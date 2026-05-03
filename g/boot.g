@@ -67,7 +67,7 @@
      (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                             (pro (seek -2 (peek 4 f)))))))
     (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
-    (ana c x) (:- (? (symp x)  (ava c x)
+    (ana c x) (:- (? (symp x)  (ava x)
                      (atomp x) (kim x)
                      (: a (car x) b (cdr x) (?
                       (atomp b) (ana c a)
@@ -125,29 +125,38 @@
               (p2 g_vm_cond (pop 'alt) j)))))))))
 
     Z (sym 0)
+    (lz lfd)(: p (em2 g_vm_lazyb lfd)
+                 _ (push 'stk 0)
+                 q (apl2r (cddr lfd))
+                 _ (pop 'stk)
+               (co p q))
     ; variable expression analyzer
-    (ava d x)
+    (ava x)
+     (: lfd (assq x (get 0 'lam c))
+       (? lfd (lz lfd)
+          (: s (get 0 'stk c)
+             (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
+             (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
+           (?- (avb (get 0 'par c) x)
+            (memq x s) (em2 g_vm_arg (lidx x s))
+            (>= (stki c) 0) (q (len (get 0 'stk c)))))))
+
+    (avb d x)
      (? (nilp d) ; outside all lexical scopes?
          (: y (get Z x globals) ; check global scope
           (? (!= y Z) (kim y) ; if it's there use that
            (: _ (? (get 0 'par c) (push 'imp x))
             (em2 g_vm_freev x))))
       (: lfd (assq x (get 0 'lam d))
-       (? lfd (: p (em2 g_vm_lazyb lfd)
-                 _ (push 'stk 0)
-                 q (apl2r (cddr lfd))
-                 _ (pop 'stk)
-               (co p q))
+       (? lfd (lz lfd)
           (: s (get 0 'stk d)
              (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
              (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
-           (?- (ava (get 0 'par d) x)
-            (memq x s) (? (= c d) (em2 g_vm_arg (lidx x s))
-                          (: _ (? (get 0 'par c) (push 'imp x))
-                           (q (len (get 0 'stk c)))))
-            (>= (stki d) 0) (: _ (&& (!= c d) (get 0 'par c) (push 'imp x))
+           (?- (avb (get 0 'par d) x)
+            (memq x s) (: _ (? (get 0 'par c) (push 'imp x))
+                           (q (len (get 0 'stk c))))
+            (>= (stki d) 0) (: _ (? (get 0 'par c) (push 'imp x))
                              (q (len (get 0 'stk c)))))))))
-
     ; lambda analyzer
     (ala c imp exp) (:
      d (sco c (init exp) imp)
@@ -166,14 +175,14 @@
       ;; l1 pass nom def and value expressions to l2
       ; l1 collects bindings and passes them with the body expression to l2
      (l1 ns ds n d rest) (:
-      (dsug n d) (? (atomp n) (cons n d)
-                     (dsug (car n) (cons '\ (cat (cdr n) (list d)))))
+      (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d)))))
        nd (dsug n d) ns (cons (car nd) ns) ds (cons (cdr nd) ds)
       (? (atomp rest)       (l2 ns ds (car nd)   1)
          (atomp (cdr rest)) (l2 ns ds (car rest) 0)
                             (l1 ns ds (car rest) (cadr rest) (cddr rest))))
 
      (l2 ns ds exp even) (:- (cl 0 l l l)
+      ns (rev ns) ds (rev ds)
       s (get 0 'stk c)
       _ (push 'stk 0)
       (jj a n d) (?
@@ -187,7 +196,7 @@
           a (cons (cons k v) a)
         _ (push 'stk k)
         (jj a (cdr n) (cdr d))))
-      l (jj 0 (rev ns) (rev ds))
+      l (jj 0 ns ds)
       _ (put 'stk s c)
       (cl n l k1 k2) (?
        (&& k1 k2 (!= k1 k2) (memq (caar k1) (cddar k2)))
@@ -203,7 +212,9 @@
        k1 (cl n l (cdr k1) l)
        n (cl 0 l l l)
        (l3 ns ds exp even
-        (flip map l (\ x (cons (car x) (cons (cadr x) (foldl (cddr x) (flip ldel) (map car l)))))))))
+        (: j (map car l)
+           (q x) (cons (car x) (cons (cadr x) (foldl (cddr x) (flip ldel) j)))
+         (map q l)))))
 
      (l3 ns ds exp even lams) (:
       (ll nds) (? (nilp nds) id
@@ -218,9 +229,9 @@
           (\ x (f (g (h x))))))
       _ (put 'lam lams q)
       s (get 0 'stk c)
-      f (ana c (cons '\ (cat ns (list exp))))
+      f (ana c (cons '\ (cat (rev ns) (list exp))))
       _ (push 'stk 0)
-      g (ll (zip (rev ns) (rev ds)))
+      g (ll (zip ns ds))
       h (kap (len ns))
       _ (put 'stk s c)
       (\ x (f (g (h x))))))))))

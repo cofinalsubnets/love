@@ -1,3 +1,4 @@
+(: t 1) ; (evil implicit test) this checks for an obscure variable scope bug triggered by ff in pat2x ; TODO real test here
 (: (pat2pred p)
  (? (symp p) (const true)
     (atomp p) (= p)

@@ -161,7 +161,7 @@ static g_inline Cata(pull) { return g_ok(f) ? ((cata*) pop1(f))(f, c) : f; }
 
 #define incl(e, n) ((e)->len += ((n)<<1))
 // generic instruction ana handlers
-static g_inline struct g *g_c0_ix(struct g *f, struct env **c, g_vm_t *i, word x) { 
+static g_inline struct g *g_c0_ix(struct g *f, struct env **c, g_vm_t *i, word x) {
  return incl(*c, 2), g_push(f, 3, g_c1_ix, i, x); }
 
 static g_inline struct g *g_c0_i(struct g *f, struct env **c, g_vm_t *i) {
@@ -614,13 +614,8 @@ static g_vm(g_vm_defglob) {
  Sp -= 3;
  struct g_tab *t = f->dict;
  word k = Ip[1].x, v = Sp[3];
- Sp[0] = k, Sp[1] = v, Sp[2] = (word) t;
- Pack(f);
- if (!g_ok(f = g_tput(f))) return f;
- Unpack(f);
- Sp += 1;
- Ip += 2;
- return Continue(); }
+ return Sp[0] = k, Sp[1] = v, Sp[2] = (word) t, Pack(f),
+  !g_ok(f = g_tput(f)) ? f : (Unpack(f), Sp += 1, Ip += 2, Continue()); }
 
 g_vm(g_vm_freev) { return
  Ip[0].ap = g_vm_quote,
@@ -643,8 +638,7 @@ g_noinline struct g *g_evals_(struct g*f, char const*s) {
  struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof}, t, 0};
  f = push0(pushq(push0(gev(g_reads(f, (void*) &i)))));
  i.t = s, i.i = 0;
- f = gev(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i))))));
- if (g_ok(f)) f->sp++;
+ if (g_ok(f = gev(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i)))))))) f->sp++;
  return f; }
 
 
@@ -677,8 +671,7 @@ static g_noinline struct g *g_tput(struct g *f) {
 
  if (e) return e->val = v, f->sp += 2, f;
 
- f = g_have(f, Width(struct g_kvs) + 1);
- if (!g_ok(f)) return f;
+ if (!g_ok(f = g_have(f, Width(struct g_kvs) + 1))) return f;
  e = bump(f, Width(struct g_kvs));
  t = (struct g_tab*) f->sp[2];
  k = f->sp[0], v = f->sp[1];
@@ -692,8 +685,7 @@ static g_noinline struct g *g_tput(struct g *f) {
  intptr_t cap1 = 2 * cap0;
  struct g_kvs **tab0, **tab1;
 
- f = g_have(f, cap1 + 1);
- if (!g_ok(f)) return f;
+ if (!g_ok(f = g_have(f, cap1 + 1))) return f;
  tab1 = bump(f, cap1);
  t = (struct g_tab*) f->sp[2];
  tab0 = t->tab;
@@ -778,8 +770,7 @@ static g_vm(g_vm_tkeys) {
  return Continue(); }
 
 static struct g *mktbl(struct g*f) {
- f = g_have(f, Width(struct g_tab) + 2);
- if (g_ok(f)) {
+ if (g_ok(f = g_have(f, Width(struct g_tab) + 2))) {
   struct g_tab *t = bump(f, Width(struct g_tab) + 1);
   *--f->sp = word(t);
   struct g_kvs **tab = (struct g_kvs**) (t + 1);
@@ -1215,42 +1206,28 @@ static g_vm(g_vm_unc) {
   return Continue(); }
 
 g_vm(g_vm_cur) {
+ size_t const S = 3 + Width(struct g_tag);
+ Have(S + 2);
  union u *k = (union u*) Hp, *j = k;
- uintptr_t n = getnum(Ip[1].x);
- size_t S = 3 + Width(struct g_tag);
-
- if (n == 2) {
-  Have(S);
-  j[0].ap = g_vm_unc;
-  j[1].x = *Sp++;
-  j[2].m = Ip + 2;
-  j[3].x = 0;
-  j[4].m = k; }
-
- else {
-  S += 2;
-  Have(S);
-  j += 2;
-  k[0].ap = g_vm_cur;
-  k[1].x = putnum(n - 1);
-  j[0].ap = g_vm_unc;
-  j[1].x = *Sp++;
-  j[2].m = Ip + 2;
-  j[3].x = 0;
-  j[4].m = k; }
-
  Hp += S;
- Ip = cell(*Sp);
- Sp[0] = word(k);
- return Continue(); }
+ size_t n = getnum(Ip[1].x);
+ // FIXME this does not always need to be a runtime check
+ if (n > 2) Hp += 2,
+            j += 2,
+            k[0].ap = g_vm_cur,
+            k[1].x = putnum(n - 1);
+ return
+  j[0].ap = g_vm_unc,
+  j[1].x = *Sp++,
+  j[2].m = Ip + 2,
+  j[3].x = 0,
+  j[4].m = k,
+  Ip = cell(*Sp),
+  Sp[0] = word(k),
+  Continue(); }
 
-static g_vm(g_vm_jump) {
- Ip = Ip[1].m;
- return Continue(); }
-
-static g_vm(g_vm_cond) {
- Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2;
- return Continue(); }
+static g_vm(g_vm_jump) { return Ip = Ip[1].m, Continue(); }
+static g_vm(g_vm_cond) { return Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 
 // load instructions
 //
