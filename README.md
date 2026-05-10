@@ -3,7 +3,7 @@
 Gwen lisp is a lisp dialect and environment that can be built as a library,
 an executable, or for bare metal on various platforms.
 
-In Gwen lisp every value is a one argument function.  There are four special forms:
+In gwen lisp every value is a one argument function.  There are four special forms:
 
 | gwen               |  scheme equivalent |
 |--------------------|----------|
@@ -65,12 +65,12 @@ In Gwen lisp every value is a one argument function.  There are four special for
 
 Gwen lisp has Scheme-like lexical scope and a single namespace for functions and values, and uses four
 special forms with easy Scheme equivalents.  However, the evaluation procedure is different, more similar to Haskell,
-though Gwen lisp is dynamically typed. Functions are curried, and data implicitly act as their own constant functions.
-Therefore in Gwen lisp every value is a one-argument function. Lists are evaluated by left-to-right application:
+though gwen lisp is dynamically typed. Functions are curried, and data implicitly act as their own constant functions.
+Therefore in gwen lisp every value is a one-argument function. Lists are evaluated by left-to-right application:
 
 - `(f x y z) = (((f x) y) z) = (foldl f id (list x y z)) ; modulo side effects`
 
-However, this is only a conceptual description. Internally Gwen lisp may use different evaluation order for optimization
+However, this is only a conceptual description. Internally gwen lisp may use different evaluation order for optimization
 reasons. Therefore if you need specific evaluation order for function arguments you should use the sequencing form `:`
 
 ```
@@ -83,7 +83,7 @@ A singleton list has the value of its element, rather than representing a 0-argu
 
 - `(f) = f`
 
-Nullary and variadic functions aren't distinct features in Gwen lisp, but can be replicated with unary functions.
+Nullary and variadic functions aren't distinct features in gwen lisp, but can be replicated with unary functions.
 For nullary functions, just pass an argument and ignore it. Conventionally `0` or `()` is used for this purpose in code.
 Variadic functions can either be simulated with macros, or written using sentinels.
 
@@ -92,8 +92,8 @@ Variadic functions can either be simulated with macros, or written using sentine
 ### variadic function using a sentinel
 
 ```
-(: end (sym 0)
-   (li k x) (? (= end x) (k 0) (li (\ z (k (cons x z)))))
+(: end (sym ())
+   (li k x) (? (= end x) (k ()) (li (\ z (k (cons x z)))))
    lis (li id)
  (lis 1 2 3 4 5 end)) ; = '(1 2 3 4 5)
 ```
@@ -111,6 +111,6 @@ Variadic functions can either be simulated with macros, or written using sentine
    five (add two three)
    six (mul two three)
    seven (add one six)
- (assert (= 420 (mul two (mul five (mul six seven)) (+ 1) 0))))
+ (assert (= 420 (mul (mul two five) (mul six seven) (+ 1) 0))))
 ```
 

@@ -72,7 +72,7 @@
    five (add two three)
    six (mul two three)
    seven (add one six)
- (assert (= 420 (mul two (mul five (mul six seven)) (+ 1) 0))))
+ (assert (= 420 (mul (mul two five) (mul six seven) (+ 1) 0))))
 
 ; fibonacci
 (: (fib n) (? (> 3 n) 1 (+ (fib (+ -1 n)) (fib (+ -2 n))))
