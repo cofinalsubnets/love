@@ -66,7 +66,7 @@ struct g {
  uintptr_t len;
  struct g *pool;
  struct g_root {
-  intptr_t *ptr;
+  g_word *ptr;
   struct g_root *next; } *root;
  union { uintptr_t t0; g_word *cp; };
  g_malloc_t *malloc;
@@ -81,8 +81,9 @@ struct g {
     uintptr_t len, cap;
     struct g_kvs {
      intptr_t key, val;
-     struct g_kvs *next; } **tab; } *dict, *macro;
-   intptr_t u[]; }; };
+     struct g_kvs *next; } **tab;
+   } *dict, *macro;
+   g_word u[g_nvars - 2]; }; };
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };

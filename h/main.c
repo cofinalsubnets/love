@@ -26,8 +26,11 @@ int main(int argc, char const **argv) {
  if (g_ok(f)) {
   struct g_def d[] = {{"argv", g_pop1(f)}, {0}};
   static char const p[] =
+#include "boot.h"
    "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))";
   f = g_evals_(g_defs(f, d), p); }
+
+ // finish up
  enum g_status s = g_code_of(f);
  if (s != g_status_ok) {
   f = g_core_of(f);
@@ -38,5 +41,5 @@ int main(int argc, char const **argv) {
    f->len,
    f->hp - (intptr_t*) f,
    (intptr_t*) f + f->len - f->sp); }
- //gfin(f);
+ g_fin(f);
  return s; }

@@ -8,27 +8,27 @@ t=$(sort $(wildcard t/*.$x))
 .PHONY: test all h k pd clean distclean
 test: b/h/$n
 	@echo TEST
-	@cat g/boot.g $t | $m
+	@cat $t | $m
 all: h k pd
 h: b/h/$n b/h/lib$n.so b/h/$n.1
 k: b/k/$n-$a.elf
 pd: b/pd/$n.pdx
 clean:
-	rm -rf b `git check-ignore esp/* wasm/*`
+	rm -rf b `git check-ignore esp/* wasm/* pico/*`
 distclean: clean
 	rm -rf dl
 
 .PHONY: valg perf repl cloc cat
 valg: b/h/$n
-	cat g/boot.g $t | valgrind --error-exitcode=1 b/h/$n
+	cat $t | valgrind --error-exitcode=1 b/h/$n
 b/perf.data: b/h/$n
-	cat g/boot.g $t | perf record -o $@ b/h/$n
+	cat $t | perf record -o $@ b/h/$n
 perf: b/perf.data
 	perf report -i $<
 b/flamegraph.svg: b/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: b/h/$n
-	@cat g/boot.g h/repl.g - | $<
+	@cat h/repl.g - | $<
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test
@@ -72,15 +72,20 @@ b/h/%.o: h/%.c $(g_h)
 	@mkdir -p $(dir $@)
 	@$(cc) -c -Ib/h $< -o $@
 
-b/h/$n: h/main.c b/h/lib$n.a
+b/h/$n: h/main.c b/h/lib$n.a b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
+	@$(cc) -o $@ h/main.c b/h/lib$n.a
+
+b/h/lcat: h/lcat.c b/h/$x/$x.o 
+	@echo CC $@
 	@$(cc) -o $@ $^
 
+
 # sed command to escape lisp text into C string format
-b/boot.h: b/h/$n h/lcat.sed g/boot.$x
+b/boot.h: b/h/lcat $x/boot.$x
 	@echo GEN	$@
-	@cat g/boot.$x h/lcat.$x g/boot.$x |  b/h/$n | sed -f h/lcat.sed >$@
+	@cat $x/boot.$x | b/h/lcat >$@
 
 b/h/$n.1: b/h/$n h/manpage.$x
 	@echo GEN	$@
