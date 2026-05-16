@@ -65,9 +65,7 @@ struct g {
   struct g_atom *l, *r; } *symbols;
  uintptr_t len;
  struct g *pool;
- struct g_root {
-  g_word *ptr;
-  struct g_root *next; } *root;
+ struct g_r { g_word *x; struct g_r *n; } *root;
  union { uintptr_t t0; g_word *cp; };
  g_malloc_t *malloc;
  g_free_t *free;
