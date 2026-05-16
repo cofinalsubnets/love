@@ -208,8 +208,8 @@ static struct font kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 1
 void fbdraw(void) {
   for (uint8_t i = 0, rows = kcb->rows; i < rows; i++)
     for (uint8_t j = 0, cols = kcb->cols; j < cols; j++) {
-      uint16_t pos = i * cols + j;
-      uint8_t g = kcb->cb[pos], *bmp = kfont.glyphs + kfont.h * (g == '\n' ? 0 : g);
+      uint16_t const pos = i * cols + j;
+      uint8_t const g = kcb->cb[pos], *bmp = kfont.glyphs + kfont.h * (g == '\n' ? 0 : g);
       bool select = kcb->rpos <= pos && pos < kcb->wpos,
            invert = kcb->flag & show_cursor && kcb->wpos == pos && kticks & 64;
       uint32_t fg = select ? console_sel : console_fg, bg = console_bg;

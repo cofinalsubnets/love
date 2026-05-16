@@ -1,6 +1,5 @@
 #include "pd_api.h"
 #include "../g/g.h"
-#include "font.h"
 #include "cb.h"
 #include <limits.h>
 #include <math.h>
@@ -41,7 +40,7 @@ static int k_update(void *_) {
   for (uint8_t i = 0, rows = K.cb.rows; i < rows; i++)
     for (uint8_t j = 0, cols = K.cb.cols; j < cols; j++) {
       uint16_t pos = i * cols + j;
-      uint8_t g = K.cb.cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
+      uint8_t const g = K.cb.cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
       bool invert = (K.cb.flag & show_cursor_flag) && pos == K.cb.wpos && g_clock() & 512;
       for (uint8_t b = 0; b < 8; b++)
         frame[52 * (8 * i + b) + j] = invert ? ~bmp[b] : bmp[b]; }

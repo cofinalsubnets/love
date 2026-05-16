@@ -15,8 +15,6 @@ int
   cb_ungetc(struct cb*, int),
   cb_eof(struct cb*);
 
-struct font { uint8_t *glyphs, w, h; };
-extern uint8_t
- cga_8x8[256][8],
- moderndos_8x16[256][16];
+struct font { uint8_t const *glyphs, w, h; };
+extern uint8_t const cga_8x8[256][8], moderndos_8x16[256][16];
 #endif
