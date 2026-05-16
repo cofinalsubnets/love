@@ -16,5 +16,7 @@ int
   cb_eof(struct cb*);
 
 struct font { uint8_t *glyphs, w, h; };
-extern uint8_t cga_8x8[256][8];
+extern uint8_t
+ cga_8x8[256][8],
+ moderndos_8x16[256][16];
 #endif

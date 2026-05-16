@@ -204,7 +204,7 @@ void free(void *x) { return kfree(x); }
 static g_vm(g_kreset) { return k_reset(), f; }
 
 
-static struct font kfont = { .glyphs = (uint8_t*) cga_8x8, .w = 8, .h = 8, };
+static struct font kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 16, };
 void fbdraw(void) {
   for (uint8_t i = 0, rows = kcb->rows; i < rows; i++)
     for (uint8_t j = 0, cols = kcb->cols; j < cols; j++) {

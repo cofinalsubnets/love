@@ -136,11 +136,6 @@ b/k/$a/%.o: %.c $(g_h) b/boot.h
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-b/k/$a/g/cga_8x8.o: f/cga_8x8.c
-	@echo CC	$@
-	@mkdir -p "$(dir $@)"
-	@$(kcc) -c $< -o $@
-
 b/k/$a/%.o: %.S $(g_h)
 	@echo AS	$@
 	@mkdir -p "$(dir $@)"
