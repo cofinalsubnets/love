@@ -5,6 +5,8 @@ void cb_fill(struct cb *c, uint8_t _) {
   for (uint32_t i = 0, j = c->rows * c->cols; i < j; i++)
     c->cb[i] = _; }
 
+void cb_clear(struct cb *c) { cb_fill(c, 0); }
+
 void cb_cur(struct cb *c, uint32_t row, uint32_t col) {
   c->wpos = (row * c->cols + col) % (c->rows * c->cols); }
 

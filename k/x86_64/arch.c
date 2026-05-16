@@ -17,8 +17,9 @@ struct k_frame {
 // renders that buffer to the framebuffer.
 struct g;
 struct cb;
-extern int gputc(struct g*, int);
-extern int gputn(struct g*, intptr_t, uint8_t);
+extern int gputc(struct g*, int),
+           gputs(struct g*, char const*),
+           gputn(struct g*, intptr_t, uint8_t);
 extern void fbdraw(void);
 extern struct cb *kcb;
 
@@ -28,7 +29,6 @@ static char const *const exc_name[32] = {
   [11] = "#NP", [12] = "#SS", [13] = "#GP", [14] = "#PF", [16] = "#MF",
   [17] = "#AC", [18] = "#MC", [19] = "#XM", [20] = "#VE", [21] = "#CP", };
 
-static void kputs(char const *s) { while (*s) gputc(0, *s++); }
 
 // every CPU exception (vectors 0..31) arrives here via exc_common.
 // fr->rip is the faulting instruction: a __builtin_trap() faults with
@@ -43,16 +43,16 @@ void k_exception(struct k_frame *fr) {
 
   if (kcb) {                           // console up? report to the screen
     char const *name = fr->vector < 32 ? exc_name[fr->vector] : 0;
-    kputs("\n*** CPU exception ");
+    gputs(0, "\n*** CPU exception ");
     gputn(0, fr->vector, 10);
-    kputs(" ("), kputs(name ? name : "?"), kputs(") rip=");
+    gputs(0, " ("), gputs(0, name ? name : "?"), gputs(0, ") rip=");
     gputn(0, fr->rip, 16);
-    kputs(" err=");
+    gputs(0, " err=");
     gputn(0, fr->error, 16);
     if (fr->vector == 14) {            // #PF: also the faulting address
       uint64_t cr2;
       asm volatile ("mov %%cr2, %0" : "=r"(cr2));
-      kputs(" cr2="), gputn(0, cr2, 16); }
+      gputs(0, " cr2="), gputn(0, cr2, 16); }
     gputc(0, '\n');
     fbdraw(); }
 

@@ -1088,6 +1088,11 @@ static g_vm(g_vm_getc) {
  Ip += 1;
  return Continue(); }
 
+int gputs(struct g*f, char const*s) {
+ int n = 0;
+ while (*s) n += gputc(f, *s++);
+ return n; }
+
 static int g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t b) {
  uintptr_t
   m = n >= 0 || b != 10 ? (uintptr_t) n : (o->putc(f, '-', o), -(uintptr_t) n),

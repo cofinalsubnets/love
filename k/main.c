@@ -1,6 +1,6 @@
 #include "limine/limine.h"
 #include "g.h"
-#include "font.h"
+#include "cb.h"
 #include <stdarg.h>
 #include <limits.h>
 
@@ -204,20 +204,19 @@ void free(void *x) { return kfree(x); }
 static g_vm(g_kreset) { return k_reset(), f; }
 
 
-#define font_x 8
-#define font_y 8
+static struct font kfont = { .glyphs = (uint8_t*) cga_8x8, .w = 8, .h = 8, };
 void fbdraw(void) {
   for (uint8_t i = 0, rows = kcb->rows; i < rows; i++)
     for (uint8_t j = 0, cols = kcb->cols; j < cols; j++) {
       uint16_t pos = i * cols + j;
-      uint8_t g = kcb->cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
+      uint8_t g = kcb->cb[pos], *bmp = kfont.glyphs + kfont.h * (g == '\n' ? 0 : g);
       bool select = kcb->rpos <= pos && pos < kcb->wpos,
            invert = kcb->flag & show_cursor && kcb->wpos == pos && kticks & 64;
       uint32_t fg = select ? console_sel : console_fg, bg = console_bg;
       if (invert) fg ^= bg, bg ^= fg, fg ^= bg;
-      uintptr_t y = i * font_y, x = j * font_x;
-      for (uint8_t r = 0; r < font_y; r++)
-        for (uint8_t o = bmp[r], c = font_x; c--; o >>= 1)
+      uintptr_t y = i * kfont.h, x = j * kfont.w;
+      for (uint8_t r = 0; r < kfont.h; r++)
+        for (uint8_t o = bmp[r], c = kfont.w; c--; o >>= 1)
           kfb._[(y + r) * kfb.pitch + x + c] = o & 1 ? fg : bg; } }
 
 static g_vm(draw) {
@@ -236,6 +235,31 @@ static g_vm(key) {
     Ip += 1;
     return Continue(); }
 
+// (fault n) -- deliberately raise CPU exception n to exercise the
+// handler in arch.c. the handler reports and halts, so this does not
+// return. n picks the vector: 0 #DE, 3 #BP, 13 #GP, 14 #PF; anything
+// else (e.g. 6) raises #UD -- the same path __builtin_trap() takes.
+static g_vm(fault) {
+  switch (g_getnum(Sp[0])) {
+    case 0:   // #DE: integer divide by zero
+      asm volatile ("xorl %%edx,%%edx; movl $1,%%eax; xorl %%ecx,%%ecx;"
+                    "divl %%ecx" ::: "eax","ecx","edx");
+      break;
+    case 3:   // #BP: breakpoint
+      asm volatile ("int3");
+      break;
+    case 13:  // #GP: write through a non-canonical address
+      *(volatile int*) 0xdeadbeefdeadbeefULL = 0;
+      break;
+    case 14:  // #PF: write to a canonical but unmapped address
+      *(volatile int*) 0x600000000000ULL = 0;
+      break;
+    default:  // #UD: invalid opcode
+      asm volatile ("ud2");
+      break; }
+  Ip += 1;                 // unreachable unless the fault did not fire
+  return Continue(); }
+
 int gflush(struct g*f) {
  kcb->rpos = kcb->wpos;
  return 0; }
@@ -245,7 +269,8 @@ static union u
   bif_reset[] = {{g_kreset}},
   bif_draw[] = {{draw}, {g_vm_ret0}},
   bif_key[] = {{key}, {g_vm_ret0}},
-  bif_wait[] = {{wait}, {g_vm_ret0}};
+  bif_wait[] = {{wait}, {g_vm_ret0}},
+  bif_fault[] = {{fault}, {g_vm_ret0}};
 
 static bool meminit(void) {
   if (!memmap_req.response || !hhdm_req.response) return false;
@@ -270,8 +295,8 @@ static bool fbinit(void) {
   return true; }
 
 static bool cbinit(void) {
-  const uintptr_t rows = kfb.height / font_y,
-                  cols = kfb.width / font_x;
+  const uintptr_t rows = kfb.height / kfont.h,
+                  cols = kfb.width / kfont.w;
   if (!(kcb = malloc(sizeof(struct cb) + rows * cols))) return false;
   kcb->rows = rows;
   kcb->cols = cols;
@@ -285,6 +310,7 @@ static struct g_def defs[] = {
   {"draw", (intptr_t) bif_draw},
   {"key", (intptr_t) bif_key},
   {"wait", (intptr_t) bif_wait},
+  {"fault", (intptr_t) bif_fault},
   {0}, };
 
 void kmain(void) {
