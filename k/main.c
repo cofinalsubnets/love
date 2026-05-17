@@ -344,15 +344,13 @@ static struct g_def defs[] = {
 
 void kmain(void) {
  archinit();
-  if (fbinit() && meminit() && cbinit())
-    palette_init(),
-    g_evals_(g_defs(g_ini(), defs),
+ if (fbinit() && meminit() && cbinit())
+  palette_init(),
+  g_evals_(g_defs(g_ini(), defs),
 #include "boot.h"
-        "(:(ps1 _)(puts\" ;; \")E(sym()))"
-        "(:(rs x)(?(= x E)0(X x(rs(read E)))))"
-        "(:(ep x)(: _(.(ev x))(putc 10)))"
-        "(puts\"\x02 \")(putn(clock())10)(ps1(putc 10))"
-        "(:(go _)(go(draw(: k(key())(? k(: _(putc k)_(?(= k 10)(ps1(each(rs(read E))ep)))k)))))(go()))"
-        );
-
-  k_reset(); }
+   "(:(ps1 _)(puts\" ;; \")E(sym()))"
+   "(:(rs x)(?(= x E)0(X x(rs(read E)))))"
+   "(:(ep x)(: _(.(ev x))(putc 10)))"
+   "(puts\"\x02 \")(putn(clock())10)(ps1(putc 10))"
+   "(:(go _)(go(draw(: k(key())(? k(: _(putc k)_(?(= k 10)(ps1(each(rs(read E))ep)))k)))))(go()))");
+ k_reset(); }

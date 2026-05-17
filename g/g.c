@@ -80,7 +80,7 @@ static g_vm(g_vm_gc, uintptr_t);
 static g_vm_t
  g_vm_data,  g_vm_putn,   g_vm_nomsym, g_vm_info, g_vm_dot,    g_vm_clock,
  g_vm_nilp,  g_vm_symnom, g_vm_read,   g_vm_putc, g_vm_gensym, g_vm_twop,
- g_vm_len, g_vm_tget,
+ g_vm_len, g_vm_get,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,
  g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
@@ -165,7 +165,8 @@ struct env {
 #define Cata(n, ...) struct g *n(struct g *f, struct env **c, ##__VA_ARGS__)
 typedef Ana(ana);
 typedef Cata(cata);
-static ana analyze, c0_let, c0_apply;
+static ana analyze, ana_d, ana_c, ana_l, ana_q, ana_ap;
+static Ana(ana_2, word, word);
 static cata c1_i, c1_ix, c1_var, c1_yield, c1_ret, c1;
 static g_inline Cata(pull) { return g_ok(f) ? ((cata*) pop1(f))(f, c) : f; }
 
@@ -215,7 +216,6 @@ static size_t llen(word l) {
  while (twop(l)) n++, l = B(l);
  return n; }
 
-static struct g *c0_lambda(struct g*, struct env**, word, word);
 
 // don't inline this so callers can tail call optimize
 static g_noinline struct g *c0(struct g *f, g_vm_t *y) {
@@ -311,7 +311,7 @@ static g_vm(g_vm_yieldk) { return
  Pack(f),
  encode(f, g_status_yield); }
 
-static struct g *gev(struct g *f) {
+struct g *g_eval(struct g *f) {
  f = c0(f, g_vm_yieldk);
 #if g_tco
  if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
@@ -330,19 +330,20 @@ static word lidx(struct g*f, word x, word l) {
  word i = 0;
  for (; twop(l); i++, l = B(l)) if (eql(f, x, A(l))) return i;
  return -1; }
-static Ana(c0_var) {
- if (!g_ok(f)) return f;
+
+static Ana(ana_v) {
  word y;
+ if (!g_ok(f)) return f;
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) return (y = g_tget(f, 0, x, f->dict)) ?
-   c0_ix(f, c, g_vm_quote, y) :
+   ana_q(f, c, y) :
    (f = gxl(g_push(f, 2, x, (*c)->imps)),
     f = c0_ix(f, c, g_vm_freev, (*c)->imps = g_ok(f) ? pop1(f) : nil),
     f);
   // lambda definition of local let form?
   if ((y = assq(f, d->lams, x))) {
     if (g_ok(f = c0_ix(f, c, g_vm_lazyb, y)))
-      f = c0_apply(f, c, BB(f->sp[2]));
+      f = ana_ap(f, c, BB(f->sp[2]));
     return f; }
   // other definition of local let form?
   if (memq(f, d->stack, x)) return
@@ -369,8 +370,6 @@ out:
         pull(f, c); }
 
 
-static g_inline struct g *symof(char const *n, struct g *f) {
-  return intern(g_strof(f, n)); }
 static g_inline struct g *pushl(struct g*f) {
   return intern(g_strof(f, "\\")); }
 static g_inline struct g *pushq(struct g*f) {
@@ -378,33 +377,19 @@ static g_inline struct g *pushq(struct g*f) {
 static g_inline struct g *push0(struct g*f) {
   return g_push(f, 1, nil); }
 
-static Ana(c0_cond_r);
 static g_noinline Ana(analyze) {
- if (symp(x)) return c0_var(f, c, x); // variable
- if (!twop(x)) return c0_ix(f, c, g_vm_quote, x); // self quoting expression
- // it is a pair
- word a = A(x), b = B(x);
- // singleton list has value of element
- if (!twop(b)) return analyze(f, c, a);
+ if (symp(x)) return ana_v(f, c, x); // lookup symbol as variable
+ if (!twop(x)) return ana_q(f, c, x); // non-pairs are self quoting
+ word a = A(x), b = B(x);                        // it must be a pair
+ if (!twop(b)) return analyze(f, c, a); // singleton list has value of element
  // if it is a special form then do that
  if (symp(a) && nom(a)->nom && len(nom(a)->nom) == 1)
   switch (*txt(nom(a)->nom)) {
-   case '`':
-    return c0_ix(f, c, g_vm_quote, !twop(b) ? nil : A(b));
-   case '\\': return f = c0_lambda(f, c, nil, b),
-                     analyze(f, c, g_ok(f) ? pop1(f) : 0);
-   case ':': return c0_let(f, c, b);
-   case '?': return !twop(B(b)) ? analyze(f, c, A(b)) :
-    (f = g_push(f, 2, b, c1_cond_pop_exit),
-     f = c0_cond_r(f, c, g_ok(f) ? pop1(f) : nil),
-     g_push(f, 1, c1_cond_push_exit)); }
- // if it is a macro then apply the macro and analyze the result
- return (x = g_tget(f, 0, a, g_core_of(f)->macro)) ?
-  (f = g_push(f, 4, b, nil, nil, x),
-   f = gev(gxr(gxl(gxl(pushq(gxl(f)))))),
-   analyze(f, c, g_ok(f) ? pop1(f) : 0)) :
-  (avec(f, b, f = analyze(f, c, a)),
-   c0_apply(f, c, b)); }
+   case '`': return ana_q(f, c, A(b));
+   case '\\': return ana_l(f, c, b);
+   case ':': return ana_d(f, c, b);
+   case '?': return ana_c(f, c, b); }
+ return ana_2(f, c, x, a, b); }
 
 
 static struct g *c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp) {
@@ -443,28 +428,27 @@ static Ana(c0_cond_r) { return
  !twop(x) ? c0_cond_exit(f, c, nil) :
  !twop(B(x)) ? c0_cond_exit(f, c, A(x)) :
  (avec(f, x,
-   incl(*c, 2),
-   f = analyze(f, c, A(x)),
-   f = g_push(f, 1, c1_cond_pop_branch),
-   f = c0_cond_exit(f, c, AB(x)),
-   f = g_push(f, 1, c1_cond_push_branch),
-   f = c0_cond_r(f, c, BB(x))), f); }
+  incl(*c, 2),
+  f = analyze(f, c, A(x)),
+  f = g_push(f, 1, c1_cond_pop_branch),
+  f = c0_cond_exit(f, c, AB(x)),
+  f = g_push(f, 1, c1_cond_push_branch),
+  f = c0_cond_r(f, c, BB(x))), f); }
 
 
-static struct g *c0_apr2l(struct g *f, struct env **c, word x);
-// TODO move optimizations to self
-static struct g *c0_apply(struct g *f, struct env **c, intptr_t x) {
+static struct g *ana_ap_r2l(struct g *f, struct env **c, word x);
+static struct g *ana_ap(struct g *f, struct env **c, intptr_t x) {
  if (!g_ok(f)) return f;
  bool imfp =
   f->sp[0] == (word) c1_ix &&
   f->sp[1] == (word) g_vm_quote &&
   even(f->sp[2]);
  intptr_t
-   ca = llen(x),
-   va =
-    imfp && cell(f->sp[2])->ap == g_vm_cur ?
-     getnum(cell(f->sp[2])[1].x) :
-     1;
+  ca = llen(x),
+  va =
+   imfp && cell(f->sp[2])->ap == g_vm_cur ?
+    getnum(cell(f->sp[2])[1].x) :
+    1;
  bool b1p = ca == 1 && imfp && cell(f->sp[2])[1].ap == g_vm_ret0,
       anp = va == ca && ca > 1,
       bnp = anp && cell(f->sp[2])[3].ap == g_vm_ret0;
@@ -478,14 +462,14 @@ static struct g *c0_apply(struct g *f, struct env **c, intptr_t x) {
  if (bnp) { // inline a curried instruction
   g_vm_t *i = cell(f->sp[2])[2].ap;
   f->sp += 3;
-  f = c0_i(c0_apr2l(f, c, x), c, i); // r2l arg eval
+  f = c0_i(ana_ap_r2l(f, c, x), c, i); // r2l arg eval
   if (g_ok(f)) while (ca--) (*c)->stack = B((*c)->stack);
   return f; }
 
  if (g_ok(f = gxl(g_push(f, 3, nil, (*c)->stack, x)))) {
   (*c)->stack = pop1(f), x = pop1(f), MM(f, &x);
   if (anp) { // r2l 1 n-ary ap
-   f = c0_apr2l(f, c, x),
+   f = ana_ap_r2l(f, c, x),
    incl(*c, 2),
    f = g_push(f, 2, c1_apn, putnum(ca));
    if (g_ok(f)) while (ca--) (*c)->stack = B((*c)->stack); }
@@ -499,10 +483,10 @@ static struct g *c0_apply(struct g *f, struct env **c, intptr_t x) {
  return f; }
 
 
-static struct g *c0_apr2l(struct g *f, struct env **c, word x) {
+static struct g *ana_ap_r2l(struct g *f, struct env **c, word x) {
  if (twop(x)) {
   word y = A(x);
-  avec(f, y, f = c0_apr2l(f, c, B(x)));
+  avec(f, y, f = ana_ap_r2l(f, c, B(x)));
   f = analyze(f, c, y);
   f = gxl(g_push(f, 2, nil, (*c)->stack));
   if (g_ok(f)) (*c)->stack = pop1(f); }
@@ -519,9 +503,29 @@ static g_inline word reverse(word l) {
  return n; }
 
 static word ldels(struct g *f, word lam, word l);
+
+static g_inline Ana(ana_2, word a, word b) {
+ if ((x = g_tget(f, 0, a, g_core_of(f)->macro)))
+  return f = g_push(f, 4, b, nil, nil, x),
+         f = g_eval(gxr(gxl(gxl(pushq(gxl(f)))))),
+         analyze(f, c, g_ok(f) ? pop1(f) : 0);
+ return avec(f, b, f = analyze(f, c, a)),
+        ana_ap(f, c, b); }
+
+static g_inline Ana(ana_q) {
+    return c0_ix(f, c, g_vm_quote, x); }
+static g_inline Ana(ana_l) {
+   return f = c0_lambda(f, c, nil, x),
+          analyze(f, c, g_ok(f) ? pop1(f) : 0); }
+static Ana(c0_cond_r);
+static g_inline Ana(ana_c) {
+ return !twop(B(x)) ? analyze(f, c, A(x)) :
+    (f = g_push(f, 2, x, c1_cond_pop_exit),
+     f = c0_cond_r(f, c, g_ok(f) ? pop1(f) : nil),
+     g_push(f, 1, c1_cond_push_exit)); }
 // this is the longest C function :(
 // it handles the let special form in a way to support sequential and recursive binding.
-static struct g *c0_let(struct g *f, struct env **b, word exp) {
+static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
  if (!twop(B(exp))) return analyze(f, b, A(exp));
  struct g_r *mm = g_core_of(f)->root;
 #define forget() (g_core_of(f)->root=(mm),f)
@@ -642,13 +646,13 @@ struct ti { struct g_in in; char const *t; word i; } ;
 static int _eof(struct g*f, struct ti *i) { return !i->t[i->i]; }
 static int _getc(struct g*f, struct ti *i) { return _eof(f, i) ? EOF : i->t[i->i++]; }
 static int _ungetc(struct g*f, int _, struct ti *i) { return i->t[i->i = i->i ? i->i - 1 : i->i]; }
-g_noinline struct g *g_evals_(struct g*f, char const*s) {
+
+g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
  struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof}, t, 0};
- f = push0(pushq(push0(gev(g_reads(f, (void*) &i)))));
+ f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i)))));
  i.t = s, i.i = 0;
- if (g_ok(f = gev(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i)))))))) f->sp++;
- return f; }
+ return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i)))))); }
 
 // some libc functions we use
 g_vm(g_vm_tnew) {
@@ -734,7 +738,7 @@ static g_noinline intptr_t gtabdel(struct g *f, struct g_tab *t, intptr_t k, int
    coll = x; }
  return v; }
 
-g_vm(g_vm_tget) {
+g_vm(g_vm_get) {
   word z = Sp[0], k = Sp[1], x = Sp[2], n;
   if (even(x) && datp(x)) switch (typ(x)) {
     case tbl_q: z = g_tget(f, z, k, tbl(x)); break;
@@ -1464,7 +1468,7 @@ static g_noinline struct g *gcg(struct g*g, struct g *p1, uintptr_t len1, struct
  g->hp = g->cp = g->end;
  g->ip = cell(gcp(g, word(g->ip), p0, t0));
  g->symbols = 0;
- for (word i = 0; i < g_nvars; i++) g->v[i] = gcp(g, g->v[i], p0, t0);               // core live variables
+ for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);               // core live variables
  for (word n = 0; n < h; n++) g->sp[n] = gcp(g, sp0[n], p0, t0);                     // stack
  for (struct g_r *s = g->root; s; s = s->n) *s->x = gcp(g, *s->x, p0, t0); // C live variables
  while (g->cp < g->hp) (datp(g->cp) ? evac_data : evac_thd)(g, p0, t0);              // cheney algorithm
@@ -1579,7 +1583,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_putc, "putc", S1(g_vm_putc)) _(bif_prn, "putn", S2(g_vm_putn)) _(bif_puts, "puts", S1(g_vm_puts))\
  _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\
- _(bif_g_vm_seek, "seek", S2(g_vm_seek)) _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_tget))\
+ _(bif_g_vm_seek, "seek", S2(g_vm_seek)) _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_get))\
  _(bif_put, "put", S3(g_vm_tset2)) _(bif_tnew, "new", S1(g_vm_tnew)) _(bif_tabkeys, "tkeys", S1(g_vm_tkeys))\
  _(bif_tabdel, "tdel", S3(g_vm_tdel)) _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp))\
  _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tblp, "tblp", S1(g_vm_tblp)) _(bif_nump, "nump", S1(g_vm_nump))\
@@ -1607,10 +1611,13 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  struct g_def def0[] = { {"globals", d, }, {"macros", m, }, {0}, };
  return g_defs(g_defs(f, def0), def1); }
 
-static void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
-static void g_libc_free(struct g*f, void *x) { free(x); }
-struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }
+void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
+void g_libc_free(struct g*f, void *x) { free(x); }
 
+g_inline struct g *g_pop(struct g*f, uintptr_t n) { return g_core_of(f)->sp += n, f; }
+
+static g_inline struct g *symof(char const *n, struct g *f) {
+  return intern(g_strof(f, n)); }
 struct g *g_defs(struct g*f, struct g_def const*defs) {
  if (!g_ok(f)) return f;
  f = g_push(f, 1, f->dict);

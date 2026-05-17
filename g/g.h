@@ -69,9 +69,8 @@ struct g {
  union { uintptr_t t0; g_word *cp; };
  g_malloc_t *malloc;
  g_free_t *free;
-#define g_nvars 8
  union {
-  intptr_t v[g_nvars];
+  intptr_t v0;
   struct {
    struct g_tab {
     g_vm_t *ap;
@@ -80,8 +79,7 @@ struct g {
     struct g_kvs {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
-   } *dict, *macro;
-   g_word u[g_nvars - 2]; }; };
+   } *dict, *macro; }; };
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };
@@ -116,18 +114,28 @@ int
  gungetc(struct g*, int),
  geof(struct g*),
  gputc(struct g*, int),
- gputx(struct g*, intptr_t),
- gputn(struct g*, intptr_t, uint8_t),
- gputs(struct g*, char const*),
  gflush(struct g*);
 
+int
+ gputx(struct g*, intptr_t),
+ gputn(struct g*, intptr_t, uint8_t),
+ gputs(struct g*, char const*);
+
 struct g
- *g_ini(void),
  *g_ini_m(g_malloc_t*, g_free_t*),
- *g_evals_(struct g*, const char*),
+ *g_eval(struct g*),
+ *g_evals(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*),
  *g_push(struct g*, uintptr_t, ...),
  *g_strof(struct g*, const char*),
+ *g_pop(struct g*, uintptr_t),
  *gxl(struct g*),
  *gxr(struct g*);
+
+g_malloc_t g_libc_malloc;
+g_free_t g_libc_free;
+static g_inline struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }
+static g_inline struct g *g_evals_(struct g *f, char const *s) {
+  return g_pop(g_evals(f, s), 1); }
+
 #endif
