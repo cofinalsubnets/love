@@ -81,6 +81,14 @@ b/h/lcat: h/lcat.c b/h/$x/$x.o
 	@echo CC $@
 	@$(cc) -o $@ $^
 
+# raw-mode zipper-editor demo front end (h/tui.c); no ncurses
+tui: b/h/tui b/boot.h
+.PHONY: tui
+b/h/tui: h/tui.c b/h/lib$n.a
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(cc) -o $@ h/tui.c b/h/lib$n.a
+
 
 # sed command to escape lisp text into C string format
 b/boot.h: b/h/lcat $x/boot.$x
