@@ -74,7 +74,7 @@ static struct g
  *g_tput(struct g*),
  *mktbl(struct g*),
  *intern(struct g*),
- *g_reads(struct g*, struct g_in*),
+ *g_reads(struct g*, struct g_in*, bool),
  *g_read1(struct g*, struct g_in*);
 static g_vm(g_vm_gc, uintptr_t);
 static g_vm_t
@@ -649,9 +649,9 @@ static struct g*_ungetc(struct g*f, int _, struct ti *i) { return f->b = i->t[i-
 g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
  struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof}, t, 0};
- f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i)))));
+ f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i, false)))));
  i.t = s, i.i = 0;
- return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i)))))); }
+ return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i, false)))))); }
 
 // some libc functions we use
 g_vm(g_vm_tnew) {
@@ -852,6 +852,113 @@ struct g *gxr(struct g *f) {
   *++f->sp = (intptr_t) p; }
  return f; }
 
+// --- input editor -----------------------------------------------------
+// A zipper editor over a list of gwen values. The current level is the
+// horizontal zipper (edl, edr): edl holds the items left of the cursor,
+// REVERSED (head = the item just left of it); edr holds the focus and
+// the items right of it, in order (head = focus). edl/edr/eda are GC
+// roots -- they sit between v0 and end[], which gcg scans wholesale.
+//
+// Items are gwen values, so one editor serves two scales: a list of
+// characters is a line/text editor; a list whose items are themselves
+// lists is a structure (code) editor. ed_down opens a focused sublist as
+// the current level; eda is the vertical zipper -- a stack of ancestor
+// frames, each a pair (parent_edl . parent_right_rest) that ed_up uses to
+// rebuild the parent with the edited level reinstalled as its focus.
+//
+// Every motion reduces to two primitives: ed_cons builds a pair (ed_push
+// is ed_cons into a slot) and ed_shift moves a head between two lists.
+// The g_edit_ev event vocabulary that g_edit takes is declared in g.h.
+
+// allocate the pair (car . cdr) and store it in *out. car and cdr are
+// rooted across the collection inside have(), so either may be a heap
+// value -- which it is at the structural scale, where items are sublists.
+static struct g *ed_cons(struct g *f, word car, word cdr, word *out) {
+ MM(f, &car);
+ MM(f, &cdr);
+ f = have(f, Width(struct g_pair));
+ UM(f);
+ UM(f);
+ if (g_ok(f)) {
+  struct g_pair *p = bump(f, Width(struct g_pair));
+  ini_two(p, car, cdr);
+  *out = (word) p; }
+ return f; }
+
+// prepend c to the list rooted at *slot: *slot = (c . *slot).
+static struct g *ed_push(struct g *f, word *slot, word c) {
+ return ed_cons(f, c, *slot, slot); }
+
+// move the head of *from onto *to -- the one navigation primitive.
+// *from/*to are GC roots; the moved item is handed to ed_push by value
+// and rooted there, so it survives the collection inside the cons.
+static struct g *ed_shift(struct g *f, word *from, word *to) {
+ if (twop(*from)) {
+  word c = A(*from);
+  if (g_ok(f = ed_push(f, to, c))) *from = B(*from); }
+ return f; }
+
+// shift every item of *from onto *to -- used for home/end, and to close
+// a level (draining edl onto edr leaves edr holding the whole level).
+static struct g *ed_drain(struct g *f, word *from, word *to) {
+ while (g_ok(f) && twop(*from)) f = ed_shift(f, from, to);
+ return f; }
+
+// descend: the focus must be a sublist. push a frame recording this
+// level minus the focus, then open the focused sublist as the new level.
+static struct g *ed_down(struct g *f) {
+ if (!twop(f->edr) || !twop(A(f->edr))) return f;
+ word fr;
+ f = ed_cons(f, f->edl, B(f->edr), &fr);    // frame = (edl . right-rest)
+ if (g_ok(f)) f = ed_push(f, &f->eda, fr);  // eda = (frame . eda)
+ if (!g_ok(f)) return f;
+ f->edr = A(f->edr);                        // focused sublist is the level
+ f->edl = g_nil;
+ return f; }
+
+// ascend: close the current level into one list, pop the parent frame,
+// and reinstall the (now edited) level as the parent's focus.
+static struct g *ed_up(struct g *f) {
+ if (!twop(f->eda)) return f;               // already at the root
+ f = ed_drain(f, &f->edl, &f->edr);         // close: edr now holds the level
+ if (!g_ok(f)) return f;
+ word fr = A(f->eda), v = f->edr;           // parent frame; the closed level
+ f->edl = A(fr);                            // parent's left siblings
+ f->edr = B(fr);                            // parent's right siblings, rest
+ f = ed_push(f, &f->edr, v);                // reinstall focus = closed level
+ if (g_ok(f)) f->eda = B(f->eda);           // pop the frame
+ return f; }
+
+// apply one key event to the editor.
+struct g *g_edit(struct g *f, int ev) {
+ switch (ev) {
+  default:  // a character: insert at the cursor
+   return ev > 0 ? ed_push(f, &f->edl, putnum(ev)) : f;
+  case g_ed_bsp:   if (twop(f->edl)) f->edl = B(f->edl); return f;
+  case g_ed_del:   if (twop(f->edr)) f->edr = B(f->edr); return f;
+  case g_ed_left:  return ed_shift(f, &f->edl, &f->edr);
+  case g_ed_right: return ed_shift(f, &f->edr, &f->edl);
+  case g_ed_home:  return ed_drain(f, &f->edl, &f->edr);
+  case g_ed_end:   return ed_drain(f, &f->edr, &f->edl);
+  case g_ed_up:    return ed_up(f);
+  case g_ed_down:  return ed_down(f); } }
+
+// flatten the current level into `buf` in display order, writing at most
+// `cap` characters; store the cursor's character offset in *cursor.
+// returns the true length, which may exceed `cap` -- the caller sizes or
+// grows buf and detects truncation. no allocation, safe to call anytime.
+size_t g_edit_text(struct g *f, char *buf, size_t cap, size_t *cursor) {
+ size_t n = 0;
+ for (word l = f->edl; twop(l); l = B(l)) n++;    // cursor offset = |edl|
+ if (cursor) *cursor = n;
+ size_t i = n;                                    // edl fills [0, n) reversed
+ for (word l = f->edl; twop(l); l = B(l))
+  if (--i < cap) buf[i] = (char) getnum(A(l));
+ size_t total = n;                                // edr fills [n, total)
+ for (word l = f->edr; twop(l); l = B(l), total++)
+  if (total < cap) buf[total] = (char) getnum(A(l));
+ return total; }
+
 op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : g_nil)
 
 g_vm(g_vm_ssub) {
@@ -1028,19 +1135,25 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
  if (!g_ok(f = g_r_getc(f, i))) return f;
  int c = f->b;
  switch (c) {
-  case '(':  return g_reads(f, i);
+  case '(':  return g_reads(f, i, true);
   case ')': case EOF:  return encode(f, g_status_eof);
-  case '\'': return gxl(pushq(gxr(g_push(g_read1(f, i), 1, g_nil))));
+  case '\'':
+   f = g_read1(f, i);
+   if (g_code_of(f) == g_status_eof)               // quote with no operand
+    f = encode(g_core_of(f), g_status_more);
+   return gxl(pushq(gxr(g_push(f, 1, g_nil))));
   case '"': {
    size_t n = 0;
    f = grbufn(f);
    for (size_t lim = sizeof(word); g_ok(f); f = grbufg(f), lim *= 2)
     for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c) {
-     if (!g_ok(f = i->getc(f, i))) return f;
-     if ((c = f->b) == EOF || c == '"' ||
-         (c == '\\' && g_ok(f = i->getc(f, i)) && (c = f->b) == EOF))
-      return len(b) = n, f;
-    }
+     if (!g_ok(f = i->getc(f, i))) return f;        // threaded; char in f->b
+     c = f->b;
+     if (c == '\\') {                               // escape: take next char
+      if (!g_ok(f = i->getc(f, i))) return f;
+      if ((c = f->b) == EOF) return encode(f, g_status_more); }
+     else if (c == EOF) return encode(f, g_status_more);  // unterminated
+     else if (c == '"') return len(b) = n, f; }           // closing quote
    return f; } }
 
  uintptr_t n = 1, lim = sizeof(intptr_t);
@@ -1062,19 +1175,99 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
       return f; } }
  return f; }
 
-static struct g *g_reads(struct g *f, struct g_in* i) {
+static struct g *g_reads(struct g *f, struct g_in* i, bool nested) {
  intptr_t n = 0;
  for (int c; g_ok(f = g_r_getc(f, i)); n++) {
   c = f->b;
-  if (c == EOF || c == ')') break;
+  if (c == ')') break;                          // list closed
+  if (c == EOF) {                               // end of input...
+   if (nested) return encode(f, g_status_more); //  ...inside a list: defer
+   break; }                                     //  ...at top level: done
   f = i->ungetc(f, c, i);
   f = g_read1(f, i); }
  for (f = g_push(f, 1, g_nil); n--; f = gxr(f));
  return f; }
 
+// Read one datum, transactionally. On g_status_more (or any non-ok
+// result) the VM stack is rolled back to its pre-parse depth, so a
+// deferred parse leaves no residue and the identical input can be
+// re-read once more of it arrives. The depth is kept as a word count,
+// not a pointer, because a collection during the parse relocates the
+// stack. The input source (g_in) is untouched -- the caller manages it.
+struct g *g_read(struct g *f, struct g_in *i) {
+ if (!g_ok(f)) return f;
+ uintptr_t depth = ((word*) f + f->len) - f->sp;
+ f = g_read1(f, i);
+ if (!g_ok(f)) {
+  struct g *c = g_core_of(f);
+  c->sp = (word*) c + c->len - depth; }
+ return f; }
+
+// --- charlist input source -------------------------------------------
+// A g_in that reads characters out of a gwen charlist (the editor buffer
+// once flattened). Unlike struct ti it is non-destructive -- it only
+// advances its own cursor -- so a deferred parse can be retried. peek is
+// a one-slot pushback for the parser's single-character lookahead; being
+// an int, not a list node, it needs no GC rooting.
+struct li { struct g_in in; word l; int peek; };
+
+static struct g *_li_eof(struct g *f, struct li *i) {
+ return f->b = (i->peek < 0 && !twop(i->l)), f; }
+static struct g *_li_getc(struct g *f, struct li *i) {
+ if (i->peek >= 0) return f->b = i->peek, i->peek = -1, f;
+ if (!twop(i->l)) return f->b = EOF, f;
+ return f->b = getnum(A(i->l)), i->l = B(i->l), f; }
+static struct g *_li_ungetc(struct g *f, int c, struct li *i) {
+ return i->peek = c, f; }
+
+// flatten the editor's current level -- reverse(edl) ++ edr, the typed
+// text in order -- into a fresh list, left on the stack at f->sp[0]. the
+// editor itself is untouched, so a parse that defers leaves it intact.
+static struct g *ed_flatten(struct g *f) {
+ f = g_push(f, 1, f->edr);                  // accumulator := edr
+ word l = f->edl;
+ MM(f, &l);
+ for (; g_ok(f) && twop(l); l = B(l))
+  f = gxl(g_push(f, 1, A(l)));              // acc := (head(edl) . acc)
+ UM(f);
+ return f; }
+
+struct g *g_read_ed_b(struct g *f) {
+ if (!g_ok(f = ed_flatten(f))) return f;
+ word r = f->sp[0];
+ if (twop(r)) return
+   f->edl = nil, f->edr = B(r), f->sp[0] = A(r), f;
+ else return pop1(f), encode(f, g_status_eof); }
+// Parse one datum out of the editor buffer. On g_status_ok the datum is
+// left on the stack and the editor is advanced past the consumed input;
+// on g_status_more the editor is untouched, so the user can keep typing;
+// on g_status_eof the buffer held nothing but whitespace. (Char scale --
+// it flattens the current level only, so eda is expected to be nil.)
+struct g *g_read_edit(struct g *f) {
+ f = ed_flatten(f);                         // sp[0] = buffer text, in order
+ if (!g_ok(f)) return f;
+ struct li i = {{(void*) _li_getc, (void*) _li_ungetc, (void*) _li_eof},
+                f->sp[0], -1};
+ MM(f, &i.l);                               // i.l aliases live heap -- root it
+ f = g_read(f, &i.in);
+ UM(f);
+ if (!g_ok(f)) return g_core_of(f)->sp += 1, f;   // more/eof: drop the buffer
+ f->edl = f->eda = g_nil;                   // consumed: reset the editor to
+ f->edr = i.l;                              //  whatever input is left over
+ f->sp[1] = f->sp[0];                       // keep the datum, drop the buffer
+ return f->sp += 1, f; }
+
+// The pump: pour the host input stream into the editor, one character at
+// a time, until end of input. (Interactive front-ends feed g_edit per
+// keystroke instead; this is the bulk path for non-interactive input.)
+struct g *g_feed(struct g *f) {
+ for (int c; g_ok(f = ggetc(f)) && (c = f->b) != EOF; ) f = g_edit(f, c);
+ return f; }
+
 static g_vm(g_vm_read) {
  switch (Pack(f), g_code_of(f = g_read1(f, &g_stdin))) {
   default: return f;
+  case g_status_more:   // not enough input yet -- treat as nothing read
   case g_status_eof:
    f = g_core_of(f); // nothing to read
    Unpack(f);
@@ -1611,6 +1804,7 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  memset(f, 0, sizeof(struct g));
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield, f->t0 = g_clock();
+ f->edl = f->edr = f->eda = nil;        // editor zipper starts empty
  if (!g_ok(f = mktbl(mktbl(f)))) return f;
  word m = pop1(f), d = pop1(f);
  f->macro = tbl(m), f->dict = tbl(d);

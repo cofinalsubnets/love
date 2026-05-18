@@ -81,6 +81,8 @@ struct g {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
    } *dict, *macro; }; };
+ g_word edl, edr, eda;     // input editor zipper (see g.c); GC roots --
+                           // they sit in the v0..end[] span gcg scans
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };
@@ -99,7 +101,21 @@ enum g_status {
  g_status_oom = 1,
  g_status_err = 2,
  g_status_eof = 3,
+ g_status_more = 4,   // EOF inside an unfinished form -- defer, retry later
 } g_fin(struct g*);
+
+// input editor key events; g_edit takes one of these or, for any value
+// > 0, a character code to insert at the cursor.
+enum g_edit_ev {
+ g_ed_left  = -1,  // move the focus one item left
+ g_ed_right = -2,  // move the focus one item right
+ g_ed_bsp   = -3,  // delete the item left of the cursor
+ g_ed_del   = -4,  // delete the focused item
+ g_ed_home  = -5,  // move the focus to the first item of this level
+ g_ed_end   = -6,  // move the focus to the last item of this level
+ g_ed_up    = -7,  // ascend: close this level into its parent's focus
+ g_ed_down  = -8,  // descend: open the focused sublist as the level
+};
 
 static g_inline intptr_t g_pop1(struct g*f) { return *f->sp++; }
 static g_inline size_t b2w(size_t b) {
@@ -126,12 +142,21 @@ struct g
  *g_ini_m(g_malloc_t*, g_free_t*),
  *g_eval(struct g*),
  *g_evals(struct g*, const char*),
+ *g_read(struct g*, struct g_in*),
+ *g_read_edit(struct g*),
+ *g_read_ed_b(struct g*),
+ *g_feed(struct g*),
  *g_defs(struct g*, struct g_def const*),
  *g_push(struct g*, uintptr_t, ...),
  *g_strof(struct g*, const char*),
  *g_pop(struct g*, uintptr_t),
+ *g_edit(struct g*, int),
  *gxl(struct g*),
  *gxr(struct g*);
+
+// flatten the editor's current level into buf (display order); store the
+// cursor's character offset in *cursor; return the true length.
+size_t g_edit_text(struct g*, char*, size_t, size_t*);
 
 g_malloc_t g_libc_malloc;
 g_free_t g_libc_free;
