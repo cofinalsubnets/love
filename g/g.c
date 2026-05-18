@@ -1734,7 +1734,7 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  memset(f, 0, sizeof(struct g));
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield, f->t0 = g_clock();
- f->e.l = f->e.r = nil;        // editor zipper starts empty
+ f->e.l = f->e.r = f->e.in_eof = nil;        // editor zipper starts empty
  f->in = g_stdin, f->out = g_stdout;
  if (!g_ok(f = mktbl(mktbl(f)))) return f;
  word m = pop1(f), d = pop1(f);

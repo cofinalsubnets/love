@@ -81,7 +81,7 @@ struct g {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
    } *dict, *macro; }; };
- struct g_ed { g_word l, r; } e;
+ struct g_ed { g_word l, r, in_eof; } e;
  struct g_in *in;
  struct g_out *out;
  intptr_t end[]; };

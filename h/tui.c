@@ -91,7 +91,6 @@ struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
 enum { two_q };
 static g_inline bool twop(g_word x) { return even(x) && typ(x) == two_q; }
 
-static bool in_eof;        // ^D pressed, or stdin ended
 static int  rendered;      // terminal cursor column relative to the start
                            // of the edit region (just after the prompt)
 
@@ -127,7 +126,7 @@ static g_inline struct g *edit_line(struct g *f) {
   for (;;) {
     render(f);
     int ev = read_event();
-    if (ev == EV_QUIT)  return in_eof = true, f;
+    if (ev == EV_QUIT)  return f->e.in_eof = g_putnum(1), f;
     if (ev == EV_ENTER) return putchar('\n'), fflush(stdout), f;
     if (!g_ok(f = g_edit(f, ev))) return f; } }
 
@@ -139,11 +138,11 @@ static struct g *_getc(struct g *f, struct g_in*) {
     return f->b = g_getnum(A(f->e.r)), f->e.r = B(f->e.r), f;
   if (!isatty(STDIN_FILENO)) {                   // non-tty: raw bytes
     int c = rb();
-    return f->b = c, in_eof = c < 0, f; }
-  if (in_eof) return f->b = EOF, f;
+    return f->b = c, f->e.in_eof = g_putnum(c < 0 ? 1 : 0), f; }
+  if (g_getnum(f->e.in_eof)) return f->b = EOF, f;
   f = edit_line(f);                              // refill: edit a fresh line
   if (!g_ok(f)) return f;
-  if (in_eof) return f->b = EOF, f;              // ^D ended the session
+  if (g_getnum(f->e.in_eof)) return f->b = EOF, f;              // ^D ended the session
   f = g_edit(f, g_ed_end);                       // flatten the line into edr,
   f = g_edit(f, '\n');                           //  terminated by a newline,
   if (!g_ok(f = g_edit(f, g_ed_home))) return f; //  in reading order
@@ -158,7 +157,8 @@ static struct g *_ungetc(struct g *f, int c, struct g_in*) {
   if (g_ok(f)) f->e.r = g_pop1(f);
   return f; }
 
-static struct g *_eof(struct g *f, struct g_in*) { return f->b = in_eof, f; }
+static struct g *_eof(struct g *f, struct g_in*) {
+  return f->b = g_getnum(f->e.in_eof), f; }
 
 static struct g_in _g_stdin = { _getc, _ungetc, _eof };
 struct g_in *g_stdin = &_g_stdin;
