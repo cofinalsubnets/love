@@ -933,19 +933,19 @@ static struct g *ed_up(struct g *f) {
  return f; }
  */
 
-// apply one key event to the editor.
-struct g *g_edit(struct g *f, int ev) {
+// apply one key event to the editor zipper *e.
+struct g *g_edit(struct g *f, struct g_ed *e, int ev) {
  switch (ev) {
   default:  // a character: insert at the cursor
-   return ev > 0 ? ed_push(f, &f->e.l, putnum(ev)) : f;
-  case g_ed_bsp:   if (twop(f->e.l)) f->e.l = B(f->e.l); return f;
-  case g_ed_del:   if (twop(f->e.r)) f->e.r = B(f->e.r); return f;
-  case g_ed_left:  return ed_shift(f, &f->e.l, &f->e.r);
-  case g_ed_right: return ed_shift(f, &f->e.r, &f->e.l);
+   return ev > 0 ? ed_push(f, &e->l, putnum(ev)) : f;
+  case g_ed_bsp:   if (twop(e->l)) e->l = B(e->l); return f;
+  case g_ed_del:   if (twop(e->r)) e->r = B(e->r); return f;
+  case g_ed_left:  return ed_shift(f, &e->l, &e->r);
+  case g_ed_right: return ed_shift(f, &e->r, &e->l);
  // case g_ed_up:    return ed_up(f);
 //  case g_ed_down:  return ed_down(f);
-  case g_ed_home:  return ed_drain(f, &f->e.l, &f->e.r);
-  case g_ed_end:   return ed_drain(f, &f->e.r, &f->e.l); } }
+  case g_ed_home:  return ed_drain(f, &e->l, &e->r);
+  case g_ed_end:   return ed_drain(f, &e->r, &e->l); } }
 
 op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : g_nil)
 
@@ -1734,7 +1734,6 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  memset(f, 0, sizeof(struct g));
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield, f->t0 = g_clock();
- f->e.l = f->e.r = f->e.in_eof = nil;        // editor zipper starts empty
  f->in = g_stdin, f->out = g_stdout;
  if (!g_ok(f = mktbl(mktbl(f)))) return f;
  word m = pop1(f), d = pop1(f);

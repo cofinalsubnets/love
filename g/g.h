@@ -49,6 +49,10 @@ union u;
 typedef g_vm(g_vm_t);
 typedef void *g_malloc_t(struct g*, size_t);
 typedef void g_free_t(struct g*, void*);
+// line-editor zipper: the line held as two charlists -- l is the items
+// left of the cursor, reversed; r is the focus and the rest, in order.
+// in_eof latches end-of-input. see g_edit and the editor notes in g.c.
+struct g_ed { g_word l, r, in_eof; };
 struct g {
  union u {
   g_vm_t *ap;
@@ -81,7 +85,6 @@ struct g {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
    } *dict, *macro; }; };
- struct g_ed { g_word l, r, in_eof; } e;
  struct g_in *in;
  struct g_out *out;
  intptr_t end[]; };
@@ -151,7 +154,7 @@ struct g
  *g_push(struct g*, uintptr_t, ...),
  *g_strof(struct g*, const char*),
  *g_pop(struct g*, uintptr_t),
- *g_edit(struct g*, int),
+ *g_edit(struct g*, struct g_ed*, int),
  *gxl(struct g*),
  *gxr(struct g*);
 
