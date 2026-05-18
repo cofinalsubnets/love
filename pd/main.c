@@ -300,6 +300,7 @@ static g_vm(cur_set) {
   Sp += 1;
   Ip += 1;
   return Continue(); }
+
 static g_vm(cur_put) {
   kcb->cb[kcb->wpos] = g_getnum(Sp[0]);
   Ip += 1;
@@ -307,6 +308,6 @@ static g_vm(cur_put) {
 
 int gputc(struct g*f, int c) { return cb_putc(kcb, c), c; }
 int gflush(struct g*f) { return 0; }
-int ggetc(struct g*f) { return cb_getc(kcb); }
-int gungetc(struct g*f, int c) { return cb_ungetc(kcb, c); }
-int geof(struct g*f) { return cb_eof(kcb); }
+struct g *ggetc(struct g*f) { return f->b = cb_getc(kcb), f; }
+struct g *gungetc(struct g*f, int c) { return f->b = cb_ungetc(kcb, c), f; }
+struct g *geof(struct g*f) { return f->b = cb_eof(kcb), f; }

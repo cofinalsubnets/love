@@ -69,6 +69,7 @@ struct g {
  union { uintptr_t t0; g_word *cp; };
  g_malloc_t *malloc;
  g_free_t *free;
+ uintptr_t b;
  union {
   intptr_t v0;
   struct {
@@ -85,9 +86,9 @@ struct g {
 struct g_def { char const *n; intptr_t x; };
 
 struct g_in {
- int (*getc)(struct g*, struct g_in*),
-     (*ungetc)(struct g*, int, struct g_in*),
-     (*eof)(struct g*, struct g_in*); };
+ struct g*(*getc)(struct g*, struct g_in*),
+         *(*ungetc)(struct g*, int, struct g_in*),
+         *(*eof)(struct g*, struct g_in*); };
 
 struct g_out {
  int (*putc)(struct g*, int, struct g_out*),
@@ -109,10 +110,11 @@ g_vm_t g_vm_ret0, g_vm_cur;
 
 uintptr_t g_clock(void); // used by garbage collector
 
+struct g
+ *ggetc(struct g*),
+ *gungetc(struct g*, int),
+ *geof(struct g*);
 int
- ggetc(struct g*),
- gungetc(struct g*, int),
- geof(struct g*),
  gputc(struct g*, int),
  gflush(struct g*);
 

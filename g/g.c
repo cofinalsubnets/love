@@ -143,9 +143,9 @@ static g_inline uintptr_t rot(uintptr_t x) {
   int const s = sizeof(uintptr_t) * 4; // shift bits = word bits / 2 = sizeof(word) * 4
   return (x << s) | (x >> s); }
 
-static int g_stdin_getc  (struct g *f, struct g_in *_)        { return ggetc(f); }
-static int g_stdin_ungetc(struct g *f, int c, struct g_in *_) { return gungetc(f, c); }
-static int g_stdin_eof   (struct g *f, struct g_in *_)        { return geof(f); }
+static struct g*g_stdin_getc  (struct g *f, struct g_in *_)        { return ggetc(f); }
+static struct g*g_stdin_ungetc(struct g *f, int c, struct g_in *_) { return gungetc(f, c); }
+static struct g*g_stdin_eof   (struct g *f, struct g_in *_)        { return geof(f); }
 static int g_stdout_putc (struct g *f, int c, struct g_out *_){ return gputc(f, c); }
 static struct g_in  g_stdin  = { g_stdin_getc, g_stdin_ungetc, g_stdin_eof };
 static struct g_out g_stdout = { g_stdout_putc, gflush };
@@ -643,9 +643,9 @@ g_vm(g_vm_eval) { return
                  Continue()); }
 
 struct ti { struct g_in in; char const *t; word i; } ;
-static int _eof(struct g*f, struct ti *i) { return !i->t[i->i]; }
-static int _getc(struct g*f, struct ti *i) { return _eof(f, i) ? EOF : i->t[i->i++]; }
-static int _ungetc(struct g*f, int _, struct ti *i) { return i->t[i->i = i->i ? i->i - 1 : i->i]; }
+static struct g*_eof(struct g*f, struct ti *i) { return f->b = !i->t[i->i], f; }
+static struct g*_getc(struct g*f, struct ti *i) { return f->b = (!i->t[i->i] ? EOF : i->t[i->i++]), f; }
+static struct g*_ungetc(struct g*f, int _, struct ti *i) { return f->b = i->t[i->i = i->i ? i->i - 1 : i->i], f; }
 g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
  struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof}, t, 0};
@@ -1014,18 +1014,19 @@ static struct g *grbufg(struct g *f) {
 //
 //
 // get the next significant character from the stream
-static int g_r_getc(struct g*f, struct g_in *i) {
- for (int c;;) switch (c = i->getc(f, i)) {
-  default: return c;
+static struct g* g_r_getc(struct g*f, struct g_in *i) {
+ for (int c; g_ok(f = i->getc(f, i));) switch (c = f->b) {
+  default: return f;
   case '#': case ';':
-   while (!i->eof(f, i) && (c = i->getc(f, i)) != '\n' && c != '\r');
+   while (g_ok(f = i->eof(f, i)) && !f->b && g_ok(f = i->getc(f, i)) && (c = f->b) != '\n' && c != '\r');
   case 0: case ' ': case '\t': case '\n': case '\r': case '\f':
-   continue; } }
+   continue; }
+ return f; }
 
 
 static struct g *g_read1(struct g*f, struct g_in *i) {
- if (!g_ok(f)) return f;
- int c = g_r_getc(f, i);
+ if (!g_ok(f = g_r_getc(f, i))) return f;
+ int c = f->b;
  switch (c) {
   case '(':  return g_reads(f, i);
   case ')': case EOF:  return encode(f, g_status_eof);
@@ -1034,36 +1035,39 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
    size_t n = 0;
    f = grbufn(f);
    for (size_t lim = sizeof(word); g_ok(f); f = grbufg(f), lim *= 2)
-    for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
-     if ((c = i->getc(f, i)) == EOF || c == '"' ||
-         (c == '\\' && (c =i->getc(f, i)) == EOF))
+    for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c) {
+     if (!g_ok(f = i->getc(f, i))) return f;
+     if ((c = f->b) == EOF || c == '"' ||
+         (c == '\\' && g_ok(f = i->getc(f, i)) && (c = f->b) == EOF))
       return len(b) = n, f;
+    }
    return f; } }
 
  uintptr_t n = 1, lim = sizeof(intptr_t);
  if (g_ok(f = grbufn(f)))
   for (txt(f->sp[0])[0] = c; g_ok(f); f = grbufg(f), lim *= 2)
-   for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
-    switch (c = i->getc(f, i)) {
+   for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c) {
+    if (!g_ok(f = i->getc(f, i))) return f;
+    switch (c = f->b) {
      default: continue;
      case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
      case '(': case ')': case '"': case '\'': case 0 : case EOF:
-      i->ungetc(f, c, i);
+      f = i->ungetc(f, c, i);
       len(b) = n;
       txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
       char *e;
       long j = strtol(txt(b), &e, 0);
       if (*e == 0) f->sp[0] = putnum(j);
       else f = intern(f);
-      return f; }
+      return f; } }
  return f; }
 
 static struct g *g_reads(struct g *f, struct g_in* i) {
  intptr_t n = 0;
- for (int c; g_ok(f); n++) {
-  c = g_r_getc(f, i);
+ for (int c; g_ok(f = g_r_getc(f, i)); n++) {
+  c = f->b;
   if (c == EOF || c == ')') break;
-  i->ungetc(f, c, i);
+  f = i->ungetc(f, c, i);
   f = g_read1(f, i); }
  for (f = g_push(f, 1, g_nil); n--; f = gxr(f));
  return f; }
@@ -1085,9 +1089,9 @@ static g_vm(g_vm_read) {
 
 static g_vm(g_vm_getc) {
  Pack(f);
- int i = ggetc(f);
+ if (!g_ok(f = ggetc(f))) return f;
  Unpack(f);
- Sp[0] = putnum(i);
+ Sp[0] = putnum(f->b);
  Ip += 1;
  return Continue(); }
 

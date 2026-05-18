@@ -89,9 +89,12 @@ static volatile LIMINE_REQUESTS_END_MARKER;
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 void g_stdout_putc(struct g*f, int c) { cb_putc(kcb, c); }
 int gputc(struct g*f, int c) { return cb_putc(kcb, c), c; }
-int ggetc(struct g*f) { return cb_getc(kcb); }
-int gungetc(struct g*f, int c) { return cb_ungetc(kcb, c); }
-int geof(struct g*f) { return cb_eof(kcb); }
+struct g* ggetc(struct g*f) {
+  return g_core_of(f)->b = cb_getc(kcb), f; }
+struct g* gungetc(struct g*f, int c) {
+  return g_core_of(f)->b = cb_ungetc(kcb, c), f; }
+struct g*geof(struct g*f) {
+  return g_core_of(f)->b = cb_eof(kcb), f; }
 uintptr_t g_clock(void) { return kticks; }
 
 #define show_cursor 1

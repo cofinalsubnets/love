@@ -17,9 +17,9 @@ int gputc(struct g*f, int c) {
   if (c == '\\' || c == '"')
     putc(c, stdout);
   return putc(c, stdout); }
-int ggetc(struct g*f) { return getc(stdin); }
-int gungetc(struct g*_, int c) { return ungetc(c, stdin); }
-int geof(struct g*_) { return feof(stdin); }
+struct g*ggetc(struct g*f) { return !g_ok(f) ? f : (f->b = getc(stdin), f); }
+struct g* gungetc(struct g*f, int c) { return !g_ok(f) ? f : (f->b = ungetc(c, stdin), f); }
+struct g* geof(struct g*f) { return !g_ok(f) ? f : (f->b = feof(stdin), f); }
 int gflush(struct g*) { return fflush(stdout); }
 
 int main(int argc, char const **argv) {
