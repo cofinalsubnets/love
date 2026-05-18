@@ -78,13 +78,26 @@ static int read_event(void) {
     default:
       return c >= ' ' && c < 127 ? c : 0; } }
 
+// --- charlist access (g.h doesn't export these; copied from g.c) -----
+struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
+#define two(o)  ((struct g_pair*)(o))
+#define A(o)    two(o)->a
+#define B(o)    two(o)->b
+#define cell(o) ((union u*)(o))
+#define odd(_)  ((uintptr_t)(_) & 1)
+#define even(_) (!odd(_))
+#define typ(o)  cell(o)[1].typ
+enum { two_q };
+static g_inline bool twop(g_word x) { return even(x) && typ(x) == two_q; }
+
 // --- the line editor (behind ggetc) ----------------------------------
-#define BUF 4096
-static char   ln[BUF];     // the edited line currently being served
-static size_t lnpos, lnlen;
-static bool   in_eof;      // ^D pressed, or stdin ended
-static int    pushback = -1;  // one-slot ungetc pushback (both paths)
-static int    rendered;    // terminal cursor column relative to the start
+// the edited line IS the editor buffer: edr (on struct g, alongside edl)
+// holds the characters not yet read. ggetc consumes edr; gungetc pushes
+// a character back onto it. there is no separate line buffer here.
+#define BUF 4096           // render scratch buffer size
+static bool in_eof;        // ^D pressed, or stdin ended
+static int  pushback = -1; // one-slot ungetc (gungetc must not allocate)
+static int  rendered;      // terminal cursor column relative to the start
                            // of the edit region (just after the prompt)
 
 // redraw the edit line in place. all motion is relative to the region
@@ -117,23 +130,26 @@ static struct g *edit_line(struct g *f) {
 // ggetc serves the next input character. interactively it runs the line
 // editor to refill once a line is used up; otherwise it raw-reads stdin.
 struct g *ggetc(struct g *f) {
-  if (pushback >= 0)                             // a previously ungot char
+  if (pushback >= 0)                             // an ungot character
     return f->b = pushback, pushback = -1, f;
+  if (twop(f->edr))                              // the edited line, char by char
+    return f->b = g_getnum(A(f->edr)), f->edr = B(f->edr), f;
   if (!isatty(STDIN_FILENO)) {                   // non-tty: raw bytes
     int c = rb();
     return f->b = c, in_eof = c < 0, f; }
-  if (lnpos < lnlen) return f->b = (unsigned char) ln[lnpos++], f;
   if (in_eof) return f->b = EOF, f;
-  f = edit_line(f);                              // -> f->edl/f->edr hold a line
+  f = edit_line(f);                              // refill: edit a fresh line
   if (!g_ok(f)) return f;
   if (in_eof) return f->b = EOF, f;              // ^D ended the session
-  lnlen = g_edit_text(f, ln, BUF - 1, NULL);     // flatten the line out
-  if (lnlen > BUF - 1) lnlen = BUF - 1;
-  ln[lnlen++] = '\n';                            // terminate the served line
-  lnpos = 0;
-  f->edl = f->edr = g_nil;                       // clear the editor
-  return f->b = (unsigned char) ln[lnpos++], f; }
+  f = g_edit(f, g_ed_end);                       // flatten the line into edr,
+  f = g_edit(f, '\n');                           //  terminated by a newline,
+  if (!g_ok(f = g_edit(f, g_ed_home))) return f; //  in reading order
+  if (!twop(f->edr)) return f->b = EOF, f;
+  return f->b = g_getnum(A(f->edr)), f->edr = B(f->edr), f; }
 
+// hold one character for the next ggetc. this can't push onto edr --
+// that would allocate, and an allocating ungetc would let a collection
+// dangle the buffer pointer the parser's token reader caches across it.
 struct g *gungetc(struct g *f, int c) {
   return pushback = c, f; }
 
