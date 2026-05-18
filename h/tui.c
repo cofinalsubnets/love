@@ -19,6 +19,16 @@
 #include <termios.h>
 #include <time.h>
 
+struct g_in_f { struct g_in i; FILE *f; };
+struct g_out_f { struct g_out i; FILE *f; };
+
+struct g
+ *g_in_f_getc(struct g*, struct g_in*),
+ *g_in_f_ungetc(struct g*, int, struct g_in*),
+ *g_in_f_eof(struct g*, struct g_in*),
+ *g_out_f_putc(struct g*, int, struct g_out*),
+ *g_out_f_flush(struct g*, struct g_out*);
+
 g_noinline uintptr_t g_clock(void) {
   struct timespec ts;
   return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1

@@ -81,8 +81,9 @@ struct g {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
    } *dict, *macro; }; };
- g_word edl, edr, eda;     // input editor zipper (see g.c); GC roots --
-                           // they sit in the v0..end[] span gcg scans
+ g_word edl, edr;
+ struct g_in *in;
+ struct g_out *out;
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };
@@ -95,6 +96,7 @@ struct g_in {
 struct g_out {
  struct g*(*putc)(struct g*, int, struct g_out*),
          *(*flush)(struct g*); };
+
 
 enum g_status {
  g_status_ok  = 0,
@@ -144,7 +146,6 @@ struct g
  *g_evals(struct g*, const char*),
  *g_read(struct g*, struct g_in*),
  *g_read_edit(struct g*),
- *g_read_ed_b(struct g*),
  *g_feed(struct g*),
  *g_defs(struct g*, struct g_def const*),
  *g_push(struct g*, uintptr_t, ...),
@@ -159,5 +160,7 @@ g_free_t g_libc_free;
 static g_inline struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }
 static g_inline struct g *g_evals_(struct g *f, char const *s) {
   return g_pop(g_evals(f, s), 1); }
+extern struct g_in g_stdin;
+extern struct g_out g_stdout, g_stderr;
 
 #endif

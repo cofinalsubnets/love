@@ -147,8 +147,8 @@ static struct g*g_stdin_getc  (struct g *f, struct g_in *_)        { return gget
 static struct g*g_stdin_ungetc(struct g *f, int c, struct g_in *_) { return gungetc(f, c); }
 static struct g*g_stdin_eof   (struct g *f, struct g_in *_)        { return geof(f); }
 static struct g*g_stdout_putc (struct g *f, int c, struct g_out *_){ return gputc(f, c); }
-static struct g_in  g_stdin  = { g_stdin_getc, g_stdin_ungetc, g_stdin_eof };
-static struct g_out g_stdout = { g_stdout_putc, gflush };
+struct g_in  g_stdin  = { g_stdin_getc, g_stdin_ungetc, g_stdin_eof };
+struct g_out g_stdout = { g_stdout_putc, gflush };
 static struct g *c0(struct g *f, g_vm_t *y);
 
 // function state using this type
@@ -904,6 +904,7 @@ static struct g *ed_drain(struct g *f, word *from, word *to) {
  while (g_ok(f) && twop(*from)) f = ed_shift(f, from, to);
  return f; }
 
+ /*
 // descend: the focus must be a sublist. push a frame recording this
 // level minus the focus, then open the focused sublist as the new level.
 static struct g *ed_down(struct g *f) {
@@ -928,6 +929,7 @@ static struct g *ed_up(struct g *f) {
  f = ed_push(f, &f->edr, v);                // reinstall focus = closed level
  if (g_ok(f)) f->eda = B(f->eda);           // pop the frame
  return f; }
+ */
 
 // apply one key event to the editor.
 struct g *g_edit(struct g *f, int ev) {
@@ -938,10 +940,10 @@ struct g *g_edit(struct g *f, int ev) {
   case g_ed_del:   if (twop(f->edr)) f->edr = B(f->edr); return f;
   case g_ed_left:  return ed_shift(f, &f->edl, &f->edr);
   case g_ed_right: return ed_shift(f, &f->edr, &f->edl);
+ // case g_ed_up:    return ed_up(f);
+//  case g_ed_down:  return ed_down(f);
   case g_ed_home:  return ed_drain(f, &f->edl, &f->edr);
-  case g_ed_end:   return ed_drain(f, &f->edr, &f->edl);
-  case g_ed_up:    return ed_up(f);
-  case g_ed_down:  return ed_down(f); } }
+  case g_ed_end:   return ed_drain(f, &f->edr, &f->edl); } }
 
 op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : g_nil)
 
@@ -1189,66 +1191,6 @@ struct g *g_read(struct g *f, struct g_in *i) {
   c->sp = (word*) c + c->len - depth; }
  return f; }
 
-// --- charlist input source -------------------------------------------
-// A g_in that reads characters out of a gwen charlist (the editor buffer
-// once flattened). Unlike struct ti it is non-destructive -- it only
-// advances its own cursor -- so a deferred parse can be retried. peek is
-// a one-slot pushback for the parser's single-character lookahead; being
-// an int, not a list node, it needs no GC rooting.
-struct li { struct g_in in; word l; int peek; };
-
-static struct g *_li_eof(struct g *f, struct li *i) {
- return f->b = (i->peek < 0 && !twop(i->l)), f; }
-static struct g *_li_getc(struct g *f, struct li *i) {
- if (i->peek >= 0) return f->b = i->peek, i->peek = -1, f;
- if (!twop(i->l)) return f->b = EOF, f;
- return f->b = getnum(A(i->l)), i->l = B(i->l), f; }
-static struct g *_li_ungetc(struct g *f, int c, struct li *i) {
- return i->peek = c, f; }
-
-// flatten the editor's current level -- reverse(edl) ++ edr, the typed
-// text in order -- into a fresh list, left on the stack at f->sp[0]. the
-// editor itself is untouched, so a parse that defers leaves it intact.
-static struct g *ed_flatten(struct g *f) {
- f = g_push(f, 1, f->edr);                  // accumulator := edr
- word l = f->edl;
- MM(f, &l);
- for (; g_ok(f) && twop(l); l = B(l))
-  f = gxl(g_push(f, 1, A(l)));              // acc := (head(edl) . acc)
- UM(f);
- return f; }
-
-struct g *g_read_ed_b(struct g *f) {
- if (!g_ok(f = ed_flatten(f))) return f;
- word r = f->sp[0];
- if (twop(r)) return
-   f->edl = nil, f->edr = B(r), f->sp[0] = A(r), f;
- else return pop1(f), encode(f, g_status_eof); }
-// Parse one datum out of the editor buffer. On g_status_ok the datum is
-// left on the stack and the editor is advanced past the consumed input;
-// on g_status_more the editor is untouched, so the user can keep typing;
-// on g_status_eof the buffer held nothing but whitespace. (Char scale --
-// it flattens the current level only, so eda is expected to be nil.)
-struct g *g_read_edit(struct g *f) {
- f = ed_flatten(f);                         // sp[0] = buffer text, in order
- if (!g_ok(f)) return f;
- struct li i = {{(void*) _li_getc, (void*) _li_ungetc, (void*) _li_eof},
-                f->sp[0], -1};
- MM(f, &i.l);                               // i.l aliases live heap -- root it
- f = g_read(f, &i.in);
- UM(f);
- if (!g_ok(f)) return g_core_of(f)->sp += 1, f;   // more/eof: drop the buffer
- f->edl = f->eda = g_nil;                   // consumed: reset the editor to
- f->edr = i.l;                              //  whatever input is left over
- f->sp[1] = f->sp[0];                       // keep the datum, drop the buffer
- return f->sp += 1, f; }
-
-// The pump: pour the host input stream into the editor, one character at
-// a time, until end of input. (Interactive front-ends feed g_edit per
-// keystroke instead; this is the bulk path for non-interactive input.)
-struct g *g_feed(struct g *f) {
- for (int c; g_ok(f = ggetc(f)) && (c = f->b) != EOF; ) f = g_edit(f, c);
- return f; }
 
 static g_vm(g_vm_read) {
  switch (Pack(f), g_code_of(f = g_read1(f, &g_stdin))) {
@@ -1790,7 +1732,8 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  memset(f, 0, sizeof(struct g));
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield, f->t0 = g_clock();
- f->edl = f->edr = f->eda = nil;        // editor zipper starts empty
+ f->edl = f->edr = nil;        // editor zipper starts empty
+ f->in = &g_stdin, f->out = &g_stdout;
  if (!g_ok(f = mktbl(mktbl(f)))) return f;
  word m = pop1(f), d = pop1(f);
  f->macro = tbl(m), f->dict = tbl(d);
