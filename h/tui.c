@@ -10,6 +10,8 @@ struct g_out_f { struct g_out o; FILE *f; };
 #define f_i(x) ((struct g_in_f*)(x))->f
 #define f_o(x) ((struct g_out_f*)(x))->f
 
+struct g_in_ed { struct g_in _i, *i; struct g_ed e; };
+
 struct g
  *g_in_f_getc(struct g*, struct g_in*),
  *g_in_f_ungetc(struct g*, int, struct g_in*),
@@ -91,8 +93,8 @@ struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
 enum { two_q };
 static g_inline bool twop(g_word x) { return even(x) && typ(x) == two_q; }
 
-static int  rendered;      // terminal cursor column relative to the start
-                           // of the edit region (just after the prompt)
+static int rendered;      // terminal cursor column relative to the start
+                          // of the edit region (just after the prompt)
 
 // redraw the edit line in place. all motion is relative to the region
 // start, so it never disturbs whatever prompt precedes it on the line.
