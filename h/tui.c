@@ -6,7 +6,9 @@
 #include <time.h>
 
 struct g_in_f { struct g_in i; FILE *f; };
-struct g_out_f { struct g_out i; FILE *f; };
+struct g_out_f { struct g_out o; FILE *f; };
+#define f_i(x) ((struct g_in_f*)(x))->f
+#define f_o(x) ((struct g_out_f*)(x))->f
 
 struct g
  *g_in_f_getc(struct g*, struct g_in*),
@@ -23,8 +25,8 @@ g_noinline uintptr_t g_clock(void) {
 
 static struct g *_putc(struct g *f, int c, struct g_out*) { return putchar(c), f; }
 static struct g *_flush(struct g *f, struct g_out*)       { return fflush(stdout), f; }
-struct g_out _g_stdout = { _putc, _flush },
-             *g_stdout = &_g_stdout;
+static struct g_out _g_stdout = { _putc, _flush };
+struct g_out *g_stdout = &_g_stdout;
 
 // --- raw terminal mode -----------------------------------------------
 static struct termios saved_termios;
@@ -158,8 +160,8 @@ static struct g *_ungetc(struct g *f, int c, struct g_in*) {
 
 static struct g *_eof(struct g *f, struct g_in*) { return f->b = in_eof, f; }
 
-struct g_in _g_stdin = { _getc, _ungetc, _eof },
-            *g_stdin = &_g_stdin;
+static struct g_in _g_stdin = { _getc, _ungetc, _eof };
+struct g_in *g_stdin = &_g_stdin;
 
 // --- main: load the prelude and run the REPL script ------------------
 int main(int argc, char const **argv) {

@@ -19,10 +19,10 @@ struct g_out_f { struct g_out o; FILE*f;};
 #define f_o(x) ((struct g_out_f*)(x))->f
 
 static struct g *_putc(struct g*f, int c, struct g_out*o) { return putc(c, f_o(o)), f; }
-static struct g* _flush(struct g*f, struct g_out*o) { fflush(f_o(o)); return f; }
-static struct g*_getc(struct g*f, struct g_in*i) { return g_core_of(f)->b = getc(f_i(i)), f; }
-static struct g* _ungetc(struct g*f, int c, struct g_in*i) { return g_core_of(f)->b = ungetc(c, f_i(i)), f; }
-static struct g* _eof(struct g*f, struct g_in*i) { return g_core_of(f)->b = feof(f_i(i)), f; }
+static struct g *_flush(struct g*f, struct g_out*o) { fflush(f_o(o)); return f; }
+static struct g *_getc(struct g*f, struct g_in*i) { return g_core_of(f)->b = getc(f_i(i)), f; }
+static struct g *_ungetc(struct g*f, int c, struct g_in*i) { return g_core_of(f)->b = ungetc(c, f_i(i)), f; }
+static struct g *_eof(struct g*f, struct g_in*i) { return g_core_of(f)->b = feof(f_i(i)), f; }
 static struct g_in_f _g_stdin = {{ .getc = _getc, .ungetc = _ungetc, .eof = _eof, }, NULL};
 struct g_in *g_stdin = (void*)&_g_stdin;
 static struct g_out_f _g_stdout = {{ .putc = _putc, .flush = _flush, }, NULL};
