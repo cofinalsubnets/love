@@ -102,25 +102,25 @@ static int  rendered;      // terminal cursor column relative to the start
 // same number of cells are rewound afterward, restoring the cursor split.
 static void render(struct g *f) {
   size_t left = 0, total = 0;                   // |edl| (= cursor offset), |line|
-  for (g_word p; twop(f->edl); left++)          // drain edl onto edr in place
-    p = f->edl, f->edl = B(p), B(p) = f->edr, f->edr = p;
+  for (g_word p; twop(f->e.l); left++)          // drain edl onto edr in place
+    p = f->e.l, f->e.l = B(p), B(p) = f->e.r, f->e.r = p;
 
   if (rendered) printf("\x1b[%dD", rendered);   // back to the region start
   fputs("\x1b[K", stdout);                      // clear to end of line
-  for (g_word l = f->edr; twop(l); l = B(l), total++) {
+  for (g_word l = f->e.r; twop(l); l = B(l), total++) {
     int c = g_getnum(A(l));                     // edr now holds the whole line
     putchar(c >= ' ' && c < 127 ? c : ' '); }
 
   for (size_t i = left; i--; ) {                // rewind: edr -> edl, restoring
-    g_word p = f->edr;                          //  the original cursor split
-    f->edr = B(p), B(p) = f->edl, f->edl = p; }
+    g_word p = f->e.r;                          //  the original cursor split
+    f->e.r = B(p), B(p) = f->e.l, f->e.l = p; }
 
   if (total > left) printf("\x1b[%zuD", total - left);  // cursor to the split
   rendered = left;
   fflush(stdout); }
 
 // edit one line: a keystroke loop until Enter (or ^D). on return the
-// editor buffer (f->edl/f->edr) holds the line. threads f -- g_edit
+// editor buffer (f->e.l/f->e.r) holds the line. threads f -- g_edit
 // allocates and the collection it may trigger relocates the runtime.
 static g_inline struct g *edit_line(struct g *f) {
   rendered = 0;                            // cursor sits at the region start
@@ -135,8 +135,8 @@ static g_inline struct g *edit_line(struct g *f) {
 // _getc serves the next input character. interactively it runs the line
 // editor to refill once a line is used up; otherwise it raw-reads stdin.
 static struct g *_getc(struct g *f, struct g_in*) {
-  if (twop(f->edr))                              // the edited line, char by char
-    return f->b = g_getnum(A(f->edr)), f->edr = B(f->edr), f;
+  if (twop(f->e.r))                              // the edited line, char by char
+    return f->b = g_getnum(A(f->e.r)), f->e.r = B(f->e.r), f;
   if (!isatty(STDIN_FILENO)) {                   // non-tty: raw bytes
     int c = rb();
     return f->b = c, in_eof = c < 0, f; }
@@ -147,15 +147,15 @@ static struct g *_getc(struct g *f, struct g_in*) {
   f = g_edit(f, g_ed_end);                       // flatten the line into edr,
   f = g_edit(f, '\n');                           //  terminated by a newline,
   if (!g_ok(f = g_edit(f, g_ed_home))) return f; //  in reading order
-  if (!twop(f->edr)) return f->b = EOF, f;
-  return f->b = g_getnum(A(f->edr)), f->edr = B(f->edr), f; }
+  if (!twop(f->e.r)) return f->b = EOF, f;
+  return f->b = g_getnum(A(f->e.r)), f->e.r = B(f->e.r), f; }
 
 // push a character back onto the editor buffer: edr := (c . edr). this
 // allocates -- g_read1's token reader refreshes its cached buffer
 // pointer from f->sp[0] after the ungetc call, so the relocation is safe.
 static struct g *_ungetc(struct g *f, int c, struct g_in*) {
-  f = gxl(g_push(f, 2, g_putnum(c), f->edr));    // gxl: (sp[0] . sp[1])
-  if (g_ok(f)) f->edr = g_pop1(f);
+  f = gxl(g_push(f, 2, g_putnum(c), f->e.r));    // gxl: (sp[0] . sp[1])
+  if (g_ok(f)) f->e.r = g_pop1(f);
   return f; }
 
 static struct g *_eof(struct g *f, struct g_in*) { return f->b = in_eof, f; }
