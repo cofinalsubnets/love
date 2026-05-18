@@ -14,7 +14,7 @@ g_noinline uintptr_t g_clock(void) {
  return s ? 0 : ts.tv_sec  * 1e3 + ts.tv_nsec / 1e6; }
 
 static struct g *_putc(struct g*f, int c, struct g_out*) { return putc(c, stdout), f; }
-static struct g* _flush(struct g*f) { fflush(stdout); return f; }
+static struct g* _flush(struct g*f, struct g_out*o) { fflush(stdout); return f; }
 static struct g*_getc(struct g*f, struct g_in*) { return g_core_of(f)->b = getc(stdin), f; }
 static struct g* _ungetc(struct g*f, int c, struct g_in*) { return g_core_of(f)->b = ungetc(c, stdin), f; }
 static struct g* _eof(struct g*f, struct g_in*) { return g_core_of(f)->b = feof(stdin), f; }

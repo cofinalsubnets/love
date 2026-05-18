@@ -89,7 +89,7 @@ static volatile LIMINE_REQUESTS_END_MARKER;
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 
 static struct g *_putc(struct g*f, int c, struct g_out*) { return cb_putc(kcb, c), f; }
-static struct g* _flush(struct g*f) { kcb->rpos = kcb->wpos; return f; }
+static struct g* _flush(struct g*f, struct g_out*) { kcb->rpos = kcb->wpos; return f; }
 static struct g*_getc(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_getc(kcb), f; }
 static struct g* _ungetc(struct g*f, int c, struct g_in*) { return g_core_of(f)->b = cb_ungetc(kcb, c), f; }
 static struct g* _eof(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_eof(kcb), f; }

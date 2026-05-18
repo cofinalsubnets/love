@@ -17,7 +17,7 @@ static struct g *lcat_putc(struct g*f, int c, struct g_out*) {
   if (c == '\\' || c == '"') putc('\\', stdout);  // C-escape backslash & quote
   putc(c, stdout);
   return f; }
-static struct g* lcat_flush(struct g*f) { fflush(stdout); return f; }
+static struct g* lcat_flush(struct g*f, struct g_out*) { fflush(stdout); return f; }
 
 static struct g*lcat_getc(struct g*f, struct g_in*) {
   return g_core_of(f)->b = getc(stdin), f; }

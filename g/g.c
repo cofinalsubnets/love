@@ -1772,4 +1772,4 @@ struct g *geof(struct g*f) {
 struct g *gputc(struct g*f, int c) {
   return !g_ok(f) ? f : f->out->putc(f, c, f->out); }
 struct g *gflush(struct g*f) {
-  return !g_ok(f) ? f : f->out->flush(f); }
+  return !g_ok(f) ? f : f->out->flush(f, f->out); }

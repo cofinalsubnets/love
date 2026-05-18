@@ -307,7 +307,7 @@ static g_vm(cur_put) {
   return Continue(); }
 
 static struct g *_putc(struct g*f, int c, struct g_out*) { return cb_putc(kcb, c), f; }
-static struct g* _flush(struct g*f) { return f; }
+static struct g* _flush(struct g*f, struct g_out*) { return f; }
 static struct g*_getc(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_getc(kcb), f; }
 static struct g* _ungetc(struct g*f, int c, struct g_in*) { return g_core_of(f)->b = cb_ungetc(kcb, c), f; }
 static struct g* _eof(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_eof(kcb), f; }
