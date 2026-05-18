@@ -154,10 +154,6 @@ struct g
  *gxl(struct g*),
  *gxr(struct g*);
 
-// flatten the editor's current level into buf (display order); store the
-// cursor's character offset in *cursor; return the true length.
-size_t g_edit_text(struct g*, char*, size_t, size_t*);
-
 g_malloc_t g_libc_malloc;
 g_free_t g_libc_free;
 static g_inline struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }

@@ -943,22 +943,6 @@ struct g *g_edit(struct g *f, int ev) {
   case g_ed_up:    return ed_up(f);
   case g_ed_down:  return ed_down(f); } }
 
-// flatten the current level into `buf` in display order, writing at most
-// `cap` characters; store the cursor's character offset in *cursor.
-// returns the true length, which may exceed `cap` -- the caller sizes or
-// grows buf and detects truncation. no allocation, safe to call anytime.
-size_t g_edit_text(struct g *f, char *buf, size_t cap, size_t *cursor) {
- size_t n = 0;
- for (word l = f->edl; twop(l); l = B(l)) n++;    // cursor offset = |edl|
- if (cursor) *cursor = n;
- size_t i = n;                                    // edl fills [0, n) reversed
- for (word l = f->edl; twop(l); l = B(l))
-  if (--i < cap) buf[i] = (char) getnum(A(l));
- size_t total = n;                                // edr fills [n, total)
- for (word l = f->edr; twop(l); l = B(l), total++)
-  if (total < cap) buf[total] = (char) getnum(A(l));
- return total; }
-
 op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : g_nil)
 
 g_vm(g_vm_ssub) {

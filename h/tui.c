@@ -94,23 +94,32 @@ static g_inline bool twop(g_word x) { return even(x) && typ(x) == two_q; }
 // the edited line IS the editor buffer: edr (on struct g, alongside edl)
 // holds the characters not yet read. ggetc consumes edr; gungetc pushes
 // a character back onto it. there is no separate line buffer here.
-#define BUF 4096           // render scratch buffer size
 static bool in_eof;        // ^D pressed, or stdin ended
 static int  rendered;      // terminal cursor column relative to the start
                            // of the edit region (just after the prompt)
 
 // redraw the edit line in place. all motion is relative to the region
 // start, so it never disturbs whatever prompt precedes it on the line.
+// edl is stored reversed; to walk the line in display order it is drained
+// onto edr in place -- just repointing cdrs, no allocation -- then the
+// same number of cells are rewound afterward, restoring the cursor split.
 static void render(struct g *f) {
-  char buf[BUF];
-  size_t cur, n = g_edit_text(f, buf, BUF, &cur);
-  if (n > BUF) n = BUF;
+  size_t left = 0, total = 0;                   // |edl| (= cursor offset), |line|
+  for (g_word p; twop(f->edl); left++)          // drain edl onto edr in place
+    p = f->edl, f->edl = B(p), B(p) = f->edr, f->edr = p;
+
   if (rendered) printf("\x1b[%dD", rendered);   // back to the region start
   fputs("\x1b[K", stdout);                      // clear to end of line
-  for (size_t i = 0; i < n; i++)
-    putchar(buf[i] >= ' ' && buf[i] < 127 ? buf[i] : ' ');
-  if (n > cur) printf("\x1b[%zuD", n - cur);    // cursor back to its offset
-  rendered = cur;
+  for (g_word l = f->edr; twop(l); l = B(l), total++) {
+    int c = g_getnum(A(l));                     // edr now holds the whole line
+    putchar(c >= ' ' && c < 127 ? c : ' '); }
+
+  for (size_t i = left; i--; ) {                // rewind: edr -> edl, restoring
+    g_word p = f->edr;                          //  the original cursor split
+    f->edr = B(p), B(p) = f->edl, f->edl = p; }
+
+  if (total > left) printf("\x1b[%zuD", total - left);  // cursor to the split
+  rendered = left;
   fflush(stdout); }
 
 // edit one line: a keystroke loop until Enter (or ^D). on return the
