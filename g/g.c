@@ -1195,7 +1195,7 @@ struct g *g_read(struct g *f, struct g_in *i) {
 
 
 static g_vm(g_vm_read) {
- switch (Pack(f), g_code_of(f = g_read1(f, &g_stdin))) {
+ switch (Pack(f), g_code_of(f = g_read1(f, f->in))) {
   default: return f;
   case g_status_more:   // not enough input yet -- treat as nothing read
   case g_status_eof:
@@ -1286,9 +1286,9 @@ static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
    case tbl_q: return gfprintf(f, o, "#tab:%d/%d@%x", tbl(x)->len, tbl(x)->cap, x); } }
 
 struct g*gputx(struct g*f, word x) {
- return gfputx(f, &g_stdout, x); }
+ return gfputx(f, f->out, x); }
 struct g*gputn(struct g*f, intptr_t n, uint8_t b) {
-  return g_putn(f, &g_stdout, n, b); }
+  return g_putn(f, f->out, n, b); }
 
 static g_vm(g_vm_putc) {
  Pack(f);
@@ -1309,7 +1309,7 @@ static g_vm(g_vm_puts) {
 static g_vm(g_vm_putn) {
  Pack(f);
  uintptr_t n = getnum(Sp[0]), b = getnum(Sp[1]);
- if (!g_ok(f = g_putn(f, &g_stdout, n, b))) return f;
+ if (!g_ok(f = g_putn(f, f->out, n, b))) return f;
  Unpack(f);
  Sp[1] = Sp[0];
  Sp += 1;
@@ -1318,7 +1318,7 @@ static g_vm(g_vm_putn) {
 
 static g_vm(g_vm_dot) {
  Pack(f);
- if (!g_ok(f = gfputx(f, &g_stdout, Sp[0]))) return f;
+ if (!g_ok(f = gfputx(f, f->out, Sp[0]))) return f;
  Unpack(f);
  Ip += 1;
  return Continue(); }
@@ -1735,7 +1735,7 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield, f->t0 = g_clock();
  f->edl = f->edr = nil;        // editor zipper starts empty
- f->in = &g_stdin, f->out = &g_stdout;
+ f->in = g_stdin, f->out = g_stdout;
  if (!g_ok(f = mktbl(mktbl(f)))) return f;
  word m = pop1(f), d = pop1(f);
  f->macro = tbl(m), f->dict = tbl(d);

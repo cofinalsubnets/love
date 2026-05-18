@@ -23,7 +23,8 @@ g_noinline uintptr_t g_clock(void) {
 
 static struct g *_putc(struct g *f, int c, struct g_out*) { return putchar(c), f; }
 static struct g *_flush(struct g *f, struct g_out*)       { return fflush(stdout), f; }
-struct g_out g_stdout = { _putc, _flush };
+struct g_out _g_stdout = { _putc, _flush },
+             *g_stdout = &_g_stdout;
 
 // --- raw terminal mode -----------------------------------------------
 static struct termios saved_termios;
@@ -157,7 +158,8 @@ static struct g *_ungetc(struct g *f, int c, struct g_in*) {
 
 static struct g *_eof(struct g *f, struct g_in*) { return f->b = in_eof, f; }
 
-struct g_in g_stdin = { _getc, _ungetc, _eof };
+struct g_in _g_stdin = { _getc, _ungetc, _eof },
+            *g_stdin = &_g_stdin;
 
 // --- main: load the prelude and run the REPL script ------------------
 int main(int argc, char const **argv) {

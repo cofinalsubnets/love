@@ -13,13 +13,20 @@ g_noinline uintptr_t g_clock(void) {
  int s = clock_gettime(CLOCK_MONOTONIC, &ts);
  return s ? 0 : ts.tv_sec  * 1e3 + ts.tv_nsec / 1e6; }
 
-static struct g *_putc(struct g*f, int c, struct g_out*) { return putc(c, stdout), f; }
+struct g_in_f { struct g_in i; FILE*f;};
+struct g_out_f { struct g_out o; FILE*f;};
+#define f_i(x) ((struct g_in_f*)(x))->f
+#define f_o(x) ((struct g_out_f*)(x))->f
+
+static struct g *_putc(struct g*f, int c, struct g_out*o) { return putc(c, stdout), f; }
 static struct g* _flush(struct g*f, struct g_out*o) { fflush(stdout); return f; }
 static struct g*_getc(struct g*f, struct g_in*) { return g_core_of(f)->b = getc(stdin), f; }
 static struct g* _ungetc(struct g*f, int c, struct g_in*) { return g_core_of(f)->b = ungetc(c, stdin), f; }
 static struct g* _eof(struct g*f, struct g_in*) { return g_core_of(f)->b = feof(stdin), f; }
-struct g_in g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof, };
-struct g_out g_stdout = { .putc = _putc, .flush = _flush, };
+struct g_in _g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof, },
+            *g_stdin = &_g_stdin;
+struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
+             *g_stdout = &_g_stdout;
 
 int main(int argc, char const **argv) {
  struct g *f;

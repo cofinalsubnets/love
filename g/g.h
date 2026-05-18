@@ -160,7 +160,7 @@ g_free_t g_libc_free;
 static g_inline struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }
 static g_inline struct g *g_evals_(struct g *f, char const *s) {
   return g_pop(g_evals(f, s), 1); }
-extern struct g_in g_stdin;
-extern struct g_out g_stdout, g_stderr;
+extern struct g_in *g_stdin;
+extern struct g_out *g_stdout, *g_stderr;
 
 #endif

@@ -311,5 +311,7 @@ static struct g* _flush(struct g*f, struct g_out*) { return f; }
 static struct g*_getc(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_getc(kcb), f; }
 static struct g* _ungetc(struct g*f, int c, struct g_in*) { return g_core_of(f)->b = cb_ungetc(kcb, c), f; }
 static struct g* _eof(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_eof(kcb), f; }
-struct g_in g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof, };
-struct g_out g_stdout = { .putc = _putc, .flush = _flush, };
+struct g_in _g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof, },
+            *g_stdin = &_g_stdin;
+struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
+             *g_stdout = &_g_stdout;
