@@ -154,7 +154,7 @@ struct g
  *g_push(struct g*, uintptr_t, ...),
  *g_strof(struct g*, const char*),
  *g_pop(struct g*, uintptr_t),
- *g_edit(struct g*, struct g_ed*, int),
+ *g_edit(struct g*, int),
  *gxl(struct g*),
  *gxr(struct g*);
 
