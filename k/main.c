@@ -53,9 +53,7 @@ static void palette_init(void) {
     palette[232 + i] = v << 16 | v << 8 | v; } }
 
 
-void k_reset(void);
-void archinit(void);
-void fbdraw(void);
+void k_reset(void), archinit(void), fbdraw(void);
 
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
@@ -118,18 +116,6 @@ struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
 uintptr_t g_clock(void) { return kticks; }
 
 #define show_cursor 1
-#define blue 0xff
-#define green 0xff00
-#define red 0xff0000
-#define cyan (blue|green)
-#define yellow (red|green)
-#define white (yellow|blue)
-#define magenta (red|blue)
-#define black 0
-#define console_bg black
-#define console_fg 0xe9edf0
-#define console_cur 0x6ba7a2
-#define console_sel 0xc3e4e0
 
 static const uint8_t
   kb2ascii[] = {
@@ -190,9 +176,6 @@ void kb_int(const uint8_t code) {
       if (a) kq(a);
       return; } }
 
-#define px_color cyan
-#define reg_color magenta
-#define mem_color yellow
 
 static g_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }

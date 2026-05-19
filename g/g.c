@@ -64,6 +64,24 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define putnum g_putnum
 #define g_strp strp
 
+// line-editor zipper: the line held as two charlists -- l is the items
+// left of the cursor, reversed; r is the focus and the rest, in order.
+// in_eof latches end-of-input. see g_edit and the editor notes in g.c.
+struct g_ed { g_word l, r, in_eof; };
+
+// input editor key events; g_edit takes one of these or, for any value
+// > 0, a character code to insert at the cursor.
+enum g_edit_ev {
+ g_ed_left  = -1,  // move the focus one item left
+ g_ed_right = -2,  // move the focus one item right
+ g_ed_bsp   = -3,  // delete the item left of the cursor
+ g_ed_del   = -4,  // delete the focused item
+ g_ed_home  = -5,  // move the focus to the first item of this level
+ g_ed_end   = -6,  // move the focus to the last item of this level
+ g_ed_up    = -7,  // ascend: close this level into its parent's focus
+ g_ed_down  = -8,  // descend: open the focused sublist as the level
+};
+
 struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
 enum q { two_q, vec_q, sym_q, tbl_q, };
 typedef g_word num, word;
