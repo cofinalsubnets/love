@@ -222,13 +222,17 @@
         (= c 1) -5 (= c 5) -6 (= c 27) (edesc 0)
         (? (&& (<= 32 c) (< c 127)) c 0)))
 
-   ; redraw from the saved cursor (DECRC), clearing everything below
-   ; first. pl is the prompt's column at DECSC time; the topmost
-   ; input line shares it, subsequent lines start at column 0.
-   ; cursor is positioned by counting rows-from-bottom (len d) and
-   ; target column.
-   (edrender pl u l r d)
-     (: _ (putc 27) _ (putc 56)             ; DECRC
+   ; redraw the buffer in place. pra is "rows above the cursor from
+   ; the previous render" -- we move up that many rows first so we
+   ; land back on the prompt's row. all motion is relative: nothing
+   ; depends on a saved absolute cursor, so the terminal scrolling
+   ; (when the buffer reaches the last row) doesn't desync us. pl is
+   ; the prompt's column; the topmost line shares it, subsequent
+   ; lines start at column 0.
+   (edrender pl pra u l r d)
+     (: _ (? (< 0 pra) (, (putc 27) (putc 91) (putn pra 10) (putc 65)) 0)
+        _ (putc 13)
+        _ (? (< 0 pl)  (, (putc 27) (putc 91) (putn pl 10)  (putc 67)) 0)
         _ (putc 27) _ (putc 91) _ (putc 74) ; clear to end of screen
         _ (each (rev u) (\ ln (, (each ln prc) (putc 10))))
         _ (each (revappend l r) prc)
@@ -240,36 +244,47 @@
         _ (? (< 0 col) (, (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
         (puts ""))
 
-   ; print the prompt, save the cursor (DECSC), dispatch events until
-   ; ^D or until enter at end-of-buffer with the buffer fully parsed.
-   ; enter always splits the current line at the cursor; only when
-   ; the cursor is at end-of-buffer do we try parseall, which may
-   ; yield multiple datums entered on one line. returns eofsym on ^D
-   ; (so the repl can distinguish that from a 0 datum list).
+   ; print the prompt, then dispatch events until ^D or until enter
+   ; at end-of-buffer with the buffer fully parsed. enter always
+   ; splits the current line at the cursor; only when the cursor is
+   ; at end-of-buffer do we try parseall, which may yield multiple
+   ; datums on one line. returns eofsym on ^D (so the repl can tell
+   ; that apart from a 0 datum list).
+   ;
+   ; the loop carries pra (= rows above the cursor as of the previous
+   ; render). edrender uses pra to move back up to the prompt's row
+   ; before redrawing, so we never rely on a saved absolute cursor
+   ; position -- terminal scrolling stays consistent. kloop wraps the
+   ; CPS helpers: they hand back a new state, kloop computes the new
+   ; pra from it and feeds it to loop.
    (edline _)
-     (: pl 4
-        _ (puts " ;; ") _ (putc 27) _ (putc 55)
-        (loop u l r d)
-          (: _ (edrender pl u l r d)
+     (: ps1 " ;; "
+        pr (ps1 _)
+        _ (puts pr)
+        pl (len pr)
+        (kloop u l r d) (loop (len u) u l r d)
+        (loop pra u l r d)
+          (: _ (edrender pl pra u l r d)
              c (edev 0)
              (? (= c -7) eofsym
                 (= c 10) (: nu (cons (rev l) u)
+                            nra (len nu)
                             (? (&& (nilp r) (nilp d))
                                (: vs (parseall (flatten nu 0 r d))
-                                  (? (= vs m) (loop nu 0 r d)
+                                  (? (= vs m) (loop nra nu 0 r d)
                                      (: _ (putc 10) vs)))
-                               (loop nu 0 r d)))
-                (< 0 c)  (loop u (cons c l) r d)
-                (= c -1) (edleft  loop u l r d)
-                (= c -2) (edright loop u l r d)
-                (= c -3) (edbsp   loop u l r d)
-                (= c -4) (eddel   loop u l r d)
-                (= c -5) (edhome  loop u l r d)
-                (= c -6) (edend   loop u l r d)
-                (= c -8) (edup    loop u l r d)
-                (= c -9) (eddown  loop u l r d)
-                (loop u l r d)))
-        (loop 0 0 0 0))
+                               (loop nra nu 0 r d)))
+                (< 0 c)  (loop (len u) u (cons c l) r d)
+                (= c -1) (edleft  kloop u l r d)
+                (= c -2) (edright kloop u l r d)
+                (= c -3) (edbsp   kloop u l r d)
+                (= c -4) (eddel   kloop u l r d)
+                (= c -5) (edhome  kloop u l r d)
+                (= c -6) (edend   kloop u l r d)
+                (= c -8) (edup    kloop u l r d)
+                (= c -9) (eddown  kloop u l r d)
+                (loop (len u) u l r d)))
+        (loop 0 0 0 0 0))
 
    (repl x)
      (: vs (edline 0)
