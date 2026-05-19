@@ -44,7 +44,7 @@
         (? (twop cr) (, (putc 27) (putc 91) (putn (len cr) 10) (putc 68)) 0)
         (puts "")))
    (edreset z) (: _ (put 'l 0 z) _ (put 'r 0 z) (put 'eof 0 z))
-   (edline z p) (: _ (puts p) _ (putc 27) _ (putc 55)
+   (edline z) (: _ (putc 27) _ (putc 55)
      (loop x) (: _ (edrender z) ev (edev 0)
        (? (= ev -7) (put 'eof -1 z)
           (= ev 10) (: _ (edit z 10) _ (putc 10)
@@ -52,15 +52,22 @@
           (: _ (edit z ev) (loop 0))))
      (loop 0))
 
-   ; read-eval-print: edline gathers a line, parse turns it into a datum
-   ; (or moresym, when the parens are still open -- keep editing the same
-   ; zipper -- or eofsym, an empty line).
+   ; read-eval-print. gather edits lines into the zipper until parse
+   ; yields a result -- a datum, or eofsym for an empty line. moresym
+   ; means the parens are still open: keep editing the same zipper with
+   ; no fresh prompt, since it is still one logical input. the prompt is
+   ; printed once per iteration, by repl.
    z (new 0) e (sym 0) m (sym 0)
-   (repl x)
-     (: cl (edline z " ;; ")
+   (gather x)
+     (: cl (edline z)
         (? (get 0 'eof z) 0
            (: r (parse cl e m)
-              (? (= r m) (repl 0)
-                 (= r e) (: _ (edreset z) (repl 0))
-                 (: _ (. (ev 'ev r)) _ (putc 10) _ (edreset z) (repl 0))))))
+              (? (= r m) (gather 0) r))))
+   (repl x)
+     (: _ (puts " ;; ")
+        r (gather 0)
+        (? (get 0 'eof z) 0
+           (: _ (? (= r e) 0 (: _ (. (ev 'ev r)) (putc 10)))
+               _ (edreset z)
+               (repl 0))))
    (repl 0))
