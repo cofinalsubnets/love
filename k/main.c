@@ -18,7 +18,18 @@ static struct {
   volatile uint32_t *_;
   uint16_t width, height, pitch; } kfb;
 
-static struct { uint8_t k, f; } kkb;
+// keyboard input. kb_int (interrupt context) decodes scancodes and
+// enqueues input bytes -- arrow/Delete keys as the ANSI escape sequences
+// the line editor decodes; k_getc and the (key) builtin drain the queue.
+// f holds the live modifier flags.
+static struct { uint8_t f, q[16], qh, qt; } kkb;
+static void kq(uint8_t b) {                // enqueue one byte (drop if full)
+  uint8_t n = (kkb.qt + 1) & 15;
+  if (n != kkb.qh) kkb.q[kkb.qt] = b, kkb.qt = n; }
+static int kqpop(void) {                   // dequeue one byte, -1 if empty
+  if (kkb.qh == kkb.qt) return -1;
+  int b = kkb.q[kkb.qh];
+  return kkb.qh = (kkb.qh + 1) & 15, b; }
 
 static uint32_t palette[256];
 static struct font
@@ -44,6 +55,7 @@ static void palette_init(void) {
 
 void k_reset(void);
 void archinit(void);
+void fbdraw(void);
 
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
@@ -89,11 +101,17 @@ static volatile LIMINE_REQUESTS_END_MARKER;
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 
 static struct g *_putc(struct g*f, int c, struct g_out*) { return cb_putc(kcb, c), f; }
-static struct g* _flush(struct g*f, struct g_out*) { kcb->rpos = kcb->wpos; return f; }
-static struct g*_getc(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_getc(kcb), f; }
-static struct g* _ungetc(struct g*f, int c, struct g_in*) { return g_core_of(f)->b = cb_ungetc(kcb, c), f; }
-static struct g* _eof(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_eof(kcb), f; }
-struct g_in _g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof, },
+static struct g *_flush(struct g*f, struct g_out*) { return fbdraw(), f; }
+// the keystroke source the line editor reads: block until a byte is
+// queued, pumping the framebuffer meanwhile so the cursor keeps
+// blinking. it never allocates, so f stays valid across the call.
+static struct g *k_getc(struct g*f, struct g_in*) {
+  int b;
+  while ((b = kqpop()) < 0) fbdraw(), kwait();
+  return g_core_of(f)->b = b, f; }
+static struct g *k_ungetc(struct g*f, int c, struct g_in*) { return f; }
+static struct g *k_eof(struct g*f, struct g_in*) { return g_core_of(f)->b = 0, f; }
+struct g_in _g_stdin = { .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof, },
             *g_stdin = &_g_stdin;
 struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
              *g_stdout = &_g_stdout;
@@ -139,48 +157,38 @@ _Static_assert(LEN(kb2ascii) == LEN(shift_kb2ascii));
 #define kb_code_right 77
 #define kb_code_up 72
 #define kb_code_down 80
+// decode a PS/2 scancode (interrupt context) and enqueue input bytes.
+// arrows and Delete become the ANSI escape sequences the line editor
+// decodes; Ctrl+letter becomes the matching control byte (so Ctrl-A/E
+// reach the editor as home/end, Ctrl-D as quit).
 void kb_int(const uint8_t code) {
-  if (code == kb_code_extend) kkb.f |= kb_flag_extend;
-  else if (kkb.f & kb_flag_extend) {
-    kkb.f &= ~kb_flag_extend;
-    uint16_t r = kcb->rpos,
-             w = kcb->wpos,
-             cs = kcb->cols;
-    if (code < 128) switch (code) {
-      case kb_code_alt: kkb.f |= kb_flag_ralt; return;
-      case kb_code_ctl: kkb.f |= kb_flag_rctl; return;
-      case kb_code_delete:
-        if (kkb.f & kb_flag_ctl && kkb.f & kb_flag_alt) k_reset();
-        return;
-      case kb_code_left: w -= 1; goto move_cursor;
-      case kb_code_right: w += 1; goto move_cursor;
-      case kb_code_up: w -= cs; goto move_cursor;
-      case kb_code_down: w += cs; 
-      move_cursor:
-        w %= kcb->rows * cs;
-        w = MAX(w, r);
-        kcb->wpos = w;
-      default: return; }
-    else switch (code - 128) {
-      case kb_code_alt: kkb.f &= ~kb_flag_ralt; return;
-      case kb_code_ctl: kkb.f &= ~kb_flag_rctl; return;
-      default: return; } }
-  else {
-    if (code < 128) switch (code) {
-      case kb_code_lshift: kkb.f |= kb_flag_lshift; return;
-      case kb_code_rshift: kkb.f |= kb_flag_rshift; return;
-      case kb_code_alt:    kkb.f |= kb_flag_lalt;   return;
-      case kb_code_ctl:    kkb.f |= kb_flag_lctl;   return;
-      default:
-        if (!kkb.k) kkb.k = code >= LEN(kb2ascii) ? code :
-          (kkb.f & (kb_flag_lshift | kb_flag_rshift) ? shift_kb2ascii : kb2ascii)[code];
-        return; }
-    else switch (code - 128) {
-      case kb_code_lshift: kkb.f &= ~kb_flag_lshift; return;
-      case kb_code_rshift: kkb.f &= ~kb_flag_rshift; return;
-      case kb_code_alt:    kkb.f &= ~kb_flag_lalt;   return;
-      case kb_code_ctl:    kkb.f &= ~kb_flag_lctl;   return;
-      default: return; } } }
+  if (code == kb_code_extend) { kkb.f |= kb_flag_extend; return; }
+  bool ext = kkb.f & kb_flag_extend, up = code & 128;
+  uint8_t sc = code & 127;
+  kkb.f &= ~kb_flag_extend;
+  if (ext) switch (sc) {
+    case kb_code_ctl: kkb.f = up ? kkb.f & ~kb_flag_rctl : kkb.f | kb_flag_rctl; return;
+    case kb_code_alt: kkb.f = up ? kkb.f & ~kb_flag_ralt : kkb.f | kb_flag_ralt; return;
+    case kb_code_delete:
+      if (up) return;
+      if (kkb.f & kb_flag_ctl && kkb.f & kb_flag_alt) k_reset();
+      kq(27), kq('['), kq('3'), kq('~'); return;       // Delete -> CSI 3 ~
+    case kb_code_left:  if (!up) kq(27), kq('['), kq('D'); return;
+    case kb_code_right: if (!up) kq(27), kq('['), kq('C'); return;
+    case kb_code_up:    if (!up) kq(27), kq('['), kq('A'); return;
+    case kb_code_down:  if (!up) kq(27), kq('['), kq('B'); return;
+    default: return; }
+  switch (sc) {
+    case kb_code_lshift: kkb.f = up ? kkb.f & ~kb_flag_lshift : kkb.f | kb_flag_lshift; return;
+    case kb_code_rshift: kkb.f = up ? kkb.f & ~kb_flag_rshift : kkb.f | kb_flag_rshift; return;
+    case kb_code_ctl:    kkb.f = up ? kkb.f & ~kb_flag_lctl : kkb.f | kb_flag_lctl; return;
+    case kb_code_alt:    kkb.f = up ? kkb.f & ~kb_flag_lalt : kkb.f | kb_flag_lalt; return;
+    default:
+      if (up || sc >= LEN(kb2ascii)) return;
+      uint8_t a = (kkb.f & kb_flag_shift ? shift_kb2ascii : kb2ascii)[sc];
+      if (a && kkb.f & kb_flag_ctl && (a | 32) >= 'a' && (a | 32) <= 'z') a &= 31;
+      if (a) kq(a);
+      return; } }
 
 #define px_color cyan
 #define reg_color magenta
@@ -256,8 +264,8 @@ static g_vm(draw) {
 
 
 static g_vm(key) {
- Sp[0] = g_putnum(kkb.k);
- kkb.k = 0;
+ int b = kqpop();
+ Sp[0] = g_putnum(b < 0 ? 0 : b);
  Ip += 1;
  return Continue(); }
 
@@ -330,7 +338,7 @@ static bool cbinit(void) {
   if (!(kcb = malloc(sizeof(struct cb) + rows * cols * sizeof(uint32_t)))) return false;
   kcb->rows = rows;
   kcb->cols = cols;
-  kcb->rpos = kcb->wpos = 0;
+  kcb->rpos = kcb->wpos = kcb->spos = kcb->esc = 0;
   kcb->flag = show_cursor;
   cb_attr(kcb, 47, 56, 0);
   cb_fill(kcb, 0);
@@ -346,13 +354,14 @@ static struct g_def defs[] = {
 
 void kmain(void) {
  archinit();
- if (fbinit() && meminit() && cbinit())
-  palette_init(),
-  g_evals_(g_defs(g_ini(), defs),
+ if (fbinit() && meminit() && cbinit()) {
+  palette_init();
+  // install the line editor at f->in (wrapping the keyboard source), then
+  // run a read-eval-print loop -- (read e) is now transparently edited.
+  struct g *f = g_read_edit(g_defs(g_ini(), defs));
+  g_evals_(f,
 #include "boot.h"
-   "(:(ps1 _)(puts\" ;; \")E(sym()))"
-   "(:(rs x)(?(= x E)0(X x(rs(read E)))))"
-   "(:(ep x)(: _(.(ev x))(putc 10)))"
-   "(puts\"\x02 \")(putn(clock())10)(ps1(putc 10))"
-   "(:(go _)(go(draw(: k(key())(? k(: _(putc k)_(?(= k 10)(ps1(each(rs(read E))ep)))k)))))(go()))");
+   "(:(g e)(: _(puts\" ;; \") r(read e)"
+   "        (?(= e r)0(: _(.(ev r)) _(putc 10)(g e))))"
+   "  (g(sym 0)))"); }
  k_reset(); }

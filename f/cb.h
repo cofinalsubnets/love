@@ -23,8 +23,8 @@
 #define cb_font(c) ((uint8_t)((c) >> 24))
 
 struct cb {
-  uint16_t rpos, wpos, flag;
-  uint8_t rows, cols, cur_fg, cur_bg, cur_font;
+  uint16_t rpos, wpos, spos, flag, arg;  // spos: saved cursor; arg: CSI param
+  uint8_t rows, cols, cur_fg, cur_bg, cur_font, esc;  // esc: escape-parser state
   uint32_t cb[]; };
 
 void
