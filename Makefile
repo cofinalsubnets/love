@@ -81,9 +81,9 @@ b/h/lcat: h/lcat.c b/h/$x/$x.o
 	@echo CC $@
 	@$(cc) -o $@ $^
 
-b/repl.h: b/h/lcat h/repl.g
+b/repl.h: b/h/lcat $x/repl.$x
 	@echo GEN	$@
-	@cat h/repl.g | b/h/lcat >$@
+	@cat $x/repl.$x | b/h/lcat >$@
 
 
 # sed command to escape lisp text into C string format
@@ -135,7 +135,7 @@ kcc_aarch64=-target aarch64-unknown-none-elf
 k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 
 
-b/k/$a/%.o: %.c $(g_h) b/boot.h
+b/k/$a/%.o: %.c $(g_h) b/boot.h b/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
