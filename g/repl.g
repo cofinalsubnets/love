@@ -350,6 +350,10 @@
                 (loop npra u l r d hu hd cur)))
         (loop 0 0 0 0 0 hu hd 0))
 
+   ; the outer (: ...) has no trailing body expression: every binding
+   ; defined inside it becomes a global, which lets t/repl.g drive the
+   ; editor and parser directly. the host and kernel frontends call
+   ; (repl 0 0) explicitly to start the loop.
    (repl hu hd)
      (: r (edline hu hd)
         (? (= r eofsym) 0
@@ -357,22 +361,4 @@
               nhu (car (cdr r))
               nhd (cdr (cdr r))
               _ (each vs (\ v (: _ (. (ev 'ev v)) (putc 10))))
-              (repl nhu nhd))))
-
-   ; expose the editor and parser functions as globals so tests in
-   ; t/repl.g can drive them directly. the main entry point is also
-   ; exposed; the host and kernel frontends call (repl 0 0) explicitly.
-   (def n v) (put n v globals)
-   _ (def 'edleft edleft)     _ (def 'edright edright)
-   _ (def 'edbsp edbsp)       _ (def 'eddel eddel)
-   _ (def 'edhome edhome)     _ (def 'edend edend)
-   _ (def 'edup edup)         _ (def 'eddown eddown)
-   _ (def 'joinln joinln)     _ (def 'flatten flatten)
-   _ (def 'splitat splitat)
-   _ (def 'mkframe mkframe)   _ (def 'detach detach)
-   _ (def 'emptybuf emptybuf) _ (def 'parses parses)
-   _ (def 'uphist uphist)     _ (def 'downhist downhist)
-   _ (def 'read1 read1)       _ (def 'parseall parseall)
-   _ (def 'numof numof)
-   _ (def 'edline edline)     _ (def 'repl repl)
-   0)
+              (repl nhu nhd)))))
