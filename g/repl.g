@@ -14,7 +14,15 @@
 ; cursor on the current line, in order), d (lines below). state is
 ; passed through helpers in CPS so no table is allocated per
 ; keystroke. on each tick the whole multi-line input is redrawn from
-; the cursor position saved by DECSC at the start of edit.
+; the prompt's row via relative cursor motion; the loop tracks rows
+; above the cursor from the previous render so terminal scrolling
+; doesn't desync.
+;
+; command history is a parallel zipper (hu, hd) over previously-
+; submitted buffer states. when the buffer cursor is on the top line,
+; up navigates history toward older; mirrored for down. on first edit
+; to a recalled entry, the pristine version is restored to its slot
+; and the buffer becomes a new entry, so the original survives.
 (: e (sym 0) m (sym 0) eofsym (sym 0)
 
    (revappend a b) (foldl b (flip cons) a)
@@ -204,6 +212,45 @@
                           0 (len l) (car d))
         (k u l r d))
 
+   ; --- history zipper ---
+
+   ; pack the buffer's four halves into one slot for history storage.
+   (mkframe u l r d) (cons u (cons l (cons r d)))
+
+   ; if cur holds a pristine recall, restore it at its slot in hu;
+   ; called before any mutating edit so the original survives.
+   (detach hu cur) (? (twop cur) (cons cur hu) hu)
+
+   ; predicates over the buffer used by the history navigation rules
+   ; below: empty buffers don't get pushed during normal nav, and
+   ; off-the-end nav only pushes when the buffer parses to a value.
+   (emptybuf u l r d) (&& (nilp u) (nilp l) (nilp r) (nilp d))
+   (parses u l r d)   (twop (parseall (flatten u l r d)))
+
+   ; up/down through the history zipper. on a normal pop, push the
+   ; current buffer onto the other side (skipping if empty); if the
+   ; other side is empty (hu or hd) but we're on a real recall (cur
+   ; non-nil) and the buffer parses, push and scroll into a fresh
+   ; empty line.
+   (uphist k u l r d hu hd cur)
+     (? (twop hu)
+        (: e (car hu)
+           nhd (? (emptybuf u l r d) hd (cons (mkframe u l r d) hd))
+           (k (car e) (car (cdr e)) (car (cdr (cdr e))) (cdr (cdr (cdr e))) (cdr hu) nhd e))
+        (&& (twop cur) (parses u l r d))
+        (: nhd (cons (mkframe u l r d) hd)
+           (k 0 0 0 0 hu nhd 0))
+        (k u l r d hu hd cur))
+   (downhist k u l r d hu hd cur)
+     (? (twop hd)
+        (: e (car hd)
+           nhu (? (emptybuf u l r d) hu (cons (mkframe u l r d) hu))
+           (k (car e) (car (cdr e)) (car (cdr (cdr e))) (cdr (cdr (cdr e))) nhu (cdr hd) e))
+        (&& (twop cur) (parses u l r d))
+        (: nhu (cons (mkframe u l r d) hu)
+           (k 0 0 0 0 nhu hd 0))
+        (k u l r d hu hd cur))
+
    ; map a raw byte (or escape sequence) to an event code:
    ; printable >0; -1 left, -2 right, -3 bsp, -4 del, -5 home,
    ; -6 end, -7 quit, -8 up, -9 down; 10 = enter.
@@ -248,8 +295,8 @@
    ; at end-of-buffer with the buffer fully parsed. enter always
    ; splits the current line at the cursor; only when the cursor is
    ; at end-of-buffer do we try parseall, which may yield multiple
-   ; datums on one line. returns eofsym on ^D (so the repl can tell
-   ; that apart from a 0 datum list).
+   ; datums on one line. returns eofsym on ^D, otherwise
+   ; (cons vs (cons nhu nhd)) so the repl can thread history.
    ;
    ; the loop carries pra = rows above the cursor as of the previous
    ; render. edrender uses pra to move back up to the prompt's row
@@ -258,41 +305,57 @@
    ; between renders moves the cursor (no putc except in the submit
    ; branch which exits), the next render's pra is always (len u) of
    ; the CURRENT frame, regardless of how the state transitions; we
-   ; cache it as npra and route every recursion through it. kloop
-   ; wraps the CPS helpers with that captured pra so the helpers
-   ; need not know about it.
-   (edline _)
+   ; cache it as npra and route every recursion through it.
+   ;
+   ; kloop wraps the CPS helpers for non-mutating motion; kedit does
+   ; the same for mutating ops (backspace, delete) and applies detach
+   ; on the way. khist is the continuation used by uphist/downhist
+   ; for history navigation. cur is the pristine frame of the
+   ; currently-recalled entry, or 0 if the buffer is a free edit.
+   (edline hu hd)
      (: ps1 " ;; "
         pr (ps1 _)
         _ (puts pr)
         pl (len pr)
-        (loop pra u l r d)
+        (loop pra u l r d hu hd cur)
           (: _ (edrender pl pra u l r d)
              c (edev 0)
              npra (len u)
-             (kloop uu ll rr dd) (loop npra uu ll rr dd)
+             (kloop uu ll rr dd) (loop npra uu ll rr dd hu hd cur)
+             (kedit uu ll rr dd) (loop npra uu ll rr dd (detach hu cur) hd 0)
+             (khist uu ll rr dd nhu nhd ncur) (loop npra uu ll rr dd nhu nhd ncur)
              (? (= c -7) eofsym
                 (= c 10) (: nu (cons (rev l) u)
                             (? (&& (nilp r) (nilp d))
                                (: vs (parseall (flatten nu 0 r d))
-                                  (? (= vs m) (loop npra nu 0 r d)
-                                     (: _ (putc 10) vs)))
-                               (loop npra nu 0 r d)))
-                (< 0 c)  (loop npra u (cons c l) r d)
+                                  (? (= vs m)
+                                     (loop npra nu 0 r d (detach hu cur) hd 0)
+                                     (: _ (putc 10)
+                                        nhu (? (twop vs)
+                                                (cons (mkframe u l r d) (revappend hd (detach hu cur)))
+                                                (revappend hd (detach hu cur)))
+                                        (cons vs (cons nhu 0)))))
+                               (loop npra nu 0 r d (detach hu cur) hd 0)))
+                (< 0 c)  (loop npra u (cons c l) r d (detach hu cur) hd 0)
                 (= c -1) (edleft  kloop u l r d)
                 (= c -2) (edright kloop u l r d)
-                (= c -3) (edbsp   kloop u l r d)
-                (= c -4) (eddel   kloop u l r d)
+                (= c -3) (edbsp   kedit u l r d)
+                (= c -4) (eddel   kedit u l r d)
                 (= c -5) (edhome  kloop u l r d)
                 (= c -6) (edend   kloop u l r d)
-                (= c -8) (edup    kloop u l r d)
-                (= c -9) (eddown  kloop u l r d)
-                (loop npra u l r d)))
-        (loop 0 0 0 0 0))
+                (= c -8) (? (twop u) (edup    kloop u l r d)
+                            (uphist   khist u l r d hu hd cur))
+                (= c -9) (? (twop d) (eddown  kloop u l r d)
+                            (downhist khist u l r d hu hd cur))
+                (loop npra u l r d hu hd cur)))
+        (loop 0 0 0 0 0 hu hd 0))
 
-   (repl x)
-     (: vs (edline 0)
-        (? (= vs eofsym) 0
-           (: _ (each vs (\ v (: _ (. (ev 'ev v)) (putc 10))))
-               (repl 0))))
-   (repl 0))
+   (repl hu hd)
+     (: r (edline hu hd)
+        (? (= r eofsym) 0
+           (: vs  (car r)
+              nhu (car (cdr r))
+              nhd (cdr (cdr r))
+              _ (each vs (\ v (: _ (. (ev 'ev v)) (putc 10))))
+              (repl nhu nhd))))
+   (repl 0 0))
