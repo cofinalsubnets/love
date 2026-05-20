@@ -67,7 +67,8 @@ int main(int argc, char const **argv) {
     struct g_def d[] = {{"argv", g_pop1(f)}, {0}};
     f = g_defs(f, d);
     f = g_evals_(f, boot);
-    f = g_evals_(f, is_repl ? repl : rel); }
+    f = g_evals_(f, repl);                   // load editor/parser defs
+    f = g_evals_(f, is_repl ? "(repl 0 0)" : rel); }
   enum g_status s = g_code_of(f);
   g_fin(f);
   return s; }

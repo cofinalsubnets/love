@@ -346,7 +346,8 @@ void kmain(void) {
   f = g_evals_(f,
 #include "boot.h"
   );
-  g_evals_(f,
+  f = g_evals_(f,
 #include "repl.h"
-  ); }
+  );
+  g_evals_(f, "(repl 0 0)"); }
  k_reset(); }

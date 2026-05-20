@@ -358,4 +358,21 @@
               nhd (cdr (cdr r))
               _ (each vs (\ v (: _ (. (ev 'ev v)) (putc 10))))
               (repl nhu nhd))))
-   (repl 0 0))
+
+   ; expose the editor and parser functions as globals so tests in
+   ; t/repl.g can drive them directly. the main entry point is also
+   ; exposed; the host and kernel frontends call (repl 0 0) explicitly.
+   (def n v) (put n v globals)
+   _ (def 'edleft edleft)     _ (def 'edright edright)
+   _ (def 'edbsp edbsp)       _ (def 'eddel eddel)
+   _ (def 'edhome edhome)     _ (def 'edend edend)
+   _ (def 'edup edup)         _ (def 'eddown eddown)
+   _ (def 'joinln joinln)     _ (def 'flatten flatten)
+   _ (def 'splitat splitat)
+   _ (def 'mkframe mkframe)   _ (def 'detach detach)
+   _ (def 'emptybuf emptybuf) _ (def 'parses parses)
+   _ (def 'uphist uphist)     _ (def 'downhist downhist)
+   _ (def 'read1 read1)       _ (def 'parseall parseall)
+   _ (def 'numof numof)
+   _ (def 'edline edline)     _ (def 'repl repl)
+   0)
