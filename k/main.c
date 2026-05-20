@@ -143,10 +143,14 @@ _Static_assert(LEN(kb2ascii) == LEN(shift_kb2ascii));
 #define kb_code_right 77
 #define kb_code_up 72
 #define kb_code_down 80
+#define kb_code_home 71
+#define kb_code_end 79
 // decode a PS/2 scancode (interrupt context) and enqueue input bytes.
-// arrows and Delete become the ANSI escape sequences the line editor
-// decodes; Ctrl+letter becomes the matching control byte (so Ctrl-A/E
-// reach the editor as home/end, Ctrl-D as quit).
+// arrows, Home, End, and Delete become the ANSI escape sequences the
+// line editor decodes; with Ctrl held, Home / End emit the modified
+// CSI form (`ESC [ 1 ; 5 H/F`) that the editor reads as buffer top /
+// buffer end. Ctrl+letter becomes the matching control byte (so
+// Ctrl-A/E reach the editor as home/end, Ctrl-D as quit).
 void kb_int(const uint8_t code) {
   if (code == kb_code_extend) { kkb.f |= kb_flag_extend; return; }
   bool ext = kkb.f & kb_flag_extend, up = code & 128;
@@ -163,6 +167,16 @@ void kb_int(const uint8_t code) {
     case kb_code_right: if (!up) kq(27), kq('['), kq('C'); return;
     case kb_code_up:    if (!up) kq(27), kq('['), kq('A'); return;
     case kb_code_down:  if (!up) kq(27), kq('['), kq('B'); return;
+    case kb_code_home:
+      if (up) return;
+      if (kkb.f & kb_flag_ctl) kq(27), kq('['), kq('1'), kq(';'), kq('5'), kq('H');
+      else kq(27), kq('['), kq('H');
+      return;
+    case kb_code_end:
+      if (up) return;
+      if (kkb.f & kb_flag_ctl) kq(27), kq('['), kq('1'), kq(';'), kq('5'), kq('F');
+      else kq(27), kq('['), kq('F');
+      return;
     default: return; }
   switch (sc) {
     case kb_code_lshift: kkb.f = up ? kkb.f & ~kb_flag_lshift : kkb.f | kb_flag_lshift; return;

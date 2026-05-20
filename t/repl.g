@@ -56,6 +56,27 @@
      (= (k4 0 '(3 2 1) 0 0)
         (edend k4 0 '(2 1) '(3) 0))
 
+     ; --- edtop / edbot: cursor to start / end of whole buffer ---
+     ; single-line buffer: edtop reduces to edhome, edbot to edend
+     (= (k4 0 0 '(1 2 3) 0)
+        (edtop k4 0 '(2 1) '(3) 0))
+     (= (k4 0 '(3 2 1) 0 0)
+        (edbot k4 0 '(2 1) '(3) 0))
+     ; three-line buffer "1" / "2" / "3", cursor on bottom line:
+     ; u = [(2) (1)] (closest first); l = (3); after edtop the cursor
+     ; lands at the start of "1" and the rest of the buffer drops below.
+     (= (k4 0 0 '(1) (X '(2) (X '(3) 0)))
+        (edtop k4 (X '(2) (X '(1) 0)) '(3) 0 0))
+     ; mirror: cursor on top of "1" / "2" / "3", edbot lands at end of "3"
+     (= (k4 (X '(2) (X '(1) 0)) '(3) 0 0)
+        (edbot k4 0 '(1) 0 (X '(2) (X '(3) 0))))
+     ; mid-line cursor: the current line gets reassembled and dropped
+     ; into d at its document position. doc: top "1", mid "89" (cursor
+     ; between 8 and 9), bot "4". after edtop: cursor at start of "1",
+     ; d holds the reassembled "89" then "4".
+     (= (k4 0 0 '(1) (X '(8 9) (X '(4) 0)))
+        (edtop k4 (X '(1) 0) '(8) '(9) (X '(4) 0)))
+
      ; --- edup: preserve column on the line above ---
      ; cursor at column 1 of line "xy", previous line "abcd" (chars 1..4):
      ; after edup, cursor at column 1 of "abcd" and "xy" becomes a d entry.

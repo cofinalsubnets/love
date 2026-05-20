@@ -203,6 +203,17 @@
         (k u l r d))
    (edhome k u l r d) (k u 0 (revappend l r) d)
    (edend  k u l r d) (k u (revappend r l) 0 d)
+   ; edtop / edbot jump across the whole buffer: cursor at the start of
+   ; the topmost line / end of the bottommost line. on a single-line
+   ; buffer they degenerate to edhome / edend.
+   (edtop k u l r d)
+     (? (twop u) (: ru (rev u)
+                     (k 0 0 (car ru) (append (cdr ru) (cons (revappend l r) d))))
+        (k u 0 (revappend l r) d))
+   (edbot k u l r d)
+     (? (twop d) (: rd (rev d)
+                     (k (append (cdr rd) (cons (revappend l r) u)) (revappend (car rd) 0) 0 0))
+        (k u (revappend r l) 0 d))
    (edup k u l r d)
      (? (twop u) (splitat (\ ll rr (k (cdr u) ll rr (cons (revappend l r) d)))
                           0 (len l) (car u))
@@ -253,13 +264,27 @@
 
    ; map a raw byte (or escape sequence) to an event code:
    ; printable >0; -1 left, -2 right, -3 bsp, -4 del, -5 home,
-   ; -6 end, -7 quit, -8 up, -9 down; 10 = enter.
+   ; -6 end, -7 quit, -8 up, -9 down, -10 buffer top, -11 buffer end;
+   ; 10 = enter.
+   ;
+   ; after `ESC [ 1` there are two shapes: `~` is plain Home; `; M F`
+   ; carries a modifier digit M (5=ctrl, 2=shift, ...) and a final byte
+   ; F. modified Home/End jump to buffer top/end; modified arrows fold
+   ; back to plain arrow events (we don't act on the modifier).
+   (edesc1 c) (? (= c 126) -5
+                 (= c 59)  (: _ (getc 0)
+                              d (getc 0)
+                              (? (= d 72) -10 (= d 70) -11
+                                 (= d 65)  -8 (= d 66)  -9
+                                 (= d 67)  -2 (= d 68)  -1 0))
+                 0)
    (edesc x) (? (!= 91 (getc 0)) 0
      (: c (getc 0)
         (? (= c 68) -1 (= c 67) -2
            (= c 65) -8 (= c 66) -9
            (= c 72) -5 (= c 70) -6
-           (|| (= c 49) (= c 55)) (: _ (getc 0) -5)
+           (= c 49) (edesc1 (getc 0))
+           (= c 55) (: _ (getc 0) -5)
            (|| (= c 52) (= c 56)) (: _ (getc 0) -6)
            (= c 51) (: _ (getc 0) -4) 0)))
    (edev x) (: c (getc 0)
@@ -347,6 +372,8 @@
                             (uphist   khist u l r d hu hd cur))
                 (= c -9) (? (twop d) (eddown  kloop u l r d)
                             (downhist khist u l r d hu hd cur))
+                (= c -10) (edtop kloop u l r d)
+                (= c -11) (edbot kloop u l r d)
                 (loop npra u l r d hu hd cur)))
         (loop 0 0 0 0 0 hu hd 0))
 
