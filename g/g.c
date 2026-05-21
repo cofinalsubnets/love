@@ -1047,7 +1047,9 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
      if (c == '\\') {                               // escape: take next char
       if (!g_ok(f = i->getc(f, i))) return f;
       if ((c = f->b) == EOF) return encode(f, g_status_more);
-      if (c == 'n') c = '\n'; }
+      if (c == 'n') c = '\n';
+      else if (c == 't') c = '\t';
+      else if (c == 'r') c = '\r'; }
      else if (c == EOF) return encode(f, g_status_more);  // unterminated
      else if (c == '"') return len(b) = n, f; }           // closing quote
    return f; } }
@@ -1206,6 +1208,8 @@ static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
       for (char c; g_ok(f) && len--; f = o->putc(f, c, o))
        if ((c = *text++) == '\\' || c == '"') f = o->putc(f, '\\', o);
        else if (c == '\n') f = o->putc(f, '\\', o), c = 'n';
+       else if (c == '\t') f = o->putc(f, '\\', o), c = 't';
+       else if (c == '\r') f = o->putc(f, '\\', o), c = 'r';
       f = o->putc(f, '"', o); }
      return f; }
    case sym_q: {
