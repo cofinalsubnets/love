@@ -1,7 +1,7 @@
 (: (f m n) 
-    (: m+ (+ m) n+ (+ n)
-              (g a) (? (< a 0) a (h (n+ a)))
-              (h a) (? (< a 0) a (g (m+ a)))
+    (: m_plus (+ m) n_plus (+ n)
+              (g a) (? (< a 0) a (h (n_plus a)))
+              (h a) (? (< a 0) a (g (m_plus a)))
               h)
    f3 (f -3)
    f37 (f3 -7)
@@ -16,12 +16,12 @@
  (= 3 (foldl + id '(1 2 3 4 5 6)))
  (= 11 (foldl + id '(6 5 4 3 2 1))))
 ; basic arithmetic
-(: 0? (= 0)
+(: zero? (= 0)
 (assert
  (= 17 ((\ f (f 9)) (+ 8)))
  (= 13 (: a 9 b 7 c -3 (+ a (+ b c))))
- (: (even? n) (? (0? n) -1 (odd? (dec n)))
-    (odd? n) (? (0? n) 0 (even? (dec n)))
+ (: (even? n) (? (zero? n) -1 (odd? (dec n)))
+    (odd? n) (? (zero? n) 0 (even? (dec n)))
   (odd? 99))
 
  (= -2 (~ 1))
@@ -45,14 +45,14 @@
  (assert (= 1013 (たらい 1012 1013 1014))))
 
 (: (c1895 m n) (+ m (/ (* (+ m n) (+ m (+ n 1))) 2))
-   (c1895~ p) (:
+   (c1895_inv p) (:
     (f t n) (? (> (+ t n) p) (X t (- n 1)) (f (+ t n) (+ n 1)))
     x (f 0 1)
     m (- p (A x))
     n (- (B x) m)
     (L m n))
    p (c1895 103 110)
-   l (c1895~ p)
+   l (c1895_inv p)
    (assert (= 103 (A l)) (= 110 (A (B l)))))
 
 ; heron's method for finding square roots

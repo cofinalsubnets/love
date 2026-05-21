@@ -18,12 +18,12 @@
  (sX x s n m y) (y x s)
  (sno n m y) (n sno)
  (sun x) (sX x sno)
- (s+ s t) (s (\ _ t)
-             (\ s _ m _ (m (s+ t s)))
-             (\ x s (sX x (s+ s t))))
- (s* s g) (s (\ _ s)
-             (\ s _ m _ (m (s* s g)))
-             (\ x s (s+ (g x) (s* s g))))
+ (s_plus s t) (s (\ _ t)
+             (\ s _ m _ (m (s_plus t s)))
+             (\ x s (sX x (s_plus s t))))
+ (s_star s g) (s (\ _ s)
+             (\ s _ m _ (m (s_star s g)))
+             (\ x s (s_plus (g x) (s_star s g))))
  (stake i s)
   (? (nilp i) s
    (s (\ _ s)
@@ -49,21 +49,21 @@
      (&& (twop x) (twop y)
      (et (est (A x) (A y)) (est (B x) (B y)) s))))
  (Run n ks g) (:
-  (walk* u s) (?
-   (var? u) (: t (has_s s u) (? t (walk* (A t) s) u))
-   (twop u) (X (walk* (A u) s) (walk* (B u) s))
+  (walk_star u s) (?
+   (var? u) (: t (has_s s u) (? t (walk_star (A t) s) u))
+   (twop u) (X (walk_star (A u) s) (walk_star (B u) s))
    u)
   (reify st) (flip catmap ks (\ k
    (: it (has_s (X (map A (A st)) (B st)) k)
-    (? it (L k (walk* (A it) st))))))
+    (? it (L k (walk_star (A it) st))))))
   (map reify (slist ((? n (stake n) id) (g empty_dict))))))
 
 (:: 'zz (\ x (: s (sym 0) n (sym 0) m (sym 0) y (sym 0) x (A x)
  (L '\ s n m y (L m (L x s))))))
 (:: 'et (\ xs (: x (A xs) xs (B xs)
- (foldl x (\ a b (L (\ a b s (s* (a s) b)) a b)) xs))))
+ (foldl x (\ a b (L (\ a b s (s_star (a s) b)) a b)) xs))))
 (:: 'vel (\ xs (: x (A xs) xs (B xs)
- (foldl x (\ a b (L (\ a b s (s+ (a s) (b s))) a b)) xs))))
+ (foldl x (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) xs))))
 (:: '\\ (\ a (X (X '\ a) (map (\ a (L var (L '` a))) (init a)))))
 
 (assert
@@ -72,7 +72,7 @@
  (unord_eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
  (: s1 (sX 1 (sX 2 (sX 3 sno)))
     s2 (smap (+ 3) s1)
-  (unord_eq '(1 2 3 4 5 6) (slist (s+ s1 s2))))
+  (unord_eq '(1 2 3 4 5 6) (slist (s_plus s1 s2))))
  (= '((a 1)) (Run 0 '(a) (\\ a (est a 1))))
  (= 0 (Run 0 '(a) (\\ a (et (est a 1) (est a 2)))))
  (= '((a (1 2 (3 (4))) b (3 (4)) c 4))
