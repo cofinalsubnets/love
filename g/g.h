@@ -11,7 +11,7 @@
 #define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))
 #define g_ok(f) (g_code_of(f) == g_status_ok)
 
-#define g_putnum(_) (((g_word)(_)<<1)|1)
+#define g_putnum(_) ((g_word)(((uintptr_t)(g_word)(_)<<1)|1))
 #define g_getnum(_) ((g_word)(_)>>1)
 
 #define g_nil g_putnum(0)

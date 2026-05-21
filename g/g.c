@@ -1017,10 +1017,10 @@ static struct g *grbufg(struct g *f) {
 //
 // get the next significant character from the stream
 static struct g* g_r_getc(struct g*f, struct g_in *i) {
- for (int c; g_ok(f = i->getc(f, i));) switch (c = f->b) {
+ while (g_ok(f = i->getc(f, i))) switch (f->b) {
   default: return f;
   case '#': case ';':
-   while (g_ok(f = i->eof(f, i)) && !f->b && g_ok(f = i->getc(f, i)) && (c = f->b) != '\n' && c != '\r');
+   while (g_ok(f = i->eof(f, i)) && !f->b && g_ok(f = i->getc(f, i)) && f->b != '\n' && f->b != '\r');
   case 0: case ' ': case '\t': case '\n': case '\r': case '\f':
    continue; }
  return f; }
