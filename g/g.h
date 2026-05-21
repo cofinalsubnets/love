@@ -116,7 +116,7 @@ static g_inline size_t b2w(size_t b) {
 g_vm_t g_vm_ret0, g_vm_cur;
 
 uintptr_t g_clock(void); // used by garbage collector
-bool g_intr(void); // per-frontend interrupt poll; default = false
+bool g_key(void);  // per-frontend non-consuming key-ready poll; default = false
 
 struct g
  *ggetc(struct g*),

@@ -107,6 +107,9 @@ static struct g *k_getc(struct g*f, struct g_in*) {
   int b;
   while ((b = kqpop()) < 0) fbdraw(), kwait();
   return g_core_of(f)->b = b, f; }
+// (key?) backend: non-consuming check on the kb queue. No EOF state on bare
+// metal, so this is just "queue non-empty".
+bool g_key(void) { return kkb.qh != kkb.qt; }
 static struct g *k_ungetc(struct g*f, int c, struct g_in*) { return f; }
 static struct g *k_eof(struct g*f, struct g_in*) { return g_core_of(f)->b = 0, f; }
 struct g_in _g_stdin = { .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof, },

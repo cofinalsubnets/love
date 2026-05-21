@@ -121,4 +121,39 @@
     b (spawn (\ _ (put 'flag -1 t)) 0)
     _ (wait a) _ (wait b)
     (= -1 (get 0 'flag t)))
+
+ ; --- kill ---
+
+ ; kill on an unknown pid: 0, no-op.
+ (= 0 (kill 99999))
+ ; kill on a non-numeric pid: 0.
+ (= 0 (kill nil))
+ ; kill on self (main = 0): 0 (self-kill impossible by construction).
+ (= 0 (kill 0))
+
+ ; kill a running task: returns -1. The task is gone from the ring, so
+ ; wait on its pid returns 0 (unknown).
+ (: t (new 0)
+    _ (put 'flag 0 t)
+    p (spawn (\ _ (: (loop) (, (yield 0) (put 'flag -1 t) (loop)) (loop))) 0)
+    r (kill p)
+    (&& (= -1 r) (= 0 (wait p))))
+
+ ; kill a dormant task (already finished): also returns -1, then wait sees 0.
+ (: p (spawn (\ _ 42) 0)
+    _ (yield 0)
+    ; p is dormant now (done? would be -1).
+    (&& (= -1 (kill p)) (= 0 (wait p))))
+
+ ; double-kill: second kill is a no-op since the pid is gone from the ring.
+ (: p (spawn (\ _ (: (loop) (, (yield 0) (loop)) (loop))) 0)
+    (&& (= -1 (kill p)) (= 0 (kill p))))
+
+ ; killing one of several tasks leaves the others intact.
+ (: t (new 0)
+    a (spawn (\ _ (: (loop) (, (yield 0) (loop)) (loop))) 0)
+    b (spawn (\ x (* x 10)) 7)
+    _ (kill a)
+    rb (wait b)
+    (&& (= 0 (wait a)) (= 70 rb)))
 )

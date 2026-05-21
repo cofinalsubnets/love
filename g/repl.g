@@ -285,6 +285,7 @@
            (= c 51) (: _ (getc 0) -4) 0)))
    (edev x) (: c (getc 0)
      (? (|| (= c -1) (= c 4)) -7
+        (= c 3) -12
         (|| (= c 13) (= c 10)) 10
         (|| (= c 8) (= c 127)) -3
         (= c 1) -5 (= c 5) -6 (= c 27) (edesc 0)
@@ -371,8 +372,25 @@
                             (downhist khist u l r d hu hd cur))
                 (= c -10) (edtop kloop u l r d)
                 (= c -11) (edbot kloop u l r d)
+                (= c -12) (: _ (puts "^C") _ (putc 10)
+                             (? (emptybuf u l r d) eofsym (edline hu hd)))
                 (loop npra u l r d hu hd cur)))
         (loop 0 0 0 0 0 hu hd 0))
+
+   ; evaluate a single parsed datum cooperatively. (ev v) is spawned as a
+   ; worker; the main task polls done?/key? and yields. on Ctrl+C (byte 3)
+   ; the worker is killed; any other byte is silently dropped (matches most
+   ; shells). prints the result (or ^C) before returning -1; caller adds
+   ; the trailing newline.
+   (do-eval v)
+     (: pid (spawn ev v)
+        (poll _)
+          (? (done? pid) (: r (wait pid) _ (. r) -1)
+             (key? 0)    (: c (getc 0)
+                            (? (= c 3) (, (puts "^C") (kill pid) -1)
+                               (poll 0)))
+             (, (yield 0) (poll 0)))
+        (poll 0))
 
    ; the outer (: ...) has no trailing body expression: every binding
    ; defined inside it becomes a global, which lets t/repl.g drive the
@@ -384,5 +402,5 @@
            (: vs  (car r)
               nhu (cadr r)
               nhd (cddr r)
-              _ (each vs (\ v (: _ (. (ev v)) (putc 10))))
+              _ (each vs (\ v (: _ (do-eval v) (putc 10))))
               (repl nhu nhd)))))

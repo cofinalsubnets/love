@@ -92,7 +92,7 @@ static g_vm_t
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
- g_vm_sleep, g_vm_sleep_wait, g_vm_donep, g_vm_intr;
+ g_vm_sleep, g_vm_sleep_wait, g_vm_donep, g_vm_kill, g_vm_key;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
 static struct g_vec *ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
@@ -1664,7 +1664,8 @@ enum g_status g_fin(struct g *f) {
  _(bif_callk, "call/cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \
  _(bif_spawn, "spawn", S2(g_vm_spawn)) _(bif_wait, "wait", S1(g_vm_wait)) \
  _(bif_sleep, "sleep", S4(g_vm_sleep)) _(bif_donep, "done?", S1(g_vm_donep)) \
- _(bif_intr, "intr?", S1(g_vm_intr))
+ _(bif_kill, "kill", S1(g_vm_kill)) \
+ _(bif_key, "key?", S1(g_vm_key))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
 #define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
@@ -1692,9 +1693,9 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
 void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
 void g_libc_free(struct g*f, void *x) { free(x); }
 
-// Default interrupt poll: never reports interrupts. Frontends that want real
-// Ctrl+C handling (host, kernel) override with a strong definition.
-__attribute__((weak)) bool g_intr(void) { return false; }
+// Default key-ready poll: nothing is ever ready (so cooperative getc would
+// block forever). Frontends with real stdin override with a strong definition.
+__attribute__((weak)) bool g_key(void) { return false; }
 
 g_inline struct g *g_pop(struct g*f, uintptr_t n) { return g_core_of(f)->sp += n, f; }
 
@@ -1923,6 +1924,27 @@ static g_vm(g_vm_donep) {
   Ip += 1;
   return Continue(); }
 
+// (kill pid) : remove a task from the ring unconditionally (running or dormant).
+// Same shape as wait's lookup, but state-agnostic: find prev, splice node out.
+//   unknown / non-num / self  -> 0 (no-op; self-kill impossible by construction
+//                                since current is sentinel and is skipped).
+//   found (running or dormant) -> splice out, return -1.
+// Killing a running task leaves its saved continuation unreachable through the
+// ring; GC will collect it. No cross-task abort dance — pure ring surgery.
+static g_vm(g_vm_kill) {
+  word pid_arg = Sp[0], result = putnum(0);
+  if (f->tasks && nump(pid_arg)) {
+    intptr_t target = getnum(pid_arg);
+    union u *prev = f->tasks;
+    for (union u *node = prev->m; node != f->tasks; prev = node, node = node->m)
+      if (getnum(node[2].x) == target) {
+        prev->m = node->m;
+        result = putnum(-1);
+        break; } }
+  Sp[0] = result;
+  Ip += 1;
+  return Continue(); }
+
 // sleep_wait_body : a sleeping task's saved_ip points here. The saved stack has
 // the absolute deadline at Sp[0] and the caller's return address at Sp[1].
 // Each time the task is scheduled, sleep_wait re-checks the clock; if the
@@ -1954,10 +1976,11 @@ static g_vm(g_vm_sleep_wait) {
   Sp += 1;
   return Continue(); }
 
-// (intr? _) : per-frontend interrupt poll. Returns -1 (true) if an interrupt
-// (typically Ctrl+C as byte 3 on raw-mode stdin) was pending and was consumed;
-// nil otherwise. Implementation lives in the frontend's main.c.
-static g_vm(g_vm_intr) {
-  Sp[0] = g_intr() ? putnum(-1) : g_nil;
+// (key? _) : per-frontend non-consuming key-ready poll. Returns -1 if
+// (getc 0) would return immediately (a byte is available or EOF state),
+// nil otherwise. Does NOT consume input. The arg is a dummy to defeat
+// gwen's (x)=x identity rule.
+static g_vm(g_vm_key) {
+  Sp[0] = g_key() ? putnum(-1) : g_nil;
   Ip += 1;
   return Continue(); }

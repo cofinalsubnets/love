@@ -14,6 +14,7 @@ g_noinline uintptr_t g_clock(void) {
  return s ? 0 : ts.tv_sec  * 1e3 + ts.tv_nsec / 1e6; }
 
 static struct g *lcat_putc(struct g*f, int c, struct g_out*) {
+  if (c == '\n') { fputs("\\n", stdout); return f; }
   if (c == '\\' || c == '"') putc('\\', stdout);  // C-escape backslash & quote
   putc(c, stdout);
   return f; }
