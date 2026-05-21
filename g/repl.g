@@ -91,8 +91,6 @@
              (cons (rev acc) cl))
         (loop 0 cl))
 
-   ; quote symbol -- gwen's quote special form is named with a backtick.
-   qsym (sym "`")
 
    ; read one datum from a charlist.
    (read1 cl)
@@ -117,12 +115,12 @@
                     (? (= rest m) m
                        (cons (cons (car r) (car rest)) (cdr rest))))))))
 
-   ; read one datum after a quote mark; wrap as (qsym datum).
+   ; read one datum after a quote mark; wrap as 'datum.
    (rdquot cl)
      (: r (read1 cl)
         (? (= r m) m
            (= r e) m
-           (cons (cons qsym (cons (car r) 0)) (cdr r))))
+           (cons (cons '` (cons (car r) 0)) (cdr r))))
 
    ; read a string literal until the closing quote, honoring \X.
    (rdstr cl)
@@ -207,11 +205,11 @@
    ; buffer they degenerate to edhome / edend.
    (edtop k u l r d)
      (? (twop u) (: ru (rev u)
-                     (k 0 0 (car ru) (cat (cdr ru) (cons (revcat l r) d))))
+                  (k 0 0 (car ru) (cat (cdr ru) (cons (revcat l r) d))))
         (k u 0 (revcat l r) d))
    (edbot k u l r d)
      (? (twop d) (: rd (rev d)
-                     (k (cat (cdr rd) (cons (revcat l r) u)) (revcat (car rd) 0) 0 0))
+                  (k (cat (cdr rd) (cons (revcat l r) u)) (revcat (car rd) 0) 0 0))
         (k u (revcat r l) 0 d))
    (edup k u l r d)
      (? (twop u) (splitat (\ ll rr (k (cdr u) ll rr (cons (revcat l r) d)))
@@ -275,8 +273,7 @@
                               d (getc 0)
                               (? (= d 72) -10 (= d 70) -11
                                  (= d 65)  -8 (= d 66)  -9
-                                 (= d 67)  -2 (= d 68)  -1 0))
-                 0)
+                                 (= d 67)  -2 (= d 68)  -1 0)))
    (edesc x) (? (!= 91 (getc 0)) 0
      (: c (getc 0)
         (? (= c 68) -1 (= c 67) -2
@@ -291,7 +288,7 @@
         (|| (= c 13) (= c 10)) 10
         (|| (= c 8) (= c 127)) -3
         (= c 1) -5 (= c 5) -6 (= c 27) (edesc 0)
-        (? (&& (<= 32 c) (< c 127)) c 0)))
+        (&& (<= 32 c) (< c 127) c)))
 
    ; redraw the buffer in place. pra is "rows above the cursor from
    ; the previous render" -- we move up that many rows first so we
@@ -315,6 +312,8 @@
         _ (? (< 0 col) (, (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
         (puts ""))
 
+   ps1 " ;; "
+
    ; print the prompt, then dispatch events until ^D or until enter
    ; at end-of-buffer with the buffer fully parsed. enter always
    ; splits the current line at the cursor; only when the cursor is
@@ -337,8 +336,7 @@
    ; for history navigation. cur is the pristine frame of the
    ; currently-recalled entry, or 0 if the buffer is a free edit.
    (edline hu hd)
-     (: ps1 " ;; "
-        pr (ps1 _)
+     (: pr (ps1 0)
         _ (puts pr)
         pl (len pr)
         (loop pra u l r d hu hd cur)
@@ -384,7 +382,7 @@
      (: r (edline hu hd)
         (? (= r eofsym) 0
            (: vs  (car r)
-              nhu (car (cdr r))
-              nhd (cdr (cdr r))
-              _ (each vs (\ v (: _ (. (ev 'ev v)) (putc 10))))
+              nhu (cadr r)
+              nhd (cddr r)
+              _ (each vs (\ v (: _ (. (ev v)) (putc 10))))
               (repl nhu nhd)))))
