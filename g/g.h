@@ -55,6 +55,8 @@ struct g {
   g_word x, typ;
   union u *m; } *ip;
  g_word *hp, *sp;
+ union u *tasks;       // task ring head (running task's node); NULL = no ring
+ uintptr_t yield_ctr;  // ticks before next cooperative yield; reset on swap/spawn
  struct g_atom {
   g_vm_t *ap;
   g_word typ;
@@ -113,6 +115,7 @@ static g_inline size_t b2w(size_t b) {
 g_vm_t g_vm_ret0, g_vm_cur;
 
 uintptr_t g_clock(void); // used by garbage collector
+bool g_intr(void); // per-frontend interrupt poll; default = false
 
 struct g
  *ggetc(struct g*),

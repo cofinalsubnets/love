@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <termios.h>
 #include <time.h>
+#include <poll.h>
 
 g_noinline uintptr_t g_clock(void) {
   struct timespec ts;
@@ -29,8 +30,23 @@ static void raw_mode(void) {
   raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
   raw.c_cc[VMIN] = 1;                      // block for one byte
   raw.c_cc[VTIME] = 0;
-  tcsetattr(STDIN_FILENO, TCSANOW, &raw); }
+  tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+  // disable stdio read-ahead so g_intr can rely on poll(STDIN_FILENO) reflecting
+  // the true byte-available state; otherwise fgetc may slurp bytes into a libc
+  // buffer that poll cannot see.
+  setvbuf(stdin, NULL, _IONBF, 0); }
   // c_oflag is left alone, so '\n' on output still becomes CR-LF.
+
+// (intr?) backend: non-blocking peek at stdin for byte 3 (Ctrl+C). Returns true
+// iff a Ctrl+C was waiting and was consumed. Any other ready byte is pushed back
+// via ungetc so the line editor's next getc sees it.
+bool g_intr(void) {
+  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
+  if (poll(&p, 1, 0) <= 0) return false;
+  int c = fgetc(stdin);
+  if (c == 3) return true;
+  if (c != EOF) ungetc(c, stdin);
+  return false; }
 
 // --- host input ------------------------------------------------------
 // raw_stdin is the byte source at f->in: non-interactively the parser
