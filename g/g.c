@@ -1684,7 +1684,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_tabdel, "tdel", S3(g_vm_tdel)) _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp))\
  _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tblp, "tblp", S1(g_vm_tblp)) _(bif_nump, "nump", S1(g_vm_nump))\
  _(bif_nilp, "nilp", S1(g_vm_nilp)) _(bif_ev, "ev", S1(g_vm_eval))\
- _(bif_callk, "call/cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \
+ _(bif_callk, "call_cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \
  _(bif_spawn, "spawn", S2(g_vm_spawn)) _(bif_wait, "wait", S1(g_vm_wait)) \
  _(bif_sleep, "sleep", S4(g_vm_sleep)) _(bif_donep, "done?", S1(g_vm_donep)) \
  _(bif_kill, "kill", S1(g_vm_kill)) \
@@ -1759,7 +1759,7 @@ static g_vm_t g_vm_kcall, g_vm_resume;
 #define topof(f) ((word*)f+f->len)
 
 // kcall : x = Sp[0], k = Ip[1] -> Ip = k, Sp[0] = x
-// NB: Sp[0] is overwritten with the call/cc argument x. The task-yield variant g_vm_resume
+// NB: Sp[0] is overwritten with the call_cc argument x. The task-yield variant g_vm_resume
 // must NOT do this — yielded tasks have a meaningful value at saved Sp[0].
 static g_vm(g_vm_kcall) {
   word x = Sp[0];
@@ -1789,7 +1789,7 @@ static g_vm(g_vm_resume) {
 
 // callk : i = Sp[0], k = Ip + 1 -> Ip = i, Sp[0] = k
 static g_vm(g_vm_callk) {
-  word f_val = Sp[0];                         // f, the call/cc arg
+  word f_val = Sp[0];                         // f, the call_cc arg
   if (oddp(f_val)) return Ip += 1, Continue();
   word height = topof(f) - Sp;
   uintptr_t n = 2 + height;                   // g_vm_kcall + (ip + 1) + stack = thread_contents

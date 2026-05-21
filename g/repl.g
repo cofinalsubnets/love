@@ -392,7 +392,7 @@
    ; the worker is killed; any other byte is silently dropped (matches most
    ; shells). prints the result (or ^C) before returning -1; caller adds
    ; the trailing newline.
-   (do-eval v)
+   (do_eval v)
      (: pid (spawn ev v)
         (poll _)
           (? (done? pid) (: r (wait pid) _ (. r) -1)
@@ -412,5 +412,5 @@
            (: vs  (car r)
               nhu (cadr r)
               nhd (cddr r)
-              _ (each vs (\ v (: _ (do-eval v) (putc 10))))
+              _ (each vs (\ v (: _ (do_eval v) (putc 10))))
               (repl nhu nhd)))))

@@ -1,11 +1,11 @@
 (putc 10)
-(. (test-get 'count)) (puts " tests in ")
+(. (test_get 'count)) (puts " tests in ")
 (: ms (clock test_t0)
    s  (/ ms 1000)
    ms (% ms 1000)
    p (? (< ms 10) ".00" (< ms 100) ".0" ".")
    (, (. s) (puts p) (puts(. ms) (puts " seconds") (putc 10))))
-(: f (test-get 'fail)
+(: f (test_get 'fail)
  (.. x) (: _ (. x) _ (putc 10) x)
 (? f (,
  (. (len f)) (puts " failed:") (putc 10)

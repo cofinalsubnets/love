@@ -1,22 +1,22 @@
 (: test_t0 (clock 0)
- (term-esc string) (, (putc 27) (puts string))
- green-dot "[32m."
- red-x "[31mX"
+ (term_esc string) (, (putc 27) (puts string))
+ green_dot "[32m."
+ red_x "[31mX"
  reset "[0m"
- (term-text s)
+ (term_text s)
   (, (putc 27)
      (puts s)
      (putc 27)
      (puts reset))
 
-   test-state (new 0)
-   (test-set k v) (put k v test-state)
-   (test-get k) (get 0 k test-state))
+   test_state (new 0)
+   (test_set k v) (put k v test_state)
+   (test_get k) (get 0 k test_state))
 (:: 'assert (\ l
 (:
  (report x v) (,
-  (test-set 'count (+ 1 (test-get 'count)))
-   (? v (term-text green-dot)
-    (, (test-set 'fail (X x (test-get 'fail)))
-       (term-text red-x))))
+  (test_set 'count (+ 1 (test_get 'count)))
+   (? v (term_text green_dot)
+    (, (test_set 'fail (X x (test_get 'fail)))
+       (term_text red_x))))
  (X ', (map (\ l (L report (L '` l) l)) l)))))
