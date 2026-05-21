@@ -1,11 +1,16 @@
-; tests for cooperative multitasking: spawn / yield / wait.
+; tests for cooperative multitasking: spawn / yield / wait / sleep / done?.
 ; (spawn fn x)  -> pid (positive integer); starts a new task running (fn x).
 ;                  the main task has reserved pid 0.
-; (yield)       -> nil; cooperatively suspends so other ready tasks can run.
+; (yield 0)     -> nil; cooperatively suspends so other ready tasks can run.
+;                  (yield) is just `yield` since (x)=x in gwen — call with an arg.
 ; (wait pid)    -> if pid is unknown / non-numeric / refers to the caller, 0.
 ;                  if the task is dormant (its fn has returned), collect it
 ;                  from the ring and return its return value.
 ;                  if the task is still running, yield until it becomes dormant.
+; (sleep n)     -> nil; blocks the current task for at least n g_clock ticks.
+;                  n <= 0 returns immediately. Other tasks run during the wait.
+; (done? pid)   -> -1 if (wait pid) would not yield (pid unknown, self, dormant),
+;                  nil if pid refers to a runnable task.
 
 (assert
  ; spawn-wait round trip: fn is applied to x; the result flows back through wait.
@@ -42,7 +47,7 @@
         (= 40 (wait b))))
 
  ; a task may yield mid-execution and still return its value through wait.
- (: p (spawn (\ x (, (yield) (yield) (yield) (+ x 1))) 41)
+ (: p (spawn (\ x (, (yield 0) (yield 0) (yield 0) (+ x 1))) 41)
     (= 42 (wait p)))
 
  ; nested spawn: a worker can spawn and wait on its own subtask.
@@ -62,10 +67,58 @@
     _ (put 'n 0 t)
     p (spawn (\ _ (: (loop) (? (< (get 0 'n t) 3)
                                 (, (put 'n (+ 1 (get 0 'n t)) t)
-                                   (yield)
+                                   (yield 0)
                                    (loop))
                                 'done)
                     (loop))) 0)
     r (wait p)
     (&& (= 'done r) (= 3 (get 0 'n t))))
+
+ ; --- done? predicate ---
+
+ ; done? on an unknown pid is true (wait would return 0 immediately).
+ (= -1 (done? 99999))
+ ; done? on a non-numeric pid is true.
+ (= -1 (done? nil))
+ ; done? on the caller's own pid (main = 0) is true — wait skips self.
+ (= -1 (done? 0))
+
+ ; done? on a freshly spawned task is false: the task hasn't completed.
+ (: p (spawn (\ _ 42) 0) r (done? p) _ (wait p) (nilp r))
+
+ ; after yielding, the worker completes and done? becomes true.
+ (: p (spawn (\ _ 42) 0) _ (yield 0) r (done? p) _ (wait p) (= -1 r))
+
+ ; after wait collects the task, done? is again true (pid is gone).
+ (: p (spawn (\ _ 42) 0) _ (wait p) (= -1 (done? p)))
+
+ ; --- sleep ---
+
+ ; sleep with non-positive n returns nil immediately without yielding.
+ (nilp (sleep 0))
+ (nilp (sleep -1))
+ (nilp (sleep nil))
+
+ ; sleep takes at least n ticks (g_clock ms on this frontend).
+ ; allow generous slack for slow CI.
+ (: t0 (clock 0)
+    _ (sleep 30)
+    elapsed (clock t0)
+    (>= elapsed 30))
+
+ ; sleeping tasks run concurrently: two parallel 30ms sleeps finish in well under 60ms.
+ (: t0 (clock 0)
+    a (spawn (\ _ (sleep 30)) 0)
+    b (spawn (\ _ (sleep 30)) 0)
+    _ (wait a) _ (wait b)
+    elapsed (clock t0)
+    (&& (>= elapsed 30) (< elapsed 60)))
+
+ ; sleep cooperates: while one task sleeps, another finishes its work.
+ (: t (new 0)
+    _ (put 'flag 0 t)
+    a (spawn (\ _ (sleep 30)) 0)
+    b (spawn (\ _ (put 'flag -1 t)) 0)
+    _ (wait a) _ (wait b)
+    (= -1 (get 0 'flag t)))
 )

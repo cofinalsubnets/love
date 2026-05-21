@@ -91,7 +91,8 @@ static g_vm_t
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
- g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait, g_vm_intr;
+ g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
+ g_vm_sleep, g_vm_sleep_wait, g_vm_donep, g_vm_intr;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
 static struct g_vec *ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
@@ -1638,7 +1639,7 @@ enum g_status g_fin(struct g *f) {
 #define S1(i) {{i}, {g_vm_ret0}}
 #define S2(i) {{g_vm_cur},{.x=putnum(2)},{i}, {g_vm_ret0}}
 #define S3(i) {{g_vm_cur},{.x=putnum(3)},{i}, {g_vm_ret0}}
-#define S4(i) {{i},{g_vm_ret},{.x=putnum(1)}}
+#define S4(i) {{i},{g_vm_ret},{.x=putnum(0)}}
 #define bifs(_) \
  _(bif_clock, "clock", S1(g_vm_clock)) _(bif_addr, "vminfo", S1(g_vm_info))\
  _(bif_add, "+", S2(g_vm_add)) _(bif_sub, "-", S2(g_vm_sub)) _(bif_mul, "*", S2(g_vm_mul))\
@@ -1662,6 +1663,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_nilp, "nilp", S1(g_vm_nilp)) _(bif_ev, "ev", S1(g_vm_eval))\
  _(bif_callk, "call/cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \
  _(bif_spawn, "spawn", S2(g_vm_spawn)) _(bif_wait, "wait", S1(g_vm_wait)) \
+ _(bif_sleep, "sleep", S4(g_vm_sleep)) _(bif_donep, "done?", S1(g_vm_donep)) \
  _(bif_intr, "intr?", S1(g_vm_intr))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
@@ -1904,6 +1906,52 @@ static g_vm(g_vm_wait) {
     return Ap(g_vm_yield_sw, f); }
   Sp[0] = putnum(0);
   Ip += 1;
+  return Continue(); }
+
+// (done? pid) : true iff (wait pid) would return without yielding — that is,
+// pid is unknown, is the caller's own pid, or refers to a dormant task.
+// false iff there's a runnable task with that pid in the ring.
+static g_vm(g_vm_donep) {
+  word pid_arg = Sp[0], result = putnum(-1);
+  if (f->tasks && nump(pid_arg)) {
+    intptr_t target = getnum(pid_arg);
+    for (union u *node = f->tasks->m; node != f->tasks; node = node->m)
+      if (getnum(node[2].x) == target) {
+        if (node[1].m->ap != g_vm_task_exit) result = g_nil;
+        break; } }
+  Sp[0] = result;
+  Ip += 1;
+  return Continue(); }
+
+// sleep_wait_body : a sleeping task's saved_ip points here. The saved stack has
+// the absolute deadline at Sp[0] and the caller's return address at Sp[1].
+// Each time the task is scheduled, sleep_wait re-checks the clock; if the
+// deadline isn't reached it yields again, otherwise it returns nil through
+// Sp[1] (the original (sleep n) call's return address).
+static union u sleep_wait_body[] = { {g_vm_sleep_wait} };
+
+// (sleep n) : block the current task for at least n g_clock() ticks, returning
+// nil. n <= 0 or non-numeric returns nil immediately without yielding.
+// Otherwise: convert n to an absolute deadline, store it at Sp[0], redirect Ip
+// to sleep_wait_body, and tail into the scheduler. The bif's own S1 ret0 cell
+// is skipped — sleep_wait does the return itself when the deadline arrives.
+static g_vm(g_vm_sleep) {
+  word n = Sp[0];
+  if (!nump(n) || getnum(n) <= 0) {
+    Sp[0] = g_nil;
+    Ip += 1;
+    return Continue(); }
+  Sp[0] = putnum((intptr_t) g_clock() + getnum(n));
+  Ip = sleep_wait_body;
+  return Ap(g_vm_yield_sw, f); }
+
+static g_vm(g_vm_sleep_wait) {
+  if ((intptr_t) g_clock() < getnum(Sp[0]))
+    return Ap(g_vm_yield_sw, f);
+  // Wake: return nil through the caller's saved return address at Sp[1].
+  Ip = cell(Sp[1]);
+  Sp[1] = g_nil;
+  Sp += 1;
   return Continue(); }
 
 // (intr? _) : per-frontend interrupt poll. Returns -1 (true) if an interrupt
