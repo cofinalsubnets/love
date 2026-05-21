@@ -338,7 +338,7 @@
    ; map a raw byte (or escape sequence) to an event code:
    ; printable >0; -1 left, -2 right, -3 bsp, -4 del, -5 home,
    ; -6 end, -7 quit, -8 up, -9 down, -10 buffer top, -11 buffer end;
-   ; 10 = enter.
+   ; -12 ack ctrl-c, -13 toggle infix mode (Ctrl+T); 10 = enter.
    ;
    ; after `ESC [ 1` there are two shapes: `~` is plain Home; `; M F`
    ; carries a modifier digit M (5=ctrl, 2=shift, ...) and a final byte
@@ -364,21 +364,25 @@
         (= c 3) -12
         (|| (= c 13) (= c 10)) 10
         (|| (= c 8) (= c 127)) -3
-        (= c 1) -5 (= c 5) -6 (= c 27) (edesc 0)
+        (= c 1) -5 (= c 5) -6
+        (= c 20) -13                        ; Ctrl+T: toggle infix mode
+        (= c 27) (edesc 0)
         (&& (<= 32 c) (< c 127) c)))
 
    ; redraw the buffer in place. pra is "rows above the cursor from
    ; the previous render" -- we move up that many rows first so we
    ; land back on the prompt's row. all motion is relative: nothing
    ; depends on a saved absolute cursor, so the terminal scrolling
-   ; (when the buffer reaches the last row) doesn't desync us. pl is
-   ; the prompt's column; the topmost line shares it, subsequent
-   ; lines start at column 0.
-   (edrender pl pra u l r d)
-     (: _ (? (< 0 pra) (, (putc 27) (putc 91) (putn pra 10) (putc 65)) 0)
+   ; (when the buffer reaches the last row) doesn't desync us. the
+   ; prompt is re-printed each tick (after clearing to end-of-screen
+   ; from the prompt row), so a mid-line mode toggle updates the
+   ; visible mode indicator without leaving the line.
+   (edrender pr pra u l r d)
+     (: pl (len pr)
+        _ (? (< 0 pra) (, (putc 27) (putc 91) (putn pra 10) (putc 65)) 0)
         _ (putc 13)
-        _ (? (< 0 pl)  (, (putc 27) (putc 91) (putn pl 10)  (putc 67)) 0)
         _ (putc 27) _ (putc 91) _ (putc 74) ; clear to end of screen
+        _ (puts pr)
         _ (each (rev u) (\ ln (, (each ln prc) (putc 10))))
         _ (each (revcat l r) prc)
         _ (each d (\ ln (, (putc 10) (each ln prc))))
@@ -389,7 +393,11 @@
         _ (? (< 0 col) (, (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
         (puts ""))
 
-   ps1 " ;; "
+   ; mode flag (0 = prefix, -1 = infix). toggled by Ctrl+T in edline.
+   ; in infix mode each Enter wraps the parsed datums in (infix ...)
+   ; before evaluating; in prefix mode each is evaluated separately.
+   infix_mode 0
+   (ps1 _) (? (get 0 'infix_mode globals) " ;i " " ;; ")
 
    ; print the prompt, then dispatch events until ^D or until enter
    ; at end-of-buffer with the buffer fully parsed. enter always
@@ -413,11 +421,9 @@
    ; for history navigation. cur is the pristine frame of the
    ; currently-recalled entry, or 0 if the buffer is a free edit.
    (edline hu hd)
-     (: pr (ps1 0)
-        _ (puts pr)
-        pl (len pr)
-        (loop pra u l r d hu hd cur)
-          (: _ (edrender pl pra u l r d)
+     (: (loop pra u l r d hu hd cur)
+          (: pr (ps1 0)                          ; recomputed each tick so
+             _ (edrender pr pra u l r d)         ; mode toggles refresh
              c (edev 0)
              npra (len u)
              (kloop uu ll rr dd) (loop npra uu ll rr dd hu hd cur)
@@ -450,6 +456,10 @@
                 (= c -11) (edbot kloop u l r d)
                 (= c -12) (: _ (puts "^C") _ (putc 10)
                              (? (emptybuf u l r d) eofsym (edline hu hd)))
+                (= c -13) (: _ (put 'infix_mode
+                                    (? (get 0 'infix_mode globals) 0 -1)
+                                    globals)
+                             (loop npra u l r d hu hd cur))
                 (loop npra u l r d hu hd cur)))
         (loop 0 0 0 0 0 hu hd 0))
 
@@ -478,5 +488,7 @@
            (: vs  (car r)
               nhu (cadr r)
               nhd (cddr r)
-              _ (each vs (\ v (: _ (do_eval v) (putc 10))))
+              _ (? (&& (twop vs) (get 0 'infix_mode globals))
+                   (: _ (do_eval (cons 'infix vs)) (putc 10))
+                   (each vs (\ v (: _ (do_eval v) (putc 10)))))
               (repl nhu nhd)))))
