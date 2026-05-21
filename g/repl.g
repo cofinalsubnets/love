@@ -28,11 +28,39 @@
    (revcat a b) (foldl b (flip cons) a)
 
    ; --- parser char classification ---
+   ;
+   ; tokens dispatch on the first non-delim char's class and read a
+   ; maximal run of matching chars. classes are mostly disjoint:
+   ;   alpha-first:  [A-Za-z_] plus any byte >= 128 (utf-8 idents)
+   ;   alpha-tail:   alpha-first plus [0-9'?]. ' allowed mid/end so
+   ;                 primed names like x' or f's work; `'` is the quote
+   ;                 prefix only at token start (so `ev'ev` is one sym;
+   ;                 write `ev 'ev` to mean `ev` then quoted `ev`).
+   ;   numeric:      [0-9]; after a leading `0x`/`0X`, switch to hex.
+   ;   punct:        [+\-*/<>=!&|~^%:,.\\`]
+   ;   leading `?`:  promoted to punct-class so `?-` reads as one token
+   ;                 while bare `?` (the cond keyword) still works.
+   ;   leading `-`/`+` + digit: numeric (so x-5 = x, -5).
+   ; `[ ] { }` are single-char delim tokens (each reads as a 1-char sym).
    (isws c)    (|| (= c 32) (= c 10) (= c 9) (= c 13) (= c 12) (= c 0))
    (iscom c)   (|| (= c 35) (= c 59))
    (isdig c)   (&& (>= c 48) (<= c 57))
    (ishex c)   (|| (isdig c) (&& (>= c 65) (<= c 70)) (&& (>= c 97) (<= c 102)))
-   (isdelim c) (|| (isws c) (iscom c) (= c 40) (= c 41) (= c 34) (= c 39))
+   (isalpha c) (|| (&& (>= c 65) (<= c 90))           ; A-Z
+                   (&& (>= c 97) (<= c 122))          ; a-z
+                   (= c 95)                            ; _
+                   (>= c 128))                        ; utf-8 high byte
+   (isalphat c)(|| (isalpha c) (isdig c) (= c 63) (= c 39))   ; + ? '
+   (ispunc c)  (|| (= c 43) (= c 45) (= c 42) (= c 47)   ; + - * /
+                   (= c 60) (= c 62) (= c 61) (= c 33)   ; < > = !
+                   (= c 38) (= c 124) (= c 126) (= c 94) ; & | ~ ^
+                   (= c 37) (= c 58) (= c 44) (= c 46)   ; % : , .
+                   (= c 92) (= c 96))                    ; \ `
+   (isdelim c) (|| (isws c) (iscom c)
+                   (= c 40) (= c 41)                  ; ( )
+                   (= c 91) (= c 93)                  ; [ ]
+                   (= c 123) (= c 125)                ; { }
+                   (= c 34) (= c 39))                 ; " '
    (digval c)  (? (isdig c) (- c 48)
                   (>= c 97) (- c 87)        ; a-f -> 10-15
                   (- c 55))                  ; A-F -> 10-15
@@ -82,16 +110,6 @@
               (uint cl)))
         0)
 
-   ; read one token: a maximal run of non-delimiter chars.
-   ; returns (cons token-charlist rest).
-   (readtok cl)
-     (: (loop acc cl)
-          (? (&& (twop cl) (nilp (isdelim (car cl))))
-             (loop (cons (car cl) acc) (cdr cl))
-             (cons (rev acc) cl))
-        (loop 0 cl))
-
-
    ; read one datum from a charlist.
    (read1 cl)
      (: cl (skipws cl)
@@ -101,6 +119,8 @@
                  (= c 41) e                     ; ) at top level
                  (= c 39) (rdquot (cdr cl))    ; '
                  (= c 34) (rdstr  (cdr cl))    ; "
+                 (|| (= c 91) (= c 93) (= c 123) (= c 125))  ; [ ] { }
+                     (cons (sym (str (cons c 0))) (cdr cl))
                  (rdatom cl)))))
 
    ; read until a closing paren (already past the opening one).
@@ -144,13 +164,42 @@
                    (loop (cons c acc) rest))))
         (loop 0 cl))
 
-   ; read an atom: a token, then decide number-or-symbol.
+   ; read an atom: dispatch on first char's class, then read a
+   ; maximal run of class-tail chars. returns (value . rest). value is
+   ; an interned symbol or a number; numeric is only chosen when the
+   ; first char is a digit or sign-followed-by-digit.
    (rdatom cl)
-     (: tr (readtok cl)
-        tok (car tr)
-        r (numof tok)
-        val (? (&& (twop r) (nilp (cdr r))) (car r) (sym (str tok)))
-        (cons val (cdr tr)))
+     (: c (car cl) rest (cdr cl)
+        (? (isalpha c)   (rdalphat (cons c 0) rest)
+           (isdig c)     (rdnum cl)
+           (= c 63)      (rdpunct (cons c 0) rest)   ; leading ? as punct
+           (|| (= c 45) (= c 43))                    ; - or +
+               (? (&& (twop rest) (isdig (car rest)))
+                  (rdnum cl)
+                  (rdpunct (cons c 0) rest))
+           (ispunc c)    (rdpunct (cons c 0) rest)
+           (rdalphat (cons c 0) rest)))               ; lenient fallback
+
+   ; accumulate alpha-tail chars (acc reversed).
+   (rdalphat acc cl)
+     (? (&& (twop cl) (isalphat (car cl)))
+        (rdalphat (cons (car cl) acc) (cdr cl))
+        (cons (sym (str (rev acc))) cl))
+
+   ; accumulate punctuation chars (acc reversed).
+   (rdpunct acc cl)
+     (? (&& (twop cl) (ispunc (car cl)))
+        (rdpunct (cons (car cl) acc) (cdr cl))
+        (cons (sym (str (rev acc))) cl))
+
+   ; numeric token: optional sign + digit run, with 0x/0X hex prefix.
+   ; numof handles all the parsing; on the rare malformed case (e.g.
+   ; `0x` with no hex digits) fall back to interning as a symbol so
+   ; the reader never errors mid-stream.
+   (rdnum cl)
+     (: r (numof cl)
+        (? (twop r) r
+           (rdalphat (cons (car cl) 0) (cdr cl))))
 
    ; drain a charlist into a list of all the datums it holds.
    ; propagates m if anything in the chain is incomplete.

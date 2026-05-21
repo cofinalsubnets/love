@@ -649,7 +649,7 @@ static struct g*_ungetc(struct g*f, int c, struct ti *i) {
  if (c != EOF && i->i) i->i--;
  return f->b = c, f; }
 g_noinline struct g *g_evals(struct g*f, char const*s) {
- static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
+ static char const *t = "((:(e a b)(? b(e(ev 'ev(A b))(B b))a)e)0)";
  struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof}, t, 0};
  f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i, false)))));
  i.t = s, i.i = 0;
@@ -1026,6 +1026,38 @@ static struct g* g_r_getc(struct g*f, struct g_in *i) {
  return f; }
 
 
+// Tokenizer character classes used after the first-char dispatch.
+//
+// alpha-first: [A-Za-z_] plus any byte >= 0x80, so UTF-8 identifiers
+//   (e.g. たらい) continue to work.
+// alpha-tail:  alpha-first plus [0-9'?]. ? and ' are tail-only — `'`
+//   supports primed identifier names like `x'` or `f's`. The quote
+//   prefix is recognized only at token start, so `ev'ev` reads as one
+//   symbol; write `ev 'ev` to mean `ev` then quoted `ev`.
+// punc:        [+\-*/<>=!&|~^%:,\.`\\]. ? is not in punc; a leading
+//   ? is promoted to a punc-class run at the dispatch site so that
+//   `?-`, `?,` etc. read as one symbol while bare `?` (the cond
+//   keyword) still works.
+// Sign handling: a leading '-' or '+' is tentatively punctuation; if
+//   the next char is a digit it switches to numeric. So `-1` is the
+//   number -1, `--` is the symbol --, `x-5` reads as x then -5, etc.
+static g_inline int is_alpha_first(int c) {
+ if (c == EOF || c == 0) return 0;
+ unsigned uc = (unsigned) c & 0xff;
+ return (uc >= 'a' && uc <= 'z') || (uc >= 'A' && uc <= 'Z') || uc == '_' || uc >= 0x80; }
+static g_inline int is_dec_digit(int c) { return c >= '0' && c <= '9'; }
+static g_inline int is_alpha_tail(int c) {
+ return is_alpha_first(c) || is_dec_digit(c) || c == '\'' || c == '?'; }
+static g_inline int is_hex_digit(int c) {
+ return is_dec_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
+static g_inline int is_punc_chr(int c) {
+ switch (c) {
+  case '+': case '-': case '*': case '/': case '<': case '>': case '=':
+  case '!': case '&': case '|': case '~': case '^': case '%': case ':':
+  case ',': case '.': case '\\': case '`':
+   return 1;
+  default: return 0; } }
+
 static struct g *g_read1(struct g*f, struct g_in *i) {
  if (!g_ok(f = g_r_getc(f, i))) return f;
  int c = f->b;
@@ -1037,6 +1069,11 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
    if (g_code_of(f) == g_status_eof)               // quote with no operand
     f = encode(g_core_of(f), g_status_more);
    return gxl(pushq(gxr(g_push(f, 1, g_nil))));
+  case '[': case ']': case '{': case '}':           // single-char delimiter tokens
+   if (!g_ok(f = grbufn(f))) return f;
+   txt((struct g_vec*) f->sp[0])[0] = c;
+   len((struct g_vec*) f->sp[0]) = 1;
+   return intern(f);
   case '"': {
    size_t n = 0;
    f = grbufn(f);
@@ -1065,25 +1102,54 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
      else if (c == '"') return len(b) = n, f; }           // closing quote
    return f; } }
 
+ // Classify first char to pick the continuation rule.
+ // cls: 'A' alpha, 'N' numeric, 'P' punctuation.
+ // hex_state: 0 none, 1 saw leading 0 (might switch to hex), 2 in hex mode.
+ // sign_first: just consumed a sole '-' or '+'; promote to numeric
+ //   if the next char is a digit.
+ char cls;
+ int hex_state = 0, sign_first = 0;
+ if (is_alpha_first(c)) cls = 'A';
+ else if (is_dec_digit(c)) { cls = 'N'; if (c == '0') hex_state = 1; }
+ else if (c == '?') cls = 'P';
+ else if (c == '-' || c == '+') { cls = 'P'; sign_first = 1; }
+ else if (is_punc_chr(c)) cls = 'P';
+ else cls = 'A';                                   // unknown byte: lenient
+
  uintptr_t n = 1, lim = sizeof(intptr_t);
  if (g_ok(f = grbufn(f)))
   for (txt(f->sp[0])[0] = c; g_ok(f); f = grbufg(f), lim *= 2)
-   for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c) {
+   for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim;) {
     if (!g_ok(f = i->getc(f, i))) return f;
-    switch (c = f->b) {
-     default: continue;
-     case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
-     case '(': case ')': case '"': case '\'': case 0 : case EOF:
-      f = i->ungetc(f, c, i);
-      if (!g_ok(f)) return f;
-      b = (struct g_vec*) f->sp[0]; // ungetc may allocate and relocate
-      len(b) = n;
-      txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
+    c = f->b;
+    if (sign_first) {                              // -<digit> / +<digit> -> number
+     sign_first = 0;
+     if (is_dec_digit(c)) {
+      cls = 'N';
+      if (c == '0') hex_state = 1;
+      txt(b)[n++] = c;
+      continue; } }
+    int cont;
+    if (c == EOF || c == 0) cont = 0;
+    else if (cls == 'A') cont = is_alpha_tail(c);
+    else if (cls == 'P') cont = is_punc_chr(c);
+    else if (hex_state == 2) cont = is_hex_digit(c);
+    else if (hex_state == 1) {                     // pending 0x switch
+     if (c == 'x' || c == 'X') { hex_state = 2; cont = 1; }
+     else { hex_state = 0; cont = is_dec_digit(c); } }
+    else cont = is_dec_digit(c);
+    if (!cont) {
+     f = i->ungetc(f, c, i);
+     if (!g_ok(f)) return f;
+     b = (struct g_vec*) f->sp[0];                 // ungetc may relocate
+     len(b) = n;
+     if (cls == 'N') {
+      txt(b)[n] = 0;                               // zero terminate for strtol
       char *e;
       long j = strtol(txt(b), &e, 0);
-      if (*e == 0) f->sp[0] = putnum(j);
-      else f = intern(f);
-      return f; } }
+      if (*e == 0) { f->sp[0] = putnum(j); return f; } }
+     return intern(f); }
+    txt(b)[n++] = c; }
  return f; }
 
 static struct g *g_reads(struct g *f, struct g_in* i, bool nested) {

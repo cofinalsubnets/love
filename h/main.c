@@ -72,7 +72,7 @@ boot[] =
 repl[] =
 #include "repl.h"
 ,
-  rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))"
+  rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev 'ev r)(g e))))(g(sym 0)))"
   ;
 // --- main: load the prelude and run the REPL script ------------------
 int main(int argc, char const **argv) {
