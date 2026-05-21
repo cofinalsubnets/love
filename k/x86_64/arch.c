@@ -1,6 +1,7 @@
-// x86_64 CPU-exception handling. the stubs in arch.asm (exc_stub_0 ..
-// exc_stub_31, funnelling through exc_common) build the frame below and
-// call k_exception. this is the only architecture-specific C so far.
+// x86_64 architecture-specific C: CPU-exception handling and the COM1
+// serial console. the stubs in x86_64.asm (exc_stub_0 .. exc_stub_31,
+// funnelling through exc_common) build the frame below and call
+// k_exception; uart_isr funnels IRQ4 into k_uart (see the bottom).
 #include <stdint.h>
 void k_halt(void);
 
@@ -59,14 +60,18 @@ void k_exception(struct k_frame *fr) {
   k_halt();
 }
 
-/* COM1 serial logging -- parked for now. this is the reliable panic
-   channel: it touches only I/O ports, so it still works when the heap,
-   console, or framebuffer are corrupt -- exactly the cases where the
-   kcb path above cannot be trusted. to bring it back: uncomment, call
-   serial_init() once at the top of k_exception, and emit the report to
-   serial *before* the kcb block, so a fault during kcb output cannot
-   lose the serial copy.
-
+// --- COM1 serial console ---------------------------------------------
+// a 16550 UART at the legacy COM1 I/O ports, used as a second console
+// alongside the framebuffer -- and the only console when no framebuffer
+// is present. output (serial_putc) is also the reliable panic channel:
+// it touches nothing but I/O ports, so it still works when the heap,
+// console buffer, or framebuffer are unusable. input is interrupt-
+// driven: serial_init enables the UART receive interrupt (IRQ4),
+// uart_isr (x86_64.asm) funnels it here, and k_uart drains every ready
+// byte into the same input queue kb_int feeds. bytes pass through
+// verbatim -- a serial terminal already sends CR for Enter, DEL for
+// Backspace, and ESC-prefixed arrow sequences, all of which the gwen
+// line editor decodes directly.
 #define COM1 0x3f8
 
 static inline void outb(uint16_t port, uint8_t v) {
@@ -74,19 +79,28 @@ static inline void outb(uint16_t port, uint8_t v) {
 static inline uint8_t inb(uint16_t port) {
   uint8_t v; asm volatile ("inb %1, %0" : "=a"(v) : "Nd"(port)); return v; }
 
-static void serial_init(void) {
-  outb(COM1 + 1, 0x00);    // interrupts off
+// called once from kmain, just after archinit (so the IDT is live).
+void serial_init(void) {
+  outb(COM1 + 1, 0x00);    // interrupts off while configuring
   outb(COM1 + 3, 0x80);    // DLAB: address the divisor latch
-  outb(COM1 + 0, 0x01);    // divisor = 1  -> 115200 baud
-  outb(COM1 + 1, 0x00);
+  outb(COM1 + 0, 0x01);    // divisor low  = 1  -> 115200 baud
+  outb(COM1 + 1, 0x00);    // divisor high = 0
   outb(COM1 + 3, 0x03);    // 8 bits, no parity, 1 stop; DLAB off
   outb(COM1 + 2, 0xc7);    // FIFO: enable, clear, 14-byte threshold
-  outb(COM1 + 4, 0x0b); }  // DTR, RTS, OUT2
+  outb(COM1 + 4, 0x0b);    // DTR, RTS, OUT2 (OUT2 gates the IRQ line)
+  outb(COM1 + 1, 0x01); }  // IER: interrupt when receive data arrives
 
-static void serial_putc(int c) {
+void serial_putc(int c) {
   if (c == '\n') serial_putc('\r');
   // bounded spin on "transmit holding register empty" so an absent or
-  // wedged port cannot hang the panic.
+  // wedged port cannot hang output.
   for (int i = 0; i < 100000 && !(inb(COM1 + 5) & 0x20); i++) {}
   outb(COM1, (uint8_t) c); }
-*/
+
+// IRQ4 handler body, reached from uart_isr. one interrupt can cover
+// several received bytes, so drain the FIFO completely. kq lives in
+// k/main.c -- the same input queue the PS/2 keyboard path enqueues to.
+void kq(uint8_t);
+void k_uart(void) {
+  while (inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
+    kq(inb(COM1)); }

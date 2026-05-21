@@ -23,7 +23,9 @@ static struct {
 // the line editor decodes; k_getc and the (key) builtin drain the queue.
 // f holds the live modifier flags.
 static struct { uint8_t f, q[16], qh, qt; } kkb;
-static void kq(uint8_t b) {                // enqueue one byte (drop if full)
+// enqueue one input byte (drop if full). non-static: the COM1 serial
+// RX handler (k_uart, in x86_64/arch.c) feeds this same queue.
+void kq(uint8_t b) {
   uint8_t n = (kkb.qt + 1) & 15;
   if (n != kkb.qh) kkb.q[kkb.qt] = b, kkb.qt = n; }
 static int kqpop(void) {                   // dequeue one byte, -1 if empty
@@ -53,7 +55,7 @@ static void palette_init(void) {
     palette[232 + i] = v << 16 | v << 8 | v; } }
 
 
-void k_reset(void), archinit(void), fbdraw(void);
+void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int);
 
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
@@ -98,7 +100,11 @@ static volatile LIMINE_REQUESTS_END_MARKER;
 #define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 
-static struct g *_putc(struct g*f, int c, struct g_out*) { return cb_putc(kcb, c), f; }
+// console output goes to the framebuffer when one is present, and is
+// always mirrored to the COM1 serial console.
+static struct g *_putc(struct g*f, int c, struct g_out*) {
+  if (kcb) cb_putc(kcb, c);
+  return serial_putc(c), f; }
 static struct g *_flush(struct g*f, struct g_out*) { return fbdraw(), f; }
 // the keystroke source the line editor reads: block until a byte is
 // queued, pumping the framebuffer meanwhile so the cursor keeps
@@ -247,6 +253,7 @@ void free(void *x) { return kfree(x); }
 static g_vm(g_kreset) { return k_reset(), f; }
 
 void fbdraw(void) {
+  if (!kcb) return;                    // serial-only: no framebuffer console
   for (uint8_t i = 0, rows = kcb->rows; i < rows; i++)
     for (uint8_t j = 0, cols = kcb->cols; j < cols; j++) {
       uint32_t const
@@ -279,9 +286,10 @@ static g_vm(key) {
 
 static g_vm(color) {
  uint8_t fg = g_getnum(*Sp++), bg = g_getnum(*Sp++);
- cb_attr(kcb, fg, bg, 0);
- for (uint32_t i = 0, j = kcb->rows * kcb->cols; i < j; i++)
-  kcb->cb[i] = cb_cell(cb_ch(kcb->cb[i]), fg, bg, 0);
+ if (kcb) {
+  cb_attr(kcb, fg, bg, 0);
+  for (uint32_t i = 0, j = kcb->rows * kcb->cols; i < j; i++)
+   kcb->cb[i] = cb_cell(cb_ch(kcb->cb[i]), fg, bg, 0); }
  return Ip += 1, Continue(); }
 
 // (fault n) -- deliberately raise CPU exception n to exercise the
@@ -362,11 +370,16 @@ static struct g_def defs[] = {
 
 void kmain(void) {
  archinit();
- if (fbinit() && meminit() && cbinit()) {
-  palette_init();
+ serial_init();
+ // the heap (meminit) is the only hard requirement. the framebuffer
+ // console is optional: when fbinit/cbinit fail -- no Limine
+ // framebuffer, or the console buffer won't allocate -- kcb stays null
+ // and the kernel runs headless on the COM1 serial console alone.
+ if (meminit()) {
+  if (fbinit() && cbinit()) palette_init();
   // load the prelude, then run the gwen read-eval-print loop. its line
-  // editor (in repl.g) drives the console; the keyboard driver delivers
-  // ANSI escape sequences, which the gwen edev decodes.
+  // editor (in repl.g) drives the console; PS/2 keyboard and serial
+  // input both arrive as ANSI escape sequences the gwen edev decodes.
   struct g *f = g_defs(g_ini(), defs);
   f = g_evals_(f,
 #include "boot.h"

@@ -256,7 +256,7 @@ b/$n-$a.hdd: b/k/$n-$a.elf dl/limine/limine k/limine/limine.conf
 	@mcopy -i $@@@1M dl/limine/BOOTRISCV64.EFI ::/EFI/BOOT
 	@mcopy -i $@@@1M dl/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
 
-k_qemu_x86_64=-M q35
+k_qemu_x86_64=-M q35 -serial stdio
 k_qemu_risc=-M virt -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_loongarch64=$(k_qemu_risc) -cpu la464
 k_qemu_aarch64=$(k_qemu_risc) -cpu cortex-a72
@@ -270,7 +270,11 @@ run-$a: b/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -cdrom $<
 run-hdd-$a: b/$n-$a.hdd dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -hda $<
-.PHONY: run run-hdd run-$a run-hdd-$a
+# headless: no display, COM1 console on stdio (see k_qemu_x86_64) -- so
+# the gwen repl can be driven over a pipe. -no-reboot exits on k_reset.
+run-headless: b/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
+	$(k_qemu) -cdrom $< -display none -no-reboot
+.PHONY: run run-hdd run-$a run-hdd-$a run-headless
 
 dl/edk2-ovmf/ovmf-code-%.fd:
 	@echo MK ovmf

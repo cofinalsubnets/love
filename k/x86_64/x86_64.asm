@@ -1,11 +1,13 @@
 global keyboard_isr
+global uart_isr
 global timer_isr
 global archinit
 global k_reset
 global k_halt
 extern kticks
 extern kb_int
-extern k_exception            ; C exception dispatcher -- fill this out
+extern k_uart                 ; COM1 serial RX handler (arch.c)
+extern k_exception            ; C exception dispatcher
 
 %define INTERRUPT 0x8e
 %define TRAP 0x8f
@@ -89,17 +91,22 @@ isrs:
   dq exc_stub_ %+ v           ; vectors 0..31: CPU exceptions
 %assign v v+1
 %endrep
-  dq timer_isr                ; vector 32: IRQ0
-  dq keyboard_isr             ; vector 33: IRQ1
-  times 14 dq k_reset         ; vectors 34..47: unused IRQs -> reboot
+  dq timer_isr                ; vector 32: IRQ0  PIT timer
+  dq keyboard_isr             ; vector 33: IRQ1  PS/2 keyboard
+  dq k_reset                  ; vector 34: IRQ2
+  dq k_reset                  ; vector 35: IRQ3
+  dq uart_isr                 ; vector 36: IRQ4  COM1 serial
+  times 11 dq k_reset         ; vectors 37..47: unused IRQs -> reboot
 
 align 8
 isr_types:
   times  2 db TRAP
   times  1 db INTERRUPT ; NMI
   times 29 db TRAP
-  times  2 db INTERRUPT ; timer & keyboard interrupts
-  times 14 db TRAP
+  times  2 db INTERRUPT ; vec 32,33: PIT timer & PS/2 keyboard
+  times  2 db TRAP      ; vec 34,35: IRQ2, IRQ3
+  times  1 db INTERRUPT ; vec 36: COM1 serial (IRQ4)
+  times 11 db TRAP      ; vec 37..47
 
 section .text
 
@@ -148,6 +155,19 @@ keyboard_isr:
   movzx rdi, al
   call kb_int
   mov al, 0x20
+  out 0x20, al
+  pop15
+  iretq
+
+; COM1 serial receive (IRQ4 -> vector 36). k_uart drains the UART FIFO
+; into the input queue; serial bytes share the keyboard path from there.
+; push15 after the CPU's exception frame leaves rsp 16-byte aligned at
+; the call, satisfying the SysV ABI.
+align 8
+uart_isr:
+  push15
+  call k_uart
+  mov al, 0x20                ; EOI to the master PIC (IRQ4)
   out 0x20, al
   pop15
   iretq
