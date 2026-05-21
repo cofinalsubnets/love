@@ -72,18 +72,22 @@ b/h/%.o: h/%.c $(g_h)
 	@mkdir -p $(dir $@)
 	@$(cc) -c -Ib/h $< -o $@
 
-b/h/$n: h/main.c b/h/lib$n.a b/boot.h b/repl.h
+b/h/$n: h/main.c b/h/lib$n.a b/boot.h b/infix.h b/repl.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -o $@ h/main.c b/h/lib$n.a
 
-b/h/lcat: h/lcat.c b/h/$x/$x.o 
+b/h/lcat: h/lcat.c b/h/$x/$x.o
 	@echo CC $@
 	@$(cc) -o $@ $^
 
 b/repl.h: b/h/lcat $x/repl.$x
 	@echo GEN	$@
 	@cat $x/repl.$x | b/h/lcat >$@
+
+b/infix.h: b/h/lcat $x/infix.$x
+	@echo GEN	$@
+	@cat $x/infix.$x | b/h/lcat >$@
 
 
 # sed command to escape lisp text into C string format
