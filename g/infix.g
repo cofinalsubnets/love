@@ -10,6 +10,14 @@
 ;   assoc ∈ {left right}   (ignored when kind=monadic)
 ; A symbol may appear at most once per kind; monadic and dyadic
 ; entries for the same symbol coexist as separate list elements.
+;
+; Sub-token escapes (see rewrite_tok):
+;   'X              quoted data is opaque; list literals pass through
+;   (prefix X...)   strip the tag and splice the body — escape back to
+;                   prefix notation, e.g. `(infix 1 + (prefix L 2 3))`
+;                   → `(+ 1 (L 2 3))`
+;   (infix X...)    nested infix; the body is rewritten in the current
+;                   fixity table and spliced in
 
 ; ----- transformer helpers (top-level let pairs → globals) -----
 (: (fixity sym kind table) (?
@@ -25,11 +33,19 @@
    (assoc e) (car (cdddr e))
 
    ; Atoms pass through; a singleton list `(sym)` unwraps (operator-
-   ; as-value escape); longer lists recurse.
+   ; as-value escape); a quoted datum `'X` = `(` X)` is opaque so list
+   ; literals survive intact; `(prefix X...)` is an escape hatch back
+   ; to prefix notation — strip the tag and splice the body in as-is;
+   ; `(infix X...)` recurses through this transformer so a nested
+   ; infix subexpression is rewritten in the same table; everything
+   ; else recurses as an infix expression.
    (rewrite_tok tok table) (?
-    (atomp tok)      tok
-    (nilp (cdr tok)) (car tok)
-                     (infix_rewrite tok table))
+    (atomp tok)            tok
+    (nilp (cdr tok))       (car tok)
+    (= (car tok) '`)       tok
+    (= (car tok) 'prefix)  (cdr tok)
+    (= (car tok) 'infix)   (infix_rewrite (cdr tok) table)
+                           (infix_rewrite tok table))
 
    ; Greedy left-assoc juxtaposition: consume consecutive operand-ish
    ; tokens into a curried application chain. Stops at any symbol with
