@@ -332,6 +332,17 @@ static g_vm(fault) {
     default:           // undefined instruction
       asm volatile ("udf #0");
       break; }
+#elif defined (__riscv)
+  switch (n) {
+    case 3:            // breakpoint
+      asm volatile ("ebreak");
+      break;
+    case 13: case 14:  // store page/access fault: write to an unmapped address
+      *(volatile int*) 0x600000000000ULL = 0;
+      break;
+    default:           // illegal instruction
+      asm volatile ("unimp");
+      break; }
 #endif
   Ip += 1;                 // unreachable unless the fault did not fire
   return Continue(); }

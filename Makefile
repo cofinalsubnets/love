@@ -260,7 +260,7 @@ k_qemu_x86_64=-M q35 -serial stdio
 k_qemu_risc=-device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_loongarch64=-M virt -cpu la464 $(k_qemu_risc)
 k_qemu_aarch64=-M virt,gic-version=2 -cpu cortex-a72 -serial stdio $(k_qemu_risc)
-k_qemu_riscv64=-M virt -cpu rv64 $(k_qemu_risc)
+k_qemu_riscv64=-M virt -cpu rv64 -serial stdio $(k_qemu_risc)
 k_qemu=qemu-system-$a -m 256M $(k_qemu_$a)\
 	-drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
