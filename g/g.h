@@ -118,7 +118,9 @@ g_vm_t g_vm_ret0, g_vm_cur;
 
 uintptr_t g_clock(void); // used by garbage collector
 bool g_key(void);  // per-frontend non-consuming key-ready poll; default = false
-void g_sleep(uintptr_t ticks); // per-frontend deep sleep for at least `ticks` g_clock() units; default = no-op (busy-wait)
+void g_wait(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
+// g_clock() units, returning early when input is ready (so a task suspended
+// in getc resumes promptly). Default = no-op (busy-yield).
 
 struct g
  *ggetc(struct g*),

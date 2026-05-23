@@ -30,11 +30,7 @@ static void raw_mode(void) {
   raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
   raw.c_cc[VMIN] = 1;                      // block for one byte
   raw.c_cc[VTIME] = 0;
-  tcsetattr(STDIN_FILENO, TCSANOW, &raw);
-  // disable stdio read-ahead so g_key can rely on poll(STDIN_FILENO) reflecting
-  // the true byte-available state; otherwise fgetc may slurp bytes into a libc
-  // buffer that poll cannot see.
-  setvbuf(stdin, NULL, _IONBF, 0); }
+  tcsetattr(STDIN_FILENO, TCSANOW, &raw); }
   // c_oflag is left alone, so '\n' on output still becomes CR-LF.
 
 // (key?) backend: non-consuming check whether the next (getc 0) would return
@@ -44,12 +40,15 @@ bool g_key(void) {
   struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
   return poll(&p, 1, 0) > 0; }
 
-// Deep sleep: g_clock() returns milliseconds (CLOCK_REALTIME, ms granularity),
-// so nanosleep is the natural fit. Called by the scheduler when every task is
-// asleep; the delta is `min(wake_at) - now` in ms.
-void g_sleep(uintptr_t ms) {
-  struct timespec ts = { (time_t) (ms / 1000), (long) (ms % 1000) * 1000000L };
-  nanosleep(&ts, NULL); }
+// Deep wait: block for up to `ms` ms or until stdin becomes readable,
+// whichever comes first. Called by the scheduler when every task is sleeping;
+// the early return on input lets a task suspended in g_vm_getc resume without
+// having to wait out the full sleep deadline. POLLIN fires for EOF too, so an
+// EOF'd stdin never holds the deadline. ms is clamped to INT_MAX (~24 days)
+// to fit poll()'s int timeout.
+void g_wait(uintptr_t ms) {
+  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
+  poll(&p, 1, ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms); }
 
 // --- host input ------------------------------------------------------
 // raw_stdin is the byte source at f->in: non-interactively the parser
@@ -81,6 +80,11 @@ repl[] =
 int main(int argc, char const **argv) {
   struct g *f = g_ini();
   bool is_repl = isatty(STDIN_FILENO);
+  // disable stdio read-ahead so g_key (poll on STDIN_FILENO) reflects the
+  // true byte-available state — otherwise fgetc slurps bytes into a libc
+  // buffer that poll cannot see, and g_vm_getc yields when bytes are
+  // actually ready. needed for both raw and pipe modes.
+  setvbuf(stdin, NULL, _IONBF, 0);
   if (is_repl) raw_mode();                 // interactive: raw tty; the line
                                            // editor is now pure gwen (boot.g)
   for (; *argv; f = g_strof(f, *argv++));

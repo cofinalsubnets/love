@@ -127,13 +127,15 @@ struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
              *g_stdout = &_g_stdout;
 uintptr_t g_clock(void) { return kticks; }
 
-// Deep sleep: the timer ISR ticks kticks; kwait halts until any interrupt
-// fires. Busy-loop until the deadline. Future optimization: program a
-// one-shot timer at the deadline so we wake exactly once instead of on
+// Deep wait: the timer ISR ticks kticks and the keyboard ISR queues bytes;
+// kwait halts until any interrupt fires. Loop until either the deadline
+// passes or input becomes available, so a task suspended in g_vm_getc can
+// resume without waiting out the full deadline. Future optimization: program
+// a one-shot timer at the deadline so we wake exactly once instead of on
 // every tick in between.
-void g_sleep(uintptr_t ticks) {
+void g_wait(uintptr_t ticks) {
   uintptr_t deadline = kticks + ticks;
-  while (kticks < deadline) kwait(); }
+  while (kticks < deadline && !g_key()) kwait(); }
 
 #define show_cursor 1
 

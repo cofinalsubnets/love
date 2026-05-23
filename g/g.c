@@ -1234,7 +1234,19 @@ static g_vm(g_vm_str) {
  Ip += 1;
  return Continue(); }
 
+// Cooperative getc: if no byte is ready and there is any non-dormant peer in
+// the ring (runnable or sleeping), yield without advancing Ip — we re-enter
+// from the top on resume, so this is just a loop punctuated by yields. The
+// ring is also walked here (not just runnability checked) so a ring full of
+// dormant peers falls through to a blocking ggetc rather than busy-spinning:
+// yield_sw would return immediately (no deadlines, no runnable peers) and we'd
+// just yield again. When all peers are sleeping, yield_sw's g_wait coalesces
+// the deadline with input readiness, so input still wakes us promptly.
 static g_vm(g_vm_getc) {
+ if (!g_key() && f->tasks)
+  for (union u *n = f->tasks->m; n != f->tasks; n = n->m)
+   if (n[1].m->ap != g_vm_task_exit)
+    return Ap(g_vm_yield_sw, f);
  Pack(f);
  if (!g_ok(f = ggetc(f))) return f;
  Unpack(f);
@@ -1802,10 +1814,12 @@ void g_libc_free(struct g*f, void *x) { free(x); }
 // block forever). Frontends with real stdin override with a strong definition.
 __attribute__((weak)) bool g_key(void) { return false; }
 
-// Default deep-sleep: no-op. Frontends override with a real wait (nanosleep,
-// hlt/wfi/idle). Without an override, the scheduler still works — it just
-// busy-yields through the sleep deadline instead of relinquishing the CPU.
-__attribute__((weak)) void g_sleep(uintptr_t ticks) { (void) ticks; }
+// Default deep-wait: no-op. Frontends override with a real wait that also
+// returns early on input readiness (poll(STDIN, POLLIN, ms) on POSIX, hlt/wfi
+// with timer+IRQ wakeup on bare metal). Without an override, the scheduler
+// still works — it just busy-yields through the deadline instead of
+// relinquishing the CPU, and a getc-suspended task spins waiting for input.
+__attribute__((weak)) void g_wait(uintptr_t ticks) { (void) ticks; }
 
 g_inline struct g *g_pop(struct g*f, uintptr_t n) { return g_core_of(f)->sp += n, f; }
 
@@ -1894,8 +1908,9 @@ static g_vm(g_vm_callk) {
 // Ip to the desired resume point before tail-calling this op.
 // Skips dormant tasks (saved_ip->ap == g_vm_task_exit) and sleeping tasks
 // (wake_at slot > now). When every task is dormant or sleeping, finds min
-// wake_at across the ring and calls the frontend g_sleep(delta) hook so the
-// CPU doesn't busy-yield through deadlines.
+// wake_at across the ring and calls the frontend g_wait(delta) hook so the
+// CPU doesn't busy-yield through deadlines. g_wait also returns early on
+// input readiness, so a peer suspended in g_vm_getc resumes promptly.
 // Caller may set f->next_wake_at to a raw deadline before calling; we read it
 // once and clear, then install it (tagged via putnum) as the current task's
 // wake_at slot at snapshot time. 0 (= default) means "always runnable".
@@ -1918,7 +1933,7 @@ static g_vm(g_vm_yield_sw) {
   // single-task fast path (no ring or self-loop): just deep-sleep if we have
   // a deadline, otherwise stay running. Either way the caller's Ip resumes.
   if (!f->tasks || f->tasks->m == f->tasks) {
-    if (my_wake && my_wake > now) g_sleep(my_wake - now);
+    if (my_wake && my_wake > now) g_wait(my_wake - now);
     return Continue(); }
   // walk forward, skipping dormant AND sleeping tasks
   union u *next = f->tasks->m;
@@ -1939,7 +1954,7 @@ static g_vm(g_vm_yield_sw) {
         if (wa && (!min_wake || wa < min_wake)) min_wake = wa; }
     // No deadlines anywhere — everyone is dormant, or we're alone. Run.
     if (!min_wake) return Continue();
-    if (min_wake > now) g_sleep(min_wake - now);
+    if (min_wake > now) g_wait(min_wake - now);
     now = g_clock();
     next = f->tasks->m;
     while (next != f->tasks &&
