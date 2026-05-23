@@ -104,3 +104,25 @@ void kq(uint8_t);
 void k_uart(void) {
   while (inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
     kq(inb(COM1)); }
+
+// (fault n) backend: deliberately raise a CPU exception, indexed by
+// the x86 vector numbers that name it. does not return -- k_exception
+// reports and halts.
+void k_fault_trigger(intptr_t n) {
+  switch (n) {
+    case 0:   // #DE: integer divide by zero
+      asm volatile ("xorl %%edx,%%edx; movl $1,%%eax; xorl %%ecx,%%ecx;"
+                    "divl %%ecx" ::: "eax","ecx","edx");
+      break;
+    case 3:   // #BP: breakpoint
+      asm volatile ("int3");
+      break;
+    case 13:  // #GP: write through a non-canonical address
+      *(volatile int*) 0xdeadbeefdeadbeefULL = 0;
+      break;
+    case 14:  // #PF: write to a canonical but unmapped address
+      *(volatile int*) 0x600000000000ULL = 0;
+      break;
+    default:  // #UD: invalid opcode
+      asm volatile ("ud2");
+      break; } }

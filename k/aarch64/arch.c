@@ -242,6 +242,22 @@ void archinit(void) {
   timer_init();
   asm volatile ("msr daifclr, #2"); }  // unmask IRQ (DAIF.I = 0)
 
+// (fault n) backend: deliberately raise a CPU exception. n indexes the
+// x86 vector numbers the builtin shares across arches; on aarch64 we
+// map 3 -> breakpoint, 13/14 -> data abort, anything else -> undefined
+// instruction. does not return -- k_fault reports and halts.
+void k_fault_trigger(intptr_t n) {
+  switch (n) {
+    case 3:            // breakpoint
+      asm volatile ("brk #0");
+      break;
+    case 13: case 14:  // data abort: write to an unmapped address
+      *(volatile int*) 0x600000000000ULL = 0;
+      break;
+    default:           // undefined instruction
+      asm volatile ("udf #0");
+      break; } }
+
 // PSCI SYSTEM_RESET. QEMU's 'virt' machine exposes PSCI over HVC.
 void k_reset(void) {
   register uint64_t fn asm("x0") = 0x84000009;

@@ -170,6 +170,22 @@ void archinit(void) {
   // sstatus.SIE (bit 1): global supervisor interrupt enable.
   asm volatile ("csrsi sstatus, 2"); }
 
+// (fault n) backend: deliberately raise a CPU exception. n indexes the
+// x86 vector numbers the builtin shares across arches; on riscv64 we
+// map 3 -> breakpoint, 13/14 -> store page/access fault, anything else
+// -> illegal instruction. does not return -- k_trap_c reports and halts.
+void k_fault_trigger(intptr_t n) {
+  switch (n) {
+    case 3:            // breakpoint
+      asm volatile ("ebreak");
+      break;
+    case 13: case 14:  // store page/access fault: write to an unmapped address
+      *(volatile int*) 0x600000000000ULL = 0;
+      break;
+    default:           // illegal instruction
+      asm volatile ("unimp");
+      break; } }
+
 // SBI System Reset: type 0 = shutdown (QEMU exits cleanly). The call
 // does not return on a conforming SBI; the wfi loop is a safety net.
 void k_reset(void) {

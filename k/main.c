@@ -58,7 +58,8 @@ static void palette_init(void) {
     palette[232 + i] = v << 16 | v << 8 | v; } }
 
 
-void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int);
+void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int),
+     k_fault_trigger(intptr_t n);
 
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
@@ -298,53 +299,14 @@ static g_vm(color) {
  return Ip += 1, Continue(); }
 
 // (fault n) -- deliberately raise a CPU exception to exercise the
-// handler in arch.c. the handler reports and halts, so this does not
-// return. the cases mirror x86_64 vector numbers; on aarch64 the same
-// n picks an analogous fault, and anything else an undefined opcode.
-static g_vm(fault) {
-  intptr_t n = g_getnum(Sp[0]);
-#if defined (__x86_64__)
-  switch (n) {
-    case 0:   // #DE: integer divide by zero
-      asm volatile ("xorl %%edx,%%edx; movl $1,%%eax; xorl %%ecx,%%ecx;"
-                    "divl %%ecx" ::: "eax","ecx","edx");
-      break;
-    case 3:   // #BP: breakpoint
-      asm volatile ("int3");
-      break;
-    case 13:  // #GP: write through a non-canonical address
-      *(volatile int*) 0xdeadbeefdeadbeefULL = 0;
-      break;
-    case 14:  // #PF: write to a canonical but unmapped address
-      *(volatile int*) 0x600000000000ULL = 0;
-      break;
-    default:  // #UD: invalid opcode
-      asm volatile ("ud2");
-      break; }
-#elif defined (__aarch64__)
-  switch (n) {
-    case 3:            // breakpoint
-      asm volatile ("brk #0");
-      break;
-    case 13: case 14:  // data abort: write to an unmapped address
-      *(volatile int*) 0x600000000000ULL = 0;
-      break;
-    default:           // undefined instruction
-      asm volatile ("udf #0");
-      break; }
-#elif defined (__riscv)
-  switch (n) {
-    case 3:            // breakpoint
-      asm volatile ("ebreak");
-      break;
-    case 13: case 14:  // store page/access fault: write to an unmapped address
-      *(volatile int*) 0x600000000000ULL = 0;
-      break;
-    default:           // illegal instruction
-      asm volatile ("unimp");
-      break; }
-#endif
-  Ip += 1;                 // unreachable unless the fault did not fire
+// handler in arch.c. k_fault_trigger (in each arch's arch.c) maps n
+// to a concrete fault: the cases mirror x86_64 vector numbers, and the
+// per-arch implementation picks the analogous fault for that target.
+// the handler reports and halts, so k_fault_trigger does not return;
+// the post-call statements are reachable only if the fault did not fire.
+static g_vm(g_vm_fault) {
+  k_fault_trigger(g_getnum(Sp[0]));
+  Ip += 1;
   return Continue(); }
 
 
@@ -354,7 +316,7 @@ static union u
   bif_draw[] = {{draw}, {g_vm_ret0}},
   bif_key[] = {{key}, {g_vm_ret0}},
   bif_color[] = {{g_vm_cur}, {.x = g_putnum(2)}, {color}, {g_vm_ret0}},
-  bif_fault[] = {{fault}, {g_vm_ret0}};
+  bif_fault[] = {{g_vm_fault}, {g_vm_ret0}};
 
 static bool meminit(void) {
   if (!memmap_req.response || !hhdm_req.response) return false;
