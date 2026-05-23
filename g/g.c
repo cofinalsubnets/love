@@ -1908,6 +1908,13 @@ static g_vm(g_vm_yield_sw) {
   uintptr_t now = g_clock();
   uintptr_t my_wake = f->next_wake_at;
   f->next_wake_at = 0;
+  // Re-arm the cooperative-yield counter on every path through yield_sw.
+  // YieldCheck fires yield_sw exactly when yield_ctr hits 0; if yield_sw then
+  // returns without switching (single-task fast path, or no peer runnable),
+  // yield_ctr is left at 0 and the next g_vm_ap decrements it to UINTPTR_MAX,
+  // silently disabling preemption for the running task until something else
+  // resets it. Re-arm here so non-switching returns stay bounded too.
+  f->yield_ctr = YIELD_INTERVAL;
   // single-task fast path (no ring or self-loop): just deep-sleep if we have
   // a deadline, otherwise stay running. Either way the caller's Ip resumes.
   if (!f->tasks || f->tasks->m == f->tasks) {
@@ -1967,7 +1974,6 @@ static g_vm(g_vm_yield_sw) {
   // switch to next task; tail-call resume to restore its state.
   // setting Ip = next makes Ip[1]/Ip[4..] line up with next's saved fields.
   f->tasks = next;
-  f->yield_ctr = YIELD_INTERVAL;
   Ip = next;
   return Ap(g_vm_resume, f); }
 
