@@ -237,10 +237,17 @@ void archinit(void) {
   asm volatile ("mov x9, sp; msr spsel, #1; mov sp, x9"
                 ::: "x9", "memory");
   asm volatile ("msr vbar_el1, %0; isb" :: "r"((uintptr_t) vectors));
-  mmio_map();                          // make the GIC and UART reachable
+  // Under Limine the HHDM covers RAM only, so mmio_map() walks TTBR1 to
+  // add 2 MiB block descriptors at HHDM+phys for the GIC and UART pages.
+  // Under UEFI khhdm == 0, the GIC/UART live in TTBR0's identity map
+  // that firmware set up, and walking TTBR1 for them would fault -- so
+  // skip the walk entirely; mmio_rd/wr (khhdm + phys + off) already
+  // resolves to the right physical address.
+  if (khhdm) mmio_map();
   gic_init();
   timer_init();
-  asm volatile ("msr daifclr, #2"); }  // unmask IRQ (DAIF.I = 0)
+  asm volatile ("msr daifclr, #2");  // unmask IRQ (DAIF.I = 0)
+}
 
 // (fault n) backend: deliberately raise a CPU exception. n indexes the
 // x86 vector numbers the builtin shares across arches; on aarch64 we

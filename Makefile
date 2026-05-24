@@ -102,16 +102,17 @@ b/h/$n.1: b/h/$n h/manpage.$x
 # Source list: the Limine build picks up arch.c + the nasm bits and
 # omits the efi_*.c files. The EFI build (EFI=1) does the opposite.
 ifdef EFI
-ifneq ($a,x86_64)
-$(error EFI=1 is only wired up for x86_64 in this prototype)
+ifeq ($(filter $a,x86_64 aarch64),)
+$(error EFI=1 is only wired up for x86_64 and aarch64)
 endif
 CC := clang
 CC_IS_CLANG := 1
 # Same sources as the Limine build, with two swaps: efi_main.c stands
 # in for the Limine boot info, and efi_*.c stays excluded for backends
 # that already exist (currently nothing -- the polled-mode stand-in is
-# gone). arch.c + x86_64.S come along; the SysV-tagged C callees keep
-# the asm-to-C boundary correct under MS x64.
+# gone). arch.c + the per-arch .S come along; the SysV-tagged C callees
+# keep the asm-to-C boundary correct under MS x64 on x86_64 (aarch64's
+# default ABI matches the asm's call convention either way).
 k_c=$(g_c) $(f_c) $(wildcard k/*.c k/$a/*.c)
 k_S=$(wildcard k/$a/*.S)
 k_asm=
@@ -159,8 +160,11 @@ b/k/$n-$a.efi: $(k_o)
 
 ifeq ($(CC_IS_CLANG),1)
 ifdef EFI
-# x86_64-unknown-windows defaults to MS x64 (matches the UEFI ABI) and
-# tells clang to invoke lld-link for the final link.
+# x86_64-unknown-windows defaults to MS x64 (matches the UEFI ABI on
+# x86_64) and tells clang to invoke lld-link for the final link. For
+# aarch64 the same triple yields PE32+/AArch64 with MS-AAPCS64, which
+# is ABI-compatible with UEFI's AAPCS64 for the scalar-argument calls
+# the firmware makes into us and we make back.
 kcc_if_clang=-target $a-unknown-windows
 else
 kcc_if_clang=-target $a-unknown-none-elf
@@ -308,22 +312,30 @@ b/$n-$a.hdd: b/k/$n-$a.elf dl/limine/limine k/limine/limine.conf
 	@mcopy -i $@@@1M dl/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
 
 # --- EFI-only boot media -----------------------------------------------
-# A raw FAT image containing just /EFI/BOOT/BOOTX64.EFI. OVMF reads this
-# directly -- no Limine, no second-stage loader, no config file. Same
-# mformat path as b/$n-$a.hdd, just without the GPT wrapper and without
-# the Limine BOOT*.EFI copies.
+# A raw FAT image containing just /EFI/BOOT/BOOT<arch>.EFI under the UEFI
+# spec's fallback name (X64 / AA64 / ...). OVMF reads this directly --
+# no Limine, no second-stage loader, no config file. Same mformat path
+# as b/$n-$a.hdd, just without the GPT wrapper and without the Limine
+# BOOT*.EFI copies.
+k_efi_short_x86_64=BOOTX64
+k_efi_short_aarch64=BOOTAA64
 b/$n-$a-efi.img: b/k/$n-$a.efi
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@ 2>/dev/null
 	@mformat -i $@ -F
 	@mmd -i $@ ::/EFI ::/EFI/BOOT
-	@mcopy -i $@ $< ::/EFI/BOOT/BOOTX64.EFI
+	@mcopy -i $@ $< ::/EFI/BOOT/$(k_efi_short_$a).EFI
 
+# x86_64's q35 has IDE so `-drive if=ide` works there; QEMU's virt
+# machine (aarch64/riscv64/loongarch64) has no IDE controller, so attach
+# the image as virtio-blk over the existing virtio-mmio bus instead.
+k_efi_drive_x86_64=-drive if=ide,format=raw,file=$<
+k_efi_drive_aarch64=-drive if=none,format=raw,file=$<,id=hd0 -device virtio-blk-device,drive=hd0
 run-efi: b/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
-	$(k_qemu) -drive if=ide,format=raw,file=$<
+	$(k_qemu) $(k_efi_drive_$a)
 run-efi-headless: b/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
-	$(k_qemu) -drive if=ide,format=raw,file=$< -display none -no-reboot
+	$(k_qemu) $(k_efi_drive_$a) -display none -no-reboot
 .PHONY: run-efi run-efi-headless
 
 k_qemu_x86_64=-M q35 -serial stdio
