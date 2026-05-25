@@ -28,43 +28,11 @@
    (revcat a b) (foldl b (flip cons) a)
 
    ; --- parser char classification ---
-   ;
-   ; tokens dispatch on the first non-delim char's class and read a
-   ; maximal run of matching chars. classes are mostly disjoint:
-   ;   alpha-first:  [A-Za-z_] plus any byte >= 128 (utf-8 idents)
-   ;   alpha-tail:   alpha-first plus [0-9'?]. ' allowed mid/end so
-   ;                 primed names like x' or f's work; `'` is the quote
-   ;                 prefix only at token start (so `ev'ev` is one sym;
-   ;                 write `ev 'ev` to mean `ev` then quoted `ev`).
-   ;   numeric:      [0-9]; after a leading `0x`/`0X`, switch to hex.
-   ;   punct:        [+\-*/<>=!&|~^%:,.\\`]
-   ;   leading `?`:  promoted to punct-class so `?-` reads as one token
-   ;                 while bare `?` (the cond keyword) still works.
-   ;   leading `-`/`+` + digit, at a token boundary (preceded by
-   ;                 whitespace/comment, start of input, or a delim
-   ;                 char `( [ { ' "`): numeric. So `(-5)` is a list
-   ;                 holding the number -5, but `(1+2)` reads as
-   ;                 `(1 + 2)` (three tokens) and `x-5` as `x - 5`.
-   ; `[ ] { }` are single-char delim tokens (each reads as a 1-char sym).
    (isws c)    (|| (= c 32) (= c 10) (= c 9) (= c 13) (= c 12) (= c 0))
    (iscom c)   (|| (= c 35) (= c 59))
    (isdig c)   (&& (>= c 48) (<= c 57))
    (ishex c)   (|| (isdig c) (&& (>= c 65) (<= c 70)) (&& (>= c 97) (<= c 102)))
-   (isalpha c) (|| (&& (>= c 65) (<= c 90))           ; A-Z
-                   (&& (>= c 97) (<= c 122))          ; a-z
-                   (= c 95)                            ; _
-                   (>= c 128))                        ; utf-8 high byte
-   (isalphat c)(|| (isalpha c) (isdig c) (= c 63) (= c 39))   ; + ? '
-   (ispunc c)  (|| (= c 43) (= c 45) (= c 42) (= c 47)   ; + - * /
-                   (= c 60) (= c 62) (= c 61) (= c 33)   ; < > = !
-                   (= c 38) (= c 124) (= c 126) (= c 94) ; & | ~ ^
-                   (= c 37) (= c 58) (= c 44) (= c 46)   ; % : , .
-                   (= c 92) (= c 96))                    ; \ `
-   (isdelim c) (|| (isws c) (iscom c)
-                   (= c 40) (= c 41)                  ; ( )
-                   (= c 91) (= c 93)                  ; [ ]
-                   (= c 123) (= c 125)                ; { }
-                   (= c 34) (= c 39))                 ; " '
+   (isdelim c) (|| (isws c) (iscom c) (= c 40) (= c 41) (= c 34) (= c 39))
    (digval c)  (? (isdig c) (- c 48)
                   (>= c 97) (- c 87)        ; a-f -> 10-15
                   (- c 55))                  ; A-F -> 10-15
@@ -114,46 +82,42 @@
               (uint cl)))
         0)
 
-   ; read one datum from a charlist. read1 is the public unary entry
-   ; point; rd1 carries the token-boundary bit needed to decide whether
-   ; a leading `-`/`+` should sign-attach to a following digit. callers
-   ; that just want "give me the next datum" stay unary.
-   (read1 cl) (rd1 cl -1)            ; top-level entry: at boundary
+   ; read one token: a maximal run of non-delimiter chars.
+   ; returns (cons token-charlist rest).
+   (readtok cl)
+     (: (loop acc cl)
+          (? (&& (twop cl) (nilp (isdelim (car cl))))
+             (loop (cons (car cl) acc) (cdr cl))
+             (cons (rev acc) cl))
+        (loop 0 cl))
 
-   (rd1 cl at_boundary)
-     (: cl2 (skipws cl)
-        ab (|| at_boundary (!= cl2 cl))
-        (? (nilp cl2) e
-           (: c (car cl2)
-              (? (= c 40) (rdlist (cdr cl2))   ; (
+
+   ; read one datum from a charlist.
+   (read1 cl)
+     (: cl (skipws cl)
+        (? (nilp cl) e
+           (: c (car cl)
+              (? (= c 40) (rdlist (cdr cl))    ; (
                  (= c 41) e                     ; ) at top level
-                 (= c 39) (rdquot (cdr cl2))   ; '
-                 (= c 34) (rdstr  (cdr cl2))   ; "
-                 (|| (= c 91) (= c 93) (= c 123) (= c 125))   ; [ ] { }
-                     (cons (sym (str (cons c 0))) (cdr cl2))
-                 (rdatom cl2 ab)))))
+                 (= c 39) (rdquot (cdr cl))    ; '
+                 (= c 34) (rdstr  (cdr cl))    ; "
+                 (rdatom cl)))))
 
-   ; read until a closing paren (already past the opening one). first
-   ; element is at a boundary (the `(` precedes it); subsequent elements
-   ; are at a boundary iff skipws skipped between them and the previous.
+   ; read until a closing paren (already past the opening one).
    (rdlist cl)
-     (: (loop cl at_boundary)
-          (: cl2 (skipws cl)
-             ab (|| at_boundary (!= cl2 cl))
-             (? (nilp cl2) m
-                (= (car cl2) 41) (cons 0 (cdr cl2))
-                (: r (rd1 cl2 ab)
-                   (? (= r m) m
-                      (= r e) m
-                      (: rest (loop (cdr r) 0)
-                         (? (= rest m) m
-                            (cons (cons (car r) (car rest)) (cdr rest))))))))
-        (loop cl -1))
+     (: cl (skipws cl)
+        (? (nilp cl) m
+           (= (car cl) 41) (cons 0 (cdr cl))
+           (: r (read1 cl)
+              (? (= r m) m
+                 (= r e) m
+                 (: rest (rdlist (cdr r))
+                    (? (= rest m) m
+                       (cons (cons (car r) (car rest)) (cdr rest))))))))
 
-   ; read one datum after a quote mark; wrap as 'datum. ' is a delim,
-   ; so the inner read is at a boundary.
+   ; read one datum after a quote mark; wrap as 'datum.
    (rdquot cl)
-     (: r (rd1 cl -1)
+     (: r (read1 cl)
         (? (= r m) m
            (= r e) m
            (cons (cons '` (cons (car r) 0)) (cdr r))))
@@ -180,59 +144,23 @@
                    (loop (cons c acc) rest))))
         (loop 0 cl))
 
-   ; read an atom: dispatch on first char's class, then read a
-   ; maximal run of class-tail chars. returns (value . rest). value is
-   ; an interned symbol or a number; numeric is only chosen when the
-   ; first char is a digit, or a sign-followed-by-digit at a token
-   ; boundary (the at_boundary flag, threaded down from rd1).
-   (rdatom cl at_boundary)
-     (: c (car cl) rest (cdr cl)
-        (? (isalpha c)   (rdalphat (cons c 0) rest)
-           (isdig c)     (rdnum cl)
-           (= c 63)      (rdpunct (cons c 0) rest)   ; leading ? as punct
-           (|| (= c 45) (= c 43))                    ; - or +
-               (? (&& at_boundary (twop rest) (isdig (car rest)))
-                  (rdnum cl)
-                  (rdpunct (cons c 0) rest))
-           (ispunc c)    (rdpunct (cons c 0) rest)
-           (rdalphat (cons c 0) rest)))               ; lenient fallback
-
-   ; accumulate alpha-tail chars (acc reversed).
-   (rdalphat acc cl)
-     (? (&& (twop cl) (isalphat (car cl)))
-        (rdalphat (cons (car cl) acc) (cdr cl))
-        (cons (sym (str (rev acc))) cl))
-
-   ; accumulate punctuation chars (acc reversed).
-   (rdpunct acc cl)
-     (? (&& (twop cl) (ispunc (car cl)))
-        (rdpunct (cons (car cl) acc) (cdr cl))
-        (cons (sym (str (rev acc))) cl))
-
-   ; numeric token: optional sign + digit run, with 0x/0X hex prefix.
-   ; numof handles all the parsing; on the rare malformed case (e.g.
-   ; `0x` with no hex digits) fall back to interning as a symbol so
-   ; the reader never errors mid-stream.
-   (rdnum cl)
-     (: r (numof cl)
-        (? (twop r) r
-           (rdalphat (cons (car cl) 0) (cdr cl))))
+   ; read an atom: a token, then decide number-or-symbol.
+   (rdatom cl)
+     (: tr (readtok cl)
+        tok (car tr)
+        r (numof tok)
+        val (? (&& (twop r) (nilp (cdr r))) (car r) (sym (str tok)))
+        (cons val (cdr tr)))
 
    ; drain a charlist into a list of all the datums it holds.
-   ; propagates m if anything in the chain is incomplete. threads the
-   ; at-boundary bit across reads (same shape as rdlist's inner loop)
-   ; so e.g. "2+3" parses as `(2 + 3)`, not `(2 3)`.
+   ; propagates m if anything in the chain is incomplete.
    (parseall cl)
-     (: (loop cl at_boundary)
-          (: cl2 (skipws cl)
-             ab (|| at_boundary (!= cl2 cl))
-             r (rd1 cl2 ab)
-             (? (= r m) m
-                (= r e) 0
-                (: rest (loop (cdr r) 0)
-                   (? (= rest m) m
-                      (cons (car r) rest)))))
-        (loop cl -1))
+     (: r (read1 cl)
+        (? (= r m) m
+           (= r e) 0
+           (: rest (parseall (cdr r))
+              (? (= rest m) m
+                 (cons (car r) rest)))))
 
    ; --- editor ---
 
@@ -344,7 +272,7 @@
    ; map a raw byte (or escape sequence) to an event code:
    ; printable >0; -1 left, -2 right, -3 bsp, -4 del, -5 home,
    ; -6 end, -7 quit, -8 up, -9 down, -10 buffer top, -11 buffer end;
-   ; -12 ack ctrl-c, -13 toggle infix mode (Ctrl+T); 10 = enter.
+   ; 10 = enter.
    ;
    ; after `ESC [ 1` there are two shapes: `~` is plain Home; `; M F`
    ; carries a modifier digit M (5=ctrl, 2=shift, ...) and a final byte
@@ -370,25 +298,21 @@
         (= c 3) -12
         (|| (= c 13) (= c 10)) 10
         (|| (= c 8) (= c 127)) -3
-        (= c 1) -5 (= c 5) -6
-        (= c 20) -13                        ; Ctrl+T: toggle infix mode
-        (= c 27) (edesc 0)
+        (= c 1) -5 (= c 5) -6 (= c 27) (edesc 0)
         (&& (<= 32 c) (< c 127) c)))
 
    ; redraw the buffer in place. pra is "rows above the cursor from
    ; the previous render" -- we move up that many rows first so we
    ; land back on the prompt's row. all motion is relative: nothing
    ; depends on a saved absolute cursor, so the terminal scrolling
-   ; (when the buffer reaches the last row) doesn't desync us. the
-   ; prompt is re-printed each tick (after clearing to end-of-screen
-   ; from the prompt row), so a mid-line mode toggle updates the
-   ; visible mode indicator without leaving the line.
-   (edrender pr pra u l r d)
-     (: pl (len pr)
-        _ (? (< 0 pra) (, (putc 27) (putc 91) (putn pra 10) (putc 65)) 0)
+   ; (when the buffer reaches the last row) doesn't desync us. pl is
+   ; the prompt's column; the topmost line shares it, subsequent
+   ; lines start at column 0.
+   (edrender pl pra u l r d)
+     (: _ (? (< 0 pra) (, (putc 27) (putc 91) (putn pra 10) (putc 65)) 0)
         _ (putc 13)
+        _ (? (< 0 pl)  (, (putc 27) (putc 91) (putn pl 10)  (putc 67)) 0)
         _ (putc 27) _ (putc 91) _ (putc 74) ; clear to end of screen
-        _ (puts pr)
         _ (each (rev u) (\ ln (, (each ln prc) (putc 10))))
         _ (each (revcat l r) prc)
         _ (each d (\ ln (, (putc 10) (each ln prc))))
@@ -399,11 +323,7 @@
         _ (? (< 0 col) (, (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
         (puts ""))
 
-   ; mode flag (0 = prefix, -1 = infix). toggled by Ctrl+T in edline.
-   ; in infix mode each Enter wraps the parsed datums in (infix ...)
-   ; before evaluating; in prefix mode each is evaluated separately.
-   infix_mode 0
-   (ps1 _) (? (get 0 'infix_mode globals) " ;i " " ;; ")
+   ps1 " ;; "
 
    ; print the prompt, then dispatch events until ^D or until enter
    ; at end-of-buffer with the buffer fully parsed. enter always
@@ -427,9 +347,11 @@
    ; for history navigation. cur is the pristine frame of the
    ; currently-recalled entry, or 0 if the buffer is a free edit.
    (edline hu hd)
-     (: (loop pra u l r d hu hd cur)
-          (: pr (ps1 0)                          ; recomputed each tick so
-             _ (edrender pr pra u l r d)         ; mode toggles refresh
+     (: pr (ps1 0)
+        _ (puts pr)
+        pl (len pr)
+        (loop pra u l r d hu hd cur)
+          (: _ (edrender pl pra u l r d)
              c (edev 0)
              npra (len u)
              (kloop uu ll rr dd) (loop npra uu ll rr dd hu hd cur)
@@ -462,10 +384,6 @@
                 (= c -11) (edbot kloop u l r d)
                 (= c -12) (: _ (puts "^C") _ (putc 10)
                              (? (emptybuf u l r d) eofsym (edline hu hd)))
-                (= c -13) (: _ (put 'infix_mode
-                                    (? (get 0 'infix_mode globals) 0 -1)
-                                    globals)
-                             (loop npra u l r d hu hd cur))
                 (loop npra u l r d hu hd cur)))
         (loop 0 0 0 0 0 hu hd 0))
 
@@ -494,7 +412,5 @@
            (: vs  (car r)
               nhu (cadr r)
               nhd (cddr r)
-              _ (? (&& (twop vs) (get 0 'infix_mode globals))
-                   (: _ (do_eval (cons 'infix vs)) (putc 10))
-                   (each vs (\ v (: _ (do_eval v) (putc 10)))))
+              _ (each vs (\ v (: _ (do_eval v) (putc 10))))
               (repl nhu nhd)))))
