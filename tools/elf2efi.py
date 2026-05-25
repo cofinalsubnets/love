@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""elf2efi.py -- wrap a statically-linked riscv64 ELF into a PE32+ EFI image.
+"""elf2efi.py -- wrap a statically-linked ELF into a PE32+ EFI image.
 
 The x86_64 and aarch64 EFI builds drive lld-link via clang's MS-COFF
 targets, which lays out a PE32+ container and synthesises the base
-relocation table on the fly. LLVM's COFF backend has no RISC-V port,
-so we cannot take that path on riscv64. Instead the riscv64 EFI build
-links a plain static ELF (with --emit-relocs to preserve the relocation
-records that ld would otherwise drop), and this tool stamps out the
-PE32+ wrapper around the same loadable bytes:
+relocation table on the fly. LLVM's COFF backend has no RISC-V or
+LoongArch port, so we cannot take that path on either arch. Instead
+those EFI builds link a plain static ELF (with --emit-relocs to
+preserve the relocation records that ld would otherwise drop), and
+this tool stamps out the PE32+ wrapper around the same loadable bytes:
 
     +-------------------------------------------------+
     |  DOS stub + PE signature + COFF + Optional Hdr  |  (RVA 0..)
@@ -19,7 +19,7 @@ PE32+ wrapper around the same loadable bytes:
     |            so the UEFI loader zeroes .bss tail  |
     +-------------------------------------------------+
     |  .reloc -- one IMAGE_REL_BASED_DIR64 per ELF    |
-    |            R_RISCV_64 record, grouped per page  |
+    |            abs-64 record, grouped per page      |
     +-------------------------------------------------+
 
 The linker script lines PT_LOAD segments up on 4 KiB boundaries starting
@@ -27,21 +27,36 @@ at RVA 0x1000, so PE FileAlignment == PE SectionAlignment == 0x1000 and
 each section's file offset matches its RVA. That keeps the conversion
 boring: copy each PT_LOAD verbatim, then append the generated .reloc.
 
+The two supported ELF machines (RISC-V, LoongArch64) both encode their
+absolute-64 relocation as type 2 in r_info, so the per-arch table just
+picks the right PE machine code; the reloc walk is identical.
+
 Usage: elf2efi.py INPUT.elf OUTPUT.efi
 """
 import struct, sys
 
 # --- ELF constants ---------------------------------------------------
 EM_RISCV    = 243
+EM_LOONGARCH= 258
 PT_LOAD     = 1
 PF_X        = 1
 PF_W        = 2
 SHT_RELA    = 4
 SHF_ALLOC   = 2
 R_RISCV_64  = 2
+R_LARCH_64  = 2
 
 # --- PE/COFF constants -----------------------------------------------
 IMAGE_FILE_MACHINE_RISCV64        = 0x5064
+IMAGE_FILE_MACHINE_LOONGARCH64    = 0x6264
+
+# Per-arch dispatch. Each entry maps an ELF e_machine to the PE machine
+# code we stamp into the COFF header and the absolute-64 r_type we lift
+# into IMAGE_REL_BASED_DIR64 records.
+ARCHES = {
+    EM_RISCV:     ("riscv64",     IMAGE_FILE_MACHINE_RISCV64,     R_RISCV_64),
+    EM_LOONGARCH: ("loongarch64", IMAGE_FILE_MACHINE_LOONGARCH64, R_LARCH_64),
+}
 IMAGE_FILE_EXECUTABLE_IMAGE       = 0x0002
 IMAGE_FILE_LINE_NUMS_STRIPPED     = 0x0004
 IMAGE_FILE_LOCAL_SYMS_STRIPPED    = 0x0008
@@ -83,8 +98,8 @@ class Elf:
          _, _, self.e_phentsize, self.e_phnum,
          self.e_shentsize, self.e_shnum, self.e_shstrndx) = \
             struct.unpack_from("<HHIQQQIHHHHHH", b, 16)
-        if self.e_machine != EM_RISCV:
-            fail(path + ": e_machine != EM_RISCV")
+        if self.e_machine not in ARCHES:
+            fail(path + ": unsupported e_machine 0x%x" % self.e_machine)
         # program headers
         self.phdrs = []
         for i in range(self.e_phnum):
@@ -110,8 +125,8 @@ class Elf:
         for s in self.shdrs:
             s["name"] = name_at(s["name_off"])
 
-# --- collect R_RISCV_64 RVAs that need PE base-relocation ------------
-def collect_relocs(elf):
+# --- collect absolute-64 RVAs that need PE base-relocation -----------
+def collect_relocs(elf, abs64_type):
     out = []
     for s in elf.shdrs:
         if s["type"] != SHT_RELA: continue
@@ -127,7 +142,7 @@ def collect_relocs(elf):
             r_offset, r_info, _r_addend = struct.unpack_from(
                 "<QQq", elf.buf, s["offset"] + i * 24)
             r_type = r_info & 0xffffffff
-            if r_type == R_RISCV_64:
+            if r_type == abs64_type:
                 out.append(r_offset)
     out.sort()
     return out
@@ -159,6 +174,7 @@ def main():
     if len(sys.argv) != 3:
         fail("usage: elf2efi.py INPUT.elf OUTPUT.efi")
     elf = Elf(sys.argv[1])
+    _arch_name, pe_machine, abs64_type = ARCHES[elf.e_machine]
 
     # Pick the loadable PT_LOAD segments and classify by writability.
     # phdr fields (struct <IIQQQQQQ): 0 p_type, 1 p_flags, 2 p_offset,
@@ -198,7 +214,7 @@ def main():
 
     # .reloc goes after .data in both file and image. Its VA is one
     # SectionAlignment boundary past data's VirtualSize range.
-    reloc_blob = build_reloc_blob(collect_relocs(elf))
+    reloc_blob = build_reloc_blob(collect_relocs(elf, abs64_type))
     reloc_va   = align_up(data_va + data_msize, SECTION_ALIGN)
     reloc_off  = align_up(data_va + data_raw, FILE_ALIGN)
     reloc_size = len(reloc_blob)
@@ -211,7 +227,7 @@ def main():
     struct.pack_into("<I", dos, 0x3c, 0x40)           # e_lfanew
 
     coff = struct.pack("<HHIIIHH",
-        IMAGE_FILE_MACHINE_RISCV64,
+        pe_machine,
         3,                                            # NumberOfSections
         0, 0, 0,                                      # TimeDateStamp, sym ptr/cnt
         240,                                          # SizeOfOptionalHeader
