@@ -1899,9 +1899,9 @@ static g_vm(g_vm_yield_sw) {
       f->next_wake_at = 0;
       f->next_wait_io = 0;
       if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
-      return Continue(); }
-    my_wake = 0;
-    my_wait_io = 0; }
+      return Continue(); } }
+  // peer became runnable: fall through to snapshot+switch, preserving
+  // my_wake / my_wait_io so caller's pending intent rides the snapshot.
   word my_height = topof(f) - Sp;
   union u *next_stack = next + 5;
   uintptr_t restore_h = (union u*) ttag(next_stack) - next_stack;

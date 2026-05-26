@@ -114,6 +114,18 @@
     elapsed (clock t0)
     (&& (>= elapsed 30) (< elapsed 60)))
 
+ ; a peer waking mid-wait must NOT cut short main's longer sleep.
+ ; (yield 0) forces peer to reach its (sleep 30) before main starts its (sleep 80),
+ ; so main's yield_sw enters the deadline-coalesce wait with peer's 30 as min_wake.
+ ; When peer wakes at ~30, main's pending wake_at must be preserved across the snapshot.
+ (: t0 (clock 0)
+    p (spawn (\ _ (sleep 30)) 0)
+    _ (yield 0)
+    _ (sleep 80)
+    _ (wait p)
+    elapsed (clock t0)
+    (&& (>= elapsed 80) (< elapsed 120)))
+
  ; sleep cooperates: while one task sleeps, another finishes its work.
  (: t (new 0)
     _ (put 'flag 0 t)
