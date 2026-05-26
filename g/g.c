@@ -92,7 +92,7 @@ static g_vm_t
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
- g_vm_sleep, g_vm_sleep_wait, g_vm_donep, g_vm_kill, g_vm_key;
+ g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
 static struct g_vec *ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
@@ -1855,25 +1855,32 @@ static g_vm(g_vm_callk) {
 // wake_at across the ring and calls the frontend g_wait(delta) hook so the
 // CPU doesn't busy-yield through deadlines. g_wait also returns early on
 // input readiness, so a peer suspended in g_vm_getc resumes promptly.
-// Caller may set f->next_wake_at to a raw deadline before calling; we read it
-// once and clear, then install it (tagged via putnum) as the current task's
-// wake_at slot at snapshot time. 0 (= default) means "always runnable".
-// The slot is always stored tagged — putnum(0) = 1 is the "always runnable"
-// sentinel; this keeps the slot non-zero so ttag's NULL-terminator walk over
-// the snapshot doesn't stop here.
+// Caller may set f->next_wake_at to a raw deadline before calling; we install
+// it (tagged via putnum) as the current task's wake_at slot at snapshot time.
+// 0 (= default) means "always runnable". The slot is always stored tagged —
+// putnum(0) = 1 is the "always runnable" sentinel; this keeps the slot
+// non-zero so ttag's NULL-terminator walk over the snapshot doesn't stop here.
+//
+// next_wake_at is cleared only after the call commits to a branch that
+// consumes it (either snapshot-and-switch, or a g_wait/no-op return). The
+// snapshot branch's heap allocation does its own gc-retry that re-enters
+// yield_sw with caller's Ip intact, so on a Have failure we don't fall back
+// into the caller before the snapshot is taken.
 //
 // Layout: [next, saved_ip, pid, wake_at, stack..., tag] — stack at offset 4.
 static g_vm(g_vm_yield_sw) {
   uintptr_t now = g_clock();
   uintptr_t my_wake = f->next_wake_at;
-  f->next_wake_at = 0;
   // single-task fast path (ring is a self-loop): just deep-sleep if we have
   // a deadline, otherwise stay running. Either way the caller's Ip resumes.
   // Clear ctr only if it's at the trigger level — preempt callers must be
   // cleared (else we'd bounce yield_sw on the next ap); voluntary callers
   // (sleep/getc/yield/wait) keep their leftover budget.
   if (f->tasks->m == f->tasks) {
-    if (my_wake && my_wake > now) g_wait(my_wake - now);
+    f->next_wake_at = 0;
+    // Loop past early g_wait returns (stdin readable wakes us even when
+    // alone). Single-task: no peer to switch to; just sleep the full delta.
+    while (my_wake && my_wake > (now = g_clock())) g_wait(my_wake - now);
     if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
     return Continue(); }
   // walk forward, skipping dormant AND sleeping tasks
@@ -1894,23 +1901,41 @@ static g_vm(g_vm_yield_sw) {
         uintptr_t wa = (uintptr_t) getnum(n[3].x);
         if (wa && (!min_wake || wa < min_wake)) min_wake = wa; }
     // No deadlines anywhere — everyone is dormant, or we're alone. Run.
-    if (!min_wake) return Continue();
-    if (min_wake > now) g_wait(min_wake - now);
-    now = g_clock();
-    next = f->tasks->m;
-    while (next != f->tasks &&
-           (next[1].m->ap == g_vm_task_exit ||
-            (uintptr_t) getnum(next[3].x) > now))
-      next = next->m;
+    if (!min_wake) { f->next_wake_at = 0; return Continue(); }
+    // Loop past early g_wait returns: wait until either min_wake reached or
+    // a peer becomes runnable (e.g. a getc-blocked peer wakes on stdin input
+    // even though no time-deadline has elapsed).
+    for (;;) {
+      if (min_wake > (now = g_clock())) g_wait(min_wake - now);
+      now = g_clock();
+      next = f->tasks->m;
+      while (next != f->tasks &&
+             (next[1].m->ap == g_vm_task_exit ||
+              (uintptr_t) getnum(next[3].x) > now))
+        next = next->m;
+      if (next != f->tasks) break;        // peer runnable
+      if (now >= min_wake) break; }       // deadline reached, no peer woke
     if (next == f->tasks) {
+      f->next_wake_at = 0;
       if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
-      return Continue(); }  // a peer didn't wake; just go
-    my_wake = 0; }  // we slept enough; record as runnable in our snapshot
+      return Continue(); }  // no peer; our wait satisfied, resume caller
+    my_wake = 0; }  // peer became runnable; our wait was satisfied en route
   word my_height = topof(f) - Sp;
   union u *next_stack = next + 4;
   uintptr_t restore_h = (union u*) ttag(next_stack) - next_stack;
-  // one Have for both the snapshot alloc and the restored stack
-  Have(my_height + restore_h + 6);
+  // one allocation for snapshot + restored stack. If we can't satisfy it,
+  // GC and re-enter yield_sw from the top — Pack/Unpack carry caller's Ip
+  // (and Hp/Sp) across the collection, and f->next_wake_at is intact since
+  // we haven't cleared it yet. This is what makes yield_sw safe to tail-call
+  // from side-effecting ops that have advanced Ip past themselves.
+  uintptr_t need = my_height + restore_h + 6;
+  if (Sp < Hp + need) {
+    Pack(f);
+    f = g_please(f, need);
+    if (!g_ok(f)) return f;
+    Unpack(f);
+    return Ap(g_vm_yield_sw, f); }
+  f->next_wake_at = 0;
   // walk the ring to find prev (the node whose next is f->tasks); O(ring size)
   union u *prev = next;
   while (prev->m != f->tasks) prev = prev->m;
@@ -2046,46 +2071,20 @@ static g_vm(g_vm_kill) {
   Ip += 1;
   return Continue(); }
 
-// sleep_wait_body : a sleeping task's saved_ip points here. The saved stack has
-// the absolute deadline at Sp[0] and the caller's return address at Sp[1].
-// Each time the task is scheduled, sleep_wait re-checks the clock; if the
-// deadline isn't reached it yields again, otherwise it returns nil through
-// Sp[1] (the original (sleep n) call's return address).
-static union u sleep_wait_body[] = { {g_vm_sleep_wait} };
-
 // (sleep n) : block the current task for at least n g_clock() ticks, returning
 // nil. n <= 0 or non-numeric returns nil immediately without yielding.
-// Otherwise: convert n to an absolute deadline, store it at Sp[0] (so the GC
-// retry path through sleep_wait can recheck) and at f->next_wake_at (so
-// yield_sw can install it as our snapshot's wake_at slot and the scheduler
-// can skip us until the deadline). The bif's own S1 ret0 cell is skipped —
-// sleep_wait does the return itself when the deadline arrives.
+// Otherwise: set Sp[0] = nil (the resume-value), set f->next_wake_at to the
+// absolute deadline (yield_sw installs it as our snapshot's wake_at slot),
+// advance Ip past ourselves so resume lands on the bif body's return cell,
+// and tail-call yield_sw. yield_sw is GC-safe in its snapshot branch, so the
+// advanced Ip survives a Have failure.
 static g_vm(g_vm_sleep) {
   word n = Sp[0];
-  if (!nump(n) || getnum(n) <= 0) {
-    Sp[0] = g_nil;
-    Ip += 1;
-    return Continue(); }
-  uintptr_t deadline = (uintptr_t) g_clock() + getnum(n);
-  Sp[0] = putnum((intptr_t) deadline);
-  f->next_wake_at = deadline;
-  Ip = sleep_wait_body;
+  Sp[0] = g_nil;
+  Ip += 1;
+  if (!nump(n) || getnum(n) <= 0) return Continue();
+  f->next_wake_at = (uintptr_t) g_clock() + getnum(n);
   return Ap(g_vm_yield_sw, f); }
-
-// sleep_wait : runs when the scheduler picks a sleeping task whose wake_at has
-// arrived. Common path: deadline reached, return nil through the saved return
-// address at Sp[1]. Defensive path: GC retry inside yield_sw can route us here
-// before the snapshot was actually taken (Ip is already sleep_wait_body when
-// yield_sw's Have fails). In that case re-arm next_wake_at and yield again.
-static g_vm(g_vm_sleep_wait) {
-  if ((intptr_t) g_clock() < getnum(Sp[0])) {
-    f->next_wake_at = (uintptr_t) getnum(Sp[0]);
-    return Ap(g_vm_yield_sw, f); }
-  // Wake: return nil through the caller's saved return address at Sp[1].
-  Ip = cell(Sp[1]);
-  Sp[1] = g_nil;
-  Sp += 1;
-  return Continue(); }
 
 // (key? _) : per-frontend non-consuming key-ready poll. Returns -1 if
 // (getc 0) would return immediately (a byte is available or EOF state),
