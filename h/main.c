@@ -13,8 +13,14 @@ g_noinline uintptr_t g_clock(void) {
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
 // --- host output -----------------------------------------------------
-static struct g *_putc(struct g *f, int c, struct g_out*) { return putchar(c), f; }
-static struct g *_flush(struct g *f, struct g_out*)       { return fflush(stdout), f; }
+// write(2) directly to STDOUT_FILENO — no FILE* / libc stream buffering.
+// _flush is a no-op since every byte hits the fd immediately.
+static struct g *_putc(struct g *f, int c, struct g_out*) {
+  uint8_t b = c;
+  ssize_t r = write(STDOUT_FILENO, &b, 1);
+  (void) r;
+  return f; }
+static struct g *_flush(struct g *f, struct g_out*) { return f; }
 static struct g_out _g_stdout = { _putc, _flush };
 struct g_out *g_stdout = &_g_stdout;
 
@@ -50,28 +56,45 @@ static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
 
 void g_sleep(uintptr_t ms) { poll_wait(NULL, 0, ms); }
 
-static void raw_wait(struct g *f, struct g_in *i, uintptr_t ms) {
-  (void) f; (void) i;
-  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
-  poll_wait(&p, 1, ms); }
+bool g_ready(int fd) {
+  if (fd < 0) return true;
+  struct pollfd p = { .fd = fd, .events = POLLIN };
+  return poll(&p, 1, 0) > 0; }
+
+void g_wait_fds(int const *fds, int n, uintptr_t ms) {
+  if (n <= 0) { g_sleep(ms); return; }
+  if (n > G_WAIT_FDS_MAX) __builtin_trap();
+  struct pollfd p[G_WAIT_FDS_MAX];
+  for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
+  poll_wait(p, n, ms); }
 
 // --- host input ------------------------------------------------------
 // raw_stdin is the byte source at f->in: non-interactively the parser
 // reads it directly; interactively the gwen line editor (boot.g) reads
 // its keystrokes through it. one byte per getc, delivered in f->b. it
 // never allocates the gwen heap, so f stays valid across a getc.
-static struct g *raw_getc(struct g *f, struct g_in*) {
-  return g_core_of(f)->b = fgetc(stdin), f; }
-static struct g *raw_ungetc(struct g *f, int c, struct g_in*) {
-  return g_core_of(f)->b = ungetc(c, stdin), f; }
-static struct g *raw_eof(struct g *f, struct g_in*) {
-  return g_core_of(f)->b = feof(stdin), f; }
-// poll returns POLLIN for EOF too, so an EOF'd stdin reports ready.
-static bool raw_key(struct g *f, struct g_in*) {
-  (void) f;
-  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
-  return poll(&p, 1, 0) > 0; }
-static struct g_in raw_stdin = { raw_getc, raw_ungetc, raw_eof, raw_key, raw_wait };
+// read(2) directly from i->fd — no FILE* / libc stream buffering. ungetc
+// is one byte stashed in i->ungetc_buf; EOF is tracked in i->eof_seen,
+// set when read returns 0 and cleared by ungetc.
+static struct g *raw_getc(struct g *f, struct g_in *i) {
+  struct g *fc = g_core_of(f);
+  if (i->ungetc_buf != EOF) {
+    fc->b = i->ungetc_buf;
+    i->ungetc_buf = EOF;
+    return f; }
+  uint8_t b;
+  ssize_t n = read(i->fd, &b, 1);
+  if (n <= 0) { i->eof_seen = true; fc->b = EOF; }
+  else fc->b = b;
+  return f; }
+static struct g *raw_ungetc(struct g *f, int c, struct g_in *i) {
+  i->ungetc_buf = c;
+  i->eof_seen = false;
+  return g_core_of(f)->b = c, f; }
+static struct g *raw_eof(struct g *f, struct g_in *i) {
+  return g_core_of(f)->b = (i->ungetc_buf == EOF) && i->eof_seen, f; }
+static struct g_in raw_stdin = { raw_getc, raw_ungetc, raw_eof,
+                                  STDIN_FILENO, EOF, false };
 struct g_in *g_stdin = &raw_stdin;
 
 static char const
@@ -87,10 +110,6 @@ repl[] =
 int main(int argc, char const **argv) {
   struct g *f = g_ini();
   bool is_repl = isatty(STDIN_FILENO);
-  // disable stdio read-ahead so raw_key's poll reflects the true
-  // byte-available state — fgetc would slurp bytes into a libc buffer
-  // that poll cannot see.
-  setvbuf(stdin, NULL, _IONBF, 0);
   if (is_repl) raw_mode();                 // interactive: raw tty; the line
                                            // editor is now pure gwen (boot.g)
   for (; *argv; f = g_strof(f, *argv++));

@@ -141,26 +141,48 @@ static struct g *_flush(struct g*f, struct g_out*) { return fbdraw(), f; }
 // the keystroke source the line editor reads: block until a byte is
 // queued, pumping the framebuffer meanwhile so the cursor keeps
 // blinking. it never allocates, so f stays valid across the call.
-static struct g *k_getc(struct g*f, struct g_in*) {
+// Consumes ungetc_buf first if a byte was pushed back. No EOF on bare
+// metal — the kb queue is endless — so eof_seen stays false.
+static struct g *k_getc(struct g*f, struct g_in *i) {
+  if (i->ungetc_buf != EOF) {
+    int c = i->ungetc_buf;
+    i->ungetc_buf = EOF;
+    return g_core_of(f)->b = c, f; }
   int b;
   while ((b = kqpop()) < 0) fbdraw(), kwait();
   return g_core_of(f)->b = b, f; }
 // Non-consuming check on the kb queue. No EOF state on bare metal.
 static bool kb_ready(void) { return kkb.qh != kkb.qt; }
-static bool k_key(struct g *f, struct g_in*) { (void) f; return kb_ready(); }
-static struct g *k_ungetc(struct g*f, int c, struct g_in*) { return f; }
-static struct g *k_eof(struct g*f, struct g_in*) { return g_core_of(f)->b = 0, f; }
-// Deep wait on the keyboard queue. ticks=0 means infinite.
-// Future: program a one-shot timer at the deadline instead of waking every tick.
-static void k_wait(struct g *f, struct g_in *i, uintptr_t ticks) {
-  (void) f; (void) i;
+static struct g *k_ungetc(struct g*f, int c, struct g_in *i) {
+  i->ungetc_buf = c;
+  return g_core_of(f)->b = c, f; }
+static struct g *k_eof(struct g*f, struct g_in *i) {
+  return g_core_of(f)->b = (i->ungetc_buf == EOF) && i->eof_seen, f; }
+struct g_in _g_stdin = { .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof,
+                         .fd = 0, .ungetc_buf = EOF, .eof_seen = false, },
+            *g_stdin = &_g_stdin;
+
+// Registry of known kernel sources. Indexed by fd; entries with NULL `ready`
+// are unregistered. Add new drivers by populating a new slot here.
+static struct { bool (*ready)(void); } k_sources[G_WAIT_FDS_MAX] = {
+  [0] = { kb_ready },
+};
+
+bool g_ready(int fd) {
+  if (fd < 0) return true;
+  if (fd >= G_WAIT_FDS_MAX || !k_sources[fd].ready) return false;
+  return k_sources[fd].ready(); }
+
+// Multi-source wait. ticks=0 means infinite. Future: program a one-shot
+// timer at the deadline instead of waking every tick.
+void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
+  if (n <= 0) { g_sleep(ticks); return; }
+  if (n > G_WAIT_FDS_MAX) __builtin_trap();
   uintptr_t deadline = kticks + ticks;
   for (;;) {
-    if (ticks && kticks >= deadline) break;
-    if (kb_ready()) break;
+    if (ticks && kticks >= deadline) return;
+    for (int i = 0; i < n; i++) if (g_ready(fds[i])) return;
     kwait(); } }
-struct g_in _g_stdin = { .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof, .key = k_key, .wait = k_wait, },
-            *g_stdin = &_g_stdin;
 struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
              *g_stdout = &_g_stdout;
 uintptr_t g_clock(void) { return kticks; }

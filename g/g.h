@@ -14,6 +14,10 @@
 #define g_putnum(_) ((g_word)(((uintptr_t)(g_word)(_)<<1)|1))
 #define g_getnum(_) ((g_word)(_)>>1)
 
+#ifndef EOF
+#define EOF (-1)
+#endif
+
 #define g_nil g_putnum(0)
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
@@ -59,7 +63,7 @@ struct g {
  uintptr_t yield_ctr;  // ap-cycles since last cooperative yield; counts up to YIELD_INTERVAL (level-triggered)
  uintptr_t next_pid;   // monotonic pid counter; pre-incremented, so first spawn returns 1
  uintptr_t next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
- struct g_in *next_wait_io; // stream the task suspended on, NULL = not waiting on I/O. Installed into next yield_sw snapshot's wait_io slot.
+ int next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
  struct g_atom {
   g_vm_t *ap;
   g_word typ;
@@ -96,9 +100,9 @@ struct g_in {
  struct g*(*getc)(struct g*, struct g_in*),
          *(*ungetc)(struct g*, int, struct g_in*),
          *(*eof)(struct g*, struct g_in*);
- bool (*key)(struct g*, struct g_in*);     // non-consuming readiness poll
- void (*wait)(struct g*, struct g_in*, uintptr_t ticks); }; // deep wait until key()
-                                            // or ticks ms elapse; ticks=0 = infinite
+ int fd;                  // source fd; -1 = data source (always-ready, no backend wait)
+ int ungetc_buf;          // pushed-back byte; -1 (EOF) = empty
+ bool eof_seen; };        // set by getc on read-returning-0, cleared by ungetc
 
 struct g_out {
  struct g*(*putc)(struct g*, int, struct g_out*),
@@ -123,7 +127,17 @@ g_vm_t g_vm_ret0, g_vm_cur;
 uintptr_t g_clock(void); // used by garbage collector
 void g_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
 // g_clock() units (ticks=0 means infinite). No input wakeup; the scheduler
-// dispatches to g_in->wait when a task is parked on a stream. Default = no-op.
+// dispatches to g_wait_fds when tasks are parked on streams. Default = no-op.
+
+// Multi-source wait. Wakes when input is ready on any of the fds, or when
+// `ticks` ms elapse (ticks=0 = infinite). With n=0 reduces to g_sleep.
+// The scheduler aggregates at most G_WAIT_FDS_MAX fds per call.
+#define G_WAIT_FDS_MAX 8
+void g_wait_fds(int const *fds, int n, uintptr_t ticks);
+
+// Non-blocking readiness peek on a single fd. fd=-1 (data source) always
+// returns true. fds not registered by the frontend return false.
+bool g_ready(int fd);
 
 struct g
  *ggetc(struct g*),

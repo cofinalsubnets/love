@@ -48,6 +48,7 @@ f_c=$(wildcard f/*.c)
 h_o=$(addprefix b/h/, $(g_c:.c=.o))
 g_cflags=-std=gnu23 -g -Os -pipe\
  	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter\
+	-Wmissing-field-initializers\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
  	-fno-exceptions -fno-asynchronous-unwind-tables -fno-stack-clash-protection\
  	-fcf-protection=none

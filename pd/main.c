@@ -308,13 +308,22 @@ static g_vm(cur_put) {
 
 static struct g *_putc(struct g*f, int c, struct g_out*) { return cb_putc(kcb, c), f; }
 static struct g* _flush(struct g*f, struct g_out*) { return f; }
-static struct g*_getc(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_getc(kcb), f; }
-static struct g* _ungetc(struct g*f, int c, struct g_in*) { return g_core_of(f)->b = cb_ungetc(kcb, c), f; }
-static struct g* _eof(struct g*f, struct g_in*) { return g_core_of(f)->b = cb_eof(kcb), f; }
-static bool _key(struct g *f, struct g_in*) { (void) f; return true; }
-// unreachable — _key always returns true so the scheduler never parks here.
-static void _wait(struct g *f, struct g_in*, uintptr_t t) { (void) f; (void) t; }
-struct g_in _g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof, .key = _key, .wait = _wait, },
+static struct g*_getc(struct g*f, struct g_in *i) {
+  if (i->ungetc_buf != EOF) {
+    int c = i->ungetc_buf;
+    i->ungetc_buf = EOF;
+    return g_core_of(f)->b = c, f; }
+  int c = cb_getc(kcb);
+  if (c == EOF) i->eof_seen = true;
+  return g_core_of(f)->b = c, f; }
+static struct g* _ungetc(struct g*f, int c, struct g_in *i) {
+  i->ungetc_buf = c;
+  i->eof_seen = false;
+  return g_core_of(f)->b = c, f; }
+static struct g* _eof(struct g*f, struct g_in *i) {
+  return g_core_of(f)->b = (i->ungetc_buf == EOF) && i->eof_seen, f; }
+struct g_in _g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof,
+                         .fd = -1, .ungetc_buf = EOF, .eof_seen = false, },
             *g_stdin = &_g_stdin;
 struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
              *g_stdout = &_g_stdout;

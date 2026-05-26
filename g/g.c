@@ -33,9 +33,6 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define cell(_) ((union u*)(_))
 
 #define g_vect_char g_vect_u8
-#ifndef EOF
-#define EOF -1
-#endif
 #define Have1() if (Sp == Hp) return Ap(g_vm_gc, f, 1)
 #define Have(n) if (Sp < Hp + n) return Ap(g_vm_gc, f, n)
 #if g_tco
@@ -102,14 +99,6 @@ static g_inline struct g_tag { union u *null, *head, end[]; } *ttag(union u *k) 
  while (k->x) k++;
  return (struct g_tag*) k; }
 static g_inline union u *clip(union u *k) { return ttag(k)->head = k; }
-static g_inline bool gkey(struct g *f) { return f->in->key(f, f->in); }
-// wait_io slot encoding: NULL → literal 1 (non-zero so ttag's NULL-terminator
-// walk skips it); non-NULL pointers are aligned ≥2, so bit 0 is free as a tag.
-static g_inline uintptr_t wait_io_enc(struct g_in *i) { return (uintptr_t) i | 1; }
-static g_inline struct g_in *wait_io_dec(uintptr_t s) {
-  return (struct g_in *) (s & ~(uintptr_t) 1); }
-static g_inline void gwait(struct g *f, struct g_in *i, uintptr_t ticks) {
-  if (i) i->wait(f, i, ticks); else g_sleep(ticks); }
 
 // equality comparisons inline the fast identity check
 static g_noinline bool eqv(struct g*, word, word); // this is for checking equality of non-identical values
@@ -648,24 +637,25 @@ g_vm(g_vm_eval) { return
                  Continue()); }
 
 struct ti { struct g_in in; char const *t; word i; } ;
-static struct g*_eof(struct g*f, struct ti *i) { return f->b = !i->t[i->i], f; }
-static struct g*_getc(struct g*f, struct ti *i) { return f->b = (!i->t[i->i] ? EOF : i->t[i->i++]), f; }
-// step the cursor back for a real character; an ungetc of EOF leaves it
-// put, so the next getc reports EOF again rather than re-reading a token
-// that ended exactly at end of input.
+static struct g*_eof(struct g*f, struct ti *i) {
+ return f->b = (i->in.ungetc_buf == EOF) && i->in.eof_seen, f; }
+static struct g*_getc(struct g*f, struct ti *i) {
+ if (i->in.ungetc_buf != EOF) {
+  int c = i->in.ungetc_buf;
+  i->in.ungetc_buf = EOF;
+  return f->b = c, f; }
+ if (!i->t[i->i]) { i->in.eof_seen = true; return f->b = EOF, f; }
+ return f->b = i->t[i->i++], f; }
 static struct g*_ungetc(struct g*f, int c, struct ti *i) {
- if (c != EOF && i->i) i->i--;
+ i->in.ungetc_buf = c;
+ i->in.eof_seen = false;
  return f->b = c, f; }
-static bool _key(struct g *f, struct ti *i) { (void) f; (void) i; return true; }
-// unreachable in practice — _key always returns true so the scheduler never
-// parks on this g_in — but the field must be filled.
-static void _wait(struct g *f, struct ti *i, uintptr_t t) {
- (void) f; (void) i; (void) t; }
 g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
- struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof, (void*)_key, (void*)_wait}, t, 0};
+ struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof,
+                 -1, EOF, false}, t, 0};
  f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i, false)))));
- i.t = s, i.i = 0;
+ i.t = s, i.i = 0, i.in.ungetc_buf = EOF, i.in.eof_seen = false;
  return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i, false)))))); }
 
 // some libc functions we use
@@ -1169,8 +1159,8 @@ static g_vm(g_vm_str) {
 // returns only after input is ready (or, with a peer in the ring, after
 // switching to one) — so this Continue() loop terminates with gkey true.
 static g_vm(g_vm_getc) {
- if (!gkey(f)) {
-  f->next_wait_io = f->in;
+ if (!g_ready(f->in->fd)) {
+  f->next_wait_fd = f->in->fd;
   return Ap(g_vm_yield_sw, f); }
  Pack(f);
  if (!g_ok(f = ggetc(f))) return f;
@@ -1743,7 +1733,7 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  M[2].x = putnum(0);   // main pid
  M[3].x = putnum(0);   // wake_at: non-zero sentinel for "always runnable"
                        // (so ttag's NULL-terminator walk doesn't stop here)
- M[4].x = (g_word) wait_io_enc(NULL);  // wait_io: NULL encoded as 1
+ M[4].x = putnum(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
  ((struct g_tag*) (M + 5))->null = NULL;
  ((struct g_tag*) (M + 5))->head = M;
  f->tasks = M;
@@ -1758,8 +1748,15 @@ void g_libc_free(struct g*f, void *x) { free(x); }
 
 // Default time-wait: no-op. Frontends override with a real sleep that
 // honors the deadline (poll(NULL, 0, ms) on POSIX, hlt-with-timer on bare
-// metal). Input wait lives on g_in->wait, dispatched via gwait().
+// metal).
 __attribute__((weak)) void g_sleep(uintptr_t ticks) { (void) ticks; }
+
+// Default fd-keyed waits. Frontends override; defaults are conservative
+// (all fds always-ready; multi-source wait collapses to plain sleep) so
+// frontends that don't multitask (lcat, pd) link without providing impls.
+__attribute__((weak)) bool g_ready(int fd) { (void) fd; return true; }
+__attribute__((weak)) void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
+  (void) fds; (void) n; g_sleep(ticks); }
 
 // `extern` keeps C99 from treating this as an inline-definition-only
 // (which would emit no external symbol -- clang's COFF backend on the
@@ -1852,13 +1849,14 @@ static g_vm(g_vm_callk) {
 // fast path for monotask
 static g_noinline g_vm(g_vm_yield_sw_mono) {
  uintptr_t my_wake = f->next_wake_at;
- struct g_in *my_wait_io = f->next_wait_io;
+ int my_wait_fd = f->next_wait_fd;
  f->next_wake_at = 0;
- f->next_wait_io = NULL;
+ f->next_wait_fd = -1;
  if (my_wake)
-  for (uintptr_t now; my_wake > (now = g_clock()); gwait(f, my_wait_io, my_wake - now));
- else if (my_wait_io)
-  while (!gkey(f)) my_wait_io->wait(f, my_wait_io, 0);
+  for (uintptr_t now; my_wake > (now = g_clock());
+       my_wait_fd >= 0 ? g_wait_fds(&my_wait_fd, 1, my_wake - now) : g_sleep(my_wake - now));
+ else if (my_wait_fd >= 0)
+  while (!g_ready(my_wait_fd)) g_wait_fds(&my_wait_fd, 1, 0);
  f->yield_ctr = 0;
  return Continue(); }
 
@@ -1869,51 +1867,54 @@ static g_inline union u *find_runnable(union u *head, uintptr_t now) {
       return n;
   return NULL; }
 
-// Called when no peer was immediately runnable. Coalesces deadlines / io intent
-// across the ring (seeded with caller's my_wake / my_wait_io) and waits. Returns
-// the runnable peer to switch to, or NULL if caller's wait was satisfied
-// (input arrived for caller, or deadline reached, or nothing to wait for).
-// Relies on the backend wait returning only when its deadline elapsed or input
-// is ready. Single-source world: the first non-NULL wait_io wins.
-static g_noinline union u *yield_sw_wait(struct g *f, uintptr_t my_wake, struct g_in *my_wait_io) {
+// Called when no peer was immediately runnable. Coalesces deadlines / fd
+// intent across the ring (seeded with caller's my_wake / my_wait_fd) and
+// waits. Returns the runnable peer to switch to, or NULL if caller's wait
+// was satisfied (input arrived for caller, deadline reached, or nothing to
+// wait for). Backend wait returns only when its deadline elapsed or any of
+// the supplied fds is ready.
+static g_noinline union u *yield_sw_wait(struct g *f, uintptr_t my_wake, int my_wait_fd) {
   uintptr_t min_wake = my_wake;
-  struct g_in *io_any = my_wait_io;
+  int fds[G_WAIT_FDS_MAX];
+  int nfds = 0;
+  if (my_wait_fd >= 0) fds[nfds++] = my_wait_fd;
   for (union u *n = f->tasks->m; n != f->tasks; n = n->m)
     if (n[1].m->ap != g_vm_task_exit) {
       uintptr_t wa = (uintptr_t) getnum(n[3].x);
       if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
-      if (!io_any) io_any = wait_io_dec((uintptr_t) n[4].x); }
-  if (!min_wake && !io_any) return NULL;
+      int wf = (int) getnum(n[4].x);
+      if (wf >= 0 && nfds < G_WAIT_FDS_MAX) fds[nfds++] = wf; }
+  if (!min_wake && !nfds) return NULL;
   uintptr_t now = g_clock();
-  if (!min_wake) io_any->wait(f, io_any, 0);
-  else if (min_wake > now) gwait(f, io_any, min_wake - now);
+  if (!min_wake) g_wait_fds(fds, nfds, 0);
+  else if (min_wake > now) g_wait_fds(fds, nfds, min_wake - now);
   now = g_clock();
-  if (my_wait_io && gkey(f)) return NULL;
+  if (my_wait_fd >= 0 && g_ready(my_wait_fd)) return NULL;
   return find_runnable(f->tasks, now); }
 
 // yield_sw : snapshot current task into the ring, advance f->tasks to the next
 // runnable peer, tail-call resume. Caller sets Ip to the resume point and may
-// set f->next_wake_at / f->next_wait_io before tail-calling — those ride the
-// snapshot's wake_at / wait_io slots.
-// Layout: [next, saved_ip, pid, wake_at, wait_io, stack..., tag] — stack at offset 5.
-// Slots tagged via putnum; putnum(0)=1 keeps slots non-zero so ttag's
-// NULL-terminator walk doesn't stop here.
+// set f->next_wake_at / f->next_wait_fd before tail-calling — those ride the
+// snapshot's wake_at / wait_fd slots.
+// Layout: [next, saved_ip, pid, wake_at, wait_fd, stack..., tag] — stack at offset 5.
+// Slots tagged via putnum; putnum stays non-zero (putnum(-1)=-1, putnum(0)=1)
+// so ttag's NULL-terminator walk doesn't stop here.
 static g_vm(g_vm_yield_sw) {
   if (f->tasks->m == f->tasks) return Ap(g_vm_yield_sw_mono, f);
   uintptr_t my_wake = f->next_wake_at;
-  struct g_in *my_wait_io = f->next_wait_io;
+  int my_wait_fd = f->next_wait_fd;
   union u *next = find_runnable(f->tasks, g_clock());
   if (!next) {
-    next = yield_sw_wait(f, my_wake, my_wait_io);
+    next = yield_sw_wait(f, my_wake, my_wait_fd);
     if (!next) {
       f->next_wake_at = 0;
-      f->next_wait_io = NULL;
+      f->next_wait_fd = -1;
       if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
       return Continue(); } }
   word my_height = topof(f) - Sp;
   union u *next_stack = next + 5;
   uintptr_t restore_h = (union u*) ttag(next_stack) - next_stack;
-  // GC-retry leaves next_wake_at / next_wait_io intact so the re-entry sees
+  // GC-retry leaves next_wake_at / next_wait_fd intact so the re-entry sees
   // the same caller intent.
   uintptr_t need = my_height + restore_h + 7;
   if (Sp < Hp + need) {
@@ -1923,7 +1924,7 @@ static g_vm(g_vm_yield_sw) {
     Unpack(f);
     return Ap(g_vm_yield_sw, f); }
   f->next_wake_at = 0;
-  f->next_wait_io = NULL;
+  f->next_wait_fd = -1;
   union u *prev = next;
   while (prev->m != f->tasks) prev = prev->m;
   uintptr_t snap = 5 + my_height + Width(struct g_tag);
@@ -1933,7 +1934,7 @@ static g_vm(g_vm_yield_sw) {
   N[1].m = Ip;
   N[2].x = f->tasks[2].x;
   N[3].x = putnum((intptr_t) my_wake);
-  N[4].x = (g_word) wait_io_enc(my_wait_io);
+  N[4].x = putnum(my_wait_fd);
   for (uintptr_t i = 0; i < (uintptr_t) my_height; i++) N[5 + i].x = Sp[i];
   struct g_tag *t = (struct g_tag*) (N + 5 + my_height);
   t->null = NULL, t->head = N;
@@ -1974,7 +1975,7 @@ static g_vm(g_vm_spawn) {
   N[2].x = putnum(pid);
   N[3].x = putnum(0);        // wake_at: non-zero sentinel for "always runnable"
                              // (so ttag's NULL-terminator walk doesn't stop here)
-  N[4].x = (g_word) wait_io_enc(NULL);  // wait_io: NULL encoded as 1
+  N[4].x = putnum(-1);       // wait_fd: -1 = not waiting on I/O
   N[5].x = x;
   N[6].x = fn;
   ((struct g_tag*) (N + 7))->null = NULL;
@@ -2071,6 +2072,6 @@ static g_vm(g_vm_sleep) {
 // (key? _) : non-consuming key-ready poll on f->in. -1 if (getc 0) would
 // return immediately, nil otherwise. Arg is dummy to defeat (x)=x.
 static g_vm(g_vm_key) {
-  Sp[0] = gkey(f) ? putnum(-1) : g_nil;
+  Sp[0] = (f->in->ungetc_buf != EOF || g_ready(f->in->fd)) ? putnum(-1) : g_nil;
   Ip += 1;
   return Continue(); }
