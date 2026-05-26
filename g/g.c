@@ -1841,6 +1841,17 @@ static g_vm(g_vm_callk) {
   Sp[1] = f_val;
   return Ap(g_vm_ap, f); }
 
+// fast path for monotask
+static g_noinline g_vm(g_vm_yield_sw_mono) {
+ uintptr_t my_wake = f->next_wake_at, my_wait_io = f->next_wait_io;
+ f->next_wake_at = f->next_wait_io = 0;
+ if (my_wake)
+  for (uintptr_t now; my_wake > (now = g_clock()); g_wait(my_wake - now, !!my_wait_io));
+ else if (my_wait_io)
+  while (!gkey(f)) g_wait(0, true);
+ f->yield_ctr = 0;
+ return Continue(); }
+
 // yield_sw : snapshot current task into the ring (in place of f->tasks),
 // advance f->tasks to the next runnable node, tail-call resume. Caller sets Ip
 // to the desired resume point and may set f->next_wake_at / f->next_wait_io
@@ -1853,23 +1864,15 @@ static g_vm(g_vm_callk) {
 // Slots are tagged via putnum; putnum(0)=1 is the sentinel keeping the slot
 // non-zero so ttag's NULL-terminator walk doesn't stop here.
 static g_vm(g_vm_yield_sw) {
-  uintptr_t now = g_clock();
-  uintptr_t my_wake = f->next_wake_at;
-  uintptr_t my_wait_io = f->next_wait_io;
-  if (f->tasks->m == f->tasks) {
-    f->next_wake_at = 0;
-    f->next_wait_io = 0;
-    if (my_wake)
-      while (my_wake > (now = g_clock())) g_wait(my_wake - now, my_wait_io != 0);
-    else if (my_wait_io)
-      while (!gkey(f)) g_wait(0, true);
-    if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
-    return Continue(); }
   union u *next = f->tasks->m;
+  if (next == f->tasks) return Ap(g_vm_yield_sw_mono, f);
+  uintptr_t now = g_clock();
   while (next != f->tasks &&
          (next[1].m->ap == g_vm_task_exit ||
           (uintptr_t) getnum(next[3].x) > now))
     next = next->m;
+  uintptr_t my_wake = f->next_wake_at,
+            my_wait_io = f->next_wait_io;
   if (next == f->tasks) {
     uintptr_t min_wake = my_wake;
     bool io_any = my_wait_io != 0;
