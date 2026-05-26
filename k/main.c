@@ -145,26 +145,25 @@ static struct g *k_getc(struct g*f, struct g_in*) {
   int b;
   while ((b = kqpop()) < 0) fbdraw(), kwait();
   return g_core_of(f)->b = b, f; }
-// (key?) backend: non-consuming check on the kb queue. No EOF state on bare
-// metal, so this is just "queue non-empty".
-bool g_key(void) { return kkb.qh != kkb.qt; }
+// Non-consuming check on the kb queue. No EOF state on bare metal.
+static bool kb_ready(void) { return kkb.qh != kkb.qt; }
+static bool k_key(struct g *f, struct g_in*) { (void) f; return kb_ready(); }
 static struct g *k_ungetc(struct g*f, int c, struct g_in*) { return f; }
 static struct g *k_eof(struct g*f, struct g_in*) { return g_core_of(f)->b = 0, f; }
-struct g_in _g_stdin = { .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof, },
+struct g_in _g_stdin = { .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof, .key = k_key, },
             *g_stdin = &_g_stdin;
 struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
              *g_stdout = &_g_stdout;
 uintptr_t g_clock(void) { return kticks; }
 
-// Deep wait: the timer ISR ticks kticks and the keyboard ISR queues bytes;
-// kwait halts until any interrupt fires. Loop until either the deadline
-// passes or input becomes available, so a task suspended in g_vm_getc can
-// resume without waiting out the full deadline. Future optimization: program
-// a one-shot timer at the deadline so we wake exactly once instead of on
-// every tick in between.
-void g_wait(uintptr_t ticks) {
+// Deep wait. ticks=0 means infinite (caller should pair with wake_on_input).
+// Future: program a one-shot timer at the deadline instead of waking every tick.
+void g_wait(uintptr_t ticks, bool wake_on_input) {
   uintptr_t deadline = kticks + ticks;
-  while (kticks < deadline && !g_key()) kwait(); }
+  for (;;) {
+    if (ticks && kticks >= deadline) break;
+    if (wake_on_input && kb_ready()) break;
+    kwait(); } }
 
 #define show_cursor 1
 

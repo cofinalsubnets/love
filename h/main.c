@@ -33,22 +33,16 @@ static void raw_mode(void) {
   tcsetattr(STDIN_FILENO, TCSANOW, &raw); }
   // c_oflag is left alone, so '\n' on output still becomes CR-LF.
 
-// (key?) backend: non-consuming check whether the next (getc 0) would return
-// immediately. True iff stdin has a byte ready (or is at EOF — poll returns
-// POLLIN for that too). Never consumes input.
-bool g_key(void) {
-  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
-  return poll(&p, 1, 0) > 0; }
-
-// Deep wait: block for up to `ms` ms or until stdin becomes readable,
-// whichever comes first. Called by the scheduler when every task is sleeping;
-// the early return on input lets a task suspended in g_vm_getc resume without
-// having to wait out the full sleep deadline. POLLIN fires for EOF too, so an
-// EOF'd stdin never holds the deadline. ms is clamped to INT_MAX (~24 days)
-// to fit poll()'s int timeout.
-void g_wait(uintptr_t ms) {
-  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
-  poll(&p, 1, ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms); }
+// Deep wait. ms=0 means infinite (caller should pair with wake_on_input=true).
+// Otherwise clamp to INT_MAX (~24 days) to fit poll()'s int timeout.
+void g_wait(uintptr_t ms, bool wake_on_input) {
+  int timeout = ms == 0 ? -1 :
+                ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
+  if (wake_on_input) {
+    struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
+    poll(&p, 1, timeout);
+  } else {
+    poll(NULL, 0, timeout); } }
 
 // --- host input ------------------------------------------------------
 // raw_stdin is the byte source at f->in: non-interactively the parser
@@ -61,7 +55,12 @@ static struct g *raw_ungetc(struct g *f, int c, struct g_in*) {
   return g_core_of(f)->b = ungetc(c, stdin), f; }
 static struct g *raw_eof(struct g *f, struct g_in*) {
   return g_core_of(f)->b = feof(stdin), f; }
-static struct g_in raw_stdin = { raw_getc, raw_ungetc, raw_eof };
+// poll returns POLLIN for EOF too, so an EOF'd stdin reports ready.
+static bool raw_key(struct g *f, struct g_in*) {
+  (void) f;
+  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
+  return poll(&p, 1, 0) > 0; }
+static struct g_in raw_stdin = { raw_getc, raw_ungetc, raw_eof, raw_key };
 struct g_in *g_stdin = &raw_stdin;
 
 static char const
@@ -77,10 +76,9 @@ repl[] =
 int main(int argc, char const **argv) {
   struct g *f = g_ini();
   bool is_repl = isatty(STDIN_FILENO);
-  // disable stdio read-ahead so g_key (poll on STDIN_FILENO) reflects the
-  // true byte-available state — otherwise fgetc slurps bytes into a libc
-  // buffer that poll cannot see, and g_vm_getc yields when bytes are
-  // actually ready. needed for both raw and pipe modes.
+  // disable stdio read-ahead so raw_key's poll reflects the true
+  // byte-available state — fgetc would slurp bytes into a libc buffer
+  // that poll cannot see.
   setvbuf(stdin, NULL, _IONBF, 0);
   if (is_repl) raw_mode();                 // interactive: raw tty; the line
                                            // editor is now pure gwen (boot.g)

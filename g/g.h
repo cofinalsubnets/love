@@ -59,6 +59,7 @@ struct g {
  uintptr_t yield_ctr;  // ap-cycles since last cooperative yield; counts up to YIELD_INTERVAL (level-triggered)
  uintptr_t next_pid;   // monotonic pid counter; pre-incremented, so first spawn returns 1
  uintptr_t next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
+ uintptr_t next_wait_io; // 1 = task suspended on I/O; installed into next yield_sw snapshot's wait_io slot. 0 = not waiting on I/O.
  struct g_atom {
   g_vm_t *ap;
   g_word typ;
@@ -94,7 +95,8 @@ struct g_def { char const *n; intptr_t x; };
 struct g_in {
  struct g*(*getc)(struct g*, struct g_in*),
          *(*ungetc)(struct g*, int, struct g_in*),
-         *(*eof)(struct g*, struct g_in*); };
+         *(*eof)(struct g*, struct g_in*);
+ bool (*key)(struct g*, struct g_in*); }; // non-consuming readiness poll
 
 struct g_out {
  struct g*(*putc)(struct g*, int, struct g_out*),
@@ -117,10 +119,9 @@ static g_inline size_t b2w(size_t b) {
 g_vm_t g_vm_ret0, g_vm_cur;
 
 uintptr_t g_clock(void); // used by garbage collector
-bool g_key(void);  // per-frontend non-consuming key-ready poll; default = false
-void g_wait(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
-// g_clock() units, returning early when input is ready (so a task suspended
-// in getc resumes promptly). Default = no-op (busy-yield).
+void g_wait(uintptr_t ticks, bool wake_on_input); // per-frontend deep wait for
+// at most `ticks` g_clock() units (ticks=0 means infinite). With wake_on_input,
+// also returns early on input readiness. Default = no-op (busy-yield).
 
 struct g
  *ggetc(struct g*),
