@@ -1581,7 +1581,19 @@ static g_noinline struct g *gcg(struct g*g, struct g *p1, uintptr_t len1, struct
  for (word n = 0; n < h; n++) g->sp[n] = gcp(g, sp0[n], p0, t0);                     // stack
  for (struct g_r *s = g->root; s; s = s->n) *s->x = gcp(g, *s->x, p0, t0); // C live variables
  while (g->cp < g->hp) (datp(g->cp) ? evac_data : evac_thd)(g, p0, t0);              // cheney algorithm
- // done
+ // Finalizer pass. g->finalizers (copied from f by memcpy above) still points
+ // into from-space, which is valid until pool flip. For each entry: read the
+ // first word of the guarded object — if it's an aligned to-space pointer,
+ // that's the forwarding pointer (survivor) and we bump a fresh 3-word node;
+ // otherwise the object is dead, so call fn(p) and drop.
+ struct g_finalizer *new_fz = NULL;
+ for (struct g_finalizer *fz = g->finalizers; fz; fz = fz->next) {
+  word fwd = fz->p->x;
+  if (evenp(fwd) && ptr(g) <= ptr(fwd) && ptr(fwd) < ptr(g) + g->len) {
+   struct g_finalizer *nn = bump(g, Width(struct g_finalizer));
+   nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
+  } else fz->fn(fz->p); }
+ g->finalizers = new_fz;
  return g; }
 
 
@@ -1615,6 +1627,10 @@ static g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
    f->free(f, f->pool),
    g->t0 = g_clock(),
    g); }
+
+void g_finalize(struct g *f, union u *p, void (*fn)(void *)) {
+ struct g_finalizer *n = bump(f, Width(struct g_finalizer));
+ n->p = p, n->fn = fn, n->next = f->finalizers, f->finalizers = n; }
 
 
 static g_inline word copy_data(struct g *f, union u *src, word const *const p0, word const *const t0) {

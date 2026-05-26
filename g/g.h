@@ -75,6 +75,7 @@ struct g {
  uintptr_t len;
  struct g *pool;
  struct g_r { g_word *x; struct g_r *n; } *root;
+ struct g_finalizer *finalizers;  // GC-managed list of (p, fn, next), 3 words each on the gwen heap
  union { uintptr_t t0; g_word *cp; };
  g_malloc_t *malloc;
  g_free_t *free;
@@ -107,6 +108,22 @@ struct g_in {
 struct g_out {
  struct g*(*putc)(struct g*, int, struct g_out*),
          *(*flush)(struct g*, struct g_out*); }; // FIXME should take g_out arg
+
+// Finalizer record. Three words on the gwen heap, owned by the GC and never
+// traced (no other object points to it; only the f->finalizers chain reaches
+// it). On each GC, the finalizer pass walks this list: for each survivor it
+// bump-allocates a fresh node in to-space with the forwarded pointer; for each
+// dead object it calls fn(p) before discarding the node.
+struct g_finalizer {
+ union u *p;
+ void (*fn)(void *);
+ struct g_finalizer *next; };
+
+// Register a finalizer for p. fn(p) is called from inside GC when p becomes
+// unreachable. Caller must reserve heap space up front: Have(<object words>
+// + 3) before bump-allocating the guarded object, then call g_finalize. The
+// finalizer must not allocate or call back into the runtime.
+void g_finalize(struct g*, union u *p, void (*fn)(void *));
 
 
 enum g_status {
