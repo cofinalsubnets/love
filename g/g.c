@@ -1394,12 +1394,18 @@ static g_vm(g_vm_arg) {
 
 // call and return
 // cooperative yield check at apply boundaries: if there's another task in the ring
-// AND the yield counter has run out, snapshot current Ip and switch. Ip has been
-// updated by the surrounding op to point at the callee, so the snapshot's saved_ip
-// resumes cleanly at the callee start.
+// AND the yield counter has reached the interval, snapshot current Ip and switch.
+// Ip has been updated by the surrounding op to point at the callee, so the
+// snapshot's saved_ip resumes cleanly at the callee start.
+// The counter counts UP from 0 toward YIELD_INTERVAL — level-triggered, not edge-
+// triggered. If yield_sw returns without clearing the counter, the next ap simply
+// re-fires yield_sw on the same level, rather than underflowing into a silently
+// preemption-disabled state. yield_sw clears on actual switch; on non-switching
+// exits it only clears if the counter is at the trigger level, so voluntary
+// yielders (sleep, getc, ...) preserve whatever quantum they had left.
 #define YIELD_INTERVAL 64
 #define YieldCheck() \
-  if (f->tasks->m != f->tasks && --f->yield_ctr == 0) \
+  if (f->tasks->m != f->tasks && ++f->yield_ctr >= YIELD_INTERVAL) \
     return Ap(g_vm_yield_sw, f)
 
 // apply function to one argument
@@ -1861,17 +1867,14 @@ static g_vm(g_vm_yield_sw) {
   uintptr_t now = g_clock();
   uintptr_t my_wake = f->next_wake_at;
   f->next_wake_at = 0;
-  // Re-arm the cooperative-yield counter on every path through yield_sw.
-  // YieldCheck fires yield_sw exactly when yield_ctr hits 0; if yield_sw then
-  // returns without switching (single-task fast path, or no peer runnable),
-  // yield_ctr is left at 0 and the next g_vm_ap decrements it to UINTPTR_MAX,
-  // silently disabling preemption for the running task until something else
-  // resets it. Re-arm here so non-switching returns stay bounded too.
-  f->yield_ctr = YIELD_INTERVAL;
   // single-task fast path (ring is a self-loop): just deep-sleep if we have
   // a deadline, otherwise stay running. Either way the caller's Ip resumes.
+  // Clear ctr only if it's at the trigger level — preempt callers must be
+  // cleared (else we'd bounce yield_sw on the next ap); voluntary callers
+  // (sleep/getc/yield/wait) keep their leftover budget.
   if (f->tasks->m == f->tasks) {
     if (my_wake && my_wake > now) g_wait(my_wake - now);
+    if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
     return Continue(); }
   // walk forward, skipping dormant AND sleeping tasks
   union u *next = f->tasks->m;
@@ -1899,7 +1902,9 @@ static g_vm(g_vm_yield_sw) {
            (next[1].m->ap == g_vm_task_exit ||
             (uintptr_t) getnum(next[3].x) > now))
       next = next->m;
-    if (next == f->tasks) return Continue();  // a peer didn't wake; just go
+    if (next == f->tasks) {
+      if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
+      return Continue(); }  // a peer didn't wake; just go
     my_wake = 0; }  // we slept enough; record as runnable in our snapshot
   word my_height = topof(f) - Sp;
   union u *next_stack = next + 4;
@@ -1926,6 +1931,8 @@ static g_vm(g_vm_yield_sw) {
   prev->m = N;       // splice
   // switch to next task; tail-call resume to restore its state.
   // setting Ip = next makes Ip[1]/Ip[4..] line up with next's saved fields.
+  // Clear ctr so the resumed task starts with a fresh quantum.
+  f->yield_ctr = 0;
   f->tasks = next;
   Ip = next;
   return Ap(g_vm_resume, f); }
@@ -1967,7 +1974,7 @@ static g_vm(g_vm_spawn) {
   ((struct g_tag*) (N + 6))->head = N;
   N[0].m = f->tasks->m;
   f->tasks->m = N;
-  f->yield_ctr = YIELD_INTERVAL;
+  f->yield_ctr = 0;
   Sp[1] = putnum(pid);
   Sp += 1;
   Ip += 1;
