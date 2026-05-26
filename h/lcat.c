@@ -21,23 +21,25 @@ static struct g *lcat_putc(struct g*f, int c, struct g_out*) {
 static struct g* lcat_flush(struct g*f, struct g_out*) { fflush(stdout); return f; }
 
 static struct g*lcat_getc(struct g*f, struct g_in *i) {
-  if (i->ungetc_buf != EOF) {
-    int c = i->ungetc_buf;
-    i->ungetc_buf = EOF;
+  if (g_getnum(i->ungetc_buf) != EOF) {
+    int c = g_getnum(i->ungetc_buf);
+    i->ungetc_buf = g_putnum(EOF);
     return g_core_of(f)->b = c, f; }
   int c = getc(stdin);
-  if (c == EOF) i->eof_seen = true;
+  if (c == EOF) i->eof_seen = g_putnum(true);
   return g_core_of(f)->b = c, f; }
 static struct g* lcat_ungetc(struct g*f, int c, struct g_in *i) {
-  i->ungetc_buf = c;
-  i->eof_seen = false;
+  i->ungetc_buf = g_putnum(c);
+  i->eof_seen = g_putnum(false);
   return g_core_of(f)->b = c, f; }
 static struct g* lcat_eof(struct g*f, struct g_in *i) {
-  return g_core_of(f)->b = (i->ungetc_buf == EOF) && i->eof_seen, f; }
-struct g_in _g_stdin = { .getc = lcat_getc, .ungetc = lcat_ungetc, .eof = lcat_eof,
-                         .fd = STDIN_FILENO, .ungetc_buf = EOF, .eof_seen = false, },
+  return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+struct g_in _g_stdin = { .ap = g_vm_port_in,
+                         .getc = lcat_getc, .ungetc = lcat_ungetc, .eof = lcat_eof,
+                         .fd = g_putnum(STDIN_FILENO), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), },
             *g_stdin = &_g_stdin;
-struct g_out _g_stdout = { .putc = lcat_putc, .flush = lcat_flush, .fd = STDOUT_FILENO, },
+struct g_out _g_stdout = { .ap = g_vm_port_out,
+                           .putc = lcat_putc, .flush = lcat_flush, .fd = g_putnum(STDOUT_FILENO), },
              *g_stdout = &_g_stdout;;
 
 int main(int argc, char const **argv) {

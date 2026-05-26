@@ -97,18 +97,26 @@ struct g {
 
 struct g_def { char const *n; intptr_t x; };
 
+// Ports carry a `g_vm_t *ap` header so heap-allocated instances are
+// indistinguishable from static frontend instances at the bif level, and so
+// the GC can route them through `evac_thd` (slot-by-slot, gcp'ing each).
+// All int-shaped fields are stored as tagged numbers (`g_putnum`/`g_getnum`)
+// so that evac_thd's blind gcp never misinterprets a raw int that happens to
+// land in pool range as a heap pointer.
 struct g_in {
+ g_vm_t *ap;
  struct g*(*getc)(struct g*, struct g_in*),
          *(*ungetc)(struct g*, int, struct g_in*),
          *(*eof)(struct g*, struct g_in*);
- int fd;                  // source fd; -1 = data source (always-ready, no backend wait)
- int ungetc_buf;          // pushed-back byte; -1 (EOF) = empty
- bool eof_seen; };        // set by getc on read-returning-0, cleared by ungetc
+ g_word fd;               // source fd; putnum(-1) = data source (always-ready, no backend wait)
+ g_word ungetc_buf;       // pushed-back byte; putnum(-1) (EOF) = empty
+ g_word eof_seen; };      // set by getc on read-returning-0, cleared by ungetc
 
 struct g_out {
+ g_vm_t *ap;
  struct g*(*putc)(struct g*, int, struct g_out*),
          *(*flush)(struct g*, struct g_out*);
- int fd; };               // sink fd; -1 = data sink (subtype carries the buffer)
+ g_word fd; };            // sink fd; putnum(-1) = data sink (subtype carries the buffer)
 
 // Data-sink g_out: writes go to a growable gwen-heap string buf. Symmetric to
 // struct ti on the input side. Caller stack-allocates, g_to_init populates the
@@ -152,7 +160,7 @@ static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
  return q + (r ? 1 : 0); }
 
-g_vm_t g_vm_ret0, g_vm_cur;
+g_vm_t g_vm_ret0, g_vm_cur, g_vm_port_in, g_vm_port_out;
 
 uintptr_t g_clock(void); // used by garbage collector
 void g_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks`

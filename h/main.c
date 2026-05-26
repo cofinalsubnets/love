@@ -21,7 +21,7 @@ static struct g *_putc(struct g *f, int c, struct g_out*) {
   (void) r;
   return f; }
 static struct g *_flush(struct g *f, struct g_out*) { return f; }
-static struct g_out _g_stdout = { _putc, _flush, STDOUT_FILENO };
+static struct g_out _g_stdout = { g_vm_port_out, _putc, _flush, g_putnum(STDOUT_FILENO) };
 struct g_out *g_stdout = &_g_stdout;
 
 // --- raw terminal mode -----------------------------------------------
@@ -78,23 +78,23 @@ void g_wait_fds(int const *fds, int n, uintptr_t ms) {
 // set when read returns 0 and cleared by ungetc.
 static struct g *raw_getc(struct g *f, struct g_in *i) {
   struct g *fc = g_core_of(f);
-  if (i->ungetc_buf != EOF) {
-    fc->b = i->ungetc_buf;
-    i->ungetc_buf = EOF;
+  if (g_getnum(i->ungetc_buf) != EOF) {
+    fc->b = g_getnum(i->ungetc_buf);
+    i->ungetc_buf = g_putnum(EOF);
     return f; }
   uint8_t b;
-  ssize_t n = read(i->fd, &b, 1);
-  if (n <= 0) { i->eof_seen = true; fc->b = EOF; }
+  ssize_t n = read(g_getnum(i->fd), &b, 1);
+  if (n <= 0) { i->eof_seen = g_putnum(true); fc->b = EOF; }
   else fc->b = b;
   return f; }
 static struct g *raw_ungetc(struct g *f, int c, struct g_in *i) {
-  i->ungetc_buf = c;
-  i->eof_seen = false;
+  i->ungetc_buf = g_putnum(c);
+  i->eof_seen = g_putnum(false);
   return g_core_of(f)->b = c, f; }
 static struct g *raw_eof(struct g *f, struct g_in *i) {
-  return g_core_of(f)->b = (i->ungetc_buf == EOF) && i->eof_seen, f; }
-static struct g_in raw_stdin = { raw_getc, raw_ungetc, raw_eof,
-                                  STDIN_FILENO, EOF, false };
+  return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+static struct g_in raw_stdin = { g_vm_port_in, raw_getc, raw_ungetc, raw_eof,
+                                  g_putnum(STDIN_FILENO), g_putnum(EOF), g_putnum(false) };
 struct g_in *g_stdin = &raw_stdin;
 
 static char const

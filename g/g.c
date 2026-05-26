@@ -638,24 +638,24 @@ g_vm(g_vm_eval) { return
 
 struct ti { struct g_in in; char const *t; word i; } ;
 static struct g*_eof(struct g*f, struct ti *i) {
- return f->b = (i->in.ungetc_buf == EOF) && i->in.eof_seen, f; }
+ return f->b = (getnum(i->in.ungetc_buf) == EOF) && getnum(i->in.eof_seen), f; }
 static struct g*_getc(struct g*f, struct ti *i) {
- if (i->in.ungetc_buf != EOF) {
-  int c = i->in.ungetc_buf;
-  i->in.ungetc_buf = EOF;
+ if (getnum(i->in.ungetc_buf) != EOF) {
+  int c = getnum(i->in.ungetc_buf);
+  i->in.ungetc_buf = putnum(EOF);
   return f->b = c, f; }
- if (!i->t[i->i]) { i->in.eof_seen = true; return f->b = EOF, f; }
+ if (!i->t[i->i]) { i->in.eof_seen = putnum(true); return f->b = EOF, f; }
  return f->b = i->t[i->i++], f; }
 static struct g*_ungetc(struct g*f, int c, struct ti *i) {
- i->in.ungetc_buf = c;
- i->in.eof_seen = false;
+ i->in.ungetc_buf = putnum(c);
+ i->in.eof_seen = putnum(false);
  return f->b = c, f; }
 g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
- struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof,
-                 -1, EOF, false}, t, 0};
+ struct ti i = {{g_vm_port_in, (void*)_getc, (void*)_ungetc, (void*)_eof,
+                 putnum(-1), putnum(EOF), putnum(false)}, t, 0};
  f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i, false)))));
- i.t = s, i.i = 0, i.in.ungetc_buf = EOF, i.in.eof_seen = false;
+ i.t = s, i.i = 0, i.in.ungetc_buf = putnum(EOF), i.in.eof_seen = putnum(false);
  return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i, false)))))); }
 
 // some libc functions we use
@@ -965,9 +965,10 @@ static struct g *to_flush(struct g *f, struct g_out *o) { (void) o; return f; }
 struct g *g_to_init(struct g *f, struct to *o) {
  f = vec0(f, g_vect_char, 1, 32);
  if (!g_ok(f)) return f;
+ o->out.ap = g_vm_port_out;
  o->out.putc = (struct g*(*)(struct g*, int, struct g_out*)) to_putc;
  o->out.flush = to_flush;
- o->out.fd = -1;
+ o->out.fd = putnum(-1);
  o->buf = (struct g_vec*) f->sp[0];
  o->i = 0;
  f->sp++;
@@ -1196,8 +1197,8 @@ static g_vm(g_vm_str) {
 // returns only after input is ready (or, with a peer in the ring, after
 // switching to one) — so this Continue() loop terminates with gkey true.
 static g_vm(g_vm_getc) {
- if (!g_ready(f->in->fd)) {
-  f->next_wait_fd = f->in->fd;
+ if (!g_ready(getnum(f->in->fd))) {
+  f->next_wait_fd = getnum(f->in->fd);
   return Ap(g_vm_yield_sw, f); }
  Pack(f);
  if (!g_ok(f = ggetc(f))) return f;
@@ -1411,6 +1412,23 @@ static g_vm(g_vm_quote) {
  return Continue(); }
 
 static g_vm(g_vm_data) {
+ intptr_t x = word(Ip);
+ Sp += 1;
+ Ip = cell(Sp[0]);
+ Sp[0] = x;
+ return Continue(); }
+
+// Port discriminators. Behaviourally identical to g_vm_data (calling a port
+// returns the port itself), but distinct function symbols so the GC's datp
+// check routes ports through `evac_thd` rather than `evac_data`, and so bifs
+// can test "is this a port?" with `cell(x)->ap == g_vm_port_in/out`.
+g_vm(g_vm_port_in) {
+ intptr_t x = word(Ip);
+ Sp += 1;
+ Ip = cell(Sp[0]);
+ Sp[0] = x;
+ return Continue(); }
+g_vm(g_vm_port_out) {
  intptr_t x = word(Ip);
  Sp += 1;
  Ip = cell(Sp[0]);
@@ -2125,6 +2143,6 @@ static g_vm(g_vm_sleep) {
 // (key? _) : non-consuming key-ready poll on f->in. -1 if (getc 0) would
 // return immediately, nil otherwise. Arg is dummy to defeat (x)=x.
 static g_vm(g_vm_key) {
-  Sp[0] = (f->in->ungetc_buf != EOF || g_ready(f->in->fd)) ? putnum(-1) : g_nil;
+  Sp[0] = (getnum(f->in->ungetc_buf) != EOF || g_ready(getnum(f->in->fd))) ? putnum(-1) : g_nil;
   Ip += 1;
   return Continue(); }
