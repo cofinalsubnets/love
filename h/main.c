@@ -5,6 +5,7 @@
 #include <termios.h>
 #include <time.h>
 #include <poll.h>
+#include <errno.h>
 
 g_noinline uintptr_t g_clock(void) {
   struct timespec ts;
@@ -34,15 +35,21 @@ static void raw_mode(void) {
   // c_oflag is left alone, so '\n' on output still becomes CR-LF.
 
 // Deep wait. ms=0 means infinite (caller should pair with wake_on_input=true).
-// Otherwise clamp to INT_MAX (~24 days) to fit poll()'s int timeout.
+// EINTR is retried internally so the caller can rely on g_wait returning only
+// when its deadline has elapsed or (if wake_on_input) input is ready.
 void g_wait(uintptr_t ms, bool wake_on_input) {
-  int timeout = ms == 0 ? -1 :
-                ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
-  if (wake_on_input) {
-    struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
-    poll(&p, 1, timeout);
-  } else {
-    poll(NULL, 0, timeout); } }
+  struct pollfd p = { .fd = STDIN_FILENO, .events = POLLIN };
+  struct pollfd *fds = wake_on_input ? &p : NULL;
+  nfds_t nfds = wake_on_input ? 1 : 0;
+  uintptr_t deadline = ms == 0 ? 0 : g_clock() + ms;
+  for (;;) {
+    int t = ms == 0 ? -1 :
+            ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
+    if (poll(fds, nfds, t) >= 0 || errno != EINTR) return;
+    if (!deadline) continue;
+    uintptr_t now = g_clock();
+    if (now >= deadline) return;
+    ms = deadline - now; } }
 
 // --- host input ------------------------------------------------------
 // raw_stdin is the byte source at f->in: non-interactively the parser

@@ -1852,56 +1852,52 @@ static g_noinline g_vm(g_vm_yield_sw_mono) {
  f->yield_ctr = 0;
  return Continue(); }
 
-// yield_sw : snapshot current task into the ring (in place of f->tasks),
-// advance f->tasks to the next runnable node, tail-call resume. Caller sets Ip
-// to the desired resume point and may set f->next_wake_at / f->next_wait_io
-// before tail-calling. Skips dormant peers (saved_ip == g_vm_task_exit) and
-// sleeping peers (wake_at > now). When every peer is dormant or sleeping,
-// coalesces deadlines and calls g_wait(delta, io); the io flag is true iff
-// some task wants input, so input readiness only wakes the wait when someone
-// is there to consume it. ticks=0 with io=true means "wait until input."
-// Layout: [next, saved_ip, pid, wake_at, wait_io, stack..., tag] — stack at offset 5.
-// Slots are tagged via putnum; putnum(0)=1 is the sentinel keeping the slot
-// non-zero so ttag's NULL-terminator walk doesn't stop here.
-static g_vm(g_vm_yield_sw) {
-  union u *next = f->tasks->m;
-  if (next == f->tasks) return Ap(g_vm_yield_sw_mono, f);
+// First non-dormant peer in the ring whose wake_at <= now, or NULL.
+static g_inline union u *find_runnable(union u *head, uintptr_t now) {
+  for (union u *n = head->m; n != head; n = n->m)
+    if (n[1].m->ap != g_vm_task_exit && (uintptr_t) getnum(n[3].x) <= now)
+      return n;
+  return NULL; }
+
+// Called when no peer was immediately runnable. Coalesces deadlines / io intent
+// across the ring (seeded with caller's my_wake / my_wait_io) and waits. Returns
+// the runnable peer to switch to, or NULL if caller's wait was satisfied
+// (input arrived for caller, or deadline reached, or nothing to wait for).
+// Relies on g_wait returning only when its deadline elapsed or input is ready.
+static g_noinline union u *yield_sw_wait(struct g *f, uintptr_t my_wake, uintptr_t my_wait_io) {
+  uintptr_t min_wake = my_wake;
+  bool io_any = my_wait_io != 0;
+  for (union u *n = f->tasks->m; n != f->tasks; n = n->m)
+    if (n[1].m->ap != g_vm_task_exit) {
+      uintptr_t wa = (uintptr_t) getnum(n[3].x);
+      if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
+      if (getnum(n[4].x)) io_any = true; }
+  if (!min_wake && !io_any) return NULL;
   uintptr_t now = g_clock();
-  while (next != f->tasks &&
-         (next[1].m->ap == g_vm_task_exit ||
-          (uintptr_t) getnum(next[3].x) > now))
-    next = next->m;
-  uintptr_t my_wake = f->next_wake_at,
-            my_wait_io = f->next_wait_io;
-  if (next == f->tasks) {
-    uintptr_t min_wake = my_wake;
-    bool io_any = my_wait_io != 0;
-    for (union u *n = f->tasks->m; n != f->tasks; n = n->m)
-      if (n[1].m->ap != g_vm_task_exit) {
-        uintptr_t wa = (uintptr_t) getnum(n[3].x);
-        if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
-        if (getnum(n[4].x)) io_any = true; }
-    if (!min_wake && !io_any) {
-      f->next_wake_at = 0; f->next_wait_io = 0; return Continue(); }
-    for (;;) {
-      if (!min_wake) g_wait(0, true);
-      else if (min_wake > (now = g_clock())) g_wait(min_wake - now, io_any);
-      now = g_clock();
-      if (my_wait_io && gkey(f)) break;
-      next = f->tasks->m;
-      while (next != f->tasks &&
-             (next[1].m->ap == g_vm_task_exit ||
-              (uintptr_t) getnum(next[3].x) > now))
-        next = next->m;
-      if (next != f->tasks) break;
-      if (min_wake && now >= min_wake) break; }
-    if (next == f->tasks) {
+  if (!min_wake) g_wait(0, true);
+  else if (min_wake > now) g_wait(min_wake - now, io_any);
+  now = g_clock();
+  if (my_wait_io && gkey(f)) return NULL;
+  return find_runnable(f->tasks, now); }
+
+// yield_sw : snapshot current task into the ring, advance f->tasks to the next
+// runnable peer, tail-call resume. Caller sets Ip to the resume point and may
+// set f->next_wake_at / f->next_wait_io before tail-calling — those ride the
+// snapshot's wake_at / wait_io slots.
+// Layout: [next, saved_ip, pid, wake_at, wait_io, stack..., tag] — stack at offset 5.
+// Slots tagged via putnum; putnum(0)=1 keeps slots non-zero so ttag's
+// NULL-terminator walk doesn't stop here.
+static g_vm(g_vm_yield_sw) {
+  if (f->tasks->m == f->tasks) return Ap(g_vm_yield_sw_mono, f);
+  uintptr_t my_wake = f->next_wake_at, my_wait_io = f->next_wait_io;
+  union u *next = find_runnable(f->tasks, g_clock());
+  if (!next) {
+    next = yield_sw_wait(f, my_wake, my_wait_io);
+    if (!next) {
       f->next_wake_at = 0;
       f->next_wait_io = 0;
       if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
       return Continue(); } }
-  // peer became runnable: fall through to snapshot+switch, preserving
-  // my_wake / my_wait_io so caller's pending intent rides the snapshot.
   word my_height = topof(f) - Sp;
   union u *next_stack = next + 5;
   uintptr_t restore_h = (union u*) ttag(next_stack) - next_stack;
