@@ -21,7 +21,7 @@ static struct g *_putc(struct g *f, int c, struct g_out*) {
   (void) r;
   return f; }
 static struct g *_flush(struct g *f, struct g_out*) { return f; }
-static struct g_out _g_stdout = { _putc, _flush };
+static struct g_out _g_stdout = { _putc, _flush, STDOUT_FILENO };
 struct g_out *g_stdout = &_g_stdout;
 
 // --- raw terminal mode -----------------------------------------------

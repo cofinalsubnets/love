@@ -944,6 +944,43 @@ struct g *g_strof(struct g *f, char const *cs) {
  if (g_ok(f)) memcpy(txt(f->sp[0]), cs, len);
  return f; }
 
+// Data-sink g_out methods. Buffer grows by doubling; o->i tracks written bytes,
+// len(o->buf) tracks current capacity. vec0 may GC, so MM the old buf pointer
+// across the allocation so we can memcpy from its (possibly forwarded) bytes.
+static struct g *to_putc(struct g *f, int c, struct to *o) {
+ if (o->i >= len(o->buf)) {
+  uintptr_t new_cap = len(o->buf) * 2;
+  MM(f, (g_word*) &o->buf);
+  f = vec0(f, g_vect_char, 1, new_cap);
+  UM(f);
+  if (!g_ok(f)) return f;
+  struct g_vec *nb = (struct g_vec*) f->sp[0];
+  memcpy(txt(nb), txt(o->buf), o->i);
+  o->buf = nb;
+  f->sp++; }
+ txt(o->buf)[o->i++] = c;
+ return f; }
+static struct g *to_flush(struct g *f, struct g_out *o) { (void) o; return f; }
+
+struct g *g_to_init(struct g *f, struct to *o) {
+ f = vec0(f, g_vect_char, 1, 32);
+ if (!g_ok(f)) return f;
+ o->out.putc = (struct g*(*)(struct g*, int, struct g_out*)) to_putc;
+ o->out.flush = to_flush;
+ o->out.fd = -1;
+ o->buf = (struct g_vec*) f->sp[0];
+ o->i = 0;
+ f->sp++;
+ return f; }
+
+struct g *g_to_harvest(struct g *f, struct to *o) {
+ MM(f, (g_word*) &o->buf);
+ f = vec0(f, g_vect_char, 1, o->i);
+ UM(f);
+ if (!g_ok(f)) return f;
+ memcpy(txt(f->sp[0]), txt(o->buf), o->i);
+ return f; }
+
 g_vm(g_vm_gensym) {
  if (strp(Sp[0])) return Ap(g_vm_nomsym, f);
  uintptr_t const req = Width(struct g_atom) - 2;

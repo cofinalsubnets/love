@@ -325,5 +325,5 @@ static struct g* _eof(struct g*f, struct g_in *i) {
 struct g_in _g_stdin = { .getc = _getc, .ungetc = _ungetc, .eof = _eof,
                          .fd = -1, .ungetc_buf = EOF, .eof_seen = false, },
             *g_stdin = &_g_stdin;
-struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
+struct g_out _g_stdout = { .putc = _putc, .flush = _flush, .fd = 1, },
              *g_stdout = &_g_stdout;

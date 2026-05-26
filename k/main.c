@@ -183,7 +183,7 @@ void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
     if (ticks && kticks >= deadline) return;
     for (int i = 0; i < n; i++) if (g_ready(fds[i])) return;
     kwait(); } }
-struct g_out _g_stdout = { .putc = _putc, .flush = _flush, },
+struct g_out _g_stdout = { .putc = _putc, .flush = _flush, .fd = 1, },
              *g_stdout = &_g_stdout;
 uintptr_t g_clock(void) { return kticks; }
 

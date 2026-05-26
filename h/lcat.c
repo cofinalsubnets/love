@@ -37,7 +37,7 @@ static struct g* lcat_eof(struct g*f, struct g_in *i) {
 struct g_in _g_stdin = { .getc = lcat_getc, .ungetc = lcat_ungetc, .eof = lcat_eof,
                          .fd = STDIN_FILENO, .ungetc_buf = EOF, .eof_seen = false, },
             *g_stdin = &_g_stdin;
-struct g_out _g_stdout = { .putc = lcat_putc, .flush = lcat_flush, },
+struct g_out _g_stdout = { .putc = lcat_putc, .flush = lcat_flush, .fd = STDOUT_FILENO, },
              *g_stdout = &_g_stdout;;
 
 int main(int argc, char const **argv) {
