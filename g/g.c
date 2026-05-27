@@ -94,7 +94,8 @@ static g_vm_t
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
- g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect;
+ g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
+ g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fflush;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
 static struct g_vec *ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
@@ -1256,6 +1257,38 @@ static g_vm(g_vm_getc) {
  Ip += 1;
  return Continue(); }
 
+// (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
+// uses the port's own fd.
+static g_vm(g_vm_fgetc) {
+ struct g_in *i = (struct g_in*) Sp[0];
+ if (!g_ready(getnum(i->fd))) {
+  f->next_wait_fd = getnum(i->fd);
+  return Ap(g_vm_yield_sw, f); }
+ Pack(f);
+ if (!g_ok(f = port_getc(f, (struct g_in*) f->sp[0]))) return f;
+ Unpack(f);
+ Sp[0] = putnum(f->b);
+ Ip += 1;
+ return Continue(); }
+
+// (fungetc port byte) — push back one byte, return the byte.
+static g_vm(g_vm_fungetc) {
+ Pack(f);
+ if (!g_ok(f = port_ungetc(f, getnum(f->sp[1]), (struct g_in*) f->sp[0]))) return f;
+ Unpack(f);
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
+
+// (feof port) — -1 if at end of stream, nil otherwise.
+static g_vm(g_vm_feof) {
+ Pack(f);
+ if (!g_ok(f = port_eof(f, (struct g_in*) f->sp[0]))) return f;
+ Unpack(f);
+ Sp[0] = f->b ? putnum(-1) : g_nil;
+ Ip += 1;
+ return Continue(); }
+
 struct g*gputs(struct g*f, char const*s) {
  while (*s) f = gputc(f, *s++);
  return f; }
@@ -1359,6 +1392,23 @@ struct g *gputn(struct g*f, intptr_t n, uint8_t b) {
 static g_vm(g_vm_putc) {
  Pack(f);
  if(!g_ok(f = gputc(f, getnum(*Sp)))) return f;
+ Unpack(f);
+ Ip += 1;
+ return Continue(); }
+
+// (fputc port byte) — write byte to port; return byte.
+static g_vm(g_vm_fputc) {
+ Pack(f);
+ if (!g_ok(f = port_putc(f, getnum(f->sp[1]), (struct g_out*) f->sp[0]))) return f;
+ Unpack(f);
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
+
+// (fflush port) — flush; return the port.
+static g_vm(g_vm_fflush) {
+ Pack(f);
+ if (!g_ok(f = port_flush(f, (struct g_out*) f->sp[0]))) return f;
  Unpack(f);
  Ip += 1;
  return Continue(); }
@@ -1861,7 +1911,12 @@ enum g_status g_fin(struct g *f) {
  _(bif_sleep, "sleep", S4(g_vm_sleep)) _(bif_donep, "done?", S1(g_vm_donep)) \
  _(bif_kill, "kill", S1(g_vm_kill)) \
  _(bif_key, "key?", S1(g_vm_key)) \
- _(bif_inspect, "inspect", S1(g_vm_inspect))
+ _(bif_inspect, "inspect", S1(g_vm_inspect)) \
+ _(bif_fgetc, "fgetc", S1(g_vm_fgetc)) \
+ _(bif_fungetc, "fungetc", S2(g_vm_fungetc)) \
+ _(bif_feof, "feof", S1(g_vm_feof)) \
+ _(bif_fputc, "fputc", S2(g_vm_fputc)) \
+ _(bif_fflush, "fflush", S1(g_vm_fflush))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
 #define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
@@ -1898,7 +1953,12 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  if (!g_ok(f = mktbl(mktbl(f)))) return f;
  word m = pop1(f), d = pop1(f);
  f->macro = tbl(m), f->dict = tbl(d);
- struct g_def def0[] = { {"globals", d, }, {"macros", m, }, {0}, };
+ struct g_def def0[] = {
+  {"globals", d, },
+  {"macros", m, },
+  {"in", (intptr_t) g_stdin},
+  {"out", (intptr_t) g_stdout},
+  {0}, };
  return g_defs(g_defs(f, def0), def1); }
 
 void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }

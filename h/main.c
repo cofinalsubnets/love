@@ -13,11 +13,14 @@ g_noinline uintptr_t g_clock(void) {
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
 // --- host output -----------------------------------------------------
-// write(2) directly to STDOUT_FILENO — no FILE* / libc stream buffering.
-// _flush is a no-op since every byte hits the fd immediately.
+// write(2) directly to the port's fd — no FILE* / libc stream buffering.
+// _flush is a no-op since every byte hits the fd immediately. Port lives
+// at f->sp[0] per the Phase B pure calling convention; _flush ignores it.
 static struct g *_putc(struct g *f, int c) {
+  struct g *fc = g_core_of(f);
+  struct g_out *o = (struct g_out*) fc->sp[0];
   uint8_t b = c;
-  ssize_t r = write(STDOUT_FILENO, &b, 1);
+  ssize_t r = write(g_getnum(o->fd), &b, 1);
   (void) r;
   return f; }
 static struct g *_flush(struct g *f) { return f; }
