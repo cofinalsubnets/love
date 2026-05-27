@@ -1,5 +1,5 @@
 // emscripten host shim for gwen lisp.
-// gputc/gflush feed a JS-visible output buffer; ggetc pulls from a string
+// gputc feeds a JS-visible output buffer; ggetc pulls from a string
 // set per-call. boot.g is embedded and evaluated once by gwen_init.
 #include "g.h"
 #include <emscripten.h>
@@ -19,12 +19,6 @@ static uint32_t    in_pos, in_len;
 int gputc(struct g *f, int c) {
   if (out_len < sizeof out_buf) out_buf[out_len++] = (char) c;
   return c; }
-int gflush(struct g *f) { return 0; }
-int ggetc(struct g *f) {
-  return in_pos < in_len ? (unsigned char) in_buf[in_pos++] : -1; }
-int gungetc(struct g *f, int c) {
-  return in_pos > 0 ? (in_pos--, c) : -1; }
-int geof(struct g *f) { return in_pos >= in_len; }
 
 uintptr_t g_clock(void) {
   struct timespec ts;

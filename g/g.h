@@ -173,13 +173,7 @@ void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool g_ready(int fd);
 
 struct g
- *ggetc(struct g*),
- *gungetc(struct g*, int),
- *geof(struct g*),
-
  *gputc(struct g*, int),
- *gflush(struct g*),
-
  *gputx(struct g*, intptr_t),
  *gputn(struct g*, intptr_t, uint8_t),
  *gputs(struct g*, char const*);
@@ -199,7 +193,8 @@ struct g
 
 g_malloc_t g_libc_malloc;
 g_free_t g_libc_free;
-static g_inline struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }
+static g_inline struct g *g_ini(void) {
+  return g_ini_m(g_libc_malloc, g_libc_free); }
 static g_inline struct g *g_evals_(struct g *f, char const *s) {
   return g_pop(g_evals(f, s), 1); }
 extern struct g_in *g_stdin;

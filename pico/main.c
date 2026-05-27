@@ -15,10 +15,6 @@ const uint LED_PIN = 25;
 uintptr_t g_clock(void) {
   return to_ms_since_boot(get_absolute_time()); }
 int gputc(struct g*f, int c) { return putc(c, stdout); }
-int ggetc(struct g*f) { return getc(stdin); }
-int gungetc(struct g*_, int c) { return ungetc(c, stdin); }
-int geof(struct g*_) { return feof(stdin); }
-int gflush(struct g*) { return fflush(stdout); }
 
 int main() {
     bi_decl(bi_program_description("PROJECT DESCRIPTION"));
