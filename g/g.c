@@ -311,6 +311,11 @@ static g_vm(g_vm_yieldk) { return
  Pack(f),
  encode(f, g_status_yield); }
 
+static g_inline bool inpp(word x) {
+  return evenp(x) && cell(x)->ap == g_vm_port_in; }
+static g_inline bool outpp(word x) {
+  return evenp(x) && cell(x)->ap == g_vm_port_out; }
+
 struct g *g_eval(struct g *f) {
  f = c0(f, g_vm_yieldk);
 #if g_tco
@@ -1249,19 +1254,21 @@ static g_vm(g_vm_fgetc) {
 
 // (fungetc port byte) — push back one byte, return the byte.
 static g_vm(g_vm_fungetc) {
- Pack(f);
- if (!g_ok(f = port_ungetc(f, getnum(f->sp[1]), (struct g_in*) f->sp[0]))) return f;
- Unpack(f);
+ if (inpp(Sp[0])) {
+  Pack(f);
+  if (!g_ok(f = ((struct g_in*)f->sp[0])->ungetc(f, getnum(f->sp[1])))) return f;
+  Unpack(f); }
  Sp += 1;
  Ip += 1;
  return Continue(); }
 
 // (feof port) — -1 if at end of stream, nil otherwise.
 static g_vm(g_vm_feof) {
- Pack(f);
- if (!g_ok(f = port_eof(f, (struct g_in*) f->sp[0]))) return f;
- Unpack(f);
- Sp[0] = f->b ? putnum(-1) : g_nil;
+ if (inpp(Sp[0])) {
+  Pack(f);
+  if (!g_ok(f = ((struct g_in*)f->sp[0])->eof(f))) return f;
+  Unpack(f);
+  Sp[0] = f->b ? putnum(-1) : nil; }
  Ip += 1;
  return Continue(); }
 
@@ -1367,25 +1374,27 @@ struct g *gputn(struct g*f, intptr_t n, uint8_t b) {
 
 static g_vm(g_vm_putc) {
  Pack(f);
- if(!g_ok(f = gputc(f, getnum(*Sp)))) return f;
+ if (!g_ok(f = gputc(f, getnum(*Sp)))) return f;
  Unpack(f);
  Ip += 1;
  return Continue(); }
 
 // (fputc port byte) — write byte to port; return byte.
 static g_vm(g_vm_fputc) {
- Pack(f);
- if (!g_ok(f = port_putc(f, getnum(f->sp[1]), (struct g_out*) f->sp[0]))) return f;
- Unpack(f);
+ if (outpp(Sp[0])) {
+  Pack(f);
+  if (!g_ok(f = ((struct g_out*)f->sp[0])->putc(f, getnum(f->sp[1])))) return f;
+  Unpack(f); }
  Sp += 1;
  Ip += 1;
  return Continue(); }
 
 // (fflush port) — flush; return the port.
 static g_vm(g_vm_fflush) {
- Pack(f);
- if (!g_ok(f = port_flush(f, (struct g_out*) f->sp[0]))) return f;
- Unpack(f);
+ if (outpp(Sp[0])) {
+  Pack(f);
+  if (!g_ok(f = ((struct g_out*)f->sp[0])->flush(f))) return f;
+  Unpack(f); }
  Ip += 1;
  return Continue(); }
 
@@ -1485,10 +1494,10 @@ static g_vm(g_vm_info) {
 
 op11(g_vm_clock, putnum(g_clock() - getnum(Sp[0])))
 static g_vm(g_vm_unc) {
-  Have1();
-  *--Sp = Ip[1].x;
-  Ip = Ip[2].m;
-  return Continue(); }
+ Have1();
+ *--Sp = Ip[1].x;
+ Ip = Ip[2].m;
+ return Continue(); }
 
 g_vm(g_vm_cur) {
  size_t const S = 3 + Width(struct g_tag);
@@ -1614,22 +1623,22 @@ static g_noinline g_vm(g_vm_gc, uintptr_t n) {
  if (g_ok(f)) return Unpack(f), Continue();
  return f; }
 
-static g_vm(g_vm_trim) {
- clip(cell(Sp[0]));
- Ip += 1;
- return Continue(); }
+static g_vm(g_vm_trim) { return
+ clip(cell(Sp[0])),
+ Ip += 1,
+ Continue(); }
 
-static g_vm(g_vm_seek) {
- Sp[1] = word(cell(Sp[1]) + getnum(Sp[0]));
- Sp += 1;
- Ip += 1;
- return Continue(); }
+static g_vm(g_vm_seek) { return
+ Sp[1] = word(cell(Sp[1]) + getnum(Sp[0])),
+ Sp += 1,
+ Ip += 1,
+ Continue(); }
 
-static g_vm(g_vm_peek2) {
- Sp[1] = (cell(Sp[1]) + getnum(Sp[0]))->x;
- Sp += 1;
- Ip += 1;
- return Continue(); }
+static g_vm(g_vm_peek2) { return
+ Sp[1] = (cell(Sp[1]) + getnum(Sp[0]))->x,
+ Sp += 1,
+ Ip += 1,
+ Continue(); }
 
 static g_vm(g_vm_poke2) {
  union u *c = cell(Sp[2]) + getnum(Sp[0]);
@@ -1644,9 +1653,7 @@ static g_vm(g_vm_thda) {
  Have(n + Width(struct g_tag));
  union u *k = (union u*) Hp;
  Hp += n + Width(struct g_tag);
- struct g_tag *t = (void*) (k + n);
- t->null = NULL;
- t->head = k;
+ k[n].m = NULL, k[n+1].m = k;
  memset(k, -1, n * sizeof(word));
  Sp[0] = word(k);
  Ip += 1;
@@ -1913,10 +1920,9 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
 void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
 void g_libc_free(struct g*f, void *x) { free(x); }
 
-// Default time-wait: no-op. Frontends override with a real sleep that
-// honors the deadline (poll(NULL, 0, ms) on POSIX, hlt-with-timer on bare
-// metal).
-__attribute__((weak)) void g_sleep(uintptr_t ticks) { (void) ticks; }
+// default sleep is busy wait
+__attribute__((weak)) void g_sleep(uintptr_t ticks) {
+  for (ticks += g_clock(); g_clock() < ticks;); }
 
 // Default fd-keyed waits. Frontends override; defaults are conservative
 // (all fds always-ready; multi-source wait collapses to plain sleep) so
@@ -1935,6 +1941,7 @@ extern g_inline struct g *g_pop(struct g*f, uintptr_t n) { return g_core_of(f)->
 
 static g_inline struct g *symof(char const *n, struct g *f) {
   return intern(g_strof(f, n)); }
+
 struct g *g_defs(struct g*f, struct g_def const*defs) {
  if (!g_ok(f)) return f;
  f = g_push(f, 1, f->dict);
