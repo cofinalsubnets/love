@@ -20,10 +20,6 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
 #define MM(f,r) ((g_core_of(f)->root=&((struct g_r){(word*)(r),g_core_of(f)->root})))
 #define UM(f) (g_core_of(f)->root=g_core_of(f)->root->n)
-#define g_in(x) ((struct g_in*)(f))
-#define g_out(x) ((struct g_out*)(f))
-#define g_in0(f) ((struct g_in*)(f)->sp[0])
-#define g_out0(f) ((struct g_out*)(f)->sp[0])
 
 
 #if UINTPTR_MAX > 0xffffffffu
@@ -149,6 +145,12 @@ static g_inline struct g_pair *ini_two(struct g_pair *w, intptr_t a, intptr_t b)
 static g_inline uintptr_t rot(uintptr_t x) {
   int const s = sizeof(uintptr_t) * 4; // shift bits = word bits / 2 = sizeof(word) * 4
   return (x << s) | (x >> s); }
+
+static g_inline struct g *zgetc(struct g*f) { return f->in->getc(f); }
+static g_inline struct g *zungetc(struct g*f, int c) { return f->in->ungetc(f, c); }
+static g_inline struct g *zeof(struct g*f) { return f->in->eof(f); }
+static g_inline struct g *zputc(struct g*f, int c) { return f->out->putc(f, c); }
+static g_inline struct g *zflush(struct g*f) { return f->out->flush(f); }
 
 static struct g *c0(struct g *f, g_vm_t *y);
 
@@ -640,11 +642,11 @@ g_vm(g_vm_eval) { return
 struct ti { struct g_in in; char const *t; word i; } ;
 
 static struct g *ti_eof(struct g*f) {
- struct ti *i = (struct ti*) f->sp[0];
+ struct ti *i = (struct ti*) f->in;
  return f->b = (getnum(i->in.ungetc_buf) == EOF) && getnum(i->in.eof_seen), f; }
 
 static struct g *ti_getc(struct g*f) {
- struct ti *i = (struct ti*) f->sp[0];
+ struct ti *i = (struct ti*) f->in;
  if (getnum(i->in.ungetc_buf) != EOF) {
   int c = getnum(i->in.ungetc_buf);
   i->in.ungetc_buf = putnum(EOF);
@@ -653,7 +655,7 @@ static struct g *ti_getc(struct g*f) {
  return f->b = i->t[i->i++], f; }
 
 static struct g *ti_ungetc(struct g*f, int c) {
- struct ti *i = (struct ti*) f->sp[0];
+ struct ti *i = (struct ti*) f->in;
  i->in.ungetc_buf = putnum(c);
  i->in.eof_seen = putnum(false);
  return f->b = c, f; }
@@ -955,13 +957,13 @@ struct to {
  g_word i; };
 
 static struct g *to_putc(struct g *f, int c) {
- struct to *o = (struct to*) f->sp[0];
+ struct to *o = (struct to*) f->out;
  uintptr_t i = getnum(o->i);
  if (i >= len(o->buf)) {
   uintptr_t new_cap = len(o->buf) * 2;
   f = vec0(f, g_vect_char, 1, new_cap);
   if (!g_ok(f)) return f;
-  o = (struct to*) f->sp[1];
+  o = (struct to*) f->out;                 // GC may have moved it; f->out is GC-traced
   struct g_vec *nb = (struct g_vec*) f->sp[0];
   memcpy(txt(nb), txt(o->buf), i);
   o->buf = nb;
@@ -1066,19 +1068,6 @@ static struct g *grbufg(struct g *f) {
  return f; }
 
 
-static struct g *port_getc(struct g *f, struct g_in *i) {
-  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
-  f = ((struct g_in*) f->sp[0])->getc(f);
-  if (g_ok(f)) f->sp++;
-  return f; }
-static struct g *port_ungetc(struct g *f, int c, struct g_in *i) {
-  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
-  f = ((struct g_in*) f->sp[0])->ungetc(f, c);
-  if (g_ok(f)) f->sp++;
-  return f; }
-
-static struct g*gsgetc(struct g*f) { return g_ok(f) ? g_in0(f)->getc(f) : f; }
-static struct g*gseof(struct g*f) { return g_ok(f) ? g_in0(f)->eof(f) : f; }
 ////
 /// " the parser "
 //
@@ -1087,27 +1076,24 @@ static struct g*gseof(struct g*f) { return g_ok(f) ? g_in0(f)->eof(f) : f; }
 // `i` parameter across the multiple port_* calls — each push triggers a
 // have() check that may GC and move heap ports.
 
-static struct g* g_s_getc(struct g*f) {
- while (g_ok(f = gsgetc(f))) switch (f->b) {
+static struct g* g_z_getc(struct g*f) {
+ while (g_ok(f = zgetc(f))) switch (f->b) {
   default: return f;
   case '#': case ';':
-   while (g_ok(f = gseof(f)) && !f->b && g_ok(f = gsgetc(f)) && f->b != '\n' && f->b != '\r');
+   while (g_ok(f = zeof(f)) && !f->b && g_ok(f = zgetc(f)) && f->b != '\n' && f->b != '\r');
   case 0: case ' ': case '\t': case '\n': case '\r': case '\f':
    continue; }
  return f; }
 
-static struct g* g_r_getc(struct g*f, struct g_in *i) {
- return g_pop(g_s_getc(g_push(f, 1, i)), 1); }
-
-static struct g *g_read1(struct g*f, struct g_in *i) {
- MM(f, (g_word*) &i);
- if (!g_ok(f = g_r_getc(f, i))) goto out;
+static struct g *gzreads(struct g *f, bool nested);
+static struct g *gzread1(struct g*f) {
+ if (!g_ok(f = g_z_getc(f))) goto out;
  int c = f->b;
  switch (c) {
-  case '(':  f = g_reads(f, i, true); goto out;
+  case '(':  f = gzreads(f, true); goto out;
   case ')': case EOF:  f = encode(f, g_status_eof); goto out;
   case '\'':
-   f = g_read1(f, i);
+   f = gzread1(f);
    if (g_code_of(f) == g_status_eof)               // quote with no operand
     f = encode(g_core_of(f), g_status_more);
    f = gxl(pushq(gxr(push0(f)))); goto out;
@@ -1118,20 +1104,20 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
    f = grbufn(f);
    for (size_t lim = sizeof(word); g_ok(f); f = grbufg(f), lim *= 2)
     for (b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c) {
-     if (!g_ok(f = port_getc(f, i))) goto out_str;     // threaded; char in f->b
+     if (!g_ok(f = zgetc(f))) goto out_str;     // threaded; char in f->b
      c = f->b;
      if (c == '\\') {                               // escape: take next char
-      if (!g_ok(f = port_getc(f, i))) goto out_str;
+      if (!g_ok(f = zgetc(f))) goto out_str;
       if ((c = f->b) == EOF) { f = encode(f, g_status_more); goto out_str; }
       if (c == 'n') c = '\n';
       else if (c == 't') c = '\t';
       else if (c == 'r') c = '\r';
       else if (c == '0') c = '\0';
       else if (c == 'x') {                          // \xHH: two hex digits
-       if (!g_ok(f = port_getc(f, i))) goto out_str;
+       if (!g_ok(f = zgetc(f))) goto out_str;
        int h1 = f->b;
        if (h1 == EOF) { f = encode(f, g_status_more); goto out_str; }
-       if (!g_ok(f = port_getc(f, i))) goto out_str;
+       if (!g_ok(f = zgetc(f))) goto out_str;
        int h2 = f->b;
        if (h2 == EOF) { f = encode(f, g_status_more); goto out_str; }
        int v1 = h1 <= '9' ? h1 - '0' : (h1 | 0x20) - 'a' + 10;
@@ -1148,12 +1134,12 @@ out_str: UM(f); goto out; } }
   if (g_ok(f = grbufn(f)))
    for (txt((struct g_vec*) f->sp[0])[0] = c; g_ok(f); f = grbufg(f), lim *= 2)
     for (b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c) {
-     if (!g_ok(f = port_getc(f, i))) goto out_atom;
+     if (!g_ok(f = zgetc(f))) goto out_atom;
      switch (c = f->b) {
       default: continue;
       case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
       case '(': case ')': case '"': case '\'': case 0 : case EOF:
-       f = port_ungetc(f, c, i);
+       f = zungetc(f, c);
        if (!g_ok(f)) goto out_atom;
        b = (struct g_vec*) f->sp[0];
        len(b) = n;
@@ -1164,21 +1150,26 @@ out_str: UM(f); goto out; } }
        else f = intern(f);
        goto out_atom; } }
 out_atom: UM(f); }
-out: UM(f); return f; }
+out: return f; }
 
-static struct g *g_reads(struct g *f, struct g_in* i, bool nested) {
- MM(f, (g_word*) &i);
+static struct g *g_read1(struct g*f, struct g_in *i) {
+ return g_core_of(f)->in = i, gzread1(f); }
+
+static struct g *gzreads(struct g *f, bool nested) {
  intptr_t n = 0;
- for (int c; g_ok(f = g_r_getc(f, i)); n++) {
+ for (int c; g_ok(f = g_z_getc(f)); n++) {
   c = f->b;
   if (c == ')') break;                          // list closed
   if (c == EOF) {                               // end of input...
-   if (nested) { f = encode(f, g_status_more); goto out; }
+   if (nested) return encode(f, g_status_more); 
    break; }                                     //  ...at top level: done
-  f = port_ungetc(f, c, i);
-  f = g_read1(f, i); }
+  f = zungetc(f, c);
+  f = gzread1(f); }
  for (f = push0(f); n--; f = gxr(f));
-out: UM(f); return f; }
+ return f; }
+
+static struct g *g_reads(struct g *f, struct g_in* i, bool nested) {
+ return g_core_of(f)->in = i, gzreads(f, nested); }
 
 // Read one datum, transactionally. On g_status_more (or any non-ok
 // result) the VM stack is rolled back to its pre-parse depth, so a
@@ -1249,7 +1240,8 @@ static g_vm(g_vm_fgetc) {
     f->next_wait_fd = getnum(i->fd);
     return Ap(g_vm_yield_sw, f); }
    Pack(f);
-   if (!g_ok(f = gsgetc(f))) return f;
+   f->in = i;
+   if (!g_ok(f = zgetc(f))) return f;
    Unpack(f);
    Sp[0] = putnum(f->b); }
  Ip += 1;
@@ -1258,8 +1250,10 @@ static g_vm(g_vm_fgetc) {
 // (fungetc port byte) — push back one byte, return the byte.
 static g_vm(g_vm_fungetc) {
  if (inpp(Sp[0])) {
+  struct g_in *i = (struct g_in*) Sp[0];
   Pack(f);
-  if (!g_ok(f = ((struct g_in*)f->sp[0])->ungetc(f, getnum(f->sp[1])))) return f;
+  f->in = i;
+  if (!g_ok(f = zungetc(f, getnum(f->sp[1])))) return f;
   Unpack(f); }
  Sp += 1;
  Ip += 1;
@@ -1268,8 +1262,10 @@ static g_vm(g_vm_fungetc) {
 // (feof port) — -1 if at end of stream, nil otherwise.
 static g_vm(g_vm_feof) {
  if (inpp(Sp[0])) {
+  struct g_in *i = (struct g_in*) Sp[0];
   Pack(f);
-  if (!g_ok(f = ((struct g_in*)f->sp[0])->eof(f))) return f;
+  f->in = i;
+  if (!g_ok(f = zeof(f))) return f;
   Unpack(f);
   Sp[0] = f->b ? putnum(-1) : nil; }
  Ip += 1;
@@ -1279,103 +1275,108 @@ struct g*gputs(struct g*f, char const*s) {
  while (*s) f = gputc(f, *s++);
  return f; }
 
-static struct g*gsflush(struct g*f) { return g_ok(f) ? g_out0(f)->flush(f) : f; }
-static struct g*gsputc(struct g*f, int c) { return g_ok(f) ? g_out0(f)->putc(f, c) : f; }
-static struct g*gsputn(struct g *f, intptr_t n, uint8_t b) {
+static struct g*gzputc(struct g*f, int c) { return g_ok(f) ? f->out->putc(f, c) : f; }
+
+static struct g*gzputn(struct g *f, intptr_t n, uint8_t b) {
  uintptr_t
-  m = n >= 0 || b != 10 ? (uintptr_t) n : (f = gsputc(f, '-'), -(uintptr_t) n),
+  m = n >= 0 || b != 10 ? (uintptr_t) n : (f = gzputc(f, '-'), -(uintptr_t) n),
   q = m / b,
   r = m % b;
- if (q) f = gsputn(f, q, b);
- return gsputc(f, g_digits[r]); }
+ if (q) f = gzputn(f, q, b);
+ return gzputc(f, g_digits[r]); }
 
 static struct g *g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t b) {
- return g_pop(gsputn(g_push(f, 1, o), n, b), 1); }
+ g_core_of(f)->out = o;
+ return gzputn(f, n, b); }
 
-static struct g*gvsprintf(struct g*f, char const *fmt, va_list xs) {
+static struct g*gvzprintf(struct g*f, char const *fmt, va_list xs) {
  for (int c; (c = *fmt++);) {
-  if (c != '%') f = gsputc(f, c);
+  if (c != '%') f = gzputc(f, c);
   else pass: switch ((c = *fmt++)) {
    case 0: goto out;
    case 'l': goto pass;
-   case 'b': f = gsputn(f, va_arg(xs, uintptr_t), 2); continue;
-   case 'o': f = gsputn(f, va_arg(xs, uintptr_t), 8); continue;
-   case 'd': f = gsputn(f, va_arg(xs, uintptr_t), 10); continue;
-   case 'x': f = gsputn(f, va_arg(xs, uintptr_t), 16); continue;
-   default: f = gsputc(f, c); } } out:
+   case 'b': f = gzputn(f, va_arg(xs, uintptr_t), 2); continue;
+   case 'o': f = gzputn(f, va_arg(xs, uintptr_t), 8); continue;
+   case 'd': f = gzputn(f, va_arg(xs, uintptr_t), 10); continue;
+   case 'x': f = gzputn(f, va_arg(xs, uintptr_t), 16); continue;
+   default: f = gzputc(f, c); } } out:
  return f; }
 
-static struct g *gsprintf(struct g *f, char const *fmt, ...) {
+
+static struct g *gzprintf(struct g *f, char const *fmt, ...) {
  va_list xs;
  va_start(xs, fmt);
- f = gvsprintf(f, fmt, xs);
+ f = gvzprintf(f, fmt, xs);
  va_end(xs);
  return f; }
 
-static struct g *gsputx(struct g *f, intptr_t x);
-static g_inline struct g*gsput_two(struct g*f, word x) {
+static struct g *gzputx(struct g *f, intptr_t x);
+
+static g_inline struct g*gzput_two(struct g*f, word x) {
  MM(f, &x);
  struct g_vec *n;
  if (symp(A(x)) && (n = sym(A(x))->nom) && len(n) == 1 && txt(n)[0] == '`' && twop(B(x))) {
-   f = gsputc(f, '\'');
-   f = gsputx(f, AB(x));
+   f = gzputc(f, '\'');
+   f = gzputx(f, AB(x));
    goto out; }
- for (f = gsputc(f, '(');; f = gsputc(f, ' '), x = B(x)) {
-  f = gsputx(f, A(x));
-  if (!twop(B(x))) { f = gsputc(f, ')'); goto out; } }
+ for (f = gzputc(f, '(');; f = gzputc(f, ' '), x = B(x)) {
+  f = gzputx(f, A(x));
+  if (!twop(B(x))) { f = gzputc(f, ')'); goto out; } }
 out: return UM(f), f; }
 
-static g_inline struct g*gsput_vec(struct g*f, word x) {
+
+static g_inline struct g*gzput_vec(struct g*f, word x) {
  MM(f, &x);
  if (!vec_strp(vec(x))) {
   uintptr_t type = vec(x)->type, rank = vec(x)->rank;
-  f = gsprintf(f, "#vec@%x:%d.%d", vec(x), type, rank);
+  f = gzprintf(f, "#vec@%x:%d.%d", vec(x), type, rank);
   for (uintptr_t i = 0; i < rank && g_ok(f); i++)
-   f = gsprintf(f, ".%d", (intptr_t) vec(x)->shape[i]); }
+   f = gzprintf(f, ".%d", (intptr_t) vec(x)->shape[i]); }
  else {
   uintptr_t slen = len(vec(x));
-  f = gsputc(f, '"');
+  f = gzputc(f, '"');
   for (uintptr_t i = 0; g_ok(f) && i < slen; i++) {
    char c = txt(vec(x))[i];
-   if (c == '\\' || c == '"') f = gsputc(f, '\\');
-   else if (c == '\n') f = gsputc(f, '\\'), c = 'n';
-   else if (c == '\t') f = gsputc(f, '\\'), c = 't';
-   else if (c == '\r') f = gsputc(f, '\\'), c = 'r';
-   else if (c == '\0') f = gsputc(f, '\\'), c = '0';
+   if (c == '\\' || c == '"') f = gzputc(f, '\\');
+   else if (c == '\n') f = gzputc(f, '\\'), c = 'n';
+   else if (c == '\t') f = gzputc(f, '\\'), c = 't';
+   else if (c == '\r') f = gzputc(f, '\\'), c = 'r';
+   else if (c == '\0') f = gzputc(f, '\\'), c = '0';
    else if ((unsigned char) c < 32) {           // other ctl bytes -> \xHH
-    f = gsputc(f, '\\');
-    f = gsputc(f, 'x');
-    f = gsputc(f, g_digits[(c >> 4) & 0xf]);
+    f = gzputc(f, '\\');
+    f = gzputc(f, 'x');
+    f = gzputc(f, g_digits[(c >> 4) & 0xf]);
     c = g_digits[c & 0xf]; }
-   f = gsputc(f, c); }
-  f = gsputc(f, '"'); }
+   f = gzputc(f, c); }
+  f = gzputc(f, '"'); }
  return UM(f), f; }
 
-static g_inline struct g*gsput_sym(struct g*f, word x) {
+
+static g_inline struct g*gzput_sym(struct g*f, word x) {
  MM(f, &x);
  struct g_vec *s = sym(x)->nom;
  if (s && vec_strp(s)) {
   uintptr_t slen = len(s);
   for (uintptr_t i = 0; g_ok(f) && i < slen; i++)
-   f = gsputc(f, txt(sym(x)->nom)[i]); }
- else f = gsprintf(f, "#sym@%x", x);
+   f = gzputc(f, txt(sym(x)->nom)[i]); }
+ else f = gzprintf(f, "#sym@%x", x);
  return UM(f), f; }
 
-static g_inline struct g*gsput_tbl(struct g*f, word x) {
- return gsprintf(f, "#tab@%x:%d/%d", x, tbl(x)->len, tbl(x)->cap); }
+static g_inline struct g*gzput_tbl(struct g*f, word x) {
+ return gzprintf(f, "#tab@%x:%d/%d", x, tbl(x)->len, tbl(x)->cap); }
 
-static struct g *gsputx(struct g *f, intptr_t x) {
- if (nump(x)) return gsprintf(f, "%d", getnum(x));
- if (!datp(x)) return gsprintf(f, "#%lx", (long) x);
+static struct g *gzputx(struct g *f, intptr_t x) {
+ if (nump(x)) return gzprintf(f, "%d", getnum(x));
+ if (!datp(x)) return gzprintf(f, "#%lx", (long) x);
  switch (typ(x)) {
    default: __builtin_trap();
-   case two_q: return gsput_two(f, x);
-   case vec_q: return gsput_vec(f, x);
-   case sym_q: return gsput_sym(f, x);
-   case tbl_q: return gsput_tbl(f, x); } }
+   case two_q: return gzput_two(f, x);
+   case vec_q: return gzput_vec(f, x);
+   case sym_q: return gzput_sym(f, x);
+   case tbl_q: return gzput_tbl(f, x); } }
 
 static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
- return g_ok(f = g_push(f, 2, x, o)) ? g_pop(gsputx(f, pop1(f)), 1) : f; }
+ return g_core_of(f)->out = o, gzputx(f, x); }
 
 struct g *gputx(struct g*f, word x) {
  return gfputx(f, &g_stdout, x); }
@@ -1393,8 +1394,10 @@ static g_vm(g_vm_putc) {
 // (fputc port byte) — write byte to port; return byte.
 static g_vm(g_vm_fputc) {
  if (outpp(Sp[0])) {
+  struct g_out *o = (struct g_out*) Sp[0];
   Pack(f);
-  if (!g_ok(f = ((struct g_out*)f->sp[0])->putc(f, getnum(f->sp[1])))) return f;
+  f->out = o;
+  if (!g_ok(f = zputc(f, getnum(f->sp[1])))) return f;
   Unpack(f); }
  Sp += 1;
  Ip += 1;
@@ -1403,8 +1406,10 @@ static g_vm(g_vm_fputc) {
 // (fflush port) — flush; return the port.
 static g_vm(g_vm_fflush) {
  if (outpp(Sp[0])) {
+  struct g_out *o = (struct g_out*) Sp[0];
   Pack(f);
-  if (!g_ok(f = ((struct g_out*)f->sp[0])->flush(f))) return f;
+  f->out = o;
+  if (!g_ok(f = zflush(f))) return f;
   Unpack(f); }
  Ip += 1;
  return Continue(); }
@@ -1958,12 +1963,6 @@ __attribute__((weak)) bool g_ready(int fd) { (void) fd; return true; }
 __attribute__((weak)) void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
   (void) fds; (void) n; g_sleep(ticks); }
 
-// `extern` keeps C99 from treating this as an inline-definition-only
-// (which would emit no external symbol -- clang's COFF backend on the
-// EFI build takes that literally, and main.c calling g_pop via the
-// inlined g_evals_ in g.h would fail to link). With `extern inline` the
-// body still inlines at call sites in this TU, but an external symbol
-// is also emitted, so callers in other TUs link cleanly.
 extern g_inline struct g *g_pop(struct g*f, uintptr_t n) { return g_core_of(f)->sp += n, f; }
 static g_inline struct g *symof(char const *n, struct g *f) { return intern(g_strof(f, n)); }
 
@@ -1981,10 +1980,9 @@ static word g_tget(struct g *f, word zero, word k, struct g_tab *t) {
  while (e && !eql(f, k, e->key)) e = e->next;
  return e ? e->val : zero; }
 
-static struct g *ggetc(struct g*f)  { return port_getc(f, &g_stdin); }
-struct g *gputc(struct g*f, int c)  { return g_pop(gsputc(g_push(f, 1, &g_stdout), c), 1); }
-static struct g *gflush(struct g*f) { return g_pop(gsflush(g_push(f, 1, &g_stdout)), 1); }
-
+static struct g *ggetc(struct g*f)  { return g_core_of(f)->in = &g_stdin, g_stdin.getc(f); }
+struct g *gputc(struct g*f, int c)  { return g_core_of(f)->out = &g_stdout, g_stdout.putc(f, c); }
+static struct g *gflush(struct g*f) { return g_core_of(f)->out = &g_stdout, g_stdout.flush(f); }
 
 #define topof(f) ((word*)f+f->len)
 

@@ -13,15 +13,9 @@ g_noinline uintptr_t g_clock(void) {
   return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
-// --- host output -----------------------------------------------------
-// write(2) directly to the port's fd — no FILE* / libc stream buffering.
-// _flush is a no-op since every byte hits the fd immediately. Port lives
-// at f->sp[0] per the Phase B pure calling convention; _flush ignores it.
 static struct g *_putc(struct g *f, int c) {
-  struct g *fc = g_core_of(f);
-  struct g_out *o = (struct g_out*) fc->sp[0];
   uint8_t b = c;
-  ssize_t r = write(g_getnum(o->fd), &b, 1);
+  ssize_t r = write(g_getnum(f->out->fd), &b, 1);
   (void) r;
   return f; }
 static struct g *_flush(struct g *f) { return f; }
@@ -74,7 +68,7 @@ void g_wait_fds(int const *fds, int n, uintptr_t ms) {
 
 static struct g *fd_getc(struct g *f) {
   struct g *fc = g_core_of(f);
-  struct g_in *i = (struct g_in*) fc->sp[0];
+  struct g_in *i = f->in;
   if (g_getnum(i->ungetc_buf) != EOF) {
     fc->b = g_getnum(i->ungetc_buf);
     i->ungetc_buf = g_putnum(EOF);
@@ -86,13 +80,13 @@ static struct g *fd_getc(struct g *f) {
   return f; }
 static struct g *fd_ungetc(struct g *f, int c) {
   struct g *fc = g_core_of(f);
-  struct g_in *i = (struct g_in*) fc->sp[0];
+  struct g_in *i = fc->in;
   i->ungetc_buf = g_putnum(c);
   i->eof_seen = g_putnum(false);
   return fc->b = c, f; }
 static struct g *fd_eof(struct g *f) {
   struct g *fc = g_core_of(f);
-  struct g_in *i = (struct g_in*) fc->sp[0];
+  struct g_in *i = fc->in;
   return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
 struct g_in g_stdin = { g_vm_port_in, fd_getc, fd_ungetc, fd_eof,
                                   g_putnum(STDIN_FILENO), g_putnum(EOF), g_putnum(false) };

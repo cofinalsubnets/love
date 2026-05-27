@@ -90,26 +90,14 @@ struct g {
     struct g_kvs {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
-   } *dict, *macro; }; };
-// struct g_in *in;
-// struct g_out *out;
+   } *dict, *macro;
+   union {
+    struct g_in *in;
+    struct g_out *out; }; }; };
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };
 
-// Ports carry a `g_vm_t *ap` header so heap-allocated instances are
-// indistinguishable from static frontend instances at the bif level, and so
-// the GC can route them through `evac_thd` (slot-by-slot, gcp'ing each).
-// All int-shaped fields are stored as tagged numbers (`g_putnum`/`g_getnum`)
-// so that evac_thd's blind gcp never misinterprets a raw int that happens to
-// land in pool range as a heap pointer.
-//
-// Pure calling convention: i/o method pointers take only `struct g*` (plus
-// the byte for putc/ungetc). The receiver port lives at `f->sp[0]` for the
-// duration of the call. Method bodies cast Sp[0] back to their subtype to
-// reach any extension fields (e.g. struct ti / struct to). Method bodies
-// must re-fetch from Sp[0] after any allocating sub-call, since a GC may
-// have moved a heap port.
 struct g_in {
  g_vm_t *ap;
  struct g*(*getc)(struct g*),
@@ -125,20 +113,11 @@ struct g_out {
          *(*flush)(struct g*);
  g_word fd; };            // sink fd; putnum(-1) = data sink (subtype carries the buffer)
 
-// Finalizer record. Three words on the gwen heap, owned by the GC and never
-// traced (no other object points to it; only the f->finalizers chain reaches
-// it). On each GC, the finalizer pass walks this list: for each survivor it
-// bump-allocates a fresh node in to-space with the forwarded pointer; for each
-// dead object it calls fn(p) before discarding the node.
 struct g_finalizer {
  union u *p;
  void (*fn)(void *);
  struct g_finalizer *next; };
 
-// Register a finalizer for p. fn(p) is called from inside GC when p becomes
-// unreachable. Caller must reserve heap space up front: Have(<object words>
-// + 3) before bump-allocating the guarded object, then call g_finalize. The
-// finalizer must not allocate or call back into the runtime.
 struct g *g_finalize(struct g*, union u *p, void (*fn)(void *));
 
 

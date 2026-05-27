@@ -144,7 +144,7 @@ static struct g *_flush(struct g*f) { return fbdraw(), f; }
 // Consumes ungetc_buf first if a byte was pushed back. No EOF on bare
 // metal — the kb queue is endless — so eof_seen stays false.
 static struct g *k_getc(struct g*f) {
-  struct g_in *i = (struct g_in*) g_core_of(f)->sp[0];
+  struct g_in *i = g_core_of(f)->in;
   if (g_getnum(i->ungetc_buf) != EOF) {
     int c = g_getnum(i->ungetc_buf);
     i->ungetc_buf = g_putnum(EOF);
@@ -155,11 +155,11 @@ static struct g *k_getc(struct g*f) {
 // Non-consuming check on the kb queue. No EOF state on bare metal.
 static bool kb_ready(void) { return kkb.qh != kkb.qt; }
 static struct g *k_ungetc(struct g*f, int c) {
-  struct g_in *i = (struct g_in*) g_core_of(f)->sp[0];
+  struct g_in *i = g_core_of(f)->in;
   i->ungetc_buf = g_putnum(c);
   return g_core_of(f)->b = c, f; }
 static struct g *k_eof(struct g*f) {
-  struct g_in *i = (struct g_in*) g_core_of(f)->sp[0];
+  struct g_in *i = g_core_of(f)->in;
   return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
 struct g_in g_stdin = { .ap = g_vm_port_in,
                         .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof,

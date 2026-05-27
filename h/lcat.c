@@ -21,7 +21,7 @@ static struct g *lcat_putc(struct g*f, int c) {
 static struct g* lcat_flush(struct g*f) { fflush(stdout); return f; }
 
 static struct g*lcat_getc(struct g*f) {
-  struct g_in *i = (struct g_in*) g_core_of(f)->sp[0];
+  struct g_in *i = g_core_of(f)->in;
   if (g_getnum(i->ungetc_buf) != EOF) {
     int c = g_getnum(i->ungetc_buf);
     i->ungetc_buf = g_putnum(EOF);
@@ -30,12 +30,12 @@ static struct g*lcat_getc(struct g*f) {
   if (c == EOF) i->eof_seen = g_putnum(true);
   return g_core_of(f)->b = c, f; }
 static struct g* lcat_ungetc(struct g*f, int c) {
-  struct g_in *i = (struct g_in*) g_core_of(f)->sp[0];
+  struct g_in *i = g_core_of(f)->in;
   i->ungetc_buf = g_putnum(c);
   i->eof_seen = g_putnum(false);
   return g_core_of(f)->b = c, f; }
 static struct g* lcat_eof(struct g*f) {
-  struct g_in *i = (struct g_in*) g_core_of(f)->sp[0];
+  struct g_in *i = g_core_of(f)->in;
   return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
 struct g_in g_stdin = { .ap = g_vm_port_in,
                         .getc = lcat_getc, .ungetc = lcat_ungetc, .eof = lcat_eof,
