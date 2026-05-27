@@ -77,10 +77,7 @@ static struct g
  *mktbl(struct g*),
  *intern(struct g*),
  *g_reads(struct g*, struct g_in*, bool),
- *g_read1(struct g*, struct g_in*),
- *port_getc(struct g*, struct g_in*),
- *port_ungetc(struct g*, int, struct g_in*),
- *port_eof(struct g*, struct g_in*);
+ *g_read1(struct g*, struct g_in*);
 static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
 static g_vm(g_vm_gc, uintptr_t);
 static g_vm_t g_vm_kcall,
@@ -310,10 +307,8 @@ static g_vm(g_vm_yieldk) { return
  Pack(f),
  encode(f, g_status_yield); }
 
-static g_inline bool inpp(word x) {
-  return homp(x) && cell(x)->ap == g_vm_port_in; }
-static g_inline bool outpp(word x) {
-  return homp(x) && cell(x)->ap == g_vm_port_out; }
+static g_inline bool inpp(word x) { return homp(x) && cell(x)->ap == g_vm_port_in; }
+static g_inline bool outpp(word x) { return homp(x) && cell(x)->ap == g_vm_port_out; }
 
 struct g *g_eval(struct g *f) {
  f = c0(f, g_vm_yieldk);
@@ -1070,6 +1065,23 @@ static struct g *grbufg(struct g *f) {
   f->sp[0] = (word) o; }
  return f; }
 
+
+static struct g *port_getc(struct g *f, struct g_in *i) {
+  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
+  f = ((struct g_in*) f->sp[0])->getc(f);
+  if (g_ok(f)) f->sp++;
+  return f; }
+static struct g *port_ungetc(struct g *f, int c, struct g_in *i) {
+  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
+  f = ((struct g_in*) f->sp[0])->ungetc(f, c);
+  if (g_ok(f)) f->sp++;
+  return f; }
+static struct g *port_eof(struct g *f, struct g_in *i) {
+  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
+  f = ((struct g_in*) f->sp[0])->eof(f);
+  if (g_ok(f)) f->sp++;
+  return f; }
+
 ////
 /// " the parser "
 //
@@ -1227,17 +1239,20 @@ static g_vm(g_vm_getc) {
  Ip += 1;
  return Continue(); }
 
+static struct g*gsgetc(struct g*f) { return g_ok(f) ? g_in0(f)->getc(f) : f; }
+
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
 // uses the port's own fd.
 static g_vm(g_vm_fgetc) {
- struct g_in *i = (struct g_in*) Sp[0];
- if (!g_ready(getnum(i->fd))) {
-  f->next_wait_fd = getnum(i->fd);
-  return Ap(g_vm_yield_sw, f); }
- Pack(f);
- if (!g_ok(f = port_getc(f, (struct g_in*) f->sp[0]))) return f;
- Unpack(f);
- Sp[0] = putnum(f->b);
+ if (inpp(Sp[0])) {
+   struct g_in *i = (struct g_in*) Sp[0];
+   if (!g_ready(getnum(i->fd))) {
+    f->next_wait_fd = getnum(i->fd);
+    return Ap(g_vm_yield_sw, f); }
+   Pack(f);
+   if (!g_ok(f = gsgetc(f))) return f;
+   Unpack(f);
+   Sp[0] = putnum(f->b); }
  Ip += 1;
  return Continue(); }
 
@@ -1968,22 +1983,6 @@ static word g_tget(struct g *f, word zero, word k, struct g_tab *t) {
  while (e && !eql(f, k, e->key)) e = e->next;
  return e ? e->val : zero; }
 
-static struct g *port_getc(struct g *f, struct g_in *i) {
-  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
-  f = ((struct g_in*) f->sp[0])->getc(f);
-  if (g_ok(f)) f->sp++;
-  return f; }
-static struct g *port_ungetc(struct g *f, int c, struct g_in *i) {
-  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
-  f = ((struct g_in*) f->sp[0])->ungetc(f, c);
-  if (g_ok(f)) f->sp++;
-  return f; }
-static struct g *port_eof(struct g *f, struct g_in *i) {
-  if (!g_ok(f = g_push(f, 1, (word) i))) return f;
-  f = ((struct g_in*) f->sp[0])->eof(f);
-  if (g_ok(f)) f->sp++;
-  return f; }
-
 static struct g *ggetc(struct g*f)  { return port_getc(f, f->in); }
 struct g *gputc(struct g*f, int c)  { return g_pop(gsputc(g_push(f, 1, f->out), c), 1); }
 static struct g *gflush(struct g*f) { return g_pop(gsflush(g_push(f, 1, f->out)), 1); }
@@ -2020,6 +2019,10 @@ static g_vm(g_vm_callk) {
  Sp[1] = f_val;
  return Ap(g_vm_ap, f); }
 
+// g_vm_yield_sw_mono can't call g_wait_fds directly with a stack pointer
+static g_noinline void g_wait_fd(int const fd, int n, uintptr_t ms) {
+  g_wait_fds(&fd, n, ms); }
+
 // monotask fast path
 static g_noinline g_vm(g_vm_yield_sw_mono) {
  uintptr_t my_wake = f->next_wake_at;
@@ -2028,9 +2031,9 @@ static g_noinline g_vm(g_vm_yield_sw_mono) {
  f->next_wait_fd = -1;
  f->yield_ctr = 0;
  if (my_wake) for (uintptr_t now; my_wake > (now = g_clock());)
-  my_wait_fd >= 0 ? g_wait_fds(&my_wait_fd, 1, my_wake - now) : g_sleep(my_wake - now);
+  my_wait_fd >= 0 ? g_wait_fd(my_wait_fd, 1, my_wake - now) : g_sleep(my_wake - now);
  else if (my_wait_fd >= 0)
-  while (!g_ready(my_wait_fd)) g_wait_fds(&my_wait_fd, 1, 0);
+  while (!g_ready(my_wait_fd)) g_wait_fd(my_wait_fd, 1, 0);
  return Continue(); }
 
 // First non-dormant peer in the ring whose wake_at <= now, or NULL.
@@ -2059,44 +2062,44 @@ static g_noinline union u *yield_sw_wait(struct g *f, uintptr_t my_wake, int my_
  return find_runnable(f->tasks, now); }
 
 static g_noinline g_vm(g_vm_yield_sw) {
-  if (f->tasks->m == f->tasks) return Ap(g_vm_yield_sw_mono, f);
-  union u *next = find_runnable(f->tasks, g_clock());
-  uintptr_t my_wake = f->next_wake_at;
-  int my_wait_fd = f->next_wait_fd;
+ if (f->tasks->m == f->tasks) return Ap(g_vm_yield_sw_mono, f);
+ union u *next = find_runnable(f->tasks, g_clock());
+ uintptr_t my_wake = f->next_wake_at;
+ int my_wait_fd = f->next_wait_fd;
+ if (!next) {
+  next = yield_sw_wait(f, my_wake, my_wait_fd);
   if (!next) {
-    next = yield_sw_wait(f, my_wake, my_wait_fd);
-    if (!next) {
-      f->next_wake_at = 0;
-      f->next_wait_fd = -1;
-      if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
-      return Continue(); } }
-  word my_height = topof(f) - Sp;
-  union u *next_stack = next + 5, *end = (union u*) ttag(next_stack);
-  uintptr_t restore_h = end - next_stack,
-            need = my_height + restore_h + 7;
-  if (Sp < Hp + need) {
-   Pack(f);
-   if (!g_ok(f = g_please(f, need))) return f;
-   Unpack(f); }
-  f->next_wake_at = 0;
-  f->next_wait_fd = -1;
-  union u *prev = next;
-  while (prev->m != f->tasks) prev = prev->m;
-  union u *N = (union u*) Hp;
-  Hp += need - restore_h;
-  N[0].m = f->tasks->m;
-  N[1].m = Ip;
-  N[2].x = f->tasks[2].x;
-  N[3].x = putnum((intptr_t) my_wake);
-  N[4].x = putnum(my_wait_fd);
-  memcpy(N + 5, Sp, my_height * sizeof(word));
-  N[5 + my_height].m = NULL;
-  N[6 + my_height].m = prev->m = N;
-  f->yield_ctr = 0;
-  f->tasks = next;
-  Sp = memmove(topof(f) - restore_h, next_stack, restore_h * sizeof(word));
-  Ip = next[1].m;
-  return Continue(); }
+   f->next_wake_at = 0;
+   f->next_wait_fd = -1;
+   if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
+   return Continue(); } }
+ word my_height = topof(f) - Sp;
+ union u *next_stack = next + 5, *end = (union u*) ttag(next_stack);
+ uintptr_t restore_h = end - next_stack,
+           need = my_height + restore_h + 7;
+ if (Sp < Hp + need) {
+  Pack(f);
+  if (!g_ok(f = g_please(f, need))) return f;
+  Unpack(f); }
+ f->next_wake_at = 0;
+ f->next_wait_fd = -1;
+ union u *prev = next;
+ while (prev->m != f->tasks) prev = prev->m;
+ union u *N = (union u*) Hp;
+ Hp += need - restore_h;
+ N[0].m = f->tasks->m;
+ N[1].m = Ip;
+ N[2].x = f->tasks[2].x;
+ N[3].x = putnum((intptr_t) my_wake);
+ N[4].x = putnum(my_wait_fd);
+ memcpy(N + 5, Sp, my_height * sizeof(word));
+ N[5 + my_height].m = NULL;
+ N[6 + my_height].m = prev->m = N;
+ f->yield_ctr = 0;
+ f->tasks = next;
+ Sp = memmove(topof(f) - restore_h, next_stack, restore_h * sizeof(word));
+ Ip = next[1].m;
+ return Continue(); }
 
 static g_vm(g_vm_yield_bif) { return Ip++, Ap(g_vm_yield_sw, f); }
 static g_vm(g_vm_task_exit) { return Ap(g_vm_yield_sw, f); }
