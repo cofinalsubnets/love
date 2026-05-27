@@ -20,6 +20,11 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
 #define MM(f,r) ((g_core_of(f)->root=&((struct g_r){(word*)(r),g_core_of(f)->root})))
 #define UM(f) (g_core_of(f)->root=g_core_of(f)->root->n)
+#define g_in(x) ((struct g_in*)(f))
+#define g_out(x) ((struct g_out*)(f))
+#define g_in0(f) ((struct g_in*)(f)->sp[0])
+#define g_out0(f) ((struct g_out*)(f)->sp[0])
+
 
 #if UINTPTR_MAX > 0xffffffffu
 #define mix ((uintptr_t) 0x9e3779b97f4a7c15) // round(2^64 / phi)
@@ -75,9 +80,7 @@ static struct g
  *g_read1(struct g*, struct g_in*),
  *port_getc(struct g*, struct g_in*),
  *port_ungetc(struct g*, int, struct g_in*),
- *port_eof(struct g*, struct g_in*),
- *port_putc(struct g*, int, struct g_out*),
- *port_flush(struct g*, struct g_out*);
+ *port_eof(struct g*, struct g_in*);
 static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
 static g_vm(g_vm_gc, uintptr_t);
 static g_vm_t g_vm_kcall,
@@ -1198,11 +1201,10 @@ static g_vm(g_vm_read) {
    return Continue(); } }
 
 static g_vm(g_vm_str) {
- uintptr_t n = 0;
- for (word l = Sp[0]; twop(l); l = B(l)) n++;
+ uintptr_t n = llen(Sp[0]);
+ // FIXME use Have instead of Pack/Unpack
  Pack(f);
- f = vec0(f, g_vect_char, 1, n);
- if (!g_ok(f)) return f;
+ if (!g_ok(f = vec0(f, g_vect_char, 1, n))) return f;
  // sp[0] is the new string; sp[1] is the original charlist.
  char *t = txt(f->sp[0]);
  uintptr_t i = 0;
@@ -1263,90 +1265,107 @@ struct g*gputs(struct g*f, char const*s) {
  while (*s) f = gputc(f, *s++);
  return f; }
 
-static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t b) {
- MM(f, (g_word*) &o);
+static struct g*gsflush(struct g*f) { return g_ok(f) ? g_out0(f)->flush(f) : f; }
+static struct g*gsputc(struct g*f, int c) { return g_ok(f) ? g_out0(f)->putc(f, c) : f; }
+static struct g*gsputn(struct g *f, intptr_t n, uint8_t b) {
  uintptr_t
-  m = n >= 0 || b != 10 ? (uintptr_t) n : (f = port_putc(f, '-', o), -(uintptr_t) n),
+  m = n >= 0 || b != 10 ? (uintptr_t) n : (f = gsputc(f, '-'), -(uintptr_t) n),
   q = m / b,
   r = m % b;
- if (q) f = g_putn(f, o, q, b);
- f = port_putc(f, g_digits[r], o);
- UM(f); return f; }
+ if (q) f = gsputn(f, q, b);
+ return gsputc(f, g_digits[r]); }
 
-static struct g*gvfprintf(struct g*f, struct g_out*o, char const *fmt, va_list xs) {
- MM(f, (g_word*) &o);
+static struct g *g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t b) {
+ return g_pop(gsputn(g_push(f, 1, o), n, b), 1); }
+
+static struct g*gvsprintf(struct g*f, char const *fmt, va_list xs) {
  for (int c; (c = *fmt++);) {
-  if (c != '%') f = port_putc(f, c, o);
+  if (c != '%') f = gsputc(f, c);
   else pass: switch ((c = *fmt++)) {
    case 0: goto out;
    case 'l': goto pass;
-   case 'b': f = g_putn(f, o, va_arg(xs, uintptr_t), 2); continue;
-   case 'o': f = g_putn(f, o, va_arg(xs, uintptr_t), 8); continue;
-   case 'd': f = g_putn(f, o, va_arg(xs, uintptr_t), 10); continue;
-   case 'x': f = g_putn(f, o, va_arg(xs, uintptr_t), 16); continue;
-   default: f = port_putc(f, c, o); } }
-out: UM(f); return f; }
+   case 'b': f = gsputn(f, va_arg(xs, uintptr_t), 2); continue;
+   case 'o': f = gsputn(f, va_arg(xs, uintptr_t), 8); continue;
+   case 'd': f = gsputn(f, va_arg(xs, uintptr_t), 10); continue;
+   case 'x': f = gsputn(f, va_arg(xs, uintptr_t), 16); continue;
+   default: f = gsputc(f, c); } } out:
+ return f; }
 
-static struct g*gfprintf(struct g *f, struct g_out *o, char const *fmt, ...) {
+static struct g *gsprintf(struct g *f, char const *fmt, ...) {
  va_list xs;
  va_start(xs, fmt);
- f = gvfprintf(f, o, fmt, xs);
+ f = gvsprintf(f, fmt, xs);
  va_end(xs);
  return f; }
 
-static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
- if (nump(x)) return gfprintf(f, o, "%d", getnum(x));
- if (!datp(x)) return gfprintf(f, o, "#%lx", (long) x);
- MM(f, (g_word*) &o);
- MM(f, (g_word*) &x);
+static struct g *gsputx(struct g *f, intptr_t x);
+static g_inline struct g*gsput_two(struct g*f, word x) {
+ MM(f, &x);
+ struct g_vec *n;
+ if (symp(A(x)) && (n = sym(A(x))->nom) && len(n) == 1 && txt(n)[0] == '`' && twop(B(x))) {
+   f = gsputc(f, '\'');
+   f = gsputx(f, AB(x));
+   goto out; }
+ for (f = gsputc(f, '(');; f = gsputc(f, ' '), x = B(x)) {
+  f = gsputx(f, A(x));
+  if (!twop(B(x))) { f = gsputc(f, ')'); goto out; } }
+out: return UM(f), f; }
+
+static g_inline struct g*gsput_vec(struct g*f, word x) {
+ MM(f, &x);
+ if (!vec_strp(vec(x))) {
+  uintptr_t type = vec(x)->type, rank = vec(x)->rank;
+  f = gsprintf(f, "#vec@%x:%d.%d", vec(x), type, rank);
+  for (uintptr_t i = 0; i < rank && g_ok(f); i++)
+   f = gsprintf(f, ".%d", (intptr_t) vec(x)->shape[i]); }
+ else {
+  uintptr_t slen = len(vec(x));
+  f = gsputc(f, '"');
+  for (uintptr_t i = 0; g_ok(f) && i < slen; i++) {
+   char c = txt(vec(x))[i];
+   if (c == '\\' || c == '"') f = gsputc(f, '\\');
+   else if (c == '\n') f = gsputc(f, '\\'), c = 'n';
+   else if (c == '\t') f = gsputc(f, '\\'), c = 't';
+   else if (c == '\r') f = gsputc(f, '\\'), c = 'r';
+   else if (c == '\0') f = gsputc(f, '\\'), c = '0';
+   else if ((unsigned char) c < 32) {           // other ctl bytes -> \xHH
+    f = gsputc(f, '\\');
+    f = gsputc(f, 'x');
+    f = gsputc(f, g_digits[(c >> 4) & 0xf]);
+    c = g_digits[c & 0xf]; }
+   f = gsputc(f, c); }
+  f = gsputc(f, '"'); }
+ return UM(f), f; }
+
+static g_inline struct g*gsput_sym(struct g*f, word x) {
+ MM(f, &x);
+ struct g_vec *s = sym(x)->nom;
+ if (s && vec_strp(s)) {
+  uintptr_t slen = len(s);
+  for (uintptr_t i = 0; g_ok(f) && i < slen; i++)
+   f = gsputc(f, txt(sym(x)->nom)[i]); }
+ else f = gsprintf(f, "#sym@%x", x);
+ return UM(f), f; }
+
+static g_inline struct g*gsput_tbl(struct g*f, word x) {
+ return gsprintf(f, "#tab@%x:%d/%d", x, tbl(x)->len, tbl(x)->cap); }
+
+static struct g *gsputx(struct g *f, intptr_t x) {
+ if (nump(x)) return gsprintf(f, "%d", getnum(x));
+ if (!datp(x)) return gsprintf(f, "#%lx", (long) x);
  switch (typ(x)) {
    default: __builtin_trap();
-   case two_q: {
-     struct g_vec *n;
-     if (symp(A(x)) && (n = sym(A(x))->nom) && len(n) == 1 && txt(n)[0] == '`' && twop(B(x))) {
-       f = port_putc(f, '\'', o);
-       f = gfputx(f, o, AB(x));
-       goto out; }
-     for (f = port_putc(f, '(', o);; f = port_putc(f, ' ', o), x = B(x)) {
-      f = gfputx(f, o, A(x));
-      if (!twop(B(x))) { f = port_putc(f, ')', o); goto out; } } }
-   case vec_q:
-     if (!vec_strp(vec(x))) {
-      uintptr_t type = vec(x)->type, rank = vec(x)->rank;
-      f = gfprintf(f, o, "#vec@%x:%d.%d", vec(x), type, rank);
-      for (uintptr_t i = 0; i < rank && g_ok(f); i++)
-       f = gfprintf(f, o, ".%d", (intptr_t) vec(x)->shape[i]); }
-     else {
-      uintptr_t slen = len(vec(x));
-      f = port_putc(f, '"', o);
-      for (uintptr_t i = 0; g_ok(f) && i < slen; i++) {
-       char c = txt(vec(x))[i];
-       if (c == '\\' || c == '"') f = port_putc(f, '\\', o);
-       else if (c == '\n') f = port_putc(f, '\\', o), c = 'n';
-       else if (c == '\t') f = port_putc(f, '\\', o), c = 't';
-       else if (c == '\r') f = port_putc(f, '\\', o), c = 'r';
-       else if (c == '\0') f = port_putc(f, '\\', o), c = '0';
-       else if ((unsigned char) c < 32) {           // other ctl bytes -> \xHH
-        f = port_putc(f, '\\', o);
-        f = port_putc(f, 'x', o);
-        f = port_putc(f, g_digits[(c >> 4) & 0xf], o);
-        c = g_digits[c & 0xf]; }
-       f = port_putc(f, c, o); }
-      f = port_putc(f, '"', o); }
-     goto out;
-   case sym_q: {
-     struct g_vec *s = sym(x)->nom;
-     if (s && vec_strp(s)) {
-      uintptr_t slen = len(s);
-      for (uintptr_t i = 0; g_ok(f) && i < slen; i++)
-       f = port_putc(f, txt(sym(x)->nom)[i], o); }
-     else f = gfprintf(f, o, "#sym@%x", x);
-     goto out; }
-   case tbl_q: f = gfprintf(f, o, "#tab@%x:%d/%d", x, tbl(x)->len, tbl(x)->cap); goto out; }
-out: UM(f); UM(f); return f; }
+   case two_q: return gsput_two(f, x);
+   case vec_q: return gsput_vec(f, x);
+   case sym_q: return gsput_sym(f, x);
+   case tbl_q: return gsput_tbl(f, x); } }
+
+static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
+ return g_ok(f = g_push(f, 2, x, o)) ? g_pop(gsputx(f, pop1(f)), 1) : f; }
 
 struct g *gputx(struct g*f, word x) {
- return gfputx(f, f->out, x); }
+ return gfputx(f, g_core_of(f)->out, x); }
+
 struct g *gputn(struct g*f, intptr_t n, uint8_t b) {
   return g_putn(f, f->out, n, b); }
 
@@ -1964,20 +1983,10 @@ static struct g *port_eof(struct g *f, struct g_in *i) {
   f = ((struct g_in*) f->sp[0])->eof(f);
   if (g_ok(f)) f->sp++;
   return f; }
-static struct g *port_putc(struct g *f, int c, struct g_out *o) {
-  if (!g_ok(f = g_push(f, 1, (word) o))) return f;
-  f = ((struct g_out*) f->sp[0])->putc(f, c);
-  if (g_ok(f)) f->sp++;
-  return f; }
-static struct g *port_flush(struct g *f, struct g_out *o) {
-  if (!g_ok(f = g_push(f, 1, (word) o))) return f;
-  f = ((struct g_out*) f->sp[0])->flush(f);
-  if (g_ok(f)) f->sp++;
-  return f; }
 
 static struct g *ggetc(struct g*f)  { return port_getc(f, f->in); }
-struct g *gputc(struct g*f, int c)  { return port_putc(f, c, f->out); }
-static struct g *gflush(struct g*f) { return port_flush(f, f->out); }
+struct g *gputc(struct g*f, int c)  { return g_pop(gsputc(g_push(f, 1, f->out), c), 1); }
+static struct g *gflush(struct g*f) { return g_pop(gsflush(g_push(f, 1, f->out)), 1); }
 
 
 #define topof(f) ((word*)f+f->len)
