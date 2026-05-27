@@ -6,6 +6,7 @@
 #include <time.h>
 #include <poll.h>
 #include <errno.h>
+#include <stdnoreturn.h>
 
 g_noinline uintptr_t g_clock(void) {
   struct timespec ts;
@@ -43,6 +44,7 @@ static void raw_mode(void) {
   tcsetattr(STDIN_FILENO, TCSANOW, &raw); }
   // c_oflag is left alone, so '\n' on output still becomes CR-LF.
 
+static noreturn g_vm(g_vm_exit) { exit(g_getnum(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // Returns only when poll succeeds (data ready / deadline elapsed) or fails
 // for a non-EINTR reason.
@@ -71,15 +73,7 @@ void g_wait_fds(int const *fds, int n, uintptr_t ms) {
   for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
   poll_wait(p, n, ms); }
 
-// --- host input ------------------------------------------------------
-// raw_stdin is the byte source at f->in: non-interactively the parser
-// reads it directly; interactively the gwen line editor (boot.g) reads
-// its keystrokes through it. one byte per getc, delivered in f->b. it
-// never allocates the gwen heap, so f stays valid across a getc.
-// read(2) directly from i->fd — no FILE* / libc stream buffering. ungetc
-// is one byte stashed in i->ungetc_buf; EOF is tracked in i->eof_seen,
-// set when read returns 0 and cleared by ungetc.
-static struct g *raw_getc(struct g *f) {
+static struct g *fd_getc(struct g *f) {
   struct g *fc = g_core_of(f);
   struct g_in *i = (struct g_in*) fc->sp[0];
   if (g_getnum(i->ungetc_buf) != EOF) {
@@ -91,43 +85,38 @@ static struct g *raw_getc(struct g *f) {
   if (n <= 0) { i->eof_seen = g_putnum(true); fc->b = EOF; }
   else fc->b = b;
   return f; }
-static struct g *raw_ungetc(struct g *f, int c) {
+static struct g *fd_ungetc(struct g *f, int c) {
   struct g *fc = g_core_of(f);
   struct g_in *i = (struct g_in*) fc->sp[0];
   i->ungetc_buf = g_putnum(c);
   i->eof_seen = g_putnum(false);
   return fc->b = c, f; }
-static struct g *raw_eof(struct g *f) {
+static struct g *fd_eof(struct g *f) {
   struct g *fc = g_core_of(f);
   struct g_in *i = (struct g_in*) fc->sp[0];
   return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
-static struct g_in raw_stdin = { g_vm_port_in, raw_getc, raw_ungetc, raw_eof,
+static struct g_in raw_stdin = { g_vm_port_in, fd_getc, fd_ungetc, fd_eof,
                                   g_putnum(STDIN_FILENO), g_putnum(EOF), g_putnum(false) };
 struct g_in *g_stdin = &raw_stdin;
+
+static union u const
+ bif_exit[] = {{g_vm_exit}, {g_vm_ret0}};
 
 static char const
 boot[] =
 #include "boot.h"
-,
-repl[] =
 #include "repl.h"
 ,
-  rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))"
+ rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))"
   ;
 // --- main: load the prelude and run the REPL script ------------------
 int main(int argc, char const **argv) {
   struct g *f = g_ini();
-  bool is_repl = isatty(STDIN_FILENO);
-  if (is_repl) raw_mode();                 // interactive: raw tty; the line
-                                           // editor is now pure gwen (boot.g)
+  bool replp = isatty(STDIN_FILENO);
+  if (replp) raw_mode();
   for (; *argv; f = g_strof(f, *argv++));
   for (f = g_push(f, 1, g_nil); argc--; f = gxr(f));
   if (g_ok(f)) {
-    struct g_def d[] = {{"argv", g_pop1(f)}, {0}};
-    f = g_defs(f, d);
-    f = g_evals_(f, boot);
-    f = g_evals_(f, repl);                   // load editor/parser defs
-    f = g_evals_(f, is_repl ? "(repl 0 0)" : rel); }
-  enum g_status s = g_code_of(f);
-  g_fin(f);
-  return s; }
+    struct g_def d[] = {{"exit", (g_word) bif_exit}, {"argv", g_pop1(f)}, {0}};
+    f = g_evals(g_evals_(g_defs(f, d), boot), replp ? "(repl 0 0)" : rel); }
+  return g_fin(f); }

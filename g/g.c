@@ -370,7 +370,6 @@ out:
         Kp[1].x = putnum(i),
         pull(f, c); }
 
-
 static g_inline struct g *pushl(struct g*f) { return intern(g_strof(f, "\\")); }
 static g_inline struct g *pushq(struct g*f) { return intern(g_strof(f, "`")); }
 static g_inline struct g *push0(struct g*f) { return g_push(f, 1, nil); }
@@ -495,7 +494,7 @@ static g_inline bool lambp(struct g *f, word x) {
  return twop(x) && symp(A(x)) && twop(B(x)) &&
   (n = sym(A(x))->nom) && len(n) == 1 && txt(n)[0] == '\\'; }
 
-static g_inline word reverse(word l) {
+static g_inline word rev(word l) {
  word m, n = nil;
  while (twop(l)) m = l, l = B(l), B(m) = n, n = m;
  return n; }
@@ -599,11 +598,11 @@ static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
    if (!g_ok(f)) return forget();
    A(v) = B(d) = pop1(f); }
 
- nom = reverse(nom); // put in literal order
+ nom = rev(nom); // put in literal order
  f = analyze(f, b, exp);
  f = gxl(g_push(f, 2, nil, e = (*b)->stack)); // push function stack rep
  (*b)->stack = g_ok(f) ? pop1(f) : nil;
- for (def = reverse(def); twop(nom); nom = B(nom), def = B(def))
+ for (def = rev(def); twop(nom); nom = B(nom), def = B(def))
   f = analyze(f, b, A(def)),
   f = globp ? c0_ix(f, b, g_vm_defglob, A(nom)) : f,
   f = gxl(g_push(f, 2, A(nom), (*b)->stack)),
@@ -670,7 +669,7 @@ g_noinline struct g *g_evals(struct g*f, char const*s) {
  return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i, false)))))); }
 
 // some libc functions we use
-g_vm(g_vm_tnew) {
+static g_vm(g_vm_tnew) {
  Have(Width(struct g_tab) + 1);
  struct g_tab *t = (struct g_tab*) Hp;
  struct g_kvs **tab = (struct g_kvs**) (t + 1);
@@ -681,7 +680,7 @@ g_vm(g_vm_tnew) {
   Ip++,
   Continue(); }
 
-op11(g_vm_tblp, tblp(Sp[0]) ? putnum(-1) : nil)
+static op11(g_vm_tblp, tblp(Sp[0]) ? putnum(-1) : nil)
 
 // relies on table capacity being a power of 2
 static g_inline uintptr_t index_of_key(struct g *f, struct g_tab *t, intptr_t k) {
@@ -754,18 +753,18 @@ static g_noinline intptr_t gtabdel(struct g *f, struct g_tab *t, intptr_t k, int
  return v; }
 
 static g_vm(g_vm_get) {
-  word z = Sp[0], k = Sp[1], x = Sp[2], n;
-  if (homp(x) && datp(x)) switch (typ(x)) {
-    case tbl_q: z = g_tget(f, z, k, tbl(x)); break;
-    case vec_q:
-      if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(x))
-        z = putnum(txt(x)[n]);
-      break;
-    case two_q:
-      if (nump(k) && (n = getnum(k)) >= 0) {
-       while (n-- && twop(x = B(x)));
-       if (twop(x)) z = A(x); } }
-  return Sp[2] = z, Sp += 2, Ip += 1, Continue(); }
+ word z = Sp[0], k = Sp[1], x = Sp[2], n;
+ if (homp(x) && datp(x)) switch (typ(x)) {
+  case tbl_q: z = g_tget(f, z, k, tbl(x)); break;
+  case vec_q:
+   if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(x))
+    z = putnum(txt(x)[n]);
+   break;
+  case two_q:
+   if (nump(k) && (n = getnum(k)) >= 0) {
+    while (n-- && twop(x = B(x)));
+    if (twop(x)) z = A(x); } }
+ return Sp[2] = z, Sp += 2, Ip += 1, Continue(); }
 
 static g_vm(g_vm_put) {
  if (!tblp(Sp[2])) Sp += 2;
@@ -834,7 +833,6 @@ static uintptr_t hash(struct g *f, intptr_t x) {
     for (uint8_t *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; } } }
 
-
 static op11(g_vm_car, twop(Sp[0]) ? A(Sp[0]) : Sp[0])
 static op11(g_vm_cdr, twop(Sp[0]) ? B(Sp[0]) : nil)
 static op11(g_vm_twop, twop(Sp[0]) ? putnum(-1) : nil)
@@ -848,19 +846,17 @@ static g_vm(g_vm_cons) {
  return Continue(); }
 
 struct g *gxl(struct g *f) {
- f = have(f, Width(struct g_pair));
- if (g_ok(f)) {
+ if (g_ok(f = have(f, Width(struct g_pair)))) {
   struct g_pair *p = bump(f, Width(struct g_pair));
   ini_two(p, f->sp[0], f->sp[1]);
-  *++f->sp = (intptr_t) p; }
+  *++f->sp = (word) p; }
  return f; }
 
 struct g *gxr(struct g *f) {
- f = have(f, Width(struct g_pair));
- if (g_ok(f)) {
+ if (g_ok(f = have(f, Width(struct g_pair)))) {
   struct g_pair *p = bump(f, Width(struct g_pair));
   ini_two(p, f->sp[1], f->sp[0]);
-  *++f->sp = (intptr_t) p; }
+  *++f->sp = (word) p; }
  return f; }
 
 static op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : nil)
@@ -904,7 +900,7 @@ static g_vm(g_vm_scat) {
 
 static size_t const vt_size[] = { [g_vect_u8]  = 1, };
 
-uintptr_t g_vec_bytes(struct g_vec *v) {
+static uintptr_t g_vec_bytes(struct g_vec *v) {
  uintptr_t len = vt_size[v->type],
            rank = v->rank,
            *shape = v->shape;
@@ -1049,7 +1045,6 @@ static  g_noinline struct g_atom *intern_checked(struct g *v, struct g_vec *b) {
   if (i == 0) i = memcmp(txt(a), txt(b), len(b));
   if (i == 0) return z;
   y = i < 0 ? &z->l : &z->r; } }
-
 
 static op11(g_vm_symp, symp(Sp[0]) ? putnum(-1) : nil)
 
@@ -1299,15 +1294,6 @@ static struct g*gfprintf(struct g *f, struct g_out *o, char const *fmt, ...) {
  va_end(xs);
  return f; }
 
-
-
-// MM-protect both `o` and `x` across the embedded port_putc / gfprintf /
-// recursive calls — each of those goes through g_push which can GC.
-// Interior reads into data objects (shape array, string body) re-read
-// from `x` each iteration via vec(x)->shape[i] / txt(vec(x))[i]; gcp can
-// forward `x` itself (heap pointer to start of object) but not raw
-// interior data pointers, since data objects have no ttag for
-// copy_thread to find the head.
 static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
  if (nump(x)) return gfprintf(f, o, "%d", getnum(x));
  if (!datp(x)) return gfprintf(f, o, "#%lx", (long) x);
@@ -1356,7 +1342,7 @@ static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
        f = port_putc(f, txt(sym(x)->nom)[i], o); }
      else f = gfprintf(f, o, "#sym@%x", x);
      goto out; }
-   case tbl_q: f = gfprintf(f, o, "#tab:%d/%d@%x", tbl(x)->len, tbl(x)->cap, x); goto out; }
+   case tbl_q: f = gfprintf(f, o, "#tab@%x:%d/%d", x, tbl(x)->len, tbl(x)->cap); goto out; }
 out: UM(f); UM(f); return f; }
 
 struct g *gputx(struct g*f, word x) {
