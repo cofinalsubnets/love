@@ -125,18 +125,6 @@ struct g_out {
          *(*flush)(struct g*);
  g_word fd; };            // sink fd; putnum(-1) = data sink (subtype carries the buffer)
 
-// Data-sink g_out: writes go to a growable gwen-heap string buf. Symmetric to
-// struct ti on the input side. Caller stack-allocates, g_to_init populates the
-// methods + initial 32-byte vec, and the caller must MM(f, &o.buf) for the
-// lifetime of any GC-prone use between init and harvest. g_to_harvest pushes a
-// fresh exact-sized g_vec onto the value stack.
-struct to {
- struct g_out out;
- struct g_vec *buf;
- uintptr_t i; };
-struct g *g_to_init(struct g *f, struct to *o);
-struct g *g_to_harvest(struct g *f, struct to *o);
-
 // Finalizer record. Three words on the gwen heap, owned by the GC and never
 // traced (no other object points to it; only the f->finalizers chain reaches
 // it). On each GC, the finalizer pass walks this list: for each survivor it

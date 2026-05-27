@@ -94,7 +94,7 @@ static g_vm_t
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
- g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key;
+ g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
 static struct g_vec *ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
@@ -952,51 +952,68 @@ struct g *g_strof(struct g *f, char const *cs) {
  if (g_ok(f)) memcpy(txt(f->sp[0]), cs, len);
  return f; }
 
-// Data-sink g_out methods. Buffer grows by doubling; o->i tracks written bytes,
-// len(o->buf) tracks current capacity. vec0 may GC, so MM the old buf pointer
-// across the allocation so we can memcpy from its (possibly forwarded) bytes.
-// Port (o) lives at f->sp[0]; vec0 pushes a new slot on top, so after the
-// allocation o has shifted to f->sp[1]. In Phase B o is still a C-stack
-// pointer and the cached C local would survive the GC; the re-fetch is
-// kept anyway so this body is ready for Phase C heap ports.
+// Data-sink g_out: a heap-allocated thread (g_vm_port_out discriminator) that
+// extends struct g_out with a growable gwen-heap string buf and a tagged
+// byte-count slot. The `i` slot must be tagged because evac_thd blindly gcps
+// every slot in the thread: an untagged count that happened to land in pool
+// range would be falsely "forwarded".
+struct to {
+ struct g_out out;
+ struct g_vec *buf;
+ g_word i; };
+
+// Buffer grows by doubling; getnum(o->i) is the written byte count,
+// len(o->buf) the current capacity. The port (o) lives at f->sp[0]; vec0
+// pushes the new buf above it, so after the allocation o has shifted to
+// f->sp[1] and may have moved (heap ports), but reading it back through
+// f->sp[1] is safe — gcp forwarded the slot. Re-reading o->buf after vec0
+// gives the forwarded buf (evac_thd walked the port and updated the slot).
 static struct g *to_putc(struct g *f, int c) {
  struct to *o = (struct to*) f->sp[0];
- if (o->i >= len(o->buf)) {
+ uintptr_t i = getnum(o->i);
+ if (i >= len(o->buf)) {
   uintptr_t new_cap = len(o->buf) * 2;
-  MM(f, (g_word*) &o->buf);
   f = vec0(f, g_vect_char, 1, new_cap);
-  UM(f);
   if (!g_ok(f)) return f;
   o = (struct to*) f->sp[1];
   struct g_vec *nb = (struct g_vec*) f->sp[0];
-  memcpy(txt(nb), txt(o->buf), o->i);
+  memcpy(txt(nb), txt(o->buf), i);
   o->buf = nb;
   f->sp++; }
- txt(o->buf)[o->i++] = c;
+ txt(o->buf)[i] = c;
+ o->i = putnum(i + 1);
  return f; }
 static struct g *to_flush(struct g *f) { return f; }
 
-struct g *g_to_init(struct g *f, struct to *o) {
- MM(f, (g_word*) &o);
- f = vec0(f, g_vect_char, 1, 32);
- if (!g_ok(f)) { UM(f); return f; }
+// Heap-allocate a fresh data-sink port. Bumps Width(struct to) + ttag, fills
+// fields, and pushes the port pointer on Sp.
+static struct g *to_alloc(struct g *f) {
+ f = vec0(f, g_vect_char, 1, 32);          // initial buf on Sp[0]
+ if (!g_ok(f)) return f;
+ uintptr_t n = Width(struct to);
+ if (!g_ok(f = have(f, n + Width(struct g_tag)))) return f;
+ union u *k = bump(f, n + Width(struct g_tag));
+ struct to *o = (struct to*) k;
  o->out.ap = g_vm_port_out;
  o->out.putc = to_putc;
  o->out.flush = to_flush;
  o->out.fd = putnum(-1);
- o->buf = (struct g_vec*) f->sp[0];
- o->i = 0;
- f->sp++;
- UM(f);
+ o->buf = (struct g_vec*) f->sp[0];        // adopt the buf
+ o->i = putnum(0);
+ struct g_tag *t = (struct g_tag*) (k + n);
+ t->null = NULL;
+ t->head = k;
+ f->sp[0] = (word) o;                      // replace buf slot with port
  return f; }
 
-struct g *g_to_harvest(struct g *f, struct to *o) {
+// Harvest the bytes written so far into a fresh exact-sized g_vec on top of
+// Sp. The port stays where it was on the value stack.
+static struct g *to_harvest(struct g *f, struct to *o) {
  MM(f, (g_word*) &o);
- MM(f, (g_word*) &o->buf);
- f = vec0(f, g_vect_char, 1, o->i);
- UM(f); UM(f);
+ f = vec0(f, g_vect_char, 1, getnum(o->i));
+ UM(f);
  if (!g_ok(f)) return f;
- memcpy(txt(f->sp[0]), txt(o->buf), o->i);
+ memcpy(txt(f->sp[0]), txt(o->buf), getnum(o->i));
  return f; }
 
 g_vm(g_vm_gensym) {
@@ -1368,6 +1385,24 @@ static g_vm(g_vm_putn) {
 static g_vm(g_vm_dot) {
  Pack(f);
  if (!g_ok(f = gfputx(f, f->out, Sp[0]))) return f;
+ Unpack(f);
+ Ip += 1;
+ return Continue(); }
+
+// (inspect x) -> string. Alloc a heap data-sink, gfputx x into it, harvest.
+// Stack walk:
+//   in:                  Sp = [x, ...]
+//   after to_alloc:      Sp = [port, x, ...]
+//   after gfputx:        Sp = [port, x, ...]  (slots may be forwarded)
+//   after to_harvest:    Sp = [str, port, x, ...]
+//   drop port and x:     Sp = [str, ...]
+static g_vm(g_vm_inspect) {
+ Pack(f);
+ if (!g_ok(f = to_alloc(f))) return f;
+ if (!g_ok(f = gfputx(f, (struct g_out*) f->sp[0], f->sp[1]))) return f;
+ if (!g_ok(f = to_harvest(f, (struct to*) f->sp[0]))) return f;
+ f->sp[2] = f->sp[0];
+ f->sp += 2;
  Unpack(f);
  Ip += 1;
  return Continue(); }
@@ -1825,7 +1860,8 @@ enum g_status g_fin(struct g *f) {
  _(bif_spawn, "spawn", S2(g_vm_spawn)) _(bif_wait, "wait", S1(g_vm_wait)) \
  _(bif_sleep, "sleep", S4(g_vm_sleep)) _(bif_donep, "done?", S1(g_vm_donep)) \
  _(bif_kill, "kill", S1(g_vm_kill)) \
- _(bif_key, "key?", S1(g_vm_key))
+ _(bif_key, "key?", S1(g_vm_key)) \
+ _(bif_inspect, "inspect", S1(g_vm_inspect))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
 #define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
