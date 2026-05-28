@@ -253,7 +253,7 @@ static g_inline struct g*gzput_vec(struct g*f, word x) {
   char buf[32];
   // 7 sig digits is enough for round-trip on f32; 15 for f64.
   int max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
-  int n = g_dtoa((double) *(g_flo_t*) vec_data(x), buf, (int) sizeof buf, max_frac);
+  int n = g_dtoa((double) flo_get(x), buf, (int) sizeof buf, max_frac);
   for (int i = 0; g_ok(f) && i < n; i++) f = gzputc(f, buf[i]);
   return UM(f), f; }
  uintptr_t type = vec(x)->type, rank = vec(x)->rank;

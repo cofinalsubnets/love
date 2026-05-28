@@ -132,6 +132,14 @@ void *malloc(size_t), free(void*),
 long strtol(char const*restrict, char**restrict, int);
 size_t strlen(char const*);
 
+// Boxed scalar float access. The payload lands in `shape[]` (which is
+// typed uintptr_t), so a direct `*(g_flo_t*)` cast trips strict-aliasing.
+// memcpy of a fixed small size compiles to a single load/store.
+static g_inline g_flo_t flo_get(word x) {
+ g_flo_t r; memcpy(&r, vec_data(x), sizeof r); return r; }
+static g_inline void flo_put(void *p, g_flo_t v) {
+ memcpy(p, &v, sizeof v); }
+
 // equality comparisons inline the fast identity check
 g_noinline bool eqv(struct g*, word, word); // this is for checking equality of non-identical values
 static g_inline bool eql(struct g *f, word a, word b) { return a == b || eqv(f, a, b); }

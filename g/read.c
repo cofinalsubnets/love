@@ -192,7 +192,7 @@ g_vm(g_vm_flo) {
  r->typ = vec_q;
  r->type = G_VT_FLO;
  r->rank = 0;
- *(g_flo_t*) r->shape = (g_flo_t) p.d;
+ flo_put(r->shape, (g_flo_t) p.d);
  Sp[0] = word(r);
  Ip += 1;
  return Continue(); }
@@ -239,6 +239,6 @@ static struct g *flo_alloc(struct g *f, g_flo_t v) {
   r->typ = vec_q;
   r->type = G_VT_FLO;
   r->rank = 0;
-  *(g_flo_t*) vec_data(r) = v;
+  flo_put(vec_data(r), v);
   *--f->sp = word(r); }
  return f; }

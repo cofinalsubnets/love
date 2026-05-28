@@ -53,8 +53,8 @@ static g_noinline struct arith_r do_arith(word a, word b, enum arith_op op) {
  // Float path: require both operands numeric.
  if (!(nump(a) || flop(a)) || !(nump(b) || flop(b))) {
   r.isnil = true; return r; }
- g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : *(g_flo_t*) vec_data(a);
- g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : *(g_flo_t*) vec_data(b);
+ g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a);
+ g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : flo_get(b);
  g_flo_t rd = 0;
  switch (op) {
   case AOP_ADD: rd = ad + bd; break;
@@ -78,7 +78,7 @@ static g_noinline struct arith_r do_arith(word a, word b, enum arith_op op) {
  v->typ = vec_q;                                                           \
  v->type = G_VT_FLO;                                                       \
  v->rank = 0;                                                              \
- *(g_flo_t*) v->shape = r.d;                                               \
+ flo_put(v->shape, r.d);                                               \
  Sp[1] = word(v);                                                          \
  Sp += 1; Ip++; return Continue(); }
 
@@ -96,8 +96,8 @@ ARITH_OP(g_vm_rem,  AOP_REM)
  word x;                                                                   \
  if (nump(a) && nump(b)) x = (a c_op b) ? putnum(-1) : nil;                \
  else if ((nump(a) || flop(a)) && (nump(b) || flop(b))) {                  \
-  g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : *(g_flo_t*) vec_data(a);    \
-  g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : *(g_flo_t*) vec_data(b);    \
+  g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a);    \
+  g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : flo_get(b);    \
   x = (ad c_op bd) ? putnum(-1) : nil;                                     \
  } else x = nil;                                                           \
  Sp[1] = x; Sp += 1; Ip++; return Continue(); }
@@ -119,7 +119,7 @@ op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : nil)
 #define MATH1_OP(nom, fn) g_vm(nom) {                                      \
  word a = Sp[0];                                                           \
  if (!nump(a) && !flop(a)) { Sp[0] = nil; Ip++; return Continue(); }       \
- g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : *(g_flo_t*) vec_data(a);     \
+ g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a);     \
  g_flo_t rd = fn(ad);                                                      \
  uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));              \
  Have(req);                                                                \
@@ -129,7 +129,7 @@ op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : nil)
  v->typ = vec_q;                                                           \
  v->type = G_VT_FLO;                                                       \
  v->rank = 0;                                                              \
- *(g_flo_t*) v->shape = rd;                                                \
+ flo_put(v->shape, rd);                                                \
  Sp[0] = word(v);                                                          \
  Ip++; return Continue(); }
 
@@ -137,8 +137,8 @@ op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : nil)
  word a = Sp[0], b = Sp[1];                                                \
  if ((!nump(a) && !flop(a)) || (!nump(b) && !flop(b)))                     \
   { Sp[1] = nil; Sp += 1; Ip++; return Continue(); }                       \
- g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : *(g_flo_t*) vec_data(a);     \
- g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : *(g_flo_t*) vec_data(b);     \
+ g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a);     \
+ g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : flo_get(b);     \
  g_flo_t rd = fn(ad, bd);                                                  \
  uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));              \
  Have(req);                                                                \
@@ -148,7 +148,7 @@ op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : nil)
  v->typ = vec_q;                                                           \
  v->type = G_VT_FLO;                                                       \
  v->rank = 0;                                                              \
- *(g_flo_t*) v->shape = rd;                                                \
+ flo_put(v->shape, rd);                                                \
  Sp[1] = word(v);                                                          \
  Sp += 1; Ip++; return Continue(); }
 

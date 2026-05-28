@@ -30,8 +30,8 @@ g_vm(g_vm_eq) {
  bool eq;
  if (nump(a) && nump(b)) eq = a == b;
  else if ((nump(a) || flop(a)) && (nump(b) || flop(b))) {
-  g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : *(g_flo_t*) vec_data(a);
-  g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : *(g_flo_t*) vec_data(b);
+  g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a);
+  g_flo_t bd = nump(b) ? (g_flo_t) getnum(b) : flo_get(b);
   eq = ad == bd;
  } else eq = eql(f, a, b);
  Sp[1] = eq ? putnum(-1) : nil;
