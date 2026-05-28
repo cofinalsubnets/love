@@ -132,48 +132,105 @@ static void limine_to_kboot(void) {
 #define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 
-// console output goes to the framebuffer when one is present, and is
-// always mirrored to the COM1 serial console.
-static struct g *_putc(struct g*f, int c) {
-  if (kcb) cb_putc(kcb, c);
-  return serial_putc(c), f; }
-static struct g *_flush(struct g*f) { return fbdraw(), f; }
-// the keystroke source the line editor reads: block until a byte is
-// queued, pumping the framebuffer meanwhile so the cursor keeps
-// blinking. it never allocates, so f stays valid across the call.
-// Consumes ungetc_buf first if a byte was pushed back. No EOF on bare
-// metal — the kb queue is endless — so eof_seen stays false.
-static struct g *k_getc(struct g*f) {
-  struct g_io *i = g_core_of(f)->io;
-  if (g_getnum(i->ungetc_buf) != EOF) {
-    int c = g_getnum(i->ungetc_buf);
-    i->ungetc_buf = g_putnum(EOF);
-    return g_core_of(f)->b = c, f; }
+// --- vfs-shaped source table ----------------------------------------------
+// k_sources[] holds per-fd vtables. The kernel's g_fd_port_vt is a thin
+// shim that routes each call through k_sources[fd]. NULL slots mean
+// "no method"; the dispatcher skips them (writes discard, reads return
+// EOF, ready returns false). Per-byte methods today -- P3b/later will
+// add bulk read/write when ramfs/files start needing them. `state` is
+// per-instance scratch (ramfs uses it for the buffer pointer; statics
+// like keyboard/serial leave it null).
+#define K_SOURCES_MAX 32
+
+struct k_source {
+  int  (*getc)(int fd);                 // returns 0..255, -1 = EOF / no data
+  void (*putc)(int fd, int c);
+  void (*flush)(int fd);
+  bool (*ready)(int fd);                // non-blocking probe
+  void (*close)(int fd);                // release per-fd state
+  void *state;
+};
+
+// Slot 0: PS/2 keyboard. Blocks until a byte is queued, pumping the
+// framebuffer in between so the cursor keeps blinking. No EOF on bare
+// metal -- the kb queue is endless -- so the dispatcher's eof_seen
+// latch never trips for slot 0.
+static int kb_getc(int fd) {
+  (void) fd;
   int b;
   while ((b = kqpop()) < 0) fbdraw(), kwait();
-  return g_core_of(f)->b = b, f; }
-// Non-consuming check on the kb queue. No EOF state on bare metal.
-static bool kb_ready(void) { return kkb.qh != kkb.qt; }
-static struct g *k_ungetc(struct g*f, int c) {
-  struct g_io *i = g_core_of(f)->io;
+  return b; }
+static bool kb_ready(int fd) { (void) fd; return kkb.qh != kkb.qt; }
+
+// Slot 1: serial console. Output goes to the framebuffer when one is
+// present and is always mirrored to COM1. Flush triggers a frame draw.
+static void serial_putc1(int fd, int c) {
+  (void) fd;
+  if (kcb) cb_putc(kcb, c);
+  serial_putc(c); }
+static void serial_flush(int fd) { (void) fd; fbdraw(); }
+
+static struct k_source k_sources[K_SOURCES_MAX] = {
+  [0] = { .getc = kb_getc,      .ready = kb_ready    },
+  [1] = { .putc = serial_putc1, .flush = serial_flush },
+};
+
+// Generic kernel dispatchers. ungetc/eof touch only header fields so
+// they're identical across sources; getc/putc/flush route through
+// k_sources[fd]. Bounds-checks and NULL-guards keep misuse from
+// crashing (read-from-output-fd returns EOF; write-to-input-fd discards).
+static struct g *fd_getc(struct g *f) {
+  struct g *fc = g_core_of(f);
+  struct g_io *i = f->io;
+  if (g_getnum(i->ungetc_buf) != EOF) {
+    fc->b = g_getnum(i->ungetc_buf);
+    i->ungetc_buf = g_putnum(EOF);
+    return f; }
+  int fd = g_getnum(i->fd);
+  int c = -1;
+  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].getc)
+    c = k_sources[fd].getc(fd);
+  if (c < 0) { i->eof_seen = g_putnum(true); fc->b = EOF; }
+  else fc->b = c;
+  return f; }
+static struct g *fd_ungetc(struct g *f, int c) {
+  struct g *fc = g_core_of(f);
+  struct g_io *i = fc->io;
   i->ungetc_buf = g_putnum(c);
-  return g_core_of(f)->b = c, f; }
-static struct g *k_eof(struct g*f) {
-  struct g_io *i = g_core_of(f)->io;
-  return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+  i->eof_seen = g_putnum(false);
+  return fc->b = c, f; }
+static struct g *fd_eof(struct g *f) {
+  struct g *fc = g_core_of(f);
+  struct g_io *i = fc->io;
+  return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+static struct g *fd_putc(struct g *f, int c) {
+  int fd = g_getnum(f->io->fd);
+  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].putc)
+    k_sources[fd].putc(fd, c);
+  return f; }
+static struct g *fd_flush(struct g *f) {
+  int fd = g_getnum(f->io->fd);
+  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].flush)
+    k_sources[fd].flush(fd);
+  return f; }
+
 struct g_io g_stdin = { .ap = g_vm_port_io,
                         .fd = g_putnum(0), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+struct g_io g_stdout = { .ap = g_vm_port_io,
+                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 
-// Registry of known kernel sources. Indexed by fd; entries with NULL `ready`
-// are unregistered. Add new drivers by populating a new slot here.
-static struct { bool (*ready)(void); } k_sources[G_WAIT_FDS_MAX] = {
-  [0] = { kb_ready },
-};
+struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
+
+// Override the weak g.c default; route close through k_sources[fd].
+// Statics (stdin/stdout) have NULL close -- nothing to release.
+void g_fd_close(int fd) {
+  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].close)
+    k_sources[fd].close(fd); }
 
 bool g_ready(int fd) {
   if (fd < 0) return true;
-  if (fd >= G_WAIT_FDS_MAX || !k_sources[fd].ready) return false;
-  return k_sources[fd].ready(); }
+  if (fd >= K_SOURCES_MAX || !k_sources[fd].ready) return false;
+  return k_sources[fd].ready(fd); }
 
 // Multi-source wait. ticks=0 means infinite. Future: program a one-shot
 // timer at the deadline instead of waking every tick.
@@ -185,10 +242,6 @@ void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
     if (ticks && kticks >= deadline) return;
     for (int i = 0; i < n; i++) if (g_ready(fds[i])) return;
     kwait(); } }
-struct g_io g_stdout = { .ap = g_vm_port_io,
-                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
-
-struct g_port_vt const g_fd_port_vt = { k_getc, k_ungetc, k_eof, _putc, _flush };
 uintptr_t g_clock(void) { return kticks; }
 
 // Pure time-wait. ticks=0 means infinite (caller is expected to pair with an
