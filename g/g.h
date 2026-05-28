@@ -92,26 +92,30 @@ struct g {
      struct g_kvs *next; } **tab;
    } *dict, *macro;
    union {
-    struct g_in *in;
-    struct g_out *out; }; }; };
+    struct g_io *io; }; }; };
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };
 
-struct g_in {
+// Unified I/O port. Direction is enforced by which slot in `struct g`
+// the port is installed at (`in` vs `out`), not by the type. fd >= 0 is
+// an OS handle (frontend's g_fd_port_vt); fd <= -1 indexes the synthetic
+// vtable table at `-(fd + 1)`. ungetc_buf/eof_seen are read-side state;
+// write-only ports carry but ignore them.
+struct g_io {
  g_vm_t *ap;
- struct g*(*getc)(struct g*),
-         *(*ungetc)(struct g*, int),
-         *(*eof)(struct g*);
- g_word fd;               // source fd; putnum(-1) = data source (always-ready, no backend wait)
- g_word ungetc_buf;       // pushed-back byte; putnum(-1) (EOF) = empty
+ g_word fd;
+ g_word ungetc_buf;       // pushed-back byte; putnum(EOF) = empty
  g_word eof_seen; };      // set by getc on read-returning-0, cleared by ungetc
 
-struct g_out {
- g_vm_t *ap;
- struct g*(*putc)(struct g*, int),
-         *(*flush)(struct g*);
- g_word fd; };            // sink fd; putnum(-1) = data sink (subtype carries the buffer)
+// Port vtable. One shape covers both directions; unused slots in a given
+// port get noop_* stubs (defined in g.c) so dispatch needs no NULL guards.
+struct g_port_vt {
+ struct g*(*getc)(struct g*),
+         *(*ungetc)(struct g*, int),
+         *(*eof)(struct g*),
+         *(*putc)(struct g*, int),
+         *(*flush)(struct g*); };
 
 struct g_fz {
  union u *p;
@@ -134,7 +138,12 @@ static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
  return q + (r ? 1 : 0); }
 
-g_vm_t g_vm_ret0, g_vm_cur, g_vm_port_in, g_vm_port_out;
+g_vm_t g_vm_ret0, g_vm_cur, g_vm_port_io;
+
+// Frontend-provided vtable for ports backed by real OS file descriptors.
+// Used whenever fd >= 0. Synthetic ports (fd <= -1) route through the
+// shared synth table inside g.c instead.
+extern struct g_port_vt const g_fd_port_vt;
 
 uintptr_t g_clock(void); // used by garbage collector
 void g_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
@@ -161,7 +170,7 @@ struct g
  *g_ini_m(g_malloc_t*, g_free_t*),
  *g_eval(struct g*),
  *g_evals(struct g*, const char*),
- *g_read(struct g*, struct g_in*),
+ *g_read(struct g*, struct g_io*),
  *g_feed(struct g*),
  *g_defs(struct g*, struct g_def const*),
  *g_push(struct g*, uintptr_t, ...),
@@ -176,7 +185,6 @@ static g_inline struct g *g_ini(void) {
   return g_ini_m(g_libc_malloc, g_libc_free); }
 static g_inline struct g *g_evals_(struct g *f, char const *s) {
   return g_pop(g_evals(f, s), 1); }
-extern struct g_in g_stdin;
-extern struct g_out g_stdout, g_stderr;
+extern struct g_io g_stdin, g_stdout;
 
 #endif

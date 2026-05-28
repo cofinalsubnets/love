@@ -21,7 +21,7 @@ static struct g *lcat_putc(struct g*f, int c) {
 static struct g* lcat_flush(struct g*f) { fflush(stdout); return f; }
 
 static struct g*lcat_getc(struct g*f) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   if (g_getnum(i->ungetc_buf) != EOF) {
     int c = g_getnum(i->ungetc_buf);
     i->ungetc_buf = g_putnum(EOF);
@@ -30,18 +30,19 @@ static struct g*lcat_getc(struct g*f) {
   if (c == EOF) i->eof_seen = g_putnum(true);
   return g_core_of(f)->b = c, f; }
 static struct g* lcat_ungetc(struct g*f, int c) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   i->ungetc_buf = g_putnum(c);
   i->eof_seen = g_putnum(false);
   return g_core_of(f)->b = c, f; }
 static struct g* lcat_eof(struct g*f) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
-struct g_in g_stdin = { .ap = g_vm_port_in,
-                        .getc = lcat_getc, .ungetc = lcat_ungetc, .eof = lcat_eof,
+struct g_io g_stdin = { .ap = g_vm_port_io,
                         .fd = g_putnum(STDIN_FILENO), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
-struct g_out g_stdout = { .ap = g_vm_port_out,
-                           .putc = lcat_putc, .flush = lcat_flush, .fd = g_putnum(STDOUT_FILENO), };
+struct g_io g_stdout = { .ap = g_vm_port_io,
+                         .fd = g_putnum(STDOUT_FILENO), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+
+struct g_port_vt const g_fd_port_vt = { lcat_getc, lcat_ungetc, lcat_eof, lcat_putc, lcat_flush };
 
 int main(int argc, char const **argv) {
  putc('"', stdout);

@@ -15,11 +15,11 @@ g_noinline uintptr_t g_clock(void) {
 
 static struct g *_putc(struct g *f, int c) {
   uint8_t b = c;
-  ssize_t r = write(g_getnum(f->out->fd), &b, 1);
+  ssize_t r = write(g_getnum(f->io->fd), &b, 1);
   (void) r;
   return f; }
 static struct g *_flush(struct g *f) { return f; }
-struct g_out g_stdout = { g_vm_port_out, _putc, _flush, g_putnum(STDOUT_FILENO) };
+struct g_io g_stdout = { g_vm_port_io, g_putnum(STDOUT_FILENO), g_putnum(EOF), g_putnum(false) };
 
 // --- raw terminal mode -----------------------------------------------
 static struct termios saved_termios;
@@ -68,7 +68,7 @@ void g_wait_fds(int const *fds, int n, uintptr_t ms) {
 
 static struct g *fd_getc(struct g *f) {
   struct g *fc = g_core_of(f);
-  struct g_in *i = f->in;
+  struct g_io *i = f->io;
   if (g_getnum(i->ungetc_buf) != EOF) {
     fc->b = g_getnum(i->ungetc_buf);
     i->ungetc_buf = g_putnum(EOF);
@@ -80,16 +80,17 @@ static struct g *fd_getc(struct g *f) {
   return f; }
 static struct g *fd_ungetc(struct g *f, int c) {
   struct g *fc = g_core_of(f);
-  struct g_in *i = fc->in;
+  struct g_io *i = fc->io;
   i->ungetc_buf = g_putnum(c);
   i->eof_seen = g_putnum(false);
   return fc->b = c, f; }
 static struct g *fd_eof(struct g *f) {
   struct g *fc = g_core_of(f);
-  struct g_in *i = fc->in;
+  struct g_io *i = fc->io;
   return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
-struct g_in g_stdin = { g_vm_port_in, fd_getc, fd_ungetc, fd_eof,
-                                  g_putnum(STDIN_FILENO), g_putnum(EOF), g_putnum(false) };
+struct g_io g_stdin = { g_vm_port_io, g_putnum(STDIN_FILENO), g_putnum(EOF), g_putnum(false) };
+
+struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, _putc, _flush };
 
 static union u const
  bif_exit[] = {{g_vm_exit}, {g_vm_ret0}};

@@ -144,7 +144,7 @@ static struct g *_flush(struct g*f) { return fbdraw(), f; }
 // Consumes ungetc_buf first if a byte was pushed back. No EOF on bare
 // metal — the kb queue is endless — so eof_seen stays false.
 static struct g *k_getc(struct g*f) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   if (g_getnum(i->ungetc_buf) != EOF) {
     int c = g_getnum(i->ungetc_buf);
     i->ungetc_buf = g_putnum(EOF);
@@ -155,14 +155,13 @@ static struct g *k_getc(struct g*f) {
 // Non-consuming check on the kb queue. No EOF state on bare metal.
 static bool kb_ready(void) { return kkb.qh != kkb.qt; }
 static struct g *k_ungetc(struct g*f, int c) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   i->ungetc_buf = g_putnum(c);
   return g_core_of(f)->b = c, f; }
 static struct g *k_eof(struct g*f) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
-struct g_in g_stdin = { .ap = g_vm_port_in,
-                        .getc = k_getc, .ungetc = k_ungetc, .eof = k_eof,
+struct g_io g_stdin = { .ap = g_vm_port_io,
                         .fd = g_putnum(0), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 
 // Registry of known kernel sources. Indexed by fd; entries with NULL `ready`
@@ -186,8 +185,10 @@ void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
     if (ticks && kticks >= deadline) return;
     for (int i = 0; i < n; i++) if (g_ready(fds[i])) return;
     kwait(); } }
-struct g_out g_stdout = { .ap = g_vm_port_out,
-                           .putc = _putc, .flush = _flush, .fd = g_putnum(1), };
+struct g_io g_stdout = { .ap = g_vm_port_io,
+                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+
+struct g_port_vt const g_fd_port_vt = { k_getc, k_ungetc, k_eof, _putc, _flush };
 uintptr_t g_clock(void) { return kticks; }
 
 // Pure time-wait. ticks=0 means infinite (caller is expected to pair with an

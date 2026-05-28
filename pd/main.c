@@ -309,7 +309,7 @@ static g_vm(cur_put) {
 static struct g *_putc(struct g*f, int c) { return cb_putc(kcb, c), f; }
 static struct g* _flush(struct g*f) { return f; }
 static struct g*_getc(struct g*f) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   if (g_getnum(i->ungetc_buf) != EOF) {
     int c = g_getnum(i->ungetc_buf);
     i->ungetc_buf = g_putnum(EOF);
@@ -318,15 +318,20 @@ static struct g*_getc(struct g*f) {
   if (c == EOF) i->eof_seen = g_putnum(true);
   return g_core_of(f)->b = c, f; }
 static struct g* _ungetc(struct g*f, int c) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   i->ungetc_buf = g_putnum(c);
   i->eof_seen = g_putnum(false);
   return g_core_of(f)->b = c, f; }
 static struct g* _eof(struct g*f) {
-  struct g_in *i = g_core_of(f)->in;
+  struct g_io *i = g_core_of(f)->io;
   return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
-struct g_in g_stdin = { .ap = g_vm_port_in,
-                        .getc = _getc, .ungetc = _ungetc, .eof = _eof,
-                        .fd = g_putnum(-1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
-struct g_out g_stdout = { .ap = g_vm_port_out,
-                          .putc = _putc, .flush = _flush, .fd = g_putnum(1), };
+// fd values are nominal here — the playdate I/O goes through cb_getc / cb_putc
+// regardless. We just need fd >= 0 so the dispatcher routes to g_fd_port_vt
+// instead of a synthetic slot. The weak default g_ready returns true
+// unconditionally, so the fd is never poll()ed.
+struct g_io g_stdin = { .ap = g_vm_port_io,
+                        .fd = g_putnum(0), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+struct g_io g_stdout = { .ap = g_vm_port_io,
+                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+
+struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };

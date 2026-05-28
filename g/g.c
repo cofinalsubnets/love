@@ -72,9 +72,9 @@ static struct g
  *g_tput(struct g*),
  *mktbl(struct g*),
  *intern(struct g*),
- *g_reads(struct g*, struct g_in*, bool),
- *g_read1(struct g*, struct g_in*);
-static struct g*g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t base);
+ *g_reads(struct g*, struct g_io*, bool),
+ *g_read1(struct g*, struct g_io*);
+static struct g*g_putn(struct g *f, struct g_io *o, intptr_t n, uint8_t base);
 static g_vm(g_vm_gc, uintptr_t);
 static g_vm_t g_vm_kcall,
  g_vm_data,  g_vm_putn, g_vm_info, g_vm_dot,    g_vm_clock,
@@ -146,11 +146,38 @@ static g_inline uintptr_t rot(uintptr_t x) {
   int const s = sizeof(uintptr_t) * 4; // shift bits = word bits / 2 = sizeof(word) * 4
   return (x << s) | (x >> s); }
 
-static g_inline struct g *zgetc(struct g*f) { return f->in->getc(f); }
-static g_inline struct g *zungetc(struct g*f, int c) { return f->in->ungetc(f, c); }
-static g_inline struct g *zeof(struct g*f) { return f->in->eof(f); }
-static g_inline struct g *zputc(struct g*f, int c) { return f->out->putc(f, c); }
-static g_inline struct g *zflush(struct g*f) { return f->out->flush(f); }
+// --- port dispatch -------------------------------------------------------
+// fd >= 0 routes through g_fd_port_vt (frontend-provided). fd <= -1 indexes
+// the synthetic table. Per-port method pointers no longer live on the port
+// instance; the vtable is selected by fd value.
+static struct g
+ *noop_getc(struct g*),
+ *noop_ungetc(struct g*, int),
+ *noop_eof(struct g*),
+ *noop_putc(struct g*, int),
+ *noop_flush(struct g*),
+ *ti_getc(struct g*),
+ *ti_ungetc(struct g*, int),
+ *ti_eof(struct g*),
+ *to_putc(struct g*, int),
+ *to_flush(struct g*);
+
+static struct g_port_vt const synth[] = {
+ /* fd = -1, ti: read-only string source */
+ { ti_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush },
+ /* fd = -2, to: write-only vec sink   */
+ { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush   },
+};
+
+static g_inline struct g_port_vt const *port_vt(g_word fd_tagged) {
+ intptr_t fd = getnum(fd_tagged);
+ return fd >= 0 ? &g_fd_port_vt : &synth[-(fd + 1)]; }
+
+static g_inline struct g *zgetc(struct g*f)         { return port_vt(f->io->fd)->getc(f); }
+static g_inline struct g *zungetc(struct g*f, int c){ return port_vt(f->io->fd)->ungetc(f, c); }
+static g_inline struct g *zeof(struct g*f)          { return port_vt(f->io->fd)->eof(f); }
+static g_inline struct g *zputc(struct g*f, int c)  { return port_vt(f->io->fd)->putc(f, c); }
+static g_inline struct g *zflush(struct g*f)        { return port_vt(f->io->fd)->flush(f); }
 
 static struct g *c0(struct g *f, g_vm_t *y);
 
@@ -309,8 +336,7 @@ static g_vm(g_vm_yieldk) { return
  Pack(f),
  encode(f, g_status_yield); }
 
-static g_inline bool inpp(word x) { return homp(x) && cell(x)->ap == g_vm_port_in; }
-static g_inline bool outpp(word x) { return homp(x) && cell(x)->ap == g_vm_port_out; }
+static g_inline bool iop(word x) { return homp(x) && cell(x)->ap == g_vm_port_io; }
 
 struct g *g_eval(struct g *f) {
  f = c0(f, g_vm_yieldk);
@@ -639,33 +665,32 @@ g_vm(g_vm_eval) { return
  !g_ok(f) ? f : (Unpack(f),
                  Continue()); }
 
-struct ti { struct g_in in; char const *t; word i; } ;
+struct ti { struct g_io io; char const *t; word i; } ;
 
 static struct g *ti_eof(struct g*f) {
- struct ti *i = (struct ti*) f->in;
- return f->b = (getnum(i->in.ungetc_buf) == EOF) && getnum(i->in.eof_seen), f; }
+ struct ti *i = (struct ti*) f->io;
+ return f->b = (getnum(i->io.ungetc_buf) == EOF) && getnum(i->io.eof_seen), f; }
 
 static struct g *ti_getc(struct g*f) {
- struct ti *i = (struct ti*) f->in;
- if (getnum(i->in.ungetc_buf) != EOF) {
-  int c = getnum(i->in.ungetc_buf);
-  i->in.ungetc_buf = putnum(EOF);
+ struct ti *i = (struct ti*) f->io;
+ if (getnum(i->io.ungetc_buf) != EOF) {
+  int c = getnum(i->io.ungetc_buf);
+  i->io.ungetc_buf = putnum(EOF);
   return f->b = c, f; }
- if (!i->t[i->i]) { i->in.eof_seen = putnum(true); return f->b = EOF, f; }
+ if (!i->t[i->i]) { i->io.eof_seen = putnum(true); return f->b = EOF, f; }
  return f->b = i->t[i->i++], f; }
 
 static struct g *ti_ungetc(struct g*f, int c) {
- struct ti *i = (struct ti*) f->in;
- i->in.ungetc_buf = putnum(c);
- i->in.eof_seen = putnum(false);
+ struct ti *i = (struct ti*) f->io;
+ i->io.ungetc_buf = putnum(c);
+ i->io.eof_seen = putnum(false);
  return f->b = c, f; }
 
 g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
- struct ti i = {{g_vm_port_in, ti_getc, ti_ungetc, ti_eof,
-                 putnum(-1), putnum(EOF), putnum(false)}, t, 0};
+ struct ti i = {{g_vm_port_io, putnum(-1), putnum(EOF), putnum(false)}, t, 0};
  f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i, false)))));
- i.t = s, i.i = 0, i.in.ungetc_buf = putnum(EOF), i.in.eof_seen = putnum(false);
+ i.t = s, i.i = 0, i.io.ungetc_buf = putnum(EOF), i.io.eof_seen = putnum(false);
  return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i, false)))))); }
 
 // some libc functions we use
@@ -946,24 +971,25 @@ struct g *g_strof(struct g *f, char const *cs) {
  if (g_ok(f)) memcpy(txt(f->sp[0]), cs, len);
  return f; }
 
-// Data-sink g_out: a heap-allocated thread (g_vm_port_out discriminator) that
-// extends struct g_out with a growable gwen-heap string buf and a tagged
-// byte-count slot. The `i` slot must be tagged because evac_thd blindly gcps
-// every slot in the thread: an untagged count that happened to land in pool
-// range would be falsely "forwarded".
+// Data-sink port: a heap-allocated thread (g_vm_port_io discriminator) that
+// extends struct g_io with a growable gwen-heap string buf and a tagged
+// byte-count slot. fd = putnum(-2) routes to_putc/to_flush via synth[1].
+// The `i` slot must be tagged because evac_thd blindly gcps every slot in
+// the thread: an untagged count that happened to land in pool range would
+// be falsely "forwarded".
 struct to {
- struct g_out out;
+ struct g_io io;
  struct g_vec *buf;
  g_word i; };
 
 static struct g *to_putc(struct g *f, int c) {
- struct to *o = (struct to*) f->out;
+ struct to *o = (struct to*) f->io;
  uintptr_t i = getnum(o->i);
  if (i >= len(o->buf)) {
   uintptr_t new_cap = len(o->buf) * 2;
   f = vec0(f, g_vect_char, 1, new_cap);
   if (!g_ok(f)) return f;
-  o = (struct to*) f->out;                 // GC may have moved it; f->out is GC-traced
+  o = (struct to*) f->io;                 // GC may have moved it; f->out is GC-traced
   struct g_vec *nb = (struct g_vec*) f->sp[0];
   memcpy(txt(nb), txt(o->buf), i);
   o->buf = nb;
@@ -972,6 +998,19 @@ static struct g *to_putc(struct g *f, int c) {
  o->i = putnum(i + 1);
  return f; }
 static struct g *to_flush(struct g *f) { return f; }
+
+// No-op methods occupy unused vtable slots so dispatch needs no NULL guards.
+// Misuse policy (matches existing bif behavior): reading from a write-only
+// port returns EOF and latches eof_seen; writing to a read-only port
+// silently discards the byte. ungetc on a write-only port ignores the
+// pushed byte (subsequent reads still return EOF via noop_getc).
+static struct g *noop_getc(struct g *f) {
+ g_core_of(f)->io->eof_seen = putnum(true);
+ return f->b = EOF, f; }
+static struct g *noop_ungetc(struct g *f, int c) { (void) c; return f; }
+static struct g *noop_eof(struct g *f) { return f->b = true, f; }
+static struct g *noop_putc(struct g *f, int c) { (void) c; return f; }
+static struct g *noop_flush(struct g *f) { return f; }
 
 // Heap-allocate a fresh data-sink port. Bumps Width(struct to) + ttag, fills
 // fields, and pushes the port pointer on Sp.
@@ -982,10 +1021,10 @@ static struct g *to_alloc(struct g *f) {
  if (!g_ok(f = have(f, n + Width(struct g_tag)))) return f;
  union u *k = bump(f, n + Width(struct g_tag));
  struct to *o = (struct to*) k;
- o->out.ap = g_vm_port_out;
- o->out.putc = to_putc;
- o->out.flush = to_flush;
- o->out.fd = putnum(-1);
+ o->io.ap = g_vm_port_io;
+ o->io.fd = putnum(-2);
+ o->io.ungetc_buf = putnum(EOF);
+ o->io.eof_seen = putnum(false);
  o->buf = (struct g_vec*) f->sp[0];        // adopt the buf
  o->i = putnum(0);
  struct g_tag *t = (struct g_tag*) (k + n);
@@ -1152,8 +1191,8 @@ out_str: UM(f); goto out; } }
 out_atom: UM(f); }
 out: return f; }
 
-static struct g *g_read1(struct g*f, struct g_in *i) {
- return g_core_of(f)->in = i, gzread1(f); }
+static struct g *g_read1(struct g*f, struct g_io *i) {
+ return g_core_of(f)->io = i, gzread1(f); }
 
 static struct g *gzreads(struct g *f, bool nested) {
  intptr_t n = 0;
@@ -1168,8 +1207,8 @@ static struct g *gzreads(struct g *f, bool nested) {
  for (f = push0(f); n--; f = gxr(f));
  return f; }
 
-static struct g *g_reads(struct g *f, struct g_in* i, bool nested) {
- return g_core_of(f)->in = i, gzreads(f, nested); }
+static struct g *g_reads(struct g *f, struct g_io* i, bool nested) {
+ return g_core_of(f)->io = i, gzreads(f, nested); }
 
 // Read one datum, transactionally. On g_status_more (or any non-ok
 // result) the VM stack is rolled back to its pre-parse depth, so a
@@ -1177,7 +1216,7 @@ static struct g *g_reads(struct g *f, struct g_in* i, bool nested) {
 // re-read once more of it arrives. The depth is kept as a word count,
 // not a pointer, because a collection during the parse relocates the
 // stack. The input source (g_in) is untouched -- the caller manages it.
-struct g *g_read(struct g *f, struct g_in *i) {
+struct g *g_read(struct g *f, struct g_io *i) {
  if (!g_ok(f)) return f;
  uintptr_t depth = ((word*) f + f->len) - f->sp;
  f = g_read1(f, i);
@@ -1234,13 +1273,13 @@ static g_vm(g_vm_getc) {
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
 // uses the port's own fd.
 static g_vm(g_vm_fgetc) {
- if (inpp(Sp[0])) {
-   struct g_in *i = (struct g_in*) Sp[0];
+ if (iop(Sp[0])) {
+   struct g_io *i = (struct g_io*) Sp[0];
    if (!g_ready(getnum(i->fd))) {
     f->next_wait_fd = getnum(i->fd);
     return Ap(g_vm_yield_sw, f); }
    Pack(f);
-   f->in = i;
+   f->io = i;
    if (!g_ok(f = zgetc(f))) return f;
    Unpack(f);
    Sp[0] = putnum(f->b); }
@@ -1249,10 +1288,10 @@ static g_vm(g_vm_fgetc) {
 
 // (fungetc port byte) — push back one byte, return the byte.
 static g_vm(g_vm_fungetc) {
- if (inpp(Sp[0])) {
-  struct g_in *i = (struct g_in*) Sp[0];
+ if (iop(Sp[0])) {
+  struct g_io *i = (struct g_io*) Sp[0];
   Pack(f);
-  f->in = i;
+  f->io = i;
   if (!g_ok(f = zungetc(f, getnum(f->sp[1])))) return f;
   Unpack(f); }
  Sp += 1;
@@ -1261,10 +1300,10 @@ static g_vm(g_vm_fungetc) {
 
 // (feof port) — -1 if at end of stream, nil otherwise.
 static g_vm(g_vm_feof) {
- if (inpp(Sp[0])) {
-  struct g_in *i = (struct g_in*) Sp[0];
+ if (iop(Sp[0])) {
+  struct g_io *i = (struct g_io*) Sp[0];
   Pack(f);
-  f->in = i;
+  f->io = i;
   if (!g_ok(f = zeof(f))) return f;
   Unpack(f);
   Sp[0] = f->b ? putnum(-1) : nil; }
@@ -1275,7 +1314,7 @@ struct g*gputs(struct g*f, char const*s) {
  while (*s) f = gputc(f, *s++);
  return f; }
 
-static struct g*gzputc(struct g*f, int c) { return g_ok(f) ? f->out->putc(f, c) : f; }
+static struct g*gzputc(struct g*f, int c) { return g_ok(f) ? port_vt(f->io->fd)->putc(f, c) : f; }
 
 static struct g*gzputn(struct g *f, intptr_t n, uint8_t b) {
  uintptr_t
@@ -1285,8 +1324,8 @@ static struct g*gzputn(struct g *f, intptr_t n, uint8_t b) {
  if (q) f = gzputn(f, q, b);
  return gzputc(f, g_digits[r]); }
 
-static struct g *g_putn(struct g *f, struct g_out *o, intptr_t n, uint8_t b) {
- g_core_of(f)->out = o;
+static struct g *g_putn(struct g *f, struct g_io *o, intptr_t n, uint8_t b) {
+ g_core_of(f)->io = o;
  return gzputn(f, n, b); }
 
 static struct g*gvzprintf(struct g*f, char const *fmt, va_list xs) {
@@ -1375,8 +1414,8 @@ static struct g *gzputx(struct g *f, intptr_t x) {
    case sym_q: return gzput_sym(f, x);
    case tbl_q: return gzput_tbl(f, x); } }
 
-static struct g *gfputx(struct g *f, struct g_out *o, intptr_t x) {
- return g_core_of(f)->out = o, gzputx(f, x); }
+static struct g *gfputx(struct g *f, struct g_io *o, intptr_t x) {
+ return g_core_of(f)->io = o, gzputx(f, x); }
 
 struct g *gputx(struct g*f, word x) {
  return gfputx(f, &g_stdout, x); }
@@ -1393,10 +1432,10 @@ static g_vm(g_vm_putc) {
 
 // (fputc port byte) — write byte to port; return byte.
 static g_vm(g_vm_fputc) {
- if (outpp(Sp[0])) {
-  struct g_out *o = (struct g_out*) Sp[0];
+ if (iop(Sp[0])) {
+  struct g_io *o = (struct g_io*) Sp[0];
   Pack(f);
-  f->out = o;
+  f->io = o;
   if (!g_ok(f = zputc(f, getnum(f->sp[1])))) return f;
   Unpack(f); }
  Sp += 1;
@@ -1405,10 +1444,10 @@ static g_vm(g_vm_fputc) {
 
 // (fflush port) — flush; return the port.
 static g_vm(g_vm_fflush) {
- if (outpp(Sp[0])) {
-  struct g_out *o = (struct g_out*) Sp[0];
+ if (iop(Sp[0])) {
+  struct g_io *o = (struct g_io*) Sp[0];
   Pack(f);
-  f->out = o;
+  f->io = o;
   if (!g_ok(f = zflush(f))) return f;
   Unpack(f); }
  Ip += 1;
@@ -1450,7 +1489,7 @@ static g_vm(g_vm_dot) {
 static g_vm(g_vm_inspect) {
  Pack(f);
  if (!g_ok(f = to_alloc(f))) return f;
- if (!g_ok(f = gfputx(f, (struct g_out*) f->sp[0], f->sp[1]))) return f;
+ if (!g_ok(f = gfputx(f, (struct g_io*) f->sp[0], f->sp[1]))) return f;
  if (!g_ok(f = to_harvest(f, (struct to*) f->sp[0]))) return f;
  f->sp[2] = f->sp[0];
  f->sp += 2;
@@ -1554,13 +1593,11 @@ static g_vm(g_vm_data) {
  *Sp = x;
  return Continue(); }
 
-g_vm(g_vm_port_in) {
- word x = word(Ip);
- Ip = cell(*++Sp);
- *Sp = x;
- return Continue(); }
-
-g_vm(g_vm_port_out) {
+// Single unified port discriminator. Behaviorally identical to g_vm_data
+// (capture self, pop one, return self) but a distinct symbol so the GC's
+// `datp` check routes ports through evac_thd (thread walker) rather than
+// evac_data.
+g_vm(g_vm_port_io) {
  word x = word(Ip);
  Ip = cell(*++Sp);
  *Sp = x;
@@ -1982,9 +2019,9 @@ static word g_tget(struct g *f, word zero, word k, struct g_tab *t) {
  while (e && !eql(f, k, e->key)) e = e->next;
  return e ? e->val : zero; }
 
-static struct g *ggetc(struct g*f)  { return g_core_of(f)->in = &g_stdin, g_stdin.getc(f); }
-struct g *gputc(struct g*f, int c)  { return g_core_of(f)->out = &g_stdout, g_stdout.putc(f, c); }
-static struct g *gflush(struct g*f) { return g_core_of(f)->out = &g_stdout, g_stdout.flush(f); }
+static struct g *ggetc(struct g*f)  { return g_core_of(f)->io = &g_stdin, port_vt(g_stdin.fd)->getc(f); }
+struct g *gputc(struct g*f, int c)  { return g_core_of(f)->io = &g_stdout, port_vt(g_stdout.fd)->putc(f, c); }
+static struct g *gflush(struct g*f) { return g_core_of(f)->io = &g_stdout, port_vt(g_stdout.fd)->flush(f); }
 
 #define topof(f) ((word*)f+f->len)
 
