@@ -80,7 +80,7 @@ static struct g*g_putn(struct g *f, struct g_io *o, intptr_t n, uint8_t base);
 static g_vm(g_vm_gc, uintptr_t);
 static g_vm_t g_vm_kcall,
  g_vm_data,  g_vm_putn, g_vm_info, g_vm_dot,    g_vm_clock,
- g_vm_nilp,  g_vm_symnom, g_vm_read,   g_vm_putc, g_vm_gensym, g_vm_twop,
+ g_vm_nilp,  g_vm_symnom,              g_vm_putc, g_vm_gensym, g_vm_twop,
  g_vm_len, g_vm_get,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
  g_vm_sin, g_vm_cos, g_vm_tan, g_vm_atan, g_vm_atan2,
@@ -97,7 +97,7 @@ static g_vm_t g_vm_kcall,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
- g_vm_parsecl;
+ g_vm_fread, g_vm_strin;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g_str *ini_str(struct g_str*, uintptr_t);
 static struct g *str0(struct g*, uintptr_t);
@@ -1445,21 +1445,46 @@ struct g *g_read(struct g *f, struct g_io *i) {
  return f; }
 
 
-static g_vm(g_vm_read) {
- switch (Pack(f), g_code_of(f = g_read1(f, &g_stdin))) {
-  default: return f;
-  case g_status_more:   // not enough input yet -- treat as nothing read
+// (fread port e) — read one datum from `port`. On success returns the
+// datum. On clean EOF returns `e` (the caller-supplied sentinel). On
+// g_status_more (EOF reached inside an unfinished form) returns the port
+// itself — distinct from `e`, so callers like the REPL editor can tell
+// "this charlist parses to nothing" apart from "this charlist is mid-form,
+// keep editing." `(: read (fread in))` in boot.g recovers the old single-
+// arg `read` for stdin. Misuse (non-port at Sp[0]) leaves `e` in place.
+static g_vm(g_vm_fread) {
+ if (!iop(Sp[0])) { Sp += 1; Ip += 1; return Continue(); }
+ struct g_io *i = (struct g_io*) Sp[0];
+ Pack(f);
+ f = g_read(f, i);
+ if (g_ok(f)) {
+  // Sp[0]=datum, Sp[1]=port, Sp[2]=e. Want top=datum, consume 2.
+  f->sp[2] = f->sp[0];
+  f->sp += 2;
+ } else switch (g_code_of(f)) {
   case g_status_eof:
-   f = g_core_of(f); // nothing to read
-   Unpack(f);
-   Ip += 1;
-   return Continue();
-  case g_status_ok:
-   Unpack(f);
-   Sp[1] = Sp[0];
-   Sp += 1;
-   Ip += 1;
-   return Continue(); } }
+   f = g_core_of(f);
+   f->sp += 1;                                   // pop port; top = e
+   break;
+  case g_status_more:
+   f = g_core_of(f);
+   f->sp[1] = f->sp[0];                          // e := port; pop one
+   f->sp += 1;
+   break;
+  default: return f; }                           // propagate other errors
+ Unpack(f);
+ Ip += 1;
+ return Continue(); }
+
+// (strin cl) — make a read-only synth port (fd=-4, ci) whose getc walks
+// the charlist `cl`. The port stays live on the gwen heap and is GC-
+// traced; its `head` slot is updated each getc.
+static g_vm(g_vm_strin) {
+ Pack(f);
+ if (!g_ok(f = ci_alloc(f))) return f;
+ Unpack(f);
+ Ip += 1;
+ return Continue(); }
 
 static g_vm(g_vm_str) {
  uintptr_t n = llen(Sp[0]);
@@ -1472,36 +1497,6 @@ static g_vm(g_vm_str) {
  for (word l = f->sp[1]; twop(l); l = B(l)) t[i++] = (char) getnum(A(l));
  f->sp[1] = f->sp[0];
  f->sp += 1;
- Unpack(f);
- Ip += 1;
- return Continue(); }
-
-// (parsecl cl) — parse a charlist as a sequence of source datums via the
-// C reader. Returns (more? . datums): more? is -1 if the input ends inside
-// an unfinished form (open list, dangling quote, unterminated string),
-// nil otherwise; datums is the list of parsed forms (nil if empty input).
-// On g_status_more the partial-parse residue is rolled back via the saved
-// depth, matching g_read's transactional reset.
-static g_vm(g_vm_parsecl) {
- Pack(f);
- if (!g_ok(f = ci_alloc(f))) return f;
- uintptr_t depth = ((word*) f + f->len) - f->sp;
- f = g_reads(f, (struct g_io*) f->sp[0], false);
- struct g *c = g_core_of(f);
- enum g_status s = g_code_of(f);
- if (s == g_status_more) {
-  c->sp = (word*) c + c->len - depth;            // discard the partial parse
-  c->sp[0] = nil;                                 // cdr (port slot reused)
-  if (!g_ok(c = g_push(c, 1, putnum(-1)))) return c;  // car: truthy "more"
-  if (!g_ok(c = gxl(c))) return c;                // (more . nil)
- } else if (s == g_status_ok) {
-  // Sp[0] = datums, Sp[1] = port
-  if (!g_ok(c = g_push(c, 1, nil))) return c;
-  if (!g_ok(c = gxl(c))) return c;                // (nil . datums)
-  c->sp[1] = c->sp[0];                            // drop the port slot
-  c->sp += 1;
- } else return f;                                 // propagate other errors
- f = c;
  Unpack(f);
  Ip += 1;
  return Continue(); }
@@ -2377,8 +2372,8 @@ enum g_status g_fin(struct g *f) {
  _(bif_cons, "X", S2(g_vm_cons)) _(bif_car, "A", S1(g_vm_car)) _(bif_cdr, "B", S1(g_vm_cdr)) \
  _(bif_cons2, "cons", S2(g_vm_cons)) _(bif_car2, "car", S1(g_vm_car)) _(bif_cdr2, "cdr", S1(g_vm_cdr)) \
  _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
- _(bif_dot, ".", S1(g_vm_dot)) _(bif_read, "read", S1(g_vm_read)) _(bif_getc, "getc", S1(g_vm_getc))\
- _(bif_str, "str", S1(g_vm_str)) _(bif_parsecl, "parsecl", S1(g_vm_parsecl))\
+ _(bif_dot, ".", S1(g_vm_dot)) _(bif_fread, "fread", S2(g_vm_fread)) _(bif_getc, "getc", S1(g_vm_getc))\
+ _(bif_str, "str", S1(g_vm_str)) _(bif_strin, "strin", S1(g_vm_strin))\
  _(bif_putc, "putc", S1(g_vm_putc)) _(bif_prn, "putn", S2(g_vm_putn)) _(bif_puts, "puts", S1(g_vm_puts))\
  _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\

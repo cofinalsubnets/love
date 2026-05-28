@@ -20,7 +20,8 @@
      cadar ABA caddr ABB
      cdaar BAA cdadr BAB
      cddar BBA cdddr BBB
-     inc (+ 1) dec (+ -1) (:: a b) (put a b macros))
+     inc (+ 1) dec (+ -1) (:: a b) (put a b macros)
+     read (fread in))
   (: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
      (foldl z f l) (? (twop l) (foldl (f z (car l)) f (cdr l)) z)
      (foldr z f l) (? (twop l) (f (car l) (foldr z f (cdr l))) z))

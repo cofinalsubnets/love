@@ -26,11 +26,11 @@
   (= 3 (len "a\0b"))         (= "a\0b" (str (X 97 (X 0  (X 98 0)))))
   (= 3 (len "a\x42b"))       (= "a\x42b" (str (X 97 (X 66 (X 98 0))))))
 
-; --- charlist port path: feed the C reader a charlist of `"..."` source.
-; this round-trips through ci_getc, which is the editor's submit path.
+; --- charlist port path: feed the C reader a charlist of `"..."` source
+; through the ci synth port (the editor's submit path).
 (:
  ; chars-of-source-with-quotes -> the parsed datum.
- (parse cl) (car (cdr (parsecl cl)))
+ (parse cl) (fread (strin cl) 0)
  (assert
    (= (str (X 10 0))                   (parse '(34 92 110 34)))   ; "\n"
    (= (str (X 9 0))                    (parse '(34 92 116 34)))   ; "\t"

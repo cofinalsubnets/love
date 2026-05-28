@@ -1,11 +1,12 @@
 ; the read-eval-print loop and its multi-line line editor. loaded after
 ; boot.g by the interactive frontends (host and kernel).
 ;
-; parsing is delegated to the C reader via the `parsecl` bif: the editor's
-; flattened charlist becomes a synthetic input port (fd=-4, ci) whose getc
-; walks the spine, and (parsecl cl) returns (more? . datums) -- more? is
-; truthy if the input ends inside an unfinished form, otherwise datums is
-; the list of parsed forms (nil if empty).
+; parsing is delegated to the C reader: the editor's flattened charlist
+; becomes a synthetic input port via (strin cl), and (fread port e) walks
+; it one datum at a time. fread returns the datum on success, the
+; sentinel `e` on clean EOF, and the port itself on g_status_more (input
+; ends inside an unfinished form). that lets parseall distinguish "all
+; done" from "keep editing".
 ;
 ; the editor buffer is a four-zipper threaded positionally through
 ; the editor functions: u (lines above the cursor, reversed), l (chars
@@ -30,8 +31,13 @@
    ; if the input ends inside an unfinished form; otherwise the (possibly
    ; empty) list of parsed datums.
    (parseall cl)
-     (: r (parsecl cl)
-        (? (car r) m (cdr r)))
+     (: p (strin cl)
+        (loop acc)
+          (: r (fread p eofsym)
+             (? (= r p)      m                 ; port == port: g_status_more
+                (= r eofsym) (revcat acc 0)    ; clean EOF: emit in source order
+                (loop (cons r acc))))
+        (loop 0))
 
    ; --- editor ---
 
