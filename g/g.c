@@ -96,7 +96,8 @@ static g_vm_t g_vm_kcall,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
- g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush;
+ g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
+ g_vm_parsecl;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g_str *ini_str(struct g_str*, uintptr_t);
 static struct g *str0(struct g*, uintptr_t);
@@ -174,6 +175,7 @@ static struct g
  *ti_getc(struct g*),
  *ti_ungetc(struct g*, int),
  *ti_eof(struct g*),
+ *ci_getc(struct g*),
  *to_putc(struct g*, int),
  *to_flush(struct g*);
 
@@ -184,15 +186,22 @@ static struct g_port_vt const synth[] = {
  { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush   },
  /* fd = -3, closed port (post-close)  */
  { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush },
+ /* fd = -4, ci: read-only charlist source -- ungetc/eof read only the g_io
+    fields, so ti_ungetc/ti_eof work unchanged here. */
+ { ci_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush },
 };
 
 static g_inline struct g_port_vt const *port_vt(g_word fd_tagged) {
  intptr_t fd = getnum(fd_tagged);
  return fd >= 0 ? &g_fd_port_vt : &synth[-(fd + 1)]; }
 
-static g_inline struct g *zgetc(struct g*f)         { return port_vt(f->io->fd)->getc(f); }
-static g_inline struct g *zungetc(struct g*f, int c){ return port_vt(f->io->fd)->ungetc(f, c); }
-static g_inline struct g *zeof(struct g*f)          { return port_vt(f->io->fd)->eof(f); }
+// Threaded-error pattern: passing a non-ok f through. gzputc already
+// does this; the read-side ports need it too because gzreads(false)'s
+// loop can call g_z_getc on a f that gzread1 just returned g_status_more
+// through (e.g. parsecl on incomplete input).
+static g_inline struct g *zgetc(struct g*f)         { return g_ok(f) ? port_vt(f->io->fd)->getc(f) : f; }
+static g_inline struct g *zungetc(struct g*f, int c){ return g_ok(f) ? port_vt(f->io->fd)->ungetc(f, c) : f; }
+static g_inline struct g *zeof(struct g*f)          { return g_ok(f) ? port_vt(f->io->fd)->eof(f) : f; }
 static g_inline struct g *zputc(struct g*f, int c)  { return port_vt(f->io->fd)->putc(f, c); }
 static g_inline struct g *zflush(struct g*f)        { return port_vt(f->io->fd)->flush(f); }
 
@@ -702,6 +711,42 @@ static struct g *ti_ungetc(struct g*f, int c) {
  i->io.ungetc_buf = putnum(c);
  i->io.eof_seen = putnum(false);
  return f->b = c, f; }
+
+// Charlist-backed read-only port. `head` is a tagged pair pointer (or nil)
+// into the gwen heap; getc walks the spine by tail-replacing it. The port
+// itself lives on the gwen heap so the GC traces `head` as a regular thread
+// slot (evac_thd walks every word up to the ttag).
+struct ci { struct g_io io; g_word head; };
+
+static struct g *ci_getc(struct g *f) {
+ struct ci *i = (struct ci*) f->io;
+ if (getnum(i->io.ungetc_buf) != EOF) {
+  int c = getnum(i->io.ungetc_buf);
+  i->io.ungetc_buf = putnum(EOF);
+  return f->b = c, f; }
+ if (!twop(i->head)) { i->io.eof_seen = putnum(true); return f->b = EOF, f; }
+ int c = getnum(A(i->head));
+ i->head = B(i->head);
+ return f->b = c, f; }
+
+// Heap-allocate a ci port. Expects the charlist on Sp[0]; on return Sp[0]
+// holds the port (the charlist is preserved inside port->head). Same shape
+// as to_alloc / g_io_alloc.
+static struct g *ci_alloc(struct g *f) {
+ uintptr_t n = Width(struct ci);
+ if (!g_ok(f = have(f, n + Width(struct g_tag)))) return f;
+ union u *k = bump(f, n + Width(struct g_tag));
+ struct ci *i = (struct ci*) k;
+ i->io.ap = g_vm_port_io;
+ i->io.fd = putnum(-4);
+ i->io.ungetc_buf = putnum(EOF);
+ i->io.eof_seen = putnum(false);
+ i->head = f->sp[0];
+ struct g_tag *t = (struct g_tag*) (k + n);
+ t->null = NULL;
+ t->head = k;
+ f->sp[0] = (word) i;
+ return f; }
 
 g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
@@ -1427,6 +1472,36 @@ static g_vm(g_vm_str) {
  for (word l = f->sp[1]; twop(l); l = B(l)) t[i++] = (char) getnum(A(l));
  f->sp[1] = f->sp[0];
  f->sp += 1;
+ Unpack(f);
+ Ip += 1;
+ return Continue(); }
+
+// (parsecl cl) — parse a charlist as a sequence of source datums via the
+// C reader. Returns (more? . datums): more? is -1 if the input ends inside
+// an unfinished form (open list, dangling quote, unterminated string),
+// nil otherwise; datums is the list of parsed forms (nil if empty input).
+// On g_status_more the partial-parse residue is rolled back via the saved
+// depth, matching g_read's transactional reset.
+static g_vm(g_vm_parsecl) {
+ Pack(f);
+ if (!g_ok(f = ci_alloc(f))) return f;
+ uintptr_t depth = ((word*) f + f->len) - f->sp;
+ f = g_reads(f, (struct g_io*) f->sp[0], false);
+ struct g *c = g_core_of(f);
+ enum g_status s = g_code_of(f);
+ if (s == g_status_more) {
+  c->sp = (word*) c + c->len - depth;            // discard the partial parse
+  c->sp[0] = nil;                                 // cdr (port slot reused)
+  if (!g_ok(c = g_push(c, 1, putnum(-1)))) return c;  // car: truthy "more"
+  if (!g_ok(c = gxl(c))) return c;                // (more . nil)
+ } else if (s == g_status_ok) {
+  // Sp[0] = datums, Sp[1] = port
+  if (!g_ok(c = g_push(c, 1, nil))) return c;
+  if (!g_ok(c = gxl(c))) return c;                // (nil . datums)
+  c->sp[1] = c->sp[0];                            // drop the port slot
+  c->sp += 1;
+ } else return f;                                 // propagate other errors
+ f = c;
  Unpack(f);
  Ip += 1;
  return Continue(); }
@@ -2303,7 +2378,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_cons2, "cons", S2(g_vm_cons)) _(bif_car2, "car", S1(g_vm_car)) _(bif_cdr2, "cdr", S1(g_vm_cdr)) \
  _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
  _(bif_dot, ".", S1(g_vm_dot)) _(bif_read, "read", S1(g_vm_read)) _(bif_getc, "getc", S1(g_vm_getc))\
- _(bif_str, "str", S1(g_vm_str))\
+ _(bif_str, "str", S1(g_vm_str)) _(bif_parsecl, "parsecl", S1(g_vm_parsecl))\
  _(bif_putc, "putc", S1(g_vm_putc)) _(bif_prn, "putn", S2(g_vm_putn)) _(bif_puts, "puts", S1(g_vm_puts))\
  _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\

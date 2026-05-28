@@ -1,12 +1,11 @@
-; the read-eval-print loop, its parser, and its multi-line line editor.
-; loaded after boot.g by the interactive frontends (host and kernel).
+; the read-eval-print loop and its multi-line line editor. loaded after
+; boot.g by the interactive frontends (host and kernel).
 ;
-; the parser is pure gwen: read1 walks a charlist and returns
-; (value . rest) on success, e on no-datum (top-level EOF or stray
-; closing paren), m on incomplete input (open list, dangling quote,
-; unterminated string). numbers are signed decimal with an optional
-; 0x/0X prefix for hex; octals are not special. the C `str` builtin
-; materializes symbol names and string literals from charlists.
+; parsing is delegated to the C reader via the `parsecl` bif: the editor's
+; flattened charlist becomes a synthetic input port (fd=-4, ci) whose getc
+; walks the spine, and (parsecl cl) returns (more? . datums) -- more? is
+; truthy if the input ends inside an unfinished form, otherwise datums is
+; the list of parsed forms (nil if empty).
 ;
 ; the editor buffer is a four-zipper threaded positionally through
 ; the editor functions: u (lines above the cursor, reversed), l (chars
@@ -23,147 +22,16 @@
 ; up navigates history toward older; mirrored for down. on first edit
 ; to a recalled entry, the pristine version is restored to its slot
 ; and the buffer becomes a new entry, so the original survives.
-(: e (sym 0) m (sym 0) eofsym (sym 0)
+(: m (sym 0) eofsym (sym 0)
 
    (revcat a b) (foldl b (flip cons) a)
 
-   ; --- parser char classification ---
-   (isws c)    (|| (= c 32) (= c 10) (= c 9) (= c 13) (= c 12) (= c 0))
-   (iscom c)   (|| (= c 35) (= c 59))
-   (isdig c)   (&& (>= c 48) (<= c 57))
-   (ishex c)   (|| (isdig c) (&& (>= c 65) (<= c 70)) (&& (>= c 97) (<= c 102)))
-   (isdelim c) (|| (isws c) (iscom c) (= c 40) (= c 41) (= c 34) (= c 39))
-   (digval c)  (? (isdig c) (- c 48)
-                  (>= c 97) (- c 87)        ; a-f -> 10-15
-                  (- c 55))                  ; A-F -> 10-15
-
-   ; skip a comment to end of physical line (consuming the \n).
-   (skipln cl) (? (twop cl)
-                  (? (|| (= (car cl) 10) (= (car cl) 13)) (cdr cl)
-                     (skipln (cdr cl)))
-                  cl)
-   ; skip whitespace and # / ; comments
-   (skipws cl) (? (twop cl)
-                  (: c (car cl)
-                     (? (isws c)  (skipws (cdr cl))
-                        (iscom c) (skipws (skipln (cdr cl)))
-                        cl))
-                  cl)
-
-   ; --- integer parsing on a charlist ---
-   ; each returns (cons int rest) on success, 0 on failure (no digits).
-   (decimal cl)
-     (: (loop n cl had)
-          (? (&& (twop cl) (isdig (car cl)))
-             (loop (+ (* n 10) (- (car cl) 48)) (cdr cl) -1)
-             (? had (cons n cl) 0))
-        (loop 0 cl 0))
-   (hex cl)
-     (: (loop n cl had)
-          (? (&& (twop cl) (ishex (car cl)))
-             (loop (+ (* n 16) (digval (car cl))) (cdr cl) -1)
-             (? had (cons n cl) 0))
-        (loop 0 cl 0))
-   ; unsigned int with optional 0x / 0X prefix.
-   (uint cl)
-     (? (&& (twop cl) (= (car cl) 48))
-        (: rest (cdr cl)
-           (? (&& (twop rest) (|| (= (car rest) 120) (= (car rest) 88)))
-              (hex (cdr rest))
-              (decimal cl)))
-        (decimal cl))
-   ; signed int.
-   (numof cl)
-     (? (twop cl)
-        (: c (car cl)
-           (? (= c 45) (: r (uint (cdr cl))
-                          (? (twop r) (cons (- 0 (car r)) (cdr r)) 0))
-              (= c 43) (uint (cdr cl))
-              (uint cl)))
-        0)
-
-   ; read one token: a maximal run of non-delimiter chars.
-   ; returns (cons token-charlist rest).
-   (readtok cl)
-     (: (loop acc cl)
-          (? (&& (twop cl) (nilp (isdelim (car cl))))
-             (loop (cons (car cl) acc) (cdr cl))
-             (cons (rev acc) cl))
-        (loop 0 cl))
-
-
-   ; read one datum from a charlist.
-   (read1 cl)
-     (: cl (skipws cl)
-        (? (nilp cl) e
-           (: c (car cl)
-              (? (= c 40) (rdlist (cdr cl))    ; (
-                 (= c 41) e                     ; ) at top level
-                 (= c 39) (rdquot (cdr cl))    ; '
-                 (= c 34) (rdstr  (cdr cl))    ; "
-                 (rdatom cl)))))
-
-   ; read until a closing paren (already past the opening one).
-   (rdlist cl)
-     (: cl (skipws cl)
-        (? (nilp cl) m
-           (= (car cl) 41) (cons 0 (cdr cl))
-           (: r (read1 cl)
-              (? (= r m) m
-                 (= r e) m
-                 (: rest (rdlist (cdr r))
-                    (? (= rest m) m
-                       (cons (cons (car r) (car rest)) (cdr rest))))))))
-
-   ; read one datum after a quote mark; wrap as 'datum.
-   (rdquot cl)
-     (: r (read1 cl)
-        (? (= r m) m
-           (= r e) m
-           (cons (cons '` (cons (car r) 0)) (cdr r))))
-
-   ; read a string literal until the closing quote, honoring \X.
-   (rdstr cl)
-     (: (loop acc cl)
-          (? (nilp cl) m
-             (: c (car cl)
-                rest (cdr cl)
-                (? (= c 34) (cons (str (rev acc)) rest)        ; closing "
-                   (= c 92) (? (nilp rest) m                    ; trailing \
-                               (: nc (car rest)
-                                  (? (= nc 120)                   ; \xHH
-                                     (? (|| (nilp (cdr rest)) (nilp (cddr rest))) m
-                                        (: h1 (cadr rest) h2 (caddr rest)
-                                           (loop (cons (+ (* (digval h1) 16) (digval h2)) acc)
-                                                 (cdddr rest))))
-                                     (loop (cons (? (= nc 110) 10
-                                                    (= nc 116) 9
-                                                    (= nc 114) 13
-                                                    (= nc 48)  0
-                                                    nc) acc) (cdr rest)))))
-                   (loop (cons c acc) rest))))
-        (loop 0 cl))
-
-   ; read an atom: a token, then decide integer / float / symbol.
-   ; matches the C reader's strtol -> strtod -> intern cascade.
-   (rdatom cl)
-     (: tr (readtok cl)
-        tok (car tr)
-        r (numof tok)
-        s (str tok)
-        val (? (&& (twop r) (nilp (cdr r))) (car r)
-               (: f (flo s) (? (nilp f) (sym s) f)))
-        (cons val (cdr tr)))
-
-   ; drain a charlist into a list of all the datums it holds.
-   ; propagates m if anything in the chain is incomplete.
+   ; drain a charlist into a list of all the datums it holds. returns m
+   ; if the input ends inside an unfinished form; otherwise the (possibly
+   ; empty) list of parsed datums.
    (parseall cl)
-     (: r (read1 cl)
-        (? (= r m) m
-           (= r e) 0
-           (: rest (parseall (cdr r))
-              (? (= rest m) m
-                 (cons (car r) rest)))))
+     (: r (parsecl cl)
+        (? (car r) m (cdr r)))
 
    ; --- editor ---
 

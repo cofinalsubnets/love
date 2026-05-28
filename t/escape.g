@@ -1,7 +1,7 @@
-; string-literal escape sequences. both readers must agree:
-; the C reader (g.c:g_read1) parses this source file at load time;
-; the gwen reader (repl.g:rdstr, reached via read1) is exercised
-; explicitly below by parsing source charlists.
+; string-literal escape sequences. the C reader (g.c:g_read1) parses this
+; source file at load time; the second block exercises the same reader via
+; the charlist port (g.c:ci_getc, used by the REPL submit path) so the
+; in-memory edit buffer agrees with file input.
 
 (assert
   ; --- C reader path: this file is parsed by it ---
@@ -26,10 +26,11 @@
   (= 3 (len "a\0b"))         (= "a\0b" (str (X 97 (X 0  (X 98 0)))))
   (= 3 (len "a\x42b"))       (= "a\x42b" (str (X 97 (X 66 (X 98 0))))))
 
-; --- gwen reader path: feed read1 a charlist of `"..."` source ---
+; --- charlist port path: feed the C reader a charlist of `"..."` source.
+; this round-trips through ci_getc, which is the editor's submit path.
 (:
  ; chars-of-source-with-quotes -> the parsed datum.
- (parse cl) (car (read1 cl))
+ (parse cl) (car (cdr (parsecl cl)))
  (assert
    (= (str (X 10 0))                   (parse '(34 92 110 34)))   ; "\n"
    (= (str (X 9 0))                    (parse '(34 92 116 34)))   ; "\t"
