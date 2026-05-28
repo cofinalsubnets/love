@@ -82,7 +82,7 @@ static g_vm_t g_vm_kcall,
  g_vm_data,  g_vm_putn, g_vm_info, g_vm_dot,    g_vm_clock,
  g_vm_nilp,  g_vm_symnom, g_vm_read,   g_vm_putc, g_vm_gensym, g_vm_twop,
  g_vm_len, g_vm_get,
- g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,
+ g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
  g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_str,    g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_gt,  g_vm_ge,
@@ -905,6 +905,7 @@ struct g *gxr(struct g *f) {
  return f; }
 
 static op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : nil)
+static op11(g_vm_flop, flop(Sp[0]) ? putnum(-1) : nil)
 
 // Strict parse of a gwen-string's bytes as a decimal float. g_noinline +
 // by-value struct return so the &e and &buf escapes stay inside this
@@ -1714,17 +1715,126 @@ static g_noinline bool eqv(struct g *f, word a, word b) {
 
 opf(g_vm_bsr, >>)
 opf(g_vm_bsl, <<)
-opf(g_vm_mul, *)
 
-op0f(g_vm_quot, /)
-op0f(g_vm_rem, %)
-op(g_vm_add, 2, (Sp[0]+Sp[1]-1)|1)
-op(g_vm_sub, 2, (Sp[0]-Sp[1])|1)
-op(g_vm_eq, 2, eql(f, Sp[0], Sp[1]) ? putnum(-1) : nil)
-op(g_vm_lt, 2, Sp[0] < Sp[1] ? putnum(-1) : nil)
-op(g_vm_le, 2, Sp[0] <= Sp[1] ? putnum(-1) : nil)
-op(g_vm_gt, 2, Sp[0] > Sp[1] ? putnum(-1) : nil)
-op(g_vm_ge, 2, Sp[0] >= Sp[1] ? putnum(-1) : nil)
+// Truncation toward zero. Magnitudes above 2^63 are already
+// integer-valued in double precision, so we leave them alone instead of
+// risking an int64 overflow on the round-trip. NaN passes through.
+static g_inline double g_trunc(double x) {
+ if (x != x) return x;
+ double m = x < 0 ? -x : x;
+ if (m > 9.22e18) return x;
+ return (double)(int64_t) x; }
+
+// Float remainder via truncated quotient. Matches libm's fmod() for
+// the cases we care about. When b == 0, x/b is ±inf or NaN, ±inf*0 is
+// NaN, so the result is NaN — same as libm.
+static g_inline double g_fmod(double a, double b) {
+ return a - g_trunc(a / b) * b; }
+
+// Generic arithmetic dispatcher. Both fixnums + no overflow → fixnum
+// result; otherwise (mixed nump/flop, overflow, /0, both flop) → double
+// result. Division/remainder by zero promote to IEEE values (±inf or
+// NaN), not nil. Non-numeric operands return nil.
+// g_noinline + by-value struct return keeps the &t overflow-out-param
+// off the g_vm caller's frame, preserving TCO.
+enum arith_op { AOP_ADD, AOP_SUB, AOP_MUL, AOP_QUOT, AOP_REM };
+struct arith_r { word v; double d; bool isflo; bool isnil; };
+
+static g_noinline struct arith_r do_arith(word a, word b, enum arith_op op) {
+ struct arith_r r = { 0, 0, false, false };
+ if (nump(a) && nump(b)) {
+  intptr_t av = getnum(a), bv = getnum(b), t = 0;
+  bool do_float = false;
+  switch (op) {
+   case AOP_ADD: do_float = __builtin_add_overflow(av, bv, &t); break;
+   case AOP_SUB: do_float = __builtin_sub_overflow(av, bv, &t); break;
+   case AOP_MUL: do_float = __builtin_mul_overflow(av, bv, &t); break;
+   case AOP_QUOT:
+    if (bv == 0) do_float = true;
+    else if (av == INTPTR_MIN && bv == -1) do_float = true;
+    else t = av / bv;
+    break;
+   case AOP_REM:
+    if (bv == 0) do_float = true;
+    else if (av == INTPTR_MIN && bv == -1) t = 0;
+    else t = av % bv;
+    break; }
+  // Also require the result to fit the tagged-fixnum range (one bit lost).
+  if (!do_float && (t < (INTPTR_MIN >> 1) || t > (INTPTR_MAX >> 1)))
+   do_float = true;
+  if (!do_float) { r.v = putnum(t); return r; } }
+ // Float path: require both operands numeric.
+ if (!(nump(a) || flop(a)) || !(nump(b) || flop(b))) {
+  r.isnil = true; return r; }
+ double ad = nump(a) ? (double) getnum(a) : *(double*) vec_data(a);
+ double bd = nump(b) ? (double) getnum(b) : *(double*) vec_data(b);
+ double rd = 0;
+ switch (op) {
+  case AOP_ADD: rd = ad + bd; break;
+  case AOP_SUB: rd = ad - bd; break;
+  case AOP_MUL: rd = ad * bd; break;
+  case AOP_QUOT: rd = ad / bd; break;         // ±inf or NaN on bd == 0
+  case AOP_REM:  rd = g_fmod(ad, bd); break;  // NaN on bd == 0
+ }
+ r.isflo = true; r.d = rd;
+ return r; }
+
+#define ARITH_OP(nom, op_tag) g_vm(nom) {                                  \
+ struct arith_r r = do_arith(Sp[0], Sp[1], op_tag);                        \
+ if (r.isnil)  { Sp[1] = nil;  Sp += 1; Ip++; return Continue(); }         \
+ if (!r.isflo) { Sp[1] = r.v;  Sp += 1; Ip++; return Continue(); }         \
+ uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(double));               \
+ Have(req);                                                                \
+ struct g_vec *v = (struct g_vec*) Hp;                                     \
+ Hp += req;                                                                \
+ v->ap = g_vm_data;                                                        \
+ v->typ = vec_q;                                                           \
+ v->type = g_vt_f64;                                                       \
+ v->rank = 0;                                                              \
+ *(double*) v->shape = r.d;                                                \
+ Sp[1] = word(v);                                                          \
+ Sp += 1; Ip++; return Continue(); }
+
+ARITH_OP(g_vm_add,  AOP_ADD)
+ARITH_OP(g_vm_sub,  AOP_SUB)
+ARITH_OP(g_vm_mul,  AOP_MUL)
+ARITH_OP(g_vm_quot, AOP_QUOT)
+ARITH_OP(g_vm_rem,  AOP_REM)
+
+// Mixed-numeric ordered comparison. Same nump-fast-path, else widen.
+// Non-numeric operands return nil (matches existing degraded behavior
+// on cross-type compares but well-defined).
+#define CMP_OP(nom, c_op) g_vm(nom) {                                      \
+ word a = Sp[0], b = Sp[1];                                                \
+ word x;                                                                   \
+ if (nump(a) && nump(b)) x = (a c_op b) ? putnum(-1) : nil;                \
+ else if ((nump(a) || flop(a)) && (nump(b) || flop(b))) {                  \
+  double ad = nump(a) ? (double) getnum(a) : *(double*) vec_data(a);       \
+  double bd = nump(b) ? (double) getnum(b) : *(double*) vec_data(b);       \
+  x = (ad c_op bd) ? putnum(-1) : nil;                                     \
+ } else x = nil;                                                           \
+ Sp[1] = x; Sp += 1; Ip++; return Continue(); }
+
+CMP_OP(g_vm_lt, <)
+CMP_OP(g_vm_le, <=)
+CMP_OP(g_vm_gt, >)
+CMP_OP(g_vm_ge, >=)
+
+// (= a b) — value-equality with numeric promotion across nump/flop.
+// Falls through to eql for non-numeric operands so symbol/pair/string
+// identity is unchanged. Note: this is strictly looser than eqv, which
+// still rejects mixed-type pairs (so table keys 3 and 3.0 stay distinct).
+static g_vm(g_vm_eq) {
+ word a = Sp[0], b = Sp[1];
+ bool eq;
+ if (nump(a) && nump(b)) eq = a == b;
+ else if ((nump(a) || flop(a)) && (nump(b) || flop(b))) {
+  double ad = nump(a) ? (double) getnum(a) : *(double*) vec_data(a);
+  double bd = nump(b) ? (double) getnum(b) : *(double*) vec_data(b);
+  eq = ad == bd;
+ } else eq = eql(f, a, b);
+ Sp[1] = eq ? putnum(-1) : nil;
+ Sp += 1; Ip++; return Continue(); }
 op(g_vm_bnot, 1, ~Sp[0] | 1)
 op(g_vm_band, 2, (Sp[0] & Sp[1]) | 1)
 op(g_vm_bor, 2, (Sp[0] | Sp[1]) | 1)
@@ -2147,7 +2257,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_seek, "seek", S2(g_vm_seek)) _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_get))\
  _(bif_put, "put", S3(g_vm_put)) _(bif_tnew, "new", S1(g_vm_tnew)) _(bif_tabkeys, "tkeys", S1(g_vm_tkeys))\
  _(bif_tabdel, "tdel", S3(g_vm_tdel)) _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp))\
- _(bif_flo, "flo", S1(g_vm_flo))\
+ _(bif_flo, "flo", S1(g_vm_flo)) _(bif_flop, "flop", S1(g_vm_flop))\
  _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tblp, "tblp", S1(g_vm_tblp)) _(bif_nump, "nump", S1(g_vm_nump))\
  _(bif_nilp, "nilp", S1(g_vm_nilp)) _(bif_ev, "ev", S1(g_vm_eval))\
  _(bif_callk, "call_cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \
