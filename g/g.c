@@ -60,7 +60,6 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define pop1 g_pop1
 #define getnum g_getnum
 #define putnum g_putnum
-#define g_strp strp
 
 struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
 enum q { two_q, vec_q, sym_q, tbl_q, };
@@ -92,7 +91,7 @@ static g_vm_t g_vm_kcall,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
- g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fflush;
+ g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush;
 static uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static struct g_vec *ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
 static word g_tget(struct g*, word, word, struct g_tab*);
@@ -127,6 +126,8 @@ static g_inline bool vec_strp(struct g_vec *s) { return
   s->type == g_vect_char && s->rank == 1; }
 static g_inline bool strp(word _) { return
   homp(_) && typ(_) == vec_q && vec_strp((struct g_vec*)_); }
+// public predicate for frontends that need to check string args
+bool g_strp(g_word x) { return strp(x); }
 static g_inline struct g *encode(struct g*f, enum g_status s) { return
   (struct g*) ((uintptr_t) f | s); }
 static g_inline void *bump(struct g *f, uintptr_t n) {
@@ -167,6 +168,8 @@ static struct g_port_vt const synth[] = {
  { ti_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush },
  /* fd = -2, to: write-only vec sink   */
  { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush   },
+ /* fd = -3, closed port (post-close)  */
+ { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush },
 };
 
 static g_inline struct g_port_vt const *port_vt(g_word fd_tagged) {
@@ -1045,10 +1048,13 @@ static struct g *to_harvest(struct g *f, struct to *o) {
 
 // Finalizer for heap stream ports: extract the fd and ask the frontend to
 // close it. Runs inside GC (run_finalizers); fz->p still points at the
-// from-space port so its fields are readable.
+// from-space port so its fields are readable. Skip if fd < 0 — that means
+// either the port was already closed explicitly (fd mutated to a synth
+// sentinel) or the caller wrapped a non-OS fd.
 static void io_close(void *p) {
  struct g_io *io = p;
- g_fd_close(getnum(io->fd)); }
+ intptr_t fd = getnum(io->fd);
+ if (fd >= 0) g_fd_close(fd); }
 
 // Heap-allocate a stream port for the given OS fd. Pushes the port pointer
 // on Sp[0] and registers io_close as its finalizer. The fd >= 0 path of
@@ -1479,6 +1485,22 @@ static g_vm(g_vm_fflush) {
   f->io = o;
   if (!g_ok(f = zflush(f))) return f;
   Unpack(f); }
+ Ip += 1;
+ return Continue(); }
+
+// (fputs port s) — write every byte of string s through port; return the
+// port. No-op when args are misused (non-port or non-string). Re-reads
+// Sp[1] each iteration so GC inside zputc (e.g., growing a sink buffer)
+// can forward the string safely.
+static g_vm(g_vm_fputs) {
+ if (iop(Sp[0]) && strp(Sp[1])) {
+  Pack(f);
+  f->io = (struct g_io*) f->sp[0];
+  for (uintptr_t i = 0; g_ok(f) && i < len(vec(f->sp[1]));)
+   f = zputc(f, txt(vec(f->sp[1]))[i++]);
+  if (!g_ok(f)) return f;
+  Unpack(f); }
+ Sp += 1;
  Ip += 1;
  return Continue(); }
 
@@ -1979,6 +2001,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_fungetc, "fungetc", S2(g_vm_fungetc)) \
  _(bif_feof, "feof", S1(g_vm_feof)) \
  _(bif_fputc, "fputc", S2(g_vm_fputc)) \
+ _(bif_fputs, "fputs", S2(g_vm_fputs)) \
  _(bif_fflush, "fflush", S1(g_vm_fflush))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);

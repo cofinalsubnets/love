@@ -179,6 +179,12 @@ struct g
  *gputn(struct g*, intptr_t, uint8_t),
  *gputs(struct g*, char const*);
 
+// Public predicate: is x a gwen string? True iff x is a heap g_vec with
+// char element type and rank 1. Frontends use this to type-check bif args.
+// String bytes live at `((char*)(((struct g_vec*)x)->shape + 1))` and the
+// byte length is `((struct g_vec*)x)->shape[0]`.
+bool g_strp(g_word);
+
 struct g
  *g_ini_m(g_malloc_t*, g_free_t*),
  *g_eval(struct g*),

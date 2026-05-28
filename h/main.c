@@ -1,7 +1,9 @@
 #include "../g/g.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <termios.h>
 #include <time.h>
 #include <poll.h>
@@ -98,8 +100,66 @@ struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, _putc, _flus
 // outside the gwen heap and the GC never visits them.
 void g_fd_close(int fd) { close(fd); }
 
+// (open path mode) — open a file with mode "r"/"w"/"a"; returns a heap port
+// (closed on GC) or nil on error or misuse. mode is a gwen string; only the
+// first byte is consulted.
+//   r = read-only
+//   w = write-only, truncate-or-create
+//   a = write-only, append-or-create
+// Errors (path too long, unknown mode, open(2) failure) all return nil.
+static g_vm(g_vm_open) {
+  if (!g_strp(Sp[0]) || !g_strp(Sp[1])) goto fail;
+  struct g_vec *pv = (struct g_vec*) Sp[0];
+  struct g_vec *mv = (struct g_vec*) Sp[1];
+  uintptr_t plen = pv->shape[0];
+  char path[4096];
+  if (plen >= sizeof path || mv->shape[0] == 0) goto fail;
+  memcpy(path, (char*)(pv->shape + 1), plen);
+  path[plen] = 0;
+  int flags;
+  switch (((char*)(mv->shape + 1))[0]) {
+    case 'r': flags = O_RDONLY; break;
+    case 'w': flags = O_WRONLY | O_CREAT | O_TRUNC; break;
+    case 'a': flags = O_WRONLY | O_CREAT | O_APPEND; break;
+    default: goto fail; }
+  int fd = open(path, flags, 0644);
+  if (fd < 0) goto fail;
+  Pack(f);
+  struct g *r = g_io_alloc(f, fd);
+  if (!g_ok(r)) { close(fd); return r; }
+  f = r;
+  Unpack(f);
+  // stack: [port, path, mode, ...] -> [port, ...]
+  Sp[2] = Sp[0];
+  Sp += 2;
+  Ip += 1;
+  return Continue();
+ fail:
+  Sp[1] = g_nil;
+  Sp += 1;
+  Ip += 1;
+  return Continue(); }
+
+// (close p) — close a port, mark its fd as the closed-sentinel (-3) so
+// subsequent reads/writes/flush go to the noop slot, and the finalizer
+// (which checks fd >= 0) skips. Returns nil. No-op on misuse, matching
+// the existing fputc/etc. convention.
+static g_vm(g_vm_close) {
+  // inline "is x a port": heap pointer whose discriminator is g_vm_port_io.
+  if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == g_vm_port_io) {
+    struct g_io *io = (struct g_io*) Sp[0];
+    intptr_t fd = g_getnum(io->fd);
+    if (fd >= 0) {
+      close(fd);
+      io->fd = g_putnum(-3); } }
+  Sp[0] = g_nil;
+  Ip += 1;
+  return Continue(); }
+
 static union u const
- bif_exit[] = {{g_vm_exit}, {g_vm_ret0}};
+ bif_exit[] = {{g_vm_exit}, {g_vm_ret0}},
+ bif_open[] = {{g_vm_cur}, {.x = g_putnum(2)}, {g_vm_open}, {g_vm_ret0}},
+ bif_close[] = {{g_vm_close}, {g_vm_ret0}};
 
 static char const
 boot[] =
@@ -116,6 +176,10 @@ int main(int argc, char const **argv) {
   for (; *argv; f = g_strof(f, *argv++));
   for (f = g_push(f, 1, g_nil); argc--; f = gxr(f));
   if (g_ok(f)) {
-    struct g_def d[] = {{"exit", (g_word) bif_exit}, {"argv", g_pop1(f)}, {0}};
+    struct g_def d[] = {{"exit", (g_word) bif_exit},
+                        {"open", (g_word) bif_open},
+                        {"close", (g_word) bif_close},
+                        {"argv", g_pop1(f)},
+                        {0}};
     f = g_evals(g_evals_(g_defs(f, d), boot), replp ? "(repl 0 0)" : rel); }
   return g_fin(f); }
