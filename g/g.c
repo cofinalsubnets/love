@@ -83,6 +83,8 @@ static g_vm_t g_vm_kcall,
  g_vm_nilp,  g_vm_symnom, g_vm_read,   g_vm_putc, g_vm_gensym, g_vm_twop,
  g_vm_len, g_vm_get,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
+ g_vm_sin, g_vm_cos, g_vm_tan, g_vm_atan, g_vm_atan2,
+ g_vm_sqrt, g_vm_exp, g_vm_log, g_vm_pow,
  g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_str,    g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_gt,  g_vm_ge,
@@ -1842,6 +1844,54 @@ op(g_vm_bxor, 2, (Sp[0] ^ Sp[1]) | 1)
 op(g_vm_nump, 1, oddp(Sp[0]) ? putnum(-1) : nil)
 op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : nil)
 
+// Unary math bif: nump/flop arg → double via vec_data, call fn, allocate
+// rank-0 f64 inline. Non-numeric arg → nil. TCO-clean (no & escapes).
+#define MATH1_OP(nom, fn) g_vm(nom) {                                      \
+ word a = Sp[0];                                                           \
+ if (!nump(a) && !flop(a)) { Sp[0] = nil; Ip++; return Continue(); }       \
+ double ad = nump(a) ? (double) getnum(a) : *(double*) vec_data(a);        \
+ double rd = fn(ad);                                                       \
+ uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(double));               \
+ Have(req);                                                                \
+ struct g_vec *v = (struct g_vec*) Hp;                                     \
+ Hp += req;                                                                \
+ v->ap = g_vm_data;                                                        \
+ v->typ = vec_q;                                                           \
+ v->type = g_vt_f64;                                                       \
+ v->rank = 0;                                                              \
+ *(double*) v->shape = rd;                                                 \
+ Sp[0] = word(v);                                                          \
+ Ip++; return Continue(); }
+
+#define MATH2_OP(nom, fn) g_vm(nom) {                                      \
+ word a = Sp[0], b = Sp[1];                                                \
+ if ((!nump(a) && !flop(a)) || (!nump(b) && !flop(b)))                     \
+  { Sp[1] = nil; Sp += 1; Ip++; return Continue(); }                       \
+ double ad = nump(a) ? (double) getnum(a) : *(double*) vec_data(a);        \
+ double bd = nump(b) ? (double) getnum(b) : *(double*) vec_data(b);        \
+ double rd = fn(ad, bd);                                                   \
+ uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(double));               \
+ Have(req);                                                                \
+ struct g_vec *v = (struct g_vec*) Hp;                                     \
+ Hp += req;                                                                \
+ v->ap = g_vm_data;                                                        \
+ v->typ = vec_q;                                                           \
+ v->type = g_vt_f64;                                                       \
+ v->rank = 0;                                                              \
+ *(double*) v->shape = rd;                                                 \
+ Sp[1] = word(v);                                                          \
+ Sp += 1; Ip++; return Continue(); }
+
+MATH1_OP(g_vm_sin,   g_sin)
+MATH1_OP(g_vm_cos,   g_cos)
+MATH1_OP(g_vm_tan,   g_tan)
+MATH1_OP(g_vm_atan,  g_atan)
+MATH1_OP(g_vm_sqrt,  g_sqrt)
+MATH1_OP(g_vm_exp,   g_exp)
+MATH1_OP(g_vm_log,   g_log)
+MATH2_OP(g_vm_atan2, g_atan2)
+MATH2_OP(g_vm_pow,   g_pow)
+
 static g_vm(g_vm_info) {
  size_t const req = 4 * Width(struct g_pair);
  Have(req);
@@ -2258,6 +2308,11 @@ enum g_status g_fin(struct g *f) {
  _(bif_put, "put", S3(g_vm_put)) _(bif_tnew, "new", S1(g_vm_tnew)) _(bif_tabkeys, "tkeys", S1(g_vm_tkeys))\
  _(bif_tabdel, "tdel", S3(g_vm_tdel)) _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp))\
  _(bif_flo, "flo", S1(g_vm_flo)) _(bif_flop, "flop", S1(g_vm_flop))\
+ _(bif_sin, "sin", S1(g_vm_sin)) _(bif_cos, "cos", S1(g_vm_cos))\
+ _(bif_tan, "tan", S1(g_vm_tan)) _(bif_atan, "atan", S1(g_vm_atan))\
+ _(bif_sqrt, "sqrt", S1(g_vm_sqrt)) _(bif_exp, "exp", S1(g_vm_exp))\
+ _(bif_log, "log", S1(g_vm_log))\
+ _(bif_atan2, "atan2", S2(g_vm_atan2)) _(bif_pow, "pow", S2(g_vm_pow))\
  _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tblp, "tblp", S1(g_vm_tblp)) _(bif_nump, "nump", S1(g_vm_nump))\
  _(bif_nilp, "nilp", S1(g_vm_nilp)) _(bif_ev, "ev", S1(g_vm_eval))\
  _(bif_callk, "call_cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \
@@ -2326,6 +2381,18 @@ __attribute__((weak)) void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
 // Default fd close is a no-op. The host overrides with close(2); kernel
 // and pd don't have real OS fds to release, so the no-op is correct.
 __attribute__((weak)) void g_fd_close(int fd) { (void) fd; }
+
+// Math hooks. Weak defaults trap so calls on a frontend without an
+// override fail loudly (kernel/pico/esp until internal impls land).
+// Host and pd override via libm.
+#define WEAK_TRAP1(nom) __attribute__((weak)) double nom(double x) \
+  { (void) x; __builtin_trap(); }
+#define WEAK_TRAP2(nom) __attribute__((weak)) double nom(double x, double y) \
+  { (void) x; (void) y; __builtin_trap(); }
+WEAK_TRAP1(g_sin)  WEAK_TRAP1(g_cos)  WEAK_TRAP1(g_tan)
+WEAK_TRAP1(g_atan) WEAK_TRAP1(g_sqrt) WEAK_TRAP1(g_exp)
+WEAK_TRAP1(g_log)
+WEAK_TRAP2(g_atan2) WEAK_TRAP2(g_pow)
 
 extern g_inline struct g *g_pop(struct g*f, uintptr_t n) { return g_core_of(f)->sp += n, f; }
 static g_inline struct g *symof(char const *n, struct g *f) { return intern(g_strof(f, n)); }

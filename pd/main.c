@@ -8,6 +8,17 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+
+// Math hooks: route through libm. Override the weak trap-defaults in g.c.
+double g_sin (double x)           { return sin(x);  }
+double g_cos (double x)           { return cos(x);  }
+double g_tan (double x)           { return tan(x);  }
+double g_atan(double x)           { return atan(x); }
+double g_sqrt(double x)           { return sqrt(x); }
+double g_exp (double x)           { return exp(x);  }
+double g_log (double x)           { return log(x);  }
+double g_atan2(double y, double x){ return atan2(y, x); }
+double g_pow (double x, double y) { return pow(x, y); }
 #define NROWS 30
 #define NCOLS 50
 #define kcb (&K.cb)

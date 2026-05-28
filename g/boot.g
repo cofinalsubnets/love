@@ -4,7 +4,8 @@
      (id x) x
      (const x _) x
      (flip f x y) (f y x))
-  (: true -1 false 0 not nilp
+  (: pi 3.141592653589793
+     true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
      AA (co A A) AB (co A B)

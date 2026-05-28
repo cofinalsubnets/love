@@ -187,6 +187,14 @@ void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 // returns true. fds not registered by the frontend return false.
 bool g_ready(int fd);
 
+// Math hooks. Weak defaults in g.c trap (loud-fail on kernel until
+// internal impls land). Host and pd override with libm. Same per-
+// frontend pattern as g_clock / g_sleep.
+double g_sin(double), g_cos(double), g_tan(double),
+       g_atan(double), g_atan2(double, double),
+       g_sqrt(double), g_exp(double), g_log(double),
+       g_pow(double, double);
+
 struct g
  *gputc(struct g*, int),
  *gputx(struct g*, intptr_t),
