@@ -301,6 +301,22 @@ g_vm(g_vm_inspect) {
  Unpack(f);
  return Ip++, Continue(); }
 
+// Magnitude thresholds for the printer below, typed to g_flo_t's width.
+// A bare double literal in a comparison against the g_flo_t `v` would
+// promote `v` to double and drag in software double emulation on f32
+// targets (Playdate, pico, esp, wasm32). On f32 the inf cutoff is
+// FLT_MAX — the largest finite float — since only an actual infinity
+// exceeds it (1e308 isn't representable as a float).
+#if UINTPTR_MAX > 0xffffffffu
+#define DTOA_INF    1e308
+#define DTOA_SCI_HI 1e16
+#define DTOA_SCI_LO 1e-4
+#else
+#define DTOA_INF    __FLT_MAX__
+#define DTOA_SCI_HI 1e16f
+#define DTOA_SCI_LO 1e-4f
+#endif
+
 // Decimal float printer. Writes up to cap bytes into buf; returns the
 // byte count written. Strategy: sign, integer part via integer math,
 // then up to 15 fractional digits with trailing zeros trimmed; for very
@@ -309,10 +325,10 @@ static int g_dtoa(g_flo_t v, char *buf, int cap, int max_frac) {
  char *p = buf, *end = buf + cap;
  if (v != v) { if (end - p >= 3) memcpy(p, "nan", 3), p += 3; return p - buf; }
  if (v < 0) { if (p < end) *p++ = '-'; v = -v; }
- if (v > 1e308) { if (end - p >= 3) memcpy(p, "inf", 3), p += 3; return p - buf; }
+ if (v > DTOA_INF) { if (end - p >= 3) memcpy(p, "inf", 3), p += 3; return p - buf; }
  int exp = 0;
  bool sci = false;
- if (v != 0 && (v >= 1e16 || v < 1e-4)) {
+ if (v != 0 && (v >= DTOA_SCI_HI || v < DTOA_SCI_LO)) {
   sci = true;
   while (v >= 10) v /= 10, exp++;
   while (v < 1)  v *= 10, exp--; }

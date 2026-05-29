@@ -200,13 +200,41 @@ void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 // returns true. fds not registered by the frontend return false.
 bool g_ready(int fd);
 
-// Math hooks. Weak defaults in g.c trap (loud-fail on kernel until
-// internal impls land). Host and pd override with libm. Same per-
-// frontend pattern as g_clock / g_sleep. Width follows g_flo_t.
-g_flo_t g_sin(g_flo_t), g_cos(g_flo_t), g_tan(g_flo_t),
-        g_atan(g_flo_t), g_atan2(g_flo_t, g_flo_t),
-        g_sqrt(g_flo_t), g_exp(g_flo_t), g_log(g_flo_t),
-        g_pow(g_flo_t, g_flo_t);
+// Math: gwen routes transcendentals straight to the C library's math
+// functions. Hosted builds pull prototypes from <math.h> and link libm;
+// the freestanding kernel (-nostdinc, no <math.h>, all arches 64-bit)
+// self-declares them and supplies its own impls in k/libc.c. The g_*
+// names are compile-time aliases, width-matched so 32-bit float ports
+// (Playdate, pico, esp) use the single-precision f-suffixed entries and
+// keep arithmetic on the hardware FPU.
+#if __STDC_HOSTED__
+#include <math.h>
+#else
+double sin(double), cos(double), tan(double), atan(double),
+       atan2(double, double), sqrt(double), exp(double),
+       log(double), pow(double, double);
+#endif
+#if UINTPTR_MAX > 0xffffffffu
+#define g_sin   sin
+#define g_cos   cos
+#define g_tan   tan
+#define g_atan  atan
+#define g_atan2 atan2
+#define g_sqrt  sqrt
+#define g_exp   exp
+#define g_log   log
+#define g_pow   pow
+#else
+#define g_sin   sinf
+#define g_cos   cosf
+#define g_tan   tanf
+#define g_atan  atanf
+#define g_atan2 atan2f
+#define g_sqrt  sqrtf
+#define g_exp   expf
+#define g_log   logf
+#define g_pow   powf
+#endif
 
 struct g
  *gputc(struct g*, int),

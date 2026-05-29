@@ -9,31 +9,6 @@
 #include <time.h>
 #include <unistd.h>
 
-// Math hooks: route through libm. Override the weak trap-defaults in g.c.
-// g_flo_t is float on Playdate (32-bit pointers), so use sinf/cosf/etc.
-// to keep arithmetic on the FPv5-SP-D16 hardware FPU instead of falling
-// back to software-emulated doubles.
-#if UINTPTR_MAX > 0xffffffffu
-g_flo_t g_sin (g_flo_t x)            { return sin(x);  }
-g_flo_t g_cos (g_flo_t x)            { return cos(x);  }
-g_flo_t g_tan (g_flo_t x)            { return tan(x);  }
-g_flo_t g_atan(g_flo_t x)            { return atan(x); }
-g_flo_t g_sqrt(g_flo_t x)            { return sqrt(x); }
-g_flo_t g_exp (g_flo_t x)            { return exp(x);  }
-g_flo_t g_log (g_flo_t x)            { return log(x);  }
-g_flo_t g_atan2(g_flo_t y, g_flo_t x){ return atan2(y, x); }
-g_flo_t g_pow (g_flo_t x, g_flo_t y) { return pow(x, y); }
-#else
-g_flo_t g_sin (g_flo_t x)            { return sinf(x);  }
-g_flo_t g_cos (g_flo_t x)            { return cosf(x);  }
-g_flo_t g_tan (g_flo_t x)            { return tanf(x);  }
-g_flo_t g_atan(g_flo_t x)            { return atanf(x); }
-g_flo_t g_sqrt(g_flo_t x)            { return sqrtf(x); }
-g_flo_t g_exp (g_flo_t x)            { return expf(x);  }
-g_flo_t g_log (g_flo_t x)            { return logf(x);  }
-g_flo_t g_atan2(g_flo_t y, g_flo_t x){ return atan2f(y, x); }
-g_flo_t g_pow (g_flo_t x, g_flo_t y) { return powf(x, y); }
-#endif
 #define NROWS 30
 #define NCOLS 50
 #define kcb (&K.cb)

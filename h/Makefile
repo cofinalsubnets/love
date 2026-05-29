@@ -26,7 +26,7 @@ b/lib$n.a: $(h_o)
 b/lib$n.so: b/lib$n.a
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive
+	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive -lm
 
 # g/*.c (and any other root-level *.c) -> b/<dir>/*.o
 b/%.o: $(R)/%.c $(g_h)
@@ -48,7 +48,7 @@ b/$n: main.c b/lib$n.a b/boot.h b/repl.h
 b/lcat: lcat.c $(h_o)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(cc) -o $@ $^
+	@$(cc) -o $@ $^ -lm
 
 b/repl.h: b/lcat $(R)/$x/repl.$x
 	@echo GEN	$@

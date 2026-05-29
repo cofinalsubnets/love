@@ -128,13 +128,13 @@ static g_noinline g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
 #define mvm1(n) g_vm(g_vm_##n) { return Ap(g_vm_math1, f, g_##n); }
 #define mvm2(n) g_vm(g_vm_##n) { return Ap(g_vm_math2, f, g_##n); }
 
-#define WEAK_TRAP1(nom) __attribute__((weak)) g_flo_t g_##nom(g_flo_t x) \
-  { (void) x; __builtin_trap(); }
-#define WEAK_TRAP2(nom) __attribute__((weak)) g_flo_t g_##nom(g_flo_t x, g_flo_t y) \
-  { (void) x; (void) y; __builtin_trap(); }
+// g_sin .. g_pow are macro aliases (g/g.h) for the C library math
+// functions: libm on hosted builds, k/libc.c on the freestanding
+// kernel. The op generators reference them through g_##n, which the
+// preprocessor rescans into the real names after pasting.
 #define m1(_) _(sin) _(cos) _(tan) _(atan) _(sqrt) _(exp) _(log)
 #define m2(_) _(atan2) _(pow)
-m1(WEAK_TRAP1) m1(mvm1)
-m2(WEAK_TRAP2) m2(mvm2)
+m1(mvm1)
+m2(mvm2)
 
 op11(g_vm_flop, flop(Sp[0]) ? putnum(-1) : nil)

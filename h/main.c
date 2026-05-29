@@ -16,19 +16,6 @@ g_noinline uintptr_t g_clock(void) {
   return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
-// Math hooks: route through libm. These override the weak trap-defaults
-// in g.c so the host (and lcat) get correct precision while kernel /
-// pico / esp continue to trap until internal impls land.
-double g_sin (double x)           { return sin(x);  }
-double g_cos (double x)           { return cos(x);  }
-double g_tan (double x)           { return tan(x);  }
-double g_atan(double x)           { return atan(x); }
-double g_sqrt(double x)           { return sqrt(x); }
-double g_exp (double x)           { return exp(x);  }
-double g_log (double x)           { return log(x);  }
-double g_atan2(double y, double x){ return atan2(y, x); }
-double g_pow (double x, double y) { return pow(x, y); }
-
 static struct g *_putc(struct g *f, int c) {
   uint8_t b = c;
   ssize_t r = write(g_getnum(f->io->fd), &b, 1);
