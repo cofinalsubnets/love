@@ -102,6 +102,7 @@ g_vm_t g_vm_kcall,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
+ g_vm_fputn,
  g_vm_fread, g_vm_strin;
 uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 #define vec(_) ((struct g_vec*)(_))
@@ -219,6 +220,6 @@ static g_inline size_t llen(word l) {
  return n; }
 word g_tget(struct g*, word, word, struct g_tab*);
 
-
+static g_inline struct g *gtrap(struct g*f) { return g_core_of(f)->trap(f); }
 
 #endif

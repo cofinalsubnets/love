@@ -146,14 +146,14 @@ static Cata(c1_cond_exit) {
   Kp -= 2, Kp[0].ap = g_vm_jump, Kp[1].x = (word) a;
  return pull(f, c); }
 
-static g_vm(g_vm_yieldk) { return
+static g_vm(_g_vm_yieldk) { return
  Ip = Ip[1].m,
  Pack(f),
  encode(f, g_status_yield); }
 
 
 struct g *g_eval(struct g *f) {
- f = c0(f, g_vm_yieldk);
+ f = c0(f, _g_vm_yieldk);
 #if g_tco
  if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
 #else
@@ -461,7 +461,7 @@ g_vm(g_vm_defglob) {
  struct g_tab *t = f->dict;
  word k = Ip[1].x, v = Sp[3];
  return Sp[0] = k, Sp[1] = v, Sp[2] = (word) t, Pack(f),
-  !g_ok(f = g_tput(f)) ? f : (Unpack(f), Sp += 1, Ip += 2, Continue()); }
+  !g_ok(f = g_tput(f)) ? gtrap(f) : (Unpack(f), Sp += 1, Ip += 2, Continue()); }
 
 g_vm(g_vm_freev) { return
  Ip[0].ap = g_vm_quote,
@@ -472,8 +472,7 @@ g_vm(g_vm_eval) { return
  Ip++,
  Pack(f),
  f = c0(f, g_vm_jump),
- !g_ok(f) ? f : (Unpack(f),
-                 Continue()); }
+ !g_ok(f) ? gtrap(f) : (Unpack(f), Continue()); }
 
 g_noinline struct g *g_evals(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";

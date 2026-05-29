@@ -13,11 +13,6 @@ matching function, without reasoning about whether that ret is reachable
 or whether the handler legitimately returns (a few do -- host I/O bifs,
 yield, etc.). Expect false positives; the point is to narrow the search.
 
-Why disassemble instead of byte-scanning for the 0xc3 opcode: 0xc3 is an
-extremely common ModRM byte (`mov %eax,%ebx` is `89 c3`), so a raw byte
-scan flags nearly every function. We let objdump decode instruction
-boundaries and match the `ret` *mnemonic* instead.
-
 Usage:
     vmret.py ELF [--prefix PREFIX] [--objdump PATH]
 

@@ -113,7 +113,7 @@ g_vm(g_vm_str) {
  uintptr_t n = llen(Sp[0]);
  // FIXME use Have instead of Pack/Unpack
  Pack(f);
- if (!g_ok(f = str0(f, n))) return f;
+ if (!g_ok(f = str0(f, n))) return gtrap(f);
  // sp[0] is the new string; sp[1] is the original charlist.
  char *t = txt(f->sp[0]);
  uintptr_t i = 0;

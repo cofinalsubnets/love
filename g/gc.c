@@ -2,9 +2,8 @@
 
 g_noinline g_vm(g_vm_gc, uintptr_t n) {
  Pack(f);
- f = g_please(f, n);
- if (g_ok(f)) return Unpack(f), Continue();
- return f; }
+ if (!g_ok(f = g_please(f, n))) return gtrap(f);
+ return Unpack(f), Continue(); }
 
 static word gcp(struct g*, word, word const *, word const *);
 

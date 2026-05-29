@@ -107,7 +107,7 @@ g_vm(g_vm_put) {
  if (!tblp(Sp[2])) Sp += 2;
  else {
   Pack(f);
-  if (!g_ok(f = g_tput(f))) return f;
+  if (!g_ok(f = g_tput(f))) return gtrap(f);
   Unpack(f); }
  return Ip += 1, Continue(); }
 

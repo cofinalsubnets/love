@@ -108,7 +108,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
       K.g = g_evals_(g_defs(g_ini_m(_malloc, _free), defs),
-    "(: (log _)(: "
+    "(: putn(fputn in)(log _)(: "
     "i(vminfo 0)"
     "f(A i)"
     "len(A(B i))"

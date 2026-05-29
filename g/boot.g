@@ -21,6 +21,8 @@
      cdaar BAA cdadr BAB
      cddar BBA cdddr BBB
      inc (+ 1) dec (+ -1) (:: a b) (put a b macros)
+     putn (fputn in)
+     (getc _) (fgetc in)
      read (fread in))
   (: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
      (foldl z f l) (? (twop l) (foldl (f z (car l)) f (cdr l)) z)

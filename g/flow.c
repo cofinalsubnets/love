@@ -152,7 +152,7 @@ g_noinline g_vm(g_vm_yield_sw) {
            need = my_height + restore_h + 7;
  if (Sp < Hp + need) {
   Pack(f);
-  if (!g_ok(f = g_please(g_push(f, 1, next), need))) return f;
+  if (!g_ok(f = g_please(g_push(f, 1, next), need))) return gtrap(f);
   next = cell(pop1(f));
   Unpack(f);
   next_stack = next + 5; }   // recompute: next was forwarded by gc
@@ -358,12 +358,3 @@ g_vm(g_vm_len) {
   Sp[0] = putnum(l);
   Ip += 1;
   return Continue(); }
-
-g_vm(g_vm_key) {
- Sp[0] = (getnum(g_stdin.ungetc_buf) != EOF || g_ready(getnum(g_stdin.fd))) ? putnum(-1) : nil;
- Ip += 1;
- return Continue(); }
-
-// default sleep is busy wait
-__attribute__((weak)) void g_sleep(uintptr_t ticks) {
-  for (ticks += g_clock(); g_clock() < ticks;); }

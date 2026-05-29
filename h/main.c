@@ -57,10 +57,11 @@ static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
 
 void g_sleep(uintptr_t ms) { poll_wait(NULL, 0, ms); }
 
-bool g_ready(int fd) {
-  if (fd < 0) return true;
+static g_noinline int poll_wrap(int fd) {
   struct pollfd p = { .fd = fd, .events = POLLIN };
-  return poll(&p, 1, 0) > 0; }
+  return poll(&p, 1, 0); }
+
+bool g_ready(int fd) { return fd < 0 || poll_wrap(fd) > 0; }
 
 void g_wait_fds(int const *fds, int n, uintptr_t ms) {
   if (n <= 0) { g_sleep(ms); return; }

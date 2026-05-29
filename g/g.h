@@ -106,6 +106,7 @@ struct g {
  union { uintptr_t t0; g_word *cp; };
  g_malloc_t *malloc;
  g_free_t *free;
+ struct g *(*trap)(struct g*);
  uintptr_t b;
  union {
   intptr_t v0;
@@ -198,7 +199,7 @@ void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 
 // Non-blocking readiness peek on a single fd. fd=-1 (data source) always
 // returns true. fds not registered by the frontend return false.
-bool g_ready(int fd);
+g_noinline bool g_ready(int fd);
 
 // Math: gwen routes transcendentals straight to the C library's math
 // functions. Hosted builds pull prototypes from <math.h> and link libm;

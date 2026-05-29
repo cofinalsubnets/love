@@ -47,11 +47,13 @@ cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test
 
-.PHONY: disasm gdb
+.PHONY: disasm gdb vmret
 disasm: h
 	rizin -A $m
 gdb: h
 	gdb $m
+vmret: h
+	tools/vmret.py $m
 
 # Pass-throughs for the kernel-specific phonies that need k_qemu etc.
 .PHONY: run run-hdd run-headless run-efi run-efi-headless

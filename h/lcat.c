@@ -47,7 +47,7 @@ struct g_port_vt const g_fd_port_vt = { lcat_getc, lcat_ungetc, lcat_eof, lcat_p
 int main(int argc, char const **argv) {
  putc('"', stdout);
  enum g_status s = g_fin(g_evals_(g_ini(),
-  "(:(g x e)(: r(fread in e)(?(= e r)0(: _(? x (puts \" \"))_(. r)(g 1 e))))(g 0 (sym 0)))"));
+  "(:(g x e)(: r(fread in e)(?(= e r)0(: _(? x (fputs in\" \"))_(. r)(g 1 e))))(g 0 (sym 0)))"));
  putc('"', stdout);
  putc('\n', stdout);
  fflush(stdout);

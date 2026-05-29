@@ -1,6 +1,6 @@
 #include "i.h"
 
-static struct g *ggetc(struct g*f)  { return g_core_of(f)->io = &g_stdin, port_vt(g_stdin.fd)->getc(f); }
+static struct g*gzputn(struct g *f, intptr_t n, uint8_t b);
 static struct g *gflush(struct g*f) { return g_core_of(f)->io = &g_stdout, port_vt(g_stdout.fd)->flush(f); }
 static int g_dtoa(g_flo_t, char*, int, int max_frac);
 static struct g *gfputx(struct g *f, struct g_io *o, intptr_t x);
@@ -72,28 +72,27 @@ struct g_port_vt const synth[] = {
  { ci_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush }, };
 
 g_vm(g_vm_putc) {
+ f->io = &g_stdout;
  Pack(f);
- if (!g_ok(f = gputc(f, getnum(*Sp)))) return f;
+ if (!g_ok(f = zputc(f, getnum(*Sp)))) return gtrap(f);
  Unpack(f);
  return Ip++, Continue(); }
 
 // (fputc port byte) — write byte to port; return byte.
 g_vm(g_vm_fputc) {
  if (iop(Sp[0])) {
-  struct g_io *o = (struct g_io*) Sp[0];
+  f->io = (struct g_io*) Sp[0];
   Pack(f);
-  f->io = o;
-  if (!g_ok(f = zputc(f, getnum(f->sp[1])))) return f;
+  if (!g_ok(f = zputc(f, getnum(f->sp[1])))) return gtrap(f);
   Unpack(f); }
  return Sp++, Ip++, Continue(); }
 
 // (fflush port) — flush; return the port.
 g_vm(g_vm_fflush) {
  if (iop(Sp[0])) {
-  struct g_io *o = (struct g_io*) Sp[0];
+  f->io = (struct g_io*) Sp[0];
   Pack(f);
-  f->io = o;
-  if (!g_ok(f = zflush(f))) return f;
+  if (!g_ok(f = zflush(f))) return gtrap(f);
   Unpack(f); }
  return Ip++, Continue(); }
 
@@ -103,11 +102,12 @@ g_vm(g_vm_fflush) {
 // can forward the string safely.
 g_vm(g_vm_fputs) {
  if (iop(Sp[0]) && strp(Sp[1])) {
+  f->io = (struct g_io*) Sp[0];
+  uintptr_t i = 0, l = len(Sp[1]);
   Pack(f);
-  f->io = (struct g_io*) f->sp[0];
-  for (uintptr_t i = 0; g_ok(f) && i < len(f->sp[1]);)
+  while (g_ok(f) && i < l)
    f = zputc(f, txt(f->sp[1])[i++]);
-  if (!g_ok(f)) return f;
+  if (!g_ok(f)) return gtrap(f);
   Unpack(f); }
  return Sp++, Ip++, Continue(); }
 
@@ -115,21 +115,23 @@ g_vm(g_vm_puts) {
  if (strp(Sp[0])) {
   Pack(f);
   for (uintptr_t i = 0; i < len(f->sp[0]);) f = gputc(f, txt(f->sp[0])[i++]);
-  if (!g_ok(f = gflush(f))) return f;
+  if (!g_ok(f = gflush(f))) return gtrap(f);
   Unpack(f); }
  return Ip++, Continue(); }
 
-g_vm(g_vm_putn) {
- Pack(f);
- uintptr_t n = getnum(Sp[0]), b = getnum(Sp[1]);
- if (!g_ok(f = g_putn(f, &g_stdout, n, b))) return f;
- Unpack(f);
- Sp[1] = Sp[0];
- return Sp++, Ip++, Continue(); }
+g_vm(g_vm_fputn) {
+ if (iop(Sp[0])) {
+   f->io = (struct g_io*) Sp[0];
+   uintptr_t n = getnum(Sp[1]), b = getnum(Sp[2]);
+   Pack(f);
+   if (!g_ok(f = gzputn(f, n, b))) return gtrap(f);
+   Unpack(f);
+   Sp[2] = Sp[1]; }
+ return Sp += 2, Ip++, Continue(); }
 
 g_vm(g_vm_dot) {
  Pack(f);
- if (!g_ok(f = gfputx(f, &g_stdout, f->sp[0]))) return f;
+ if (!g_ok(f = gfputx(f, &g_stdout, f->sp[0]))) return gtrap(f);
  Unpack(f);
  return Ip++, Continue(); }
 
@@ -293,9 +295,9 @@ struct g *gputn(struct g*f, intptr_t n, uint8_t b) {
 //   drop port and x:     Sp = [str, ...]
 g_vm(g_vm_inspect) {
  Pack(f);
- if (!g_ok(f = to_alloc(f))) return f;
- if (!g_ok(f = gfputx(f, (struct g_io*) f->sp[0], f->sp[1]))) return f;
- if (!g_ok(f = to_harvest(f, (struct to*) f->sp[0]))) return f;
+ if (!g_ok(f = to_alloc(f))) return gtrap(f);
+ if (!g_ok(f = gfputx(f, (struct g_io*) f->sp[0], f->sp[1]))) return gtrap(f);
+ if (!g_ok(f = to_harvest(f, (struct to*) f->sp[0]))) return gtrap(f);
  f->sp[2] = f->sp[0];
  f->sp += 2;
  Unpack(f);
@@ -365,16 +367,6 @@ static int g_dtoa(g_flo_t v, char *buf, int cap, int max_frac) {
   while (eb_n > 0) { eb_n--; if (p < end) *p++ = eb[eb_n]; } }
  return p - buf; }
 
-g_vm(g_vm_getc) {
- if (!g_ready(getnum(g_stdin.fd))) {
-  f->next_wait_fd = getnum(g_stdin.fd);
-  return Ap(g_vm_yield_sw, f); }
- Pack(f);
- if (!g_ok(f = ggetc(f))) return f;
- Unpack(f);
- Sp[0] = putnum(f->b);
- return Ip++, Continue(); }
-
 g_vm(g_vm_fread) {
  if (!iop(Sp[0])) return Sp++, Ip++, Continue();
  struct g_io *i = (struct g_io*) Sp[0];
@@ -393,7 +385,7 @@ g_vm(g_vm_fread) {
    f->sp[1] = f->sp[0];                          // e := port; pop one
    f->sp += 1;
    break;
-  default: return f; }                           // propagate other errors
+  default: return gtrap(f); }                           // propagate other errors
  Unpack(f);
  return Ip++, Continue(); }
 
@@ -419,7 +411,7 @@ static struct g *ci_alloc(struct g *f) {
 // traced; its `head` slot is updated each getc.
 g_vm(g_vm_strin) {
  Pack(f);
- if (!g_ok(f = ci_alloc(f))) return f;
+ if (!g_ok(f = ci_alloc(f))) return gtrap(f);
  Unpack(f);
  return Ip++, Continue(); }
 
@@ -434,6 +426,9 @@ __attribute__((weak)) void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
 // Default fd close is a no-op. The host overrides with close(2); kernel
 // and pd don't have real OS fds to release, so the no-op is correct.
 __attribute__((weak)) void g_fd_close(int fd) { (void) fd; }
+// default sleep is busy wait
+__attribute__((weak)) g_noinline void g_sleep(uintptr_t ticks) {
+  for (ticks += g_clock(); g_clock() < ticks;); }
 
 struct g*gputs(struct g*f, char const*s) {
  while (*s) f = gputc(f, *s++);
@@ -445,7 +440,7 @@ g_vm(g_vm_feof) {
   struct g_io *i = (struct g_io*) Sp[0];
   Pack(f);
   f->io = i;
-  if (!g_ok(f = zeof(f))) return f;
+  if (!g_ok(f = zeof(f))) return gtrap(f);
   Unpack(f);
   Sp[0] = f->b ? putnum(-1) : nil; }
  return Ip++, Continue(); }
@@ -461,7 +456,7 @@ g_vm(g_vm_fgetc) {
     return Ap(g_vm_yield_sw, f); }
    Pack(f);
    f->io = i;
-   if (!g_ok(f = zgetc(f))) return f;
+   if (!g_ok(f = zgetc(f))) return gtrap(f);
    Unpack(f);
    Sp[0] = putnum(f->b); }
  return Ip++, Continue(); }
@@ -472,7 +467,7 @@ g_vm(g_vm_fungetc) {
   struct g_io *i = (struct g_io*) Sp[0];
   Pack(f);
   f->io = i;
-  if (!g_ok(f = zungetc(f, getnum(f->sp[1])))) return f;
+  if (!g_ok(f = zungetc(f, getnum(f->sp[1])))) return gtrap(f);
   Unpack(f); }
  return Sp++, Ip++, Continue(); }
 
@@ -506,3 +501,8 @@ struct g *g_io_alloc(struct g *f, int fd) {
  // allocation, and the stack slot we just pushed will be forwarded by GC
  // if a collection happens, so Sp[0] holds the live port on return.
  return g_finalize(f, (union u*) f->sp[0], io_close); }
+
+g_vm(g_vm_key) {
+ Sp[0] = (getnum(g_stdin.ungetc_buf) != EOF || g_ready(getnum(g_stdin.fd))) ? putnum(-1) : nil;
+ Ip += 1;
+ return Continue(); }
