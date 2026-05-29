@@ -6,14 +6,15 @@ R ?= .
 
 n = gl
 x = g
-m = $(R)/h/b/$n
+m = $R/h/b/$n
 a ?= $(shell uname -m)
 
-t = $(sort $(wildcard $(R)/t/*.$x))
+t = $(sort $(wildcard $R/t/*.$x))
 
-g_h = $(wildcard $(R)/g/*.h)
-g_c = $(wildcard $(R)/g/*.c)
-f_c = $(wildcard $(R)/f/*.c)
+g_h = $(wildcard $R/g/*.h)
+g_c = $(wildcard $R/g/*.c)
+f_c = $(wildcard $R/f/*.c)
+c_c = $(wildcard $R/libc/*.c)
 
 g_cflags = -std=gnu23 -g -Os -pipe \
   -Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter \

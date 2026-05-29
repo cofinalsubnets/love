@@ -9,8 +9,8 @@ include $(R)/common.mk
 # --- sources ---------------------------------------------------------
 # The Limine build picks up arch.c + the nasm bits and omits the efi_*.c
 # files. The EFI build (EFI=1) does the opposite. Shared sources from
-# root (g/, f/) come in via common.mk; local kernel sources are reached
-# from this cwd (k/).
+# root (g/, f/, libc/) come in via common.mk; local kernel sources are
+# reached from this cwd (k/).
 ifdef EFI
 ifeq ($(filter $a,x86_64 aarch64 riscv64 loongarch64),)
 $(error EFI=1 is only wired up for x86_64, aarch64, riscv64, and loongarch64)
@@ -29,7 +29,7 @@ else
 k_local_c = $(filter-out $a/efi_%.c,$(wildcard *.c $a/*.c))
 k_asm = $(wildcard $a/*.asm)
 endif
-k_shared_c = $(g_c) $(f_c)
+k_shared_c = $(g_c) $(f_c) $(c_c)
 k_S = $(wildcard $a/*.S)
 k_h = $(g_h) $(wildcard *.h $a/*.h)
 

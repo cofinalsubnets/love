@@ -1,0 +1,29 @@
+#include "g.h"
+int isspace(int), tolower(int);
+void *memchr(void const*, int, size_t);
+static char const digits[] = g_digits;
+
+long int strtol(const char *s, char **endptr, int base) {
+ char const *p = s;
+ int sign = 1;
+ while (isspace(*p)) p++;
+ if (*p == '-') sign = -1, p++;
+ else if (*p == '+') p++;
+ if (*p == '0') {
+  ++p;
+  if ((base == 0 || base == 16) && (*p == 'x' || *p == 'X')) {
+   base = 16;
+   ++p;
+   if (!memchr(digits, tolower(*p), base)) p -= 2; }
+  else if (base == 0) base = 8, --p;
+  else --p; }
+ else if (!base) base = 10;
+ if ( base < 2 || base > 36 ) return 0;
+ int digit = -1;
+ long rc = 0;
+ for (const char *x; (x = memchr(digits, tolower(*p), base)); p++)
+  digit = x - digits,
+  rc = rc * base + digit;
+ if (digit == -1) p = NULL, rc = 0;
+ if (endptr) *endptr = (char*) (p ? p : s);
+ return sign * rc; }
