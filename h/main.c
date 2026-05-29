@@ -16,13 +16,6 @@ g_noinline uintptr_t g_clock(void) {
   return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
-static struct g *_putc(struct g *f, int c) {
-  uint8_t b = c;
-  ssize_t r = write(g_getnum(f->io->fd), &b, 1);
-  (void) r;
-  return f; }
-static struct g *_flush(struct g *f) { return f; }
-struct g_io g_stdout = { g_vm_port_io, g_putnum(STDOUT_FILENO), g_putnum(EOF), g_putnum(false) };
 
 // --- raw terminal mode -----------------------------------------------
 static struct termios saved_termios;
@@ -82,20 +75,33 @@ static struct g *fd_getc(struct g *f) {
   if (n <= 0) { i->eof_seen = g_putnum(true); fc->b = EOF; }
   else fc->b = b;
   return f; }
+
 static struct g *fd_ungetc(struct g *f, int c) {
   struct g *fc = g_core_of(f);
   struct g_io *i = fc->io;
   i->ungetc_buf = g_putnum(c);
   i->eof_seen = g_putnum(false);
   return fc->b = c, f; }
+
 static struct g *fd_eof(struct g *f) {
   struct g *fc = g_core_of(f);
   struct g_io *i = fc->io;
   return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+
+static struct g *fd_putc(struct g *f, int c) {
+ uint8_t b = c;
+ if (f->io->fd == g_putnum(STDOUT_FILENO)) fputc(b, stdout);
+ else write(g_getnum(f->io->fd), &b, 1);
+ return f; }
+
+static struct g *fd_flush(struct g *f) {
+ if (f->io->fd == g_putnum(STDOUT_FILENO)) fflush(stdout);
+ return f; }
+
+struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
+
 struct g_io g_stdin = { g_vm_port_io, g_putnum(STDIN_FILENO), g_putnum(EOF), g_putnum(false) };
-
-struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, _putc, _flush };
-
+struct g_io g_stdout = { g_vm_port_io, g_putnum(STDOUT_FILENO), g_putnum(EOF), g_putnum(false) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that g_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live
