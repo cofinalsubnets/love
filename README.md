@@ -1,9 +1,50 @@
 # gwen lisp
 
-Gwen lisp is a lisp dialect and environment that can be built as a library,
-an executable, or for bare metal on various platforms.
+A lisp dialect where every value is a unary function.
 
-In gwen lisp every value is a one argument function.  There are four special forms:
+## features
+
+- lisp stuff: lists, symbols, macros, lambdas, lexical scope, garbage collection, eval/apply, call/cc
+- automatic currying
+- co-op multitasking
+- file i/o
+- floating point
+- mutable hash tables
+- multidimensional numeric arrays
+- repl with native line editing
+- self-hosting threaded code compiler
+- super portable: builds for MCUs, bare metal kernel, executable, shared or static library, WASM, etc.
+
+## language details
+
+Gwen lisp has Scheme-like lexical scope and a single namespace for functions and values, and uses four
+special forms with easy Scheme equivalents.  However, the evaluation procedure is different, more similar to Haskell,
+though gwen lisp is dynamically typed. Functions are automatically curried, and data implicitly act as their own constant
+functions.  Therefore in gwen lisp every value is a unary function. Lists are evaluated by left-to-right application:
+
+- `(f x y z) = (((f x) y) z) = (foldl f id (list x y z)) ; modulo side effects`
+
+However, this is only a conceptual description: actual evaluation order may vary for optimization purposes.
+Therefore if you need specific evaluation order you should use the sequencing form `:`
+
+```
+(: y (f 0) ; eval second argument first
+   x (g 0) ; eval first argument second
+ (c x y))
+```
+
+Since every value is a unary function, nullary/0-argument functions (thunks) don't exist per se in Gwen lisp, and a singleton
+list has the value of its element:
+
+- `(f) = f`
+
+To implement a nullary function, write a unary function and call with an arbitrary value. Conventionally `0` or `()` are used
+for this purpose. Similarly, variadic functions aren't a distinct feature in Gwen lisp, but they can either be simulated with
+macros, or written directly using an explicit sentinel (see below for an example).
+
+### special forms
+
+There are four special forms:
 
 | gwen               |  scheme equivalent |
 |--------------------|----------|
@@ -12,7 +53,7 @@ In gwen lisp every value is a one argument function.  There are four special for
 | `:`                | `let`    |
 | <code>&#92;</code> | `lambda` |
 
-## &#96; (quote)
+#### &#96; (quote)
 
 | gwen  | scheme |
 |-------|--------|
@@ -22,7 +63,7 @@ In gwen lisp every value is a one argument function.  There are four special for
 - like `quote` in other lisp
 - <code>(&#96; x) = 'x</code>
 
-## ? (cond)
+#### ? (cond)
 
 | gwen            | scheme                      |
 |-----------------|-----------------------------|
@@ -35,7 +76,7 @@ In gwen lisp every value is a one argument function.  There are four special for
 - `(? x a) = (? x a 0)`
 - `(? x) = x`
 
-## : (let)
+#### : (let)
 
 | gwen            | scheme                      |
 |-----------------|-----------------------------|
@@ -51,7 +92,7 @@ In gwen lisp every value is a one argument function.  There are four special for
 - assignments are immutable (some data are mutable)
 - also used for sequencing `(: _ (do this) _ (then do that) (final value))`
 
-## &#92; (lambda)
+#### &#92; (lambda)
 
 | gwen                           | scheme                 |
 |--------------------------------|------------------------|
@@ -61,41 +102,15 @@ In gwen lisp every value is a one argument function.  There are four special for
 - `(\ x) = x`
 - use `:` for sequencing multiple expressions in one function body
 
-## evaluation
-
-Gwen lisp has Scheme-like lexical scope and a single namespace for functions and values, and uses four
-special forms with easy Scheme equivalents.  However, the evaluation procedure is different, more similar to Haskell,
-though gwen lisp is dynamically typed. Functions are curried, and data implicitly act as their own constant functions.
-Therefore in gwen lisp every value is a one-argument function. Lists are evaluated by left-to-right application:
-
-- `(f x y z) = (((f x) y) z) = (foldl f id (list x y z)) ; modulo side effects`
-
-However, this is only a conceptual description. Internally gwen lisp may use different evaluation order for optimization
-reasons. Therefore if you need specific evaluation order for function arguments you should use the sequencing form `:`
-
-```
-(: y (f 0) ; eval second argument first
-   x (g 0) ; eval first argument second
- (c x y))
-```
-
-A singleton list has the value of its element, rather than representing a 0-argument function call like in other lisps.
-
-- `(f) = f`
-
-Nullary and variadic functions aren't distinct features in gwen lisp, but can be replicated with unary functions.
-For nullary functions, just pass an argument and ignore it. Conventionally `0` or `()` is used for this purpose in code.
-Variadic functions can either be simulated with macros, or written using sentinels.
-
 ## code examples
 
 ### variadic function using a sentinel
 
 ```
-(: end (sym ())
-   (li k x) (? (= end x) (k ()) (li (\ z (k (cons x z)))))
+(: endsym (sym 0)
+   (li k x) (? (= endsym x) (k ()) (li (\ z (k (cons x z)))))
    lis (li id)
- (lis 1 2 3 4 5 end)) ; = '(1 2 3 4 5)
+ (lis 1 2 3 4 5 endsym)) ; = '(1 2 3 4 5)
 ```
 
 ### church numerals
@@ -113,4 +128,3 @@ Variadic functions can either be simulated with macros, or written using sentine
    seven (add one six)
  (assert (= 420 (mul (mul two five) (mul six seven) (+ 1) 0))))
 ```
-
