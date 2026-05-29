@@ -99,7 +99,7 @@ g_vm(g_vm_fputs) {
   Pack(f);
   while (g_ok(f) && i < l)
    f = zputc(f, txt(f->sp[1])[i++]);
-  if (!g_ok(f)) return gtrap(f);
+  if (!g_ok(f = zflush(f))) return gtrap(f);
   Unpack(f); }
  return Sp++, Ip++, Continue(); }
 
