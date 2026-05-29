@@ -18,7 +18,6 @@ struct g *g_defs(struct g*f, struct g_def const*defs) {
  if (g_ok(f)) f->sp++;
  return f; }
 
-
 #define S1(i) {{i}, {g_vm_ret0}}
 #define S2(i) {{g_vm_cur},{.x=putnum(2)},{i}, {g_vm_ret0}}
 #define S3(i) {{g_vm_cur},{.x=putnum(3)},{i}, {g_vm_ret0}}
