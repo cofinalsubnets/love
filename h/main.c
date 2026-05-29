@@ -1,4 +1,4 @@
-#include "../g/g.h"
+#include "../g/i.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -193,5 +193,5 @@ int main(int argc, char const **argv) {
                         {"close", (g_word) bif_close},
                         {"argv", g_pop1(f)},
                         {0}};
-    f = g_evals(g_evals_(g_defs(f, d), boot), replp ? "(repl 0 0)" : rel); }
+    f = g_evals_(g_evals_(g_defs(f, d), boot), replp ? "(repl 0 0)" : rel); }
   return g_fin(f); }

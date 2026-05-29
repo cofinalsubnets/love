@@ -480,5 +480,6 @@ g_noinline struct g *g_evals(struct g*f, char const*s) {
  f = push0(pushq(push0(g_eval(g_reads(f, (void*) &i, false)))));
  i.t = s, i.i = 0, i.io.ungetc_buf = putnum(EOF), i.io.eof_seen = putnum(false);
  return g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i, false)))))); }
+struct g *g_evals_(struct g*f, char const *s) { return g_pop(g_evals(f, s), 1); }
 
 

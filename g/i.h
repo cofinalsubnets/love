@@ -2,6 +2,46 @@
 #define _g_i_h
 #include "g.h"
 
+#if UINTPTR_MAX == UINT64_MAX
+#define WBITS 64
+typedef double g_flo_t;
+#define G_VT_FLO g_vt_f64
+#define g_sin   sin
+#define g_cos   cos
+#define g_tan   tan
+#define g_atan  atan
+#define g_atan2 atan2
+#define g_sqrt  sqrt
+#define g_exp   exp
+#define g_log   log
+#define g_pow   pow
+#elif UINTPTR_MAX == UINT32_MAX
+#define WBITS 32
+typedef float g_flo_t;
+#define G_VT_FLO g_vt_f32
+#define g_sin   sinf
+#define g_cos   cosf
+#define g_tan   tanf
+#define g_atan  atanf
+#define g_atan2 atan2f
+#define g_sqrt  sqrtf
+#define g_exp   expf
+#define g_log   logf
+#define g_pow   powf
+#endif
+
+#if __STDC_HOSTED__
+#include <math.h>
+#else
+g_flo_t g_sin(g_flo_t), g_cos(g_flo_t), g_tan(g_flo_t), g_atan(g_flo_t),
+        g_atan2(g_flo_t, g_flo_t), g_sqrt(g_flo_t), g_exp(g_flo_t),
+        g_log(g_flo_t), g_pow(g_flo_t, g_flo_t);
+#endif
+
+#define WBYTES (WBITS>>3)
+_Static_assert(WBYTES == sizeof(uintptr_t), "word size sanity check");
+
+#define G_WAIT_FDS_MAX 8
 #include <stdarg.h>
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
@@ -69,10 +109,23 @@ typedef g_word num, word;
 enum g_vec_type {
  g_vt_u8, g_vt_u16, g_vt_u32, g_vt_u64,
  g_vt_i8, g_vt_i16, g_vt_i32, g_vt_i64,
- g_vt_f32, g_vt_f64,
-};
+ g_vt_f32, g_vt_f64, };
+void g_wait_fds(int const *fds, int n, uintptr_t ticks);
+bool g_ready(int fd), g_strp(g_word);
 struct g
+ *g_read(struct g*, struct g_io*),
+ *g_pop(struct g*, uintptr_t),
  *g_please(struct g*, uintptr_t),
+ *g_evals(struct g*, const char*),
+ *g_push(struct g*, uintptr_t, ...),
+ *g_strof(struct g*, const char*),
+ *gxl(struct g*),
+ *gxr(struct g*),
+ *gputc(struct g*, int),
+ *gputx(struct g*, intptr_t),
+ *gputn(struct g*, intptr_t, uint8_t),
+ *gputs(struct g*, char const*),
+ *g_eval(struct g*),
  *have(struct g*, uintptr_t),
  *g_tput(struct g*),
  *mktbl(struct g*),

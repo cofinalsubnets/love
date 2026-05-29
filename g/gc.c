@@ -109,13 +109,6 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
    g->t0 = g_clock(),
    g); }
 
-struct g *g_finalize(struct g *f, union u *p, void (*fn)(void *)) {
- if (g_ok(f = have(g_push(f, 1, p), Width(struct g_fz)))) {
-  p = cell(pop1(f));
-  struct g_fz *n = bump(f, Width(struct g_fz));
-  n->p = p, n->fn = fn, n->next = f->fz, f->fz = n; }
- return f; }
-
 static g_inline word copy_two(struct g*f, struct g_pair *src, word const *const p0, word const *const t0) {
  struct g_pair *dst = bump(f, Width(struct g_pair));
  ini_two(dst, src->a, src->b);

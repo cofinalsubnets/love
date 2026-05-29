@@ -50,30 +50,8 @@
 // ok thanks
 typedef intptr_t g_word;
 
-// gwen's runtime float width. 64-bit hosts get double; 32-bit ports
-// (Playdate, pico, esp32, wasm32) get float so they can use their
-// hardware single-precision FPU instead of soft-emulated doubles.
-// G_VT_FLO is the matching enum g_vec_type entry the boxed-flo
-// allocator stamps in.
-#if UINTPTR_MAX > 0xffffffffu
-typedef double g_flo_t;
-#define G_VT_FLO g_vt_f64
-#else
-typedef float g_flo_t;
-#define G_VT_FLO g_vt_f32
-#endif
 union u;
 typedef g_vm(g_vm_t);
-typedef void *g_malloc_t(struct g*, size_t);
-typedef void g_free_t(struct g*, void*);
-
-// Byte string. Interned, immutable. Bytes are not nul-terminated; length
-// is the byte count.
-struct g_str {
- g_vm_t *ap;
- uintptr_t typ;       // text_q
- uintptr_t len;       // byte count
- char bytes[]; };
 
 // Typed N-dim array. Rank 0 = scalar (no shape words); payload at
 // (void*)(shape + rank). Immutable.
@@ -89,23 +67,30 @@ struct g {
   union u *m; } *ip;
  g_word *hp, *sp;
  union u *tasks;       // task ring head (running task's node); always non-NULL after g_ini
- uintptr_t yield_ctr;  // ap-cycles since last cooperative yield; counts up to YIELD_INTERVAL (level-triggered)
- uintptr_t next_pid;   // monotonic pid counter; pre-incremented, so first spawn returns 1
- uintptr_t next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
- int next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
+ uintptr_t yield_ctr,  // ap-cycles since last cooperative yield; counts up to YIELD_INTERVAL (level-triggered)
+           next_pid,   // monotonic pid counter; pre-incremented, so first spawn returns 1
+           next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
+ intptr_t next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
  struct g_atom {
   g_vm_t *ap;
   g_word typ;
   uintptr_t code;
-  struct g_str *nom;
+  struct g_str {
+   g_vm_t *ap;
+   uintptr_t typ;       // text_q
+   uintptr_t len;       // byte count
+   char bytes[]; } *nom;
   struct g_atom *l, *r; } *symbols;
  uintptr_t len;
  struct g *pool;
- struct g_r { g_word *x; struct g_r *n; } *root;
- struct g_fz *fz;  // GC-managed list of (p, fn, next), 3 words each on the gwen heap
+ struct g_r { g_word *x; struct g_r *n; } *root; // gc roots list
+ struct g_fz { // finalizers
+  union u *p;
+  void (*fn)(void *);
+  struct g_fz *next; } *fz;
  union { uintptr_t t0; g_word *cp; };
- g_malloc_t *malloc;
- g_free_t *free;
+ void *(*malloc)(struct g*, size_t),
+      (*free)(struct g*, void*);
  struct g *(*trap)(struct g*);
  uintptr_t b;
  union {
@@ -119,22 +104,14 @@ struct g {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
    } *dict, *macro;
-   union {
-    struct g_io *io; }; }; };
+  struct g_io {
+   g_vm_t *ap;
+   g_word fd;
+   g_word ungetc_buf;            // pushed-back byte; putnum(EOF) = empty
+   g_word eof_seen; } *io; }; }; // set by getc on read-returning-0, cleared by ungetc
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };
-
-// Unified I/O port. Direction is enforced by which slot in `struct g`
-// the port is installed at (`in` vs `out`), not by the type. fd >= 0 is
-// an OS handle (frontend's g_fd_port_vt); fd <= -1 indexes the synthetic
-// vtable table at `-(fd + 1)`. ungetc_buf/eof_seen are read-side state;
-// write-only ports carry but ignore them.
-struct g_io {
- g_vm_t *ap;
- g_word fd;
- g_word ungetc_buf;       // pushed-back byte; putnum(EOF) = empty
- g_word eof_seen; };      // set by getc on read-returning-0, cleared by ungetc
 
 // Port vtable. One shape covers both directions; unused slots in a given
 // port get noop_* stubs (defined in g.c) so dispatch needs no NULL guards.
@@ -145,21 +122,9 @@ struct g_port_vt {
          *(*putc)(struct g*, int),
          *(*flush)(struct g*); };
 
-struct g_fz {
- union u *p;
- void (*fn)(void *);
- struct g_fz *next; };
-
-struct g *g_finalize(struct g*, union u *p, void (*fn)(void *));
-
-
-enum g_status {
- g_status_ok  = 0,
- g_status_oom = 1,
- g_status_err = 2,
- g_status_eof = 3,
- g_status_more = 4,   // EOF inside an unfinished form -- defer, retry later
-} g_fin(struct g*);
+// only 2 tag bits on 32 bit so we can only have four of these
+enum g_status { g_status_ok = 0, g_status_oom = 1, g_status_eof = 2, g_status_more = 3 };
+enum g_status g_fin(struct g*);
 
 static g_inline intptr_t g_pop1(struct g*f) { return *f->sp++; }
 static g_inline size_t b2w(size_t b) {
@@ -191,82 +156,11 @@ void g_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
 // g_clock() units (ticks=0 means infinite). No input wakeup; the scheduler
 // dispatches to g_wait_fds when tasks are parked on streams. Default = no-op.
 
-// Multi-source wait. Wakes when input is ready on any of the fds, or when
-// `ticks` ms elapse (ticks=0 = infinite). With n=0 reduces to g_sleep.
-// The scheduler aggregates at most G_WAIT_FDS_MAX fds per call.
-#define G_WAIT_FDS_MAX 8
-void g_wait_fds(int const *fds, int n, uintptr_t ticks);
-
-// Non-blocking readiness peek on a single fd. fd=-1 (data source) always
-// returns true. fds not registered by the frontend return false.
-g_noinline bool g_ready(int fd);
-
-// Math: gwen routes transcendentals straight to the C library's math
-// functions. Hosted builds pull prototypes from <math.h> and link libm;
-// the freestanding kernel (-nostdinc, no <math.h>, all arches 64-bit)
-// self-declares them and supplies its own impls in k/libc.c. The g_*
-// names are compile-time aliases, width-matched so 32-bit float ports
-// (Playdate, pico, esp) use the single-precision f-suffixed entries and
-// keep arithmetic on the hardware FPU.
-#if __STDC_HOSTED__
-#include <math.h>
-#else
-double sin(double), cos(double), tan(double), atan(double),
-       atan2(double, double), sqrt(double), exp(double),
-       log(double), pow(double, double);
-#endif
-#if UINTPTR_MAX > 0xffffffffu
-#define g_sin   sin
-#define g_cos   cos
-#define g_tan   tan
-#define g_atan  atan
-#define g_atan2 atan2
-#define g_sqrt  sqrt
-#define g_exp   exp
-#define g_log   log
-#define g_pow   pow
-#else
-#define g_sin   sinf
-#define g_cos   cosf
-#define g_tan   tanf
-#define g_atan  atanf
-#define g_atan2 atan2f
-#define g_sqrt  sqrtf
-#define g_exp   expf
-#define g_log   logf
-#define g_pow   powf
-#endif
-
 struct g
- *gputc(struct g*, int),
- *gputx(struct g*, intptr_t),
- *gputn(struct g*, intptr_t, uint8_t),
- *gputs(struct g*, char const*);
+ *g_ini(void),
+ *g_ini_m(void*(*)(struct g*, size_t), void(*)(struct g*,void*)),
+ *g_evals_(struct g*, const char*),
+ *g_defs(struct g*, struct g_def const*);
 
-// Public predicate: is x a gwen string? True iff x is a heap struct g_str.
-// Frontends use this to type-check bif args. Bytes live at
-// `((struct g_str*)x)->bytes` and the byte length is `((struct g_str*)x)->len`.
-bool g_strp(g_word);
-
-struct g
- *g_ini_m(g_malloc_t*, g_free_t*),
- *g_eval(struct g*),
- *g_evals(struct g*, const char*),
- *g_read(struct g*, struct g_io*),
- *g_feed(struct g*),
- *g_defs(struct g*, struct g_def const*),
- *g_push(struct g*, uintptr_t, ...),
- *g_strof(struct g*, const char*),
- *g_pop(struct g*, uintptr_t),
- *gxl(struct g*),
- *gxr(struct g*);
-
-g_malloc_t g_libc_malloc;
-g_free_t g_libc_free;
-static g_inline struct g *g_ini(void) {
-  return g_ini_m(g_libc_malloc, g_libc_free); }
-static g_inline struct g *g_evals_(struct g *f, char const *s) {
-  return g_pop(g_evals(f, s), 1); }
 extern struct g_io g_stdin, g_stdout;
-
 #endif

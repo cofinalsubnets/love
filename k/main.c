@@ -2,7 +2,7 @@
 #include "limine/limine.h"
 #endif
 #include "k_boot.h"
-#include "g.h"
+#include "i.h"
 #include "cb.h"
 #include <stdarg.h>
 #include <limits.h>

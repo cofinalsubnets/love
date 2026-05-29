@@ -7,9 +7,6 @@ enum g_status g_fin(struct g *f) {
    f->free(f, f->pool); }
  return s; }
 
-void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
-void g_libc_free(struct g*f, void *x) { free(x); }
-
 struct g *g_defs(struct g*f, struct g_def const*defs) {
  if (!g_ok(f)) return f;
  f = g_push(f, 1, f->dict);
@@ -66,7 +63,7 @@ static union u yield_c[] = { {_g_vm_yield_c} };
 static struct g_def const def1[] = { bifs(biff) insts(i_entry) {0}};
 static struct g *g_trap_default(struct g *f) { return f; }
 
-g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
+struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  uintptr_t const len0 = 1 << 10;
  struct g *f = ma(NULL, 2 * len0 * sizeof(word));
  if (f == NULL) return encode(f, g_status_oom);
@@ -93,3 +90,7 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
   M[5].m = NULL;
   M[6].m = f->tasks = M; }
  return f; }
+
+static void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
+static void g_libc_free(struct g*f, void *x) { free(x); }
+struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }

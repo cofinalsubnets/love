@@ -396,8 +396,7 @@ static struct g *ci_alloc(struct g *f) {
 g_vm(g_vm_strin) {
  Pack(f);
  if (!g_ok(f = ci_alloc(f))) return gtrap(f);
- Unpack(f);
- return Ip++, Continue(); }
+ return Unpack(f), Ip++, Continue(); }
 
 struct g *gputc(struct g*f, int c)  { return g_core_of(f)->io = &g_stdout, port_vt(g_stdout.fd)->putc(f, c); }
 // Default fd-keyed waits. Frontends override; defaults are conservative
@@ -470,21 +469,20 @@ static void io_close(void *p) {
 // the dispatcher routes through g_fd_port_vt, so the host's read/write
 // methods see this port like any other.
 struct g *g_io_alloc(struct g *f, int fd) {
- uintptr_t n = Width(struct g_io);
- if (!g_ok(f = have(f, n + Width(struct g_tag) + 1))) return f;
- union u *k = bump(f, n + Width(struct g_tag));
- struct g_io *io = (struct g_io*) k;
- io->ap = g_vm_port_io;
- io->fd = putnum(fd);
- io->ungetc_buf = putnum(EOF);
- io->eof_seen = putnum(false);
- k[n].m = NULL;
- k[n+1].m = k;
- *--f->sp = (word) io;            // stack slot reserved by the +1 in have()
- // g_finalize MM-protects its `p` argument internally across its own
- // allocation, and the stack slot we just pushed will be forwarded by GC
- // if a collection happens, so Sp[0] holds the live port on return.
- return g_finalize(f, (union u*) f->sp[0], io_close); }
+ uintptr_t const n = Width(struct g_io);
+ if (g_ok(f = have(f, n + Width(struct g_tag) + Width(struct g_fz) + 1))) {
+  union u *k = bump(f, n + Width(struct g_tag));
+  struct g_io *io = (struct g_io*) k;
+  io->ap = g_vm_port_io;
+  io->fd = putnum(fd);
+  io->ungetc_buf = putnum(EOF);
+  io->eof_seen = putnum(false);
+  k[n].m = NULL;
+  k[n+1].m = k;
+  *--f->sp = (word) io;            // stack slot reserved by the +1 in have()
+  struct g_fz *z = bump(f, Width(struct g_fz));
+  z->p = k, z->fn = io_close, z->next = f->fz, f->fz = z; }
+ return f; }
 
 g_vm(g_vm_key) {
  Sp[0] = (getnum(g_stdin.ungetc_buf) != EOF || g_ready(getnum(g_stdin.fd))) ? putnum(-1) : nil;
