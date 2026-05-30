@@ -25,7 +25,7 @@
  (assert
     (= 2 (len t))
     (= 2 (len (tkeys t)))
-    (: (lll t) (foldl 0 (\ l k (X k (X (Get k) l))) (tkeys t))
+    (: (lll t) (foldl (\ l k (X k (X (Get k) l))) 0 (tkeys t))
      (= (* 2 (len t)) (len (lll t))))))
 
 (:

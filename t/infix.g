@@ -149,7 +149,7 @@
   (= '(+ (f x) (g y))     (infix_rewrite '(f x + g y) table))
   (= '(* ((f x) y) z)     (infix_rewrite '(f x y * z) table))
   (= '((map +) xs)        (infix_rewrite '(map (+) xs) table))
-  (= '((foldl +) 0)       (infix_rewrite '(foldl (+) 0) table))
+  (= '((foldl 0) +)       (infix_rewrite '(foldl 0 (+)) table))
   (= '(+ ((map +) xs) 1)  (infix_rewrite '((map (+) xs) + 1) table))
   ; quoted data is opaque — the inner list is not reshuffled
   (= ''(1 2 3)            (infix_rewrite '('(1 2 3)) table))
@@ -177,7 +177,7 @@
  (= 7  (infix 3 * (1 + 2) - 2))
  (= 5  (infix (+) 2 3))
  (= 25 (: f (* 5) (infix f 4 + 5)))
- (= 10 (: l (L 1 2 3 4) (infix foldl 0 (+) l)))
+ (= 10 (: l (L 1 2 3 4) (infix foldl (+) 0 l)))
  (= 3  (infix len '(1 2 3)))
  (= 3  (infix len (prefix L 1 2 3)))
  (= 7  (infix 1 + (infix 2 * 3)))

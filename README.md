@@ -22,7 +22,7 @@ special forms with easy Scheme equivalents.  However, the evaluation procedure i
 though gwen lisp is dynamically typed. Functions are automatically curried, and data implicitly act as their own constant
 functions.  Therefore in gwen lisp every value is a unary function. Lists are evaluated by left-to-right application:
 
-- `(f x y z) = (((f x) y) z) = (foldl f id (list x y z)) ; modulo side effects`
+- `(f x y z) = (((f x) y) z) = (foldl id f (list x y z)) ; modulo side effects`
 
 However, this is only a conceptual description: actual evaluation order may vary for optimization purposes.
 Therefore if you need specific evaluation order you should use the sequencing form `:`

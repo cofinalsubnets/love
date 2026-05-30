@@ -25,7 +25,7 @@
 ; and the buffer becomes a new entry, so the original survives.
 (: m (sym 0) eofsym (sym 0)
 
-   (revcat a b) (foldl b (flip cons) a)
+   (revcat a b) (foldl (flip cons) b a)
 
    ; drain a charlist into a list of all the datums it holds. returns m
    ; if the input ends inside an unfinished form; otherwise the (possibly

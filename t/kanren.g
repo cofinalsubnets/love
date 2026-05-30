@@ -61,9 +61,9 @@
 (:: 'zz (\ x (: s (sym 0) n (sym 0) m (sym 0) y (sym 0) x (A x)
  (L '\ s n m y (L m (L x s))))))
 (:: 'et (\ xs (: x (A xs) xs (B xs)
- (foldl x (\ a b (L (\ a b s (s_star (a s) b)) a b)) xs))))
+ (foldl (\ a b (L (\ a b s (s_star (a s) b)) a b)) x xs))))
 (:: 'vel (\ xs (: x (A xs) xs (B xs)
- (foldl x (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) xs))))
+ (foldl (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) x xs))))
 (:: '\\ (\ a (X (X '\ a) (map (\ a (L var (L '` a))) (init a)))))
 
 (assert

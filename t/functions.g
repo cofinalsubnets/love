@@ -13,8 +13,8 @@
  (= 2 ((\ f n (f n)) 2 3))
  (= 'a ('a 'b 'c 'd))
  (= 'a ((\ a b c d (a b c d)) 'a 'b 'c 'd))
- (= 3 (foldl + id '(1 2 3 4 5 6)))
- (= 11 (foldl + id '(6 5 4 3 2 1))))
+ (= 3 (foldl id + '(1 2 3 4 5 6)))
+ (= 11 (foldl id + '(6 5 4 3 2 1))))
 ; basic arithmetic
 (: zero? (= 0)
 (assert
