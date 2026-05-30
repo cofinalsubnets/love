@@ -15,8 +15,8 @@ syn keyword PFunc cons car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar
 syn keyword PFunc foldl foldr foldl1 foldr1 map filter id const cat each
 syn keyword PFunc all any init last rev take drop catmap
 syn keyword PFunc inc dec flip diag part len ldel puts zip lidx memq assq
-syn keyword PFunc twop nump symp nomp tblp strp nilp homp ev not atomp
-syn keyword PFunc str scat ssub sym nom putc co
+syn keyword PFunc twop nump symp nomp tblp strp nilp homp ev ap not atomp
+syn keyword PFunc str scat ssub sym nom putc co putn read fputc fputs fputn fread
 syn keyword PFunc tnew thas tkeys tdel set put get new
 syn keyword PFunc :: < <= = >= > != + - ~ ! * / % .
 syn keyword PFunc assert
@@ -35,6 +35,12 @@ syn match PAtom "'[^ \t()]\+" contains=PAtomMark
 
 " Numbers (integer literals, possibly negative)
 syn match PNumber "\<-\?\d\+\>"
+
+" Floating point literals: 1.5  -1.5  .5  1.  1e10  1.5e-3  (a point and/or exponent)
+" Defined after PNumber so a float wins over the integer match at a shared start.
+syn match PFloat "\<-\?\d\+\.\d*\([eE][-+]\?\d\+\)\?\>"
+syn match PFloat "\<-\?\.\d\+\([eE][-+]\?\d\+\)\?\>"
+syn match PFloat "\<-\?\d\+[eE][-+]\?\d\+\>"
 
 " Strings
 syn region PString start='"' skip='\\\\\|\\"' end='"'
@@ -56,6 +62,7 @@ hi def link PForm           Statement
 hi def link PFunc           Function
 hi def link PMacro          Operator
 hi def link PNumber         Number
+hi def link PFloat          Float
 hi def link PParenError     Error
 hi def link PString         String
 hi def link PBool           Boolean
@@ -63,7 +70,7 @@ hi def link PBool           Boolean
 " Rainbow parentheses — each nesting level gets its own colour.
 " Each region contains the cluster plus the next level; level 9 wraps to 0.
 " Toggle with \r (or :GwRainbow) — controlled by g:gw_rainbow (default: 1).
-syn cluster PListCluster contains=PAtom,PAtomMark,PBool,PComment,PCommentTodo,PFunc,PNumber,PSymbol,PForm,PString,PMacro
+syn cluster PListCluster contains=PAtom,PAtomMark,PBool,PComment,PCommentTodo,PFunc,PNumber,PFloat,PSymbol,PForm,PString,PMacro
 
 if !exists("g:gw_rainbow")
   let g:gw_rainbow = 0
