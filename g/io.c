@@ -133,8 +133,7 @@ static struct g *to_alloc(struct g *f) {
  o->io.eof_seen = putnum(false);
  o->buf = (struct g_str*) f->sp[0];
  o->i = nil;
- k[n].m = NULL;
- k[n+1].m = k;
+ tag_thd(k + n, k);
  f->sp[0] = (word) o;
  return f; }
 
@@ -359,8 +358,7 @@ static struct g *ci_alloc(struct g *f) {
  i->io.ungetc_buf = putnum(EOF);
  i->io.eof_seen = putnum(false);
  i->head = f->sp[0];
- k[n].m = NULL;
- k[n+1].m = k;
+ tag_thd(k + n, k);
  f->sp[0] = (word) i;
  return f; }
 // (strin cl) — make a read-only synth port (fd=-4, ci) whose getc walks
@@ -450,8 +448,7 @@ struct g *g_io_alloc(struct g *f, int fd) {
   io->fd = putnum(fd);
   io->ungetc_buf = putnum(EOF);
   io->eof_seen = putnum(false);
-  k[n].m = NULL;
-  k[n+1].m = k;
+  tag_thd(k + n, k);
   *--f->sp = (word) io;            // stack slot reserved by the +1 in have()
   struct g_fz *z = bump(f, Width(struct g_fz));
   z->p = k, z->fn = io_close, z->next = f->fz, f->fz = z; }

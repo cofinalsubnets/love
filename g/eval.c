@@ -37,7 +37,7 @@ static struct g *enscope(struct g *f, struct env *par, word args, word imps) {
   struct env *c = bump(f, n);
   c->stack = c->branches = c->exits = c->lams = c->len = nil;
   c->args = f->sp[0], c->imps = f->sp[1], c->par = (struct env*) f->sp[2];
-  c->end[0] = 0, c->end[1] = word(c);
+  tag_thd((union u*) c->end, (union u*) c);
   f->sp[2] = (word) c, f->sp += 2; }
  return f; }
 
@@ -79,9 +79,9 @@ static Cata(c1) {
  f = g_have(f, l + Width(struct g_tag));
  if (g_ok(f)) {
   union u *k = bump(f, l + Width(struct g_tag));
-  k[l].m = NULL, k[l+1].m = memset(k, -1, l * sizeof(word));
+  memset(k, -1, l * sizeof(word)), tag_thd(k + l, k);
   Kp = k + l;
-  if (g_ok(f = pull(f, c))) clip(Kp); }
+  if (g_ok(f = pull(f, c))) clip(f, Kp); }
  return f; }
 
 static Cata(c1_yield) { return f; }

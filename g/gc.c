@@ -32,7 +32,10 @@ static g_inline void evac_tbl(struct g*f, word const*const p0, word const*const 
    e = e->next); }
 
 static g_inline void evac_thd(struct g *g, word const *const p0, word const*const t0) {
-  for (g->cp += 2; g->cp[-2]; g->cp[-2] = gcp(g, g->cp[-2], p0, t0), g->cp++); }
+  // terminator payloads point into the new pool (the copied object's home);
+  // a stray 2-byte-aligned external content word is rejected by the range
+  word const *lo = ptr(g), *hi = ptr(g) + g->len;
+  for (g->cp += 1; !tagp(g->cp[-1], lo, hi); g->cp[-1] = gcp(g, g->cp[-1], p0, t0), g->cp++); }
 
 static g_inline void evac_data(struct g *g, word const *const p0, word const*const t0) {
   switch (typ(g->cp)) {
@@ -158,11 +161,12 @@ static g_inline word copy_data(struct g *f, union u *src, word const *const p0, 
 
 static g_inline word copy_thread(struct g *f, union u *src, word const *const p0, word const *const t0) {
  // it's a thread, find the end to find the head
- struct g_tag *t = ttag(src);
- union u *ini = t->head, *d = bump(f, t->end - ini), *dst = d;
- // copy source contents to dest and write dest addresses to source
- for (union u*s = ini; (d->x = s->x); s++->x = (word) d++);
- ((struct g_tag*) d)->head = dst;
+ struct g_tag *t = ttag(src, p0, t0);
+ union u *ini = tag_head(t), *d = bump(f, t->end - ini), *dst = d;
+ // copy each content word to dest and leave a forwarding pointer behind,
+ // stopping at the terminator; then rewrite it as the new tagged head
+ for (union u *s = ini; !tagp(s->x, p0, t0); s->x = (word) d, d++, s++) d->x = s->x;
+ tag_thd(d, dst);
  return (word) (dst + (src - ini)); }
 
 static g_noinline intptr_t gcp(struct g *f, word x, word const *p0, word const *t0) {

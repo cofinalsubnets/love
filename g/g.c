@@ -90,15 +90,14 @@ struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) 
   {"in", (word) &g_stdin},
   {"out", (word) &g_stdout},
   {0}, };
- if (g_ok(f = g_have(g_defs(g_defs(f, def0), def1), 7))) {
-  union u *M = bump(f, 7);
+ if (g_ok(f = g_have(g_defs(g_defs(f, def0), def1), 6))) {
+  union u *M = bump(f, 6);
   M[0].m = M;
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
   M[4].x = putnum(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
-  M[5].m = NULL;
-  M[6].m = f->tasks = M; }
+  f->tasks = M, tag_thd(M + 5, M); }
  return f; }
 
 static void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }

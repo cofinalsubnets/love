@@ -201,11 +201,28 @@ static g_inline void flo_put(void *p, g_flo_t v) {
 g_noinline bool eqv(struct g*, word, word); // this is for checking equality of non-identical values
 static g_inline bool eql(struct g *f, word a, word b) { return a == b || eqv(f, a, b); }
 
-static g_inline struct g_tag { union u *null, *head, end[]; } *ttag(union u *k) {
- while (k->x) k++;
+// Threads -- and every other variable-length heap object the GC copies by
+// scanning (continuations, task nodes, env scopes, ports) -- end with a single
+// tag word: the object's own head pointer with bit 1 set (G_THD_TAG), saving a
+// word over a separate NULL marker + head. Small ints are odd and gwen heap
+// pointers are word-aligned, so the only other word that can carry (x & 3) == 2
+// is an embedded *external* pointer (host data/function) that happens to land
+// on a 2-byte boundary. So the terminator test is not just the tag bits: the
+// payload must also point back into [lo, hi), the pool the object lives in --
+// which a stray external pointer never does.
+#define G_THD_TAG 2
+static g_inline bool tagp(word x, word const *lo, word const *hi) {
+ word const *p = (word const*) (x & ~(word) 3);
+ return (x & 3) == G_THD_TAG && p >= lo && p < hi; }
+static g_inline void tag_thd(union u *e, union u *head) { e->x = word(head) | G_THD_TAG; }
+static g_inline struct g_tag { union u *head; union u end[]; }
+ *ttag(union u *k, word const *lo, word const *hi) {
+ while (!tagp(k->x, lo, hi)) k++;
  return (struct g_tag*) k; }
+static g_inline union u *tag_head(struct g_tag *t) { return cell(word(t->head) & ~(word) 3); }
 
-static g_inline union u *clip(union u *k) { return ttag(k)->head = k; }
+static g_inline union u *clip(struct g *f, union u *k) {
+ return tag_thd((union u*) ttag(k, ptr(f), ptr(f) + f->len), k), k; }
 
 static g_inline struct g *encode(struct g*f, enum g_status s) { return
   (struct g*) ((uintptr_t) f | s); }

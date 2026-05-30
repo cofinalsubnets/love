@@ -60,7 +60,7 @@ g_vm(g_vm_ret0) { return
 // kcall : x = Sp[0], k = Ip[1] -> Ip = k, Sp[0] = x
 g_vm(g_vm_kcall) {
  word x = Sp[0];
- union u *stack = Ip + 2, *end = (union u*) ttag(stack);
+ union u *stack = Ip + 2, *end = (union u*) ttag(stack, ptr(f), ptr(f) + f->len);
  uintptr_t height = end - stack;
  Have(height);
  *(Sp = memmove(topof(f) - height, stack, height * sizeof(word))) = x;
@@ -79,8 +79,7 @@ g_vm(g_vm_callk) {
  k[0].ap = g_vm_kcall;                       // 
  k[1].m  = Ip + 1;                           // resume at next instruction
  memcpy(k + 2, Sp, height * sizeof(word));
- k[n].m = NULL;
- k[n+1].m = k;
+ tag_thd(k + n, k);
  Sp -= 1;
  Sp[0] = word(k);
  Sp[1] = f_val;
@@ -144,9 +143,9 @@ g_vm(g_vm_yield_sw) {
    if (f->yield_ctr >= YIELD_INTERVAL) f->yield_ctr = 0;
    return Continue(); } }
  word my_height = topof(f) - Sp;
- union u *next_stack = next + 5, *end = (union u*) ttag(next_stack);
+ union u *next_stack = next + 5, *end = (union u*) ttag(next_stack, ptr(f), ptr(f) + f->len);
  uintptr_t restore_h = end - next_stack,
-           need = my_height + restore_h + 7;
+           need = my_height + restore_h + 6;
  if (Sp < Hp + need) {
   Pack(f);
   if (!g_ok(f = g_please(g_push(f, 1, next), need))) return gtrap(f);
@@ -165,8 +164,7 @@ g_vm(g_vm_yield_sw) {
  N[3].x = putnum((intptr_t) my_wake);
  N[4].x = putnum(my_wait_fd);
  memcpy(N + 5, Sp, my_height * sizeof(word));
- N[5 + my_height].m = NULL;
- N[6 + my_height].m = prev->m = N;
+ prev->m = N, tag_thd(N + 5 + my_height, N);
  f->yield_ctr = 0;
  f->tasks = next;
  Sp = memmove(topof(f) - restore_h, next_stack, restore_h * sizeof(word));
@@ -177,10 +175,10 @@ g_vm(g_vm_yield_bif) { return Ip++, Ap(g_vm_yield_sw, f); }
 g_vm(g_vm_task_exit) { return Ap(g_vm_yield_sw, f); }
 static union u spawn_body[] = { {g_vm_ap}, {.ap = g_vm_task_exit} };
 g_vm(g_vm_spawn) {
- Have(9);
- // New task node N: [next, saved_ip=spawn_body, pid, wake_at=0, wait_io=0, stack[0..1]=x,fn, NULL, HEAD]
+ Have(8);
+ // New task node N: [next, saved_ip=spawn_body, pid, wake_at=0, wait_io=0, stack[0..1]=x,fn, tag]
  union u *N = (union u*) Hp;
- Hp += 9;
+ Hp += 8;
  word fn = Sp[0], x = Sp[1];
  uintptr_t pid = ++f->next_pid;
  N[0].m = f->tasks->m;
@@ -190,8 +188,7 @@ g_vm(g_vm_spawn) {
  N[4].x = putnum(-1);  // wait_fd: -1 = not waiting on I/O
  N[5].x = x;
  N[6].x = fn;
- N[7].m = NULL;
- N[8].m = f->tasks->m = N;
+ f->tasks->m = N, tag_thd(N + 7, N);
  return Sp++, Ip++, Continue(); }
 
 g_vm(g_vm_wait) {
@@ -266,8 +263,7 @@ g_vm(g_vm_cur) {
   j[0].ap = g_vm_unc,
   j[1].x = *Sp++,
   j[2].m = Ip + 2,
-  j[3].x = 0,
-  j[4].m = k,
+  tag_thd(j + 3, k),
   Ip = cell(*Sp),
   Sp[0] = word(k),
   Continue(); }
@@ -311,7 +307,7 @@ g_vm(g_vm_arg) {
  return Continue(); }
 
 g_vm(g_vm_trim) { return
- clip(cell(Sp[0])), Ip++, Continue(); }
+ clip(f, cell(Sp[0])), Ip++, Continue(); }
 
 g_vm(g_vm_seek) { return
  Sp[1] = word(cell(Sp[1]) + getnum(Sp[0])),
@@ -330,7 +326,7 @@ g_vm(g_vm_thda) {
  Have(n + Width(struct g_tag));
  union u *k = (union u*) Hp;
  Hp += n + Width(struct g_tag);
- k[n].m = NULL, k[n+1].m = k;
+ tag_thd(k + n, k);
  Sp[0] = word(memset(k, -1, n * sizeof(word)));
  return Ip++, Continue(); }
 
