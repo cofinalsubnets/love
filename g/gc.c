@@ -72,6 +72,8 @@ static g_noinline struct g *gcg(struct g*g, struct g *p1, uintptr_t len1, struct
  for (struct g_r *s = g->root; s; s = s->n) *s->x = gcp(g, *s->x, p0, t0); // C live variables
  while (g->cp < g->hp) (datp(g->cp) ? evac_data : evac_thd)(g, p0, t0);              // cheney algorithm
  run_finalizers(g);
+ if (g->len > g->max_len) g->max_len = g->len;                                       // instrumentation: peak pool len
+ { uintptr_t heap = g->hp - g->end; if (heap > g->max_heap) g->max_heap = heap; }    // peak live (compacted) heap
  return g; }
 
 
@@ -83,6 +85,7 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
  // find alternate pool
  struct g *g = off_pool(f);
  f = gcg(g, f->pool, f->len, f);
+ f->n_gc += 1; // instrumentation: count one gc cycle per please
  uintptr_t const
   v_lo = 4,
   v_hi = v_lo * v_lo,

@@ -104,6 +104,7 @@ struct g {
       (*free)(struct g*, void*);
  struct g *(*trap)(struct g*);
  uintptr_t b;
+ uintptr_t n_gc, max_len, max_heap; // gc instrumentation (cycles, peak pool len, peak live heap; words)
  union {
   intptr_t v0;
   struct {
