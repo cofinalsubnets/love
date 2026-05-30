@@ -6,6 +6,9 @@ include $(R)/common.mk
 
 h_o = $(g_c:$(R)/%.c=b/%.o)
 cc = $(CC) $(g_cflags) -fpic -I$(R) -I$(R)/g -I. -Ib
+# Pins the gwen_data_vt sentinel order on every final link (see the script).
+vt_ld = $(R)/g/gwen_data_vt.ld
+ldflags = -Wl,-T,$(vt_ld)
 
 .PHONY: default boot.h repl.h clean
 default: b/$n b/lib$n.so b/$n.1
@@ -23,10 +26,10 @@ b/lib$n.a: $(h_o)
 	@mkdir -p $(dir $@)
 	@ar rcs $@ $^
 
-b/lib$n.so: b/lib$n.a
+b/lib$n.so: b/lib$n.a $(vt_ld)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive -lm
+	@$(cc) $(ldflags) -shared -o $@ -Wl,--whole-archive b/lib$n.a -Wl,--no-whole-archive -lm
 
 # g/*.c (and any other root-level *.c) -> b/<dir>/*.o
 b/%.o: $(R)/%.c $(g_h)
@@ -40,15 +43,15 @@ b/%.o: %.c $(g_h)
 	@mkdir -p $(dir $@)
 	@$(cc) -c $< -o $@
 
-b/$n: main.c b/lib$n.a b/boot.h b/repl.h
+b/$n: main.c b/lib$n.a b/boot.h b/repl.h $(vt_ld)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(cc) -o $@ main.c b/lib$n.a -lm
+	@$(cc) $(ldflags) -o $@ main.c b/lib$n.a -lm
 
-b/lcat: lcat.c $(h_o)
+b/lcat: lcat.c $(h_o) $(vt_ld)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(cc) -o $@ $^ -lm
+	@$(cc) $(ldflags) -o $@ lcat.c $(h_o) -lm
 
 b/repl.h: b/lcat $(R)/$x/repl.$x
 	@echo GEN	$@

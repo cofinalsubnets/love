@@ -281,17 +281,26 @@ g_vm(g_vm_quote) {
  Ip += 2;
  return Continue(); }
 
-g_vm(g_vm_data) {
- word x = word(Ip);
- Ip = cell(*++Sp);
- *Sp = x;
- return Continue(); }
+// Self-quote sentinel: the ap (word 0) of a heap data object. Invoking it
+// pushes the object itself and returns to the caller. DATA_SENTINEL emits
+// each one into its own input subsection gwen_data_vt.NN (NN = the enum q
+// slot) so a future per-kind scheme can treat the sentinels as a contiguous,
+// enum-ordered address range. g/gwen_data_vt.ld SORTs the subsections into
+// one .gwen_data_vt block and provides the __start_/__stop_ bounds; a
+// frontend with its own full linker script must inline an equivalent block
+// (and KEEP it). Because a sentinel's *address* is meant to carry the type
+// tag, g_noicf keeps the byte-identical bodies from being folded to one
+// address. Today only these two exist: g_vm_data for every structural data
+// kind (kind stored in the typ word) and g_vm_port_io for ports.
+#define DATA_SENTINEL(idx, name) \
+ __attribute__((section("gwen_data_vt." #idx), used)) g_noicf g_vm(name) { \
+  word x = word(Ip); \
+  Ip = cell(*++Sp); \
+  *Sp = x; \
+  return Continue(); }
 
-g_vm(g_vm_port_io) {
- word x = word(Ip);
- Ip = cell(*++Sp);
- *Sp = x;
- return Continue(); }
+DATA_SENTINEL(00, g_vm_data)
+DATA_SENTINEL(01, g_vm_port_io)
 
 // push a value from the stack
 g_vm(g_vm_arg) {

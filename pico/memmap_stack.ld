@@ -70,6 +70,14 @@ SECTIONS
          * FLASH ... we will include any thing excluded here in .data below by default */
         *(.init)
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .text*)
+        /* gwen data self-quote sentinels: kept contiguous and in enum
+           order (gwen_data_vt.NN) so g_typ() recovers a kind from an ap's
+           slot index. Mirrors g/gwen_data_vt.ld for the host link. The
+           Thumb bit set on the ap pointers is absorbed by g_typ's divide. */
+        . = ALIGN(16);
+        __start_gwen_data_vt = .;
+        KEEP(*(SORT_BY_NAME(gwen_data_vt.*)))
+        __stop_gwen_data_vt = .;
         *(.fini)
         /* Pull all c'tors into .text */
         *crtbegin.o(.ctors)

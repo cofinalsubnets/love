@@ -96,6 +96,25 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 
 struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
 enum q { two_q, vec_q, sym_q, tbl_q, text_q, };
+// The data self-quote sentinels (flow.c) sit contiguously in the
+// .gwen_data_vt section, laid out in enum q order by g/gwen_data_vt.ld, which
+// also provides these bounds. in_data_vt tests whether an ap lands in that
+// range (a range-based datp for a future per-kind scheme), and g_typ reads
+// the kind straight out of the pointer's slot index: every sentinel shares
+// one body and size (nm confirms), so they tile the section evenly and the
+// slot is (ap - start) / unit, unit = span / count. The slot->kind mapping
+// relies on that enum-ordered layout -- a frontend with its own full linker
+// script must reproduce the .gwen_data_vt block before g_typ works there.
+// Both are unused for now; they're scaffolding for step 2.
+extern char __start_gwen_data_vt[], __stop_gwen_data_vt[];
+#define G_DATA_VT_N 2   // number of DATA_SENTINEL()s in flow.c; keep in sync
+static g_inline bool in_data_vt(void *a) {
+ return (uintptr_t) a >= (uintptr_t) __start_gwen_data_vt
+     && (uintptr_t) a <  (uintptr_t) __stop_gwen_data_vt; }
+static g_inline enum q g_typ(union u *o) {
+ uintptr_t base = (uintptr_t) __start_gwen_data_vt,
+           unit = ((uintptr_t) __stop_gwen_data_vt - base) / G_DATA_VT_N;
+ return (enum q) (((uintptr_t) o->ap - base) / unit); }
 typedef g_word num, word;
 enum g_vec_type {
  g_vt_u8, g_vt_u16, g_vt_u32, g_vt_u64,

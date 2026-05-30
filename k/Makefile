@@ -11,12 +11,21 @@ include $(R)/common.mk
 # files. The EFI build (EFI=1) does the opposite. Shared sources from
 # root (g/, f/, libc/) come in via common.mk; local kernel sources are
 # reached from this cwd (k/).
+
+# Default the cross toolchain to clang + lld: one multi-target pair covers
+# every arch (Limine and EFI) with no per-arch GCC. Override CC/LD on the
+# command line for a GCC cross toolchain, e.g.
+#   make k a=aarch64 CC=aarch64-linux-gnu-gcc LD=aarch64-linux-gnu-ld
+# (command-line assignments beat these). CC_IS_CLANG is detected from the
+# chosen CC so the clang-only -target triples never reach a gcc.
+CC := clang
+LD := ld.lld
+CC_IS_CLANG := $(shell $(CC) --version 2>/dev/null | grep -qiw clang && echo 1)
+
 ifdef EFI
 ifeq ($(filter $a,x86_64 aarch64 riscv64 loongarch64),)
 $(error EFI=1 is only wired up for x86_64, aarch64, riscv64, and loongarch64)
 endif
-CC := clang
-CC_IS_CLANG := 1
 # Same sources as the Limine build, with two swaps: efi_main.c stands
 # in for the Limine boot info, and efi_*.c stays excluded for backends
 # that already exist (currently nothing -- the polled-mode stand-in is

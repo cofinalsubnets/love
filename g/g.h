@@ -21,6 +21,16 @@
 #define g_nil g_putnum(0)
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
+// Keep a function from being identical-code-folded with another. The data
+// self-quote sentinels (flow.c) have byte-identical bodies but must keep
+// distinct addresses, since their address *is* their type tag. GCC -Os runs
+// -fipa-icf, which noipa disables; clang/lld only fold under an explicit
+// --icf=all, which no build passes.
+#if defined(__GNUC__) && !defined(__clang__)
+#define g_noicf __attribute__((noipa))
+#else
+#define g_noicf
+#endif
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 #define LEN(_) (sizeof(_)/sizeof(*_))
 #define MIN(p,q) ((p)<(q)?(p):(q))
