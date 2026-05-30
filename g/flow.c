@@ -1,13 +1,12 @@
 #include "i.h"
 
-#define topof(f) ((word*)f+f->len)
 #define YIELD_INTERVAL 64
 #define YieldCheck() \
   if (f->tasks->m != f->tasks && ++f->yield_ctr >= YIELD_INTERVAL) \
     return Ap(g_vm_yield_sw, f)
 
 // apply function to one argument
-g_noinline g_vm(g_vm_ap) {
+g_vm(g_vm_ap) {
  union u *k;
  if (oddp(Sp[1])) Ip++, Sp++;
  else k = cell(Sp[1]), Sp[1] = word(Ip + 1), Ip = k;
@@ -57,6 +56,7 @@ g_vm(g_vm_ret0) { return
  Continue(); }
 
 
+#define topof(f) ((word*)f+f->len)
 // kcall : x = Sp[0], k = Ip[1] -> Ip = k, Sp[0] = x
 g_vm(g_vm_kcall) {
  word x = Sp[0];
@@ -91,7 +91,7 @@ static g_noinline void g_wait_fd(int const fd, int n, uintptr_t ms) {
   g_wait_fds(&fd, n, ms); }
 
 // monotask fast path
-static g_noinline g_vm(g_vm_yield_sw_mono) { uintptr_t my_wake = f->next_wake_at;
+static g_vm(g_vm_yield_sw_mono) { uintptr_t my_wake = f->next_wake_at;
  int my_wait_fd = f->next_wait_fd;
  f->next_wake_at = 0;
  f->next_wait_fd = -1;
@@ -131,7 +131,7 @@ static g_noinline union u *yield_sw_wait(struct g *f, uintptr_t my_wake, int my_
  if (my_wait_fd >= 0 && g_ready(my_wait_fd)) return NULL;
  return find_runnable(f->tasks, now); }
 
-g_noinline g_vm(g_vm_yield_sw) {
+g_vm(g_vm_yield_sw) {
  if (f->tasks->m == f->tasks) return Ap(g_vm_yield_sw_mono, f);
  union u *next = find_runnable(f->tasks, g_clock());
  uintptr_t my_wake = f->next_wake_at;

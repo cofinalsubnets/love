@@ -58,7 +58,7 @@ static g_noinline struct arith_r do_arith(word a, word b, enum arith_op op) {
   case aop_quot: return r.d = ad / bd, r;    // ±inf or NaN on bd == 0
   case aop_rem:  return r.d = g_fmod(ad, bd), r; } }  // NaN on bd == 0
 
-static g_noinline g_vm(g_vm_arith, enum arith_op op_tag) {
+static g_vm(g_vm_arith, enum arith_op op_tag) {
  struct arith_r r = do_arith(Sp[0], Sp[1], op_tag);
  if (!r.isflo) return *++Sp = r.v, Ip++, Continue();
  uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
@@ -96,7 +96,7 @@ op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : nil)
 
 // Unary math bif: nump/flop arg → double via vec_data, call fn, allocate
 // rank-0 f64 inline. Non-numeric arg → nil. TCO-clean (no & escapes).
-static g_noinline g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
+static g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
  word a = Sp[0];
  if (!nump(a) && !flop(a)) return Sp[0] = nil, Ip++, Continue();
  g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a), rd = fn(ad);
@@ -107,7 +107,7 @@ static g_noinline g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
  flo_put(v->shape, rd);
  return Sp[0] = word(v), Ip++, Continue(); }
 
-static g_noinline g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
+static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  word a = Sp[0], b = Sp[1];
  if ((!nump(a) && !flop(a)) || (!nump(b) && !flop(b))) return
   *++Sp = nil, Ip++, Continue();

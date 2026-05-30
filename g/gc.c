@@ -1,6 +1,6 @@
 #include "i.h"
 
-g_noinline g_vm(g_vm_gc, uintptr_t n) {
+g_vm(g_vm_gc, uintptr_t n) {
  Pack(f);
  if (!g_ok(f = g_please(f, n))) return gtrap(f);
  return Unpack(f), Continue(); }

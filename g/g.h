@@ -31,13 +31,13 @@
 #endif
 
 #if g_tco
-#define g_vm(n, ...) struct g *n(struct g *restrict f, union u *Ip, g_word *Hp, g_word *restrict Sp, ##__VA_ARGS__)
+#define _g_vm(n, ...) struct g *n(struct g *restrict f, union u *Ip, g_word *Hp, g_word *restrict Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Continue() Ap(Ip->ap, f)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
 #else
-#define g_vm(n, ...) struct g *n(struct g *restrict f, ##__VA_ARGS__)
+#define _g_vm(n, ...) struct g *n(struct g *restrict f, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
 #define Continue() f
 #define Hp f->hp
@@ -46,12 +46,13 @@
 #define Pack(f) ((void)0)
 #define Unpack(f) ((void)0)
 #endif
+#define g_vm(...) g_noinline _g_vm(__VA_ARGS__)
 
 // ok thanks
 typedef intptr_t g_word;
 
 union u;
-typedef g_vm(g_vm_t);
+typedef _g_vm(g_vm_t);
 
 // Typed N-dim array. Rank 0 = scalar (no shape words); payload at
 // (void*)(shape + rank). Immutable.
