@@ -96,25 +96,7 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
 enum q { two_q, vec_q, sym_q, tbl_q, text_q, };
-// A heap data object carries no type word: its kind IS its ap. The five
-// self-quote sentinels (flow.c) sit contiguously in the .gwen_data_vt section,
-// one per enum q kind, laid out in enum order by g/gwen_data_vt.ld (which also
-// provides these bounds). datp() tests whether an ap lands in that range;
-// g_typ() reads the kind straight out of the pointer's slot index: every
-// sentinel shares one body and size, so they tile the section evenly and the
-// slot is (ap - start) / unit, unit = span / count (the ARM Thumb low bit on
-// ap washes out in the divide). The slot->kind mapping relies on that
-// enum-ordered layout -- a frontend with its own full linker script must
-// reproduce the .gwen_data_vt block, and g_ini checks the tiling at startup.
-extern char __start_gwen_data_vt[], __stop_gwen_data_vt[];
-#define G_DATA_VT_N 5   // one DATA_SENTINEL() per enum q kind in flow.c; keep in sync
-static g_inline bool in_data_vt(void *a) {
- return (uintptr_t) a >= (uintptr_t) __start_gwen_data_vt
-     && (uintptr_t) a <  (uintptr_t) __stop_gwen_data_vt; }
-static g_inline enum q g_typ(union u *o) {
- uintptr_t base = (uintptr_t) __start_gwen_data_vt,
-           unit = ((uintptr_t) __stop_gwen_data_vt - base) / G_DATA_VT_N;
- return (enum q) (((uintptr_t) o->ap - base) / unit); }
+#define G_DATA_VT_N 5
 typedef g_word num, word;
 enum g_vec_type {
  g_vt_u8, g_vt_u16, g_vt_u32, g_vt_u64,
@@ -162,6 +144,10 @@ g_vm_t g_vm_kcall,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
  g_vm_fputn,
  g_vm_fread, g_vm_strin;
+// data-kind recovery (datp/typ). Included here, after the self-quote sentinels
+// above, because a frontend's override (e.g. wasm/inc/data_vt.h) resolves kinds
+// by comparing an ap against g_vm_two..g_vm_text directly.
+#include <data_vt.h>
 uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 word g_tget(struct g*, word, word, struct g_tab*);
 #define vec(_) ((struct g_vec*)(_))

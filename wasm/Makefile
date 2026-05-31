@@ -4,10 +4,14 @@ EMCC ?= /usr/lib/emscripten/emcc
 g_c = $(wildcard ../g/*.c)
 g_h = $(wildcard ../g/*.h)
 
+# inc/ holds wasm's <data_vt.h> override (no flat code-address space, so it
+# resolves data kinds by sentinel ap rather than .gwen_data_vt slot index).
+# It must be its own include dir, NOT ".": emcc deprioritizes the compiler's
+# cwd in the <...> search path, which would let ../g/data_vt.h win instead.
 CFLAGS = -std=gnu2x -Os -g0 -Dg_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
-  -I. -I../g -I../h/b
+  -Iinc -I../g -I../h/b
 
 EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=GwenModule \
