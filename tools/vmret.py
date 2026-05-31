@@ -13,24 +13,41 @@ matching function, without reasoning about whether that ret is reachable
 or whether the handler legitimately returns (a few do -- host I/O bifs,
 yield, etc.). Expect false positives; the point is to narrow the search.
 
+The kernel is built for four arches (x86_64, aarch64, riscv64,
+loongarch64), so the tool is cross-arch: it reads the ELF's e_machine,
+picks a return mnemonic for that target, and -- since the system objdump
+is usually x86-only -- prefers the multi-target llvm-objdump for any
+non-x86 image.
+
 Usage:
     vmret.py ELF [--prefix PREFIX] [--objdump PATH]
 
     --prefix   symbol-name prefix to check (default: g_vm_)
-    --objdump  disassembler to use; otherwise $OBJDUMP, then objdump,
-               then llvm-objdump
+    --objdump  disassembler to use; otherwise $OBJDUMP, then (for x86)
+               objdump else llvm-objdump first. llvm-objdump auto-detects
+               the target from the ELF, so no triple is needed.
 
 Exit status: 0 if no matching function contains a ret, 1 if any do,
 2 on a usage or tool error -- so it can gate a build.
 """
 import os, re, shutil, struct, subprocess, sys
 
-EM_X86_64 = 62                                    # ELF e_machine for x86-64
+EM_X86_64    = 62                                 # ELF e_machine values
+EM_AARCH64   = 183
+EM_RISCV     = 243
+EM_LOONGARCH = 258
 
 # A disassembly line is a function header `<addr> <name>:` or an
 # instruction `<addr>: <text>`. Both GNU objdump and llvm-objdump emit
 # this shape (with --no-show-raw-insn the raw bytes are gone).
 HEADER_RE = re.compile(r"^\s*[0-9a-fA-F]+\s+<(.+)>:\s*$")
+# llvm-objdump also prints intra-function *local labels* as headers of the
+# same shape (e.g. `<.L0 >`, `<.Ltmp3>`) -- on loongarch64 it emits
+# thousands of them. They are NOT function boundaries; a ret in the segment
+# after one still belongs to the enclosing function. Treating them as
+# headers would end the watched function early and silently miss its tail
+# rets, so we recognize and skip them.
+LABEL_RE  = re.compile(r"^\.")
 # Instruction lines: <addr>: <text>. Leading whitespace is optional -- some
 # objdump builds indent it, others (e.g. GNU objdump on a high-half kernel
 # image) print the address flush-left. Requiring the indent silently skipped
@@ -41,9 +58,20 @@ INSN_RE   = re.compile(r"^\s*([0-9a-fA-F]+):\s+(.*)$")
 # the old AMD branch-target padding). Skipped when extracting the mnemonic.
 PREFIXES = {"rep", "repz", "repe", "repnz", "repne", "lock", "bnd",
             "notrack", "data16"}
-# ret / retq / retf / retfq / retw / lret ... but not e.g. a `jmp` to a
-# retpoline thunk, which keeps its jmp/call mnemonic and is a real tail call.
-RET_RE = re.compile(r"^l?ret[a-z]*$")
+
+# Per-arch ordinary-return mnemonic. llvm-objdump with its default flags
+# (pseudo-instructions on) spells the function return as `ret` on every
+# target we build for; x86 also uses retq/retf/lret. We deliberately do
+# NOT match the privileged/exception returns (iret, eret, sret, mret,
+# ertn) -- those are ISR/trap epilogues, not threaded-VM handlers -- nor
+# the register-indirect tail jumps (jr/jirl/br), which are *correct* TCO.
+RET_RES = {
+    EM_X86_64:    re.compile(r"^l?ret[a-z]*$"),   # ret, retq, retf, lret; not iret
+    EM_AARCH64:   re.compile(r"^ret(aa|ab)?$"),   # ret + PAC variants; not eret
+    EM_RISCV:     re.compile(r"^ret$"),           # alias of jalr zero,0(ra); not s/mret
+    EM_LOONGARCH: re.compile(r"^ret$"),           # alias of jirl zero,ra,0; not ertn
+}
+RET_DEFAULT = RET_RES[EM_X86_64]                  # fallback for an unknown arch
 
 
 def fail(msg):
@@ -62,15 +90,26 @@ def elf_machine(path):
     if hdr[4] != 2 or hdr[5] != 1:
         fail(path + ": not ELF64 little-endian")
     (machine,) = struct.unpack_from("<H", hdr, 18)
-    names = {EM_X86_64: "x86-64", 183: "aarch64", 243: "riscv", 258: "loongarch64"}
+    names = {EM_X86_64: "x86-64", EM_AARCH64: "aarch64",
+             EM_RISCV: "riscv64", EM_LOONGARCH: "loongarch64"}
     return machine, names.get(machine, "0x%x" % machine)
 
 
-def find_objdump(explicit):
-    for cand in (explicit, os.environ.get("OBJDUMP"), "objdump", "llvm-objdump"):
+def find_objdump(explicit, machine):
+    # The system `objdump` is typically built for the host arch only (x86-64
+    # here), so it can't disassemble the kernel's other-arch ELFs --
+    # llvm-objdump is multi-target. Prefer GNU objdump only for x86, and
+    # llvm-objdump for everything else. An explicit --objdump / $OBJDUMP
+    # (e.g. a GNU cross-objdump) always wins.
+    env = os.environ.get("OBJDUMP")
+    if machine == EM_X86_64:
+        order = (explicit, env, "objdump", "llvm-objdump")
+    else:
+        order = (explicit, env, "llvm-objdump", "objdump")
+    for cand in order:
         if cand and shutil.which(cand):
             return cand
-    fail("no disassembler found (tried objdump, llvm-objdump); pass --objdump")
+    fail("no disassembler found (tried llvm-objdump, objdump); pass --objdump")
 
 
 def disassemble(objdump, path):
@@ -93,7 +132,7 @@ def mnemonic(insn_text):
     return ""
 
 
-def scan(lines, prefix):
+def scan(lines, prefix, ret_re):
     """Walk the disassembly, grouping by function header. Return
     [(name, [ret_addr, ...]), ...] for matching functions, and the total
     number of matching functions seen (flagged or not)."""
@@ -107,8 +146,11 @@ def scan(lines, prefix):
     for line in lines:
         h = HEADER_RE.match(line)
         if h:
+            hname = h.group(1).strip()
+            if LABEL_RE.match(hname):
+                continue                # local label: stay inside this function
             close()
-            name = h.group(1)
+            name = hname
             watching = name.startswith(prefix)
             rets = []
             if watching:
@@ -117,7 +159,7 @@ def scan(lines, prefix):
         if not watching:
             continue
         m = INSN_RE.match(line)
-        if m and RET_RE.match(mnemonic(m.group(2))):
+        if m and ret_re.match(mnemonic(m.group(2))):
             rets.append(m.group(1))
     close()
     return flagged, total
@@ -146,12 +188,15 @@ def main():
         fail("usage: vmret.py ELF [--prefix PREFIX] [--objdump PATH]")
 
     machine, mname = elf_machine(path)
-    if machine != EM_X86_64:
-        sys.stderr.write("vmret: note: %s is %s, ret-mnemonic match assumes "
-                         "x86_64\n" % (path, mname))
+    ret_re = RET_RES.get(machine)
+    if ret_re is None:
+        sys.stderr.write("vmret: note: %s is an unrecognized arch (%s); "
+                         "falling back to the generic `ret` matcher\n"
+                         % (os.path.basename(path), mname))
+        ret_re = RET_DEFAULT
 
-    od = find_objdump(objdump)
-    flagged, total = scan(disassemble(od, path), prefix)
+    od = find_objdump(objdump, machine)
+    flagged, total = scan(disassemble(od, path), prefix, ret_re)
 
     base = os.path.basename(path)
     if total == 0:
