@@ -479,6 +479,25 @@ static struct g_def defs[] = {
   {0}, };
 
 void kmain(void) {
+#if defined(__x86_64__)
+ // Enable x87/SSE before ANY other C runs. Limine doesn't guarantee SSE is
+ // on, and clang auto-vectorizes freely on x86_64 -- even the struct copies
+ // in limine_to_kboot below compile to movups, which #UDs (-> triple fault,
+ // no output) if SSE is still masked. CR0: clear EM (no FPU emulation), set
+ // MP; CR4: set OSFXSR | OSXMMEXCPT. The "memory" clobber keeps clang from
+ // hoisting any vectorized access above this. This is the single SSE-enable
+ // point -- archinit no longer repeats it. (EFI firmware already has SSE on,
+ // but re-asserting it here is harmless.)
+ asm volatile(
+  "mov %%cr0, %%rax\n\t"
+  "and $~(1 << 2), %%rax\n\t"          // CR0.EM = 0
+  "or  $(1 << 1), %%rax\n\t"           // CR0.MP = 1
+  "mov %%rax, %%cr0\n\t"
+  "mov %%cr4, %%rax\n\t"
+  "or  $((1 << 9) | (1 << 10)), %%rax\n\t"  // CR4.OSFXSR | CR4.OSXMMEXCPT
+  "mov %%rax, %%cr4\n\t"
+  ::: "rax", "memory");
+#endif
 #ifndef K_EFI
  // Limine path: copy the requested responses into kboot before anything
  // else reads it. The EFI path has already populated kboot in efi_main.

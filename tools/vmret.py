@@ -30,8 +30,12 @@ EM_X86_64 = 62                                    # ELF e_machine for x86-64
 # A disassembly line is a function header `<addr> <name>:` or an
 # instruction `<addr>: <text>`. Both GNU objdump and llvm-objdump emit
 # this shape (with --no-show-raw-insn the raw bytes are gone).
-HEADER_RE = re.compile(r"^[0-9a-fA-F]+\s+<(.+)>:\s*$")
-INSN_RE   = re.compile(r"^\s+([0-9a-fA-F]+):\s+(.*)$")
+HEADER_RE = re.compile(r"^\s*[0-9a-fA-F]+\s+<(.+)>:\s*$")
+# Instruction lines: <addr>: <text>. Leading whitespace is optional -- some
+# objdump builds indent it, others (e.g. GNU objdump on a high-half kernel
+# image) print the address flush-left. Requiring the indent silently skipped
+# every instruction and made the tool report all functions ret-free.
+INSN_RE   = re.compile(r"^\s*([0-9a-fA-F]+):\s+(.*)$")
 
 # Instruction prefixes that can sit in front of `ret` (e.g. `rep ret`,
 # the old AMD branch-target padding). Skipped when extracting the mnemonic.

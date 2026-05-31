@@ -190,13 +190,22 @@ long strtol(char const*restrict, char**restrict, int);
 size_t strlen(char const*);
 double strtod(char const *restrict, char **restrict);
 
-// Boxed scalar float access. The payload lands in `shape[]` (which is
-// typed uintptr_t), so a direct `*(g_flo_t*)` cast trips strict-aliasing.
-// memcpy of a fixed small size compiles to a single load/store.
+// Boxed scalar float access. The payload occupies one uintptr_t-wide
+// shape[] slot (g_flo_t is f64 on 64-bit ports, f32 on 32-bit -- always
+// the width of uintptr_t). Pun through a union rather than
+// memcpy(&local, ...): both are strict-aliasing clean, but the memcpy form
+// takes the address of a stack local, which clang -Os treats as an escape
+// and then refuses to sibling-call the trailing Continue() out of any VM
+// handler that inlines this -- silently breaking threaded dispatch (a
+// `call`+`ret` where there must be a `jmp`; see tools/vmret.py). GCC proves
+// the local dead and TCOs either way; the union keeps the value in a
+// register so clang does too.
+_Static_assert(sizeof(g_flo_t) == sizeof(uintptr_t), "float box assumes g_flo_t is pointer-width");
+typedef union { uintptr_t u; g_flo_t d; } g_flo_pun;
 static g_inline g_flo_t flo_get(word x) {
- g_flo_t r; memcpy(&r, vec(x)->shape, sizeof r); return r; }
+ return ((g_flo_pun){ .u = vec(x)->shape[0] }).d; }
 static g_inline void flo_put(void *p, g_flo_t v) {
- memcpy(p, &v, sizeof v); }
+ *(uintptr_t*) p = ((g_flo_pun){ .d = v }).u; }
 
 // equality comparisons inline the fast identity check
 g_noinline bool eqv(struct g*, word, word); // this is for checking equality of non-identical values

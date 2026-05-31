@@ -138,8 +138,12 @@ static struct g *to_alloc(struct g *f) {
  return f; }
 
 // Harvest the bytes written so far into a fresh exact-sized g_vec on top of
-// Sp. The port stays where it was on the value stack.
-static struct g *to_harvest(struct g *f, struct to *o) {
+// Sp. The port stays where it was on the value stack. Kept out of line: it
+// roots a local with MM(&o), and were it inlined into the g_vm_inspect
+// handler that address would escape into the handler's frame, which makes
+// clang -Os refuse to tail-call the handler's Continue() (breaking threaded
+// dispatch -- see tools/vmret.py and the flo_get note in i.h).
+g_noinline static struct g *to_harvest(struct g *f, struct to *o) {
  MM(f, (g_word*) &o);
  f = str0(f, getnum(o->i));
  UM(f);
