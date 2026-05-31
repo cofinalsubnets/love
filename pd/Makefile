@@ -9,7 +9,6 @@ pd_gcc = arm-none-eabi-gcc
 pd_cc = $(pd_gcc) -g3
 pd_as = $(pd_gcc) -x assembler-with-cpp
 pd_opt = -O2 -falign-functions=16 -fomit-frame-pointer
-pd_lds = $(patsubst ~%,$(HOME)%,$(pd_sdk)/C_API/buildsupport/link_map.ld)
 pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
 pd_incdir = $(patsubst %,-I %, . $(pd_sdk)/C_API $(R)/g $(R)/h/b $(R)/f)
 pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_tco=0
@@ -33,6 +32,10 @@ pd_cpflags = \
   -gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas \
   -fverbose-asm -Wdouble-promotion -mword-relocations -fno-common \
   -ffunction-sections -fdata-sections -Wa,-ahlms=b/$(notdir $(<:.c=.lst))
+# gwen_pd.lds is the SDK link_map.ld plus the data self-quote sentinel
+# block inlined into .text (see that file); used in its place because the
+# stock SDK script orphans the sentinels and leaves __start_/__stop_ undefined.
+pd_lds = gwen_pd.lds
 pd_ldflags = \
   -nostartfiles $(pd_mcflags) -T$(pd_lds) \
   -Wl,-Map=b/pdex.map,--cref,--gc-sections,--no-warn-mismatch,--emit-relocs
@@ -93,9 +96,14 @@ b/pdex.elf: $(pd_o) $(pd_lds)
 	@mkdir -p $(dir $@)
 	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
 
-b/pdex.so: $(pd_src)
+# The simulator .so is a host (x86_64) shared object loaded via dlopen, so it
+# needs the data self-quote sentinels pinned too. It's an ordinary host link
+# with no full -T script of its own, so the host INSERT-after-.text fragment
+# (g/gwen_data_vt.ld) augments the default script exactly as it does for h/.
+pd_host_vt_lds = $(R)/g/gwen_data_vt.ld
+b/pdex.so: $(pd_src) $(pd_host_vt_lds)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o b/pdex.so $(pd_src)
+	@gcc -g -shared -fPIC -Wl,-T,$(pd_host_vt_lds) -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o b/pdex.so $(pd_src)
 
 .PRECIOUS: b/%elf
