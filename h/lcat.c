@@ -44,9 +44,10 @@ struct g_io g_stdout = { .ap = g_vm_port_io,
 
 struct g_port_vt const g_fd_port_vt = { lcat_getc, lcat_ungetc, lcat_eof, lcat_putc, lcat_flush };
 
+static intptr_t pool[1<<20];
 int main(int argc, char const **argv) {
  putc('"', stdout);
- enum g_status s = g_fin(g_evals_(g_ini(),
+ enum g_status s = g_fin(g_evals_(g_ini_s(pool, sizeof pool),
   "(:(g x e)(: r(fread in e)(?(= e r)0(: _(? x (fputs in\" \"))_(. r)(g 1 e))))(g 0 (sym 0)))"));
  putc('"', stdout);
  putc('\n', stdout);

@@ -203,6 +203,7 @@ static char const boot[] =
 "(: (repl _) (: _ (fputs out \"hi\n\")_(sleep 2000)(repl 0)))"
 ;
 
+static uint8_t pool[200 * (1<<10)];
 #include <stdio.h>
 int main() {
   stdio_init_all();
@@ -210,7 +211,7 @@ int main() {
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
-  struct g *f = g_defs(g_ini(), defs);
+  struct g *f = g_defs(g_ini_s(pool, sizeof pool), defs);
   f = g_evals_(f, boot);
   f = g_evals_(f, repl);
   if (g_ok(f)) {

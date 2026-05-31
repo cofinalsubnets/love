@@ -63,15 +63,12 @@ static union u yield_c[] = { {_g_vm_yield_c} };
 static struct g_def const def1[] = { bifs(biff) insts(i_entry) {0}};
 static struct g *g_trap_default(struct g *f) { return f; }
 
-struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
- uintptr_t const len0 = 1 << 10;
- struct g *f = ma(NULL, 2 * len0 * sizeof(word));
- if (f == NULL) return encode(f, g_status_oom);
+static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  memset(f, 0, sizeof(struct g));
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield_c, f->t0 = g_clock();
  f->trap = g_trap_default;
- uintptr_t const req = 2 * (Width(struct g_tab) + 1) + 6;
+ uintptr_t const req = 2 * (Width(struct g_tab) + 1) + 6; // two tables plus main task thread
  if (g_ok(f = g_have(f, req))) {
   struct g_tab *t1 = bump(f, req),      *t2 = t1 + 1;
   struct g_kvs **b1 = (void*) (t2 + 1), **b2 = b1 + 1;
@@ -93,6 +90,18 @@ struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) 
    {0}, };
   f = g_defs(g_defs(f, def0), def1); }
  return f; }
+
+struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
+ uintptr_t const len0 = 1 << 10;
+ struct g *f = ma(NULL, 2 * len0 * sizeof(word));
+ return f == NULL ? encode(f, g_status_oom) : g_ini_0(f, len0, ma, fr); }
+
+static void *g_no_malloc(struct g*f, uintptr_t n) { return NULL; }
+static void g_no_free(struct g*f, void *p) { }
+struct g *g_ini_s(void *mem, uintptr_t nbytes) {
+ uintptr_t len0 = nbytes / (2 * sizeof(word));
+ return len0 <= Width(struct g) ? encode(mem, g_status_oom) :
+   g_ini_0(mem, len0, g_no_malloc, g_no_free); }
 
 static void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
 static void g_libc_free(struct g*f, void *x) { free(x); }

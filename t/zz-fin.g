@@ -7,9 +7,9 @@
       (. (- (test_get 'count) (len f))) (puts " tests pass in ")
      (. s) (puts p) (puts(. ms) (puts " seconds") (putc 10))
      (: i (cdddr (vminfo 0))
-        (, (. (cadr i)) (puts " gc cycles ")
-           (. (caddr i)) (puts " max len ")
-           (. (car (cdddr i))) (puts " max heap")
+        (, (. (cadr i)) (puts " cycles ")
+           (. (caddr i)) (puts "/") (. (car (cdddr i)))
+            (puts " len/heap max")
            (putc 10)))
      (? f (,
       (. (len f)) (puts " failed:") (putc 10)

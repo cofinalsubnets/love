@@ -180,6 +180,13 @@ boot[] =
 ,
  rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))"
   ;
+
+static struct g *report(struct g*f) {
+  switch (g_code_of(f)) {
+    default: break;
+    case g_status_oom: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(f)->len); break; }
+  return f; }
+
 // --- main: load the prelude and run the REPL script ------------------
 int main(int argc, char const **argv) {
   struct g *f = g_ini();
@@ -194,4 +201,4 @@ int main(int argc, char const **argv) {
                         {"argv", g_pop1(f)},
                         {0}};
     f = g_evals_(g_evals_(g_defs(f, d), boot), replp ? "(repl 0 0)" : rel); }
-  return g_fin(f); }
+  return g_fin(report(f)); }

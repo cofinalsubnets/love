@@ -166,6 +166,7 @@ void g_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
 struct g
  *g_ini(void),
  *g_ini_m(void*(*)(struct g*, size_t), void(*)(struct g*,void*)),
+ *g_ini_s(void*, uintptr_t),
  *g_evals_(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*);
 
