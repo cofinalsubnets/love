@@ -8,7 +8,7 @@ g_h = $(wildcard ../g/*.h)
 # resolves data kinds by sentinel ap rather than .gwen_data_vt slot index).
 # It must be its own include dir, NOT ".": emcc deprioritizes the compiler's
 # cwd in the <...> search path, which would let ../g/data_vt.h win instead.
-CFLAGS = -std=gnu2x -Os -g0 -Dg_tco=0 \
+CFLAGS = -std=gnu2x -O2 -g0 -Dg_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
   -Iinc -I../g -I../h/b

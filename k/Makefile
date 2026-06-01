@@ -58,11 +58,22 @@ k_S_o = $(k_S:%.S=$(k_odir)/%.o)
 k_asm_o = $(k_asm:%.asm=$(k_odir)/%.o)
 k_o = $(k_shared_o) $(k_local_o) $(k_S_o) $(k_asm_o)
 
+# Reflected out of this arch's data.o so g_typ() shifts instead of doing the
+# portable header's two link-time divides (see tools/gen_data_vt.py). Every C
+# object depends on it; data.o itself bootstraps from the portable header (no
+# $(vt_h) prerequisite -- that would be circular -- and it never calls g_typ).
+vt_h = $(k_odir)/data_vt.h
+gen_vt = $(R)/tools/gen_data_vt.py
+
 # --- flags -----------------------------------------------------------
 kcflags = $(g_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
 kldflags := -static -nostdlib --gc-sections -T $a/$a.lds -z max-page-size=0x1000
+# -I$(k_odir) is first so this arch's generated data_vt.h (reflected out of
+# its own data.o below) shadows the portable -I$(R)/g/data_vt.h. It is
+# per-arch because the sentinel body -- and so its stride -- differs by target.
 kcppflags := \
+  -I$(k_odir) \
   -I. -I$(R)/h/b -I$(R)/f -I$(R)/g \
   -Iinclude \
   -isystem include \
@@ -192,14 +203,28 @@ b/$n-$a.efi: $(k_o)
 	  $(k_o) -o $@
 endif
 
+# The data-sentinel TU bootstraps from the portable header (no $(vt_h)
+# prerequisite -- circular, since b/.../data_vt.h is reflected out of it). Its
+# explicit recipe overrides the shared-source pattern rule below; on a clean
+# build data_vt.h does not exist yet, so -I$(k_odir) finds nothing and the
+# compile falls through to the portable g/data_vt.h.
+$(k_odir)/g/data.o: $(R)/g/data.c $(k_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
+	@echo CC	$@
+	@mkdir -p "$(dir $@)"
+	@$(kcc) -c $< -o $@
+
+$(vt_h): $(k_odir)/g/data.o $(gen_vt)
+	@echo GEN	$@
+	@$(gen_vt) $< -o $@
+
 # Compile shared C sources from g/ and f/.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(vt_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
 # Compile local kernel C sources (k/*.c, k/$a/*.c).
-$(k_odir)/%.o: %.c $(k_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
+$(k_odir)/%.o: %.c $(k_h) $(vt_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

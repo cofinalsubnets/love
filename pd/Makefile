@@ -26,6 +26,17 @@ pd_shared_o = $(pd_shared_c:$(R)/%.c=b/%.o)
 pd_sdk_o = b/setup.o
 pd_o = $(pd_local_o) $(pd_shared_o) $(pd_sdk_o)
 
+# b/data_vt.h is reflected out of the device data.o (g/data.c, Thumb): the
+# 24-byte sentinel body is 16-aligned, so the real stride is 32 and g_typ()
+# shifts by 5 instead of doing the portable header's two link-time divides.
+# Every device object below carries -Ib (ahead of pd_incdir's -I../g) so it
+# shadows g/data_vt.h, and depends on $(vt_h) -- except data.o, which builds
+# without -Ib and bootstraps from the portable header (it never calls g_typ).
+# The simulator .so (host x86_64, dev-only) is a single-shot compile with no
+# intermediate data.o, so it stays on the portable header.
+vt_h = b/data_vt.h
+gen_vt = $(R)/tools/gen_data_vt.py
+
 pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
 pd_cpflags = \
   $(pd_mcflags) $(pd_opt) $(pd_defs) \
@@ -65,17 +76,29 @@ b/Source/pdex.%: b/pdex.%
 	@mkdir -p $(dir $@)
 	@cp $< $@
 
-# Shared C sources from g/ and f/.
-b/%.o: $(R)/%.c | $(R)/h/b/boot.h
+# The data-sentinel TU bootstraps from the portable header (no -Ib, no $(vt_h)
+# prerequisite -- both would be circular, since b/data_vt.h is reflected out of
+# this object). Its explicit recipe overrides the pattern rules below.
+b/g/data.o: $(R)/g/data.c | $(R)/h/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
 
-# Local pd/*.c sources.
-b/%.o: %.c | $(R)/h/b/boot.h
+b/data_vt.h: b/g/data.o $(gen_vt)
+	@echo GEN	$@
+	@$(gen_vt) $< -o $@
+
+# Shared C sources from g/ and f/.
+b/%.o: $(R)/%.c $(vt_h) | $(R)/h/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
+
+# Local pd/*.c sources.
+b/%.o: %.c $(vt_h) | $(R)/h/b/boot.h
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
 
 # Local pd/*.s assembly (rule preserved from original; no .s files exist
 # today but keep the pattern in case one shows up).
@@ -86,10 +109,10 @@ b/%.o: %.s
 
 # SDK setup.c is reached via an absolute path; an explicit rule keeps
 # its output filename predictable.
-b/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c | $(R)/h/b/boot.h
+b/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(vt_h) | $(R)/h/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
 
 b/pdex.elf: $(pd_o) $(pd_lds)
 	@echo CC	$@

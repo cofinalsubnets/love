@@ -16,9 +16,9 @@ g_c = $(wildcard $R/g/*.c)
 f_c = $(wildcard $R/f/*.c)
 c_c = $(wildcard $R/libc/*.c)
 
-g_cflags = -std=gnu23 -g -Os -pipe \
+g_cflags = -std=gnu23 -g -O2 -pipe \
   -Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers \
   -falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector \
-  -fno-exceptions -fno-asynchronous-unwind-tables -fno-stack-clash-protection \
+  -fno-exceptions -fno-asynchronous-unwind-tables \
   -fcf-protection=none

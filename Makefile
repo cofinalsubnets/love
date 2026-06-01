@@ -10,7 +10,7 @@ include common.mk
 test: h
 	@echo TEST
 	@cat $t | $m
-all: h k pd wasm
+all: h k pd wasm pico
 h:
 	@$(MAKE) -C h
 k:
@@ -19,11 +19,18 @@ pd:
 	@$(MAKE) -C pd
 wasm:
 	@$(MAKE) -C wasm
+pico: pico/Makefile
+	@$(MAKE) -C pico
+pico/Makefile: pico/CMakeLists.txt
+	@cd pico
+	@cmake .
 clean:
 	@$(MAKE) -C h clean
 	@$(MAKE) -C k clean
 	@$(MAKE) -C pd clean
 	@$(MAKE) -C wasm clean
+	@[ -e pico/Makefile ] && $(MAKE) -C pico clean || true
+
 distclean: clean
 	@$(MAKE) -C k distclean
 

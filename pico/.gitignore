@@ -3,6 +3,7 @@
 /Makefile
 /CMakeFiles
 /generated
+/gen
 /main.elf.map
 /pico-sdk
 /pico_flash_region.ld
