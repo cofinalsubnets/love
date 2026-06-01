@@ -6,21 +6,24 @@
 R := .
 include common.mk
 
-.PHONY: test all h k pd clean distclean wasm rp2040 test_host test_js
+.PHONY: all install uninstall clean distclean
+.PHONY: host kernel playdate wasm rp2040
+.PHONY: test test_host test_js test_all
+.PHONY: valg disasm flame cat perf repl gdb vmret
 test: test_host
 test_all: test_host test_js
 test_js:
 	@cd js && npm test
-test_host: h
+test_host: host
 	@echo TEST
 	@cat $t | $m
-all: h k pd wasm rp2040
-h:
-	@$(MAKE) -C h
-k:
-	@$(MAKE) -C k
-pd:
-	@$(MAKE) -C pd
+all: host kernel playdate wasm rp2040
+host:
+	@$(MAKE) -C host
+kernel:
+	@$(MAKE) -C kernel
+playdate:
+	@$(MAKE) -C playdate
 wasm:
 	@$(MAKE) -C wasm
 rp2040: rp2040/Makefile
@@ -28,53 +31,53 @@ rp2040: rp2040/Makefile
 rp2040/Makefile: rp2040/CMakeLists.txt
 	@cd rp2040 && cmake .
 clean:
-	@$(MAKE) -C h clean
-	@$(MAKE) -C k clean
-	@$(MAKE) -C pd clean
+	@$(MAKE) -C host clean
+	@$(MAKE) -C kernel clean
+	@$(MAKE) -C playdate clean
 	@$(MAKE) -C wasm clean
 	@[ -e rp2040/Makefile ] && $(MAKE) -C rp2040 clean || true
 
 distclean: clean
-	@$(MAKE) -C k distclean
+	@$(MAKE) -C kernel distclean
 
 # Host artefacts produced by `make -C h`. Declaring them as targets that
 # depend on the phony `h` means any other rule that consumes them (the
 # install rules, valg, perf, etc.) triggers a single recursive `make -C
 # h` rather than failing with "no rule to make target".
-h/b/$n h/b/$n.1 h/b/lib$n.a h/b/lib$n.so: h
+$(addprefix host/b/,$n $n.1 lib$n.a lib$n.so): host
 
 .PHONY: valg perf repl cloc cat
-valg: h
+valg: host
 	cat $t | valgrind --error-exitcode=1 $m
-h/b/perf.data: h
+host/b/perf.data: host
 	cat $t | perf record -o $@ $m
-perf: h/b/perf.data
+perf: host/b/perf.data
 	perf report -i $<
-h/b/flamegraph.svg: h/b/perf.data
+host/b/flamegraph.svg: host/b/perf.data
 	flamegraph -o $@ --perfdata $<
-repl: h
+repl: host
 	@$m
 cloc:
-	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
+	cloc --by-file --force-lang=Lisp,$x core host js kernel playdate test vim
 cat: clean all test
 
 .PHONY: disasm gdb vmret
-disasm: h
+disasm: host
 	rizin -A $m
-gdb: h
+gdb: host
 	gdb $m
-vmret: h
+vmret: host
 	tools/vmret.py $m
 
 # Pass-throughs for the kernel-specific phonies that need k_qemu etc.
 .PHONY: run run-hdd run-headless run-efi run-efi-headless
 run run-hdd run-headless run-efi run-efi-headless:
-	$(MAKE) -C k $@
+	$(MAKE) -C kernel $@
 
 # Pass-through for the playdate simulator.
 .PHONY: sim
 sim:
-	$(MAKE) -C pd sim
+	$(MAKE) -C playdate sim
 
 # --- install / uninstall --------------------------------------------
 PREFIX ?= .local/
@@ -100,27 +103,27 @@ uninstall:
 	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
-$d/include/$x.h: g/$x.h
+$d/include/$x.h: core/$x.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/$n/%.$x: g/%.$x
+$d/lib/$n/%.$x: core/%.$x
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/lib$n.a: h/b/lib$n.a
+$d/lib/lib$n.a: host/b/lib$n.a
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/lib$n.so: h/b/lib$n.so
+$d/lib/lib$n.so: host/b/lib$n.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/bin/$n: h/b/$n
+$d/bin/$n: host/b/$n
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/g/man/man1/$n.1: h/b/$n.1
+$d/g/man/man1/$n.1: host/b/$n.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

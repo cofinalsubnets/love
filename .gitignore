@@ -1,6 +1,6 @@
 vgcore.*
 .gdb_history
-/h/b/
-/k/b/
-/k/dl/
-/pd/b/
+/host/b/
+/kernel/b/
+/kernel/dl/
+/playdate/b/

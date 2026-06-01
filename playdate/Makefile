@@ -10,7 +10,7 @@ pd_cc = $(pd_gcc) -g3
 pd_as = $(pd_gcc) -x assembler-with-cpp
 pd_opt = -O2 -falign-functions=16 -fomit-frame-pointer
 pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
-pd_incdir = $(patsubst %,-I %, . $(pd_sdk)/C_API $(R)/core $(R)/h/b $(R)/font)
+pd_incdir = $(patsubst %,-I %, . $(pd_sdk)/C_API $(R)/core $(R)/host/b $(R)/font)
 pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_tco=0
 
 # Sources split by group so the obj-path patsubst works cleanly:
@@ -64,8 +64,8 @@ clean:
 	rm -rf b
 
 # boot.h is owned by the host build.
-$(R)/h/b/boot.h:
-	@$(MAKE) -C $(R)/h boot.h
+$(R)/host/b/boot.h:
+	@$(MAKE) -C $(R)/host b/boot.h
 
 b/$n.pdx: b/Source/pdex.elf b/Source/pdex.so
 	@echo PDC	$@
@@ -79,26 +79,26 @@ b/Source/pdex.%: b/pdex.%
 # The data-sentinel TU bootstraps from the portable header (no -Ib, no $(vt_h)
 # prerequisite -- both would be circular, since b/data_vt.h is reflected out of
 # this object). Its explicit recipe overrides the pattern rules below.
-b/core/data.o: $(R)/core/data.c | $(R)/h/b/boot.h
+b/core/data.o: $(R)/core/data.c | $(R)/host/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/host/b -I$(R)/f $(pd_incdir) $< -o $@
 
 b/data_vt.h: b/core/data.o $(gen_vt)
 	@echo GEN	$@
 	@$(gen_vt) $< -o $@
 
 # Shared C sources from g/ and f/.
-b/%.o: $(R)/%.c $(vt_h) | $(R)/h/b/boot.h
+b/%.o: $(R)/%.c $(vt_h) | $(R)/host/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/host/b -I$(R)/f $(pd_incdir) $< -o $@
 
 # Local pd/*.c sources.
-b/%.o: %.c $(vt_h) | $(R)/h/b/boot.h
+b/%.o: %.c $(vt_h) | $(R)/host/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/host/b -I$(R)/f $(pd_incdir) $< -o $@
 
 # Local pd/*.s assembly (rule preserved from original; no .s files exist
 # today but keep the pattern in case one shows up).
@@ -109,10 +109,10 @@ b/%.o: %.s
 
 # SDK setup.c is reached via an absolute path; an explicit rule keeps
 # its output filename predictable.
-b/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(vt_h) | $(R)/h/b/boot.h
+b/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(vt_h) | $(R)/host/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/h/b -I$(R)/f $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -Ib -I. -I$(R)/host/b -I$(R)/f $(pd_incdir) $< -o $@
 
 b/pdex.elf: $(pd_o) $(pd_lds)
 	@echo CC	$@

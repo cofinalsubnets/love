@@ -74,7 +74,7 @@ kldflags := -static -nostdlib --gc-sections -T $a/$a.lds -z max-page-size=0x1000
 # per-arch because the sentinel body -- and so its stride -- differs by target.
 kcppflags := \
   -I$(k_odir) \
-  -I. -I$(R)/h/b -I$(R)/font -I$(R)/core \
+  -I. -I$(R)/host/b -I$(R)/font -I$(R)/core \
   -Iinclude \
   -isystem include \
   $(kcppflags) \
@@ -161,10 +161,10 @@ distclean: clean
 # the .g sources so editing the prelude re-triggers the regen; without these
 # prereqs the rule only fires when the header is missing, so a stale boot.h
 # silently survives boot.g edits and the kernel boots an old prelude.
-$(R)/h/b/boot.h: $(R)/core/boot.g
-$(R)/h/b/repl.h: $(R)/core/repl.g
-$(R)/h/b/boot.h $(R)/h/b/repl.h:
-	@$(MAKE) -C $(R)/h $(notdir $@)
+$(R)/host/b/boot.h: $(R)/core/boot.g
+$(R)/host/b/repl.h: $(R)/core/repl.g
+$(R)/host/b/boot.h $(R)/host/b/repl.h:
+	@$(MAKE) -C $(R)/host b/$(notdir $@)
 
 b/$n-$a.elf: $a/$a.lds $(k_o)
 	@echo LD	$@
@@ -208,7 +208,7 @@ endif
 # explicit recipe overrides the shared-source pattern rule below; on a clean
 # build data_vt.h does not exist yet, so -I$(k_odir) finds nothing and the
 # compile falls through to the portable g/data_vt.h.
-$(k_odir)/core/data.o: $(R)/core/data.c $(k_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
+$(k_odir)/core/data.o: $(R)/core/data.c $(k_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -218,13 +218,13 @@ $(vt_h): $(k_odir)/core/data.o $(gen_vt)
 	@$(gen_vt) $< -o $@
 
 # Compile shared C sources from g/ and f/.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(vt_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(vt_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
 # Compile local kernel C sources (k/*.c, k/$a/*.c).
-$(k_odir)/%.o: %.c $(k_h) $(vt_h) $(R)/h/b/boot.h $(R)/h/b/repl.h
+$(k_odir)/%.o: %.c $(k_h) $(vt_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
