@@ -31,6 +31,7 @@ struct g *g_defs(struct g*f, struct g_def const*defs) {
  _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
  _(bif_dot, ".", S1(g_vm_dot)) _(bif_fread, "fread", S2(g_vm_fread))\
  _(bif_str, "str", S1(g_vm_str)) _(bif_strin, "strin", S1(g_vm_strin))\
+ _(bif_slurp, "slurp", S1(g_vm_slurp))\
  _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\
  _(bif_seek, "seek", S2(g_vm_seek)) _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_get))\
@@ -87,6 +88,7 @@ static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size
    {"macros", (word) t2, },
    {"in", (word) &g_stdin},
    {"out", (word) &g_stdout},
+   {"err", (word) &g_stderr},
    {0}, };
   f = g_defs(g_defs(f, def0), def1); }
  return f; }

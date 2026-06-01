@@ -139,6 +139,9 @@ struct g_io g_stdin = { .ap = g_vm_port_io,
                         .fd = g_putnum(0), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 struct g_io g_stdout = { .ap = g_vm_port_io,
                          .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+// No separate error stream; route err to the same fd as out (the console).
+struct g_io g_stderr = { .ap = g_vm_port_io,
+                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
 // --- GPIO builtins --------------------------------------------------------

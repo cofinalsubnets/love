@@ -17,7 +17,7 @@ f_c = $(wildcard $R/font/*.c)
 c_c = $(wildcard $R/libc/*.c)
 
 g_cflags = -std=gnu23 -g -O2 -pipe \
-  -Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter \
+  -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers \
   -falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector \
   -fno-exceptions -fno-asynchronous-unwind-tables \

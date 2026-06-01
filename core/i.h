@@ -98,8 +98,9 @@ struct g_pair { g_vm_t *ap; intptr_t a, b; };
 enum q { two_q, vec_q, sym_q, tbl_q, text_q, };
 #define G_DATA_VT_N 5
 typedef g_word num, word;
+// Signedness is a property of operators, not data (see the wide-int box
+// plan), so only signed integer widths + the two float widths exist here.
 enum g_vec_type {
- g_vt_u8, g_vt_u16, g_vt_u32, g_vt_u64,
  g_vt_i8, g_vt_i16, g_vt_i32, g_vt_i64,
  g_vt_f32, g_vt_f64, };
 void g_wait_fds(int const *fds, int n, uintptr_t ticks);
@@ -143,7 +144,7 @@ g_vm_t g_vm_kcall,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
  g_vm_fputn,
- g_vm_fread, g_vm_strin;
+ g_vm_fread, g_vm_strin, g_vm_slurp;
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
 // above, because a frontend's override (e.g. wasm/inc/data_vt.h) resolves kinds
 // by comparing an ap against g_vm_two..g_vm_text directly.

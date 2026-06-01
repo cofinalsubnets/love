@@ -417,6 +417,35 @@ g_vm(g_vm_fgetc) {
    Sp[0] = putnum(f->b); }
  return Ip++, Continue(); }
 
+// (slurp port) — read every remaining byte of port into a fresh string and
+// return it (nil on misuse). Compensates for the lack of a file seek: read
+// the whole image once, then index it with (get _ i s). Blocking: a byte is
+// pulled with the port's own getc until it reports EOF (fd_getc reads into a
+// uint8_t, so a 0xff data byte is distinct from the EOF sentinel -- binary
+// safe). The bytes are accumulated through a heap data-sink (struct to, the
+// same growable buffer (inspect) uses) and harvested into an exact-size string.
+//   in:               Sp = [inport, ...]
+//   after to_alloc:   Sp = [sink, inport, ...]
+//   after to_harvest: Sp = [str, sink, inport, ...]
+//   drop sink+inport: Sp = [str, ...]
+g_vm(g_vm_slurp) {
+ if (!iop(Sp[0])) { Sp[0] = nil; return Ip++, Continue(); }
+ Pack(f);
+ if (!g_ok(f = to_alloc(f))) return gtrap(f);
+ for (;;) {
+  f->io = (struct g_io*) f->sp[1];            // input port (re-read: GC-traced)
+  if (!g_ok(f = zgetc(f))) return gtrap(f);
+  int c = f->b;                               // int, so EOF (-1) compares cleanly
+  if (c == EOF) break;
+  f->io = (struct g_io*) f->sp[0];            // data sink
+  if (!g_ok(f = zputc(f, c))) return gtrap(f);
+ }
+ if (!g_ok(f = to_harvest(f, (struct to*) f->sp[0]))) return gtrap(f);
+ f->sp[2] = f->sp[0];
+ f->sp += 2;
+ Unpack(f);
+ return Ip++, Continue(); }
+
 // (fungetc port byte) — push back one byte, return the byte.
 g_vm(g_vm_fungetc) {
  if (iop(Sp[0])) {

@@ -33,8 +33,6 @@
 #endif
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 #define LEN(_) (sizeof(_)/sizeof(*_))
-#define MIN(p,q) ((p)<(q)?(p):(q))
-#define MAX(p,q) ((p)>(q)?(p):(q))
 
 #ifndef g_tco
 #define g_tco 1
@@ -170,5 +168,5 @@ struct g
  *g_evals_(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*);
 
-extern struct g_io g_stdin, g_stdout;
+extern struct g_io g_stdin, g_stdout, g_stderr;
 #endif

@@ -41,6 +41,8 @@ struct g_io g_stdin = { .ap = g_vm_port_io,
                         .fd = g_putnum(STDIN_FILENO), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 struct g_io g_stdout = { .ap = g_vm_port_io,
                          .fd = g_putnum(STDOUT_FILENO), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+struct g_io g_stderr = { .ap = g_vm_port_io,
+                         .fd = g_putnum(STDERR_FILENO), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 
 struct g_port_vt const g_fd_port_vt = { lcat_getc, lcat_ungetc, lcat_eof, lcat_putc, lcat_flush };
 

@@ -334,5 +334,8 @@ struct g_io g_stdin = { .ap = g_vm_port_io,
                         .fd = g_putnum(0), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 struct g_io g_stdout = { .ap = g_vm_port_io,
                          .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+// No separate error stream on the device; route err to the same fd as out.
+struct g_io g_stderr = { .ap = g_vm_port_io,
+                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
 
 struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };

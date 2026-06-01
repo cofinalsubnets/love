@@ -95,8 +95,11 @@ g_vm(g_vm_get) {
   default: break;                               // vec_q, sym_q are not indexable
   case tbl_q: z = g_tget(f, z, k, tbl(x)); break;
   case text_q:
+   // Byte as its unsigned value 0..255 -- bytes are data, signedness is the
+   // operator's job. txt is signed char[], so cast to avoid sign-extending a
+   // high byte (e.g. 0xff -> -1) when binary data is indexed.
    if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(x))
-    z = putnum(txt(x)[n]);
+    z = putnum((unsigned char) txt(x)[n]);
    break;
   case two_q:
    if (nump(k) && (n = getnum(k)) >= 0) {

@@ -1,4 +1,6 @@
 #include "i.h"
+#define MIN(p,q) ((p)<(q)?(p):(q))
+#define MAX(p,q) ((p)>(q)?(p):(q))
 
 // Allocate a fresh struct g_str of `len` bytes, zero-filled, push on Sp.
 struct g *str0(struct g *f, uintptr_t len) {

@@ -1,7 +1,6 @@
 #include "i.h"
 
 static size_t const vt_size[] = {
- [g_vt_u8]  = 1, [g_vt_u16] = 2, [g_vt_u32] = 4, [g_vt_u64] = 8,
  [g_vt_i8]  = 1, [g_vt_i16] = 2, [g_vt_i32] = 4, [g_vt_i64] = 8,
  [g_vt_f32] = 4, [g_vt_f64] = 8,
 };
