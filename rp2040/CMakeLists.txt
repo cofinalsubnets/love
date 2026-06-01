@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.13)
 
+# Route every compile through ccache when it's on PATH. Set before project()
+# so it covers the Pico SDK's own TUs as well as gwen's. ASM too: the SDK has a
+# fair amount of .S, and ccache handles the assembler fine.
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+  set(CMAKE_C_COMPILER_LAUNCHER   ${CCACHE_PROGRAM})
+  set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+  set(CMAKE_ASM_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
 include(pico_sdk_import.cmake)
 
 project(main C CXX ASM)

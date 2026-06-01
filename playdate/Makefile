@@ -5,7 +5,10 @@ R := ..
 include $(R)/common.mk
 
 pd_sdk = $(PLAYDATE_SDK_PATH)
-pd_gcc = arm-none-eabi-gcc
+# ccache wraps the compiler when available; override with `make CCACHE=` to
+# disable, or point CCACHE at a different launcher.
+CCACHE ?= $(shell command -v ccache 2>/dev/null)
+pd_gcc = $(CCACHE) arm-none-eabi-gcc
 pd_cc = $(pd_gcc) -g3
 pd_as = $(pd_gcc) -x assembler-with-cpp
 pd_opt = -O2 -falign-functions=16 -fomit-frame-pointer
@@ -127,6 +130,6 @@ pd_host_vt_lds = $(R)/core/gwen_data_vt.ld
 b/pdex.so: $(pd_src) $(pd_host_vt_lds)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@gcc -g -shared -fPIC -Wl,-T,$(pd_host_vt_lds) -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o b/pdex.so $(pd_src)
+	@$(CCACHE) gcc -g -shared -fPIC -Wl,-T,$(pd_host_vt_lds) -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o b/pdex.so $(pd_src)
 
 .PRECIOUS: b/%elf

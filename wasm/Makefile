@@ -1,8 +1,20 @@
 EMCC ?= /usr/lib/emscripten/emcc
+# ccache wraps emcc for the per-object compiles below; override with
+# `make CCACHE=` to disable. Caching only works because each source is
+# compiled separately (-c) -- ccache passes through multi-source links.
+CCACHE ?= $(shell command -v ccache 2>/dev/null)
+emcc = $(CCACHE) $(EMCC)
 
 # g.c was split into per-concern translation units (g/*.c); build them all.
 g_c = $(wildcard ../core/*.c)
 g_h = $(wildcard ../core/*.h)
+
+# One object per source so an edit recompiles just that TU (and so ccache
+# can cache each compile). Local host.c stays rooted in cwd; shared core/*.c
+# carry the ../ prefix, mapped into b/core/ by the patsubst.
+host_o = b/host.o
+core_o = $(g_c:../%.c=b/%.o)
+objs = $(host_o) $(core_o)
 
 # inc/ holds wasm's <data_vt.h> override (no flat code-address space, so it
 # resolves data kinds by sentinel ap rather than .gwen_data_vt slot index).
@@ -26,13 +38,23 @@ all: gwen.js
 ../host/b/boot.h:
 	$(MAKE) -C ../h boot.h
 
-gwen.js: host.c ../host/b/boot.h $(g_c) $(g_h)
-	$(EMCC) $(CFLAGS) $(EMFLAGS) host.c $(g_c) -o $@
+# Link step: emcc's link is multi-input, so ccache can't cache it -- use
+# bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
+gwen.js: $(objs)
+	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
+
+b/host.o: host.c ../host/b/boot.h $(g_h)
+	@mkdir -p $(dir $@)
+	$(emcc) $(CFLAGS) -c $< -o $@
+
+b/core/%.o: ../core/%.c $(g_h)
+	@mkdir -p $(dir $@)
+	$(emcc) $(CFLAGS) -c $< -o $@
 
 serve: all
 	python3 -m http.server 8000
 
 clean:
-	rm -f gwen.js gwen.wasm
+	rm -rf gwen.js gwen.wasm b
 
 .PHONY: all serve clean
