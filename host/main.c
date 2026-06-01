@@ -179,7 +179,15 @@ boot[] =
 #include "boot.h"
 #include "repl.h"
 ,
- rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))"
+ rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))",
+ // Run a script file named by (car argv): open it, then read-eval each form
+ // through fread until it hands back the gensym eof sentinel. A leading
+ // #!-shebang line is skipped by the reader, which treats # like ; (a
+ // comment to end-of-line). nil open -> message to err and exit 1.
+ load[] = "(:(g p e)(: r(fread p e)(?(= e r)0(: _(ev'ev r)(g p e))))"
+            "(: p(open(car argv)\"r\")"
+               "(? p(g p(sym 0))"
+                   "(: _(fputs err(scat \"gl: cannot open \"(car argv)))(exit 1)))))"
   ;
 
 static struct g *report(struct g*f) {
@@ -191,15 +199,24 @@ static struct g *report(struct g*f) {
 // --- main: load the prelude and run the REPL script ------------------
 int main(int argc, char const **argv) {
   struct g *f = g_ini();
-  bool replp = isatty(STDIN_FILENO);
+  // First non-program arg, if any, is a script to run; otherwise REPL on a
+  // tty, else read-eval stdin.
+  char const *script = argc > 1 ? argv[1] : NULL;
+  bool replp = !script && isatty(STDIN_FILENO);
   if (replp) raw_mode();
-  for (; *argv; f = g_strof(f, *argv++));
-  for (f = g_push(f, 1, g_nil); argc--; f = gxr(f));
+  // Build the `argv` list. In script mode drop gl's own name so the script
+  // sees argv[0] == itself (Unix convention): (car argv) is the script path,
+  // (car (cdr argv)) its first argument.
+  char const **av = script ? argv + 1 : argv;
+  int ac = script ? argc - 1 : argc;
+  for (; *av; f = g_strof(f, *av++));
+  for (f = g_push(f, 1, g_nil); ac--; f = gxr(f));
   if (g_ok(f)) {
     struct g_def d[] = {{"exit", (g_word) bif_exit},
                         {"open", (g_word) bif_open},
                         {"close", (g_word) bif_close},
                         {"argv", g_pop1(f)},
                         {0}};
-    f = g_evals_(g_evals_(g_defs(f, d), boot), replp ? "(repl 0 0)" : rel); }
+    f = g_evals_(g_defs(f, d), boot);
+    f = g_evals_(f, script ? load : replp ? "(repl 0 0)" : rel); }
   return g_fin(report(f)); }
