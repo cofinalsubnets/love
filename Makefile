@@ -11,7 +11,7 @@ include common.mk
 .PHONY: test test_host test_js test_all test_gen_vt test_gl0
 .PHONY: valg disasm flame cat perf repl gdb vmret
 test: test_host
-test_all: test_host test_js test_gen_vt
+test_all: test_host test_js test_gen_vt test_gl0
 test_gl0: host
 	@echo TEST $m0
 	@cat $t | host/b/gl0 -l core/prelude.$x -l core/repl.$x

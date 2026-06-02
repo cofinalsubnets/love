@@ -65,12 +65,12 @@
  ; alongside it and eventually returns the result.
  (: t (new 0)
     _ (put 'n 0 t)
-    p (spawn (\ _ (: (loop) (? (< (get 0 'n t) 3)
+    p (spawn (\ _ (: (loop _) (? (< (get 0 'n t) 3)
                                 (, (put 'n (+ 1 (get 0 'n t)) t)
                                    (yield 0)
-                                   (loop))
+                                   (loop 0))
                                 'done)
-                    (loop))) 0)
+                    (loop 0))) 0)
     r (wait p)
     (&& (= 'done r) (= 3 (get 0 'n t))))
 
@@ -147,7 +147,7 @@
  ; wait on its pid returns 0 (unknown).
  (: t (new 0)
     _ (put 'flag 0 t)
-    p (spawn (\ _ (: (loop) (, (yield 0) (put 'flag -1 t) (loop)) (loop))) 0)
+    p (spawn (\ _ (: (loop _) (, (yield 0) (put 'flag -1 t) (loop 0)) (loop 0))) 0)
     r (kill p)
     (&& (= -1 r) (= 0 (wait p))))
 
@@ -158,12 +158,12 @@
     (&& (= -1 (kill p)) (= 0 (wait p))))
 
  ; double-kill: second kill is a no-op since the pid is gone from the ring.
- (: p (spawn (\ _ (: (loop) (, (yield 0) (loop)) (loop))) 0)
+ (: p (spawn (\ _ (: (loop _) (, (yield 0) (loop 0)) (loop 0))) 0)
     (&& (= -1 (kill p)) (= 0 (kill p))))
 
  ; killing one of several tasks leaves the others intact.
  (: t (new 0)
-    a (spawn (\ _ (: (loop) (, (yield 0) (loop)) (loop))) 0)
+    a (spawn (\ _ (: (loop _) (, (yield 0) (loop 0)) (loop 0))) 0)
     b (spawn (\ x (* x 10)) 7)
     _ (kill a)
     rb (wait b)
@@ -199,12 +199,12 @@
  (: t (new 0)
     _ (put 'n 0 t)
     a (spawn (\ _ (sleep 30)) 0)
-    b (spawn (\ _ (: (loop) (? (< (get 0 'n t) 5)
+    b (spawn (\ _ (: (loop _) (? (< (get 0 'n t) 5)
                                 (, (put 'n (+ 1 (get 0 'n t)) t)
                                    (yield 0)
-                                   (loop))
+                                   (loop 0))
                                 'done)
-                    (loop))) 0)
+                    (loop 0))) 0)
     _ (wait a) _ (wait b)
     (= 5 (get 0 'n t)))
 )

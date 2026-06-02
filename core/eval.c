@@ -330,7 +330,7 @@ static struct g *ana_ap_r2l(struct g *f, struct env **c, word x) {
 
 static g_inline bool lambp(struct g *f, word x) {
  struct g_str *n;
- return twop(x) && symp(A(x)) && twop(B(x)) &&
+ return twop(x) && symp(A(x)) && twop(B(x)) && twop(B(B(x))) &&
   (n = sym(A(x))->nom) && len(n) == 1 && txt(n)[0] == '\\'; }
 
 static g_inline word rev(word l) {
@@ -348,8 +348,10 @@ static g_inline Ana(ana_2, word a, word b) {
         ana_ap(f, c, b); }
 
 static g_inline Ana(ana_q) { return c0_ix(f, c, g_vm_quote, x); }
-static g_inline Ana(ana_l) { return f = c0_lambda(f, c, nil, x),
-                                    analyze(f, c, g_ok(f) ? pop1(f) : 0); }
+static g_inline Ana(ana_l) {
+  if (!twop(B(x))) return analyze(f, c, A(x));
+  return f = c0_lambda(f, c, nil, x),
+         analyze(f, c, g_ok(f) ? pop1(f) : 0); }
 static Ana(c0_cond_r);
 static g_inline Ana(ana_c) {
  return !twop(B(x)) ? analyze(f, c, A(x)) :
