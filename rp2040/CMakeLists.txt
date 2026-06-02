@@ -31,14 +31,12 @@ list(REMOVE_ITEM G_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../core/data.c)
 # .g sources change; they land in ../host/b.
 set(GEN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../host/b)
 add_custom_command(
-  OUTPUT ${GEN_DIR}/boot.h ${GEN_DIR}/repl.h
-  COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/../host boot.h repl.h
+  OUTPUT ${GEN_DIR}/prelude.h ${GEN_DIR}/repl.h
+  COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/../host b/prelude.h b/repl.h
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../core/prelude.g
-          ${CMAKE_CURRENT_SOURCE_DIR}/../core/ev.g
-          ${CMAKE_CURRENT_SOURCE_DIR}/../tools/mkboot.g
           ${CMAKE_CURRENT_SOURCE_DIR}/../core/repl.g
-  COMMENT "Generating boot.h / repl.h via host lcat")
-add_custom_target(gl_headers DEPENDS ${GEN_DIR}/boot.h ${GEN_DIR}/repl.h)
+  COMMENT "Generating prelude.h / repl.h via host lcat")
+add_custom_target(gl_headers DEPENDS ${GEN_DIR}/prelude.h ${GEN_DIR}/repl.h)
 
 # The data-sentinel TU on its own. It bootstraps from the portable
 # g/data_vt.h (it never calls g_typ, so the stride it records is independent of
@@ -85,6 +83,10 @@ target_include_directories(main PRIVATE ../core ../host/b)
 # sequence. PICO_STACK_SIZE must match the STACK region length in the script.
 pico_set_linker_script(main ${CMAKE_CURRENT_SOURCE_DIR}/memmap_stack.ld)
 target_compile_definitions(main PRIVATE PICO_STACK_SIZE=0x2000)
+
+# Disable the threaded-code tail-call dispatch (g_tco) on the RP2040; fall
+# back to the trampolined Continue()/Ap() loop.
+target_compile_definitions(main PRIVATE g_tco=0)
 
 # pico_malloc's wrapper panics ("Out of memory") on allocation failure by
 # default, which kills the board before USB even enumerates. gwen's g_ini_m

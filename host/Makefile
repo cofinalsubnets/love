@@ -109,10 +109,15 @@ b/repl.h: $(gl0) $(R)/tools/lcat.$x $(R)/core/repl.$x
 	@mkdir -p $(dir $@)
 	@$(gl0) $(R)/tools/lcat.$x $(R)/core/repl.$x >$@
 
-b/boot.h: $(gl0) $(R)/tools/lcat.$x b/boot.g
+b/boot.h: $(gl0) $(R)/tools/lcat.$x b/boot.$x
 	@echo GEN	$@
 	@mkdir -p $(dir $@)
-	@$(gl0) $(R)/tools/lcat.$x b/boot.g >$@
+	@$(gl0) $(R)/tools/lcat.$x b/boot.$x >$@
+
+b/prelude.h: $(gl0) $(R)/tools/lcat.$x $R/core/prelude.$x
+	@echo GEN	$@
+	@mkdir -p $(dir $@)
+	@$(gl0) $(R)/tools/lcat.$x $R/core/prelude.$x >$@
 
 b/$n.1: b/$n manpage.$x
 	@echo GEN	$@

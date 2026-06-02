@@ -29,31 +29,28 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 // off the g_vm caller's frame, preserving TCO.
 enum arith_op { aop_add, aop_sub, aop_mul, aop_quot, aop_rem };
 struct arith_r { union { word v; g_flo_t d; }; bool isflo; };
-
 static g_noinline struct arith_r do_arith(word a, word b, enum arith_op op) {
  struct arith_r r = { 0 };
+ if (!(nump(a) || flop(a)) || !(nump(b) || flop(b))) return r.v = nil, r;
  if (nump(a) && nump(b)) {
   intptr_t av = getnum(a), bv = getnum(b), t = 0;
-  bool do_float = false;
   switch (op) {
-   case aop_add: do_float = __builtin_add_overflow(av, bv, &t); break;
-   case aop_sub: do_float = __builtin_sub_overflow(av, bv, &t); break;
-   case aop_mul: do_float = __builtin_mul_overflow(av, bv, &t); break;
+   case aop_add: r.isflo = __builtin_add_overflow(av, bv, &t); break;
+   case aop_sub: r.isflo = __builtin_sub_overflow(av, bv, &t); break;
+   case aop_mul: r.isflo = __builtin_mul_overflow(av, bv, &t); break;
    case aop_quot:
-    if (bv == 0 || (av == INTPTR_MIN && bv == -1)) do_float = true;
+    if (bv == 0 || (av == INTPTR_MIN && bv == -1)) r.isflo = true;
     else t = av / bv;
     break;
    case aop_rem:
-    if (bv == 0 || (av == INTPTR_MIN && bv == -1)) do_float = true;
+    if (bv == 0 || (av == INTPTR_MIN && bv == -1)) r.isflo = true;
     else t = av % bv; }
   // Also require the result to fit the tagged-fixnum range (one bit lost).
-  do_float = do_float || t < (INTPTR_MIN >> 1) || t > (INTPTR_MAX >> 1);
-  if (!do_float) return r.v = putnum(t), r; }
- // Float path: require both operands numeric.
- if (!(nump(a) || flop(a)) || !(nump(b) || flop(b))) return r.v = nil, r;
+  r.isflo = r.isflo || t < (INTPTR_MIN >> 1) || t > (INTPTR_MAX >> 1);
+  if (!r.isflo) return r.v = putnum(t), r; }
+ r.isflo = true;
  g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a),
          bd = nump(b) ? (g_flo_t) getnum(b) : flo_get(b);
- r.isflo = true;
  switch (op) {
   default: __builtin_trap();
   case aop_add: return r.d = ad + bd, r;
@@ -65,7 +62,7 @@ static g_noinline struct arith_r do_arith(word a, word b, enum arith_op op) {
 static g_vm(g_vm_arith, enum arith_op op_tag) {
  struct arith_r r = do_arith(Sp[0], Sp[1], op_tag);
  if (!r.isflo) return *++Sp = r.v, Ip++, Continue();
- uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
+ uintptr_t req = Width(struct g_vec) + Width(g_flo_t);
  Have(req);
  struct g_vec *v = ini_scalar((struct g_vec*) Hp, G_VT_FLO);
  Hp += req;
@@ -134,7 +131,6 @@ static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
 // preprocessor rescans into the real names after pasting.
 #define m1(_) _(sin) _(cos) _(tan) _(atan) _(sqrt) _(exp) _(log)
 #define m2(_) _(atan2) _(pow)
-m1(mvm1)
-m2(mvm2)
+m1(mvm1) m2(mvm2)
 
 op11(g_vm_flop, flop(Sp[0]) ? putnum(-1) : nil)

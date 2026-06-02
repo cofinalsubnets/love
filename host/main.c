@@ -77,11 +77,11 @@ static struct g *fd_getc(struct g *f) {
   return f; }
 
 static struct g *fd_ungetc(struct g *f, int c) {
-  struct g *fc = g_core_of(f);
-  struct g_io *i = fc->io;
-  i->ungetc_buf = g_putnum(c);
-  i->eof_seen = g_putnum(false);
-  return fc->b = c, f; }
+ struct g *fc = g_core_of(f);
+ struct g_io *i = fc->io;
+ i->ungetc_buf = g_putnum(c);
+ i->eof_seen = g_putnum(false);
+ return fc->b = c, f; }
 
 static struct g *fd_eof(struct g *f) {
   struct g *fc = g_core_of(f);
@@ -214,6 +214,6 @@ int main(int argc, char const **argv) {
 #endif
     f = g_evals_(f, argp ? cli : replp ? "(repl 0 0)" : rel); }
   switch (g_code_of(f)) {
-    default: break;
-    case g_status_oom: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(f)->len); break; }
+   default: break;
+   case g_status_oom: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(f)->len); break; }
   return g_fin(f); }

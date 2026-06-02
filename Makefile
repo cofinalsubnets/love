@@ -13,12 +13,12 @@ include common.mk
 test: test_host
 test_all: test_host test_js test_gen_vt
 test_gl0: host
-	@echo TEST gl0 "(C compiler)"
+	@echo TEST $m0
 	@cat $t | host/b/gl0 -l core/prelude.$x -l core/repl.$x
 test_js:
 	@cd js && npm test
 test_host: host
-	@echo TEST
+	@echo TEST $m
 	@cat $t | $m
 # Phase-1 gate: the gwen rewrite tools/gen_data_vt.g must produce byte-identical
 # output (the .py/.g generator-name aside) to gen_data_vt.py on every data.o
@@ -101,7 +101,7 @@ d = $(DESTDIR)/$(PREFIX)
 v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/$n \
-  $d/g/man/man1/$n.1 \
+  $d/share/man/man1/$n.1 \
   $d/lib/$n/prelude.$x \
   $d/lib/$n/ev.$x \
   $d/lib/$n/repl.$x \

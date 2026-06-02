@@ -198,12 +198,11 @@ static struct g_def defs[] = {
 // boot.g + repl.g, embedded as a C string by the host's lcat (the pico
 // CMake build invokes `make -C ../h boot.h repl.h` to regenerate them).
 static char const boot[] =
-#include "boot.h"
+#include "prelude.h"
 ,
   repl[] =
-
 //#include "repl.h"
-"(: (repl _) (: _ (fputs out \"hi\n\")_(sleep 2000)(repl 0)))"
+"(: yy (sym 0) (repl _ _) (: r (read yy) (, (? (!= r yy) (, (. (ev r)) (putc 10))) (repl _ _))))"
 ;
 
 static uint8_t pool[200 * (1<<10)];
@@ -219,7 +218,9 @@ int main() {
   f = g_evals_(f, repl);
   if (g_ok(f)) {
     gpio_put(LED_PIN, 1);               // alive: prelude loaded
-    f = g_evals_(f, "(repl 0 0)"); }    // serial read-eval-print loop
+    f = g_evals_(f, "(repl 0 0)");
+    while (1) printf("yay\n"), g_sleep(1000);
+  }    // serial read-eval-print loop
   else {
     while (1)
      printf("nope s=%d l=%d\n", g_code_of(f), g_core_of(f)->len),
