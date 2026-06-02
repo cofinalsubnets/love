@@ -1,0 +1,60 @@
+; prelude.g -- gwen prelude: data + function + macro definitions.
+(: (co f g x) (f (g x))
+   (id x) x
+   (const x _) x
+   (flip f x y) (f y x))
+(: pi 3.141592653589793
+   true -1 false 0 not nilp
+   (atomp x) (nilp (twop x))
+   (!= a b) (? (= a b) 0 -1)
+   AA (co A A) AB (co A B)
+   BA (co B A) BB (co B B))
+(: AAA (co A AA) AAB (co A AB)
+   ABA (co A BA) ABB (co A BB)
+   BAA (co B AA) BAB (co B AB)
+   BBA (co B BA) BBB (co B BB))
+(: cons X car A cdr B
+   caar AA cadr AB cdar BA cddr BB
+   caaar AAA caadr AAB
+   cadar ABA caddr ABB
+   cdaar BAA cdadr BAB
+   cddar BBA cdddr BBB
+   inc (+ 1) dec (+ -1) (:: a b) (put a b macros)
+   putc (fputc out)
+   puts (fputs out)
+   putn (fputn out)
+   (getc _) (fgetc in)
+   read (fread in))
+(: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
+   (foldl f z l) (? (twop l) (foldl f (f z (car l)) (cdr l)) z)
+   (foldr f z l) (? (twop l) (f (car l) (foldr f z (cdr l))) z))
+(: (foldl1 f l) (foldl f (car l) (cdr l))
+   (foldr1 f l) (foldr f (last l) (init l))
+   ap (foldl id)
+   (filter p l) (? (twop l) (: m (filter p (cdr l)) (? (p (car l)) (cons (car l) m) m)))
+   (init l) (? (cdr l) (cons (car l) (init (cdr l))))
+   (last l) (? (cdr l) (last (cdr l)) (car l))
+   (each l f) (? (twop l) (: _ (f (car l)) (each (cdr l) f)))
+   (ldel x l) (? (twop l) (? (= (car l) x) (cdr l) (cons (car l) (ldel x (cdr l)))))
+   (all f l) (? (twop l) (? (f (car l)) (all f (cdr l))) -1)
+   (any f l) (? (twop l) (? (f (car l)) -1 (any f (cdr l))))
+   (cat a b) (foldr cons b a))
+(: catmap (co (flip foldr 0) (co cat))
+   (assq x l) (? l (? (= x (caar l)) (car l) (assq x (cdr l))))
+   (lidx x) ((: (f n l) (? (twop l) (? (= x (car l)) n (f (+ 1 n) (cdr l))) -1)) 0)
+   memq (co any =)
+   (zip a b) (? (twop a) (? (twop b) (cons (cons (car a) (car b)) (zip (cdr a) (cdr b)))))
+   rev (foldl (flip cons) 0)
+   (drop n l) (? n (drop (- n 1) (cdr l)) l)
+   (take n l) (? n (cons (car l) (take (- n 1) (cdr l))))
+   (part p) (foldr (\ a m (? (p a) (cons (cons a (car m)) (cdr m))
+                                        (cons (car m) (cons a (cdr m))))) '(0)))
+; here are some macro definitions
+(: l (foldr (\ a l (cons cons (cons a (cons l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
+(:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) -1))))
+(:: '|| (\ l (: (or l) (? l (: y (sym 0) (list ': y (car l) (list '? y y (or (cdr l)))))) (or l))))
+(:: ':- (\ a (cons ': (cat (cdr a) (cons (car a) 0)))))
+(:: '?- (\ a (cons '? (cat (cdr a) (cons (car a) 0)))))
+(:: '>>= (\ l (cons (last l) (init l))))
+(:: ', (\ l (cons ': (foldr  (\ l r (cons '_ (cons l r)))(list (last l)) (init l)))))
+(:: '<=< (\ g (: y (sym 0) (list '\ y (foldr (\ f x (list f x)) y g)))))

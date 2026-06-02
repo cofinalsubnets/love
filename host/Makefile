@@ -8,6 +8,8 @@ h_o = $(g_c:$(R)/%.c=b/%.o)
 # -Ib is first so b/data_vt.h (generated below) shadows the portable
 # g/data_vt.h; nothing else in b/ collides with a g/ header.
 cc = $(CC) $(g_cflags) -fpic -Ib -I$(R) -I$(R)/core -I.
+# ccache wraps gl0's per-object compiles (override with `make CCACHE=` to disable).
+CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # Pins the gwen_data_vt sentinel order on every final link (see the script).
 vt_ld = $(R)/core/gwen_data_vt.ld
 ldflags = -Wl,-T,$(vt_ld)
@@ -52,15 +54,29 @@ b/core/data.o: $(R)/core/data.c $(g_h)
 	@mkdir -p $(dir $@)
 	@$(cc) -c $< -o $@
 
-# One-shot bootstrap interpreter (fallback header, no compiled-in prelude).
-$(gl0): main.c $(g_c) $(g_h) $(vt_ld)
+# Bootstrap interpreter (fallback header, no compiled-in prelude). Built
+# per-object into b/gl0/ -- separate from the final gl's optimized b/*.o, since
+# these use the fallback header (no -Ib) + -DGL_BOOTSTRAP -- so ccache caches
+# each TU and an edit recompiles just that file. No -Ib/$(vt_h) dependency:
+# b/data_vt.h is generated *by* gl0, so it must not need it.
+gl0_cc = $(CCACHE) $(CC) $(g_cflags) -DGL_BOOTSTRAP -I$(R) -I$(R)/core -I.
+gl0_o = b/0/main.o $(g_c:$(R)/%.c=b/0/%.o)
+b/0/main.o: main.c $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(CC) $(g_cflags) -DGL_BOOTSTRAP -I$(R) -I$(R)/core -I. $(ldflags) -o $@ main.c $(g_c) -lm
+	@$(gl0_cc) -c $< -o $@
+b/0/%.o: $(R)/%.c $(g_h)
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(gl0_cc) -c $< -o $@
+$(gl0): $(gl0_o) $(vt_ld)
+	@echo LD	$@
+	@mkdir -p $(dir $@)
+	@$(CC) $(g_cflags) $(ldflags) -o $@ $(gl0_o) -lm
 
-b/data_vt.h: b/core/data.o $(gl0) $(R)/tools/gen_data_vt.$x $(R)/core/boot.$x
+b/data_vt.h: b/core/data.o $(gl0) $(R)/tools/gen_data_vt.$x $(R)/core/prelude.$x
 	@echo GEN	$@
-	@$(gl0) -l $(R)/core/boot.$x $(R)/tools/gen_data_vt.$x $< -o $@
+	@$(gl0) -l $(R)/core/prelude.$x $(R)/tools/gen_data_vt.$x $< -o $@
 
 # g/*.c (and any other root-level *.c) -> b/<dir>/*.o
 b/%.o: $(R)/%.c $(g_h) $(vt_h)
@@ -79,18 +95,24 @@ b/$n: main.c b/lib$n.a b/boot.h b/repl.h $(vt_h) $(vt_ld)
 	@mkdir -p $(dir $@)
 	@$(cc) $(ldflags) -o $@ main.c b/lib$n.a -lm
 
-# boot.h / repl.h: the prelude re-serialized into a C string literal by
-# tools/lcat.g (the gwen port of the old host/lcat.c), run on the bootstrap gl0.
-# lcat.g is bif-only, so it needs no prelude loaded.
+# boot.g is assembled from prelude.g + ev.g (the egg wrapper + the bootstrap
+# that compiles the gwen compiler with the C ev, recompiles with itself, and
+# installs it) by tools/mkboot.g on gl0. boot.h / repl.h then re-serialize the
+# source into a C string literal via lcat.g. All bif-only -> run on gl0.
+b/boot.g: $(gl0) $(R)/tools/mkboot.$x $(R)/core/prelude.$x $(R)/core/ev.$x
+	@echo GEN	$@
+	@mkdir -p $(dir $@)
+	@$(gl0) -l $R/core/prelude.$x $(R)/tools/mkboot.$x $(R)/core/prelude.$x $(R)/core/ev.$x >$@
+
 b/repl.h: $(gl0) $(R)/tools/lcat.$x $(R)/core/repl.$x
 	@echo GEN	$@
 	@mkdir -p $(dir $@)
 	@$(gl0) $(R)/tools/lcat.$x $(R)/core/repl.$x >$@
 
-b/boot.h: $(gl0) $(R)/tools/lcat.$x $(R)/core/boot.$x
+b/boot.h: $(gl0) $(R)/tools/lcat.$x b/boot.g
 	@echo GEN	$@
 	@mkdir -p $(dir $@)
-	@$(gl0) $(R)/tools/lcat.$x $(R)/core/boot.$x >$@
+	@$(gl0) $(R)/tools/lcat.$x b/boot.g >$@
 
 b/$n.1: b/$n manpage.$x
 	@echo GEN	$@

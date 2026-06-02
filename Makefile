@@ -8,10 +8,20 @@ include common.mk
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel playdate wasm rp2040
-.PHONY: test test_host test_js test_all test_gen_vt
+.PHONY: test test_host test_js test_all test_gen_vt test_gl0
 .PHONY: valg disasm flame cat perf repl gdb vmret
 test: test_host
 test_all: test_host test_js test_gen_vt
+# Validate the C-side thread compiler (core/eval.c): run the test corpus on the
+# bootstrap gl0 with the prelude (and repl) loaded via -l, but `ev` NOT replaced
+# by the gwen compiler -- so each form is compiled by the C compiler, not the
+# boot.g one that the normal `gl` installs. Exercises the same eval.c paths the
+# final build relies on to compile boot.g itself.
+test_gl0: host
+	@echo TEST gl0 "(C compiler)"
+	@cat $t > host/b/.corpus.$x
+	@host/b/gl0 -l core/prelude.$x -l core/repl.$x host/b/.corpus.$x; \
+	  r=$$?; rm -f host/b/.corpus.$x; exit $$r
 test_js:
 	@cd js && npm test
 test_host: host
@@ -99,7 +109,8 @@ v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/$n \
   $d/g/man/man1/$n.1 \
-  $d/lib/$n/boot.$x \
+  $d/lib/$n/prelude.$x \
+  $d/lib/$n/ev.$x \
   $d/lib/$n/repl.$x \
   $d/lib/lib$n.a \
   $d/lib/lib$n.so \

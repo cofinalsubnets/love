@@ -175,27 +175,7 @@ static union u const
  bif_close[] = {{g_vm_close}, {g_vm_ret0}};
 
 static char const
-boot[] =
-// GL_BOOTSTRAP builds the prelude-less bootstrap interpreter (b/gl0) used to
-// generate boot.h/repl.h and b/data_vt.h; it gets its prelude at runtime via
-// the cli driver's `-l` flag instead of having it compiled in.
-#ifdef GL_BOOTSTRAP
-  ""
-#else
-#include "boot.h"
-#include "repl.h"
-#endif
-,
  rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))",
- // CLI driver. argv (gl's own name already dropped) is [-l FILE]... SCRIPT
- // [ARGS...]. load1 opens a file and read-eval-loops its forms (a leading
- // #!-shebang line is skipped by the reader, which treats # like ;). strip-l
- // loads each leading `-l FILE` as prelude and returns the tail; we rebind the
- // global argv to it so SCRIPT sees argv[0] == itself, then load SCRIPT.
- // bif-only (no prelude funcs): runs on gl0 before any prelude exists.
- // (the read loop threads the port q as a parameter rather than capturing it:
- // a closure-captured heap port doesn't survive the GC that fread triggers in
- // a near-empty heap -- see project_tools_to_gwen memory.)
  cli[] =
   "(: (load1 p)"
   "   (: q (open p \"r\")"
@@ -206,7 +186,10 @@ boot[] =
   "      (: _ (load1 (car (cdr a))) (strip-l (cdr (cdr a))))"
   "      a))"
   "(: argv (strip-l argv))"
-  "(load1 (car argv))"
+  // a SCRIPT remains after the -l flags -> run it; otherwise (only -l flags, or
+  // none) read-eval stdin, so `gl -l foo.g` loads foo.g then acts like a pipe.
+  "(? (twop argv) (load1 (car argv))"
+  "   ((: (g e) (: r (fread in e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (sym 0)))"
   ;
 
 static struct g *report(struct g*f) {
@@ -218,13 +201,9 @@ static struct g *report(struct g*f) {
 // --- main: load the prelude and run the REPL script ------------------
 int main(int argc, char const **argv) {
   struct g *f = g_ini();
-  // With args, run them as a CLI program (the cli driver parses -l and the
-  // script in lisp); otherwise REPL on a tty, else read-eval stdin.
   bool argp = argc > 1;
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
-  // Build the `argv` list. With args, drop gl's own name so the script sees
-  // argv[0] == itself once the cli driver strips any leading -l flags.
   char const **av = argp ? argv + 1 : argv;
   int ac = argp ? argc - 1 : argc;
   for (; *av; f = g_strof(f, *av++));
@@ -235,6 +214,12 @@ int main(int argc, char const **argv) {
                         {"close", (g_word) bif_close},
                         {"argv", g_pop1(f)},
                         {0}};
-    f = g_evals_(g_defs(f, d), boot);
+    f = g_defs(f, d);
+#ifndef GL_BOOTSTRAP
+    f = g_evals_(f,
+#include "boot.h"
+#include "repl.h"
+    );
+#endif
     f = g_evals_(f, argp ? cli : replp ? "(repl 0 0)" : rel); }
   return g_fin(report(f)); }

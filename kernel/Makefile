@@ -161,7 +161,7 @@ distclean: clean
 # the .g sources so editing the prelude re-triggers the regen; without these
 # prereqs the rule only fires when the header is missing, so a stale boot.h
 # silently survives boot.g edits and the kernel boots an old prelude.
-$(R)/host/b/boot.h: $(R)/core/boot.g
+$(R)/host/b/boot.h: $(R)/core/prelude.g $(R)/core/ev.g $(R)/tools/mkboot.g
 $(R)/host/b/repl.h: $(R)/core/repl.g
 $(R)/host/b/boot.h $(R)/host/b/repl.h:
 	@$(MAKE) -C $(R)/host b/$(notdir $@)

@@ -1,0 +1,13 @@
+(: (reads path)
+   ((: (g e p) (: r (fread p e)
+                  (? (= e r) 0 (X r (g e p)))))
+    (sym 0) (open path "r")))
+
+(:
+   prelude (reads (car (cdr argv)))
+   evaluator (reads (car (cdr (cdr argv)))))
+(. (list ': 'egg (list '` (cat prelude evaluator))
+ '(go e z a) '(? a (go e (e (car a)) (cdr a)) z)
+ 't0 '(clock 0)
+ 'e '(go (go ev 0 egg) 0 egg)
+ '(put 'boot_ms (clock t0) (put 'ev e globals))))

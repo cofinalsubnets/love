@@ -32,8 +32,10 @@ list(REMOVE_ITEM G_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../core/data.c)
 set(GEN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../host/b)
 add_custom_command(
   OUTPUT ${GEN_DIR}/boot.h ${GEN_DIR}/repl.h
-  COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/../h boot.h repl.h
-  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../core/boot.g
+  COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/../host boot.h repl.h
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../core/prelude.g
+          ${CMAKE_CURRENT_SOURCE_DIR}/../core/ev.g
+          ${CMAKE_CURRENT_SOURCE_DIR}/../tools/mkboot.g
           ${CMAKE_CURRENT_SOURCE_DIR}/../core/repl.g
   COMMENT "Generating boot.h / repl.h via host lcat")
 add_custom_target(gl_headers DEPENDS ${GEN_DIR}/boot.h ${GEN_DIR}/repl.h)
