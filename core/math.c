@@ -21,58 +21,66 @@ static g_inline g_flo_t g_trunc(g_flo_t x) {
 static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
  return a - g_trunc(a / b) * b; }
 
-// Generic arithmetic dispatcher. Both fixnums + no overflow → fixnum
-// result; otherwise (mixed nump/flop, overflow, /0, both flop) → double
-// result. Division/remainder by zero promote to IEEE values (±inf or
-// NaN), not nil. Non-numeric operands return nil.
-// g_noinline + by-value struct return keeps the &t overflow-out-param
-// off the g_vm caller's frame, preserving TCO.
+// Arithmetic is dispatched op-first: each operator is its own g_vm handler
+// (g_vm_add ... g_vm_rem) carrying an inlined both-fixnum fast path, and
+// tail-calls the shared slow handler arith_flo only when an operand isn't a
+// fixnum, an integer op overflows, or a division degenerates. This keeps the
+// common integer case free of the indirect re-dispatch + noinline struct
+// return + runtime op-switch the old generic dispatcher imposed.
 enum arith_op { aop_add, aop_sub, aop_mul, aop_quot, aop_rem };
-struct arith_r { union { word v; g_flo_t d; }; bool isflo; };
-static g_noinline struct arith_r do_arith(word a, word b, enum arith_op op) {
- struct arith_r r = { 0 };
- if (!(nump(a) || flop(a)) || !(nump(b) || flop(b))) return r.v = nil, r;
- if (nump(a) && nump(b)) {
-  intptr_t av = getnum(a), bv = getnum(b), t = 0;
-  switch (op) {
-   case aop_add: r.isflo = __builtin_add_overflow(av, bv, &t); break;
-   case aop_sub: r.isflo = __builtin_sub_overflow(av, bv, &t); break;
-   case aop_mul: r.isflo = __builtin_mul_overflow(av, bv, &t); break;
-   case aop_quot:
-    if (bv == 0 || (av == INTPTR_MIN && bv == -1)) r.isflo = true;
-    else t = av / bv;
-    break;
-   case aop_rem:
-    if (bv == 0 || (av == INTPTR_MIN && bv == -1)) r.isflo = true;
-    else t = av % bv; }
-  // Also require the result to fit the tagged-fixnum range (one bit lost).
-  r.isflo = r.isflo || t < (INTPTR_MIN >> 1) || t > (INTPTR_MAX >> 1);
-  if (!r.isflo) return r.v = putnum(t), r; }
- r.isflo = true;
+
+// Slow path: at least one operand is non-fixnum, or the fixnum op overflowed
+// the tagged range / hit a /0 or INT_MIN/-1 degenerate. Non-numeric operand →
+// nil. Otherwise promote both to g_flo_t, compute, and box the f64 inline.
+// g_vm (noinline) + reached only by tail call, so the per-op fast paths stay
+// branch-light and TCO-clean (the &-escaping float box never touches them).
+static g_vm(arith_flo, enum arith_op op) {
+ word a = Sp[0], b = Sp[1];
+ if (!(nump(a) || flop(a)) || !(nump(b) || flop(b)))
+  return *++Sp = nil, Ip++, Continue();
  g_flo_t ad = nump(a) ? (g_flo_t) getnum(a) : flo_get(a),
-         bd = nump(b) ? (g_flo_t) getnum(b) : flo_get(b);
+         bd = nump(b) ? (g_flo_t) getnum(b) : flo_get(b), rd;
  switch (op) {
   default: __builtin_trap();
-  case aop_add: return r.d = ad + bd, r;
-  case aop_sub: return r.d = ad - bd, r;
-  case aop_mul: return r.d = ad * bd, r;
-  case aop_quot: return r.d = ad / bd, r;    // ±inf or NaN on bd == 0
-  case aop_rem:  return r.d = g_fmod(ad, bd), r; } }  // NaN on bd == 0
-
-static g_vm(g_vm_arith, enum arith_op op_tag) {
- struct arith_r r = do_arith(Sp[0], Sp[1], op_tag);
- if (!r.isflo) return *++Sp = r.v, Ip++, Continue();
+  case aop_add:  rd = ad + bd; break;
+  case aop_sub:  rd = ad - bd; break;
+  case aop_mul:  rd = ad * bd; break;
+  case aop_quot: rd = ad / bd; break;          // ±inf or NaN on bd == 0
+  case aop_rem:  rd = g_fmod(ad, bd); break; }  // NaN on bd == 0
  uintptr_t req = Width(struct g_vec) + Width(g_flo_t);
  Have(req);
  struct g_vec *v = ini_scalar((struct g_vec*) Hp, G_VT_FLO);
  Hp += req;
- flo_put(v->shape, r.d);
- Sp[1] = word(v);
- return Sp++, Ip++, Continue(); }
+ flo_put(v->shape, rd);
+ return *++Sp = word(v), Ip++, Continue(); }
 
-#define a2(_) _(add) _(sub) _(mul) _(quot) _(rem)
-#define avm2(n) g_vm(g_vm_##n) { return Ap(g_vm_arith, f, aop_##n); }
-a2(avm2)
+// Both-fixnum fast path, inlined per operation. add/sub/mul use the compiler
+// overflow builtins; the result must also fit the tagged-fixnum range (one bit
+// lost to the tag). quot/rem guard /0 and the INT_MIN/-1 overflow, then
+// range-check the quotient (-2^62 / -1 == 2^62 overflows the fixnum range).
+// Anything that fails a guard tail-calls arith_flo.
+#define AVM_OVF(n, builtin) g_vm(g_vm_##n) { \
+ word a = Sp[0], b = Sp[1]; \
+ if (nump(a) && nump(b)) { intptr_t t; \
+  if (!builtin((intptr_t) getnum(a), (intptr_t) getnum(b), &t) && \
+      t >= (INTPTR_MIN >> 1) && t <= (INTPTR_MAX >> 1)) \
+   return *++Sp = putnum(t), Ip++, Continue(); } \
+ return Ap(arith_flo, f, aop_##n); }
+AVM_OVF(add, __builtin_add_overflow)
+AVM_OVF(sub, __builtin_sub_overflow)
+AVM_OVF(mul, __builtin_mul_overflow)
+
+#define AVM_DIV(n, c_op) g_vm(g_vm_##n) { \
+ word a = Sp[0], b = Sp[1]; \
+ if (nump(a) && nump(b)) { \
+  intptr_t av = getnum(a), bv = getnum(b); \
+  if (bv != 0 && !(av == INTPTR_MIN && bv == -1)) { \
+   intptr_t t = av c_op bv; \
+   if (t >= (INTPTR_MIN >> 1) && t <= (INTPTR_MAX >> 1)) \
+    return *++Sp = putnum(t), Ip++, Continue(); } } \
+ return Ap(arith_flo, f, aop_##n); }
+AVM_DIV(quot, /)
+AVM_DIV(rem, %)
 
 // Mixed-numeric ordered comparison. Same nump-fast-path, else widen.
 // Non-numeric operands return nil (matches existing degraded behavior
