@@ -9,7 +9,7 @@ include common.mk
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel playdate wasm rp2040
 .PHONY: test test_host test_js test_all test_gen_vt test_gl0
-.PHONY: valg disasm flame cat perf repl gdb vmret
+.PHONY: valg disasm flame cat cata perf repl gdb vmret
 test: test_host
 test_all: test_host test_gl0 test_js test_gen_vt
 test_gl0: host
@@ -74,6 +74,7 @@ repl: host
 cloc:
 	cloc --by-file --force-lang=Lisp,$x core host js kernel playdate test vim
 cat: clean all test
+cata: clean all test_all
 
 .PHONY: disasm gdb vmret
 disasm: host

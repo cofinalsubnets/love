@@ -49,6 +49,8 @@
    (take n l) (? n (cons (car l) (take (- n 1) (cdr l))))
    (part p) (foldr (\ a m (? (p a) (cons (cons a (car m)) (cdr m))
                                         (cons (car m) (cons a (cdr m))))) '(0)))
+(: (strin cl)
+ (poke -1 g_vm_port_io (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (thd 5)))))))
 ; here are some macro definitions
 (: l (foldr (\ a l (cons cons (cons a (cons l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
 (:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) -1))))

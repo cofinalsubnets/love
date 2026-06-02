@@ -17,8 +17,6 @@ struct g *g_push(struct g *f, uintptr_t m, ...) {
  else for (f->sp -= m; n < m; f->sp[n++] = va_arg(xs, word));
  va_end(xs);
  return f; }
-extern g_inline struct g *g_pop(struct g*f, uintptr_t n) { return g_core_of(f)->sp += n, f; }
-
 
 struct g *gxl(struct g *f) {
  if (g_ok(f = g_have(f, Width(struct g_pair)))) {

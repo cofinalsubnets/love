@@ -30,7 +30,7 @@ struct g *g_defs(struct g*f, struct g_def const*defs) {
  _(bif_cons2, "cons", S2(g_vm_cons)) _(bif_car2, "car", S1(g_vm_car)) _(bif_cdr2, "cdr", S1(g_vm_cdr)) \
  _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
  _(bif_dot, ".", S1(g_vm_dot)) _(bif_fread, "fread", S2(g_vm_fread))\
- _(bif_str, "str", S1(g_vm_str)) _(bif_strin, "strin", S1(g_vm_strin))\
+ _(bif_str, "str", S1(g_vm_str))\
  _(bif_slurp, "slurp", S1(g_vm_slurp))\
  _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\
@@ -55,7 +55,8 @@ struct g *g_defs(struct g*f, struct g_def const*defs) {
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
 #define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
-  _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_cur) _(g_vm_defglob) _(g_vm_lazyb) _(g_vm_ret0)
+  _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_cur) _(g_vm_defglob) _(g_vm_lazyb) _(g_vm_ret0)\
+  _(g_vm_port_io)
 #define biff(b, n, _) {n, (intptr_t) b},
 #define i_entry(i) {#i, (intptr_t) i},
 

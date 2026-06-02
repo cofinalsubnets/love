@@ -106,14 +106,12 @@ enum g_vec_type {
 void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool g_ready(int fd), g_strp(g_word);
 struct g
- *g_pop(struct g*, uintptr_t),
  *g_please(struct g*, uintptr_t),
  *g_push(struct g*, uintptr_t, ...),
  *g_strof(struct g*, const char*),
  *gxl(struct g*),
  *gxr(struct g*),
  *gputc(struct g*, int),
- *gputx(struct g*, intptr_t),
  *gputn(struct g*, intptr_t, uint8_t),
  *gputs(struct g*, char const*),
  *g_tput(struct g*),
@@ -127,7 +125,7 @@ g_vm_t g_vm_kcall,
  g_vm_two, g_vm_vec, g_vm_sym, g_vm_tbl, g_vm_text, // data self-quote sentinels, enum q order
  g_vm_putn, g_vm_info, g_vm_dot,    g_vm_clock,
  g_vm_nilp,  g_vm_symnom, g_vm_putc, g_vm_gensym, g_vm_twop,
- g_vm_len, g_vm_get,
+ g_vm_len, g_vm_get, g_vm_fputx,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
  g_vm_sin, g_vm_cos, g_vm_tan, g_vm_atan, g_vm_atan2,
  g_vm_sqrt, g_vm_exp, g_vm_log, g_vm_pow,
@@ -144,7 +142,7 @@ g_vm_t g_vm_kcall,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
  g_vm_fputn,
- g_vm_fread, g_vm_strin, g_vm_slurp;
+ g_vm_fread, g_vm_slurp;
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
 // above, because a frontend's override (e.g. wasm/inc/data_vt.h) resolves kinds
 // by comparing an ap against g_vm_two..g_vm_text directly.
@@ -158,15 +156,14 @@ word g_tget(struct g*, word, word, struct g_tab*);
 #define homp evenp
 #define two(_) ((struct g_pair*)(_))
 #define sym(_) ((struct g_atom*)(_))
-static g_inline bool twop(word _) { return homp(_) && typ(_) == two_q; }
-static g_inline bool tblp(word _) { return homp(_) && typ(_) == tbl_q; }
-static g_inline bool symp(word _) { return homp(_) && typ(_) == sym_q; }
-static g_inline bool vecp(word _) { return homp(_) && typ(_) == vec_q; }
-static g_inline bool strp(word _) { return homp(_) && typ(_) == text_q; }
+static g_inline bool twop(word _) { return homp(_) && cell(_)->ap == g_vm_two; }
+static g_inline bool tblp(word _) { return homp(_) && cell(_)->ap == g_vm_tbl; }
+static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == g_vm_sym; }
+static g_inline bool vecp(word _) { return homp(_) && cell(_)->ap == g_vm_vec; }
+static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == g_vm_text; }
 static g_inline bool flop(word _) {
   return vecp(_) && vec(_)->rank == 0 && vec(_)->type == G_VT_FLO; }
 static g_inline bool numericp(word _) { return nump(_) || vecp(_); }
-static g_inline bool iop(word x) { return homp(x) && cell(x)->ap == g_vm_port_io; }
 
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
@@ -211,14 +208,15 @@ static g_inline bool eql(struct g *f, word a, word b) { return a == b || eqv(f, 
 static g_inline bool tagp(word x, word const *lo, word const *hi) {
  word const *p = (word const*) (x & ~(word) 3);
  return (x & 3) == G_THD_TAG && p >= lo && p < hi; }
-static g_inline void tag_thd(union u *e, union u *head) { e->x = word(head) | G_THD_TAG; }
-static g_inline union u *tagthd(union u *h, uintptr_t len) { return h[len].x = word(h) | G_THD_TAG, h; }
+static g_inline union u *tagthd(union u *h, uintptr_t len) {
+  return h[len].x = word(h) | G_THD_TAG, h; }
 #define topof(f) ((word*)f+f->len)
 static g_inline struct g_tag { union u *head; union u end[]; } *ttag(struct g*f, union u *k) {
  word *lo = ptr(f), *hi = topof(f);
  while (!tagp(k->x, lo, hi)) k++;
  return (struct g_tag*) k; }
-static g_inline union u *tag_head(struct g_tag *t) { return cell(word(t->head) & ~(word) 3); }
+static g_inline union u *tag_head(struct g_tag *t) {
+ return cell(word(t->head) & ~(word) 3); }
 
 static g_inline union u *clip(struct g *f, union u *k) {
  return tagthd(k, cell(ttag(f, k)) - k); }
@@ -254,20 +252,9 @@ static g_inline uintptr_t rot(uintptr_t x) {
 
 extern struct g_port_vt const synth[];
 
-static g_inline struct g_port_vt const *port_vt(word fd_tagged) {
- intptr_t fd = getnum(fd_tagged);
- return fd >= 0 ? &g_fd_port_vt : &synth[-(fd + 1)]; }
-static g_inline struct g *zgetc(struct g*f)         { return g_ok(f) ? port_vt(f->io->fd)->getc(f) : f; }
-static g_inline struct g *zungetc(struct g*f, int c){ return g_ok(f) ? port_vt(f->io->fd)->ungetc(f, c) : f; }
-static g_inline struct g *zeof(struct g*f)          { return g_ok(f) ? port_vt(f->io->fd)->eof(f) : f; }
-static g_inline struct g *zputc(struct g*f, int c)  { return port_vt(f->io->fd)->putc(f, c); }
-static g_inline struct g *zflush(struct g*f)        { return port_vt(f->io->fd)->flush(f); }
 struct ti { struct g_io io; char const *t; word i; } ; // C string input
-struct ci { struct g_io io; g_word head; }; // charlist input
-struct to { struct g_io io; struct g_str *buf; g_word i; }; // lisp string output
 static g_inline void *off_pool(struct g *f) {
  return f == f->pool ? (word*) f->pool + f->len : (word*) f->pool; }
-static g_inline struct g *pushl(struct g*f) { return intern(g_strof(f, "\\")); }
 static g_inline struct g *pushq(struct g*f) { return intern(g_strof(f, "`")); }
 static g_inline struct g *push0(struct g*f) { return g_push(f, 1, nil); }
 static g_inline size_t llen(word l) {
@@ -277,4 +264,6 @@ static g_inline size_t llen(word l) {
 static g_inline struct g *gtrap(struct g*f) { return g_core_of(f)->trap(f); }
 static g_inline struct g *g_have(struct g *f, uintptr_t n) {
  return !g_ok(f) || avail(f) >= n ? f : g_please(f, n); }
+static g_inline struct g*g_pop(struct g*f, uintptr_t n) {
+ return g_core_of(f)->sp += n, f; }
 #endif

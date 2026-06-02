@@ -110,11 +110,13 @@ struct g {
      intptr_t key, val;
      struct g_kvs *next; } **tab;
    } *dict, *macro;
-  struct g_io {
-   g_vm_t *ap;
-   g_word fd;
-   g_word ungetc_buf;            // pushed-back byte; putnum(EOF) = empty
-   g_word eof_seen; } *io; }; }; // set by getc on read-returning-0, cleared by ungetc
+  union {
+   g_word x;
+   struct g_io {
+    g_vm_t *ap;
+    g_word fd;
+    g_word ungetc_buf;            // pushed-back byte; putnum(EOF) = empty
+    g_word eof_seen; } *io; }; }; }; // set by getc on read-returning-0, cleared by ungetc
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };

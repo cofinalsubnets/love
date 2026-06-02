@@ -1,5 +1,6 @@
 #include "i.h"
 
+static g_inline struct g *pushl(struct g*f) { return intern(g_strof(f, "\\")); }
 static struct g *c0(struct g *f, g_vm_t *y);
 
 // function state using this type
