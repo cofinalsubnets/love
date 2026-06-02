@@ -13,16 +13,24 @@ struct k_frame {
            rdi, rsi, rdx, rcx, rbx, rax, rbp,
            vector, error, rip, cs, rflags, rsp, ss; };
 
-// console output, from g.c / main.c. gputc appends a char and gputn a
-// number (in the given base) to the console ring buffer (kcb); fbdraw
-// renders that buffer to the framebuffer.
-struct g;
+// panic-path console output. cb_putc stamps a char into the framebuffer
+// ring buffer (kcb); serial_putc mirrors it to COM1; fbdraw renders kcb
+// to the framebuffer. kputc/kputs/kputn take no gwen state, so they run
+// from a fault handler with no live `struct g` -- the old gput* path
+// dereferenced its (null here) f argument before reaching the console.
 struct cb;
-extern int gputc(struct g*, int),
-           gputs(struct g*, char const*),
-           gputn(struct g*, intptr_t, uint8_t);
+extern void cb_putc(struct cb*, char);
+extern void serial_putc(int);
 extern void fbdraw(void);
 extern struct cb *kcb;
+
+static void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
+static void kputs(char const *s) { while (*s) kputc(*s++); }
+static void kputn(uintptr_t n, int base) {
+  static char const d[] = "0123456789abcdef";
+  char buf[24]; int i = 0;
+  do buf[i++] = d[n % base], n /= base; while (n);
+  while (i) kputc(buf[--i]); }
 
 static char const *const exc_name[32] = {
   [0]  = "#DE", [1]  = "#DB", [2]  = "NMI", [3]  = "#BP", [4]  = "#OF",
@@ -45,20 +53,19 @@ void k_exception(struct k_frame *fr) {
   if (nested) k_halt();                // faulted while reporting -- stop
   nested = 1;
 
-  if (kcb) {                           // console up? report to the screen
-    char const *name = fr->vector < 32 ? exc_name[fr->vector] : 0;
-    gputs(0, "\n*** CPU exception ");
-    gputn(0, fr->vector, 10);
-    gputs(0, " ("), gputs(0, name ? name : "?"), gputs(0, ") rip=");
-    gputn(0, fr->rip, 16);
-    gputs(0, " err=");
-    gputn(0, fr->error, 16);
-    if (fr->vector == 14) {            // #PF: also the faulting address
-      uint64_t cr2;
-      asm volatile ("mov %%cr2, %0" : "=r"(cr2));
-      gputs(0, " cr2="), gputn(0, cr2, 16); }
-    gputc(0, '\n');
-    fbdraw(); }
+  char const *name = fr->vector < 32 ? exc_name[fr->vector] : 0;
+  kputs("\n*** CPU exception ");
+  kputn(fr->vector, 10);
+  kputs(" ("), kputs(name ? name : "?"), kputs(") rip=");
+  kputn(fr->rip, 16);
+  kputs(" err=");
+  kputn(fr->error, 16);
+  if (fr->vector == 14) {              // #PF: also the faulting address
+    uint64_t cr2;
+    asm volatile ("mov %%cr2, %0" : "=r"(cr2));
+    kputs(" cr2="), kputn(cr2, 16); }
+  kputc('\n');
+  fbdraw();
 
   k_halt();
 }

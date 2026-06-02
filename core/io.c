@@ -259,10 +259,6 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x) {
 static g_inline struct g *gfputx(struct g *f, struct g_io *o, intptr_t x) {
  return g_core_of(f)->io = o, gzputx(f, x); }
 
-struct g *gputn(struct g*f, intptr_t n, uint8_t b) { return
- g_core_of(f)->io = &g_stdout,
- gzputn(f, n, b); }
-
 // (inspect x) -> string. Alloc a heap data-sink, gfputx x into it, harvest.
 // Stack walk:
 //   in:                  Sp = [x, ...]
@@ -342,7 +338,6 @@ static int g_dtoa(g_flo_t v, char *buf, int cap, int max_frac) {
   while (eb_n > 0) { eb_n--; if (p < end) *p++ = eb[eb_n]; } }
  return p - buf; }
 
-struct g *gputc(struct g*f, int c)  { return g_core_of(f)->io = &g_stdout, port_vt(g_stdout.fd)->putc(f, c); }
 // Default fd-keyed waits. Frontends override; defaults are conservative
 // (all fds always-ready; multi-source wait collapses to plain sleep) so
 // frontends that don't multitask (lcat, pd) link without providing impls.
@@ -356,10 +351,6 @@ __attribute__((weak)) void g_fd_close(int fd) { (void) fd; }
 // default sleep is busy wait
 __attribute__((weak)) g_noinline void g_sleep(uintptr_t ticks) {
   for (ticks += g_clock(); g_clock() < ticks;); }
-
-struct g*gputs(struct g*f, char const*s) {
- while (*s) f = gputc(f, *s++);
- return f; }
 
 // (feof port) — -1 if at end of stream, nil otherwise.
 g_vm(g_vm_feof) {

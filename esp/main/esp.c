@@ -6,7 +6,6 @@
 
 g_noinline uintptr_t g_clock(void) {
   return esp_timer_get_time() / 1000; }
-int gputc(struct g*, int c) { return putc(c, stdout); }
 int ggetc(struct g*) { return getc(stdin); }
 int gungetc(struct g*, int c) { return ungetc(c, stdin); }
 int geof(struct g*) { return feof(stdin); }

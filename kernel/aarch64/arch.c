@@ -12,12 +12,13 @@
 extern uintptr_t khhdm;
 extern uint64_t kticks;
 
-// kq (k/main.c) enqueues one input byte; gput* / fbdraw render the
-// console. fault reporting reuses them exactly as x86_64 does.
+// kq (k/main.c) enqueues one input byte; cb_putc / fbdraw render the
+// console. fault reporting writes the framebuffer ring buffer (kcb) and
+// mirrors to serial, exactly as x86_64 does.
 void kq(uint8_t);
-struct g;
-extern int gputc(struct g*, int), gputs(struct g*, char const*),
-           gputn(struct g*, intptr_t, uint8_t);
+struct cb;
+extern void cb_putc(struct cb*, char);
+extern struct cb *kcb;
 extern void fbdraw(void);
 
 // the exception vector table (aarch64.S).
@@ -206,19 +207,30 @@ static char const *fault_kind(uint64_t esr) {
     case 0x2c: return "FP";
     default:   return "?"; } }
 
+// panic-path console output. kputc stamps a char into the framebuffer
+// ring buffer (kcb, when present) and mirrors it to serial; it takes no
+// gwen state, so it runs from a fault handler with no live `struct g`.
+static void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
+static void kputs(char const *s) { while (*s) kputc(*s++); }
+static void kputn(uintptr_t n, int base) {
+  static char const d[] = "0123456789abcdef";
+  char buf[24]; int i = 0;
+  do buf[i++] = d[n % base], n /= base; while (n);
+  while (i) kputc(buf[--i]); }
+
 // reached from the sync/FIQ/SError vectors. report and halt -- faults
-// are not resumed (returning would just re-fault). gput* reach the
+// are not resumed (returning would just re-fault). kput* reach the
 // serial console even when no framebuffer is up.
 void k_fault(uint64_t esr, uint64_t elr, uint64_t far) {
   asm volatile ("msr daifset, #0xf");  // all interrupts off while reporting
   static int nested;
   if (nested) for (;;) asm volatile ("wfi");
   nested = 1;
-  gputs(0, "\n*** CPU exception ("), gputs(0, fault_kind(esr));
-  gputs(0, ") esr="), gputn(0, esr, 16);
-  gputs(0, " elr="),  gputn(0, elr, 16);
-  gputs(0, " far="),  gputn(0, far, 16);
-  gputc(0, '\n');
+  kputs("\n*** CPU exception ("), kputs(fault_kind(esr));
+  kputs(") esr="), kputn(esr, 16);
+  kputs(" elr="),  kputn(elr, 16);
+  kputs(" far="),  kputn(far, 16);
+  kputc('\n');
   fbdraw();
   for (;;) asm volatile ("wfi"); }
 
