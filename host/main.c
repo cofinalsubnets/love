@@ -203,9 +203,8 @@ int main(int argc, char const **argv) {
     struct g_def d[] = {{"exit", (g_word) bif_exit},
                         {"open", (g_word) bif_open},
                         {"close", (g_word) bif_close},
-                        {"argv", g_pop1(f)},
-                        {0}};
-    f = g_defs(f, d);
+                        {"argv", g_pop1(f)}, };
+    f = g_defn(f, d, LEN(d));
 #ifndef GL_BOOTSTRAP
     f = g_evals_(f,
 #include "boot.h"

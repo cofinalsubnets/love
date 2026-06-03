@@ -191,8 +191,7 @@ static struct g_def defs[] = {
   {"gpio_init", (intptr_t) bif_gpio_init},
   {"gpio_dir",  (intptr_t) bif_gpio_dir},
   {"gpio_put",  (intptr_t) bif_gpio_put},
-  {"gpio_get",  (intptr_t) bif_gpio_get},
-  {0}, };
+  {"gpio_get",  (intptr_t) bif_gpio_get}, };
 
 // --- prelude --------------------------------------------------------------
 // boot.g + repl.g, embedded as a C string by the host's lcat (the pico
@@ -213,7 +212,7 @@ int main() {
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
-  struct g *f = g_defs(g_ini_s(pool, sizeof pool), defs);
+  struct g *f = g_defn(g_ini_s(pool, sizeof pool), defs, LEN(defs));
   f = g_evals_(f, boot);
   f = g_evals_(f, repl);
   if (g_ok(f)) {

@@ -7,12 +7,10 @@ enum g_status g_fin(struct g *f) {
    f->free(f, f->pool); }
  return s; }
 
-struct g *g_defs(struct g*f, struct g_def const*defs) {
- if (!g_ok(f)) return f;
- f = g_push(f, 1, f->dict);
- for (int n = 0; defs[n].n; n++)
-  f = g_tput(intern(g_strof(g_push(f, 1, defs[n].x), defs[n].n)));
- if (g_ok(f)) f->sp++;
+struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
+ for (f = g_push(f, 1, g_core_of(f)->dict); n--; 
+  f = g_tput(intern(g_strof(g_push(f, 1, defs[n].x), defs[n].n))));
+ g_core_of(f)->sp++;
  return f; }
 
 #define S1(i) {{i}, {g_vm_ret0}}
@@ -60,7 +58,7 @@ bifs(built_in_function);
 
 static g_vm(_g_vm_yield_c) { return Pack(f), f; }
 static union u yield_c[] = { {_g_vm_yield_c} };
-static struct g_def const def1[] = { bifs(biff) insts(i_entry) {0}};
+static struct g_def const def1[] = { bifs(biff) insts(i_entry)};
 static struct g *g_trap_default(struct g *f) { return f; }
 
 static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
@@ -70,12 +68,12 @@ static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size
  f->trap = g_trap_default;
  uintptr_t const req = 2 * (Width(struct g_tab) + 1) + 6; // two tables plus main task thread
  if (g_ok(f = g_have(f, req))) {
-  struct g_tab *t1 = bump(f, req),      *t2 = t1 + 1;
-  struct g_kvs **b1 = (void*) (t2 + 1), **b2 = b1 + 1;
+  struct g_tab *d = bump(f, req),      *m = d + 1;
+  struct g_kvs **b1 = (void*) (m + 1), **b2 = b1 + 1;
   union u *M = (void*) (b2 + 1);
   *b1 = *b2 = 0;
-  f->dict = ini_tab(t1, 0, 1, b1);
-  f->macro = ini_tab(t2, 0, 1, b2);
+  f->dict = ini_tab(d, 0, 1, b1);
+  f->macro = ini_tab(m, 0, 1, b2);
   M[0].m = M;
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
@@ -83,13 +81,15 @@ static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size
   M[4].x = putnum(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   f->tasks = tagthd(M, 5);
   struct g_def def0[] = {
-   {"globals", (word) t1, },
-   {"macros", (word) t2, },
+   {"globals", (word) d, },
    {"in", (word) &g_stdin},
    {"out", (word) &g_stdout},
-   {"err", (word) &g_stderr},
-   {0}, };
-  f = g_defs(g_defs(f, def0), def1); }
+   {"err", (word) &g_stderr}, };
+  f = g_defn(f, def0, LEN(def0));
+  f = g_push(f, 3, nil, m, d);
+  f = g_tput(f);
+  f = g_pop(f, 1);
+  f = g_defn(f, def1, LEN(def1)); }
  return f; }
 
 struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {

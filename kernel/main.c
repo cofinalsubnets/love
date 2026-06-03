@@ -478,8 +478,7 @@ static struct g_def defs[] = {
   {"draw", (intptr_t) bif_draw},
   {"key", (intptr_t) bif_key},
   {"fault", (intptr_t) bif_fault},
-  {"color", (intptr_t) bif_color},
-  {0}, };
+  {"color", (intptr_t) bif_color} };
 
 void kmain(void) {
 #if defined(__x86_64__)
@@ -518,7 +517,7 @@ void kmain(void) {
   // load the prelude, then run the gwen read-eval-print loop. its line
   // editor (in repl.g) drives the console; PS/2 keyboard and serial
   // input both arrive as ANSI escape sequences the gwen edev decodes.
-  g_fin(g_evals_(g_defs(g_ini(), defs),
+  g_fin(g_evals_(g_defn(g_ini(), defs, LEN(defs)),
 #include "boot.h"
 #include "repl.h"
  "(repl 0 0)"

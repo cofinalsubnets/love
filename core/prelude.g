@@ -3,6 +3,7 @@
    (id x) x
    (const x _) x
    (flip f x y) (f y x))
+(: macros (get 0 0 globals))
 (: pi 3.141592653589793
    true -1 false 0 not nilp
    (atomp x) (nilp (twop x))

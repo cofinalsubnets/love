@@ -168,7 +168,7 @@ struct g
  *g_ini_m(void*(*)(struct g*, size_t), void(*)(struct g*,void*)),
  *g_ini_s(void*, uintptr_t),
  *g_evals_(struct g*, const char*),
- *g_defs(struct g*, struct g_def const*);
+ *g_defn(struct g*, struct g_def const*, uintptr_t);
 
 extern struct g_io g_stdin, g_stdout, g_stderr;
 #endif
