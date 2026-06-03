@@ -140,9 +140,9 @@ g_vm_t g_vm_kcall,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
  g_vm_fputn, g_vm_fread;
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
-// above, because a frontend's override (e.g. wasm/inc/data_vt.h) resolves kinds
+// above, because a frontend's override (e.g. wasm/inc/vt.h) resolves kinds
 // by comparing an ap against g_vm_two..g_vm_text directly.
-#include <data_vt.h>
+#include <vt.h>
 uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 word g_tget(struct g*, word, word, struct g_tab*);
 #define vec(_) ((struct g_vec*)(_))

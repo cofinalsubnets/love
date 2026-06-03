@@ -72,7 +72,7 @@ SECTIONS
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .text*)
         /* gwen data self-quote sentinels: kept contiguous and in enum
            order (gwen_data_vt.NN) so g_typ() recovers a kind from an ap's
-           slot index. Mirrors g/gwen_data_vt.ld for the host link. The
+           slot index. Mirrors g/vt.ld for the host link. The
            Thumb bit set on the ap pointers is absorbed by g_typ's divide. */
         . = ALIGN(16);
         __start_gwen_data_vt = .;

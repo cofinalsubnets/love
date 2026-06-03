@@ -29,15 +29,15 @@ pd_shared_o = $(pd_shared_c:$(R)/%.c=b/%.o)
 pd_sdk_o = b/setup.o
 pd_o = $(pd_local_o) $(pd_shared_o) $(pd_sdk_o)
 
-# b/data_vt.h is reflected out of the device data.o (g/data.c, Thumb): the
+# b/vt.h is reflected out of the device vt.o (core/vt.c, Thumb): the
 # 24-byte sentinel body is 16-aligned, so the real stride is 32 and g_typ()
 # shifts by 5 instead of doing the portable header's two link-time divides.
-# Every device object below carries -Ib (ahead of pd_incdir's -I../g) so it
-# shadows g/data_vt.h, and depends on $(vt_h) -- except data.o, which builds
+# Every device object below carries -Ib (ahead of pd_incdir's -I../core) so it
+# shadows core/vt.h, and depends on $(vt_h) -- except vt.o, which builds
 # without -Ib and bootstraps from the portable header (it never calls g_typ).
 # The simulator .so (host x86_64, dev-only) is a single-shot compile with no
-# intermediate data.o, so it stays on the portable header.
-vt_h = b/data_vt.h
+# intermediate vt.o, so it stays on the portable header.
+vt_h = b/vt.h
 gen_vt = $(R)/tools/gen_data_vt.py
 
 pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
@@ -80,14 +80,14 @@ b/Source/pdex.%: b/pdex.%
 	@cp $< $@
 
 # The data-sentinel TU bootstraps from the portable header (no -Ib, no $(vt_h)
-# prerequisite -- both would be circular, since b/data_vt.h is reflected out of
+# prerequisite -- both would be circular, since b/vt.h is reflected out of
 # this object). Its explicit recipe overrides the pattern rules below.
-b/core/data.o: $(R)/core/data.c | $(R)/host/b/boot.h
+b/core/vt.o: $(R)/core/vt.c | $(R)/host/b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/host/b -I$(R)/f $(pd_incdir) $< -o $@
 
-b/data_vt.h: b/core/data.o $(gen_vt)
+b/vt.h: b/core/vt.o $(gen_vt)
 	@echo GEN	$@
 	@$(gen_vt) $< -o $@
 
@@ -125,8 +125,8 @@ b/pdex.elf: $(pd_o) $(pd_lds)
 # The simulator .so is a host (x86_64) shared object loaded via dlopen, so it
 # needs the data self-quote sentinels pinned too. It's an ordinary host link
 # with no full -T script of its own, so the host INSERT-after-.text fragment
-# (g/gwen_data_vt.ld) augments the default script exactly as it does for h/.
-pd_host_vt_lds = $(R)/core/gwen_data_vt.ld
+# (core/vt.ld) augments the default script exactly as it does for host/.
+pd_host_vt_lds = $(R)/core/vt.ld
 b/pdex.so: $(pd_src) $(pd_host_vt_lds)
 	@echo CC	$@
 	@mkdir -p $(dir $@)

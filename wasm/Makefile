@@ -16,10 +16,10 @@ host_o = b/host.o
 core_o = $(g_c:../%.c=b/%.o)
 objs = $(host_o) $(core_o)
 
-# inc/ holds wasm's <data_vt.h> override (no flat code-address space, so it
+# inc/ holds wasm's <vt.h> override (no flat code-address space, so it
 # resolves data kinds by sentinel ap rather than .gwen_data_vt slot index).
 # It must be its own include dir, NOT ".": emcc deprioritizes the compiler's
-# cwd in the <...> search path, which would let ../core/data_vt.h win instead.
+# cwd in the <...> search path, which would let ../core/vt.h win instead.
 CFLAGS = -std=gnu2x -O2 -g0 -Dg_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \

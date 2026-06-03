@@ -1,7 +1,7 @@
-#ifndef _g_data_vt_h
-#define _g_data_vt_h
+#ifndef _g_vt_h
+#define _g_vt_h
 // wasm has no flat code address space, so the host's slot-index trick (recover
-// a kind from where an ap lands in the .gwen_data_vt section -- see g/data_vt.h)
+// a kind from where an ap lands in the .gwen_data_vt section -- see core/vt.h)
 // doesn't apply: function pointers aren't ordered integers here. Instead compare
 // the ap against each self-quote sentinel directly. ap is a g_vm_t* (function
 // pointer), so this is equality on pointers, not a switch (which C forbids on

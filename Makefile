@@ -21,11 +21,11 @@ test_host: host
 	@echo TEST $m
 	@cat $t | $m
 # Phase-1 gate: the gwen rewrite tools/gen_data_vt.g must produce byte-identical
-# output (the .py/.g generator-name aside) to gen_data_vt.py on every data.o
+# output (the .py/.g generator-name aside) to gen_data_vt.py on every vt.o
 # present in a build tree. Run after building the arches you want covered.
 test_gen_vt: host
 	@echo TEST gen_data_vt.g
-	@for o in `find host/b playdate/b kernel/b -name data.o 2>/dev/null`; do \
+	@for o in `find host/b playdate/b kernel/b -name vt.o 2>/dev/null`; do \
 	  python3 tools/gen_data_vt.py $$o | sed 's@gen_data_vt\.py@gen_data_vt.g@' > host/b/.vt.py.h; \
 	  $m tools/gen_data_vt.g $$o > host/b/.vt.g.h; \
 	  cmp -s host/b/.vt.py.h host/b/.vt.g.h && echo "  ok   $$o" \

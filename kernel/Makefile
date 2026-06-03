@@ -58,19 +58,19 @@ k_S_o = $(k_S:%.S=$(k_odir)/%.o)
 k_asm_o = $(k_asm:%.asm=$(k_odir)/%.o)
 k_o = $(k_shared_o) $(k_local_o) $(k_S_o) $(k_asm_o)
 
-# Reflected out of this arch's data.o so g_typ() shifts instead of doing the
+# Reflected out of this arch's vt.o so g_typ() shifts instead of doing the
 # portable header's two link-time divides (see tools/gen_data_vt.py). Every C
-# object depends on it; data.o itself bootstraps from the portable header (no
+# object depends on it; vt.o itself bootstraps from the portable header (no
 # $(vt_h) prerequisite -- that would be circular -- and it never calls g_typ).
-vt_h = $(k_odir)/data_vt.h
+vt_h = $(k_odir)/vt.h
 gen_vt = $(R)/tools/gen_data_vt.py
 
 # --- flags -----------------------------------------------------------
 kcflags = $(g_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
 kldflags := -static -nostdlib --gc-sections -T $a/$a.lds -z max-page-size=0x1000
-# -I$(k_odir) is first so this arch's generated data_vt.h (reflected out of
-# its own data.o below) shadows the portable -I$(R)/core/data_vt.h. It is
+# -I$(k_odir) is first so this arch's generated vt.h (reflected out of
+# its own vt.o below) shadows the portable -I$(R)/core/vt.h. It is
 # per-arch because the sentinel body -- and so its stride -- differs by target.
 kcppflags := \
   -I$(k_odir) \
@@ -204,16 +204,16 @@ b/$n-$a.efi: $(k_o)
 endif
 
 # The data-sentinel TU bootstraps from the portable header (no $(vt_h)
-# prerequisite -- circular, since b/.../data_vt.h is reflected out of it). Its
+# prerequisite -- circular, since b/.../vt.h is reflected out of it). Its
 # explicit recipe overrides the shared-source pattern rule below; on a clean
-# build data_vt.h does not exist yet, so -I$(k_odir) finds nothing and the
-# compile falls through to the portable g/data_vt.h.
-$(k_odir)/core/data.o: $(R)/core/data.c $(k_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
+# build vt.h does not exist yet, so -I$(k_odir) finds nothing and the
+# compile falls through to the portable core/vt.h.
+$(k_odir)/core/vt.o: $(R)/core/vt.c $(k_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-$(vt_h): $(k_odir)/core/data.o $(gen_vt)
+$(vt_h): $(k_odir)/core/vt.o $(gen_vt)
 	@echo GEN	$@
 	@$(gen_vt) $< -o $@
 

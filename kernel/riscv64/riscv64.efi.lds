@@ -39,7 +39,7 @@ SECTIONS
         *(.text .text.*)
         /* gwen data self-quote sentinels: kept contiguous and in enum
            order (gwen_data_vt.NN) so g_typ() recovers a kind from an ap's
-           slot index. Mirrors g/gwen_data_vt.ld for the host link. */
+           slot index. Mirrors g/vt.ld for the host link. */
         . = ALIGN(16);
         __start_gwen_data_vt = .;
         KEEP(*(SORT_BY_NAME(gwen_data_vt.*)))
