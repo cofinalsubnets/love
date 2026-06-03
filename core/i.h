@@ -124,7 +124,7 @@ g_vm_t g_vm_kcall,
  g_vm_two, g_vm_vec, g_vm_sym, g_vm_tbl, g_vm_text, // data self-quote sentinels, enum q order
  g_vm_putn, g_vm_info,    g_vm_clock,
  g_vm_nilp,  g_vm_symnom, g_vm_putc, g_vm_gensym, g_vm_twop,
- g_vm_len, g_vm_get, g_vm_fputx,
+ g_vm_len, g_vm_get, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
  g_vm_sin, g_vm_cos, g_vm_tan, g_vm_atan, g_vm_atan2,
  g_vm_sqrt, g_vm_exp, g_vm_log, g_vm_pow,
@@ -159,6 +159,19 @@ static g_inline bool tblp(word _) { return homp(_) && cell(_)->ap == g_vm_tbl; }
 static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == g_vm_sym; }
 static g_inline bool vecp(word _) { return homp(_) && cell(_)->ap == g_vm_vec; }
 static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == g_vm_text; }
+// Mutable flat byte string. NOT a data_vt kind: its head word is the
+// self-quoting g_vm_buf (like g_vm_port_io for ports), so the GC walks a buf
+// as a plain length-2 thread -- [g_vm_buf, backing g_str, terminator] -- and
+// the generic thread scan forwards the embedded string pointer for free; no
+// bespoke evac/copy rule, and the data-sentinel mechanism stays reserved for
+// kinds that need one. The bytes live in an ordinary g_str we mutate in place
+// (cf. the `to` output port). Earned by tools/elf2efi.g, which back-patches a
+// PE image. Recognized by ap, like iop() for ports.
+struct g_buf { g_vm_t *ap; struct g_str *str; };
+static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == g_vm_buf; }
+static g_inline struct g_str *buf_str(word x) { return ((struct g_buf*) x)->str; }
+// the byte ops read from a string or a buf; both resolve to a g_str of bytes.
+static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
 static g_inline bool flop(word _) {
   return vecp(_) && vec(_)->rank == 0 && vec(_)->type == G_VT_FLO; }
 // Wide-integer box: a rank-0 G_VT_INT scalar vec. Arises only from

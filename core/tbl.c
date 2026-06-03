@@ -91,7 +91,11 @@ static g_noinline intptr_t gtabdel(struct g *f, struct g_tab *t, intptr_t k, int
 
 g_vm(g_vm_get) {
  word z = Sp[0], k = Sp[1], x = Sp[2], n;
- if (homp(x) && datp(x)) switch (typ(x)) {
+ if (bufp(x)) {                                  // mutable byte string: byte index
+  struct g_str *s = buf_str(x);
+  if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(s))
+   z = putnum((unsigned char) txt(s)[n]); }
+ else if (homp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // vec_q, sym_q are not indexable
   case tbl_q: z = g_tget(f, z, k, tbl(x)); break;
   case text_q:
@@ -107,12 +111,20 @@ g_vm(g_vm_get) {
     if (twop(x)) z = A(x); } }
  return Sp[2] = z, Sp += 2, Ip += 1, Continue(); }
 
+// (put key val coll): table insert, or -- when coll is a buf -- store the
+// byte val at index key. Both leave coll on the stack as the result. A buf
+// store needs no allocation, so no GC dance; out-of-range/non-numeric is a
+// silent no-op, matching the misuse convention of the other byte ops.
 g_vm(g_vm_put) {
- if (!tblp(Sp[2])) Sp += 2;
- else {
+ word x = Sp[2], n;
+ if (tblp(x)) {
   Pack(f);
   if (!g_ok(f = g_tput(f))) return gtrap(f);
   Unpack(f); }
+ else {
+  if (bufp(x) && nump(Sp[0]) && (n = getnum(Sp[0])) >= 0 && n < (word) len(buf_str(x)))
+   txt(buf_str(x))[n] = (char) getnum(Sp[1]);
+  Sp += 2; }
  return Ip += 1, Continue(); }
 
 g_vm(g_vm_tdel) {

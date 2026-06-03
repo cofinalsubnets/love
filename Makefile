@@ -8,7 +8,7 @@ include common.mk
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel playdate wasm rp2040
-.PHONY: test test_host test_js test_all test_gen_vt test_gl0
+.PHONY: test test_host test_js test_all test_gen_vt test_gl0 test_elf2efi
 .PHONY: valg disasm flame cat cata perf repl gdb vmret
 test: test_host
 test_all: test_host test_gl0 test_js test_gen_vt
@@ -31,6 +31,17 @@ test_gen_vt: host
 	  cmp -s host/b/.vt.py.h host/b/.vt.g.h && echo "  ok   $$o" \
 	    || { echo "  FAIL $$o"; rm -f host/b/.vt.py.h host/b/.vt.g.h; exit 1; }; \
 	done; rm -f host/b/.vt.py.h host/b/.vt.g.h
+# Phase-4 gate: the gwen rewrite tools/elf2efi.g must produce a byte-identical
+# PE32+ image to elf2efi.py for every EFI ELF (riscv64/loongarch64) present in
+# the build tree. Run after `make -C kernel EFI=1 a=riscv64` (and a=loongarch64).
+test_elf2efi: host
+	@echo TEST elf2efi.g
+	@for e in `find kernel/b -name '*.efi.elf' 2>/dev/null`; do \
+	  python3 tools/elf2efi.py $$e host/b/.efi.py; \
+	  $m tools/elf2efi.g $$e host/b/.efi.g; \
+	  cmp -s host/b/.efi.py host/b/.efi.g && echo "  ok   $$e" \
+	    || { echo "  FAIL $$e"; rm -f host/b/.efi.py host/b/.efi.g; exit 1; }; \
+	done; rm -f host/b/.efi.py host/b/.efi.g
 all: host kernel playdate wasm rp2040
 host:
 	@$(MAKE) -C host

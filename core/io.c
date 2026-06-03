@@ -99,16 +99,17 @@ g_vm(g_vm_fflush) {
   Unpack(f); }
  return Ip++, Continue(); }
 
-// (fputs port s) — write every byte of string s through port; return the
-// port. No-op when args are misused (non-port or non-string). Re-reads
-// Sp[1] each iteration so GC inside zputc (e.g., growing a sink buffer)
-// can forward the string safely.
+// (fputs port s) — write every byte of string-or-buf s through port; return
+// the port. No-op when args are misused (non-port, or neither string nor
+// buf). bytes_of resolves either to the g_str holding the bytes, re-read each
+// iteration so GC inside zputc (e.g., growing a sink buffer) can forward it
+// safely (for a buf, GC may move both the wrapper and its backing string).
 g_vm(g_vm_fputs) {
- if (iop(Sp[0]) && strp(Sp[1])) {
+ if (iop(Sp[0]) && (strp(Sp[1]) || bufp(Sp[1]))) {
   f->io = (struct g_io*) Sp[0];
-  uintptr_t i = 0, l = len(Sp[1]);
+  uintptr_t i = 0, l = len(bytes_of(Sp[1]));
   Pack(f);
-  while (g_ok(f) && i < l) f = zputc(f, txt(f->sp[1])[i++]);
+  while (g_ok(f) && i < l) f = zputc(f, txt(bytes_of(f->sp[1]))[i++]);
   if (!g_ok(f = zflush(f))) return gtrap(f);
   Unpack(f); }
  return Sp++, Ip++, Continue(); }

@@ -136,7 +136,7 @@ kcflags_loongarch64_limine =
 # (well, the rest of the abs64 records do; PCALA pairs are PC-relative and
 # need no fix-up). The 64-bit absolute references the compiler still emits
 # for function-pointer tables and static initializers come out as
-# R_LARCH_64 records, which elf2efi.py lifts into PE .reloc entries.
+# R_LARCH_64 records, which elf2efi.g lifts into PE .reloc entries.
 kcflags_loongarch64_efi = -fdirect-access-external-data
 
 kldflags_x86_64 = -m elf_x86_64
@@ -179,21 +179,23 @@ b/$n-$a.elf: $a/$a.lds $(k_o)
 # riscv64 and loongarch64: LLVM has no COFF backend for either arch, so
 # we cannot take that path. Instead we link a plain static ELF with
 # --emit-relocs (preserving the relocation records ld would otherwise
-# drop) and wrap the result in a PE32+ container via tools/elf2efi.py.
+# drop) and wrap the result in a PE32+ container via the gwen tool
+# tools/elf2efi.g (run through the host interpreter $m; see the recipe below).
 # The tool walks .rela.* for the absolute-64 entries (R_RISCV_64 or
 # R_LARCH_64, both encoded as type 2) and stamps out IMAGE_REL_BASED_DIR64
 # records that do the same job lld-link does for the other two arches.
+# tools/elf2efi.py is kept as the cross-checked reference (make test_elf2efi).
 kefi_elfmach_riscv64     = elf64lriscv
 kefi_elfmach_loongarch64 = elf64loongarch
 ifneq ($(filter $a,riscv64 loongarch64),)
-b/$n-$a.efi: $(k_o) $a/$a.efi.lds $(R)/tools/elf2efi.py
+b/$n-$a.efi: $(k_o) $a/$a.efi.lds $(R)/tools/elf2efi.$x | $(m)
 	@echo LD	$(@:.efi=.efi.elf)
 	@mkdir -p "$(dir $@)"
 	@$(LD) -m $(kefi_elfmach_$a) --no-relax -static -nostdlib --gc-sections \
 	  --emit-relocs -T $a/$a.efi.lds -e efi_main \
 	  $(k_o) -o $(@:.efi=.efi.elf)
 	@echo EFI	$@
-	@python3 $(R)/tools/elf2efi.py $(@:.efi=.efi.elf) $@
+	@$(m) $(R)/tools/elf2efi.$x $(@:.efi=.efi.elf) $@
 else
 b/$n-$a.efi: $(k_o)
 	@echo LD	$@
@@ -202,6 +204,17 @@ b/$n-$a.efi: $(k_o)
 	  -Wl,-subsystem:efi_application -Wl,-entry:efi_main \
 	  $(k_o) -o $@
 endif
+
+# riscv64/loongarch64 stamp their PE32+ wrapper with the gwen tool
+# tools/elf2efi.g, run through the host interpreter $m (= $(R)/host/b/gl). Build
+# it on demand (recursively) so a standalone `make -C kernel EFI=1 a=riscv64`
+# works without a prior `make host`. It is an order-only prereq of the .efi
+# above, so refreshing gl never forces a kernel relink; gl reads the cross-arch
+# ELF purely as bytes, so the host-arch interpreter is the right one to run.
+.PHONY: host-gl
+host-gl:
+	@$(MAKE) -C $(R)/host
+$(m): host-gl
 
 # The data-sentinel TU bootstraps from the portable header (no $(vt_h)
 # prerequisite -- circular, since b/.../vt.h is reflected out of it). Its
