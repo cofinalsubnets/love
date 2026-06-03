@@ -107,17 +107,17 @@ b/boot.g: $(gl0) $(R)/tools/mkboot.$x $(R)/core/prelude.$x $(R)/core/ev.$x
 b/repl.h: $(gl0) $(R)/tools/lcat.$x $(R)/core/repl.$x
 	@echo GEN	$@
 	@mkdir -p $(dir $@)
-	@$(gl0) $(R)/tools/lcat.$x $(R)/core/repl.$x >$@
+	@$(gl0) -l $R/core/prelude.$x $(R)/tools/lcat.$x $(R)/core/repl.$x >$@
 
 b/boot.h: $(gl0) $(R)/tools/lcat.$x b/boot.$x
 	@echo GEN	$@
 	@mkdir -p $(dir $@)
-	@$(gl0) $(R)/tools/lcat.$x b/boot.$x >$@
+	@$(gl0) -l $R/core/prelude.$x $(R)/tools/lcat.$x b/boot.$x >$@
 
 b/prelude.h: $(gl0) $(R)/tools/lcat.$x $R/core/prelude.$x
 	@echo GEN	$@
 	@mkdir -p $(dir $@)
-	@$(gl0) $(R)/tools/lcat.$x $R/core/prelude.$x >$@
+	@$(gl0) -l $R/core/prelude.$x $(R)/tools/lcat.$x $R/core/prelude.$x >$@
 
 b/$n.1: b/$n manpage.$x
 	@echo GEN	$@

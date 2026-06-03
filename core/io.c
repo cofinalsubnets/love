@@ -123,42 +123,21 @@ g_vm(g_vm_fputn) {
    Sp[2] = Sp[1]; }
  return Sp += 2, Ip++, Continue(); }
 
+g_vm(g_vm_fputx) {
+ if (iop(Sp[0])) {
+  Pack(f);
+  if (!g_ok(f = gfputx(f, (struct g_io*) Sp[0], Sp[1]))) return gtrap(f);
+  Unpack(f); }
+ return Sp++, Ip++, Continue(); }
 g_vm(g_vm_dot) {
  Pack(f);
- if (!g_ok(f = gfputx(f, &g_stdout, f->sp[0]))) return gtrap(f);
+ if (!g_ok(f = gfputx(f, &g_stdout, Sp[0]))) return gtrap(f);
  Unpack(f);
  return Ip++, Continue(); }
 
-// Heap-allocate a fresh data-sink port. Bumps Width(struct to) + ttag, fills
-// fields, and pushes the port pointer on Sp.
-static struct g *to_alloc(struct g *f) {
- if (!g_ok(f = str0(f, 32))) return f;
- uintptr_t n = Width(struct to);
- if (!g_ok(f = g_have(f, n + Width(struct g_tag)))) return f;
- union u *k = bump(f, n + Width(struct g_tag));
- struct to *o = (struct to*) k;
- o->io.ap = g_vm_port_io;
- o->io.fd = putnum(-2);
- o->io.ungetc_buf = putnum(EOF);
- o->io.eof_seen = putnum(false);
- o->buf = (struct g_str*) f->sp[0];
- o->i = nil;
- f->sp[0] = (word) tagthd(k, n);
- return f; }
 
-#define _to(x) ((struct to*)(x))
-// Harvest the bytes written so far into a fresh exact-sized g_vec on top of Sp.
-static struct g *to_harvest(struct g *f, struct to *o) {
- f->io = (struct g_io*) o;
- if (g_ok(f = str0(f, getnum(o->i))))
-  o = (struct to*) f->io,
-  memcpy(txt(f->sp[0]), txt(o->buf), getnum(o->i));
- return f; }
-
-static struct g*gzputc(struct g*f, int c) { return g_ok(f) ? port_vt(f->io->fd)->putc(f, c) : f; }
-static struct g*gzputs(struct g*f, char const *s) {
- while (*s) f = gzputc(f, *s++);
- return f; }
+static struct g*gzputc(struct g*f, int c) {
+  return port_vt(g_core_of(f)->io->fd)->putc(f, c); }
 
 static struct g*gzputn(struct g *f, intptr_t n, uint8_t b) {
  uintptr_t
@@ -227,7 +206,7 @@ static g_inline struct g*gzput_str(struct g*f, word _) {
   else if (c == '\r') f = gzputc(f, '\\'), c = 'r';
   else if (c == '\0') f = gzputc(f, '\\'), c = '0';
   else if ((unsigned char) c < 32) {           // other ctl bytes -> \xHH
-   f = gzputc(gzputs(f, "\\x"), g_digits[(c >> 4) & 0xf]);
+   f = gzputc(gzputc(gzputc(f, '\\'), 'x'), g_digits[(c >> 4) & 0xf]);
    c = g_digits[c & 0xf]; }
   f = gzputc(f, c); }
  return g_pop(gzputc(f, '"'), 1); }
@@ -258,21 +237,6 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x) {
 
 static g_inline struct g *gfputx(struct g *f, struct g_io *o, intptr_t x) {
  return g_core_of(f)->io = o, gzputx(f, x); }
-
-// (inspect x) -> string. Alloc a heap data-sink, gfputx x into it, harvest.
-// Stack walk:
-//   in:                  Sp = [x, ...]
-//   after to_alloc:      Sp = [port, x, ...]
-//   after gfputx:        Sp = [port, x, ...]  (slots may be forwarded)
-//   after to_harvest:    Sp = [str, port, x, ...]
-//   drop port and x:     Sp = [str, ...]
-g_vm(g_vm_inspect) {
- Pack(f);
- if (!g_ok(f = to_alloc(f)) ||
-     !g_ok(f = gfputx(f, (struct g_io*) f->sp[0], f->sp[1])) ||
-     !g_ok(f = to_harvest(f, (struct to*) f->sp[0])))
-  return gtrap(f);
- return f->sp[2] = f->sp[0], Unpack(f), Sp += 2, Ip++, Continue(); }
 
 // Magnitude thresholds for the printer below, typed to g_flo_t's width.
 // A bare double literal in a comparison against the g_flo_t `v` would
@@ -378,33 +342,6 @@ g_vm(g_vm_fgetc) {
    Sp[0] = putnum(f->b); }
  return Ip++, Continue(); }
 
-// (slurp port) — read every remaining byte of port into a fresh string and
-// return it (nil on misuse). Compensates for the lack of a file seek: read
-// the whole image once, then index it with (get _ i s). Blocking: a byte is
-// pulled with the port's own getc until it reports EOF (fd_getc reads into a
-// uint8_t, so a 0xff data byte is distinct from the EOF sentinel -- binary
-// safe). The bytes are accumulated through a heap data-sink (struct to, the
-// same growable buffer (inspect) uses) and harvested into an exact-size string.
-//   in:               Sp = [inport, ...]
-//   after to_alloc:   Sp = [sink, inport, ...]
-//   after to_harvest: Sp = [str, sink, inport, ...]
-//   drop sink+inport: Sp = [str, ...]
-g_vm(g_vm_slurp) {
- if (!iop(Sp[0])) { Sp[0] = nil; return Ip++, Continue(); }
- Pack(f);
- if (!g_ok(f = to_alloc(f))) return gtrap(f);
- for (;;) {
-  f->io = (struct g_io*) f->sp[1];            // input port (re-read: GC-traced)
-  if (!g_ok(f = zgetc(f))) return gtrap(f);
-  int c = f->b;                               // int, so EOF (-1) compares cleanly
-  if (c == EOF) break;
-  f->io = (struct g_io*) f->sp[0];            // data sink
-  if (!g_ok(f = zputc(f, c))) return gtrap(f); }
- if (!g_ok(f = to_harvest(f, (struct to*) f->sp[0]))) return gtrap(f);
- f->sp[2] = f->sp[0];
- f->sp += 2;
- Unpack(f);
- return Ip++, Continue(); }
 
 // (fungetc port byte) — push back one byte, return the byte.
 g_vm(g_vm_fungetc) {

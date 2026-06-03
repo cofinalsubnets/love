@@ -120,7 +120,7 @@ struct g_atom *intern_checked(struct g*, struct g_str*);
 g_vm(g_vm_gc, uintptr_t);
 g_vm_t g_vm_kcall,
  g_vm_two, g_vm_vec, g_vm_sym, g_vm_tbl, g_vm_text, // data self-quote sentinels, enum q order
- g_vm_putn, g_vm_info, g_vm_dot,    g_vm_clock,
+ g_vm_putn, g_vm_info,    g_vm_clock,
  g_vm_nilp,  g_vm_symnom, g_vm_putc, g_vm_gensym, g_vm_twop,
  g_vm_len, g_vm_get, g_vm_fputx,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
@@ -136,10 +136,9 @@ g_vm_t g_vm_kcall,
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
- g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key, g_vm_inspect,
+ g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
- g_vm_fputn,
- g_vm_fread, g_vm_slurp;
+ g_vm_fputn, g_vm_fread;
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
 // above, because a frontend's override (e.g. wasm/inc/data_vt.h) resolves kinds
 // by comparing an ap against g_vm_two..g_vm_text directly.

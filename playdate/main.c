@@ -130,7 +130,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
     "_(puts\"\nbuttons: \")"
     "_(putn(get_buttons 0)2)"
     "_(puts\"\n\nroot folder contents:\n\")"
-    "_(.(ls_root 0))"
+    "_(fputx out(ls_root 0))"
     "r0(cur_row 0)"
     "c0(cur_col 0)"
     "_(cur_set 0 44)"

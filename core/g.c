@@ -29,9 +29,8 @@ struct g *g_defs(struct g*f, struct g_def const*defs) {
  _(bif_cons, "X", S2(g_vm_cons)) _(bif_car, "A", S1(g_vm_car)) _(bif_cdr, "B", S1(g_vm_cdr)) \
  _(bif_cons2, "cons", S2(g_vm_cons)) _(bif_car2, "car", S1(g_vm_car)) _(bif_cdr2, "cdr", S1(g_vm_cdr)) \
  _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
- _(bif_dot, ".", S1(g_vm_dot)) _(bif_fread, "fread", S2(g_vm_fread))\
+ _(bif_fread, "fread", S2(g_vm_fread))\
  _(bif_str, "str", S1(g_vm_str))\
- _(bif_slurp, "slurp", S1(g_vm_slurp))\
  _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\
  _(bif_seek, "seek", S2(g_vm_seek)) _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_get))\
@@ -48,8 +47,8 @@ struct g *g_defs(struct g*f, struct g_def const*defs) {
  _(bif_sleep, "sleep", S1(g_vm_sleep)) _(bif_donep, "done?", S1(g_vm_donep)) \
  _(bif_kill, "kill", S1(g_vm_kill)) \
  _(bif_key, "key?", S1(g_vm_key)) \
- _(bif_inspect, "inspect", S1(g_vm_inspect)) \
  _(bif_fputn, "fputn", S3(g_vm_fputn))\
+ _(bif_fputx, "fputx", S2(g_vm_fputx))\
  _(bif_fgetc, "fgetc", S1(g_vm_fgetc)) _(bif_fungetc, "fungetc", S2(g_vm_fungetc)) _(bif_feof, "feof", S1(g_vm_feof))\
  _(bif_fputc, "fputc", S2(g_vm_fputc)) _(bif_fputs, "fputs", S2(g_vm_fputs))  _(bif_fflush, "fflush", S1(g_vm_fflush))
 #define built_in_function(n, _, d) static union u const n[] = d;
