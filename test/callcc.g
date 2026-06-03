@@ -39,7 +39,7 @@
  (: (loop n k) (? (= 0 n) -1
                   (= n 5) (k 100)
                   (loop (+ -1 n) k))
-    (, (= 100 (call_cc (\ k (loop 10 k))))
+    (do (= 100 (call_cc (\ k (loop 10 k))))
        (= -1  (call_cc (\ k (loop  3 k))))))
 
  ; --- nested call_cc: inner k escapes only the inner form ---

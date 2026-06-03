@@ -43,10 +43,10 @@
   (: (rng n) (? (= n 0) 0 (X n (rng (- n 1))))
      s (inspect (rng 200))
      ; 200 numbers + 199 separators + 2 parens = at least 400 chars
-   (, (strp s) (< 400 (len s))))
+   (do (strp s) (< 400 (len s))))
 
   ; GC stress: 500 inspects in a loop. Each call alloc'd a heap port + buf,
   ; provoking many GCs. Final call must still produce the expected output.
   (: (loop n) (? (= n 0) (inspect (X 1 (X 2 (X 3 0))))
-                 (, (inspect "stress") (loop (- n 1))))
+                 (do (inspect "stress") (loop (- n 1))))
    (= "(1 2 3)" (loop 500))))

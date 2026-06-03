@@ -186,18 +186,18 @@
    ; the prompt's column; the topmost line shares it, subsequent
    ; lines start at column 0.
    (edrender pl pra u l r d)
-     (: _ (? (< 0 pra) (, (putc 27) (putc 91) (putn pra 10) (putc 65)) 0)
+     (: _ (? (< 0 pra) (do (putc 27) (putc 91) (putn pra 10) (putc 65)) 0)
         _ (putc 13)
-        _ (? (< 0 pl)  (, (putc 27) (putc 91) (putn pl 10)  (putc 67)) 0)
+        _ (? (< 0 pl)  (do (putc 27) (putc 91) (putn pl 10)  (putc 67)) 0)
         _ (putc 27) _ (putc 91) _ (putc 74) ; clear to end of screen
-        _ (each (rev u) (\ ln (, (each ln prc) (putc 10))))
+        _ (each (rev u) (\ ln (do (each ln prc) (putc 10))))
         _ (each (revcat l r) prc)
-        _ (each d (\ ln (, (putc 10) (each ln prc))))
+        _ (each d (\ ln (do (putc 10) (each ln prc))))
         ld (len d)
         col (+ (? (twop u) 0 pl) (len l))
-        _ (? (< 0 ld) (, (putc 27) (putc 91) (putn ld 10) (putc 65)) 0)
+        _ (? (< 0 ld) (do (putc 27) (putc 91) (putn ld 10) (putc 65)) 0)
         _ (putc 13)
-        _ (? (< 0 col) (, (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
+        _ (? (< 0 col) (do (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
         (puts ""))
 
    ps1 " ;; "
@@ -274,9 +274,9 @@
         (poll _)
           (? (done? pid) (: r (wait pid) _ (putx r) -1)
              (key? 0)    (: c (getc 0)
-                            (? (= c 3) (, (puts "^C") (kill pid) -1)
+                            (? (= c 3) (do (puts "^C") (kill pid) -1)
                                (poll 0)))
-             (, (yield 0) (poll 0)))
+             (do (yield 0) (poll 0)))
         (poll 0))
 
    ; the outer (: ...) has no trailing body expression: every binding

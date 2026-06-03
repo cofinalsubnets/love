@@ -1,10 +1,10 @@
 (: test_t0 (clock 0)
- (term_esc string) (, (putc 27) (puts string))
+ (term_esc string) (do (putc 27) (puts string))
  green_dot "[32m."
  red_x "[31mX"
  reset "[0m"
  (term_text s)
-  (, (putc 27)
+  (do (putc 27)
      (puts s)
      (putc 27)
      (puts reset))
@@ -14,9 +14,9 @@
    (test_get k) (get 0 k test_state))
 (:: 'assert (\ l
 (:
- (report x v) (,
+ (report x v) (do
   (test_set 'count (+ 1 (test_get 'count)))
    (? v (term_text green_dot)
-    (, (test_set 'fail (X x (test_get 'fail)))
+    (do (test_set 'fail (X x (test_get 'fail)))
        (term_text red_x))))
- (X ', (map (\ l (L report (L '. l) l)) l)))))
+ (X 'do (map (\ l (L report (L '. l) l)) l)))))

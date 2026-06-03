@@ -15,7 +15,7 @@
   ; fungetc + fgetc roundtrip on stdin (within a single top-level form,
   ; otherwise the REPL parser would consume the pushed-back byte itself).
   (: (rt c) (: _ (fungetc in c) (fgetc in))
-   (, (= 65  (rt 65))
+   (do (= 65  (rt 65))
       (= 32  (rt 32))
       (= 255 (rt 255))))
 
@@ -61,15 +61,15 @@
   (= 1 (fread (strin '(49)) 99))                          ; "1"
   (= 'a (fread (strin '(97)) 99))                         ; "a"
   (: r (fread (strin '(40 49 32 50 41)) 99)               ; "(1 2)"
-     (, (twop r) (= 1 (car r)) (= 2 (cadr r))))
+     (do (twop r) (= 1 (car r)) (= 2 (cadr r))))
   (: r (fread (strin '(39 49)) 99)                        ; "'1" -> (` 1)
-     (, (twop r) (= 1 (cadr r))))
+     (do (twop r) (= 1 (cadr r))))
   ; "hi" -- string literal round-trip through the ci port.
   (= (str (X 104 (X 105 0))) (fread (strin '(34 104 105 34)) 99))
 
   ; Sequential reads: pull each datum in source order; final read returns e.
   (: p (strin '(49 32 50 32 51))                          ; "1 2 3"
-     (, (= 1 (fread p 99))
+     (do (= 1 (fread p 99))
         (= 2 (fread p 99))
         (= 3 (fread p 99))
         (= 99 (fread p 99))))
@@ -83,7 +83,7 @@
 
   ; --- g_status_more cases: fread returns the port itself, distinct from e ---
   ; Unclosed list.
-  (: p (strin '(40)) r (fread p 99) (, (= r p) (~ (= r 99))))
+  (: p (strin '(40)) r (fread p 99) (do (= r p) (~ (= r 99))))
   ; Unterminated string.
   (: p (strin '(34 97)) (= p (fread p 99)))                ; "\"a"
   ; Dangling quote.
@@ -100,7 +100,7 @@
 
   ; The port stays usable across complete forms in mixed sequences.
   (: p (strin '(40 41 32 49))                              ; "() 1"
-     (, (= 0 (fread p 99))                                 ; () -> nil
+     (do (= 0 (fread p 99))                                 ; () -> nil
         (= 1 (fread p 99))
         (= 99 (fread p 99))))
 

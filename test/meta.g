@@ -5,7 +5,7 @@
    (not (twop x)) (const x)
    (: x0 (car x) a (cdr x)
     (? (= x0 '.) (const (car a))
-       (= x0 ',) (foldl (\ a b l (, (a l) (b l))) 0 (map meta_eval a))
+       (= x0 'do) (foldl (\ a b l (do (a l) (b l))) 0 (map meta_eval a))
        (= x0 '\) (foldr (\ a f l x (f (\ y (? (= y a) x (l y)))))
                         (meta_eval (last a))
                         (init a))
@@ -25,7 +25,7 @@
    (nilp (cdr a)) (meta_eval (car a) (b m))
    (desugar (car a) (cadr a) (\ k v
     (: t (new 0) (Get k) (get 0 k t) (Put v) (put 0 v t)
-     (let_loop (cddr a) (\ l (, (Put (meta_eval v (b l))) l))
+     (let_loop (cddr a) (\ l (do (Put (meta_eval v (b l))) l))
                         (\ x (? (= x k) (Get 0) (m x))))))))
 
   (desugar k v c)

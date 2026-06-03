@@ -47,7 +47,7 @@
         (= 40 (wait b))))
 
  ; a task may yield mid-execution and still return its value through wait.
- (: p (spawn (\ x (, (yield 0) (yield 0) (yield 0) (+ x 1))) 41)
+ (: p (spawn (\ x (do (yield 0) (yield 0) (yield 0) (+ x 1))) 41)
     (= 42 (wait p)))
 
  ; nested spawn: a worker can spawn and wait on its own subtask.
@@ -66,7 +66,7 @@
  (: t (new 0)
     _ (put 'n 0 t)
     p (spawn (\ _ (: (loop _) (? (< (get 0 'n t) 3)
-                                (, (put 'n (+ 1 (get 0 'n t)) t)
+                                (do (put 'n (+ 1 (get 0 'n t)) t)
                                    (yield 0)
                                    (loop 0))
                                 'done)
@@ -147,7 +147,7 @@
  ; wait on its pid returns 0 (unknown).
  (: t (new 0)
     _ (put 'flag 0 t)
-    p (spawn (\ _ (: (loop _) (, (yield 0) (put 'flag -1 t) (loop 0)) (loop 0))) 0)
+    p (spawn (\ _ (: (loop _) (do (yield 0) (put 'flag -1 t) (loop 0)) (loop 0))) 0)
     r (kill p)
     (&& (= -1 r) (= 0 (wait p))))
 
@@ -158,12 +158,12 @@
     (&& (= -1 (kill p)) (= 0 (wait p))))
 
  ; double-kill: second kill is a no-op since the pid is gone from the ring.
- (: p (spawn (\ _ (: (loop _) (, (yield 0) (loop 0)) (loop 0))) 0)
+ (: p (spawn (\ _ (: (loop _) (do (yield 0) (loop 0)) (loop 0))) 0)
     (&& (= -1 (kill p)) (= 0 (kill p))))
 
  ; killing one of several tasks leaves the others intact.
  (: t (new 0)
-    a (spawn (\ _ (: (loop _) (, (yield 0) (loop 0)) (loop 0))) 0)
+    a (spawn (\ _ (: (loop _) (do (yield 0) (loop 0)) (loop 0))) 0)
     b (spawn (\ x (* x 10)) 7)
     _ (kill a)
     rb (wait b)
@@ -174,15 +174,15 @@
  ; wait on a sleeping task: main has to sleep deeply alongside it, then
  ; collect the result. Elapsed should be ~30ms, not 0 or much more.
  (: t0 (clock 0)
-    p (spawn (\ _ (, (sleep 30) 'done)) 0)
+    p (spawn (\ _ (do (sleep 30) 'done)) 0)
     r (wait p)
     elapsed (clock t0)
     (&& (= 'done r) (>= elapsed 30) (< elapsed 80)))
 
  ; tasks with different sleep durations wake in order: shorter sleep
  ; finishes first, longer still sleeping when we check, then completes.
- (: a (spawn (\ _ (, (sleep 10) 1)) 0)
-    b (spawn (\ _ (, (sleep 80) 2)) 0)
+ (: a (spawn (\ _ (do (sleep 10) 1)) 0)
+    b (spawn (\ _ (do (sleep 80) 2)) 0)
     ra (wait a)               ; ~10ms; b still sleeping
     db (done? b)              ; b should still be running
     rb (wait b)               ; ~70ms more
@@ -190,7 +190,7 @@
 
  ; kill a sleeping task: scheduler skips it via wake_at, but kill walks the
  ; ring directly and finds it regardless of state.
- (: p (spawn (\ _ (, (sleep 10000) 'never)) 0)
+ (: p (spawn (\ _ (do (sleep 10000) 'never)) 0)
     r (kill p)
     (&& (= -1 r) (= 0 (wait p))))
 
@@ -200,7 +200,7 @@
     _ (put 'n 0 t)
     a (spawn (\ _ (sleep 30)) 0)
     b (spawn (\ _ (: (loop _) (? (< (get 0 'n t) 5)
-                                (, (put 'n (+ 1 (get 0 'n t)) t)
+                                (do (put 'n (+ 1 (get 0 'n t)) t)
                                    (yield 0)
                                    (loop 0))
                                 'done)

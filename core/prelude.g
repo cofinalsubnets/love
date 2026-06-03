@@ -77,7 +77,6 @@
 (:: ':- (\ a (cons ': (cat (cdr a) (cons (car a) 0)))))
 (:: '?- (\ a (cons '? (cat (cdr a) (cons (car a) 0)))))
 (:: '>>= (\ l (cons (last l) (init l))))
-(:: ', (\ l (cons ': (foldr  (\ l r (cons '_ (cons l r)))(list (last l)) (init l)))))
 (:: '<=< (\ g (: y (sym 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
