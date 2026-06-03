@@ -15,6 +15,12 @@ g_noinline bool eqv(struct g *f, word a, word b) {
      size_t la = g_vec_bytes(vec(a)), lb = g_vec_bytes(vec(b));
      if (la != lb || memcmp(vec(a), vec(b), la)) return false;
      break; }
+    case big_q: {
+     struct g_big *x = (struct g_big*) a, *y = (struct g_big*) b;
+     if (x->slen != y->slen) return false;
+     size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(uint32_t);
+     if (memcmp(x->limb, y->limb, nb)) return false;
+     break; }
     case text_q:
      if (len(a) != len(b) || memcmp(txt(a), txt(b), len(a))) return false;
      break; } }
@@ -35,10 +41,12 @@ g_vm(g_vm_eq) {
  // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, VOP_EQ);
  bool r;
- if (flop(a) || flop(b))
-  r = (nump(a) || flop(a) || boxp(a)) && (nump(b) || flop(b) || boxp(b)) &&
-      (flop(a) ? flo_get(a) : nump(a) ? (g_flo_t) getnum(a) : (g_flo_t) box_get(a)) ==
-      (flop(b) ? flo_get(b) : nump(b) ? (g_flo_t) getnum(b) : (g_flo_t) box_get(b));
+ // A float operand compares as doubles across the whole numeric tower (fixnum /
+ // float box / wide-int box / bignum all widen via TOFLO; a bignum loses
+ // precision past 2^53, the documented float caveat). Otherwise eql: two equal
+ // bignums match through eqv's big_q arm, and canonical demotion keeps a bignum
+ // distinct from any fixnum/box of a different value.
+ if (flop(a) || flop(b)) r = ISNUM(a) && ISNUM(b) && (TOFLO(a) == TOFLO(b));
  else r = eql(f, a, b);
  Sp[1] = r ? putnum(-1) : nil;
  return Sp++, Ip++, Continue(); }

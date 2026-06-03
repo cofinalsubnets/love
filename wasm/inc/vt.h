@@ -9,7 +9,7 @@
 static g_inline bool in_data_vt(void *a) {
  g_vm_t *p = a;
  return p == g_vm_two || p == g_vm_vec || p == g_vm_sym
-     || p == g_vm_tbl || p == g_vm_text; }
+     || p == g_vm_tbl || p == g_vm_text || p == g_vm_big; }
 
 static g_inline enum q g_typ(union u *o) {
  g_vm_t *p = o->ap;
@@ -17,5 +17,6 @@ static g_inline enum q g_typ(union u *o) {
         p == g_vm_vec ? vec_q :
         p == g_vm_sym ? sym_q :
         p == g_vm_tbl ? tbl_q :
-                        text_q; }
+        p == g_vm_text ? text_q :
+                        big_q; }
 #endif

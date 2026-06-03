@@ -102,8 +102,8 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define putnum g_putnum
 
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
-enum q { two_q, vec_q, sym_q, tbl_q, text_q, };
-#define G_DATA_VT_N 5
+enum q { two_q, vec_q, sym_q, tbl_q, text_q, big_q, };
+#define G_DATA_VT_N 6
 typedef g_word num, word;
 // Signedness is a property of operators, not data (see the wide-int box
 // plan), so only signed integer widths + the two float widths exist here.
@@ -131,7 +131,7 @@ struct g
 struct g_atom *intern_checked(struct g*, struct g_str*);
 g_vm(g_vm_gc, uintptr_t);
 g_vm_t g_vm_kcall,
- g_vm_two, g_vm_vec, g_vm_sym, g_vm_tbl, g_vm_text, // data self-quote sentinels, enum q order
+ g_vm_two, g_vm_vec, g_vm_sym, g_vm_tbl, g_vm_text, g_vm_big, // data self-quote sentinels, enum q order
  g_vm_putn, g_vm_info,    g_vm_clock,
  g_vm_nilp,  g_vm_symnom, g_vm_putc, g_vm_gensym, g_vm_twop,
  g_vm_len, g_vm_get, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
@@ -192,6 +192,33 @@ static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == g_vm_buf; }
 static g_inline struct g_str *buf_str(word x) { return ((struct g_buf*) x)->str; }
 // the byte ops read from a string or a buf; both resolve to a g_str of bytes.
 static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
+// Arbitrary-precision integer (Step 6). Own data-sentinel kind big_q: a flat,
+// GC-trivial object (raw limbs, no embedded gwen pointers) the copying GC moves
+// by memcpy. A generic thread scan can't hold inline limb words (a limb that's
+// even-and-in-pool would be spuriously forwarded, one matching G_THD_TAG would
+// truncate the object), so a flat bignum needs its own copy/evac rule -- like
+// text_q strings -- which is exactly what the sentinel buys. slen = signed limb
+// count (negative => negative value); |slen| 32-bit limbs little-endian
+// (limb[0] least significant), top limb nonzero (normalized). Zero is never a
+// bignum (it demotes to the fixnum nil), so slen is never 0 and the sign is
+// unambiguous. Canonical demotion keeps the tiers disjoint: a value in fixnum
+// range is a fixnum, one in intptr_t range a wide-int box, only wider values a
+// bignum -- so nump/boxp/bigp are mutually exclusive and =/eqv stay well defined.
+struct g_big { g_vm_t *ap; intptr_t slen; uint32_t limb[]; };
+static g_inline bool bigp(word _) { return homp(_) && cell(_)->ap == g_vm_big; }
+static g_inline struct g_big *ini_big(struct g_big *b, intptr_t slen) {
+ return b->ap = g_vm_big, b->slen = slen, b; }
+uintptr_t g_big_bytes(struct g_big*);
+// Canonicalize a magnitude (limb[0..n), sign neg) into the smallest tier:
+// fixnum, else wide-int box, else bignum; bumps *hp when it boxes/bignums. One
+// sink shared by the reader and the arithmetic slow paths.
+word g_big_canon(g_word **hp, uint32_t const *limb, int n, bool neg);
+g_flo_t g_big_to_flo(word);                 // bignum -> double (used by TOFLO)
+int g_big_cmp(word, word);                  // -1/0/1 over two integer operands
+struct g *g_big_binop(struct g*, int vop);  // VOP_ADD..VOP_REM, packed; pops one operand
+struct g *g_big_dec(struct g*);             // sp[0] bignum -> decimal string
+struct g *g_big_read_dec(struct g*);        // sp[0] [+-]?digits token -> canonical value
+
 static g_inline bool flop(word _) {
   return vecp(_) && vec(_)->rank == 0 && vec(_)->type == G_VT_FLO; }
 // Wide-integer box: a rank-0 G_VT_INT scalar vec. Arises only from
@@ -200,7 +227,7 @@ static g_inline bool flop(word _) {
 // disjoint), so boxp and nump never both hold for the same number.
 static g_inline bool boxp(word _) {
   return vecp(_) && vec(_)->rank == 0 && vec(_)->type == G_VT_INT; }
-static g_inline bool numericp(word _) { return nump(_) || vecp(_); }
+static g_inline bool numericp(word _) { return nump(_) || vecp(_) || bigp(_); }
 // A rank>=1 typed array (vs a rank-0 scalar box, which flop/boxp catch). The
 // elementwise arith/compare lanes divert to g_vm_vbin when either operand arrp.
 static g_inline bool arrp(word _) { return vecp(_) && vec(_)->rank >= 1; }
@@ -275,11 +302,12 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 
 // --- numeric tower helpers (shared by math.c, arr.c, tbl.c) ----------------
 // Numeric scalar = a fixnum, a boxed float (flop), or a boxed wide int (boxp).
-#define ISNUM(x) (nump(x) || flop(x) || boxp(x))
-// Integer value of a fixnum-or-box operand (callers must exclude floats).
+#define ISNUM(x) (nump(x) || flop(x) || boxp(x) || bigp(x))
+// Integer value of a fixnum-or-box operand (callers must exclude floats AND
+// bignums -- a bignum doesn't fit an intptr_t; integer lanes guard on !bigp).
 #define TOINT(x) (nump(x) ? (intptr_t) getnum(x) : box_get(x))
-// Double value of any numeric operand.
-#define TOFLO(x) (nump(x) ? (g_flo_t) getnum(x) : flop(x) ? flo_get(x) : (g_flo_t) box_get(x))
+// Double value of any numeric operand (a bignum widens via g_big_to_flo).
+#define TOFLO(x) (nump(x) ? (g_flo_t) getnum(x) : flop(x) ? flo_get(x) : boxp(x) ? (g_flo_t) box_get(x) : g_big_to_flo(x))
 // Heap words for one scalar box. The float box (g_flo_t) and the wide-int box
 // (intptr_t) are both one pointer-width word, so one reservation fits.
 #define BOX_REQ (Width(struct g_vec) + Width(intptr_t))

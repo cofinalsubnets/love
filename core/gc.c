@@ -19,6 +19,9 @@ static g_inline void evac_vec(struct g*f, word const*const p0, word const*const 
 static g_inline void evac_str(struct g*f, word const*const p0, word const*const t0) {
  f->cp += b2w(sizeof(struct g_str) + str(f->cp)->len); }
 
+static g_inline void evac_big(struct g*f, word const*const p0, word const*const t0) {
+ f->cp += b2w(g_big_bytes((struct g_big*) f->cp)); }
+
 static g_inline void evac_sym(struct g*f, word const*const p0, word const*const t0) {
  f->cp += Width(struct g_atom) - (sym(f->cp)->nom ? 0 : 2); }
 
@@ -44,7 +47,8 @@ static g_inline void evac_data(struct g *g, word const *const p0, word const*con
    case sym_q: return evac_sym(g, p0, t0);
    case two_q: return evac_two(g, p0, t0);
    case tbl_q: return evac_tbl(g, p0, t0);
-   case text_q: return evac_str(g, p0, t0); } }
+   case text_q: return evac_str(g, p0, t0);
+   case big_q: return evac_big(g, p0, t0); } }
 
 static g_inline void run_finalizers(struct g*g) {
  struct g_fz *new_fz = NULL;
@@ -130,6 +134,14 @@ static g_inline word copy_str(struct g*f, struct g_str *src, word const *const p
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
+// Bignums are flat (raw limbs, no embedded gwen pointers), so they copy by a
+// single memcpy and evac by advancing past their bytes -- exactly like strings.
+static g_inline word copy_big(struct g*f, struct g_big *src, word const *const p0, word const*const t0) {
+ uintptr_t bytes = g_big_bytes(src);
+ struct g_big *dst = bump(f, b2w(bytes));
+ src->ap = memcpy(dst, src, bytes);
+ return word(dst); }
+
 static g_inline word copy_sym(struct g*f, struct g_atom *src, word const *const p0, word const*const t0) {
  struct g_atom *dst;
  if (src->nom) dst = intern_checked(f, (struct g_str*) gcp(f, word(src->nom), p0, t0));
@@ -157,7 +169,8 @@ static g_inline word copy_data(struct g *f, union u *src, word const *const p0, 
   case vec_q: return copy_vec(f, vec(src), p0, t0);
   case sym_q: return copy_sym(f, sym(src), p0, t0);
   case tbl_q: return copy_tbl(f, tbl(src), p0, t0);
-  case text_q: return copy_str(f, str(src), p0, t0); } }
+  case text_q: return copy_str(f, str(src), p0, t0);
+  case big_q: return copy_big(f, (struct g_big*) src, p0, t0); } }
 
 static g_inline struct g_tag *ttag2(union u *k, word const *const lo, word const *const hi) {
  while (!tagp(k->x, lo, hi)) k++;

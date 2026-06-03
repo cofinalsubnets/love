@@ -252,6 +252,16 @@ static g_inline struct g*gzput_sym(struct g*f, word _) {
 static g_inline struct g*gzput_tbl(struct g*f, word x) {
  return gzprintf(f, "#tab@%x:%d/%d", x, tbl(x)->len, tbl(x)->cap); }
 
+// A bignum prints in base 10 (with sign). g_big_dec renders it to a fresh
+// string (repeated divide-by-10 of a heap-local copy); we then emit the bytes,
+// re-fetching sp[0] each step since gzputc may grow a string port and GC.
+static g_inline struct g*gzput_big(struct g*f, word x) {
+ if (!g_ok(f = g_push(f, 1, x))) return f;
+ f = g_big_dec(f);
+ for (uintptr_t i = 0, n = g_ok(f) ? len(f->sp[0]) : 0; g_ok(f) && i < n; i++)
+  f = gzputc(f, txt(f->sp[0])[i]);
+ return g_pop(f, 1); }
+
 static g_noinline struct g *gzputx(struct g *f, intptr_t x) {
  if (nump(x)) return gzprintf(f, "%d", getnum(x));
  if (!datp(x)) return gzprintf(f, "#%lx", (long) x);
@@ -261,7 +271,8 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x) {
    case vec_q: return gzput_vec(f, x);
    case sym_q: return gzput_sym(f, x);
    case tbl_q: return gzput_tbl(f, x);
-   case text_q: return gzput_str(f, x); } }
+   case text_q: return gzput_str(f, x);
+   case big_q: return gzput_big(f, x); } }
 
 static g_inline struct g *gfputx(struct g *f, struct g_io *o, intptr_t x) {
  return g_core_of(f)->io = o, gzputx(f, x); }
@@ -416,6 +427,26 @@ g_vm(g_vm_key) {
 
 static struct g *grbufg(struct g *f, uintptr_t len);
 static struct g *flo_alloc(struct g*, g_flo_t);
+
+// A token is a plain decimal integer iff it is [+-]?[0-9]+ with no leading-zero
+// prefix (so "0x.." hex and "0.." octal stay with strtol, and bare "0" parses
+// as decimal). These read at full precision through g_big_read_dec.
+static g_inline bool is_dec_int(char const *s, uintptr_t n) {
+ uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
+ if (i >= n) return false;                       // a lone sign is a symbol
+ if (s[i] == '0' && n - i > 1) return false;     // leading zero -> let strtol decide
+ for (; i < n; i++) if (s[i] < '0' || s[i] > '9') return false;
+ return true; }
+
+// Replace the token at sp[0] with a wide-int box holding v (used when a non-
+// decimal integer literal overflows the fixnum tag but fits a machine word).
+static g_inline struct g *box_int(struct g *f, intptr_t v) {
+ if (g_ok(f = g_have(f, BOX_REQ))) {
+  struct g_vec *b = ini_scalar(bump(f, BOX_REQ), G_VT_INT);
+  box_put(b->shape, v);
+  f->sp[0] = word(b); }
+ return f; }
+
 static struct g *gzreads(struct g *f, bool nested);
 static struct g *gzread1(struct g *f);
 static g_inline struct g *gzread1sym(struct g*f, int c);
@@ -501,9 +532,14 @@ static g_inline struct g *gzread1sym(struct g*f, int c) {
       if (!g_ok(f = zungetc(f, c))) return f;
       len(f->sp[0]) = n;
       txt(f->sp[0])[n] = 0; // zero terminate for strtol ; n < lim so this is safe
+      // A plain decimal integer reads at full precision (fixnum / box / bignum);
+      // hex/octal/float/symbol tokens keep the strtol -> strtod -> intern path.
+      if (is_dec_int(txt(f->sp[0]), n)) return g_big_read_dec(f);
       char *e;
       long j = strtol(txt(f->sp[0]), &e, 0);
-      if (*e == 0) f->sp[0] = putnum(j);
+      if (*e == 0) {
+       if (j >= FIX_MIN && j <= FIX_MAX) f->sp[0] = putnum(j);
+       else f = box_int(f, j); }           // overflows the tag -> wide-int box
       else {
        double d = strtod(txt(f->sp[0]), &e);
        f = e == txt(f->sp[0]) || *e != 0 ? intern(f) : flo_alloc(f, d); }

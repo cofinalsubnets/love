@@ -32,8 +32,8 @@ Usage: gen_data_vt.py <vt.o> [-o vt.h]   (writes stdout if no -o)
 
 import struct, sys
 
-PREFIX = "gwen_data_vt."   # input subsections: gwen_data_vt.00 .. .04
-N = 5                      # enum q: two/vec/sym/tbl/text -- must match i.h
+PREFIX = "gwen_data_vt."   # input subsections: gwen_data_vt.00 .. .05
+N = 6                      # enum q: two/vec/sym/tbl/text/big -- must match i.h
 
 
 def fail(msg):

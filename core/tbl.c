@@ -205,6 +205,10 @@ uintptr_t hash(struct g *f, intptr_t x) {
     uintptr_t len = g_vec_bytes(vec(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
+   case big_q: {
+    uintptr_t len = g_big_bytes((struct g_big*) x), h = mix;
+    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
+    return h; }
    case text_q: {
     uintptr_t n = len(x), h = mix;
     char const *bs = txt(x);

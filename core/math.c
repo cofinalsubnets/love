@@ -14,43 +14,50 @@
 //
 // Slow path, one handler per operator. Non-numeric operand → nil. Otherwise:
 // either operand a float → promote both to g_flo_t and box the f64 result;
-// else both are integers (fixnum or wide-int box) → compute in intptr_t
-// (through uintptr_t, so an i64 overflow wraps with defined behavior) and
-// demote-or-box via EMIT_INT. g_vm (noinline) + reached only by tail call, so
-// the per-op fast paths stay branch-light and TCO-clean.
-#define AVM_SLOW(n, vop, iexpr, fexpr) static g_vm(g_vm_##n##_slow) { \
- word a = Sp[0], b = Sp[1], _res; \
+// else both are integers and neither a bignum → compute the machine-word op with
+// overflow detection: no overflow → demote-or-box via EMIT_INT; overflow (or
+// either operand already a bignum) → the multi-precision lane g_big_binop, which
+// promotes to an exact bignum. The bignum tail is Pack/helper/Unpack/Continue,
+// same TCO-clean shape as g_vm_gc. g_vm (noinline) + reached only by tail call,
+// so the per-op fast paths stay branch-light.
+#define AVM_SLOW(n, vop, ovf, fexpr) static g_vm(g_vm_##n##_slow) { \
+ word a = Sp[0], b = Sp[1]; \
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop); \
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
- Have(BOX_REQ); \
- if (flop(a) || flop(b)) { \
+ if (flop(a) || flop(b)) { word _res; Have(BOX_REQ); \
   g_flo_t ad = TOFLO(a), bd = TOFLO(b); \
   struct g_vec *v = ini_scalar((struct g_vec*) Hp, G_VT_FLO); \
-  Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); } \
- else { intptr_t av = TOINT(a), bv = TOINT(b); EMIT_INT(iexpr); } \
- return *++Sp = _res, Ip++, Continue(); }
-AVM_SLOW(add, VOP_ADD, (intptr_t)((uintptr_t) av + (uintptr_t) bv), ad + bd)
-AVM_SLOW(sub, VOP_SUB, (intptr_t)((uintptr_t) av - (uintptr_t) bv), ad - bd)
-AVM_SLOW(mul, VOP_MUL, (intptr_t)((uintptr_t) av * (uintptr_t) bv), ad * bd)
+  Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); \
+  return *++Sp = _res, Ip++, Continue(); } \
+ if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b), t; \
+  if (!ovf(av, bv, &t)) { word _res; Have(BOX_REQ); EMIT_INT(t); \
+   return *++Sp = _res, Ip++, Continue(); } } \
+ Pack(f); f = g_big_binop(f, vop); \
+ if (!g_ok(f)) return gtrap(f); \
+ return Unpack(f), Continue(); }
+AVM_SLOW(add, VOP_ADD, __builtin_add_overflow, ad + bd)
+AVM_SLOW(sub, VOP_SUB, __builtin_sub_overflow, ad - bd)
+AVM_SLOW(mul, VOP_MUL, __builtin_mul_overflow, ad * bd)
 
-// Division slow path: like AVM_SLOW, but the integer lane bails to the float
-// lane on the two degenerate cases (÷0 → ±inf/NaN; INT_MIN÷-1 would overflow),
-// matching the both-fixnum fast path's guard.
+// Division slow path: like AVM_SLOW, but a zero integer divisor (b == nil, the
+// only integer zero -- a box/bignum is never zero) routes to the float lane
+// (÷0 → ±inf/NaN), and the lone INT_MIN÷-1 case routes to the bignum lane,
+// which yields the exact 2^(W-1) (quot) / 0 (rem) without the C overflow/UB.
 #define AVM_SLOWDIV(n, vop, c_op, fexpr) static g_vm(g_vm_##n##_slow) { \
- word a = Sp[0], b = Sp[1], _res; \
+ word a = Sp[0], b = Sp[1]; \
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop); \
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
- Have(BOX_REQ); \
- bool use_flo = flop(a) || flop(b); \
- intptr_t av = 0, bv = 0; \
- if (!use_flo) { av = TOINT(a), bv = TOINT(b); \
-  use_flo = bv == 0 || (av == INTPTR_MIN && bv == -1); } \
- if (use_flo) { \
+ if (flop(a) || flop(b) || b == nil) { word _res; Have(BOX_REQ); \
   g_flo_t ad = TOFLO(a), bd = TOFLO(b); \
   struct g_vec *v = ini_scalar((struct g_vec*) Hp, G_VT_FLO); \
-  Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); } \
- else EMIT_INT(av c_op bv); \
- return *++Sp = _res, Ip++, Continue(); }
+  Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); \
+  return *++Sp = _res, Ip++, Continue(); } \
+ if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b); \
+  if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(BOX_REQ); EMIT_INT(av c_op bv); \
+   return *++Sp = _res, Ip++, Continue(); } } \
+ Pack(f); f = g_big_binop(f, vop); \
+ if (!g_ok(f)) return gtrap(f); \
+ return Unpack(f), Continue(); }
 AVM_SLOWDIV(quot, VOP_QUOT, /, ad / bd)         // ±inf or NaN on bd == 0
 AVM_SLOWDIV(rem, VOP_REM, %, g_fmod(ad, bd))    // NaN on bd == 0
 
@@ -90,6 +97,7 @@ AVM_DIV(rem, %)
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop);                 \
  if (ISNUM(a) && ISNUM(b))                                             \
   x = ((flop(a) || flop(b)) ? (TOFLO(a) c_op TOFLO(b))                 \
+     : (bigp(a) || bigp(b)) ? (g_big_cmp(a, b) c_op 0)                 \
                             : (TOINT(a) c_op TOINT(b))) ? putnum(-1) : nil; \
  return *++Sp = x, Ip++, Continue(); }
 #define CMP_OP(nom, vop, c_op) CMP_SLOW(nom, vop, c_op) g_vm(nom) {    \
