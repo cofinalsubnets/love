@@ -96,6 +96,10 @@ g_vm(g_vm_ashape) {
 // an empty array is vacuously all-zero). Drives g_falsy (i.h) -> g_vm_cond and
 // the `nilp`/`not` bif.
 bool g_all_zero(struct g_vec *v) {
+ // A complex scalar is falsy iff both components are 0 (so (cplx 0 0) and 0.0
+ // agree). Read both parts -- the generic float-domain scan below would see only
+ // the real part (cplx sorts past f64, so `>= g_vt_f32` treats it as float).
+ if (v->type == G_VT_CPLX) return cplx_re(word(v)) == 0 && cplx_im(word(v)) == 0;
  uintptr_t n = 1;
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  bool fdom = v->type >= g_vt_f32;

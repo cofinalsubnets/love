@@ -23,6 +23,7 @@
 #define AVM_SLOW(n, vop, ovf, fexpr) static g_vm(g_vm_##n##_slow) { \
  word a = Sp[0], b = Sp[1]; \
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop); \
+ if (cplxp(a) || cplxp(b)) return Ap(g_vm_cplx_bin, f, vop); \
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b)) { word _res; Have(BOX_REQ); \
   g_flo_t ad = TOFLO(a), bd = TOFLO(b); \
@@ -46,6 +47,7 @@ AVM_SLOW(mul, VOP_MUL, __builtin_mul_overflow, ad * bd)
 #define AVM_SLOWDIV(n, vop, c_op, fexpr) static g_vm(g_vm_##n##_slow) { \
  word a = Sp[0], b = Sp[1]; \
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop); \
+ if (cplxp(a) || cplxp(b)) return Ap(g_vm_cplx_bin, f, vop); \
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b) || b == nil) { word _res; Have(BOX_REQ); \
   g_flo_t ad = TOFLO(a), bd = TOFLO(b); \

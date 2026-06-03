@@ -40,6 +40,9 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
  _(bif_sin, "sin", S1(g_vm_sin)) _(bif_cos, "cos", S1(g_vm_cos)) _(bif_tan, "tan", S1(g_vm_tan)) _(bif_atan, "atan", S1(g_vm_atan))\
  _(bif_sqrt, "sqrt", S1(g_vm_sqrt)) _(bif_exp, "exp", S1(g_vm_exp)) _(bif_log, "log", S1(g_vm_log))\
  _(bif_atan2, "atan2", S2(g_vm_atan2)) _(bif_pow, "pow", S2(g_vm_pow))\
+ _(bif_cplx, "cplx", S2(g_vm_cplx)) _(bif_cplxp, "cplxp", S1(g_vm_cplxp))\
+ _(bif_re, "re", S1(g_vm_re)) _(bif_im, "im", S1(g_vm_im)) _(bif_conj, "conj", S1(g_vm_conj))\
+ _(bif_abs, "abs", S1(g_vm_abs)) _(bif_arg, "arg", S1(g_vm_carg))\
  _(bif_arr, "arr", S2(g_vm_arr)) _(bif_arrl, "arrl", S3(g_vm_arrl))\
  _(bif_arank, "arank", S1(g_vm_arank))\
  _(bif_alen, "alen", S1(g_vm_alen)) _(bif_ashape, "ashape", S1(g_vm_ashape))\

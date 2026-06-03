@@ -12,6 +12,8 @@
    BA (co B A) BB (co B B))
 ; array element-type codes for `arr` (core/i.h enum g_vec_type)
 (: i8 0 i16 1 i32 2 i64 3 f32 4 f64 5)
+; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
+(: i (cplx 0 1))
 ; integer math: `**` is exact exponentiation-by-squaring (distinct from the
 ; float `pow` bif), `gcd` is Euclid, `modpow` is modular exponentiation. these
 ; ride the numeric tower (* / %), so they stay exact across fixnum/box/bignum.

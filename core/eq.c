@@ -40,6 +40,16 @@ g_vm(g_vm_eq) {
  // Over a rank>=1 array, `=` is elementwise -> a 0/-1 bool array (whole-array
  // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, VOP_EQ);
+ // Complex equality: equal iff re and im match. A real operand reads as (r, 0),
+ // so the cross-real case `(= (cplx 2 0) 2)` is true (numeric widening, like
+ // `(= 2 2.0)`); a non-numeric operand makes it false. Done before the float
+ // lane so a complex never reaches TOFLO (which would misread its two words).
+ if (cplxp(a) || cplxp(b)) {
+  bool r = (cplxp(a) || ISNUM(a)) && (cplxp(b) || ISNUM(b))
+        && (cplxp(a) ? cplx_re(a) : TOFLO(a)) == (cplxp(b) ? cplx_re(b) : TOFLO(b))
+        && (cplxp(a) ? cplx_im(a) : 0) == (cplxp(b) ? cplx_im(b) : 0);
+  Sp[1] = r ? putnum(-1) : nil;
+  return Sp++, Ip++, Continue(); }
  bool r;
  // A float operand compares as doubles across the whole numeric tower (fixnum /
  // float box / wide-int box / bignum all widen via TOFLO; a bignum loses

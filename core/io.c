@@ -214,6 +214,18 @@ static g_inline struct g*gzput_vec(struct g*f, word _) {
    } else if (vec(f->sp[0])->rank == 0 && vec(f->sp[0])->type == G_VT_INT) {
     // wide-int box: print the payload as a decimal integer, same as a fixnum
     f = gzputn(f, box_get(f->sp[0]), 10);
+   } else if (vec(f->sp[0])->rank == 0 && vec(f->sp[0])->type == G_VT_CPLX) {
+    // complex: re ± |im| i (sign of im explicit). Read both parts up front --
+    // gzputc may grow a string port and relocate the box.
+    char buf[32];
+    int max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
+    g_flo_t re = cplx_re(f->sp[0]), im = cplx_im(f->sp[0]);
+    int n = g_dtoa(re, buf, (int) sizeof buf, max_frac);
+    for (int i = 0; g_ok(f) && i < n; f = gzputc(f, buf[i++]));
+    f = gzputc(f, im < 0 ? '-' : '+');
+    n = g_dtoa(im < 0 ? -im : im, buf, (int) sizeof buf, max_frac);
+    for (int i = 0; g_ok(f) && i < n; f = gzputc(f, buf[i++]));
+    f = gzputc(f, 'i');
    } else if (vec(f->sp[0])->rank >= 1) {
     f = gzput_vec_rec(f, 0, 0);
    } else {

@@ -109,7 +109,14 @@ typedef g_word num, word;
 // plan), so only signed integer widths + the two float widths exist here.
 enum g_vec_type {
  g_vt_i8, g_vt_i16, g_vt_i32, g_vt_i64,
- g_vt_f32, g_vt_f64, };
+ g_vt_f32, g_vt_f64,
+ // Step 7 -- complex: a rank-0 vec carrying two g_flo_t (re, im). Sits past the
+ // real element types; arr/arrl reject ty > f64, so it can never be an array
+ // element in v1 -- complex only ever appears as a rank-0 scalar (cplxp), never
+ // in the rank>=1 array lanes. The `>= g_vt_f32` float-domain tests therefore
+ // never see it except via the explicit cplx branches (g_all_zero, the printer).
+ g_vt_cplx, };
+#define G_VT_CPLX g_vt_cplx
 // Elementwise binary opcodes for g_vm_vbin (core/arr.c). The five arith codes
 // match the arith slow handlers; the five compare codes (>= VOP_LT) produce a
 // 0/-1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
@@ -138,6 +145,9 @@ g_vm_t g_vm_kcall,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
  g_vm_sin, g_vm_cos, g_vm_tan, g_vm_atan, g_vm_atan2,
  g_vm_sqrt, g_vm_exp, g_vm_log, g_vm_pow,
+ // Step 7 -- complex (core/cplx.c). g_vm_cplx_bin (declared apart, below) is
+ // the arithmetic lane the scalar arith slow paths divert into.
+ g_vm_cplx, g_vm_cplxp, g_vm_re, g_vm_im, g_vm_conj, g_vm_abs, g_vm_carg,
  g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_str,    g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_gt,  g_vm_ge,
@@ -163,6 +173,9 @@ g_vm_t g_vm_kcall,
 g_vm(g_vm_vbin, int);
 g_vm(g_vm_vmap1, g_flo_t (*)(g_flo_t));
 g_vm(g_vm_vmap2, g_flo_t (*)(g_flo_t, g_flo_t));
+// Complex arithmetic lane (core/cplx.c): the scalar arith slow paths divert
+// here when either operand is complex; vop selects add/sub/mul/quot (rem -> nil).
+g_vm(g_vm_cplx_bin, int);
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
 // above, because a frontend's override (e.g. wasm/inc/vt.h) resolves kinds
 // by comparing an ap against g_vm_two..g_vm_text directly.
@@ -230,6 +243,12 @@ static g_inline bool flop(word _) {
 // disjoint), so boxp and nump never both hold for the same number.
 static g_inline bool boxp(word _) {
   return vecp(_) && vec(_)->rank == 0 && vec(_)->type == G_VT_INT; }
+// A complex scalar: a rank-0 G_VT_CPLX vec (two g_flo_t, re then im). Deliberately
+// NOT folded into ISNUM -- the real-tower macros (TOFLO/TOINT) would misread its
+// two-word payload, so the arith/eq paths handle complex via explicit cplxp
+// branches placed before the real lanes (decision: complex > float > int/bignum).
+static g_inline bool cplxp(word _) {
+  return vecp(_) && vec(_)->rank == 0 && vec(_)->type == G_VT_CPLX; }
 static g_inline bool numericp(word _) { return nump(_) || vecp(_) || bigp(_); }
 // A rank>=1 typed array (vs a rank-0 scalar box, which flop/boxp catch). The
 // elementwise arith/compare lanes divert to g_vm_vbin when either operand arrp.
@@ -314,6 +333,8 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 // Heap words for one scalar box. The float box (g_flo_t) and the wide-int box
 // (intptr_t) are both one pointer-width word, so one reservation fits.
 #define BOX_REQ (Width(struct g_vec) + Width(intptr_t))
+// Heap words for one complex box: the (re, im) payload is two g_flo_t words.
+#define CPLX_REQ (Width(struct g_vec) + 2 * Width(g_flo_t))
 // The tagged fixnum range: putnum spends one bit, so |value| <= 2^(WBITS-2).
 #define FIX_MIN (INTPTR_MIN >> 1)
 #define FIX_MAX (INTPTR_MAX >> 1)
@@ -355,6 +376,17 @@ static g_inline g_flo_t flo_get(word x) {
  return ((g_flo_pun){ .u = vec(x)->shape[0] }).d; }
 static g_inline void flo_put(void *p, g_flo_t v) {
  *(uintptr_t*) p = ((g_flo_pun){ .d = v }).u; }
+
+// Boxed complex access: re in shape[0], im in shape[1] (rank-0, so vec_data ==
+// shape). Same union-pun discipline as flo_get/flo_put so an inlining VM handler
+// keeps its tail call. cplx_put writes both components of an already-shaped box.
+static g_inline g_flo_t cplx_re(word x) {
+ return ((g_flo_pun){ .u = vec(x)->shape[0] }).d; }
+static g_inline g_flo_t cplx_im(word x) {
+ return ((g_flo_pun){ .u = vec(x)->shape[1] }).d; }
+static g_inline void cplx_put(struct g_vec *v, g_flo_t re, g_flo_t im) {
+ v->shape[0] = ((g_flo_pun){ .d = re }).u;
+ v->shape[1] = ((g_flo_pun){ .d = im }).u; }
 
 // Boxed wide-int access. The payload is one pointer-width signed integer
 // in shape[0]; unlike the float box it needs no bit reinterpretation --
