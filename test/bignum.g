@@ -88,4 +88,33 @@
  ; --- bignums as table keys (eqv over slen+limbs) ---
  (= 'hit (get 'miss B100 (put B100 'hit (put F25 'fk (new 0)))))
  (= 'fk (get 'miss F25 (put B100 'hit (put F25 'fk (new 0)))))
- (= 'miss (get 'miss (+ B100 1) (put B100 'hit (new 0)))))
+ (= 'miss (get 'miss (+ B100 1) (put B100 'hit (new 0))))
+
+ ; --- prelude ** / gcd / modpow: exact across the tower via * / % ---
+ ; (`**` is exact-integer power; the float `pow` bif is tested in math.g)
+ (= 8 (** 2 3))                           ; small ints stay fixnums
+ (nump (** 2 3))                          ; ...and stay integers (not float pow)
+ (= B100 (** 2 100))                      ; promotes to a bignum
+ (= (bpow2 200) (** 2 200))
+ (= 1 (** 999 0))                         ; e <= 0 -> 1
+ (= 1024 (** 2 10))
+ (= 21 (gcd 1071 462))
+ (= 21 (gcd 462 1071))                    ; order-independent
+ (= 4 (gcd -12 8))                        ; result normalized non-negative
+ (= 4 (gcd 12 -8))
+ (= F24 (gcd F25 F24))                    ; F24 divides F25, so gcd is F24
+ (= 1 (gcd B100 (+ B100 1)))              ; consecutive ints are coprime
+ (= 976371285 (modpow 2 100 1000000007)) ; 2^100 mod (1e9+7)
+ (= 1 (modpow 7 0 100))
+ (= (% B100 1000000007) (modpow 2 100 1000000007))
+
+ ; --- int array vs bignum scalar: ordered by the bignum's true magnitude/sign,
+ ;     NOT its low bits. 2^100's low word is 0, so a low-bits comparison would
+ ;     wrongly treat B100 as 0 -- these assertions pin the magnitude-exact path. ---
+ (aall (< (arrl i64 '(3) '(1 2 3)) B100))          ; every int < 2^100
+ (aall (<= (arrl i64 '(3) '(1 2 3)) B100))
+ (nilp (aall (> (arrl i64 '(3) '(1 2 3)) B100)))   ; nothing exceeds 2^100
+ (nilp (aall (>= (arrl i64 '(3) '(1 2 3)) B100)))
+ (aall (> (arrl i64 '(3) '(1 2 3)) (- 0 B100)))    ; every int > -2^100
+ (aall (< (- 0 B100) (arrl i64 '(3) '(1 2 3))))    ; bignum on the left, too
+ (nilp (aall (= (arrl i64 '(2) '(0 0)) B100))))    ; 0 != 2^100 (low word is 0!)

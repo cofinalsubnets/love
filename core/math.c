@@ -183,6 +183,7 @@ static g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
 
 static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  word a = Sp[0], b = Sp[1];
+ if (arrp(a) || arrp(b)) return Ap(g_vm_vmap2, f, fn);   // (pow arr ..) etc. -> float array
  if (!ISNUM(a) || !ISNUM(b)) return
   *++Sp = nil, Ip++, Continue();
  g_flo_t ad = TOFLO(a), bd = TOFLO(b), rd = fn(ad, bd);

@@ -158,9 +158,11 @@ g_vm_t g_vm_kcall,
 // Carry extra operands, so (like g_vm_gc) they are declared apart from the
 // plain g_vm_t list, which fixes the 4-argument handler signature. g_vm_vbin
 // is the elementwise/broadcast binary engine (vop selects the op); g_vm_vmap1
-// applies a unary math fn elementwise to an array (e.g. (sin arr)).
+// applies a unary math fn elementwise to an array (e.g. (sin arr)); g_vm_vmap2
+// is the binary analogue with broadcasting (e.g. (pow arr arr), (atan2 ...)).
 g_vm(g_vm_vbin, int);
 g_vm(g_vm_vmap1, g_flo_t (*)(g_flo_t));
+g_vm(g_vm_vmap2, g_flo_t (*)(g_flo_t, g_flo_t));
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
 // above, because a frontend's override (e.g. wasm/inc/vt.h) resolves kinds
 // by comparing an ap against g_vm_two..g_vm_text directly.
@@ -214,6 +216,7 @@ uintptr_t g_big_bytes(struct g_big*);
 // sink shared by the reader and the arithmetic slow paths.
 word g_big_canon(g_word **hp, uint32_t const *limb, int n, bool neg);
 g_flo_t g_big_to_flo(word);                 // bignum -> double (used by TOFLO)
+intptr_t g_big_low(word);                   // bignum value mod 2^W (low machine word)
 int g_big_cmp(word, word);                  // -1/0/1 over two integer operands
 struct g *g_big_binop(struct g*, int vop);  // VOP_ADD..VOP_REM, packed; pops one operand
 struct g *g_big_dec(struct g*);             // sp[0] bignum -> decimal string

@@ -66,4 +66,28 @@
     (nilp (sin "x"))
     (nilp (sqrt '(1 2)))
     (nilp (pow "a" 1))
-    (nilp (atan2 "x" 1))))
+    (nilp (atan2 "x" 1))
+
+    ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo),
+    ;     exactly as a scalar bignum already fed the scalar pow ---
+    (= 1125899906842624.0 (sqrt 1267650600228229401496703205376))  ; sqrt(2^100) = 2^50
+    (flop (pow 1267650600228229401496703205376 2))
+    (< 1e300 (pow 2 100000000000000000000))                        ; huge bignum exp -> inf
+
+    ; --- pow / atan2 elementwise over arrays (numpy broadcast); result is f64 ---
+    (= f64 (atype (pow (arrl i32 '(2) '(2 3)) 2)))                  ; always a float array
+    (aall (= (pow (arrl f64 '(3) '(1 2 3)) 2) (arrl f64 '(3) '(1 4 9))))  ; array ^ scalar
+    (aall (= (pow 2 (arrl f64 '(3) '(1 2 3))) (arrl f64 '(3) '(2 4 8))))  ; scalar ^ array
+    (aall (= (pow (arrl f64 '(3) '(1 2 3)) (arrl f64 '(3) '(2 2 2)))      ; array ^ array
+             (arrl f64 '(3) '(1 4 9))))
+    (close 1.570796326794897 (get 0 1 (atan2 (arrl f64 '(2) '(1 1))      ; atan2(1,0) = pi/2
+                                              (arrl f64 '(2) '(1 0)))))
+    (nilp (pow (arrl f64 '(2) '(1 2)) "x"))                         ; array vs non-number -> nil
+
+    ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
+    ;     the array's element form -- full magnitude in a float array, low bits in
+    ;     an int array (modular, so it wraps: 2^64 + 5 contributes 5). Comparison
+    ;     against a bignum stays magnitude-exact -- see test/bignum.g ---
+    (aall (= (+ (arrl i64 '(2) '(1 2)) 18446744073709551621)        ; 2^64 + 5 -> low word 5
+             (arrl i64 '(2) '(6 7))))
+    (< 1e19 (get 0 0 (+ (arrl f64 '(2) '(0 0)) 18446744073709551616)))))  ; 2^64 full magnitude

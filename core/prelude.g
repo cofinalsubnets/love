@@ -12,6 +12,14 @@
    BA (co B A) BB (co B B))
 ; array element-type codes for `arr` (core/i.h enum g_vec_type)
 (: i8 0 i16 1 i32 2 i64 3 f32 4 f64 5)
+; integer math: `**` is exact exponentiation-by-squaring (distinct from the
+; float `pow` bif), `gcd` is Euclid, `modpow` is modular exponentiation. these
+; ride the numeric tower (* / %), so they stay exact across fixnum/box/bignum.
+(: (** b e) (? (< e 1) 1 (: h (** b (/ e 2)) h2 (* h h)
+                           (? (= 0 (% e 2)) h2 (* h2 b))))
+   (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
+   (modpow b e m) (? (< e 1) 1 (: h (modpow b (/ e 2) m) h2 (% (* h h) m)
+                                 (? (= 0 (% e 2)) h2 (% (* h2 b) m)))))
 (: AAA (co A AA) AAB (co A AB)
    ABA (co A BA) ABB (co A BB)
    BAA (co B AA) BAB (co B AB)

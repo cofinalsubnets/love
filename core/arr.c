@@ -223,6 +223,15 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
   case VOP_LT: return a < b; case VOP_LE: return a <= b;
   case VOP_GT: return a > b; case VOP_GE: return a >= b;
   default: return a == b; } }                   // VOP_EQ
+// Comparison from a 3-way sign of (lhs - rhs). Used when one operand is a bignum
+// scalar: a bignum is always out of machine-int range (|bignum| > INTPTR_MAX, by
+// canonical demotion), so it orders against any int element by its sign alone --
+// exactly, where the low-bits truncation used for arithmetic would not.
+static intptr_t vcmp_sign(int op, int s) {
+ switch (op) {
+  case VOP_LT: return s < 0; case VOP_LE: return s <= 0;
+  case VOP_GT: return s > 0; case VOP_GE: return s >= 0;
+  default: return s == 0; } }                   // VOP_EQ
 
 // Fill the (already-shaped) result r with a `op` b, broadcasting. All the
 // &-taking stack arrays (strides, odometer) live here so the g_vm wrapper stays
@@ -245,9 +254,16 @@ static g_noinline void vbin_fill(struct g_vec *r, word a, word b, int op, bool f
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank;
    cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
  bool cmp = op >= VOP_LT;
- g_flo_t sa = aarr ? 0 : TOFLO(a), sb = barr ? 0 : TOFLO(b);  // scalar values
- intptr_t ia = aarr ? 0 : (nump(a) ? (intptr_t) getnum(a) : box_get(a)),
-          ib = barr ? 0 : (nump(b) ? (intptr_t) getnum(b) : box_get(b));
+ // scalar values: the float domain widens a bignum full-magnitude (g_big_to_flo
+ // via TOFLO); the int domain has no room for a bignum, so arithmetic demotes it
+ // by low bits (modular). A *comparison* against a bignum, though, is decided
+ // exactly by the bignum's sign below -- never by these low bits.
+ g_flo_t sa = aarr ? 0 : TOFLO(a), sb = barr ? 0 : TOFLO(b);
+ intptr_t ia = aarr ? 0 : nump(a) ? (intptr_t) getnum(a) : bigp(a) ? g_big_low(a) : box_get(a),
+          ib = barr ? 0 : nump(b) ? (intptr_t) getnum(b) : bigp(b) ? g_big_low(b) : box_get(b);
+ bool abig = !aarr && bigp(a), bbig = !barr && bigp(b);   // at most one (the other is an array)
+ int asign = abig ? (((struct g_big*) a)->slen < 0 ? -1 : 1) : 0;
+ int bsign = bbig ? (((struct g_big*) b)->slen < 0 ? -1 : 1) : 0;
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
@@ -257,7 +273,9 @@ static g_noinline void vbin_fill(struct g_vec *r, word a, word b, int op, bool f
    else vec_put_flo(r, p, vop_flo(op, av, bv)); }
   else {
    intptr_t av = aarr ? vec_get_int(va, oa) : ia, bv = barr ? vec_get_int(vb, ob) : ib;
-   if (cmp) vec_put_int(r, p, vcmp_int(op, av, bv) ? -1 : 0);
+   if (cmp) {                                    // bignum side (if any) sorts by sign: a-b ~ asign, or -bsign
+    intptr_t t = (abig || bbig) ? vcmp_sign(op, abig ? asign : -bsign) : vcmp_int(op, av, bv);
+    vec_put_int(r, p, t ? -1 : 0); }
    else vec_put_int(r, p, vop_int(op, av, bv)); }
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
    if (++idx[j] < (intptr_t) r->shape[j]) break;
@@ -295,4 +313,60 @@ g_vm(g_vm_vbin, int op) {
   uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   r->shape[R - 1 - k] = da > db ? da : db; }
  vbin_fill(r, a, b, op, fdom);
+ return *++Sp = word(r), Ip++, Continue(); }
+
+// --- binary libm map with broadcasting (pow / atan2 over arrays) -------------
+// The float-domain twin of g_vm_vbin: same numpy broadcast, but the result is
+// always a float array and each element is fn(av, bv) for an arbitrary libm
+// binary fn. A scalar operand broadcasts, widening through TOFLO -- so a bignum
+// scalar feeds in at full magnitude (g_big_to_flo), same as the scalar `pow`.
+// All the &-taking stack arrays live in this g_noinline fill so the wrapper's
+// trailing tail call survives.
+static g_noinline void vmap2_fill(struct g_vec *r, word a, word b, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
+ uintptr_t R = r->rank, n = 1;
+ for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
+ bool aarr = arrp(a), barr = arrp(b);
+ struct g_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
+ intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
+ for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
+ if (aarr) { intptr_t s = 1;
+  for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
+   intptr_t j = oa + (intptr_t) R - (intptr_t) va->rank;
+   ca[j] = va->shape[oa] == 1 ? 0 : s; s *= (intptr_t) va->shape[oa]; } }
+ if (barr) { intptr_t s = 1;
+  for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
+   intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank;
+   cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
+ g_flo_t sa = aarr ? 0 : TOFLO(a), sb = barr ? 0 : TOFLO(b);
+ for (uintptr_t p = 0; p < n; p++) {
+  intptr_t oa = 0, ob = 0;
+  for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
+  g_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
+  vec_put_flo(r, p, fn(av, bv));
+  for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
+   if (++idx[j] < (intptr_t) r->shape[j]) break;
+   idx[j] = 0; } } }
+
+g_vm(g_vm_vmap2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
+ word a = Sp[0], b = Sp[1];
+ bool aarr = arrp(a), barr = arrp(b);
+ if (!(aarr || ISNUM(a)) || !(barr || ISNUM(b)))   // each operand: array or scalar
+  return *++Sp = nil, Ip++, Continue();
+ uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ uintptr_t R = ra > rb ? ra : rb, n = 1;
+ for (uintptr_t k = 0; k < R; k++) {               // broadcast shape, right-aligned
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
+  n *= da > db ? da : db; }
+ uintptr_t bytes = sizeof(struct g_vec) + R * sizeof(word) + n * g_vt_size[G_VT_FLO];
+ Have(b2w(bytes));
+ a = Sp[0], b = Sp[1], aarr = arrp(a), barr = arrp(b);       // re-read post-Have
+ struct g_vec *r = (struct g_vec*) Hp; Hp += b2w(bytes);
+ ini_vec(r, G_VT_FLO, R);
+ for (uintptr_t k = 0; k < R; k++) {
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  r->shape[R - 1 - k] = da > db ? da : db; }
+ vmap2_fill(r, a, b, fn);
  return *++Sp = word(r), Ip++, Continue(); }

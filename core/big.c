@@ -158,6 +158,18 @@ g_flo_t g_big_to_flo(word x) {
  for (int i = n - 1; i >= 0; i--) r = r * 4294967296.0 + (double) b->limb[i];
  return (g_flo_t) (neg ? -r : r); }
 
+// The bignum's two's-complement value mod 2^W (its low machine word). Used when
+// an integer-array elementwise op must broadcast a bignum scalar down to one
+// machine-int element ("arrays win; demote the bignum by its low bits").
+intptr_t g_big_low(word x) {
+ struct g_big *b = (struct g_big*) x;
+ intptr_t sl = b->slen; bool neg = sl < 0; int n = (int) (neg ? -sl : sl);
+ uintptr_t u = b->limb[0];
+#if WBITS == 64
+ if (n >= 2) u |= ((uintptr_t) b->limb[1] << 16) << 16;
+#endif
+ return (intptr_t) (neg ? (uintptr_t) 0 - u : u); }
+
 int g_big_cmp(word a, word b) {
  uint32_t sa[2], sb[2]; uint32_t const *la, *lb; bool na, nb;
  int nla = load_int_mag(a, sa, &la, &na), nlb = load_int_mag(b, sb, &lb, &nb);
