@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stdnoreturn.h>
+#include <sys/wait.h>
 
 g_noinline uintptr_t g_clock(void) {
   struct timespec ts;
@@ -169,10 +170,136 @@ static g_vm(g_vm_close) {
   Ip += 1;
   return Continue(); }
 
+// --- subprocess (run) + environment (getenv) ---------------------------
+// Both are host-only bifs (POSIX fork/exec/wait, getenv), like open/close.
+// No malloc: argv is marshalled into the uncommitted gwen heap gap and the
+// child's stdout is captured into a growing gwen string (the reader's
+// str0 + grow + len-fixup pattern). See core/io.c gzread1str / grbufg.
+
+// Local copy of core/io.c's grbufg (static there): grow the string on sp[0]
+// to 2*len, copying the old `len` bytes in. str0 is the public allocator.
+static struct g *host_grbufg(struct g *f, uintptr_t len) {
+ if (g_ok(f = str0(f, 2 * len)))
+  memcpy(txt(f->sp[0]), txt(f->sp[1]), len),
+  f->sp[1] = f->sp[0], f->sp++;
+ return f; }
+
+// Workhorse for (run argv). Called with f Packed; argv is the single arg.
+// Pushes EXACTLY ONE net value above argv on every path so the g_vm_run
+// shell collapses uniformly: success -> [(status . output), argv], failure
+// -> [errno-or-(-1) fixnum, argv]. Returns a not-ok f only on OOM.
+// &locals (pipes/pid/status) are fine here: this returns normally, it is
+// not a VM-dispatch tail-call site (cf. call_open vs g_vm_open).
+g_noinline static struct g *host_run(struct g *f, g_word argv) {
+ // pass 1: validate every element is a string; size the arg-byte blob.
+ intptr_t argc = 0;
+ uintptr_t total = 0;
+ for (g_word p = argv; twop(p); p = B(p)) {
+  if (!g_strp(A(p))) return g_push(f, 1, g_putnum(-1));   // misuse
+  argc++, total += len(A(p)) + 1; }                       // +1 for the NUL
+ if (!argc) return g_push(f, 1, g_putnum(-1));            // empty argv
+
+ // Reserve gap for cav (argc+1 pointers, word-aligned) + the byte blob.
+ // Written into the uncommitted region at Hp -- invisible to GC, holds no
+ // gwen pointers, consumed before any further allocation. Never bump Hp.
+ if (!g_ok(f = g_have(f, (uintptr_t) argc + 1 + b2w(total)))) return f;
+ argv = f->sp[0];          // g_have may have GC'd; argv (the only root, at sp[0])
+                           // is forwarded there -- the C local is now stale.
+ char **cav = (char**) f->hp;                             // at Hp: aligned
+ char *blob = (char*) (f->hp + (argc + 1));               // whole words after
+ { uintptr_t off = 0; intptr_t i = 0;
+   for (g_word p = argv; twop(p); p = B(p), i++) {         // re-walk post-g_have
+    struct g_str *s = str(A(p));
+    memcpy(blob + off, txt(s), len(s));
+    blob[off + len(s)] = 0;
+    cav[i] = blob + off;
+    off += len(s) + 1; }
+   cav[argc] = NULL; }
+
+ // spawn: stdout pipe + a close-on-exec error pipe. On a successful exec the
+ // kernel closes ep[1] -> parent reads EOF; on failure the child writes errno
+ // -> parent distinguishes "couldn't spawn" from "ran and exited 127".
+ int op[2], ep[2];
+ if (pipe(op)) return g_push(f, 1, g_putnum(errno));
+ if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]); return g_push(f, 1, g_putnum(e)); }
+ fcntl(ep[1], F_SETFD, FD_CLOEXEC);
+ fflush(stdout);
+ pid_t pid = fork();
+ if (pid < 0) { int e = errno;
+  close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
+  return g_push(f, 1, g_putnum(e)); }
+ if (!pid) {                                              // child
+  dup2(op[1], STDOUT_FILENO);
+  close(op[0]); close(op[1]); close(ep[0]);
+  execvp(cav[0], cav);
+  int e = errno; ssize_t w = write(ep[1], &e, sizeof e); (void) w;
+  _exit(127); }
+ close(op[1]); close(ep[1]);                              // parent
+ int childerr = 0; ssize_t r;
+ do r = read(ep[0], &childerr, sizeof childerr); while (r < 0 && errno == EINTR);
+ close(ep[0]);
+ if (childerr) {                                          // exec failed
+  close(op[0]);
+  int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+  return g_push(f, 1, g_putnum(childerr)); }
+
+ // drain stdout into a growing gwen string (bulk reads; stderr inherited).
+ uintptr_t n = 0, lim = 1u << 16;
+ f = str0(f, lim);                                        // capture -> sp[0]
+ while (g_ok(f)) {
+  if (n == lim) { f = host_grbufg(f, lim); lim *= 2; continue; }
+  r = read(op[0], txt(f->sp[0]) + n, lim - n);
+  if (r < 0) { if (errno == EINTR) continue; break; }
+  if (!r) break;                                          // EOF
+  n += (uintptr_t) r; }
+ close(op[0]);
+ { int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}          // reap
+   if (!g_ok(f)) return f;                                // OOM mid-drain
+   len(f->sp[0]) = n;                                     // fix logical length
+   int status = WIFEXITED(st) ? WEXITSTATUS(st)
+              : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1;
+   if (!g_ok(f = g_have(f, Width(struct g_pair)))) return f;
+   struct g_pair *w = ini_two((struct g_pair*) bump(f, Width(struct g_pair)),
+                              g_putnum(status), f->sp[0]);
+   f->sp[0] = word(w); }                                  // [(status.output), argv]
+ return f; }
+
+static g_vm(g_vm_run) {
+ Pack(f);
+ f = host_run(f, Sp[0]);
+ if (!g_ok(f)) return gtrap(f);
+ Unpack(f);
+ Sp[1] = Sp[0];                                           // result over argv
+ Sp += 1; Ip += 1;
+ return Continue(); }
+
+// Copy the name to a C string and look it up. Factored out (g_noinline) so the
+// memcpy(&name,...) escape can't defeat g_vm_getenv's tail call (cf. call_open).
+g_noinline static char const *host_getenv(struct g_str *nv) {
+ char name[4096];
+ if (nv->len >= sizeof name) return NULL;
+ memcpy(name, nv->bytes, nv->len);
+ name[nv->len] = 0;
+ return getenv(name); }
+
+// (getenv name) -> string, or nil if unset / misused. nil = absent, not an
+// error; the run fixnum-error convention does not apply here.
+static g_vm(g_vm_getenv) {
+ char const *v = g_strp(Sp[0]) ? host_getenv((struct g_str*) Sp[0]) : NULL;
+ if (!v) { Sp[0] = g_nil; Ip += 1; return Continue(); }
+ Pack(f);
+ if (!g_ok(f = g_strof(f, v))) return gtrap(f);
+ Unpack(f);
+ Sp[1] = Sp[0];
+ Sp += 1; Ip += 1;
+ return Continue(); }
+
 static union u const
  bif_exit[] = {{g_vm_exit}, {g_vm_ret0}},
  bif_open[] = {{g_vm_cur}, {.x = g_putnum(2)}, {g_vm_open}, {g_vm_ret0}},
- bif_close[] = {{g_vm_close}, {g_vm_ret0}};
+ bif_close[] = {{g_vm_close}, {g_vm_ret0}},
+ bif_run[] = {{g_vm_run}, {g_vm_ret0}},
+ bif_getenv[] = {{g_vm_getenv}, {g_vm_ret0}};
 
 static char const
  rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))",
@@ -203,6 +330,8 @@ int main(int argc, char const **argv) {
     struct g_def d[] = {{"exit", (g_word) bif_exit},
                         {"open", (g_word) bif_open},
                         {"close", (g_word) bif_close},
+                        {"run", (g_word) bif_run},
+                        {"getenv", (g_word) bif_getenv},
                         {"argv", g_pop1(f)}, };
     f = g_defn(f, d, LEN(d));
 #ifndef GL_BOOTSTRAP

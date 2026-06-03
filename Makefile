@@ -8,7 +8,7 @@ include common.mk
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel playdate wasm rp2040
-.PHONY: test test_host test_js test_all test_gen_vt test_gl0 test_elf2efi
+.PHONY: test test_host test_js test_all test_gen_vt test_gl0 test_elf2efi test_vmret
 .PHONY: valg disasm flame cat cata perf repl gdb vmret
 test: test_host
 test_all: test_host test_gl0 test_js test_gen_vt
@@ -42,6 +42,18 @@ test_elf2efi: host
 	  cmp -s host/b/.efi.py host/b/.efi.g && echo "  ok   $$e" \
 	    || { echo "  FAIL $$e"; rm -f host/b/.efi.py host/b/.efi.g; exit 1; }; \
 	done; rm -f host/b/.efi.py host/b/.efi.g
+# Phase-5 gate: the gwen rewrite tools/vmret.g must produce output identical to
+# vmret.py for every ELF it's pointed at -- the host binaries plus any kernel
+# arch ELFs present (x86_64/aarch64/riscv64/loongarch64, exercising each arch's
+# ret matcher and the llvm-objdump preference). Needs objdump/llvm-objdump.
+test_vmret: host
+	@echo TEST vmret.g
+	@for e in host/b/gl host/b/gl0 `find kernel/b -name 'gl-*.elf' 2>/dev/null`; do \
+	  python3 tools/vmret.py $$e > host/b/.vmret.py 2>&1; \
+	  $m tools/vmret.g $$e > host/b/.vmret.g 2>&1; \
+	  cmp -s host/b/.vmret.py host/b/.vmret.g && echo "  ok   $$e" \
+	    || { echo "  FAIL $$e"; diff host/b/.vmret.py host/b/.vmret.g; rm -f host/b/.vmret.py host/b/.vmret.g; exit 1; }; \
+	done; rm -f host/b/.vmret.py host/b/.vmret.g
 all: host kernel playdate wasm rp2040
 host:
 	@$(MAKE) -C host
@@ -93,7 +105,7 @@ disasm: host
 gdb: host
 	gdb $m
 vmret: host
-	tools/vmret.py $m
+	@$m tools/vmret.g $m
 
 # Pass-throughs for the kernel-specific phonies that need k_qemu etc.
 .PHONY: run run-hdd run-headless run-efi run-efi-headless
