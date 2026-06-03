@@ -240,7 +240,10 @@ g_vm(g_vm_sleep) {
 
 
 g_vm(g_vm_jump) { return Ip = Ip[1].m, Continue(); }
-g_vm(g_vm_cond) { return Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
+// The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
+// language falsy predicate so an all-zero vec (boxed 0.0, zero int box,
+// all-zero array) takes the false arm, lifting "0 is the only false scalar".
+g_vm(g_vm_cond) { return Ip = g_falsy(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 g_vm(g_vm_unc) {
  Have1();
  *--Sp = Ip[1].x;

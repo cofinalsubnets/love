@@ -31,6 +31,9 @@ g_noinline bool eqv(struct g *f, word a, word b) {
 // still rejects mixed-type pairs (so table keys 3 and 3.0 stay distinct).
 g_vm(g_vm_eq) {
  word a = Sp[0], b = Sp[1];
+ // Over a rank>=1 array, `=` is elementwise -> a 0/-1 bool array (whole-array
+ // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
+ if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, VOP_EQ);
  bool r;
  if (flop(a) || flop(b))
   r = (nump(a) || flop(a) || boxp(a)) && (nump(b) || flop(b) || boxp(b)) &&

@@ -1,41 +1,9 @@
 #include "i.h"
 
-// --- numeric tower helpers (fixnum / boxed float / boxed wide int) ----
-// Numeric = a fixnum, a boxed float (flop), or a boxed wide int (boxp).
-#define ISNUM(x) (nump(x) || flop(x) || boxp(x))
-// Integer value of a fixnum-or-box operand (callers must exclude floats).
-#define TOINT(x) (nump(x) ? (intptr_t) getnum(x) : box_get(x))
-// Double value of any numeric operand.
-#define TOFLO(x) (nump(x) ? (g_flo_t) getnum(x) : flop(x) ? flo_get(x) : (g_flo_t) box_get(x))
-// Heap words for one scalar box. The float box (g_flo_t) and the wide-int
-// box (intptr_t) are both one pointer-width word, so one reservation fits.
-#define BOX_REQ (Width(struct g_vec) + Width(intptr_t))
-// The tagged fixnum range: putnum spends one bit, so |value| <= 2^(WBITS-2).
-#define FIX_MIN (INTPTR_MIN >> 1)
-#define FIX_MAX (INTPTR_MAX >> 1)
-// Emit an integer result R into `_res`: demote to a fixnum when it fits the
-// tag, else box it as a rank-0 G_VT_INT scalar (bumping Hp). The caller must
-// already hold Have(BOX_REQ). Takes no &local, so a handler that uses it
-// keeps its trailing tail call.
-#define EMIT_INT(R) do { intptr_t _r = (R); \
- if (_r >= FIX_MIN && _r <= FIX_MAX) _res = putnum(_r); \
- else { struct g_vec *_v = ini_scalar((struct g_vec*) Hp, G_VT_INT); \
-        Hp += BOX_REQ; box_put(_v->shape, _r); _res = word(_v); } } while (0)
-
-// Truncation toward zero. Magnitudes above 2^63 are already
-// integer-valued in double precision, so we leave them alone instead of
-// risking an int64 overflow on the round-trip. NaN passes through.
-static g_inline g_flo_t g_trunc(g_flo_t x) {
- if (x != x) return x;
- g_flo_t m = x < 0 ? -x : x;
- if (m > (g_flo_t) 9.22e18) return x;
- return (g_flo_t)(int64_t) x; }
-
-// Float remainder via truncated quotient. Matches libm's fmod() for
-// the cases we care about. When b == 0, x/b is ±inf or NaN, ±inf*0 is
-// NaN, so the result is NaN — same as libm.
-static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
- return a - g_trunc(a / b) * b; }
+// The numeric-tower helpers (ISNUM / TOINT / TOFLO / BOX_REQ / FIX_MIN / FIX_MAX
+// / EMIT_INT / EMIT_FLO) and g_trunc / g_fmod now live in i.h, shared with the
+// elementwise array lane (core/arr.c) and the array element read in get
+// (core/tbl.c). They are unchanged; only their home moved.
 
 // Arithmetic is dispatched op-first: each operator is its own g_vm handler
 // (g_vm_add ... g_vm_rem) carrying an inlined both-fixnum fast path, and
@@ -50,8 +18,9 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 // (through uintptr_t, so an i64 overflow wraps with defined behavior) and
 // demote-or-box via EMIT_INT. g_vm (noinline) + reached only by tail call, so
 // the per-op fast paths stay branch-light and TCO-clean.
-#define AVM_SLOW(n, iexpr, fexpr) static g_vm(g_vm_##n##_slow) { \
+#define AVM_SLOW(n, vop, iexpr, fexpr) static g_vm(g_vm_##n##_slow) { \
  word a = Sp[0], b = Sp[1], _res; \
+ if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop); \
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
  Have(BOX_REQ); \
  if (flop(a) || flop(b)) { \
@@ -60,15 +29,16 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
   Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); } \
  else { intptr_t av = TOINT(a), bv = TOINT(b); EMIT_INT(iexpr); } \
  return *++Sp = _res, Ip++, Continue(); }
-AVM_SLOW(add, (intptr_t)((uintptr_t) av + (uintptr_t) bv), ad + bd)
-AVM_SLOW(sub, (intptr_t)((uintptr_t) av - (uintptr_t) bv), ad - bd)
-AVM_SLOW(mul, (intptr_t)((uintptr_t) av * (uintptr_t) bv), ad * bd)
+AVM_SLOW(add, VOP_ADD, (intptr_t)((uintptr_t) av + (uintptr_t) bv), ad + bd)
+AVM_SLOW(sub, VOP_SUB, (intptr_t)((uintptr_t) av - (uintptr_t) bv), ad - bd)
+AVM_SLOW(mul, VOP_MUL, (intptr_t)((uintptr_t) av * (uintptr_t) bv), ad * bd)
 
 // Division slow path: like AVM_SLOW, but the integer lane bails to the float
 // lane on the two degenerate cases (÷0 → ±inf/NaN; INT_MIN÷-1 would overflow),
 // matching the both-fixnum fast path's guard.
-#define AVM_SLOWDIV(n, c_op, fexpr) static g_vm(g_vm_##n##_slow) { \
+#define AVM_SLOWDIV(n, vop, c_op, fexpr) static g_vm(g_vm_##n##_slow) { \
  word a = Sp[0], b = Sp[1], _res; \
+ if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop); \
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
  Have(BOX_REQ); \
  bool use_flo = flop(a) || flop(b); \
@@ -81,8 +51,8 @@ AVM_SLOW(mul, (intptr_t)((uintptr_t) av * (uintptr_t) bv), ad * bd)
   Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); } \
  else EMIT_INT(av c_op bv); \
  return *++Sp = _res, Ip++, Continue(); }
-AVM_SLOWDIV(quot, /, ad / bd)         // ±inf or NaN on bd == 0
-AVM_SLOWDIV(rem, %, g_fmod(ad, bd))   // NaN on bd == 0
+AVM_SLOWDIV(quot, VOP_QUOT, /, ad / bd)         // ±inf or NaN on bd == 0
+AVM_SLOWDIV(rem, VOP_REM, %, g_fmod(ad, bd))    // NaN on bd == 0
 
 // arith builtins take an explicit stack address but
 // empirically this is compiled away on both GCC and
@@ -115,19 +85,21 @@ AVM_DIV(rem, %)
 // store/jmp in source order. The slow handler widens to the integer lane
 // (signed compare, valid across boxes) or the float lane (either operand a
 // flop). Non-numeric operands return nil.
-#define CMP_SLOW(nom, c_op) static g_vm(nom##_slow) {                   \
+#define CMP_SLOW(nom, vop, c_op) static g_vm(nom##_slow) {                   \
  word a = Sp[0], b = Sp[1], x = nil;                                   \
+ if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, vop);                 \
  if (ISNUM(a) && ISNUM(b))                                             \
   x = ((flop(a) || flop(b)) ? (TOFLO(a) c_op TOFLO(b))                 \
                             : (TOINT(a) c_op TOINT(b))) ? putnum(-1) : nil; \
  return *++Sp = x, Ip++, Continue(); }
-#define CMP_OP(nom, c_op) CMP_SLOW(nom, c_op) g_vm(nom) {              \
+#define CMP_OP(nom, vop, c_op) CMP_SLOW(nom, vop, c_op) g_vm(nom) {    \
  word a = Sp[0], b = Sp[1];                                           \
  if (__builtin_expect(nump(a) && nump(b), 1))                         \
   return *++Sp = (a c_op b) ? putnum(-1) : nil, Ip++, Continue();     \
  return Ap(nom##_slow, f); }
 
-CMP_OP(g_vm_lt, <) CMP_OP(g_vm_le, <=) CMP_OP(g_vm_gt, >) CMP_OP(g_vm_ge, >=)
+CMP_OP(g_vm_lt, VOP_LT, <) CMP_OP(g_vm_le, VOP_LE, <=)
+CMP_OP(g_vm_gt, VOP_GT, >) CMP_OP(g_vm_ge, VOP_GE, >=)
 
 // Bitwise and/or/xor: fast both-fixnum tag trick (two odds stay odd under &
 // and |; ^ clears the tag bit so we re-set it). A box operand routes to the
@@ -182,12 +154,16 @@ g_vm(g_vm_bsl) { word a = Sp[0], b = Sp[1], _res;
  return *++Sp = _res, Ip++, Continue(); }
 
 op(g_vm_nump, 1, oddp(Sp[0]) ? putnum(-1) : nil)
-op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : nil)
+// `nilp`/`not`: the language falsy predicate (nil/0 OR an all-zero vec --
+// boxed 0.0, zero int box, all-zero array). Use `(= x 0)` for a literal
+// scalar-zero test; `(aall (= x 0))` over an array.
+op11(g_vm_nilp, g_falsy(Sp[0]) ? putnum(-1) : nil)
 
 // Unary math bif: numeric arg → double, call fn, box the rank-0 f64 result.
 // Non-numeric arg → nil. TCO-clean (no & escapes).
 static g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
  word a = Sp[0];
+ if (arrp(a)) return Ap(g_vm_vmap1, f, fn);   // (sin arr) etc. -> float array
  if (!ISNUM(a)) return Sp[0] = nil, Ip++, Continue();
  g_flo_t ad = TOFLO(a), rd = fn(ad);
  uintptr_t req = Width(struct g_vec) + Width(g_flo_t);

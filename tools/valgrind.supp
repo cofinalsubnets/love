@@ -1,0 +1,20 @@
+# Valgrind suppressions for the gwen host binary (`make valg`).
+#
+# The (run argv) subprocess capability (host/main.c) fork()s, and when the
+# child's execvp fails -- e.g. test/run.g's deliberate ENOENT cases like
+# "/no/such/prog-xyzzy" -- the child _exit()s while still holding the gwen heap
+# arena it inherited from the parent. Freeing between fork and exec is an
+# async-signal-safety anti-pattern, so the minimal _exit() is deliberate and the
+# OS reclaims the memory. Valgrind keeps tracing the forked child until it execs,
+# so it reports that inherited arena (allocated by g_please) as "possibly lost".
+# It is a benign false positive: the parent frees the arena normally
+# (g_fin -> "All heap blocks were freed"), and only "possible" (never
+# "definite") leaks rooted at g_please -- exactly that one arena block -- match.
+{
+   gwen-arena-possibly-lost-in-forked-subprocess
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   ...
+   fun:g_please
+}

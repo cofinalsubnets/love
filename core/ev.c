@@ -176,14 +176,14 @@ static Ana(ana_v) {
  word y;
  if (!g_ok(f)) return f;
  for (struct env *d = *c;; d = d->par) {
-  if (nilp(d)) {
+  if (fix0p(d)) {
    if ((y = g_tget(f, 0, x, f->dict))) return ana_q(f, c, y);
    // undefined global: resolved by g_vm_freev via the dict at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.g avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
    // is no enclosing frame to capture from, so adding x to imps would make a
    // second reference resolve via memq(imps) to an uninitialized arg slot.
-   if (!nilp((*c)->par))
+   if (!fix0p((*c)->par))
     f = gxl(g_push(f, 2, x, (*c)->imps)),
     (*c)->imps = g_ok(f) ? pop1(f) : nil;
    return c0_ix(f, c, g_vm_freev, x); }
@@ -210,9 +210,9 @@ static Ana(ana_v) {
 
 static Cata(c1_var) {
  word v = pop1(f), i = llen(pop1(f)); // stack inset
- for (word l = (*c)->imps; !nilp(l); l = B(l), i++)
+ for (word l = (*c)->imps; !fix0p(l); l = B(l), i++)
   if (eql(f, v, A(l))) goto out;
- for (word l = (*c)->args; !nilp(l); l = B(l), i++)
+ for (word l = (*c)->args; !fix0p(l); l = B(l), i++)
   if (eql(f, v, A(l))) break;
 out:
  return Kp -= 2,
@@ -411,7 +411,7 @@ static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
 
  intptr_t ll = llen(nom);
  bool oddp = twop(exp),
-      globp = !oddp && nilp((*b)->args); // we check this again later to make global bindings at top level
+      globp = !oddp && fix0p((*b)->args); // we check this again later to make global bindings at top level
  if (!oddp) { // if there's no body then evaluate the name of the last definition
   f = gxl(g_push(f, 2, A(nom), nil));
   if (!g_ok(f)) return forget();

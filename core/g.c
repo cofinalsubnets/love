@@ -40,6 +40,13 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
  _(bif_sin, "sin", S1(g_vm_sin)) _(bif_cos, "cos", S1(g_vm_cos)) _(bif_tan, "tan", S1(g_vm_tan)) _(bif_atan, "atan", S1(g_vm_atan))\
  _(bif_sqrt, "sqrt", S1(g_vm_sqrt)) _(bif_exp, "exp", S1(g_vm_exp)) _(bif_log, "log", S1(g_vm_log))\
  _(bif_atan2, "atan2", S2(g_vm_atan2)) _(bif_pow, "pow", S2(g_vm_pow))\
+ _(bif_arr, "arr", S2(g_vm_arr)) _(bif_arrl, "arrl", S3(g_vm_arrl))\
+ _(bif_arank, "arank", S1(g_vm_arank))\
+ _(bif_alen, "alen", S1(g_vm_alen)) _(bif_ashape, "ashape", S1(g_vm_ashape))\
+ _(bif_atype, "atype", S1(g_vm_atype))\
+ _(bif_asum, "asum", S1(g_vm_asum)) _(bif_aprod, "aprod", S1(g_vm_aprod))\
+ _(bif_amax, "amax", S1(g_vm_amax)) _(bif_amin, "amin", S1(g_vm_amin))\
+ _(bif_aall, "aall", S1(g_vm_aall)) _(bif_aany, "aany", S1(g_vm_aany))\
  _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tblp, "tblp", S1(g_vm_tblp)) _(bif_nump, "nump", S1(g_vm_nump))\
  _(bif_nilp, "nilp", S1(g_vm_nilp)) _(bif_ev, "ev", S1(g_vm_eval))\
  _(bif_callk, "call_cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \

@@ -176,6 +176,33 @@ static g_inline struct g*gzput_two(struct g*f, word _) {
  return g_pop(f, 1); }
 
 
+// Print element i of the array parked at f->sp[0] as a bare number (float ->
+// g_dtoa, integer -> base 10). The element value is read before any gzputc, so
+// a GC during printing (string-port growth) that relocates the array is safe;
+// callers re-fetch vec(f->sp[0]) each call for the same reason.
+static struct g *gzput_vec_elem(struct g *f, uintptr_t i) {
+ struct g_vec *v = vec(f->sp[0]);
+ if (v->type >= g_vt_f32) {
+  char buf[32];
+  int max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
+  int n = g_dtoa(vec_get_flo(v, i), buf, (int) sizeof buf, max_frac);
+  for (int j = 0; g_ok(f) && j < n; f = gzputc(f, buf[j++]));
+  return f; }
+ return gzputn(f, vec_get_int(v, i), 10); }
+
+// Recursive row-major bracketing: [a b c] for rank 1, nested for rank N. `inner`
+// is the per-step flat stride of `axis` (product of the deeper dims).
+static struct g *gzput_vec_rec(struct g *f, uintptr_t axis, uintptr_t offset) {
+ struct g_vec *v = vec(f->sp[0]);
+ uintptr_t R = v->rank, dim = v->shape[axis], inner = 1;
+ for (uintptr_t x = axis + 1; x < R; x++) inner *= v->shape[x];
+ f = gzputc(f, '[');
+ for (uintptr_t k = 0; g_ok(f) && k < dim; k++) {
+  if (k) f = gzputc(f, ' ');
+  f = axis + 1 == R ? gzput_vec_elem(f, offset + k)
+                    : gzput_vec_rec(f, axis + 1, offset + k * inner); }
+ return g_ok(f) ? gzputc(f, ']') : f; }
+
 static g_inline struct g*gzput_vec(struct g*f, word _) {
  if (g_ok(f = g_push(f, 1, _))) {
    if (vec(f->sp[0])->rank == 0 && vec(f->sp[0])->type == G_VT_FLO) {
@@ -187,6 +214,8 @@ static g_inline struct g*gzput_vec(struct g*f, word _) {
    } else if (vec(f->sp[0])->rank == 0 && vec(f->sp[0])->type == G_VT_INT) {
     // wide-int box: print the payload as a decimal integer, same as a fixnum
     f = gzputn(f, box_get(f->sp[0]), 10);
+   } else if (vec(f->sp[0])->rank >= 1) {
+    f = gzput_vec_rec(f, 0, 0);
    } else {
     uintptr_t type = vec(f->sp[0])->type, rank = vec(f->sp[0])->rank;
     f = gzprintf(f, "#vec@%x:%d.%d", vec(f->sp[0]), type, rank);

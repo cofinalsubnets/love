@@ -96,7 +96,32 @@ g_vm(g_vm_get) {
   if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(s))
    z = putnum((unsigned char) txt(s)[n]); }
  else if (homp(x) && datp(x)) switch (typ(x)) {
-  default: break;                               // vec_q, sym_q are not indexable
+  default: break;                               // sym_q is not indexable
+  case vec_q: {
+   // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
+   // rank-N; an empty/nil key derefs a rank-0 scalar box. Out-of-bounds or a
+   // wrong-rank key falls through to the default `z`. Integer elements keep
+   // integer type (EMIT_INT demotes-or-boxes); float elements box an f64.
+   struct g_vec *v = vec(x);
+   uintptr_t R = v->rank, off = 0; bool ok = false;
+   if (R == 0) ok = fix0p(k);
+   else if (R == 1 && nump(k)) {
+    intptr_t ix = getnum(k);
+    if (ix >= 0 && ix < (intptr_t) v->shape[0]) off = ix, ok = true; }
+   else if (twop(k)) {
+    uintptr_t a = 0; ok = true;
+    for (word l = k;; l = B(l)) {
+     if (!twop(l)) { ok = a == R; break; }
+     word ki = A(l);
+     if (a >= R || !nump(ki)) { ok = false; break; }
+     intptr_t ix = getnum(ki);
+     if (ix < 0 || ix >= (intptr_t) v->shape[a]) { ok = false; break; }
+     off = off * v->shape[a] + ix, a++; } }
+   if (ok) { word _res; Have(BOX_REQ); v = vec(Sp[2]);
+    if (v->type >= g_vt_f32) EMIT_FLO(vec_get_flo(v, off));
+    else EMIT_INT(vec_get_int(v, off));
+    z = _res; }
+   break; }
   case tbl_q: z = g_tget(f, z, k, tbl(x)); break;
   case text_q:
    // Byte as its unsigned value 0..255 -- bytes are data, signedness is the

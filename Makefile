@@ -55,7 +55,7 @@ $(addprefix host/b/,$n $n.1 lib$n.a lib$n.so): host
 
 .PHONY: valg perf repl cloc cat
 valg: host
-	cat $t | valgrind --error-exitcode=1 $m
+	cat $t | valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m
 host/b/perf.data: host
 	cat $t | perf record -o $@ $m
 perf: host/b/perf.data
