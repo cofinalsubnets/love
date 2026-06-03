@@ -1,4 +1,6 @@
 (:- (\ x (: c (sco 0 (list 0) 0) (ana c x (k0 c) 0 0)))
+  g_vm_cur (peek 0 +)
+  g_vm_ret0 (peek 1 car)
   (sco p a i) (put 'par p (put 'imp i (put 'arg a (new 0))))
   (p2 i x k) (poke -1 i (poke -1 x k))
   (em1 x k n) (poke -1 x (k (+ 1 n)))
