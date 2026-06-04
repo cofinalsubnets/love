@@ -153,7 +153,9 @@ static int load_int_mag(word x, uint32_t scratch[2], uint32_t const **out, bool 
 
 g_flo_t g_big_to_flo(word x) {
  struct g_big *b = (struct g_big*) x;
- intptr_t sl = b->slen; bool neg = sl < 0; int n = (int) (neg ? -sl : sl);
+ intptr_t sl = b->slen;
+ bool neg = sl < 0;
+ int n = (int) (neg ? -sl : sl);
  double r = 0;
  for (int i = n - 1; i >= 0; i--) r = r * 4294967296.0 + (double) b->limb[i];
  return (g_flo_t) (neg ? -r : r); }
@@ -163,7 +165,9 @@ g_flo_t g_big_to_flo(word x) {
 // machine-int element ("arrays win; demote the bignum by its low bits").
 intptr_t g_big_low(word x) {
  struct g_big *b = (struct g_big*) x;
- intptr_t sl = b->slen; bool neg = sl < 0; int n = (int) (neg ? -sl : sl);
+ intptr_t sl = b->slen;
+ bool neg = sl < 0;
+ int n = (int) (neg ? -sl : sl);
  uintptr_t u = b->limb[0];
 #if WBITS == 64
  if (n >= 2) u |= ((uintptr_t) b->limb[1] << 16) << 16;
@@ -202,7 +206,7 @@ word g_big_canon(g_word **hp, uint32_t const *limb, int n, bool neg) {
    val = (intptr_t) ((uintptr_t) 0 - u); }                            // incl INTPTR_MIN
   struct g_vec *bx = ini_scalar((struct g_vec*) *hp, G_VT_INT);
   *hp += BOX_REQ; box_put(bx->shape, val); return word(bx); }
-big:;
+big:
  struct g_big *b = ini_big((struct g_big*) *hp, neg ? -n : n);
  for (int i = 0; i < n; i++) b->limb[i] = limb[i];
  *hp += b2w(sizeof(struct g_big) + (size_t) n * sizeof(uint32_t));
@@ -272,7 +276,8 @@ struct g *g_big_binop(struct g *f, int vop) {
 // (fixnum / box / bignum). Accumulates 9 decimal digits per mul-add pass.
 struct g *g_big_read_dec(struct g *f) {
  struct g_str *tok = str(f->sp[0]);
- uintptr_t n = tok->len; char const *s = tok->bytes;
+ uintptr_t n = tok->len;
+ char const *s = tok->bytes;
  bool neg = n && s[0] == '-';
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0, ndig = n - i;
  int cap = (int) (ndig / 9) + 3;                 // upper-bound magnitude limbs
@@ -294,8 +299,10 @@ struct g *g_big_read_dec(struct g *f) {
 // the work buffer and the string stay put through the loop.
 struct g *g_big_dec(struct g *f) {
  struct g_big *a = (struct g_big*) f->sp[0];
- intptr_t sl = a->slen; bool neg = sl < 0; int n = (int) (neg ? -sl : sl);
- int cap = n * 10 + 2 + (neg ? 1 : 0);           // upper-bound bytes (1 limb ~ 9.633 digits)
+ intptr_t sl = a->slen;
+ bool neg = sl < 0;
+ int n = (int) (neg ? -sl : sl),
+     cap = n * 10 + 2 + (neg ? 1 : 0);           // upper-bound bytes (1 limb ~ 9.633 digits)
  uintptr_t str_words = str_type_width + b2w((size_t) cap),
            scratch_words = b2w((size_t) n * 4);
  if (!g_ok(f = g_have(f, str_words + scratch_words))) return f;

@@ -18,7 +18,7 @@ c_c = $(wildcard $R/libc/*.c)
 
 g_cflags = -std=gnu23 -g -O2 -pipe \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
-  -Wmissing-field-initializers \
+  -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector \
   -fno-exceptions -fno-asynchronous-unwind-tables \
   -fcf-protection=none

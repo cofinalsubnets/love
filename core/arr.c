@@ -114,12 +114,18 @@ g_vm(g_vm_asum) {
  word x = Sp[0];
  if (!vecp(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
  struct g_vec *v = vec(x);
- uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ uintptr_t n = 1;
+ for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  bool fdom = v->type >= g_vt_f32; word _res;
- Have(BOX_REQ); v = vec(Sp[0]);
- if (fdom) { g_flo_t a = 0; for (uintptr_t i = 0; i < n; i++) a += vec_get_flo(v, i); EMIT_FLO(a); }
- else { intptr_t a = 0;
-  for (uintptr_t i = 0; i < n; i++) a = (intptr_t)((uintptr_t) a + (uintptr_t) vec_get_int(v, i));
+ Have(BOX_REQ);
+ v = vec(Sp[0]);
+ if (fdom) {
+  g_flo_t a = 0;
+  for (uintptr_t i = 0; i < n; i++) a += vec_get_flo(v, i);
+  EMIT_FLO(a); }
+ else {
+  intptr_t a = 0;
+  for (uintptr_t i = 0; i < n; i++) a = (intptr_t) ((uintptr_t) a + (uintptr_t) vec_get_int(v, i));
   EMIT_INT(a); }
  return Sp[0] = _res, Ip++, Continue(); }
 
@@ -130,7 +136,10 @@ g_vm(g_vm_aprod) {
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  bool fdom = v->type >= g_vt_f32; word _res;
  Have(BOX_REQ); v = vec(Sp[0]);
- if (fdom) { g_flo_t a = 1; for (uintptr_t i = 0; i < n; i++) a *= vec_get_flo(v, i); EMIT_FLO(a); }
+ if (fdom) {
+  g_flo_t a = 1;
+  for (uintptr_t i = 0; i < n; i++) a *= vec_get_flo(v, i);
+  EMIT_FLO(a); }
  else { intptr_t a = 1;
   for (uintptr_t i = 0; i < n; i++) a = (intptr_t)((uintptr_t) a * (uintptr_t) vec_get_int(v, i));
   EMIT_INT(a); }
@@ -146,10 +155,14 @@ g_vm(g_vm_aprod) {
  bool fdom = v->type >= g_vt_f32; word _res; \
  Have(BOX_REQ); v = vec(Sp[0]); \
  if (fdom) { g_flo_t m = vec_get_flo(v, 0); \
-  for (uintptr_t i = 1; i < n; i++) { g_flo_t e = vec_get_flo(v, i); if (e c_op m) m = e; } \
+  for (uintptr_t i = 1; i < n; i++) {\
+   g_flo_t e = vec_get_flo(v, i);\
+   if (e c_op m) m = e; } \
   EMIT_FLO(m); } \
  else { intptr_t m = vec_get_int(v, 0); \
-  for (uintptr_t i = 1; i < n; i++) { intptr_t e = vec_get_int(v, i); if (e c_op m) m = e; } \
+  for (uintptr_t i = 1; i < n; i++) {\
+   intptr_t e = vec_get_int(v, i);\
+   if (e c_op m) m = e; } \
   EMIT_INT(m); } \
  return Sp[0] = _res, Ip++, Continue(); }
 RED_EXTREME(g_vm_amax, >)
@@ -186,8 +199,10 @@ g_vm(g_vm_aany) {
 // (G_VT_FLO) with the operand's shape. The fill loop takes no &local, so the
 // g_vm wrapper keeps its trailing tail call.
 static g_noinline void vmap1_fill(struct g_vec *r, struct g_vec *a, g_flo_t (*fn)(g_flo_t)) {
- uintptr_t n = 1; for (uintptr_t i = 0; i < r->rank; i++) n *= r->shape[i];
- for (uintptr_t i = 0; i < n; i++) vec_put_flo(r, i, fn(vec_get_flo(a, i))); }
+ uintptr_t i, n = 1;
+ for (i = 0; i < r->rank; i++) n *= r->shape[i];
+ for (i = 0; i < n; i++) vec_put_flo(r, i, fn(vec_get_flo(a, i))); }
+
 g_vm(g_vm_vmap1, g_flo_t (*fn)(g_flo_t)) {
  struct g_vec *a = vec(Sp[0]);
  uintptr_t rank = a->rank, n = 1;
@@ -195,7 +210,8 @@ g_vm(g_vm_vmap1, g_flo_t (*fn)(g_flo_t)) {
  uintptr_t bytes = sizeof(struct g_vec) + rank * sizeof(word) + n * g_vt_size[G_VT_FLO];
  Have(b2w(bytes));
  a = vec(Sp[0]);                               // re-read post-Have
- struct g_vec *r = (struct g_vec*) Hp; Hp += b2w(bytes);
+ struct g_vec *r = (struct g_vec*) Hp;
+ Hp += b2w(bytes);
  ini_vec(r, G_VT_FLO, rank);
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = a->shape[i];
  vmap1_fill(r, a, fn);
@@ -251,7 +267,7 @@ static g_noinline void vbin_fill(struct g_vec *r, word a, word b, int op, bool f
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1;
   for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
-   intptr_t j = oa + (intptr_t) R - (intptr_t) va->rank;
+   intptr_t j = oa + R - va->rank;
    ca[j] = va->shape[oa] == 1 ? 0 : s; s *= (intptr_t) va->shape[oa]; } }
  if (barr) { intptr_t s = 1;
   for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
@@ -263,8 +279,8 @@ static g_noinline void vbin_fill(struct g_vec *r, word a, word b, int op, bool f
  // by low bits (modular). A *comparison* against a bignum, though, is decided
  // exactly by the bignum's sign below -- never by these low bits.
  g_flo_t sa = aarr ? 0 : TOFLO(a), sb = barr ? 0 : TOFLO(b);
- intptr_t ia = aarr ? 0 : nump(a) ? (intptr_t) getnum(a) : bigp(a) ? g_big_low(a) : box_get(a),
-          ib = barr ? 0 : nump(b) ? (intptr_t) getnum(b) : bigp(b) ? g_big_low(b) : box_get(b);
+ intptr_t ia = aarr ? 0 : nump(a) ? getnum(a) : bigp(a) ? g_big_low(a) : box_get(a),
+          ib = barr ? 0 : nump(b) ? getnum(b) : bigp(b) ? g_big_low(b) : box_get(b);
  bool abig = !aarr && bigp(a), bbig = !barr && bigp(b);   // at most one (the other is an array)
  int asign = abig ? (((struct g_big*) a)->slen < 0 ? -1 : 1) : 0;
  int bsign = bbig ? (((struct g_big*) b)->slen < 0 ? -1 : 1) : 0;

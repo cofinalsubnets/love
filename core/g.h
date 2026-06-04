@@ -18,6 +18,10 @@
 #define EOF (-1)
 #endif
 
+#ifndef NAN
+#define NAN (__builtin_nanf(""))
+#endif
+
 #define g_nil g_putnum(0)
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))

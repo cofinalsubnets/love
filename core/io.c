@@ -11,8 +11,7 @@ static g_inline struct g *zflush(struct g*f)         { return port_vt(f->io->fd)
 static g_inline struct g *zeof(struct g*f)           { return g_ok(f) ? port_vt(f->io->fd)->eof(f) : f; }
 struct ci { struct g_io io; g_word head; }; // charlist input
 struct to { struct g_io io; struct g_str *buf; g_word i; }; // lisp string output
-static struct g*gzputn(struct g *f, intptr_t n, uint8_t b);
-static int g_dtoa(g_flo_t, char*, int, int max_frac);
+static struct g *g_dtoa2(struct g*, g_flo_t);
 static struct g *gfputx(struct g *f, struct g_io *o, intptr_t x);
 
 static struct g *noop_getc(struct g *f) {
@@ -114,16 +113,6 @@ g_vm(g_vm_fputs) {
   Unpack(f); }
  return Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_fputn) {
- if (iop(Sp[0])) {
-   f->io = (struct g_io*) Sp[0];
-   uintptr_t n = getnum(Sp[1]), b = getnum(Sp[2]);
-   Pack(f);
-   if (!g_ok(f = gzputn(f, n, b))) return gtrap(f);
-   Unpack(f);
-   Sp[2] = Sp[1]; }
- return Sp += 2, Ip++, Continue(); }
-
 g_vm(g_vm_fputx) {
  if (iop(Sp[0])) {
   Pack(f);
@@ -131,9 +120,20 @@ g_vm(g_vm_fputx) {
   Unpack(f); }
  return Sp++, Ip++, Continue(); }
 
+static struct g*gfputn(struct g *f, intptr_t n, uint8_t b, struct g_io *o);
+g_vm(g_vm_fputn) {
+ if (iop(Sp[0])) {
+   Pack(f);
+   if (!g_ok(f = gfputn(f, getnum(Sp[1]), getnum(Sp[2]), (struct g_io*) Sp[0]))) return gtrap(f);
+   Unpack(f);
+   Sp[2] = Sp[1]; }
+ return Sp += 2, Ip++, Continue(); }
 
 static struct g*gzputc(struct g*f, int c) {
   return port_vt(g_core_of(f)->io->fd)->putc(f, c); }
+static struct g*gzputs(struct g*f, char const *s) {
+ while (*s) f = gzputc(f, *s++);
+ return f; }
 
 static struct g*gzputn(struct g *f, intptr_t n, uint8_t b) {
  uintptr_t
@@ -142,6 +142,9 @@ static struct g*gzputn(struct g *f, intptr_t n, uint8_t b) {
   r = m % b;
  if (q) f = gzputn(f, q, b);
  return gzputc(f, g_digits[r]); }
+
+static g_inline struct g*gfputn(struct g *f, intptr_t n, uint8_t b, struct g_io *o) {
+ return f->io = o, gzputn(f, n, b); }
 
 static struct g*gvzprintf(struct g*f, char const *fmt, va_list xs) {
  for (int c; (c = *fmt++);) {
@@ -182,12 +185,8 @@ static g_inline struct g*gzput_two(struct g*f, word _) {
 // callers re-fetch vec(f->sp[0]) each call for the same reason.
 static struct g *gzput_vec_elem(struct g *f, uintptr_t i) {
  struct g_vec *v = vec(f->sp[0]);
- if (v->type >= g_vt_f32) {
-  char buf[32];
-  int max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
-  int n = g_dtoa(vec_get_flo(v, i), buf, (int) sizeof buf, max_frac);
-  for (int j = 0; g_ok(f) && j < n; f = gzputc(f, buf[j++]));
-  return f; }
+ if (v->type >= g_vt_f32)
+  return g_dtoa2(f, vec_get_flo(v, i));
  return gzputn(f, vec_get_int(v, i), 10); }
 
 // Recursive row-major bracketing: [a b c] for rank 1, nested for rank N. `inner`
@@ -203,36 +202,24 @@ static struct g *gzput_vec_rec(struct g *f, uintptr_t axis, uintptr_t offset) {
                     : gzput_vec_rec(f, axis + 1, offset + k * inner); }
  return g_ok(f) ? gzputc(f, ']') : f; }
 
+static g_inline struct g*gzput_vec_scalar_float(struct g*f) {
+ return g_dtoa2(f, (g_flo_t) flo_get(f->sp[0])); }
+
+static g_inline struct g*gzput_vec_scalar_complex(struct g*f) {
+ g_flo_t re = cplx_re(f->sp[0]), im = cplx_im(f->sp[0]);
+ f = g_dtoa2(f, re);
+ f = gzputc(f, im < 0 ? '-' : '+');
+ f = g_dtoa2(f, im < 0 ? -im : im);
+ return gzputc(f, 'i'); }
+
 static g_inline struct g*gzput_vec(struct g*f, word _) {
- if (g_ok(f = g_push(f, 1, _))) {
-   if (vec(f->sp[0])->rank == 0 && vec(f->sp[0])->type == G_VT_FLO) {
-    char buf[32];
-    // 7 sig digits is enough for round-trip on f32; 15 for f64.
-    int max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
-    int n = g_dtoa((g_flo_t) flo_get(f->sp[0]), buf, (int) sizeof buf, max_frac);
-    for (int i = 0; g_ok(f) && i < n; f = gzputc(f, buf[i++]));
-   } else if (vec(f->sp[0])->rank == 0 && vec(f->sp[0])->type == G_VT_INT) {
-    // wide-int box: print the payload as a decimal integer, same as a fixnum
-    f = gzputn(f, box_get(f->sp[0]), 10);
-   } else if (vec(f->sp[0])->rank == 0 && vec(f->sp[0])->type == G_VT_CPLX) {
-    // complex: re ± |im| i (sign of im explicit). Read both parts up front --
-    // gzputc may grow a string port and relocate the box.
-    char buf[32];
-    int max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
-    g_flo_t re = cplx_re(f->sp[0]), im = cplx_im(f->sp[0]);
-    int n = g_dtoa(re, buf, (int) sizeof buf, max_frac);
-    for (int i = 0; g_ok(f) && i < n; f = gzputc(f, buf[i++]));
-    f = gzputc(f, im < 0 ? '-' : '+');
-    n = g_dtoa(im < 0 ? -im : im, buf, (int) sizeof buf, max_frac);
-    for (int i = 0; g_ok(f) && i < n; f = gzputc(f, buf[i++]));
-    f = gzputc(f, 'i');
-   } else if (vec(f->sp[0])->rank >= 1) {
-    f = gzput_vec_rec(f, 0, 0);
-   } else {
-    uintptr_t type = vec(f->sp[0])->type, rank = vec(f->sp[0])->rank;
-    f = gzprintf(f, "#vec@%x:%d.%d", vec(f->sp[0]), type, rank);
-    for (uintptr_t i = 0; i < rank && g_ok(f);
-     f = gzprintf(f, ".%d", (intptr_t) vec(f->sp[0])->shape[i++])); } }
+ intptr_t rank = vec(_)->rank, type = vec(_)->type;
+ if (!g_ok(f = g_push(f, 1, _))) return f;
+ if (rank == 0 && type == G_VT_FLO) f = gzput_vec_scalar_float(f);
+ else if (rank == 0 && type == G_VT_INT) f = gzputn(f, box_get(f->sp[0]), 10);
+ else if (rank == 0 && type == G_VT_CPLX) f = gzput_vec_scalar_complex(f);
+ else if (rank >= 1) f = gzput_vec_rec(f, 0, 0);
+ else f = gzprintf(f, "#vec@%x:%d.%d", vec(f->sp[0]), type, rank);
  return g_pop(f, 1); }
 
 static g_inline struct g*gzput_str(struct g*f, word _) {
@@ -245,20 +232,19 @@ static g_inline struct g*gzput_str(struct g*f, word _) {
   else if (c == '\t') f = gzputc(f, '\\'), c = 't';
   else if (c == '\r') f = gzputc(f, '\\'), c = 'r';
   else if (c == '\0') f = gzputc(f, '\\'), c = '0';
-  else if ((unsigned char) c < 32) {           // other ctl bytes -> \xHH
-   f = gzputc(gzputc(gzputc(f, '\\'), 'x'), g_digits[(c >> 4) & 0xf]);
-   c = g_digits[c & 0xf]; }
+  else if ((unsigned char) c < 32)
+   f = gzputc(gzputc(gzputc(f, '\\'), 'x'), g_digits[(c >> 4) & 0xf]),
+   c = g_digits[c & 0xf];
   f = gzputc(f, c); }
  return g_pop(gzputc(f, '"'), 1); }
-
 
 static g_inline struct g*gzput_sym(struct g*f, word _) {
  if (g_ok(f = g_push(f, 1, _))) {
   struct g_str *s = sym(f->sp[0])->nom;
   if (!s) f = gzprintf(f, "#sym@%x", f->sp[0]);
   else {
-    f->sp[0] = word(s);
-    for (uintptr_t slen = len(s), i = 0; g_ok(f) && i < slen; f = gzputc(f, txt(f->sp[0])[i++])); } }
+   f->sp[0] = word(s);
+   for (uintptr_t slen = len(s), i = 0; g_ok(f) && i < slen; f = gzputc(f, txt(f->sp[0])[i++])); } }
  return g_pop(f, 1); }
 
 static g_inline struct g*gzput_tbl(struct g*f, word x) {
@@ -289,12 +275,8 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x) {
 static g_inline struct g *gfputx(struct g *f, struct g_io *o, intptr_t x) {
  return g_core_of(f)->io = o, gzputx(f, x); }
 
-// Magnitude thresholds for the printer below, typed to g_flo_t's width.
-// A bare double literal in a comparison against the g_flo_t `v` would
-// promote `v` to double and drag in software double emulation on f32
-// targets (Playdate, pico, esp, wasm32). On f32 the inf cutoff is
-// FLT_MAX — the largest finite float — since only an actual infinity
-// exceeds it (1e308 isn't representable as a float).
+// AI slop alert....
+//
 #if UINTPTR_MAX > 0xffffffffu
 #define DTOA_INF    1e308
 #define DTOA_SCI_HI 1e16
@@ -305,15 +287,11 @@ static g_inline struct g *gfputx(struct g *f, struct g_io *o, intptr_t x) {
 #define DTOA_SCI_LO 1e-4f
 #endif
 
-// Decimal float printer. Writes up to cap bytes into buf; returns the
-// byte count written. Strategy: sign, integer part via integer math,
-// then up to 15 fractional digits with trailing zeros trimmed; for very
-// large or very small magnitudes, normalize to [1,10) and append eE.
-static int g_dtoa(g_flo_t v, char *buf, int cap, int max_frac) {
- char *p = buf, *end = buf + cap;
- if (v != v) { if (end - p >= 3) memcpy(p, "nan", 3), p += 3; return p - buf; }
- if (v < 0) { if (p < end) *p++ = '-'; v = -v; }
- if (v > DTOA_INF) { if (end - p >= 3) memcpy(p, "inf", 3), p += 3; return p - buf; }
+static struct g* g_dtoa2(struct g*f, g_flo_t v) {
+ int const max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
+ if (v != v) return gzputs(f, "nan");
+ if (v < 0) f = gzputc(f, '-'), v = -v;
+ if (v > DTOA_INF) return gzputs(f, "inf");
  int exp = 0;
  bool sci = false;
  if (v != 0 && (v >= DTOA_SCI_HI || v < DTOA_SCI_LO)) {
@@ -323,16 +301,17 @@ static int g_dtoa(g_flo_t v, char *buf, int cap, int max_frac) {
  // integer part, lsb-first then reversed
  word ip = (word) v;
  g_flo_t frac = v - (g_flo_t) ip;
- char ib[24]; int ib_n = 0;
+ char ib[24];
+ int ib_n = 0;
  if (ip == 0) ib[ib_n++] = '0';
  while (ip) ib[ib_n++] = '0' + ip % 10, ip /= 10;
- while (ib_n > 0) { ib_n--; if (p < end) *p++ = ib[ib_n]; }
+ while (ib_n > 0) f = gzputc(f, ib[--ib_n]);
  // fractional digits; in non-scientific mode always emit at least ".0"
  // so the result is visually distinguishable from a fixnum.
  bool emit_frac = frac > 0 || !sci;
  if (emit_frac) {
-  char fb[16]; int fb_n = 0;
-  if (max_frac > 15) max_frac = 15;
+  char fb[16];
+  int fb_n = 0;
   for (int i = 0; i < max_frac && frac > 0; i++) {
    frac *= 10;
    int d = (int) frac;
@@ -342,30 +321,16 @@ static int g_dtoa(g_flo_t v, char *buf, int cap, int max_frac) {
   while (fb_n > 0 && fb[fb_n - 1] == '0') fb_n--;
   if (!sci && fb_n == 0) fb[fb_n++] = '0';      // force "X.0" for ints
   if (fb_n > 0) {
-   if (p < end) *p++ = '.';
-   for (int i = 0; i < fb_n; i++) if (p < end) *p++ = fb[i]; } }
+   f = gzputc(f, '.');
+   for (int i = 0; i < fb_n; i++) f = gzputc(f, fb[i]); } }
  if (sci) {
-  if (p < end) *p++ = 'e';
-  if (exp < 0) { if (p < end) *p++ = '-'; exp = -exp; }
+  f = gzputc(f, 'e');
+  if (exp < 0) f = gzputc(f, '-'), exp = -exp;
   char eb[8]; int eb_n = 0;
   if (exp == 0) eb[eb_n++] = '0';
   while (exp) eb[eb_n++] = '0' + exp % 10, exp /= 10;
-  while (eb_n > 0) { eb_n--; if (p < end) *p++ = eb[eb_n]; } }
- return p - buf; }
-
-// Default fd-keyed waits. Frontends override; defaults are conservative
-// (all fds always-ready; multi-source wait collapses to plain sleep) so
-// frontends that don't multitask (lcat, pd) link without providing impls.
-__attribute__((weak)) bool g_ready(int fd) { (void) fd; return true; }
-__attribute__((weak)) void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
-  (void) fds; (void) n; g_sleep(ticks); }
-
-// Default fd close is a no-op. The host overrides with close(2); kernel
-// and pd don't have real OS fds to release, so the no-op is correct.
-__attribute__((weak)) void g_fd_close(int fd) { (void) fd; }
-// default sleep is busy wait
-__attribute__((weak)) g_noinline void g_sleep(uintptr_t ticks) {
-  for (ticks += g_clock(); g_clock() < ticks;); }
+  while (eb_n > 0) f = gzputc(f, eb[--eb_n]); }
+ return f; }
 
 // (feof port) — -1 if at end of stream, nil otherwise.
 g_vm(g_vm_feof) {
@@ -377,22 +342,20 @@ g_vm(g_vm_feof) {
   Sp[0] = f->b ? putnum(-1) : nil; }
  return Ip++, Continue(); }
 
-
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
 // uses the port's own fd.
 g_vm(g_vm_fgetc) {
  if (iop(Sp[0])) {
-   struct g_io *i = (struct g_io*) Sp[0];
-   if (!g_ready(getnum(i->fd))) {
-    f->next_wait_fd = getnum(i->fd);
-    return Ap(g_vm_yield_sw, f); }
-   Pack(f);
-   f->io = i;
-   if (!g_ok(f = zgetc(f))) return gtrap(f);
-   Unpack(f);
-   Sp[0] = putnum(f->b); }
+  struct g_io *i = (struct g_io*) Sp[0];
+  if (!g_ready(getnum(i->fd))) {
+   f->next_wait_fd = getnum(i->fd);
+   return Ap(g_vm_yield_sw, f); }
+  Pack(f);
+  f->io = i;
+  if (!g_ok(f = zgetc(f))) return gtrap(f);
+  Unpack(f);
+  Sp[0] = putnum(f->b); }
  return Ip++, Continue(); }
-
 
 // (fungetc port byte) — push back one byte, return the byte.
 g_vm(g_vm_fungetc) {
@@ -410,8 +373,7 @@ g_vm(g_vm_fungetc) {
 // either the port was already closed explicitly (fd mutated to a synth
 // sentinel) or the caller wrapped a non-OS fd.
 static void io_close(void *p) {
- struct g_io *io = p;
- intptr_t fd = getnum(io->fd);
+ intptr_t fd = getnum(((struct g_io*)p)->fd);
  if (fd >= 0) g_fd_close(fd); }
 
 // Heap-allocate a stream port for the given OS fd. Pushes the port pointer
@@ -432,13 +394,7 @@ struct g *g_io_alloc(struct g *f, int fd) {
   z->p = k, z->fn = io_close, z->next = f->fz, f->fz = z; }
  return f; }
 
-g_vm(g_vm_key) {
- Sp[0] = (getnum(g_stdin.ungetc_buf) != EOF || g_ready(getnum(g_stdin.fd))) ? putnum(-1) : nil;
- Ip += 1;
- return Continue(); }
-
 static struct g *grbufg(struct g *f, uintptr_t len);
-static struct g *flo_alloc(struct g*, g_flo_t);
 
 // A token is a plain decimal integer iff it is [+-]?[0-9]+ with no leading-zero
 // prefix (so "0x.." hex and "0.." octal stay with strtol, and bare "0" parses
@@ -450,19 +406,69 @@ static g_inline bool is_dec_int(char const *s, uintptr_t n) {
  for (; i < n; i++) if (s[i] < '0' || s[i] > '9') return false;
  return true; }
 
-// Replace the token at sp[0] with a wide-int box holding v (used when a non-
-// decimal integer literal overflows the fixnum tag but fits a machine word).
-static g_inline struct g *box_int(struct g *f, intptr_t v) {
- if (g_ok(f = g_have(f, BOX_REQ))) {
-  struct g_vec *b = ini_scalar(bump(f, BOX_REQ), G_VT_INT);
-  box_put(b->shape, v);
-  f->sp[0] = word(b); }
+static struct g *gzreads(struct g *f, bool nested), *gzread1(struct g *f);
+static g_inline struct g *gzread1sym(struct g*f, int c), *gzread1str(struct g*f), *gzquote(struct g*f);
+struct g *g_reads(struct g *f, struct g_io* i) { return g_core_of(f)->io = i, gzreads(f, false); }
+struct g *g_read1(struct g*f, struct g_io *i) { return g_core_of(f)->io = i, gzread1(f); }
+
+static struct g *grbufg(struct g *f, uintptr_t len) {
+ if (g_ok(f = str0(f, 2 * len)))
+  memcpy(txt(f->sp[0]), txt(f->sp[1]), len),
+  f->sp[1] = f->sp[0],
+  f->sp++;
  return f; }
 
-static struct g *gzreads(struct g *f, bool nested);
-static struct g *gzread1(struct g *f);
-static g_inline struct g *gzread1sym(struct g*f, int c);
-static g_inline struct g *gzread1str(struct g*f);
+static g_noinline double strtod_wrap(struct g*f, word x) {
+ struct g_str *s = str(x);
+ if (!strp(x) || !s->len) return NAN;
+ char *e, *b = off_pool(f);
+ memcpy(b, s->bytes, s->len);
+ b[s->len] = 0;
+ double r = strtod(b, &e);
+ return e != b && *e == 0 ? r : NAN; }
+
+// (flo s) — parse a gwen string as a decimal float. Returns a rank-0
+// f64 box if the entire string parses, else nil. Used by the gwen-side
+// reader in repl.g to match the C reader's strtol → strtod → intern
+// cascade on float-shaped tokens.
+g_vm(g_vm_flo) {
+ word x = Sp[0];
+ double d = strtod_wrap(f, x);
+ if (d != d) return Sp[0] = nil, Ip += 1, Continue();
+ uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
+ Have(req);
+ struct g_vec *r = ini_scalar((struct g_vec*) Hp, G_VT_FLO);
+ Hp += req;
+ flo_put(r->shape, (g_flo_t) d);
+ Sp[0] = word(r);
+ return Ip++, Continue(); }
+
+g_vm(g_vm_fread) {
+ Ip++;
+ if (!iop(Sp[0])) return Sp++, Continue();
+ struct g_io *i = (struct g_io*) Sp[0];
+ uintptr_t depth = topof(f) - Sp;
+ Pack(f);
+ if (g_ok(f = g_read1(f, i))) f->sp[2] = f->sp[0], f->sp += 2;
+ else {
+  struct g *c = g_core_of(f); // reset stack on parse fail
+  c->sp = (word*) c + c->len - depth;
+  switch (g_code_of(f)) {
+   default: return gtrap(f);
+   case g_status_more: c->sp[1] = c->sp[0];
+   case g_status_eof: f = c, f->sp++; } }
+ return Unpack(f), Continue(); }
+
+g_vm(g_vm_str) {
+ word l = Sp[0];
+ uintptr_t n = llen(l), req = str_type_width + b2w(n);
+ if (!n) return Sp[0] = nil, Ip++, Continue();
+ Have(req);
+ struct g_str *s = (void*) Hp;
+ Hp += req;
+ ini_str(s, n);
+ for (uintptr_t i = 0; n--; l = B(l)) txt(s)[i++] = (char) getnum(A(l));
+ return Sp[0] = word(s), Ip++, Continue(); }
 
 ////
 /// " the parser "
@@ -486,10 +492,7 @@ static struct g *gzread1(struct g*f) {
  switch (f->b) {
   case '(':  return gzreads(f, true);
   case ')': case EOF: return encode(f, g_status_eof);
-  case '\'': return
-   g_code_of(f = gzread1(f)) == g_status_eof ? // quote with no operand
-    encode(g_core_of(f), g_status_more) :
-    gxl(pushq(gxr(push0(f))));
+  case '\'': return gzquote(f);
   case '"': return gzread1str(f);
   default: return gzread1sym(f, f->b); } }
 
@@ -503,6 +506,11 @@ static struct g *gzreads(struct g *f, bool nested) {
   f = gzread1(zungetc(f, c)); }
  for (f = push0(f); n--; f = gxr(f));
  return f; }
+
+static g_inline struct g *gzquote(struct g*f) {
+ return g_code_of(f = gzread1(f)) == g_status_eof ? // quote with no operand
+  encode(g_core_of(f), g_status_more) :
+  gxl(pushq(gxr(push0(f)))); }
 
 static g_inline struct g *gzread1str(struct g*f) {
  int c;
@@ -531,6 +539,8 @@ static g_inline struct g *gzread1str(struct g*f) {
      c = ((v1 & 0xf) << 4) | (v2 & 0xf); } } }
  return f; }
 
+
+
 static g_inline struct g *gzread1sym(struct g*f, int c) {
  uintptr_t n = 1, lim = sizeof(intptr_t);
  if (g_ok(f = str0(f, sizeof(word))))
@@ -542,108 +552,26 @@ static g_inline struct g *gzread1sym(struct g*f, int c) {
      case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
      case '(': case ')': case '"': case '\'': case 0 : case EOF:
       if (!g_ok(f = zungetc(f, c))) return f;
-      len(f->sp[0]) = n;
-      txt(f->sp[0])[n] = 0; // zero terminate for strtol ; n < lim so this is safe
+      struct g_str *s = str(f->sp[0]);
+      txt(s)[len(s) = n] = 0; // zero terminate for strtol ; n < lim so this is safe
       // A plain decimal integer reads at full precision (fixnum / box / bignum);
       // hex/octal/float/symbol tokens keep the strtol -> strtod -> intern path.
-      if (is_dec_int(txt(f->sp[0]), n)) return g_big_read_dec(f);
+      if (is_dec_int(txt(s), n)) return g_big_read_dec(f);
       char *e;
-      long j = strtol(txt(f->sp[0]), &e, 0);
+      long j = strtol(txt(s), &e, 0);
       if (*e == 0) {
-       if (j >= FIX_MIN && j <= FIX_MAX) f->sp[0] = putnum(j);
-       else f = box_int(f, j); }           // overflows the tag -> wide-int box
-      else {
-       double d = strtod(txt(f->sp[0]), &e);
-       f = e == txt(f->sp[0]) || *e != 0 ? intern(f) : flo_alloc(f, d); }
+       if (j >= FIX_MIN && j <= FIX_MAX) return f->sp[0] = putnum(j), f;
+       if (g_ok(f = g_have(f, BOX_REQ))) {
+        struct g_vec *b = ini_scalar(bump(f, BOX_REQ), G_VT_INT);
+        box_put(b->shape, j);
+        f->sp[0] = word(b); }
+       return f; }
+      double d = strtod(txt(s), &e);
+      if (e == txt(s) || *e != 0) return intern(f);
+      uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
+      if (g_ok(f = g_have(f, req))) {
+       struct g_vec *r = ini_scalar(bump(f, req), G_VT_FLO);
+       flo_put(r->shape, d);
+       f->sp[0] = word(r); }
       return f; } }
  return f; }
-
-// Allocate a rank-0 G_VT_FLO g_vec wrapping v, push on Sp.
-static g_inline struct g *flo_alloc(struct g *f, g_flo_t v) {
- uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
- if (g_ok(f = g_have(f, req))) {
-  struct g_vec *r = ini_scalar(bump(f, req), G_VT_FLO);
-  flo_put(r->shape, v);
-  f->sp[0] = word(r); }
- return f; }
-
-struct g *g_reads(struct g *f, struct g_io* i) {
- return g_core_of(f)->io = i, gzreads(f, false); }
-
-static struct g *g_read(struct g *f, struct g_io *i) {
- uintptr_t depth = ((word*) f + f->len) - f->sp;
- if (!g_ok(f = g_read1(f, i))) {
-  struct g *c = g_core_of(f); // reset stack on parse fail
-  c->sp = (word*) c + c->len - depth; }
- return f; }
-
-// Strict parse of a gwen-string's bytes as a decimal float. g_noinline +
-// by-value struct return so the &e and &buf escapes stay inside this
-// frame and never reach g_vm_flo, which needs to TCO out via Continue().
-struct g_strtod_r { double d; bool ok; };
-static g_noinline struct g_strtod_r parse_flo_strict(char const *bytes, size_t len) {
- struct g_strtod_r r = { 0, false };
- char buf[64], *e;
- if (len != 0 && len < sizeof buf)
-  memcpy(buf, bytes, len),
-  buf[len] = 0,
-  r.d = strtod(buf, &e),
-  r.ok = e != buf && *e == 0;
- return r; }
-
-struct g *g_read1(struct g*f, struct g_io *i) {
- return g_core_of(f)->io = i, gzread1(f); }
-
-static struct g *grbufg(struct g *f, uintptr_t len) {
- if (g_ok(f = str0(f, 2 * len)))
-  memcpy(txt(f->sp[0]), txt(f->sp[1]), len),
-  f->sp[1] = f->sp[0],
-  f->sp++;
- return f; }
-
-// (flo s) — parse a gwen string as a decimal float. Returns a rank-0
-// f64 box if the entire string parses, else nil. Used by the gwen-side
-// reader in repl.g to match the C reader's strtol → strtod → intern
-// cascade on float-shaped tokens.
-g_vm(g_vm_flo) {
- word x = Sp[0];
- if (!strp(x)) return Sp[0] = nil, Ip += 1, Continue();
- struct g_strtod_r p = parse_flo_strict(str(x)->bytes, str(x)->len);
- if (!p.ok) return Sp[0] = nil, Ip += 1, Continue();
- uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
- Have(req);
- struct g_vec *r = ini_scalar((struct g_vec*) Hp, G_VT_FLO);
- Hp += req;
- flo_put(r->shape, (g_flo_t) p.d);
- Sp[0] = word(r);
- return Ip++, Continue(); }
-
-g_vm(g_vm_fread) {
- Ip++;
- if (!iop(Sp[0])) return Sp++, Continue();
- struct g_io *i = (struct g_io*) Sp[0];
- Pack(f);
- if (g_ok(f = g_read(f, i))) f->sp[2] = f->sp[0], f->sp += 2;
- else switch (g_code_of(f)) {
-  case g_status_eof:
-   f = g_core_of(f);
-   f->sp++;
-   break;
-  case g_status_more:
-   f = g_core_of(f);
-   f->sp[1] = f->sp[0];
-   f->sp++;
-   break;
-  default: return gtrap(f); }
- return Unpack(f), Continue(); }
-
-g_vm(g_vm_str) {
- word l = Sp[0];
- uintptr_t n = llen(l), req = str_type_width + b2w(n);
- if (!n) return Sp[0] = nil, Ip++, Continue();
- Have(req);
- struct g_str *s = (void*) Hp;
- Hp += req;
- ini_str(s, n);
- for (uintptr_t i = 0; n--; l = B(l)) txt(s)[i++] = (char) getnum(A(l));
- return Sp[0] = word(s), Ip++, Continue(); }
