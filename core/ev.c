@@ -375,6 +375,17 @@ static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
  struct g_r *mm = g_core_of(f)->root;
 #define forget() (g_core_of(f)->root=(mm),f)
  MM(f, &exp);
+ // recursive-value boxing: c0 is the bootstrap compiler, so it delegates the
+ // letrec*-value rewrite to the gwen `boxfix` prepass (prelude.g) -- evaluated
+ // like a macro -- once that global exists (i.e. for everything after its own
+ // definition partway through the prelude). It boxes a value binding whose init
+ // closes over the name being defined into a heap cell. The runtime compiler
+ // (ev.g) does the same natively in `l2x`. exp is rooted across the alloc.
+ if (g_ok(f = intern(g_strof(f, "boxfix")))) {
+  word bf = g_tget(f, 0, pop1(f), f->dict);
+  if (bf && homp(bf)) {
+   f = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(f, 4, exp, nil, nil, bf)))))));
+   if (g_ok(f)) exp = pop1(f); } }
  f = enscope(f, *b, (*b)->args, (*b)->imps);
  if (!g_ok(f)) return forget();
  struct env *q = (struct env*) pop1(f), **c = &q;

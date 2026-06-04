@@ -89,3 +89,66 @@
 (:: 'cond (\ a (cons '? a)))
 ; `(quote x)` -> `(. x)`: the CL/Scheme name for the `.` quote form (`'x` sugar).
 (:: 'quote (\ a (cons '. a)))
+
+; recursive-value boxing prepass for `:` (the letrec* "capture by location" fix).
+; Given a flat `:` binding list (n1 d1 .. [body]) it indirects every *value*
+; binding whose init closes over the name being defined (or a forward/mutual
+; sibling defined no later) through a heap cell: prepend `cell (cons 0 0)`, store
+; via `(poke 1 init cell)`, read via `(car cell)`. Functions (resolved lazily),
+; values defined before their users, and global (body-less) lets are untouched.
+; This is the single source of truth for the rewrite: c0 (ev.c) runs it as a
+; prepass on each let, and ev.g's `ale` (the self-hosted compiler) calls it too
+; from l2x -- so both compilers box identically. `lambp`/`dsug` are hoisted to
+; globals so `ale` can share them (lambda detection, binding desugaring).
+(: (lambp x) (? (twop x) (= '\ (car x)))
+   (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d))))))
+(: (boxfix fs) (:
+   (lp x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
+   (ln bs) (? (atomp bs) 0 (atomp (cdr bs)) 0 (cons (car (dsug (car bs) 0)) (ln (cddr bs))))
+   ; w: is symbol v free in x and (u) under a lambda? \ / : shadowing, . quote,
+   ; macro expansion (so :- ?- let &&/|| are seen as the compiler sees them).
+   (w v x bnd u) (?
+    (symp x) (&& u (= x v) (nilp (memq v bnd)))
+    (atomp x) 0
+    (: h (car x) (?
+      (= h '.) 0
+      (= h '\) (: r (lp x) (w v (cdr r) (cat (car r) bnd) -1))
+      (= h ':) (wl v (cdr x) (cat (ln (cdr x)) bnd) u)
+      (: m (? (symp h) (get 0 h macros) 0) (? m (w v (m (cdr x)) bnd u) (any (\ e (w v e bnd u)) x))))))
+   (wl v bs bnd u) (?
+    (atomp bs) 0
+    (atomp (cdr bs)) (w v (car bs) bnd u)
+    (: nd (dsug (car bs) (cadr bs)) (? (w v (cdr nd) bnd u) -1 (wl v (cddr bs) bnd u))))
+   ; sub: replace free refs to a boxed name (cs = alist name->cell) with (car cell)
+   (rmc cs ns) (filter (\ p (nilp (memq (car p) ns))) cs)
+   (sub cs x) (?
+    (symp x) (: p (assq x cs) (? p (list 'car (cdr p)) x))
+    (atomp x) x
+    (: h (car x) (?
+      (= h '.) x
+      (= h '\) (: r (lp x) (cons '\ (cat (car r) (list (sub (rmc cs (car r)) (cdr r))))))
+      (= h ':) (cons ': (subl (rmc cs (ln (cdr x))) (cdr x)))
+      (: m (? (symp h) (get 0 h macros) 0) (? m (sub cs (m (cdr x))) (map (\ e (sub cs e)) x))))))
+   (subl cs bs) (?
+    (atomp bs) bs
+    (atomp (cdr bs)) (list (sub cs (car bs)))
+    (: nd (dsug (car bs) (cadr bs)) (cons (car nd) (cons (sub cs (cdr nd)) (subl cs (cddr bs))))))
+   (ev l) (? (atomp l) -1 (atomp (cdr l)) 0 (ev (cddr l)))
+   (bpr fs) (? (atomp (cdr fs)) (cons 0 (car fs))
+               (: r (bpr (cddr fs)) (cons (cons (dsug (car fs) (cadr fs)) (car r)) (cdr r))))
+   (? (ev fs) fs
+    (: pb (bpr fs) prs (car pb) body (cdr pb)
+       nm (map car prs)
+       bx (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
+                           (any (\ p (w v (cdr p) 0 0))
+                                (take (+ 1 (lidx v nm)) prs)))) nm)
+       (? (nilp bx) fs
+        (: cs (map (\ v (cons v (sym 0))) bx)
+           (one p) (: d (sub cs (cdr p))
+                      (? (memq (car p) bx)
+                         (cons '_ (list 'poke 1 d (cdr (assq (car p) cs))))
+                         (cons (car p) d)))
+           es (map one prs)
+           (cat (catmap (\ c (list (cdr c) (list 'cons 0 0))) cs)
+                (cat (catmap (\ e (list (car e) (cdr e))) es)
+                     (list (sub cs body))))))))))

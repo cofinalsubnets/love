@@ -116,51 +116,6 @@
    (:- (l1 0 0 a (car b) (cdr b))
     q (sco c (get 0 'arg c) (get 0 'imp c))
     (set_cdr p x) (: _ (poke 2 x p) x) ; :[ weh
-    (lambp x) (? (twop x) (= '\ (car x)))
-    (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d)))))
-
-    ; --- recursive-value boxing (l2x) -------------------------------------
-    ; `:` is letrec*, but a closure captures free vars by value at creation, so
-    ; a *value* binding whose init closes over the name being defined (or a
-    ; forward/mutual sibling defined no later) snapshots it while still 0. l2x
-    ; (called by l1 below in place of l2) finds such names and indirects them
-    ; through a heap cell: prepend `cell (cons 0 0)`, store via `(poke 1 init
-    ; cell)`, read via `(car cell)`. The cell (a pair) is captured by pointer, so
-    ; the store is visible at call time. Global lets are dict-bound (late), not
-    ; stack slots, so they have no such bug and are left untouched.
-    (lp x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
-    (ln bs) (? (atomp bs) 0 (atomp (cdr bs)) 0 (cons (car (dsug (car bs) 0)) (ln (cddr bs))))
-    ; w: is symbol v free in x and (u) under a lambda? respects \ / : shadowing,
-    ; skips . quotes, expands macros (so :- ?- let &&/|| match ana's own view).
-    (w v x bnd u) (?
-     (symp x) (&& u (= x v) (nilp (memq v bnd)))
-     (atomp x) 0
-     (: h (car x) (?
-       (= h '.) 0
-       (= h '\) (: r (lp x) (w v (cdr r) (cat (car r) bnd) -1))
-       (= h ':) (wl v (cdr x) (cat (ln (cdr x)) bnd) u)
-       (: m (? (symp h) (get 0 h macros) 0)
-        (? m (w v (m (cdr x)) bnd u) (any (\ e (w v e bnd u)) x))))))
-    (wl v bs bnd u) (?
-     (atomp bs) 0
-     (atomp (cdr bs)) (w v (car bs) bnd u)
-     (: nd (dsug (car bs) (cadr bs)) (? (w v (cdr nd) bnd u) -1 (wl v (cddr bs) bnd u))))
-    ; sub: replace free refs to a boxed name (cs = alist name->cell) with (car cell)
-    (rmc cs ns) (filter (\ p (nilp (memq (car p) ns))) cs)
-    (sub cs x) (?
-     (symp x) (: p (assq x cs) (? p (list 'car (cdr p)) x))
-     (atomp x) x
-     (: h (car x) (?
-       (= h '.) x
-       (= h '\) (: r (lp x) (cons '\ (cat (car r) (list (sub (rmc cs (car r)) (cdr r))))))
-       (= h ':) (cons ': (subl (rmc cs (ln (cdr x))) (cdr x)))
-       (: m (? (symp h) (get 0 h macros) 0)
-        (? m (sub cs (m (cdr x))) (map (\ e (sub cs e)) x))))))
-    (subl cs bs) (?
-     (atomp bs) bs
-     (atomp (cdr bs)) (list (sub cs (car bs)))
-     (: nd (dsug (car bs) (cadr bs))
-        (cons (car nd) (cons (sub cs (cdr nd)) (subl cs (cddr bs))))))
 
     ;; l1 collects bindings and passes them with the body expression to l2x
    (l1 ns ds n d rest) (:
@@ -168,24 +123,20 @@
     (? (atomp rest)       (l2x ns ds (car nd)   1)
        (atomp (cdr rest)) (l2x ns ds (car rest) 0)
                           (l1 ns ds (car rest) (cadr rest) (cddr rest))))
-   ; l2x boxes captured recursive *values*, then hands the rewrite to l2.
+   ; l2x delegates recursive-value boxing to the shared prelude `boxfix` (the
+   ; same rewrite c0 runs -- single source of truth). It flattens the collected
+   ; bindings + body back into a `:`-style list, boxes, then re-splits for l2.
+   ; even (global, body-less) lets are never boxed, so they skip the round-trip.
    (l2x ns ds exp even) (?
-    even (l2 ns ds exp even)                          ; global let -> no boxing
-    (: prs (zip (rev ns) (rev ds))
-       nm (map car prs)
-       bx (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))      ; a value binding
-                           (any (\ p (w v (cdr p) 0 0))           ; captured by a lambda
-                                (take (+ 1 (lidx v nm)) prs)))) nm) ; at index <= its own
-       (? (nilp bx) (l2 ns ds exp even)
-        (: cs (map (\ v (cons v (sym 0))) bx)
-           (one p) (: d (sub cs (cdr p))
-                      (? (memq (car p) bx)
-                         (cons '_ (list 'poke 1 d (cdr (assq (car p) cs))))
-                         (cons (car p) d)))
-           es (map one prs)
-           ns2 (cat (map cdr cs) (map car es))
-           ds2 (cat (map (\ _ (list 'cons 0 0)) cs) (map cdr es))
-         (l2 (rev ns2) (rev ds2) (sub cs exp) even)))))
+    even (l2 ns ds exp even)
+    (: fs (boxfix (cat (catmap (\ p (list (car p) (cdr p)))
+                               (zip (rev ns) (rev ds)))
+                       (list exp)))
+       (splt l) (? (atomp (cdr l)) (cons 0 (car l))
+                   (: r (splt (cddr l))
+                      (cons (cons (cons (car l) (cadr l)) (car r)) (cdr r))))
+       pb (splt fs)
+     (l2 (rev (map car (car pb))) (rev (map cdr (car pb))) (cdr pb) even)))
 
    (l2 ns ds exp even) (:- (cl 0 l l l)
     ns (rev ns) ds (rev ds)
