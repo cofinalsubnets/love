@@ -110,141 +110,82 @@
    k (trim ((? (= a 1) k (em2 g_vm_cur a k)) 0))
    (cons k (get 0 'imp d)))
 
-  ; --- recursive-value boxing (boxfix) -----------------------------------
-  ; `:` is letrec*, but closures capture free vars BY VALUE at creation time,
-  ; so a *value* binding whose init closes over the very name being defined (or
-  ; a forward/mutual sibling) snapshots it while still unassigned (0). boxfix is
-  ; a source pre-pass on the binding list (run by ale below): it indirects such
-  ; names through a heap cell -- prepend `cell (cons 0 0)`, replace the binding
-  ; with `_ (poke 1 init cell)` and every free ref with `(car cell)`. The cell
-  ; (a pair) is captured by pointer, so the store is visible at call time.
-  ; nameparts: namepart -> (bindname . defun-sugar-params)
-  (nameparts n) (? (atomp n) (cons n 0)
-                   (: ip (nameparts (car n)) (cons (car ip) (cat (cdr ip) (cdr n)))))
-  (lambp x) (? (twop x) (= '\ (car x)))
-  (lamparts x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
-  ; lparse: cdr of a `:` form -> (binds . bodylist); bodylist=0 if even/no-body.
-  ; binds entry = (namepart defpart bindname . params)
-  (lparse bs) (?
-   (atomp bs)       (cons 0 0)
-   (atomp (cdr bs)) (cons 0 (cons (car bs) 0))
-   (: np (car bs) dp (cadr bs) rest (cddr bs)
-      ip (nameparts np)
-      e (cons np (cons dp ip))
-      r (lparse rest)
-    (cons (cons e (car r)) (cdr r))))
-  ; freev: is symbol v free in x? respects \ / : shadowing, skips . quotes, and
-  ; expands macros (so :- ?- let &&/|| etc. are handled exactly as ana sees them)
-  (freev v x) (?
-   (symp x)  (= x v)
-   (atomp x) 0
-   (: h (car x) (?
-     (= h '.) 0
-     (= h '\) (: lp (lamparts x) (? (memq v (car lp)) 0 (freev v (cdr lp))))
-     (= h ':) (freelet v (cdr x))
-     (: m (? (symp h) (get 0 h macros) 0)
-      (? m (freev v (m (cdr x))) (anyfree v x))))))
-  (anyfree v l) (? (twop l) (? (freev v (car l)) -1 (anyfree v (cdr l))) 0)
-  (freelet v bs) (:
-   pr (lparse bs) binds (car pr) bodylist (cdr pr)
-   names (map (\ e (caddr e)) binds)
-   (? (memq v names) 0
-      (? (freebinds v binds) -1
-         (? bodylist (freev v (car bodylist)) 0))))
-  (freebinds v binds) (? (twop binds)
-   (: e (car binds) dp (cadr e) params (cdddr e)
-      (? (memq v params) (freebinds v (cdr binds))
-         (? (freev v dp) -1 (freebinds v (cdr binds)))))
-   0)
-  ; inlam: does v occur free inside SOME lambda within x? (the capture test)
-  (inlam v x) (?
-   (atomp x) 0
-   (: h (car x) (?
-     (= h '.) 0
-     (= h '\) (: lp (lamparts x) (? (memq v (car lp)) 0 (freev v (cdr lp))))
-     (= h ':) (inlamlet v (cdr x))
-     (: m (? (symp h) (get 0 h macros) 0)
-      (? m (inlam v (m (cdr x))) (anylam v x))))))
-  (anylam v l) (? (twop l) (? (inlam v (car l)) -1 (anylam v (cdr l))) 0)
-  (inlamlet v bs) (:
-   pr (lparse bs) binds (car pr) bodylist (cdr pr)
-   names (map (\ e (caddr e)) binds)
-   (? (memq v names) 0
-      (? (inlambinds v binds) -1
-         (? bodylist (inlam v (car bodylist)) 0))))
-  (inlambinds v binds) (? (twop binds)
-   (: e (car binds) dp (cadr e) params (cdddr e)
-      hit (? params (? (memq v params) 0 (freev v dp)) (inlam v dp))
-      (? hit -1 (inlambinds v (cdr binds))))
-   0)
-  ; subst: replace free v with expr r in x (same shadowing/quote/macro rules)
-  (subst v r x) (?
-   (symp x)  (? (= x v) r x)
-   (atomp x) x
-   (: h (car x) (?
-     (= h '.) x
-     (= h '\) (: lp (lamparts x)
-                 (? (memq v (car lp)) x
-                    (cons '\ (cat (car lp) (list (subst v r (cdr lp)))))))
-     (= h ':) (substlet v r x)
-     (: m (? (symp h) (get 0 h macros) 0)
-      (? m (subst v r (m (cdr x))) (map (\ e (subst v r e)) x))))))
-  (substlet v r x) (:
-   pr (lparse (cdr x)) binds (car pr) bodylist (cdr pr)
-   names (map (\ e (caddr e)) binds)
-   (? (memq v names) x
-      (: nb (map (\ e (subdef v r e)) binds)
-         bl (? bodylist (list (subst v r (car bodylist))) 0)
-         (cons ': (cat (catmap rebuild nb) bl)))))
-  (subdef v r e) (: np (car e) dp (cadr e) bn (caddr e) params (cdddr e)
-                    dp2 (? (memq v params) dp (subst v r dp))
-                    (cons np (cons dp2 (cons bn params))))
-  (rebuild e) (list (car e) (cadr e))
-  ; cands: value-binding names (def not a \, not defun-sugar) captured free
-  ; inside a lambda in a def at index <= the value's own index. defs at a LATER
-  ; index evaluate after the value is assigned, so their closures already see
-  ; the right value -- no box (leaves the common "value then functions" alone).
-  (cands binds) (:
-   (go bs i) (? (twop bs)
-     (: e (car bs) bn (caddr e) dp (cadr e) params (cdddr e)
-        isval (? params 0 (nilp (lambp dp)))
-        rest (go (cdr bs) (+ i 1))
-        (? (&& isval (inlambinds bn (take (+ i 1) binds))) (cons bn rest) rest))
-     0)
-   (go binds 0))
-  (boxfix fs) (:
-   pr (lparse fs) binds (car pr) bodylist (cdr pr)
-   (? (nilp bodylist) fs
-    (: cand (cands binds)
-       (? (nilp cand) fs (dorewrite binds bodylist cand)))))
-  (dorewrite binds bodylist cand) (:
-   cells (map (\ v (cons v (sym 0))) cand)
-   (sub1 x) (foldl (\ acc c (subst (car c) (list 'car (cdr c)) acc)) x cells)
-   allocs (catmap (\ c (list (cdr c) (list 'cons 0 0))) cells)
-   (emit e) (: np (car e) dp (cadr e) bn (caddr e)
-               dp2 (sub1 dp)
-               (? (memq bn cand)
-                  (list '_ (list 'poke 1 dp2 (cdr (assq bn cells))))
-                  (list np dp2)))
-   binds2 (catmap emit binds)
-   bl (? bodylist (list (sub1 (car bodylist))) 0)
-   (cat allocs (cat binds2 bl)))
-
   ; let expression analyzer (the most complicated one)
   (ale a b) (?
    (atomp b) (ana c a)
-   (:- (: fs (boxfix (cons a b)) (l1 0 0 (car fs) (cadr fs) (cddr fs)))
+   (:- (l1 0 0 a (car b) (cdr b))
     q (sco c (get 0 'arg c) (get 0 'imp c))
     (set_cdr p x) (: _ (poke 2 x p) x) ; :[ weh
     (lambp x) (? (twop x) (= '\ (car x)))
-    ;; l1 pass nom def and value expressions to l2
-    ; l1 collects bindings and passes them with the body expression to l2
-   (l1 ns ds n d rest) (:
     (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d)))))
+
+    ; --- recursive-value boxing (l2x) -------------------------------------
+    ; `:` is letrec*, but a closure captures free vars by value at creation, so
+    ; a *value* binding whose init closes over the name being defined (or a
+    ; forward/mutual sibling defined no later) snapshots it while still 0. l2x
+    ; (called by l1 below in place of l2) finds such names and indirects them
+    ; through a heap cell: prepend `cell (cons 0 0)`, store via `(poke 1 init
+    ; cell)`, read via `(car cell)`. The cell (a pair) is captured by pointer, so
+    ; the store is visible at call time. Global lets are dict-bound (late), not
+    ; stack slots, so they have no such bug and are left untouched.
+    (lp x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
+    (ln bs) (? (atomp bs) 0 (atomp (cdr bs)) 0 (cons (car (dsug (car bs) 0)) (ln (cddr bs))))
+    ; w: is symbol v free in x and (u) under a lambda? respects \ / : shadowing,
+    ; skips . quotes, expands macros (so :- ?- let &&/|| match ana's own view).
+    (w v x bnd u) (?
+     (symp x) (&& u (= x v) (nilp (memq v bnd)))
+     (atomp x) 0
+     (: h (car x) (?
+       (= h '.) 0
+       (= h '\) (: r (lp x) (w v (cdr r) (cat (car r) bnd) -1))
+       (= h ':) (wl v (cdr x) (cat (ln (cdr x)) bnd) u)
+       (: m (? (symp h) (get 0 h macros) 0)
+        (? m (w v (m (cdr x)) bnd u) (any (\ e (w v e bnd u)) x))))))
+    (wl v bs bnd u) (?
+     (atomp bs) 0
+     (atomp (cdr bs)) (w v (car bs) bnd u)
+     (: nd (dsug (car bs) (cadr bs)) (? (w v (cdr nd) bnd u) -1 (wl v (cddr bs) bnd u))))
+    ; sub: replace free refs to a boxed name (cs = alist name->cell) with (car cell)
+    (rmc cs ns) (filter (\ p (nilp (memq (car p) ns))) cs)
+    (sub cs x) (?
+     (symp x) (: p (assq x cs) (? p (list 'car (cdr p)) x))
+     (atomp x) x
+     (: h (car x) (?
+       (= h '.) x
+       (= h '\) (: r (lp x) (cons '\ (cat (car r) (list (sub (rmc cs (car r)) (cdr r))))))
+       (= h ':) (cons ': (subl (rmc cs (ln (cdr x))) (cdr x)))
+       (: m (? (symp h) (get 0 h macros) 0)
+        (? m (sub cs (m (cdr x))) (map (\ e (sub cs e)) x))))))
+    (subl cs bs) (?
+     (atomp bs) bs
+     (atomp (cdr bs)) (list (sub cs (car bs)))
+     (: nd (dsug (car bs) (cadr bs))
+        (cons (car nd) (cons (sub cs (cdr nd)) (subl cs (cddr bs))))))
+
+    ;; l1 collects bindings and passes them with the body expression to l2x
+   (l1 ns ds n d rest) (:
      nd (dsug n d) ns (cons (car nd) ns) ds (cons (cdr nd) ds)
-    (? (atomp rest)       (l2 ns ds (car nd)   1)
-       (atomp (cdr rest)) (l2 ns ds (car rest) 0)
+    (? (atomp rest)       (l2x ns ds (car nd)   1)
+       (atomp (cdr rest)) (l2x ns ds (car rest) 0)
                           (l1 ns ds (car rest) (cadr rest) (cddr rest))))
+   ; l2x boxes captured recursive *values*, then hands the rewrite to l2.
+   (l2x ns ds exp even) (?
+    even (l2 ns ds exp even)                          ; global let -> no boxing
+    (: prs (zip (rev ns) (rev ds))
+       nm (map car prs)
+       bx (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))      ; a value binding
+                           (any (\ p (w v (cdr p) 0 0))           ; captured by a lambda
+                                (take (+ 1 (lidx v nm)) prs)))) nm) ; at index <= its own
+       (? (nilp bx) (l2 ns ds exp even)
+        (: cs (map (\ v (cons v (sym 0))) bx)
+           (one p) (: d (sub cs (cdr p))
+                      (? (memq (car p) bx)
+                         (cons '_ (list 'poke 1 d (cdr (assq (car p) cs))))
+                         (cons (car p) d)))
+           es (map one prs)
+           ns2 (cat (map cdr cs) (map car es))
+           ds2 (cat (map (\ _ (list 'cons 0 0)) cs) (map cdr es))
+         (l2 (rev ns2) (rev ds2) (sub cs exp) even)))))
 
    (l2 ns ds exp even) (:- (cl 0 l l l)
     ns (rev ns) ds (rev ds)
