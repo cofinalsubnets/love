@@ -4,16 +4,15 @@ A lisp dialect where every value is a unary function.
 
 ## features
 
-- lisp stuff: lists, symbols, macros, lambdas, lexical scope, garbage collection, eval/apply, call/cc
-- automatic currying
+- lists, symbols, macros, lambdas, eval/apply, call/cc
+- strings, file i/o
+- integers, floats, bignums, complex, vectors
+- only three special forms
+- currying like haskell
 - co-op multitasking
-- file i/o
-- floating point
-- mutable hash tables
-- multidimensional numeric arrays
 - repl with native line editing
 - self-hosting threaded code compiler
-- super portable: builds for MCUs, bare metal kernel, executable, shared or static library, WASM, etc.
+- super portable
 
 ## language details
 
@@ -128,8 +127,10 @@ form round-trips):
 
 Functions print the same way — a builtin as `,name`, a compiled lambda as its
 source `,(\ x (+ x 1))`, and a partial application / closure as the base applied
-to its captured arguments `,(+ 1)`, `,((\ x (+ x y)) 5)` (the `,` is only on the
-outermost form). An opaque thread (a continuation) prints bare as `#<thread>`.
+to its captured arguments `,(+ 1)`, `,((\ y x (+ x y)) 5)` (the `,` is only on the
+outermost form). A closure shows its captured variables as **leading parameters**
+of the base lambda (`y` above), matching the order they're applied, so it too reads
+back to an equal value. An opaque thread (a continuation) prints bare as `#<thread>`.
 
 ## code examples
 

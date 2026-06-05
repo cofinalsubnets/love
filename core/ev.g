@@ -131,10 +131,13 @@
   ; lambda analyzer
   (ala c imp exp) (:
    d (sco c (init exp) imp)
-   s (cons '\ exp)                                  ; source \-expr (built before GC-y thread alloc)
    k (ana d (last exp) (k0s d))
    a (ary d)
    e ((? (= a 1) k (em2 g_vm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
+   ; source \-expr, built AFTER ana so the captured imports are known. prepend them
+   ; as leading params (the frame is [imps args]) so a closure prints as
+   ; ,((\ y x …) capturedvals) and round-trips through read+eval.
+   s (cons '\ (cat (get 0 'imp d) exp))
    _ (poke -1 s e)                                  ; value[-1] = source \-expr
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
    (cons e (get 0 'imp d)))

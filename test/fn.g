@@ -14,8 +14,10 @@
  (= ",(+ 1)" (inspect (+ 1)))
  ; partial app of a lambda: only the OUTER form gets the comma, not the base
  (= ",((\\ a b (+ a b)) 1)" (inspect ((\ a b (+ a b)) 1)))
- ; a closure (captures a free var) is a partial application over its base lambda
- (= ",((\\ x (+ x y)) 5)" (: y 5 (inspect (\ x (+ x y)))))
+ ; a closure (captures a free var) prints as a partial application over its base
+ ; lambda; the captured var is shown as a LEADING param (frame layout [imps args]),
+ ; so the form round-trips: applying the base to the captures reconstructs it.
+ (= ",((\\ y x (+ x y)) 5)" (: y 5 (inspect (\ x (+ x y)))))
  ; a prelude function prints its (non-trivial) source
  (strp (inspect map))
  (< 10 (len (inspect map))))

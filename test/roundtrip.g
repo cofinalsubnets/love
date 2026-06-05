@@ -35,9 +35,9 @@
  (= 5 ((rt (\ x (+ x 1))) 4))                       ; lambda
  (= 7 ((rt (+ 3)) 4))                               ; partial application of a builtin
  (= 3 ((rt ((\ a b (+ a b)) 1)) 2))                 ; partial app of a lambda (no capture)
- ; NB a *closure* (lambda over a captured free var) prints faithfully, e.g.
- ; ,((\ x (+ x y)) 5), but does NOT round-trip: the source shows only the explicit
- ; param x while the captured y fills a (leading) import slot, so re-applying the
- ; printed source binds the wrong position. Display is tested in test/fn.g.
+ ; a closure (captures free var y) round-trips: the captured value is printed as a
+ ; leading param, so re-applying the reconstructed base to it rebinds correctly.
+ (= 9 (: y 5 ((rt (\ x (+ x y))) 4)))               ; (rt closure) is base needing x; apply 4
+ (= 30 (: a 10 b 20 ((rt (\ z (+ z (+ a b)))) 0)))  ; two captured vars
  ; the lambda's source survives the loop (idempotent inspect)
  (= (inspect (\ a b (+ a b))) (inspect (rt (\ a b (+ a b))))))
