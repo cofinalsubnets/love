@@ -126,14 +126,6 @@
                       (any (\ p (w v (cdr p) 0 0)) (take (+ 1 (lidx v nm)) prs)))) nm))
    (mkcs bx) (map (\ v (cons v (sym 0))) bx)
    (cellbinds cs) (map (\ c (cons (cdr c) (list 'cons 0 0))) cs))
-; boxprep (ev.g `ale`): prepend a cell per boxed name, turn each boxed (v . init) into
-; (_ . (poke 1 init cell)) -- init UN-rewritten (ale redirects boxed refs to (car cell)
-; at analysis). Returns (prepped-prs . cs) or 0.
-(: (boxprep prs) (: bx (boxset prs)
-   (? (nilp bx) 0
-    (: cs (mkcs bx)
-       (one p) (? (memq (car p) bx) (cons '_ (list 'poke 1 (cdr p) (cdr (assq (car p) cs)))) p)
-     (cons (cat (cellbinds cs) (map one prs)) cs)))))
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.
 (: (boxfix-core prs body) (:

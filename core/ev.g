@@ -1,4 +1,7 @@
-(:- (\ x (: c (sco 0 (list 0) 0) (ana c x (k0 c) 0 0)))
+(:- (\ x (:
+ c (sco 0 (list 0) 0)
+ x (wev c x)
+ (ana c x (k0 c) 0 0)))
   g_vm_cur (peek 0 +)
   g_vm_ret0 (peek 1 car)
   (sco p a i) (put 'par p (put 'imp i (put 'arg a (new 0))))
@@ -12,6 +15,11 @@
    (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
   (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
+  ; wev: weak-evaluator pre-pass (entry calls `(wev c x)` before `ana`). Target:
+  ; a source->source normalizer that builds the shared scope tree `ana` reuses and
+  ; annotates it with facts (box-set, const-env, ...) for `ana` to read. Identity
+  ; for now (scaffolding only); behavior unchanged until it is grown.
+  (wev c x) x
   (ana c x) (:- (? (symp x)  (ava x)
                    (atomp x) (kim x)
                    (: a (car x) b (cdr x) (?
@@ -125,6 +133,17 @@
    k (trim ((? (= a 1) k (em2 g_vm_cur a k)) 0))
    (cons k (get 0 'imp d)))
 
+  ; bxp: recursive-value boxing for one let's bindings (was prelude `boxprep`),
+  ; called by l2x. Prepend a cell per recursively-captured value, rewrite each boxed
+  ; (v . init) to (_ . (poke 1 init cell)); the cs name->cell map (cdr) lands on the
+  ; scope 'box so `ava` redirects boxed refs to (car cell). Returns (prepped-prs . cs),
+  ; or 0 when nothing is boxed. (Being subsumed by `wev` as the design progresses.)
+  (bxp prs) (: bx (boxset prs)
+   (? (nilp bx) 0
+    (: cs (mkcs bx)
+       (one p) (? (memq (car p) bx) (cons '_ (list 'poke 1 (cdr p) (cdr (assq (car p) cs)))) p)
+     (cons (cat (cellbinds cs) (map one prs)) cs))))
+
   ; let expression analyzer (the most complicated one)
   (ale a b) (?
    (atomp b) (ana c a)
@@ -138,11 +157,11 @@
     (? (atomp rest)       (l2x (rev (cons nd prs)) (car nd)   1)
        (atomp (cdr rest)) (l2x (rev (cons nd prs)) (car rest) 0)
                           (l1 (cons nd prs) (car rest) (cadr rest) (cddr rest))))
-   ; l2x: native recursive-value boxing. boxprep returns (cells-prepended-prs . cs)
+   ; l2x: native recursive-value boxing. wev returns (cells-prepended-prs . cs)
    ; or 0; the cs name->cell map goes on the scope 'box so ava redirects boxed refs
    ; to (car cell) at analysis (no source rewrite). Body-less lets aren't boxed.
    (l2x prs body even)
-    (: r (? even 0 (boxprep prs))
+    (: r (? even 0 (bxp prs))
        pp (? r (car r) prs)
        old (get 0 'box c)
        _ (? r (put 'box (cat (cdr r) old) c))
@@ -197,7 +216,6 @@
         (\ x (f (g (h x))))))
     _ (put 'lam lams q)
     s (get 0 'stk c)
-    f (ana c (cons '\ (cat (rev (map car prs)) (list body))))
     _ (push 'stk 0)
     ; clear stale first-build closures so a ref hit during the rebuild defers to a
     ; backpatch site; the import sets (cddr) are kept.
@@ -206,6 +224,9 @@
     ; closures final -> backpatch each recorded recursive-fn ref with its thread.
     _ (each (get 0 'sites q) (\ s (poke 0 (cadr (car s)) (cdr s))))
     _ (put 'sites 0 q)
+    _ (put 'stk s c)
+    ; body-lambda analyzed AFTER inits (it takes bindings as args; never makes sites)
+    f (ana c (cons '\ (cat (rev (map car prs)) (list body))))
     h (kap (len prs))
     _ (put 'stk s c)
     (\ x (f (g (h x)))))))))

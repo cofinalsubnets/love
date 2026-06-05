@@ -60,3 +60,10 @@ g_vm(g_vm_eq) {
  else r = eql(f, a, b);
  Sp[1] = r ? putnum(-1) : nil;
  return Sp++, Ip++, Continue(); }
+
+// (same a b) — pointer/word identity, no structural recursion. Distinguishes
+// two distinct objects that `=` would conflate (e.g. two equal pairs), so the
+// compiler can find a unique marker by identity.
+g_vm(g_vm_same) {
+ Sp[1] = Sp[0] == Sp[1] ? putnum(-1) : nil;
+ return Sp++, Ip++, Continue(); }

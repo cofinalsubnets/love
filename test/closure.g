@@ -54,4 +54,38 @@
   (= 7   (: (mk z) (\ n (? (< n 1) z (self (- n 1)))) self (mk 7) g (\ self self) (g (self 1))))
 
   ; --- a value defined BEFORE the function using it needs no box, stays correct ---
-  (= 6   (: x 5 f (\ n (+ x n)) (f 1)))))
+  (= 6   (: x 5 f (\ n (+ x n)) (f 1)))
+
+  ; --- box cells must not shift an EARLIER ref: `a` reads an outer binding
+  ; before a later init's forward capture forces `self` to be boxed; the cell
+  ; sits below `a` at runtime, so `a`'s captured slot must already count it ---
+  (= 108 (: outer 100
+            (: a (+ outer 1)
+               (mk z) (\ n (? (< n 1) z (self (- n 1))))
+               self (mk 7)
+               (+ a (self 3)))))
+  ; same, two cells (mutual) -- the early ref must survive BOTH box cells ---
+  (= 110 (: outer 100
+            (: a (+ outer 1)
+               (mka z) (\ n (? (< n 1) z (kb (- n 1))))
+               (mkb z) (\ n (? (< n 1) z (ka (- n 1))))
+               ka (mka 7) kb (mkb 9)
+               (+ a (ka 1)))))
+  ; nested boxing let: an init reaches a SIBLING of an enclosing let via the
+  ; data stack (g is below the inner let's box cell) -- the cell must not shift it
+  (= 108 (: g 100
+            q (: a (+ g 1)
+                  (mk z) (\ n (? (< n 1) z (self (- n 1))))
+                  self (mk 7)
+                  (+ a (self 3)))
+            q))
+  ; doubly nested: `a` reaches g (two boxing lets out) and b (one out) -- the
+  ; reference crosses two cell regions and must account for both ---
+  (= 114 (: g 100
+            q (: b 7
+                 r (: a (+ g b)
+                      (mk z) (\ n (? (< n 1) z (self (- n 1))))
+                      self (mk 7)
+                      (+ a (self 3)))
+                 r)
+            q))))
