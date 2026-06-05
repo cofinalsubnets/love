@@ -166,17 +166,43 @@ static struct g *gzprintf(struct g *f, char const *fmt, ...) {
  va_end(xs);
  return f; }
 
-static struct g *gzputx(struct g *f, intptr_t x);
+static struct g *gzputx(struct g *f, intptr_t x, uintptr_t off);
+static struct g *gzputcs(struct g *f, char const *s);
 
-static g_inline struct g*gzput_two(struct g*f, word _) {
+// --- print cycle detection (tables only) --------------------------------------
+// A "seen" list of the tables on the current print path lives in a single stack
+// slot at the bottom of the print region (established by gfputx). It moves with
+// the stack on GC, so callers locate it by its offset from the stack top (`off`),
+// which GC preserves; the offset is threaded down the recursion as an ordinary
+// integer (no struct-g state). A table is consed on as we descend into it and
+// dropped as we ascend, so the list is exactly the ancestor path of tables. When
+// printing finishes gfputx restores the original stack height, discarding it.
+static word *seen_slot(struct g *f, uintptr_t off) {
+ return topof(g_core_of(f)) - off; }
+static bool seen_member(struct g *f, uintptr_t off, word x) {
+ for (word l = *seen_slot(f, off); twop(l); l = B(l)) if (A(l) == x) return true;
+ return false; }
+static struct g *seen_push(struct g *f, uintptr_t off, word x) {   // cons x onto seen
+ if (!g_ok(f = g_push(f, 1, x))) return f;                         // protect x across GC
+ if (!g_ok(f = g_have(f, Width(struct g_pair)))) return g_pop(f, 1);
+ struct g_pair *p = bump(f, Width(struct g_pair));
+ word *slot = seen_slot(f, off);                                   // re-read: GC may move it
+ ini_two(p, f->sp[0], *slot);
+ *slot = (word) p;
+ return g_pop(f, 1); }
+static void seen_pop(struct g *f, uintptr_t off) {                 // drop the newest entry
+ word *slot = seen_slot(f, off);
+ *slot = B(*slot); }
+
+static g_inline struct g*gzput_two(struct g*f, word _, uintptr_t off) {
  if (!g_ok(f = g_push(f, 1, _))) return f;
  struct g_str *n;
  // a one-operand `\` pair (`(\ x)`) is quote -> print as 'x; ≥2 operands is a lambda.
  if (symp(A(f->sp[0])) && (n = sym(A(f->sp[0]))->nom) && len(n) == 1 && txt(n)[0] == '\\'
      && twop(B(f->sp[0])) && !twop(BB(f->sp[0])))
-  f = gzputx(gzputc(f, '\''), AB(f->sp[0]));
+  f = gzputx(gzputc(f, '\''), AB(f->sp[0]), off);
  else for (f = gzputc(f, '(');; f = gzputc(f, ' '), f->sp[0] = B(f->sp[0])) {
-  f = gzputx(f, A(f->sp[0]));
+  f = gzputx(f, A(f->sp[0]), off);            // off threaded so nested tables are still tracked
   if (!twop(B(f->sp[0]))) { f = gzputc(f, ')'); break; } }
  return g_pop(f, 1); }
 
@@ -242,7 +268,7 @@ static g_inline struct g*gzput_vec(struct g*f, word _) {
  else if (rank == 0 && type == G_VT_INT) f = gzputn(f, box_get(f->sp[0]), 10);
  else if (rank == 0 && type == G_VT_CPLX) f = gzput_vec_scalar_complex(f);
  else if (rank >= 1) f = gzput_arr(f);
- else f = gzprintf(f, "#vec@%x:%d.%d", vec(f->sp[0]), type, rank);
+ else f = gzprintf(f, ",vec@%x:%d.%d", vec(f->sp[0]), type, rank);
  return g_pop(f, 1); }
 
 static g_inline struct g*gzput_str(struct g*f, word _) {
@@ -264,7 +290,7 @@ static g_inline struct g*gzput_str(struct g*f, word _) {
 static g_inline struct g*gzput_sym(struct g*f, word _) {
  if (g_ok(f = g_push(f, 1, _))) {
   struct g_str *s = sym(f->sp[0])->nom;
-  if (!s) f = gzprintf(f, "#sym@%x", f->sp[0]);
+  if (!s) f = gzprintf(f, ",sym@%x", f->sp[0]);   // gensym: , (not #, which is a comment) -- parses, won't round-trip
   else {
    f->sp[0] = word(s);
    for (uintptr_t slen = len(s), i = 0; g_ok(f) && i < slen; f = gzputc(f, txt(f->sp[0])[i++])); } }
@@ -275,7 +301,7 @@ static g_inline struct g*gzput_sym(struct g*f, word _) {
 // ((k . v) …) in a single allocation, so the g_kvs C-pointer walk can't be split
 // by a GC; the list is parked on f->sp[0] and each k/v is re-read from there after
 // the printer (which may GC on string-port growth) runs.
-static g_inline struct g*gzput_tbl(struct g*f, word x) {
+static g_inline struct g*gzput_tbl(struct g*f, word x, uintptr_t off) {
  if (!g_ok(f = g_push(f, 1, x))) return f;            // sp[0] = table
  uintptr_t n = tbl(f->sp[0])->len;
  if (!g_ok(f = g_have(f, n * 2 * Width(struct g_pair)))) return g_pop(f, 1);
@@ -291,8 +317,8 @@ static g_inline struct g*gzput_tbl(struct g*f, word x) {
  f->sp[0] = list;
  f = gzprintf(f, ",(tbl");
  for (; g_ok(f) && twop(f->sp[0]); f->sp[0] = B(f->sp[0])) {
-  f = gzputc(f, ' '); f = gzputx(f, AA(f->sp[0]));    // key (re-read after gzputc)
-  f = gzputc(f, ' '); f = gzputx(f, BA(f->sp[0])); }  // val (re-read after gzputc)
+  f = gzputc(f, ' '); f = gzputx(f, AA(f->sp[0]), off);  // key (re-read after gzputc)
+  f = gzputc(f, ' '); f = gzputx(f, BA(f->sp[0]), off); } // val (re-read after gzputc)
  return g_pop(g_ok(f) ? gzputc(f, ')') : f, 1); }
 
 // A bignum prints in base 10 (with sign). g_big_dec renders it to a fresh
@@ -332,8 +358,7 @@ static word fn_arg(union u *k, int i, int nargs) { // i-th arg in application or
  for (int w = nargs - 1 - i; w > 0; w--) u = u[2].m;
  return u[1].x; }
 
-static struct g *gzput_fn_body(struct g *f, word x);
-static struct g *gzputx(struct g *f, intptr_t x);
+static struct g *gzput_fn_body(struct g *f, word x, uintptr_t off);
 
 // the in-pool source \-expr stashed at value[-1] by a compiled lambda, or 0.
 static word fn_src(struct g *c, union u *k, word x) {
@@ -344,18 +369,18 @@ static word fn_src(struct g *c, union u *k, word x) {
 // Print a function value. Like vec/cplx/tbl it's a `,`-prefixed value form (so it
 // reads back via uq=identity): ,(base arg…) for a partial application / closure,
 // ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
-// thread (continuation, top-level wrap) has no constructor form, so it prints bare
-// as #<thread>. The leading , is emitted once here; the body renders without it.
-static struct g *gzput_fn(struct g *f, word x) {
+// thread (continuation, top-level wrap) has no constructor form, so it prints as the
+// opaque, re-parsable token ,hom@<addr>. The leading , is emitted once here; body w/o it.
+static struct g *gzput_fn(struct g *f, word x, uintptr_t off) {
  union u *k = cell(x);
  bool reprp = fn_partialp(k) || g_bif_name(x) || fn_src(g_core_of(f), k, x);
- return reprp ? gzput_fn_body(gzputc(f, ','), x) : gzputcs(f, "#<thread>"); }
+ return reprp ? gzput_fn_body(gzputc(f, ','), x, off) : gzprintf(f, ",hom@%x", x); }
 
 // Render a function as a bare constructor expression (NO leading ,). Detection
 // order matters: a bare multi-arg lambda and a partial-app both have a g_vm_cur
 // head, and a bif's value[-1] is undefined static data. The partial-app base
 // recurses here (not gzput_fn) so it doesn't get its own comma.
-static struct g *gzput_fn_body(struct g *f, word x) {
+static struct g *gzput_fn_body(struct g *f, word x, uintptr_t off) {
  struct g *c = g_core_of(f);
  union u *k = cell(x);
  if (fn_partialp(k)) {                              // (base arg…)
@@ -363,30 +388,49 @@ static struct g *gzput_fn_body(struct g *f, word x) {
   int na; fn_base(cell(f->sp[0]), &na);
   f = gzputc(f, '(');
   { union u *bk = cell(f->sp[0]); int n2;           // base re-derived after each gzputc
-    f = gzput_fn_body(f, (word) fn_base(bk, &n2)); }
+    f = gzput_fn_body(f, (word) fn_base(bk, &n2), off); }
   for (int i = 0; g_ok(f) && i < na; i++) {
    f = gzputc(f, ' ');                              // separate stmt: re-read arg after GC
-   f = gzputx(f, fn_arg(cell(f->sp[0]), i, na)); }
+   f = gzputx(f, fn_arg(cell(f->sp[0]), i, na), off); }
   return g_pop(g_ok(f) ? gzputc(f, ')') : f, 1); }
  char const *nm = g_bif_name(x);                    // builtin -> name
  if (nm) return gzputcs(f, nm);
  word s = fn_src(c, k, x);                          // compiled lambda -> source \-expr
- return s ? gzputx(f, s) : gzputcs(f, "#<thread>"); }
+ return s ? gzputx(f, s, off) : gzprintf(f, ",hom@%x", x); }
 
-static g_noinline struct g *gzputx(struct g *f, intptr_t x) {
+static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off) {
  if (nump(x)) return gzprintf(f, "%d", getnum(x));
- if (!datp(x)) return gzput_fn(f, x);
+ if (!datp(x)) return gzput_fn(f, x, off);
+ // a table is mutable and can contain itself; guard the recursion with the seen
+ // list so a self-referential table prints a marker instead of looping forever.
+ // (pairs are only cyclic via low-level poke, so we don't pay the cost there.)
+ bool cyc = typ(x) == tbl_q;
+ if (cyc) {
+  if (seen_member(f, off, x)) return gzputcs(f, "<cycle>");
+  if (!g_ok(f = seen_push(f, off, x))) return f;
+  x = A(*seen_slot(f, off)); }   // seen_push may have GC'd; reload x from the slot it pushed
  switch (typ(x)) {
    default: __builtin_trap();
-   case two_q: return gzput_two(f, x);
-   case vec_q: return gzput_vec(f, x);
-   case sym_q: return gzput_sym(f, x);
-   case tbl_q: return gzput_tbl(f, x);
-   case text_q: return gzput_str(f, x);
-   case big_q: return gzput_big(f, x); } }
+   case two_q:  f = gzput_two(f, x, off); break;
+   case vec_q:  f = gzput_vec(f, x); break;
+   case sym_q:  f = gzput_sym(f, x); break;
+   case tbl_q:  f = gzput_tbl(f, x, off); break;
+   case text_q: f = gzput_str(f, x); break;
+   case big_q:  f = gzput_big(f, x); break; }
+ if (cyc) seen_pop(f, off);
+ return f; }
 
+// Establish a fresh seen-list slot at the bottom of the print region, print, then
+// restore the original stack height (discarding the slot and the whole list).
 static g_inline struct g *gfputx(struct g *f, struct g_io *o, intptr_t x) {
- return g_core_of(f)->io = o, gzputx(f, x); }
+ struct g *c = g_core_of(f);
+ c->io = o;
+ uintptr_t base = topof(c) - c->sp;                 // original height (GC-invariant)
+ if (!g_ok(f = g_push(f, 1, nil))) return f;        // the seen-list slot
+ c = g_core_of(f);
+ f = gzputx(f, x, topof(c) - c->sp);                // offset of the slot from the top
+ c = g_core_of(f);
+ return c->sp = topof(c) - base, f; }               // restore original stack height
 
 // AI slop alert....
 //

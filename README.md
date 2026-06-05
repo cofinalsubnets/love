@@ -130,7 +130,14 @@ source `,(\ x (+ x 1))`, and a partial application / closure as the base applied
 to its captured arguments `,(+ 1)`, `,((\ y x (+ x y)) 5)` (the `,` is only on the
 outermost form). A closure shows its captured variables as **leading parameters**
 of the base lambda (`y` above), matching the order they're applied, so it too reads
-back to an equal value. An opaque thread (a continuation) prints bare as `#<thread>`.
+back to an equal value. An opaque thread (a continuation) prints as `,hom@<addr>`.
+
+Values with no readable form still print as something the reader accepts (a `#`
+prefix is avoided, since `#` begins a comment): an opaque thread as `,hom@<addr>`, an
+anonymous symbol as `,sym@<addr>`, an unrecognized array as `,vec@<addr>:<t>.<r>`, and
+a self-referential table as `<cycle>` in place of the back-reference (cycle detection
+covers tables only). These parse — as the unquote `,hom@…`/`,sym@…`/`,vec@…` or the
+symbol `<cycle>` — but do not round-trip.
 
 ## code examples
 
