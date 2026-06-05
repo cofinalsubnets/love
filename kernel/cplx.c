@@ -5,10 +5,10 @@
 // box (G_VT_FLO), so it rides the existing vec allocation and copying GC for
 // free (g_vec_bytes already generalizes over type via g_vt_size). Complex is the
 // widest numeric tier (complex > float > int/bignum): the scalar arith slow
-// paths (core/math.c) divert here via g_vm_cplx_bin when either operand is
+// paths (kernel/math.c) divert here via g_vm_cplx_bin when either operand is
 // complex. It is sticky -- never demotes to a real, even when im is 0 -- and
 // unordered (< <= > >= on a complex operand return nil, handled for free since
-// cplxp is not in ISNUM). `=` IS defined (core/eq.c), bridging to reals.
+// cplxp is not in ISNUM). `=` IS defined (kernel/eq.c), bridging to reals.
 // See [[project-todo-math]] step 7.
 
 // (re, im) of an operand for the complex lane / equality: a complex contributes

@@ -115,7 +115,7 @@ enum g_vec_type {
  // never see it except via the explicit cplx branches (g_all_zero, the printer).
  g_vt_cplx, };
 #define G_VT_CPLX g_vt_cplx
-// Elementwise binary opcodes for g_vm_vbin (core/arr.c). The five arith codes
+// Elementwise binary opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
 // match the arith slow handlers; the five compare codes (>= VOP_LT) produce a
 // 0/-1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
 enum vop { VOP_ADD, VOP_SUB, VOP_MUL, VOP_QUOT, VOP_REM,
@@ -143,7 +143,7 @@ g_vm_t g_vm_kcall,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
  g_vm_sin, g_vm_cos, g_vm_tan, g_vm_atan, g_vm_atan2,
  g_vm_sqrt, g_vm_exp, g_vm_log, g_vm_pow,
- // Step 7 -- complex (core/cplx.c). g_vm_cplx_bin (declared apart, below) is
+ // Step 7 -- complex (kernel/cplx.c). g_vm_cplx_bin (declared apart, below) is
  // the arithmetic lane the scalar arith slow paths divert into.
  g_vm_cplx, g_vm_cplxp, g_vm_re, g_vm_im, g_vm_conj, g_vm_abs, g_vm_carg,
  g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
@@ -159,7 +159,7 @@ g_vm_t g_vm_kcall,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
  g_vm_fputn, g_vm_fread,
- // Step 5a -- typed multi-rank arrays (core/arr.c). g_vm_vbin is the shared
+ // Step 5a -- typed multi-rank arrays (kernel/arr.c). g_vm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  g_vm_arr, g_vm_arrl, g_vm_arank, g_vm_alen, g_vm_ashape, g_vm_atype,
  g_vm_asum, g_vm_aprod, g_vm_amax, g_vm_amin, g_vm_aall, g_vm_aany;
@@ -171,7 +171,7 @@ g_vm_t g_vm_kcall,
 g_vm(g_vm_vbin, int);
 g_vm(g_vm_vmap1, g_flo_t (*)(g_flo_t));
 g_vm(g_vm_vmap2, g_flo_t (*)(g_flo_t, g_flo_t));
-// Complex arithmetic lane (core/cplx.c): the scalar arith slow paths divert
+// Complex arithmetic lane (kernel/cplx.c): the scalar arith slow paths divert
 // here when either operand is complex; vop selects add/sub/mul/quot (rem -> nil).
 g_vm(g_vm_cplx_bin, int);
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
@@ -237,7 +237,7 @@ struct g *g_big_read_dec(struct g*);        // sp[0] [+-]?digits token -> canoni
 static g_inline bool flop(word _) {
   return vecp(_) && vec(_)->rank == 0 && vec(_)->type == G_VT_FLO; }
 // Wide-integer box: a rank-0 G_VT_INT scalar vec. Arises only from
-// transparent fixnum overflow (core/math.c); never holds a value that
+// transparent fixnum overflow (kernel/math.c); never holds a value that
 // fits the fixnum tag (canonical demotion keeps box and fixnum ranges
 // disjoint), so boxp and nump never both hold for the same number.
 static g_inline bool boxp(word _) {

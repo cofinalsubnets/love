@@ -1,4 +1,4 @@
-#include "../core/i.h"
+#include "../kernel/i.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

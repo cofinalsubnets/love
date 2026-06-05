@@ -1,5 +1,5 @@
 #include "pd_api.h"
-#include "../core/i.h"
+#include "../kernel/i.h"
 #include "cb.h"
 #include <limits.h>
 #include <math.h>

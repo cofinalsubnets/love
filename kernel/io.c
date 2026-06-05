@@ -336,7 +336,7 @@ static struct g *gzputcs(struct g *f, char const *s) {
  for (; g_ok(f) && *s; s++) f = gzputc(f, *s);
  return f; }
 
-// --- partial-application introspection (mirrors core/vm.c g_vm_cur/g_vm_unc) ---
+// --- partial-application introspection (mirrors kernel/vm.c g_vm_cur/g_vm_unc) ---
 // A partial-app closure is a thread whose head is g_vm_unc (one more arg wanted)
 // or [g_vm_cur n][g_vm_unc …] (more wanted). Each g_vm_unc cell holds a captured
 // arg at [1] and a link at [2] that points either to the next (older) closure's
@@ -655,9 +655,9 @@ static struct g* g_z_getc(struct g*f) {
 // result. Everything lives on the gwen stack so GC relocates it across the allocs
 // that reading does.
 
-static struct g *push_frame(struct g *f) {     // push an empty (head . tail) accumulator
+static g_inline struct g *push_frame(struct g *f) {     // push an empty (head . tail) accumulator
  return gxl(gxl(g_push(f, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
-static struct g *push_wrap(struct g *f, char const *nom) {
+static g_inline struct g *push_wrap(struct g *f, char const *nom) {
  return gxl(intern(g_strof(f, nom))); }        // ctx' = (wrapsym . ctx)
 
 static struct g *gz_parse(struct g *f, bool multi) {

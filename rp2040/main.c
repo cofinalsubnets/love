@@ -9,7 +9,7 @@
 // GPIO bifs so gwen programs can blink LEDs and read pins.
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
-#include "../core/i.h"          // g.h + G_WAIT_FDS_MAX and the cooperative-wait prototypes
+#include "../kernel/i.h"          // g.h + G_WAIT_FDS_MAX and the cooperative-wait prototypes
 
 const uint LED_PIN = 25;        // onboard LED, lit once boot succeeds
 

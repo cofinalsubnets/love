@@ -1,2 +1,2 @@
-idf_component_register(SRCS "esp.c" "../../g/g.c"
-                    INCLUDE_DIRS "../../g")
+idf_component_register(SRCS "esp.c" "../../kernel/g.c"
+                    INCLUDE_DIRS "../../kernel")
