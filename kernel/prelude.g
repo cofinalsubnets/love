@@ -10,7 +10,7 @@
    (!= a b) (? (= a b) 0 -1)
    AA (co A A) AB (co A B)
    BA (co B A) BB (co B B))
-; array element-type codes for `arr` (core/i.h enum g_vec_type)
+; array element-type codes for `arr` (kernel/i.h enum g_vec_type)
 (: i8 0 i16 1 i32 2 i64 3 f32 4 f64 5)
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
 (: i (cplx 0 1))

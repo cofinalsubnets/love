@@ -24,31 +24,31 @@ $(m):
 # compared.
 test_gen_vt: | $(m)
 	@echo TEST gen_data_vt.g
-	@for o in `find $(R)/host/b $(R)/playdate/b $(R)/kernel/b -name vt.o 2>/dev/null`; do \
-	  python3 $(R)/tools/py/gen_data_vt.py $$o | sed 's@gen_data_vt\.py@gen_data_vt.g@' > $(R)/host/b/.vt.py.h; \
-	  $(m) $(R)/tools/gen_data_vt.$x $$o > $(R)/host/b/.vt.g.h; \
-	  cmp -s $(R)/host/b/.vt.py.h $(R)/host/b/.vt.g.h && echo "  ok   $$o" \
-	    || { echo "  FAIL $$o"; rm -f $(R)/host/b/.vt.py.h $(R)/host/b/.vt.g.h; exit 1; }; \
-	done; rm -f $(R)/host/b/.vt.py.h $(R)/host/b/.vt.g.h
+	@for o in `find $(R)/b/host $(R)/b/playdate $(R)/b/free -name vt.o 2>/dev/null`; do \
+	  python3 $(R)/tools/py/gen_data_vt.py $$o | sed 's@gen_data_vt\.py@gen_data_vt.g@' > $(R)/b/host/.vt.py.h; \
+	  $(m) $(R)/tools/gen_data_vt.$x $$o > $(R)/b/host/.vt.g.h; \
+	  cmp -s $(R)/b/host/.vt.py.h $(R)/b/host/.vt.g.h && echo "  ok   $$o" \
+	    || { echo "  FAIL $$o"; rm -f $(R)/b/host/.vt.py.h $(R)/b/host/.vt.g.h; exit 1; }; \
+	done; rm -f $(R)/b/host/.vt.py.h $(R)/b/host/.vt.g.h
 
 # elf2efi.g vs py/elf2efi.py over every EFI ELF present (riscv64/loongarch64).
-# Build them first with `make -C kernel EFI=1 a=riscv64` (and a=loongarch64).
+# Build them first with `make -C free EFI=1 a=riscv64` (and a=loongarch64).
 test_elf2efi: | $(m)
 	@echo TEST elf2efi.g
-	@for e in `find $(R)/kernel/b -name '*.efi.elf' 2>/dev/null`; do \
-	  python3 $(R)/tools/py/elf2efi.py $$e $(R)/host/b/.efi.py; \
-	  $(m) $(R)/tools/elf2efi.$x $$e $(R)/host/b/.efi.g; \
-	  cmp -s $(R)/host/b/.efi.py $(R)/host/b/.efi.g && echo "  ok   $$e" \
-	    || { echo "  FAIL $$e"; rm -f $(R)/host/b/.efi.py $(R)/host/b/.efi.g; exit 1; }; \
-	done; rm -f $(R)/host/b/.efi.py $(R)/host/b/.efi.g
+	@for e in `find $(R)/b/free -name '*.efi.elf' 2>/dev/null`; do \
+	  python3 $(R)/tools/py/elf2efi.py $$e $(R)/b/host/.efi.py; \
+	  $(m) $(R)/tools/elf2efi.$x $$e $(R)/b/host/.efi.g; \
+	  cmp -s $(R)/b/host/.efi.py $(R)/b/host/.efi.g && echo "  ok   $$e" \
+	    || { echo "  FAIL $$e"; rm -f $(R)/b/host/.efi.py $(R)/b/host/.efi.g; exit 1; }; \
+	done; rm -f $(R)/b/host/.efi.py $(R)/b/host/.efi.g
 
 # vmret.g vs py/vmret.py over the host binaries plus any kernel arch ELFs
 # present (each arch exercises a different ret matcher + the objdump choice).
 test_vmret: | $(m)
 	@echo TEST vmret.g
-	@for e in $(R)/host/b/gl $(R)/host/b/gl0 `find $(R)/kernel/b -name 'gl-*.elf' 2>/dev/null`; do \
-	  python3 $(R)/tools/py/vmret.py $$e > $(R)/host/b/.vmret.py 2>&1; \
-	  $(m) $(R)/tools/vmret.$x $$e > $(R)/host/b/.vmret.g 2>&1; \
-	  cmp -s $(R)/host/b/.vmret.py $(R)/host/b/.vmret.g && echo "  ok   $$e" \
-	    || { echo "  FAIL $$e"; diff $(R)/host/b/.vmret.py $(R)/host/b/.vmret.g; rm -f $(R)/host/b/.vmret.py $(R)/host/b/.vmret.g; exit 1; }; \
-	done; rm -f $(R)/host/b/.vmret.py $(R)/host/b/.vmret.g
+	@for e in $(R)/b/host/gl $(R)/b/host/gl0 `find $(R)/b/free -name 'gl-*.elf' 2>/dev/null`; do \
+	  python3 $(R)/tools/py/vmret.py $$e > $(R)/b/host/.vmret.py 2>&1; \
+	  $(m) $(R)/tools/vmret.$x $$e > $(R)/b/host/.vmret.g 2>&1; \
+	  cmp -s $(R)/b/host/.vmret.py $(R)/b/host/.vmret.g && echo "  ok   $$e" \
+	    || { echo "  FAIL $$e"; diff $(R)/b/host/.vmret.py $(R)/b/host/.vmret.g; rm -f $(R)/b/host/.vmret.py $(R)/b/host/.vmret.g; exit 1; }; \
+	done; rm -f $(R)/b/host/.vmret.py $(R)/b/host/.vmret.g

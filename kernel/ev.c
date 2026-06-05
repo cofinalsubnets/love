@@ -265,16 +265,13 @@ static g_noinline Ana(analyze) {
 
 static struct g *c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp) {
  union u *k, *ip;
+ word ops = exp;             // the full operand list (params… body) for the stored src
  struct env *d = NULL;
- MM(f, &d); MM(f, &exp);
+ MM(f, &d); MM(f, &exp); MM(f, &ops);
  f = enscope(f, *c, exp, imps);
 
  if (g_ok(f)) {
   d = (struct env*) pop1(f);
-  // stash the source \-expr `(\ params… body)` for the printer (gzput_fn).
-  // built before d->args is overwritten with the parsed parameter list below.
-  f = gxl(pushl(g_push(f, 1, d->args)));
-  if (g_ok(f)) d->src = pop1(f);
   exp = d->args;
   int n = 0; // push exp args onto stack
   for (; twop(B(exp)); exp = B(exp), n++) f = g_push(f, 1, A(exp));
@@ -287,13 +284,26 @@ static struct g *c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t 
   incl(d, 4);
   f = g_push(f, 2, c1_cur, d);
   f = analyze(f, &d, exp);
+  // stash the source \-expr for the printer (gzput_fn), built AFTER analyze so the
+  // captured imports (d->imps) are known. ops is (params… body); prepend the
+  // imports as leading params (the frame layout is [imps, args]) so a closure
+  // prints as `(\ imps… params… body)` applied to its captures and round-trips.
+  if (g_ok(f)) {
+   word l = d->imps; int ni = 0;
+   MM(f, &l);
+   for (; twop(l); l = B(l), ni++) f = g_push(f, 1, A(l));  // push imp1..impN
+   UM(f);
+   f = g_push(f, 1, ops);                                   // tail = (params… body)
+   while (ni-- > 0) f = gxr(f);                             // fold: imps ++ ops
+   f = gxl(pushl(f));                                       // cons '\ onto the front
+   if (g_ok(f)) d->src = pop1(f); }
   if (g_ok(f = g_push(f, 2, c1_ret, d)))
     ip = f->ip,
     avec(f, ip, f = c1(f, &d)); }
 
  if (g_ok(f)) k = f->ip, f->ip = ip, f = gxl(g_push(f, 2, k, d->imps));
 
- return UM(f), UM(f), f; }
+ return UM(f), UM(f), UM(f), f; }
 
 static Ana(c0_cond_exit) { return
  incl(*c, 3),

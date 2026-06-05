@@ -2,7 +2,7 @@
 #define _g_vt_h
 // Default data-kind recovery (see i.h for the contract). The five DATA_SENTINEL
 // bodies (flow.c) are laid out contiguously and in enum order in the
-// .gwen_data_vt section by core/vt.ld (host) or the equivalent inline
+// .gwen_data_vt section by kernel/vt.ld (host) or the equivalent inline
 // block in each frontend's own full linker script (kernel/, playdate/). g_typ()
 // reads a kind straight out of an ap's slot index: every sentinel shares one
 // body and size, so they tile the section evenly and the slot is

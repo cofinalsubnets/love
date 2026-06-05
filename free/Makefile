@@ -1,21 +1,27 @@
-# Kernel build. Run from project root via `make k`, or directly via
-# `cd k && make`. Outputs (objects, kernel ELF/EFI, ISO/HDD/EFI images)
-# all land in b/ under this cwd. Downloaded blobs (Limine, edk2-ovmf)
-# live in dl/ under this cwd. The Limine vs UEFI direct-boot toggle
-# is `EFI=1`.
+# Freestanding kernel build. Run from project root via `make kernel`, or
+# directly via `cd free && make`. Outputs (objects, kernel ELF/EFI, ISO/HDD/
+# EFI images) all land in $(R)/b/free/. Downloaded blobs (Limine, edk2-ovmf)
+# live in dl/ under this cwd. The Limine vs UEFI direct-boot toggle is `EFI=1`.
+#
+# Shared, arch-independent glue (main.c, k.h, k_boot.h, include/, limine/,
+# uefi/) lives here in free/; per-arch code (arch.c, *.S, *.lds, efi_main.c)
+# lives in the top-level <arch>/ folders, reached as $(R)/$a/.
 R := ..
 include $(R)/common.mk
+
+# This frontend's build output directory under the top-level b/.
+o = $(R)/b/free
 
 # --- sources ---------------------------------------------------------
 # The Limine build picks up arch.c + the nasm bits and omits the efi_*.c
 # files. The EFI build (EFI=1) does the opposite. Shared sources from
-# root (g/, f/, libc/) come in via common.mk; local kernel sources are
-# reached from this cwd (k/).
+# root (kernel/, font/, libc/) come in via common.mk; the arch-independent
+# glue (main.c) is local to free/, and per-arch sources live in $(R)/$a/.
 
 # Default the cross toolchain to clang + lld: one multi-target pair covers
 # every arch (Limine and EFI) with no per-arch GCC. Override CC/LD on the
 # command line for a GCC cross toolchain, e.g.
-#   make k a=aarch64 CC=aarch64-linux-gnu-gcc LD=aarch64-linux-gnu-ld
+#   make kernel a=aarch64 CC=aarch64-linux-gnu-gcc LD=aarch64-linux-gnu-ld
 # (command-line assignments beat these). CC_IS_CLANG is detected from the
 # chosen CC so the clang-only -target triples never reach a gcc.
 CC := clang
@@ -32,38 +38,43 @@ endif
 # gone). arch.c + the per-arch .S come along; the SysV-tagged C callees
 # keep the asm-to-C boundary correct under MS x64 on x86_64 (aarch64's
 # default ABI matches the asm's call convention either way).
-k_local_c = $(wildcard *.c $a/*.c)
+k_arch_c = $(wildcard $(R)/$a/*.c)
 k_asm =
 else
-k_local_c = $(filter-out $a/efi_%.c,$(wildcard *.c $a/*.c))
-k_asm = $(wildcard $a/*.asm)
+k_arch_c = $(filter-out $(R)/$a/efi_%.c,$(wildcard $(R)/$a/*.c))
+k_asm = $(wildcard $(R)/$a/*.asm)
 endif
+# main.c (the arch-independent glue) is local to free/; shared runtime is
+# kernel/ + font/ + libc/; per-arch C/asm comes from $(R)/$a/.
+k_free_c = $(wildcard *.c)
 k_shared_c = $(g_c) $(f_c) $(c_c)
-k_S = $(wildcard $a/*.S)
-k_h = $(g_h) $(wildcard *.h $a/*.h)
+k_S = $(wildcard $(R)/$a/*.S)
+k_h = $(g_h) $(wildcard *.h $(R)/$a/*.h)
 
-# Output objects live under b/$a/ for the Limine build and b/$a-efi/ for
-# the EFI build, so the two coexist (different ABI/format objects).
+# Output objects live under $(o)/$a/ for the Limine build and $(o)/$a-efi/
+# for the EFI build, so the two coexist (different ABI/format objects).
 ifdef EFI
-k_odir = b/$a-efi
+k_odir = $(o)/$a-efi
 else
-k_odir = b/$a
+k_odir = $(o)/$a
 endif
 
-# Split into shared (root) and local (cwd k/) so the patsubst forms are
-# unambiguous; both groups land under k_odir.
+# Split into shared (root) and local (cwd free/) so the patsubst forms are
+# unambiguous; all groups land under k_odir. Shared and arch sources are both
+# $(R)-relative; only main.c is cwd-local.
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
-k_local_o = $(k_local_c:%.c=$(k_odir)/%.o)
-k_S_o = $(k_S:%.S=$(k_odir)/%.o)
-k_asm_o = $(k_asm:%.asm=$(k_odir)/%.o)
-k_o = $(k_shared_o) $(k_local_o) $(k_S_o) $(k_asm_o)
+k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
+k_free_o = $(k_free_c:%.c=$(k_odir)/%.o)
+k_S_o = $(k_S:$(R)/%.S=$(k_odir)/%.o)
+k_asm_o = $(k_asm:$(R)/%.asm=$(k_odir)/%.o)
+k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
 
 # Reflected out of this arch's vt.o so g_typ() shifts instead of doing the
 # portable header's two link-time divides (see tools/gen_data_vt.g). Every C
 # object depends on it; vt.o itself bootstraps from the portable header (no
 # $(vt_h) prerequisite -- that would be circular -- and it never calls g_typ).
 vt_h = $(k_odir)/vt.h
-# Run through the host interpreter $m (= $(R)/host/b/gl); built on demand via
+# Run through the host interpreter $m (= $(R)/b/host/gl); built on demand via
 # the host-gl recursion below. py/gen_data_vt.py is the cross-checked reference
 # (make test_tools).
 gen_vt = $(R)/tools/gen_data_vt.$x
@@ -71,13 +82,13 @@ gen_vt = $(R)/tools/gen_data_vt.$x
 # --- flags -----------------------------------------------------------
 kcflags = $(g_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
-kldflags := -static -nostdlib --gc-sections -T $a/$a.lds -z max-page-size=0x1000
+kldflags := -static -nostdlib --gc-sections -T $(R)/$a/$a.lds -z max-page-size=0x1000
 # -I$(k_odir) is first so this arch's generated vt.h (reflected out of
-# its own vt.o below) shadows the portable -I$(R)/core/vt.h. It is
+# its own vt.o below) shadows the portable -I$(R)/kernel/vt.h. It is
 # per-arch because the sentinel body -- and so its stride -- differs by target.
 kcppflags := \
   -I$(k_odir) \
-  -I. -I$(R)/host/b -I$(R)/font -I$(R)/core \
+  -I. -I$(R)/b/host -I$(R)/font -I$(R)/kernel \
   -Iinclude \
   -isystem include \
   $(kcppflags) \
@@ -152,10 +163,10 @@ k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword 
 
 # --- targets ---------------------------------------------------------
 .PHONY: default clean distclean
-default: b/$n-$a.elf
+default: $(o)/$n-$a.elf
 
 clean:
-	rm -rf b
+	rm -rf $(o)
 
 distclean: clean
 	rm -rf dl
@@ -164,12 +175,12 @@ distclean: clean
 # the .g sources so editing the prelude re-triggers the regen; without these
 # prereqs the rule only fires when the header is missing, so a stale boot.h
 # silently survives boot.g edits and the kernel boots an old prelude.
-$(R)/host/b/boot.h: $(R)/core/prelude.g $(R)/core/ev.g $(R)/tools/mkboot.g
-$(R)/host/b/repl.h: $(R)/core/repl.g
-$(R)/host/b/boot.h $(R)/host/b/repl.h:
-	@$(MAKE) -C $(R)/host b/$(notdir $@)
+$(R)/b/host/boot.h: $(R)/kernel/prelude.g $(R)/kernel/ev.g $(R)/tools/mkboot.g
+$(R)/b/host/repl.h: $(R)/kernel/repl.g
+$(R)/b/host/boot.h $(R)/b/host/repl.h:
+	@$(MAKE) -C $(R)/host $(notdir $@)
 
-b/$n-$a.elf: $a/$a.lds $(k_o)
+$(o)/$n-$a.elf: $(R)/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(LD) $(kldflags) $(k_o) -o $@
@@ -191,16 +202,16 @@ b/$n-$a.elf: $a/$a.lds $(k_o)
 kefi_elfmach_riscv64     = elf64lriscv
 kefi_elfmach_loongarch64 = elf64loongarch
 ifneq ($(filter $a,riscv64 loongarch64),)
-b/$n-$a.efi: $(k_o) $a/$a.efi.lds $(R)/tools/elf2efi.$x | $(m)
+$(o)/$n-$a.efi: $(k_o) $(R)/$a/$a.efi.lds $(R)/tools/elf2efi.$x | $(m)
 	@echo LD	$(@:.efi=.efi.elf)
 	@mkdir -p "$(dir $@)"
 	@$(LD) -m $(kefi_elfmach_$a) --no-relax -static -nostdlib --gc-sections \
-	  --emit-relocs -T $a/$a.efi.lds -e efi_main \
+	  --emit-relocs -T $(R)/$a/$a.efi.lds -e efi_main \
 	  $(k_o) -o $(@:.efi=.efi.elf)
 	@echo EFI	$@
 	@$(m) $(R)/tools/elf2efi.$x $(@:.efi=.efi.elf) $@
 else
-b/$n-$a.efi: $(k_o)
+$(o)/$n-$a.efi: $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(CC) $(kcflags) $(kcflags_$a) $(kcc_if_clang) -nostdlib -fuse-ld=lld \
@@ -209,8 +220,8 @@ b/$n-$a.efi: $(k_o)
 endif
 
 # riscv64/loongarch64 stamp their PE32+ wrapper with the gwen tool
-# tools/elf2efi.g, run through the host interpreter $m (= $(R)/host/b/gl). Build
-# it on demand (recursively) so a standalone `make -C kernel EFI=1 a=riscv64`
+# tools/elf2efi.g, run through the host interpreter $m (= $(R)/b/host/gl). Build
+# it on demand (recursively) so a standalone `make -C free EFI=1 a=riscv64`
 # works without a prior `make host`. It is an order-only prereq of the .efi
 # above, so refreshing gl never forces a kernel relink; gl reads the cross-arch
 # ELF purely as bytes, so the host-arch interpreter is the right one to run.
@@ -220,37 +231,37 @@ host-gl:
 $(m): host-gl
 
 # The data-sentinel TU bootstraps from the portable header (no $(vt_h)
-# prerequisite -- circular, since b/.../vt.h is reflected out of it). Its
+# prerequisite -- circular, since $(k_odir)/vt.h is reflected out of it). Its
 # explicit recipe overrides the shared-source pattern rule below; on a clean
 # build vt.h does not exist yet, so -I$(k_odir) finds nothing and the
-# compile falls through to the portable core/vt.h.
-$(k_odir)/core/vt.o: $(R)/core/vt.c $(k_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
+# compile falls through to the portable kernel/vt.h.
+$(k_odir)/kernel/vt.o: $(R)/kernel/vt.c $(k_h) $(R)/b/host/boot.h $(R)/b/host/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-$(vt_h): $(k_odir)/core/vt.o $(gen_vt) | $(m)
+$(vt_h): $(k_odir)/kernel/vt.o $(gen_vt) | $(m)
 	@echo GEN	$@
 	@$(m) $(gen_vt) $< -o $@
 
-# Compile shared C sources from g/ and f/.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(vt_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
+# Compile shared C sources from kernel/ and font/ and the per-arch $(R)/$a/.
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(vt_h) $(R)/b/host/boot.h $(R)/b/host/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-# Compile local kernel C sources (k/*.c, k/$a/*.c).
-$(k_odir)/%.o: %.c $(k_h) $(vt_h) $(R)/host/b/boot.h $(R)/host/b/repl.h
+# Compile local free/*.c sources (main.c).
+$(k_odir)/%.o: %.c $(k_h) $(vt_h) $(R)/b/host/boot.h $(R)/b/host/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-$(k_odir)/%.o: %.S $(k_h)
+$(k_odir)/%.o: $(R)/%.S $(k_h)
 	@echo AS	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-$(k_odir)/%.o: %.asm $(k_h)
+$(k_odir)/%.o: $(R)/%.asm $(k_h)
 	@echo AS	$@
 	@mkdir -p "$(dir $@)"
 	@nasm $< -o $@ $(k_nasmflags)
@@ -265,25 +276,25 @@ k_xorriso = xorriso -as mkisofs -quiet -R -r -J \
   -efi-boot-part --efi-boot-image --protective-msdos-label \
   $(k_xorriso_$a)
 
-b/$n-$a.iso: b/$n-$a.elf dl/limine/limine limine/limine.conf
+$(o)/$n-$a.iso: $(o)/$n-$a.elf dl/limine/limine limine/limine.conf
 	@echo MK $@
-	@rm -rf b/iso_root
-	@mkdir -p b/iso_root/boot
-	@cp $< b/iso_root/boot/kernel
-	@mkdir -p b/iso_root/boot/limine
-	@cp limine/limine.conf b/iso_root/boot/limine/
-	@mkdir -p b/iso_root/EFI/BOOT
-	@cp dl/limine/limine-uefi-cd.bin b/iso_root/boot/limine/
-	@cp dl/limine/limine-bios.sys dl/limine/limine-bios-cd.bin b/iso_root/boot/limine/
-	@cp dl/limine/BOOTX64.EFI dl/limine/BOOTIA32.EFI b/iso_root/EFI/BOOT/
-	@cp dl/limine/BOOTAA64.EFI b/iso_root/EFI/BOOT/
-	@cp dl/limine/BOOTRISCV64.EFI b/iso_root/EFI/BOOT/
-	@cp dl/limine/BOOTLOONGARCH64.EFI b/iso_root/EFI/BOOT/
-	$(k_xorriso) b/iso_root -o $@
+	@rm -rf $(o)/iso_root
+	@mkdir -p $(o)/iso_root/boot
+	@cp $< $(o)/iso_root/boot/kernel
+	@mkdir -p $(o)/iso_root/boot/limine
+	@cp limine/limine.conf $(o)/iso_root/boot/limine/
+	@mkdir -p $(o)/iso_root/EFI/BOOT
+	@cp dl/limine/limine-uefi-cd.bin $(o)/iso_root/boot/limine/
+	@cp dl/limine/limine-bios.sys dl/limine/limine-bios-cd.bin $(o)/iso_root/boot/limine/
+	@cp dl/limine/BOOTX64.EFI dl/limine/BOOTIA32.EFI $(o)/iso_root/EFI/BOOT/
+	@cp dl/limine/BOOTAA64.EFI $(o)/iso_root/EFI/BOOT/
+	@cp dl/limine/BOOTRISCV64.EFI $(o)/iso_root/EFI/BOOT/
+	@cp dl/limine/BOOTLOONGARCH64.EFI $(o)/iso_root/EFI/BOOT/
+	$(k_xorriso) $(o)/iso_root -o $@
 	@dl/limine/limine bios-install $@
-	@rm -rf b/iso_root
+	@rm -rf $(o)/iso_root
 
-b/$n-$a.hdd: b/$n-$a.elf dl/limine/limine limine/limine.conf
+$(o)/$n-$a.hdd: $(o)/$n-$a.elf dl/limine/limine limine/limine.conf
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
@@ -309,7 +320,7 @@ k_efi_short_x86_64 = BOOTX64
 k_efi_short_aarch64 = BOOTAA64
 k_efi_short_riscv64 = BOOTRISCV64
 k_efi_short_loongarch64 = BOOTLOONGARCH64
-b/$n-$a-efi.img: b/$n-$a.efi
+$(o)/$n-$a-efi.img: $(o)/$n-$a.efi
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@ 2>/dev/null
@@ -340,17 +351,17 @@ k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
 .PHONY: run run-hdd run-$a run-hdd-$a run-headless run-efi run-efi-headless
 run: run-$a
 run-hdd: run-hdd-$a
-run-$a: b/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
+run-$a: $(o)/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -cdrom $<
-run-hdd-$a: b/$n-$a.hdd dl/edk2-ovmf/ovmf-code-$a.fd
+run-hdd-$a: $(o)/$n-$a.hdd dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -hda $<
 # headless: no display, COM1 console on stdio (see k_qemu_x86_64) -- so
 # the gwen repl can be driven over a pipe. -no-reboot exits on k_reset.
-run-headless: b/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
+run-headless: $(o)/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -cdrom $< -display none -no-reboot
-run-efi: b/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
+run-efi: $(o)/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) $(k_efi_drive_$a)
-run-efi-headless: b/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
+run-efi-headless: $(o)/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) $(k_efi_drive_$a) -display none -no-reboot
 
 # --- downloads -------------------------------------------------------

@@ -5,6 +5,7 @@
   g_vm_cur (peek 0 +)
   g_vm_ret0 (peek 1 car)
   (sco p a i) (put 'par p (put 'imp i (put 'arg a (new 0))))
+  (rootc c) (? (get 0 'par c) (rootc (get 0 'par c)) c)        ; top scope: where wev stashes 'src
   (p2 i x k) (poke -1 i (poke -1 x k))
   (em1 x k n) (poke -1 x (k (+ 1 n)))
   (em2 i x k n) (poke -1 i (poke -1 x (k (+ 2 n))))
@@ -70,7 +71,10 @@
     (atomp x) x
     (: h (car x) (?
      (= h '\) (? (atomp (cddr x)) x                          ; quote
-                (: r (lp x) (cons '\ (cat (car r) (list (wx (cdr r) (cat (car r) bnd)))))))
+                (: r (lp x)
+                   lam (cons '\ (cat (car r) (list (wx (cdr r) (cat (car r) bnd)))))
+                   _ (push c 'src (cons (cdr lam) x))         ; tagged-body -> surface src for ala
+                   lam))
      (= h ':) (? (atomp (cddr x)) (cons ': (list (wx (cadr x) bnd)))
                  (cons ': (wxl (cdr x) bnd)))
      (= h '?) (cons '? (wxc (cdr x) bnd))
@@ -209,10 +213,16 @@
   ; lambda analyzer
   (ala c imp exp) (:
    d (sco c (init exp) imp)
-   s (cons '\ exp)                                  ; source \-expr (built before GC-y thread alloc)
    k (ana d (last exp) (k0s d))
    a (ary d)
    e ((? (= a 1) k (em2 g_vm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
+   ; source \-expr for the printer. take the SURFACE body wev stashed for this node
+   ; (keyed by the tagged exp) so iop/apx tags don't leak into the printed source;
+   ; fall back to exp if unrecorded. prepend the captured imports as leading params
+   ; (frame is [imps args]) so a closure prints as ,((\ y x …) capturedvals) and
+   ; round-trips through read+eval.
+   os (assq exp (get 0 'src (rootc c)))
+   s (cons '\ (cat (get 0 'imp d) (? os (cddr os) exp)))
    _ (poke -1 s e)                                  ; value[-1] = source \-expr
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
    (cons e (get 0 'imp d)))

@@ -2,8 +2,8 @@
 
 // The numeric-tower helpers (ISNUM / TOINT / TOFLO / BOX_REQ / FIX_MIN / FIX_MAX
 // / EMIT_INT / EMIT_FLO) and g_trunc / g_fmod now live in i.h, shared with the
-// elementwise array lane (core/arr.c) and the array element read in get
-// (core/tbl.c). They are unchanged; only their home moved.
+// elementwise array lane (kernel/arr.c) and the array element read in get
+// (kernel/tbl.c). They are unchanged; only their home moved.
 
 // Arithmetic is dispatched op-first: each operator is its own g_vm handler
 // (g_vm_add ... g_vm_rem) carrying an inlined both-fixnum fast path, and
