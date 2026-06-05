@@ -72,6 +72,13 @@ bifs(built_in_function);
 static g_vm(_g_vm_yield_c) { return Pack(f), f; }
 static union u yield_c[] = { {_g_vm_yield_c} };
 static struct g_def const def1[] = { bifs(biff) insts(i_entry)};
+
+// reverse-lookup a function value against the builtin table -> its source name,
+// or NULL. Used by the printer to render bifs (e.g. `+`) by name.
+char const *g_bif_name(intptr_t x) {
+ for (uintptr_t i = 0; i < LEN(def1); i++) if (def1[i].x == x) return def1[i].n;
+ return 0; }
+
 static struct g *g_trap_default(struct g *f) { return f; }
 
 static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {

@@ -42,7 +42,7 @@
    (rewrite_tok tok table) (?
     (atomp tok)            tok
     (nilp (cdr tok))       (car tok)
-    (= (car tok) '.)       tok
+    (&& (= (car tok) '\) (atomp (cddr tok))) tok ; one-operand \ is quote: pass through
     (= (car tok) 'prefix)  (cdr tok)
     (= (car tok) 'infix)   (infix_rewrite (cdr tok) table)
                            (infix_rewrite tok table))

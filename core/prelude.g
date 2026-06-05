@@ -87,8 +87,38 @@
 (:: 'let (\ a (cons ': a)))
 (:: 'if (\ a (cons '? a)))
 (:: 'cond (\ a (cons '? a)))
-; `(quote x)` -> `(. x)`: the CL/Scheme name for the `.` quote form (`'x` sugar).
-(:: 'quote (\ a (cons '. a)))
+; `(quote x)` -> `(\ x)`: the CL/Scheme name for the one-arg-lambda quote (`'x` sugar).
+(:: 'quote (\ a (cons '\ a)))
+
+; quasiquote: `tmpl with ,x (unquote) and ,@xs (unquote-splice). The reader emits
+; (qq tmpl), (uq x), (uqs xs). qqx/qql walk the template tracking nesting depth d:
+; a nested `qq increments d, a ,/,@ decrements it, and an unquote only FIRES at d=1
+; (the outermost quasiquote, R7RS) -- deeper ones are rebuilt literally. qqx returns
+; CODE that reconstructs the template (cons/cat over the spliced values). uq is also
+; bound to identity so a stray top-level ,x just evaluates its operand.
+(: (qqx t d) (?
+    (atomp t)       (list '\ t)                              ; atom: quote it
+    (= (car t) 'uq) (? (= d 1) (cadr t)                      ; fire: value as-is
+                       (list 'list ''uq (qqx (cadr t) (- d 1)))) ; rebuild literal uq
+    (= (car t) 'qq) (list 'list ''qq (qqx (cadr t) (+ d 1))) ; nested qq: walk one in
+                    (qql t d))                               ; other list
+   (qql t d) (?
+    (atomp t) (qqx t d)                                      ; nil / improper tail
+    (&& (twop (car t)) (= (caar t) 'uqs))
+     (? (= d 1) (list 'cat (cadr (car t)) (qql (cdr t) d))   ; fire splice
+        (list 'cons (list 'list ''uqs (qqx (cadr (car t)) (- d 1))) (qql (cdr t) d)))
+    (list 'cons (qqx (car t) d) (qql (cdr t) d))))           ; ordinary element
+(:: 'qq (\ a (qqx (car a) 1)))
+(: uq (\ x x))                                               ; stray ,x evaluates x
+
+; vec/tbl value constructors (also the read-back targets of the `,(vec …)` /
+; `,(tbl …)` printer forms). `vec` builds a rank-1 array from its element args,
+; inferring f64 if any arg is a float else i64; `tbl` builds a table from
+; alternating key/value args via nested `put`.
+(: (lvec l) (arrl (? (any flop l) f64 i64) (list (foldl (\ n _ (+ 1 n)) 0 l)) l))
+(:: 'vec (\ a (list 'lvec (cons 'list a))))
+(: (tblx a) (? (twop a) (list 'put (car a) (cadr a) (tblx (cddr a))) '(new 0)))
+(:: 'tbl (\ a (tblx a)))
 
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
 ; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body
@@ -102,18 +132,18 @@
 ; boxfix-core directly (zero conversion); c0 (ev.c) calls the flat `boxfix`
 ; wrapper below, which is just bpr+flatten around the same core. `lambp`/`dsug`
 ; are globals so `ale` shares them (lambda detection, binding desugaring).
-(: (lambp x) (? (twop x) (= '\ (car x)))
+(: (lambp x) (? (twop x) (&& (= '\ (car x)) (twop (cddr x)))) ; \ with >=1 param (one-operand \ is quote)
    (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d)))))
    (lp x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
    (ln bs) (? (atomp bs) 0 (atomp (cdr bs)) 0 (cons (car (dsug (car bs) 0)) (ln (cddr bs))))
-   ; w/wl: is symbol v free under a lambda in x / binding-list bs? \ / : shadow, . quote,
-   ; macro expansion (so :- ?- &&/|| are seen as the compiler sees them).
+   ; w/wl: is symbol v free under a lambda in x / binding-list bs? multi-operand \ and
+   ; : shadow; one-operand \ is quote (data, nothing free); macro expansion (so :- ?-
+   ; &&/|| are seen as the compiler sees them).
    (w v x bnd u) (?
     (symp x) (&& u (= x v) (nilp (memq v bnd)))
     (atomp x) 0
     (: h (car x) (?
-      (= h '.) 0
-      (= h '\) (: r (lp x) (w v (cdr r) (cat (car r) bnd) -1))
+      (= h '\) (? (atomp (cddr x)) 0 (: r (lp x) (w v (cdr r) (cat (car r) bnd) -1)))
       (= h ':) (wl v (cdr x) (cat (ln (cdr x)) bnd) u)
       (: m (? (symp h) (get 0 h macros) 0) (? m (w v (m (cdr x)) bnd u) (any (\ e (w v e bnd u)) x))))))
    (wl v bs bnd u) (?
@@ -134,8 +164,7 @@
     (symp x) (: p (assq x cs) (? p (list 'car (cdr p)) x))
     (atomp x) x
     (: h (car x) (?
-      (= h '.) x
-      (= h '\) (: r (lp x) (cons '\ (cat (car r) (list (sub (rmc cs (car r)) (cdr r))))))
+      (= h '\) (? (atomp (cddr x)) x (: r (lp x) (cons '\ (cat (car r) (list (sub (rmc cs (car r)) (cdr r)))))))
       (= h ':) (cons ': (subl (rmc cs (ln (cdr x))) (cdr x)))
       (: m (? (symp h) (get 0 h macros) 0) (? m (sub cs (m (cdr x))) (map (\ e (sub cs e)) x))))))
    (subl cs bs) (?

@@ -9,6 +9,10 @@
   (em1 x k n) (poke -1 x (k (+ 1 n)))
   (em2 i x k n) (poke -1 i (poke -1 x (k (+ 2 n))))
   (k0 c n) (poke -1 g_vm_ret (poke (+ 1 n) (ary c) (thd (+ 2 n))))
+  ; k0s: like k0 but reserves one extra LEADING cell (so the thread is shifted up
+  ; by one) for ala to stash the lambda's source \-expr at value[-1], where the
+  ; printer (gzput_fn) finds it. entry = cell 1, src = cell 0.
+  (k0s c n) (poke -1 g_vm_ret (poke (+ 2 n) (ary c) (thd (+ 3 n))))
   (ary c) (+ (len (get 0 'arg c)) (len (get 0 'imp c)))
   (pro f) (? (nump f) f (: a (peek 0 f) (?- f
    (= a g_vm_unc) (pro (seek -2 (peek 2 f)))
@@ -24,9 +28,8 @@
                    (atomp x) (kim x)
                    (: a (car x) b (cdr x) (?
                     (atomp b) (ana c a)
-                    (= a '. ) (kim (car b))
                     (= a '? ) (aco b)
-                    (= a '\ ) (ana c (? (atomp (cdr b)) (car b) (ala c 0 b)))
+                    (= a '\ ) (? (atomp (cdr b)) (kim (car b)) (ana c (ala c 0 b)))
                     (= a ': ) (ale (car b) (cdr b))
                     (: m (get 0 a macros)
                      (? m (ana c (m b)) (app a b))))))
@@ -128,10 +131,13 @@
   ; lambda analyzer
   (ala c imp exp) (:
    d (sco c (init exp) imp)
-   k (ana d (last exp) (k0 d))
+   s (cons '\ exp)                                  ; source \-expr (built before GC-y thread alloc)
+   k (ana d (last exp) (k0s d))
    a (ary d)
-   k (trim ((? (= a 1) k (em2 g_vm_cur a k)) 0))
-   (cons k (get 0 'imp d)))
+   e ((? (= a 1) k (em2 g_vm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
+   _ (poke -1 s e)                                  ; value[-1] = source \-expr
+   _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
+   (cons e (get 0 'imp d)))
 
   ; bxp: recursive-value boxing for one let's bindings (was prelude `boxprep`),
   ; called by l2x. Prepend a cell per recursively-captured value, rewrite each boxed

@@ -120,10 +120,16 @@
  (aall (= (arrl f64 '(2) '(2.0 3.0)) (sqrt (arrl f64 '(2) '(4.0 9.0)))))
  (= f64 (atype (sqrt (arr i64 '(3)))))  ; result is a float array
 
- ; --- print round-trip ---
- (= "[10 20 30]" (inspect (arrl i64 '(3) '(10 20 30))))
- (= "[[1 2] [3 4]]" (inspect (arrl i64 '(2 2) '(1 2 3 4))))
- (= "[1.5 2.5]" (inspect (arrl f64 '(2) '(1.5 2.5))))
+ ; --- print as `,`-prefixed constructor forms ---
+ ; rank-1 i64/f64 -> ,(vec …); other rank/type -> ,(arrl <type> '(shape) '(vals))
+ (= ",(vec 10 20 30)" (inspect (arrl i64 '(3) '(10 20 30))))
+ (= ",(arrl i64 '(2 2) '(1 2 3 4))" (inspect (arrl i64 '(2 2) '(1 2 3 4))))
+ (= ",(vec 1.5 2.5)" (inspect (arrl f64 '(2) '(1.5 2.5))))
+ (= ",(arrl i8 '(3) '(1 2 3))" (inspect (arrl i8 '(3) '(1 2 3))))
+ ; the printed form reads back to an equal array (`,` = uq = identity)
+ (aall (= (arrl i64 '(3) '(10 20 30)) (vec 10 20 30)))
+ (aall (= (arrl i64 '(2 2) '(1 2 3 4)) (arrl i64 '(2 2) '(1 2 3 4))))
+ (aall (= (arrl f64 '(2) '(1.5 2.5)) (vec 1.5 2.5)))
 
  ; --- non-conforming / non-numeric -> nil ---
  (nilp (+ (arr i64 '(3)) (arr i64 '(4))))   ; shapes [3] and [4] don't conform

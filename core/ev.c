@@ -13,6 +13,7 @@ struct env {
   branches, // stack for conditional alternate branch addresses
   exits,
   sites, // recursive-fn ref backpatch: list of (lams-entry . operand-cell)
+  src,  // a lambda's source \-expr, stashed at the thread head for printing (nil = none)
   end[]; }; // stach for conditional exit addresses
 
 #define Ana(n, ...) struct g *n(struct g *f, struct env **c, intptr_t x, ##__VA_ARGS__)
@@ -37,7 +38,7 @@ static struct g *enscope(struct g *f, struct env *par, word args, word imps) {
  f = g_push(f, 3, args, imps, par);
  if (g_ok(f = g_have(f, n))) {
   struct env *c = bump(f, n);
-  c->stack = c->branches = c->exits = c->lams = c->len = c->sites = nil;
+  c->stack = c->branches = c->exits = c->lams = c->len = c->sites = c->src = nil;
   c->args = f->sp[0], c->imps = f->sp[1], c->par = (struct env*) f->sp[2];
   *(f->sp += 2) = (word) tagthd((union u*)c, Width(struct env)); }
  return f; }
@@ -77,12 +78,20 @@ static g_noinline struct g *c0(struct g *f, g_vm_t *y) {
 #define Kp (f->ip)
 static Cata(c1) {
  uintptr_t l = getnum((*c)->len);
- f = g_have(f, l + Width(struct g_tag));
+ // a lambda carries its source \-expr: reserve one extra leading word for it so
+ // it sits at value[-1] (the printer's discriminator) and rides inside the thread
+ // span (head = src word) for free GC tracing. top-level/aux threads have no src.
+ uintptr_t extra = nilp((*c)->src) ? 0 : 1;
+ f = g_have(f, l + extra + Width(struct g_tag));
  if (g_ok(f)) {
-  union u *k = bump(f, l + Width(struct g_tag));
-  memset(k, -1, l * sizeof(word));
-  Kp = tagthd(k, l) + l;
-  if (g_ok(f = pull(f, c))) clip(f, Kp); }
+  union u *k = bump(f, l + extra + Width(struct g_tag));
+  memset(k, -1, (l + extra) * sizeof(word));
+  Kp = tagthd(k, l + extra) + l + extra;
+  if (g_ok(f = pull(f, c))) {           // pull emits l words (may GC); Kp now = entry
+   // read src AFTER all allocation: g_have/pull can GC and relocate the env's src.
+   if (extra) Kp[-1].x = (*c)->src,     // value[-1] = source \-expr
+              clip(f, Kp - 1);          // tag head spans [src .. body]; value stays Kp
+   else clip(f, Kp); } }
  return f; }
 
 static Cata(c1_yield) { return f; }
@@ -248,7 +257,6 @@ static g_noinline Ana(analyze) {
  // if it is a special form then do that
  if (symp(a) && nom(a)->nom && len(nom(a)->nom) == 1)
   switch (*txt(nom(a)->nom)) {
-   case '.': return ana_q(f, c, A(b));  // quote special form: head symbol `.`
    case '\\': return ana_l(f, c, b);
    case ':': return ana_d(f, c, b);
    case '?': return ana_c(f, c, b); }
@@ -263,6 +271,10 @@ static struct g *c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t 
 
  if (g_ok(f)) {
   d = (struct env*) pop1(f);
+  // stash the source \-expr `(\ params… body)` for the printer (gzput_fn).
+  // built before d->args is overwritten with the parsed parameter list below.
+  f = gxl(pushl(g_push(f, 1, d->args)));
+  if (g_ok(f)) d->src = pop1(f);
   exp = d->args;
   int n = 0; // push exp args onto stack
   for (; twop(B(exp)); exp = B(exp), n++) f = g_push(f, 1, A(exp));
@@ -376,7 +388,7 @@ static g_inline Ana(ana_2, word a, word b) {
 
 static g_inline Ana(ana_q) { return c0_ix(f, c, g_vm_quote, x); }
 static g_inline Ana(ana_l) {
-  if (!twop(B(x))) return analyze(f, c, A(x));
+  if (!twop(B(x))) return ana_q(f, c, A(x)); // one operand, no params: quote
   return f = c0_lambda(f, c, nil, x),
          analyze(f, c, g_ok(f) ? pop1(f) : 0); }
 static Ana(c0_cond_r);

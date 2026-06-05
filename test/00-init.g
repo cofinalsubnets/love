@@ -19,4 +19,4 @@
    (? v (term_text green_dot)
     (do (test_set 'fail (X x (test_get 'fail)))
        (term_text red_x))))
- (X 'do (map (\ l (L report (L '. l) l)) l)))))
+ (X 'do (map (\ l (L report (L '\ l) l)) l)))))

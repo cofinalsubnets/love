@@ -2,7 +2,7 @@
 (: (pat2pred p)
  (? (symp p) (const true)
     (atomp p) (= p)
-    (= '. (car p)) (= (cadr p))
+    (&& (= '\ (car p)) (atomp (cddr p))) (= (cadr p)) ; one-operand \ is quote: literal match
   (: p1 (pat2pred (car p))
      p2 (pat2pred (cdr p))
    (\ x (? (twop x) (? (p1 (car x)) (p2 (cdr x)))))))

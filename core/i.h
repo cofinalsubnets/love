@@ -180,6 +180,7 @@ g_vm(g_vm_cplx_bin, int);
 #include <vt.h>
 uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
 word g_tget(struct g*, word, word, struct g_tab*);
+char const *g_bif_name(intptr_t);
 #define vec(_) ((struct g_vec*)(_))
 #define str(_) ((struct g_str*)(_))
 #define tbl(_) ((struct g_tab*)(_))
@@ -456,7 +457,7 @@ extern struct g_port_vt const synth[];
 struct ti { struct g_io io; char const *t; word i; } ; // C string input
 static g_inline void *off_pool(struct g *f) {
  return f == f->pool ? (word*) f->pool + f->len : (word*) f->pool; }
-static g_inline struct g *pushq(struct g*f) { return intern(g_strof(f, ".")); }
+static g_inline struct g *pushq(struct g*f) { return intern(g_strof(f, "\\")); }
 static g_inline struct g *push0(struct g*f) { return g_push(f, 1, nil); }
 static g_inline size_t llen(word l) {
  size_t n = 0;

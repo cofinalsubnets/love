@@ -1,0 +1,21 @@
+; printing functions: like vec/tbl/cplx, a function is a `,`-prefixed value form
+; (reads back via uq=identity). builtins -> ,name; compiled lambdas -> ,(\ …)
+; source; partial applications/closures -> ,(base captured-args…).
+(assert
+ ; builtins print by name
+ (= ",+" (inspect +))
+ (= ",X" (inspect cons))              ; prelude `cons` is the bif `X`
+ ; a compiled lambda prints as its source \-expr
+ (= ",(\\ x x)" (inspect (\ x x)))
+ (= ",(\\ a b (+ a b))" (inspect (\ a b (+ a b))))
+ ; a one-arg lambda body that is itself quote still round-trips structurally
+ (= ",(\\ x 'y)" (inspect (\ x 'y)))
+ ; partial application of a builtin
+ (= ",(+ 1)" (inspect (+ 1)))
+ ; partial app of a lambda: only the OUTER form gets the comma, not the base
+ (= ",((\\ a b (+ a b)) 1)" (inspect ((\ a b (+ a b)) 1)))
+ ; a closure (captures a free var) is a partial application over its base lambda
+ (= ",((\\ x (+ x y)) 5)" (: y 5 (inspect (\ x (+ x y)))))
+ ; a prelude function prints its (non-trivial) source
+ (strp (inspect map))
+ (< 10 (len (inspect map))))

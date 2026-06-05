@@ -5,7 +5,7 @@
 
    prelude (reads (cadr argv))
    evaluator (reads (caddr argv))
-(putx (list ': 'egg (list '. (cat prelude evaluator))
+(putx (list ': 'egg (list '\ (cat prelude evaluator))
  '(go e z a) '(? a (go e (e (car a)) (cdr a)) z)
  't0 '(clock 0)
  'e '(go (go ev 0 egg) 0 egg)

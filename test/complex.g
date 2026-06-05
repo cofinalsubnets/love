@@ -12,11 +12,11 @@
    B100 (** 2 100))
 
 (assert
- ; --- constructor + printer round-trip (re ± |im| i) ---
- (= "0.0+1.0i" (inspect i))
- (= "2.0+3.0i" (inspect (cplx 2 3)))
- (= "2.0-3.0i" (inspect (cplx 2 -3)))
- (= "-1.0-2.0i" (inspect (cplx -1 -2)))
+ ; --- printer: ,(cplx re im) constructor form, reads back via uq=identity ---
+ (= ",(cplx 0.0 1.0)" (inspect i))
+ (= ",(cplx 2.0 3.0)" (inspect (cplx 2 3)))
+ (= ",(cplx 2.0 -3.0)" (inspect (cplx 2 -3)))
+ (= ",(cplx -1.0 -2.0)" (inspect (cplx -1 -2)))
 
  ; --- the defining identity, and that `=` bridges complex to a real ---
  (= (* i i) -1)                           ; i^2 = -1+0i, equal to the real -1
