@@ -103,12 +103,11 @@
 ; wrapper below, which is just bpr+flatten around the same core. `lambp`/`dsug`
 ; are globals so `ale` shares them (lambda detection, binding desugaring).
 (: (lambp x) (? (twop x) (= '\ (car x)))
-   (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d))))))
-(: (boxfix-core prs body) (:
+   (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d)))))
    (lp x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
    (ln bs) (? (atomp bs) 0 (atomp (cdr bs)) 0 (cons (car (dsug (car bs) 0)) (ln (cddr bs))))
-   ; w: is symbol v free in x and (u) under a lambda? \ / : shadowing, . quote,
-   ; macro expansion (so :- ?- let &&/|| are seen as the compiler sees them).
+   ; w/wl: is symbol v free under a lambda in x / binding-list bs? \ / : shadow, . quote,
+   ; macro expansion (so :- ?- &&/|| are seen as the compiler sees them).
    (w v x bnd u) (?
     (symp x) (&& u (= x v) (nilp (memq v bnd)))
     (atomp x) 0
@@ -121,7 +120,23 @@
     (atomp bs) 0
     (atomp (cdr bs)) (w v (car bs) bnd u)
     (: nd (dsug (car bs) (cadr bs)) (? (w v (cdr nd) bnd u) -1 (wl v (cddr bs) bnd u))))
-   ; sub: replace free refs to a boxed name (cs = alist name->cell) with (car cell)
+   ; boxset: value bindings whose init closes over the name (or a no-later sibling).
+   (boxset prs) (: nm (map car prs)
+     (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
+                      (any (\ p (w v (cdr p) 0 0)) (take (+ 1 (lidx v nm)) prs)))) nm))
+   (mkcs bx) (map (\ v (cons v (sym 0))) bx)
+   (cellbinds cs) (map (\ c (cons (cdr c) (list 'cons 0 0))) cs))
+; boxprep (ev.g `ale`): prepend a cell per boxed name, turn each boxed (v . init) into
+; (_ . (poke 1 init cell)) -- init UN-rewritten (ale redirects boxed refs to (car cell)
+; at analysis). Returns (prepped-prs . cs) or 0.
+(: (boxprep prs) (: bx (boxset prs)
+   (? (nilp bx) 0
+    (: cs (mkcs bx)
+       (one p) (? (memq (car p) bx) (cons '_ (list 'poke 1 (cdr p) (cdr (assq (car p) cs)))) p)
+     (cons (cat (cellbinds cs) (map one prs)) cs)))))
+; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
+; redirect). Returns (prepped-prs . body') or 0.
+(: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nilp (memq (car p) ns))) cs)
    (sub cs x) (?
     (symp x) (: p (assq x cs) (? p (list 'car (cdr p)) x))
@@ -135,19 +150,11 @@
     (atomp bs) bs
     (atomp (cdr bs)) (list (sub cs (car bs)))
     (: nd (dsug (car bs) (cadr bs)) (cons (car nd) (cons (sub cs (cdr nd)) (subl cs (cddr bs))))))
-   (: nm (map car prs)
-      bx (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
-                          (any (\ p (w v (cdr p) 0 0))
-                               (take (+ 1 (lidx v nm)) prs)))) nm)
+   (: bx (boxset prs)
       (? (nilp bx) 0
-       (: cs (map (\ v (cons v (sym 0))) bx)
-          (one p) (: d (sub cs (cdr p))
-                     (? (memq (car p) bx)
-                        (cons '_ (list 'poke 1 d (cdr (assq (car p) cs))))
-                        (cons (car p) d)))
-          es (map one prs)
-          (cons (cat (map (\ c (cons (cdr c) (list 'cons 0 0))) cs) es)
-                (sub cs body)))))))
+       (: cs (mkcs bx)
+          (one p) (: d (sub cs (cdr p)) (? (memq (car p) bx) (cons '_ (list 'poke 1 d (cdr (assq (car p) cs)))) (cons (car p) d)))
+          (cons (cat (cellbinds cs) (map one prs)) (sub cs body)))))))
 ; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that
 ; need no boxing pass through verbatim.

@@ -85,15 +85,21 @@
                    _ (pop 'stk)
                  (co p q))
   ; variable expression analyzer
+  ; boxof: walk scopes for a boxed name -> its cell sym (the 'box map l2x sets).
+  (boxof x s) (? s
+   (? (|| (memq x (get 0 'arg s)) (memq x (get 0 'stk s))) 0 ; shadowed by a closer binding
+    (: p (assq x (get 0 'box s)) (? p (cdr p) (boxof x (get 0 'par s))))))
   (ava x)
-   (: lfd (assq x (get 0 'lam c))
+   (: cell (boxof x c)
+    (? cell (ana c (list 'car cell)) ; boxed value ref -> (car cell), at analysis
+     (: lfd (assq x (get 0 'lam c))
      (? lfd (lz lfd c)
         (: s (get 0 'stk c)
            (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
            (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
          (?- (avb (get 0 'par c) x)
           (memq x s) (em2 g_vm_arg (lidx x s))
-          (>= (stki c) 0) (q (len (get 0 'stk c)))))))
+          (>= (stki c) 0) (q (len (get 0 'stk c)))))))))
 
   (avb d x)
    (? (nilp d) ; outside all lexical scopes?
@@ -132,11 +138,17 @@
     (? (atomp rest)       (l2x (rev (cons nd prs)) (car nd)   1)
        (atomp (cdr rest)) (l2x (rev (cons nd prs)) (car rest) 0)
                           (l1 (cons nd prs) (car rest) (cadr rest) (cddr rest))))
-   ; l2x runs the shared `boxfix-core` recursive-value boxing (same rewrite c0
-   ; uses); it returns 0 when nothing needs boxing. Body-less lets aren't boxed.
+   ; l2x: native recursive-value boxing. boxprep returns (cells-prepended-prs . cs)
+   ; or 0; the cs name->cell map goes on the scope 'box so ava redirects boxed refs
+   ; to (car cell) at analysis (no source rewrite). Body-less lets aren't boxed.
    (l2x prs body even)
-    (: r (? even 0 (boxfix-core prs body))
-     (? r (l2 (car r) (cdr r) even) (l2 prs body even)))
+    (: r (? even 0 (boxprep prs))
+       pp (? r (car r) prs)
+       old (get 0 'box c)
+       _ (? r (put 'box (cat (cdr r) old) c))
+       k (l2 pp body even)
+       _ (put 'box old c)
+     k)
 
    (l2 prs body even) (:- (cl 0 l l l)
     s (get 0 'stk c)
