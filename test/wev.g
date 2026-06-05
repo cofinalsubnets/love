@@ -1,0 +1,32 @@
+; test/wev.g -- the wev pre-pass: macro expansion (exercised throughout the suite)
+; and constant folding. Folding is semantics-preserving, so whether it FIRED is only
+; observable via baked-literal identity (a folded (cons 1 2) is shared across calls) --
+; which differs between the wev compiler and the c0/gl0 control, so those positive
+; "fires" checks can't live in this cross-compiler suite (they're verified out of band).
+; What CAN be asserted here: fold correctness, and that identity-minting heads stay
+; excluded -- (new 0) must yield a fresh table on every call under BOTH compilers.
+(assert
+ ; --- impure / identity-minting heads are NOT folded (fresh each call) ---
+ (: (f _) (new 0) (nilp (same (f 0) (f 0))))    ; `new` excluded -> distinct tables
+
+ ; --- arithmetic / numeric folds are correct (nested, bottom-up) ---
+ (= 7  (+ 1 (* 2 3)))
+ (= 6  (* 2 3 4))                                ; binary * over-applied: ((* 2 3) 4) = (6 4) = 6
+ (= 8  (** 2 3))
+ (= 6  (gcd 24 18))
+ (= 6  (inc 5))                                  ; inc = (+ 1): a curried pure global folds
+
+ ; --- cons / car / cdr fold; element access is correct ---
+ (= 9  (car (cons 9 8)))
+ (= 8  (cdr (cons 9 8)))
+ (= 2  (cadr '(1 2 3)))
+ (= 4  (len (scat "ab" "cd")))                   ; string built + measured at compile time
+
+ ; --- currying: under-application yields a usable closure; prefix+unknown tail ---
+ (= 7  ((+ 3) 4))                                ; (+ 3) baked, applied at runtime
+ (= 15 (: (g x) (+ 10 x) (g 5)))                 ; (+ 10) folded; x unknown -> residual
+
+ ; --- shadowing: a locally-bound name is never folded as the global ---
+ (= 99 (: (cons a b) 99 (cons 1 2)))             ; let-bound cons
+ (= 5  (: (car x) 5 (car '(1 2))))               ; let-bound car
+ (= 7  (: (f cons) (cons 3 4) (f +))))           ; PARAM cons shadows the global; f + -> (+ 3 4)

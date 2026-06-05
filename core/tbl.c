@@ -186,15 +186,14 @@ static g_noinline uintptr_t hash_two(struct g *f, word x) {
 uintptr_t hash(struct g *f, intptr_t x) {
  if (nump(x)) return rot(x*mix);
  if (!datp(x)) {
-   // it's a thread; hash by length. Threads live in the pool and end in a
-   // G_THD_TAG word, so walk to that terminator rather than to a 0 word: the
-   // length is GC-stable, and we never read past the object into un-written
-   // pool space (the 0-walk did, depending on heap layout). Bounded by the
-   // pool so a stray non-pool thread value can't run away.
+   // out-of-pool (static bif): stable distinct address. in-pool: a compiled lambda
+   // parks its source \-expr one cell before the entry (the tag head points there),
+   // a better key than length; else by length. All GC-stable (buckets survive copy).
+   if ((word*) x < ptr(f) || (word*) x >= topof(f)) return rot(x * mix);
+   union u *k = cell(x); struct g_tag *tg = ttag(f, k);
+   if (tag_head(tg) < k) return hash(f, k[-1].x);
    uintptr_t r = mix;
-   word const *lo = ptr(f), *hi = ptr(f) + f->len;
-   for (word const *y = (word const*) x; y >= lo && y < hi && !tagp(*y, lo, hi); y++)
-     r ^= r * mix;
+   for (union u *y = k; y < (union u*) tg; y++) r ^= r * mix;
    return r; }
  switch (typ(x)) {
    default: __builtin_trap();

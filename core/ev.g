@@ -19,11 +19,53 @@
    (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
   (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
-  ; wev: weak-evaluator pre-pass (entry calls `(wev c x)` before `ana`). Target:
-  ; a source->source normalizer that builds the shared scope tree `ana` reuses and
-  ; annotates it with facts (box-set, const-env, ...) for `ana` to read. Identity
-  ; for now (scaffolding only); behavior unchanged until it is grown.
-  (wev c x) x
+  ; pures: table value->-1 of pure, total global fns safe to evaluate at compile
+  ; time. Keyed by value (handles redefinition/aliases); unresolved names dropped.
+  ; Excludes I/O, mutation, gensym/thd, tasks, higher-order combinators.
+  pures (: names (list '+ '- '* '/ '% '~ '<< '>> '& '| '^
+                       '< '<= '= '>= '> 'same '** 'gcd 'modpow 'inc 'dec 'abs
+                       'cons 'car 'cdr 'X 'A 'B 'caar 'cadr 'cdar 'cddr
+                       'len 'lidx 'assq 'memq 'last 'rev 'cat
+                       'nump 'symp 'twop 'tblp 'strp 'nilp 'flop 'cplxp 'atomp
+                       'ssub 'scat 'str 'nom
+                       're 'im 'conj 'arg 'flo 'cplx
+                       'sin 'cos 'tan 'atan 'sqrt 'exp 'log 'atan2 'pow)
+   (foldl (\ t n (: v (get 0 n globals) (? v (put v -1 t) t))) (new 0) names))
+  ; wev: source->source pre-pass before `ana` -- expands macros and constant-folds,
+  ; threading bound names `bnd` for shadowing. Macros expand as ana does (table head,
+  ; not gated on bnd). Only `\` and `:` need bespoke handling; quotes are left as-is.
+  (wev c x) (:
+   (wx x bnd) (?
+    (atomp x) x
+    (: h (car x) (?
+     (= h '\) (? (atomp (cddr x)) x
+                (: r (lp x) (cons '\ (cat (car r) (list (wx (cdr r) (cat (car r) bnd)))))))
+     (= h ':) (cons ': (wxl (cdr x) bnd))
+     (: m (? (symp h) (get 0 h macros) 0)         ; macro head? expand, then re-walk
+      (? m (wx (m (cdr x)) bnd)
+         (fold (map (\ e (wx e bnd)) x) bnd))))))
+   (wxl bs bnd) (wxb bs (cat (ln bs) bnd))        ; a let's names all shadow throughout
+   (wxb bs bnd) (?
+    (atomp bs) bs
+    (atomp (cdr bs)) (list (wx (car bs) bnd))
+    (: nd (dsug (car bs) (cadr bs))               ; desugar (f a..) so wx's \ adds params to bnd
+     (cons (car nd) (cons (wx (cdr nd) bnd) (wxb (cddr bs) bnd)))))
+   (cval e) (?                                    ; constant? -> (-1 . value) else (0 . 0)
+    (symp e) (cons 0 0)
+    (atomp e) (cons -1 e)
+    (&& (= (car e) '\) (atomp (cddr e))) (cons -1 (cadr e))   ; quote -> its datum
+    (cons 0 0))
+   (bake v) (? (nump v) v (list '\ v))            ; value -> source: fixnum bare else quote
+   ; curry constant args left to right; fold only on FULL consumption -- a partial
+   ; prefix is left as-is so ana keeps its inline-bif path for it.
+   (curry x0 hv a) (?
+    (atomp a) (bake hv)
+    (: cv (cval (car a)) (? (car cv) (curry x0 (hv (cdr cv)) (cdr a)) x0)))
+   ; fold: head an un-shadowed global whose value is pure -> evaluate at compile time.
+   (fold x bnd) (: h (car x)
+    (? (|| (nilp (symp h)) (memq h bnd)) x
+       (: gv (get 0 h globals) (? (get 0 gv pures) (curry x gv (cdr x)) x))))
+   (wx x 0))
   (ana c x) (:- (? (symp x)  (ava x)
                    (atomp x) (kim x)
                    (: a (car x) b (cdr x) (?
