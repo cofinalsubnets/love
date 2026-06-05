@@ -519,10 +519,10 @@ static g_inline bool is_dec_int(char const *s, uintptr_t n) {
  for (; i < n; i++) if (s[i] < '0' || s[i] > '9') return false;
  return true; }
 
-static struct g *gzreads(struct g *f, bool nested), *gzread1(struct g *f);
-static g_inline struct g *gzread1sym(struct g*f, int c), *gzread1str(struct g*f), *gzquote(struct g*f);
-struct g *g_reads(struct g *f, struct g_io* i) { return g_core_of(f)->io = i, gzreads(f, false); }
-struct g *g_read1(struct g*f, struct g_io *i) { return g_core_of(f)->io = i, gzread1(f); }
+static struct g *gz_parse(struct g *f, bool multi);
+static g_inline struct g *gzread1sym(struct g*f, int c), *gzread1str(struct g*f);
+struct g *g_reads(struct g *f, struct g_io* i) { return g_core_of(f)->io = i, gz_parse(f, true); }
+struct g *g_read1(struct g*f, struct g_io *i) { return g_core_of(f)->io = i, gz_parse(f, false); }
 
 static struct g *grbufg(struct g *f, uintptr_t len) {
  if (g_ok(f = str0(f, 2 * len)))
@@ -600,46 +600,72 @@ static struct g* g_z_getc(struct g*f) {
    continue; }
  return f; }
 
-static g_inline struct g *gzreadmac(struct g*f, char const *nom);
+// --- one non-recursive reader for both g_read1 (multi=0) and g_reads (multi=1) ---
+// `ctx` (kept at sp[0]) is an explicit stack of frames, top = car, so the nesting
+// that used to recurse in C now lives on the gwen heap (and rides GC). A frame is
+// either a *list accumulator* — a pair (head . tail) holding the elements read so
+// far in source order, ((nil . nil) when empty), built in place by appending at
+// `tail` so no reverse pass is needed — or a *reader-macro* — the wrap symbol \ qq
+// uq uqs, recognised by symp. A finished datum is `delivered` to the top frame:
+// appended to a list, or wrapped and re-delivered; with no frame left it is the
+// result. Everything lives on the gwen stack so GC relocates it across the allocs
+// that reading does.
 
-static struct g *gzread1(struct g*f) {
- if (!g_ok(f = g_z_getc(f))) return f;
- switch (f->b) {
-  case '(':  return gzreads(f, true);
-  case ')': case EOF: return encode(f, g_status_eof);
-  case '\'': return gzquote(f);
-  case '`':  return gzreadmac(f, "qq");                  // quasiquote
-  case ',': {                                            // unquote / unquote-splice
-   int c2;
-   if (!g_ok(f = zgetc(f))) return f;
-   if ((c2 = f->b) == '@') return gzreadmac(f, "uqs");
-   if (c2 == EOF) return encode(g_core_of(f), g_status_more);
-   return gzreadmac(zungetc(f, c2), "uq"); }
-  case '"': return gzread1str(f);
-  default: return gzread1sym(f, f->b); } }
+static struct g *push_frame(struct g *f) {     // push an empty (head . tail) accumulator
+ return gxl(gxl(g_push(f, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
+static struct g *push_wrap(struct g *f, char const *nom) {
+ return gxl(intern(g_strof(f, nom))); }        // ctx' = (wrapsym . ctx)
 
-static struct g *gzreads(struct g *f, bool nested) {
- intptr_t n = 0;
- for (int c; g_ok(f = g_z_getc(f)); n++) {
-  if ((c = f->b) == ')') break;                          // list closed
-  if (c == EOF) {                               // end of input...
-   if (nested) return encode(f, g_status_more); 
-   break; }                                     //  ...at top level: done
-  f = gzread1(zungetc(f, c)); }
- for (f = push0(f); n--; f = gxr(f));
- return f; }
-
-static g_inline struct g *gzquote(struct g*f) {
- return g_code_of(f = gzread1(f)) == g_status_eof ? // quote with no operand
-  encode(g_core_of(f), g_status_more) :
-  gxl(pushq(gxr(push0(f)))); }
-
-// reader macro: read one operand and wrap it as (nom operand), e.g. `x -> (qq x).
-// EOF right after the prefix -> incomplete input (status_more), as for '.
-static g_inline struct g *gzreadmac(struct g*f, char const *nom) {
- return g_code_of(f = gzread1(f)) == g_status_eof ?
-  encode(g_core_of(f), g_status_more) :
-  gxl(intern(g_strof(gxr(push0(f)), nom))); }
+static struct g *gz_parse(struct g *f, bool multi) {
+ // multi: ctx starts with one open accumulator (collects all top-level datums in
+ // source order); read1: ctx starts empty (returns the first complete datum).
+ f = multi ? gxl(gxl(g_push(f, 3, nil, nil, nil))) : g_push(f, 1, nil);
+ for (;;) {
+  if (!g_ok(f = g_z_getc(f))) return f;
+  int c = f->b, c2 = EOF;
+  switch (c) {
+   case '(':  f = push_frame(f); continue;
+   case '\'': f = push_wrap(f, "\\"); continue;
+   case '`':  f = push_wrap(f, "qq"); continue;
+   case ',':                                            // unquote / unquote-splice
+    if (!g_ok(f = zgetc(f))) return f;
+    if ((c2 = f->b) == '@') { f = push_wrap(f, "uqs"); continue; }
+    if (c2 != EOF) f = zungetc(f, c2);
+    f = push_wrap(f, "uq"); continue;
+   case ')':
+    if (nilp(f->sp[0])) return encode(g_core_of(f), g_status_eof);   // stray ) / read1
+    if (symp(A(f->sp[0]))) return encode(g_core_of(f), g_status_more); // wrap wants an operand
+    f = g_push(f, 1, AA(f->sp[0]));                    // d = head of the closed frame
+    if (g_ok(f)) f->sp[1] = B(f->sp[1]);               // pop the closed frame
+    break;                                             // -> deliver d
+   case EOF:
+    if (nilp(f->sp[0])) return encode(g_core_of(f), g_status_eof);
+    if (!(multi && nilp(B(f->sp[0])) && !symp(A(f->sp[0]))))
+     return encode(g_core_of(f), g_status_more);       // unclosed list / pending wrap
+    f = g_push(f, 1, AA(f->sp[0]));                    // close the top accumulator -> its head
+    if (g_ok(f)) f->sp[1] = B(f->sp[1]);
+    break;
+   case '"': f = gzread1str(f); break;
+   default:  f = gzread1sym(f, c); break; }
+  if (!g_ok(f)) return f;
+  // deliver the datum at sp[0] into the frame stack at sp[1]
+  for (bool done = false; g_ok(f) && !done; ) {
+   if (nilp(f->sp[1])) {                               // no frame left: the result
+    f->sp[1] = f->sp[0], f->sp++;
+    return f; }
+   if (symp(A(f->sp[1]))) {                            // wrap: d := (wrapsym d), pop wrap
+    f = gxr(g_push(f, 1, nil));                        // (d . nil)
+    f = gxl(g_push(f, 1, g_ok(f) ? A(f->sp[1]) : nil)); // (wrapsym . (d))
+    if (g_ok(f)) f->sp[1] = B(f->sp[1]); }
+   else {                                              // list: append d at the frame's tail
+    f = gxr(g_push(f, 1, nil));                        // newcons = (d . nil)
+    if (g_ok(f)) {
+     word frame = A(f->sp[1]);                         // (head . tail)
+     if (nilp(A(frame))) A(frame) = B(frame) = f->sp[0];  // first element: head = tail = newcons
+     else B(B(frame)) = f->sp[0], B(frame) = f->sp[0];    // link onto tail, advance tail
+     f->sp++; }                                        // pop newcons -> ctx
+    done = true; } }
+  if (!g_ok(f)) return f; } }
 
 static g_inline struct g *gzread1str(struct g*f) {
  int c;
