@@ -104,7 +104,7 @@ g_vm(g_vm_get) {
    // integer type (EMIT_INT demotes-or-boxes); float elements box an f64.
    struct g_vec *v = vec(x);
    uintptr_t R = v->rank, off = 0; bool ok = false;
-   if (R == 0) ok = fix0p(k);
+   if (R == 0) ok = nilp(k);
    else if (R == 1 && nump(k)) {
     intptr_t ix = getnum(k);
     if (ix >= 0 && ix < (intptr_t) v->shape[0]) off = ix, ok = true; }

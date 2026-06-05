@@ -90,19 +90,21 @@
 ; `(quote x)` -> `(. x)`: the CL/Scheme name for the `.` quote form (`'x` sugar).
 (:: 'quote (\ a (cons '. a)))
 
-; recursive-value boxing prepass for `:` (the letrec* "capture by location" fix).
-; Given a flat `:` binding list (n1 d1 .. [body]) it indirects every *value*
-; binding whose init closes over the name being defined (or a forward/mutual
-; sibling defined no later) through a heap cell: prepend `cell (cons 0 0)`, store
-; via `(poke 1 init cell)`, read via `(car cell)`. Functions (resolved lazily),
-; values defined before their users, and global (body-less) lets are untouched.
-; This is the single source of truth for the rewrite: c0 (ev.c) runs it as a
-; prepass on each let, and ev.g's `ale` (the self-hosted compiler) calls it too
-; from l2x -- so both compilers box identically. `lambp`/`dsug` are hoisted to
-; globals so `ale` can share them (lambda detection, binding desugaring).
+; recursive-value boxing for `:` (the letrec* "capture by location" fix).
+; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body
+; expression, and indirects every *value* binding whose init closes over the
+; name being defined (or a forward/mutual sibling defined no later) through a
+; heap cell: prepend `cell (cons 0 0)`, store via `(poke 1 init cell)`, read via
+; `(car cell)`. Functions (resolved lazily) and values defined before their
+; users are untouched. It returns 0 when nothing needs boxing, else the rewritten
+; (prs' . body'). This is the single source of truth, shared verbatim by both
+; compilers: ev.g's `ale` keeps its bindings as this exact pair-list and calls
+; boxfix-core directly (zero conversion); c0 (ev.c) calls the flat `boxfix`
+; wrapper below, which is just bpr+flatten around the same core. `lambp`/`dsug`
+; are globals so `ale` shares them (lambda detection, binding desugaring).
 (: (lambp x) (? (twop x) (= '\ (car x)))
    (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d))))))
-(: (boxfix fs) (:
+(: (boxfix-core prs body) (:
    (lp x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
    (ln bs) (? (atomp bs) 0 (atomp (cdr bs)) 0 (cons (car (dsug (car bs) 0)) (ln (cddr bs))))
    ; w: is symbol v free in x and (u) under a lambda? \ / : shadowing, . quote,
@@ -133,22 +135,26 @@
     (atomp bs) bs
     (atomp (cdr bs)) (list (sub cs (car bs)))
     (: nd (dsug (car bs) (cadr bs)) (cons (car nd) (cons (sub cs (cdr nd)) (subl cs (cddr bs))))))
+   (: nm (map car prs)
+      bx (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
+                          (any (\ p (w v (cdr p) 0 0))
+                               (take (+ 1 (lidx v nm)) prs)))) nm)
+      (? (nilp bx) 0
+       (: cs (map (\ v (cons v (sym 0))) bx)
+          (one p) (: d (sub cs (cdr p))
+                     (? (memq (car p) bx)
+                        (cons '_ (list 'poke 1 d (cdr (assq (car p) cs))))
+                        (cons (car p) d)))
+          es (map one prs)
+          (cons (cat (map (\ c (cons (cdr c) (list 'cons 0 0))) cs) es)
+                (sub cs body)))))))
+; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the
+; rewritten list, or the input unchanged. even (body-less) lets and lets that
+; need no boxing pass through verbatim.
+(: (boxfix fs) (:
    (ev l) (? (atomp l) -1 (atomp (cdr l)) 0 (ev (cddr l)))
    (bpr fs) (? (atomp (cdr fs)) (cons 0 (car fs))
                (: r (bpr (cddr fs)) (cons (cons (dsug (car fs) (cadr fs)) (car r)) (cdr r))))
    (? (ev fs) fs
-    (: pb (bpr fs) prs (car pb) body (cdr pb)
-       nm (map car prs)
-       bx (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
-                           (any (\ p (w v (cdr p) 0 0))
-                                (take (+ 1 (lidx v nm)) prs)))) nm)
-       (? (nilp bx) fs
-        (: cs (map (\ v (cons v (sym 0))) bx)
-           (one p) (: d (sub cs (cdr p))
-                      (? (memq (car p) bx)
-                         (cons '_ (list 'poke 1 d (cdr (assq (car p) cs))))
-                         (cons (car p) d)))
-           es (map one prs)
-           (cat (catmap (\ c (list (cdr c) (list 'cons 0 0))) cs)
-                (cat (catmap (\ e (list (car e) (cdr e))) es)
-                     (list (sub cs body))))))))))
+    (: pb (bpr fs) r (boxfix-core (car pb) (cdr pb))
+       (? r (cat (catmap (\ p (list (car p) (cdr p))) (car r)) (list (cdr r))) fs)))))

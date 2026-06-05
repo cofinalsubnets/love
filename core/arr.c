@@ -93,7 +93,7 @@ g_vm(g_vm_ashape) {
 
 // --- falsiness -------------------------------------------------------------
 // True iff every element compares numerically == 0 (so -0.0 counts as zero, and
-// an empty array is vacuously all-zero). Drives g_falsy (i.h) -> g_vm_cond and
+// an empty array is vacuously all-zero). Drives g_false (i.h) -> g_vm_cond and
 // the `nilp`/`not` bif.
 bool g_all_zero(struct g_vec *v) {
  // A complex scalar is falsy iff both components are 0 (so (cplx 0 0) and 0.0

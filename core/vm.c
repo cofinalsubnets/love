@@ -243,7 +243,7 @@ g_vm(g_vm_jump) { return Ip = Ip[1].m, Continue(); }
 // The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
 // language falsy predicate so an all-zero vec (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
-g_vm(g_vm_cond) { return Ip = g_falsy(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
+g_vm(g_vm_cond) { return Ip = g_false(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 g_vm(g_vm_unc) {
  Have1();
  *--Sp = Ip[1].x;
@@ -289,6 +289,24 @@ g_vm(g_vm_arg) {
  Have1();
  Sp[-1] = Sp[getnum(Ip[1].x)];
  Sp -= 1;
+ Ip += 2;
+ return Continue(); }
+
+// recursive-value boxing stores (ev.g `ale`): write the top of stack into a
+// frame slot in place, then pop it. setarg stores the value directly (an unboxed
+// `:` binding's init); setbox stores it into the car of the cell already in the
+// slot (a boxed binding -- closures captured that cell, so the store is seen
+// through (car slot)). The slot operand counts from the post-push Sp, i.e. it
+// includes the value being stored at Sp[0].
+g_vm(g_vm_setarg) {
+ Sp[getnum(Ip[1].x)] = Sp[0];
+ Sp += 1;
+ Ip += 2;
+ return Continue(); }
+
+g_vm(g_vm_setbox) {
+ A(Sp[getnum(Ip[1].x)]) = Sp[0];
+ Sp += 1;
  Ip += 2;
  return Continue(); }
 

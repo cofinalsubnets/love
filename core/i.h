@@ -47,12 +47,10 @@ _Static_assert(WBYTES == sizeof(uintptr_t), "word size sanity check");
 #include <stdarg.h>
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
-// fix0p: the structural immediate-zero/nil-word test (the only false scalar is
-// the word nil==0). Distinct from the *language* falsy predicate g_falsy below,
-// which also treats an all-zero vec as false. Compiler-internal list walks use
-// fix0p (their operands are pair-or-nil, never numeric vecs); the gwen-facing
-// `nilp`/`not` bif and g_vm_cond use g_falsy.
-#define fix0p(_) (word(_)==nil)
+// nilp: structural test for the nil word (the only false scalar). Distinct from
+// g_false below (the language falsy predicate, which also counts an all-zero vec);
+// the gwen `nilp` bif maps to g_false, not this macro.
+#define nilp(_) (word(_)==nil)
 #define A(o) two(o)->a
 #define B(o) two(o)->b
 #define AB(o) A(B(o))
@@ -155,8 +153,9 @@ g_vm_t g_vm_kcall,
  g_vm_unc, g_vm_poke2, g_vm_peek2,
  g_vm_seek,  g_vm_trim,   g_vm_thda,   g_vm_add,
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,
+ g_vm_setarg, g_vm_setbox, // recursive-value boxing: store an init into a frame slot / into a boxed slot's cell
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
- g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb,
+ g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,
  g_vm_callk, g_vm_yield_sw, g_vm_yield_bif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
@@ -302,13 +301,10 @@ static g_inline void vec_put_flo(struct g_vec *v, uintptr_t i, g_flo_t x) {
   case g_vt_f32: ((float*) p)[i]   = (float) x; break;
   default:       ((double*) p)[i]  = (double) x; break; } }
 
-// Language falsy predicate: nil/0, or an all-zero vec (boxed 0.0, zero int box,
-// all-zero array; empty vec vacuously). The lift of "0 is the only false
-// scalar" -- the false vector is the zero vector. Hot fixnum/nil tests
-// short-circuit on fix0p / the homp check inside vecp; only an actual vec
-// reaches the g_all_zero scan (numeric ==0 per element, so -0.0 is false too).
+// Language falsy predicate: nil/0, or an all-zero vec (boxed 0.0, zero box/array;
+// empty vec vacuously). Hot path short-circuits on nilp; only a vec scans g_all_zero.
 bool g_all_zero(struct g_vec*);
-static g_inline bool g_falsy(word x) { return fix0p(x) || (vecp(x) && g_all_zero(vec(x))); }
+static g_inline bool g_false(word x) { return nilp(x) || (vecp(x) && g_all_zero(vec(x))); }
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
 // 1/0 lowers to an FPU divide that yields +-inf or NaN per IEEE, and inf*0=NaN

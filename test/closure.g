@@ -22,7 +22,7 @@
  (nfac n) (? (< n 1) 1 (* n (nfac (- n 1))))
  ; the eta-expanded factory idiom (a *function* binding) -- still works
  (mkconst z) (\ n (? (< n 1) z (kconst (- n 1))))
- (kconst x) (mkconst 7 x)
+ kconst (mkconst 7)
  ; memoizing fixpoint combinator (used for the recursive-value fib below)
  (memo f) (: m (new 0) (\ x (: c (get 0 x m) (? c c (: y (f x) _ (put x y m) y)))))
  (assert

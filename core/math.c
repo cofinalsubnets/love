@@ -167,7 +167,7 @@ op(g_vm_nump, 1, oddp(Sp[0]) ? putnum(-1) : nil)
 // `nilp`/`not`: the language falsy predicate (nil/0 OR an all-zero vec --
 // boxed 0.0, zero int box, all-zero array). Use `(= x 0)` for a literal
 // scalar-zero test; `(aall (= x 0))` over an array.
-op11(g_vm_nilp, g_falsy(Sp[0]) ? putnum(-1) : nil)
+op11(g_vm_nilp, g_false(Sp[0]) ? putnum(-1) : nil)
 
 // Unary math bif: numeric arg → double, call fn, box the rank-0 f64 result.
 // Non-numeric arg → nil. TCO-clean (no & escapes).

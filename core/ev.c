@@ -12,6 +12,7 @@ struct env {
   len,  // thread length accumulator
   branches, // stack for conditional alternate branch addresses
   exits,
+  sites, // recursive-fn ref backpatch: list of (lams-entry . operand-cell)
   end[]; }; // stach for conditional exit addresses
 
 #define Ana(n, ...) struct g *n(struct g *f, struct env **c, intptr_t x, ##__VA_ARGS__)
@@ -20,7 +21,7 @@ typedef Ana(ana);
 typedef Cata(cata);
 static ana analyze, ana_d, ana_c, ana_l, ana_q, ana_ap;
 static Ana(ana_2, word, word);
-static cata c1_i, c1_ix, c1_var, c1_yield, c1_ret, c1;
+static cata c1_i, c1_ix, c1_var, c1_yield, c1_ret, c1, c1_recv;
 static g_inline Cata(pull) { return g_ok(f) ? ((cata*) pop1(f))(f, c) : f; }
 
 #define incl(e, n) ((e)->len += ((n)<<1))
@@ -36,7 +37,7 @@ static struct g *enscope(struct g *f, struct env *par, word args, word imps) {
  f = g_push(f, 3, args, imps, par);
  if (g_ok(f = g_have(f, n))) {
   struct env *c = bump(f, n);
-  c->stack = c->branches = c->exits = c->lams = c->len = nil;
+  c->stack = c->branches = c->exits = c->lams = c->len = c->sites = nil;
   c->args = f->sp[0], c->imps = f->sp[1], c->par = (struct env*) f->sp[2];
   *(f->sp += 2) = (word) tagthd((union u*)c, Width(struct env)); }
  return f; }
@@ -115,6 +116,16 @@ static Cata(c1_ix) {
  Kp[1].x = x;
  return pull(f, c); }
 
+// Emit a recursive-function ref: bake `quote AB(y)` if the closure is final, else
+// `quote nil` + stash the operand cell in the site for ana_d to backpatch.
+static Cata(c1_recv) {
+ word y = pop1(f), site = pop1(f);
+ Kp -= 2;
+ Kp[0].ap = g_vm_quote;
+ if (nilp(site)) Kp[1].x = AB(y);
+ else Kp[1].x = nil, B(site) = (word) &Kp[1];
+ return pull(f, c); }
+
 static Cata(c1_ar, g_vm_t *i, word ar) { return
  Kp -= 2,
  Kp[0].ap = i,
@@ -162,11 +173,6 @@ static struct g *g_eval(struct g *f) {
 #endif
  return f; }
 
-g_vm(g_vm_lazyb) { return
- Ip[0].ap = g_vm_quote,
- Ip[1].x = AB(Ip[1].x),
- Continue(); }
-
 static word lidx(struct g*f, word x, word l) {
  word i = 0;
  for (; twop(l); i++, l = B(l)) if (eql(f, x, A(l))) return i;
@@ -176,7 +182,7 @@ static Ana(ana_v) {
  word y;
  if (!g_ok(f)) return f;
  for (struct env *d = *c;; d = d->par) {
-  if (fix0p(d)) {
+  if (nilp(d)) {
    if ((y = g_tget(f, 0, x, f->dict))) return ana_q(f, c, y);
    // undefined global: resolved by g_vm_freev via the dict at run time.
    // Only record it as a captured free variable when this scope is nested
@@ -186,15 +192,26 @@ static Ana(ana_v) {
    // re-read x from the imps cons: the gxl/g_push above can GC and relocate
    // the symbol, leaving the local x dangling (cf. the same A((*c)->imps)
    // pattern in the capture path below). c0_ix then emits the live pointer.
-   if (!fix0p((*c)->par))
+   if (!nilp((*c)->par))
     f = gxl(g_push(f, 2, x, (*c)->imps)),
     x = g_ok(f) ? A((*c)->imps = pop1(f)) : nil;
    return c0_ix(f, c, g_vm_freev, x); }
   // lambda definition of local let form?
   if ((y = assq(f, d->lams, x))) {
-    if (g_ok(f = c0_ix(f, c, g_vm_lazyb, y)))
-      f = ana_ap(f, c, BB(f->sp[2]));
-    return f; }
+   // recursive-fn ref: record a backpatch site on d (the lams-owning scope) when
+   // the closure isn't built yet, then apply the captured imports.
+   word site = nil;
+   if (nilp(AB(y))) {
+    MM(f, &d), MM(f, &y);
+    f = gxl(g_push(f, 2, y, nil)); // site = (y . nil)
+    if (g_ok(f)) {
+     f = gxl(g_push(f, 2, f->sp[0], d->sites)); // (site . d->sites)
+     if (g_ok(f)) d->sites = pop1(f), site = pop1(f); }
+    UM(f), UM(f); }
+   incl(*c, 2);
+   if (g_ok(f = g_push(f, 3, c1_recv, y, site)))
+    f = ana_ap(f, c, BB(f->sp[1]));
+   return f; }
   // let binding in the *current* scope -> a direct stack slot.
   if (d == *c && memq(f, d->stack, x)) return
     c0_ix(f, c, g_vm_arg, putnum(lidx(f, x, d->stack)));
@@ -213,9 +230,9 @@ static Ana(ana_v) {
 
 static Cata(c1_var) {
  word v = pop1(f), i = llen(pop1(f)); // stack inset
- for (word l = (*c)->imps; !fix0p(l); l = B(l), i++)
+ for (word l = (*c)->imps; !nilp(l); l = B(l), i++)
   if (eql(f, v, A(l))) goto out;
- for (word l = (*c)->args; !fix0p(l); l = B(l), i++)
+ for (word l = (*c)->args; !nilp(l); l = B(l), i++)
   if (eql(f, v, A(l))) break;
 out:
  return Kp -= 2,
@@ -425,7 +442,7 @@ static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
 
  intptr_t ll = llen(nom);
  bool oddp = twop(exp),
-      globp = !oddp && fix0p((*b)->args); // we check this again later to make global bindings at top level
+      globp = !oddp && nilp((*b)->args); // we check this again later to make global bindings at top level
  if (!oddp) { // if there's no body then evaluate the name of the last definition
   f = gxl(g_push(f, 2, A(nom), nil));
   if (!g_ok(f)) return forget();
@@ -460,12 +477,20 @@ static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
  // all the code emissions are below here (??)
  //
 
+ // clear each function's provisional closure so a ref hit mid-rebuild defers to a
+ // backpatch site rather than baking the stale closure; keep the import sets (BB).
+ for (d = lam; twop(d); d = B(d)) AB(A(d)) = nil;
+
  for (e = nom, v = def; twop(e); e = B(e), v = B(v))
   if (lambp(f, A(v))) {
    d = assq(f, lam, A(e));
    f = c0_lambda(f, c, BB(d), BA(v));
    if (!g_ok(f)) return forget();
    A(v) = B(d) = pop1(f); }
+
+ // closures final -> backpatch each recorded recursive-fn ref with its thread.
+ for (d = (*c)->sites; twop(d); d = B(d)) cell(B(A(d)))->x = AB(A(A(d)));
+ (*c)->sites = nil;
 
  nom = rev(nom); // put in literal order
  f = analyze(f, b, exp);

@@ -70,15 +70,24 @@
             (p2 g_vm_cond (pop 'alt) j)))))))))
 
   Z (sym 0)
-  (lz lfd)(: p (em2 g_vm_lazyb lfd)
-               _ (push 'stk 0)
-               q (apl2r (cddr lfd))
-               _ (pop 'stk)
-             (co p q))
+  ; recursive-fn ref: bake `quote code` if the closure is built, else `quote 0`
+  ; + a backpatch site `(lfd . cell)` on the scope for l3 to resolve.
+  (qsite site k n) (: cell (poke -1 0 (k (+ 2 n)))
+                      _ (poke 2 cell site)
+                    (poke -1 g_vm_quote cell))
+  (lz lfd scope)(: code (cadr lfd)
+                   p (? code (em2 g_vm_quote code)
+                        (: site (cons lfd 0)
+                           _ (put 'sites (cons site (get 0 'sites scope)) scope)
+                         (qsite site)))
+                   _ (push 'stk 0)
+                   q (apl2r (cddr lfd))
+                   _ (pop 'stk)
+                 (co p q))
   ; variable expression analyzer
   (ava x)
    (: lfd (assq x (get 0 'lam c))
-     (? lfd (lz lfd)
+     (? lfd (lz lfd c)
         (: s (get 0 'stk c)
            (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
            (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
@@ -93,7 +102,7 @@
          (: _ (? (get 0 'par c) (push 'imp x))
           (em2 g_vm_freev x))))
     (: lfd (assq x (get 0 'lam d))
-     (? lfd (lz lfd)
+     (? lfd (lz lfd d)
         (: s (get 0 'stk d)
            (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
            (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
@@ -113,47 +122,37 @@
   ; let expression analyzer (the most complicated one)
   (ale a b) (?
    (atomp b) (ana c a)
-   (:- (l1 0 0 a (car b) (cdr b))
+   (:- (l1 0 a (car b) (cdr b))
     q (sco c (get 0 'arg c) (get 0 'imp c))
     (set_cdr p x) (: _ (poke 2 x p) x) ; :[ weh
 
-    ;; l1 collects bindings and passes them with the body expression to l2x
-   (l1 ns ds n d rest) (:
-     nd (dsug n d) ns (cons (car nd) ns) ds (cons (cdr nd) ds)
-    (? (atomp rest)       (l2x ns ds (car nd)   1)
-       (atomp (cdr rest)) (l2x ns ds (car rest) 0)
-                          (l1 ns ds (car rest) (cadr rest) (cddr rest))))
-   ; l2x delegates recursive-value boxing to the shared prelude `boxfix` (the
-   ; same rewrite c0 runs -- single source of truth). It flattens the collected
-   ; bindings + body back into a `:`-style list, boxes, then re-splits for l2.
-   ; even (global, body-less) lets are never boxed, so they skip the round-trip.
-   (l2x ns ds exp even) (?
-    even (l2 ns ds exp even)
-    (: fs (boxfix (cat (catmap (\ p (list (car p) (cdr p)))
-                               (zip (rev ns) (rev ds)))
-                       (list exp)))
-       (splt l) (? (atomp (cdr l)) (cons 0 (car l))
-                   (: r (splt (cddr l))
-                      (cons (cons (cons (car l) (cadr l)) (car r)) (cdr r))))
-       pb (splt fs)
-     (l2 (rev (map car (car pb))) (rev (map cdr (car pb))) (cdr pb) even)))
+   ; l1 collects bindings into a source-order (name . def) pair-list for l2x.
+   (l1 prs n d rest) (:
+     nd (dsug n d)
+    (? (atomp rest)       (l2x (rev (cons nd prs)) (car nd)   1)
+       (atomp (cdr rest)) (l2x (rev (cons nd prs)) (car rest) 0)
+                          (l1 (cons nd prs) (car rest) (cadr rest) (cddr rest))))
+   ; l2x runs the shared `boxfix-core` recursive-value boxing (same rewrite c0
+   ; uses); it returns 0 when nothing needs boxing. Body-less lets aren't boxed.
+   (l2x prs body even)
+    (: r (? even 0 (boxfix-core prs body))
+     (? r (l2 (car r) (cdr r) even) (l2 prs body even)))
 
-   (l2 ns ds exp even) (:- (cl 0 l l l)
-    ns (rev ns) ds (rev ds)
+   (l2 prs body even) (:- (cl 0 l l l)
     s (get 0 'stk c)
     _ (push 'stk 0)
-    (jj a n d) (?
-     (atomp n) a
-     (nilp (lambp (car d)))
+    (jj a ps) (?
+     (atomp ps) a
+     (nilp (lambp (cdar ps)))
       (:
-      _ (push 'stk (car n))
-      (jj a (cdr n) (cdr d)))
-     (: k (car n)
-        v (ala q 0 (cdar d))
+      _ (push 'stk (caar ps))
+      (jj a (cdr ps)))
+     (: k (caar ps)
+        v (ala q 0 (cddar ps))
         a (cons (cons k v) a)
       _ (push 'stk k)
-      (jj a (cdr n) (cdr d))))
-    l (jj 0 ns ds)
+      (jj a (cdr ps))))
+    l (jj 0 prs)
     _ (put 'stk s c)
     (cl n l k1 k2) (?
      (&& k1 k2 (!= k1 k2) (memq (caar k1) (cddar k2)))
@@ -168,12 +167,12 @@
      k2 (cl n l k1 (cdr k2))
      k1 (cl n l (cdr k1) l)
      n (cl 0 l l l)
-     (l3 ns ds exp even
+     (l3 prs body even
       (: j (map car l)
          (q x) (cons (car x) (cons (cadr x) (foldl (flip ldel) (cddr x) j)))
        (map q l)))))
 
-   (l3 ns ds exp even lams) (:
+   (l3 prs body even lams) (:
     (ll nds) (? (nilp nds) id
      (: nd (car nds) n (car nd) d (cdr nd)
         d (?- d (lambp d) (: qa (assq (car nd) lams)
@@ -186,9 +185,15 @@
         (\ x (f (g (h x))))))
     _ (put 'lam lams q)
     s (get 0 'stk c)
-    f (ana c (cons '\ (cat (rev ns) (list exp))))
+    f (ana c (cons '\ (cat (rev (map car prs)) (list body))))
     _ (push 'stk 0)
-    g (ll (zip ns ds))
-    h (kap (len ns))
+    ; clear stale first-build closures so a ref hit during the rebuild defers to a
+    ; backpatch site; the import sets (cddr) are kept.
+    _ (each lams (\ e (poke 1 0 (cdr e))))
+    g (ll prs)
+    ; closures final -> backpatch each recorded recursive-fn ref with its thread.
+    _ (each (get 0 'sites q) (\ s (poke 0 (cadr (car s)) (cdr s))))
+    _ (put 'sites 0 q)
+    h (kap (len prs))
     _ (put 'stk s c)
     (\ x (f (g (h x)))))))))
