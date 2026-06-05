@@ -19,18 +19,44 @@
    (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
   (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
-  ; pures: table value->-1 of pure, total global fns safe to evaluate at compile
-  ; time. Keyed by value (handles redefinition/aliases); unresolved names dropped.
-  ; Excludes I/O, mutation, gensym/thd, tasks, higher-order combinators.
-  pures (: names (list '+ '- '* '/ '% '~ '<< '>> '& '| '^
-                       '< '<= '= '>= '> 'same '** 'gcd 'modpow 'inc 'dec 'abs
-                       'cons 'car 'cdr 'X 'A 'B 'caar 'cadr 'cdar 'cddr
-                       'len 'lidx 'assq 'memq 'last 'rev 'cat
-                       'nump 'symp 'twop 'tblp 'strp 'nilp 'flop 'cplxp 'atomp
-                       'ssub 'scat 'str 'nom
-                       're 'im 'conj 'arg 'flo 'cplx
-                       'sin 'cos 'tan 'atan 'sqrt 'exp 'log 'atan2 'pow)
-   (foldl (\ t n (: v (get 0 n globals) (? v (put v -1 t) t))) (new 0) names))
+  iop (sym 0)   ; inline-op marker: (iop op . args), emitted by wev, compiled by iap
+  ; wevs: value->handler for global fns. A handler folds an application to a value when
+  ; its args are constant (pure fns only), else emits an (iop op . args) node iap inlines
+  ; (any bif of matching arity), else leaves it. Built by scanning every global: a bif is
+  ; found by thread shape (g_vm_ret0 terminator); fold eligibility from curated `names`.
+  wevs (:
+   (cval e) (? (symp e) (cons 0 0)               ; (const? . value): -1 head iff a literal
+               (atomp e) (cons -1 e)
+               (&& (= (car e) '\) (atomp (cddr e))) (cons -1 (cadr e))
+               (cons 0 0))
+   (bake v) (? (nump v) v (list '\ v))           ; value -> source: fixnum bare else quote
+   ; (op . arity) iff v is a bif. `same` (identity) not `=`: a non-bif global may peek to
+   ; a word that looks like a heap pointer, which `=`/eql would deref and crash on.
+   (opof v) (? (same g_vm_ret0 (peek 1 v)) (cons (peek 0 v) 1)
+               (&& (same g_vm_cur (peek 0 v)) (same g_vm_ret0 (peek 3 v))) (cons (peek 2 v) (peek 1 v))
+               0)
+   (hgen v op ar pure x) (: as (cdr x) n (len as)
+    (go hv a) (? (atomp a) (bake hv)             ; all args constant -> fold
+     (: cv (cval (car a))
+      (? (&& pure (car cv)) (go (hv (cdr cv)) (cdr a))
+         (? (&& op (= n ar)) (cons iop (cons op as)) x))))   ; matching-arity bif -> inline
+    (go v as))
+   names (list '+ '- '* '/ '% '~ '<< '>> '& '| '^
+               '< '<= '= '>= '> 'same '** 'gcd 'modpow 'inc 'dec 'abs
+               'cons 'car 'cdr 'X 'A 'B 'caar 'cadr 'cdar 'cddr
+               'len 'lidx 'assq 'memq 'last 'rev 'cat
+               'nump 'symp 'twop 'tblp 'strp 'nilp 'flop 'cplxp 'atomp
+               'ssub 'scat 'str 'nom
+               're 'im 'conj 'arg 'flo 'cplx
+               'sin 'cos 'tan 'atan 'sqrt 'exp 'log 'atan2 'pow)
+   pureset (foldl (\ t s (: v (get 0 s globals) (? v (put v -1 t) t))) (new 0) names)
+   (add t s) (: v (get 0 s globals)
+    (? (nump v) t
+     (: o (opof v) p (get 0 v pureset)
+      (? (|| o p)
+       (: op (? o (car o) 0) ar (? o (cdr o) 0) (put v (\ x (hgen v op ar p x)) t))
+       t))))
+   (foldl add (new 0) (tkeys globals)))
   ; wev: source->source pre-pass before `ana` -- expands macros and constant-folds,
   ; threading bound names `bnd` for shadowing. Macros expand as ana does (table head,
   ; not gated on bnd). Only `\` and `:` need bespoke handling; quotes are left as-is.
@@ -50,21 +76,10 @@
     (atomp (cdr bs)) (list (wx (car bs) bnd))
     (: nd (dsug (car bs) (cadr bs))               ; desugar (f a..) so wx's \ adds params to bnd
      (cons (car nd) (cons (wx (cdr nd) bnd) (wxb (cddr bs) bnd)))))
-   (cval e) (?                                    ; constant? -> (-1 . value) else (0 . 0)
-    (symp e) (cons 0 0)
-    (atomp e) (cons -1 e)
-    (&& (= (car e) '\) (atomp (cddr e))) (cons -1 (cadr e))   ; quote -> its datum
-    (cons 0 0))
-   (bake v) (? (nump v) v (list '\ v))            ; value -> source: fixnum bare else quote
-   ; curry constant args left to right; fold only on FULL consumption -- a partial
-   ; prefix is left as-is so ana keeps its inline-bif path for it.
-   (curry x0 hv a) (?
-    (atomp a) (bake hv)
-    (: cv (cval (car a)) (? (car cv) (curry x0 (hv (cdr cv)) (cdr a)) x0)))
-   ; fold: head an un-shadowed global whose value is pure -> evaluate at compile time.
+   ; fold: head an un-shadowed global with a handler -> run it; else leave as-is.
    (fold x bnd) (: h (car x)
     (? (|| (nilp (symp h)) (memq h bnd)) x
-       (: gv (get 0 h globals) (? (get 0 gv pures) (curry x gv (cdr x)) x))))
+       (: hd (get 0 (get 0 h globals) wevs) (? hd (hd x) x))))
    (wx x 0))
   (ana c x) (:- (? (symp x)  (ava x)
                    (atomp x) (kim x)
@@ -73,26 +88,25 @@
                     (= a '? ) (aco b)
                     (= a '\ ) (? (atomp (cdr b)) (kim (car b)) (ana c (ala c 0 b)))
                     (= a ': ) (ale (car b) (cdr b))
+                    (= a iop) (iap b)
                     (: m (get 0 a macros)
                      (? m (ana c (m b)) (app a b))))))
   (push k x) (: _ (put k (cons x (get 0 k c)) c) x)
   (pop k) (: x (get 0 k c) _ (put k (cdr x) c) (car x))
+  (iap b) (: op (car b) as (cdr b)                         ; (iop op . args) -> inline the vm op
+   (? (atomp (cdr as)) (co (ana c (car as)) (em1 op))      ; unary
+      (: s (get 0 'stk c) k (apr2l as) _ (put 'stk s c) (co k (em1 op))))) ; n-ary, r2l args
   (app a b) (: f (ana c a) ; analyze function expression
                ca (len b)                                  ; call arity
-               i (? (= kim (pro f)) (peek 3 f))
+               i (? (= kim (pro f)) (peek 3 f))            ; head's quoted global value, if any
                i (? (nump i) 0 i)
-               fa (? (nump i) 1 (!= g_vm_cur (peek 0 i)) 1 (peek 1 i)) ; function arity
-               ub (&& i (= 1 ca) (= g_vm_ret0 (peek 1 i))) ; unary bif?
-               na (&& (< 1 ca) (= ca fa))                  ; n-ary ap?
-               nb (&& na (= g_vm_ret0 (peek 3 i)))         ; n-ary bif?
-               s (get 0 'stk c)                            ; get original stack
-               (? ub (co (ana c (A b)) (em1 (peek 0 i)))   ; unary bif
-                  nb (: k (apr2l b) _ (put 'stk s c)
-                      (co k (em1 (peek 2 i))))             ; n-ary bif
-                (: _ (push 'stk 0)                         ; stack rep of analyzed function f
-                   g (? na (co (apr2l b) (kap ca)) (apl2r b)) ; r2l or l2r?
-                   _ (put 'stk s c)                        ; put original stack
-                 (co f g))))
+               fa (? (nump i) 1 (!= g_vm_cur (peek 0 i)) 1 (peek 1 i)) ; its arity
+               na (&& (< 1 ca) (= ca fa))                  ; n-ary apply (arity match)?
+               s (get 0 'stk c)
+               _ (push 'stk 0)                             ; stack rep of analyzed function f
+               g (? na (co (apr2l b) (kap ca)) (apl2r b))  ; r2l n-ary or l2r 1-ary
+               _ (put 'stk s c)
+             (co f g))
  (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (co f (co (kap 1) g))))
  (apr2l b) (?- id (twop b) (: g (apr2l (cdr b)) f (ana c (car b)) _ (push 'stk 0) (co g f)))
  (kap n k m)
