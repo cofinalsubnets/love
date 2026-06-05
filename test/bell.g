@@ -14,7 +14,7 @@
 ; so memoization here uses module-level tables + named recursive functions,
 ; which compile correctly. Same algorithm, identical output.
 
-(: miss (sym 0)            ; unique "absent" sentinel for table misses
+(: miss  (sym 0)           ; unique "absent" sentinel for table misses
    facts (new 0)           ; memo: n -> n!
    bells (new 0)           ; memo: n -> B(n)
    ; n!  (Ruby: x=1; (x*=n; n-=1) while n>1)

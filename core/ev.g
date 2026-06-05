@@ -20,6 +20,8 @@
                           (pro (seek -2 (peek 4 f)))))))
   (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
   iop (sym 0)   ; inline-op marker: (iop op . args), emitted by wev, compiled by iap
+  apx (sym 0)   ; apply marker: (apx tail nary head . args), emitted by wev, compiled by apxh
+  auto (sym 0)  ; kap tail sentinel: detect tail by peeking (ana-internal applies that bypass wev)
   ; wevs: value->handler for global fns. A handler folds an application to a value when
   ; its args are constant (pure fns only), else emits an (iop op . args) node iap inlines
   ; (any bif of matching arity), else leaves it. Built by scanning every global: a bif is
@@ -35,11 +37,13 @@
    (opof v) (? (same g_vm_ret0 (peek 1 v)) (cons (peek 0 v) 1)
                (&& (same g_vm_cur (peek 0 v)) (same g_vm_ret0 (peek 3 v))) (cons (peek 2 v) (peek 1 v))
                0)
-   (hgen v op ar pure x) (: as (cdr x) n (len as)
+   (hgen v op ar pure x tail) (: as (cdr x) n (len as)
     (go hv a) (? (atomp a) (bake hv)             ; all args constant -> fold
      (: cv (cval (car a))
       (? (&& pure (car cv)) (go (hv (cdr cv)) (cdr a))
-         (? (&& op (= n ar)) (cons iop (cons op as)) x))))   ; matching-arity bif -> inline
+         (? (&& op (= n ar)) (cons iop (cons op as))                  ; matching-arity bif -> inline
+            (&& (< 1 ar) (= n ar)) (cons apx (cons tail (cons -1 x))) ; multi-arg fn -> n-ary apply
+            (cons apx (cons tail (cons 0 x)))))))                     ; generic l2r apply
     (go v as))
    names (list '+ '- '* '/ '% '~ '<< '>> '& '| '^
                '< '<= '= '>= '> 'same '** 'gcd 'modpow 'inc 'dec 'abs
@@ -54,33 +58,50 @@
     (? (nump v) t
      (: o (opof v) p (get 0 v pureset)
       (? (|| o p)
-       (: op (? o (car o) 0) ar (? o (cdr o) 0) (put v (\ x (hgen v op ar p x)) t))
+       (: op (? o (car o) 0)
+          ar (? o (cdr o) (same g_vm_cur (peek 0 v)) (peek 1 v) 0)   ; bif/multi-arg-fn arity
+          (put v (\ x tail (hgen v op ar p x tail)) t))
        t))))
    (foldl add (new 0) (tkeys globals)))
-  ; wev: source->source pre-pass before `ana` -- expands macros and constant-folds,
-  ; threading bound names `bnd` for shadowing. Macros expand as ana does (table head,
-  ; not gated on bnd). Only `\` and `:` need bespoke handling; quotes are left as-is.
+  ; wev: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks
+  ; applies with their strategy + tail position (threaded as `tail`, -1 = tail). `\`/`:`/`?`
+  ; set tail for sub-exprs; quotes are left as-is. ana reads tail off the emitted apx nodes.
   (wev c x) (:
-   (wx x bnd) (?
+   (wx x bnd tail) (?
     (atomp x) x
     (: h (car x) (?
-     (= h '\) (? (atomp (cddr x)) x
-                (: r (lp x) (cons '\ (cat (car r) (list (wx (cdr r) (cat (car r) bnd)))))))
-     (= h ':) (cons ': (wxl (cdr x) bnd))
-     (: m (? (symp h) (get 0 h macros) 0)         ; macro head? expand, then re-walk
-      (? m (wx (m (cdr x)) bnd)
-         (fold (map (\ e (wx e bnd)) x) bnd))))))
+     (= h '\) (? (atomp (cddr x)) x                          ; quote
+                (: r (lp x) (cons '\ (cat (car r) (list (wx (cdr r) (cat (car r) bnd) -1)))))) ; body is tail
+     (= h ':) (? (atomp (cddr x)) (cons ': (list (wx (cadr x) bnd tail))) ; (: a) no frame -> inherits
+                 (cons ': (wxl (cdr x) bnd)))                 ; framed let: body is a body-lambda body
+     (= h '?) (cons '? (wxc (cdr x) bnd tail))                ; cond: branches inherit tail
+     (: m (? (symp h) (get 0 h macros) 0)                     ; macro head? expand, then re-walk
+      (? m (wx (m (cdr x)) bnd tail)
+         (fold (map (\ e (wx e bnd 0)) x) bnd tail))))))      ; args non-tail; the call inherits tail
    (wxl bs bnd) (wxb bs (cat (ln bs) bnd))        ; a let's names all shadow throughout
    (wxb bs bnd) (?
     (atomp bs) bs
-    (atomp (cdr bs)) (list (wx (car bs) bnd))
+    (atomp (cdr bs)) (list (wx (car bs) bnd -1))  ; lone body -> body-lambda body -> tail
     (: nd (dsug (car bs) (cadr bs))               ; desugar (f a..) so wx's \ adds params to bnd
-     (cons (car nd) (cons (wx (cdr nd) bnd) (wxb (cddr bs) bnd)))))
-   ; fold: head an un-shadowed global with a handler -> run it; else leave as-is.
-   (fold x bnd) (: h (car x)
-    (? (|| (nilp (symp h)) (memq h bnd)) x
-       (: hd (get 0 (get 0 h globals) wevs) (? hd (hd x) x))))
-   (wx x 0))
+     (cons (car nd) (cons (wx (cdr nd) bnd 0) (wxb (cddr bs) bnd)))))  ; binding value -> non-tail
+   (wxc bs bnd tail) (?                           ; cond clauses (ant con ant con ... else)
+    (atomp bs) bs
+    (atomp (cdr bs)) (list (wx (car bs) bnd tail))                    ; lone else -> tail
+    (cons (wx (car bs) bnd 0) (cons (wx (cadr bs) bnd tail) (wxc (cddr bs) bnd tail))))
+   ; napof: v is a non-bif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
+   ; `same`-safe peeks (a non-fn value never matches g_vm_cur); mirrors app's old `fa`/`na`.
+   (napof v args) (? (nump v) 0
+    (? (same g_vm_cur (peek 0 v)) (: ar (peek 1 v) (&& (< 1 ar) (= (len args) ar))) 0))
+   ; fold: un-shadowed global head -> handler (fold/iop/apx); else mark the call as an apx
+   ; node (apx tail nary head . args) carrying tail position + n-ary-vs-l2r strategy.
+   (fold x bnd tail) (: h (car x)
+    (? (atomp (cdr x)) x                          ; (f) single element -> ana's (atomp b) handles
+       (|| (nilp (symp h)) (memq h bnd)) (cons apx (cons tail (cons 0 x)))   ; local/computed head
+       (: v (get 0 h globals) hd (get 0 v wevs)
+        (? hd (hd x tail)
+           (napof v (cdr x)) (cons apx (cons tail (cons -1 x)))
+           (cons apx (cons tail (cons 0 x)))))))
+   (wx x 0 -1))
   (ana c x) (:- (? (symp x)  (ava x)
                    (atomp x) (kim x)
                    (: a (car x) b (cdr x) (?
@@ -89,6 +110,7 @@
                     (= a '\ ) (? (atomp (cdr b)) (kim (car b)) (ana c (ala c 0 b)))
                     (= a ': ) (ale (car b) (cdr b))
                     (= a iop) (iap b)
+                    (= a apx) (apxh b)
                     (: m (get 0 a macros)
                      (? m (ana c (m b)) (app a b))))))
   (push k x) (: _ (put k (cons x (get 0 k c)) c) x)
@@ -96,24 +118,25 @@
   (iap b) (: op (car b) as (cdr b)                         ; (iop op . args) -> inline the vm op
    (? (atomp (cdr as)) (co (ana c (car as)) (em1 op))      ; unary
       (: s (get 0 'stk c) k (apr2l as) _ (put 'stk s c) (co k (em1 op))))) ; n-ary, r2l args
-  (app a b) (: f (ana c a) ; analyze function expression
-               ca (len b)                                  ; call arity
-               i (? (= kim (pro f)) (peek 3 f))            ; head's quoted global value, if any
-               i (? (nump i) 0 i)
-               fa (? (nump i) 1 (!= g_vm_cur (peek 0 i)) 1 (peek 1 i)) ; its arity
-               na (&& (< 1 ca) (= ca fa))                  ; n-ary apply (arity match)?
-               s (get 0 'stk c)
-               _ (push 'stk 0)                             ; stack rep of analyzed function f
-               g (? na (co (apr2l b) (kap ca)) (apl2r b))  ; r2l n-ary or l2r 1-ary
-               _ (put 'stk s c)
+  ; apxh: (apx tail nary head . args) -> apply. nary -> r2l arg eval + a single n-ary apply;
+  ; else l2r 1-ary chain. tail (from wev) drives tap/tapn vs ap/apn in kap.
+  (apxh b) (: tl (car b) nary (cadr b) head (caddr b) args (cdddr b)
+              f (ana c head) s (get 0 'stk c) _ (push 'stk 0)
+              g (? nary (co (apr2l args) (kap tl (len args))) (apl2r tl args))
+              _ (put 'stk s c)
+            (co f g))
+  (app a b) (: f (ana c a)                                 ; bare apply (ana-internal): tail auto-detect
+               s (get 0 'stk c) _ (push 'stk 0)
+               g (apl2r auto b) _ (put 'stk s c)
              (co f g))
- (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (co f (co (kap 1) g))))
+ (apl2r tail b) (?- id (twop b) (: f (ana c (car b)) g (apl2r tail (cdr b))
+                    (co f (co (kap (? (nilp (cdr b)) tail 0) 1) g))))  ; only the last apply is tail
  (apr2l b) (?- id (twop b) (: g (apr2l (cdr b)) f (ana c (car b)) _ (push 'stk 0) (co g f)))
- (kap n k m)
+ (kap tail n k m)
   (: j (k (+ 2 m))
-   (? (= (peek 0 j) g_vm_ret)
-    (? (> n 1) (poke -1 g_vm_tapn (poke 0 n j)) (poke 0 g_vm_tap j))
-    (? (> n 1) (p2 g_vm_apn n j) (poke -1 g_vm_ap j))))
+   t (? (same tail auto) (= (peek 0 j) g_vm_ret) tail)    ; auto -> peek the continuation for ret
+   (? t (? (> n 1) (poke -1 g_vm_tapn (poke 0 n j)) (poke 0 g_vm_tap j))
+        (? (> n 1) (p2 g_vm_apn n j) (poke -1 g_vm_ap j))))
 
   ;aco is a bit complicated
   (aco b) (:- (: f (acr b) (\ k n (: k (f (co (push 'end) k) n) _ (pop 'end) k)))
@@ -148,7 +171,7 @@
                            _ (put 'sites (cons site (get 0 'sites scope)) scope)
                          (qsite site)))
                    _ (push 'stk 0)
-                   q (apl2r (cddr lfd))
+                   q (apl2r auto (cddr lfd))
                    _ (pop 'stk)
                  (co p q))
   ; variable expression analyzer
@@ -289,6 +312,6 @@
     _ (put 'stk s c)
     ; body-lambda analyzed AFTER inits (it takes bindings as args; never makes sites)
     f (ana c (cons '\ (cat (rev (map car prs)) (list body))))
-    h (kap (len prs))
+    h (kap auto (len prs))
     _ (put 'stk s c)
     (\ x (f (g (h x)))))))))
