@@ -35,7 +35,7 @@
      _ (close wp)
      rp (open "/tmp/gwen-io-test" "r")
      (slurp acc) (: c (fgetc rp) (? (= c -1) (rev acc) (slurp (cons c acc))))
-     rd (str (slurp 0))
+     rd (string (slurp 0))
      _ (close rp)
      (= txt rd))
 
@@ -65,7 +65,7 @@
   (: r (fread (strin '(39 49)) 99)                        ; "'1" -> (` 1)
      (do (twop r) (= 1 (cadr r))))
   ; "hi" -- string literal round-trip through the ci port.
-  (= (str (X 104 (X 105 0))) (fread (strin '(34 104 105 34)) 99))
+  (= (string (X 104 (X 105 0))) (fread (strin '(34 104 105 34)) 99))
 
   ; Sequential reads: pull each datum in source order; final read returns e.
   (: p (strin '(49 32 50 32 51))                          ; "1 2 3"

@@ -72,6 +72,7 @@ struct g_vec {
  g_vm_t *ap;
  uintptr_t type, rank, shape[]; };
 
+enum g_status { g_status_ok = 0, g_status_oom = 1, g_status_eof = 2, g_status_more = 3 };
 struct g {
  union u {
   g_vm_t *ap;
@@ -101,7 +102,7 @@ struct g {
  union { uintptr_t t0; g_word *cp; };
  void *(*malloc)(struct g*, size_t),
       (*free)(struct g*, void*);
- struct g *(*trap)(struct g*);
+ union u *k; // current continuation: a thread thrown to on error (default throw_c, installed by g_ini_0)
  uintptr_t b;
  uintptr_t n_gc, max_len, max_heap; // gc instrumentation (cycles, peak pool len, peak live heap; words)
  union {
@@ -135,7 +136,6 @@ struct g_port_vt {
          *(*flush)(struct g*); };
 
 // only 2 tag bits on 32 bit so we can only have four of these
-enum g_status { g_status_ok = 0, g_status_oom = 1, g_status_eof = 2, g_status_more = 3 };
 enum g_status g_fin(struct g*);
 
 static g_inline size_t b2w(size_t b) {

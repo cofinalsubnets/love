@@ -15,9 +15,10 @@
   (= "\"\\\\\""       (inspect "\\"))
   (= "\"\\\"\""       (inspect "\""))
 
-  ; symbols print as their name
+  ; interned symbols print as their name
   (= "foo" (inspect 'foo))
-  (= "x"   (inspect (sym "x")))
+  ; named-uninterned symbols print as ,<name>@<addr>
+  (= ",x@" (ssub (inspect (gensym "x")) 0 3))
 
   ; quote sugar: a pair (` x) prints as 'x
   (= "'foo"      (inspect ''foo))

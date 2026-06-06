@@ -153,9 +153,12 @@ static struct g*gvzprintf(struct g*f, char const *fmt, va_list xs) {
    case 0: return f;
    case 'l': goto pass;
    case 'b': f = gzputn(f, va_arg(xs, uintptr_t), 2); continue;
+   case 'n': f = gzputn(f, va_arg(xs, uintptr_t), 6); continue;
    case 'o': f = gzputn(f, va_arg(xs, uintptr_t), 8); continue;
    case 'd': f = gzputn(f, va_arg(xs, uintptr_t), 10); continue;
+   case 'u': f = gzputn(f, va_arg(xs, uintptr_t), 12); continue;
    case 'x': f = gzputn(f, va_arg(xs, uintptr_t), 16); continue;
+   case 'z': f = gzputn(f, va_arg(xs, uintptr_t), 36); continue;
    default: f = gzputc(f, c); } }
  return f; }
 
@@ -268,7 +271,7 @@ static g_inline struct g*gzput_vec(struct g*f, word _) {
  else if (rank == 0 && type == G_VT_INT) f = gzputn(f, box_get(f->sp[0]), 10);
  else if (rank == 0 && type == G_VT_CPLX) f = gzput_vec_scalar_complex(f);
  else if (rank >= 1) f = gzput_arr(f);
- else f = gzprintf(f, ",vec@%x:%d.%d", vec(f->sp[0]), type, rank);
+ else f = gzprintf(f, ",vec@%z:%d.%d", vec(f->sp[0]), type, rank);
  return g_pop(f, 1); }
 
 static g_inline struct g*gzput_str(struct g*f, word _) {
@@ -287,13 +290,25 @@ static g_inline struct g*gzput_str(struct g*f, word _) {
   f = gzputc(f, c); }
  return g_pop(gzputc(f, '"'), 1); }
 
+// A symbol's nom encodes its kind: 0 = anonymous gensym, a string = interned, a
+// symbol = named-uninterned (the naming symbol, whose own nom is the name string).
+// Interned syms print bare; the other two get a leading , (parses, won't round-
+// trip) -- anonymous as ,sym@<addr>, named-uninterned as ,<name>@<addr>.
 static g_inline struct g*gzput_sym(struct g*f, word _) {
  if (g_ok(f = g_push(f, 1, _))) {
-  struct g_str *s = sym(f->sp[0])->nom;
-  if (!s) f = gzprintf(f, ",sym@%x", f->sp[0]);   // gensym: , (not #, which is a comment) -- parses, won't round-trip
-  else {
-   f->sp[0] = word(s);
-   for (uintptr_t slen = len(s), i = 0; g_ok(f) && i < slen; f = gzputc(f, txt(f->sp[0])[i++])); } }
+  word nom = word(sym(f->sp[0])->nom);
+  if (!nom) f = gzprintf(f, ",sym@%z", f->sp[0]);           // anonymous gensym
+  else if (strp(nom)) {                                     // interned: bare name
+   f->sp[0] = nom;
+   for (uintptr_t slen = len(nom), i = 0; g_ok(f) && i < slen; f = gzputc(f, txt(f->sp[0])[i++]));
+  } else {                                                  // named but uninterned
+   word name = word(sym(nom)->nom), addr = f->sp[0];
+   if (!name || !strp(name)) f = gzprintf(f, ",sym@%z", addr); // named after a nameless sym: fall back
+   else {
+    f->sp[0] = name;
+    f = gzputc(f, ',');
+    for (uintptr_t slen = len(name), i = 0; g_ok(f) && i < slen; f = gzputc(f, txt(f->sp[0])[i++]));
+    if (g_ok(f)) f = gzprintf(f, "@%z", addr); } } }
  return g_pop(f, 1); }
 
 // table -> ,(tbl k1 v1 k2 v2 …); round-trips via uq=identity (tbl is a prelude
@@ -370,11 +385,11 @@ static word fn_src(struct g *c, union u *k, word x) {
 // reads back via uq=identity): ,(base arg…) for a partial application / closure,
 // ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
 // thread (continuation, top-level wrap) has no constructor form, so it prints as the
-// opaque, re-parsable token ,hom@<addr>. The leading , is emitted once here; body w/o it.
+// opaque, re-parsable token ,thd@<addr>. The leading , is emitted once here; body w/o it.
 static struct g *gzput_fn(struct g *f, word x, uintptr_t off) {
  union u *k = cell(x);
  bool reprp = fn_partialp(k) || g_bif_name(x) || fn_src(g_core_of(f), k, x);
- return reprp ? gzput_fn_body(gzputc(f, ','), x, off) : gzprintf(f, ",hom@%x", x); }
+ return reprp ? gzput_fn_body(gzputc(f, ','), x, off) : gzprintf(f, ",thd@%z", x); }
 
 // Render a function as a bare constructor expression (NO leading ,). Detection
 // order matters: a bare multi-arg lambda and a partial-app both have a g_vm_cur
@@ -396,7 +411,7 @@ static struct g *gzput_fn_body(struct g *f, word x, uintptr_t off) {
  char const *nm = g_bif_name(x);                    // builtin -> name
  if (nm) return gzputcs(f, nm);
  word s = fn_src(c, k, x);                          // compiled lambda -> source \-expr
- return s ? gzputx(f, s, off) : gzprintf(f, ",hom@%x", x); }
+ return s ? gzputx(f, s, off) : gzprintf(f, ",thd@%z", x); }
 
 static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off) {
  if (nump(x)) return gzprintf(f, "%d", getnum(x));
@@ -616,16 +631,34 @@ g_vm(g_vm_fread) {
    case g_status_eof: f = c, f->sp++; } }
  return Unpack(f), Continue(); }
 
-g_vm(g_vm_str) {
- word l = Sp[0];
- uintptr_t n = llen(l), req = str_type_width + b2w(n);
- if (!n) return Sp[0] = nil, Ip++, Continue();
- Have(req);
- struct g_str *s = (void*) Hp;
- Hp += req;
- ini_str(s, n);
- for (uintptr_t i = 0; n--; l = B(l)) txt(s)[i++] = (char) getnum(A(l));
- return Sp[0] = word(s), Ip++, Continue(); }
+// (string x): a charlist -> the string of those bytes; a named symbol -> its
+// name string; a fixnum -> the one-byte string of its low byte. Identity on any
+// other type (strings, anonymous syms, nil, ...).
+g_vm(g_vm_string) {
+ word x = Sp[0];
+ if (nump(x)) {                                     // fixnum -> one-byte string
+  uintptr_t req = str_type_width + b2w(1);
+  Have(req);
+  struct g_str *s = (void*) Hp;
+  Hp += req;
+  ini_str(s, 1);
+  txt(s)[0] = (char) getnum(x);
+  return Sp[0] = word(s), Ip++, Continue(); }
+ if (symp(x)) {                                      // named symbol -> name string, else identity
+  word y = x;
+  while (symp(y) && sym(y)->nom && symp(word(sym(y)->nom))) y = word(sym(y)->nom);
+  word nom = word(sym(y)->nom);
+  if (nom && strp(nom)) Sp[0] = nom;
+  return Ip++, Continue(); }
+ if (twop(x)) {                                      // charlist -> string
+  uintptr_t n = llen(x), req = str_type_width + b2w(n);
+  Have(req);
+  struct g_str *s = (void*) Hp;
+  Hp += req;
+  ini_str(s, n);
+  for (uintptr_t i = 0; n--; x = B(x)) txt(s)[i++] = (char) getnum(A(x));
+  return Sp[0] = word(s), Ip++, Continue(); }
+ return Ip++, Continue(); }                          // any other type: identity
 
 ////
 /// " the parser "

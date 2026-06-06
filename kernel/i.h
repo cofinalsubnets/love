@@ -138,7 +138,7 @@ g_vm(g_vm_gc, uintptr_t);
 g_vm_t g_vm_kcall,
  g_vm_two, g_vm_vec, g_vm_sym, g_vm_tbl, g_vm_text, g_vm_big, // data self-quote sentinels, enum q order
  g_vm_putn, g_vm_info,    g_vm_clock,
- g_vm_nilp,  g_vm_symnom, g_vm_putc, g_vm_gensym, g_vm_twop,
+ g_vm_nilp,  g_vm_putc, g_vm_gensym, g_vm_intern, g_vm_twop,
  g_vm_len, g_vm_get, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
  g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
  g_vm_sin, g_vm_cos, g_vm_tan, g_vm_atan, g_vm_atan2,
@@ -148,7 +148,7 @@ g_vm_t g_vm_kcall,
  g_vm_cplx, g_vm_cplxp, g_vm_re, g_vm_im, g_vm_conj, g_vm_abs, g_vm_carg,
  g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
- g_vm_getc,  g_vm_str,    g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_same, g_vm_gt,  g_vm_ge,
+ g_vm_getc,  g_vm_string, g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_same, g_vm_gt,  g_vm_ge,
  g_vm_put, g_vm_tdel,   g_vm_tnew,   g_vm_tkeys,
  g_vm_unc, g_vm_poke2, g_vm_peek2,
  g_vm_seek,  g_vm_trim,   g_vm_thda,   g_vm_add,
@@ -436,6 +436,14 @@ static g_inline struct g_atom *ini_anon(struct g_atom *y, uintptr_t code) {
 static g_inline struct g_atom *ini_sym(struct g_atom *y, struct g_str *nom, uintptr_t code) {
  return y->ap = g_vm_sym, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
 
+// named but *uninterned* symbol: nom holds the interned SYMBOL it is named after
+// (not a string). That both tags it as uninterned -- the printer renders it
+// ,<name>@<addr> and the GC keeps it out of the to-space symbol tree -- and lets
+// it skip the l/r subtree slots only interned syms (string nom) carry, exactly
+// like an anonymous sym (nom 0). So it is also a Width-2 allocation.
+static g_inline struct g_atom *ini_usym(struct g_atom *y, struct g_atom *nom, uintptr_t code) {
+ return y->ap = g_vm_sym, y->nom = (struct g_str*) nom, y->code = code, y; }
+
 static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
  return s->ap = g_vm_text, s->len = len, s; }
 
@@ -463,7 +471,21 @@ static g_inline size_t llen(word l) {
  size_t n = 0;
  while (twop(l)) n++, l = B(l);
  return n; }
-static g_inline struct g *gtrap(struct g*f) { return g_core_of(f)->trap(f); }
+// Throw status s: transfer control to the continuation installed at f->k,
+// carrying s encoded into the f handed to it. The default k (throw_c, set in
+// g_ini_0) immediately yields that back to the C driver -- same escape the old
+// trap did; installing a gwen thread at f->k would instead land throws in gwen.
+static g_inline struct g *gtrap2(struct g*f, enum g_status s) {
+ struct g *c = g_core_of(f);
+ c->ip = c->k;                                  // resume at the continuation
+#if g_tco
+ return c->k->ap(encode(c, s), c->k, c->hp, c->sp);
+#else
+ return c->k->ap(encode(c, s));
+#endif
+}
+// Throw on an already-tagged f: re-throw its own status to f->k.
+static g_inline struct g *gtrap(struct g*f) { return gtrap2(g_core_of(f), g_code_of(f)); }
 static g_inline struct g *g_have(struct g *f, uintptr_t n) {
  return !g_ok(f) || avail(f) >= n ? f : g_please(f, n); }
 static g_inline struct g*g_pop(struct g*f, uintptr_t n) {

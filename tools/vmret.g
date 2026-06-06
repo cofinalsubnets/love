@@ -169,7 +169,7 @@
    base     (basename path)
    port     (open path "r")
    _        (? port 0 (die (scat "cannot open " path)))
-   hdr      (str (read-hdr port 20 0))
+   hdr      (string (read-hdr port 20 0))
    _        (close port)
    _        (? (&& (= 127 (get 0 0 hdr)) (&& (= 69 (get 0 1 hdr)) (&& (= 76 (get 0 2 hdr)) (= 70 (get 0 3 hdr))))) 0
                (die (scat path ": not an ELF file")))

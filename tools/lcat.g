@@ -18,6 +18,6 @@
                (: _ (? first (fputs out " ") 0)
                   _ (cesc (inspect r))
                   (g -1 e p)))))
-      0 (sym 0) p)
+      0 (gensym 0) p)
    _ (fputc out 34)                  ; closing "
    (fputc out 10))

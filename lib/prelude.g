@@ -68,16 +68,16 @@
  (strout _)
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (thd 6)))))))
  (outstr o) (ssub (peek 4 o) 0 (peek 5 o))
- (slurp i) (: (rl i) (: c (fgetc i) (? (!= c -1) (X c (rl i)))) (str (rl i)))
+ (slurp i) (: (rl i) (: c (fgetc i) (? (!= c -1) (X c (rl i)))) (string (rl i)))
  (inspect x) (: o (strout 0) _ (fputx o x) (outstr o)))
 ; here are some macro definitions
 (: l (foldr (\ a l (cons cons (cons a (cons l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
 (:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) -1))))
-(:: '|| (\ l (: (or l) (? l (: y (sym 0) (list ': y (car l) (list '? y y (or (cdr l)))))) (or l))))
+(:: '|| (\ l (: (or l) (? l (: y (gensym 0) (list ': y (car l) (list '? y y (or (cdr l)))))) (or l))))
 (:: ':- (\ a (cons ': (cat (cdr a) (cons (car a) 0)))))
 (:: '?- (\ a (cons '? (cat (cdr a) (cons (car a) 0)))))
 (:: '>>= (\ l (cons (last l) (init l))))
-(:: '<=< (\ g (: y (sym 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
+(:: '<=< (\ g (: y (gensym 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;
@@ -154,7 +154,7 @@
    (boxset prs) (: nm (map car prs)
      (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
                       (any (\ p (w v (cdr p) 0 0)) (take (+ 1 (lidx v nm)) prs)))) nm))
-   (mkcs bx) (map (\ v (cons v (sym 0))) bx)
+   (mkcs bx) (map (\ v (cons v (gensym 0))) bx)
    (cellbinds cs) (map (\ c (cons (cdr c) (list 'cons 0 0))) cs))
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.

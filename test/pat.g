@@ -17,7 +17,7 @@
   ks (tkeys t)
 
   lam (cons '\ (cat ks (list b)))
-  y (sym 0)
+  y (gensym 0)
   (ev (list '\ y (cons lam (map (\ k (list (get 0 k t) y)) ks)))))
 
  (pmatch x1 x2 f) (:

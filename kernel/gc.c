@@ -23,7 +23,8 @@ static g_inline void evac_big(struct g*f, word const*const p0, word const*const 
  f->cp += b2w(g_big_bytes((struct g_big*) f->cp)); }
 
 static g_inline void evac_sym(struct g*f, word const*const p0, word const*const t0) {
- f->cp += Width(struct g_atom) - (sym(f->cp)->nom ? 0 : 2); }
+ word nom = word(sym(f->cp)->nom);            // l/r subtree slots exist only for interned
+ f->cp += Width(struct g_atom) - (nom && strp(nom) ? 0 : 2); }   // (string nom); anon/uninterned skip them
 
 static g_inline void evac_tbl(struct g*f, word const*const p0, word const*const t0) {
  struct g_tab *t = (struct g_tab*) f->cp;
@@ -144,9 +145,13 @@ static g_inline word copy_big(struct g*f, struct g_big *src, word const *const p
 
 static g_inline word copy_sym(struct g*f, struct g_atom *src, word const *const p0, word const*const t0) {
  struct g_atom *dst;
- if (src->nom) dst = intern_checked(f, (struct g_str*) gcp(f, word(src->nom), p0, t0));
- else dst = bump(f, Width(struct g_atom) - 2),
-      ini_anon(dst, src->code);
+ if (!src->nom) dst = bump(f, Width(struct g_atom) - 2), ini_anon(dst, src->code);
+ else {
+  word nom = gcp(f, word(src->nom), p0, t0);   // relocate the nom (its sentinel now reads true)
+  if (symp(nom))                               // named-uninterned: copy fresh, stay out of the tree
+   dst = bump(f, Width(struct g_atom) - 2), ini_usym(dst, sym(nom), src->code);
+  else                                         // interned (string nom): rebuild the tree by name
+   dst = intern_checked(f, (struct g_str*) nom); }
  return word(src->ap = (g_vm_t*) dst); }
 
 static g_inline word copy_tbl(struct g*f, struct g_tab *src, word const*const p0, word const*const t0) {

@@ -6,9 +6,9 @@
   (loop k (A d) (B d)))
  (dict_get d k) (: x (dict_has d k) (? x (A x)))
  (dict_set d k v) (X (X k (A d)) (X v (B d)))
- (anon? x) (&& (symp x) (nilp (nom x)))
+ (anon? x) (&& (symp x) (symp (string x)))   ; string of a named sym is its name; of an anon sym, itself
  (var? x) (&& (twop x) (anon? (B x)))
- (var x) (X x (sym 0))
+ (var x) (X x (gensym 0))
  empty_dict '(0)
  has_s dict_has
  ext_s dict_set
@@ -58,7 +58,7 @@
     (? it (L k (walk_star (A it) st))))))
   (map reify (slist ((? n (stake n) id) (g empty_dict))))))
 
-(:: 'zz (\ x (: s (sym 0) n (sym 0) m (sym 0) y (sym 0) x (A x)
+(:: 'zz (\ x (: s (gensym 0) n (gensym 0) m (gensym 0) y (gensym 0) x (A x)
  (L '\ s n m y (L m (L x s))))))
 (:: 'et (\ xs (: x (A xs) xs (B xs)
  (foldl (\ a b (L (\ a b s (s_star (a s) b)) a b)) x xs))))

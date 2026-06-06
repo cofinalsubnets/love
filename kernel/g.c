@@ -30,8 +30,9 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
  _(bif_cons2, "cons", S2(g_vm_cons)) _(bif_car2, "car", S1(g_vm_car)) _(bif_cdr2, "cdr", S1(g_vm_cdr)) \
  _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
  _(bif_fread, "fread", S2(g_vm_fread))\
- _(bif_str, "str", S1(g_vm_str))\
- _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda))\
+ _(bif_string, "string", S1(g_vm_string))\
+ _(bif_intern, "intern", S1(g_vm_intern)) _(bif_gensym, "gensym", S1(g_vm_gensym))\
+ _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\
  _(bif_seek, "seek", S2(g_vm_seek)) _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_get))\
  _(bif_put, "put", S3(g_vm_put)) _(bif_tnew, "new", S1(g_vm_tnew)) _(bif_tabkeys, "tkeys", S1(g_vm_tkeys))\
@@ -71,6 +72,17 @@ bifs(built_in_function);
 
 static g_vm(_g_vm_yield_c) { return Pack(f), f; }
 static union u yield_c[] = { {_g_vm_yield_c} };
+
+// Default continuation installed at f->k. A throw enters it with the thrown
+// status encoded into f (see gtrap2 in i.h); it re-encodes that status and
+// yields to C -- the same escape the old trap did. Swap f->k for a gwen thread
+// to land throws in gwen instead.
+static g_vm(_g_vm_throw_c) {
+ enum g_status s = g_code_of(f);
+ f = g_core_of(f);
+ return Pack(f), encode(f, s); }
+static union u throw_c[] = { {_g_vm_throw_c} };
+
 static struct g_def const def1[] = { bifs(biff) insts(i_entry)};
 
 // reverse-lookup a function value against the builtin table -> its source name,
@@ -79,13 +91,11 @@ char const *g_bif_name(intptr_t x) {
  for (uintptr_t i = 0; i < LEN(def1); i++) if (def1[i].x == x) return def1[i].n;
  return 0; }
 
-static struct g *g_trap_default(struct g *f) { return f; }
-
 static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  memset(f, 0, sizeof(struct g));
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield_c, f->t0 = g_clock();
- f->trap = g_trap_default;
+ f->k = throw_c;
  uintptr_t const req = 2 * (Width(struct g_tab) + 1) + 6; // two tables plus main task thread
  if (g_ok(f = g_have(f, req))) {
   struct g_tab *d = bump(f, req),      *m = d + 1;

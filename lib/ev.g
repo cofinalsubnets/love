@@ -20,8 +20,8 @@
    (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
   (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
-  iop (sym 0)   ; inline-op marker: (iop op . args), emitted by wev, compiled by iap
-  apx (sym 0)   ; apply marker: (apx nary head . args), emitted by wev, compiled by apxh
+  iop (gensym 'iop)   ; inline-op marker: (iop op . args), emitted by wev, compiled by iap
+  apx (gensym 'apx)   ; apply marker: (apx nary head . args), emitted by wev, compiled by apxh
   ; wevs: value->handler for global fns. A handler folds an application to a value when
   ; its args are constant (pure fns only), else emits an (iop op . args) node iap inlines
   ; (any bif of matching arity), else leaves it. Built by scanning every global: a bif is
@@ -50,7 +50,7 @@
                'cons 'car 'cdr 'X 'A 'B 'caar 'cadr 'cdar 'cddr
                'len 'lidx 'assq 'memq 'last 'rev 'cat
                'nump 'symp 'twop 'tblp 'strp 'nilp 'flop 'cplxp 'atomp
-               'ssub 'scat 'str 'nom
+               'ssub 'scat 'string
                're 'im 'conj 'arg 'flo 'cplx
                'sin 'cos 'tan 'atan 'sqrt 'exp 'log 'atan2 'pow)
    pureset (foldl (\ t s (: v (get 0 s globals) (? v (put v -1 t) t))) (new 0) names)
@@ -162,7 +162,7 @@
             j (g (acx k) (+ 2 n))
             (p2 g_vm_cond (pop c 'alt) j)))))))))
 
-  Z (sym 0)
+  Z (gensym 'Z)
   ; recursive-fn ref: bake `quote code` if the closure is built, else `quote 0`
   ; + a backpatch site `(lfd . cell)` on the scope for l3 to resolve.
   (qsite site k n) (: cell (poke -1 0 (k (+ 2 n)))

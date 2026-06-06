@@ -14,28 +14,17 @@
 ; so memoization here uses module-level tables + named recursive functions,
 ; which compile correctly. Same algorithm, identical output.
 
-(: miss  (sym 0)           ; unique "absent" sentinel for table misses
-   facts (new 0)           ; memo: n -> n!
-   bells (new 0)           ; memo: n -> B(n)
-   ; n!  (Ruby: x=1; (x*=n; n-=1) while n>1)
-   (factloop n acc) (? (< n 2) acc (factloop (- n 1) (* acc n)))
-   (fact n) (: v (get miss n facts)
-              (? (= v miss) (: r (factloop n 1) _ (put n r facts) r) v))
-   ; C(n,k) = n! / (k! (n-k)!)
-   (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
-   ; tail-recursive sum_{k in [k,n)} C(n-1,k) * B(k)
-   (bellsum n k acc) (? (< k n) (bellsum n (+ k 1) (+ acc (* (choose (- n 1) k) (bell k)))) acc)
-   (bell n) (: v (get miss n bells)
-              (? (= v miss) (: r (? (< n 2) 1 (bellsum n 0 0)) _ (put n r bells) r) v))
-   ; base-36 rendering (Ruby: show). show(0) = "" (the empty product of digits).
+(: miss  (gensym 0) facts (new 0) bells (new 0)
    digits "0123456789abcdefghijklmnopqrstuvwxyz"
-   r (len digits)
+   (factloop n acc) (? (< n 2) acc (factloop (- n 1) (* acc n)))
+   (fact n) (: v (get miss n facts) (? (= v miss) (: r (factloop n 1) _ (put n r facts) r) v))
+   (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
+   (bellsum n k acc) (? (< k n) (bellsum n (+ k 1) (+ acc (* (choose (- n 1) k) (bell k)))) acc)
+   (bell n) (: v (get miss n bells) (? (= v miss) (: r (? (< n 2) 1 (bellsum n 0 0)) _ (put n r bells) r) v))
    (digit d) (ssub digits d (+ d 1))
-   (showloop n acc) (? (< n 1) acc (showloop (/ n r) (scat (digit (% n r)) acc)))
+   (showloop n acc) (? (< n 1) acc (showloop (/ n (len digits)) (scat (digit (% n (len digits))) acc)))
    (show n) (showloop n "")
-   ; the main loop: collect show(B(i)) while its length stays <= limit
    (gen i limit) (: b (show (bell i)) (? (<= (len b) limit) (cons b (gen (+ i 1) limit))))
-   ; elementwise list equality (also requires equal length)
    (leq a b) (? (twop a) (? (twop b) (? (= (car a) (car b)) (leq (cdr a) (cdr b)) 0) 0)
                          (? (twop b) 0 -1))
    out (gen 0 280)

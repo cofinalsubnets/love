@@ -23,7 +23,7 @@
 ; up navigates history toward older; mirrored for down. on first edit
 ; to a recalled entry, the pristine version is restored to its slot
 ; and the buffer becomes a new entry, so the original survives.
-(: m (sym 0) eofsym (sym 0)
+(: m (gensym 0) eofsym (gensym 0)
 
    (revcat a b) (foldl (flip cons) b a)
 
