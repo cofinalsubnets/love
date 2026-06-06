@@ -43,12 +43,26 @@
    (getc _) (fgetc in)
    read (fread in))
 ; fixnum-as-function application, installed into the VM via set-numap: applying a
-; fixnum n to x is Church-numeral application -- a numeric x exponentiates (x ** n),
-; a non-numeric (function) x is composed with itself n times (n < 1 -> identity).
-; registered here, after ** and dec exist and before any code can apply a fixnum
-; (boot applies none), so the VM's dispatch needs no fallback.
-(: (church n f) (? (< n 1) (\ x x) (\ x (f ((church (dec n) f) x))))
-   (num-ap n x) (? (nump x) (** x n) (church n x))
+; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
+; function x composes n times (n < 1 -> identity). numfn assembles the n-fold thread
+; directly via thd/poke (no `ev`, so applying a fixnum never re-enters the compiler):
+; n quote-f's then n ap's -- apl2r's [head..][arg][ap..] shape -- via the interned
+; opcode globals (kernel/g.c `insts`). Cell 0 is the source \-expr at value[-1] for
+; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (seek 1 th), and
+; the src rides the thread span so GC traces it. Helpers pass th/f/n explicitly -- a
+; closure over the forward-bound th miscompiles under the bootstrap c0.
+(: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (cons f (cons acc 0))))
+   (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) g_vm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
+   (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) g_vm_ap th) (nfa th (+ 1 i) n)) th)
+   (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
+     src (cons '\ (cons 'x (cons (nfnest f n 'x) 0)))  ; alloc before thd; printer source
+     th (thd (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
+     _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past thd: th can't move
+     _ (poke (+ 1 (* 2 n)) g_vm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
+     _ (nfa th 0 n)
+     _ (poke (+ 3 (* 3 n)) g_vm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
+   (seek 1 th))
+   (num-ap n x) (? (nump x) (** x n) (< n 1) id (numfn n x))
    _ (set-numap num-ap))
 (: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
    (foldl f z l) (? (twop l) (foldl f (f z (car l)) (cdr l)) z)
