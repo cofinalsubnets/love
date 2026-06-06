@@ -6,7 +6,7 @@
 // the page drains via gwen_out_ptr/len/reset; stdin always reads EOF (the
 // REPL feeds source through gwen_eval, not the stdin port). boot.g is
 // embedded and evaluated once by gwen_init.
-#include "g.h"
+#include "gwen.h"
 #include <emscripten.h>
 #include <time.h>
 

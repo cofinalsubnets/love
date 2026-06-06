@@ -9,12 +9,12 @@ emcc = $(CCACHE) $(EMCC)
 o = ../b/wasm
 
 # g.c was split into per-concern translation units (kernel/*.c); build them all.
-g_c = $(wildcard ../kernel/*.c)
-g_h = $(wildcard ../kernel/*.h)
+g_c = ../gwen.c ../vt.c
+g_h = $(wildcard ../*.h)
 
 # One object per source so an edit recompiles just that TU (and so ccache
 # can cache each compile). Local host.c stays rooted in cwd; shared kernel/*.c
-# carry the ../ prefix, mapped into $(o)/kernel/ by the patsubst.
+# carry the ../ prefix, mapped into $(o)/ by the patsubst.
 host_o = $(o)/host.o
 core_o = $(g_c:../%.c=$(o)/%.o)
 objs = $(host_o) $(core_o)
@@ -22,11 +22,11 @@ objs = $(host_o) $(core_o)
 # inc/ holds wasm's <vt.h> override (no flat code-address space, so it
 # resolves data kinds by sentinel ap rather than .gwen_data_vt slot index).
 # It must be its own include dir, NOT ".": emcc deprioritizes the compiler's
-# cwd in the <...> search path, which would let ../kernel/vt.h win instead.
+# cwd in the <...> search path, which would let ../vt.h win instead.
 CFLAGS = -std=gnu2x -Os -g0 -Dg_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
-  -Iinc -I../kernel -I../b/lib
+  -Iinc -I.. -I../b/lib
 
 EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=GwenModule \
@@ -40,8 +40,8 @@ all: gwen.js
 # prelude.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
 # the browser feeds the REPL through gwen_eval).
-../b/lib/prelude.h: ../lib/prelude.g
-../b/lib/ev.h: ../lib/ev.g
+../b/lib/prelude.h: ../gwen/prelude.g
+../b/lib/ev.h: ../gwen/ev.g
 ../b/lib/prelude.h ../b/lib/ev.h:
 	$(MAKE) -C .. b/lib/$(notdir $@)
 
@@ -54,7 +54,7 @@ $(o)/host.o: host.c ../b/lib/prelude.h ../b/lib/ev.h $(g_h)
 	@mkdir -p $(dir $@)
 	$(emcc) $(CFLAGS) -c $< -o $@
 
-$(o)/kernel/%.o: ../kernel/%.c $(g_h)
+$(o)/%.o: ../%.c $(g_h)
 	@mkdir -p $(dir $@)
 	$(emcc) $(CFLAGS) -c $< -o $@
 

@@ -12,8 +12,8 @@ a ?= $(shell uname -m)
 
 t = $(sort $(wildcard $R/test/*.$x))
 
-g_h = $(wildcard $R/kernel/*.h)
-g_c = $(wildcard $R/kernel/*.c)
+g_h = $(wildcard $R/*.h)
+g_c = $R/gwen.c $R/vt.c
 f_c = $(wildcard $R/font/*.c)
 c_c = $(wildcard $R/libc/*.c)
 
