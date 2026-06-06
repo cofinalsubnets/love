@@ -9,6 +9,35 @@
   (p2 i x k) (poke -1 i (poke -1 x k))
   (em1 x k n) (poke -1 x (k (+ 1 n)))
   (em2 i x k n) (poke -1 i (poke -1 x (k (+ 2 n))))
+  ; karg/kim: emit an arg ref / a quote, fusing with an immediately-following
+  ; 1-ary apply (g_vm_ap) or tail-call (g_vm_tap) that kap already wrote into the
+  ; continuation head. The same emit works for both: overwrite that op cell with
+  ; the operand (seek 1 keeps what follows -- the rest for ap, the frame-size for
+  ; tap) and prepend the fused op; only the handler differs. kap over-reserves a
+  ; word, so the reclaimed cell becomes -1 slack (thd memsets it; GC-safe).
+  ; operand-value specialization: a zero-operand opcode for the hottest arg indices
+  ; / quote constants, emitted in the plain (non-ap/tap) path -- covers arg/quote
+  ; consumed by inlined ops, e.g. n in (- n 1). 1-word op, no operand fetch; the
+  ; reclaimed operand cell is -1 slack (thd memsets it; GC-safe).
+  ; index/value -> specialized-op. A compare chain beats a `get`-table here: `get`
+  ; is a heavyweight polymorphic bif (type-dispatch + hash + eql), costing far more
+  ; than a few fixnum compares that short-circuit on the common small values
+  ; (measured: a table made boot +13% vs +5% for this chain; frequency-reordering
+  ; the chain was a wash). The nump guard keeps spq from ever hashing a heap value.
+  (spa i) (? (= i 0) g_vm_arg0 (= i 1) g_vm_arg1 (= i 2) g_vm_arg2 (= i 3) g_vm_arg3 0)
+  (spq v) (? (nump v) (? (= v 0) g_vm_quo0 (= v 1) g_vm_quo1 (= v 2) g_vm_quo2
+                         (= v 3) g_vm_quo3 (= v -1) g_vm_quom1 (= v -2) g_vm_quom2 0) 0)
+  (fuse a o t sp x k n)                          ; a=ap-op o=tap-op(0=none) t=plain-op sp=specializer
+   (: tail (k (+ 2 n)) h (peek 0 tail)
+    (? (= h g_vm_ap)         (p2 a x (seek 1 tail))
+       (&& o (= h g_vm_tap)) (p2 o x (seek 1 tail))
+       (: s (sp x) (? s (poke -1 s tail) (p2 t x tail)))))
+  ; arg fuses both ap and tap; quote only ap. quote;tap (a constant arg to a tail
+  ; call, e.g. (loop 0)) is left unfused: overwriting the shared tap cell in some
+  ; emit contexts corrupts a branch's jump target -- safe for arg (a fixnum index)
+  ; but not for quote. The rarest of the four cases; deferred.
+  (karg x k n) (fuse g_vm_argap   g_vm_argtap g_vm_arg   spa x k n)
+  (kim  x k n) (fuse g_vm_quoteap 0           g_vm_quote spq x k n)
   (k0 c n) (poke -1 g_vm_ret (poke (+ 1 n) (ary c) (thd (+ 2 n))))
   ; k0s: like k0 but reserves one extra LEADING cell (so the thread is shifted up
   ; by one) for ala to stash the lambda's source \-expr at value[-1], where the
@@ -19,7 +48,6 @@
    (= a g_vm_unc) (pro (seek -2 (peek 2 f)))
    (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
-  (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
   iop (gensym 'iop)   ; inline-op marker: (iop op . args), emitted by wev, compiled by iap
   apx (gensym 'apx)   ; apply marker: (apx nary head . args), emitted by wev, compiled by apxh
   ; wevs: value->handler for global fns. A handler folds an application to a value when
@@ -189,9 +217,9 @@
      (? lfd (lz c lfd c)
         (: s (get 0 'stk c)
            (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
-           (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
+           (q i j m) (karg (+ i (stki c)) j m)
          (?- (avb c (get 0 'par c) x)
-          (memq x s) (em2 g_vm_arg (lidx x s))
+          (memq x s) (karg (lidx x s))
           (>= (stki c) 0) (q (len (get 0 'stk c)))))))))
 
   (avb c d x)
@@ -204,7 +232,7 @@
      (? lfd (lz c lfd d)
         (: s (get 0 'stk d)
            (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
-           (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
+           (q i j m) (karg (+ i (stki c)) j m)
          (?- (avb c (get 0 'par d) x)
           (memq x s) (: _ (? (get 0 'par c) (push c 'imp x))
                          (q (len (get 0 'stk c))))

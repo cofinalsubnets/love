@@ -292,6 +292,57 @@ g_vm(g_vm_arg) {
  Ip += 2;
  return Continue(); }
 
+// fused (g_vm_arg <idx> ; g_vm_ap): push local at <idx>, then apply. A 2-word op
+// emitted by the compiler's `karg` when an arg ref is immediately followed by a
+// non-tail ap (the dominant "call a function on a local" shape). Saves one
+// dispatch + the standalone ap word vs. the unfused pair. The post-pattern
+// resume address is Ip+2 (cf. g_vm_ap's Ip+1, since the op is one word longer).
+g_vm(g_vm_argap) {
+ Have1();
+ Sp[-1] = Sp[getnum(Ip[1].x)];
+ Sp -= 1;
+ union u *k;
+ if (oddp(Sp[1])) Ip += 2, Sp++;
+ else k = cell(Sp[1]), Sp[1] = word(Ip + 2), Ip = k;
+ YieldCheck();
+ return Continue(); }
+
+// fused (g_vm_quote <v> ; g_vm_ap): push constant <v>, then apply. Emitted by
+// kim when a quote is immediately followed by a non-tail ap (a call with a
+// constant arg, e.g. (k 0)). Resume at Ip+2 (2-word op), cf. g_vm_argap.
+g_vm(g_vm_quoteap) {
+ Have1();
+ Sp -= 1;
+ Sp[0] = Ip[1].x;
+ union u *k;
+ if (oddp(Sp[1])) Ip += 2, Sp++;
+ else k = cell(Sp[1]), Sp[1] = word(Ip + 2), Ip = k;
+ YieldCheck();
+ return Continue(); }
+
+// fused (g_vm_arg <idx> ; g_vm_tap <fs>): push local <idx>, then tail-call,
+// popping frame size <fs> at Ip[2] (tap's operand, kept in place by the fused
+// emit). The single-arg tail-call shape, e.g. a tail (loop x) or cont (k v).
+g_vm(g_vm_argtap) {
+ Have1();
+ Sp[-1] = Sp[getnum(Ip[1].x)];
+ Sp -= 1;
+ intptr_t x = Sp[0], j = Sp[1];
+ Sp += getnum(Ip[2].x) + 1;
+ if (homp(j)) Ip = cell(j), Sp[0] = x;
+ else Sp += 1, Ip = cell(Sp[0]), Sp[0] = j;
+ YieldCheck();
+ return Continue(); }
+
+// operand-value-specialized arg/quote: 1-word ops with the index/constant baked
+// into the handler (no Ip[1] operand fetch). Emitted by the compiler's spa/spq for
+// the hottest indices {0..3} / constants {0,1,2,3,-1,-2}.
+#define ARGN(nom, i) g_vm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
+#define QUON(nom, v) g_vm(nom) { Have1(); Sp -= 1; Sp[0] = putnum(v); Ip += 1; return Continue(); }
+ARGN(g_vm_arg0, 0) ARGN(g_vm_arg1, 1) ARGN(g_vm_arg2, 2) ARGN(g_vm_arg3, 3)
+QUON(g_vm_quo0, 0) QUON(g_vm_quo1, 1) QUON(g_vm_quo2, 2) QUON(g_vm_quo3, 3)
+QUON(g_vm_quom1, -1) QUON(g_vm_quom2, -2)
+
 g_vm(g_vm_trim) { return
  clip(f, cell(Sp[0])), Ip++, Continue(); }
 

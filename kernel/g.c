@@ -69,7 +69,10 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
 #define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
-  _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_defglob)
+  _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_defglob)\
+  _(g_vm_argap) _(g_vm_quoteap) _(g_vm_argtap)\
+  _(g_vm_arg0) _(g_vm_arg1) _(g_vm_arg2) _(g_vm_arg3)\
+  _(g_vm_quo0) _(g_vm_quo1) _(g_vm_quo2) _(g_vm_quo3) _(g_vm_quom1) _(g_vm_quom2)
 #define biff(b, n, _) {n, (intptr_t) b},
 #define i_entry(i) {#i, (intptr_t) i},
 

@@ -4,13 +4,14 @@
    ms (% ms 1000)
    p (? (< ms 10) ".00" (< ms 100) ".0" ".")
    (do (putc 10)
-      (putx (- (test_get 'count) (len f))) (puts " tests pass in ")
-     (putx s) (puts p) (puts (putx ms) (puts " seconds") (putc 10))
+
      (: i (cdddr (vminfo 0))
         (do (putx (cadr i)) (puts " cycles ")
            (putx (caddr i)) (puts "/") (putx (car (cdddr i)))
             (puts " len/heap max")
            (putc 10)))
+      (putx (- (test_get 'count) (len f))) (puts " tests pass in ")
+     (putx s) (puts p) (puts (putx ms) (puts " seconds") (putc 10))
      (? f (do
       (putx (len f)) (puts " failed:") (putc 10)
       (each f (\ x (do (puts "  ") (putx x) (putc 10))))
