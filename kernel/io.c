@@ -314,11 +314,11 @@ static g_inline struct g*gzput_sym(struct g*f, word _) {
 
 #define fs0(f) (g_core_of(f)->sp[0])
 
-// table -> ,(tbl k1 v1 k2 v2 …); round-trips via uq=identity (tbl is a prelude
-// macro of nested `put`s). Entries are first snapshotted into an assoc list
-// ((k . v) …) in a single allocation, so the g_kvs C-pointer walk can't be split
-// by a GC; the list is parked on f->sp[0] and each k/v is re-read from there after
-// the printer (which may GC on string-port growth) runs.
+// table -> #(k1 v1 k2 v2 …); the `#` reader macro splices that back into a table
+// (#() reads as a fresh empty table). Entries are first snapshotted into an assoc
+// list ((k . v) …) in a single allocation, so the g_kvs C-pointer walk can't be
+// split by a GC; the list is parked on f->sp[0] and each k/v is re-read from there
+// after the printer (which may GC on string-port growth) runs.
 static g_inline struct g*gzput_tbl(struct g*f, word x, uintptr_t off) {
  if (!g_ok(f = g_push(f, 1, x))) return f;            // sp[0] = table
  uintptr_t n = tbl(f->sp[0])->len;
@@ -333,12 +333,13 @@ static g_inline struct g*gzput_tbl(struct g*f, word x, uintptr_t off) {
    ini_two(p, (word) kv, list);                       // cons onto the snapshot
    list = (word) p++; }
  fs0(f) = list;
- if (g_ok(f = gzprintf(f, "(tbl")) && twop(fs0(f))) do {
-  f = gzputc(f, ' ');
-  f = gzputx(f, AA(g_core_of(f)->sp[0]), off);  // key (re-read after gzputc)
+ if (g_ok(f = gzprintf(f, "#(")) && twop(fs0(f))) for (bool sp = false;;) {
+  if (sp) f = gzputc(f, ' ');                    // space between entries, not before the first
+  sp = true;
+  f = gzputx(f, AA(g_core_of(f)->sp[0]), off);   // key (re-read after gzputc)
   f = gzputc(f, ' '); f = gzputx(f, BA(g_core_of(f)->sp[0]), off);
   g_core_of(f)->sp[0] = B(g_core_of(f)->sp[0]);
- } while (g_ok(f) && twop(f->sp[0]));
+  if (!g_ok(f) || !twop(f->sp[0])) break; }
 
  return g_pop(g_ok(f) ? gzputc(f, ')') : f, 1); }
 
@@ -674,13 +675,45 @@ g_vm(g_vm_string) {
 // `i` parameter across the multiple port_* calls — each push triggers a
 // have() check that may GC and move heap ports.
 
+// Comments: `;` runs to end of line; a line that *starts* with `;;;` opens a
+// block comment that runs until the next line starting with `;;;` (that line is
+// consumed too). `#!` (shebang) runs to end of line; a bare `#` is significant
+// (the tbl reader macro), as is any other non-whitespace char. `bol` tracks the
+// start of a line; it is conservatively false at entry, so a `;;;` block is only
+// recognised when preceded by a newline this call has consumed (the common case).
 static struct g* g_z_getc(struct g*f) {
+ bool bol = false;
  while (g_ok(f = zgetc(f))) switch (f->b) {
-  default: return f;
-  case '#': case ';':
+  default: bol = false; return f;
+  case '\n': case '\r': bol = true; continue;
+  case 0: case ' ': case '\t': case '\f': continue;  // whitespace preserves bol
+  case '#':                                          // #! is a line comment; bare # is significant
+   if (!g_ok(f = zgetc(f))) return f;
+   if (f->b != '!') {                                // not a shebang: push back, return #
+    if ((int) f->b != EOF && !g_ok(f = zungetc(f, f->b))) return f;
+    return f->b = '#', f; }
    while (g_ok(f = zeof(f)) && !f->b && g_ok(f = zgetc(f)) && f->b != '\n' && f->b != '\r');
-  case 0: case ' ': case '\t': case '\n': case '\r': case '\f':
-   continue; }
+   bol = true; continue;                             // consumed the newline -> at line start
+  case ';':
+   if (bol) {                                        // a line-start ;;; opens a block comment
+    if (!g_ok(f = zgetc(f))) return f;               // 2nd char
+    if (f->b == ';') {
+     if (!g_ok(f = zgetc(f))) return f;              // 3rd char
+     if (f->b == ';') {                              // ;;; : run to the next ;;;-line
+      for (int n = -1; ;) {          // n = leading ; on this line (-1 = line disqualified)
+       if (!g_ok(f = zgetc(f)) || (int) f->b == EOF) return f;  // unterminated -> EOF in f->b
+       if (f->b == '\n' || f->b == '\r') n = 0;      // new line: count from scratch
+       else if (n < 0) continue;                     // line already has a non-; prefix
+       else if (f->b == ';') { if (++n == 3) break; }// closing ;;; found
+       else n = -1; }                                // non-; in the leading run: disqualify
+      while (g_ok(f = zgetc(f)) && f->b != '\n' && f->b != '\r' && (int) f->b != EOF);
+      if (!g_ok(f) || (int) f->b == EOF) return f;   // skip the rest of the closing ;;; line
+      bol = true; continue; } }
+    // not ;;;: the extra char(s) read are part of the comment; if it was already the
+    // line's newline (line was ";" or ";;"), the comment is done.
+    if (f->b == '\n' || f->b == '\r') { bol = true; continue; } }
+   while (g_ok(f = zeof(f)) && !f->b && g_ok(f = zgetc(f)) && f->b != '\n' && f->b != '\r');
+   bol = true; continue; }                           // consumed the newline -> at line start
  return f; }
 
 // --- one non-recursive reader for both g_read1 (multi=0) and g_reads (multi=1) ---
@@ -698,6 +731,12 @@ static g_inline struct g *push_frame(struct g *f) {     // push an empty (head .
  return gxl(gxl(g_push(f, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
 static g_inline struct g *push_wrap(struct g *f, char const *nom) {
  return gxl(intern(g_strof(f, nom))); }        // ctx' = (wrapsym . ctx)
+// recognise the `#` reader-macro wrap (interned `tbl`) so it can splice a list
+// operand instead of wrapping it -- see the deliver loop in gz_parse.
+static g_inline bool hashsym(word x) {
+ struct g_str *s = symp(x) ? sym(x)->nom : 0;
+ return s && strp(word(s)) && s->len == 3 &&
+   s->bytes[0] == 't' && s->bytes[1] == 'b' && s->bytes[2] == 'l'; }
 
 static struct g *gz_parse(struct g *f, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
@@ -710,6 +749,7 @@ static struct g *gz_parse(struct g *f, bool multi) {
    case '(':  f = push_frame(f); continue;
    case '\'': f = push_wrap(f, "\\"); continue;
    case '`':  f = push_wrap(f, "qq"); continue;
+   case '#':  f = push_wrap(f, "tbl"); continue;       // #(k v …)->(tbl k v …), #x->(tbl x)
    case ',':                                            // unquote / unquote-splice
     if (!g_ok(f = zgetc(f))) return f;
     if ((c2 = f->b) == '@') { f = push_wrap(f, "uqs"); continue; }
@@ -736,10 +776,18 @@ static struct g *gz_parse(struct g *f, bool multi) {
    if (nilp(f->sp[1])) {                               // no frame left: the result
     f->sp[1] = f->sp[0], f->sp++;
     return f; }
-   if (symp(A(f->sp[1]))) {                            // wrap: d := (wrapsym d), pop wrap
-    f = gxr(g_push(f, 1, nil));                        // (d . nil)
-    f = gxl(g_push(f, 1, g_ok(f) ? A(f->sp[1]) : nil)); // (wrapsym . (d))
-    if (g_ok(f)) f->sp[1] = B(f->sp[1]); }
+   if (symp(A(f->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
+    if (hashsym(A(f->sp[1])) && nilp(f->sp[0])) {      // #() -> (new 0): a fresh empty table
+     f = gxr(g_push(f, 1, nil));                       // d (=nil=0) -> (0 . nil) = (0)
+     f = gxl(intern(g_strof(f, "new")));               // (new . (0)) = (new 0)
+     if (g_ok(f)) f->sp[1] = B(f->sp[1]); }            // pop wrap
+    else if (hashsym(A(f->sp[1])) && twop(f->sp[0])) {
+     f = gxl(g_push(f, 1, A(f->sp[1])));               // #(k v …) on a list: splice -> (tbl . d)
+     if (g_ok(f)) f->sp[1] = B(f->sp[1]); }
+    else {                                             // 'x `x ,x #atom -> (wrapsym d)
+     f = gxr(g_push(f, 1, nil));                       // (d . nil)
+     f = gxl(g_push(f, 1, g_ok(f) ? A(f->sp[1]) : nil)); // (wrapsym . (d))
+     if (g_ok(f)) f->sp[1] = B(f->sp[1]); } }
    else {                                              // list: append d at the frame's tail
     f = gxr(g_push(f, 1, nil));                        // newcons = (d . nil)
     if (g_ok(f)) {
