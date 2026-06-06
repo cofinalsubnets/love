@@ -347,6 +347,19 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 #define EMIT_FLO(R) do { struct g_vec *_v = ini_scalar((struct g_vec*) Hp, G_VT_FLO); \
  Hp += BOX_REQ; flo_put(_v->shape, (R)); _res = word(_v); } while (0)
 
+// Step 8 -- RNG (kernel/rng.c). State is a rank-1 i64 vec of length 4 (256 bits,
+// xoshiro256++). It rides the existing vec machinery (no data sentinel) but its
+// payload is treated as raw bytes -- moved by memcpy, never via vec_get/put_int,
+// which would truncate the 64-bit limbs to intptr_t on 32-bit ports. The fixed
+// 8-byte limbs make a seed reproduce the same sequence on every target.
+#define RNG_STATE_LEN 4
+#define RNG_PAYLOAD_BYTES (RNG_STATE_LEN * 8)
+#define RNG_VEC_BYTES (sizeof(struct g_vec) + sizeof(uintptr_t) + RNG_PAYLOAD_BYTES)
+#define RNG_VEC_REQ (b2w(RNG_VEC_BYTES))
+void g_rng_seed(struct g_vec*, uint64_t);   // shape an i64 state vec + seed it (SplitMix64)
+g_vm_t g_vm_rng_seed, g_vm_rng_get, g_vm_rng_set,
+       g_vm_rand, g_vm_randf, g_vm_rand_next, g_vm_randf_next;
+
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),

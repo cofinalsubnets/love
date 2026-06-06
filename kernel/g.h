@@ -121,7 +121,9 @@ struct g {
     g_vm_t *ap;
     g_word fd;
     g_word ungetc_buf;            // pushed-back byte; putnum(EOF) = empty
-    g_word eof_seen; } *io; }; }; }; // set by getc on read-returning-0, cleared by ungetc
+    g_word eof_seen; } *io; };
+  g_word rng; }; }; // global RNG state: a rank-1 i64 vec, len 4 (xoshiro256++). Lives
+                    // in the &v0..end region so gc.c's root loop forwards it for free.
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };

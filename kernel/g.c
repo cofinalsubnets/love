@@ -62,7 +62,10 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
  _(bif_fputn, "fputn", S3(g_vm_fputn))\
  _(bif_fputx, "fputx", S2(g_vm_fputx))\
  _(bif_fgetc, "fgetc", S1(g_vm_fgetc)) _(bif_fungetc, "fungetc", S2(g_vm_fungetc)) _(bif_feof, "feof", S1(g_vm_feof))\
- _(bif_fputc, "fputc", S2(g_vm_fputc)) _(bif_fputs, "fputs", S2(g_vm_fputs))  _(bif_fflush, "fflush", S1(g_vm_fflush))
+ _(bif_fputc, "fputc", S2(g_vm_fputc)) _(bif_fputs, "fputs", S2(g_vm_fputs))  _(bif_fflush, "fflush", S1(g_vm_fflush))\
+ _(bif_rng_seed, "rng-seed", S1(g_vm_rng_seed)) _(bif_rng_get, "rng-get", S1(g_vm_rng_get)) _(bif_rng_set, "rng-set", S1(g_vm_rng_set))\
+ _(bif_rand, "rand", S1(g_vm_rand)) _(bif_randf, "randf", S1(g_vm_randf))\
+ _(bif_rand_next, "rand-next", S1(g_vm_rand_next)) _(bif_randf_next, "randf-next", S1(g_vm_randf_next))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
 #define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
@@ -119,7 +122,13 @@ static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size
   f = g_push(f, 3, nil, m, d);
   f = g_tput(f);
   f = g_pop(f, 1);
-  f = g_defn(f, def1, LEN(def1)); }
+  f = g_defn(f, def1, LEN(def1));
+  // Eager-seed the global RNG stream so f->rng is always a valid state vec (gl0
+  // bootstrap included). The seed mixes the clock with the rotated pool address.
+  if (g_ok(f = g_have(f, RNG_VEC_REQ))) {
+   struct g_vec *v = bump(f, RNG_VEC_REQ);
+   g_rng_seed(v, (uint64_t) (g_clock() ^ rot((uintptr_t) f)));
+   f->rng = word(v); } }
  return f; }
 
 struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {

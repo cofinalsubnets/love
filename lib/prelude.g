@@ -22,6 +22,9 @@
    (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
    (modpow b e m) (? (< e 1) 1 (: h (modpow b (/ e 2) m) h2 (% (* h h) m)
                                  (? (= 0 (% e 2)) h2 (% (* h2 b) m)))))
+; functional bounded draw: (value . st') with value in [0,n), riding rand-next
+; (full-width draw) + modulo. The global-stream analogue is the `rand` bif.
+(: (randint st n) (: r (rand-next st) (cons (% (car r) n) (cdr r))))
 (: AAA (co A AA) AAB (co A AB)
    ABA (co A BA) ABB (co A BB)
    BAA (co B AA) BAB (co B AB)
