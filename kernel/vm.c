@@ -240,7 +240,7 @@ g_vm(g_vm_wait) {
  return *Sp = ret, Ip++, Continue(); }
 
 g_vm(g_vm_donep) {
- word pid_arg = Sp[0], result = putnum(-1);
+ word pid_arg = Sp[0], result = putnum(1);
  intptr_t target = getnum(pid_arg);
  for (union u *node = f->tasks->m; node != f->tasks; node = node->m)
   if (getnum(node[2].x) == target) {
@@ -257,7 +257,7 @@ g_vm(g_vm_kill) {
  for (union u *node = prev->m; node != f->tasks; prev = node, node = node->m)
   if (getnum(node[2].x) == target) {
    prev->m = node->m;
-   result = putnum(-1);
+   result = putnum(1);
    break; }
  Sp[0] = result;
  Ip += 1;

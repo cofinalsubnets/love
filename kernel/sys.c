@@ -33,6 +33,6 @@ __attribute__((weak)) g_noinline void g_sleep(uintptr_t ticks) {
   for (ticks += g_clock(); g_clock() < ticks;); }
 
 g_vm(g_vm_key) {
- Sp[0] = (getnum(g_stdin.ungetc_buf) != EOF || g_ready(getnum(g_stdin.fd))) ? putnum(-1) : nil;
+ Sp[0] = (getnum(g_stdin.ungetc_buf) != EOF || g_ready(getnum(g_stdin.fd))) ? putnum(1) : nil;
  Ip += 1;
  return Continue(); }

@@ -10,7 +10,7 @@ g_vm(g_vm_hnew) {
   Ip++,
   Continue(); }
 
-op11(g_vm_hashp, hashp(Sp[0]) ? putnum(-1) : nil)
+op11(g_vm_hashp, hashp(Sp[0]) ? putnum(1) : nil)
 
 // (hash x) -- the general hashing method exposed to gwen as a fixnum.
 op11(g_vm_hashof, putnum(hash(f, Sp[0])))

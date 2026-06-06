@@ -5,9 +5,9 @@
    (flip f x y) (f y x))
 (: macros (get 0 0 globals))
 (: pi 3.141592653589793
-   true -1 false 0 not nilp
+   true 1 false 0 not nilp
    (atomp x) (nilp (twop x))
-   (!= a b) (? (= a b) 0 -1)
+   (!= a b) (? (= a b) 0 1)
    AA (co A A) AB (co A B)
    BA (co B A) BB (co B B))
 ; array element-type codes for `arr` (kernel/i.h enum g_vec_type)
@@ -75,8 +75,8 @@
    (last l) (? (cdr l) (last (cdr l)) (car l))
    (each l f) (? (twop l) (: _ (f (car l)) (each (cdr l) f)))
    (ldel x l) (? (twop l) (? (= (car l) x) (cdr l) (cons (car l) (ldel x (cdr l)))))
-   (all f l) (? (twop l) (? (f (car l)) (all f (cdr l))) -1)
-   (any f l) (? (twop l) (? (f (car l)) -1 (any f (cdr l))))
+   (all f l) (? (twop l) (? (f (car l)) (all f (cdr l))) 1)
+   (any f l) (? (twop l) (? (f (car l)) 1 (any f (cdr l))))
    (cat a b) (foldr cons b a))
 (: catmap (co (flip foldr 0) (co cat))
    (assq x l) (? l (? (= x (caar l)) (car l) (assq x (cdr l))))
@@ -97,7 +97,7 @@
  (inspect x) (: o (strout 0) _ (fputx o x) (outstr o)))
 ; here are some macro definitions
 (: l (foldr (\ a l (cons cons (cons a (cons l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
-(:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) -1))))
+(:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) 1))))
 (:: '|| (\ l (: (or l) (? l (: y (gensym 0) (list ': y (car l) (list '? y y (or (cdr l)))))) (or l))))
 (:: ':- (\ a (cons ': (cat (cdr a) (cons (car a) 0)))))
 (:: '?- (\ a (cons '? (cat (cdr a) (cons (car a) 0)))))
@@ -168,13 +168,13 @@
     (symp x) (&& u (= x v) (nilp (memq v bnd)))
     (atomp x) 0
     (: h (car x) (?
-      (= h '\) (? (atomp (cddr x)) 0 (: r (lp x) (w v (cdr r) (cat (car r) bnd) -1)))
+      (= h '\) (? (atomp (cddr x)) 0 (: r (lp x) (w v (cdr r) (cat (car r) bnd) 1)))
       (= h ':) (wl v (cdr x) (cat (ln (cdr x)) bnd) u)
       (: m (? (symp h) (get 0 h macros) 0) (? m (w v (m (cdr x)) bnd u) (any (\ e (w v e bnd u)) x))))))
    (wl v bs bnd u) (?
     (atomp bs) 0
     (atomp (cdr bs)) (w v (car bs) bnd u)
-    (: nd (dsug (car bs) (cadr bs)) (? (w v (cdr nd) bnd u) -1 (wl v (cddr bs) bnd u))))
+    (: nd (dsug (car bs) (cadr bs)) (? (w v (cdr nd) bnd u) 1 (wl v (cddr bs) bnd u))))
    ; boxset: value bindings whose init closes over the name (or a no-later sibling).
    (boxset prs) (: nm (map car prs)
      (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
@@ -205,7 +205,7 @@
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that
 ; need no boxing pass through verbatim.
 (: (boxfix fs) (:
-   (ev l) (? (atomp l) -1 (atomp (cdr l)) 0 (ev (cddr l)))
+   (ev l) (? (atomp l) 1 (atomp (cdr l)) 0 (ev (cddr l)))
    (bpr fs) (? (atomp (cdr fs)) (cons 0 (car fs))
                (: r (bpr (cddr fs)) (cons (cons (dsug (car fs) (cadr fs)) (car r)) (cdr r))))
    (? (ev fs) fs

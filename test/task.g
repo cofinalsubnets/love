@@ -9,7 +9,7 @@
 ;                  if the task is still running, yield until it becomes dormant.
 ; (sleep n)     -> nil; blocks the current task for at least n g_clock ticks.
 ;                  n <= 0 returns immediately. Other tasks run during the wait.
-; (done? pid)   -> -1 if (wait pid) would not yield (pid unknown, self, dormant),
+; (done? pid)   -> 1 if (wait pid) would not yield (pid unknown, self, dormant),
 ;                  nil if pid refers to a runnable task.
 
 (assert
@@ -77,20 +77,20 @@
  ; --- done? predicate ---
 
  ; done? on an unknown pid is true (wait would return 0 immediately).
- (= -1 (done? 99999))
+ (= 1 (done? 99999))
  ; done? on a non-numeric pid is true.
- (= -1 (done? nil))
+ (= 1 (done? nil))
  ; done? on the caller's own pid (main = 0) is true — wait skips self.
- (= -1 (done? 0))
+ (= 1 (done? 0))
 
  ; done? on a freshly spawned task is false: the task hasn't completed.
  (: p (spawn (\ _ 42) 0) r (done? p) _ (wait p) (nilp r))
 
  ; after yielding, the worker completes and done? becomes true.
- (: p (spawn (\ _ 42) 0) _ (yield 0) r (done? p) _ (wait p) (= -1 r))
+ (: p (spawn (\ _ 42) 0) _ (yield 0) r (done? p) _ (wait p) (= 1 r))
 
  ; after wait collects the task, done? is again true (pid is gone).
- (: p (spawn (\ _ 42) 0) _ (wait p) (= -1 (done? p)))
+ (: p (spawn (\ _ 42) 0) _ (wait p) (= 1 (done? p)))
 
  ; --- sleep ---
 
@@ -130,9 +130,9 @@
  (: t (hashn 0)
     _ (put 'flag 0 t)
     a (spawn (\ _ (sleep 30)) 0)
-    b (spawn (\ _ (put 'flag -1 t)) 0)
+    b (spawn (\ _ (put 'flag 1 t)) 0)
     _ (wait a) _ (wait b)
-    (= -1 (get 0 'flag t)))
+    (= 1 (get 0 'flag t)))
 
  ; --- kill ---
 
@@ -143,23 +143,23 @@
  ; kill on self (main = 0): 0 (self-kill impossible by construction).
  (= 0 (kill 0))
 
- ; kill a running task: returns -1. The task is gone from the ring, so
+ ; kill a running task: returns 1. The task is gone from the ring, so
  ; wait on its pid returns 0 (unknown).
  (: t (hashn 0)
     _ (put 'flag 0 t)
-    p (spawn (\ _ (: (loop _) (do (yield 0) (put 'flag -1 t) (loop 0)) (loop 0))) 0)
+    p (spawn (\ _ (: (loop _) (do (yield 0) (put 'flag 1 t) (loop 0)) (loop 0))) 0)
     r (kill p)
-    (&& (= -1 r) (= 0 (wait p))))
+    (&& (= 1 r) (= 0 (wait p))))
 
- ; kill a dormant task (already finished): also returns -1, then wait sees 0.
+ ; kill a dormant task (already finished): also returns 1, then wait sees 0.
  (: p (spawn (\ _ 42) 0)
     _ (yield 0)
-    ; p is dormant now (done? would be -1).
-    (&& (= -1 (kill p)) (= 0 (wait p))))
+    ; p is dormant now (done? would be 1).
+    (&& (= 1 (kill p)) (= 0 (wait p))))
 
  ; double-kill: second kill is a no-op since the pid is gone from the ring.
  (: p (spawn (\ _ (: (loop _) (do (yield 0) (loop 0)) (loop 0))) 0)
-    (&& (= -1 (kill p)) (= 0 (kill p))))
+    (&& (= 1 (kill p)) (= 0 (kill p))))
 
  ; killing one of several tasks leaves the others intact.
  (: t (hashn 0)
@@ -192,7 +192,7 @@
  ; ring directly and finds it regardless of state.
  (: p (spawn (\ _ (do (sleep 10000) 'never)) 0)
     r (kill p)
-    (&& (= -1 r) (= 0 (wait p))))
+    (&& (= 1 r) (= 0 (wait p))))
 
  ; sleep tasks coexist with non-sleeping ones: a worker that yields hot
  ; gets time while another sleeps.

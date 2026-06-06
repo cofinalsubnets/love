@@ -518,7 +518,7 @@ g_vm(g_vm_feof) {
   Pack(f);
   if (!g_ok(f = zeof(f))) return gtrap(f);
   Unpack(f);
-  Sp[0] = f->b ? putnum(-1) : nil; }
+  Sp[0] = f->b ? putnum(1) : nil; }
  return Ip++, Continue(); }
 
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait

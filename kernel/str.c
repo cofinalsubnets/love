@@ -13,7 +13,7 @@ struct g *g_strof(struct g *f, char const *cs) {
  if (g_ok(f = str0(f, len))) memcpy(txt(f->sp[0]), cs, len);
  return f; }
 
-op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : nil)
+op11(g_vm_strp, strp(Sp[0]) ? putnum(1) : nil)
 g_vm(g_vm_ssub) {
  if (!strp(Sp[0])) Sp[2] = nil;
  else {

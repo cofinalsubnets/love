@@ -4,7 +4,7 @@
 ; - arank / alen / ashape / atype accessors
 ; - elementwise + - * / over arrays + scalar broadcast + numpy broadcasting
 ; - mixed element-type promotes to the widest type
-; - < <= > >= = elementwise -> 0/-1 bool array
+; - < <= > >= = elementwise -> 0/1 bool array
 ; - reductions asum aprod amax amin aall aany; identity on scalars
 ; - vector falsiness: a vec is false iff every element is 0
 ; - elementwise transcendentals (sqrt) over an array
@@ -73,12 +73,12 @@
  (= i32 (atype (+ (arr i8 '(2)) (arr i32 '(2)))))  ; i8 + i32 -> i32
  (= i8 (atype (+ (arr i8 '(2)) 1)))                ; scalar int never widens the array
 
- ; --- comparison -> 0/-1 bool array ---
+ ; --- comparison -> 0/1 bool array ---
  (aall (< (arrl i64 '(3) '(1 2 3)) 10))
  (~ (aall (< (arrl i64 '(3) '(1 2 30)) 10)))
  (aany (< (arrl i64 '(3) '(1 20 30)) 10))
  (~ (aany (< (arrl i64 '(3) '(10 20 30)) 5)))
- (aall (= (arrl i8 '(3) '(-1 0 -1)) (< (arrl i64 '(3) '(1 5 2)) 3)))
+ (aall (= (arrl i8 '(3) '(1 0 1)) (< (arrl i64 '(3) '(1 5 2)) 3)))
  (= i8 (atype (< (arr i64 '(3)) 1)))               ; bool array is i8
  ; whole-array equality is (aall (= a b))
  (aall (= (arrl i64 '(2) '(5 6)) (arrl i64 '(2) '(5 6))))
@@ -99,9 +99,9 @@
  ; --- reductions are the identity on a scalar (rank-agnostic idiom) ---
  (= 5 (asum 5))
  (= 5 (amax 5))
- (= -1 (aall -1))
+ (= 1 (aall 1))
  (= 0 (aall 0))
- (aall (< 1 2))                                    ; scalar: (< 1 2) = -1, (aall -1) = -1
+ (aall (< 1 2))                                    ; scalar: (< 1 2) = 1, (aall 1) = 1
  (~ (aall (< 2 1)))
  (aall (< (arrl i64 '(2) '(1 2)) (arrl i64 '(2) '(3 4))))  ; array: same expression
 
@@ -113,8 +113,8 @@
  (~ (nilp 2.5))                         ; nonzero float -> true
  (~ (nilp -5))                          ; negatives are true
  (~ (nilp (+ (arr i64 '(2)) 1)))        ; nonzero array -> true
- (= -1 (? (arr i64 '(3)) 0 -1))         ; zero array takes the false arm
- (= 0 (? (+ (arr i64 '(3)) 1) 0 -1))    ; nonzero array takes the true arm
+ (= 1 (? (arr i64 '(3)) 0 1))         ; zero array takes the false arm
+ (= 0 (? (+ (arr i64 '(3)) 1) 0 1))    ; nonzero array takes the true arm
 
  ; --- elementwise transcendentals over an array ---
  (aall (= (arrl f64 '(2) '(2.0 3.0)) (sqrt (arrl f64 '(2) '(4.0 9.0)))))

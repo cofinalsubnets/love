@@ -37,7 +37,7 @@ g_noinline bool eqv(struct g *f, word a, word b) {
 // still rejects mixed-type pairs (so table keys 3 and 3.0 stay distinct).
 g_vm(g_vm_eq) {
  word a = Sp[0], b = Sp[1];
- // Over a rank>=1 array, `=` is elementwise -> a 0/-1 bool array (whole-array
+ // Over a rank>=1 array, `=` is elementwise -> a 0/1 bool array (whole-array
  // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, f, VOP_EQ);
  // Complex equality: equal iff re and im match. A real operand reads as (r, 0),
@@ -48,7 +48,7 @@ g_vm(g_vm_eq) {
   bool r = (cplxp(a) || ISNUM(a)) && (cplxp(b) || ISNUM(b))
         && (cplxp(a) ? cplx_re(a) : TOFLO(a)) == (cplxp(b) ? cplx_re(b) : TOFLO(b))
         && (cplxp(a) ? cplx_im(a) : 0) == (cplxp(b) ? cplx_im(b) : 0);
-  Sp[1] = r ? putnum(-1) : nil;
+  Sp[1] = r ? putnum(1) : nil;
   return Sp++, Ip++, Continue(); }
  bool r;
  // A float operand compares as doubles across the whole numeric tower (fixnum /
@@ -58,12 +58,12 @@ g_vm(g_vm_eq) {
  // distinct from any fixnum/box of a different value.
  if (flop(a) || flop(b)) r = ISNUM(a) && ISNUM(b) && (TOFLO(a) == TOFLO(b));
  else r = eql(f, a, b);
- Sp[1] = r ? putnum(-1) : nil;
+ Sp[1] = r ? putnum(1) : nil;
  return Sp++, Ip++, Continue(); }
 
 // (same a b) — pointer/word identity, no structural recursion. Distinguishes
 // two distinct objects that `=` would conflate (e.g. two equal pairs), so the
 // compiler can find a unique marker by identity.
 g_vm(g_vm_same) {
- Sp[1] = Sp[0] == Sp[1] ? putnum(-1) : nil;
+ Sp[1] = Sp[0] == Sp[1] ? putnum(1) : nil;
  return Sp++, Ip++, Continue(); }

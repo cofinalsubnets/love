@@ -168,7 +168,7 @@ g_vm(g_vm_aprod) {
 RED_EXTREME(g_vm_amax, >)
 RED_EXTREME(g_vm_amin, <)
 
-// aall/aany: bool reductions. Scalar -> identity (so (aall -1) = -1, the linchpin
+// aall/aany: bool reductions. Scalar -> identity (so (aall 1) = 1, the linchpin
 // of the rank-agnostic compare idiom). Over an array: aall = "no zero element",
 // aany = "some nonzero element" -- the falsy rule lifted to a conjunction/
 // disjunction. Empty array: aall true (vacuous), aany false.
@@ -181,7 +181,7 @@ g_vm(g_vm_aall) {
  for (uintptr_t i = 0; i < n; i++)
   if (fdom ? vec_get_flo(v, i) == 0 : vec_get_int(v, i) == 0)
    return Sp[0] = nil, Ip++, Continue();
- return Sp[0] = putnum(-1), Ip++, Continue(); }
+ return Sp[0] = putnum(1), Ip++, Continue(); }
 
 g_vm(g_vm_aany) {
  word x = Sp[0];
@@ -191,7 +191,7 @@ g_vm(g_vm_aany) {
  bool fdom = v->type >= g_vt_f32;
  for (uintptr_t i = 0; i < n; i++)
   if (fdom ? vec_get_flo(v, i) != 0 : vec_get_int(v, i) != 0)
-   return Sp[0] = putnum(-1), Ip++, Continue();
+   return Sp[0] = putnum(1), Ip++, Continue();
  return Sp[0] = nil, Ip++, Continue(); }
 
 // --- elementwise unary math over an array (sin/cos/sqrt/... ) --------------
@@ -289,13 +289,13 @@ static g_noinline void vbin_fill(struct g_vec *r, word a, word b, int op, bool f
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
   if (fdom) {
    g_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
-   if (cmp) vec_put_int(r, p, vcmp_flo(op, av, bv) ? -1 : 0);
+   if (cmp) vec_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
    else vec_put_flo(r, p, vop_flo(op, av, bv)); }
   else {
    intptr_t av = aarr ? vec_get_int(va, oa) : ia, bv = barr ? vec_get_int(vb, ob) : ib;
    if (cmp) {                                    // bignum side (if any) sorts by sign: a-b ~ asign, or -bsign
     intptr_t t = (abig || bbig) ? vcmp_sign(op, abig ? asign : -bsign) : vcmp_int(op, av, bv);
-    vec_put_int(r, p, t ? -1 : 0); }
+    vec_put_int(r, p, t ? 1 : 0); }
    else vec_put_int(r, p, vop_int(op, av, bv)); }
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
    if (++idx[j] < (intptr_t) r->shape[j]) break;
@@ -314,7 +314,7 @@ g_vm(g_vm_vbin, int op) {
  int tb = barr ? (int) vec(b)->type : flop(b) ? (int) G_VT_FLO : (int) g_vt_i8;
  int ct = ta > tb ? ta : tb;
  bool fdom = ct >= g_vt_f32, cmp = op >= VOP_LT;
- enum g_vec_type rt = cmp ? g_vt_i8 : (enum g_vec_type) ct;   // compare -> 0/-1 i8
+ enum g_vec_type rt = cmp ? g_vt_i8 : (enum g_vec_type) ct;   // compare -> 0/1 i8
  // broadcast shape + conformance, right-aligned; scalar locals only (no array,
  // so the trailing tail call below survives).
  uintptr_t n = 1;

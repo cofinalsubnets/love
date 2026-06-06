@@ -117,7 +117,7 @@ enum g_vec_type {
 #define G_VT_CPLX g_vt_cplx
 // Elementwise binary opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
 // match the arith slow handlers; the five compare codes (>= VOP_LT) produce a
-// 0/-1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
+// 0/1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
 enum vop { VOP_ADD, VOP_SUB, VOP_MUL, VOP_QUOT, VOP_REM,
            VOP_LT, VOP_LE, VOP_GT, VOP_GE, VOP_EQ, };
 void g_wait_fds(int const *fds, int n, uintptr_t ticks);

@@ -44,4 +44,4 @@ g_noinline struct g_atom *intern_checked(struct g *v, struct g_str *b) {
   if (i == 0) return z;
   y = i < 0 ? &z->l : &z->r; } }
 
-op11(g_vm_symp, symp(Sp[0]) ? putnum(-1) : nil)
+op11(g_vm_symp, symp(Sp[0]) ? putnum(1) : nil)

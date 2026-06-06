@@ -100,12 +100,12 @@ AVM_DIV(rem, %)
  if (ISNUM(a) && ISNUM(b))                                             \
   x = ((flop(a) || flop(b)) ? (TOFLO(a) c_op TOFLO(b))                 \
      : (bigp(a) || bigp(b)) ? (g_big_cmp(a, b) c_op 0)                 \
-                            : (TOINT(a) c_op TOINT(b))) ? putnum(-1) : nil; \
+                            : (TOINT(a) c_op TOINT(b))) ? putnum(1) : nil; \
  return *++Sp = x, Ip++, Continue(); }
 #define CMP_OP(nom, vop, c_op) CMP_SLOW(nom, vop, c_op) g_vm(nom) {    \
  word a = Sp[0], b = Sp[1];                                           \
  if (__builtin_expect(nump(a) && nump(b), 1))                         \
-  return *++Sp = (a c_op b) ? putnum(-1) : nil, Ip++, Continue();     \
+  return *++Sp = (a c_op b) ? putnum(1) : nil, Ip++, Continue();     \
  return Ap(nom##_slow, f); }
 
 CMP_OP(g_vm_lt, VOP_LT, <) CMP_OP(g_vm_le, VOP_LE, <=)
@@ -163,11 +163,11 @@ g_vm(g_vm_bsl) { word a = Sp[0], b = Sp[1], _res;
  EMIT_INT((intptr_t)((uintptr_t) TOINT(a) << getnum(b)));
  return *++Sp = _res, Ip++, Continue(); }
 
-op(g_vm_nump, 1, oddp(Sp[0]) ? putnum(-1) : nil)
+op(g_vm_nump, 1, oddp(Sp[0]) ? putnum(1) : nil)
 // `nilp`/`not`: the language falsy predicate (nil/0 OR an all-zero vec --
 // boxed 0.0, zero int box, all-zero array). Use `(= x 0)` for a literal
 // scalar-zero test; `(aall (= x 0))` over an array.
-op11(g_vm_nilp, g_false(Sp[0]) ? putnum(-1) : nil)
+op11(g_vm_nilp, g_false(Sp[0]) ? putnum(1) : nil)
 
 // Unary math bif: numeric arg → double, call fn, box the rank-0 f64 result.
 // Non-numeric arg → nil. TCO-clean (no & escapes).
@@ -207,4 +207,4 @@ static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
 #define m2(_) _(atan2) _(pow)
 m1(mvm1) m2(mvm2)
 
-op11(g_vm_flop, flop(Sp[0]) ? putnum(-1) : nil)
+op11(g_vm_flop, flop(Sp[0]) ? putnum(1) : nil)

@@ -61,7 +61,7 @@ g_vm(g_vm_cplx) {
  return *++Sp = word(v), Ip++, Continue(); }
 
 // (cplxp x): is x a complex scalar?
-op11(g_vm_cplxp, cplxp(Sp[0]) ? putnum(-1) : nil)
+op11(g_vm_cplxp, cplxp(Sp[0]) ? putnum(1) : nil)
 
 // (re z) / (im z): real / imaginary part as a rank-0 float box. On a real
 // number, re is the number itself and im is 0; on a non-number, nil.
