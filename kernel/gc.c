@@ -76,6 +76,7 @@ static g_noinline struct g *gcg(struct g*g, struct g *p1, uintptr_t len1, struct
  g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
  g->symbols = 0;
  for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);               // core live variables
+ g_numap = gcp(g, g_numap, p0, t0);                                                  // singleton fixnum-apply handler (vm.c)
  for (word n = 0; n < h; n++) g->sp[n] = gcp(g, sp0[n], p0, t0);                     // stack
  for (struct g_r *s = g->root; s; s = s->n) *s->x = gcp(g, *s->x, p0, t0); // C live variables
  while (g->cp < g->hp) (datp(g->cp) ? evac_data : evac_thd)(g, p0, t0);              // cheney algorithm

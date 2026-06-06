@@ -122,11 +122,16 @@ struct g {
     g_word fd;
     g_word ungetc_buf;            // pushed-back byte; putnum(EOF) = empty
     g_word eof_seen; } *io; };
-  // rng: global RNG state (rank-1 i64 vec, len 4, xoshiro256++). numap: gwen handler
-  // for fixnum-as-function application ((n x) -> (num-ap n x)), installed by the
-  // `set-numap` bif from prelude.g. Both live in &v0..end so gc.c's root loop forwards them.
-  g_word rng, numap; }; };
+  // rng: global RNG state (rank-1 i64 vec, len 4, xoshiro256++). Lives in &v0..end
+  // so gc.c's root loop forwards it.
+  g_word rng; }; };
  intptr_t end[]; };
+
+// numap: gwen handler for fixnum-as-function application ((n x) -> (num-ap n x)),
+// installed once by the `set-numap` bif from prelude.g. The same handler serves every
+// interpreter, so it is a singleton global rather than a `struct g` field. It points at
+// a heap thread, so gcg() (gc.c) forwards it each collection.
+extern g_word g_numap;
 
 struct g_def { char const *n; intptr_t x; };
 
