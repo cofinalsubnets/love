@@ -314,20 +314,20 @@ static g_inline struct g*gzput_sym(struct g*f, word _) {
 
 #define fs0(f) (g_core_of(f)->sp[0])
 
-// table -> #(k1 v1 k2 v2 …); the `#` reader macro splices that back into a table
-// (#() reads as a fresh empty table). Entries are first snapshotted into an assoc
+// hash -> #(k1 v1 k2 v2 …); the `#` reader macro splices that back into a hash
+// (#() reads as a fresh empty hash). Entries are first snapshotted into an assoc
 // list ((k . v) …) in a single allocation, so the g_kvs C-pointer walk can't be
 // split by a GC; the list is parked on f->sp[0] and each k/v is re-read from there
 // after the printer (which may GC on string-port growth) runs.
-static g_inline struct g*gzput_tbl(struct g*f, word x, uintptr_t off) {
- if (!g_ok(f = g_push(f, 1, x))) return f;            // sp[0] = table
- uintptr_t n = tbl(f->sp[0])->len;
+static g_inline struct g*gzput_hash(struct g*f, word x, uintptr_t off) {
+ if (!g_ok(f = g_push(f, 1, x))) return f;            // sp[0] = hash
+ uintptr_t n = hsh(f->sp[0])->len;
  if (!g_ok(f = g_have(f, n * 2 * Width(struct g_pair)))) return g_pop(f, 1);
- struct g_tab *t = tbl(f->sp[0]);                     // re-fetch after possible GC
+ struct g_hash *t = hsh(f->sp[0]);                    // re-fetch after possible GC
  struct g_pair *p = bump(f, n * 2 * Width(struct g_pair));
  word list = nil;
  for (uintptr_t i = t->cap; i;)
-  for (struct g_kvs *e = t->tab[--i]; e; e = e->next) {
+  for (struct g_kvs *e = t->bkt[--i]; e; e = e->next) {
    struct g_pair *kv = p++;
    ini_two(kv, e->key, e->val);                       // (k . v)
    ini_two(p, (word) kv, list);                       // cons onto the snapshot
@@ -388,7 +388,7 @@ static word fn_src(struct g *c, union u *k, word x) {
  return ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len
      && homp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
 
-// Print a function value. Like vec/cplx/tbl it's a `,`-prefixed value form (so it
+// Print a function value. Like vec/cplx/hash it's a `,`-prefixed value form (so it
 // reads back via uq=identity): ,(base arg…) for a partial application / closure,
 // ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
 // thread (continuation, top-level wrap) has no constructor form, so it prints as the
@@ -423,10 +423,10 @@ static struct g *gzput_fn_body(struct g *f, word x, uintptr_t off) {
 static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off) {
  if (nump(x)) return gzprintf(f, "%d", getnum(x));
  if (!datp(x)) return gzput_fn(f, x, off);
- // a table is mutable and can contain itself; guard the recursion with the seen
- // list so a self-referential table prints a marker instead of looping forever.
+ // a hash is mutable and can contain itself; guard the recursion with the seen
+ // list so a self-referential hash prints a marker instead of looping forever.
  // (pairs are only cyclic via low-level poke, so we don't pay the cost there.)
- bool cyc = typ(x) == tbl_q;
+ bool cyc = typ(x) == hash_q;
  if (cyc) {
   if (seen_member(f, off, x)) return gzputcs(f, "<cycle>");
   if (!g_ok(f = seen_push(f, off, x))) return f;
@@ -436,7 +436,7 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off) {
    case two_q:  f = gzput_two(f, x, off); break;
    case vec_q:  f = gzput_vec(f, x); break;
    case sym_q:  f = gzput_sym(f, x); break;
-   case tbl_q:  f = gzput_tbl(f, x, off); break;
+   case hash_q:  f = gzput_hash(f, x, off); break;
    case text_q: f = gzput_str(f, x); break;
    case big_q:  f = gzput_big(f, x); break; }
  if (cyc) seen_pop(f, off);
@@ -678,7 +678,7 @@ g_vm(g_vm_string) {
 // Comments: `;` runs to end of line; a line that *starts* with `;;;` opens a
 // block comment that runs until the next line starting with `;;;` (that line is
 // consumed too). `#!` (shebang) runs to end of line; a bare `#` is significant
-// (the tbl reader macro), as is any other non-whitespace char. `bol` tracks the
+// (the hash reader macro), as is any other non-whitespace char. `bol` tracks the
 // start of a line; it is conservatively false at entry, so a `;;;` block is only
 // recognised when preceded by a newline this call has consumed (the common case).
 static struct g* g_z_getc(struct g*f) {
@@ -731,12 +731,13 @@ static g_inline struct g *push_frame(struct g *f) {     // push an empty (head .
  return gxl(gxl(g_push(f, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
 static g_inline struct g *push_wrap(struct g *f, char const *nom) {
  return gxl(intern(g_strof(f, nom))); }        // ctx' = (wrapsym . ctx)
-// recognise the `#` reader-macro wrap (interned `tbl`) so it can splice a list
+// recognise the `#` reader-macro wrap (interned `hasht`) so it can splice a list
 // operand instead of wrapping it -- see the deliver loop in gz_parse.
 static g_inline bool hashsym(word x) {
  struct g_str *s = symp(x) ? sym(x)->nom : 0;
- return s && strp(word(s)) && s->len == 3 &&
-   s->bytes[0] == 't' && s->bytes[1] == 'b' && s->bytes[2] == 'l'; }
+ return s && strp(word(s)) && s->len == 5 &&
+   s->bytes[0] == 'h' && s->bytes[1] == 'a' && s->bytes[2] == 's' &&
+   s->bytes[3] == 'h' && s->bytes[4] == 't'; }
 
 static struct g *gz_parse(struct g *f, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
@@ -749,7 +750,7 @@ static struct g *gz_parse(struct g *f, bool multi) {
    case '(':  f = push_frame(f); continue;
    case '\'': f = push_wrap(f, "\\"); continue;
    case '`':  f = push_wrap(f, "qq"); continue;
-   case '#':  f = push_wrap(f, "tbl"); continue;       // #(k v …)->(tbl k v …), #x->(tbl x)
+   case '#':  f = push_wrap(f, "hasht"); continue;     // #(k v …)->(hasht k v …), #x->(hasht x)
    case ',':                                            // unquote / unquote-splice
     if (!g_ok(f = zgetc(f))) return f;
     if ((c2 = f->b) == '@') { f = push_wrap(f, "uqs"); continue; }
@@ -777,12 +778,12 @@ static struct g *gz_parse(struct g *f, bool multi) {
     f->sp[1] = f->sp[0], f->sp++;
     return f; }
    if (symp(A(f->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    if (hashsym(A(f->sp[1])) && nilp(f->sp[0])) {      // #() -> (new 0): a fresh empty table
+    if (hashsym(A(f->sp[1])) && nilp(f->sp[0])) {      // #() -> (hashn 0): a fresh empty hash
      f = gxr(g_push(f, 1, nil));                       // d (=nil=0) -> (0 . nil) = (0)
-     f = gxl(intern(g_strof(f, "new")));               // (new . (0)) = (new 0)
+     f = gxl(intern(g_strof(f, "hashn")));             // (hashn . (0)) = (hashn 0)
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); }            // pop wrap
     else if (hashsym(A(f->sp[1])) && twop(f->sp[0])) {
-     f = gxl(g_push(f, 1, A(f->sp[1])));               // #(k v …) on a list: splice -> (tbl . d)
+     f = gxl(g_push(f, 1, A(f->sp[1])));               // #(k v …) on a list: splice -> (hasht . d)
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); }
     else {                                             // 'x `x ,x #atom -> (wrapsym d)
      f = gxr(g_push(f, 1, nil));                       // (d . nil)

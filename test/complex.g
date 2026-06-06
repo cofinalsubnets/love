@@ -80,7 +80,7 @@
  (= 1.0 (im (+ i B100)))                   ; imaginary part untouched
  (< 1e29 (re (+ i B100)))                  ; real part ~ 2^100
 
- ; --- complex as table keys: eql-distinct from the equal real (sticky) ---
- (= 'hit (get 'miss (cplx 2 0) (put (cplx 2 0) 'hit (new 0))))
- (= 'miss (get 'miss 2 (put (cplx 2 0) 'hit (new 0))))   ; 2 and 2+0i are different keys
- (= 'iv (get 'miss i (put i 'iv (new 0)))))
+ ; --- complex as hash keys: eql-distinct from the equal real (sticky) ---
+ (= 'hit (get 'miss (cplx 2 0) (put (cplx 2 0) 'hit (hashn 0))))
+ (= 'miss (get 'miss 2 (put (cplx 2 0) 'hit (hashn 0))))   ; 2 and 2+0i are different keys
+ (= 'iv (get 'miss i (put i 'iv (hashn 0)))))

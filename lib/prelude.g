@@ -136,14 +136,14 @@
 (:: 'qq (\ a (qqx (car a) 1)))
 (: uq (\ x x))                                               ; stray ,x evaluates x
 
-; vec/tbl value constructors (also the read-back targets of the `,(vec …)` /
-; `,(tbl …)` printer forms). `vec` builds a rank-1 array from its element args,
-; inferring f64 if any arg is a float else i64; `tbl` builds a table from
+; vec/hash value constructors (also the read-back targets of the `,(vec …)` /
+; `#(…)` printer forms). `vec` builds a rank-1 array from its element args,
+; inferring f64 if any arg is a float else i64; `hasht` builds a hash from
 ; alternating key/value args via nested `put`.
 (: (lvec l) (arrl (? (any flop l) f64 i64) (list (foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'vec (\ a (list 'lvec (cons 'list a))))
-(: (tblx a) (? (twop a) (list 'put (car a) (cadr a) (tblx (cddr a))) '(new 0)))
-(:: 'tbl (\ a (tblx a)))
+(: (hashtx a) (? (twop a) (list 'put (car a) (cadr a) (hashtx (cddr a))) '(hashn 0)))
+(:: 'hasht (\ a (hashtx a)))
 
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
 ; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body

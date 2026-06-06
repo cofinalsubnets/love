@@ -24,7 +24,7 @@
  (mkconst z) (\ n (? (< n 1) z (kconst (- n 1))))
  kconst (mkconst 7)
  ; memoizing fixpoint combinator (used for the recursive-value fib below)
- (memo f) (: m (new 0) (\ x (: c (get 0 x m) (? c c (: y (f x) _ (put x y m) y)))))
+ (memo f) (: m (hashn 0) (\ x (: c (get 0 x m) (? c c (: y (f x) _ (put x y m) y)))))
  (assert
   ; --- recursive functions (unchanged behaviour) ---
   (= 120 (nfac 5))                 ; named recursion

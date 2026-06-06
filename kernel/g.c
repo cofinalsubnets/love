@@ -9,7 +9,7 @@ enum g_status g_fin(struct g *f) {
 
 struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
  for (f = g_push(f, 1, g_core_of(f)->dict); n--; 
-  f = g_tput(intern(g_strof(g_push(f, 1, defs[n].x), defs[n].n))));
+  f = g_hput(intern(g_strof(g_push(f, 1, defs[n].x), defs[n].n))));
  g_core_of(f)->sp++;
  return f; }
 
@@ -35,9 +35,10 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
  _(bif_thd, "thd", S1(g_vm_thda))\
  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim))\
  _(bif_seek, "seek", S2(g_vm_seek)) _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_get))\
- _(bif_put, "put", S3(g_vm_put)) _(bif_tnew, "new", S1(g_vm_tnew)) _(bif_tabkeys, "tkeys", S1(g_vm_tkeys))\
+ _(bif_put, "put", S3(g_vm_put)) _(bif_hnew, "hashn", S1(g_vm_hnew)) _(bif_hashk, "hashk", S1(g_vm_hashk))\
+ _(bif_hash, "hash", S1(g_vm_hashof))\
  _(bif_bufnew, "bufnew", S1(g_vm_bufnew)) _(bif_bcopy, "bcopy", S5(g_vm_bcopy))\
- _(bif_tabdel, "tdel", S3(g_vm_tdel)) _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp))\
+ _(bif_hashd, "hashd", S3(g_vm_hashd)) _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp))\
  _(bif_flo, "flo", S1(g_vm_flo)) _(bif_flop, "flop", S1(g_vm_flop))\
  _(bif_sin, "sin", S1(g_vm_sin)) _(bif_cos, "cos", S1(g_vm_cos)) _(bif_tan, "tan", S1(g_vm_tan)) _(bif_atan, "atan", S1(g_vm_atan))\
  _(bif_sqrt, "sqrt", S1(g_vm_sqrt)) _(bif_exp, "exp", S1(g_vm_exp)) _(bif_log, "log", S1(g_vm_log))\
@@ -52,7 +53,7 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
  _(bif_asum, "asum", S1(g_vm_asum)) _(bif_aprod, "aprod", S1(g_vm_aprod))\
  _(bif_amax, "amax", S1(g_vm_amax)) _(bif_amin, "amin", S1(g_vm_amin))\
  _(bif_aall, "aall", S1(g_vm_aall)) _(bif_aany, "aany", S1(g_vm_aany))\
- _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tblp, "tblp", S1(g_vm_tblp)) _(bif_nump, "nump", S1(g_vm_nump))\
+ _(bif_symp, "symp", S1(g_vm_symp)) _(bif_hashp, "hashp", S1(g_vm_hashp)) _(bif_nump, "nump", S1(g_vm_nump))\
  _(bif_nilp, "nilp", S1(g_vm_nilp)) _(bif_ev, "ev", S1(g_vm_eval))\
  _(bif_callk, "call_cc", S1(g_vm_callk)) _(bif_yield, "yield", S1(g_vm_yield_bif)) \
  _(bif_spawn, "spawn", S2(g_vm_spawn)) _(bif_wait, "wait", S1(g_vm_wait)) \
@@ -103,14 +104,14 @@ static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
  f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield_c, f->t0 = g_clock();
  f->k = throw_c;
- uintptr_t const req = 2 * (Width(struct g_tab) + 1) + 6; // two tables plus main task thread
+ uintptr_t const req = 2 * (Width(struct g_hash) + 1) + 6; // two hashes plus main task thread
  if (g_ok(f = g_have(f, req))) {
-  struct g_tab *d = bump(f, req),      *m = d + 1;
+  struct g_hash *d = bump(f, req),      *m = d + 1;
   struct g_kvs **b1 = (void*) (m + 1), **b2 = b1 + 1;
   union u *M = (void*) (b2 + 1);
   *b1 = *b2 = 0;
-  f->dict = ini_tab(d, 0, 1, b1);
-  f->macro = ini_tab(m, 0, 1, b2);
+  f->dict = ini_hash(d, 0, 1, b1);
+  f->macro = ini_hash(m, 0, 1, b2);
   M[0].m = M;
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
@@ -124,7 +125,7 @@ static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size
    {"err", (word) &g_stderr}, };
   f = g_defn(f, def0, LEN(def0));
   f = g_push(f, 3, nil, m, d);
-  f = g_tput(f);
+  f = g_hput(f);
   f = g_pop(f, 1);
   f = g_defn(f, def1, LEN(def1));
   // Eager-seed the global RNG stream so f->rng is always a valid state vec (gl0

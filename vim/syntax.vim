@@ -15,9 +15,9 @@ syn keyword PFunc cons car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar
 syn keyword PFunc foldl foldr foldl1 foldr1 map filter id const cat each
 syn keyword PFunc all any init last rev take drop catmap
 syn keyword PFunc inc dec flip diag part len ldel puts zip lidx memq assq
-syn keyword PFunc twop nump symp nomp tblp strp nilp homp ev ap not atomp
+syn keyword PFunc twop nump symp nomp hashp strp nilp homp ev ap not atomp
 syn keyword PFunc str scat ssub sym nom putc co putn read fputc fputs fputn fread
-syn keyword PFunc tnew thas tkeys tdel set put get new
+syn keyword PFunc hasht hash hashn thas hashk hashd set put get
 syn keyword PFunc :: < <= = >= > != + - ~ ! * / % .
 syn keyword PFunc assert
 

@@ -4,7 +4,7 @@
 ;   rt: value -> inspect (print) -> read -> eval  (value round-trip)
 ; Datums (symbols, lists, atoms) print as their literal form, so they re-READ
 ; equal but would re-EVAL as code -- those use rd. Self-evaluating atoms and the
-; `,`-prefixed value forms (vec/arr/cplx/tbl/functions, read back via uq=identity)
+; `,`-prefixed value forms (vec/arr/cplx/hash/functions, read back via uq=identity)
 ; reconstruct the value under eval -- those use rt.
 ; s2cl turns a string into a charlist of byte codes (get is generic over strings).
 (: (s2cl s) ((: (g i) (? (< i (len s)) (cons (get 0 i s) (g (+ 1 i))))) 0)
@@ -28,8 +28,8 @@
  (aall (= (arrl i8 '(2 2) '(1 2 3 4)) (rt (arrl i8 '(2 2) '(1 2 3 4)))))
  (aall (= (arrl f64 '(2) '(1.5 2.5)) (rt (arrl f64 '(2) '(1.5 2.5)))))
  (= (cplx 2 -3) (rt (cplx 2 -3)))
- (= 100 (get 0 1 (rt (tbl 1 100 2 200))))
- (= 200 (get 0 2 (rt (tbl 1 100 2 200))))
+ (= 100 (get 0 1 (rt (hasht 1 100 2 200))))
+ (= 200 (get 0 2 (rt (hasht 1 100 2 200))))
  ; functions reconstruct a working function
  (= 3 ((rt +) 1 2))                                 ; builtin
  (= 5 ((rt (\ x (+ x 1))) 4))                       ; lambda

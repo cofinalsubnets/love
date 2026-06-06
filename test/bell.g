@@ -7,14 +7,14 @@
 ; bignum tower (* / %); the last lines are 280-digit base-36 numbers.
 ;
 ; Faithful port, with one forced deviation: Ruby's `memo` closes the cache
-; table over a *returned* closure. A gwen closure that closes over a variable
+; hash over a *returned* closure. A gwen closure that closes over a variable
 ; currently miscomputes when called re-entrantly (a self-call), e.g.
 ;     (: (mk z) (\ n (? (< n 1) 1 (* n (self (- n 1))))) self (mk 0))
 ;     (self 1)   ; => 0, should be 1
-; so memoization here uses module-level tables + named recursive functions,
+; so memoization here uses module-level hashes + named recursive functions,
 ; which compile correctly. Same algorithm, identical output.
 
-(: miss  (gensym 0) facts (new 0) bells (new 0)
+(: miss  (gensym 0) facts (hashn 0) bells (hashn 0)
    digits "0123456789abcdefghijklmnopqrstuvwxyz"
    (factloop n acc) (? (< n 2) acc (factloop (- n 1) (* acc n)))
    (fact n) (: v (get miss n facts) (? (= v miss) (: r (factloop n 1) _ (put n r facts) r) v))

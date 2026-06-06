@@ -6,7 +6,7 @@
 // slow lanes divert into. GC is free: copy_vec / evac_vec already generalize
 // over rank + type via g_vec_bytes (kernel/gc.c). See [[project-todo-math]] 5a.
 // The per-element read/write + size helpers live in i.h (vec_get/put_*,
-// g_vt_size in kernel/vec.c), shared with `get` (kernel/tbl.c) and the printer.
+// g_vt_size in kernel/vec.c), shared with `get` (kernel/hash.c) and the printer.
 
 // --- (arr type shape-list): zero-filled array ------------------------------
 // `type` is a fixnum element-type code (i8..f64, named in the prelude); `shape`

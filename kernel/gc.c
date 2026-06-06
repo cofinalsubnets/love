@@ -26,11 +26,11 @@ static g_inline void evac_sym(struct g*f, word const*const p0, word const*const 
  word nom = word(sym(f->cp)->nom);            // l/r subtree slots exist only for interned
  f->cp += Width(struct g_atom) - (nom && strp(nom) ? 0 : 2); }   // (string nom); anon/uninterned skip them
 
-static g_inline void evac_tbl(struct g*f, word const*const p0, word const*const t0) {
- struct g_tab *t = (struct g_tab*) f->cp;
- f->cp += Width(struct g_tab) + t->cap + t->len * Width(struct g_kvs);
+static g_inline void evac_hash(struct g*f, word const*const p0, word const*const t0) {
+ struct g_hash *t = (struct g_hash*) f->cp;
+ f->cp += Width(struct g_hash) + t->cap + t->len * Width(struct g_kvs);
  for (intptr_t i = 0, lim = t->cap; i < lim; i++)
-  for (struct g_kvs*e = t->tab[i]; e;
+  for (struct g_kvs*e = t->bkt[i]; e;
    e->key = gcp(f, e->key, p0, t0),
    e->val = gcp(f, e->val, p0, t0),
    e = e->next); }
@@ -47,7 +47,7 @@ static g_inline void evac_data(struct g *g, word const *const p0, word const*con
    case vec_q: return evac_vec(g, p0, t0);
    case sym_q: return evac_sym(g, p0, t0);
    case two_q: return evac_two(g, p0, t0);
-   case tbl_q: return evac_tbl(g, p0, t0);
+   case hash_q: return evac_hash(g, p0, t0);
    case text_q: return evac_str(g, p0, t0);
    case big_q: return evac_big(g, p0, t0); } }
 
@@ -155,15 +155,15 @@ static g_inline word copy_sym(struct g*f, struct g_atom *src, word const *const 
    dst = intern_checked(f, (struct g_str*) nom); }
  return word(src->ap = (g_vm_t*) dst); }
 
-static g_inline word copy_tbl(struct g*f, struct g_tab *src, word const*const p0, word const*const t0) {
+static g_inline word copy_hash(struct g*f, struct g_hash *src, word const*const p0, word const*const t0) {
  uintptr_t len = src->len, cap = src->cap;
- struct g_tab *dst = bump(f, Width(struct g_tab) + cap + Width(struct g_kvs) * len);
- struct g_kvs **tab = (struct g_kvs**) (dst + 1),
-              *dd = (struct g_kvs*) (tab + cap);
- ini_tab(dst, len, cap, tab);
+ struct g_hash *dst = bump(f, Width(struct g_hash) + cap + Width(struct g_kvs) * len);
+ struct g_kvs **bkt = (struct g_kvs**) (dst + 1),
+              *dd = (struct g_kvs*) (bkt + cap);
+ ini_hash(dst, len, cap, bkt);
  src->ap = (g_vm_t*) dst;
- for (struct g_kvs *d, *s, *last; cap--; tab[cap] = last)
-  for (s = src->tab[cap], last = NULL; s;
+ for (struct g_kvs *d, *s, *last; cap--; bkt[cap] = last)
+  for (s = src->bkt[cap], last = NULL; s;
    d = dd++, d->key = s->key, d->val = s->val, d->next = last,
    last = d, s = s->next);
  return word(dst); }
@@ -174,7 +174,7 @@ static g_inline word copy_data(struct g *f, union u *src, word const *const p0, 
   case two_q: return copy_two(f, two(src), p0, t0);
   case vec_q: return copy_vec(f, vec(src), p0, t0);
   case sym_q: return copy_sym(f, sym(src), p0, t0);
-  case tbl_q: return copy_tbl(f, tbl(src), p0, t0);
+  case hash_q: return copy_hash(f, hsh(src), p0, t0);
   case text_q: return copy_str(f, str(src), p0, t0);
   case big_q: return copy_big(f, (struct g_big*) src, p0, t0); } }
 

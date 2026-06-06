@@ -108,12 +108,12 @@ struct g {
  union {
   intptr_t v0;
   struct {
-   struct g_tab {
+   struct g_hash {
     g_vm_t *ap;
     uintptr_t len, cap;
     struct g_kvs {
      intptr_t key, val;
-     struct g_kvs *next; } **tab;
+     struct g_kvs *next; } **bkt;
    } *dict, *macro;
   union {
    g_word x;

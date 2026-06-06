@@ -7,14 +7,14 @@
      p2 (pat2pred (cdr p))
    (\ x (? (twop x) (? (p1 (car x)) (p2 (cdr x)))))))
  (pat2x p b) (:
-  t (new 0)
+  t (hashn 0)
 
   (ff q p) (?
    (symp p) (put p q t)
    (twop p) (: _ (ff (co car q) (car p))
                 (ff (co cdr q) (cdr p))))
   _ (ff id p)
-  ks (tkeys t)
+  ks (hashk t)
 
   lam (cons '\ (cat ks (list b)))
   y (gensym 0)

@@ -411,7 +411,7 @@ g_vm(g_vm_len) {
   if (bufp(x)) l = len(buf_str(x));              // mutable byte string
   else if (!nump(x) && datp(x)) switch (typ(x)) {
     default: break;                              // vec_q, sym_q have no length
-    case tbl_q: l = tbl(x)->len; break;
+    case hash_q: l = hsh(x)->len; break;
     case text_q: l = len(x); break;
     case two_q: do l++, x = B(x); while (twop(x)); }
   Sp[0] = putnum(l);

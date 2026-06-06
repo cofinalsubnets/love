@@ -192,7 +192,7 @@ static Ana(ana_v) {
  if (!g_ok(f)) return f;
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) {
-   if ((y = g_tget(f, 0, x, f->dict))) return ana_q(f, c, y);
+   if ((y = g_hget(f, 0, x, f->dict))) return ana_q(f, c, y);
    // undefined global: resolved by g_vm_freev via the dict at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.g avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
@@ -390,7 +390,7 @@ static g_inline word rev(word l) {
 static word ldels(struct g *f, word lam, word l);
 
 static g_inline Ana(ana_2, word a, word b) {
- if ((x = g_tget(f, 0, a, g_core_of(f)->macro)))
+ if ((x = g_hget(f, 0, a, g_core_of(f)->macro)))
   return f = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(f, 4, b, nil, nil, x))))))),
          analyze(f, c, g_ok(f) ? pop1(f) : 0);
  return avec(f, b, f = analyze(f, c, a)),
@@ -421,7 +421,7 @@ static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
  // closes over the name being defined into a heap cell. The runtime compiler
  // (ev.g) does the same natively in `l2x`. exp is rooted across the alloc.
  if (g_ok(f = intern(g_strof(f, "boxfix")))) {
-  word bf = g_tget(f, 0, pop1(f), f->dict);
+  word bf = g_hget(f, 0, pop1(f), f->dict);
   if (bf && homp(bf)) {
    f = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(f, 4, exp, nil, nil, bf)))))));
    if (g_ok(f)) exp = pop1(f); } }
@@ -538,14 +538,14 @@ static word ldels(struct g *f, word lam, word l) {
 g_vm(g_vm_defglob) {
  Have(3);
  Sp -= 3;
- struct g_tab *t = f->dict;
+ struct g_hash *t = f->dict;
  word k = Ip[1].x, v = Sp[3];
  return Sp[0] = k, Sp[1] = v, Sp[2] = (word) t, Pack(f),
-  !g_ok(f = g_tput(f)) ? gtrap(f) : (Unpack(f), Sp += 1, Ip += 2, Continue()); }
+  !g_ok(f = g_hput(f)) ? gtrap(f) : (Unpack(f), Sp += 1, Ip += 2, Continue()); }
 
 g_vm(g_vm_freev) { return
  Ip[0].ap = g_vm_quote,
- Ip[1].x = g_tget(f, nil, Ip[1].x, f->dict),
+ Ip[1].x = g_hget(f, nil, Ip[1].x, f->dict),
  Continue(); }
 
 g_vm(g_vm_eval) { return Ip++, Pack(f),

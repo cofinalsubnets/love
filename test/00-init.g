@@ -9,7 +9,7 @@
      (putc 27)
      (puts reset))
 
-   test_state (new 0)
+   test_state (hashn 0)
    (test_set k v) (put k v test_state)
    (test_get k) (get 0 k test_state))
 (:: 'assert (\ l

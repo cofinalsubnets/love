@@ -4,7 +4,7 @@
  (ana c x (k0 c) 0 0)))
   g_vm_cur (peek 0 +)
   g_vm_ret0 (peek 1 car)
-  (sco p a i) (put 'par p (put 'imp i (put 'arg a (new 0))))
+  (sco p a i) (put 'par p (put 'imp i (put 'arg a (hashn 0))))
   (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where wev stashes 'src
   (p2 i x k) (poke -1 i (poke -1 x k))
   (em1 x k n) (poke -1 x (k (+ 1 n)))
@@ -19,10 +19,10 @@
   ; / quote constants, emitted in the plain (non-ap/tap) path -- covers arg/quote
   ; consumed by inlined ops, e.g. n in (- n 1). 1-word op, no operand fetch; the
   ; reclaimed operand cell is -1 slack (thd memsets it; GC-safe).
-  ; index/value -> specialized-op. A compare chain beats a `get`-table here: `get`
+  ; index/value -> specialized-op. A compare chain beats a `get`-hash here: `get`
   ; is a heavyweight polymorphic bif (type-dispatch + hash + eql), costing far more
   ; than a few fixnum compares that short-circuit on the common small values
-  ; (measured: a table made boot +13% vs +5% for this chain; frequency-reordering
+  ; (measured: a hash made boot +13% vs +5% for this chain; frequency-reordering
   ; the chain was a wash). The nump guard keeps spq from ever hashing a heap value.
   (spa i) (? (= i 0) g_vm_arg0 (= i 1) g_vm_arg1 (= i 2) g_vm_arg2 (= i 3) g_vm_arg3 0)
   (spq v) (? (nump v) (? (= v 0) g_vm_quo0 (= v 1) g_vm_quo1 (= v 2) g_vm_quo2
@@ -77,11 +77,11 @@
                '< '<= '= '>= '> 'same '** 'gcd 'modpow 'inc 'dec 'abs
                'cons 'car 'cdr 'X 'A 'B 'caar 'cadr 'cdar 'cddr
                'len 'lidx 'assq 'memq 'last 'rev 'cat
-               'nump 'symp 'twop 'tblp 'strp 'nilp 'flop 'cplxp 'atomp
+               'nump 'symp 'twop 'hashp 'strp 'nilp 'flop 'cplxp 'atomp
                'ssub 'scat 'string
                're 'im 'conj 'arg 'flo 'cplx
                'sin 'cos 'tan 'atan 'sqrt 'exp 'log 'atan2 'pow)
-   pureset (foldl (\ t s (: v (globals s) (? v (put v -1 t) t))) (new 0) names)
+   pureset (foldl (\ t s (: v (globals s) (? v (put v -1 t) t))) (hashn 0) names)
    (add t s) (: v (globals s)
     (? (nump v) t
      (: o (opof v) p (pureset v)
@@ -90,7 +90,7 @@
           ar (? o (cdr o) (same g_vm_cur (peek 0 v)) (peek 1 v) 0)   ; bif/multi-arg-fn arity
           (put v (\ x (hgen v op ar p x)) t))
        t))))
-   (foldl add (new 0) (tkeys globals)))
+   (foldl add (hashn 0) (hashk globals)))
   ; wev: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks
   ; applies with their n-ary-vs-l2r strategy. Tail position is NOT tracked here -- kap detects
   ; tail by peeking the continuation for g_vm_ret at analysis time.

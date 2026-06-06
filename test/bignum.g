@@ -2,7 +2,7 @@
 ; - the numeric tower closes: fixnum -> wide-int box -> bignum
 ; - + - * overflow promotes to an exact bignum; / % are truncated division
 ; - canonical demotion: any result that fits a smaller tier shrinks back to it
-;   (so = / eqv / table keys stay well defined across tiers)
+;   (so = / eqv / hash keys stay well defined across tiers)
 ; - reader parses oversized decimal literals exactly; printer is base-10
 ; - mixed fixnum/box/bignum/float arithmetic, comparison, equality
 
@@ -85,10 +85,10 @@
  (= "9223372036854775808" (inspect (bpow2 63)))
  (= "15511210043330985984000000" (inspect F25))
 
- ; --- bignums as table keys (eqv over slen+limbs) ---
- (= 'hit (get 'miss B100 (put B100 'hit (put F25 'fk (new 0)))))
- (= 'fk (get 'miss F25 (put B100 'hit (put F25 'fk (new 0)))))
- (= 'miss (get 'miss (+ B100 1) (put B100 'hit (new 0))))
+ ; --- bignums as hash keys (eqv over slen+limbs) ---
+ (= 'hit (get 'miss B100 (put B100 'hit (put F25 'fk (hashn 0)))))
+ (= 'fk (get 'miss F25 (put B100 'hit (put F25 'fk (hashn 0)))))
+ (= 'miss (get 'miss (+ B100 1) (put B100 'hit (hashn 0))))
 
  ; --- prelude ** / gcd / modpow: exact across the tower via * / % ---
  ; (`**` is exact-integer power; the float `pow` bif is tested in math.g)

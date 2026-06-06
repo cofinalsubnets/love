@@ -1,4 +1,4 @@
-; printing functions: like vec/tbl/cplx, a function is a `,`-prefixed value form
+; printing functions: like vec/hash/cplx, a function is a `,`-prefixed value form
 ; (reads back via uq=identity). builtins -> ,name; compiled lambdas -> ,(\ …)
 ; source; partial applications/closures -> ,(base captured-args…).
 (assert

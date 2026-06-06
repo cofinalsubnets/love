@@ -37,7 +37,7 @@
   (strp (inspect 0))
   (strp (inspect "hi"))
   (strp (inspect '(1 2 3)))
-  (strp (inspect (new 0)))
+  (strp (inspect (hashn 0)))
 
   ; buffer growth: a 200-element list far exceeds the 32-byte initial buf,
   ; forcing several doublings inside to_putc.

@@ -14,9 +14,9 @@
          (= "asdf" (string (gensym 'asdf)))   ; ...and (symbol arg)
          (= "asdf" (string 'asdf))))
 (:
- t (new 0)
+ t (hashn 0)
  (Put k v) (put k v t)
- Del (tdel 0 t)
+ Del (hashd 0 t)
  (Get k) (get 0 k t)
  _ (Put 1 2)
  _ (Put 2 3)
@@ -24,13 +24,13 @@
  _ (Put 't 'f)
  _ (assert
     (= 4 (len t))
-    (= 4 (len (tkeys t))))
+    (= 4 (len (hashk t))))
  _ (Del 2)
  _ (Del 't)
  (assert
     (= 2 (len t))
-    (= 2 (len (tkeys t)))
-    (: (lll t) (foldl (\ l k (X k (X (Get k) l))) 0 (tkeys t))
+    (= 2 (len (hashk t)))
+    (: (lll t) (foldl (\ l k (X k (X (Get k) l))) 0 (hashk t))
      (= (* 2 (len t)) (len (lll t))))))
 
 (:
