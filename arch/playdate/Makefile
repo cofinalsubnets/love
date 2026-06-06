@@ -1,11 +1,11 @@
 # Playdate build. Run from project root via `make playdate`, or directly via
-# `cd playdate && make`. Outputs land in $(R)/b/playdate/. Requires
+# `cd playdate && make`. Outputs land in $(R)/out/playdate/. Requires
 # PLAYDATE_SDK_PATH in the environment.
 R := ../..
 include $(R)/common.mk
 
-# This frontend's build output directory under the top-level b/.
-o = $(R)/b/playdate
+# This frontend's build output directory under the top-level out/.
+o = $(R)/out/playdate
 
 pd_sdk = $(PLAYDATE_SDK_PATH)
 # ccache wraps the compiler when available; override with `make CCACHE=` to
@@ -16,7 +16,7 @@ pd_cc = $(pd_gcc) -g3
 pd_as = $(pd_gcc) -x assembler-with-cpp
 pd_opt = -Os -falign-functions=16 -fomit-frame-pointer
 pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
-pd_incdir = $(patsubst %,-I %, . $(pd_sdk)/C_API $(R) $(R)/b/host $(R)/font)
+pd_incdir = $(patsubst %,-I %, . $(pd_sdk)/C_API $(R) $(R)/out/host $(R)/font)
 pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_tco=0
 
 # Sources split by group so the obj-path patsubst works cleanly:
@@ -41,7 +41,7 @@ pd_o = $(pd_local_o) $(pd_shared_o) $(pd_sdk_o)
 # The simulator .so (host x86_64, dev-only) is a single-shot compile with no
 # intermediate vt.o, so it stays on the portable header.
 vt_h = $(o)/vt.h
-# Run through the host interpreter $m (= $(R)/b/host/gl), built on demand below.
+# Run through the host interpreter $m (= $(R)/out/host/gl), built on demand below.
 # py/gen_data_vt.py is the cross-checked reference (make test_tools).
 gen_vt = $(R)/tools/gen_data_vt.$x
 
@@ -74,8 +74,8 @@ clean:
 # A lib header (and the host gl, which runs gen_data_vt.g) stand in for "the
 # host build ran"; built on demand here so a standalone `make -C playdate` works.
 # (playdate/main.c embeds no prelude -- this is just a build-order sentinel.)
-$(R)/b/lib/prelude.h:
-	@$(MAKE) -C $(R) b/lib/prelude.h
+$(R)/out/lib/prelude.h:
+	@$(MAKE) -C $(R) out/lib/prelude.h
 $(m):
 	@$(MAKE) -C $(R)/host
 
@@ -91,10 +91,10 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 # The data-sentinel TU bootstraps from the portable header (no -I$(o), no $(vt_h)
 # prerequisite -- both would be circular, since $(o)/vt.h is reflected out of
 # this object). Its explicit recipe overrides the pattern rules below.
-$(o)/vt.o: $(R)/vt.c | $(R)/b/lib/prelude.h
+$(o)/vt.o: $(R)/vt.c | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/b/host -I$(R)/font $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
 $(o)/vt.h: $(o)/vt.o $(gen_vt) | $(m)
 	@echo GEN	$@
@@ -105,16 +105,16 @@ $(o)/vt.h: $(o)/vt.o $(gen_vt) | $(m)
 # same-named top-level file: top-level main.c is the host frontend, which
 # must not be compiled here (it pulls in POSIX headers like <termios.h>).
 # Shared sources fall through to the $(R) rule (no local gwen.c/vt.c exist).
-$(o)/%.o: %.c $(vt_h) | $(R)/b/lib/prelude.h
+$(o)/%.o: %.c $(vt_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/b/host -I$(R)/font $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
 # Shared C sources from gwen.c/vt.c and font/.
-$(o)/%.o: $(R)/%.c $(vt_h) | $(R)/b/lib/prelude.h
+$(o)/%.o: $(R)/%.c $(vt_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/b/host -I$(R)/font $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
 # Local pd/*.s assembly (rule preserved from original; no .s files exist
 # today but keep the pattern in case one shows up).
@@ -125,10 +125,10 @@ $(o)/%.o: %.s
 
 # SDK setup.c is reached via an absolute path; an explicit rule keeps
 # its output filename predictable.
-$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(vt_h) | $(R)/b/lib/prelude.h
+$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(vt_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/b/host -I$(R)/font $(pd_incdir) $< -o $@
+	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
 $(o)/pdex.elf: $(pd_o) $(pd_lds)
 	@echo CC	$@

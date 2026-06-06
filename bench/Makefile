@@ -8,7 +8,7 @@
 #   make BENCHES=fib run a subset
 #   make gwen       gwen only   (also: python ruby chez sbcl node lua)
 #   make raw        print the raw "<name> <lang> <reps> <ms> <chk>" lines
-#   make clean      remove bench/b/
+#   make clean      remove bench/out/
 #
 # gwen is always run; the other interpreters are auto-skipped if not on PATH,
 # and a bench is skipped for a language that has no implementation file (e.g.
@@ -16,9 +16,9 @@
 R := ..
 include $(R)/common.mk
 
-GL  := $(R)/b/host/$n
+GL  := $(R)/out/host/$n
 HARN := bench.g
-BDIR := b
+BDIR := out
 RAW  := $(BDIR)/results.txt
 
 # default suite, in display order; override with `make BENCHES="fib primes"`.

@@ -1,8 +1,8 @@
 # Project root. Single Makefile: cross-cutting tasks (test, clean, install, ...)
 # plus the host (POSIX CLI) and kernel (freestanding) builds inlined directly
 # here. Embedded shells (playdate, rp2040) live under arch/ with their own
-# build files; wasm keeps its own Makefile. Build output lands under b/
-# (b/host, b/free, b/lib, b/playdate, b/dl). Shared vars live in common.mk.
+# build files; wasm keeps its own Makefile. Build output lands under out/
+# (out/host, out/free, out/lib, out/playdate, out/dl). Shared vars live in common.mk.
 R := .
 include common.mk
 
@@ -27,24 +27,24 @@ test_tools: host
 all: host kernel playdate wasm rp2040
 
 # Static lisp headers: each gwen/*.g is serialized to a C string literal in
-# b/lib/*.h by tools/lcat.g (run on the bootstrap interpreter gl0). Frontends
+# out/lib/*.h by tools/lcat.g (run on the bootstrap interpreter gl0). Frontends
 # #include these and assemble the bootstrap with G_EGG_PRE/POST (gwen.h).
 # Drop a .g into gwen/ and it is picked up automatically -- no rule to edit.
-lib_h = $(patsubst gwen/%.$x,b/lib/%.h,$(wildcard gwen/*.$x))
+lib_h = $(patsubst gwen/%.$x,out/lib/%.h,$(wildcard gwen/*.$x))
 .PHONY: lib
 lib: $(lib_h)
-$(lib_h): b/lib/%.h: gwen/%.$x $(gl0) tools/lcat.$x
-	@mkdir -p b/lib
+$(lib_h): out/lib/%.h: gwen/%.$x $(gl0) tools/lcat.$x
+	@mkdir -p out/lib
 	@echo GEN	$@
 	@$(gl0) -l gwen/prelude.$x tools/lcat.$x $< > $@
 
 # ====================================================================
-# host (POSIX CLI) build -- outputs under b/host. Was host/Makefile.
+# host (POSIX CLI) build -- outputs under out/host. Was host/Makefile.
 # ====================================================================
-ho = b/host
+ho = out/host
 h_o = $(g_c:$(R)/%.c=$(ho)/%.o)
 # -I$(ho) first so the generated $(ho)/vt.h shadows the portable top-level vt.h.
-hcc = $(CC) $(g_cflags) -fpic -I$(ho) -I. -Ib/lib
+hcc = $(CC) $(g_cflags) -fpic -I$(ho) -I. -Iout/lib
 vt_ld = vt.ld
 ldflags = -Wl,-T,$(vt_ld)
 hvt_h = $(ho)/vt.h
@@ -95,7 +95,7 @@ $(hvt_h): $(ho)/vt.o $(gl0) tools/gen_data_vt.$x gwen/prelude.$x
 	@echo GEN	$@
 	@$(gl0) -l gwen/prelude.$x tools/gen_data_vt.$x $< -o $@
 
-# gwen.c/vt.c -> b/host/*.o (against the generated vt.h).
+# gwen.c/vt.c -> out/host/*.o (against the generated vt.h).
 $(ho)/%.o: $(R)/%.c $(g_h) $(hvt_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
@@ -103,7 +103,7 @@ $(ho)/%.o: $(R)/%.c $(g_h) $(hvt_h)
 
 # main.c is compiled into the final gl inline (G_EGG_PRE/POST assemble the lib
 # headers); depend on them so it relinks when a lib source changes.
-$(ho)/$n: main.c $(ho)/lib$n.a b/lib/prelude.h b/lib/ev.h b/lib/repl.h $(hvt_h) $(vt_ld)
+$(ho)/$n: main.c $(ho)/lib$n.a out/lib/prelude.h out/lib/ev.h out/lib/repl.h $(hvt_h) $(vt_ld)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm
@@ -113,12 +113,12 @@ $(ho)/$n.1: $(ho)/$n gwen/manpage.$x
 	@$(ho)/$n < gwen/manpage.$x > $@
 
 # ====================================================================
-# kernel (freestanding) build -- outputs under b/free. Was free/Makefile.
+# kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
 # Arch-independent glue is kmain.c + k.h at the root; per-arch code lives in
 # arch/<a>/ (arch.c, *.S, *.lds, efi_main.c). Limine vs UEFI toggle is EFI=1.
 # ====================================================================
-ko = b/free
-dl = b/dl
+ko = out/free
+dl = out/dl
 
 # Cross toolchain defaults to clang + lld (one multi-target pair covers every
 # arch). Override for a GCC cross toolchain, e.g.
@@ -166,7 +166,7 @@ kcflags = $(g_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
 kldflags := -static -nostdlib --gc-sections -T $(R)/arch/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
-  -I. -I$(R)/b/host -Ib/lib -I$(R)/font -I$(R) \
+  -I. -I$(R)/out/host -Iout/lib -I$(R)/font -I$(R) \
   -Ilibc \
   -isystem c \
   $(kcppflags) \
@@ -243,7 +243,7 @@ endif
 # The data-sentinel TU bootstraps from the portable header (no $(kvt_h) prereq
 # -- circular). On a clean build vt.h doesn't exist yet, so -I$(k_odir) finds
 # nothing and the compile falls through to the portable top-level vt.h.
-$(k_odir)/vt.o: $(R)/vt.c $(k_h) b/lib/prelude.h b/lib/ev.h b/lib/repl.h
+$(k_odir)/vt.o: $(R)/vt.c $(k_h) out/lib/prelude.h out/lib/ev.h out/lib/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -253,7 +253,7 @@ $(kvt_h): $(k_odir)/vt.o $(gen_vt) | $(m)
 	@$(m) $(gen_vt) $< -o $@
 
 # Shared C sources (gwen.c/vt.c, font/, c/) + per-arch arch/$a/.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kvt_h) b/lib/prelude.h b/lib/ev.h b/lib/repl.h
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kvt_h) out/lib/prelude.h out/lib/ev.h out/lib/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -389,7 +389,7 @@ sim:
 	$(MAKE) -C arch/playdate sim
 
 clean:
-	rm -rf b
+	rm -rf out
 	@$(MAKE) -C wasm clean
 	@$(MAKE) -C arch/playdate clean 2>/dev/null || true
 	@[ -e arch/rp2040/Makefile ] && $(MAKE) -C arch/rp2040 clean || true
@@ -397,11 +397,11 @@ distclean: clean
 
 valg: host
 	cat $t | valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m
-b/host/perf.data: host
+out/host/perf.data: host
 	cat $t | perf record -o $@ $m
-perf: b/host/perf.data
+perf: out/host/perf.data
 	perf report -i $<
-b/host/flamegraph.svg: b/host/perf.data
+out/host/flamegraph.svg: out/host/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: host
 	@$m
@@ -434,8 +434,8 @@ installs = \
   $d/lib/$n/prelude.$x \
   $d/lib/$n/ev.$x \
   $d/lib/$n/repl.$x \
-  $d/lib/lib$n.a \
-  $d/lib/lib$n.so \
+  $d/liout/lib$n.a \
+  $d/liout/lib$n.so \
   $d/include/gwen.h \
   $v/ftdetect/$n.vim \
   $v/syntax/$n.vim \
@@ -454,19 +454,19 @@ $d/lib/$n/%.$x: gwen/%.$x
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/lib$n.a: b/host/lib$n.a
+$d/liout/lib$n.a: out/host/lib$n.a
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/lib$n.so: b/host/lib$n.so
+$d/liout/lib$n.so: out/host/lib$n.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/bin/$n: b/host/$n
+$d/bin/$n: out/host/$n
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/share/man/man1/$n.1: b/host/$n.1
+$d/share/man/man1/$n.1: out/host/$n.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

@@ -23,13 +23,13 @@ make BENCHES="sum primes"   # a subset
 make gwen                   # one language only
 make python                 # also: ruby / chez / sbcl / node / lua
 make raw                    # the raw result lines, unformatted
-make clean                  # remove bench/b/
+make clean                  # remove bench/out/
 ```
 
 Each non-gwen interpreter (`python3`, `ruby`, `chez`, `sbcl`, `node`, `lua`) is
 auto-skipped if not on `PATH`, and is skipped for any individual bench it has no
 implementation file for; its column then drops out of the table. gwen always
-runs against `../b/host/gl` (built on demand via the root Makefile).
+runs against `../out/host/gl` (built on demand via the root Makefile).
 
 Example output:
 

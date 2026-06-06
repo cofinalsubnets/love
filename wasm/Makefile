@@ -5,8 +5,8 @@ EMCC ?= /usr/lib/emscripten/emcc
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 emcc = $(CCACHE) $(EMCC)
 
-# This frontend's build output directory under the top-level b/.
-o = ../b/wasm
+# This frontend's build output directory under the top-level out/.
+o = ../out/wasm
 
 # g.c was split into per-concern translation units (kernel/*.c); build them all.
 g_c = ../gwen.c ../vt.c
@@ -26,7 +26,7 @@ objs = $(host_o) $(core_o)
 CFLAGS = -std=gnu2x -Os -g0 -Dg_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
-  -Iinc -I.. -I../b/lib
+  -Iinc -I.. -I../out/lib
 
 EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=GwenModule \
@@ -40,17 +40,17 @@ all: gwen.js
 # prelude.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
 # the browser feeds the REPL through gwen_eval).
-../b/lib/prelude.h: ../gwen/prelude.g
-../b/lib/ev.h: ../gwen/ev.g
-../b/lib/prelude.h ../b/lib/ev.h:
-	$(MAKE) -C .. b/lib/$(notdir $@)
+../out/lib/prelude.h: ../gwen/prelude.g
+../out/lib/ev.h: ../gwen/ev.g
+../out/lib/prelude.h ../out/lib/ev.h:
+	$(MAKE) -C .. out/lib/$(notdir $@)
 
 # Link step: emcc's link is multi-input, so ccache can't cache it -- use
 # bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
 gwen.js: $(objs)
 	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
-$(o)/host.o: host.c ../b/lib/prelude.h ../b/lib/ev.h $(g_h)
+$(o)/host.o: host.c ../out/lib/prelude.h ../out/lib/ev.h $(g_h)
 	@mkdir -p $(dir $@)
 	$(emcc) $(CFLAGS) -c $< -o $@
 

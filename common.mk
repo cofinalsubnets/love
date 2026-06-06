@@ -2,12 +2,12 @@
 # Makefiles. Each includer sets R to the relative path to the project root
 # before including this file: the root Makefile sets R := . and subdir
 # Makefiles (host/, free/, playdate/) set R := .. so the paths below resolve
-# from any cwd. Per-frontend build output lives under $R/b/<frontend>/.
+# from any cwd. Per-frontend build output lives under $R/out/<frontend>/.
 R ?= .
 
 n = gl
 x = g
-m = $R/b/host/$n
+m = $R/out/host/$n
 a ?= $(shell uname -m)
 
 t = $(sort $(wildcard $R/test/*.$x))
