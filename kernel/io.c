@@ -597,7 +597,7 @@ static g_noinline double strtod_wrap(struct g*f, word x) {
  memcpy(b, s->bytes, s->len);
  b[s->len] = 0;
  double r = strtod(b, &e);
- return e != b && *e == 0 ? r : NAN; }
+ return e != b && *e == 0 ? (g_flo_t) r : (g_flo_t) NAN; }
 
 // (flo s) — parse a gwen string as a decimal float. Returns a rank-0
 // f64 box if the entire string parses, else nil. Used by the gwen-side

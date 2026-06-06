@@ -1,8 +1,8 @@
 # Project root. This file defines the cross-cutting phony tasks (host,
 # kernel, playdate, test, clean, install, ...) and delegates the actual
 # build logic to per-subfolder Makefiles (host/, free/, playdate/). Build
-# output lands under the top-level b/ (b/host, b/free, ...); free/ owns dl/
-# for limine + edk2-ovmf. Shared variables live in common.mk.
+# output lands under the top-level b/ (b/host, b/free, b/dl, ...); free/
+# downloads limine + edk2-ovmf into b/dl. Shared variables live in common.mk.
 R := .
 include common.mk
 
@@ -104,6 +104,11 @@ run run-hdd run-headless run-efi run-efi-headless:
 .PHONY: sim
 sim:
 	$(MAKE) -C playdate sim
+
+# Pass-through for the benchmark harness (gwen vs python/ruby; see bench/).
+.PHONY: bench
+bench: host
+	$(MAKE) -C bench
 
 # --- install / uninstall --------------------------------------------
 PREFIX ?= .local/

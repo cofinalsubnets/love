@@ -125,3 +125,50 @@
  ; sum is linear: sum(a+b) = sum(a) + sum(b)
  (fz-ok 250 42 fz-arrpair
    (\ v (= (asum (+ (car v) (cadr v))) (+ (asum (car v)) (asum (cadr v)))))))
+
+; ---- string operations: scat / ssub / string / get / print->read ----
+; fz-str draws a random byte string (length 0..mx, any byte 0..255 -- inspect's
+; \xHH escaping round-trips them all). ssub returns nil for an empty slice
+; (i==j), which scat and len treat as "" but `=` does not, so any comparison
+; that can land on an empty slice routes through fz-norm (scat x "" coerces a
+; nil/string to a string). fz-s2cl / fz-rd are the helpers from the round-trip
+; section above (string->charlist, print->read).
+(: fz-byte (fz-int 0 256)                                  ; any byte 0..255
+   (fz-cl->str cl) (? (twop cl) (string cl) "")            ; charlist -> string ("" for nil)
+   (fz-norm x) (scat x "")                                 ; nil|string -> string
+   (fz-str mx) (fz-map fz-cl->str (fz-list mx fz-byte))    ; string, len 0..mx
+   fz-s    (fz-str 12)
+   fz-s2   (fz-pair2 fz-s fz-s)
+   fz-s3   (fz-trip fz-s fz-s fz-s)
+   fz-cl1  (fz-bind (fz-int 1 12) (\ n (fz-rep n fz-byte))) ; nonempty charlist
+   ; a string paired with a split point i in [0, len]
+   fz-s-i  (fz-bind fz-s (\ s (fz-map (\ i (cons s i)) (fz-int 0 (+ 1 (len s))))))
+   ; a string with 0 <= i <= j <= len, as (L s i j)
+   fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (+ 1 (len s)))
+              (\ i (fz-map (\ j (L s i j)) (fz-int i (+ 1 (len s)))))))))
+(assert
+ ; scat: length adds, is associative, and "" is a two-sided identity
+ (fz-ok 300 50 fz-s2 (\ v (= (len (scat (car v) (cadr v))) (+ (len (car v)) (len (cadr v))))))
+ (fz-ok 250 51 fz-s3 (\ v (= (scat (scat (car v) (cadr v)) (caddr v))
+                             (scat (car v) (scat (cadr v) (caddr v))))))
+ (fz-ok 300 52 fz-s (\ s (= s (scat "" s))))
+ (fz-ok 300 53 fz-s (\ s (= s (scat s ""))))
+ ; ssub: any split reconcatenates to the original; the full slice is the string
+ (fz-ok 300 54 fz-s-i (\ v (= (car v) (fz-norm (scat (ssub (car v) 0 (cdr v))
+                                            (ssub (car v) (cdr v) (len (car v))))))))
+ (fz-ok 300 55 fz-s (\ s (= s (fz-norm (ssub s 0 (len s))))))
+ ; the slice length is j-i, and out-of-range indices clamp to [0, len]
+ (fz-ok 300 56 fz-s-ij (\ v (= (- (caddr v) (cadr v)) (len (ssub (car v) (cadr v) (caddr v))))))
+ (fz-ok 300 57 fz-s (\ s (= (fz-norm (ssub s 0 (len s))) (fz-norm (ssub s -9 (+ 99 (len s)))))))
+ ; ssub recovers the two operands of a scat
+ (fz-ok 250 58 fz-s2 (\ v (= (car v) (fz-norm (ssub (scat (car v) (cadr v)) 0 (len (car v)))))))
+ (fz-ok 250 59 fz-s2 (\ v (= (cadr v) (fz-norm (ssub (scat (car v) (cadr v))
+                              (len (car v)) (+ (len (car v)) (len (cadr v))))))))
+ ; string is identity on strings; charlist->string round-trips by bytes and length
+ (fz-ok 300 60 fz-s (\ s (= s (string s))))
+ (fz-ok 250 61 fz-cl1 (\ cl (= cl (fz-s2cl (string cl)))))
+ (fz-ok 250 62 fz-cl1 (\ cl (= (len cl) (len (string cl)))))
+ ; get yields the default outside [0, len)
+ (fz-ok 300 63 fz-s (\ s (&& (= 'oob (get 'oob (len s) s)) (= 'oob (get 'oob -1 s)))))
+ ; print -> read round trip over arbitrary byte strings
+ (fz-ok 250 64 fz-s (\ s (= s (fz-rd s)))))

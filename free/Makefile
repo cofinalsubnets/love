@@ -1,7 +1,7 @@
 # Freestanding kernel build. Run from project root via `make kernel`, or
 # directly via `cd free && make`. Outputs (objects, kernel ELF/EFI, ISO/HDD/
 # EFI images) all land in $(R)/b/free/. Downloaded blobs (Limine, edk2-ovmf)
-# live in dl/ under this cwd. The Limine vs UEFI direct-boot toggle is `EFI=1`.
+# live in $(R)/b/dl/. The Limine vs UEFI direct-boot toggle is `EFI=1`.
 #
 # Shared, arch-independent glue (main.c, k.h, k_boot.h, include/, limine/,
 # uefi/) lives here in free/; per-arch code (arch.c, *.S, *.lds, efi_main.c)
@@ -11,6 +11,8 @@ include $(R)/common.mk
 
 # This frontend's build output directory under the top-level b/.
 o = $(R)/b/free
+# Downloaded boot blobs (Limine, edk2-ovmf) also live under the top-level b/.
+dl = $(R)/b/dl
 
 # --- sources ---------------------------------------------------------
 # The Limine build picks up arch.c + the nasm bits and omits the efi_*.c
@@ -169,7 +171,7 @@ clean:
 	rm -rf $(o)
 
 distclean: clean
-	rm -rf dl
+	rm -rf $(dl)
 
 # prelude.h/ev.h/repl.h are serialized from lib/*.g by the top-level lcat rule;
 # main.c assembles them into the bootstrap via G_EGG_PRE/POST. Depend on the .g
@@ -277,7 +279,7 @@ k_xorriso = xorriso -as mkisofs -quiet -R -r -J \
   -efi-boot-part --efi-boot-image --protective-msdos-label \
   $(k_xorriso_$a)
 
-$(o)/$n-$a.iso: $(o)/$n-$a.elf dl/limine/limine limine/limine.conf
+$(o)/$n-$a.iso: $(o)/$n-$a.elf $(dl)/limine/limine limine/limine.conf
 	@echo MK $@
 	@rm -rf $(o)/iso_root
 	@mkdir -p $(o)/iso_root/boot
@@ -285,17 +287,17 @@ $(o)/$n-$a.iso: $(o)/$n-$a.elf dl/limine/limine limine/limine.conf
 	@mkdir -p $(o)/iso_root/boot/limine
 	@cp limine/limine.conf $(o)/iso_root/boot/limine/
 	@mkdir -p $(o)/iso_root/EFI/BOOT
-	@cp dl/limine/limine-uefi-cd.bin $(o)/iso_root/boot/limine/
-	@cp dl/limine/limine-bios.sys dl/limine/limine-bios-cd.bin $(o)/iso_root/boot/limine/
-	@cp dl/limine/BOOTX64.EFI dl/limine/BOOTIA32.EFI $(o)/iso_root/EFI/BOOT/
-	@cp dl/limine/BOOTAA64.EFI $(o)/iso_root/EFI/BOOT/
-	@cp dl/limine/BOOTRISCV64.EFI $(o)/iso_root/EFI/BOOT/
-	@cp dl/limine/BOOTLOONGARCH64.EFI $(o)/iso_root/EFI/BOOT/
+	@cp $(dl)/limine/limine-uefi-cd.bin $(o)/iso_root/boot/limine/
+	@cp $(dl)/limine/limine-bios.sys $(dl)/limine/limine-bios-cd.bin $(o)/iso_root/boot/limine/
+	@cp $(dl)/limine/BOOTX64.EFI $(dl)/limine/BOOTIA32.EFI $(o)/iso_root/EFI/BOOT/
+	@cp $(dl)/limine/BOOTAA64.EFI $(o)/iso_root/EFI/BOOT/
+	@cp $(dl)/limine/BOOTRISCV64.EFI $(o)/iso_root/EFI/BOOT/
+	@cp $(dl)/limine/BOOTLOONGARCH64.EFI $(o)/iso_root/EFI/BOOT/
 	$(k_xorriso) $(o)/iso_root -o $@
-	@dl/limine/limine bios-install $@
+	@$(dl)/limine/limine bios-install $@
 	@rm -rf $(o)/iso_root
 
-$(o)/$n-$a.hdd: $(o)/$n-$a.elf dl/limine/limine limine/limine.conf
+$(o)/$n-$a.hdd: $(o)/$n-$a.elf $(dl)/limine/limine limine/limine.conf
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
@@ -304,12 +306,12 @@ $(o)/$n-$a.hdd: $(o)/$n-$a.elf dl/limine/limine limine/limine.conf
 	@mmd -i $@@@1M ::/EFI ::/EFI/BOOT ::/boot ::/boot/limine
 	@mcopy -i $@@@1M $< ::/boot/kernel
 	@mcopy -i $@@@1M limine/limine.conf ::/boot/limine
-	@mcopy -i $@@@1M dl/limine/limine-bios.sys ::/boot/limine
-	@mcopy -i $@@@1M dl/limine/BOOTX64.EFI ::/EFI/BOOT
-	@mcopy -i $@@@1M dl/limine/BOOTIA32.EFI ::/EFI/BOOT
-	@mcopy -i $@@@1M dl/limine/BOOTAA64.EFI ::/EFI/BOOT
-	@mcopy -i $@@@1M dl/limine/BOOTRISCV64.EFI ::/EFI/BOOT
-	@mcopy -i $@@@1M dl/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M $(dl)/limine/limine-bios.sys ::/boot/limine
+	@mcopy -i $@@@1M $(dl)/limine/BOOTX64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M $(dl)/limine/BOOTIA32.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M $(dl)/limine/BOOTAA64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M $(dl)/limine/BOOTRISCV64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M $(dl)/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
 
 # --- EFI-only boot media -----------------------------------------------
 # A raw FAT image containing just /EFI/BOOT/BOOT<arch>.EFI under the UEFI
@@ -347,36 +349,36 @@ k_qemu_loongarch64 = -M virt -cpu la464 -serial stdio $(k_qemu_risc)
 k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio $(k_qemu_risc)
 k_qemu_riscv64 = -M virt -cpu rv64 -serial stdio $(k_qemu_risc)
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
-  -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$a.fd,readonly=on
+  -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
 .PHONY: run run-hdd run-$a run-hdd-$a run-headless run-efi run-efi-headless
 run: run-$a
 run-hdd: run-hdd-$a
-run-$a: $(o)/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
+run-$a: $(o)/$n-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -cdrom $<
-run-hdd-$a: $(o)/$n-$a.hdd dl/edk2-ovmf/ovmf-code-$a.fd
+run-hdd-$a: $(o)/$n-$a.hdd $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -hda $<
 # headless: no display, COM1 console on stdio (see k_qemu_x86_64) -- so
 # the gwen repl can be driven over a pipe. -no-reboot exits on k_reset.
-run-headless: $(o)/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
+run-headless: $(o)/$n-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -cdrom $< -display none -no-reboot
-run-efi: $(o)/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
+run-efi: $(o)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) $(k_efi_drive_$a)
-run-efi-headless: $(o)/$n-$a-efi.img dl/edk2-ovmf/ovmf-code-$a.fd
+run-efi-headless: $(o)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) $(k_efi_drive_$a) -display none -no-reboot
 
 # --- downloads -------------------------------------------------------
-dl/edk2-ovmf/ovmf-code-%.fd:
+$(dl)/edk2-ovmf/ovmf-code-%.fd:
 	@echo MK ovmf
-	@mkdir -p dl
-	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C dl -xf -
+	@mkdir -p $(dl)
+	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C $(dl) -xf -
 	@case "$a" in \
 		aarch64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
 		riscv64) dd if=/dev/zero of=$@ bs=1 count=0 seek=33554432 2>/dev/null;; \
 	esac
 
-dl/limine/limine:
+$(dl)/limine/limine:
 	@echo MK limine
-	@rm -rf dl/limine
-	@git clone https://codeberg.org/Limine/Limine.git dl/limine --branch=v10.x-binary --depth=1 > /dev/null 2>&1
-	@$(MAKE) -sC dl/limine
+	@rm -rf $(dl)/limine
+	@git clone https://codeberg.org/Limine/Limine.git $(dl)/limine --branch=v10.x-binary --depth=1 > /dev/null 2>&1
+	@$(MAKE) -sC $(dl)/limine
