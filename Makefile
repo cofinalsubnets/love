@@ -10,7 +10,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel playdate wasm rp2040 gl0
-.PHONY: test test_host test_all test_tools test_gl0
+.PHONY: test test_host test_all test_tools test_gl0 claudemd hooks
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench sim
 test: test_host test_gl0
 test_all: test_host test_gl0 test_tools
@@ -24,6 +24,19 @@ test_host: host
 # tools/py/ (gen_data_vt / elf2efi / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host
 	@$(MAKE) -C tools
+# Regenerate CLAUDE.md from test/lang.g (its source of truth: CLAUDE.md is just
+# that file wrapped in a ```gwen fence). Only from a known-good tree -- a clean
+# host build with the whole corpus passing on BOTH gl and gl0. The git pre-commit
+# hook runs this and rejects the commit if CLAUDE.md then differs from what's staged.
+claudemd:
+	$(MAKE) clean
+	$(MAKE) test
+	@echo GEN	CLAUDE.md
+	@$m tools/gen_claudemd.$x
+# Activate the tracked git hooks (tools/hooks/) for this clone.
+hooks:
+	@git config core.hooksPath tools/hooks
+	@echo "hooks: core.hooksPath -> tools/hooks"
 all: host kernel playdate wasm rp2040
 
 # Static lisp headers: each gwen/*.g is serialized to a C string literal in

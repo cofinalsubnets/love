@@ -2639,45 +2639,23 @@ g_vm(g_vm_string) {
 // `i` parameter across the multiple port_* calls — each push triggers a
 // have() check that may GC and move heap ports.
 
-// Comments: `;` runs to end of line; a line that *starts* with `;;;` opens a
-// block comment that runs until the next line starting with `;;;` (that line is
-// consumed too). `#!` (shebang) runs to end of line; a bare `#` is significant
-// (the len reader macro), as is any other non-whitespace char. `bol` tracks the
-// start of a line; it is conservatively false at entry, so a `;;;` block is only
-// recognised when preceded by a newline this call has consumed (the common case).
+// Comments: `;` runs to end of line; `#!` (shebang) runs to end of line; a bare
+// `#` is significant (the len reader macro), as is any other non-whitespace char.
 static struct g* g_z_getc(struct g*f) {
- bool bol = false;
  while (g_ok(f = zgetc(f))) switch (f->b) {
-  default: bol = false; return f;
-  case '\n': case '\r': bol = true; continue;
-  case 0: case ' ': case '\t': case '\f': continue;  // whitespace preserves bol
+  default: return f;
+  case '\n': case '\r': continue;
+  case 0: case ' ': case '\t': case '\f': continue;
   case '#':                                          // #! is a line comment; bare # is significant (len macro)
    if (!g_ok(f = zgetc(f))) return f;
    if (f->b != '!') {                                // not a shebang: push back, return #
     if ((int) f->b != EOF && !g_ok(f = zungetc(f, f->b))) return f;
     return f->b = '#', f; }
    while (g_ok(f = zeof(f)) && !f->b && g_ok(f = zgetc(f)) && f->b != '\n' && f->b != '\r');
-   bol = true; continue;                             // consumed the newline -> at line start
-  case ';':
-   if (bol) {                                        // a line-start ;;; opens a block comment
-    if (!g_ok(f = zgetc(f))) return f;               // 2nd char
-    if (f->b == ';') {
-     if (!g_ok(f = zgetc(f))) return f;              // 3rd char
-     if (f->b == ';') {                              // ;;; : run to the next ;;;-line
-      for (int n = -1; ;) {          // n = leading ; on this line (-1 = line disqualified)
-       if (!g_ok(f = zgetc(f)) || (int) f->b == EOF) return f;  // unterminated -> EOF in f->b
-       if (f->b == '\n' || f->b == '\r') n = 0;      // new line: count from scratch
-       else if (n < 0) continue;                     // line already has a non-; prefix
-       else if (f->b == ';') { if (++n == 3) break; }// closing ;;; found
-       else n = -1; }                                // non-; in the leading run: disqualify
-      while (g_ok(f = zgetc(f)) && f->b != '\n' && f->b != '\r' && (int) f->b != EOF);
-      if (!g_ok(f) || (int) f->b == EOF) return f;   // skip the rest of the closing ;;; line
-      bol = true; continue; } }
-    // not ;;;: the extra char(s) read are part of the comment; if it was already the
-    // line's newline (line was ";" or ";;"), the comment is done.
-    if (f->b == '\n' || f->b == '\r') { bol = true; continue; } }
+   continue;
+  case ';':                                          // line comment: run to end of line
    while (g_ok(f = zeof(f)) && !f->b && g_ok(f = zgetc(f)) && f->b != '\n' && f->b != '\r');
-   bol = true; continue; }                           // consumed the newline -> at line start
+   continue; }
  return f; }
 
 // --- one non-recursive reader for both g_read1 (multi=0) and g_reads (multi=1) ---

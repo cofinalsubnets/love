@@ -1,12 +1,11 @@
-; comment syntax: `;` to end of line, `;;;`-at-line-start block comments, `#!` shebang.
+; comment syntax: `;` runs to end of line; `#!` is a shebang line comment.
+; there are NO block comments -- every comment ends at the newline.
 ; a plain `;` line comment (this line) is skipped.
-;;;
-this is a ;;; block comment. none of these lines are read:
-(putx "if you see this the block comment leaked") (putc 10)
-weird tokens ) ) ) ( ( " unterminated
-;;;
-; the block above is closed by the line starting with ;;;
-(: cmt-after 7) ;;; a trailing ;;; is just a normal line comment, not a block
+;; two semicolons: still just a line comment.
+;;; three semicolons: also just a line comment now (the old block form is gone).
+;;; (putx "if this printed, ;;; still started a block") (putc 10)
+#! a `#!` shebang line is skipped too -- ) ) ( ( " weird tokens are fine here
+(: cmt-after 7)  ;;; a trailing ;;; is an ordinary line comment
 (assert
- (= 7 cmt-after)                                ; survived the trailing ;;; line comment
+ (= 7 cmt-after)                                ; survived the ;;; / #! / ;; lines above
  (= 1 1))

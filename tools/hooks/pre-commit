@@ -1,0 +1,35 @@
+#!/bin/sh
+# pre-commit: keep CLAUDE.md in sync with its source of truth, test/lang.g.
+#
+# CLAUDE.md is test/lang.g wrapped in a ```gwen fence (tools/gen_claudemd.g). An
+# "up-to-date" CLAUDE.md is one regenerated from a KNOWN-GOOD tree, so `make
+# claudemd` does a clean host build and runs the whole corpus on both gl and gl0
+# before regenerating. If any of that fails -- or if the regenerated CLAUDE.md
+# then differs from what you staged -- the commit is rejected.
+#
+# Activate (once per clone):  git config core.hooksPath tools/hooks   (or: make hooks)
+set -e
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+# Only the runtime/compiler/doc-source can affect CLAUDE.md or whether it is valid;
+# skip the (expensive) clean rebuild for commits that touch none of them.
+if git diff --cached --quiet -- \
+     test/lang.g tools/gen_claudemd.g gwen.c gwen.h vt.c vt.h vt.ld main.c \
+     common.mk Makefile gwen/ ; then
+  exit 0
+fi
+
+echo "pre-commit: regenerating CLAUDE.md (clean build + gl/gl0 tests via 'make claudemd')..." >&2
+if ! make claudemd >/dev/null 2>&1; then
+  echo "pre-commit: 'make claudemd' FAILED (clean build or gl/gl0 tests did not pass)." >&2
+  echo "            re-run 'make claudemd' to see the error; commit aborted." >&2
+  exit 1
+fi
+
+if ! git diff --quiet -- CLAUDE.md; then
+  echo "pre-commit: CLAUDE.md was stale and has been regenerated from test/lang.g." >&2
+  echo "            review and stage it, then re-commit:  git add CLAUDE.md" >&2
+  exit 1
+fi
+exit 0
