@@ -13,9 +13,9 @@ static g_inline bool in_data(void *a) {
 
 static g_inline enum q g_typ(union u *o) {
  g_vm_t *p = o->ap;
- return p == g_vm_two ? K_TWO :
-        p == g_vm_tuple ? K_TUPLE :
-        p == g_vm_sym ? K_SYM :
-        p == g_vm_str ? K_STRING :
-                        K_BIG; }
+ return p == g_vm_two ? KTwo :
+        p == g_vm_tuple ? KTuple :
+        p == g_vm_sym ? KSym :
+        p == g_vm_str ? KString :
+                        KBig; }
 #endif

@@ -10,7 +10,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel playdate wasm rp2040 gl0
-.PHONY: test test_host test_all test_tools test_gl0 claudemd hooks
+.PHONY: test test_host test_all test_tools test_gl0 hooks
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench sim
 test: test_host test_gl0
 test_all: test_host test_gl0 test_tools
@@ -24,20 +24,10 @@ test_host: host
 # tools/py/ (gen_data / elf2efi / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host
 	@$(MAKE) -C tools
-# CLAUDE.md is test/CLAUDE.g wrapped in a ```gwen fence (tools/gen_claudemd.g), so
-# the project guide and a runnable, asserted test stay the same artifact.
-CLAUDE.md: test/CLAUDE.$x tools/gen_claudemd.$x | $m
-	@echo GEN	$@
-	@$m tools/gen_claudemd.$x
-# Regenerate from a KNOWN-GOOD tree -- a clean host build with the whole corpus
-# passing on BOTH gl and gl0 -- then force the rebuild (CLAUDE.md is otherwise
-# newer than its source). The git pre-commit hook runs this and rejects the commit
-# if CLAUDE.md then differs from what's staged.
-claudemd:
-	$(MAKE) clean
-	$(MAKE) test
-	@rm -f CLAUDE.md
-	@$(MAKE) CLAUDE.md
+# CLAUDE.md is test/CLAUDE.g wrapped in a ```gwen fence (tools/gen_claudemd.g). It is
+# NOT a make target: Claude regenerates it by hand after rewriting test/CLAUDE.g --
+#   out/host/gl tools/gen_claudemd.g
+# and the pre-commit hook (tools/hooks/) only checks freshness, failing a stale commit.
 # Activate the tracked git hooks (tools/hooks/) for this clone.
 hooks:
 	@git config core.hooksPath tools/hooks

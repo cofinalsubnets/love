@@ -14,7 +14,7 @@
 (: (die m) (: _ (fputs err "gen_data: ") _ (fputs err m) _ (fputs err "\n") (exit 1)))
 
 ; --- little-endian decoders over the slurped image ------------------
-; (get 0 o s) -> byte o as an unsigned fixnum 0..255 (K_STRING case of get).
+; (get 0 o s) -> byte o as an unsigned fixnum 0..255 (KString case of get).
 (: (u8 s o)   (get 0 o s)
    (rd16 s o) (| (u8 s o)   (<< (u8 s (+ o 1)) 8))
    (rd32 s o) (| (rd16 s o) (<< (rd16 s (+ o 2)) 16))
@@ -50,9 +50,10 @@
       _ (fputs p " return (uintptr_t) a >= (uintptr_t) __start_gwen_data\n")
       _ (fputs p "     && (uintptr_t) a <  (uintptr_t) __stop_gwen_data; }\n")
       _ (fputs p "static g_inline enum q g_typ(union u *o) {\n")
-      _ (fputs p " return (enum q) (K_TUPLE + (((uintptr_t) o->ap - (uintptr_t) __start_gwen_data) ")
+      _ (fputs p " static const enum q kinds[] = { KTuple, KBig, KString, KSym, KTwo };\n")
+      _ (fputs p " return kinds[((uintptr_t) o->ap - (uintptr_t) __start_gwen_data) ")
       _ (? po2 (: _ (fputs p ">> ") (fputn p shift 10)) (fputs p "/ G_DATA_UNIT"))
-      _ (fputs p ")); }\n")
+      _ (fputs p "]; }\n")
       (fputs p "#endif\n")))
 
 ; --- parse one ELF object (64-bit LE) and emit -----------------------

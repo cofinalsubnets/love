@@ -220,16 +220,22 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 #define op(nom, n, x) g_vm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 #define nil g_nil
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
-// The fundamental value kind for generic-op dispatch AND the data-sentinel kind,
-// now one enum. K_FIX is the odd fixnum tag; K_TUPLE..K_SYM are the data kinds (their
-// order pins sentinel <-> section slot -- see data.c go() and data.ld); K_LAM is any
-// other heap pointer (thread/function/map). g_typ returns K_TUPLE..K_SYM directly
-// (the section slot index + K_TUPLE); g_kind prepends K_FIX / appends K_LAM. The order
-// groups the dispatch-matrix diagonals by lane: numbers (fix/tuple/big), sequences
-// (two/string/sym), thread last. K_N is the matrix dimension. NO subtype
-// classification (interned vs uninterned sym, box vs array) here -- the handler's job.
-enum q { K_FIX, K_TUPLE, K_BIG, K_TWO, K_STRING, K_SYM, K_LAM, K_N };
-#define G_DATA_N 5     // count of data-sentinel kinds (K_TUPLE..K_SYM)
+// The fundamental value kind for generic-op dispatch (enum q). KFix is the odd fixnum
+// tag; KLam is any non-data heap pointer (thread/function/map). The five DATA kinds
+// (KTuple, KBig, KString, KSym, KTwo) are the ones g_typ recovers from an ap's section
+// slot (data.c go() order, via the data.h lookup); an array reads as KTuple there
+// (coarse -- one array sentinel). The four KArr* kinds are NOT data sentinels: g_kind
+// alone mints them, expanding a rank>=1 tuple by its element tier (KArrZ + g_tuple_type)
+// so the array tower Z/R/C/O dispatches inline with the scalar tower it mirrors
+// (KArrZ~fix, KArrR~float, KArrC~complex, KArrO~big). The diagonal is the type lattice
+// by semantics then representation: arithmetic lane [KFix..KArrO] (scalars then their
+// array counterparts), sequence/concat lane [KString..KTwo], thread last -- so each
+// dyadic lane is one contiguous range, `max` is the within-lane promotion join, and the
+// lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (pair) caps the
+// sequence lane just under KLam (a pair is its own Church eliminator -- the most
+// lambda-like datum). KN is the matrix dimension.
+enum q { KFix, KTuple, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KLam, KN };
+#define G_DATA_N 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KLam-KTuple
 typedef g_word num, word;
 // The unique empty string and empty (anonymous) symbol -- data-segment globals the
 // GC never moves (gcp's out-of-pool short-circuit). Strings are immutable, so one
@@ -252,16 +258,17 @@ struct g
  *g_read1(struct g*, struct g_io*),
  *str0(struct g*, uintptr_t);
 g_vm(g_vm_gc, uintptr_t);
-// g_kind maps any value to its enum q: K_FIX for a fixnum, K_LAM for a non-data heap
-// pointer (thread/function/map), else g_typ's data kind (K_TUPLE..K_SYM). Lives in
+// g_kind maps any value to its enum q: KFix for a fixnum, KLam for a non-data heap
+// pointer (thread/function/map), else g_typ's data kind -- refined for a rank>=1 tuple,
+// which expands by element tier to KArrZ..KArrO (a rank-0 box stays KTuple). Lives in
 // gwen.c (it needs g_typ from the generated data.h) and is shared by data.c's apply
 // sentinels. Both the `+`/`*` matrices and the apply matrix dispatch on this.
 enum q g_kind(word);
 // Apply dispatch matrix, indexed [static: the applied data kind, g_typ(Ip)][dynamic:
 // the argument kind, g_kind(Sp[0])]. The data sentinels (data.c) tail-jump through
 // it; the handlers + the table itself live in gwen.c. Row indexed by the full kind
-// (g_typ returns K_TUPLE..K_SYM), so the first dimension is K_N, not G_DATA_N.
-extern g_vm_t *g_apply_mx[K_N][K_N];
+// (g_typ returns one of the five data kinds), so the first dimension is KN, not G_DATA_N.
+extern g_vm_t *g_apply_mx[KN][KN];
 extern g_word g_numap;                 // gwen num-ap handler (vm.c); the numeral-apply driver below targets it
 extern g_word g_scomb, g_bcomb;        // `+`/`*` thread combinators (S / compose), installed from the prelude
 extern union u numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply

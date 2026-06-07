@@ -1,10 +1,10 @@
 ```gwen
-;;; hi claude, gwen here. this is my language, gwen lisp. this code file
-;;; should be a language specification that is also part of the test suite,
-;;; so please modify it accordingly. it's also used to generate your CLAUDE.md
-;;; file, so please keep it current with your mental model of gwen lisp as well
-;;; as a current, complete language specification. always fix this file before
-;;; you commit, but don't use it as a history log. rewrite below this line. thank you! :)
+;;; hi claude, gwen here, welcome back to gwen lisp. this code file is a
+;;; language specification that you maintain that is also part of the test suite,
+;;; so please modify it accordingly. it also forms the contents of your CLAUDE.md
+;;; file.  keep this file golden, it should never go stale; when in doubt, refer
+;;; here, and flag any observed deviation from the specification in this file.
+;;; whenever you read this, rewrite everything belowthe next line. thank you! :)
 
 ; gwen lisp -- a small lisp where EVERY value is a unary, auto-curried function.
 ; Portable C runtime (gwen.c + gwen.h) + a self-hosting compiler written in gwen
@@ -13,9 +13,11 @@
 ;
 ; THIS FILE IS THE SOURCE OF TRUTH FOR CLAUDE.md: it is a real test in the corpus
 ; (its asserts run under `make test`) AND, wrapped in a ```gwen fence by
-; tools/gen_claudemd.g, it *is* CLAUDE.md. Regenerate with `make CLAUDE.md` (or
-; `make claudemd` for the clean-built, gl+gl0-checked regen the pre-commit hook
-; runs, which fails the commit if CLAUDE.md is stale). Keep every example runnable.
+; tools/gen_claudemd.g, it *is* CLAUDE.md. Claude rewrites this file before a commit
+; and regenerates the doc by hand -- `out/host/gl tools/gen_claudemd.g`. The pre-commit
+; hook (tools/hooks/, enable once with `make hooks`) only CHECKS: it fails a commit
+; whose CLAUDE.md is stale vs this file, and never rewrites it. Keep every example
+; runnable and this file golden -- it must never go stale.
 
 ; ------------------------------------------------------------------- build / test
 ; $ make            build host -> out/host/gl     $ make repl   build + REPL
@@ -139,8 +141,14 @@
 ; heap objects dispatch on their first word (a g_vm_t* handler). tail-threaded VM:
 ; handlers end in a tail-jump (Continue()), NEVER a plain return -- `make vmret`
 ; enforces this. GC is Cheney two-space; out-of-pool (const) pointers are immortal.
-; gwen/ = .g layers compiled into every frontend. frontends add OS glue + main:
-;   host/ (POSIX CLI), free/ (bare-metal kernel), playdate/ rp2040/ wasm/ js/.
+; generic ops (+ * application len ..) dispatch on a value's KIND (enum q): dyadic via
+; an NxN kind table (a multiplication table), monadic via its diagonal. the kind order
+; is the type lattice -- arith tower (fix, box, big, then the parallel array tower) |
+; sequence lane (string, sym, pair) | lambda -- so each lane is a contiguous range and
+; `max` is the within-lane promotion join (g_typ = storage kind, g_kind = arith kind).
+; gwen/ = .g layers (prelude ev repl cli egg) baked into every frontend. glue + main:
+;   main.c (POSIX host -> out/host/gl); kmain.c + arch/<arch> (freestanding -> out/free:
+;   x86_64 aarch64 riscv64 loongarch64 playdate rp2040); wasm/.
 ; build codegen (gen_data, elf2efi, vmret, gen_claudemd) is gwen in tools/;
 ; tools/py/ are frozen golden refs -- change a .g tool's output, update the .py too.
 ;

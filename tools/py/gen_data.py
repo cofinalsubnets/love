@@ -150,7 +150,8 @@ static g_inline bool in_data(void *a) {
  return (uintptr_t) a >= (uintptr_t) __start_gwen_data
      && (uintptr_t) a <  (uintptr_t) __stop_gwen_data; }
 static g_inline enum q g_typ(union u *o) {
- return (enum q) (K_TUPLE + (((uintptr_t) o->ap - (uintptr_t) __start_gwen_data) %s)); }
+ static const enum q kinds[] = { KTuple, KBig, KString, KSym, KTwo };
+ return kinds[((uintptr_t) o->ap - (uintptr_t) __start_gwen_data) %s]; }
 #endif
 """
 

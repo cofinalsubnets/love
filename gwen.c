@@ -192,12 +192,12 @@ static struct g *g_mapput(struct g*), *map_new(struct g*);
 static g_inline struct g_str *buf_str(word x) { return ((struct g_buf*) x)->str; }
 // the byte ops read from a string or a buf; both resolve to a g_str of bytes.
 static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
-// Arbitrary-precision integer (Step 6). Own data-sentinel kind K_BIG: a flat,
+// Arbitrary-precision integer (Step 6). Own data-sentinel kind KBig: a flat,
 // GC-trivial object (raw limbs, no embedded gwen pointers) the copying GC moves
 // by memcpy. A generic thread scan can't hold inline limb words (a limb that's
 // even-and-in-pool would be spuriously forwarded, one matching G_THD_TAG would
 // truncate the object), so a flat bignum needs its own copy/evac rule -- like
-// K_STRING strings -- which is exactly what the sentinel buys. slen = signed limb
+// KString strings -- which is exactly what the sentinel buys. slen = signed limb
 // count (negative => negative value); |slen| 32-bit limbs little-endian
 // (limb[0] least significant), top limb nonzero (normalized). Zero is never a
 // bignum (it demotes to the fixnum nil), so slen is never 0 and the sign is
@@ -783,11 +783,11 @@ static g_inline void evac_thd(struct g *g, word const *const p0, word const*cons
 static g_inline void evac_data(struct g *g, word const *const p0, word const*const t0) {
   switch (typ(g->cp)) {
    default: __builtin_trap();
-   case K_TUPLE: return evac_tuple(g, p0, t0);
-   case K_SYM: return evac_sym(g, p0, t0);
-   case K_TWO: return evac_two(g, p0, t0);
-   case K_STRING: return evac_str(g, p0, t0);
-   case K_BIG: return evac_big(g, p0, t0); } }
+   case KTuple: return evac_tuple(g, p0, t0);
+   case KSym: return evac_sym(g, p0, t0);
+   case KTwo: return evac_two(g, p0, t0);
+   case KString: return evac_str(g, p0, t0);
+   case KBig: return evac_big(g, p0, t0); } }
 
 static g_inline void run_finalizers(struct g*g) {
  struct g_fz *new_fz = NULL;
@@ -897,11 +897,11 @@ static g_inline word copy_sym(struct g*f, struct g_atom *src, word const *const 
 static g_inline word copy_data(struct g *f, union u *src, word const *const p0, word const *const t0) {
  switch (typ(src)) {
   default: __builtin_trap();
-  case K_TWO: return copy_two(f, two(src), p0, t0);
-  case K_TUPLE: return copy_tuple(f, tuple(src), p0, t0);
-  case K_SYM: return copy_sym(f, sym(src), p0, t0);
-  case K_STRING: return copy_str(f, str(src), p0, t0);
-  case K_BIG: return copy_big(f, (struct g_big*) src, p0, t0); } }
+  case KTwo: return copy_two(f, two(src), p0, t0);
+  case KTuple: return copy_tuple(f, tuple(src), p0, t0);
+  case KSym: return copy_sym(f, sym(src), p0, t0);
+  case KString: return copy_str(f, str(src), p0, t0);
+  case KBig: return copy_big(f, (struct g_big*) src, p0, t0); } }
 
 static g_inline struct g_tag *ttag2(union u *k, word const *const lo, word const *const hi) {
  while (!tagp(k->x, lo, hi)) k++;
@@ -1940,17 +1940,17 @@ g_vm(g_vm_len) {
   else if (mapp(x)) l = map_len(x);                              // table: key count
   else if (datp(x)) switch (typ(x)) {
     default: l = 1; break;                                      // unknown present data kind -> truthy
-    case K_STRING: l = len(x); break;                             // string: byte count
-    case K_TWO: { word p = x; do l++, p = B(p); while (twop(p)); } break;  // list: pair count
-    case K_BIG: l = FIX_MAX; break;                             // |bignum| > FIX_MAX: saturate
-    case K_SYM: {                                              // symbol: name length, floored at 1
+    case KString: l = len(x); break;                             // string: byte count
+    case KTwo: { word p = x; do l++, p = B(p); while (twop(p)); } break;  // list: pair count
+    case KBig: l = FIX_MAX; break;                             // |bignum| > FIX_MAX: saturate
+    case KSym: {                                              // symbol: name length, floored at 1
       struct g_atom *s = sym(x);                               // (a symbol is always a present identity)
       intptr_t nl = !s->nom ? 0                                // anonymous gensym
         : strp(word(s->nom)) ? (intptr_t) len(s->nom)          // interned: its name string
         : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;  // uninterned
       l = nl ? nl : 1;
       break; }
-    case K_TUPLE: {                                               // boxed scalar or rank-n array
+    case KTuple: {                                               // boxed scalar or rank-n array
       struct g_tuple *v = tuple(x);                                 // all -> ceil(|x|), saturated, never negative
       if (v->rank) { uintptr_t i = 0, n = 1;                    // array: its L2 norm
         while (i < v->rank) n *= v->shape[i++];
@@ -2409,11 +2409,11 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off) {
  // own recursion (the seen list); the data kinds below are acyclic.
  switch (typ(x)) {
    default: __builtin_trap();
-   case K_TWO:  return gzput_two(f, x, off);
-   case K_TUPLE:  return gzput_tuple(f, x, off);
-   case K_SYM:  return gzput_sym(f, x);
-   case K_STRING: return gzput_str(f, x);
-   case K_BIG:  return gzput_big(f, x); } }
+   case KTwo:  return gzput_two(f, x, off);
+   case KTuple:  return gzput_tuple(f, x, off);
+   case KSym:  return gzput_sym(f, x);
+   case KString: return gzput_str(f, x);
+   case KBig:  return gzput_big(f, x); } }
 
 // Establish a fresh seen-list slot at the bottom of the print region, print, then
 // restore the original stack height (discarding the slot and the whole list).
@@ -2975,8 +2975,8 @@ g_vm(g_vm_get) {
    z = putnum((unsigned char) txt(s)[n]); }
  else if (mapp(x)) z = g_mapget(f, z, k, x);     // map lookup (not a data sentinel)
  else if (lamp(x) && datp(x)) switch (typ(x)) {
-  default: break;                               // K_SYM is not indexable
-  case K_TUPLE: {
+  default: break;                               // KSym is not indexable
+  case KTuple: {
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
    // rank-N; an empty/nil key derefs a rank-0 scalar box. Out-of-bounds or a
    // wrong-rank key falls through to the default `z`. Integer elements keep
@@ -3002,14 +3002,14 @@ g_vm(g_vm_get) {
     else EMIT_INT(tuple_get_int(v, off));
     z = _res; }
    break; }
-  case K_STRING:
+  case KString:
    // Byte as its unsigned value 0..255 -- bytes are data, signedness is the
    // operator's job. txt is signed char[], so cast to avoid sign-extending a
    // high byte (e.g. 0xff -> -1) when binary data is indexed.
    if (fixp(k) && (n = getnum(k)) >= 0 && n < (word) len(x))
     z = putnum((unsigned char) txt(x)[n]);
    break;
-  case K_TWO:
+  case KTwo:
    if (fixp(k) && (n = getnum(k)) >= 0) {
     while (n-- && twop(x = B(x)));
     if (twop(x)) z = A(x); } }
@@ -3075,17 +3075,17 @@ uintptr_t hash(struct g *f, intptr_t x) {
    return r; }
  switch (typ(x)) {
    default: __builtin_trap();
-   case K_TWO: return hash_two(f, x);
-   case K_SYM: return sym(x)->code;
-   case K_TUPLE: {
+   case KTwo: return hash_two(f, x);
+   case KSym: return sym(x)->code;
+   case KTuple: {
     uintptr_t len = g_tuple_bytes(tuple(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case K_BIG: {
+   case KBig: {
     uintptr_t len = g_big_bytes((struct g_big*) x), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case K_STRING: {
+   case KString: {
     uintptr_t n = len(x), h = mix;
     char const *bs = txt(x);
     while (n--) h ^= (uint8_t) *bs++, h *= mix;
@@ -3450,12 +3450,16 @@ static g_vm(g_vm_0) {                             // unsupported mix (array <-> 
  return *++Sp = nil, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in gwen.h): a fixnum is
-// the odd tag (K_FIX), a non-data heap pointer is a thread/function (K_LAM), else g_typ
-// recovers the data kind directly (K_TUPLE..K_SYM -- it already folds in the +K_TUPLE
-// slot shift). No subtype classification here; that is the handler's job. Exported (not
-// inline) so data.c's apply sentinels share it.
+// the odd tag (KFix), a non-data heap pointer is a thread/function (KLam), else g_typ
+// gives the data kind. The one refinement: a rank>=1 tuple (array) expands by element
+// tier to KArrZ..KArrO so the array tower dispatches inline with the scalar tower it
+// mirrors; rank-0 boxes (float/complex/wide-int) stay KTuple. Exported (not inline) so
+// data.c's apply sentinels share it.
 enum q g_kind(word x) {
- return fixp(x) ? K_FIX : !datp(x) ? K_LAM : typ(x); }
+ if (fixp(x)) return KFix;
+ if (!datp(x)) return KLam;
+ enum q k = typ(x);
+ return k == KTuple && tuple(x)->rank ? (enum q) (KArrZ + tuple(x)->type) : k; }
 
 // ============================================================================
 // generic-op lane handlers, then all three dispatch matrices adjacent, then the
@@ -3567,48 +3571,60 @@ static g_vm(data_pair_apply) {
  return Ip = pair_drive, Continue(); }
 
 // === the three generic-op dispatch matrices, adjacent ======================
-// All indexed by g_kind (g_apply_mx's row by g_typ, the data-kind subrange). Lanes:
-//   *n   = numeric tower & arrays (arithmetic / broadcast)
-//   add_seq = a list anywhere (other operand a scalar element / spine)
+// All indexed by g_kind (g_apply_mx's row by g_typ, the data-kind subrange). The kind
+// order (gwen.h) makes each lane a contiguous block: [KFix..KArrO] arithmetic (the
+// scalar tower fix/tuple/big then the parallel array tower arrZ/arrR/arrC/arrO), then
+// [KString..KTwo] sequence, then KLam. Lanes:
+//   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane handler still
+//          refines by g_tuple_type; the seven arithmetic kinds route identically today.
+//   add_seq = a list anywhere (other operand a scalar element / spine); pair wins
 //   add_string = strings & symbols name-compatibly (+ a number as one byte; demotes
 //              isym>usym>str and nils an array operand internally)
 //   mul_rep  = sequence * scalar-count -> repetition
-//   *l   = a LAMBDA operand (precedence: the K_LAM row+col) -- Church add / compose
-//   g_vm_0 = undefined (-> nil): function<->text, sequence*sequence
-// K_TUPLE covers boxes/complex (numbers) AND arrays; the lane handler refines. Maps
-// are lambdas (K_LAM) -- the *l lanes -- so they have no row/col of their own.
+//   *l   = a LAMBDA operand (precedence: the KLam row+col) -- Church add / compose
+//   g_vm_0 = undefined (-> nil): sequence*sequence
+// Precedence (high->low): lambda > pair > text > number(incl array). Maps are lambdas
+// (KLam) -- the *l lanes -- so they have no row/col of their own.
+// cols (enum order): fix tuple big arrZ arrR arrC arrO | string sym | two | lam
 
-// `+`: numbers add, lists/text concat, lambdas Church-add. K_LAM row+col all addl.
-static g_vm_t *const g_add_mx[K_N][K_N] = {
-//            FIX            TUPLE          BIG            TWO            STRING         SYM            LAM
- [K_FIX]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
- [K_TUPLE]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
- [K_BIG]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
- [K_TWO]  = { g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_addl },
- [K_STRING] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
- [K_SYM]  = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
- [K_LAM]  = { g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl },
+// `+`: numbers add, lists/text concat, lambdas Church-add. KLam row+col all addl.
+static g_vm_t *const g_add_mx[KN][KN] = {
+ [KFix]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KTuple]  = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KBig]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KArrZ]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KArrR]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KArrC]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KArrO]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KString] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KSym]    = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
+ [KTwo]    = { g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_addl },
+ [KLam]    = { g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl },
 };
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas compose (Church mul). seq*seq -> nil.
-static g_vm_t *const g_mul_mx[K_N][K_N] = {
-//            FIX            TUPLE          BIG            TWO            STRING         SYM            LAM
- [K_FIX]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
- [K_TUPLE]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
- [K_BIG]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
- [K_TWO]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
- [K_STRING] = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
- [K_SYM]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
- [K_LAM]  = { g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull },
+static g_vm_t *const g_mul_mx[KN][KN] = {
+ [KFix]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
+ [KTuple]  = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
+ [KBig]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
+ [KArrZ]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
+ [KArrR]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
+ [KArrC]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
+ [KArrO]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
+ [KString] = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull },
+ [KSym]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull },
+ [KTwo]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull },
+ [KLam]    = { g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull },
 };
 // apply: [applied data kind = g_typ(Ip)][argument kind = g_kind(arg)]. Every row is
 // arg-kind-uniform today (AROW fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
-#define AROW(h) { [K_FIX]=h,[K_LAM]=h,[K_TWO]=h,[K_TUPLE]=h,[K_SYM]=h,[K_STRING]=h,[K_BIG]=h }
-g_vm_t *g_apply_mx[K_N][K_N] = {
- [K_TWO]  = AROW(data_pair_apply), [K_TUPLE]  = AROW(data_num_apply),
- [K_SYM]  = AROW(data_sym_apply),
- [K_STRING] = AROW(data_string_apply), [K_BIG]  = AROW(data_num_apply), };
+#define AROW(h) { [KFix]=h,[KLam]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
+                  [KArrZ]=h,[KArrR]=h,[KArrC]=h,[KArrO]=h }
+g_vm_t *g_apply_mx[KN][KN] = {
+ [KTwo]  = AROW(data_pair_apply), [KTuple]  = AROW(data_num_apply),
+ [KSym]  = AROW(data_sym_apply),
+ [KString] = AROW(data_string_apply), [KBig]  = AROW(data_num_apply), };
 #undef AROW
 
 // === the `+`/`*` dispatchers (fixnum fast path, then the matrix) ============
@@ -3905,21 +3921,21 @@ g_noinline bool eqv(struct g *f, word a, word b) {
    if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return false;
    switch (typ(a)) {
     default: return false;
-    case K_TWO:
+    case KTwo:
      if (top - w < 2) __builtin_trap();     // worklist overflow: a cycle
      *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
      continue;
-    case K_TUPLE: {
+    case KTuple: {
      size_t la = g_tuple_bytes(tuple(a)), lb = g_tuple_bytes(tuple(b));
      if (la != lb || memcmp(tuple(a), tuple(b), la)) return false;
      break; }
-    case K_BIG: {
+    case KBig: {
      struct g_big *x = (struct g_big*) a, *y = (struct g_big*) b;
      if (x->slen != y->slen) return false;
      size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(uint32_t);
      if (memcmp(x->limb, y->limb, nb)) return false;
      break; }
-    case K_STRING:
+    case KString:
      if (len(a) != len(b) || memcmp(txt(a), txt(b), len(a))) return false;
      break; } }
   if (w == base) return true;              // worklist drained: all equal
@@ -3952,7 +3968,7 @@ g_vm(g_vm_eq) {
  // A float operand compares as doubles across the whole numeric tower (fixnum /
  // float box / wide-int box / bignum all widen via TOFLO; a bignum loses
  // precision past 2^53, the documented float caveat). Otherwise eql: two equal
- // bignums match through eqv's K_BIG arm, and canonical demotion keeps a bignum
+ // bignums match through eqv's KBig arm, and canonical demotion keeps a bignum
  // distinct from any fixnum/box of a different value.
  if (flop(a) || flop(b)) r = ISNUM(a) && ISNUM(b) && (TOFLO(a) == TOFLO(b));
  else r = eql(f, a, b);
@@ -3970,7 +3986,7 @@ g_vm(g_vm_same) {
 // big
 // ============================================================================
 // Step 6 -- arbitrary-precision integers (bignums). Closes the numeric tower
-// fixnum -> wide-int box -> bignum. The representation is the K_BIG data
+// fixnum -> wide-int box -> bignum. The representation is the KBig data
 // sentinel `struct g_big` (i.h): sign-magnitude, 32-bit base-2^32 limbs,
 // little-endian, top limb nonzero, slen the signed limb count. Zero is never a
 // bignum (it demotes to nil), so every bignum has |slen| >= 1 limbs.

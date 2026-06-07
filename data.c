@@ -15,7 +15,7 @@
   return Ap(g_apply_mx[g_typ(Ip)][g_kind(Sp[0])], f); }
 
 #define go(_)\
-  _(00, g_vm_tuple) _(01, g_vm_big) _(02, g_vm_two)\
-  _(03, g_vm_str) _(04, g_vm_sym)
+  _(00, g_vm_tuple) _(01, g_vm_big) _(02, g_vm_str)\
+  _(03, g_vm_sym) _(04, g_vm_two)
 
 go(data)

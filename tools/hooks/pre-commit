@@ -1,35 +1,26 @@
 #!/bin/sh
-# pre-commit: keep CLAUDE.md in sync with its source of truth, test/CLAUDE.g.
-#
-# CLAUDE.md is test/CLAUDE.g wrapped in a ```gwen fence (tools/gen_claudemd.g). An
-# "up-to-date" CLAUDE.md is one regenerated from a KNOWN-GOOD tree, so `make
-# claudemd` does a clean host build and runs the whole corpus on both gl and gl0
-# before regenerating. If any of that fails -- or if the regenerated CLAUDE.md
-# then differs from what you staged -- the commit is rejected.
+# pre-commit: fail (do NOT regenerate) if CLAUDE.md is out of sync with its source of
+# truth, test/CLAUDE.g. CLAUDE.md is just test/CLAUDE.g wrapped in a ```gwen fence
+# (tools/gen_claudemd.g); Claude regenerates it by hand. This hook only verifies that
+# the staged CLAUDE.md equals fence(staged test/CLAUDE.g), so a stale doc can't land.
 #
 # Activate (once per clone):  git config core.hooksPath tools/hooks   (or: make hooks)
 set -e
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-# Only the runtime/compiler/doc-source can affect CLAUDE.md or whether it is valid;
-# skip the (expensive) clean rebuild for commits that touch none of them.
-if git diff --cached --quiet -- \
-     test/CLAUDE.g tools/gen_claudemd.g gwen.c gwen.h data.c data.h data.ld main.c \
-     common.mk Makefile gwen/ ; then
+# Nothing to check unless the doc or its source is part of this commit.
+if git diff --cached --quiet -- CLAUDE.md test/CLAUDE.g; then
   exit 0
 fi
 
-echo "pre-commit: regenerating CLAUDE.md (clean build + gl/gl0 tests via 'make claudemd')..." >&2
-if ! make claudemd >/dev/null 2>&1; then
-  echo "pre-commit: 'make claudemd' FAILED (clean build or gl/gl0 tests did not pass)." >&2
-  echo "            re-run 'make claudemd' to see the error; commit aborted." >&2
-  exit 1
-fi
-
-if ! git diff --quiet -- CLAUDE.md; then
-  echo "pre-commit: CLAUDE.md was stale and has been regenerated from test/CLAUDE.g." >&2
-  echo "            review and stage it, then re-commit:  git add CLAUDE.md" >&2
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+{ printf '```gwen\n'; git show :test/CLAUDE.g; printf '```\n'; } > "$tmp"
+if ! git show :CLAUDE.md | cmp -s - "$tmp"; then
+  echo "pre-commit: CLAUDE.md is stale vs test/CLAUDE.g (or unstaged)." >&2
+  echo "            regenerate it by hand and stage it, then re-commit:" >&2
+  echo "              out/host/gl tools/gen_claudemd.g && git add CLAUDE.md" >&2
   exit 1
 fi
 exit 0
