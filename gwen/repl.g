@@ -224,7 +224,7 @@
    ; for history navigation. cur is the pristine frame of the
    ; currently-recalled entry, or 0 if the buffer is a free edit.
    (edline hu hd)
-     (: pr (ps1 0)
+     (: pr ps1
         _ (puts pr)
         pl (len pr)
         (loop pra u l r d hu hd cur)

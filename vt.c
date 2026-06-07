@@ -18,6 +18,15 @@ static g_vm(data_hash_apply) {
  word v = g_hget(f, nil, Sp[0], hsh(Ip));
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
+// (s k): applying a string indexes it -- k is a byte offset and the result is
+// the unsigned byte 0..255 there, nil (0) if k is non-numeric or out of range,
+// i.e. (s k) == (get 0 k s). No allocation, so the frame unwinds like self-quote.
+static g_vm(data_text_apply) {
+ word k = Sp[0], v = nil, n;
+ if (oddp(k) && (n = g_getnum(k)) >= 0 && n < (word) len(Ip))
+  v = g_putnum((unsigned char) txt(Ip)[n]);
+ return Ip = cell(*++Sp), *Sp = v, Continue(); }
+
 // ((a . b) f) == (f a b): a pair is its own Church eliminator (cons = \a b f.f a b).
 // We re-enter the apply protocol via a static driver thread: lay the stack as the
 // two curried calls expect, then [ap ; swap+ap ; ret0] runs ((f a) b) and returns
@@ -38,7 +47,7 @@ static g_vm(data_pair_apply) {
 
 g_vm_t *g_data_ap[G_DATA_VT_N] = {
  [two_q]  = data_pair_apply, [vec_q]  = data_self_quote, [sym_q] = data_self_quote,
- [hash_q]  = data_hash_apply,  [text_q] = data_self_quote, [big_q] = data_self_quote, };
+ [hash_q]  = data_hash_apply,  [text_q] = data_text_apply, [big_q] = data_self_quote, };
 
 #define data_vt(idx, name) \
  __attribute__((section("gwen_data_vt." #idx), used)) g_vm(name) { \

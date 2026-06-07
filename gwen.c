@@ -2582,6 +2582,7 @@ g_vm(g_vm_fread) {
 // other type (strings, anonymous syms, nil, ...).
 g_vm(g_vm_string) {
  word x = Sp[0];
+ if (x == nil) return Ip++, Continue();             // nil is the empty string (0)
  if (nump(x)) {                                     // fixnum -> one-byte string
   uintptr_t req = str_type_width + b2w(1);
   Have(req);
@@ -2744,7 +2745,8 @@ static g_inline struct g *gzread1str(struct g*f) {
  for (f = str0(f, lim); g_ok(f); f = grbufg(f, lim), lim *= 2)
   for (; n < lim; txt(f->sp[0])[n++] = c) {
    if (!g_ok(f = zgetc(f))) return f;     // threaded; char in f->b
-   else if ((c = f->b) == '"') return len(f->sp[0]) = n, f;
+   else if ((c = f->b) == '"')                  // close quote; "" normalizes to nil (0)
+    return n ? (len(f->sp[0]) = n, f) : (f->sp[0] = nil, f);
    else if (c == EOF) return encode(f, g_status_more);
    else if (c == '\\') {                               // escape: take next char
     if (!g_ok(f = zgetc(f))) return f;

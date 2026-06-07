@@ -48,6 +48,14 @@
   (= 4 (len "slen"))
   (= "bidden" (ssub "forbidden planet" 3 9))
   (= "all of it" (ssub "all of it" -9 100))
+  ; applying a string indexes it: (s k) == (get 0 k s), byte 0..255 or 0 if oob
+  (= 104 ("hi" 0))                          ; 'h'
+  (= 105 ("hi" 1))                          ; 'i'
+  (= 0 ("hi" 2))                            ; past the end -> 0
+  (= 0 ("hi" -1))                           ; negative index -> 0
+  (= 0 ("hi" 'x))                           ; non-numeric index -> 0
+  (= 255 ((string 255) 0))                  ; high byte returns unsigned 0..255
+  (= (get 0 3 "vaporeon") ("vaporeon" 3))   ; identical to get with a 0 default
   (= "eon" (stripPrefix "vapor" "vaporeon"))
  (= '("eon" "vapor")
   (lit "vapor" X 0 "vaporeon"))
