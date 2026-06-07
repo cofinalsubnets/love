@@ -73,15 +73,6 @@ struct g_vec {
  uintptr_t type, rank, shape[]; };
 
 enum g_status { g_status_ok = 0, g_status_oom = 1, g_status_eof = 2, g_status_more = 3 };
-// Legacy separate-chaining hash; retained only for the dead old-hash branches
-// until they are removed. Live maps are lookup-lambdas (header->backing threads).
-struct g_hash {
- g_vm_t *ap;
- uintptr_t len, cap;
- struct g_kvs {
-  intptr_t key, val;
-  struct g_kvs *next; } **bkt; };
-
 struct g {
  union u {
   g_vm_t *ap;
@@ -231,10 +222,10 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
 // Data-sentinel kinds. Ordered so that, with K_FIX prepended and K_LAM appended,
 // they form `enum kind` by a bare +K_VEC shift (see g_kind) and group the dispatch
-// matrices' diagonals by lane: numbers (vec/big), sequences (two/text/sym), hash.
+// matrices' diagonals by lane: numbers (vec/big), sequences (two/text/sym).
 // The section map in vt.c (go()) and vt.ld pin sentinel <-> slot to match.
-enum q { vec_q, big_q, two_q, text_q, sym_q, hash_q, };
-#define G_DATA_VT_N 6
+enum q { vec_q, big_q, two_q, text_q, sym_q, };
+#define G_DATA_VT_N 5
 typedef g_word num, word;
 // The unique empty string and empty (anonymous) symbol -- data-segment globals the
 // GC never moves (gcp's out-of-pool short-circuit). Strings are immutable, so one
@@ -252,7 +243,6 @@ struct g
  *g_strof(struct g*, const char*),
  *gxl(struct g*),
  *gxr(struct g*),
- *g_hput(struct g*),
  *intern(struct g*),
  *g_reads(struct g*, struct g_io*),
  *g_read1(struct g*, struct g_io*),
@@ -260,14 +250,14 @@ struct g
 g_vm(g_vm_gc, uintptr_t);
 // Generic-op dispatch kind: the fundamental value kind by pure arithmetic on the
 // data-sentinel index g_typ with a fixnum (K_FIX) prepended and a thread/function
-// (K_LAM) appended -- so K_VEC..K_HASH are exactly enum q + K_VEC (enum q is ordered
+// (K_LAM) appended -- so K_VEC..K_SYM are exactly enum q + K_VEC (enum q is ordered
 // to make this a bare shift; see gwen.h's enum q). NO subtype classification (interned
 // vs uninterned sym, box vs array) at this level -- the handler's job. The order
 // groups the matrix diagonals by lane: numbers (fix/vec/big), sequences (two/text/
-// sym), hash, then thread last (its row+column a uniform precedence band). Both the
-// `+`/`*` matrices and the apply matrix dispatch on this; g_kind lives in gwen.c (it
-// needs g_typ from the generated vt.h) and is used by vt.c's sentinels.
-enum kind { K_FIX, K_VEC, K_BIG, K_TWO, K_TEXT, K_SYM, K_HASH, K_LAM, K_N };
+// sym), then thread last (its row+column a uniform precedence band; maps are threads).
+// Both the `+`/`*` matrices and the apply matrix dispatch on this; g_kind lives in
+// gwen.c (it needs g_typ from the generated vt.h) and is used by vt.c's sentinels.
+enum kind { K_FIX, K_VEC, K_BIG, K_TWO, K_TEXT, K_SYM, K_LAM, K_N };
 enum kind g_kind(word);
 // Apply dispatch matrix, indexed [static: the applied data kind, g_typ(Ip)][dynamic:
 // the argument kind, g_kind(Sp[0])]. The data_vt sentinels (vt.c) tail-jump through
@@ -276,11 +266,9 @@ extern g_vm_t *g_apply_mx[G_DATA_VT_N][K_N];
 extern g_word g_numap;                 // gwen num-ap handler (vm.c); the numeral-apply driver below targets it
 extern g_word g_scomb, g_bcomb;        // `+`/`*` thread combinators (S / compose), installed from the prelude
 extern union u numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-g_vm_t g_vm_ap, g_vm_two, g_vm_vec, g_vm_sym, g_vm_hash, g_vm_text, g_vm_big; // sentinels + ap: vt.c & inline predicates
+g_vm_t g_vm_ap, g_vm_two, g_vm_vec, g_vm_sym, g_vm_text, g_vm_big; // sentinels + ap: vt.c & inline predicates
 uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
-word g_hget(struct g*, word, word, struct g_hash*);
 #define str(_) ((struct g_str*)(_))
-#define hsh(_) ((struct g_hash*)(_))
 #define homp evenp
 #define two(_) ((struct g_pair*)(_))
 static g_inline bool twop(word _) { return homp(_) && cell(_)->ap == g_vm_two; }

@@ -100,7 +100,7 @@ enum vop { VOP_ADD, VOP_SUB, VOP_MUL, VOP_QUOT, VOP_REM,
            VOP_LT, VOP_LE, VOP_GT, VOP_GE, VOP_EQ, };
 struct g_atom *intern_checked(struct g*, struct g_str*);
 g_vm_t g_vm_kcall,
- g_vm_two, g_vm_vec, g_vm_sym, g_vm_hash, g_vm_text, g_vm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
+ g_vm_two, g_vm_vec, g_vm_sym, g_vm_text, g_vm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
  g_vm_putn, g_vm_info,    g_vm_clock,
  g_vm_nilp,  g_vm_putc, g_vm_gensym, g_vm_intern, g_vm_twop,
  g_vm_len, g_vm_get, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
@@ -154,7 +154,6 @@ char const *g_bif_name(intptr_t);
 #define vec(_) ((struct g_vec*)(_))
 #define nump oddp
 #define sym(_) ((struct g_atom*)(_))
-static g_inline bool hashp(word _) { return homp(_) && cell(_)->ap == g_vm_hash; }
 static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == g_vm_sym; }
 static g_inline bool vecp(word _) { return homp(_) && cell(_)->ap == g_vm_vec; }
 static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == g_vm_text; }
@@ -451,9 +450,6 @@ const struct g_atom g_sym_empty = { .ap = g_vm_sym, .code = 0, .nom = 0, .l = 0,
 
 static g_inline struct g_vec *ini_scalar(struct g_vec *v, enum g_vec_type t) {
  return v->ap = g_vm_vec, v->type = t, v->rank = 0, v; }
-
-static g_inline struct g_hash *ini_hash(struct g_hash *t, size_t len, size_t cap, struct g_kvs**bkt) {
- return t->ap = g_vm_hash, t->len = len, t->cap = cap, t->bkt = bkt, t; }
 
 
 static g_inline uintptr_t rot(uintptr_t x) {
@@ -769,15 +765,6 @@ static g_inline void evac_sym(struct g*f, word const*const p0, word const*const 
  word nom = word(sym(f->cp)->nom);            // l/r subtree slots exist only for interned
  f->cp += Width(struct g_atom) - (nom && strp(nom) ? 0 : 2); }   // (string nom); anon/uninterned skip them
 
-static g_inline void evac_hash(struct g*f, word const*const p0, word const*const t0) {
- struct g_hash *t = (struct g_hash*) f->cp;
- f->cp += Width(struct g_hash) + t->cap + t->len * Width(struct g_kvs);
- for (intptr_t i = 0, lim = t->cap; i < lim; i++)
-  for (struct g_kvs*e = t->bkt[i]; e;
-   e->key = gcp(f, e->key, p0, t0),
-   e->val = gcp(f, e->val, p0, t0),
-   e = e->next); }
-
 static g_inline void evac_thd(struct g *g, word const *const p0, word const*const t0) {
   // terminator payloads point into the new pool (the copied object's home);
   // a stray 2-byte-aligned external content word is rejected by the range
@@ -790,7 +777,6 @@ static g_inline void evac_data(struct g *g, word const *const p0, word const*con
    case vec_q: return evac_vec(g, p0, t0);
    case sym_q: return evac_sym(g, p0, t0);
    case two_q: return evac_two(g, p0, t0);
-   case hash_q: return evac_hash(g, p0, t0);
    case text_q: return evac_str(g, p0, t0);
    case big_q: return evac_big(g, p0, t0); } }
 
@@ -899,26 +885,12 @@ static g_inline word copy_sym(struct g*f, struct g_atom *src, word const *const 
    dst = intern_checked(f, (struct g_str*) nom); }
  return word(src->ap = (g_vm_t*) dst); }
 
-static g_inline word copy_hash(struct g*f, struct g_hash *src, word const*const p0, word const*const t0) {
- uintptr_t len = src->len, cap = src->cap;
- struct g_hash *dst = bump(f, Width(struct g_hash) + cap + Width(struct g_kvs) * len);
- struct g_kvs **bkt = (struct g_kvs**) (dst + 1),
-              *dd = (struct g_kvs*) (bkt + cap);
- ini_hash(dst, len, cap, bkt);
- src->ap = (g_vm_t*) dst;
- for (struct g_kvs *d, *s, *last; cap--; bkt[cap] = last)
-  for (s = src->bkt[cap], last = NULL; s;
-   d = dd++, d->key = s->key, d->val = s->val, d->next = last,
-   last = d, s = s->next);
- return word(dst); }
-
 static g_inline word copy_data(struct g *f, union u *src, word const *const p0, word const *const t0) {
  switch (typ(src)) {
   default: __builtin_trap();
   case two_q: return copy_two(f, two(src), p0, t0);
   case vec_q: return copy_vec(f, vec(src), p0, t0);
   case sym_q: return copy_sym(f, sym(src), p0, t0);
-  case hash_q: return copy_hash(f, hsh(src), p0, t0);
   case text_q: return copy_str(f, str(src), p0, t0);
   case big_q: return copy_big(f, (struct g_big*) src, p0, t0); } }
 
@@ -1945,7 +1917,6 @@ g_vm(g_vm_len) {
   else if (mapp(x)) l = map_len(x);              // entry count
   else if (!nump(x) && datp(x)) switch (typ(x)) {
     default: break;                              // vec_q, sym_q have no length
-    case hash_q: l = hsh(x)->len; break;
     case text_q: l = len(x); break;
     case two_q: do l++, x = B(x); while (twop(x)); }
   Sp[0] = putnum(l);
@@ -2276,35 +2247,6 @@ static g_inline struct g*gzput_sym(struct g*f, word _) {
  return g_pop(f, 1); }
 
 
-// hash -> #(k1 v1 k2 v2 …); the `#` reader macro splices that back into a hash
-// (#() reads as a fresh empty hash). Entries are first snapshotted into an assoc
-// list ((k . v) …) in a single allocation, so the g_kvs C-pointer walk can't be
-// split by a GC; the list is parked on f->sp[0] and each k/v is re-read from there
-// after the printer (which may GC on string-port growth) runs.
-static g_inline struct g*gzput_hash(struct g*f, word x, uintptr_t off) {
- if (!g_ok(f = g_push(f, 1, x))) return f;            // sp[0] = hash
- uintptr_t n = hsh(f->sp[0])->len;
- if (!g_ok(f = g_have(f, n * 2 * Width(struct g_pair)))) return g_pop(f, 1);
- struct g_hash *t = hsh(f->sp[0]);                    // re-fetch after possible GC
- struct g_pair *p = bump(f, n * 2 * Width(struct g_pair));
- word list = nil;
- for (uintptr_t i = t->cap; i;)
-  for (struct g_kvs *e = t->bkt[--i]; e; e = e->next) {
-   struct g_pair *kv = p++;
-   ini_two(kv, e->key, e->val);                       // (k . v)
-   ini_two(p, (word) kv, list);                       // cons onto the snapshot
-   list = (word) p++; }
- fs0(f) = list;
- if (g_ok(f = gzprintf(f, "#(")) && twop(fs0(f))) for (bool sp = false;;) {
-  if (sp) f = gzputc(f, ' ');                    // space between entries, not before the first
-  sp = true;
-  f = gzputx(f, AA(g_core_of(f)->sp[0]), off);   // key (re-read after gzputc)
-  f = gzputc(f, ' '); f = gzputx(f, BA(g_core_of(f)->sp[0]), off);
-  g_core_of(f)->sp[0] = B(g_core_of(f)->sp[0]);
-  if (!g_ok(f) || !twop(f->sp[0])) break; }
-
- return g_pop(g_ok(f) ? gzputc(f, ')') : f, 1); }
-
 // Maps print as #(k v …), round-tripping through the #( reader, like hashes.
 // A map is mutable and can hold itself, so guard the recursion with the seen
 // list. Snapshot k/v into a list first (printing may GC and move the map).
@@ -2414,24 +2356,15 @@ static struct g *gzput_fn_body(struct g *f, word x, uintptr_t off) {
 static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off) {
  if (nump(x)) return gzprintf(f, "%d", getnum(x));
  if (!datp(x)) return mapp(x) ? gzput_map(f, x, off) : gzput_fn(f, x, off);
- // a hash is mutable and can contain itself; guard the recursion with the seen
- // list so a self-referential hash prints a marker instead of looping forever.
- // (pairs are only cyclic via low-level poke, so we don't pay the cost there.)
- bool cyc = typ(x) == hash_q;
- if (cyc) {
-  if (seen_member(f, off, x)) return gzputcs(f, "<cycle>");
-  if (!g_ok(f = seen_push(f, off, x))) return f;
-  x = A(*seen_slot(f, off)); }   // seen_push may have GC'd; reload x from the slot it pushed
+ // Maps are the only mutable/self-referential value, and gzput_map guards its
+ // own recursion (the seen list); the data kinds below are acyclic.
  switch (typ(x)) {
    default: __builtin_trap();
-   case two_q:  f = gzput_two(f, x, off); break;
-   case vec_q:  f = gzput_vec(f, x, off); break;
-   case sym_q:  f = gzput_sym(f, x); break;
-   case hash_q:  f = gzput_hash(f, x, off); break;
-   case text_q: f = gzput_str(f, x); break;
-   case big_q:  f = gzput_big(f, x); break; }
- if (cyc) seen_pop(f, off);
- return f; }
+   case two_q:  return gzput_two(f, x, off);
+   case vec_q:  return gzput_vec(f, x, off);
+   case sym_q:  return gzput_sym(f, x);
+   case text_q: return gzput_str(f, x);
+   case big_q:  return gzput_big(f, x); } }
 
 // Establish a fresh seen-list slot at the bottom of the print region, print, then
 // restore the original stack height (discarding the slot and the whole list).
@@ -3003,83 +2936,6 @@ op11(g_vm_hashp, mapp(Sp[0]) ? putnum(1) : nil)
 // (hash x) -- the general hashing method exposed to gwen as a fixnum.
 op11(g_vm_hashof, putnum(hash(f, Sp[0])))
 
-// relies on hash capacity being a power of 2
-static g_inline uintptr_t index_of_key(struct g *f, struct g_hash *t, intptr_t k) {
- return (t->cap - 1) & hash(f, k); }
-
-word g_hget(struct g *f, word zero, word k, struct g_hash *t) {
- uintptr_t i = index_of_key(f, t, k);
- struct g_kvs *e = t->bkt[i];
- while (e && !eql(f, k, e->key)) e = e->next;
- return e ? e->val : zero; }
-
-
-g_noinline struct g *g_hput(struct g *f) {
- if (!g_ok(f)) return f;
- struct g_hash *t = (struct g_hash*) f->sp[2];
- word v = f->sp[1], k = f->sp[0];
- uintptr_t i = index_of_key(f, t, k);
- struct g_kvs *e = t->bkt[i];
- while (e && !eql(f, k, e->key)) e = e->next;
-
- if (e) return e->val = v, f->sp += 2, f;
-
- if (!g_ok(f = g_have(f, Width(struct g_kvs) + 1))) return f;
- e = bump(f, Width(struct g_kvs));
- t = (struct g_hash*) f->sp[2];
- k = f->sp[0], v = f->sp[1];
- e->key = k, e->val = v, e->next = t->bkt[i];
- t->bkt[i] = e;
- intptr_t cap0 = t->cap, load = ++t->len / cap0;
-
- if (load < 2) return f->sp += 2, f;
-
- // grow the hash
- intptr_t cap1 = 2 * cap0;
- struct g_kvs **bkt0, **bkt1;
-
- if (!g_ok(f = g_have(f, cap1 + 1))) return f;
- bkt1 = bump(f, cap1);
- t = (struct g_hash*) f->sp[2];
- bkt0 = t->bkt;
- memset(bkt1, 0, cap1 * sizeof(intptr_t));
- for (t->cap = cap1, t->bkt = bkt1; cap0--;)
-  for (struct g_kvs *e, *es = bkt0[cap0]; es;
-   e = es,
-   es = es->next,
-   i = (cap1-1) & hash(f, e->key),
-   e->next = bkt1[i],
-   bkt1[i] = e);
-
- return f->sp += 2, f; }
-
-static struct g_kvs *g_hashdelr(struct g *f, struct g_hash *t, intptr_t k, intptr_t *v, struct g_kvs *e) {
- if (e) {
-  if (eql(f, e->key, k)) return
-   t->len--,
-   *v = e->val,
-   e->next;
-  e->next = g_hashdelr(f, t, k, v, e->next); }
- return e; }
-
-static g_noinline intptr_t g_hashdel(struct g *f, struct g_hash *t, intptr_t k, intptr_t v) {
- uintptr_t idx = index_of_key(f, t, k);
- t->bkt[idx] = g_hashdelr(f, t, k, &v, t->bkt[idx]);
- if (t->cap > 1 && t->len / t->cap < 1) {
-  intptr_t cap = t->cap;
-  struct g_kvs *coll = 0, *x, *y; // collect all entries in one list
-  for (intptr_t i = 0; i < cap; i++)
-   for (x = t->bkt[i], t->bkt[i] = 0; x;)
-    y = x, x = x->next, y->next = coll, coll = y;
-  t->cap = cap >>= 1;
-  for (intptr_t i; coll;)
-   i = (cap - 1) & hash(f, coll->key),
-   x = coll->next,
-   coll->next = t->bkt[i],
-   t->bkt[i] = coll,
-   coll = x; }
- return v; }
-
 g_vm(g_vm_get) {
  word z = Sp[0], k = Sp[1], x = Sp[2], n;
  if (bufp(x)) {                                  // mutable byte string: byte index
@@ -3115,7 +2971,6 @@ g_vm(g_vm_get) {
     else EMIT_INT(vec_get_int(v, off));
     z = _res; }
    break; }
-  case hash_q: z = g_hget(f, z, k, hsh(x)); break;
   case text_q:
    // Byte as its unsigned value 0..255 -- bytes are data, signedness is the
    // operator's job. txt is signed char[], so cast to avoid sign-extending a
@@ -3129,7 +2984,7 @@ g_vm(g_vm_get) {
     if (twop(x)) z = A(x); } }
  return Sp[2] = z, Sp += 2, Ip += 1, Continue(); }
 
-// (put key val coll): hash insert, or -- when coll is a buf -- store the
+// (put key val coll): map insert, or -- when coll is a buf -- store the
 // byte val at index key. Both leave coll on the stack as the result. A buf
 // store needs no allocation, so no GC dance; out-of-range/non-numeric is a
 // silent no-op, matching the misuse convention of the other byte ops.
@@ -3139,10 +2994,6 @@ g_vm(g_vm_put) {
   Pack(f);
   if (!g_ok(f = g_mapput(f))) return gtrap(f);
   Unpack(f); }
- else if (hashp(x)) {
-  Pack(f);
-  if (!g_ok(f = g_hput(f))) return gtrap(f);
-  Unpack(f); }
  else {
   if (bufp(x) && nump(Sp[0]) && (n = getnum(Sp[0])) >= 0 && n < (word) len(buf_str(x)))
    txt(buf_str(x))[n] = (char) getnum(Sp[1]);
@@ -3151,7 +3002,6 @@ g_vm(g_vm_put) {
 
 g_vm(g_vm_hashd) {
  if (mapp(Sp[1])) Sp[2] = g_mapdel(f, Sp[1], Sp[2], Sp[0]);
- else if (hashp(Sp[1])) Sp[2] = g_hashdel(f, (struct g_hash*) Sp[1], Sp[2], Sp[0]);
  return Sp += 2, Ip += 1, Continue(); }
 
 g_vm(g_vm_hashk) {
@@ -3165,16 +3015,6 @@ g_vm(g_vm_hashk) {
   for (uintptr_t i = cap; i;)
    if (s[2 * --i] != MAP_GAP)
     ini_two(pairs, s[2 * i], list), list = (intptr_t) pairs, pairs++; }
- else if (hashp(Sp[0])) {
-  struct g_hash *t = (struct g_hash*) Sp[0];
-  intptr_t len = t->len;
-  Have(len * Width(struct g_pair));
-  struct g_pair *pairs = (struct g_pair*) Hp;
-  Hp += len * Width(struct g_pair);
-  for (uintptr_t i = t->cap; i;)
-   for (struct g_kvs *e = t->bkt[--i]; e; e = e->next)
-    ini_two(pairs, e->key, list),
-    list = (intptr_t) pairs, pairs++; }
  Sp[0] = list;
  Ip += 1;
  return Continue(); }
@@ -3206,7 +3046,6 @@ uintptr_t hash(struct g *f, intptr_t x) {
    default: __builtin_trap();
    case two_q: return hash_two(f, x);
    case sym_q: return sym(x)->code;
-   case hash_q: return mix;
    case vec_q: {
     uintptr_t len = g_vec_bytes(vec(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
@@ -3643,16 +3482,10 @@ static g_vm(g_vm_mul_rep) {
 // When a data value is applied, its sentinel (vt.c, pinned in the gwen_data_vt
 // section) tail-jumps through g_apply_mx[g_typ(Ip)][g_kind(Sp[0])] -- the static
 // kind of the applied value and the dynamic kind of the argument. Every data kind
-// has a meaningful apply (pair = eliminator, string/symbol = byte index, hash =
-// lookup, numeric tower = Church numeral); opaque handles (ports, buffers) behave
-// as 0 via their own g_vm_* sentinel, not through here.
-
-// (t x): applying a hash looks x up as a key, nil if absent -- the value is its own
-// lookup fn, so (t x) == (get 0 x t). g_hget doesn't allocate, so the frame unwinds
-// like self-quote (drop arg, jump to the return address at Sp[1], leave result on top).
-static g_vm(data_hash_apply) {
- word v = g_hget(f, nil, Sp[0], hsh(Ip));
- return Ip = cell(*++Sp), *Sp = v, Continue(); }
+// has a meaningful apply (pair = eliminator, string/symbol = byte index, numeric
+// tower = Church numeral); opaque handles (ports, buffers) behave as 0 via their
+// own g_vm_* sentinel, not through here. Maps look up via g_vm_map_lookup (a thread
+// ap, not a data sentinel), so they do not appear in this table.
 
 // (s k): applying a string indexes it -- k a byte offset, result the unsigned byte
 // 0..255 there, 1 if k is non-numeric or out of range (matches "" == 0: a numeric
@@ -3711,41 +3544,40 @@ static g_vm(data_pair_apply) {
 //              isym>usym>str and nils an array operand internally)
 //   mul_rep  = sequence * scalar-count -> repetition
 //   *l   = a LAMBDA operand (precedence: the K_LAM row+col) -- Church add / compose
-//   g_vm_0 = undefined (-> nil): hash, function<->text, sequence*sequence
-// K_VEC covers boxes/complex (numbers) AND arrays; the lane handler refines.
+//   g_vm_0 = undefined (-> nil): function<->text, sequence*sequence
+// K_VEC covers boxes/complex (numbers) AND arrays; the lane handler refines. Maps
+// are lambdas (K_LAM) -- the *l lanes -- so they have no row/col of their own.
 
 // `+`: numbers add, lists/text concat, lambdas Church-add. K_LAM row+col all addl.
 static g_vm_t *const g_add_mx[K_N][K_N] = {
-//            FIX            VEC            BIG            TWO            TEXT           SYM            HASH        LAM
- [K_FIX]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_0,    g_vm_addl },
- [K_VEC]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_0,    g_vm_addl },
- [K_BIG]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_0,    g_vm_addl },
- [K_TWO]  = { g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq, g_vm_addl },
- [K_TEXT] = { g_vm_add_text, g_vm_add_text, g_vm_add_text, g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_0,    g_vm_addl },
- [K_SYM]  = { g_vm_add_text, g_vm_add_text, g_vm_add_text, g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_0,    g_vm_addl },
- [K_HASH] = { g_vm_0,        g_vm_0,        g_vm_0,        g_vm_add_seq,  g_vm_0,        g_vm_0,        g_vm_0,    g_vm_addl },
- [K_LAM]  = { g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl, g_vm_addl },
+//            FIX            VEC            BIG            TWO            TEXT           SYM            LAM
+ [K_FIX]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
+ [K_VEC]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
+ [K_BIG]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
+ [K_TWO]  = { g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_addl },
+ [K_TEXT] = { g_vm_add_text, g_vm_add_text, g_vm_add_text, g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
+ [K_SYM]  = { g_vm_add_text, g_vm_add_text, g_vm_add_text, g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
+ [K_LAM]  = { g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl },
 };
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
-// * count repeats, lambdas compose (Church mul). seq*seq / hash -> nil.
+// * count repeats, lambdas compose (Church mul). seq*seq -> nil.
 static g_vm_t *const g_mul_mx[K_N][K_N] = {
-//            FIX            VEC            BIG            TWO            TEXT           SYM            HASH        LAM
- [K_FIX]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,    g_vm_mull },
- [K_VEC]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,    g_vm_mull },
- [K_BIG]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,    g_vm_mull },
- [K_TWO]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_0,    g_vm_mull },
- [K_TEXT] = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_0,    g_vm_mull },
- [K_SYM]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_0,    g_vm_mull },
- [K_HASH] = { g_vm_0,        g_vm_0,        g_vm_0,        g_vm_0,        g_vm_0,        g_vm_0,        g_vm_0,    g_vm_mull },
- [K_LAM]  = { g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull, g_vm_mull },
+//            FIX            VEC            BIG            TWO            TEXT           SYM            LAM
+ [K_FIX]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
+ [K_VEC]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
+ [K_BIG]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
+ [K_TWO]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
+ [K_TEXT] = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
+ [K_SYM]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
+ [K_LAM]  = { g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull },
 };
 // apply: [applied data kind = g_typ(Ip)][argument kind = g_kind(arg)]. Every row is
-// arg-kind-uniform today (AROW fills all 8 columns); the 2-D shape is the hook for
+// arg-kind-uniform today (AROW fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
-#define AROW(h) { [K_FIX]=h,[K_LAM]=h,[K_TWO]=h,[K_VEC]=h,[K_SYM]=h,[K_HASH]=h,[K_TEXT]=h,[K_BIG]=h }
+#define AROW(h) { [K_FIX]=h,[K_LAM]=h,[K_TWO]=h,[K_VEC]=h,[K_SYM]=h,[K_TEXT]=h,[K_BIG]=h }
 g_vm_t *g_apply_mx[G_DATA_VT_N][K_N] = {
  [two_q]  = AROW(data_pair_apply), [vec_q]  = AROW(data_num_apply),
- [sym_q]  = AROW(data_sym_apply),  [hash_q] = AROW(data_hash_apply),
+ [sym_q]  = AROW(data_sym_apply),
  [text_q] = AROW(data_text_apply), [big_q]  = AROW(data_num_apply), };
 #undef AROW
 

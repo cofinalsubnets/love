@@ -28,8 +28,8 @@
    (pow2? n) (&& (< 0 n) (= 0 (& n (- n 1))))
    (bitlen n) ((: (f n k) (? (< 0 n) (f (>> n 1) (+ k 1)) k)) n 0))
 
-(: prefix "gwen_data_vt."   ; input subsections gwen_data_vt.00 .. .05
-   N 6)                     ; enum q: two/vec/sym/tbl/text/big -- must match i.h
+(: prefix "gwen_data_vt."   ; input subsections gwen_data_vt.00 .. .04
+   N 5)                     ; enum q: vec/big/two/text/sym -- must match gwen.h
 
 ; --- emit the generated header to port p ----------------------------
 (: (emit p unit po2 shift)

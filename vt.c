@@ -16,6 +16,6 @@
 
 #define go(_)\
   _(00, g_vm_vec) _(01, g_vm_big) _(02, g_vm_two)\
-  _(03, g_vm_text) _(04, g_vm_sym) _(05, g_vm_hash)
+  _(03, g_vm_text) _(04, g_vm_sym)
 
 go(data_vt)
