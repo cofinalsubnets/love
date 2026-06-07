@@ -20,7 +20,7 @@
  (= 1 ((gensym 0) 5))                         ; anonymous gensym has no name -> act same as 0
  (= 8 (3 2))                                  ; (3 2) = 2 ** 3
  (= 13 ((3 (+ 1)) 10)))                       ; non-numeric operand -> (+ 1) composed 3 times on 10
-; the whole numeric tower is a Church numeral, not just fixnums (vt.c data_num_apply
+; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply
 ; routes float/box/complex/array/bignum operators through num-ap, like the odd-tag
 ; fixnum path). 0 applied to anything is 1 -- it *is* const-1, the zero numeral.
 (assert

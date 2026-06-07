@@ -8,7 +8,7 @@ dependency is a C compiler (plus a disassembler for the TCO check).
 
 | Python (here)      | gwen replacement (`tools/`) | what it does |
 |--------------------|-----------------------------|--------------|
-| `gen_data_vt.py`   | `gen_data_vt.g`             | reflects the data-sentinel stride out of a compiled `vt.o` into a generated `vt.h` so `g_typ()` is one shift |
+| `gen_data.py`   | `gen_data.g`             | reflects the data-sentinel stride out of a compiled `data.o` into a generated `data.h` so `g_typ()` is one shift |
 | `elf2efi.py`       | `elf2efi.g`                 | wraps a static ELF into a PE32+ `.efi` (riscv64/loongarch64 EFI builds, which can't use lld's COFF backend) |
 | `vmret.py`         | `vmret.g`                   | disassembles an ELF and flags `g_vm_*` handlers that emit a `ret` instead of tail-jumping |
 | `pad_checksum.py`  | `pad_checksum.g`            | stamps the RP2040 boot2 CRC (CRC-32/MPEG-2 over 252 bytes) and emits the checksummed `.boot2` `.byte` array |
@@ -24,8 +24,8 @@ every build artifact present. Keeping the Python around means a regression in a
 `.g` tool — or a behavioural drift introduced by a future change to the gwen
 compiler/runtime — is caught immediately against an independent implementation.
 
-They are no longer invoked by any build: `gen_data_vt.g` generates every
-frontend's `vt.h` (host, kernel, playdate, rp2040), `elf2efi.g` stamps the
+They are no longer invoked by any build: `gen_data.g` generates every
+frontend's `data.h` (host, kernel, playdate, rp2040), `elf2efi.g` stamps the
 kernel EFI images, and `make vmret` runs `vmret.g`. The scripts here are frozen
 — edit the `.g` tools, not these — and exist solely so the gates have something
 trustworthy to check against. If a gwen tool ever needs to intentionally change

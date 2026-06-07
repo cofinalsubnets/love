@@ -1,6 +1,6 @@
 # Validation gates for the gwen rewrites of the old Python build tools.
 #
-# Each gwen tool in this directory (gen_data_vt.g, elf2efi.g, vmret.g) must
+# Each gwen tool in this directory (gen_data.g, elf2efi.g, vmret.g) must
 # produce output identical to the frozen Python reference under py/ (see
 # py/README.md). These targets diff the two over every relevant build artifact
 # present in the tree -- so they only check what you've actually built. Run all
@@ -11,25 +11,25 @@
 R := ..
 include $(R)/common.mk
 
-.PHONY: all test_gen_vt test_elf2efi test_vmret test_pad_checksum test_elf2uf2
-all: test_gen_vt test_elf2efi test_vmret test_pad_checksum test_elf2uf2
+.PHONY: all test_gen_data test_elf2efi test_vmret test_pad_checksum test_elf2uf2
+all: test_gen_data test_elf2efi test_vmret test_pad_checksum test_elf2uf2
 
 # Build the host gl on demand (it runs the .g tools); only if it's missing.
 $(m):
 	@$(MAKE) -C $(R)/host
 
-# gen_data_vt.g vs py/gen_data_vt.py over every vt.o in a build tree (host,
+# gen_data.g vs py/gen_data.py over every data.o in a build tree (host,
 # playdate ELF32, the kernel arches). The sed folds the .py's generator-name
 # token in the header comment to the .g's so only the reflected stride is
 # compared.
-test_gen_vt: | $(m)
-	@echo TEST gen_data_vt.g
-	@for o in `find $(R)/out/host $(R)/out/playdate $(R)/out/free -name vt.o 2>/dev/null`; do \
-	  python3 $(R)/tools/py/gen_data_vt.py $$o | sed 's@gen_data_vt\.py@gen_data_vt.g@' > $(R)/out/host/.vt.py.h; \
-	  $(m) $(R)/tools/gen_data_vt.$x $$o > $(R)/out/host/.vt.g.h; \
-	  cmp -s $(R)/out/host/.vt.py.h $(R)/out/host/.vt.g.h && echo "  ok   $$o" \
-	    || { echo "  FAIL $$o"; rm -f $(R)/out/host/.vt.py.h $(R)/out/host/.vt.g.h; exit 1; }; \
-	done; rm -f $(R)/out/host/.vt.py.h $(R)/out/host/.vt.g.h
+test_gen_data: | $(m)
+	@echo TEST gen_data.g
+	@for o in `find $(R)/out/host $(R)/out/playdate $(R)/out/free -name data.o 2>/dev/null`; do \
+	  python3 $(R)/tools/py/gen_data.py $$o | sed 's@gen_data\.py@gen_data.g@' > $(R)/out/host/.data.py.h; \
+	  $(m) $(R)/tools/gen_data.$x $$o > $(R)/out/host/.data.g.h; \
+	  cmp -s $(R)/out/host/.data.py.h $(R)/out/host/.data.g.h && echo "  ok   $$o" \
+	    || { echo "  FAIL $$o"; rm -f $(R)/out/host/.data.py.h $(R)/out/host/.data.g.h; exit 1; }; \
+	done; rm -f $(R)/out/host/.data.py.h $(R)/out/host/.data.g.h
 
 # elf2efi.g vs py/elf2efi.py over every EFI ELF present (riscv64/loongarch64).
 # Build them first with `make -C free EFI=1 a=riscv64` (and a=loongarch64).

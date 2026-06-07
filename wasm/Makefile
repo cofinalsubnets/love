@@ -9,7 +9,7 @@ emcc = $(CCACHE) $(EMCC)
 o = ../out/wasm
 
 # g.c was split into per-concern translation units (kernel/*.c); build them all.
-g_c = ../gwen.c ../vt.c
+g_c = ../gwen.c ../data.c
 g_h = $(wildcard ../*.h)
 
 # One object per source so an edit recompiles just that TU (and so ccache
@@ -19,10 +19,10 @@ host_o = $(o)/host.o
 core_o = $(g_c:../%.c=$(o)/%.o)
 objs = $(host_o) $(core_o)
 
-# inc/ holds wasm's <vt.h> override (no flat code-address space, so it
-# resolves data kinds by sentinel ap rather than .gwen_data_vt slot index).
+# inc/ holds wasm's <data.h> override (no flat code-address space, so it
+# resolves data kinds by sentinel ap rather than .gwen_data slot index).
 # It must be its own include dir, NOT ".": emcc deprioritizes the compiler's
-# cwd in the <...> search path, which would let ../vt.h win instead.
+# cwd in the <...> search path, which would let ../data.h win instead.
 CFLAGS = -std=gnu2x -Os -g0 -Dg_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \

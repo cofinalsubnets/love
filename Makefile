@@ -21,18 +21,23 @@ test_host: host
 	@echo TEST $m
 	@cat $t | $m
 # Validate the gwen tool rewrites against their frozen Python references in
-# tools/py/ (gen_data_vt / elf2efi / vmret). See tools/Makefile + tools/py/README.md.
+# tools/py/ (gen_data / elf2efi / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host
 	@$(MAKE) -C tools
-# Regenerate CLAUDE.md from test/lang.g (its source of truth: CLAUDE.md is just
-# that file wrapped in a ```gwen fence). Only from a known-good tree -- a clean
-# host build with the whole corpus passing on BOTH gl and gl0. The git pre-commit
-# hook runs this and rejects the commit if CLAUDE.md then differs from what's staged.
+# CLAUDE.md is test/CLAUDE.g wrapped in a ```gwen fence (tools/gen_claudemd.g), so
+# the project guide and a runnable, asserted test stay the same artifact.
+CLAUDE.md: test/CLAUDE.$x tools/gen_claudemd.$x | $m
+	@echo GEN	$@
+	@$m tools/gen_claudemd.$x
+# Regenerate from a KNOWN-GOOD tree -- a clean host build with the whole corpus
+# passing on BOTH gl and gl0 -- then force the rebuild (CLAUDE.md is otherwise
+# newer than its source). The git pre-commit hook runs this and rejects the commit
+# if CLAUDE.md then differs from what's staged.
 claudemd:
 	$(MAKE) clean
 	$(MAKE) test
-	@echo GEN	CLAUDE.md
-	@$m tools/gen_claudemd.$x
+	@rm -f CLAUDE.md
+	@$(MAKE) CLAUDE.md
 # Activate the tracked git hooks (tools/hooks/) for this clone.
 hooks:
 	@git config core.hooksPath tools/hooks
@@ -64,11 +69,11 @@ out/lib/cli0.h: gwen/cli.$x
 # ====================================================================
 ho = out/host
 h_o = $(g_c:$(R)/%.c=$(ho)/%.o)
-# -I$(ho) first so the generated $(ho)/vt.h shadows the portable top-level vt.h.
+# -I$(ho) first so the generated $(ho)/data.h shadows the portable top-level data.h.
 hcc = $(CC) $(g_cflags) -fpic -I$(ho) -I. -Iout/lib
-vt_ld = vt.ld
-ldflags = -Wl,-T,$(vt_ld)
-hvt_h = $(ho)/vt.h
+data_ld = data.ld
+ldflags = -Wl,-T,$(data_ld)
+hdata_h = $(ho)/data.h
 gl0 = $(ho)/gl0
 
 host: $(ho)/$n $(ho)/lib$n.so $(ho)/$n.1
@@ -79,20 +84,20 @@ $(ho)/lib$n.a: $(h_o)
 	@mkdir -p $(dir $@)
 	@ar rcs $@ $^
 
-$(ho)/lib$n.so: $(ho)/lib$n.a $(vt_ld)
+$(ho)/lib$n.so: $(ho)/lib$n.a $(data_ld)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -shared -o $@ -Wl,--whole-archive $(ho)/lib$n.a -Wl,--no-whole-archive -lm
 
-# The data-sentinel TU bootstraps from the portable top-level vt.h (no $(hvt_h)
-# prerequisite -- that would be circular, since $(hvt_h) is reflected out of it).
-$(ho)/vt.o: vt.c $(g_h)
+# The data-sentinel TU bootstraps from the portable top-level data.h (no $(hdata_h)
+# prerequisite -- that would be circular, since $(hdata_h) is reflected out of it).
+$(ho)/data.o: data.c $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
 # Prelude-less bootstrap interpreter, compiled against the fallback top-level
-# vt.h (no -I$(ho)) + -DGL_BOOTSTRAP; runs the gwen build tools that generate
+# data.h (no -I$(ho)) + -DGL_BOOTSTRAP; runs the gwen build tools that generate
 # the lcat headers, so it must need none of those. The one exception is cli0.h
 # (its own CLI arg handler), which sed produces without an interpreter -- hence
 # -Iout/lib. Per-object into $(ho)/0/ so ccache caches each TU.
@@ -106,26 +111,26 @@ $(ho)/0/%.o: $(R)/%.c $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(gl0_cc) -c $< -o $@
-$(gl0): $(gl0_o) $(vt_ld)
+$(gl0): $(gl0_o) $(data_ld)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(CC) $(g_cflags) $(ldflags) -o $@ $(gl0_o) -lm
 
-# tools/gen_data_vt.g reflects $(ho)/vt.o's gwen_data_vt.NN section sizes into
-# $(ho)/vt.h, whose g_typ() shifts instead of the portable header's divides.
-$(hvt_h): $(ho)/vt.o $(gl0) tools/gen_data_vt.$x gwen/prelude.$x
+# tools/gen_data.g reflects $(ho)/data.o's gwen_data.NN section sizes into
+# $(ho)/data.h, whose g_typ() shifts instead of the portable header's divides.
+$(hdata_h): $(ho)/data.o $(gl0) tools/gen_data.$x gwen/prelude.$x
 	@echo GEN	$@
-	@$(gl0) -l gwen/prelude.$x tools/gen_data_vt.$x $< -o $@
+	@$(gl0) -l gwen/prelude.$x tools/gen_data.$x $< -o $@
 
-# gwen.c/vt.c -> out/host/*.o (against the generated vt.h).
-$(ho)/%.o: $(R)/%.c $(g_h) $(hvt_h)
+# gwen.c/data.c -> out/host/*.o (against the generated data.h).
+$(ho)/%.o: $(R)/%.c $(g_h) $(hdata_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
 # main.c is compiled into the final gl inline (G_EGG_PRE/POST assemble the lib
 # headers); depend on them so it relinks when a lib source changes.
-$(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h out/lib/cli.h $(hvt_h) $(vt_ld)
+$(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h out/lib/cli.h $(hdata_h) $(data_ld)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm
@@ -177,11 +182,11 @@ k_S_o = $(k_S:$(R)/%.S=$(k_odir)/%.o)
 k_asm_o = $(k_asm:$(R)/%.asm=$(k_odir)/%.o)
 k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
 
-# Per-arch vt.h reflected out of this arch's vt.o (its sentinel stride differs
-# by target). Every C object depends on it; vt.o bootstraps from the portable
-# top-level vt.h (no $(kvt_h) prerequisite -- circular).
-kvt_h = $(k_odir)/vt.h
-gen_vt = $(R)/tools/gen_data_vt.$x
+# Per-arch data.h reflected out of this arch's data.o (its sentinel stride differs
+# by target). Every C object depends on it; data.o bootstraps from the portable
+# top-level data.h (no $(kdata_h) prerequisite -- circular).
+kdata_h = $(k_odir)/data.h
+gen_data = $(R)/tools/gen_data.$x
 
 kcflags = $(g_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
@@ -262,20 +267,20 @@ $(ko)/$n-$a.efi: $(k_o)
 	  $(k_o) -o $@
 endif
 
-# The data-sentinel TU bootstraps from the portable header (no $(kvt_h) prereq
-# -- circular). On a clean build vt.h doesn't exist yet, so -I$(k_odir) finds
-# nothing and the compile falls through to the portable top-level vt.h.
-$(k_odir)/vt.o: $(R)/vt.c $(k_h) out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
+# The data-sentinel TU bootstraps from the portable header (no $(kdata_h) prereq
+# -- circular). On a clean build data.h doesn't exist yet, so -I$(k_odir) finds
+# nothing and the compile falls through to the portable top-level data.h.
+$(k_odir)/data.o: $(R)/data.c $(k_h) out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-$(kvt_h): $(k_odir)/vt.o $(gen_vt) | $(m)
+$(kdata_h): $(k_odir)/data.o $(gen_data) | $(m)
 	@echo GEN	$@
-	@$(m) $(gen_vt) $< -o $@
+	@$(m) $(gen_data) $< -o $@
 
-# Shared C sources (gwen.c/vt.c, font/, c/) + per-arch arch/$a/.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kvt_h) out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
+# Shared C sources (gwen.c/data.c, font/, c/) + per-arch arch/$a/.
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kdata_h) out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -410,8 +415,8 @@ sim:
 # Freestanding thumbv6m build of the gwen runtime + the arch/rp2040 backend,
 # linked at flash XIP behind a 256-byte checksummed boot2 (tools/pad_checksum.g
 # stamps the vendored arch/rp2040/boot2.bin) and packed into a flashable .uf2
-# (tools/elf2uf2.g). Mirrors the kernel build: per-arch vt.h reflected out of
-# this target's vt.o, the lcat lib headers shared from out/lib. The M0+ has no
+# (tools/elf2uf2.g). Mirrors the kernel build: per-arch data.h reflected out of
+# this target's data.o, the lcat lib headers shared from out/lib. The M0+ has no
 # FPU or hardware divide, so the compiler-rt builtins archive (rp_rt) supplies
 # the soft-float / 64-bit __aeabi_* libcalls -- from clang's compiler-rt when a
 # thumbv6m build is installed, else the arm-none-eabi GCC libgcc multilib (the
@@ -425,26 +430,26 @@ rp_rt := $(shell f=$$($(KCC) $(rp_triple) -print-libgcc-file-name 2>/dev/null); 
   [ -e "$$f" ] && echo "$$f" || \
   arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -print-libgcc-file-name 2>/dev/null)
 rp_h = $(g_h) $(wildcard $R/arch/rp2040/*.h)
-rp_vt_h = $(ro)/vt.h
+rp_data_h = $(ro)/data.h
 rp_lib_h = out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
 rp_src = $(g_c) $(c_c) $R/arch/rp2040/rp2040.c $R/arch/rp2040/main.c
 rp_o = $(rp_src:$(R)/%.c=$(ro)/%.o)
 
 rp2040: $(ro)/$n.uf2
 
-# vt.o bootstraps from the portable top-level vt.h (no rp_vt_h prereq -- it is
-# circular); its sentinel stride is then reflected into the generated vt.h,
+# data.o bootstraps from the portable top-level data.h (no rp_data_h prereq -- it is
+# circular); its sentinel stride is then reflected into the generated data.h,
 # which -I$(ro) puts ahead of the portable one. The explicit rule shadows the
-# %.o pattern below for vt.o specifically.
-$(ro)/vt.o: $R/vt.c $(rp_h) $(rp_lib_h)
+# %.o pattern below for data.o specifically.
+$(ro)/data.o: $R/data.c $(rp_h) $(rp_lib_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(rp_cc) -c $< -o $@
-$(rp_vt_h): $(ro)/vt.o $(gen_vt) | $(m)
+$(rp_data_h): $(ro)/data.o $(gen_data) | $(m)
 	@echo GEN	$@
-	@$(m) $(gen_vt) $< -o $@
+	@$(m) $(gen_data) $< -o $@
 
-$(ro)/%.o: $R/%.c $(rp_h) $(rp_vt_h) $(rp_lib_h)
+$(ro)/%.o: $R/%.c $(rp_h) $(rp_data_h) $(rp_lib_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(rp_cc) -c $< -o $@
@@ -485,7 +490,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@$m
 cloc:
-	cloc --by-file --force-lang=Lisp,$x gwen gwen.c gwen.h vt.c vt.h kmain.c main.c k.h arch tools test vim
+	cloc --by-file --force-lang=Lisp,$x gwen gwen.c gwen.h data.c data.h kmain.c main.c k.h arch tools test vim
 cat: clean all test
 cata: clean all test_all
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.

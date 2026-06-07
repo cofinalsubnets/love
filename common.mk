@@ -13,7 +13,7 @@ a ?= $(shell uname -m)
 t = $(sort $(wildcard $R/test/*.$x))
 
 g_h = $(wildcard $R/*.h)
-g_c = $R/gwen.c $R/vt.c
+g_c = $R/gwen.c $R/data.c
 f_c = $(wildcard $R/font/*.c)
 c_c = $(wildcard $R/libc/*.c)
 

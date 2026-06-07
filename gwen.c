@@ -45,7 +45,7 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // nilp: structural test for the nil word (the only false scalar). Distinct from
-// g_false below (the language falsy predicate, which also counts an all-zero vec);
+// g_false below (the language falsy predicate, which also counts an all-zero tuple);
 // the gwen `nilp` bif maps to g_false, not this macro.
 #define nilp(_) (word(_)==nil)
 #define AB(o) A(B(o))
@@ -54,7 +54,7 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define BB(o) B(B(o))
 #define nom(_) sym(_)
 #define ptr(_) ((word*)(_))
-#define datp(_) in_data_vt(cell(_)->ap)
+#define datp(_) in_data(cell(_)->ap)
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
 #define MM(f,r) ((g_core_of(f)->root=&((struct g_r){(word*)(r),g_core_of(f)->root})))
 #define UM(f) (g_core_of(f)->root=g_core_of(f)->root->n)
@@ -87,12 +87,12 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // arr/arrl reject ty == C, so C never appears as a rank>=1 array element -- complex
 // only ever shows up as a rank-0 scalar (cplxp), handled by explicit cplx branches.
 // O (object) is the odd tier out: its slots hold live gwen words (any value --
-// fixnum, bignum, box, complex, string, pair...), so it is the ONE vec type the
-// copying GC must trace element-by-element (evac_vec). It sits outside the numeric
+// fixnum, bignum, box, complex, string, pair...), so it is the ONE tuple type the
+// copying GC must trace element-by-element (evac_tuple). It sits outside the numeric
 // order; the typed fast lanes gate on `type <= g_C`, the arith lane on `type == g_O`
 // (g_vm_obin), so O elements always route through the promoting scalar dispatch --
 // that is what makes a bignum array add/multiply exactly instead of wrapping.
-enum g_vec_type { g_Z, g_R, g_C, g_O, };
+enum g_tuple_type { g_Z, g_R, g_C, g_O, };
 // Elementwise binary opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
 // match the arith slow handlers; the five compare codes (>= VOP_LT) produce a
 // 0/1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
@@ -100,7 +100,7 @@ enum vop { VOP_ADD, VOP_SUB, VOP_MUL, VOP_QUOT, VOP_REM,
            VOP_LT, VOP_LE, VOP_GT, VOP_GE, VOP_EQ, };
 struct g_atom *intern_checked(struct g*, struct g_str*);
 g_vm_t g_vm_kcall,
- g_vm_two, g_vm_vec, g_vm_sym, g_vm_text, g_vm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
+ g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
  g_vm_putn, g_vm_info,    g_vm_clock,
  g_vm_nilp,  g_vm_putc, g_vm_gensym, g_vm_intern, g_vm_twop,
  g_vm_len, g_vm_get, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
@@ -130,7 +130,7 @@ g_vm_t g_vm_kcall,
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  g_vm_arr, g_vm_arrl, g_vm_arank, g_vm_alen, g_vm_ashape, g_vm_atype,
  g_vm_asum, g_vm_aprod, g_vm_amax, g_vm_amin, g_vm_aall, g_vm_aany,
- g_vm_vecp, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf;
+ g_vm_tuplep, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf;
 // Carry extra operands, so (like g_vm_gc) they are declared apart from the
 // plain g_vm_t list, which fixes the 4-argument handler signature. g_vm_vbin
 // is the elementwise/broadcast binary engine (vop selects the op); g_vm_vmap1
@@ -147,17 +147,17 @@ g_vm(g_vm_cplx_bin, int);
 // scalar dispatch (exact bignum results) instead of the typed raw-C lanes.
 g_vm(g_vm_obin, int);
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
-// above, because a frontend's override (e.g. wasm/inc/vt.h) resolves kinds
-// by comparing an ap against g_vm_two..g_vm_text directly.
-#include <vt.h>
+// above, because a frontend's override (e.g. wasm/inc/data.h) resolves kinds
+// by comparing an ap against g_vm_two..g_vm_str directly.
+#include <data.h>
 char const *g_bif_name(intptr_t);
-#define vec(_) ((struct g_vec*)(_))
+#define tuple(_) ((struct g_tuple*)(_))
 #define nump oddp
 #define sym(_) ((struct g_atom*)(_))
-static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == g_vm_sym; }
-static g_inline bool vecp(word _) { return homp(_) && cell(_)->ap == g_vm_vec; }
-static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == g_vm_text; }
-// Mutable flat byte string. NOT a data_vt kind: its head word is the
+static g_inline bool symp(word _) { return lamp(_) && cell(_)->ap == g_vm_sym; }
+static g_inline bool tuplep(word _) { return lamp(_) && cell(_)->ap == g_vm_tuple; }
+static g_inline bool strp(word _) { return lamp(_) && cell(_)->ap == g_vm_str; }
+// Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 g_vm_buf (like g_vm_port_io for ports), so the GC walks a buf
 // as a plain length-2 thread -- [g_vm_buf, backing g_str, terminator] -- and
 // the generic thread scan forwards the embedded string pointer for free; no
@@ -166,7 +166,7 @@ static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == g_vm_text; 
 // (cf. the `to` output port). Earned by tools/elf2efi.g, which back-patches a
 // PE image. Recognized by ap, like iop() for ports.
 struct g_buf { g_vm_t *ap; struct g_str *str; };
-static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == g_vm_buf; }
+static g_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == g_vm_buf; }
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
 // threads: a fixed 2-word HEADER [g_vm_map_lookup, backing, <tag>] that callers
@@ -179,7 +179,7 @@ static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == g_vm_buf; }
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
 // a terminator. (m k) looks k up (nil if absent) through g_vm_map_lookup.
 static g_vm_t g_vm_map_lookup, g_vm_map_data;
-static g_inline bool mapp(word _) { return homp(_) && cell(_)->ap == g_vm_map_lookup; }
+static g_inline bool mapp(word _) { return lamp(_) && cell(_)->ap == g_vm_map_lookup; }
 static const word g_map_gap_cell = 0;
 #define MAP_GAP ((word) &g_map_gap_cell)
 #define MAP_MIN_CAP 4
@@ -192,12 +192,12 @@ static struct g *g_mapput(struct g*), *map_new(struct g*);
 static g_inline struct g_str *buf_str(word x) { return ((struct g_buf*) x)->str; }
 // the byte ops read from a string or a buf; both resolve to a g_str of bytes.
 static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
-// Arbitrary-precision integer (Step 6). Own data-sentinel kind big_q: a flat,
+// Arbitrary-precision integer (Step 6). Own data-sentinel kind K_BIG: a flat,
 // GC-trivial object (raw limbs, no embedded gwen pointers) the copying GC moves
 // by memcpy. A generic thread scan can't hold inline limb words (a limb that's
 // even-and-in-pool would be spuriously forwarded, one matching G_THD_TAG would
 // truncate the object), so a flat bignum needs its own copy/evac rule -- like
-// text_q strings -- which is exactly what the sentinel buys. slen = signed limb
+// K_STRING strings -- which is exactly what the sentinel buys. slen = signed limb
 // count (negative => negative value); |slen| 32-bit limbs little-endian
 // (limb[0] least significant), top limb nonzero (normalized). Zero is never a
 // bignum (it demotes to the fixnum nil), so slen is never 0 and the sign is
@@ -205,7 +205,7 @@ static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : s
 // range is a fixnum, one in intptr_t range a wide-int box, only wider values a
 // bignum -- so nump/boxp/bigp are mutually exclusive and =/eqv stay well defined.
 struct g_big { g_vm_t *ap; intptr_t slen; uint32_t limb[]; };
-static g_inline bool bigp(word _) { return homp(_) && cell(_)->ap == g_vm_big; }
+static g_inline bool bigp(word _) { return lamp(_) && cell(_)->ap == g_vm_big; }
 static g_inline struct g_big *ini_big(struct g_big *b, intptr_t slen) {
  return b->ap = g_vm_big, b->slen = slen, b; }
 uintptr_t g_big_bytes(struct g_big*);
@@ -221,69 +221,69 @@ struct g *g_big_dec(struct g*);             // sp[0] bignum -> decimal string
 struct g *g_big_read_dec(struct g*);        // sp[0] [+-]?digits token -> canonical value
 
 static g_inline bool flop(word _) {
-  return vecp(_) && vec(_)->rank == 0 && vec(_)->type == g_R; }
-// Wide-integer box: a rank-0 g_Z scalar vec. Arises only from
+  return tuplep(_) && tuple(_)->rank == 0 && tuple(_)->type == g_R; }
+// Wide-integer box: a rank-0 g_Z scalar tuple. Arises only from
 // transparent fixnum overflow (kernel/math.c); never holds a value that
 // fits the fixnum tag (canonical demotion keeps box and fixnum ranges
 // disjoint), so boxp and nump never both hold for the same number.
 static g_inline bool boxp(word _) {
-  return vecp(_) && vec(_)->rank == 0 && vec(_)->type == g_Z; }
-// A complex scalar: a rank-0 g_C vec (two g_flo_t, re then im). Deliberately
+  return tuplep(_) && tuple(_)->rank == 0 && tuple(_)->type == g_Z; }
+// A complex scalar: a rank-0 g_C tuple (two g_flo_t, re then im). Deliberately
 // NOT folded into ISNUM -- the real-tower macros (TOFLO/TOINT) would misread its
 // two-word payload, so the arith/eq paths handle complex via explicit cplxp
 // branches placed before the real lanes (decision: complex > float > int/bignum).
 static g_inline bool cplxp(word _) {
-  return vecp(_) && vec(_)->rank == 0 && vec(_)->type == g_C; }
+  return tuplep(_) && tuple(_)->rank == 0 && tuple(_)->type == g_C; }
 // A rank>=1 typed array (vs a rank-0 scalar box, which flop/boxp catch). The
 // elementwise arith/compare lanes divert to g_vm_vbin when either operand arrp.
-static g_inline bool arrp(word _) { return vecp(_) && vec(_)->rank >= 1; }
+static g_inline bool arrp(word _) { return tuplep(_) && tuple(_)->rank >= 1; }
 
 // Max array rank (bounds the stack index/stride arrays in the broadcast loop).
 #define G_VEC_MAXRANK 8
-extern size_t const g_vt_[];                 // element byte size by g_vec_type
+extern size_t const g_vt_[];                 // element byte size by g_tuple_type
 // Element payload: laid out row-major just past the shape words.
-static g_inline void *vec_data(struct g_vec *v) { return (void*) (v->shape + v->rank); }
-static g_inline struct g_vec *ini_vec(struct g_vec *v, enum g_vec_type t, uintptr_t rank) {
- return v->ap = g_vm_vec, v->type = t, v->rank = rank, v; }
+static g_inline void *tuple_data(struct g_tuple *v) { return (void*) (v->shape + v->rank); }
+static g_inline struct g_tuple *ini_tuple(struct g_tuple *v, enum g_tuple_type t, uintptr_t rank) {
+ return v->ap = g_vm_tuple, v->type = t, v->rank = rank, v; }
 // Read element i of v as a double / as an integer (sign-extending the narrow
 // integer types; truncating a float toward zero for the int reader). The int
 // reader is only used on integer-typed arrays in practice.
-static g_inline g_flo_t vec_get_flo(struct g_vec *v, uintptr_t i) {
- void *p = vec_data(v);
+static g_inline g_flo_t tuple_get_flo(struct g_tuple *v, uintptr_t i) {
+ void *p = tuple_data(v);
  return v->type == g_R ? ((g_flo_t*) p)[i] : (g_flo_t) ((intptr_t*) p)[i]; }
-static g_inline intptr_t vec_get_int(struct g_vec *v, uintptr_t i) {
- void *p = vec_data(v);
+static g_inline intptr_t tuple_get_int(struct g_tuple *v, uintptr_t i) {
+ void *p = tuple_data(v);
  return v->type == g_R ? (intptr_t) ((g_flo_t*) p)[i] : ((intptr_t*) p)[i]; }
 // Write element i of v, converting to v's element kind.
-static g_inline void vec_put_int(struct g_vec *v, uintptr_t i, intptr_t x) {
- void *p = vec_data(v);
+static g_inline void tuple_put_int(struct g_tuple *v, uintptr_t i, intptr_t x) {
+ void *p = tuple_data(v);
  if (v->type == g_R) ((g_flo_t*) p)[i] = (g_flo_t) x; else ((intptr_t*) p)[i] = x; }
-static g_inline void vec_put_flo(struct g_vec *v, uintptr_t i, g_flo_t x) {
- void *p = vec_data(v);
+static g_inline void tuple_put_flo(struct g_tuple *v, uintptr_t i, g_flo_t x) {
+ void *p = tuple_data(v);
  if (v->type == g_R) ((g_flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = (intptr_t) x; }
 // Read/write element i of a g_O array as a raw tagged gwen word (the GC traces
-// these; see evac_vec). No conversion -- the slot IS a value.
-static g_inline word vec_get_obj(struct g_vec *v, uintptr_t i) {
- return ((word*) vec_data(v))[i]; }
-static g_inline void vec_put_obj(struct g_vec *v, uintptr_t i, word x) {
- ((word*) vec_data(v))[i] = x; }
+// these; see evac_tuple). No conversion -- the slot IS a value.
+static g_inline word tuple_get_obj(struct g_tuple *v, uintptr_t i) {
+ return ((word*) tuple_data(v))[i]; }
+static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
+ ((word*) tuple_data(v))[i] = x; }
 
 // Language falsy predicate: a value is falsy iff its magnitude (L2 norm) is zero.
 // For a scalar that is just "== 0": nil/0, a boxed 0.0, a zero wide-int box. For a
-// vec it is the Euclidean norm being zero -- which, since a sum of squares is zero
+// tuple it is the Euclidean norm being zero -- which, since a sum of squares is zero
 // iff every term is, g_all_zero tests EXACTLY by scanning for a non-zero element
-// (a boxed 0.0/array, an empty vec vacuously; a complex via both components; an
+// (a boxed 0.0/array, an empty tuple vacuously; a complex via both components; an
 // object array recursively per element). We scan rather than literally call abs()
 // because this is the hot `?`/g_vm_cond path: the scan short-circuits on the first
 // truthy element and is exact, whereas sqrt(Σx²) is slower and overflows to inf on
 // a large array -- reporting a non-zero array as falsy. Same predicate, no float risk.
-bool g_all_zero(struct g_vec*);
+bool g_all_zero(struct g_tuple*);
 // Truthiness: a value is false iff it is "zero or empty" -- exactly (= 0 (len x)).
 // nil/0, an all-zero number/array/complex, and the empty string/buf/table. Every
 // present value (non-empty container, symbol incl. anonymous, function, port,
 // bignum) is truthy. Kept in sync with g_vm_len's zero case.
 static g_inline bool g_false(word x) {
-  return nilp(x) || (vecp(x) && g_all_zero(vec(x)))
+  return nilp(x) || (tuplep(x) && g_all_zero(tuple(x)))
       || (strp(x) && len(x) == 0)                       // empty string
       || (bufp(x) && len(buf_str(x)) == 0)              // empty buf
       || (mapp(x) && map_len(x) == 0); }                // empty table
@@ -310,9 +310,9 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 #define TOFLO(x) (nump(x) ? (g_flo_t) getnum(x) : flop(x) ? flo_get(x) : boxp(x) ? (g_flo_t) box_get(x) : g_big_to_flo(x))
 // Heap words for one scalar box. The float box (g_flo_t) and the wide-int box
 // (intptr_t) are both one pointer-width word, so one reservation fits.
-#define BOX_REQ (Width(struct g_vec) + Width(intptr_t))
+#define BOX_REQ (Width(struct g_tuple) + Width(intptr_t))
 // Heap words for one complex box: the (re, im) payload is two g_flo_t words.
-#define CPLX_REQ (Width(struct g_vec) + 2 * Width(g_flo_t))
+#define CPLX_REQ (Width(struct g_tuple) + 2 * Width(g_flo_t))
 // The tagged fixnum range: putnum spends one bit, so |value| <= 2^(Bits-2).
 #define FIX_MIN (INTPTR_MIN >> 1)
 #define FIX_MAX (INTPTR_MAX >> 1)
@@ -322,26 +322,26 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 // its trailing tail call.
 #define EMIT_INT(R) do { intptr_t _r = (R); \
  if (_r >= FIX_MIN && _r <= FIX_MAX) _res = putnum(_r); \
- else { struct g_vec *_v = ini_scalar((struct g_vec*) Hp, g_Z); \
+ else { struct g_tuple *_v = ini_scalar((struct g_tuple*) Hp, g_Z); \
         Hp += BOX_REQ; box_put(_v->shape, _r); _res = word(_v); } } while (0)
 // Emit a double result R into `_res` as a rank-0 g_R box. Same Have(BOX_REQ)
 // precondition and TCO discipline as EMIT_INT.
-#define EMIT_FLO(R) do { struct g_vec *_v = ini_scalar((struct g_vec*) Hp, g_R); \
+#define EMIT_FLO(R) do { struct g_tuple *_v = ini_scalar((struct g_tuple*) Hp, g_R); \
  Hp += BOX_REQ; flo_put(_v->shape, (R)); _res = word(_v); } while (0)
 
-// Step 8 -- RNG (kernel/rng.c). State is a rank-1 i64 vec of length 4 (256 bits,
-// xoshiro256++). It rides the existing vec machinery (no data sentinel) but its
-// payload is treated as raw bytes -- moved by memcpy, never via vec_get/put_int,
+// Step 8 -- RNG (kernel/rng.c). State is a rank-1 i64 tuple of length 4 (256 bits,
+// xoshiro256++). It rides the existing tuple machinery (no data sentinel) but its
+// payload is treated as raw bytes -- moved by memcpy, never via tuple_get/put_int,
 // which would truncate the 64-bit limbs to intptr_t on 32-bit ports. The fixed
 // 8-byte limbs make a seed reproduce the same sequence on every target.
 #define RNG_STATE_LEN 4
 #define RNG_PAYLOAD_BYTES (RNG_STATE_LEN * 8)
-#define RNG_VEC_BYTES (sizeof(struct g_vec) + sizeof(uintptr_t) + RNG_PAYLOAD_BYTES)
+#define RNG_VEC_BYTES (sizeof(struct g_tuple) + sizeof(uintptr_t) + RNG_PAYLOAD_BYTES)
 #define RNG_VEC_REQ (b2w(RNG_VEC_BYTES))
-// State element kind: pick whichever kind is 8 bytes wide so g_vec_bytes (GC) sees
+// State element kind: pick whichever kind is 8 bytes wide so g_tuple_bytes (GC) sees
 // the full 256-bit payload -- Z (one word) on 64-bit, C (two words) on 32-bit.
 #define RNG_VT (Bytes == 4 ? g_C : g_Z)
-void g_rng_seed(struct g_vec*, uint64_t);   // shape an i64 state vec + seed it (SplitMix64)
+void g_rng_seed(struct g_tuple*, uint64_t);   // shape an i64 state tuple + seed it (SplitMix64)
 g_vm_t g_vm_rng_seed, g_vm_rng_get, g_vm_rng_set,
        g_vm_rand, g_vm_randf, g_vm_rand_next, g_vm_randf_next;
 g_vm_t g_vm_set_numap,   // installs f->numap (the gwen fixnum-as-function handler), see vm.c
@@ -369,18 +369,18 @@ double strtod(char const *restrict, char **restrict);
 _Static_assert(sizeof(g_flo_t) == sizeof(uintptr_t), "float box assumes g_flo_t is pointer-width");
 typedef union { uintptr_t u; g_flo_t d; } g_flo_pun;
 static g_inline g_flo_t flo_get(word x) {
- return ((g_flo_pun){ .u = vec(x)->shape[0] }).d; }
+ return ((g_flo_pun){ .u = tuple(x)->shape[0] }).d; }
 static g_inline void flo_put(void *p, g_flo_t v) {
  *(uintptr_t*) p = ((g_flo_pun){ .d = v }).u; }
 
-// Boxed complex access: re in shape[0], im in shape[1] (rank-0, so vec_data ==
+// Boxed complex access: re in shape[0], im in shape[1] (rank-0, so tuple_data ==
 // shape). Same union-pun discipline as flo_get/flo_put so an inlining VM handler
 // keeps its tail call. cplx_put writes both components of an already-shaped box.
 static g_inline g_flo_t cplx_re(word x) {
- return ((g_flo_pun){ .u = vec(x)->shape[0] }).d; }
+ return ((g_flo_pun){ .u = tuple(x)->shape[0] }).d; }
 static g_inline g_flo_t cplx_im(word x) {
- return ((g_flo_pun){ .u = vec(x)->shape[1] }).d; }
-static g_inline void cplx_put(struct g_vec *v, g_flo_t re, g_flo_t im) {
+ return ((g_flo_pun){ .u = tuple(x)->shape[1] }).d; }
+static g_inline void cplx_put(struct g_tuple *v, g_flo_t re, g_flo_t im) {
  v->shape[0] = ((g_flo_pun){ .d = re }).u;
  v->shape[1] = ((g_flo_pun){ .d = im }).u; }
 
@@ -390,7 +390,7 @@ static g_inline void cplx_put(struct g_vec *v, g_flo_t re, g_flo_t im) {
 // uintptr_t slot. Neither helper takes the address of a stack local, so a
 // VM handler that inlines them keeps its trailing tail call (see the
 // flo_get/flo_put note above and tools/vmret.g).
-static g_inline intptr_t box_get(word x) { return (intptr_t) vec(x)->shape[0]; }
+static g_inline intptr_t box_get(word x) { return (intptr_t) tuple(x)->shape[0]; }
 static g_inline void box_put(void *p, intptr_t v) { *(uintptr_t*) p = (uintptr_t) v; }
 
 // equality comparisons inline the fast identity check
@@ -440,7 +440,7 @@ static g_inline struct g_atom *ini_usym(struct g_atom *y, struct g_atom *nom, ui
  return y->ap = g_vm_sym, y->nom = (struct g_str*) nom, y->code = code, y; }
 
 static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
- return s->ap = g_vm_text, s->len = len, s; }
+ return s->ap = g_vm_str, s->len = len, s; }
 
 // The unique empty string and empty (anonymous) symbol. Both live in the data
 // segment, so the Cheney forwarder leaves any pointer to them untouched (gcp's
@@ -453,11 +453,11 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // text/sym value; the FAM `bytes[]` is simply absent (len 0).
 // External linkage (declared in gwen.h with the EMPTY_STR/EMPTY_SYM macros) so the
 // frontends can return them too (e.g. host_run's empty-output capture).
-const struct g_str g_str_empty = { .ap = g_vm_text, .len = 0 };
+const struct g_str g_str_empty = { .ap = g_vm_str, .len = 0 };
 const struct g_atom g_sym_empty = { .ap = g_vm_sym, .code = 0, .nom = 0, .l = 0, .r = 0 };
 
-static g_inline struct g_vec *ini_scalar(struct g_vec *v, enum g_vec_type t) {
- return v->ap = g_vm_vec, v->type = t, v->rank = 0, v; }
+static g_inline struct g_tuple *ini_scalar(struct g_tuple *v, enum g_tuple_type t) {
+ return v->ap = g_vm_tuple, v->type = t, v->rank = 0, v; }
 
 
 static g_inline uintptr_t rot(uintptr_t x) {
@@ -498,24 +498,24 @@ static g_inline struct g*g_pop(struct g*f, uintptr_t n) {
 
 #define RED_EXTREME(nom, c_op, kind) g_vm(nom) { \
  word x = Sp[0]; \
- if (!vecp(x)) return Ip++, Continue(); \
- if (vec(x)->type == g_O) { \
+ if (!tuplep(x)) return Ip++, Continue(); \
+ if (tuple(x)->type == g_O) { \
   Pack(f); f = ored(f, kind); \
   if (!g_ok(f)) return gtrap(f); \
   return Unpack(f), Continue(); } \
- struct g_vec *v = vec(x); \
+ struct g_tuple *v = tuple(x); \
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i]; \
  if (!n) return Sp[0] = nil, Ip++, Continue(); \
  bool fdom = v->type >= g_R; word _res; \
- Have(BOX_REQ); v = vec(Sp[0]); \
- if (fdom) { g_flo_t m = vec_get_flo(v, 0); \
+ Have(BOX_REQ); v = tuple(Sp[0]); \
+ if (fdom) { g_flo_t m = tuple_get_flo(v, 0); \
   for (uintptr_t i = 1; i < n; i++) {\
-   g_flo_t e = vec_get_flo(v, i);\
+   g_flo_t e = tuple_get_flo(v, i);\
    if (e c_op m) m = e; } \
   EMIT_FLO(m); } \
- else { intptr_t m = vec_get_int(v, 0); \
+ else { intptr_t m = tuple_get_int(v, 0); \
   for (uintptr_t i = 1; i < n; i++) {\
-   intptr_t e = vec_get_int(v, i);\
+   intptr_t e = tuple_get_int(v, i);\
    if (e c_op m) m = e; } \
   EMIT_INT(m); } \
  return Sp[0] = _res, Ip++, Continue(); }
@@ -585,7 +585,7 @@ static g_inline struct g*g_pop(struct g*f, uintptr_t n) {
  _(bif_asum, "asum", S1(g_vm_asum)) _(bif_aprod, "aprod", S1(g_vm_aprod))\
  _(bif_amax, "amax", S1(g_vm_amax)) _(bif_amin, "amin", S1(g_vm_amin))\
  _(bif_aall, "aall", S1(g_vm_aall)) _(bif_aany, "aany", S1(g_vm_aany))\
- _(bif_vecp, "vecp", S1(g_vm_vecp)) _(bif_bigp, "bigp", S1(g_vm_bigp)) _(bif_boxp, "boxp", S1(g_vm_boxp))\
+ _(bif_tuplep, "tuplep", S1(g_vm_tuplep)) _(bif_bigp, "bigp", S1(g_vm_bigp)) _(bif_boxp, "boxp", S1(g_vm_boxp))\
  _(bif_arrp, "arrp", S1(g_vm_arrp)) _(bif_intf, "int", S1(g_vm_intf))\
  _(bif_symp, "symp", S1(g_vm_symp)) _(bif_hashp, "hashp", S1(g_vm_hashp)) _(bif_nump, "nump", S1(g_vm_nump))\
  _(bif_nilp, "nilp", S1(g_vm_nilp)) _(bif_ev, "ev", S1(g_vm_eval))\
@@ -678,10 +678,10 @@ static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size
    {"err", (word) &g_stderr}, };
   f = g_defn(f, def0, LEN(def0));
   f = g_defn(f, def1, LEN(def1));
-  // Eager-seed the global RNG stream so f->rng is always a valid state vec (gl0
+  // Eager-seed the global RNG stream so f->rng is always a valid state tuple (gl0
   // bootstrap included). The seed mixes the clock with the rotated pool address.
   if (g_ok(f = g_have(f, RNG_VEC_REQ))) {
-   struct g_vec *v = bump(f, RNG_VEC_REQ);
+   struct g_tuple *v = bump(f, RNG_VEC_REQ);
    g_rng_seed(v, (uint64_t) (g_clock() ^ rot((uintptr_t) f)));
    f->rng = word(v); } }
  return f; }
@@ -754,11 +754,11 @@ static g_inline void evac_two(struct g*f, word const*const p0, word const*const 
  w->a = gcp(f, w->a, p0, t0);
  w->b = gcp(f, w->b, p0, t0); }
 
-static g_inline void evac_vec(struct g*f, word const*const p0, word const*const t0) {
- struct g_vec *v = vec(f->cp);
- f->cp += b2w(g_vec_bytes(v));
+static g_inline void evac_tuple(struct g*f, word const*const p0, word const*const t0) {
+ struct g_tuple *v = tuple(f->cp);
+ f->cp += b2w(g_tuple_bytes(v));
  if (v->type != g_O) return;                 // numeric vecs are GC leaves (flat payload)
- word *e = (word*) vec_data(v);              // object vec: forward each live element word
+ word *e = (word*) tuple_data(v);              // object tuple: forward each live element word
  uintptr_t n = 1;
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  while (n--) e[n] = gcp(f, e[n], p0, t0); }
@@ -782,17 +782,17 @@ static g_inline void evac_thd(struct g *g, word const *const p0, word const*cons
 static g_inline void evac_data(struct g *g, word const *const p0, word const*const t0) {
   switch (typ(g->cp)) {
    default: __builtin_trap();
-   case vec_q: return evac_vec(g, p0, t0);
-   case sym_q: return evac_sym(g, p0, t0);
-   case two_q: return evac_two(g, p0, t0);
-   case text_q: return evac_str(g, p0, t0);
-   case big_q: return evac_big(g, p0, t0); } }
+   case K_TUPLE: return evac_tuple(g, p0, t0);
+   case K_SYM: return evac_sym(g, p0, t0);
+   case K_TWO: return evac_two(g, p0, t0);
+   case K_STRING: return evac_str(g, p0, t0);
+   case K_BIG: return evac_big(g, p0, t0); } }
 
 static g_inline void run_finalizers(struct g*g) {
  struct g_fz *new_fz = NULL;
  for (struct g_fz *fz = g->fz; fz; fz = fz->next) {
   word fwd = fz->p->x;
-  if (homp(fwd) && ptr(g) <= ptr(fwd) && ptr(fwd) < ptr(g) + g->len) {
+  if (lamp(fwd) && ptr(g) <= ptr(fwd) && ptr(fwd) < ptr(g) + g->len) {
    struct g_fz *nn = bump(g, Width(struct g_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
   } else fz->fn(fz->p); }
@@ -862,9 +862,9 @@ static g_inline word copy_two(struct g*f, struct g_pair *src, word const *const 
  src->ap = (g_vm_t*) dst;
  return word(dst); }
 
-static g_inline word copy_vec(struct g*f, struct g_vec *src, word const *const p0, word const*const t0) {
- uintptr_t bytes = g_vec_bytes(src);
- struct g_vec *dst = bump(f, b2w(bytes));
+static g_inline word copy_tuple(struct g*f, struct g_tuple *src, word const *const p0, word const*const t0) {
+ uintptr_t bytes = g_tuple_bytes(src);
+ struct g_tuple *dst = bump(f, b2w(bytes));
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
@@ -896,11 +896,11 @@ static g_inline word copy_sym(struct g*f, struct g_atom *src, word const *const 
 static g_inline word copy_data(struct g *f, union u *src, word const *const p0, word const *const t0) {
  switch (typ(src)) {
   default: __builtin_trap();
-  case two_q: return copy_two(f, two(src), p0, t0);
-  case vec_q: return copy_vec(f, vec(src), p0, t0);
-  case sym_q: return copy_sym(f, sym(src), p0, t0);
-  case text_q: return copy_str(f, str(src), p0, t0);
-  case big_q: return copy_big(f, (struct g_big*) src, p0, t0); } }
+  case K_TWO: return copy_two(f, two(src), p0, t0);
+  case K_TUPLE: return copy_tuple(f, tuple(src), p0, t0);
+  case K_SYM: return copy_sym(f, sym(src), p0, t0);
+  case K_STRING: return copy_str(f, str(src), p0, t0);
+  case K_BIG: return copy_big(f, (struct g_big*) src, p0, t0); } }
 
 static g_inline struct g_tag *ttag2(union u *k, word const *const lo, word const *const hi) {
  while (!tagp(k->x, lo, hi)) k++;
@@ -921,8 +921,8 @@ static g_noinline intptr_t gcp(struct g *f, word x, word const *p0, word const *
  union u *src = cell(x);
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer
- return homp(x) && ptr(f) <= ptr(x) && ptr(x) < ptr(f) + f->len ? x :
-        in_data_vt((void*) x) ? copy_data(f, src, p0, t0) :
+ return lamp(x) && ptr(f) <= ptr(x) && ptr(x) < ptr(f) + f->len ? x :
+        in_data((void*) x) ? copy_data(f, src, p0, t0) :
                                 copy_thread(f, src, p0, t0); }
 
 // ============================================================================
@@ -1250,7 +1250,7 @@ static struct g *ana_ap(struct g *f, struct env **c, intptr_t x) {
  bool imfp =
   f->sp[0] == (word) c1_ix &&
   f->sp[1] == (word) g_vm_quote &&
-  homp(f->sp[2]);
+  lamp(f->sp[2]);
  intptr_t
   ca = llen(x),
   va =
@@ -1344,7 +1344,7 @@ static g_inline struct g *ana_d(struct g *f, struct env **b, word exp) {
  // (ev.g) does the same natively in `l2x`. exp is rooted across the alloc.
  if (g_ok(f = intern(g_strof(f, "boxfix")))) {
   word bf = g_mapget(f, 0, pop1(f), f->dict);
-  if (bf && homp(bf)) {
+  if (bf && lamp(bf)) {
    f = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(f, 4, exp, nil, nil, bf)))))));
    if (g_ok(f)) exp = pop1(f); } }
  f = enscope(f, *b, (*b)->args, (*b)->imps);
@@ -1788,7 +1788,7 @@ g_vm(g_vm_sleep) {
 
 g_vm(g_vm_jump) { return Ip = Ip[1].m, Continue(); }
 // The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
-// language falsy predicate so an all-zero vec (boxed 0.0, zero int box,
+// language falsy predicate so an all-zero tuple (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
 g_vm(g_vm_cond) { return Ip = g_false(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 g_vm(g_vm_unc) {
@@ -1939,22 +1939,22 @@ g_vm(g_vm_len) {
   else if (mapp(x)) l = map_len(x);                              // table: key count
   else if (datp(x)) switch (typ(x)) {
     default: l = 1; break;                                      // unknown present data kind -> truthy
-    case text_q: l = len(x); break;                             // string: byte count
-    case two_q: { word p = x; do l++, p = B(p); while (twop(p)); } break;  // list: pair count
-    case big_q: l = FIX_MAX; break;                             // |bignum| > FIX_MAX: saturate
-    case sym_q: {                                              // symbol: name length, floored at 1
+    case K_STRING: l = len(x); break;                             // string: byte count
+    case K_TWO: { word p = x; do l++, p = B(p); while (twop(p)); } break;  // list: pair count
+    case K_BIG: l = FIX_MAX; break;                             // |bignum| > FIX_MAX: saturate
+    case K_SYM: {                                              // symbol: name length, floored at 1
       struct g_atom *s = sym(x);                               // (a symbol is always a present identity)
       intptr_t nl = !s->nom ? 0                                // anonymous gensym
         : strp(word(s->nom)) ? (intptr_t) len(s->nom)          // interned: its name string
         : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;  // uninterned
       l = nl ? nl : 1;
       break; }
-    case vec_q: {                                               // boxed scalar or rank-n array
-      struct g_vec *v = vec(x);                                 // all -> ceil(|x|), saturated, never negative
+    case K_TUPLE: {                                               // boxed scalar or rank-n array
+      struct g_tuple *v = tuple(x);                                 // all -> ceil(|x|), saturated, never negative
       if (v->rank) { uintptr_t i = 0, n = 1;                    // array: its L2 norm
         while (i < v->rank) n *= v->shape[i++];
         g_flo_t s = 0;
-        for (i = 0; i < n; i++) { g_flo_t e = vec_get_flo(v, i); s += e * e; }
+        for (i = 0; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); s += e * e; }
         l = len_sat(g_sqrt(s)); }
       else if (v->type == g_C) {                                // complex: |z|
         g_flo_t re = cplx_re(x), im = cplx_im(x); l = len_sat(g_sqrt(re * re + im * im)); }
@@ -1969,7 +1969,7 @@ g_vm(g_vm_len) {
 // ============================================================================
 // io
 // ============================================================================
-static g_inline bool iop(word x) { return homp(x) && cell(x)->ap == g_vm_port_io; }
+static g_inline bool iop(word x) { return lamp(x) && cell(x)->ap == g_vm_port_io; }
 static g_inline struct g_port_vt const *port_vt(word fd_tagged) {
  intptr_t fd = getnum(fd_tagged);
  return fd >= 0 ? &g_fd_port_vt : &synth[-(fd + 1)]; }
@@ -2041,7 +2041,7 @@ static struct g *to_flush(struct g *f) { return f; }
 struct g_port_vt const synth[] = {
  /* fd = -1, ti: read-only string source */
  { ti_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush },
- /* fd = -2, to: write-only vec sink   */
+ /* fd = -2, to: write-only tuple sink   */
  { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush   },
  /* fd = -3, closed port (post-close)  */
  { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush },
@@ -2183,22 +2183,22 @@ static g_inline struct g*gzput_two(struct g*f, word _, uintptr_t off) {
 // Print element i of the array parked at f->sp[0] as a bare number (float ->
 // g_dtoa, integer -> base 10). The element value is read before any gzputc, so
 // a GC during printing (string-port growth) that relocates the array is safe;
-// callers re-fetch vec(f->sp[0]) each call for the same reason.
-static struct g *gzput_vec_elem(struct g *f, uintptr_t i) {
- struct g_vec *v = vec(f->sp[0]);
+// callers re-fetch tuple(f->sp[0]) each call for the same reason.
+static struct g *gzput_tuple_elem(struct g *f, uintptr_t i) {
+ struct g_tuple *v = tuple(f->sp[0]);
  if (v->type >= g_R)
-  return g_dtoa2(f, vec_get_flo(v, i));
- return gzputn(f, vec_get_int(v, i), 10); }
+  return g_dtoa2(f, tuple_get_flo(v, i));
+ return gzputn(f, tuple_get_int(v, i), 10); }
 
 // element-kind code -> a prelude symbol bound to it, so the printed `arrl` form
 // round-trips: Z prints as the `i64` alias, R as `f64`. `c` only labels the
-// 32-bit RNG state vec (never a constructible array -- arrl rejects ty > R).
+// 32-bit RNG state tuple (never a constructible array -- arrl rejects ty > R).
 static char const *const g_vt_names[] = {
  [g_Z] = "i64", [g_R] = "f64", [g_C] = "c", [g_O] = "o" };
 
 // Print a rank>=1 array (f->sp[0]) as a constructor expression that reads back to
 // the same array. A rank-1 i64/f64 array uses the terse `@(a b …)` sugar (the `@`
-// reader macro splices into `(vec a b …)`, which infers i64/f64 from its args);
+// reader macro splices into `(tuple a b …)`, which infers i64/f64 from its args);
 // anything else (rank>=2, or an object array whose elements are arbitrary, quoted
 // values) uses `(arrl <type> '(shape) '(vals))`, a bare constructor call that pins
 // the exact element type and shape. The array may move on a GC during printing, so
@@ -2206,7 +2206,7 @@ static char const *const g_vt_names[] = {
 static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off);
 
 static struct g *gzput_arr(struct g *f, uintptr_t off) {
- struct g_vec *v = vec(f->sp[0]);
+ struct g_tuple *v = tuple(f->sp[0]);
  uintptr_t rank = v->rank, type = v->type, nelem = 1;
  for (uintptr_t i = 0; i < rank; i++) nelem *= v->shape[i];
  if (rank == 1 && (type == g_Z || type == g_R)) {     // terse rank-1 numeric: @(a b …)
@@ -2214,26 +2214,26 @@ static struct g *gzput_arr(struct g *f, uintptr_t off) {
   f = gzputc(f, '@'); f = gzputc(f, '(');
   for (uintptr_t i = 0; g_ok(f) && i < nelem; i++) {
    if (i) f = gzputc(f, ' ');
-   f = gzput_vec_elem(f, i); }
+   f = gzput_tuple_elem(f, i); }
   return g_ok(f) ? gzputc(f, ')') : f; }
  f = gzprintf(f, "(arrl ");                            // explicit: (arrl type '(shape) '(vals))
  for (char const *s = g_vt_names[type]; g_ok(f) && *s; s++) f = gzputc(f, *s);
  f = gzprintf(f, " '(");
  for (uintptr_t i = 0; g_ok(f) && i < rank; i++) {
   if (i) f = gzputc(f, ' ');
-  f = gzputn(f, vec(f->sp[0])->shape[i], 10); }
+  f = gzputn(f, tuple(f->sp[0])->shape[i], 10); }
  f = gzprintf(f, ") '(");
  for (uintptr_t i = 0; g_ok(f) && i < nelem; i++) {    // object elements via the general
-  if (i) f = gzputc(f, ' ');                           // printer; numeric via gzput_vec_elem
-  f = type == g_O ? gzputx(f, vec_get_obj(vec(f->sp[0]), i), off) : gzput_vec_elem(f, i); }
+  if (i) f = gzputc(f, ' ');                           // printer; numeric via gzput_tuple_elem
+  f = type == g_O ? gzputx(f, tuple_get_obj(tuple(f->sp[0]), i), off) : gzput_tuple_elem(f, i); }
  return g_ok(f) ? gzprintf(f, "))") : f; }
 
-static g_inline struct g*gzput_vec_scalar_float(struct g*f) {
+static g_inline struct g*gzput_tuple_scalar_float(struct g*f) {
  return g_dtoa2(f, (g_flo_t) flo_get(f->sp[0])); }
 
 // complex -> (C re im); round-trips by re-evaluation (C is a bif). re/im are
 // read into C locals up front so a GC during g_dtoa2 can't strand the operand.
-static g_inline struct g*gzput_vec_scalar_complex(struct g*f) {
+static g_inline struct g*gzput_tuple_scalar_complex(struct g*f) {
  g_flo_t re = cplx_re(f->sp[0]), im = cplx_im(f->sp[0]);
  f = gzprintf(f, "(C ");
  f = g_dtoa2(f, re);
@@ -2241,14 +2241,14 @@ static g_inline struct g*gzput_vec_scalar_complex(struct g*f) {
  f = g_dtoa2(f, im);
  return gzputc(f, ')'); }
 
-static g_inline struct g*gzput_vec(struct g*f, word _, uintptr_t off) {
- intptr_t rank = vec(_)->rank, type = vec(_)->type;
+static g_inline struct g*gzput_tuple(struct g*f, word _, uintptr_t off) {
+ intptr_t rank = tuple(_)->rank, type = tuple(_)->type;
  if (!g_ok(f = g_push(f, 1, _))) return f;
- if (rank == 0 && type == g_R) f = gzput_vec_scalar_float(f);
+ if (rank == 0 && type == g_R) f = gzput_tuple_scalar_float(f);
  else if (rank == 0 && type == g_Z) f = gzputn(f, box_get(f->sp[0]), 10);
- else if (rank == 0 && type == g_C) f = gzput_vec_scalar_complex(f);
+ else if (rank == 0 && type == g_C) f = gzput_tuple_scalar_complex(f);
  else if (rank >= 1) f = gzput_arr(f, off);
- else f = gzprintf(f, ",vec@%z:%d.%d", vec(f->sp[0]), type, rank);
+ else f = gzprintf(f, ",tuple@%z:%d.%d", tuple(f->sp[0]), type, rank);
  return g_pop(f, 1); }
 
 static g_inline struct g*gzput_str(struct g*f, word _) {
@@ -2367,9 +2367,9 @@ static struct g *gzput_fn_body(struct g *f, word x, uintptr_t off);
 static word fn_src(struct g *c, union u *k, word x) {
  word s = k[-1].x;
  return ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len
-     && homp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
+     && lamp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
 
-// Print a function value. Like vec/cplx/hash it's a `,`-prefixed value form (so it
+// Print a function value. Like tuple/cplx/hash it's a `,`-prefixed value form (so it
 // reads back via uq=identity): ,(base arg…) for a partial application / closure,
 // ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
 // thread (continuation, top-level wrap) has no constructor form, so it prints as the
@@ -2408,11 +2408,11 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off) {
  // own recursion (the seen list); the data kinds below are acyclic.
  switch (typ(x)) {
    default: __builtin_trap();
-   case two_q:  return gzput_two(f, x, off);
-   case vec_q:  return gzput_vec(f, x, off);
-   case sym_q:  return gzput_sym(f, x);
-   case text_q: return gzput_str(f, x);
-   case big_q:  return gzput_big(f, x); } }
+   case K_TWO:  return gzput_two(f, x, off);
+   case K_TUPLE:  return gzput_tuple(f, x, off);
+   case K_SYM:  return gzput_sym(f, x);
+   case K_STRING: return gzput_str(f, x);
+   case K_BIG:  return gzput_big(f, x); } }
 
 // Establish a fresh seen-list slot at the bottom of the print region, print, then
 // restore the original stack height (discarding the slot and the whole list).
@@ -2577,9 +2577,9 @@ g_vm(g_vm_flo) {
  word x = Sp[0];
  double d = strtod_wrap(f, x);
  if (d != d) return Sp[0] = nil, Ip += 1, Continue();
- uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
+ uintptr_t req = b2w(sizeof(struct g_tuple) + sizeof(g_flo_t));
  Have(req);
- struct g_vec *r = ini_scalar((struct g_vec*) Hp, g_R);
+ struct g_tuple *r = ini_scalar((struct g_tuple*) Hp, g_R);
  Hp += req;
  flo_put(r->shape, (g_flo_t) d);
  Sp[0] = word(r);
@@ -2674,7 +2674,7 @@ static g_inline struct g *push_frame(struct g *f) {     // push an empty (head .
 static g_inline struct g *push_wrap(struct g *f, char const *nom) {
  return gxl(intern(g_strof(f, nom))); }        // ctx' = (wrapsym . ctx)
 // recognise the splicing reader-macro wraps -- `%` (interned `hasht`) and `@`
-// (interned `vec`) -- so a list operand splices into the constructor call
+// (interned `tuple`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in gz_parse.
 static g_inline bool symeq(word x, char const *nm, uintptr_t n) {
  struct g_str *s = symp(x) ? sym(x)->nom : 0;
@@ -2682,7 +2682,7 @@ static g_inline bool symeq(word x, char const *nm, uintptr_t n) {
  for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
  return true; }
 static g_inline bool hashsym(word x) { return symeq(x, "hasht", 5); }
-static g_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "vec", 3); }
+static g_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5); }
 
 static struct g *gz_parse(struct g *f, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
@@ -2697,7 +2697,7 @@ static struct g *gz_parse(struct g *f, bool multi) {
    case '`':  f = push_wrap(f, "qq"); continue;
    case '%':  f = push_wrap(f, "hasht"); continue;     // %(k v …)->(hasht k v …), %x->(hasht x)
    case '#':  f = push_wrap(f, "len"); continue;       // #x->(len x): wrap operand in len
-   case '@':  f = push_wrap(f, "vec"); continue;       // @(e …)->(vec e …) [array], @()->(vec)
+   case '@':  f = push_wrap(f, "tuple"); continue;       // @(e …)->(tuple e …) [array], @()->(tuple)
    case '$':  f = push_wrap(f, "gsym"); continue;      // $x->(gsym x)->(gensym 'x): a fresh gensym
    case ',':                                            // unquote / unquote-splice
     if (!g_ok(f = zgetc(f))) return f;
@@ -2799,15 +2799,15 @@ static g_inline struct g *gzread1sym(struct g*f, int c) {
       if (*e == 0) {
        if (j >= FIX_MIN && j <= FIX_MAX) return f->sp[0] = putnum(j), f;
        if (g_ok(f = g_have(f, BOX_REQ))) {
-        struct g_vec *b = ini_scalar(bump(f, BOX_REQ), g_Z);
+        struct g_tuple *b = ini_scalar(bump(f, BOX_REQ), g_Z);
         box_put(b->shape, j);
         f->sp[0] = word(b); }
        return f; }
       double d = strtod(txt(s), &e);
       if (e == txt(s) || *e != 0) return intern(f);
-      uintptr_t req = b2w(sizeof(struct g_vec) + sizeof(g_flo_t));
+      uintptr_t req = b2w(sizeof(struct g_tuple) + sizeof(g_flo_t));
       if (g_ok(f = g_have(f, req))) {
-       struct g_vec *r = ini_scalar(bump(f, req), g_R);
+       struct g_tuple *r = ini_scalar(bump(f, req), g_R);
        flo_put(r->shape, d);
        f->sp[0] = word(r); }
       return f; } }
@@ -2970,14 +2970,14 @@ g_vm(g_vm_get) {
   if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(s))
    z = putnum((unsigned char) txt(s)[n]); }
  else if (mapp(x)) z = g_mapget(f, z, k, x);     // map lookup (not a data sentinel)
- else if (homp(x) && datp(x)) switch (typ(x)) {
-  default: break;                               // sym_q is not indexable
-  case vec_q: {
+ else if (lamp(x) && datp(x)) switch (typ(x)) {
+  default: break;                               // K_SYM is not indexable
+  case K_TUPLE: {
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
    // rank-N; an empty/nil key derefs a rank-0 scalar box. Out-of-bounds or a
    // wrong-rank key falls through to the default `z`. Integer elements keep
    // integer type (EMIT_INT demotes-or-boxes); float elements box an f64.
-   struct g_vec *v = vec(x);
+   struct g_tuple *v = tuple(x);
    uintptr_t R = v->rank, off = 0; bool ok = false;
    if (R == 0) ok = nilp(k);
    else if (R == 1 && nump(k)) {
@@ -2992,20 +2992,20 @@ g_vm(g_vm_get) {
      intptr_t ix = getnum(ki);
      if (ix < 0 || ix >= (intptr_t) v->shape[a]) { ok = false; break; }
      off = off * v->shape[a] + ix, a++; } }
-   if (ok && v->type == g_O) z = vec_get_obj(v, off);   // object: the slot IS the value
-   else if (ok) { word _res; Have(BOX_REQ); v = vec(Sp[2]);
-    if (v->type >= g_R) EMIT_FLO(vec_get_flo(v, off));
-    else EMIT_INT(vec_get_int(v, off));
+   if (ok && v->type == g_O) z = tuple_get_obj(v, off);   // object: the slot IS the value
+   else if (ok) { word _res; Have(BOX_REQ); v = tuple(Sp[2]);
+    if (v->type >= g_R) EMIT_FLO(tuple_get_flo(v, off));
+    else EMIT_INT(tuple_get_int(v, off));
     z = _res; }
    break; }
-  case text_q:
+  case K_STRING:
    // Byte as its unsigned value 0..255 -- bytes are data, signedness is the
    // operator's job. txt is signed char[], so cast to avoid sign-extending a
    // high byte (e.g. 0xff -> -1) when binary data is indexed.
    if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(x))
     z = putnum((unsigned char) txt(x)[n]);
    break;
-  case two_q:
+  case K_TWO:
    if (nump(k) && (n = getnum(k)) >= 0) {
     while (n-- && twop(x = B(x)));
     if (twop(x)) z = A(x); } }
@@ -3071,17 +3071,17 @@ uintptr_t hash(struct g *f, intptr_t x) {
    return r; }
  switch (typ(x)) {
    default: __builtin_trap();
-   case two_q: return hash_two(f, x);
-   case sym_q: return sym(x)->code;
-   case vec_q: {
-    uintptr_t len = g_vec_bytes(vec(x)), h = mix;
+   case K_TWO: return hash_two(f, x);
+   case K_SYM: return sym(x)->code;
+   case K_TUPLE: {
+    uintptr_t len = g_tuple_bytes(tuple(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case big_q: {
+   case K_BIG: {
     uintptr_t len = g_big_bytes((struct g_big*) x), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case text_q: {
+   case K_STRING: {
     uintptr_t n = len(x), h = mix;
     char const *bs = txt(x);
     while (n--) h ^= (uint8_t) *bs++, h *= mix;
@@ -3145,7 +3145,7 @@ g_vm(g_vm_scat) {
 // A buf has no function meaning, so applying it behaves as 0 (yields 1, the const-1
 // identity numeral) -- like every structureless value. Its address is still the
 // kind tag: g_noicf (on every g_vm) keeps this byte-identical to g_vm_port_io so
-// bufp and iop never collide. NOT a data_vt sentinel, so the GC copies a buf via the
+// bufp and iop never collide. NOT a data sentinel, so the GC copies a buf via the
 // generic thread path and the cheney scan forwards its backing-string pointer.
 g_vm(g_vm_buf) {
  return Ip = cell(*++Sp), *Sp = putnum(1), Continue(); }
@@ -3244,7 +3244,7 @@ g_noinline struct g_atom *intern_checked(struct g *v, struct g_str *b) {
   y = i < 0 ? &z->l : &z->r; } }
 
 op11(g_vm_symp, symp(Sp[0]) ? putnum(1) : nil)
-op11(g_vm_vecp, vecp(Sp[0]) ? putnum(1) : nil)
+op11(g_vm_tuplep, tuplep(Sp[0]) ? putnum(1) : nil)
 op11(g_vm_bigp, bigp(Sp[0]) ? putnum(1) : nil)
 op11(g_vm_boxp, boxp(Sp[0]) ? putnum(1) : nil)
 op11(g_vm_arrp, arrp(Sp[0]) ? putnum(1) : nil)
@@ -3274,7 +3274,7 @@ g_vm(g_vm_cons) {
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b)) { word _res; Have(BOX_REQ); \
   g_flo_t ad = TOFLO(a), bd = TOFLO(b); \
-  struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_R); \
+  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R); \
   Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); \
   return *++Sp = _res, Ip++, Continue(); } \
  if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b), t; \
@@ -3290,7 +3290,7 @@ g_vm(g_vm_cons) {
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b) || b == nil) { word _res; Have(BOX_REQ); \
   g_flo_t ad = TOFLO(a), bd = TOFLO(b); \
-  struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_R); \
+  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R); \
   Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); \
   return *++Sp = _res, Ip++, Continue(); } \
  if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b); \
@@ -3350,7 +3350,7 @@ AVM_SLOWDIV(rem, VOP_REM, %, g_fmod(ad, bd))    // NaN on bd == 0
 
 AVM_OVF(sub, __builtin_sub_overflow)
 // g_vm_mul + its kind matrix live after the `+` text lane (they reuse add_name /
-// textrank for the symbol-repetition case), below.
+// stringrank for the symbol-repetition case), below.
 
 // `+` is overloaded: still arithmetic add, but generic over strings and lists,
 // where it is order-preserving concatenation -- a precedes b in the result, with a
@@ -3414,11 +3414,11 @@ static g_inline struct g_str *add_name(word x) {        // symbol -> name string
  if (strp(nom)) return str(nom);                        // interned: nom IS the name
  nom = word(sym(nom)->nom);                             // named-uninterned: naming sym's nom
  return nom && strp(nom) ? str(nom) : 0; }
-static g_inline int textrank(word x) {                  // STR 0 / USYM 1 / ISYM|NUM 2
+static g_inline int stringrank(word x) {                  // STR 0 / USYM 1 / ISYM|NUM 2
  if (strp(x)) return 0;
  if (symp(x)) { word n = word(sym(x)->nom); return n && strp(n) ? 2 : 1; }
  return 2; }
-static g_inline uintptr_t textlen(word x) {             // bytes x contributes to a concat
+static g_inline uintptr_t stringlen(word x) {             // bytes x contributes to a concat
  if (strp(x)) return len(x);
  if (symp(x)) { struct g_str *n = add_name(x); return n ? n->len : 0; }
  return 1; }                                            // number -> one byte
@@ -3427,11 +3427,11 @@ static g_inline char *add_emit(char *w, word x) {       // append x's bytes; ret
  if (symp(x)) { struct g_str *n = add_name(x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
  return *w = (char) seq_byte(x), w + 1; }               // number -> one byte
-static g_vm(g_vm_add_text) {
+static g_vm(g_vm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> text: undefined
- int rank = MIN(textrank(a), textrank(b));
- uintptr_t n = textlen(a) + textlen(b);
+ int rank = MIN(stringrank(a), stringrank(b));
+ uintptr_t n = stringlen(a) + stringlen(b);
  if (!n) return *++Sp = rank ? EMPTY_SYM : EMPTY_STR, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(n);
  Have(req);
@@ -3445,19 +3445,18 @@ static g_vm(g_vm_add_text) {
 static g_vm(g_vm_0) {                             // unsupported mix (array <-> text)
  return *++Sp = nil, Ip++, Continue(); }
 
-// The fundamental value kind for generic-op dispatch (enum kind in gwen.h): pure
-// arithmetic on the data-sentinel index g_typ -- a fixnum is the odd tag, a non-data
-// heap pointer is a thread (function/continuation), else g_typ recovers the data kind
-// (enum q is ordered so the six data kinds are g_typ + K_VEC). No subtype
-// classification here; that is the handler's job. Exported (not inline) so vt.c's
-// apply sentinels share it.
-enum kind g_kind(word x) {
- return nump(x) ? K_FIX : !datp(x) ? K_LAM : (enum kind) (typ(x) + K_VEC); }
+// The fundamental value kind for generic-op dispatch (enum q in gwen.h): a fixnum is
+// the odd tag (K_FIX), a non-data heap pointer is a thread/function (K_LAM), else g_typ
+// recovers the data kind directly (K_TUPLE..K_SYM -- it already folds in the +K_TUPLE
+// slot shift). No subtype classification here; that is the handler's job. Exported (not
+// inline) so data.c's apply sentinels share it.
+enum q g_kind(word x) {
+ return nump(x) ? K_FIX : !datp(x) ? K_LAM : typ(x); }
 
 // ============================================================================
 // generic-op lane handlers, then all three dispatch matrices adjacent, then the
 // `+`/`*` dispatchers. The numeric slow lanes (addn/muln…) come from the AVM_*
-// macros above; the `+` text lanes (add_seq/add_text) and g_vm_0 just above; the
+// macros above; the `+` text lanes (add_seq/add_string) and g_vm_0 just above; the
 // lambda combinators (g_vm_addl/g_vm_mull) near num-ap. Defined here: the `*`
 // repeat lane and the apply handlers -- everything the matrices reference.
 // ============================================================================
@@ -3490,7 +3489,7 @@ static g_vm(g_vm_mul_rep) {
   (w - 1)->b = nil;
   return *++Sp = word(base), Ip++, Continue(); }
  // string / symbol: repeat the byte content (a symbol's name; anonymous -> empty)
- int rank = strp(seq) ? 0 : textrank(seq);         // 0 str / 1 usym / 2 isym
+ int rank = strp(seq) ? 0 : stringrank(seq);         // 0 str / 1 usym / 2 isym
  struct g_str *src = strp(seq) ? str(seq) : add_name(seq);
  uintptr_t sl = src ? src->len : 0, total = sl * n;
  if (!total) return *++Sp = rank ? EMPTY_SYM : EMPTY_STR, Ip++, Continue();
@@ -3505,8 +3504,8 @@ static g_vm(g_vm_mul_rep) {
       : rank == 1 ? Ap(g_vm_gensym, f)             // uninterned symbol
                   : Ap(g_vm_intern, f); }          // interned symbol
 
-// --- apply lane (the data-value `(f x)` handlers; moved here from vt.c) -----
-// When a data value is applied, its sentinel (vt.c, pinned in the gwen_data_vt
+// --- apply lane (the data-value `(f x)` handlers; moved here from data.c) -----
+// When a data value is applied, its sentinel (data.c, pinned in the gwen_data
 // section) tail-jumps through g_apply_mx[g_typ(Ip)][g_kind(Sp[0])] -- the static
 // kind of the applied value and the dynamic kind of the argument. Every data kind
 // has a meaningful apply (pair = eliminator, string/symbol = byte index, numeric
@@ -3517,7 +3516,7 @@ static g_vm(g_vm_mul_rep) {
 // (s k): applying a string indexes it -- k a byte offset, result the unsigned byte
 // 0..255 there, 1 if k is non-numeric or out of range (matches "" == 0: a numeric
 // ("" k) is the Church numeral k**0 == 1). No alloc, unwinds like self-quote.
-static g_vm(data_text_apply) {
+static g_vm(data_string_apply) {
  word k = Sp[0], v = putnum(1), n;
  if (oddp(k) && (n = getnum(k)) >= 0 && n < (word) len(Ip))
   v = putnum((unsigned char) txt(Ip)[n]);
@@ -3531,13 +3530,13 @@ static g_vm(data_sym_apply) {
  word nom = word(((struct g_atom*) Ip)->nom);
  if (nom && cell(nom)->ap == g_vm_sym)              // named-uninterned: follow to the naming symbol
   nom = word(((struct g_atom*) nom)->nom);
- if (nom && cell(nom)->ap == g_vm_text)             // interned/named: index the underlying name string
-  return Ip = cell(nom), Ap(data_text_apply, f);
+ if (nom && cell(nom)->ap == g_vm_str)             // interned/named: index the underlying name string
+  return Ip = cell(nom), Ap(data_string_apply, f);
  return Ip = cell(*++Sp), *Sp = putnum(1), Continue(); }  // anonymous: no name -> act like 0
 
 // (n x): applying a number is Church-numeral application, like a fixnum (cf.
 // g_vm_numap). Fixnums reach num-ap via the odd-tag check in g_vm_ap; the rest of the
-// tower (floats, boxes, complex, arrays -- all g_vm_vec -- and bignums) are heap
+// tower (floats, boxes, complex, arrays -- all g_vm_tuple -- and bignums) are heap
 // pointers, so they arrive at their data sentinel. We lay the same [n, num-ap, x, ret]
 // frame and run numap_drive, handing the boxed operator n to the gwen num-ap handler,
 // which picks exponentiate / compose / self by operand+operator kind.
@@ -3567,45 +3566,45 @@ static g_vm(data_pair_apply) {
 // All indexed by g_kind (g_apply_mx's row by g_typ, the data-kind subrange). Lanes:
 //   *n   = numeric tower & arrays (arithmetic / broadcast)
 //   add_seq = a list anywhere (other operand a scalar element / spine)
-//   add_text = strings & symbols name-compatibly (+ a number as one byte; demotes
+//   add_string = strings & symbols name-compatibly (+ a number as one byte; demotes
 //              isym>usym>str and nils an array operand internally)
 //   mul_rep  = sequence * scalar-count -> repetition
 //   *l   = a LAMBDA operand (precedence: the K_LAM row+col) -- Church add / compose
 //   g_vm_0 = undefined (-> nil): function<->text, sequence*sequence
-// K_VEC covers boxes/complex (numbers) AND arrays; the lane handler refines. Maps
+// K_TUPLE covers boxes/complex (numbers) AND arrays; the lane handler refines. Maps
 // are lambdas (K_LAM) -- the *l lanes -- so they have no row/col of their own.
 
 // `+`: numbers add, lists/text concat, lambdas Church-add. K_LAM row+col all addl.
 static g_vm_t *const g_add_mx[K_N][K_N] = {
-//            FIX            VEC            BIG            TWO            TEXT           SYM            LAM
- [K_FIX]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
- [K_VEC]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
- [K_BIG]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
+//            FIX            TUPLE          BIG            TWO            STRING         SYM            LAM
+ [K_FIX]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
+ [K_TUPLE]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
+ [K_BIG]  = { g_vm_addn,     g_vm_addn,     g_vm_addn,     g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
  [K_TWO]  = { g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_add_seq,  g_vm_addl },
- [K_TEXT] = { g_vm_add_text, g_vm_add_text, g_vm_add_text, g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
- [K_SYM]  = { g_vm_add_text, g_vm_add_text, g_vm_add_text, g_vm_add_seq,  g_vm_add_text, g_vm_add_text, g_vm_addl },
+ [K_STRING] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
+ [K_SYM]  = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq,  g_vm_add_string, g_vm_add_string, g_vm_addl },
  [K_LAM]  = { g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl,     g_vm_addl },
 };
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas compose (Church mul). seq*seq -> nil.
 static g_vm_t *const g_mul_mx[K_N][K_N] = {
-//            FIX            VEC            BIG            TWO            TEXT           SYM            LAM
+//            FIX            TUPLE          BIG            TWO            STRING         SYM            LAM
  [K_FIX]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
- [K_VEC]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
+ [K_TUPLE]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
  [K_BIG]  = { g_vm_muln,     g_vm_muln,     g_vm_muln,     g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mull },
  [K_TWO]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
- [K_TEXT] = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
+ [K_STRING] = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
  [K_SYM]  = { g_vm_mul_rep,  g_vm_mul_rep,  g_vm_mul_rep,  g_vm_0,        g_vm_0,        g_vm_0,        g_vm_mull },
  [K_LAM]  = { g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull,     g_vm_mull },
 };
 // apply: [applied data kind = g_typ(Ip)][argument kind = g_kind(arg)]. Every row is
 // arg-kind-uniform today (AROW fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
-#define AROW(h) { [K_FIX]=h,[K_LAM]=h,[K_TWO]=h,[K_VEC]=h,[K_SYM]=h,[K_TEXT]=h,[K_BIG]=h }
-g_vm_t *g_apply_mx[G_DATA_VT_N][K_N] = {
- [two_q]  = AROW(data_pair_apply), [vec_q]  = AROW(data_num_apply),
- [sym_q]  = AROW(data_sym_apply),
- [text_q] = AROW(data_text_apply), [big_q]  = AROW(data_num_apply), };
+#define AROW(h) { [K_FIX]=h,[K_LAM]=h,[K_TWO]=h,[K_TUPLE]=h,[K_SYM]=h,[K_STRING]=h,[K_BIG]=h }
+g_vm_t *g_apply_mx[K_N][K_N] = {
+ [K_TWO]  = AROW(data_pair_apply), [K_TUPLE]  = AROW(data_num_apply),
+ [K_SYM]  = AROW(data_sym_apply),
+ [K_STRING] = AROW(data_string_apply), [K_BIG]  = AROW(data_num_apply), };
 #undef AROW
 
 // === the `+`/`*` dispatchers (fixnum fast path, then the matrix) ============
@@ -3682,7 +3681,7 @@ g_vm(g_vm_bsl) { word a = Sp[0], b = Sp[1], _res;
  return *++Sp = _res, Ip++, Continue(); }
 
 op(g_vm_nump, 1, oddp(Sp[0]) ? putnum(1) : nil)
-// `nilp`/`not`: the language falsy predicate (nil/0 OR an all-zero vec --
+// `nilp`/`not`: the language falsy predicate (nil/0 OR an all-zero tuple --
 // boxed 0.0, zero int box, all-zero array). Use `(= x 0)` for a literal
 // scalar-zero test; `(aall (= x 0))` over an array.
 op11(g_vm_nilp, g_false(Sp[0]) ? putnum(1) : nil)
@@ -3694,9 +3693,9 @@ static g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
  if (arrp(a)) return Ap(g_vm_vmap1, f, fn);   // (sin arr) etc. -> float array
  if (!ISNUM(a)) return Sp[0] = nil, Ip++, Continue();
  g_flo_t ad = TOFLO(a), rd = fn(ad);
- uintptr_t req = Width(struct g_vec) + Width(g_flo_t);
+ uintptr_t req = Width(struct g_tuple) + Width(g_flo_t);
  Have(req);
- struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_R);
+ struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R);
  Hp += req;
  flo_put(v->shape, rd);
  return Sp[0] = word(v), Ip++, Continue(); }
@@ -3707,9 +3706,9 @@ static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  if (!ISNUM(a) || !ISNUM(b)) return
   *++Sp = nil, Ip++, Continue();
  g_flo_t ad = TOFLO(a), bd = TOFLO(b), rd = fn(ad, bd);
- uintptr_t req = Width(struct g_vec) + Width(g_flo_t);
+ uintptr_t req = Width(struct g_tuple) + Width(g_flo_t);
  Have(req);
- struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_R);
+ struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R);
  Hp += req;
  flo_put(v->shape, rd);
  return *++Sp = word(v), Ip++, Continue(); }
@@ -3724,7 +3723,7 @@ m1(mvm1) m2(mvm2)
 op11(g_vm_flop, flop(Sp[0]) ? putnum(1) : nil)
 
 // ============================================================================
-// vec
+// tuple
 // ============================================================================
 size_t const g_T[] = {
  [g_Z] = Bytes,
@@ -3732,21 +3731,21 @@ size_t const g_T[] = {
  [g_C] = 2 * Bytes,      // complex scalar: (re, im)
  [g_O] = Bytes, };       // object: one tagged gwen word per element
 
-uintptr_t g_vec_bytes(struct g_vec *v) {
+uintptr_t g_tuple_bytes(struct g_tuple *v) {
  uintptr_t len = g_T[v->type],
            rank = v->rank,
            *shape = v->shape;
  while (rank--) len *= *shape++;
- return sizeof(struct g_vec) + v->rank * sizeof(word) + len; }
+ return sizeof(struct g_tuple) + v->rank * sizeof(word) + len; }
 
 // ============================================================================
 // rng
 // ============================================================================
 // Step 8 -- random numbers. xoshiro256++ (Blackman & Vigna, public domain)
-// seeded by SplitMix64. State is a rank-1 i64 vec of length 4 (256 bits) that
-// rides the existing vec machinery -- no data sentinel, no enum q / G_DATA_VT_N
-// / gen_data_vt / wasm-vt changes (cf. complex, Step 7). The payload is treated
-// as raw bytes (memcpy), never via the typed vec_get/put accessors, so the
+// seeded by SplitMix64. State is a rank-1 i64 tuple of length 4 (256 bits) that
+// rides the existing tuple machinery -- no data sentinel, no enum q / G_DATA_N
+// / gen_data / wasm-vt changes (cf. complex, Step 7). The payload is treated
+// as raw bytes (memcpy), never via the typed tuple_get/put accessors, so the
 // 64-bit limbs survive on 32-bit ports and a given seed reproduces the same
 // sequence on host/kernel/MCU/WASM/Playdate. Two stream flavors share the one
 // representation: a global stream in f->rng (mutated in place by rand/randf) and
@@ -3760,7 +3759,7 @@ static g_inline uint64_t rotl64(uint64_t x, int k) {
 // All the uint64_t scratch (s[4]) lives in these g_noinline helpers that move it
 // via memcpy: taking &s in a VM handler would defeat the Continue() sibcall (see
 // the flo_get note in i.h), and memcpy is alignment-safe (a 32-bit port's
-// vec_data is only 4-byte aligned, so a raw uint64_t* deref could fault).
+// tuple_data is only 4-byte aligned, so a raw uint64_t* deref could fault).
 
 // Advance the 4-word state stored at `payload` and return one 64-bit draw.
 static g_noinline uint64_t rng_step(void *payload) {
@@ -3795,52 +3794,52 @@ static g_inline g_flo_t u64_to_unit(uint64_t u) {
 #endif
 }
 
-// Shape v as an i64 state vec (rank 1, len 4) and seed it. Exposed for the eager
-// seed in g_ini_0. ini_vec + a pointer write only, so an inlining caller keeps
+// Shape v as an i64 state tuple (rank 1, len 4) and seed it. Exposed for the eager
+// seed in g_ini_0. ini_tuple + a pointer write only, so an inlining caller keeps
 // its tail call; the &s scratch stays inside rng_seed_into.
-void g_rng_seed(struct g_vec *v, uint64_t seed) {
- ini_vec(v, RNG_VT, 1);
+void g_rng_seed(struct g_tuple *v, uint64_t seed) {
+ ini_tuple(v, RNG_VT, 1);
  v->shape[0] = RNG_STATE_LEN;
- rng_seed_into(vec_data(v), seed); }
+ rng_seed_into(tuple_data(v), seed); }
 
-// Is x a well-formed state vec (rank-1 i64, length 4)?
+// Is x a well-formed state tuple (rank-1 i64, length 4)?
 static g_inline bool rng_state_p(word x) {
- return vecp(x) && vec(x)->rank == 1 && vec(x)->type == RNG_VT
-        && vec(x)->shape[0] == RNG_STATE_LEN; }
+ return tuplep(x) && tuple(x)->rank == 1 && tuple(x)->type == RNG_VT
+        && tuple(x)->shape[0] == RNG_STATE_LEN; }
 
-// Build a fresh state vec at Hp, copying the 4 limbs of `src` into it. Caller
+// Build a fresh state tuple at Hp, copying the 4 limbs of `src` into it. Caller
 // holds Have(RNG_VEC_REQ). Both pointers are heap pointers -> no &local escape.
-static g_inline struct g_vec *rng_copy(g_word **hp, struct g_vec *src) {
- struct g_vec *v = (struct g_vec*) *hp;
+static g_inline struct g_tuple *rng_copy(g_word **hp, struct g_tuple *src) {
+ struct g_tuple *v = (struct g_tuple*) *hp;
  *hp += RNG_VEC_REQ;
- ini_vec(v, RNG_VT, 1);
+ ini_tuple(v, RNG_VT, 1);
  v->shape[0] = RNG_STATE_LEN;
- memcpy(vec_data(v), vec_data(src), RNG_PAYLOAD_BYTES);
+ memcpy(tuple_data(v), tuple_data(src), RNG_PAYLOAD_BYTES);
  return v; }
 
-// (rng-seed n): a fresh state vec deterministically seeded from fixnum n. A
+// (rng-seed n): a fresh state tuple deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
 g_vm(g_vm_rng_seed) {
  word n = Sp[0];
  uint64_t seed = nump(n) ? (uint64_t) (intptr_t) getnum(n) : 0;
  Have(RNG_VEC_REQ);
- struct g_vec *v = (struct g_vec*) Hp; Hp += RNG_VEC_REQ;
+ struct g_tuple *v = (struct g_tuple*) Hp; Hp += RNG_VEC_REQ;
  g_rng_seed(v, seed);
  return Sp[0] = word(v), Ip++, Continue(); }
 
-// (rng-get _): a snapshot copy of the global state vec (never aliases it).
+// (rng-get _): a snapshot copy of the global state tuple (never aliases it).
 g_vm(g_vm_rng_get) {
  Have(RNG_VEC_REQ);
- struct g_vec *src = vec(f->rng);            // re-read post-Have (GC may move it)
- struct g_vec *v = rng_copy(&Hp, src);
+ struct g_tuple *src = tuple(f->rng);            // re-read post-Have (GC may move it)
+ struct g_tuple *v = rng_copy(&Hp, src);
  return Sp[0] = word(v), Ip++, Continue(); }
 
 // (rng-set v): install v's 4 limbs into the global state (copies, never aliases),
-// returning v; nil if v isn't a valid state vec.
+// returning v; nil if v isn't a valid state tuple.
 g_vm(g_vm_rng_set) {
  word v = Sp[0];
  if (!rng_state_p(v)) return Sp[0] = nil, Ip++, Continue();
- memcpy(vec_data(vec(f->rng)), vec_data(vec(v)), RNG_PAYLOAD_BYTES);
+ memcpy(tuple_data(tuple(f->rng)), tuple_data(tuple(v)), RNG_PAYLOAD_BYTES);
  return Ip++, Continue(); }            // Sp[0] (== v) is the result
 
 // (rand n): global draw, fixnum in [0,n); n <= 0 (incl. nil) -> a full-width
@@ -3848,7 +3847,7 @@ g_vm(g_vm_rng_set) {
 // and no GC concern from mutating f->rng in place.
 g_vm(g_vm_rand) {
  word n = Sp[0];
- uint64_t r = rng_step(vec_data(vec(f->rng)));
+ uint64_t r = rng_step(tuple_data(tuple(f->rng)));
  intptr_t out = nump(n) && getnum(n) > 0
    ? (intptr_t) (r % (uint64_t) getnum(n))
    : (intptr_t) (r & (uint64_t) FIX_MAX);
@@ -3859,7 +3858,7 @@ g_vm(g_vm_rand) {
 g_vm(g_vm_randf) {
  word _res;
  Have(BOX_REQ);
- uint64_t r = rng_step(vec_data(vec(f->rng)));
+ uint64_t r = rng_step(tuple_data(tuple(f->rng)));
  g_flo_t u = u64_to_unit(r);
  EMIT_FLO(u);
  return Sp[0] = _res, Ip++, Continue(); }
@@ -3872,8 +3871,8 @@ g_vm(g_vm_rand_next) {
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
  Have(RNG_VEC_REQ + Width(struct g_pair));
  st = Sp[0];                                 // re-read post-Have
- struct g_vec *v = rng_copy(&Hp, vec(st));
- uint64_t r = rng_step(vec_data(v));
+ struct g_tuple *v = rng_copy(&Hp, tuple(st));
+ uint64_t r = rng_step(tuple_data(v));
  struct g_pair *p = (struct g_pair*) Hp; Hp += Width(struct g_pair);
  ini_two(p, putnum((intptr_t) (r & (uint64_t) FIX_MAX)), word(v));
  return Sp[0] = word(p), Ip++, Continue(); }
@@ -3884,8 +3883,8 @@ g_vm(g_vm_randf_next) {
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
  Have(RNG_VEC_REQ + BOX_REQ + Width(struct g_pair));
  st = Sp[0];                                 // re-read post-Have
- struct g_vec *v = rng_copy(&Hp, vec(st));
- uint64_t r = rng_step(vec_data(v));
+ struct g_tuple *v = rng_copy(&Hp, tuple(st));
+ uint64_t r = rng_step(tuple_data(v));
  g_flo_t u = u64_to_unit(r);
  EMIT_FLO(u);                                // box at Hp, into _res
  struct g_pair *p = (struct g_pair*) Hp; Hp += Width(struct g_pair);
@@ -3902,21 +3901,21 @@ g_noinline bool eqv(struct g *f, word a, word b) {
    if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return false;
    switch (typ(a)) {
     default: return false;
-    case two_q:
+    case K_TWO:
      if (top - w < 2) __builtin_trap();     // worklist overflow: a cycle
      *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
      continue;
-    case vec_q: {
-     size_t la = g_vec_bytes(vec(a)), lb = g_vec_bytes(vec(b));
-     if (la != lb || memcmp(vec(a), vec(b), la)) return false;
+    case K_TUPLE: {
+     size_t la = g_tuple_bytes(tuple(a)), lb = g_tuple_bytes(tuple(b));
+     if (la != lb || memcmp(tuple(a), tuple(b), la)) return false;
      break; }
-    case big_q: {
+    case K_BIG: {
      struct g_big *x = (struct g_big*) a, *y = (struct g_big*) b;
      if (x->slen != y->slen) return false;
      size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(uint32_t);
      if (memcmp(x->limb, y->limb, nb)) return false;
      break; }
-    case text_q:
+    case K_STRING:
      if (len(a) != len(b) || memcmp(txt(a), txt(b), len(a))) return false;
      break; } }
   if (w == base) return true;              // worklist drained: all equal
@@ -3925,7 +3924,7 @@ g_noinline bool eqv(struct g *f, word a, word b) {
 // (= a b) — value-equality with numeric promotion across the numeric tower
 // (fixnum / boxed float / boxed wide int). With a float operand we compare as
 // doubles (a box widens via box_get); otherwise eql handles it — two equal
-// wide-int boxes match through eqv's vec arm (g_vec_bytes covers the type +
+// wide-int boxes match through eqv's tuple arm (g_tuple_bytes covers the type +
 // payload), while a box and a fixnum never collide since boxes hold only
 // out-of-fixnum-range values. Falls through to eql for non-numeric operands so
 // symbol/pair/string identity is unchanged. Strictly looser than eqv, which
@@ -3949,7 +3948,7 @@ g_vm(g_vm_eq) {
  // A float operand compares as doubles across the whole numeric tower (fixnum /
  // float box / wide-int box / bignum all widen via TOFLO; a bignum loses
  // precision past 2^53, the documented float caveat). Otherwise eql: two equal
- // bignums match through eqv's big_q arm, and canonical demotion keeps a bignum
+ // bignums match through eqv's K_BIG arm, and canonical demotion keeps a bignum
  // distinct from any fixnum/box of a different value.
  if (flop(a) || flop(b)) r = ISNUM(a) && ISNUM(b) && (TOFLO(a) == TOFLO(b));
  else r = eql(f, a, b);
@@ -3967,7 +3966,7 @@ g_vm(g_vm_same) {
 // big
 // ============================================================================
 // Step 6 -- arbitrary-precision integers (bignums). Closes the numeric tower
-// fixnum -> wide-int box -> bignum. The representation is the big_q data
+// fixnum -> wide-int box -> bignum. The representation is the K_BIG data
 // sentinel `struct g_big` (i.h): sign-magnitude, 32-bit base-2^32 limbs,
 // little-endian, top limb nonzero, slen the signed limb count. Zero is never a
 // bignum (it demotes to nil), so every bignum has |slen| >= 1 limbs.
@@ -4168,7 +4167,7 @@ word g_big_canon(g_word **hp, uint32_t const *limb, int n, bool neg) {
    if (u <= fixmag) return putnum((intptr_t) ((uintptr_t) 0 - u));   // incl FIX_MIN
    if (u > boxmag) goto big;                                          // < INTPTR_MIN -> bignum
    val = (intptr_t) ((uintptr_t) 0 - u); }                            // incl INTPTR_MIN
-  struct g_vec *bx = ini_scalar((struct g_vec*) *hp, g_Z);
+  struct g_tuple *bx = ini_scalar((struct g_tuple*) *hp, g_Z);
   *hp += BOX_REQ; box_put(bx->shape, val); return word(bx); }
 big:
  struct g_big *b = ini_big((struct g_big*) *hp, neg ? -n : n);
@@ -4304,15 +4303,15 @@ g_vm(g_vm_arr) {
   if (!nump(d) || getnum(d) < 0) return *++Sp = nil, Ip++, Continue();
   rank++, nelem *= (uintptr_t) getnum(d); }
  if (rank > G_VEC_MAXRANK || (ty == g_O && rank == 0)) return *++Sp = nil, Ip++, Continue();
- uintptr_t bytes = sizeof(struct g_vec) + rank * sizeof(word) + nelem * g_T[ty];
+ uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + nelem * g_T[ty];
  Have(b2w(bytes));
- struct g_vec *v = (struct g_vec*) Hp;
+ struct g_tuple *v = (struct g_tuple*) Hp;
  Hp += b2w(bytes);
- ini_vec(v, ty, rank);
+ ini_tuple(v, ty, rank);
  uintptr_t i = 0;                              // re-walk the (possibly moved) list
  for (word l = Sp[1]; twop(l); l = B(l)) v->shape[i++] = (uintptr_t) getnum(A(l));
- if (ty == g_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, nil);   // object zero = nil, NOT raw 0
- else memset(vec_data(v), 0, nelem * g_T[ty]);
+ if (ty == g_O) for (i = 0; i < nelem; i++) tuple_put_obj(v, i, nil);   // object zero = nil, NOT raw 0
+ else memset(tuple_data(v), 0, nelem * g_T[ty]);
  return *++Sp = word(v), Ip++, Continue(); }
 
 // (arrl type shape-list vals-list): like arr, but fills row-major from
@@ -4329,45 +4328,45 @@ g_vm(g_vm_arrl) {
   if (!nump(d) || getnum(d) < 0) return Sp[2] = nil, Sp += 2, Ip++, Continue();
   rank++, nelem *= (uintptr_t) getnum(d); }
  if (rank > G_VEC_MAXRANK || (ty == g_O && rank == 0)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
- uintptr_t bytes = sizeof(struct g_vec) + rank * sizeof(word) + nelem * g_T[ty];
+ uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + nelem * g_T[ty];
  Have(b2w(bytes));
- struct g_vec *v = (struct g_vec*) Hp;
+ struct g_tuple *v = (struct g_tuple*) Hp;
  Hp += b2w(bytes);
- ini_vec(v, ty, rank);
+ ini_tuple(v, ty, rank);
  uintptr_t i = 0;                              // re-walk the (possibly moved) lists
  for (word l = Sp[1]; twop(l); l = B(l)) v->shape[i++] = (uintptr_t) getnum(A(l));
- if (ty == g_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, nil);
- else memset(vec_data(v), 0, nelem * g_T[ty]);
+ if (ty == g_O) for (i = 0; i < nelem; i++) tuple_put_obj(v, i, nil);
+ else memset(tuple_data(v), 0, nelem * g_T[ty]);
  i = 0;                                        // no alloc below, so v/Sp[2] stay put
  for (word l = Sp[2]; twop(l) && i < nelem; l = B(l), i++) {
   word e = A(l);
-  if (ty == g_O) { vec_put_obj(v, i, e); continue; }   // store any value verbatim
+  if (ty == g_O) { tuple_put_obj(v, i, e); continue; }   // store any value verbatim
   if (!ISNUM(e)) continue;
-  if (ty >= g_R) vec_put_flo(v, i, TOFLO(e));
-  else vec_put_int(v, i, nump(e) ? (intptr_t) getnum(e)
+  if (ty >= g_R) tuple_put_flo(v, i, TOFLO(e));
+  else tuple_put_int(v, i, nump(e) ? (intptr_t) getnum(e)
                        : flop(e) ? (intptr_t) flo_get(e) : box_get(e)); }
  return Sp[2] = word(v), Sp += 2, Ip++, Continue(); }
 
 // --- accessors -------------------------------------------------------------
-// rank / element-type code as fixnums; nil for a non-vec. Both 0 for a scalar box.
-op11(g_vm_arank, vecp(Sp[0]) ? putnum(vec(Sp[0])->rank) : nil)
-op11(g_vm_atype, vecp(Sp[0]) ? putnum(vec(Sp[0])->type) : nil)
+// rank / element-type code as fixnums; nil for a non-tuple. Both 0 for a scalar box.
+op11(g_vm_arank, tuplep(Sp[0]) ? putnum(tuple(Sp[0])->rank) : nil)
+op11(g_vm_atype, tuplep(Sp[0]) ? putnum(tuple(Sp[0])->type) : nil)
 
-// total element count (1 for a scalar box), nil for a non-vec.
+// total element count (1 for a scalar box), nil for a non-tuple.
 g_vm(g_vm_alen) {
  word x = Sp[0];
- if (!vecp(x)) return Sp[0] = nil, Ip++, Continue();
+ if (!tuplep(x)) return Sp[0] = nil, Ip++, Continue();
  uintptr_t n = 1;
- for (uintptr_t i = 0; i < vec(x)->rank; i++) n *= vec(x)->shape[i];
+ for (uintptr_t i = 0; i < tuple(x)->rank; i++) n *= tuple(x)->shape[i];
  return Sp[0] = putnum(n), Ip++, Continue(); }
 
-// dimensions as a list (allocates rank cons cells), nil for a non-vec.
+// dimensions as a list (allocates rank cons cells), nil for a non-tuple.
 g_vm(g_vm_ashape) {
  word x = Sp[0];
- if (!vecp(x)) return Sp[0] = nil, Ip++, Continue();
- uintptr_t r = vec(x)->rank;
+ if (!tuplep(x)) return Sp[0] = nil, Ip++, Continue();
+ uintptr_t r = tuple(x)->rank;
  Have(r * Width(struct g_pair));
- struct g_vec *v = vec(Sp[0]);                 // re-read post-Have
+ struct g_tuple *v = tuple(Sp[0]);                 // re-read post-Have
  struct g_pair *p = (struct g_pair*) Hp;
  Hp += r * Width(struct g_pair);
  word list = nil;
@@ -4379,7 +4378,7 @@ g_vm(g_vm_ashape) {
 // True iff every element compares numerically == 0 (so -0.0 counts as zero, and
 // an empty array is vacuously all-zero). Drives g_false (i.h) -> g_vm_cond and
 // the `nilp`/`not` bif.
-bool g_all_zero(struct g_vec *v) {
+bool g_all_zero(struct g_tuple *v) {
  // A complex scalar is falsy iff both components are 0 (so (cplx 0 0) and 0.0
  // agree). Read both parts -- the generic float-domain scan below would see only
  // the real part (cplx sorts past f64, so `>= g_R` treats it as float).
@@ -4387,11 +4386,11 @@ bool g_all_zero(struct g_vec *v) {
  uintptr_t n = 1;
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (v->type == g_O) {                          // object array: falsy iff every element is falsy
-  for (uintptr_t i = 0; i < n; i++) if (!g_false(vec_get_obj(v, i))) return false;
+  for (uintptr_t i = 0; i < n; i++) if (!g_false(tuple_get_obj(v, i))) return false;
   return true; }
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
-  if (fdom ? vec_get_flo(v, i) != 0 : vec_get_int(v, i) != 0) return false;
+  if (fdom ? tuple_get_flo(v, i) != 0 : tuple_get_int(v, i) != 0) return false;
  return true; }
 
 // g_O reductions (sum/prod/max/min) fold through the promoting scalar op, so an
@@ -4404,44 +4403,44 @@ static struct g *ored(struct g *f, int kind);   // kind: 0 sum, 1 prod, 2 max, 3
 // same expression works whether a/b are scalars or arrays.
 g_vm(g_vm_asum) {
  word x = Sp[0];
- if (!vecp(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
- if (vec(x)->type == g_O) {
+ if (!tuplep(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
+ if (tuple(x)->type == g_O) {
   Pack(f); f = ored(f, 0);
   if (!g_ok(f)) return gtrap(f);
   return Unpack(f), Continue(); }
- struct g_vec *v = vec(x);
+ struct g_tuple *v = tuple(x);
  uintptr_t n = 1;
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  bool fdom = v->type >= g_R; word _res;
  Have(BOX_REQ);
- v = vec(Sp[0]);
+ v = tuple(Sp[0]);
  if (fdom) {
   g_flo_t a = 0;
-  for (uintptr_t i = 0; i < n; i++) a += vec_get_flo(v, i);
+  for (uintptr_t i = 0; i < n; i++) a += tuple_get_flo(v, i);
   EMIT_FLO(a); }
  else {
   intptr_t a = 0;
-  for (uintptr_t i = 0; i < n; i++) a = (intptr_t) ((uintptr_t) a + (uintptr_t) vec_get_int(v, i));
+  for (uintptr_t i = 0; i < n; i++) a = (intptr_t) ((uintptr_t) a + (uintptr_t) tuple_get_int(v, i));
   EMIT_INT(a); }
  return Sp[0] = _res, Ip++, Continue(); }
 
 g_vm(g_vm_aprod) {
  word x = Sp[0];
- if (!vecp(x)) return Ip++, Continue();
- if (vec(x)->type == g_O) {
+ if (!tuplep(x)) return Ip++, Continue();
+ if (tuple(x)->type == g_O) {
   Pack(f); f = ored(f, 1);
   if (!g_ok(f)) return gtrap(f);
   return Unpack(f), Continue(); }
- struct g_vec *v = vec(x);
+ struct g_tuple *v = tuple(x);
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  bool fdom = v->type >= g_R; word _res;
- Have(BOX_REQ); v = vec(Sp[0]);
+ Have(BOX_REQ); v = tuple(Sp[0]);
  if (fdom) {
   g_flo_t a = 1;
-  for (uintptr_t i = 0; i < n; i++) a *= vec_get_flo(v, i);
+  for (uintptr_t i = 0; i < n; i++) a *= tuple_get_flo(v, i);
   EMIT_FLO(a); }
  else { intptr_t a = 1;
-  for (uintptr_t i = 0; i < n; i++) a = (intptr_t)((uintptr_t) a * (uintptr_t) vec_get_int(v, i));
+  for (uintptr_t i = 0; i < n; i++) a = (intptr_t)((uintptr_t) a * (uintptr_t) tuple_get_int(v, i));
   EMIT_INT(a); }
  return Sp[0] = _res, Ip++, Continue(); }
 
@@ -4455,31 +4454,31 @@ RED_EXTREME(g_vm_amin, <, 3)
 // disjunction. Empty array: aall true (vacuous), aany false.
 g_vm(g_vm_aall) {
  word x = Sp[0];
- if (!vecp(x)) return Ip++, Continue();
- struct g_vec *v = vec(x);
+ if (!tuplep(x)) return Ip++, Continue();
+ struct g_tuple *v = tuple(x);
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (v->type == g_O) {                         // object: a falsy element fails the conjunction
   for (uintptr_t i = 0; i < n; i++)
-   if (g_false(vec_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
+   if (g_false(tuple_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
   return Sp[0] = putnum(1), Ip++, Continue(); }
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
-  if (fdom ? vec_get_flo(v, i) == 0 : vec_get_int(v, i) == 0)
+  if (fdom ? tuple_get_flo(v, i) == 0 : tuple_get_int(v, i) == 0)
    return Sp[0] = nil, Ip++, Continue();
  return Sp[0] = putnum(1), Ip++, Continue(); }
 
 g_vm(g_vm_aany) {
  word x = Sp[0];
- if (!vecp(x)) return Ip++, Continue();
- struct g_vec *v = vec(x);
+ if (!tuplep(x)) return Ip++, Continue();
+ struct g_tuple *v = tuple(x);
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (v->type == g_O) {                         // object: a truthy element satisfies the disjunction
   for (uintptr_t i = 0; i < n; i++)
-   if (!g_false(vec_get_obj(v, i))) return Sp[0] = putnum(1), Ip++, Continue();
+   if (!g_false(tuple_get_obj(v, i))) return Sp[0] = putnum(1), Ip++, Continue();
   return Sp[0] = nil, Ip++, Continue(); }
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
-  if (fdom ? vec_get_flo(v, i) != 0 : vec_get_int(v, i) != 0)
+  if (fdom ? tuple_get_flo(v, i) != 0 : tuple_get_int(v, i) != 0)
    return Sp[0] = putnum(1), Ip++, Continue();
  return Sp[0] = nil, Ip++, Continue(); }
 
@@ -4487,21 +4486,21 @@ g_vm(g_vm_aany) {
 // Reached from g_vm_math1 when its operand arrp. Result is a float array
 // (g_R) with the operand's shape. The fill loop takes no &local, so the
 // g_vm wrapper keeps its trailing tail call.
-static g_noinline void vmap1_fill(struct g_vec *r, struct g_vec *a, g_flo_t (*fn)(g_flo_t)) {
+static g_noinline void vmap1_fill(struct g_tuple *r, struct g_tuple *a, g_flo_t (*fn)(g_flo_t)) {
  uintptr_t i, n = 1;
  for (i = 0; i < r->rank; i++) n *= r->shape[i];
- for (i = 0; i < n; i++) vec_put_flo(r, i, fn(vec_get_flo(a, i))); }
+ for (i = 0; i < n; i++) tuple_put_flo(r, i, fn(tuple_get_flo(a, i))); }
 
 g_vm(g_vm_vmap1, g_flo_t (*fn)(g_flo_t)) {
- struct g_vec *a = vec(Sp[0]);
+ struct g_tuple *a = tuple(Sp[0]);
  uintptr_t rank = a->rank, n = 1;
  for (uintptr_t i = 0; i < rank; i++) n *= a->shape[i];
- uintptr_t bytes = sizeof(struct g_vec) + rank * sizeof(word) + n * g_T[g_R];
+ uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + n * g_T[g_R];
  Have(b2w(bytes));
- a = vec(Sp[0]);                               // re-read post-Have
- struct g_vec *r = (struct g_vec*) Hp;
+ a = tuple(Sp[0]);                               // re-read post-Have
+ struct g_tuple *r = (struct g_tuple*) Hp;
  Hp += b2w(bytes);
- ini_vec(r, g_R, rank);
+ ini_tuple(r, g_R, rank);
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = a->shape[i];
  vmap1_fill(r, a, fn);
  return Sp[0] = word(r), Ip++, Continue(); }
@@ -4545,11 +4544,11 @@ static intptr_t vcmp_sign(int op, int s) {
 // Fill the (already-shaped) result r with a `op` b, broadcasting. All the
 // &-taking stack arrays (strides, odometer) live here so the g_vm wrapper stays
 // TCO-clean. No allocation inside, so operand pointers can't move under us.
-static g_noinline void vbin_fill(struct g_vec *r, word a, word b, int op, bool fdom) {
+static g_noinline void vbin_fill(struct g_tuple *r, word a, word b, int op, bool fdom) {
  uintptr_t R = r->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
- struct g_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
+ struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
  // ca[j]/cb[j]: the operand flat-offset contribution of result axis j (0 when
  // that axis is absent in the operand or is a size-1 broadcast axis).
  intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
@@ -4577,15 +4576,15 @@ static g_noinline void vbin_fill(struct g_vec *r, word a, word b, int op, bool f
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
   if (fdom) {
-   g_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
-   if (cmp) vec_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
-   else vec_put_flo(r, p, vop_flo(op, av, bv)); }
+   g_flo_t av = aarr ? tuple_get_flo(va, oa) : sa, bv = barr ? tuple_get_flo(vb, ob) : sb;
+   if (cmp) tuple_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
+   else tuple_put_flo(r, p, vop_flo(op, av, bv)); }
   else {
-   intptr_t av = aarr ? vec_get_int(va, oa) : ia, bv = barr ? vec_get_int(vb, ob) : ib;
+   intptr_t av = aarr ? tuple_get_int(va, oa) : ia, bv = barr ? tuple_get_int(vb, ob) : ib;
    if (cmp) {                                    // bignum side (if any) sorts by sign: a-b ~ asign, or -bsign
     intptr_t t = (abig || bbig) ? vcmp_sign(op, abig ? asign : -bsign) : vcmp_int(op, av, bv);
-    vec_put_int(r, p, t ? 1 : 0); }
-   else vec_put_int(r, p, vop_int(op, av, bv)); }
+    tuple_put_int(r, p, t ? 1 : 0); }
+   else tuple_put_int(r, p, vop_int(op, av, bv)); }
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
    if (++idx[j] < (intptr_t) r->shape[j]) break;
    idx[j] = 0; } } }
@@ -4595,33 +4594,33 @@ g_vm(g_vm_vbin, int op) {
  bool aarr = arrp(a), barr = arrp(b);
  if (!(aarr || ISNUM(a)) || !(barr || ISNUM(b)))   // each operand: array or scalar
   return *++Sp = nil, Ip++, Continue();
- if ((aarr && vec(a)->type == g_O) || (barr && vec(b)->type == g_O))
+ if ((aarr && tuple(a)->type == g_O) || (barr && tuple(b)->type == g_O))
   return Ap(g_vm_obin, f, op);                     // object array -> promoting lane
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type
  // (i8) so it never widens an int array, a scalar float forces the float lane.
- int ta = aarr ? (int) vec(a)->type : flop(a) ? (int) g_R : (int) g_Z;
- int tb = barr ? (int) vec(b)->type : flop(b) ? (int) g_R : (int) g_Z;
+ int ta = aarr ? (int) tuple(a)->type : flop(a) ? (int) g_R : (int) g_Z;
+ int tb = barr ? (int) tuple(b)->type : flop(b) ? (int) g_R : (int) g_Z;
  int ct = ta > tb ? ta : tb;
  bool fdom = ct >= g_R, cmp = op >= VOP_LT;
- enum g_vec_type rt = cmp ? g_Z : (enum g_vec_type) ct;   // compare -> 0/1 Z mask
+ enum g_tuple_type rt = cmp ? g_Z : (enum g_tuple_type) ct;   // compare -> 0/1 Z mask
  // broadcast shape + conformance, right-aligned; scalar locals only (no array,
  // so the trailing tail call below survives).
  uintptr_t n = 1;
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
   n *= da > db ? da : db; }
- uintptr_t bytes = sizeof(struct g_vec) + R * sizeof(word) + n * g_T[rt];
+ uintptr_t bytes = sizeof(struct g_tuple) + R * sizeof(word) + n * g_T[rt];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1], aarr = arrp(a), barr = arrp(b);       // re-read post-Have
- struct g_vec *r = (struct g_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, rt, R);
+ struct g_tuple *r = (struct g_tuple*) Hp; Hp += b2w(bytes);
+ ini_tuple(r, rt, R);
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
   r->shape[R - 1 - k] = da > db ? da : db; }
  vbin_fill(r, a, b, op, fdom);
  return *++Sp = word(r), Ip++, Continue(); }
@@ -4633,11 +4632,11 @@ g_vm(g_vm_vbin, int op) {
 // scalar feeds in at full magnitude (g_big_to_flo), same as the scalar `pow`.
 // All the &-taking stack arrays live in this g_noinline fill so the wrapper's
 // trailing tail call survives.
-static g_noinline void vmap2_fill(struct g_vec *r, word a, word b, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
+static g_noinline void vmap2_fill(struct g_tuple *r, word a, word b, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  uintptr_t R = r->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
- struct g_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
+ struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
  intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1;
@@ -4652,8 +4651,8 @@ static g_noinline void vmap2_fill(struct g_vec *r, word a, word b, g_flo_t (*fn)
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  g_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
-  vec_put_flo(r, p, fn(av, bv));
+  g_flo_t av = aarr ? tuple_get_flo(va, oa) : sa, bv = barr ? tuple_get_flo(vb, ob) : sb;
+  tuple_put_flo(r, p, fn(av, bv));
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
    if (++idx[j] < (intptr_t) r->shape[j]) break;
    idx[j] = 0; } } }
@@ -4663,21 +4662,21 @@ g_vm(g_vm_vmap2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  bool aarr = arrp(a), barr = arrp(b);
  if (!(aarr || ISNUM(a)) || !(barr || ISNUM(b)))   // each operand: array or scalar
   return *++Sp = nil, Ip++, Continue();
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1;
  for (uintptr_t k = 0; k < R; k++) {               // broadcast shape, right-aligned
-  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
   n *= da > db ? da : db; }
- uintptr_t bytes = sizeof(struct g_vec) + R * sizeof(word) + n * g_T[g_R];
+ uintptr_t bytes = sizeof(struct g_tuple) + R * sizeof(word) + n * g_T[g_R];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1], aarr = arrp(a), barr = arrp(b);       // re-read post-Have
- struct g_vec *r = (struct g_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, g_R, R);
+ struct g_tuple *r = (struct g_tuple*) Hp; Hp += b2w(bytes);
+ ini_tuple(r, g_R, R);
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
   r->shape[R - 1 - k] = da > db ? da : db; }
  vmap2_fill(r, a, b, fn);
  return *++Sp = word(r), Ip++, Continue(); }
@@ -4708,7 +4707,7 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
  if (flop(a) || flop(b)) {                      // float domain -> g_R box
   if (!g_ok(f = g_have(f, BOX_REQ))) return *fp = f, nil;
   *fp = f;
-  struct g_vec *v = ini_scalar((struct g_vec*) f->hp, g_R);
+  struct g_tuple *v = ini_scalar((struct g_tuple*) f->hp, g_R);
   f->hp += BOX_REQ; flo_put(v->shape, vop_flo(op, TOFLO(a), TOFLO(b)));
   return word(v); }
  if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
@@ -4725,7 +4724,7 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
    if (t >= FIX_MIN && t <= FIX_MAX) return putnum(t);
    if (!g_ok(f = g_have(f, BOX_REQ))) return *fp = f, nil;
    *fp = f;
-   struct g_vec *v = ini_scalar((struct g_vec*) f->hp, g_Z);
+   struct g_tuple *v = ini_scalar((struct g_tuple*) f->hp, g_Z);
    f->hp += BOX_REQ; box_put(v->shape, t); return word(v); } }
  // bignum lane: g_big_binop computes sp[0] (op) sp[1], leaves it at sp[1],
  // pops one, and advances ip -- so save/restore ip and pop the net result.
@@ -4742,32 +4741,32 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
 // source (rooted at its slot) and the partially-built copy (parked on the stack)
 // are re-fetched after every box.
 static struct g *arr_to_obj(struct g *f, int slot) {
- struct g_vec *src = vec(f->sp[slot]);
+ struct g_tuple *src = tuple(f->sp[slot]);
  uintptr_t R = src->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= src->shape[i];
- uintptr_t bytes = sizeof(struct g_vec) + R * sizeof(word) + n * g_T[g_O];
+ uintptr_t bytes = sizeof(struct g_tuple) + R * sizeof(word) + n * g_T[g_O];
  if (!g_ok(f = g_have(f, b2w(bytes)))) return f;
- src = vec(f->sp[slot]);
- struct g_vec *dst = (struct g_vec*) f->hp; f->hp += b2w(bytes);
- ini_vec(dst, g_O, R);
+ src = tuple(f->sp[slot]);
+ struct g_tuple *dst = (struct g_tuple*) f->hp; f->hp += b2w(bytes);
+ ini_tuple(dst, g_O, R);
  for (uintptr_t i = 0; i < R; i++) dst->shape[i] = src->shape[i];
- for (uintptr_t i = 0; i < n; i++) vec_put_obj(dst, i, nil);   // safe pre-fill (GC may see it)
+ for (uintptr_t i = 0; i < n; i++) tuple_put_obj(dst, i, nil);   // safe pre-fill (GC may see it)
  if (!g_ok(f = g_push(f, 1, word(dst)))) return f;             // sp[0]=dst, src now at slot+1
  for (uintptr_t i = 0; i < n; i++) {
-  struct g_vec *s = vec(f->sp[slot + 1]);
+  struct g_tuple *s = tuple(f->sp[slot + 1]);
   word v;
   if (s->type >= g_R) {                                        // float -> g_R box
-   g_flo_t e = vec_get_flo(s, i);
+   g_flo_t e = tuple_get_flo(s, i);
    if (!g_ok(f = g_have(f, BOX_REQ))) return f;
-   struct g_vec *bx = ini_scalar((struct g_vec*) f->hp, g_R); f->hp += BOX_REQ;
+   struct g_tuple *bx = ini_scalar((struct g_tuple*) f->hp, g_R); f->hp += BOX_REQ;
    flo_put(bx->shape, e); v = word(bx); }
   else {                                                       // int -> fixnum or g_Z box
-   intptr_t e = vec_get_int(s, i);
+   intptr_t e = tuple_get_int(s, i);
    if (e >= FIX_MIN && e <= FIX_MAX) v = putnum(e);
    else { if (!g_ok(f = g_have(f, BOX_REQ))) return f;
-    struct g_vec *bx = ini_scalar((struct g_vec*) f->hp, g_Z); f->hp += BOX_REQ;
+    struct g_tuple *bx = ini_scalar((struct g_tuple*) f->hp, g_Z); f->hp += BOX_REQ;
     box_put(bx->shape, e); v = word(bx); } }
-  vec_put_obj(vec(f->sp[0]), i, v); }                          // re-fetch dst post-box
+  tuple_put_obj(tuple(f->sp[0]), i, v); }                          // re-fetch dst post-box
  word d = f->sp[0]; f->sp++; f->sp[slot] = d;                  // install copy, drop the parked root
  return f; }
 
@@ -4775,42 +4774,42 @@ static struct g *arr_to_obj(struct g *f, int slot) {
 static struct g *obin_run(struct g *f, int op) {
  word a = f->sp[0], b = f->sp[1];
  bool aarr = arrp(a), barr = arrp(b);
- if (aarr && vec(a)->type != g_O) { if (!g_ok(f = arr_to_obj(f, 0))) return f; }
- if (barr && vec(b)->type != g_O) { if (!g_ok(f = arr_to_obj(f, 1))) return f; }
+ if (aarr && tuple(a)->type != g_O) { if (!g_ok(f = arr_to_obj(f, 0))) return f; }
+ if (barr && tuple(b)->type != g_O) { if (!g_ok(f = arr_to_obj(f, 1))) return f; }
  a = f->sp[0], b = f->sp[1], aarr = arrp(a), barr = arrp(b);
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1, shp[G_VEC_MAXRANK];
  for (uintptr_t k = 0; k < R; k++) {                           // broadcast shape, right-aligned
-  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) {                        // non-conforming -> nil
    f->sp[1] = nil, f->sp++, f->ip = (union u*) f->ip + 1; return f; }
   shp[R - 1 - k] = da > db ? da : db; n *= da > db ? da : db; }
- uintptr_t bytes = sizeof(struct g_vec) + R * sizeof(word) + n * g_T[g_O];
+ uintptr_t bytes = sizeof(struct g_tuple) + R * sizeof(word) + n * g_T[g_O];
  if (!g_ok(f = g_have(f, b2w(bytes)))) return f;
- struct g_vec *r = (struct g_vec*) f->hp; f->hp += b2w(bytes);
- ini_vec(r, g_O, R);
+ struct g_tuple *r = (struct g_tuple*) f->hp; f->hp += b2w(bytes);
+ ini_tuple(r, g_O, R);
  for (uintptr_t k = 0; k < R; k++) r->shape[k] = shp[k];
- for (uintptr_t p = 0; p < n; p++) vec_put_obj(r, p, nil);     // nil-fill before any GC
+ for (uintptr_t p = 0; p < n; p++) tuple_put_obj(r, p, nil);     // nil-fill before any GC
  if (!g_ok(f = g_push(f, 1, word(r)))) return f;               // sp: [0]=r [1]=a [2]=b
  intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
- if (aarr) { intptr_t s = 1; struct g_vec *va = vec(f->sp[1]);
+ if (aarr) { intptr_t s = 1; struct g_tuple *va = tuple(f->sp[1]);
   for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
    intptr_t j = oa + (intptr_t) R - (intptr_t) va->rank;
    ca[j] = va->shape[oa] == 1 ? 0 : s; s *= (intptr_t) va->shape[oa]; } }
- if (barr) { intptr_t s = 1; struct g_vec *vb = vec(f->sp[2]);
+ if (barr) { intptr_t s = 1; struct g_tuple *vb = tuple(f->sp[2]);
   for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank;
    cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  word ae = aarr ? vec_get_obj(vec(f->sp[1]), oa) : f->sp[1];  // scalar operand re-read each step
-  word be = barr ? vec_get_obj(vec(f->sp[2]), ob) : f->sp[2];
+  word ae = aarr ? tuple_get_obj(tuple(f->sp[1]), oa) : f->sp[1];  // scalar operand re-read each step
+  word be = barr ? tuple_get_obj(tuple(f->sp[2]), ob) : f->sp[2];
   word res = obin_elem(&f, op, ae, be);
   if (!g_ok(f)) return f;
-  vec_put_obj(vec(f->sp[0]), p, res);                          // re-fetch result post-alloc
+  tuple_put_obj(tuple(f->sp[0]), p, res);                          // re-fetch result post-alloc
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {
    if (++idx[j] < (intptr_t) shp[j]) break;
    idx[j] = 0; } }
@@ -4826,21 +4825,21 @@ g_vm(g_vm_obin, int op) {
 
 // g_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). f->sp[0] is the array.
 static struct g *ored(struct g *f, int kind) {
- struct g_vec *v = vec(f->sp[0]);
+ struct g_tuple *v = tuple(f->sp[0]);
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (kind >= 2) {                                              // max/min: pick an element, no alloc
   if (!n) { f->sp[0] = nil, f->ip = (union u*) f->ip + 1; return f; }
-  word acc = vec_get_obj(vec(f->sp[0]), 0);
+  word acc = tuple_get_obj(tuple(f->sp[0]), 0);
   int cop = kind == 2 ? VOP_GT : VOP_LT;
   for (uintptr_t i = 1; i < n; i++) {
-   word e = vec_get_obj(vec(f->sp[0]), i);
+   word e = tuple_get_obj(tuple(f->sp[0]), i);
    if (obin_elem(&f, cop, e, acc) == putnum(1)) acc = e; }
   f->sp[0] = acc, f->ip = (union u*) f->ip + 1; return f; }
  word init = kind == 0 ? putnum(0) : putnum(1);               // sum/prod: fold with allocation
  int aop = kind == 0 ? VOP_ADD : VOP_MUL;
  if (!g_ok(f = g_push(f, 1, init))) return f;                 // sp[0]=acc, sp[1]=array
  for (uintptr_t i = 0; i < n; i++) {
-  word e = vec_get_obj(vec(f->sp[1]), i);
+  word e = tuple_get_obj(tuple(f->sp[1]), i);
   word acc = obin_elem(&f, aop, f->sp[0], e);
   if (!g_ok(f)) return f;
   f->sp[0] = acc; }
@@ -4860,7 +4859,7 @@ static g_inline void cplx_parts(word x, g_flo_t *re, g_flo_t *im) {
 // Fill the rank-0 complex box v with a `vop` b. All the &-taking lives in this
 // g_noinline helper so the g_vm wrapper keeps its trailing tail call; no
 // allocation inside, so the operand pointers can't move under us.
-static g_noinline void cplx_fill(struct g_vec *v, word a, word b, int vop) {
+static g_noinline void cplx_fill(struct g_tuple *v, word a, word b, int vop) {
  g_flo_t ar, ai, br, bi, re, im;
  cplx_parts(a, &ar, &ai); cplx_parts(b, &br, &bi);
  switch (vop) {
@@ -4881,7 +4880,7 @@ g_vm(g_vm_cplx_bin, int vop) {
   return *++Sp = nil, Ip++, Continue();
  Have(CPLX_REQ);
  a = Sp[0], b = Sp[1];                              // re-read post-Have
- struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_C);
+ struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
  Hp += CPLX_REQ;
  cplx_fill(v, a, b, vop);
  return *++Sp = word(v), Ip++, Continue(); }
@@ -4890,7 +4889,7 @@ g_vm(g_vm_cplx_bin, int vop) {
 // Log w = ln|w| + i*arg w. A real operand promotes to (r, 0) (cplx_parts). w == 0
 // falls out as the IEEE limit (exp(-inf) -> 0 for Re z > 0), same domain stance as
 // real pow. &-locals stay in this g_noinline helper, off g_vm_pow's tail call.
-static g_noinline void cplx_pow_fill(struct g_vec *v, word wbase, word zexp) {
+static g_noinline void cplx_pow_fill(struct g_tuple *v, word wbase, word zexp) {
  g_flo_t wr, wi, zr, zi;
  cplx_parts(wbase, &wr, &wi); cplx_parts(zexp, &zr, &zi);
  g_flo_t lr = (g_flo_t) 0.5 * g_log(wr * wr + wi * wi),    // ln|w|
@@ -4908,7 +4907,7 @@ g_vm(g_vm_pow) {
    return *++Sp = nil, Ip++, Continue();
   Have(CPLX_REQ);
   a = Sp[0], b = Sp[1];                              // re-read post-Have
-  struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_C);
+  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
   Hp += CPLX_REQ;
   cplx_pow_fill(v, a, b);
   return *++Sp = word(v), Ip++, Continue(); }
@@ -4920,7 +4919,7 @@ g_vm(g_vm_cplx) {
  if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue();
  g_flo_t re = TOFLO(a), im = TOFLO(b);             // values extracted before alloc
  Have(CPLX_REQ);
- struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_C);
+ struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
  Hp += CPLX_REQ;
  cplx_put(v, re, im);
  return *++Sp = word(v), Ip++, Continue(); }
@@ -4949,7 +4948,7 @@ g_vm(g_vm_conj) {
  word a = Sp[0];
  if (cplxp(a)) { g_flo_t re = cplx_re(a), im = cplx_im(a);
   Have(CPLX_REQ);
-  struct g_vec *v = ini_scalar((struct g_vec*) Hp, g_C); Hp += CPLX_REQ;
+  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C); Hp += CPLX_REQ;
   cplx_put(v, re, -im);
   return Sp[0] = word(v), Ip++, Continue(); }
  if (ISNUM(a)) return Ip++, Continue();
@@ -4982,9 +4981,9 @@ g_vm(g_vm_abs) {
   memcpy(y, x, bytes); y->slen = -x->slen;           // flip the sign
   return Sp[0] = word(y), Ip++, Continue(); }
  if (arrp(a)) {                                       // vector -> scalar: the Euclidean (L2) norm
-  struct g_vec *v = vec(a); uintptr_t i, n = 1;       // sqrt(sum of squares) -- the same magnitude
+  struct g_tuple *v = tuple(a); uintptr_t i, n = 1;       // sqrt(sum of squares) -- the same magnitude
   for (i = 0; i < v->rank; i++) n *= v->shape[i];     // abs gives a complex (its 2-vector modulus)
-  g_flo_t s = 0; for (i = 0; i < n; i++) { g_flo_t e = vec_get_flo(v, i); s += e * e; }
+  g_flo_t s = 0; for (i = 0; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); s += e * e; }
   Have(BOX_REQ); EMIT_FLO(g_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
  if (mapp(a)) {                                       // table: its key count (so (int (abs t)) == (len t))
   Have(BOX_REQ); EMIT_INT((intptr_t) map_len(a)); return Sp[0] = _res, Ip++, Continue(); }

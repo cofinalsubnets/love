@@ -1,5 +1,5 @@
 ; step 8: random numbers (xoshiro256++ seeded by SplitMix64).
-; - state is a rank-1 word-int vec of length 4 (256 bits), riding the vec machinery.
+; - state is a rank-1 word-int tuple of length 4 (256 bits), riding the tuple machinery.
 ; - two streams share it: a global one in f->rng (rand / randf, mutated in place)
 ;   and a functional one threaded explicitly (rand-next / randf-next, pure: the
 ;   input state is copied, never mutated).
@@ -13,12 +13,12 @@
                     a (rand 0) b (rand 0) c (rand 0) (L a b c))
    (ffirst seed) (car (rand-next (rng-seed seed))))          ; 1st functional draw
 (assert
- ; --- state-vec structure: rank-1 word-int (Z) vec, length 4 (C-typed on 32-bit,
+ ; --- state-tuple structure: rank-1 word-int (Z) tuple, length 4 (C-typed on 32-bit,
  ; where C is the 8-byte-wide kind, so the 256-bit payload survives either way) ---
  (= 4 (alen (rng-seed 1)))
  (= 1 (arank (rng-seed 1)))
  (= z (atype (rng-seed 1)))
- (= 4 (alen (rng-get 0)))                  ; the global is a valid state vec too
+ (= 4 (alen (rng-get 0)))                  ; the global is a valid state tuple too
 
  ; --- determinism: same seed -> same sequence (global and functional) ---
  (= (gseq3 42) (gseq3 42))
@@ -33,7 +33,7 @@
  (: st (rng-seed 7) a (car (rand-next st)) b (car (rand-next st)) (= a b))
  ; ...and chaining the returned state advances the stream
  (: st (rng-seed 7) p (rand-next st) q (rand-next (cdr p)) (!= (car p) (car q)))
- (: st (rng-seed 7) p (rand-next st) (= 4 (alen (cdr p))))   ; st' is a state vec
+ (: st (rng-seed 7) p (rand-next st) (= 4 (alen (cdr p))))   ; st' is a state tuple
 
  ; --- rng-get / rng-set snapshot + restore reproduces a draw ---
  (: _ (rng-set (rng-seed 55)) g0 (rng-get 0)

@@ -68,7 +68,7 @@ typedef _g_vm(g_vm_t);
 
 // Typed N-dim array. Rank 0 = scalar (no shape words); payload at
 // (void*)(shape + rank). Immutable.
-struct g_vec {
+struct g_tuple {
  g_vm_t *ap;
  uintptr_t type, rank, shape[]; };
 
@@ -117,7 +117,7 @@ struct g {
     g_word fd;
     g_word ungetc_buf;            // pushed-back byte; putnum(EOF) = empty
     g_word eof_seen; } *io; };
-  // rng: global RNG state (rank-1 i64 vec, len 4, xoshiro256++). Lives in &v0..end
+  // rng: global RNG state (rank-1 i64 tuple, len 4, xoshiro256++). Lives in &v0..end
   // so gc.c's root loop forwards it.
   g_word rng; }; };
  intptr_t end[]; };
@@ -202,7 +202,7 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 #define G_EGG_PRE " '("
 #define G_EGG_POST ")) "
 
-// === internal API shared with vt.c / host / free (merged from former i.h) ===
+// === internal API shared with data.c / host / free (merged from former i.h) ===
 #define G_WAIT_FDS_MAX 8
 #define A(o) two(o)->a
 #define B(o) two(o)->b
@@ -220,12 +220,16 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 #define op(nom, n, x) g_vm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 #define nil g_nil
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
-// Data-sentinel kinds. Ordered so that, with K_FIX prepended and K_LAM appended,
-// they form `enum kind` by a bare +K_VEC shift (see g_kind) and group the dispatch
-// matrices' diagonals by lane: numbers (vec/big), sequences (two/text/sym).
-// The section map in vt.c (go()) and vt.ld pin sentinel <-> slot to match.
-enum q { vec_q, big_q, two_q, text_q, sym_q, };
-#define G_DATA_VT_N 5
+// The fundamental value kind for generic-op dispatch AND the data-sentinel kind,
+// now one enum. K_FIX is the odd fixnum tag; K_TUPLE..K_SYM are the data kinds (their
+// order pins sentinel <-> section slot -- see data.c go() and data.ld); K_LAM is any
+// other heap pointer (thread/function/map). g_typ returns K_TUPLE..K_SYM directly
+// (the section slot index + K_TUPLE); g_kind prepends K_FIX / appends K_LAM. The order
+// groups the dispatch-matrix diagonals by lane: numbers (fix/tuple/big), sequences
+// (two/string/sym), thread last. K_N is the matrix dimension. NO subtype
+// classification (interned vs uninterned sym, box vs array) here -- the handler's job.
+enum q { K_FIX, K_TUPLE, K_BIG, K_TWO, K_STRING, K_SYM, K_LAM, K_N };
+#define G_DATA_N 5     // count of data-sentinel kinds (K_TUPLE..K_SYM)
 typedef g_word num, word;
 // The unique empty string and empty (anonymous) symbol -- data-segment globals the
 // GC never moves (gcp's out-of-pool short-circuit). Strings are immutable, so one
@@ -248,30 +252,25 @@ struct g
  *g_read1(struct g*, struct g_io*),
  *str0(struct g*, uintptr_t);
 g_vm(g_vm_gc, uintptr_t);
-// Generic-op dispatch kind: the fundamental value kind by pure arithmetic on the
-// data-sentinel index g_typ with a fixnum (K_FIX) prepended and a thread/function
-// (K_LAM) appended -- so K_VEC..K_SYM are exactly enum q + K_VEC (enum q is ordered
-// to make this a bare shift; see gwen.h's enum q). NO subtype classification (interned
-// vs uninterned sym, box vs array) at this level -- the handler's job. The order
-// groups the matrix diagonals by lane: numbers (fix/vec/big), sequences (two/text/
-// sym), then thread last (its row+column a uniform precedence band; maps are threads).
-// Both the `+`/`*` matrices and the apply matrix dispatch on this; g_kind lives in
-// gwen.c (it needs g_typ from the generated vt.h) and is used by vt.c's sentinels.
-enum kind { K_FIX, K_VEC, K_BIG, K_TWO, K_TEXT, K_SYM, K_LAM, K_N };
-enum kind g_kind(word);
+// g_kind maps any value to its enum q: K_FIX for a fixnum, K_LAM for a non-data heap
+// pointer (thread/function/map), else g_typ's data kind (K_TUPLE..K_SYM). Lives in
+// gwen.c (it needs g_typ from the generated data.h) and is shared by data.c's apply
+// sentinels. Both the `+`/`*` matrices and the apply matrix dispatch on this.
+enum q g_kind(word);
 // Apply dispatch matrix, indexed [static: the applied data kind, g_typ(Ip)][dynamic:
-// the argument kind, g_kind(Sp[0])]. The data_vt sentinels (vt.c) tail-jump through
-// it; the handlers + the table itself live in gwen.c.
-extern g_vm_t *g_apply_mx[G_DATA_VT_N][K_N];
+// the argument kind, g_kind(Sp[0])]. The data sentinels (data.c) tail-jump through
+// it; the handlers + the table itself live in gwen.c. Row indexed by the full kind
+// (g_typ returns K_TUPLE..K_SYM), so the first dimension is K_N, not G_DATA_N.
+extern g_vm_t *g_apply_mx[K_N][K_N];
 extern g_word g_numap;                 // gwen num-ap handler (vm.c); the numeral-apply driver below targets it
 extern g_word g_scomb, g_bcomb;        // `+`/`*` thread combinators (S / compose), installed from the prelude
 extern union u numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-g_vm_t g_vm_ap, g_vm_two, g_vm_vec, g_vm_sym, g_vm_text, g_vm_big; // sentinels + ap: vt.c & inline predicates
-uintptr_t hash(struct g*, word), g_vec_bytes(struct g_vec*);
+g_vm_t g_vm_ap, g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big; // sentinels + ap: data.c & inline predicates
+uintptr_t hash(struct g*, word), g_tuple_bytes(struct g_tuple*);
 #define str(_) ((struct g_str*)(_))
-#define homp evenp
+#define lamp evenp
 #define two(_) ((struct g_pair*)(_))
-static g_inline bool twop(word _) { return homp(_) && cell(_)->ap == g_vm_two; }
+static g_inline bool twop(word _) { return lamp(_) && cell(_)->ap == g_vm_two; }
 static g_inline void *bump(struct g *f, uintptr_t n) {
   if (avail(f) < n) __builtin_trap();
   void *x = f->hp; f->hp += n; return x; }

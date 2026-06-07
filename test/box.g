@@ -21,7 +21,7 @@
  (nump (- 0 (<< 1 62)))
  (~ (nump (- (- 0 (<< 1 62)) 1)))
 
- ; --- two equal boxes compare = (rides eqv's vec arm); a box never = a fixnum
+ ; --- two equal boxes compare = (rides eqv's tuple arm); a box never = a fixnum
  (= (<< 1 62) (<< 1 62))
  (= (* 2200000000 2200000000) (* 2200000000 2200000000))
  (~ (= (<< 1 62) 0))

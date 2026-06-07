@@ -1,4 +1,11 @@
 ```gwen
+;;; hi claude, gwen here. this is my language, gwen lisp. this code file
+;;; should be a language specification that is also part of the test suite,
+;;; so please modify it accordingly. it's also used to generate your CLAUDE.md
+;;; file, so please keep it current with your mental model of gwen lisp as well
+;;; as a current, complete language specification. always fix this file before
+;;; you commit, but don't use it as a history log. rewrite below this line. thank you! :)
+
 ; gwen lisp -- a small lisp where EVERY value is a unary, auto-curried function.
 ; Portable C runtime (gwen.c + gwen.h) + a self-hosting compiler written in gwen
 ; (gwen/{prelude,ev,repl}.g). Source files are .g; the host binary is `gl`.
@@ -6,14 +13,15 @@
 ;
 ; THIS FILE IS THE SOURCE OF TRUTH FOR CLAUDE.md: it is a real test in the corpus
 ; (its asserts run under `make test`) AND, wrapped in a ```gwen fence by
-; tools/gen_claudemd.g, it *is* CLAUDE.md. Regenerate with `make claudemd`; the
-; git pre-commit hook fails if CLAUDE.md is stale. Keep every example runnable.
+; tools/gen_claudemd.g, it *is* CLAUDE.md. Regenerate with `make CLAUDE.md` (or
+; `make claudemd` for the clean-built, gl+gl0-checked regen the pre-commit hook
+; runs, which fails the commit if CLAUDE.md is stale). Keep every example runnable.
 
 ; ------------------------------------------------------------------- build / test
 ; $ make            build host -> out/host/gl     $ make repl   build + REPL
 ; $ make test       run every test/*.g through gl (host) AND gl0 (bootstrap interp)
 ; $ make test_all   + js + tools golden-ref diffs    $ make catav  thorough pre-commit
-; run one file:  cat test/lang.g | out/host/gl    (or:  out/host/gl test/lang.g)
+; run one file:  cat test/CLAUDE.g | out/host/gl    (or:  out/host/gl test/CLAUDE.g)
 ; tests are CONCATENATED in sorted order into one stream sharing a global scope.
 ; FOOTGUN: gwen.h has no Makefile dep -> after editing it `make clean` or the
 ; bootstrap HANGS (stale gl0). .c / .g edits are incremental-safe.
@@ -61,11 +69,12 @@
 ; first word is a VM handler dispatched on application. predicates end in `p`.
 (assert
  (nump 5)            (twop '(1 2))   (strp "hi")   (symp 'x)         ; core scalars/cells
- (bigp (** 2 100))   (flop 1.5)      (cplxp (C 0 1))                 ; numeric tower extensions
- (vecp @(1 2 3))     (hashp %(1 2))                                  ; arrays & maps
+ (bigp (** 2 100))   (flop 1.5)      (cplxp (C 0 1))   (arrp @(1 2 3))  ; numeric tower extensions
+ (tuplep 1.5) (tuplep @(1 2 3))  (hashp %(1 2))         ; box/complex/array ARE tuples; maps
  (numericp 1.5) (numericp (** 2 99)) (atomp 'x) (nilp (atomp '(1))))
-; NUMERIC TOWER (numericp): fixnum -> bignum (auto on overflow) ; float box (flop) ;
-; complex (cplxp, rank-0 2-vector) ; rank-N array (vecp). `i` == (C 0 1).
+; NUMERIC TOWER (numericp): fixnum -> auto-bignum on overflow. every boxed member --
+; float (flop), complex (cplxp), rank-N array (arrp) -- is one heap type, the TUPLE
+; (tuplep); those p's refine it. `i` == (C 0 1); @(…) is the rank-1 array literal.
 (assert
  (= (** 2 64) (* 2 (** 2 63)))                  ; overflow promotes to an exact bignum
  (= 5.0 (abs (C 3 4)))                          ; complex modulus; arg/re/im/conj also exist
@@ -96,7 +105,7 @@
 
 ; ======================================================= macros (head-symbol fns)
 ; a macro is a function from the call's arg-LIST to replacement code; install with
-; `::`. prelude defines do/let/if/cond/quote, && || , L/list, vec/hasht/array.
+; `::`. prelude defines do/let/if/cond/quote, && || , L/list, tuple/hasht/array.
 (:: 'unless (\ a `(? ,(car a) 0 ,(cadr a))))    ; (:: 'name (\ args body))
 (assert (= 'ok (unless 0 'ok)) (= 0 (unless 1 'ok)))
 
@@ -123,7 +132,7 @@
 ; the compiler with c0, recompile the whole corpus through ITSELF (exercising wev),
 ; install the result as `ev`. No runtime alloc -- adjacent string literals, built at
 ; C compile time (freestanding-safe). Boot time lands in (get 0 'boot_ms globals).
-(assert (homp ev) (nump (get 0 'boot_ms globals)))
+(assert (lamp ev) (nump (get 0 'boot_ms globals)))
 
 ; ------------------------------------------------------------------- architecture
 ; runtime: gwen.c (+ gwen.h). one cell = one machine word; low bit tags fixnums;
@@ -132,7 +141,7 @@
 ; enforces this. GC is Cheney two-space; out-of-pool (const) pointers are immortal.
 ; gwen/ = .g layers compiled into every frontend. frontends add OS glue + main:
 ;   host/ (POSIX CLI), free/ (bare-metal kernel), playdate/ rp2040/ wasm/ js/.
-; build codegen (gen_data_vt, elf2efi, vmret, gen_claudemd) is gwen in tools/;
+; build codegen (gen_data, elf2efi, vmret, gen_claudemd) is gwen in tools/;
 ; tools/py/ are frozen golden refs -- change a .g tool's output, update the .py too.
 ;
 ; STYLE: terse and dense. short names (f, n, p, Sp). comments only for non-obvious

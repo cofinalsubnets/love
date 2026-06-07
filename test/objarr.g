@@ -1,7 +1,7 @@
 ; object arrays (type code `o` = g_O): rank-N containers of live gwen *values*.
-; the numeric vec types (i8..f64) fold to a flat word/float payload the GC moves
+; the numeric tuple types (i8..f64) fold to a flat word/float payload the GC moves
 ; by memcpy; an o-array instead holds tagged words, so it can carry bignums,
-; strings, symbols and nested arrays -- and is the one vec type the collector
+; strings, symbols and nested arrays -- and is the one tuple type the collector
 ; traces element-by-element. rank-0 is rejected (a boxed scalar is just a value).
 
 (: (oa-list n acc) (? (< n 1) acc (oa-list (- n 1) (X n acc)))   ; build (1 .. n)

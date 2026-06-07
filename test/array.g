@@ -6,7 +6,7 @@
 ; - mixed element-type promotes to the widest type
 ; - < <= > >= = elementwise -> 0/1 bool array
 ; - reductions asum aprod amax amin aall aany; identity on scalars
-; - vector falsiness: a vec is false iff every element is 0
+; - vector falsiness: a tuple is false iff every element is 0
 ; - elementwise transcendentals (sqrt) over an array
 ; - print round-trip; non-conforming / non-numeric -> nil
 
@@ -20,7 +20,7 @@
  (= f32 (atype (arr f32 '(4))))
  (= '(2 3) (ashape (arr i64 '(2 3))))
  (= 0 (ashape (arr i64 '())))         ; rank-0 shape is the empty list (nil)
- (nilp (arank 5))                     ; non-vec -> nil
+ (nilp (arank 5))                     ; non-tuple -> nil
  (nilp (atype "x"))
 
  ; --- get: rank-1 fixnum index ---
@@ -117,7 +117,7 @@
  (= 0 (? (+ (arr i64 '(3)) 1) 0 1))    ; nonzero array takes the true arm
  ; a single non-zero component makes the norm non-zero (truthy), per the tower:
  (~ (nilp @(0 0 5)))                    ; one non-zero element -> true
- (nilp @(0.0 0.0))                      ; all-zero float vec -> false
+ (nilp @(0.0 0.0))                      ; all-zero float tuple -> false
  (nilp (C 0 0))                         ; complex 0+0i (|z|=0) -> false
  (~ (nilp (C 0 1)))                     ; 0+1i (|z|=1) -> true
  (~ (nilp i))                           ; the imaginary unit is truthy
@@ -127,7 +127,7 @@
  (= f64 (atype (sqrt (arr i64 '(3)))))  ; result is a float array
 
  ; --- print as constructor forms ---
- ; rank-1 numeric -> the @(…) sugar (@ reader splices into (vec …)); rank>=2 ->
+ ; rank-1 numeric -> the @(…) sugar (@ reader splices into (tuple …)); rank>=2 ->
  ; an explicit (arrl <type> '(shape) '(vals)) call
  (= "@(10 20 30)" (inspect (arrl i64 '(3) '(10 20 30))))
  (= "(arrl i64 '(2 2) '(1 2 3 4))" (inspect (arrl i64 '(2 2) '(1 2 3 4))))
@@ -138,9 +138,9 @@
  (aall (= (arrl f64 '(2) '(1.5 2.5)) @(1.5 2.5)))
  (aall (= (arrl i64 '(2 2) '(1 2 3 4)) (arrl i64 '(2 2) '(1 2 3 4))))
  ; the printed form reads back to an equal array
- (aall (= (arrl i64 '(3) '(10 20 30)) (vec 10 20 30)))
+ (aall (= (arrl i64 '(3) '(10 20 30)) (tuple 10 20 30)))
  (aall (= (arrl i64 '(2 2) '(1 2 3 4)) (arrl i64 '(2 2) '(1 2 3 4))))
- (aall (= (arrl f64 '(2) '(1.5 2.5)) (vec 1.5 2.5)))
+ (aall (= (arrl f64 '(2) '(1.5 2.5)) (tuple 1.5 2.5)))
 
  ; --- non-conforming / non-numeric -> nil ---
  (nilp (+ (arr i64 '(3)) (arr i64 '(4))))   ; shapes [3] and [4] don't conform

@@ -3,9 +3,9 @@
    This is the Playdate SDK's C_API/buildsupport/link_map.ld with one
    addition: the data self-quote sentinel block grafted into .text (marked
    below). The sentinels (g/flow.c DATA_SENTINEL) are each emitted into
-   their own gwen_data_vt.NN input subsection; the SDK script has no
+   their own gwen_data.NN input subsection; the SDK script has no
    collection for them, so used as-is they orphan and __start_/__stop_
-   gwen_data_vt go undefined. We can't edit the SDK file in place and an
+   gwen_data go undefined. We can't edit the SDK file in place and an
    INSERT fragment can't augment a full -T script (it pulls in the builtin
    default script and clobbers ENTRY/layout), so we keep a full copy here
    and inline the block -- the same approach as k/*.lds and pico/. KEEP
@@ -45,11 +45,11 @@ SECTIONS
 		KEEP(*(.eh_frame*))
 
 		/* gwen data self-quote sentinels: contiguous, in enum order
-		   (gwen_data_vt.NN), inside the executable text region. */
+		   (gwen_data.NN), inside the executable text region. */
 		. = ALIGN(16);
-		__start_gwen_data_vt = .;
-		KEEP(*(SORT_BY_NAME(gwen_data_vt.*)))
-		__stop_gwen_data_vt = .;
+		__start_gwen_data = .;
+		KEEP(*(SORT_BY_NAME(gwen_data.*)))
+		__stop_gwen_data = .;
 	}
 
 	.data :

@@ -10,7 +10,7 @@
    (!= a b) (? (= a b) 0 1)
    AA (co A A) AB (co A B)
    BA (co B A) BB (co B B))
-; array element-kind codes for `arr` (enum g_vec_type): one word per element, so
+; array element-kind codes for `arr` (enum g_tuple_type): one word per element, so
 ; every integer width aliases Z=0 and every float width aliases R=1 (C=2 is the
 ; rank-0 complex scalar, not a constructible array element).
 (: i8 0 i16 0 i32 0 i64 0 f32 1 f64 1 z 0 r 1 c 2 o 3)
@@ -62,7 +62,7 @@
      _ (nfa th 0 n)
      _ (poke (+ 3 (* 3 n)) g_vm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
-   (numericp x) (| (nump x) (| (vecp x) (bigp x)))   ; whole tower: fixnum / float box / wide-int box / complex / array / bignum
+   (numericp x) (| (nump x) (| (tuplep x) (bigp x)))   ; whole tower: fixnum / float box / wide-int box / complex / array / bignum
    (intp n) (| (nump n) (| (boxp n) (bigp n)))       ; integer-valued numeral (exact ** exponent / composition count)
    ; x ** n across the whole tower. array exponent -> elementwise pow (broadcasts
    ; via the vmap2 engine, float result); integer exponent -> exact squaring
@@ -170,7 +170,7 @@
 (:: 'qq (\ a (qqx (car a) 1)))
 (: uq (\ x x))                                               ; stray ,x evaluates x
 
-; --- array element-type inference + shape coercion (shared by `vec` and `array`).
+; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
 ; a-type: the element type code, the highest of {i64=0 < f64=1 < o=2} present in
 ; a list of values -- a box still fits i64; only a value past the real 64-bit
 ; tower (bignum, complex, non-number) lifts the array to an object (o) array.
@@ -185,12 +185,12 @@
    (a-dim d) (int (abs d))
    (a-shape s) (? (twop s) (map a-dim s) (L (a-dim s))))
 
-; vec/hash value constructors (also the read-back targets of the `@(…)` / `%(…)`
-; printer-sugar forms). `vec` builds a rank-1 array from its element args,
+; tuple/hash value constructors (also the read-back targets of the `@(…)` / `%(…)`
+; printer-sugar forms). `tuple` builds a rank-1 array from its element args,
 ; inferring the element type via a-type (so it carries bignums/symbols in an o
 ; array, not just i64/f64); `hasht` builds a hash from alternating key/value args.
-(: (lvec l) (arrl (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
-(:: 'vec (\ a (list 'lvec (cons 'list a))))
+(: (ltuple l) (arrl (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
+(:: 'tuple (\ a (list 'ltuple (cons 'list a))))
 (: (hashtx a) (? (twop a) (list 'put (car a) (cadr a) (hashtx (cddr a))) '(hashn 0)))
 (:: 'hasht (\ a (hashtx a)))
 

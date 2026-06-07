@@ -32,18 +32,18 @@ pd_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)
 pd_sdk_o = $(o)/setup.o
 pd_o = $(pd_local_o) $(pd_shared_o) $(pd_sdk_o)
 
-# $(o)/vt.h is reflected out of the device vt.o (kernel/vt.c, Thumb): the
+# $(o)/data.h is reflected out of the device data.o (kernel/data.c, Thumb): the
 # 24-byte sentinel body is 16-aligned, so the real stride is 32 and g_typ()
 # shifts by 5 instead of doing the portable header's two link-time divides.
 # Every device object below carries -I$(o) (ahead of pd_incdir's -I../kernel) so
-# it shadows kernel/vt.h, and depends on $(vt_h) -- except vt.o, which builds
+# it shadows kernel/data.h, and depends on $(data_h) -- except data.o, which builds
 # without -I$(o) and bootstraps from the portable header (it never calls g_typ).
 # The simulator .so (host x86_64, dev-only) is a single-shot compile with no
-# intermediate vt.o, so it stays on the portable header.
-vt_h = $(o)/vt.h
+# intermediate data.o, so it stays on the portable header.
+data_h = $(o)/data.h
 # Run through the host interpreter $m (= $(R)/out/host/gl), built on demand below.
-# py/gen_data_vt.py is the cross-checked reference (make test_tools).
-gen_vt = $(R)/tools/gen_data_vt.$x
+# py/gen_data.py is the cross-checked reference (make test_tools).
+gen_data = $(R)/tools/gen_data.$x
 
 pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
 pd_cpflags = \
@@ -71,7 +71,7 @@ sim: $(o)/$n.pdx
 clean:
 	rm -rf $(o)
 
-# A lib header (and the host gl, which runs gen_data_vt.g) stand in for "the
+# A lib header (and the host gl, which runs gen_data.g) stand in for "the
 # host build ran"; built on demand here so a standalone `make -C playdate` works.
 # (playdate/main.c embeds no prelude -- this is just a build-order sentinel.)
 $(R)/out/lib/prelude.h:
@@ -88,30 +88,30 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 	@mkdir -p $(dir $@)
 	@cp $< $@
 
-# The data-sentinel TU bootstraps from the portable header (no -I$(o), no $(vt_h)
-# prerequisite -- both would be circular, since $(o)/vt.h is reflected out of
+# The data-sentinel TU bootstraps from the portable header (no -I$(o), no $(data_h)
+# prerequisite -- both would be circular, since $(o)/data.h is reflected out of
 # this object). Its explicit recipe overrides the pattern rules below.
-$(o)/vt.o: $(R)/vt.c | $(R)/out/lib/prelude.h
+$(o)/data.o: $(R)/data.c | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
-$(o)/vt.h: $(o)/vt.o $(gen_vt) | $(m)
+$(o)/data.h: $(o)/data.o $(gen_data) | $(m)
 	@echo GEN	$@
-	@$(m) $(gen_vt) $< -o $@
+	@$(m) $(gen_data) $< -o $@
 
 # Local pd/*.c sources (e.g. playdate/main.c). Listed BEFORE the shared
 # $(R)/%.c rule so a local source wins the object-name race against a
 # same-named top-level file: top-level main.c is the host frontend, which
 # must not be compiled here (it pulls in POSIX headers like <termios.h>).
-# Shared sources fall through to the $(R) rule (no local gwen.c/vt.c exist).
-$(o)/%.o: %.c $(vt_h) | $(R)/out/lib/prelude.h
+# Shared sources fall through to the $(R) rule (no local gwen.c/data.c exist).
+$(o)/%.o: %.c $(data_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
-# Shared C sources from gwen.c/vt.c and font/.
-$(o)/%.o: $(R)/%.c $(vt_h) | $(R)/out/lib/prelude.h
+# Shared C sources from gwen.c/data.c and font/.
+$(o)/%.o: $(R)/%.c $(data_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
@@ -125,7 +125,7 @@ $(o)/%.o: %.s
 
 # SDK setup.c is reached via an absolute path; an explicit rule keeps
 # its output filename predictable.
-$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(vt_h) | $(R)/out/lib/prelude.h
+$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(data_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
@@ -138,11 +138,11 @@ $(o)/pdex.elf: $(pd_o) $(pd_lds)
 # The simulator .so is a host (x86_64) shared object loaded via dlopen, so it
 # needs the data self-quote sentinels pinned too. It's an ordinary host link
 # with no full -T script of its own, so the host INSERT-after-.text fragment
-# (kernel/vt.ld) augments the default script exactly as it does for host/.
-pd_host_vt_lds = $(R)/vt.ld
-$(o)/pdex.so: $(pd_src) $(pd_host_vt_lds)
+# (kernel/data.ld) augments the default script exactly as it does for host/.
+pd_host_data_lds = $(R)/data.ld
+$(o)/pdex.so: $(pd_src) $(pd_host_data_lds)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(CCACHE) gcc -g -shared -fPIC -Wl,-T,$(pd_host_vt_lds) -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o $(o)/pdex.so $(pd_src)
+	@$(CCACHE) gcc -g -shared -fPIC -Wl,-T,$(pd_host_data_lds) -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o $(o)/pdex.so $(pd_src)
 
 .PRECIOUS: $(o)/%elf

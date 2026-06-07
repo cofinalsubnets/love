@@ -35,12 +35,12 @@ SECTIONS
     .text : {
         *(.text .text.*)
         /* gwen data self-quote sentinels: kept contiguous and in enum
-           order (gwen_data_vt.NN) so g_typ() recovers a kind from an ap's
-           slot index. Mirrors g/vt.ld for the host link. */
+           order (gwen_data.NN) so g_typ() recovers a kind from an ap's
+           slot index. Mirrors g/data.ld for the host link. */
         . = ALIGN(16);
-        __start_gwen_data_vt = .;
-        KEEP(*(SORT_BY_NAME(gwen_data_vt.*)))
-        __stop_gwen_data_vt = .;
+        __start_gwen_data = .;
+        KEEP(*(SORT_BY_NAME(gwen_data.*)))
+        __stop_gwen_data = .;
     } :text
 
     /* Move to the next memory page for .rodata */

@@ -6,7 +6,7 @@
  * code/rodata. .data is loaded from flash and copied to SRAM by reset_handler
  * (crt0 in rp2040.c); .bss is zeroed there. The stack lives at the top of the
  * 264 KB main SRAM. Mirrors the freestanding arch/<arch>/*.lds, including the
- * contiguous gwen_data_vt sentinel block that g_typ() indexes into. */
+ * contiguous gwen_data sentinel block that g_typ() indexes into. */
 
 OUTPUT_FORMAT("elf32-littlearm")
 ENTRY(reset_handler)
@@ -27,12 +27,12 @@ SECTIONS {
   .text : {
     *(.text .text.*)
     /* gwen data self-quote sentinels: kept contiguous and in enum order
-       (gwen_data_vt.NN) so g_typ() recovers a kind from an ap's slot index.
-       Mirrors vt.ld for the host link. */
+       (gwen_data.NN) so g_typ() recovers a kind from an ap's slot index.
+       Mirrors data.ld for the host link. */
     . = ALIGN(16);
-    __start_gwen_data_vt = .;
-    KEEP(*(SORT_BY_NAME(gwen_data_vt.*)))
-    __stop_gwen_data_vt = .;
+    __start_gwen_data = .;
+    KEEP(*(SORT_BY_NAME(gwen_data.*)))
+    __stop_gwen_data = .;
   } > FLASH
 
   .rodata : {

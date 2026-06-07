@@ -1,7 +1,7 @@
 #!/bin/sh
-# pre-commit: keep CLAUDE.md in sync with its source of truth, test/lang.g.
+# pre-commit: keep CLAUDE.md in sync with its source of truth, test/CLAUDE.g.
 #
-# CLAUDE.md is test/lang.g wrapped in a ```gwen fence (tools/gen_claudemd.g). An
+# CLAUDE.md is test/CLAUDE.g wrapped in a ```gwen fence (tools/gen_claudemd.g). An
 # "up-to-date" CLAUDE.md is one regenerated from a KNOWN-GOOD tree, so `make
 # claudemd` does a clean host build and runs the whole corpus on both gl and gl0
 # before regenerating. If any of that fails -- or if the regenerated CLAUDE.md
@@ -15,7 +15,7 @@ cd "$root"
 # Only the runtime/compiler/doc-source can affect CLAUDE.md or whether it is valid;
 # skip the (expensive) clean rebuild for commits that touch none of them.
 if git diff --cached --quiet -- \
-     test/lang.g tools/gen_claudemd.g gwen.c gwen.h vt.c vt.h vt.ld main.c \
+     test/CLAUDE.g tools/gen_claudemd.g gwen.c gwen.h data.c data.h data.ld main.c \
      common.mk Makefile gwen/ ; then
   exit 0
 fi
@@ -28,7 +28,7 @@ if ! make claudemd >/dev/null 2>&1; then
 fi
 
 if ! git diff --quiet -- CLAUDE.md; then
-  echo "pre-commit: CLAUDE.md was stale and has been regenerated from test/lang.g." >&2
+  echo "pre-commit: CLAUDE.md was stale and has been regenerated from test/CLAUDE.g." >&2
   echo "            review and stage it, then re-commit:  git add CLAUDE.md" >&2
   exit 1
 fi
