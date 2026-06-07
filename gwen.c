@@ -1560,13 +1560,22 @@ static g_vm(numap_swap) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
  return Ap(g_vm_ap, f); }
 union u numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
+// numap/numtap are tail-called (Ap) from the fused arg/quote handlers, which bump
+// Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
+// operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: g_vm_gc
+// re-dispatches via Continue() -> cell(Ip)->ap, which would jump into that operand.
+// Instead gc by hand and re-Ap ourselves (we read but don't mutate before this, so
+// re-entry is idempotent); the dispatch never has to trust Ip.
+#define NumapHave(self) if (Sp < Hp + 2) { \
+ Pack(f); f = g_please(f, 2); if (!g_ok(f)) return gtrap(f); \
+ return Unpack(f), Ap(self, f); }
 static g_vm(g_vm_numap) {
- Have(2);
+ NumapHave(g_vm_numap);
  word n = Sp[1], x = Sp[0], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = n, dst[1] = g_numap, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = numap_drive, Continue(); }
 static g_vm(g_vm_numtap) {
- Have(2);
+ NumapHave(g_vm_numtap);
  word fs = getnum(Ip[1].x), n = Sp[1], x = Sp[0], *dst = &Sp[fs + 2] - 3, ret = Sp[fs + 2];
  dst[0] = n, dst[1] = g_numap, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = numap_drive, Continue(); }
@@ -2749,8 +2758,8 @@ static g_inline struct g *gzread1str(struct g*f) {
  for (f = str0(f, lim); g_ok(f); f = grbufg(f, lim), lim *= 2)
   for (; n < lim; txt(f->sp[0])[n++] = c) {
    if (!g_ok(f = zgetc(f))) return f;     // threaded; char in f->b
-   else if ((c = f->b) == '"')                  // close quote; "" normalizes to nil (0)
-    return n ? (len(f->sp[0]) = n, f) : (f->sp[0] = nil, f);
+   else if ((c = f->b) == '"')                  // close quote; "" is a distinct
+    return len(f->sp[0]) = n, f;                 // (truthy) empty string, + identity
    else if (c == EOF) return encode(f, g_status_more);
    else if (c == '\\') {                               // escape: take next char
     if (!g_ok(f = zgetc(f))) return f;
@@ -3279,9 +3288,71 @@ AVM_SLOWDIV(rem, VOP_REM, %, g_fmod(ad, bd))    // NaN on bd == 0
 // arith builtins take an explicit stack address but
 // empirically this is compiled away on both GCC and
 // clang so TCO is preserved.
-AVM_OVF(add, __builtin_add_overflow)
 AVM_OVF(sub, __builtin_sub_overflow)
 AVM_OVF(mul, __builtin_mul_overflow)
+
+// `+` is overloaded: still arithmetic add, but generic over strings and lists,
+// where it is order-preserving concatenation -- a precedes b in the result, with a
+// scalar lifted into the sequence on the side it appears (left -> front, right ->
+// back). This is deliberately noncommutative (unlike numeric add): the written
+// order survives, since concatenation is inherently ordered. (nil counts as the
+// number 0 here, not the empty list.)
+//   str + str   -> byte concat            list + list -> spine append
+//   str + list  -> (cons str list)        list + str  -> (append list (list str))
+//   num + str   -> byte at front          str + num   -> byte at back
+//   num + list  -> (cons num list)        list + num  -> (append list (list num))
+// RUNTIME FLAG: g_add_lr selects order-preserving (left->front, right->back); set
+// it false for the commutative reading (smaller operand always joins the front, so
+// a+b == b+a like numeric add). A plain mutable global -> toggleable at runtime.
+static bool g_add_lr = true;
+static g_inline bool seq_num(word x) { return ISNUM(x) || cplxp(x); }
+// coerce a numeric to a string byte: floor(|x|) mod 256, where |x| of a complex
+// is its modulus (matching abs's L2 vector->scalar coercion, see g_vm_abs).
+static g_inline unsigned char seq_byte(word x) {
+ g_flo_t v = cplxp(x)
+  ? g_sqrt(cplx_re(x) * cplx_re(x) + cplx_im(x) * cplx_im(x)) : TOFLO(x);
+ if (v < 0) v = -v;
+ return (unsigned char) (uintptr_t) g_trunc(v); }
+static g_vm(g_vm_add_seq) {
+ word a = Sp[0], b = Sp[1];
+ if (twop(a) && twop(b)) {                       // list + list -> append a..b
+  uintptr_t n = llen(a); Have(n * Width(struct g_pair));
+  a = Sp[0], b = Sp[1];
+  struct g_pair *base = (struct g_pair*) Hp, *w = base;
+  Hp += n * Width(struct g_pair);
+  for (word l = a; twop(l); l = B(l), w++) ini_two(w, A(l), word(w + 1));
+  (w - 1)->b = b;                                // last cdr -> b
+  return *++Sp = word(base), Ip++, Continue(); }
+ if (twop(a) || twop(b)) {                        // elt <-> list
+  bool front = !g_add_lr || twop(b);              // element on the left -> front
+  word lst = twop(a) ? a : b, elt = twop(a) ? b : a;
+  if (front) { Sp[0] = elt, Sp[1] = lst; return Ap(g_vm_cons, f); }  // (cons elt list)
+  uintptr_t n = llen(lst) + 1; Have(n * Width(struct g_pair));        // append elt at tail
+  lst = twop(Sp[0]) ? Sp[0] : Sp[1], elt = twop(Sp[0]) ? Sp[1] : Sp[0];
+  struct g_pair *base = (struct g_pair*) Hp, *w = base;
+  Hp += n * Width(struct g_pair);
+  for (word l = lst; twop(l); l = B(l), w++) ini_two(w, A(l), word(w + 1));
+  ini_two(w, elt, nil);                           // trailing (elt . nil)
+  return *++Sp = word(base), Ip++, Continue(); }
+ if (strp(a) && strp(b)) return Ap(g_vm_scat, f); // str + str -> byte concat
+ word s = strp(a) ? a : b, e = strp(a) ? b : a;   // string and the other operand
+ if (strp(s) && seq_num(e)) {                     // num <-> str -> byte spliced
+  bool front = !g_add_lr || strp(b);              // number on the left -> front
+  struct g_str *y = str(s); uintptr_t len = len(y) + 1, req = str_type_width + b2w(len);
+  unsigned char c = seq_byte(e); Have(req); y = str(strp(Sp[0]) ? Sp[0] : Sp[1]);
+  struct g_str *z = ini_str((struct g_str*) Hp, len); Hp += req;
+  if (front) txt(z)[0] = c, memcpy(txt(z) + 1, txt(y), len(y));
+  else memcpy(txt(z), txt(y), len(y)), txt(z)[len(y)] = c;
+  return *++Sp = word(z), Ip++, Continue(); }
+ return *++Sp = nil, Ip++, Continue(); }          // unsupported mix -> nil
+g_vm(g_vm_add) {
+ word a = Sp[0], b = Sp[1]; intptr_t t;
+ if (nump(a) && nump(b)
+     && !__builtin_add_overflow((intptr_t) getnum(a), (intptr_t) getnum(b), &t)
+     && t >= FIX_MIN && t <= FIX_MAX)
+  return *++Sp = putnum(t), Ip++, Continue();
+ if (strp(a) || strp(b) || twop(a) || twop(b)) return Ap(g_vm_add_seq, f);
+ return Ap(g_vm_add_slow, f); }
 
 AVM_DIV(quot, /)
 AVM_DIV(rem, %)

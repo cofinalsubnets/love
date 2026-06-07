@@ -7,8 +7,8 @@
   (= "-7"   (inspect -7))
   (= "0"    (inspect 0))
 
-  ; "" normalizes to 0 (no distinct empty-string value), so it prints as 0
-  (= "0"              (inspect ""))
+  ; "" is a distinct empty string, printed as a pair of quotes
+  (= "\"\""           (inspect ""))
   ; strings: printed with surrounding quotes; specials re-escaped
   (= "\"hi\""         (inspect "hi"))
   (= "\"a\\nb\""      (inspect "a\nb"))

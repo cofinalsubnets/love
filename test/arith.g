@@ -61,9 +61,16 @@
  (flop (% 7 0))
  (flop (% 7.0 0.0))
 
- ; --- non-numeric operands → nil ---
- (nilp (+ "x" 1))
- (nilp (+ 1 "x"))
+ ; --- + is generic: string/list concat, order-preserving; - stays numeric (nil) ---
+ (= "xB" (+ "x" 66))                ; str + num -> byte (floor|n| mod 256) at back
+ (= "Bx" (+ 66 "x"))                ; num + str -> byte at front
+ (= "xB" (+ "x" 66.9))              ; numeric coerced via floor(|n|)
+ (= "abcd" (+ "ab" "cd"))           ; str + str -> concat
+ (= '(1 2 3 4) (+ '(1 2) '(3 4)))   ; list + list -> append
+ (= '("x" 1 2) (+ "x" '(1 2)))      ; str + list -> (cons str list)
+ (= '(1 2 "x") (+ '(1 2) "x"))      ; list + str -> (append list (list str))
+ (= '(5 1 2) (+ 5 '(1 2)))          ; num + list -> cons at front
+ (= '(1 2 5) (+ '(1 2) 5))          ; list + num -> append at back
  (nilp (- "a" "b"))
 
  ; --- equality with promotion across nump/flop ---
