@@ -1,4 +1,4 @@
 (: fin (gensym ())
-   (li k x) (? (= fin x) (k ()) (li (\ z (k (cons x z)))))
+   (li k x) (? (= fin x) (k ()) (li (\ z (k (X x z)))))
    lis (li id)
    (assert (= '(1 2 3 4 5) (lis 1 2 3 4 5 fin))))

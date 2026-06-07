@@ -46,13 +46,13 @@
              fsz  (rd32 s (+ o 16))                       ; p_filesz
              (? (&& (= 1 (rd32 s o))                      ; PT_LOAD
                  (&& (< 0 fsz) (&& (<= FLASH-LO pa) (< pa FLASH-HI))))
-                (cons (L pa (rd32 s (+ o 4)) fsz) rest)
+                (X (L pa (rd32 s (+ o 4)) fsz) rest)
                 rest))
           0))
     0))
 
-(: (min-pa segs m) (? (twop segs) (min-pa (cdr segs) (? (< (get 0 0 (car segs)) m) (get 0 0 (car segs)) m)) m)
-   (max-end segs m) (? (twop segs) (max-end (cdr segs) (: e (+ (get 0 0 (car segs)) (get 0 2 (car segs))) (? (< m e) e m))) m))
+(: (min-pa segs m) (? (twop segs) (min-pa (B segs) (? (< (get 0 0 (A segs)) m) (get 0 0 (A segs)) m)) m)
+   (max-end segs m) (? (twop segs) (max-end (B segs) (: e (+ (get 0 0 (A segs)) (get 0 2 (A segs))) (? (< m e) e m))) m))
 
 ; --- emit one UF2 block for page i ----------------------------------
 (: (emit-block out bo img isz base i nblocks)
@@ -67,9 +67,9 @@
       _ (bcopy out (+ bo 32) img (* i 256) 256)          ; 256B payload (img is pre-padded)
       (wr out (+ bo 508) 4 UF2-MAGIC-END)))
 
-(: args    (cdr argv)
-   inpath  (? (twop args) (car args) (die "usage: elf2uf2.g INPUT.elf OUTPUT.uf2"))
-   outpath (? (twop (cdr args)) (car (cdr args)) (die "usage: elf2uf2.g INPUT.elf OUTPUT.uf2"))
+(: args    (B argv)
+   inpath  (? (twop args) (A args) (die "usage: elf2uf2.g INPUT.elf OUTPUT.uf2"))
+   outpath (? (twop (B args)) (A (B args)) (die "usage: elf2uf2.g INPUT.elf OUTPUT.uf2"))
    port    (open inpath "r")
    _       (? port 0 (die (scat "cannot open " inpath)))
    s       (slurp port)
@@ -81,7 +81,7 @@
    phnum   (rd16 s 44)
    segs    (loads s phoff phent phnum)
    _       (? (twop segs) 0 (die "no flash-resident PT_LOAD segments"))
-   base    (align-down (min-pa segs (get 0 0 (car segs))) 256)
+   base    (align-down (min-pa segs (get 0 0 (A segs))) 256)
    end     (align-up (max-end segs 0) 256)
    isz     (- end base)
    img     (bufnew isz)                                  ; zero-filled contiguous flash image

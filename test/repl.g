@@ -195,8 +195,8 @@
 
      ; --- floats: parse and round-trip via the gwen reader ---
      ; "1.5" parses to (1.5); the value is an actual flo, not a symbol
-     (= 1.5 (car (parseall '(49 46 53))))
+     (= 1.5 (A (parseall '(49 46 53))))
      ; "1e3" parses as float, not symbol
-     (= 1000.0 (car (parseall '(49 101 51))))
+     (= 1000.0 (A (parseall '(49 101 51))))
      ; "1.2.3" stays a symbol (g_strtod partial-consume)
-     (symp (car (parseall '(49 46 50 46 51))))))
+     (symp (A (parseall '(49 46 50 46 51))))))

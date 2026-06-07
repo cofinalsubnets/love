@@ -1,5 +1,5 @@
 (\ egg (:
- (go e z a) (? a (go e (e (car a)) (cdr a)) z)
+ (go e z a) (? a (go e (e (A a)) (B a)) z)
  t0 (clock 0)
  e (go (go ev 0 egg) 0 egg)
  _ (put 'ev e globals)

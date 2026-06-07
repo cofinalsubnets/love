@@ -47,22 +47,22 @@
 (: (merge a b)
    (? (twop a)
       (? (twop b)
-         (? (<= (car a) (car b)) (cons (car a) (merge (cdr a) b)) (cons (car b) (merge a (cdr b))))
+         (? (<= (A a) (A b)) (X (A a) (merge (B a) b)) (X (A b) (merge a (B b))))
          a)
       b)
-   (msort l) (? (twop (cdr l)) (: n (>> (len l) 1) (merge (msort (take n l)) (msort (drop n l)))) l))
+   (msort l) (? (twop (B l)) (: n (>> (len l) 1) (merge (msort (take n l)) (msort (drop n l)))) l))
 
 ; --- section / program-header records -------------------------------
 ; section record = (name type flags offset size); fields via (get 0 i rec).
 (: (sec-name s) (get 0 0 s) (sec-type s) (get 0 1 s) (sec-flags s) (get 0 2 s)
    (sec-off s)  (get 0 3 s) (sec-size s) (get 0 4 s)
-   (find-sec secs nm) (? (twop secs) (? (= nm (sec-name (car secs))) (car secs) (find-sec (cdr secs) nm))))
+   (find-sec secs nm) (? (twop secs) (? (= nm (sec-name (A secs))) (A secs) (find-sec (B secs) nm))))
 
 (: (sections s shoff shent shnum stroff)
    ((: (loop i)
        (? (< i shnum)
           (: o  (+ shoff (* i shent))
-             (cons (L (cstr s (+ stroff (rd32 s o)))   ; sh_name -> name
+             (X (L (cstr s (+ stroff (rd32 s o)))   ; sh_name -> name
                       (rd32 s (+ o 4))                 ; sh_type
                       (rd64 s (+ o 8))                 ; sh_flags
                       (rd64 s (+ o 24))                ; sh_offset
@@ -78,7 +78,7 @@
           (: o    (+ phoff (* i phent))
              rest (loop (+ i 1))
              (? (&& (= 1 (rd32 s o)) (< 0 (rd64 s (+ o 40))))   ; PT_LOAD && p_memsz>0
-                (cons (L (rd32 s (+ o 4)) (rd64 s (+ o 8)) (rd64 s (+ o 16)) (rd64 s (+ o 32)) (rd64 s (+ o 40))) rest)
+                (X (L (rd32 s (+ o 4)) (rd64 s (+ o 8)) (rd64 s (+ o 16)) (rd64 s (+ o 32)) (rd64 s (+ o 40))) rest)
                 rest))
           0))
     0))
@@ -90,14 +90,14 @@
 (: (relocs-in s off n acc)
    (? (< 0 n)
       (relocs-in s (+ off 24) (- n 1)
-         (? (= 2 (rd32 s (+ off 8))) (cons (rd64 s off) acc) acc))   ; abs64 -> keep r_offset
+         (? (= 2 (rd32 s (+ off 8))) (X (rd64 s off) acc) acc))   ; abs64 -> keep r_offset
       acc))
 
 ; secs scanned for SHT_RELA(4) sections named .rela* whose target is allocated.
 (: (collect s secs all)
    (? (twop secs)
-      (: sec  (car secs)
-         more (collect s (cdr secs) all)
+      (: sec  (A secs)
+         more (collect s (B secs) all)
          (? (&& (= 4 (sec-type sec)) (prefix? ".rela" (sec-name sec)))
             (: tgt (find-sec all (ssub (sec-name sec) 5 (len (sec-name sec))))
                (? (&& tgt (!= 0 (& (sec-flags tgt) 2)))             ; SHF_ALLOC == 2
@@ -110,12 +110,12 @@
 ; Each block: <page RVA u32><block size u32> then u16 entries (type:4|off:12),
 ; padded to a 4-byte multiple with a type-0 (ABSOLUTE) no-op entry.
 (: (pageof r) (& r (~ 4095))
-   (samepage page lst) (? (&& (twop lst) (= page (pageof (car lst)))) (cons (car lst) (samepage page (cdr lst))))
-   (dropsame page lst) (? (&& (twop lst) (= page (pageof (car lst)))) (dropsame page (cdr lst)) lst))
+   (samepage page lst) (? (&& (twop lst) (= page (pageof (A lst)))) (X (A lst) (samepage page (B lst))))
+   (dropsame page lst) (? (&& (twop lst) (= page (pageof (A lst)))) (dropsame page (B lst)) lst))
 
 (: (emit-blocks o rvas)
    (? (twop rvas)
-      (: page    (pageof (car rvas))
+      (: page    (pageof (A rvas))
          here    (samepage page rvas)
          rest    (dropsame page rvas)
          ents    (map (\ r (| (<< 10 12) (& r 4095))) here)        ; DIR64 == 10
@@ -151,9 +151,9 @@
     0 o))
 
 ; --- driver ----------------------------------------------------------
-(: args       (cdr argv)
-   inpath     (? (twop args) (car args) (die "usage: elf2efi.g INPUT.elf OUTPUT.efi"))
-   outpath    (? (twop (cdr args)) (car (cdr args)) (die "usage: elf2efi.g INPUT.elf OUTPUT.efi"))
+(: args       (B argv)
+   inpath     (? (twop args) (A args) (die "usage: elf2efi.g INPUT.elf OUTPUT.efi"))
+   outpath    (? (twop (B args)) (A (B args)) (die "usage: elf2efi.g INPUT.elf OUTPUT.efi"))
    port       (open inpath "r")
    _          (? port 0 (die (scat "cannot open " inpath)))
    s          (slurp port)

@@ -21,7 +21,7 @@
  ; === row NUM (a = 65 = 'A') ===========================================
  (= 67 (+ 65 2))                               ; NUM+NUM -> arithmetic
  (aall (= @(66 67) (+ 65 @(1 2))))             ; NUM+ARR -> broadcast add
- (= '(65 1 2) (+ 65 '(1 2)))                   ; NUM+LIST -> cons (num element)
+ (= '(65 1 2) (+ 65 '(1 2)))                   ; NUM+LIST -> X (num element)
  (= "Aab" (+ 65 "ab"))   (strp (+ 65 "ab"))    ; NUM+STR -> byte+str (string)
  (= "Acd" (string (+ 65 sa-U)))   (sa-u (+ 65 sa-U)) ; NUM+USYM -> sym, byte lifted
  (= 'Aef (+ 65 'ef))   (sa-i (+ 65 'ef))       ; NUM+ISYM -> interned sym
@@ -44,7 +44,7 @@
  ; === row STR (a = "ab") ===============================================
  (= "abC" (+ "ab" 67))   (strp (+ "ab" 67))    ; STR+NUM -> byte at back
  (nilp (+ "ab" @(1 2)))                        ; STR+ARR -> nil
- (= '("ab" 1 2) (+ "ab" '(1 2)))               ; STR+LIST -> cons (str element)
+ (= '("ab" 1 2) (+ "ab" '(1 2)))               ; STR+LIST -> X (str element)
  (= "abcd" (+ "ab" "cd"))                      ; STR+STR
  (= "abcd" (+ "ab" sa-U))   (strp (+ "ab" sa-U)) ; STR+USYM -> demote to str
  (= "abef" (+ "ab" 'ef))    (strp (+ "ab" 'ef))  ; STR+ISYM -> demote to str
@@ -52,7 +52,7 @@
  ; === row USYM (a = $cd) ===============================================
  (= "cdC" (string (+ sa-U 67)))   (sa-u (+ sa-U 67)) ; USYM+NUM -> sym (byte at back)
  (nilp (+ sa-U @(1 2)))                        ; USYM+ARR -> nil
- (= 3 (len (+ sa-U '(1 2))))                   ; USYM+LIST -> cons (sym element)
+ (= 3 (len (+ sa-U '(1 2))))                   ; USYM+LIST -> X (sym element)
  (= "cdab" (+ sa-U "ab"))   (strp (+ sa-U "ab"))  ; USYM+STR -> demote to str
  (= "cdcd" (string (+ sa-U sa-U)))   (sa-u (+ sa-U sa-U)) ; USYM+USYM -> usym
  (= "cdef" (string (+ sa-U 'ef)))    (sa-u (+ sa-U 'ef))  ; USYM+ISYM -> demote to usym
@@ -60,7 +60,7 @@
  ; === row ISYM (a = 'ef) ===============================================
  (= 'efC (+ 'ef 67))   (sa-i (+ 'ef 67))       ; ISYM+NUM -> interned sym
  (nilp (+ 'ef @(1 2)))                         ; ISYM+ARR -> nil
- (= 3 (len (+ 'ef '(1 2))))                    ; ISYM+LIST -> cons (sym element)
+ (= 3 (len (+ 'ef '(1 2))))                    ; ISYM+LIST -> X (sym element)
  (= "efab" (+ 'ef "ab"))   (strp (+ 'ef "ab")) ; ISYM+STR -> demote to str
  (= "efcd" (string (+ 'ef sa-U)))   (sa-u (+ 'ef sa-U)) ; ISYM+USYM -> demote to usym
  (= 'efef (+ 'ef 'ef))   (sa-i (+ 'ef 'ef))    ; ISYM+ISYM -> interned sym

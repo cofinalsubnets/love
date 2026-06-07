@@ -34,7 +34,7 @@
      _ (fputs wp txt)
      _ (close wp)
      rp (open "/tmp/gwen-io-test" "r")
-     (slurp acc) (: c (fgetc rp) (? (= c -1) (rev acc) (slurp (cons c acc))))
+     (slurp acc) (: c (fgetc rp) (? (= c -1) (rev acc) (slurp (X c acc))))
      rd (string (slurp 0))
      _ (close rp)
      (= txt rd))
@@ -61,9 +61,9 @@
   (= 1 (fread (strin '(49)) 99))                          ; "1"
   (= 'a (fread (strin '(97)) 99))                         ; "a"
   (: r (fread (strin '(40 49 32 50 41)) 99)               ; "(1 2)"
-     (do (twop r) (= 1 (car r)) (= 2 (cadr r))))
+     (do (twop r) (= 1 (A r)) (= 2 (AB r))))
   (: r (fread (strin '(39 49)) 99)                        ; "'1" -> (` 1)
-     (do (twop r) (= 1 (cadr r))))
+     (do (twop r) (= 1 (AB r))))
   ; "hi" -- string literal round-trip through the ci port.
   (= (string (X 104 (X 105 0))) (fread (strin '(34 104 105 34)) 99))
 

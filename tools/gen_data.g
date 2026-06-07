@@ -83,15 +83,15 @@
                      nm (cstr s (+ stroff (rd32 s o)))
                      (loop (+ i 1)
                            (? (prefix? prefix nm)
-                              (cons (cons (rdw s (+ o szoff))     ; sh_size
+                              (X (X (rdw s (+ o szoff))     ; sh_size
                                           (rdw s (+ o aloff))) acc) ; sh_addralign
                               acc)))
                   acc)
                (loop 0 0))
       n     (foldl (\ k _ (+ k 1)) 0 secs)
-      size  (car (car secs))
-      okeq  (all (\ e (= (car e) size)) secs)
-      align (foldl (\ m e (? (< m (cdr e)) (cdr e) m)) 0 secs)
+      size  (A (A secs))
+      okeq  (all (\ e (= (A e) size)) secs)
+      align (foldl (\ m e (? (< m (B e)) (B e) m)) 0 secs)
       unit  (align-up size align)
       ; the (? ...) is the BODY of this binding block, so it runs when gen is
       ; called with n/okeq/unit in scope -- not at definition time.
@@ -100,9 +100,9 @@
          (not okeq)  (die "sentinel sections have unequal sizes -- they no longer tile evenly")
          (emit p unit (pow2? unit) (- (bitlen unit) 1)))))
 
-; --- driver: (cdr argv) = (data.o [-o out]) --------------------------
-(: args (cdr argv)
-   path (? (twop args) (car args) (die "usage: gen_data.g <data.o> [-o out]"))
-   rest (cdr args)
-   p (? (&& (twop rest) (= (car rest) "-o")) (open (car (cdr rest)) "w") out)
+; --- driver: (B argv) = (data.o [-o out]) --------------------------
+(: args (B argv)
+   path (? (twop args) (A args) (die "usage: gen_data.g <data.o> [-o out]"))
+   rest (B args)
+   p (? (&& (twop rest) (= (A rest) "-o")) (open (A (B rest)) "w") out)
    (gen path p))

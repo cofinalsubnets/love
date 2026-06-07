@@ -9,7 +9,7 @@
           0))
     0 (len s)))
 
-(: p (open (car (cdr argv)) "r")
+(: p (open (A (B argv)) "r")
    _ (? p 0 (: _ (fputs err "lcat: cannot open input") (exit 1)))
    _ (fputc out 34)                  ; opening "
    _ ((: (g first e p)               ; print each form, space-separated

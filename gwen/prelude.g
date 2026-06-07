@@ -23,11 +23,13 @@
                                  (? (= 0 (mod e 2)) h2 (mod (* h2 b) m)))))
 ; functional bounded draw: (value . st') with value in [0,n), riding rand-next
 ; (full-width draw) + modulo. The global-stream analogue is the `rand` bif.
-(: (randint st n) (: r (rand-next st) (cons (mod (car r) n) (cdr r))))
+(: (randint st n) (: r (rand-next st) (X (mod (A r) n) (B r))))
 (: AAA (co A AA) AAB (co A AB)
    ABA (co A BA) ABB (co A BB)
    BAA (co B AA) BAB (co B AB)
    BBA (co B BA) BBB (co B BB))
+; cons/car/cdr (+ c[ad]+r) are compatibility aliases; X/A/B + the AB-compound names
+; (AA AB .. BBB above) are the native primitives the prelude/compiler standardize on.
 (: cons X car A cdr B
    caar AA cadr AB cdar BA cddr BB
    caaar AAA caadr AAB
@@ -51,11 +53,11 @@
 ; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (seek 1 th), and
 ; the src rides the thread span so GC traces it. Helpers pass th/f/n explicitly -- a
 ; closure over the forward-bound th miscompiles under the bootstrap c0.
-(: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (cons f (cons acc 0))))
+(: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (X f (X acc 0))))
    (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) g_vm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
    (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) g_vm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
-     src (cons '\ (cons 'x (cons (nfnest f n 'x) 0)))  ; alloc before lam; printer source
+     src (X '\ (X 'x (X (nfnest f n 'x) 0)))  ; alloc before lam; printer source
      th (lam (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
      _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past lam: th can't move
      _ (poke (+ 1 (* 2 n)) g_vm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
@@ -89,39 +91,39 @@
 (: (scomb f g a x) (f a (g a x))
    (bcomb f g x) (f (g x))
    _ (set-scomb scomb) _ (set-bcomb bcomb))
-(: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
-   (foldl f z l) (? (twop l) (foldl f (f z (car l)) (cdr l)) z)
-   (foldr f z l) (? (twop l) (f (car l) (foldr f z (cdr l))) z))
-(: (foldl1 f l) (foldl f (car l) (cdr l))
+(: (map f l) (? (twop l) (X (f (A l)) (map f (B l))))
+   (foldl f z l) (? (twop l) (foldl f (f z (A l)) (B l)) z)
+   (foldr f z l) (? (twop l) (f (A l) (foldr f z (B l))) z))
+(: (foldl1 f l) (foldl f (A l) (B l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
-   (filter p l) (? (twop l) (: m (filter p (cdr l)) (? (p (car l)) (cons (car l) m) m)))
-   (init l) (? (cdr l) (cons (car l) (init (cdr l))))
-   (last l) (? (cdr l) (last (cdr l)) (car l))
-   (each l f) (? (twop l) (: _ (f (car l)) (each (cdr l) f)))
-   (ldel x l) (? (twop l) (? (= (car l) x) (cdr l) (cons (car l) (ldel x (cdr l)))))
-   (all f l) (? (twop l) (? (f (car l)) (all f (cdr l))) 1)
-   (any f l) (? (twop l) (? (f (car l)) 1 (any f (cdr l))))
-   (cat a b) (foldr cons b a))
+   (filter p l) (? (twop l) (: m (filter p (B l)) (? (p (A l)) (X (A l) m) m)))
+   (init l) (? (B l) (X (A l) (init (B l))))
+   (last l) (? (B l) (last (B l)) (A l))
+   (each l f) (? (twop l) (: _ (f (A l)) (each (B l) f)))
+   (ldel x l) (? (twop l) (? (= (A l) x) (B l) (X (A l) (ldel x (B l)))))
+   (all f l) (? (twop l) (? (f (A l)) (all f (B l))) 1)
+   (any f l) (? (twop l) (? (f (A l)) 1 (any f (B l))))
+   (cat a b) (foldr X b a))
 ; merge sort on lists: (sort le l) orders l by the strict less-than predicate
 ; le (e.g. (sort < xs)). top-down alternating split + merge; O(n log n).
 (: (merge le a b) (? (atomp a) b (atomp b) a
-                     (le (car a) (car b)) (cons (car a) (merge le (cdr a) b))
-                     (cons (car b) (merge le a (cdr b))))
-   (sortsplit l) (? (atomp l) (cons l 0) (atomp (cdr l)) (cons l 0)
-                    (: r (sortsplit (cddr l)) (cons (cons (car l) (car r)) (cons (cadr l) (cdr r)))))
-   (sort le l) (? (atomp l) l (atomp (cdr l)) l
-                  (: s (sortsplit l) (merge le (sort le (car s)) (sort le (cdr s))))))
+                     (le (A a) (A b)) (X (A a) (merge le (B a) b))
+                     (X (A b) (merge le a (B b))))
+   (sortsplit l) (? (atomp l) (X l 0) (atomp (B l)) (X l 0)
+                    (: r (sortsplit (BB l)) (X (X (A l) (A r)) (X (AB l) (B r)))))
+   (sort le l) (? (atomp l) l (atomp (B l)) l
+                  (: s (sortsplit l) (merge le (sort le (A s)) (sort le (B s))))))
 (: catmap (co (flip foldr 0) (co cat))
-   (assq x l) (? l (? (= x (caar l)) (car l) (assq x (cdr l))))
-   (lidx x) ((: (f n l) (? (twop l) (? (= x (car l)) n (f (+ 1 n) (cdr l))) -1)) 0)
+   (assq x l) (? l (? (= x (AA l)) (A l) (assq x (B l))))
+   (lidx x) ((: (f n l) (? (twop l) (? (= x (A l)) n (f (+ 1 n) (B l))) -1)) 0)
    memq (co any =)
-   (zip a b) (? (twop a) (? (twop b) (cons (cons (car a) (car b)) (zip (cdr a) (cdr b)))))
-   rev (foldl (flip cons) 0)
-   (drop n l) (? n (drop (- n 1) (cdr l)) l)
-   (take n l) (? n (cons (car l) (take (- n 1) (cdr l))))
-   (part p) (foldr (\ a m (? (p a) (cons (cons a (car m)) (cdr m))
-                                        (cons (car m) (cons a (cdr m))))) '(0)))
+   (zip a b) (? (twop a) (? (twop b) (X (X (A a) (A b)) (zip (B a) (B b)))))
+   rev (foldl (flip X) 0)
+   (drop n l) (? n (drop (- n 1) (B l)) l)
+   (take n l) (? n (X (A l) (take (- n 1) (B l))))
+   (part p) (foldr (\ a m (? (p a) (X (X a (A m)) (B m))
+                                        (X (A m) (X a (B m))))) '(0)))
 (: (strin cl)
  (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (lam 5))))))
  (strout _)
@@ -130,44 +132,44 @@
  (slurp i) (: (rl i) (: c (fgetc i) (? (!= c -1) (X c (rl i)))) (string (rl i)))
  (inspect x) (: o (strout 0) _ (fputx o x) (outstr o)))
 ; here are some macro definitions
-(: l (foldr (\ a l (cons cons (cons a (cons l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
-(:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) 1))))
-(:: '|| (\ l (: (or l) (? l (: y (gensym 0) (list ': y (car l) (list '? y y (or (cdr l)))))) (or l))))
-(:: ':- (\ a (cons ': (cat (cdr a) (cons (car a) 0)))))
-(:: '?- (\ a (cons '? (cat (cdr a) (cons (car a) 0)))))
-(:: '>>= (\ l (cons (last l) (init l))))
+(: l (foldr (\ a l (X X (X a (X l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
+(:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) 1))))
+(:: '|| (\ l (: (or l) (? l (: y (gensym 0) (list ': y (A l) (list '? y y (or (B l)))))) (or l))))
+(:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
+(:: '?- (\ a (X '? (cat (B a) (X (A a) 0)))))
+(:: '>>= (\ l (X (last l) (init l))))
 (:: '<=< (\ g (: y (gensym 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;
 ; if/cond -> the `?` conditional.
-(: seqx (\ l (cons ': (foldr (\ l r (cons '_ (cons l r))) (list (last l)) (init l)))))
+(: seqx (\ l (X ': (foldr (\ l r (X '_ (X l r))) (list (last l)) (init l)))))
 (:: 'do seqx) (:: 'begin seqx) (:: 'progn seqx)
-(:: 'let (\ a (cons ': a)))
-(:: 'if (\ a (cons '? a)))
-(:: 'cond (\ a (cons '? a)))
+(:: 'let (\ a (X ': a)))
+(:: 'if (\ a (X '? a)))
+(:: 'cond (\ a (X '? a)))
 ; `(quote x)` -> `(\ x)`: the CL/Scheme name for the one-arg-lambda quote (`'x` sugar).
-(:: 'quote (\ a (cons '\ a)))
+(:: 'quote (\ a (X '\ a)))
 
 ; quasiquote: `tmpl with ,x (unquote) and ,@xs (unquote-splice). The reader emits
 ; (qq tmpl), (uq x), (uqs xs). qqx/qql walk the template tracking nesting depth d:
 ; a nested `qq increments d, a ,/,@ decrements it, and an unquote only FIRES at d=1
 ; (the outermost quasiquote, R7RS) -- deeper ones are rebuilt literally. qqx returns
-; CODE that reconstructs the template (cons/cat over the spliced values). uq is also
+; CODE that reconstructs the template (X/cat over the spliced values). uq is also
 ; bound to identity so a stray top-level ,x just evaluates its operand.
 (: (qqx t d) (?
     (atomp t)       (list '\ t)                              ; atom: quote it
-    (= (car t) 'uq) (? (= d 1) (cadr t)                      ; fire: value as-is
-                       (list 'list ''uq (qqx (cadr t) (- d 1)))) ; rebuild literal uq
-    (= (car t) 'qq) (list 'list ''qq (qqx (cadr t) (+ d 1))) ; nested qq: walk one in
+    (= (A t) 'uq) (? (= d 1) (AB t)                      ; fire: value as-is
+                       (list 'list ''uq (qqx (AB t) (- d 1)))) ; rebuild literal uq
+    (= (A t) 'qq) (list 'list ''qq (qqx (AB t) (+ d 1))) ; nested qq: walk one in
                     (qql t d))                               ; other list
    (qql t d) (?
     (atomp t) (qqx t d)                                      ; nil / improper tail
-    (&& (twop (car t)) (= (caar t) 'uqs))
-     (? (= d 1) (list 'cat (cadr (car t)) (qql (cdr t) d))   ; fire splice
-        (list 'cons (list 'list ''uqs (qqx (cadr (car t)) (- d 1))) (qql (cdr t) d)))
-    (list 'cons (qqx (car t) d) (qql (cdr t) d))))           ; ordinary element
-(:: 'qq (\ a (qqx (car a) 1)))
+    (&& (twop (A t)) (= (AA t) 'uqs))
+     (? (= d 1) (list 'cat (AB (A t)) (qql (B t) d))   ; fire splice
+        (list 'X (list 'list ''uqs (qqx (AB (A t)) (- d 1))) (qql (B t) d)))
+    (list 'X (qqx (A t) d) (qql (B t) d))))           ; ordinary element
+(:: 'qq (\ a (qqx (A a) 1)))
 (: uq (\ x x))                                               ; stray ,x evaluates x
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
@@ -190,15 +192,15 @@
 ; inferring the element type via a-type (so it carries bignums/symbols in an o
 ; array, not just i64/f64); `hasht` builds a hash from alternating key/value args.
 (: (ltuple l) (arrl (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
-(:: 'tuple (\ a (list 'ltuple (cons 'list a))))
-(: (hashtx a) (? (twop a) (list 'put (car a) (cadr a) (hashtx (cddr a))) '(hashn 0)))
+(:: 'tuple (\ a (list 'ltuple (X 'list a))))
+(: (hashtx a) (? (twop a) (list 'put (A a) (AB a) (hashtx (BB a))) '(hashn 0)))
 (:: 'hasht (\ a (hashtx a)))
 
 ; the `$` reader sigil wraps its operand with gensym: `$x` -> (gsym x) -> the macro
 ; quotes the operand, giving (gensym 'x) -- a fresh uninterned symbol named x. a
 ; non-name operand (e.g. the $<addr> an anonymous gensym prints as) quotes to itself
 ; and gensym makes it anonymous. mirrors the printer in gzput_sym.
-(:: 'gsym (\ a (list 'gensym (list '\ (car a)))))
+(:: 'gsym (\ a (list 'gensym (list '\ (A a)))))
 
 ; (array shape elem…): the ergonomic N-D array constructor. `shape` is either a
 ; dimension *list* (rank-N) or a single number n (a rank-1 vector of length |n|),
@@ -217,65 +219,65 @@
 ; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body
 ; expression, and indirects every *value* binding whose init closes over the
 ; name being defined (or a forward/mutual sibling defined no later) through a
-; heap cell: prepend `cell (cons 0 0)`, store via `(poke 1 init cell)`, read via
-; `(car cell)`. Functions (resolved lazily) and values defined before their
+; heap cell: prepend `cell (X 0 0)`, store via `(poke 1 init cell)`, read via
+; `(A cell)`. Functions (resolved lazily) and values defined before their
 ; users are untouched. It returns 0 when nothing needs boxing, else the rewritten
 ; (prs' . body'). This is the single source of truth, shared verbatim by both
 ; compilers: ev.g's `ale` keeps its bindings as this exact pair-list and calls
 ; boxfix-core directly (zero conversion); c0 (ev.c) calls the flat `boxfix`
 ; wrapper below, which is just bpr+flatten around the same core. `lambp`/`dsug`
 ; are globals so `ale` shares them (lambda detection, binding desugaring).
-(: (lambp x) (? (twop x) (&& (= '\ (car x)) (twop (cddr x)))) ; \ with >=1 param (one-operand \ is quote)
-   (dsug n d) (? (atomp n) (cons n d) (dsug (car n) (cons '\ (cat (cdr n) (list d)))))
-   (lp x) (: a (cdr x) (? (atomp (cdr a)) (cons 0 (car a)) (cons (init a) (last a))))
-   (ln bs) (? (atomp bs) 0 (atomp (cdr bs)) 0 (cons (car (dsug (car bs) 0)) (ln (cddr bs))))
+(: (lambp x) (? (twop x) (&& (= '\ (A x)) (twop (BB x)))) ; \ with >=1 param (one-operand \ is quote)
+   (dsug n d) (? (atomp n) (X n d) (dsug (A n) (X '\ (cat (B n) (list d)))))
+   (lp x) (: a (B x) (? (atomp (B a)) (X 0 (A a)) (X (init a) (last a))))
+   (ln bs) (? (atomp bs) 0 (atomp (B bs)) 0 (X (A (dsug (A bs) 0)) (ln (BB bs))))
    ; w/wl: is symbol v free under a lambda in x / binding-list bs? multi-operand \ and
    ; : shadow; one-operand \ is quote (data, nothing free); macro expansion (so :- ?-
    ; &&/|| are seen as the compiler sees them).
    (w v x bnd u) (?
     (symp x) (&& u (= x v) (nilp (memq v bnd)))
     (atomp x) 0
-    (: h (car x) (?
-      (= h '\) (? (atomp (cddr x)) 0 (: r (lp x) (w v (cdr r) (cat (car r) bnd) 1)))
-      (= h ':) (wl v (cdr x) (cat (ln (cdr x)) bnd) u)
-      (: m (? (symp h) (get 0 h macros) 0) (? m (w v (m (cdr x)) bnd u) (any (\ e (w v e bnd u)) x))))))
+    (: h (A x) (?
+      (= h '\) (? (atomp (BB x)) 0 (: r (lp x) (w v (B r) (cat (A r) bnd) 1)))
+      (= h ':) (wl v (B x) (cat (ln (B x)) bnd) u)
+      (: m (? (symp h) (get 0 h macros) 0) (? m (w v (m (B x)) bnd u) (any (\ e (w v e bnd u)) x))))))
    (wl v bs bnd u) (?
     (atomp bs) 0
-    (atomp (cdr bs)) (w v (car bs) bnd u)
-    (: nd (dsug (car bs) (cadr bs)) (? (w v (cdr nd) bnd u) 1 (wl v (cddr bs) bnd u))))
+    (atomp (B bs)) (w v (A bs) bnd u)
+    (: nd (dsug (A bs) (AB bs)) (? (w v (B nd) bnd u) 1 (wl v (BB bs) bnd u))))
    ; boxset: value bindings whose init closes over the name (or a no-later sibling).
-   (boxset prs) (: nm (map car prs)
-     (filter (\ v (&& (nilp (lambp (cdr (assq v prs))))
-                      (any (\ p (w v (cdr p) 0 0)) (take (+ 1 (lidx v nm)) prs)))) nm))
-   (mkcs bx) (map (\ v (cons v (gensym 0))) bx)
-   (cellbinds cs) (map (\ c (cons (cdr c) (list 'cons 0 0))) cs))
+   (boxset prs) (: nm (map A prs)
+     (filter (\ v (&& (nilp (lambp (B (assq v prs))))
+                      (any (\ p (w v (B p) 0 0)) (take (+ 1 (lidx v nm)) prs)))) nm))
+   (mkcs bx) (map (\ v (X v (gensym 0))) bx)
+   (cellbinds cs) (map (\ c (X (B c) (list 'X 0 0))) cs))
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.
 (: (boxfix-core prs body) (:
-   (rmc cs ns) (filter (\ p (nilp (memq (car p) ns))) cs)
+   (rmc cs ns) (filter (\ p (nilp (memq (A p) ns))) cs)
    (sub cs x) (?
-    (symp x) (: p (assq x cs) (? p (list 'car (cdr p)) x))
+    (symp x) (: p (assq x cs) (? p (list 'A (B p)) x))
     (atomp x) x
-    (: h (car x) (?
-      (= h '\) (? (atomp (cddr x)) x (: r (lp x) (cons '\ (cat (car r) (list (sub (rmc cs (car r)) (cdr r)))))))
-      (= h ':) (cons ': (subl (rmc cs (ln (cdr x))) (cdr x)))
-      (: m (? (symp h) (get 0 h macros) 0) (? m (sub cs (m (cdr x))) (map (\ e (sub cs e)) x))))))
+    (: h (A x) (?
+      (= h '\) (? (atomp (BB x)) x (: r (lp x) (X '\ (cat (A r) (list (sub (rmc cs (A r)) (B r)))))))
+      (= h ':) (X ': (subl (rmc cs (ln (B x))) (B x)))
+      (: m (? (symp h) (get 0 h macros) 0) (? m (sub cs (m (B x))) (map (\ e (sub cs e)) x))))))
    (subl cs bs) (?
     (atomp bs) bs
-    (atomp (cdr bs)) (list (sub cs (car bs)))
-    (: nd (dsug (car bs) (cadr bs)) (cons (car nd) (cons (sub cs (cdr nd)) (subl cs (cddr bs))))))
+    (atomp (B bs)) (list (sub cs (A bs)))
+    (: nd (dsug (A bs) (AB bs)) (X (A nd) (X (sub cs (B nd)) (subl cs (BB bs))))))
    (: bx (boxset prs)
       (? (nilp bx) 0
        (: cs (mkcs bx)
-          (one p) (: d (sub cs (cdr p)) (? (memq (car p) bx) (cons '_ (list 'poke 1 d (cdr (assq (car p) cs)))) (cons (car p) d)))
-          (cons (cat (cellbinds cs) (map one prs)) (sub cs body)))))))
+          (one p) (: d (sub cs (B p)) (? (memq (A p) bx) (X '_ (list 'poke 1 d (B (assq (A p) cs)))) (X (A p) d)))
+          (X (cat (cellbinds cs) (map one prs)) (sub cs body)))))))
 ; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that
 ; need no boxing pass through verbatim.
 (: (boxfix fs) (:
-   (ev l) (? (atomp l) 1 (atomp (cdr l)) 0 (ev (cddr l)))
-   (bpr fs) (? (atomp (cdr fs)) (cons 0 (car fs))
-               (: r (bpr (cddr fs)) (cons (cons (dsug (car fs) (cadr fs)) (car r)) (cdr r))))
+   (ev l) (? (atomp l) 1 (atomp (B l)) 0 (ev (BB l)))
+   (bpr fs) (? (atomp (B fs)) (X 0 (A fs))
+               (: r (bpr (BB fs)) (X (X (dsug (A fs) (AB fs)) (A r)) (B r))))
    (? (ev fs) fs
-    (: pb (bpr fs) r (boxfix-core (car pb) (cdr pb))
-       (? r (cat (catmap (\ p (list (car p) (cdr p))) (car r)) (list (cdr r))) fs)))))
+    (: pb (bpr fs) r (boxfix-core (A pb) (B pb))
+       (? r (cat (catmap (\ p (list (A p) (B p))) (A r)) (list (B r))) fs)))))

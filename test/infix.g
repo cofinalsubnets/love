@@ -21,16 +21,16 @@
 
 ; ----- transformer helpers (top-level let pairs → globals) -----
 (: (fixity sym kind table) (?
-    (twop table) (: e (car table)
-     (? (&& (= (car e) sym) (= (cadr e) kind))
+    (twop table) (: e (A table)
+     (? (&& (= (A e) sym) (= (AB e) kind))
       e
-      (fixity sym kind (cdr table))))
+      (fixity sym kind (B table))))
     0)
    (op_monadic sym table) (fixity sym 'monadic table)
    (op_dyadic  sym table) (fixity sym 'dyadic  table)
    (in_table sym table) (|| (op_monadic sym table) (op_dyadic sym table))
-   (prec e)  (caddr e)
-   (assoc e) (car (cdddr e))
+   (prec e)  (ABB e)
+   (assoc e) (A (BBB e))
 
    ; Atoms pass through; a singleton list `(sym)` unwraps (operator-
    ; as-value escape); a quoted datum `'X` = `(` X)` is opaque so list
@@ -41,10 +41,10 @@
    ; else recurses as an infix expression.
    (rewrite_tok tok table) (?
     (atomp tok)            tok
-    (nilp (cdr tok))       (car tok)
-    (&& (= (car tok) '\) (atomp (cddr tok))) tok ; one-operand \ is quote: pass through
-    (= (car tok) 'prefix)  (cdr tok)
-    (= (car tok) 'infix)   (infix_rewrite (cdr tok) table)
+    (nilp (B tok))       (A tok)
+    (&& (= (A tok) '\) (atomp (BB tok))) tok ; one-operand \ is quote: pass through
+    (= (A tok) 'prefix)  (B tok)
+    (= (A tok) 'infix)   (infix_rewrite (B tok) table)
                            (infix_rewrite tok table))
 
    ; Greedy left-assoc juxtaposition: consume consecutive operand-ish
@@ -52,29 +52,29 @@
    ; a fixity entry. Returns (chain . remaining-tokens).
    (juxt chain tokens table) (?
     (nilp tokens) (X chain tokens)
-    (: tok (car tokens)
+    (: tok (A tokens)
      (? (&& (symp tok) (in_table tok table))
       (X chain tokens)
-      (juxt (L chain (rewrite_tok tok table)) (cdr tokens) table))))
+      (juxt (L chain (rewrite_tok tok table)) (B tokens) table))))
 
    ; Pop predicate:
    ;   monadic on top  → always pop (binds tighter than any binary push)
    ;   left-assoc binary  → pop on prec >=
    ;   right-assoc binary → pop on prec >
    (should_pop top new) (?
-    (= 'monadic (cadr top)) -1
+    (= 'monadic (AB top)) -1
     (: tp (prec top) np (prec new)
      (? (= 'left (assoc top)) (>= tp np) (> tp np))))
 
    ; Pop ops while pred holds. Top of out is the right operand for
    ; binary ops. Returns (new-out . new-ops).
    (apply_pops out ops pred) (?
-    (&& (twop ops) (pred (car ops)))
-    (: op (car ops)
-       new_out (? (= 'monadic (cadr op))
-                (X (L (car op) (car out)) (cdr out))
-                (X (L (car op) (cadr out) (car out)) (cddr out)))
-     (apply_pops new_out (cdr ops) pred))
+    (&& (twop ops) (pred (A ops)))
+    (: op (A ops)
+       new_out (? (= 'monadic (AB op))
+                (X (L (A op) (A out)) (B out))
+                (X (L (A op) (AB out) (A out)) (BB out)))
+     (apply_pops new_out (B ops) pred))
     (X out ops))
 
    (drain out ops)          (apply_pops out ops (\ _ -1))
@@ -82,17 +82,17 @@
 
    ; Shunting-yard step. state ∈ {operand operator}.
    (sy tokens out ops state table) (?
-    (nilp tokens) (car (car (drain out ops)))
-    (: tok (car tokens) rest (cdr tokens)
+    (nilp tokens) (A (A (drain out ops)))
+    (: tok (A tokens) rest (B tokens)
      (? (= state 'operand)
       (? (&& (symp tok) (op_monadic tok table))
        (sy rest out (X (op_monadic tok table) ops) 'operand table)
        (: first (rewrite_tok tok table)
           jc    (juxt first rest table)
-        (sy (cdr jc) (X (car jc) out) ops 'operator table)))
+        (sy (B jc) (X (A jc) out) ops 'operator table)))
       (: new_op (op_dyadic tok table)
          ph    (pop_higher out ops new_op)
-       (sy rest (car ph) (X new_op (cdr ph)) 'operand table)))))
+       (sy rest (A ph) (X new_op (B ph)) 'operand table)))))
 
    (infix_rewrite tokens table) (sy tokens 0 0 'operand table))
 
@@ -110,7 +110,7 @@
 ; ----- default canonical fixities -----
 ; Order doesn't matter — deffix prepends; lookup resolves by (sym, kind).
 ; Monadic - is included for structural completeness; gwen has no native
-; unary minus, so runtime use of monadic - requires the user to define
+; monadic minus, so runtime use of monadic - requires the user to define
 ; an arity-1 negation function and re-deffix.
 (deffix ^ dyadic  8 right)
 (deffix / dyadic  7 left)

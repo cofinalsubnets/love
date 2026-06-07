@@ -243,7 +243,7 @@ typedef g_word num, word;
 // is the additive identity for `+` on symbols. See gwen.c for the rationale.
 extern const struct g_str g_str_empty;
 extern const struct g_atom g_sym_empty;
-#define EMPTY_STR ((word) &g_str_empty)
+#define EmptyString ((word) &g_str_empty)
 #define EMPTY_SYM ((word) &g_sym_empty)
 void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool g_ready(int fd), g_strp(g_word);

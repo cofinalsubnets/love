@@ -60,8 +60,8 @@
           0))
     0))
 
-(: args   (cdr argv)
-   inpath (? (twop args) (car args) (die "usage: pad_checksum.g <boot2.bin>"))
+(: args   (B argv)
+   inpath (? (twop args) (A args) (die "usage: pad_checksum.g <boot2.bin>"))
    port   (open inpath "r")
    _      (? port 0 (die (scat "cannot open " inpath)))
    s      (slurp port)

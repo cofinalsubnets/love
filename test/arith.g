@@ -67,9 +67,9 @@
  (= "xB" (+ "x" 66.9))              ; numeric coerced via floor(|n|)
  (= "abcd" (+ "ab" "cd"))           ; str + str -> concat
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))   ; list + list -> append
- (= '("x" 1 2) (+ "x" '(1 2)))      ; str + list -> (cons str list)
+ (= '("x" 1 2) (+ "x" '(1 2)))      ; str + list -> (X str list)
  (= '(1 2 "x") (+ '(1 2) "x"))      ; list + str -> (append list (list str))
- (= '(5 1 2) (+ 5 '(1 2)))          ; num + list -> cons at front
+ (= '(5 1 2) (+ 5 '(1 2)))          ; num + list -> X at front
  (= '(1 2 5) (+ '(1 2) 5))          ; list + num -> append at back
  (nilp (- "a" "b"))
 

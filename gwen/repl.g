@@ -25,7 +25,7 @@
 ; and the buffer becomes a new entry, so the original survives.
 (: m (gensym 0) eofsym (gensym 0)
 
-   (revcat a b) (foldl (flip cons) b a)
+   (revcat a b) (foldl (flip X) b a)
 
    ; drain a charlist into a list of all the datums it holds. returns m
    ; if the input ends inside an unfinished form; otherwise the (possibly
@@ -36,7 +36,7 @@
           (: r (fread p eofsym)
              (? (= r p)      m                 ; port == port: g_status_more
                 (= r eofsym) (revcat acc 0)    ; clean EOF: emit in source order
-                (loop (cons r acc))))
+                (loop (X r acc))))
         (loop 0))
 
    ; --- editor ---
@@ -44,20 +44,20 @@
    ; intersperse a list of charlists with newlines, in order
    (joinln ls)
      (? (twop ls)
-        (? (twop (cdr ls))
-           (cat (car ls) (cons 10 (joinln (cdr ls))))
-           (car ls))
+        (? (twop (B ls))
+           (cat (A ls) (X 10 (joinln (B ls))))
+           (A ls))
         0)
 
    ; flatten the editor state into one charlist suitable for parseall
    (flatten u l r d)
-     (joinln (revcat u (cons (revcat l r) d)))
+     (joinln (revcat u (X (revcat l r) d)))
 
    ; walk xs forward taking n chars into acc (reversed); when done
    ; call k with (rev (take n xs)) and (drop n xs). stops cleanly at
    ; end-of-xs even if n exceeds the list length.
    (splitat k acc n xs)
-     (? (&& (twop xs) (< 0 n)) (splitat k (cons (car xs) acc) (- n 1) (cdr xs))
+     (? (&& (twop xs) (< 0 n)) (splitat k (X (A xs) acc) (- n 1) (B xs))
         (k acc xs))
 
    ; map non-printables to space; otherwise pass through
@@ -70,20 +70,20 @@
    ; the next line on. up/down preserve column, clamped to the
    ; destination line's length.
    (edleft k u l r d)
-     (? (twop l) (k u (cdr l) (cons (car l) r) d)
-        (twop u) (k (cdr u) (rev (car u)) 0 (cons (revcat l r) d))
+     (? (twop l) (k u (B l) (X (A l) r) d)
+        (twop u) (k (B u) (rev (A u)) 0 (X (revcat l r) d))
         (k u l r d))
    (edright k u l r d)
-     (? (twop r) (k u (cons (car r) l) (cdr r) d)
-        (twop d) (k (cons (revcat l r) u) 0 (car d) (cdr d))
+     (? (twop r) (k u (X (A r) l) (B r) d)
+        (twop d) (k (X (revcat l r) u) 0 (A d) (B d))
         (k u l r d))
    (edbsp k u l r d)
-     (? (twop l) (k u (cdr l) r d)
-        (twop u) (k (cdr u) (rev (car u)) r d)
+     (? (twop l) (k u (B l) r d)
+        (twop u) (k (B u) (rev (A u)) r d)
         (k u l r d))
    (eddel k u l r d)
-     (? (twop r) (k u l (cdr r) d)
-        (twop d) (k u l (car d) (cdr d))
+     (? (twop r) (k u l (B r) d)
+        (twop d) (k u l (A d) (B d))
         (k u l r d))
    (edhome k u l r d) (k u 0 (revcat l r) d)
    (edend  k u l r d) (k u (revcat r l) 0 d)
@@ -92,29 +92,29 @@
    ; buffer they degenerate to edhome / edend.
    (edtop k u l r d)
      (? (twop u) (: ru (rev u)
-                  (k 0 0 (car ru) (cat (cdr ru) (cons (revcat l r) d))))
+                  (k 0 0 (A ru) (cat (B ru) (X (revcat l r) d))))
         (k u 0 (revcat l r) d))
    (edbot k u l r d)
      (? (twop d) (: rd (rev d)
-                  (k (cat (cdr rd) (cons (revcat l r) u)) (revcat (car rd) 0) 0 0))
+                  (k (cat (B rd) (X (revcat l r) u)) (revcat (A rd) 0) 0 0))
         (k u (revcat r l) 0 d))
    (edup k u l r d)
-     (? (twop u) (splitat (\ ll rr (k (cdr u) ll rr (cons (revcat l r) d)))
-                          0 (len l) (car u))
+     (? (twop u) (splitat (\ ll rr (k (B u) ll rr (X (revcat l r) d)))
+                          0 (len l) (A u))
         (k u l r d))
    (eddown k u l r d)
-     (? (twop d) (splitat (\ ll rr (k (cons (revcat l r) u) ll rr (cdr d)))
-                          0 (len l) (car d))
+     (? (twop d) (splitat (\ ll rr (k (X (revcat l r) u) ll rr (B d)))
+                          0 (len l) (A d))
         (k u l r d))
 
    ; --- history zipper ---
 
    ; pack the buffer's four halves into one slot for history storage.
-   (mkframe u l r d) (cons u (cons l (cons r d)))
+   (mkframe u l r d) (X u (X l (X r d)))
 
    ; if cur holds a pristine recall, restore it at its slot in hu;
    ; called before any mutating edit so the original survives.
-   (detach hu cur) (? (twop cur) (cons cur hu) hu)
+   (detach hu cur) (? (twop cur) (X cur hu) hu)
 
    ; predicates over the buffer used by the history navigation rules
    ; below: empty buffers don't get pushed during normal nav, and
@@ -129,20 +129,20 @@
    ; empty line.
    (uphist k u l r d hu hd cur)
      (? (twop hu)
-        (: e (car hu)
-           nhd (? (emptybuf u l r d) hd (cons (mkframe u l r d) hd))
-           (k (car e) (car (cdr e)) (car (cdr (cdr e))) (cdr (cdr (cdr e))) (cdr hu) nhd e))
+        (: e (A hu)
+           nhd (? (emptybuf u l r d) hd (X (mkframe u l r d) hd))
+           (k (A e) (A (B e)) (A (B (B e))) (B (B (B e))) (B hu) nhd e))
         (&& (twop cur) (parses u l r d))
-        (: nhd (cons (mkframe u l r d) hd)
+        (: nhd (X (mkframe u l r d) hd)
            (k 0 0 0 0 hu nhd 0))
         (k u l r d hu hd cur))
    (downhist k u l r d hu hd cur)
      (? (twop hd)
-        (: e (car hd)
-           nhu (? (emptybuf u l r d) hu (cons (mkframe u l r d) hu))
-           (k (car e) (car (cdr e)) (car (cdr (cdr e))) (cdr (cdr (cdr e))) nhu (cdr hd) e))
+        (: e (A hd)
+           nhu (? (emptybuf u l r d) hu (X (mkframe u l r d) hu))
+           (k (A e) (A (B e)) (A (B (B e))) (B (B (B e))) nhu (B hd) e))
         (&& (twop cur) (parses u l r d))
-        (: nhu (cons (mkframe u l r d) hu)
+        (: nhu (X (mkframe u l r d) hu)
            (k 0 0 0 0 nhu hd 0))
         (k u l r d hu hd cur))
 
@@ -207,7 +207,7 @@
    ; splits the current line at the cursor; only when the cursor is
    ; at end-of-buffer do we try parseall, which may yield multiple
    ; datums on one line. returns eofsym on ^D, otherwise
-   ; (cons vs (cons nhu nhd)) so the repl can thread history.
+   ; (X vs (X nhu nhd)) so the repl can thread history.
    ;
    ; the loop carries pra = rows above the cursor as of the previous
    ; render. edrender uses pra to move back up to the prompt's row
@@ -235,18 +235,18 @@
              (kedit uu ll rr dd) (loop npra uu ll rr dd (detach hu cur) hd 0)
              (khist uu ll rr dd nhu nhd ncur) (loop npra uu ll rr dd nhu nhd ncur)
              (? (= c -7) eofsym
-                (= c 10) (: nu (cons (rev l) u)
+                (= c 10) (: nu (X (rev l) u)
                             (? (&& (nilp r) (nilp d))
                                (: vs (parseall (flatten nu 0 r d))
                                   (? (= vs m)
                                      (loop npra nu 0 r d (detach hu cur) hd 0)
                                      (: _ (putc 10)
                                         nhu (? (nilp vs) (revcat hd (detach hu cur))
-                                               (twop cur) (revcat hd (cons cur hu))
-                                               (revcat hd (cons (mkframe u l r d) hu)))
-                                        (cons vs (cons nhu 0)))))
+                                               (twop cur) (revcat hd (X cur hu))
+                                               (revcat hd (X (mkframe u l r d) hu)))
+                                        (X vs (X nhu 0)))))
                                (loop npra nu 0 r d (detach hu cur) hd 0)))
-                (< 0 c)  (loop npra u (cons c l) r d (detach hu cur) hd 0)
+                (< 0 c)  (loop npra u (X c l) r d (detach hu cur) hd 0)
                 (= c -1) (edleft  kloop u l r d)
                 (= c -2) (edright kloop u l r d)
                 (= c -3) (edbsp   kedit u l r d)
@@ -286,8 +286,8 @@
    (repl hu hd)
      (: r (edline hu hd)
         (? (= r eofsym) 0
-           (: vs  (car r)
-              nhu (cadr r)
-              nhd (cddr r)
+           (: vs  (A r)
+              nhu (AB r)
+              nhd (BB r)
               _ (each vs (\ v (: _ (do_eval v) (putc 10))))
               (repl nhu nhd)))))

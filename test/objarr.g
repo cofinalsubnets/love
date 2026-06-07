@@ -131,3 +131,21 @@
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
  (= o (atype @((** 2 100) 1)))                    ; bignum element -> object array
  (aall (= @(1 2 3) (array 3 1 2 3))))
+
+; --- len / truthiness of object arrays: (nilp x) == (= 0 (len x)) holds here too, via
+; g_len recursing into each element's own magnitude (so an all-zero object array is len 0,
+; not the garbage that a raw word-bits L2 norm would give). Complex/bignum elements force o.
+(: oa-z2 (array 2 (C 0 0) (C 0 0))               ; two zero complexes
+   oa-c2 (array 2 (C 0 0) (C 3 4))               ; |0|²+|3+4i|² = 25 -> ceil 5
+   oa-b2 (array 2 (** 2 100) 0))                 ; bignum element saturates len
+(assert
+ (= o (atype oa-z2)) (= o (atype oa-c2)) (= o (atype oa-b2))
+ (= 0 (len oa-z2)) (nilp oa-z2)                   ; all-zero object array -> falsy, len 0
+ (= 5 (len oa-c2)) (not (nilp oa-c2))             ; one nonzero element -> truthy, ceil(5)
+ (not (nilp oa-b2))                               ; a bignum element is truthy
+ (= 0 (len (arr o '(2 2))))                       ; all-nil object array -> len 0
+ (not (nilp (array 2 'a 'b)))                     ; symbol elements -> truthy
+ ; the defining invariant (nilp x) == (= 0 (len x)) on each:
+ (= (? (nilp oa-z2) 1 0) (? (= 0 (len oa-z2)) 1 0))
+ (= (? (nilp oa-c2) 1 0) (? (= 0 (len oa-c2)) 1 0))
+ (= (? (nilp oa-b2) 1 0) (? (= 0 (len oa-b2)) 1 0)))

@@ -5,9 +5,9 @@
    p (? (< ms 10) ".00" (< ms 100) ".0" ".")
    (do (putc 10)
 
-     (: i (cdddr (vminfo 0))
-        (do (putx (cadr i)) (puts " cycles ")
-           (putx (caddr i)) (puts "/") (putx (car (cdddr i)))
+     (: i (BBB (vminfo 0))
+        (do (putx (AB i)) (puts " cycles ")
+           (putx (ABB i)) (puts "/") (putx (A (BBB i)))
             (puts " len/heap max")
            (putc 10)))
       (putx (- (test_get 'count) (len f))) (puts " tests pass in ")

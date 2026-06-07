@@ -55,7 +55,7 @@
       (? (&& (> j i) (= 58 (get 0 j line)))               ; hexrun then ':'
          (: k (skip-ws line (+ j 1))
             (? (> k (+ j 1))                                ; need >=1 ws after ':'
-               (cons (ssub line i j) (ssub line k (len line)))
+               (X (ssub line i j) (ssub line k (len line)))
                0))
          0)))
 
@@ -84,22 +84,22 @@
 (: (lines s)
    ((: (f start i)
        (? (< i (len s))
-          (? (= 10 (get 0 i s)) (cons (ssub s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
+          (? (= 10 (get 0 i s)) (X (ssub s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
           (? (< start i) (L (ssub s start i)) 0)))
     0 0))
 
 ; --- the scan (vmret.py scan(), grouping by function header) ----------
 ; close the current watched function: flag it iff it collected any rets.
 (: (close name watching rets flagged)
-   (? (&& watching (twop rets)) (cons (cons name (rev rets)) flagged) flagged))
+   (? (&& watching (twop rets)) (X (X name (rev rets)) flagged) flagged))
 
 ; -> (flagged . total), where flagged = ((name . rets) ...), total = count
 ; of prefix* functions seen. prefix + the ret matcher are captured.
 (: (scan-all ls prefix ret?)
    ((: (loop ls name watching rets flagged total)
        (? (twop ls)
-          (: line (car ls)
-             rest (cdr ls)
+          (: line (A ls)
+             rest (B ls)
              h    (parse-header line)
              (? h
                 (? (prefix? "." h)                              ; local label: stay inside
@@ -108,10 +108,10 @@
                       w2  (prefix? prefix h)
                       (loop rest h w2 0 fl2 (? w2 (+ total 1) total))))
                 (: ins (? watching (parse-insn line) 0)         ; instruction: maybe a ret
-                   (? (&& ins (ret? (mnemonic (cdr ins))))
-                      (loop rest name watching (cons (car ins) rets) flagged total)
+                   (? (&& ins (ret? (mnemonic (B ins))))
+                      (loop rest name watching (X (A ins) rets) flagged total)
                       (loop rest name watching rets flagged total)))))
-          (cons (close name watching rets flagged) total)))
+          (X (close name watching rets flagged) total)))
     ls 0 0 0 0 0))
 
 ; --- report helpers --------------------------------------------------
@@ -121,50 +121,50 @@
                             (? (>= i (len b)) 0
                                (: ca (get 0 i a) cb (get 0 i b)
                                   (? (< ca cb) -1 (? (> ca cb) 0 (f (+ i 1)))))))) 0)
-   (maxlen fl)   (foldl (\ m e (: l (len (car e)) (? (< m l) l m))) 0 fl)
+   (maxlen fl)   (foldl (\ m e (: l (len (A e)) (? (< m l) l m))) 0 fl)
    (join-rets rs) (? (twop rs)
-                     (? (twop (cdr rs)) (scat (scat "0x" (car rs)) (scat ", " (join-rets (cdr rs))))
-                                        (scat "0x" (car rs)))
+                     (? (twop (B rs)) (scat (scat "0x" (A rs)) (scat ", " (join-rets (B rs))))
+                                        (scat "0x" (A rs)))
                      ""))
 
 ; sort the flagged entries by function name (ascending), matching .py.
 (: (emerge a b) (? (twop a) (? (twop b)
-                     (? (str< (car (car a)) (car (car b)))
-                        (cons (car a) (emerge (cdr a) b)) (cons (car b) (emerge a (cdr b))))
+                     (? (str< (A (A a)) (A (A b)))
+                        (X (A a) (emerge (B a) b)) (X (A b) (emerge a (B b))))
                      a) b)
-   (esort l) (? (twop (cdr l)) (: n (>> (len l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
+   (esort l) (? (twop (B l)) (: n (>> (len l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
 
 ; --- argument parsing ------------------------------------------------
 (: (parse-args args path prefix od)
    (? (twop args)
-      (: a (car args)
+      (: a (A args)
          (? (= a "--prefix")
-            (? (twop (cdr args)) (parse-args (cdr (cdr args)) path (car (cdr args)) od) (die "missing argument for --prefix"))
+            (? (twop (B args)) (parse-args (B (B args)) path (A (B args)) od) (die "missing argument for --prefix"))
          (? (= a "--objdump")
-            (? (twop (cdr args)) (parse-args (cdr (cdr args)) path prefix (car (cdr args))) (die "missing argument for --objdump"))
+            (? (twop (B args)) (parse-args (B (B args)) path prefix (A (B args))) (die "missing argument for --objdump"))
          (? (|| (= a "-h") (= a "--help")) (usage 0)
          (? (dash? a) (die (scat "unknown option: " a))
          (? path (die (scat "unexpected argument: " a))
-            (parse-args (cdr args) a prefix od)))))))
+            (parse-args (B args) a prefix od)))))))
       (L path prefix od)))
 
 ; --- read the ELF e_ident + e_machine (first 20 bytes) ---------------
-(: (read-hdr port k acc) (? (< 0 k) (: c (fgetc port) (? (= c -1) (rev acc) (read-hdr port (- k 1) (cons c acc)))) (rev acc)))
+(: (read-hdr port k acc) (? (< 0 k) (: c (fgetc port) (? (= c -1) (rev acc) (read-hdr port (- k 1) (X c acc)))) (rev acc)))
 
 ; --- try candidate disassemblers in order ----------------------------
 ; (run ...) returns (status . output) when the tool ran, else a fixnum errno
 ; (spawn failed -> try the next). -> (cand status . output) or 0 if exhausted.
 (: (try-cands cs elf)
    (? (twop cs)
-      (: r (run (L (car cs) "-d" "--no-show-raw-insn" elf))
-         (? (twop r) (cons (car cs) r) (try-cands (cdr cs) elf)))
+      (: r (run (L (A cs) "-d" "--no-show-raw-insn" elf))
+         (? (twop r) (X (A cs) r) (try-cands (B cs) elf)))
       0))
 
 ; --- driver ----------------------------------------------------------
-(: parsed   (parse-args (cdr argv) 0 "g_vm_" 0)
-   path     (car parsed)
-   prefix   (car (cdr parsed))
-   od       (car (cdr (cdr parsed)))
+(: parsed   (parse-args (B argv) 0 "g_vm_" 0)
+   path     (A parsed)
+   prefix   (A (B parsed))
+   od       (A (B (B parsed)))
    _        (? path 0 (die "usage: vmret.g ELF [--prefix PREFIX] [--objdump PATH]"))
    base     (basename path)
    port     (open path "r")
@@ -190,12 +190,12 @@
                           (? x86? "objdump" "llvm-objdump") (? x86? "llvm-objdump" "objdump")))
    chosen   (try-cands cands path)
    _        (? chosen 0 (die "no disassembler found (tried llvm-objdump, objdump); pass --objdump"))
-   status   (car (cdr chosen))
-   output   (cdr (cdr chosen))
-   _        (? (= 0 status) 0 (die (scat (scat (car chosen) " failed: status ") (inspect status))))
+   status   (A (B chosen))
+   output   (B (B chosen))
+   _        (? (= 0 status) 0 (die (scat (scat (A chosen) " failed: status ") (inspect status))))
    scanned  (scan-all (lines output) prefix ret?)
-   flagged  (car scanned)
-   total    (cdr scanned)
+   flagged  (A scanned)
+   total    (B scanned)
    ; --- the report (byte-for-byte the same shape as vmret.py) ---
    (? (= 0 total)
       (: _ (fputs err "vmret: no ") _ (fputs err prefix) _ (fputs err "* functions found in ")
@@ -208,7 +208,7 @@
          _ (fputn out total 10) _ (fputs out " ") _ (fputs out prefix)
          _ (fputs out "* functions contain a ret (TCO suspects):\n")
          _ (each sorted (\ e
-              (: name (car e) rets (cdr e)
+              (: name (A e) rets (B e)
                  _ (fputs out "  ") _ (fputs out name) _ (fputs out (spaces (- width (len name))))
                  _ (fputs out "  ret @ ") _ (fputs out (join-rets rets)) _ (fputc out 10) 0)))
          (exit 1))

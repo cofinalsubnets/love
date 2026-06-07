@@ -45,8 +45,8 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // nilp: structural test for the nil word (the only false scalar). Distinct from
-// g_false below (the language falsy predicate, which also counts an all-zero tuple);
-// the gwen `nilp` bif maps to g_false, not this macro.
+// g_nilp below (the language falsy predicate, which also counts an all-zero tuple);
+// the gwen `nilp` bif maps to g_nilp, not this macro.
 #define nilp(_) (word(_)==nil)
 #define AB(o) A(B(o))
 #define AA(o) A(A(o))
@@ -93,7 +93,7 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // (g_vm_obin), so O elements always route through the promoting scalar dispatch --
 // that is what makes a bignum array add/multiply exactly instead of wrapping.
 enum g_tuple_type { g_Z, g_R, g_C, g_O, };
-// Elementwise binary opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
+// Elementwise dyadic opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
 // match the arith slow handlers; the five compare codes (>= VOP_LT) produce a
 // 0/1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
 enum vop { VOP_ADD, VOP_SUB, VOP_MUL, VOP_QUOT, VOP_REM,
@@ -133,9 +133,9 @@ g_vm_t g_vm_kcall,
  g_vm_tupp, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf, g_vm_lamp;
 // Carry extra operands, so (like g_vm_gc) they are declared apart from the
 // plain g_vm_t list, which fixes the 4-argument handler signature. g_vm_vbin
-// is the elementwise/broadcast binary engine (vop selects the op); g_vm_vmap1
-// applies a unary math fn elementwise to an array (e.g. (sin arr)); g_vm_vmap2
-// is the binary analogue with broadcasting (e.g. (pow arr arr), (atan2 ...)).
+// is the elementwise/broadcast dyadic engine (vop selects the op); g_vm_vmap1
+// applies a monadic math fn elementwise to an array (e.g. (sin arr)); g_vm_vmap2
+// is the dyadic analogue with broadcasting (e.g. (pow arr arr), (atan2 ...)).
 g_vm(g_vm_vbin, int);
 g_vm(g_vm_vmap1, g_flo_t (*)(g_flo_t));
 g_vm(g_vm_vmap2, g_flo_t (*)(g_flo_t, g_flo_t));
@@ -278,15 +278,17 @@ static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
 // truthy element and is exact, whereas sqrt(Σx²) is slower and overflows to inf on
 // a large array -- reporting a non-zero array as falsy. Same predicate, no float risk.
 bool g_all_zero(struct g_tuple*);
-// Truthiness: a value is false iff it is "zero or empty" -- exactly (= 0 (len x)).
-// nil/0, an all-zero number/array/complex, and the empty string/buf/table. Every
-// present value (non-empty container, symbol incl. anonymous, function, port,
-// bignum) is truthy. Kept in sync with g_vm_len's zero case.
-static g_inline bool g_false(word x) {
-  return nilp(x) || (tupp(x) && g_all_zero(tuple(x)))
-      || (strp(x) && len(x) == 0)                       // empty string
-      || (bufp(x) && len(buf_str(x)) == 0)              // empty buf
-      || (mapp(x) && map_len(x) == 0); }                // empty table
+// Truthiness: x is false iff (= 0 (len x)). FOUR cases, each a cheap test with NO walk:
+// the two empty data-segment singletons (nil = the 0 word; EmptyString = the unique empty
+// string, so a string is empty iff == it), an empty table, and a zero-magnitude tuple
+// (g_all_zero: boxed 0.0 / zero int box / all-zero array / 0+0i complex / all-falsy object
+// array). Everything else -- pair, bignum, symbol, non-empty string/table/array, buf, fn,
+// port -- is truthy without traversal (bufnew never makes an empty buf). Lockstep w/ g_vm_len.
+static g_inline bool g_nilp(word x) {
+  return x == nil ||
+    x == EmptyString ||
+    (mapp(x) && map_len(x) == 0) ||
+    (tupp(x) && g_all_zero(tuple(x))); }
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
 // 1/0 lowers to an FPU divide that yields +-inf or NaN per IEEE, and inf*0=NaN
@@ -451,7 +453,7 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // for `+` on symbols (empty name -> contributes no bytes) and the canonical value of
 // any empty-named symbol concat. Predicates read `ap`, so these behave as a normal
 // text/sym value; the FAM `bytes[]` is simply absent (len 0).
-// External linkage (declared in gwen.h with the EMPTY_STR/EMPTY_SYM macros) so the
+// External linkage (declared in gwen.h with the EmptyString/EMPTY_SYM macros) so the
 // frontends can return them too (e.g. host_run's empty-output capture).
 const struct g_str g_str_empty = { .ap = g_vm_str, .len = 0 };
 const struct g_atom g_sym_empty = { .ap = g_vm_sym, .code = 0, .nom = 0, .l = 0, .r = 0 };
@@ -559,7 +561,6 @@ static g_inline struct g*g_pop(struct g*f, uintptr_t n) {
  _(bif_bnot, "~", S1(g_vm_bnot)) _(bif_bsl, "<<", S2(g_vm_bsl)) _(bif_bsr, ">>", S2(g_vm_bsr))\
  _(bif_band, "&", S2(g_vm_band)) _(bif_bor, "|", S2(g_vm_bor)) _(bif_bxor, "^", S2(g_vm_bxor))\
  _(bif_cons, "X", S2(g_vm_cons)) _(bif_car, "A", S1(g_vm_car)) _(bif_cdr, "B", S1(g_vm_cdr)) \
- _(bif_cons2, "cons", S2(g_vm_cons)) _(bif_car2, "car", S1(g_vm_car)) _(bif_cdr2, "cdr", S1(g_vm_cdr)) \
  _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
  _(bif_fread, "fread", S2(g_vm_fread))\
  _(bif_string, "string", S1(g_vm_string))\
@@ -1791,7 +1792,7 @@ g_vm(g_vm_jump) { return Ip = Ip[1].m, Continue(); }
 // The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
 // language falsy predicate so an all-zero tuple (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
-g_vm(g_vm_cond) { return Ip = g_false(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
+g_vm(g_vm_cond) { return Ip = g_nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 g_vm(g_vm_unc) {
  Have1();
  *--Sp = Ip[1].x;
@@ -1932,40 +1933,40 @@ static g_inline intptr_t len_sat(g_flo_t m) {
   if (m >= (g_flo_t) FIX_MAX) return FIX_MAX;
   intptr_t i = (intptr_t) m;                    // trunc toward 0 (m >= 0)
   return i + (m > (g_flo_t) i ? 1 : 0); }       // bump for any fractional part -> ceil
-g_vm(g_vm_len) {
-  word x = Sp[0];
-  intptr_t l = 0;
-  if (fixp(x)) { intptr_t n = getnum(x); l = n == FIX_MIN ? FIX_MAX : n < 0 ? -n : n; }  // fixnum: |x|
-  else if (bufp(x)) l = len(buf_str(x));                         // mutable byte string
-  else if (mapp(x)) l = map_len(x);                              // table: key count
-  else if (datp(x)) switch (typ(x)) {
-    default: l = 1; break;                                      // unknown present data kind -> truthy
-    case KString: l = len(x); break;                             // string: byte count
-    case KTwo: { word p = x; do l++, p = B(p); while (twop(p)); } break;  // list: pair count
-    case KBig: l = FIX_MAX; break;                             // |bignum| > FIX_MAX: saturate
-    case KSym: {                                              // symbol: name length, floored at 1
-      struct g_atom *s = sym(x);                               // (a symbol is always a present identity)
-      intptr_t nl = !s->nom ? 0                                // anonymous gensym
-        : strp(word(s->nom)) ? (intptr_t) len(s->nom)          // interned: its name string
-        : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;  // uninterned
-      l = nl ? nl : 1;
-      break; }
-    case KTuple: {                                               // boxed scalar or rank-n array
-      struct g_tuple *v = tuple(x);                                 // all -> ceil(|x|), saturated, never negative
-      if (v->rank) { uintptr_t i = 0, n = 1;                    // array: its L2 norm
-        while (i < v->rank) n *= v->shape[i++];
-        g_flo_t s = 0;
-        for (i = 0; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); s += e * e; }
-        l = len_sat(g_sqrt(s)); }
-      else if (v->type == g_C) {                                // complex: |z|
-        g_flo_t re = cplx_re(x), im = cplx_im(x); l = len_sat(g_sqrt(re * re + im * im)); }
-      else if (v->type == g_R) { g_flo_t f = flo_get(x); l = len_sat(f < 0 ? -f : f); }  // float box
-      else l = FIX_MAX;                                         // g_Z int box: |x| always exceeds FIX_MAX
-      break; } }
-  else l = 1;                                                  // opaque but present (fn / port): truthy, len 1
-  Sp[0] = putnum(l);
-  Ip += 1;
-  return Continue(); }
+// Total length / magnitude of any value as a non-negative fixnum (the # operator). 0 iff
+// (g_nilp x) -- the truthiness invariant, kept in lockstep with g_nilp. A rank>=1 array is
+// ceil of its L2 norm; the three element families contribute their own magnitudes:
+//   g_C  packed (re,im) float pairs at tuple_data -> sum all 2n floats squared
+//   g_O  object words -> each element's own g_len (recursive; depth bounded by nesting)
+//   g_Z/g_R  the element values directly (tuple_get_flo)
+// so len(arr)==0 iff every element is itself nilp -- matching g_all_zero's per-family scan.
+static intptr_t g_len(word x) {
+  if (fixp(x)) { intptr_t n = getnum(x); return n == FIX_MIN ? FIX_MAX : n < 0 ? -n : n; }  // fixnum |x|
+  if (bufp(x)) return len(buf_str(x));                          // mutable byte string
+  if (mapp(x)) return map_len(x);                               // table: key count
+  if (!datp(x)) return 1;                                       // opaque but present (fn / port): truthy
+  switch (typ(x)) {
+    default: return 1;                                          // unknown present data kind -> truthy
+    case KString: return len(x);                                 // string: byte count
+    case KTwo: { intptr_t l = 0; word p = x; do l++, p = B(p); while (twop(p)); return l; }  // list
+    case KBig: return FIX_MAX;                                  // |bignum| > FIX_MAX: saturate
+    case KSym: { struct g_atom *s = sym(x);                      // symbol: name length, floored at 1
+      intptr_t nl = !s->nom ? 0
+        : strp(word(s->nom)) ? (intptr_t) len(s->nom)
+        : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;
+      return nl ? nl : 1; }
+    case KTuple: { struct g_tuple *v = tuple(x);                 // boxed scalar or rank-n array
+      uintptr_t i, n = 1; for (i = 0; i < v->rank; i++) n *= v->shape[i];
+      if (!v->rank) {                                            // rank-0 scalar
+        if (v->type == g_C) { g_flo_t re = cplx_re(x), im = cplx_im(x); return len_sat(g_sqrt(re*re + im*im)); }
+        if (v->type == g_R) { g_flo_t f = flo_get(x); return len_sat(f < 0 ? -f : f); }
+        return FIX_MAX; }                                        // g_Z int box: magnitude exceeds fixnum range
+      g_flo_t s = 0;                                             // rank>=1 array -> ceil(sqrt(Σ |elem|²))
+      if (v->type == g_C) { g_flo_t *f = tuple_data(v); for (i = 0; i < 2 * n; i++) s += f[i] * f[i]; }
+      else if (v->type == g_O) for (i = 0; i < n; i++) { g_flo_t e = (g_flo_t) g_len(tuple_get_obj(v, i)); s += e*e; }
+      else for (i = 0; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); s += e*e; }
+      return len_sat(g_sqrt(s)); } } }
+g_vm(g_vm_len) { Sp[0] = putnum(g_len(Sp[0])); Ip += 1; return Continue(); }
 
 // ============================================================================
 // io
@@ -2756,7 +2757,7 @@ static g_inline struct g *gzread1str(struct g*f) {
    if (!g_ok(f = zgetc(f))) return f;     // threaded; char in f->b
    else if ((c = f->b) == '"')                  // close quote; "" -> the empty
     return n ? (len(f->sp[0]) = n, f)            // (truthy) singleton, never allocated
-             : (f->sp[0] = EMPTY_STR, f);
+             : (f->sp[0] = EmptyString, f);
    else if (c == EOF) return encode(f, g_status_more);
    else if (c == '\\') {                               // escape: take next char
     if (!g_ok(f = zgetc(f))) return f;
@@ -3095,7 +3096,7 @@ uintptr_t hash(struct g *f, intptr_t x) {
 // str
 // ============================================================================
 struct g *str0(struct g *f, uintptr_t len) {
- if (!len) { if (g_ok(f = g_have(f, 1))) *--f->sp = EMPTY_STR; return f; } // never alloc empty
+ if (!len) { if (g_ok(f = g_have(f, 1))) *--f->sp = EmptyString; return f; } // never alloc empty
  uintptr_t req = str_type_width + b2w(len);
  if (g_ok(f = g_have(f, req + 1)))
   *--f->sp = word(ini_str(bump(f, req), len));
@@ -3130,7 +3131,7 @@ g_vm(g_vm_scat) {
  intptr_t a = Sp[0], b = Sp[1];
  if (!strp(a)) Sp += 1;
  else if (!strp(b)) Sp[1] = a, Sp += 1;
- else if (!(len(str(a)) + len(str(b)))) *++Sp = EMPTY_STR;   // both empty -> singleton
+ else if (!(len(str(a)) + len(str(b)))) *++Sp = EmptyString;   // both empty -> singleton
  else {
   struct g_str *x = str(a), *y = str(b), *z;
   uintptr_t
@@ -3154,13 +3155,14 @@ g_vm(g_vm_scat) {
 g_vm(g_vm_buf) {
  return Ip = cell(*++Sp), *Sp = putnum(1), Continue(); }
 
-// (bufnew n) — allocate a zeroed n-byte mutable buf (n<0 / non-numeric -> 0).
-// Two heap objects under one Have (so no GC sees a half-built buf): the
-// backing g_str holding the bytes, and the length-2 wrapper thread
-// [g_vm_buf, str, terminator] that gives it its identity.
+// (bufnew n) — allocate a zeroed n-byte mutable buf. n<=0 / non-numeric -> the empty
+// string singleton EmptyString, so NO empty buf object ever exists (an un-writable 0-byte
+// buf IS ""); this lets g_nilp drop its buf branch (every real buf has len>=1, truthy).
+// Two heap objects under one Have (so no GC sees a half-built buf): the backing g_str
+// holding the bytes, and the length-2 wrapper thread [g_vm_buf, str, terminator].
 g_vm(g_vm_bufnew) {
  intptr_t n = fixp(Sp[0]) ? getnum(Sp[0]) : 0;
- if (n < 0) n = 0;
+ if (n <= 0) return Sp[0] = EmptyString, Ip++, Continue();   // no empty buf: it is ""
  uintptr_t sreq = str_type_width + b2w(n),
            breq = Width(struct g_buf) + Width(struct g_tag);
  Have(sreq + breq);
@@ -3436,7 +3438,7 @@ static g_vm(g_vm_add_string) {
  if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> text: undefined
  int rank = MIN(stringrank(a), stringrank(b));
  uintptr_t n = stringlen(a) + stringlen(b);
- if (!n) return *++Sp = rank ? EMPTY_SYM : EMPTY_STR, Ip++, Continue();
+ if (!n) return *++Sp = rank ? EMPTY_SYM : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(n);
  Have(req);
  a = Sp[0], b = Sp[1];                                  // re-read post-GC
@@ -3500,7 +3502,7 @@ static g_vm(g_vm_mul_rep) {
  int rank = strp(seq) ? 0 : stringrank(seq);         // 0 str / 1 usym / 2 isym
  struct g_str *src = strp(seq) ? str(seq) : add_name(seq);
  uintptr_t sl = src ? src->len : 0, total = sl * n;
- if (!total) return *++Sp = rank ? EMPTY_SYM : EMPTY_STR, Ip++, Continue();
+ if (!total) return *++Sp = rank ? EMPTY_SYM : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(total);
  Have(req);
  seq = (strp(Sp[0]) || symp(Sp[0])) ? Sp[0] : Sp[1];   // re-read post-GC
@@ -3701,10 +3703,12 @@ g_vm(g_vm_bsl) { word a = Sp[0], b = Sp[1], _res;
  return *++Sp = _res, Ip++, Continue(); }
 
 op(g_vm_fixp, 1, oddp(Sp[0]) ? putnum(1) : nil)
-// `nilp`/`not`: the language falsy predicate (nil/0 OR an all-zero tuple --
-// boxed 0.0, zero int box, all-zero array). Use `(= x 0)` for a literal
-// scalar-zero test; `(aall (= x 0))` over an array.
-op11(g_vm_nilp, g_false(Sp[0]) ? putnum(1) : nil)
+// `nilp`/`not`: the falsy predicate -- the efficient generic form of (= 0 (len x)),
+// via g_nilp, which short-circuits and never materializes len (a pair/sym/fn is truthy
+// with no walk). The single truthiness oracle: `?` (g_vm_cond), nilp, and aall/aany all
+// consult g_nilp, so `(? (nilp e) a b)` == `(? e b a)` -- the wev pass drops such a
+// nilp wrapper. Use `(= x 0)` for a literal scalar-zero test.
+op11(g_vm_nilp, g_nilp(Sp[0]) ? putnum(1) : nil)
 
 // Unary math bif: numeric arg → double, call fn, box the rank-0 f64 result.
 // Non-numeric arg → nil. TCO-clean (no & escapes).
@@ -4396,17 +4400,21 @@ g_vm(g_vm_ashape) {
 
 // --- falsiness -------------------------------------------------------------
 // True iff every element compares numerically == 0 (so -0.0 counts as zero, and
-// an empty array is vacuously all-zero). Drives g_false (i.h) -> g_vm_cond and
+// an empty array is vacuously all-zero). Drives g_nilp (i.h) -> g_vm_cond and
 // the `nilp`/`not` bif.
 bool g_all_zero(struct g_tuple *v) {
  // A complex scalar is falsy iff both components are 0 (so (cplx 0 0) and 0.0
  // agree). Read both parts -- the generic float-domain scan below would see only
  // the real part (cplx sorts past f64, so `>= g_R` treats it as float).
- if (v->type == g_C) return cplx_re(word(v)) == 0 && cplx_im(word(v)) == 0;
  uintptr_t n = 1;
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ if (v->type == g_C) {                          // complex scalar (rank 0) or packed complex array
+  if (!v->rank) return cplx_re(word(v)) == 0 && cplx_im(word(v)) == 0;
+  g_flo_t *f = tuple_data(v);                    // 2n packed (re,im) floats
+  for (uintptr_t i = 0; i < 2 * n; i++) if (f[i] != 0) return false;
+  return true; }
  if (v->type == g_O) {                          // object array: falsy iff every element is falsy
-  for (uintptr_t i = 0; i < n; i++) if (!g_false(tuple_get_obj(v, i))) return false;
+  for (uintptr_t i = 0; i < n; i++) if (!g_nilp(tuple_get_obj(v, i))) return false;
   return true; }
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
@@ -4479,7 +4487,7 @@ g_vm(g_vm_aall) {
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (v->type == g_O) {                         // object: a falsy element fails the conjunction
   for (uintptr_t i = 0; i < n; i++)
-   if (g_false(tuple_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
+   if (g_nilp(tuple_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
   return Sp[0] = putnum(1), Ip++, Continue(); }
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
@@ -4494,7 +4502,7 @@ g_vm(g_vm_aany) {
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (v->type == g_O) {                         // object: a truthy element satisfies the disjunction
   for (uintptr_t i = 0; i < n; i++)
-   if (!g_false(tuple_get_obj(v, i))) return Sp[0] = putnum(1), Ip++, Continue();
+   if (!g_nilp(tuple_get_obj(v, i))) return Sp[0] = putnum(1), Ip++, Continue();
   return Sp[0] = nil, Ip++, Continue(); }
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
@@ -4502,7 +4510,7 @@ g_vm(g_vm_aany) {
    return Sp[0] = putnum(1), Ip++, Continue();
  return Sp[0] = nil, Ip++, Continue(); }
 
-// --- elementwise unary math over an array (sin/cos/sqrt/... ) --------------
+// --- elementwise monadic math over an array (sin/cos/sqrt/... ) --------------
 // Reached from g_vm_math1 when its operand arrp. Result is a float array
 // (g_R) with the operand's shape. The fill loop takes no &local, so the
 // g_vm wrapper keeps its trailing tail call.
@@ -4525,7 +4533,7 @@ g_vm(g_vm_vmap1, g_flo_t (*fn)(g_flo_t)) {
  vmap1_fill(r, a, fn);
  return Sp[0] = word(r), Ip++, Continue(); }
 
-// --- elementwise binary engine (arith / compare / =) with broadcasting ------
+// --- elementwise dyadic engine (arith / compare / =) with broadcasting ------
 // Per-element ops. Integer division guards /0 and INT_MIN/-1 -> 0 (the array
 // convention; a scalar `/` promotes such cases to an IEEE inf/NaN instead, but
 // one element can't change the whole result's domain).
@@ -4645,10 +4653,10 @@ g_vm(g_vm_vbin, int op) {
  vbin_fill(r, a, b, op, fdom);
  return *++Sp = word(r), Ip++, Continue(); }
 
-// --- binary libm map with broadcasting (pow / atan2 over arrays) -------------
+// --- dyadic libm map with broadcasting (pow / atan2 over arrays) -------------
 // The float-domain twin of g_vm_vbin: same numpy broadcast, but the result is
 // always a float array and each element is fn(av, bv) for an arbitrary libm
-// binary fn. A scalar operand broadcasts, widening through TOFLO -- so a bignum
+// dyadic fn. A scalar operand broadcasts, widening through TOFLO -- so a bignum
 // scalar feeds in at full magnitude (g_big_to_flo), same as the scalar `pow`.
 // All the &-taking stack arrays live in this g_noinline fill so the wrapper's
 // trailing tail call survives.

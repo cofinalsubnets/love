@@ -4,7 +4,7 @@
 (assert
  ; builtins print by name
  (= "\+" (inspect +))
- (= "\X" (inspect cons))              ; prelude `cons` is the bif `X`
+ (= "\X" (inspect X))              ; prelude `X` is the bif `X`
  ; a compiled lambda prints as its source \-expr
  (= "(\\ x x)" (inspect (\ x x)))
  (= "(\\ a b (+ a b))" (inspect (\ a b (+ a b))))
