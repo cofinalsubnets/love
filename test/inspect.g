@@ -18,8 +18,13 @@
 
   ; interned symbols print as their name
   (= "foo" (inspect 'foo))
-  ; named-uninterned symbols print as ,<name>@<addr>
-  (= "x@" (ssub (inspect (gensym "x")) 0 2))
+  ; gensyms print with the `$` sigil: named-uninterned as $<name>, anonymous as
+  ; $<addr>. the `$` reader macro wraps with gensym, so $x re-reads to a symbol.
+  (= "$x" (inspect (gensym "x")))
+  (= "$foo" (inspect (gensym 'foo)))
+  (= "$" (ssub (inspect (gensym 0)) 0 1))           ; anonymous -> $<addr>
+  (symp $x)                                          ; $x reads back as a (fresh) symbol
+  (= "$bar" (inspect $bar))
 
   ; quote sugar: a pair (` x) prints as 'x
   (= "'foo"      (inspect ''foo))

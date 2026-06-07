@@ -159,14 +159,48 @@
 (:: 'qq (\ a (qqx (car a) 1)))
 (: uq (\ x x))                                               ; stray ,x evaluates x
 
-; vec/hash value constructors (also the read-back targets of the `,(vec …)` /
-; `#(…)` printer forms). `vec` builds a rank-1 array from its element args,
-; inferring f64 if any arg is a float else i64; `hasht` builds a hash from
-; alternating key/value args via nested `put`.
-(: (lvec l) (arrl (? (any flop l) f64 i64) (list (foldl (\ n _ (+ 1 n)) 0 l)) l))
+; --- array element-type inference + shape coercion (shared by `vec` and `array`).
+; a-type: the element type code, the highest of {i64=0 < f64=1 < o=2} present in
+; a list of values -- a box still fits i64; only a value past the real 64-bit
+; tower (bignum, complex, non-number) lifts the array to an object (o) array.
+; a-dim/a-shape: a shape dimension may be any numeric -- a float, complex, or even
+; a vector -- and is coerced to a non-negative integer by its L2 norm ((int (abs
+; d)): abs is the modulus for a complex / the Euclidean norm for a vector). a list
+; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …) and
+; (array (C 3 4) …) both mean "rank-1, length (int |n|)").
+(: (a-rank x) (? (flop x) 1 (| (nump x) (boxp x)) 0 2)
+   (a-emax m x) (: k (a-rank x) (? (< m k) k m))
+   (a-type d) (: r (foldl a-emax 0 d) (? (= r 0) i64 (= r 1) f64 o))
+   (a-dim d) (int (abs d))
+   (a-shape s) (? (twop s) (map a-dim s) (L (a-dim s))))
+
+; vec/hash value constructors (also the read-back targets of the `@(…)` / `#(…)`
+; printer-sugar forms). `vec` builds a rank-1 array from its element args,
+; inferring the element type via a-type (so it carries bignums/symbols in an o
+; array, not just i64/f64); `hasht` builds a hash from alternating key/value args.
+(: (lvec l) (arrl (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'vec (\ a (list 'lvec (cons 'list a))))
 (: (hashtx a) (? (twop a) (list 'put (car a) (cadr a) (hashtx (cddr a))) '(hashn 0)))
 (:: 'hasht (\ a (hashtx a)))
+
+; the `$` reader sigil wraps its operand with gensym: `$x` -> (gsym x) -> the macro
+; quotes the operand, giving (gensym 'x) -- a fresh uninterned symbol named x. a
+; non-name operand (e.g. the $<addr> an anonymous gensym prints as) quotes to itself
+; and gensym makes it anonymous. mirrors the printer in gzput_sym.
+(:: 'gsym (\ a (list 'gensym (list '\ (car a)))))
+
+; (array shape elem…): the ergonomic N-D array constructor. `shape` is either a
+; dimension *list* (rank-N) or a single number n (a rank-1 vector of length |n|),
+; coerced via a-shape (L2 norm). the element type is INFERRED via a-type, so a
+; bignum / complex / string / nested array forces an object array automatically --
+; no explicit type code, and exactness is never silently lost. the elements are
+; ordinary trailing arguments (not a list): since the shape fixes the count,
+; `array` curries them one at a time and builds once it has them all -- so
+; (array 2 'a 'b), (array '(2 2) 1 2 3 4) and a partial like (array 3) (a collector
+; awaiting 3 elems) all fall out of gwen's auto-currying, like numap's n-ary thread.
+(: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (arrl (a-type d) sh d))
+                        (\ x (a-coll sh (- n 1) (X x acc))))
+   (array s) (: sh (a-shape s) (a-coll sh (foldl * 1 sh) 0)))
 
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
 ; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body

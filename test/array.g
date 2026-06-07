@@ -105,7 +105,7 @@
  (~ (aall (< 2 1)))
  (aall (< (arrl i64 '(2) '(1 2)) (arrl i64 '(2) '(3 4))))  ; array: same expression
 
- ; --- vector falsiness: a vec is false iff every element is 0 ---
+ ; --- truthiness is zero-magnitude (L2 norm): a value is false iff |x| == 0 ---
  (nilp (arr i64 '(3)))                  ; zero array -> false
  (nilp (arr f64 '(2 2)))                ; zero float array -> false
  (nilp (arr i64 '(0)))                  ; empty array -> vacuously false
@@ -115,18 +115,29 @@
  (~ (nilp (+ (arr i64 '(2)) 1)))        ; nonzero array -> true
  (= 1 (? (arr i64 '(3)) 0 1))         ; zero array takes the false arm
  (= 0 (? (+ (arr i64 '(3)) 1) 0 1))    ; nonzero array takes the true arm
+ ; a single non-zero component makes the norm non-zero (truthy), per the tower:
+ (~ (nilp @(0 0 5)))                    ; one non-zero element -> true
+ (nilp @(0.0 0.0))                      ; all-zero float vec -> false
+ (nilp (C 0 0))                         ; complex 0+0i (|z|=0) -> false
+ (~ (nilp (C 0 1)))                     ; 0+1i (|z|=1) -> true
+ (~ (nilp i))                           ; the imaginary unit is truthy
 
  ; --- elementwise transcendentals over an array ---
  (aall (= (arrl f64 '(2) '(2.0 3.0)) (sqrt (arrl f64 '(2) '(4.0 9.0)))))
  (= f64 (atype (sqrt (arr i64 '(3)))))  ; result is a float array
 
- ; --- print as `,`-prefixed constructor forms ---
- ; rank-1 -> ,(vec …); rank>=2 -> ,(arrl <type> '(shape) '(vals))
- (= ",(vec 10 20 30)" (inspect (arrl i64 '(3) '(10 20 30))))
- (= ",(arrl i64 '(2 2) '(1 2 3 4))" (inspect (arrl i64 '(2 2) '(1 2 3 4))))
- (= ",(vec 1.5 2.5)" (inspect (arrl f64 '(2) '(1.5 2.5))))
- (= ",(vec 1 2 3)" (inspect (arrl i8 '(3) '(1 2 3))))   ; i8 aliases the word-int kind -> terse vec
- ; the printed form reads back to an equal array (`,` = uq = identity)
+ ; --- print as constructor forms ---
+ ; rank-1 numeric -> the @(…) sugar (@ reader splices into (vec …)); rank>=2 ->
+ ; an explicit (arrl <type> '(shape) '(vals)) call
+ (= "@(10 20 30)" (inspect (arrl i64 '(3) '(10 20 30))))
+ (= "(arrl i64 '(2 2) '(1 2 3 4))" (inspect (arrl i64 '(2 2) '(1 2 3 4))))
+ (= "@(1.5 2.5)" (inspect (arrl f64 '(2) '(1.5 2.5))))
+ (= "@(1 2 3)" (inspect (arrl i8 '(3) '(1 2 3))))   ; i8 aliases the word-int kind -> terse @
+ ; @(…) reads back to an equal array; the explicit form is a plain constructor call
+ (aall (= (arrl i64 '(3) '(10 20 30)) @(10 20 30)))
+ (aall (= (arrl f64 '(2) '(1.5 2.5)) @(1.5 2.5)))
+ (aall (= (arrl i64 '(2 2) '(1 2 3 4)) (arrl i64 '(2 2) '(1 2 3 4))))
+ ; the printed form reads back to an equal array
  (aall (= (arrl i64 '(3) '(10 20 30)) (vec 10 20 30)))
  (aall (= (arrl i64 '(2 2) '(1 2 3 4)) (arrl i64 '(2 2) '(1 2 3 4))))
  (aall (= (arrl f64 '(2) '(1.5 2.5)) (vec 1.5 2.5)))

@@ -36,8 +36,9 @@
  (? oa-z 0 1)                                    ; oa-z all nil -> falsy -> 1
  (? oa-a 1 0)                                     ; oa-a has truthy elems -> 1
 
- ; --- print round-trip (numeric content), reads back via uq=identity ---
- (= ",(arrl o '(3) '(10 20 30))" (inspect (arrl o '(3) '(10 20 30))))
+ ; --- print round-trip: an object array prints as a bare (arrl o …) call whose
+ ;     shape/vals are quoted, so it re-evaluates to an equal array ---
+ (= "(arrl o '(3) '(10 20 30))" (inspect (arrl o '(3) '(10 20 30))))
 
  ; --- GC stress: oa-a stays live (global root) across many collections; the
  ;     bignum element pointers must be forwarded, not dropped or truncated ---
@@ -93,3 +94,40 @@
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (= 0 (oa-churn 40))
  (= (* 2 (** 2 80)) (asum (* oa-oar oa-oar))))    ; [2^80 2^80] summed = 2^81
+
+; --- the `array` constructor: ergonomic front-end over arr/arrl --------------
+; no type code (inferred as the highest of i64<f64<o present), shape may be a
+; number (rank-1 of length |n|) or a list, and the elements are trailing args
+; (the shape fixes the count, so it curries them one at a time). bignum/complex/
+; non-number data lifts the whole array to o automatically -> exact, never lossy.
+(: oa-q (array 2 'hello 'world)                  ; symbols -> object array
+   oa-bn (array 2 (** 2 100) 5)                  ; bignum -> o, stored exactly
+   oa-m  (array (L 2 2) 1 2 3 4))                ; rank-2 from a shape list
+(assert
+ ; type inference: pure ints -> i64, any float -> f64, anything past the real
+ ; 64-bit tower (bignum/symbol/...) -> o
+ (= i64 (atype (array 3 1 2 3)))
+ (= f64 (atype (array 3 1 2.0 3)))
+ (= o   (atype oa-q))
+ (= o   (atype oa-bn))
+ ; numeric shape -> rank-1 vector of length |n| (negative shape uses |n|)
+ (= 1 (arank (array 4 1 2 3 4)))
+ (= 3 (alen (array -3 7 8 9)))
+ ; shape list -> rank-N
+ (= 2 (arank oa-m))   (= 4 (get 0 (L 1 1) oa-m))
+ ; elements stored verbatim, in order
+ (= 'world (get 0 1 oa-q))
+ (= (** 2 100) (get 0 0 oa-bn))                  ; full bignum, not truncated to i64
+ ; currying: a partial collector is a function; completing it builds the array
+ (= "(arrl o '(2) '(a b))" (inspect ((array 2) 'a 'b)))
+ ; (array 0) -> empty rank-1 array, no elements to collect
+ (= "@()" (inspect (array 0)))
+ ; round-trips: numeric array result prints as the terse @(…) sugar
+ (= "@(1 2 3)" (inspect (array 3 1 2 3)))
+ ; L2-norm shape coercion: a float / complex / vector dimension -> (int (abs d))
+ (= 2 (alen (array 2.9 7 8)))                     ; |2.9| -> 2 : rank-1 length 2
+ (= 5 (alen (array (C 3 4) 0 0 0 0 0)))           ; |(C 3 4)| = 5
+ (= 6 (alen (array (L 2.0 3.5) 1 2 3 4 5 6)))     ; dims (2 3) -> 6 elems
+ ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
+ (= o (atype @((** 2 100) 1)))                    ; bignum element -> object array
+ (aall (= @(1 2 3) (array 3 1 2 3))))

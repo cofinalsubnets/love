@@ -247,8 +247,15 @@ static g_inline word vec_get_obj(struct g_vec *v, uintptr_t i) {
 static g_inline void vec_put_obj(struct g_vec *v, uintptr_t i, word x) {
  ((word*) vec_data(v))[i] = x; }
 
-// Language falsy predicate: nil/0, or an all-zero vec (boxed 0.0, zero box/array;
-// empty vec vacuously). Hot path short-circuits on nilp; only a vec scans g_all_zero.
+// Language falsy predicate: a value is falsy iff its magnitude (L2 norm) is zero.
+// For a scalar that is just "== 0": nil/0, a boxed 0.0, a zero wide-int box. For a
+// vec it is the Euclidean norm being zero -- which, since a sum of squares is zero
+// iff every term is, g_all_zero tests EXACTLY by scanning for a non-zero element
+// (a boxed 0.0/array, an empty vec vacuously; a complex via both components; an
+// object array recursively per element). We scan rather than literally call abs()
+// because this is the hot `?`/g_vm_cond path: the scan short-circuits on the first
+// truthy element and is exact, whereas sqrt(Σx²) is slower and overflows to inf on
+// a large array -- reporting a non-zero array as falsy. Same predicate, no float risk.
 bool g_all_zero(struct g_vec*);
 static g_inline bool g_false(word x) { return nilp(x) || (vecp(x) && g_all_zero(vec(x))); }
 
@@ -2183,43 +2190,35 @@ static struct g *gzput_vec_elem(struct g *f, uintptr_t i) {
 static char const *const g_vt_names[] = {
  [g_Z] = "i64", [g_R] = "f64", [g_C] = "c", [g_O] = "o" };
 
-// Print a rank>=1 array (f->sp[0]) as a `,`-prefixed constructor expression that
-// reads back to the same array (`,` = uq = identity). A rank-1 i64/f64 array uses
-// the terse `,(vec a b …)` (vec infers i64/f64 from its args); anything else uses
-// `,(arrl <type> '(shape) '(vals))`, which pins the exact element type and shape.
-// The array may move on a GC during printing, so shape/elements are re-fetched
-// from f->sp[0] each step (gzput_vec_elem already does this internally).
+// Print a rank>=1 array (f->sp[0]) as a constructor expression that reads back to
+// the same array. A rank-1 i64/f64 array uses the terse `@(a b …)` sugar (the `@`
+// reader macro splices into `(vec a b …)`, which infers i64/f64 from its args);
+// anything else (rank>=2, or an object array whose elements are arbitrary, quoted
+// values) uses `(arrl <type> '(shape) '(vals))`, a bare constructor call that pins
+// the exact element type and shape. The array may move on a GC during printing, so
+// shape/elements are re-fetched from f->sp[0] each step.
 static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off);
 
 static struct g *gzput_arr(struct g *f, uintptr_t off) {
  struct g_vec *v = vec(f->sp[0]);
  uintptr_t rank = v->rank, type = v->type, nelem = 1;
  for (uintptr_t i = 0; i < rank; i++) nelem *= v->shape[i];
- if (type == g_O) {                             // object array: elements are arbitrary
-  f = gzprintf(f, ",(arrl o '(");               // values -> print each via the general
-  for (uintptr_t i = 0; g_ok(f) && i < rank; i++) {   // printer (re-fetch sp[0] each step:
-   if (i) f = gzputc(f, ' ');                         // gzputx may GC and relocate the array)
-   f = gzputn(f, vec(f->sp[0])->shape[i], 10); }
-  f = gzprintf(f, ") '(");
+ if (rank == 1 && (type == g_Z || type == g_R)) {     // terse rank-1 numeric: @(a b …)
+  f = gzputc(f, '@'); f = gzputc(f, '(');
   for (uintptr_t i = 0; g_ok(f) && i < nelem; i++) {
    if (i) f = gzputc(f, ' ');
-   f = gzputx(f, vec_get_obj(vec(f->sp[0]), i), off); }
-  return g_ok(f) ? gzprintf(f, "))") : f; }
- if (rank == 1 && (type == g_Z || type == g_R)) {
-  f = gzprintf(f, ",(vec");
-  for (uintptr_t i = 0; g_ok(f) && i < nelem; i++)
-   f = gzput_vec_elem(gzputc(f, ' '), i);
+   f = gzput_vec_elem(f, i); }
   return g_ok(f) ? gzputc(f, ')') : f; }
- f = gzprintf(f, ",(arrl ");
+ f = gzprintf(f, "(arrl ");                            // explicit: (arrl type '(shape) '(vals))
  for (char const *s = g_vt_names[type]; g_ok(f) && *s; s++) f = gzputc(f, *s);
  f = gzprintf(f, " '(");
  for (uintptr_t i = 0; g_ok(f) && i < rank; i++) {
   if (i) f = gzputc(f, ' ');
   f = gzputn(f, vec(f->sp[0])->shape[i], 10); }
  f = gzprintf(f, ") '(");
- for (uintptr_t i = 0; g_ok(f) && i < nelem; i++) {
-  if (i) f = gzputc(f, ' ');
-  f = gzput_vec_elem(f, i); }
+ for (uintptr_t i = 0; g_ok(f) && i < nelem; i++) {    // object elements via the general
+  if (i) f = gzputc(f, ' ');                           // printer; numeric via gzput_vec_elem
+  f = type == g_O ? gzputx(f, vec_get_obj(vec(f->sp[0]), i), off) : gzput_vec_elem(f, i); }
  return g_ok(f) ? gzprintf(f, "))") : f; }
 
 static g_inline struct g*gzput_vec_scalar_float(struct g*f) {
@@ -2263,24 +2262,26 @@ static g_inline struct g*gzput_str(struct g*f, word _) {
 
 // A symbol's nom encodes its kind: 0 = anonymous gensym, a string = interned, a
 // symbol = named-uninterned (the naming symbol, whose own nom is the name string).
-// Interned syms print bare; the other two get a leading , (parses, won't round-
-// trip) -- anonymous as ,sym@<addr>, named-uninterned as ,<name>@<addr>.
+// Interned syms print bare; gensyms get the `$` sigil (the `$` reader macro wraps
+// its operand with gensym): a named-uninterned gensym as `$<name>` (re-reads to a
+// fresh gensym of the same name), an anonymous one as `$<addr>` (unique, doesn't
+// round-trip to identity -- the addr just makes the printout distinguishable).
 static g_inline struct g*gzput_sym(struct g*f, word _) {
  if (g_ok(f = g_push(f, 1, _))) {
   word nom = word(sym(f->sp[0])->nom);
-  if (!nom) f = gzprintf(f, "@%z", f->sp[0]);           // anonymous gensym
+  if (!nom) f = gzprintf(f, "$%z", f->sp[0]);              // anonymous gensym -> $<addr>
   else if (strp(nom)) {                                     // interned: bare name
    f->sp[0] = nom;
    for (uintptr_t l = len(nom), i = 0; g_ok(f) && i < l;)
      f = gzputc(f, txt(f->sp[0])[i++]);
-  } else {                                                  // named but uninterned
-   word name = word(sym(nom)->nom), addr = f->sp[0];
-   if (!name || !strp(name)) f = gzprintf(f, "@%z", addr); // named after a nameless sym: fall back
+  } else {                                                  // named-uninterned -> $<name>
+   word name = word(sym(nom)->nom);
+   if (!name || !strp(name)) f = gzprintf(f, "$%z", f->sp[0]); // named after a nameless sym: fall back
    else {
+    f = gzputc(f, '$');
     f->sp[0] = name;
     for (uintptr_t l = len(name), i = 0; g_ok(f) && i < l;)
-        f = gzputc(f, txt(f->sp[0])[i++]);
-    if (g_ok(f)) f = gzprintf(f, "@%z", addr); } } }
+        f = gzputc(f, txt(f->sp[0])[i++]); } } }
  return g_pop(f, 1); }
 
 
@@ -2693,13 +2694,16 @@ static g_inline struct g *push_frame(struct g *f) {     // push an empty (head .
  return gxl(gxl(g_push(f, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
 static g_inline struct g *push_wrap(struct g *f, char const *nom) {
  return gxl(intern(g_strof(f, nom))); }        // ctx' = (wrapsym . ctx)
-// recognise the `#` reader-macro wrap (interned `hasht`) so it can splice a list
-// operand instead of wrapping it -- see the deliver loop in gz_parse.
-static g_inline bool hashsym(word x) {
+// recognise the splicing reader-macro wraps -- `#` (interned `hasht`) and `@`
+// (interned `vec`) -- so a list operand splices into the constructor call
+// instead of being wrapped: see the deliver loop in gz_parse.
+static g_inline bool symeq(word x, char const *nm, uintptr_t n) {
  struct g_str *s = symp(x) ? sym(x)->nom : 0;
- return s && strp(word(s)) && s->len == 5 &&
-   s->bytes[0] == 'h' && s->bytes[1] == 'a' && s->bytes[2] == 's' &&
-   s->bytes[3] == 'h' && s->bytes[4] == 't'; }
+ if (!s || !strp(word(s)) || s->len != n) return false;
+ for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
+ return true; }
+static g_inline bool hashsym(word x) { return symeq(x, "hasht", 5); }
+static g_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "vec", 3); }
 
 static struct g *gz_parse(struct g *f, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
@@ -2713,6 +2717,8 @@ static struct g *gz_parse(struct g *f, bool multi) {
    case '\'': f = push_wrap(f, "\\"); continue;
    case '`':  f = push_wrap(f, "qq"); continue;
    case '#':  f = push_wrap(f, "hasht"); continue;     // #(k v …)->(hasht k v …), #x->(hasht x)
+   case '@':  f = push_wrap(f, "vec"); continue;       // @(e …)->(vec e …) [array], @()->(vec)
+   case '$':  f = push_wrap(f, "gsym"); continue;      // $x->(gsym x)->(gensym 'x): a fresh gensym
    case ',':                                            // unquote / unquote-splice
     if (!g_ok(f = zgetc(f))) return f;
     if ((c2 = f->b) == '@') { f = push_wrap(f, "uqs"); continue; }
@@ -2744,10 +2750,10 @@ static struct g *gz_parse(struct g *f, bool multi) {
      f = gxr(g_push(f, 1, nil));                       // d (=nil=0) -> (0 . nil) = (0)
      f = gxl(intern(g_strof(f, "hashn")));             // (hashn . (0)) = (hashn 0)
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); }            // pop wrap
-    else if (hashsym(A(f->sp[1])) && twop(f->sp[0])) {
-     f = gxl(g_push(f, 1, A(f->sp[1])));               // #(k v …) on a list: splice -> (hasht . d)
+    else if (splicesym(A(f->sp[1])) && (twop(f->sp[0]) || nilp(f->sp[0]))) {
+     f = gxl(g_push(f, 1, A(f->sp[1])));               // #(k v …)/@(e …)/@() : splice -> (sym . d)
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); }
-    else {                                             // 'x `x ,x #atom -> (wrapsym d)
+    else {                                             // 'x `x ,x  #atom/@atom -> (wrapsym d)
      f = gxr(g_push(f, 1, nil));                       // (d . nil)
      f = gxl(g_push(f, 1, g_ok(f) ? A(f->sp[1]) : nil)); // (wrapsym . (d))
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); } }
