@@ -11,8 +11,8 @@
 R := ..
 include $(R)/common.mk
 
-.PHONY: all test_gen_vt test_elf2efi test_vmret
-all: test_gen_vt test_elf2efi test_vmret
+.PHONY: all test_gen_vt test_elf2efi test_vmret test_pad_checksum test_elf2uf2
+all: test_gen_vt test_elf2efi test_vmret test_pad_checksum test_elf2uf2
 
 # Build the host gl on demand (it runs the .g tools); only if it's missing.
 $(m):
@@ -52,3 +52,28 @@ test_vmret: | $(m)
 	  cmp -s $(R)/out/host/.vmret.py $(R)/out/host/.vmret.g && echo "  ok   $$e" \
 	    || { echo "  FAIL $$e"; diff $(R)/out/host/.vmret.py $(R)/out/host/.vmret.g; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.g; exit 1; }; \
 	done; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.g
+
+# pad_checksum.g vs py/pad_checksum.py over the vendored rp2040 boot2 payload.
+# (Independently cross-checked against the Pico SDK's own checksummed boot2:
+# arch/rp2040/boot2.bin -> CRC 0x7a4eb274.)
+test_pad_checksum: | $(m)
+	@echo TEST pad_checksum.g
+	@b=$(R)/arch/rp2040/boot2.bin; \
+	if [ -e $$b ]; then \
+	  python3 $(R)/tools/py/pad_checksum.py $$b > $(R)/out/host/.b2.py; \
+	  $(m) $(R)/tools/pad_checksum.$x $$b > $(R)/out/host/.b2.g; \
+	  cmp -s $(R)/out/host/.b2.py $(R)/out/host/.b2.g && echo "  ok   $$b" \
+	    || { echo "  FAIL $$b"; rm -f $(R)/out/host/.b2.py $(R)/out/host/.b2.g; exit 1; }; \
+	  rm -f $(R)/out/host/.b2.py $(R)/out/host/.b2.g; \
+	fi
+
+# elf2uf2.g vs py/elf2uf2.py over the linked rp2040 ELF (build it first with
+# `make rp2040`); skipped when no out/rp2040/*.elf is present.
+test_elf2uf2: | $(m)
+	@echo TEST elf2uf2.g
+	@for e in `find $(R)/out/rp2040 -name '*.elf' 2>/dev/null`; do \
+	  python3 $(R)/tools/py/elf2uf2.py $$e $(R)/out/host/.uf2.py; \
+	  $(m) $(R)/tools/elf2uf2.$x $$e $(R)/out/host/.uf2.g; \
+	  cmp -s $(R)/out/host/.uf2.py $(R)/out/host/.uf2.g && echo "  ok   $$e" \
+	    || { echo "  FAIL $$e"; rm -f $(R)/out/host/.uf2.py $(R)/out/host/.uf2.g; exit 1; }; \
+	done; rm -f $(R)/out/host/.uf2.py $(R)/out/host/.uf2.g

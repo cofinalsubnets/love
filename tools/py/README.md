@@ -11,6 +11,8 @@ dependency is a C compiler (plus a disassembler for the TCO check).
 | `gen_data_vt.py`   | `gen_data_vt.g`             | reflects the data-sentinel stride out of a compiled `vt.o` into a generated `vt.h` so `g_typ()` is one shift |
 | `elf2efi.py`       | `elf2efi.g`                 | wraps a static ELF into a PE32+ `.efi` (riscv64/loongarch64 EFI builds, which can't use lld's COFF backend) |
 | `vmret.py`         | `vmret.g`                   | disassembles an ELF and flags `g_vm_*` handlers that emit a `ret` instead of tail-jumping |
+| `pad_checksum.py`  | `pad_checksum.g`            | stamps the RP2040 boot2 CRC (CRC-32/MPEG-2 over 252 bytes) and emits the checksummed `.boot2` `.byte` array |
+| `elf2uf2.py`       | `elf2uf2.g`                 | packs a linked RP2040 ELF32 into a flashable `.uf2` (256-byte payload blocks, family `0xe48bff56`) |
 
 ## Why keep them?
 

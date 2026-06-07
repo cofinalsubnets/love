@@ -3777,9 +3777,9 @@ intptr_t g_big_low(word x) {
  struct g_big *b = (struct g_big*) x;
  intptr_t sl = b->slen;
  bool neg = sl < 0;
- int n = (int) (neg ? -sl : sl);
  uintptr_t u = b->limb[0];
 #if WBITS == 64
+ int n = (int) (neg ? -sl : sl);   // limb count only consulted for the 2nd limb
  if (n >= 2) u |= ((uintptr_t) b->limb[1] << 16) << 16;
 #endif
  return (intptr_t) (neg ? (uintptr_t) 0 - u : u); }

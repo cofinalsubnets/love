@@ -14,16 +14,19 @@
 ; so memoization here uses module-level hashes + named recursive functions,
 ; which compile correctly. Same algorithm, identical output.
 
-(: miss  (gensym 0) facts (hashn 0) bells (hashn 0)
-   digits "0123456789abcdefghijklmnopqrstuvwxyz"
-   (factloop n acc) (? (< n 2) acc (factloop (- n 1) (* acc n)))
-   (fact n) (: v (get miss n facts) (? (= v miss) (: r (factloop n 1) _ (put n r facts) r) v))
-   (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
-   (bellsum n k acc) (? (< k n) (bellsum n (+ k 1) (+ acc (* (choose (- n 1) k) (bell k)))) acc)
-   (bell n) (: v (get miss n bells) (? (= v miss) (: r (? (< n 2) 1 (bellsum n 0 0)) _ (put n r bells) r) v))
+(: facts #() bells #() digits "0123456789abcdefghijklmnopqrstuvwxyz"
    (digit d) (ssub digits d (+ d 1))
-   (showloop n acc) (? (< n 1) acc (showloop (/ n (len digits)) (scat (digit (% n (len digits))) acc)))
-   (show n) (showloop n "")
+   (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
+   (fact n) (:
+    (f n x) (? (< n 2) x (f (- n 1) (* x n)))
+    v (facts n)
+    (? v v (: v (f n 1) _ (put n v facts) v)))
+   (bell n) (:
+    (f n k x) (? (>= k n) x (f n (+ k 1) (+ x (* (choose (- n 1) k) (bell k)))))
+    v (bells n)
+    (? v v (: v (? (< n 2) 1 (f n 0 0)) _ (put n v bells) v)))
+   (showloop acc n) (? (< n 1) acc (showloop (scat (digit (% n (len digits))) acc)(/ n (len digits)) ))
+   show (showloop "")
    (gen i limit) (: b (show (bell i)) (? (<= (len b) limit) (cons b (gen (+ i 1) limit))))
    (leq a b) (? (twop a) (? (twop b) (? (= (car a) (car b)) (leq (cdr a) (cdr b)) 0) 0)
                          (? (twop b) 0 -1))

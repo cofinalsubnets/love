@@ -1,17 +1,4 @@
-/CMakeCache.txt
-/cmake_install.cmake
-/Makefile
-/CMakeFiles
-/generated
-/gen
-/main.elf.map
-/pico-sdk
-/pico_flash_region.ld
-/pioasm
-/pioasm-install
-*.bin
-*.dis
-*.elf
-*.hex
-*.uf2
-/build/
+# The bare-metal RP2040 build (no CMake/SDK) writes all output under the
+# top-level out/rp2040 -- nothing build-generated lands here. boot2.bin is a
+# vendored source artifact (the stage-2 payload pad_checksum.g stamps), so it
+# is tracked despite the .bin extension.

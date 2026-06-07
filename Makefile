@@ -381,18 +381,75 @@ playdate:
 	@$(MAKE) -C arch/playdate
 wasm:
 	@$(MAKE) -C wasm
-rp2040: arch/rp2040/Makefile
-	@$(MAKE) -C arch/rp2040
-arch/rp2040/Makefile: arch/rp2040/CMakeLists.txt
-	@cd arch/rp2040 && cmake .
 sim:
 	$(MAKE) -C arch/playdate sim
+
+# --- rp2040: bare-metal Cortex-M0+ (no Pico SDK, no CMake) -----------
+# Freestanding thumbv6m build of the gwen runtime + the arch/rp2040 backend,
+# linked at flash XIP behind a 256-byte checksummed boot2 (tools/pad_checksum.g
+# stamps the vendored arch/rp2040/boot2.bin) and packed into a flashable .uf2
+# (tools/elf2uf2.g). Mirrors the kernel build: per-arch vt.h reflected out of
+# this target's vt.o, the lcat lib headers shared from out/lib. The M0+ has no
+# FPU or hardware divide, so the compiler-rt builtins archive (rp_rt) supplies
+# the soft-float / 64-bit __aeabi_* libcalls -- from clang's compiler-rt when a
+# thumbv6m build is installed, else the arm-none-eabi GCC libgcc multilib (the
+# v6-m/nofp variant ships the same AAPCS __aeabi_* routines).
+ro = out/rp2040
+rp_triple = -target thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb
+rp_cppflags = -I$(ro) -I. -Iout/lib -I$R/libc -I$R/arch/rp2040
+rp_cc = $(KCC) $(rp_triple) $(g_cflags) -nostdinc -ffreestanding -fno-lto \
+  -fno-PIC -ffunction-sections -fdata-sections -Dg_tco=0 $(rp_cppflags)
+rp_rt := $(shell f=$$($(KCC) $(rp_triple) -print-libgcc-file-name 2>/dev/null); \
+  [ -e "$$f" ] && echo "$$f" || \
+  arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -print-libgcc-file-name 2>/dev/null)
+rp_h = $(g_h) $(wildcard $R/arch/rp2040/*.h)
+rp_vt_h = $(ro)/vt.h
+rp_lib_h = out/lib/prelude.h out/lib/ev.h out/lib/repl.h
+rp_src = $(g_c) $(c_c) $R/arch/rp2040/rp2040.c $R/arch/rp2040/main.c
+rp_o = $(rp_src:$(R)/%.c=$(ro)/%.o)
+
+rp2040: $(ro)/$n.uf2
+
+# vt.o bootstraps from the portable top-level vt.h (no rp_vt_h prereq -- it is
+# circular); its sentinel stride is then reflected into the generated vt.h,
+# which -I$(ro) puts ahead of the portable one. The explicit rule shadows the
+# %.o pattern below for vt.o specifically.
+$(ro)/vt.o: $R/vt.c $(rp_h) $(rp_lib_h)
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(rp_cc) -c $< -o $@
+$(rp_vt_h): $(ro)/vt.o $(gen_vt) | $(m)
+	@echo GEN	$@
+	@$(m) $(gen_vt) $< -o $@
+
+$(ro)/%.o: $R/%.c $(rp_h) $(rp_vt_h) $(rp_lib_h)
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(rp_cc) -c $< -o $@
+
+# boot2: stamp the CRC onto the vendored payload, then assemble the .byte blob
+# into the .boot2 section the linker places at flash base (0x10000000).
+$(ro)/boot2.s: $R/arch/rp2040/boot2.bin $R/tools/pad_checksum.$x | $(m)
+	@echo GEN	$@
+	@mkdir -p $(dir $@)
+	@$(m) $R/tools/pad_checksum.$x $< > $@
+$(ro)/boot2.o: $(ro)/boot2.s
+	@echo AS	$@
+	@$(KCC) $(rp_triple) -c $< -o $@
+
+$(ro)/$n.elf: $(rp_o) $(ro)/boot2.o $R/arch/rp2040/rp2040.lds
+	@echo LD	$@
+	@$(KCC) $(rp_triple) -nostdlib -fuse-ld=lld -Wl,--gc-sections -Wl,-T,$R/arch/rp2040/rp2040.lds \
+	  $(rp_o) $(ro)/boot2.o $(rp_rt) -o $@
+
+$(ro)/$n.uf2: $(ro)/$n.elf $R/tools/elf2uf2.$x | $(m)
+	@echo UF2	$@
+	@$(m) $R/tools/elf2uf2.$x $< $@
 
 clean:
 	rm -rf out
 	@$(MAKE) -C wasm clean
 	@$(MAKE) -C arch/playdate clean 2>/dev/null || true
-	@[ -e arch/rp2040/Makefile ] && $(MAKE) -C arch/rp2040 clean || true
 distclean: clean
 
 valg: host

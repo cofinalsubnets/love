@@ -133,3 +133,16 @@ double pow(double x, double y) {
   double r = exp(y * log(-x));
   return (yi & 1) ? -r : r; }
  return exp(y * log(x)); }
+
+// Single-precision wrappers for the 32-bit frontends (g_flo_t == float there,
+// so gwen reaches sqrtf/expf/... via the g_* aliases); just round through the
+// double kernels above -- the extra rounding stays within the accuracy target.
+float sqrtf(float x)           { return (float) sqrt(x); }
+float expf(float x)            { return (float) exp(x); }
+float logf(float x)            { return (float) log(x); }
+float sinf(float x)            { return (float) sin(x); }
+float cosf(float x)            { return (float) cos(x); }
+float tanf(float x)            { return (float) tan(x); }
+float atanf(float x)           { return (float) atan(x); }
+float atan2f(float y, float x) { return (float) atan2(y, x); }
+float powf(float x, float y)   { return (float) pow(x, y); }
