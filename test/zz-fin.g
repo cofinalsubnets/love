@@ -1,7 +1,7 @@
 (: f (test_get 'fail)
    ms (clock test_t0)
    s  (/ ms 1000)
-   ms (% ms 1000)
+   ms (mod ms 1000)
    p (? (< ms 10) ".00" (< ms 100) ".0" ".")
    (do (putc 10)
 

@@ -38,25 +38,25 @@
  (nump (/ B100 B100))
 
  ; --- divmod identities: a == (a/b)*b + a%b ---
- (= B100 (+ (* (/ B100 1000000007) 1000000007) (% B100 1000000007)))
- (= B100 (+ (* (/ B100 (bpow2 40)) (bpow2 40)) (% B100 (bpow2 40))))   ; multi-limb divisor
- (= F25 (+ (* (/ F25 F24) F24) (% F25 F24)))
- (= 2 (% B100 7))                         ; 2^100 mod 7
+ (= B100 (+ (* (/ B100 1000000007) 1000000007) (mod B100 1000000007)))
+ (= B100 (+ (* (/ B100 (bpow2 40)) (bpow2 40)) (mod B100 (bpow2 40))))   ; multi-limb divisor
+ (= F25 (+ (* (/ F25 F24) F24) (mod F25 F24)))
+ (= 2 (mod B100 7))                         ; 2^100 mod 7
 
  ; --- signs: truncate toward zero, remainder follows the dividend ---
  (= -25 (/ (- 0 F25) F24))
  (= 25 (/ (- 0 F25) (- 0 F24)))
  (= -25 (/ F25 (- 0 F24)))
- (= -2 (% (- 0 B100) 7))
- (= 2 (% B100 (- 0 7)))
- (= -2 (% (- 0 B100) (- 0 7)))
+ (= -2 (mod (- 0 B100) 7))
+ (= 2 (mod B100 (- 0 7)))
+ (= -2 (mod (- 0 B100) (- 0 7)))
  (= (- 0 B100) (* -1 B100))
  (= B100 (- 0 (- 0 B100)))
  (= (- 0 B100) -1267650600228229401496703205376)
 
  ; --- the lone INT_MIN/-1 case: -2^63 / -1 is the exact 2^63, %-1 is 0 ---
  (= (bpow2 63) (/ (- 0 (bpow2 63)) -1))
- (= 0 (% (- 0 (bpow2 63)) -1))
+ (= 0 (mod (- 0 (bpow2 63)) -1))
 
  ; --- mixed-tier comparison (fixnum / box / bignum) ---
  (< F24 F25)
@@ -106,7 +106,7 @@
  (= 1 (gcd B100 (+ B100 1)))              ; consecutive ints are coprime
  (= 976371285 (modpow 2 100 1000000007)) ; 2^100 mod (1e9+7)
  (= 1 (modpow 7 0 100))
- (= (% B100 1000000007) (modpow 2 100 1000000007))
+ (= (mod B100 1000000007) (modpow 2 100 1000000007))
 
  ; --- int array vs bignum scalar: ordered by the bignum's true magnitude/sign,
  ;     NOT its low bits. 2^100's low word is 0, so a low-bits comparison would

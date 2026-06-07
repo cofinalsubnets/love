@@ -63,10 +63,10 @@ the three basic special forms are:
 ; gwen lisp follows this behavior
 (assert (= (3 3 3) 7625597484987))
 
-; the classic fizzbuzz example may be written as
+; therefore the classic fizzbuzz example can be expressed
 (100
- (\ n (: fb (+ (? (% n 3) "" "fizz")
-               (? (% n 5) "" "buzz"))
+ (\ n (: fb (+ (? (mod n 3) "" "fizz")
+               (? (mod n 5) "" "buzz"))
          _ (? (len fb) (say fb))
        (+ 1 n)))
  1)

@@ -187,7 +187,7 @@
    text-off   (get 0 1 text-seg)  text-va (get 0 2 text-seg)  text-fsize (get 0 3 text-seg)  text-msize (get 0 4 text-seg)
    data-off   (get 0 1 data-seg)  data-va (get 0 2 data-seg)  data-fsize (get 0 3 data-seg)  data-msize (get 0 4 data-seg)
    _          (? (>= text-va 0x1000) 0 (die "text VA overlaps PE header span"))
-   _          (? (&& (= 0 (% text-va 0x1000)) (= 0 (% data-va 0x1000))) 0 (die "PT_LOAD VAs are not page-aligned"))
+   _          (? (&& (= 0 (mod text-va 0x1000)) (= 0 (mod data-va 0x1000))) 0 (die "PT_LOAD VAs are not page-aligned"))
    text-raw   (align-up text-fsize 0x1000)
    data-raw   (align-up data-fsize 0x1000)
    reloc      (reloc-blob (msort (collect s secs secs)))

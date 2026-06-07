@@ -278,7 +278,15 @@ static g_inline void vec_put_obj(struct g_vec *v, uintptr_t i, word x) {
 // truthy element and is exact, whereas sqrt(Σx²) is slower and overflows to inf on
 // a large array -- reporting a non-zero array as falsy. Same predicate, no float risk.
 bool g_all_zero(struct g_vec*);
-static g_inline bool g_false(word x) { return nilp(x) || (vecp(x) && g_all_zero(vec(x))); }
+// Truthiness: a value is false iff it is "zero or empty" -- exactly (= 0 (len x)).
+// nil/0, an all-zero number/array/complex, and the empty string/buf/table. Every
+// present value (non-empty container, symbol incl. anonymous, function, port,
+// bignum) is truthy. Kept in sync with g_vm_len's zero case.
+static g_inline bool g_false(word x) {
+  return nilp(x) || (vecp(x) && g_all_zero(vec(x)))
+      || (strp(x) && len(x) == 0)                       // empty string
+      || (bufp(x) && len(buf_str(x)) == 0)              // empty buf
+      || (mapp(x) && map_len(x) == 0); }                // empty table
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
 // 1/0 lowers to an FPU divide that yields +-inf or NaN per IEEE, and inf*0=NaN
@@ -544,7 +552,7 @@ static g_inline struct g*g_pop(struct g*f, uintptr_t n) {
 #define bifs(_) \
  _(bif_clock, "clock", S1(g_vm_clock)) _(bif_addr, "vminfo", S1(g_vm_info))\
  _(bif_add, "+", S2(g_vm_add)) _(bif_sub, "-", S2(g_vm_sub)) _(bif_mul, "*", S2(g_vm_mul))\
- _(bif_quot, "/", S2(g_vm_quot)) _(bif_rem, "%", S2(g_vm_rem)) \
+ _(bif_quot, "/", S2(g_vm_quot)) _(bif_rem, "mod", S2(g_vm_rem)) \
  _(bif_lt, "<", S2(g_vm_lt))  _(bif_le, "<=", S2(g_vm_le)) _(bif_eq, "=", S2(g_vm_eq))\
  _(bif_ge, ">=", S2(g_vm_ge))  _(bif_gt, ">", S2(g_vm_gt)) \
  _(bif_same, "same", S2(g_vm_same)) \
@@ -1911,14 +1919,49 @@ g_vm(g_vm_lam) {
  Sp[0] = word(memset(tagthd(k, n), -1, n * sizeof(word)));
  return Ip++, Continue(); }
 
+// (len x): a total size/magnitude. Containers -> element count (string/buf bytes,
+// list pairs, table keys, rank-n array shape-product). Numbers -> floored |x|
+// (fixnum/box/float/complex), so it agrees with (int (abs x)); a bignum saturates
+// to the nearest representable fixnum (sign-preserving). Symbol -> its name length
+// (anonymous gensym -> 0). Everything else (code, ports) -> 0.
+// ceil a non-negative magnitude into a fixnum, saturating at FIX_MAX. ceil (not
+// floor) so the result is 0 *only* when m is exactly 0 -- len then doubles as a
+// zero test: (= 0 (len x)) iff x is zero/empty. Never overflows putnum's tag.
+static g_inline intptr_t len_sat(g_flo_t m) {
+  if (m >= (g_flo_t) FIX_MAX) return FIX_MAX;
+  intptr_t i = (intptr_t) m;                    // trunc toward 0 (m >= 0)
+  return i + (m > (g_flo_t) i ? 1 : 0); }       // bump for any fractional part -> ceil
 g_vm(g_vm_len) {
-  word x = Sp[0], l = 0;
-  if (bufp(x)) l = len(buf_str(x));              // mutable byte string
-  else if (mapp(x)) l = map_len(x);              // entry count
-  else if (!nump(x) && datp(x)) switch (typ(x)) {
-    default: break;                              // vec_q, sym_q have no length
-    case text_q: l = len(x); break;
-    case two_q: do l++, x = B(x); while (twop(x)); }
+  word x = Sp[0];
+  intptr_t l = 0;
+  if (nump(x)) { intptr_t n = getnum(x); l = n == FIX_MIN ? FIX_MAX : n < 0 ? -n : n; }  // fixnum: |x|
+  else if (bufp(x)) l = len(buf_str(x));                         // mutable byte string
+  else if (mapp(x)) l = map_len(x);                              // table: key count
+  else if (datp(x)) switch (typ(x)) {
+    default: l = 1; break;                                      // unknown present data kind -> truthy
+    case text_q: l = len(x); break;                             // string: byte count
+    case two_q: { word p = x; do l++, p = B(p); while (twop(p)); } break;  // list: pair count
+    case big_q: l = FIX_MAX; break;                             // |bignum| > FIX_MAX: saturate
+    case sym_q: {                                              // symbol: name length, floored at 1
+      struct g_atom *s = sym(x);                               // (a symbol is always a present identity)
+      intptr_t nl = !s->nom ? 0                                // anonymous gensym
+        : strp(word(s->nom)) ? (intptr_t) len(s->nom)          // interned: its name string
+        : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;  // uninterned
+      l = nl ? nl : 1;
+      break; }
+    case vec_q: {                                               // boxed scalar or rank-n array
+      struct g_vec *v = vec(x);                                 // all -> ceil(|x|), saturated, never negative
+      if (v->rank) { uintptr_t i = 0, n = 1;                    // array: its L2 norm
+        while (i < v->rank) n *= v->shape[i++];
+        g_flo_t s = 0;
+        for (i = 0; i < n; i++) { g_flo_t e = vec_get_flo(v, i); s += e * e; }
+        l = len_sat(g_sqrt(s)); }
+      else if (v->type == g_C) {                                // complex: |z|
+        g_flo_t re = cplx_re(x), im = cplx_im(x); l = len_sat(g_sqrt(re * re + im * im)); }
+      else if (v->type == g_R) { g_flo_t f = flo_get(x); l = len_sat(f < 0 ? -f : f); }  // float box
+      else l = FIX_MAX;                                         // g_Z int box: |x| always exceeds FIX_MAX
+      break; } }
+  else l = 1;                                                  // opaque but present (fn / port): truthy, len 1
   Sp[0] = putnum(l);
   Ip += 1;
   return Continue(); }
@@ -2085,6 +2128,7 @@ static struct g*gvzprintf(struct g*f, char const *fmt, va_list xs) {
    case 'u': f = gzputn(f, va_arg(xs, uintptr_t), 12); continue;
    case 'x': f = gzputn(f, va_arg(xs, uintptr_t), 16); continue;
    case 'z': f = gzputn(f, va_arg(xs, uintptr_t), 36); continue;
+   case '%': f = gzputc(f, '%'); continue;             // %% -> literal %
    default: f = gzputc(f, c); } }
  return f; }
 
@@ -2166,6 +2210,7 @@ static struct g *gzput_arr(struct g *f, uintptr_t off) {
  uintptr_t rank = v->rank, type = v->type, nelem = 1;
  for (uintptr_t i = 0; i < rank; i++) nelem *= v->shape[i];
  if (rank == 1 && (type == g_Z || type == g_R)) {     // terse rank-1 numeric: @(a b …)
+  if (nelem == 0) return gzputcs(f, "@0");            // empty array prints @0 (reads back via @0/@())
   f = gzputc(f, '@'); f = gzputc(f, '(');
   for (uintptr_t i = 0; g_ok(f) && i < nelem; i++) {
    if (i) f = gzputc(f, ' ');
@@ -2247,7 +2292,7 @@ static g_inline struct g*gzput_sym(struct g*f, word _) {
  return g_pop(f, 1); }
 
 
-// Maps print as #(k v …), round-tripping through the #( reader, like hashes.
+// Maps print as %(k v …), round-tripping through the %( reader, like hashes.
 // A map is mutable and can hold itself, so guard the recursion with the seen
 // list. Snapshot k/v into a list first (printing may GC and move the map).
 static g_inline struct g*gzput_map(struct g*f, word x, uintptr_t off) {
@@ -2266,14 +2311,17 @@ static g_inline struct g*gzput_map(struct g*f, word x, uintptr_t off) {
    ini_two(kv, s[2 * i], s[2 * i + 1]);                 // (k . v)
    ini_two(p, (word) kv, list), list = (word) p++; }    // cons onto the snapshot
  fs0(f) = list;
- if (g_ok(f = gzprintf(f, "#(")) && twop(fs0(f))) for (bool sp = false;;) {
-  if (sp) f = gzputc(f, ' ');
-  sp = true;
-  f = gzputx(f, AA(g_core_of(f)->sp[0]), off);
-  f = gzputc(f, ' '); f = gzputx(f, BA(g_core_of(f)->sp[0]), off);
-  g_core_of(f)->sp[0] = B(g_core_of(f)->sp[0]);
-  if (!g_ok(f) || !twop(f->sp[0])) break; }
- f = g_pop(g_ok(f) ? gzputc(f, ')') : f, 1);
+ if (!twop(fs0(f))) f = gzputcs(f, "%0");              // empty map prints %0 (reads back via %0/%())
+ else {
+  if (g_ok(f = gzprintf(f, "%%("))) for (bool sp = false;;) {
+   if (sp) f = gzputc(f, ' ');
+   sp = true;
+   f = gzputx(f, AA(g_core_of(f)->sp[0]), off);
+   f = gzputc(f, ' '); f = gzputx(f, BA(g_core_of(f)->sp[0]), off);
+   g_core_of(f)->sp[0] = B(g_core_of(f)->sp[0]);
+   if (!g_ok(f) || !twop(f->sp[0])) break; }
+  f = g_ok(f) ? gzputc(f, ')') : f; }
+ f = g_pop(f, 1);
  return seen_pop(f, off), f; }
 
 // A bignum prints in base 10 (with sign). g_big_dec renders it to a fresh
@@ -2594,7 +2642,7 @@ g_vm(g_vm_string) {
 // Comments: `;` runs to end of line; a line that *starts* with `;;;` opens a
 // block comment that runs until the next line starting with `;;;` (that line is
 // consumed too). `#!` (shebang) runs to end of line; a bare `#` is significant
-// (the hash reader macro), as is any other non-whitespace char. `bol` tracks the
+// (the len reader macro), as is any other non-whitespace char. `bol` tracks the
 // start of a line; it is conservatively false at entry, so a `;;;` block is only
 // recognised when preceded by a newline this call has consumed (the common case).
 static struct g* g_z_getc(struct g*f) {
@@ -2603,7 +2651,7 @@ static struct g* g_z_getc(struct g*f) {
   default: bol = false; return f;
   case '\n': case '\r': bol = true; continue;
   case 0: case ' ': case '\t': case '\f': continue;  // whitespace preserves bol
-  case '#':                                          // #! is a line comment; bare # is significant
+  case '#':                                          // #! is a line comment; bare # is significant (len macro)
    if (!g_ok(f = zgetc(f))) return f;
    if (f->b != '!') {                                // not a shebang: push back, return #
     if ((int) f->b != EOF && !g_ok(f = zungetc(f, f->b))) return f;
@@ -2647,7 +2695,7 @@ static g_inline struct g *push_frame(struct g *f) {     // push an empty (head .
  return gxl(gxl(g_push(f, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
 static g_inline struct g *push_wrap(struct g *f, char const *nom) {
  return gxl(intern(g_strof(f, nom))); }        // ctx' = (wrapsym . ctx)
-// recognise the splicing reader-macro wraps -- `#` (interned `hasht`) and `@`
+// recognise the splicing reader-macro wraps -- `%` (interned `hasht`) and `@`
 // (interned `vec`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in gz_parse.
 static g_inline bool symeq(word x, char const *nm, uintptr_t n) {
@@ -2669,7 +2717,8 @@ static struct g *gz_parse(struct g *f, bool multi) {
    case '(':  f = push_frame(f); continue;
    case '\'': f = push_wrap(f, "\\"); continue;
    case '`':  f = push_wrap(f, "qq"); continue;
-   case '#':  f = push_wrap(f, "hasht"); continue;     // #(k v …)->(hasht k v …), #x->(hasht x)
+   case '%':  f = push_wrap(f, "hasht"); continue;     // %(k v …)->(hasht k v …), %x->(hasht x)
+   case '#':  f = push_wrap(f, "len"); continue;       // #x->(len x): wrap operand in len
    case '@':  f = push_wrap(f, "vec"); continue;       // @(e …)->(vec e …) [array], @()->(vec)
    case '$':  f = push_wrap(f, "gsym"); continue;      // $x->(gsym x)->(gensym 'x): a fresh gensym
    case ',':                                            // unquote / unquote-splice
@@ -2699,14 +2748,14 @@ static struct g *gz_parse(struct g *f, bool multi) {
     f->sp[1] = f->sp[0], f->sp++;
     return f; }
    if (symp(A(f->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    if (hashsym(A(f->sp[1])) && nilp(f->sp[0])) {      // #() -> (hashn 0): a fresh empty hash
+    if (hashsym(A(f->sp[1])) && nilp(f->sp[0])) {      // %() -> (hashn 0): a fresh empty hash
      f = gxr(g_push(f, 1, nil));                       // d (=nil=0) -> (0 . nil) = (0)
      f = gxl(intern(g_strof(f, "hashn")));             // (hashn . (0)) = (hashn 0)
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); }            // pop wrap
     else if (splicesym(A(f->sp[1])) && (twop(f->sp[0]) || nilp(f->sp[0]))) {
-     f = gxl(g_push(f, 1, A(f->sp[1])));               // #(k v …)/@(e …)/@() : splice -> (sym . d)
+     f = gxl(g_push(f, 1, A(f->sp[1])));               // %(k v …)/@(e …)/@() : splice -> (sym . d)
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); }
-    else {                                             // 'x `x ,x  #atom/@atom -> (wrapsym d)
+    else {                                             // 'x `x ,x  #x %atom/@atom -> (wrapsym d)
      f = gxr(g_push(f, 1, nil));                       // (d . nil)
      f = gxl(g_push(f, 1, g_ok(f) ? A(f->sp[1]) : nil)); // (wrapsym . (d))
      if (g_ok(f)) f->sp[1] = B(f->sp[1]); } }
@@ -4959,6 +5008,8 @@ g_vm(g_vm_abs) {
   for (i = 0; i < v->rank; i++) n *= v->shape[i];     // abs gives a complex (its 2-vector modulus)
   g_flo_t s = 0; for (i = 0; i < n; i++) { g_flo_t e = vec_get_flo(v, i); s += e * e; }
   Have(BOX_REQ); EMIT_FLO(g_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
+ if (mapp(a)) {                                       // table: its key count (so (int (abs t)) == (len t))
+  Have(BOX_REQ); EMIT_INT((intptr_t) map_len(a)); return Sp[0] = _res, Ip++, Continue(); }
  return Sp[0] = nil, Ip++, Continue(); }
 
 // (arg z): phase angle atan2(im, re) as a float. On a real number this is 0 for

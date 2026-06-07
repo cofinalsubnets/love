@@ -12,7 +12,7 @@
        (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
        (bellsum n k acc) (? (< k n) (bellsum n (+ k 1) (+ acc (* (choose (- n 1) k) (bell k)))) acc)
        (bell n) (: v (get miss n bells) (? (= v miss) (: r (? (< n 2) 1 (bellsum n 0 0)) _ (put n r bells) r) v))
-       (showloop n acc) (? (< n 1) acc (showloop (/ n base) (scat (ssub digits (% n base) (+ 1 (% n base))) acc)))
+       (showloop n acc) (? (< n 1) acc (showloop (/ n base) (scat (ssub digits (mod n base) (+ 1 (mod n base))) acc)))
        (show n) (showloop n "")
        (gen i acc) (: b (show (bell i)) (? (<= (len b) limit) (gen (+ i 1) (+ acc (len b))) acc))
      (gen 0 0))

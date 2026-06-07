@@ -17,13 +17,13 @@
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
 (: i (C 0 1))
 (: (** b e) (? (< e 1) 1 (: h (** b (/ e 2)) h2 (* h h)
-                           (? (= 0 (% e 2)) h2 (* h2 b))))
-   (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
-   (modpow b e m) (? (< e 1) 1 (: h (modpow b (/ e 2) m) h2 (% (* h h) m)
-                                 (? (= 0 (% e 2)) h2 (% (* h2 b) m)))))
+                           (? (= 0 (mod e 2)) h2 (* h2 b))))
+   (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (mod a b)))
+   (modpow b e m) (? (< e 1) 1 (: h (modpow b (/ e 2) m) h2 (mod (* h h) m)
+                                 (? (= 0 (mod e 2)) h2 (mod (* h2 b) m)))))
 ; functional bounded draw: (value . st') with value in [0,n), riding rand-next
 ; (full-width draw) + modulo. The global-stream analogue is the `rand` bif.
-(: (randint st n) (: r (rand-next st) (cons (% (car r) n) (cdr r))))
+(: (randint st n) (: r (rand-next st) (cons (mod (car r) n) (cdr r))))
 (: AAA (co A AA) AAB (co A AB)
    ABA (co A BA) ABB (co A BB)
    BAA (co B AA) BAB (co B AB)
@@ -185,7 +185,7 @@
    (a-dim d) (int (abs d))
    (a-shape s) (? (twop s) (map a-dim s) (L (a-dim s))))
 
-; vec/hash value constructors (also the read-back targets of the `@(…)` / `#(…)`
+; vec/hash value constructors (also the read-back targets of the `@(…)` / `%(…)`
 ; printer-sugar forms). `vec` builds a rank-1 array from its element args,
 ; inferring the element type via a-type (so it carries bignums/symbols in an o
 ; array, not just i64/f64); `hasht` builds a hash from alternating key/value args.

@@ -73,7 +73,7 @@
             (&& (< 1 ar) (= n ar)) (cons apx (cons -1 x))      ; multi-arg fn -> n-ary apply
             (cons apx (cons 0 x))))))                          ; generic l2r apply
     (go v as))
-   names (list '+ '- '* '/ '% '~ '<< '>> '& '| '^
+   names (list '+ '- '* '/ 'mod '~ '<< '>> '& '| '^
                '< '<= '= '>= '> 'same '** 'gcd 'modpow 'inc 'dec 'abs
                'cons 'car 'cdr 'X 'A 'B 'caar 'cadr 'cdar 'cddr
                'len 'lidx 'assq 'memq 'last 'rev 'cat

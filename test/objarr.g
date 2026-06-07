@@ -121,7 +121,7 @@
  ; currying: a partial collector is a function; completing it builds the array
  (= "(arrl o '(2) '(a b))" (inspect ((array 2) 'a 'b)))
  ; (array 0) -> empty rank-1 array, no elements to collect
- (= "@()" (inspect (array 0)))
+ (= "@0" (inspect (array 0)))
  ; round-trips: numeric array result prints as the terse @(…) sugar
  (= "@(1 2 3)" (inspect (array 3 1 2 3)))
  ; L2-norm shape coercion: a float / complex / vector dimension -> (int (abs d))

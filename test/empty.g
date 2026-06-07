@@ -1,10 +1,12 @@
-; "" is a distinct, truthy empty-string object -- the identity element for + (and
-; scat) over strings. It is NOT the number 0: 0 (nil) is still tolerated as an
-; "empty" argument by the lenient string ops, but the two are distinguishable.
+; "" is a distinct empty-string object -- the identity element for + (and scat)
+; over strings. It is falsy (an empty container), but NOT the number 0: 0 (nil) is
+; still tolerated as an "empty" argument by the lenient string ops, and "" prints
+; and compares as a string, yet the two are distinguishable objects.
 (assert
-  ; the literal "" reads as a real, truthy string object distinct from 0
+  ; the literal "" reads as a real string object, distinct from 0 ...
   (strp "")                                  ; "" is a string
-  (not (nilp ""))                            ; "" is truthy
+  (nilp "")                                  ; ... but falsy now -- an empty container
+  (not (same "" 0))                          ; truthiness aside, "" is its own object, not 0/nil
   (nilp (= "" 0))                            ; "" is not equal to 0
   (nilp (same "" 0))                         ; ... nor identical to it
   (= "" "")                                  ; but all empty strings are equal

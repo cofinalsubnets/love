@@ -67,18 +67,18 @@
  (fz-ok 300 9 fz-num (\ a (= a (* a 1))))
  ; divmod identity: a = (a/b)*b + a%b, and the remainder is smaller in magnitude
  (fz-ok 400 10 (fz-pair2 fz-num fz-num-nz)
-   (\ v (= (car v) (+ (* (/ (car v) (cadr v)) (cadr v)) (% (car v) (cadr v))))))
+   (\ v (= (car v) (+ (* (/ (car v) (cadr v)) (cadr v)) (mod (car v) (cadr v))))))
  ; remainder sign follows the dividend (truncated division)
  (fz-ok 400 11 (fz-pair2 fz-fix fz-fix-nz)
-   (\ v (: r (% (car v) (cadr v)) (|| (= r 0) (= (< r 0) (< (car v) 0))))))
+   (\ v (: r (mod (car v) (cadr v)) (|| (= r 0) (= (< r 0) (< (car v) 0))))))
  ; exact-power recurrence and the float-free modpow against ** then %
  (fz-ok 300 12 (fz-pair2 (fz-int -6 7) (fz-nat 14))
    (\ v (= (** (car v) (+ 1 (cadr v))) (* (car v) (** (car v) (cadr v))))))
  (fz-ok 250 13 (fz-trip (fz-nat 30) (fz-nat 14) (fz-int 2 500))
-   (\ v (= (modpow (car v) (cadr v) (caddr v)) (% (** (car v) (cadr v)) (caddr v)))))
+   (\ v (= (modpow (car v) (cadr v) (caddr v)) (mod (** (car v) (cadr v)) (caddr v)))))
  ; gcd divides both arguments
  (fz-ok 300 14 (fz-pair2 fz-fix-nz fz-fix-nz)
-   (\ v (: g (gcd (car v) (cadr v)) (&& (= 0 (% (car v) g)) (= 0 (% (cadr v) g)))))))
+   (\ v (: g (gcd (car v) (cadr v)) (&& (= 0 (mod (car v) g)) (= 0 (mod (cadr v) g)))))))
 
 ; ---- number-as-function application (Church numerals), deliberately bounded ----
 ; applying a fixnum n is Church-numeral application: a numeric operand m gives
@@ -111,7 +111,7 @@
    (\ v (= (car v) (cat (take (cadr v) (car v)) (drop (cadr v) (car v))))))
  ; filter keeps only matching elements and never grows the list
  (fz-ok 300 27 fz-l
-   (\ l (: p (\ x (= 0 (% x 2))) (&& (all p (filter p l)) (<= (len (filter p l)) (len l))))))
+   (\ l (: p (\ x (= 0 (mod x 2))) (&& (all p (filter p l)) (<= (len (filter p l)) (len l))))))
  ; an element consed on is found by memq
  (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (memq (car v) (cons (car v) (cadr v))))))
 

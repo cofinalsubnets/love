@@ -65,7 +65,7 @@
  (nilp (< 1 i))   (nilp (<= (C 1 1) (C 2 2)))
 
  ; --- % is undefined on complex; sin/sqrt/atan2 stay real-domain (deferred) ---
- (nilp (% i 2))
+ (nilp (mod i 2))
  (nilp (sin i))   (nilp (sqrt i))   (nilp (atan2 i 1))
  ; pow IS defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
  (close -1 (re (pow i 2)))   (close 0 (im (pow i 2)))

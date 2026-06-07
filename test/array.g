@@ -51,7 +51,7 @@
  (aall (= (arrl i64 '(3) '(9 19 29)) (- (arrl i64 '(3) '(10 20 30)) 1)))
  (aall (= (arrl i64 '(2) '(4 6)) (* (arrl i64 '(2) '(2 3)) 2)))
  (aall (= (arrl i64 '(2) '(3 5)) (/ (arrl i64 '(2) '(7 11)) 2)))   ; integer division
- (aall (= (arrl i64 '(2) '(1 1)) (% (arrl i64 '(2) '(7 11)) 2)))
+ (aall (= (arrl i64 '(2) '(1 1)) (mod (arrl i64 '(2) '(7 11)) 2)))
  (aall (= (arrl i64 '(3) '(2 4 6)) (+ 1 (arrl i64 '(3) '(1 3 5)))))  ; scalar on the left
 
  ; --- array (op) array, same shape ---
