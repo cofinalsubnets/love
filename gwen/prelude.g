@@ -1,6 +1,6 @@
 ; prelude.g -- gwen prelude: data + function + macro definitions.
 (: (co f g x) (f (g x))
-   (id x) x
+   id 1
    (const x _) x
    (flip f x y) (f y x))
 (: macros (get 0 0 globals))
@@ -44,7 +44,8 @@
    read (fread in))
 ; fixnum-as-function application, installed into the VM via set-numap: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
-; function x composes n times (n < 1 -> identity). numfn assembles the n-fold thread
+; function x composes n times. n<1 -> 1 (itself the identity numeral: (1 x) == x
+; for every x, see below); n=1 -> x directly. numfn assembles the n-fold thread
 ; directly via thd/poke (no `ev`, so applying a fixnum never re-enters the compiler):
 ; n quote-f's then n ap's -- apl2r's [head..][arg][ap..] shape -- via the interned
 ; opcode globals (kernel/g.c `insts`). Cell 0 is the source \-expr at value[-1] for
@@ -62,7 +63,7 @@
      _ (nfa th 0 n)
      _ (poke (+ 3 (* 3 n)) g_vm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
-   (num-ap n x) (? (nump x) (** x n) (< n 1) id (numfn n x))
+   (num-ap n x) (? (nump x) (** x n) (< n 1) 1 (= n 1) x (numfn n x))
    _ (set-numap num-ap))
 (: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
    (foldl f z l) (? (twop l) (foldl f (f z (car l)) (cdr l)) z)

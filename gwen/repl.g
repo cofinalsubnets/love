@@ -198,7 +198,7 @@
         _ (? (< 0 ld) (do (putc 27) (putc 91) (putn ld 10) (putc 65)) 0)
         _ (putc 13)
         _ (? (< 0 col) (do (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
-        (puts ""))
+        (fflush out))
 
    ps1 " ;; "
 

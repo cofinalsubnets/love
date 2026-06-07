@@ -19,10 +19,11 @@ static g_vm(data_hash_apply) {
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
 // (s k): applying a string indexes it -- k is a byte offset and the result is
-// the unsigned byte 0..255 there, nil (0) if k is non-numeric or out of range,
-// i.e. (s k) == (get 0 k s). No allocation, so the frame unwinds like self-quote.
+// the unsigned byte 0..255 there, 1 if k is non-numeric or out of range. The 1
+// matches the empty string ("" == 0): a numeric ("" k) is Church-numeral k**0 ==
+// 1. No allocation, so the frame unwinds like self-quote.
 static g_vm(data_text_apply) {
- word k = Sp[0], v = nil, n;
+ word k = Sp[0], v = g_putnum(1), n;
  if (oddp(k) && (n = g_getnum(k)) >= 0 && n < (word) len(Ip))
   v = g_putnum((unsigned char) txt(Ip)[n]);
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
