@@ -169,6 +169,32 @@
     rb (wait b)
     (&& (= 0 (wait a)) (= 70 rb)))
 
+ ; --- yieldable bignum multiply ---
+
+ ; A single bignum multiply is O(n^2) but now yields cooperatively: it folds a
+ ; bounded chunk of the product per VM dispatch, so a peer task runs *during* the
+ ; product. This is what lets the repl's Ctrl-C poller interrupt a hung eval like
+ ; (3 3 3 3) (see g/repl.g do_eval). Here a worker squares a ~200k-bit number
+ ; once; a ticker peer counts how often it gets scheduled mid-multiply. Before
+ ; chunking, the worker held the CPU for the whole product and the ticker (capped
+ ; so it can't wrap the 1-byte buf) never ran -- post-chunking it runs many times.
+ (: big (** 2 200000)
+    ticks (bufnew 1)
+    w (spawn (\ _ (* big big)) 0)
+    t (spawn (\ _ (: (go _) (? (done? w) 0
+                               (: c (get 0 0 ticks)
+                                  _ (? (< c 250) (put 0 (+ c 1) ticks) 0)
+                                  _ (yield 0) (go 0)))
+                     (go 0))) 0)
+    _ (wait w) _ (wait t)
+    (< 5 (get 0 0 ticks)))
+
+ ; a peer can kill a task while it is mid-multiply, not only once it finishes:
+ ; the worker parks at a yield inside the product, so kill finds it runnable.
+ (: w (spawn (\ _ (* (** 2 200000) (** 2 200000))) 0)
+    _ (yield 0)
+    (&& (= 1 (kill w)) (= 0 (wait w))))
+
  ; --- wake_at scheduler behavior ---
 
  ; wait on a sleeping task: main has to sleep deeply alongside it, then

@@ -127,11 +127,16 @@ double atan2(double y, double x) {
 double pow(double x, double y) {
  if (y == 0) return 1;
  if (x == 0) return y > 0 ? 0 : M_INF;
- if (x < 0) {
-  int64_t yi = (int64_t) y;
-  if ((double) yi != y) return M_NAN;        // non-integer exponent
-  double r = exp(y * log(-x));
-  return (yi & 1) ? -r : r; }
+ // Integer exponents: exact binary exponentiation (correct sign for x<0 falls out
+ // of the repeated multiply). exp(y*log x) drifts ~1 ULP, so 3^2.0 lands at
+ // 8.999..., not 9 -- the integer path keeps such results exact.
+ int64_t yi = (int64_t) y;
+ if ((double) yi == y && yi > -1024 && yi < 1024) {
+  int64_t n = yi < 0 ? -yi : yi;
+  double r = 1, b = x;
+  for (; n; n >>= 1, b *= b) if (n & 1) r *= b;
+  return yi < 0 ? 1 / r : r; }
+ if (x < 0) return M_NAN;                     // non-integer exponent, negative base
  return exp(y * log(x)); }
 
 // Single-precision wrappers for the 32-bit frontends (g_flo_t == float there,

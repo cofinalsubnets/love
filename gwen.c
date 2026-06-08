@@ -117,6 +117,7 @@ g_vm_t g_vm_kcall,
  g_vm_unc, g_vm_poke2, g_vm_peek2,
  g_vm_seek,  g_vm_trim,   g_vm_lam,   g_vm_add,
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,
+ g_vm_bmul_start, g_vm_bmul,   // resumable (yieldable) bignum multiply
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,
  g_vm_argap, g_vm_quoteap, g_vm_argtap,
@@ -3316,6 +3317,7 @@ g_vm(g_vm_cons) {
  if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b), t; \
   if (!ovf(av, bv, &t)) { word _res; Have(BOX_REQ); EMIT_INT(t); \
    return *++Sp = _res, Ip++, Continue(); } } \
+ if ((vop) == VOP_MUL) return Ap(g_vm_bmul_start, f); /* O(n^2): run yieldable */ \
  Pack(f); f = g_big_binop(f, vop); \
  if (!g_ok(f)) return gtrap(f); \
  return Unpack(f), Continue(); }
@@ -4062,7 +4064,9 @@ static g_noinline int mag_sub(uint32_t *r, uint32_t const *a, int na, uint32_t c
   r[i] = (uint32_t) d; }
  return na; }
 
-// r = a * b (schoolbook). r must be distinct from a,b; capacity >= na+nb.
+// r = a * b (schoolbook). r must be distinct from a,b; capacity >= na+nb. Used
+// one-shot by g_big_binop (the object-array elementwise lane); the scalar `*`
+// path instead drives a chunked, yieldable copy of this loop in g_vm_bmul.
 static g_noinline void mag_mul(uint32_t *r, uint32_t const *a, int na, uint32_t const *b, int nb) {
  for (int i = 0; i < na + nb; i++) r[i] = 0;
  for (int i = 0; i < na; i++) {
@@ -4266,6 +4270,90 @@ struct g *g_big_binop(struct g *f, int vop) {
  f->sp++;
  f->ip = (union u*) f->ip + 1;
  return f; }
+
+// --- resumable (yieldable) multiply -----------------------------------------
+// Schoolbook multiply is O(na*nb) and, run as one C call, never yields -- so a
+// peer task (the repl's Ctrl-C poller) can't interrupt a huge product. Instead
+// we drive it as a self-looping VM instruction: the partial product lives in a
+// buf (flat bytes, GC-relocates safely), and each dispatch folds ~BMUL_CHUNK
+// limb-mults of rows, then re-dispatches with a YieldCheck. The work state rides
+// the gwen stack [i, r, ret_ip, a, b] -- a yield saves/restores it, so the
+// product resumes exactly where it paused. Ip parks on bmul_loop while looping;
+// on completion it jumps back to ret_ip (the instruction after `*`).
+// Operands a,b are kept as heap bignums so the loop reads stable limb pointers
+// directly: a tail-jumping handler must NOT take the address of a stack local
+// (it blocks the sibcall), which rules out load_int_mag's scratch array. Setup
+// (which may use scratch) is hoisted into a plain function, g_bmul_setup.
+#define BMUL_CHUNK (1 << 14)
+static union u bmul_loop[1] = { { .ap = g_vm_bmul } };
+
+// Materialize integer x (fixnum/box/bignum) as a heap g_big, bumping *hp for the
+// fixnum/box case; a bignum is returned in place. Plain function: scratch is fine.
+static union u *as_big(g_word **hp, word x) {
+ if (bigp(x)) return cell(x);
+ intptr_t v = TOINT(x);
+ bool neg = v < 0;
+ uintptr_t u = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
+ uint32_t lo = (uint32_t) u, hi = (uint32_t) ((u >> 16) >> 16);   // hi=0 on 32-bit ports
+ int n = hi ? 2 : lo ? 1 : 0;
+ struct g_big *b = ini_big((struct g_big*) *hp, neg ? -n : n);
+ if (n >= 1) b->limb[0] = lo;
+ if (n >= 2) b->limb[1] = hi;
+ *hp += b2w(sizeof(struct g_big) + (size_t) n * 4);
+ return cell((word) b); }
+
+// f->sp[0]=a f->sp[1]=b (integers whose product overflows a word). Promote both
+// to bignums, allocate the zeroed result buf, and lay out the work frame; on
+// return f->ip is bmul_loop. One g_have so no half-built state is ever seen.
+static struct g *g_bmul_setup(struct g *f) {
+ word a = f->sp[0], b = f->sp[1];
+ int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
+ uintptr_t rbytes = (uintptr_t) (na + nb) * 4,
+           sreq = str_type_width + b2w(rbytes),
+           breq = Width(struct g_buf) + Width(struct g_tag),
+           bigmax = Width(struct g_big) + b2w(2 * 4);
+ if (!g_ok(f = g_have(f, 2 * bigmax + sreq + breq + 3))) return f;
+ a = f->sp[0], b = f->sp[1];                       // re-fetch (g_have may have GC'd)
+ union u *abig = as_big(&f->hp, a), *bbig = as_big(&f->hp, b), *ret = f->ip + 1;
+ struct g_str *s = ini_str((struct g_str*) f->hp, rbytes);
+ f->hp += sreq; memset(txt(s), 0, rbytes);
+ union u *k = (union u*) f->hp; f->hp += breq;
+ ((struct g_buf*) k)->ap = g_vm_buf, ((struct g_buf*) k)->str = s, tagthd(k, Width(struct g_buf));
+ f->sp -= 3;                                       // [i, r, ret_ip, abig, bbig]
+ f->sp[0] = putnum(0), f->sp[1] = word(k), f->sp[2] = word(ret);
+ f->sp[3] = word(abig), f->sp[4] = word(bbig);
+ f->ip = bmul_loop;
+ return f; }
+
+g_vm(g_vm_bmul_start) {
+ Pack(f); f = g_bmul_setup(f);
+ if (!g_ok(f)) return gtrap(f);
+ return Unpack(f), Continue(); }
+
+g_vm(g_vm_bmul) {
+ int i = (int) getnum(Sp[0]);
+ struct g_big *A = (struct g_big*) Sp[3], *B = (struct g_big*) Sp[4];
+ intptr_t sla = A->slen, slb = B->slen;
+ int na = sla < 0 ? -sla : sla, nb = slb < 0 ? -slb : slb;
+ if (!na || !nb) {                                // a zero operand: product is 0
+  word ret = Sp[2]; return Sp += 4, Sp[0] = nil, Ip = cell(ret), Continue(); }
+ uint32_t *la = A->limb, *lb = B->limb, *rl = (uint32_t*) txt(buf_str(Sp[1]));
+ int end = MIN(i + MAX(1, BMUL_CHUNK / nb), na);
+ for (; i < end; i++) {                           // schoolbook outer loop, one chunk of rows
+  uint64_t carry = 0, ai = la[i];
+  for (int j = 0; j < nb; j++) {
+   uint64_t t = ai * lb[j] + rl[i+j] + carry;
+   rl[i+j] = (uint32_t) t, carry = t >> 32; }
+  rl[i+nb] = (uint32_t) carry; }
+ Sp[0] = putnum(i);                               // persist progress before any yield/GC
+ if (i < na) { YieldCheck(); return Continue(); }
+ bool neg = (sla < 0) != (slb < 0); word ret;     // done: canonicalize the product
+ Have(Width(struct g_big) + b2w((size_t) (na + nb) * 4));
+ ret = Sp[2]; uint32_t *rmag = (uint32_t*) txt(buf_str(Sp[1]));   // re-fetch (Have may have GC'd)
+ Pack(f);                                          // canon needs the synced f->hp (not &Hp: stack-local escapes block the sibcall)
+ word res = g_big_canon(&f->hp, rmag, na + nb, neg);
+ Unpack(f);
+ return Sp += 4, Sp[0] = res, Ip = cell(ret), Continue(); }
 
 // --- reader / printer -------------------------------------------------------
 

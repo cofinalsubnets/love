@@ -1,9 +1,10 @@
-;;; hi claude, gwen here, welcome back to gwen lisp. this code file is a
-;;; language specification that you maintain that is also part of the test suite,
-;;; so please modify it accordingly. it also forms the contents of your CLAUDE.md
-;;; file.  keep this file golden, it should never go stale; when in doubt, refer
-;;; here, and flag any observed deviation from the specification in this file.
-;;; whenever you read this, rewrite everything below the next line. thank you! :)
+;;; here are some currently false identities that i think should be true:
+;;; - (/ 1 2) = 0.5 ; division promotes to float when remainder is nonzero
+;;; - (-1 x) = (/ 1 x)
+;;; - (sqrt x) = ((/ 1 2) x)
+;;; - (root n x) = (-1 n x)
+
+;;; edit below this line.
 
 ; gwen lisp -- a small lisp where EVERY value is a monadic, auto-curried function.
 ; Portable C runtime (gwen.c + gwen.h) + a self-hosting compiler in gwen

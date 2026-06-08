@@ -21,13 +21,12 @@ different meaning in gwen lisp. examples:
    `(f x y z) = (((f x) y) z) = (foldl 1 f (list x y z))` so
    `(f) = (foldl 1 f '()) = f`
 
-function/argument evaluation order is unspecified.
-the `:` form is used for both variable naming and expression sequencing:
-
+function and argument evaluation order is at the compiler's discretion.
+when evaluation must be ordered then `:` is used:
 ```
-(: b (g 0)       ; eval second argument first
-   a (f 0)       ; eval first argument second
-   _ (puts "hi") ; print something third
+(: b (g 0)       ; eval second argument
+   a (f 0)       ; eval first argument
+   _ (puts "hi") ; 
  (c a b))        ; last expression = final result
 ```
 

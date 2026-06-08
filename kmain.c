@@ -65,6 +65,9 @@ static void palette_init(void) {
 
 void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int),
      k_fault_trigger(intptr_t n);
+#ifdef K_TEST
+void k_qemu_exit(int);
+#endif
 
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
@@ -430,6 +433,11 @@ static g_vm(g_vm_fault) {
   Ip += 1;
   return Continue(); }
 
+#ifdef K_TEST
+// (exit code) -- quit qemu; the test corpus calls it on completion / failure.
+static g_vm(g_vm_kexit) { k_qemu_exit(g_getnum(Sp[0])); Ip += 1; return Continue(); }
+#endif
+
 
 
 static union u
@@ -437,6 +445,9 @@ static union u
   bif_draw[] = {{draw}, {g_vm_ret0}},
   bif_key[] = {{key}, {g_vm_ret0}},
   bif_color[] = {{g_vm_cur}, {.x = g_putnum(2)}, {color}, {g_vm_ret0}},
+#ifdef K_TEST
+  bif_exit[] = {{g_vm_kexit}, {g_vm_ret0}},
+#endif
   bif_fault[] = {{g_vm_fault}, {g_vm_ret0}};
 
 // Reads the bootloader-populated kboot struct (Limine or UEFI) and
@@ -478,7 +489,18 @@ static struct g_def defs[] = {
   {"draw", (intptr_t) bif_draw},
   {"key", (intptr_t) bif_key},
   {"fault", (intptr_t) bif_fault},
+#ifdef K_TEST
+  {"exit", (intptr_t) bif_exit},
+#endif
   {"color", (intptr_t) bif_color} };
+
+#ifdef K_TEST
+// The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.g
+// (Makefile out/lib/ktests.h). Bound to the global `tests` and run through ev at boot.
+static char const ktests[] =
+#include "ktests.h"
+;
+#endif
 
 void kmain(void) {
 #if defined(__x86_64__)
@@ -514,10 +536,18 @@ void kmain(void) {
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {
   if (fbinit() && cbinit()) palette_init();
+  struct g *f = g_defn(g_ini(), defs, LEN(defs));
+#ifdef K_TEST
+  // bind the baked corpus to the global `tests`; below it is read form-by-form
+  // and run through ev at boot (no console), then qemu is quit.
+  f = g_strof(f, ktests);
+  struct g_def td[] = {{"tests", g_pop1(f)}};
+  f = g_defn(f, td, LEN(td));
+#endif
   // load the prelude, then run the gwen read-eval-print loop. its line
   // editor (in repl.g) drives the console; PS/2 keyboard and serial
   // input both arrive as ANSI escape sequences the gwen edev decodes.
-  g_fin(g_evals_(g_defn(g_ini(), defs, LEN(defs)), "("
+  g_fin(g_evals_(f, "("
 #include "egg.h"
  G_EGG_PRE
 #include "prelude.h"
@@ -525,6 +555,17 @@ void kmain(void) {
 #include "ev.h"
  G_EGG_POST
 #include "repl.h"
+#ifdef K_TEST
+ // test build: read each form out of the baked `tests` string (string -> charlist
+ // -> strin port -> fread) and eval it via the self-hosted ev -- the same shape as
+ // the host's stdin runner. zz-fin.g prints the summary and (exit 1)s on failure.
+ "(: p (strin ((: (g i) (? (< i (len tests)) (X (get 0 i tests) (g (+ 1 i))))) 0))"
+ " ((: (g e) (: r (fread p e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (gensym 0)))"
+#else
  "(repl 0 0)"
+#endif
   )); }
+#ifdef K_TEST
+ k_qemu_exit(0);   // corpus done with no failures -> quit qemu (exit 0)
+#endif
  k_reset(); }

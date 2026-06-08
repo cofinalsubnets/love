@@ -100,6 +100,12 @@ void serial_init(void) {
   outb(COM1 + 4, 0x0b);    // DTR, RTS, OUT2 (OUT2 gates the IRQ line)
   outb(COM1 + 1, 0x01); }  // IER: interrupt when receive data arrives
 
+#ifdef K_TEST
+// Test build (make test_kernel): the corpus is baked into the kernel and run at
+// boot; (exit code) calls this to quit qemu via the isa-debug-exit device.
+void k_qemu_exit(int code) { asm volatile ("outl %0, %w1" :: "a"((uint32_t) code), "Nd"((uint16_t) 0xf4)); }
+#endif
+
 void serial_putc(int c) {
   if (c == '\n') serial_putc('\r');
   // bounded spin on "transmit holding register empty" so an absent or

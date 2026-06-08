@@ -10,9 +10,12 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel playdate wasm rp2040 gl0
-.PHONY: test test_host test_all test_tools test_gl0 hooks
+.PHONY: test test_host test_all test_tools test_gl0
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench sim
 test: test_host test_gl0
+# test_kernel is intentionally NOT in test/test_all: it currently hangs (the baked
+# corpus read back through a strin port wedges the freestanding kernel). Run it
+# explicitly with `make test_kernel`. See the TODO above its rule below.
 test_all: test_host test_gl0 test_tools
 # gl0 bakes prelude+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prelude (c0), run the corpus, bootstrap ev.g
@@ -31,14 +34,6 @@ test_host: host
 # tools/py/ (gen_data / elf2efi / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host
 	@$(MAKE) -C tools
-# CLAUDE.md is test/CLAUDE.g wrapped in a ```gwen fence (tools/gen_claudemd.g). It is
-# NOT a make target: Claude regenerates it by hand after rewriting test/CLAUDE.g --
-#   out/host/gl tools/gen_claudemd.g
-# and the pre-commit hook (tools/hooks/) only checks freshness, failing a stale commit.
-# Activate the tracked git hooks (tools/hooks/) for this clone.
-hooks:
-	@git config core.hooksPath tools/hooks
-	@echo "hooks: core.hooksPath -> tools/hooks"
 all: host kernel playdate wasm rp2040
 
 # Static lisp headers: each gwen/*.g is serialized to a C string literal in
@@ -153,6 +148,13 @@ $(ho)/$n.1: $(ho)/$n gwen/manpage.$x
 ko = out/free
 dl = out/dl
 
+# K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
+# `exit` bif that quits qemu) into its own odir / elf / iso, so it never clobbers the
+# normal interactive kernel. See the test_kernel target below.
+ifdef K_TEST
+ksuf := -test
+endif
+
 # Cross toolchain defaults to clang + lld (one multi-target pair covers every
 # arch). Override for a GCC cross toolchain, e.g.
 #   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLD=aarch64-linux-gnu-ld
@@ -178,7 +180,7 @@ k_h = $(g_h) $(wildcard *.h $(R)/arch/$a/*.h)
 ifdef EFI
 k_odir = $(ko)/$a-efi
 else
-k_odir = $(ko)/$a
+k_odir = $(ko)/$a$(ksuf)
 endif
 
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
@@ -206,6 +208,9 @@ kcppflags := \
   -DLIMINE_API_REVISION=3
 ifdef EFI
 kcppflags += -DK_EFI
+endif
+ifdef K_TEST
+kcppflags += -DK_TEST
 endif
 
 ifeq ($(KCC_IS_CLANG),1)
@@ -243,9 +248,9 @@ kldflags_loongarch64 = -m elf64loongarch
 kcc = $(KCC) $(kcflags) $(kcflags_$a) $(kcppflags) $(kcc_if_clang)
 k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 
-kernel: $(ko)/$n-$a.elf
+kernel: $(ko)/$n-$a$(ksuf).elf
 
-$(ko)/$n-$a.elf: $(R)/arch/$a/$a.lds $(k_o)
+$(ko)/$n-$a$(ksuf).elf: $(R)/arch/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
@@ -286,7 +291,8 @@ $(kdata_h): $(k_odir)/data.o $(gen_data) | $(m)
 	@$(m) $(gen_data) $< -o $@
 
 # Shared C sources (gwen.c/data.c, font/, c/) + per-arch arch/$a/.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kdata_h) out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
+# Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kdata_h) out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h $(if $(K_TEST),out/lib/ktests.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -317,7 +323,7 @@ $(ko)/limine.conf:
 	@mkdir -p $(dir $@)
 	@printf 'timeout: 1\n/gk\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
 
-$(ko)/$n-$a.iso: $(ko)/$n-$a.elf $(dl)/limine/limine $(ko)/limine.conf
+$(ko)/$n-$a$(ksuf).iso: $(ko)/$n-$a$(ksuf).elf $(dl)/limine/limine $(ko)/limine.conf
 	@echo MK $@
 	@rm -rf $(ko)/iso_root
 	@mkdir -p $(ko)/iso_root/boot
@@ -390,6 +396,52 @@ run-efi: $(ko)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) $(k_efi_drive_$a)
 run-efi-headless: $(ko)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) $(k_efi_drive_$a) -display none -no-reboot
+
+# --- headless serial test (WIP -- NOT wired into test/test_all) ----------------
+# !!! HIGH-PRIORITY TODO: this currently HANGS and is parked. !!!
+# The K_TEST kernel boots fine and runs the baked corpus, but wedges at ~assert 201
+# (array.g) when the corpus is read back through a strin port. Confirmed NOT the
+# cause: the build (compiles+links+boots), lcat2 minification, and high bytes
+# (octal-escaped). Confirmed working alternatives, isolating the bug to
+# kernel+strin: the SAME corpus passes via strin on the host (1644) AND via
+# serial-feed on the kernel (the earlier shelled-out version got 1668). So the
+# fault is a freestanding-kernel strin/reader (or GC-under-the-pinned-~1.5MB
+# s2cl charlist) interaction. Next steps to try: (1) bump the kernel pool / qemu
+# RAM to rule memory in/out; (2) trace fread/fungetc on a strin port on the kernel
+# vs host around the hang; (3) if unfixable, fall back to feeding the corpus over
+# serial (restore a shell driver, since the `run` bif can't do the bidirectional
+# READY-handshake feeding).
+#
+# A K_TEST kernel bakes the test corpus in (out/lib/ktests.h, baked VERBATIM by
+# tools/lcatv.g -- lcat's inspect-reprint diverges when the corpus is read back
+# incrementally via a strin port) and runs it through the self-hosted ev at boot,
+# printing the usual summary over the serial console, then quits qemu (the `exit`
+# bif -> isa-debug-exit). tools/ktest.g (run on
+# the host gl) boots it under qemu headless, captures the serial output, and checks
+# it. So this exercises the freestanding kernel the way test_host/test_gl0 exercise
+# the host. x86_64 only (qemu + isa-debug-exit); a no-op on other hosts.
+#
+# Drop from the kernel corpus: io.g (host file open) and run.g (subprocess/getenv)
+# need host-OS bifs the kernel lacks; math.g pins transcendental results to glibc
+# precision (1e-12/1e-15) that the freestanding libc/math.c series can't meet;
+# bell.g's Bell-number bignums are too heavy for the emulated kernel.
+kt = $(filter-out %/io.g %/run.g %/math.g %/bell.g,$t)
+out/lib/ktests.$x: $(kt) $(R)/Makefile
+	@mkdir -p out/lib
+	@cat $(kt) > $@
+out/lib/ktests.h: out/lib/ktests.$x $(gl0) tools/lcatv.$x gwen/prelude.$x
+	@echo GEN	$@
+	@$(gl0) -l gwen/prelude.$x tools/lcatv.$x out/lib/ktests.$x > $@
+.PHONY: test_kernel
+ifeq ($a,x86_64)
+test_kernel: host $(R)/tools/ktest.$x
+	@$(MAKE) -s K_TEST=1 $(ko)/$n-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	@echo TEST $(ko)/$n-$a-test.iso "(serial, headless)"
+	@$m $(R)/tools/ktest.$x $(ko)/$n-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+else
+test_kernel:
+	@echo "test_kernel: skipped (host arch $a is not x86_64)"
+endif
 
 # --- downloads -------------------------------------------------------
 $(dl)/edk2-ovmf/ovmf-code-%.fd:
