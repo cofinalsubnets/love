@@ -16,13 +16,13 @@
 ; one matrix cell but fan out by representation inside the lane).
 (: mx-fix 5                              ; KFix
    mx-flo 2.5                            ; KTuple, float box
-   mx-cpx (C 2 3)                        ; KTuple, complex scalar (Cp)
+   mx-cpx ~(2 3)                        ; KTuple, complex scalar (Cp)
    mx-box (<< 1 62)                      ; KTuple, wide-int box (boxp)
-   mx-big (** 2 100)                     ; KBig
+   mx-big (100 2)                     ; KBig
    mx-az  @(10 20)                       ; KArrZ (int array)
    mx-ar  @(1.5 2.5)                     ; KArrR (float array)
-   mx-ac  (array 2 (C 1 2) (C 3 4))      ; KArrC (packed complex array)
-   mx-ao  (array 2 (** 2 100) 5)         ; KArrO (object array)
+   mx-ac  (array 2 ~(1 2) ~(3 4))      ; KArrC (packed complex array)
+   mx-ao  (array 2 (100 2) 5)         ; KArrO (object array)
    mx-str "ab"                           ; KString
    mx-sym 'ef                            ; KSym (interned)
    mx-usy $cd                            ; KSym (uninterned)
@@ -64,7 +64,7 @@
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 = 9
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8
  (= 12 ((2.5 (+ 1)) 10))                      ; float operator on a fn: floor|2.5|=2 comps
- (= 15 (((C 3 4) (+ 1)) 10))                  ; complex operator on a fn: floor|5|=5 comps
+ (= 15 ((~(3 4) (+ 1)) 10))                  ; complex operator on a fn: floor|5|=5 comps
  (aall (= @(4 9 16) (2 @(2 3 4))))            ; array operand: elementwise ** broadcast
 
  ; --- row KBig: a bignum is also a Church numeral, but its magnitude is always
@@ -89,30 +89,30 @@
  (= 7 (+ 5 2))                                ; fix + fix (overflow-free fast path)
  (= 7.5 (+ 5 2.5))   (= 7.5 (+ 2.5 5))        ; fix + float (both orders)
  (= 5.0 (+ 2.5 2.5))                          ; float + float
- (= (** 2 63) (+ (<< 1 62) (<< 1 62)))        ; box + box -> 2^63 overflows i64 -> bignum
+ (= (63 2) (+ (<< 1 62) (<< 1 62)))        ; box + box -> 2^63 overflows i64 -> bignum
  (bigp (+ (<< 1 62) (<< 1 62)))
  (boxp (+ (<< 1 62) 1))                        ; box + fix stays a box (still > fixnum range)
  (= (+ (<< 1 62) 1) (+ 1 (<< 1 62)))          ; ...and commutes
- (= (+ 1 (** 2 100)) (+ (** 2 100) 1))        ; big + fix == fix + big (commutes)
- (= (* 2 (** 2 100)) (+ (** 2 100) (** 2 100))) ; big + big
- (flop (+ (** 2 100) 0.5))                    ; big + float -> float (widens)
- (= (C 4 6) (+ (C 1 2) (C 3 4)))              ; complex + complex
- (= (C 7 3) (+ 5 (C 2 3)))                    ; fix + complex (real -> (5,0))
- (= (C 4.0 3.0) (+ 1.5 (C 2.5 3)))            ; float + complex
- (Cp (+ (<< 1 62) (C 0 1)))                   ; box + complex -> complex
- (Cp (+ (** 2 100) (C 0 1)))                  ; big + complex -> complex (widens)
+ (= (+ 1 (100 2)) (+ (100 2) 1))        ; big + fix == fix + big (commutes)
+ (= (* 2 (100 2)) (+ (100 2) (100 2))) ; big + big
+ (flop (+ (100 2) 0.5))                    ; big + float -> float (widens)
+ (= ~(4 6) (+ ~(1 2) ~(3 4)))              ; complex + complex
+ (= ~(7 3) (+ 5 ~(2 3)))                    ; fix + complex (real -> (5,0))
+ (= ~(4.0 3.0) (+ 1.5 ~(2.5 3)))            ; float + complex
+ (comp (+ (<< 1 62) ~(0 1)))                   ; box + complex -> complex
+ (comp (+ (100 2) ~(0 1)))                  ; big + complex -> complex (widens)
 
  ; --- array tower: each tier with a matching array and with a scalar broadcast ---
  (aall (= @(11 22) (+ @(10 20) @(1 2))))      ; Z + Z
  (= f64 (atype (+ @(10 20) @(1.5 2.5))))      ; Z + R -> widens to R
  (aall (= @(11.5 22.5) (+ @(10 20) @(1.5 2.5))))
  (aall (= @(3.0 5.0) (+ @(1.5 2.5) @(1.5 2.5)))) ; R + R
- (= (C 2 4) (get 0 0 (+ mx-ac mx-ac)))        ; C + C (packed complex)
+ (= ~(2 4) (get 0 0 (+ mx-ac mx-ac)))        ; C + C (packed complex)
  (= o (atype (+ mx-ao mx-ao)))                ; O + O stays exact/object
- (= (* 2 (** 2 100)) (get 0 0 (+ mx-ao mx-ao)))
+ (= (* 2 (100 2)) (get 0 0 (+ mx-ao mx-ao)))
  (aall (= @(12 22) (+ @(10 20) 2)))           ; Z + scalar (broadcast, no widen)
- (= (C 11 2) (get 0 0 (+ (C 10 0) mx-ac)))    ; C array + complex scalar
- (= (C 11 2) (get 0 0 (+ @(10 20) mx-ac)))    ; R/Z array + C array (real promotes)
+ (= ~(11 2) (get 0 0 (+ ~(10 0) mx-ac)))    ; C array + complex scalar
+ (= ~(11 2) (get 0 0 (+ @(10 20) mx-ac)))    ; R/Z array + C array (real promotes)
  (nilp (+ @(1 2) @(1 2 3)))                   ; non-conforming shapes -> nil
 
  ; --- add_string lane: text x text, and a number as one byte ---
@@ -148,16 +148,16 @@
  ; --- muln: scalar tower + arrays ---
  (= 6 (* 2 3))                                ; fix * fix
  (= 7.5 (* 3 2.5))                            ; fix * float
- (= (** 2 124) (* (<< 1 62) (<< 1 62)))       ; box * box -> bignum (overflows the box)
- (= (** 2 200) (* (** 2 100) (** 2 100)))     ; big * big
+ (= (124 2) (* (<< 1 62) (<< 1 62)))       ; box * box -> bignum (overflows the box)
+ (= (200 2) (* (100 2) (100 2)))     ; big * big
  (= -1 (* i i))                               ; complex * complex (i^2, bridges to real)
- (= (C -5 10) (* (C 1 2) (C 3 4)))            ; Gaussian product
- (= (C 4 6) (* 2 (C 2 3)))                    ; fix * complex
+ (= ~(-5 10) (* ~(1 2) ~(3 4)))            ; Gaussian product
+ (= ~(4 6) (* 2 ~(2 3)))                    ; fix * complex
  (aall (= @(20 60) (* @(10 30) 2)))           ; Z array * scalar
- (= (C 2 4) (get 0 0 (* (C 2 0) mx-ac)))      ; complex scalar * C array
+ (= ~(2 4) (get 0 0 (* ~(2 0) mx-ac)))      ; complex scalar * C array
  (= o (atype (* mx-ao mx-ao)))                ; O * O exact
- (= (** 2 80)                                 ; 2^40 * 2^40, exact (an i64 array would wrap)
-    (get 0 0 (* (arrl o '(2) (L (** 2 40) (** 2 40))) (arrl o '(2) (L (** 2 40) (** 2 40))))))
+ (= (80 2)                                 ; 2^40 * 2^40, exact (an i64 array would wrap)
+    (get 0 0 (* (arrl o '(2) (L (40 2) (40 2))) (arrl o '(2) (L (40 2) (40 2))))))
 
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
@@ -184,22 +184,22 @@
 (assert
  ; --- subtraction `-` is NUMERIC ONLY (text/list/lambda operands -> nil) ---
  (= 3 (- 5 2))   (= 2.5 (- 5 2.5))            ; fix/float tower
- (= (** 2 100) (- (+ (** 2 100) 5) 5))        ; bignum
- (= (C -2 -2) (- (C 1 2) (C 3 4)))            ; complex
+ (= (100 2) (- (+ (100 2) 5) 5))        ; bignum
+ (= ~(-2 -2) (- ~(1 2) ~(3 4)))            ; complex
  (aall (= @(9 18) (- @(10 20) @(1 2))))       ; array elementwise
  (nilp (- "a" "b"))   (nilp (- '(1) '(2)))    ; non-numeric -> nil
 
- ; --- division `/` (truncating on ints) + array broadcast; complex defined ---
- (= 2 (/ 5 2))   (= 2.5 (/ 5 2.0))            ; int trunc / float
- (= 32 (/ (** 2 100) (** 2 95)))              ; bignum (2^5)
+ ; --- division: `/` true (float on inexact), `//` truncating; array broadcast; complex defined ---
+ (= 2.5 (/ 5 2))   (= 2 (// 5 2))   (= 2.5 (/ 5 2.0))   ; / promotes, // truncates
+ (= 32 (/ (100 2) (95 2)))              ; bignum exact (2^5) stays integer
  (flop (/ 1 0))                               ; /0 -> IEEE inf (float)
  (aall (= @(5 10) (/ @(10 20) 2)))            ; array / scalar
  (nilp (/ "a" 2))                             ; non-numeric -> nil
 
  ; --- modulo `mod` (fmod on floats); UNDEFINED on complex (-> nil) ---
  (= 1 (mod 5 2))   (= 1.0 (mod 7.0 2.0))
- (= 2 (mod (** 2 100) 7))                     ; bignum mod fixnum
- (nilp (mod (C 1 2) 2))                       ; complex -> nil
+ (= 2 (mod (100 2) 7))                     ; bignum mod fixnum
+ (nilp (mod ~(1 2) 2))                       ; complex -> nil
  (nilp (mod "a" 2))                           ; non-numeric -> nil
 
  ; === ordered comparison (< <= > >=): a TOTAL ORDER over all values. Cross-kind =
@@ -211,11 +211,11 @@
  ; --- within NUMBER: the whole tower orders by value (reps interleave) ---
  (< 1 2)   (< 1 1.5)   (< 1.5 2)                       ; fix / float
  (< (<< 1 62) (* 3 (<< 1 62)))                         ; box < box
- (< 5 (** 2 100))   (< (<< 1 62) (** 2 100))           ; fix/box < bignum (magnitude-exact)
- (< (** 2 100) (** 2 101))                             ; bignum < bignum
+ (< 5 (100 2))   (< (<< 1 62) (100 2))           ; fix/box < bignum (magnitude-exact)
+ (< (100 2) (101 2))                             ; bignum < bignum
  ; --- complex: lexicographic (re, im); a real r is (r, 0) ---
- (< i 1)   (< (C 1 9) (C 2 0))   (< (C 2 1) (C 2 2))   ; re decides, then im
- !(< (C 2 2) (C 2 2))   (<= (C 2 2) (C 2 2))        ; equal complexes
+ (< i 1)   (< ~(1 9) ~(2 0))   (< ~(2 1) ~(2 2))   ; re decides, then im
+ !(< ~(2 2) ~(2 2))   (<= ~(2 2) ~(2 2))        ; equal complexes
  ; --- within STRING / SYMBOL: lexicographic, a prefix sorts first ---
  (< "abc" "abd")   (< "ab" "abc")   !(< "abc" "abc")
  (< 'aa 'ab)   (< 'ab 'abc)
@@ -224,7 +224,7 @@
  !(< '(1 2) '(1 2))   (<= '(1 2) '(1 2))
  ; --- CROSS-kind = the type lattice (number < string < symbol < pair < lambda) ---
  (< 1 "a")   (< "a" 'a)   (< 'a '(0))   (< '(0) inc)
- (< 1.5 "")   (< (** 2 100) 'z)   (< (C 1 1) "x")      ; ANY number < ANY string
+ (< 1.5 "")   (< (100 2) 'z)   (< ~(1 1) "x")      ; ANY number < ANY string
  !(< "a" 1)   !(< '(0) 'z)                        ; ...and the reverses are false (pair > sym)
  ; --- LAMBDA is the top class; within it, ordered by representation hash ---
  (< 5 inc)   (> inc '(0))   (< "z" inc)                ; everything sorts below a lambda
@@ -247,9 +247,9 @@
  (= 3 3.0)                                    ; fix = float (promotion)
  (= (<< 1 62) (<< 1 62))                      ; box = box
  !(= (<< 1 62) 0)                          ; ...never = a fixnum
- (= (** 2 100) (** 2 100))                    ; bignum = bignum
- (= (C 2 0) 2)                                ; complex bridges a real (im 0)
- !(= (C 2 1) 2)                            ; ...but not when im != 0
+ (= (100 2) (100 2))                    ; bignum = bignum
+ (= ~(2 0) 2)                                ; complex bridges a real (im 0)
+ !(= ~(2 1) 2)                            ; ...but not when im != 0
  (aall (= @(1 2) @(1 2)))                     ; array = array -> mask
  (= 1 (get 0 0 (= @(1 9) @(1 8))))            ; elementwise: first elem equal
  (= 0 (get 0 1 (= @(1 9) @(1 8))))

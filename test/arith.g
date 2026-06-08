@@ -10,7 +10,12 @@
  (= 3 (+ 1 2))
  (= -1 (- 1 2))
  (= 6 (* 2 3))
- (= 2 (/ 5 2))
+ (= 2.5 (/ 5 2))                    ; `/` true division: inexact -> float
+ (= 2 (/ 4 2))                      ; exact -> stays integer
+ (fixp (/ 4 2))
+ (= 0.5 (/ 1 2))
+ (= 2 (// 5 2))                     ; `//` truncating integer division
+ (= -2 (// -5 2))                   ; truncates toward zero (not floor -3)
  (= 1 (mod 5 2))
 
  ; --- mixed fixp + flop promotes ---

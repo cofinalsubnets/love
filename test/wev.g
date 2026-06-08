@@ -12,7 +12,7 @@
  ; --- arithmetic / numeric folds are correct (nested, bottom-up) ---
  (= 7  (+ 1 (* 2 3)))
  (= 4096 (* 2 3 4))                              ; binary * over-applied: ((* 2 3) 4) = (6 4) = 4 ** 6
- (= 8  (** 2 3))
+ (= 8  (3 2))
  (= 6  (gcd 24 18))
  (= 6  (inc 5))                                  ; inc = (+ 1): a curried pure global folds
 

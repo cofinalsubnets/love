@@ -178,7 +178,7 @@
  ; once; a ticker peer counts how often it gets scheduled mid-multiply. Before
  ; chunking, the worker held the CPU for the whole product and the ticker (capped
  ; so it can't wrap the 1-byte buf) never ran -- post-chunking it runs many times.
- (: big (** 2 200000)
+ (: big (200000 2)
     ticks (bufnew 1)
     w (spawn (\ _ (* big big)) 0)
     t (spawn (\ _ (: (go _) (? (done? w) 0
@@ -191,7 +191,7 @@
 
  ; a peer can kill a task while it is mid-multiply, not only once it finishes:
  ; the worker parks at a yield inside the product, so kill finds it runnable.
- (: w (spawn (\ _ (* (** 2 200000) (** 2 200000))) 0)
+ (: w (spawn (\ _ (* (200000 2) (200000 2))) 0)
     _ (yield 0)
     (&& (= 1 (kill w)) (= 0 (wait w))))
 

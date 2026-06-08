@@ -39,7 +39,7 @@
 (: fz-fix    (fz-int -1000 1000)                         ; fixnums straddling 0
    fz-fix-nz (fz-map (\ x (? (= x 0) 1 x)) fz-fix)       ; nonzero fixnum (safe divisor)
    ; s * 2^e with e up to 160 forces the box / bignum tiers and both signs
-   fz-bignum (fz-bind (fz-int 58 160) (\ e (fz-map (\ s (* s (** 2 e))) (fz-elt '(-3 -1 1 3 5)))))
+   fz-bignum (fz-bind (fz-int 58 160) (\ e (fz-map (\ s (* s (e 2))) (fz-elt '(-3 -1 1 3 5)))))
    fz-num    (fz-oneof (L fz-fix fz-bignum))             ; mixed-tier value
    fz-num-nz (fz-map (\ x (? (= x 0) 1 x)) fz-num)       ; nonzero mixed-tier (divisor)
    fz-elem   (fz-int -20 20)                             ; small list/array element
@@ -65,17 +65,17 @@
  ; multiplying by zero / one
  (fz-ok 300 8 fz-num (\ a (= 0 (* a 0))))
  (fz-ok 300 9 fz-num (\ a (= a (* a 1))))
- ; divmod identity: a = (a/b)*b + a%b, and the remainder is smaller in magnitude
+ ; divmod identity: a = (a//b)*b + a%b, and the remainder is smaller in magnitude
  (fz-ok 400 10 (fz-pair2 fz-num fz-num-nz)
-   (\ v (= (A v) (+ (* (/ (A v) (AB v)) (AB v)) (mod (A v) (AB v))))))
+   (\ v (= (A v) (+ (* (// (A v) (AB v)) (AB v)) (mod (A v) (AB v))))))
  ; remainder sign follows the dividend (truncated division)
  (fz-ok 400 11 (fz-pair2 fz-fix fz-fix-nz)
    (\ v (: r (mod (A v) (AB v)) (|| (= r 0) (= (< r 0) (< (A v) 0))))))
  ; exact-power recurrence and the float-free modpow against ** then %
  (fz-ok 300 12 (fz-pair2 (fz-int -6 7) (fz-nat 14))
-   (\ v (= (** (A v) (+ 1 (AB v))) (* (A v) (** (A v) (AB v))))))
+   (\ v (= ((+ 1 (AB v)) (A v)) (* (A v) ((AB v) (A v))))))
  (fz-ok 250 13 (fz-trip (fz-nat 30) (fz-nat 14) (fz-int 2 500))
-   (\ v (= (modpow (A v) (AB v) (ABB v)) (mod (** (A v) (AB v)) (ABB v)))))
+   (\ v (= (modpow (A v) (AB v) (ABB v)) (mod ((AB v) (A v)) (ABB v)))))
  ; gcd divides both arguments
  (fz-ok 300 14 (fz-pair2 fz-fix-nz fz-fix-nz)
    (\ v (: g (gcd (A v) (AB v)) (&& (= 0 (mod (A v) g)) (= 0 (mod (AB v) g)))))))
@@ -91,7 +91,7 @@
 (assert
  ; numeric operand: (n m) == m ** n  (exponent n bounded to <= 6)
  (fz-ok 300 15 (fz-pair2 fz-op (fz-int -4 5))
-   (\ v (= (** (AB v) (A v)) ((A v) (AB v)))))
+   (\ v (= ((A v) (AB v)) ((A v) (AB v)))))
  ; function operand: ((n (+ k)) x) == x + n*k  (composition depth n bounded to <= 6)
  (fz-ok 300 16 (fz-trip fz-op (fz-int -3 4) (fz-int -10 10))
    (\ v (= (+ (* (A v) (AB v)) (ABB v)) ((A v) (+ (AB v)) (ABB v))))))

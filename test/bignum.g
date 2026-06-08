@@ -31,22 +31,25 @@
  ; --- canonical demotion: shrinking results fall back to the smallest tier ---
  (= 0 (- F25 F25))
  (fixp (- F25 F25))                       ; demoted all the way to a fixnum
+ ; exact bignum division stays an integer; an inexact one promotes to a float (`/`)
  (= 25 (/ F25 F24))
  (fixp (/ F25 F24))
  (= F24 (/ F25 25))
  (= 1 (/ B100 B100))
  (fixp (/ B100 B100))
+ (flop (/ B100 7))                         ; 2^100 / 7 has a remainder -> float
+ (= 25 (// F25 F24))                       ; floor division `//` truncates, stays integer
 
- ; --- divmod identities: a == (a/b)*b + a%b ---
- (= B100 (+ (* (/ B100 1000000007) 1000000007) (mod B100 1000000007)))
- (= B100 (+ (* (/ B100 (bpow2 40)) (bpow2 40)) (mod B100 (bpow2 40))))   ; multi-limb divisor
- (= F25 (+ (* (/ F25 F24) F24) (mod F25 F24)))
+ ; --- divmod identities (floor division `//`): a == (a//b)*b + a%b ---
+ (= B100 (+ (* (// B100 1000000007) 1000000007) (mod B100 1000000007)))
+ (= B100 (+ (* (// B100 (bpow2 40)) (bpow2 40)) (mod B100 (bpow2 40))))   ; multi-limb divisor
+ (= F25 (+ (* (// F25 F24) F24) (mod F25 F24)))
  (= 2 (mod B100 7))                         ; 2^100 mod 7
 
- ; --- signs: truncate toward zero, remainder follows the dividend ---
- (= -25 (/ (- 0 F25) F24))
- (= 25 (/ (- 0 F25) (- 0 F24)))
- (= -25 (/ F25 (- 0 F24)))
+ ; --- signs: `//` truncates toward zero, remainder follows the dividend ---
+ (= -25 (// (- 0 F25) F24))
+ (= 25 (// (- 0 F25) (- 0 F24)))
+ (= -25 (// F25 (- 0 F24)))
  (= -2 (mod (- 0 B100) 7))
  (= 2 (mod B100 (- 0 7)))
  (= -2 (mod (- 0 B100) (- 0 7)))
@@ -54,8 +57,8 @@
  (= B100 (- 0 (- 0 B100)))
  (= (- 0 B100) -1267650600228229401496703205376)
 
- ; --- the lone INT_MIN/-1 case: -2^63 / -1 is the exact 2^63, %-1 is 0 ---
- (= (bpow2 63) (/ (- 0 (bpow2 63)) -1))
+ ; --- the lone INT_MIN/-1 case: -2^63 // -1 is the exact 2^63, %-1 is 0 ---
+ (= (bpow2 63) (// (- 0 (bpow2 63)) -1))
  (= 0 (mod (- 0 (bpow2 63)) -1))
 
  ; --- mixed-tier comparison (fixnum / box / bignum) ---
@@ -92,12 +95,12 @@
 
  ; --- prelude ** / gcd / modpow: exact across the tower via * / % ---
  ; (`**` is exact-integer power; the float `pow` bif is tested in math.g)
- (= 8 (** 2 3))                           ; small ints stay fixnums
- (fixp (** 2 3))                          ; ...and stay integers (not float pow)
- (= B100 (** 2 100))                      ; promotes to a bignum
- (= (bpow2 200) (** 2 200))
- (= 1 (** 999 0))                         ; e <= 0 -> 1
- (= 1024 (** 2 10))
+ (= 8 (3 2))                           ; small ints stay fixnums
+ (fixp (3 2))                          ; ...and stay integers (not float pow)
+ (= B100 (100 2))                      ; promotes to a bignum
+ (= (bpow2 200) (200 2))
+ (= 1 (0 999))                         ; e <= 0 -> 1
+ (= 1024 (10 2))
  (= 21 (gcd 1071 462))
  (= 21 (gcd 462 1071))                    ; order-independent
  (= 4 (gcd -12 8))                        ; result normalized non-negative

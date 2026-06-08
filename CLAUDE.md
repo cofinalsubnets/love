@@ -9,9 +9,8 @@
 ; gwen lisp -- a small lisp where EVERY value is a monadic, auto-curried function.
 ; Portable C runtime (gwen.c + gwen.h) + a self-hosting compiler in gwen
 ; (gwen/{prelude,ev,repl}.g). Source files are .g; the host binary is `gl`. Read README.md.
-; SOURCE OF TRUTH for CLAUDE.md: a real test in the corpus AND, fenced by
-; tools/gen_claudemd.g, it IS CLAUDE.md. Rewrite this, then regenerate the doc by hand
-; (out/host/gl tools/gen_claudemd.g); the pre-commit hook (make hooks) only CHECKS it.
+; SOURCE OF TRUTH for CLAUDE.md: a real test in the corpus that, wrapped in a gwen code
+; fence, IS CLAUDE.md -- rewrite this, then regenerate the doc by hand (wrap this file).
 
 ; --- build/test --- ($ make -> out/host/gl; make repl; make test runs test/*.g through
 ; gl AND gl0; make test_all + js/tools diffs; make catav pre-commit). one file:
@@ -35,6 +34,7 @@
 ; numbers are Church numerals; the whole tower applies; data self-applies/indexes.
 (assert
  (= 8 (3 2)) (= 7625597484987 (3 3 3))          ; (n x) NUMBER -> x**n ; so (3 3 3)==(27 3)
+ (= 0.5 (-1 2)) (= 0.2 (-1 5)) (= 3.0 ((/ 1 2) 9))  ; negative n -> reciprocal ((-1 x)=(/ 1 x)); (1/2 x)=sqrt
  (= 12 (3 (+ 1) 9)) (= 5 (1 5)) (= 1 (0 5))     ; (n f) FN -> compose n; 1=id, 0=const-1
  (= '(2 3 4) (map (+ 1) '(1 2 3)))              ; partial application is just currying
  (= 8 (3 2.0)) (= 12 ((2.5 (+ 1)) 10))          ; tower numeral: |n| floors a fn count
@@ -43,25 +43,27 @@
 ; === truthiness (`?`/nilp): FALSE == zero or empty. nilp is the efficient generic form of
 ; (= 0 (len x)) (one C oracle g_false, short-circuits, no len walk). invariant (nilp x)==(= 0 #x). ===
 (assert
- (nilp 0) (nilp "") (nilp %()) (nilp @0) (nilp ()) (nilp 0.0) (nilp (C 0 0))
+ (nilp 0) (nilp "") (nilp %()) (nilp @0) (nilp ()) (nilp 0.0) (nilp ~(0 0))
  (not (nilp "x")) (not (nilp 'a)) (not (nilp A)) (not (nilp -5)) (not (nilp i))
  (= (nilp "") (= 0 #"")))
 
 ; === types: fixnum (tagged odd word); else a heap object whose 1st word dispatches.
 ; predicates end in `p`. numeric TOWER (nump): fix -> bignum on overflow; float/complex/
-; rank-N array are all one heap type TUPLE (tupp), refined by flop/Cp/arrp. `i`==(C 0 1).
+; rank-N array are all one heap type TUPLE (tupp), refined by flop/comp/arrp. `i`==~(0 1).
 (assert
  (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (lamp A) (mapp %(1 2))
- (bigp (** 2 100)) (boxp (** 2 62)) (flop 1.5) (Cp i) (arrp @(1 2 3)) (tupp 1.5)
- (nump 1.5) (intp (** 2 62)) (atomp 'x) (nilp (atomp '(1)))
- (= (** 2 64) (* 2 (** 2 63)))                  ; overflow -> exact bignum
- (= 5.0 (abs (C 3 4))) (= (C 2.0 3.0) (+ 2 (* 3 i))))  ; mixed arith -> wider type
+ (bigp (100 2)) (boxp (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (tupp 1.5)
+ (nump 1.5) (intp (62 2)) (atomp 'x) (nilp (atomp '(1)))
+ (= (64 2) (* 2 (63 2)))                        ; overflow -> exact bignum (numeral power (k b)==b**k)
+ (= 5.0 (abs ~(3 4))) (= ~(2.0 3.0) (+ 2 (* 3 i))))  ; mixed arith -> wider type
 ; SYMBOLS: interned 'x, named-uninterned $x (gensym 'x), anonymous (gensym 0). STRINGS
 ; index bytes: ("abc" 0)->97. opaque: buf/port/thread. #x (len) = count | floored magnitude.
 (assert (= 97 ("abc" 0)) (= 3 #"abc") (= 4 #3.9) (= 5 #@(3 4)))   ; #@(3 4)=ceil(L2 norm)
 
-; === arithmetic + - * / mod : fixnum fast path; fixp/flop promotes to float; int
-; overflow -> wide-int box -> bignum; /0 -> IEEE inf/nan; non-num -> nil.
+; === arithmetic + - * / // mod : fixnum fast path; fixp/flop promotes to float; int
+; overflow -> wide-int box -> bignum; non-num -> nil. `/` is TRUE division -- an inexact
+; integer quotient PROMOTES to a float ((/ 1 2)=0.5; (/ 4 2)=2 exact stays int), /0 -> IEEE
+; inf/nan; `//` truncates toward zero (integer division, the pair of `mod`).
 ; ORDERED compare < <= > >= : a TOTAL ORDER over ALL values -- cross-kind by the
 ; enum q type lattice the matrix DIAGONAL encodes (number < string < symbol < pair
 ; < lambda, fixnum low), within a kind by value/lexicographic (complex by (re,im),
@@ -69,7 +71,8 @@
 ; `=` is eqv (promotes across tower), `same` is eq (identity). bitwise << >> & | ^
 ; (int; complement is (^ x -1)). logical not is `!`/`not`/`nilp`; != is gone (use !(= ..)).
 (assert
- (= 3 (+ 1 2)) (= 6 (* 2 3)) (= 2 (/ 5 2)) (= 1 (mod 5 2)) (= 3.5 (+ 1 2.5))
+ (= 3 (+ 1 2)) (= 6 (* 2 3)) (= 2.5 (/ 5 2)) (= 2 (// 5 2)) (= 0.5 (/ 1 2)) (= 1 (mod 5 2)) (= 3.5 (+ 1 2.5))
+ (= 2 (/ 4 2)) (fixp (/ 4 2)) (= -2 (// -5 2))   ; / exact->int, // truncates toward zero
  !(fixp (* 2 2305843009213693952)) (flop (/ 1 0)) (< 1e308 (/ 1 0)) !(= (/ 0 0) (/ 0 0))
  (= 3 3.0) !(= 3 4) (< 1 1.5) (>= 3.0 3) !(= 3 4) (same 'a 'a) (nilp (same '(1) '(1)))
  (= -2 (^ 1 -1)) (= 15 (| 8 (| 4 (| 2 1)))) (= 16 (>> 64 2)) (= 16 (<< 2 3))
@@ -84,24 +87,33 @@
  (= "ababab" (* "ab" 3)) (= "ababab" (* 3 "ab")) (= 'xyxy (* 'xy 2))
  (= '(1 2 1 2) (* '(1 2) 2)) (nilp (* "ab" "cd")))
 
-; === numeric fns: abs/int type-aware; ** exact-int power; gcd/modpow; pow + sin cos tan
-; atan exp log sqrt atan2 are float (generic over bignums widened, arrays elementwise).
+; === numeric fns: abs/int type-aware; constants e pi i; gcd/modpow. The IRREDUCIBLE
+; transcendental bifs are pow sin cos log (float; bignums widen, arrays elementwise).
+; EVERYTHING else is a numeral/complex DERIVATION, NOT a bif (no sqrt/exp/tan/atan/atan2):
+;   power (k b)==b**k     sqrt ((/ 1 2) x)     exp (x e)     root n of x: ((/ 1 n) x)
+;   tan (/ (sin x) (cos x))     atan (arg ~(1 x))     atan2 (arg ~(x y))
+; arg/com broadcast over arrays, so the derived forms stay elementwise (see arrays/complex).
 (assert
- (= 5 (abs -5)) (fixp (abs -5)) (= 5.0 (abs (C 3 4))) (= 2 (int 2.9))
- (= 1024 (** 2 10)) (fixp (** 2 10)) (= 21 (gcd 1071 462)) (= 976371285 (modpow 2 100 1000000007))
- (= 2.0 (sqrt 4)) (= 1024.0 (pow 2 10)) (flop (sin 0)) (nilp (sqrt '(1 2))))
+ (= 5 (abs -5)) (fixp (abs -5)) (= 5.0 (abs ~(3 4))) (= 2 (int 2.9))
+ (= 1024 (10 2)) (fixp (10 2)) (= 21 (gcd 1071 462)) (= 976371285 (modpow 2 100 1000000007))
+ (= 2.0 ((/ 1 2) 4)) (= 1024.0 (pow 2 10)) (= 1 (0 e)) (= e (1 e)) (= 2.718281828459045 e)
+ (= 0.0 (arg ~(1 0))) (= 0.0 (/ (sin 0) (cos 0))) (flop (sin 0)))
 
-; === complex: rank-0 scalar (Cp), widest tier (complex>float>int). (C re im), i=(C 0 1).
-; + - * / promote a real; sticky (no demote); ORDERED lexicographically by (re,im)
-; -- a real is (r,0) -- and `=` bridges reals (a c array operand stays elementwise).
-; rank-N complex packs (re,im) pairs into a `c` array (atype c): arr/arrl/array/@ build it,
-; get -> a (C..) box, + - * / broadcast (numpy) and `=` -> a mask, asum/aprod fold complex.
+; === complex: rank-0 scalar (comp), widest tier (complex>float>int). ~(re im) reads AND
+; prints a complex -- the `~` reader macro splices its list into (com re im); i=~(0 1).
+; com/comp are the constructor/predicate bifs. + - * / promote a real; sticky (no demote);
+; ORDERED lexicographically by (re,im) -- a real is (r,0) -- and `=` bridges reals. com and
+; arg BROADCAST over arrays (a real operand -> a packed `c` array / a real-array result), so
+; the derived (arg ~(1 x)) = atan etc. stay elementwise. rank-N complex packs (re,im) into a
+; `c` array (atype c): arr/arrl/array/@ build it, get -> a ~(..) box, + - * / broadcast (numpy)
+; and `=` -> a mask, asum/aprod fold complex.
 (assert
- (= (* i i) -1) (= (C 2 0) 2) (= (* (C 1 2) (C 3 4)) (C -5 10)) (Cp (C 2 0)) (nilp (Cp 5))
- (= 2.0 (re (C 2 3))) (= (conj (C 2 3)) (C 2 -3)) (< i 1) !(< 1 i) (= "(C 0.0 1.0)" (inspect i))
- (: v (array 2 (C 1 2) (C 3 4)) (&& (= c (atype v)) (= (C 1 2) (get 0 0 v)) (= (C 4 6) (asum v))
-    (= (C 2 4) (get 0 0 (+ v v))) (= (C 2 4) (get 0 0 (* (C 2 0) v))) (nilp (< v v))
-    (= "@((C 1.0 2.0) (C 3.0 4.0))" (inspect v)))))
+ (= (* i i) -1) (= ~(2 0) 2) (= (* ~(1 2) ~(3 4)) ~(-5 10)) (comp ~(2 0)) (nilp (comp 5))
+ (= 2.0 (re ~(2 3))) (= (conj ~(2 3)) ~(2 -3)) (< i 1) !(< 1 i) (= "~(0.0 1.0)" (inspect i))
+ (= 0.0 (get 0 1 (arg ~(1 @(1 0)))))            ; com/arg broadcast: (arg ~(1 x)) = atan, per element
+ (: v (array 2 ~(1 2) ~(3 4)) (&& (= c (atype v)) (= ~(1 2) (get 0 0 v)) (= ~(4 6) (asum v))
+    (= ~(2 4) (get 0 0 (+ v v))) (= ~(2 4) (get 0 0 (* ~(2 0) v))) (nilp (< v v))
+    (= "@(~(1.0 2.0) ~(3.0 4.0))" (inspect v)))))
 
 ; === pairs & lists: X=cons, A=car, B=cdr; AA AB .. BBB = the c[ad]+r compounds. NATIVE
 ; names are X/A/B + the AB-compound; cons/car/cdr/caar/cadr/.. are prelude compat ALIASES
@@ -125,16 +137,18 @@
 
 ; === arrays: (arr type shape) zero ; (arrl type shape vals) ; (array shape elem…) infers
 ; type+curries ; @(…) rank-1 literal. arank/alen/ashape/atype ; get (oob->default).
-; + - * / < = broadcast (numpy, widest type, compare->i8) ; reduce asum aprod amax amin
-; aall (conjunction; identity on a scalar; the disjunction "any nonzero" is just
-; `len`, truthy iff not all-zero) ; zero-norm falsy ; sin..sqrt map elementwise.
+; + - * // < = broadcast (numpy, widest type, compare->i8); `/` promotes the whole result
+; to f64 the moment an element divides inexactly (else stays integer); reduce asum aprod
+; amax amin aall (conjunction; identity on a scalar; the disjunction "any nonzero" is just
+; `len`, truthy iff not all-zero) ; zero-norm falsy ; sin/cos/log/pow (+ derived) map elementwise.
 (assert
  (= 6 (alen (arr i64 '(2 3)))) (= 2 (arank (arr i64 '(2 3)))) (= '(2 3) (ashape (arr i64 '(2 3))))
  (= i64 (atype (arr i64 '(2 3)))) (= 20 (get -1 1 @(10 20 30))) (= -1 (get -1 9 @(10 20 30)))
  (= 3 (get -1 '(1 0) (arrl i64 '(2 2) '(1 2 3 4)))) (= @(11 22 33) (+ @(1 2 3) @(10 20 30)))
  (= @(2 4 6) (* @(1 2 3) 2)) (= f64 (atype (+ (arr i32 '(2)) 1.5))) (= i8 (atype (< (arr i64 '(3)) 1)))
  (= 60 (asum @(10 20 30))) (= 30 (amax @(10 30 20))) (= 5 (asum 5)) (aall (< 1 2))
- (aall (= @(2.0 3.0) (sqrt @(4.0 9.0)))) (nilp (arr i64 '(3))) (= "@(10 20 30)" (inspect @(10 20 30)))
+ (aall (= @(2.0 3.0) ((/ 1 2) @(4.0 9.0)))) (= @(3.5 5.5) (/ @(7 11) 2)) (= @(3 5) (// @(7 11) 2))
+ (= @(4 6) (/ @(8 12) 2)) (nilp (arr i64 '(3))) (= "@(10 20 30)" (inspect @(10 20 30)))
  (aall (= @(10 20 30) (array 3 10 20 30))) (nilp (+ @(1 2 3) @(1 2))) (nilp (arr 99 '(3))))
 
 ; === maps: %(k v..)/(hasht ..) build, %()/(hashn 0) empty, mutable. get/put/hashd
@@ -151,10 +165,12 @@
  !(= (bufnew 2) (bufnew 2)))
 
 ; === reader & sigils: ; line comment, #! shebang (NO block comments). ' quote (=1-arg \),
-; ` quasiquote , unquote ,@ splice ; @ array %  map # len $ gensym ! nilp (!x->(nilp x)).
+; ` quasiquote , unquote ,@ splice ; @ array % map # len $ gensym ! nilp ~ complex
+; (~(re im)->(com re im), splices like @/%).
 (assert
  (= '(1 (\ x) 3) `(1 'x 3)) (= '(1 2 3 4) (: xs '(2 3) `(1 ,@xs 4)))
- (= 5 #"hello") (= 42 #42) (symp $x) (= 1 !0) (nilp !5) (= !(= 3 4) (nilp (= 3 4))))
+ (= 5 #"hello") (= 42 #42) (symp $x) (= 1 !0) (nilp !5) (= !(= 3 4) (nilp (= 3 4)))
+ (= i ~(0 1)) (= ~(2 3) (com 2 3)))             ; ~(re im) splices into (com re im)
 
 ; === macros (arg-list -> code, install via `::`): prelude do/let/if/cond/quote && || L/list
 ; tuple hasht array, body-first :- ?- , pipes >>= <=< .

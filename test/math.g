@@ -21,33 +21,30 @@
     (close 1.0 (+ (* (sin (- 0 0.7)) (sin (- 0 0.7)))
                   (* (cos (- 0 0.7)) (cos (- 0 0.7)))))
 
-    ; --- tan = sin/cos ---
-    (close (tan 0.5) (/ (sin 0.5) (cos 0.5)))
-
-    ; --- atan inverse of tan in (-pi/2, pi/2) ---
-    (close 0.7 (atan (tan 0.7)))
+    ; --- atan inverse of tan in (-pi/2, pi/2); tan is now (/ (sin x) (cos x)) ---
+    (close 0.7 (arg ~(1 (/ (sin 0.7) (cos 0.7)))))
 
     ; --- atan2 quadrants ---
-    (very-close 0.0 (atan2 0 1))
-    (very-close (/ pi 2) (atan2 1 0))
-    (very-close pi (atan2 0 -1))
-    (very-close (- 0 (/ pi 2)) (atan2 -1 0))
-    (very-close (/ pi 4) (atan2 1 1))
+    (very-close 0.0 (arg ~(1 0)))
+    (very-close (/ pi 2) (arg ~(0 1)))
+    (very-close pi (arg ~(-1 0)))
+    (very-close (- 0 (/ pi 2)) (arg ~(0 -1)))
+    (very-close (/ pi 4) (arg ~(1 1)))
 
     ; --- sqrt ---
-    (= 0.0 (sqrt 0))
-    (= 1.0 (sqrt 1))
-    (= 2.0 (sqrt 4))
-    (close 1.414213562373095 (sqrt 2))
+    (= 0.0 ((/ 1 2) 0))
+    (= 1.0 ((/ 1 2) 1))
+    (= 2.0 ((/ 1 2) 4))
+    (close 1.414213562373095 ((/ 1 2) 2))
     ; (sqrt (* x x)) ~ x for x > 0
-    (close 7.5 (sqrt (* 7.5 7.5)))
+    (close 7.5 ((/ 1 2) (* 7.5 7.5)))
 
     ; --- exp / log inverse ---
-    (close 1.0 (exp 0))
-    (close 2.718281828459045 (exp 1))
+    (close 1.0 (0 e))
+    (close 2.718281828459045 (1 e))
     (close 0 (log 1))
-    (close 1.0 (log (exp 1)))
-    (close 5.5 (log (exp 5.5)))
+    (close 1.0 (log (1 e)))
+    (close 5.5 (log (5.5 e)))
 
     ; --- pow ---
     (= 1.0 (pow 2 0))
@@ -58,19 +55,18 @@
 
     ; --- accepts fixnum args (promoted to float) ---
     (flop (sin 0))
-    (flop (sqrt 4))
+    (flop ((/ 1 2) 4))
     (flop (pow 2 3))
 
     ; --- non-numeric arg → nil ---
     ; (nil counts as numeric — it's putnum(0).)
     (nilp (sin "x"))
-    (nilp (sqrt '(1 2)))
     (nilp (pow "a" 1))
-    (nilp (atan2 "x" 1))
+    (nilp (com "x" 1))      ; com of a non-number -> nil (so (arg (com 1 "x")) folds to 0)
 
     ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo),
     ;     exactly as a scalar bignum already fed the scalar pow ---
-    (= 1125899906842624.0 (sqrt 1267650600228229401496703205376))  ; sqrt(2^100) = 2^50
+    (= 1125899906842624.0 ((/ 1 2) 1267650600228229401496703205376))  ; sqrt(2^100) = 2^50
     (flop (pow 1267650600228229401496703205376 2))
     (< 1e300 (pow 2 100000000000000000000))                        ; huge bignum exp -> inf
 
@@ -80,8 +76,7 @@
     (aall (= (pow 2 (arrl f64 '(3) '(1 2 3))) (arrl f64 '(3) '(2 4 8))))  ; scalar ^ array
     (aall (= (pow (arrl f64 '(3) '(1 2 3)) (arrl f64 '(3) '(2 2 2)))      ; array ^ array
              (arrl f64 '(3) '(1 4 9))))
-    (close 1.570796326794897 (get 0 1 (atan2 (arrl f64 '(2) '(1 1))      ; atan2(1,0) = pi/2
-                                              (arrl f64 '(2) '(1 0)))))
+    (close 1.570796326794897 (get 0 1 (arg ~((arrl f64 '(2) '(1 0)) (arrl f64 '(2) '(1 1))))))
     (nilp (pow (arrl f64 '(2) '(1 2)) "x"))                         ; array vs non-number -> nil
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to

@@ -6,7 +6,7 @@
 
 (: (oa-list n acc) (? (< n 1) acc (oa-list (- n 1) (X n acc)))   ; build (1 .. n)
    (oa-churn n)    (? (< n 1) 0 (: g (oa-list 300) (oa-churn (- n 1)))) ; alloc + discard
-   oa-B     (** 2 100)                          ; a bignum (past fixnum/box range)
+   oa-B     (100 2)                          ; a bignum (past fixnum/box range)
    oa-vals  (L oa-B (* oa-B oa-B) (+ oa-B 7) "hi" 'sym)
    oa-a     (arrl o '(5) oa-vals)
    oa-z     (arr o '(3))                         ; nil-filled
@@ -50,11 +50,11 @@
 ; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
 ; the whole point of g_O: ops route through the promoting scalar dispatch, so a
 ; bignum array adds/multiplies EXACTLY where an i64 array would wrap.
-(: oa-x   (arrl o '(3) (L (** 2 100) 2 3))
-   oa-y   (arrl o '(3) (L 1 (** 2 100) 4))
+(: oa-x   (arrl o '(3) (L (100 2) 2 3))
+   oa-y   (arrl o '(3) (L 1 (100 2) 4))
    oa-sum (+ oa-x oa-y)
    oa-prd (* oa-x oa-y)
-   oa-w   (** 2 40)                              ; 2^40 fits i64; 2^40 * 2^40 = 2^80 overflows it
+   oa-w   (40 2)                              ; 2^40 fits i64; 2^40 * 2^40 = 2^80 overflows it
    oa-zar (arrl i64 '(2) (L oa-w oa-w))          ; typed int array -> wraps
    oa-oar (arrl o   '(2) (L oa-w oa-w)))         ; object array   -> exact
 
@@ -62,17 +62,17 @@
  ; result of an op on a g_O array is itself g_O
  (= o (atype oa-sum))
  ; exact elementwise results (no wrap, no float rounding)
- (= (+ (** 2 100) 1) (get 0 0 oa-sum))
- (= (* 2 (** 2 100)) (get 0 1 oa-prd))
+ (= (+ (100 2) 1) (get 0 0 oa-sum))
+ (= (* 2 (100 2)) (get 0 1 oa-prd))
  (= 12 (get 0 2 oa-prd))
 
  ; transparency vs the typed lane: 2^40*2^40 = 2^80; i64 wraps to 0, o stays exact
- (= (** 2 80) (get 0 0 (* oa-oar oa-oar)))
- (nilp (= (** 2 80) (get 0 0 (* oa-zar oa-zar))))
+ (= (80 2) (get 0 0 (* oa-oar oa-oar)))
+ (nilp (= (80 2) (get 0 0 (* oa-zar oa-zar))))
 
  ; broadcasting: object array (+) scalar bignum
- (= (* 2 (** 2 100)) (get 0 0 (+ oa-x (** 2 100))))   ; (2^100)+(2^100)
- (= (+ 3 (** 2 100)) (get 0 2 (+ (** 2 100) oa-x)))   ; scalar on the left; oa-x elem 2 = 3
+ (= (* 2 (100 2)) (get 0 0 (+ oa-x (100 2))))   ; (2^100)+(2^100)
+ (= (+ 3 (100 2)) (get 0 2 (+ (100 2) oa-x)))   ; scalar on the left; oa-x elem 2 = 3
 
  ; mixed: object array (+) typed int array -> widens the int array, stays exact
  (= (* 2 oa-w) (get 0 0 (+ oa-oar oa-zar)))
@@ -82,9 +82,9 @@
  (= 0 (get 0 1 (< (arrl o '(2) '(1 5)) (arrl o '(2) '(3 2)))))
 
  ; --- reductions fold exactly through the same dispatch ---
- (= (+ (** 2 100) 5) (asum oa-x))
- (= (* 6 (** 2 100)) (aprod oa-x))
- (= (** 2 100) (amax (arrl o '(3) (L 5 (** 2 100) 7))))
+ (= (+ (100 2) 5) (asum oa-x))
+ (= (* 6 (100 2)) (aprod oa-x))
+ (= (100 2) (amax (arrl o '(3) (L 5 (100 2) 7))))
  (= -3 (amin (arrl o '(3) (L 5 -3 7))))
  (aall (arrl o '(2) '(1 2)))
  (nilp (aall (arrl o '(2) '(1 0))))
@@ -93,7 +93,7 @@
 
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (= 0 (oa-churn 40))
- (= (* 2 (** 2 80)) (asum (* oa-oar oa-oar))))    ; [2^80 2^80] summed = 2^81
+ (= (* 2 (80 2)) (asum (* oa-oar oa-oar))))    ; [2^80 2^80] summed = 2^81
 
 ; --- the `array` constructor: ergonomic front-end over arr/arrl --------------
 ; no type code (inferred as the highest of i64<f64<o present), shape may be a
@@ -101,7 +101,7 @@
 ; (the shape fixes the count, so it curries them one at a time). bignum/complex/
 ; non-number data lifts the whole array to o automatically -> exact, never lossy.
 (: oa-q (array 2 'hello 'world)                  ; symbols -> object array
-   oa-bn (array 2 (** 2 100) 5)                  ; bignum -> o, stored exactly
+   oa-bn (array 2 (100 2) 5)                  ; bignum -> o, stored exactly
    oa-m  (array (L 2 2) 1 2 3 4))                ; rank-2 from a shape list
 (assert
  ; type inference: pure ints -> i64, any float -> f64, anything past the real
@@ -117,7 +117,7 @@
  (= 2 (arank oa-m))   (= 4 (get 0 (L 1 1) oa-m))
  ; elements stored verbatim, in order
  (= 'world (get 0 1 oa-q))
- (= (** 2 100) (get 0 0 oa-bn))                  ; full bignum, not truncated to i64
+ (= (100 2) (get 0 0 oa-bn))                  ; full bignum, not truncated to i64
  ; currying: a partial collector is a function; completing it builds the array
  (= "(arrl o '(2) '(a b))" (inspect ((array 2) 'a 'b)))
  ; (array 0) -> empty rank-1 array, no elements to collect
@@ -126,19 +126,19 @@
  (= "@(1 2 3)" (inspect (array 3 1 2 3)))
  ; L2-norm shape coercion: a float / complex / vector dimension -> (int (abs d))
  (= 2 (alen (array 2.9 7 8)))                     ; |2.9| -> 2 : rank-1 length 2
- (= 5 (alen (array (C 3 4) 0 0 0 0 0)))           ; |(C 3 4)| = 5
+ (= 5 (alen (array ~(3 4) 0 0 0 0 0)))           ; |~(3 4)| = 5
  (= 6 (alen (array (L 2.0 3.5) 1 2 3 4 5 6)))     ; dims (2 3) -> 6 elems
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
- (= o (atype @((** 2 100) 1)))                    ; bignum element -> object array
+ (= o (atype @((100 2) 1)))                    ; bignum element -> object array
  (aall (= @(1 2 3) (array 3 1 2 3))))
 
 ; --- len / truthiness: (nilp x) == (= 0 (len x)) holds across tuple types, via
 ; g_len recursing into each element's own magnitude (so an all-zero array is len 0,
 ; not the garbage that a raw word-bits L2 norm would give). A bignum element forces
 ; an o array; a complex element packs into a c array (both keep the invariant).
-(: oa-z2 (array 2 (C 0 0) (C 0 0))               ; two zero complexes -> packed c array
-   oa-c2 (array 2 (C 0 0) (C 3 4))               ; |0|²+|3+4i|² = 25 -> ceil 5
-   oa-b2 (array 2 (** 2 100) 0))                 ; bignum element saturates len, forces o
+(: oa-z2 (array 2 ~(0 0) ~(0 0))               ; two zero complexes -> packed c array
+   oa-c2 (array 2 ~(0 0) ~(3 4))               ; |0|²+|3+4i|² = 25 -> ceil 5
+   oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates len, forces o
 (assert
  (= c (atype oa-z2)) (= c (atype oa-c2)) (= o (atype oa-b2))
  (= 0 (len oa-z2)) (nilp oa-z2)                   ; all-zero object array -> falsy, len 0

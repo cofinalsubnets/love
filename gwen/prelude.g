@@ -5,6 +5,7 @@
    (flip f x y) (f y x))
 (: macros (get 0 0 globals))
 (: pi 3.141592653589793
+   e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
    true 1 false 0 not nilp
    (atomp x) (nilp (twop x))
    AA (co A A) AB (co A B)
@@ -14,12 +15,12 @@
 ; rank-0 complex scalar, not a constructible array element).
 (: i8 0 i16 0 i32 0 i64 0 f32 1 f64 1 z 0 r 1 c 2 o 3)
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
-(: i (C 0 1))
-(: (** b e) (? (< e 1) 1 (: h (** b (/ e 2)) h2 (* h h)
-                           (? (= 0 (mod e 2)) h2 (* h2 b))))
-   (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (mod a b)))
-   (modpow b e m) (? (< e 1) 1 (: h (modpow b (/ e 2) m) h2 (mod (* h h) m)
-                                 (? (= 0 (mod e 2)) h2 (mod (* h2 b) m)))))
+(: i ~(0 1))
+; integer power (b ** k) is just numeral application: (k b) == b**k. The squaring
+; algorithm lives in `ipow`, local to the num-ap block below, so there is no `**`.
+(: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (mod a b)))
+   (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (mod (* h h) m)
+                                 (? (= 0 (mod k 2)) h2 (mod (* h2 b) m)))))
 ; functional bounded draw: (value . st') with value in [0,n), riding rand-next
 ; (full-width draw) + modulo. The global-stream analogue is the `rand` bif.
 (: (randint st n) (: r (rand-next st) (X (mod (A r) n) (B r))))
@@ -64,12 +65,18 @@
      _ (poke (+ 3 (* 3 n)) g_vm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    (nump x) (| (fixp x) (| (tupp x) (bigp x)))   ; whole tower: fixnum / float box / wide-int box / complex / array / bignum
-   (intp n) (| (fixp n) (| (boxp n) (bigp n)))       ; integer-valued numeral (exact ** exponent / composition count)
+   (intp n) (| (fixp n) (| (boxp n) (bigp n)))       ; integer-valued numeral (exact power exponent / composition count)
+   ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
+   ; (k b) numeral application routes here, so `**` is unneeded.
+   (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (mod k 2)) h2 (* h2 b))))
    ; x ** n across the whole tower. array exponent -> elementwise pow (broadcasts
-   ; via the vmap2 engine, float result); integer exponent -> exact squaring
-   ; (broadcasts over an array base, complex base via complex *); otherwise pow,
-   ; which carries a complex lane (w^z = exp(z Log w)) and a real lane.
-   (powg x n) (? (arrp n) (pow x n) (intp n) (** x n) (pow x n))
+   ; via the vmap2 engine, float result); integer exponent -> exact squaring, with
+   ; a NEGATIVE integer giving the reciprocal power (so (-1 x) == (/ 1 x) and
+   ; (sqrt x) == ((/ 1 2) x)); otherwise pow, which carries a complex lane
+   ; (w^z = exp(z Log w)) and a real lane.
+   (powg x n) (? (arrp n) (pow x n)
+                 (intp n) (? (< n 0) (/ 1 (ipow x (- 0 n))) (ipow x n))
+                 (pow x n))
    ; Church-numeral application generalized across the whole tower. n is the
    ; operator (the numeral), x the operand. numeric operand -> x ** n. non-numeric
    ; operand (a function) -> compose floor(|n|) times: (int (abs n)) reduces ANY
@@ -180,8 +187,8 @@
 ; a vector -- and is coerced to a non-negative integer by its L2 norm ((int (abs
 ; d)): abs is the modulus for a complex / the Euclidean norm for a vector). a list
 ; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …) and
-; (array (C 3 4) …) both mean "rank-1, length (int |n|)").
-(: (a-rank x) (? (flop x) 1 (| (fixp x) (boxp x)) 0 (Cp x) 2 3)
+; (array ~(3 4) …) both mean "rank-1, length (int |n|)").
+(: (a-rank x) (? (flop x) 1 (| (fixp x) (boxp x)) 0 (comp x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
    (a-type d) (: r (foldl a-emax 0 d) (? (= r 0) i64 (= r 1) f64 (= r 2) c o))
    (a-dim d) (int (abs d))

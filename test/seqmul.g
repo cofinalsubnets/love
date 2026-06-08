@@ -14,7 +14,7 @@
  (= "" (* "ab" 0))   (strp (* "ab" 0))          ; 0 -> the empty string
  (= "abab" (* "ab" -2))                         ; count is |n|: 2 copies
  (= "abab" (* "ab" 2.9))                        ; float count -> int(abs) = 2
- (= "ababababab" (* "ab" (C 3 4)))              ; |3+4i| = 5 copies
+ (= "ababababab" (* "ab" ~(3 4)))              ; |3+4i| = 5 copies
  (= "xxx" (* "x" 3))
 
  ; --- symbol repetition: stays at the operand's own rank (no demotion) ---

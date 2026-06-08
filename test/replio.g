@@ -23,7 +23,7 @@
   ; --- result types print in their canonical read-back form ---
   (= "(1 2 3)\n" (ri-eval "(list 1 2 3)"))      ; a list
   (= "\"hi\"\n" (ri-eval "\"hi\""))             ; a string -> quoted
-  (= "(C 1.0 2.0)\n" (ri-eval "(C 1 2)"))       ; a complex scalar
+  (= "~(1.0 2.0)\n" (ri-eval "~(1 2)"))       ; a complex scalar
   ; --- a whole body-ful form: a local define then a use, one result ---
   (= "9\n" (ri-eval "(: sq (\\ x (* x x)) (sq 3))"))
   ; --- the reader skips whitespace and ;-comments between datums ---

@@ -50,7 +50,10 @@
  (aall (= (arrl i64 '(3) '(11 21 31)) (+ (arrl i64 '(3) '(10 20 30)) 1)))
  (aall (= (arrl i64 '(3) '(9 19 29)) (- (arrl i64 '(3) '(10 20 30)) 1)))
  (aall (= (arrl i64 '(2) '(4 6)) (* (arrl i64 '(2) '(2 3)) 2)))
- (aall (= (arrl i64 '(2) '(3 5)) (/ (arrl i64 '(2) '(7 11)) 2)))   ; integer division
+ (aall (= (arrl i64 '(2) '(3 5)) (// (arrl i64 '(2) '(7 11)) 2)))   ; `//` floor division, stays i64
+ (= f64 (atype (/ (arrl i64 '(2) '(7 11)) 2)))                     ; `/` promotes (7/2 inexact) -> f64
+ (aall (= (arrl f64 '(2) '(3.5 5.5)) (/ (arrl i64 '(2) '(7 11)) 2)))
+ (aall (= (arrl i64 '(2) '(4 6)) (/ (arrl i64 '(2) '(8 12)) 2)))   ; `/` stays i64 when every element divides evenly
  (aall (= (arrl i64 '(2) '(1 1)) (mod (arrl i64 '(2) '(7 11)) 2)))
  (aall (= (arrl i64 '(3) '(2 4 6)) (+ 1 (arrl i64 '(3) '(1 3 5)))))  ; scalar on the left
 
@@ -118,13 +121,13 @@
  ; a single non-zero component makes the norm non-zero (truthy), per the tower:
  !(nilp @(0 0 5))                    ; one non-zero element -> true
  (nilp @(0.0 0.0))                      ; all-zero float tuple -> false
- (nilp (C 0 0))                         ; complex 0+0i (|z|=0) -> false
- !(nilp (C 0 1))                     ; 0+1i (|z|=1) -> true
+ (nilp ~(0 0))                         ; complex 0+0i (|z|=0) -> false
+ !(nilp ~(0 1))                     ; 0+1i (|z|=1) -> true
  !(nilp i)                           ; the imaginary unit is truthy
 
  ; --- elementwise transcendentals over an array ---
- (aall (= (arrl f64 '(2) '(2.0 3.0)) (sqrt (arrl f64 '(2) '(4.0 9.0)))))
- (= f64 (atype (sqrt (arr i64 '(3)))))  ; result is a float array
+ (aall (= (arrl f64 '(2) '(2.0 3.0)) ((/ 1 2) (arrl f64 '(2) '(4.0 9.0)))))
+ (= f64 (atype ((/ 1 2) (arr i64 '(3)))))  ; result is a float array
 
  ; --- print as constructor forms ---
  ; rank-1 numeric -> the @(…) sugar (@ reader splices into (tuple …)); rank>=2 ->

@@ -34,10 +34,10 @@
  (aall (= (2 (arrl i64 '(3) '(2 3 4))) (arrl i64 '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
  (aall (= ((arrl i64 '(3) '(2 3 4)) 5) (arrl f64 '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 pow)
  (= 13 (((arrl i64 '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose floor(L2 norm |[2 3]|=sqrt13)=3
- (= 15 (((C 3 4) (+ 1)) 10))               ; complex operator on a fn: compose floor(|3+4i|=5)=5
- (Cp ((C 0 1) 5))                       ; complex operator on a number -> complex pow (5^i), no longer fenced
- (< (abs (- 1 (abs ((C 0 1) 5)))) 0.0001)  ; |5^i| = 1 exactly (w^z = exp(z Log w))
- (< (abs (im ((C 0 1) (C 0 1)))) 0.0001)) ; i^i = e^(-pi/2) is real
+ (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose floor(|3+4i|=5)=5
+ (comp (~(0 1) 5))                       ; complex operator on a number -> complex pow (5^i), no longer fenced
+ (< (abs (- 1 (abs (~(0 1) 5)))) 0.0001)  ; |5^i| = 1 exactly (w^z = exp(z Log w))
+ (< (abs (im (~(0 1) ~(0 1)))) 0.0001)) ; i^i = e^(-pi/2) is real
 ; basic arithmetic
 (: zero? (= 0)
 (assert
@@ -78,9 +78,10 @@
    l (c1895_inv p)
    (assert (= 103 (A l)) (= 110 (A (B l)))))
 
-; heron's method for finding square roots
-(: (heron x g) (? (= g (/ x g)) g
-    (heron x (/ (+ g (/ x g)) 2)))
+; heron's method for finding square roots (integer Newton -- floor division `//`,
+; so it converges to the exact integer root and the `=` test terminates)
+(: (heron x g) (? (= g (// x g)) g
+    (heron x (// (+ g (// x g)) 2)))
    guess 1337
  (assert (= 6 (heron 36 guess))))
 

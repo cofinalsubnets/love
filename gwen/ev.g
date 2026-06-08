@@ -73,14 +73,14 @@
             (&& (< 1 ar) (= n ar)) (X apx (X -1 x))      ; multi-arg fn -> n-ary apply
             (X apx (X 0 x))))))                          ; generic l2r apply
     (go v as))
-   names '(+ - * / mod << >> & | ^
-           < <= = >= > same ** gcd modpow inc dec abs
+   names '(+ - * / // mod << >> & | ^
+           < <= = >= > same gcd modpow inc dec abs
            X A B AA AB BA BB
            len lidx assq memq last rev cat
-           fixp symp twop mapp lamp strp nilp flop Cp atomp
+           fixp symp twop mapp lamp strp nilp flop comp atomp
            ssub scat string
-           re im conj arg flo C
-           sin cos tan atan sqrt exp log atan2 pow)
+           re im conj arg flo com
+           sin cos log pow)
    pureset (foldl (\ t s (: v (globals s) (? v (put v -1 t) t))) (hashn 0) names)
    (add t s) (: v (globals s)
     (? (fixp v) t
