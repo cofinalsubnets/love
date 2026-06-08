@@ -29,7 +29,7 @@
    show (showloop "")
    (gen i limit) (: b (show (bell i)) (? (<= (len b) limit) (X b (gen (+ i 1) limit))))
    (leq a b) (? (twop a) (? (twop b) (? (= (A a) (A b)) (leq (B a) (B b)) 0) 0)
-                         (? (twop b) 0 -1))
+                         (? (twop b) 0 1))
    out (gen 0 280)
    ; expected: byte-exact stdout of `ruby test/bell.rb` (n defaults to 280),
    ; 291 lines, B(0..290) in base 36.

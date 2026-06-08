@@ -20,8 +20,8 @@
 ; --- character classes + cursors over a line (string s) --------------
 ; ws = Python \s within a line (space tab cr ff vtab); hex = [0-9a-fA-F].
 (: (ws?  c) (any (\ x (= x c)) (L 32 9 13 12 11))
-   (hex? c) (? (&& (>= c 48)  (<= c 57))  -1
-            (? (&& (>= c 97)  (<= c 102)) -1
+   (hex? c) (? (&& (>= c 48)  (<= c 57))  1
+            (? (&& (>= c 97)  (<= c 102)) 1
                (&& (>= c 65)  (<= c 70))))
    (skip-ws    s i) (? (< i (len s)) (? (ws?  (get 0 i s)) (skip-ws    s (+ i 1)) i) i)
    (skip-hex   s i) (? (< i (len s)) (? (hex? (get 0 i s)) (skip-hex   s (+ i 1)) i) i)
@@ -74,7 +74,7 @@
 ; --- per-arch return-mnemonic matchers --------------------------------
 ; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$.
 ; riscv64/loongarch64: exactly ret. (iret/eret/sret/mret/ertn never match.)
-(: (lower? s i) (? (< i (len s)) (: c (get 0 i s) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) -1)
+(: (lower? s i) (? (< i (len s)) (: c (get 0 i s) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
    (ret-tail? r) (&& (prefix? "ret" r) (lower? r 3))
    (retx?  m) (|| (ret-tail? m) (&& (= 108 (get 0 0 m)) (ret-tail? (ssub m 1 (len m)))))
    (reta?  m) (|| (= m "ret") (|| (= m "retaa") (= m "retab")))
@@ -120,7 +120,7 @@
    (str< a b)    ((: (f i) (? (>= i (len a)) (< (len a) (len b))
                             (? (>= i (len b)) 0
                                (: ca (get 0 i a) cb (get 0 i b)
-                                  (? (< ca cb) -1 (? (> ca cb) 0 (f (+ i 1)))))))) 0)
+                                  (? (< ca cb) 1 (? (> ca cb) 0 (f (+ i 1)))))))) 0)
    (maxlen fl)   (foldl (\ m e (: l (len (A e)) (? (< m l) l m))) 0 fl)
    (join-rets rs) (? (twop rs)
                      (? (twop (B rs)) (scat (scat "0x" (A rs)) (scat ", " (join-rets (B rs))))

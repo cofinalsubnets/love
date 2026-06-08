@@ -8,7 +8,7 @@
 ; invariants that must hold for EVERY draw -- algebraic laws of the numeric tower,
 ; list-combinator identities, the print->read round trip, and array broadcasting.
 ;
-; fz-find returns (X -1 0) on success or (X 0 counterexample) on failure;
+; fz-find returns (X 1 0) on success or (X 0 counterexample) on failure;
 ; to debug a red property interactively, eval (inspect (B (fz-find n seed g p)))
 ; to see the offending input.
 (:
@@ -30,7 +30,7 @@
    (\ st (: a (ga st) b (gb (B a)) c (gc (B b)) (X (L (A a) (A b) (A c)) (B c))))
  ; --- the driver: N trials from `seed`, first counterexample wins ---
  (fz-find n seed g p)
-   (: (go n st) (? (< n 1) (X -1 0)
+   (: (go n st) (? (< n 1) (X 1 0)
         (: r (g st) (? (p (A r)) (go (- n 1) (B r)) (X 0 (A r)))))
       (go n (rng-seed seed)))
  (fz-ok n seed g p) (A (fz-find n seed g p)))

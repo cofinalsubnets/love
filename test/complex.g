@@ -76,11 +76,13 @@
  (close -1 (re (pow i 2)))   (close 0 (im (pow i 2)))
  (close 0.20787957635076193 (re (pow i i)))   (close 0 (im (pow i i)))
 
- ; --- truthiness: a complex zero is falsy, any nonzero part is truthy ---
- (nilp ~(0 0))
- (nilp ~(0 0.0))
- (? i -1 0)                                ; i is truthy
- (? ~(0 1) -1 0)
+ ; --- truthiness: a complex is FALSE iff it sorts <= 0+0i by the total order (re, then
+ ;     im) -- 0, a negative real part, or re=0 with im<=0. re>0, or re=0 with im>0, is true.
+ ;     (Lockstep with #: #z = 0 iff z <= 0, so -i and ~(-3 4) are now falsy.) ---
+ (nilp ~(0 0))   (nilp ~(0 0.0))           ; 0+0i is false
+ (nilp ~(-3 4))  (nilp ~(0 -1))            ; re<0, and -i (re=0, im<=0), are false
+ (? i 1 0)                                 ; i = ~(0 1): re=0, im>0 -> true
+ (? ~(0 1) 1 0)   (? ~(3 -4) 1 0)          ; re>0 -> true even with im<0
  (nilp (nilp i))
 
  ; --- complex meets bignum: the bignum narrows to double (floating domain) ---

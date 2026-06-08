@@ -24,7 +24,7 @@
 
  ; --- a bignum is its own tier: not a fixnum, truthy, not falsy, not a pair ---
  (nilp (fixp B100))                       ; (fixp bignum) is false
- (? B100 -1 0)                            ; a bignum is truthy
+ (? B100 1 0)                             ; a bignum is truthy
  (nilp (nilp B100))                       ; ...hence not falsy
  (atomp B100)
 

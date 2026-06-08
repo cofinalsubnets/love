@@ -1,72 +1,47 @@
 # gwen lisp
 
-- three special forms `:` `\` `?`
-- int, float, complex, bignum, array
-- list, lambda, macro, symbol, string, process, hash (mutable)
-- portable C virtual machine for self hosting thread compiler
+in gwen lisp every value is a monadic total function.
+1 is the identity function, 0 is the constant function of 1.
+numbers act on functions by composition (church numerals).
+a numeric list evaluates to an exponential tower.
 
-## language
+- `(0 x) = 1`
+- `(1 x) = (x) = x`
+- `(f x y) = ((f x) y)`
+- `(2 f x) = (f (f x))`
+- `(2 3 4) = 4 ** (3 ** 2) = 262144`
 
-in gwen the function type includes every value. even "data" like
-numbers, strings, symbols, lists, etc. act like functions in a (hopefully)
-well-defined way. thus many expressions that would be wrong in other lisp
-are fine in gwen lisp, while some common expressions in other lisp have
-different meaning in gwen lisp. examples:
+reader sigils (prefix operators)
+- `.` print
+- `'` quote
+- `%` hash literal
+- `@` array literal
+- `$` gensym literal
+- `~` complex literal
+- `#` saturating projection to non-negative fixnum (len on lists/strings/hashes)
+- `!` 1 when `#` is 0 else 0
 
-- `1` is the identity function and `0` is the constant function of `1`
-- integers act efficiently as church numerals such that
-  `(3 3 3) = (27 3) = 7625597484987` (see below)
-- contrary to a standard pattern for thunks in other lisp, `(f) = f`
-  because function application modulo eval order is
-   `(f x y z) = (((f x) y) z) = (foldl 1 f (list x y z))` so
-   `(f) = (foldl 1 f '()) = f`
+style special forms
+- `:` let
+- `\` lambda
+- `?` cond
 
-function and argument evaluation order is at the compiler's discretion.
-when evaluation must be ordered then `:` is used:
-```
-(: b (g 0)       ; eval second argument
-   a (f 0)       ; eval first argument
-   _ (puts "hi") ; 
- (c a b))        ; last expression = final result
-```
+## code examples
 
-comments `;` or `#!`. reader sigils `'` (quote) ; `#` (hash table).
-`:` has scheme-like sugar for lambda definitions.
-in `:`  `(f x y) (y x) = f (\ x y (y x))` like (define (f x y) ...)` in scheme.
-dotted lists are not distinguished for reading/printing so `.` is a normal symbol.
-the three basic special forms are:
-
-| gwen               |   scheme approximate |
-|--------------------|-----------|
-| `(: a b c d e)`    | `(letrec* ((a b) (c d)) e)`   |
-| `(? a b c d e)`    | `(cond (a b) (c d) (#t e))`    |
-| <code>(&#92; x)</code> | `(quote x)` |
-| <code>(&#92; a b c d e)</code> | `(lambda (a) (lambda (b) (lambda (c) (lambda (d) e))))`|
-
-## church fizz buzz (code example)
+hello world
 
 ```
-; church numerals
-(: (add a b f x) (a f (b f x))
-   (mul a b f) (a (b f))
-   (zero a b) b
-   one (zero zero)
-   two (add one one)
-   three (add one two)
-   four (add two two)
-   five (add two three)
-   six (mul two three)
-   seven (add one six)
- (assert (= 420 (mul (mul two five) (mul six seven) (+ 1) 0))))
+."hello world\n"
+```
 
-; gwen lisp follows this behavior
-(assert (= (3 3 3) 7625597484987))
+fizzbuzz
 
-; therefore the classic fizzbuzz example can be expressed
+```
 (100
- (\ n (: fb (+ (? (mod n 3) "" "fizz")
-               (? (mod n 5) "" "buzz"))
-         _ (? (len fb) (say fb))
+ (\ n (: f (? (mod n 3) "" "fizz")
+         b (? (mod n 5) "" "buzz")
+         _ .(? (| #f #b) (+ f b) n)
+         _ ."\n"
        (+ 1 n)))
  1)
 ```

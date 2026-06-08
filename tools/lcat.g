@@ -27,7 +27,7 @@
           (: r (fread p e)
              (? (= e r) acc
                 (g (? first (inspect r) (scat (scat acc " ") (inspect r))) e p 0))))
-        "" (gensym 0) p -1)
+        "" (gensym 0) p 1)
    _ (fputc out 34)                                      ; opening "
    ; walk acc: drop redundant spaces (outside string literals), C-escape the rest.
    ; pc = previous emitted byte; instr = inside a "..." literal (where \ escapes).

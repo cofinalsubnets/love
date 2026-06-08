@@ -10,6 +10,7 @@
 ; (gwen/{prelude,ev,repl}.g). Source files are .g; the host binary is `gl`. Read README.md.
 ; SOURCE OF TRUTH for CLAUDE.md: a real test in the corpus that, wrapped in a gwen code
 ; fence, IS CLAUDE.md -- rewrite this, then regenerate the doc by hand (wrap this file).
+; STYLE: prefer the sigils `!` over `nilp` and `#` over `len`, in code and prose.
 
 ; --- build/test --- ($ make -> out/host/gl; make repl; make test runs test/*.g through
 ; gl AND gl0; make test_all + js/tools diffs; make catav pre-commit). one file:
@@ -30,21 +31,28 @@
 (: (twice f x) (f (f x)) (assert (= 12 (twice inc 10))))
 
 ; === every value is a function: (f x y) == ((f x) y), (f) == f ===
-; numbers are Church numerals; the whole tower applies; data self-applies/indexes.
+; numbers are Church numerals; a numeric list is an exponential tower; data self-applies/indexes.
 (assert
  (= 8 (3 2)) (= 7625597484987 (3 3 3))          ; (n x) NUMBER -> x**n ; so (3 3 3)==(27 3)
+ (= 262144 (2 3 4))                             ; the tower: (2 3 4)==4**(3**2)==4**9
  (= 0.5 (-1 2)) (= 0.2 (-1 5)) (= 3.0 ((/ 1 2) 9))  ; negative n -> reciprocal ((-1 x)=(/ 1 x)); (1/2 x)=sqrt
  (= 12 (3 (+ 1) 9)) (= 5 (1 5)) (= 1 (0 5))     ; (n f) FN -> compose n; 1=id, 0=const-1
  (= '(2 3 4) (map (+ 1) '(1 2 3)))              ; partial application is just currying
  (= 8 (3 2.0)) (= 12 ((2.5 (+ 1)) 10))          ; tower numeral: |n| floors a fn count
  (= 1 ((bufnew 4) 'x)))                         ; opaque handles (buf/port) act as 0
 
-; === truthiness (`?`/nilp): FALSE == zero or empty. nilp is the efficient generic form of
-; (= 0 (len x)) (one C oracle g_false, short-circuits, no len walk). invariant (nilp x)==(= 0 #x). ===
+; === truthiness (`?`/`!`): FALSE == NEGATIVE-OR-ZERO or empty; POSITIVE is true. An ordered
+; scalar (real/complex/box/bignum) is false iff it sorts <= 0 by the total order (complex: re
+; then im, so ~(-3 4) and -i are false but ~(3 -4) and i are true); a container is false iff
+; empty; an array is false iff its L2 norm is 0 -- a negative element keeps it true (an array
+; has no single sign). `!` is the C oracle (short-circuits, no `#` walk). invariant
+; !x==(= 0 #x), so # clamps any non-positive scalar to 0 (#-5=0). ===
 (assert
- (nilp 0) (nilp "") (nilp %()) (nilp @0) (nilp ()) (nilp 0.0) (nilp ~(0 0))
- (not (nilp "x")) (not (nilp 'a)) (not (nilp A)) (not (nilp -5)) (not (nilp i))
- (= (nilp "") (= 0 #"")))
+ !0 !"" !%() !@0 !() !0.0 !~(0 0)
+ !-5 !-3.9 !(- 0 (100 2)) !~(-3 4) !~(0 -1)     ; <= 0 by total order -> false
+ !!"x" !!'a !!A !!5 !!i !!~(3 -4)               ; positive / nonempty -> true (!! = "is truthy")
+ !!@(-3 -4)                                     ; a NEGATIVE array stays true (norm, sign squares away)
+ (= !"" (= 0 #"")) (= !-5 (= 0 #-5)))
 
 ; === types: fixnum (tagged odd word); else a heap object whose 1st word dispatches.
 ; predicates end in `p`. numeric TOWER (nump): fix -> bignum on overflow; float/complex/
@@ -52,12 +60,14 @@
 (assert
  (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (lamp A) (mapp %(1 2))
  (bigp (100 2)) (boxp (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (tupp 1.5)
- (nump 1.5) (intp (62 2)) (atomp 'x) (nilp (atomp '(1)))
+ (nump 1.5) (intp (62 2)) (atomp 'x) !(atomp '(1))
  (= (64 2) (* 2 (63 2)))                        ; overflow -> exact bignum (numeral power (k b)==b**k)
  (= 5.0 (abs ~(3 4))) (= ~(2.0 3.0) (+ 2 (* 3 i))))  ; mixed arith -> wider type
 ; SYMBOLS: interned 'x, named-uninterned $x (gensym 'x), anonymous (gensym 0). STRINGS
-; index bytes: ("abc" 0)->97. opaque: buf/port/thread. #x (len) = count | floored magnitude.
-(assert (= 97 ("abc" 0)) (= 3 #"abc") (= 4 #3.9) (= 5 #@(3 4)))   ; #@(3 4)=ceil(L2 norm)
+; index bytes: ("abc" 0)->97. opaque: buf/port/thread. #x = a SATURATING NON-NEGATIVE size:
+; container count | symbol name length | ceil magnitude, a non-positive scalar clamped to 0
+; (#-3.9=0); an array = ceil(L2 norm). abs is the raw magnitude, so they DIVERGE: (abs -5)=5.
+(assert (= 97 ("abc" 0)) (= 3 #"abc") (= 4 #3.9) (= 0 #-3.9) (= 5 #@(3 4)) (= 5 (abs -5)))  ; #@(3 4)=ceil(L2 norm)
 
 ; === arithmetic + - * / // mod : fixnum fast path; fixp/flop promotes to float; int
 ; overflow -> wide-int box -> bignum; non-num -> nil. `/` is TRUE division -- an inexact
@@ -68,23 +78,23 @@
 ; < lambda, fixnum low), within a kind by value/lexicographic (complex by (re,im),
 ; lambda by hash; array operand -> elementwise 0/1 mask). `> >=` reverse `< <=`.
 ; `=` is eqv (promotes across tower), `same` is eq (identity). bitwise << >> & | ^
-; (int; complement is (^ x -1)). logical not is `!`/`not`/`nilp`; != is gone (use !(= ..)).
+; (int; complement is (^ x -1)). logical not is `!` (= `not` = `nilp`); != is gone (use !(= ..)).
 (assert
  (= 3 (+ 1 2)) (= 6 (* 2 3)) (= 2.5 (/ 5 2)) (= 2 (// 5 2)) (= 0.5 (/ 1 2)) (= 1 (mod 5 2)) (= 3.5 (+ 1 2.5))
  (= 2 (/ 4 2)) (fixp (/ 4 2)) (= -2 (// -5 2))   ; / exact->int, // truncates toward zero
  !(fixp (* 2 2305843009213693952)) (flop (/ 1 0)) (< 1e308 (/ 1 0)) !(= (/ 0 0) (/ 0 0))
- (= 3 3.0) !(= 3 4) (< 1 1.5) (>= 3.0 3) !(= 3 4) (same 'a 'a) (nilp (same '(1) '(1)))
+ (= 3 3.0) !(= 3 4) (< 1 1.5) (>= 3.0 3) !(= 3 4) (same 'a 'a) !(same '(1) '(1))
  (= -2 (^ 1 -1)) (= 15 (| 8 (| 4 (| 2 1)))) (= 16 (>> 64 2)) (= 16 (<< 2 3))
  (< 1 "a") (< "a" 'x) (< 'x '(0)) !(< "a" 1))   ; total order: number < string < sym < pair
 ; `+` GENERIC (order-preserving): num add; str/sym concat (num=1 byte; text tower
 ; str<usym<isym lifts a num, mixing demotes); list append. `-` numeric only (nil).
 (assert
  (= "abcd" (+ "ab" "cd")) (= "xB" (+ "x" 66)) (= 'efef (+ 'ef 'ef)) (strp (+ "ab" 'ef))
- (= '(1 2 3 4) (+ '(1 2) '(3 4))) (= '(5 1 2) (+ 5 '(1 2))) (nilp (- "a" "b")))
+ (= '(1 2 3 4) (+ '(1 2) '(3 4))) (= '(5 1 2) (+ 5 '(1 2))) !(- "a" "b"))
 ; `*` = repeated `+`: seq * count (int(abs c)) -> copies joined; seq*seq/array-count -> nil.
 (assert
  (= "ababab" (* "ab" 3)) (= "ababab" (* 3 "ab")) (= 'xyxy (* 'xy 2))
- (= '(1 2 1 2) (* '(1 2) 2)) (nilp (* "ab" "cd")))
+ (= '(1 2 1 2) (* '(1 2) 2)) !(* "ab" "cd"))
 
 ; === numeric fns: abs/int type-aware; constants e pi i; gcd/modpow. The IRREDUCIBLE
 ; transcendental bifs are pow sin cos log (float; bignums widen, arrays elementwise).
@@ -107,11 +117,11 @@
 ; `c` array (atype c): arr/arrl/array/@ build it, get -> a ~(..) box, + - * / broadcast (numpy)
 ; and `=` -> a mask, asum/aprod fold complex.
 (assert
- (= (* i i) -1) (= ~(2 0) 2) (= (* ~(1 2) ~(3 4)) ~(-5 10)) (comp ~(2 0)) (nilp (comp 5))
+ (= (* i i) -1) (= ~(2 0) 2) (= (* ~(1 2) ~(3 4)) ~(-5 10)) (comp ~(2 0)) !(comp 5)
  (= 2.0 (re ~(2 3))) (= (conj ~(2 3)) ~(2 -3)) (< i 1) !(< 1 i) (= "~(0.0 1.0)" (inspect i))
  (= 0.0 (get 0 1 (arg ~(1 @(1 0)))))            ; com/arg broadcast: (arg ~(1 x)) = atan, per element
  (: v (array 2 ~(1 2) ~(3 4)) (&& (= c (atype v)) (= ~(1 2) (get 0 0 v)) (= ~(4 6) (asum v))
-    (= ~(2 4) (get 0 0 (+ v v))) (= ~(2 4) (get 0 0 (* ~(2 0) v))) (nilp (< v v))
+    (= ~(2 4) (get 0 0 (+ v v))) (= ~(2 4) (get 0 0 (* ~(2 0) v))) !(< v v)
     (= "@(~(1.0 2.0) ~(3.0 4.0))" (inspect v)))))
 
 ; === pairs & lists: X=cons, A=car, B=cdr; AA AB .. BBB = the c[ad]+r compounds. NATIVE
@@ -124,13 +134,13 @@
  (= '(1 3) (filter (\ x (mod x 2)) '(1 2 3 4))) (= '(1 2 3) (sort < '(3 1 2)))
  (= '(1 2 3 4) (cat '(1 2) '(3 4))) (= '(3 2 1) (rev '(1 2 3))) (= '(1 2) (map A (zip '(1 2) '(3 4))))
  (= 20 (AB (assq 2 (list (L 1 10) (L 2 20))))) (= '(1 2) (take 2 '(1 2 3 4))) (= '(3 4) (drop 2 '(1 2 3 4)))
- (= 3 (last '(1 2 3))) (= '(1 2) (init '(1 2 3))) (memq 3 '(1 2 3)) (nilp (memq 9 '(1 2 3)))
- (all (\ x (< 0 x)) '(1 2 3)) (any (\ x (< 2 x)) '(1 2 3)) (= 3 (len '(a b c))))
+ (= 3 (last '(1 2 3))) (= '(1 2) (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
+ (all (\ x (< 0 x)) '(1 2 3)) (any (\ x (< 2 x)) '(1 2 3)) (= 3 #'(a b c)))
 
-; === strings & symbols: len/get index; ssub (half-open) ; scat (lenient, "" identity);
+; === strings & symbols: # /get index; ssub (half-open) ; scat (lenient, "" identity);
 ; (str k) indexes a byte (oob/non-num -> 1); string coerces; intern/gensym ; \n escapes.
 (assert
- (= 4 (len "slen")) (= "bidden" (ssub "forbidden planet" 3 9)) (= "abcd" (scat "ab" "cd"))
+ (= 4 #"slen") (= "bidden" (ssub "forbidden planet" 3 9)) (= "abcd" (scat "ab" "cd"))
  (= 104 ("hi" 0)) (= 1 ("hi" 9)) (= 'asdf (intern "asdf")) !(= (gensym 0) (gensym 0))
  (= "asdf" (string 'asdf)) (= "\"a\\nb\"" (inspect "a\nb")) (= "$x" (inspect (gensym "x"))))
 
@@ -139,7 +149,7 @@
 ; + - * // < = broadcast (numpy, widest type, compare->i8); `/` promotes the whole result
 ; to f64 the moment an element divides inexactly (else stays integer); reduce asum aprod
 ; amax amin aall (conjunction; identity on a scalar; the disjunction "any nonzero" is just
-; `len`, truthy iff not all-zero) ; zero-norm falsy ; sin/cos/log/pow (+ derived) map elementwise.
+; `#`, truthy iff not all-zero) ; zero-norm falsy ; sin/cos/log/pow (+ derived) map elementwise.
 (assert
  (= 6 (alen (arr i64 '(2 3)))) (= 2 (arank (arr i64 '(2 3)))) (= '(2 3) (ashape (arr i64 '(2 3))))
  (= i64 (atype (arr i64 '(2 3)))) (= 20 (get -1 1 @(10 20 30))) (= -1 (get -1 9 @(10 20 30)))
@@ -147,35 +157,36 @@
  (= @(2 4 6) (* @(1 2 3) 2)) (= f64 (atype (+ (arr i32 '(2)) 1.5))) (= i8 (atype (< (arr i64 '(3)) 1)))
  (= 60 (asum @(10 20 30))) (= 30 (amax @(10 30 20))) (= 5 (asum 5)) (aall (< 1 2))
  (aall (= @(2.0 3.0) ((/ 1 2) @(4.0 9.0)))) (= @(3.5 5.5) (/ @(7 11) 2)) (= @(3 5) (// @(7 11) 2))
- (= @(4 6) (/ @(8 12) 2)) (nilp (arr i64 '(3))) (= "@(10 20 30)" (inspect @(10 20 30)))
- (aall (= @(10 20 30) (array 3 10 20 30))) (nilp (+ @(1 2 3) @(1 2))) (nilp (arr 99 '(3))))
+ (= @(4 6) (/ @(8 12) 2)) !(arr i64 '(3)) (= "@(10 20 30)" (inspect @(10 20 30)))
+ (aall (= @(10 20 30) (array 3 10 20 30))) !(+ @(1 2 3) @(1 2)) !(arr 99 '(3)))
 
 ; === maps: %(k v..)/(hasht ..) build, %()/(hashn 0) empty, mutable. get/put/hashd
-; (default key | key val | default table key), hashk, hash, len=keycount. (t k)==(get 0 k t).
+; (default key | key val | default table key), hashk, hash, #=keycount. (t k)==(get 0 k t).
 (assert
  (: t %(1 10 2 20) (&& (= 20 (get 0 2 t)) (= 20 (t 2)) (= 99 (get 99 9 t))))
- (= 50 (get 0 5 (put 5 50 %()))) (: t %(1 10 2 20) _ (hashd 0 t 1) (= 1 (len t)))
- (= 2 (len (hashk %(1 10 2 20)))) (= (hash 'k) (hash 'k)) (mapp %()) (nilp (mapp 5)))
+ (= 50 (get 0 5 (put 5 50 %()))) (: t %(1 10 2 20) _ (hashd 0 t 1) (= 1 #t))
+ (= 2 #(hashk %(1 10 2 20))) (= (hash 'k) (hash 'k)) (mapp %()) !(mapp 5))
 
-; === bufs: (bufnew n) mutable zeroed bytes ; len/get/put (byte 0..255) ; bcopy ; eq by id.
+; === bufs: (bufnew n) mutable zeroed bytes ; # /get/put (byte 0..255) ; bcopy ; eq by id.
 (assert
- (: b (bufnew 3) _ (put 0 65 b) (= 65 (get 0 0 b))) (= 4 (len (bufnew 4)))
+ (: b (bufnew 3) _ (put 0 65 b) (= 65 (get 0 0 b))) (= 4 #(bufnew 4))
  (: b (bufnew 1) _ (put 0 257 b) (= 1 (get 0 0 b))) (: b (bufnew 4) _ (bcopy b 0 "ABCD" 0 4) (= 68 (get 0 3 b)))
  !(= (bufnew 2) (bufnew 2)))
 
 ; === reader & sigils: ; line comment, #! shebang (NO block comments). ' quote (=1-arg \),
 ; ` quasiquote , unquote ,@ splice ; @ array % map # len $ gensym ! nilp ~ complex
-; (~(re im)->(com re im), splices like @/%).
+; (~(re im)->(com re im), splices like @/%) ; . dot (.x->(dot x), see I/O).
 (assert
  (= '(1 (\ x) 3) `(1 'x 3)) (= '(1 2 3 4) (: xs '(2 3) `(1 ,@xs 4)))
- (= 5 #"hello") (= 42 #42) (symp $x) (= 1 !0) (nilp !5) (= !(= 3 4) (nilp (= 3 4)))
- (= i ~(0 1)) (= ~(2 3) (com 2 3)))             ; ~(re im) splices into (com re im)
+ (= 5 #"hello") (= 42 #42) (symp $x) (= 1 !0) (= 0 !5) !!5
+ (= i ~(0 1)) (= ~(2 3) (com 2 3))              ; ~(re im) splices into (com re im)
+ (= '(dot x) '.x) (lamp dot))                   ; .x->(dot x): the `.` sigil wraps `dot`
 
 ; === macros (arg-list -> code, install via `::`): prelude do/let/if/cond/quote && || L/list
 ; tuple hasht array, body-first :- ?- , pipes >>= <=< .
 (:: 'unless (\ a `(? ,(A a) 0 ,(AB a))))
 (assert
- (= 'ok (unless 0 'ok)) (= 0 (unless 1 'ok)) (= 3 (&& 1 2 3)) (nilp (&& 1 0 3))
+ (= 'ok (unless 0 'ok)) (= 0 (unless 1 'ok)) (= 3 (&& 1 2 3)) !(&& 1 0 3)
  (= 2 (|| 0 2 3)) (= '(1 2 3) (L 1 2 3)) (= 6 (do 1 2 6)) (= 3 (let a 1 b 2 (+ a b)))
  (= 3 (:- (+ a b) a 1 b 2)) (= 'big (?- 'else (< 1 2) 'big)) (= 9 ((<=< inc (\ x (* x 2))) 4)))
 
@@ -184,12 +195,14 @@
 (assert
  (= 3 (ev '(+ 1 2))) (lamp ev) (= 41 (call_cc (\ k (k 41)))) (= 42 (+ 1 (call_cc (\ k 41))))
  (= 42 (: p (spawn (\ x (do (yield 0) (+ x 1))) 41) (wait p))) (= 0 (wait 99999)) (done? 99999)
- (nilp (sleep 0)) (= 4 (alen (rng-seed 1))) (< (rand 10) 10) (flop (randf 0))
+ !(sleep 0) (= 4 (alen (rng-seed 1))) (< (rand 10) 10) (flop (randf 0))
  (: st (rng-seed 7) (= (A (rand-next st)) (A (rand-next st)))))
 
 ; === I/O & ports: in/out back prelude getc/read putc/puts/putn/putx ; per-port f-bifs
 ; fgetc fungetc feof fputc fputs fputn fputx fflush fread ; open/close (host) ; strin/strout
 ; /slurp/outstr/inspect ; fread = one datum/call (sentinel on EOF, the port on incomplete).
+; `dot` (sigil `.`) prints x to `out` -- raw bytes if a string (puts discipline) else the
+; inspect form (putx discipline) -- and RETURNS x, so `.x` taps a value mid-expression.
 (assert
  (strp (inspect out)) (= "hi" (slurp (strin '(104 105)))) (: o (strout 0) _ (fputx o 42) (= "42" (outstr o)))
  (= 1 (fread (strin '(49)) 99)) (= 'eof (fread (strin 0) 'eof)) (: p (strin '(40)) (= p (fread p 99))))
@@ -202,8 +215,8 @@
 ;  * boxfix: letrec* "capture by location" rewrite. c0 (gwen.c) calls `boxfix` like a macro;
 ;    ev.g calls `boxfix-core`. single source of truth.
 ;  * wev (ev.g only, not c0): source->source pre-pass before `ana` -- macro-expand, constant-
-;    fold pure globals, mark apply strategy, and flip `(? (nilp e) a b)` -> `(? e b a)`,
-;    dropping a nilp that just wraps a `?` test (the cond tests g_false(e), which IS nilp).
+;    fold pure globals, mark apply strategy, and flip `(? !e a b)` -> `(? e b a)`, dropping a
+;    `!`/nilp that just wraps a `?` test (the cond tests g_false(e), which IS `!e`).
 ;  * maps: %(k v..)/hasht expand to nested (put k v (hashn 0)); a map IS a lookup-lambda.
 ; THE EGG (gwen/egg.g, G_EGG_PRE/POST in gwen.h): compile the compiler with c0, recompile
 ; the whole prelude+ev corpus through ITSELF, install as `ev` -- at C compile time, no alloc.
@@ -231,7 +244,8 @@
 ;
 ; gwen/ = .g layers (prelude ev repl cli egg) baked into every frontend. glue: main.c
 ; (host -> out/host/gl); kmain.c + arch/<arch> (freestanding -> out/free: x86_64 aarch64
-; riscv64 loongarch64 playdate rp2040); wasm/. build codegen (gen_data elf2efi vmret
-; gen_claudemd) is gwen in tools/; tools/py/ are frozen golden refs (update on output change).
+; riscv64 loongarch64 playdate rp2040); wasm/. build codegen (gen_data elf2efi vmret) is
+; gwen in tools/; tools/py/ are frozen golden refs (update on output change). CLAUDE.md is
+; hand-maintained (wrap this file); there is no generator.
 ; STYLE: terse, dense; short names; comments only for non-obvious invariants. C freestanding,
 ; -Wall -Wextra -Werror.

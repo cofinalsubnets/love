@@ -55,9 +55,9 @@
   ; (any bif of matching arity), else leaves it. Built by scanning every global: a bif is
   ; found by thread shape (g_vm_ret0 terminator); fold eligibility from curated `names`.
   wevs (:
-   (cval e) (? (symp e) (X 0 0)               ; (const? . value): -1 head iff a literal
-               (atomp e) (X -1 e)
-               (&& (= (A e) '\) (atomp (BB e))) (X -1 (AB e))
+   (cval e) (? (symp e) (X 0 0)               ; (const? . value): 1 head iff a literal
+               (atomp e) (X 1 e)
+               (&& (= (A e) '\) (atomp (BB e))) (X 1 (AB e))
                (X 0 0))
    (bake v) (? (fixp v) v (list '\ v))           ; value -> source: fixnum bare else quote
    ; (op . arity) iff v is a bif. `same` (identity) not `=`: a non-bif global may peek to
@@ -70,7 +70,7 @@
      (: cv (cval (A a))
       (? (&& pure (A cv)) (go (hv (B cv)) (B a))
          (? (&& op (= n ar)) (X iop (X op as))           ; matching-arity bif -> inline
-            (&& (< 1 ar) (= n ar)) (X apx (X -1 x))      ; multi-arg fn -> n-ary apply
+            (&& (< 1 ar) (= n ar)) (X apx (X 1 x))       ; multi-arg fn -> n-ary apply
             (X apx (X 0 x))))))                          ; generic l2r apply
     (go v as))
    names '(+ - * / // mod << >> & | ^
@@ -81,7 +81,7 @@
            ssub scat string
            re im conj arg flo com
            sin cos log pow)
-   pureset (foldl (\ t s (: v (globals s) (? v (put v -1 t) t))) (hashn 0) names)
+   pureset (foldl (\ t s (: v (globals s) (? v (put v 1 t) t))) (hashn 0) names)
    (add t s) (: v (globals s)
     (? (fixp v) t
      (: o (opof v) p (pureset v)
@@ -130,13 +130,13 @@
    (napof v args) (? (fixp v) 0
     (? (same g_vm_cur (peek 0 v)) (: ar (peek 1 v) (&& (< 1 ar) (= (len args) ar))) 0))
    ; fold: un-shadowed global head -> handler (fold/iop/apx); else mark the call as an apx
-   ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (-1 = n-ary, 0 = l2r).
+   ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h (A x)
     (? (atomp (B x)) x                          ; (f) single element -> ana's (atomp b) handles
        (|| (nilp (symp h)) (memq h bnd)) (X apx (X 0 x))   ; local/computed head
        (: v (globals h) hd (wevs v)
         (? hd (hd x)
-           (napof v (B x)) (X apx (X -1 x))
+           (napof v (B x)) (X apx (X 1 x))
            (X apx (X 0 x))))))
    (wx x 0))
   (ana c x) (? (symp x)  (ava c x)

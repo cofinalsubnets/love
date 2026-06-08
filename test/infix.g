@@ -62,7 +62,7 @@
    ;   left-assoc binary  → pop on prec >=
    ;   right-assoc binary → pop on prec >
    (should_pop top new) (?
-    (= 'monadic (AB top)) -1
+    (= 'monadic (AB top)) 1
     (: tp (prec top) np (prec new)
      (? (= 'left (assoc top)) (>= tp np) (> tp np))))
 
@@ -77,7 +77,7 @@
      (apply_pops new_out (B ops) pred))
     (X out ops))
 
-   (drain out ops)          (apply_pops out ops (\ _ -1))
+   (drain out ops)          (apply_pops out ops (\ _ 1))
    (pop_higher out ops new) (apply_pops out ops (\ top (should_pop top new)))
 
    ; Shunting-yard step. state ∈ {operand operator}.

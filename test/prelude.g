@@ -2,7 +2,7 @@
    (diag f x) (f x x)
    m (map (diag +) l)
    n (map (* 2) l)
-   (even n) (? n (odd (dec n)) -1)
+   (even n) (? n (odd (dec n)) 1)
    (odd n) (? n (even (dec n)))
    eo (part even l)
    es (A eo)

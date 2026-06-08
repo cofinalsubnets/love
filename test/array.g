@@ -113,9 +113,10 @@
  (nilp (arr f64 '(2 2)))                ; zero float array -> false
  (nilp (arr i64 '(0)))                  ; empty array -> vacuously false
  (nilp 0.0)                             ; boxed 0.0 -> false (was a truthy wart)
- !(nilp 2.5)                         ; nonzero float -> true
- !(nilp -5)                          ; negatives are true
+ !(nilp 2.5)                         ; positive float -> true
+ (nilp -5)                           ; a negative real is now FALSE (<= 0)
  !(nilp (+ (arr i64 '(2)) 1))        ; nonzero array -> true
+ !(nilp @(-3 -4))                    ; a NEGATIVE array stays true (norm, sign squares away)
  (= 1 (? (arr i64 '(3)) 0 1))         ; zero array takes the false arm
  (= 0 (? (+ (arr i64 '(3)) 1) 0 1))    ; nonzero array takes the true arm
  ; a single non-zero component makes the norm non-zero (truthy), per the tower:
