@@ -13,10 +13,9 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 .PHONY: test test_host test_all test_tools test_gl0
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench sim
 test: test_host test_gl0
-# test_kernel is intentionally NOT in test/test_all: it currently hangs (the baked
-# corpus read back through a strin port wedges the freestanding kernel). Run it
-# explicitly with `make test_kernel`. See the TODO above its rule below.
-test_all: test_host test_gl0 test_tools
+# test_kernel is in test_all but NOT the fast `test` target: it needs qemu + an
+# OVMF download and is x86_64-only (a no-op on other hosts). See its rule below.
+test_all: test_host test_gl0 test_tools test_kernel
 # gl0 bakes prelude+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prelude (c0), run the corpus, bootstrap ev.g
 # through c0, run the corpus again via the self-hosted ev. Built with -Dg_tco=0,
@@ -403,20 +402,16 @@ run-efi: $(ko)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 run-efi-headless: $(ko)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) $(k_efi_drive_$a) -display none -no-reboot
 
-# --- headless serial test (WIP -- NOT wired into test/test_all) ----------------
-# !!! HIGH-PRIORITY TODO: this currently HANGS and is parked. !!!
-# The K_TEST kernel boots fine and runs the baked corpus, but wedges at ~assert 201
-# (array.g) when the corpus is read back through a strin port. Confirmed NOT the
-# cause: the build (compiles+links+boots), lcat2 minification, and high bytes
-# (octal-escaped). Confirmed working alternatives, isolating the bug to
-# kernel+strin: the SAME corpus passes via strin on the host (1644) AND via
-# serial-feed on the kernel (the earlier shelled-out version got 1668). So the
-# fault is a freestanding-kernel strin/reader (or GC-under-the-pinned-~1.5MB
-# s2cl charlist) interaction. Next steps to try: (1) bump the kernel pool / qemu
-# RAM to rule memory in/out; (2) trace fread/fungetc on a strin port on the kernel
-# vs host around the hang; (3) if unfixable, fall back to feeding the corpus over
-# serial (restore a shell driver, since the `run` bif can't do the bidirectional
-# READY-handshake feeding).
+# --- headless serial test (wired into test_all; x86_64 + qemu only) ------------
+# The K_TEST kernel boots, runs the baked corpus through the self-hosted ev, and
+# PASSES (1708/1708 in ~2.5s). Two bugs were behind the long-parked hang:
+#  (1) the cooperative scheduler deadlocked -- a task blocked in `(wait p)` was
+#      saved by yield_sw parked on the kernel's serial input fd (a stale
+#      next_wait_fd), so find_runnable never rescheduled it (fixed in gwen.c
+#      g_vm_wait: clear next_wake_at/next_wait_fd before yielding);
+#  (2) five float-sqrt asserts failed because libc/math.c pow(x,0.5) used
+#      exp(0.5*log x) (drifts a few ULP) instead of the exact Newton sqrt(), and
+#      cos_k's Taylor ran a couple terms short at the pi/4 boundary.
 #
 # A K_TEST kernel bakes the test corpus in (out/lib/ktests.h, baked VERBATIM by
 # tools/lcatv.g -- lcat's inspect-reprint diverges when the corpus is read back

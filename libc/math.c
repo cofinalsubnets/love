@@ -62,17 +62,19 @@ double log(double x) {
           + t2 * (1.0/9 + t2 * (1.0/11 + t2 * (1.0/13)))))));
  return p + e * m_ln2; }
 
-// sin/cos kernels. |x| <= pi/4. Degree-11 Taylor for sin, degree-10
-// for cos, both ~3e-14 error in range.
+// sin/cos kernels. |x| <= pi/4. Degree-13 Taylor for sin, degree-14 for
+// cos. The dropped tail term at the pi/4 boundary sets the error floor, so
+// cos needs through x^14/14! (the x^12 term alone is ~1.5e-10 at pi/4, which
+// blew the 1e-12 `close` tolerance on cos(pi/4)); now both are < 1e-14 in range.
 static double sin_k(double x) {
  double x2 = x * x;
  return x * (1 + x2 * (-1.0/6 + x2 * (1.0/120 + x2 * (-1.0/5040
-          + x2 * (1.0/362880 + x2 * (-1.0/39916800)))))); }
+          + x2 * (1.0/362880 + x2 * (-1.0/39916800 + x2 * (1.0/6227020800))))))); }
 
 static double cos_k(double x) {
  double x2 = x * x;
  return 1 + x2 * (-0.5 + x2 * (1.0/24 + x2 * (-1.0/720 + x2 * (1.0/40320
-          + x2 * (-1.0/3628800))))); }
+          + x2 * (-1.0/3628800 + x2 * (1.0/479001600 + x2 * (-1.0/87178291200))))))); }
 
 // Reduce x mod 2pi via fmod-style subtraction, then quadrant pick into
 // [-pi/4, pi/4] and dispatch to the kernel. Loses precision for very
@@ -136,6 +138,12 @@ double pow(double x, double y) {
   double r = 1, b = x;
   for (; n; n >>= 1, b *= b) if (n & 1) r *= b;
   return yi < 0 ? 1 / r : r; }
+ // Square root is the common fractional exponent (gwen spells sqrt as ((/ 1 2) x)).
+ // The Newton sqrt below is ~1 ulp and bit-exact on perfect squares, whereas
+ // exp(0.5*log x) drifts several ULP (pow(9,0.5) -> 2.99999999999583, pow(30,0.5)
+ // off by 7e-9), so route 0.5 / -0.5 through it.
+ if (y == 0.5)  return sqrt(x);
+ if (y == -0.5) return 1 / sqrt(x);
  if (x < 0) return M_NAN;                     // non-integer exponent, negative base
  return exp(y * log(x)); }
 
