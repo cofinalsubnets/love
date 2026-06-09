@@ -651,7 +651,7 @@ struct g *g_defn(struct g*f, struct g_def const*defs, uintptr_t n) {
 bifs(built_in_function);
 
 static g_vm(_g_vm_yield_c) { return Pack(f), f; }
-static union u yield_c[] = { {_g_vm_yield_c} };
+static union u const yield_c[] = { {_g_vm_yield_c} };
 
 // Default continuation installed at f->k. A throw enters it with the thrown
 // status encoded into f (see gtrap2 in i.h); it re-encodes that status and
@@ -661,7 +661,7 @@ static g_vm(_g_vm_throw_c) {
  enum g_status s = g_code_of(f);
  f = g_core_of(f);
  return Pack(f), encode(f, s); }
-static union u throw_c[] = { {_g_vm_throw_c} };
+static union u const throw_c[] = { {_g_vm_throw_c} };
 
 static struct g_def const def1[] = { bifs(biff) insts(i_entry)};
 
@@ -674,8 +674,8 @@ char const *g_bif_name(intptr_t x) {
 static struct g *g_ini_0(struct g*f, uintptr_t len0, void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  memset(f, 0, sizeof(struct g));
  f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
- f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield_c, f->t0 = g_clock();
- f->k = throw_c;
+ f->hp = f->end, f->sp = (word*) f + len0, f->ip = (union u*) yield_c, f->t0 = g_clock();
+ f->k = (union u*) throw_c;
  // dict + macro maps (lookup-lambdas) then the main task thread.
  if (g_ok(f = map_new(f)) && g_ok(f = map_new(f)) && g_ok(f = g_have(f, 6))) {
   union u *M = bump(f, 6);            // sp[0]=macro, sp[1]=dict (no GC since g_have)
@@ -1551,7 +1551,7 @@ g_vm(g_vm_set_bcomb) { f->bcomb = Sp[0]; return Ip++, Continue(); }
 static g_vm(numap_swap) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
  return Ap(g_vm_ap, f); }
-union u numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
+union u const numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
 // numap/numtap are tail-called (Ap) from the fused arg/quote handlers, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: g_vm_gc
@@ -1566,13 +1566,13 @@ static g_vm(g_vm_numap) {
  f->numap = resolve_handler(f, f->numap, f->numap_sym);
  word n = Sp[1], x = Sp[0], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = n, dst[1] = f->numap, dst[2] = x, dst[3] = ret;
- return Sp = dst, Ip = numap_drive, Continue(); }
+ return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 static g_vm(g_vm_numtap) {
  NumapHave(g_vm_numtap);
  f->numap = resolve_handler(f, f->numap, f->numap_sym);
  word fs = getnum(Ip[1].x), n = Sp[1], x = Sp[0], *dst = &Sp[fs + 2] - 3, ret = Sp[fs + 2];
  dst[0] = n, dst[1] = f->numap, dst[2] = x, dst[3] = ret;
- return Sp = dst, Ip = numap_drive, Continue(); }
+ return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // `+`/`*` over a lambda operand: build the combinator partial (f->scomb/f->bcomb f g)
 // and leave it as the result. Mirrors g_vm_numap's frame -- [f, comb, g, ret=Ip+1]
@@ -1584,13 +1584,13 @@ static g_vm(g_vm_addl) {
  f->scomb = resolve_handler(f, f->scomb, f->scomb_sym);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = f->scomb, dst[2] = ga, dst[3] = ret;
- return Sp = dst, Ip = numap_drive, Continue(); }
+ return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 static g_vm(g_vm_mull) {
  Have(2);
  f->bcomb = resolve_handler(f, f->bcomb, f->bcomb_sym);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = f->bcomb, dst[2] = ga, dst[3] = ret;
- return Sp = dst, Ip = numap_drive, Continue(); }
+ return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // apply function to one argument
 g_vm(g_vm_ap) {
@@ -1758,7 +1758,7 @@ g_vm(g_vm_yield_sw) {
 
 g_vm(g_vm_yield_bif) { return Ip++, Ap(g_vm_yield_sw, f); }
 g_vm(g_vm_task_exit) { return Ap(g_vm_yield_sw, f); }
-static union u spawn_body[] = { {g_vm_ap}, {.ap = g_vm_task_exit} };
+static union u const spawn_body[] = { {g_vm_ap}, {.ap = g_vm_task_exit} };
 g_vm(g_vm_spawn) {
  Have(8);
  // New task node N: [next, saved_ip=spawn_body, pid, wake_at=0, wait_io=0, stack[0..1]=x,fn, tag]
@@ -3680,7 +3680,7 @@ static g_vm(data_num_apply) {
  f->numap = resolve_handler(f, f->numap, f->numap_sym);
  word n = word(Ip), x = Sp[0], ret = Sp[1], *dst = Sp - 2;
  dst[0] = n, dst[1] = f->numap, dst[2] = x, dst[3] = ret;
- return Sp = dst, Ip = numap_drive, Continue(); }
+ return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // ((a . b) f) == (f a b): a pair is its own Church eliminator (cons = \a b f.f a b).
 // Re-enter the apply protocol via a static driver thread: lay the stack as the two
@@ -3690,13 +3690,13 @@ static g_vm(data_num_apply) {
 static g_vm(pair_swap) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
  return Ap(g_vm_ap, f); }
-static union u pair_drive[] = { {g_vm_ap}, {.ap = pair_swap}, {.ap = g_vm_ret0} };
+static union u const pair_drive[] = { {g_vm_ap}, {.ap = pair_swap}, {.ap = g_vm_ret0} };
 static g_vm(data_pair_apply) {
  Have(2);
  word a = A(Ip), b = B(Ip), fn = Sp[0];     // re-read after the Have guard; no alloc past here
  Sp -= 2;                                    // grow the frame to [a, fn, b, ret]
  Sp[0] = a, Sp[1] = fn, Sp[2] = b;           // Sp[3] = ret (was Sp[1]) stays put
- return Ip = pair_drive, Continue(); }
+ return Ip = (union u*) pair_drive, Continue(); }
 
 // === the three generic-op dispatch matrices, adjacent ======================
 // All indexed by g_kind (g_apply_mx's row by g_typ, the data-kind subrange). The kind
@@ -4505,7 +4505,7 @@ struct g *g_big_quot_true(struct g *f) {
 // (it blocks the sibcall), which rules out load_int_mag's scratch array. Setup
 // (which may use scratch) is hoisted into a plain function, g_bmul_setup.
 #define BMUL_CHUNK (1 << 14)
-static union u bmul_loop[1] = { { .ap = g_vm_bmul } };
+static union u const bmul_loop[1] = { { .ap = g_vm_bmul } };
 
 // Materialize integer x (fixnum/box/bignum) as a heap g_big, bumping *hp for the
 // fixnum/box case; a bignum is returned in place. Plain function: scratch is fine.
@@ -4542,7 +4542,7 @@ static struct g *g_bmul_setup(struct g *f) {
  f->sp -= 3;                                       // [i, r, ret_ip, abig, bbig]
  f->sp[0] = putnum(0), f->sp[1] = word(k), f->sp[2] = word(ret);
  f->sp[3] = word(abig), f->sp[4] = word(bbig);
- f->ip = bmul_loop;
+ f->ip = (union u*) bmul_loop;
  return f; }
 
 g_vm(g_vm_bmul_start) {

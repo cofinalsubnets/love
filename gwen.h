@@ -269,7 +269,7 @@ enum q g_kind(word);
 // it; the handlers + the table itself live in gwen.c. Row indexed by the full kind
 // (g_typ returns one of the five data kinds), so the first dimension is KN, not G_DATA_N.
 extern g_vm_t *g_apply_mx[KN][KN];
-extern union u numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
+extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
 g_vm_t g_vm_ap, g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big; // sentinels + ap: data.c & inline predicates
 uintptr_t hash(struct g*, word), g_tuple_bytes(struct g_tuple*);
 #define str(_) ((struct g_str*)(_))
