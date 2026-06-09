@@ -1,4 +1,4 @@
-;; mutable hash-table throughput (see bench/benches/hash.g). checksum = N*N.
+;; mutable hash-table throughput (see bench/benches/hash.l). checksum = N*N.
 (import sys)
 (sys.path.insert 0 "lib")
 (import bench [bench])

@@ -1,4 +1,4 @@
--- closure / higher-order stress (see bench/benches/closure.g). checksum = sum 3i.
+-- closure / higher-order stress (see bench/benches/closure.l). checksum = sum 3i.
 package.path = (arg[0]:match("(.*/)") or "./") .. "../lib/?.lua;" .. package.path
 local bench = require("bench")
 local function twice(f) return function(x) return f(f(x)) end end

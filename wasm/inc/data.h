@@ -5,7 +5,7 @@
 // doesn't apply: function pointers aren't ordered integers here. Instead compare
 // the ap against each self-quote sentinel directly. ap is a g_vm_t* (function
 // pointer), so this is equality on pointers, not a switch (which C forbids on
-// non-integer types). Keep these in enum q order (gwen.h: tuple/big/two/text/sym).
+// non-integer types). Keep these in enum q order (ll.h: tuple/big/two/text/sym).
 static g_inline bool in_data(void *a) {
  g_vm_t *p = a;
  return p == g_vm_two || p == g_vm_tuple || p == g_vm_sym

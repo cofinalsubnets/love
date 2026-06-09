@@ -1,4 +1,4 @@
-;; Bell numbers in base 36 (see bench/benches/bell.g) -- a bignum-tower stress.
+;; Bell numbers in base 36 (see bench/benches/bell.l) -- a bignum-tower stress.
 (load-file "lib/bench.clj")
 (def digits "0123456789abcdefghijklmnopqrstuvwxyz")
 (def base (count digits))

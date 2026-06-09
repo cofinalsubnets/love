@@ -1,6 +1,6 @@
 require_relative "../lib/bench"
 
-# mutable hash-table throughput (see bench/benches/hash.g). checksum = N*N.
+# mutable hash-table throughput (see bench/benches/hash.l). checksum = N*N.
 N = 10000
 
 def work

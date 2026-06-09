@@ -1,5 +1,5 @@
 #lang racket/base
-;; closure / higher-order stress (see bench/benches/closure.g). checksum = sum 3i.
+;; closure / higher-order stress (see bench/benches/closure.l). checksum = sum 3i.
 (require "../lib/bench.rkt")
 (define N 100000)
 (define (twice f) (lambda (x) (f (f x))))

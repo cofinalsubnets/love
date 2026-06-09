@@ -44,7 +44,7 @@ SECTIONS
     .text : ALIGN(0x1000) {
         *(.text.head)
         *(.text .text.*)
-        /* gwen data self-quote sentinels: kept contiguous and in enum
+        /* ll data self-quote sentinels: kept contiguous and in enum
            order (gwen_data.NN) so g_typ() recovers a kind from an ap's
            slot index. Mirrors g/data.ld for the host link. */
         . = ALIGN(16);

@@ -2,7 +2,7 @@
 #include "limine.h"
 #endif
 #include "k.h"
-#include "gwen.h"
+#include "ll.h"
 #include "cb.h"
 #include <stdarg.h>
 #include <limits.h>
@@ -495,7 +495,7 @@ static struct g_def defs[] = {
   {"color", (intptr_t) nif_color} };
 
 #ifdef K_TEST
-// The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.g
+// The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.l
 // (Makefile out/lib/ktests.h). Bound to the global `tests` and run through ev at boot.
 static char const ktests[] =
 #include "ktests.h"
@@ -544,9 +544,9 @@ void kmain(void) {
   struct g_def td[] = {{"tests", g_pop1(g)}};
   g = g_defn(g, td, LEN(td));
 #endif
-  // load the prelude, then run the gwen read-eval-print loop. its line
-  // editor (in repl.g) drives the console; PS/2 keyboard and serial
-  // input both arrive as ANSI escape sequences the gwen edev decodes.
+  // load the prelude, then run the ll read-eval-print loop. its line
+  // editor (in repl.l) drives the console; PS/2 keyboard and serial
+  // input both arrive as ANSI escape sequences the ll edev decodes.
   g_fin(g_evals_(g, "("
 #include "egg.h"
  G_EGG_PRE
@@ -558,7 +558,7 @@ void kmain(void) {
 #ifdef K_TEST
  // test build: read each form out of the baked `tests` string (string -> charlist
  // -> strin port -> fread) and eval it via the self-hosted ev -- the same shape as
- // the host's stdin runner. zz-fin.g prints the summary and (exit 1)s on failure.
+ // the host's stdin runner. zz-fin.l prints the summary and (exit 1)s on failure.
  "(: p (strin ((: (g i) (? (< i (pin tests)) (X (get 0 i tests) (g (+ 1 i))))) 0))"
  " ((: (g e) (: r (fread p e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (nom 0)))"
 #else

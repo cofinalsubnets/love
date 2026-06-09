@@ -209,7 +209,7 @@ static char const *fault_kind(uint64_t esr) {
 
 // panic-path console output. kputc stamps a char into the framebuffer
 // ring buffer (kcb, when present) and mirrors it to serial; it takes no
-// gwen state, so it runs from a fault handler with no live `struct g`.
+// ll state, so it runs from a fault handler with no live `struct g`.
 static void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
 static void kputs(char const *s) { while (*s) kputc(*s++); }
 static void kputn(uintptr_t n, int base) {

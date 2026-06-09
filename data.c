@@ -1,4 +1,4 @@
-#include "gwen.h"
+#include "ll.h"
 #include <data.h>
 
 // The data-type sentinels. Each is the `ap` (first word) of a data kind's heap
@@ -6,13 +6,13 @@
 // in the pinned gwen_data section -- a single shift). Applying a data value lands
 // on its sentinel, which tail-jumps through the apply matrix with one static index
 // (its own kind, g_typ(Ip)) and one dynamic index (the argument's kind,
-// g_kind(Sp[0])). The matrix and its handlers live in gwen.c.
+// g_kind(Sp[0])). The matrix and its handlers live in ll.c.
 //
 // The dispatch (incl. g_typ) lives in ONE shared callee, data_apply; the sentinels
 // are tiny, byte-identical tail calls into it. This is deliberate: the section
 // STRIDE is the sentinel-body size, and g_typ divides by that stride to recover a
 // kind -- but g_typ is reflected out of the stride into the generated data.h
-// (tools/gen_data.g). If a sentinel body inlined g_typ, its size would depend on
+// (tools/gen_data.l). If a sentinel body inlined g_typ, its size would depend on
 // data.h, which depends on its size: a feedback loop where any change to g_typ /
 // g_kind / opt flags resizes the bodies and silently desyncs the baked stride from
 // the real one (a stale build then mis-routes every apply). Keeping g_typ out of

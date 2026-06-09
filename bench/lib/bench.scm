@@ -1,4 +1,4 @@
-;;; guile benchmark harness -- mirrors bench/bench.g.
+;;; guile benchmark harness -- mirrors bench/bench.l.
 ;;; (bench name work) auto-scales the repetition count (doubling until the run
 ;;; clears bench-min-ms), then prints one line matching the other harnesses:
 ;;;     <name> <lang> <reps> <ms> <checksum>

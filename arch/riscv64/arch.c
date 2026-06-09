@@ -103,7 +103,7 @@ static void rearm_timer(void) {
 
 // Standalone string + hex printers used by the panic path -- no
 // dependencies beyond serial_putc, so they work even when the heap,
-// framebuffer console, and gwen state are unusable.
+// framebuffer console, and ll state are unusable.
 static void pserial(char const *s) {
   while (*s) serial_putc(*s++); }
 static void pserialx(uint64_t v) {
@@ -144,7 +144,7 @@ void k_trap_c(uint64_t cause, uint64_t epc, uint64_t tval) {
   nested = 1;
   // The fault reporter is the panic channel: it must touch nothing
   // but the SBI console. The framebuffer console (gputs/gputn) needs
-  // a live gwen state, which we do not have here; serial_putc is
+  // a live ll state, which we do not have here; serial_putc is
   // standalone (one ecall per byte) and works whether or not the
   // heap, console buffer, and framebuffer ever came up.
   pserial("\n*** CPU exception ("); pserial(fault_kind(cause));

@@ -1,16 +1,16 @@
 # Maintainer: gwem <cofinalsubnets@gmail.com>
-pkgname=gwen-git
+pkgname=ll-git
 pkgver=0.0.0
 pkgrel=1
 pkgdesc="list expression interpreter"
 arch=(x86_64 i686 aarch64 armv7h)
-url="https://github.com/cofinalsubnets/gwen"
+url="https://github.com/cofinalsubnets/ll"
 license=(Unlicense)
 depends=('glibc')
 makedepends=('git')
-provides=('gwen')
+provides=('ll')
 _gitname="${pkgname}"
-source=("${_gitname}::git+https://github.com/cofinalsubnets/gwen.git")
+source=("${_gitname}::git+https://github.com/cofinalsubnets/ll.git")
 sha256sums=(SKIP)
 
 pkgver() {

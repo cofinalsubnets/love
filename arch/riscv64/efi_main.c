@@ -38,13 +38,13 @@ struct k_boot kboot;
 // free list. Once kmallocw carves something from that chunk, every C
 // call we make pushes a frame on top of memory we have already given
 // away -- which is benign while the call depth stays shallow but
-// silently corrupts the heap once gwen's evaluator recurses. The fix is
+// silently corrupts the heap once ll's evaluator recurses. The fix is
 // to stop using the firmware stack at all: efi_main does the last
 // firmware-state operations (GOP, GetMemoryMap, ExitBootServices) on
 // the inherited stack, then switches sp to the top of k_stack[] -- a
 // .bss buffer that lives inside the kernel image and is never part of
 // the free list -- before tail-calling kmain. 64 KiB matches what the
-// other ports inherit from their bootloader; deep enough for gwen's
+// other ports inherit from their bootloader; deep enough for ll's
 // recursive descent + the worst-case GC walk.
 static char k_stack[64 * 1024] __attribute__((aligned(16)));
 

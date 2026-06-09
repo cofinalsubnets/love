@@ -1,4 +1,4 @@
-;; mutable hash-table throughput (see bench/benches/hash.g). checksum = N*N.
+;; mutable hash-table throughput (see bench/benches/hash.l). checksum = N*N.
 (set package.path (.. "lib/?.lua;" package.path))
 (local bench (require :bench))
 (local N 10000)

@@ -1,4 +1,4 @@
--- mutable hash-table throughput (see bench/benches/hash.g). checksum = N*N.
+-- mutable hash-table throughput (see bench/benches/hash.l). checksum = N*N.
 -- keys are sparse (stride 97) so they land in the table's hash part, not the
 -- contiguous array part.
 package.path = (arg[0]:match("(.*/)") or "./") .. "../lib/?.lua;" .. package.path

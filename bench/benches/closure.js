@@ -1,4 +1,4 @@
-// closure / higher-order stress (see bench/benches/closure.g). checksum = sum 3i.
+// closure / higher-order stress (see bench/benches/closure.l). checksum = sum 3i.
 const { bench } = require("../lib/bench");
 const twice = (f) => (x) => f(f(x));
 const adder = (i) => (x) => x + i;

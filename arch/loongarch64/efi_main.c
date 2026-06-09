@@ -55,7 +55,7 @@ struct k_boot kboot;
 // into the kernel free list. Once kmallocw carves something from that
 // chunk, every C call we make pushes a frame on top of memory we have
 // already given away -- benign while the call depth stays shallow,
-// silently corrupting the heap once gwen's evaluator recurses. The fix
+// silently corrupting the heap once ll's evaluator recurses. The fix
 // is to stop using the firmware stack at all: efi_main does the last
 // firmware-state operations (GOP, GetMemoryMap, ExitBootServices) on
 // the inherited stack, then switches sp to the top of k_stack[] -- a

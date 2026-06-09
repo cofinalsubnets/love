@@ -9,7 +9,7 @@ emcc = $(CCACHE) $(EMCC)
 o = ../out/wasm
 
 # g.c was split into per-concern translation units (kernel/*.c); build them all.
-g_c = ../gwen.c ../data.c
+g_c = ../ll.c ../data.c
 g_h = $(wildcard ../*.h)
 
 # One object per source so an edit recompiles just that TU (and so ccache
@@ -35,20 +35,20 @@ EMFLAGS = \
   -sEXPORTED_FUNCTIONS=_gwen_init,_gwen_eval,_gwen_out_ptr,_gwen_out_len,_gwen_out_reset,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAPU32
 
-all: gwen.js
+all: ll.js
 
 # prelude.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
 # the browser feeds the REPL through gwen_eval).
-../out/lib/egg.h: ../gwen/egg.g
-../out/lib/prelude.h: ../gwen/prelude.g
-../out/lib/ev.h: ../gwen/ev.g
+../out/lib/egg.h: ../ll/egg.l
+../out/lib/prelude.h: ../ll/prelude.l
+../out/lib/ev.h: ../ll/ev.l
 ../out/lib/egg.h ../out/lib/prelude.h ../out/lib/ev.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
 # Link step: emcc's link is multi-input, so ccache can't cache it -- use
 # bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
-gwen.js: $(objs)
+ll.js: $(objs)
 	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
 $(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prelude.h ../out/lib/ev.h $(g_h)
@@ -63,6 +63,6 @@ serve: all
 	python3 -m http.server 8000
 
 clean:
-	rm -rf gwen.js gwen.wasm $(o)
+	rm -rf ll.js ll.wasm $(o)
 
 .PHONY: all serve clean

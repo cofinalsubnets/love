@@ -1,4 +1,4 @@
-;; binary-trees allocation/GC stress (see bench/benches/tree.g). checksum = 2^D-1.
+;; binary-trees allocation/GC stress (see bench/benches/tree.l). checksum = 2^D-1.
 (import sys)
 (sys.path.insert 0 "lib")
 (import bench [bench])

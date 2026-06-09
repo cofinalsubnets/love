@@ -1,5 +1,5 @@
 #lang racket/base
-;;; racket benchmark harness -- mirrors bench/bench.g. one line out:
+;;; racket benchmark harness -- mirrors bench/bench.l. one line out:
 ;;;     <name> <lang> <reps> <ms> <checksum>          label from BENCH_LANG.
 (provide bench sum-list)
 (define bench-min-ms 200)

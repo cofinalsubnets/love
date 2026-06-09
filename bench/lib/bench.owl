@@ -1,5 +1,5 @@
-;;; owl lisp benchmark harness -- mirrors bench/bench.g. owl is purely
-;;; functional: no load (this file is cat-ed ahead of each bench, like gwen),
+;;; owl lisp benchmark harness -- mirrors bench/bench.l. owl is purely
+;;; functional: no load (this file is cat-ed ahead of each bench, like ll),
 ;;; immutable strings, and `ff` maps for memo tables. (time-ms) -> epoch ms;
 ;;; string-ref yields the code point directly. one line out:
 ;;;     <name> <lang> <reps> <ms> <checksum>

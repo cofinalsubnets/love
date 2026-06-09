@@ -1,4 +1,4 @@
-;; mandelbrot escape counts over a 64x64 grid (see bench/benches/float.g).
+;; mandelbrot escape counts over a 64x64 grid (see bench/benches/float.l).
 (import sys)
 (sys.path.insert 0 "lib")
 (import bench [bench])

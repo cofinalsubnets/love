@@ -1,6 +1,6 @@
 Code.require_file("../lib/bench.exs", __DIR__)
 
-# Bell numbers in base 36 (see bench/benches/bell.g). Fresh memo maps per rep,
+# Bell numbers in base 36 (see bench/benches/bell.l). Fresh memo maps per rep,
 # threaded functionally; checksum = total characters across all rendered lines.
 defmodule Bell do
   @digits "0123456789abcdefghijklmnopqrstuvwxyz"

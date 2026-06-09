@@ -142,7 +142,7 @@ static void timer_init(void) {
 
 // Standalone string + hex printers used by the panic path -- no
 // dependencies beyond serial_putc, so they work even when the heap,
-// framebuffer console, and gwen state are unusable.
+// framebuffer console, and ll state are unusable.
 static void pserial(char const *s) {
   while (*s) serial_putc(*s++); }
 static void pserialx(uint64_t v) {

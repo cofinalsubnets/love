@@ -1,4 +1,4 @@
-;; Mutable hash-table throughput (see bench/benches/hash.g). Clojure's core maps
+;; Mutable hash-table throughput (see bench/benches/hash.l). Clojure's core maps
 ;; are persistent, so this uses java.util.HashMap for a true mutable table.
 (load-file "lib/bench.clj")
 (defn hash-run [n]

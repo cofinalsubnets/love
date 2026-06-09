@@ -41,7 +41,7 @@ pd_o = $(pd_local_o) $(pd_shared_o) $(pd_sdk_o)
 # The simulator .so (host x86_64, dev-only) is a single-shot compile with no
 # intermediate data.o, so it stays on the portable header.
 data_h = $(o)/data.h
-# Run through the host interpreter $m (= $(R)/out/host/gl), built on demand below.
+# Run through the host interpreter $m (= $(R)/out/host/ll), built on demand below.
 # py/gen_data.py is the cross-checked reference (make test_tools).
 gen_data = $(R)/tools/gen_data.$x
 
@@ -51,10 +51,10 @@ pd_cpflags = \
   -gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas \
   -fverbose-asm -Wdouble-promotion -mword-relocations -fno-common \
   -ffunction-sections -fdata-sections -Wa,-ahlms=$(o)/$(notdir $(<:.c=.lst))
-# gwen_pd.lds is the SDK link_map.ld plus the data self-quote sentinel
+# ll_pd.lds is the SDK link_map.ld plus the data self-quote sentinel
 # block inlined into .text (see that file); used in its place because the
 # stock SDK script orphans the sentinels and leaves __start_/__stop_ undefined.
-pd_lds = gwen_pd.lds
+pd_lds = ll_pd.lds
 pd_ldflags = \
   -nostartfiles $(pd_mcflags) -T$(pd_lds) \
   -Wl,-Map=$(o)/pdex.map,--cref,--gc-sections,--no-warn-mismatch,--emit-relocs
@@ -71,7 +71,7 @@ sim: $(o)/$n.pdx
 clean:
 	rm -rf $(o)
 
-# A lib header (and the host gl, which runs gen_data.g) stand in for "the
+# A lib header (and the host ll, which runs gen_data.l) stand in for "the
 # host build ran"; built on demand here so a standalone `make -C playdate` works.
 # (playdate/main.c embeds no prelude -- this is just a build-order sentinel.)
 $(R)/out/lib/prelude.h:
@@ -104,13 +104,13 @@ $(o)/data.h: $(o)/data.o $(gen_data) | $(m)
 # $(R)/%.c rule so a local source wins the object-name race against a
 # same-named top-level file: top-level main.c is the host frontend, which
 # must not be compiled here (it pulls in POSIX headers like <termios.h>).
-# Shared sources fall through to the $(R) rule (no local gwen.c/data.c exist).
+# Shared sources fall through to the $(R) rule (no local ll.c/data.c exist).
 $(o)/%.o: %.c $(data_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
-# Shared C sources from gwen.c/data.c and font/.
+# Shared C sources from ll.c/data.c and font/.
 $(o)/%.o: $(R)/%.c $(data_h) | $(R)/out/lib/prelude.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)

@@ -1,4 +1,4 @@
-# elixir benchmark harness -- mirrors bench/bench.g.
+# elixir benchmark harness -- mirrors bench/bench.l.
 # Bench.run(name, work) auto-scales the repetition count (doubling until the run
 # clears @min_ms), then prints one line matching the other harnesses:
 #     <name> <lang> <reps> <ms> <checksum>

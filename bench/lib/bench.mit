@@ -1,4 +1,4 @@
-;;; mit-scheme benchmark harness -- mirrors bench/bench.g. (runtime) is CPU
+;;; mit-scheme benchmark harness -- mirrors bench/bench.l. (runtime) is CPU
 ;;; seconds (no wall clock); fine for these CPU-bound loops. one line out:
 ;;;     <name> <lang> <reps> <ms> <checksum>          label from BENCH_LANG.
 (define bench-min-ms 200)

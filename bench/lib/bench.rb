@@ -1,6 +1,6 @@
-# ruby benchmark harness -- mirrors bench/bench.g.
+# ruby benchmark harness -- mirrors bench/bench.l.
 # bench(name) { work } auto-scales the repetition count (doubling until the run
-# clears MIN_MS), then prints one line matching the gwen/python harnesses:
+# clears MIN_MS), then prints one line matching the ll/python harnesses:
 #     <name> ruby <reps> <ms> <checksum>
 MIN_MS = 200.0
 

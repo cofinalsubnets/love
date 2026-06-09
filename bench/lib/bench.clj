@@ -1,4 +1,4 @@
-;; clojure benchmark harness -- mirrors bench/bench.g. (System/nanoTime) wall
+;; clojure benchmark harness -- mirrors bench/bench.l. (System/nanoTime) wall
 ;; clock; one line out: <name> <lang> <reps> <ms> <checksum> (println is
 ;; space-separated). label from BENCH_LANG (default "clojure").
 (def bench-min-ms 200.0)

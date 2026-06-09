@@ -1,6 +1,6 @@
 Code.require_file("../lib/bench.exs", __DIR__)
 
-# binary-trees allocation/GC stress (see bench/benches/tree.g). checksum = 2^D-1.
+# binary-trees allocation/GC stress (see bench/benches/tree.l). checksum = 2^D-1.
 defmodule Tree do
   def mk(0), do: nil
   def mk(d), do: {mk(d - 1), mk(d - 1)}

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """vmret.py -- flag g_vm_* VM-instruction handlers that contain a ret.
 
-The gwen VM is threaded: every `g_vm_*` opcode handler is supposed to be
+The ll VM is threaded: every `g_vm_*` opcode handler is supposed to be
 tail-call optimised into a `jmp` to the next handler, never a normal
 `ret`. A handler that the compiler failed to TCO emits a real `ret` in
 its epilogue, which silently breaks the threaded dispatch. This tool

@@ -1,4 +1,4 @@
-;;; bigloo benchmark harness -- mirrors bench/bench.g. (current-microseconds)
+;;; bigloo benchmark harness -- mirrors bench/bench.l. (current-microseconds)
 ;;; -> us; ms = us/1000. one line out: <name> <lang> <reps> <ms> <checksum>.
 (define bench-min-ms 200)
 (define bench-lang "bigloo")

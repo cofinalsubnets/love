@@ -1,4 +1,4 @@
-#include "gwen.h"
+#include "ll.h"
 #include "cb.h"
 
 void cb_fill(struct cb *c, uint8_t _) {
@@ -16,7 +16,7 @@ void cb_attr(struct cb *c, uint8_t fg, uint8_t bg, uint8_t font) {
 
 // advance to the start of the next row; if already on the bottom row
 // scroll the buffer up by one row and leave the cursor at the start
-// of the (now blank) bottom row. the gwen line editor relies on this:
+// of the (now blank) bottom row. the ll line editor relies on this:
 // when the multi-line buffer reaches the last row, the terminal must
 // scroll so its relative cursor-up moves still find the right rows.
 static void cb_line_feed(struct cb *c) {
@@ -35,7 +35,7 @@ static void cb_erase_eol(struct cb *c) {
     c->cb[p] = cell; }
 
 // erase from the cursor to the end of the screen -- ANSI ED (CSI J,
-// arg 0). the gwen line editor calls this each render before redrawing.
+// arg 0). the ll line editor calls this each render before redrawing.
 static void cb_erase_eos(struct cb *c) {
   uint32_t cell = cb_cell(0, c->cur_fg, c->cur_bg, c->cur_font);
   for (uint32_t p = c->wpos, e = (uint32_t) c->rows * c->cols; p < e; p++)

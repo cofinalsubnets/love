@@ -1,8 +1,8 @@
-# Valgrind suppressions for the gwen host binary (`make valg`).
+# Valgrind suppressions for the ll host binary (`make valg`).
 #
 # The (run argv) subprocess capability (host/main.c) fork()s, and when the
-# child's execvp fails -- e.g. test/run.g's deliberate ENOENT cases like
-# "/no/such/prog-xyzzy" -- the child _exit()s while still holding the gwen heap
+# child's execvp fails -- e.g. test/run.l's deliberate ENOENT cases like
+# "/no/such/prog-xyzzy" -- the child _exit()s while still holding the ll heap
 # arena it inherited from the parent. Freeing between fork and exec is an
 # async-signal-safety anti-pattern, so the minimal _exit() is deliberate and the
 # OS reclaims the memory. Valgrind keeps tracing the forked child until it execs,
@@ -11,7 +11,7 @@
 # (g_fin -> "All heap blocks were freed"), and only "possible" (never
 # "definite") leaks rooted at g_please -- exactly that one arena block -- match.
 {
-   gwen-arena-possibly-lost-in-forked-subprocess
+   ll-arena-possibly-lost-in-forked-subprocess
    Memcheck:Leak
    match-leak-kinds: possible
    fun:malloc

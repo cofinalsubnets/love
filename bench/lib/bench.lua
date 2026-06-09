@@ -1,4 +1,4 @@
--- lua benchmark harness -- mirrors bench/bench.g.
+-- lua benchmark harness -- mirrors bench/bench.l.
 -- bench(name, work) auto-scales the repetition count (doubling until the run
 -- clears MIN_MS), then prints one line matching the other harnesses:
 --     <name> <lang> <reps> <ms> <checksum>

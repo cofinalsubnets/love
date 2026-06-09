@@ -1,4 +1,4 @@
-// Bell numbers in base 36 (see bench/benches/bell.g) -- a bignum (BigInt) stress.
+// Bell numbers in base 36 (see bench/benches/bell.l) -- a bignum (BigInt) stress.
 // fresh memo maps per rep; checksum = total characters across all lines.
 const { bench } = require("../lib/bench");
 const DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";

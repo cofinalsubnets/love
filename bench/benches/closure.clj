@@ -1,4 +1,4 @@
-;; closure / higher-order stress (see bench/benches/closure.g). checksum = sum 3i.
+;; closure / higher-order stress (see bench/benches/closure.l). checksum = sum 3i.
 (load-file "lib/bench.clj")
 (def N 100000)
 (defn twice [f] (fn [x] (f (f x))))

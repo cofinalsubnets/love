@@ -1,4 +1,4 @@
-" vim syntax for gwen lisp (.g)
+" vim syntax for ll lisp (.g)
 " based on lisp.vim by Charles E Campbell <http://www.drchip.org/astronaut/vim/index.html#SYNTAX_LISP>
 if exists("b:current_syntax")
   finish
@@ -140,4 +140,4 @@ else
   hi def link PParen Delimiter
 endif
 
-let b:current_syntax = "gl"
+let b:current_syntax = "ll"

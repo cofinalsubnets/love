@@ -1,4 +1,4 @@
-;;; chicken benchmark harness -- mirrors bench/bench.g.
+;;; chicken benchmark harness -- mirrors bench/bench.l.
 ;;; (current-process-milliseconds) is integer ms. csi has no srfi-1/hashtables
 ;;; without eggs, so this provides `keep` (filter) and benches memoize via
 ;;; vectors. one line out: <name> <lang> <reps> <ms> <checksum>.

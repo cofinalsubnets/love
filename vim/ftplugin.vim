@@ -7,7 +7,7 @@ command! -buffer GwRainbow call s:ToggleRainbow()
 
 function! s:ToggleRainbow()
   let g:gw_rainbow = !get(g:, 'gw_rainbow', 1)
-  set syntax=gl
+  set syntax=ll
 endfunction
 
 nnoremap <buffer> <LocalLeader>r :GwRainbow<CR>

@@ -1,4 +1,4 @@
-;;; closure / higher-order stress (see bench/benches/closure.g). checksum = sum 3i.
+;;; closure / higher-order stress (see bench/benches/closure.l). checksum = sum 3i.
 (load "lib/bench.lisp")
 (defparameter *n* 100000)
 (defun twice (f) (lambda (x) (funcall f (funcall f x))))

@@ -1,4 +1,4 @@
--- binary-trees allocation/GC stress (see bench/benches/tree.g). checksum = 2^D-1.
+-- binary-trees allocation/GC stress (see bench/benches/tree.l). checksum = 2^D-1.
 package.path = (arg[0]:match("(.*/)") or "./") .. "../lib/?.lua;" .. package.path
 local bench = require("bench")
 local function mk(d) if d == 0 then return nil else return { mk(d - 1), mk(d - 1) } end end

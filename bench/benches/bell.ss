@@ -1,4 +1,4 @@
-; Bell numbers in base 36 (see bench/benches/bell.g) -- a bignum-tower stress.
+; Bell numbers in base 36 (see bench/benches/bell.l) -- a bignum-tower stress.
 ; fresh memo tables per rep; checksum = total characters across all lines.
 (load "lib/bench.ss")
 (define digits "0123456789abcdefghijklmnopqrstuvwxyz")

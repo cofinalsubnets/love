@@ -1,5 +1,5 @@
 #lang racket/base
-;; Mutable hash-table throughput (see bench/benches/hash.g). checksum = N*N.
+;; Mutable hash-table throughput (see bench/benches/hash.l). checksum = N*N.
 (require "../lib/bench.rkt")
 (define (hash-run n)
   (define h (make-hash))

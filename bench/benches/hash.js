@@ -1,4 +1,4 @@
-// mutable hash-table throughput (see bench/benches/hash.g). checksum = N*N.
+// mutable hash-table throughput (see bench/benches/hash.l). checksum = N*N.
 const { bench } = require("../lib/bench");
 const N = 10000;
 function work() {

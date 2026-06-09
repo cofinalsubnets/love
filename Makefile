@@ -1,6 +1,6 @@
 # Project root. Single Makefile: cross-cutting tasks (test, clean, install, ...)
 # plus the host (POSIX CLI) and kernel (freestanding) builds inlined directly
-# here. Embedded shells (playdate, rp2040) live under arch/ with their own
+# here. The playdate embedded shell lives under arch/ with its own
 # build files; wasm keeps its own Makefile. Build output lands under out/
 # (out/host, out/free, out/lib, out/playdate, out/dl). Shared vars live in common.mk.
 R := .
@@ -9,52 +9,52 @@ include common.mk
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean
-.PHONY: host kernel playdate wasm rp2040 gl0
+.PHONY: host kernel playdate wasm ll0
 .PHONY: test test_host test_all test_tools test_gl0
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench sim
 test: test_host test_gl0
 # test_kernel is in test_all but NOT the fast `test` target: it needs qemu + an
 # OVMF download and is x86_64-only (a no-op on other hosts). See its rule below.
 test_all: test_host test_gl0 test_tools test_kernel
-# gl0 bakes prelude+ev+repl + the whole test corpus (sed headers) and self-tests
-# BOTH compilers in one run: eval prelude (c0), run the corpus, bootstrap ev.g
+# ll0 bakes prelude+ev+repl + the whole test corpus (sed headers) and self-tests
+# BOTH compilers in one run: eval prelude (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dg_tco=0,
 # so this also exercises the non-tail-threaded trampoline dispatch path.
 # stdin is /dev/null: the corpus reads from the baked string, not stdin, but
-# test/io.g exercises the real `in` port (a bare fgetc), which would otherwise
-# block on a tty (the old `cat $t | gl0` fed the test stream in on stdin).
-test_gl0: $(gl0)
-	@echo TEST $(gl0)
-	@$(gl0) </dev/null
+# test/io.l exercises the real `in` port (a bare fgetc), which would otherwise
+# block on a tty (the old `cat $t | ll0` fed the test stream in on stdin).
+test_gl0: $(ll0)
+	@echo TEST $(ll0)
+	@$(ll0) </dev/null
 test_host: host
 	@echo TEST $m
 	@cat $t | $m
-# Validate the gwen tool rewrites against their frozen Python references in
+# Validate the ll tool rewrites against their frozen Python references in
 # tools/py/ (gen_data / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host
 	@$(MAKE) -C tools
-all: host kernel playdate wasm rp2040
+all: host kernel playdate wasm
 
-# Static lisp headers: each gwen/*.g is serialized to a C string literal in
-# out/lib/*.h by tools/lcat.g (run on the bootstrap interpreter gl0). Frontends
-# #include these and assemble the bootstrap with G_EGG_PRE/POST (gwen.h).
-# Drop a .g into gwen/ and it is picked up automatically -- no rule to edit.
-lib_h = $(patsubst gwen/%.$x,out/lib/%.h,$(wildcard gwen/*.$x))
-# gl0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
-# interpreter -- the gwen reader strips the ; comments at read time), since gl0
-# can't lcat the very sources it is assembled from (chicken/egg). cli.g doubles as
-# gl0's CLI arg handler; prelude/ev/egg/repl + the whole concatenated test corpus
-# are baked in so gl0 self-tests both compilers in one run (see main.c). The final
-# gl uses the canonicalized lcat headers from the rule below instead.
+# Static lisp headers: each ll/*.g is serialized to a C string literal in
+# out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter ll0). Frontends
+# #include these and assemble the bootstrap with G_EGG_PRE/POST (ll.h).
+# Drop a .g into ll/ and it is picked up automatically -- no rule to edit.
+lib_h = $(patsubst ll/%.$x,out/lib/%.h,$(wildcard ll/*.$x))
+# ll0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
+# interpreter -- the ll reader strips the ; comments at read time), since ll0
+# can't lcat the very sources it is assembled from (chicken/egg). cli.l doubles as
+# ll0's CLI arg handler; prelude/ev/egg/repl + the whole concatenated test corpus
+# are baked in so ll0 self-tests both compilers in one run (see main.c). The final
+# ll uses the canonicalized lcat headers from the rule below instead.
 sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prelude0.h out/lib/ev0.h out/lib/repl0.h out/lib/tests0.h
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
-$(lib_h): out/lib/%.h: gwen/%.$x $(gl0) tools/lcat.$x
+$(lib_h): out/lib/%.h: ll/%.$x $(ll0) tools/lcat.$x
 	@mkdir -p out/lib
 	@echo GEN	$@
-	@$(gl0) -l gwen/prelude.$x tools/lcat.$x $< > $@
-out/lib/%0.h: gwen/%.$x
+	@$(ll0) -l ll/prelude.$x tools/lcat.$x $< > $@
+out/lib/%0.h: ll/%.$x
 	@mkdir -p out/lib
 	@echo GEN	$@
 	@$(sed_lit) $< > $@
@@ -69,16 +69,16 @@ out/lib/tests0.h: $t
 ho = out/host
 h_o = $(g_c:$(R)/%.c=$(ho)/%.o)
 # -I$(ho) first so the generated $(ho)/data.h shadows the portable top-level data.h.
-# -Dg_tco=0: the host gl runs the unified register-passing trampoline (the kernel
-# session is collapsing the g_tco split); gl0 already builds at g_tco=0.
+# -Dg_tco=0: the host ll runs the unified register-passing trampoline (the kernel
+# session is collapsing the g_tco split); ll0 already builds at g_tco=0.
 hcc = $(CC) $(g_cflags) -Dg_tco=0 -fpic -I$(ho) -I. -Iout/lib
 data_ld = data.ld
 ldflags = -Wl,-T,$(data_ld)
 hdata_h = $(ho)/data.h
-gl0 = $(ho)/gl0
+ll0 = $(ho)/ll0
 
 host: $(ho)/$n $(ho)/lib$n.so $(ho)/$n.1
-gl0: $(gl0)
+ll0: $(ll0)
 
 $(ho)/lib$n.a: $(h_o)
 	@echo AR	$@
@@ -99,7 +99,7 @@ $(ho)/data.o: data.c $(g_h)
 
 # Bootstrap interpreter, compiled against the fallback top-level data.h (no
 # -I$(ho)) + -DGL_BOOTSTRAP -Dg_tco=0 (also exercises the non-threaded trampoline
-# dispatch). Runs the gwen build tools that generate the lcat headers, so it can't
+# dispatch). Runs the ll build tools that generate the lcat headers, so it can't
 # depend on those; instead it #includes the sed-wrapped $(gl0_h) (cli0 + the baked
 # prelude/ev/egg/repl + the test corpus), all produced without an interpreter --
 # hence -Iout/lib. Per-object into $(ho)/0/ so ccache caches each TU.
@@ -113,33 +113,33 @@ $(ho)/0/%.o: $(R)/%.c $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(gl0_cc) -c $< -o $@
-$(gl0): $(gl0_o) $(data_ld)
+$(ll0): $(gl0_o) $(data_ld)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(CC) $(g_cflags) $(ldflags) -o $@ $(gl0_o) -lm
 
-# tools/gen_data.g reflects $(ho)/data.o's gwen_data.NN section sizes into
+# tools/gen_data.l reflects $(ho)/data.o's gwen_data.NN section sizes into
 # $(ho)/data.h, whose g_typ() shifts instead of the portable header's divides.
-$(hdata_h): $(ho)/data.o $(gl0) tools/gen_data.$x gwen/prelude.$x
+$(hdata_h): $(ho)/data.o $(ll0) tools/gen_data.$x ll/prelude.$x
 	@echo GEN	$@
-	@$(gl0) -l gwen/prelude.$x tools/gen_data.$x $< -o $@
+	@$(ll0) -l ll/prelude.$x tools/gen_data.$x $< -o $@
 
-# gwen.c/data.c -> out/host/*.o (against the generated data.h).
+# ll.c/data.c -> out/host/*.o (against the generated data.h).
 $(ho)/%.o: $(R)/%.c $(g_h) $(hdata_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
-# main.c is compiled into the final gl inline (G_EGG_PRE/POST assemble the lib
+# main.c is compiled into the final ll inline (G_EGG_PRE/POST assemble the lib
 # headers); depend on them so it relinks when a lib source changes.
 $(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h out/lib/cli.h $(hdata_h) $(data_ld)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm
 
-$(ho)/$n.1: $(ho)/$n gwen/manpage.$x
+$(ho)/$n.1: $(ho)/$n ll/manpage.$x
 	@echo GEN	$@
-	@$(ho)/$n < gwen/manpage.$x > $@
+	@$(ho)/$n < ll/manpage.$x > $@
 
 # ====================================================================
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
@@ -211,10 +211,10 @@ ifdef EFI
 kcppflags += -DK_EFI
 endif
 ifdef K_TEST
-# Trampoline (g_tco=0), like gl0/rp2040: the stackless cooperative scheduler needs a
+# Trampoline (g_tco=0), like ll0: the stackless cooperative scheduler needs a
 # single dispatch loop to be reentrant under nested (ev …), which the threaded
 # tail-call path (g_tco=1) is not -- spawn/wait/yield run from the strin→fread→ev
-# runner hang on the TCO path. gl0 runs the identical corpus at g_tco=0, 1812 green.
+# runner hang on the TCO path. ll0 runs the identical corpus at g_tco=0, 1812 green.
 kcppflags += -DK_TEST -Dg_tco=0
 endif
 
@@ -280,7 +280,7 @@ $(kdata_h): $(k_odir)/data.o $(gen_data) | $(m)
 	@echo GEN	$@
 	@$(m) $(gen_data) $< -o $@
 
-# Shared C sources (gwen.c/data.c, font/, c/) + per-arch arch/$a/.
+# Shared C sources (ll.c/data.c, font/, c/) + per-arch arch/$a/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kdata_h) out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h $(if $(K_TEST),out/lib/ktests.h)
 	@echo CC	$@
@@ -392,32 +392,32 @@ run-efi-headless: $(ko)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 # PASSES (1708/1708 in ~2.5s). Two bugs were behind the long-parked hang:
 #  (1) the cooperative scheduler deadlocked -- a task blocked in `(wait p)` was
 #      saved by yield_sw parked on the kernel's serial input fd (a stale
-#      next_wait_fd), so find_runnable never rescheduled it (fixed in gwen.c
+#      next_wait_fd), so find_runnable never rescheduled it (fixed in ll.c
 #      g_vm_wait: clear next_wake_at/next_wait_fd before yielding);
 #  (2) five float-sqrt asserts failed because libc/math.c pow(x,0.5) used
 #      exp(0.5*log x) (drifts a few ULP) instead of the exact Newton sqrt(), and
 #      cos_k's Taylor ran a couple terms short at the pi/4 boundary.
 #
 # A K_TEST kernel bakes the test corpus in (out/lib/ktests.h, baked VERBATIM by
-# tools/lcatv.g -- lcat's inspect-reprint diverges when the corpus is read back
+# tools/lcatv.l -- lcat's inspect-reprint diverges when the corpus is read back
 # incrementally via a strin port) and runs it through the self-hosted ev at boot,
 # printing the usual summary over the serial console, then quits qemu (the `exit`
-# nif -> isa-debug-exit). tools/ktest.g (run on
-# the host gl) boots it under qemu headless, captures the serial output, and checks
+# nif -> isa-debug-exit). tools/ktest.l (run on
+# the host ll) boots it under qemu headless, captures the serial output, and checks
 # it. So this exercises the freestanding kernel the way test_host/test_gl0 exercise
 # the host. x86_64 only (qemu + isa-debug-exit); a no-op on other hosts.
 #
-# Drop from the kernel corpus: io.g (host file open) and run.g (subprocess/getenv)
-# need host-OS nifs the kernel lacks; math.g pins transcendental results to glibc
+# Drop from the kernel corpus: io.l (host file open) and run.l (subprocess/getenv)
+# need host-OS nifs the kernel lacks; math.l pins transcendental results to glibc
 # precision (1e-12/1e-15) that the freestanding libc/math.c series can't meet;
-# bell.g's Bell-number bignums are too heavy for the emulated kernel.
-kt = $(filter-out %/io.g %/run.g %/math.g %/bell.g,$t)
+# bell.l's Bell-number bignums are too heavy for the emulated kernel.
+kt = $(filter-out %/io.l %/run.l %/math.l %/bell.l,$t)
 out/lib/ktests.$x: $(kt) $(R)/Makefile
 	@mkdir -p out/lib
 	@cat $(kt) > $@
-out/lib/ktests.h: out/lib/ktests.$x $(gl0) tools/lcatv.$x gwen/prelude.$x
+out/lib/ktests.h: out/lib/ktests.$x $(ll0) tools/lcatv.$x ll/prelude.$x
 	@echo GEN	$@
-	@$(gl0) -l gwen/prelude.$x tools/lcatv.$x out/lib/ktests.$x > $@
+	@$(ll0) -l ll/prelude.$x tools/lcatv.$x out/lib/ktests.$x > $@
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.$x
@@ -455,68 +455,6 @@ wasm:
 sim:
 	$(MAKE) -C arch/playdate sim
 
-# --- rp2040: bare-metal Cortex-M0+ (no Pico SDK, no CMake) -----------
-# Freestanding thumbv6m build of the gwen runtime + the arch/rp2040 backend,
-# linked at flash XIP behind a 256-byte checksummed boot2 (tools/pad_checksum.g
-# stamps the vendored arch/rp2040/boot2.bin) and packed into a flashable .uf2
-# (tools/elf2uf2.g). Mirrors the kernel build: per-arch data.h reflected out of
-# this target's data.o, the lcat lib headers shared from out/lib. The M0+ has no
-# FPU or hardware divide, so the compiler-rt builtins archive (rp_rt) supplies
-# the soft-float / 64-bit __aeabi_* libcalls -- from clang's compiler-rt when a
-# thumbv6m build is installed, else the arm-none-eabi GCC libgcc multilib (the
-# v6-m/nofp variant ships the same AAPCS __aeabi_* routines).
-ro = out/rp2040
-rp_triple = -target thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb
-rp_cppflags = -I$(ro) -I. -Iout/lib -I$R/libc -I$R/arch/rp2040
-rp_cc = $(KCC) $(rp_triple) $(g_cflags) -nostdinc -ffreestanding -fno-lto \
-  -fno-PIC -ffunction-sections -fdata-sections -Dg_tco=0 $(rp_cppflags)
-rp_rt := $(shell f=$$($(KCC) $(rp_triple) -print-libgcc-file-name 2>/dev/null); \
-  [ -e "$$f" ] && echo "$$f" || \
-  arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -print-libgcc-file-name 2>/dev/null)
-rp_h = $(g_h) $(wildcard $R/arch/rp2040/*.h)
-rp_data_h = $(ro)/data.h
-rp_lib_h = out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
-rp_src = $(g_c) $(c_c) $R/arch/rp2040/rp2040.c $R/arch/rp2040/main.c
-rp_o = $(rp_src:$(R)/%.c=$(ro)/%.o)
-
-rp2040: $(ro)/$n.uf2
-
-# data.o bootstraps from the portable top-level data.h (no rp_data_h prereq -- it is
-# circular); its sentinel stride is then reflected into the generated data.h,
-# which -I$(ro) puts ahead of the portable one. The explicit rule shadows the
-# %.o pattern below for data.o specifically.
-$(ro)/data.o: $R/data.c $(rp_h) $(rp_lib_h)
-	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(rp_cc) -c $< -o $@
-$(rp_data_h): $(ro)/data.o $(gen_data) | $(m)
-	@echo GEN	$@
-	@$(m) $(gen_data) $< -o $@
-
-$(ro)/%.o: $R/%.c $(rp_h) $(rp_data_h) $(rp_lib_h)
-	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(rp_cc) -c $< -o $@
-
-# boot2: stamp the CRC onto the vendored payload, then assemble the .byte blob
-# into the .boot2 section the linker places at flash base (0x10000000).
-$(ro)/boot2.s: $R/arch/rp2040/boot2.bin $R/tools/pad_checksum.$x | $(m)
-	@echo GEN	$@
-	@mkdir -p $(dir $@)
-	@$(m) $R/tools/pad_checksum.$x $< > $@
-$(ro)/boot2.o: $(ro)/boot2.s
-	@echo AS	$@
-	@$(KCC) $(rp_triple) -c $< -o $@
-
-$(ro)/$n.elf: $(rp_o) $(ro)/boot2.o $R/arch/rp2040/rp2040.lds
-	@echo LD	$@
-	@$(KCC) $(rp_triple) -nostdlib -fuse-ld=lld -Wl,--gc-sections -Wl,-T,$R/arch/rp2040/rp2040.lds \
-	  $(rp_o) $(ro)/boot2.o $(rp_rt) -o $@
-
-$(ro)/$n.uf2: $(ro)/$n.elf $R/tools/elf2uf2.$x | $(m)
-	@echo UF2	$@
-	@$(m) $R/tools/elf2uf2.$x $< $@
-
 clean:
 	rm -rf out
 	@$(MAKE) -C wasm clean
@@ -534,7 +472,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@$m
 cloc:
-	cloc --by-file --force-lang=Lisp,$x gwen gwen.c gwen.h data.c data.h kmain.c main.c k.h arch tools test vim
+	cloc --by-file --force-lang=Lisp,$x ll ll.c ll.h data.c data.h kmain.c main.c k.h arch tools test vim
 cat: clean all test
 cata: clean all test_all
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.
@@ -545,7 +483,7 @@ disasm: host
 gdb: host
 	gdb $m
 vmret: host
-	@$m tools/vmret.g $m
+	@$m tools/vmret.$x $m
 
 bench: host
 	$(MAKE) -C bench bench
@@ -564,7 +502,7 @@ installs = \
   $d/lib/$n/repl.$x \
   $d/liout/lib$n.a \
   $d/liout/lib$n.so \
-  $d/include/gwen.h \
+  $d/include/ll.h \
   $v/ftdetect/$n.vim \
   $v/syntax/$n.vim \
   $v/ftplugin/$n.vim
@@ -574,11 +512,11 @@ uninstall:
 	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
-$d/include/gwen.h: gwen.h
+$d/include/ll.h: ll.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/$n/%.$x: gwen/%.$x
+$d/lib/$n/%.$x: ll/%.$x
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

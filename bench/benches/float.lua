@@ -1,4 +1,4 @@
--- mandelbrot escape counts over a 64x64 grid (see bench/benches/float.g).
+-- mandelbrot escape counts over a 64x64 grid (see bench/benches/float.l).
 package.path = (arg[0]:match("(.*/)") or "./") .. "../lib/?.lua;" .. package.path
 local bench = require("bench")
 local function mand(cx, cy)

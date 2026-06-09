@@ -79,7 +79,7 @@ static double cos_k(double x) {
 // Reduce x mod 2pi via fmod-style subtraction, then quadrant pick into
 // [-pi/4, pi/4] and dispatch to the kernel. Loses precision for very
 // large |x| since we don't do Cody-Waite splitting — adequate for
-// gwen-scale inputs.
+// ll-scale inputs.
 double sin(double x) {
  if (x != x) return x;
  if (x > 1e15 || x < -1e15) return M_NAN;   // catastrophic cancellation
@@ -138,7 +138,7 @@ double pow(double x, double y) {
   double r = 1, b = x;
   for (; n; n >>= 1, b *= b) if (n & 1) r *= b;
   return yi < 0 ? 1 / r : r; }
- // Square root is the common fractional exponent (gwen spells sqrt as ((/ 1 2) x)).
+ // Square root is the common fractional exponent (ll spells sqrt as ((/ 1 2) x)).
  // The Newton sqrt below is ~1 ulp and bit-exact on perfect squares, whereas
  // exp(0.5*log x) drifts several ULP (pow(9,0.5) -> 2.99999999999583, pow(30,0.5)
  // off by 7e-9), so route 0.5 / -0.5 through it.
@@ -148,7 +148,7 @@ double pow(double x, double y) {
  return exp(y * log(x)); }
 
 // Single-precision wrappers for the 32-bit frontends (g_flo_t == float there,
-// so gwen reaches sqrtf/expf/... via the g_* aliases); just round through the
+// so ll reaches sqrtf/expf/... via the g_* aliases); just round through the
 // double kernels above -- the extra rounding stays within the accuracy target.
 float sqrtf(float x)           { return (float) sqrt(x); }
 float expf(float x)            { return (float) exp(x); }

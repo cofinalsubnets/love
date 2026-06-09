@@ -1,4 +1,4 @@
-; mandelbrot escape counts over a 64x64 grid (see bench/benches/float.g).
+; mandelbrot escape counts over a 64x64 grid (see bench/benches/float.l).
 (load "lib/bench.ss")
 (define (mand cx cy)
   (let loop ((zx 0.0) (zy 0.0) (it 0))

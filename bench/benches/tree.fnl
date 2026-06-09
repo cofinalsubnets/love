@@ -1,4 +1,4 @@
-;; binary-trees allocation/GC stress (see bench/benches/tree.g). checksum = 2^D-1.
+;; binary-trees allocation/GC stress (see bench/benches/tree.l). checksum = 2^D-1.
 (set package.path (.. "lib/?.lua;" package.path))
 (local bench (require :bench))
 (fn mk [d] (if (= d 0) nil [(mk (- d 1)) (mk (- d 1))]))

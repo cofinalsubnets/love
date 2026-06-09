@@ -1,4 +1,4 @@
-;; Bell numbers in base 36 (see bench/benches/bell.g) -- a bignum-tower stress.
+;; Bell numbers in base 36 (see bench/benches/bell.l) -- a bignum-tower stress.
 (import sys)
 (sys.path.insert 0 "lib")
 (import bench [bench])

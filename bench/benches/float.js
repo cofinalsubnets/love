@@ -1,4 +1,4 @@
-// mandelbrot escape counts over a 64x64 grid (see bench/benches/float.g).
+// mandelbrot escape counts over a 64x64 grid (see bench/benches/float.l).
 const { bench } = require("../lib/bench");
 function mand(cx, cy) {
   let zx = 0.0, zy = 0.0, it = 0;

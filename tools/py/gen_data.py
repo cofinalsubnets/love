@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gen_data.py -- bake the data-sentinel stride into a generated data.h.
 
-gwen recovers a heap object's kind from its `ap`: the five self-quote sentinels
+ll recovers a heap object's kind from its `ap`: the five self-quote sentinels
 (data.c, DATA_SENTINEL) are pinned contiguously and in enum order into the
 .gwen_data section, so a kind is just a slot index into that section --
 g_typ(o) == (ap - start) / unit, unit == (stop - start) / N (see data.h).
@@ -33,7 +33,7 @@ Usage: gen_data.py <data.o> [-o data.h]   (writes stdout if no -o)
 import struct, sys
 
 PREFIX = "gwen_data."      # input subsections: gwen_data.00 .. .04
-N = 5                      # enum q data kinds: tuple/big/two/string/sym -- must match gwen.h
+N = 5                      # enum q data kinds: tuple/big/two/string/sym -- must match ll.h
 
 
 def fail(msg):

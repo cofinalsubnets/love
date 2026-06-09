@@ -5,15 +5,15 @@
 # from any cwd. Per-frontend build output lives under $R/out/<frontend>/.
 R ?= .
 
-n = gl
-x = g
+n = ll
+x = l
 m = $R/out/host/$n
 a ?= $(shell uname -m)
 
 t = $(sort $(wildcard $R/test/*.$x))
 
 g_h = $(wildcard $R/*.h)
-g_c = $R/gwen.c $R/data.c
+g_c = $R/ll.c $R/data.c
 f_c = $(wildcard $R/font/*.c)
 c_c = $(wildcard $R/libc/*.c)
 

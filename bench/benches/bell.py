@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 from bench import bench
 
-# Bell numbers in base 36 (see bench/benches/bell.g). Fresh memo dicts per rep.
+# Bell numbers in base 36 (see bench/benches/bell.l). Fresh memo dicts per rep.
 # checksum = total characters across all rendered lines.
 DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
 BASE = len(DIGITS)

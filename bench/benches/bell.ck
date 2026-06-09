@@ -1,4 +1,4 @@
-; Bell numbers in base 36 (see bench/benches/bell.g) -- a bignum-tower stress.
+; Bell numbers in base 36 (see bench/benches/bell.l) -- a bignum-tower stress.
 ; vector memo (csi has no hashtables without eggs).
 (load "lib/bench.ck")
 (define digits "0123456789abcdefghijklmnopqrstuvwxyz")

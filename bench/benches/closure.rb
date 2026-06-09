@@ -1,6 +1,6 @@
 require_relative "../lib/bench"
 
-# closure / higher-order stress (see bench/benches/closure.g). checksum = sum 3i.
+# closure / higher-order stress (see bench/benches/closure.l). checksum = sum 3i.
 TWICE = ->(f) { ->(x) { f.(f.(x)) } }
 ADDER = ->(i) { ->(x) { x + i } }
 N = 100000

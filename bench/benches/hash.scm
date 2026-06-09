@@ -1,4 +1,4 @@
-; Mutable hash-table throughput (see bench/benches/hash.g). checksum = N*N.
+; Mutable hash-table throughput (see bench/benches/hash.l). checksum = N*N.
 (load "../lib/bench.scm")
 (define (hash-run n)
   (let ((h (make-hash-table)))

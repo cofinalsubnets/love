@@ -1,6 +1,6 @@
 Code.require_file("../lib/bench.exs", __DIR__)
 
-# mandelbrot escape counts over a 64x64 grid (see bench/benches/float.g).
+# mandelbrot escape counts over a 64x64 grid (see bench/benches/float.l).
 defmodule Float64 do
   def mand(cx, cy), do: mand(cx, cy, 0.0, 0.0, 0)
   def mand(cx, cy, zx, zy, it) do

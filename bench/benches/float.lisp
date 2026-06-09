@@ -1,4 +1,4 @@
-;;; mandelbrot escape counts over a 64x64 grid (see bench/benches/float.g).
+;;; mandelbrot escape counts over a 64x64 grid (see bench/benches/float.l).
 ;;; double-float literals (d0) so the arithmetic matches the other languages.
 (load "lib/bench.lisp")
 (defun mand (cx cy)

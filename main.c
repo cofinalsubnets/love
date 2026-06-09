@@ -1,4 +1,4 @@
-#include "gwen.h"
+#include "ll.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +19,7 @@ g_noinline uintptr_t g_clock(void) {
 
 
 // --- raw terminal mode -----------------------------------------------
-// Only the REPL (full gl) needs it; gl0 is non-interactive (build tool / self-test).
+// Only the REPL (full ll) needs it; ll0 is non-interactive (build tool / self-test).
 #ifndef GL_BOOTSTRAP
 static struct termios saved_termios;
 static void restore_termios(void) {
@@ -110,11 +110,11 @@ struct g_io g_stderr = { g_vm_port_io, putfix(STDERR_FILENO), putfix(EOF), putfi
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that g_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live
-// outside the gwen heap and the GC never visits them.
+// outside the ll heap and the GC never visits them.
 void g_fd_close(int fd) { close(fd); }
 
 // (open path mode) — open a file with mode "r"/"w"/"a"; returns a heap port
-// (closed on GC) or nil on error or misuse. mode is a gwen string; only the
+// (closed on GC) or nil on error or misuse. mode is a ll string; only the
 // first byte is consulted.
 //   r = read-only
 //   w = write-only, truncate-or-create
@@ -175,8 +175,8 @@ static g_vm(g_vm_close) {
 
 // --- subprocess (run) + environment (getenv) ---------------------------
 // Both are host-only nifs (POSIX fork/exec/wait, getenv), like open/close.
-// No malloc: argv is marshalled into the uncommitted gwen heap gap and the
-// child's stdout is captured into a growing gwen string (the reader's
+// No malloc: argv is marshalled into the uncommitted ll heap gap and the
+// child's stdout is captured into a growing ll string (the reader's
 // str0 + grow + len-fixup pattern). See core/io.c gzread1str / grbufg.
 
 // Local copy of core/io.c's grbufg (static there): grow the string on sp[0]
@@ -204,7 +204,7 @@ g_noinline static struct g *host_run(struct g *g, g_word argv) {
 
  // Reserve gap for cav (argc+1 pointers, word-aligned) + the byte blob.
  // Written into the uncommitted region at Hp -- invisible to GC, holds no
- // gwen pointers, consumed before any further allocation. Never bump Hp.
+ // ll pointers, consumed before any further allocation. Never bump Hp.
  if (!g_ok(g = g_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
  argv = g->sp[0];          // g_have may have GC'd; argv (the only root, at sp[0])
                            // is forwarded there -- the C local is now stale.
@@ -246,7 +246,7 @@ g_noinline static struct g *host_run(struct g *g, g_word argv) {
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
   return g_push(g, 1, putfix(childerr)); }
 
- // drain stdout into a growing gwen string (bulk reads; stderr inherited).
+ // drain stdout into a growing ll string (bulk reads; stderr inherited).
  uintptr_t n = 0, lim = 1u << 16;
  g = str0(g, lim);                                        // capture -> sp[0]
  while (g_ok(g)) {
@@ -309,8 +309,8 @@ static union u const
 static char const
  rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(nom 0)))";
 #endif
-// host CLI driver from gwen/cli.g: gl0 takes the sed-wrapped raw text (it can't
-// lcat its own arg handler); the final gl takes the canonicalized lcat header.
+// host CLI driver from ll/cli.l: ll0 takes the sed-wrapped raw text (it can't
+// lcat its own arg handler); the final ll takes the canonicalized lcat header.
 static char const cli[] =
 #ifdef GL_BOOTSTRAP
 #include "cli0.h"
@@ -319,9 +319,9 @@ static char const cli[] =
 #endif
   ;
 #ifdef GL_BOOTSTRAP
-// gl0 self-test: the whole test corpus, baked in (sed-wrapped), run twice -- once
+// ll0 self-test: the whole test corpus, baked in (sed-wrapped), run twice -- once
 // compiled by the C bootstrap compiler (c0), once by the self-hosted ev installed
-// from ev.g -- so one gl0 invocation exercises both compilers (and -Dg_tco=0 makes
+// from ev.l -- so one ll0 invocation exercises both compilers (and -Dg_tco=0 makes
 // it the trampoline path). s2cldef installs s2cl (string -> charlist); runner reads
 // the baked corpus (the global `tests`) through a strin port and evals each form via
 // `(ev 'ev r)` -- the `'ev` indirection late-binds to whatever `ev` is now, so the
@@ -355,7 +355,7 @@ int main(int argc, char const **argv) {
                         {"argv", g_pop1(g)}, };
     g = g_defn(g, d, LEN(d));
 #ifdef GL_BOOTSTRAP
-    // gl0: with args, run the build tool (lcat / gen_data) through the CLI driver.
+    // ll0: with args, run the build tool (lcat / gen_data) through the CLI driver.
     // With no args, self-test -- eval prelude+repl and run the baked corpus via c0,
     // then bootstrap the self-hosted ev (egg) and run the corpus again through it.
     if (argp) g = g_evals_(g, cli);

@@ -1,4 +1,4 @@
-;; closure / higher-order stress (see bench/benches/closure.g). checksum = sum 3i.
+;; closure / higher-order stress (see bench/benches/closure.l). checksum = sum 3i.
 (import sys)
 (sys.path.insert 0 "lib")
 (import bench [bench])

@@ -1,6 +1,6 @@
 #ifndef _g_data_h
 #define _g_data_h
-// Default data-kind recovery (see gwen.h for the contract). The five DATA_SENTINEL
+// Default data-kind recovery (see ll.h for the contract). The five DATA_SENTINEL
 // bodies (data.c) are laid out contiguously and in enum order in the
 // .gwen_data section by data.ld (host) or the equivalent inline
 // block in each frontend's own full linker script (free/, playdate/). g_typ()
