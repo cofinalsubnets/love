@@ -251,6 +251,11 @@ static g_inline bool arrp(word _) { return tupp(_) && tuple(_)->rank >= 1; }
 extern size_t const g_vt_[];                 // element byte size by g_tuple_type
 // Element payload: laid out row-major just past the shape words.
 static g_inline void *tuple_data(struct g_tuple *v) { return (void*) (v->shape + v->rank); }
+// Total element count = product of the dimensions (1 for a rank-0 scalar box).
+static g_inline uintptr_t tuple_nelem(struct g_tuple *v) {
+ uintptr_t n = 1;
+ for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ return n; }
 static g_inline struct g_tuple *ini_tuple(struct g_tuple *v, enum g_tuple_type t, uintptr_t rank) {
  return v->ap = g_vm_tuple, v->type = t, v->rank = rank, v; }
 // Read element i of v as a double / as an integer (sign-extending the narrow
@@ -394,6 +399,10 @@ static g_inline g_flo_t cplx_re(word x) {
  return ((g_flo_pun){ .u = tuple(x)->shape[0] }).d; }
 static g_inline g_flo_t cplx_im(word x) {
  return ((g_flo_pun){ .u = tuple(x)->shape[1] }).d; }
+// |z| of a boxed complex scalar: the L2 norm of (re, im).
+static g_inline g_flo_t cplx_mod(word x) {
+ g_flo_t re = cplx_re(x), im = cplx_im(x);
+ return g_sqrt(re * re + im * im); }
 // Total-order non-positive test for a complex scalar (re first, then im): the
 // falsiness oracle for `~(re im)` -- false iff it sorts <= 0+0i (re < 0, or re == 0
 // and im <= 0). Lockstep with g_nilp/g_len: negative-or-zero is FALSE, positive TRUE.
@@ -514,31 +523,6 @@ static g_inline struct g*g_pop(struct g*f, uintptr_t n) {
 
 #define LIMB_BITS 32
 #define LIMB_BASE ((uint64_t) 1 << LIMB_BITS)
-
-#define RED_EXTREME(nom, c_op, kind) g_vm(nom) { \
- word x = Sp[0]; \
- if (!tupp(x)) return Ip++, Continue(); \
- if (tuple(x)->type == g_O) { \
-  Pack(f); f = ored(f, kind); \
-  if (!g_ok(f)) return gtrap(f); \
-  return Unpack(f), Continue(); } \
- if (tuple(x)->type == g_C) return Sp[0] = nil, Ip++, Continue(); /* complex: unordered */ \
- struct g_tuple *v = tuple(x); \
- uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i]; \
- if (!n) return Sp[0] = nil, Ip++, Continue(); \
- bool fdom = v->type >= g_R; word _res; \
- Have(BOX_REQ); v = tuple(Sp[0]); \
- if (fdom) { g_flo_t m = tuple_get_flo(v, 0); \
-  for (uintptr_t i = 1; i < n; i++) {\
-   g_flo_t e = tuple_get_flo(v, i);\
-   if (e c_op m) m = e; } \
-  EMIT_FLO(m); } \
- else { intptr_t m = tuple_get_int(v, 0); \
-  for (uintptr_t i = 1; i < n; i++) {\
-   intptr_t e = tuple_get_int(v, i);\
-   if (e c_op m) m = e; } \
-  EMIT_INT(m); } \
- return Sp[0] = _res, Ip++, Continue(); }
 
 #define YIELD_INTERVAL 64
 #define YieldCheck() \
@@ -785,8 +769,7 @@ static g_inline void evac_tuple(struct g*f, word const*const p0, word const*cons
  f->cp += b2w(g_tuple_bytes(v));
  if (v->type != g_O) return;                 // numeric vecs are GC leaves (flat payload)
  word *e = (word*) tuple_data(v);              // object tuple: forward each live element word
- uintptr_t n = 1;
- for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ uintptr_t n = tuple_nelem(v);
  while (n--) e[n] = gcp(f, e[n], p0, t0); }
 
 static g_inline void evac_str(struct g*f, word const*const p0, word const*const t0) {
@@ -1999,9 +1982,9 @@ static intptr_t g_mag(word x) {
         : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;
       return nl ? nl : 1; }
     case KTuple: { struct g_tuple *v = tuple(x);                 // boxed scalar or rank-n array
-      uintptr_t i, n = 1; for (i = 0; i < v->rank; i++) n *= v->shape[i];
+      uintptr_t i, n = tuple_nelem(v);
       if (!v->rank) {                                            // rank-0 scalar magnitude
-        if (v->type == g_C) { g_flo_t re = cplx_re(x), im = cplx_im(x); return len_sat(g_sqrt(re*re + im*im)); }
+        if (v->type == g_C) return len_sat(cplx_mod(x));
         if (v->type == g_R) { g_flo_t f = flo_get(x); return len_sat(f < 0 ? -f : f); }
         return FIX_MAX; }                                        // g_Z int box: magnitude exceeds fixnum range
       g_flo_t s = 0;                                             // rank>=1 array -> ceil(sqrt(Σ |elem|²))
@@ -2019,7 +2002,7 @@ static intptr_t g_len(word x) {
   if (tupp(x) && !tuple(x)->rank) {                                 // boxed scalar: total-order <= 0 -> 0
     struct g_tuple *v = tuple(x);
     if (v->type == g_R) { g_flo_t f = flo_get(x); return f <= 0 ? 0 : len_sat(f); }
-    if (v->type == g_C) return cplx_nonpos(x) ? 0 : len_sat(g_sqrt(cplx_re(x)*cplx_re(x) + cplx_im(x)*cplx_im(x)));
+    if (v->type == g_C) return cplx_nonpos(x) ? 0 : len_sat(cplx_mod(x));
     return box_get(x) < 0 ? 0 : FIX_MAX; }                          // g_Z wide-int box
   return g_mag(x); }                                                // arrays / strings / lists / syms / maps / bufs / fns
 g_vm(g_vm_len) { Sp[0] = putnum(g_len(Sp[0])); Ip += 1; return Continue(); }
@@ -2293,8 +2276,7 @@ static g_noinline struct g *gzputx(struct g *f, intptr_t x, uintptr_t off);
 
 static struct g *gzput_arr(struct g *f, uintptr_t off) {
  struct g_tuple *v = tuple(f->sp[0]);
- uintptr_t rank = v->rank, type = v->type, nelem = 1;
- for (uintptr_t i = 0; i < rank; i++) nelem *= v->shape[i];
+ uintptr_t rank = v->rank, type = v->type, nelem = tuple_nelem(v);
  if (rank == 1 && nelem == 0 && (type == g_Z || type == g_R))
   return gzputcs(f, "@0");                             // empty numeric -> @0 (reads back via @0/@())
  if (rank == 1 && nelem > 0 && (type == g_Z || type == g_R || type == g_C)) {  // terse rank-1: @(…)
@@ -3500,8 +3482,7 @@ static const bool g_add_lr = true;
 // coerce a numeric to a string byte: floor(|x|) mod 256, where |x| of a complex
 // is its modulus (matching abs's L2 vector->scalar coercion, see g_vm_abs).
 static g_inline unsigned char seq_byte(word x) {
- g_flo_t v = Cp(x)
-  ? g_sqrt(cplx_re(x) * cplx_re(x) + cplx_im(x) * cplx_im(x)) : TOFLO(x);
+ g_flo_t v = Cp(x) ? cplx_mod(x) : TOFLO(x);
  if (v < 0) v = -v;
  return (unsigned char) (uintptr_t) g_trunc(v); }
 // LIST lane: at least one operand is a pair (the matrix only routes list-involved
@@ -3608,8 +3589,7 @@ static g_vm(g_vm_mul_rep) {
  bool aseq = strp(a) || symp(a) || twop(a);
  word seq = aseq ? a : b, cnt = aseq ? b : a;
  if (!ISNUM(cnt) && !Cp(cnt)) return *++Sp = nil, Ip++, Continue();   // array/non-number count
- g_flo_t cv = Cp(cnt)
-  ? g_sqrt(cplx_re(cnt) * cplx_re(cnt) + cplx_im(cnt) * cplx_im(cnt)) : TOFLO(cnt);
+ g_flo_t cv = Cp(cnt) ? cplx_mod(cnt) : TOFLO(cnt);
  if (cv < 0) cv = -cv;
  uintptr_t n = (uintptr_t) g_trunc(cv);
  if (twop(seq)) {                                  // list -> n copies of the spine
@@ -3882,11 +3862,7 @@ size_t const g_T[] = {
  [g_O] = Bytes, };       // object: one tagged gwen word per element
 
 uintptr_t g_tuple_bytes(struct g_tuple *v) {
- uintptr_t len = g_T[v->type],
-           rank = v->rank,
-           *shape = v->shape;
- while (rank--) len *= *shape++;
- return sizeof(struct g_tuple) + v->rank * sizeof(word) + len; }
+ return sizeof(struct g_tuple) + v->rank * sizeof(word) + g_T[v->type] * tuple_nelem(v); }
 
 // ============================================================================
 // rng
@@ -4704,9 +4680,7 @@ op11(g_vm_atype, tupp(Sp[0]) ? putnum(tuple(Sp[0])->type) : nil)
 g_vm(g_vm_alen) {
  word x = Sp[0];
  if (!tupp(x)) return Sp[0] = nil, Ip++, Continue();
- uintptr_t n = 1;
- for (uintptr_t i = 0; i < tuple(x)->rank; i++) n *= tuple(x)->shape[i];
- return Sp[0] = putnum(n), Ip++, Continue(); }
+ return Sp[0] = putnum(tuple_nelem(tuple(x))), Ip++, Continue(); }
 
 // dimensions as a list (allocates rank cons cells), nil for a non-tuple.
 g_vm(g_vm_ashape) {
@@ -4729,8 +4703,7 @@ g_vm(g_vm_ashape) {
 // zero, i.e. every element has zero MAGNITUDE (sign squares away, so a negative element keeps
 // the array truthy -- an array has no single sign). Drives g_nilp -> g_vm_cond and nilp/not.
 bool g_all_zero(struct g_tuple *v) {
- uintptr_t n = 1;
- for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ uintptr_t n = tuple_nelem(v);
  if (!v->rank) {                                // rank-0 boxed scalar: false iff <= 0 (total order)
   word x = word(v);
   if (v->type == g_C) return cplx_nonpos(x);    // re < 0, or re == 0 && im <= 0
@@ -4764,8 +4737,7 @@ g_vm(g_vm_asum) {
   if (!g_ok(f)) return gtrap(f);
   return Unpack(f), Continue(); }
  if (tuple(x)->type == g_C) {                   // complex sum -> a complex box
-  struct g_tuple *v = tuple(x); uintptr_t n = 1;
-  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+  struct g_tuple *v = tuple(x); uintptr_t n = tuple_nelem(v);
   g_flo_t *fp = tuple_data(v), sr = 0, si = 0;  // read all parts before Have (no alloc here)
   for (uintptr_t i = 0; i < n; i++) sr += fp[2*i], si += fp[2*i+1];
   Have(CPLX_REQ);
@@ -4773,8 +4745,7 @@ g_vm(g_vm_asum) {
   cplx_put(r, sr, si);
   return Sp[0] = word(r), Ip++, Continue(); }
  struct g_tuple *v = tuple(x);
- uintptr_t n = 1;
- for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ uintptr_t n = tuple_nelem(v);
  bool fdom = v->type >= g_R; word _res;
  Have(BOX_REQ);
  v = tuple(Sp[0]);
@@ -4796,8 +4767,7 @@ g_vm(g_vm_aprod) {
   if (!g_ok(f)) return gtrap(f);
   return Unpack(f), Continue(); }
  if (tuple(x)->type == g_C) {                   // complex product -> a complex box
-  struct g_tuple *v = tuple(x); uintptr_t n = 1;
-  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+  struct g_tuple *v = tuple(x); uintptr_t n = tuple_nelem(v);
   g_flo_t *fp = tuple_data(v), pr = 1, pi = 0;
   for (uintptr_t i = 0; i < n; i++) {
    g_flo_t ar = pr, ai = pi, br = fp[2*i], bi = fp[2*i+1];
@@ -4807,7 +4777,7 @@ g_vm(g_vm_aprod) {
   cplx_put(r, pr, pi);
   return Sp[0] = word(r), Ip++, Continue(); }
  struct g_tuple *v = tuple(x);
- uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ uintptr_t n = tuple_nelem(v);
  bool fdom = v->type >= g_R; word _res;
  Have(BOX_REQ); v = tuple(Sp[0]);
  if (fdom) {
@@ -4819,9 +4789,30 @@ g_vm(g_vm_aprod) {
   EMIT_INT(a); }
  return Sp[0] = _res, Ip++, Continue(); }
 
-// max / min over a non-empty array; empty -> nil; scalar -> identity.
-RED_EXTREME(g_vm_amax, >, 2)
-RED_EXTREME(g_vm_amin, <, 3)
+// max / min over a non-empty array (kind 2 = max, 3 = min, matching ored);
+// empty -> nil; scalar -> identity. The kind selects the comparison sense.
+static g_vm(g_vm_aextreme, int kind) {
+ word x = Sp[0];
+ if (!tupp(x)) return Ip++, Continue();
+ if (tuple(x)->type == g_O) {
+  Pack(f); f = ored(f, kind);
+  if (!g_ok(f)) return gtrap(f);
+  return Unpack(f), Continue(); }
+ if (tuple(x)->type == g_C) return Sp[0] = nil, Ip++, Continue();   // complex: unordered
+ struct g_tuple *v = tuple(x);
+ uintptr_t n = tuple_nelem(v);
+ if (!n) return Sp[0] = nil, Ip++, Continue();
+ bool fdom = v->type >= g_R, ismax = kind == 2; word _res;
+ Have(BOX_REQ); v = tuple(Sp[0]);
+ if (fdom) { g_flo_t m = tuple_get_flo(v, 0);
+  for (uintptr_t i = 1; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); if (ismax ? e > m : e < m) m = e; }
+  EMIT_FLO(m); }
+ else { intptr_t m = tuple_get_int(v, 0);
+  for (uintptr_t i = 1; i < n; i++) { intptr_t e = tuple_get_int(v, i); if (ismax ? e > m : e < m) m = e; }
+  EMIT_INT(m); }
+ return Sp[0] = _res, Ip++, Continue(); }
+g_vm(g_vm_amax) { return Ap(g_vm_aextreme, f, 2); }
+g_vm(g_vm_amin) { return Ap(g_vm_aextreme, f, 3); }
 
 // aall: the bool conjunction reduction. Scalar -> identity (so (aall 1) = 1, the
 // linchpin of the rank-agnostic compare idiom). Over an array: "no zero element"
@@ -4832,7 +4823,7 @@ g_vm(g_vm_aall) {
  word x = Sp[0];
  if (!tupp(x)) return Ip++, Continue();
  struct g_tuple *v = tuple(x);
- uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ uintptr_t n = tuple_nelem(v);
  if (v->type == g_O) {                         // object: a falsy element fails the conjunction
   for (uintptr_t i = 0; i < n; i++)
    if (g_nilp(tuple_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
@@ -4853,14 +4844,12 @@ g_vm(g_vm_aall) {
 // (g_R) with the operand's shape. The fill loop takes no &local, so the
 // g_vm wrapper keeps its trailing tail call.
 static g_noinline void vmap1_fill(struct g_tuple *r, struct g_tuple *a, g_flo_t (*fn)(g_flo_t)) {
- uintptr_t i, n = 1;
- for (i = 0; i < r->rank; i++) n *= r->shape[i];
- for (i = 0; i < n; i++) tuple_put_flo(r, i, fn(tuple_get_flo(a, i))); }
+ uintptr_t n = tuple_nelem(r);
+ for (uintptr_t i = 0; i < n; i++) tuple_put_flo(r, i, fn(tuple_get_flo(a, i))); }
 
 g_vm(g_vm_vmap1, g_flo_t (*fn)(g_flo_t)) {
  struct g_tuple *a = tuple(Sp[0]);
- uintptr_t rank = a->rank, n = 1;
- for (uintptr_t i = 0; i < rank; i++) n *= a->shape[i];
+ uintptr_t rank = a->rank, n = tuple_nelem(a);
  uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + n * g_T[g_R];
  Have(b2w(bytes));
  a = tuple(Sp[0]);                               // re-read post-Have
@@ -5582,7 +5571,7 @@ g_vm(g_vm_conj) {
 // arith INT_MIN/-1 edge.
 g_vm(g_vm_abs) {
  word a = Sp[0], _res;
- if (Cp(a)) { g_flo_t re = cplx_re(a), im = cplx_im(a), m = g_sqrt(re * re + im * im);
+ if (Cp(a)) { g_flo_t m = cplx_mod(a);
   Have(BOX_REQ); EMIT_FLO(m); return Sp[0] = _res, Ip++, Continue(); }
  if (fixp(a)) { intptr_t n = getnum(a);
   Have(BOX_REQ); EMIT_INT(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
@@ -5601,9 +5590,8 @@ g_vm(g_vm_abs) {
   memcpy(y, x, bytes); y->slen = -x->slen;           // flip the sign
   return Sp[0] = word(y), Ip++, Continue(); }
  if (arrp(a)) {                                       // vector -> scalar: the Euclidean (L2) norm
-  struct g_tuple *v = tuple(a); uintptr_t i, n = 1;       // sqrt(sum of squares) -- the same magnitude
-  for (i = 0; i < v->rank; i++) n *= v->shape[i];     // abs gives a complex (its 2-vector modulus)
-  g_flo_t s = 0;                                      // a g_C array sums its 2n packed (re,im) floats
+  struct g_tuple *v = tuple(a); uintptr_t i, n = tuple_nelem(v);   // sqrt(sum of squares); abs of a
+  g_flo_t s = 0;                                      // complex elem is its 2-vector modulus; g_C sums 2n floats
   if (v->type == g_C) { g_flo_t *fp = tuple_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
   else for (i = 0; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); s += e * e; }
   Have(BOX_REQ); EMIT_FLO(g_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
@@ -5614,7 +5602,7 @@ g_vm(g_vm_abs) {
 // fill f64 array r with arg of each element of v (a g_C packed or g_Z/g_R real
 // array, same shape). &-free, but g_noinline to keep g_vm_carg's tail call clean.
 static g_noinline void carg_fill(struct g_tuple *r, struct g_tuple *v) {
- uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
+ uintptr_t n = tuple_nelem(v);
  g_flo_t *rf = tuple_data(r);
  if (v->type == g_C) { g_flo_t *fp = tuple_data(v);
   for (uintptr_t p = 0; p < n; p++) rf[p] = g_atan2(fp[2*p+1], fp[2*p]); }
