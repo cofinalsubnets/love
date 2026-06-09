@@ -144,8 +144,8 @@
  (inspect x) (: o (strout 0) _ (fputx o x) (outstr o)))
 ; here are some macro definitions
 (: l (foldr (\ a l (X X (X a (X l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
-(:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) 1))))
-(:: '|| (\ l (: (or l) (? l (: y (nom 0) (list ': y (A l) (list '? y y (or (B l)))))) (or l))))
+(:: '&& (\ l (: (and l) (? (B l) (list '? (A l) (and (B l)) 0) (A l)) (? l (and l) 1))))
+(:: '|| (\ l (: (or l) (? l (: y (nom 0) (list ': y (A l) (list '? y y (or (B l))))) 0) (or l))))
 (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
 (:: '?- (\ a (X '? (cat (B a) (X (A a) 0)))))
 (:: '>>= (\ l (X (last l) (init l))))

@@ -104,7 +104,7 @@
                    _ (push c 'src (X (B lam) x))         ; tagged-body -> surface src for ala
                    lam))
      (= h ':) (? (atomp (BB x)) (X ': (list (wx (AB x) bnd)))
-                 (X ': (wxl (B x) bnd)))
+                 (X ': (wxl (boxfix (B x)) bnd)))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
      (= h '?) (X '? (wxc (B x) bnd))
      (: m (? (symp h) (macros h) 0)                     ; macro head? expand, then re-walk
       (? m (wx (m (B x)) bnd)
@@ -116,7 +116,7 @@
     (: nd (dsug (A bs) (AB bs))               ; desugar (f a..) so wx's \ adds params to bnd
      (X (A nd) (X (wx (B nd) bnd) (wxb (BB bs) bnd)))))
    (wxc bs bnd) (?                                ; cond clauses (ant con ant con ... else)
-    (atomp bs) bs
+    (atomp bs) (list 0)                           ; clauses ran out: supply the implicit 0 else
     (atomp (B bs)) (list (wx (A bs) bnd))
     ; peephole: a FINAL (nilp e) test flips its branches, dropping the wrapper --
     ; (.. (nilp e) con else) == (.. e else con), since the cond tests g_false(e), == nilp(e).
@@ -212,21 +212,15 @@
                    _ (pop c 'stk)
                  (co p q))
   ; variable expression analyzer
-  ; boxof: walk scopes for a boxed name -> its cell sym (the 'box map l2x sets).
-  (boxof x s) (? s
-   (? (|| (memq x (s 'arg)) (memq x (s 'stk))) 0 ; shadowed by a closer binding
-    (: p (assq x (s 'box)) (? p (B p) (boxof x (s 'par))))))
   (ava c x)
-   (: cell (boxof x c)
-    (? cell (ana c (list 'A cell)) ; boxed value ref -> (A cell), at analysis
-     (: lfd (assq x (c 'lam))
-     (? lfd (lz c lfd c)
-        (: s (c 'stk)
-           (stki d) (lidx x (cat (d 'imp) (d 'arg)))
-           (q i j m) (karg (+ i (stki c)) j m)
-         (?- (avb c (c 'par) x)
-          (memq x s) (karg (lidx x s))
-          (>= (stki c) 0) (q (pin (c 'stk)))))))))
+   (: lfd (assq x (c 'lam))
+    (? lfd (lz c lfd c)
+       (: s (c 'stk)
+          (stki d) (lidx x (cat (d 'imp) (d 'arg)))
+          (q i j m) (karg (+ i (stki c)) j m)
+        (?- (avb c (c 'par) x)
+         (memq x s) (karg (lidx x s))
+         (>= (stki c) 0) (q (pin (c 'stk)))))))
 
   (avb c d x)
    (? (nilp d) ; outside all lexical scopes?
@@ -261,17 +255,6 @@
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
    (X e (d 'imp)))
 
-  ; bxp: recursive-value boxing for one let's bindings (was prelude `boxprep`),
-  ; called by l2x. Prepend a cell per recursively-captured value, rewrite each boxed
-  ; (v . init) to (_ . (poke 1 init cell)); the cs name->cell map (B) lands on the
-  ; scope 'box so `ava` redirects boxed refs to (A cell). Returns (prepped-prs . cs),
-  ; or 0 when nothing is boxed. (Being subsumed by `wev` as the design progresses.)
-  (bxp prs) (: bx (boxset prs)
-   (? (nilp bx) 0
-    (: cs (mkcs bx)
-       (one p) (? (memq (A p) bx) (X '_ (list 'poke 1 (B p) (B (assq (A p) cs)))) p)
-     (X (cat (cellbinds cs) (map one prs)) cs))))
-
   ; let expression analyzer (the most complicated one)
   (ale c a b) (?
    (atomp b) (ana c a)
@@ -279,23 +262,13 @@
     q (sco c (c 'arg) (c 'imp))
     (set_cdr p x) (: _ (poke 2 x p) x) ; :[ weh
 
-   ; l1 collects bindings into a source-order (name . def) pair-list for l2x.
+   ; l1 collects bindings into a source-order (name . def) pair-list; boxing already
+   ; happened in wev (boxfix), so l2 compiles the bindings directly.
    (l1 prs n d rest) (:
      nd (dsug n d)
-    (? (atomp rest)       (l2x (rev (X nd prs)) (A nd)   1)
-       (atomp (B rest)) (l2x (rev (X nd prs)) (A rest) 0)
+    (? (atomp rest)       (l2 (rev (X nd prs)) (A nd)   1)
+       (atomp (B rest)) (l2 (rev (X nd prs)) (A rest) 0)
                           (l1 (X nd prs) (A rest) (AB rest) (BB rest))))
-   ; l2x: native recursive-value boxing. wev returns (cells-prepended-prs . cs)
-   ; or 0; the cs name->cell map goes on the scope 'box so ava redirects boxed refs
-   ; to (A cell) at analysis (no source rewrite). Body-less lets aren't boxed.
-   (l2x prs body even)
-    (: r (? even 0 (bxp prs))
-       pp (? r (A r) prs)
-       old (c 'box)
-       _ (? r (put 'box (cat (B r) old) c))
-       k (l2 pp body even)
-       _ (put 'box old c)
-     k)
 
    (l2 prs body even) (:- (cl 0 l l l)
     s (c 'stk)

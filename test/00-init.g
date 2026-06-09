@@ -17,6 +17,6 @@
  (report x v) (do
   (test_set 'count (+ 1 (test_get 'count)))
    (? v (term_text green_dot)
-    (do (test_set 'fail (X x (test_get 'fail)))
-       (term_text red_x))))
+    (do (term_text red_x) (putc 10)
+       (puts "assert failed: ") (putx x) (putc 10) (exit 1))))
  (X 'do (map (\ l (L report (L '\ l) l)) l)))))
