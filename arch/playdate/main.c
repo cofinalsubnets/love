@@ -52,21 +52,21 @@ static unsigned int (*clockfp)(void);
 g_noinline uintptr_t g_clock(void) { return clockfp ? clockfp() : 0; }
 static g_vm_t crank_angle, g_buttons, ls_root, cur_row, cur_col, cur_put, cur_set;
 static union u
-  bif_ls_root[] = {{ls_root}, {g_vm_ret0}},
-  bif_buttons[] = {{g_buttons}, {g_vm_ret0}},
-  bif_cur_row[] = {{cur_row}, {g_vm_ret0}},
-  bif_cur_col[] = {{cur_col}, {g_vm_ret0}},
-  bif_cur_put[] = {{cur_put}, {g_vm_ret0}},
-  bif_cur_set[] = {{g_vm_cur}, {.x=g_putnum(2)}, {cur_set}, {g_vm_ret0}},
-  bif_crank_angle[] = {{crank_angle}, {g_vm_ret0}};
+  nif_ls_root[] = {{ls_root}, {g_vm_ret0}},
+  nif_buttons[] = {{g_buttons}, {g_vm_ret0}},
+  nif_cur_row[] = {{cur_row}, {g_vm_ret0}},
+  nif_cur_col[] = {{cur_col}, {g_vm_ret0}},
+  nif_cur_put[] = {{cur_put}, {g_vm_ret0}},
+  nif_cur_set[] = {{g_vm_cur}, {.x=putfix(2)}, {cur_set}, {g_vm_ret0}},
+  nif_crank_angle[] = {{crank_angle}, {g_vm_ret0}};
 static struct g_def defs[] = {
-  {"cur_row", (intptr_t) bif_cur_row},
-  {"cur_col", (intptr_t) bif_cur_col},
-  {"cur_set", (intptr_t) bif_cur_set},
-  {"cur_put", (intptr_t) bif_cur_put},
-  {"ls_root", (intptr_t) bif_ls_root},
-  {"crank_angle", (intptr_t) bif_crank_angle},
-  {"get_buttons", (intptr_t) bif_buttons} };
+  {"cur_row", (intptr_t) nif_cur_row},
+  {"cur_col", (intptr_t) nif_cur_col},
+  {"cur_set", (intptr_t) nif_cur_set},
+  {"cur_put", (intptr_t) nif_cur_put},
+  {"ls_root", (intptr_t) nif_ls_root},
+  {"crank_angle", (intptr_t) nif_crank_angle},
+  {"get_buttons", (intptr_t) nif_buttons} };
 
 static void g_nop(void) {}
 static void
@@ -109,14 +109,14 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.g = g_evals_(g_defn(g_ini_m(_malloc, _free), defs, LEN(defs)),
     "(: putn(fputn out)puts(fputs out)(log _)(: "
     "i(vminfo 0)"
-    "f(A i)"
+    "g(A i)"
     "len(A(B i))"
     "allocd(A(B(B i)))"
     "stackd(A(B(B(B i))))"
     "_(puts\"\x03 \")"
     "_(putn(clock 0)10)"
     "_(puts\"\n\nf@\")"
-    "_(putn f 16)"
+    "_(putn g 16)"
     "_(puts\"\n#\")"
     "_(putn len 10)"
     "_(puts\".\")"
@@ -152,12 +152,12 @@ static void g_log_update(void) {
 static g_vm(crank_angle) {
  int d = K.pd->system->isCrankDocked();
  float a = K.pd->system->getCrankAngle();
- Sp[0] = d ? g_nil : g_putnum((int)a%360);
+ Sp[0] = d ? g_nil : putfix((int)a%360);
  Ip += 1;
  return Continue(); }
 
 static void g_log_ini(void) { kcb->flag |= show_cursor_flag; }
-static struct g*g_boot(struct g*f);
+static struct g*g_boot(struct g*g);
 
 
 
@@ -276,7 +276,7 @@ static void g_synth_update(void) {
       return; } }
 
 static g_vm(g_buttons) { return
-  Sp[0] = g_putnum(K.b.current),
+  Sp[0] = putfix(K.b.current),
   Ip += 1,
   Continue(); }
 
@@ -284,57 +284,57 @@ static void ls_cb(const char *p, void *_) {
   K.g = gxl(g_strof(K.g, p)); }
 
 static g_vm(ls_root) {
-  f = g_push(f, 1, g_nil);
-  if (g_ok(f)) {
-    K.g = f;
+  g = g_push(g, 1, g_nil);
+  if (g_ok(g)) {
+    K.g = g;
     K.pd->file->listfiles("/", ls_cb, NULL, 0);
-    f = K.g; }
-  if (!g_ok(f)) return f;
-  return f->sp[1] = f->sp[0], f->sp++, f->ip++, Continue(); }
+    g = K.g; }
+  if (!g_ok(g)) return g;
+  return g->sp[1] = g->sp[0], g->sp++, g->ip++, Continue(); }
 
-static g_vm(cur_row) { return Sp[0] = g_putnum(kcb->wpos / kcb->cols), Ip++, Continue(); }
-static g_vm(cur_col) { return Sp[0] = g_putnum(kcb->wpos % kcb->cols), Ip++, Continue(); }
+static g_vm(cur_row) { return Sp[0] = putfix(kcb->wpos / kcb->cols), Ip++, Continue(); }
+static g_vm(cur_col) { return Sp[0] = putfix(kcb->wpos % kcb->cols), Ip++, Continue(); }
 static g_vm(cur_set) {
-  uintptr_t r = g_getnum(Sp[0]), c = g_getnum(Sp[1]);
+  uintptr_t r = getfix(Sp[0]), c = getfix(Sp[1]);
   cb_cur(kcb, r, c);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
 static g_vm(cur_put) {
-  kcb->cb[kcb->wpos] = g_getnum(Sp[0]);
+  kcb->cb[kcb->wpos] = getfix(Sp[0]);
   Ip += 1;
   return Continue(); }
 
-static struct g *_putc(struct g*f, int c) { return cb_putc(kcb, c), f; }
-static struct g* _flush(struct g*f) { return f; }
-static struct g*_getc(struct g*f) {
-  struct g_io *i = g_core_of(f)->io;
-  if (g_getnum(i->ungetc_buf) != EOF) {
-    int c = g_getnum(i->ungetc_buf);
-    i->ungetc_buf = g_putnum(EOF);
-    return g_core_of(f)->b = c, f; }
+static struct g *_putc(struct g*g, int c) { return cb_putc(kcb, c), g; }
+static struct g* _flush(struct g*g) { return g; }
+static struct g*_getc(struct g*g) {
+  struct g_io *i = g_core_of(g)->io;
+  if (getfix(i->ungetc_buf) != EOF) {
+    int c = getfix(i->ungetc_buf);
+    i->ungetc_buf = putfix(EOF);
+    return g_core_of(g)->b = c, g; }
   int c = cb_getc(kcb);
-  if (c == EOF) i->eof_seen = g_putnum(true);
-  return g_core_of(f)->b = c, f; }
-static struct g* _ungetc(struct g*f, int c) {
-  struct g_io *i = g_core_of(f)->io;
-  i->ungetc_buf = g_putnum(c);
-  i->eof_seen = g_putnum(false);
-  return g_core_of(f)->b = c, f; }
-static struct g* _eof(struct g*f) {
-  struct g_io *i = g_core_of(f)->io;
-  return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+  if (c == EOF) i->eof_seen = putfix(true);
+  return g_core_of(g)->b = c, g; }
+static struct g* _ungetc(struct g*g, int c) {
+  struct g_io *i = g_core_of(g)->io;
+  i->ungetc_buf = putfix(c);
+  i->eof_seen = putfix(false);
+  return g_core_of(g)->b = c, g; }
+static struct g* _eof(struct g*g) {
+  struct g_io *i = g_core_of(g)->io;
+  return g_core_of(g)->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
 // fd values are nominal here — the playdate I/O goes through cb_getc / cb_putc
 // regardless. We just need fd >= 0 so the dispatcher routes to g_fd_port_vt
 // instead of a synthetic slot. The weak default g_ready returns true
 // unconditionally, so the fd is never poll()ed.
 struct g_io g_stdin = { .ap = g_vm_port_io,
-                        .fd = g_putnum(0), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+                        .fd = putfix(0), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 struct g_io g_stdout = { .ap = g_vm_port_io,
-                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 // No separate error stream on the device; route err to the same fd as out.
 struct g_io g_stderr = { .ap = g_vm_port_io,
-                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 
 struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };

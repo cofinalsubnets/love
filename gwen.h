@@ -6,13 +6,12 @@
 #include <stdarg.h>
 
 #define Width(_) b2w(sizeof(_))
-#define g_width Width
-#define g_core_of(f) ((struct g*)((intptr_t)(f)&~(sizeof(intptr_t)-1)))
-#define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))
-#define g_ok(f) (g_code_of(f) == g_status_ok)
+#define g_core_of(g) ((struct g*)((intptr_t)(g)&~(sizeof(intptr_t)-1)))
+#define g_code_of(g) ((enum g_status)((intptr_t)(g)&(sizeof(intptr_t)-1)))
+#define g_ok(g) (g_code_of(g) == g_status_ok)
 
-#define g_putnum(_) ((g_word)(((uintptr_t)(g_word)(_)<<1)|1))
-#define g_getnum(_) ((g_word)(_)>>1)
+#define putfix(_) ((g_word)(((uintptr_t)(g_word)(_)<<1)|1))
+#define getfix(_) ((g_word)(_)>>1)
 
 #ifndef EOF
 #define EOF (-1)
@@ -22,7 +21,7 @@
 #define NAN (__builtin_nanf(""))
 #endif
 
-#define g_nil g_putnum(0)
+#define g_nil putfix(0)
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
 // Keep a function from being identical-code-folded with another. The data
@@ -43,20 +42,20 @@
 #endif
 
 #if g_tco
-#define _g_vm(n, ...) struct g *n(struct g *restrict f, union u *Ip, g_word *Hp, g_word *restrict Sp, ##__VA_ARGS__)
-#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
-#define Continue() Ap(Ip->ap, f)
-#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
-#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
+#define _g_vm(n, ...) struct g *n(struct g *restrict g, union u *Ip, g_word *Hp, g_word *restrict Sp, ##__VA_ARGS__)
+#define Ap(fn, g, ...) fn(g, Ip, Hp, Sp, ##__VA_ARGS__)
+#define Continue() Ap(Ip->ap, g)
+#define Pack(g) (g->ip = Ip, g->hp = Hp, g->sp = Sp)
+#define Unpack(g) (Ip = g->ip, Hp = g->hp, Sp = g->sp)
 #else
-#define _g_vm(n, ...) struct g *n(struct g *restrict f, ##__VA_ARGS__)
-#define Ap(g, f, ...) g(f, ##__VA_ARGS__)
-#define Continue() f
-#define Hp f->hp
-#define Sp f->sp
-#define Ip f->ip
-#define Pack(f) ((void)0)
-#define Unpack(f) ((void)0)
+#define _g_vm(n, ...) struct g *n(struct g *restrict g, ##__VA_ARGS__)
+#define Ap(fn, g, ...) fn(g, ##__VA_ARGS__)
+#define Continue() g
+#define Hp g->hp
+#define Sp g->sp
+#define Ip g->ip
+#define Pack(g) ((void)0)
+#define Unpack(g) ((void)0)
 #endif
 #define g_vm(...) g_noinline g_noicf _g_vm(__VA_ARGS__)
 
@@ -115,7 +114,7 @@ struct g {
    struct g_io {
     g_vm_t *ap;
     g_word fd;
-    g_word ungetc_buf;            // pushed-back byte; putnum(EOF) = empty
+    g_word ungetc_buf;            // pushed-back byte; putfix(EOF) = empty
     g_word eof_seen; } *io; };
   // rng: global RNG state (rank-1 i64 tuple, len 4, xoshiro256++). Lives in &v0..end
   // so gc.c's root loop forwards it.
@@ -164,7 +163,7 @@ void g_fd_close(int fd);
 // and registers a finalizer that calls g_fd_close(fd) when the port is
 // collected. fd is stored as a plain integer at the C layer and tagged on
 // the way in.
-struct g *g_io_alloc(struct g *f, int fd);
+struct g *g_io_alloc(struct g *g, int fd);
 
 uintptr_t g_clock(void); // used by garbage collector
 void g_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
@@ -184,7 +183,7 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 // lib/ headers are bare C string literals (lcat output), so a frontend builds
 // the egg + double-bake bootstrap by juxtaposing them between these macros:
 //
-//   g_evals_(f, "("
+//   g_evals_(g, "("
 //   #include "egg.h"          // (\ egg (: ...)) -- the boot driver, lcat'd
 //     G_EGG_PRE
 //   #include "prelude.h"
@@ -208,15 +207,15 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 #define B(o) two(o)->b
 #define len(_) (((struct g_str*)(_))->len)
 #define txt(_) (((struct g_str*)(_))->bytes)
-#define avail(f) ((uintptr_t)(f->sp-f->hp))
+#define avail(g) ((uintptr_t)(g->sp-g->hp))
 #define num(_) ((word)(_))
 #define word(_) num(_)
 #define oddp(_) ((uintptr_t)(_)&1)
 #define evenp(_) !oddp(_)
 #define cell(_) ((union u*)(_))
-#define Have1() if (Sp == Hp) return Ap(g_vm_gc, f, 1)
-#define Have(n) if (Sp < Hp + n) return Ap(g_vm_gc, f, n)
-#define g_pop1(f) (*(f)->sp++)
+#define Have1() if (Sp == Hp) return Ap(g_vm_gc, g, 1)
+#define Have(n) if (Sp < Hp + n) return Ap(g_vm_gc, g, n)
+#define g_pop1(g) (*(g)->sp++)
 #define op(nom, n, x) g_vm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 #define nil g_nil
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
@@ -276,19 +275,19 @@ uintptr_t hash(struct g*, word), g_tuple_bytes(struct g_tuple*);
 #define lamp evenp
 #define two(_) ((struct g_pair*)(_))
 static g_inline bool twop(word _) { return lamp(_) && cell(_)->ap == g_vm_two; }
-static g_inline void *bump(struct g *f, uintptr_t n) {
-  if (avail(f) < n) __builtin_trap();
-  void *x = f->hp; f->hp += n; return x; }
+static g_inline void *bump(struct g *g, uintptr_t n) {
+  if (avail(g) < n) __builtin_trap();
+  void *x = g->hp; g->hp += n; return x; }
 static g_inline struct g_pair *ini_two(struct g_pair *w, intptr_t a, intptr_t b) {
  return w->ap = g_vm_two, w->a = a, w->b = b, w; }
-static g_inline struct g *encode(struct g*f, enum g_status s) { return
-  (struct g*) ((uintptr_t) f | s); }
-// Throw status s: transfer control to the continuation installed at f->k,
-// carrying s encoded into the f handed to it. The default k (throw_c, set in
+static g_inline struct g *encode(struct g*g, enum g_status s) { return
+  (struct g*) ((uintptr_t) g | s); }
+// Throw status s: transfer control to the continuation installed at g->k,
+// carrying s encoded into the g handed to it. The default k (throw_c, set in
 // g_ini_0) immediately yields that back to the C driver -- same escape the old
-// trap did; installing a gwen thread at f->k would instead land throws in gwen.
-static g_inline struct g *gtrap2(struct g*f, enum g_status s) {
- struct g *c = g_core_of(f);
+// trap did; installing a gwen thread at g->k would instead land throws in gwen.
+static g_inline struct g *gtrap2(struct g*g, enum g_status s) {
+ struct g *c = g_core_of(g);
  c->ip = c->k;                                  // resume at the continuation
 #if g_tco
  return c->k->ap(encode(c, s), c->k, c->hp, c->sp);
@@ -296,9 +295,9 @@ static g_inline struct g *gtrap2(struct g*f, enum g_status s) {
  return c->k->ap(encode(c, s));
 #endif
 }
-// Throw on an already-tagged f: re-throw its own status to f->k.
-static g_inline struct g *gtrap(struct g*f) { return gtrap2(g_core_of(f), g_code_of(f)); }
-static g_inline struct g *g_have(struct g *f, uintptr_t n) {
- return !g_ok(f) || avail(f) >= n ? f : g_please(f, n); }
+// Throw on an already-tagged g: re-throw its own status to g->k.
+static g_inline struct g *gtrap(struct g*g) { return gtrap2(g_core_of(g), g_code_of(g)); }
+static g_inline struct g *g_have(struct g *g, uintptr_t n) {
+ return !g_ok(g) || avail(g) >= n ? g : g_please(g, n); }
 
 #endif

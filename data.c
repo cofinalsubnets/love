@@ -21,9 +21,9 @@
 // order/stride; g_noicf in the g_vm macro blocks identical-code folding. No body
 // here may use a per-sentinel literal, or the bodies would differ in size.)
 static g_vm(data_apply) {
- return Ap(g_apply_mx[g_typ(Ip)][g_kind(Sp[0])], f); }
+ return Ap(g_apply_mx[g_typ(Ip)][g_kind(Sp[0])], g); }
 #define data(idx, name) \
- __attribute__((section("gwen_data." #idx), used)) g_vm(name) { return Ap(data_apply, f); }
+ __attribute__((section("gwen_data." #idx), used)) g_vm(name) { return Ap(data_apply, g); }
 
 #define go(_)\
   _(00, g_vm_tuple) _(01, g_vm_big) _(02, g_vm_str)\

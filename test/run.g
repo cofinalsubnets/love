@@ -1,4 +1,4 @@
-; Subprocess capability (host-only bifs `run` and `getenv`).
+; Subprocess capability (host-only nifs `run` and `getenv`).
 ;
 ; (run argv) takes a LIST of strings and spawns the program named by its head
 ; (PATH-resolved via execvp). It returns:

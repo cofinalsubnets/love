@@ -4,7 +4,7 @@
 ; Port of tools/vmret.py (see it for the full rationale). The gwen VM is
 ; threaded: every g_vm_* opcode handler should tail-jump to the next, never
 ; emit an ordinary `ret`. This tool disassembles an ELF (shelling out to
-; objdump / llvm-objdump via the `run` bif) and reports every g_vm_* function
+; objdump / llvm-objdump via the `run` nif) and reports every g_vm_* function
 ; whose body still contains a `ret` -- a first-pass heuristic, expect false
 ; positives. It is cross-arch: it reads e_machine and picks a per-arch return
 ; mnemonic, preferring multi-target llvm-objdump for non-x86 images.
@@ -12,7 +12,7 @@
 ; Usage: gl vmret.g ELF [--prefix PREFIX] [--objdump PATH]
 ; Exit:  0 = all clean, 1 = suspects found, 2 = usage/tool error.
 ;
-; This needs the host-only `run`/`getenv` bifs (subprocess + environment).
+; This needs the host-only `run`/`getenv` nifs (subprocess + environment).
 
 (: (die m)   (: _ (fputs err "vmret: ") _ (fputs err m) _ (fputs err "\n") (exit 2))
    (usage 0) (: _ (fputs out "usage: vmret.g ELF [--prefix PREFIX] [--objdump PATH]\n") (exit 0)))

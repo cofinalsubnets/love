@@ -5,7 +5,7 @@
 // hooks. Here the console is UART0 on GPIO0(TX)/GPIO1(RX) at 115200 8N1 -- the
 // same PL011 the aarch64 kernel console drives -- reachable over a USB-serial
 // adapter. The arch backend (rp2040.c) owns the boot chain, clocks, UART, and
-// timer; this file is just the gwen glue plus a few GPIO bifs. The REPL line
+// timer; this file is just the gwen glue plus a few GPIO nifs. The REPL line
 // editor in repl.g drives the console exactly as it drives the kernel's.
 #include "../../gwen.h"
 #include "rp2040.h"
@@ -40,39 +40,39 @@ void g_wait_fds(int const *fds, int n, uintptr_t ms) {
 // Both ports ride UART0; the fd is nominal (>= 0 so the dispatcher routes
 // here). Serial never reaches EOF, so the dispatcher's eof_seen latch never
 // trips.
-static struct g *fd_getc(struct g *f) {
-  struct g *fc = g_core_of(f);
+static struct g *fd_getc(struct g *g) {
+  struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  if (g_getnum(i->ungetc_buf) != EOF) {
-    fc->b = g_getnum(i->ungetc_buf);
-    i->ungetc_buf = g_putnum(EOF);
-    return f; }
+  if (getfix(i->ungetc_buf) != EOF) {
+    fc->b = getfix(i->ungetc_buf);
+    i->ungetc_buf = putfix(EOF);
+    return g; }
   fc->b = serial_getc();
-  return f; }
+  return g; }
 
-static struct g *fd_ungetc(struct g *f, int c) {
-  struct g *fc = g_core_of(f);
+static struct g *fd_ungetc(struct g *g, int c) {
+  struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  i->ungetc_buf = g_putnum(c);
-  i->eof_seen = g_putnum(false);
-  return fc->b = c, f; }
+  i->ungetc_buf = putfix(c);
+  i->eof_seen = putfix(false);
+  return fc->b = c, g; }
 
-static struct g *fd_eof(struct g *f) {
-  struct g *fc = g_core_of(f);
+static struct g *fd_eof(struct g *g) {
+  struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+  return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
 
-static struct g *fd_putc(struct g *f, int c) {
+static struct g *fd_putc(struct g *g, int c) {
   if (c == '\n') serial_putc('\r');     // cook LF -> CRLF for terminals
   serial_putc(c);
-  return f; }
+  return g; }
 
-static struct g *fd_flush(struct g *f) { return f; }   // UART has no buffer
+static struct g *fd_flush(struct g *g) { return g; }   // UART has no buffer
 
-struct g_io g_stdin  = { g_vm_port_io, g_putnum(0), g_putnum(EOF), g_putnum(false) };
-struct g_io g_stdout = { g_vm_port_io, g_putnum(1), g_putnum(EOF), g_putnum(false) };
+struct g_io g_stdin  = { g_vm_port_io, putfix(0), putfix(EOF), putfix(false) };
+struct g_io g_stdout = { g_vm_port_io, putfix(1), putfix(EOF), putfix(false) };
 // No separate error stream; route err to the console too.
-struct g_io g_stderr = { g_vm_port_io, g_putnum(1), g_putnum(EOF), g_putnum(false) };
+struct g_io g_stderr = { g_vm_port_io, putfix(1), putfix(EOF), putfix(false) };
 struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
 // --- GPIO builtins --------------------------------------------------------
@@ -80,48 +80,48 @@ struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_
 // (gpio_dir pin out) -- direction: out non-nil => output; returns out.
 // (gpio_put pin val) -- drive an output: val non-nil => high; returns val.
 // (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
-// nil is g_putnum(0), so g_getnum(arg) != 0 reads a number or nil correctly.
+// nil is putfix(0), so getfix(arg) != 0 reads a number or nil correctly.
 static g_vm(g_gpio_init) {
-  gpio_init(g_getnum(Sp[0]));           // leaves Sp[0] (the pin) as the result
+  gpio_init(getfix(Sp[0]));           // leaves Sp[0] (the pin) as the result
   Ip += 1;
   return Continue(); }
 
 static g_vm(g_gpio_get) {
-  Sp[0] = g_putnum(gpio_get(g_getnum(Sp[0])));
+  Sp[0] = putfix(gpio_get(getfix(Sp[0])));
   Ip += 1;
   return Continue(); }
 
 static g_vm(g_gpio_dir) {
-  unsigned pin = g_getnum(Sp[0]);
-  int out = g_getnum(Sp[1]) != 0;
+  unsigned pin = getfix(Sp[0]);
+  int out = getfix(Sp[1]) != 0;
   gpio_set_dir(pin, out);
-  Sp[1] = g_putnum(out);
+  Sp[1] = putfix(out);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
 static g_vm(g_gpio_put) {
-  unsigned pin = g_getnum(Sp[0]);
-  int val = g_getnum(Sp[1]) != 0;
+  unsigned pin = getfix(Sp[0]);
+  int val = getfix(Sp[1]) != 0;
   gpio_put(pin, val);
-  Sp[1] = g_putnum(val);
+  Sp[1] = putfix(val);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
-// 1-arg bifs run their thunk directly; 2-arg bifs build a 2-slot frame with
-// g_vm_cur first (mirrors the host's bif_open shape).
+// 1-arg nifs run their thunk directly; 2-arg nifs build a 2-slot frame with
+// g_vm_cur first (mirrors the host's nif_open shape).
 static union u const
-  bif_gpio_init[] = {{g_gpio_init}, {g_vm_ret0}},
-  bif_gpio_get[]  = {{g_gpio_get}, {g_vm_ret0}},
-  bif_gpio_dir[]  = {{g_vm_cur}, {.x = g_putnum(2)}, {g_gpio_dir}, {g_vm_ret0}},
-  bif_gpio_put[]  = {{g_vm_cur}, {.x = g_putnum(2)}, {g_gpio_put}, {g_vm_ret0}};
+  nif_gpio_init[] = {{g_gpio_init}, {g_vm_ret0}},
+  nif_gpio_get[]  = {{g_gpio_get}, {g_vm_ret0}},
+  nif_gpio_dir[]  = {{g_vm_cur}, {.x = putfix(2)}, {g_gpio_dir}, {g_vm_ret0}},
+  nif_gpio_put[]  = {{g_vm_cur}, {.x = putfix(2)}, {g_gpio_put}, {g_vm_ret0}};
 
 static struct g_def defs[] = {
-  {"gpio_init", (intptr_t) bif_gpio_init},
-  {"gpio_dir",  (intptr_t) bif_gpio_dir},
-  {"gpio_put",  (intptr_t) bif_gpio_put},
-  {"gpio_get",  (intptr_t) bif_gpio_get}, };
+  {"gpio_init", (intptr_t) nif_gpio_init},
+  {"gpio_dir",  (intptr_t) nif_gpio_dir},
+  {"gpio_put",  (intptr_t) nif_gpio_put},
+  {"gpio_get",  (intptr_t) nif_gpio_get}, };
 
 // --- entry ----------------------------------------------------------------
 // reset_handler (rp2040.c) has set up clocks before calling us. The static
@@ -136,8 +136,8 @@ static uint8_t pool[232 * (1 << 10)];
 
 int main(void) {
   serial_init();
-  struct g *f = g_defn(g_ini_s(pool, sizeof pool), defs, LEN(defs));
-  f = g_evals_(f, "("
+  struct g *g = g_defn(g_ini_s(pool, sizeof pool), defs, LEN(defs));
+  g = g_evals_(g, "("
 #include "egg.h"
     G_EGG_PRE
 #include "prelude.h"
@@ -147,5 +147,5 @@ int main(void) {
 #include "repl.h"
     "(repl 0 0)");
   // The REPL only returns on a fatal error. Idle low-power afterward.
-  (void) f;
+  (void) g;
   for (;;) __asm volatile("wfe"); }

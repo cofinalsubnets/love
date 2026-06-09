@@ -37,7 +37,7 @@ static void raw_mode(void) {
   // c_oflag is left alone, so '\n' on output still becomes CR-LF.
 #endif
 
-static noreturn g_vm(g_vm_exit) { exit(g_getnum(Sp[0])); }
+static noreturn g_vm(g_vm_exit) { exit(getfix(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // Returns only when poll succeeds (data ready / deadline elapsed) or fails
 // for a non-EINTR reason.
@@ -67,46 +67,46 @@ void g_wait_fds(int const *fds, int n, uintptr_t ms) {
   for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
   poll_wait(p, n, ms); }
 
-static struct g *fd_getc(struct g *f) {
-  struct g *fc = g_core_of(f);
-  struct g_io *i = f->io;
-  if (g_getnum(i->ungetc_buf) != EOF) {
-    fc->b = g_getnum(i->ungetc_buf);
-    i->ungetc_buf = g_putnum(EOF);
-    return f; }
+static struct g *fd_getc(struct g *g) {
+  struct g *fc = g_core_of(g);
+  struct g_io *i = g->io;
+  if (getfix(i->ungetc_buf) != EOF) {
+    fc->b = getfix(i->ungetc_buf);
+    i->ungetc_buf = putfix(EOF);
+    return g; }
   uint8_t b;
-  ssize_t n = read(g_getnum(i->fd), &b, 1);
-  if (n <= 0) { i->eof_seen = g_putnum(true); fc->b = EOF; }
+  ssize_t n = read(getfix(i->fd), &b, 1);
+  if (n <= 0) { i->eof_seen = putfix(true); fc->b = EOF; }
   else fc->b = b;
-  return f; }
+  return g; }
 
-static struct g *fd_ungetc(struct g *f, int c) {
- struct g *fc = g_core_of(f);
+static struct g *fd_ungetc(struct g *g, int c) {
+ struct g *fc = g_core_of(g);
  struct g_io *i = fc->io;
- i->ungetc_buf = g_putnum(c);
- i->eof_seen = g_putnum(false);
- return fc->b = c, f; }
+ i->ungetc_buf = putfix(c);
+ i->eof_seen = putfix(false);
+ return fc->b = c, g; }
 
-static struct g *fd_eof(struct g *f) {
-  struct g *fc = g_core_of(f);
+static struct g *fd_eof(struct g *g) {
+  struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+  return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
 
-static struct g *fd_putc(struct g *f, int c) {
+static struct g *fd_putc(struct g *g, int c) {
  uint8_t b = c;
- if (f->io->fd == g_putnum(STDOUT_FILENO)) fputc(b, stdout);
- else write(g_getnum(f->io->fd), &b, 1);
- return f; }
+ if (g->io->fd == putfix(STDOUT_FILENO)) fputc(b, stdout);
+ else write(getfix(g->io->fd), &b, 1);
+ return g; }
 
-static struct g *fd_flush(struct g *f) {
- if (f->io->fd == g_putnum(STDOUT_FILENO)) fflush(stdout);
- return f; }
+static struct g *fd_flush(struct g *g) {
+ if (g->io->fd == putfix(STDOUT_FILENO)) fflush(stdout);
+ return g; }
 
 struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
-struct g_io g_stdin = { g_vm_port_io, g_putnum(STDIN_FILENO), g_putnum(EOF), g_putnum(false) };
-struct g_io g_stdout = { g_vm_port_io, g_putnum(STDOUT_FILENO), g_putnum(EOF), g_putnum(false) };
-struct g_io g_stderr = { g_vm_port_io, g_putnum(STDERR_FILENO), g_putnum(EOF), g_putnum(false) };
+struct g_io g_stdin = { g_vm_port_io, putfix(STDIN_FILENO), putfix(EOF), putfix(false) };
+struct g_io g_stdout = { g_vm_port_io, putfix(STDOUT_FILENO), putfix(EOF), putfix(false) };
+struct g_io g_stderr = { g_vm_port_io, putfix(STDERR_FILENO), putfix(EOF), putfix(false) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that g_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live
@@ -141,11 +141,11 @@ static g_vm(g_vm_open) {
   struct g_str *mv = (struct g_str*) Sp[1];
   int fd = call_open(pv, mv);
   if (fd < 0) goto fail;
-  Pack(f);
-  struct g *r = g_io_alloc(f, fd);
+  Pack(g);
+  struct g *r = g_io_alloc(g, fd);
   if (!g_ok(r)) { close(fd); goto fail; }
-  f = r;
-  Unpack(f);
+  g = r;
+  Unpack(g);
   // stack: [port, path, mode, ...] -> [port, ...]
   Sp[2] = Sp[0];
   Sp += 2;
@@ -165,51 +165,51 @@ static g_vm(g_vm_close) {
   // inline "is x a port": heap pointer whose discriminator is g_vm_port_io.
   if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == g_vm_port_io) {
     struct g_io *io = (struct g_io*) Sp[0];
-    intptr_t fd = g_getnum(io->fd);
+    intptr_t fd = getfix(io->fd);
     if (fd >= 0) {
       close(fd);
-      io->fd = g_putnum(-3); } }
+      io->fd = putfix(-3); } }
   Sp[0] = g_nil;
   Ip += 1;
   return Continue(); }
 
 // --- subprocess (run) + environment (getenv) ---------------------------
-// Both are host-only bifs (POSIX fork/exec/wait, getenv), like open/close.
+// Both are host-only nifs (POSIX fork/exec/wait, getenv), like open/close.
 // No malloc: argv is marshalled into the uncommitted gwen heap gap and the
 // child's stdout is captured into a growing gwen string (the reader's
 // str0 + grow + len-fixup pattern). See core/io.c gzread1str / grbufg.
 
 // Local copy of core/io.c's grbufg (static there): grow the string on sp[0]
 // to 2*len, copying the old `len` bytes in. str0 is the public allocator.
-static struct g *host_grbufg(struct g *f, uintptr_t len) {
- if (g_ok(f = str0(f, 2 * len)))
-  memcpy(txt(f->sp[0]), txt(f->sp[1]), len),
-  f->sp[1] = f->sp[0], f->sp++;
- return f; }
+static struct g *host_grbufg(struct g *g, uintptr_t len) {
+ if (g_ok(g = str0(g, 2 * len)))
+  memcpy(txt(g->sp[0]), txt(g->sp[1]), len),
+  g->sp[1] = g->sp[0], g->sp++;
+ return g; }
 
-// Workhorse for (run argv). Called with f Packed; argv is the single arg.
+// Workhorse for (run argv). Called with g Packed; argv is the single arg.
 // Pushes EXACTLY ONE net value above argv on every path so the g_vm_run
 // shell collapses uniformly: success -> [(status . output), argv], failure
-// -> [errno-or-(-1) fixnum, argv]. Returns a not-ok f only on OOM.
+// -> [errno-or-(-1) fixnum, argv]. Returns a not-ok g only on OOM.
 // &locals (pipes/pid/status) are fine here: this returns normally, it is
 // not a VM-dispatch tail-call site (cf. call_open vs g_vm_open).
-g_noinline static struct g *host_run(struct g *f, g_word argv) {
+g_noinline static struct g *host_run(struct g *g, g_word argv) {
  // pass 1: validate every element is a string; size the arg-byte blob.
  intptr_t argc = 0;
  uintptr_t total = 0;
  for (g_word p = argv; twop(p); p = B(p)) {
-  if (!g_strp(A(p))) return g_push(f, 1, g_putnum(-1));   // misuse
+  if (!g_strp(A(p))) return g_push(g, 1, putfix(-1));   // misuse
   argc++, total += len(A(p)) + 1; }                       // +1 for the NUL
- if (!argc) return g_push(f, 1, g_putnum(-1));            // empty argv
+ if (!argc) return g_push(g, 1, putfix(-1));            // empty argv
 
  // Reserve gap for cav (argc+1 pointers, word-aligned) + the byte blob.
  // Written into the uncommitted region at Hp -- invisible to GC, holds no
  // gwen pointers, consumed before any further allocation. Never bump Hp.
- if (!g_ok(f = g_have(f, (uintptr_t) argc + 1 + b2w(total)))) return f;
- argv = f->sp[0];          // g_have may have GC'd; argv (the only root, at sp[0])
+ if (!g_ok(g = g_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
+ argv = g->sp[0];          // g_have may have GC'd; argv (the only root, at sp[0])
                            // is forwarded there -- the C local is now stale.
- char **cav = (char**) f->hp;                             // at Hp: aligned
- char *blob = (char*) (f->hp + (argc + 1));               // whole words after
+ char **cav = (char**) g->hp;                             // at Hp: aligned
+ char *blob = (char*) (g->hp + (argc + 1));               // whole words after
  { uintptr_t off = 0; intptr_t i = 0;
    for (g_word p = argv; twop(p); p = B(p), i++) {         // re-walk post-g_have
     struct g_str *s = str(A(p));
@@ -223,14 +223,14 @@ g_noinline static struct g *host_run(struct g *f, g_word argv) {
  // kernel closes ep[1] -> parent reads EOF; on failure the child writes errno
  // -> parent distinguishes "couldn't spawn" from "ran and exited 127".
  int op[2], ep[2];
- if (pipe(op)) return g_push(f, 1, g_putnum(errno));
- if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]); return g_push(f, 1, g_putnum(e)); }
+ if (pipe(op)) return g_push(g, 1, putfix(errno));
+ if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]); return g_push(g, 1, putfix(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  pid_t pid = fork();
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
-  return g_push(f, 1, g_putnum(e)); }
+  return g_push(g, 1, putfix(e)); }
  if (!pid) {                                              // child
   dup2(op[1], STDOUT_FILENO);
   close(op[0]); close(op[1]); close(ep[0]);
@@ -244,35 +244,35 @@ g_noinline static struct g *host_run(struct g *f, g_word argv) {
  if (childerr) {                                          // exec failed
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return g_push(f, 1, g_putnum(childerr)); }
+  return g_push(g, 1, putfix(childerr)); }
 
  // drain stdout into a growing gwen string (bulk reads; stderr inherited).
  uintptr_t n = 0, lim = 1u << 16;
- f = str0(f, lim);                                        // capture -> sp[0]
- while (g_ok(f)) {
-  if (n == lim) { f = host_grbufg(f, lim); lim *= 2; continue; }
-  r = read(op[0], txt(f->sp[0]) + n, lim - n);
+ g = str0(g, lim);                                        // capture -> sp[0]
+ while (g_ok(g)) {
+  if (n == lim) { g = host_grbufg(g, lim); lim *= 2; continue; }
+  r = read(op[0], txt(g->sp[0]) + n, lim - n);
   if (r < 0) { if (errno == EINTR) continue; break; }
   if (!r) break;                                          // EOF
   n += (uintptr_t) r; }
  close(op[0]);
  { int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}          // reap
-   if (!g_ok(f)) return f;                                // OOM mid-drain
-   if (n) len(f->sp[0]) = n;                              // fix logical length
-   else f->sp[0] = EmptyString;                             // empty output -> the singleton
+   if (!g_ok(g)) return g;                                // OOM mid-drain
+   if (n) len(g->sp[0]) = n;                              // fix logical length
+   else g->sp[0] = EmptyString;                             // empty output -> the singleton
    int status = WIFEXITED(st) ? WEXITSTATUS(st)
               : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1;
-   if (!g_ok(f = g_have(f, Width(struct g_pair)))) return f;
-   struct g_pair *w = ini_two((struct g_pair*) bump(f, Width(struct g_pair)),
-                              g_putnum(status), f->sp[0]);
-   f->sp[0] = word(w); }                                  // [(status.output), argv]
- return f; }
+   if (!g_ok(g = g_have(g, Width(struct g_pair)))) return g;
+   struct g_pair *w = ini_two((struct g_pair*) bump(g, Width(struct g_pair)),
+                              putfix(status), g->sp[0]);
+   g->sp[0] = word(w); }                                  // [(status.output), argv]
+ return g; }
 
 static g_vm(g_vm_run) {
- Pack(f);
- f = host_run(f, Sp[0]);
- if (!g_ok(f)) return gtrap(f);
- Unpack(f);
+ Pack(g);
+ g = host_run(g, Sp[0]);
+ if (!g_ok(g)) return gtrap(g);
+ Unpack(g);
  Sp[1] = Sp[0];                                           // result over argv
  Sp += 1; Ip += 1;
  return Continue(); }
@@ -291,19 +291,19 @@ g_noinline static char const *host_getenv(struct g_str *nv) {
 static g_vm(g_vm_getenv) {
  char const *v = g_strp(Sp[0]) ? host_getenv((struct g_str*) Sp[0]) : NULL;
  if (!v) { Sp[0] = g_nil; Ip += 1; return Continue(); }
- Pack(f);
- if (!g_ok(f = g_strof(f, v))) return gtrap(f);
- Unpack(f);
+ Pack(g);
+ if (!g_ok(g = g_strof(g, v))) return gtrap(g);
+ Unpack(g);
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
  return Continue(); }
 
 static union u const
- bif_exit[] = {{g_vm_exit}, {g_vm_ret0}},
- bif_open[] = {{g_vm_cur}, {.x = g_putnum(2)}, {g_vm_open}, {g_vm_ret0}},
- bif_close[] = {{g_vm_close}, {g_vm_ret0}},
- bif_run[] = {{g_vm_run}, {g_vm_ret0}},
- bif_getenv[] = {{g_vm_getenv}, {g_vm_ret0}};
+ nif_exit[] = {{g_vm_exit}, {g_vm_ret0}},
+ nif_open[] = {{g_vm_cur}, {.x = putfix(2)}, {g_vm_open}, {g_vm_ret0}},
+ nif_close[] = {{g_vm_close}, {g_vm_ret0}},
+ nif_run[] = {{g_vm_run}, {g_vm_ret0}},
+ nif_getenv[] = {{g_vm_getenv}, {g_vm_ret0}};
 
 #ifndef GL_BOOTSTRAP
 static char const
@@ -336,7 +336,7 @@ static char const
 #endif
 
 int main(int argc, char const **argv) {
-  struct g *f = g_ini();
+  struct g *g = g_ini();
   bool argp = argc > 1;
 #ifndef GL_BOOTSTRAP
   bool replp = !argp && isatty(STDIN_FILENO);
@@ -344,40 +344,40 @@ int main(int argc, char const **argv) {
 #endif
   char const **av = argp ? argv + 1 : argv;
   int ac = argp ? argc - 1 : argc;
-  for (; *av; f = g_strof(f, *av++));
-  for (f = g_push(f, 1, g_nil); ac--; f = gxr(f));
-  if (g_ok(f)) {
-    struct g_def d[] = {{"exit", (g_word) bif_exit},
-                        {"open", (g_word) bif_open},
-                        {"close", (g_word) bif_close},
-                        {"run", (g_word) bif_run},
-                        {"getenv", (g_word) bif_getenv},
-                        {"argv", g_pop1(f)}, };
-    f = g_defn(f, d, LEN(d));
+  for (; *av; g = g_strof(g, *av++));
+  for (g = g_push(g, 1, g_nil); ac--; g = gxr(g));
+  if (g_ok(g)) {
+    struct g_def d[] = {{"exit", (g_word) nif_exit},
+                        {"open", (g_word) nif_open},
+                        {"close", (g_word) nif_close},
+                        {"run", (g_word) nif_run},
+                        {"getenv", (g_word) nif_getenv},
+                        {"argv", g_pop1(g)}, };
+    g = g_defn(g, d, LEN(d));
 #ifdef GL_BOOTSTRAP
     // gl0: with args, run the build tool (lcat / gen_data) through the CLI driver.
     // With no args, self-test -- eval prelude+repl and run the baked corpus via c0,
     // then bootstrap the self-hosted ev (egg) and run the corpus again through it.
-    if (argp) f = g_evals_(f, cli);
+    if (argp) g = g_evals_(g, cli);
     else {
-      f = g_strof(f, tests0);                          // the baked corpus, as a string
-      struct g_def td[] = {{"tests", g_pop1(f)}};
-      f = g_defn(f, td, LEN(td));
-      f = g_evals_(f,                                  // prelude + repl, compiled by c0
+      g = g_strof(g, tests0);                          // the baked corpus, as a string
+      struct g_def td[] = {{"tests", g_pop1(g)}};
+      g = g_defn(g, td, LEN(td));
+      g = g_evals_(g,                                  // prelude + repl, compiled by c0
 #include "prelude0.h"
 #include "repl0.h"
       );
-      f = g_evals_(f, s2cldef);
-      f = g_evals_(f, runner);                         // pass 1: corpus via ev = the c0 bif
-      f = g_evals_(f, "("                              // bootstrap: install the self-hosted ev
+      g = g_evals_(g, s2cldef);
+      g = g_evals_(g, runner);                         // pass 1: corpus via ev = the c0 nif
+      g = g_evals_(g, "("                              // bootstrap: install the self-hosted ev
 #include "egg0.h"
         "'("
 #include "prelude0.h"
 #include "ev0.h"
         "))");
-      f = g_evals_(f, runner); }                       // pass 2: corpus via the self-hosted ev
+      g = g_evals_(g, runner); }                       // pass 2: corpus via the self-hosted ev
 #else
-    f = g_evals_(f, "("
+    g = g_evals_(g, "("
 #include "egg.h"
         "'("
 #include "prelude.h"
@@ -385,10 +385,10 @@ int main(int argc, char const **argv) {
         "))"
 #include "repl.h"
     );
-    f = g_evals_(f, argp ? cli : replp ? "(repl 0 0)" : rel);
+    g = g_evals_(g, argp ? cli : replp ? "(repl 0 0)" : rel);
 #endif
   }
-  switch (g_code_of(f)) {
+  switch (g_code_of(g)) {
    default: break;
-   case g_status_oom: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(f)->len); break; }
-  return g_fin(f); }
+   case g_status_oom: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(g)->len); break; }
+  return g_fin(g); }

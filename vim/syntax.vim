@@ -13,7 +13,7 @@ syn iskeyword @,33,38,42-43,45-47,48-57,58,60-63,92,94-95,124,126
 " The three special forms: : (letrec*/seq), ? (cond), \ (lambda/quote)
 syn keyword PForm : ? \\
 
-" Built-in functions (C bifs) + prelude functions
+" Built-in functions (C nifs) + prelude functions
 syn keyword PFunc X A B AA AB BA BB AAA AAB ABA ABB BAA BAB BBA BBB
 syn keyword PFunc cons car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
 syn keyword PFunc id co const flip

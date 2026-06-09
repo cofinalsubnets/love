@@ -27,7 +27,7 @@
    (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (mod (* h h) m)
                                  (? (= 0 (mod k 2)) h2 (mod (* h2 b) m)))))
 ; functional bounded draw: (value . st') with value in [0,n), riding rand-next
-; (full-width draw) + modulo. The global-stream analogue is the `rand` bif.
+; (full-width draw) + modulo. The global-stream analogue is the `rand` nif.
 (: (randint st n) (: r (rand-next st) (X (mod (A r) n) (B r))))
 (: AAA (co A AA) AAB (co A AB)
    ABA (co A BA) ABB (co A BB)

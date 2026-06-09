@@ -29,38 +29,38 @@ uintptr_t g_clock(void) {
 
 // --- ports ----------------------------------------------------------------
 // Output goes to out_buf; the page reads it back through the exports below.
-static struct g *_putc(struct g *f, int c) {
+static struct g *_putc(struct g *g, int c) {
   if (out_len < sizeof out_buf) out_buf[out_len++] = (char) c;
-  return f; }
-static struct g *_flush(struct g *f) { return f; }
+  return g; }
+static struct g *_flush(struct g *g) { return g; }
 
 // No real stdin: getc reports EOF (honouring any pushed-back byte first).
-static struct g *_getc(struct g *f) {
-  struct g_io *i = g_core_of(f)->io;
-  if (g_getnum(i->ungetc_buf) != EOF) {
-    int c = g_getnum(i->ungetc_buf);
-    i->ungetc_buf = g_putnum(EOF);
-    return g_core_of(f)->b = c, f; }
-  i->eof_seen = g_putnum(true);
-  return g_core_of(f)->b = EOF, f; }
-static struct g *_ungetc(struct g *f, int c) {
-  struct g_io *i = g_core_of(f)->io;
-  i->ungetc_buf = g_putnum(c);
-  i->eof_seen = g_putnum(false);
-  return g_core_of(f)->b = c, f; }
-static struct g *_eof(struct g *f) {
-  struct g_io *i = g_core_of(f)->io;
-  return g_core_of(f)->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
+static struct g *_getc(struct g *g) {
+  struct g_io *i = g_core_of(g)->io;
+  if (getfix(i->ungetc_buf) != EOF) {
+    int c = getfix(i->ungetc_buf);
+    i->ungetc_buf = putfix(EOF);
+    return g_core_of(g)->b = c, g; }
+  i->eof_seen = putfix(true);
+  return g_core_of(g)->b = EOF, g; }
+static struct g *_ungetc(struct g *g, int c) {
+  struct g_io *i = g_core_of(g)->io;
+  i->ungetc_buf = putfix(c);
+  i->eof_seen = putfix(false);
+  return g_core_of(g)->b = c, g; }
+static struct g *_eof(struct g *g) {
+  struct g_io *i = g_core_of(g)->io;
+  return g_core_of(g)->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
 
 // fd values are nominal: all I/O routes through the vtable regardless. We
 // just need fd >= 0 so the dispatcher picks g_fd_port_vt over a synth slot.
-struct g_io g_stdin  = { .ap = g_vm_port_io, .fd = g_putnum(0),
-                         .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false) };
-struct g_io g_stdout = { .ap = g_vm_port_io, .fd = g_putnum(1),
-                         .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false) };
+struct g_io g_stdin  = { .ap = g_vm_port_io, .fd = putfix(0),
+                         .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
+struct g_io g_stdout = { .ap = g_vm_port_io, .fd = putfix(1),
+                         .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
 // No separate error stream in the browser host; route err to out's fd.
-struct g_io g_stderr = { .ap = g_vm_port_io, .fd = g_putnum(1),
-                         .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false) };
+struct g_io g_stderr = { .ap = g_vm_port_io, .fd = putfix(1),
+                         .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
 struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };
 
 // --- exported entry points ------------------------------------------------

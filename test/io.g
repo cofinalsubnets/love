@@ -1,5 +1,5 @@
-; Port bifs that take an explicit port: fgetc, fungetc, feof, fputc, fputs,
-; fflush. Sibling forms of the static-port (getc/putc/key?) bifs that
+; Port nifs that take an explicit port: fgetc, fungetc, feof, fputc, fputs,
+; fflush. Sibling forms of the static-port (getc/putc/key?) nifs that
 ; dispatch via f->io. open/close round out the surface for heap-allocated
 ; stream ports backed by real OS file descriptors.
 

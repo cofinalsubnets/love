@@ -94,7 +94,7 @@
  (= 'miss (get 'miss (+ B100 1) (put B100 'hit (hashn 0))))
 
  ; --- prelude ** / gcd / modpow: exact across the tower via * / % ---
- ; (`**` is exact-integer power; the float `pow` bif is tested in math.g)
+ ; (`**` is exact-integer power; the float `pow` nif is tested in math.g)
  (= 8 (3 2))                           ; small ints stay fixnums
  (fixp (3 2))                          ; ...and stay integers (not float pow)
  (= B100 (100 2))                      ; promotes to a bignum

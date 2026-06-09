@@ -29,8 +29,8 @@ static struct {
 // keyboard input. kb_int (interrupt context) decodes scancodes and
 // enqueues input bytes -- arrow/Delete keys as the ANSI escape sequences
 // the line editor decodes; k_getc and the (key) builtin drain the queue.
-// f holds the live modifier flags.
-static struct { uint8_t f, q[16], qh, qt; } kkb;
+// g holds the live modifier flags.
+static struct { uint8_t g, q[16], qh, qt; } kkb;
 // enqueue one input byte (drop if full). non-static: the COM1 serial
 // RX handler (k_uart, in x86_64/arch.c) feeds this same queue.
 void kq(uint8_t b) {
@@ -110,11 +110,11 @@ static void limine_to_kboot(void) {
         kboot.ram[kboot.ram_n].len  = rr[i]->length,
         kboot.ram_n++; }
   if (fb_req.response && fb_req.response->framebuffer_count) {
-    struct limine_framebuffer *f = fb_req.response->framebuffers[0];
-    kboot.fb.base     = f->address;
-    kboot.fb.w        = f->width;
-    kboot.fb.h        = f->height;
-    kboot.fb.pitch_px = f->pitch >> 2;
+    struct limine_framebuffer *g = fb_req.response->framebuffers[0];
+    kboot.fb.base     = g->address;
+    kboot.fb.w        = g->width;
+    kboot.fb.h        = g->height;
+    kboot.fb.pitch_px = g->pitch >> 2;
     kboot.has_fb      = true; } }
 #endif
 
@@ -182,48 +182,48 @@ static struct k_source k_sources[K_SOURCES_MAX] = {
 // they're identical across sources; getc/putc/flush route through
 // k_sources[fd]. Bounds-checks and NULL-guards keep misuse from
 // crashing (read-from-output-fd returns EOF; write-to-input-fd discards).
-static struct g *fd_getc(struct g *f) {
-  struct g *fc = g_core_of(f);
-  struct g_io *i = f->io;
-  if (g_getnum(i->ungetc_buf) != EOF) {
-    fc->b = g_getnum(i->ungetc_buf);
-    i->ungetc_buf = g_putnum(EOF);
-    return f; }
-  int fd = g_getnum(i->fd);
+static struct g *fd_getc(struct g *g) {
+  struct g *fc = g_core_of(g);
+  struct g_io *i = g->io;
+  if (getfix(i->ungetc_buf) != EOF) {
+    fc->b = getfix(i->ungetc_buf);
+    i->ungetc_buf = putfix(EOF);
+    return g; }
+  int fd = getfix(i->fd);
   int c = -1;
   if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].getc)
     c = k_sources[fd].getc(fd);
-  if (c < 0) { i->eof_seen = g_putnum(true); fc->b = EOF; }
+  if (c < 0) { i->eof_seen = putfix(true); fc->b = EOF; }
   else fc->b = c;
-  return f; }
-static struct g *fd_ungetc(struct g *f, int c) {
-  struct g *fc = g_core_of(f);
+  return g; }
+static struct g *fd_ungetc(struct g *g, int c) {
+  struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  i->ungetc_buf = g_putnum(c);
-  i->eof_seen = g_putnum(false);
-  return fc->b = c, f; }
-static struct g *fd_eof(struct g *f) {
-  struct g *fc = g_core_of(f);
+  i->ungetc_buf = putfix(c);
+  i->eof_seen = putfix(false);
+  return fc->b = c, g; }
+static struct g *fd_eof(struct g *g) {
+  struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  return fc->b = (g_getnum(i->ungetc_buf) == EOF) && g_getnum(i->eof_seen), f; }
-static struct g *fd_putc(struct g *f, int c) {
-  int fd = g_getnum(f->io->fd);
+  return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
+static struct g *fd_putc(struct g *g, int c) {
+  int fd = getfix(g->io->fd);
   if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].putc)
     k_sources[fd].putc(fd, c);
-  return f; }
-static struct g *fd_flush(struct g *f) {
-  int fd = g_getnum(f->io->fd);
+  return g; }
+static struct g *fd_flush(struct g *g) {
+  int fd = getfix(g->io->fd);
   if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].flush)
     k_sources[fd].flush(fd);
-  return f; }
+  return g; }
 
 struct g_io g_stdin = { .ap = g_vm_port_io,
-                        .fd = g_putnum(0), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+                        .fd = putfix(0), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 struct g_io g_stdout = { .ap = g_vm_port_io,
-                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 // No separate error stream; route err to the same fd as out (the console).
 struct g_io g_stderr = { .ap = g_vm_port_io,
-                         .fd = g_putnum(1), .ungetc_buf = g_putnum(EOF), .eof_seen = g_putnum(false), };
+                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 
 struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
@@ -299,16 +299,16 @@ _Static_assert(LEN(kb2ascii) == LEN(shift_kb2ascii));
 // (default is MS x64) so arg0 is read out of rdi rather than rcx.
 __attribute__((sysv_abi))
 void kb_int(const uint8_t code) {
-  if (code == kb_code_extend) { kkb.f |= kb_flag_extend; return; }
-  bool ext = kkb.f & kb_flag_extend, up = code & 128;
+  if (code == kb_code_extend) { kkb.g |= kb_flag_extend; return; }
+  bool ext = kkb.g & kb_flag_extend, up = code & 128;
   uint8_t sc = code & 127;
-  kkb.f &= ~kb_flag_extend;
+  kkb.g &= ~kb_flag_extend;
   if (ext) switch (sc) {
-    case kb_code_ctl: kkb.f = up ? kkb.f & ~kb_flag_rctl : kkb.f | kb_flag_rctl; return;
-    case kb_code_alt: kkb.f = up ? kkb.f & ~kb_flag_ralt : kkb.f | kb_flag_ralt; return;
+    case kb_code_ctl: kkb.g = up ? kkb.g & ~kb_flag_rctl : kkb.g | kb_flag_rctl; return;
+    case kb_code_alt: kkb.g = up ? kkb.g & ~kb_flag_ralt : kkb.g | kb_flag_ralt; return;
     case kb_code_delete:
       if (up) return;
-      if (kkb.f & kb_flag_ctl && kkb.f & kb_flag_alt) k_reset();
+      if (kkb.g & kb_flag_ctl && kkb.g & kb_flag_alt) k_reset();
       kq(27), kq('['), kq('3'), kq('~'); return;       // Delete -> CSI 3 ~
     case kb_code_left:  if (!up) kq(27), kq('['), kq('D'); return;
     case kb_code_right: if (!up) kq(27), kq('['), kq('C'); return;
@@ -316,24 +316,24 @@ void kb_int(const uint8_t code) {
     case kb_code_down:  if (!up) kq(27), kq('['), kq('B'); return;
     case kb_code_home:
       if (up) return;
-      if (kkb.f & kb_flag_ctl) kq(27), kq('['), kq('1'), kq(';'), kq('5'), kq('H');
+      if (kkb.g & kb_flag_ctl) kq(27), kq('['), kq('1'), kq(';'), kq('5'), kq('H');
       else kq(27), kq('['), kq('H');
       return;
     case kb_code_end:
       if (up) return;
-      if (kkb.f & kb_flag_ctl) kq(27), kq('['), kq('1'), kq(';'), kq('5'), kq('F');
+      if (kkb.g & kb_flag_ctl) kq(27), kq('['), kq('1'), kq(';'), kq('5'), kq('F');
       else kq(27), kq('['), kq('F');
       return;
     default: return; }
   switch (sc) {
-    case kb_code_lshift: kkb.f = up ? kkb.f & ~kb_flag_lshift : kkb.f | kb_flag_lshift; return;
-    case kb_code_rshift: kkb.f = up ? kkb.f & ~kb_flag_rshift : kkb.f | kb_flag_rshift; return;
-    case kb_code_ctl:    kkb.f = up ? kkb.f & ~kb_flag_lctl : kkb.f | kb_flag_lctl; return;
-    case kb_code_alt:    kkb.f = up ? kkb.f & ~kb_flag_lalt : kkb.f | kb_flag_lalt; return;
+    case kb_code_lshift: kkb.g = up ? kkb.g & ~kb_flag_lshift : kkb.g | kb_flag_lshift; return;
+    case kb_code_rshift: kkb.g = up ? kkb.g & ~kb_flag_rshift : kkb.g | kb_flag_rshift; return;
+    case kb_code_ctl:    kkb.g = up ? kkb.g & ~kb_flag_lctl : kkb.g | kb_flag_lctl; return;
+    case kb_code_alt:    kkb.g = up ? kkb.g & ~kb_flag_lalt : kkb.g | kb_flag_lalt; return;
     default:
       if (up || sc >= LEN(kb2ascii)) return;
-      uint8_t a = (kkb.f & kb_flag_shift ? shift_kb2ascii : kb2ascii)[sc];
-      if (a && kkb.f & kb_flag_ctl && (a | 32) >= 'a' && (a | 32) <= 'z') a &= 31;
+      uint8_t a = (kkb.g & kb_flag_shift ? shift_kb2ascii : kb2ascii)[sc];
+      if (a && kkb.g & kb_flag_ctl && (a | 32) >= 'a' && (a | 32) <= 'z') a &= 31;
       if (a) kq(a);
       return; } }
 
@@ -380,7 +380,7 @@ static void kfree(void *p) {
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
-static g_vm(g_kreset) { return k_reset(), f; }
+static g_vm(g_kreset) { return k_reset(), g; }
 
 void fbdraw(void) {
   if (!kcb) return;                    // serial-only: no framebuffer console
@@ -410,12 +410,12 @@ static g_vm(draw) {
 
 static g_vm(key) {
  int b = kqpop();
- Sp[0] = g_putnum(b < 0 ? 0 : b);
+ Sp[0] = putfix(b < 0 ? 0 : b);
  Ip += 1;
  return Continue(); }
 
 static g_vm(color) {
- uint8_t fg = g_getnum(*Sp++), bg = g_getnum(*Sp++);
+ uint8_t fg = getfix(*Sp++), bg = getfix(*Sp++);
  if (kcb) {
   cb_attr(kcb, fg, bg, 0);
   for (uint32_t i = 0, j = kcb->rows * kcb->cols; i < j; i++)
@@ -429,26 +429,26 @@ static g_vm(color) {
 // the handler reports and halts, so k_fault_trigger does not return;
 // the post-call statements are reachable only if the fault did not fire.
 static g_vm(g_vm_fault) {
-  k_fault_trigger(g_getnum(Sp[0]));
+  k_fault_trigger(getfix(Sp[0]));
   Ip += 1;
   return Continue(); }
 
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
-static g_vm(g_vm_kexit) { k_qemu_exit(g_getnum(Sp[0])); Ip += 1; return Continue(); }
+static g_vm(g_vm_kexit) { k_qemu_exit(getfix(Sp[0])); Ip += 1; return Continue(); }
 #endif
 
 
 
 static union u
-  bif_reset[] = {{g_kreset}},
-  bif_draw[] = {{draw}, {g_vm_ret0}},
-  bif_key[] = {{key}, {g_vm_ret0}},
-  bif_color[] = {{g_vm_cur}, {.x = g_putnum(2)}, {color}, {g_vm_ret0}},
+  nif_reset[] = {{g_kreset}},
+  nif_draw[] = {{draw}, {g_vm_ret0}},
+  nif_key[] = {{key}, {g_vm_ret0}},
+  nif_color[] = {{g_vm_cur}, {.x = putfix(2)}, {color}, {g_vm_ret0}},
 #ifdef K_TEST
-  bif_exit[] = {{g_vm_kexit}, {g_vm_ret0}},
+  nif_exit[] = {{g_vm_kexit}, {g_vm_ret0}},
 #endif
-  bif_fault[] = {{g_vm_fault}, {g_vm_ret0}};
+  nif_fault[] = {{g_vm_fault}, {g_vm_ret0}};
 
 // Reads the bootloader-populated kboot struct (Limine or UEFI) and
 // links every reported free range into the kernel free list. The
@@ -485,14 +485,14 @@ static bool cbinit(void) {
   return true; }
 
 static struct g_def defs[] = {
-  {"reset", (intptr_t) bif_reset},
-  {"draw", (intptr_t) bif_draw},
-  {"key", (intptr_t) bif_key},
-  {"fault", (intptr_t) bif_fault},
+  {"reset", (intptr_t) nif_reset},
+  {"draw", (intptr_t) nif_draw},
+  {"key", (intptr_t) nif_key},
+  {"fault", (intptr_t) nif_fault},
 #ifdef K_TEST
-  {"exit", (intptr_t) bif_exit},
+  {"exit", (intptr_t) nif_exit},
 #endif
-  {"color", (intptr_t) bif_color} };
+  {"color", (intptr_t) nif_color} };
 
 #ifdef K_TEST
 // The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.g
@@ -536,18 +536,18 @@ void kmain(void) {
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {
   if (fbinit() && cbinit()) palette_init();
-  struct g *f = g_defn(g_ini(), defs, LEN(defs));
+  struct g *g = g_defn(g_ini(), defs, LEN(defs));
 #ifdef K_TEST
   // bind the baked corpus to the global `tests`; below it is read form-by-form
   // and run through ev at boot (no console), then qemu is quit.
-  f = g_strof(f, ktests);
-  struct g_def td[] = {{"tests", g_pop1(f)}};
-  f = g_defn(f, td, LEN(td));
+  g = g_strof(g, ktests);
+  struct g_def td[] = {{"tests", g_pop1(g)}};
+  g = g_defn(g, td, LEN(td));
 #endif
   // load the prelude, then run the gwen read-eval-print loop. its line
   // editor (in repl.g) drives the console; PS/2 keyboard and serial
   // input both arrive as ANSI escape sequences the gwen edev decodes.
-  g_fin(g_evals_(f, "("
+  g_fin(g_evals_(g, "("
 #include "egg.h"
  G_EGG_PRE
 #include "prelude.h"

@@ -150,7 +150,7 @@ ko = out/free
 dl = out/dl
 
 # K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
-# `exit` bif that quits qemu) into its own odir / elf / iso, so it never clobbers the
+# `exit` nif that quits qemu) into its own odir / elf / iso, so it never clobbers the
 # normal interactive kernel. See the test_kernel target below.
 ifdef K_TEST
 ksuf := -test
@@ -402,13 +402,13 @@ run-efi-headless: $(ko)/$n-$a-efi.img $(dl)/edk2-ovmf/ovmf-code-$a.fd
 # tools/lcatv.g -- lcat's inspect-reprint diverges when the corpus is read back
 # incrementally via a strin port) and runs it through the self-hosted ev at boot,
 # printing the usual summary over the serial console, then quits qemu (the `exit`
-# bif -> isa-debug-exit). tools/ktest.g (run on
+# nif -> isa-debug-exit). tools/ktest.g (run on
 # the host gl) boots it under qemu headless, captures the serial output, and checks
 # it. So this exercises the freestanding kernel the way test_host/test_gl0 exercise
 # the host. x86_64 only (qemu + isa-debug-exit); a no-op on other hosts.
 #
 # Drop from the kernel corpus: io.g (host file open) and run.g (subprocess/getenv)
-# need host-OS bifs the kernel lacks; math.g pins transcendental results to glibc
+# need host-OS nifs the kernel lacks; math.g pins transcendental results to glibc
 # precision (1e-12/1e-15) that the freestanding libc/math.c series can't meet;
 # bell.g's Bell-number bignums are too heavy for the emulated kernel.
 kt = $(filter-out %/io.g %/run.g %/math.g %/bell.g,$t)

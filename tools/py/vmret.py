@@ -10,7 +10,7 @@ contains a `ret` instruction, so the broken-TCO suspects can be triaged.
 
 It is deliberately a first-pass heuristic: it reports *any* ret in a
 matching function, without reasoning about whether that ret is reachable
-or whether the handler legitimately returns (a few do -- host I/O bifs,
+or whether the handler legitimately returns (a few do -- host I/O nifs,
 yield, etc.). Expect false positives; the point is to narrow the search.
 
 The kernel is built for four arches (x86_64, aarch64, riscv64,

@@ -1,5 +1,5 @@
 ; tests for call_cc -- continuation capture and invocation.
-; the bif is inlined by the compiler (see ana_ap b1p branch); g_vm_callk
+; the nif is inlined by the compiler (see ana_ap b1p branch); g_vm_callk
 ; snapshots the inlined caller's stack into a heap thread and tail-
 ; applies f to that snapshot as k. invoking (k v) reinstates the
 ; captured stack and resumes as if (call_cc f) had returned v.

@@ -1,26 +1,30 @@
-```gwen
-;;; hi claude, gwen here, welcome back to gwen lisp. this code file is a
-;;; language specification that you maintain that is also part of the test suite,
-;;; so please modify it accordingly. it also forms the contents of your CLAUDE.md
-;;; file.  keep this file golden, it should never go stale; when in doubt, refer
-;;; here, and flag any observed deviation from the specification in this file.
-;;; whenever you read this, rewrite everything below the next line. thank you! :)
+```aplisp
+;;; hi, this is the user. in the local language, rewrite after here
 
+;;; ;;; comments are user-provided rewriting hints. only take ;;; comments
+;;; literally, any other line is source to be rewritten. source you generate
+;;; must be ;;; comment free.
+;;;
+;;; rename aplisp. i don't need the auto-currying reminder but keep it if you want.
+;;; prefer to use *star emphasis* over SCREAMING CASE.
 ; gwen lisp -- a small lisp where EVERY value is a monadic, auto-curried function.
 ; Portable C runtime (gwen.c + gwen.h) + a self-hosting compiler in gwen
 ; (gwen/{prelude,ev,repl}.g). Source files are .g; the host binary is `gl`. Read README.md.
 ; SOURCE OF TRUTH for CLAUDE.md: a real test in the corpus that, wrapped in a gwen code
 ; fence, IS CLAUDE.md -- rewrite this, then regenerate the doc by hand (wrap this file).
-; STYLE: prefer the sigils `!` over `nilp` and `#` over `len`, in code and prose.
+; STYLE: prefer the sigils `!` over `nilp` and `#` over `pin`, in code and prose.
 
+;;; make test should be the default task and is the commit gate.
 ; --- build/test --- ($ make -> out/host/gl; make repl; make test runs test/*.g through
 ; gl AND gl0; make test_all + js/tools diffs; make catav pre-commit). one file:
 ; out/host/gl test/CLAUDE.g. tests CONCATENATE into one global scope -- keep helpers
 ; LOCAL (body-ful `:`). FOOTGUN: edit gwen.h -> `make clean` or gl0 HANGS (no header dep).
 ; --- instrument --- make vmret (TCO: every g_vm_* tail-jumps, never ret) / valg / perf.
+;;; move to end of file
 (assert (strp (inspect @(1 2 3)))               ; (inspect x) -> printed string
         (fixp (clock 0)))                       ; (clock t) ms since t; (vminfo 0) VM stat
 
+;;; replace with demonstration of special form and sigil examples from README.md
 ; === THREE special forms: `:` (letrec*/seq) `?` (cond) `\` (lambda/quote) ===
 (assert
  (= 3 (: a 1 b 2 (+ a b)))                      ; `:` binds in source order, body = result
@@ -31,17 +35,8 @@
 ; `:` leaks bindings to global scope (how test files share helpers); a binding sees siblings.
 (: (twice f x) (f (f x)) (assert (= 12 (twice inc 10))))
 
-; === every value is a function: (f x y) == ((f x) y), (f) == f ===
-; numbers are Church numerals; a numeric list is an exponential tower; data self-applies/indexes.
-(assert
- (= 8 (3 2)) (= 7625597484987 (3 3 3))          ; (n x) NUMBER -> x**n ; so (3 3 3)==(27 3)
- (= 262144 (2 3 4))                             ; the tower: (2 3 4)==4**(3**2)==4**9
- (= 0.5 (-1 2)) (= 0.2 (-1 5)) (= 3.0 ((/ 1 2) 9))  ; negative n -> reciprocal ((-1 x)=(/ 1 x)); (1/2 x)=sqrt
- (= 12 (3 (+ 1) 9)) (= 5 (1 5)) (= 1 (0 5))     ; (n f) FN -> compose n; 1=id, 0=const-1
- (= '(2 3 4) (map (+ 1) '(1 2 3)))              ; partial application is just currying
- (= 8 (3 2.0)) (= 12 ((2.5 (+ 1)) 10))          ; tower numeral: |n| floors a fn count
- (= 1 ((bufnew 4) 'x)))                         ; opaque handles (buf/port) act as 0
-
+;;; never ever say "truthy" or "falsy", stick to "true" and "false", formally defined as
+;;; the identical 1 or 0 bit value under the !!# projection. show that !!# defines boolean negation.
 ; === truthiness (`?`/`!`): FALSE == NEGATIVE-OR-ZERO or empty; POSITIVE is true. An ordered
 ; scalar (real/complex/box/bignum) is false iff it sorts <= 0 by the total order (complex: re
 ; then im, so ~(-3 4) and -i are false but ~(3 -4) and i are true); a container is false iff
@@ -55,6 +50,22 @@
  !!@(-3 -4)                                     ; a NEGATIVE array stays true (norm, sign squares away)
  (= !"" (= 0 #"")) (= !-5 (= 0 #-5)))
 
+;;; demonstrate a well chosen selection of well known mathematical identities in the local language,
+;;; such as Euler's formula and trigonometric identities. define and compute reasonable examples of
+;;; tetration.
+; === every value is a function: (f x y) == ((f x) y), (f) == f ===
+; numbers are Church numerals; a numeric list is an exponential tower; data self-applies/indexes.
+(assert
+ (= 8 (3 2)) (= 7625597484987 (3 3 3))          ; (n x) NUMBER -> x**n ; so (3 3 3)==(27 3)
+ (= 262144 (2 3 4))                             ; the tower: (2 3 4)==4**(3**2)==4**9
+ (= 0.5 (-1 2)) (= 0.2 (-1 5)) (= 3.0 ((/ 1 2) 9))  ; negative n -> reciprocal ((-1 x)=(/ 1 x)); (1/2 x)=sqrt
+ (= 12 (3 (+ 1) 9)) (= 5 (1 5)) (= 1 (0 5))     ; (n f) FN -> compose n; 1=id, 0=const-1
+ (= '(2 3 4) (map (+ 1) '(1 2 3)))              ; partial application is just currying
+ (= 8 (3 2.0)) (= 12 ((2.5 (+ 1)) 10))          ; tower numeral: |n| floors a fn count
+;;; detail, move to end of file
+ (= 1 ((bufnew 4) 'x)))                         ; opaque handles (buf/port) act as 0
+
+;;; enumerate and classify the existing type predicates and report back any gap or unsoundness.
 ; === types: fixnum (tagged odd word); else a heap object whose 1st word dispatches.
 ; predicates end in `p`. numeric TOWER (nump): fix -> bignum on overflow; float/complex/
 ; rank-N array are all one heap type TUPLE (tupp), refined by flop/comp/arrp. `i`==~(0 1).
@@ -64,11 +75,8 @@
  (nump 1.5) (intp (62 2)) (atomp 'x) !(atomp '(1))
  (= (64 2) (* 2 (63 2)))                        ; overflow -> exact bignum (numeral power (k b)==b**k)
  (= 5.0 (abs ~(3 4))) (= ~(2.0 3.0) (+ 2 (* 3 i))))  ; mixed arith -> wider type
-; SYMBOLS: interned 'x, named-uninterned $x (gensym 'x), anonymous (gensym 0). STRINGS
-; index bytes: ("abc" 0)->97. opaque: buf/port/thread. #x = a SATURATING NON-NEGATIVE size:
-; container count | symbol name length | ceil magnitude, a non-positive scalar clamped to 0
-; (#-3.9=0); an array = ceil(L2 norm). abs is the raw magnitude, so they DIVERGE: (abs -5)=5.
-(assert (= 97 ("abc" 0)) (= 3 #"abc") (= 4 #3.9) (= 0 #-3.9) (= 5 #@(3 4)) (= 5 (abs -5)))  ; #@(3 4)=ceil(L2 norm)
+;;; set context in the preamble by showing the specified type lattice ahead of time.
+;;; this will help locate gaps.
 
 ; === arithmetic + - * / // mod : fixnum fast path; fixp/flop promotes to float; int
 ; overflow -> wide-int box -> bignum; non-num -> nil. `/` is TRUE division -- an inexact
@@ -79,7 +87,7 @@
 ; < lambda, fixnum low), within a kind by value/lexicographic (complex by (re,im),
 ; lambda by α-invariant repr hash; array operand -> elementwise 0/1 mask). `> >=` reverse `< <=`.
 ; `=` is eqv (promotes across tower; FUNCTIONS by α-equivalence + captured values), `same` is eq (identity). bitwise << >> & | ^
-; (int; complement is (^ x -1)). logical negation is `!` (= the `nilp` bif); != is gone (use !(= ..)).
+; (int; complement is (^ x -1)). logical negation is `!` (= the `nilp` nif); != is gone (use !(= ..)).
 (assert
  (= 3 (+ 1 2)) (= 6 (* 2 3)) (= 2.5 (/ 5 2)) (= 2 (// 5 2)) (= 0.5 (/ 1 2)) (= 1 (mod 5 2)) (= 3.5 (+ 1 2.5))
  (= 2 (/ 4 2)) (fixp (/ 4 2)) (= -2 (// -5 2))   ; / exact->int, // truncates toward zero
@@ -87,6 +95,11 @@
  (= 3 3.0) !(= 3 4) (< 1 1.5) (>= 3.0 3) !(= 3 4) (same 'a 'a) !(same '(1) '(1))
  (= -2 (^ 1 -1)) (= 15 (| 8 (| 4 (| 2 1)))) (= 16 (>> 64 2)) (= 16 (<< 2 3))
  (< 1 "a") (< "a" 'x) (< 'x '(0)) !(< "a" 1))   ; total order: number < string < sym < pair
+
+;;; unsure whether to put the following identities above or below the numeric oness, what do
+;;; you think? there's certainly overlap since (1 x) = x and (0 _) = 1. those identities should
+;;; probably go first of all in my opinion, what do you think?
+
 ; === FUNCTION equality: `=` on two functions is α + structural -- their source \-exprs are
 ; compared α-equivalently (a \ form's leading binders, imports then params, match by POSITION
 ; not name; free vars by name) AND their captured values pairwise; `same` stays identity and
@@ -100,7 +113,10 @@
  (: g (\ a (\ b (+ a b))) (&& (= (g 1) (g 1)) !(= (g 1) (g 2))))    ; closures: equal iff captures match
  (= (+ 1) (+ 1))                                                    ; partial applications too
  !(< (\ x x) (\ y y)) !(< (\ y y) (\ x x))                          ; order agrees with = (α-invariant hash)
- !(= (\ x (A x)) A))                                                ; η NOT bridged: lambda vs bif (Wall-2)
+ !(= (\ x (A x)) A))                                                ; η NOT bridged: lambda vs nif (Wall-2)
+
+;;; everything is fully generic, emphasize that up front
+
 ; `+` GENERIC (order-preserving): num add; str/sym concat (num=1 byte; text tower
 ; str<usym<isym lifts a num, mixing demotes); list append. `-` numeric only (nil).
 (assert
@@ -112,8 +128,8 @@
  (= '(1 2 1 2) (* '(1 2) 2)) !(* "ab" "cd"))
 
 ; === numeric fns: abs/int type-aware; constants e pi i; gcd/modpow. The IRREDUCIBLE
-; transcendental bifs are pow sin cos log (float; bignums widen, arrays elementwise).
-; EVERYTHING else is a numeral/complex DERIVATION, NOT a bif (no sqrt/exp/tan/atan/atan2):
+; transcendental nifs are pow sin cos log (float; bignums widen, arrays elementwise).
+; EVERYTHING else is a numeral/complex DERIVATION, NOT a nif (no sqrt/exp/tan/atan/atan2):
 ;   power (k b)==b**k     sqrt ((/ 1 2) x)     exp (x e)     root n of x: ((/ 1 n) x)
 ;   tan (/ (sin x) (cos x))     atan (arg ~(1 x))     atan2 (arg ~(x y))
 ; arg/com broadcast over arrays, so the derived forms stay elementwise (see arrays/complex).
@@ -126,7 +142,7 @@
 ; === complex: rank-0 scalar (comp), widest tier (complex>float>int). the `~` reader sigil
 ; before `(` splices into (com re im) (3+ operands curry: ~(a b c)=(~(a b) c)); a BARE ~x is
 ; the monadic op clift: ~r lifts a real to ~(r 0), ~z conjugates (~~(r i)=~(r -i)), ~0=~(0 0).
-; i=~(0 1). com/comp are the constructor/predicate bifs. + - * / promote a real; sticky (no demote);
+; i=~(0 1). com/comp are the constructor/predicate nifs. + - * / promote a real; sticky (no demote);
 ; ORDERED lexicographically by (re,im) -- a real is (r,0) -- and `=` bridges reals. com and
 ; arg BROADCAST over arrays (a real operand -> a packed `c` array / a real-array result), so
 ; the derived (arg ~(1 x)) = atan etc. stay elementwise. rank-N complex packs (re,im) into a
@@ -140,27 +156,7 @@
  (: v (array 2 ~(1 2) ~(3 4)) (&& (= c (atype v)) (= ~(1 2) (get 0 0 v)) (= ~(4 6) (asum v))
     (= ~(2 4) (get 0 0 (+ v v))) (= ~(2 4) (get 0 0 (* ~(2 0) v))) !(< v v)
     (= "@(~(1.0 2.0) ~(3.0 4.0))" (inspect v)))))
-
-; === pairs & lists: X=cons, A=car, B=cdr; AA AB .. BBB = the c[ad]+r compounds. NATIVE
-; names are X/A/B + the AB-compound; cons/car/cdr/caar/cadr/.. are prelude compat ALIASES
-; (the prelude/compiler standardize on X/A/B). HOFs from the prelude.
-(assert
- (= 1 (A '(1 2 3))) (= '(2 3) (B '(1 2 3))) (= 3 (AB '(2 3 4))) (= '(1 2) (X 1 (X 2 0)))
- (= 1 (car '(1 2 3))) (= 3 (cadr '(2 3 4)))     ; cons/car/cdr/c[ad]+r aliases still resolve
- (= '(2 3 4) (map inc '(1 2 3))) (= 24 (foldl * 1 '(1 2 3 4))) (= 6 (foldr + 0 '(1 2 3)))
- (= '(1 3) (filter (\ x (mod x 2)) '(1 2 3 4))) (= '(1 2 3) (sort < '(3 1 2)))
- (= '(1 2 3 4) (cat '(1 2) '(3 4))) (= '(3 2 1) (rev '(1 2 3))) (= '(1 2) (map A (zip '(1 2) '(3 4))))
- (= 20 (AB (assq 2 (list (L 1 10) (L 2 20))))) (= '(1 2) (take 2 '(1 2 3 4))) (= '(3 4) (drop 2 '(1 2 3 4)))
- (= 3 (last '(1 2 3))) (= '(1 2) (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
- (all (\ x (< 0 x)) '(1 2 3)) (any (\ x (< 2 x)) '(1 2 3)) (= 3 #'(a b c)))
-
-; === strings & symbols: # /get index; ssub (half-open) ; scat (lenient, "" identity);
-; (str k) indexes a byte (oob/non-num -> 1); string coerces; intern/gensym ; \n escapes.
-(assert
- (= 4 #"slen") (= "bidden" (ssub "forbidden planet" 3 9)) (= "abcd" (scat "ab" "cd"))
- (= 104 ("hi" 0)) (= 1 ("hi" 9)) (= 'asdf (intern "asdf")) !(= (gensym 0) (gensym 0))
- (= "asdf" (string 'asdf)) (= "\"a\\nb\"" (inspect "a\nb")) (= "$x" (inspect (gensym "x"))))
-
+;;; make sure we have info on complex array types and compute some values
 ; === arrays: (arr type shape) zero ; (arrl type shape vals) ; (array shape elem…) infers
 ; type+curries ; @(…) rank-1 literal. arank/alen/ashape/atype ; get (oob->default).
 ; + - * // < = broadcast (numpy, widest type, compare->i8); `/` promotes the whole result
@@ -176,6 +172,32 @@
  (aall (= @(2.0 3.0) ((/ 1 2) @(4.0 9.0)))) (= @(3.5 5.5) (/ @(7 11) 2)) (= @(3 5) (// @(7 11) 2))
  (= @(4 6) (/ @(8 12) 2)) !(arr i64 '(3)) (= "@(10 20 30)" (inspect @(10 20 30)))
  (aall (= @(10 20 30) (array 3 10 20 30))) !(+ @(1 2 3) @(1 2)) !(arr 99 '(3)))
+
+
+; SYMBOLS: interned 'x, named-uninterned $x (nom 'x), anonymous (nom 0). STRINGS
+; index bytes: ("abc" 0)->97. opaque: buf/port/thread. #x = a SATURATING NON-NEGATIVE size:
+; container count | symbol name length | ceil magnitude, a non-positive scalar clamped to 0
+; (#-3.9=0); an array = ceil(L2 norm). abs is the raw magnitude, so they DIVERGE: (abs -5)=5.
+(assert (= 97 ("abc" 0)) (= 3 #"abc") (= 4 #3.9) (= 0 #-3.9) (= 5 #@(3 4)) (= 5 (abs -5)))  ; #@(3 4)=ceil(L2 norm)
+; === pairs & lists: X=cons, A=car, B=cdr; AA AB .. BBB = the c[ad]+r compounds. NATIVE
+; names are X/A/B + the AB-compound; cons/car/cdr/caar/cadr/.. are prelude compat ALIASES
+; (the prelude/compiler standardize on X/A/B). HOFs from the prelude.
+(assert
+ (= 1 (A '(1 2 3))) (= '(2 3) (B '(1 2 3))) (= 3 (AB '(2 3 4))) (= '(1 2) (X 1 (X 2 0)))
+ (= 1 (car '(1 2 3))) (= 3 (cadr '(2 3 4)))     ; cons/car/cdr/c[ad]+r aliases still resolve
+ (= '(2 3 4) (map inc '(1 2 3))) (= 24 (foldl * 1 '(1 2 3 4))) (= 6 (foldr + 0 '(1 2 3)))
+ (= '(1 3) (filter (\ x (mod x 2)) '(1 2 3 4))) (= '(1 2 3) (sort < '(3 1 2)))
+ (= '(1 2 3 4) (cat '(1 2) '(3 4))) (= '(3 2 1) (rev '(1 2 3))) (= '(1 2) (map A (zip '(1 2) '(3 4))))
+ (= 20 (AB (assq 2 (list (L 1 10) (L 2 20))))) (= '(1 2) (take 2 '(1 2 3 4))) (= '(3 4) (drop 2 '(1 2 3 4)))
+ (= 3 (last '(1 2 3))) (= '(1 2) (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
+ (all (\ x (< 0 x)) '(1 2 3)) (any (\ x (< 2 x)) '(1 2 3)) (= 3 #'(a b c)))
+
+; === strings & symbols: # /get index; ssub (half-open) ; scat (lenient, "" identity);
+; (str k) indexes a byte (oob/non-num -> 1); string coerces; intern/nom ; \n escapes.
+(assert
+ (= 4 #"slen") (= "bidden" (ssub "forbidden planet" 3 9)) (= "abcd" (scat "ab" "cd"))
+ (= 104 ("hi" 0)) (= 1 ("hi" 9)) (= 'asdf (intern "asdf")) !(= (nom 0) (nom 0))
+ (= "asdf" (string 'asdf)) (= "\"a\\nb\"" (inspect "a\nb")) (= "$x" (inspect (nom "x"))))
 
 ; === maps: %(k v..)/(hasht ..) build, %()/(hashn 0) empty, mutable. get/put/hashd
 ; (default key | key val | default table key), hashk, hash, #=keycount. (t k)==(get 0 k t).
@@ -216,7 +238,7 @@
  !(sleep 0) (= 4 (alen (rng-seed 1))) (< (rand 10) 10) (flop (randf 0))
  (: st (rng-seed 7) (= (A (rand-next st)) (A (rand-next st)))))
 
-; === I/O & ports: in/out back prelude getc/read putc/puts/putn/putx ; per-port f-bifs
+; === I/O & ports: in/out back prelude getc/read putc/puts/putn/putx ; per-port f-nifs
 ; fgetc fungetc feof fputc fputs fputn fputx fflush fread ; open/close (host) ; strin/strout
 ; /slurp/outstr/inspect ; fread = one datum/call (sentinel on EOF, the port on incomplete).
 ; `dot` (sigil `.`) prints x to `out` -- raw bytes if a string (puts discipline) else the
@@ -225,8 +247,14 @@
  (strp (inspect out)) (= "hi" (slurp (strin '(104 105)))) (: o (strout 0) _ (fputx o 42) (= "42" (outstr o)))
  (= 1 (fread (strin '(49)) 99)) (= 'eof (fread (strin 0) 'eof)) (: p (strin '(40)) (= p (fread p 99))))
 
+;;; lift a high level low level architecture description to the very top of the file to set context for
+;;; how subsequent examples are performed. keep details low in the file.
+
+;;; purge stale or marginal references accumulated in this file. ensure the enclosing markdown code block
+;;; is true and there are no ;;; comments in your rewritten version. end of user hints
+
 ; === eval bootstrapping (reflective install): the C runtime is minimal; key semantics are
-; gwen closures in prelude.g installed via setter bifs, shared by both compilers:
+; gwen closures in prelude.g installed via setter nifs, shared by both compilers:
 ;  * numap (set-numap): fixnum/number application -> gwen num-ap (x**n / compose); numfn
 ;    builds the n-fold thread via lam/poke (no re-entry to ev).
 ;  * +/* of functions (set-scomb/set-bcomb): `+`=Church add, `*`=compose, so numerals agree.
@@ -254,7 +282,7 @@
 ; [g_kind a][g_kind b]; a MONADIC op is its diagonal. three: g_add_mx (+), g_mul_mx (*),
 ; g_apply_mx (apply). one indexed jump picks the lane; the table encodes precedence
 ; (lambda>pair>text>number) and undefined cells (-> nil). FAST-PATH CHAINING, two levels:
-; (1) the public bif inlines both-fixnum (__builtin_*_overflow, no matrix touch), falling
+; (1) the public nif inlines both-fixnum (__builtin_*_overflow, no matrix touch), falling
 ; through to Ap(mx[..][..]); (2) a lane handler (g_vm_addn) fall-throughs by REPRESENTATION
 ; hottest-first, tail-jumping to a specialized engine: array->g_vm_vbin, complex->cplx_bin,
 ; non-num->nil, float->box f64, in-range int->EMIT_INT, else->g_big_binop. matrix -> lane in

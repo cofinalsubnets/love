@@ -20,7 +20,7 @@
   ; consumed by inlined ops, e.g. n in (- n 1). 1-word op, no operand fetch; the
   ; reclaimed operand cell is -1 slack (lam memsets it; GC-safe).
   ; index/value -> specialized-op. A compare chain beats a `get`-hash here: `get`
-  ; is a heavyweight polymorphic bif (type-dispatch + hash + eql), costing far more
+  ; is a heavyweight polymorphic nif (type-dispatch + hash + eql), costing far more
   ; than a few fixnum compares that short-circuit on the common small values
   ; (measured: a hash made boot +13% vs +5% for this chain; frequency-reordering
   ; the chain was a wash). The fixp guard keeps spq from ever hashing a heap value.
@@ -52,7 +52,7 @@
   apx (nom 'apx)   ; apply marker: (apx nary head . args), emitted by wev, compiled by apxh
   ; wevs: value->handler for global fns. A handler folds an application to a value when
   ; its args are constant (pure fns only), else emits an (iop op . args) node iap inlines
-  ; (any bif of matching arity), else leaves it. Built by scanning every global: a bif is
+  ; (any nif of matching arity), else leaves it. Built by scanning every global: a nif is
   ; found by thread shape (g_vm_ret0 terminator); fold eligibility from curated `names`.
   wevs (:
    (cval e) (? (symp e) (X 0 0)               ; (const? . value): 1 head iff a literal
@@ -60,7 +60,7 @@
                (&& (= (A e) '\) (atomp (BB e))) (X 1 (AB e))
                (X 0 0))
    (bake v) (? (fixp v) v (list '\ v))           ; value -> source: fixnum bare else quote
-   ; (op . arity) iff v is a bif. `same` (identity) not `=`: a non-bif global may peek to
+   ; (op . arity) iff v is a nif. `same` (identity) not `=`: a non-nif global may peek to
    ; a word that looks like a heap pointer, which `=`/eql would deref and crash on.
    (opof v) (? (same g_vm_ret0 (peek 1 v)) (X (peek 0 v) 1)
                (&& (same g_vm_cur (peek 0 v)) (same g_vm_ret0 (peek 3 v))) (X (peek 2 v) (peek 1 v))
@@ -69,7 +69,7 @@
     (go hv a) (? (atomp a) (bake hv)             ; all args constant -> fold
      (: cv (cval (A a))
       (? (&& pure (A cv)) (go (hv (B cv)) (B a))
-         (? (&& op (= n ar)) (X iop (X op as))           ; matching-arity bif -> inline
+         (? (&& op (= n ar)) (X iop (X op as))           ; matching-arity nif -> inline
             (&& (< 1 ar) (= n ar)) (X apx (X 1 x))       ; multi-arg fn -> n-ary apply
             (X apx (X 0 x))))))                          ; generic l2r apply
     (go v as))
@@ -87,7 +87,7 @@
      (: o (opof v) p (pureset v)
       (? (|| o p)
        (: op (? o (A o) 0)
-          ar (? o (B o) (same g_vm_cur (peek 0 v)) (peek 1 v) 0)   ; bif/multi-arg-fn arity
+          ar (? o (B o) (same g_vm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (put v (\ x (hgen v op ar p x)) t))
        t))))
    (foldl add (hashn 0) (hashk globals)))
@@ -125,7 +125,7 @@
         (twop (B (A bs))) (atomp (BB (A bs))) (nilp (memq (A (A bs)) bnd)))
      (X (wx (AB (A bs)) bnd) (X (wx (A (BB bs)) bnd) (list (wx (AB bs) bnd))))
     (X (wx (A bs) bnd) (X (wx (AB bs) bnd) (wxc (BB bs) bnd))))
-   ; napof: v is a non-bif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
+   ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
    ; `same`-safe peeks (a non-fn value never matches g_vm_cur); mirrors app's old `fa`/`na`.
    (napof v args) (? (fixp v) 0
     (? (same g_vm_cur (peek 0 v)) (: ar (peek 1 v) (&& (< 1 ar) (= (pin args) ar))) 0))

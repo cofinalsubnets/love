@@ -27,7 +27,7 @@
    mx-sym 'ef                            ; KSym (interned)
    mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KTwo (pair / list)
-   mx-fn  (+ 1)                          ; KLam (bif partial application)
+   mx-fn  (+ 1)                          ; KLam (nif partial application)
    mx-map (put 2 20 (put 1 10 (hashn 0)))) ; KLam (a map is a lookup-lambda)
 
 ; ============================================================================
@@ -35,7 +35,7 @@
 ; ============================================================================
 ; Each data kind's sentinel tail-jumps through this. The arg-kind dimension is
 ; uniform today (a hook for later), so we vary it to pin that. Non-data applies
-; (fixnum numeral, lambda/bif, map, opaque handle) take their own paths.
+; (fixnum numeral, lambda/nif, map, opaque handle) take their own paths.
 (assert
  ; --- row KTwo: a pair IS its own Church eliminator, (p f) == (f (A p) (B p)).
  ;     This row had no test before -- a sentinel mis-route would silently break
@@ -43,7 +43,7 @@
  (= '(1 (2)) ('(1 2) (\ a b (L a b))))        ; f sees car=1, cdr='(2)
  (= '(1 (2 3)) ('(1 2 3) (\ a b (L a b))))    ; longer cdr passed whole
  (= '(1 2) ((X 1 2) (\ a b (L a b))))         ; improper pair: cdr=2 (a fixnum), raw
- (= '(1 2) ('(1 2) +))                        ; arg = a bif: (+ 1 '(2)) = (1 2)
+ (= '(1 2) ('(1 2) +))                        ; arg = a nif: (+ 1 '(2)) = (1 2)
  (= '(1 2 3) ('(1 2 3) +))                    ; (+ 1 '(2 3))
  (nilp ('(1) (\ a b b)))                      ; cdr of (1) is nil -> 0
 
@@ -74,7 +74,7 @@
  ; --- non-matrix apply paths --------------------------------------------------
  (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KFix numeral (odd-tag path)
  (= 36 ((\ x (* x x)) 6))                     ; KLam: a lambda applies directly
- (= 7 (((+) 3) 4))                            ; KLam: a bif / partial application
+ (= 7 (((+) 3) 4))                            ; KLam: a nif / partial application
  (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KLam: a map looks its key up
  (nilp (mx-map 9))                            ; ...missing key -> nil
  (= 1 ((bufnew 4) 'x)))                       ; opaque handle (buf) behaves as 0

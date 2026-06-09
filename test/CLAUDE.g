@@ -78,7 +78,7 @@
 ; < lambda, fixnum low), within a kind by value/lexicographic (complex by (re,im),
 ; lambda by α-invariant repr hash; array operand -> elementwise 0/1 mask). `> >=` reverse `< <=`.
 ; `=` is eqv (promotes across tower; FUNCTIONS by α-equivalence + captured values), `same` is eq (identity). bitwise << >> & | ^
-; (int; complement is (^ x -1)). logical negation is `!` (= the `nilp` bif); != is gone (use !(= ..)).
+; (int; complement is (^ x -1)). logical negation is `!` (= the `nilp` nif); != is gone (use !(= ..)).
 (assert
  (= 3 (+ 1 2)) (= 6 (* 2 3)) (= 2.5 (/ 5 2)) (= 2 (// 5 2)) (= 0.5 (/ 1 2)) (= 1 (mod 5 2)) (= 3.5 (+ 1 2.5))
  (= 2 (/ 4 2)) (fixp (/ 4 2)) (= -2 (// -5 2))   ; / exact->int, // truncates toward zero
@@ -99,7 +99,7 @@
  (: g (\ a (\ b (+ a b))) (&& (= (g 1) (g 1)) !(= (g 1) (g 2))))    ; closures: equal iff captures match
  (= (+ 1) (+ 1))                                                    ; partial applications too
  !(< (\ x x) (\ y y)) !(< (\ y y) (\ x x))                          ; order agrees with = (α-invariant hash)
- !(= (\ x (A x)) A))                                                ; η NOT bridged: lambda vs bif (Wall-2)
+ !(= (\ x (A x)) A))                                                ; η NOT bridged: lambda vs nif (Wall-2)
 ; `+` GENERIC (order-preserving): num add; str/sym concat (num=1 byte; text tower
 ; str<usym<isym lifts a num, mixing demotes); list append. `-` numeric only (nil).
 (assert
@@ -111,8 +111,8 @@
  (= '(1 2 1 2) (* '(1 2) 2)) !(* "ab" "cd"))
 
 ; === numeric fns: abs/int type-aware; constants e pi i; gcd/modpow. The IRREDUCIBLE
-; transcendental bifs are pow sin cos log (float; bignums widen, arrays elementwise).
-; EVERYTHING else is a numeral/complex DERIVATION, NOT a bif (no sqrt/exp/tan/atan/atan2):
+; transcendental nifs are pow sin cos log (float; bignums widen, arrays elementwise).
+; EVERYTHING else is a numeral/complex DERIVATION, NOT a nif (no sqrt/exp/tan/atan/atan2):
 ;   power (k b)==b**k     sqrt ((/ 1 2) x)     exp (x e)     root n of x: ((/ 1 n) x)
 ;   tan (/ (sin x) (cos x))     atan (arg ~(1 x))     atan2 (arg ~(x y))
 ; arg/com broadcast over arrays, so the derived forms stay elementwise (see arrays/complex).
@@ -125,7 +125,7 @@
 ; === complex: rank-0 scalar (comp), widest tier (complex>float>int). the `~` reader sigil
 ; before `(` splices into (com re im) (3+ operands curry: ~(a b c)=(~(a b) c)); a BARE ~x is
 ; the monadic op clift: ~r lifts a real to ~(r 0), ~z conjugates (~~(r i)=~(r -i)), ~0=~(0 0).
-; i=~(0 1). com/comp are the constructor/predicate bifs. + - * / promote a real; sticky (no demote);
+; i=~(0 1). com/comp are the constructor/predicate nifs. + - * / promote a real; sticky (no demote);
 ; ORDERED lexicographically by (re,im) -- a real is (r,0) -- and `=` bridges reals. com and
 ; arg BROADCAST over arrays (a real operand -> a packed `c` array / a real-array result), so
 ; the derived (arg ~(1 x)) = atan etc. stay elementwise. rank-N complex packs (re,im) into a
@@ -215,7 +215,7 @@
  !(sleep 0) (= 4 (alen (rng-seed 1))) (< (rand 10) 10) (flop (randf 0))
  (: st (rng-seed 7) (= (A (rand-next st)) (A (rand-next st)))))
 
-; === I/O & ports: in/out back prelude getc/read putc/puts/putn/putx ; per-port f-bifs
+; === I/O & ports: in/out back prelude getc/read putc/puts/putn/putx ; per-port f-nifs
 ; fgetc fungetc feof fputc fputs fputn fputx fflush fread ; open/close (host) ; strin/strout
 ; /slurp/outstr/inspect ; fread = one datum/call (sentinel on EOF, the port on incomplete).
 ; `dot` (sigil `.`) prints x to `out` -- raw bytes if a string (puts discipline) else the
@@ -225,7 +225,7 @@
  (= 1 (fread (strin '(49)) 99)) (= 'eof (fread (strin 0) 'eof)) (: p (strin '(40)) (= p (fread p 99))))
 
 ; === eval bootstrapping (reflective install): the C runtime is minimal; key semantics are
-; gwen closures in prelude.g installed via setter bifs, shared by both compilers:
+; gwen closures in prelude.g installed via setter nifs, shared by both compilers:
 ;  * numap (set-numap): fixnum/number application -> gwen num-ap (x**n / compose); numfn
 ;    builds the n-fold thread via lam/poke (no re-entry to ev).
 ;  * +/* of functions (set-scomb/set-bcomb): `+`=Church add, `*`=compose, so numerals agree.
@@ -253,7 +253,7 @@
 ; [g_kind a][g_kind b]; a MONADIC op is its diagonal. three: g_add_mx (+), g_mul_mx (*),
 ; g_apply_mx (apply). one indexed jump picks the lane; the table encodes precedence
 ; (lambda>pair>text>number) and undefined cells (-> nil). FAST-PATH CHAINING, two levels:
-; (1) the public bif inlines both-fixnum (__builtin_*_overflow, no matrix touch), falling
+; (1) the public nif inlines both-fixnum (__builtin_*_overflow, no matrix touch), falling
 ; through to Ap(mx[..][..]); (2) a lane handler (g_vm_addn) fall-throughs by REPRESENTATION
 ; hottest-first, tail-jumping to a specialized engine: array->g_vm_vbin, complex->cplx_bin,
 ; non-num->nil, float->box f64, in-range int->EMIT_INT, else->g_big_binop. matrix -> lane in
