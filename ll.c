@@ -2469,10 +2469,19 @@ static word fn_arg(union u *k, int i, int nargs) { // i-th arg in application or
 static struct g *gzput_fn_body(struct g *g, word x, uintptr_t off);
 
 // the in-pool source \-expr stashed at value[-1] by a compiled lambda, or 0.
+// Only an ala/k0s lambda reserves that leading cell, so its value pointer sits one past
+// the allocation start. A k0 top-level wrap, a partial-app (g_vm_cur/unc), a continuation,
+// or an opaque handle puts its value AT the start -- no leading cell -- so reading value[-1]
+// there reads the neighbouring object: uninitialised/foreign (flaky to valgrind, and garbage
+// that looked like an in-pool pair would spuriously read back as a source). Probe the tag,
+// which records the true start, instead of reading value[-1]: ttag scans only defined thread
+// cells. value > start <=> a reserved leading cell exists. (fn_partialp is a cheap fast
+// reject so the common curried-closure case skips the tag scan.)
 static word fn_src(struct g *c, union u *k, word x) {
+ if (!(ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len) || fn_partialp(k)) return 0;
+ if (k == tag_head(ttag(c, k))) return 0;       // value at allocation start: no leading src cell
  word s = k[-1].x;
- return ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len
-     && lamp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
+ return lamp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
 
 // --- de Bruijn canonical printing of a lambda's source ---------------------
 // A \-bound variable prints as $<level> where the level (de Bruijn LEVEL:
@@ -4478,7 +4487,7 @@ word g_big_canon(g_word **hp, uint32_t const *limb, int n, bool neg) {
    val = (intptr_t) ((uintptr_t) 0 - u); }                            // incl INTPTR_MIN
   struct g_tuple *bx = ini_scalar((struct g_tuple*) *hp, g_Z);
   *hp += BOX_REQ; box_put(bx->shape, val); return word(bx); }
-big:
+big:;
  struct g_big *b = ini_big((struct g_big*) *hp, neg ? -n : n);
  for (int i = 0; i < n; i++) b->limb[i] = limb[i];
  *hp += b2w(sizeof(struct g_big) + (size_t) n * sizeof(uint32_t));

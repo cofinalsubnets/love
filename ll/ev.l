@@ -1,9 +1,62 @@
+; iop/apx: unforgeable tag markers (uninterned) shared by wev -- which emits (iop op . args)
+; and (apx nary head . args) nodes -- and ana, which dispatches on them. Top-level globals,
+; NOT ev-block locals, so wev's per-global handlers and ana resolve them by name. That keeps
+; them out of ev's captured frame (and off every handler's import list: a handler closing over
+; a sibling that captured iop/apx would otherwise drag both in dead -- see .wevs).
+(: iop (nom 'iop)
+   apx (nom 'apx))
+
+; wevs: value->handler memo for global fns, built once by scanning every global. A handler
+; folds an application to a value when its args are constant (pure fns only), else emits an
+; (iop op . args) node iap inlines (any nif of matching arity), else leaves it. A nif is found
+; by thread shape (g_vm_ret0 terminator); fold eligibility from the curated `names`. It lives
+; as a global -- wev's fold reaches it by name -- so this ~126-entry table is NOT baked into
+; ev's value; `.ev` then prints as just the ana+wev logic, and the table prints under `.wevs`.
+(: wevs (:
+   g_vm_cur  (peek 0 +)
+   g_vm_ret0 (peek 1 A)
+   (cval e) (? (symp e) (X 0 0)               ; (const? . value): 1 head iff a literal
+               (atomp e) (X 1 e)
+               (&& (= (A e) '\) (atomp (BB e))) (X 1 (AB e))
+               (X 0 0))
+   (bake v) (? (fixp v) v (list '\ v))           ; value -> source: fixnum bare else quote
+   ; (op . arity) iff v is a nif. `same` (identity) not `=`: a non-nif global may peek to
+   ; a word that looks like a heap pointer, which `=`/eql would deref and crash on.
+   (opof v) (? (same g_vm_ret0 (peek 1 v)) (X (peek 0 v) 1)
+               (&& (same g_vm_cur (peek 0 v)) (same g_vm_ret0 (peek 3 v))) (X (peek 2 v) (peek 1 v))
+               0)
+   (hgen v op ar pure x) (: as (B x) n (pin as)
+    (go hv a) (? (atomp a) (bake hv)             ; all args constant -> fold
+     (: cv (cval (A a))
+      (? (&& pure (A cv)) (go (hv (B cv)) (B a))
+         (? (&& op (= n ar)) (X iop (X op as))           ; matching-arity nif -> inline
+            (&& (< 1 ar) (= n ar)) (X apx (X 1 x))       ; multi-arg fn -> n-ary apply
+            (X apx (X 0 x))))))                          ; generic l2r apply
+    (go v as))
+   names '(+ - * / // mod << >> & | ^
+           < <= = >= > same gcd modpow inc dec abs
+           X A B AA AB BA BB
+           pin lidx assq memq last rev cat
+           fixp symp twop mapp lamp strp nilp flop comp atomp
+           ssub scat string
+           re im conj arg flo com
+           sin cos log pow)
+   pureset (foldl (\ t s (: v (globals s) (? v (put v 1 t) t))) (hashn 0) names)
+   (add t s) (: v (globals s)
+    (? (fixp v) t
+     (: o (opof v) p (pureset v)
+      (? (|| o p)
+       (: op (? o (A o) 0)
+          ar (? o (B o) (same g_vm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
+          (put v (\ x (hgen v op ar p x)) t))
+       t))))
+   (foldl add (hashn 0) (hashk globals))))
+
 (:- (\ x (:
  c (sco 0 (list 0) 0)
  x (wev c x)
  (ana c x (k0 c) 0 0)))
   g_vm_cur (peek 0 +)
-  g_vm_ret0 (peek 1 A)
   (sco p a i) (put 'par p (put 'imp i (put 'arg a (hashn 0))))
   (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where wev stashes 'src
   (p2 i x k) (poke -1 i (poke -1 x k))
@@ -48,49 +101,6 @@
    (= a g_vm_unc) (pro (seek -2 (peek 2 f)))
    (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
-  iop (nom 'iop)   ; inline-op marker: (iop op . args), emitted by wev, compiled by iap
-  apx (nom 'apx)   ; apply marker: (apx nary head . args), emitted by wev, compiled by apxh
-  ; wevs: value->handler for global fns. A handler folds an application to a value when
-  ; its args are constant (pure fns only), else emits an (iop op . args) node iap inlines
-  ; (any nif of matching arity), else leaves it. Built by scanning every global: a nif is
-  ; found by thread shape (g_vm_ret0 terminator); fold eligibility from curated `names`.
-  wevs (:
-   (cval e) (? (symp e) (X 0 0)               ; (const? . value): 1 head iff a literal
-               (atomp e) (X 1 e)
-               (&& (= (A e) '\) (atomp (BB e))) (X 1 (AB e))
-               (X 0 0))
-   (bake v) (? (fixp v) v (list '\ v))           ; value -> source: fixnum bare else quote
-   ; (op . arity) iff v is a nif. `same` (identity) not `=`: a non-nif global may peek to
-   ; a word that looks like a heap pointer, which `=`/eql would deref and crash on.
-   (opof v) (? (same g_vm_ret0 (peek 1 v)) (X (peek 0 v) 1)
-               (&& (same g_vm_cur (peek 0 v)) (same g_vm_ret0 (peek 3 v))) (X (peek 2 v) (peek 1 v))
-               0)
-   (hgen v op ar pure x) (: as (B x) n (pin as)
-    (go hv a) (? (atomp a) (bake hv)             ; all args constant -> fold
-     (: cv (cval (A a))
-      (? (&& pure (A cv)) (go (hv (B cv)) (B a))
-         (? (&& op (= n ar)) (X iop (X op as))           ; matching-arity nif -> inline
-            (&& (< 1 ar) (= n ar)) (X apx (X 1 x))       ; multi-arg fn -> n-ary apply
-            (X apx (X 0 x))))))                          ; generic l2r apply
-    (go v as))
-   names '(+ - * / // mod << >> & | ^
-           < <= = >= > same gcd modpow inc dec abs
-           X A B AA AB BA BB
-           pin lidx assq memq last rev cat
-           fixp symp twop mapp lamp strp nilp flop comp atomp
-           ssub scat string
-           re im conj arg flo com
-           sin cos log pow)
-   pureset (foldl (\ t s (: v (globals s) (? v (put v 1 t) t))) (hashn 0) names)
-   (add t s) (: v (globals s)
-    (? (fixp v) t
-     (: o (opof v) p (pureset v)
-      (? (|| o p)
-       (: op (? o (A o) 0)
-          ar (? o (B o) (same g_vm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
-          (put v (\ x (hgen v op ar p x)) t))
-       t))))
-   (foldl add (hashn 0) (hashk globals)))
   ; wev: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks
   ; applies with their n-ary-vs-l2r strategy. Tail position is NOT tracked here -- kap detects
   ; tail by peeking the continuation for g_vm_ret at analysis time.
