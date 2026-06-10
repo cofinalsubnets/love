@@ -709,12 +709,12 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   if (g_ok(g = g_strof(g, LL_VERSION))) {
    struct g_def vd[] = {{"version-number", g_pop1(g)}};
    g = g_defn(g, vd, LEN(vd)); }
-  // Pre-intern the dict keys for the C->lisp hooks so resolve_handler/gtrap2
-  // can look them up without allocating. Idempotent with the prelude's bindings.
+  // Pre-intern the dict keys for the hot C->lisp hooks so resolve_handler and
+  // the reader can look them up without allocating. Idempotent with the
+  // prelude's bindings. (The cold trap key is probed by name: sym_probe.)
   if (g_ok(g = intern(g_strof(g, "num-ap")))) g->numap_sym = pop1(g);
   if (g_ok(g = intern(g_strof(g, "scomb"))))  g->scomb_sym = pop1(g);
   if (g_ok(g = intern(g_strof(g, "bcomb"))))  g->bcomb_sym = pop1(g);
-  if (g_ok(g = intern(g_strof(g, "trap"))))   g->trap_sym = pop1(g);
   if (g_ok(g = intern(g_strof(g, "operators")))) g->operators_sym = pop1(g);
   // dict['operators]: the reader's operator table, char -> name | (name . arity).
   // Seeded with the 8 builtin sigil operators at arity 1; `~` and `,` stay
@@ -1590,14 +1590,34 @@ static union u const trap_scare_k[] = { {trap_ret_scare} };
 static union u const trap_drive[] =
  { {g_vm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
 
+// Probe the symbol tree for a C-string name, materializing the lookup with a
+// phantom g_str on the C stack -- same content hash, same walk as
+// intern_checked, but never interning or allocating. A miss means the name was
+// never read, so no global by that name was ever defined.
+uintptr_t hash(struct g*, intptr_t);
+static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
+ union { struct g_str s; char span[sizeof(struct g_str) + 8]; } b;
+ b.s.ap = g_vm_str, b.s.len = n;
+ memcpy(b.s.bytes, nm, n);
+ uintptr_t h = rot(hash(g, word(&b.s)));
+ for (struct g_atom *z = g->symbols; z;) {
+  struct g_str *a = z->nom;
+  intptr_t i = z->code < h ? -1 : z->code > h ? 1 : 0;
+  if (i == 0) i = len(a) - n;
+  if (i == 0) i = memcmp(txt(a), b.s.bytes, n);
+  if (i == 0) return z;
+  z = i < 0 ? z->l : z->r; }
+ return 0; }
+
 // Throw status s to the trap continuation. With a global `trap` function and 5
 // words of stack headroom (the throw path never allocates), build the
 // (trap s a b) frame and run it; else the C default throw_c, which resumes the
 // eof protocol raw. Pre-dict throws (g_ini_0) always take the default.
 struct g *gtrap2(struct g *g, enum g_status s) {
  struct g *c = g_core_of(g);
- if (c->dict && c->trap_sym) {
-  word h = g_mapget(c, nil, c->trap_sym, c->dict);
+ if (c->dict) {
+  struct g_atom *ts = sym_probe(c, "trap", 4);
+  word h = ts ? g_mapget(c, nil, word(ts), c->dict) : nil;
   if (lamp(h) && avail(c) >= 5) {
    int rd = s & g_status_more;     // the more bit: a read-end condition
    word *sp = c->sp -= 5;          // [s h a b K | thrower data ..]
