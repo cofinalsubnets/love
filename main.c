@@ -18,25 +18,6 @@ g_noinline uintptr_t g_clock(void) {
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
 
-// --- raw terminal mode -----------------------------------------------
-// Only the REPL (full ll) needs it; ll0 is non-interactive (build tool / self-test).
-#ifndef GL_BOOTSTRAP
-static struct termios saved_termios;
-static void restore_termios(void) {
-  tcsetattr(STDIN_FILENO, TCSANOW, &saved_termios); }
-
-static void raw_mode(void) {
-  tcgetattr(STDIN_FILENO, &saved_termios);
-  atexit(restore_termios);                 // restore on normal exit
-  struct termios raw = saved_termios;
-  raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);  // no line buffering/echo
-  raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-  raw.c_cc[VMIN] = 1;                      // block for one byte
-  raw.c_cc[VTIME] = 0;
-  tcsetattr(STDIN_FILENO, TCSANOW, &raw); }
-  // c_oflag is left alone, so '\n' on output still becomes CR-LF.
-#endif
-
 static noreturn g_vm(g_vm_exit) { exit(getfix(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // Returns only when poll succeeds (data ready / deadline elapsed) or fails
@@ -305,27 +286,23 @@ static union u const
  nif_run[] = {{g_vm_run}, {g_vm_ret0}},
  nif_getenv[] = {{g_vm_getenv}, {g_vm_ret0}};
 
-#ifndef GL_BOOTSTRAP
-static char const
- rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(nom 0)))";
-#endif
-// host CLI driver from ll/cli.l: ll0 takes the sed-wrapped raw text (it can't
-// lcat its own arg handler); the final ll takes the canonicalized lcat header.
+// --- the boot script ---------------------------------------------------
+// Everything the two builds disagree about lives in this ONE conditional
+// region: the baked lisp text plus a `boot` entry that main tail-calls after
+// the universal setup (argv pins + the host nif defs above).
+#ifdef GL_BOOTSTRAP
+// ll0: the CLI driver is the sed-wrapped raw text (it can't lcat its own arg
+// handler). Self-test: the whole test corpus, baked in (sed-wrapped), run
+// twice -- once compiled by the C bootstrap compiler (c0), once by the
+// self-hosted ev installed from ev.l -- so one ll0 invocation exercises both
+// compilers (and -Dg_tco=0 makes it the trampoline path). s2cldef installs
+// s2cl (string -> charlist); runner reads the baked corpus (the global
+// `tests`) through a sip port and evals each form via `(ev 'ev r)` -- the
+// `'ev` indirection late-binds to whatever `ev` is now, so the same source
+// drives the c0 pass and (after the egg) the self-hosted pass.
 static char const cli[] =
-#ifdef GL_BOOTSTRAP
 #include "cli0.h"
-#else
-#include "cli.h"
-#endif
-  ;
-#ifdef GL_BOOTSTRAP
-// ll0 self-test: the whole test corpus, baked in (sed-wrapped), run twice -- once
-// compiled by the C bootstrap compiler (c0), once by the self-hosted ev installed
-// from ev.l -- so one ll0 invocation exercises both compilers (and -Dg_tco=0 makes
-// it the trampoline path). s2cldef installs s2cl (string -> charlist); runner reads
-// the baked corpus (the global `tests`) through a sip port and evals each form via
-// `(ev 'ev r)` -- the `'ev` indirection late-binds to whatever `ev` is now, so the
-// same source drives the c0 pass and (after the egg) the self-hosted pass.
+ ;
 static char const tests0[] =
 #include "tests0.h"
  ;
@@ -333,15 +310,71 @@ static char const
  s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (sat s)) (X (peek s i 0) (g (+ 1 i))))) 0))",
  runner[] = "(: p (sip (s2cl tests))"
             " ((: (g e) (: r (fread p e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (nom 0)))";
+
+// With args, run the build tool (lcat / gen_data) through the CLI driver.
+// With no args, self-test: eval prelude+repl and run the baked corpus via c0,
+// then bootstrap the self-hosted ev (egg) and run the corpus again through it.
+static struct g *boot(struct g *g, bool argp) {
+  if (argp) return g_evals_(g, cli);
+  g = g_strof(g, tests0);                            // the baked corpus, as a string
+  struct g_def td[] = {{"tests", g_pop1(g)}};
+  g = g_defn(g, td, LEN(td));
+  g = g_evals_(g,                                    // prelude + repl, compiled by c0
+#include "prelude0.h"
+#include "repl0.h"
+  );
+  g = g_evals_(g, s2cldef);
+  g = g_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
+  g = g_evals_(g, "("                                // bootstrap: install the self-hosted ev
+#include "egg0.h"
+    "'("
+#include "prelude0.h"
+#include "ev0.h"
+    "))");
+  return g_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
+
+#else
+// the full ll: raw terminal mode for the interactive REPL (ll0 never needs
+// it -- a build tool / self-test is non-interactive); the CLI driver is the
+// canonicalized lcat header; `rel` is the non-tty stdin runner.
+static struct termios saved_termios;
+static void restore_termios(void) {
+  tcsetattr(STDIN_FILENO, TCSANOW, &saved_termios); }
+
+static void raw_mode(void) {
+  tcgetattr(STDIN_FILENO, &saved_termios);
+  atexit(restore_termios);                 // restore on normal exit
+  struct termios raw = saved_termios;
+  raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);  // no line buffering/echo
+  raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+  raw.c_cc[VMIN] = 1;                      // block for one byte
+  raw.c_cc[VTIME] = 0;
+  tcsetattr(STDIN_FILENO, TCSANOW, &raw); }
+  // c_oflag is left alone, so '\n' on output still becomes CR-LF.
+
+static char const cli[] =
+#include "cli.h"
+ ;
+static char const
+ rel[] = "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(nom 0)))";
+
+static struct g *boot(struct g *g, bool argp) {
+  bool replp = !argp && isatty(STDIN_FILENO);
+  if (replp) raw_mode();
+  g = g_evals_(g, "("
+#include "egg.h"
+    "'("
+#include "prelude.h"
+#include "ev.h"
+    "))"
+#include "repl.h"
+  );
+  return g_evals_(g, argp ? cli : replp ? "(repl 0 0)" : rel); }
 #endif
 
 int main(int argc, char const **argv) {
   struct g *g = g_ini();
   bool argp = argc > 1;
-#ifndef GL_BOOTSTRAP
-  bool replp = !argp && isatty(STDIN_FILENO);
-  if (replp) raw_mode();
-#endif
   // The WHOLE C argv (incl. argv[0]/program name): cli.l drops the head for its own
   // use, while `cmdline` keeps the full list, pinned for user visibility.
   char const **av = argv;
@@ -358,40 +391,7 @@ int main(int argc, char const **argv) {
                         {"argv", full_argv},
                         {"cmdline", full_argv}, };
     g = g_defn(g, d, LEN(d));
-#ifdef GL_BOOTSTRAP
-    // ll0: with args, run the build tool (lcat / gen_data) through the CLI driver.
-    // With no args, self-test -- eval prelude+repl and run the baked corpus via c0,
-    // then bootstrap the self-hosted ev (egg) and run the corpus again through it.
-    if (argp) g = g_evals_(g, cli);
-    else {
-      g = g_strof(g, tests0);                          // the baked corpus, as a string
-      struct g_def td[] = {{"tests", g_pop1(g)}};
-      g = g_defn(g, td, LEN(td));
-      g = g_evals_(g,                                  // prelude + repl, compiled by c0
-#include "prelude0.h"
-#include "repl0.h"
-      );
-      g = g_evals_(g, s2cldef);
-      g = g_evals_(g, runner);                         // pass 1: corpus via ev = the c0 nif
-      g = g_evals_(g, "("                              // bootstrap: install the self-hosted ev
-#include "egg0.h"
-        "'("
-#include "prelude0.h"
-#include "ev0.h"
-        "))");
-      g = g_evals_(g, runner); }                       // pass 2: corpus via the self-hosted ev
-#else
-    g = g_evals_(g, "("
-#include "egg.h"
-        "'("
-#include "prelude.h"
-#include "ev.h"
-        "))"
-#include "repl.h"
-    );
-    g = g_evals_(g, argp ? cli : replp ? "(repl 0 0)" : rel);
-#endif
-  }
+    g = boot(g, argp); }
   switch (g_code_of(g)) {
    default: break;
    case g_status_scare: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(g)->len); break; }
