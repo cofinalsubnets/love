@@ -35,7 +35,7 @@
 #define g_noicf
 #endif
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
-#define LEN(_) (sizeof(_)/sizeof(*_))
+#define countof(_) (sizeof(_)/sizeof(*_))
 
 #ifndef g_tco
 #define g_tco 1
@@ -85,7 +85,7 @@ struct g {
   union u *m; } *ip;
  g_word *hp, *sp;
  union u *tasks;       // task ring head (running task's node); always non-NULL after g_ini
- uintptr_t yield_ctr,  // ap-cycles since last cooperative yield; counts up to YIELD_INTERVAL (level-triggered)
+ uintptr_t yield_ctr,  // ap-cycles since last cooperative yield; counts up to yield_interval (level-triggered)
            next_pid,   // monotonic pid counter; pre-incremented, so first spawn returns 1
            next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
  intptr_t next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
@@ -187,11 +187,11 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 //
 //   g_evals_(g, "("
 //   #include "egg.h"          // (\ egg (: ...)) -- the boot driver, lcat'd
-//     G_EGG_PRE
+//     g_egg_pre
 //   #include "prelude.h"
 //     " "
 //   #include "ev.h"
-//     G_EGG_POST
+//     g_egg_post
 //   #include "repl.h"          // optional: REPL, compiled by the installed ev
 //   );
 //
@@ -200,11 +200,11 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 // compiler with c0, recompiles the whole corpus through itself (exercising
 // wev), and installs that as `ev`. Adjacent string-literal concatenation does
 // all the work at compile time -- no runtime allocation, freestanding-safe.
-#define G_EGG_PRE " '("
-#define G_EGG_POST ")) "
+#define g_egg_pre " '("
+#define g_egg_post ")) "
 
 // === internal API shared with data.c / host / free (merged from former i.h) ===
-#define G_WAIT_FDS_MAX 8
+#define g_wait_fds_max 8
 #define A(o) two(o)->a
 #define B(o) two(o)->b
 #define len(_) (((struct g_str*)(_))->len)
@@ -238,7 +238,7 @@ struct g_pair { g_vm_t *ap; intptr_t a, b; };
 // for +/*/apply -- the rung exists for the order and the honest matrix cells).
 // KN is the matrix dimension.
 enum q { KFix, KTuple, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KLam, KN };
-#define G_DATA_N 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KLam-KTuple
+#define g_data_n 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KLam-KTuple
 typedef g_word num, word;
 // The unique empty string and empty (anonymous) symbol -- data-segment globals the
 // GC never moves (gcp's out-of-pool short-circuit). Strings are immutable, so one
@@ -247,7 +247,7 @@ typedef g_word num, word;
 extern const struct g_str g_str_empty;
 extern const struct g_atom g_sym_empty;
 #define EmptyString ((word) &g_str_empty)
-#define EMPTY_SYM ((word) &g_sym_empty)
+#define empty_sym ((word) &g_sym_empty)
 void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool g_ready(int fd), g_strp(g_word);
 struct g
@@ -270,7 +270,7 @@ enum q g_kind(word);
 // Apply dispatch matrix, indexed [static: the applied data kind, g_typ(Ip)][dynamic:
 // the argument kind, g_kind(Sp[0])]. The data sentinels (data.c) tail-jump through
 // it; the aps + the table itself live in l.c. Row indexed by the full kind
-// (g_typ returns one of the five data kinds), so the first dimension is KN, not G_DATA_N.
+// (g_typ returns one of the five data kinds), so the first dimension is KN, not g_data_n.
 extern g_vm_t *g_apply_mx[KN][KN];
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
 g_vm_t g_vm_ap, g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big; // sentinels + ap: data.c & inline predicates

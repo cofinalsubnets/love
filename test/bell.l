@@ -15,7 +15,7 @@
 ; which compile correctly. Same algorithm, identical output.
 
 (: facts #() bells #() digits "0123456789abcdefghijklmnopqrstuvwxyz"
-   (digit d) (ssub digits d (+ d 1))
+   (digit d) (slice digits d (+ d 1))
    (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
    (fact n) (:
     (f n x) (? (< n 2) x (f (- n 1) (* x n)))

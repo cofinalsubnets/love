@@ -43,8 +43,8 @@ bool g_ready(int fd) { return fd < 0 || poll_wrap(fd) > 0; }
 
 void g_wait_fds(int const *fds, int n, uintptr_t ms) {
   if (n <= 0) { g_sleep(ms); return; }
-  if (n > G_WAIT_FDS_MAX) __builtin_trap();
-  struct pollfd p[G_WAIT_FDS_MAX];
+  if (n > g_wait_fds_max) __builtin_trap();
+  struct pollfd p[g_wait_fds_max];
   for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
   poll_wait(p, n, ms); }
 
@@ -307,7 +307,7 @@ static char const tests0[] =
 #include "tests0.h"
  ;
 static char const
- s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (sat s)) (cons (peek s i 0) (g (+ 1 i))))) 0))",
+ s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (sat s)) (cons (peep s i 0) (g (+ 1 i))))) 0))",
  runner[] = "(: p (sip (s2cl tests))"
             " ((: (g e) (: r (fread p e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (nom 0)))";
 
@@ -318,7 +318,7 @@ static struct g *boot(struct g *g, bool argp) {
   if (argp) return g_evals_(g, cli);
   g = g_strof(g, tests0);                            // the baked corpus, as a string
   struct g_def td[] = {{"tests", g_pop1(g)}};
-  g = g_defn(g, td, LEN(td));
+  g = g_defn(g, td, countof(td));
   g = g_evals_(g,                                    // prelude + repl, compiled by c0
 #include "prelude0.h"
 #include "repl0.h"
@@ -390,7 +390,7 @@ int main(int argc, char const **argv) {
                         {"getenv", (g_word) nif_getenv},
                         {"argv", full_argv},
                         {"cmdline", full_argv}, };
-    g = g_defn(g, d, LEN(d));
+    g = g_defn(g, d, countof(d));
     g = boot(g, argp); }
   switch (g_code_of(g)) {
    default: break;

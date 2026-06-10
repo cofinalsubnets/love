@@ -76,7 +76,7 @@
     (aall (= (pow 2 (arr r '(3) '(1 2 3))) (arr r '(3) '(2 4 8))))  ; scalar ^ array
     (aall (= (pow (arr r '(3) '(1 2 3)) (arr r '(3) '(2 2 2)))      ; array ^ array
              (arr r '(3) '(1 4 9))))
-    (close 1.570796326794897 (peek (arg ~((arr r '(2) '(1 0)) (arr r '(2) '(1 1)))) 1 0))
+    (close 1.570796326794897 (peep (arg ~((arr r '(2) '(1 0)) (arr r '(2) '(1 1)))) 1 0))
     (nilp (pow (arr r '(2) '(1 2)) "x"))                         ; array vs non-number -> nil
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
@@ -85,4 +85,4 @@
     ;     against a bignum stays magnitude-exact -- see test/bignum.l ---
     (aall (= (+ (arr z '(2) '(1 2)) 18446744073709551621)        ; 2^64 + 5 -> low word 5
              (arr z '(2) '(6 7))))
-    (< 1e19 (peek (+ (arr r '(2) '(0 0)) 18446744073709551616) 0 0))))  ; 2^64 full magnitude
+    (< 1e19 (peep (+ (arr r '(2) '(0 0)) 18446744073709551616) 0 0))))  ; 2^64 full magnitude

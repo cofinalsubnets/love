@@ -24,27 +24,27 @@
  (nilp (atype "x"))
 
  ; --- get: rank-1 fixnum index ---
- (= 10 (peek (arr z '(3) '(10 20 30)) 0 -1))
- (= 20 (peek (arr z '(3) '(10 20 30)) 1 -1))
- (= 30 (peek (arr z '(3) '(10 20 30)) 2 -1))
- (= -1 (peek (arr z '(3) '(10 20 30)) 3 -1))   ; out of bounds -> default
- (= -1 (peek (arr z '(3) '(10 20 30)) -1 -1))  ; negative -> default
+ (= 10 (peep (arr z '(3) '(10 20 30)) 0 -1))
+ (= 20 (peep (arr z '(3) '(10 20 30)) 1 -1))
+ (= 30 (peep (arr z '(3) '(10 20 30)) 2 -1))
+ (= -1 (peep (arr z '(3) '(10 20 30)) 3 -1))   ; out of bounds -> default
+ (= -1 (peep (arr z '(3) '(10 20 30)) -1 -1))  ; negative -> default
 
  ; --- get: rank-N shape-list index, row-major ---
- (= 1 (peek (arr z '(2 2) '(1 2 3 4)) '(0 0) -1))
- (= 2 (peek (arr z '(2 2) '(1 2 3 4)) '(0 1) -1))
- (= 3 (peek (arr z '(2 2) '(1 2 3 4)) '(1 0) -1))
- (= 4 (peek (arr z '(2 2) '(1 2 3 4)) '(1 1) -1))
- (= -1 (peek (arr z '(2 2) '(1 2 3 4)) '(2 0) -1))  ; oob -> default
- (= -1 (peek (arr z '(2 2) 0) 0 -1))                   ; wrong-rank key -> default
- (= -1 (peek (arr z '(2 2) 0) '(0) -1))                ; too-few indices -> default
+ (= 1 (peep (arr z '(2 2) '(1 2 3 4)) '(0 0) -1))
+ (= 2 (peep (arr z '(2 2) '(1 2 3 4)) '(0 1) -1))
+ (= 3 (peep (arr z '(2 2) '(1 2 3 4)) '(1 0) -1))
+ (= 4 (peep (arr z '(2 2) '(1 2 3 4)) '(1 1) -1))
+ (= -1 (peep (arr z '(2 2) '(1 2 3 4)) '(2 0) -1))  ; oob -> default
+ (= -1 (peep (arr z '(2 2) 0) 0 -1))                   ; wrong-rank key -> default
+ (= -1 (peep (arr z '(2 2) 0) '(0) -1))                ; too-few indices -> default
 
  ; --- rank-0 deref: empty/nil key yields the lone scalar ---
- (= 2.5 (peek 2.5 0 -9))
+ (= 2.5 (peep 2.5 0 -9))
 
  ; --- float element read boxes an r ---
- (= 1.5 (peek (arr r '(2) '(1.5 2.5)) 0 -1))
- (flop (peek (arr r '(2) '(1.5 2.5)) 0 -1))
+ (= 1.5 (peep (arr r '(2) '(1.5 2.5)) 0 -1))
+ (flop (peep (arr r '(2) '(1.5 2.5)) 0 -1))
 
  ; --- scalar broadcast: array (op) scalar ---
  (aall (= (arr z '(3) '(11 21 31)) (+ (arr z '(3) '(10 20 30)) 1)))

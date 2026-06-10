@@ -22,15 +22,15 @@
  (nilp (arr o '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
 
  ; --- holds arbitrary values verbatim (no boxing/coercion) ---
- (= oa-big (peek oa-a 0 0))
- (= (* oa-big oa-big) (peek oa-a 1 0))
- (= (+ oa-big 7) (peek oa-a 2 0))
- (= "hi" (peek oa-a 3 0))
- (= 'sym (peek oa-a 4 0))
- (nilp (peek oa-z 0 0))                           ; (arr o ... 0) fills with nil
+ (= oa-big (peep oa-a 0 0))
+ (= (* oa-big oa-big) (peep oa-a 1 0))
+ (= (+ oa-big 7) (peep oa-a 2 0))
+ (= "hi" (peep oa-a 3 0))
+ (= 'sym (peep oa-a 4 0))
+ (nilp (peep oa-z 0 0))                           ; (arr o ... 0) fills with nil
 
  ; --- nested object arrays + index into the inner one ---
- (= 4 (peek (peek oa-nest 1 0) 1 0))
+ (= 4 (peep (peep oa-nest 1 0) 1 0))
 
  ; --- falsiness: an all-nil o-array is falsy; any truthy element flips it ---
  (? oa-z 0 1)                                    ; oa-z all nil -> falsy -> 1
@@ -44,9 +44,9 @@
  ; --- GC stress: oa-a stays live (global root) across many collections; the
  ;     bignum element pointers must be forwarded, not dropped or truncated ---
  (= 0 (oa-churn 80))
- (= oa-big (peek oa-a 0 0))
- (= (* oa-big oa-big) (peek oa-a 1 0))
- (= 'sym (peek oa-a 4 0)))
+ (= oa-big (peep oa-a 0 0))
+ (= (* oa-big oa-big) (peep oa-a 1 0))
+ (= 'sym (peep oa-a 4 0)))
 
 ; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
 ; the whole point of g_O: ops route through the promoting scalar dispatch, so a
@@ -63,24 +63,24 @@
  ; result of an op on a g_O array is itself g_O
  (= o (atype oa-sum))
  ; exact elementwise results (no wrap, no float rounding)
- (= (+ (100 2) 1) (peek oa-sum 0 0))
- (= (* 2 (100 2)) (peek oa-prd 1 0))
- (= 12 (peek oa-prd 2 0))
+ (= (+ (100 2) 1) (peep oa-sum 0 0))
+ (= (* 2 (100 2)) (peep oa-prd 1 0))
+ (= 12 (peep oa-prd 2 0))
 
  ; transparency vs the typed lane: 2^40*2^40 = 2^80; z wraps to 0, o stays exact
- (= (80 2) (peek (* oa-oar oa-oar) 0 0))
- (nilp (= (80 2) (peek (* oa-zar oa-zar) 0 0)))
+ (= (80 2) (peep (* oa-oar oa-oar) 0 0))
+ (nilp (= (80 2) (peep (* oa-zar oa-zar) 0 0)))
 
  ; broadcasting: object array (+) scalar bignum
- (= (* 2 (100 2)) (peek (+ oa-x (100 2)) 0 0))   ; (2^100)+(2^100)
- (= (+ 3 (100 2)) (peek (+ (100 2) oa-x) 2 0))   ; scalar on the left; oa-x elem 2 = 3
+ (= (* 2 (100 2)) (peep (+ oa-x (100 2)) 0 0))   ; (2^100)+(2^100)
+ (= (+ 3 (100 2)) (peep (+ (100 2) oa-x) 2 0))   ; scalar on the left; oa-x elem 2 = 3
 
  ; mixed: object array (+) typed int array -> widens the int array, stays exact
- (= (* 2 oa-w) (peek (+ oa-oar oa-zar) 0 0))
+ (= (* 2 oa-w) (peep (+ oa-oar oa-zar) 0 0))
 
  ; comparison over object arrays -> 0/1 element
- (= 1 (peek (< (arr o '(2) '(1 5)) (arr o '(2) '(3 2))) 0 0))
- (= 0 (peek (< (arr o '(2) '(1 5)) (arr o '(2) '(3 2))) 1 0))
+ (= 1 (peep (< (arr o '(2) '(1 5)) (arr o '(2) '(3 2))) 0 0))
+ (= 0 (peep (< (arr o '(2) '(1 5)) (arr o '(2) '(3 2))) 1 0))
 
  ; --- reductions fold exactly through the same dispatch ---
  (= (+ (100 2) 5) (asum oa-x))
@@ -115,10 +115,10 @@
  (= 1 (arank (array 4 1 2 3 4)))
  (= 0 (alen (array -3))) (= "@0" (show (array -3)))
  ; shape list -> rank-N
- (= 2 (arank oa-m))   (= 4 (peek oa-m (L 1 1) 0))
+ (= 2 (arank oa-m))   (= 4 (peep oa-m (L 1 1) 0))
  ; elements stored verbatim, in order
- (= 'world (peek oa-q 1 0))
- (= (100 2) (peek oa-bn 0 0))                  ; full bignum, not truncated to z
+ (= 'world (peep oa-q 1 0))
+ (= (100 2) (peep oa-bn 0 0))                  ; full bignum, not truncated to z
  ; currying: a partial collector is a function; completing it builds the array
  (= "@('a 'b)" (show ((array 2) 'a 'b)))
  ; (array 0) -> empty rank-1 array, no elements to collect

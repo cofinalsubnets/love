@@ -22,7 +22,7 @@
   ; $<addr>. display form only -- `$` READS as the sat operator now.
   (= "$x" (show (nom "x")))
   (= "$foo" (show (nom 'foo)))
-  (= "$" (ssub (show (nom 0)) 0 1))           ; anonymous -> $<addr>
+  (= "$" (slice (show (nom 0)) 0 1))           ; anonymous -> $<addr>
   (symp (gsym x))
   (= "$bar" (show (gsym bar)))
 
@@ -43,7 +43,7 @@
   (strp (show 0))
   (strp (show "hi"))
   (strp (show '(1 2 3)))
-  (strp (show (hashn 0)))
+  (strp (show (table 0)))
 
   ; buffer growth: a 200-element list far exceeds the 32-byte initial buf,
   ; forcing several doublings inside to_putc.

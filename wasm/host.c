@@ -12,11 +12,11 @@
 
 static const char boot_g[] = "("
 #include "egg.h"
-  G_EGG_PRE
+  g_egg_pre
 #include "prelude.h"
   " "
 #include "ev.h"
-  G_EGG_POST
+  g_egg_post
 ;
 
 static char     out_buf[1 << 14];

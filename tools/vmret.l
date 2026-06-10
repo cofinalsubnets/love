@@ -23,13 +23,13 @@
    (hex? c) (? (&& (>= c 48)  (<= c 57))  1
             (? (&& (>= c 97)  (<= c 102)) 1
                (&& (>= c 65)  (<= c 70))))
-   (skip-ws    s i) (? (< i (sat s)) (? (ws?  (peek s i 0)) (skip-ws    s (+ i 1)) i) i)
-   (skip-hex   s i) (? (< i (sat s)) (? (hex? (peek s i 0)) (skip-hex   s (+ i 1)) i) i)
-   (skip-nonws s i) (? (< i (sat s)) (? (ws?  (peek s i 0)) i (skip-nonws s (+ i 1))) i)
+   (skip-ws    s i) (? (< i (sat s)) (? (ws?  (peep s i 0)) (skip-ws    s (+ i 1)) i) i)
+   (skip-hex   s i) (? (< i (sat s)) (? (hex? (peep s i 0)) (skip-hex   s (+ i 1)) i) i)
+   (skip-nonws s i) (? (< i (sat s)) (? (ws?  (peep s i 0)) i (skip-nonws s (+ i 1))) i)
    ; one past the last non-ws char (0 if the line is all whitespace).
-   (trim-end s) ((: (f i e) (? (< i (sat s)) (f (+ i 1) (? (ws? (peek s i 0)) e (+ i 1))) e)) 0 0)
-   (prefix? p s) (= p (ssub s 0 (sat p)))
-   (dash? a) (&& (< 0 (sat a)) (= 45 (peek a 0 0))))
+   (trim-end s) ((: (f i e) (? (< i (sat s)) (f (+ i 1) (? (ws? (peep s i 0)) e (+ i 1))) e)) 0 0)
+   (prefix? p s) (= p (slice s 0 (sat p)))
+   (dash? a) (&& (< 0 (sat a)) (= 45 (peep a 0 0))))
 
 ; --- line classifiers (the three vmret.py regexes, by hand) -----------
 ; HEADER_RE  ^\s*[0-9a-fA-F]+\s+<(.+)>:\s*$  -> the captured name, else 0.
@@ -39,12 +39,12 @@
       (? (= j i) 0                                       ; need >=1 hex digit
          (: k (skip-ws line j)
             (? (= k j) 0                                  ; need >=1 space
-               (? (= 60 (peek line k 0))                   ; '<'
+               (? (= 60 (peep line k 0))                   ; '<'
                   (: e (trim-end line)
                      (? (&& (>= e (+ k 4))                 ; room for "<x>:"
-                            (&& (= 58 (peek line (- e 1) 0)) ; ':' at end
-                                (= 62 (peek line (- e 2) 0)))) ; '>' before it
-                        (ssub line (+ k 1) (- e 2))         ; the (.+) name
+                            (&& (= 58 (peep line (- e 1) 0)) ; ':' at end
+                                (= 62 (peep line (- e 2) 0)))) ; '>' before it
+                        (slice line (+ k 1) (- e 2))         ; the (.+) name
                         0))
                   0))))))
 
@@ -52,10 +52,10 @@
 (: (parse-insn line)
    (: i (skip-ws line 0)
       j (skip-hex line i)
-      (? (&& (> j i) (= 58 (peek line j 0)))               ; hexrun then ':'
+      (? (&& (> j i) (= 58 (peep line j 0)))               ; hexrun then ':'
          (: k (skip-ws line (+ j 1))
             (? (> k (+ j 1))                                ; need >=1 ws after ':'
-               (cons (ssub line i j) (ssub line k (sat line)))
+               (cons (slice line i j) (slice line k (sat line)))
                0))
          0)))
 
@@ -66,7 +66,7 @@
        (: ts (skip-ws text i)
           (? (< ts (sat text))
              (: te (skip-nonws text ts)
-                w  (ssub text ts te)
+                w  (slice text ts te)
                 (? (any (\ p (= p w)) PREFIXES) (f te) w))
              "")))
     0))
@@ -74,17 +74,17 @@
 ; --- per-arch return-mnemonic matchers --------------------------------
 ; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$
 ; (iret/eret never match).
-(: (lower? s i) (? (< i (sat s)) (: c (peek s i 0) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
+(: (lower? s i) (? (< i (sat s)) (: c (peep s i 0) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
    (ret-tail? r) (&& (prefix? "ret" r) (lower? r 3))
-   (retx?  m) (|| (ret-tail? m) (&& (= 108 (peek m 0 0)) (ret-tail? (ssub m 1 (sat m)))))
+   (retx?  m) (|| (ret-tail? m) (&& (= 108 (peep m 0 0)) (ret-tail? (slice m 1 (sat m)))))
    (reta?  m) (|| (= m "ret") (|| (= m "retaa") (= m "retab"))))
 
 ; --- split a string on '\n' into a list of lines ---------------------
 (: (lines s)
    ((: (f start i)
        (? (< i (sat s))
-          (? (= 10 (peek s i 0)) (cons (ssub s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
-          (? (< start i) (L (ssub s start i)) 0)))
+          (? (= 10 (peep s i 0)) (cons (slice s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
+          (? (< start i) (L (slice s start i)) 0)))
     0 0))
 
 ; --- ELF64 symbol sizes: bound each function to its real extent -------
@@ -97,7 +97,7 @@
 ; never bitwise `<<`/`|` (which would not), keeping the values exact.
 (: (hex->int s) ((: (f i acc)
                     (? (< i (sat s))
-                       (: c (peek s i 0)
+                       (: c (peep s i 0)
                           v (? (&& (>= c 48) (<= c 57))  (- c 48)
                             (? (&& (>= c 97) (<= c 102)) (- c 87)
                             (? (&& (>= c 65) (<= c 70))  (- c 55) 0)))
@@ -107,8 +107,8 @@
    BIG (* 4294967296 4294967296)                          ; 2^64: above any real address
    (parse-header-addr line)                               ; the <addr> before <name>:, as an int
      (: i (skip-ws line 0) j (skip-hex line i)
-        (? (= j i) 0 (hex->int (ssub line i j))))
-   (u8  d i) (peek d i 0)                                  ; little-endian fixed-width readers
+        (? (= j i) 0 (hex->int (slice line i j))))
+   (u8  d i) (peep d i 0)                                  ; little-endian fixed-width readers
    (u16 d i) (| (u8  d i) (<< (u8  d (+ i 1)) 8))
    (u32 d i) (| (u16 d i) (<< (u16 d (+ i 2)) 16))
    (u64 d i) (+ (u32 d i) (* (u32 d (+ i 4)) 4294967296))   ; `+`/`*` so a high-half addr promotes to bignum
@@ -150,7 +150,7 @@
                    (: fl2  (close name watching rets flagged)   ; real header: close, open new
                       w2   (prefix? prefix h)
                       ha   (parse-header-addr line)
-                      sz   (peek sizes ha 0)                     ; symtab size, 0 if absent
+                      sz   (peep sizes ha 0)                     ; symtab size, 0 if absent
                       lim2 (? (< 0 sz) (+ ha sz) BIG)           ; extent end, or unbounded
                       (loop rest h w2 lim2 0 fl2 (? w2 (+ total 1) total))))
                 (: ins (? watching (parse-insn line) 0)         ; instruction: maybe a ret
@@ -161,11 +161,11 @@
     ls 0 0 BIG 0 0 0))
 
 ; --- report helpers --------------------------------------------------
-(: (basename p) ((: (f i last) (? (< i (sat p)) (f (+ i 1) (? (= 47 (peek p i 0)) (+ i 1) last)) (ssub p last (sat p)))) 0 0)
+(: (basename p) ((: (f i last) (? (< i (sat p)) (f (+ i 1) (? (= 47 (peep p i 0)) (+ i 1) last)) (slice p last (sat p)))) 0 0)
    (spaces n)    (? (< 0 n) (scat " " (spaces (- n 1))) "")
    (str< a b)    ((: (f i) (? (>= i (sat a)) (< (sat a) (sat b))
                             (? (>= i (sat b)) 0
-                               (: ca (peek a i 0) cb (peek b i 0)
+                               (: ca (peep a i 0) cb (peep b i 0)
                                   (? (< ca cb) 1 (? (> ca cb) 0 (f (+ i 1)))))))) 0)
    (maxlen fl)   (foldl (\ m e (: l (sat (cap e)) (? (< m l) l m))) 0 fl)
    (join-rets rs) (? (twop rs)
@@ -214,12 +214,12 @@
    _        (? port 0 (die (scat "cannot open " path)))
    hdr      (slurp port)                                 ; whole image: e_ident/e_machine + .symtab
    _        (close port)
-   _        (? (&& (= 127 (peek hdr 0 0)) (&& (= 69 (peek hdr 1 0)) (&& (= 76 (peek hdr 2 0)) (= 70 (peek hdr 3 0))))) 0
+   _        (? (&& (= 127 (peep hdr 0 0)) (&& (= 69 (peep hdr 1 0)) (&& (= 76 (peep hdr 2 0)) (= 70 (peep hdr 3 0))))) 0
                (die (scat path ": not an ELF file")))
-   _        (? (&& (= 2 (peek hdr 4 0)) (= 1 (peek hdr 5 0))) 0
+   _        (? (&& (= 2 (peep hdr 4 0)) (= 1 (peep hdr 5 0))) 0
                (die (scat path ": not ELF64 little-endian")))
    sizes    (symtab-sizes hdr)                           ; function start address -> byte size
-   mach     (| (peek hdr 18 0) (<< (peek hdr 19 0) 8))
+   mach     (| (peep hdr 18 0) (<< (peep hdr 19 0) 8))
    x86?     (= mach 62)
    known?   (|| x86? (= mach 183))
    ret?     (? x86? retx? (? (= mach 183) reta? retx?))

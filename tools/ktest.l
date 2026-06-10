@@ -4,13 +4,13 @@
 ; Run on the host l, which has the `run` subprocess nif. argv = (this iso ovmf).
 
 (: (sub-at s i t j) (? (>= j (sat t)) 1                    ; does t occur in s at index i?
-       (? (= (peek s (+ i j) 0) (peek t j 0)) (sub-at s i t (+ 1 j)) 0))
+       (? (= (peep s (+ i j) 0) (peep t j 0)) (sub-at s i t (+ 1 j)) 0))
    (idx s t) ((: (g i) (? (> (+ i (sat t)) (sat s)) -1     ; first index of t in s, else -1
        (? (sub-at s i t 0) i (g (+ 1 i))))) 0)
    (has? s t) (< -1 (idx s t))
-   (bol s i)  (? (< i 1) 0 (? (= 10 (peek s (- i 1) 0)) i (bol s (- i 1))))
-   (eol s i)  (? (>= i (sat s)) i (? (= 10 (peek s i 0)) i (eol s (+ 1 i))))
-   (lineof s t) (: i (idx s t) (? (< i 0) "" (ssub s (bol s i) (eol s i)))))
+   (bol s i)  (? (< i 1) 0 (? (= 10 (peep s (- i 1) 0)) i (bol s (- i 1))))
+   (eol s i)  (? (>= i (sat s)) i (? (= 10 (peep s i 0)) i (eol s (+ 1 i))))
+   (lineof s t) (: i (idx s t) (? (< i 0) "" (slice s (bol s i) (eol s i)))))
 
 (: a    (cbp argv)
    iso  (cap a)

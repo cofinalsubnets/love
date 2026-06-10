@@ -20,7 +20,7 @@ skip=" ${4:-} "   # padded so `case` can match whole " lang:bench " words
 # per-language file extension, interpreter binary, and run command. the command
 # is eval'd with $b bound to the bench name, so the source is benches/$b.$ext.
 case $lang in
-  ll)         ext=g;    bin=../out/host/ll; cmd='cat bench.l benches/$b.g | ../out/host/ll' ;;
+  l)          ext=l;    bin=../out/host/l;  cmd='cat bench.l benches/$b.l | ../out/host/l' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   petite)       ext=ss;   bin=petite;     cmd='petite --script benches/$b.ss' ;;
   guile)        ext=scm;  bin=guile;      cmd='guile --no-auto-compile -s benches/$b.scm' ;;

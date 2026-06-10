@@ -9,9 +9,9 @@
      (putc 27)
      (puts reset))
 
-   test_state (hashn 0)
+   test_state (table 0)
    (test_set k v) (pin test_state k v)
-   (test_get k) (peek test_state k 0))
+   (test_get k) (peep test_state k 0))
 (:: 'assert (\ l
 (:
  (report x v) (do

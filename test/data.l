@@ -13,27 +13,27 @@
          (= "asdf" (string (nom 'asdf)))   ; ...and (symbol arg)
          (= "asdf" (string 'asdf))))
 (:
- t (hashn 0)
+ t (table 0)
  (Put k v) (pin t k v)
- Del (hashd 0 t)
- (Get k) (peek t k 0)
+ (Del k) (pull t k 0)
+ (Get k) (peep t k 0)
  _ (Put 1 2)
  _ (Put 2 3)
  _ (Put 3 4)
  _ (Put 't 'f)
  _ (assert
     (= 4 (sat t))
-    (= 4 (sat (hashk t))))
+    (= 4 (sat (keys t))))
  _ (Del 2)
  _ (Del 't)
  (assert
     (= 2 (sat t))
-    (= 2 (sat (hashk t)))
-    (: (lll t) (foldl (\ l k (cons k (cons (Get k) l))) 0 (hashk t))
+    (= 2 (sat (keys t)))
+    (: (lll t) (foldl (\ l k (cons k (cons (Get k) l))) 0 (keys t))
      (= (* 2 (sat t)) (sat (lll t))))))
 
 (:
- (stripPrefix p s) (? (= p (ssub s 0 (sat p))) (ssub s (sat p) (sat s)))
+ (stripPrefix p s) (? (= p (slice s 0 (sat p))) (slice s (sat p) (sat s)))
  (lit l y n s) ((\ ss (? ss (y ss (cons l 0)) (n s))) (stripPrefix l s))
  (drop p y) (p (\ s _ (y s 0)))
  (opt p y _) (p y (\ s (y s 0)))
@@ -45,8 +45,8 @@
   (= "xx" (scat "x" "x"))
   (= "xx" (scat "" "xx"))
   (= 4 (sat "slen"))
-  (= "bidden" (ssub "forbidden planet" 3 9))
-  (= "all of it" (ssub "all of it" -9 100))
+  (= "bidden" (slice "forbidden planet" 3 9))
+  (= "all of it" (slice "all of it" -9 100))
   ; applying a string indexes it: a byte 0..255, or 1 when out of range --
   ; matching the empty string, where ("" k) is Church-numeral k**0 == 1
   (= 104 ("hi" 0))                          ; 'h'
@@ -55,7 +55,7 @@
   (= 1 ("hi" -1))                           ; negative index -> 1
   (= 1 ("hi" 'x))                           ; non-numeric index -> 1
   (= 255 ((string 255) 0))                  ; high byte returns unsigned 0..255
-  (= (peek "vaporeon" 3 0) ("vaporeon" 3))   ; identical to get with a 0 default
+  (= (peep "vaporeon" 3 0) ("vaporeon" 3))   ; identical to get with a 0 default
   (= "eon" (stripPrefix "vapor" "vaporeon"))
  (= '("eon" "vapor")
   (lit "vapor" cons 0 "vaporeon"))

@@ -1,4 +1,4 @@
-```ll
+```l
 ; l -- a small lisp where every value is a monadic, auto-curried function.
 ; a portable C runtime (l.c + l.h) plus a self-hosting compiler written in l
 ; (the l/{prelude,ev,repl}.l layers). source is .l; the host binary is `l`. see README.md.
@@ -194,25 +194,25 @@
  ((* i i) = -1) (~(2 0) = 2) (~(-5 10) = ~(1 2) * ~(3 4)) (comp ~5) !(comp 5)
  (~(0 0) = ~0) ((conj ~(2 3)) = ~~(2 3)) ((conj ~(2 3)) = ~(2 -3))
  (2.0 = (re ~(2 3))) (i < 1) !(1 < i) ("~(0.0 1.0)" = (show i))
- (0.0 = (peek (arg ~(1 @(1 0))) 1 0)))           ; arg broadcasts -- (arg ~(1 x)) = atan, elementwise
-; a rank-N complex array packs (re,im) into a `c`-typed array: peek yields a ~(..) box,
+ (0.0 = (peep (arg ~(1 @(1 0))) 1 0)))           ; arg broadcasts -- (arg ~(1 x)) = atan, elementwise
+; a rank-N complex array packs (re,im) into a `c`-typed array: peep yields a ~(..) box,
 ; + - * / broadcast numpy-style, `=` gives a mask, and asum/aprod fold complex.
 (assert
- (: v (array 2 ~(1 2) ~(3 4)) (&& (c = (atype v)) (~(1 2) = (peek v 0 0)) (~(4 6) = (asum v))
-    (~(2 4) = (peek (v + v) 0 0)) (~(2 4) = (peek (~(2 0) * v) 0 0)) !(v < v)
+ (: v (array 2 ~(1 2) ~(3 4)) (&& (c = (atype v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (asum v))
+    (~(2 4) = (peep (v + v) 0 0)) (~(2 4) = (peep (~(2 0) * v) 0 0)) !(v < v)
     ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v)))))
 
 ; --- arrays --- (arr type shape vals) is THE typed constructor: vals 0 zero-fills, a list
 ; fills row-major; (array shape elem..) infers the type and curries; @(..) is a rank-1
-; literal. arank/alen/ashape/atype; peek (out of bounds -> the default). + - * // < =
+; literal. arank/alen/ashape/atype; peep (out of bounds -> the default). + - * // < =
 ; broadcast numpy-style to the widest type
 ; (compare -> a z mask); `/` promotes the whole result to r the moment any element divides
 ; inexactly. reduce with asum aprod amax amin aall (a conjunction; "any nonzero" is just `$`).
 ; a zero-norm array is false. sin/cos/log/pow and the derived forms map elementwise.
 (assert
  (6 = (alen (arr z '(2 3) 0))) (2 = (arank (arr z '(2 3) 0))) ('(2 3) = (ashape (arr z '(2 3) 0)))
- (z = (atype (arr z '(2 3) 0))) (20 = (peek @(10 20 30) 1 -1)) (-1 = (peek @(10 20 30) 9 -1))
- (3 = (peek (arr z '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
+ (z = (atype (arr z '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
+ (3 = (peep (arr z '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
  (@(2 4 6) = @(1 2 3) * 2) (r = (atype ((arr z '(2) 0) + 1.5))) (z = (atype ((arr z '(3) 0) < 1)))
  (60 = (asum @(10 20 30))) (30 = (amax @(10 30 20))) (5 = (asum 5)) (aall (1 < 2))
  (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = (// @(7 11) 2))
@@ -223,12 +223,13 @@
 ; pair); cap and cbp take the Contents of the A/B Part of the product (no cap: you have
 ; reached the end of the list); caap cabp .. cbbbp are the compounds, read right to left
 ; like their classic c[ad]+r ancestors (which are gone, as is the X alias).
-; the higher-order functions live in the prelude.
+; (sort l) orders by the total order, in C (descending = rev); (msort le l)
+; takes a predicate. the other higher-order functions live in the prelude.
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cbp '(1 2 3))) (3 = (cabp '(2 3 4))) ('(1 2) = (cons 1 (cons 2 0)))
  !(cap 0) ('x = (cap 'x)) !(cbp 'x)              ; no cap at the end of the list; an atom is its own cap
  ('(2 3 4) = (map inc '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
- ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort (<) '(3 1 2)))
+ ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (msort (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
  (20 = (cabp (assq 2 (list (L 1 10) (L 2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
@@ -240,37 +241,37 @@
 ; a string indexes its bytes ("abc" 0 -> 97). $ (sat) is a *saturating* size:
 ; a container's count, a symbol's name length, a number's ceil-magnitude clamped to >= 0
 ; ($-3.9 = 0), or an array's ceil L2 norm -- so $ and abs diverge ((abs -5) = 5 but $-5 = 0).
-; ssub takes a half-open slice; scat concatenates ("" is the identity); string coerces; \n escapes.
+; slice takes a half-open slice; scat concatenates ("" is the identity); string coerces; \n escapes.
 (assert
  (symp ()) !(() = 0) (idp () (intern "")) (idp () '()) (0 = $()) !() !!$'x
  ('x = () + 'x) ("()" = (show ()))
  (97 = ("abc" 0)) (3 = $"abc") (4 = $3.9) (0 = $-3.9) (5 = $@(3 4)) (5 = (abs -5))
- ("bidden" = (ssub "forbidden planet" 3 9)) ("abcd" = (scat "ab" "cd")) (1 = ("hi" 9))
+ ("bidden" = (slice "forbidden planet" 3 9)) ("abcd" = (scat "ab" "cd")) (1 = ("hi" 9))
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("$x" = (show (nom "x"))))
 
 ; --- hashes --- #(k v ..) or (hash ..) build; #() is the empty hash -- ONLY #(); mutable.
 ; # on a scalar BOXES it: #x = #(() x), a fresh mutable hash pinning x to the () key (a 1-entry
 ; box, truthy -- the dead () = 0 identity used to conflate #0 with empty). the accessors are
-; collection-first: (peek coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
-; and-returns. peek and pull share the default-if-absent fallback; only pull mutates a key away.
-; also hashd, hashk (the keys), $ is the key count. (t k) == (peek t k 0) -- a map is a lookup
-; function. (digest k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
+; collection-first: (peep coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
+; and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key away.
+; also keys (the key list), $ is the key count. (t k) == (peep t k 0) -- a map is a lookup
+; function. (digs k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
 (assert
- (: b #0 (&& (mapp b) (1 = $b) (0 = (peek b () 9)) (: _ (pin b () 7) (7 = (b ())))))
- (: t #(1 10 2 20) (&& (20 = (peek t 2 0)) (20 = (t 2)) (99 = (peek t 9 99))))
- (50 = (peek (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (hashd 0 t 1) (1 = $t))
- (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peek t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- (2 = $(hashk #(1 10 2 20))) ((digest 'k) = (digest 'k)) (mapp #()) !(mapp 5)
+ (: b #0 (&& (mapp b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
+ (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
+ (50 = (peep (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
+ (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
+ (2 = $(keys #(1 10 2 20))) ((digs 'k) = (digs 'k)) (mapp #()) !(mapp 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
  (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
 
-; --- buffers --- (buf n) gives n mutable zeroed bytes; $/peek/pin a byte (0..255); blit;
+; --- buffers --- (buf n) gives n mutable zeroed bytes; $/peep/pin a byte (0..255); blit;
 ; identity equality.
 (assert
- (: b (buf 3) _ (pin b 0 65) (65 = (peek b 0 0))) (4 = $(buf 4))
- (: b (buf 1) _ (pin b 0 257) (1 = (peek b 0 0))) (: b (buf 4) _ (blit b 0 "ABCD" 0 4) (68 = (peek b 3 0)))
+ (: b (buf 3) _ (pin b 0 65) (65 = (peep b 0 0))) (4 = $(buf 4))
+ (: b (buf 1) _ (pin b 0 257) (1 = (peep b 0 0))) (: b (buf 4) _ (blit b 0 "ABCD" 0 4) (68 = (peep b 3 0)))
  !((buf 2) = (buf 2)))
 
 ; --- reader operators --- `;` line comment, `#!` pinbang (no block comments). TWO sibling
@@ -287,8 +288,8 @@
 ; reader digraphs (~(re im) splices to (plex re im); a bare ~x is (clift x)). infix:
 ; + - * / = < <= > >= | & ship dyadic and ? ternary -- the cond form infix, (t ? a b);
 ; aliases ride (name . arity) entries: % is mod, and the accessors go infix as <- pin and
-; -> peek, collection-first -- (t <- k v) pins (giving back t, so it chains), (t -> k d)
-; peeks. (1 + 2) reads ((+ 1 2)) and evaluates via (f) == f.
+; -> peep, collection-first -- (t <- k v) pins (giving back t, so it chains), (t -> k d)
+; peeps. (1 + 2) reads ((+ 1 2)) and evaluates via (f) == f.
 (assert
  ('(1 (\ x) 3) = `(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) `(1 ,@xs 4)))
  (5 = $"hello") (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
@@ -296,8 +297,8 @@
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (20 = (#(1 10 2 20) -> 2 0)) (7 = ((#() <- 'k 7) 'k)) (9 = (#() -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
- (: t (peek dict 'operators 0) (&& (mapp t) ('sat = (t ("$" 0))) ('hash = (t ("#" 0)))))
- (: t (peek dict 'infix 0)
+ (: t (peep dict 'operators 0) (&& (mapp t) ('sat = (t ("$" 0))) ('hash = (t ("#" 0)))))
+ (: t (peep dict 'infix 0)
     (&& (mapp t) (2 = (t '+)) (3 = (t '?)) ('mod = (cap (t '%))))))
 
 ; --- macros --- a macro maps an argument list to code; install with `::`. the prelude ships
@@ -316,12 +317,14 @@
 ; throw as (trap s a b) -- s = the status word, two bits: sing (1, something wrong) and
 ; more (2, read control flow); more alone = incomplete, eof = more|sing. a/b = the
 ; condition data; the result is delivered per the bits (the more bit: to the reader's
-; resume; a bare sing: observed). sing?/more?/eof? read s. see test/trap.l.
+; resume; a bare sing: observed). sing?/more?/eof? read s. (sing a b) raises
+; deliberately -- the sing bit set unconditionally, and the trap's result comes back
+; as its value (no trap installed -> terminal). see test/trap.l.
 (assert
  (3 = (ev '(+ 1 2))) (lamp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
- (sing? 1) !(sing? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3)
+ (sing? 1) !(sing? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lamp sing)
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prelude wraps getc/read and
@@ -349,7 +352,7 @@
 ; the hatchling installs as `ev`, baked into the image at C compile time, no allocation;
 ; born-at records the hatch time. (its pin defaults 0 deliberately: l0's first corpus
 ; pass runs PRE-egg, where born-at does not exist yet.)
-(assert (lamp ev) (fixp (peek dict 'born-at 0)))
+(assert (lamp ev) (fixp (peep dict 'born-at 0)))
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
 ; lattice above). a dyadic op is an NxN table indexed by the two kinds; a monadic op is its
@@ -362,7 +365,7 @@
 ; freestanding, -Wall -Wextra -Werror.
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is
-; milliseconds since t and (vminfo 0) reports a VM stat. an opaque handle acts as a constant
+; milliseconds since t and (gauge 0) reports a VM stat. an opaque handle acts as a constant
 ; function -- applying it ignores the argument.
 (assert (strp (show @(1 2 3))) (fixp (clock 0)) (1 = ((buf 4) 'x)))
 ```

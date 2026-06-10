@@ -17,11 +17,11 @@ void
 #include <stdint.h>
 #include <stdbool.h>
 
-#define K_BOOT_RAM_MAX 64
+#define k_boot_ram_max 64
 
 struct k_boot {
   uint32_t ram_n;
-  struct { uintptr_t base, len; } ram[K_BOOT_RAM_MAX];
+  struct { uintptr_t base, len; } ram[k_boot_ram_max];
   uintptr_t hhdm;                     // 0 means identity-mapped (UEFI path)
   struct {
     void    *base;                    // framebuffer linear address

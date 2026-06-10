@@ -44,7 +44,7 @@
  (= (* 2 2305843009213693952) (* 2 2305843009213693952))           ; equal boxes compare =
 
  ; --- /0 promotes to IEEE inf / -inf / NaN ---
- ; the result is a flo, not a fixnum; not equal to any finite value.
+ ; the result is a real, not a fixnum; not equal to any finite value.
  (flop (/ 1 0))
  (flop (/ -1 0))
  (flop (/ 0 0))
@@ -62,7 +62,7 @@
  (= 1 (mod 7 2))
  (= 0.0 (mod 7.5 2.5))
  (= -1.0 (mod -7.0 2.0))
- ; % by zero is NaN (via fmod's identity), expressed as a flo
+ ; % by zero is NaN (via fmod's identity), expressed as a real
  (flop (mod 7 0))
  (flop (mod 7.0 0.0))
 

@@ -19,24 +19,24 @@ syn keyword LFunc cons cap cbp caap cabp cbap cbbp
 syn keyword LFunc caaap caabp cabap cabbp cbaap cbabp cbbap cbbbp
 syn keyword LFunc id co const flip
 syn keyword LFunc map foldl foldr foldl1 foldr1 filter init last each all any cat catmap
-syn keyword LFunc rev take drop part zip ldel assq memq lidx sort sortsplit merge
-syn keyword LFunc + - * / % mod < <= = >= > <- -> idp sortl msort inc dec abs gcd modpow int
+syn keyword LFunc rev take drop part zip ldel assq memq lidx sort sortsplit merge msort
+syn keyword LFunc + - * / % mod < <= = >= > <- -> idp inc dec abs gcd modpow int
 syn keyword LFunc ~ << >> & \| ^
 syn keyword LFunc sin cos log pow plex re im conj arg clift
 syn keyword LFunc nump intp powg num-ap numfn randint
 syn keyword LFunc twop strp symp mapp lamp handlep tupp bigp boxp arrp comp flop fixp nilp atomp
 syn keyword LFunc arr array arank alen ashape atype asum aprod amax amin aall
 syn keyword LFunc a-rank a-shape a-type a-dim
-syn keyword LFunc string ssub scat intern nom slurp show sip pad page
-syn keyword LFunc hashn hashk hashd digest sat peek pin pull buf blit
-syn keyword LFunc lam peekl pinl seekl trim
+syn keyword LFunc string slice scat intern nom slurp show sip pad page
+syn keyword LFunc table keys digs sat peep pin pull buf blit
+syn keyword LFunc loom pick knit slip trim
 syn keyword LFunc fgetc fungetc feof fputc fputs fputn fputx fflush fread
 syn keyword LFunc putc puts putn putx getc read in out dot
 syn keyword LFunc ev call-cc yield spawn wait sleep done? kill key?
-syn keyword LFunc trap sing? more? eof?
+syn keyword LFunc trap sing sing? more? eof?
 syn keyword LFunc rand randf rand-next randf-next rng-seed rng-get rng-set
 syn keyword LFunc open close run getenv exit
-syn keyword LFunc clock vminfo dict macros assert version-number argv cmdline
+syn keyword LFunc clock gauge dict macros assert version-number argv cmdline
 
 " Macros (head-symbol rewrites installed with ::)
 syn keyword LMacro :: L list do begin progn let if cond quote qq gsym tuple hash

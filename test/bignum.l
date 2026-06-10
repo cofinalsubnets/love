@@ -89,9 +89,9 @@
  (= "15511210043330985984000000" (show F25))
 
  ; --- bignums as hash keys (eqv over slen+limbs) ---
- (= 'hit (peek (pin (pin (hashn 0) F25 'fk) B100 'hit) B100 'miss))
- (= 'fk (peek (pin (pin (hashn 0) F25 'fk) B100 'hit) F25 'miss))
- (= 'miss (peek (pin (hashn 0) B100 'hit) (+ B100 1) 'miss))
+ (= 'hit (peep (pin (pin (table 0) F25 'fk) B100 'hit) B100 'miss))
+ (= 'fk (peep (pin (pin (table 0) F25 'fk) B100 'hit) F25 'miss))
+ (= 'miss (peep (pin (table 0) B100 'hit) (+ B100 1) 'miss))
 
  ; --- prelude ** / gcd / modpow: exact across the tower via * / % ---
  ; (`**` is exact-integer power; the float `pow` nif is tested in math.l)

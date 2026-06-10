@@ -15,7 +15,7 @@
 ; one representative value per kind (the KTuple box has three reps that route to
 ; one matrix cell but fan out by representation inside the lane).
 (: mx-fix 5                              ; KFix
-   mx-flo 2.5                            ; KTuple, float box
+   mx-real 2.5                            ; KTuple, float box
    mx-cpx ~(2 3)                        ; KTuple, complex scalar (Cp)
    mx-box (<< 1 62)                      ; KTuple, wide-int box (boxp)
    mx-big (100 2)                     ; KBig
@@ -28,7 +28,7 @@
    mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KTwo (pair / list)
    mx-fn  (+ 1)                          ; KLam (nif partial application)
-   mx-map (pin (pin (hashn 0) 1 10) 2 20)) ; KLam (a map is a lookup-lambda)
+   mx-map (pin (pin (table 0) 1 10) 2 20)) ; KLam (a map is a lookup-lambda)
 
 ; ============================================================================
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
@@ -107,12 +107,12 @@
  (= r (atype (+ @(10 20) @(1.5 2.5))))      ; Z + R -> widens to R
  (aall (= @(11.5 22.5) (+ @(10 20) @(1.5 2.5))))
  (aall (= @(3.0 5.0) (+ @(1.5 2.5) @(1.5 2.5)))) ; R + R
- (= ~(2 4) (peek (+ mx-ac mx-ac) 0 0))        ; C + C (packed complex)
+ (= ~(2 4) (peep (+ mx-ac mx-ac) 0 0))        ; C + C (packed complex)
  (= o (atype (+ mx-ao mx-ao)))                ; O + O stays exact/object
- (= (* 2 (100 2)) (peek (+ mx-ao mx-ao) 0 0))
+ (= (* 2 (100 2)) (peep (+ mx-ao mx-ao) 0 0))
  (aall (= @(12 22) (+ @(10 20) 2)))           ; Z + scalar (broadcast, no widen)
- (= ~(11 2) (peek (+ ~(10 0) mx-ac) 0 0))    ; C array + complex scalar
- (= ~(11 2) (peek (+ @(10 20) mx-ac) 0 0))    ; R/Z array + C array (real promotes)
+ (= ~(11 2) (peep (+ ~(10 0) mx-ac) 0 0))    ; C array + complex scalar
+ (= ~(11 2) (peep (+ @(10 20) mx-ac) 0 0))    ; R/Z array + C array (real promotes)
  (nilp (+ @(1 2) @(1 2 3)))                   ; non-conforming shapes -> nil
 
  ; --- add_string lane: text x text, and a number as one byte ---
@@ -155,10 +155,10 @@
  (= ~(-5 10) (* ~(1 2) ~(3 4)))            ; Gaussian product
  (= ~(4 6) (* 2 ~(2 3)))                    ; fix * complex
  (aall (= @(20 60) (* @(10 30) 2)))           ; Z array * scalar
- (= ~(2 4) (peek (* ~(2 0) mx-ac) 0 0))      ; complex scalar * C array
+ (= ~(2 4) (peep (* ~(2 0) mx-ac) 0 0))      ; complex scalar * C array
  (= o (atype (* mx-ao mx-ao)))                ; O * O exact
  (= (80 2)                                 ; 2^40 * 2^40, exact (an z array would wrap)
-    (peek (* (arr o '(2) (L (40 2) (40 2))) (arr o '(2) (L (40 2) (40 2)))) 0 0))
+    (peep (* (arr o '(2) (L (40 2) (40 2))) (arr o '(2) (L (40 2) (40 2)))) 0 0))
 
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
@@ -237,7 +237,7 @@
  (<= "ab" "ab")   (> 'b 'a)   (>= '(1) '(1))
  ; --- array operand: comparison is ELEMENTWISE (a 0/1 mask), not the scalar order ---
  (aall (< @(1 2) 10))   (= z (atype (< @(1 2) 10)))   ; the mask is an z array
- (= 1 (peek (< @(1 5) @(3 2)) 0 0))   (= 0 (peek (< @(1 5) @(3 2)) 1 0))
+ (= 1 (peep (< @(1 5) @(3 2)) 0 0))   (= 0 (peep (< @(1 5) @(3 2)) 1 0))
  (aall (<= @(1 2) @(1 2)))   (aall (>= @(2 2) @(1 2)))
  (nilp (< @(1 2) "x"))                                 ; array vs non-number -> nil
  (nilp (< mx-ac mx-ac))                                ; a complex array is unordered -> nil
@@ -252,8 +252,8 @@
  (= ~(2 0) 2)                                ; complex bridges a real (im 0)
  !(= ~(2 1) 2)                            ; ...but not when im != 0
  (aall (= @(1 2) @(1 2)))                     ; array = array -> mask
- (= 1 (peek (= @(1 9) @(1 8)) 0 0))            ; elementwise: first elem equal
- (= 0 (peek (= @(1 9) @(1 8)) 1 0))
+ (= 1 (peep (= @(1 9) @(1 8)) 0 0))            ; elementwise: first elem equal
+ (= 0 (peep (= @(1 9) @(1 8)) 1 0))
  (= 'ef 'ef)   !(= 'ef 'gh)                ; symbol identity
  (= "ab" "ab")                                ; string structural eq
  (= '(1 2) '(1 2))                            ; list structural eq

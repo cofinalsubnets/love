@@ -24,7 +24,7 @@
    (nilp a) (let_loop (cons 0 0) b m)
    (nilp (cbp a)) (meta_eval (cap a) (b m))
    (desugar (cap a) (cabp a) (\ k v
-    (: t (hashn 0) (Get k) (peek t k 0) (Put v) (pin t 0 v)
+    (: t (table 0) (Get k) (peep t k 0) (Put v) (pin t 0 v)
      (let_loop (cbbp a) (\ l (do (Put (meta_eval v (b l))) l))
                         (\ x (? (= x k) (Get 0) (m x))))))))
 

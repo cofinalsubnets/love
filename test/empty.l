@@ -24,14 +24,14 @@
   (= "ab" (scat "ab" 0))   (= "ab" (scat 0 "ab"))
   (= 0 (scat 0 0))
 
-  ; ssub: an empty slice collapses to 0 (no string object is built)
-  (= 0 (ssub "abc" 1 1))
-  (= 0 (ssub "" 0 5))
-  (= 0 (ssub 0 0 5))
+  ; slice: an empty slice collapses to 0 (no string object is built)
+  (= 0 (slice "abc" 1 1))
+  (= 0 (slice "" 0 5))
+  (= 0 (slice 0 0 5))
 
   ; get: indexing the empty string returns the default
-  (= 99 (peek "" 0 99))
-  (= 99 (peek 0 0 99))
+  (= 99 (peep "" 0 99))
+  (= 99 (peep 0 0 99))
 
   ; applying "" IS byte-indexing now (it is a real text object): every index is
   ; out of range, so ("" k) == 1 -- the same value the number 0 yields, but via

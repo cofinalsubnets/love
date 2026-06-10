@@ -1,6 +1,6 @@
 #ifndef _g_data_h
 #define _g_data_h
-// Default data-kind recovery (see ll.h for the contract). The five DATA_SENTINEL
+// Default data-kind recovery (see l.h for the contract). The five DATA_SENTINEL
 // bodies (data.c) are laid out contiguously and in enum order in the
 // .gwen_data section by data.ld (host) or the equivalent inline
 // block in the kernel's full linker script (arch/<a>/<a>.lds). g_typ()
@@ -16,8 +16,8 @@ static g_inline bool in_data(void *a) {
  return (uintptr_t) a >= (uintptr_t) __start_gwen_data
      && (uintptr_t) a <  (uintptr_t) __stop_gwen_data; }
 static g_inline enum q g_typ(union u *o) {
- static const enum q slot_kind[G_DATA_N] = { KTuple, KBig, KString, KSym, KTwo };
+ static const enum q slot_kind[g_data_n] = { KTuple, KBig, KString, KSym, KTwo };
  uintptr_t base = (uintptr_t) __start_gwen_data,
-           unit = ((uintptr_t) __stop_gwen_data - base) / G_DATA_N;
+           unit = ((uintptr_t) __stop_gwen_data - base) / g_data_n;
  return slot_kind[((uintptr_t) o->ap - base) / unit]; }
 #endif

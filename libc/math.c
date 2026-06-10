@@ -8,8 +8,8 @@
 // ~10^-12 relative error or better; not bit-exact libm but plenty for
 // "fractions and graphics work" use cases.
 
-#define M_INF __builtin_inf()
-#define M_NAN __builtin_nan("")
+#define m_inf __builtin_inf()
+#define m_nan __builtin_nan("")
 static double const m_pi    = 3.141592653589793;
 static double const m_pi_2  = 1.5707963267948966;
 static double const m_pi_4  = 0.7853981633974483;
@@ -22,7 +22,7 @@ static double const m_invln2= 1.4426950408889634;
 // iterations reach ~1 ulp from a guess that's already within ~0.5%.
 double sqrt(double x) {
  if (x != x) return x;
- if (x < 0)  return M_NAN;
+ if (x < 0)  return m_nan;
  if (x == 0) return x;        // preserves signed zero
  if (x > 1e308) return x;     // +inf
  union { double d; uint64_t u; } u = { .d = x };
@@ -36,7 +36,7 @@ double sqrt(double x) {
 // manipulation of the exponent.
 double exp(double x) {
  if (x != x) return x;
- if (x >  709.78) return M_INF;
+ if (x >  709.78) return m_inf;
  if (x < -745.13) return 0;
  double kd = x * m_invln2;
  int k = (int)(kd + (kd < 0 ? -0.5 : 0.5));
@@ -52,8 +52,8 @@ double exp(double x) {
 // converges fast. Result is poly + e * ln2.
 double log(double x) {
  if (x != x) return x;
- if (x < 0)  return M_NAN;
- if (x == 0) return -M_INF;
+ if (x < 0)  return m_nan;
+ if (x == 0) return -m_inf;
  union { double d; uint64_t u; } u = { .d = x };
  int e = (int)((u.u >> 52) & 0x7ff) - 1023;
  u.u = (u.u & 0x000fffffffffffffULL) | ((uint64_t)1023 << 52);
@@ -82,7 +82,7 @@ static double cos_k(double x) {
 // l-scale inputs.
 double sin(double x) {
  if (x != x) return x;
- if (x > 1e15 || x < -1e15) return M_NAN;   // catastrophic cancellation
+ if (x > 1e15 || x < -1e15) return m_nan;   // catastrophic cancellation
  double k = (int64_t)(x * m_inv2pi + (x < 0 ? -0.5 : 0.5));
  double y = x - k * m_2pi;                   // y in [-pi, pi]
  if (y > m_pi_2 + m_pi_4)      return -sin_k(y - m_pi);
@@ -128,7 +128,7 @@ double atan2(double y, double x) {
 // NaN on (-1)^2 = 1.
 double pow(double x, double y) {
  if (y == 0) return 1;
- if (x == 0) return y > 0 ? 0 : M_INF;
+ if (x == 0) return y > 0 ? 0 : m_inf;
  // Integer exponents: exact binary exponentiation (correct sign for x<0 falls out
  // of the repeated multiply). exp(y*log x) drifts ~1 ULP, so 3^2.0 lands at
  // 8.999..., not 9 -- the integer path keeps such results exact.
@@ -144,7 +144,7 @@ double pow(double x, double y) {
  // off by 7e-9), so route 0.5 / -0.5 through it.
  if (y == 0.5)  return sqrt(x);
  if (y == -0.5) return 1 / sqrt(x);
- if (x < 0) return M_NAN;                     // non-integer exponent, negative base
+ if (x < 0) return m_nan;                     // non-integer exponent, negative base
  return exp(y * log(x)); }
 
 // Single-precision wrappers for the 32-bit frontends (g_flo_t == float there,

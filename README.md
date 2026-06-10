@@ -40,14 +40,14 @@ and the infix operators
 - `+ - * / = < <= > >= | &`
 - `?` ternary (the cond form infix: `(t ? a b)`)
 - `%` mod
-- `<-` pin, `->` peek (the collection accessors: `(t <- k v)`, `(t -> k d)`)
+- `<-` pin, `->` peep (the collection accessors: `(t <- k v)`, `(t -> k d)`)
 
 pure lisp is the lassoc subset: `?` is still the cond form at the head of a
 list, and bare punct symbols escape in parens -- `(+)` is `+` as a value --
 so these are true too:
 - `12 = (foldl (+) 0 '(3 4 5))`
 - `24 = (foldl (*) 1 '(1 2 3 4))`
-- `'(1 2 3) = (sort (<) '(3 1 2))`
+- `'(1 2 3) = (sort '(3 1 2))`
 - `'(2 3 4) = (map (+ 1) '(1 2 3))`
 
 the full spec

@@ -59,9 +59,9 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define BB(o) B(B(o))
 #define ptr(_) ((word*)(_))
 #define datp(_) in_data(cell(_)->ap)
-#define avec(g, y, ...) (MM(g,&(y)),(__VA_ARGS__),UM(g))
-#define MM(g,r) ((g_core_of(g)->root=&((struct g_r){(word*)(r),g_core_of(g)->root})))
-#define UM(g) (g_core_of(g)->root=g_core_of(g)->root->n)
+#define avec(g, y, ...) (mm(g,&(y)),(__VA_ARGS__),um(g))
+#define mm(g,r) ((g_core_of(g)->root=&((struct g_r){(word*)(r),g_core_of(g)->root})))
+#define um(g) (g_core_of(g)->root=g_core_of(g)->root->n)
 
 
 #if UINTPTR_MAX > 0xffffffffu
@@ -96,31 +96,31 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // that is what makes a bignum array add/multiply exactly instead of wrapping.
 enum g_tuple_type { g_Z, g_R, g_C, g_O, };
 // Elementwise dyadic opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
-// match the arith slow aps; the five compare codes (>= VOP_LT) produce a
-// 0/1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
-// VOP_QUOT is `/` (true division: float when a element divides inexactly);
-// VOP_FQUOT is `//` (truncating integer division). Both stay in the arith group
-// (< VOP_LT) so `op >= VOP_LT` still selects the compare codes.
-enum vop { VOP_ADD, VOP_SUB, VOP_MUL, VOP_QUOT, VOP_REM, VOP_FQUOT,
-           VOP_LT, VOP_LE, VOP_GT, VOP_GE, VOP_EQ, };
+// match the arith slow aps; the five compare codes (>= vop_lt) produce a
+// 0/1 bool array. vop_eq is `=` over arrays (whole-array eq is `(aall (= a b))`).
+// vop_quot is `/` (true division: float when a element divides inexactly);
+// vop_fquot is `//` (truncating integer division). Both stay in the arith group
+// (< vop_lt) so `op >= vop_lt` still selects the compare codes.
+enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
+           vop_lt, vop_le, vop_gt, vop_ge, vop_eq, };
 struct g_atom *intern_checked(struct g*, struct g_str*);
 g_vm_t g_vm_kcall,
  g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
- g_vm_putn, g_vm_info,    g_vm_clock,
+ g_vm_putn, g_vm_gauge,    g_vm_clock,
  g_vm_nilp,  g_vm_putc, g_vm_nom, g_vm_intern, g_vm_twop,
- g_vm_pin, g_vm_get, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
- g_vm_fixp,  g_vm_symp,   g_vm_strp,   g_vm_mapp, g_vm_band,   g_vm_bor,  g_vm_flo,  g_vm_flop,
+ g_vm_pin, g_vm_peep, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
+ g_vm_fixp,  g_vm_symp,   g_vm_strp,   g_vm_mapp, g_vm_band,   g_vm_bor,  g_vm_real,  g_vm_flop,
  g_vm_sin, g_vm_cos, g_vm_log, g_vm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). g_vm_cplx_bin (declared apart, below) is
  // the arithmetic lane the scalar arith slow paths divert into.
  g_vm_cplx, g_vm_Cp, g_vm_re, g_vm_im, g_vm_conj, g_vm_abs, g_vm_carg,
- g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_ssub,
+ g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_slice,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_string, g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_same, g_vm_gt,  g_vm_ge,
- g_vm_sortl,
- g_vm_put, g_vm_pull, g_vm_hashd,   g_vm_hnew,   g_vm_hashk,  g_vm_hashof,
- g_vm_unc, g_vm_poke2, g_vm_peek2,
- g_vm_seek,  g_vm_trim,   g_vm_lam,   g_vm_add,
+ g_vm_sort,
+ g_vm_put, g_vm_pull, g_vm_table,   g_vm_keys,  g_vm_digs,
+ g_vm_unc, g_vm_knit, g_vm_pick,
+ g_vm_slip,  g_vm_trim,   g_vm_loom,   g_vm_add,
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_fquot, g_vm_rem,  g_vm_arg,
  g_vm_bmul_start, g_vm_bmul,   // resumable (yieldable) bignum multiply
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
@@ -128,7 +128,7 @@ g_vm_t g_vm_kcall,
  g_vm_argap, g_vm_quoteap, g_vm_argtap,
  g_vm_arg0, g_vm_arg1, g_vm_arg2, g_vm_arg3,
  g_vm_quo0, g_vm_quo1, g_vm_quo2, g_vm_quo3, g_vm_quom1, g_vm_quom2,
- g_vm_callk, g_vm_yield_sw, g_vm_yield_nif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
+ g_vm_callk, g_vm_sing, g_vm_yield_sw, g_vm_yield_nif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
  g_vm_fputn, g_vm_fread, g_vm_dot,
@@ -185,14 +185,14 @@ static g_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == g_vm_buf; }
 // allocates a new backing and swaps header[1]; the header never moves, so an
 // aliased reference (ev's scopes) sees later inserts. Both are plain threads:
 // len/cap are fixnums and keys/vals l words, so evac_thd traces them with no
-// bespoke GC, like g_buf. Empty slots hold MAP_GAP, a unique word-aligned
+// bespoke GC, like g_buf. Empty slots hold map_gap, a unique word-aligned
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
 // a terminator. (m k) looks k up (nil if absent) through g_vm_map_lookup.
 static g_vm_t g_vm_map_lookup, g_vm_map_data;
 static g_inline bool mapp(word _) { return lamp(_) && cell(_)->ap == g_vm_map_lookup; }
 static const word g_map_gap_cell = 0;
-#define MAP_GAP ((word) &g_map_gap_cell)
-#define MAP_MIN_CAP 4
+#define map_gap ((word) &g_map_gap_cell)
+#define map_min_cap 4
 static g_inline word map_back(word m) { return cell(m)[1].x; }
 static g_inline word *map_slots(word m) { return &cell(map_back(m))[3].x; }
 static g_inline uintptr_t map_len(word m) { return getfix(cell(map_back(m))[1].x); }
@@ -205,7 +205,7 @@ static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : s
 // Arbitrary-precision integer (Step 6). Own data-sentinel kind KBig: a flat,
 // GC-trivial object (raw limbs, no embedded l pointers) the copying GC moves
 // by memcpy. A generic thread scan can't hold inline limb words (a limb that's
-// even-and-in-pool would be spuriously forwarded, one matching G_THD_TAG would
+// even-and-in-pool would be spuriously forwarded, one matching g_thd_tag would
 // truncate the object), so a flat bignum needs its own copy/evac rule -- like
 // KString strings -- which is exactly what the sentinel buys. slen = signed limb
 // count (negative => negative value); |slen| 32-bit limbs little-endian
@@ -223,10 +223,10 @@ uintptr_t g_big_bytes(struct g_big*);
 // fixnum, else wide-int box, else bignum; bumps *hp when it boxes/bignums. One
 // sink shared by the reader and the arithmetic slow paths.
 word g_big_canon(g_word **hp, uint32_t const *limb, int n, bool neg);
-g_flo_t g_big_to_flo(word);                 // bignum -> double (used by TOFLO)
+g_flo_t g_big_to_flo(word);                 // bignum -> double (used by toflo)
 intptr_t g_big_low(word);                   // bignum value mod 2^W (low machine word)
 int g_big_cmp(word, word);                  // -1/0/1 over two integer operands
-struct g *g_big_binop(struct g*, int vop);  // VOP_ADD..VOP_REM, packed; pops one operand
+struct g *g_big_binop(struct g*, int vop);  // vop_add..vop_rem, packed; pops one operand
 struct g *g_big_quot_true(struct g*);       // `/` bignum lane: exact quotient when b | a, else a float box
 struct g *g_big_dec(struct g*);             // sp[0] bignum -> decimal string
 struct g *g_big_read_dec(struct g*);        // sp[0] [+-]?digits token -> canonical value
@@ -240,7 +240,7 @@ static g_inline bool flop(word _) {
 static g_inline bool boxp(word _) {
   return tupp(_) && tuple(_)->rank == 0 && tuple(_)->type == g_Z; }
 // A complex scalar: a rank-0 g_C tuple (two g_flo_t, re then im). Deliberately
-// NOT folded into ISNUM -- the real-tower macros (TOFLO/TOINT) would misread its
+// NOT folded into isnum -- the real-tower macros (toflo/toint) would misread its
 // two-word payload, so the arith/eq paths handle complex via explicit Cp
 // branches placed before the real lanes (decision: complex > float > int/bignum).
 static g_inline bool Cp(word _) {
@@ -250,7 +250,7 @@ static g_inline bool Cp(word _) {
 static g_inline bool arrp(word _) { return tupp(_) && tuple(_)->rank >= 1; }
 
 // Max array rank (bounds the stack index/stride arrays in the broadcast loop).
-#define G_VEC_MAXRANK 8
+#define maxrank 8
 extern size_t const g_vt_[];                 // element byte size by g_tuple_type
 // Element payload: laid out row-major just past the shape words.
 static g_inline void *tuple_data(struct g_tuple *v) { return (void*) (v->shape + v->rank); }
@@ -304,10 +304,10 @@ bool g_all_zero(struct g_tuple*);
 // scan that short-circuits). Pair, symbol, non-empty string/table/array, buf, fn, port are
 // truthy without traversal. Lockstep with g_pin (g_vm_pin): same zero-conditions.
 // a symbol's # (pin) value, shared by g_mag (#) and g_nilp (!). THE empty symbol
-// (EMPTY_SYM, prints as ()) has no name -> 0 -> falsy. Every other present symbol
+// (empty_sym, prints as ()) has no name -> 0 -> falsy. Every other present symbol
 // (interned, named-uninterned, anonymous nom) floors to >=1 -> truthy.
 static g_inline intptr_t pin_sym(word x) {
-  if (x == EMPTY_SYM) return 0;                        // the empty symbol: falsy (prints as ())
+  if (x == empty_sym) return 0;                        // the empty symbol: falsy (prints as ())
   struct g_atom *s = (struct g_atom*) x;
   intptr_t nl = !s->nom ? 0
     : strp(word(s->nom)) ? (intptr_t) len(s->nom)
@@ -335,45 +335,45 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 
 // --- numeric tower helpers (shared by math.c, arr.c, hash.c) ----------------
 // Numeric scalar = a fixnum, a boxed float (flop), or a boxed wide int (boxp).
-#define ISNUM(x) (fixp(x) || flop(x) || boxp(x) || bigp(x))
+#define isnum(x) (fixp(x) || flop(x) || boxp(x) || bigp(x))
 // Integer value of a fixnum-or-box operand (callers must exclude floats AND
 // bignums -- a bignum doesn't fit an intptr_t; integer lanes guard on !bigp).
-#define TOINT(x) (fixp(x) ? (intptr_t) getfix(x) : box_get(x))
+#define toint(x) (fixp(x) ? (intptr_t) getfix(x) : box_get(x))
 // Double value of any numeric operand (a bignum widens via g_big_to_flo).
-#define TOFLO(x) (fixp(x) ? (g_flo_t) getfix(x) : flop(x) ? flo_get(x) : boxp(x) ? (g_flo_t) box_get(x) : g_big_to_flo(x))
+#define toflo(x) (fixp(x) ? (g_flo_t) getfix(x) : flop(x) ? flo_get(x) : boxp(x) ? (g_flo_t) box_get(x) : g_big_to_flo(x))
 // Heap words for one scalar box. The float box (g_flo_t) and the wide-int box
 // (intptr_t) are both one pointer-width word, so one reservation fits.
-#define BOX_REQ (Width(struct g_tuple) + Width(intptr_t))
+#define box_req (Width(struct g_tuple) + Width(intptr_t))
 // Heap words for one complex box: the (re, im) payload is two g_flo_t words.
-#define CPLX_REQ (Width(struct g_tuple) + 2 * Width(g_flo_t))
+#define cplx_req (Width(struct g_tuple) + 2 * Width(g_flo_t))
 // The tagged fixnum range: putfix spends one bit, so |value| <= 2^(Bits-2).
-#define FIX_MIN (INTPTR_MIN >> 1)
-#define FIX_MAX (INTPTR_MAX >> 1)
+#define fix_min (INTPTR_MIN >> 1)
+#define fix_max (INTPTR_MAX >> 1)
 // Emit an integer result R into `_res`: demote to a fixnum when it fits the
 // tag, else box it as a rank-0 g_Z scalar (bumping Hp). The caller must
-// already hold Have(BOX_REQ). Takes no &local, so a ap that uses it keeps
+// already hold Have(box_req). Takes no &local, so a ap that uses it keeps
 // its trailing tail call.
-#define EMIT_INT(R) do { intptr_t _r = (R); \
- if (_r >= FIX_MIN && _r <= FIX_MAX) _res = putfix(_r); \
+#define emit_int(R) do { intptr_t _r = (R); \
+ if (_r >= fix_min && _r <= fix_max) _res = putfix(_r); \
  else { struct g_tuple *_v = ini_scalar((struct g_tuple*) Hp, g_Z); \
-        Hp += BOX_REQ; box_put(_v->shape, _r); _res = word(_v); } } while (0)
-// Emit a double result R into `_res` as a rank-0 g_R box. Same Have(BOX_REQ)
-// precondition and TCO discipline as EMIT_INT.
-#define EMIT_FLO(R) do { struct g_tuple *_v = ini_scalar((struct g_tuple*) Hp, g_R); \
- Hp += BOX_REQ; flo_put(_v->shape, (R)); _res = word(_v); } while (0)
+        Hp += box_req; box_put(_v->shape, _r); _res = word(_v); } } while (0)
+// Emit a double result R into `_res` as a rank-0 g_R box. Same Have(box_req)
+// precondition and TCO discipline as emit_int.
+#define emit_flo(R) do { struct g_tuple *_v = ini_scalar((struct g_tuple*) Hp, g_R); \
+ Hp += box_req; flo_put(_v->shape, (R)); _res = word(_v); } while (0)
 
 // Step 8 -- RNG (kernel/rng.c). State is a rank-1 i64 tuple of length 4 (256 bits,
 // xoshiro256++). It rides the existing tuple machinery (no data sentinel) but its
 // payload is treated as raw bytes -- moved by memcpy, never via tuple_get/put_int,
 // which would truncate the 64-bit limbs to intptr_t on 32-bit ports. The fixed
 // 8-byte limbs make a seed reproduce the same sequence on every target.
-#define RNG_STATE_LEN 4
-#define RNG_PAYLOAD_BYTES (RNG_STATE_LEN * 8)
-#define RNG_VEC_BYTES (sizeof(struct g_tuple) + sizeof(uintptr_t) + RNG_PAYLOAD_BYTES)
-#define RNG_VEC_REQ (b2w(RNG_VEC_BYTES))
+#define rng_state_len 4
+#define rng_payload_bytes (rng_state_len * 8)
+#define rng_vec_bytes (sizeof(struct g_tuple) + sizeof(uintptr_t) + rng_payload_bytes)
+#define rng_vec_req (b2w(rng_vec_bytes))
 // State element kind: pick whichever kind is 8 bytes wide so g_tuple_bytes (GC) sees
 // the full 256-bit payload -- Z (one word) on 64-bit, C (two words) on 32-bit.
-#define RNG_VT (Bytes == 4 ? g_C : g_Z)
+#define rng_vt (Bytes == 4 ? g_C : g_Z)
 void g_rng_seed(struct g_tuple*, uint64_t);   // shape an i64 state tuple + seed it (SplitMix64)
 g_vm_t g_vm_rng_seed, g_vm_rand_next, g_vm_randf_next;
 int memcmp(void const*, void const*, size_t);
@@ -437,19 +437,19 @@ static g_inline bool eql(struct g *g, word a, word b) { return a == b || eqv(g, 
 
 // Threads -- and every other variable-length heap object the GC copies by
 // scanning (continuations, task nodes, env scopes, ports) -- end with a single
-// tag word: the object's own head pointer with bit 1 set (G_THD_TAG), saving a
+// tag word: the object's own head pointer with bit 1 set (g_thd_tag), saving a
 // word over a separate NULL marker + head. Small ints are odd and l heap
 // pointers are word-aligned, so the only other word that can carry (x & 3) == 2
 // is an embedded *external* pointer (host data/function) that happens to land
 // on a 2-byte boundary. So the terminator test is not just the tag bits: the
 // payload must also point back into [lo, hi), the pool the object lives in --
 // which a stray external pointer never does.
-#define G_THD_TAG 2
+#define g_thd_tag 2
 static g_inline bool tagp(word x, word const *lo, word const *hi) {
  word const *p = (word const*) (x & ~(word) 3);
- return (x & 3) == G_THD_TAG && p >= lo && p < hi; }
+ return (x & 3) == g_thd_tag && p >= lo && p < hi; }
 static g_inline union u *tagthd(union u *h, uintptr_t len) {
-  return h[len].x = word(h) | G_THD_TAG, h; }
+  return h[len].x = word(h) | g_thd_tag, h; }
 #define topof(g) ((word*)g+g->len)
 static g_inline struct g_tag { union u *head; union u end[]; } *ttag(struct g*g, union u *k) {
  word *lo = ptr(g), *hi = topof(g);
@@ -489,7 +489,7 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // for `+` on symbols (empty name -> contributes no bytes) and the canonical value of
 // any empty-named symbol concat. Predicates read `ap`, so these behave as a normal
 // text/sym value; the FAM `bytes[]` is simply absent (len 0).
-// External linkage (declared in l.h with the EmptyString/EMPTY_SYM macros) so the
+// External linkage (declared in l.h with the EmptyString/empty_sym macros) so the
 // frontends can return them too (e.g. host_run's empty-output capture).
 const struct g_str g_str_empty = { .ap = g_vm_str, .len = 0 };
 const struct g_atom g_sym_empty = { .ap = g_vm_sym, .code = 0, .nom = 0, .l = 0, .r = 0 };
@@ -525,95 +525,95 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
 
 
 
-#define MIN(p,q) ((p)<(q)?(p):(q))
-#define MAX(p,q) ((p)>(q)?(p):(q))
+#define min(p,q) ((p)<(q)?(p):(q))
+#define max(p,q) ((p)>(q)?(p):(q))
 
 
 
 
-#define LIMB_BITS 32
-#define LIMB_BASE ((uint64_t) 1 << LIMB_BITS)
+#define limb_bits 32
+#define limb_base ((uint64_t) 1 << limb_bits)
 
-#define YIELD_INTERVAL 64
+#define yield_interval 64
 #define YieldCheck() \
-  if (g->tasks->m != g->tasks && ++g->yield_ctr >= YIELD_INTERVAL) \
+  if (g->tasks->m != g->tasks && ++g->yield_ctr >= yield_interval) \
     return Ap(g_vm_yield_sw, g)
-#define ARGN(nom, i) g_vm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
-#define QUON(nom, v) g_vm(nom) { Have1(); Sp -= 1; Sp[0] = putfix(v); Ip += 1; return Continue(); }
+#define argn(nom, i) g_vm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
+#define quon(nom, v) g_vm(nom) { Have1(); Sp -= 1; Sp[0] = putfix(v); Ip += 1; return Continue(); }
 
 #define Ana(n, ...) struct g *n(struct g *g, struct env **c, intptr_t x, ##__VA_ARGS__)
 #define Cata(n, ...) struct g *n(struct g *g, struct env **c, ##__VA_ARGS__)
 #define incl(e, n) ((e)->len += ((n)<<1))
 #define Kp (g->ip)
-#define C1(n, ...) static Cata(n) { return __VA_ARGS__, pull(g, c); }
-#define forget() (g_core_of(g)->root=(mm),g)
+#define cata1(n, ...) static Cata(n) { return __VA_ARGS__, pull(g, c); }
+#define forget() (g_core_of(g)->root=(mm0),g)
 
 #define fs0(g) (g_core_of(g)->sp[0])
 #if UINTPTR_MAX > 0xffffffffu
-#define DTOA_INF    1e308
-#define DTOA_SCI_HI 1e16
-#define DTOA_SCI_LO 1e-4
+#define dtoa_inf    1e308
+#define dtoa_sci_hi 1e16
+#define dtoa_sci_lo 1e-4
 #else
-#define DTOA_INF    __FLT_MAX__
-#define DTOA_SCI_HI 1e16f
-#define DTOA_SCI_LO 1e-4f
+#define dtoa_inf    __FLT_MAX__
+#define dtoa_sci_hi 1e16f
+#define dtoa_sci_lo 1e-4f
 #endif
 
-#define S1(i) {{i}, {g_vm_ret0}}
-#define S2(i) {{g_vm_cur},{.x=putfix(2)},{i}, {g_vm_ret0}}
-#define S3(i) {{g_vm_cur},{.x=putfix(3)},{i}, {g_vm_ret0}}
-#define S5(i) {{g_vm_cur},{.x=putfix(5)},{i}, {g_vm_ret0}}
+#define s1(i) {{i}, {g_vm_ret0}}
+#define s2(i) {{g_vm_cur},{.x=putfix(2)},{i}, {g_vm_ret0}}
+#define s3(i) {{g_vm_cur},{.x=putfix(3)},{i}, {g_vm_ret0}}
+#define s5(i) {{g_vm_cur},{.x=putfix(5)},{i}, {g_vm_ret0}}
 #define nifs(_) \
- _(nif_clock, "clock", S1(g_vm_clock)) _(nif_addr, "vminfo", S1(g_vm_info))\
- _(nif_add, "+", S2(g_vm_add)) _(nif_sub, "-", S2(g_vm_sub)) _(nif_mul, "*", S2(g_vm_mul))\
- _(nif_quot, "/", S2(g_vm_quot)) _(nif_fquot, "//", S2(g_vm_fquot)) _(nif_rem, "mod", S2(g_vm_rem)) \
- _(nif_lt, "<", S2(g_vm_lt))  _(nif_le, "<=", S2(g_vm_le)) _(nif_eq, "=", S2(g_vm_eq))\
- _(nif_ge, ">=", S2(g_vm_ge))  _(nif_gt, ">", S2(g_vm_gt)) \
- _(nif_same, "idp", S2(g_vm_same)) \
- _(nif_bsl, "<<", S2(g_vm_bsl)) _(nif_bsr, ">>", S2(g_vm_bsr))\
- _(nif_band, "&", S2(g_vm_band)) _(nif_bor, "|", S2(g_vm_bor)) _(nif_bxor, "^", S2(g_vm_bxor))\
- _(nif_cons, "cons", S2(g_vm_cons)) _(nif_car, "cap", S1(g_vm_car)) _(nif_cdr, "cbp", S1(g_vm_cdr)) _(nif_sortl, "sortl", S1(g_vm_sortl)) \
- _(nif_ssub, "ssub", S3(g_vm_ssub)) _(nif_scat, "scat", S2(g_vm_scat)) \
- _(nif_fread, "fread", S2(g_vm_fread))\
- _(nif_string, "string", S1(g_vm_string))\
- _(nif_intern, "intern", S1(g_vm_intern)) _(nif_nom, "nom", S1(g_vm_nom))\
- _(nif_lam, "lam", S1(g_vm_lam))\
- _(nif_peek, "peekl", S2(g_vm_peek2)) _(nif_poke, "pinl", S3(g_vm_poke2)) _(nif_trim, "trim", S1(g_vm_trim))\
- _(nif_seek, "seekl", S2(g_vm_seek)) _(nif_pin, "sat", S1(g_vm_pin)) _(nif_get, "peek", S3(g_vm_get))\
- _(nif_put, "pin", S3(g_vm_put)) _(nif_pull, "pull", S3(g_vm_pull)) _(nif_hnew, "hashn", S1(g_vm_hnew)) _(nif_hashk, "hashk", S1(g_vm_hashk))\
- _(nif_hash, "digest", S1(g_vm_hashof))\
- _(nif_bufnew, "buf", S1(g_vm_bufnew)) _(nif_bcopy, "blit", S5(g_vm_bcopy))\
- _(nif_hashd, "hashd", S3(g_vm_hashd)) _(nif_twop, "twop", S1(g_vm_twop)) _(nif_strp, "strp", S1(g_vm_strp))\
- _(nif_flo, "flo", S1(g_vm_flo)) _(nif_flop, "flop", S1(g_vm_flop))\
- _(nif_sin, "sin", S1(g_vm_sin)) _(nif_cos, "cos", S1(g_vm_cos))\
- _(nif_log, "log", S1(g_vm_log)) _(nif_pow, "pow", S2(g_vm_pow))\
- _(nif_cplx, "plex", S2(g_vm_cplx)) _(nif_Cp, "comp", S1(g_vm_Cp))\
- _(nif_re, "re", S1(g_vm_re)) _(nif_im, "im", S1(g_vm_im)) _(nif_conj, "conj", S1(g_vm_conj))\
- _(nif_abs, "abs", S1(g_vm_abs)) _(nif_arg, "arg", S1(g_vm_carg))\
- _(nif_arr, "arr", S3(g_vm_arr))\
- _(nif_arank, "arank", S1(g_vm_arank))\
- _(nif_alen, "alen", S1(g_vm_alen)) _(nif_ashape, "ashape", S1(g_vm_ashape))\
- _(nif_atype, "atype", S1(g_vm_atype))\
- _(nif_asum, "asum", S1(g_vm_asum)) _(nif_aprod, "aprod", S1(g_vm_aprod))\
- _(nif_amax, "amax", S1(g_vm_amax)) _(nif_amin, "amin", S1(g_vm_amin))\
- _(nif_aall, "aall", S1(g_vm_aall))\
- _(nif_tupp, "tupp", S1(g_vm_tupp)) _(nif_bigp, "bigp", S1(g_vm_bigp)) _(nif_boxp, "boxp", S1(g_vm_boxp))\
- _(nif_arrp, "arrp", S1(g_vm_arrp)) _(nif_intf, "int", S1(g_vm_intf))\
- _(nif_symp, "symp", S1(g_vm_symp)) _(nif_mapp, "mapp", S1(g_vm_mapp)) _(nif_fixp, "fixp", S1(g_vm_fixp))\
- _(nif_lamp, "lamp", S1(g_vm_lamp)) _(nif_handlep, "handlep", S1(g_vm_handlep))\
- _(nif_nilp, "nilp", S1(g_vm_nilp)) _(nif_ev, "ev", S1(g_vm_eval))\
- _(nif_callk, "call-cc", S1(g_vm_callk)) _(nif_yield, "yield", S1(g_vm_yield_nif)) \
- _(nif_spawn, "spawn", S2(g_vm_spawn)) _(nif_wait, "wait", S1(g_vm_wait)) \
- _(nif_sleep, "sleep", S1(g_vm_sleep)) _(nif_donep, "done?", S1(g_vm_donep)) \
- _(nif_kill, "kill", S1(g_vm_kill)) \
- _(nif_key, "key?", S1(g_vm_key)) \
- _(nif_fputn, "fputn", S3(g_vm_fputn))\
- _(nif_fputx, "fputx", S2(g_vm_fputx))\
- _(nif_fgetc, "fgetc", S1(g_vm_fgetc)) _(nif_fungetc, "fungetc", S2(g_vm_fungetc)) _(nif_feof, "feof", S1(g_vm_feof))\
- _(nif_fputc, "fputc", S2(g_vm_fputc)) _(nif_fputs, "fputs", S2(g_vm_fputs))  _(nif_fflush, "fflush", S1(g_vm_fflush))\
- _(nif_dot, "dot", S1(g_vm_dot))\
- _(nif_rng_seed, "rng-seed", S1(g_vm_rng_seed))\
- _(nif_rand_next, "rand-next", S1(g_vm_rand_next)) _(nif_randf_next, "randf-next", S1(g_vm_randf_next))
+ _(nif_clock, "clock", s1(g_vm_clock)) _(nif_gauge, "gauge", s1(g_vm_gauge))\
+ _(nif_add, "+", s2(g_vm_add)) _(nif_sub, "-", s2(g_vm_sub)) _(nif_mul, "*", s2(g_vm_mul))\
+ _(nif_quot, "/", s2(g_vm_quot)) _(nif_fquot, "//", s2(g_vm_fquot)) _(nif_rem, "mod", s2(g_vm_rem)) \
+ _(nif_lt, "<", s2(g_vm_lt))  _(nif_le, "<=", s2(g_vm_le)) _(nif_eq, "=", s2(g_vm_eq))\
+ _(nif_ge, ">=", s2(g_vm_ge))  _(nif_gt, ">", s2(g_vm_gt)) \
+ _(nif_same, "idp", s2(g_vm_same)) \
+ _(nif_bsl, "<<", s2(g_vm_bsl)) _(nif_bsr, ">>", s2(g_vm_bsr))\
+ _(nif_band, "&", s2(g_vm_band)) _(nif_bor, "|", s2(g_vm_bor)) _(nif_bxor, "^", s2(g_vm_bxor))\
+ _(nif_cons, "cons", s2(g_vm_cons)) _(nif_car, "cap", s1(g_vm_car)) _(nif_cdr, "cbp", s1(g_vm_cdr)) _(nif_sort, "sort", s1(g_vm_sort)) \
+ _(nif_slice, "slice", s3(g_vm_slice)) _(nif_scat, "scat", s2(g_vm_scat)) \
+ _(nif_fread, "fread", s2(g_vm_fread))\
+ _(nif_string, "string", s1(g_vm_string))\
+ _(nif_intern, "intern", s1(g_vm_intern)) _(nif_nom, "nom", s1(g_vm_nom))\
+ _(nif_loom, "loom", s1(g_vm_loom))\
+ _(nif_pick, "pick", s2(g_vm_pick)) _(nif_knit, "knit", s3(g_vm_knit)) _(nif_trim, "trim", s1(g_vm_trim))\
+ _(nif_slip, "slip", s2(g_vm_slip)) _(nif_pin, "sat", s1(g_vm_pin)) _(nif_peep, "peep", s3(g_vm_peep))\
+ _(nif_put, "pin", s3(g_vm_put)) _(nif_pull, "pull", s3(g_vm_pull)) _(nif_table, "table", s1(g_vm_table)) _(nif_keys, "keys", s1(g_vm_keys))\
+ _(nif_digs, "digs", s1(g_vm_digs))\
+ _(nif_bufnew, "buf", s1(g_vm_bufnew)) _(nif_bcopy, "blit", s5(g_vm_bcopy))\
+ _(nif_twop, "twop", s1(g_vm_twop)) _(nif_strp, "strp", s1(g_vm_strp))\
+ _(nif_real, "real", s1(g_vm_real)) _(nif_flop, "flop", s1(g_vm_flop))\
+ _(nif_sin, "sin", s1(g_vm_sin)) _(nif_cos, "cos", s1(g_vm_cos))\
+ _(nif_log, "log", s1(g_vm_log)) _(nif_pow, "pow", s2(g_vm_pow))\
+ _(nif_cplx, "plex", s2(g_vm_cplx)) _(nif_Cp, "comp", s1(g_vm_Cp))\
+ _(nif_re, "re", s1(g_vm_re)) _(nif_im, "im", s1(g_vm_im)) _(nif_conj, "conj", s1(g_vm_conj))\
+ _(nif_abs, "abs", s1(g_vm_abs)) _(nif_arg, "arg", s1(g_vm_carg))\
+ _(nif_arr, "arr", s3(g_vm_arr))\
+ _(nif_arank, "arank", s1(g_vm_arank))\
+ _(nif_alen, "alen", s1(g_vm_alen)) _(nif_ashape, "ashape", s1(g_vm_ashape))\
+ _(nif_atype, "atype", s1(g_vm_atype))\
+ _(nif_asum, "asum", s1(g_vm_asum)) _(nif_aprod, "aprod", s1(g_vm_aprod))\
+ _(nif_amax, "amax", s1(g_vm_amax)) _(nif_amin, "amin", s1(g_vm_amin))\
+ _(nif_aall, "aall", s1(g_vm_aall))\
+ _(nif_tupp, "tupp", s1(g_vm_tupp)) _(nif_bigp, "bigp", s1(g_vm_bigp)) _(nif_boxp, "boxp", s1(g_vm_boxp))\
+ _(nif_arrp, "arrp", s1(g_vm_arrp)) _(nif_intf, "int", s1(g_vm_intf))\
+ _(nif_symp, "symp", s1(g_vm_symp)) _(nif_mapp, "mapp", s1(g_vm_mapp)) _(nif_fixp, "fixp", s1(g_vm_fixp))\
+ _(nif_lamp, "lamp", s1(g_vm_lamp)) _(nif_handlep, "handlep", s1(g_vm_handlep))\
+ _(nif_nilp, "nilp", s1(g_vm_nilp)) _(nif_ev, "ev", s1(g_vm_eval))\
+ _(nif_callk, "call-cc", s1(g_vm_callk)) _(nif_sing, "sing", s2(g_vm_sing)) _(nif_yield, "yield", s1(g_vm_yield_nif)) \
+ _(nif_spawn, "spawn", s2(g_vm_spawn)) _(nif_wait, "wait", s1(g_vm_wait)) \
+ _(nif_sleep, "sleep", s1(g_vm_sleep)) _(nif_donep, "done?", s1(g_vm_donep)) \
+ _(nif_kill, "kill", s1(g_vm_kill)) \
+ _(nif_key, "key?", s1(g_vm_key)) \
+ _(nif_fputn, "fputn", s3(g_vm_fputn))\
+ _(nif_fputx, "fputx", s2(g_vm_fputx))\
+ _(nif_fgetc, "fgetc", s1(g_vm_fgetc)) _(nif_fungetc, "fungetc", s2(g_vm_fungetc)) _(nif_feof, "feof", s1(g_vm_feof))\
+ _(nif_fputc, "fputc", s2(g_vm_fputc)) _(nif_fputs, "fputs", s2(g_vm_fputs))  _(nif_fflush, "fflush", s1(g_vm_fflush))\
+ _(nif_dot, "dot", s1(g_vm_dot))\
+ _(nif_rng_seed, "rng-seed", s1(g_vm_rng_seed))\
+ _(nif_rand_next, "rand-next", s1(g_vm_rand_next)) _(nif_randf_next, "randf-next", s1(g_vm_randf_next))
 #define native_implemented_function(n, _, d) static union u const n[] = d;
 #define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
   _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_defglob)\
@@ -670,7 +670,7 @@ static struct g_def const def1[] = { nifs(niff) insts(i_entry)};
 // reverse-lookup a function value against the builtin table -> its source name,
 // or NULL. Used by the printer to render nifs (e.g. `+`) by name.
 char const *g_nif_name(intptr_t x) {
- for (uintptr_t i = 0; i < LEN(def1); i++) if (def1[i].x == x) return def1[i].n;
+ for (uintptr_t i = 0; i < countof(def1); i++) if (def1[i].x == x) return def1[i].n;
  return 0; }
 
 static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
@@ -697,17 +697,17 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
    {"in", (word) &g_stdin},
    {"out", (word) &g_stdout},
    {"err", (word) &g_stderr}, };
-  g = g_defn(g, def0, LEN(def0));
-  g = g_defn(g, def1, LEN(def1));
+  g = g_defn(g, def0, countof(def0));
+  g = g_defn(g, def1, countof(def1));
   // () (the empty symbol) is self-evaluating: dict[()] = ().
-  g = g_push(g, 3, EMPTY_SYM, EMPTY_SYM, g->dict);
+  g = g_push(g, 3, empty_sym, empty_sym, g->dict);
   g = g_mapput(g);
   g = g_pop(g, 1);
   // `version-number`: the build's git hash (l_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
   if (g_ok(g = g_strof(g, L_VERSION))) {
    struct g_def vd[] = {{"version-number", g_pop1(g)}};
-   g = g_defn(g, vd, LEN(vd)); }
+   g = g_defn(g, vd, countof(vd)); }
   // dict['operators]: the reader's operator table, char -> name | (name . arity).
   // Seeded with the 7 builtin sigil operators at arity 1; `~` and `,` stay
   // hardcoded digraphs. Lisp extends it with a plain pin (arity 1..7).
@@ -715,7 +715,7 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
      {'\'', "\\"}, {'`', "qq"}, {'#', "hash"},
      {'@', "tuple"}, {'$', "sat"}, {'!', "nilp"}, {'.', "dot"} };
    g = map_new(g);                                  // sp[0] = the table
-   for (uintptr_t i = 0; i < LEN(ops); i++) {
+   for (uintptr_t i = 0; i < countof(ops); i++) {
     g = intern(g_strof(g, ops[i].n));               // sp[0]=name sp[1]=table
     g = g_push(g, 1, putfix(ops[i].c));             // (key val map) for g_mapput
     g = g_mapput(g); }                              // -> sp[0]=table
@@ -730,9 +730,9 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   // as the plain symbol ((+) passes + as a value, '+ quotes it).
   { char const *const ops2[] = { "+", "-", "*", "/", "=", "<", "<=", ">", ">=", "|", "&" };
    g = map_new(g);                                  // sp[0] = the table
-   for (uintptr_t i = 0; i < LEN(ops2) + 1; i++) {
-    g = intern(g_strof(g, i < LEN(ops2) ? ops2[i] : "?"));
-    g = g_push(g, 1, putfix(i < LEN(ops2) ? 2 : 3)); // [arity sym table]
+   for (uintptr_t i = 0; i < countof(ops2) + 1; i++) {
+    g = intern(g_strof(g, i < countof(ops2) ? ops2[i] : "?"));
+    g = g_push(g, 1, putfix(i < countof(ops2) ? 2 : 3)); // [arity sym table]
     if (g_ok(g)) {                                  // swap to (key val map) = (sym arity table)
      word t = g->sp[0]; g->sp[0] = g->sp[1], g->sp[1] = t;
      g = g_mapput(g); } }                           // -> sp[0]=table
@@ -744,7 +744,7 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
    g = gxr(g_push(g, 1, putfix(3)));
    g = intern(g_strof(g, "<-"));
    g = g_mapput(g);
-   g = intern(g_strof(g, "peek"));                  // -> aliases peek: (t -> k d)
+   g = intern(g_strof(g, "peep"));                  // -> aliases peep: (t -> k d)
    g = gxr(g_push(g, 1, putfix(3)));
    g = intern(g_strof(g, "->"));
    g = g_mapput(g);
@@ -777,9 +777,9 @@ struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }
 static struct g *g_pushr(struct g *g, uintptr_t m, uintptr_t n, va_list xs) {
  if (n == m) return g_please(g, m);
  word x = va_arg(xs, word);
- MM(g, &x);
+ mm(g, &x);
  g = g_pushr(g, m, n + 1, xs);
- UM(g);
+ um(g);
  if (g_ok(g)) *--g->sp = x;
  return g; }
 
@@ -1060,10 +1060,10 @@ static g_noinline struct g *c0(struct g *g, g_vm_t *y) {
  struct env *c = (void*) ptr(pop1(g));
  word x = g->sp[0];
  g->sp[0] = (word) c1_yield;
- MM(g, &c); MM(g, &x);
+ mm(g, &c); mm(g, &x);
  if (g_ok(g = analyze(g, &c, x)))
    g = c1(c0_ix(g, &c, y, word(g->ip)), &c);
- UM(g), UM(g);
+ um(g), um(g);
  return g; }
 
 static Cata(c1) {
@@ -1141,9 +1141,9 @@ static Cata(c1_ret) {
  uintptr_t ar = llen(e->args) + llen(e->imps);
  return c1_ar(g, c, g_vm_ret, ar); }
 
-C1(c1_cond_push_branch, g = gxl(g_push(g, 2, Kp, (*c)->branches)), (*c)->branches = g_ok(g) ? pop1(g) : nil)
-C1(c1_cond_push_exit, g = gxl(g_push(g, 2, Kp, (*c)->exits)), (*c)->exits = g_ok(g) ? pop1(g) : nil)
-C1(c1_cond_pop_branch, Kp -= 2, Kp[0].ap = g_vm_cond, Kp[1].x = A((*c)->branches), (*c)->branches = B((*c)->branches))
+cata1(c1_cond_push_branch, g = gxl(g_push(g, 2, Kp, (*c)->branches)), (*c)->branches = g_ok(g) ? pop1(g) : nil)
+cata1(c1_cond_push_exit, g = gxl(g_push(g, 2, Kp, (*c)->exits)), (*c)->exits = g_ok(g) ? pop1(g) : nil)
+cata1(c1_cond_pop_branch, Kp -= 2, Kp[0].ap = g_vm_cond, Kp[1].x = A((*c)->branches), (*c)->branches = B((*c)->branches))
 
 static Cata(c1_cond_exit) {
  union u *a = cell(A((*c)->exits));
@@ -1200,12 +1200,12 @@ static Ana(ana_v) {
    // the closure isn't built yet, then apply the captured imports.
    word site = nil;
    if (nilp(AB(y))) {
-    MM(g, &d), MM(g, &y);
+    mm(g, &d), mm(g, &y);
     g = gxl(g_push(g, 2, y, nil)); // site = (y . nil)
     if (g_ok(g)) {
      g = gxl(g_push(g, 2, g->sp[0], d->sites)); // (site . d->sites)
      if (g_ok(g)) d->sites = pop1(g), site = pop1(g); }
-    UM(g), UM(g); }
+    um(g), um(g); }
    incl(*c, 2);
    if (g_ok(g = g_push(g, 3, c1_recv, y, site)))
     g = ana_ap(g, c, BB(g->sp[1]));
@@ -1256,7 +1256,7 @@ static struct g *c0_lambda(struct g *g, struct env **c, intptr_t imps, intptr_t 
  union u *k, *ip;
  word ops = exp;             // the full operand list (params… body) for the stored src
  struct env *d = NULL;
- MM(g, &d); MM(g, &exp); MM(g, &ops);
+ mm(g, &d); mm(g, &exp); mm(g, &ops);
  g = enscope(g, *c, exp, imps);
 
  if (g_ok(g)) {
@@ -1279,9 +1279,9 @@ static struct g *c0_lambda(struct g *g, struct env **c, intptr_t imps, intptr_t 
   // prints as `(\ imps… params… body)` applied to its captures and round-trips.
   if (g_ok(g)) {
    word l = d->imps; int ni = 0;
-   MM(g, &l);
+   mm(g, &l);
    for (; twop(l); l = B(l), ni++) g = g_push(g, 1, A(l));  // push imp1..impN
-   UM(g);
+   um(g);
    g = g_push(g, 1, ops);                                   // tail = (params… body)
    while (ni-- > 0) g = gxr(g);                             // fold: imps ++ ops
    g = gxl(pushl(g));                                       // cons '\ onto the front
@@ -1292,7 +1292,7 @@ static struct g *c0_lambda(struct g *g, struct env **c, intptr_t imps, intptr_t 
 
  if (g_ok(g)) k = g->ip, g->ip = ip, g = gxl(g_push(g, 2, k, d->imps));
 
- return UM(g), UM(g), UM(g), g; }
+ return um(g), um(g), um(g), g; }
 
 static Ana(c0_cond_exit) { return
  incl(*c, 3),
@@ -1341,7 +1341,7 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
   return g; }
 
  if (g_ok(g = gxl(g_push(g, 3, nil, (*c)->stack, x)))) {
-  (*c)->stack = pop1(g), x = pop1(g), MM(g, &x);
+  (*c)->stack = pop1(g), x = pop1(g), mm(g, &x);
   if (anp) { // r2l 1 n-ary ap
    g = ana_ap_r2l(g, c, x),
    incl(*c, 2),
@@ -1352,7 +1352,7 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
    incl(*c, 2),
    g = g_push(g, 2, c1_apn, putfix(1)),
    x = B(x);
-  UM(g), (*c)->stack = B((*c)->stack); }
+  um(g), (*c)->stack = B((*c)->stack); }
 
  return g; }
 
@@ -1400,8 +1400,8 @@ static g_inline Ana(ana_c) {
 // it handles the let special form in a way to support sequential and recursive binding.
 static g_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  if (!twop(B(exp))) return analyze(g, b, A(exp));
- struct g_r *mm = g_core_of(g)->root;
- MM(g, &exp);
+ struct g_r *mm0 = g_core_of(g)->root;
+ mm(g, &exp);
  // recursive-value boxing: c0 is the bootstrap compiler, so it delegates the
  // letrec*-value rewrite to the l `boxfix` prepass (prelude.l) -- evaluated
  // like a macro -- once that global exists (i.e. for everything after its own
@@ -1419,8 +1419,8 @@ static g_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  // lots of variables :(
  word nom = nil, def = nil, lam = nil,
       v = nil, d = nil, e = nil, os = nil;
- MM(g, &nom), MM(g, &def), MM(g, &lam);
- MM(g, &d); MM(g, &e); MM(g, &v); MM(g, &q); MM(g, &os);
+ mm(g, &nom), mm(g, &def), mm(g, &lam);
+ mm(g, &d); mm(g, &e); mm(g, &v); mm(g, &q); mm(g, &os);
 
  // collect vars and defs into two lists.
  // While finding each bound lambda's closure (the c0_lambda below) we expose
@@ -1625,22 +1625,21 @@ static union u const trap_sing_k[] = { {trap_ret_sing} };
 static union u const trap_drive[] =
  { {g_vm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
 
-// Throw status s to the trap continuation. With a global `trap` function and 5
-// words of stack headroom (the throw path never allocates), build the
-// (trap s a b) frame and run it; else the C default throw_c, which resumes the
-// eof protocol raw. Pre-dict throws (g_ini_0) always take the default.
-struct g *gtrap2(struct g *g, enum g_status s) {
- struct g *c = g_core_of(g);
+// Throw status s with condition data a/b to the trap continuation. With a
+// global `trap` function and 5 words of stack headroom (the throw path never
+// allocates), build the (trap s a b) frame and run it; else the C default
+// throw_c, which resumes the eof protocol raw. Pre-dict throws (g_ini_0)
+// always take the default.
+static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
+                         union u const *K) {
  if (c->dict) {
   struct g_atom *ts = sym_probe(c, "trap", 4);
   word h = ts ? g_mapget(c, nil, word(ts), c->dict) : nil;
   if (lamp(h) && avail(c) >= 5) {
-   int rd = s & g_status_more;     // the more bit: a read-end condition
    word *sp = c->sp -= 5;          // [s h a b K | thrower data ..]
    sp[0] = putfix(s), sp[1] = h;
-   sp[2] = rd ? sp[6] : nil;       // read data: [resume port sentinel] under the frame
-   sp[3] = rd ? sp[7] : nil;
-   sp[4] = word(rd ? trap_more_k : trap_sing_k);
+   sp[2] = a, sp[3] = b;
+   sp[4] = word(K);
    c->ip = (union u*) trap_drive;
 #if g_tco
    return c->ip->ap(c, c->ip, c->hp, c->sp);
@@ -1656,8 +1655,25 @@ struct g *gtrap2(struct g *g, enum g_status s) {
  return t->ap(encode(c, s));
 #endif
 }
+struct g *gtrap2(struct g *g, enum g_status s) {
+ struct g *c = g_core_of(g);
+ int rd = s & g_status_more;       // the more bit: a read-end condition --
+ return g_raise(c, s,              // [resume port sentinel] sits on the stack
+  rd ? c->sp[1] : nil, rd ? c->sp[2] : nil,
+  rd ? trap_more_k : trap_sing_k); }
 // Throw on an already-tagged g: re-throw its own status.
 struct g *gtrap(struct g *g) { return gtrap2(g_core_of(g), g_code_of(g)); }
+// (sing a b): the deliberate throw -- the user sings, the sing bit is set
+// unconditionally and the global trap hears (trap 1 a b). Unlike a C sing
+// (oom), the raise point here is a clean boundary, so the trap's result is
+// delivered back as (sing a b)'s value via the more continuation -- the
+// resume is this nif's own ret. With no trap installed the C default
+// applies and the sing is terminal.
+g_vm(g_vm_sing) {
+ Have(1);
+ word a = Sp[0], b = Sp[1];
+ *--Sp = word(Ip + 1);             // [resume a b ..]: trap_more_k's layout
+ return Pack(g), g_raise(g, g_status_sing, a, b, trap_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: g_vm_gc
@@ -1804,14 +1820,14 @@ static g_inline union u *find_runnable(union u *head, uintptr_t now) {
 
 static g_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int my_wait_fd) {
  uintptr_t min_wake = my_wake;
- int fds[G_WAIT_FDS_MAX], nfds = 0;
+ int fds[g_wait_fds_max], nfds = 0;
  if (my_wait_fd >= 0) fds[nfds++] = my_wait_fd;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
   if (n[1].m->ap != g_vm_task_exit) {
    uintptr_t wa = (uintptr_t) getfix(n[3].x);
    if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
    int wf = (int) getfix(n[4].x);
-   if (wf >= 0 && nfds < G_WAIT_FDS_MAX) fds[nfds++] = wf; }
+   if (wf >= 0 && nfds < g_wait_fds_max) fds[nfds++] = wf; }
  if (!min_wake && !nfds) return NULL;
  uintptr_t now = g_clock();
  if (!min_wake) g_wait_fds(fds, nfds, 0);
@@ -1830,7 +1846,7 @@ g_vm(g_vm_yield_sw) {
   if (!next) {
    g->next_wake_at = 0;
    g->next_wait_fd = -1;
-   if (g->yield_ctr >= YIELD_INTERVAL) g->yield_ctr = 0;
+   if (g->yield_ctr >= yield_interval) g->yield_ctr = 0;
    return Continue(); } }
  word my_height = topof(g) - Sp;
  union u *next_stack = next + 5,
@@ -2043,26 +2059,26 @@ g_vm(g_vm_argtap) {
 // operand-value-specialized arg/quote: 1-word ops with the index/constant baked
 // into the ap (no Ip[1] operand fetch). Emitted by the compiler's spa/spq for
 // the hottest indices {0..3} / constants {0,1,2,3,-1,-2}.
-ARGN(g_vm_arg0, 0) ARGN(g_vm_arg1, 1) ARGN(g_vm_arg2, 2) ARGN(g_vm_arg3, 3)
-QUON(g_vm_quo0, 0) QUON(g_vm_quo1, 1) QUON(g_vm_quo2, 2) QUON(g_vm_quo3, 3)
-QUON(g_vm_quom1, -1) QUON(g_vm_quom2, -2)
+argn(g_vm_arg0, 0) argn(g_vm_arg1, 1) argn(g_vm_arg2, 2) argn(g_vm_arg3, 3)
+quon(g_vm_quo0, 0) quon(g_vm_quo1, 1) quon(g_vm_quo2, 2) quon(g_vm_quo3, 3)
+quon(g_vm_quom1, -1) quon(g_vm_quom2, -2)
 
 g_vm(g_vm_trim) { return
  clip(g, cell(Sp[0])), Ip++, Continue(); }
 
-g_vm(g_vm_seek) { return
+g_vm(g_vm_slip) { return
  Sp[1] = word(cell(Sp[1]) + getfix(Sp[0])),
  Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_peek2) { return
+g_vm(g_vm_pick) { return
  Sp[1] = (cell(Sp[1]) + getfix(Sp[0]))->x,
  Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_poke2) {
+g_vm(g_vm_knit) {
  union u *c = cell(Sp[2]) + getfix(Sp[0]);
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
-g_vm(g_vm_lam) {
+g_vm(g_vm_loom) {
  size_t n = getfix(Sp[0]);
  Have(n + Width(struct g_tag));
  union u *k = (union u*) Hp;
@@ -2075,11 +2091,11 @@ g_vm(g_vm_lam) {
 // (fixnum/box/float/complex), so it agrees with (int (abs x)); a bignum saturates
 // to the nearest representable fixnum (sign-preserving). Symbol -> its name length
 // (anonymous nom -> 0). Everything else (code, ports) -> 0.
-// ceil a non-negative magnitude into a fixnum, saturating at FIX_MAX. ceil (not
+// ceil a non-negative magnitude into a fixnum, saturating at fix_max. ceil (not
 // floor) so the result is 0 *only* when m is exactly 0 -- len then doubles as a
 // zero test: (= 0 (len x)) iff x is zero/empty. Never overflows putfix's tag.
 static g_inline intptr_t len_sat(g_flo_t m) {
-  if (m >= (g_flo_t) FIX_MAX) return FIX_MAX;
+  if (m >= (g_flo_t) fix_max) return fix_max;
   intptr_t i = (intptr_t) m;                    // trunc toward 0 (m >= 0)
   return i + (m > (g_flo_t) i ? 1 : 0); }       // bump for any fractional part -> ceil
 // Magnitude: the SIGN-INDEPENDENT size of any value as a non-negative fixnum. A rank>=1
@@ -2090,7 +2106,7 @@ static g_inline intptr_t len_sat(g_flo_t m) {
 // g_pin uses this for arrays/containers (no sign) and for g_O element norms, so a negative
 // array element keeps the array truthy (matching g_all_zero's per-family magnitude scan).
 static intptr_t g_mag(word x) {
-  if (fixp(x)) { intptr_t n = getfix(x); return n == FIX_MIN ? FIX_MAX : n < 0 ? -n : n; }  // fixnum |x|
+  if (fixp(x)) { intptr_t n = getfix(x); return n == fix_min ? fix_max : n < 0 ? -n : n; }  // fixnum |x|
   if (bufp(x)) return len(buf_str(x));                          // mutable byte string
   if (mapp(x)) return map_len(x);                               // table: key count
   if (!datp(x)) return 1;                                       // opaque but present (fn / port): truthy
@@ -2098,14 +2114,14 @@ static intptr_t g_mag(word x) {
     default: return 1;                                          // unknown present data kind -> truthy
     case KString: return len(x);                                 // string: byte count
     case KTwo: { intptr_t l = 0; word p = x; do l++, p = B(p); while (twop(p)); return l; }  // list
-    case KBig: return FIX_MAX;                                  // |bignum| > FIX_MAX: saturate
+    case KBig: return fix_max;                                  // |bignum| > fix_max: saturate
     case KSym: return pin_sym(x);                                // symbol: name length (0 if anonymous/empty)
     case KTuple: { struct g_tuple *v = tuple(x);                 // boxed scalar or rank-n array
       uintptr_t i, n = tuple_nelem(v);
       if (!v->rank) {                                            // rank-0 scalar magnitude
         if (v->type == g_C) return len_sat(cplx_mod(x));
         if (v->type == g_R) { g_flo_t r = flo_get(x); return len_sat(r < 0 ? -r : r); }
-        return FIX_MAX; }                                        // g_Z int box: magnitude exceeds fixnum range
+        return fix_max; }                                        // g_Z int box: magnitude exceeds fixnum range
       g_flo_t s = 0;                                             // rank>=1 array -> ceil(sqrt(Σ |elem|²))
       if (v->type == g_C) { g_flo_t *re = tuple_data(v); for (i = 0; i < 2 * n; i++) s += re[i] * re[i]; }
       else if (v->type == g_O) for (i = 0; i < n; i++) { g_flo_t e = (g_flo_t) g_mag(tuple_get_obj(v, i)); s += e*e; }
@@ -2117,12 +2133,12 @@ static intptr_t g_mag(word x) {
 // im); arrays and containers have no single sign and pass straight to g_mag. Lockstep w/ g_nilp.
 static intptr_t g_pin(word x) {
   if (fixp(x)) { intptr_t n = getfix(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil)
-  if (bigp(x)) return ((struct g_big*) x)->slen < 0 ? 0 : FIX_MAX;  // negative bignum -> 0
+  if (bigp(x)) return ((struct g_big*) x)->slen < 0 ? 0 : fix_max;  // negative bignum -> 0
   if (tupp(x) && !tuple(x)->rank) {                                 // boxed scalar: total-order <= 0 -> 0
     struct g_tuple *v = tuple(x);
     if (v->type == g_R) { g_flo_t r = flo_get(x); return r <= 0 ? 0 : len_sat(r); }
     if (v->type == g_C) return cplx_nonpos(x) ? 0 : len_sat(cplx_mod(x));
-    return box_get(x) < 0 ? 0 : FIX_MAX; }                          // g_Z wide-int box
+    return box_get(x) < 0 ? 0 : fix_max; }                          // g_Z wide-int box
   return g_mag(x); }                                                // arrays / strings / lists / syms / maps / bufs / fns
 g_vm(g_vm_pin) { Sp[0] = putfix(g_pin(Sp[0])); Ip += 1; return Continue(); }
 
@@ -2465,7 +2481,7 @@ static g_inline struct g*gzput_str(struct g*g, word _) {
 // an anonymous one as `$<addr>` (unique, doesn't round-trip to identity -- the
 // addr just makes the printout distinguishable).
 static g_inline struct g*gzput_sym(struct g*g, word _) {
- if (_ == EMPTY_SYM) return gzprintf(g, "()");
+ if (_ == empty_sym) return gzprintf(g, "()");
  if (g_ok(g = g_push(g, 1, _))) {
   word nom = word(sym(g->sp[0])->nom);
   if (!nom) g = gzprintf(g, "$%z", g->sp[0]);              // anonymous nom -> $<addr>
@@ -2498,7 +2514,7 @@ static g_inline struct g*gzput_map(struct g*g, word x, uintptr_t off) {
  struct g_pair *p = bump(g, n * 2 * Width(struct g_pair));
  word list = nil;
  for (uintptr_t i = cap; i;)
-  if (s[2 * --i] != MAP_GAP) {
+  if (s[2 * --i] != map_gap) {
    struct g_pair *kv = p++;
    ini_two(kv, s[2 * i], s[2 * i + 1]);                 // (k . v)
    ini_two(p, (word) kv, list), list = (word) p++; }    // cons onto the snapshot
@@ -2701,10 +2717,10 @@ static struct g* g_dtoa2(struct g*g, g_flo_t v) {
  int const max_frac = sizeof(g_flo_t) == 4 ? 7 : 15;
  if (v != v) return gzputs(g, "nan");
  if (v < 0) g = gzputc(g, '-'), v = -v;
- if (v > DTOA_INF) return gzputs(g, "inf");
+ if (v > dtoa_inf) return gzputs(g, "inf");
  int exp = 0;
  bool sci = false;
- if (v != 0 && (v >= DTOA_SCI_HI || v < DTOA_SCI_LO)) {
+ if (v != 0 && (v >= dtoa_sci_hi || v < dtoa_sci_lo)) {
   sci = true;
   while (v >= 10) v /= 10, exp++;
   while (v < 1)  v *= 10, exp--; }
@@ -2841,7 +2857,7 @@ static g_noinline double strtod_wrap(struct g*g, word x) {
 // f64 box if the entire string parses, else nil. Used by the l-side
 // reader in repl.l to match the C reader's strtol → strtod → intern
 // cascade on float-shaped tokens.
-g_vm(g_vm_flo) {
+g_vm(g_vm_real) {
  word x = Sp[0];
  double d = strtod_wrap(g, x);
  if (d != d) return Sp[0] = nil, Ip += 1, Continue();
@@ -2908,7 +2924,7 @@ g_vm(g_vm_string) {
 /// " the parser "
 //
 //
-// get the next significant character from the stream. MM-protect the C
+// get the next significant character from the stream. mm-protect the C
 // `i` parameter across the multiple port_* calls — each push triggers a
 // have() check that may GC and move heap ports.
 
@@ -3014,7 +3030,7 @@ static struct g *gz_parse(struct g *g, bool multi) {
     if (wrap_framep(A(g->sp[0]))) return encode(g_core_of(g), g_status_more); // wrap wants operands
     g = g_push(g, 1, AA(g->sp[0]));                    // d = head of the closed frame
     if (g_ok(g)) {
-     if (nilp(g->sp[0])) g->sp[0] = EMPTY_SYM;         // () -- the empty symbol, not 0
+     if (nilp(g->sp[0])) g->sp[0] = empty_sym;         // () -- the empty symbol, not 0
      g->sp[1] = B(g->sp[1]); }                         // pop the closed frame
     break;                                             // -> deliver d
    case EOF:
@@ -3035,8 +3051,8 @@ static struct g *gz_parse(struct g *g, bool multi) {
     struct g_atom *os = sym_probe(cg, "operators", 9);
     word t = os ? g_mapget(cg, nil, word(os), cg->dict) : nil;
     word v = mapp(t) ? g_mapget(cg, nil, putfix(c), t) : nil;
-    if (symp(v) && v != EMPTY_SYM) { g = gxl(g_push(g, 1, v)); continue; }   // name -> arity-1 wrap
-    if (twop(v) && symp(A(v)) && A(v) != EMPTY_SYM && fixp(B(v))) {          // (name . arity)
+    if (symp(v) && v != empty_sym) { g = gxl(g_push(g, 1, v)); continue; }   // name -> arity-1 wrap
+    if (twop(v) && symp(A(v)) && A(v) != empty_sym && fixp(B(v))) {          // (name . arity)
      intptr_t n = getfix(B(v));
      if (n == 1) { g = gxl(g_push(g, 1, A(v))); continue; }
      if (n >= 2 && n <= 7) { g = push_wrapn(g, A(v), (int) n); continue; } } // junk arity: not an op
@@ -3105,15 +3121,15 @@ static struct g *gz_parse(struct g *g, bool multi) {
     else __builtin_trap();                             // unreachable under an N-ary wrap
     g->sp++; }                                         // pop newcons -> [d ctx]
    if (symp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    if (hashsym(A(g->sp[1])) && g->sp[0] == EMPTY_SYM) { // #() ONLY -> (hashn 0): the empty hash
+    if (hashsym(A(g->sp[1])) && g->sp[0] == empty_sym) { // #() ONLY -> (table 0): the empty hash
      g->sp[0] = nil;                                   // (#0 is NOT empty: it boxes 0 -- see hashtx)
      g = gxr(g_push(g, 1, nil));
-     g = gxl(intern(g_strof(g, "hashn")));              // (hashn . (0)) = (hashn 0)
+     g = gxl(intern(g_strof(g, "table")));              // (table . (0)) = (table 0)
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); }            // pop wrap
     else if (splicesym(A(g->sp[1])) &&
-             (twop(g->sp[0]) || g->sp[0] == EMPTY_SYM ||
+             (twop(g->sp[0]) || g->sp[0] == empty_sym ||
               (nilp(g->sp[0]) && !hashsym(A(g->sp[1]))))) {  // @0 splices empty; #0 wraps (a box)
-     if (g->sp[0] == EMPTY_SYM) g->sp[0] = nil;        // @() -> (tuple), ~() -> (com)
+     if (g->sp[0] == empty_sym) g->sp[0] = nil;        // @() -> (tuple), ~() -> (com)
      g = gxl(g_push(g, 1, A(g->sp[1])));               // #(k v …)/@(e …)/@() : splice -> (sym . d)
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); }
     else {                                             // 'x `x ,x  #x %atom/@atom -> (wrapsym d)
@@ -3188,9 +3204,9 @@ static g_inline struct g *gzread1sym(struct g*g, int c) {
       char *e;
       long j = strtol(txt(s), &e, 0);
       if (*e == 0) {
-       if (j >= FIX_MIN && j <= FIX_MAX) return g->sp[0] = putfix(j), g;
-       if (g_ok(g = g_have(g, BOX_REQ))) {
-        struct g_tuple *b = ini_scalar(bump(g, BOX_REQ), g_Z);
+       if (j >= fix_min && j <= fix_max) return g->sp[0] = putfix(j), g;
+       if (g_ok(g = g_have(g, box_req))) {
+        struct g_tuple *b = ini_scalar(bump(g, box_req), g_Z);
         box_put(b->shape, j);
         g->sp[0] = word(b); }
        return g; }
@@ -3209,7 +3225,7 @@ static g_inline struct g *gzread1sym(struct g*g, int c) {
 // ============================================================================
 op11(g_vm_clock, putfix(g_clock() - getfix(Sp[0])))
 
-g_vm(g_vm_info) {
+g_vm(g_vm_gauge) {
  size_t const req = 7 * Width(struct g_pair);
  Have(req);
  struct g_pair *si = (struct g_pair*) Hp;
@@ -3259,7 +3275,7 @@ static g_inline uintptr_t map_probe(struct g *g, word m, word k, bool *found) {
  word *s = map_slots(m);
  for (;; i = (i + 1) & mask) {
   word sk = s[2 * i];
-  if (sk == MAP_GAP) return *found = false, i;
+  if (sk == map_gap) return *found = false, i;
   if (eql(g, k, sk)) return *found = true, i; } }
 
 word g_mapget(struct g *g, word zero, word k, word m) {
@@ -3269,7 +3285,7 @@ word g_mapget(struct g *g, word zero, word k, word m) {
 // fill an empty cap-slot backing at b (cap a power of two); caller reserves it.
 static g_inline union u *map_fill_back(union u *b, uintptr_t cap) {
  b[0].ap = g_vm_map_data, b[1].x = putfix(0), b[2].x = putfix(cap);
- for (uintptr_t i = 0; i < cap; i++) b[3 + 2 * i].x = MAP_GAP, b[4 + 2 * i].x = nil;
+ for (uintptr_t i = 0; i < cap; i++) b[3 + 2 * i].x = map_gap, b[4 + 2 * i].x = nil;
  return tagthd(b, 3 + 2 * cap); }
 
 // double the backing of the map at sp[2] and rehash into it, then swap it into
@@ -3286,9 +3302,9 @@ static g_noinline struct g *map_grow(struct g *g) {
  uintptr_t ocap = map_cap(m), nlen = 0, nmask = ncap - 1;
  for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];
-  if (k == MAP_GAP) continue;
+  if (k == map_gap) continue;
   uintptr_t i = hash(g, k) & nmask;
-  while (ns[2 * i] != MAP_GAP) i = (i + 1) & nmask;
+  while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
  nb[1].x = putfix(nlen);
  return cell(m)[1].x = (word) nb, g; }            // swap backing; header identity stable
@@ -3307,7 +3323,7 @@ static g_noinline struct g *g_mapput(struct g *g) {
  cell(map_back(g->sp[2]))[1].x = putfix(map_len(g->sp[2]) + 1);
  return g->sp += 2, g; }
 
-// (hashd k v map): delete k, backward-shift the probe chain so no tombstone is
+// g_mapdel: delete k, backward-shift the probe chain so no tombstone is
 // needed; v is the not-found result. No allocation. Leaves the map at sp[2].
 static g_noinline word g_mapdel(struct g *g, word m, word k, word zero) {
  bool found; uintptr_t i = map_probe(g, m, k, &found);
@@ -3315,26 +3331,26 @@ static g_noinline word g_mapdel(struct g *g, word m, word k, word zero) {
  word *s = map_slots(m); uintptr_t mask = map_cap(m) - 1;
  for (uintptr_t j = i;;) {
   j = (j + 1) & mask;
-  if (s[2 * j] == MAP_GAP) break;
+  if (s[2 * j] == map_gap) break;
   uintptr_t h = hash(g, s[2 * j]) & mask;            // ideal slot of the probed key
   bool gap = i <= j ? (h <= i || h > j) : (h <= i && h > j);   // h not in (i, j]
   if (gap) s[2 * i] = s[2 * j], s[2 * i + 1] = s[2 * j + 1], i = j; }
- s[2 * i] = MAP_GAP, s[2 * i + 1] = nil;
+ s[2 * i] = map_gap, s[2 * i + 1] = nil;
  cell(map_back(m))[1].x = putfix(map_len(m) - 1);
  return m; }
 
-// C-callable fresh empty map, pushed on sp[0]. Same shape as g_vm_hnew.
+// C-callable fresh empty map, pushed on sp[0]. Same shape as g_vm_table.
 static struct g *map_new(struct g *g) {
- uintptr_t cap = MAP_MIN_CAP, nb = 4 + 2 * cap;
+ uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  if (!g_ok(g = g_have(g, nb + 3))) return g;
  union u *b = map_fill_back((union u*) g->hp, cap), *h = (union u*) (g->hp + nb);
  h[0].ap = g_vm_map_lookup, h[1].x = (word) b, tagthd(h, 2);
  g->hp += nb + 3;
  return g_push(g, 1, (word) h); }
 
-// (hashn _): a fresh empty map -- header [g_vm_map_lookup, backing] + backing.
-g_vm(g_vm_hnew) {
- uintptr_t cap = MAP_MIN_CAP, nb = 4 + 2 * cap;
+// (table _): a fresh empty map -- header [g_vm_map_lookup, backing] + backing.
+g_vm(g_vm_table) {
+ uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  Have(nb + 3);
  union u *b = map_fill_back((union u*) Hp, cap);
  union u *h = (union u*) (Hp + nb);
@@ -3359,9 +3375,9 @@ op11(g_vm_lamp, lamp(Sp[0]) ? putfix(1) : nil)
 op11(g_vm_handlep, (bufp(Sp[0]) || iop(Sp[0])) ? putfix(1) : nil)
 
 // (hash x) -- the general hashing method exposed to l as a fixnum.
-op11(g_vm_hashof, putfix(hash(g, Sp[0])))
+op11(g_vm_digs, putfix(hash(g, Sp[0])))
 
-g_vm(g_vm_get) {                                // (peek coll key default): collection-first
+g_vm(g_vm_peep) {                                // (peep coll key default): collection-first
  word x = Sp[0], k = Sp[1], z = Sp[2], n;
  if (bufp(x)) {                                  // mutable byte string: byte index
   struct g_str *s = buf_str(x);
@@ -3374,7 +3390,7 @@ g_vm(g_vm_get) {                                // (peek coll key default): coll
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
    // rank-N; an empty/nil key derefs a rank-0 scalar box. Out-of-bounds or a
    // wrong-rank key falls through to the default `z`. Integer elements keep
-   // integer type (EMIT_INT demotes-or-boxes); float elements box an f64.
+   // integer type (emit_int demotes-or-boxes); float elements box an f64.
    struct g_tuple *v = tuple(x);
    uintptr_t R = v->rank, off = 0; bool ok = false;
    if (R == 0) ok = nilp(k);
@@ -3392,13 +3408,13 @@ g_vm(g_vm_get) {                                // (peek coll key default): coll
      off = off * v->shape[a] + ix, a++; } }
    if (ok && v->type == g_O) z = tuple_get_obj(v, off);   // object: the slot IS the value
    else if (ok && v->type == g_C) {                       // packed complex -> a (re,im) box
-    Have(CPLX_REQ); v = tuple(Sp[0]);                      // re-read coll (Sp[0]) post-Have
+    Have(cplx_req); v = tuple(Sp[0]);                      // re-read coll (Sp[0]) post-Have
     g_flo_t *fp = tuple_data(v);
-    struct g_tuple *bx = ini_scalar((struct g_tuple*) Hp, g_C); Hp += CPLX_REQ;
+    struct g_tuple *bx = ini_scalar((struct g_tuple*) Hp, g_C); Hp += cplx_req;
     cplx_put(bx, fp[2*off], fp[2*off+1]); z = word(bx); }
-   else if (ok) { word _res; Have(BOX_REQ); v = tuple(Sp[0]);
-    if (v->type >= g_R) EMIT_FLO(tuple_get_flo(v, off));
-    else EMIT_INT(tuple_get_int(v, off));
+   else if (ok) { word _res; Have(box_req); v = tuple(Sp[0]);
+    if (v->type >= g_R) emit_flo(tuple_get_flo(v, off));
+    else emit_int(tuple_get_int(v, off));
     z = _res; }
    break; }
   case KString:
@@ -3432,7 +3448,7 @@ g_vm(g_vm_put) {
  return Ip += 1, Continue(); }
 
 // (pull coll key default): remove key from a map, returning its value -- or
-// default if absent (symmetry with peek) -- and mutating coll in place.
+// default if absent (symmetry with peep) -- and mutating coll in place.
 // g_mapget reads the value, g_mapdel removes it; neither allocates, so no GC
 // dance. A non-map coll yields default (silent misuse).
 g_vm(g_vm_pull) {
@@ -3442,11 +3458,7 @@ g_vm(g_vm_pull) {
   g_mapdel(g, coll, Sp[1], Sp[2]); }             // remove in place (no-op if absent)
  return Sp[2] = v, Sp += 2, Ip += 1, Continue(); }
 
-g_vm(g_vm_hashd) {
- if (mapp(Sp[1])) Sp[2] = g_mapdel(g, Sp[1], Sp[2], Sp[0]);
- return Sp += 2, Ip += 1, Continue(); }
-
-g_vm(g_vm_hashk) {
+g_vm(g_vm_keys) {
  intptr_t list = nil;
  if (mapp(Sp[0])) {
   uintptr_t cap = map_cap(Sp[0]), n = map_len(Sp[0]);
@@ -3455,7 +3467,7 @@ g_vm(g_vm_hashk) {
   Hp += n * Width(struct g_pair);
   word *s = map_slots(Sp[0]);                    // re-read after Have (GC may move the map)
   for (uintptr_t i = cap; i;)
-   if (s[2 * --i] != MAP_GAP)
+   if (s[2 * --i] != map_gap)
     ini_two(pairs, s[2 * i], list), list = (intptr_t) pairs, pairs++; }
  Sp[0] = list;
  Ip += 1;
@@ -3520,14 +3532,14 @@ struct g *g_strof(struct g *g, char const *cs) {
  return g; }
 
 op11(g_vm_strp, strp(Sp[0]) ? putfix(1) : nil)
-g_vm(g_vm_ssub) {
+g_vm(g_vm_slice) {
  if (!strp(Sp[0])) Sp[2] = nil;
  else {
   struct g_str *s = str(Sp[0]), *t;
   intptr_t i = oddp(Sp[1]) ? getfix(Sp[1]) : 0,
            j = oddp(Sp[2]) ? getfix(Sp[2]) : 0;
-  i = MAX(i, 0), i = MIN(i, (word) len(s));
-  j = MAX(j, i), j = MIN(j, (word) len(s));
+  i = max(i, 0), i = min(i, (word) len(s));
+  j = max(j, i), j = min(j, (word) len(s));
   if (i == j) Sp[2] = nil;
   else {
    size_t req = str_type_width + b2w(j - i);
@@ -3618,7 +3630,7 @@ bool g_strp(g_word x) { return strp(x); }
 // never interned into the tree and stays unique.
 g_vm(g_vm_intern) {
  if (strp(Sp[0])) {
-  if (Sp[0] == EmptyString) return Sp[0] = EMPTY_SYM, Ip += 1, Continue();
+  if (Sp[0] == EmptyString) return Sp[0] = empty_sym, Ip += 1, Continue();
   struct g_atom *y;
   Have(Width(struct g_atom));
   Pack(g), y = intern_checked(g, (struct g_str*) g->sp[0]), Unpack(g);
@@ -3630,7 +3642,7 @@ g_vm(g_vm_intern) {
 // that naming SYMBOL as its nom, which marks it uninterned (interned syms have a
 // string nom; see ini_usym). Any other arg yields an anonymous nom (nom 0).
 g_vm(g_vm_nom) {
- if (Sp[0] == EmptyString) return Sp[0] = EMPTY_SYM, Ip += 1, Continue(); // ""->the empty sym
+ if (Sp[0] == EmptyString) return Sp[0] = empty_sym, Ip += 1, Continue(); // ""->the empty sym
  Have(2 * Width(struct g_atom));               // room for the wrapper + a fresh intern
  struct g_atom *nom;
  if (strp(Sp[0]))                              // (sym "x"): intern "x" -> the symbol it names
@@ -3685,102 +3697,102 @@ g_vm(g_vm_cons) {
  Ip++;
  return Continue(); }
 
-#define AVM_SLOW(op, vop, ovf, fexpr) static g_vm(g_vm_##op##n) { \
+#define avm_slow(op, vop, ovf, fexpr) static g_vm(g_vm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop); \
  if (Cp(a) || Cp(b)) return Ap(g_vm_cplx_bin, g, vop); \
- if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
- if (flop(a) || flop(b)) { word _res; Have(BOX_REQ); \
-  g_flo_t ad = TOFLO(a), bd = TOFLO(b); \
+ if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
+ if (flop(a) || flop(b)) { word _res; Have(box_req); \
+  g_flo_t ad = toflo(a), bd = toflo(b); \
   struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R); \
-  Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); \
+  Hp += box_req; flo_put(v->shape, (fexpr)); _res = word(v); \
   return *++Sp = _res, Ip++, Continue(); } \
- if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b), t; \
-  if (!ovf(av, bv, &t)) { word _res; Have(BOX_REQ); EMIT_INT(t); \
+ if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b), t; \
+  if (!ovf(av, bv, &t)) { word _res; Have(box_req); emit_int(t); \
    return *++Sp = _res, Ip++, Continue(); } } \
- if ((vop) == VOP_MUL) return Ap(g_vm_bmul_start, g); /* O(n^2): run yieldable */ \
+ if ((vop) == vop_mul) return Ap(g_vm_bmul_start, g); /* O(n^2): run yieldable */ \
  Pack(g); g = g_big_binop(g, vop); \
  if (!g_ok(g)) return gtrap(g); \
  return Unpack(g), Continue(); }
-#define AVM_SLOWDIV(op, vop, c_op, fexpr) static g_vm(g_vm_##op##n) { \
+#define avm_slowdiv(op, vop, c_op, fexpr) static g_vm(g_vm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
  if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop); \
  if (Cp(a) || Cp(b)) return Ap(g_vm_cplx_bin, g, vop); \
- if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue(); \
- if (flop(a) || flop(b) || b == nil) { word _res; Have(BOX_REQ); \
-  g_flo_t ad = TOFLO(a), bd = TOFLO(b); \
+ if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
+ if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req); \
+  g_flo_t ad = toflo(a), bd = toflo(b); \
   struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R); \
-  Hp += BOX_REQ; flo_put(v->shape, (fexpr)); _res = word(v); \
+  Hp += box_req; flo_put(v->shape, (fexpr)); _res = word(v); \
   return *++Sp = _res, Ip++, Continue(); } \
- if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b); \
-  if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(BOX_REQ); EMIT_INT(av c_op bv); \
+ if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b); \
+  if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(av c_op bv); \
    return *++Sp = _res, Ip++, Continue(); } } \
  Pack(g); g = g_big_binop(g, vop); \
  if (!g_ok(g)) return gtrap(g); \
  return Unpack(g), Continue(); }
-#define AVM_OVF(op, builtin) g_vm(g_vm_##op) { \
+#define avm_ovf(op, builtin) g_vm(g_vm_##op) { \
  word a = Sp[0], b = Sp[1]; \
  if (fixp(a) && fixp(b)) { intptr_t t; \
   if (!builtin((intptr_t) getfix(a), (intptr_t) getfix(b), &t) && \
-      t >= FIX_MIN && t <= FIX_MAX) \
+      t >= fix_min && t <= fix_max) \
    return *++Sp = putfix(t), Ip++, Continue(); } \
  return Ap(g_vm_##op##n, g); }
-#define AVM_DIV(op, c_op) g_vm(g_vm_##op) { \
+#define avm_div(op, c_op) g_vm(g_vm_##op) { \
  word a = Sp[0], b = Sp[1]; \
  if (fixp(a) && fixp(b)) { \
   intptr_t av = getfix(a), bv = getfix(b); \
   if (bv != 0 && !(av == INTPTR_MIN && bv == -1)) { \
    intptr_t t = av c_op bv; \
-   if (t >= FIX_MIN && t <= FIX_MAX) \
+   if (t >= fix_min && t <= fix_max) \
     return *++Sp = putfix(t), Ip++, Continue(); } } \
  return Ap(g_vm_##op##n, g); }
 // the ordered comparisons (< <= > >=) and their total order over all values are
 // defined after vcmp_int/vcmp_flo (the per-op helpers they reuse), by g_vm_vbin.
-#define BIT_SLOW(n, c_op) static g_vm(g_vm_##n##_slow) {               \
+#define bit_slow(n, c_op) static g_vm(g_vm_##n##_slow) {               \
  word a = Sp[0], b = Sp[1], _res;                                     \
  if (!(fixp(a) || boxp(a)) || !(fixp(b) || boxp(b)))                  \
   return *++Sp = nil, Ip++, Continue();                               \
- Have(BOX_REQ);                                                       \
- EMIT_INT(TOINT(a) c_op TOINT(b));                                    \
+ Have(box_req);                                                       \
+ emit_int(toint(a) c_op toint(b));                                    \
  return *++Sp = _res, Ip++, Continue(); }
 #define mvm1(n) g_vm(g_vm_##n) { return Ap(g_vm_math1, g, g_##n); }
 #define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own ap)
 
 
-AVM_SLOW(add, VOP_ADD, __builtin_add_overflow, ad + bd)
-AVM_SLOW(sub, VOP_SUB, __builtin_sub_overflow, ad - bd)
-AVM_SLOW(mul, VOP_MUL, __builtin_mul_overflow, ad * bd)
+avm_slow(add, vop_add, __builtin_add_overflow, ad + bd)
+avm_slow(sub, vop_sub, __builtin_sub_overflow, ad - bd)
+avm_slow(mul, vop_mul, __builtin_mul_overflow, ad * bd)
 
-AVM_SLOWDIV(fquot, VOP_FQUOT, /, g_trunc(ad / bd))  // `//` truncating: float operand floors toward zero
-AVM_SLOWDIV(rem, VOP_REM, %, g_fmod(ad, bd))    // NaN on bd == 0
+avm_slowdiv(fquot, vop_fquot, /, g_trunc(ad / bd))  // `//` truncating: float operand floors toward zero
+avm_slowdiv(rem, vop_rem, %, g_fmod(ad, bd))    // NaN on bd == 0
 
 // `/` true division: exact integer when b divides a, a float box otherwise (the
-// truncating quotient is `//`, g_vm_fquot above). Mirrors AVM_SLOWDIV's lane order
+// truncating quotient is `//`, g_vm_fquot above). Mirrors avm_slowdiv's lane order
 // -- array / complex / non-num / float-or-÷0 -- then splits the integer lane on
 // divisibility. The bignum lane defers to g_big_quot_true (same exact-or-float test).
 static g_vm(g_vm_quotn) {
  word a = Sp[0], b = Sp[1];
- if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, VOP_QUOT);
- if (Cp(a) || Cp(b)) return Ap(g_vm_cplx_bin, g, VOP_QUOT);
- if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue();
- if (flop(a) || flop(b) || b == nil) { word _res; Have(BOX_REQ);   // ±inf/NaN on ÷0
-  g_flo_t ad = TOFLO(a), bd = TOFLO(b);
+ if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop_quot);
+ if (Cp(a) || Cp(b)) return Ap(g_vm_cplx_bin, g, vop_quot);
+ if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue();
+ if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req);   // ±inf/NaN on ÷0
+  g_flo_t ad = toflo(a), bd = toflo(b);
   struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R);
-  Hp += BOX_REQ; flo_put(v->shape, ad / bd); _res = word(v);
+  Hp += box_req; flo_put(v->shape, ad / bd); _res = word(v);
   return *++Sp = _res, Ip++, Continue(); }
- if (!bigp(a) && !bigp(b)) { intptr_t av = TOINT(a), bv = TOINT(b);  // bv != 0 (b != nil)
+ if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b);  // bv != 0 (b != nil)
   if (!(av == INTPTR_MIN && bv == -1)) {                            // INT_MIN/-1 is exact but overflows -> bignum lane
-   if (av % bv == 0) { word _res; Have(BOX_REQ); EMIT_INT(av / bv);
+   if (av % bv == 0) { word _res; Have(box_req); emit_int(av / bv);
     return *++Sp = _res, Ip++, Continue(); }
-   word _res; Have(BOX_REQ);                                        // inexact -> promote to float
+   word _res; Have(box_req);                                        // inexact -> promote to float
    struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R);
-   Hp += BOX_REQ; flo_put(v->shape, (g_flo_t) av / (g_flo_t) bv); _res = word(v);
+   Hp += box_req; flo_put(v->shape, (g_flo_t) av / (g_flo_t) bv); _res = word(v);
    return *++Sp = _res, Ip++, Continue(); } }
  Pack(g); g = g_big_quot_true(g);
  if (!g_ok(g)) return gtrap(g);
  return Unpack(g), Continue(); }
 
-AVM_OVF(sub, __builtin_sub_overflow)
+avm_ovf(sub, __builtin_sub_overflow)
 // g_vm_mul + its kind matrix live after the `+` text lane (they reuse add_name /
 // stringrank for the symbol-repetition case), below.
 
@@ -3850,7 +3862,7 @@ static g_inline struct g_str *add_name(word x) {        // symbol -> name string
  return nom && strp(nom) ? str(nom) : 0; }
 static g_inline int stringrank(word x) {                  // STR 0 / USYM 1 / ISYM|NUM 2
  if (strp(x)) return 0;
- if (x == EMPTY_SYM) return 2;                           // canonical (intern ""): the + identity
+ if (x == empty_sym) return 2;                           // canonical (intern ""): the + identity
  if (symp(x)) { word n = word(sym(x)->nom); return n && strp(n) ? 2 : 1; }
  return 2; }
 static g_inline uintptr_t stringlen(word x) {             // bytes x contributes to a concat
@@ -3867,9 +3879,9 @@ static g_vm(g_vm_add_string) {
  if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> text: undefined
  if (!strp(a) && !symp(a) && seq_byte(a) < 0) return *++Sp = nil, Ip++, Continue();  // the byte law
  if (!strp(b) && !symp(b) && seq_byte(b) < 0) return *++Sp = nil, Ip++, Continue();
- int rank = MIN(stringrank(a), stringrank(b));
+ int rank = min(stringrank(a), stringrank(b));
  uintptr_t n = stringlen(a) + stringlen(b);
- if (!n) return *++Sp = rank ? EMPTY_SYM : EmptyString, Ip++, Continue();
+ if (!n) return *++Sp = rank ? empty_sym : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(n);
  Have(req);
  a = Sp[0], b = Sp[1];                                  // re-read post-GC
@@ -3914,7 +3926,7 @@ static g_vm(g_vm_mul_rep) {
  word a = Sp[0], b = Sp[1];
  bool aseq = strp(a) || symp(a) || twop(a);
  word seq = aseq ? a : b, cnt = aseq ? b : a;
- if (!ISNUM(cnt) && !Cp(cnt)) return *++Sp = nil, Ip++, Continue();   // array/non-number count
+ if (!isnum(cnt) && !Cp(cnt)) return *++Sp = nil, Ip++, Continue();   // array/non-number count
  uintptr_t n = (uintptr_t) g_pin(cnt);
  if (twop(seq)) {                                  // list -> n copies of the spine
   if (!n) return *++Sp = nil, Ip++, Continue();
@@ -3931,7 +3943,7 @@ static g_vm(g_vm_mul_rep) {
  int rank = strp(seq) ? 0 : stringrank(seq);         // 0 str / 1 usym / 2 isym
  struct g_str *src = strp(seq) ? str(seq) : add_name(seq);
  uintptr_t sl = src ? src->len : 0, total = sl * n;
- if (!total) return *++Sp = rank ? EMPTY_SYM : EmptyString, Ip++, Continue();
+ if (!total) return *++Sp = rank ? empty_sym : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(total);
  Have(req);
  seq = (strp(Sp[0]) || symp(Sp[0])) ? Sp[0] : Sp[1];   // re-read post-GC
@@ -4052,34 +4064,34 @@ static g_vm_t *const g_mul_mx[KN][KN] = {
  [KLam]    = { g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull },
 };
 // apply: [applied data kind = g_typ(Ip)][argument kind = g_kind(arg)]. Every row is
-// arg-kind-uniform today (AROW fills all columns); the 2-D shape is the hook for
+// arg-kind-uniform today (arow fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
-#define AROW(h) { [KFix]=h,[KLam]=h,[KMap]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
+#define arow(h) { [KFix]=h,[KLam]=h,[KMap]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
                   [KArrZ]=h,[KArrR]=h,[KArrC]=h,[KArrO]=h }
 g_vm_t *g_apply_mx[KN][KN] = {
- [KTwo]  = AROW(data_pair_apply), [KTuple]  = AROW(data_num_apply),
- [KSym]  = AROW(data_sym_apply),
- [KString] = AROW(data_string_apply), [KBig]  = AROW(data_num_apply), };
-#undef AROW
+ [KTwo]  = arow(data_pair_apply), [KTuple]  = arow(data_num_apply),
+ [KSym]  = arow(data_sym_apply),
+ [KString] = arow(data_string_apply), [KBig]  = arow(data_num_apply), };
+#undef arow
 
 // === the `+`/`*` dispatchers (fixnum fast path, then the matrix) ============
 g_vm(g_vm_add) {
  word a = Sp[0], b = Sp[1]; intptr_t t;
  if (fixp(a) && fixp(b)
      && !__builtin_add_overflow((intptr_t) getfix(a), (intptr_t) getfix(b), &t)
-     && t >= FIX_MIN && t <= FIX_MAX)
+     && t >= fix_min && t <= fix_max)
   return *++Sp = putfix(t), Ip++, Continue();
  return Ap(g_add_mx[g_kind(a)][g_kind(b)], g); }
 g_vm(g_vm_mul) {
  word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b)) { intptr_t t;
   if (!__builtin_mul_overflow((intptr_t) getfix(a), (intptr_t) getfix(b), &t)
-      && t >= FIX_MIN && t <= FIX_MAX)
+      && t >= fix_min && t <= fix_max)
    return *++Sp = putfix(t), Ip++, Continue(); }
  return Ap(g_mul_mx[g_kind(a)][g_kind(b)], g); }
 
-AVM_DIV(fquot, /)                               // `//` fixnum fast path: truncating quotient
-AVM_DIV(rem, %)
+avm_div(fquot, /)                               // `//` fixnum fast path: truncating quotient
+avm_div(rem, %)
 // `/` fixnum fast path: stay exact only when b divides a; otherwise the slow lane
 // promotes to a float box. The INT_MIN/-1 guard precedes the `%` (it would be UB).
 g_vm(g_vm_quot) {
@@ -4087,7 +4099,7 @@ g_vm(g_vm_quot) {
  if (fixp(a) && fixp(b)) { intptr_t av = getfix(a), bv = getfix(b);
   if (bv != 0 && !(av == INTPTR_MIN && bv == -1) && av % bv == 0) {
    intptr_t t = av / bv;
-   if (t >= FIX_MIN && t <= FIX_MAX) return *++Sp = putfix(t), Ip++, Continue(); } }
+   if (t >= fix_min && t <= fix_max) return *++Sp = putfix(t), Ip++, Continue(); } }
  return Ap(g_vm_quotn, g); }
 
 // The ordered comparisons (g_vm_lt/le/gt/ge) and their total order are defined
@@ -4097,7 +4109,7 @@ g_vm(g_vm_quot) {
 // and |; ^ clears the tag bit so we re-set it). A box operand routes to the
 // slow ap, which works at full width and demotes-or-boxes; these are
 // integer-only, so a float (or any non-integer) operand yields nil.
-BIT_SLOW(band, &) BIT_SLOW(bor, |) BIT_SLOW(bxor, ^)
+bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
 g_vm(g_vm_band) { word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b)) return *++Sp = (a & b) | 1, Ip++, Continue();
  return Ap(g_vm_band_slow, g); }
@@ -4113,8 +4125,8 @@ g_vm(g_vm_bxor) { word a = Sp[0], b = Sp[1];
 // non-allocating fast path; a boxed value routes to the slow ap.
 static g_vm(g_vm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
  if (!(fixp(a) || boxp(a)) || !fixp(b)) return *++Sp = nil, Ip++, Continue();
- Have(BOX_REQ);
- EMIT_INT(TOINT(a) >> getfix(b));
+ Have(box_req);
+ emit_int(toint(a) >> getfix(b));
  return *++Sp = _res, Ip++, Continue(); }
 g_vm(g_vm_bsr) { word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b))
@@ -4122,12 +4134,12 @@ g_vm(g_vm_bsr) { word a = Sp[0], b = Sp[1];
  return Ap(g_vm_bsr_slow, g); }
 
 // << : can overflow the tag, so it always runs through the box/demote path
-// (EMIT_INT still demotes small results — only genuinely wide values
+// (emit_int still demotes small results — only genuinely wide values
 // allocate). Shift done in uintptr_t for well-defined overflow.
 g_vm(g_vm_bsl) { word a = Sp[0], b = Sp[1], _res;
  if (!(fixp(a) || boxp(a)) || !fixp(b)) return *++Sp = nil, Ip++, Continue();
- Have(BOX_REQ);
- EMIT_INT((intptr_t)((uintptr_t) TOINT(a) << getfix(b)));
+ Have(box_req);
+ emit_int((intptr_t)((uintptr_t) toint(a) << getfix(b)));
  return *++Sp = _res, Ip++, Continue(); }
 
 op(g_vm_fixp, 1, oddp(Sp[0]) ? putfix(1) : nil)
@@ -4145,8 +4157,8 @@ static g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
  if (arrp(a)) {                               // (sin arr) etc. -> float array; complex array undefined
   if (tuple(a)->type == g_C) return Sp[0] = nil, Ip++, Continue();
   return Ap(g_vm_vmap1, g, fn); }
- if (!ISNUM(a)) return Sp[0] = nil, Ip++, Continue();
- g_flo_t ad = TOFLO(a), rd = fn(ad);
+ if (!isnum(a)) return Sp[0] = nil, Ip++, Continue();
+ g_flo_t ad = toflo(a), rd = fn(ad);
  uintptr_t req = Width(struct g_tuple) + Width(g_flo_t);
  Have(req);
  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R);
@@ -4160,9 +4172,9 @@ static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
   if ((arrp(a) && tuple(a)->type == g_C) || (arrp(b) && tuple(b)->type == g_C))
    return *++Sp = nil, Ip++, Continue();                 // complex array undefined here
   return Ap(g_vm_vmap2, g, fn); }
- if (!ISNUM(a) || !ISNUM(b)) return
+ if (!isnum(a) || !isnum(b)) return
   *++Sp = nil, Ip++, Continue();
- g_flo_t ad = TOFLO(a), bd = TOFLO(b), rd = fn(ad, bd);
+ g_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
  uintptr_t req = Width(struct g_tuple) + Width(g_flo_t);
  Have(req);
  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_R);
@@ -4187,12 +4199,12 @@ g_vm(g_vm_log) {
  word a = Sp[0];
  g_flo_t m, th;
  if (Cp(a)) m = g_log(cplx_mod(a)), th = g_atan2(cplx_im(a), cplx_re(a));
- else if (ISNUM(a) && TOFLO(a) < 0) { g_flo_t ad = TOFLO(a);
+ else if (isnum(a) && toflo(a) < 0) { g_flo_t ad = toflo(a);
   m = g_log(-ad), th = g_atan2(0, ad); }
  else return Ap(g_vm_math1, g, g_log);
- Have(CPLX_REQ);
+ Have(cplx_req);
  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
- Hp += CPLX_REQ;
+ Hp += cplx_req;
  cplx_put(v, m, th);
  return Sp[0] = word(v), Ip++, Continue(); }
 
@@ -4215,7 +4227,7 @@ uintptr_t g_tuple_bytes(struct g_tuple *v) {
 // ============================================================================
 // Step 8 -- random numbers. xoshiro256++ (Blackman & Vigna, public domain)
 // seeded by SplitMix64. State is a rank-1 i64 tuple of length 4 (256 bits) that
-// rides the existing tuple machinery -- no data sentinel, no enum q / G_DATA_N
+// rides the existing tuple machinery -- no data sentinel, no enum q / g_data_n
 // / gen_data / wasm-vt changes (cf. complex, Step 7). The payload is treated
 // as raw bytes (memcpy), never via the typed tuple_get/put accessors, so the
 // 64-bit limbs survive on 32-bit ports and a given seed reproduces the same
@@ -4249,7 +4261,7 @@ static g_noinline uint64_t rng_step(void *payload) {
 // ever arises (SplitMix64 makes that practically impossible, but be exact).
 static g_noinline void rng_seed_into(void *payload, uint64_t seed) {
  uint64_t s[4], x = seed;
- for (int i = 0; i < RNG_STATE_LEN; i++) {
+ for (int i = 0; i < rng_state_len; i++) {
   uint64_t z = (x += (uint64_t) 0x9e3779b97f4a7c15);
   z = (z ^ (z >> 30)) * (uint64_t) 0xbf58476d1ce4e5b9;
   z = (z ^ (z >> 27)) * (uint64_t) 0x94d049bb133111eb;
@@ -4270,23 +4282,23 @@ static g_inline g_flo_t u64_to_unit(uint64_t u) {
 // pointer write only, so an inlining caller keeps its tail call; the &s
 // scratch stays inside rng_seed_into.
 void g_rng_seed(struct g_tuple *v, uint64_t seed) {
- ini_tuple(v, RNG_VT, 1);
- v->shape[0] = RNG_STATE_LEN;
+ ini_tuple(v, rng_vt, 1);
+ v->shape[0] = rng_state_len;
  rng_seed_into(tuple_data(v), seed); }
 
 // Is x a well-formed state tuple (rank-1 i64, length 4)?
 static g_inline bool rng_state_p(word x) {
- return tupp(x) && tuple(x)->rank == 1 && tuple(x)->type == RNG_VT
-        && tuple(x)->shape[0] == RNG_STATE_LEN; }
+ return tupp(x) && tuple(x)->rank == 1 && tuple(x)->type == rng_vt
+        && tuple(x)->shape[0] == rng_state_len; }
 
 // Build a fresh state tuple at Hp, copying the 4 limbs of `src` into it. Caller
-// holds Have(RNG_VEC_REQ). Both pointers are heap pointers -> no &local escape.
+// holds Have(rng_vec_req). Both pointers are heap pointers -> no &local escape.
 static g_inline struct g_tuple *rng_copy(g_word **hp, struct g_tuple *src) {
  struct g_tuple *v = (struct g_tuple*) *hp;
- *hp += RNG_VEC_REQ;
- ini_tuple(v, RNG_VT, 1);
- v->shape[0] = RNG_STATE_LEN;
- memcpy(tuple_data(v), tuple_data(src), RNG_PAYLOAD_BYTES);
+ *hp += rng_vec_req;
+ ini_tuple(v, rng_vt, 1);
+ v->shape[0] = rng_state_len;
+ memcpy(tuple_data(v), tuple_data(src), rng_payload_bytes);
  return v; }
 
 // (rng-seed n): a fresh state tuple deterministically seeded from fixnum n. A
@@ -4294,8 +4306,8 @@ static g_inline struct g_tuple *rng_copy(g_word **hp, struct g_tuple *src) {
 g_vm(g_vm_rng_seed) {
  word n = Sp[0];
  uint64_t seed = fixp(n) ? (uint64_t) (intptr_t) getfix(n) : 0;
- Have(RNG_VEC_REQ);
- struct g_tuple *v = (struct g_tuple*) Hp; Hp += RNG_VEC_REQ;
+ Have(rng_vec_req);
+ struct g_tuple *v = (struct g_tuple*) Hp; Hp += rng_vec_req;
  g_rng_seed(v, seed);
  return Sp[0] = word(v), Ip++, Continue(); }
 
@@ -4305,24 +4317,24 @@ g_vm(g_vm_rng_seed) {
 g_vm(g_vm_rand_next) {
  word st = Sp[0];
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
- Have(RNG_VEC_REQ + Width(struct g_pair));
+ Have(rng_vec_req + Width(struct g_pair));
  st = Sp[0];                                 // re-read post-Have
  struct g_tuple *v = rng_copy(&Hp, tuple(st));
  uint64_t r = rng_step(tuple_data(v));
  struct g_pair *p = (struct g_pair*) Hp; Hp += Width(struct g_pair);
- ini_two(p, putfix((intptr_t) (r & (uint64_t) FIX_MAX)), word(v));
+ ini_two(p, putfix((intptr_t) (r & (uint64_t) fix_max)), word(v));
  return Sp[0] = word(p), Ip++, Continue(); }
 
 // (randf-next st): functional draw -> (float . st'), float in [0,1).
 g_vm(g_vm_randf_next) {
  word st = Sp[0], _res;
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
- Have(RNG_VEC_REQ + BOX_REQ + Width(struct g_pair));
+ Have(rng_vec_req + box_req + Width(struct g_pair));
  st = Sp[0];                                 // re-read post-Have
  struct g_tuple *v = rng_copy(&Hp, tuple(st));
  uint64_t r = rng_step(tuple_data(v));
  g_flo_t u = u64_to_unit(r);
- EMIT_FLO(u);                                // box at Hp, into _res
+ emit_flo(u);                                // box at Hp, into _res
  struct g_pair *p = (struct g_pair*) Hp; Hp += Width(struct g_pair);
  ini_two(p, _res, word(v));
  return Sp[0] = word(p), Ip++, Continue(); }
@@ -4464,24 +4476,24 @@ g_vm(g_vm_eq) {
  word a = Sp[0], b = Sp[1];
  // Over a rank>=1 array, `=` is elementwise -> a 0/1 bool array (whole-array
  // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
- if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, VOP_EQ);
+ if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop_eq);
  // Complex equality: equal iff re and im match. A real operand reads as (r, 0),
  // so the cross-real case `(= (cplx 2 0) 2)` is true (numeric widening, like
  // `(= 2 2.0)`); a non-numeric operand makes it false. Done before the float
- // lane so a complex never reaches TOFLO (which would misread its two words).
+ // lane so a complex never reaches toflo (which would misread its two words).
  if (Cp(a) || Cp(b)) {
-  bool r = (Cp(a) || ISNUM(a)) && (Cp(b) || ISNUM(b))
-        && (Cp(a) ? cplx_re(a) : TOFLO(a)) == (Cp(b) ? cplx_re(b) : TOFLO(b))
+  bool r = (Cp(a) || isnum(a)) && (Cp(b) || isnum(b))
+        && (Cp(a) ? cplx_re(a) : toflo(a)) == (Cp(b) ? cplx_re(b) : toflo(b))
         && (Cp(a) ? cplx_im(a) : 0) == (Cp(b) ? cplx_im(b) : 0);
   Sp[1] = r ? putfix(1) : nil;
   return Sp++, Ip++, Continue(); }
  bool r;
  // A float operand compares as doubles across the whole numeric tower (fixnum /
- // float box / wide-int box / bignum all widen via TOFLO; a bignum loses
+ // float box / wide-int box / bignum all widen via toflo; a bignum loses
  // precision past 2^53, the documented float caveat). Otherwise eql: two equal
  // bignums match through eqv's KBig arm, and canonical demotion keeps a bignum
  // distinct from any fixnum/box of a different value.
- if (flop(a) || flop(b)) r = ISNUM(a) && ISNUM(b) && (TOFLO(a) == TOFLO(b));
+ if (flop(a) || flop(b)) r = isnum(a) && isnum(b) && (toflo(a) == toflo(b));
  else r = eql(g, a, b);
  Sp[1] = r ? putfix(1) : nil;
  return Sp++, Ip++, Continue(); }
@@ -4551,11 +4563,11 @@ static g_noinline int mag_sub(uint32_t *r, uint32_t const *a, int na, uint32_t c
  int64_t borrow = 0; int i = 0;
  for (; i < nb; i++) {
   int64_t d = (int64_t) a[i] - b[i] - borrow;
-  if (d < 0) d += (int64_t) LIMB_BASE, borrow = 1; else borrow = 0;
+  if (d < 0) d += (int64_t) limb_base, borrow = 1; else borrow = 0;
   r[i] = (uint32_t) d; }
  for (; i < na; i++) {
   int64_t d = (int64_t) a[i] - borrow;
-  if (d < 0) d += (int64_t) LIMB_BASE, borrow = 1; else borrow = 0;
+  if (d < 0) d += (int64_t) limb_base, borrow = 1; else borrow = 0;
   r[i] = (uint32_t) d; }
  return na; }
 
@@ -4591,7 +4603,7 @@ static g_noinline uint32_t mag_divmod_small(uint32_t *a, int n, uint32_t d) {
 // normalized dividend/divisor. q,r,un,vn all distinct from u,v.
 static g_noinline void mag_divmod(uint32_t *q, uint32_t *r,
   uint32_t const *u, int m, uint32_t const *v, int n, uint32_t *un, uint32_t *vn) {
- uint64_t const B = LIMB_BASE;
+ uint64_t const B = limb_base;
  if (n == 1) {                                  // single-limb divisor: simple
   uint64_t rem = 0;
   for (int j = m - 1; j >= 0; j--) { uint64_t cur = (rem << 32) | u[j]; q[j] = (uint32_t) (cur / v[0]); rem = cur % v[0]; }
@@ -4689,19 +4701,19 @@ word g_big_canon(g_word **hp, uint32_t const *limb, int n, bool neg) {
  if (n <= wlimbs) {
   uintptr_t u = limb[0];
   if (wlimbs == 2 && n == 2) u |= ((uintptr_t) limb[1] << 16) << 16;
-  uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2);   // |FIX_MIN|  = 2^(W-2)
+  uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2);   // |fix_min|  = 2^(W-2)
   uintptr_t const boxmag = (uintptr_t) 1 << (Bits - 1);   // |INT_MIN|  = 2^(W-1)
   intptr_t val;
   if (!neg) {
-   if (u <= fixmag - 1) return putfix((intptr_t) u);       // FIX_MAX = 2^(W-2)-1
+   if (u <= fixmag - 1) return putfix((intptr_t) u);       // fix_max = 2^(W-2)-1
    if (u > boxmag - 1) goto big;                            // > INTPTR_MAX -> bignum
    val = (intptr_t) u; }
   else {
-   if (u <= fixmag) return putfix((intptr_t) ((uintptr_t) 0 - u));   // incl FIX_MIN
+   if (u <= fixmag) return putfix((intptr_t) ((uintptr_t) 0 - u));   // incl fix_min
    if (u > boxmag) goto big;                                          // < INTPTR_MIN -> bignum
    val = (intptr_t) ((uintptr_t) 0 - u); }                            // incl INTPTR_MIN
   struct g_tuple *bx = ini_scalar((struct g_tuple*) *hp, g_Z);
-  *hp += BOX_REQ; box_put(bx->shape, val); return word(bx); }
+  *hp += box_req; box_put(bx->shape, val); return word(bx); }
 big:;
  struct g_big *b = ini_big((struct g_big*) *hp, neg ? -n : n);
  for (int i = 0; i < n; i++) b->limb[i] = limb[i];
@@ -4745,17 +4757,17 @@ struct g *g_big_binop(struct g *g, int vop) {
  uint32_t *rmag = (uint32_t*) (g->hp + res_area), *scr = rmag + bound;
  int rn = 0; bool rneg = false;
  switch (vop) {
-  case VOP_ADD: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, false); break;
-  case VOP_SUB: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, true); break;
-  case VOP_MUL: rn = big_mul_mag(rmag, la, nla, lb, nlb); rneg = nega != negb; break;
-  default: {                                     // VOP_QUOT / VOP_REM (truncated)
+  case vop_add: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, false); break;
+  case vop_sub: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, true); break;
+  case vop_mul: rn = big_mul_mag(rmag, la, nla, lb, nlb); rneg = nega != negb; break;
+  default: {                                     // vop_quot / vop_rem (truncated)
    int c = mag_cmp(la, nla, lb, nlb);
    if (c < 0) {                                  // |a| < |b|: q = 0, r = a
-    if (vop == VOP_REM) rn = mag_copy(rmag, la, nla), rneg = nega; }
+    if (vop == vop_rem) rn = mag_copy(rmag, la, nla), rneg = nega; }
    else {
     uint32_t *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
     mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
-    if (vop != VOP_REM) {                          // VOP_QUOT / VOP_FQUOT: truncated quotient
+    if (vop != vop_rem) {                          // vop_quot / vop_fquot: truncated quotient
      int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
      rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
     else {
@@ -4772,12 +4784,12 @@ struct g *g_big_binop(struct g *g, int vop) {
 // at g->sp[0..1] are integers; a zero divisor is screened off by the caller.
 struct g *g_big_quot_true(struct g *g) {
  word a = g->sp[0], b = g->sp[1];
- g_flo_t fa = TOFLO(a), fb = TOFLO(b);          // captured before any allocation
+ g_flo_t fa = toflo(a), fb = toflo(b);          // captured before any allocation
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  int bound = na + nb + 2, work = 4 * (na + nb) + 16;
  uintptr_t res_area = Width(struct g_big) + b2w((size_t) bound * 4),
            ws_words = b2w((size_t) (bound + work) * 4);
- if (!g_ok(g = g_have(g, res_area + ws_words + BOX_REQ))) return g;
+ if (!g_ok(g = g_have(g, res_area + ws_words + box_req))) return g;
  a = g->sp[0], b = g->sp[1];                     // re-fetch (g_have may have GC'd)
  uint32_t sa[2], sb[2]; uint32_t const *la, *lb; bool nega, negb;
  int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
@@ -4794,7 +4806,7 @@ struct g *g_big_quot_true(struct g *g) {
   rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
  if (exact) g->sp[1] = g_big_canon(&g->hp, rmag, rn, rneg);
  else { struct g_tuple *v = ini_scalar((struct g_tuple*) g->hp, g_R);
-  g->hp += BOX_REQ; flo_put(v->shape, fa / fb); g->sp[1] = word(v); }
+  g->hp += box_req; flo_put(v->shape, fa / fb); g->sp[1] = word(v); }
  g->sp++;
  g->ip = (union u*) g->ip + 1;
  return g; }
@@ -4803,7 +4815,7 @@ struct g *g_big_quot_true(struct g *g) {
 // Schoolbook multiply is O(na*nb) and, run as one C call, never yields -- so a
 // peer task (the repl's Ctrl-C poller) can't interrupt a huge product. Instead
 // we drive it as a self-looping VM instruction: the partial product lives in a
-// buf (flat bytes, GC-relocates safely), and each dispatch folds ~BMUL_CHUNK
+// buf (flat bytes, GC-relocates safely), and each dispatch folds ~bmul_chunk
 // limb-mults of rows, then re-dispatches with a YieldCheck. The work state rides
 // the l stack [i, r, ret_ip, a, b] -- a yield saves/restores it, so the
 // product resumes exactly where it paused. Ip parks on bmul_loop while looping;
@@ -4812,14 +4824,14 @@ struct g *g_big_quot_true(struct g *g) {
 // directly: a tail-jumping ap must NOT take the address of a stack local
 // (it blocks the sibcall), which rules out load_int_mag's scratch array. Setup
 // (which may use scratch) is hoisted into a plain function, g_bmul_setup.
-#define BMUL_CHUNK (1 << 14)
+#define bmul_chunk (1 << 14)
 static union u const bmul_loop[1] = { { .ap = g_vm_bmul } };
 
 // Materialize integer x (fixnum/box/bignum) as a heap g_big, bumping *hp for the
 // fixnum/box case; a bignum is returned in place. Plain function: scratch is fine.
 static union u *as_big(g_word **hp, word x) {
  if (bigp(x)) return cell(x);
- intptr_t v = TOINT(x);
+ intptr_t v = toint(x);
  bool neg = v < 0;
  uintptr_t u = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
  uint32_t lo = (uint32_t) u, hi = (uint32_t) ((u >> 16) >> 16);   // hi=0 on 32-bit ports
@@ -4866,7 +4878,7 @@ g_vm(g_vm_bmul) {
  if (!na || !nb) {                                // a zero operand: product is 0
   word ret = Sp[2]; return Sp += 4, Sp[0] = nil, Ip = cell(ret), Continue(); }
  uint32_t *la = A->limb, *lb = B->limb, *rl = (uint32_t*) txt(buf_str(Sp[1]));
- int end = MIN(i + MAX(1, BMUL_CHUNK / nb), na);
+ int end = min(i + max(1, bmul_chunk / nb), na);
  for (; i < end; i++) {                           // schoolbook outer loop, one chunk of rows
   uint64_t carry = 0, ai = la[i];
   for (int j = 0; j < nb; j++) {
@@ -4955,7 +4967,7 @@ g_vm(g_vm_arr) {
   word d = A(l);
   if (!fixp(d) || getfix(d) < 0) return Sp[2] = nil, Sp += 2, Ip++, Continue();
   rank++, nelem *= (uintptr_t) getfix(d); }
- if (rank > G_VEC_MAXRANK || (ty == g_O && rank == 0)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+ if (rank > maxrank || (ty == g_O && rank == 0)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
  uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + nelem * g_T[ty];
  Have(b2w(bytes));
  struct g_tuple *v = (struct g_tuple*) Hp;
@@ -4972,10 +4984,10 @@ g_vm(g_vm_arr) {
   if (ty == g_C) {                                        // pack (re,im): a real -> (r,0)
    g_flo_t *fp = tuple_data(v);
    if (Cp(e)) fp[2*i] = cplx_re(e), fp[2*i+1] = cplx_im(e);
-   else if (ISNUM(e)) fp[2*i] = TOFLO(e), fp[2*i+1] = 0;
+   else if (isnum(e)) fp[2*i] = toflo(e), fp[2*i+1] = 0;
    continue; }
-  if (!ISNUM(e)) continue;
-  if (ty >= g_R) tuple_put_flo(v, i, TOFLO(e));
+  if (!isnum(e)) continue;
+  if (ty >= g_R) tuple_put_flo(v, i, toflo(e));
   else tuple_put_int(v, i, fixp(e) ? (intptr_t) getfix(e)
                        : flop(e) ? (intptr_t) flo_get(e) : box_get(e)); }
  return Sp[2] = word(v), Sp += 2, Ip++, Continue(); }
@@ -5049,23 +5061,23 @@ g_vm(g_vm_asum) {
   struct g_tuple *v = tuple(x); uintptr_t n = tuple_nelem(v);
   g_flo_t *fp = tuple_data(v), sr = 0, si = 0;  // read all parts before Have (no alloc here)
   for (uintptr_t i = 0; i < n; i++) sr += fp[2*i], si += fp[2*i+1];
-  Have(CPLX_REQ);
-  struct g_tuple *r = ini_scalar((struct g_tuple*) Hp, g_C); Hp += CPLX_REQ;
+  Have(cplx_req);
+  struct g_tuple *r = ini_scalar((struct g_tuple*) Hp, g_C); Hp += cplx_req;
   cplx_put(r, sr, si);
   return Sp[0] = word(r), Ip++, Continue(); }
  struct g_tuple *v = tuple(x);
  uintptr_t n = tuple_nelem(v);
  bool fdom = v->type >= g_R; word _res;
- Have(BOX_REQ);
+ Have(box_req);
  v = tuple(Sp[0]);
  if (fdom) {
   g_flo_t a = 0;
   for (uintptr_t i = 0; i < n; i++) a += tuple_get_flo(v, i);
-  EMIT_FLO(a); }
+  emit_flo(a); }
  else {
   intptr_t a = 0;
   for (uintptr_t i = 0; i < n; i++) a = (intptr_t) ((uintptr_t) a + (uintptr_t) tuple_get_int(v, i));
-  EMIT_INT(a); }
+  emit_int(a); }
  return Sp[0] = _res, Ip++, Continue(); }
 
 g_vm(g_vm_aprod) {
@@ -5081,21 +5093,21 @@ g_vm(g_vm_aprod) {
   for (uintptr_t i = 0; i < n; i++) {
    g_flo_t ar = pr, ai = pi, br = fp[2*i], bi = fp[2*i+1];
    pr = ar*br - ai*bi; pi = ar*bi + ai*br; }
-  Have(CPLX_REQ);
-  struct g_tuple *r = ini_scalar((struct g_tuple*) Hp, g_C); Hp += CPLX_REQ;
+  Have(cplx_req);
+  struct g_tuple *r = ini_scalar((struct g_tuple*) Hp, g_C); Hp += cplx_req;
   cplx_put(r, pr, pi);
   return Sp[0] = word(r), Ip++, Continue(); }
  struct g_tuple *v = tuple(x);
  uintptr_t n = tuple_nelem(v);
  bool fdom = v->type >= g_R; word _res;
- Have(BOX_REQ); v = tuple(Sp[0]);
+ Have(box_req); v = tuple(Sp[0]);
  if (fdom) {
   g_flo_t a = 1;
   for (uintptr_t i = 0; i < n; i++) a *= tuple_get_flo(v, i);
-  EMIT_FLO(a); }
+  emit_flo(a); }
  else { intptr_t a = 1;
   for (uintptr_t i = 0; i < n; i++) a = (intptr_t)((uintptr_t) a * (uintptr_t) tuple_get_int(v, i));
-  EMIT_INT(a); }
+  emit_int(a); }
  return Sp[0] = _res, Ip++, Continue(); }
 
 // max / min over a non-empty array (kind 2 = max, 3 = min, matching ored);
@@ -5112,13 +5124,13 @@ static g_vm(g_vm_aextreme, int kind) {
  uintptr_t n = tuple_nelem(v);
  if (!n) return Sp[0] = nil, Ip++, Continue();
  bool fdom = v->type >= g_R, ismax = kind == 2; word _res;
- Have(BOX_REQ); v = tuple(Sp[0]);
+ Have(box_req); v = tuple(Sp[0]);
  if (fdom) { g_flo_t m = tuple_get_flo(v, 0);
   for (uintptr_t i = 1; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); if (ismax ? e > m : e < m) m = e; }
-  EMIT_FLO(m); }
+  emit_flo(m); }
  else { intptr_t m = tuple_get_int(v, 0);
   for (uintptr_t i = 1; i < n; i++) { intptr_t e = tuple_get_int(v, i); if (ismax ? e > m : e < m) m = e; }
-  EMIT_INT(m); }
+  emit_int(m); }
  return Sp[0] = _res, Ip++, Continue(); }
 g_vm(g_vm_amax) { return Ap(g_vm_aextreme, g, 2); }
 g_vm(g_vm_amin) { return Ap(g_vm_aextreme, g, 3); }
@@ -5175,27 +5187,27 @@ g_vm(g_vm_vmap1, g_flo_t (*fn)(g_flo_t)) {
 // one element can't change the whole result's domain).
 static g_flo_t vop_flo(int op, g_flo_t a, g_flo_t b) {
  switch (op) {
-  case VOP_SUB: return a - b; case VOP_MUL: return a * b;
-  case VOP_QUOT: return a / b; case VOP_FQUOT: return g_trunc(a / b);
-  case VOP_REM: return g_fmod(a, b);
-  default: return a + b; } }                   // VOP_ADD
+  case vop_sub: return a - b; case vop_mul: return a * b;
+  case vop_quot: return a / b; case vop_fquot: return g_trunc(a / b);
+  case vop_rem: return g_fmod(a, b);
+  default: return a + b; } }                   // vop_add
 static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
-  case VOP_SUB: return (intptr_t)((uintptr_t) a - (uintptr_t) b);
-  case VOP_MUL: return (intptr_t)((uintptr_t) a * (uintptr_t) b);
-  case VOP_QUOT: case VOP_FQUOT: return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a / b;
-  case VOP_REM:  return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a % b;
-  default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // VOP_ADD
+  case vop_sub: return (intptr_t)((uintptr_t) a - (uintptr_t) b);
+  case vop_mul: return (intptr_t)((uintptr_t) a * (uintptr_t) b);
+  case vop_quot: case vop_fquot: return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a / b;
+  case vop_rem:  return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a % b;
+  default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // vop_add
 static intptr_t vcmp_flo(int op, g_flo_t a, g_flo_t b) {
  switch (op) {
-  case VOP_LT: return a < b; case VOP_LE: return a <= b;
-  case VOP_GT: return a > b; case VOP_GE: return a >= b;
-  default: return a == b; } }                   // VOP_EQ
+  case vop_lt: return a < b; case vop_le: return a <= b;
+  case vop_gt: return a > b; case vop_ge: return a >= b;
+  default: return a == b; } }                   // vop_eq
 static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
-  case VOP_LT: return a < b; case VOP_LE: return a <= b;
-  case VOP_GT: return a > b; case VOP_GE: return a >= b;
-  default: return a == b; } }                   // VOP_EQ
+  case vop_lt: return a < b; case vop_le: return a <= b;
+  case vop_gt: return a > b; case vop_ge: return a >= b;
+  default: return a == b; } }                   // vop_eq
 
 // === ordered comparison: a total order over lisp values ======================
 // `< <= > >=` extend across EVERY kind, not just numbers. The CROSS-kind order is
@@ -5220,7 +5232,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // (KFix) so fix/box/big/float/complex order by VALUE, not representation. Arrays
 // divert to g_vm_vbin before this, so KArr* never appear. One source of truth:
 // the enum q order itself.
-static g_inline int cmp_rank(word x) { return (ISNUM(x) || Cp(x)) ? KFix : (int) g_kind(x); }
+static g_inline int cmp_rank(word x) { return (isnum(x) || Cp(x)) ? KFix : (int) g_kind(x); }
 static g_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
@@ -5238,11 +5250,11 @@ static intptr_t cmp3(struct g *g, word a, word b) {
  switch (ra) {
   case KFix:                                               // number band, by value
    if (Cp(a) || Cp(b)) {                                   // complex: (re, im) lexicographic
-    g_flo_t ar = Cp(a) ? cplx_re(a) : TOFLO(a), br = Cp(b) ? cplx_re(b) : TOFLO(b);
+    g_flo_t ar = Cp(a) ? cplx_re(a) : toflo(a), br = Cp(b) ? cplx_re(b) : toflo(b);
     if (ar != br) return ar < br ? -1 : 1;
     g_flo_t ai = Cp(a) ? cplx_im(a) : 0, bi = Cp(b) ? cplx_im(b) : 0;
     return ai < bi ? -1 : ai > bi ? 1 : 0; }
-   if (flop(a) || flop(b)) { g_flo_t av = TOFLO(a), bv = TOFLO(b); return av < bv ? -1 : av > bv ? 1 : 0; }
+   if (flop(a) || flop(b)) { g_flo_t av = toflo(a), bv = toflo(b); return av < bv ? -1 : av > bv ? 1 : 0; }
    return g_big_cmp(a, b);                                 // exact fix/box/big tower
   case KString: return bytes_cmp(txt(a), len(a), txt(b), len(b));
   case KSym:    return sym_cmp(a, b);
@@ -5250,7 +5262,7 @@ static intptr_t cmp3(struct g *g, word a, word b) {
   default: { uintptr_t ha = hash(g, a), hb = hash(g, b);   // lambda/map/port/buf: by repr hash
              return ha < hb ? -1 : ha > hb ? 1 : 0; } } }
 
-// (sortl l): sort a list ascending by the total order (cmp3), STABLE. One
+// (sort l): sort a list ascending by the total order (cmp3), STABLE. One
 // reservation up front -- n result pairs (committed) plus 2n scratch words
 // (left in the uncommitted gap, GC-invisible) -- then a bottom-up merge over
 // the scratch lanes and a single spine fill. cmp3 is alloc-free and
@@ -5258,7 +5270,7 @@ static intptr_t cmp3(struct g *g, word a, word b) {
 // prelude's `sort` dispatches (<)/(>) here (descending = rev) and keeps the
 // lisp merge sort for arbitrary predicates. A non-pair passes through; a
 // 1-element list returns itself (identity preserved, like the lisp sort).
-g_vm(g_vm_sortl) {
+g_vm(g_vm_sort) {
  word l = Sp[0];
  if (!twop(l) || !twop(B(l))) return Ip++, Continue();
  uintptr_t n = 0;
@@ -5273,7 +5285,7 @@ g_vm(g_vm_sortl) {
  for (word p = l; twop(p); p = B(p)) a[i++] = A(p);
  for (uintptr_t w = 1; w < n; w *= 2) {            // bottom-up stable merge
   for (uintptr_t lo = 0; lo < n; lo += 2 * w) {
-   uintptr_t m = MIN(lo + w, n), hi = MIN(lo + 2 * w, n), x = lo, y = m, o = lo;
+   uintptr_t m = min(lo + w, n), hi = min(lo + 2 * w, n), x = lo, y = m, o = lo;
    while (x < m && y < hi) b[o++] = cmp3(g, a[y], a[x]) < 0 ? a[y++] : a[x++];
    while (x < m) b[o++] = a[x++];
    while (y < hi) b[o++] = a[y++]; }
@@ -5282,7 +5294,7 @@ g_vm(g_vm_sortl) {
  spine[n - 1].b = nil;
  return Sp[0] = word(spine), Ip++, Continue(); }
 
-// the `<` / `<=` lane (op is VOP_LT or VOP_LE). An array operand -> elementwise
+// the `<` / `<=` lane (op is vop_lt or vop_le). An array operand -> elementwise
 // mask (g_vm_vbin); a top-level float/complex pair is IEEE-faithful (NaN ->
 // unordered -> false), so e.g. (<= nan nan) is nil.
 static g_vm(g_vm_cmp_ord, int op) {
@@ -5292,23 +5304,23 @@ static g_vm(g_vm_cmp_ord, int op) {
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: type lattice
  else if (ra != KFix) r = vcmp_int(op, cmp3(g, a, b), 0);  // string / sym / pair / lambda
  else if (Cp(a) || Cp(b)) {                                // complex: lexicographic, per op
-  g_flo_t ar = Cp(a) ? cplx_re(a) : TOFLO(a), br = Cp(b) ? cplx_re(b) : TOFLO(b);
+  g_flo_t ar = Cp(a) ? cplx_re(a) : toflo(a), br = Cp(b) ? cplx_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)
               : vcmp_flo(op, Cp(a) ? cplx_im(a) : 0, Cp(b) ? cplx_im(b) : 0); }
- else if (flop(a) || flop(b)) r = vcmp_flo(op, TOFLO(a), TOFLO(b));
+ else if (flop(a) || flop(b)) r = vcmp_flo(op, toflo(a), toflo(b));
  else if (bigp(a) || bigp(b)) r = vcmp_int(op, g_big_cmp(a, b), 0);
- else r = vcmp_int(op, TOINT(a), TOINT(b));
+ else r = vcmp_int(op, toint(a), toint(b));
  return *++Sp = r ? putfix(1) : nil, Ip++, Continue(); }
 // `<` `<=` -- the implemented side: both-fixnum fast path (tagged order is
 // monotonic), else the lane. `>` `>=` are the other side: reverse the operands and
 // reuse `<` `<=` (a > b == b < a; a >= b == b <= a).
-#define CMP_LT(nom, vop) g_vm(nom) { \
+#define cmp_lt(nom, vop) g_vm(nom) { \
  word a = Sp[0], b = Sp[1]; \
  if (__builtin_expect(fixp(a) && fixp(b), 1)) \
   return *++Sp = vcmp_int(vop, a, b) ? putfix(1) : nil, Ip++, Continue(); \
  return Ap(g_vm_cmp_ord, g, vop); }
-CMP_LT(g_vm_lt, VOP_LT) CMP_LT(g_vm_le, VOP_LE)
-#undef CMP_LT
+cmp_lt(g_vm_lt, vop_lt) cmp_lt(g_vm_le, vop_le)
+#undef cmp_lt
 g_vm(g_vm_gt) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; return Ap(g_vm_lt, g); }  // a > b == b < a
 g_vm(g_vm_ge) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; return Ap(g_vm_le, g); }  // a >= b == b <= a
 
@@ -5318,9 +5330,9 @@ g_vm(g_vm_ge) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; return Ap(g_vm_le, g);
 // exactly, where the low-bits truncation used for arithmetic would not.
 static intptr_t vcmp_sign(int op, int s) {
  switch (op) {
-  case VOP_LT: return s < 0; case VOP_LE: return s <= 0;
-  case VOP_GT: return s > 0; case VOP_GE: return s >= 0;
-  default: return s == 0; } }                   // VOP_EQ
+  case vop_lt: return s < 0; case vop_le: return s <= 0;
+  case vop_gt: return s > 0; case vop_ge: return s >= 0;
+  default: return s == 0; } }                   // vop_eq
 
 // Fill the (already-shaped) result r with a `op` b, broadcasting. All the
 // &-taking stack arrays (strides, odometer) live here so the g_vm wrapper stays
@@ -5332,7 +5344,7 @@ static g_noinline void vbin_fill(struct g_tuple *r, word a, word b, int op, bool
  struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
  // ca[j]/cb[j]: the operand flat-offset contribution of result axis j (0 when
  // that axis is absent in the operand or is a size-1 broadcast axis).
- intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
+ intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1;
   for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
@@ -5342,12 +5354,12 @@ static g_noinline void vbin_fill(struct g_tuple *r, word a, word b, int op, bool
   for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank;
    cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
- bool cmp = op >= VOP_LT;
+ bool cmp = op >= vop_lt;
  // scalar values: the float domain widens a bignum full-magnitude (g_big_to_flo
- // via TOFLO); the int domain has no room for a bignum, so arithmetic demotes it
+ // via toflo); the int domain has no room for a bignum, so arithmetic demotes it
  // by low bits (modular). A *comparison* against a bignum, though, is decided
  // exactly by the bignum's sign below -- never by these low bits.
- g_flo_t sa = aarr ? 0 : TOFLO(a), sb = barr ? 0 : TOFLO(b);
+ g_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
  intptr_t ia = aarr ? 0 : fixp(a) ? getfix(a) : bigp(a) ? g_big_low(a) : box_get(a),
           ib = barr ? 0 : fixp(b) ? getfix(b) : bigp(b) ? g_big_low(b) : box_get(b);
  bool abig = !aarr && bigp(a), bbig = !barr && bigp(b);   // at most one (the other is an array)
@@ -5370,7 +5382,7 @@ static g_noinline void vbin_fill(struct g_tuple *r, word a, word b, int op, bool
    if (++idx[j] < (intptr_t) r->shape[j]) break;
    idx[j] = 0; } } }
 
-// For `/` (VOP_QUOT) over the integer domain: true if some broadcast element pair
+// For `/` (vop_quot) over the integer domain: true if some broadcast element pair
 // (av, bv) divides inexactly (bv == 0 or av % bv != 0), so the whole result must
 // promote to f64. A bignum scalar forces the float lane (its low word can't decide
 // divisibility). g_noinline: its &-taken stride/odometer arrays stay off g_vm_vbin's
@@ -5380,7 +5392,7 @@ static g_noinline bool vquot_needs_float(word a, word b) {
  if ((!aarr && bigp(a)) || (!barr && bigp(b))) return true;
  struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
  uintptr_t ra = aarr ? va->rank : 0, rb = barr ? vb->rank : 0, R = ra > rb ? ra : rb, n = 1;
- intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK], shp[G_VEC_MAXRANK];
+ intptr_t ca[maxrank], cb[maxrank], idx[maxrank], shp[maxrank];
  for (uintptr_t k = 0; k < R; k++) {
   uintptr_t da = (aarr && k < ra) ? va->shape[ra - 1 - k] : 1;
   uintptr_t db = (barr && k < rb) ? vb->shape[rb - 1 - k] : 1;
@@ -5390,7 +5402,7 @@ static g_noinline bool vquot_needs_float(word a, word b) {
    intptr_t j = oa + (intptr_t) R - (intptr_t) va->rank; ca[j] = va->shape[oa] == 1 ? 0 : s; s *= (intptr_t) va->shape[oa]; } }
  if (barr) { intptr_t s = 1; for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank; cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
- intptr_t ia = aarr ? 0 : TOINT(a), ib = barr ? 0 : TOINT(b);
+ intptr_t ia = aarr ? 0 : toint(a), ib = barr ? 0 : toint(b);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
@@ -5403,13 +5415,13 @@ g_vm(g_vm_vbin, int op) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
  // complex lane first: a packed g_C array, or a complex scalar paired with an
- // array (a complex scalar isn't ISNUM, so it must divert before the gate below).
+ // array (a complex scalar isn't isnum, so it must divert before the gate below).
  // Mixing g_C with a g_O object array is unsupported (neither reads the other's
  // element encoding) -- the g_O lane wins there.
  if (((aarr && tuple(a)->type == g_C) || (barr && tuple(b)->type == g_C) || Cp(a) || Cp(b))
      && !(aarr && tuple(a)->type == g_O) && !(barr && tuple(b)->type == g_O))
   return Ap(g_vm_cbin, g, op);
- if (!(aarr || ISNUM(a)) || !(barr || ISNUM(b)))   // each operand: array or scalar
+ if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
   return *++Sp = nil, Ip++, Continue();
  if ((aarr && tuple(a)->type == g_O) || (barr && tuple(b)->type == g_O))
   return Ap(g_vm_obin, g, op);                     // object array -> promoting lane
@@ -5420,7 +5432,7 @@ g_vm(g_vm_vbin, int op) {
  int ta = aarr ? (int) tuple(a)->type : flop(a) ? (int) g_R : (int) g_Z;
  int tb = barr ? (int) tuple(b)->type : flop(b) ? (int) g_R : (int) g_Z;
  int ct = ta > tb ? ta : tb;
- bool fdom = ct >= g_R, cmp = op >= VOP_LT;
+ bool fdom = ct >= g_R, cmp = op >= vop_lt;
  // broadcast shape + conformance, right-aligned; scalar locals only (no array,
  // so the trailing tail call below survives).
  uintptr_t n = 1;
@@ -5430,9 +5442,9 @@ g_vm(g_vm_vbin, int op) {
   if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
   n *= da > db ? da : db; }
  // `/` over an all-integer broadcast promotes the whole result to f64 the moment
- // any element divides inexactly (matching the scalar `/`); `//` (VOP_FQUOT) stays
+ // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
  // integer. Scan only after conformance is known good (offsets are then in range).
- if (op == VOP_QUOT && !fdom && !cmp && vquot_needs_float(a, b)) fdom = true, ct = g_R;
+ if (op == vop_quot && !fdom && !cmp && vquot_needs_float(a, b)) fdom = true, ct = g_R;
  enum g_tuple_type rt = cmp ? g_Z : (enum g_tuple_type) ct;   // compare -> 0/1 Z mask
  uintptr_t bytes = sizeof(struct g_tuple) + R * sizeof(word) + n * g_T[rt];
  Have(b2w(bytes));
@@ -5449,7 +5461,7 @@ g_vm(g_vm_vbin, int op) {
 // --- dyadic libm map with broadcasting (pow / atan2 over arrays) -------------
 // The float-domain twin of g_vm_vbin: same numpy broadcast, but the result is
 // always a float array and each element is fn(av, bv) for an arbitrary libm
-// dyadic fn. A scalar operand broadcasts, widening through TOFLO -- so a bignum
+// dyadic fn. A scalar operand broadcasts, widening through toflo -- so a bignum
 // scalar feeds in at full magnitude (g_big_to_flo), same as the scalar `pow`.
 // All the &-taking stack arrays live in this g_noinline fill so the wrapper's
 // trailing tail call survives.
@@ -5458,7 +5470,7 @@ static g_noinline void vmap2_fill(struct g_tuple *r, word a, word b, g_flo_t (*f
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
  struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
- intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
+ intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1;
   for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
@@ -5468,7 +5480,7 @@ static g_noinline void vmap2_fill(struct g_tuple *r, word a, word b, g_flo_t (*f
   for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank;
    cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
- g_flo_t sa = aarr ? 0 : TOFLO(a), sb = barr ? 0 : TOFLO(b);
+ g_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
@@ -5481,7 +5493,7 @@ static g_noinline void vmap2_fill(struct g_tuple *r, word a, word b, g_flo_t (*f
 g_vm(g_vm_vmap2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
- if (!(aarr || ISNUM(a)) || !(barr || ISNUM(b)))   // each operand: array or scalar
+ if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
   return *++Sp = nil, Ip++, Continue();
  uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1;
@@ -5517,37 +5529,37 @@ g_vm(g_vm_vmap2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
 // a/b are passed by value and rooted before the first allocation here). Returns
 // the result value, or nil for a non-numeric / complex operand (deferred).
 static word obin_elem(struct g **fp, int op, word a, word b) {
- if (op >= VOP_LT) {                            // comparison -> 1 / nil, no allocation
-  if (!ISNUM(a) || !ISNUM(b)) return nil;       // Cp not in ISNUM -> unordered -> nil
-  intptr_t t = (flop(a) || flop(b)) ? vcmp_flo(op, TOFLO(a), TOFLO(b))
+ if (op >= vop_lt) {                            // comparison -> 1 / nil, no allocation
+  if (!isnum(a) || !isnum(b)) return nil;       // Cp not in isnum -> unordered -> nil
+  intptr_t t = (flop(a) || flop(b)) ? vcmp_flo(op, toflo(a), toflo(b))
              : (bigp(a) || bigp(b)) ? vcmp_int(op, g_big_cmp(a, b), 0)
-                                    : vcmp_int(op, TOINT(a), TOINT(b));
+                                    : vcmp_int(op, toint(a), toint(b));
   return t ? putfix(1) : nil; }
- if (!ISNUM(a) || !ISNUM(b)) return nil;
+ if (!isnum(a) || !isnum(b)) return nil;
  struct g *g = *fp;
  if (flop(a) || flop(b)) {                      // float domain -> g_R box
-  if (!g_ok(g = g_have(g, BOX_REQ))) return *fp = g, nil;
+  if (!g_ok(g = g_have(g, box_req))) return *fp = g, nil;
   *fp = g;
   struct g_tuple *v = ini_scalar((struct g_tuple*) g->hp, g_R);
-  g->hp += BOX_REQ; flo_put(v->shape, vop_flo(op, TOFLO(a), TOFLO(b)));
+  g->hp += box_req; flo_put(v->shape, vop_flo(op, toflo(a), toflo(b)));
   return word(v); }
  if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
-  intptr_t av = TOINT(a), bv = TOINT(b), t; bool of;
+  intptr_t av = toint(a), bv = toint(b), t; bool of;
   switch (op) {
-   case VOP_QUOT: case VOP_FQUOT:                         // object (g_O) arrays truncate under both / and //
+   case vop_quot: case vop_fquot:                         // object (g_O) arrays truncate under both / and //
                   if (bv == 0) return putfix(0);          // array convention: int /0 -> 0
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av / bv; break;
-   case VOP_REM:  if (bv == 0) return putfix(0);
+   case vop_rem:  if (bv == 0) return putfix(0);
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av % bv; break;
-   case VOP_SUB:  of = __builtin_sub_overflow(av, bv, &t); break;
-   case VOP_MUL:  of = __builtin_mul_overflow(av, bv, &t); break;
-   default:       of = __builtin_add_overflow(av, bv, &t); break; }   // VOP_ADD
+   case vop_sub:  of = __builtin_sub_overflow(av, bv, &t); break;
+   case vop_mul:  of = __builtin_mul_overflow(av, bv, &t); break;
+   default:       of = __builtin_add_overflow(av, bv, &t); break; }   // vop_add
   if (!of) {                                    // demote-or-box the result
-   if (t >= FIX_MIN && t <= FIX_MAX) return putfix(t);
-   if (!g_ok(g = g_have(g, BOX_REQ))) return *fp = g, nil;
+   if (t >= fix_min && t <= fix_max) return putfix(t);
+   if (!g_ok(g = g_have(g, box_req))) return *fp = g, nil;
    *fp = g;
    struct g_tuple *v = ini_scalar((struct g_tuple*) g->hp, g_Z);
-   g->hp += BOX_REQ; box_put(v->shape, t); return word(v); } }
+   g->hp += box_req; box_put(v->shape, t); return word(v); } }
  // bignum lane: g_big_binop computes sp[0] (op) sp[1], leaves it at sp[1],
  // pops one, and advances ip -- so save/restore ip and pop the net result.
  if (!g_ok(g = g_push(g, 2, a, b))) return *fp = g, nil;
@@ -5579,14 +5591,14 @@ static struct g *arr_to_obj(struct g *g, int slot) {
   word v;
   if (s->type >= g_R) {                                        // float -> g_R box
    g_flo_t e = tuple_get_flo(s, i);
-   if (!g_ok(g = g_have(g, BOX_REQ))) return g;
-   struct g_tuple *bx = ini_scalar((struct g_tuple*) g->hp, g_R); g->hp += BOX_REQ;
+   if (!g_ok(g = g_have(g, box_req))) return g;
+   struct g_tuple *bx = ini_scalar((struct g_tuple*) g->hp, g_R); g->hp += box_req;
    flo_put(bx->shape, e); v = word(bx); }
   else {                                                       // int -> fixnum or g_Z box
    intptr_t e = tuple_get_int(s, i);
-   if (e >= FIX_MIN && e <= FIX_MAX) v = putfix(e);
-   else { if (!g_ok(g = g_have(g, BOX_REQ))) return g;
-    struct g_tuple *bx = ini_scalar((struct g_tuple*) g->hp, g_Z); g->hp += BOX_REQ;
+   if (e >= fix_min && e <= fix_max) v = putfix(e);
+   else { if (!g_ok(g = g_have(g, box_req))) return g;
+    struct g_tuple *bx = ini_scalar((struct g_tuple*) g->hp, g_Z); g->hp += box_req;
     box_put(bx->shape, e); v = word(bx); } }
   tuple_put_obj(tuple(g->sp[0]), i, v); }                          // re-fetch dst post-box
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
@@ -5600,7 +5612,7 @@ static struct g *obin_run(struct g *g, int op) {
  if (barr && tuple(b)->type != g_O) { if (!g_ok(g = arr_to_obj(g, 1))) return g; }
  a = g->sp[0], b = g->sp[1], aarr = arrp(a), barr = arrp(b);
  uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
- uintptr_t R = ra > rb ? ra : rb, n = 1, shp[G_VEC_MAXRANK];
+ uintptr_t R = ra > rb ? ra : rb, n = 1, shp[maxrank];
  for (uintptr_t k = 0; k < R; k++) {                           // broadcast shape, right-aligned
   uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
   uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
@@ -5614,7 +5626,7 @@ static struct g *obin_run(struct g *g, int op) {
  for (uintptr_t k = 0; k < R; k++) r->shape[k] = shp[k];
  for (uintptr_t p = 0; p < n; p++) tuple_put_obj(r, p, nil);     // nil-fill before any GC
  if (!g_ok(g = g_push(g, 1, word(r)))) return g;               // sp: [0]=r [1]=a [2]=b
- intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
+ intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1; struct g_tuple *va = tuple(g->sp[1]);
   for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
@@ -5652,13 +5664,13 @@ static struct g *ored(struct g *g, int kind) {
  if (kind >= 2) {                                              // max/min: pick an element, no alloc
   if (!n) { g->sp[0] = nil, g->ip = (union u*) g->ip + 1; return g; }
   word acc = tuple_get_obj(tuple(g->sp[0]), 0);
-  int cop = kind == 2 ? VOP_GT : VOP_LT;
+  int cop = kind == 2 ? vop_gt : vop_lt;
   for (uintptr_t i = 1; i < n; i++) {
    word e = tuple_get_obj(tuple(g->sp[0]), i);
    if (obin_elem(&g, cop, e, acc) == putfix(1)) acc = e; }
   g->sp[0] = acc, g->ip = (union u*) g->ip + 1; return g; }
  word init = kind == 0 ? putfix(0) : putfix(1);               // sum/prod: fold with allocation
- int aop = kind == 0 ? VOP_ADD : VOP_MUL;
+ int aop = kind == 0 ? vop_add : vop_mul;
  if (!g_ok(g = g_push(g, 1, init))) return g;                 // sp[0]=acc, sp[1]=array
  for (uintptr_t i = 0; i < n; i++) {
   word e = tuple_get_obj(tuple(g->sp[1]), i);
@@ -5670,13 +5682,13 @@ static struct g *ored(struct g *g, int kind) {
  return g; }
 
 // (re, im) of an operand for the complex lane / equality: a complex contributes
-// its two parts; a real number contributes (value, 0). TOFLO widens a fixnum /
+// its two parts; a real number contributes (value, 0). toflo widens a fixnum /
 // float box / wide-int box / bignum -- a bignum narrows to double here, since
 // complex is a floating domain (decision 5). Caller guarantees x is Cp or
-// ISNUM. The &out params stay inside g_noinline callers, off the VM tail call.
+// isnum. The &out params stay inside g_noinline callers, off the VM tail call.
 static g_inline void cplx_parts(word x, g_flo_t *re, g_flo_t *im) {
  if (Cp(x)) *re = cplx_re(x), *im = cplx_im(x);
- else *re = TOFLO(x), *im = 0; }
+ else *re = toflo(x), *im = 0; }
 
 // Fill the rank-0 complex box v with a `vop` b. All the &-taking lives in this
 // g_noinline helper so the g_vm wrapper keeps its trailing tail call; no
@@ -5685,25 +5697,25 @@ static g_noinline void cplx_fill(struct g_tuple *v, word a, word b, int vop) {
  g_flo_t ar, ai, br, bi, re, im;
  cplx_parts(a, &ar, &ai); cplx_parts(b, &br, &bi);
  switch (vop) {
-  case VOP_SUB: re = ar - br; im = ai - bi; break;
-  case VOP_MUL: re = ar * br - ai * bi; im = ar * bi + ai * br; break;
-  case VOP_QUOT: { g_flo_t d = br * br + bi * bi;   // (ac+bd)/(c^2+d^2) + ...
+  case vop_sub: re = ar - br; im = ai - bi; break;
+  case vop_mul: re = ar * br - ai * bi; im = ar * bi + ai * br; break;
+  case vop_quot: { g_flo_t d = br * br + bi * bi;   // (ac+bd)/(c^2+d^2) + ...
    re = (ar * br + ai * bi) / d; im = (ai * br - ar * bi) / d; break; }
-  default: re = ar + br; im = ai + bi; }            // VOP_ADD
+  default: re = ar + br; im = ai + bi; }            // vop_add
  cplx_put(v, re, im); }
 
 // The complex arithmetic lane. Reached from the arith slow paths when either
 // operand is complex. A real operand promotes to (r, 0); a non-numeric operand,
-// or VOP_REM (% is undefined on complex), yields nil. TCO-clean: the validation
+// or vop_rem (% is undefined on complex), yields nil. TCO-clean: the validation
 // and box are in the body (no &local), the math is in cplx_fill.
 g_vm(g_vm_cplx_bin, int vop) {
  word a = Sp[0], b = Sp[1];
- if (!(Cp(a) || ISNUM(a)) || !(Cp(b) || ISNUM(b)) || vop > VOP_QUOT)
+ if (!(Cp(a) || isnum(a)) || !(Cp(b) || isnum(b)) || vop > vop_quot)
   return *++Sp = nil, Ip++, Continue();
- Have(CPLX_REQ);
+ Have(cplx_req);
  a = Sp[0], b = Sp[1];                              // re-read post-Have
  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
- Hp += CPLX_REQ;
+ Hp += cplx_req;
  cplx_fill(v, a, b, vop);
  return *++Sp = word(v), Ip++, Continue(); }
 
@@ -5725,7 +5737,7 @@ static g_noinline void cbin_fill(struct g_tuple *r, word a, word b, int op, bool
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
  struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
- intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
+ intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1;
   for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
@@ -5736,8 +5748,8 @@ static g_noinline void cbin_fill(struct g_tuple *r, word a, word b, int op, bool
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank;
    cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
  g_flo_t sar = 0, sai = 0, sbr = 0, sbi = 0;
- if (!aarr) { if (Cp(a)) sar = cplx_re(a), sai = cplx_im(a); else sar = TOFLO(a); }
- if (!barr) { if (Cp(b)) sbr = cplx_re(b), sbi = cplx_im(b); else sbr = TOFLO(b); }
+ if (!aarr) { if (Cp(a)) sar = cplx_re(a), sai = cplx_im(a); else sar = toflo(a); }
+ if (!barr) { if (Cp(b)) sbr = cplx_re(b), sbi = cplx_im(b); else sbr = toflo(b); }
  g_flo_t *rf = cmp ? 0 : tuple_data(r);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
@@ -5748,11 +5760,11 @@ static g_noinline void cbin_fill(struct g_tuple *r, word a, word b, int op, bool
   if (cmp) tuple_put_int(r, p, (ar == br && ai == bi) ? 1 : 0);
   else {
    switch (op) {
-    case VOP_SUB: re = ar - br; im = ai - bi; break;
-    case VOP_MUL: re = ar * br - ai * bi; im = ar * bi + ai * br; break;
-    case VOP_QUOT: { g_flo_t d = br * br + bi * bi;
+    case vop_sub: re = ar - br; im = ai - bi; break;
+    case vop_mul: re = ar * br - ai * bi; im = ar * bi + ai * br; break;
+    case vop_quot: { g_flo_t d = br * br + bi * bi;
      re = (ar * br + ai * bi) / d; im = (ai * br - ar * bi) / d; break; }
-    default: re = ar + br; im = ai + bi; }            // VOP_ADD
+    default: re = ar + br; im = ai + bi; }            // vop_add
    rf[2*p] = re; rf[2*p+1] = im; }
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
    if (++idx[j] < (intptr_t) r->shape[j]) break;
@@ -5763,10 +5775,10 @@ g_vm(g_vm_cbin, int op) {
  bool aarr = arrp(a), barr = arrp(b);
  // operand: array / complex scalar / real number. %, // and the orderings are
  // undefined on complex; only `=` survives among the comparisons (-> a mask).
- if (!(aarr || Cp(a) || ISNUM(a)) || !(barr || Cp(b) || ISNUM(b))
-     || op == VOP_REM || op == VOP_FQUOT || (op >= VOP_LT && op != VOP_EQ))
+ if (!(aarr || Cp(a) || isnum(a)) || !(barr || Cp(b) || isnum(b))
+     || op == vop_rem || op == vop_fquot || (op >= vop_lt && op != vop_eq))
   return *++Sp = nil, Ip++, Continue();
- bool cmp = op == VOP_EQ;
+ bool cmp = op == vop_eq;
  uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1;
  for (uintptr_t k = 0; k < R; k++) {                  // broadcast shape + conformance, right-aligned
@@ -5831,21 +5843,21 @@ static g_inline bool flo_fracp(g_flo_t x) {
 g_vm(g_vm_pow) {
  word a = Sp[0], b = Sp[1];
  if (Cp(a) || Cp(b)) {
-  if (!(Cp(a) || ISNUM(a)) || !(Cp(b) || ISNUM(b)))
+  if (!(Cp(a) || isnum(a)) || !(Cp(b) || isnum(b)))
    return *++Sp = nil, Ip++, Continue();
-  Have(CPLX_REQ);
+  Have(cplx_req);
   a = Sp[0], b = Sp[1];                              // re-read post-Have
   struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
-  Hp += CPLX_REQ;
+  Hp += cplx_req;
   cplx_pow_fill(v, a, b);
   return *++Sp = word(v), Ip++, Continue(); }
- if (ISNUM(a) && ISNUM(b)) {
-  g_flo_t ad = TOFLO(a), bd = TOFLO(b);
+ if (isnum(a) && isnum(b)) {
+  g_flo_t ad = toflo(a), bd = toflo(b);
   if (ad < 0 && !__builtin_isinf(ad) && flo_fracp(bd)) {
    g_flo_t m = g_pow(-ad, bd), re = m * g_cospi(bd), im = m * g_sinpi(bd);
-   Have(CPLX_REQ);
+   Have(cplx_req);
    struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
-   Hp += CPLX_REQ;
+   Hp += cplx_req;
    cplx_put(v, re, im);
    return *++Sp = word(v), Ip++, Continue(); } }
  return Ap(g_vm_math2, g, g_pow); }
@@ -5859,13 +5871,13 @@ static g_noinline void cplx_build_fill(struct g_tuple *r, word a, word b) {
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
  struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
- intptr_t ca[G_VEC_MAXRANK], cb[G_VEC_MAXRANK], idx[G_VEC_MAXRANK];
+ intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1; for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
    intptr_t j = oa + (intptr_t) R - (intptr_t) va->rank; ca[j] = va->shape[oa] == 1 ? 0 : s; s *= (intptr_t) va->shape[oa]; } }
  if (barr) { intptr_t s = 1; for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank; cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
- g_flo_t sa = aarr ? 0 : TOFLO(a), sb = barr ? 0 : TOFLO(b);
+ g_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
  g_flo_t *rf = tuple_data(r);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
@@ -5883,7 +5895,7 @@ g_vm(g_vm_cplx) {
  bool aarr = arrp(a), barr = arrp(b);
  if (aarr || barr) {
   if ((aarr && tuple(a)->type >= g_C) || (barr && tuple(b)->type >= g_C)
-      || (!aarr && !ISNUM(a)) || (!barr && !ISNUM(b)))
+      || (!aarr && !isnum(a)) || (!barr && !isnum(b)))
    return *++Sp = nil, Ip++, Continue();
   uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
   uintptr_t R = ra > rb ? ra : rb, n = 1;
@@ -5903,11 +5915,11 @@ g_vm(g_vm_cplx) {
    r->shape[R - 1 - k] = da > db ? da : db; }
   cplx_build_fill(r, a, b);
   return *++Sp = word(r), Ip++, Continue(); }
- if (!ISNUM(a) || !ISNUM(b)) return *++Sp = nil, Ip++, Continue();
- g_flo_t re = TOFLO(a), im = TOFLO(b);             // values extracted before alloc
- Have(CPLX_REQ);
+ if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue();
+ g_flo_t re = toflo(a), im = toflo(b);             // values extracted before alloc
+ Have(cplx_req);
  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
- Hp += CPLX_REQ;
+ Hp += cplx_req;
  cplx_put(v, re, im);
  return *++Sp = word(v), Ip++, Continue(); }
 
@@ -5918,31 +5930,31 @@ op11(g_vm_Cp, Cp(Sp[0]) ? putfix(1) : nil)
 // number, re is the number itself and im is 0; on a non-number, nil.
 g_vm(g_vm_re) {
  word a = Sp[0], _res;
- if (Cp(a)) { g_flo_t re = cplx_re(a); Have(BOX_REQ); EMIT_FLO(re);
+ if (Cp(a)) { g_flo_t re = cplx_re(a); Have(box_req); emit_flo(re);
   return Sp[0] = _res, Ip++, Continue(); }
- if (ISNUM(a)) return Ip++, Continue();            // re of a real is itself
+ if (isnum(a)) return Ip++, Continue();            // re of a real is itself
  return Sp[0] = nil, Ip++, Continue(); }
 
 g_vm(g_vm_im) {
  word a = Sp[0], _res;
- if (Cp(a)) { g_flo_t im = cplx_im(a); Have(BOX_REQ); EMIT_FLO(im);
+ if (Cp(a)) { g_flo_t im = cplx_im(a); Have(box_req); emit_flo(im);
   return Sp[0] = _res, Ip++, Continue(); }
- if (ISNUM(a)) return Sp[0] = putfix(0), Ip++, Continue();   // im of a real is 0
+ if (isnum(a)) return Sp[0] = putfix(0), Ip++, Continue();   // im of a real is 0
  return Sp[0] = nil, Ip++, Continue(); }
 
 // (conj z): complex conjugate (re, -im). On a real number, the number itself.
 g_vm(g_vm_conj) {
  word a = Sp[0];
  if (Cp(a)) { g_flo_t re = cplx_re(a), im = cplx_im(a);
-  Have(CPLX_REQ);
-  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C); Hp += CPLX_REQ;
+  Have(cplx_req);
+  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C); Hp += cplx_req;
   cplx_put(v, re, -im);
   return Sp[0] = word(v), Ip++, Continue(); }
- if (ISNUM(a)) return Ip++, Continue();
+ if (isnum(a)) return Ip++, Continue();
  return Sp[0] = nil, Ip++, Continue(); }
 
 // (abs z): type-aware magnitude. Complex -> sqrt(re^2+im^2) (a float). Real ->
-// |z| in its own tier: fixnum stays fixnum (or boxes if |FIX_MIN| overflows the
+// |z| in its own tier: fixnum stays fixnum (or boxes if |fix_min| overflows the
 // tag), float stays float, bignum stays bignum (just flips its sign). The lone
 // wart is a wide-int box holding INTPTR_MIN, whose magnitude needs a bignum --
 // rare enough to leave (it re-boxes INTPTR_MIN unchanged), same flavor as the
@@ -5950,14 +5962,14 @@ g_vm(g_vm_conj) {
 g_vm(g_vm_abs) {
  word a = Sp[0], _res;
  if (Cp(a)) { g_flo_t m = cplx_mod(a);
-  Have(BOX_REQ); EMIT_FLO(m); return Sp[0] = _res, Ip++, Continue(); }
+  Have(box_req); emit_flo(m); return Sp[0] = _res, Ip++, Continue(); }
  if (fixp(a)) { intptr_t n = getfix(a);
-  Have(BOX_REQ); EMIT_INT(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
+  Have(box_req); emit_int(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
   return Sp[0] = _res, Ip++, Continue(); }
  if (flop(a)) { g_flo_t v = flo_get(a); if (v < 0) v = -v;
-  Have(BOX_REQ); EMIT_FLO(v); return Sp[0] = _res, Ip++, Continue(); }
+  Have(box_req); emit_flo(v); return Sp[0] = _res, Ip++, Continue(); }
  if (boxp(a)) { intptr_t n = box_get(a);
-  Have(BOX_REQ); EMIT_INT(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
+  Have(box_req); emit_int(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
   return Sp[0] = _res, Ip++, Continue(); }
  if (bigp(a)) {
   struct g_big *x = (struct g_big*) a;
@@ -5972,9 +5984,9 @@ g_vm(g_vm_abs) {
   g_flo_t s = 0;                                      // complex elem is its 2-vector modulus; g_C sums 2n floats
   if (v->type == g_C) { g_flo_t *fp = tuple_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
   else for (i = 0; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); s += e * e; }
-  Have(BOX_REQ); EMIT_FLO(g_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
+  Have(box_req); emit_flo(g_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
  if (mapp(a)) {                                       // table: its key count (so (int (abs t)) == (len t))
-  Have(BOX_REQ); EMIT_INT((intptr_t) map_len(a)); return Sp[0] = _res, Ip++, Continue(); }
+  Have(box_req); emit_int((intptr_t) map_len(a)); return Sp[0] = _res, Ip++, Continue(); }
  return Sp[0] = nil, Ip++, Continue(); }
 
 // fill f64 array r with arg of each element of v (a g_C packed or g_Z/g_R real
@@ -5992,7 +6004,7 @@ static g_noinline void carg_fill(struct g_tuple *r, struct g_tuple *v) {
 g_vm(g_vm_carg) {
  word a = Sp[0], _res;
  if (Cp(a)) { g_flo_t r = g_atan2(cplx_im(a), cplx_re(a));
-  Have(BOX_REQ); EMIT_FLO(r); return Sp[0] = _res, Ip++, Continue(); }
+  Have(box_req); emit_flo(r); return Sp[0] = _res, Ip++, Continue(); }
  if (arrp(a)) {
   struct g_tuple *v = tuple(a);
   if (v->type == g_O) return Sp[0] = nil, Ip++, Continue();   // object array -> nil
@@ -6005,6 +6017,6 @@ g_vm(g_vm_carg) {
   for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
   carg_fill(r, v);
   return Sp[0] = word(r), Ip++, Continue(); }
- if (ISNUM(a)) { g_flo_t r = g_atan2(0, TOFLO(a));
-  Have(BOX_REQ); EMIT_FLO(r); return Sp[0] = _res, Ip++, Continue(); }
+ if (isnum(a)) { g_flo_t r = g_atan2(0, toflo(a));
+  Have(box_req); emit_flo(r); return Sp[0] = _res, Ip++, Continue(); }
  return Sp[0] = nil, Ip++, Continue(); }

@@ -99,9 +99,9 @@
  (< 1e29 (re (+ i B100)))                  ; real part ~ 2^100
 
  ; --- complex as hash keys: eql-distinct from the equal real (sticky) ---
- (= 'hit (peek (pin (hashn 0) ~(2 0) 'hit) ~(2 0) 'miss))
- (= 'miss (peek (pin (hashn 0) ~(2 0) 'hit) 2 'miss))   ; 2 and 2+0i are different keys
- (= 'iv (peek (pin (hashn 0) i 'iv) i 'miss)))
+ (= 'hit (peep (pin (table 0) ~(2 0) 'hit) ~(2 0) 'miss))
+ (= 'miss (peep (pin (table 0) ~(2 0) 'hit) 2 'miss))   ; 2 and 2+0i are different keys
+ (= 'iv (peep (pin (table 0) i 'iv) i 'miss)))
 
 ; --- step 7b: full-rank complex arrays (packed (re,im) g_C tuples) -----------
 ; a complex value packs two floats per element into a `c` array (type code c = 2,
@@ -123,29 +123,29 @@
  (= 2 (arank ca-m))   (= 4 (alen ca-m))
 
  ; --- get returns a complex box; rank-N indexing; zero element ---
- (= ~(1 2) (peek ca-v 0 0))   (= ~(3 4) (peek ca-v 1 0))   (comp (peek ca-v 0 0))
- (= ~(0 2) (peek ca-m (L 1 1) 0))                ; row-major (1,1)
- (= ~(0 0) (peek ca-z 0 0))   (= ~(2 2) (peek ca-a 1 0))
+ (= ~(1 2) (peep ca-v 0 0))   (= ~(3 4) (peep ca-v 1 0))   (comp (peep ca-v 0 0))
+ (= ~(0 2) (peep ca-m (L 1 1) 0))                ; row-major (1,1)
+ (= ~(0 0) (peep ca-z 0 0))   (= ~(2 2) (peep ca-a 1 0))
 
  ; --- elementwise broadcast: array (op) array ---
- (= ~(2 4) (peek (+ ca-v ca-v) 0 0))             ; (1+2i)+(1+2i) elementwise
+ (= ~(2 4) (peep (+ ca-v ca-v) 0 0))             ; (1+2i)+(1+2i) elementwise
  (aall (= ca-v (+ ca-v (arr c '(2) 0))))           ; + the zero array is identity
- (= ~(-5 10) (peek (* (arr c '(2) (L ~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
- (= ~(1 2) (peek (/ (* ca-v ca-v) ca-v) 0 0))    ; (z*z)/z = z
+ (= ~(-5 10) (peep (* (arr c '(2) (L ~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
+ (= ~(1 2) (peep (/ (* ca-v ca-v) ca-v) 0 0))    ; (z*z)/z = z
 
  ; --- scalar broadcast: complex scalar (op) array, both orders ---
- (= ~(11 2) (peek (+ ~(10 0) ca-v) 0 0))
- (= ~(13 4) (peek (+ ca-v ~(10 0)) 1 0))
- (= ~(2 4) (peek (* ~(2 0) ca-v) 0 0))          ; scale by 2
- (= ~(0 1) (peek (* i ca-r) 0 0))                ; i*(1+0i) = i
+ (= ~(11 2) (peep (+ ~(10 0) ca-v) 0 0))
+ (= ~(13 4) (peep (+ ca-v ~(10 0)) 1 0))
+ (= ~(2 4) (peep (* ~(2 0) ca-v) 0 0))          ; scale by 2
+ (= ~(0 1) (peep (* i ca-r) 0 0))                ; i*(1+0i) = i
 
  ; --- real array meets complex: the real promotes to (v, 0) ---
- (= ~(11 2) (peek (+ @(10 20) ca-v) 0 0))        ; z @(10 20) lifts to (10,0)/(20,0)
- (= ~(23 4) (peek (+ ca-v @(10 20)) 1 0))
+ (= ~(11 2) (peep (+ @(10 20) ca-v) 0 0))        ; z @(10 20) lifts to (10,0)/(20,0)
+ (= ~(23 4) (peep (+ ca-v @(10 20)) 1 0))
 
  ; --- `=` over complex arrays -> a 0/1 mask; orderings/% -> nil ---
- (= 1 (peek (= ca-v ca-v) 0 0))
- (= 0 (peek (= ca-v (arr c '(2) (L ~(9 9) ~(3 4)))) 0 0))
+ (= 1 (peep (= ca-v ca-v) 0 0))
+ (= 0 (peep (= ca-v (arr c '(2) (L ~(9 9) ~(3 4)))) 0 0))
  (aall (= ca-v ca-v))
  (nilp (< ca-v ca-v))   (nilp (> ca-v ca-v))   (nilp (mod ca-v ca-v))
 

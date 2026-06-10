@@ -3,7 +3,7 @@
    (co f g x) (f (g x))
    (const x _) x
    (flip f x y) (f y x))
-(: macros (peek dict 0 0))
+(: macros (peep dict 0 0))
 (: pi 3.141592653589793
    e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
    true 1 false 0
@@ -42,30 +42,30 @@
    (getc _) (fgetc in)
    read (fread in))
 ; the infix aliases are plain globals too, so escaping works like (+)/'+ --
-; ((->) t k d) peeks, ((%) 5 2) is mod. (punct names can't sit in `:` binding
+; ((->) t k d) peeps, ((%) 5 2) is mod. (punct names can't sit in `:` binding
 ; position -- they'd capture the `:` -- so pin dict directly.)
-(: _ (pin dict '<- pin) _ (pin dict '-> peek) (pin dict '% mod))
+(: _ (pin dict '<- pin) _ (pin dict '-> peep) (pin dict '% mod))
 ; fixnum-as-function application, pinned on dict for the VM's apply path: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
 ; for every x, see below); n=1 -> x directly. numfn assembles the n-fold thread
-; directly via lam/pinl (no `ev`, so applying a fixnum never re-enters the compiler):
+; directly via loom/knit (no `ev`, so applying a fixnum never re-enters the compiler):
 ; n quote-f's then n ap's -- apl2r's [head..][arg][ap..] shape -- via the interned
 ; opcode globals (kernel/g.c `insts`). Cell 0 is the source \-expr at value[-1] for
-; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (seekl 1 th), and
+; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (slip 1 th), and
 ; the src rides the thread span so GC traces it. Helpers pass th/f/n explicitly -- a
 ; closure over the forward-bound th miscompiles under the bootstrap c0.
 (: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (cons f (cons acc 0))))
-   (nfq th f i n) (? (< i n) (: _ (pinl (+ 1 (* 2 i)) g_vm_quote th) _ (pinl (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
-   (nfa th i n) (? (< i n) (: _ (pinl (+ (+ 3 (* 2 n)) i) g_vm_ap th) (nfa th (+ 1 i) n)) th)
+   (nfq th f i n) (? (< i n) (: _ (knit (+ 1 (* 2 i)) g_vm_quote th) _ (knit (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
+   (nfa th i n) (? (< i n) (: _ (knit (+ (+ 3 (* 2 n)) i) g_vm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
-     src (cons '\ (cons 'x (cons (nfnest f n 'x) 0)))  ; alloc before lam; printer source
-     th (lam (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
-     _ (pinl 0 src th) _ (nfq th f 0 n)             ; no allocation past lam: th can't move
-     _ (pinl (+ 1 (* 2 n)) g_vm_arg th) _ (pinl (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
+     src (cons '\ (cons 'x (cons (nfnest f n 'x) 0)))  ; alloc before loom; printer source
+     th (loom (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
+     _ (knit 0 src th) _ (nfq th f 0 n)             ; no allocation past loom: th can't move
+     _ (knit (+ 1 (* 2 n)) g_vm_arg th) _ (knit (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
      _ (nfa th 0 n)
-     _ (pinl (+ 3 (* 3 n)) g_vm_ret th) _ (pinl (+ 4 (* 3 n)) 1 th)
-   (seekl 1 th))
+     _ (knit (+ 3 (* 3 n)) g_vm_ret th) _ (knit (+ 4 (* 3 n)) 1 th)
+   (slip 1 th))
    (nump x) (| (fixp x) (| (tupp x) (bigp x)))   ; whole tower: fixnum / float box / wide-int box / complex / array / bignum
    (intp n) (| (fixp n) (| (boxp n) (bigp n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
@@ -114,21 +114,17 @@
    (all f l) (? (twop l) (? (f (cap l)) (all f (cbp l))) 1)
    (any f l) (? (twop l) (? (f (cap l)) 1 (any f (cbp l))))
    (cat a b) (foldr cons b a))
-; sort: (sort le l) orders l by the strict less-than predicate le. the order
-; predicates take the C lane -- sortl, a stable bottom-up merge in the heap
-; gap, one cmp3 (the total order) per compare, no lisp re-entry; descending
-; is rev -- while an arbitrary predicate keeps the lisp merge sort (msort:
-; top-down alternating split + merge, O(n log n)).
+; sort: (sort l) orders l ascending by the total order -- the C lane (a stable
+; bottom-up merge in the heap gap, one cmp3 per compare, no lisp re-entry);
+; descending is (rev (sort l)). an arbitrary strict less-than predicate takes
+; the lisp merge sort: (msort le l), top-down alternating split + merge.
 (: (merge le a b) (? (atomp a) b (atomp b) a
                      (le (cap a) (cap b)) (cons (cap a) (merge le (cbp a) b))
                      (cons (cap b) (merge le a (cbp b))))
    (sortsplit l) (? (atomp l) (cons l 0) (atomp (cbp l)) (cons l 0)
                     (: r (sortsplit (cbbp l)) (cons (cons (cap l) (cap r)) (cons (cabp l) (cbp r)))))
    (msort le l) (? (atomp l) l (atomp (cbp l)) l
-                  (: s (sortsplit l) (merge le (msort le (cap s)) (msort le (cbp s)))))
-   (sort le l) (? (idp le (<)) (sortl l)
-                  (idp le (>)) (rev (sortl l))
-                  (msort le l)))
+                  (: s (sortsplit l) (merge le (msort le (cap s)) (msort le (cbp s))))))
 (: catmap (co (flip foldr 0) (co cat))
    (assq x l) (? l (? (= x (caap l)) (cap l) (assq x (cbp l))))
    (lidx x) ((: (f n l) (? (twop l) (? (= x (cap l)) n (f (+ 1 n) (cbp l))) -1)) 0)
@@ -140,10 +136,10 @@
    (part p) (foldr (\ a m (? (p a) (cons (cons a (cap m)) (cbp m))
                                         (cons (cap m) (cons a (cbp m))))) '(0)))
 (: (sip cl)
- (pinl -1 (peekl 0 in) (pinl -1 -4 (pinl -1 -1 (pinl -1 0 (pinl 4 cl (lam 5))))))
+ (knit -1 (pick 0 in) (knit -1 -4 (knit -1 -1 (knit -1 0 (knit 4 cl (loom 5))))))
  (pad _)
-  (pinl -1 (peekl 0 in) (pinl -1 -2 (pinl -1 -1 (pinl -1 0 (pinl -1 "  " (pinl 5 0 (lam 6)))))))
- (page o) (ssub (peekl 4 o) 0 (peekl 5 o))
+  (knit -1 (pick 0 in) (knit -1 -2 (knit -1 -1 (knit -1 0 (knit -1 "  " (knit 5 0 (loom 6)))))))
+ (page o) (slice (pick 4 o) 0 (pick 5 o))
  (slurp i) (: (rl i) (: c (fgetc i) (? !(= c -1) (cons c (rl i)))) (string (rl i)))
  (show x) (: o (pad 0) _ (fputx o x) (page o)))
 ; trap status readers. a global `trap` function is called as (trap s a b):
@@ -168,7 +164,7 @@
 ; clock-seeds on first use; rng-set validates and installs (the state, or nil
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
-(: (rng-get _) (: st (peek dict 'rng-state 0)
+(: (rng-get _) (: st (peep dict 'rng-state 0)
                   (? st st (: f (rng-seed (clock 0)) _ (pin dict 'rng-state f) f)))
    (rng-set st) (? (&& (arrp st) (= 1 (arank st)) (= 4 (alen st)) (= z (atype st)))
                    (: _ (pin dict 'rng-state st) st)
@@ -234,7 +230,7 @@
 ; (hash) = empty; (hash x) boxes a scalar -- a fresh mutable hash pinning x
 ; to the () key, so #5 = #(() 5); pairs pin as usual, and an odd trailing
 ; operand lands in the () box slot.
-(: (hashtx a) (? (nilp a) '(hashn 0)
+(: (hashtx a) (? (nilp a) '(table 0)
                  (nilp (cbp a)) (list 'pin (hashtx 0) '() (cap a))
                  (list 'pin (hashtx (cbbp a)) (cap a) (cabp a))))
 (:: 'hash (\ a (hashtx a)))
@@ -261,7 +257,7 @@
 ; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body
 ; expression, and indirects every *value* binding whose init closes over the
 ; name being defined (or a forward/mutual sibling defined no later) through a
-; heap cell: prepend `cell (X 0 0)`, store via `(pinl 1 init cell)`, read via
+; heap cell: prepend `cell (X 0 0)`, store via `(knit 1 init cell)`, read via
 ; `(A cell)`. Functions (resolved lazily) and values defined before their
 ; users are untouched. It returns 0 when nothing needs boxing, else the rewritten
 ; (prs' . body'). This is the single source of truth, shared verbatim by both
@@ -282,7 +278,7 @@
     (: h (cap x) (?
       (= h '\) (? (atomp (cbbp x)) 0 (: r (lp x) (w v (cbp r) (cat (cap r) bnd) 1)))
       (= h ':) (wl v (cbp x) (cat (ln (cbp x)) bnd) u)
-      (: m (? (symp h) (peek macros h 0) 0) (? m (w v (m (cbp x)) bnd u) (any (\ e (w v e bnd u)) x))))))
+      (: m (? (symp h) (peep macros h 0) 0) (? m (w v (m (cbp x)) bnd u) (any (\ e (w v e bnd u)) x))))))
    (wl v bs bnd u) (?
     (atomp bs) 0
     (atomp (cbp bs)) (w v (cap bs) bnd u)
@@ -303,7 +299,7 @@
     (: h (cap x) (?
       (= h '\) (? (atomp (cbbp x)) x (: r (lp x) (cons '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cbp r)))))))
       (= h ':) (cons ': (subl (rmc cs (ln (cbp x))) (cbp x)))
-      (: m (? (symp h) (peek macros h 0) 0) (? m (sub cs (m (cbp x))) (map (\ e (sub cs e)) x))))))
+      (: m (? (symp h) (peep macros h 0) 0) (? m (sub cs (m (cbp x))) (map (\ e (sub cs e)) x))))))
    (subl cs bs) (?
     (atomp bs) bs
     (atomp (cbp bs)) (list (sub cs (cap bs)))
@@ -311,7 +307,7 @@
    (: bx (boxset prs)
       (? (nilp bx) 0
        (: cs (mkcs bx)
-          (one p) (: d (sub cs (cbp p)) (? (memq (cap p) bx) (cons '_ (list 'pinl 1 d (cbp (assq (cap p) cs)))) (cons (cap p) d)))
+          (one p) (: d (sub cs (cbp p)) (? (memq (cap p) bx) (cons '_ (list 'knit 1 d (cbp (assq (cap p) cs)))) (cons (cap p) d)))
           (cons (cat (cellbinds cs) (map one prs)) (sub cs body)))))))
 ; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that

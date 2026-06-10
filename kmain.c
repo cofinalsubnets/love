@@ -97,7 +97,7 @@ static void limine_to_kboot(void) {
   if (memmap_req.response) {
     struct limine_memmap_entry **rr = memmap_req.response->entries;
     uintptr_t n = memmap_req.response->entry_count;
-    for (uintptr_t i = 0; i < n && kboot.ram_n < K_BOOT_RAM_MAX; i++)
+    for (uintptr_t i = 0; i < n && kboot.ram_n < k_boot_ram_max; i++)
       if (rr[i]->type == 0)
         kboot.ram[kboot.ram_n].base = rr[i]->base,
         kboot.ram[kboot.ram_n].len  = rr[i]->length,
@@ -135,7 +135,7 @@ static void limine_to_kboot(void) {
 // add bulk read/write when ramfs/files start needing them. `state` is
 // per-instance scratch (ramfs uses it for the buffer pointer; statics
 // like keyboard/serial leave it null).
-#define K_SOURCES_MAX 32
+#define k_sources_max 32
 
 struct k_source {
   int  (*getc)(int fd);                 // returns 0..255, -1 = EOF / no data
@@ -165,7 +165,7 @@ static void serial_putc1(int fd, int c) {
   serial_putc(c); }
 static void serial_flush(int fd) { (void) fd; fbdraw(); }
 
-static struct k_source k_sources[K_SOURCES_MAX] = {
+static struct k_source k_sources[k_sources_max] = {
   [0] = { .getc = kb_getc,      .ready = kb_ready    },
   [1] = { .putc = serial_putc1, .flush = serial_flush },
 };
@@ -183,7 +183,7 @@ static struct g *fd_getc(struct g *g) {
     return g; }
   int fd = getfix(i->fd);
   int c = -1;
-  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].getc)
+  if (fd >= 0 && fd < k_sources_max && k_sources[fd].getc)
     c = k_sources[fd].getc(fd);
   if (c < 0) { i->eof_seen = putfix(true); fc->b = EOF; }
   else fc->b = c;
@@ -200,12 +200,12 @@ static struct g *fd_eof(struct g *g) {
   return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
 static struct g *fd_putc(struct g *g, int c) {
   int fd = getfix(g->io->fd);
-  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].putc)
+  if (fd >= 0 && fd < k_sources_max && k_sources[fd].putc)
     k_sources[fd].putc(fd, c);
   return g; }
 static struct g *fd_flush(struct g *g) {
   int fd = getfix(g->io->fd);
-  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].flush)
+  if (fd >= 0 && fd < k_sources_max && k_sources[fd].flush)
     k_sources[fd].flush(fd);
   return g; }
 
@@ -222,19 +222,19 @@ struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_
 // Override the weak g.c default; route close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.
 void g_fd_close(int fd) {
-  if (fd >= 0 && fd < K_SOURCES_MAX && k_sources[fd].close)
+  if (fd >= 0 && fd < k_sources_max && k_sources[fd].close)
     k_sources[fd].close(fd); }
 
 bool g_ready(int fd) {
   if (fd < 0) return true;
-  if (fd >= K_SOURCES_MAX || !k_sources[fd].ready) return false;
+  if (fd >= k_sources_max || !k_sources[fd].ready) return false;
   return k_sources[fd].ready(fd); }
 
 // Multi-source wait. ticks=0 means infinite. Future: program a one-shot
 // timer at the deadline instead of waking every tick.
 void g_wait_fds(int const *fds, int n, uintptr_t ticks) {
   if (n <= 0) { g_sleep(ticks); return; }
-  if (n > G_WAIT_FDS_MAX) __builtin_trap();
+  if (n > g_wait_fds_max) __builtin_trap();
   uintptr_t deadline = kticks + ticks;
   for (;;) {
     if (ticks && kticks >= deadline) return;
@@ -272,7 +272,7 @@ static const uint8_t
    'B', 'N', 'M',  '<', '>', '?',   0, '*',
      0, ' ' };
 
-_Static_assert(LEN(kb2ascii) == LEN(shift_kb2ascii));
+_Static_assert(countof(kb2ascii) == countof(shift_kb2ascii));
 
 #define kb_code_left 75
 #define kb_code_right 77
@@ -319,7 +319,7 @@ void kb_int(const uint8_t code) {
     case kb_code_ctl:    kkb.g = up ? kkb.g & ~kb_flag_lctl : kkb.g | kb_flag_lctl; return;
     case kb_code_alt:    kkb.g = up ? kkb.g & ~kb_flag_lalt : kkb.g | kb_flag_lalt; return;
     default:
-      if (up || sc >= LEN(kb2ascii)) return;
+      if (up || sc >= countof(kb2ascii)) return;
       uint8_t a = (kkb.g & kb_flag_shift ? shift_kb2ascii : kb2ascii)[sc];
       if (a && kkb.g & kb_flag_ctl && (a | 32) >= 'a' && (a | 32) <= 'z') a &= 31;
       if (a) kq(a);
@@ -521,30 +521,30 @@ void kmain(void) {
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {
   if (fbinit() && cbinit()) palette_init();
-  struct g *g = g_defn(g_ini(), defs, LEN(defs));
+  struct g *g = g_defn(g_ini(), defs, countof(defs));
 #ifdef K_TEST
   // bind the baked corpus to the global `tests`; below it is read form-by-form
   // and run through ev at boot (no console), then qemu is quit.
   g = g_strof(g, ktests);
   struct g_def td[] = {{"tests", g_pop1(g)}};
-  g = g_defn(g, td, LEN(td));
+  g = g_defn(g, td, countof(td));
 #endif
   // load the prelude, then run the l read-eval-print loop. its line
   // editor (in repl.l) drives the console; PS/2 keyboard and serial
   // input both arrive as ANSI escape sequences the l edev decodes.
   g_fin(g_evals_(g, "("
 #include "egg.h"
- G_EGG_PRE
+ g_egg_pre
 #include "prelude.h"
  " "
 #include "ev.h"
- G_EGG_POST
+ g_egg_post
 #include "repl.h"
 #ifdef K_TEST
  // test build: read each form out of the baked `tests` string (string -> charlist
  // -> sip port -> fread) and eval it via the self-hosted ev -- the same shape as
  // the host's stdin runner. zz-fin.l prints the summary and (exit 1)s on failure.
- "(: p (sip ((: (g i) (? (< i (sat tests)) (cons (peek tests i 0) (g (+ 1 i))))) 0))"
+ "(: p (sip ((: (g i) (? (< i (sat tests)) (cons (peep tests i 0) (g (+ 1 i))))) 0))"
  " ((: (g e) (: r (fread p e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (nom 0)))"
 #else
  "(repl 0 0)"
