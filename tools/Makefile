@@ -31,11 +31,13 @@ test_gen_data: | $(m)
 	    || { echo "  FAIL $$o"; rm -f $(R)/out/host/.data.py.h $(R)/out/host/.data.l.h; exit 1; }; \
 	done; rm -f $(R)/out/host/.data.py.h $(R)/out/host/.data.l.h
 
-# vmret.l vs py/vmret.py over the host binaries plus any kernel arch ELFs
+# vmret.l vs py/vmret.py over the host binary plus any kernel arch ELFs
 # present (each arch exercises a different ret matcher + the objdump choice).
+# ll0 is skipped: it builds -Dg_tco=0 (trampoline), where handler rets are
+# expected -- the vmret signal is noise there.
 test_vmret: | $(m)
 	@echo TEST vmret.l
-	@for e in $(R)/out/host/ll $(R)/out/host/ll0 `find $(R)/out/free -name 'll-*.elf' 2>/dev/null`; do \
+	@for e in $(R)/out/host/ll `find $(R)/out/free -name 'll-*.elf' 2>/dev/null`; do \
 	  python3 $(R)/tools/py/vmret.py $$e > $(R)/out/host/.vmret.py 2>&1; \
 	  $(m) $(R)/tools/vmret.$x $$e > $(R)/out/host/.vmret.l 2>&1; \
 	  cmp -s $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l && echo "  ok   $$e" \

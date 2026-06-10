@@ -126,7 +126,7 @@
         m)
    (symtab-sizes d)                                       ; -> map: fn start address -> byte size
      (: st (find-symtab d (u64 d 40) (u16 d 58) (u16 d 60) 0)  ; e_shoff / e_shentsize / e_shnum
-        (? st (collect-syms d (A st) (// (B st) 24) 0 %()) %())))
+        (? st (collect-syms d (A st) (// (B st) 24) 0 #()) #())))
 
 ; --- the scan (vmret.py scan(), grouping by function header) ----------
 ; close the current watched function: flag it iff it collected any rets.
@@ -236,7 +236,7 @@
    _        (? chosen 0 (die "no disassembler found (tried llvm-objdump, objdump); pass --objdump"))
    status   (A (B chosen))
    output   (B (B chosen))
-   _        (? (= 0 status) 0 (die (scat (scat (A chosen) " failed: status ") (inspect status))))
+   _        (? (= 0 status) 0 (die (scat (scat (A chosen) " failed: status ") (show status))))
    scanned  (scan-all (lines output) prefix ret? sizes)
    flagged  (A scanned)
    total    (B scanned)

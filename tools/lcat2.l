@@ -1,5 +1,5 @@
 ; lcat2: lcat + variable-name minification. Like lcat, it serializes a ll
-; source file to a C string literal (re-print each top-level form via inspect,
+; source file to a C string literal (re-print each top-level form via show,
 ; space-join, drop spaces the reader doesn't need, C-escape). lcat2 ALSO renames
 ; local variables to short fresh names before re-printing, shrinking the literal.
 ;
@@ -41,7 +41,7 @@
 
 ; cnt = every source symbol -> its occurrence count (also the fresh-name avoid-set);
 ; taint = the frozen set (here: symbols seen under qq). both mutated in place.
-(: cnt %() taint %())
+(: cnt #() taint #())
 
 ; === CORE -- naming-with-reuse for MACROEXPANDED forms (the part destined for the
 ; compiler). Knows only `\` / `:` / application; recurses through the hook `rec`.
@@ -125,15 +125,15 @@
 ; re-parse to the same datum count without it; then C-escape the survivors. ---
 (: (s2cl s) ((: (g i) (? (< i (sat s)) (X (peek s i 0) (g (+ 1 i))))) 0)
    (nforms s) ((: (g p e n) (: r (fread p e) (? (| (= e r) (= p r)) n (g p e (+ 1 n)))))
-               (strin (s2cl s)) (nom 0) 0)
+               (sip (s2cl s)) (nom 0) 0)
    (redundant? a b) (= (nforms (string (L a b))) (nforms (string (L a 32 b))))
    (eb c) (? (= c 10) (fputs out "\\n")
               (| (= c 92) (= c 34)) (: _ (fputc out 92) (fputc out c))
               (fputc out c)))
 
 (: (readforms p e) (: r (fread p e) (? (= e r) 0 (X r (readforms p e))))
-   (joinforms fs) (? (atomp fs) "" (atomp (B fs)) (inspect (rn (A fs) 0 0 1 rn))
-       (scat (scat (inspect (rn (A fs) 0 0 1 rn)) " ") (joinforms (B fs))))
+   (joinforms fs) (? (atomp fs) "" (atomp (B fs)) (show (rn (A fs) 0 0 1 rn))
+       (scat (scat (show (rn (A fs) 0 0 1 rn)) " ") (joinforms (B fs))))
    (emit acc) (: _ (fputc out 34)
        _ ((: (g i pc instr) (? (< i (sat acc))
             (: c (peek acc i 0) (? instr
