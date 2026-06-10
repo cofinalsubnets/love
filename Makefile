@@ -23,12 +23,19 @@ test_all: test_host test_gl0 test_tools test_kernel
 # stdin is /dev/null: the corpus reads from the baked string, not stdin, but
 # test/io.l exercises the real `in` port (a bare fgetc), which would otherwise
 # block on a tty (the old `cat $t | ll0` fed the test stream in on stdin).
+# Both gates require the zz-fin summary line, not just exit 0: a reader stop
+# (e.g. a stray `)` mid-corpus) silently drops the rest of the stream and
+# exits 0 without ever reaching zz-fin -- exit code alone green-lights a run
+# that only executed a prefix of the corpus. ll0 must print TWO summaries
+# (the corpus runs under both c0 and the self-hosted ev).
 test_gl0: $(ll0)
 	@echo TEST $(ll0)
-	@$(ll0) </dev/null
+	@$(ll0) </dev/null > out/host/.test_gl0.out; s=$$?; cat out/host/.test_gl0.out; \
+	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_gl0.out` -eq 2 ]
 test_host: host
 	@echo TEST $m
-	@cat $t | $m
+	@cat $t | $m > out/host/.test_host.out; s=$$?; cat out/host/.test_host.out; \
+	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
 # Validate the ll tool rewrites against their frozen Python references in
 # tools/py/ (gen_data / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host

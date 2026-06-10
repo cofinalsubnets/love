@@ -8,4 +8,4 @@
 (: cmt-after 7)  ;;; a trailing ;;; is an ordinary line comment
 (assert
  (= 7 cmt-after)                                ; survived the ;;; / #! / ;; lines above
- (= 1 1)))
+ (= 1 1))
