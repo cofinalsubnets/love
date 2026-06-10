@@ -67,9 +67,11 @@
  (flop (mod 7.0 0.0))
 
  ; --- + is generic: string/list concat, order-preserving; - stays numeric (nil) ---
- (= "xB" (+ "x" 66))                ; str + num -> byte (floor|n| mod 256) at back
+ (= "xB" (+ "x" 66))                ; str + num -> one byte at back (the byte law)
  (= "Bx" (+ 66 "x"))                ; num + str -> byte at front
- (= "xB" (+ "x" 66.9))              ; numeric coerced via floor(|n|)
+ (= "xB" (+ "x" 66.0))              ; rep-blind: 66.0 IS 66
+ (nilp (+ "x" 66.9))                ; ... but a non-integer is NOT a byte -> nil
+ (nilp (+ "x" -66)) (nilp (+ "x" 256))   ; out of 0..255 -> nil
  (= "abcd" (+ "ab" "cd"))           ; str + str -> concat
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))   ; list + list -> append
  (= '("x" 1 2) (+ "x" '(1 2)))      ; str + list -> (X str list)

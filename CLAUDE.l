@@ -118,12 +118,15 @@
  (1 = (\ x x)) ((\ y y) = 1) !(idp 1 (\ x x))                      ; 1 = identity, either side
  (0 = (\ _ 1)) ((\ q 1) = 0) !(0 = (\ _ 2)) !(0 = (\ _ _)))        ; 0 = const-1 (and only that)
 
-; --- + and * are generic --- `+` adds numbers, concatenates strings/symbols (a number is one
-; byte), and appends lists; `-` is numeric only. `*` is repeated `+`: a sequence times a count
-; repeats it, and the count SATURATES (($ c), the count law shared with numeral-apply and
-; array shapes): a non-positive count gives the empty sequence, a float ceils.
+; --- + and * are generic --- `+` adds numbers, concatenates strings/symbols, and appends
+; lists; `-` is numeric only. the BYTE LAW: text + number is one byte, strictly -- the value
+; must be an exact integer 0..255 (rep-blind, like `=`: 66.0 is 66); anything else is nil,
+; like `-` on strings. `*` is repeated `+`: a sequence times a count repeats it, and the
+; count SATURATES (($ c), the count law shared with numeral-apply and array shapes): a
+; non-positive count gives the empty sequence, a float ceils.
 (assert
  ("abcd" = "ab" + "cd") ("xB" = "x" + 66) ('efef = 'ef + 'ef) (strp ("ab" + 'ef))
+ ("xB" = "x" + 66.0) !("x" + 1.5) !("x" + -66) !("x" + 256)   ; the byte law: exact 0..255 or nil
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(5 1 2) = 5 + '(1 2)) !("a" - "b")
  ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")
  !("ab" * -3) ("ababab" = "ab" * 2.5) !('(1 2) * 0))

@@ -3793,12 +3793,15 @@ AVM_OVF(sub, __builtin_sub_overflow)
 // it false for the commutative reading (smaller operand always joins the front, so
 // a+b == b+a like numeric add). A plain mutable global -> toggleable at runtime.
 static const bool g_add_lr = true;
-// coerce a numeric to a string byte: floor(|x|) mod 256, where |x| of a complex
-// is its modulus (matching abs's L2 vector->scalar coercion, see g_vm_abs).
-static g_inline unsigned char seq_byte(word x) {
- g_flo_t v = Cp(x) ? cplx_mod(x) : TOFLO(x);
- if (v < 0) v = -v;
- return (unsigned char) (uintptr_t) g_trunc(v); }
+// THE BYTE LAW: text + number is one byte, STRICTLY -- the value must be an exact
+// integer 0..255 (rep-blind, like `=`: 66.0 is 66; a wide box/bignum is never in
+// range), anything else nil, like `-` on strings. Returns the byte or -1.
+static g_inline intptr_t seq_byte(word x) {
+ if (fixp(x)) { intptr_t v = getfix(x); return v < 0 || v > 255 ? -1 : v; }
+ if (flop(x)) { g_flo_t f = flo_get(x);
+  if (!(f >= 0 && f <= 255)) return -1;                 // range first (nan fails); cast below is safe
+  return f != (g_flo_t) (intptr_t) f ? -1 : (intptr_t) f; }
+ return -1; }
 // LIST lane: at least one operand is a pair (the matrix only routes list-involved
 // pairs here). list+list -> spine append; elt<->list -> the non-list operand joins
 // as a scalar element (front if it is on the left, else appended at the tail).
@@ -3853,10 +3856,12 @@ static g_inline char *add_emit(char *w, word x) {       // append x's bytes; ret
  if (strp(x)) return (void) memcpy(w, txt(x), len(x)), w + len(x);
  if (symp(x)) { struct g_str *n = add_name(x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
- return *w = (char) seq_byte(x), w + 1; }               // number -> one byte
+ return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (gated >= 0 by the byte law)
 static g_vm(g_vm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> text: undefined
+ if (!strp(a) && !symp(a) && seq_byte(a) < 0) return *++Sp = nil, Ip++, Continue();  // the byte law
+ if (!strp(b) && !symp(b) && seq_byte(b) < 0) return *++Sp = nil, Ip++, Continue();
  int rank = MIN(stringrank(a), stringrank(b));
  uintptr_t n = stringlen(a) + stringlen(b);
  if (!n) return *++Sp = rank ? EMPTY_SYM : EmptyString, Ip++, Continue();

@@ -123,9 +123,10 @@
  (strp (+ 'ef "ab"))                          ; isym + str -> str
 
  ; --- the arith<->seq SEAM (KArrO|KString) is ARRAY x text only -> nil. A SCALAR
- ;     number (incl. a bignum) instead joins text as one byte -> a string. ---
+ ;     number joins text as one byte ONLY under the byte law (exact 0..255), so a
+ ;     bignum -- never in range -- is nil too. ---
  (nilp (+ @(1 2) "ab"))   (nilp (+ "ab" @(1 2)))   (nilp (+ @(1 2) 'ef))
- (strp (+ mx-big "ab"))                       ; bignum is a scalar -> a byte, not nil
+ (nilp (+ mx-big "ab"))                       ; bignum: out of byte range -> nil
 
  ; --- add_seq lane: a list anywhere (pair wins over text & number) ---
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))             ; list + list
