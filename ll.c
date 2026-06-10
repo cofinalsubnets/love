@@ -3740,7 +3740,7 @@ g_vm(g_vm_cons) {
  EMIT_INT(TOINT(a) c_op TOINT(b));                                    \
  return *++Sp = _res, Ip++, Continue(); }
 #define mvm1(n) g_vm(g_vm_##n) { return Ap(g_vm_math1, g, g_##n); }
-#define m1(_) _(sin) _(cos) _(log)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals
+#define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own handler)
 
 
 AVM_SLOW(add, VOP_ADD, __builtin_add_overflow, ad + bd)
@@ -4165,6 +4165,25 @@ static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
 // kernel. The op generators reference them through g_##n, which the
 // preprocessor rescans into the real names after pasting.
 m1(mvm1)
+
+// (log x): natural log, climbing the tier lattice like everything else. A
+// positive real stays float (math1); a negative real or a complex scalar
+// widens to the complex principal value ~((log |z|) (arg z)) -- so euler's
+// identity holds in the direction floats can state it exactly: (log -1) =
+// (* i pi), since atan2(0,-1) is pi by IEEE fiat and i moves it with exact
+// 0/1 products. Arrays stay elementwise float (negative elements -> nan).
+g_vm(g_vm_log) {
+ word a = Sp[0];
+ g_flo_t m, th;
+ if (Cp(a)) m = g_log(cplx_mod(a)), th = g_atan2(cplx_im(a), cplx_re(a));
+ else if (ISNUM(a) && TOFLO(a) < 0) { g_flo_t ad = TOFLO(a);
+  m = g_log(-ad), th = g_atan2(0, ad); }
+ else return Ap(g_vm_math1, g, g_log);
+ Have(CPLX_REQ);
+ struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
+ Hp += CPLX_REQ;
+ cplx_put(v, m, th);
+ return Sp[0] = word(v), Ip++, Continue(); }
 
 op11(g_vm_flop, flop(Sp[0]) ? putfix(1) : nil)
 

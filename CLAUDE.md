@@ -125,7 +125,9 @@
 
 ; --- numeric functions --- abs and int are type-aware; the constants are e pi i; also gcd and
 ; modpow. the only irreducible transcendental nifs are pow sin cos log (float; bignums widen,
-; arrays map elementwise). everything else is *derived* from numerals and complex -- no nif:
+; arrays map elementwise; log alone climbs tiers -- a negative or complex argument gives the
+; complex principal value ~((log |z|) (arg z))). everything else is *derived* from numerals
+; and complex -- no nif:
 ;   power (k b) = b**k    sqrt ((/ 1 2) x)    exp (x e)    nth root ((/ 1 n) x)
 ;   tan (/ (sin x) (cos x))    atan (arg ~(1 x))    atan2 (arg ~(x y))
 (assert
@@ -134,13 +136,17 @@
  (2.0 = ((/ 1 2) 4)) (1024.0 = (pow 2 10)) (1 = (0 e)) (2.718281828459045 = e))
 ; --- a few identities --- tetration is just the tower with one base: (3 3) = 3^3, (3 3 3) =
 ; 3^(3^3), (2 2 2 2) = 2^2^2^2. i*i = -1 -- the algebraic heart of euler's e^(i*pi) = -1 -- and
-; e^(i*0) = 1. the textbook (= -1 (* i pi e)) does *not* hold: `=` is exact and e^(i*pi) carries
-; a ~1e-16 imaginary residue, the honest price of an irrational pi in floats. (i only assert
-; what's bit-exact on every target: the freestanding math lib is coarser than glibc, so nothing
+; e^(i*0) = 1. the textbook (-1 = i * pi e) does *not* hold forward: `=` is exact and e^(i*pi)
+; carries a ~1e-16 imaginary residue, the honest price of an irrational pi in floats. read it
+; backwards instead -- the principal log IS exact: atan2(0 -1) is pi by IEEE fiat and i moves
+; it with exact 0/1 products, so ((log -1) = i * pi) bit-exactly. (i only assert what's
+; bit-exact on every target: the freestanding math lib is coarser than glibc, so nothing else
 ; that pits a transcendental against a literal or a differently-computed transcendental.)
 (assert
  (27 = (3 3)) (7625597484987 = (3 3 3)) (16 = (2 2 2)) (65536 = (2 2 2 2))   ; tetration
  (-1 = i * i) (-1 = (2 i)) (1 = ((i * 0) e))                                 ; i^2 = -1; e^(i*0) = 1
+ ((log -1) = i * pi) ((log i) = i * pi / 2)                                  ; euler, in the exact direction
+ (comp (log -1)) (flop (log 2)) (comp (log ~(2 3)))                          ; log widens only when it must
  (0.0 = (sin 0) / (cos 0)) (flop (sin 0)))                                   ; tan 0 = 0
 
 ; --- complex --- a discrete scalar at the top numeric tier (comp). the `~` reader sigil:
