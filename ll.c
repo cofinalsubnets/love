@@ -659,6 +659,8 @@ static union u const throw_c[] = { {_g_vm_throw_c} };
 // installed (entered raw -- status in the tag bits, no args -- so it must check
 // before doing anything unsafe), else throw_c. Pre-dict throws (g_ini_0) always
 // take the default. g_mapget is a read: no allocation, safe at oom.
+// Convention: a SCARE throw (bit 0) puts its condition data on struct g before
+// throwing -- the trap function reads it there; oom is the bare scare (no data).
 struct g *gtrap2(struct g *g, enum g_status s) {
  struct g *c = g_core_of(g);
  union u *t = (union u*) throw_c;
@@ -752,13 +754,13 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
 struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  uintptr_t const len0 = 1 << 10;
  struct g *g = ma(NULL, 2 * len0 * sizeof(word));
- return g == NULL ? encode(g, g_status_oom) : g_ini_0(g, len0, ma, fr); }
+ return g == NULL ? encode(g, g_status_scare) : g_ini_0(g, len0, ma, fr); }
 
 static void *g_no_malloc(struct g*g, uintptr_t n) { return NULL; }
 static void g_no_free(struct g*g, void *p) { }
 struct g *g_ini_s(void *mem, uintptr_t nbytes) {
  uintptr_t len0 = nbytes / (2 * sizeof(word));
- return len0 <= Width(struct g) ? encode(mem, g_status_oom) :
+ return len0 <= Width(struct g) ? encode(mem, g_status_scare) :
    g_ini_0(mem, len0, g_no_malloc, g_no_free); }
 
 static void *g_libc_malloc(struct g*g, size_t n) { return malloc(n); }
@@ -910,7 +912,7 @@ g_noinline struct g *g_please(struct g *g, uintptr_t req0) {
  else return g->t0 = t2, g; // else right size -> all done
  return // allocate a new pool with target size
   !(h = g->malloc(g, len1 * 2 * sizeof(word))) ? // if malloc fails but pool is big enough
-   encode(g, req <= len0 ? g_status_ok : g_status_oom) : // we can still report success
+   encode(g, req <= len0 ? g_status_ok : g_status_scare) : // we can still report success
   (h = gcg(h, h, len1, g),
    g->free(g, g->pool),
    h->t0 = g_clock(),

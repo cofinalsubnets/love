@@ -71,7 +71,11 @@ struct g_tuple {
  g_vm_t *ap;
  uintptr_t type, rank, shape[]; };
 
-enum g_status { g_status_ok = 0, g_status_oom = 1, g_status_eof = 2, g_status_more = 3 };
+// Status rides the 2 pointer tag bits, read as two flags: bit 0 is the SCARE
+// bit (something is wrong -- the thrower puts the relevant data on struct g for
+// the trap function to read; the bare scare is oom, which has no room to say
+// more), bit 1 is the EOF bit (control flow; bit 0 under it means more/none).
+enum g_status { g_status_ok = 0, g_status_scare = 1, g_status_eof = 2, g_status_more = 3 };
 struct g {
  union u {
   g_vm_t *ap;

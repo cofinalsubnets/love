@@ -394,5 +394,5 @@ int main(int argc, char const **argv) {
   }
   switch (g_code_of(g)) {
    default: break;
-   case g_status_oom: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(g)->len); break; }
+   case g_status_scare: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(g)->len); break; }
   return g_fin(g); }
