@@ -35,7 +35,7 @@
 ; --- build & test --- `make test` is the default task and the commit gate: it builds
 ; out/host/ll and runs test/*.l through both `ll` and the self-hosted `ll0`. `make repl` for a
 ; prompt; `make test_all` adds the kernel and tool diffs; `make catav` before committing. one
-; file at a time: `out/host/ll test/CLAUDE.l`. tests concatenate into one global scope, so keep
+; file at a time: `out/host/ll CLAUDE.l`. tests concatenate into one global scope, so keep
 ; helpers local (give `:` a body). footgun: edit ll.h and you must `make clean` or ll0 hangs.
 
 ; --- three special forms --- `:` is letrec*/sequence, `?` is cond, `\` is lambda (and, with a

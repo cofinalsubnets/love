@@ -10,7 +10,8 @@ x = l
 m = $R/out/host/$n
 a ?= $(shell uname -m)
 
-t = $(sort $(wildcard $R/test/*.$x))
+# the corpus: 00-init's harness first, the root spec second, then the rest
+t = $R/test/00-init.$x $R/CLAUDE.$x $(filter-out %/00-init.$x,$(sort $(wildcard $R/test/*.$x)))
 
 g_h = $(wildcard $R/*.h)
 g_c = $R/ll.c $R/data.c
