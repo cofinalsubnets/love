@@ -1,10 +1,10 @@
 ; === the generic-op DISPATCH MATRICES, walked cell by cell ====================
-; ll's generic dyadic ops are NxN hot matrices indexed by the kind lattice
+; ll's generic dyadic ops are NxN ap matrices indexed by the kind lattice
 ; (ll.h enum q): KFix | KTuple(rank-0 box: float/complex/wide-int) | KBig |
 ; KArrZ KArrR KArrC KArrO (the array tower) | KString KSym | KTwo(pair) | KLam.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; ll.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / mod
-; < <= = >= >) are lane hots that refine the same lattice internally. This
+; < <= = >= >) are lane aps that refine the same lattice internally. This
 ; file pins EVERY cell with an assertion, so the coverage is auditable in one
 ; place -- and so a dispatch regression (e.g. a data-sentinel stride desync that
 ; mis-routes whole apply rows) fails loudly here. The coarse {NUM ARR LIST STR
@@ -179,7 +179,7 @@
  (= 10 ((* mx-map (\ x (- x 1))) 2)))         ; a map composes too: m(2-1) = m 1 = 10
 
 ; ============================================================================
-; the other dyadic generic ops (lane hots, not explicit tables): -, /, mod,
+; the other dyadic generic ops (lane aps, not explicit tables): -, /, mod,
 ; comparisons, =. Same lattice; these had no consolidated matrix test.
 ; ============================================================================
 (assert

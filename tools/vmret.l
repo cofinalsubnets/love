@@ -1,8 +1,8 @@
 #!/usr/bin/env ll
-; vmret.l -- flag g_vm_* VM-instruction hots that contain a `ret`.
+; vmret.l -- flag g_vm_* VM-instruction aps that contain a `ret`.
 ;
 ; Port of tools/vmret.py (see it for the full rationale). The ll VM is
-; threaded: every g_vm_* opcode hot should tail-jump to the next, never
+; threaded: every g_vm_* opcode ap should tail-jump to the next, never
 ; emit an ordinary `ret`. This tool disassembles an ELF (shelling out to
 ; objdump / llvm-objdump via the `run` nif) and reports every g_vm_* function
 ; whose body still contains a `ret` -- a first-pass heuristic, expect false

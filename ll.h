@@ -147,7 +147,7 @@ static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
  return q + (r ? 1 : 0); }
 
-g_vm_t g_vm_ret0, g_vm_cur, g_vm_port_io;
+g_vm_t g_vm_ret0, g_vm_cur, g_vm_port_io, g_vm_trap;
 
 // Frontend-provided vtable for ports backed by real OS file descriptors.
 // Used whenever fd >= 0. Synthetic ports (fd <= -1) route through the
@@ -269,7 +269,7 @@ g_vm(g_vm_gc, uintptr_t);
 enum q g_kind(word);
 // Apply dispatch matrix, indexed [static: the applied data kind, g_typ(Ip)][dynamic:
 // the argument kind, g_kind(Sp[0])]. The data sentinels (data.c) tail-jump through
-// it; the hots + the table itself live in ll.c. Row indexed by the full kind
+// it; the aps + the table itself live in ll.c. Row indexed by the full kind
 // (g_typ returns one of the five data kinds), so the first dimension is KN, not G_DATA_N.
 extern g_vm_t *g_apply_mx[KN][KN];
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply

@@ -35,7 +35,7 @@
 
   ; applying "" IS byte-indexing now (it is a real text object): every index is
   ; out of range, so ("" k) == 1 -- the same value the number 0 yields, but via
-  ; the string ap hot, not Church-numeral application.
+  ; the string ap ap, not Church-numeral application.
   (= 1 ("" 5))
   (= 1 (0 5))
 

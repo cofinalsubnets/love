@@ -29,7 +29,7 @@ static struct {
 // g holds the live modifier flags.
 static struct { uint8_t g, q[16], qh, qt; } kkb;
 // enqueue one input byte (drop if full). non-static: the COM1 serial
-// RX hot (k_uart, in x86_64/arch.c) feeds this same queue.
+// RX ap (k_uart, in x86_64/arch.c) feeds this same queue.
 void kq(uint8_t b) {
   uint8_t n = (kkb.qt + 1) & 15;
   if (n != kkb.qh) kkb.q[kkb.qt] = b, kkb.qt = n; }
@@ -411,10 +411,10 @@ static g_vm(color) {
  return Ip += 1, Continue(); }
 
 // (fault n) -- deliberately raise a CPU exception to exercise the
-// hot in arch.c. k_fault_trigger (in each arch's arch.c) maps n
+// ap in arch.c. k_fault_trigger (in each arch's arch.c) maps n
 // to a concrete fault: the cases mirror x86_64 vector numbers, and the
 // per-arch implementation picks the analogous fault for that target.
-// the hot reports and halts, so k_fault_trigger does not return;
+// the ap reports and halts, so k_fault_trigger does not return;
 // the post-call statements are reachable only if the fault did not fire.
 static g_vm(g_vm_fault) {
   k_fault_trigger(getfix(Sp[0]));

@@ -83,7 +83,7 @@ kilobytes of the whole back end.
 ### under the hood
 - one word per value: a fixnum is a tagged odd word, anything else is a heap
   object whose first word is its hot -- a live external reference, the wire out
-  of the heap to the code that runs it. the vm is tail-threaded -- hots jump,
+  of the heap to the ap that runs it. the vm is tail-threaded -- aps jump,
   never return -- over a two-space copying heap; `make vmret` proves the
   no-return claim by disassembling the binary.
 - every operation is generic, dispatched on a value's kind through NxN tables

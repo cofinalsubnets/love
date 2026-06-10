@@ -1,12 +1,12 @@
 ; iop/apx: unforgeable tag markers (uninterned) shared by wev -- which emits (iop op . args)
 ; and (apx nary head . args) nodes -- and ana, which dispatches on them. Top-level globals,
-; NOT ev-block locals, so wev's per-global hots and ana resolve them by name. That keeps
-; them out of ev's captured frame (and off every hot's import list: a hot closing over
+; NOT ev-block locals, so wev's per-global aps and ana resolve them by name. That keeps
+; them out of ev's captured frame (and off every ap's import list: a ap closing over
 ; a sibling that captured iop/apx would otherwise drag both in dead -- see .wevs).
 (: iop (nom 'iop)
    apx (nom 'apx))
 
-; wevs: value->hot memo for global fns, built once by scanning every global. A hot
+; wevs: value->ap memo for global fns, built once by scanning every global. A ap
 ; folds an application to a value when its args are constant (pure fns only), else emits an
 ; (iop op . args) node iap inlines (any nif of matching arity), else leaves it. A nif is found
 ; by thread shape (g_vm_ret0 terminator); fold eligibility from the curated `names`. It lives
@@ -69,7 +69,7 @@
   ; 1-ary apply (g_vm_ap) or tail-call (g_vm_tap) that kap already wrote into the
   ; continuation head. The same emit works for both: overwrite that op cell with
   ; the operand (seekl 1 keeps what follows -- the rest for ap, the frame-size for
-  ; tap) and prepend the fused op; only the hot differs. kap over-reserves a
+  ; tap) and prepend the fused op; only the ap differs. kap over-reserves a
   ; word, so the reclaimed cell becomes -1 slack (lam memsets it; GC-safe).
   ; operand-value specialization: a zero-operand opcode for the hottest arg indices
   ; / quote constants, emitted in the plain (non-ap/tap) path -- covers arg/quote
@@ -142,7 +142,7 @@
    ; `idp`-safe peeks (a non-fn value never matches g_vm_cur); mirrors app's old `fa`/`na`.
    (napof v args) (? (fixp v) 0
     (? (idp g_vm_cur (peekl 0 v)) (: ar (peekl 1 v) (&& (< 1 ar) (= (sat args) ar))) 0))
-   ; fold: un-shadowed global head -> hot (fold/iop/apx); else mark the call as an apx
+   ; fold: un-shadowed global head -> ap (fold/iop/apx); else mark the call as an apx
    ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h (cap x)
     (? (atomp (cbp x)) x                          ; (f) single element -> ana's (atomp b) handles

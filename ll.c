@@ -96,7 +96,7 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // that is what makes a bignum array add/multiply exactly instead of wrapping.
 enum g_tuple_type { g_Z, g_R, g_C, g_O, };
 // Elementwise dyadic opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
-// match the arith slow hots; the five compare codes (>= VOP_LT) produce a
+// match the arith slow aps; the five compare codes (>= VOP_LT) produce a
 // 0/1 bool array. VOP_EQ is `=` over arrays (whole-array eq is `(aall (= a b))`).
 // VOP_QUOT is `/` (true division: float when a element divides inexactly);
 // VOP_FQUOT is `//` (truncating integer division). Both stay in the arith group
@@ -138,7 +138,7 @@ g_vm_t g_vm_kcall,
  g_vm_asum, g_vm_aprod, g_vm_amax, g_vm_amin, g_vm_aall,
  g_vm_tupp, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf, g_vm_lamp, g_vm_handlep;
 // Carry extra operands, so (like g_vm_gc) they are declared apart from the
-// plain g_vm_t list, which fixes the 4-argument hot signature. g_vm_vbin
+// plain g_vm_t list, which fixes the 4-argument ap signature. g_vm_vbin
 // is the elementwise/broadcast dyadic engine (vop selects the op); g_vm_vmap1
 // applies a monadic math fn elementwise to an array (e.g. (sin arr)); g_vm_vmap2
 // is the dyadic analogue with broadcasting (e.g. (pow arr arr), (atan2 ...)).
@@ -290,7 +290,7 @@ static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
 // iff every term is, g_all_zero tests EXACTLY by scanning for a non-zero element
 // (a boxed 0.0/array, an empty tuple vacuously; a complex via both components; an
 // object array recursively per element). We scan rather than literally call abs()
-// because this is the hot `?`/g_vm_cond path: the scan short-circuits on the first
+// because this is the ap `?`/g_vm_cond path: the scan short-circuits on the first
 // truthy element and is exact, whereas sqrt(Σx²) is slower and overflows to inf on
 // a large array -- reporting a non-zero array as falsy. Same predicate, no float risk.
 bool g_all_zero(struct g_tuple*);
@@ -351,7 +351,7 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 #define FIX_MAX (INTPTR_MAX >> 1)
 // Emit an integer result R into `_res`: demote to a fixnum when it fits the
 // tag, else box it as a rank-0 g_Z scalar (bumping Hp). The caller must
-// already hold Have(BOX_REQ). Takes no &local, so a hot that uses it keeps
+// already hold Have(BOX_REQ). Takes no &local, so a ap that uses it keeps
 // its trailing tail call.
 #define EMIT_INT(R) do { intptr_t _r = (R); \
  if (_r >= FIX_MIN && _r <= FIX_MAX) _res = putfix(_r); \
@@ -391,7 +391,7 @@ double strtod(char const *restrict, char **restrict);
 // memcpy(&local, ...): both are strict-aliasing clean, but the memcpy form
 // takes the address of a stack local, which clang -Os treats as an escape
 // and then refuses to sibling-call the trailing Continue() out of any VM
-// hot that inlines this -- silently breaking threaded dispatch (a
+// ap that inlines this -- silently breaking threaded dispatch (a
 // `call`+`ret` where there must be a `jmp`; see tools/vmret.l). GCC proves
 // the local dead and TCOs either way; the union keeps the value in a
 // register so clang does too.
@@ -403,7 +403,7 @@ static g_inline void flo_put(void *p, g_flo_t v) {
  *(uintptr_t*) p = ((g_flo_pun){ .d = v }).u; }
 
 // Boxed complex access: re in shape[0], im in shape[1] (rank-0, so tuple_data ==
-// shape). Same union-pun discipline as flo_get/flo_put so an inlining VM hot
+// shape). Same union-pun discipline as flo_get/flo_put so an inlining VM ap
 // keeps its tail call. cplx_put writes both components of an already-shaped box.
 static g_inline g_flo_t cplx_re(word x) {
  return ((g_flo_pun){ .u = tuple(x)->shape[0] }).d; }
@@ -426,7 +426,7 @@ static g_inline void cplx_put(struct g_tuple *v, g_flo_t re, g_flo_t im) {
 // in shape[0]; unlike the float box it needs no bit reinterpretation --
 // it is already an integer, only its signedness differs from the
 // uintptr_t slot. Neither helper takes the address of a stack local, so a
-// VM hot that inlines them keeps its trailing tail call (see the
+// VM ap that inlines them keeps its trailing tail call (see the
 // flo_get/flo_put note above and tools/vmret.l).
 static g_inline intptr_t box_get(word x) { return (intptr_t) tuple(x)->shape[0]; }
 static g_inline void box_put(void *p, intptr_t v) { *(uintptr_t*) p = (uintptr_t) v; }
@@ -644,14 +644,14 @@ nifs(native_implemented_function);
 static g_vm(_g_vm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_g_vm_yield_c} };
 
-// Default trap continuation. A throw enters it with the thrown status encoded
-// into g (see gtrap2 below). The MORE bit is read control flow, not a sing:
-// the thrower left [resume port sentinel] on the stack (the fread protocol),
-// so deliver the port (more: incomplete) or the sentinel (eof) to the resume
-// thread and keep running. A sing re-encodes and yields to C -- the same
-// escape the old trap did. Define a global `trap` function to land throws in
-// ll instead.
-static g_vm(_g_vm_throw_c) {
+// g_vm_trap: the default trap ap, a first-class vm ap (declared in ll.h with
+// ret0/cur/port_io). A throw enters it with the thrown status encoded into g
+// (see gtrap2 below). The MORE bit is read control flow, not a sing: the
+// thrower left [resume port sentinel] on the stack (the fread protocol), so
+// deliver the port (more: incomplete) or the sentinel (eof) to the resume
+// thread and keep running. A sing re-encodes and yields to C. Define a global
+// `trap` function to land throws in ll instead.
+g_vm(g_vm_trap) {
  enum g_status s = g_code_of(g);
  g = g_core_of(g);
  if (s & g_status_more) {
@@ -660,7 +660,7 @@ static g_vm(_g_vm_throw_c) {
   Sp += 2;
   return Continue(); }
  return Pack(g), encode(g, s); }
-static union u const throw_c[] = { {_g_vm_throw_c} };
+static union u const throw_c[] = { {g_vm_trap} };
 
 // gtrap2/gtrap are defined after numap_drive (the trap call frame runs
 // through its 3-arg twin); declared in ll.h.
@@ -1017,7 +1017,7 @@ static Ana(ana_2, word, word);
 static cata c1_i, c1_ix, c1_var, c1_yield, c1_ret, c1, c1_recv;
 static g_inline Cata(pull) { return g_ok(g) ? ((cata*) pop1(g))(g, c) : g; }
 
-// generic instruction ana hots
+// generic instruction ana aps
 static g_inline struct g *c0_ix(struct g *g, struct env **c, g_vm_t *i, word x) {
  return incl(*c, 2), g_push(g, 3, c1_ix, i, x); }
 
@@ -1567,7 +1567,7 @@ static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
   z = i < 0 ? z->l : z->r; }
  return 0; }
 
-// Resolve a C->lisp hot from dict (where the prelude pins it -- dict is
+// Resolve a C->lisp ap from dict (where the prelude pins it -- dict is
 // GC-traced and egg-baked, so it survives into the runtime image), materializing
 // the key by name. Trap loud if undefined: a prelude-ordering contract
 // violation. Probe + mapget are reads, so no Have in the tail-jump callers.
@@ -1582,11 +1582,11 @@ static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
 // `+`/`*` of a function build a new function -- the README's Church arithmetic,
 // agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
 // composition. scomb is the 4-arg add lambda, bcomb the 3-arg compose; the C
-// hots reuse numap_drive to compute the partial (scomb g g) / (bcomb g g)
+// aps reuse numap_drive to compute the partial (scomb g g) / (bcomb g g)
 // -- itself the new function -- and leave it as the result, resuming at Ip+1.
 
 // Fixnum-as-function application. A fixnum operator n applied to x is dispatched
-// to the ll hot at dict['num-ap] as (num-ap n x): numeric x -> x**n, a
+// to the ll ap at dict['num-ap] as (num-ap n x): numeric x -> x**n, a
 // function x -> x iterated n times (Church numerals).
 //
 // The driver mirrors the pair driver: with the stack laid out [n, num-ap, x, ret]
@@ -1610,8 +1610,8 @@ union u const numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0}
 // a/b = the condition data -- for the more bit the port and the read sentinel,
 // for a sing nil nil (oom is bare; future sings define their shapes). The
 // frame runs through trap_drive (numap_drive's 3-arg twin) into a per-class
-// epilogue: the more bit delivers the hot's result to the thrower's resume
-// thread (the fread protocol -- the hot chooses what the reader's caller
+// epilogue: the more bit delivers the ap's result to the thrower's resume
+// thread (the fread protocol -- the ap chooses what the reader's caller
 // sees); a sing is observed, then takes the default escape to C.
 static g_vm(trap_ret_more) {   // [result resume port sentinel ..] -> resume sees result
  Ip = cell(Sp[1]);
@@ -1658,7 +1658,7 @@ struct g *gtrap2(struct g *g, enum g_status s) {
 }
 // Throw on an already-tagged g: re-throw its own status.
 struct g *gtrap(struct g *g) { return gtrap2(g_core_of(g), g_code_of(g)); }
-// numap/numtap are tail-called (Ap) from the fused arg/quote hots, which bump
+// numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: g_vm_gc
 // re-dispatches via Continue() -> cell(Ip)->ap, which would jump into that operand.
@@ -2041,7 +2041,7 @@ g_vm(g_vm_argtap) {
  return Continue(); }
 
 // operand-value-specialized arg/quote: 1-word ops with the index/constant baked
-// into the hot (no Ip[1] operand fetch). Emitted by the compiler's spa/spq for
+// into the ap (no Ip[1] operand fetch). Emitted by the compiler's spa/spq for
 // the hottest indices {0..3} / constants {0,1,2,3,-1,-2}.
 ARGN(g_vm_arg0, 0) ARGN(g_vm_arg1, 1) ARGN(g_vm_arg2, 2) ARGN(g_vm_arg3, 3)
 QUON(g_vm_quo0, 0) QUON(g_vm_quo1, 1) QUON(g_vm_quo2, 2) QUON(g_vm_quo3, 3)
@@ -3744,7 +3744,7 @@ g_vm(g_vm_cons) {
  EMIT_INT(TOINT(a) c_op TOINT(b));                                    \
  return *++Sp = _res, Ip++, Continue(); }
 #define mvm1(n) g_vm(g_vm_##n) { return Ap(g_vm_math1, g, g_##n); }
-#define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own hot)
+#define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own ap)
 
 
 AVM_SLOW(add, VOP_ADD, __builtin_add_overflow, ad + bd)
@@ -3895,11 +3895,11 @@ enum q g_kind(word x) {
  return k == KTuple && tuple(x)->rank ? (enum q) (KArrZ + tuple(x)->type) : k; }
 
 // ============================================================================
-// generic-op lane hots, then all three dispatch matrices adjacent, then the
+// generic-op lane aps, then all three dispatch matrices adjacent, then the
 // `+`/`*` dispatchers. The numeric slow lanes (addn/muln…) come from the AVM_*
 // macros above; the `+` text lanes (add_seq/add_string) and g_vm_0 just above; the
 // lambda combinators (g_vm_addl/g_vm_mull) near num-ap. Defined here: the `*`
-// repeat lane and the apply hots -- everything the matrices reference.
+// repeat lane and the apply aps -- everything the matrices reference.
 // ============================================================================
 
 // `*` REPEAT lane: the multiplicative analog of `+`'s concat. `*` is "repeated
@@ -3943,7 +3943,7 @@ static g_vm(g_vm_mul_rep) {
       : rank == 1 ? Ap(g_vm_nom, g)             // uninterned symbol
                   : Ap(g_vm_intern, g); }          // interned symbol
 
-// --- apply lane (the data-value `(g x)` hots; moved here from data.c) -----
+// --- apply lane (the data-value `(g x)` aps; moved here from data.c) -----
 // When a data value is applied, its sentinel (data.c, pinned in the gwen_data
 // section) tail-jumps through g_apply_mx[g_typ(Ip)][g_kind(Sp[0])] -- the static
 // kind of the applied value and the dynamic kind of the argument. Every data kind
@@ -3977,7 +3977,7 @@ static g_vm(data_sym_apply) {
 // g_vm_numap). Fixnums reach num-ap via the odd-tag check in g_vm_ap; the rest of the
 // tower (floats, boxes, complex, arrays -- all g_vm_tuple -- and bignums) are heap
 // pointers, so they arrive at their data sentinel. We lay the same [n, num-ap, x, ret]
-// frame and run numap_drive, handing the boxed operator n to the ll num-ap hot,
+// frame and run numap_drive, handing the boxed operator n to the ll num-ap ap,
 // which picks exponentiate / compose / self by operand+operator kind.
 static g_vm(data_num_apply) {
  Have(2);
@@ -4007,7 +4007,7 @@ static g_vm(data_pair_apply) {
 // order (ll.h) makes each lane a contiguous block: [KFix..KArrO] arithmetic (the
 // scalar tower fix/tuple/big then the parallel array tower arrZ/arrR/arrC/arrO), then
 // [KString..KTwo] sequence, then KMap, then KLam. Lanes:
-//   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane hot still
+//   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane ap still
 //          refines by g_tuple_type; the seven arithmetic kinds route identically today.
 //   add_seq = a list anywhere (other operand a scalar element / spine); pair wins
 //   add_string = strings & symbols name-compatibly (+ a number as one byte; demotes
@@ -4095,7 +4095,7 @@ g_vm(g_vm_quot) {
 
 // Bitwise and/or/xor: fast both-fixnum tag trick (two odds stay odd under &
 // and |; ^ clears the tag bit so we re-set it). A box operand routes to the
-// slow hot, which works at full width and demotes-or-boxes; these are
+// slow ap, which works at full width and demotes-or-boxes; these are
 // integer-only, so a float (or any non-integer) operand yields nil.
 BIT_SLOW(band, &) BIT_SLOW(bor, |) BIT_SLOW(bxor, ^)
 g_vm(g_vm_band) { word a = Sp[0], b = Sp[1];
@@ -4110,7 +4110,7 @@ g_vm(g_vm_bxor) { word a = Sp[0], b = Sp[1];
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `nilp`.)
 
 // >> : arithmetic right shift. A fixnum value only shrinks, so it keeps a
-// non-allocating fast path; a boxed value routes to the slow hot.
+// non-allocating fast path; a boxed value routes to the slow ap.
 static g_vm(g_vm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
  if (!(fixp(a) || boxp(a)) || !fixp(b)) return *++Sp = nil, Ip++, Continue();
  Have(BOX_REQ);
@@ -4229,7 +4229,7 @@ static g_inline uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }
 
 // All the uint64_t scratch (s[4]) lives in these g_noinline helpers that move it
-// via memcpy: taking &s in a VM hot would defeat the Continue() sibcall (see
+// via memcpy: taking &s in a VM ap would defeat the Continue() sibcall (see
 // the flo_get note in i.h), and memcpy is alignment-safe (a 32-bit port's
 // tuple_data is only 4-byte aligned, so a raw uint64_t* deref could fault).
 
@@ -4809,7 +4809,7 @@ struct g *g_big_quot_true(struct g *g) {
 // product resumes exactly where it paused. Ip parks on bmul_loop while looping;
 // on completion it jumps back to ret_ip (the instruction after `*`).
 // Operands a,b are kept as heap bignums so the loop reads stable limb pointers
-// directly: a tail-jumping hot must NOT take the address of a stack local
+// directly: a tail-jumping ap must NOT take the address of a stack local
 // (it blocks the sibcall), which rules out load_int_mag's scratch array. Setup
 // (which may use scratch) is hoisted into a plain function, g_bmul_setup.
 #define BMUL_CHUNK (1 << 14)

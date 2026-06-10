@@ -292,7 +292,7 @@ static union u const
 // the universal setup (argv pins + the host nif defs above).
 #ifdef GL_BOOTSTRAP
 // ll0: the CLI driver is the sed-wrapped raw text (it can't lcat its own arg
-// hot). Self-test: the whole test corpus, baked in (sed-wrapped), run
+// ap). Self-test: the whole test corpus, baked in (sed-wrapped), run
 // twice -- once compiled by the C bootstrap compiler (c0), once by the
 // self-hosted ev installed from ev.l -- so one ll0 invocation exercises both
 // compilers (and -Dg_tco=0 makes it the trampoline path). s2cldef installs

@@ -3,11 +3,11 @@
 ; wrong) and more (2: read control flow); more alone = incomplete, eof =
 ; more|sing. a/b = the condition data: for the more bit the port and the
 ; read sentinel. the result is delivered per the bits: more -> to the
-; reader's resume (the fread protocol: the hot chooses what the reader's
+; reader's resume (the fread protocol: the ap chooses what the reader's
 ; caller sees); a bare sing is observed, then the default escape proceeds
 ; (oom is the only C sing today and is terminal, so that lane is exercised
 ; manually, not here). entries are live immediately (datum-at-a-time read
-; loop); the hot is UNINSTALLED at the end of this file.
+; loop); the ap is UNINSTALLED at the end of this file.
 (: trap-log (hashn 0))
 
 ; status readers
@@ -15,7 +15,7 @@
         (more? 2) !(more? 3) !(more? 1)
         (eof? 3) !(eof? 2) !(eof? 1))
 
-; a counting hot that reproduces the default protocol
+; a counting ap that reproduces the default protocol
 (: (trap s p e) (: _ (pin trap-log s (+ 1 (peek trap-log s 0)))
                    (? (more? s) p (eof? s) e 0)))
 (assert (= 'eof (fread (sip 0) 'eof)))             ; eof through the lisp trap

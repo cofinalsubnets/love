@@ -220,7 +220,7 @@
     r (kill p)
     (&& (= 1 r) (= 0 (wait p))))
 
- ; sleep tasks coexist with non-sleeping ones: a worker that yields hot
+ ; sleep tasks coexist with non-sleeping ones: a worker that yields ap
  ; gets time while another sleeps.
  (: t (hashn 0)
     _ (pin t 'n 0)
