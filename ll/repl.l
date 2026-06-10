@@ -3,10 +3,12 @@
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist
 ; becomes a synthetic input port via (strin cl), and (fread port e) walks
-; it one datum at a time. fread returns the datum on success, the
-; sentinel `e` on clean EOF, and the port itself on g_status_more (input
+; it one datum at a time. fread returns the datum on success; its eof-bit
+; conditions route through the trap continuation, whose default delivers
+; the sentinel `e` on clean EOF and the port itself on eof-more (input
 ; ends inside an unfinished form). that lets parseall distinguish "all
-; done" from "keep editing".
+; done" from "keep editing" -- parseall is the lisp-visible face of the
+; eof bit, and a global `trap` function takes over that dispatch.
 ;
 ; the editor buffer is a four-zipper threaded positionally through
 ; the editor functions: u (lines above the cursor, reversed), l (chars
@@ -269,6 +271,12 @@
    ; the worker is killed; any other byte is silently dropped (matches most
    ; shells). prints the result (or ^C) before returning -1; caller adds
    ; the trailing newline.
+   ;
+   ; this poll is the repl's control-flow seam under the trap model: a
+   ; worker that scares is terminated by the default trap and done? flips,
+   ; so the repl survives evaluation errors by construction. a global
+   ; `trap` function gets control at the scare (condition data on struct g)
+   ; BEFORE the task dies; either way done?/key? is where the repl resumes.
    (do_eval v)
      (: pid (spawn ev v)
         (poll _)

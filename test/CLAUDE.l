@@ -251,8 +251,10 @@
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prelude wraps getc/read and
 ; putc/puts/putn/putx, with per-port fgetc/fputc/.../fread plus open/close/strin/strout/slurp.
-; fread reads one datum per call (a sentinel at EOF, the port back when incomplete). `dot` (the
-; `.` sigil) prints x to `out` -- raw bytes for a string, else the inspect form -- and returns
+; fread reads one datum per call; its end conditions route through the trap continuation via
+; the status eof bit, and the default trap delivers a sentinel at EOF, the port back when
+; incomplete (a global `trap` function takes over that dispatch). `dot` (the `.` operator)
+; prints x to `out` -- raw bytes for a string, else the inspect form -- and returns
 ; x, so .x taps a value mid-expression.
 (assert
  (strp (inspect out)) (= "hi" (slurp (strin '(104 105)))) (: o (strout 0) _ (fputx o 42) (= "42" (outstr o)))

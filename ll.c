@@ -646,12 +646,20 @@ static g_vm(_g_vm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_g_vm_yield_c} };
 
 // Default trap continuation. A throw enters it with the thrown status encoded
-// into g (see gtrap2 below); it re-encodes that status and yields to C -- the
-// same escape the old trap did. Define a global `trap` function to land throws
-// in ll instead.
+// into g (see gtrap2 below). The EOF bit is control flow, not a scare: the
+// thrower left [resume port sentinel] on the stack (the fread protocol), so
+// deliver the port (more: bit 0 set under eof) or the sentinel (eof-none) to
+// the resume thread and keep running. A scare re-encodes and yields to C --
+// the same escape the old trap did. Define a global `trap` function to land
+// throws in ll instead.
 static g_vm(_g_vm_throw_c) {
  enum g_status s = g_code_of(g);
  g = g_core_of(g);
+ if (s & g_status_eof) {
+  Ip = cell(Sp[0]);                                   // [resume port sentinel]
+  Sp[2] = s & g_status_scare ? Sp[1] : Sp[2];         // more -> port, none -> sentinel
+  Sp += 2;
+  return Continue(); }
  return Pack(g), encode(g, s); }
 static union u const throw_c[] = { {_g_vm_throw_c} };
 
@@ -2792,9 +2800,14 @@ g_vm(g_vm_fread) {
   struct g *c = g_core_of(g); // reset stack on parse fail
   c->sp = (word*) c + c->len - depth;
   switch (g_code_of(g)) {
-   default: return gtrap(g);
-   case g_status_more: c->sp[1] = c->sp[0];
-   case g_status_eof: g = c, g->sp++; } }
+   default: return gtrap(g);                          // scare: condition data per thrower
+   case g_status_more: case g_status_eof:
+    // The eof bit routes control through the trap continuation: push fread's
+    // resume thread under [port sentinel] and throw -- the trap function (or
+    // throw_c's default) decides flow from the bits. Headroom for the push is
+    // the parse ctx frame, which exists wherever more/eof can arise.
+    *--c->sp = word(c->ip);
+    return gtrap2(c, g_code_of(g)); } }
  return Unpack(g), Continue(); }
 
 // (string x): a charlist -> the string of those bytes; a named symbol -> its
