@@ -227,7 +227,12 @@
 ; array, not just i64/f64); `map` builds a map from alternating key/value args.
 (: (ltuple l) (arrl (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'tuple (\ a (list 'ltuple (X 'list a))))
-(: (hashtx a) (? (twop a) (list 'pin (hashtx (BB a)) (A a) (AB a)) '(hashn 0)))
+; (hasht) = empty; (hasht x) boxes a scalar -- a fresh mutable hash pinning x
+; to the () key, so #5 = #(() 5); pairs pin as usual, and an odd trailing
+; operand lands in the () box slot.
+(: (hashtx a) (? (nilp a) '(hashn 0)
+                 (nilp (B a)) (list 'pin (hashtx 0) '() (A a))
+                 (list 'pin (hashtx (BB a)) (A a) (AB a))))
 (:: 'hasht (\ a (hashtx a)))
 
 ; (gsym x) quotes its operand, giving (nom 'x) -- a fresh uninterned symbol

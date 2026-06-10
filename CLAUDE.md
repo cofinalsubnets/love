@@ -201,12 +201,15 @@
  (= 'asdf (intern "asdf")) !(= (nom 0) (nom 0)) (= "asdf" (string 'asdf))
  (= "\"a\\nb\"" (inspect "a\nb")) (= "$x" (inspect (nom "x"))))
 
-; --- hashes --- #(k v ..) or (hasht ..) build; #() or (hashn 0) is empty; mutable. the accessors are
+; --- hashes --- #(k v ..) or (hasht ..) build; #() or (hashn 0) is empty -- ONLY #(); mutable.
+; # on a scalar BOXES it: #x = #(() x), a fresh mutable hash pinning x to the () key (a 1-entry
+; box, truthy -- the dead () = 0 identity used to conflate #0 with empty). the accessors are
 ; collection-first: (peek coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
 ; and-returns. peek and pull share the default-if-absent fallback; only pull mutates a key away.
-; also hashd, hashk (the keys), # is the key count. (t k) == (peek t k 0) -- a map is a lookup
+; also hashd, hashk (the keys), $ is the key count. (t k) == (peek t k 0) -- a map is a lookup
 ; function. (hash k) hashes a key.
 (assert
+ (: b #0 (&& (mapp b) (= 1 $b) (= 0 (peek b () 9)) (: _ (pin b () 7) (= 7 (b ())))))
  (: t #(1 10 2 20) (&& (= 20 (peek t 2 0)) (= 20 (t 2)) (= 99 (peek t 9 99))))
  (= 50 (peek (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (hashd 0 t 1) (= 1 $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (= 20 v) (= 1 $t) (= 99 (peek t 2 99)) (= -1 (pull t 9 -1))))  ; pull: value or default, removes the key

@@ -16,7 +16,7 @@
  (fz-pure v) (\ st (X v st))                          ; ignores the stream
  (fz-map f g) (\ st (: r (g st) (X (f (A r)) (B r))))
  (fz-bind g k) (\ st (: r (g st) ((k (A r)) (B r)))) ; feed value into next gen
- ; --- primitive draws (every range below keeps hi > lo so randint never #0) ---
+ ; --- primitive draws (every range below keeps hi > lo so randint never mods by 0) ---
  (fz-nat n) (\ st (randint st n))                        ; [0, n)
  (fz-int lo hi) (fz-map (+ lo) (fz-nat (- hi lo)))       ; [lo, hi)
  (fz-elt l) (\ st (: r (randint st (sat l)) (X (A (drop (A r) l)) (B r))))

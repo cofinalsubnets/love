@@ -2503,7 +2503,7 @@ static g_inline struct g*gzput_map(struct g*g, word x, uintptr_t off) {
    ini_two(kv, s[2 * i], s[2 * i + 1]);                 // (k . v)
    ini_two(p, (word) kv, list), list = (word) p++; }    // cons onto the snapshot
  fs0(g) = list;
- if (!twop(fs0(g))) g = gzputcs(g, "#0");              // empty map prints #0 (reads back via #0/#())
+ if (!twop(fs0(g))) g = gzputcs(g, "#()");             // empty map prints #() (#0 is the 0-box now)
  else {
   if (g_ok(g = gzprintf(g, "#("))) for (bool sp = false;;) {
    if (sp) g = gzputc(g, ' ');
@@ -3105,13 +3105,14 @@ static struct g *gz_parse(struct g *g, bool multi) {
     else __builtin_trap();                             // unreachable under an N-ary wrap
     g->sp++; }                                         // pop newcons -> [d ctx]
    if (symp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    if (hashsym(A(g->sp[1])) && (nilp(g->sp[0]) || g->sp[0] == EMPTY_SYM)) { // #() -> (hashn 0)
-     g->sp[0] = nil;                                   // d -> (0 . nil) = (0)
+    if (hashsym(A(g->sp[1])) && g->sp[0] == EMPTY_SYM) { // #() ONLY -> (hashn 0): the empty hash
+     g->sp[0] = nil;                                   // (#0 is NOT empty: it boxes 0 -- see hashtx)
      g = gxr(g_push(g, 1, nil));
      g = gxl(intern(g_strof(g, "hashn")));              // (hashn . (0)) = (hashn 0)
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); }            // pop wrap
     else if (splicesym(A(g->sp[1])) &&
-             (twop(g->sp[0]) || nilp(g->sp[0]) || g->sp[0] == EMPTY_SYM)) {
+             (twop(g->sp[0]) || g->sp[0] == EMPTY_SYM ||
+              (nilp(g->sp[0]) && !hashsym(A(g->sp[1]))))) {  // @0 splices empty; #0 wraps (a box)
      if (g->sp[0] == EMPTY_SYM) g->sp[0] = nil;        // @() -> (tuple), ~() -> (com)
      g = gxl(g_push(g, 1, A(g->sp[1])));               // #(k v …)/@(e …)/@() : splice -> (sym . d)
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); }

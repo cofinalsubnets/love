@@ -10,7 +10,7 @@
  (= 0 (peek t 9 0))                              ; missing key -> default
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (hashk t)))      ; three entries
  ; empty + single-entry printer forms are deterministic (no bucket-order dependence)
- (= "#0" (inspect (hashn 0)))
+ (= "#()" (inspect (hashn 0)))
  (= "#(1 100)" (inspect (hasht 1 100)))
  (= "#(1 \"hi\")" (inspect (hasht 1 "hi")))
  (strp (inspect t))                             ; multi-entry: just exercise the path
@@ -20,17 +20,32 @@
  (= (hash '(1 2)) (hash '(1 2))))
 
 ; #(…) reader macro: splices a list operand into (hasht …), wraps an atom as (hasht x),
-; and #() builds a fresh empty hash. Hashes print as #(…), round-tripping via %.
+; and #() builds a fresh empty hash. Hashes print as #(…), round-tripping via #.
 (: ht #(1 100 2 200 3 300))
 (assert
  (mapp ht)
  (= 100 (peek ht 1 0))
  (= 300 (peek ht 3 0))
  (mapp #())                                     ; #() -> empty hash
+ !#()                                           ; ... and ONLY #() is empty
  (= 50 (peek (pin #() 5 50) 5 0))                ; the empty hash is mutable
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (hashk #(1 10 2 20 3 30))))   ; splice builds all entries
- (= "#0" (inspect #()))
+ (= "#()" (inspect #()))
  (= "#(1 \"hi\")" (inspect #(1 "hi"))))
+
+; # on a SCALAR boxes it: #x = #(() x), a fresh mutable hash pinning x to the
+; () key -- so #0 is a 1-entry box, NOT the empty hash (the dead () = 0
+; identity used to conflate them).
+(: bx #0)
+(assert
+ (mapp #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
+ (= 0 (peek bx () 9))                           ; the boxed value sits at ()
+ (= 9 (: _ (pin bx () 9) (peek bx () 0)))       ; ... and is mutable in place
+ (= 5 (peek #5 () 0)) (= "s" (peek #"s" () 0))  ; any scalar boxes
+ (= 'a (peek (hasht 'a) () 0))                  ; (NB #'a SPLICES -- a quote form is a pair)
+ (= "#(() 5)" (inspect #5))                     ; a box prints as #(() v), reads back
+ (= 7 (peek #(1 2 7) () 0))                     ; an odd trailing operand lands in the box slot
+ (= 2 (peek #(1 2 7) 1 0)))
 
 ; # reader macro wraps its operand in (pin …): #x -> (pin x)
 (assert
