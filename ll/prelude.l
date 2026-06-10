@@ -50,7 +50,7 @@
    read (fread in))
 ; fixnum-as-function application, pinned on dict for the VM's apply path: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
-; function x composes n times. n<1 -> 1 (itself the identity numeral: (1 x) == x
+; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
 ; for every x, see below); n=1 -> x directly. numfn assembles the n-fold thread
 ; directly via lam/pinl (no `ev`, so applying a fixnum never re-enters the compiler):
 ; n quote-f's then n ap's -- apl2r's [head..][arg][ap..] shape -- via the interned
@@ -84,12 +84,13 @@
                  (pow x n))
    ; Church-numeral application generalized across the whole tower. n is the
    ; operator (the numeral), x the operand. numeric operand -> x ** n. non-numeric
-   ; operand (a function) -> compose floor(|n|) times: (int (abs n)) reduces ANY
-   ; numeral to a non-negative integer count -- a float floors, a complex takes its
-   ; modulus, a vector its L2 norm (all via abs, then int). k<1 -> 1 (the zero
-   ; numeral, == const 1); k=1 -> identity.
+   ; operand (a function) -> compose ($ n) times: saturation reduces ANY numeral to
+   ; a fixnum nat, true to the !!$ truth bits -- a non-positive numeral acts as the
+   ; zero numeral ((-3 f) = (0 f) = 1, the literal lambda construction), a float
+   ; ceils, a complex/array its ceil'd norm when it sorts positive. k=0 -> 1
+   ; (const 1); k=1 -> x directly -- the snappy basics.
    (num-ap n x) (? (nump x) (powg x n)
-                   (: k (int (abs n)) (? (< k 1) 1 (= k 1) x (numfn k x))))
+                   (: k (sat n) (? (< k 1) 1 (= k 1) x (numfn k x))))
    _ (pin dict 'num-ap num-ap))
 ; thread (function) combinators for + and *, installed like num-ap. a thread operand
 ; takes precedence over every other type, so +/* of a function build a function. these

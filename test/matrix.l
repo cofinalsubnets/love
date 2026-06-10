@@ -63,8 +63,8 @@
  ;     or operator-fold over a function). Full tower coverage in functions.l. ---
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 = 9
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8
- (= 12 ((2.5 (+ 1)) 10))                      ; float operator on a fn: floor|2.5|=2 comps
- (= 15 ((~(3 4) (+ 1)) 10))                  ; complex operator on a fn: floor|5|=5 comps
+ (= 13 ((2.5 (+ 1)) 10))                      ; float operator on a fn: ($ 2.5)=3 comps
+ (= 15 ((~(3 4) (+ 1)) 10))                  ; complex operator on a fn: ($ ~(3 4))=5 comps
  (aall (= @(4 9 16) (2 @(2 3 4))))            ; array operand: elementwise ** broadcast
 
  ; --- row KBig: a bignum is also a Church numeral, but its magnitude is always

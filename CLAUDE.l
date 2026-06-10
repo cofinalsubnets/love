@@ -29,8 +29,9 @@
 (assert
  (1 = (0 5)) (5 = (1 5))                         ; 0 is const-1, 1 is the identity
  (8 = (3 2)) (262144 = (2 3 4))                  ; (n x) = x**n; the tower (2 3 4) = 4**(3**2)
- (12 = (3 (+ 1) 9)) ('(2 3 4) = (map (+ 1) '(1 2 3)))  ; (n f) composes f n times; currying *is* partial application
- (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9)))             ; (-1 x) = 1/x; (1/2 x) = sqrt x
+ (12 = (3 (+ 1) 9)) ('(2 3 4) = (map (+ 1) '(1 2 3)))  ; (n f) composes f ($ n) times; currying *is* partial application
+ (10 = (-3 (+ 1) 10)) (13 = (2.5 (+ 1) 10))      ; the count SATURATES, true to !!$: (-3 f) = (0 f) = 1; a float ceils
+ (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9)))             ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
 
 ; --- build & test --- `make test` is the default task and the commit gate: it builds
 ; out/host/ll and runs test/*.l through both `ll` and the self-hosted `ll0`. `make repl` for a
@@ -293,7 +294,7 @@
 
 ; --- bootstrapping --- the C core is minimal; the key semantics are ll closures installed
 ; from the prelude and shared by both compilers:
-;   numap -- fixnum/number application (x**n, or compose), built as an n-fold thread.
+;   numap -- fixnum/number application (x**n, or compose ($ n) times), an n-fold thread.
 ;   scomb/bcomb -- `+` and `*` of functions are church add and compose, so numerals agree.
 ;   boxfix -- the letrec* "capture by location" rewrite; now a wev source pass run after
 ;     macroexpansion, one source of truth shared with the C bootstrap compiler.

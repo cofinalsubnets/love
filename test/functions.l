@@ -23,18 +23,22 @@
 ; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply
 ; routes float/box/complex/array/bignum operators through num-ap, like the odd-tag
 ; fixnum path). 0 applied to anything is 1 -- it *is* const-1, the zero numeral.
+; the compose count is ($ n) -- SATURATING, true to the !!$ truth bits: a non-positive
+; numeral acts as the zero numeral, a float ceils, a complex/array its ceil'd norm.
 (assert
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8.0, = bridges to 8
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 via real pow = 9.0
- (= 12 ((2.5 (+ 1)) 10))                      ; float operator on a fn: floor(|2.5|)=2 compositions
- (= 12 (((- 0 2.5) (+ 1)) 10))                ; |n| first: floor(abs(-2.5))=2 too
+ (= 13 ((2.5 (+ 1)) 10))                      ; float operator on a fn: ($ 2.5)=3 compositions
+ (= 10 (((- 0 2.5) (+ 1)) 10))                ; saturation first: ($ -2.5)=0 -> the zero numeral
+ (= 10 ((-3 (+ 1)) 10)) (= 1 (-3 (+ 1)))      ; (-3 f) = (0 f) = 1 -- negatives have no church content
  (= 10 ((0 (+ 1)) 10))                        ; (0 f) = 1 = identity numeral -> 10 unchanged
  (= 1 (0 'anything))                          ; 0 is const-1: (0 x) = 1 for every x
  (= 1 ((bufnew 4) 'anything))                 ; opaque handles (buf/port) behave as 0 too
  (aall (= (2 (arrl i64 '(3) '(2 3 4))) (arrl i64 '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
  (aall (= ((arrl i64 '(3) '(2 3 4)) 5) (arrl f64 '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 pow)
- (= 13 (((arrl i64 '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose floor(L2 norm |[2 3]|=sqrt13)=3
- (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose floor(|3+4i|=5)=5
+ (= 14 (((arrl i64 '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = ceil(sqrt 13) = 4
+ (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ ~(3 4)) = |3+4i| = 5
+ (= 10 ((~(-3 4) (+ 1)) 10))              ; ... but a complex sorting negative saturates to 0
  (comp (~(0 1) 5))                       ; complex operator on a number -> complex pow (5^i), no longer fenced
  (< (abs (- 1 (abs (~(0 1) 5)))) 0.0001)  ; |5^i| = 1 exactly (w^z = exp(z Log w))
  (< (abs (im (~(0 1) ~(0 1)))) 0.0001)) ; i^i = e^(-pi/2) is real
