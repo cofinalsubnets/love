@@ -42,7 +42,7 @@
             digest lidx assq memq last rev cat
             fixp symp twop mapp lamp strp nilp flop comp atomp
             ssub scat string
-            re im conj arg flo com
+            re im conj arg flo plex
             sin cos log pow))
    pureset (foldl (\ t s (: v (dict s) (? v (pin t v 1) t))) (hashn 0) names)
    (add t s) (: v (dict s)

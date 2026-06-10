@@ -26,8 +26,8 @@
  (= "hi\n" (rt "hi\n"))
  ; ,-prefixed constructor forms reconstruct an equal value
  (aall (= (tuple 1 2 3) (rt (tuple 1 2 3))))
- (aall (= (arrl z '(2 2) '(1 2 3 4)) (rt (arrl z '(2 2) '(1 2 3 4)))))
- (aall (= (arrl r '(2) '(1.5 2.5)) (rt (arrl r '(2) '(1.5 2.5)))))
+ (aall (= (arr z '(2 2) '(1 2 3 4)) (rt (arr z '(2 2) '(1 2 3 4)))))
+ (aall (= (arr r '(2) '(1.5 2.5)) (rt (arr r '(2) '(1.5 2.5)))))
  (= ~(2 -3) (rt ~(2 -3)))
  ; complex arrays round-trip: rank-1 via @((C…)…)->tuple, rank>=2 via (array…) (ca-* from complex.l)
  (aall (= ca-v (rt ca-v)))

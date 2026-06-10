@@ -1,7 +1,7 @@
 ; step 7: complex arithmetic.
 ; - a complex is a rank-0 scalar (comp), the widest numeric tier: complex >
 ;   float > int/bignum. ~(re im) builds one (the `~` reader macro splices into
-;   (com re im)); `i` = ~(0 1) is the unit.
+;   (plex re im)); `i` = ~(0 1) is the unit.
 ; - + - * / promote a real operand to (r, 0); % is undefined (-> nil).
 ; - sticky: never demotes to a real, even when im is 0 (eql-distinct keys).
 ; - ordered: < <= > >= sort a complex lexicographically by (re, im); a real r is
@@ -14,7 +14,7 @@
    B100 (100 2))
 
 (assert
- ; --- printer: ~(re im) form, reads back by re-evaluation (splices into com) ---
+ ; --- printer: ~(re im) form, reads back by re-evaluation (splices into plex) ---
  (= "~(0.0 1.0)" (show i))
  (= "~(2.0 3.0)" (show ~(2 3)))
  (= "~(2.0 -3.0)" (show ~(2 -3)))
@@ -48,7 +48,7 @@
  (= 5 (conj 5))                            ; conj of a real is itself
 
  ; --- monadic ~ (clift): bare ~x (the `~` sigil not before `(`) lifts a real to
- ;     (r 0) and conjugates a complex; the 2-operand ~(a b) still splices into com ---
+ ;     (r 0) and conjugates a complex; the 2-operand ~(a b) still splices into plex ---
  (= ~(5 0) ~5)   (comp ~5)                 ; ~r lifts a real to (r, 0) -- a true complex
  (= ~(0 0) ~0)   (= ~(-3.5 0) ~-3.5)       ; ~0 -> (0, 0); lift works on a negative real
  (= (conj ~(2 3)) ~~(2 3))                 ; ~z conjugates -- ~ generalizes conj
@@ -77,9 +77,9 @@
  (< ~(2 1) ~(2 5))   !(< ~(2 5) ~(2 1))
 
  ; --- % is undefined on complex; sin stays real-domain (-> nil); sqrt is ((/ 1 2) x)
- ;     and now works on a complex (via pow); com rejects a complex part ---
+ ;     and now works on a complex (via pow); plex rejects a complex part ---
  (nilp (mod i 2))
- (nilp (sin i))   (close 0.7071067811865476 (re ((/ 1 2) i)))   (nilp (com 1 i))
+ (nilp (sin i))   (close 0.7071067811865476 (re ((/ 1 2) i)))   (nilp (plex 1 i))
  ; pow IS defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
  (close -1 (re (pow i 2)))   (close 0 (im (pow i 2)))
  (close 0.20787957635076193 (re (pow i i)))   (close 0 (im (pow i i)))
@@ -105,12 +105,12 @@
 
 ; --- step 7b: full-rank complex arrays (packed (re,im) g_C tuples) -----------
 ; a complex value packs two floats per element into a `c` array (type code c = 2,
-; the tier between r and o). arr/arrl/array/@ all build them (a-type infers c);
+; the tier between r and o). arr/arr/array/@ all build them (a-type infers c);
 ; `get` returns a ~(re im) box; + - * / broadcast in the complex domain; `=` ->
 ; a 0/1 mask, the orderings -> nil; asum/aprod fold complex; aall/aany lift the
 ; 0+0i-is-falsy rule. (body-less `:` -> ca-* leak to global, reused in roundtrip.l)
-(: ca-z (arr c '(3))                             ; zero-filled: three 0+0i
-   ca-v (arrl c '(2) (L ~(1 2) ~(3 4)))        ; explicit packed pair
+(: ca-z (arr c '(3) 0)                             ; zero-filled: three 0+0i
+   ca-v (arr c '(2) (L ~(1 2) ~(3 4)))        ; explicit packed pair
    ca-a (array 3 ~(1 1) ~(2 2) ~(3 3))        ; `array` infers c from its args
    ca-r @(~(1 0) ~(0 1))                       ; `@` reader infers c too
    ca-m (array '(2 2) ~(1 0) ~(0 1) ~(2 0) ~(0 2)))  ; rank-2 complex
@@ -129,8 +129,8 @@
 
  ; --- elementwise broadcast: array (op) array ---
  (= ~(2 4) (peek (+ ca-v ca-v) 0 0))             ; (1+2i)+(1+2i) elementwise
- (aall (= ca-v (+ ca-v (arr c '(2)))))           ; + the zero array is identity
- (= ~(-5 10) (peek (* (arrl c '(2) (L ~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
+ (aall (= ca-v (+ ca-v (arr c '(2) 0))))           ; + the zero array is identity
+ (= ~(-5 10) (peek (* (arr c '(2) (L ~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
  (= ~(1 2) (peek (/ (* ca-v ca-v) ca-v) 0 0))    ; (z*z)/z = z
 
  ; --- scalar broadcast: complex scalar (op) array, both orders ---
@@ -145,7 +145,7 @@
 
  ; --- `=` over complex arrays -> a 0/1 mask; orderings/% -> nil ---
  (= 1 (peek (= ca-v ca-v) 0 0))
- (= 0 (peek (= ca-v (arrl c '(2) (L ~(9 9) ~(3 4)))) 0 0))
+ (= 0 (peek (= ca-v (arr c '(2) (L ~(9 9) ~(3 4)))) 0 0))
  (aall (= ca-v ca-v))
  (nilp (< ca-v ca-v))   (nilp (> ca-v ca-v))   (nilp (mod ca-v ca-v))
 
@@ -157,12 +157,12 @@
 
  ; --- aall/aany lift the 0+0i-is-falsy rule ---
  (aall ca-v)
- (nilp (aall (arrl c '(2) (L ~(0 0) ~(1 1)))))   ; a 0+0i element fails aall
- (sat (arrl c '(2) (L ~(0 0) ~(1 1))))          ; one nonzero satisfies aany
+ (nilp (aall (arr c '(2) (L ~(0 0) ~(1 1)))))   ; a 0+0i element fails aall
+ (sat (arr c '(2) (L ~(0 0) ~(1 1))))          ; one nonzero satisfies aany
  (nilp (sat ca-z))
 
  ; --- abs of a complex array = the flat L2 norm over every (re, im) ---
- (= 5.0 (abs (arrl c '(1) (L ~(3 4)))))          ; |3+4i| = 5
+ (= 5.0 (abs (arr c '(1) (L ~(3 4)))))          ; |3+4i| = 5
  (close ((/ 1 2) 30) (abs ca-v))                     ; sqrt(1+4+9+16)
 
  ; --- pin / nilp: the invariant (nilp x) == (= 0 (pin x)) holds here too ---

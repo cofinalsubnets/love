@@ -62,7 +62,7 @@
     ; (nil counts as numeric — it's putnum(0).)
     (nilp (sin "x"))
     (nilp (pow "a" 1))
-    (nilp (com "x" 1))      ; com of a non-number -> nil (so (arg (com 1 "x")) folds to 0)
+    (nilp (plex "x" 1))      ; plex of a non-number -> nil (so (arg (plex 1 "x")) folds to 0)
 
     ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo),
     ;     exactly as a scalar bignum already fed the scalar pow ---
@@ -71,18 +71,18 @@
     (< 1e300 (pow 2 100000000000000000000))                        ; huge bignum exp -> inf
 
     ; --- pow / atan2 elementwise over arrays (numpy broadcast); result is r ---
-    (= r (atype (pow (arrl z '(2) '(2 3)) 2)))                  ; always a float array
-    (aall (= (pow (arrl r '(3) '(1 2 3)) 2) (arrl r '(3) '(1 4 9))))  ; array ^ scalar
-    (aall (= (pow 2 (arrl r '(3) '(1 2 3))) (arrl r '(3) '(2 4 8))))  ; scalar ^ array
-    (aall (= (pow (arrl r '(3) '(1 2 3)) (arrl r '(3) '(2 2 2)))      ; array ^ array
-             (arrl r '(3) '(1 4 9))))
-    (close 1.570796326794897 (peek (arg ~((arrl r '(2) '(1 0)) (arrl r '(2) '(1 1)))) 1 0))
-    (nilp (pow (arrl r '(2) '(1 2)) "x"))                         ; array vs non-number -> nil
+    (= r (atype (pow (arr z '(2) '(2 3)) 2)))                  ; always a float array
+    (aall (= (pow (arr r '(3) '(1 2 3)) 2) (arr r '(3) '(1 4 9))))  ; array ^ scalar
+    (aall (= (pow 2 (arr r '(3) '(1 2 3))) (arr r '(3) '(2 4 8))))  ; scalar ^ array
+    (aall (= (pow (arr r '(3) '(1 2 3)) (arr r '(3) '(2 2 2)))      ; array ^ array
+             (arr r '(3) '(1 4 9))))
+    (close 1.570796326794897 (peek (arg ~((arr r '(2) '(1 0)) (arr r '(2) '(1 1)))) 1 0))
+    (nilp (pow (arr r '(2) '(1 2)) "x"))                         ; array vs non-number -> nil
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
     ;     the array's element form -- full magnitude in a float array, low bits in
     ;     an int array (modular, so it wraps: 2^64 + 5 contributes 5). Comparison
     ;     against a bignum stays magnitude-exact -- see test/bignum.l ---
-    (aall (= (+ (arrl z '(2) '(1 2)) 18446744073709551621)        ; 2^64 + 5 -> low word 5
-             (arrl z '(2) '(6 7))))
-    (< 1e19 (peek (+ (arrl r '(2) '(0 0)) 18446744073709551616) 0 0))))  ; 2^64 full magnitude
+    (aall (= (+ (arr z '(2) '(1 2)) 18446744073709551621)        ; 2^64 + 5 -> low word 5
+             (arr z '(2) '(6 7))))
+    (< 1e19 (peek (+ (arr r '(2) '(0 0)) 18446744073709551616) 0 0))))  ; 2^64 full magnitude

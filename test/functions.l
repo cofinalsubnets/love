@@ -34,9 +34,9 @@
  (= 10 ((0 (+ 1)) 10))                        ; (0 f) = 1 = identity numeral -> 10 unchanged
  (= 1 (0 'anything))                          ; 0 is const-1: (0 x) = 1 for every x
  (= 1 ((buf 4) 'anything))                 ; opaque handles (buf/port) behave as 0 too
- (aall (= (2 (arrl z '(3) '(2 3 4))) (arrl z '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
- (aall (= ((arrl z '(3) '(2 3 4)) 5) (arrl r '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 pow)
- (= 14 (((arrl z '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = ceil(sqrt 13) = 4
+ (aall (= (2 (arr z '(3) '(2 3 4))) (arr z '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
+ (aall (= ((arr z '(3) '(2 3 4)) 5) (arr r '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 pow)
+ (= 14 (((arr z '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = ceil(sqrt 13) = 4
  (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ ~(3 4)) = |3+4i| = 5
  (= 10 ((~(-3 4) (+ 1)) 10))              ; ... but a complex sorting negative saturates to 0
  (comp (~(0 1) 5))                       ; complex operator on a number -> complex pow (5^i), no longer fenced

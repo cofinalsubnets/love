@@ -86,7 +86,7 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // One word per element: every integer width folds to Z (intptr_t), every float
 // width to R (g_flo_t), and C is the rank-0 complex scalar (two g_flo_t). Ordered
 // Z < R < C so `>= g_R` is the float-domain test and C is the widest *numeric* tier.
-// arr/arrl reject ty == C, so C never appears as a rank>=1 array element -- complex
+// arr rejects ty == C, so C never appears as a rank>=1 array element -- complex
 // only ever shows up as a rank-0 scalar (Cp), handled by explicit cplx branches.
 // O (object) is the odd tier out: its slots hold live ll words (any value --
 // fixnum, bignum, box, complex, string, pair...), so it is the ONE tuple type the
@@ -133,7 +133,7 @@ g_vm_t g_vm_kcall,
  g_vm_fputn, g_vm_fread, g_vm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). g_vm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
- g_vm_arr, g_vm_arrl, g_vm_arank, g_vm_alen, g_vm_ashape, g_vm_atype,
+ g_vm_arr, g_vm_arank, g_vm_alen, g_vm_ashape, g_vm_atype,
  g_vm_asum, g_vm_aprod, g_vm_amax, g_vm_amin, g_vm_aall,
  g_vm_tupp, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf, g_vm_lamp;
 // Carry extra operands, so (like g_vm_gc) they are declared apart from the
@@ -586,10 +586,10 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_flo, "flo", S1(g_vm_flo)) _(nif_flop, "flop", S1(g_vm_flop))\
  _(nif_sin, "sin", S1(g_vm_sin)) _(nif_cos, "cos", S1(g_vm_cos))\
  _(nif_log, "log", S1(g_vm_log)) _(nif_pow, "pow", S2(g_vm_pow))\
- _(nif_cplx, "com", S2(g_vm_cplx)) _(nif_Cp, "comp", S1(g_vm_Cp))\
+ _(nif_cplx, "plex", S2(g_vm_cplx)) _(nif_Cp, "comp", S1(g_vm_Cp))\
  _(nif_re, "re", S1(g_vm_re)) _(nif_im, "im", S1(g_vm_im)) _(nif_conj, "conj", S1(g_vm_conj))\
  _(nif_abs, "abs", S1(g_vm_abs)) _(nif_arg, "arg", S1(g_vm_carg))\
- _(nif_arr, "arr", S2(g_vm_arr)) _(nif_arrl, "arrl", S3(g_vm_arrl))\
+ _(nif_arr, "arr", S3(g_vm_arr))\
  _(nif_arank, "arank", S1(g_vm_arank))\
  _(nif_alen, "alen", S1(g_vm_alen)) _(nif_ashape, "ashape", S1(g_vm_ashape))\
  _(nif_atype, "atype", S1(g_vm_atype))\
@@ -2378,59 +2378,49 @@ static struct g *gzput_carr_elem(struct g *g, uintptr_t i) {
  g = gzprintf(g, "~("); g = g_dtoa2(g, re); g = gzputc(g, ' ');
  g = g_dtoa2(g, im); return gzputc(g, ')'); }
 
-// element-kind code -> a prelude symbol bound to it, so the printed `arrl` form
-// round-trips: the names follow the tier spine -- Z prints as `z`, R as `r`. `c`
-// only labels the 32-bit RNG state tuple (never a constructible array -- arrl
-// rejects ty > R).
-static char const *const g_vt_names[] = {
- [g_Z] = "z", [g_R] = "r", [g_C] = "c", [g_O] = "o" };
-
 // Print a rank>=1 array (g->sp[0]) as a constructor expression that reads back to
-// the same array. A rank-1 z/r array uses the terse `@(a b …)` sugar (the `@`
-// reader macro splices into `(tuple a b …)`, which infers z/r from its args);
-// anything else (rank>=2, or an object array whose elements are arbitrary, quoted
-// values) uses `(arrl <type> '(shape) '(vals))`, a bare constructor call that pins
-// the exact element type and shape. The array may move on a GC during printing, so
-// shape/elements are re-fetched from g->sp[0] each step.
+// the same array -- always a SURFACE form, never the typed `arr` call. A rank-1
+// array uses the terse `@(a b …)` sugar (the `@` reader macro splices into
+// `(tuple a b …)`); rank>=2 uses `(array '(shape) elem …)`. Either way a-type
+// re-infers the element type from the printed elements: bare numbers -> z/r,
+// ~(re im) -> c, anything else -> o, with symbol/pair elements quoted so eval
+// reconstructs them. (An o array of self-evaluating scalars re-reads at its
+// natural tier -- the type is inferred, not pinned.) The array may move on a GC
+// during printing, so shape/elements are re-fetched from g->sp[0] each step.
 static g_noinline struct g *gzputx(struct g *g, intptr_t x, uintptr_t off);
+
+static struct g *gzput_arr_elem(struct g *g, uintptr_t i, uintptr_t type, uintptr_t off) {
+ if (type == g_C) return gzput_carr_elem(g, i);
+ if (type != g_O) return gzput_tuple_elem(g, i);
+ word e = tuple_get_obj(tuple(g->sp[0]), i);           // kind test only; re-fetched below
+ if (symp(e) || twop(e)) g = gzputc(g, '\'');          // quote, so eval rebuilds the element
+ return gzputx(g, tuple_get_obj(tuple(g->sp[0]), i), off); }
 
 static struct g *gzput_arr(struct g *g, uintptr_t off) {
  struct g_tuple *v = tuple(g->sp[0]);
  uintptr_t rank = v->rank, type = v->type, nelem = tuple_nelem(v);
- if (rank == 1 && nelem == 0 && (type == g_Z || type == g_R))
-  return gzputcs(g, "@0");                             // empty numeric -> @0 (reads back via @0/@())
- if (rank == 1 && nelem > 0 && (type == g_Z || type == g_R || type == g_C)) {  // terse rank-1: @(…)
-  g = gzputc(g, '@'); g = gzputc(g, '(');              // a complex elem prints as ~(re im)
+ if (rank == 1 && nelem == 0)
+  return gzputcs(g, "@0");                             // empty rank-1 -> @0
+ if (rank == 1) {                                      // terse rank-1: @(…)
+  g = gzputc(g, '@'); g = gzputc(g, '(');
   for (uintptr_t i = 0; g_ok(g) && i < nelem; i++) {
    if (i) g = gzputc(g, ' ');
-   g = type == g_C ? gzput_carr_elem(g, i) : gzput_tuple_elem(g, i); }
+   g = gzput_arr_elem(g, i, type, off); }
   return g_ok(g) ? gzputc(g, ')') : g; }
- if (type == g_C) {                                    // rank>=2 / empty complex: (array '(shape) ~(…)…)
-  g = gzprintf(g, "(array '(");                        // array's trailing args are evaluated -> a-type
-  for (uintptr_t i = 0; g_ok(g) && i < rank; i++) {    // infers c, so the ~(…) elems pack back exactly
-   if (i) g = gzputc(g, ' ');
-   g = gzputn(g, tuple(g->sp[0])->shape[i], 10); }
-  g = gzputc(g, ')');
-  for (uintptr_t i = 0; g_ok(g) && i < nelem; i++) {
-   g = gzputc(g, ' '); g = gzput_carr_elem(g, i); }
-  return g_ok(g) ? gzputc(g, ')') : g; }
- g = gzprintf(g, "(arrl ");                            // explicit: (arrl type '(shape) '(vals))
- for (char const *s = g_vt_names[type]; g_ok(g) && *s; s++) g = gzputc(g, *s);
- g = gzprintf(g, " '(");
+ g = gzprintf(g, "(array '(");                         // rank>=2: (array '(shape) elem …)
  for (uintptr_t i = 0; g_ok(g) && i < rank; i++) {
   if (i) g = gzputc(g, ' ');
   g = gzputn(g, tuple(g->sp[0])->shape[i], 10); }
- g = gzprintf(g, ") '(");
- for (uintptr_t i = 0; g_ok(g) && i < nelem; i++) {    // object elements via the general
-  if (i) g = gzputc(g, ' ');                           // printer; numeric via gzput_tuple_elem
-  g = type == g_O ? gzputx(g, tuple_get_obj(tuple(g->sp[0]), i), off) : gzput_tuple_elem(g, i); }
- return g_ok(g) ? gzprintf(g, "))") : g; }
+ g = gzputc(g, ')');
+ for (uintptr_t i = 0; g_ok(g) && i < nelem; i++) {
+  g = gzputc(g, ' '); g = gzput_arr_elem(g, i, type, off); }
+ return g_ok(g) ? gzputc(g, ')') : g; }
 
 static g_inline struct g*gzput_tuple_scalar_float(struct g*g) {
  return g_dtoa2(g, (g_flo_t) flo_get(g->sp[0])); }
 
 // complex -> ~(re im); round-trips by re-evaluation (the `~` reader macro splices
-// into (com re im), and com is a nif). re/im are read into C locals up front so a
+// into (plex re im), and plex is a nif). re/im are read into C locals up front so a
 // GC during g_dtoa2 can't strand the operand.
 static g_inline struct g*gzput_tuple_scalar_complex(struct g*g) {
  g_flo_t re = cplx_re(g->sp[0]), im = cplx_im(g->sp[0]);
@@ -2991,7 +2981,7 @@ static g_inline bool symeq(word x, char const *nm, uintptr_t n) {
  for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
  return true; }
 static g_inline bool hashsym(word x) { return symeq(x, "hash", 4); }
-static g_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "com", 3); }
+static g_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "plex", 4); }
 
 static struct g *gz_parse(struct g *g, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
@@ -3002,11 +2992,11 @@ static struct g *gz_parse(struct g *g, bool multi) {
   int c = g->b, c2 = EOF;
   switch (c) {
    case '(': case '[': case '{': g = push_frame(g); continue;   // [ ] { } are () synonyms
-   case '~':                                            // ~(re im)->(com re im) [construct]; ~x->(clift x)
-    if (!g_ok(g = zgetc(g))) return g;                 // peek the char after ~: `(` -> splice into com (build
+   case '~':                                            // ~(re im)->(plex re im) [construct]; ~x->(clift x)
+    if (!g_ok(g = zgetc(g))) return g;                 // peek the char after ~: `(` -> splice into plex (build
     c2 = g->b;                                         // a complex / curry); anything else -> monadic lift/conj
     if (c2 != EOF) g = zungetc(g, c2);                 // (clift: real r -> ~(r 0); complex z -> conj z)
-    g = push_wrap(g, c2 == '(' ? "com" : "clift"); continue;
+    g = push_wrap(g, c2 == '(' ? "plex" : "clift"); continue;
    case ',':                                            // unquote / unquote-splice
     if (!g_ok(g = zgetc(g))) return g;
     if ((c2 = g->b) == '@') { g = push_wrap(g, "uqs"); continue; }
@@ -4935,37 +4925,14 @@ struct g *g_big_dec(struct g *g) {
  g->sp[0] = word(st);
  return g; }
 
-// --- (arr type shape-list): zero-filled array ------------------------------
+// --- (arr type shape-list vals): THE typed array constructor ----------------
 // `type` is a fixnum element-type code (z/r/c/o, named in the prelude); `shape`
-// is a list of non-negative fixnum dimensions (empty -> a rank-0 scalar box). A
-// `c` array packs two floats (re,im) per element; zero-fill is 0+0i. Bad type /
-// negative dim / over-rank -> nil.
+// is a list of non-negative fixnum dimensions (empty -> a rank-0 scalar box);
+// `vals` fills row-major from a list (a non-numeric or missing entry stays 0;
+// extras are ignored), and 0 (or any non-list) means zero-filled. A `c` array
+// packs two floats (re,im) per element; zero-fill is 0+0i. Bad type / negative
+// dim / over-rank -> nil.
 g_vm(g_vm_arr) {
- word t = Sp[0], shp = Sp[1];
- if (!fixp(t)) return *++Sp = nil, Ip++, Continue();
- intptr_t ty = getfix(t);
- if (ty < 0 || ty > g_O) return *++Sp = nil, Ip++, Continue();
- uintptr_t rank = 0, nelem = 1;
- for (word l = shp; twop(l); l = B(l)) {
-  word d = A(l);
-  if (!fixp(d) || getfix(d) < 0) return *++Sp = nil, Ip++, Continue();
-  rank++, nelem *= (uintptr_t) getfix(d); }
- if (rank > G_VEC_MAXRANK || (ty == g_O && rank == 0)) return *++Sp = nil, Ip++, Continue();
- uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + nelem * g_T[ty];
- Have(b2w(bytes));
- struct g_tuple *v = (struct g_tuple*) Hp;
- Hp += b2w(bytes);
- ini_tuple(v, ty, rank);
- uintptr_t i = 0;                              // re-walk the (possibly moved) list
- for (word l = Sp[1]; twop(l); l = B(l)) v->shape[i++] = (uintptr_t) getfix(A(l));
- if (ty == g_O) for (i = 0; i < nelem; i++) tuple_put_obj(v, i, nil);   // object zero = nil, NOT raw 0
- else memset(tuple_data(v), 0, nelem * g_T[ty]);
- return *++Sp = word(v), Ip++, Continue(); }
-
-// (arrl type shape-list vals-list): like arr, but fills row-major from
-// vals-list (a non-numeric or missing entry stays 0; extras are ignored). Lets
-// code build a specific array before array-literal syntax lands.
-g_vm(g_vm_arrl) {
  word t = Sp[0], shp = Sp[1];                  // vals = Sp[2]
  if (!fixp(t)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
  intptr_t ty = getfix(t);

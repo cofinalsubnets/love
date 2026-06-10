@@ -157,7 +157,7 @@
  (= ~(2 4) (peek (* ~(2 0) mx-ac) 0 0))      ; complex scalar * C array
  (= o (atype (* mx-ao mx-ao)))                ; O * O exact
  (= (80 2)                                 ; 2^40 * 2^40, exact (an z array would wrap)
-    (peek (* (arrl o '(2) (L (40 2) (40 2))) (arrl o '(2) (L (40 2) (40 2)))) 0 0))
+    (peek (* (arr o '(2) (L (40 2) (40 2))) (arr o '(2) (L (40 2) (40 2)))) 0 0))
 
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)

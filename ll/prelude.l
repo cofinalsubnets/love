@@ -16,10 +16,10 @@
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
 (: i ~(0 1))
 ; the monadic ~ sigil (~x, i.e. ~ not followed by `(`): lift a real to ~(r 0),
-; conjugate a complex to ~(re -im), ~0 -> ~(0 0). One formula -- com of the real
+; conjugate a complex to ~(re -im), ~0 -> ~(0 0). One formula -- plex of the real
 ; part and the negated imaginary part -- since (re r)=r, (im r)=0 for a real, and
-; (re z)/(im z) for a complex. (The 2-operand ~(a b) splices into (com a b).)
-(: (clift x) (com (re x) (- 0 (im x))))
+; (re z)/(im z) for a complex. (The 2-operand ~(a b) splices into (plex a b).)
+(: (clift x) (plex (re x) (- 0 (im x))))
 ; integer power (b ** k) is just numeral application: (k b) == b**k. The squaring
 ; algorithm lives in `ipow`, local to the num-ap block below, so there is no `**`.
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (mod a b)))
@@ -229,7 +229,7 @@
 ; printer-sugar forms). `tuple` builds a rank-1 array from its element args,
 ; inferring the element type via a-type (so it carries bignums/symbols in an o
 ; array, not just z/r); `map` builds a map from alternating key/value args.
-(: (ltuple l) (arrl (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
+(: (ltuple l) (arr (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'tuple (\ a (list 'ltuple (X 'list a))))
 ; (hash) = empty; (hash x) boxes a scalar -- a fresh mutable hash pinning x
 ; to the () key, so #5 = #(() 5); pairs pin as usual, and an odd trailing
@@ -253,7 +253,7 @@
 ; `array` curries them one at a time and builds once it has them all -- so
 ; (array 2 'a 'b), (array '(2 2) 1 2 3 4) and a partial like (array 3) (a collector
 ; awaiting 3 elems) all fall out of ll's auto-currying, like numap's n-ary thread.
-(: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (arrl (a-type d) sh d))
+(: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (arr (a-type d) sh d))
                         (\ x (a-coll sh (- n 1) (X x acc))))
    (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 

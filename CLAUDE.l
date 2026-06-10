@@ -161,10 +161,10 @@
  (0.0 = (sin 0) / (cos 0)) (flop (sin 0)))                                   ; tan 0 = 0
 
 ; --- complex --- a discrete scalar at the top numeric tier (comp). the `~` reader sigil:
-; ~(re im) builds (com re im) (3+ operands curry); a bare ~x lifts a real (~r = ~(r 0)) or
+; ~(re im) builds (plex re im) (3+ operands curry); a bare ~x lifts a real (~r = ~(r 0)) or
 ; conjugates a complex (~~(r i) = ~(r -i)), so `~` is conjugation and an involution. i = ~(0 1).
 ; + - * / promote a real and stick (no demotion); order is lexicographic by (re,im) and `=`
-; bridges reals. `com` and `arg` broadcast over arrays, so the derived forms stay elementwise.
+; bridges reals. `plex` and `arg` broadcast over arrays, so the derived forms stay elementwise.
 (assert
  ((* i i) = -1) (~(2 0) = 2) (~(-5 10) = ~(1 2) * ~(3 4)) (comp ~5) !(comp 5)
  (~(0 0) = ~0) ((conj ~(2 3)) = ~~(2 3)) ((conj ~(2 3)) = ~(2 -3))
@@ -177,21 +177,22 @@
     (~(2 4) = (peek (v + v) 0 0)) (~(2 4) = (peek (~(2 0) * v) 0 0)) !(v < v)
     ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v)))))
 
-; --- arrays --- (arr type shape) zeros; (arrl type shape vals) fills; (array shape elem..)
-; infers the type and curries; @(..) is a rank-1 literal. arank/alen/ashape/atype; peek
-; (out of bounds -> the default). + - * // < = broadcast numpy-style to the widest type
-; (compare -> an z mask); `/` promotes the whole result to r the moment any element divides
+; --- arrays --- (arr type shape vals) is THE typed constructor: vals 0 zero-fills, a list
+; fills row-major; (array shape elem..) infers the type and curries; @(..) is a rank-1
+; literal. arank/alen/ashape/atype; peek (out of bounds -> the default). + - * // < =
+; broadcast numpy-style to the widest type
+; (compare -> a z mask); `/` promotes the whole result to r the moment any element divides
 ; inexactly. reduce with asum aprod amax amin aall (a conjunction; "any nonzero" is just `$`).
 ; a zero-norm array is false. sin/cos/log/pow and the derived forms map elementwise.
 (assert
- (6 = (alen (arr z '(2 3)))) (2 = (arank (arr z '(2 3)))) ('(2 3) = (ashape (arr z '(2 3))))
- (z = (atype (arr z '(2 3)))) (20 = (peek @(10 20 30) 1 -1)) (-1 = (peek @(10 20 30) 9 -1))
- (3 = (peek (arrl z '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
- (@(2 4 6) = @(1 2 3) * 2) (r = (atype ((arr z '(2)) + 1.5))) (z = (atype ((arr z '(3)) < 1)))
+ (6 = (alen (arr z '(2 3) 0))) (2 = (arank (arr z '(2 3) 0))) ('(2 3) = (ashape (arr z '(2 3) 0)))
+ (z = (atype (arr z '(2 3) 0))) (20 = (peek @(10 20 30) 1 -1)) (-1 = (peek @(10 20 30) 9 -1))
+ (3 = (peek (arr z '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
+ (@(2 4 6) = @(1 2 3) * 2) (r = (atype ((arr z '(2) 0) + 1.5))) (z = (atype ((arr z '(3) 0) < 1)))
  (60 = (asum @(10 20 30))) (30 = (amax @(10 30 20))) (5 = (asum 5)) (aall (1 < 2))
  (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = (// @(7 11) 2))
- (@(4 6) = @(8 12) / 2) !(arr z '(3)) ("@(10 20 30)" = (show @(10 20 30)))
- (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2)) !(arr 99 '(3)))
+ (@(4 6) = @(8 12) / 2) !(arr z '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
+ (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2)) !(arr 99 '(3) 0))
 
 ; --- pairs & lists --- X is cons, A is car, B is cdr; AA AB .. BBB are the compounds.
 ; cons/car/cdr/cadr.. are prelude aliases. the higher-order functions live in the prelude.
@@ -250,7 +251,7 @@
 ; pin (see test/operator.l). seven ship at arity 1 (glyph / name): $ sat (saturation), # hash (hash table),
 ; ' quote (= one-operand \), ! bang (negation), . dot (print), @ tup
 ; (array), ` quasiquote. % is infix mod. , unquote, ,@ splice, and ~ wave (complex/conjugate)
-; stay reader digraphs. ~(re im) splices to (com re im); a bare ~x is (clift x).
+; stay reader digraphs. ~(re im) splices to (plex re im); a bare ~x is (clift x).
 ; INFIX operators are all-punct symbols in dict['infix] (symbol -> arity): with a left
 ; operand available the symbol captures it and collects arity-1 more, nesting RIGHT-
 ; associatively; with no left operand it reads as the plain symbol, so (+ 1 2), '+, and
@@ -262,7 +263,7 @@
 (assert
  ('(1 (\ x) 3) = `(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) `(1 ,@xs 4)))
  (5 = $"hello") (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
- (i = ~(0 1)) (~(2 3) = (com 2 3)) ('~x = '(clift x)) ('(dot x) = '.x) (lamp dot)
+ (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) ('(dot x) = '.x) (lamp dot)
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (20 = (#(1 10 2 20) -> 2 0)) (7 = ((#() <- 'k 7) 'k)) (9 = (#() -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))

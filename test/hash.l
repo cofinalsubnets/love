@@ -71,7 +71,7 @@
  (= 1 (sat i))                                  ; i = ~(0 1): re=0, im>0 sorts above 0 -> ceil 1
  (= 5 (sat @(3 4)))                             ; array -> ceil(L2 norm): the 3-4-5 triangle
  (= 5 (sat @(-3 -4)))                           ; array norm is sign-independent -> negatives stay truthy
- (= 0 (sat (arr z '(2 3))))                   ; all-zero array -> norm 0
+ (= 0 (sat (arr z '(2 3) 0)))                   ; all-zero array -> norm 0
  (= 1 (sat @(0.3 0.4)))                         ; ceil makes any nonzero magnitude -> >=1
  (= 1 (sat ~(0.001 0)))                        ; re>0 -> ceil(0.001) = 1; pin=0 iff sorts <= 0
  (= 1 (sat (nom 'x))) (= 1 (sat (nom 0)))          ; symbol name length; anon nom present -> floored to 1 (truthy)
