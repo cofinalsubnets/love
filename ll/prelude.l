@@ -48,6 +48,10 @@
    putx (fputx out)
    (getc _) (fgetc in)
    read (fread in))
+; the infix aliases are plain globals too, so escaping works like (+)/'+ --
+; ((->) t k d) peeks, ((%) 5 2) is mod. (punct names can't sit in `:` binding
+; position -- they'd capture the `:` -- so pin dict directly.)
+(: _ (pin dict '<- pin) _ (pin dict '-> peek) (pin dict '% mod))
 ; fixnum-as-function application, pinned on dict for the VM's apply path: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
@@ -212,14 +216,14 @@
 ; (re,im) `c` array; only a value past the real numeric tower (bignum, symbol,
 ; string, nested array, …) lifts the whole array to an object (o) array.
 ; a-dim/a-shape: a shape dimension may be any numeric -- a float, complex, or even
-; a vector -- and is coerced to a non-negative integer by its L2 norm ((int (abs
-; d)): abs is the modulus for a complex / the Euclidean norm for a vector). a list
-; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …) and
-; (array ~(3 4) …) both mean "rank-1, length (int |n|)").
+; a vector -- and is coerced to a nat by saturation (($ d) -- the count law:
+; non-positive -> 0, a float ceils, modulus/norm for a complex/vector). a list
+; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …)
+; means rank-1 length 3, (array ~(3 4) …) length 5).
 (: (a-rank x) (? (flop x) 1 (| (fixp x) (boxp x)) 0 (comp x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
    (a-type d) (: r (foldl a-emax 0 d) (? (= r 0) i64 (= r 1) f64 (= r 2) c o))
-   (a-dim d) (int (abs d))
+   (a-dim d) (sat d)
    (a-shape s) (? (twop s) (map a-dim s) (L (a-dim s))))
 
 ; tuple/hash value constructors (also the read-back targets of the `@(…)` / `#(…)`

@@ -47,3 +47,15 @@
 (assert (= 8.0 (2 ** 3)) (= 512.0 (2 ** 3 ** 2)))  ; right-assoc: 2^(3^2)
 (pull in-tbl '** 0)
 (assert !(in-tbl '**) (symp '**))
+
+; the accessor aliases: <- is (pin . 3), -> is (peek . 3) -- collection-first,
+; (t <- k v) pins (returns the collection, so it chains), (t -> k d) peeks.
+(assert
+ (= 20 (: t #(1 10) _ (t <- 2 20) (t -> 2 0)))   ; pin then peek, infix
+ (= 7 ((#() <- 'k 7) 'k))                        ; <- returns the collection
+ (= 9 (#(1 10) -> 2 9))                          ; -> falls back to the default
+ (= 65 (: b (bufnew 1) _ (b <- 0 65) (b -> 0 0)))  ; bufs take the same accessors
+ (= 'pin (A (peek (peek dict 'infix 0) '<- 0)))  ; the table entries are (name . arity) aliases
+ (= 3 (B (peek (peek dict 'infix 0) '-> 0)))
+ (symp '<-) (= 30 ((->) #(3 30) 3 0))            ; escaped, -> is still peek-as-a-value
+ (idp pin (<-)) (idp peek (->)) (= 1 ((%) 5 2)))  ; every alias is a bound global

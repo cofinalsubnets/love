@@ -17,10 +17,13 @@
 ;   N naturals (the range of $)  <  Z integers (fixnum -> wide box -> bignum)
 ;     <  R reals (float)  <  C complex  <  O objects (string < symbol < pair < map < lambda)
 ; numbers nest as usual (N in Z in R in C). the *rank* axis is scalar (0) vs array (>= 1, one
-; per tier: arrZ/R/C/O). the total order < is this lattice flattened: fixnum < box < bignum <
-; float < complex < string < symbol < pair < map < lambda. opaque handles (buf/port/thread)
-; live off the lattice -- false, compared by identity, and they act like functions. every
-; predicate ends in `p`; they are enumerated below.
+; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
+; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
+; string < symbol < pair < functions, each band ordered within itself (text and pairs
+; lexicographically, functions by an alpha-invariant hash). maps and the opaque handles
+; (buf/port/thread) sit in the function band: truthy when nonempty ($out = 1), compared by
+; identity, and applying a handle acts like 0 (const-1). every predicate ends in `p`; they
+; are enumerated below.
 
 ; --- everything is a function --- (f x y) == ((f x) y) and (f) == f, so application is just
 ; left-to-right currying. numbers are church numerals, a list of numbers is an exponential
@@ -118,11 +121,13 @@
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings/symbols (a number is one
 ; byte), and appends lists; `-` is numeric only. `*` is repeated `+`: a sequence times a count
-; repeats it.
+; repeats it, and the count SATURATES (($ c), the count law shared with numeral-apply and
+; array shapes): a non-positive count gives the empty sequence, a float ceils.
 (assert
  ("abcd" = "ab" + "cd") ("xB" = "x" + 66) ('efef = 'ef + 'ef) (strp ("ab" + 'ef))
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(5 1 2) = 5 + '(1 2)) !("a" - "b")
- ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd"))
+ ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")
+ !("ab" * -3) ("ababab" = "ab" * 2.5) !('(1 2) * 0))
 
 ; --- numeric functions --- abs and int are type-aware; the constants are e pi i; also gcd and
 ; modpow. the only irreducible transcendental nifs are pow sin cos log (float; bignums widen,
@@ -222,13 +227,16 @@
 ; collection-first: (peek coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
 ; and-returns. peek and pull share the default-if-absent fallback; only pull mutates a key away.
 ; also hashd, hashk (the keys), $ is the key count. (t k) == (peek t k 0) -- a map is a lookup
-; function. (hash k) hashes a key.
+; function. (hash k) hashes a key. a hash is MUTABLE, so `=` on hashes is identity (like
+; buffers); infix, the accessors are (t <- k v) and (t -> k d).
 (assert
  (: b #0 (&& (mapp b) (1 = $b) (0 = (peek b () 9)) (: _ (pin b () 7) (7 = (b ())))))
  (: t #(1 10 2 20) (&& (20 = (peek t 2 0)) (20 = (t 2)) (99 = (peek t 9 99))))
  (50 = (peek (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (hashd 0 t 1) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peek t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- (2 = $(hashk #(1 10 2 20))) ((hash 'k) = (hash 'k)) (mapp #()) !(mapp 5))
+ (2 = $(hashk #(1 10 2 20))) ((hash 'k) = (hash 'k)) (mapp #()) !(mapp 5)
+ !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
+ (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
 
 ; --- buffers --- (bufnew n) gives n mutable zeroed bytes; $/peek/pin a byte (0..255); bcopy;
 ; identity equality.
@@ -248,13 +256,16 @@
 ; operand available the symbol captures it and collects arity-1 more, nesting RIGHT-
 ; associatively; with no left operand it reads as the plain symbol, so (+ 1 2), '+, and
 ; (+)-as-a-value still work. + - * / = < <= > >= | & ship dyadic and ? ternary -- the
-; cond form infix, (t ? a b). (1 + 2) reads ((+ 1 2)) and evaluates via (f) == f.
-; see test/infixop.l.
+; cond form infix, (t ? a b). aliases ride (name . arity) entries: % is mod, and the
+; accessors go infix as <- pin and -> peek, collection-first -- (t <- k v) pins (giving
+; back t, so it chains), (t -> k d) peeks. (1 + 2) reads ((+ 1 2)) and evaluates via
+; (f) == f. see test/infixop.l.
 (assert
  ('(1 (\ x) 3) = `(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) `(1 ,@xs 4)))
  (5 = $"hello") (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (com 2 3)) ('~x = '(clift x)) ('(dot x) = '.x) (lamp dot)
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
+ (20 = (#(1 10 2 20) -> 2 0)) (7 = ((#() <- 'k 7) 'k)) (9 = (#() -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
  (: t (peek dict 'operators 0) (&& (mapp t) ('sat = (t ("$" 0))) ('hasht = (t ("#" 0))))))
 

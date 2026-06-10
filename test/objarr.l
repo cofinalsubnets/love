@@ -110,9 +110,9 @@
  (= f64 (atype (array 3 1 2.0 3)))
  (= o   (atype oa-q))
  (= o   (atype oa-bn))
- ; numeric shape -> rank-1 vector of length |n| (negative shape uses |n|)
+ ; numeric shape -> rank-1 vector of length ($ n); a non-positive shape is empty
  (= 1 (arank (array 4 1 2 3 4)))
- (= 3 (alen (array -3 7 8 9)))
+ (= 0 (alen (array -3))) (= "@0" (inspect (array -3)))
  ; shape list -> rank-N
  (= 2 (arank oa-m))   (= 4 (peek oa-m (L 1 1) 0))
  ; elements stored verbatim, in order
@@ -124,10 +124,10 @@
  (= "@0" (inspect (array 0)))
  ; round-trips: numeric array result prints as the terse @(…) sugar
  (= "@(1 2 3)" (inspect (array 3 1 2 3)))
- ; L2-norm shape coercion: a float / complex / vector dimension -> (int (abs d))
- (= 2 (alen (array 2.9 7 8)))                     ; |2.9| -> 2 : rank-1 length 2
- (= 5 (alen (array ~(3 4) 0 0 0 0 0)))           ; |~(3 4)| = 5
- (= 6 (alen (array (L 2.0 3.5) 1 2 3 4 5 6)))     ; dims (2 3) -> 6 elems
+ ; saturating shape coercion: a float / complex / vector dimension -> ($ d)
+ (= 3 (alen (array 2.9 7 8 9)))                   ; ($ 2.9) = 3 : rank-1 length 3
+ (= 5 (alen (array ~(3 4) 0 0 0 0 0)))           ; ($ ~(3 4)) = 5
+ (= 8 (alen (array (L 2.0 3.5) 1 2 3 4 5 6 7 8)))  ; dims (2 4) -> 8 elems
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
  (= o (atype @((100 2) 1)))                    ; bignum element -> object array
  (aall (= @(1 2 3) (array 3 1 2 3))))

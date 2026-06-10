@@ -161,7 +161,7 @@
 
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
- (= "abab" (* "ab" -2))    (= "abab" (* "ab" 2.9))   ; |count|, floored
+ (= "" (* "ab" -2))    (= "ababab" (* "ab" 2.9))   ; ($ count): saturates, ceils
  (= 'xyxy (* 'xy 2))                          ; sym keeps its rank
  (= '(1 2 1 2) (* '(1 2) 2))                  ; list
  (= "" (* "ab" 0))   (nilp (* '(1 2) 0))      ; 0 copies: empty str / empty list

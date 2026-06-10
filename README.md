@@ -34,6 +34,7 @@ reading as plain symbols with no left operand -- `(1 + 2)`, `'+`, and `(+)` all 
 - `+ - * / = < <= > >= | &` dyadic
 - `?` ternary (the cond form infix: `(t ? a b)`)
 - `%` mod
+- `<-` pin, `->` peek (the collection accessors: `(t <- k v)`, `(t -> k d)`)
 
 `,` unquote, `,@` splice, and `~` wave (complex constructor / conjugate) stay
 reader digraphs. the full spec is [CLAUDE.md](CLAUDE.md) -- the root test file

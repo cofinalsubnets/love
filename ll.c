@@ -739,6 +739,14 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
    g = gxr(g_push(g, 1, putfix(2)));                // [(mod . 2) table]
    g = intern(g_strof(g, "%"));                     // [% (mod.2) table]
    g = g_mapput(g);                                 // -> [table]
+   g = intern(g_strof(g, "pin"));                   // <- aliases pin: (t <- k v)
+   g = gxr(g_push(g, 1, putfix(3)));
+   g = intern(g_strof(g, "<-"));
+   g = g_mapput(g);
+   g = intern(g_strof(g, "peek"));                  // -> aliases peek: (t -> k d)
+   g = gxr(g_push(g, 1, putfix(3)));
+   g = intern(g_strof(g, "->"));
+   g = g_mapput(g);
    g = intern(g_strof(g, "infix"));                 // [key table]
    g = g_push(g, 1, nil);
    if (g_ok(g)) {                                   // permute to (key val map)=(infix table dict)
@@ -3895,19 +3903,18 @@ enum q g_kind(word x) {
 
 // `*` REPEAT lane: the multiplicative analog of `+`'s concat. `*` is "repeated
 // `+`": a sequence (string / symbol / list) times a scalar count n is n copies
-// joined, just as `(* 2 3)` is 2+2+2. The count is the OTHER operand, L2-norm-
-// coerced to a non-negative int (int(abs c) -- a float/complex count works, matching
-// array shapes); an array (or any non-number) is not a count -> nil. n == 0 -> the
-// empty singleton. A symbol stays at its own rank (no demotion): an interned name
-// repeats to an interned symbol.
+// joined, just as `(* 2 3)` is 2+2+2. The count is the OTHER operand, SATURATED
+// to a nat (($ c) -- the count law, shared with numeral-apply and array shapes:
+// non-positive -> 0 -> the empty singleton, a float ceils, a complex counts by
+// total-order-guarded modulus); an array (or any non-number) is not a count ->
+// nil. A symbol stays at its own rank (no demotion): an interned name repeats
+// to an interned symbol.
 static g_vm(g_vm_mul_rep) {
  word a = Sp[0], b = Sp[1];
  bool aseq = strp(a) || symp(a) || twop(a);
  word seq = aseq ? a : b, cnt = aseq ? b : a;
  if (!ISNUM(cnt) && !Cp(cnt)) return *++Sp = nil, Ip++, Continue();   // array/non-number count
- g_flo_t cv = Cp(cnt) ? cplx_mod(cnt) : TOFLO(cnt);
- if (cv < 0) cv = -cv;
- uintptr_t n = (uintptr_t) g_trunc(cv);
+ uintptr_t n = (uintptr_t) g_pin(cnt);
  if (twop(seq)) {                                  // list -> n copies of the spine
   if (!n) return *++Sp = nil, Ip++, Continue();
   uintptr_t m = llen(seq), total = m * n;

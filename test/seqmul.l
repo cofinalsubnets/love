@@ -1,7 +1,9 @@
 ; `*` extended as the multiplicative analog of `+` (ll.c g_mul_mx), dispatched
 ; through the same kind matrix. `*` is "repeated `+`": a sequence (string/symbol/
 ; list) times a scalar count n is n copies joined, just as (* 2 3) = 2+2+2. The
-; count is L2-norm-coerced (int(abs c)); an array/non-number count is undefined
+; count SATURATES (($ c) -- the count law, shared with numeral-apply and array
+; shapes: non-positive -> 0 -> empty, a float ceils, a complex by total-order-
+; guarded modulus); an array/non-number count is undefined
 ; (nil); sequence x sequence is undefined; a thread anywhere -> composition.
 (: sm-i (\ x (? (symp x) (= x (intern (string x))) 0)))      ; interned symbol?
 (assert
@@ -12,8 +14,8 @@
  ; --- string repetition (commutative), empty, count coercion ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))
  (= "" (* "ab" 0))   (strp (* "ab" 0))          ; 0 -> the empty string
- (= "abab" (* "ab" -2))                         ; count is |n|: 2 copies
- (= "abab" (* "ab" 2.9))                        ; float count -> int(abs) = 2
+ (= "" (* "ab" -2)) (strp (* "ab" -2))          ; non-positive count saturates to 0 -> empty
+ (= "ababab" (* "ab" 2.9))                      ; float count ceils: ($ 2.9) = 3
  (= "ababababab" (* "ab" ~(3 4)))              ; |3+4i| = 5 copies
  (= "xxx" (* "x" 3))
 
