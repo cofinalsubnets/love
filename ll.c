@@ -646,44 +646,25 @@ static g_vm(_g_vm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_g_vm_yield_c} };
 
 // Default trap continuation. A throw enters it with the thrown status encoded
-// into g (see gtrap2 below). The EOF bit is control flow, not a scare: the
-// thrower left [resume port sentinel] on the stack (the fread protocol), so
-// deliver the port (more: bit 0 set under eof) or the sentinel (eof-none) to
-// the resume thread and keep running. A scare re-encodes and yields to C --
-// the same escape the old trap did. Define a global `trap` function to land
-// throws in ll instead.
+// into g (see gtrap2 below). The MORE bit is read control flow, not a scare:
+// the thrower left [resume port sentinel] on the stack (the fread protocol),
+// so deliver the port (more: incomplete) or the sentinel (eof) to the resume
+// thread and keep running. A scare re-encodes and yields to C -- the same
+// escape the old trap did. Define a global `trap` function to land throws in
+// ll instead.
 static g_vm(_g_vm_throw_c) {
  enum g_status s = g_code_of(g);
  g = g_core_of(g);
- if (s & g_status_eof) {
+ if (s & g_status_more) {
   Ip = cell(Sp[0]);                                   // [resume port sentinel]
-  Sp[2] = s & g_status_scare ? Sp[1] : Sp[2];         // more -> port, none -> sentinel
+  Sp[2] = s == g_status_more ? Sp[1] : Sp[2];         // more -> port, eof -> sentinel
   Sp += 2;
   return Continue(); }
  return Pack(g), encode(g, s); }
 static union u const throw_c[] = { {_g_vm_throw_c} };
 
-// Throw status s to the trap continuation: the global `trap` function when
-// installed (entered raw -- status in the tag bits, no args -- so it must check
-// before doing anything unsafe), else throw_c. Pre-dict throws (g_ini_0) always
-// take the default. g_mapget is a read: no allocation, safe at oom.
-// Convention: a SCARE throw (bit 0) puts its condition data on struct g before
-// throwing -- the trap function reads it there; oom is the bare scare (no data).
-struct g *gtrap2(struct g *g, enum g_status s) {
- struct g *c = g_core_of(g);
- union u *t = (union u*) throw_c;
- if (c->dict && c->trap_sym) {
-  word h = g_mapget(c, nil, c->trap_sym, c->dict);
-  if (lamp(h)) t = cell(h); }
- c->ip = t;
-#if g_tco
- return t->ap(encode(c, s), t, c->hp, c->sp);
-#else
- return t->ap(encode(c, s));
-#endif
-}
-// Throw on an already-tagged g: re-throw its own status.
-struct g *gtrap(struct g *g) { return gtrap2(g_core_of(g), g_code_of(g)); }
+// gtrap2/gtrap are defined after numap_drive (the trap call frame runs
+// through its 3-arg twin); declared in ll.h.
 
 static struct g_def const def1[] = { nifs(niff) insts(i_entry)};
 
@@ -1585,6 +1566,62 @@ static g_vm(numap_swap) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
  return Ap(g_vm_ap, g); }
 union u const numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
+
+// ============================================================================
+// the lisp trap calling convention
+// ============================================================================
+// With a global `trap` function installed, a throw becomes the call
+// (trap s a b): s = the status word (prelude readers scare?/more?/eof?),
+// a/b = the condition data -- for the more bit the port and the read sentinel,
+// for a scare nil nil (oom is bare; future scares define their shapes). The
+// frame runs through trap_drive (numap_drive's 3-arg twin) into a per-class
+// epilogue: the more bit delivers the handler's result to the thrower's resume
+// thread (the fread protocol -- the handler chooses what the reader's caller
+// sees); a scare is observed, then takes the default escape to C.
+static g_vm(trap_ret_more) {   // [result resume port sentinel ..] -> resume sees result
+ Ip = cell(Sp[1]);
+ Sp[3] = Sp[0];
+ Sp += 3;
+ return Continue(); }
+static g_vm(trap_ret_scare) {  // result ignored: scares are not (yet) resumable
+ return Pack(g), encode(g, g_status_scare); }
+static union u const trap_more_k[] = { {trap_ret_more} };
+static union u const trap_scare_k[] = { {trap_ret_scare} };
+static union u const trap_drive[] =
+ { {g_vm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
+
+// Throw status s to the trap continuation. With a global `trap` function and 5
+// words of stack headroom (the throw path never allocates), build the
+// (trap s a b) frame and run it; else the C default throw_c, which resumes the
+// eof protocol raw. Pre-dict throws (g_ini_0) always take the default.
+struct g *gtrap2(struct g *g, enum g_status s) {
+ struct g *c = g_core_of(g);
+ if (c->dict && c->trap_sym) {
+  word h = g_mapget(c, nil, c->trap_sym, c->dict);
+  if (lamp(h) && avail(c) >= 5) {
+   int rd = s & g_status_more;     // the more bit: a read-end condition
+   word *sp = c->sp -= 5;          // [s h a b K | thrower data ..]
+   sp[0] = putfix(s), sp[1] = h;
+   sp[2] = rd ? sp[6] : nil;       // read data: [resume port sentinel] under the frame
+   sp[3] = rd ? sp[7] : nil;
+   sp[4] = word(rd ? trap_more_k : trap_scare_k);
+   c->ip = (union u*) trap_drive;
+#if g_tco
+   return c->ip->ap(c, c->ip, c->hp, c->sp);
+#else
+   return c;                       // ok-g: the trampoline dispatches trap_drive
+#endif
+  } }
+ union u *t = (union u*) throw_c;
+ c->ip = t;
+#if g_tco
+ return t->ap(encode(c, s), t, c->hp, c->sp);
+#else
+ return t->ap(encode(c, s));
+#endif
+}
+// Throw on an already-tagged g: re-throw its own status.
+struct g *gtrap(struct g *g) { return gtrap2(g_core_of(g), g_code_of(g)); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote handlers, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: g_vm_gc
@@ -2802,7 +2839,7 @@ g_vm(g_vm_fread) {
   switch (g_code_of(g)) {
    default: return gtrap(g);                          // scare: condition data per thrower
    case g_status_more: case g_status_eof:
-    // The eof bit routes control through the trap continuation: push fread's
+    // The more bit routes control through the trap continuation: push fread's
     // resume thread under [port sentinel] and throw -- the trap function (or
     // throw_c's default) decides flow from the bits. Headroom for the push is
     // the parse ctx frame, which exists wherever more/eof can arise.

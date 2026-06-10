@@ -242,17 +242,22 @@
 
 ; --- control --- ev compiles and runs; call-cc is a one-shot escape; tasks are
 ; spawn/wait/yield/sleep/done?/kill/key?; the RNG is xoshiro256++ (global rand/randf plus the
-; pure rand-next/randf-next over explicit state).
+; pure rand-next/randf-next over explicit state). a global `trap` function receives every
+; throw as (trap s a b) -- s = the status word, two bits: scare (1, something wrong) and
+; more (2, read control flow); more alone = incomplete, eof = more|scare. a/b = the
+; condition data; the result is delivered per the bits (the more bit: to the reader's
+; resume; a bare scare: observed). scare?/more?/eof? read s. see test/trap.l.
 (assert
  (= 3 (ev '(+ 1 2))) (lamp ev) (= 41 (call-cc (\ k (k 41)))) (= 42 (+ 1 (call-cc (\ k 41))))
  (= 42 (: p (spawn (\ x (do (yield 0) (+ x 1))) 41) (wait p))) (= 0 (wait 99999)) (done? 99999)
  !(sleep 0) (= 4 (alen (rng-seed 1))) (< (rand 10) 10) (flop (randf 0))
+ (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3)
  (: st (rng-seed 7) (= (A (rand-next st)) (A (rand-next st)))))
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prelude wraps getc/read and
 ; putc/puts/putn/putx, with per-port fgetc/fputc/.../fread plus open/close/strin/strout/slurp.
 ; fread reads one datum per call; its end conditions route through the trap continuation via
-; the status eof bit, and the default trap delivers a sentinel at EOF, the port back when
+; the status more bit, and the default trap delivers a sentinel at EOF, the port back when
 ; incomplete (a global `trap` function takes over that dispatch). `dot` (the `.` operator)
 ; prints x to `out` -- raw bytes for a string, else the inspect form -- and returns
 ; x, so .x taps a value mid-expression.

@@ -142,6 +142,15 @@
  (outstr o) (ssub (peekl 4 o) 0 (peekl 5 o))
  (slurp i) (: (rl i) (: c (fgetc i) (? !(= c -1) (X c (rl i)))) (string (rl i)))
  (inspect x) (: o (strout 0) _ (fputx o x) (outstr o)))
+; trap status readers. a global `trap` function is called as (trap s a b):
+; s = the status word, two bits -- scare (1: something went wrong) and more
+; (2: read control flow, more input wanted). more alone = incomplete; eof =
+; more|scare (the end is the scary case of wanting more). a/b = the condition
+; data (the more bit: the port and the read sentinel). the result is delivered
+; per the bits: more -> to the reader's resume; a bare scare -> observed.
+(: (scare? s) (= s 1)
+   (more? s) (= s 2)
+   (eof? s) (= s 3))
 ; here are some macro definitions
 (: l (foldr (\ a l (X X (X a (X l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
 (:: '&& (\ l (: (and l) (? (B l) (list '? (A l) (and (B l)) 0) (A l)) (? l (and l) 1))))

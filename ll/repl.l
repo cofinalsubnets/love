@@ -3,12 +3,12 @@
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist
 ; becomes a synthetic input port via (strin cl), and (fread port e) walks
-; it one datum at a time. fread returns the datum on success; its eof-bit
+; it one datum at a time. fread returns the datum on success; its more-bit
 ; conditions route through the trap continuation, whose default delivers
-; the sentinel `e` on clean EOF and the port itself on eof-more (input
-; ends inside an unfinished form). that lets parseall distinguish "all
-; done" from "keep editing" -- parseall is the lisp-visible face of the
-; eof bit, and a global `trap` function takes over that dispatch.
+; the sentinel `e` on eof and the port itself on more (input ends inside
+; an unfinished form). that lets parseall distinguish "all done" from
+; "keep editing" -- parseall is the lisp-visible face of the more bit,
+; and a global `trap` function takes over that dispatch.
 ;
 ; the editor buffer is a four-zipper threaded positionally through
 ; the editor functions: u (lines above the cursor, reversed), l (chars
