@@ -1,7 +1,6 @@
 (\ egg (:
- (go e z a) (? a (go e (e (A a)) (B a)) z)
- t0 (clock 0)
- e (go (go ev 0 egg) 0 egg)
- _ (pin dict 'ev e)
- t1 (clock t0)
- (pin dict 'boot-ticks t1)))
+ (sit e z a) (? a (sit e (e (A a)) (B a)) z)
+ now (clock 0)
+ ev (sit (sit ev 0 egg) 0 egg)
+ _ (pin dict 'ev ev)
+ (pin dict 'born-at (clock now))))

@@ -314,10 +314,12 @@
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure
 ;     globals, mark apply strategy, and flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins; a map is a lookup function.
-; the *egg* (ll/egg.l): compile the compiler with the C bootstrap, recompile the whole
-; prelude+ev corpus through itself, and install it as `ev` -- baked into the image at C compile
-; time, no allocation.
-(assert (lamp ev) (fixp (peek dict 'boot-ticks 0)))
+; the *egg* (ll/egg.l): the evaluator SITS on the egg (the quoted prelude+ev corpus) twice --
+; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- and
+; the hatchling installs as `ev`, baked into the image at C compile time, no allocation;
+; born-at records the hatch time. (its pin defaults 0 deliberately: ll0's first corpus
+; pass runs PRE-egg, where born-at does not exist yet.)
+(assert (lamp ev) (fixp (peek dict 'born-at 0)))
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
 ; lattice above). a dyadic op is an NxN table indexed by the two kinds; a monadic op is its
