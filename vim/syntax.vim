@@ -28,8 +28,8 @@ syn keyword LFunc twop strp symp mapp lamp handlep tupp bigp boxp arrp comp flop
 syn keyword LFunc arr array arank alen ashape atype asum aprod amax amin aall
 syn keyword LFunc a-rank a-shape a-type a-dim
 syn keyword LFunc string slice scat intern nom slurp show sip pad page
-syn keyword LFunc table keys digs sat peep pin pull buf blit
-syn keyword LFunc loom pick knit slip trim
+syn keyword LFunc table keys dig sat peep pin pull buf blit
+syn keyword LFunc lam peek poke seek trim
 syn keyword LFunc fgetc fungetc feof fputc fputs fputn fputx fflush fread
 syn keyword LFunc putc puts putn putx getc read in out dot
 syn keyword LFunc ev call-cc yield spawn wait sleep done? kill key?

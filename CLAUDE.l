@@ -255,14 +255,14 @@
 ; collection-first: (peep coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
 ; and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key away.
 ; also keys (the key list), $ is the key count. (t k) == (peep t k 0) -- a map is a lookup
-; function. (digs k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
+; function. (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
 (assert
  (: b #0 (&& (mapp b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
  (50 = (peep (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- (2 = $(keys #(1 10 2 20))) ((digs 'k) = (digs 'k)) (mapp #()) !(mapp 5)
+ (2 = $(keys #(1 10 2 20))) ((dig 'k) = (dig 'k)) (mapp #()) !(mapp 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
  (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
 
@@ -339,7 +339,7 @@
 
 ; --- bootstrapping --- the C core is minimal; the key semantics are l closures installed
 ; from the prelude and shared by both compilers:
-;   numap -- fixnum/number application (x**n, or compose ($ n) times), an n-fold thread.
+;   numap -- fixnum/number application (x**n, or compose ($ n) times), an n-fold text.
 ;   scomb/bcomb -- `+` and `*` of functions are church add and compose, so numerals agree.
 ;   boxfix -- the letrec* "capture by location" rewrite; now a wev source pass run after
 ;     macroexpansion, one source of truth shared with the C bootstrap compiler.
@@ -349,9 +349,15 @@
 ; the *egg* (l/egg.l): the evaluator SITS on the egg (the quoted prelude+ev corpus) twice --
 ; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- and
 ; the hatchling installs as `ev`, baked into the image at C compile time, no allocation;
-; born-at records the hatch time. (its pin defaults 0 deliberately: l0's first corpus
-; pass runs PRE-egg, where born-at does not exist yet.)
-(assert (lamp ev) (fixp (peep dict 'born-at 0)))
+; `born` records the hatch time. (its pin defaults 0 deliberately: l0's first corpus
+; pass runs PRE-egg, where born does not exist yet.) before it is born the egg PULLS the
+; runtime-internal names from dict: the raw cell nifs (peek poke seek), every hot g_vm_*
+; pointer, and `macros` (the table stays at dict[0]) -- compiled references were folded,
+; so only the names die.
+(assert (lamp ev) (fixp (peep dict 'born 0))
+        (? (peep dict 'born 0) !(peep dict 'macros 0) 1)     ; post-birth the names are gone
+        (? (peep dict 'born 0) !(peep dict 'poke 0) 1)       ; (pre-egg they still exist,
+        (? (peep dict 'born 0) !(peep dict 'g_vm_ret 0) 1))  ;  hence the born guard)
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
 ; lattice above). a dyadic op is an NxN table indexed by the two kinds; a monadic op is its

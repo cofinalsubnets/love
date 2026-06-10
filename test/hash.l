@@ -14,10 +14,10 @@
  (= "#(1 100)" (show (hash 1 100)))
  (= "#(1 \"hi\")" (show (hash 1 "hi")))
  (strp (show t))                             ; multi-entry: just exercise the path
- ; (digs x) exposes the runtime hashing method: a fixnum, equal for eql keys
- (fixp (digs 'k))
- (= (digs 'k) (digs 'k))
- (= (digs '(1 2)) (digs '(1 2))))
+ ; (dig x) exposes the runtime hashing method: a fixnum, equal for eql keys
+ (fixp (dig 'k))
+ (= (dig 'k) (dig 'k))
+ (= (dig '(1 2)) (dig '(1 2))))
 
 ; #(…) reader macro: splices a list operand into (hash …), wraps an atom as (hash x),
 ; and #() builds a fresh empty hash. Hashes print as #(…), round-tripping via #.

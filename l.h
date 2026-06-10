@@ -222,7 +222,7 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 #define nil g_nil
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KFix is the odd fixnum
-// tag; KLam is any non-data heap pointer (thread/function/map). The five DATA kinds
+// tag; KLam is any non-data heap pointer (text/function/map). The five DATA kinds
 // (KTuple, KBig, KString, KSym, KTwo) are the ones g_typ recovers from an ap's section
 // slot (data.c go() order, via the data.h lookup); an array reads as KTuple there
 // (coarse -- one array sentinel). The four KArr* kinds are NOT data sentinels: g_kind
@@ -230,7 +230,7 @@ struct g_pair { g_vm_t *ap; intptr_t a, b; };
 // so the array tower Z/R/C/O dispatches inline with the scalar tower it mirrors
 // (KArrZ~fix, KArrR~float, KArrC~complex, KArrO~big). The diagonal is the type lattice
 // by semantics then representation: arithmetic lane [KFix..KArrO] (scalars then their
-// array counterparts), sequence/concat lane [KString..KTwo], then map, thread last --
+// array counterparts), sequence/concat lane [KString..KTwo], then map, text last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (pair)
 // caps the sequence lane; KMap is the map's own rung just under KLam, so the total
@@ -262,7 +262,7 @@ struct g
  *str0(struct g*, uintptr_t);
 g_vm(g_vm_gc, uintptr_t);
 // g_kind maps any value to its enum q: KFix for a fixnum, KLam for a non-data heap
-// pointer (thread/function/map), else g_typ's data kind -- refined for a rank>=1 tuple,
+// pointer (text/function/map), else g_typ's data kind -- refined for a rank>=1 tuple,
 // which expands by element tier to KArrZ..KArrO (a rank-0 box stays KTuple). Lives in
 // l.c (it needs g_typ from the generated data.h) and is shared by data.c's apply
 // sentinels. Both the `+`/`*` matrices and the apply matrix dispatch on this.

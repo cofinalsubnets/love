@@ -118,9 +118,9 @@ g_vm_t g_vm_kcall,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_string, g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_same, g_vm_gt,  g_vm_ge,
  g_vm_sort,
- g_vm_put, g_vm_pull, g_vm_table,   g_vm_keys,  g_vm_digs,
- g_vm_unc, g_vm_knit, g_vm_pick,
- g_vm_slip,  g_vm_trim,   g_vm_loom,   g_vm_add,
+ g_vm_put, g_vm_pull, g_vm_table,   g_vm_keys,  g_vm_dig,
+ g_vm_unc, g_vm_poke, g_vm_peek,
+ g_vm_seek,  g_vm_trim,   g_vm_lam,   g_vm_add,
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_fquot, g_vm_rem,  g_vm_arg,
  g_vm_bmul_start, g_vm_bmul,   // resumable (yieldable) bignum multiply
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
@@ -169,8 +169,8 @@ static g_inline bool tupp(word _) { return lamp(_) && cell(_)->ap == g_vm_tuple;
 static g_inline bool strp(word _) { return lamp(_) && cell(_)->ap == g_vm_str; }
 // Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 g_vm_buf (like g_vm_port_io for ports), so the GC walks a buf
-// as a plain length-2 thread -- [g_vm_buf, backing g_str, terminator] -- and
-// the generic thread scan forwards the embedded string pointer for free; no
+// as a plain length-2 text -- [g_vm_buf, backing g_str, terminator] -- and
+// the generic text scan forwards the embedded string pointer for free; no
 // bespoke evac/copy rule, and the data-sentinel mechanism stays reserved for
 // kinds that need one. The bytes live in an ordinary g_str we mutate in place
 // (cf. the `to` output port). Earned by the build tools that back-patch a
@@ -179,12 +179,12 @@ struct g_buf { g_vm_t *ap; struct g_str *str; };
 static g_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == g_vm_buf; }
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
-// threads: a fixed 2-word HEADER [g_vm_map_lookup, backing, <tag>] that callers
+// texts: a fixed 2-word HEADER [g_vm_map_lookup, backing, <tag>] that callers
 // hold, and a BACKING [g_vm_map_data, putfix(len), putfix(cap), k0,v0, … , <tag>]
 // it points at -- open-addressed, linear-probed, cap a power of two. Growth
 // allocates a new backing and swaps header[1]; the header never moves, so an
-// aliased reference (ev's scopes) sees later inserts. Both are plain threads:
-// len/cap are fixnums and keys/vals l words, so evac_thd traces them with no
+// aliased reference (ev's scopes) sees later inserts. Both are plain texts:
+// len/cap are fixnums and keys/vals l words, so evac_text traces them with no
 // bespoke GC, like g_buf. Empty slots hold map_gap, a unique word-aligned
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
 // a terminator. (m k) looks k up (nil if absent) through g_vm_map_lookup.
@@ -204,8 +204,8 @@ static g_inline struct g_str *buf_str(word x) { return ((struct g_buf*) x)->str;
 static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
 // Arbitrary-precision integer (Step 6). Own data-sentinel kind KBig: a flat,
 // GC-trivial object (raw limbs, no embedded l pointers) the copying GC moves
-// by memcpy. A generic thread scan can't hold inline limb words (a limb that's
-// even-and-in-pool would be spuriously forwarded, one matching g_thd_tag would
+// by memcpy. A generic text scan can't hold inline limb words (a limb that's
+// even-and-in-pool would be spuriously forwarded, one matching g_text_tag would
 // truncate the object), so a flat bignum needs its own copy/evac rule -- like
 // KString strings -- which is exactly what the sentinel buys. slen = signed limb
 // count (negative => negative value); |slen| 32-bit limbs little-endian
@@ -437,19 +437,19 @@ static g_inline bool eql(struct g *g, word a, word b) { return a == b || eqv(g, 
 
 // Threads -- and every other variable-length heap object the GC copies by
 // scanning (continuations, task nodes, env scopes, ports) -- end with a single
-// tag word: the object's own head pointer with bit 1 set (g_thd_tag), saving a
+// tag word: the object's own head pointer with bit 1 set (g_text_tag), saving a
 // word over a separate NULL marker + head. Small ints are odd and l heap
 // pointers are word-aligned, so the only other word that can carry (x & 3) == 2
 // is an embedded *external* pointer (host data/function) that happens to land
 // on a 2-byte boundary. So the terminator test is not just the tag bits: the
 // payload must also point back into [lo, hi), the pool the object lives in --
 // which a stray external pointer never does.
-#define g_thd_tag 2
+#define g_text_tag 2
 static g_inline bool tagp(word x, word const *lo, word const *hi) {
  word const *p = (word const*) (x & ~(word) 3);
- return (x & 3) == g_thd_tag && p >= lo && p < hi; }
-static g_inline union u *tagthd(union u *h, uintptr_t len) {
-  return h[len].x = word(h) | g_thd_tag, h; }
+ return (x & 3) == g_text_tag && p >= lo && p < hi; }
+static g_inline union u *tagtext(union u *h, uintptr_t len) {
+  return h[len].x = word(h) | g_text_tag, h; }
 #define topof(g) ((word*)g+g->len)
 static g_inline struct g_tag { union u *head; union u end[]; } *ttag(struct g*g, union u *k) {
  word *lo = ptr(g), *hi = topof(g);
@@ -459,7 +459,7 @@ static g_inline union u *tag_head(struct g_tag *t) {
  return cell(word(t->head) & ~(word) 3); }
 
 static g_inline union u *clip(struct g *g, union u *k) {
- return tagthd(k, cell(ttag(g, k)) - k); }
+ return tagtext(k, cell(ttag(g, k)) - k); }
 
 
 
@@ -485,10 +485,10 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // out-of-pool short-circuit, like g_stdin/stdout/stderr) -- immortal, never copied
 // or freed, so `const` is safe. Strings are immutable, so a single empty string
 // suffices and we NEVER heap-allocate a zero-length one (str0/scat/strin/reader and
-// the `+` text lane all hand back g_str_empty). g_sym_empty is the additive identity
+// the `+` string lane all hand back g_str_empty). g_sym_empty is the additive identity
 // for `+` on symbols (empty name -> contributes no bytes) and the canonical value of
 // any empty-named symbol concat. Predicates read `ap`, so these behave as a normal
-// text/sym value; the FAM `bytes[]` is simply absent (len 0).
+// string/sym value; the FAM `bytes[]` is simply absent (len 0).
 // External linkage (declared in l.h with the EmptyString/empty_sym macros) so the
 // frontends can return them too (e.g. host_run's empty-output capture).
 const struct g_str g_str_empty = { .ap = g_vm_str, .len = 0 };
@@ -577,11 +577,11 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_fread, "fread", s2(g_vm_fread))\
  _(nif_string, "string", s1(g_vm_string))\
  _(nif_intern, "intern", s1(g_vm_intern)) _(nif_nom, "nom", s1(g_vm_nom))\
- _(nif_loom, "loom", s1(g_vm_loom))\
- _(nif_pick, "pick", s2(g_vm_pick)) _(nif_knit, "knit", s3(g_vm_knit)) _(nif_trim, "trim", s1(g_vm_trim))\
- _(nif_slip, "slip", s2(g_vm_slip)) _(nif_pin, "sat", s1(g_vm_pin)) _(nif_peep, "peep", s3(g_vm_peep))\
+ _(nif_lam, "lam", s1(g_vm_lam))\
+ _(nif_peek, "peek", s2(g_vm_peek)) _(nif_poke, "poke", s3(g_vm_poke)) _(nif_trim, "trim", s1(g_vm_trim))\
+ _(nif_seek, "seek", s2(g_vm_seek)) _(nif_pin, "sat", s1(g_vm_pin)) _(nif_peep, "peep", s3(g_vm_peep))\
  _(nif_put, "pin", s3(g_vm_put)) _(nif_pull, "pull", s3(g_vm_pull)) _(nif_table, "table", s1(g_vm_table)) _(nif_keys, "keys", s1(g_vm_keys))\
- _(nif_digs, "digs", s1(g_vm_digs))\
+ _(nif_dig, "dig", s1(g_vm_dig))\
  _(nif_bufnew, "buf", s1(g_vm_bufnew)) _(nif_bcopy, "blit", s5(g_vm_bcopy))\
  _(nif_twop, "twop", s1(g_vm_twop)) _(nif_strp, "strp", s1(g_vm_strp))\
  _(nif_real, "real", s1(g_vm_real)) _(nif_flop, "flop", s1(g_vm_flop))\
@@ -649,7 +649,7 @@ static union u const yield_c[] = { {_g_vm_yield_c} };
 // (see gtrap2 below). The MORE bit is read control flow, not a sing: the
 // thrower left [resume port sentinel] on the stack (the fread protocol), so
 // deliver the port (more: incomplete) or the sentinel (eof) to the resume
-// thread and keep running. A sing re-encodes and yields to C. Define a global
+// text and keep running. A sing re-encodes and yields to C. Define a global
 // `trap` function to land throws in l instead.
 g_vm(g_vm_trap) {
  enum g_status s = g_code_of(g);
@@ -677,7 +677,7 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
  memset(g, 0, sizeof(struct g));
  g->len = len0, g->pool = (void*) g, g->malloc = ma, g->free = fr;
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = g_clock();
- // dict + macro maps (lookup-lambdas) then the main task thread.
+ // dict + macro maps (lookup-lambdas) then the main task text.
  if (g_ok(g = map_new(g)) && g_ok(g = map_new(g)) && g_ok(g = g_have(g, 6))) {
   union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=dict (no GC since g_have)
   M[0].m = M;
@@ -685,7 +685,7 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
   M[4].x = putfix(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
-  g->tasks = tagthd(M, 5);
+  g->tasks = tagtext(M, 5);
   // dict[nil] = macro (the macro table -- no separate field). Both are on the
   // stack; push the nil key so (sp2,sp1,sp0)=(dict,macro,nil) for g_mapput.
   g = g_push(g, 1, nil);
@@ -841,7 +841,7 @@ static g_inline void evac_sym(struct g*g, word const*const p0, word const*const 
  word nom = word(sym(g->cp)->nom);            // l/r subtree slots exist only for interned
  g->cp += Width(struct g_atom) - (nom && strp(nom) ? 0 : 2); }   // (string nom); anon/uninterned skip them
 
-static g_inline void evac_thd(struct g *g, word const *const p0, word const*const t0) {
+static g_inline void evac_text(struct g *g, word const *const p0, word const*const t0) {
   // terminator payloads point into the new pool (the copied object's home);
   // a stray 2-byte-aligned external content word is rejected by the range
   word const *lo = ptr(g), *hi = ptr(g) + g->len;
@@ -883,7 +883,7 @@ static g_noinline struct g *gcg(struct g*h, struct g *p1, uintptr_t len1, struct
  for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym dict keys)
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                     // stack
  for (struct g_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0); // C live variables
- while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_thd)(h, p0, t0);              // cheney algorithm
+ while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_text)(h, p0, t0);              // cheney algorithm
  run_finalizers(h);
  if (h->len > h->max_len) h->max_len = h->len;                                       // instrumentation: peak pool len
  { uintptr_t heap = h->hp - h->end; if (heap > h->max_heap) h->max_heap = heap; }    // peak live (compacted) heap
@@ -972,14 +972,14 @@ static g_inline struct g_tag *ttag2(union u *k, word const *const lo, word const
  while (!tagp(k->x, lo, hi)) k++;
  return (struct g_tag*) k; }
 
-static g_inline word copy_thread(struct g *g, union u *src, word const *const p0, word const *const t0) {
- // it's a thread, find the end to find the head
+static g_inline word copy_text(struct g *g, union u *src, word const *const p0, word const *const t0) {
+ // it's a text, find the end to find the head
  struct g_tag *t = ttag2(src, p0, t0);
  union u *ini = tag_head(t), *d = bump(g, t->end - ini), *dst = d;
  // copy each content word to dest and leave a forwarding pointer behind,
  // stopping at the terminator; then rewrite it as the new tagged head
  for (union u *s = ini; !tagp(s->x, p0, t0); s->x = (word) d, d++, s++) d->x = s->x;
- return (word) (tagthd(dst, d - dst) + (src - ini)); }
+ return (word) (tagtext(dst, d - dst) + (src - ini)); }
 
 static g_noinline intptr_t gcp(struct g *g, word x, word const *p0, word const *t0) {
  // if it's a number or it's outside managed memory then return it
@@ -989,7 +989,7 @@ static g_noinline intptr_t gcp(struct g *g, word x, word const *p0, word const *
  // if it contains a pointer to the new space then return the pointer
  return lamp(x) && ptr(g) <= ptr(x) && ptr(x) < ptr(g) + g->len ? x :
         in_data((void*) x) ? copy_data(g, src, p0, t0) :
-                                copy_thread(g, src, p0, t0); }
+                                copy_text(g, src, p0, t0); }
 
 // ============================================================================
 // ev
@@ -1003,11 +1003,11 @@ struct env {
  word args, imps, // positional and closure variables
   stack, // computed arguments and let bindings on stack
   lams, // lambdas defined in a local let form
-  len,  // thread length accumulator
+  len,  // text length accumulator
   branches, // stack for conditional alternate branch addresses
   exits,
   sites, // recursive-fn ref backpatch: list of (lams-entry . operand-cell)
-  src,  // a lambda's source \-expr, stashed at the thread head for printing (nil = none)
+  src,  // a lambda's source \-expr, stashed at the text head for printing (nil = none)
   end[]; }; // stach for conditional exit addresses
 
 typedef Ana(ana);
@@ -1031,7 +1031,7 @@ static struct g *enscope(struct g *g, struct env *par, word args, word imps) {
   struct env *c = bump(g, n);
   c->stack = c->branches = c->exits = c->lams = c->len = c->sites = c->src = nil;
   c->args = g->sp[0], c->imps = g->sp[1], c->par = (struct env*) g->sp[2];
-  *(g->sp += 2) = (word) tagthd((union u*)c, Width(struct env)); }
+  *(g->sp += 2) = (word) tagtext((union u*)c, Width(struct env)); }
  return g; }
 
 static word memq(struct g *g, word l, word k) {
@@ -1069,14 +1069,14 @@ static g_noinline struct g *c0(struct g *g, g_vm_t *y) {
 static Cata(c1) {
  uintptr_t l = getfix((*c)->len);
  // a lambda carries its source \-expr: reserve one extra leading word for it so
- // it sits at value[-1] (the printer's discriminator) and rides inside the thread
- // span (head = src word) for free GC tracing. top-level/aux threads have no src.
+ // it sits at value[-1] (the printer's discriminator) and rides inside the text
+ // span (head = src word) for free GC tracing. top-level/aux texts have no src.
  uintptr_t extra = nilp((*c)->src) ? 0 : 1;
  g = g_have(g, l + extra + Width(struct g_tag));
  if (g_ok(g)) {
   union u *k = bump(g, l + extra + Width(struct g_tag));
   memset(k, -1, (l + extra) * sizeof(word));
-  Kp = tagthd(k, l + extra) + l + extra;
+  Kp = tagtext(k, l + extra) + l + extra;
   if (g_ok(g = pull(g, c))) {           // pull emits l words (may GC); Kp now = entry
    // read src AFTER all allocation: g_have/pull can GC and relocate the env's src.
    if (extra) Kp[-1].x = (*c)->src,     // value[-1] = source \-expr
@@ -1498,7 +1498,7 @@ static g_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
    if (!g_ok(g)) return forget();
    A(v) = B(d) = pop1(g); }
 
- // closures final -> backpatch each recorded recursive-fn ref with its thread.
+ // closures final -> backpatch each recorded recursive-fn ref with its text.
  for (d = (*c)->sites; twop(d); d = B(d)) cell(B(A(d)))->x = AB(A(A(d)));
  (*c)->sites = nil;
 
@@ -1578,7 +1578,7 @@ static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
  return cur; }
 
 // Thread (function) combinators for `+` and `*`, pinned on dict by the prelude
-// like num-ap. A thread operand takes precedence over every other type, so
+// like num-ap. A text operand takes precedence over every other type, so
 // `+`/`*` of a function build a new function -- the README's Church arithmetic,
 // agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
 // composition. scomb is the 4-arg add lambda, bcomb the 3-arg compose; the C
@@ -1611,7 +1611,7 @@ union u const numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0}
 // for a sing nil nil (oom is bare; future sings define their shapes). The
 // frame runs through trap_drive (numap_drive's 3-arg twin) into a per-class
 // epilogue: the more bit delivers the ap's result to the thrower's resume
-// thread (the fread protocol -- the ap chooses what the reader's caller
+// text (the fread protocol -- the ap chooses what the reader's caller
 // sees); a sing is observed, then takes the default escape to C.
 static g_vm(trap_ret_more) {   // [result resume port sentinel ..] -> resume sees result
  Ip = cell(Sp[1]);
@@ -1779,15 +1779,15 @@ g_vm(g_vm_callk) {
  word f_val = Sp[0];                         // g, the call_cc arg
  if (oddp(f_val)) return Ip += 1, Continue();
  word height = topof(g) - Sp;
- uintptr_t n = 2 + height;                   // g_vm_kcall + (ip + 1) + stack = thread_contents
- Have(n + Width(struct g_tag) + 1);          // thread_contents + thread_tag + 1 stack = _mem_req
+ uintptr_t n = 2 + height;                   // g_vm_kcall + (ip + 1) + stack = text_contents
+ Have(n + Width(struct g_tag) + 1);          // text_contents + text_tag + 1 stack = _mem_req
  union u *k = (union u*) Hp;
- Hp += n + Width(struct g_tag);              // thread_contents + thread_tag = _heap_alloc
+ Hp += n + Width(struct g_tag);              // text_contents + text_tag = _heap_alloc
  k[0].ap = g_vm_kcall;                       // 
  k[1].m  = Ip + 1;                           // resume at next instruction
  memcpy(k + 2, Sp, height * sizeof(word));
  Sp -= 1;
- Sp[0] = word(tagthd(k, n));
+ Sp[0] = word(tagtext(k, n));
  Sp[1] = f_val;
  return Ap(g_vm_ap, g); }
 
@@ -1871,7 +1871,7 @@ g_vm(g_vm_yield_sw) {
  N[3].x = putfix((intptr_t) my_wake);
  N[4].x = putfix(my_wait_fd);
  memcpy(N + 5, Sp, my_height * sizeof(word));
- prev->m = tagthd(N, 5 + my_height);
+ prev->m = tagtext(N, 5 + my_height);
  g->yield_ctr = 0;
  g->tasks = next;
  Sp = memmove(topof(g) - restore_h, next_stack, restore_h * sizeof(word));
@@ -1895,7 +1895,7 @@ g_vm(g_vm_spawn) {
  N[4].x = putfix(-1);  // wait_fd: -1 = not waiting on I/O
  N[5].x = x;
  N[6].x = fn;
- g->tasks->m = tagthd(N, 7);
+ g->tasks->m = tagtext(N, 7);
  return Sp++, Ip++, Continue(); }
 
 g_vm(g_vm_wait) {
@@ -1980,7 +1980,7 @@ g_vm(g_vm_cur) {
   j[1].x = *Sp++,
   j[2].m = Ip + 2,
   Ip = cell(*Sp),
-  Sp[0] = (word) tagthd(k, j + 3 - k),
+  Sp[0] = (word) tagtext(k, j + 3 - k),
   Continue(); }
 
 // load instructions
@@ -2066,24 +2066,24 @@ quon(g_vm_quom1, -1) quon(g_vm_quom2, -2)
 g_vm(g_vm_trim) { return
  clip(g, cell(Sp[0])), Ip++, Continue(); }
 
-g_vm(g_vm_slip) { return
+g_vm(g_vm_seek) { return
  Sp[1] = word(cell(Sp[1]) + getfix(Sp[0])),
  Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_pick) { return
+g_vm(g_vm_peek) { return
  Sp[1] = (cell(Sp[1]) + getfix(Sp[0]))->x,
  Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_knit) {
+g_vm(g_vm_poke) {
  union u *c = cell(Sp[2]) + getfix(Sp[0]);
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
-g_vm(g_vm_loom) {
+g_vm(g_vm_lam) {
  size_t n = getfix(Sp[0]);
  Have(n + Width(struct g_tag));
  union u *k = (union u*) Hp;
  Hp += n + Width(struct g_tag);
- Sp[0] = word(memset(tagthd(k, n), -1, n * sizeof(word)));
+ Sp[0] = word(memset(tagtext(k, n), -1, n * sizeof(word)));
  return Ip++, Continue(); }
 
 // (len x): a total size/magnitude. Containers -> element count (string/buf bytes,
@@ -2548,7 +2548,7 @@ static struct g *gzputcs(struct g *g, char const *s) {
  return g; }
 
 // --- partial-application introspection (mirrors kernel/vm.c g_vm_cur/g_vm_unc) ---
-// A partial-app closure is a thread whose head is g_vm_unc (one more arg wanted)
+// A partial-app closure is a text whose head is g_vm_unc (one more arg wanted)
 // or [g_vm_cur n][g_vm_unc …] (more wanted). Each g_vm_unc cell holds a captured
 // arg at [1] and a link at [2] that points either to the next (older) closure's
 // unc cell or, for the last one, two cells into the underlying function's body --
@@ -2577,7 +2577,7 @@ static struct g *gzput_fn_body(struct g *g, word x, uintptr_t off);
 // or an opaque handle puts its value AT the start -- no leading cell -- so reading value[-1]
 // there reads the neighbouring object: uninitialised/foreign (flaky to valgrind, and garbage
 // that looked like an in-pool pair would spuriously read back as a source). Probe the tag,
-// which records the true start, instead of reading value[-1]: ttag scans only defined thread
+// which records the true start, instead of reading value[-1]: ttag scans only defined text
 // cells. value > start <=> a reserved leading cell exists. (fn_partialp is a cheap fast
 // reject so the common curried-closure case skips the tag scan.)
 static word fn_src(struct g *c, union u *k, word x) {
@@ -2652,7 +2652,7 @@ static struct g *gz_canon(struct g *g) {
 // Print a function value. Like tuple/cplx/hash it's a `,`-prefixed value form (so it
 // reads back via uq=identity): ,(base arg…) for a partial application / closure,
 // ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
-// thread (continuation, top-level wrap) has no constructor form, so it prints as the
+// text (continuation, top-level wrap) has no constructor form, so it prints as the
 // opaque, re-parsable token ,thd@<addr>. The leading , is emitted once here; body w/o it.
 static struct g *gzput_fn(struct g *g, word x, uintptr_t off) {
  union u *k = cell(x);
@@ -2815,7 +2815,7 @@ struct g *g_io_alloc(struct g *g, int fd) {
   io->fd = putfix(fd);
   io->ungetc_buf = putfix(EOF);
   io->eof_seen = putfix(false);
-  *--g->sp = (word) tagthd(k, n);            // stack slot reserved by the +1 in have()
+  *--g->sp = (word) tagtext(k, n);            // stack slot reserved by the +1 in have()
   struct g_fz *z = bump(g, Width(struct g_fz));
   z->p = k, z->fn = io_close, z->next = g->fz, g->fz = z; }
  return g; }
@@ -2883,7 +2883,7 @@ g_vm(g_vm_fread) {
    default: return gtrap(g);                          // sing: condition data per thrower
    case g_status_more: case g_status_eof:
     // The more bit routes control through the trap continuation: push fread's
-    // resume thread under [port sentinel] and throw -- the trap function (or
+    // resume text under [port sentinel] and throw -- the trap function (or
     // throw_c's default) decides flow from the bits. Headroom for the push is
     // the parse ctx frame, which exists wherever more/eof can arise.
     *--c->sp = word(c->ip);
@@ -3261,7 +3261,7 @@ g_vm(g_vm_key) {
  return Continue(); }
 
 // ============================================================================
-// map (lookup-lambda backed by an open-addressed thread; see mapp comment)
+// map (lookup-lambda backed by an open-addressed text; see mapp comment)
 // ============================================================================
 // backing is internal -- only ever reached from a header[1], never applied as a
 // l value; its ap behaves-as-1 like g_vm_buf should it ever be (it won't).
@@ -3286,7 +3286,7 @@ word g_mapget(struct g *g, word zero, word k, word m) {
 static g_inline union u *map_fill_back(union u *b, uintptr_t cap) {
  b[0].ap = g_vm_map_data, b[1].x = putfix(0), b[2].x = putfix(cap);
  for (uintptr_t i = 0; i < cap; i++) b[3 + 2 * i].x = map_gap, b[4 + 2 * i].x = nil;
- return tagthd(b, 3 + 2 * cap); }
+ return tagtext(b, 3 + 2 * cap); }
 
 // double the backing of the map at sp[2] and rehash into it, then swap it into
 // header[1]; the header never moves, so aliased references stay valid. The
@@ -3344,7 +3344,7 @@ static struct g *map_new(struct g *g) {
  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  if (!g_ok(g = g_have(g, nb + 3))) return g;
  union u *b = map_fill_back((union u*) g->hp, cap), *h = (union u*) (g->hp + nb);
- h[0].ap = g_vm_map_lookup, h[1].x = (word) b, tagthd(h, 2);
+ h[0].ap = g_vm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
  g->hp += nb + 3;
  return g_push(g, 1, (word) h); }
 
@@ -3354,7 +3354,7 @@ g_vm(g_vm_table) {
  Have(nb + 3);
  union u *b = map_fill_back((union u*) Hp, cap);
  union u *h = (union u*) (Hp + nb);
- h[0].ap = g_vm_map_lookup, h[1].x = (word) b, tagthd(h, 2);
+ h[0].ap = g_vm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
  Sp[0] = (word) h;
  return Hp += nb + 3, Ip++, Continue(); }
 
@@ -3367,7 +3367,7 @@ static g_vm(g_vm_map_lookup) {
 
 op11(g_vm_mapp, mapp(Sp[0]) ? putfix(1) : nil)
 // (lamp x): is x a heap object (a pointer), i.e. not a fixnum? true for every
-// present non-fixnum value -- pairs, symbols, strings, tuples, maps, threads.
+// present non-fixnum value -- pairs, symbols, strings, tuples, maps, texts.
 op11(g_vm_lamp, lamp(Sp[0]) ? putfix(1) : nil)
 // (handlep x): is x an opaque handle -- a buf or a port? (a task is referenced
 // by a fixnum id, not a handle object.) a handle also answers lamp (it acts as
@@ -3375,7 +3375,7 @@ op11(g_vm_lamp, lamp(Sp[0]) ? putfix(1) : nil)
 op11(g_vm_handlep, (bufp(Sp[0]) || iop(Sp[0])) ? putfix(1) : nil)
 
 // (hash x) -- the general hashing method exposed to l as a fixnum.
-op11(g_vm_digs, putfix(hash(g, Sp[0])))
+op11(g_vm_dig, putfix(hash(g, Sp[0])))
 
 g_vm(g_vm_peep) {                                // (peep coll key default): collection-first
  word x = Sp[0], k = Sp[1], z = Sp[2], n;
@@ -3575,7 +3575,7 @@ g_vm(g_vm_scat) {
 // identity numeral) -- like every structureless value. Its address is still the
 // kind tag: g_noicf (on every g_vm) keeps this byte-identical to g_vm_port_io so
 // bufp and iop never collide. NOT a data sentinel, so the GC copies a buf via the
-// generic thread path and the cheney scan forwards its backing-string pointer.
+// generic text path and the cheney scan forwards its backing-string pointer.
 g_vm(g_vm_buf) {
  return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
 
@@ -3583,7 +3583,7 @@ g_vm(g_vm_buf) {
 // string singleton EmptyString, so NO empty buf object ever exists (an un-writable 0-byte
 // buf IS ""); this lets g_nilp drop its buf branch (every real buf has len>=1, truthy).
 // Two heap objects under one Have (so no GC sees a half-built buf): the backing g_str
-// holding the bytes, and the length-2 wrapper thread [g_vm_buf, str, terminator].
+// holding the bytes, and the length-2 wrapper text [g_vm_buf, str, terminator].
 g_vm(g_vm_bufnew) {
  intptr_t n = fixp(Sp[0]) ? getfix(Sp[0]) : 0;
  if (n <= 0) return Sp[0] = EmptyString, Ip++, Continue();   // no empty buf: it is ""
@@ -3597,7 +3597,7 @@ g_vm(g_vm_bufnew) {
  Hp += breq;
  ((struct g_buf*) k)->ap = g_vm_buf;
  ((struct g_buf*) k)->str = s;
- tagthd(k, Width(struct g_buf));
+ tagtext(k, Width(struct g_buf));
  return Sp[0] = word(k), Ip++, Continue(); }
 
 // (bcopy dst doff src soff n) — copy n bytes from src[soff..] into buf dst at
@@ -3793,7 +3793,7 @@ static g_vm(g_vm_quotn) {
  return Unpack(g), Continue(); }
 
 avm_ovf(sub, __builtin_sub_overflow)
-// g_vm_mul + its kind matrix live after the `+` text lane (they reuse add_name /
+// g_vm_mul + its kind matrix live after the `+` string lane (they reuse add_name /
 // stringrank for the symbol-repetition case), below.
 
 // `+` is overloaded: still arithmetic add, but generic over strings and lists,
@@ -3846,7 +3846,7 @@ static g_vm(g_vm_add_seq) {
  return *++Sp = nil, Ip++, Continue(); }          // unreachable: matrix gates on a list
 
 // --- TEXT lane: strings + symbols, name-compatible -------------------------
-// The text tower is STRING (rank 0) < UNINTERNED-SYM (1) < INTERNED-SYM (2). A
+// The string tower is STRING (rank 0) < UNINTERNED-SYM (1) < INTERNED-SYM (2). A
 // symbol's bytes are its name (anonymous -> empty, like ""); a number contributes
 // one byte (seq_byte) and sits at the top rank, so min() keeps its partner's type
 // (a scalar lifts into whatever it joins). Mixing demotes to the lower rank:
@@ -3876,7 +3876,7 @@ static g_inline char *add_emit(char *w, word x) {       // append x's bytes; ret
  return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (gated >= 0 by the byte law)
 static g_vm(g_vm_add_string) {
  word a = Sp[0], b = Sp[1];
- if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> text: undefined
+ if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> string: undefined
  if (!strp(a) && !symp(a) && seq_byte(a) < 0) return *++Sp = nil, Ip++, Continue();  // the byte law
  if (!strp(b) && !symp(b) && seq_byte(b) < 0) return *++Sp = nil, Ip++, Continue();
  int rank = min(stringrank(a), stringrank(b));
@@ -3891,11 +3891,11 @@ static g_vm(g_vm_add_string) {
  return rank == 0 ? (Ip++, Continue())                  // string
       : rank == 1 ? Ap(g_vm_nom, g)                  // uninterned symbol (fresh)
                   : Ap(g_vm_intern, g); }               // interned symbol
-static g_vm(g_vm_0) {                             // unsupported mix (array <-> text)
+static g_vm(g_vm_0) {                             // unsupported mix (array <-> string)
  return *++Sp = nil, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in l.h): a fixnum is
-// the odd tag (KFix), a non-data heap pointer is a thread/function (KLam), else g_typ
+// the odd tag (KFix), a non-data heap pointer is a text/function (KLam), else g_typ
 // gives the data kind. The one refinement: a rank>=1 tuple (array) expands by element
 // tier to KArrZ..KArrO so the array tower dispatches inline with the scalar tower it
 // mirrors; rank-0 boxes (float/complex/wide-int) stay KTuple. Exported (not inline) so
@@ -3909,7 +3909,7 @@ enum q g_kind(word x) {
 // ============================================================================
 // generic-op lane aps, then all three dispatch matrices adjacent, then the
 // `+`/`*` dispatchers. The numeric slow lanes (addn/muln…) come from the AVM_*
-// macros above; the `+` text lanes (add_seq/add_string) and g_vm_0 just above; the
+// macros above; the `+` string lanes (add_seq/add_string) and g_vm_0 just above; the
 // lambda combinators (g_vm_addl/g_vm_mull) near num-ap. Defined here: the `*`
 // repeat lane and the apply aps -- everything the matrices reference.
 // ============================================================================
@@ -3961,7 +3961,7 @@ static g_vm(g_vm_mul_rep) {
 // kind of the applied value and the dynamic kind of the argument. Every data kind
 // has a meaningful apply (pair = eliminator, string/symbol = byte index, numeric
 // tower = Church numeral); opaque handles (ports, buffers) behave as 0 via their
-// own g_vm_* sentinel, not through here. Maps look up via g_vm_map_lookup (a thread
+// own g_vm_* sentinel, not through here. Maps look up via g_vm_map_lookup (a text
 // ap, not a data sentinel), so they do not appear in this table.
 
 // (s k): applying a string indexes it -- k a byte offset, result the unsigned byte
@@ -3999,7 +3999,7 @@ static g_vm(data_num_apply) {
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // ((a . b) g) == (g a b): a pair is its own Church eliminator (cons = \a b g.g a b).
-// Re-enter the apply protocol via a static driver thread: lay the stack as the two
+// Re-enter the apply protocol via a static driver text: lay the stack as the two
 // curried calls expect, then [ap ; swap+ap ; ret0] runs ((g a) b). pair_swap reorders
 // [result, b] -> [b, result] so the second ap sees arg=b, fn=(g a). The driver lives
 // in .data, so the return addresses it leaves on the stack fall outside the GC pool.
@@ -4858,7 +4858,7 @@ static struct g *g_bmul_setup(struct g *g) {
  struct g_str *s = ini_str((struct g_str*) g->hp, rbytes);
  g->hp += sreq; memset(txt(s), 0, rbytes);
  union u *k = (union u*) g->hp; g->hp += breq;
- ((struct g_buf*) k)->ap = g_vm_buf, ((struct g_buf*) k)->str = s, tagthd(k, Width(struct g_buf));
+ ((struct g_buf*) k)->ap = g_vm_buf, ((struct g_buf*) k)->str = s, tagtext(k, Width(struct g_buf));
  g->sp -= 3;                                       // [i, r, ret_ip, abig, bbig]
  g->sp[0] = putfix(0), g->sp[1] = word(k), g->sp[2] = word(ret);
  g->sp[3] = word(abig), g->sp[4] = word(bbig);
