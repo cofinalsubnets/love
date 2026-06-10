@@ -118,11 +118,11 @@ struct g {
   // rng: global RNG state (rank-1 i64 tuple, len 4, xoshiro256++). Lives in &v0..end
   // so gc.c's root loop forwards it.
   g_word rng;
-  // Pre-interned dict keys for the C->lisp hooks (num-ap, scomb, bcomb, trap).
-  // The handlers live on dict (GC-traced, egg-baked; no cache slots), resolved
-  // per use; keys interned at init so lookups never allocate. In v0..end so the
-  // gc root loop forwards them.
-  g_word numap_sym, scomb_sym, bcomb_sym, trap_sym; }; };
+  // Pre-interned dict keys for the C->lisp hooks (num-ap, scomb, bcomb, trap)
+  // and the reader's operator table (operators). The values live on dict
+  // (GC-traced, egg-baked; no cache slots), resolved per use; keys interned at
+  // init so lookups never allocate. In v0..end so the gc root loop forwards them.
+  g_word numap_sym, scomb_sym, bcomb_sym, trap_sym, operators_sym; }; };
  intptr_t end[]; };
 
 struct g_def { char const *n; intptr_t x; };

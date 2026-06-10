@@ -724,6 +724,23 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   if (g_ok(g = intern(g_strof(g, "scomb"))))  g->scomb_sym = pop1(g);
   if (g_ok(g = intern(g_strof(g, "bcomb"))))  g->bcomb_sym = pop1(g);
   if (g_ok(g = intern(g_strof(g, "trap"))))   g->trap_sym = pop1(g);
+  if (g_ok(g = intern(g_strof(g, "operators")))) g->operators_sym = pop1(g);
+  // dict['operators]: the reader's operator table, char -> name | (name . arity).
+  // Seeded with the 8 builtin sigil operators at arity 1; `~` and `,` stay
+  // hardcoded digraphs. Lisp extends it with a plain pin (arity 1..7).
+  { struct { char c; char const *n; } const ops[] = {
+     {'\'', "\\"}, {'`', "qq"}, {'%', "map"}, {'#', "hash"},
+     {'@', "tuple"}, {'$', "gsym"}, {'!', "nilp"}, {'.', "dot"} };
+   g = map_new(g);                                  // sp[0] = the table
+   for (uintptr_t i = 0; i < LEN(ops); i++) {
+    g = intern(g_strof(g, ops[i].n));               // sp[0]=name sp[1]=table
+    g = g_push(g, 1, putfix(ops[i].c));             // (key val map) for g_mapput
+    g = g_mapput(g); }                              // -> sp[0]=table
+   g = intern(g_strof(g, "operators"));             // sp[0]=key sp[1]=table
+   g = g_push(g, 1, nil);
+   if (g_ok(g)) {                                   // permute to (key val map)=(operators table dict)
+    g->sp[0] = g->sp[1], g->sp[1] = g->sp[2], g->sp[2] = g->dict;
+    g = g_pop(g_mapput(g), 1); } }
   // Eager-seed the global RNG stream so g->rng is always a valid state tuple (ll0
   // bootstrap included). The seed mixes the clock with the rotated pool address.
   if (g_ok(g = g_have(g, RNG_VEC_REQ))) {
@@ -2850,6 +2867,18 @@ static g_inline struct g *push_frame(struct g *g) {     // push an empty (head .
  return gxl(gxl(g_push(g, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
 static g_inline struct g *push_wrap(struct g *g, char const *nom) {
  return gxl(intern(g_strof(g, nom))); }        // ctx' = (wrapsym . ctx)
+// N-ary operator wrap: frame = (count . (head . tail)), the accumulator seeded
+// with the operator name so completion delivers (name d1 .. dN) directly.
+static struct g *push_wrapn(struct g *g, word name, int n) {
+ g = g_push(g, 1, name);
+ g = gxr(g_push(g, 1, nil));                       // s = (name . nil)
+ g = gxl(g_push(g, 1, g_ok(g) ? g->sp[0] : nil));  // (s . s): head = tail = s
+ g = gxl(g_push(g, 1, putfix(n)));                 // (n . (s . s))
+ return gxl(g); }                                  // ctx' = (frame . ctx)
+// a pending wrap (vs a list accumulator): an arity-1 wrapsym, or an N-ary frame
+// whose car is a positive count (a list frame's car is nil or a pair).
+static g_inline bool wrap_framep(word f) {
+ return symp(f) || (twop(f) && fixp(A(f)) && !nilp(A(f))); }
 // recognise the splicing reader-macro wraps -- `%` (interned `hasht`) and `@`
 // (interned `tuple`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in gz_parse.
@@ -2870,19 +2899,11 @@ static struct g *gz_parse(struct g *g, bool multi) {
   int c = g->b, c2 = EOF;
   switch (c) {
    case '(': case '[': case '{': g = push_frame(g); continue;   // [ ] { } are () synonyms
-   case '\'': g = push_wrap(g, "\\"); continue;
-   case '`':  g = push_wrap(g, "qq"); continue;
-   case '%':  g = push_wrap(g, "map"); continue;       // %(k v …)->(map k v …), %x->(map x)
-   case '#':  g = push_wrap(g, "hash"); continue;      // #x->(hash x): the saturation operator
-   case '@':  g = push_wrap(g, "tuple"); continue;       // @(e …)->(tuple e …) [array], @()->(tuple)
-   case '$':  g = push_wrap(g, "gsym"); continue;      // $x->(gsym x)->(nom 'x): a fresh nom
-   case '!':  g = push_wrap(g, "nilp"); continue;      // !x->(nilp x): logical not (`!=` is gone, use !(= …))
    case '~':                                            // ~(re im)->(com re im) [construct]; ~x->(clift x)
     if (!g_ok(g = zgetc(g))) return g;                 // peek the char after ~: `(` -> splice into com (build
     c2 = g->b;                                         // a complex / curry); anything else -> monadic lift/conj
     if (c2 != EOF) g = zungetc(g, c2);                 // (clift: real r -> ~(r 0); complex z -> conj z)
     g = push_wrap(g, c2 == '(' ? "com" : "clift"); continue;
-   case '.':  g = push_wrap(g, "dot"); continue;       // .x->(dot x): print x (raw if string, else inspect), return x
    case ',':                                            // unquote / unquote-splice
     if (!g_ok(g = zgetc(g))) return g;
     if ((c2 = g->b) == '@') { g = push_wrap(g, "uqs"); continue; }
@@ -2890,7 +2911,7 @@ static struct g *gz_parse(struct g *g, bool multi) {
     g = push_wrap(g, "uq"); continue;
    case ')': case ']': case '}':
     if (nilp(g->sp[0])) return encode(g_core_of(g), g_status_eof);   // stray ) / read1
-    if (symp(A(g->sp[0]))) return encode(g_core_of(g), g_status_more); // wrap wants an operand
+    if (wrap_framep(A(g->sp[0]))) return encode(g_core_of(g), g_status_more); // wrap wants operands
     g = g_push(g, 1, AA(g->sp[0]));                    // d = head of the closed frame
     if (g_ok(g)) {
      if (nilp(g->sp[0])) g->sp[0] = EMPTY_SYM;         // () -- the empty symbol, not 0
@@ -2898,13 +2919,22 @@ static struct g *gz_parse(struct g *g, bool multi) {
     break;                                             // -> deliver d
    case EOF:
     if (nilp(g->sp[0])) return encode(g_core_of(g), g_status_eof);
-    if (!(multi && nilp(B(g->sp[0])) && !symp(A(g->sp[0]))))
+    if (!(multi && nilp(B(g->sp[0])) && !wrap_framep(A(g->sp[0]))))
      return encode(g_core_of(g), g_status_more);       // unclosed list / pending wrap
     g = g_push(g, 1, AA(g->sp[0]));                    // close the top accumulator -> its head
     if (g_ok(g)) g->sp[1] = B(g->sp[1]);
     break;
    case '"': g = gzread1str(g); break;
-   default:  g = gzread1sym(g, c); break; }
+   default: {                                          // operator table, else a symbol/number token
+    struct g *cg = g_core_of(g);
+    word t = cg->operators_sym ? g_mapget(cg, nil, cg->operators_sym, cg->dict) : nil;
+    word v = mapp(t) ? g_mapget(cg, nil, putfix(c), t) : nil;
+    if (symp(v) && v != EMPTY_SYM) { g = gxl(g_push(g, 1, v)); continue; }   // name -> arity-1 wrap
+    if (twop(v) && symp(A(v)) && A(v) != EMPTY_SYM && fixp(B(v))) {          // (name . arity)
+     intptr_t n = getfix(B(v));
+     if (n == 1) { g = gxl(g_push(g, 1, A(v))); continue; }
+     if (n >= 2 && n <= 7) { g = push_wrapn(g, A(v), (int) n); continue; } } // junk arity: not an op
+    g = gzread1sym(g, c); break; } }
   if (!g_ok(g)) return g;
   // deliver the datum at sp[0] into the frame stack at sp[1]
   for (bool done = false; g_ok(g) && !done; ) {
@@ -2926,6 +2956,15 @@ static struct g *gz_parse(struct g *g, bool multi) {
      g = gxr(g_push(g, 1, nil));                       // (d . nil)
      g = gxl(g_push(g, 1, g_ok(g) ? A(g->sp[1]) : nil)); // (wrapsym . (d))
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); } }
+   else if (twop(A(g->sp[1])) && fixp(AA(g->sp[1])) && !nilp(AA(g->sp[1]))) { // N-ary wrap: collect d
+    g = gxr(g_push(g, 1, nil));                        // newcons = (d . nil)
+    if (g_ok(g)) {
+     word f = A(g->sp[1]), acc = B(f);                 // f = (count . (head . tail))
+     B(B(acc)) = g->sp[0], B(acc) = g->sp[0];          // append at the tail (head pre-seeded)
+     if (A(f) == putfix(1)) {                          // last operand -> (name d1 .. dN)
+      g->sp[0] = A(acc);                               // the result replaces newcons
+      g->sp[1] = B(g->sp[1]); }                        // pop the wrap; keep delivering
+     else { A(f) = putfix(getfix(A(f)) - 1), g->sp++; done = true; } } }
    else {                                              // list: append d at the frame's tail
     g = gxr(g_push(g, 1, nil));                        // newcons = (d . nil)
     if (g_ok(g)) {

@@ -219,15 +219,18 @@
  (: b (bufnew 1) _ (pin b 0 257) (= 1 (peek b 0 0))) (: b (bufnew 4) _ (bcopy b 0 "ABCD" 0 4) (= 68 (peek b 3 0)))
  !(= (bufnew 2) (bufnew 2)))
 
-; --- reader sigils --- `;` line comment, `#!` pinbang (no block comments). eight are monadic
-; operators (sigil / name / call): # hash (saturation), ' quote (= one-operand \), ! bang (negation),
-; . dot (print), ~ wave (complex/conjugate), $ nom (gensym), @ tup (array), % map. the
-; quasiquote family -- ` quasiquote, , unquote, ,@ splice -- are sigils, not operators.
-; ~(re im) splices to (com re im); a bare ~x is (clift x); .x is (dot x).
+; --- reader operators --- `;` line comment, `#!` pinbang (no block comments). an operator
+; char reads its next N datums and desugars to (name d1 .. dN). the table is
+; dict['operators] (char -> name | (name . arity), arity 1-7) -- extensible with a plain
+; pin (see test/operator.l). eight ship at arity 1 (glyph / name): # hash (saturation),
+; ' quote (= one-operand \), ! bang (negation), . dot (print), $ nom (gensym), @ tup
+; (array), % map, ` quasiquote. , unquote, ,@ splice, and ~ wave (complex/conjugate)
+; stay reader digraphs. ~(re im) splices to (com re im); a bare ~x is (clift x).
 (assert
  (= '(1 (\ x) 3) `(1 'x 3)) (= '(1 2 3 4) (: xs '(2 3) `(1 ,@xs 4)))
  (= 5 #"hello") (= 42 #42) (symp $x) (= 1 !0) (= 0 !5) !!5
- (= i ~(0 1)) (= ~(2 3) (com 2 3)) (= '~x '(clift x)) (= '(dot x) '.x) (lamp dot))
+ (= i ~(0 1)) (= ~(2 3) (com 2 3)) (= '~x '(clift x)) (= '(dot x) '.x) (lamp dot)
+ (: t (peek dict 'operators 0) (&& (mapp t) (= 'hash (t ("#" 0))) (= 'map (t ("%" 0))))))
 
 ; --- macros --- a macro maps an argument list to code; install with `::`. the prelude ships
 ; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, the body-first
