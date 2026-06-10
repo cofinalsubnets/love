@@ -101,7 +101,7 @@ struct g {
  union { uintptr_t t0; g_word *cp; };
  void *(*malloc)(struct g*, size_t),
       (*free)(struct g*, void*);
- union u *k; // current continuation: a thread thrown to on error (default throw_c, installed by g_ini_0)
+ union u *trap; // trap continuation: a thread thrown to on error (default throw_c, installed by g_ini_0)
  uintptr_t b;
  uintptr_t n_gc, max_len, max_heap; // gc instrumentation (cycles, peak pool len, peak live heap; words)
  union {
@@ -282,20 +282,20 @@ static g_inline struct g_pair *ini_two(struct g_pair *w, intptr_t a, intptr_t b)
  return w->ap = g_vm_two, w->a = a, w->b = b, w; }
 static g_inline struct g *encode(struct g*g, enum g_status s) { return
   (struct g*) ((uintptr_t) g | s); }
-// Throw status s: transfer control to the continuation installed at g->k,
-// carrying s encoded into the g handed to it. The default k (throw_c, set in
+// Throw status s: transfer control to the continuation installed at g->trap,
+// carrying s encoded into the g handed to it. The default (throw_c, set in
 // g_ini_0) immediately yields that back to the C driver -- same escape the old
-// trap did; installing a ll thread at g->k would instead land throws in ll.
+// trap did; installing a ll thread at g->trap would instead land throws in ll.
 static g_inline struct g *gtrap2(struct g*g, enum g_status s) {
  struct g *c = g_core_of(g);
- c->ip = c->k;                                  // resume at the continuation
+ c->ip = c->trap;                               // resume at the trap continuation
 #if g_tco
- return c->k->ap(encode(c, s), c->k, c->hp, c->sp);
+ return c->trap->ap(encode(c, s), c->trap, c->hp, c->sp);
 #else
- return c->k->ap(encode(c, s));
+ return c->trap->ap(encode(c, s));
 #endif
 }
-// Throw on an already-tagged g: re-throw its own status to g->k.
+// Throw on an already-tagged g: re-throw its own status to g->trap.
 static g_inline struct g *gtrap(struct g*g) { return gtrap2(g_core_of(g), g_code_of(g)); }
 static g_inline struct g *g_have(struct g *g, uintptr_t n) {
  return !g_ok(g) || avail(g) >= n ? g : g_please(g, n); }

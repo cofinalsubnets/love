@@ -650,10 +650,10 @@ nifs(native_implemented_function);
 static g_vm(_g_vm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_g_vm_yield_c} };
 
-// Default continuation installed at g->k. A throw enters it with the thrown
-// status encoded into g (see gtrap2 in i.h); it re-encodes that status and
-// yields to C -- the same escape the old trap did. Swap g->k for a ll thread
-// to land throws in ll instead.
+// Default trap continuation installed at g->trap. A throw enters it with the
+// thrown status encoded into g (see gtrap2 in i.h); it re-encodes that status
+// and yields to C -- the same escape the old trap did. Swap g->trap for a ll
+// thread to land throws in ll instead.
 static g_vm(_g_vm_throw_c) {
  enum g_status s = g_code_of(g);
  g = g_core_of(g);
@@ -672,7 +672,7 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
  memset(g, 0, sizeof(struct g));
  g->len = len0, g->pool = (void*) g, g->malloc = ma, g->free = fr;
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = g_clock();
- g->k = (union u*) throw_c;
+ g->trap = (union u*) throw_c;
  // dict + macro maps (lookup-lambdas) then the main task thread.
  if (g_ok(g = map_new(g)) && g_ok(g = map_new(g)) && g_ok(g = g_have(g, 6))) {
   union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=dict (no GC since g_have)
