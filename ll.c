@@ -117,7 +117,7 @@ g_vm_t g_vm_kcall,
  g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_ssub,
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_string, g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_same, g_vm_gt,  g_vm_ge,
- g_vm_put, g_vm_hashd,   g_vm_hnew,   g_vm_hashk,  g_vm_hashof,
+ g_vm_put, g_vm_pull, g_vm_hashd,   g_vm_hnew,   g_vm_hashk,  g_vm_hashof,
  g_vm_unc, g_vm_poke2, g_vm_peek2,
  g_vm_seek,  g_vm_trim,   g_vm_lam,   g_vm_add,
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_fquot, g_vm_rem,  g_vm_arg,
@@ -572,7 +572,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_quot, "/", S2(g_vm_quot)) _(nif_fquot, "//", S2(g_vm_fquot)) _(nif_rem, "mod", S2(g_vm_rem)) \
  _(nif_lt, "<", S2(g_vm_lt))  _(nif_le, "<=", S2(g_vm_le)) _(nif_eq, "=", S2(g_vm_eq))\
  _(nif_ge, ">=", S2(g_vm_ge))  _(nif_gt, ">", S2(g_vm_gt)) \
- _(nif_same, "same", S2(g_vm_same)) \
+ _(nif_same, "idp", S2(g_vm_same)) \
  _(nif_bsl, "<<", S2(g_vm_bsl)) _(nif_bsr, ">>", S2(g_vm_bsr))\
  _(nif_band, "&", S2(g_vm_band)) _(nif_bor, "|", S2(g_vm_bor)) _(nif_bxor, "^", S2(g_vm_bxor))\
  _(nif_cons, "X", S2(g_vm_cons)) _(nif_car, "A", S1(g_vm_car)) _(nif_cdr, "B", S1(g_vm_cdr)) \
@@ -581,12 +581,12 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_string, "string", S1(g_vm_string))\
  _(nif_intern, "intern", S1(g_vm_intern)) _(nif_nom, "nom", S1(g_vm_nom))\
  _(nif_lam, "lam", S1(g_vm_lam))\
- _(nif_peek, "peek", S2(g_vm_peek2)) _(nif_poke, "poke", S3(g_vm_poke2)) _(nif_trim, "trim", S1(g_vm_trim))\
- _(nif_seek, "seek", S2(g_vm_seek)) _(nif_pin, "pin", S1(g_vm_pin)) _(nif_get, "get", S3(g_vm_get))\
- _(nif_put, "put", S3(g_vm_put)) _(nif_hnew, "hashn", S1(g_vm_hnew)) _(nif_hashk, "hashk", S1(g_vm_hashk))\
- _(nif_hash, "hash", S1(g_vm_hashof))\
+ _(nif_peek, "peekl", S2(g_vm_peek2)) _(nif_poke, "pinl", S3(g_vm_poke2)) _(nif_trim, "trim", S1(g_vm_trim))\
+ _(nif_seek, "seekl", S2(g_vm_seek)) _(nif_pin, "hash", S1(g_vm_pin)) _(nif_get, "peek", S3(g_vm_get))\
+ _(nif_put, "pin", S3(g_vm_put)) _(nif_pull, "pull", S3(g_vm_pull)) _(nif_hnew, "mapn", S1(g_vm_hnew)) _(nif_hashk, "mapk", S1(g_vm_hashk))\
+ _(nif_hash, "digest", S1(g_vm_hashof))\
  _(nif_bufnew, "bufnew", S1(g_vm_bufnew)) _(nif_bcopy, "bcopy", S5(g_vm_bcopy))\
- _(nif_hashd, "hashd", S3(g_vm_hashd)) _(nif_twop, "twop", S1(g_vm_twop)) _(nif_strp, "strp", S1(g_vm_strp))\
+ _(nif_hashd, "mapd", S3(g_vm_hashd)) _(nif_twop, "twop", S1(g_vm_twop)) _(nif_strp, "strp", S1(g_vm_strp))\
  _(nif_flo, "flo", S1(g_vm_flo)) _(nif_flop, "flop", S1(g_vm_flop))\
  _(nif_sin, "sin", S1(g_vm_sin)) _(nif_cos, "cos", S1(g_vm_cos))\
  _(nif_log, "log", S1(g_vm_log)) _(nif_pow, "pow", S2(g_vm_pow))\
@@ -605,7 +605,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_symp, "symp", S1(g_vm_symp)) _(nif_mapp, "mapp", S1(g_vm_mapp)) _(nif_fixp, "fixp", S1(g_vm_fixp))\
  _(nif_lamp, "lamp", S1(g_vm_lamp))\
  _(nif_nilp, "nilp", S1(g_vm_nilp)) _(nif_ev, "ev", S1(g_vm_eval))\
- _(nif_callk, "call_cc", S1(g_vm_callk)) _(nif_yield, "yield", S1(g_vm_yield_nif)) \
+ _(nif_callk, "call-cc", S1(g_vm_callk)) _(nif_yield, "yield", S1(g_vm_yield_nif)) \
  _(nif_spawn, "spawn", S2(g_vm_spawn)) _(nif_wait, "wait", S1(g_vm_wait)) \
  _(nif_sleep, "sleep", S1(g_vm_sleep)) _(nif_donep, "done?", S1(g_vm_donep)) \
  _(nif_kill, "kill", S1(g_vm_kill)) \
@@ -2862,7 +2862,7 @@ static g_inline bool symeq(word x, char const *nm, uintptr_t n) {
  if (!s || !strp(word(s)) || s->len != n) return false;
  for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
  return true; }
-static g_inline bool hashsym(word x) { return symeq(x, "hasht", 5); }
+static g_inline bool hashsym(word x) { return symeq(x, "map", 3); }
 static g_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "com", 3); }
 
 static struct g *gz_parse(struct g *g, bool multi) {
@@ -2876,8 +2876,8 @@ static struct g *gz_parse(struct g *g, bool multi) {
    case '(': case '[': case '{': g = push_frame(g); continue;   // [ ] { } are () synonyms
    case '\'': g = push_wrap(g, "\\"); continue;
    case '`':  g = push_wrap(g, "qq"); continue;
-   case '%':  g = push_wrap(g, "hasht"); continue;     // %(k v …)->(hasht k v …), %x->(hasht x)
-   case '#':  g = push_wrap(g, "pin"); continue;       // #x->(len x): wrap operand in len
+   case '%':  g = push_wrap(g, "map"); continue;       // %(k v …)->(map k v …), %x->(map x)
+   case '#':  g = push_wrap(g, "hash"); continue;      // #x->(hash x): the saturation operator
    case '@':  g = push_wrap(g, "tuple"); continue;       // @(e …)->(tuple e …) [array], @()->(tuple)
    case '$':  g = push_wrap(g, "gsym"); continue;      // $x->(gsym x)->(nom 'x): a fresh nom
    case '!':  g = push_wrap(g, "nilp"); continue;      // !x->(nilp x): logical not (`!=` is gone, use !(= …))
@@ -2916,7 +2916,7 @@ static struct g *gz_parse(struct g *g, bool multi) {
    if (symp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
     if (hashsym(A(g->sp[1])) && nilp(g->sp[0])) {      // %() -> (hashn 0): a fresh empty hash
      g = gxr(g_push(g, 1, nil));                       // d (=nil=0) -> (0 . nil) = (0)
-     g = gxl(intern(g_strof(g, "hashn")));             // (hashn . (0)) = (hashn 0)
+     g = gxl(intern(g_strof(g, "mapn")));              // (mapn . (0)) = (mapn 0)
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); }            // pop wrap
     else if (splicesym(A(g->sp[1])) && (twop(g->sp[0]) || nilp(g->sp[0]))) {
      g = gxl(g_push(g, 1, A(g->sp[1])));               // %(k v …)/@(e …)/@() : splice -> (sym . d)
@@ -3155,8 +3155,8 @@ op11(g_vm_lamp, lamp(Sp[0]) ? putfix(1) : nil)
 // (hash x) -- the general hashing method exposed to ll as a fixnum.
 op11(g_vm_hashof, putfix(hash(g, Sp[0])))
 
-g_vm(g_vm_get) {
- word z = Sp[0], k = Sp[1], x = Sp[2], n;
+g_vm(g_vm_get) {                                // (peek coll key default): collection-first
+ word x = Sp[0], k = Sp[1], z = Sp[2], n;
  if (bufp(x)) {                                  // mutable byte string: byte index
   struct g_str *s = buf_str(x);
   if (fixp(k) && (n = getfix(k)) >= 0 && n < (word) len(s))
@@ -3186,11 +3186,11 @@ g_vm(g_vm_get) {
      off = off * v->shape[a] + ix, a++; } }
    if (ok && v->type == g_O) z = tuple_get_obj(v, off);   // object: the slot IS the value
    else if (ok && v->type == g_C) {                       // packed complex -> a (re,im) box
-    Have(CPLX_REQ); v = tuple(Sp[2]);                      // re-read post-Have
+    Have(CPLX_REQ); v = tuple(Sp[0]);                      // re-read coll (Sp[0]) post-Have
     g_flo_t *fp = tuple_data(v);
     struct g_tuple *bx = ini_scalar((struct g_tuple*) Hp, g_C); Hp += CPLX_REQ;
     cplx_put(bx, fp[2*off], fp[2*off+1]); z = word(bx); }
-   else if (ok) { word _res; Have(BOX_REQ); v = tuple(Sp[2]);
+   else if (ok) { word _res; Have(BOX_REQ); v = tuple(Sp[0]);
     if (v->type >= g_R) EMIT_FLO(tuple_get_flo(v, off));
     else EMIT_INT(tuple_get_int(v, off));
     z = _res; }
@@ -3208,21 +3208,33 @@ g_vm(g_vm_get) {
     if (twop(x)) z = A(x); } }
  return Sp[2] = z, Sp += 2, Ip += 1, Continue(); }
 
-// (put key val coll): map insert, or -- when coll is a buf -- store the
-// byte val at index key. Both leave coll on the stack as the result. A buf
-// store needs no allocation, so no GC dance; out-of-range/non-numeric is a
+// (pin coll key val): collection-first map insert, or -- when coll is a buf --
+// store the byte val at index key. Both leave coll on the stack as the result.
+// A buf store needs no allocation, so no GC dance; out-of-range/non-numeric is a
 // silent no-op, matching the misuse convention of the other byte ops.
 g_vm(g_vm_put) {
- word x = Sp[2], n;
+ word x = Sp[0], n;                              // coll
  if (mapp(x)) {
+  Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // g_mapput wants (sp0,sp1,sp2)=(key,val,coll)
   Pack(g);
   if (!g_ok(g = g_mapput(g))) return gtrap(g);
   Unpack(g); }
  else {
-  if (bufp(x) && fixp(Sp[0]) && (n = getfix(Sp[0])) >= 0 && n < (word) len(buf_str(x)))
-   txt(buf_str(x))[n] = (char) getfix(Sp[1]);
-  Sp += 2; }
+  if (bufp(x) && fixp(Sp[1]) && (n = getfix(Sp[1])) >= 0 && n < (word) len(buf_str(x)))
+   txt(buf_str(x))[n] = (char) getfix(Sp[2]);     // index = key = Sp[1], val = Sp[2]
+  Sp[2] = x, Sp += 2; }                           // leave coll as the result
  return Ip += 1, Continue(); }
+
+// (pull coll key default): remove key from a map, returning its value -- or
+// default if absent (symmetry with peek) -- and mutating coll in place.
+// g_mapget reads the value, g_mapdel removes it; neither allocates, so no GC
+// dance. A non-map coll yields default (silent misuse).
+g_vm(g_vm_pull) {
+ word coll = Sp[0], v = Sp[2];                   // default
+ if (mapp(coll)) {
+  v = g_mapget(g, Sp[2], Sp[1], coll);           // value, or default if absent
+  g_mapdel(g, coll, Sp[1], Sp[2]); }             // remove in place (no-op if absent)
+ return Sp[2] = v, Sp += 2, Ip += 1, Continue(); }
 
 g_vm(g_vm_hashd) {
  if (mapp(Sp[1])) Sp[2] = g_mapdel(g, Sp[1], Sp[2], Sp[0]);

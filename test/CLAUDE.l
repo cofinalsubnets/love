@@ -27,7 +27,7 @@
 (assert
  (= 1 (0 5)) (= 5 (1 5))                         ; 0 is const-1, 1 is the identity
  (= 8 (3 2)) (= 262144 (2 3 4))                  ; (n x) = x**n; the tower (2 3 4) = 4**(3**2)
- (= 12 (3 (+ 1) 9)) (= '(2 3 4) (map (+ 1) '(1 2 3)))  ; (n f) composes f n times; currying *is* partial application
+ (= 12 (3 (+ 1) 9)) (= '(2 3 4) (mapf (+ 1) '(1 2 3)))  ; (n f) composes f n times; currying *is* partial application
  (= 0.5 (-1 2)) (= 3.0 ((/ 1 2) 9)))            ; (-1 x) = 1/x; (1/2 x) = sqrt x
 
 ; --- build & test --- `make test` is the default task and the commit gate: it builds
@@ -91,20 +91,20 @@
 ; --- order & equality --- < <= > >= is a *total order over all values*: across kinds by the
 ; lattice (number < string < symbol < pair < lambda), within a kind by value/lexicographic
 ; order (complex by (re,im); lambdas by an alpha-invariant hash; an array operand broadcasts to
-; a 0/1 mask). `=` is value equality and bridges the whole numeric tower; `same` is identity;
+; a 0/1 mask). `=` is value equality and bridges the whole numeric tower; `idp` is identity;
 ; `!=` is gone -- write `!(= ..)`.
 (assert
- (= 3 3.0) !(= 3 4) (< 1 1.5) (>= 3.0 3) (same 'a 'a) !(same '(1) '(1))
+ (= 3 3.0) !(= 3 4) (< 1 1.5) (>= 3.0 3) (idp 'a 'a) !(idp '(1) '(1))
  (< 1 "a") (< "a" 'x) (< 'x '(0)) !(< "a" 1))
 
 ; --- comparing functions --- `=` on two functions is alpha + structural: their source \-exprs
 ; match up to renaming of bound variables (binders by position, free vars by name) and their
-; captured values match pairwise. `<` agrees (the hash is alpha-invariant); `same` stays
+; captured values match pairwise. `<` agrees (the hash is alpha-invariant); `idp` stays
 ; identity. eta ((\ x (f x)) = f) and beta are *not* bridged -- a closure versus its operator is
 ; a representation-crossing edge that stays false.
 (assert
  (= (\ x x) (\ y y)) (= (\ a b (+ a b)) (\ x y (+ x y)))           ; alpha: bound vars by position
- (= (\ x (+ x 1)) (\ x (+ x 1))) !(same (\ x (+ x 1)) (\ x (+ x 1)))  ; equal, yet distinct objects
+ (= (\ x (+ x 1)) (\ x (+ x 1))) !(idp (\ x (+ x 1)) (\ x (+ x 1)))  ; equal, yet distinct objects
  !(= (\ x x) (\ y z)) !(= (\ x (+ x 1)) (\ x (+ x 2)))             ; free /= bound; different body
  (: g (\ a (\ b (+ a b))) (&& (= (g 1) (g 1)) !(= (g 1) (g 2))))   ; closures: equal iff captures match
  (= (+ 1) (+ 1)) !(< (\ x x) (\ y y)) !(= (\ x (A x)) A))          ; partial apps too; eta not bridged
@@ -146,24 +146,24 @@
  (= (* i i) -1) (= ~(2 0) 2) (= (* ~(1 2) ~(3 4)) ~(-5 10)) (comp ~5) !(comp 5)
  (= ~(0 0) ~0) (= (conj ~(2 3)) ~~(2 3)) (= (conj ~(2 3)) ~(2 -3))
  (= 2.0 (re ~(2 3))) (< i 1) !(< 1 i) (= "~(0.0 1.0)" (inspect i))
- (= 0.0 (get 0 1 (arg ~(1 @(1 0))))))            ; arg broadcasts -- (arg ~(1 x)) = atan, elementwise
-; a rank-N complex array packs (re,im) into a `c`-typed array: get yields a ~(..) box,
+ (= 0.0 (peek (arg ~(1 @(1 0))) 1 0)))            ; arg broadcasts -- (arg ~(1 x)) = atan, elementwise
+; a rank-N complex array packs (re,im) into a `c`-typed array: peek yields a ~(..) box,
 ; + - * / broadcast numpy-style, `=` gives a mask, and asum/aprod fold complex.
 (assert
- (: v (array 2 ~(1 2) ~(3 4)) (&& (= c (atype v)) (= ~(1 2) (get 0 0 v)) (= ~(4 6) (asum v))
-    (= ~(2 4) (get 0 0 (+ v v))) (= ~(2 4) (get 0 0 (* ~(2 0) v))) !(< v v)
+ (: v (array 2 ~(1 2) ~(3 4)) (&& (= c (atype v)) (= ~(1 2) (peek v 0 0)) (= ~(4 6) (asum v))
+    (= ~(2 4) (peek (+ v v) 0 0)) (= ~(2 4) (peek (* ~(2 0) v) 0 0)) !(< v v)
     (= "@(~(1.0 2.0) ~(3.0 4.0))" (inspect v)))))
 
 ; --- arrays --- (arr type shape) zeros; (arrl type shape vals) fills; (array shape elem..)
-; infers the type and curries; @(..) is a rank-1 literal. arank/alen/ashape/atype; get
+; infers the type and curries; @(..) is a rank-1 literal. arank/alen/ashape/atype; peek
 ; (out of bounds -> the default). + - * // < = broadcast numpy-style to the widest type
 ; (compare -> an i8 mask); `/` promotes the whole result to f64 the moment any element divides
 ; inexactly. reduce with asum aprod amax amin aall (a conjunction; "any nonzero" is just `#`).
 ; a zero-norm array is false. sin/cos/log/pow and the derived forms map elementwise.
 (assert
  (= 6 (alen (arr i64 '(2 3)))) (= 2 (arank (arr i64 '(2 3)))) (= '(2 3) (ashape (arr i64 '(2 3))))
- (= i64 (atype (arr i64 '(2 3)))) (= 20 (get -1 1 @(10 20 30))) (= -1 (get -1 9 @(10 20 30)))
- (= 3 (get -1 '(1 0) (arrl i64 '(2 2) '(1 2 3 4)))) (= @(11 22 33) (+ @(1 2 3) @(10 20 30)))
+ (= i64 (atype (arr i64 '(2 3)))) (= 20 (peek @(10 20 30) 1 -1)) (= -1 (peek @(10 20 30) 9 -1))
+ (= 3 (peek (arrl i64 '(2 2) '(1 2 3 4)) '(1 0) -1)) (= @(11 22 33) (+ @(1 2 3) @(10 20 30)))
  (= @(2 4 6) (* @(1 2 3) 2)) (= f64 (atype (+ (arr i32 '(2)) 1.5))) (= i8 (atype (< (arr i64 '(3)) 1)))
  (= 60 (asum @(10 20 30))) (= 30 (amax @(10 30 20))) (= 5 (asum 5)) (aall (< 1 2))
  (aall (= @(2.0 3.0) ((/ 1 2) @(4.0 9.0)))) (= @(3.5 5.5) (/ @(7 11) 2)) (= @(3 5) (// @(7 11) 2))
@@ -175,9 +175,9 @@
 (assert
  (= 1 (A '(1 2 3))) (= '(2 3) (B '(1 2 3))) (= 3 (AB '(2 3 4))) (= '(1 2) (X 1 (X 2 0)))
  (= 1 (car '(1 2 3))) (= 3 (cadr '(2 3 4)))
- (= '(2 3 4) (map inc '(1 2 3))) (= 24 (foldl * 1 '(1 2 3 4))) (= 6 (foldr + 0 '(1 2 3)))
+ (= '(2 3 4) (mapf inc '(1 2 3))) (= 24 (foldl * 1 '(1 2 3 4))) (= 6 (foldr + 0 '(1 2 3)))
  (= '(1 3) (filter (\ x (mod x 2)) '(1 2 3 4))) (= '(1 2 3) (sort < '(3 1 2)))
- (= '(1 2 3 4) (cat '(1 2) '(3 4))) (= '(3 2 1) (rev '(1 2 3))) (= '(1 2) (map A (zip '(1 2) '(3 4))))
+ (= '(1 2 3 4) (cat '(1 2) '(3 4))) (= '(3 2 1) (rev '(1 2 3))) (= '(1 2) (mapf A (zip '(1 2) '(3 4))))
  (= 20 (AB (assq 2 (list (L 1 10) (L 2 20))))) (= '(1 2) (take 2 '(1 2 3 4))) (= '(3 4) (drop 2 '(1 2 3 4)))
  (= 3 (last '(1 2 3))) (= '(1 2) (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
  (all (\ x (< 0 x)) '(1 2 3)) (any (\ x (< 2 x)) '(1 2 3)) (= 3 #'(a b c)))
@@ -193,23 +193,26 @@
  (= 'asdf (intern "asdf")) !(= (nom 0) (nom 0)) (= "asdf" (string 'asdf))
  (= "\"a\\nb\"" (inspect "a\nb")) (= "$x" (inspect (nom "x"))))
 
-; --- maps --- %(k v ..) or (hasht ..) build; %() or (hashn 0) is empty; mutable. get/put,
-; hashd (default | key val | default-table-key), hashk (the keys), hash, and # is the key count.
-; (t k) == (get 0 k t) -- a map is a lookup function.
+; --- maps --- %(k v ..) or (map ..) build; %() or (mapn 0) is empty; mutable. the accessors are
+; collection-first: (peek coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
+; and-returns. peek and pull share the default-if-absent fallback; only pull mutates a key away.
+; also mapd, mapk (the keys), # is the key count. (t k) == (peek t k 0) -- a map is a lookup
+; function. (digest k) hashes a key.
 (assert
- (: t %(1 10 2 20) (&& (= 20 (get 0 2 t)) (= 20 (t 2)) (= 99 (get 99 9 t))))
- (= 50 (get 0 5 (put 5 50 %()))) (: t %(1 10 2 20) _ (hashd 0 t 1) (= 1 #t))
- (= 2 #(hashk %(1 10 2 20))) (= (hash 'k) (hash 'k)) (mapp %()) !(mapp 5))
+ (: t %(1 10 2 20) (&& (= 20 (peek t 2 0)) (= 20 (t 2)) (= 99 (peek t 9 99))))
+ (= 50 (peek (pin %() 5 50) 5 0)) (: t %(1 10 2 20) _ (mapd 0 t 1) (= 1 #t))
+ (: t %(1 10 2 20) v (pull t 2 0) (&& (= 20 v) (= 1 #t) (= 99 (peek t 2 99)) (= -1 (pull t 9 -1))))  ; pull: value or default, removes the key
+ (= 2 #(mapk %(1 10 2 20))) (= (digest 'k) (digest 'k)) (mapp %()) !(mapp 5))
 
-; --- buffers --- (bufnew n) gives n mutable zeroed bytes; # /get/put a byte (0..255); bcopy;
+; --- buffers --- (bufnew n) gives n mutable zeroed bytes; # /peek/pin a byte (0..255); bcopy;
 ; identity equality.
 (assert
- (: b (bufnew 3) _ (put 0 65 b) (= 65 (get 0 0 b))) (= 4 #(bufnew 4))
- (: b (bufnew 1) _ (put 0 257 b) (= 1 (get 0 0 b))) (: b (bufnew 4) _ (bcopy b 0 "ABCD" 0 4) (= 68 (get 0 3 b)))
+ (: b (bufnew 3) _ (pin b 0 65) (= 65 (peek b 0 0))) (= 4 #(bufnew 4))
+ (: b (bufnew 1) _ (pin b 0 257) (= 1 (peek b 0 0))) (: b (bufnew 4) _ (bcopy b 0 "ABCD" 0 4) (= 68 (peek b 3 0)))
  !(= (bufnew 2) (bufnew 2)))
 
 ; --- reader sigils --- `;` line comment, `#!` pinbang (no block comments). eight are monadic
-; operators (sigil / name / call): # pin (size), ' quote (= one-operand \), ! bang (nilp),
+; operators (sigil / name / call): # hash (saturation), ' quote (= one-operand \), ! bang (negation),
 ; . dot (print), ~ wave (complex/conjugate), $ nom (gensym), @ tup (array), % map. the
 ; quasiquote family -- ` quasiquote, , unquote, ,@ splice -- are sigils, not operators.
 ; ~(re im) splices to (com re im); a bare ~x is (clift x); .x is (dot x).
@@ -219,7 +222,7 @@
  (= i ~(0 1)) (= ~(2 3) (com 2 3)) (= '~x '(clift x)) (= '(dot x) '.x) (lamp dot))
 
 ; --- macros --- a macro maps an argument list to code; install with `::`. the prelude ships
-; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/hasht/array, the body-first
+; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, the body-first
 ; :- and ?-, and the pipes >>= <=<.
 (:: 'unless (\ a `(? ,(A a) 0 ,(AB a))))
 (assert
@@ -227,11 +230,11 @@
  (= 2 (|| 0 2 3)) (= '(1 2 3) (L 1 2 3)) (= 6 (do 1 2 6)) (= 3 (let a 1 b 2 (+ a b)))
  (= 3 (:- (+ a b) a 1 b 2)) (= 'big (?- 'else (< 1 2) 'big)) (= 9 ((<=< inc (\ x (* x 2))) 4)))
 
-; --- control --- ev compiles and runs; call_cc is a one-shot escape; tasks are
+; --- control --- ev compiles and runs; call-cc is a one-shot escape; tasks are
 ; spawn/wait/yield/sleep/done?/kill/key?; the RNG is xoshiro256++ (global rand/randf plus the
 ; pure rand-next/randf-next over explicit state).
 (assert
- (= 3 (ev '(+ 1 2))) (lamp ev) (= 41 (call_cc (\ k (k 41)))) (= 42 (+ 1 (call_cc (\ k 41))))
+ (= 3 (ev '(+ 1 2))) (lamp ev) (= 41 (call-cc (\ k (k 41)))) (= 42 (+ 1 (call-cc (\ k 41))))
  (= 42 (: p (spawn (\ x (do (yield 0) (+ x 1))) 41) (wait p))) (= 0 (wait 99999)) (done? 99999)
  !(sleep 0) (= 4 (alen (rng-seed 1))) (< (rand 10) 10) (flop (randf 0))
  (: st (rng-seed 7) (= (A (rand-next st)) (A (rand-next st)))))
@@ -253,11 +256,11 @@
 ;     macroexpansion, one source of truth shared with the C bootstrap compiler.
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure
 ;     globals, mark apply strategy, and flip (? !e a b) to (? e b a).
-;   maps -- %(..)/hasht expand to nested puts; a map is a lookup function.
+;   maps -- %(..)/map expand to nested pins; a map is a lookup function.
 ; the *egg* (ll/egg.l): compile the compiler with the C bootstrap, recompile the whole
 ; prelude+ev corpus through itself, and install it as `ev` -- baked into the image at C compile
 ; time, no allocation.
-(assert (lamp ev) (fixp (get 0 'boot_ms globals)))
+(assert (lamp ev) (fixp (peek globals 'boot-ticks 0)))
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
 ; lattice above). a dyadic op is an NxN table indexed by the two kinds; a monadic op is its
@@ -265,8 +268,8 @@
 ; table; otherwise one indexed jump picks a lane that widens only as far as the operands need
 ; (array, complex, bignum, float, ...). the VM is tail-threaded over a two-space copying
 ; collector; out-of-pool constants are immortal. the ll/ layer (prelude ev repl cli egg) bakes
-; into every frontend: the host (out/host/ll), the freestanding kernel (x86_64/aarch64/riscv64/
-; loongarch64/playdate), and wasm. build codegen lives in ll under tools/; the C is
+; into every frontend: the host (out/host/ll), the freestanding kernel (x86_64/aarch64/
+; playdate), and wasm. build codegen lives in ll under tools/; the C is
 ; freestanding, -Wall -Wextra -Werror.
 
 ; --- odds & ends --- inspect renders a value as its reparsable printed form; (clock t) is

@@ -23,13 +23,13 @@
    (hex? c) (? (&& (>= c 48)  (<= c 57))  1
             (? (&& (>= c 97)  (<= c 102)) 1
                (&& (>= c 65)  (<= c 70))))
-   (skip-ws    s i) (? (< i (pin s)) (? (ws?  (get 0 i s)) (skip-ws    s (+ i 1)) i) i)
-   (skip-hex   s i) (? (< i (pin s)) (? (hex? (get 0 i s)) (skip-hex   s (+ i 1)) i) i)
-   (skip-nonws s i) (? (< i (pin s)) (? (ws?  (get 0 i s)) i (skip-nonws s (+ i 1))) i)
+   (skip-ws    s i) (? (< i (hash s)) (? (ws?  (peek s i 0)) (skip-ws    s (+ i 1)) i) i)
+   (skip-hex   s i) (? (< i (hash s)) (? (hex? (peek s i 0)) (skip-hex   s (+ i 1)) i) i)
+   (skip-nonws s i) (? (< i (hash s)) (? (ws?  (peek s i 0)) i (skip-nonws s (+ i 1))) i)
    ; one past the last non-ws char (0 if the line is all whitespace).
-   (trim-end s) ((: (f i e) (? (< i (pin s)) (f (+ i 1) (? (ws? (get 0 i s)) e (+ i 1))) e)) 0 0)
-   (prefix? p s) (= p (ssub s 0 (pin p)))
-   (dash? a) (&& (< 0 (pin a)) (= 45 (get 0 0 a))))
+   (trim-end s) ((: (f i e) (? (< i (hash s)) (f (+ i 1) (? (ws? (peek s i 0)) e (+ i 1))) e)) 0 0)
+   (prefix? p s) (= p (ssub s 0 (hash p)))
+   (dash? a) (&& (< 0 (hash a)) (= 45 (peek a 0 0))))
 
 ; --- line classifiers (the three vmret.py regexes, by hand) -----------
 ; HEADER_RE  ^\s*[0-9a-fA-F]+\s+<(.+)>:\s*$  -> the captured name, else 0.
@@ -39,11 +39,11 @@
       (? (= j i) 0                                       ; need >=1 hex digit
          (: k (skip-ws line j)
             (? (= k j) 0                                  ; need >=1 space
-               (? (= 60 (get 0 k line))                   ; '<'
+               (? (= 60 (peek line k 0))                   ; '<'
                   (: e (trim-end line)
                      (? (&& (>= e (+ k 4))                 ; room for "<x>:"
-                            (&& (= 58 (get 0 (- e 1) line)) ; ':' at end
-                                (= 62 (get 0 (- e 2) line)))) ; '>' before it
+                            (&& (= 58 (peek line (- e 1) 0)) ; ':' at end
+                                (= 62 (peek line (- e 2) 0)))) ; '>' before it
                         (ssub line (+ k 1) (- e 2))         ; the (.+) name
                         0))
                   0))))))
@@ -52,10 +52,10 @@
 (: (parse-insn line)
    (: i (skip-ws line 0)
       j (skip-hex line i)
-      (? (&& (> j i) (= 58 (get 0 j line)))               ; hexrun then ':'
+      (? (&& (> j i) (= 58 (peek line j 0)))               ; hexrun then ':'
          (: k (skip-ws line (+ j 1))
             (? (> k (+ j 1))                                ; need >=1 ws after ':'
-               (X (ssub line i j) (ssub line k (pin line)))
+               (X (ssub line i j) (ssub line k (hash line)))
                0))
          0)))
 
@@ -64,7 +64,7 @@
    (mnemonic text)
    ((: (f i)
        (: ts (skip-ws text i)
-          (? (< ts (pin text))
+          (? (< ts (hash text))
              (: te (skip-nonws text ts)
                 w  (ssub text ts te)
                 (? (any (\ p (= p w)) PREFIXES) (f te) w))
@@ -72,19 +72,18 @@
     0))
 
 ; --- per-arch return-mnemonic matchers --------------------------------
-; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$.
-; riscv64/loongarch64: exactly ret. (iret/eret/sret/mret/ertn never match.)
-(: (lower? s i) (? (< i (pin s)) (: c (get 0 i s) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
+; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$
+; (iret/eret never match).
+(: (lower? s i) (? (< i (hash s)) (: c (peek s i 0) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
    (ret-tail? r) (&& (prefix? "ret" r) (lower? r 3))
-   (retx?  m) (|| (ret-tail? m) (&& (= 108 (get 0 0 m)) (ret-tail? (ssub m 1 (pin m)))))
-   (reta?  m) (|| (= m "ret") (|| (= m "retaa") (= m "retab")))
-   (reteq? m) (= m "ret"))
+   (retx?  m) (|| (ret-tail? m) (&& (= 108 (peek m 0 0)) (ret-tail? (ssub m 1 (hash m)))))
+   (reta?  m) (|| (= m "ret") (|| (= m "retaa") (= m "retab"))))
 
 ; --- split a string on '\n' into a list of lines ---------------------
 (: (lines s)
    ((: (f start i)
-       (? (< i (pin s))
-          (? (= 10 (get 0 i s)) (X (ssub s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
+       (? (< i (hash s))
+          (? (= 10 (peek s i 0)) (X (ssub s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
           (? (< start i) (L (ssub s start i)) 0)))
     0 0))
 
@@ -97,8 +96,8 @@
 ; overflows a fixnum -- so u64/BIG/hex->int use `+`/`*` (which promote to bignum),
 ; never bitwise `<<`/`|` (which would not), keeping the values exact.
 (: (hex->int s) ((: (f i acc)
-                    (? (< i (pin s))
-                       (: c (get 0 i s)
+                    (? (< i (hash s))
+                       (: c (peek s i 0)
                           v (? (&& (>= c 48) (<= c 57))  (- c 48)
                             (? (&& (>= c 97) (<= c 102)) (- c 87)
                             (? (&& (>= c 65) (<= c 70))  (- c 55) 0)))
@@ -109,7 +108,7 @@
    (parse-header-addr line)                               ; the <addr> before <name>:, as an int
      (: i (skip-ws line 0) j (skip-hex line i)
         (? (= j i) 0 (hex->int (ssub line i j))))
-   (u8  d i) (get 0 i d)                                  ; little-endian fixed-width readers
+   (u8  d i) (peek d i 0)                                  ; little-endian fixed-width readers
    (u16 d i) (| (u8  d i) (<< (u8  d (+ i 1)) 8))
    (u32 d i) (| (u16 d i) (<< (u16 d (+ i 2)) 16))
    (u64 d i) (+ (u32 d i) (* (u32 d (+ i 4)) 4294967296))   ; `+`/`*` so a high-half addr promotes to bignum
@@ -123,7 +122,7 @@
      (? (< k n)
         (: p (+ off (* k 24)) info (u8 d (+ p 4)) val (u64 d (+ p 8)) sz (u64 d (+ p 16))
            (collect-syms d off n (+ k 1)
-              (? (&& (= 2 (& info 15)) (< 0 sz)) (put val sz m) m)))
+              (? (&& (= 2 (& info 15)) (< 0 sz)) (pin m val sz) m)))
         m)
    (symtab-sizes d)                                       ; -> map: fn start address -> byte size
      (: st (find-symtab d (u64 d 40) (u16 d 58) (u16 d 60) 0)  ; e_shoff / e_shentsize / e_shnum
@@ -151,7 +150,7 @@
                    (: fl2  (close name watching rets flagged)   ; real header: close, open new
                       w2   (prefix? prefix h)
                       ha   (parse-header-addr line)
-                      sz   (get 0 ha sizes)                     ; symtab size, 0 if absent
+                      sz   (peek sizes ha 0)                     ; symtab size, 0 if absent
                       lim2 (? (< 0 sz) (+ ha sz) BIG)           ; extent end, or unbounded
                       (loop rest h w2 lim2 0 fl2 (? w2 (+ total 1) total))))
                 (: ins (? watching (parse-insn line) 0)         ; instruction: maybe a ret
@@ -162,13 +161,13 @@
     ls 0 0 BIG 0 0 0))
 
 ; --- report helpers --------------------------------------------------
-(: (basename p) ((: (f i last) (? (< i (pin p)) (f (+ i 1) (? (= 47 (get 0 i p)) (+ i 1) last)) (ssub p last (pin p)))) 0 0)
+(: (basename p) ((: (f i last) (? (< i (hash p)) (f (+ i 1) (? (= 47 (peek p i 0)) (+ i 1) last)) (ssub p last (hash p)))) 0 0)
    (spaces n)    (? (< 0 n) (scat " " (spaces (- n 1))) "")
-   (str< a b)    ((: (f i) (? (>= i (pin a)) (< (pin a) (pin b))
-                            (? (>= i (pin b)) 0
-                               (: ca (get 0 i a) cb (get 0 i b)
+   (str< a b)    ((: (f i) (? (>= i (hash a)) (< (hash a) (hash b))
+                            (? (>= i (hash b)) 0
+                               (: ca (peek a i 0) cb (peek b i 0)
                                   (? (< ca cb) 1 (? (> ca cb) 0 (f (+ i 1)))))))) 0)
-   (maxlen fl)   (foldl (\ m e (: l (pin (A e)) (? (< m l) l m))) 0 fl)
+   (maxlen fl)   (foldl (\ m e (: l (hash (A e)) (? (< m l) l m))) 0 fl)
    (join-rets rs) (? (twop rs)
                      (? (twop (B rs)) (scat (scat "0x" (A rs)) (scat ", " (join-rets (B rs))))
                                         (scat "0x" (A rs)))
@@ -179,7 +178,7 @@
                      (? (str< (A (A a)) (A (A b)))
                         (X (A a) (emerge (B a) b)) (X (A b) (emerge a (B b))))
                      a) b)
-   (esort l) (? (twop (B l)) (: n (>> (pin l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
+   (esort l) (? (twop (B l)) (: n (>> (hash l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
 
 ; --- argument parsing ------------------------------------------------
 (: (parse-args args path prefix od)
@@ -215,15 +214,15 @@
    _        (? port 0 (die (scat "cannot open " path)))
    hdr      (slurp port)                                 ; whole image: e_ident/e_machine + .symtab
    _        (close port)
-   _        (? (&& (= 127 (get 0 0 hdr)) (&& (= 69 (get 0 1 hdr)) (&& (= 76 (get 0 2 hdr)) (= 70 (get 0 3 hdr))))) 0
+   _        (? (&& (= 127 (peek hdr 0 0)) (&& (= 69 (peek hdr 1 0)) (&& (= 76 (peek hdr 2 0)) (= 70 (peek hdr 3 0))))) 0
                (die (scat path ": not an ELF file")))
-   _        (? (&& (= 2 (get 0 4 hdr)) (= 1 (get 0 5 hdr))) 0
+   _        (? (&& (= 2 (peek hdr 4 0)) (= 1 (peek hdr 5 0))) 0
                (die (scat path ": not ELF64 little-endian")))
    sizes    (symtab-sizes hdr)                           ; function start address -> byte size
-   mach     (| (get 0 18 hdr) (<< (get 0 19 hdr) 8))
+   mach     (| (peek hdr 18 0) (<< (peek hdr 19 0) 8))
    x86?     (= mach 62)
-   known?   (|| x86? (|| (= mach 183) (|| (= mach 243) (= mach 258))))
-   ret?     (? x86? retx? (? (= mach 183) reta? (? (|| (= mach 243) (= mach 258)) reteq? retx?)))
+   known?   (|| x86? (= mach 183))
+   ret?     (? x86? retx? (? (= mach 183) reta? retx?))
    _        (? known? 0
                (: _ (fputs err "vmret: note: ") _ (fputs err base)
                   _ (fputs err " is an unrecognized arch (0x") _ (fputn err mach 16)
@@ -246,7 +245,7 @@
       (: _ (fputs err "vmret: no ") _ (fputs err prefix) _ (fputs err "* functions found in ")
          _ (fputs err base) _ (fputs err " (stripped binary?)\n") (exit 2))
    (? (twop flagged)
-      (: k      (pin flagged)
+      (: k      (hash flagged)
          width  (maxlen flagged)
          sorted (esort flagged)
          _ (fputs out base) _ (fputs out ": ") _ (fputn out k 10) _ (fputs out " of ")
@@ -254,7 +253,7 @@
          _ (fputs out "* functions contain a ret (TCO suspects):\n")
          _ (each sorted (\ e
               (: name (A e) rets (B e)
-                 _ (fputs out "  ") _ (fputs out name) _ (fputs out (spaces (- width (pin name))))
+                 _ (fputs out "  ") _ (fputs out name) _ (fputs out (spaces (- width (hash name))))
                  _ (fputs out "  ret @ ") _ (fputs out (join-rets rets)) _ (fputc out 10) 0)))
          (exit 1))
       (: _ (fputs out base) _ (fputs out ": all ") _ (fputn out total 10) _ (fputs out " ")

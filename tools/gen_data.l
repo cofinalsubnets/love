@@ -14,8 +14,8 @@
 (: (die m) (: _ (fputs err "gen_data: ") _ (fputs err m) _ (fputs err "\n") (exit 1)))
 
 ; --- little-endian decoders over the slurped image ------------------
-; (get 0 o s) -> byte o as an unsigned fixnum 0..255 (KString case of get).
-(: (u8 s o)   (get 0 o s)
+; (peek s o 0) -> byte o as an unsigned fixnum 0..255 (KString case of peek).
+(: (u8 s o)   (peek s o 0)
    (rd16 s o) (| (u8 s o)   (<< (u8 s (+ o 1)) 8))
    (rd32 s o) (| (rd16 s o) (<< (rd16 s (+ o 2)) 16))
    (rd64 s o) (| (rd32 s o) (<< (rd32 s (+ o 4)) 32)))
@@ -23,7 +23,7 @@
 ; NUL-terminated ascii at offset o -> string.
 (: (cstr s o) ((: (f i) (? (= 0 (u8 s i)) (ssub s o i) (f (+ i 1)))) o))
 
-(: (prefix? p s) (= p (ssub s 0 (pin p)))
+(: (prefix? p s) (= p (ssub s 0 (hash p)))
    (align-up x a) (& (+ x (- a 1)) (^ (- a 1) -1))
    (pow2? n) (&& (< 0 n) (= 0 (& n (- n 1))))
    (bitlen n) ((: (f n k) (? (< 0 n) (f (>> n 1) (+ k 1)) k)) n 0))

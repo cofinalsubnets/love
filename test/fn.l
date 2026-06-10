@@ -13,5 +13,5 @@
  (= "(+ 1)" (inspect (+ 1)))
  (= "((\\ d0 d1 (+ d0 d1)) 1)" (inspect ((\ a b (+ a b)) 1)))
  (= "((\\ d0 d1 (+ d1 d0)) 5)" (: y 5 (inspect (\ x (+ x y)))))  ; closure: capture is leading binder
- (strp (inspect map))
- (< 10 (pin (inspect map))))
+ (strp (inspect mapf))
+ (< 10 (hash (inspect mapf))))

@@ -28,7 +28,7 @@
    mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KTwo (pair / list)
    mx-fn  (+ 1)                          ; KLam (nif partial application)
-   mx-map (put 2 20 (put 1 10 (hashn 0)))) ; KLam (a map is a lookup-lambda)
+   mx-mapf (pin (pin (mapn 0) 1 10) 2 20)) ; KLam (a map is a lookup-lambda)
 
 ; ============================================================================
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
@@ -75,8 +75,8 @@
  (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KFix numeral (odd-tag path)
  (= 36 ((\ x (* x x)) 6))                     ; KLam: a lambda applies directly
  (= 7 (((+) 3) 4))                            ; KLam: a nif / partial application
- (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KLam: a map looks its key up
- (nilp (mx-map 9))                            ; ...missing key -> nil
+ (= 10 (mx-mapf 1))   (= 20 (mx-mapf 2))        ; KLam: a map looks its key up
+ (nilp (mx-mapf 9))                            ; ...missing key -> nil
  (= 1 ((bufnew 4) 'x)))                       ; opaque handle (buf) behaves as 0
 
 ; ============================================================================
@@ -107,12 +107,12 @@
  (= f64 (atype (+ @(10 20) @(1.5 2.5))))      ; Z + R -> widens to R
  (aall (= @(11.5 22.5) (+ @(10 20) @(1.5 2.5))))
  (aall (= @(3.0 5.0) (+ @(1.5 2.5) @(1.5 2.5)))) ; R + R
- (= ~(2 4) (get 0 0 (+ mx-ac mx-ac)))        ; C + C (packed complex)
+ (= ~(2 4) (peek (+ mx-ac mx-ac) 0 0))        ; C + C (packed complex)
  (= o (atype (+ mx-ao mx-ao)))                ; O + O stays exact/object
- (= (* 2 (100 2)) (get 0 0 (+ mx-ao mx-ao)))
+ (= (* 2 (100 2)) (peek (+ mx-ao mx-ao) 0 0))
  (aall (= @(12 22) (+ @(10 20) 2)))           ; Z + scalar (broadcast, no widen)
- (= ~(11 2) (get 0 0 (+ ~(10 0) mx-ac)))    ; C array + complex scalar
- (= ~(11 2) (get 0 0 (+ @(10 20) mx-ac)))    ; R/Z array + C array (real promotes)
+ (= ~(11 2) (peek (+ ~(10 0) mx-ac) 0 0))    ; C array + complex scalar
+ (= ~(11 2) (peek (+ @(10 20) mx-ac) 0 0))    ; R/Z array + C array (real promotes)
  (nilp (+ @(1 2) @(1 2 3)))                   ; non-conforming shapes -> nil
 
  ; --- add_string lane: text x text, and a number as one byte ---
@@ -131,7 +131,7 @@
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))             ; list + list
  (= '(5 1 2) (+ 5 '(1 2)))   (= '(1 2 5) (+ '(1 2) 5))   ; num <-> list
  (= '("ab" 1 2) (+ "ab" '(1 2)))              ; str <-> list (str is one element)
- (= 3 (pin (+ @(1 2) '(7 8))))                ; array <-> list (array is one element)
+ (= 3 (hash (+ @(1 2) '(7 8))))                ; array <-> list (array is one element)
 
  ; --- addl lane: a lambda operand anywhere -> CHURCH-NUMERAL add (not pointwise):
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).
@@ -154,10 +154,10 @@
  (= ~(-5 10) (* ~(1 2) ~(3 4)))            ; Gaussian product
  (= ~(4 6) (* 2 ~(2 3)))                    ; fix * complex
  (aall (= @(20 60) (* @(10 30) 2)))           ; Z array * scalar
- (= ~(2 4) (get 0 0 (* ~(2 0) mx-ac)))      ; complex scalar * C array
+ (= ~(2 4) (peek (* ~(2 0) mx-ac) 0 0))      ; complex scalar * C array
  (= o (atype (* mx-ao mx-ao)))                ; O * O exact
  (= (80 2)                                 ; 2^40 * 2^40, exact (an i64 array would wrap)
-    (get 0 0 (* (arrl o '(2) (L (40 2) (40 2))) (arrl o '(2) (L (40 2) (40 2))))))
+    (peek (* (arrl o '(2) (L (40 2) (40 2))) (arrl o '(2) (L (40 2) (40 2)))) 0 0))
 
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
@@ -175,7 +175,7 @@
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---
  (= 36 ((* (\ x (* x x)) (\ x (+ x 1))) 5))   ; sq(inc 5) = sq 6 = 36
  (= 26 ((* (\ x (+ x 1)) 2) 5))               ; (inc (2 5)) = inc 25 = 26 (numeral then inc)
- (= 10 ((* mx-map (\ x (- x 1))) 2)))         ; a map composes too: m(2-1) = m 1 = 10
+ (= 10 ((* mx-mapf (\ x (- x 1))) 2)))         ; a map composes too: m(2-1) = m 1 = 10
 
 ; ============================================================================
 ; the other dyadic generic ops (lane handlers, not explicit tables): -, /, mod,
@@ -236,7 +236,7 @@
  (<= "ab" "ab")   (> 'b 'a)   (>= '(1) '(1))
  ; --- array operand: comparison is ELEMENTWISE (a 0/1 mask), not the scalar order ---
  (aall (< @(1 2) 10))   (= i8 (atype (< @(1 2) 10)))   ; the mask is an i8 array
- (= 1 (get 0 0 (< @(1 5) @(3 2))))   (= 0 (get 0 1 (< @(1 5) @(3 2))))
+ (= 1 (peek (< @(1 5) @(3 2)) 0 0))   (= 0 (peek (< @(1 5) @(3 2)) 1 0))
  (aall (<= @(1 2) @(1 2)))   (aall (>= @(2 2) @(1 2)))
  (nilp (< @(1 2) "x"))                                 ; array vs non-number -> nil
  (nilp (< mx-ac mx-ac))                                ; a complex array is unordered -> nil
@@ -251,8 +251,8 @@
  (= ~(2 0) 2)                                ; complex bridges a real (im 0)
  !(= ~(2 1) 2)                            ; ...but not when im != 0
  (aall (= @(1 2) @(1 2)))                     ; array = array -> mask
- (= 1 (get 0 0 (= @(1 9) @(1 8))))            ; elementwise: first elem equal
- (= 0 (get 0 1 (= @(1 9) @(1 8))))
+ (= 1 (peek (= @(1 9) @(1 8)) 0 0))            ; elementwise: first elem equal
+ (= 0 (peek (= @(1 9) @(1 8)) 1 0))
  (= 'ef 'ef)   !(= 'ef 'gh)                ; symbol identity
  (= "ab" "ab")                                ; string structural eq
  (= '(1 2) '(1 2))                            ; list structural eq

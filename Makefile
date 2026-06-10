@@ -178,8 +178,8 @@ KLD ?= ld.lld
 KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1)
 
 ifdef EFI
-ifeq ($(filter $a,x86_64 aarch64 riscv64 loongarch64),)
-$(error EFI=1 is only wired up for x86_64, aarch64, riscv64, and loongarch64)
+ifeq ($(filter $a,x86_64 aarch64),)
+$(error EFI=1 is only wired up for x86_64 and aarch64)
 endif
 k_arch_c = $(wildcard $(R)/arch/$a/*.c)
 k_asm =
@@ -234,11 +234,7 @@ endif
 
 ifeq ($(KCC_IS_CLANG),1)
 ifdef EFI
-ifneq ($(filter $a,riscv64 loongarch64),)
-kcc_if_clang = -target $a-unknown-none-elf
-else
 kcc_if_clang = -target $a-unknown-windows
-endif
 else
 kcc_if_clang = -target $a-unknown-none-elf
 endif
@@ -250,19 +246,9 @@ else
 kcflags_x86_64 = -m64 -march=x86-64 -mabi=sysv -mno-red-zone -mcmodel=kernel
 endif
 kcflags_aarch64 = -mcpu=generic -march=armv8-a
-kcflags_riscv64 = -march=rv64imafdc -mabi=lp64d -mno-relax \
-  $(kcflags_riscv64_$(if $(EFI),efi,limine))
-kcflags_riscv64_limine =
-kcflags_riscv64_efi = -mcmodel=medany
-kcflags_loongarch64 = -march=loongarch64 -mabi=lp64d \
-  $(kcflags_loongarch64_$(if $(EFI),efi,limine))
-kcflags_loongarch64_limine =
-kcflags_loongarch64_efi = -fdirect-access-external-data
 
 kldflags_x86_64 = -m elf_x86_64
 kldflags_aarch64 = -m aarch64elf
-kldflags_riscv64 = -m elf64lriscv --no-relax
-kldflags_loongarch64 = -m elf64loongarch
 
 kcc = $(KCC) $(kcflags) $(kcflags_$a) $(kcppflags) $(kcc_if_clang)
 k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
@@ -342,8 +328,6 @@ $(ko)/$n-$a$(ksuf).iso: $(ko)/$n-$a$(ksuf).elf $(dl)/limine/limine $(ko)/limine.
 	@cp $(dl)/limine/limine-bios.sys $(dl)/limine/limine-bios-cd.bin $(ko)/iso_root/boot/limine/
 	@cp $(dl)/limine/BOOTX64.EFI $(dl)/limine/BOOTIA32.EFI $(ko)/iso_root/EFI/BOOT/
 	@cp $(dl)/limine/BOOTAA64.EFI $(ko)/iso_root/EFI/BOOT/
-	@cp $(dl)/limine/BOOTRISCV64.EFI $(ko)/iso_root/EFI/BOOT/
-	@cp $(dl)/limine/BOOTLOONGARCH64.EFI $(ko)/iso_root/EFI/BOOT/
 	$(k_xorriso) $(ko)/iso_root -o $@
 	@$(dl)/limine/limine bios-install $@
 	@rm -rf $(ko)/iso_root
@@ -361,13 +345,9 @@ $(ko)/$n-$a.hdd: $(ko)/$n-$a.elf $(dl)/limine/limine $(ko)/limine.conf
 	@mcopy -i $@@@1M $(dl)/limine/BOOTX64.EFI ::/EFI/BOOT
 	@mcopy -i $@@@1M $(dl)/limine/BOOTIA32.EFI ::/EFI/BOOT
 	@mcopy -i $@@@1M $(dl)/limine/BOOTAA64.EFI ::/EFI/BOOT
-	@mcopy -i $@@@1M $(dl)/limine/BOOTRISCV64.EFI ::/EFI/BOOT
-	@mcopy -i $@@@1M $(dl)/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
 
 k_efi_short_x86_64 = BOOTX64
 k_efi_short_aarch64 = BOOTAA64
-k_efi_short_riscv64 = BOOTRISCV64
-k_efi_short_loongarch64 = BOOTLOONGARCH64
 $(ko)/$n-$a-efi.img: $(ko)/$n-$a.efi
 	@echo MK $@
 	@rm -f $@
@@ -379,14 +359,10 @@ $(ko)/$n-$a-efi.img: $(ko)/$n-$a.efi
 # --- qemu run targets ------------------------------------------------
 k_efi_drive_x86_64 = -drive if=ide,format=raw,file=$<
 k_efi_drive_aarch64 = -drive if=none,format=raw,file=$<,id=hd0 -device virtio-blk-device,drive=hd0
-k_efi_drive_riscv64 = -drive if=none,format=raw,file=$<,id=hd0 -device virtio-blk-device,drive=hd0
-k_efi_drive_loongarch64 = -drive if=none,format=raw,file=$<,id=hd0 -device virtio-blk-pci,drive=hd0
 
 k_qemu_x86_64 = -M q35 -serial stdio
 k_qemu_risc = -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
-k_qemu_loongarch64 = -M virt -cpu la464 -serial stdio $(k_qemu_risc)
 k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio $(k_qemu_risc)
-k_qemu_riscv64 = -M virt -cpu rv64 -serial stdio $(k_qemu_risc)
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
   -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
@@ -453,7 +429,6 @@ $(dl)/edk2-ovmf/ovmf-code-%.fd:
 	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C $(dl) -xf -
 	@case "$a" in \
 		aarch64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
-		riscv64) dd if=/dev/zero of=$@ bs=1 count=0 seek=33554432 2>/dev/null;; \
 	esac
 
 $(dl)/limine/limine:

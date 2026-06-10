@@ -43,14 +43,14 @@
   (strp (inspect 0))
   (strp (inspect "hi"))
   (strp (inspect '(1 2 3)))
-  (strp (inspect (hashn 0)))
+  (strp (inspect (mapn 0)))
 
   ; buffer growth: a 200-element list far exceeds the 32-byte initial buf,
   ; forcing several doublings inside to_putc.
   (: (rng n) (? (= n 0) 0 (X n (rng (- n 1))))
      s (inspect (rng 200))
      ; 200 numbers + 199 separators + 2 parens = at least 400 chars
-   (do (strp s) (< 400 (pin s))))
+   (do (strp s) (< 400 (hash s))))
 
   ; GC stress: 500 inspects in a loop. Each call alloc'd a heap port + buf,
   ; provoking many GCs. Final call must still produce the expected output.

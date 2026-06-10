@@ -7,7 +7,7 @@
 ; pure value. (The interactive multi-line line editor is covered in test/repl.l;
 ; its getc/putc are wired to the real in/out ports and can't be redirected here.)
 
-(: (ri-cl s) ((: (g i) (? (< i (pin s)) (X (get 0 i s) (g (+ 1 i))))) 0)   ; string -> charlist
+(: (ri-cl s) ((: (g i) (? (< i (hash s)) (X (peek s i 0) (g (+ 1 i))))) 0)   ; string -> charlist
    (ri-eval s)
      (: cap (strout 0)
         _ (each (parseall (ri-cl s)) (\ v (: _ (fputx cap (ev v)) (fputc cap 10))))

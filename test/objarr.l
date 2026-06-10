@@ -22,15 +22,15 @@
  (nilp (arr o '(2 2 2 2 2 2 2 2 2)))             ; over-rank rejected
 
  ; --- holds arbitrary values verbatim (no boxing/coercion) ---
- (= oa-B (get 0 0 oa-a))
- (= (* oa-B oa-B) (get 0 1 oa-a))
- (= (+ oa-B 7) (get 0 2 oa-a))
- (= "hi" (get 0 3 oa-a))
- (= 'sym (get 0 4 oa-a))
- (nilp (get 0 0 oa-z))                           ; (arr o ...) fills with nil
+ (= oa-B (peek oa-a 0 0))
+ (= (* oa-B oa-B) (peek oa-a 1 0))
+ (= (+ oa-B 7) (peek oa-a 2 0))
+ (= "hi" (peek oa-a 3 0))
+ (= 'sym (peek oa-a 4 0))
+ (nilp (peek oa-z 0 0))                           ; (arr o ...) fills with nil
 
  ; --- nested object arrays + index into the inner one ---
- (= 4 (get 0 1 (get 0 1 oa-nest)))
+ (= 4 (peek (peek oa-nest 1 0) 1 0))
 
  ; --- falsiness: an all-nil o-array is falsy; any truthy element flips it ---
  (? oa-z 0 1)                                    ; oa-z all nil -> falsy -> 1
@@ -43,9 +43,9 @@
  ; --- GC stress: oa-a stays live (global root) across many collections; the
  ;     bignum element pointers must be forwarded, not dropped or truncated ---
  (= 0 (oa-churn 80))
- (= oa-B (get 0 0 oa-a))
- (= (* oa-B oa-B) (get 0 1 oa-a))
- (= 'sym (get 0 4 oa-a)))
+ (= oa-B (peek oa-a 0 0))
+ (= (* oa-B oa-B) (peek oa-a 1 0))
+ (= 'sym (peek oa-a 4 0)))
 
 ; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
 ; the whole point of g_O: ops route through the promoting scalar dispatch, so a
@@ -62,24 +62,24 @@
  ; result of an op on a g_O array is itself g_O
  (= o (atype oa-sum))
  ; exact elementwise results (no wrap, no float rounding)
- (= (+ (100 2) 1) (get 0 0 oa-sum))
- (= (* 2 (100 2)) (get 0 1 oa-prd))
- (= 12 (get 0 2 oa-prd))
+ (= (+ (100 2) 1) (peek oa-sum 0 0))
+ (= (* 2 (100 2)) (peek oa-prd 1 0))
+ (= 12 (peek oa-prd 2 0))
 
  ; transparency vs the typed lane: 2^40*2^40 = 2^80; i64 wraps to 0, o stays exact
- (= (80 2) (get 0 0 (* oa-oar oa-oar)))
- (nilp (= (80 2) (get 0 0 (* oa-zar oa-zar))))
+ (= (80 2) (peek (* oa-oar oa-oar) 0 0))
+ (nilp (= (80 2) (peek (* oa-zar oa-zar) 0 0)))
 
  ; broadcasting: object array (+) scalar bignum
- (= (* 2 (100 2)) (get 0 0 (+ oa-x (100 2))))   ; (2^100)+(2^100)
- (= (+ 3 (100 2)) (get 0 2 (+ (100 2) oa-x)))   ; scalar on the left; oa-x elem 2 = 3
+ (= (* 2 (100 2)) (peek (+ oa-x (100 2)) 0 0))   ; (2^100)+(2^100)
+ (= (+ 3 (100 2)) (peek (+ (100 2) oa-x) 2 0))   ; scalar on the left; oa-x elem 2 = 3
 
  ; mixed: object array (+) typed int array -> widens the int array, stays exact
- (= (* 2 oa-w) (get 0 0 (+ oa-oar oa-zar)))
+ (= (* 2 oa-w) (peek (+ oa-oar oa-zar) 0 0))
 
  ; comparison over object arrays -> 0/1 element
- (= 1 (get 0 0 (< (arrl o '(2) '(1 5)) (arrl o '(2) '(3 2)))))
- (= 0 (get 0 1 (< (arrl o '(2) '(1 5)) (arrl o '(2) '(3 2)))))
+ (= 1 (peek (< (arrl o '(2) '(1 5)) (arrl o '(2) '(3 2))) 0 0))
+ (= 0 (peek (< (arrl o '(2) '(1 5)) (arrl o '(2) '(3 2))) 1 0))
 
  ; --- reductions fold exactly through the same dispatch ---
  (= (+ (100 2) 5) (asum oa-x))
@@ -88,8 +88,8 @@
  (= -3 (amin (arrl o '(3) (L 5 -3 7))))
  (aall (arrl o '(2) '(1 2)))
  (nilp (aall (arrl o '(2) '(1 0))))
- (pin (arrl o '(2) '(0 5)))
- (nilp (pin (arrl o '(2) '(0 0))))
+ (hash (arrl o '(2) '(0 5)))
+ (nilp (hash (arrl o '(2) '(0 0))))
 
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (= 0 (oa-churn 40))
@@ -114,10 +114,10 @@
  (= 1 (arank (array 4 1 2 3 4)))
  (= 3 (alen (array -3 7 8 9)))
  ; shape list -> rank-N
- (= 2 (arank oa-m))   (= 4 (get 0 (L 1 1) oa-m))
+ (= 2 (arank oa-m))   (= 4 (peek oa-m (L 1 1) 0))
  ; elements stored verbatim, in order
- (= 'world (get 0 1 oa-q))
- (= (100 2) (get 0 0 oa-bn))                  ; full bignum, not truncated to i64
+ (= 'world (peek oa-q 1 0))
+ (= (100 2) (peek oa-bn 0 0))                  ; full bignum, not truncated to i64
  ; currying: a partial collector is a function; completing it builds the array
  (= "(arrl o '(2) '(a b))" (inspect ((array 2) 'a 'b)))
  ; (array 0) -> empty rank-1 array, no elements to collect
@@ -141,12 +141,12 @@
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
 (assert
  (= c (atype oa-z2)) (= c (atype oa-c2)) (= o (atype oa-b2))
- (= 0 (pin oa-z2)) (nilp oa-z2)                   ; all-zero object array -> falsy, pin 0
- (= 5 (pin oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(5)
+ (= 0 (hash oa-z2)) (nilp oa-z2)                   ; all-zero object array -> falsy, pin 0
+ (= 5 (hash oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(5)
  !!oa-b2                                          ; a bignum element is truthy
- (= 0 (pin (arr o '(2 2))))                       ; all-nil object array -> pin 0
+ (= 0 (hash (arr o '(2 2))))                       ; all-nil object array -> pin 0
  !!(array 2 'a 'b)                                ; symbol elements -> truthy
  ; the defining invariant (nilp x) == (= 0 (pin x)) on each:
- (= (? (nilp oa-z2) 1 0) (? (= 0 (pin oa-z2)) 1 0))
- (= (? (nilp oa-c2) 1 0) (? (= 0 (pin oa-c2)) 1 0))
- (= (? (nilp oa-b2) 1 0) (? (= 0 (pin oa-b2)) 1 0)))
+ (= (? (nilp oa-z2) 1 0) (? (= 0 (hash oa-z2)) 1 0))
+ (= (? (nilp oa-c2) 1 0) (? (= 0 (hash oa-c2)) 1 0))
+ (= (? (nilp oa-b2) 1 0) (? (= 0 (hash oa-b2)) 1 0)))

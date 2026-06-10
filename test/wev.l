@@ -7,7 +7,7 @@
 ; excluded -- (hashn 0) must yield a fresh hash on every call under BOTH compilers.
 (assert
  ; --- impure / identity-minting heads are NOT folded (fresh each call) ---
- (: (f _) (hashn 0) (nilp (same (f 0) (f 0))))    ; `hashn` excluded -> distinct hashes
+ (: (f _) (mapn 0) (nilp (idp (f 0) (f 0))))    ; `hashn` excluded -> distinct hashes
 
  ; --- arithmetic / numeric folds are correct (nested, bottom-up) ---
  (= 7  (+ 1 (* 2 3)))
@@ -20,7 +20,7 @@
  (= 9  (A (X 9 8)))
  (= 8  (B (X 9 8)))
  (= 2  (AB '(1 2 3)))
- (= 4  (pin (scat "ab" "cd")))                   ; string built + measured at compile time
+ (= 4  (hash (scat "ab" "cd")))                   ; string built + measured at compile time
 
  ; --- currying: under-application yields a usable closure; prefix+unknown tail ---
  (= 7  ((+ 3) 4))                                ; (+ 3) baked, applied at runtime

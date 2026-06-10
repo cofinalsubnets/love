@@ -6,14 +6,14 @@
   ; the literal "" reads as a real string object, distinct from 0 ...
   (strp "")                                  ; "" is a string
   (nilp "")                                  ; ... but falsy now -- an empty container
-  !(same "" 0)                               ; truthiness aside, "" is its own object, not 0/nil
+  !(idp "" 0)                               ; truthiness aside, "" is its own object, not 0/nil
   (nilp (= "" 0))                            ; "" is not equal to 0
-  (nilp (same "" 0))                         ; ... nor identical to it
+  (nilp (idp "" 0))                         ; ... nor identical to it
   (= "" "")                                  ; but all empty strings are equal
 
   ; pin: both the empty string and 0 have empty length
-  (= 0 (pin ""))
-  (= 0 (pin 0))
+  (= 0 (hash ""))
+  (= 0 (hash 0))
 
   ; + / scat: "" is a two-sided identity, and joining empties yields ""
   (= "ab" (+ "" "ab"))   (= "ab" (+ "ab" ""))
@@ -30,8 +30,8 @@
   (= 0 (ssub 0 0 5))
 
   ; get: indexing the empty string returns the default
-  (= 99 (get 99 0 ""))
-  (= 99 (get 99 0 0))
+  (= 99 (peek "" 0 99))
+  (= 99 (peek 0 0 99))
 
   ; applying "" IS byte-indexing now (it is a real text object): every index is
   ; out of range, so ("" k) == 1 -- the same value the number 0 yields, but via

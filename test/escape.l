@@ -6,25 +6,25 @@
 (assert
   ; --- C reader path: this file is parsed by it ---
   ; \n / \t / \r / \0 become 1-byte strings with the corresponding byte.
-  (= 1 (pin "\n"))           (= "\n" (string (X 10 0)))
-  (= 1 (pin "\t"))           (= "\t" (string (X 9 0)))
-  (= 1 (pin "\r"))           (= "\r" (string (X 13 0)))
-  (= 1 (pin "\0"))           (= "\0" (string (X 0 0)))
+  (= 1 (hash "\n"))           (= "\n" (string (X 10 0)))
+  (= 1 (hash "\t"))           (= "\t" (string (X 9 0)))
+  (= 1 (hash "\r"))           (= "\r" (string (X 13 0)))
+  (= 1 (hash "\0"))           (= "\0" (string (X 0 0)))
   ; \xHH: two hex digits.
-  (= 1 (pin "\x00"))         (= "\x00" (string (X 0 0)))
-  (= 1 (pin "\x41"))         (= "\x41" (string (X 65 0)))
-  (= 1 (pin "\xff"))         (= "\xff" (string (X 255 0)))
+  (= 1 (hash "\x00"))         (= "\x00" (string (X 0 0)))
+  (= 1 (hash "\x41"))         (= "\x41" (string (X 65 0)))
+  (= 1 (hash "\xff"))         (= "\xff" (string (X 255 0)))
   (= "\x41" "A")             (= "\x0a" "\n")
   (= "\xAB" "\xab")          ; mixed case
   ; \\ and \" still pass through via the take-next-char-as-is fallback.
-  (= 1 (pin "\\"))           (= "\\" (string (X 92 0)))
-  (= 1 (pin "\""))           (= "\"" (string (X 34 0)))
+  (= 1 (hash "\\"))           (= "\\" (string (X 92 0)))
+  (= 1 (hash "\""))           (= "\"" (string (X 34 0)))
   ; embedded mid-string
-  (= 3 (pin "a\nb"))         (= "a\nb" (string (X 97 (X 10 (X 98 0)))))
-  (= 3 (pin "a\tb"))         (= "a\tb" (string (X 97 (X 9  (X 98 0)))))
-  (= 3 (pin "a\rb"))         (= "a\rb" (string (X 97 (X 13 (X 98 0)))))
-  (= 3 (pin "a\0b"))         (= "a\0b" (string (X 97 (X 0  (X 98 0)))))
-  (= 3 (pin "a\x42b"))       (= "a\x42b" (string (X 97 (X 66 (X 98 0))))))
+  (= 3 (hash "a\nb"))         (= "a\nb" (string (X 97 (X 10 (X 98 0)))))
+  (= 3 (hash "a\tb"))         (= "a\tb" (string (X 97 (X 9  (X 98 0)))))
+  (= 3 (hash "a\rb"))         (= "a\rb" (string (X 97 (X 13 (X 98 0)))))
+  (= 3 (hash "a\0b"))         (= "a\0b" (string (X 97 (X 0  (X 98 0)))))
+  (= 3 (hash "a\x42b"))       (= "a\x42b" (string (X 97 (X 66 (X 98 0))))))
 
 ; --- charlist port path: feed the C reader a charlist of `"..."` source
 ; through the ci synth port (the editor's submit path).

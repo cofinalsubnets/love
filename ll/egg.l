@@ -2,6 +2,6 @@
  (go e z a) (? a (go e (e (A a)) (B a)) z)
  t0 (clock 0)
  e (go (go ev 0 egg) 0 egg)
- _ (put 'ev e globals)
+ _ (pin globals 'ev e)
  t1 (clock t0)
- (put 'boot_ms t1 globals)))
+ (pin globals 'boot-ticks t1)))

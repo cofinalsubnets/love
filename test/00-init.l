@@ -9,9 +9,9 @@
      (putc 27)
      (puts reset))
 
-   test_state (hashn 0)
-   (test_set k v) (put k v test_state)
-   (test_get k) (get 0 k test_state))
+   test_state (mapn 0)
+   (test_set k v) (pin test_state k v)
+   (test_get k) (peek test_state k 0))
 (:: 'assert (\ l
 (:
  (report x v) (do
@@ -19,4 +19,4 @@
    (? v (term_text green_dot)
     (do (term_text red_x) (putc 10)
        (puts "assert failed: ") (putx x) (putc 10) (exit 1))))
- (X 'do (map (\ l (L report (L '\ l) l)) l)))))
+ (X 'do (mapf (\ l (L report (L '\ l) l)) l)))))

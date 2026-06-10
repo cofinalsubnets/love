@@ -330,7 +330,7 @@ static char const tests0[] =
 #include "tests0.h"
  ;
 static char const
- s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (pin s)) (X (get 0 i s) (g (+ 1 i))))) 0))",
+ s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (hash s)) (X (peek s i 0) (g (+ 1 i))))) 0))",
  runner[] = "(: p (strin (s2cl tests))"
             " ((: (g e) (: r (fread p e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (nom 0)))";
 #endif

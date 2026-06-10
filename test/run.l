@@ -17,7 +17,7 @@
   ; --- ran successfully: a pair, exit 0, and (here) no output ---
   (twop (run (L "true")))
   (= 0 (A (run (L "true"))))
-  (= 0 (pin (B (run (L "true")))))            ; `true` writes nothing
+  (= 0 (hash (B (run (L "true")))))            ; `true` writes nothing
 
   ; --- a nonzero exit code is reported as-is ---
   (= 1 (A (run (L "false"))))
@@ -37,7 +37,7 @@
   (= -1 (run (L "echo" 5)))                     ; 5 is not a string
 
   ; --- output larger than the initial buffer exercises the grow path ---
-  (: r (run (L "seq" "20000")) (&& (= 0 (A r)) (< 65536 (pin (B r)))))
+  (: r (run (L "seq" "20000")) (&& (= 0 (A r)) (< 65536 (hash (B r)))))
 
   ; --- getenv: PATH is set (a string); a bogus name is unset (nil) ---
   (strp (getenv "PATH"))

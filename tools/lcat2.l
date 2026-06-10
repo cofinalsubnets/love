@@ -60,17 +60,17 @@
 (: (sl-char d) (? (< d 26) (+ 97 d) (+ 65 (- d 26)))   ; shortlex over a-zA-Z (bijective base-52):
    (sl-digits n acc) (? (< n 1) acc (: m (+ -1 n) (sl-digits (/ m 52) (X (sl-char (mod m 52)) acc))))
    (shortlex k) (string (sl-digits (+ 1 k) 0))         ; 0->a .. 25->z 26->A .. 51->Z 52->aa
-   (freshname? nm) (= 0 (get 0 nm cnt))                ; nm occurs as no source symbol
+   (freshname? nm) (= 0 (peek cnt nm 0))                ; nm occurs as no source symbol
    (avail? nm u) (&& (freshname? nm) !(memq nm u))     ; ..and not live on this path
    (pickname u) ((: (g k) (: nm (intern (shortlex k)) (? (avail? nm u) nm (g (+ 1 k))))) 0)
-   (cntle a b) (: ca (get 0 a cnt) cb (get 0 b cnt)    ; order a scope's bindings: count desc,
+   (cntle a b) (: ca (peek cnt a 0) cb (peek cnt b 0)    ; order a scope's bindings: count desc,
        (? (> ca cb) 1 (< ca cb) 0                      ; then length desc, then name -- deterministic
-          (: la (pin (string a)) lb (pin (string b)) (? (> la lb) 1 (< la lb) 0 (< a b)))))
+          (: la (hash (string a)) lb (hash (string b)) (? (> la lb) 1 (< la lb) 0 (< a b)))))
    ; assign fresh names to a scope's co-live bindings (count order). a frozen (tainted)
    ; or can't-shrink binding is kept (mapped to itself, no name spent). -> (env-frame . used').
    (assign syms used) ((: (g ss m u) (? (twop ss)
          (: s (A ss) nm (pickname u)
-            (? (&& !(get 0 s taint) (< (pin nm) (pin (string s))))
+            (? (&& !(peek taint s 0) (< (hash nm) (hash (string s))))
                (: i (intern nm) (g (B ss) (X (X s i) m) (X i u)))
                (g (B ss) (X (X s s) m) u)))
          (X m u))) (sort cntle syms) 0 used)
@@ -99,19 +99,19 @@
      (atomp x) x
      (= '\ (A x)) (? (lambp x)
         (: lb (lp x) ps (A lb) bd (B lb) r (assign ps used) am (A r) u2 (B r)
-           env2 (cat am env) ps2 (map (\ p (mapped p am)) ps)
+           env2 (cat am env) ps2 (mapf (\ p (mapped p am)) ps)
            (X '\ (cat ps2 (list (rec bd env2 u2 0 rec)))))
         x)
      (= ': (A x)) (rn-let (B x) env used top rec)
-     (map (\ e (rec e env used 0 rec)) x)))
+     (mapf (\ e (rec e env used 0 rec)) x)))
 
 ; === lcat2 SURFACE -- builds the core's inputs (cnt/taint) from un-expanded source, and
 ; adapts the binding/quote macros the compiler would have already expanded away. `rn` is
 ; the recursion the core threads, so nested `:-`/qq are adapted at every level. ===
-(: (collect x) (? (symp x) (put x (+ 1 (get 0 x cnt)) cnt)
+(: (collect x) (? (symp x) (pin cnt x (+ 1 (peek cnt x 0)))
      (twop x) (? (= 'qq (A x)) (: _ (collect (A x)) (tcollect (B x)))   ; qq body -> taint
                  (: _ (collect (A x)) (collect (B x)))) 0)
-   (tcollect x) (? (symp x) (: _ (put x (+ 1 (get 0 x cnt)) cnt) (put x 1 taint))
+   (tcollect x) (? (symp x) (: _ (pin cnt x (+ 1 (peek cnt x 0))) (pin taint x 1))
                     (twop x) (: _ (tcollect (A x)) (tcollect (B x))) 0)
    (rn x env used top rec) (? (twop x)
        (? (= ':- (A x)) (: rl (rn-let (cat (BB x) (list (AB x))) env used top rec)  ; :- = body-first :
@@ -123,7 +123,7 @@
 
 ; --- minify (identical to lcat): drop a space only where the two flanking bytes
 ; re-parse to the same datum count without it; then C-escape the survivors. ---
-(: (s2cl s) ((: (g i) (? (< i (pin s)) (X (get 0 i s) (g (+ 1 i))))) 0)
+(: (s2cl s) ((: (g i) (? (< i (hash s)) (X (peek s i 0) (g (+ 1 i))))) 0)
    (nforms s) ((: (g p e n) (: r (fread p e) (? (| (= e r) (= p r)) n (g p e (+ 1 n)))))
                (strin (s2cl s)) (nom 0) 0)
    (redundant? a b) (= (nforms (string (L a b))) (nforms (string (L a 32 b))))
@@ -135,12 +135,12 @@
    (joinforms fs) (? (atomp fs) "" (atomp (B fs)) (inspect (rn (A fs) 0 0 1 rn))
        (scat (scat (inspect (rn (A fs) 0 0 1 rn)) " ") (joinforms (B fs))))
    (emit acc) (: _ (fputc out 34)
-       _ ((: (g i pc instr) (? (< i (pin acc))
-            (: c (get 0 i acc) (? instr
-               (? (= c 92) (: _ (eb c) _ (eb (get 0 (+ i 1) acc)) (g (+ i 2) 0 1))
+       _ ((: (g i pc instr) (? (< i (hash acc))
+            (: c (peek acc i 0) (? instr
+               (? (= c 92) (: _ (eb c) _ (eb (peek acc (+ i 1) 0)) (g (+ i 2) 0 1))
                   (: _ (eb c) (g (+ i 1) c (? (= c 34) 0 1))))
                (? (= c 32)
-                  (? (redundant? pc (get 0 (+ i 1) acc)) (g (+ i 1) pc 0)
+                  (? (redundant? pc (peek acc (+ i 1) 0)) (g (+ i 1) pc 0)
                      (: _ (eb c) (g (+ i 1) c 0)))
                   (: _ (eb c) (g (+ i 1) c (= c 34)))))) 0)) 0 0 0)
        (fputc out 34))
@@ -148,8 +148,8 @@
    _ (? p 0 (: _ (fputs err "lcat2: cannot open input") (exit 1)))
    e (nom 0)
    forms (readforms p e)
-   _ (map (\ m (put m (+ 1 (get 0 m cnt)) cnt)) (hashk macros))  ; macro heads bypass scoping
-   _ (map collect forms)                                        ; count symbols + taint qq
+   _ (mapf (\ m (pin cnt m (+ 1 (peek cnt m 0)))) (mapk macros))  ; macro heads bypass scoping
+   _ (mapf collect forms)                                        ; count symbols + taint qq
    acc (joinforms forms)
    _ (emit acc)
    (fputc out 10))

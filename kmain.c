@@ -72,10 +72,8 @@ void k_qemu_exit(int);
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
   "hlt"
-#elif defined (__aarch64__) || defined (__riscv)
+#elif defined (__aarch64__)
   "wfi"
-#elif defined (__loongarch64)
-  "idle 0"
 #endif
   ); }
 
@@ -559,7 +557,7 @@ void kmain(void) {
  // test build: read each form out of the baked `tests` string (string -> charlist
  // -> strin port -> fread) and eval it via the self-hosted ev -- the same shape as
  // the host's stdin runner. zz-fin.l prints the summary and (exit 1)s on failure.
- "(: p (strin ((: (g i) (? (< i (pin tests)) (X (get 0 i tests) (g (+ 1 i))))) 0))"
+ "(: p (strin ((: (g i) (? (< i (hash tests)) (X (peek tests i 0) (g (+ 1 i))))) 0))"
  " ((: (g e) (: r (fread p e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (nom 0)))"
 #else
  "(repl 0 0)"

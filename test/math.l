@@ -76,7 +76,7 @@
     (aall (= (pow 2 (arrl f64 '(3) '(1 2 3))) (arrl f64 '(3) '(2 4 8))))  ; scalar ^ array
     (aall (= (pow (arrl f64 '(3) '(1 2 3)) (arrl f64 '(3) '(2 2 2)))      ; array ^ array
              (arrl f64 '(3) '(1 4 9))))
-    (close 1.570796326794897 (get 0 1 (arg ~((arrl f64 '(2) '(1 0)) (arrl f64 '(2) '(1 1))))))
+    (close 1.570796326794897 (peek (arg ~((arrl f64 '(2) '(1 0)) (arrl f64 '(2) '(1 1)))) 1 0))
     (nilp (pow (arrl f64 '(2) '(1 2)) "x"))                         ; array vs non-number -> nil
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
@@ -85,4 +85,4 @@
     ;     against a bignum stays magnitude-exact -- see test/bignum.l ---
     (aall (= (+ (arrl i64 '(2) '(1 2)) 18446744073709551621)        ; 2^64 + 5 -> low word 5
              (arrl i64 '(2) '(6 7))))
-    (< 1e19 (get 0 0 (+ (arrl f64 '(2) '(0 0)) 18446744073709551616)))))  ; 2^64 full magnitude
+    (< 1e19 (peek (+ (arrl f64 '(2) '(0 0)) 18446744073709551616) 0 0))))  ; 2^64 full magnitude

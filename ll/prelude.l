@@ -3,7 +3,7 @@
    (co f g x) (f (g x))
    (const x _) x
    (flip f x y) (f y x))
-(: macros (get 0 0 globals))
+(: macros (peek globals 0 0))
 (: pi 3.141592653589793
    e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
    true 1 false 0
@@ -41,7 +41,7 @@
    cadar ABA caddr ABB
    cdaar BAA cdadr BAB
    cddar BBA cdddr BBB
-   inc (+ 1) dec (+ -1) (:: a b) (put a b macros)
+   inc (+ 1) dec (+ -1) (:: a b) (pin macros a b)
    putc (fputc out)
    puts (fputs out)
    putn (fputn out)
@@ -52,23 +52,23 @@
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes n times. n<1 -> 1 (itself the identity numeral: (1 x) == x
 ; for every x, see below); n=1 -> x directly. numfn assembles the n-fold thread
-; directly via lam/poke (no `ev`, so applying a fixnum never re-enters the compiler):
+; directly via lam/pinl (no `ev`, so applying a fixnum never re-enters the compiler):
 ; n quote-f's then n ap's -- apl2r's [head..][arg][ap..] shape -- via the interned
 ; opcode globals (kernel/g.c `insts`). Cell 0 is the source \-expr at value[-1] for
-; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (seek 1 th), and
+; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (seekl 1 th), and
 ; the src rides the thread span so GC traces it. Helpers pass th/f/n explicitly -- a
 ; closure over the forward-bound th miscompiles under the bootstrap c0.
 (: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (X f (X acc 0))))
-   (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) g_vm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
-   (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) g_vm_ap th) (nfa th (+ 1 i) n)) th)
+   (nfq th f i n) (? (< i n) (: _ (pinl (+ 1 (* 2 i)) g_vm_quote th) _ (pinl (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
+   (nfa th i n) (? (< i n) (: _ (pinl (+ (+ 3 (* 2 n)) i) g_vm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
      src (X '\ (X 'x (X (nfnest f n 'x) 0)))  ; alloc before lam; printer source
      th (lam (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
-     _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past lam: th can't move
-     _ (poke (+ 1 (* 2 n)) g_vm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
+     _ (pinl 0 src th) _ (nfq th f 0 n)             ; no allocation past lam: th can't move
+     _ (pinl (+ 1 (* 2 n)) g_vm_arg th) _ (pinl (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
      _ (nfa th 0 n)
-     _ (poke (+ 3 (* 3 n)) g_vm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
-   (seek 1 th))
+     _ (pinl (+ 3 (* 3 n)) g_vm_ret th) _ (pinl (+ 4 (* 3 n)) 1 th)
+   (seekl 1 th))
    (nump x) (| (fixp x) (| (tupp x) (bigp x)))   ; whole tower: fixnum / float box / wide-int box / complex / array / bignum
    (intp n) (| (fixp n) (| (boxp n) (bigp n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
@@ -102,7 +102,7 @@
 (: (scomb f g a x) (f a (g a x))
    (bcomb f g x) (f (g x))
    _ (set-scomb scomb) _ (set-bcomb bcomb))
-(: (map f l) (? (twop l) (X (f (A l)) (map f (B l))))
+(: (mapf f l) (? (twop l) (X (f (A l)) (mapf f (B l))))
    (foldl f z l) (? (twop l) (foldl f (f z (A l)) (B l)) z)
    (foldr f z l) (? (twop l) (f (A l) (foldr f z (B l))) z))
 (: (foldl1 f l) (foldl f (A l) (B l))
@@ -136,10 +136,10 @@
    (part p) (foldr (\ a m (? (p a) (X (X a (A m)) (B m))
                                         (X (A m) (X a (B m))))) '(0)))
 (: (strin cl)
- (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (lam 5))))))
+ (pinl -1 (peekl 0 in) (pinl -1 -4 (pinl -1 -1 (pinl -1 0 (pinl 4 cl (lam 5))))))
  (strout _)
-  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (lam 6)))))))
- (outstr o) (ssub (peek 4 o) 0 (peek 5 o))
+  (pinl -1 (peekl 0 in) (pinl -1 -2 (pinl -1 -1 (pinl -1 0 (pinl -1 "  " (pinl 5 0 (lam 6)))))))
+ (outstr o) (ssub (peekl 4 o) 0 (peekl 5 o))
  (slurp i) (: (rl i) (: c (fgetc i) (? !(= c -1) (X c (rl i)))) (string (rl i)))
  (inspect x) (: o (strout 0) _ (fputx o x) (outstr o)))
 ; here are some macro definitions
@@ -197,16 +197,16 @@
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
    (a-type d) (: r (foldl a-emax 0 d) (? (= r 0) i64 (= r 1) f64 (= r 2) c o))
    (a-dim d) (int (abs d))
-   (a-shape s) (? (twop s) (map a-dim s) (L (a-dim s))))
+   (a-shape s) (? (twop s) (mapf a-dim s) (L (a-dim s))))
 
 ; tuple/hash value constructors (also the read-back targets of the `@(…)` / `%(…)`
 ; printer-sugar forms). `tuple` builds a rank-1 array from its element args,
 ; inferring the element type via a-type (so it carries bignums/symbols in an o
-; array, not just i64/f64); `hasht` builds a hash from alternating key/value args.
+; array, not just i64/f64); `map` builds a map from alternating key/value args.
 (: (ltuple l) (arrl (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'tuple (\ a (list 'ltuple (X 'list a))))
-(: (hashtx a) (? (twop a) (list 'put (A a) (AB a) (hashtx (BB a))) '(hashn 0)))
-(:: 'hasht (\ a (hashtx a)))
+(: (mapx a) (? (twop a) (list 'pin (mapx (BB a)) (A a) (AB a)) '(mapn 0)))
+(:: 'map (\ a (mapx a)))
 
 ; the `$` reader sigil wraps its operand with nom: `$x` -> (gsym x) -> the macro
 ; quotes the operand, giving (nom 'x) -- a fresh uninterned symbol named x. a
@@ -231,7 +231,7 @@
 ; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body
 ; expression, and indirects every *value* binding whose init closes over the
 ; name being defined (or a forward/mutual sibling defined no later) through a
-; heap cell: prepend `cell (X 0 0)`, store via `(poke 1 init cell)`, read via
+; heap cell: prepend `cell (X 0 0)`, store via `(pinl 1 init cell)`, read via
 ; `(A cell)`. Functions (resolved lazily) and values defined before their
 ; users are untouched. It returns 0 when nothing needs boxing, else the rewritten
 ; (prs' . body'). This is the single source of truth, shared verbatim by both
@@ -252,17 +252,17 @@
     (: h (A x) (?
       (= h '\) (? (atomp (BB x)) 0 (: r (lp x) (w v (B r) (cat (A r) bnd) 1)))
       (= h ':) (wl v (B x) (cat (ln (B x)) bnd) u)
-      (: m (? (symp h) (get 0 h macros) 0) (? m (w v (m (B x)) bnd u) (any (\ e (w v e bnd u)) x))))))
+      (: m (? (symp h) (peek macros h 0) 0) (? m (w v (m (B x)) bnd u) (any (\ e (w v e bnd u)) x))))))
    (wl v bs bnd u) (?
     (atomp bs) 0
     (atomp (B bs)) (w v (A bs) bnd u)
     (: nd (dsug (A bs) (AB bs)) (? (w v (B nd) bnd u) 1 (wl v (BB bs) bnd u))))
    ; boxset: value bindings whose init closes over the name (or a no-later sibling).
-   (boxset prs) (: nm (map A prs)
+   (boxset prs) (: nm (mapf A prs)
      (filter (\ v (&& (nilp (lambp (B (assq v prs))))
                       (any (\ p (w v (B p) 0 0)) (take (+ 1 (lidx v nm)) prs)))) nm))
-   (mkcs bx) (map (\ v (X v (nom 0))) bx)
-   (cellbinds cs) (map (\ c (X (B c) (list 'X 0 0))) cs))
+   (mkcs bx) (mapf (\ v (X v (nom 0))) bx)
+   (cellbinds cs) (mapf (\ c (X (B c) (list 'X 0 0))) cs))
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.
 (: (boxfix-core prs body) (:
@@ -273,7 +273,7 @@
     (: h (A x) (?
       (= h '\) (? (atomp (BB x)) x (: r (lp x) (X '\ (cat (A r) (list (sub (rmc cs (A r)) (B r)))))))
       (= h ':) (X ': (subl (rmc cs (ln (B x))) (B x)))
-      (: m (? (symp h) (get 0 h macros) 0) (? m (sub cs (m (B x))) (map (\ e (sub cs e)) x))))))
+      (: m (? (symp h) (peek macros h 0) 0) (? m (sub cs (m (B x))) (mapf (\ e (sub cs e)) x))))))
    (subl cs bs) (?
     (atomp bs) bs
     (atomp (B bs)) (list (sub cs (A bs)))
@@ -281,8 +281,8 @@
    (: bx (boxset prs)
       (? (nilp bx) 0
        (: cs (mkcs bx)
-          (one p) (: d (sub cs (B p)) (? (memq (A p) bx) (X '_ (list 'poke 1 d (B (assq (A p) cs)))) (X (A p) d)))
-          (X (cat (cellbinds cs) (map one prs)) (sub cs body)))))))
+          (one p) (: d (sub cs (B p)) (? (memq (A p) bx) (X '_ (list 'pinl 1 d (B (assq (A p) cs)))) (X (A p) d)))
+          (X (cat (cellbinds cs) (mapf one prs)) (sub cs body)))))))
 ; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that
 ; need no boxing pass through verbatim.

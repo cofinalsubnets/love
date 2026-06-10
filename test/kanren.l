@@ -13,7 +13,7 @@
  has_s dict_has
  ext_s dict_set
  (unord_eq a b) (&&
-  (= (pin a) (pin b))
+  (= (hash a) (hash b))
   (all (flip memq a) b))
  (sX x s n m y) (y x s)
  (sno n m y) (n sno)
@@ -54,9 +54,9 @@
    (twop u) (X (walk_star (A u) s) (walk_star (B u) s))
    u)
   (reify st) (flip catmap ks (\ k
-   (: it (has_s (X (map A (A st)) (B st)) k)
+   (: it (has_s (X (mapf A (A st)) (B st)) k)
     (? it (L k (walk_star (A it) st))))))
-  (map reify ((? n (stake n) slist) (g empty_dict)))))
+  (mapf reify ((? n (stake n) slist) (g empty_dict)))))
 
 (:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x (A x)
  (L '\ s n m y (L m (L x s))))))
@@ -64,7 +64,7 @@
  (foldl (\ a b (L (\ a b s (s_star (a s) b)) a b)) x xs))))
 (:: 'vel (\ xs (: x (A xs) xs (B xs)
  (foldl (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) x xs))))
-(:: '\\ (\ a (X (X '\ a) (map (\ a (L var (L '\ a))) (init a)))))
+(:: '\\ (\ a (X (X '\ a) (mapf (\ a (L var (L '\ a))) (init a)))))
 
 (assert
  (unord_eq '(1 2 3) '(2 1 3))

@@ -8,7 +8,7 @@
 ; and the complex form ~(re im)
 ; reconstruct the value under eval -- those use rt.
 ; s2cl turns a string into a charlist of byte codes (get is generic over strings).
-(: (s2cl s) ((: (g i) (? (< i (pin s)) (X (get 0 i s) (g (+ 1 i))))) 0)
+(: (s2cl s) ((: (g i) (? (< i (hash s)) (X (peek s i 0) (g (+ 1 i))))) 0)
    (rdr s) (fread (strin (s2cl s)) (nom 0))
    (rd x) (rdr (inspect x))
    (rt x) (ev (rdr (inspect x))))
@@ -32,8 +32,8 @@
  ; complex arrays round-trip: rank-1 via @((C…)…)->tuple, rank>=2 via (array…) (ca-* from complex.l)
  (aall (= ca-v (rt ca-v)))
  (aall (= ca-m (rt ca-m)))
- (= 100 (get 0 1 (rt (hasht 1 100 2 200))))
- (= 200 (get 0 2 (rt (hasht 1 100 2 200))))
+ (= 100 (peek (rt (map 1 100 2 200)) 1 0))
+ (= 200 (peek (rt (map 1 100 2 200)) 2 0))
  ; functions reconstruct a working function
  (= 3 ((rt +) 1 2))                                 ; builtin
  (= 5 ((rt (\ x (+ x 1))) 4))                       ; lambda

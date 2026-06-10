@@ -17,6 +17,6 @@
    _ (? p 0 (: _ (fputs err "lcatv: cannot open input") (exit 1)))
    s (slurp p)
    _ (fputc out 34)
-   _ ((: (g i) (? (< i (pin s)) (: _ (eb (get 0 i s)) (g (+ 1 i))))) 0)
+   _ ((: (g i) (? (< i (hash s)) (: _ (eb (peek s i 0)) (g (+ 1 i))))) 0)
    _ (fputc out 34)
    (fputc out 10))

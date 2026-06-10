@@ -104,8 +104,8 @@
 ; (see avb in boot.l), so the macros read op_fixity via (get 0 ... globals)
 ; to force a dynamic lookup each invocation rather than capturing 0 once.
 (:: 'deffix (\ args
- (: _ (put 'op_fixity (X args (get 0 'op_fixity globals)) globals) 0)))
-(:: 'infix (\ body (infix_rewrite body (get 0 'op_fixity globals))))
+ (: _ (pin globals 'op_fixity (X args (peek globals 'op_fixity 0))) 0)))
+(:: 'infix (\ body (infix_rewrite body (peek globals 'op_fixity 0))))
 
 ; ----- default canonical fixities -----
 ; Order doesn't matter — deffix prepends; lookup resolves by (sym, kind).
@@ -148,12 +148,12 @@
   (= '((f x) y)           (infix_rewrite '(f x y) table))
   (= '(+ (f x) (g y))     (infix_rewrite '(f x + g y) table))
   (= '(* ((f x) y) z)     (infix_rewrite '(f x y * z) table))
-  (= '((map +) xs)        (infix_rewrite '(map (+) xs) table))
+  (= '((mapf +) xs)        (infix_rewrite '(mapf (+) xs) table))
   (= '((foldl 0) +)       (infix_rewrite '(foldl 0 (+)) table))
-  (= '(+ ((map +) xs) 1)  (infix_rewrite '((map (+) xs) + 1) table))
+  (= '(+ ((mapf +) xs) 1)  (infix_rewrite '((mapf (+) xs) + 1) table))
   ; quoted data is opaque — the inner list is not reshuffled
   (= ''(1 2 3)            (infix_rewrite '('(1 2 3)) table))
-  (= '(pin '(1 2 3))      (infix_rewrite '(pin '(1 2 3)) table))
+  (= '(hash '(1 2 3))      (infix_rewrite '(hash '(1 2 3)) table))
   ; (prefix X...) escapes back to prefix notation; the tag is stripped
   (= '(L 1 2 3)           (infix_rewrite '((prefix L 1 2 3)) table))
   (= '(+ 1 (L 2 3))       (infix_rewrite '(1 + (prefix L 2 3)) table))
@@ -178,8 +178,8 @@
  (= 5  (infix (+) 2 3))
  (= 25 (: f (* 5) (infix f 4 + 5)))
  (= 10 (: l (L 1 2 3 4) (infix foldl (+) 0 l)))
- (= 3  (infix pin '(1 2 3)))
- (= 3  (infix pin (prefix L 1 2 3)))
+ (= 3  (infix hash '(1 2 3)))
+ (= 3  (infix hash (prefix L 1 2 3)))
  (= 7  (infix 1 + (infix 2 * 3)))
  (= 7  (infix (infix 2 * 3) + 1)))
 

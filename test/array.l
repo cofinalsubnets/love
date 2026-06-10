@@ -24,27 +24,27 @@
  (nilp (atype "x"))
 
  ; --- get: rank-1 fixnum index ---
- (= 10 (get -1 0 (arrl i64 '(3) '(10 20 30))))
- (= 20 (get -1 1 (arrl i64 '(3) '(10 20 30))))
- (= 30 (get -1 2 (arrl i64 '(3) '(10 20 30))))
- (= -1 (get -1 3 (arrl i64 '(3) '(10 20 30))))   ; out of bounds -> default
- (= -1 (get -1 -1 (arrl i64 '(3) '(10 20 30))))  ; negative -> default
+ (= 10 (peek (arrl i64 '(3) '(10 20 30)) 0 -1))
+ (= 20 (peek (arrl i64 '(3) '(10 20 30)) 1 -1))
+ (= 30 (peek (arrl i64 '(3) '(10 20 30)) 2 -1))
+ (= -1 (peek (arrl i64 '(3) '(10 20 30)) 3 -1))   ; out of bounds -> default
+ (= -1 (peek (arrl i64 '(3) '(10 20 30)) -1 -1))  ; negative -> default
 
  ; --- get: rank-N shape-list index, row-major ---
- (= 1 (get -1 '(0 0) (arrl i64 '(2 2) '(1 2 3 4))))
- (= 2 (get -1 '(0 1) (arrl i64 '(2 2) '(1 2 3 4))))
- (= 3 (get -1 '(1 0) (arrl i64 '(2 2) '(1 2 3 4))))
- (= 4 (get -1 '(1 1) (arrl i64 '(2 2) '(1 2 3 4))))
- (= -1 (get -1 '(2 0) (arrl i64 '(2 2) '(1 2 3 4))))  ; oob -> default
- (= -1 (get -1 0 (arr i64 '(2 2))))                   ; wrong-rank key -> default
- (= -1 (get -1 '(0) (arr i64 '(2 2))))                ; too-few indices -> default
+ (= 1 (peek (arrl i64 '(2 2) '(1 2 3 4)) '(0 0) -1))
+ (= 2 (peek (arrl i64 '(2 2) '(1 2 3 4)) '(0 1) -1))
+ (= 3 (peek (arrl i64 '(2 2) '(1 2 3 4)) '(1 0) -1))
+ (= 4 (peek (arrl i64 '(2 2) '(1 2 3 4)) '(1 1) -1))
+ (= -1 (peek (arrl i64 '(2 2) '(1 2 3 4)) '(2 0) -1))  ; oob -> default
+ (= -1 (peek (arr i64 '(2 2)) 0 -1))                   ; wrong-rank key -> default
+ (= -1 (peek (arr i64 '(2 2)) '(0) -1))                ; too-few indices -> default
 
  ; --- rank-0 deref: empty/nil key yields the lone scalar ---
- (= 2.5 (get -9 '() 2.5))
+ (= 2.5 (peek 2.5 '() -9))
 
  ; --- float element read boxes an f64 ---
- (= 1.5 (get -1 0 (arrl f64 '(2) '(1.5 2.5))))
- (flop (get -1 0 (arrl f64 '(2) '(1.5 2.5))))
+ (= 1.5 (peek (arrl f64 '(2) '(1.5 2.5)) 0 -1))
+ (flop (peek (arrl f64 '(2) '(1.5 2.5)) 0 -1))
 
  ; --- scalar broadcast: array (op) scalar ---
  (aall (= (arrl i64 '(3) '(11 21 31)) (+ (arrl i64 '(3) '(10 20 30)) 1)))
@@ -79,8 +79,8 @@
  ; --- comparison -> 0/1 bool array ---
  (aall (< (arrl i64 '(3) '(1 2 3)) 10))
  !(aall (< (arrl i64 '(3) '(1 2 30)) 10))
- (pin (< (arrl i64 '(3) '(1 20 30)) 10))
- !(pin (< (arrl i64 '(3) '(10 20 30)) 5))
+ (hash (< (arrl i64 '(3) '(1 20 30)) 10))
+ !(hash (< (arrl i64 '(3) '(10 20 30)) 5))
  (aall (= (arrl i8 '(3) '(1 0 1)) (< (arrl i64 '(3) '(1 5 2)) 3)))
  (= i8 (atype (< (arr i64 '(3)) 1)))               ; bool array is i8
  ; whole-array equality is (aall (= a b))
@@ -96,8 +96,8 @@
  (= 21 (asum (arrl i64 '(2 3) '(1 2 3 4 5 6))))    ; reduces over all axes
  (aall (arrl i64 '(3) '(1 2 3)))                   ; no zero element
  !(aall (arrl i64 '(3) '(1 0 3)))               ; a zero element
- (pin (arrl i64 '(3) '(0 0 3)))
- !(pin (arr i64 '(3)))                         ; all zero
+ (hash (arrl i64 '(3) '(0 0 3)))
+ !(hash (arr i64 '(3)))                         ; all zero
 
  ; --- reductions are the identity on a scalar (rank-agnostic idiom) ---
  (= 5 (asum 5))

@@ -9,8 +9,8 @@
   ; printer renders them as a hex address — non-empty and string-typed.
   (strp (inspect in))
   (strp (inspect out))
-  (< 0 (pin (inspect in)))
-  (< 0 (pin (inspect out)))
+  (< 0 (hash (inspect in)))
+  (< 0 (hash (inspect out)))
 
   ; fungetc + fgetc roundtrip on stdin (within a single top-level form,
   ; otherwise the REPL parser would consume the pushed-back byte itself).
@@ -42,7 +42,7 @@
   ; --- strin: charlist-backed read-only synth port (fd=-4, ci) ---
   ; strin returns a port whose inspect rendering is a non-empty string.
   (strp (inspect (strin 0)))
-  (< 0 (pin (inspect (strin 0))))
+  (< 0 (hash (inspect (strin 0))))
   ; Each call allocates a fresh port object.
   (: p (strin 0) q (strin 0) !(= p q))
 

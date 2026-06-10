@@ -13,11 +13,10 @@ matching function, without reasoning about whether that ret is reachable
 or whether the handler legitimately returns (a few do -- host I/O nifs,
 yield, etc.). Expect false positives; the point is to narrow the search.
 
-The kernel is built for four arches (x86_64, aarch64, riscv64,
-loongarch64), so the tool is cross-arch: it reads the ELF's e_machine,
-picks a return mnemonic for that target, and -- since the system objdump
-is usually x86-only -- prefers the multi-target llvm-objdump for any
-non-x86 image.
+The kernel is built for two arches (x86_64, aarch64), so the tool is
+cross-arch: it reads the ELF's e_machine, picks a return mnemonic for
+that target, and -- since the system objdump is usually x86-only --
+prefers the multi-target llvm-objdump for any non-x86 image.
 
 Usage:
     vmret.py ELF [--prefix PREFIX] [--objdump PATH]
@@ -34,16 +33,14 @@ import os, re, shutil, struct, subprocess, sys
 
 EM_X86_64    = 62                                 # ELF e_machine values
 EM_AARCH64   = 183
-EM_RISCV     = 243
-EM_LOONGARCH = 258
 
 # A disassembly line is a function header `<addr> <name>:` or an
 # instruction `<addr>: <text>`. Both GNU objdump and llvm-objdump emit
 # this shape (with --no-show-raw-insn the raw bytes are gone).
 HEADER_RE = re.compile(r"^\s*([0-9a-fA-F]+)\s+<(.+)>:\s*$")   # 1 = start addr, 2 = name
 # llvm-objdump also prints intra-function *local labels* as headers of the
-# same shape (e.g. `<.L0 >`, `<.Ltmp3>`) -- on loongarch64 it emits
-# thousands of them. They are NOT function boundaries; a ret in the segment
+# same shape (e.g. `<.L0 >`, `<.Ltmp3>`), sometimes thousands of them.
+# They are NOT function boundaries; a ret in the segment
 # after one still belongs to the enclosing function. Treating them as
 # headers would end the watched function early and silently miss its tail
 # rets, so we recognize and skip them.
@@ -62,14 +59,12 @@ PREFIXES = {"rep", "repz", "repe", "repnz", "repne", "lock", "bnd",
 # Per-arch ordinary-return mnemonic. llvm-objdump with its default flags
 # (pseudo-instructions on) spells the function return as `ret` on every
 # target we build for; x86 also uses retq/retf/lret. We deliberately do
-# NOT match the privileged/exception returns (iret, eret, sret, mret,
-# ertn) -- those are ISR/trap epilogues, not threaded-VM handlers -- nor
-# the register-indirect tail jumps (jr/jirl/br), which are *correct* TCO.
+# NOT match the privileged/exception returns (iret, eret) -- those are
+# ISR/trap epilogues, not threaded-VM handlers -- nor the
+# register-indirect tail jumps (jmp/br), which are *correct* TCO.
 RET_RES = {
     EM_X86_64:    re.compile(r"^l?ret[a-z]*$"),   # ret, retq, retf, lret; not iret
     EM_AARCH64:   re.compile(r"^ret(aa|ab)?$"),   # ret + PAC variants; not eret
-    EM_RISCV:     re.compile(r"^ret$"),           # alias of jalr zero,0(ra); not s/mret
-    EM_LOONGARCH: re.compile(r"^ret$"),           # alias of jirl zero,ra,0; not ertn
 }
 RET_DEFAULT = RET_RES[EM_X86_64]                  # fallback for an unknown arch
 
@@ -90,8 +85,7 @@ def elf_machine(path):
     if hdr[4] != 2 or hdr[5] != 1:
         fail(path + ": not ELF64 little-endian")
     (machine,) = struct.unpack_from("<H", hdr, 18)
-    names = {EM_X86_64: "x86-64", EM_AARCH64: "aarch64",
-             EM_RISCV: "riscv64", EM_LOONGARCH: "loongarch64"}
+    names = {EM_X86_64: "x86-64", EM_AARCH64: "aarch64"}
     return machine, names.get(machine, "0x%x" % machine)
 
 

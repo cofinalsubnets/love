@@ -20,14 +20,14 @@
    (fact n) (:
     (f n x) (? (< n 2) x (f (- n 1) (* x n)))
     v (facts n)
-    (? v v (: v (f n 1) _ (put n v facts) v)))
+    (? v v (: v (f n 1) _ (pin facts n v) v)))
    (bell n) (:
     (f n k x) (? (>= k n) x (f n (+ k 1) (+ x (* (choose (- n 1) k) (bell k)))))
     v (bells n)
-    (? v v (: v (? (< n 2) 1 (f n 0 0)) _ (put n v bells) v)))
-   (showloop acc n) (? (< n 1) acc (showloop (scat (digit (mod n (pin digits))) acc)(// n (pin digits)) ))
+    (? v v (: v (? (< n 2) 1 (f n 0 0)) _ (pin bells n v) v)))
+   (showloop acc n) (? (< n 1) acc (showloop (scat (digit (mod n (hash digits))) acc)(// n (hash digits)) ))
    show (showloop "")
-   (gen i limit) (: b (show (bell i)) (? (<= (pin b) limit) (X b (gen (+ i 1) limit))))
+   (gen i limit) (: b (show (bell i)) (? (<= (hash b) limit) (X b (gen (+ i 1) limit))))
    (leq a b) (? (twop a) (? (twop b) (? (= (A a) (A b)) (leq (B a) (B b)) 0) 0)
                          (? (twop b) 0 1))
    out (gen 0 280)
@@ -337,6 +337,6 @@
   (= "" (show 0)) (= "1" (show 1)) (= "f" (show 15)) (= "z" (show 35))
   (= "10" (show 36)) (= "zz" (show 1295))
   ; the full output matches the Ruby program's, line for line
-  (= 291 (pin out))
-  (= (pin expected) (pin out))
+  (= 291 (hash out))
+  (= (hash expected) (hash out))
   (leq out expected)))

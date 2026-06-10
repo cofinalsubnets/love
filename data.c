@@ -1,6 +1,8 @@
 #include "ll.h"
 #include <data.h>
 
+// ;;; FIXME the historical style gwen still appears in this file, update the instances.
+// ;;; FIXME the following comment is way longer than the code which is odd, make it tight.
 // The data-type sentinels. Each is the `ap` (first word) of a data kind's heap
 // objects; its ADDRESS is the type tag (g_typ recovers the kind as the slot index
 // in the pinned gwen_data section -- a single shift). Applying a data value lands
