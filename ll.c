@@ -3885,7 +3885,7 @@ static g_vm(g_vm_0) {                             // unsupported mix (array <-> 
 // data.c's apply sentinels share it.
 enum q g_kind(word x) {
  if (fixp(x)) return KFix;
- if (!datp(x)) return KLam;
+ if (!datp(x)) return mapp(x) ? KMap : KLam;
  enum q k = typ(x);
  return k == KTuple && tuple(x)->rank ? (enum q) (KArrZ + tuple(x)->type) : k; }
 
@@ -4001,52 +4001,55 @@ static g_vm(data_pair_apply) {
 // All indexed by g_kind (g_apply_mx's row by g_typ, the data-kind subrange). The kind
 // order (ll.h) makes each lane a contiguous block: [KFix..KArrO] arithmetic (the
 // scalar tower fix/tuple/big then the parallel array tower arrZ/arrR/arrC/arrO), then
-// [KString..KTwo] sequence, then KLam. Lanes:
+// [KString..KTwo] sequence, then KMap, then KLam. Lanes:
 //   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane handler still
 //          refines by g_tuple_type; the seven arithmetic kinds route identically today.
 //   add_seq = a list anywhere (other operand a scalar element / spine); pair wins
 //   add_string = strings & symbols name-compatibly (+ a number as one byte; demotes
 //              isym>usym>str and nils an array operand internally)
 //   mul_rep  = sequence * scalar-count -> repetition
-//   *l   = a LAMBDA operand (precedence: the KLam row+col) -- Church add / compose
+//   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KLam rows+cols) -- Church
+//          add / compose; a map IS a lookup lambda for +/*, kept deliberately, so
+//          its rung shares the lanes (the rung exists for the order)
 //   g_vm_0 = undefined (-> nil): sequence*sequence
-// Precedence (high->low): lambda > pair > text > number(incl array). Maps are lambdas
-// (KLam) -- the *l lanes -- so they have no row/col of their own.
-// cols (enum order): fix tuple big arrZ arrR arrC arrO | string sym | two | lam
+// Precedence (high->low): lambda > map > pair > text > number(incl array).
+// cols (enum order): fix tuple big arrZ arrR arrC arrO | string sym | two | map lam
 
-// `+`: numbers add, lists/text concat, lambdas Church-add. KLam row+col all addl.
+// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KLam rows+cols all addl.
 static g_vm_t *const g_add_mx[KN][KN] = {
- [KFix]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KTuple]  = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KBig]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KArrZ]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KArrR]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KArrC]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KArrO]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KString] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KSym]    = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl },
- [KTwo]    = { g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_addl },
- [KLam]    = { g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl },
+ [KFix]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KTuple]  = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KBig]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KArrZ]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KArrR]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KArrC]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KArrO]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KString] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KSym]    = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KTwo]    = { g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_addl, g_vm_addl },
+ [KMap]    = { g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl },
+ [KLam]    = { g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl },
 };
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
-// * count repeats, lambdas compose (Church mul). seq*seq -> nil.
+// * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil.
 static g_vm_t *const g_mul_mx[KN][KN] = {
- [KFix]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
- [KTuple]  = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
- [KBig]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
- [KArrZ]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
- [KArrR]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
- [KArrC]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
- [KArrO]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull },
- [KString] = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull },
- [KSym]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull },
- [KTwo]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull },
- [KLam]    = { g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull },
+ [KFix]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
+ [KTuple]  = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
+ [KBig]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
+ [KArrZ]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
+ [KArrR]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
+ [KArrC]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
+ [KArrO]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
+ [KString] = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull, g_vm_mull },
+ [KSym]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull, g_vm_mull },
+ [KTwo]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull, g_vm_mull },
+ [KMap]    = { g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull },
+ [KLam]    = { g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull },
 };
 // apply: [applied data kind = g_typ(Ip)][argument kind = g_kind(arg)]. Every row is
 // arg-kind-uniform today (AROW fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
-#define AROW(h) { [KFix]=h,[KLam]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
+#define AROW(h) { [KFix]=h,[KLam]=h,[KMap]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
                   [KArrZ]=h,[KArrR]=h,[KArrC]=h,[KArrO]=h }
 g_vm_t *g_apply_mx[KN][KN] = {
  [KTwo]  = AROW(data_pair_apply), [KTuple]  = AROW(data_num_apply),
@@ -5193,7 +5196,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // `< <= > >=` extend across EVERY kind, not just numbers. The CROSS-kind order is
 // the enum q type lattice (ll.h) -- fixnum/number LOW, lambda HIGH, the very
 // order the generic-op matrix diagonals encode: number < string < symbol < pair <
-// lambda. (Arrays are the exception: an array operand compares ELEMENTWISE -> a
+// map < lambda. (Arrays are the exception: an array operand compares ELEMENTWISE -> a
 // 0/1 mask via g_vm_vbin, never the scalar order.) WITHIN a kind:
 //   numbers  by value across the tower; a real r is the complex (r, 0), so complex
 //            sorts lexicographically by (re, im). IEEE-faithful: NaN is unordered,
@@ -5201,7 +5204,8 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 //   strings  lexicographic over bytes (a prefix sorts first)
 //   symbols  lexicographic over the name (anonymous == the empty name)
 //   pairs    lexicographic over (car, then cdr), recursively
-//   lambdas  by representation hash (maps/ports/bufs too) -- a GC-stable order
+//   maps     by representation hash, in their OWN band (pair < map < lambda)
+//   lambdas  by representation hash (ports/bufs too) -- a GC-stable order
 // ANTISYMMETRY: only `<` and `<=` are implemented; `>` and `>=` REVERSE the
 // operands and reuse them (a > b == b < a), which is also the right NaN behaviour
 // (swap, never negate). A total PREORDER: agrees with `=` (eqv) except where eqv

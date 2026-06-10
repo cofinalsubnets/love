@@ -18,11 +18,12 @@
 ; numbers nest as usual (N in Z in R in C). the *rank* axis is scalar (0) vs array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
 ; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
-; string < symbol < pair < functions, each band ordered within itself (text and pairs
-; lexicographically, functions by an alpha-invariant hash). maps and the opaque handles
-; (buf/port/thread) sit in the function band: truthy when nonempty ($out = 1), compared by
-; identity, and applying a handle acts like 0 (const-1). every predicate ends in `p`; they
-; are enumerated below.
+; string < symbol < pair < map < functions, each band ordered within itself (text and pairs
+; lexicographically, maps and functions by an alpha-invariant hash). a map has its own rung
+; just under the functions, though it still acts as a lookup lambda for +/*/apply. the
+; opaque handles (buf/port/thread) sit in the function band: truthy when nonempty
+; ($out = 1), compared by identity, and applying a handle acts like 0 (const-1). every
+; predicate ends in `p`; they are enumerated below.
 
 ; --- everything is a function --- (f x y) == ((f x) y) and (f) == f, so application is just
 ; left-to-right currying. numbers are church numerals, a list of numbers is an exponential
@@ -95,13 +96,14 @@
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
 ; --- order & equality --- < <= > >= is a *total order over all values*: across kinds by the
-; lattice (number < string < symbol < pair < lambda), within a kind by value/lexicographic
-; order (complex by (re,im); lambdas by an alpha-invariant hash; an array operand broadcasts to
-; a 0/1 mask). `=` is value equality and bridges the whole numeric tower; `idp` is identity;
-; `!=` is gone -- write `!(a = b)`.
+; lattice (number < string < symbol < pair < map < lambda), within a kind by value/
+; lexicographic order (complex by (re,im); maps and lambdas by an alpha-invariant hash; an
+; array operand broadcasts to a 0/1 mask). `=` is value equality and bridges the whole
+; numeric tower; `idp` is identity; `!=` is gone -- write `!(a = b)`.
 (assert
  (3 = 3.0) !(3 = 4) (1 < 1.5) (3.0 >= 3) (idp 'a 'a) !(idp '(1) '(1))
- (1 < "a") ("a" < 'x) ('x < '(0)) !("a" < 1))
+ (1 < "a") ("a" < 'x) ('x < '(0)) !("a" < 1)
+ ('(0) < #(1 10)) (#(1 10) < A) !(A < #(1 10)))   ; the map rung: pair < map < lambda
 
 ; --- comparing functions --- `=` on two functions is alpha + structural: their source \-exprs
 ; match up to renaming of bound variables (binders by position, free vars by name) and their

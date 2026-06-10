@@ -230,12 +230,14 @@ struct g_pair { g_vm_t *ap; intptr_t a, b; };
 // so the array tower Z/R/C/O dispatches inline with the scalar tower it mirrors
 // (KArrZ~fix, KArrR~float, KArrC~complex, KArrO~big). The diagonal is the type lattice
 // by semantics then representation: arithmetic lane [KFix..KArrO] (scalars then their
-// array counterparts), sequence/concat lane [KString..KTwo], thread last -- so each
-// dyadic lane is one contiguous range, `max` is the within-lane promotion join, and the
-// lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (pair) caps the
-// sequence lane just under KLam (a pair is its own Church eliminator -- the most
-// lambda-like datum). KN is the matrix dimension.
-enum q { KFix, KTuple, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KLam, KN };
+// array counterparts), sequence/concat lane [KString..KTwo], then map, thread last --
+// so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
+// and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (pair)
+// caps the sequence lane; KMap is the map's own rung just under KLam, so the total
+// order's pair < map < lambda is the enum order itself (a map is still a lookup lambda
+// for +/*/apply -- the rung exists for the order and the honest matrix cells).
+// KN is the matrix dimension.
+enum q { KFix, KTuple, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KLam, KN };
 #define G_DATA_N 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KLam-KTuple
 typedef g_word num, word;
 // The unique empty string and empty (anonymous) symbol -- data-segment globals the
