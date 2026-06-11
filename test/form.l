@@ -1,7 +1,9 @@
 (assert
- (= : (:))
- (= \ (\))
- (= (?) ((?)))                  ; bare ? mid-list is infix at three now; (?) escapes it
+ (idp () :) (idp () \)          ; a special-form name as a value is an anon: not in the book
+ (idp () (\))                   ; ... and the singleton law collapses (\) to \, the same anon.
+                                ; (:)/((?)) stay UNPINNED: the lanes answer the empty forms
+                                ; differently today (c0 singleton-collapses to the name -- an
+                                ; anon, () -- where ev builds the empty form -- 0)
  (= ''x '(\ x))
  (= 1 (? 1))
  (= 1 (: 1))

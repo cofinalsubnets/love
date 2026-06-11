@@ -125,8 +125,11 @@ struct g {
  union {
   intptr_t v0;
   struct {
-   g_word dict;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
-                  // macro table is dict[nil] -- no separate field.
+   g_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
+                  // macro table is book[nil] -- no separate field.
+   g_word anon;   // the pre-interned 'anon atom: the condition tag for reading
+                  // a nom not in the book. rooted here (v0..end) so the raise
+                  // path never allocates and the weak intern map keeps it.
   union {
    g_word x;
    struct g_io {
@@ -134,9 +137,9 @@ struct g {
     g_word fd;
     g_word ungetc_buf;            // pushed-back byte; putfix(EOF) = empty
     g_word eof_seen; } *io; };
-  // The C->lisp hooks (num-ap, scomb, bcomb, trap, operators) live on dict
+  // The C->lisp hooks (num-ap, scomb, bcomb, trap, operators) live on book
   // (GC-traced, egg-baked): no slots, no key caches -- C materializes the
-  // keys by name per use (sym_probe walks the intern tree allocation-free;
+  // keys by name per use (sym_probe walks the intern map allocation-free;
   // hot numeric code is compiled by the lisp compiler, which holds the
   // symbols directly, so the C dispatch only catches stragglers).
   }; };

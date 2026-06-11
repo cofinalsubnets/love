@@ -37,7 +37,7 @@
 ; compile time. the gritty details sit at the bottom.
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
-;   N naturals (the range of $)  <  Z integers (fixnum -> wide box -> bignum)
+;   N the charms (naturals, the range of $)  <  Z integers (fixnum -> wide box -> bignum)
 ;     <  R reals (float)  <  C complex  <  O objects (string < symbol < product < map < hom)
 ; numbers nest as usual (N in Z in R in C). the *rank* axis is scalar (0) vs array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
@@ -339,7 +339,7 @@
 ; inside (kebab law unchanged), while a punctuation-led token is a SIGIL -- a maximal run
 ; of operator chars, read as ONE PLAIN SYMBOL (value-surface chars and delimiters break
 ; the run). code then factors sigils against the ONE `operators` table at COMPILE time:
-; `opfix`, a source->source prepass hooked by both compilers (c0 probes dict['opfix] like
+; `opfix`, a source->source prepass hooked by both compilers (c0 probes book['opfix] like
 ; boxfix; ev runs it before wev -- ev is opfix after read, so the two input lanes, data
 ; and characters, meet at one core). the table: symbol -> arity (the symbol names itself)
 ; | (name . arity) (an alias), arity 1-7, extended with a plain pin -- live for the next
@@ -392,7 +392,12 @@
 ; condition data; the result is delivered per the bits (the more bit: to the reader's
 ; resume; a bare scare: observed). scare?/more?/eof? read s. (scare a b) raises
 ; deliberately -- the scare bit set unconditionally, and the trap's result comes back
-; as its value (no trap installed -> terminal). see test/trap.l. numeral counts are
+; as its value (no trap installed -> terminal). see test/trap.l. an ANON -- a nom not
+; in the `book` (the global table) -- is a trappable condition: reading one raises
+; (scare 'anon nom) under an installed trap (the trap's result is the value); untrapped
+; it reads (), not 0 -- false either way. the read happens where the code says it does:
+; a closure captures its free globals at creation, so an anon in a lambda body fires
+; the condition at the define, not the call. see test/anon.l. numeral counts are
 ; CAPPED: a compose count or exact-power exponent above the `apcap` box (a public
 ; runtime tunable, default 2^20) raises (scare 'apcap k) instead of allocating O(k) --
 ; (bignum f) traps where it would oom. retune with (pin apcap () n); see test/apcap.l.
@@ -402,6 +407,7 @@
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (homp scare)
  (mapp apcap) (1048576 = (apcap ()))             ; the count ceiling, a tunable box
+ (idp () not-in-the-book) !not-in-the-book       ; an anon reads (): a nom not in the book
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prelude wraps getc and
@@ -431,18 +437,18 @@
 ; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- and
 ; the hatchling installs as `ev`, baked into the image at C compile time, no allocation;
 ; `born` records the hatch time (unbound pre-egg: love0's first corpus pass runs PRE-egg,
-; and an absent global reads as nil). before it is born the egg PULLS every runtime-
+; and an unbound name is an anon, reading ()). before it is born the egg PULLS every runtime-
 ; internal name: the raw cell nifs (peek poke seek lamb -- (lamb 2 3) is a segfault, big
 ; scare; lamb is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), the repl sentinels, every hot lvm_* pointer,
-; and finally `dict` itself. compiled references were folded, so only the names die.
+; and finally the `book` itself. compiled references were folded, so only the names die.
 ; names the printer or an expander EMITS (uq ltuple cons pin table ..) stay, as do the
 ; C-resolved hooks (num-ap scomb bcomb trap) and the repl's test-driven editor surface.
 (assert (homp ev) (? born (fixp born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
-        (? born !lamb 1) (? born !dict 1))      ;  hence the born guards)
+        (? born !lamb 1) (? born !book 1))      ;  hence the born guards)
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
 ; lattice above). an op at two is an NxN table indexed by the two kinds; an op at one is its

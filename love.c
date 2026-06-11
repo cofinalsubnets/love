@@ -623,7 +623,7 @@ enum g_status g_fin(struct g *g) {
  return s; }
 
 struct g *g_defn(struct g*g, struct g_def const*defs, uintptr_t n) {
- for (g = g_push(g, 1, g_core_of(g)->dict); n--;
+ for (g = g_push(g, 1, g_core_of(g)->book); n--;
   g = g_mapput(intern(g_strof(g_push(g, 1, defs[n].x), defs[n].n))));
  g_core_of(g)->sp++;
  return g; }
@@ -671,20 +671,20 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
  memset(g, 0, sizeof(struct g));
  g->len = len0, g->pool = (void*) g, g->malloc = ma, g->free = fr;
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = g_clock();
- // dict + macro maps (lookup-lambdas) then the main task text.
+ // book + macro maps (lookup-lambdas) then the main task text.
  if (g_ok(g = map_new(g)) && g_ok(g = map_new(g)) && g_ok(g = g_have(g, 6))) {
-  union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=dict (no GC since g_have)
+  union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=book (no GC since g_have)
   M[0].m = M;
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
   M[4].x = putfix(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   g->tasks = tagtext(M, 5);
-  // dict[nil] = macro (the macro table -- no separate field). Both are on the
-  // stack; push the nil key so (sp2,sp1,sp0)=(dict,macro,nil) for g_mapput.
+  // book[nil] = macro (the macro table -- no separate field). Both are on the
+  // stack; push the nil key so (sp2,sp1,sp0)=(book,macro,nil) for g_mapput.
   g = g_push(g, 1, nil);
-  g = g_mapput(g);                     // -> sp[0] = dict
-  g->dict = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
+  g = g_mapput(g);                     // -> sp[0] = book
+  g->book = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
   g = g_pop(g, 1);
   // the WEAK intern map (string -> the canonical atom), created before the
   // first intern (the def tables just below). it lives OUTSIDE the traced
@@ -692,14 +692,14 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   g = map_new(g);
   if (g_ok(g)) g->symbols = g_pop1(g);
   struct g_def def0[] = {
-   {"dict", g->dict},
+   {"book", g->book},
    {"in", (word) &g_stdin},
    {"out", (word) &g_stdout},
    {"err", (word) &g_stderr}, };
   g = g_defn(g, def0, countof(def0));
   g = g_defn(g, def1, countof(def1));
-  // () (the empty symbol) is self-evaluating: dict[()] = ().
-  g = g_push(g, 3, empty_sym, empty_sym, g->dict);
+  // () (the empty symbol) is self-evaluating: book[()] = ().
+  g = g_push(g, 3, empty_sym, empty_sym, g->book);
   g = g_mapput(g);
   g = g_pop(g, 1);
   // `version-number`: the build's git hash (love_version.h), surfaced on init so the user
@@ -707,7 +707,13 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   if (g_ok(g = g_strof(g, LOVE_VERSION))) {
    struct g_def vd[] = {{"version-number", g_pop1(g)}};
    g = g_defn(g, vd, countof(vd)); }
-  // the reader owns no operator tables: dict['operators] (the ONE table,
+  // the anon condition tag ('anon), pre-interned and rooted (v0..end in
+  // struct g) so lvm_freev's raise path never allocates the tag and the
+  // weak intern map keeps the atom across collections.
+  if (g_ok(g = g_strof(g, "anon"))) {
+   g = intern(g);
+   if (g_ok(g)) g->anon = g_pop1(g); }
+  // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prelude, and the
   // opfix source pass (prelude.l, hooked by both compilers at c0 and wev)
   // factors sigil tokens against it at compile time. data reading is
@@ -867,7 +873,7 @@ static g_noinline struct g *gcg(struct g*h, struct g *p1, uintptr_t len1, struct
  h->ip = cell(gcp(h, word(h->ip), p0, t0));
  h->tasks = cell(gcp(h, word(h->tasks), p0, t0));
  h->symbols = 0;                               // the WEAK intern map: rebuilt below, after the fixpoint
- for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym dict keys)
+ for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym book keys)
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                     // stack
  for (struct g_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0); // C live variables
  while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_text)(h, p0, t0);              // cheney algorithm
@@ -1058,7 +1064,7 @@ static g_noinline struct g *c0(struct g *g, lvm_t *y) {
  { word x0 = g->sp[0];
    if (twop(x0) && (!homp(A(x0)) || datp(A(x0)))) {
     struct g_atom *os = sym_probe(g_core_of(g), "opfix", 5);
-    word of = os ? g_mapget(g_core_of(g), 0, word(os), g_core_of(g)->dict) : 0;
+    word of = os ? g_mapget(g_core_of(g), 0, word(os), g_core_of(g)->book) : 0;
     if (of && homp(of)) {
      g = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(g, 4, x0, nil, nil, of)))))));
      if (!g_ok(g)) return g;
@@ -1188,8 +1194,8 @@ static Ana(ana_v) {
  if (!g_ok(g)) return g;
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) {
-   if ((y = g_mapget(g, 0, x, g->dict))) return ana_q(g, c, y);
-   // undefined global: resolved by lvm_freev via the dict at run time.
+   if ((y = g_mapget(g, 0, x, g->book))) return ana_q(g, c, y);
+   // undefined global: resolved by lvm_freev via the book at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.l avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
    // is no enclosing frame to capture from, so adding x to imps would make a
@@ -1386,7 +1392,7 @@ static g_inline word rev(word l) {
 static word ldels(struct g *g, word lam, word l);
 
 static g_inline Ana(ana_2, word a, word b) {
- if ((x = g_mapget(g, 0, a, g_mapget(g, nil, nil, g_core_of(g)->dict))))   // macro table = dict[nil]
+ if ((x = g_mapget(g, 0, a, g_mapget(g, nil, nil, g_core_of(g)->book))))   // macro table = book[nil]
   return g = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(g, 4, b, nil, nil, x))))))),
          analyze(g, c, g_ok(g) ? pop1(g) : 0);
  return avec(g, b, g = analyze(g, c, a)),
@@ -1416,7 +1422,7 @@ static g_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  // closes over the name being defined into a heap cell. The runtime compiler
  // (ev.l) does the same natively in `l2x`. exp is rooted across the alloc.
  if (g_ok(g = intern(g_strof(g, "boxfix")))) {
-  word bf = g_mapget(g, 0, pop1(g), g->dict);
+  word bf = g_mapget(g, 0, pop1(g), g->book);
   if (bf && homp(bf)) {
    g = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(g, 4, exp, nil, nil, bf)))))));
    if (g_ok(g)) exp = pop1(g); } }
@@ -1534,13 +1540,11 @@ lvm(lvm_defglob) {
  Have(3);
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
- return Sp[0] = k, Sp[1] = v, Sp[2] = g->dict, Pack(g),
+ return Sp[0] = k, Sp[1] = v, Sp[2] = g->book, Pack(g),
   !g_ok(g = g_mapput(g)) ? gtrap(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
-lvm(lvm_freev) { return
- Ip[0].ap = lvm_quote,
- Ip[1].x = g_mapget(g, nil, Ip[1].x, g->dict),
- Continue(); }
+// lvm_freev (the late-bound global read) is defined below lvm_scare: its
+// miss path is the anon condition and borrows the whole trap apparatus.
 
 lvm(lvm_eval) { return Ip++, Pack(g),
  !g_ok(g = c0(g, lvm_jump)) ? gtrap(g) : (Unpack(g), Continue()); }
@@ -1572,17 +1576,17 @@ static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
   if (k == map_gap) return 0;
   if (len(k) == n && !memcmp(txt(k), nm, n)) return sym(s[2 * i + 1]); } }
 
-// Resolve a C->lisp ap from dict (where the prelude pins it -- dict is
+// Resolve a C->lisp ap from book (where the prelude pins it -- book is
 // GC-traced and egg-baked, so it survives into the runtime image), materializing
 // the key by name. Trap loud if undefined: a prelude-ordering contract
 // violation. Probe + mapget are reads, so no Have in the tail-jump callers.
 static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
  struct g_atom *y = sym_probe(g, nm, n);
- g_word cur = y ? g_mapget(g, nil, word(y), g->dict) : nil;
+ g_word cur = y ? g_mapget(g, nil, word(y), g->book) : nil;
  if (!homp(cur)) __builtin_trap();
  return cur; }
 
-// Thread (function) combinators for `+` and `*`, pinned on dict by the prelude
+// Thread (function) combinators for `+` and `*`, pinned on book by the prelude
 // like num-ap. A text operand takes precedence over every other type, so
 // `+`/`*` of a function build a new function -- the README's Church arithmetic,
 // agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
@@ -1591,7 +1595,7 @@ static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
 // -- itself the new function -- and leave it as the result, resuming at Ip+1.
 
 // Fixnum-as-function application. A fixnum operator n applied to x is dispatched
-// to the l ap at dict['num-ap] as (num-ap n x): numeric x -> x**n, a
+// to the l ap at book['num-ap] as (num-ap n x): numeric x -> x**n, a
 // function x -> x iterated n times (Church numerals).
 //
 // The driver mirrors the pair driver: with the stack laid out [n, num-ap, x, ret]
@@ -1633,13 +1637,13 @@ static union u const trap_drive[] =
 // Throw status s with condition data a/b to the trap continuation. With a
 // global `trap` function and 5 words of stack headroom (the throw path never
 // allocates), build the (trap s a b) frame and run it; else the C default
-// throw_c, which resumes the eof protocol raw. Pre-dict throws (g_ini_0)
+// throw_c, which resumes the eof protocol raw. Pre-book throws (g_ini_0)
 // always take the default.
 static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
                          union u const *K) {
- if (c->dict) {
+ if (c->book) {
   struct g_atom *ts = sym_probe(c, "trap", 4);
-  word h = ts ? g_mapget(c, nil, word(ts), c->dict) : nil;
+  word h = ts ? g_mapget(c, nil, word(ts), c->book) : nil;
   if (homp(h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | thrower data ..]
    sp[0] = putfix(s), sp[1] = h;
@@ -1678,6 +1682,32 @@ lvm(lvm_scare) {
  Have(1);
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: trap_more_k's layout
+ return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
+// the anon miss sentinel: a private static address no book value can equal,
+// so a name bound to nil stays distinct from no entry at all.
+static union u const anon_miss[1];
+// The late-bound global read. A hit patches the site to a quote of the value
+// (the fold law's runtime tail). A miss is an ANON -- a nom not in the book,
+// a trappable condition: with a global trap installed the read raises
+// (trap 1 'anon nom) and the trap's result is the value here; untrapped it
+// reads (). either way the site stays a freev (no quote patch on a miss):
+// the condition recurs, and a define that lands later is seen.
+lvm(lvm_freev) {
+ word v = g_mapget(g, word(anon_miss), Ip[1].x, g->book);
+ if (v != word(anon_miss)) return
+  Ip[0].ap = lvm_quote,
+  Ip[1].x = v,
+  Continue();
+ Have(8);                          // [resume a b] + g_raise's 5 words
+ struct g_atom *ts = sym_probe(g, "trap", 4);
+ word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
+ if (!homp(h)) return
+  *--Sp = empty_sym,
+  Ip += 2,
+  Continue();
+ word a = g->anon, b = Ip[1].x;
+ Sp -= 3;
+ Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // trap_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
@@ -2971,7 +3001,7 @@ static g_inline struct g *push_wrap(struct g *g, char const *nom) {
 // the LEXER LAW, operator half. a token led by an operator (punctuation)
 // char is a maximal run of operator chars -- a SIGIL, read as one plain
 // symbol; the opfix compile pass (prelude.l) factors it against
-// dict['operators] later, so the reader is purely structural. a run stops
+// book['operators] later, so the reader is purely structural. a run stops
 // at name chars (alnum/_), whitespace, delimiters, and the value-surface
 // chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
 // still contain @ ~ $ ! . (the kebab law for names is unchanged).
@@ -4180,7 +4210,7 @@ uintptr_t g_tuple_bytes(struct g_tuple *v) {
 // draws: the only primitives are rng-seed (fresh state from a fixnum) and the
 // functional steps rand-next/randf-next (copy the input state, step the copy,
 // return (value . new-state) -- the input is never mutated). The global stream
-// (rand/randf over dict['rng-state]) is prelude lisp. Not a CSPRNG.
+// (rand/randf over book['rng-state]) is prelude lisp. Not a CSPRNG.
 
 static g_inline uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }

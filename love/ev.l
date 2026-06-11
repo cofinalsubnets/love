@@ -44,8 +44,8 @@
             slice string
             re im conj arg real plex
             sin cos log pow))
-   pureset (foldl (\ t s (: v (dict s) (? v (pin t v 1) t))) (table 0) names)
-   (add t s) (: v (dict s)
+   pureset (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (table 0) names)
+   (add t s) (: v (book s)
     (? (fixp v) t
      (: o (opof v) p (pureset v)
       (? (|| o p)
@@ -53,7 +53,7 @@
           ar (? o (cbp o) (idp lvm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (\ x (hgen v op ar p x))))
        t))))
-   (foldl add (table 0) (keys dict))))
+   (foldl add (table 0) (keys book))))
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
@@ -147,7 +147,7 @@
    (fold x bnd) (: h (cap x)
     (? (atomp (cbp x)) x                          ; (f) single element -> ana's (atomp b) handles
        (|| (nilp (symp h)) (memq h bnd)) (cons apx (cons 0 x))   ; local/computed head
-       (: v (dict h) hd (wevs v)
+       (: v (book h) hd (wevs v)
         (? hd (hd x)
            (napof v (cbp x)) (cons apx (cons 1 x))
            (cons apx (cons 0 x))))))
@@ -237,7 +237,7 @@
 
   (avb c d x)
    (? (nilp d) ; outside all lexical scopes?
-       (: y (peep dict x Z) ; check global scope
+       (: y (peep book x Z) ; check global scope
         (? !(= y Z) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
           (em2 lvm_freev x))))

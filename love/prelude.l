@@ -3,7 +3,7 @@
    (co f g x) (f (g x))
    (const x _) x
    (flip f x y) (f y x))
-(: macros (peep dict 0 0))
+(: macros (peep book 0 0))
 (: pi 3.141592653589793
    e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
    true 1 false 0
@@ -50,9 +50,9 @@
    (getc _) (fgetc in))
 ; the accessor aliases are plain globals too, so escaping works like (+)/'+ --
 ; ((->) t k d) peeps. (punct names can't sit in `:` binding position -- they'd
-; capture the `:` -- so pin dict directly.)
-(: _ (pin dict '<- pin) (pin dict '-> peep))
-; fixnum-as-function application, pinned on dict for the VM's apply path: applying a
+; capture the `:` -- so pin book directly.)
+(: _ (pin book '<- pin) (pin book '-> peep))
+; fixnum-as-function application, pinned on book for the VM's apply path: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
 ; for every x, see below); n=1 -> x directly. numfn assembles the n-fold text
@@ -104,7 +104,7 @@
                       (? (< k 1) 1 (= k 1) x
                          (< (peep apcap () 0) k) (scare 'apcap k)
                          (numfn k x))))
-   _ (pin dict 'num-ap num-ap))
+   _ (pin book 'num-ap num-ap))
 ; text (function) combinators for + and *, installed like num-ap. a text operand
 ; takes precedence over every other type, so +/* of a function build a function. these
 ; are the README's Church numeral arithmetic, so +/* on numerals agree with the numbers:
@@ -115,7 +115,7 @@
 ; with addition rather than the S combinator's (f x (g x)).
 (: (scomb f g a x) (f a (g a x))
    (bcomb f g x) (f (g x))
-   _ (pin dict 'scomb scomb) _ (pin dict 'bcomb bcomb))
+   _ (pin book 'scomb scomb) _ (pin book 'bcomb bcomb))
 (: (map f l) (? (twop l) (cons (f (cap l)) (map f (cbp l))))
    (foldl f z l) (? (twop l) (foldl f (f z (cap l)) (cbp l)) z)
    (foldr f z l) (? (twop l) (f (cap l) (foldr f z (cbp l))) z))
@@ -180,7 +180,7 @@
 ; a SIGIL is a maximal all-punct token (the reader's lexer law); the reader
 ; leaves it a plain symbol. code factors a sigil into a composition of
 ; operators against THIS table at compile time -- opfix below, the
-; source->source pass hooked by both compilers (c0 probes dict['opfix] like
+; source->source pass hooked by both compilers (c0 probes book['opfix] like
 ; boxfix; ev.l's wev runs it first) -- while data reading stays structural.
 ; ONE table: symbol -> arity (the symbol names itself) | (name . arity) (an
 ; alias). arity ONE applies to the next datum, never capturing a left
@@ -343,19 +343,19 @@
           (? (&& (= h '\) (atomp (cbbp x))) x
              (= h 'qq) (cons 'qq (cons (op-qq (cabp x) 1) 0))
              (op-w x 0 0)))))
-; the global RNG stream lives on dict ('rng-state) and advances by the pure
+; the global RNG stream lives on book ('rng-state) and advances by the pure
 ; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
 ; clock-seeds on first use; rng-set validates and installs (the state, or nil
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
-(: (rng-get _) (: st (peep dict 'rng-state 0)
-                  (? (arrp st) st (: f (rng-seed (clock 0)) _ (pin dict 'rng-state f) f)))
+(: (rng-get _) (: st (peep book 'rng-state 0)
+                  (? (arrp st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
    (rng-set st) (? (&& (arrp st) (= 1 (arank st)) (= 4 (alen st)) (= z (atype st)))
-                   (: _ (pin dict 'rng-state st) st)
+                   (: _ (pin book 'rng-state st) st)
                    0)
-   (rand n) (: r (rand-next (rng-get 0)) _ (pin dict 'rng-state (cbp r))
+   (rand n) (: r (rand-next (rng-get 0)) _ (pin book 'rng-state (cbp r))
                (? (&& (fixp n) (< 0 n)) (% (cap r) n) (cap r)))
-   (randf _) (: r (randf-next (rng-get 0)) _ (pin dict 'rng-state (cbp r)) (cap r)))
+   (randf _) (: r (randf-next (rng-get 0)) _ (pin book 'rng-state (cbp r)) (cap r)))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;
@@ -442,7 +442,7 @@
 ; expression, and indirects every *value* binding whose init closes over the
 ; name being defined (or a forward/mutual sibling defined no later) through a
 ; heap cell: prepend `cell (cons 0 0)`, store via poke -- the nif VALUE, not its
-; name, so the rewrite survives the egg pulling `poke` from dict -- read via
+; name, so the rewrite survives the egg pulling `poke` from book -- read via
 ; `(cap cell)`. Functions (resolved lazily) and values defined before their
 ; users are untouched. It returns 0 when nothing needs boxing, else the rewritten
 ; (prs' . body'). This is the single source of truth, shared verbatim by both

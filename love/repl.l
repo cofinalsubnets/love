@@ -341,7 +341,7 @@
 ; zevs: the stream shell -- a port is the LAZY charms, and zevs drinks it:
 ; read and eval every form until the stream ends (eof, or input ends inside
 ; an unfinished shape); the value is the last form's. ev late-binds through
-; the dict ((ev 'ev r)) so the one definition drives both of love0's passes
+; the book ((ev 'ev r)) so the one definition drives both of love0's passes
 ; (c0 first, the hatched ev' second); the host's stdin runner and the
 ; love0/kernel corpus runners are all this function now.
 (: (zevs p)
