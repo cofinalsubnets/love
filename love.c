@@ -136,7 +136,7 @@ g_vm_t g_vm_kcall,
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  g_vm_arr, g_vm_arank, g_vm_alen, g_vm_ashape, g_vm_atype,
  g_vm_asum, g_vm_aprod, g_vm_amax, g_vm_amin, g_vm_aall,
- g_vm_tupp, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf, g_vm_lamp, g_vm_handlep;
+ g_vm_tupp, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf, g_vm_homp, g_vm_handlep;
 // Carry extra operands, so (like g_vm_gc) they are declared apart from the
 // plain g_vm_t list, which fixes the 4-argument ap signature. g_vm_vbin
 // is the elementwise/broadcast dyadic engine (vop selects the op); g_vm_vmap1
@@ -164,9 +164,9 @@ char const *g_nif_name(intptr_t);
 #define tuple(_) ((struct g_tuple*)(_))
 #define fixp oddp
 #define sym(_) ((struct g_atom*)(_))
-static g_inline bool symp(word _) { return lamp(_) && cell(_)->ap == g_vm_sym; }
-static g_inline bool tupp(word _) { return lamp(_) && cell(_)->ap == g_vm_tuple; }
-static g_inline bool strp(word _) { return lamp(_) && cell(_)->ap == g_vm_str; }
+static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == g_vm_sym; }
+static g_inline bool tupp(word _) { return homp(_) && cell(_)->ap == g_vm_tuple; }
+static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == g_vm_str; }
 // Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 g_vm_buf (like g_vm_port_io for ports), so the GC walks a buf
 // as a plain length-2 text -- [g_vm_buf, backing g_str, terminator] -- and
@@ -176,7 +176,7 @@ static g_inline bool strp(word _) { return lamp(_) && cell(_)->ap == g_vm_str; }
 // (cf. the `to` output port). Earned by the build tools that back-patch a
 // binary image in place. Recognized by ap, like iop() for ports.
 struct g_buf { g_vm_t *ap; struct g_str *str; };
-static g_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == g_vm_buf; }
+static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == g_vm_buf; }
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
 // texts: a fixed 2-word HEADER [g_vm_map_lookup, backing, <tag>] that callers
@@ -189,7 +189,7 @@ static g_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == g_vm_buf; }
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
 // a terminator. (m k) looks k up (nil if absent) through g_vm_map_lookup.
 static g_vm_t g_vm_map_lookup, g_vm_map_data;
-static g_inline bool mapp(word _) { return lamp(_) && cell(_)->ap == g_vm_map_lookup; }
+static g_inline bool mapp(word _) { return homp(_) && cell(_)->ap == g_vm_map_lookup; }
 static const word g_map_gap_cell = 0;
 #define map_gap ((word) &g_map_gap_cell)
 #define map_min_cap 4
@@ -215,7 +215,7 @@ static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : s
 // range is a fixnum, one in intptr_t range a wide-int box, only wider values a
 // bignum -- so fixp/boxp/bigp are mutually exclusive and =/eqv stay well defined.
 struct g_big { g_vm_t *ap; intptr_t slen; uint32_t limb[]; };
-static g_inline bool bigp(word _) { return lamp(_) && cell(_)->ap == g_vm_big; }
+static g_inline bool bigp(word _) { return homp(_) && cell(_)->ap == g_vm_big; }
 static g_inline struct g_big *ini_big(struct g_big *b, intptr_t slen) {
  return b->ap = g_vm_big, b->slen = slen, b; }
 uintptr_t g_big_bytes(struct g_big*);
@@ -593,7 +593,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_tupp, "tupp", s1(g_vm_tupp)) _(nif_bigp, "bigp", s1(g_vm_bigp)) _(nif_boxp, "boxp", s1(g_vm_boxp))\
  _(nif_arrp, "arrp", s1(g_vm_arrp)) _(nif_intf, "int", s1(g_vm_intf))\
  _(nif_symp, "symp", s1(g_vm_symp)) _(nif_mapp, "mapp", s1(g_vm_mapp)) _(nif_fixp, "fixp", s1(g_vm_fixp))\
- _(nif_lamp, "lamp", s1(g_vm_lamp)) _(nif_handlep, "handlep", s1(g_vm_handlep))\
+ _(nif_homp, "homp", s1(g_vm_homp)) _(nif_handlep, "handlep", s1(g_vm_handlep))\
  _(nif_nilp, "nilp", s1(g_vm_nilp)) _(nif_ev, "ev", s1(g_vm_eval))\
  _(nif_callk, "call-cc", s1(g_vm_callk)) _(nif_sing, "sing", s2(g_vm_sing)) _(nif_yield, "yield", s1(g_vm_yield_nif)) \
  _(nif_spawn, "spawn", s2(g_vm_spawn)) _(nif_wait, "wait", s1(g_vm_wait)) \
@@ -849,7 +849,7 @@ static g_inline void run_finalizers(struct g*g) {
  struct g_fz *new_fz = NULL;
  for (struct g_fz *fz = g->fz; fz; fz = fz->next) {
   word fwd = fz->p->x;
-  if (lamp(fwd) && ptr(g) <= ptr(fwd) && ptr(fwd) < ptr(g) + g->len) {
+  if (homp(fwd) && ptr(g) <= ptr(fwd) && ptr(fwd) < ptr(g) + g->len) {
    struct g_fz *nn = bump(g, Width(struct g_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
   } else fz->fn(fz->p); }
@@ -976,7 +976,7 @@ static g_noinline intptr_t gcp(struct g *g, word x, word const *p0, word const *
  union u *src = cell(x);
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer
- return lamp(x) && ptr(g) <= ptr(x) && ptr(x) < ptr(g) + g->len ? x :
+ return homp(x) && ptr(g) <= ptr(x) && ptr(x) < ptr(g) + g->len ? x :
         in_data((void*) x) ? copy_data(g, src, p0, t0) :
                                 copy_text(g, src, p0, t0); }
 
@@ -1305,7 +1305,7 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
  bool imfp =
   g->sp[0] == (word) c1_ix &&
   g->sp[1] == (word) g_vm_quote &&
-  lamp(g->sp[2]);
+  homp(g->sp[2]);
  intptr_t
   ca = llen(x),
   va =
@@ -1399,7 +1399,7 @@ static g_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  // (ev.l) does the same natively in `l2x`. exp is rooted across the alloc.
  if (g_ok(g = intern(g_strof(g, "boxfix")))) {
   word bf = g_mapget(g, 0, pop1(g), g->dict);
-  if (bf && lamp(bf)) {
+  if (bf && homp(bf)) {
    g = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(g, 4, exp, nil, nil, bf)))))));
    if (g_ok(g)) exp = pop1(g); } }
  g = enscope(g, *b, (*b)->args, (*b)->imps);
@@ -1563,7 +1563,7 @@ static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
 static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
  struct g_atom *y = sym_probe(g, nm, n);
  g_word cur = y ? g_mapget(g, nil, word(y), g->dict) : nil;
- if (!lamp(cur)) __builtin_trap();
+ if (!homp(cur)) __builtin_trap();
  return cur; }
 
 // Thread (function) combinators for `+` and `*`, pinned on dict by the prelude
@@ -1624,7 +1624,7 @@ static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
  if (c->dict) {
   struct g_atom *ts = sym_probe(c, "trap", 4);
   word h = ts ? g_mapget(c, nil, word(ts), c->dict) : nil;
-  if (lamp(h) && avail(c) >= 5) {
+  if (homp(h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | thrower data ..]
    sp[0] = putfix(s), sp[1] = h;
    sp[2] = a, sp[3] = b;
@@ -1690,13 +1690,13 @@ static g_vm(g_vm_numtap) {
 // run through numap_drive -- but the combinator (4-arg add / 3-arg compose) applied
 // to 2 args yields a closure (the new function) instead of a value. Ip is at the +/*
 // opcode (a re-runnable instruction), so a plain Have is safe; operands re-read after.
-static g_vm(g_vm_addl) {
+static g_vm(g_vm_addh) {
  Have(2);
  word h = resolve_hot(g, "scomb", 5);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
-static g_vm(g_vm_mull) {
+static g_vm(g_vm_mulh) {
  Have(2);
  word h = resolve_hot(g, "bcomb", 5);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
@@ -2132,7 +2132,7 @@ g_vm(g_vm_pin) { Sp[0] = putfix(g_pin(Sp[0])); Ip += 1; return Continue(); }
 // ============================================================================
 // io
 // ============================================================================
-static g_inline bool iop(word x) { return lamp(x) && cell(x)->ap == g_vm_port_io; }
+static g_inline bool iop(word x) { return homp(x) && cell(x)->ap == g_vm_port_io; }
 static g_inline struct g_port_vt const *port_vt(word fd_tagged) {
  intptr_t fd = getfix(fd_tagged);
  return fd >= 0 ? &g_fd_port_vt : &synth[-(fd + 1)]; }
@@ -2571,7 +2571,7 @@ static word fn_src(struct g *c, union u *k, word x) {
  if (!(ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len) || fn_partialp(k)) return 0;
  if (k == tag_head(ttag(c, k))) return 0;       // value at allocation start: no leading src cell
  word s = k[-1].x;
- return lamp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
+ return homp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
 
 // --- de Bruijn canonical printing of a lambda's source ---------------------
 // A \-bound variable prints as $<level> where the level (de Bruijn LEVEL:
@@ -3353,11 +3353,11 @@ static g_vm(g_vm_map_lookup) {
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
 op11(g_vm_mapp, mapp(Sp[0]) ? putfix(1) : nil)
-// (lamp x): is x a heap object (a pointer), i.e. not a fixnum? true for every
+// (homp x): is x a heap object (a pointer), i.e. not a fixnum? true for every
 // present non-fixnum value -- pairs, symbols, strings, tuples, maps, texts.
-op11(g_vm_lamp, lamp(Sp[0]) ? putfix(1) : nil)
+op11(g_vm_homp, homp(Sp[0]) ? putfix(1) : nil)
 // (handlep x): is x an opaque handle -- a buf or a port? (a task is referenced
-// by a fixnum id, not a handle object.) a handle also answers lamp (it acts as
+// by a fixnum id, not a handle object.) a handle also answers homp (it acts as
 // a constant function); handlep is the refinement that names the zoo.
 op11(g_vm_handlep, (bufp(Sp[0]) || iop(Sp[0])) ? putfix(1) : nil)
 
@@ -3371,7 +3371,7 @@ g_vm(g_vm_peep) {                                // (peep coll key default): col
   if (fixp(k) && (n = getfix(k)) >= 0 && n < (word) len(s))
    z = putfix((unsigned char) txt(s)[n]); }
  else if (mapp(x)) z = g_mapget(g, z, k, x);     // map lookup (not a data sentinel)
- else if (lamp(x) && datp(x)) switch (typ(x)) {
+ else if (homp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // KSym is not indexable
   case KTuple: {
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
@@ -3863,14 +3863,14 @@ static g_vm(g_vm_0) {                             // unsupported mix (array <-> 
  return *++Sp = nil, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in love.h): a fixnum is
-// the odd tag (KFix), a non-data heap pointer is a text/function (KLam), else g_typ
+// the odd tag (KFix), a non-data heap pointer is a text/function (KHom), else g_typ
 // gives the data kind. The one refinement: a rank>=1 tuple (array) expands by element
 // tier to KArrZ..KArrO so the array tower dispatches inline with the scalar tower it
 // mirrors; rank-0 boxes (float/complex/wide-int) stay KTuple. Exported (not inline) so
 // data.c's apply sentinels share it.
 enum q g_kind(word x) {
  if (fixp(x)) return KFix;
- if (!datp(x)) return mapp(x) ? KMap : KLam;
+ if (!datp(x)) return mapp(x) ? KMap : KHom;
  enum q k = typ(x);
  return k == KTuple && tuple(x)->rank ? (enum q) (KArrZ + tuple(x)->type) : k; }
 
@@ -3878,7 +3878,7 @@ enum q g_kind(word x) {
 // generic-op lane aps, then all three dispatch matrices adjacent, then the
 // `+`/`*` dispatchers. The numeric slow lanes (addn/muln…) come from the AVM_*
 // macros above; the `+` string lanes (add_seq/add_string) and g_vm_0 just above; the
-// lambda combinators (g_vm_addl/g_vm_mull) near num-ap. Defined here: the `*`
+// lambda combinators (g_vm_addh/g_vm_mulh) near num-ap. Defined here: the `*`
 // repeat lane and the apply aps -- everything the matrices reference.
 // ============================================================================
 
@@ -3986,55 +3986,55 @@ static g_vm(data_pair_apply) {
 // All indexed by g_kind (g_apply_mx's row by g_typ, the data-kind subrange). The kind
 // order (love.h) makes each lane a contiguous block: [KFix..KArrO] arithmetic (the
 // scalar tower fix/tuple/big then the parallel array tower arrZ/arrR/arrC/arrO), then
-// [KString..KTwo] sequence, then KMap, then KLam. Lanes:
+// [KString..KTwo] sequence, then KMap, then KHom. Lanes:
 //   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane ap still
 //          refines by g_tuple_type; the seven arithmetic kinds route identically today.
 //   add_seq = a list anywhere (other operand a scalar element / spine); pair wins
 //   add_string = strings & symbols name-compatibly (+ a number as one byte; demotes
 //              isym>usym>str and nils an array operand internally)
 //   mul_rep  = sequence * scalar-count -> repetition
-//   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KLam rows+cols) -- Church
+//   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KHom rows+cols) -- Church
 //          add / compose; a map IS a lookup lambda for +/*, kept deliberately, so
 //          its rung shares the lanes (the rung exists for the order)
 //   g_vm_0 = undefined (-> nil): sequence*sequence
 // Precedence (high->low): lambda > map > pair > text > number(incl array).
 // cols (enum order): fix tuple big arrZ arrR arrC arrO | string sym | two | map lam
 
-// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KLam rows+cols all addl.
+// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KHom rows+cols all addl.
 static g_vm_t *const g_add_mx[KN][KN] = {
- [KFix]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KTuple]  = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KBig]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KArrZ]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KArrR]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KArrC]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KArrO]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KString] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KSym]    = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KTwo]    = { g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_addl, g_vm_addl },
- [KMap]    = { g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl },
- [KLam]    = { g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl, g_vm_addl },
+ [KFix]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KTuple]  = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KBig]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KArrZ]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KArrR]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KArrC]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KArrO]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KString] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KSym]    = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KTwo]    = { g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_addh, g_vm_addh },
+ [KMap]    = { g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh },
+ [KHom]    = { g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh },
 };
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil.
 static g_vm_t *const g_mul_mx[KN][KN] = {
- [KFix]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
- [KTuple]  = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
- [KBig]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
- [KArrZ]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
- [KArrR]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
- [KArrC]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
- [KArrO]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mull, g_vm_mull },
- [KString] = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull, g_vm_mull },
- [KSym]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull, g_vm_mull },
- [KTwo]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mull, g_vm_mull },
- [KMap]    = { g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull },
- [KLam]    = { g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull, g_vm_mull },
+ [KFix]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
+ [KTuple]  = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
+ [KBig]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
+ [KArrZ]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
+ [KArrR]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
+ [KArrC]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
+ [KArrO]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
+ [KString] = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mulh, g_vm_mulh },
+ [KSym]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mulh, g_vm_mulh },
+ [KTwo]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mulh, g_vm_mulh },
+ [KMap]    = { g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh },
+ [KHom]    = { g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh },
 };
 // apply: [applied data kind = g_typ(Ip)][argument kind = g_kind(arg)]. Every row is
 // arg-kind-uniform today (arow fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
-#define arow(h) { [KFix]=h,[KLam]=h,[KMap]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
+#define arow(h) { [KFix]=h,[KHom]=h,[KMap]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
                   [KArrZ]=h,[KArrR]=h,[KArrC]=h,[KArrO]=h }
 g_vm_t *g_apply_mx[KN][KN] = {
  [KTwo]  = arow(data_pair_apply), [KTuple]  = arow(data_num_apply),
@@ -4369,7 +4369,7 @@ static uintptr_t shash(struct g *g, word x, struct arib *env) {
 // equals 1, and one whose body is the literal 1 equals 0. All a-variants count;
 // idp stays false (distinct objects). Closures / multi-binder never match.
 static word lam_src1(struct g *c, word v) {           // 1-binder lambda -> (binder body), else 0
- if (!lamp(v) || datp(v)) return 0;
+ if (!homp(v) || datp(v)) return 0;
  if (!(ptr(v) > ptr(c) && ptr(v) < ptr(c) + c->len)) return 0;  // in-pool only: k[-1]/k valid
  union u *k = cell(v);
  if (fn_partialp(k)) return 0;
@@ -4393,7 +4393,7 @@ g_noinline bool eqv(struct g *g, word a, word b) {
    // is a partial-application chain (fn_partialp) -> compare the base function and each
    // captured arg pairwise, so (\ y (+ x y))[x=1] != [x=2]. Bifs / source-less / maps /
    // ports / mixed fall through to identity (a==b already failed -> false).
-   if (lamp(a) && lamp(b) && !datp(a) && !datp(b)) {
+   if (homp(a) && homp(b) && !datp(a) && !datp(b)) {
     union u *ka = cell(a), *kb = cell(b);
     if (fn_partialp(ka) && fn_partialp(kb)) {
      int na, nb; union u *ba = fn_base(ka, &na), *bb = fn_base(kb, &nb);

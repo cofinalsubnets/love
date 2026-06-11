@@ -103,7 +103,7 @@
 ; are the README's Church numeral arithmetic, so +/* on numerals agree with the numbers:
 ;   (+ f g) = Church add     ((+ f g) a x) = (f a (g a x))   -- README `add`
 ;   (* f g) = composition    ((* f g) x)   = (f (g x))       -- README `mul`
-; the C aps (g_vm_addl / g_vm_mull) build the 2-arg partial (scomb f g)
+; the C aps (g_vm_addh / g_vm_mulh) build the 2-arg partial (scomb f g)
 ; / (bcomb f g); scomb's extra a-slot (threaded into both operands) is what makes + agree
 ; with addition rather than the S combinator's (f x (g x)).
 (: (scomb f g a x) (f a (g a x))

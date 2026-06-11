@@ -37,14 +37,14 @@
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
 ;   N naturals (the range of $)  <  Z integers (fixnum -> wide box -> bignum)
-;     <  R reals (float)  <  C complex  <  O objects (string < symbol < product < map < lambda)
+;     <  R reals (float)  <  C complex  <  O objects (string < symbol < product < map < hom)
 ; numbers nest as usual (N in Z in R in C). the *rank* axis is scalar (0) vs array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
 ; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
-; string < symbol < product < map < functions, each band ordered within itself (text and products
-; lexicographically, maps and functions by an alpha-invariant hash). a map has its own rung
-; just under the functions, though it still acts as a lookup lambda for +/*/apply. the
-; opaque handles (buf/port -- `handlep`) sit in the function band: truthy when nonempty
+; string < symbol < product < map < hom, each band ordered within itself (text and products
+; lexicographically, maps and homs by an alpha-invariant hash). a map has its own rung
+; just under the homs, though it still acts as a lookup hom for +/*/apply. the
+; opaque handles (buf/port -- `handlep`) sit in the hom band: truthy when nonempty
 ; ($out = 1), compared by identity, and applying a handle acts like 0 (const-1). every
 ; predicate ends in `p`; they are enumerated below.
 
@@ -99,18 +99,18 @@
 ; first word dispatches. the storage predicates:
 ;   fixp bigp boxp  -- the integer reps (fixnum, bignum, wide-int box)
 ;   flop comp arrp  -- float, complex scalar, array; all three share one heap type, `tupp`
-;   strp symp twop mapp lamp  -- string, symbol, product, map, lambda
+;   strp symp twop mapp homp  -- string, symbol, product, map, hom (function)
 ; derived: `nump` (any number: fix/box/big/float/complex/array), `intp` (any integer), `atomp`
 ; (anything but a product). `i` is ~(0 1). opaque handles (buf/port) answer `handlep` -- and
-; `lamp` too, since they act as functions; a task is referenced by a fixnum id, not a handle
+; `homp` too, since they act as functions; a task is referenced by a fixnum id, not a handle
 ; object. `!` (nilp) and `done?` are truth/task tests, not type tests.
 (assert
- (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (lamp cap) (mapp #(1 2))
+ (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (homp cap) (mapp #(1 2))
  (bigp (100 2)) (boxp (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (tupp 1.5)
  (nump 1.5) (nump i) (nump (62 2)) (intp (62 2)) (atomp 'x) !(atomp '(1))
  (handlep (buf 4)) (handlep out) (handlep (sip '(104)))   ; the handle zoo, named
  !(handlep #()) !(handlep cap) !(handlep 5) !(handlep "s")  ; maps/functions/data are not handles
- (lamp (buf 4))                               ; a handle still answers lamp -- it acts as a function
+ (homp (buf 4))                               ; a handle still answers homp -- it acts as a function
  (fixp (: p (spawn (\ x x) 0) _ (wait p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; fixnum overflow -> exact bignum ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
@@ -128,14 +128,14 @@
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
 ; --- order & equality --- < <= > >= is a *total order over all values*: across kinds by the
-; lattice (number < string < symbol < product < map < lambda), within a kind by value/
+; lattice (number < string < symbol < product < map < hom), within a kind by value/
 ; lexicographic order (complex by (re,im); maps and lambdas by an alpha-invariant hash; an
 ; array operand broadcasts to a 0/1 mask). `=` is value equality and bridges the whole
 ; numeric tower; `idp` is identity; `!=` is gone -- write `!(a = b)`.
 (assert
  (3 = 3.0) !(3 = 4) (1 < 1.5) (3.0 >= 3) (idp 'a 'a) !(idp '(1) '(1))
  (1 < "a") ("a" < 'x) ('x < '(0)) !("a" < 1)
- ('(0) < #(1 10)) (#(1 10) < cap) !(cap < #(1 10)))   ; the map rung: pair < map < lambda
+ ('(0) < #(1 10)) (#(1 10) < cap) !(cap < #(1 10)))   ; the map rung: pair < map < hom
 
 ; --- comparing functions --- `=` on two functions is alpha + structural: their source \-exprs
 ; match up to renaming of bound variables (binders by position, free vars by name) and their
@@ -308,7 +308,7 @@
 (assert
  ('(1 (\ x) 3) = `(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) `(1 ,@xs 4)))
  (5 = $"hello") (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
- (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) ('(dot x) = '.x) (lamp dot)
+ (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) ('(dot x) = '.x) (homp dot)
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (20 = (#(1 10 2 20) -> 2 0)) (7 = ((#() <- 'k 7) 'k)) (9 = (#() -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
@@ -339,10 +339,10 @@
 ; runtime tunable, default 2^20) raises (sing 'apcap k) instead of allocating O(k) --
 ; (bignum f) traps where it would oom. retune with (pin apcap () n); see test/apcap.l.
 (assert
- (3 = (ev '(+ 1 2))) (lamp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
+ (3 = (ev '(+ 1 2))) (homp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
- (sing? 1) !(sing? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lamp sing)
+ (sing? 1) !(sing? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (homp sing)
  (mapp apcap) (1048576 = (apcap ()))             ; the count ceiling, a tunable box
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
@@ -381,7 +381,7 @@
 ; and finally `dict` itself. compiled references were folded, so only the names die.
 ; names the printer or an expander EMITS (uq ltuple cons pin table ..) stay, as do the
 ; C-resolved hooks (num-ap scomb bcomb trap) and the repl's test-driven editor surface.
-(assert (lamp ev) (? born (fixp born) 1)
+(assert (homp ev) (? born (fixp born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !g_vm_ret 1) ; (pre-egg they still exist,
         (? born !lamb 1) (? born !dict 1))      ;  hence the born guards)

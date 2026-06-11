@@ -3,7 +3,7 @@
 (assert
  ; the constructor builds a working hash
  (mapp t) (nilp (mapp 5)) (nilp (mapp '(1 2)))   ; mapp: only maps, not fixnums/lists
- (lamp t) (lamp cap) (nilp (lamp 5)) (nilp (lamp 0))  ; lamp: any heap object, not a fixnum/nil
+ (homp t) (homp cap) (nilp (homp 5)) (nilp (homp 0))  ; homp: any heap object, not a fixnum/nil
  (= 100 (peep t 1 0))
  (= 200 (peep t 2 0))
  (= 300 (peep t 3 0))

@@ -1,7 +1,7 @@
 ; === the generic-op DISPATCH MATRICES, walked cell by cell ====================
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
 ; (l.h enum q): KFix | KTuple(rank-0 box: float/complex/wide-int) | KBig |
-; KArrZ KArrR KArrC KArrO (the array tower) | KString KSym | KTwo(pair) | KLam.
+; KArrZ KArrR KArrC KArrO (the array tower) | KString KSym | KTwo(pair) | KHom.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
 ; < <= = >= >) are lane aps that refine the same lattice internally. This
@@ -27,8 +27,8 @@
    mx-sym 'ef                            ; KSym (interned)
    mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KTwo (pair / list)
-   mx-fn  (+ 1)                          ; KLam (nif partial application)
-   mx-map (pin (pin (table 0) 1 10) 2 20)) ; KLam (a map is a lookup-lambda)
+   mx-fn  (+ 1)                          ; KHom (nif partial application)
+   mx-map (pin (pin (table 0) 1 10) 2 20)) ; KHom (a map is a lookup-lambda)
 
 ; ============================================================================
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
@@ -73,9 +73,9 @@
 
  ; --- non-matrix apply paths --------------------------------------------------
  (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KFix numeral (odd-tag path)
- (= 36 ((\ x (* x x)) 6))                     ; KLam: a lambda applies directly
- (= 7 (((+) 3) 4))                            ; KLam: a nif / partial application
- (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KLam: a map looks its key up
+ (= 36 ((\ x (* x x)) 6))                     ; KHom: a lambda applies directly
+ (= 7 (((+) 3) 4))                            ; KHom: a nif / partial application
+ (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KHom: a map looks its key up
  (nilp (mx-map 9))                            ; ...missing key -> nil
  (= 1 ((buf 4) 'x)))                       ; opaque handle (buf) behaves as 0
 
@@ -138,8 +138,8 @@
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).
  ;     "1" + "1" == "2": apply (+ 1) twice to 0. ---
  (= 2 (((+ (\ f x (f x)) (\ f x (f x))) (+ 1)) 0))
- (lamp (+ inc 2))   (lamp (+ 2 inc))          ; num + fn (either order) -> a function
- (lamp (+ inc inc)))                          ; fn + fn -> a function
+ (homp (+ inc 2))   (homp (+ 2 inc))          ; num + fn (either order) -> a function
+ (homp (+ inc inc)))                          ; fn + fn -> a function
 
 ; ============================================================================
 ; `*` matrix (g_mul_mx): the multiplicative analog (semiring product of `+`)

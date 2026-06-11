@@ -24,7 +24,7 @@ syn keyword LoveFunc + - * / % < <= = >= > <- -> idp inc dec abs gcd modpow int
 syn keyword LoveFunc ~ << >> & \| ^
 syn keyword LoveFunc sin cos log pow plex re im conj arg clift
 syn keyword LoveFunc nump intp powg num-ap numfn randint
-syn keyword LoveFunc twop strp symp mapp lamp handlep tupp bigp boxp arrp comp flop fixp nilp atomp
+syn keyword LoveFunc twop strp symp mapp homp handlep tupp bigp boxp arrp comp flop fixp nilp atomp
 syn keyword LoveFunc arr array arank alen ashape atype asum aprod amax amin aall
 syn keyword LoveFunc a-rank a-shape a-type a-dim
 syn keyword LoveFunc string slice intern nom slurp show sip pad page

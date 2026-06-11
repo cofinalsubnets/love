@@ -222,7 +222,7 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 #define nil g_nil
 struct g_pair { g_vm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KFix is the odd fixnum
-// tag; KLam is any non-data heap pointer (text/function/map). The five DATA kinds
+// tag; KHom is any non-data heap pointer (text/function/map). The five DATA kinds
 // (KTuple, KBig, KString, KSym, KTwo) are the ones g_typ recovers from an ap's section
 // slot (data.c go() order, via the data.h lookup); an array reads as KTuple there
 // (coarse -- one array sentinel). The four KArr* kinds are NOT data sentinels: g_kind
@@ -233,12 +233,12 @@ struct g_pair { g_vm_t *ap; intptr_t a, b; };
 // array counterparts), sequence/concat lane [KString..KTwo], then map, text last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (pair)
-// caps the sequence lane; KMap is the map's own rung just under KLam, so the total
+// caps the sequence lane; KMap is the map's own rung just under KHom, so the total
 // order's pair < map < lambda is the enum order itself (a map is still a lookup lambda
 // for +/*/apply -- the rung exists for the order and the honest matrix cells).
 // KN is the matrix dimension.
-enum q { KFix, KTuple, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KLam, KN };
-#define g_data_n 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KLam-KTuple
+enum q { KFix, KTuple, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KHom, KN };
+#define g_data_n 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KHom-KTuple
 typedef g_word num, word;
 // The unique empty string and empty (anonymous) symbol -- data-segment globals the
 // GC never moves (gcp's out-of-pool short-circuit). Strings are immutable, so one
@@ -261,7 +261,7 @@ struct g
  *g_read1(struct g*, struct g_io*),
  *str0(struct g*, uintptr_t);
 g_vm(g_vm_gc, uintptr_t);
-// g_kind maps any value to its enum q: KFix for a fixnum, KLam for a non-data heap
+// g_kind maps any value to its enum q: KFix for a fixnum, KHom for a non-data heap
 // pointer (text/function/map), else g_typ's data kind -- refined for a rank>=1 tuple,
 // which expands by element tier to KArrZ..KArrO (a rank-0 box stays KTuple). Lives in
 // love.c (it needs g_typ from the generated data.h) and is shared by data.c's apply
@@ -276,9 +276,9 @@ extern union u const numap_drive[];          // [ap; swap; ret0] driver that run
 g_vm_t g_vm_ap, g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big; // sentinels + ap: data.c & inline predicates
 uintptr_t hash(struct g*, word), g_tuple_bytes(struct g_tuple*);
 #define str(_) ((struct g_str*)(_))
-#define lamp evenp
+#define homp evenp
 #define two(_) ((struct g_pair*)(_))
-static g_inline bool twop(word _) { return lamp(_) && cell(_)->ap == g_vm_two; }
+static g_inline bool twop(word _) { return homp(_) && cell(_)->ap == g_vm_two; }
 static g_inline void *bump(struct g *g, uintptr_t n) {
   if (avail(g) < n) __builtin_trap();
   void *x = g->hp; g->hp += n; return x; }
