@@ -23,7 +23,11 @@
 ;   opfix pass) -- escape it in parens ((+) is + as a value); quoted lists are data and
 ;   keep their operators plain.
 ; * a corpus test that spawns must (wait p) its task: an orphan stalls the kernel runner.
-; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms.
+; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the
+;   interactive shell installs a default trap when none is present (repl.l shell-trap):
+;   a scare prints `# a b` and answers (), so the session survives every raise and an
+;   anon or apcap is VISIBLE; the more bits keep the read protocol (port back when
+;   incomplete, sentinel at eof). file mode stays untrapped -- terminal, per the law.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 
 ; --- the shape of it --- one cell is one word: a fixnum is a tagged odd word, anything else

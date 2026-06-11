@@ -301,7 +301,26 @@
               nhu (cabp r)
               nhd (cbbp r)
               _ (each vs (\ v (: _ (do_eval v) (putc 10))))
-              (repl nhu nhd)))))
+              (repl nhu nhd))))
+
+   ; the shell's default trap: a scare prints its condition -- # a b -- and
+   ; answers (), so the session survives every raise with an honest face
+   ; (untrapped, the C default is terminal and wears the oom banner). the
+   ; more bits reproduce the read protocol exactly: incomplete delivers the
+   ; port back, eof the sentinel -- a = the port, b = the sentinel.
+   (shell-trap s a b)
+     (? (eof? s) b
+        (more? s) a
+        (: _ (puts "# ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) ()))
+
+   ; the interactive entry: install shell-trap IF no trap is present (the
+   ; check and the define both go through ev -- a live read and a top-level
+   ; pin -- since closures capture their free globals at creation and the
+   ; book itself is pulled). file mode never comes through here, so scripts
+   ; keep the untrapped (terminal) law.
+   (shell _)
+     (: _ (? (ev (\ trap)) 0 (ev (list (\ :) (\ trap) shell-trap)))
+        (repl 0 0)))
 
 ; charms: the global character construction -- the LAZY charlist. a charm is
 ; a sat (a non-negative fixnum); a CHARS is a bare charlist (eager, ends at

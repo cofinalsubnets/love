@@ -368,7 +368,7 @@ static struct g *boot(struct g *g, bool argp) {
     "))"
 #include "repl.h"
   );
-  return g_evals_(g, argp ? cli : replp ? "(repl 0 0)" : rel); }
+  return g_evals_(g, argp ? cli : replp ? "(shell 0)" : rel); }
 #endif
 
 int main(int argc, char const **argv) {

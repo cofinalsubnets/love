@@ -546,7 +546,7 @@ void kmain(void) {
  // zz-fin.l prints the summary and (exit 1)s on failure.
  "(zevs (sip ((: (g i) (? (< i (tally tests)) (cons (peep tests i 0) (g (+ 1 i))))) 0)))"
 #else
- "(repl 0 0)"
+ "(shell 0)"
 #endif
   )); }
 #ifdef K_TEST
