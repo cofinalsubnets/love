@@ -20,8 +20,23 @@
   !(zev (zs ""))                              ; nothing readable is nothing
   !(zev (zs "(+ 1"))                          ; an unfinished shape is nothing
   (1 = (zev (zs "1")))
-  ; zevs: the stream shell -- a port is the lazy charms; every form evals,
+  ; zevs: the stream shell -- a port is the hot charms; every form evals,
   ; the last value is the value. the host/love0/kernel runners ARE zevs.
   (42 = (zevs (sip (zs "(: zq 41) (zq + 1)"))))  ; defines land: the second form reads the first's
   !(zevs (sip (zs "")))
   (7 = (zevs (sip (zs "1 2 (3 + 4)"))))))     ; forms eval in order; the last one answers
+
+; charms: the global construction -- the lazy colist. (cap cs) is a charm,
+; ((cbp cs) ()) is charms + () (the coproduct, () the end); chars and ports
+; lift canonically; consumers dispatch on kind (twop = cell, else end).
+(: (zs2 s) ((: (g i) (? (< i $s) (cons (s i) (g (+ 1 i))))) 0)
+   cs (charms (zs2 "(+ 1 2)"))
+ (assert
+  (fixp (cap cs)) (homp (cbp cs))               ; a cell is charm x hom
+  (40 = (cap cs))                               ; the charm is the byte
+  (: r ((cbp cs) ()) (&& (twop r) (43 = (cap r))))  ; forcing with () yields the next cell
+  (3 = (zev cs))                                ; zev drinks charms proper
+  (idp () (charms ()))                          ; the end lifts to itself
+  ('(40 43 41) = (charms->chars (zs2 "(+)")))   ; realize: charms end () -> chars end 0
+  (6 = (zev (charms (sip (zs2 "(* 2 3)")))))    ; a port lifts: the hot charms
+  (1 = (zev (cons 49 (\ _ ()))))))              ; a hand-built one-cell charms: "1"
