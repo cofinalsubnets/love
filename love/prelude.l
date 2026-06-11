@@ -213,7 +213,7 @@
     (? (symp x)
        (: s (string x)
           (? (strp s)
-             (: n (sat s)
+             (: n (tally s)
                 (? (< 0 n)
                    ((: (go i) (? (< i n) (? (op-punc-byte (s i)) (go (+ 1 i)) 0) 1)) 0)
                    0))
@@ -232,7 +232,7 @@
      (- n i))
    ; factor symbol s -> a list of (name . arity) entries, or 0
    (opfactor s)
-    (: nm (string s) n (sat nm)
+    (: nm (string s) n (tally nm)
        ((: (go i)
            (? (< i n)
               (: m (op-long nm i n)

@@ -3,12 +3,12 @@
 ; is a sat (a non-negative fixnum), a charms is a charlist. zev reads one
 ; form structurally and compiles it through opfix/wev/ana/cata, so the
 ; whole hull -- characters to hom -- closes in lisp.
-(: (zs s) ((: (g i) (? (< i $s) (cons (s i) (g (+ 1 i))))) 0)   ; string -> charms
+(: (zs s) ((: (g i) (? (< i (tally s)) (cons (s i) (g (+ 1 i))))) 0)   ; string -> chars
  (assert
   (3 = (zev (zs "(+ 1 2)")))                  ; the plain lane
   (3 = (zev (zs "(1 + 2)")))                  ; infix factors through the charm lane
   (7 = (zev (zs "(1 + 2 * 3)")))              ; right-assoc, same as ev
-  (4 = (zev (zs "($\"ab\" + 2)")))            ; one binds tightest, same as ev
+  (197 = (zev (zs "($\"ab\" + 2)")))          ; one binds tightest, same as ev
   (1 = (zev (zs "(!0)")))                     ; sigils factor mid-form; a BARE "!0" is
                                               ; two datums -- wrapping a whole line is a
                                               ; shell's move (the repl's), not zev's
@@ -29,7 +29,7 @@
 ; charms: the global construction -- the lazy colist. (cap cs) is a charm,
 ; ((cbp cs) ()) is charms + () (the coproduct, () the end); chars and ports
 ; lift canonically; consumers dispatch on kind (twop = cell, else end).
-(: (zs2 s) ((: (g i) (? (< i $s) (cons (s i) (g (+ 1 i))))) 0)
+(: (zs2 s) ((: (g i) (? (< i (tally s)) (cons (s i) (g (+ 1 i))))) 0)
    cs (charms (zs2 "(+ 1 2)"))
  (assert
   (fixp (cap cs)) (homp (cbp cs))               ; a cell is charm x hom

@@ -21,7 +21,7 @@
   (= "" (+ "" ""))                        ; empty join -> the empty string
   (strp (+ "" ""))                        ; ... still a string, not 0
   ; scat is gone; + takes the byte law instead: 0 is byte 0, not an empty operand
-  (= 3 (sat (+ "ab" 0)))  (= 0 ((+ "ab" 0) 2))
+  (= 3 (tally (+ "ab" 0)))  (= 0 ((+ "ab" 0) 2))
   (= 0 (+ 0 0))
 
   ; slice: an empty slice collapses to 0 (no string object is built)

@@ -20,7 +20,7 @@
  (= 9  (cap (cons 9 8)))
  (= 8  (cbp (cons 9 8)))
  (= 2  (cabp '(1 2 3)))
- (= 4  (sat (+ "ab" "cd")))                   ; string built + measured at compile time
+ (= 4  (tally (+ "ab" "cd")))                 ; string built + counted at compile time
 
  ; --- currying: under-application yields a usable closure; prefix+unknown tail ---
  (= 7  ((+ 3) 4))                                ; (+ 3) baked, applied at runtime

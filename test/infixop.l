@@ -37,7 +37,7 @@
  (symp '+) (7 = ((+) 3 4))
 
  ; composes with sigils at one ($ folds eagerly -- binds tightest -- then + steals it)
- (4 = ($"ab" + 2))
+ (197 = ($"ab" + 2))
 
  ; the curry law: operands missing at the end of a list fold to the partial
  ; application -- for a special form like ? that is just the shorter form

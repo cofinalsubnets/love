@@ -3,13 +3,13 @@
 ; "N tests pass" summary, then (exit) quits qemu via isa-debug-exit), and report.
 ; Run on the host love, which has the `run` subprocess nif. argv = (this iso ovmf).
 
-(: (sub-at s i t j) (? (>= j (sat t)) 1                    ; does t occur in s at index i?
+(: (sub-at s i t j) (? (>= j (tally t)) 1                    ; does t occur in s at index i?
        (? (= (peep s (+ i j) 0) (peep t j 0)) (sub-at s i t (+ 1 j)) 0))
-   (idx s t) ((: (g i) (? (> (+ i (sat t)) (sat s)) -1     ; first index of t in s, else -1
+   (idx s t) ((: (g i) (? (> (+ i (tally t)) (tally s)) -1     ; first index of t in s, else -1
        (? (sub-at s i t 0) i (g (+ 1 i))))) 0)
    (has? s t) (< -1 (idx s t))
    (bol s i)  (? (< i 1) 0 (? (= 10 (peep s (- i 1) 0)) i (bol s (- i 1))))
-   (eol s i)  (? (>= i (sat s)) i (? (= 10 (peep s i 0)) i (eol s (+ 1 i))))
+   (eol s i)  (? (>= i (tally s)) i (? (= 10 (peep s i 0)) i (eol s (+ 1 i))))
    (lineof s t) (: i (idx s t) (? (< i 0) "" (slice s (bol s i) (eol s i)))))
 
 (: a    (cbp argv)

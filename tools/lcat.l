@@ -14,7 +14,7 @@
 ; inside a string literal are data and never touched. Surviving bytes are then
 ; C-escaped.
 
-(: (s2cl s) ((: (g i) (? (< i (sat s)) (cons (peep s i 0) (g (+ 1 i))))) 0)  ; string -> charlist
+(: (s2cl s) ((: (g i) (? (< i (tally s)) (cons (peep s i 0) (g (+ 1 i))))) 0)  ; string -> charlist
    ; count complete datums readable from s (stop on the eof sentinel or an
    ; incomplete form, which read signals by returning the port itself).
    (nforms s) ((: (g p e n) (: r (read p e) (? (| (= e r) (= p r)) n (g p e (+ 1 n)))))
@@ -49,7 +49,7 @@
    ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."
    ; literal (where \ escapes).
    _ ((: (g i ctx instr)
-        (? (< i (sat acc))
+        (? (< i (tally acc))
            (: c (peep acc i 0)
               (? instr
                  (? (= c 92) (: _ (eb c) _ (eb (peep acc (+ i 1) 0)) (g (+ i 2) 0 1))

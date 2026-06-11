@@ -72,17 +72,23 @@
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0. every value has a signed
-; net measure: a number is its own value (complex: |z| signed by the total order), text is
-; its length, a list or array is the SUM of its elements' nets -- recursive and unclamped,
-; so negatives cancel positives and a PRODUCT OF NOTHINGS is nothing too. the law of
-; saturation holds at every rank: positive to positive, zero-or-negative to zero, so a
-; list or array of negatives is nothing, exactly like a negative scalar. maps stay
-; key-counted: presence is information there, and #0 must stay truthy. there is no
-; "truthy"/"falsy" -- true and false are the bits 1 and 0 of the `!!$` projection.
-; `$` (sat) is ONE saturating clamp over the net, max(0, ceil(net)); `!` is the falsity
-; oracle (the nif `nilp`, the classical name; `non` is its normal alias, so !$x reads
-; "non sat x"), with the invariant !x == (0 = $x). net is additive wherever + is total:
-; $(a + b) saturates net a + net b over numbers, text, and lists alike.
+; net measure: a number is its own value (complex: |z| signed by the total order), text
+; SUMS ITS CHARMS (a string is packed chars, measured by content -- a NUL contributes
+; nothing, so an all-NUL text is nothing), a symbol nets its spelling, a list or array
+; is the SUM of its elements' nets -- recursive and unclamped, so negatives cancel
+; positives and a PRODUCT OF NOTHINGS is nothing too. the law of saturation holds at
+; every rank: positive to positive, zero-or-negative to zero, so a list or array of
+; negatives is nothing, exactly like a negative scalar. maps stay key-counted: presence
+; is information there, and #0 must stay truthy. there is no "truthy"/"falsy" -- true
+; and false are the bits 1 and 0 of the `!!$` projection. `$` (sat) is ONE saturating
+; clamp over the net, max(0, ceil(net)); `!` is the falsity oracle (the nif `nilp`, the
+; classical name; `non` is its normal alias, so !$x reads "non sat x"), with the
+; invariant !x == (0 = $x). net is additive wherever + is total -- EXACTLY now: $(a + b)
+; saturates net a + net b over numbers, text, and lists alike, the byte law included
+; (a string + a byte nets the byte: + is a true measure homomorphism). the COUNT --
+; how many, not how much -- is `tally`: a string or buf counts its charms, a list its
+; spine, an array its cells, a map its keys, a symbol its spelling, a scalar nothing.
+; tally is what "length" always was; $ never was.
 (assert
  !0 !"" !#() !@0 !() !0.0 !~(0 0)                ; zero / empty -> false
  !-5 !-3.9 !~(-3 4) !~(0 -1)                     ; <= 0 in the total order -> false (complex by re then im)
@@ -257,7 +263,8 @@
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
  (20 = (cabp (assq 2 (list (L 1 10) (L 2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
- (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3)) (3 = $'(a b c)))
+ (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3))
+ (294 = $'(a b c)) (3 = (tally '(a b c))))  ; net sums spellings; tally counts the spine
 
 ; --- strings, symbols & mints --- a symbol is interned ('x): one canonical atom per
 ; spelling. a MINT ((mint 0), arg ignored) adjoins a fresh POINT to the value space:
@@ -275,9 +282,9 @@
 ; distinct map keys for free. SYMBOLS HAVE NO STRING ALGEBRA (+/* nil, apply const-1);
 ; intern and string are the explicit bridge, and a nom's name is (cap nom).
 ; a string indexes its bytes ("abc" 0 -> 97). $ (sat) clamps the net measure once,
-; max(0, ceil(net)): a string's byte count, a symbol's name length, a number's own value
+; max(0, ceil(net)): a string's CHARM SUM, a symbol's spelling sum, a number's own value
 ; ($-3.9 = 0), a list's or array's element sum -- so $ and abs diverge ((abs -5) = 5 but
-; $-5 = 0, and $@(3 4) = 7 where (abs @(3 4)) is the norm 5).
+; $-5 = 0, and $@(3 4) = 7 where (abs @(3 4)) is the norm 5). the count is tally.
 ; slice takes a half-open slice; + concatenates ("" is the identity; scat is gone); string
 ; coerces; \n escapes.
 (assert
@@ -292,7 +299,8 @@
  (() < (mint 0))                                 ; the zero point sits first among the nameless
  (: a (nom 'k) b (nom 'k) t #() _ (pin t a 1) _ (pin t b 2)
     (&& (1 = (t a)) (2 = (t b)) (2 = $t)))      ; same-name noms are distinct map keys
- (97 = ("abc" 0)) (3 = $"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
+ (97 = ("abc" 0)) (294 = $"abc") (3 = (tally "abc")) (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
+ !(string 0) !!(string 1)                        ; a NUL nets nothing: the product of nothings reaches the bytes
  ("bidden" = (slice "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("(mint 0)" = (show (mint 0))))
@@ -317,7 +325,7 @@
 ; --- buffers --- (buf n) gives n mutable zeroed bytes; $/peep/pin a byte (0..255); blit;
 ; identity equality.
 (assert
- (: b (buf 3) _ (pin b 0 65) (65 = (peep b 0 0))) (4 = $(buf 4))
+ (: b (buf 3) _ (pin b 0 65) (65 = (peep b 0 0))) (0 = $(buf 4)) (4 = (tally (buf 4)))
  (: b (buf 1) _ (pin b 0 257) (1 = (peep b 0 0))) (: b (buf 4) _ (blit b 0 "ABCD" 0 4) (68 = (peep b 3 0)))
  !((buf 2) = (buf 2)))
 
@@ -342,7 +350,7 @@
 ; (+ 1 2), '+, and (+)-as-a-value still work. a token that doesn't factor is a plain
 ; symbol (&&, >>=, :-, ?- stay atomic); != factors to ! and =, !! double-negates. a
 ; sigil at one binds TIGHTEST (folds the moment its operand lands), so $"ab" + 2 is
-; (+ ($ "ab") 2); only infix defers, which is what makes it right-associative. the
+; (+ ($ "ab") 2) = 197; only infix defers, which is what makes it right-associative. the
 ; CURRY LAW: operands missing at the end of a list fold to the partial application.
 ; quote interiors are DATA -- operators inside ' stay plain symbols; quasiquote descends
 ; only through unquotes. shipped at one: $ sat, ! nilp, . dot; at two: + - * / %
@@ -351,12 +359,12 @@
 ; peeps. (1 + 2) factors to ((+ 1 2)) and evaluates via (f) == f.
 (assert
  ('(1 (\ x) 3) = `(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) `(1 ,@xs 4)))
- (5 = $"hello") (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
+ (532 = $"hello") (5 = (tally "hello")) (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) (homp dot)
  ('((dot x)) = (opfix '(. x))) ('! = (cabp '(a ! b)))   ; opfix factors; quotes stay data
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
- (4 = ($"ab" + 2))                               ; one binds tightest: (+ ($ "ab") 2)
+ (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
  (3 = ((1 +) 2))                                 ; the curry law: (1 +) folds to (+ 1)
  (20 = (#(1 10 2 20) -> 2 0)) (7 = ((#() <- 'k 7) 'k)) (9 = (#() -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
@@ -424,9 +432,7 @@
 ; `born` records the hatch time (unbound pre-egg: love0's first corpus pass runs PRE-egg,
 ; and an absent global reads as nil). before it is born the egg PULLS every runtime-
 ; internal name: the raw cell nifs (peek poke seek lamb -- (lamb 2 3) is a segfault, big
-; scare; lamb is still there for real, it's ultimate), tally (the spine length of a list,
-; blind to its elements -- the compiler's frame arithmetic runs on it; $ sums the
-; elements' nets, so post-birth code wanting a structural length folds), the compiler's machinery
+; scare; lamb is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), the repl sentinels, every hot lvm_* pointer,
 ; and finally `dict` itself. compiled references were folded, so only the names die.

@@ -1,7 +1,7 @@
 (\ egg (:
  ; pre egg hatch cleanup routine
  (mop _) ((peep dict 'ev 0) '(:
-   _ (each '(peek poke seek lamb tally macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop do_eval numfn nfa nfq nfnest powg ipow a-coll a-dim a-emax a-rank a-shape a-type m eofsym prc _)
+   _ (each '(peek poke seek lamb macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop do_eval numfn nfa nfq nfnest powg ipow a-coll a-dim a-emax a-rank a-shape a-type m eofsym prc _)
       (\ k (pull dict k 0)))
    (each (keys dict)
     (\ k (? (symp k) (? (= "lvm_" (slice (string k) 0 4)) (pull dict k 0) 0) 0)))))

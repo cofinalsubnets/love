@@ -6,8 +6,9 @@
 
 (assert
  ; --- construction + length, and what a buf is NOT ---
- (= 4 (sat (buf 4)))
- (= 0 (sat (buf 0)))
+ (= 4 (tally (buf 4)))   ; the COUNT is tally now
+ (= 0 (sat (buf 4)))     ; a zeroed buf NETS nothing: hot chars measure by content
+ (= 0 (tally (buf 0)))
  !(strp (buf 4))                          ; a buf is not a string
  !(fixp (buf 4))                          ; ...nor a number
 
@@ -41,7 +42,7 @@
     (&& (= 7 (peep d 0 0)) (= 9 (peep d 2 0))))
 
  ; --- blit clamps an oversized count rather than trampling the heap ---
- (: b (buf 2) _ (blit b 0 "ABCD" 0 100) (= 2 (sat b)))
+ (: b (buf 2) _ (blit b 0 "ABCD" 0 100) (= 2 (tally b)))
 
  ; --- equality is by identity (a buf is mutable) ---
  (: b (buf 2) (= b b))                       ; a buf equals itself

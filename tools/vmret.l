@@ -23,13 +23,13 @@
    (hex? c) (? (&& (>= c 48)  (<= c 57))  1
             (? (&& (>= c 97)  (<= c 102)) 1
                (&& (>= c 65)  (<= c 70))))
-   (skip-ws    s i) (? (< i (sat s)) (? (ws?  (peep s i 0)) (skip-ws    s (+ i 1)) i) i)
-   (skip-hex   s i) (? (< i (sat s)) (? (hex? (peep s i 0)) (skip-hex   s (+ i 1)) i) i)
-   (skip-nonws s i) (? (< i (sat s)) (? (ws?  (peep s i 0)) i (skip-nonws s (+ i 1))) i)
+   (skip-ws    s i) (? (< i (tally s)) (? (ws?  (peep s i 0)) (skip-ws    s (+ i 1)) i) i)
+   (skip-hex   s i) (? (< i (tally s)) (? (hex? (peep s i 0)) (skip-hex   s (+ i 1)) i) i)
+   (skip-nonws s i) (? (< i (tally s)) (? (ws?  (peep s i 0)) i (skip-nonws s (+ i 1))) i)
    ; one past the last non-ws char (0 if the line is all whitespace).
-   (trim-end s) ((: (f i e) (? (< i (sat s)) (f (+ i 1) (? (ws? (peep s i 0)) e (+ i 1))) e)) 0 0)
-   (prefix? p s) (= p (slice s 0 (sat p)))
-   (dash? a) (&& (< 0 (sat a)) (= 45 (peep a 0 0))))
+   (trim-end s) ((: (f i e) (? (< i (tally s)) (f (+ i 1) (? (ws? (peep s i 0)) e (+ i 1))) e)) 0 0)
+   (prefix? p s) (= p (slice s 0 (tally p)))
+   (dash? a) (&& (< 0 (tally a)) (= 45 (peep a 0 0))))
 
 ; --- line classifiers (the three vmret.py regexes, by hand) -----------
 ; HEADER_RE  ^\s*[0-9a-fA-F]+\s+<(.+)>:\s*$  -> the captured name, else 0.
@@ -55,7 +55,7 @@
       (? (&& (> j i) (= 58 (peep line j 0)))               ; hexrun then ':'
          (: k (skip-ws line (+ j 1))
             (? (> k (+ j 1))                                ; need >=1 ws after ':'
-               (cons (slice line i j) (slice line k (sat line)))
+               (cons (slice line i j) (slice line k (tally line)))
                0))
          0)))
 
@@ -64,7 +64,7 @@
    (mnemonic text)
    ((: (f i)
        (: ts (skip-ws text i)
-          (? (< ts (sat text))
+          (? (< ts (tally text))
              (: te (skip-nonws text ts)
                 w  (slice text ts te)
                 (? (any (\ p (= p w)) PREFIXES) (f te) w))
@@ -74,15 +74,15 @@
 ; --- per-arch return-mnemonic matchers --------------------------------
 ; x86: ^l?ret[a-z]*$ (ret/retq/lret/...; not iret). arm: ^ret(aa|ab)?$
 ; (iret/eret never match).
-(: (lower? s i) (? (< i (sat s)) (: c (peep s i 0) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
+(: (lower? s i) (? (< i (tally s)) (: c (peep s i 0) (? (&& (>= c 97) (<= c 122)) (lower? s (+ i 1)) 0)) 1)
    (ret-tail? r) (&& (prefix? "ret" r) (lower? r 3))
-   (retx?  m) (|| (ret-tail? m) (&& (= 108 (peep m 0 0)) (ret-tail? (slice m 1 (sat m)))))
+   (retx?  m) (|| (ret-tail? m) (&& (= 108 (peep m 0 0)) (ret-tail? (slice m 1 (tally m)))))
    (reta?  m) (|| (= m "ret") (|| (= m "retaa") (= m "retab"))))
 
 ; --- split a string on '\n' into a list of lines ---------------------
 (: (lines s)
    ((: (f start i)
-       (? (< i (sat s))
+       (? (< i (tally s))
           (? (= 10 (peep s i 0)) (cons (slice s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
           (? (< start i) (L (slice s start i)) 0)))
     0 0))
@@ -96,7 +96,7 @@
 ; overflows a fixnum -- so u64/BIG/hex->int use `+`/`*` (which promote to bignum),
 ; never bitwise `<<`/`|` (which would not), keeping the values exact.
 (: (hex->int s) ((: (f i acc)
-                    (? (< i (sat s))
+                    (? (< i (tally s))
                        (: c (peep s i 0)
                           v (? (&& (>= c 48) (<= c 57))  (- c 48)
                             (? (&& (>= c 97) (<= c 102)) (- c 87)
@@ -161,13 +161,13 @@
     ls 0 0 BIG 0 0 0))
 
 ; --- report helpers --------------------------------------------------
-(: (basename p) ((: (f i last) (? (< i (sat p)) (f (+ i 1) (? (= 47 (peep p i 0)) (+ i 1) last)) (slice p last (sat p)))) 0 0)
+(: (basename p) ((: (f i last) (? (< i (tally p)) (f (+ i 1) (? (= 47 (peep p i 0)) (+ i 1) last)) (slice p last (tally p)))) 0 0)
    (spaces n)    (? (< 0 n) (+ " " (spaces (- n 1))) "")
-   (str< a b)    ((: (f i) (? (>= i (sat a)) (< (sat a) (sat b))
-                            (? (>= i (sat b)) 0
+   (str< a b)    ((: (f i) (? (>= i (tally a)) (< (tally a) (tally b))
+                            (? (>= i (tally b)) 0
                                (: ca (peep a i 0) cb (peep b i 0)
                                   (? (< ca cb) 1 (? (> ca cb) 0 (f (+ i 1)))))))) 0)
-   (maxlen fl)   (foldl (\ m e (: l (sat (cap e)) (? (< m l) l m))) 0 fl)
+   (maxlen fl)   (foldl (\ m e (: l (tally (cap e)) (? (< m l) l m))) 0 fl)
    (join-rets rs) (? (twop rs)
                      (? (twop (cbp rs)) (+ (+ "0x" (cap rs)) (+ ", " (join-rets (cbp rs))))
                                         (+ "0x" (cap rs)))
@@ -255,7 +255,7 @@
          _ (fputs out "* functions contain a ret (TCO suspects):\n")
          _ (each sorted (\ e
               (: name (cap e) rets (cbp e)
-                 _ (fputs out "  ") _ (fputs out name) _ (fputs out (spaces (- width (sat name))))
+                 _ (fputs out "  ") _ (fputs out name) _ (fputs out (spaces (- width (tally name))))
                  _ (fputs out "  ret @ ") _ (fputs out (join-rets rets)) _ (fputc out 10) 0)))
          (exit 1))
       (: _ (fputs out base) _ (fputs out ": all ") _ (fputn out total 10) _ (fputs out " ")

@@ -31,11 +31,6 @@
 
    (revcat a b) (foldl (flip cons) b a)
 
-   ; spine length, re-derived locally: the editor counts rows and columns
-   ; (lines in u/d, chars in l), and $ is the NET now -- it would sum the
-   ; byte values. (the tally nif is egg-pulled; this file compiles after.)
-   (tally l) (foldl (\ n _ (+ 1 n)) 0 l)
-
    ; parse a charlist as ONE expression: the line is implicitly parenthesized,
    ; so `x y z` reads as (x y z) -- a single application -- and infix works at
    ; the prompt (`1 = 1` factors to ((= 1 1)) = 1). a lone value is unchanged

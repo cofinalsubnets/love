@@ -65,12 +65,12 @@
    (pickname u) ((: (g k) (: nm (intern (shortlex k)) (? (avail? nm u) nm (g (+ 1 k))))) 0)
    (cntle a b) (: ca (peep cnt a 0) cb (peep cnt b 0)    ; order a scope's bindings: count desc,
        (? (> ca cb) 1 (< ca cb) 0                      ; then length desc, then name -- deterministic
-          (: la (sat (string a)) lb (sat (string b)) (? (> la lb) 1 (< la lb) 0 (< a b)))))
+          (: la (tally (string a)) lb (tally (string b)) (? (> la lb) 1 (< la lb) 0 (< a b)))))
    ; assign fresh names to a scope's co-live bindings (count order). a frozen (tainted)
    ; or can't-shrink binding is kept (mapped to itself, no name spent). -> (env-frame . used').
    (assign syms used) ((: (g ss m u) (? (twop ss)
          (: s (cap ss) nm (pickname u)
-            (? (&& !(peep taint s 0) (< (sat nm) (sat (string s))))
+            (? (&& !(peep taint s 0) (< (tally nm) (tally (string s))))
                (: i (intern nm) (g (cbp ss) (cons (cons s i) m) (cons i u)))
                (g (cbp ss) (cons (cons s s) m) u)))
          (cons m u))) (msort cntle syms) 0 used)
@@ -123,7 +123,7 @@
 
 ; --- minify (identical to lcat): drop a space only where the two flanking bytes
 ; re-parse to the same datum count without it; then C-escape the survivors. ---
-(: (s2cl s) ((: (g i) (? (< i (sat s)) (cons (peep s i 0) (g (+ 1 i))))) 0)
+(: (s2cl s) ((: (g i) (? (< i (tally s)) (cons (peep s i 0) (g (+ 1 i))))) 0)
    (nforms s) ((: (g p e n) (: r (read p e) (? (| (= e r) (= p r)) n (g p e (+ 1 n)))))
                (sip (s2cl s)) (nom 0) 0)
    (redundant? a b) (= (nforms (string (L a b))) (nforms (string (L a 32 b))))
@@ -135,7 +135,7 @@
    (joinforms fs) (? (atomp fs) "" (atomp (cbp fs)) (show (rn (cap fs) 0 0 1 rn))
        (+ (+ (show (rn (cap fs) 0 0 1 rn)) " ") (joinforms (cbp fs))))
    (emit acc) (: _ (fputc out 34)
-       _ ((: (g i pc instr) (? (< i (sat acc))
+       _ ((: (g i pc instr) (? (< i (tally acc))
             (: c (peep acc i 0) (? instr
                (? (= c 92) (: _ (eb c) _ (eb (peep acc (+ i 1) 0)) (g (+ i 2) 0 1))
                   (: _ (eb c) (g (+ i 1) c (? (= c 34) 0 1))))

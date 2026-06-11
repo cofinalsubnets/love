@@ -6,25 +6,25 @@
 (assert
   ; --- C reader path: this file is parsed by it ---
   ; \n / \t / \r / \0 become 1-byte strings with the corresponding byte.
-  (= 1 (sat "\n"))           (= "\n" (string (cons 10 0)))
-  (= 1 (sat "\t"))           (= "\t" (string (cons 9 0)))
-  (= 1 (sat "\r"))           (= "\r" (string (cons 13 0)))
-  (= 1 (sat "\0"))           (= "\0" (string (cons 0 0)))
+  (= 1 (tally "\n"))           (= "\n" (string (cons 10 0)))
+  (= 1 (tally "\t"))           (= "\t" (string (cons 9 0)))
+  (= 1 (tally "\r"))           (= "\r" (string (cons 13 0)))
+  (= 1 (tally "\0"))           (= "\0" (string (cons 0 0)))
   ; \xHH: two hex digits.
-  (= 1 (sat "\x00"))         (= "\x00" (string (cons 0 0)))
-  (= 1 (sat "\x41"))         (= "\x41" (string (cons 65 0)))
-  (= 1 (sat "\xff"))         (= "\xff" (string (cons 255 0)))
+  (= 1 (tally "\x00"))         (= "\x00" (string (cons 0 0)))
+  (= 1 (tally "\x41"))         (= "\x41" (string (cons 65 0)))
+  (= 1 (tally "\xff"))         (= "\xff" (string (cons 255 0)))
   (= "\x41" "A")             (= "\x0a" "\n")
   (= "\xAB" "\xab")          ; mixed case
   ; \\ and \" still pass through via the take-next-char-as-is fallback.
-  (= 1 (sat "\\"))           (= "\\" (string (cons 92 0)))
-  (= 1 (sat "\""))           (= "\"" (string (cons 34 0)))
+  (= 1 (tally "\\"))           (= "\\" (string (cons 92 0)))
+  (= 1 (tally "\""))           (= "\"" (string (cons 34 0)))
   ; embedded mid-string
-  (= 3 (sat "a\nb"))         (= "a\nb" (string (cons 97 (cons 10 (cons 98 0)))))
-  (= 3 (sat "a\tb"))         (= "a\tb" (string (cons 97 (cons 9  (cons 98 0)))))
-  (= 3 (sat "a\rb"))         (= "a\rb" (string (cons 97 (cons 13 (cons 98 0)))))
-  (= 3 (sat "a\0b"))         (= "a\0b" (string (cons 97 (cons 0  (cons 98 0)))))
-  (= 3 (sat "a\x42b"))       (= "a\x42b" (string (cons 97 (cons 66 (cons 98 0))))))
+  (= 3 (tally "a\nb"))         (= "a\nb" (string (cons 97 (cons 10 (cons 98 0)))))
+  (= 3 (tally "a\tb"))         (= "a\tb" (string (cons 97 (cons 9  (cons 98 0)))))
+  (= 3 (tally "a\rb"))         (= "a\rb" (string (cons 97 (cons 13 (cons 98 0)))))
+  (= 3 (tally "a\0b"))         (= "a\0b" (string (cons 97 (cons 0  (cons 98 0)))))
+  (= 3 (tally "a\x42b"))       (= "a\x42b" (string (cons 97 (cons 66 (cons 98 0))))))
 
 ; --- charlist port path: feed the C reader a charlist of `"..."` source
 ; through the ci synth port (the editor's submit path).

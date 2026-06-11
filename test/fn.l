@@ -14,4 +14,4 @@
  (= "((\\ d0 d1 (+ d0 d1)) 1)" (show ((\ a b (+ a b)) 1)))
  (= "((\\ d0 d1 (+ d1 d0)) 5)" (: y 5 (show (\ x (+ x y)))))  ; closure: capture is leading binder
  (strp (show map))
- (< 10 (sat (show map))))
+ (< 10 (tally (show map))))

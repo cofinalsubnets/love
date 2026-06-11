@@ -50,7 +50,7 @@
 ; # reader macro wraps its operand in (pin …): #x -> (pin x)
 (assert
  (= 6 $'(1 2 3))                                 ; #quoted-list -> the elements' net sum
- (= 5 $"hello")                                  ; #string -> byte length
+ (= 532 $"hello")                                ; $string -> the charm sum (tally counts)
  (= 42 $42)                                      ; #positive number -> ceil magnitude
  (= 0 $-7)                                        ; #negative number -> 0 (<= 0 is falsy)
  (= 2 $(hash 1 10 2 20))                        ; #map-expr -> key count
@@ -75,7 +75,7 @@
  (= 0 (sat (arr z '(2 3) 0)))                   ; all-zero array -> net 0
  (= 1 (sat @(0.3 0.4)))                         ; ceil makes any positive net -> >=1
  (= 1 (sat ~(0.001 0)))                        ; re>0 -> ceil(0.001) = 1; sat=0 iff sorts <= 0
- (= 1 (sat (nom 'x)))                        ; a nom is a pair: net = name length + the mint's 0
+ (= 120 (sat (nom 'x)))                      ; a nom nets its spelling's charms + the mint's 0
  (= 0 (sat (mint 0))) !(mint 0)              ; the mint is materially EMPTY: a distinct nothing
  (= 0 (sat (intern "")))                     ; THE empty symbol -> 0 (falsy, prints as ())
  (= 2 (sat (hash 1 10 2 20)))                  ; table -> key count

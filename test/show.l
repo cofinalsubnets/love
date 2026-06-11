@@ -50,7 +50,7 @@
   (: (rng n) (? (= n 0) 0 (cons n (rng (- n 1))))
      s (show (rng 200))
      ; 200 numbers + 199 separators + 2 parens = at least 400 chars
-   (do (strp s) (< 400 (sat s))))
+   (do (strp s) (< 400 (tally s))))
 
   ; GC stress: 500 inspects in a loop. Each call alloc'd a heap port + buf,
   ; provoking many GCs. Final call must still produce the expected output.

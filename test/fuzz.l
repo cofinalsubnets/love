@@ -19,8 +19,8 @@
  ; --- primitive draws (every range below keeps hi > lo so randint never mods by 0) ---
  (fz-nat n) (\ st (randint st n))                        ; [0, n)
  (fz-int lo hi) (fz-map (+ lo) (fz-nat (- hi lo)))       ; [lo, hi)
- (fz-elt l) (\ st (: r (randint st (sat l)) (cons (cap (drop (cap r) l)) (cbp r))))
- (fz-oneof gs) (fz-bind (fz-nat (sat gs)) (\ k (cap (drop k gs))))  ; pick a generator
+ (fz-elt l) (\ st (: r (randint st (tally l)) (cons (cap (drop (cap r) l)) (cbp r))))
+ (fz-oneof gs) (fz-bind (fz-nat (tally gs)) (\ k (cap (drop k gs))))  ; pick a generator
  ; --- structured draws: fixed repetition, bounded-length list, tuples ---
  (fz-rep n g) (? (< n 1) (fz-pure 0)
     (\ st (: a (g st) b ((fz-rep (- n 1) g) (cbp a)) (cons (cons (cap a) (cap b)) (cbp b)))))
@@ -127,7 +127,7 @@
 
 ; ---- print -> read round trip on random s-expressions ----
 ; reuses the io.c reader: serialize via show, re-read the bytes, expect equality.
-(: (fz-s2cl s) ((: (g i) (? (< i (sat s)) (cons (peep s i 0) (g (+ 1 i))))) 0)
+(: (fz-s2cl s) ((: (g i) (? (< i (tally s)) (cons (peep s i 0) (g (+ 1 i))))) 0)
    (fz-rd x) (read (sip (fz-s2cl (show x))) (nom 0))
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof (L (fz-elt fz-syms) (fz-int -500 500)))
@@ -168,10 +168,10 @@
    fz-s3   (fz-trip fz-s fz-s fz-s)
    fz-cl1  (fz-bind (fz-int 1 12) (\ n (fz-rep n fz-byte))) ; nonempty charlist
    ; a string paired with a split point i in [0, pin]
-   fz-s-i  (fz-bind fz-s (\ s (fz-map (\ i (cons s i)) (fz-int 0 (+ 1 (sat s))))))
+   fz-s-i  (fz-bind fz-s (\ s (fz-map (\ i (cons s i)) (fz-int 0 (+ 1 (tally s))))))
    ; a string with 0 <= i <= j <= pin, as (L s i j)
-   fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (+ 1 (sat s)))
-              (\ i (fz-map (\ j (L s i j)) (fz-int i (+ 1 (sat s)))))))))
+   fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (+ 1 (tally s)))
+              (\ i (fz-map (\ j (L s i j)) (fz-int i (+ 1 (tally s)))))))))
 (assert
  ; +: length adds, is associative, and "" is a two-sided identity
  (fz-ok 300 50 fz-s2 (\ v (= (sat (+ (cap v) (cabp v))) (+ (sat (cap v)) (sat (cabp v))))))
@@ -181,20 +181,20 @@
  (fz-ok 300 53 fz-s (\ s (= s (+ s ""))))
  ; slice: any split reconcatenates to the original; the full slice is the string
  (fz-ok 300 54 fz-s-i (\ v (= (cap v) (fz-norm (+ (fz-norm (slice (cap v) 0 (cbp v)))
-                                            (fz-norm (slice (cap v) (cbp v) (sat (cap v)))))))))
- (fz-ok 300 55 fz-s (\ s (= s (fz-norm (slice s 0 (sat s))))))
+                                            (fz-norm (slice (cap v) (cbp v) (tally (cap v)))))))))
+ (fz-ok 300 55 fz-s (\ s (= s (fz-norm (slice s 0 (tally s))))))
  ; the slice length is j-i, and out-of-range indices clamp to [0, pin]
- (fz-ok 300 56 fz-s-ij (\ v (= (- (cabbp v) (cabp v)) (sat (slice (cap v) (cabp v) (cabbp v))))))
- (fz-ok 300 57 fz-s (\ s (= (fz-norm (slice s 0 (sat s))) (fz-norm (slice s -9 (+ 99 (sat s)))))))
+ (fz-ok 300 56 fz-s-ij (\ v (= (- (cabbp v) (cabp v)) (tally (slice (cap v) (cabp v) (cabbp v))))))
+ (fz-ok 300 57 fz-s (\ s (= (fz-norm (slice s 0 (tally s))) (fz-norm (slice s -9 (+ 99 (tally s)))))))
  ; slice recovers the two operands of a scat
- (fz-ok 250 58 fz-s2 (\ v (= (cap v) (fz-norm (slice (+ (cap v) (cabp v)) 0 (sat (cap v)))))))
+ (fz-ok 250 58 fz-s2 (\ v (= (cap v) (fz-norm (slice (+ (cap v) (cabp v)) 0 (tally (cap v)))))))
  (fz-ok 250 59 fz-s2 (\ v (= (cabp v) (fz-norm (slice (+ (cap v) (cabp v))
-                              (sat (cap v)) (+ (sat (cap v)) (sat (cabp v))))))))
+                              (tally (cap v)) (+ (tally (cap v)) (tally (cabp v))))))))
  ; string is identity on strings; charlist->string round-trips by bytes and length
  (fz-ok 300 60 fz-s (\ s (= s (string s))))
  (fz-ok 250 61 fz-cl1 (\ cl (= cl (fz-s2cl (string cl)))))
- (fz-ok 250 62 fz-cl1 (\ cl (: (ln x) (foldl (\ n _ (+ 1 n)) 0 x) (= (ln cl) (sat (string cl))))))
+ (fz-ok 250 62 fz-cl1 (\ cl (: (ln x) (foldl (\ n _ (+ 1 n)) 0 x) (= (ln cl) (tally (string cl))))))
  ; get yields the default outside [0, pin)
- (fz-ok 300 63 fz-s (\ s (&& (= 'oob (peep s (sat s) 'oob)) (= 'oob (peep s -1 'oob)))))
+ (fz-ok 300 63 fz-s (\ s (&& (= 'oob (peep s (tally s) 'oob)) (= 'oob (peep s -1 'oob)))))
  ; print -> read round trip over arbitrary byte strings
  (fz-ok 250 64 fz-s (\ s (= s (fz-rd s)))))

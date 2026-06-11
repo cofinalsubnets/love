@@ -297,13 +297,17 @@ static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
 // count, bignum sign, symbol name; only products and tuples (boxed scalars, rank>=1
 // arrays) compute their net, and those sums cannot short-circuit -- a later negative
 // can cancel an early positive. Lockstep with g_pin (lvm_pin): same zero conditions.
-// a symbol's $ (sat) value, shared by g_net ($) and g_nilp (!). THE empty
-// symbol (prints as ()) and every MINT (the nameless fresh point: materially
-// empty, a DISTINCT NOTHING whose only property is identity) net 0 -> falsy;
-// an interned symbol nets its name length.
+// a symbol's net, shared by g_net ($) and g_nilp (!): the SPELLING's charm
+// sum (a symbol nets what its nom pair nets -- chars measure by content now).
+// THE empty symbol (prints as ()) and every MINT (the nameless fresh point:
+// materially empty, a DISTINCT NOTHING) net 0 -> falsy; so does an all-NUL
+// spelling: a string of nothings is nothing, in or out of a symbol.
 static g_inline intptr_t pin_sym(word x) {
-  struct g_atom *s = (struct g_atom*) x;
-  return s->nom ? (intptr_t) len(s->nom) : 0; }
+  struct g_str *nm = ((struct g_atom*) x)->nom;
+  if (!nm) return 0;
+  intptr_t t = 0;
+  for (uintptr_t i = 0; i < nm->len; i++) t += (uint8_t) nm->bytes[i];
+  return t; }
 static g_flo_t g_net(word);                          // fwd: products and tuples sum their elements
 static g_inline bool g_nilp(word x) {
   if (x == nil || x == EmptyString) return true;
@@ -2107,17 +2111,24 @@ static g_inline intptr_t len_sat(g_flo_t m) {
 //   g_Z/g_R  the element values directly (tuple_get_flo)
 static g_flo_t g_net(word x) {
   if (fixp(x)) return (g_flo_t) getfix(x);                      // fixnum: its value
-  if (bufp(x)) return (g_flo_t) len(buf_str(x));                // mutable byte string
+  if (bufp(x)) { struct g_str *b = buf_str(x); g_flo_t t = 0;   // hot chars: Σ charms, like a string
+    for (uintptr_t i = 0; i < b->len; i++) t += (uint8_t) b->bytes[i];
+    return t; }
   if (mapp(x)) return (g_flo_t) map_len(x);                     // table: key count
   if (!datp(x)) return 1;                                       // opaque but present (fn / port): truthy
   switch (typ(x)) {
     default: return 1;                                          // unknown present data kind -> truthy
-    case KString: return (g_flo_t) len(x);                       // string: byte count
+    case KString: { g_flo_t t = 0;                                 // a string is PACKED CHARS: Σ charms
+      for (uintptr_t i = 0; i < len(x); i++) t += (uint8_t) txt(x)[i];
+      return t; }                                                  // (the count moved to tally)
     case KTwo: { g_flo_t s = 0; word p = x;                      // product: sum the elements' nets --
       do s += g_net(A(p)), p = B(p); while (twop(p));            // signed, so negatives cancel and a
       return s; }                                                // product of nothings nets to nothing
     case KBig: return g_big_to_flo(x);                          // bignum: full magnitude, sign intact
-    case KSym: return (g_flo_t) pin_sym(x);                      // symbol: name length (0 if anonymous/empty)
+    case KSym: { struct g_str *nm = sym(x)->nom; g_flo_t t = 0;   // a symbol nets its SPELLING's charms
+      if (!nm) return 0;                                           // (a mint: the distinct nothing)
+      for (uintptr_t i = 0; i < nm->len; i++) t += (uint8_t) nm->bytes[i];
+      return t; }
     case KTuple: { struct g_tuple *v = tuple(x);                 // boxed scalar or rank-n array
       uintptr_t i, n = tuple_nelem(v);
       if (!v->rank) {                                            // rank-0 scalar: its signed value
@@ -5198,9 +5209,18 @@ static intptr_t cmp3(struct g *g, word a, word b) {
 // elements (unlike $, which counts only the sat ones: a product of nothings
 // is nothing, but it still has a length). the compiler's frame arithmetic
 // runs on tally; the egg pulls it at birth with the other internals.
+// (tally x): THE COUNT -- the second canonical foldMap (every generator weighs
+// 1) beside $'s net (every generator weighs itself). a string or buf counts
+// its charms, a list its spine, an array its cells, a map its keys, a symbol
+// its spelling; a scalar counts nothing. this is what "length" always was.
 lvm(lvm_tally) {
  word l = Sp[0]; intptr_t n = 0;
- while (twop(l)) n++, l = B(l);
+ if (strp(l)) n = (intptr_t) len(l);
+ else if (bufp(l)) n = (intptr_t) len(buf_str(l));
+ else if (mapp(l)) n = (intptr_t) map_len(l);
+ else if (arrp(l)) n = (intptr_t) tuple_nelem(tuple(l));
+ else if (symp(l)) n = sym(l)->nom ? (intptr_t) len(sym(l)->nom) : 0;
+ else while (twop(l)) n++, l = B(l);
  Sp[0] = putfix(n);
  return Ip++, Continue(); }
 
