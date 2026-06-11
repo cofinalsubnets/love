@@ -87,9 +87,9 @@ out/lib/love_version.h: force_version
 ho = out/host
 h_o = $(g_c:$(R)/%.c=$(ho)/%.o)
 # -I$(ho) first so the generated $(ho)/data.h shadows the portable top-level data.h.
-# -Dg_tco=0: the host l runs the unified register-passing trampoline (the kernel
-# session is collapsing the g_tco split); love0 already builds at g_tco=0.
-hcc = $(CC) $(g_cflags) -Dg_tco=0 -fpic -I$(ho) -I. -Iout/lib
+# the host runs $(tco) (common.mk; default 1 = tail-threaded, vmret-checked);
+# love0 below stays pinned 0, the deliberate trampoline-coverage lane.
+hcc = $(CC) $(g_cflags) -Dg_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 data_ld = data.ld
 ldflags = -Wl,-T,$(data_ld)
 hdata_h = $(ho)/data.h
@@ -217,10 +217,12 @@ kcppflags := \
   $(kcppflags) \
   -DLIMINE_API_REVISION=3
 ifdef K_TEST
-# Trampoline (g_tco=0), like love0: the stackless cooperative scheduler needs a
-# single dispatch loop to be reentrant under nested (ev …), which the threaded
-# tail-call path (g_tco=1) is not -- spawn/wait/yield run from the strin→fread→ev
-# runner hang on the TCO path. love0 runs the identical corpus at g_tco=0, 1812 green.
+# Trampoline (g_tco=0): the kernel test build HANGS at g_tco=1 -- re-verified
+# 2026-06-11 (clean build, qemu silent before the first corpus dot, killed by
+# the gate's timeout; the host corpus is green at g_tco=1, so this is kernel-
+# specific -- likely the freestanding toolchain not guaranteeing the sibcall
+# the tail-threaded path leans on). love0 + this build are the two deliberate
+# trampoline lanes; the host runs $(tco) below.
 kcppflags += -DK_TEST -Dg_tco=0
 endif
 

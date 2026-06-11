@@ -10,6 +10,13 @@ x = l
 m = $R/out/host/$n
 a ?= $(shell uname -m)
 
+# g_tco for the builds that can take it: 1 = the tail-threaded VM (aps tail-jump,
+# never return -- `make vmret` verifies it per binary), 0 = the trampoline loop.
+# The host runs $(tco). PINNED ELSEWHERE: love0 stays 0 (the deliberate
+# trampoline-coverage lane) and the kernel test build stays 0 (hangs at 1 --
+# see the K_TEST block in the root Makefile).
+tco ?= 1
+
 # the corpus: 00-init's harness first, the root spec second, then the rest
 t = $R/test/00-init.$x $R/CLAUDE.$x $(filter-out %/00-init.$x,$(sort $(wildcard $R/test/*.$x)))
 

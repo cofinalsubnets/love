@@ -644,6 +644,11 @@ static union u const yield_c[] = { {_g_vm_yield_c} };
 // deliver the port (more: incomplete) or the sentinel (eof) to the resume
 // text and keep running. A sing re-encodes and yields to C. Define a global
 // `trap` function to land throws in l instead.
+// the sing exit door: re-encode and yield to C. Lives OUTSIDE the g_vm_*
+// namespace (the underscore convention, like _g_vm_yield_c above) because it
+// is the one designed return -- the vmret gate's no-ret invariant scans
+// g_vm_*, and g_vm_trap reaches here by tail call (a jmp under g_tco).
+static g_vm(_g_vm_trap_sing, enum g_status s) { return Pack(g), encode(g, s); }
 g_vm(g_vm_trap) {
  enum g_status s = g_code_of(g);
  g = g_core_of(g);
@@ -652,7 +657,7 @@ g_vm(g_vm_trap) {
   Sp[2] = s == g_status_more ? Sp[1] : Sp[2];         // more -> port, eof -> sentinel
   Sp += 2;
   return Continue(); }
- return Pack(g), encode(g, s); }
+ return Ap(_g_vm_trap_sing, g, s); }
 static union u const throw_c[] = { {g_vm_trap} };
 
 // gtrap2/gtrap are defined after numap_drive (the trap call frame runs
