@@ -281,9 +281,9 @@
    ; the trailing newline.
    ;
    ; this poll is the repl's control-flow seam under the trap model: a
-   ; worker that sings is terminated by the default trap and done? flips,
+   ; worker that scares is terminated by the default trap and done? flips,
    ; so the repl survives evaluation errors by construction. a global
-   ; `trap` function gets control at the sing (condition data on struct g)
+   ; `trap` function gets control at the scare (condition data on struct g)
    ; BEFORE the task dies; either way done?/key? is where the repl resumes.
    (do_eval v)
      (: pid (spawn ev v)

@@ -73,11 +73,11 @@ struct g_tuple {
 
 // Status rides the 2 pointer tag bits, read as two flags: bit 0 is the SING
 // bit (something is wrong -- the thrower puts the relevant data on struct g for
-// the trap function to read; the bare sing is oom, which has no room to say
+// the trap function to read; the bare scare is oom, which has no room to say
 // more), bit 1 is the MORE bit (read control flow: more input is wanted).
-// more alone = incomplete; eof = more|sing -- the end is the singing case of
+// more alone = incomplete; eof = more|scare -- the end is the scary case of
 // wanting more.
-enum g_status { g_status_ok = 0, g_status_sing = 1, g_status_more = 2, g_status_eof = 3 };
+enum g_status { g_status_ok = 0, g_status_scare = 1, g_status_more = 2, g_status_eof = 3 };
 struct g {
  union u {
   g_vm_t *ap;

@@ -110,8 +110,8 @@ kilobytes of the whole back end.
   which recompiles itself -- and the hatchling bakes into the binary; `born`
   records the hatch time. the same image runs on linux, bare metal
   (x86_64/aarch64 via limine), and wasm.
-- status rides the two pointer tag bits: sing (something is wrong) and more
-  (the reader wants more); eof = more|sing. a global `trap` function receives
+- status rides the two pointer tag bits: scare (something is wrong) and more
+  (the reader wants more); eof = more|scare. a global `trap` function receives
   every throw as `(trap s a b)`.
 - `=` is exact, so e^(i*pi) honestly misses -1 by ~1e-16 -- but the principal
   log is exact (`(log -1) = i * pi`, since atan2(0,-1) is pi by IEEE fiat),

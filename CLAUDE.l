@@ -363,20 +363,20 @@
 ; spawn/wait/yield/sleep/done?/kill/key?; the RNG is xoshiro256++: C ships only rng-seed and
 ; the pure rand-next/randf-next over explicit state -- the global rand/randf stream is
 ; prelude lisp over hidden rng state. a global `trap` function receives every
-; throw as (trap s a b) -- s = the status word, two bits: sing (1, something wrong) and
-; more (2, read control flow); more alone = incomplete, eof = more|sing. a/b = the
+; throw as (trap s a b) -- s = the status word, two bits: scare (1, something wrong) and
+; more (2, read control flow); more alone = incomplete, eof = more|scare. a/b = the
 ; condition data; the result is delivered per the bits (the more bit: to the reader's
-; resume; a bare sing: observed). sing?/more?/eof? read s. (sing a b) raises
-; deliberately -- the sing bit set unconditionally, and the trap's result comes back
+; resume; a bare scare: observed). scare?/more?/eof? read s. (scare a b) raises
+; deliberately -- the scare bit set unconditionally, and the trap's result comes back
 ; as its value (no trap installed -> terminal). see test/trap.l. numeral counts are
 ; CAPPED: a compose count or exact-power exponent above the `apcap` box (a public
-; runtime tunable, default 2^20) raises (sing 'apcap k) instead of allocating O(k) --
+; runtime tunable, default 2^20) raises (scare 'apcap k) instead of allocating O(k) --
 ; (bignum f) traps where it would oom. retune with (pin apcap () n); see test/apcap.l.
 (assert
  (3 = (ev '(+ 1 2))) (homp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
- (sing? 1) !(sing? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (homp sing)
+ (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (homp scare)
  (mapp apcap) (1048576 = (apcap ()))             ; the count ceiling, a tunable box
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 

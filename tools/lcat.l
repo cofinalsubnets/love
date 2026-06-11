@@ -7,10 +7,10 @@
 ; char -- chars that end a token under every lexer law) plus the byte after the
 ; space are concatenated with and without it and re-parsed; if both spellings
 ; yield the same number of complete datums the space was redundant (e.g. `o(`
-; reads the same as `o (`, but `-5` and `- 5` do not, and `sing? s` must keep
-; its space -- `sing?s` is ONE name token, since a name absorbs ? ! etc). The
+; reads the same as `o (`, but `-5` and `- 5` do not, and `scare? s` must keep
+; its space -- `scare?s` is ONE name token, since a name absorbs ? ! etc). The
 ; probe needs the whole left token, not one byte: flanking bytes alone said
-; `?`+`s` splits, blind to the name `sing?` continuing through both. Spaces
+; `?`+`s` splits, blind to the name `scare?` continuing through both. Spaces
 ; inside a string literal are data and never touched. Surviving bytes are then
 ; C-escaped.
 

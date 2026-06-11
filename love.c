@@ -128,7 +128,7 @@ g_vm_t g_vm_kcall,
  g_vm_argap, g_vm_quoteap, g_vm_argtap,
  g_vm_arg0, g_vm_arg1, g_vm_arg2, g_vm_arg3,
  g_vm_quo0, g_vm_quo1, g_vm_quo2, g_vm_quo3, g_vm_quom1, g_vm_quom2,
- g_vm_callk, g_vm_sing, g_vm_yield_sw, g_vm_yield_nif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
+ g_vm_callk, g_vm_scare, g_vm_yield_sw, g_vm_yield_nif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
  g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key,
  g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
  g_vm_fputn, g_vm_read, g_vm_dot,
@@ -595,7 +595,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_symp, "symp", s1(g_vm_symp)) _(nif_mapp, "mapp", s1(g_vm_mapp)) _(nif_fixp, "fixp", s1(g_vm_fixp))\
  _(nif_homp, "homp", s1(g_vm_homp)) _(nif_hotp, "hotp", s1(g_vm_hotp))\
  _(nif_nilp, "nilp", s1(g_vm_nilp)) _(nif_ev, "ev", s1(g_vm_eval))\
- _(nif_callk, "call-cc", s1(g_vm_callk)) _(nif_sing, "sing", s2(g_vm_sing)) _(nif_yield, "yield", s1(g_vm_yield_nif)) \
+ _(nif_callk, "call-cc", s1(g_vm_callk)) _(nif_scare, "scare", s2(g_vm_scare)) _(nif_yield, "yield", s1(g_vm_yield_nif)) \
  _(nif_spawn, "spawn", s2(g_vm_spawn)) _(nif_wait, "wait", s1(g_vm_wait)) \
  _(nif_sleep, "sleep", s1(g_vm_sleep)) _(nif_donep, "done?", s1(g_vm_donep)) \
  _(nif_kill, "kill", s1(g_vm_kill)) \
@@ -639,12 +639,12 @@ static union u const yield_c[] = { {_g_vm_yield_c} };
 
 // g_vm_trap: the default trap ap, a first-class vm ap (declared in love.h with
 // ret0/cur/port_io). A throw enters it with the thrown status encoded into g
-// (see gtrap2 below). The MORE bit is read control flow, not a sing: the
+// (see gtrap2 below). The MORE bit is read control flow, not a scare: the
 // thrower left [resume port sentinel] on the stack (the fread protocol), so
 // deliver the port (more: incomplete) or the sentinel (eof) to the resume
-// text and keep running. A sing re-encodes and yields to C. Define a global
+// text and keep running. A scare re-encodes and yields to C. Define a global
 // `trap` function to land throws in l instead.
-// the sing exit door: re-encode and yield to C. Lives OUTSIDE the g_vm_*
+// the scare exit door: re-encode and yield to C. Lives OUTSIDE the g_vm_*
 // namespace (the underscore convention, like _g_vm_yield_c above) because it
 // is the one designed return -- the vmret gate's no-ret invariant scans
 // g_vm_*, and g_vm_trap reaches here by tail call (a jmp under g_tco).
@@ -717,13 +717,13 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
 struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  uintptr_t const len0 = 1 << 10;
  struct g *g = ma(NULL, 2 * len0 * sizeof(word));
- return g == NULL ? encode(g, g_status_sing) : g_ini_0(g, len0, ma, fr); }
+ return g == NULL ? encode(g, g_status_scare) : g_ini_0(g, len0, ma, fr); }
 
 static void *g_no_malloc(struct g*g, uintptr_t n) { return NULL; }
 static void g_no_free(struct g*g, void *p) { }
 struct g *g_ini_s(void *mem, uintptr_t nbytes) {
  uintptr_t len0 = nbytes / (2 * sizeof(word));
- return len0 <= Width(struct g) ? encode(mem, g_status_sing) :
+ return len0 <= Width(struct g) ? encode(mem, g_status_scare) :
    g_ini_0(mem, len0, g_no_malloc, g_no_free); }
 
 static void *g_libc_malloc(struct g*g, size_t n) { return malloc(n); }
@@ -875,7 +875,7 @@ g_noinline struct g *g_please(struct g *g, uintptr_t req0) {
  else return g->t0 = t2, g; // else right size -> all done
  return // allocate a new pool with target size
   !(h = g->malloc(g, len1 * 2 * sizeof(word))) ? // if malloc fails but pool is big enough
-   encode(g, req <= len0 ? g_status_ok : g_status_sing) : // we can still report success
+   encode(g, req <= len0 ? g_status_ok : g_status_scare) : // we can still report success
   (h = gcg(h, h, len1, g),
    g->free(g, g->pool),
    h->t0 = g_clock(),
@@ -1583,20 +1583,20 @@ union u const numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0}
 // the lisp trap calling convention
 // ============================================================================
 // With a global `trap` function installed, a throw becomes the call
-// (trap s a b): s = the status word (prelude readers sing?/more?/eof?),
+// (trap s a b): s = the status word (prelude readers scare?/more?/eof?),
 // a/b = the condition data -- for the more bit the port and the read sentinel,
-// for a sing nil nil (oom is bare; future sings define their shapes). The
+// for a scare nil nil (oom is bare; future scares define their shapes). The
 // frame runs through trap_drive (numap_drive's 3-arg twin) into a per-class
 // epilogue: the more bit delivers the ap's result to the thrower's resume
 // text (the fread protocol -- the ap chooses what the reader's caller
-// sees); a sing is observed, then takes the default escape to C.
+// sees); a scare is observed, then takes the default escape to C.
 static g_vm(trap_ret_more) {   // [result resume port sentinel ..] -> resume sees result
  Ip = cell(Sp[1]);
  Sp[3] = Sp[0];
  Sp += 3;
  return Continue(); }
-static g_vm(trap_ret_sing) {  // result ignored: sings are not (yet) resumable
- return Pack(g), encode(g, g_status_sing); }
+static g_vm(trap_ret_sing) {  // result ignored: scares are not (yet) resumable
+ return Pack(g), encode(g, g_status_scare); }
 static union u const trap_more_k[] = { {trap_ret_more} };
 static union u const trap_sing_k[] = { {trap_ret_sing} };
 static union u const trap_drive[] =
@@ -1640,17 +1640,17 @@ struct g *gtrap2(struct g *g, enum g_status s) {
   rd ? trap_more_k : trap_sing_k); }
 // Throw on an already-tagged g: re-throw its own status.
 struct g *gtrap(struct g *g) { return gtrap2(g_core_of(g), g_code_of(g)); }
-// (sing a b): the deliberate throw -- the user sings, the sing bit is set
-// unconditionally and the global trap hears (trap 1 a b). Unlike a C sing
+// (scare a b): the deliberate throw -- the user scares, the scare bit is set
+// unconditionally and the global trap hears (trap 1 a b). Unlike a C scare
 // (oom), the raise point here is a clean boundary, so the trap's result is
-// delivered back as (sing a b)'s value via the more continuation -- the
+// delivered back as (scare a b)'s value via the more continuation -- the
 // resume is this nif's own ret. With no trap installed the C default
-// applies and the sing is terminal.
-g_vm(g_vm_sing) {
+// applies and the scare is terminal.
+g_vm(g_vm_scare) {
  Have(1);
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: trap_more_k's layout
- return Pack(g), g_raise(g, g_status_sing, a, b, trap_more_k); }
+ return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: g_vm_gc
@@ -2856,7 +2856,7 @@ g_vm(g_vm_read) {
   struct g *c = g_core_of(g); // reset stack on parse fail
   c->sp = (word*) c + c->len - depth;
   switch (g_code_of(g)) {
-   default: return gtrap(g);                          // sing: condition data per thrower
+   default: return gtrap(g);                          // scare: condition data per thrower
    case g_status_more: case g_status_eof:
     // The more bit routes control through the trap continuation: push fread's
     // resume text under [port sentinel] and throw -- the trap function (or

@@ -71,7 +71,7 @@
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
    ; (k b) numeral application routes here, so `**` is unneeded.
    ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
-   ; exponent above it raises (sing 'apcap k) instead of allocating O(k) -- so
+   ; exponent above it raises (scare 'apcap k) instead of allocating O(k) -- so
    ; (bignum f) traps where it would oom. retune at runtime: (pin apcap () n).
    apcap (pin (table 0) () 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
@@ -82,7 +82,7 @@
    ; (w^z = exp(z Log w)) and a real lane.
    (powg x n) (? (arrp n) (pow x n)
                  (intp n) (: m (? (< n 0) (- 0 n) n)
-                             (? (< (peep apcap () 0) m) (sing 'apcap m)
+                             (? (< (peep apcap () 0) m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                  (pow x n))
    ; Church-numeral application generalized across the whole tower. n is the
@@ -95,7 +95,7 @@
    (num-ap n x) (? (nump x) (powg x n)
                    (: k (sat n)
                       (? (< k 1) 1 (= k 1) x
-                         (< (peep apcap () 0) k) (sing 'apcap k)
+                         (< (peep apcap () 0) k) (scare 'apcap k)
                          (numfn k x))))
    _ (pin dict 'num-ap num-ap))
 ; text (function) combinators for + and *, installed like num-ap. a text operand
@@ -152,12 +152,12 @@
  (slurp i) (: (rl i) (: c (fgetc i) (? (= c -1) 0 (cons c (rl i)))) (string (rl i)))  ; (pre-opfix: no ! here)
  (show x) (: o (pad 0) _ (fputx o x) (page o)))
 ; trap status readers. a global `trap` function is called as (trap s a b):
-; s = the status word, two bits -- sing (1: something went wrong) and more
+; s = the status word, two bits -- scare (1: something went wrong) and more
 ; (2: read control flow, more input wanted). more alone = incomplete; eof =
-; more|sing (the end is the singing case of wanting more). a/b = the condition
+; more|scare (the end is the scary case of wanting more). a/b = the condition
 ; data (the more bit: the port and the read sentinel). the result is delivered
-; per the bits: more -> to the reader's resume; a bare sing -> observed.
-(: (sing? s) (= s 1)
+; per the bits: more -> to the reader's resume; a bare scare -> observed.
+(: (scare? s) (= s 1)
    (more? s) (= s 2)
    (eof? s) (= s 3))
 ; here are some macro definitions

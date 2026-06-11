@@ -33,7 +33,7 @@ syn keyword LoveFunc lamb peek poke seek trim
 syn keyword LoveFunc fgetc fungetc feof fputc fputs fputn fputx fflush read
 syn keyword LoveFunc putc puts putn putx getc read in out dot
 syn keyword LoveFunc ev call-cc yield spawn wait sleep done? kill key?
-syn keyword LoveFunc trap sing sing? more? eof?
+syn keyword LoveFunc trap scare scare? more? eof?
 syn keyword LoveFunc rand randf rand-next randf-next rng-seed rng-get rng-set
 syn keyword LoveFunc open close run getenv exit
 syn keyword LoveFunc clock gauge dict macros assert version-number argv cmdline
