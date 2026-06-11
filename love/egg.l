@@ -15,7 +15,7 @@
  ; compiler's closures), the repl's sentinels, every leaked lvm_* pointer,
  ; and finally book itself. compiled references were folded, so only the
  ; names die; an absent name reads as nil. names the printer or an expander
- ; EMITS (uq ltuple cons pin table ...) stay, as do the C-resolved hooks
+ ; EMITS (uq ltuple cons pin tablet ...) stay, as do the C-resolved hooks
  ; (num-ap scomb bcomb trap) and the repl's test-driven editor surface.
  ; the sweep runs through the FRESH ev -- c0 is done by now, and
  ; late-binding through book['ev] is the egg's own idiom.

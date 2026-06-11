@@ -55,7 +55,7 @@
     (= 11 (wait p)))
 
  ; tasks share the heap: a captured hash sees writes from the worker.
- (: t (table 0)
+ (: t (tablet 0)
     p (spawn (\ k (pin t k 'done)) 'key)
     _ (wait p)
     (= 'done (peep t 'key 0)))
@@ -63,7 +63,7 @@
  ; waiting on a still-running task blocks until it finishes.
  ; here the worker only completes after several yields; main's wait yields
  ; alongside it and eventually returns the result.
- (: t (table 0)
+ (: t (tablet 0)
     _ (pin t 'n 0)
     p (spawn (\ _ (: (loop _) (? (< (peep t 'n 0) 3)
                                 (do (pin t 'n (+ 1 (peep t 'n 0)))
@@ -127,7 +127,7 @@
     (&& (>= elapsed 80) (< elapsed 120)))
 
  ; sleep cooperates: while one task sleeps, another finishes its work.
- (: t (table 0)
+ (: t (tablet 0)
     _ (pin t 'flag 0)
     a (spawn (\ _ (sleep 30)) 0)
     b (spawn (\ _ (pin t 'flag 1)) 0)
@@ -145,7 +145,7 @@
 
  ; kill a running task: returns 1. The task is gone from the ring, so
  ; wait on its pid returns 0 (unknown).
- (: t (table 0)
+ (: t (tablet 0)
     _ (pin t 'flag 0)
     p (spawn (\ _ (: (loop _) (do (yield 0) (pin t 'flag 1) (loop 0)) (loop 0))) 0)
     r (kill p)
@@ -162,7 +162,7 @@
     (&& (= 1 (kill p)) (= 0 (kill p))))
 
  ; killing one of several tasks leaves the others intact.
- (: t (table 0)
+ (: t (tablet 0)
     a (spawn (\ _ (: (loop _) (do (yield 0) (loop 0)) (loop 0))) 0)
     b (spawn (\ x (* x 10)) 7)
     _ (kill a)
@@ -222,7 +222,7 @@
 
  ; sleep tasks coexist with non-sleeping ones: a worker that yields ap
  ; gets time while another sleeps.
- (: t (table 0)
+ (: t (tablet 0)
     _ (pin t 'n 0)
     a (spawn (\ _ (sleep 30)) 0)
     b (spawn (\ _ (: (loop _) (? (< (peep t 'n 0) 5)

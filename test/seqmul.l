@@ -36,7 +36,7 @@
  (nilp (* @(1 2) "ab"))
  ; a map is a lookup-lambda, so it takes the thread (composition) rule, not nil:
  ; (* m g) x = (m (g x)); here m maps 5->10, g adds 4, so (1) -> g 5 -> m 10
- (= 10 ((* (pin (table 0) 5 10) (\ x (+ x 4))) 1))
+ (= 10 ((* (pin (tablet 0) 5 10) (\ x (+ x 4))) 1))
 
  ; --- thread precedence: composition = Church mul ((* f g) x = f (g x)) ---
  (= 36 ((* (\ x (* x x)) (\ x (+ x 1))) 5))     ; sq(inc 5) = sq 6 = 36

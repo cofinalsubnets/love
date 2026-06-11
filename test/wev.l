@@ -4,10 +4,10 @@
 ; which differs between the wev compiler and the c0/l0 control, so those positive
 ; "fires" checks can't live in this cross-compiler suite (they're verified out of band).
 ; What CAN be asserted here: fold correctness, and that identity-minting heads stay
-; excluded -- (table 0) must yield a fresh hash on every call under BOTH compilers.
+; excluded -- (tablet 0) must yield a fresh hash on every call under BOTH compilers.
 (assert
  ; --- impure / identity-minting heads are NOT folded (fresh each call) ---
- (: (f _) (table 0) (nilp (idp (f 0) (f 0))))    ; `table` excluded -> distinct hashes
+ (: (f _) (tablet 0) (nilp (idp (f 0) (f 0))))    ; `table` excluded -> distinct hashes
 
  ; --- arithmetic / numeric folds are correct (nested, bottom-up) ---
  (= 7  (+ 1 (* 2 3)))

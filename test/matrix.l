@@ -28,7 +28,7 @@
    mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KTwo (pair / list)
    mx-fn  (+ 1)                          ; KHom (nif partial application)
-   mx-map (pin (pin (table 0) 1 10) 2 20)) ; KHom (a map is a lookup-lambda)
+   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KHom (a map is a lookup-lambda)
 
 ; ============================================================================
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]

@@ -13,7 +13,7 @@
          (= "asdf" (cap (nom 'asdf)))   ; ...same for a symbol arg (string'd on the way in)
          (= "asdf" (string 'asdf))))
 (:
- t (table 0)
+ t (tablet 0)
  (Put k v) (pin t k v)
  (Del k) (pull t k 0)
  (Get k) (peep t k 0)

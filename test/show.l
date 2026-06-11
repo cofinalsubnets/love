@@ -43,7 +43,7 @@
   (strp (show 0))
   (strp (show "hi"))
   (strp (show '(1 2 3)))
-  (strp (show (table 0)))
+  (strp (show (tablet 0)))
 
   ; buffer growth: a 200-element list far exceeds the 32-byte initial buf,
   ; forcing several doublings inside to_putc.

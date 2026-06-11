@@ -10,7 +10,7 @@
  (= 0 (peep t 9 0))                              ; missing key -> default
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys t)))      ; three entries
  ; empty + single-entry printer forms are deterministic (no bucket-order dependence)
- (= "#()" (show (table 0)))
+ (= "#()" (show (tablet 0)))
  (= "#(1 100)" (show (hash 1 100)))
  (= "#(1 \"hi\")" (show (hash 1 "hi")))
  (strp (show t))                             ; multi-entry: just exercise the path

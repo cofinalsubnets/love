@@ -44,7 +44,7 @@
             slice string
             re im conj arg real plex
             sin cos log pow))
-   pureset (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (table 0) names)
+   pureset (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (tablet 0) names)
    (add t s) (: v (book s)
     (? (fixp v) t
      (: o (opof v) p (pureset v)
@@ -53,14 +53,14 @@
           ar (? o (cbp o) (idp lvm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (\ x (hgen v op ar p x))))
        t))))
-   (foldl add (table 0) (keys book))))
+   (foldl add (tablet 0) (keys book))))
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
- x (wev c (opfix x))    ; opfix first: ev = the deserialized-data lane, opfix factors its sigil surface
- (ana c x (k0 c) 0 0)))
+ y (wev c (opfix x))    ; opfix first: ev = the deserialized-data lane, opfix factors its sigil surface
+ (ana c y (k0 c) 0 0)))
   lvm_cur (peek 0 (+))
-  (sco p a i) (pin (pin (pin (table 0) 'arg a) 'imp i) 'par p)
+  (sco p a i) (pin (pin (pin (tablet 0) 'arg a) 'imp i) 'par p)
   (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where wev stashes 'src
   (p2 i x k) (poke -1 i (poke -1 x k))
   (em1 x k n) (poke -1 x (k (+ 1 n)))
@@ -116,9 +116,11 @@
                    lam (cons '\ (cat (cap r) (list (wx (cbp r) (cat (cap r) bnd)))))
                    _ (push c 'src (cons (cbp lam) x))         ; tagged-body -> surface src for ala
                    lam))
-     (= h ':) (? (atomp (cbbp x)) (cons ': (list (wx (cabp x) bnd)))
+     (= h ':) (? (atomp (cbp x)) ':                      ; (:) = the head read -- (f)==f at zero operands, an anon (c0 agrees)
+                 (atomp (cbbp x)) (cons ': (list (wx (cabp x) bnd)))
                  (cons ': (wxl (boxfix (cbp x)) bnd)))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
-     (= h '?) (cons '? (wxc (cbp x) bnd))
+     (= h '?) (? (atomp (cbp x)) '?                      ; (?) likewise: the empty form is the head's value
+                 (cons '? (wxc (cbp x) bnd)))
      (: m (? (symp h) (macros h) 0)                     ; macro head? expand, then re-walk
       (? m (wx (m (cbp x)) bnd)
          (fold (map (\ e (wx e bnd)) x) bnd))))))
@@ -189,7 +191,7 @@
         (? (> n 1) (p2 lvm_apn n j) (poke -1 lvm_ap j))))
 
   ;aco is a bit complicated
-  (aco c b) (:- (: f (acr b) (\ k n (: k (f (co (push c 'end) k) n) _ (pop c 'end) k)))
+  (aco c b) (:- (: f (acr b) (\ k n (: k2 (f (co (push c 'end) k) n) _ (pop c 'end) k2)))
    (acx k n) (: ; jump out
     j (k (+ 3 n))
     a (cap (c 'end))
@@ -294,9 +296,9 @@
       (jj a (cbp ps)))
      (: k (caap ps)
         v (ala q 0 (cbbap ps))
-        a (cons (cons k v) a)
+        a2 (cons (cons k v) a)
       _ (push c 'stk k)
-      (jj a (cbp ps))))
+      (jj a2 (cbp ps))))
     l (jj 0 prs)
     _ (pin c 'stk s)
     (cl n l k1 k2) (?
@@ -305,10 +307,10 @@
        (? (nilp v) (cl n l k1 (cbp k2))
         (: var (cap v)
            vars (cbbap k2)
-           n (? (memq var vars) n
+           n2 (? (memq var vars) n
               (: _ (set_cdr (cbap k2) (cons var vars))
                (+ 1 n)))
-           (kk n (cbp v))))))
+           (kk n2 (cbp v))))))
      k2 (cl n l k1 (cbp k2))
      k1 (cl n l (cbp k1) l)
      n (cl 0 l l l)

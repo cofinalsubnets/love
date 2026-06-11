@@ -131,7 +131,7 @@ lvm_t lvm_kcall,
  lvm_argap, lvm_quoteap, lvm_argtap,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
  lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
- lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
+ lvm_callk, lvm_scare, lvm_anon, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_kill, lvm_key,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputn, lvm_read, lvm_dot,
@@ -574,7 +574,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_lamb, "lamb", s1(lvm_lamb))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
  _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "sat", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
- _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull)) _(nif_table, "table", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
+ _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull)) _(nif_table, "tablet", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
  _(nif_twop, "twop", s1(lvm_twop)) _(nif_strp, "strp", s1(lvm_strp))\
@@ -596,7 +596,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_symp, "symp", s1(lvm_symp)) _(nif_mapp, "mapp", s1(lvm_mapp)) _(nif_fixp, "fixp", s1(lvm_fixp))\
  _(nif_homp, "homp", s1(lvm_homp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
  _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
- _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
+ _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare)) _(nif_anon, "anon", s2(lvm_anon)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
  _(nif_spawn, "spawn", s2(lvm_spawn)) _(nif_wait, "wait", s1(lvm_wait)) \
  _(nif_sleep, "sleep", s1(lvm_sleep)) _(nif_donep, "done?", s1(lvm_donep)) \
  _(nif_kill, "kill", s1(lvm_kill)) \
@@ -1714,6 +1714,32 @@ lvm(lvm_freev) {
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // trap_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
+// (anon t k): the book read as a value -- lvm_freev's law with the book as an
+// argument (a tablet is a little book; the book is just the outermost one).
+// k present in map t answers the value; a miss is the ANON CONDITION: with a
+// global trap installed the read raises (trap 1 'anon k) and the trap's result
+// is the value, untrapped it reads (). boxfix's letrec cells read this way --
+// pre-fill is a miss, the binding-site nom the payload. distinct from peep,
+// whose caller names what absence means.
+lvm(lvm_anon) {
+ word v = mapp(Sp[0]) ? g_mapget(g, word(anon_miss), Sp[1], Sp[0]) : word(anon_miss);
+ if (v != word(anon_miss)) return
+  Sp[1] = v,
+  Sp++,
+  Ip++,
+  Continue();
+ Have(8);                          // [resume a b] + g_raise's 5 words
+ struct g_atom *ts = sym_probe(g, "trap", 4);
+ word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
+ if (!homp(h)) return
+  Sp[1] = empty_sym,
+  Sp++,
+  Ip++,
+  Continue();
+ word a = g->anon;
+ Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
+ Sp[0] = word(Ip + 1), Sp[1] = a;
+ return Pack(g), g_raise(g, g_status_scare, a, Sp[2], trap_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: lvm_gc
@@ -3114,10 +3140,10 @@ static struct g *gz_parse(struct g *g, bool multi) {
     g->sp[1] = g->sp[0], g->sp++;
     return g; }
    if (symp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    if (hashsym(A(g->sp[1])) && g->sp[0] == empty_sym) { // #() ONLY -> (table 0): the empty hash
+    if (hashsym(A(g->sp[1])) && g->sp[0] == empty_sym) { // #() ONLY -> (tablet 0): the empty hash
      g->sp[0] = nil;                                   // (#0 is NOT empty: it boxes 0 -- see hashtx)
      g = gxr(g_push(g, 1, nil));
-     g = gxl(intern(g_strof(g, "table")));              // (table . (0)) = (table 0)
+     g = gxl(intern(g_strof(g, "tablet")));             // (tablet . (0)) = (tablet 0)
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); }            // pop wrap
     else if (splicesym(A(g->sp[1])) &&
              (twop(g->sp[0]) || g->sp[0] == empty_sym ||
@@ -3334,7 +3360,7 @@ static struct g *map_new(struct g *g) {
  g->hp += nb + 3;
  return g_push(g, 1, (word) h); }
 
-// (table _): a fresh empty map -- header [lvm_map_lookup, backing] + backing.
+// (tablet _): a fresh empty map -- header [lvm_map_lookup, backing] + backing.
 lvm(lvm_table) {
  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  Have(nb + 3);

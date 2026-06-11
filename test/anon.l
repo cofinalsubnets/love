@@ -32,3 +32,36 @@
 (: (an-g _) an-phantom)
 (assert (42 = (an-g 0)))
 (: trap 0)
+
+; ONE SCOPE -- a `:` binds every name over the whole form. reading a binding
+; before its value is pinned is the SAME condition, with the binding site's
+; nom (name . mint) as payload: trappable, () untrapped. the two old silent
+; lanes -- a direct forward read escaping to the book, a boxed pre-fill read
+; of 0 -- are gone: one law at every depth, local or book.
+(: an-outer 99)
+(assert
+ (idp () (: a an-outer an-outer 2 a))            ; no silent capture of the book's an-outer
+ (idp () (: a an-local an-local 2 a))            ; ... nor of nothing: () untrapped
+ (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
+ (idp () (: f (\ _ an-cell) v (f 0) an-cell 5 v)) ; the boxed lane reads the same ()
+ (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the cell, once pinned
+
+; the trap hears the cell miss too; the payload is the binding-site nom
+(: trap (\ s a b (? (&& (scare? s) (idp a 'anon) (twop b) ("an-fwd" = (cap b))) 'cell-nom 0)))
+(assert (idp 'cell-nom (: q an-fwd an-fwd 2 q)))
+(: trap 0)
+
+; the empty special forms are their head reads -- the same anons under a trap
+(: trap (\ s a b (? (&& (scare? s) (idp a 'anon)) (L 'empty-form b) 0)))
+(assert (: r (:) (&& (twop r) (idp ': (cabp r))))
+        (: r (?) (&& (twop r) (idp '? (cabp r)))))
+(: trap 0)
+
+; (anon t k) -- the book read as a value: k present in tablet t answers the
+; value, a miss is the anon condition with k as payload. a tablet is a little
+; book; `the` book is just the outermost one.
+(assert (10 = (anon #(1 10) 1)) (idp () (anon #() 'k)) (idp () (anon 5 'k))
+        (0 = (anon #(1 0) 1)))                   ; presence beats value: a pinned 0 answers 0
+(: trap (\ s a b (? (&& (scare? s) (idp a 'anon) (idp b 'an-missing)) 'heard 0)))
+(assert (idp 'heard (anon #() 'an-missing)))
+(: trap 0)

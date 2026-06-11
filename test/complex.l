@@ -99,9 +99,9 @@
  (< 1e29 (re (+ i B100)))                  ; real part ~ 2^100
 
  ; --- complex as hash keys: eql-distinct from the equal real (sticky) ---
- (= 'hit (peep (pin (table 0) ~(2 0) 'hit) ~(2 0) 'miss))
- (= 'miss (peep (pin (table 0) ~(2 0) 'hit) 2 'miss))   ; 2 and 2+0i are different keys
- (= 'iv (peep (pin (table 0) i 'iv) i 'miss)))
+ (= 'hit (peep (pin (tablet 0) ~(2 0) 'hit) ~(2 0) 'miss))
+ (= 'miss (peep (pin (tablet 0) ~(2 0) 'hit) 2 'miss))   ; 2 and 2+0i are different keys
+ (= 'iv (peep (pin (tablet 0) i 'iv) i 'miss)))
 
 ; --- step 7b: full-rank complex arrays (packed (re,im) g_C tuples) -----------
 ; a complex value packs two floats per element into a `c` array (type code c = 2,

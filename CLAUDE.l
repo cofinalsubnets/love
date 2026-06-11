@@ -70,7 +70,17 @@
  ('big = (? 0 'a (1 < 2) 'big 'else)))           ; `?` -- test/result pairs, then a final else
 ; `:` doubles as sequencing (bind `_` for effect); `(f x)` on the left is define-sugar; a
 ; body-less top-level `:` leaks its bindings to the global scope (that's how tests share helpers).
+; a body-having `:` is ONE SCOPE: every name binds over the whole form, so a read before the
+; pin is the ANON CONDITION (see control) with the binding site's nom as payload -- trappable,
+; () untrapped; no read ever escapes to an outer binding of the same name. rebinding a name
+; later in the form still reads the previous value (the sequence law); recursion among lambda
+; bindings resolves lazily. an EMPTY form is its head's value -- (f) == f at zero operands --
+; and the heads are anons, so (:) (?) (\) all read ().
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
+(assert
+ (idp () (:)) (idp () (?)) (idp () (\))          ; the empty form is the head read, both lanes
+ (idp () (: a b b 2 a)) (2 = (: a b b 2 b))      ; one scope: forward read = the condition, () untrapped
+ (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0. every value has a net
 ; measure, COMPLEX-VALUED: a number is its own value -- a complex nets ITSELF, phase
@@ -319,17 +329,23 @@
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("(mint 0)" = (show (mint 0))))
 
-; --- hashes --- #(k v ..) or (hash ..) build; #() is the empty hash -- ONLY #(); mutable.
-; # on a scalar BOXES it: #x = #(() x), a fresh mutable hash pinning x to the () key (a 1-entry
+; --- hashes --- #(k v ..) or (hash ..) build; #() is the empty hash -- ONLY #() (it reads as
+; (tablet 0), the empty-map constructor); mutable. a map is a BOOK -- a tablet is a little
+; book, and `the` book is just the outermost one. # on a scalar BOXES it: #x = #(() x), a
+; fresh mutable hash pinning x to the () key (a 1-entry
 ; box, truthy -- the dead () = 0 identity used to conflate #0 with empty). the accessors are
 ; collection-first: (peep coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
 ; and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key away.
 ; also keys (the key list), $ is the key count. (t k) == (peep t k 0) -- a map is a lookup
-; function. (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
+; function. THREE ABSENCE LANES, one miss machinery: peep (the caller names what absence
+; means), apply (absence is 0), and (anon t k) -- the book read as a value: a present k
+; answers, a miss is the anon condition (the trap's result, () untrapped, k the payload).
+; (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
 (assert
  (: b #0 (&& (mapp b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
+ (10 = (anon #(1 10) 1)) (idp () (anon #() 'k)) (0 = (anon #(1 0) 1))   ; anon: the conditioned read; presence beats value
  (50 = (peep (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
  ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (mapp #()) !(mapp 5)
@@ -411,7 +427,11 @@
 ; (scare 'anon nom) under an installed trap (the trap's result is the value); untrapped
 ; it reads (), not 0 -- false either way. the read happens where the code says it does:
 ; a closure captures its free globals at creation, so an anon in a lambda body fires
-; the condition at the define, not the call. see test/anon.l. numeral counts are
+; the condition at the define, not the call. see test/anon.l. THE CONDITION IS ONE LAW
+; AT EVERY DEPTH: a `:` binding read before its pin raises it with the binding site's
+; nom as payload (one scope, see the special forms), (anon t k) raises it for a miss on
+; any tablet (k the payload), and an empty special form reads its head -- the same anon.
+; numeral counts are
 ; CAPPED: a compose count or exact-power exponent above the `apcap` box (a public
 ; runtime tunable, default 2^20) raises (scare 'apcap k) instead of allocating O(k) --
 ; (bignum f) traps where it would oom. retune with (pin apcap () n); see test/apcap.l.
@@ -442,8 +462,11 @@
 ;   scomb/bcomb -- `+` and `*` of functions are church add and compose, so numerals agree.
 ;   opfix -- the operator factor pass (see reader operators above): sigil surface -> core
 ;     source, run FIRST, one source of truth shared with the C bootstrap compiler.
-;   boxfix -- the letrec* "capture by location" rewrite; now a wev source pass run after
-;     macroexpansion, one source of truth shared with the C bootstrap compiler.
+;   boxfix -- the letrec* "capture by location" rewrite (one scope): a forward-referenced
+;     binding indirects through a CELL, a fresh tablet keyed by the binding site's nom --
+;     pin fills it, (anon cell 'nom) reads it, so a pre-fill read IS the anon condition.
+;     a wev source pass run after macroexpansion, one source of truth shared with the C
+;     bootstrap compiler; it emits nif VALUES (pin/anon/tablet), immune to shadowing.
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure
 ;     globals, mark apply strategy, and flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins; a map is a lookup function.

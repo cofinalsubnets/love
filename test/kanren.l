@@ -58,12 +58,12 @@
     (? (twop it) (L k (walk_star (cap it) st))))))
   (map reify ((? n (stake n) slist) (g empty_dict)))))
 
-(:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x (cap x)
- (L '\ s n m y (L m (L x s))))))
-(:: 'et (\ xs (: x (cap xs) xs (cbp xs)
- (foldl (\ a b (L (\ a b s (s_star (a s) b)) a b)) x xs))))
-(:: 'vel (\ xs (: x (cap xs) xs (cbp xs)
- (foldl (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) x xs))))
+(:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 (cap x)
+ (L '\ s n m y (L m (L x2 s))))))
+(:: 'et (\ xs (: x (cap xs) r (cbp xs)
+ (foldl (\ a b (L (\ a b s (s_star (a s) b)) a b)) x r))))
+(:: 'vel (\ xs (: x (cap xs) r (cbp xs)
+ (foldl (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) x r))))
 (:: '\\ (\ a (cons (cons '\ a) (map (\ a (L var (L '\ a))) (init a)))))
 
 (assert

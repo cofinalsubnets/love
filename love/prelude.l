@@ -80,7 +80,7 @@
    ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
    ; exponent above it raises (scare 'apcap k) instead of allocating O(k) -- so
    ; (bignum f) traps where it would oom. retune at runtime: (pin apcap () n).
-   apcap (pin (table 0) () 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
+   apcap (pin (tablet 0) () 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
    ; x ** n across the whole tower. array exponent -> elementwise pow (broadcasts
    ; via the vmap2 engine, float result); integer exponent -> exact squaring, with
@@ -191,7 +191,7 @@
 ; must stay operator-free (the bootstrap restriction: no unquoted sigil
 ; before its definitions); everything after -- and every later file, the
 ; corpus, the repl -- reads hot.
-(: operators (: t (table 0)
+(: operators (: t (tablet 0)
    _ (pin t '$ (cons 'sat 1)) _ (pin t '! (cons 'nilp 1)) _ (pin t '. (cons 'dot 1))
    _ (pin t '+ 2) _ (pin t '- 2) _ (pin t '* 2) _ (pin t '/ 2) _ (pin t '% 2)
    _ (pin t '= 2) _ (pin t '< 2) _ (pin t '<= 2) _ (pin t '> 2) _ (pin t '>= 2)
@@ -414,7 +414,7 @@
 ; (hash) = empty; (hash x) boxes a scalar -- a fresh mutable hash pinning x
 ; to the () key, so #5 = #(() 5); pairs pin as usual, and an odd trailing
 ; operand lands in the () box slot.
-(: (hashtx a) (? (atomp a) '(table 0)
+(: (hashtx a) (? (atomp a) '(tablet 0)
                  (atomp (cbp a)) (list 'pin (hashtx 0) '() (cap a))
                  (list 'pin (hashtx (cbbp a)) (cap a) (cabp a))))
 (:: 'hash (\ a (hashtx a)))
@@ -438,48 +438,57 @@
    (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
+; ONE SCOPE: every name bound in a `:` resolves locally over the whole form.
 ; `boxfix-core` takes a source-order (name . def) pair-list `prs` and the body
-; expression, and indirects every *value* binding whose init closes over the
-; name being defined (or a forward/mutual sibling defined no later) through a
-; heap cell: prepend `cell (cons 0 0)`, store via poke -- the nif VALUE, not its
-; name, so the rewrite survives the egg pulling `poke` from book -- read via
-; `(cap cell)`. Functions (resolved lazily) and values defined before their
-; users are untouched. It returns 0 when nothing needs boxing, else the rewritten
-; (prs' . body'). This is the single source of truth, shared verbatim by both
-; compilers: ev.l's `ale` keeps its bindings as this exact pair-list and calls
-; boxfix-core directly (zero conversion); c0 (ev.c) calls the flat `boxfix`
-; wrapper below, which is just bpr+flatten around the same core. `lambp`/`dsug`
+; expression. a reference to a name at-or-before its own (first) binding is a
+; FORWARD reference; the name is indirected through a CELL -- a box (a fresh
+; map, the # adjoint of :) keyed by the binding site's nom: prepend
+; `cell (tablet 0)`, store via pin, read via (anon cell 'nom) -- the nif
+; VALUES, not their names, so the rewrite survives the egg pulling names and
+; user bindings shadowing them. a pre-fill read is a map miss, i.e. THE ANON
+; CONDITION with the binding-site nom as payload: trappable, () untrapped --
+; read-before-pin is one law at every depth, local or book. a value binding
+; boxes on ANY forward reference; a lambda binding only on a DIRECT (not
+; under-lambda) one -- ordinary recursion keeps the lazy lane. values defined
+; before their users are untouched. It returns 0 when nothing needs boxing,
+; else the rewritten (prs' . body'). This is the single source of truth,
+; shared verbatim by both compilers: ev.l's wev and c0 (ev.c) both call the
+; flat `boxfix` wrapper below, bpr+flatten around the same core. `lambp`/`dsug`
 ; are globals so `ale` shares them (lambda detection, binding desugaring).
 (: (lambp x) (? (twop x) (&& (= '\ (cap x)) (twop (cbbp x)))) ; \ with >=1 param (one-operand \ is quote)
    (dsug n d) (? (atomp n) (cons n d) (dsug (cap n) (cons '\ (cat (cbp n) (list d)))))
    (lp x) (: a (cbp x) (? (atomp (cbp a)) (cons 0 (cap a)) (cons (init a) (last a))))
    (ln bs) (? (atomp bs) 0 (atomp (cbp bs)) 0 (cons (cap (dsug (cap bs) 0)) (ln (cbbp bs))))
-   ; w/wl: is symbol v free under a lambda in x / binding-list bs? multi-operand \ and
+   ; w/wl: does x / binding-list bs reference symbol v? multi-operand \ and
    ; : shadow; one-operand \ is quote (data, nothing free); macro expansion (so :- ?-
-   ; &&/|| are seen as the compiler sees them).
-   (w v x bnd u) (?
-    (symp x) (&& u (= x v) (nilp (memq v bnd)))
+   ; &&/|| are seen as the compiler sees them). u tracks lambda depth; dm (direct
+   ; mode) counts only references NOT under a lambda.
+   (w v x bnd u dm) (?
+    (symp x) (&& (? dm (nilp u) 1) (= x v) (nilp (memq v bnd)))
     (atomp x) 0
     (: h (cap x) (?
-      (= h '\) (? (atomp (cbbp x)) 0 (: r (lp x) (w v (cbp r) (cat (cap r) bnd) 1)))
-      (= h ':) (wl v (cbp x) (cat (ln (cbp x)) bnd) u)
-      (: m (? (symp h) (peep macros h 0) 0) (? m (w v (m (cbp x)) bnd u) (any (\ e (w v e bnd u)) x))))))
-   (wl v bs bnd u) (?
+      (= h '\) (? (atomp (cbbp x)) 0 (: r (lp x) (w v (cbp r) (cat (cap r) bnd) 1 dm)))
+      (= h ':) (wl v (cbp x) (cat (ln (cbp x)) bnd) u dm)
+      (: m (? (symp h) (peep macros h 0) 0) (? m (w v (m (cbp x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
+   (wl v bs bnd u dm) (?
     (atomp bs) 0
-    (atomp (cbp bs)) (w v (cap bs) bnd u)
-    (: nd (dsug (cap bs) (cabp bs)) (? (w v (cbp nd) bnd u) 1 (wl v (cbbp bs) bnd u))))
-   ; boxset: value bindings whose init closes over the name (or a no-later sibling).
+    (atomp (cbp bs)) (w v (cap bs) bnd u dm)
+    (: nd (dsug (cap bs) (cabp bs)) (? (w v (cbp nd) bnd u dm) 1 (wl v (cbbp bs) bnd u dm))))
+   ; boxset: ONE SCOPE -- a reference at-or-before the name's own (first) binding
+   ; is a forward reference and earns a cell. a value binding boxes on ANY such
+   ; reference; a lambda binding only on a DIRECT one (not under a lambda), so
+   ; ordinary recursion keeps the lazy lane.
    (boxset prs) (: nm (map cap prs)
-     (filter (\ v (&& (nilp (lambp (cbp (assq v prs))))
-                      (any (\ p (w v (cbp p) 0 0)) (take (+ 1 (lidx v nm)) prs)))) nm))
-   (mkcs bx) (map (\ v (cons v (nom 0))) bx)
-   (cellbinds cs) (map (\ c (cons (cbp c) (list 'cons 0 0))) cs))
+     (filter (\ v (any (\ p (w v (cbp p) 0 0 (lambp (cbp (assq v prs)))))
+                       (take (+ 1 (lidx v nm)) prs))) nm))
+   (mkcs bx) (map (\ v (cons v (cons (nom 0) (nom v)))) bx)
+   (cellbinds cs) (map (\ c (cons (cabp c) (list tablet 0))) cs))
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nilp (memq (cap p) ns))) cs)
    (sub cs x) (?
-    (symp x) (: p (assq x cs) (? (twop p) (list 'cap (cbp p)) x))
+    (symp x) (: p (assq x cs) (? (twop p) (list anon (cabp p) (list '\ (cbbp p))) x))
     (atomp x) x
     (: h (cap x) (?
       (= h '\) (? (atomp (cbbp x)) x (: r (lp x) (cons '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cbp r)))))))
@@ -492,7 +501,10 @@
    (: bx (boxset prs)
       (? (nilp bx) 0
        (: cs (mkcs bx)
-          (one p) (: d (sub cs (cbp p)) (? (memq (cap p) bx) (cons '_ (list poke 1 d (cbp (assq (cap p) cs)))) (cons (cap p) d)))
+          (one p) (: d (sub cs (cbp p))
+                     (? (memq (cap p) bx)
+                        (: c (assq (cap p) cs) (cons '_ (list pin (cabp c) (list '\ (cbbp c)) d)))
+                        (cons (cap p) d)))
           (cons (cat (cellbinds cs) (map one prs)) (sub cs body)))))))
 ; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that

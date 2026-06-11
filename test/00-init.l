@@ -9,7 +9,7 @@
      (putc 27)
      (puts reset))
 
-   test_state (table 0)
+   test_state (tablet 0)
    (test_set k v) (pin test_state k v)
    (test_get k) (peep test_state k 0))
 (:: 'assert (\ l

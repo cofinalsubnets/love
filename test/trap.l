@@ -8,7 +8,7 @@
 ; (oom is the only C scare today and is terminal, so that lane is exercised
 ; manually, not here). entries are live immediately (datum-at-a-time read
 ; loop); the ap is UNINSTALLED at the end of this file.
-(: trap-log (table 0))
+(: trap-log (tablet 0))
 
 ; status readers
 (assert (scare? 1) !(scare? 3) !(scare? 2)

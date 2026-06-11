@@ -7,7 +7,7 @@
      p2 (pat2pred (cbp p))
    (\ x (? (twop x) (? (p1 (cap x)) (p2 (cbp x)))))))
  (pat2x p b) (:
-  t (table 0)
+  t (tablet 0)
 
   (ff q p) (?
    (symp p) (pin t p q)
