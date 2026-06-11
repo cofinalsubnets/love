@@ -19,10 +19,9 @@
  (= "ababababab" (* "ab" ~(3 4)))              ; |3+4i| = 5 copies
  (= "xxx" (* "x" 3))
 
- ; --- symbol repetition: stays at the operand's own rank (no demotion) ---
- (= 'xyxy (* 'xy 2))   (sm-i (* 'xy 2))         ; interned -> interned
- (= "cdcd" (string (* (nom (\ cd)) 2)))                  ; uninterned name repeats
- (nilp (sm-i (* (nom (\ cd)) 2)))                        ; ... and stays uninterned
+ ; --- symbols left the string algebra (the mint round): * on a symbol is nil ---
+ (nilp (* 'xy 2)) (nilp (* 2 'xy))
+ (nilp ('cd * 2))
 
  ; --- list repetition ---
  (= '(1 2 1 2 1 2) (* '(1 2) 3))

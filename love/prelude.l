@@ -21,6 +21,13 @@
 ; part and the negated imaginary part -- since (re r)=r, (im r)=0 for a real, and
 ; (re z)/(im z) for a complex. (The 2-operand ~(a b) splices into (plex a b).)
 (: (clift x) (plex (re x) (- 0 (im x))))
+; a NOM is the literal pair of a name string and a MINT (the nameless fresh
+; point the mint nif adjoins; identity its only property, $mint = 0). the old
+; named-uninterned atom species is gone -- McCarthy's symbol, restored as the
+; product it always was. (nom 0) (any non-text arg) is the bare mint.
+(: (nom n) (? (strp n) (cons n (mint 0))
+              (symp n) (cons (string n) (mint 0))
+              (mint 0)))
 ; integer power (b ** k) is just numeral application: (k b) == b**k. The squaring
 ; algorithm lives in `ipow`, local to the num-ap block below, so there is no `**`.
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
@@ -412,10 +419,10 @@
                  (list 'pin (hashtx (cbbp a)) (cap a) (cabp a))))
 (:: 'hash (\ a (hashtx a)))
 
-; (gsym x) quotes its operand, giving (nom 'x) -- a fresh uninterned symbol
-; named x. its `$` glyph went to sat; gsyms still PRINT as $<name>/$<addr>
-; (display only, see gzput_sym) and are made by calling gsym or nom directly.
-(:: 'gsym (\ a (list 'nom (list '\ (cap a)))))
+; (gsym x) mints a fresh point -- a nameless atom, still symp, so it binds as
+; a hygienic variable; the operand is decorative (kept for the source's eye).
+; a NAMED fresh identity is (nom 'x): the pair of the name and a mint.
+(:: 'gsym (\ a (list 'mint (list '\ (cap a)))))
 
 ; (array shape elem…): the ergonomic N-D array constructor. `shape` is either a
 ; dimension *list* (rank-N) or a single number n (a rank-1 vector of length |n|),

@@ -18,13 +18,13 @@
 
   ; interned symbols print as their name
   (= "foo" (show 'foo))
-  ; gensyms print with the `$` sigil: named-uninterned as $<name>, anonymous as
-  ; $<addr>. display form only -- `$` READS as the sat operator now.
-  (= "$x" (show (nom "x")))
-  (= "$foo" (show (nom 'foo)))
-  (= "$" (slice (show (nom 0)) 0 1))           ; anonymous -> $<addr>
+  ; a mint prints (mint 0) -- re-reads to a FRESH point, the mutables'
+  ; round-trip (identity is the mint's whole product; no spelling carries it).
+  ; the old $<name> form died with the named-uninterned species: a nom is a
+  ; pair now and prints like one.
+  (= "(mint 0)" (show (mint 0)))
   (symp (gsym x))
-  (= "$bar" (show (gsym bar)))
+  (= "(mint 0)" (show (gsym bar)))
 
   ; quote sugar: a pair (` x) prints as 'x
   (= "'foo"      (show ''foo))

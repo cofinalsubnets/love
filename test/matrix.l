@@ -54,10 +54,12 @@
  (= 255 ((string 255) 0))                     ; byte is unsigned 0..255
  (= 1 ("" 5))                                 ; the empty string indexes to 1
 
- ; --- row KSym: applying a symbol indexes its name (== indexing the name str) ---
- (= 97 ('abc 0))   (= 99 ('abc 2))            ; interned: name bytes
- (= 1 ('abc 9))    (= 1 ('abc 'x))            ; oob / non-number -> 1
- (= 1 ((nom 0) 5))                         ; anonymous: no name -> act as 0
+ ; --- row KSym: the name index left with the string algebra (the mint round);
+ ;     a symbol is a point with a spelling attribute and applies as every unit
+ ;     does -- const-1, like 0, (), and the hots ---
+ (= 1 ('abc 0))   (= 1 ('abc 2))
+ (= 1 ('abc 9))   (= 1 ('abc 'x))
+ (= 1 ((mint 0) 5))
 
  ; --- row KTuple: a rank-0 box / array is a Church numeral (operand ** operator,
  ;     or operator-fold over a function). Full tower coverage in functions.l. ---
@@ -118,9 +120,9 @@
  ; --- add_string lane: text x text, and a number as one byte ---
  (= "abcd" (+ "ab" "cd"))                     ; str + str
  (= "abC" (+ "ab" 67))   (= "Cab" (+ 67 "ab")) ; str + num (byte at the written end)
- (= "abef" (+ "ab" 'ef))                      ; str + isym -> demote to str
- (= 'efef (+ 'ef 'ef))                        ; isym + isym -> interned sym
- (strp (+ 'ef "ab"))                          ; isym + str -> str
+ (nilp (+ "ab" 'ef))                          ; sym left the string algebra (the mint round)
+ (nilp (+ 'ef 'ef))                           ; ... in every direction
+ (nilp (+ 'ef "ab"))
 
  ; --- the arith<->seq SEAM (KArrO|KString) is ARRAY x text only -> nil. A SCALAR
  ;     number joins text as one byte ONLY under the byte law (exact 0..255), so a
@@ -163,7 +165,7 @@
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
  (= "" (* "ab" -2))    (= "ababab" (* "ab" 2.9))   ; ($ count): saturates, ceils
- (= 'xyxy (* 'xy 2))                          ; sym keeps its rank
+ (nilp (* 'xy 2))                             ; sym left the string algebra: no repetition
  (= '(1 2 1 2) (* '(1 2) 2))                  ; list
  (= "" (* "ab" 0))   (nilp (* '(1 2) 0))      ; 0 copies: empty str / empty list
 

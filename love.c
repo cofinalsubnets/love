@@ -107,7 +107,7 @@ struct g_atom *intern_checked(struct g*, struct g_str*);
 lvm_t lvm_kcall,
  lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
- lvm_nilp,  lvm_putc, lvm_nom, lvm_intern, lvm_twop,
+ lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_twop,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
  lvm_fixp,  lvm_symp,   lvm_strp,   lvm_mapp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
@@ -294,16 +294,13 @@ static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
 // count, bignum sign, symbol name; only products and tuples (boxed scalars, rank>=1
 // arrays) compute their net, and those sums cannot short-circuit -- a later negative
 // can cancel an early positive. Lockstep with g_pin (lvm_pin): same zero conditions.
-// a symbol's $ (sat) value, shared by g_net ($) and g_nilp (!). THE empty symbol
-// (empty_sym, prints as ()) has no name -> 0 -> falsy. Every other present symbol
-// (interned, named-uninterned, anonymous nom) floors to >=1 -> truthy.
+// a symbol's $ (sat) value, shared by g_net ($) and g_nilp (!). THE empty
+// symbol (prints as ()) and every MINT (the nameless fresh point: materially
+// empty, a DISTINCT NOTHING whose only property is identity) net 0 -> falsy;
+// an interned symbol nets its name length.
 static g_inline intptr_t pin_sym(word x) {
-  if (x == empty_sym) return 0;                        // the empty symbol: falsy (prints as ())
   struct g_atom *s = (struct g_atom*) x;
-  intptr_t nl = !s->nom ? 0
-    : strp(word(s->nom)) ? (intptr_t) len(s->nom)
-    : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;
-  return nl ? nl : 1; }                                // present symbol -> truthy
+  return s->nom ? (intptr_t) len(s->nom) : 0; }
 static g_flo_t g_net(word);                          // fwd: products and tuples sum their elements
 static g_inline bool g_nilp(word x) {
   if (x == nil || x == EmptyString) return true;
@@ -467,9 +464,6 @@ static g_inline struct g_atom *ini_sym(struct g_atom *y, struct g_str *nom, uint
 // ,<name>@<addr> and the GC keeps it out of the to-space symbol tree -- and lets
 // it skip the l/r subtree slots only interned syms (string nom) carry, exactly
 // like an anonymous sym (nom 0). So it is also a Width-2 allocation.
-static g_inline struct g_atom *ini_usym(struct g_atom *y, struct g_atom *nom, uintptr_t code) {
- return y->ap = lvm_sym, y->nom = (struct g_str*) nom, y->code = code, y; }
-
 static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
  return s->ap = lvm_str, s->len = len, s; }
 
@@ -569,7 +563,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_slice, "slice", s3(lvm_slice)) \
  _(nif_read, "read", s2(lvm_read))\
  _(nif_string, "string", s1(lvm_string))\
- _(nif_intern, "intern", s1(lvm_intern)) _(nif_nom, "nom", s1(lvm_nom))\
+ _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_lamb, "lamb", s1(lvm_lamb))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
  _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "sat", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
@@ -909,13 +903,10 @@ static g_inline word copy_big(struct g*g, struct g_big *src, word const *const p
 
 static g_inline word copy_sym(struct g*g, struct g_atom *src, word const *const p0, word const*const t0) {
  struct g_atom *dst;
- if (!src->nom) dst = bump(g, Width(struct g_atom) - 2), ini_anon(dst, src->code);
- else {
-  word nom = gcp(g, word(src->nom), p0, t0);   // relocate the nom (its sentinel now reads true)
-  if (symp(nom))                               // named-uninterned: copy fresh, stay out of the tree
-   dst = bump(g, Width(struct g_atom) - 2), ini_usym(dst, sym(nom), src->code);
-  else                                         // interned (string nom): rebuild the tree by name
-   dst = intern_checked(g, (struct g_str*) nom); }
+ if (!src->nom)                                // a mint: fresh copy, the serial rides
+  dst = bump(g, Width(struct g_atom) - 2), ini_anon(dst, src->code);
+ else                                          // interned (string nom): rebuild the tree by name
+  dst = intern_checked(g, (struct g_str*) gcp(g, word(src->nom), p0, t0));
  return word(src->ap = (lvm_t*) dst); }
 
 static g_inline word copy_data(struct g *g, union u *src, word const *const p0, word const *const t0) {
@@ -2449,30 +2440,20 @@ static g_inline struct g*gzput_str(struct g*g, word _) {
   g = gzputc(g, c); }
  return g_pop(gzputc(g, '"'), 1); }
 
-// A symbol's nom encodes its kind: 0 = anonymous nom, a string = interned, a
-// symbol = named-uninterned (the naming symbol, whose own nom is the name string).
-// Interned syms print bare; the empty symbol as `()` (round-trips); gensyms get
-// the `$` sigil (the `$` reader macro wraps its operand with nom): a
-// named-uninterned nom as `$<name>` (re-reads to a fresh nom of the same name),
-// an anonymous one as `$<addr>` (unique, doesn't round-trip to identity -- the
-// addr just makes the printout distinguishable).
+// A symbol's nom is its kind: 0 = a mint (the nameless fresh point), a string
+// = interned. Interned syms print bare; the empty symbol as `()` (round-trips);
+// a mint prints `(mint 0)` -- which re-reads to a FRESH point, the same
+// round-trip the mutables make (a printed map is a fresh map): identity is the
+// mint's whole product, so no spelling can carry it.
 static g_inline struct g*gzput_sym(struct g*g, word _) {
  if (_ == empty_sym) return gzprintf(g, "()");
  if (g_ok(g = g_push(g, 1, _))) {
   word nom = word(sym(g->sp[0])->nom);
-  if (!nom) g = gzprintf(g, "$%z", g->sp[0]);              // anonymous nom -> $<addr>
-  else if (strp(nom)) {                                     // interned: bare name
+  if (!nom) g = gzprintf(g, "(mint 0)");                    // a mint: fresh on re-read
+  else {                                                    // interned: bare name
    g->sp[0] = nom;
    for (uintptr_t l = len(nom), i = 0; g_ok(g) && i < l;)
-     g = gzputc(g, txt(g->sp[0])[i++]);
-  } else {                                                  // named-uninterned -> $<name>
-   word name = word(sym(nom)->nom);
-   if (!name || !strp(name)) g = gzprintf(g, "$%z", g->sp[0]); // named after a nameless sym: fall back
-   else {
-    g = gzputc(g, '$');
-    g->sp[0] = name;
-    for (uintptr_t l = len(name), i = 0; g_ok(g) && i < l;)
-        g = gzputc(g, txt(g->sp[0])[i++]); } } }
+     g = gzputc(g, txt(g->sp[0])[i++]); } }
  return g_pop(g, 1); }
 
 
@@ -3536,25 +3517,19 @@ lvm(lvm_intern) {
   Sp[0] = word(y); }
  return Ip += 1, Continue(); }
 
-// (nom name) -> a fresh *uninterned* symbol named after `name`: a string (the
-// symbol it would intern to) or a symbol (used directly). The new symbol stores
-// that naming SYMBOL as its nom, which marks it uninterned (interned syms have a
-// string nom; see ini_usym). Any other arg yields an anonymous nom (nom 0).
-// `code` gets THE MINT SERIAL (monotonic, pre-incremented; 0 is the empty
-// symbol's) -- the fresh point's hash and its place in the total order: same-
-// name noms order by creation. (g_clock once sat here: same-tick mints
-// collided, leaving distinct noms pairwise incomparable -- order wasn't total.)
-lvm(lvm_nom) {
- if (Sp[0] == EmptyString) return Sp[0] = empty_sym, Ip += 1, Continue(); // ""->the empty sym
- Have(2 * Width(struct g_atom));               // room for the wrapper + a fresh intern
- struct g_atom *nom;
- if (strp(Sp[0]))                              // (sym "x"): intern "x" -> the symbol it names
-   Pack(g), nom = intern_checked(g, (struct g_str*) g->sp[0]), Unpack(g);
- else nom = symp(Sp[0]) ? sym(Sp[0]) : 0;      // symbol arg used as-is; else anonymous
+// (mint _) -> a fresh POINT, adjoined to the value space: nameless, materially
+// empty ($mint = 0, applies const-1 like every unit), identity its only
+// property -- the arg is ignored. `code` gets THE MINT SERIAL (monotonic,
+// pre-incremented; 0 is the empty symbol's) -- the point's hash and its place
+// in the total order: mints order by creation, GC-stable. a NOM is now the
+// literal pair of a name string and a mint (prelude sugar over this nif) --
+// the named-uninterned atom species is gone, the McCarthy restoration's first
+// half. mints still answer symp (a nameless atom), so they bind as gensyms.
+lvm(lvm_mint) {
+ Have(Width(struct g_atom));
  struct g_atom *y = (struct g_atom*) Hp;
- Hp += Width(struct g_atom) - 2;               // uninterned/anonymous: no l/r subtree slots
- uintptr_t serial = ++g->next_serial;
- nom ? ini_usym(y, nom, serial) : ini_anon(y, serial);
+ Hp += Width(struct g_atom) - 2;               // no l/r subtree slots: never in the tree
+ ini_anon(y, ++g->next_serial);
  return
   Sp[0] = word(y),
   Ip += 1,
@@ -3758,12 +3733,9 @@ static lvm(lvm_add_seq) {
 // concat is built as one string in operand order, then returned per the result
 // rank: string as-is / nom'd to a fresh uninterned sym / interned. An empty
 // result is the g_str_empty / g_sym_empty singleton (the additive identity).
-static g_inline struct g_str *add_name(word x) {        // symbol -> name string, or 0 (anon)
+static g_inline struct g_str *add_name(word x) {        // symbol -> name string, or 0 (a mint)
  word nom = word(sym(x)->nom);
- if (!nom) return 0;
- if (strp(nom)) return str(nom);                        // interned: nom IS the name
- nom = word(sym(nom)->nom);                             // named-uninterned: naming sym's nom
- return nom && strp(nom) ? str(nom) : 0; }
+ return nom ? str(nom) : 0; }                           // interned: nom IS the name
 static g_inline int stringrank(word x) {                  // STR 0 / USYM 1 / ISYM|NUM 2
  if (strp(x)) return 0;
  if (x == empty_sym) return 2;                           // canonical (intern ""): the + identity
@@ -3793,7 +3765,7 @@ static lvm(lvm_add_string) {
  add_emit(add_emit(txt(z), a), b);                      // a's bytes then b's, in order
  *++Sp = word(z);
  return rank == 0 ? (Ip++, Continue())                  // string
-      : rank == 1 ? Ap(lvm_nom, g)                  // uninterned symbol (fresh)
+      : rank == 1 ? Ap(lvm_mint, g)                  // uninterned symbol (fresh)
                   : Ap(lvm_intern, g); }               // interned symbol
 static lvm(lvm_0) {                             // unsupported mix (array <-> string)
  return *++Sp = nil, Ip++, Continue(); }
@@ -3856,7 +3828,7 @@ static lvm(lvm_mul_rep) {
  for (uintptr_t i = 0; i < n; i++) memcpy(txt(z) + i * sl, txt(src), sl);
  *++Sp = word(z);
  return rank == 0 ? (Ip++, Continue())             // string
-      : rank == 1 ? Ap(lvm_nom, g)             // uninterned symbol
+      : rank == 1 ? Ap(lvm_mint, g)             // uninterned symbol
                   : Ap(lvm_intern, g); }          // interned symbol
 
 // --- apply lane (the data-value `(g x)` aps; moved here from data.c) -----
@@ -3881,13 +3853,11 @@ static lvm(data_string_apply) {
 // nom encodes the kind: a string is the name (interned), a symbol is the naming
 // symbol of a named-uninterned sym (follow once to its string nom), 0 is an anonymous
 // nom. With no underlying string we act like 0 (absent name == "" == 0 -> 1).
+// applying a symbol: the name-index is RELEASED (the string semantics left the
+// symbols with the mint round) -- a symbol is a point with a spelling attribute,
+// and a point applies as every unit does: const-1, like 0, (), and the hots.
 static lvm(data_sym_apply) {
- word nom = word(((struct g_atom*) Ip)->nom);
- if (nom && cell(nom)->ap == lvm_sym)              // named-uninterned: follow to the naming symbol
-  nom = word(((struct g_atom*) nom)->nom);
- if (nom && cell(nom)->ap == lvm_str)             // interned/named: index the underlying name string
-  return Ip = cell(nom), Ap(data_string_apply, g);
- return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }  // anonymous: no name -> act like 0
+ return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
 
 // (n x): applying a number is Church-numeral application, like a fixnum (cf.
 // lvm_numap). Fixnums reach num-ap via the odd-tag check in lvm_ap; the rest of the
@@ -3926,8 +3896,9 @@ static lvm(data_pair_apply) {
 //   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane ap still
 //          refines by g_tuple_type; the seven arithmetic kinds route identically today.
 //   add_seq = a list anywhere (other operand a scalar element / spine); pair wins
-//   add_string = strings & symbols name-compatibly (+ a number as one byte; demotes
-//              isym>usym>str and nils an array operand internally)
+//   add_string = strings (+ a number as one byte -- the byte law; nils an array
+//              operand internally). SYMBOLS left the string algebra with the mint
+//              round: their string cells are lvm_0 (intern/string = the explicit bridge)
 //   mul_rep  = sequence * scalar-count -> repetition
 //   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KHom rows+cols) -- Church
 //          add / compose; a map IS a lookup lambda for +/*, kept deliberately, so
@@ -3938,15 +3909,15 @@ static lvm(data_pair_apply) {
 
 // `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KHom rows+cols all addl.
 static lvm_t *const g_add_mx[KN][KN] = {
- [KFix]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KTuple]  = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KBig]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrZ]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrR]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrC]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrO]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KString] = { lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
- [KSym]    = { lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KFix]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KTuple]  = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KBig]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrZ]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrR]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrC]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrO]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KString] = { lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KSym]    = { lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
  [KTwo]    = { lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_addh, lvm_addh },
  [KMap]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
  [KHom]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
@@ -3954,15 +3925,15 @@ static lvm_t *const g_add_mx[KN][KN] = {
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil.
 static lvm_t *const g_mul_mx[KN][KN] = {
- [KFix]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KTuple]  = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KBig]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrZ]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrR]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrC]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrO]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KFix]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KTuple]  = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KBig]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrZ]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrR]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrC]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrO]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
  [KString] = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
- [KSym]    = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
+ [KSym]    = { lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
  [KTwo]    = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
  [KMap]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
  [KHom]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },

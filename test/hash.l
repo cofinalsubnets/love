@@ -75,8 +75,9 @@
  (= 0 (sat (arr z '(2 3) 0)))                   ; all-zero array -> net 0
  (= 1 (sat @(0.3 0.4)))                         ; ceil makes any positive net -> >=1
  (= 1 (sat ~(0.001 0)))                        ; re>0 -> ceil(0.001) = 1; sat=0 iff sorts <= 0
- (= 1 (sat (nom 'x))) (= 1 (sat (nom 0)))          ; symbol name length; anon nom present -> floored to 1 (truthy)
- (= 0 (sat (nom "")))                        ; THE empty symbol (nom "") -> 0 (falsy, prints as ())
+ (= 1 (sat (nom 'x)))                        ; a nom is a pair: net = name length + the mint's 0
+ (= 0 (sat (mint 0))) !(mint 0)              ; the mint is materially EMPTY: a distinct nothing
+ (= 0 (sat (intern "")))                     ; THE empty symbol -> 0 (falsy, prints as ())
  (= 2 (sat (hash 1 10 2 20)))                  ; table -> key count
  (= 2 (int (abs (hash 1 10 2 20))))            ; abs of a table is its key count too
  (= (sat (100 2)) (sat (200 2)))          ; any positive bignum saturates to FIX_MAX
@@ -86,13 +87,14 @@
 
 ; the defining invariant: (nilp x) == (= 0 (pin x)) for every value. empty
 ; containers and exact zeros are false; every present value (incl. functions,
-; ports, symbols, anonymous gensyms, bignums) is truthy with pin >= 1.
+; ports, symbols, bignums) is truthy with pin >= 1. (a MINT is the exception
+; by design: the fresh point is materially empty -- a distinct NOTHING.)
 (: same? (\ x (= (? (nilp x) 1 0) (? (= 0 (sat x)) 1 0)))
 (assert
  (nilp "") (nilp #()) (nilp (buf 0)) (nilp @0) (nilp 0) (nilp ())  ; empties/zeros are false
- !!"x" !!#(1 2) !!(nom 0)                                        ; present values are true
+ !!"x" !!#(1 2) !(mint 0)                                        ; present values are true; the mint is nothing
  !!cap !!out !!(\ x x)                                                ; functions/ports too
  (same? "") (same? #()) (same? (buf 0)) (same? @0) (same? 0)
- (same? "x") (same? #(1 2)) (same? (nom 0)) (same? cap) (same? out)
+ (same? "x") (same? #(1 2)) (same? (mint 0)) (same? cap) (same? out)
  (same? ~(0 0)) (same? ~(0.3 0.4)) (same? @(0 0)) (same? @(0.1 0))
  (same? (100 2)) (same? 'abc) (same? '(1 2))))

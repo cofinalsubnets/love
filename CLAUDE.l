@@ -154,17 +154,20 @@
  (1 = (\ x x)) ((\ y y) = 1) !(idp 1 (\ x x))                      ; 1 = identity, either side
  (0 = (\ _ 1)) ((\ q 1) = 0) !(0 = (\ _ 2)) !(0 = (\ _ _)))        ; 0 = const-1 (and only that)
 
-; --- + and * are generic --- `+` adds numbers, concatenates strings/symbols, and appends
-; lists; `-` is numeric only. the BYTE LAW: text + number is one byte, strictly -- the value
-; must be an exact integer 0..255 (rep-blind, like `=`: 66.0 is 66); anything else is nil,
-; like `-` on strings. `*` is repeated `+`: a sequence times a count repeats it, and the
-; count SATURATES (($ c), the count law shared with numeral-apply and array shapes): a
-; non-positive count gives the empty sequence, a float ceils.
+; --- + and * are generic --- `+` adds numbers, concatenates strings, and appends
+; lists; `-` is numeric only. the BYTE LAW: a string + a number is one byte, strictly --
+; the value must be an exact integer 0..255 (rep-blind, like `=`: 66.0 is 66); anything
+; else is nil, like `-` on strings. SYMBOLS LEFT THE STRING ALGEBRA (the mint round):
+; + and * on a symbol are nil -- a symbol is a point with a spelling attribute, and
+; intern/string are the explicit bridge, not operators. `*` is repeated `+`: a sequence
+; times a count repeats it, and the count SATURATES (($ c), the count law shared with
+; numeral-apply and array shapes): a non-positive count gives the empty sequence, a
+; float ceils.
 (assert
- ("abcd" = "ab" + "cd") ("xB" = "x" + 66) ('efef = 'ef + 'ef) (strp ("ab" + 'ef))
+ ("abcd" = "ab" + "cd") ("xB" = "x" + 66) !('ef + 'ef) !("ab" + 'ef)
  ("xB" = "x" + 66.0) !("x" + 1.5) !("x" + -66) !("x" + 256)   ; the byte law: exact 0..255 or nil
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(5 1 2) = 5 + '(1 2)) !("a" - "b")
- ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")
+ ("ababab" = "ab" * 3) !('xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")
  !("ab" * -3) ("ababab" = "ab" * 2.5) !('(1 2) * 0))
 
 ; --- numeric functions --- abs and int are type-aware; the constants are e pi i; also gcd and
@@ -256,14 +259,21 @@
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
  (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3)) (3 = $'(a b c)))
 
-; --- strings & symbols --- a symbol is interned ('x), named-uninterned ($x = (nom 'x)), or
-; anonymous ((nom 0)). `()` is THE empty symbol -- one canonical value, (intern ""), the
-; `+`-identity on symbols, self-evaluating, false by !!$ -- but a symbol, NOT the number 0.
-; every nom draws a MINT SERIAL from the one mint stream (task pids draw from it too):
-; symbols order by name first (the nameless below every named), then the interned one
-; (the canonical point precedes the fresh), then by serial -- creation order -- so the
-; total order is TOTAL over symbols, GC-stable; the serial is also the nom's hash, so
-; same-name noms key a map apart.
+; --- strings, symbols & mints --- a symbol is interned ('x): one canonical atom per
+; spelling. a MINT ((mint 0), arg ignored) adjoins a fresh POINT to the value space:
+; nameless, materially empty ($mint = 0, false), applying as every unit does (const-1),
+; identity its only property -- the unforgeable thing. a NOM is the literal pair of a
+; name string and a mint -- (nom "x") = ("x" . fresh point) -- McCarthy's symbol
+; restored as the product it always was (the named-uninterned atom species is gone).
+; `()` is THE empty symbol -- one canonical value, (intern ""), self-evaluating, false
+; by !!$ -- but a symbol, NOT the number 0. every mint draws a SERIAL from the one
+; mint stream (task pids draw from it too): symbols order by name first (mints below
+; every named symbol), then the interned one (the canonical point precedes the fresh),
+; then by serial -- creation order -- so the total order is TOTAL, GC-stable; the
+; serial is also the mint's hash. noms inherit all of it through the pair: product
+; order = (name lex, then mint), structural = stays identity-sharp (the mint inside),
+; distinct map keys for free. SYMBOLS HAVE NO STRING ALGEBRA (+/* nil, apply const-1);
+; intern and string are the explicit bridge, and a nom's name is (cap nom).
 ; a string indexes its bytes ("abc" 0 -> 97). $ (sat) clamps the net measure once,
 ; max(0, ceil(net)): a string's byte count, a symbol's name length, a number's own value
 ; ($-3.9 = 0), a list's or array's element sum -- so $ and abs diverge ((abs -5) = 5 but
@@ -272,15 +282,20 @@
 ; coerces; \n escapes.
 (assert
  (symp ()) !(() = 0) (idp () (intern "")) (idp () '()) (0 = $()) !() !!$'x
- ('x = () + 'x) ("()" = (show ()))
- (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; the serial: creation order, trichotomy holds
- ('x < (nom 'x)) (() < (nom 0))                  ; interned first on a name tie; the floor below the fresh
+ ("()" = (show ()))
+ (symp (mint 0)) (0 = $(mint 0)) !(mint 0)       ; the fresh point: a nameless atom, materially empty
+ (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone
+ !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (idp m m)))  ; distinct always; itself only
+ (twop (nom 'x)) ("x" = (cap (nom 'x)))          ; a nom is the pair; the name is its cap
+ (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; pair lex inherits the serial order
+ ((mint 0) < (nom 'x))                           ; cross-kind: the point (symbol band) below the product
+ (() < (mint 0))                                 ; the zero point sits first among the nameless
  (: a (nom 'k) b (nom 'k) t #() _ (pin t a 1) _ (pin t b 2)
     (&& (1 = (t a)) (2 = (t b)) (2 = $t)))      ; same-name noms are distinct map keys
  (97 = ("abc" 0)) (3 = $"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  ("bidden" = (slice "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
- ("\"a\\nb\"" = (show "a\nb")) ("$x" = (show (nom "x"))))
+ ("\"a\\nb\"" = (show "a\nb")) ("(mint 0)" = (show (mint 0))))
 
 ; --- hashes --- #(k v ..) or (hash ..) build; #() is the empty hash -- ONLY #(); mutable.
 ; # on a scalar BOXES it: #x = #(() x), a fresh mutable hash pinning x to the () key (a 1-entry

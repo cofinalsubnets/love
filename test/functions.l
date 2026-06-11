@@ -13,11 +13,11 @@
  (= 2 (1 2))                                  ; (1 2) = 2 ** 1
  (= 1 (2 1))                                  ; (2 1) = 1 ** 2
  (= 9 ((\ f n (f n)) 2 3))                    ; (2 3) = 3 ** 2
- (= 97 ('abc 0))                              ; applying a symbol indexes its name string ('a)
- (= 99 ('abc 2))                              ; ('c)
- (= 1 ('abc 9))                               ; out of range -> act same as 0 ("" k == k**0 == 1)
- (= 1 ('abc 'x))                              ; non-numeric key -> same as 0
- (= 1 ((nom 0) 5))                         ; anonymous nom has no name -> act same as 0
+ (= 1 ('abc 0))                               ; a symbol applies const-1: the name index left
+ (= 1 ('abc 2))                               ;   with the string algebra (the mint round)
+ (= 1 ('abc 9))                               ; every argument the same: a point is a unit
+ (= 1 ('abc 'x))
+ (= 1 ((mint 0) 5))                           ; the mint, the purest point, likewise
  (= 8 (3 2))                                  ; (3 2) = 2 ** 3
  (= 13 ((3 (+ 1)) 10)))                       ; non-numeric operand -> (+ 1) composed 3 times on 10
 ; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply

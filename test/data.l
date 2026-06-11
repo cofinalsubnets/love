@@ -7,10 +7,10 @@
          !(= s1 s2)
          (= 'asdf (intern "asdf"))          ; intern: string -> the interned symbol
          (= 'asdf (intern 'asdf))           ; ...identity on any non-string arg
-         !(= 'asdf (nom "asdf"))         ; nom str/sym is uninterned: distinct from the interned symbol
-         !(= (nom "asdf") (nom "asdf")) ; ...and from each other
-         (= "asdf" (string (nom "asdf")))  ; but carries the name -> (string sym) (string arg)
-         (= "asdf" (string (nom 'asdf)))   ; ...and (symbol arg)
+         !(= 'asdf (nom "asdf"))         ; a nom is a PAIR (name . mint): never the interned symbol
+         !(= (nom "asdf") (nom "asdf")) ; ...nor another nom (the mint inside differs)
+         (= "asdf" (cap (nom "asdf")))  ; the name is the pair's cap -- the explicit bridge
+         (= "asdf" (cap (nom 'asdf)))   ; ...same for a symbol arg (string'd on the way in)
          (= "asdf" (string 'asdf))))
 (:
  t (table 0)
