@@ -12,4 +12,6 @@
  (= 8 (: a 2 b 3 a (+ a b) a (+ a b) a))
  (= 2 ((\ a b a) 2 3))
  (= 3 ((\ f g (f g 1 2 3)) (\ g a b c (g c b)) (\ a b a)))
+ (= 0 (: _ 1 _ 2 0))            ; regression: dup _ + literal-0 body segfaulted pre-round-16
+ (= 7 (: _ 1 _ 2 _ 3 7))
  )
