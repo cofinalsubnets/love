@@ -54,12 +54,12 @@ static struct g *_eof(struct g *g) {
 
 // fd values are nominal: all I/O routes through the vtable regardless. We
 // just need fd >= 0 so the dispatcher picks g_fd_port_vt over a synth slot.
-struct g_io g_stdin  = { .ap = g_vm_port_io, .fd = putfix(0),
+struct g_io g_stdin  = { .ap = lvm_port_io, .fd = putfix(0),
                          .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
-struct g_io g_stdout = { .ap = g_vm_port_io, .fd = putfix(1),
+struct g_io g_stdout = { .ap = lvm_port_io, .fd = putfix(1),
                          .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
 // No separate error stream in the browser host; route err to out's fd.
-struct g_io g_stderr = { .ap = g_vm_port_io, .fd = putfix(1),
+struct g_io g_stderr = { .ap = lvm_port_io, .fd = putfix(1),
                          .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
 struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };
 

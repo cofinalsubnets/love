@@ -1,10 +1,10 @@
 #!/usr/bin/env l
-; vmret.l -- flag g_vm_* VM-instruction aps that contain a `ret`.
+; vmret.l -- flag lvm_* VM-instruction aps that contain a `ret`.
 ;
 ; Port of tools/vmret.py (see it for the full rationale). The l VM is
-; threaded: every g_vm_* opcode ap should tail-jump to the next, never
+; threaded: every lvm_* opcode ap should tail-jump to the next, never
 ; emit an ordinary `ret`. This tool disassembles an ELF (shelling out to
-; objdump / llvm-objdump via the `run` nif) and reports every g_vm_* function
+; objdump / llvm-objdump via the `run` nif) and reports every lvm_* function
 ; whose body still contains a `ret` -- a first-pass heuristic, expect false
 ; positives. It is cross-arch: it reads e_machine and picks a per-arch return
 ; mnemonic, preferring multi-target llvm-objdump for non-x86 images.
@@ -206,7 +206,7 @@
       0))
 
 ; --- driver ----------------------------------------------------------
-(: parsed   (parse-args (cbp argv) 0 "g_vm_" 0)
+(: parsed   (parse-args (cbp argv) 0 "lvm_" 0)
    path     (cap parsed)
    prefix   (cap (cbp parsed))
    od       (cap (cbp (cbp parsed)))

@@ -9,12 +9,12 @@
 ; wevs: value->ap memo for global fns, built once by scanning every global. A ap
 ; folds an application to a value when its args are constant (pure fns only), else emits an
 ; (iop op . args) node iap inlines (any nif of matching arity), else leaves it. A nif is found
-; by text shape (g_vm_ret0 terminator); fold eligibility from the curated `names`. It lives
+; by text shape (lvm_ret0 terminator); fold eligibility from the curated `names`. It lives
 ; as a global -- wev's fold reaches it by name -- so this ~126-entry table is NOT baked into
 ; ev's value; `.ev` then prints as just the ana+wev logic, and the table prints under `.wevs`.
 (: wevs (:
-   g_vm_cur  (peek 0 (+))
-   g_vm_ret0 (peek 1 cap)
+   lvm_cur  (peek 0 (+))
+   lvm_ret0 (peek 1 cap)
    (cval e) (? (symp e) (cons 0 0)               ; (const? . value): 1 head iff a literal
                (atomp e) (cons 1 e)
                (&& (= (cap e) '\) (atomp (cbbp e))) (cons 1 (cabp e))
@@ -22,8 +22,8 @@
    (bake v) (? (fixp v) v (list '\ v))           ; value -> source: fixnum bare else quote
    ; (op . arity) iff v is a nif. `idp` (identity) not `=`: a non-nif global may peep to
    ; a word that looks like a heap pointer, which `=`/eql would deref and crash on.
-   (opof v) (? (idp g_vm_ret0 (peek 1 v)) (cons (peek 0 v) 1)
-               (&& (idp g_vm_cur (peek 0 v)) (idp g_vm_ret0 (peek 3 v))) (cons (peek 2 v) (peek 1 v))
+   (opof v) (? (idp lvm_ret0 (peek 1 v)) (cons (peek 0 v) 1)
+               (&& (idp lvm_cur (peek 0 v)) (idp lvm_ret0 (peek 3 v))) (cons (peek 2 v) (peek 1 v))
                0)
    (hgen v op ar pure x) (: as (cbp x) n (tally as)
     (go hv a) (? (atomp a) (bake hv)             ; all args constant -> fold
@@ -50,7 +50,7 @@
      (: o (opof v) p (pureset v)
       (? (|| o p)
        (: op (? o (cap o) 0)
-          ar (? o (cbp o) (idp g_vm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
+          ar (? o (cbp o) (idp lvm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (\ x (hgen v op ar p x))))
        t))))
    (foldl add (table 0) (keys dict))))
@@ -59,14 +59,14 @@
  c (sco 0 (list 0) 0)
  x (wev c (opfix x))    ; opfix first: ev = the deserialized-data lane, opfix factors its sigil surface
  (ana c x (k0 c) 0 0)))
-  g_vm_cur (peek 0 (+))
+  lvm_cur (peek 0 (+))
   (sco p a i) (pin (pin (pin (table 0) 'arg a) 'imp i) 'par p)
   (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where wev stashes 'src
   (p2 i x k) (poke -1 i (poke -1 x k))
   (em1 x k n) (poke -1 x (k (+ 1 n)))
   (em2 i x k n) (poke -1 i (poke -1 x (k (+ 2 n))))
   ; karg/kim: emit an arg ref / a quote, fusing with an immediately-following
-  ; 1-ary apply (g_vm_ap) or tail-call (g_vm_tap) that kap already wrote into the
+  ; 1-ary apply (lvm_ap) or tail-call (lvm_tap) that kap already wrote into the
   ; continuation head. The same emit works for both: overwrite that op cell with
   ; the operand (seek 1 keeps what follows -- the rest for ap, the frame-size for
   ; tap) and prepend the fused op; only the ap differs. kap over-reserves a
@@ -80,33 +80,33 @@
   ; than a few fixnum compares that short-circuit on the common small values
   ; (measured: a hash made boot +13% vs +5% for this chain; frequency-reordering
   ; the chain was a wash). The fixp guard keeps spq from ever hashing a heap value.
-  (spa i) (? (= i 0) g_vm_arg0 (= i 1) g_vm_arg1 (= i 2) g_vm_arg2 (= i 3) g_vm_arg3 0)
-  (spq v) (? (fixp v) (? (= v 0) g_vm_quo0 (= v 1) g_vm_quo1 (= v 2) g_vm_quo2
-                         (= v 3) g_vm_quo3 (= v -1) g_vm_quom1 (= v -2) g_vm_quom2 0) 0)
+  (spa i) (? (= i 0) lvm_arg0 (= i 1) lvm_arg1 (= i 2) lvm_arg2 (= i 3) lvm_arg3 0)
+  (spq v) (? (fixp v) (? (= v 0) lvm_quo0 (= v 1) lvm_quo1 (= v 2) lvm_quo2
+                         (= v 3) lvm_quo3 (= v -1) lvm_quom1 (= v -2) lvm_quom2 0) 0)
   (fuse a o t sp x k n)                          ; a=ap-op o=tap-op(0=none) t=plain-op sp=specializer
    (: tail (k (+ 2 n)) h (peek 0 tail)
-    (? (= h g_vm_ap)         (p2 a x (seek 1 tail))
-       (&& o (= h g_vm_tap)) (p2 o x (seek 1 tail))
+    (? (= h lvm_ap)         (p2 a x (seek 1 tail))
+       (&& o (= h lvm_tap)) (p2 o x (seek 1 tail))
        (: s (sp x) (? s (poke -1 s tail) (p2 t x tail)))))
   ; arg fuses both ap and tap; quote only ap. quote;tap (a constant arg to a tail
   ; call, e.g. (loop 0)) is left unfused: overwriting the shared tap cell in some
   ; emit contexts corrupts a branch's jump target -- safe for arg (a fixnum index)
   ; but not for quote. The rarest of the four cases; deferred.
-  (karg x k n) (fuse g_vm_argap   g_vm_argtap g_vm_arg   spa x k n)
-  (kim  x k n) (fuse g_vm_quoteap 0           g_vm_quote spq x k n)
-  (k0 c n) (poke -1 g_vm_ret (poke (+ 1 n) (ary c) (lamb (+ 2 n))))
+  (karg x k n) (fuse lvm_argap   lvm_argtap lvm_arg   spa x k n)
+  (kim  x k n) (fuse lvm_quoteap 0           lvm_quote spq x k n)
+  (k0 c n) (poke -1 lvm_ret (poke (+ 1 n) (ary c) (lamb (+ 2 n))))
   ; k0s: like k0 but reserves one extra LEADING cell (so the text is shifted up
   ; by one) for ala to stash the lambda's source \-expr at value[-1], where the
   ; printer (gzput_fn) finds it. entry = cell 1, src = cell 0.
-  (k0s c n) (poke -1 g_vm_ret (poke (+ 2 n) (ary c) (lamb (+ 3 n))))
+  (k0s c n) (poke -1 lvm_ret (poke (+ 2 n) (ary c) (lamb (+ 3 n))))
   (ary c) (+ (tally (c 'arg)) (tally (c 'imp)))
   (pro f) (? (fixp f) f (: a (peek 0 f) (?- f
-   (= a g_vm_unc) (pro (seek -2 (peek 2 f)))
-   (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
+   (= a lvm_unc) (pro (seek -2 (peek 2 f)))
+   (= a lvm_cur) (?- f (= lvm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
   ; wev: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks
   ; applies with their n-ary-vs-l2r strategy. Tail position is NOT tracked here -- kap detects
-  ; tail by peeking the continuation for g_vm_ret at analysis time.
+  ; tail by peeking the continuation for lvm_ret at analysis time.
   (wev c x) (:
    (wx x bnd) (?
     (atomp x) x
@@ -139,9 +139,9 @@
      (cons (wx (cabp (cap bs)) bnd) (cons (wx (cap (cbbp bs)) bnd) (list (wx (cabp bs) bnd))))
     (cons (wx (cap bs) bnd) (cons (wx (cabp bs) bnd) (wxc (cbbp bs) bnd))))
    ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
-   ; `idp`-safe peeps (a non-fn value never matches g_vm_cur); mirrors app's old `fa`/`na`.
+   ; `idp`-safe peeps (a non-fn value never matches lvm_cur); mirrors app's old `fa`/`na`.
    (napof v args) (? (fixp v) 0
-    (? (idp g_vm_cur (peek 0 v)) (: ar (peek 1 v) (&& (< 1 ar) (= (tally args) ar))) 0))
+    (? (idp lvm_cur (peek 0 v)) (: ar (peek 1 v) (&& (< 1 ar) (= (tally args) ar))) 0))
    ; fold: un-shadowed global head -> ap (fold/iop/apx); else mark the call as an apx
    ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h (cap x)
@@ -184,9 +184,9 @@
  (apr2l c b) (?- id (twop b) (: g (apr2l c (cbp b)) f (ana c (cap b)) _ (push c 'stk 0) (co g f)))
  (kap n k m)
   (: j (k (+ 2 m))
-   t (= (peek 0 j) g_vm_ret)                              ; peep the continuation for ret -> tail
-   (? t (? (> n 1) (poke -1 g_vm_tapn (poke 0 n j)) (poke 0 g_vm_tap j))
-        (? (> n 1) (p2 g_vm_apn n j) (poke -1 g_vm_ap j))))
+   t (= (peek 0 j) lvm_ret)                              ; peep the continuation for ret -> tail
+   (? t (? (> n 1) (poke -1 lvm_tapn (poke 0 n j)) (poke 0 lvm_tap j))
+        (? (> n 1) (p2 lvm_apn n j) (poke -1 lvm_ap j))))
 
   ;aco is a bit complicated
   (aco c b) (:- (: f (acr b) (\ k n (: k (f (co (push c 'end) k) n) _ (pop c 'end) k)))
@@ -194,9 +194,9 @@
     j (k (+ 3 n))
     a (cap (c 'end))
     i (peek 0 a)
-    (? (| (= g_vm_ret i) (= g_vm_tap i)) (p2 i (peek 1 a) j)
-       (= g_vm_tapn i)                   (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
-                                         (p2 g_vm_jump a j)))
+    (? (| (= lvm_ret i) (= lvm_tap i)) (p2 i (peek 1 a) j)
+       (= lvm_tapn i)                   (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
+                                         (p2 lvm_jump a j)))
    (acr b) (?
     (atomp b)       (kim 0)
     (atomp (cbp b)) (co (ana c (cap b)) acx)
@@ -207,16 +207,16 @@
         (\ x (f (\ n
          (: k (co (push c 'alt) (h x))
             j (g (acx k) (+ 2 n))
-            (p2 g_vm_cond (pop c 'alt) j)))))))))
+            (p2 lvm_cond (pop c 'alt) j)))))))))
 
   Z (nom 'Z)
   ; recursive-fn ref: bake `quote code` if the closure is built, else `quote 0`
   ; + a backpatch site `(lfd . cell)` on the scope for l3 to resolve.
   (qsite site k n) (: cell (poke -1 0 (k (+ 2 n)))
                       _ (poke 2 cell site)
-                    (poke -1 g_vm_quote cell))
+                    (poke -1 lvm_quote cell))
   (lz c lfd scope)(: code (cabp lfd)
-                   p (? code (em2 g_vm_quote code)
+                   p (? code (em2 lvm_quote code)
                         (: site (cons lfd 0)
                            _ (pin scope 'sites (cons site (scope 'sites)))
                          (qsite site)))
@@ -240,7 +240,7 @@
        (: y (peep dict x Z) ; check global scope
         (? !(= y Z) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
-          (em2 g_vm_freev x))))
+          (em2 lvm_freev x))))
     (: lfd (assq x (d 'lam))
      (? (twop lfd) (lz c lfd d)
         (: s (d 'stk)
@@ -256,7 +256,7 @@
    d (sco c (init exp) imp)
    k (ana d (last exp) (k0s d))
    a (ary d)
-   e ((? (= a 1) k (em2 g_vm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
+   e ((? (= a 1) k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
    ; source \-expr for the printer. take the SURFACE body wev stashed for this node
    ; (keyed by the tagged exp) so iop/apx tags don't leak into the printed source;
    ; fall back to exp if unrecorded. prepend the captured imports as leading params
@@ -324,7 +324,7 @@
                              x (ala q (cbbp qa) (cbp d))
                            (set_cdr qa x)))
         f (ana c d)
-        g (?- id (&& even (nilp (c 'par))) (em2 g_vm_defglob n))
+        g (?- id (&& even (nilp (c 'par))) (em2 lvm_defglob n))
         _ (push c 'stk n)
         h (lnk (cbp nds))
         (\ x (f (g (h x))))))

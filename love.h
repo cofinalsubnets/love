@@ -42,13 +42,13 @@
 #endif
 
 #if g_tco
-#define _g_vm(n, ...) struct g *n(struct g *restrict g, union u *Ip, g_word *Hp, g_word *restrict Sp, ##__VA_ARGS__)
+#define _lvm(n, ...) struct g *n(struct g *restrict g, union u *Ip, g_word *Hp, g_word *restrict Sp, ##__VA_ARGS__)
 #define Ap(fn, g, ...) fn(g, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Continue() Ap(Ip->ap, g)
 #define Pack(g) (g->ip = Ip, g->hp = Hp, g->sp = Sp)
 #define Unpack(g) (Ip = g->ip, Hp = g->hp, Sp = g->sp)
 #else
-#define _g_vm(n, ...) struct g *n(struct g *restrict g, ##__VA_ARGS__)
+#define _lvm(n, ...) struct g *n(struct g *restrict g, ##__VA_ARGS__)
 #define Ap(fn, g, ...) fn(g, ##__VA_ARGS__)
 #define Continue() g
 #define Hp g->hp
@@ -57,18 +57,18 @@
 #define Pack(g) ((void)0)
 #define Unpack(g) ((void)0)
 #endif
-#define g_vm(...) g_noinline g_noicf _g_vm(__VA_ARGS__)
+#define lvm(...) g_noinline g_noicf _lvm(__VA_ARGS__)
 
 // ok thanks
 typedef intptr_t g_word;
 
 union u;
-typedef _g_vm(g_vm_t);
+typedef _lvm(lvm_t);
 
 // Typed N-dim array. Rank 0 = scalar (no shape words); payload at
 // (void*)(shape + rank). Immutable.
 struct g_tuple {
- g_vm_t *ap;
+ lvm_t *ap;
  uintptr_t type, rank, shape[]; };
 
 // Status rides the 2 pointer tag bits, read as two flags: bit 0 is the SING
@@ -80,7 +80,7 @@ struct g_tuple {
 enum g_status { g_status_ok = 0, g_status_scare = 1, g_status_more = 2, g_status_eof = 3 };
 struct g {
  union u {
-  g_vm_t *ap;
+  lvm_t *ap;
   g_word x;
   union u *m; } *ip;
  g_word *hp, *sp;
@@ -94,10 +94,10 @@ struct g {
            next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
  intptr_t next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
  struct g_atom {
-  g_vm_t *ap;
+  lvm_t *ap;
   uintptr_t code;
   struct g_str {
-   g_vm_t *ap;
+   lvm_t *ap;
    uintptr_t len;       // byte count
    char bytes[]; } *nom;
   struct g_atom *l, *r; } *symbols;
@@ -121,7 +121,7 @@ struct g {
   union {
    g_word x;
    struct g_io {
-    g_vm_t *ap;
+    lvm_t *ap;
     g_word fd;
     g_word ungetc_buf;            // pushed-back byte; putfix(EOF) = empty
     g_word eof_seen; } *io; };
@@ -151,7 +151,7 @@ static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
  return q + (r ? 1 : 0); }
 
-g_vm_t g_vm_ret0, g_vm_cur, g_vm_port_io, g_vm_trap;
+lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_trap;
 
 // Frontend-provided vtable for ports backed by real OS file descriptors.
 // Used whenever fd >= 0. Synthetic ports (fd <= -1) route through the
@@ -219,12 +219,12 @@ extern struct g_io g_stdin, g_stdout, g_stderr;
 #define oddp(_) ((uintptr_t)(_)&1)
 #define evenp(_) !oddp(_)
 #define cell(_) ((union u*)(_))
-#define Have1() if (Sp == Hp) return Ap(g_vm_gc, g, 1)
-#define Have(n) if (Sp < Hp + n) return Ap(g_vm_gc, g, n)
+#define Have1() if (Sp == Hp) return Ap(lvm_gc, g, 1)
+#define Have(n) if (Sp < Hp + n) return Ap(lvm_gc, g, n)
 #define g_pop1(g) (*(g)->sp++)
-#define op(nom, n, x) g_vm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
+#define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 #define nil g_nil
-struct g_pair { g_vm_t *ap; intptr_t a, b; };
+struct g_pair { lvm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KFix is the odd fixnum
 // tag; KHom is any non-data heap pointer (text/function/map). The five DATA kinds
 // (KTuple, KBig, KString, KSym, KTwo) are the ones g_typ recovers from an ap's section
@@ -264,7 +264,7 @@ struct g
  *g_reads(struct g*, struct g_io*),
  *g_read1(struct g*, struct g_io*),
  *str0(struct g*, uintptr_t);
-g_vm(g_vm_gc, uintptr_t);
+lvm(lvm_gc, uintptr_t);
 // g_kind maps any value to its enum q: KFix for a fixnum, KHom for a non-data heap
 // pointer (text/function/map), else g_typ's data kind -- refined for a rank>=1 tuple,
 // which expands by element tier to KArrZ..KArrO (a rank-0 box stays KTuple). Lives in
@@ -275,19 +275,19 @@ enum q g_kind(word);
 // the argument kind, g_kind(Sp[0])]. The data sentinels (data.c) tail-jump through
 // it; the aps + the table itself live in love.c. Row indexed by the full kind
 // (g_typ returns one of the five data kinds), so the first dimension is KN, not g_data_n.
-extern g_vm_t *g_apply_mx[KN][KN];
+extern lvm_t *g_apply_mx[KN][KN];
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-g_vm_t g_vm_ap, g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big; // sentinels + ap: data.c & inline predicates
+lvm_t lvm_ap, lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big; // sentinels + ap: data.c & inline predicates
 uintptr_t hash(struct g*, word), g_tuple_bytes(struct g_tuple*);
 #define str(_) ((struct g_str*)(_))
 #define homp evenp
 #define two(_) ((struct g_pair*)(_))
-static g_inline bool twop(word _) { return homp(_) && cell(_)->ap == g_vm_two; }
+static g_inline bool twop(word _) { return homp(_) && cell(_)->ap == lvm_two; }
 static g_inline void *bump(struct g *g, uintptr_t n) {
   if (avail(g) < n) __builtin_trap();
   void *x = g->hp; g->hp += n; return x; }
 static g_inline struct g_pair *ini_two(struct g_pair *w, intptr_t a, intptr_t b) {
- return w->ap = g_vm_two, w->a = a, w->b = b, w; }
+ return w->ap = lvm_two, w->a = a, w->b = b, w; }
 static g_inline struct g *encode(struct g*g, enum g_status s) { return
   (struct g*) ((uintptr_t) g | s); }
 // Throw: to the global `trap` function when installed, else throw_c (love.c).

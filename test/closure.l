@@ -3,7 +3,7 @@
 ; `:` is a sequential, letrec*-like scope: a binding may refer to earlier
 ; bindings and to itself. Recursive *functions* (a `\` literal or the
 ; `(name args) body` defun sugar) resolve lazily -- the name is bound before any
-; call, so self/forward references resolve per call (g_vm_lazyb).
+; call, so self/forward references resolve per call (lvm_lazyb).
 ;
 ; Recursive *VALUES* are the hard case: a binding whose eagerly-evaluated init
 ; is (or builds) a closure capturing the very name being defined, or a

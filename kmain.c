@@ -209,12 +209,12 @@ static struct g *fd_flush(struct g *g) {
     k_sources[fd].flush(fd);
   return g; }
 
-struct g_io g_stdin = { .ap = g_vm_port_io,
+struct g_io g_stdin = { .ap = lvm_port_io,
                         .fd = putfix(0), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
-struct g_io g_stdout = { .ap = g_vm_port_io,
+struct g_io g_stdout = { .ap = lvm_port_io,
                          .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 // No separate error stream; route err to the same fd as out (the console).
-struct g_io g_stderr = { .ap = g_vm_port_io,
+struct g_io g_stderr = { .ap = lvm_port_io,
                          .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
 
 struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
@@ -368,7 +368,7 @@ static void kfree(void *p) {
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
-static g_vm(g_kreset) { return k_reset(), g; }
+static lvm(g_kreset) { return k_reset(), g; }
 
 void fbdraw(void) {
   if (!kcb) return;                    // serial-only: no framebuffer console
@@ -389,20 +389,20 @@ void fbdraw(void) {
         for (uint8_t o = bmp[r], c = ff->w; c--; o >>= 1)
           kfb._[(y + r) * kfb.pitch + x + c] = o & 1 ? fg : bg; } }
 
-static g_vm(draw) {
+static lvm(draw) {
   fbdraw();
   kwait();
   Ip += 1;
   return Continue(); }
 
 
-static g_vm(key) {
+static lvm(key) {
  int b = kqpop();
  Sp[0] = putfix(b < 0 ? 0 : b);
  Ip += 1;
  return Continue(); }
 
-static g_vm(color) {
+static lvm(color) {
  uint8_t fg = getfix(*Sp++), bg = getfix(*Sp++);
  if (kcb) {
   cb_attr(kcb, fg, bg, 0);
@@ -416,27 +416,27 @@ static g_vm(color) {
 // per-arch implementation picks the analogous fault for that target.
 // the ap reports and halts, so k_fault_trigger does not return;
 // the post-call statements are reachable only if the fault did not fire.
-static g_vm(g_vm_fault) {
+static lvm(lvm_fault) {
   k_fault_trigger(getfix(Sp[0]));
   Ip += 1;
   return Continue(); }
 
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
-static g_vm(g_vm_kexit) { k_qemu_exit(getfix(Sp[0])); Ip += 1; return Continue(); }
+static lvm(lvm_kexit) { k_qemu_exit(getfix(Sp[0])); Ip += 1; return Continue(); }
 #endif
 
 
 
 static union u
   nif_reset[] = {{g_kreset}},
-  nif_draw[] = {{draw}, {g_vm_ret0}},
-  nif_key[] = {{key}, {g_vm_ret0}},
-  nif_color[] = {{g_vm_cur}, {.x = putfix(2)}, {color}, {g_vm_ret0}},
+  nif_draw[] = {{draw}, {lvm_ret0}},
+  nif_key[] = {{key}, {lvm_ret0}},
+  nif_color[] = {{lvm_cur}, {.x = putfix(2)}, {color}, {lvm_ret0}},
 #ifdef K_TEST
-  nif_exit[] = {{g_vm_kexit}, {g_vm_ret0}},
+  nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
 #endif
-  nif_fault[] = {{g_vm_fault}, {g_vm_ret0}};
+  nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
 // Reads the bootloader-populated kboot struct (Limine or UEFI) and
 // links every reported free range into the kernel free list. The

@@ -20,15 +20,15 @@
 // the real one (a stale build then mis-routes every apply). Keeping g_typ out of
 // the section makes the stride independent of data.h -- small, and constant across
 // regenerations. (Bodies stay distinct only by address: the section pins the
-// order/stride; g_noicf in the g_vm macro blocks identical-code folding. No body
+// order/stride; g_noicf in the lvm macro blocks identical-code folding. No body
 // here may use a per-sentinel literal, or the bodies would differ in size.)
-static g_vm(data_apply) {
+static lvm(data_apply) {
  return Ap(g_apply_mx[g_typ(Ip)][g_kind(Sp[0])], g); }
 #define data(idx, name) \
- __attribute__((section("gwen_data." #idx), used)) g_vm(name) { return Ap(data_apply, g); }
+ __attribute__((section("gwen_data." #idx), used)) lvm(name) { return Ap(data_apply, g); }
 
 #define go(_)\
-  _(00, g_vm_tuple) _(01, g_vm_big) _(02, g_vm_str)\
-  _(03, g_vm_sym) _(04, g_vm_two)
+  _(00, lvm_tuple) _(01, lvm_big) _(02, lvm_str)\
+  _(03, lvm_sym) _(04, lvm_two)
 
 go(data)

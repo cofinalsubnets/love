@@ -56,15 +56,15 @@
 ; the src rides the text span so GC traces it. Helpers pass th/f/n explicitly -- a
 ; closure over the forward-bound th miscompiles under the bootstrap c0.
 (: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (cons f (cons acc 0))))
-   (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) g_vm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
-   (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) g_vm_ap th) (nfa th (+ 1 i) n)) th)
+   (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) lvm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
+   (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
      src (cons '\ (cons 'x (cons (nfnest f n 'x) 0)))  ; alloc before lamb; printer source
      th (lamb (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
      _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past lamb: th can't move
-     _ (poke (+ 1 (* 2 n)) g_vm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
+     _ (poke (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
      _ (nfa th 0 n)
-     _ (poke (+ 3 (* 3 n)) g_vm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
+     _ (poke (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    (nump x) (| (fixp x) (| (tupp x) (bigp x)))   ; whole tower: fixnum / float box / wide-int box / complex / array / bignum
    (intp n) (| (fixp n) (| (boxp n) (bigp n)))       ; integer-valued numeral (exact power exponent / composition count)
@@ -103,7 +103,7 @@
 ; are the README's Church numeral arithmetic, so +/* on numerals agree with the numbers:
 ;   (+ f g) = Church add     ((+ f g) a x) = (f a (g a x))   -- README `add`
 ;   (* f g) = composition    ((* f g) x)   = (f (g x))       -- README `mul`
-; the C aps (g_vm_addh / g_vm_mulh) build the 2-arg partial (scomb f g)
+; the C aps (lvm_addh / lvm_mulh) build the 2-arg partial (scomb f g)
 ; / (bcomb f g); scomb's extra a-slot (threaded into both operands) is what makes + agree
 ; with addition rather than the S combinator's (f x (g x)).
 (: (scomb f g a x) (f a (g a x))

@@ -18,7 +18,7 @@ g_noinline uintptr_t g_clock(void) {
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
 
-static noreturn g_vm(g_vm_exit) { exit(getfix(Sp[0])); }
+static noreturn lvm(lvm_exit) { exit(getfix(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // Returns only when poll succeeds (data ready / deadline elapsed) or fails
 // for a non-EINTR reason.
@@ -85,9 +85,9 @@ static struct g *fd_flush(struct g *g) {
 
 struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
-struct g_io g_stdin = { g_vm_port_io, putfix(STDIN_FILENO), putfix(EOF), putfix(false) };
-struct g_io g_stdout = { g_vm_port_io, putfix(STDOUT_FILENO), putfix(EOF), putfix(false) };
-struct g_io g_stderr = { g_vm_port_io, putfix(STDERR_FILENO), putfix(EOF), putfix(false) };
+struct g_io g_stdin = { lvm_port_io, putfix(STDIN_FILENO), putfix(EOF), putfix(false) };
+struct g_io g_stdout = { lvm_port_io, putfix(STDOUT_FILENO), putfix(EOF), putfix(false) };
+struct g_io g_stderr = { lvm_port_io, putfix(STDERR_FILENO), putfix(EOF), putfix(false) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that g_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live
@@ -116,7 +116,7 @@ static g_noinline int call_open(struct g_str *pv, struct g_str *mv) {
     default: return -1; }
   return open(path, flags, 0644); }
 
-static g_vm(g_vm_open) {
+static lvm(lvm_open) {
   if (!g_strp(Sp[0]) || !g_strp(Sp[1])) goto fail;
   struct g_str *pv = (struct g_str*) Sp[0];
   struct g_str *mv = (struct g_str*) Sp[1];
@@ -142,9 +142,9 @@ static g_vm(g_vm_open) {
 // subsequent reads/writes/flush go to the noop slot, and the finalizer
 // (which checks fd >= 0) skips. Returns nil. No-op on misuse, matching
 // the existing fputc/etc. convention.
-static g_vm(g_vm_close) {
-  // inline "is x a port": heap pointer whose discriminator is g_vm_port_io.
-  if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == g_vm_port_io) {
+static lvm(lvm_close) {
+  // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
+  if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == lvm_port_io) {
     struct g_io *io = (struct g_io*) Sp[0];
     intptr_t fd = getfix(io->fd);
     if (fd >= 0) {
@@ -169,11 +169,11 @@ static struct g *host_grbufg(struct g *g, uintptr_t len) {
  return g; }
 
 // Workhorse for (run argv). Called with g Packed; argv is the single arg.
-// Pushes EXACTLY ONE net value above argv on every path so the g_vm_run
+// Pushes EXACTLY ONE net value above argv on every path so the lvm_run
 // shell collapses uniformly: success -> [(status . output), argv], failure
 // -> [errno-or-(-1) fixnum, argv]. Returns a not-ok g only on OOM.
 // &locals (pipes/pid/status) are fine here: this returns normally, it is
-// not a VM-dispatch tail-call site (cf. call_open vs g_vm_open).
+// not a VM-dispatch tail-call site (cf. call_open vs lvm_open).
 g_noinline static struct g *host_run(struct g *g, g_word argv) {
  // pass 1: validate every element is a string; size the arg-byte blob.
  intptr_t argc = 0;
@@ -249,7 +249,7 @@ g_noinline static struct g *host_run(struct g *g, g_word argv) {
    g->sp[0] = word(w); }                                  // [(status.output), argv]
  return g; }
 
-static g_vm(g_vm_run) {
+static lvm(lvm_run) {
  Pack(g);
  g = host_run(g, Sp[0]);
  if (!g_ok(g)) return gtrap(g);
@@ -259,7 +259,7 @@ static g_vm(g_vm_run) {
  return Continue(); }
 
 // Copy the name to a C string and look it up. Factored out (g_noinline) so the
-// memcpy(&name,...) escape can't defeat g_vm_getenv's tail call (cf. call_open).
+// memcpy(&name,...) escape can't defeat lvm_getenv's tail call (cf. call_open).
 g_noinline static char const *host_getenv(struct g_str *nv) {
  char name[4096];
  if (nv->len >= sizeof name) return NULL;
@@ -269,7 +269,7 @@ g_noinline static char const *host_getenv(struct g_str *nv) {
 
 // (getenv name) -> string, or nil if unset / misused. nil = absent, not an
 // error; the run fixnum-error convention does not apply here.
-static g_vm(g_vm_getenv) {
+static lvm(lvm_getenv) {
  char const *v = g_strp(Sp[0]) ? host_getenv((struct g_str*) Sp[0]) : NULL;
  if (!v) { Sp[0] = g_nil; Ip += 1; return Continue(); }
  Pack(g);
@@ -280,11 +280,11 @@ static g_vm(g_vm_getenv) {
  return Continue(); }
 
 static union u const
- nif_exit[] = {{g_vm_exit}, {g_vm_ret0}},
- nif_open[] = {{g_vm_cur}, {.x = putfix(2)}, {g_vm_open}, {g_vm_ret0}},
- nif_close[] = {{g_vm_close}, {g_vm_ret0}},
- nif_run[] = {{g_vm_run}, {g_vm_ret0}},
- nif_getenv[] = {{g_vm_getenv}, {g_vm_ret0}};
+ nif_exit[] = {{lvm_exit}, {lvm_ret0}},
+ nif_open[] = {{lvm_cur}, {.x = putfix(2)}, {lvm_open}, {lvm_ret0}},
+ nif_close[] = {{lvm_close}, {lvm_ret0}},
+ nif_run[] = {{lvm_run}, {lvm_ret0}},
+ nif_getenv[] = {{lvm_getenv}, {lvm_ret0}};
 
 // --- the boot script ---------------------------------------------------
 // Everything the two builds disagree about lives in this ONE conditional

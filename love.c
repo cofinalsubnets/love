@@ -78,7 +78,7 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define g_status_yield g_status_eof
 #endif
 #define str_type_width (Width(struct g_str))
-#define op1(nom, i, x) g_vm(nom) { Sp[0] = (x); Ip += i; return Continue(); }
+#define op1(nom, i, x) lvm(nom) { Sp[0] = (x); Ip += i; return Continue(); }
 #define op11(nom, x) op1(nom, 1, x)
 
 #define pop1 g_pop1
@@ -92,10 +92,10 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // fixnum, bignum, box, complex, string, pair...), so it is the ONE tuple type the
 // copying GC must trace element-by-element (evac_tuple). It sits outside the numeric
 // order; the typed fast lanes gate on `type <= g_C`, the arith lane on `type == g_O`
-// (g_vm_obin), so O elements always route through the promoting scalar dispatch --
+// (lvm_obin), so O elements always route through the promoting scalar dispatch --
 // that is what makes a bignum array add/multiply exactly instead of wrapping.
 enum g_tuple_type { g_Z, g_R, g_C, g_O, };
-// Elementwise dyadic opcodes for g_vm_vbin (kernel/arr.c). The five arith codes
+// Elementwise dyadic opcodes for lvm_vbin (kernel/arr.c). The five arith codes
 // match the arith slow aps; the five compare codes (>= vop_lt) produce a
 // 0/1 bool array. vop_eq is `=` over arrays (whole-array eq is `(aall (= a b))`).
 // vop_quot is `/` (true division: float when a element divides inexactly);
@@ -104,92 +104,92 @@ enum g_tuple_type { g_Z, g_R, g_C, g_O, };
 enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
            vop_lt, vop_le, vop_gt, vop_ge, vop_eq, };
 struct g_atom *intern_checked(struct g*, struct g_str*);
-g_vm_t g_vm_kcall,
- g_vm_two, g_vm_tuple, g_vm_sym, g_vm_str, g_vm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
- g_vm_putn, g_vm_gauge,    g_vm_clock,
- g_vm_nilp,  g_vm_putc, g_vm_nom, g_vm_intern, g_vm_twop,
- g_vm_pin, g_vm_peep, g_vm_fputx, g_vm_buf, g_vm_bufnew, g_vm_bcopy,
- g_vm_fixp,  g_vm_symp,   g_vm_strp,   g_vm_mapp, g_vm_band,   g_vm_bor,  g_vm_real,  g_vm_flop,
- g_vm_sin, g_vm_cos, g_vm_log, g_vm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
- // Step 7 -- complex (kernel/cplx.c). g_vm_cplx_bin (declared apart, below) is
+lvm_t lvm_kcall,
+ lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
+ lvm_putn, lvm_gauge,    lvm_clock,
+ lvm_nilp,  lvm_putc, lvm_nom, lvm_intern, lvm_twop,
+ lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
+ lvm_fixp,  lvm_symp,   lvm_strp,   lvm_mapp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
+ lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
+ // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
  // the arithmetic lane the scalar arith slow paths divert into.
- g_vm_cplx, g_vm_Cp, g_vm_re, g_vm_im, g_vm_conj, g_vm_abs, g_vm_carg,
- g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_slice,
- g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
- g_vm_getc,  g_vm_string, g_vm_lt,     g_vm_le,   g_vm_eq,     g_vm_same, g_vm_gt,  g_vm_ge,
- g_vm_sort,  g_vm_tally,
- g_vm_put, g_vm_pull, g_vm_table,   g_vm_keys,  g_vm_dig,
- g_vm_unc, g_vm_poke, g_vm_peek,
- g_vm_seek,  g_vm_trim,   g_vm_lamb,   g_vm_add,
- g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_fquot, g_vm_rem,  g_vm_arg,
- g_vm_bmul_start, g_vm_bmul,   // resumable (yieldable) bignum multiply
- g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
- g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,
- g_vm_argap, g_vm_quoteap, g_vm_argtap,
- g_vm_arg0, g_vm_arg1, g_vm_arg2, g_vm_arg3,
- g_vm_quo0, g_vm_quo1, g_vm_quo2, g_vm_quo3, g_vm_quom1, g_vm_quom2,
- g_vm_callk, g_vm_scare, g_vm_yield_sw, g_vm_yield_nif, g_vm_task_exit, g_vm_spawn, g_vm_wait,
- g_vm_sleep, g_vm_donep, g_vm_kill, g_vm_key,
- g_vm_fgetc, g_vm_fungetc, g_vm_feof, g_vm_fputc, g_vm_fputs, g_vm_fflush,
- g_vm_fputn, g_vm_read, g_vm_dot,
- // Step 5a -- typed multi-rank arrays (kernel/arr.c). g_vm_vbin is the shared
+ lvm_cplx, lvm_Cp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,
+ lvm_bxor,  lvm_bsr,    lvm_bsl,    lvm_slice,
+ lvm_cons,   lvm_car,  lvm_cdr,    lvm_puts,
+ lvm_getc,  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
+ lvm_sort,  lvm_tally,
+ lvm_put, lvm_pull, lvm_table,   lvm_keys,  lvm_dig,
+ lvm_unc, lvm_poke, lvm_peek,
+ lvm_seek,  lvm_trim,   lvm_lamb,   lvm_add,
+ lvm_sub,   lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
+ lvm_bmul_start, lvm_bmul,   // resumable (yieldable) bignum multiply
+ lvm_quote, lvm_freev,  lvm_eval,   lvm_cond, lvm_jump,   lvm_defglob,
+ lvm_ap,    lvm_tap,    lvm_apn,    lvm_tapn, lvm_ret,
+ lvm_argap, lvm_quoteap, lvm_argtap,
+ lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
+ lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
+ lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
+ lvm_sleep, lvm_donep, lvm_kill, lvm_key,
+ lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
+ lvm_fputn, lvm_read, lvm_dot,
+ // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
- g_vm_arr, g_vm_arank, g_vm_alen, g_vm_ashape, g_vm_atype,
- g_vm_asum, g_vm_aprod, g_vm_amax, g_vm_amin, g_vm_aall,
- g_vm_tupp, g_vm_bigp, g_vm_boxp, g_vm_arrp, g_vm_intf, g_vm_homp, g_vm_hotp;
-// Carry extra operands, so (like g_vm_gc) they are declared apart from the
-// plain g_vm_t list, which fixes the 4-argument ap signature. g_vm_vbin
-// is the elementwise/broadcast dyadic engine (vop selects the op); g_vm_vmap1
-// applies a monadic math fn elementwise to an array (e.g. (sin arr)); g_vm_vmap2
+ lvm_arr, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
+ lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall,
+ lvm_tupp, lvm_bigp, lvm_boxp, lvm_arrp, lvm_intf, lvm_homp, lvm_hotp;
+// Carry extra operands, so (like lvm_gc) they are declared apart from the
+// plain lvm_t list, which fixes the 4-argument ap signature. lvm_vbin
+// is the elementwise/broadcast dyadic engine (vop selects the op); lvm_vmap1
+// applies a monadic math fn elementwise to an array (e.g. (sin arr)); lvm_vmap2
 // is the dyadic analogue with broadcasting (e.g. (pow arr arr), (atan2 ...)).
-g_vm(g_vm_vbin, int);
-g_vm(g_vm_vmap1, g_flo_t (*)(g_flo_t));
-g_vm(g_vm_vmap2, g_flo_t (*)(g_flo_t, g_flo_t));
+lvm(lvm_vbin, int);
+lvm(lvm_vmap1, g_flo_t (*)(g_flo_t));
+lvm(lvm_vmap2, g_flo_t (*)(g_flo_t, g_flo_t));
 // Complex arithmetic lane (kernel/cplx.c): the scalar arith slow paths divert
 // here when either operand is complex; vop selects add/sub/mul/quot (rem -> nil).
-g_vm(g_vm_cplx_bin, int);
-// Complex-array elementwise lane (g_C): g_vm_vbin diverts here when an operand is
+lvm(lvm_cplx_bin, int);
+// Complex-array elementwise lane (g_C): lvm_vbin diverts here when an operand is
 // a packed (re,im) g_C array (or a complex scalar paired with an array). Same
 // numpy broadcast as vbin, complex domain; `=` -> mask, ordering/% -> nil.
-g_vm(g_vm_cbin, int);
-// Object-array elementwise lane (g_O): the broadcast engine g_vm_vbin diverts
+lvm(lvm_cbin, int);
+// Object-array elementwise lane (g_O): the broadcast engine lvm_vbin diverts
 // here when an operand is a g_O array, so each element op runs the promoting
 // scalar dispatch (exact bignum results) instead of the typed raw-C lanes.
-g_vm(g_vm_obin, int);
+lvm(lvm_obin, int);
 // data-kind recovery (datp/typ). Included here, after the self-quote sentinels
 // above, because a frontend's override (e.g. wasm/inc/data.h) resolves kinds
-// by comparing an ap against g_vm_two..g_vm_str directly.
+// by comparing an ap against lvm_two..lvm_str directly.
 #include <data.h>
 char const *g_nif_name(intptr_t);
 #define tuple(_) ((struct g_tuple*)(_))
 #define fixp oddp
 #define sym(_) ((struct g_atom*)(_))
-static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == g_vm_sym; }
-static g_inline bool tupp(word _) { return homp(_) && cell(_)->ap == g_vm_tuple; }
-static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == g_vm_str; }
+static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == lvm_sym; }
+static g_inline bool tupp(word _) { return homp(_) && cell(_)->ap == lvm_tuple; }
+static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == lvm_str; }
 // Mutable flat byte string. NOT a data kind: its head word is the
-// behaves-as-0 g_vm_buf (like g_vm_port_io for ports), so the GC walks a buf
-// as a plain length-2 text -- [g_vm_buf, backing g_str, terminator] -- and
+// behaves-as-0 lvm_buf (like lvm_port_io for ports), so the GC walks a buf
+// as a plain length-2 text -- [lvm_buf, backing g_str, terminator] -- and
 // the generic text scan forwards the embedded string pointer for free; no
 // bespoke evac/copy rule, and the data-sentinel mechanism stays reserved for
 // kinds that need one. The bytes live in an ordinary g_str we mutate in place
 // (cf. the `to` output port). Earned by the build tools that back-patch a
 // binary image in place. Recognized by ap, like iop() for ports.
-struct g_buf { g_vm_t *ap; struct g_str *str; };
-static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == g_vm_buf; }
+struct g_buf { lvm_t *ap; struct g_str *str; };
+static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == lvm_buf; }
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
-// texts: a fixed 2-word HEADER [g_vm_map_lookup, backing, <tag>] that callers
-// hold, and a BACKING [g_vm_map_data, putfix(len), putfix(cap), k0,v0, … , <tag>]
+// texts: a fixed 2-word HEADER [lvm_map_lookup, backing, <tag>] that callers
+// hold, and a BACKING [lvm_map_data, putfix(len), putfix(cap), k0,v0, … , <tag>]
 // it points at -- open-addressed, linear-probed, cap a power of two. Growth
 // allocates a new backing and swaps header[1]; the header never moves, so an
 // aliased reference (ev's scopes) sees later inserts. Both are plain texts:
 // len/cap are fixnums and keys/vals l words, so evac_text traces them with no
 // bespoke GC, like g_buf. Empty slots hold map_gap, a unique word-aligned
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
-// a terminator. (m k) looks k up (nil if absent) through g_vm_map_lookup.
-static g_vm_t g_vm_map_lookup, g_vm_map_data;
-static g_inline bool mapp(word _) { return homp(_) && cell(_)->ap == g_vm_map_lookup; }
+// a terminator. (m k) looks k up (nil if absent) through lvm_map_lookup.
+static lvm_t lvm_map_lookup, lvm_map_data;
+static g_inline bool mapp(word _) { return homp(_) && cell(_)->ap == lvm_map_lookup; }
 static const word g_map_gap_cell = 0;
 #define map_gap ((word) &g_map_gap_cell)
 #define map_min_cap 4
@@ -214,10 +214,10 @@ static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : s
 // unambiguous. Canonical demotion keeps the tiers disjoint: a value in fixnum
 // range is a fixnum, one in intptr_t range a wide-int box, only wider values a
 // bignum -- so fixp/boxp/bigp are mutually exclusive and =/eqv stay well defined.
-struct g_big { g_vm_t *ap; intptr_t slen; uint32_t limb[]; };
-static g_inline bool bigp(word _) { return homp(_) && cell(_)->ap == g_vm_big; }
+struct g_big { lvm_t *ap; intptr_t slen; uint32_t limb[]; };
+static g_inline bool bigp(word _) { return homp(_) && cell(_)->ap == lvm_big; }
 static g_inline struct g_big *ini_big(struct g_big *b, intptr_t slen) {
- return b->ap = g_vm_big, b->slen = slen, b; }
+ return b->ap = lvm_big, b->slen = slen, b; }
 uintptr_t g_big_bytes(struct g_big*);
 // Canonicalize a magnitude (limb[0..n), sign neg) into the smallest tier:
 // fixnum, else wide-int box, else bignum; bumps *hp when it boxes/bignums. One
@@ -246,7 +246,7 @@ static g_inline bool boxp(word _) {
 static g_inline bool Cp(word _) {
   return tupp(_) && tuple(_)->rank == 0 && tuple(_)->type == g_C; }
 // A rank>=1 typed array (vs a rank-0 scalar box, which flop/boxp catch). The
-// elementwise arith/compare lanes divert to g_vm_vbin when either operand arrp.
+// elementwise arith/compare lanes divert to lvm_vbin when either operand arrp.
 static g_inline bool arrp(word _) { return tupp(_) && tuple(_)->rank >= 1; }
 
 // Max array rank (bounds the stack index/stride arrays in the broadcast loop).
@@ -260,7 +260,7 @@ static g_inline uintptr_t tuple_nelem(struct g_tuple *v) {
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  return n; }
 static g_inline struct g_tuple *ini_tuple(struct g_tuple *v, enum g_tuple_type t, uintptr_t rank) {
- return v->ap = g_vm_tuple, v->type = t, v->rank = rank, v; }
+ return v->ap = lvm_tuple, v->type = t, v->rank = rank, v; }
 // Read element i of v as a double / as an integer (sign-extending the narrow
 // integer types; truncating a float toward zero for the int reader). The int
 // reader is only used on integer-typed arrays in practice.
@@ -293,7 +293,7 @@ static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
 // short-circuit with NO walk: nil (the 0 word), EmptyString, fixnum sign, table key
 // count, bignum sign, symbol name; only products and tuples (boxed scalars, rank>=1
 // arrays) compute their net, and those sums cannot short-circuit -- a later negative
-// can cancel an early positive. Lockstep with g_pin (g_vm_pin): same zero conditions.
+// can cancel an early positive. Lockstep with g_pin (lvm_pin): same zero conditions.
 // a symbol's $ (sat) value, shared by g_net ($) and g_nilp (!). THE empty symbol
 // (empty_sym, prints as ()) has no name -> 0 -> falsy. Every other present symbol
 // (interned, named-uninterned, anonymous nom) floors to >=1 -> truthy.
@@ -368,7 +368,7 @@ static g_inline g_flo_t g_fmod(g_flo_t a, g_flo_t b) {
 // the full 256-bit payload -- Z (one word) on 64-bit, C (two words) on 32-bit.
 #define rng_vt (Bytes == 4 ? g_C : g_Z)
 void g_rng_seed(struct g_tuple*, uint64_t);   // shape an i64 state tuple + seed it (SplitMix64)
-g_vm_t g_vm_rng_seed, g_vm_rand_next, g_vm_randf_next;
+lvm_t lvm_rng_seed, lvm_rand_next, lvm_randf_next;
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
@@ -457,10 +457,10 @@ static g_inline union u *clip(struct g *g, union u *k) {
 
 
 static g_inline struct g_atom *ini_anon(struct g_atom *y, uintptr_t code) {
- return y->ap = g_vm_sym, y->nom = 0, y->code = code, y; }
+ return y->ap = lvm_sym, y->nom = 0, y->code = code, y; }
 
 static g_inline struct g_atom *ini_sym(struct g_atom *y, struct g_str *nom, uintptr_t code) {
- return y->ap = g_vm_sym, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
+ return y->ap = lvm_sym, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
 
 // named but *uninterned* symbol: nom holds the interned SYMBOL it is named after
 // (not a string). That both tags it as uninterned -- the printer renders it
@@ -468,10 +468,10 @@ static g_inline struct g_atom *ini_sym(struct g_atom *y, struct g_str *nom, uint
 // it skip the l/r subtree slots only interned syms (string nom) carry, exactly
 // like an anonymous sym (nom 0). So it is also a Width-2 allocation.
 static g_inline struct g_atom *ini_usym(struct g_atom *y, struct g_atom *nom, uintptr_t code) {
- return y->ap = g_vm_sym, y->nom = (struct g_str*) nom, y->code = code, y; }
+ return y->ap = lvm_sym, y->nom = (struct g_str*) nom, y->code = code, y; }
 
 static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
- return s->ap = g_vm_str, s->len = len, s; }
+ return s->ap = lvm_str, s->len = len, s; }
 
 // The unique empty string and empty (anonymous) symbol. Both live in the data
 // segment, so the Cheney forwarder leaves any pointer to them untouched (gcp's
@@ -484,11 +484,11 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // string/sym value; the FAM `bytes[]` is simply absent (len 0).
 // External linkage (declared in love.h with the EmptyString/empty_sym macros) so the
 // frontends can return them too (e.g. host_run's empty-output capture).
-const struct g_str g_str_empty = { .ap = g_vm_str, .len = 0 };
-const struct g_atom g_sym_empty = { .ap = g_vm_sym, .code = 0, .nom = 0, .l = 0, .r = 0 };
+const struct g_str g_str_empty = { .ap = lvm_str, .len = 0 };
+const struct g_atom g_sym_empty = { .ap = lvm_sym, .code = 0, .nom = 0, .l = 0, .r = 0 };
 
 static g_inline struct g_tuple *ini_scalar(struct g_tuple *v, enum g_tuple_type t) {
- return v->ap = g_vm_tuple, v->type = t, v->rank = 0, v; }
+ return v->ap = lvm_tuple, v->type = t, v->rank = 0, v; }
 
 
 static g_inline uintptr_t rot(uintptr_t x) {
@@ -530,9 +530,9 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
 #define yield_interval 64
 #define YieldCheck() \
   if (g->tasks->m != g->tasks && ++g->yield_ctr >= yield_interval) \
-    return Ap(g_vm_yield_sw, g)
-#define argn(nom, i) g_vm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
-#define quon(nom, v) g_vm(nom) { Have1(); Sp -= 1; Sp[0] = putfix(v); Ip += 1; return Continue(); }
+    return Ap(lvm_yield_sw, g)
+#define argn(nom, i) lvm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
+#define quon(nom, v) lvm(nom) { Have1(); Sp -= 1; Sp[0] = putfix(v); Ip += 1; return Continue(); }
 
 #define Ana(n, ...) struct g *n(struct g *g, struct env **c, intptr_t x, ##__VA_ARGS__)
 #define Cata(n, ...) struct g *n(struct g *g, struct env **c, ##__VA_ARGS__)
@@ -552,67 +552,67 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
 #define dtoa_sci_lo 1e-4f
 #endif
 
-#define s1(i) {{i}, {g_vm_ret0}}
-#define s2(i) {{g_vm_cur},{.x=putfix(2)},{i}, {g_vm_ret0}}
-#define s3(i) {{g_vm_cur},{.x=putfix(3)},{i}, {g_vm_ret0}}
-#define s5(i) {{g_vm_cur},{.x=putfix(5)},{i}, {g_vm_ret0}}
+#define s1(i) {{i}, {lvm_ret0}}
+#define s2(i) {{lvm_cur},{.x=putfix(2)},{i}, {lvm_ret0}}
+#define s3(i) {{lvm_cur},{.x=putfix(3)},{i}, {lvm_ret0}}
+#define s5(i) {{lvm_cur},{.x=putfix(5)},{i}, {lvm_ret0}}
 #define nifs(_) \
- _(nif_clock, "clock", s1(g_vm_clock)) _(nif_gauge, "gauge", s1(g_vm_gauge))\
- _(nif_add, "+", s2(g_vm_add)) _(nif_sub, "-", s2(g_vm_sub)) _(nif_mul, "*", s2(g_vm_mul))\
- _(nif_quot, "/", s2(g_vm_quot)) _(nif_fquot, "//", s2(g_vm_fquot)) _(nif_rem, "%", s2(g_vm_rem)) \
- _(nif_lt, "<", s2(g_vm_lt))  _(nif_le, "<=", s2(g_vm_le)) _(nif_eq, "=", s2(g_vm_eq))\
- _(nif_ge, ">=", s2(g_vm_ge))  _(nif_gt, ">", s2(g_vm_gt)) \
- _(nif_same, "idp", s2(g_vm_same)) \
- _(nif_bsl, "<<", s2(g_vm_bsl)) _(nif_bsr, ">>", s2(g_vm_bsr))\
- _(nif_band, "&", s2(g_vm_band)) _(nif_bor, "|", s2(g_vm_bor)) _(nif_bxor, "^", s2(g_vm_bxor))\
- _(nif_cons, "cons", s2(g_vm_cons)) _(nif_car, "cap", s1(g_vm_car)) _(nif_cdr, "cbp", s1(g_vm_cdr)) _(nif_sort, "sort", s1(g_vm_sort)) _(nif_tally, "tally", s1(g_vm_tally)) \
- _(nif_slice, "slice", s3(g_vm_slice)) \
- _(nif_read, "read", s2(g_vm_read))\
- _(nif_string, "string", s1(g_vm_string))\
- _(nif_intern, "intern", s1(g_vm_intern)) _(nif_nom, "nom", s1(g_vm_nom))\
- _(nif_lamb, "lamb", s1(g_vm_lamb))\
- _(nif_peek, "peek", s2(g_vm_peek)) _(nif_poke, "poke", s3(g_vm_poke)) _(nif_trim, "trim", s1(g_vm_trim))\
- _(nif_seek, "seek", s2(g_vm_seek)) _(nif_pin, "sat", s1(g_vm_pin)) _(nif_peep, "peep", s3(g_vm_peep))\
- _(nif_put, "pin", s3(g_vm_put)) _(nif_pull, "pull", s3(g_vm_pull)) _(nif_table, "table", s1(g_vm_table)) _(nif_keys, "keys", s1(g_vm_keys))\
- _(nif_dig, "dig", s1(g_vm_dig))\
- _(nif_bufnew, "buf", s1(g_vm_bufnew)) _(nif_bcopy, "blit", s5(g_vm_bcopy))\
- _(nif_twop, "twop", s1(g_vm_twop)) _(nif_strp, "strp", s1(g_vm_strp))\
- _(nif_real, "real", s1(g_vm_real)) _(nif_flop, "flop", s1(g_vm_flop))\
- _(nif_sin, "sin", s1(g_vm_sin)) _(nif_cos, "cos", s1(g_vm_cos))\
- _(nif_log, "log", s1(g_vm_log)) _(nif_pow, "pow", s2(g_vm_pow))\
- _(nif_cplx, "plex", s2(g_vm_cplx)) _(nif_Cp, "comp", s1(g_vm_Cp))\
- _(nif_re, "re", s1(g_vm_re)) _(nif_im, "im", s1(g_vm_im)) _(nif_conj, "conj", s1(g_vm_conj))\
- _(nif_abs, "abs", s1(g_vm_abs)) _(nif_arg, "arg", s1(g_vm_carg))\
- _(nif_arr, "arr", s3(g_vm_arr))\
- _(nif_arank, "arank", s1(g_vm_arank))\
- _(nif_alen, "alen", s1(g_vm_alen)) _(nif_ashape, "ashape", s1(g_vm_ashape))\
- _(nif_atype, "atype", s1(g_vm_atype))\
- _(nif_asum, "asum", s1(g_vm_asum)) _(nif_aprod, "aprod", s1(g_vm_aprod))\
- _(nif_amax, "amax", s1(g_vm_amax)) _(nif_amin, "amin", s1(g_vm_amin))\
- _(nif_aall, "aall", s1(g_vm_aall))\
- _(nif_tupp, "tupp", s1(g_vm_tupp)) _(nif_bigp, "bigp", s1(g_vm_bigp)) _(nif_boxp, "boxp", s1(g_vm_boxp))\
- _(nif_arrp, "arrp", s1(g_vm_arrp)) _(nif_intf, "int", s1(g_vm_intf))\
- _(nif_symp, "symp", s1(g_vm_symp)) _(nif_mapp, "mapp", s1(g_vm_mapp)) _(nif_fixp, "fixp", s1(g_vm_fixp))\
- _(nif_homp, "homp", s1(g_vm_homp)) _(nif_hotp, "hotp", s1(g_vm_hotp))\
- _(nif_nilp, "nilp", s1(g_vm_nilp)) _(nif_ev, "ev", s1(g_vm_eval))\
- _(nif_callk, "call-cc", s1(g_vm_callk)) _(nif_scare, "scare", s2(g_vm_scare)) _(nif_yield, "yield", s1(g_vm_yield_nif)) \
- _(nif_spawn, "spawn", s2(g_vm_spawn)) _(nif_wait, "wait", s1(g_vm_wait)) \
- _(nif_sleep, "sleep", s1(g_vm_sleep)) _(nif_donep, "done?", s1(g_vm_donep)) \
- _(nif_kill, "kill", s1(g_vm_kill)) \
- _(nif_key, "key?", s1(g_vm_key)) \
- _(nif_fputn, "fputn", s3(g_vm_fputn))\
- _(nif_fputx, "fputx", s2(g_vm_fputx))\
- _(nif_fgetc, "fgetc", s1(g_vm_fgetc)) _(nif_fungetc, "fungetc", s2(g_vm_fungetc)) _(nif_feof, "feof", s1(g_vm_feof))\
- _(nif_fputc, "fputc", s2(g_vm_fputc)) _(nif_fputs, "fputs", s2(g_vm_fputs))  _(nif_fflush, "fflush", s1(g_vm_fflush))\
- _(nif_dot, "dot", s1(g_vm_dot))\
- _(nif_rng_seed, "rng-seed", s1(g_vm_rng_seed))\
- _(nif_rand_next, "rand-next", s1(g_vm_rand_next)) _(nif_randf_next, "randf-next", s1(g_vm_randf_next))
+ _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge))\
+ _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
+ _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
+ _(nif_lt, "<", s2(lvm_lt))  _(nif_le, "<=", s2(lvm_le)) _(nif_eq, "=", s2(lvm_eq))\
+ _(nif_ge, ">=", s2(lvm_ge))  _(nif_gt, ">", s2(lvm_gt)) \
+ _(nif_same, "idp", s2(lvm_same)) \
+ _(nif_bsl, "<<", s2(lvm_bsl)) _(nif_bsr, ">>", s2(lvm_bsr))\
+ _(nif_band, "&", s2(lvm_band)) _(nif_bor, "|", s2(lvm_bor)) _(nif_bxor, "^", s2(lvm_bxor))\
+ _(nif_cons, "cons", s2(lvm_cons)) _(nif_car, "cap", s1(lvm_car)) _(nif_cdr, "cbp", s1(lvm_cdr)) _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
+ _(nif_slice, "slice", s3(lvm_slice)) \
+ _(nif_read, "read", s2(lvm_read))\
+ _(nif_string, "string", s1(lvm_string))\
+ _(nif_intern, "intern", s1(lvm_intern)) _(nif_nom, "nom", s1(lvm_nom))\
+ _(nif_lamb, "lamb", s1(lvm_lamb))\
+ _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
+ _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "sat", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
+ _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull)) _(nif_table, "table", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
+ _(nif_dig, "dig", s1(lvm_dig))\
+ _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
+ _(nif_twop, "twop", s1(lvm_twop)) _(nif_strp, "strp", s1(lvm_strp))\
+ _(nif_real, "real", s1(lvm_real)) _(nif_flop, "flop", s1(lvm_flop))\
+ _(nif_sin, "sin", s1(lvm_sin)) _(nif_cos, "cos", s1(lvm_cos))\
+ _(nif_log, "log", s1(lvm_log)) _(nif_pow, "pow", s2(lvm_pow))\
+ _(nif_cplx, "plex", s2(lvm_cplx)) _(nif_Cp, "comp", s1(lvm_Cp))\
+ _(nif_re, "re", s1(lvm_re)) _(nif_im, "im", s1(lvm_im)) _(nif_conj, "conj", s1(lvm_conj))\
+ _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
+ _(nif_arr, "arr", s3(lvm_arr))\
+ _(nif_arank, "arank", s1(lvm_arank))\
+ _(nif_alen, "alen", s1(lvm_alen)) _(nif_ashape, "ashape", s1(lvm_ashape))\
+ _(nif_atype, "atype", s1(lvm_atype))\
+ _(nif_asum, "asum", s1(lvm_asum)) _(nif_aprod, "aprod", s1(lvm_aprod))\
+ _(nif_amax, "amax", s1(lvm_amax)) _(nif_amin, "amin", s1(lvm_amin))\
+ _(nif_aall, "aall", s1(lvm_aall))\
+ _(nif_tupp, "tupp", s1(lvm_tupp)) _(nif_bigp, "bigp", s1(lvm_bigp)) _(nif_boxp, "boxp", s1(lvm_boxp))\
+ _(nif_arrp, "arrp", s1(lvm_arrp)) _(nif_intf, "int", s1(lvm_intf))\
+ _(nif_symp, "symp", s1(lvm_symp)) _(nif_mapp, "mapp", s1(lvm_mapp)) _(nif_fixp, "fixp", s1(lvm_fixp))\
+ _(nif_homp, "homp", s1(lvm_homp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
+ _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
+ _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
+ _(nif_spawn, "spawn", s2(lvm_spawn)) _(nif_wait, "wait", s1(lvm_wait)) \
+ _(nif_sleep, "sleep", s1(lvm_sleep)) _(nif_donep, "done?", s1(lvm_donep)) \
+ _(nif_kill, "kill", s1(lvm_kill)) \
+ _(nif_key, "key?", s1(lvm_key)) \
+ _(nif_fputn, "fputn", s3(lvm_fputn))\
+ _(nif_fputx, "fputx", s2(lvm_fputx))\
+ _(nif_fgetc, "fgetc", s1(lvm_fgetc)) _(nif_fungetc, "fungetc", s2(lvm_fungetc)) _(nif_feof, "feof", s1(lvm_feof))\
+ _(nif_fputc, "fputc", s2(lvm_fputc)) _(nif_fputs, "fputs", s2(lvm_fputs))  _(nif_fflush, "fflush", s1(lvm_fflush))\
+ _(nif_dot, "dot", s1(lvm_dot))\
+ _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
+ _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))
 #define native_implemented_function(n, _, d) static union u const n[] = d;
-#define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn)\
-  _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_defglob)\
-  _(g_vm_argap) _(g_vm_quoteap) _(g_vm_argtap)\
-  _(g_vm_arg0) _(g_vm_arg1) _(g_vm_arg2) _(g_vm_arg3)\
-  _(g_vm_quo0) _(g_vm_quo1) _(g_vm_quo2) _(g_vm_quo3) _(g_vm_quom1) _(g_vm_quom2)
+#define insts(_) _(lvm_unc) _(lvm_freev) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
+  _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
+  _(lvm_argap) _(lvm_quoteap) _(lvm_argtap)\
+  _(lvm_arg0) _(lvm_arg1) _(lvm_arg2) _(lvm_arg3)\
+  _(lvm_quo0) _(lvm_quo1) _(lvm_quo2) _(lvm_quo3) _(lvm_quom1) _(lvm_quom2)
 #define niff(b, n, _) {n, (intptr_t) b},
 #define i_entry(i) {#i, (intptr_t) i},
 
@@ -634,22 +634,22 @@ struct g *g_defn(struct g*g, struct g_def const*defs, uintptr_t n) {
 
 nifs(native_implemented_function);
 
-static g_vm(_g_vm_yield_c) { return Pack(g), g; }
-static union u const yield_c[] = { {_g_vm_yield_c} };
+static lvm(_lvm_yield_c) { return Pack(g), g; }
+static union u const yield_c[] = { {_lvm_yield_c} };
 
-// g_vm_trap: the default trap ap, a first-class vm ap (declared in love.h with
+// lvm_trap: the default trap ap, a first-class vm ap (declared in love.h with
 // ret0/cur/port_io). A throw enters it with the thrown status encoded into g
 // (see gtrap2 below). The MORE bit is read control flow, not a scare: the
 // thrower left [resume port sentinel] on the stack (the fread protocol), so
 // deliver the port (more: incomplete) or the sentinel (eof) to the resume
 // text and keep running. A scare re-encodes and yields to C. Define a global
 // `trap` function to land throws in l instead.
-// the scare exit door: re-encode and yield to C. Lives OUTSIDE the g_vm_*
-// namespace (the underscore convention, like _g_vm_yield_c above) because it
+// the scare exit door: re-encode and yield to C. Lives OUTSIDE the lvm_*
+// namespace (the underscore convention, like _lvm_yield_c above) because it
 // is the one designed return -- the vmret gate's no-ret invariant scans
-// g_vm_*, and g_vm_trap reaches here by tail call (a jmp under g_tco).
-static g_vm(_g_vm_trap_sing, enum g_status s) { return Pack(g), encode(g, s); }
-g_vm(g_vm_trap) {
+// lvm_*, and lvm_trap reaches here by tail call (a jmp under g_tco).
+static lvm(_lvm_trap_sing, enum g_status s) { return Pack(g), encode(g, s); }
+lvm(lvm_trap) {
  enum g_status s = g_code_of(g);
  g = g_core_of(g);
  if (s & g_status_more) {
@@ -657,8 +657,8 @@ g_vm(g_vm_trap) {
   Sp[2] = s == g_status_more ? Sp[1] : Sp[2];         // more -> port, eof -> sentinel
   Sp += 2;
   return Continue(); }
- return Ap(_g_vm_trap_sing, g, s); }
-static union u const throw_c[] = { {g_vm_trap} };
+ return Ap(_lvm_trap_sing, g, s); }
+static union u const throw_c[] = { {lvm_trap} };
 
 // gtrap2/gtrap are defined after numap_drive (the trap call frame runs
 // through its 3-arg twin); declared in love.h.
@@ -769,7 +769,7 @@ struct g *gxr(struct g *g) {
 // ============================================================================
 // gc
 // ============================================================================
-g_vm(g_vm_gc, uintptr_t n) {
+lvm(lvm_gc, uintptr_t n) {
  Pack(g);
  if (!g_ok(g = g_please(g, n))) return gtrap(g);
  return Unpack(g), Continue(); }
@@ -884,7 +884,7 @@ g_noinline struct g *g_please(struct g *g, uintptr_t req0) {
 static g_inline word copy_two(struct g*g, struct g_pair *src, word const *const p0, word const *const t0) {
  struct g_pair *dst = bump(g, Width(struct g_pair));
  ini_two(dst, src->a, src->b);
- src->ap = (g_vm_t*) dst;
+ src->ap = (lvm_t*) dst;
  return word(dst); }
 
 static g_inline word copy_tuple(struct g*g, struct g_tuple *src, word const *const p0, word const*const t0) {
@@ -916,7 +916,7 @@ static g_inline word copy_sym(struct g*g, struct g_atom *src, word const *const 
    dst = bump(g, Width(struct g_atom) - 2), ini_usym(dst, sym(nom), src->code);
   else                                         // interned (string nom): rebuild the tree by name
    dst = intern_checked(g, (struct g_str*) nom); }
- return word(src->ap = (g_vm_t*) dst); }
+ return word(src->ap = (lvm_t*) dst); }
 
 static g_inline word copy_data(struct g *g, union u *src, word const *const p0, word const *const t0) {
  switch (typ(src)) {
@@ -954,7 +954,7 @@ static g_noinline intptr_t gcp(struct g *g, word x, word const *p0, word const *
 // ev
 // ============================================================================
 static g_inline struct g *pushl(struct g*g) { return intern(g_strof(g, "\\")); }
-static struct g *c0(struct g *g, g_vm_t *y);
+static struct g *c0(struct g *g, lvm_t *y);
 static struct g *g_eval(struct g *g);
 static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n);
 
@@ -979,10 +979,10 @@ static cata c1_i, c1_ix, c1_var, c1_yield, c1_ret, c1, c1_recv;
 static g_inline Cata(pull) { return g_ok(g) ? ((cata*) pop1(g))(g, c) : g; }
 
 // generic instruction ana aps
-static g_inline struct g *c0_ix(struct g *g, struct env **c, g_vm_t *i, word x) {
+static g_inline struct g *c0_ix(struct g *g, struct env **c, lvm_t *i, word x) {
  return incl(*c, 2), g_push(g, 3, c1_ix, i, x); }
 
-static g_inline struct g *c0_i(struct g *g, struct env **c, g_vm_t *i) {
+static g_inline struct g *c0_i(struct g *g, struct env **c, lvm_t *i) {
  return incl(*c, 1), g_push(g, 2, c1_i, i); }
 
 static struct g *enscope(struct g *g, struct env *par, word args, word imps) {
@@ -1016,7 +1016,7 @@ static struct g *append(struct g *g) {
  return g; }
 
 // don't inline this so callers can tail call optimize
-static g_noinline struct g *c0(struct g *g, g_vm_t *y) {
+static g_noinline struct g *c0(struct g *g, lvm_t *y) {
  // the operator factor pass: c0 delegates the sigil surface -> core source
  // rewrite to the l `opfix` prepass (prelude.l) -- evaluated like a macro,
  // once that global exists (i.e. for everything after its own definition
@@ -1070,22 +1070,22 @@ static Cata(c1_cond_pop_exit) { return
 static Cata(c1_apn) {
  word arity = pop1(g);
  if (arity == putfix(1)) {
-  if (Kp[0].ap == g_vm_ret) Kp[0].ap = g_vm_tap;
-  else Kp -= 1, Kp[0].ap = g_vm_ap; }
+  if (Kp[0].ap == lvm_ret) Kp[0].ap = lvm_tap;
+  else Kp -= 1, Kp[0].ap = lvm_ap; }
  else {
-  if (Kp[0].ap == g_vm_ret) Kp -= 1, Kp[0].ap = g_vm_tapn, Kp[1].x = arity;
-  else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; }
+  if (Kp[0].ap == lvm_ret) Kp -= 1, Kp[0].ap = lvm_tapn, Kp[1].x = arity;
+  else Kp -= 2, Kp[0].ap = lvm_apn, Kp[1].x = arity; }
  return pull(g, c); }
 
 
 static Cata(c1_i) {
- g_vm_t *i = (void*) pop1(g);
+ lvm_t *i = (void*) pop1(g);
  Kp -= 1;
  Kp[0].ap = i;
  return pull(g, c); }
 
 static Cata(c1_ix) {
- g_vm_t *i = (void*) pop1(g);
+ lvm_t *i = (void*) pop1(g);
  word x = pop1(g);
  Kp -= 2;
  Kp[0].ap = i;
@@ -1097,12 +1097,12 @@ static Cata(c1_ix) {
 static Cata(c1_recv) {
  word y = pop1(g), site = pop1(g);
  Kp -= 2;
- Kp[0].ap = g_vm_quote;
+ Kp[0].ap = lvm_quote;
  if (nilp(site)) Kp[1].x = AB(y);
  else Kp[1].x = nil, B(site) = (word) &Kp[1];
  return pull(g, c); }
 
-static Cata(c1_ar, g_vm_t *i, word ar) { return
+static Cata(c1_ar, lvm_t *i, word ar) { return
  Kp -= 2,
  Kp[0].ap = i,
  Kp[1].x = putfix(ar),
@@ -1111,35 +1111,35 @@ static Cata(c1_ar, g_vm_t *i, word ar) { return
 static Cata(c1_cur) {
  struct env *e = (void*) pop1(g);
  uintptr_t ar = llen(e->args) + llen(e->imps);
- return ar == 1 ? pull(g, c) : c1_ar(g, c, g_vm_cur, ar); }
+ return ar == 1 ? pull(g, c) : c1_ar(g, c, lvm_cur, ar); }
 
 static Cata(c1_ret) {
  struct env *e = (struct env*) pop1(g);
  uintptr_t ar = llen(e->args) + llen(e->imps);
- return c1_ar(g, c, g_vm_ret, ar); }
+ return c1_ar(g, c, lvm_ret, ar); }
 
 cata1(c1_cond_push_branch, g = gxl(g_push(g, 2, Kp, (*c)->branches)), (*c)->branches = g_ok(g) ? pop1(g) : nil)
 cata1(c1_cond_push_exit, g = gxl(g_push(g, 2, Kp, (*c)->exits)), (*c)->exits = g_ok(g) ? pop1(g) : nil)
-cata1(c1_cond_pop_branch, Kp -= 2, Kp[0].ap = g_vm_cond, Kp[1].x = A((*c)->branches), (*c)->branches = B((*c)->branches))
+cata1(c1_cond_pop_branch, Kp -= 2, Kp[0].ap = lvm_cond, Kp[1].x = A((*c)->branches), (*c)->branches = B((*c)->branches))
 
 static Cata(c1_cond_exit) {
  union u *a = cell(A((*c)->exits));
- if (a->ap == g_vm_ret || a->ap == g_vm_tap)
+ if (a->ap == lvm_ret || a->ap == lvm_tap)
   Kp = memcpy(Kp - 2, a, 2 * sizeof(*Kp));
- else if (a->ap == g_vm_tapn)
+ else if (a->ap == lvm_tapn)
   Kp = memcpy(Kp - 3, a, 3 * sizeof(*Kp));
  else
-  Kp -= 2, Kp[0].ap = g_vm_jump, Kp[1].x = (word) a;
+  Kp -= 2, Kp[0].ap = lvm_jump, Kp[1].x = (word) a;
  return pull(g, c); }
 
-static g_vm(_g_vm_yieldk) { return
+static lvm(_lvm_yieldk) { return
  Ip = Ip[1].m,
  Pack(g),
  encode(g, g_status_yield); }
 
 
 static struct g *g_eval(struct g *g) {
- g = c0(g, _g_vm_yieldk);
+ g = c0(g, _lvm_yieldk);
 #if g_tco
  if (g_ok(g)) g = g->ip->ap(g, g->ip, g->hp, g->sp);
 #else
@@ -1159,7 +1159,7 @@ static Ana(ana_v) {
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) {
    if ((y = g_mapget(g, 0, x, g->dict))) return ana_q(g, c, y);
-   // undefined global: resolved by g_vm_freev via the dict at run time.
+   // undefined global: resolved by lvm_freev via the dict at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.l avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
    // is no enclosing frame to capture from, so adding x to imps would make a
@@ -1170,7 +1170,7 @@ static Ana(ana_v) {
    if (!nilp((*c)->par))
     g = gxl(g_push(g, 2, x, (*c)->imps)),
     x = g_ok(g) ? A((*c)->imps = pop1(g)) : nil;
-   return c0_ix(g, c, g_vm_freev, x); }
+   return c0_ix(g, c, lvm_freev, x); }
   // lambda definition of local let form?
   if ((y = assq(g, d->lams, x))) {
    // recursive-fn ref: record a backpatch site on d (the lams-owning scope) when
@@ -1189,7 +1189,7 @@ static Ana(ana_v) {
    return g; }
   // let binding in the *current* scope -> a direct stack slot.
   if (d == *c && memq(g, d->stack, x)) return
-    c0_ix(g, c, g_vm_arg, putfix(lidx(g, x, d->stack)));
+    c0_ix(g, c, lvm_arg, putfix(lidx(g, x, d->stack)));
   // a let binding, closure var, or lambda arg -- possibly from an enclosing
   // scope. If enclosing, import it into this scope's free-variable (imps) list
   // so the offset c1_var emits is valid in *this* frame, not the defining one;
@@ -1211,7 +1211,7 @@ static Cata(c1_var) {
   if (eql(g, v, A(l))) break;
 out:
  return Kp -= 2,
-        Kp[0].ap = g_vm_arg,
+        Kp[0].ap = lvm_arg,
         Kp[1].x = putfix(i),
         pull(g, c); }
 
@@ -1292,26 +1292,26 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
  if (!g_ok(g)) return g;
  bool imfp =
   g->sp[0] == (word) c1_ix &&
-  g->sp[1] == (word) g_vm_quote &&
+  g->sp[1] == (word) lvm_quote &&
   homp(g->sp[2]);
  intptr_t
   ca = llen(x),
   va =
-   imfp && cell(g->sp[2])->ap == g_vm_cur ?
+   imfp && cell(g->sp[2])->ap == lvm_cur ?
     getfix(cell(g->sp[2])[1].x) :
     1;
- bool b1p = ca == 1 && imfp && cell(g->sp[2])[1].ap == g_vm_ret0,
+ bool b1p = ca == 1 && imfp && cell(g->sp[2])[1].ap == lvm_ret0,
       anp = va == ca && ca > 1,
-      bnp = anp && cell(g->sp[2])[3].ap == g_vm_ret0;
+      bnp = anp && cell(g->sp[2])[3].ap == lvm_ret0;
 
  if (b1p) { // inline an instruction
-  g_vm_t *i = cell(g->sp[2])->ap;
+  lvm_t *i = cell(g->sp[2])->ap;
   g->sp += 3;
   g = c0_i(analyze(g, c, A(x)), c, i);
   return g; }
 
  if (bnp) { // inline a curried instruction
-  g_vm_t *i = cell(g->sp[2])[2].ap;
+  lvm_t *i = cell(g->sp[2])[2].ap;
   g->sp += 3;
   g = c0_i(ana_ap_r2l(g, c, x), c, i); // r2l arg eval
   if (g_ok(g)) while (ca--) (*c)->stack = B((*c)->stack);
@@ -1362,7 +1362,7 @@ static g_inline Ana(ana_2, word a, word b) {
  return avec(g, b, g = analyze(g, c, a)),
         ana_ap(g, c, b); }
 
-static g_inline Ana(ana_q) { return c0_ix(g, c, g_vm_quote, x); }
+static g_inline Ana(ana_q) { return c0_ix(g, c, lvm_quote, x); }
 static g_inline Ana(ana_l) {
   if (!twop(B(x))) return ana_q(g, c, A(x)); // one operand, no params: quote
   return g = c0_lambda(g, c, nil, x),
@@ -1485,7 +1485,7 @@ static g_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  (*b)->stack = g_ok(g) ? pop1(g) : nil;
  for (def = rev(def); twop(nom); nom = B(nom), def = B(def))
   g = analyze(g, b, A(def)),
-  g = globp ? c0_ix(g, b, g_vm_defglob, A(nom)) : g,
+  g = globp ? c0_ix(g, b, lvm_defglob, A(nom)) : g,
   g = gxl(g_push(g, 2, A(nom), (*b)->stack)),
   (*b)->stack = g_ok(g) ? pop1(g) : nil;
  return
@@ -1500,24 +1500,24 @@ static word ldels(struct g *g, word lam, word l) {
  if (!assq(g, lam, A(l))) B(l) = m, m = l;
  return m; }
 
-g_vm(g_vm_defglob) {
+lvm(lvm_defglob) {
  Have(3);
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
  return Sp[0] = k, Sp[1] = v, Sp[2] = g->dict, Pack(g),
   !g_ok(g = g_mapput(g)) ? gtrap(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
-g_vm(g_vm_freev) { return
- Ip[0].ap = g_vm_quote,
+lvm(lvm_freev) { return
+ Ip[0].ap = lvm_quote,
  Ip[1].x = g_mapget(g, nil, Ip[1].x, g->dict),
  Continue(); }
 
-g_vm(g_vm_eval) { return Ip++, Pack(g),
- !g_ok(g = c0(g, g_vm_jump)) ? gtrap(g) : (Unpack(g), Continue()); }
+lvm(lvm_eval) { return Ip++, Pack(g),
+ !g_ok(g = c0(g, lvm_jump)) ? gtrap(g) : (Unpack(g), Continue()); }
 
 g_noinline struct g *g_evals_(struct g*g, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(cap b))(cbp b))a)e)0)";
- struct ti i = {{g_vm_port_io, putfix(-1), putfix(EOF), putfix(false)}, t, 0};
+ struct ti i = {{lvm_port_io, putfix(-1), putfix(EOF), putfix(false)}, t, 0};
  g = push0(pushq(push0(g_eval(g_reads(g, (void*) &i)))));
  i.t = s, i.i = 0, i.io.ungetc_buf = putfix(EOF), i.io.eof_seen = putfix(false);
  return g_pop(g_eval(gxr(gxl(gxr(gxl(g_reads(g, (void*) &i)))))), 1); }
@@ -1532,7 +1532,7 @@ g_noinline struct g *g_evals_(struct g*g, char const*s) {
 uintptr_t hash(struct g*, intptr_t);
 static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
  union { struct g_str s; char span[sizeof(struct g_str) + 8]; } b;
- b.s.ap = g_vm_str, b.s.len = n;
+ b.s.ap = lvm_str, b.s.len = n;
  memcpy(b.s.bytes, nm, n);
  uintptr_t h = rot(hash(g, word(&b.s)));
  for (struct g_atom *z = g->symbols; z;) {
@@ -1569,15 +1569,15 @@ static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
 // The driver mirrors the pair driver: with the stack laid out [n, num-ap, x, ret]
 // it applies num-ap to n (a partial), swaps so that partial becomes the operator,
 // applies it to x, and ret0s the result to ret. The five apply sites divert here as
-// a tail jump (no extra args -> stays a sibcall, cf. vmret): g_vm_numap is the
-// non-tail form (frame below Sp, resume at Ip+1), g_vm_numtap the tail form (frame
+// a tail jump (no extra args -> stays a sibcall, cf. vmret): lvm_numap is the
+// non-tail form (frame below Sp, resume at Ip+1), lvm_numtap the tail form (frame
 // in the popped region, deliver to the caller's ret at Sp[fs+2]). The fused arg/quote
 // variants first push their argument under the operator and bump Ip by one word so
 // the canonical [.. x n] layout and resume/frame-size operand line up, then divert.
-static g_vm(numap_swap) {
+static lvm(numap_swap) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
- return Ap(g_vm_ap, g); }
-union u const numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
+ return Ap(lvm_ap, g); }
+union u const numap_drive[] = { {lvm_ap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
 
 // ============================================================================
 // the lisp trap calling convention
@@ -1590,17 +1590,17 @@ union u const numap_drive[] = { {g_vm_ap}, {.ap = numap_swap}, {.ap = g_vm_ret0}
 // epilogue: the more bit delivers the ap's result to the thrower's resume
 // text (the fread protocol -- the ap chooses what the reader's caller
 // sees); a scare is observed, then takes the default escape to C.
-static g_vm(trap_ret_more) {   // [result resume port sentinel ..] -> resume sees result
+static lvm(trap_ret_more) {   // [result resume port sentinel ..] -> resume sees result
  Ip = cell(Sp[1]);
  Sp[3] = Sp[0];
  Sp += 3;
  return Continue(); }
-static g_vm(trap_ret_sing) {  // result ignored: scares are not (yet) resumable
+static lvm(trap_ret_sing) {  // result ignored: scares are not (yet) resumable
  return Pack(g), encode(g, g_status_scare); }
 static union u const trap_more_k[] = { {trap_ret_more} };
 static union u const trap_sing_k[] = { {trap_ret_sing} };
 static union u const trap_drive[] =
- { {g_vm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = g_vm_ret0} };
+ { {lvm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
 
 // Throw status s with condition data a/b to the trap continuation. With a
 // global `trap` function and 5 words of stack headroom (the throw path never
@@ -1646,45 +1646,45 @@ struct g *gtrap(struct g *g) { return gtrap2(g_core_of(g), g_code_of(g)); }
 // delivered back as (scare a b)'s value via the more continuation -- the
 // resume is this nif's own ret. With no trap installed the C default
 // applies and the scare is terminal.
-g_vm(g_vm_scare) {
+lvm(lvm_scare) {
  Have(1);
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: trap_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
-// operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: g_vm_gc
+// operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: lvm_gc
 // re-dispatches via Continue() -> cell(Ip)->ap, which would jump into that operand.
 // Instead gc by hand and re-Ap ourselves (we read but don't mutate before this, so
 // re-entry is idempotent); the dispatch never has to trust Ip.
 #define NumapHave(self) if (Sp < Hp + 2) { \
  Pack(g); g = g_please(g, 2); if (!g_ok(g)) return gtrap(g); \
  return Unpack(g), Ap(self, g); }
-static g_vm(g_vm_numap) {
- NumapHave(g_vm_numap);
+static lvm(lvm_numap) {
+ NumapHave(lvm_numap);
  word h = resolve_hot(g, "num-ap", 6);
  word n = Sp[1], x = Sp[0], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
-static g_vm(g_vm_numtap) {
- NumapHave(g_vm_numtap);
+static lvm(lvm_numtap) {
+ NumapHave(lvm_numtap);
  word h = resolve_hot(g, "num-ap", 6);
  word fs = getfix(Ip[1].x), n = Sp[1], x = Sp[0], *dst = &Sp[fs + 2] - 3, ret = Sp[fs + 2];
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // `+`/`*` over a lambda operand: build the combinator partial (scomb/bcomb g g)
-// and leave it as the result. Mirrors g_vm_numap's frame -- [g, comb, g, ret=Ip+1]
+// and leave it as the result. Mirrors lvm_numap's frame -- [g, comb, g, ret=Ip+1]
 // run through numap_drive -- but the combinator (4-arg add / 3-arg compose) applied
 // to 2 args yields a closure (the new function) instead of a value. Ip is at the +/*
 // opcode (a re-runnable instruction), so a plain Have is safe; operands re-read after.
-static g_vm(g_vm_addh) {
+static lvm(lvm_addh) {
  Have(2);
  word h = resolve_hot(g, "scomb", 5);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
-static g_vm(g_vm_mulh) {
+static lvm(lvm_mulh) {
  Have(2);
  word h = resolve_hot(g, "bcomb", 5);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
@@ -1692,16 +1692,16 @@ static g_vm(g_vm_mulh) {
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // apply function to one argument
-g_vm(g_vm_ap) {
+lvm(lvm_ap) {
  union u *k;
- if (oddp(Sp[1])) return Ap(g_vm_numap, g);
+ if (oddp(Sp[1])) return Ap(lvm_numap, g);
  k = cell(Sp[1]), Sp[1] = word(Ip + 1), Ip = k;
  YieldCheck();
  return Continue(); }
 
 // tail call
-g_vm(g_vm_tap) {
- if (oddp(Sp[1])) return Ap(g_vm_numtap, g);         // fixnum operator -> num-ap, deliver to caller
+lvm(lvm_tap) {
+ if (oddp(Sp[1])) return Ap(lvm_numtap, g);         // fixnum operator -> num-ap, deliver to caller
  intptr_t x = Sp[0], j = Sp[1];
  Sp += getfix(Ip[1].x) + 1;
  Ip = cell(j), Sp[0] = x;
@@ -1709,7 +1709,7 @@ g_vm(g_vm_tap) {
  return Continue(); }
 
 // apply to multiple arguments
-g_vm(g_vm_apn) {
+lvm(lvm_apn) {
  size_t n = getfix(Ip[1].x);
  union u *r = Ip + 2; // return address
  // this instruction is only emitted when the callee is known to be a function
@@ -1721,7 +1721,7 @@ g_vm(g_vm_apn) {
  return Continue(); }
 
 // tail call
-g_vm(g_vm_tapn) {
+lvm(lvm_tapn) {
  size_t n = getfix(Ip[1].x),
         r = getfix(Ip[2].x);
  Ip = cell(Sp[n]) + 2;
@@ -1731,18 +1731,18 @@ g_vm(g_vm_tapn) {
  return Continue(); }
 
 // return
-g_vm(g_vm_ret) {
+lvm(lvm_ret) {
  word n = getfix(Ip[1].x) + 1;
  return Ip = cell(Sp[n]), Sp[n] = Sp[0], Sp += n, Continue(); }
 
-g_vm(g_vm_ret0) { return
+lvm(lvm_ret0) { return
  Ip = cell(Sp[1]),
  Sp[1] = Sp[0],
  Sp += 1,
  Continue(); }
 
 // kcall : x = Sp[0], k = Ip[1] -> Ip = k, Sp[0] = x
-g_vm(g_vm_kcall) {
+lvm(lvm_kcall) {
  word x = Sp[0];
  union u *stack = Ip + 2, *end = (union u*) ttag(g, stack);
  uintptr_t height = end - stack;
@@ -1752,28 +1752,28 @@ g_vm(g_vm_kcall) {
  return Continue(); }
 
 // callk : i = Sp[0], k = Ip + 1 -> Ip = i, Sp[0] = k
-g_vm(g_vm_callk) {
+lvm(lvm_callk) {
  word f_val = Sp[0];                         // g, the call_cc arg
  if (oddp(f_val)) return Ip += 1, Continue();
  word height = topof(g) - Sp;
- uintptr_t n = 2 + height;                   // g_vm_kcall + (ip + 1) + stack = text_contents
+ uintptr_t n = 2 + height;                   // lvm_kcall + (ip + 1) + stack = text_contents
  Have(n + Width(struct g_tag) + 1);          // text_contents + text_tag + 1 stack = _mem_req
  union u *k = (union u*) Hp;
  Hp += n + Width(struct g_tag);              // text_contents + text_tag = _heap_alloc
- k[0].ap = g_vm_kcall;                       // 
+ k[0].ap = lvm_kcall;                       // 
  k[1].m  = Ip + 1;                           // resume at next instruction
  memcpy(k + 2, Sp, height * sizeof(word));
  Sp -= 1;
  Sp[0] = word(tagtext(k, n));
  Sp[1] = f_val;
- return Ap(g_vm_ap, g); }
+ return Ap(lvm_ap, g); }
 
-// g_vm_yield_sw_mono can't call g_wait_fds directly with a stack pointer
+// lvm_yield_sw_mono can't call g_wait_fds directly with a stack pointer
 static g_noinline void g_wait_fd(int const fd, int n, uintptr_t ms) {
   g_wait_fds(&fd, n, ms); }
 
 // monotask fast path
-static g_vm(g_vm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
+static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd;
  g->next_wake_at = 0;
  g->next_wait_fd = -1;
@@ -1790,7 +1790,7 @@ static g_vm(g_vm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
 // through yield_sw and filling the heap with stale task nodes.
 static g_inline union u *find_runnable(union u *head, uintptr_t now) {
  for (union u *n = head->m; n != head; n = n->m)
-  if (n[1].m->ap != g_vm_task_exit && (uintptr_t) getfix(n[3].x) <= now) {
+  if (n[1].m->ap != lvm_task_exit && (uintptr_t) getfix(n[3].x) <= now) {
    int wf = (int) getfix(n[4].x);
    if (wf < 0 || g_ready(wf)) return n; }
  return NULL; }
@@ -1800,7 +1800,7 @@ static g_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int my_
  int fds[g_wait_fds_max], nfds = 0;
  if (my_wait_fd >= 0) fds[nfds++] = my_wait_fd;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
-  if (n[1].m->ap != g_vm_task_exit) {
+  if (n[1].m->ap != lvm_task_exit) {
    uintptr_t wa = (uintptr_t) getfix(n[3].x);
    if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
    int wf = (int) getfix(n[4].x);
@@ -1813,8 +1813,8 @@ static g_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int my_
  if (my_wait_fd >= 0 && g_ready(my_wait_fd)) return NULL;
  return find_runnable(g->tasks, now); }
 
-g_vm(g_vm_yield_sw) {
- if (g->tasks->m == g->tasks) return Ap(g_vm_yield_sw_mono, g);
+lvm(lvm_yield_sw) {
+ if (g->tasks->m == g->tasks) return Ap(lvm_yield_sw_mono, g);
  union u *next = find_runnable(g->tasks, g_clock());
  uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd;
@@ -1855,10 +1855,10 @@ g_vm(g_vm_yield_sw) {
  Ip = next[1].m;
  return Continue(); }
 
-g_vm(g_vm_yield_nif) { return Ip++, Ap(g_vm_yield_sw, g); }
-g_vm(g_vm_task_exit) { return Ap(g_vm_yield_sw, g); }
-static union u const spawn_body[] = { {g_vm_ap}, {.ap = g_vm_task_exit} };
-g_vm(g_vm_spawn) {
+lvm(lvm_yield_nif) { return Ip++, Ap(lvm_yield_sw, g); }
+lvm(lvm_task_exit) { return Ap(lvm_yield_sw, g); }
+static union u const spawn_body[] = { {lvm_ap}, {.ap = lvm_task_exit} };
+lvm(lvm_spawn) {
  Have(8);
  // New task node N: [next, saved_ip=spawn_body, pid, wake_at=0, wait_io=0, stack[0..1]=x,fn, tag]
  union u *N = (union u*) Hp;
@@ -1875,12 +1875,12 @@ g_vm(g_vm_spawn) {
  g->tasks->m = tagtext(N, 7);
  return Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_wait) {
+lvm(lvm_wait) {
  word pid_arg = Sp[0], ret = nil;
  intptr_t target = getfix(pid_arg);
  for (union u *node = g->tasks->m; node != g->tasks; node = node->m) {
   if (getfix(node[2].x) != target) continue;
-  if (node[1].m->ap == g_vm_task_exit) {
+  if (node[1].m->ap == lvm_task_exit) {
    // dormant: dormant task's stack is just [retval] at node[5]
    ret = node[5].x;
    union u *prev = node;
@@ -1894,21 +1894,21 @@ g_vm(g_vm_wait) {
    // parked on an unready fd and find_runnable never reschedules it (deadlock).
    g->next_wake_at = 0;
    g->next_wait_fd = -1;
-  return Ap(g_vm_yield_sw, g); }
+  return Ap(lvm_yield_sw, g); }
  return *Sp = ret, Ip++, Continue(); }
 
-g_vm(g_vm_donep) {
+lvm(lvm_donep) {
  word pid_arg = Sp[0], result = putfix(1);
  intptr_t target = getfix(pid_arg);
  for (union u *node = g->tasks->m; node != g->tasks; node = node->m)
   if (getfix(node[2].x) == target) {
-   if (node[1].m->ap != g_vm_task_exit) result = nil;
+   if (node[1].m->ap != lvm_task_exit) result = nil;
    break; }
  Sp[0] = result;
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_kill) {
+lvm(lvm_kill) {
  word pid_arg = Sp[0], result = nil;
  intptr_t target = getfix(pid_arg);
  union u *prev = g->tasks;
@@ -1921,27 +1921,27 @@ g_vm(g_vm_kill) {
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_sleep) {
+lvm(lvm_sleep) {
  word n = Sp[0];
  Sp[0] = nil;
  Ip += 1;
  if (!fixp(n) || getfix(n) <= 0) return Continue();
  g->next_wake_at = (uintptr_t) g_clock() + getfix(n);
- return Ap(g_vm_yield_sw, g); }
+ return Ap(lvm_yield_sw, g); }
 
 
-g_vm(g_vm_jump) { return Ip = Ip[1].m, Continue(); }
+lvm(lvm_jump) { return Ip = Ip[1].m, Continue(); }
 // The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
 // language falsy predicate so an all-zero tuple (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
-g_vm(g_vm_cond) { return Ip = g_nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
-g_vm(g_vm_unc) {
+lvm(lvm_cond) { return Ip = g_nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
+lvm(lvm_unc) {
  Have1();
  *--Sp = Ip[1].x;
  Ip = Ip[2].m;
  return Continue(); }
 
-g_vm(g_vm_cur) {
+lvm(lvm_cur) {
  size_t const S = 3 + Width(struct g_tag);
  Have(S + 2);
  union u *k = (union u*) Hp, *j = k;
@@ -1950,10 +1950,10 @@ g_vm(g_vm_cur) {
  // FIXME this does not always need to be a runtime check
  if (n > 2) Hp += 2,
             j += 2,
-            k[0].ap = g_vm_cur,
+            k[0].ap = lvm_cur,
             k[1].x = putfix(n - 1);
  return
-  j[0].ap = g_vm_unc,
+  j[0].ap = lvm_unc,
   j[1].x = *Sp++,
   j[2].m = Ip + 2,
   Ip = cell(*Sp),
@@ -1962,7 +1962,7 @@ g_vm(g_vm_cur) {
 
 // load instructions
 //
-g_vm(g_vm_quote) {
+lvm(lvm_quote) {
  Have1();
  Sp -= 1;
  Sp[0] = Ip[1].x;
@@ -1970,30 +1970,30 @@ g_vm(g_vm_quote) {
  return Continue(); }
 
 // A port has no function meaning either: applying it behaves as 0 (yields 1), like
-// a buf (byte-identical body, kept distinct by g_noicf -- see g_vm_buf).
-g_vm(g_vm_port_io) {
+// a buf (byte-identical body, kept distinct by g_noicf -- see lvm_buf).
+lvm(lvm_port_io) {
   Ip = cell(*++Sp);
   *Sp = putfix(1);
   return Continue(); }
 
 // push a value from the stack
-g_vm(g_vm_arg) {
+lvm(lvm_arg) {
  Have1();
  Sp[-1] = Sp[getfix(Ip[1].x)];
  Sp -= 1;
  Ip += 2;
  return Continue(); }
 
-// fused (g_vm_arg <idx> ; g_vm_ap): push local at <idx>, then apply. A 2-word op
+// fused (lvm_arg <idx> ; lvm_ap): push local at <idx>, then apply. A 2-word op
 // emitted by the compiler's `karg` when an arg ref is immediately followed by a
 // non-tail ap (the dominant "call a function on a local" shape). Saves one
 // dispatch + the standalone ap word vs. the unfused pair. The post-pattern
-// resume address is Ip+2 (cf. g_vm_ap's Ip+1, since the op is one word longer).
-g_vm(g_vm_argap) {
+// resume address is Ip+2 (cf. lvm_ap's Ip+1, since the op is one word longer).
+lvm(lvm_argap) {
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, resume at Ip+2
   Have1();
   Sp[-1] = Sp[getfix(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; resume now Ip+2
-  return Ap(g_vm_numap, g); }
+  return Ap(lvm_numap, g); }
  Have1();
  Sp[-1] = Sp[getfix(Ip[1].x)];
  Sp -= 1;
@@ -2001,14 +2001,14 @@ g_vm(g_vm_argap) {
  YieldCheck();
  return Continue(); }
 
-// fused (g_vm_quote <v> ; g_vm_ap): push constant <v>, then apply. Emitted by
+// fused (lvm_quote <v> ; lvm_ap): push constant <v>, then apply. Emitted by
 // kim when a quote is immediately followed by a non-tail ap (a call with a
-// constant arg, e.g. (k 0)). Resume at Ip+2 (2-word op), cf. g_vm_argap.
-g_vm(g_vm_quoteap) {
+// constant arg, e.g. (k 0)). Resume at Ip+2 (2-word op), cf. lvm_argap.
+lvm(lvm_quoteap) {
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, resume at Ip+2
   Have1();
   Sp[-1] = Ip[1].x, Sp -= 1, Ip += 1;               // push const under operator; resume now Ip+2
-  return Ap(g_vm_numap, g); }
+  return Ap(lvm_numap, g); }
  Have1();
  Sp -= 1;
  Sp[0] = Ip[1].x;
@@ -2016,14 +2016,14 @@ g_vm(g_vm_quoteap) {
  YieldCheck();
  return Continue(); }
 
-// fused (g_vm_arg <idx> ; g_vm_tap <fs>): push local <idx>, then tail-call,
+// fused (lvm_arg <idx> ; lvm_tap <fs>): push local <idx>, then tail-call,
 // popping frame size <fs> at Ip[2] (tap's operand, kept in place by the fused
 // emit). The single-arg tail-call shape, e.g. a tail (loop x) or cont (k v).
-g_vm(g_vm_argtap) {
+lvm(lvm_argtap) {
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, deliver to caller
   Have1();
   Sp[-1] = Sp[getfix(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; fs operand now Ip[1]
-  return Ap(g_vm_numtap, g); }
+  return Ap(lvm_numtap, g); }
  Have1();
  Sp[-1] = Sp[getfix(Ip[1].x)];
  Sp -= 1;
@@ -2036,26 +2036,26 @@ g_vm(g_vm_argtap) {
 // operand-value-specialized arg/quote: 1-word ops with the index/constant baked
 // into the ap (no Ip[1] operand fetch). Emitted by the compiler's spa/spq for
 // the hottest indices {0..3} / constants {0,1,2,3,-1,-2}.
-argn(g_vm_arg0, 0) argn(g_vm_arg1, 1) argn(g_vm_arg2, 2) argn(g_vm_arg3, 3)
-quon(g_vm_quo0, 0) quon(g_vm_quo1, 1) quon(g_vm_quo2, 2) quon(g_vm_quo3, 3)
-quon(g_vm_quom1, -1) quon(g_vm_quom2, -2)
+argn(lvm_arg0, 0) argn(lvm_arg1, 1) argn(lvm_arg2, 2) argn(lvm_arg3, 3)
+quon(lvm_quo0, 0) quon(lvm_quo1, 1) quon(lvm_quo2, 2) quon(lvm_quo3, 3)
+quon(lvm_quom1, -1) quon(lvm_quom2, -2)
 
-g_vm(g_vm_trim) { return
+lvm(lvm_trim) { return
  clip(g, cell(Sp[0])), Ip++, Continue(); }
 
-g_vm(g_vm_seek) { return
+lvm(lvm_seek) { return
  Sp[1] = word(cell(Sp[1]) + getfix(Sp[0])),
  Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_peek) { return
+lvm(lvm_peek) { return
  Sp[1] = (cell(Sp[1]) + getfix(Sp[0]))->x,
  Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_poke) {
+lvm(lvm_poke) {
  union u *c = cell(Sp[2]) + getfix(Sp[0]);
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
-g_vm(g_vm_lamb) {
+lvm(lvm_lamb) {
  size_t n = getfix(Sp[0]);
  Have(n + Width(struct g_tag));
  union u *k = (union u*) Hp;
@@ -2115,12 +2115,12 @@ static intptr_t g_pin(word x) {
   if (fixp(x)) { intptr_t n = getfix(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil), exact
   g_flo_t m = g_net(x);
   return m <= 0 ? 0 : len_sat(m); }
-g_vm(g_vm_pin) { Sp[0] = putfix(g_pin(Sp[0])); Ip += 1; return Continue(); }
+lvm(lvm_pin) { Sp[0] = putfix(g_pin(Sp[0])); Ip += 1; return Continue(); }
 
 // ============================================================================
 // io
 // ============================================================================
-static g_inline bool iop(word x) { return homp(x) && cell(x)->ap == g_vm_port_io; }
+static g_inline bool iop(word x) { return homp(x) && cell(x)->ap == lvm_port_io; }
 static g_inline struct g_port_vt const *port_vt(word fd_tagged) {
  intptr_t fd = getfix(fd_tagged);
  return fd >= 0 ? &g_fd_port_vt : &synth[-(fd + 1)]; }
@@ -2201,7 +2201,7 @@ struct g_port_vt const synth[] = {
  { ci_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush }, };
 
 // (fputc port byte) — write byte to port; return byte.
-g_vm(g_vm_fputc) {
+lvm(lvm_fputc) {
  if (iop(Sp[0])) {
   g->io = (struct g_io*) Sp[0];
   Pack(g);
@@ -2210,7 +2210,7 @@ g_vm(g_vm_fputc) {
  return Sp++, Ip++, Continue(); }
 
 // (fflush port) — flush; return the port.
-g_vm(g_vm_fflush) {
+lvm(lvm_fflush) {
  if (iop(Sp[0])) {
   g->io = (struct g_io*) Sp[0];
   Pack(g);
@@ -2223,7 +2223,7 @@ g_vm(g_vm_fflush) {
 // buf). bytes_of resolves either to the g_str holding the bytes, re-read each
 // iteration so GC inside zputc (e.g., growing a sink buffer) can forward it
 // safely (for a buf, GC may move both the wrapper and its backing string).
-g_vm(g_vm_fputs) {
+lvm(lvm_fputs) {
  if (iop(Sp[0]) && (strp(Sp[1]) || bufp(Sp[1]))) {
   g->io = (struct g_io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
@@ -2233,7 +2233,7 @@ g_vm(g_vm_fputs) {
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
-g_vm(g_vm_fputx) {
+lvm(lvm_fputx) {
  if (iop(Sp[0])) {
   Pack(g);
   if (!g_ok(g = gfputx(g, (struct g_io*) Sp[0], Sp[1]))) return gtrap(g);
@@ -2244,8 +2244,8 @@ g_vm(g_vm_fputx) {
 // (puts discipline -- raw bytes); any other value in external form (putx
 // discipline -- the inspect form). The `.` reader sigil expands to (dot x). The
 // string bytes are re-read from g->sp[0] each iteration (GC inside zputc may
-// forward them); gfputx is self-GC-safe over its value arg, as in g_vm_fputx.
-g_vm(g_vm_dot) {
+// forward them); gfputx is self-GC-safe over its value arg, as in lvm_fputx.
+lvm(lvm_dot) {
  word x = Sp[0];
  g->io = &g_stdout;
  Pack(g);
@@ -2259,7 +2259,7 @@ g_vm(g_vm_dot) {
  return Ip++, Continue(); }
 
 static struct g*gfputn(struct g *g, intptr_t n, uint8_t b, struct g_io *o);
-g_vm(g_vm_fputn) {
+lvm(lvm_fputn) {
  if (iop(Sp[0])) {
    Pack(g);
    if (!g_ok(g = gfputn(g, getfix(Sp[1]), getfix(Sp[2]), (struct g_io*) Sp[0]))) return gtrap(g);
@@ -2523,22 +2523,22 @@ static struct g *gzputcs(struct g *g, char const *s) {
  for (; g_ok(g) && *s; s++) g = gzputc(g, *s);
  return g; }
 
-// --- partial-application introspection (mirrors kernel/vm.c g_vm_cur/g_vm_unc) ---
-// A partial-app closure is a text whose head is g_vm_unc (one more arg wanted)
-// or [g_vm_cur n][g_vm_unc …] (more wanted). Each g_vm_unc cell holds a captured
+// --- partial-application introspection (mirrors kernel/vm.c lvm_cur/lvm_unc) ---
+// A partial-app closure is a text whose head is lvm_unc (one more arg wanted)
+// or [lvm_cur n][lvm_unc …] (more wanted). Each lvm_unc cell holds a captured
 // arg at [1] and a link at [2] that points either to the next (older) closure's
 // unc cell or, for the last one, two cells into the underlying function's body --
 // so the base function value is terminal_link-2 and the captured args are the
 // chain of [1] fields, newest first. The chain survives GC (interior pointers are
 // relocated), so callers re-walk from the parked, possibly-moved closure.
 static bool fn_partialp(union u *k) {
- return k[0].ap == g_vm_unc || (k[0].ap == g_vm_cur && k[2].ap == g_vm_unc); }
+ return k[0].ap == lvm_unc || (k[0].ap == lvm_cur && k[2].ap == lvm_unc); }
 static g_inline union u *fn_unc0(union u *k) {
- return k[0].ap == g_vm_cur ? k + 2 : k; }       // first unc cell
+ return k[0].ap == lvm_cur ? k + 2 : k; }       // first unc cell
 static union u *fn_base(union u *k, int *nargs) { // base value + captured-arg count
  union u *u = fn_unc0(k), *link;
  int n = 0;
- for (;;) { link = u[2].m; n++; if (link[0].ap != g_vm_unc) break; u = link; }
+ for (;;) { link = u[2].m; n++; if (link[0].ap != lvm_unc) break; u = link; }
  return *nargs = n, link - 2; }
 static word fn_arg(union u *k, int i, int nargs) { // i-th arg in application order
  union u *u = fn_unc0(k);
@@ -2549,7 +2549,7 @@ static struct g *gzput_fn_body(struct g *g, word x, uintptr_t off);
 
 // the in-pool source \-expr stashed at value[-1] by a compiled lambda, or 0.
 // Only an ala/k0s lambda reserves that leading cell, so its value pointer sits one past
-// the allocation start. A k0 top-level wrap, a partial-app (g_vm_cur/unc), a continuation,
+// the allocation start. A k0 top-level wrap, a partial-app (lvm_cur/unc), a continuation,
 // or an opaque handle puts its value AT the start -- no leading cell -- so reading value[-1]
 // there reads the neighbouring object: uninitialised/foreign (flaky to valgrind, and garbage
 // that looked like an in-pool pair would spuriously read back as a source). Probe the tag,
@@ -2636,7 +2636,7 @@ static struct g *gzput_fn(struct g *g, word x, uintptr_t off) {
  return reprp ? gzput_fn_body(g, x, off) : gzprintf(g, "\\%z", x); }
 
 // Render a function as a bare constructor expression (NO leading ,). Detection
-// order matters: a bare multi-arg lambda and a partial-app both have a g_vm_cur
+// order matters: a bare multi-arg lambda and a partial-app both have a lvm_cur
 // head, and a nif's value[-1] is undefined static data. The partial-app base
 // recurses here (not gzput_fn) so it doesn't get its own comma.
 static struct g *gzput_fn_body(struct g *g, word x, uintptr_t off) {
@@ -2735,7 +2735,7 @@ static struct g* g_dtoa2(struct g*g, g_flo_t v) {
  return g; }
 
 // (feof port) — -1 if at end of stream, nil otherwise.
-g_vm(g_vm_feof) {
+lvm(lvm_feof) {
  if (iop(Sp[0])) {
   g->io = (struct g_io*) Sp[0];
   Pack(g);
@@ -2746,12 +2746,12 @@ g_vm(g_vm_feof) {
 
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
 // uses the port's own fd.
-g_vm(g_vm_fgetc) {
+lvm(lvm_fgetc) {
  if (iop(Sp[0])) {
   struct g_io *i = (struct g_io*) Sp[0];
   if (!g_ready(getfix(i->fd))) {
    g->next_wait_fd = getfix(i->fd);
-   return Ap(g_vm_yield_sw, g); }
+   return Ap(lvm_yield_sw, g); }
   Pack(g);
   g->io = i;
   if (!g_ok(g = zgetc(g))) return gtrap(g);
@@ -2760,7 +2760,7 @@ g_vm(g_vm_fgetc) {
  return Ip++, Continue(); }
 
 // (fungetc port byte) — push back one byte, return the byte.
-g_vm(g_vm_fungetc) {
+lvm(lvm_fungetc) {
  if (iop(Sp[0])) {
   struct g_io *i = (struct g_io*) Sp[0];
   Pack(g);
@@ -2787,7 +2787,7 @@ struct g *g_io_alloc(struct g *g, int fd) {
  if (g_ok(g = g_have(g, n + Width(struct g_tag) + Width(struct g_fz) + 1))) {
   union u *k = bump(g, n + Width(struct g_tag));
   struct g_io *io = (struct g_io*) k;
-  io->ap = g_vm_port_io;
+  io->ap = lvm_port_io;
   io->fd = putfix(fd);
   io->ungetc_buf = putfix(EOF);
   io->eof_seen = putfix(false);
@@ -2833,7 +2833,7 @@ static g_noinline double strtod_wrap(struct g*g, word x) {
 // f64 box if the entire string parses, else nil. Used by the l-side
 // reader in repl.l to match the C reader's strtol → strtod → intern
 // cascade on float-shaped tokens.
-g_vm(g_vm_real) {
+lvm(lvm_real) {
  word x = Sp[0];
  double d = strtod_wrap(g, x);
  if (d != d) return Sp[0] = nil, Ip += 1, Continue();
@@ -2845,7 +2845,7 @@ g_vm(g_vm_real) {
  Sp[0] = word(r);
  return Ip++, Continue(); }
 
-g_vm(g_vm_read) {
+lvm(lvm_read) {
  Ip++;
  if (!iop(Sp[0])) return Sp++, Continue();
  struct g_io *i = (struct g_io*) Sp[0];
@@ -2869,7 +2869,7 @@ g_vm(g_vm_read) {
 // (string x): a charlist -> the string of those bytes; a named symbol -> its
 // name string; a fixnum -> the one-byte string of its low byte. Identity on any
 // other type (strings, anonymous syms, nil, ...).
-g_vm(g_vm_string) {
+lvm(lvm_string) {
  word x = Sp[0];
  if (x == nil) return Ip++, Continue();             // nil is the empty string (0)
  if (fixp(x)) {                                     // fixnum -> one-byte string
@@ -3141,9 +3141,9 @@ static g_inline struct g *gzread1sym(struct g*g, int c) {
 // ============================================================================
 // sys
 // ============================================================================
-op11(g_vm_clock, putfix(g_clock() - getfix(Sp[0])))
+op11(lvm_clock, putfix(g_clock() - getfix(Sp[0])))
 
-g_vm(g_vm_gauge) {
+lvm(lvm_gauge) {
  size_t const req = 7 * Width(struct g_pair);
  Have(req);
  struct g_pair *si = (struct g_pair*) Hp;
@@ -3173,7 +3173,7 @@ __attribute__((weak)) void g_fd_close(int fd) { (void) fd; }
 __attribute__((weak)) g_noinline void g_sleep(uintptr_t ticks) {
   for (ticks += g_clock(); g_clock() < ticks;); }
 
-g_vm(g_vm_key) {
+lvm(lvm_key) {
  Sp[0] = (getfix(g_stdin.ungetc_buf) != EOF || g_ready(getfix(g_stdin.fd))) ? putfix(1) : nil;
  Ip += 1;
  return Continue(); }
@@ -3182,8 +3182,8 @@ g_vm(g_vm_key) {
 // map (lookup-lambda backed by an open-addressed text; see mapp comment)
 // ============================================================================
 // backing is internal -- only ever reached from a header[1], never applied as a
-// l value; its ap behaves-as-1 like g_vm_buf should it ever be (it won't).
-static g_vm(g_vm_map_data) {
+// l value; its ap behaves-as-1 like lvm_buf should it ever be (it won't).
+static lvm(lvm_map_data) {
  return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
 
 // the backing slot of k, or -- if absent -- the first empty slot on its probe
@@ -3202,7 +3202,7 @@ word g_mapget(struct g *g, word zero, word k, word m) {
 
 // fill an empty cap-slot backing at b (cap a power of two); caller reserves it.
 static g_inline union u *map_fill_back(union u *b, uintptr_t cap) {
- b[0].ap = g_vm_map_data, b[1].x = putfix(0), b[2].x = putfix(cap);
+ b[0].ap = lvm_map_data, b[1].x = putfix(0), b[2].x = putfix(cap);
  for (uintptr_t i = 0; i < cap; i++) b[3 + 2 * i].x = map_gap, b[4 + 2 * i].x = nil;
  return tagtext(b, 3 + 2 * cap); }
 
@@ -3257,45 +3257,45 @@ static g_noinline word g_mapdel(struct g *g, word m, word k, word zero) {
  cell(map_back(m))[1].x = putfix(map_len(m) - 1);
  return m; }
 
-// C-callable fresh empty map, pushed on sp[0]. Same shape as g_vm_table.
+// C-callable fresh empty map, pushed on sp[0]. Same shape as lvm_table.
 static struct g *map_new(struct g *g) {
  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  if (!g_ok(g = g_have(g, nb + 3))) return g;
  union u *b = map_fill_back((union u*) g->hp, cap), *h = (union u*) (g->hp + nb);
- h[0].ap = g_vm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
+ h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
  g->hp += nb + 3;
  return g_push(g, 1, (word) h); }
 
-// (table _): a fresh empty map -- header [g_vm_map_lookup, backing] + backing.
-g_vm(g_vm_table) {
+// (table _): a fresh empty map -- header [lvm_map_lookup, backing] + backing.
+lvm(lvm_table) {
  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  Have(nb + 3);
  union u *b = map_fill_back((union u*) Hp, cap);
  union u *h = (union u*) (Hp + nb);
- h[0].ap = g_vm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
+ h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
  Sp[0] = (word) h;
  return Hp += nb + 3, Ip++, Continue(); }
 
 // (m k): map application is lookup, nil if absent (the map is its own lookup fn,
 // so (m k) == (get 0 k m)). No alloc, unwinds like self-quote: drop the arg,
 // jump to the return address at Sp[1], leave the result on top.
-static g_vm(g_vm_map_lookup) {
+static lvm(lvm_map_lookup) {
  word v = g_mapget(g, nil, Sp[0], (word) Ip);
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
-op11(g_vm_mapp, mapp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_mapp, mapp(Sp[0]) ? putfix(1) : nil)
 // (homp x): is x a heap object (a pointer), i.e. not a fixnum? true for every
 // present non-fixnum value -- pairs, symbols, strings, tuples, maps, texts.
-op11(g_vm_homp, homp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_homp, homp(Sp[0]) ? putfix(1) : nil)
 // (hotp x): is x an opaque hot handle -- a buf or a port? (a task is referenced
 // by a fixnum id, not a handle object.) a hot also answers homp (it acts as
 // a constant function); hotp is the refinement that names the zoo.
-op11(g_vm_hotp, (bufp(Sp[0]) || iop(Sp[0])) ? putfix(1) : nil)
+op11(lvm_hotp, (bufp(Sp[0]) || iop(Sp[0])) ? putfix(1) : nil)
 
 // (hash x) -- the general hashing method exposed to l as a fixnum.
-op11(g_vm_dig, putfix(hash(g, Sp[0])))
+op11(lvm_dig, putfix(hash(g, Sp[0])))
 
-g_vm(g_vm_peep) {                                // (peep coll key default): collection-first
+lvm(lvm_peep) {                                // (peep coll key default): collection-first
  word x = Sp[0], k = Sp[1], z = Sp[2], n;
  if (bufp(x)) {                                  // mutable byte string: byte index
   struct g_str *s = buf_str(x);
@@ -3352,7 +3352,7 @@ g_vm(g_vm_peep) {                                // (peep coll key default): col
 // store the byte val at index key. Both leave coll on the stack as the result.
 // A buf store needs no allocation, so no GC dance; out-of-range/non-numeric is a
 // silent no-op, matching the misuse convention of the other byte ops.
-g_vm(g_vm_put) {
+lvm(lvm_put) {
  word x = Sp[0], n;                              // coll
  if (mapp(x)) {
   Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // g_mapput wants (sp0,sp1,sp2)=(key,val,coll)
@@ -3369,14 +3369,14 @@ g_vm(g_vm_put) {
 // default if absent (symmetry with peep) -- and mutating coll in place.
 // g_mapget reads the value, g_mapdel removes it; neither allocates, so no GC
 // dance. A non-map coll yields default (silent misuse).
-g_vm(g_vm_pull) {
+lvm(lvm_pull) {
  word coll = Sp[0], v = Sp[2];                   // default
  if (mapp(coll)) {
   v = g_mapget(g, Sp[2], Sp[1], coll);           // value, or default if absent
   g_mapdel(g, coll, Sp[1], Sp[2]); }             // remove in place (no-op if absent)
  return Sp[2] = v, Sp += 2, Ip += 1, Continue(); }
 
-g_vm(g_vm_keys) {
+lvm(lvm_keys) {
  intptr_t list = nil;
  if (mapp(Sp[0])) {
   uintptr_t cap = map_cap(Sp[0]), n = map_len(Sp[0]);
@@ -3449,8 +3449,8 @@ struct g *g_strof(struct g *g, char const *cs) {
  if (g_ok(g = str0(g, len))) memcpy(txt(g->sp[0]), cs, len);
  return g; }
 
-op11(g_vm_strp, strp(Sp[0]) ? putfix(1) : nil)
-g_vm(g_vm_slice) {
+op11(lvm_strp, strp(Sp[0]) ? putfix(1) : nil)
+lvm(lvm_slice) {
  if (!strp(Sp[0])) Sp[2] = nil;
  else {
   struct g_str *s = str(Sp[0]), *t;
@@ -3472,18 +3472,18 @@ g_vm(g_vm_slice) {
 
 // A buf has no function meaning, so applying it behaves as 0 (yields 1, the const-1
 // identity numeral) -- like every structureless value. Its address is still the
-// kind tag: g_noicf (on every g_vm) keeps this byte-identical to g_vm_port_io so
+// kind tag: g_noicf (on every lvm) keeps this byte-identical to lvm_port_io so
 // bufp and iop never collide. NOT a data sentinel, so the GC copies a buf via the
 // generic text path and the cheney scan forwards its backing-string pointer.
-g_vm(g_vm_buf) {
+lvm(lvm_buf) {
  return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
 
 // (buf n) — allocate a zeroed n-byte mutable buf. n<=0 / non-numeric -> the empty
 // string singleton EmptyString, so NO empty buf object ever exists (an un-writable 0-byte
 // buf IS ""); this lets g_nilp drop its buf branch (every real buf has len>=1, truthy).
 // Two heap objects under one Have (so no GC sees a half-built buf): the backing g_str
-// holding the bytes, and the length-2 wrapper text [g_vm_buf, str, terminator].
-g_vm(g_vm_bufnew) {
+// holding the bytes, and the length-2 wrapper text [lvm_buf, str, terminator].
+lvm(lvm_bufnew) {
  intptr_t n = fixp(Sp[0]) ? getfix(Sp[0]) : 0;
  if (n <= 0) return Sp[0] = EmptyString, Ip++, Continue();   // no empty buf: it is ""
  uintptr_t sreq = str_type_width + b2w(n),
@@ -3494,7 +3494,7 @@ g_vm(g_vm_bufnew) {
  memset(txt(s), 0, n);
  union u *k = (union u*) Hp;
  Hp += breq;
- ((struct g_buf*) k)->ap = g_vm_buf;
+ ((struct g_buf*) k)->ap = lvm_buf;
  ((struct g_buf*) k)->str = s;
  tagtext(k, Width(struct g_buf));
  return Sp[0] = word(k), Ip++, Continue(); }
@@ -3504,7 +3504,7 @@ g_vm(g_vm_bufnew) {
 // both backing stores -- a safety net (the caller sizes dst to fit), so an
 // out-of-range request copies less rather than trampling the heap. Returns
 // dst. No allocation, so no GC dance and the trailing tail call is preserved.
-g_vm(g_vm_bcopy) {
+lvm(lvm_bcopy) {
  word dst = Sp[0], src = Sp[2];
  if (bufp(dst) && (strp(src) || bufp(src))) {
   struct g_str *d = buf_str(dst), *s = bytes_of(src);
@@ -3527,7 +3527,7 @@ bool g_strp(g_word x) { return strp(x); }
 // (intern s) -> the interned symbol named by string s; identity on any other arg.
 // The empty name maps to the one canonical empty symbol (g_sym_empty), so it is
 // never interned into the tree and stays unique.
-g_vm(g_vm_intern) {
+lvm(lvm_intern) {
  if (strp(Sp[0])) {
   if (Sp[0] == EmptyString) return Sp[0] = empty_sym, Ip += 1, Continue();
   struct g_atom *y;
@@ -3544,7 +3544,7 @@ g_vm(g_vm_intern) {
 // symbol's) -- the fresh point's hash and its place in the total order: same-
 // name noms order by creation. (g_clock once sat here: same-tick mints
 // collided, leaving distinct noms pairwise incomparable -- order wasn't total.)
-g_vm(g_vm_nom) {
+lvm(lvm_nom) {
  if (Sp[0] == EmptyString) return Sp[0] = empty_sym, Ip += 1, Continue(); // ""->the empty sym
  Have(2 * Width(struct g_atom));               // room for the wrapper + a fresh intern
  struct g_atom *nom;
@@ -3577,22 +3577,22 @@ g_noinline struct g_atom *intern_checked(struct g *g, struct g_str *b) {
   if (i == 0) return z;
   y = i < 0 ? &z->l : &z->r; } }
 
-op11(g_vm_symp, symp(Sp[0]) ? putfix(1) : nil)
-op11(g_vm_tupp, tupp(Sp[0]) ? putfix(1) : nil)
-op11(g_vm_bigp, bigp(Sp[0]) ? putfix(1) : nil)
-op11(g_vm_boxp, boxp(Sp[0]) ? putfix(1) : nil)
-op11(g_vm_arrp, arrp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_symp, symp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_tupp, tupp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_bigp, bigp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_boxp, boxp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_arrp, arrp(Sp[0]) ? putfix(1) : nil)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. Used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
-op11(g_vm_intf, flop(Sp[0]) ? putfix((intptr_t) flo_get(Sp[0])) : Sp[0])
+op11(lvm_intf, flop(Sp[0]) ? putfix((intptr_t) flo_get(Sp[0])) : Sp[0])
 
 // ============================================================================
 // pair
 // ============================================================================
-op11(g_vm_car, twop(Sp[0]) ? A(Sp[0]) : Sp[0])
-op11(g_vm_cdr, twop(Sp[0]) ? B(Sp[0]) : nil)
-op11(g_vm_twop, twop(Sp[0]) ? putfix(1) : nil)
-g_vm(g_vm_cons) {
+op11(lvm_car, twop(Sp[0]) ? A(Sp[0]) : Sp[0])
+op11(lvm_cdr, twop(Sp[0]) ? B(Sp[0]) : nil)
+op11(lvm_twop, twop(Sp[0]) ? putfix(1) : nil)
+lvm(lvm_cons) {
  Have(Width(struct g_pair));
  struct g_pair *w = (struct g_pair*) Hp;
  Hp += Width(struct g_pair);
@@ -3601,10 +3601,10 @@ g_vm(g_vm_cons) {
  Ip++;
  return Continue(); }
 
-#define avm_slow(op, vop, ovf, fexpr) static g_vm(g_vm_##op##n) { \
+#define avm_slow(op, vop, ovf, fexpr) static lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop); \
- if (Cp(a) || Cp(b)) return Ap(g_vm_cplx_bin, g, vop); \
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop); \
+ if (Cp(a) || Cp(b)) return Ap(lvm_cplx_bin, g, vop); \
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b)) { word _res; Have(box_req); \
   g_flo_t ad = toflo(a), bd = toflo(b); \
@@ -3614,14 +3614,14 @@ g_vm(g_vm_cons) {
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b), t; \
   if (!ovf(av, bv, &t)) { word _res; Have(box_req); emit_int(t); \
    return *++Sp = _res, Ip++, Continue(); } } \
- if ((vop) == vop_mul) return Ap(g_vm_bmul_start, g); /* O(n^2): run yieldable */ \
+ if ((vop) == vop_mul) return Ap(lvm_bmul_start, g); /* O(n^2): run yieldable */ \
  Pack(g); g = g_big_binop(g, vop); \
  if (!g_ok(g)) return gtrap(g); \
  return Unpack(g), Continue(); }
-#define avm_slowdiv(op, vop, c_op, fexpr) static g_vm(g_vm_##op##n) { \
+#define avm_slowdiv(op, vop, c_op, fexpr) static lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop); \
- if (Cp(a) || Cp(b)) return Ap(g_vm_cplx_bin, g, vop); \
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop); \
+ if (Cp(a) || Cp(b)) return Ap(lvm_cplx_bin, g, vop); \
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req); \
   g_flo_t ad = toflo(a), bd = toflo(b); \
@@ -3634,14 +3634,14 @@ g_vm(g_vm_cons) {
  Pack(g); g = g_big_binop(g, vop); \
  if (!g_ok(g)) return gtrap(g); \
  return Unpack(g), Continue(); }
-#define avm_ovf(op, builtin) g_vm(g_vm_##op) { \
+#define avm_ovf(op, builtin) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
  if (fixp(a) && fixp(b)) { intptr_t t; \
   if (!builtin((intptr_t) getfix(a), (intptr_t) getfix(b), &t) && \
       t >= fix_min && t <= fix_max) \
    return *++Sp = putfix(t), Ip++, Continue(); } \
- return Ap(g_vm_##op##n, g); }
-#define avm_div(op, c_op) g_vm(g_vm_##op) { \
+ return Ap(lvm_##op##n, g); }
+#define avm_div(op, c_op) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
  if (fixp(a) && fixp(b)) { \
   intptr_t av = getfix(a), bv = getfix(b); \
@@ -3649,17 +3649,17 @@ g_vm(g_vm_cons) {
    intptr_t t = av c_op bv; \
    if (t >= fix_min && t <= fix_max) \
     return *++Sp = putfix(t), Ip++, Continue(); } } \
- return Ap(g_vm_##op##n, g); }
+ return Ap(lvm_##op##n, g); }
 // the ordered comparisons (< <= > >=) and their total order over all values are
-// defined after vcmp_int/vcmp_flo (the per-op helpers they reuse), by g_vm_vbin.
-#define bit_slow(n, c_op) static g_vm(g_vm_##n##_slow) {               \
+// defined after vcmp_int/vcmp_flo (the per-op helpers they reuse), by lvm_vbin.
+#define bit_slow(n, c_op) static lvm(lvm_##n##_slow) {               \
  word a = Sp[0], b = Sp[1], _res;                                     \
  if (!(fixp(a) || boxp(a)) || !(fixp(b) || boxp(b)))                  \
   return *++Sp = nil, Ip++, Continue();                               \
  Have(box_req);                                                       \
  emit_int(toint(a) c_op toint(b));                                    \
  return *++Sp = _res, Ip++, Continue(); }
-#define mvm1(n) g_vm(g_vm_##n) { return Ap(g_vm_math1, g, g_##n); }
+#define mvm1(n) lvm(lvm_##n) { return Ap(lvm_math1, g, g_##n); }
 #define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own ap)
 
 
@@ -3671,13 +3671,13 @@ avm_slowdiv(fquot, vop_fquot, /, g_trunc(ad / bd))  // `//` truncating: float op
 avm_slowdiv(rem, vop_rem, %, g_fmod(ad, bd))    // NaN on bd == 0
 
 // `/` true division: exact integer when b divides a, a float box otherwise (the
-// truncating quotient is `//`, g_vm_fquot above). Mirrors avm_slowdiv's lane order
+// truncating quotient is `//`, lvm_fquot above). Mirrors avm_slowdiv's lane order
 // -- array / complex / non-num / float-or-÷0 -- then splits the integer lane on
 // divisibility. The bignum lane defers to g_big_quot_true (same exact-or-float test).
-static g_vm(g_vm_quotn) {
+static lvm(lvm_quotn) {
  word a = Sp[0], b = Sp[1];
- if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop_quot);
- if (Cp(a) || Cp(b)) return Ap(g_vm_cplx_bin, g, vop_quot);
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_quot);
+ if (Cp(a) || Cp(b)) return Ap(lvm_cplx_bin, g, vop_quot);
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue();
  if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req);   // ±inf/NaN on ÷0
   g_flo_t ad = toflo(a), bd = toflo(b);
@@ -3697,7 +3697,7 @@ static g_vm(g_vm_quotn) {
  return Unpack(g), Continue(); }
 
 avm_ovf(sub, __builtin_sub_overflow)
-// g_vm_mul + its kind matrix live after the `+` string lane (they reuse add_name /
+// lvm_mul + its kind matrix live after the `+` string lane (they reuse add_name /
 // stringrank for the symbol-repetition case), below.
 
 // `+` is overloaded: still arithmetic add, but generic over strings and lists,
@@ -3726,7 +3726,7 @@ static g_inline intptr_t seq_byte(word x) {
 // LIST lane: at least one operand is a pair (the matrix only routes list-involved
 // pairs here). list+list -> spine append; elt<->list -> the non-list operand joins
 // as a scalar element (front if it is on the left, else appended at the tail).
-static g_vm(g_vm_add_seq) {
+static lvm(lvm_add_seq) {
  word a = Sp[0], b = Sp[1];
  if (twop(a) && twop(b)) {                       // list + list -> append a..b
   uintptr_t n = llen(a); Have(n * Width(struct g_pair));
@@ -3739,7 +3739,7 @@ static g_vm(g_vm_add_seq) {
  if (twop(a) || twop(b)) {                        // elt <-> list
   bool front = !g_add_lr || twop(b);              // element on the left -> front
   word lst = twop(a) ? a : b, elt = twop(a) ? b : a;
-  if (front) { Sp[0] = elt, Sp[1] = lst; return Ap(g_vm_cons, g); }  // (cons elt list)
+  if (front) { Sp[0] = elt, Sp[1] = lst; return Ap(lvm_cons, g); }  // (cons elt list)
   uintptr_t n = llen(lst) + 1; Have(n * Width(struct g_pair));        // append elt at tail
   lst = twop(Sp[0]) ? Sp[0] : Sp[1], elt = twop(Sp[0]) ? Sp[1] : Sp[0];
   struct g_pair *base = (struct g_pair*) Hp, *w = base;
@@ -3778,7 +3778,7 @@ static g_inline char *add_emit(char *w, word x) {       // append x's bytes; ret
  if (symp(x)) { struct g_str *n = add_name(x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
  return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (gated >= 0 by the byte law)
-static g_vm(g_vm_add_string) {
+static lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> string: undefined
  if (!strp(a) && !symp(a) && seq_byte(a) < 0) return *++Sp = nil, Ip++, Continue();  // the byte law
@@ -3793,9 +3793,9 @@ static g_vm(g_vm_add_string) {
  add_emit(add_emit(txt(z), a), b);                      // a's bytes then b's, in order
  *++Sp = word(z);
  return rank == 0 ? (Ip++, Continue())                  // string
-      : rank == 1 ? Ap(g_vm_nom, g)                  // uninterned symbol (fresh)
-                  : Ap(g_vm_intern, g); }               // interned symbol
-static g_vm(g_vm_0) {                             // unsupported mix (array <-> string)
+      : rank == 1 ? Ap(lvm_nom, g)                  // uninterned symbol (fresh)
+                  : Ap(lvm_intern, g); }               // interned symbol
+static lvm(lvm_0) {                             // unsupported mix (array <-> string)
  return *++Sp = nil, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in love.h): a fixnum is
@@ -3813,8 +3813,8 @@ enum q g_kind(word x) {
 // ============================================================================
 // generic-op lane aps, then all three dispatch matrices adjacent, then the
 // `+`/`*` dispatchers. The numeric slow lanes (addn/muln…) come from the AVM_*
-// macros above; the `+` string lanes (add_seq/add_string) and g_vm_0 just above; the
-// lambda combinators (g_vm_addh/g_vm_mulh) near num-ap. Defined here: the `*`
+// macros above; the `+` string lanes (add_seq/add_string) and lvm_0 just above; the
+// lambda combinators (lvm_addh/lvm_mulh) near num-ap. Defined here: the `*`
 // repeat lane and the apply aps -- everything the matrices reference.
 // ============================================================================
 
@@ -3826,7 +3826,7 @@ enum q g_kind(word x) {
 // total-order-guarded modulus); an array (or any non-number) is not a count ->
 // nil. A symbol stays at its own rank (no demotion): an interned name repeats
 // to an interned symbol.
-static g_vm(g_vm_mul_rep) {
+static lvm(lvm_mul_rep) {
  word a = Sp[0], b = Sp[1];
  bool aseq = strp(a) || symp(a) || twop(a);
  word seq = aseq ? a : b, cnt = aseq ? b : a;
@@ -3856,8 +3856,8 @@ static g_vm(g_vm_mul_rep) {
  for (uintptr_t i = 0; i < n; i++) memcpy(txt(z) + i * sl, txt(src), sl);
  *++Sp = word(z);
  return rank == 0 ? (Ip++, Continue())             // string
-      : rank == 1 ? Ap(g_vm_nom, g)             // uninterned symbol
-                  : Ap(g_vm_intern, g); }          // interned symbol
+      : rank == 1 ? Ap(lvm_nom, g)             // uninterned symbol
+                  : Ap(lvm_intern, g); }          // interned symbol
 
 // --- apply lane (the data-value `(g x)` aps; moved here from data.c) -----
 // When a data value is applied, its sentinel (data.c, pinned in the gwen_data
@@ -3865,13 +3865,13 @@ static g_vm(g_vm_mul_rep) {
 // kind of the applied value and the dynamic kind of the argument. Every data kind
 // has a meaningful apply (pair = eliminator, string/symbol = byte index, numeric
 // tower = Church numeral); opaque handles (ports, buffers) behave as 0 via their
-// own g_vm_* sentinel, not through here. Maps look up via g_vm_map_lookup (a text
+// own lvm_* sentinel, not through here. Maps look up via lvm_map_lookup (a text
 // ap, not a data sentinel), so they do not appear in this table.
 
 // (s k): applying a string indexes it -- k a byte offset, result the unsigned byte
 // 0..255 there, 1 if k is non-numeric or out of range (matches "" == 0: a numeric
 // ("" k) is the Church numeral k**0 == 1). No alloc, unwinds like self-quote.
-static g_vm(data_string_apply) {
+static lvm(data_string_apply) {
  word k = Sp[0], v = putfix(1), n;
  if (oddp(k) && (n = getfix(k)) >= 0 && n < (word) len(Ip))
   v = putfix((unsigned char) txt(Ip)[n]);
@@ -3881,21 +3881,21 @@ static g_vm(data_string_apply) {
 // nom encodes the kind: a string is the name (interned), a symbol is the naming
 // symbol of a named-uninterned sym (follow once to its string nom), 0 is an anonymous
 // nom. With no underlying string we act like 0 (absent name == "" == 0 -> 1).
-static g_vm(data_sym_apply) {
+static lvm(data_sym_apply) {
  word nom = word(((struct g_atom*) Ip)->nom);
- if (nom && cell(nom)->ap == g_vm_sym)              // named-uninterned: follow to the naming symbol
+ if (nom && cell(nom)->ap == lvm_sym)              // named-uninterned: follow to the naming symbol
   nom = word(((struct g_atom*) nom)->nom);
- if (nom && cell(nom)->ap == g_vm_str)             // interned/named: index the underlying name string
+ if (nom && cell(nom)->ap == lvm_str)             // interned/named: index the underlying name string
   return Ip = cell(nom), Ap(data_string_apply, g);
  return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }  // anonymous: no name -> act like 0
 
 // (n x): applying a number is Church-numeral application, like a fixnum (cf.
-// g_vm_numap). Fixnums reach num-ap via the odd-tag check in g_vm_ap; the rest of the
-// tower (floats, boxes, complex, arrays -- all g_vm_tuple -- and bignums) are heap
+// lvm_numap). Fixnums reach num-ap via the odd-tag check in lvm_ap; the rest of the
+// tower (floats, boxes, complex, arrays -- all lvm_tuple -- and bignums) are heap
 // pointers, so they arrive at their data sentinel. We lay the same [n, num-ap, x, ret]
 // frame and run numap_drive, handing the boxed operator n to the l num-ap ap,
 // which picks exponentiate / compose / self by operand+operator kind.
-static g_vm(data_num_apply) {
+static lvm(data_num_apply) {
  Have(2);
  word h = resolve_hot(g, "num-ap", 6);
  word n = word(Ip), x = Sp[0], ret = Sp[1], *dst = Sp - 2;
@@ -3907,11 +3907,11 @@ static g_vm(data_num_apply) {
 // curried calls expect, then [ap ; swap+ap ; ret0] runs ((g a) b). pair_swap reorders
 // [result, b] -> [b, result] so the second ap sees arg=b, fn=(g a). The driver lives
 // in .data, so the return addresses it leaves on the stack fall outside the GC pool.
-static g_vm(pair_swap) {
+static lvm(pair_swap) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
- return Ap(g_vm_ap, g); }
-static union u const pair_drive[] = { {g_vm_ap}, {.ap = pair_swap}, {.ap = g_vm_ret0} };
-static g_vm(data_pair_apply) {
+ return Ap(lvm_ap, g); }
+static union u const pair_drive[] = { {lvm_ap}, {.ap = pair_swap}, {.ap = lvm_ret0} };
+static lvm(data_pair_apply) {
  Have(2);
  word a = A(Ip), b = B(Ip), fn = Sp[0];     // re-read after the Have guard; no alloc past here
  Sp -= 2;                                    // grow the frame to [a, fn, b, ret]
@@ -3932,61 +3932,61 @@ static g_vm(data_pair_apply) {
 //   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KHom rows+cols) -- Church
 //          add / compose; a map IS a lookup lambda for +/*, kept deliberately, so
 //          its rung shares the lanes (the rung exists for the order)
-//   g_vm_0 = undefined (-> nil): sequence*sequence
+//   lvm_0 = undefined (-> nil): sequence*sequence
 // Precedence (high->low): lambda > map > pair > text > number(incl array).
 // cols (enum order): fix tuple big arrZ arrR arrC arrO | string sym | two | map lam
 
 // `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KHom rows+cols all addl.
-static g_vm_t *const g_add_mx[KN][KN] = {
- [KFix]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KTuple]  = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KBig]    = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KArrZ]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KArrR]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KArrC]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KArrO]   = { g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_addn, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KString] = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KSym]    = { g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_string, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KTwo]    = { g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_add_seq, g_vm_addh, g_vm_addh },
- [KMap]    = { g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh },
- [KHom]    = { g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh, g_vm_addh },
+static lvm_t *const g_add_mx[KN][KN] = {
+ [KFix]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KTuple]  = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KBig]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrZ]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrR]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrC]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KArrO]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KString] = { lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KSym]    = { lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_seq, lvm_addh, lvm_addh },
+ [KTwo]    = { lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_addh, lvm_addh },
+ [KMap]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
+ [KHom]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
 };
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil.
-static g_vm_t *const g_mul_mx[KN][KN] = {
- [KFix]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
- [KTuple]  = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
- [KBig]    = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
- [KArrZ]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
- [KArrR]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
- [KArrC]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
- [KArrO]   = { g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_muln, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mulh, g_vm_mulh },
- [KString] = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mulh, g_vm_mulh },
- [KSym]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mulh, g_vm_mulh },
- [KTwo]    = { g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_mul_rep, g_vm_0, g_vm_0, g_vm_0, g_vm_mulh, g_vm_mulh },
- [KMap]    = { g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh },
- [KHom]    = { g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh, g_vm_mulh },
+static lvm_t *const g_mul_mx[KN][KN] = {
+ [KFix]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KTuple]  = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KBig]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrZ]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrR]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrC]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KArrO]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KString] = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
+ [KSym]    = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
+ [KTwo]    = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
+ [KMap]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
+ [KHom]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
 };
 // apply: [applied data kind = g_typ(Ip)][argument kind = g_kind(arg)]. Every row is
 // arg-kind-uniform today (arow fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
 #define arow(h) { [KFix]=h,[KHom]=h,[KMap]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
                   [KArrZ]=h,[KArrR]=h,[KArrC]=h,[KArrO]=h }
-g_vm_t *g_apply_mx[KN][KN] = {
+lvm_t *g_apply_mx[KN][KN] = {
  [KTwo]  = arow(data_pair_apply), [KTuple]  = arow(data_num_apply),
  [KSym]  = arow(data_sym_apply),
  [KString] = arow(data_string_apply), [KBig]  = arow(data_num_apply), };
 #undef arow
 
 // === the `+`/`*` dispatchers (fixnum fast path, then the matrix) ============
-g_vm(g_vm_add) {
+lvm(lvm_add) {
  word a = Sp[0], b = Sp[1]; intptr_t t;
  if (fixp(a) && fixp(b)
      && !__builtin_add_overflow((intptr_t) getfix(a), (intptr_t) getfix(b), &t)
      && t >= fix_min && t <= fix_max)
   return *++Sp = putfix(t), Ip++, Continue();
  return Ap(g_add_mx[g_kind(a)][g_kind(b)], g); }
-g_vm(g_vm_mul) {
+lvm(lvm_mul) {
  word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b)) { intptr_t t;
   if (!__builtin_mul_overflow((intptr_t) getfix(a), (intptr_t) getfix(b), &t)
@@ -3998,69 +3998,69 @@ avm_div(fquot, /)                               // `//` fixnum fast path: trunca
 avm_div(rem, %)
 // `/` fixnum fast path: stay exact only when b divides a; otherwise the slow lane
 // promotes to a float box. The INT_MIN/-1 guard precedes the `%` (it would be UB).
-g_vm(g_vm_quot) {
+lvm(lvm_quot) {
  word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b)) { intptr_t av = getfix(a), bv = getfix(b);
   if (bv != 0 && !(av == INTPTR_MIN && bv == -1) && av % bv == 0) {
    intptr_t t = av / bv;
    if (t >= fix_min && t <= fix_max) return *++Sp = putfix(t), Ip++, Continue(); } }
- return Ap(g_vm_quotn, g); }
+ return Ap(lvm_quotn, g); }
 
-// The ordered comparisons (g_vm_lt/le/gt/ge) and their total order are defined
-// after vcmp_int/vcmp_flo (the per-op trichotomy helpers), near g_vm_vbin.
+// The ordered comparisons (lvm_lt/le/gt/ge) and their total order are defined
+// after vcmp_int/vcmp_flo (the per-op trichotomy helpers), near lvm_vbin.
 
 // Bitwise and/or/xor: fast both-fixnum tag trick (two odds stay odd under &
 // and |; ^ clears the tag bit so we re-set it). A box operand routes to the
 // slow ap, which works at full width and demotes-or-boxes; these are
 // integer-only, so a float (or any non-integer) operand yields nil.
 bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
-g_vm(g_vm_band) { word a = Sp[0], b = Sp[1];
+lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b)) return *++Sp = (a & b) | 1, Ip++, Continue();
- return Ap(g_vm_band_slow, g); }
-g_vm(g_vm_bor) { word a = Sp[0], b = Sp[1];
+ return Ap(lvm_band_slow, g); }
+lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b)) return *++Sp = (a | b) | 1, Ip++, Continue();
- return Ap(g_vm_bor_slow, g); }
-g_vm(g_vm_bxor) { word a = Sp[0], b = Sp[1];
+ return Ap(lvm_bor_slow, g); }
+lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b)) return *++Sp = (a ^ b) | 1, Ip++, Continue();
- return Ap(g_vm_bxor_slow, g); }
+ return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `nilp`.)
 
 // >> : arithmetic right shift. A fixnum value only shrinks, so it keeps a
 // non-allocating fast path; a boxed value routes to the slow ap.
-static g_vm(g_vm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
+static lvm(lvm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
  if (!(fixp(a) || boxp(a)) || !fixp(b)) return *++Sp = nil, Ip++, Continue();
  Have(box_req);
  emit_int(toint(a) >> getfix(b));
  return *++Sp = _res, Ip++, Continue(); }
-g_vm(g_vm_bsr) { word a = Sp[0], b = Sp[1];
+lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
  if (fixp(a) && fixp(b))
   return *++Sp = putfix(getfix(a) >> getfix(b)), Ip++, Continue();
- return Ap(g_vm_bsr_slow, g); }
+ return Ap(lvm_bsr_slow, g); }
 
 // << : can overflow the tag, so it always runs through the box/demote path
 // (emit_int still demotes small results — only genuinely wide values
 // allocate). Shift done in uintptr_t for well-defined overflow.
-g_vm(g_vm_bsl) { word a = Sp[0], b = Sp[1], _res;
+lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  if (!(fixp(a) || boxp(a)) || !fixp(b)) return *++Sp = nil, Ip++, Continue();
  Have(box_req);
  emit_int((intptr_t)((uintptr_t) toint(a) << getfix(b)));
  return *++Sp = _res, Ip++, Continue(); }
 
-op(g_vm_fixp, 1, oddp(Sp[0]) ? putfix(1) : nil)
+op(lvm_fixp, 1, oddp(Sp[0]) ? putfix(1) : nil)
 // `nilp`/`not`: the falsy predicate -- the efficient generic form of (= 0 ($ x)),
 // via g_nilp, which reads the net's sign without the clamp (a sym/string/fn is truthy
-// with no walk). The single truthiness oracle: `?` (g_vm_cond), nilp, and aall all
+// with no walk). The single truthiness oracle: `?` (lvm_cond), nilp, and aall all
 // consult g_nilp, so `(? (nilp e) a b)` == `(? e b a)` -- the wev pass drops such a
 // nilp wrapper. Use `(= x 0)` for a literal scalar-zero test.
-op11(g_vm_nilp, g_nilp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_nilp, g_nilp(Sp[0]) ? putfix(1) : nil)
 
 // Unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
 // Non-numeric arg → nil. TCO-clean (no & escapes).
-static g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
+static lvm(lvm_math1, g_flo_t (*fn)(g_flo_t)) {
  word a = Sp[0];
  if (arrp(a)) {                               // (sin arr) etc. -> float array; complex array undefined
   if (tuple(a)->type == g_C) return Sp[0] = nil, Ip++, Continue();
-  return Ap(g_vm_vmap1, g, fn); }
+  return Ap(lvm_vmap1, g, fn); }
  if (!isnum(a)) return Sp[0] = nil, Ip++, Continue();
  g_flo_t ad = toflo(a), rd = fn(ad);
  uintptr_t req = Width(struct g_tuple) + Width(g_flo_t);
@@ -4070,12 +4070,12 @@ static g_vm(g_vm_math1, g_flo_t (*fn)(g_flo_t)) {
  flo_put(v->shape, rd);
  return Sp[0] = word(v), Ip++, Continue(); }
 
-static g_vm(g_vm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
+static lvm(lvm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  word a = Sp[0], b = Sp[1];
  if (arrp(a) || arrp(b)) {                               // (pow arr ..) etc. -> float array
   if ((arrp(a) && tuple(a)->type == g_C) || (arrp(b) && tuple(b)->type == g_C))
    return *++Sp = nil, Ip++, Continue();                 // complex array undefined here
-  return Ap(g_vm_vmap2, g, fn); }
+  return Ap(lvm_vmap2, g, fn); }
  if (!isnum(a) || !isnum(b)) return
   *++Sp = nil, Ip++, Continue();
  g_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
@@ -4099,20 +4099,20 @@ m1(mvm1)
 // identity holds in the direction floats can state it exactly: (log -1) =
 // (* i pi), since atan2(0,-1) is pi by IEEE fiat and i moves it with exact
 // 0/1 products. Arrays stay elementwise float (negative elements -> nan).
-g_vm(g_vm_log) {
+lvm(lvm_log) {
  word a = Sp[0];
  g_flo_t m, th;
  if (Cp(a)) m = g_log(cplx_mod(a)), th = g_atan2(cplx_im(a), cplx_re(a));
  else if (isnum(a) && toflo(a) < 0) { g_flo_t ad = toflo(a);
   m = g_log(-ad), th = g_atan2(0, ad); }
- else return Ap(g_vm_math1, g, g_log);
+ else return Ap(lvm_math1, g, g_log);
  Have(cplx_req);
  struct g_tuple *v = ini_scalar((struct g_tuple*) Hp, g_C);
  Hp += cplx_req;
  cplx_put(v, m, th);
  return Sp[0] = word(v), Ip++, Continue(); }
 
-op11(g_vm_flop, flop(Sp[0]) ? putfix(1) : nil)
+op11(lvm_flop, flop(Sp[0]) ? putfix(1) : nil)
 
 // ============================================================================
 // tuple
@@ -4207,7 +4207,7 @@ static g_inline struct g_tuple *rng_copy(g_word **hp, struct g_tuple *src) {
 
 // (rng-seed n): a fresh state tuple deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
-g_vm(g_vm_rng_seed) {
+lvm(lvm_rng_seed) {
  word n = Sp[0];
  uint64_t seed = fixp(n) ? (uint64_t) (intptr_t) getfix(n) : 0;
  Have(rng_vec_req);
@@ -4218,7 +4218,7 @@ g_vm(g_vm_rng_seed) {
 // (rand-next st): functional draw -> (value . st'), value a full-width
 // non-negative fixnum. st is copied (referentially transparent); st' is the
 // stepped copy.
-g_vm(g_vm_rand_next) {
+lvm(lvm_rand_next) {
  word st = Sp[0];
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
  Have(rng_vec_req + Width(struct g_pair));
@@ -4230,7 +4230,7 @@ g_vm(g_vm_rand_next) {
  return Sp[0] = word(p), Ip++, Continue(); }
 
 // (randf-next st): functional draw -> (float . st'), float in [0,1).
-g_vm(g_vm_randf_next) {
+lvm(lvm_randf_next) {
  word st = Sp[0], _res;
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
  Have(rng_vec_req + box_req + Width(struct g_pair));
@@ -4376,11 +4376,11 @@ g_noinline bool eqv(struct g *g, word a, word b) {
 // out-of-fixnum-range values. Falls through to eql for non-numeric operands so
 // symbol/pair/string identity is unchanged. Strictly looser than eqv, which
 // still rejects mixed-type pairs (so table keys 3 and 3.0 stay distinct).
-g_vm(g_vm_eq) {
+lvm(lvm_eq) {
  word a = Sp[0], b = Sp[1];
  // Over a rank>=1 array, `=` is elementwise -> a 0/1 bool array (whole-array
  // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
- if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, vop_eq);
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_eq);
  // Complex equality: equal iff re and im match. A real operand reads as (r, 0),
  // so the cross-real case `(= (cplx 2 0) 2)` is true (numeric widening, like
  // `(= 2 2.0)`); a non-numeric operand makes it false. Done before the float
@@ -4405,7 +4405,7 @@ g_vm(g_vm_eq) {
 // (same a b) — pointer/word identity, no structural recursion. Distinguishes
 // two distinct objects that `=` would conflate (e.g. two equal pairs), so the
 // compiler can find a unique marker by identity.
-g_vm(g_vm_same) {
+lvm(lvm_same) {
  Sp[1] = Sp[0] == Sp[1] ? putfix(1) : nil;
  return Sp++, Ip++, Continue(); }
 
@@ -4477,7 +4477,7 @@ static g_noinline int mag_sub(uint32_t *r, uint32_t const *a, int na, uint32_t c
 
 // r = a * b (schoolbook). r must be distinct from a,b; capacity >= na+nb. Used
 // one-shot by g_big_binop (the object-array elementwise lane); the scalar `*`
-// path instead drives a chunked, yieldable copy of this loop in g_vm_bmul.
+// path instead drives a chunked, yieldable copy of this loop in lvm_bmul.
 static g_noinline void mag_mul(uint32_t *r, uint32_t const *a, int na, uint32_t const *b, int nb) {
  for (int i = 0; i < na + nb; i++) r[i] = 0;
  for (int i = 0; i < na; i++) {
@@ -4646,7 +4646,7 @@ static int big_mul_mag(uint32_t *r, uint32_t const *a, int na, uint32_t const *b
 // Operands at g->sp[0..1] are integers (fixnum/box/bignum); a zero divisor is
 // screened off by the caller. Computes a (vop) b, leaves the canonical result
 // at g->sp[1], pops one operand, and advances g->ip -- so the caller is just
-// Pack(g); g = g_big_binop(g, vop); Unpack(g); Continue();  (cf. g_vm_gc).
+// Pack(g); g = g_big_binop(g, vop); Unpack(g); Continue();  (cf. lvm_gc).
 struct g *g_big_binop(struct g *g, int vop) {
  word a = g->sp[0], b = g->sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
@@ -4729,7 +4729,7 @@ struct g *g_big_quot_true(struct g *g) {
 // (it blocks the sibcall), which rules out load_int_mag's scratch array. Setup
 // (which may use scratch) is hoisted into a plain function, g_bmul_setup.
 #define bmul_chunk (1 << 14)
-static union u const bmul_loop[1] = { { .ap = g_vm_bmul } };
+static union u const bmul_loop[1] = { { .ap = lvm_bmul } };
 
 // Materialize integer x (fixnum/box/bignum) as a heap g_big, bumping *hp for the
 // fixnum/box case; a bignum is returned in place. Plain function: scratch is fine.
@@ -4762,19 +4762,19 @@ static struct g *g_bmul_setup(struct g *g) {
  struct g_str *s = ini_str((struct g_str*) g->hp, rbytes);
  g->hp += sreq; memset(txt(s), 0, rbytes);
  union u *k = (union u*) g->hp; g->hp += breq;
- ((struct g_buf*) k)->ap = g_vm_buf, ((struct g_buf*) k)->str = s, tagtext(k, Width(struct g_buf));
+ ((struct g_buf*) k)->ap = lvm_buf, ((struct g_buf*) k)->str = s, tagtext(k, Width(struct g_buf));
  g->sp -= 3;                                       // [i, r, ret_ip, abig, bbig]
  g->sp[0] = putfix(0), g->sp[1] = word(k), g->sp[2] = word(ret);
  g->sp[3] = word(abig), g->sp[4] = word(bbig);
  g->ip = (union u*) bmul_loop;
  return g; }
 
-g_vm(g_vm_bmul_start) {
+lvm(lvm_bmul_start) {
  Pack(g); g = g_bmul_setup(g);
  if (!g_ok(g)) return gtrap(g);
  return Unpack(g), Continue(); }
 
-g_vm(g_vm_bmul) {
+lvm(lvm_bmul) {
  int i = (int) getfix(Sp[0]);
  struct g_big *A = (struct g_big*) Sp[3], *B = (struct g_big*) Sp[4];
  intptr_t sla = A->slen, slb = B->slen;
@@ -4861,7 +4861,7 @@ struct g *g_big_dec(struct g *g) {
 // extras are ignored), and 0 (or any non-list) means zero-filled. A `c` array
 // packs two floats (re,im) per element; zero-fill is 0+0i. Bad type / negative
 // dim / over-rank -> nil.
-g_vm(g_vm_arr) {
+lvm(lvm_arr) {
  word t = Sp[0], shp = Sp[1];                  // vals = Sp[2]
  if (!fixp(t)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
  intptr_t ty = getfix(t);
@@ -4898,17 +4898,17 @@ g_vm(g_vm_arr) {
 
 // --- accessors -------------------------------------------------------------
 // rank / element-type code as fixnums; nil for a non-tuple. Both 0 for a scalar box.
-op11(g_vm_arank, tupp(Sp[0]) ? putfix(tuple(Sp[0])->rank) : nil)
-op11(g_vm_atype, tupp(Sp[0]) ? putfix(tuple(Sp[0])->type) : nil)
+op11(lvm_arank, tupp(Sp[0]) ? putfix(tuple(Sp[0])->rank) : nil)
+op11(lvm_atype, tupp(Sp[0]) ? putfix(tuple(Sp[0])->type) : nil)
 
 // total element count (1 for a scalar box), nil for a non-tuple.
-g_vm(g_vm_alen) {
+lvm(lvm_alen) {
  word x = Sp[0];
  if (!tupp(x)) return Sp[0] = nil, Ip++, Continue();
  return Sp[0] = putfix(tuple_nelem(tuple(x))), Ip++, Continue(); }
 
 // dimensions as a list (allocates rank cons cells), nil for a non-tuple.
-g_vm(g_vm_ashape) {
+lvm(lvm_ashape) {
  word x = Sp[0];
  if (!tupp(x)) return Sp[0] = nil, Ip++, Continue();
  uintptr_t r = tuple(x)->rank;
@@ -4930,7 +4930,7 @@ static struct g *ored(struct g *g, int kind);   // kind: 0 sum, 1 prod, 2 max, 3
 // --- reductions: rank>=1 array -> rank-0 scalar; identity on a scalar -------
 // The identity-on-scalar property makes `(aall (< a b))` rank-agnostic: the
 // same expression works whether a/b are scalars or arrays.
-g_vm(g_vm_asum) {
+lvm(lvm_asum) {
  word x = Sp[0];
  if (!tupp(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
  if (tuple(x)->type == g_O) {
@@ -4960,7 +4960,7 @@ g_vm(g_vm_asum) {
   emit_int(a); }
  return Sp[0] = _res, Ip++, Continue(); }
 
-g_vm(g_vm_aprod) {
+lvm(lvm_aprod) {
  word x = Sp[0];
  if (!tupp(x)) return Ip++, Continue();
  if (tuple(x)->type == g_O) {
@@ -4992,7 +4992,7 @@ g_vm(g_vm_aprod) {
 
 // max / min over a non-empty array (kind 2 = max, 3 = min, matching ored);
 // empty -> nil; scalar -> identity. The kind selects the comparison sense.
-static g_vm(g_vm_aextreme, int kind) {
+static lvm(lvm_aextreme, int kind) {
  word x = Sp[0];
  if (!tupp(x)) return Ip++, Continue();
  if (tuple(x)->type == g_O) {
@@ -5012,15 +5012,15 @@ static g_vm(g_vm_aextreme, int kind) {
   for (uintptr_t i = 1; i < n; i++) { intptr_t e = tuple_get_int(v, i); if (ismax ? e > m : e < m) m = e; }
   emit_int(m); }
  return Sp[0] = _res, Ip++, Continue(); }
-g_vm(g_vm_amax) { return Ap(g_vm_aextreme, g, 2); }
-g_vm(g_vm_amin) { return Ap(g_vm_aextreme, g, 3); }
+lvm(lvm_amax) { return Ap(lvm_aextreme, g, 2); }
+lvm(lvm_amin) { return Ap(lvm_aextreme, g, 3); }
 
 // aall: the bool conjunction reduction. Scalar -> identity (so (aall 1) = 1, the
 // linchpin of the rank-agnostic compare idiom). Over an array: "no zero element"
 // (the falsy rule lifted to a conjunction); empty array -> true (vacuous). The
 // DISJUNCTION (was `aany`) is just `len`: an array is truthy iff some element is
 // nonzero, i.e. (nilp x) == (= 0 (len x)) -- so `(len x)` replaces `(aany x)`.
-g_vm(g_vm_aall) {
+lvm(lvm_aall) {
  word x = Sp[0];
  if (!tupp(x)) return Ip++, Continue();
  struct g_tuple *v = tuple(x);
@@ -5041,14 +5041,14 @@ g_vm(g_vm_aall) {
  return Sp[0] = putfix(1), Ip++, Continue(); }
 
 // --- elementwise monadic math over an array (sin/cos/sqrt/... ) --------------
-// Reached from g_vm_math1 when its operand arrp. Result is a float array
+// Reached from lvm_math1 when its operand arrp. Result is a float array
 // (g_R) with the operand's shape. The fill loop takes no &local, so the
-// g_vm wrapper keeps its trailing tail call.
+// lvm wrapper keeps its trailing tail call.
 static g_noinline void vmap1_fill(struct g_tuple *r, struct g_tuple *a, g_flo_t (*fn)(g_flo_t)) {
  uintptr_t n = tuple_nelem(r);
  for (uintptr_t i = 0; i < n; i++) tuple_put_flo(r, i, fn(tuple_get_flo(a, i))); }
 
-g_vm(g_vm_vmap1, g_flo_t (*fn)(g_flo_t)) {
+lvm(lvm_vmap1, g_flo_t (*fn)(g_flo_t)) {
  struct g_tuple *a = tuple(Sp[0]);
  uintptr_t rank = a->rank, n = tuple_nelem(a);
  uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + n * g_T[g_R];
@@ -5094,7 +5094,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // the enum q type lattice (love.h) -- fixnum/number LOW, lambda HIGH, the very
 // order the generic-op matrix diagonals encode: number < string < symbol < pair <
 // map < lambda. (Arrays are the exception: an array operand compares ELEMENTWISE -> a
-// 0/1 mask via g_vm_vbin, never the scalar order.) WITHIN a kind:
+// 0/1 mask via lvm_vbin, never the scalar order.) WITHIN a kind:
 //   numbers  by value across the tower; a real r is the complex (r, 0), so complex
 //            sorts lexicographically by (re, im). IEEE-faithful: NaN is unordered,
 //            so every ordering of it is false.
@@ -5111,7 +5111,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // (symbols no longer: the mint serial made their order total).
 // cross-kind rank = the enum q kind, every numeric kind folded to the arith lane
 // (KFix) so fix/box/big/float/complex order by VALUE, not representation. Arrays
-// divert to g_vm_vbin before this, so KArr* never appear. One source of truth:
+// divert to lvm_vbin before this, so KArr* never appear. One source of truth:
 // the enum q order itself.
 static g_inline int cmp_rank(word x) { return (isnum(x) || Cp(x)) ? KFix : (int) g_kind(x); }
 static g_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
@@ -5168,13 +5168,13 @@ static intptr_t cmp3(struct g *g, word a, word b) {
 // elements (unlike $, which counts only the sat ones: a product of nothings
 // is nothing, but it still has a length). the compiler's frame arithmetic
 // runs on tally; the egg pulls it at birth with the other internals.
-g_vm(g_vm_tally) {
+lvm(lvm_tally) {
  word l = Sp[0]; intptr_t n = 0;
  while (twop(l)) n++, l = B(l);
  Sp[0] = putfix(n);
  return Ip++, Continue(); }
 
-g_vm(g_vm_sort) {
+lvm(lvm_sort) {
  word l = Sp[0];
  if (!twop(l) || !twop(B(l))) return Ip++, Continue();
  uintptr_t n = 0;
@@ -5199,11 +5199,11 @@ g_vm(g_vm_sort) {
  return Sp[0] = word(spine), Ip++, Continue(); }
 
 // the `<` / `<=` lane (op is vop_lt or vop_le). An array operand -> elementwise
-// mask (g_vm_vbin); a top-level float/complex pair is IEEE-faithful (NaN ->
+// mask (lvm_vbin); a top-level float/complex pair is IEEE-faithful (NaN ->
 // unordered -> false), so e.g. (<= nan nan) is nil.
-static g_vm(g_vm_cmp_ord, int op) {
+static lvm(lvm_cmp_ord, int op) {
  word a = Sp[0], b = Sp[1]; intptr_t r;
- if (arrp(a) || arrp(b)) return Ap(g_vm_vbin, g, op);      // array -> elementwise
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, op);      // array -> elementwise
  int ra = cmp_rank(a), rb = cmp_rank(b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: type lattice
  else if (ra != KFix) r = vcmp_int(op, cmp3(g, a, b), 0);  // string / sym / pair / lambda
@@ -5218,15 +5218,15 @@ static g_vm(g_vm_cmp_ord, int op) {
 // `<` `<=` -- the implemented side: both-fixnum fast path (tagged order is
 // monotonic), else the lane. `>` `>=` are the other side: reverse the operands and
 // reuse `<` `<=` (a > b == b < a; a >= b == b <= a).
-#define cmp_lt(nom, vop) g_vm(nom) { \
+#define cmp_lt(nom, vop) lvm(nom) { \
  word a = Sp[0], b = Sp[1]; \
  if (__builtin_expect(fixp(a) && fixp(b), 1)) \
   return *++Sp = vcmp_int(vop, a, b) ? putfix(1) : nil, Ip++, Continue(); \
- return Ap(g_vm_cmp_ord, g, vop); }
-cmp_lt(g_vm_lt, vop_lt) cmp_lt(g_vm_le, vop_le)
+ return Ap(lvm_cmp_ord, g, vop); }
+cmp_lt(lvm_lt, vop_lt) cmp_lt(lvm_le, vop_le)
 #undef cmp_lt
-g_vm(g_vm_gt) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; return Ap(g_vm_lt, g); }  // a > b == b < a
-g_vm(g_vm_ge) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; return Ap(g_vm_le, g); }  // a >= b == b <= a
+lvm(lvm_gt) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; return Ap(lvm_lt, g); }  // a > b == b < a
+lvm(lvm_ge) { word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t; return Ap(lvm_le, g); }  // a >= b == b <= a
 
 // Comparison from a 3-way sign of (lhs - rhs). Used when one operand is a bignum
 // scalar: a bignum is always out of machine-int range (|bignum| > INTPTR_MAX, by
@@ -5245,7 +5245,7 @@ static g_inline uintptr_t bdim(uintptr_t da, uintptr_t db) {
  return da == 1 ? db : db == 1 ? da : da; }
 
 // Fill the (already-shaped) result r with a `op` b, broadcasting. All the
-// &-taking stack arrays (strides, odometer) live here so the g_vm wrapper stays
+// &-taking stack arrays (strides, odometer) live here so the lvm wrapper stays
 // TCO-clean. No allocation inside, so operand pointers can't move under us.
 static g_noinline void vbin_fill(struct g_tuple *r, word a, word b, int op, bool fdom) {
  uintptr_t R = r->rank, n = 1;
@@ -5295,7 +5295,7 @@ static g_noinline void vbin_fill(struct g_tuple *r, word a, word b, int op, bool
 // For `/` (vop_quot) over the integer domain: true if some broadcast element pair
 // (av, bv) divides inexactly (bv == 0 or av % bv != 0), so the whole result must
 // promote to f64. A bignum scalar forces the float lane (its low word can't decide
-// divisibility). g_noinline: its &-taken stride/odometer arrays stay off g_vm_vbin's
+// divisibility). g_noinline: its &-taken stride/odometer arrays stay off lvm_vbin's
 // tail call. Called only after conformance is checked, so every offset is in range.
 static g_noinline bool vquot_needs_float(word a, word b) {
  bool aarr = arrp(a), barr = arrp(b);
@@ -5321,7 +5321,7 @@ static g_noinline bool vquot_needs_float(word a, word b) {
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) { if (++idx[j] < shp[j]) break; idx[j] = 0; } }
  return false; }
 
-g_vm(g_vm_vbin, int op) {
+lvm(lvm_vbin, int op) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
  // complex lane first: a packed g_C array, or a complex scalar paired with an
@@ -5330,11 +5330,11 @@ g_vm(g_vm_vbin, int op) {
  // element encoding) -- the g_O lane wins there.
  if (((aarr && tuple(a)->type == g_C) || (barr && tuple(b)->type == g_C) || Cp(a) || Cp(b))
      && !(aarr && tuple(a)->type == g_O) && !(barr && tuple(b)->type == g_O))
-  return Ap(g_vm_cbin, g, op);
+  return Ap(lvm_cbin, g, op);
  if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
   return *++Sp = nil, Ip++, Continue();
  if ((aarr && tuple(a)->type == g_O) || (barr && tuple(b)->type == g_O))
-  return Ap(g_vm_obin, g, op);                     // object array -> promoting lane
+  return Ap(lvm_obin, g, op);                     // object array -> promoting lane
  uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type
@@ -5369,7 +5369,7 @@ g_vm(g_vm_vbin, int op) {
  return *++Sp = word(r), Ip++, Continue(); }
 
 // --- dyadic libm map with broadcasting (pow / atan2 over arrays) -------------
-// The float-domain twin of g_vm_vbin: same numpy broadcast, but the result is
+// The float-domain twin of lvm_vbin: same numpy broadcast, but the result is
 // always a float array and each element is fn(av, bv) for an arbitrary libm
 // dyadic fn. A scalar operand broadcasts, widening through toflo -- so a bignum
 // scalar feeds in at full magnitude (g_big_to_flo), same as the scalar `pow`.
@@ -5400,7 +5400,7 @@ static g_noinline void vmap2_fill(struct g_tuple *r, word a, word b, g_flo_t (*f
    if (++idx[j] < (intptr_t) r->shape[j]) break;
    idx[j] = 0; } } }
 
-g_vm(g_vm_vmap2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
+lvm(lvm_vmap2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
  if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
@@ -5431,7 +5431,7 @@ g_vm(g_vm_vmap2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
 // fixed-width int array *wraps* on overflow. The object lane instead routes every
 // element through the scalar dispatch (obin_elem), which promotes fixnum->box->
 // bignum and boxes floats -- so a g_O array adds/multiplies *exactly*. Cost: the
-// inner loop allocates, so it runs Pack'd (g_vm_obin -> obin_run) and re-fetches
+// inner loop allocates, so it runs Pack'd (lvm_obin -> obin_run) and re-fetches
 // every live pointer (result, operands) after each element, exactly like the
 // other allocate-in-a-loop paths (cf. host_run, g_big_binop).
 
@@ -5514,7 +5514,7 @@ static struct g *arr_to_obj(struct g *g, int slot) {
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
  return g; }
 
-// Pack'd body of g_vm_obin (operands at g->sp[0..1], >=1 is a g_O array).
+// Pack'd body of lvm_obin (operands at g->sp[0..1], >=1 is a g_O array).
 static struct g *obin_run(struct g *g, int op) {
  word a = g->sp[0], b = g->sp[1];
  bool aarr = arrp(a), barr = arrp(b);
@@ -5561,7 +5561,7 @@ static struct g *obin_run(struct g *g, int op) {
  g->sp += 2, g->sp[0] = result, g->ip = (union u*) g->ip + 1;
  return g; }
 
-g_vm(g_vm_obin, int op) {
+lvm(lvm_obin, int op) {
  Pack(g);
  g = obin_run(g, op);
  if (!g_ok(g)) return gtrap(g);
@@ -5601,7 +5601,7 @@ static g_inline void cplx_parts(word x, g_flo_t *re, g_flo_t *im) {
  else *re = toflo(x), *im = 0; }
 
 // Fill the rank-0 complex box v with a `vop` b. All the &-taking lives in this
-// g_noinline helper so the g_vm wrapper keeps its trailing tail call; no
+// g_noinline helper so the lvm wrapper keeps its trailing tail call; no
 // allocation inside, so the operand pointers can't move under us.
 static g_noinline void cplx_fill(struct g_tuple *v, word a, word b, int vop) {
  g_flo_t ar, ai, br, bi, re, im;
@@ -5618,7 +5618,7 @@ static g_noinline void cplx_fill(struct g_tuple *v, word a, word b, int vop) {
 // operand is complex. A real operand promotes to (r, 0); a non-numeric operand,
 // or vop_rem (% is undefined on complex), yields nil. TCO-clean: the validation
 // and box are in the body (no &local), the math is in cplx_fill.
-g_vm(g_vm_cplx_bin, int vop) {
+lvm(lvm_cplx_bin, int vop) {
  word a = Sp[0], b = Sp[1];
  if (!(Cp(a) || isnum(a)) || !(Cp(b) || isnum(b)) || vop > vop_quot)
   return *++Sp = nil, Ip++, Continue();
@@ -5630,7 +5630,7 @@ g_vm(g_vm_cplx_bin, int vop) {
  return *++Sp = word(v), Ip++, Continue(); }
 
 // --- complex-array elementwise lane (g_C) ----------------------------------
-// The complex twin of g_vm_vbin: packed (re,im) numpy broadcast. An array operand
+// The complex twin of lvm_vbin: packed (re,im) numpy broadcast. An array operand
 // is a g_C (packed) array or a real g_Z/g_R array (each element promotes to (v,0));
 // a scalar operand is a complex box or any real number. + - * / use cplx_fill's
 // formulas; `=` writes a g_Z 0/1 mask (componentwise equal); ordering and % are
@@ -5680,7 +5680,7 @@ static g_noinline void cbin_fill(struct g_tuple *r, word a, word b, int op, bool
    if (++idx[j] < (intptr_t) r->shape[j]) break;
    idx[j] = 0; } } }
 
-g_vm(g_vm_cbin, int op) {
+lvm(lvm_cbin, int op) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
  // operand: array / complex scalar / real number. %, // and the orderings are
@@ -5712,7 +5712,7 @@ g_vm(g_vm_cbin, int op) {
 // Fill complex box v with w ** z via the principal branch: w^z = exp(z * Log w),
 // Log w = ln|w| + i*arg w. A real operand promotes to (r, 0) (cplx_parts). w == 0
 // falls out as the IEEE limit (exp(-inf) -> 0 for Re z > 0), same domain stance as
-// real pow. &-locals stay in this g_noinline helper, off g_vm_pow's tail call.
+// real pow. &-locals stay in this g_noinline helper, off lvm_pow's tail call.
 static g_noinline void cplx_pow_fill(struct g_tuple *v, word wbase, word zexp) {
  g_flo_t wr, wi, zr, zi;
  cplx_parts(wbase, &wr, &wi); cplx_parts(zexp, &zr, &zi);
@@ -5749,8 +5749,8 @@ static g_inline bool flo_fracp(g_flo_t x) {
 // negative real base to a non-integer power widens to its principal root
 // |b|^e * (cospi(e), sinpi(e)) instead of nan -- pow climbs tiers like log, and
 // ((/ 1 2) -1) = i exactly. An infinite/integer-power/array case keeps the IEEE
-// real lanes (g_vm_math2 -> real pow, or vmap2 elementwise over arrays).
-g_vm(g_vm_pow) {
+// real lanes (lvm_math2 -> real pow, or vmap2 elementwise over arrays).
+lvm(lvm_pow) {
  word a = Sp[0], b = Sp[1];
  if (Cp(a) || Cp(b)) {
   if (!(Cp(a) || isnum(a)) || !(Cp(b) || isnum(b)))
@@ -5770,12 +5770,12 @@ g_vm(g_vm_pow) {
    Hp += cplx_req;
    cplx_put(v, re, im);
    return *++Sp = word(v), Ip++, Continue(); } }
- return Ap(g_vm_math2, g, g_pow); }
+ return Ap(lvm_math2, g, g_pow); }
 
 // (C re im): build a complex from two real numbers. Non-numeric arg -> nil.
 // Fill packed g_C array r with (re = a-element, im = b-element) under numpy
 // broadcast; a, b are real (g_Z/g_R) arrays or real scalars. &-taking stride/
-// odometer arrays live in this g_noinline fill so g_vm_cplx keeps its tail call.
+// odometer arrays live in this g_noinline fill so lvm_cplx keeps its tail call.
 static g_noinline void cplx_build_fill(struct g_tuple *r, word a, word b) {
  uintptr_t R = r->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
@@ -5800,7 +5800,7 @@ static g_noinline void cplx_build_fill(struct g_tuple *r, word a, word b) {
 // a real array operand (with the other broadcasting) -> a packed g_C array, so
 // (arg (C 1 x)) = atan and (arg (C x y)) = atan2 stay elementwise. A complex or
 // object array operand, or a non-numeric scalar, -> nil.
-g_vm(g_vm_cplx) {
+lvm(lvm_cplx) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
  if (aarr || barr) {
@@ -5834,18 +5834,18 @@ g_vm(g_vm_cplx) {
  return *++Sp = word(v), Ip++, Continue(); }
 
 // (Cp x): is x a complex scalar?
-op11(g_vm_Cp, Cp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_Cp, Cp(Sp[0]) ? putfix(1) : nil)
 
 // (re z) / (im z): real / imaginary part as a rank-0 float box. On a real
 // number, re is the number itself and im is 0; on a non-number, nil.
-g_vm(g_vm_re) {
+lvm(lvm_re) {
  word a = Sp[0], _res;
  if (Cp(a)) { g_flo_t re = cplx_re(a); Have(box_req); emit_flo(re);
   return Sp[0] = _res, Ip++, Continue(); }
  if (isnum(a)) return Ip++, Continue();            // re of a real is itself
  return Sp[0] = nil, Ip++, Continue(); }
 
-g_vm(g_vm_im) {
+lvm(lvm_im) {
  word a = Sp[0], _res;
  if (Cp(a)) { g_flo_t im = cplx_im(a); Have(box_req); emit_flo(im);
   return Sp[0] = _res, Ip++, Continue(); }
@@ -5853,7 +5853,7 @@ g_vm(g_vm_im) {
  return Sp[0] = nil, Ip++, Continue(); }
 
 // (conj z): complex conjugate (re, -im). On a real number, the number itself.
-g_vm(g_vm_conj) {
+lvm(lvm_conj) {
  word a = Sp[0];
  if (Cp(a)) { g_flo_t re = cplx_re(a), im = cplx_im(a);
   Have(cplx_req);
@@ -5869,7 +5869,7 @@ g_vm(g_vm_conj) {
 // wart is a wide-int box holding INTPTR_MIN, whose magnitude needs a bignum --
 // rare enough to leave (it re-boxes INTPTR_MIN unchanged), same flavor as the
 // arith INT_MIN/-1 edge.
-g_vm(g_vm_abs) {
+lvm(lvm_abs) {
  word a = Sp[0], _res;
  if (Cp(a)) { g_flo_t m = cplx_mod(a);
   Have(box_req); emit_flo(m); return Sp[0] = _res, Ip++, Continue(); }
@@ -5900,7 +5900,7 @@ g_vm(g_vm_abs) {
  return Sp[0] = nil, Ip++, Continue(); }
 
 // fill f64 array r with arg of each element of v (a g_C packed or g_Z/g_R real
-// array, same shape). &-free, but g_noinline to keep g_vm_carg's tail call clean.
+// array, same shape). &-free, but g_noinline to keep lvm_carg's tail call clean.
 static g_noinline void carg_fill(struct g_tuple *r, struct g_tuple *v) {
  uintptr_t n = tuple_nelem(v);
  g_flo_t *rf = tuple_data(r);
@@ -5911,7 +5911,7 @@ static g_noinline void carg_fill(struct g_tuple *r, struct g_tuple *v) {
 // (arg z): phase angle atan2(im, re) as a float. On a real number this is 0 for
 // non-negative and pi for negative; on a complex/real array, an f64 array of the
 // per-element phase (so (arg (C 1 x)) = atan elementwise); on a non-number, nil.
-g_vm(g_vm_carg) {
+lvm(lvm_carg) {
  word a = Sp[0], _res;
  if (Cp(a)) { g_flo_t r = g_atan2(cplx_im(a), cplx_re(a));
   Have(box_req); emit_flo(r); return Sp[0] = _res, Ip++, Continue(); }

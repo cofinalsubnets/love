@@ -5,7 +5,7 @@
 
 (assert
   ; The static frontend ports are globally bound to `in` and `out`.
-  ; They are heap-shaped (g_vm_port_io discriminator), so the default
+  ; They are heap-shaped (lvm_port_io discriminator), so the default
   ; printer renders them as a hex address — non-empty and string-typed.
   (strp (show in))
   (strp (show out))

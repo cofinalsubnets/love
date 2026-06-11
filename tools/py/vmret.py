@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""vmret.py -- flag g_vm_* VM-instruction handlers that contain a ret.
+"""vmret.py -- flag lvm_* VM-instruction handlers that contain a ret.
 
-The ll VM is threaded: every `g_vm_*` opcode handler is supposed to be
+The ll VM is threaded: every `lvm_*` opcode handler is supposed to be
 tail-call optimised into a `jmp` to the next handler, never a normal
 `ret`. A handler that the compiler failed to TCO emits a real `ret` in
 its epilogue, which silently breaks the threaded dispatch. This tool
-disassembles an ELF and flags every `g_vm_*` function whose body still
+disassembles an ELF and flags every `lvm_*` function whose body still
 contains a `ret` instruction, so the broken-TCO suspects can be triaged.
 
 It is deliberately a first-pass heuristic: it reports *any* ret in a
@@ -21,7 +21,7 @@ prefers the multi-target llvm-objdump for any non-x86 image.
 Usage:
     vmret.py ELF [--prefix PREFIX] [--objdump PATH]
 
-    --prefix   symbol-name prefix to check (default: g_vm_)
+    --prefix   symbol-name prefix to check (default: lvm_)
     --objdump  disassembler to use; otherwise $OBJDUMP, then (for x86)
                objdump else llvm-objdump first. llvm-objdump auto-detects
                the target from the ELF, so no triple is needed.
@@ -197,7 +197,7 @@ def scan(lines, prefix, ret_re, sizes):
 def main():
     argv = sys.argv[1:]
     path = prefix = objdump = None
-    prefix = "g_vm_"
+    prefix = "lvm_"
     i = 0
     while i < len(argv):
         a = argv[i]

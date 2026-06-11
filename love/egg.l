@@ -5,7 +5,7 @@
  ; runtime-internal names die before the image is born: the raw cell ops,
  ; the compiler's own machinery (boxfix, wev, the num-ap and array-ctor
  ; helpers, the macro expanders -- the macro TABLE lives on inside the
- ; compiler's closures), the repl's sentinels, every leaked g_vm_* pointer,
+ ; compiler's closures), the repl's sentinels, every leaked lvm_* pointer,
  ; and finally dict itself. compiled references were folded, so only the
  ; names die; an absent name reads as nil. names the printer or an expander
  ; EMITS (uq ltuple cons pin table ...) stay, as do the C-resolved hooks
@@ -21,6 +21,6 @@
                   m eofsym prc _)
             (\ k (pull dict k 0)))
         (each (keys dict)
-         (\ k (? (symp k) (? (= "g_vm_" (slice (string k) 0 5)) (pull dict k 0) 0) 0)))))
+         (\ k (? (symp k) (? (= "lvm_" (slice (string k) 0 4)) (pull dict k 0) 0) 0)))))
  _ (pin dict 'born (clock now))
  (pull dict 'dict 0)))

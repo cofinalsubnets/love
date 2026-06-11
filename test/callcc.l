@@ -1,5 +1,5 @@
 ; tests for call_cc -- continuation capture and invocation.
-; the nif is inlined by the compiler (see ana_ap b1p branch); g_vm_callk
+; the nif is inlined by the compiler (see ana_ap b1p branch); lvm_callk
 ; snapshots the inlined caller's stack into a heap thread and tail-
 ; applies f to that snapshot as k. invoking (k v) reinstates the
 ; captured stack and resumes as if (call_cc f) had returned v.
@@ -23,7 +23,7 @@
 
  ; --- odd-arg fallback ---
  ; if f is a number (not callable) the form is a no-op that returns f,
- ; matching g_vm_ap's "odd Sp[1]" convention.
+ ; matching lvm_ap's "odd Sp[1]" convention.
  (= 42 (call-cc 42))
  (= 0 (call-cc 0))
  (= -7 (call-cc -7))

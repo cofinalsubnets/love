@@ -144,7 +144,7 @@
 ; ============================================================================
 ; `*` matrix (g_mul_mx): the multiplicative analog (semiring product of `+`)
 ; ============================================================================
-; muln (arith), mul_rep (seq x count), g_vm_0 (seq x seq -> nil), mull (compose).
+; muln (arith), mul_rep (seq x count), lvm_0 (seq x seq -> nil), mull (compose).
 (assert
  ; --- muln: scalar tower + arrays ---
  (= 6 (* 2 3))                                ; fix * fix
@@ -170,7 +170,7 @@
  ; --- count must be a number: an array / non-number count -> nil ---
  (nilp (* "ab" @(1 2)))   (nilp (* @(1 2) "ab"))
 
- ; --- g_vm_0: sequence * sequence is undefined -> nil ---
+ ; --- lvm_0: sequence * sequence is undefined -> nil ---
  (nilp (* "ab" "cd"))   (nilp (* 'a 'b))   (nilp (* '(1) '(2)))
 
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---

@@ -9,7 +9,7 @@ dependency is a C compiler (plus a disassembler for the TCO check).
 | Python (here)      | ll replacement (`tools/`) | what it does |
 |--------------------|-----------------------------|--------------|
 | `gen_data.py`   | `gen_data.l`             | reflects the data-sentinel stride out of a compiled `data.o` into a generated `data.h` so `g_typ()` is one shift |
-| `vmret.py`         | `vmret.l`                   | disassembles an ELF and flags `g_vm_*` handlers that emit a `ret` instead of tail-jumping |
+| `vmret.py`         | `vmret.l`                   | disassembles an ELF and flags `lvm_*` handlers that emit a `ret` instead of tail-jumping |
 
 ## Why keep them?
 

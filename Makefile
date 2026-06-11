@@ -347,7 +347,7 @@ run-headless: $(ko)/$n-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 #  (1) the cooperative scheduler deadlocked -- a task blocked in `(wait p)` was
 #      saved by yield_sw parked on the kernel's serial input fd (a stale
 #      next_wait_fd), so find_runnable never rescheduled it (fixed in love.c
-#      g_vm_wait: clear next_wake_at/next_wait_fd before yielding);
+#      lvm_wait: clear next_wake_at/next_wait_fd before yielding);
 #  (2) five float-sqrt asserts failed because libc/math.c pow(x,0.5) used
 #      exp(0.5*log x) (drifts a few ULP) instead of the exact Newton sqrt(), and
 #      cos_k's Taylor ran a couple terms short at the pi/4 boundary.

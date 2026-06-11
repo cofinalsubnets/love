@@ -414,13 +414,13 @@
 ; blind to its elements -- the compiler's frame arithmetic runs on it; $ sums the
 ; elements' nets, so post-birth code wanting a structural length folds), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
-; lives on inside the compiler's closures), the repl sentinels, every hot g_vm_* pointer,
+; lives on inside the compiler's closures), the repl sentinels, every hot lvm_* pointer,
 ; and finally `dict` itself. compiled references were folded, so only the names die.
 ; names the printer or an expander EMITS (uq ltuple cons pin table ..) stay, as do the
 ; C-resolved hooks (num-ap scomb bcomb trap) and the repl's test-driven editor surface.
 (assert (homp ev) (? born (fixp born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
-        (? born !boxfix 1) (? born !g_vm_ret 1) ; (pre-egg they still exist,
+        (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !lamb 1) (? born !dict 1))      ;  hence the born guards)
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
