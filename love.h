@@ -78,6 +78,19 @@ struct g_tuple {
 // more alone = incomplete; eof = more|scare -- the end is the scary case of
 // wanting more.
 enum g_status { g_status_ok = 0, g_status_scare = 1, g_status_more = 2, g_status_eof = 3 };
+
+// the atom: ap, the code (an interned symbol's name hash / a mint's serial),
+// the nom (a string = interned; 0 = a mint). UNIFORM 3 words -- the l/r
+// intern-tree slots died with the tree: interning lives in struct g's
+// `symbols`, a weak map from name string to the canonical atom.
+struct g_atom {
+ lvm_t *ap;
+ uintptr_t code;
+ struct g_str {
+  lvm_t *ap;
+  uintptr_t len;        // byte count
+  char bytes[]; } *nom; };
+
 struct g {
  union u {
   lvm_t *ap;
@@ -93,14 +106,10 @@ struct g {
                         // GC-stable (code rides the copy), closing trichotomy.
            next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
  intptr_t next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
- struct g_atom {
-  lvm_t *ap;
-  uintptr_t code;
-  struct g_str {
-   lvm_t *ap;
-   uintptr_t len;       // byte count
-   char bytes[]; } *nom;
-  struct g_atom *l, *r; } *symbols;
+ g_word symbols;        // the WEAK intern map (string -> the canonical atom; see struct g_atom
+                        // above): value-keyed by string content; gcg clones it untraced and
+                        // sweeps it after the cheney fixpoint, so a dead atom's entry drops --
+                        // dead spellings vanish. 0 only during early init.
  uintptr_t len;
  struct g *pool;
  struct g_r { g_word *x; struct g_r *n; } *root; // gc roots list

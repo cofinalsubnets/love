@@ -104,6 +104,9 @@ enum g_tuple_type { g_Z, g_R, g_C, g_O, };
 enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
            vop_lt, vop_le, vop_gt, vop_ge, vop_eq, };
 struct g_atom *intern_checked(struct g*, struct g_str*);
+uintptr_t intern_reserve(struct g*);
+uintptr_t hash(struct g*, intptr_t);
+static g_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
@@ -457,13 +460,8 @@ static g_inline struct g_atom *ini_anon(struct g_atom *y, uintptr_t code) {
  return y->ap = lvm_sym, y->nom = 0, y->code = code, y; }
 
 static g_inline struct g_atom *ini_sym(struct g_atom *y, struct g_str *nom, uintptr_t code) {
- return y->ap = lvm_sym, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
+ return y->ap = lvm_sym, y->nom = nom, y->code = code, y; }
 
-// named but *uninterned* symbol: nom holds the interned SYMBOL it is named after
-// (not a string). That both tags it as uninterned -- the printer renders it
-// ,<name>@<addr> and the GC keeps it out of the to-space symbol tree -- and lets
-// it skip the l/r subtree slots only interned syms (string nom) carry, exactly
-// like an anonymous sym (nom 0). So it is also a Width-2 allocation.
 static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
  return s->ap = lvm_str, s->len = len, s; }
 
@@ -472,14 +470,14 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // out-of-pool short-circuit, like g_stdin/stdout/stderr) -- immortal, never copied
 // or freed, so `const` is safe. Strings are immutable, so a single empty string
 // suffices and we NEVER heap-allocate a zero-length one (str0/scat/strin/reader and
-// the `+` string lane all hand back g_str_empty). g_sym_empty is the additive identity
-// for `+` on symbols (empty name -> contributes no bytes) and the canonical value of
-// any empty-named symbol concat. Predicates read `ap`, so these behave as a normal
+// the `+` string lane all hand back g_str_empty). g_sym_empty is the canonical
+// empty-named symbol (intern "" answers it; symbols have no + since the mint
+// round). Predicates read `ap`, so these behave as a normal
 // string/sym value; the FAM `bytes[]` is simply absent (len 0).
 // External linkage (declared in love.h with the EmptyString/empty_sym macros) so the
 // frontends can return them too (e.g. host_run's empty-output capture).
 const struct g_str g_str_empty = { .ap = lvm_str, .len = 0 };
-const struct g_atom g_sym_empty = { .ap = lvm_sym, .code = 0, .nom = 0, .l = 0, .r = 0 };
+const struct g_atom g_sym_empty = { .ap = lvm_sym, .code = 0, .nom = 0 };
 
 static g_inline struct g_tuple *ini_scalar(struct g_tuple *v, enum g_tuple_type t) {
  return v->ap = lvm_tuple, v->type = t, v->rank = 0, v; }
@@ -684,6 +682,11 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   g = g_mapput(g);                     // -> sp[0] = dict
   g->dict = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
   g = g_pop(g, 1);
+  // the WEAK intern map (string -> the canonical atom), created before the
+  // first intern (the def tables just below). it lives OUTSIDE the traced
+  // v0 region: gcg clones it untraced and sweeps it at the fixpoint.
+  g = map_new(g);
+  if (g_ok(g)) g->symbols = g_pop1(g);
   struct g_def def0[] = {
    {"dict", g->dict},
    {"in", (word) &g_stdin},
@@ -791,8 +794,7 @@ static g_inline void evac_big(struct g*g, word const*const p0, word const*const 
  g->cp += b2w(g_big_bytes((struct g_big*) g->cp)); }
 
 static g_inline void evac_sym(struct g*g, word const*const p0, word const*const t0) {
- word nom = word(sym(g->cp)->nom);            // l/r subtree slots exist only for interned
- g->cp += Width(struct g_atom) - (nom && strp(nom) ? 0 : 2); }   // (string nom); anon/uninterned skip them
+ g->cp += Width(struct g_atom); }              // uniform 3 words; copy_sym forwarded the nom
 
 static g_inline void evac_text(struct g *g, word const *const p0, word const*const t0) {
   // terminator payloads point into the new pool (the copied object's home);
@@ -808,6 +810,34 @@ static g_inline void evac_data(struct g *g, word const *const p0, word const*con
    case KTwo: return evac_two(g, p0, t0);
    case KString: return evac_str(g, p0, t0);
    case KBig: return evac_big(g, p0, t0); } }
+
+// THE WEAK INTERN TABLE. the cheney phase never traces it (the map alone
+// keeps no atom alive); after the fixpoint, symbols_rebuild walks the OLD
+// from-space table -- still ours to read -- and inserts only the entries
+// whose atoms were forwarded into a fresh same-cap backing in to-space (the
+// copied atom carries its forwarded name; survivors <= len < 3/4 cap, so
+// everything fits with no growth). a dead atom's entry simply never crosses:
+// dead spellings vanish, the same weak interning the rebuilt tree gave for
+// free. bump-bounded: from-space held a table of the same size.
+static g_noinline word symbols_rebuild(struct g *h, struct g *g) {
+ word om = g->symbols;
+ if (!om) return 0;
+ uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
+ union u *b = map_fill_back(bump(h, 4 + 2 * cap), cap), *hd = bump(h, 3);
+ hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagtext(hd, 2);
+ word *os = map_slots(om), *ns = &b[3].x;
+ word const *lo = ptr(h), *hi = ptr(h) + h->len;
+ for (uintptr_t j = 0; j < cap; j++) {
+  word k = os[2 * j];
+  if (k == map_gap) continue;
+  word fwd = cell(os[2 * j + 1])->x;            // the atom's first word: its forward, if it survived
+  if (!(homp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
+  word nk = word(sym(fwd)->nom);                // the copied atom carries the forwarded name
+  uintptr_t i = hash(h, nk) & mask;
+  while (ns[2 * i] != map_gap) i = (i + 1) & mask;
+  ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
+ b[1].x = putfix(n);
+ return (word) hd; }
 
 static g_inline void run_finalizers(struct g*g) {
  struct g_fz *new_fz = NULL;
@@ -832,11 +862,16 @@ static g_noinline struct g *gcg(struct g*h, struct g *p1, uintptr_t len1, struct
  h->hp = h->cp = h->end;
  h->ip = cell(gcp(h, word(h->ip), p0, t0));
  h->tasks = cell(gcp(h, word(h->tasks), p0, t0));
- h->symbols = 0;
+ h->symbols = 0;                               // the WEAK intern map: rebuilt below, after the fixpoint
  for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym dict keys)
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                     // stack
  for (struct g_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0); // C live variables
  while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_text)(h, p0, t0);              // cheney algorithm
+ // the weak intern table: rebuilt ONLY NOW, past the scan window, so the
+ // cheney loop never traces it (an early copy would sit in [cp, hp) and get
+ // walked -- resurrecting every atom). run_finalizers bumps after the
+ // fixpoint the same way.
+ h->symbols = symbols_rebuild(h, g);
  run_finalizers(h);
  if (h->len > h->max_len) h->max_len = h->len;                                       // instrumentation: peak pool len
  { uintptr_t heap = h->hp - h->end; if (heap > h->max_heap) h->max_heap = heap; }    // peak live (compacted) heap
@@ -901,12 +936,12 @@ static g_inline word copy_big(struct g*g, struct g_big *src, word const *const p
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
+// atoms copy like any object (the nom string forwards normally); interning
+// maintenance moved WHOLLY to the post-fixpoint table sweep (symbols_sweep).
 static g_inline word copy_sym(struct g*g, struct g_atom *src, word const *const p0, word const*const t0) {
- struct g_atom *dst;
- if (!src->nom)                                // a mint: fresh copy, the serial rides
-  dst = bump(g, Width(struct g_atom) - 2), ini_anon(dst, src->code);
- else                                          // interned (string nom): rebuild the tree by name
-  dst = intern_checked(g, (struct g_str*) gcp(g, word(src->nom), p0, t0));
+ struct g_atom *dst = bump(g, Width(struct g_atom));
+ if (!src->nom) ini_anon(dst, src->code);      // a mint: the serial rides
+ else ini_sym(dst, (struct g_str*) gcp(g, word(src->nom), p0, t0), src->code);
  return word(src->ap = (lvm_t*) dst); }
 
 static g_inline word copy_data(struct g *g, union u *src, word const *const p0, word const *const t0) {
@@ -1522,18 +1557,16 @@ g_noinline struct g *g_evals_(struct g*g, char const*s) {
 // never read, so no global by that name was ever defined.
 uintptr_t hash(struct g*, intptr_t);
 static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
- union { struct g_str s; char span[sizeof(struct g_str) + 8]; } b;
- b.s.ap = lvm_str, b.s.len = n;
- memcpy(b.s.bytes, nm, n);
- uintptr_t h = rot(hash(g, word(&b.s)));
- for (struct g_atom *z = g->symbols; z;) {
-  struct g_str *a = z->nom;
-  intptr_t i = z->code < h ? -1 : z->code > h ? 1 : 0;
-  if (i == 0) i = len(a) - n;
-  if (i == 0) i = memcmp(txt(a), b.s.bytes, n);
-  if (i == 0) return z;
-  z = i < 0 ? z->l : z->r; }
- return 0; }
+ word m = g->symbols;
+ if (!m) return 0;
+ uintptr_t h = mix;                            // the KString content hash, over the C bytes
+ for (uintptr_t j = 0; j < n; j++) h ^= (uint8_t) nm[j], h *= mix;
+ uintptr_t mask = map_cap(m) - 1, i = h & mask;
+ word *s = map_slots(m);
+ for (;; i = (i + 1) & mask) {
+  word k = s[2 * i];
+  if (k == map_gap) return 0;
+  if (len(k) == n && !memcmp(txt(k), nm, n)) return sym(s[2 * i + 1]); } }
 
 // Resolve a C->lisp ap from dict (where the prelude pins it -- dict is
 // GC-traced and egg-baked, so it survives into the runtime image), materializing
@@ -3512,7 +3545,7 @@ lvm(lvm_intern) {
  if (strp(Sp[0])) {
   if (Sp[0] == EmptyString) return Sp[0] = empty_sym, Ip += 1, Continue();
   struct g_atom *y;
-  Have(Width(struct g_atom));
+  Have(intern_reserve(g));
   Pack(g), y = intern_checked(g, (struct g_str*) g->sp[0]), Unpack(g);
   Sp[0] = word(y); }
  return Ip += 1, Continue(); }
@@ -3528,7 +3561,7 @@ lvm(lvm_intern) {
 lvm(lvm_mint) {
  Have(Width(struct g_atom));
  struct g_atom *y = (struct g_atom*) Hp;
- Hp += Width(struct g_atom) - 2;               // no l/r subtree slots: never in the tree
+ Hp += Width(struct g_atom);                   // atoms are uniform: ap, code, nom
  ini_anon(y, ++g->next_serial);
  return
   Sp[0] = word(y),
@@ -3536,21 +3569,47 @@ lvm(lvm_mint) {
   Continue(); }
 
 struct g *intern(struct g*g) {
- if (g_ok(g = g_have(g, Width(struct g_atom))))
+ if (g_ok(g = g_have(g, intern_reserve(g))))   // atom + (at the load factor) the doubled backing
   g->sp[0] = (word) intern_checked(g, (struct g_str*) g->sp[0]);
  return g; }
 
 // avail must be >= Width(struct g_atom) when this is called.
+// how much a fresh intern may bump: the atom, plus -- when the table sits at
+// the load factor -- the doubled backing it rehashes into. callers reserve
+// this BEFORE intern_checked so the insert below never allocates (and so the
+// string never moves mid-insert).
+uintptr_t intern_reserve(struct g *g) {
+ word m = g->symbols;
+ uintptr_t extra = m && (map_len(m) + 1) * 4 >= map_cap(m) * 3 ? 4 + 4 * map_cap(m) : 0;
+ return Width(struct g_atom) + extra; }
+
+// intern: probe the WEAK intern map by string content (string hash + content
+// equality -- the same value-keyed probe every map uses); a miss mints the
+// canonical atom (code = its name hash, the symbol's own hash) and inserts.
+// avail must be >= intern_reserve(g) when this is called: bump-only in here.
 g_noinline struct g_atom *intern_checked(struct g *g, struct g_str *b) {
- uintptr_t h = rot(hash(g, word(b)));
- for (struct g_atom **y = &g->symbols, *z;;) {
-  if (!(z = *y)) return *y = ini_sym(bump(g, Width(struct g_atom)), b, h);
-  struct g_str *a = z->nom;
-  intptr_t i = z->code < h ? -1 : z->code > h ? 1 : 0;
-  if (i == 0) i = len(a) - len(b);
-  if (i == 0) i = memcmp(txt(a), txt(b), len(b));
-  if (i == 0) return z;
-  y = i < 0 ? &z->l : &z->r; } }
+ word m = g->symbols;
+ bool found; uintptr_t i = map_probe(g, m, word(b), &found);
+ if (found) return sym(map_slots(m)[2 * i + 1]);
+ if ((map_len(m) + 1) * 4 >= map_cap(m) * 3) {           // at load: rehash into a doubled backing
+  uintptr_t ncap = 2 * map_cap(m), nmask = ncap - 1;
+  union u *nb = map_fill_back(bump(g, 4 + 2 * ncap), ncap);
+  word *os = map_slots(m), *ns = &nb[3].x;
+  uintptr_t ocap = map_cap(m), nlen = 0;
+  for (uintptr_t j = 0; j < ocap; j++) {
+   word k = os[2 * j];
+   if (k == map_gap) continue;
+   uintptr_t x = hash(g, k) & nmask;
+   while (ns[2 * x] != map_gap) x = (x + 1) & nmask;
+   ns[2 * x] = k, ns[2 * x + 1] = os[2 * j + 1], nlen++; }
+  nb[1].x = putfix(nlen);
+  cell(m)[1].x = (word) nb;                              // swap backing; header identity stable
+  i = map_probe(g, m, word(b), &found); }
+ struct g_atom *y = ini_sym(bump(g, Width(struct g_atom)), b, rot(hash(g, word(b))));
+ word *slots = map_slots(m);
+ slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
+ cell(map_back(m))[1].x = putfix(map_len(m) + 1);
+ return y; }
 
 op11(lvm_symp, symp(Sp[0]) ? putfix(1) : nil)
 op11(lvm_tupp, tupp(Sp[0]) ? putfix(1) : nil)
