@@ -30,6 +30,7 @@
    (gen i limit) (: b (show (bell i)) (? (<= (sat b) limit) (cons b (gen (+ i 1) limit))))
    (leq a b) (? (twop a) (? (twop b) (? (= (cap a) (cap b)) (leq (cbp a) (cbp b)) 0) 0)
                          (? (twop b) 0 1))
+   (ln x) (foldl (\ n _ (+ 1 n)) 0 x)            ; line count ($ on a list is the net sum)
    out (gen 0 280)
    ; expected: byte-exact stdout of `ruby test/bell.rb` (n defaults to 280),
    ; 291 lines, B(0..290) in base 36.
@@ -337,6 +338,6 @@
   (= "" (show 0)) (= "1" (show 1)) (= "f" (show 15)) (= "z" (show 35))
   (= "10" (show 36)) (= "zz" (show 1295))
   ; the full output matches the Ruby program's, line for line
-  (= 291 (sat out))
-  (= (sat expected) (sat out))
+  (= 291 (ln out))
+  (= (ln expected) (ln out))
   (leq out expected)))

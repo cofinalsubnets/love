@@ -49,31 +49,32 @@
 
 ; # reader macro wraps its operand in (pin …): #x -> (pin x)
 (assert
- (= 3 $'(1 2 3))                                 ; #quoted-list -> pair count
+ (= 6 $'(1 2 3))                                 ; #quoted-list -> the elements' net sum
  (= 5 $"hello")                                  ; #string -> byte length
  (= 42 $42)                                      ; #positive number -> ceil magnitude
  (= 0 $-7)                                        ; #negative number -> 0 (<= 0 is falsy)
  (= 2 $(hash 1 10 2 20))                        ; #map-expr -> key count
- (= 8 $@(3 4 5)))                                ; #array -> ceil(L2 norm) = ceil(sqrt 50)
+ (= 12 $@(3 4 5)))                               ; #array -> the elements' net sum
 
-; pin/# is a SATURATING NON-NEGATIVE size: a non-positive scalar clamps to 0 (so it is
-; falsy), a positive real/complex gives its ceil'd magnitude, an array its ceil(L2 norm)
-; (sign squares away, so negatives stay truthy), a count on list/string/buf, a name length
-; on symbols, FIX_MAX on a positive bignum. abs is the plain magnitude -- the two DIVERGE on
-; negatives: (abs -5) = 5 but $-5 = 0.
+; sat/$ is ONE SATURATING CLAMP over the NET, max(0, ceil(net)): a number nets its own
+; signed value (complex: |z| signed by the total order), text its length, a map its key
+; count, a list or array the SUM of its elements' nets -- so negatives push an aggregate
+; toward nothing, per the law: positive to positive, zero-or-negative to zero, at every
+; rank. abs is the plain magnitude -- the two DIVERGE on negatives: (abs -5) = 5, $-5 = 0.
 (assert
  (= 4 (sat 3.9)) (= 0 (sat -3.9))               ; positive float -> ceil; negative -> 0
- (= 5 (abs -5)) (= 0 (sat -5))                  ; abs is magnitude; # clamps a non-positive scalar to 0
+ (= 5 (abs -5)) (= 0 (sat -5))                  ; abs is magnitude; $ clamps a non-positive scalar to 0
  (= 5 (sat ~(3 4)))                            ; complex re>0 -> ceil|z| (modulus): exact 5
  (= 5 (sat ~(3 -4)))                           ; re>0 sorts above 0 -> ceil|z|
  (= 0 (sat ~(-3 4)))                           ; re<0 sorts below 0 -> 0 (falsy)
  (= 0 (sat ~(0 -1)))                           ; -i: re=0, im<0 -> 0 (falsy)
  (= 1 (sat i))                                  ; i = ~(0 1): re=0, im>0 sorts above 0 -> ceil 1
- (= 5 (sat @(3 4)))                             ; array -> ceil(L2 norm): the 3-4-5 triangle
- (= 5 (sat @(-3 -4)))                           ; array norm is sign-independent -> negatives stay truthy
- (= 0 (sat (arr z '(2 3) 0)))                   ; all-zero array -> norm 0
- (= 1 (sat @(0.3 0.4)))                         ; ceil makes any nonzero magnitude -> >=1
- (= 1 (sat ~(0.001 0)))                        ; re>0 -> ceil(0.001) = 1; pin=0 iff sorts <= 0
+ (= 7 (sat @(3 4)))                             ; array -> element sum
+ (= 0 (sat @(-3 -4)))                           ; a list or array of negatives nets <= 0 -> nothing
+ (= 0 (sat '(-2 1))) !'(-2 1)                   ; negatives cancel positives -- net -1 -> 0, falsy
+ (= 0 (sat (arr z '(2 3) 0)))                   ; all-zero array -> net 0
+ (= 1 (sat @(0.3 0.4)))                         ; ceil makes any positive net -> >=1
+ (= 1 (sat ~(0.001 0)))                        ; re>0 -> ceil(0.001) = 1; sat=0 iff sorts <= 0
  (= 1 (sat (nom 'x))) (= 1 (sat (nom 0)))          ; symbol name length; anon nom present -> floored to 1 (truthy)
  (= 0 (sat (nom "")))                        ; THE empty symbol (nom "") -> 0 (falsy, prints as ())
  (= 2 (sat (hash 1 10 2 20)))                  ; table -> key count

@@ -227,7 +227,7 @@
   ; variable expression analyzer
   (ava c x)
    (: lfd (assq x (c 'lam))
-    (? lfd (lz c lfd c)
+    (? (twop lfd) (lz c lfd c)
        (: s (c 'stk)
           (stki d) (lidx x (cat (d 'imp) (d 'arg)))
           (q i j m) (karg (+ i (stki c)) j m)
@@ -242,7 +242,7 @@
          (: _ (? (c 'par) (push c 'imp x))
           (em2 g_vm_freev x))))
     (: lfd (assq x (d 'lam))
-     (? lfd (lz c lfd d)
+     (? (twop lfd) (lz c lfd d)
         (: s (d 'stk)
            (stki d) (lidx x (cat (d 'imp) (d 'arg)))
            (q i j m) (karg (+ i (stki c)) j m)
@@ -263,7 +263,7 @@
    ; (frame is [imps args]) so a closure prints as ,((\ y x …) capturedvals) and
    ; round-trips through read+eval.
    os (assq exp ((rootc c) 'src))
-   s (cons '\ (cat (d 'imp) (? os (cbbp os) exp)))
+   s (cons '\ (cat (d 'imp) (? (twop os) (cbbp os) exp)))
    _ (poke -1 s e)                                  ; value[-1] = source \-expr
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
    (cons e (d 'imp)))
@@ -318,7 +318,7 @@
        (map q l)))))
 
    (l3 prs body even lams) (:
-    (lnk nds) (? (nilp nds) id
+    (lnk nds) (? (atomp nds) id
      (: nd (cap nds) n (cap nd) d (cbp nd)
         d (?- d (lambp d) (: qa (assq (cap nd) lams)
                              x (ala q (cbbp qa) (cbp d))

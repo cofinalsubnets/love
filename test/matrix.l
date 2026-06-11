@@ -132,7 +132,7 @@
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))             ; list + list
  (= '(5 1 2) (+ 5 '(1 2)))   (= '(1 2 5) (+ '(1 2) 5))   ; num <-> list
  (= '("ab" 1 2) (+ "ab" '(1 2)))              ; str <-> list (str is one element)
- (= 3 (sat (+ @(1 2) '(7 8))))                ; array <-> list (array is one element)
+ (= "(@(1 2) 7 8)" (show (+ @(1 2) '(7 8))))  ; array <-> list (array is one element)
 
  ; --- addl lane: a lambda operand anywhere -> CHURCH-NUMERAL add (not pointwise):
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).

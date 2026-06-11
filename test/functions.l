@@ -24,7 +24,7 @@
 ; routes float/box/complex/array/bignum operators through num-ap, like the odd-tag
 ; fixnum path). 0 applied to anything is 1 -- it *is* const-1, the zero numeral.
 ; the compose count is ($ n) -- SATURATING, true to the !!$ truth bits: a non-positive
-; numeral acts as the zero numeral, a float ceils, a complex/array its ceil'd norm.
+; numeral acts as the zero numeral, a float ceils, a complex/array its saturated net.
 (assert
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8.0, = bridges to 8
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 via real pow = 9.0
@@ -36,7 +36,7 @@
  (= 1 ((buf 4) 'anything))                 ; opaque handles (buf/port) behave as 0 too
  (aall (= (2 (arr z '(3) '(2 3 4))) (arr z '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
  (aall (= ((arr z '(3) '(2 3 4)) 5) (arr r '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 pow)
- (= 14 (((arr z '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = ceil(sqrt 13) = 4
+ (= 15 (((arr z '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
  (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ ~(3 4)) = |3+4i| = 5
  (= 10 ((~(-3 4) (+ 1)) 10))              ; ... but a complex sorting negative saturates to 0
  (comp (~(0 1) 5))                       ; complex operator on a number -> complex pow (5^i), no longer fenced

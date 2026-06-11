@@ -174,11 +174,13 @@
                      ""))
 
 ; sort the flagged entries by function name (ascending), matching .py.
+; the merge split counts the SPINE (entries are pairs; $ is the net sum), so fold.
 (: (emerge a b) (? (twop a) (? (twop b)
                      (? (str< (cap (cap a)) (cap (cap b)))
                         (cons (cap a) (emerge (cbp a) b)) (cons (cap b) (emerge a (cbp b))))
                      a) b)
-   (esort l) (? (twop (cbp l)) (: n (>> (sat l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
+   (llen l) (foldl (\ n _ (+ 1 n)) 0 l)
+   (esort l) (? (twop (cbp l)) (: n (>> (llen l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
 
 ; --- argument parsing ------------------------------------------------
 (: (parse-args args path prefix od)
@@ -245,7 +247,7 @@
       (: _ (fputs err "vmret: no ") _ (fputs err prefix) _ (fputs err "* functions found in ")
          _ (fputs err base) _ (fputs err " (stripped binary?)\n") (exit 2))
    (? (twop flagged)
-      (: k      (sat flagged)
+      (: k      (llen flagged)
          width  (maxlen flagged)
          sorted (esort flagged)
          _ (fputs out base) _ (fputs out ": ") _ (fputn out k 10) _ (fputs out " of ")

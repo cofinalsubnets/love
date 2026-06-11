@@ -17,20 +17,21 @@
  (Put k v) (pin t k v)
  (Del k) (pull t k 0)
  (Get k) (peep t k 0)
+ (ln x) (foldl (\ n _ (+ 1 n)) 0 x)             ; spine length ($ on a list is the net sum)
  _ (Put 1 2)
  _ (Put 2 3)
  _ (Put 3 4)
  _ (Put 't 'f)
  _ (assert
     (= 4 (sat t))
-    (= 4 (sat (keys t))))
+    (= 4 (ln (keys t))))
  _ (Del 2)
  _ (Del 't)
  (assert
     (= 2 (sat t))
-    (= 2 (sat (keys t)))
+    (= 2 (ln (keys t)))
     (: (lll t) (foldl (\ l k (cons k (cons (Get k) l))) 0 (keys t))
-     (= (* 2 (sat t)) (sat (lll t))))))
+     (= (* 2 (sat t)) (ln (lll t))))))
 
 (:
  (stripPrefix p s) (? (= p (slice s 0 (sat p))) (slice s (sat p) (sat s)))

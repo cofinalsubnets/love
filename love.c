@@ -284,26 +284,17 @@ static g_inline word tuple_get_obj(struct g_tuple *v, uintptr_t i) {
 static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
  ((word*) tuple_data(v))[i] = x; }
 
-// Language falsy predicate: a value is falsy iff its magnitude (L2 norm) is zero.
-// For a scalar that is just "== 0": nil/0, a boxed 0.0, a zero wide-int box. For a
-// tuple it is the Euclidean norm being zero -- which, since a sum of squares is zero
-// iff every term is, g_all_zero tests EXACTLY by scanning for a non-zero element
-// (a boxed 0.0/array, an empty tuple vacuously; a complex via both components; an
-// object array recursively per element). We scan rather than literally call abs()
-// because this is the ap `?`/g_vm_cond path: the scan short-circuits on the first
-// truthy element and is exact, whereas sqrt(Σx²) is slower and overflows to inf on
-// a large array -- reporting a non-zero array as falsy. Same predicate, no float risk.
-bool g_all_zero(struct g_tuple*);
-// Truthiness: x is false iff (= 0 (len x)) -- i.e. NEGATIVE-OR-ZERO is false, POSITIVE
-// is true. For an ordered scalar (fixnum/float/wide-int box/bignum/complex) that means
-// <= 0 by the total order (complex: re first, then im). Containers are false iff empty;
-// an array (rank>=1) is false iff its L2 norm is zero (all elements zero MAGNITUDE, so a
-// negative element keeps it true -- arrays have no single sign). Each is a cheap test with
-// NO magnitude walk: the empty singletons (nil = the 0 word; EmptyString), an empty table,
-// a negative fixnum/bignum, or a tuple via g_all_zero (rank-0 scalar <=0, else norm-zero
-// scan that short-circuits). Pair, symbol, non-empty string/table/array, buf, fn, port are
-// truthy without traversal. Lockstep with g_pin (g_vm_pin): same zero-conditions.
-// a symbol's # (pin) value, shared by g_mag (#) and g_nilp (!). THE empty symbol
+// Truthiness: x is false iff (= 0 ($ x)) -- NEGATIVE-OR-ZERO is false, POSITIVE is
+// true, where the measure is the NET (g_net below): an ordered scalar's own signed
+// value (complex: |z| signed by the total order, re first then im), a container's
+// count, and a product's or array's SUM of element nets -- signed and unclamped, so
+// a list or array of negatives nets <= 0 and is false, per the saturation law:
+// positive to positive, zero-or-negative to zero, at every rank. The common kinds
+// short-circuit with NO walk: nil (the 0 word), EmptyString, fixnum sign, table key
+// count, bignum sign, symbol name; only products and tuples (boxed scalars, rank>=1
+// arrays) compute their net, and those sums cannot short-circuit -- a later negative
+// can cancel an early positive. Lockstep with g_pin (g_vm_pin): same zero conditions.
+// a symbol's $ (sat) value, shared by g_net ($) and g_nilp (!). THE empty symbol
 // (empty_sym, prints as ()) has no name -> 0 -> falsy. Every other present symbol
 // (interned, named-uninterned, anonymous nom) floors to >=1 -> truthy.
 static g_inline intptr_t pin_sym(word x) {
@@ -313,17 +304,15 @@ static g_inline intptr_t pin_sym(word x) {
     : strp(word(s->nom)) ? (intptr_t) len(s->nom)
     : ((struct g_atom*) s->nom)->nom ? (intptr_t) len(((struct g_atom*) s->nom)->nom) : 0;
   return nl ? nl : 1; }                                // present symbol -> truthy
-static intptr_t g_mag(word);                         // fwd: the pair lane recurses on elements
+static g_flo_t g_net(word);                          // fwd: products and tuples sum their elements
 static g_inline bool g_nilp(word x) {
   if (x == nil || x == EmptyString) return true;
   if (fixp(x)) return getfix(x) < 0;                 // 0 is nil (caught above); negatives false
   if (mapp(x)) return map_len(x) == 0;
   if (bigp(x)) return ((struct g_big*) x)->slen < 0; // a negative bignum is false
   if (symp(x)) return pin_sym(x) == 0;               // empty/anonymous symbol name -> nil (pin lockstep)
-  if (twop(x)) {                                     // a product of nothings is nothing
-    do { if (g_mag(A(x))) return false; x = B(x); } while (twop(x));
-    return true; }                                   // (like an array of zero norm; mag lockstep)
-  return tupp(x) && g_all_zero(tuple(x)); }          // boxed scalar <=0 / array norm 0
+  if (twop(x) || tupp(x)) return g_net(x) <= 0;      // product / boxed scalar / array: net <= 0
+  return false; }                                    // non-empty string / buf / fn / port: present
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
 // 1/0 lowers to an FPU divide that yields +-inf or NaN per IEEE, and inf*0=NaN
@@ -2086,62 +2075,58 @@ g_vm(g_vm_lamb) {
  Sp[0] = word(memset(tagtext(k, n), -1, n * sizeof(word)));
  return Ip++, Continue(); }
 
-// (len x): a total size/magnitude. Containers -> element count (string/buf bytes,
-// list pairs, table keys, rank-n array shape-product). Numbers -> floored |x|
-// (fixnum/box/float/complex), so it agrees with (int (abs x)); a bignum saturates
-// to the nearest representable fixnum (sign-preserving). Symbol -> its name length
-// (anonymous nom -> 0). Everything else (code, ports) -> 0.
-// ceil a non-negative magnitude into a fixnum, saturating at fix_max. ceil (not
-// floor) so the result is 0 *only* when m is exactly 0 -- len then doubles as a
-// zero test: (= 0 (len x)) iff x is zero/empty. Never overflows putfix's tag.
+// ceil a positive measure into a fixnum, saturating at fix_max. ceil (not floor)
+// so the result is 0 *only* when m is exactly 0 -- $ then doubles as a zero test:
+// (= 0 ($ x)) iff x is nothing. Never overflows putfix's tag.
 static g_inline intptr_t len_sat(g_flo_t m) {
   if (m >= (g_flo_t) fix_max) return fix_max;
   intptr_t i = (intptr_t) m;                    // trunc toward 0 (m >= 0)
   return i + (m > (g_flo_t) i ? 1 : 0); }       // bump for any fractional part -> ceil
-// Magnitude: the SIGN-INDEPENDENT size of any value as a non-negative fixnum. A rank>=1
-// array is ceil of its L2 norm; the three element families contribute their own magnitudes:
-//   g_C  packed (re,im) float pairs at tuple_data -> sum all 2n floats squared
-//   g_O  object words -> each element's own g_mag (recursive; depth bounded by nesting)
+// The NET: the SIGNED measure of any value, before the single saturating clamp in
+// g_pin. A number is its own value (complex: |z| signed by the total order, re then
+// im); text is its byte/name length; a table its key count; a fn/port 1 (present);
+// a product or rank>=1 array the SUM of its elements' nets, recursive and UNCLAMPED,
+// so a list of negatives nets negative and a product of nothings nets to nothing.
+// Additive wherever + is total: net(a + b) = net a + net b over numbers, text, and
+// products alike -- the one measure $ saturates and ! reads the sign of.
+//   g_C  packed (re,im) float pairs at tuple_data -> modulus of the complex sum,
+//        signed by the sum's total-order position
+//   g_O  object words -> each element's own g_net (recursive; depth bounded by nesting)
 //   g_Z/g_R  the element values directly (tuple_get_flo)
-// g_pin uses this for arrays/containers (no sign) and for g_O element norms, so a negative
-// array element keeps the array truthy (matching g_all_zero's per-family magnitude scan).
-static intptr_t g_mag(word x) {
-  if (fixp(x)) { intptr_t n = getfix(x); return n == fix_min ? fix_max : n < 0 ? -n : n; }  // fixnum |x|
-  if (bufp(x)) return len(buf_str(x));                          // mutable byte string
-  if (mapp(x)) return map_len(x);                               // table: key count
+static g_flo_t g_net(word x) {
+  if (fixp(x)) return (g_flo_t) getfix(x);                      // fixnum: its value
+  if (bufp(x)) return (g_flo_t) len(buf_str(x));                // mutable byte string
+  if (mapp(x)) return (g_flo_t) map_len(x);                     // table: key count
   if (!datp(x)) return 1;                                       // opaque but present (fn / port): truthy
   switch (typ(x)) {
     default: return 1;                                          // unknown present data kind -> truthy
-    case KString: return len(x);                                 // string: byte count
-    case KTwo: { intptr_t l = 0; word p = x;                     // list: count the elements that are
-      do l += g_mag(A(p)) ? 1 : 0, p = B(p); while (twop(p));    // themselves something -- a product of
-      return l; }                                                // nothings is nothing (nilp lockstep)
-    case KBig: return fix_max;                                  // |bignum| > fix_max: saturate
-    case KSym: return pin_sym(x);                                // symbol: name length (0 if anonymous/empty)
+    case KString: return (g_flo_t) len(x);                       // string: byte count
+    case KTwo: { g_flo_t s = 0; word p = x;                      // product: sum the elements' nets --
+      do s += g_net(A(p)), p = B(p); while (twop(p));            // signed, so negatives cancel and a
+      return s; }                                                // product of nothings nets to nothing
+    case KBig: return g_big_to_flo(x);                          // bignum: full magnitude, sign intact
+    case KSym: return (g_flo_t) pin_sym(x);                      // symbol: name length (0 if anonymous/empty)
     case KTuple: { struct g_tuple *v = tuple(x);                 // boxed scalar or rank-n array
       uintptr_t i, n = tuple_nelem(v);
-      if (!v->rank) {                                            // rank-0 scalar magnitude
-        if (v->type == g_C) return len_sat(cplx_mod(x));
-        if (v->type == g_R) { g_flo_t r = flo_get(x); return len_sat(r < 0 ? -r : r); }
-        return fix_max; }                                        // g_Z int box: magnitude exceeds fixnum range
-      g_flo_t s = 0;                                             // rank>=1 array -> ceil(sqrt(Σ |elem|²))
-      if (v->type == g_C) { g_flo_t *re = tuple_data(v); for (i = 0; i < 2 * n; i++) s += re[i] * re[i]; }
-      else if (v->type == g_O) for (i = 0; i < n; i++) { g_flo_t e = (g_flo_t) g_mag(tuple_get_obj(v, i)); s += e*e; }
-      else for (i = 0; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); s += e*e; }
-      return len_sat(g_sqrt(s)); } } }
-// The # operator: a SATURATING NON-NEGATIVE size, with negative-or-zero scalars clamped to 0
-// so (nilp x) == (= 0 (len x)) and a negative real / non-positive complex is FALSE. An ordered
-// scalar (fix/float/wide-int box/bignum/complex) clamps by the TOTAL ORDER (complex: re then
-// im); arrays and containers have no single sign and pass straight to g_mag. Lockstep w/ g_nilp.
+      if (!v->rank) {                                            // rank-0 scalar: its signed value
+        if (v->type == g_C) return cplx_nonpos(x) ? -cplx_mod(x) : cplx_mod(x);
+        if (v->type == g_R) return flo_get(x);
+        return (g_flo_t) box_get(x); }                           // g_Z wide-int box
+      g_flo_t s = 0;                                             // rank>=1 array -> Σ elem (signed)
+      if (v->type == g_C) { g_flo_t sr = 0, si = 0, *re = tuple_data(v);
+        for (i = 0; i < n; i++) sr += re[2*i], si += re[2*i+1];
+        s = g_sqrt(sr*sr + si*si);                               // the sum's modulus, order-signed
+        return sr < 0 || (sr == 0 && si <= 0) ? -s : s; }
+      if (v->type == g_O) for (i = 0; i < n; i++) s += g_net(tuple_get_obj(v, i));
+      else for (i = 0; i < n; i++) s += tuple_get_flo(v, i);
+      return s; } } }
+// The $ operator: ONE saturating clamp over the net -- max(0, ceil(net x)) -- so
+// (nilp x) == (= 0 ($ x)) at every kind and rank: a negative real, a non-positive
+// complex, a list or array whose elements sum <= 0 all measure 0. Lockstep w/ g_nilp.
 static intptr_t g_pin(word x) {
-  if (fixp(x)) { intptr_t n = getfix(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil)
-  if (bigp(x)) return ((struct g_big*) x)->slen < 0 ? 0 : fix_max;  // negative bignum -> 0
-  if (tupp(x) && !tuple(x)->rank) {                                 // boxed scalar: total-order <= 0 -> 0
-    struct g_tuple *v = tuple(x);
-    if (v->type == g_R) { g_flo_t r = flo_get(x); return r <= 0 ? 0 : len_sat(r); }
-    if (v->type == g_C) return cplx_nonpos(x) ? 0 : len_sat(cplx_mod(x));
-    return box_get(x) < 0 ? 0 : fix_max; }                          // g_Z wide-int box
-  return g_mag(x); }                                                // arrays / strings / lists / syms / maps / bufs / fns
+  if (fixp(x)) { intptr_t n = getfix(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil), exact
+  g_flo_t m = g_net(x);
+  return m <= 0 ? 0 : len_sat(m); }
 g_vm(g_vm_pin) { Sp[0] = putfix(g_pin(Sp[0])); Ip += 1; return Continue(); }
 
 // ============================================================================
@@ -4126,8 +4111,8 @@ g_vm(g_vm_bsl) { word a = Sp[0], b = Sp[1], _res;
  return *++Sp = _res, Ip++, Continue(); }
 
 op(g_vm_fixp, 1, oddp(Sp[0]) ? putfix(1) : nil)
-// `nilp`/`not`: the falsy predicate -- the efficient generic form of (= 0 (len x)),
-// via g_nilp, which short-circuits and never materializes len (a pair/sym/fn is truthy
+// `nilp`/`not`: the falsy predicate -- the efficient generic form of (= 0 ($ x)),
+// via g_nilp, which reads the net's sign without the clamp (a sym/string/fn is truthy
 // with no walk). The single truthiness oracle: `?` (g_vm_cond), nilp, and aall all
 // consult g_nilp, so `(? (nilp e) a b)` == `(? e b a)` -- the wev pass drops such a
 // nilp wrapper. Use `(= x 0)` for a literal scalar-zero test.
@@ -5000,30 +4985,6 @@ g_vm(g_vm_ashape) {
   ini_two(p, putfix(v->shape[i]), list), list = word(p), p++;
  return Sp[0] = list, Ip++, Continue(); }
 
-// --- falsiness -------------------------------------------------------------
-// Tuple falsiness, in lockstep with g_pin. A rank-0 boxed scalar (float/wide-int/complex)
-// is FALSE iff it sorts <= 0 by the total order (complex: re first, then im) -- so a negative
-// real box and a non-positive complex are false. A rank>=1 array is false iff its L2 norm is
-// zero, i.e. every element has zero MAGNITUDE (sign squares away, so a negative element keeps
-// the array truthy -- an array has no single sign). Drives g_nilp -> g_vm_cond and nilp/not.
-bool g_all_zero(struct g_tuple *v) {
- uintptr_t n = tuple_nelem(v);
- if (!v->rank) {                                // rank-0 boxed scalar: false iff <= 0 (total order)
-  word x = word(v);
-  if (v->type == g_C) return cplx_nonpos(x);    // re < 0, or re == 0 && im <= 0
-  if (v->type == g_R) return flo_get(x) <= 0;   // boxed float <= 0
-  return box_get(x) < 0; }                        // g_Z wide-int box (never exactly 0)
- if (v->type == g_C) {                          // packed complex array: every (re,im) float 0
-  g_flo_t *re = tuple_data(v);                    // 2n packed (re,im) floats
-  for (uintptr_t i = 0; i < 2 * n; i++) if (re[i] != 0) return false;
-  return true; }
- if (v->type == g_O) {                          // object array: false iff every element zero-magnitude
-  for (uintptr_t i = 0; i < n; i++) if (g_mag(tuple_get_obj(v, i)) != 0) return false;
-  return true; }
- bool fdom = v->type >= g_R;
- for (uintptr_t i = 0; i < n; i++)
-  if (fdom ? tuple_get_flo(v, i) != 0 : tuple_get_int(v, i) != 0) return false;
- return true; }
 
 // g_O reductions (sum/prod/max/min) fold through the promoting scalar op, so an
 // object array reduces *exactly*. Defined after the object lane (below); the

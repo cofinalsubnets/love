@@ -108,22 +108,23 @@
  !(aall (< 2 1))
  (aall (< (arr z '(2) '(1 2)) (arr z '(2) '(3 4))))  ; array: same expression
 
- ; --- truthiness is zero-magnitude (L2 norm): a value is false iff |x| == 0 ---
+ ; --- truthiness is the NET: a value is false iff its element sum nets <= 0 ---
  (nilp (arr z '(3) 0))                  ; zero array -> false
  (nilp (arr r '(2 2) 0))                ; zero float array -> false
  (nilp (arr z '(0) 0))                  ; empty array -> vacuously false
  (nilp 0.0)                             ; boxed 0.0 -> false (was a truthy wart)
  !(nilp 2.5)                         ; positive float -> true
- (nilp -5)                           ; a negative real is now FALSE (<= 0)
- !(nilp (+ (arr z '(2) 0) 1))        ; nonzero array -> true
- !(nilp @(-3 -4))                    ; a NEGATIVE array stays true (norm, sign squares away)
+ (nilp -5)                           ; a negative real is FALSE (<= 0)
+ !(nilp (+ (arr z '(2) 0) 1))        ; positive array -> true
+ (nilp @(-3 -4))                     ; a NEGATIVE array is false too -- the sign law at rank 1
+ (nilp @(-2 1)) !(nilp @(-2 3))      ; the elements SUM: -2+1 <= 0 < -2+3
  (= 1 (? (arr z '(3) 0) 0 1))         ; zero array takes the false arm
- (= 0 (? (+ (arr z '(3) 0) 1) 0 1))    ; nonzero array takes the true arm
- ; a single non-zero component makes the norm non-zero (truthy), per the tower:
- !(nilp @(0 0 5))                    ; one non-zero element -> true
+ (= 0 (? (+ (arr z '(3) 0) 1) 0 1))    ; positive array takes the true arm
+ ; a positive net makes the array truthy, per the tower:
+ !(nilp @(0 0 5))                    ; one positive element -> true
  (nilp @(0.0 0.0))                      ; all-zero float tuple -> false
- (nilp ~(0 0))                         ; complex 0+0i (|z|=0) -> false
- !(nilp ~(0 1))                     ; 0+1i (|z|=1) -> true
+ (nilp ~(0 0))                         ; complex 0+0i -> false
+ !(nilp ~(0 1))                     ; 0+1i sorts above 0 -> true
  !(nilp i)                           ; the imaginary unit is truthy
 
  ; --- elementwise transcendentals over an array ---

@@ -70,21 +70,25 @@
 ; body-less top-level `:` leaks its bindings to the global scope (that's how tests share helpers).
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
 
-; --- true and false --- false is *nothing*: a scalar that sorts <= 0 in the total order, an
-; empty container, an array of zero norm -- or a PRODUCT OF NOTHINGS, which is nothing too:
-; on a list, $ counts the elements that are themselves something (by magnitude, like the
-; array norm, so '(-5) stays true like @(-5)), recursively, so a list of ()s or 0s collapses.
-; maps stay key-counted: presence is information there, and #0 must stay truthy. everything
-; positive/nonempty is true. there is no "truthy"/"falsy" -- true and false are the bits 1
-; and 0 of the `!!$` projection. `$` (sat) measures a value (its size/magnitude, 0 when
-; empty or <= 0); `!` is the falsity oracle (the nif `nilp`, the classical name; `non` is
-; its normal alias, so !$x reads "non sat x"), with the invariant !x == (0 = $x).
+; --- true and false --- false is *nothing*: whatever NETS <= 0. every value has a signed
+; net measure: a number is its own value (complex: |z| signed by the total order), text is
+; its length, a list or array is the SUM of its elements' nets -- recursive and unclamped,
+; so negatives cancel positives and a PRODUCT OF NOTHINGS is nothing too. the law of
+; saturation holds at every rank: positive to positive, zero-or-negative to zero, so a
+; list or array of negatives is nothing, exactly like a negative scalar. maps stay
+; key-counted: presence is information there, and #0 must stay truthy. there is no
+; "truthy"/"falsy" -- true and false are the bits 1 and 0 of the `!!$` projection.
+; `$` (sat) is ONE saturating clamp over the net, max(0, ceil(net)); `!` is the falsity
+; oracle (the nif `nilp`, the classical name; `non` is its normal alias, so !$x reads
+; "non sat x"), with the invariant !x == (0 = $x). net is additive wherever + is total:
+; $(a + b) saturates net a + net b over numbers, text, and lists alike.
 (assert
  !0 !"" !#() !@0 !() !0.0 !~(0 0)                ; zero / empty -> false
  !-5 !-3.9 !~(-3 4) !~(0 -1)                     ; <= 0 in the total order -> false (complex by re then im)
- !!5 !!"x" !!'a !!cap !!i !!~(3 -4) !!@(-3 -4)     ; positive / nonempty / nonzero-norm -> true
+ !!5 !!"x" !!'a !!cap !!i !!~(3 -4)              ; positive / nonempty -> true
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a product of nothings is nothing, recursively
- (2 = $'(1 () 2)) !!'(0 1) !!'(-5)               ; $ counts the sat elements; magnitude like arrays
+ !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
+ (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (idp non nilp) (1 = (non 0))  ; ! negates it; non is nilp
@@ -214,8 +218,9 @@
 ; literal. arank/alen/ashape/atype; peep (out of bounds -> the default). + - * // < =
 ; broadcast numpy-style to the widest type
 ; (compare -> a z mask); `/` promotes the whole result to r the moment any element divides
-; inexactly. reduce with asum aprod amax amin aall (a conjunction; "any nonzero" is just `$`).
-; a zero-norm array is false. sin/cos/log/pow and the derived forms map elementwise.
+; inexactly. reduce with asum aprod amax amin aall (a conjunction). an array nets the SUM of
+; its elements ($ = max(0, ceil(asum)), like a list), so an all-zero or net-negative array
+; is false. sin/cos/log/pow and the derived forms map elementwise.
 (assert
  (6 = (alen (arr z '(2 3) 0))) (2 = (arank (arr z '(2 3) 0))) ('(2 3) = (ashape (arr z '(2 3) 0)))
  (z = (atype (arr z '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
@@ -245,15 +250,16 @@
 ; --- strings & symbols --- a symbol is interned ('x), named-uninterned ($x = (nom 'x)), or
 ; anonymous ((nom 0)). `()` is THE empty symbol -- one canonical value, (intern ""), the
 ; `+`-identity on symbols, self-evaluating, false by !!$ -- but a symbol, NOT the number 0.
-; a string indexes its bytes ("abc" 0 -> 97). $ (sat) is a *saturating* size:
-; a container's count, a symbol's name length, a number's ceil-magnitude clamped to >= 0
-; ($-3.9 = 0), or an array's ceil L2 norm -- so $ and abs diverge ((abs -5) = 5 but $-5 = 0).
+; a string indexes its bytes ("abc" 0 -> 97). $ (sat) clamps the net measure once,
+; max(0, ceil(net)): a string's byte count, a symbol's name length, a number's own value
+; ($-3.9 = 0), a list's or array's element sum -- so $ and abs diverge ((abs -5) = 5 but
+; $-5 = 0, and $@(3 4) = 7 where (abs @(3 4)) is the norm 5).
 ; slice takes a half-open slice; + concatenates ("" is the identity; scat is gone); string
 ; coerces; \n escapes.
 (assert
  (symp ()) !(() = 0) (idp () (intern "")) (idp () '()) (0 = $()) !() !!$'x
  ('x = () + 'x) ("()" = (show ()))
- (97 = ("abc" 0)) (3 = $"abc") (4 = $3.9) (0 = $-3.9) (5 = $@(3 4)) (5 = (abs -5))
+ (97 = ("abc" 0)) (3 = $"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  ("bidden" = (slice "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("$x" = (show (nom "x"))))
@@ -271,7 +277,7 @@
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
  (50 = (peep (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- (2 = $(keys #(1 10 2 20))) ((dig 'k) = (dig 'k)) (mapp #()) !(mapp 5)
+ ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (mapp #()) !(mapp 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
  (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
 
@@ -327,12 +333,16 @@
 ; condition data; the result is delivered per the bits (the more bit: to the reader's
 ; resume; a bare sing: observed). sing?/more?/eof? read s. (sing a b) raises
 ; deliberately -- the sing bit set unconditionally, and the trap's result comes back
-; as its value (no trap installed -> terminal). see test/trap.l.
+; as its value (no trap installed -> terminal). see test/trap.l. numeral counts are
+; CAPPED: a compose count or exact-power exponent above the `apcap` box (a public
+; runtime tunable, default 2^20) raises (sing 'apcap k) instead of allocating O(k) --
+; (bignum f) traps where it would oom. retune with (pin apcap () n); see test/apcap.l.
 (assert
  (3 = (ev '(+ 1 2))) (lamp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
  (sing? 1) !(sing? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lamp sing)
+ (mapp apcap) (1048576 = (apcap ()))             ; the count ceiling, a tunable box
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prelude wraps getc and
@@ -363,8 +373,8 @@
 ; and an absent global reads as nil). before it is born the egg PULLS every runtime-
 ; internal name: the raw cell nifs (peek poke seek lamb -- (lamb 2 3) is a segfault, big
 ; scare; lamb is still there for real, it's ultimate), tally (the spine length of a list,
-; blind to its elements -- the compiler's frame arithmetic runs on it; $ counts only the
-; sat elements, so post-birth code wanting a structural length folds), the compiler's machinery
+; blind to its elements -- the compiler's frame arithmetic runs on it; $ sums the
+; elements' nets, so post-birth code wanting a structural length folds), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), the repl sentinels, every hot g_vm_* pointer,
 ; and finally `dict` itself. compiled references were folded, so only the names die.

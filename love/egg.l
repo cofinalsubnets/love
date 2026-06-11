@@ -1,5 +1,5 @@
 (\ egg (:
- (sit e z a) (? a (sit e (e (cap a)) (cbp a)) z)
+ (sit e z a) (? (twop a) (sit e (e (cap a)) (cbp a)) z)
  now (clock 0)
  _ (pin dict 'ev (sit (sit ev 0 egg) 0 egg))
  ; runtime-internal names die before the image is born: the raw cell ops,

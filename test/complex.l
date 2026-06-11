@@ -158,7 +158,7 @@
  ; --- aall/aany lift the 0+0i-is-falsy rule ---
  (aall ca-v)
  (nilp (aall (arr c '(2) (L ~(0 0) ~(1 1)))))   ; a 0+0i element fails aall
- (sat (arr c '(2) (L ~(0 0) ~(1 1))))          ; one nonzero satisfies aany
+ (sat (arr c '(2) (L ~(0 0) ~(1 1))))          ; the element sum ~(1 1) sorts positive
  (nilp (sat ca-z))
 
  ; --- abs of a complex array = the flat L2 norm over every (re, im) ---
@@ -167,7 +167,7 @@
 
  ; --- pin / nilp: the invariant (nilp x) == (= 0 (pin x)) holds here too ---
  (= 0 (sat ca-z))   (nilp ca-z)
- !!ca-v   (= 6 (sat ca-v))                        ; ceil(sqrt 30) = 6
+ !!ca-v   (= 8 (sat ca-v))                        ; ceil |4+6i| = ceil(sqrt 52): the sum's modulus
  (= (? (nilp ca-v) 1 0) (? (= 0 (sat ca-v)) 1 0))
  (= (? (nilp ca-z) 1 0) (? (= 0 (sat ca-z)) 1 0))
 

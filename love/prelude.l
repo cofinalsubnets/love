@@ -70,6 +70,10 @@
    (intp n) (| (fixp n) (| (boxp n) (bigp n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
    ; (k b) numeral application routes here, so `**` is unneeded.
+   ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
+   ; exponent above it raises (sing 'apcap k) instead of allocating O(k) -- so
+   ; (bignum f) traps where it would oom. retune at runtime: (pin apcap () n).
+   apcap (pin (table 0) () 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
    ; x ** n across the whole tower. array exponent -> elementwise pow (broadcasts
    ; via the vmap2 engine, float result); integer exponent -> exact squaring, with
@@ -77,17 +81,22 @@
    ; (sqrt x) == ((/ 1 2) x)); otherwise pow, which carries a complex lane
    ; (w^z = exp(z Log w)) and a real lane.
    (powg x n) (? (arrp n) (pow x n)
-                 (intp n) (? (< n 0) (/ 1 (ipow x (- 0 n))) (ipow x n))
+                 (intp n) (: m (? (< n 0) (- 0 n) n)
+                             (? (< (peep apcap () 0) m) (sing 'apcap m)
+                                (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                  (pow x n))
    ; Church-numeral application generalized across the whole tower. n is the
    ; operator (the numeral), x the operand. numeric operand -> x ** n. non-numeric
    ; operand (a function) -> compose ($ n) times: saturation reduces ANY numeral to
    ; a fixnum nat, true to the !!$ truth bits -- a non-positive numeral acts as the
    ; zero numeral ((-3 f) = (0 f) = 1, the literal lambda construction), a float
-   ; ceils, a complex/array its ceil'd norm when it sorts positive. k=0 -> 1
-   ; (const 1); k=1 -> x directly -- the snappy basics.
+   ; ceils, a complex its modulus when it sorts positive, an array its element
+   ; sum -- the saturated net. k=0 -> 1 (const 1); k=1 -> x directly -- the snappy basics.
    (num-ap n x) (? (nump x) (powg x n)
-                   (: k (sat n) (? (< k 1) 1 (= k 1) x (numfn k x))))
+                   (: k (sat n)
+                      (? (< k 1) 1 (= k 1) x
+                         (< (peep apcap () 0) k) (sing 'apcap k)
+                         (numfn k x))))
    _ (pin dict 'num-ap num-ap))
 ; text (function) combinators for + and *, installed like num-ap. a text operand
 ; takes precedence over every other type, so +/* of a function build a function. these
@@ -107,8 +116,8 @@
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
    (filter p l) (? (twop l) (: m (filter p (cbp l)) (? (p (cap l)) (cons (cap l) m) m)))
-   (init l) (? (cbp l) (cons (cap l) (init (cbp l))))
-   (last l) (? (cbp l) (last (cbp l)) (cap l))
+   (init l) (? (twop (cbp l)) (cons (cap l) (init (cbp l))))
+   (last l) (? (twop (cbp l)) (last (cbp l)) (cap l))
    (each l f) (? (twop l) (: _ (f (cap l)) (each (cbp l) f)))
    (ldel x l) (? (twop l) (? (= (cap l) x) (cbp l) (cons (cap l) (ldel x (cbp l)))))
    (all f l) (? (twop l) (? (f (cap l)) (all f (cbp l))) 1)
@@ -126,7 +135,7 @@
    (msort le l) (? (atomp l) l (atomp (cbp l)) l
                   (: s (sortsplit l) (merge le (msort le (cap s)) (msort le (cbp s))))))
 (: catmap (co (flip foldr 0) (co cat))
-   (assq x l) (? l (? (= x (caap l)) (cap l) (assq x (cbp l))))
+   (assq x l) (? (twop l) (? (= x (caap l)) (cap l) (assq x (cbp l))))
    (lidx x) ((: (f n l) (? (twop l) (? (= x (cap l)) n (f (+ 1 n) (cbp l))) -1)) 0)
    memq (co any (=))
    (zip a b) (? (twop a) (? (twop b) (cons (cons (cap a) (cap b)) (zip (cbp a) (cbp b)))))
@@ -153,8 +162,8 @@
    (eof? s) (= s 3))
 ; here are some macro definitions
 (: l (foldr (\ a l (cons cons (cons a (cons l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
-(:: '&& (\ l (: (and l) (? (cbp l) (list '? (cap l) (and (cbp l)) 0) (cap l)) (? l (and l) 1))))
-(:: '|| (\ l (: (or l) (? l (: y (nom 0) (list ': y (cap l) (list '? y y (or (cbp l))))) 0) (or l))))
+(:: '&& (\ l (: (and l) (? (twop (cbp l)) (list '? (cap l) (and (cbp l)) 0) (cap l)) (? (twop l) (and l) 1))))
+(:: '|| (\ l (: (or l) (? (twop l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cbp l))))) 0) (or l))))
 (:: ':- (\ a (cons ': (cat (cbp a) (cons (cap a) 0)))))
 (:: '?- (\ a (cons '? (cat (cbp a) (cons (cap a) 0)))))
 (:: '>>= (\ l (cons (last l) (init l))))
@@ -165,7 +174,7 @@
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
 (: (rng-get _) (: st (peep dict 'rng-state 0)
-                  (? st st (: f (rng-seed (clock 0)) _ (pin dict 'rng-state f) f)))
+                  (? (arrp st) st (: f (rng-seed (clock 0)) _ (pin dict 'rng-state f) f)))
    (rng-set st) (? (&& (arrp st) (= 1 (arank st)) (= 4 (alen st)) (= z (atype st)))
                    (: _ (pin dict 'rng-state st) st)
                    0)
@@ -212,7 +221,7 @@
 ; string, nested array, …) lifts the whole array to an object (o) array.
 ; a-dim/a-shape: a shape dimension may be any numeric -- a float, complex, or even
 ; a vector -- and is coerced to a nat by saturation (($ d) -- the count law:
-; non-positive -> 0, a float ceils, modulus/norm for a complex/vector). a list
+; non-positive -> 0, a float ceils, a complex its modulus, a vector its net sum). a list
 ; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …)
 ; means rank-1 length 3, (array ~(3 4) …) length 5).
 (: (a-rank x) (? (flop x) 1 (| (fixp x) (boxp x)) 0 (comp x) 2 3)
@@ -242,7 +251,7 @@
 
 ; (array shape elem…): the ergonomic N-D array constructor. `shape` is either a
 ; dimension *list* (rank-N) or a single number n (a rank-1 vector of length |n|),
-; coerced via a-shape (L2 norm). the element type is INFERRED via a-type, so a
+; coerced via a-shape (the saturated net). the element type is INFERRED via a-type, so a
 ; bignum / complex / string / nested array forces an object array automatically --
 ; no explicit type code, and exactness is never silently lost. the elements are
 ; ordinary trailing arguments (not a list): since the shape fixes the count,
@@ -295,7 +304,7 @@
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nilp (memq (cap p) ns))) cs)
    (sub cs x) (?
-    (symp x) (: p (assq x cs) (? p (list 'cap (cbp p)) x))
+    (symp x) (: p (assq x cs) (? (twop p) (list 'cap (cbp p)) x))
     (atomp x) x
     (: h (cap x) (?
       (= h '\) (? (atomp (cbbp x)) x (: r (lp x) (cons '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cbp r)))))))

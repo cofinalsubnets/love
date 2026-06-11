@@ -29,6 +29,11 @@
 
    (revcat a b) (foldl (flip cons) b a)
 
+   ; spine length, re-derived locally: the editor counts rows and columns
+   ; (lines in u/d, chars in l), and $ is the NET now -- it would sum the
+   ; byte values. (the tally nif is egg-pulled; this file compiles after.)
+   (tally l) (foldl (\ n _ (+ 1 n)) 0 l)
+
    ; parse a charlist as ONE expression: the line is implicitly parenthesized,
    ; so `x y z` reads as (x y z) -- a single application -- and infix works at
    ; the prompt (`1 = 1` is ((= 1 1)) = 1). a lone value is unchanged by
@@ -103,11 +108,11 @@
         (k u (revcat r l) 0 d))
    (edup k u l r d)
      (? (twop u) (splitat (\ lz rr (k (cbp u) lz rr (cons (revcat l r) d)))
-                          0 (sat l) (cap u))
+                          0 (tally l) (cap u))
         (k u l r d))
    (eddown k u l r d)
      (? (twop d) (splitat (\ lz rr (k (cons (revcat l r) u) lz rr (cbp d)))
-                          0 (sat l) (cap d))
+                          0 (tally l) (cap d))
         (k u l r d))
 
    ; --- history zipper ---
@@ -196,8 +201,8 @@
         _ (each (rev u) (\ ln (do (each ln prc) (putc 10))))
         _ (each (revcat l r) prc)
         _ (each d (\ ln (do (putc 10) (each ln prc))))
-        ld (sat d)
-        col (+ (? (twop u) 0 pl) (sat l))
+        ld (tally d)
+        col (+ (? (twop u) 0 pl) (tally l))
         _ (? (< 0 ld) (do (putc 27) (putc 91) (putn ld 10) (putc 65)) 0)
         _ (putc 13)
         _ (? (< 0 col) (do (putc 27) (putc 91) (putn col 10) (putc 67)) 0)
@@ -217,7 +222,7 @@
    ; before redrawing, so we never rely on a saved absolute cursor
    ; position -- terminal scrolling stays consistent. since nothing
    ; between renders moves the cursor (no putc except in the submit
-   ; branch which exits), the next render's pra is always (pin u) of
+   ; branch which exits), the next render's pra is always (tally u) of
    ; the CURRENT frame, regardless of how the state transitions; we
    ; cache it as npra and route every recursion through it.
    ;
@@ -233,7 +238,7 @@
         (loop pra u l r d hu hd cur)
           (: _ (edrender pl pra u l r d)
              c (edev 0)
-             npra (sat u)
+             npra (tally u)
              (kloop uu lz rr dd) (loop npra uu lz rr dd hu hd cur)
              (kedit uu lz rr dd) (loop npra uu lz rr dd (detach hu cur) hd 0)
              (khist uu lz rr dd nhu nhd ncur) (loop npra uu lz rr dd nhu nhd ncur)

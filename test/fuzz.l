@@ -101,18 +101,27 @@
  (fz-ok 300 20 fz-l (\ l (= l (rev (rev l)))))                          ; rev is involutive
  (fz-ok 300 21 fz-l (\ l (= l (map id l))))                            ; map id = id
  (fz-ok 300 22 fz-l (\ l (= l (foldr cons 0 l))))                      ; foldr X nil = id
+ ; cat adds spine lengths, and the NET law holds exactly: $ of a cat is the
+ ; saturated sum of the two lists' element sums (one clamp, at the top)
  (fz-ok 300 23 (fz-pair2 fz-l fz-l)
-   (\ v (= (sat (cat (cap v) (cabp v))) (+ (sat (cap v)) (sat (cabp v))))))   ; cat length
+   (\ v (: (ln x) (foldl (\ n _ (+ 1 n)) 0 x)
+           (sum x) (foldl (+) 0 x)
+           a (cap v) b (cabp v)
+           (&& (= (ln (cat a b)) (+ (ln a) (ln b)))
+               (= (sat (cat a b)) (sat (+ (sum a) (sum b))))))))
  (fz-ok 300 24 (fz-pair2 fz-l fz-l)
    (\ v (= (rev (cat (cap v) (cabp v))) (cat (rev (cabp v)) (rev (cap v))))))  ; rev of cat
- ; map preserves spine length ($ now counts sat elements, so count the spine explicitly)
+ ; map preserves spine length ($ is the net sum, so count the spine explicitly)
  (fz-ok 300 25 fz-l (\ l (: (ln x) (foldl (\ n _ (+ 1 n)) 0 x) (= (ln (map (+ 1) l)) (ln l)))))
- ; take n ++ drop n = identity, for n drawn within [0, pin]
- (fz-ok 300 26 (fz-bind fz-l (\ l (fz-map (\ n (L l n)) (fz-int 0 (+ 1 (sat l))))))
+ ; take n ++ drop n = identity, for n drawn within [0, spine length]
+ (fz-ok 300 26 (fz-bind fz-l (\ l (fz-map (\ n (L l n)) (fz-int 0 (+ 1 (foldl (\ n _ (+ 1 n)) 0 l))))))
    (\ v (= (cap v) (cat (take (cabp v) (cap v)) (drop (cabp v) (cap v))))))
- ; filter keeps only matching elements and never grows the list
+ ; filter keeps only matching elements and never grows the spine (the clamped $
+ ; can GROW under filter -- dropping a negative raises the net -- so fold)
  (fz-ok 300 27 fz-l
-   (\ l (: p (\ x (= 0 (% x 2))) (&& (all p (filter p l)) (<= (sat (filter p l)) (sat l))))))
+   (\ l (: (ln x) (foldl (\ n _ (+ 1 n)) 0 x)
+           p (\ x (= 0 (% x 2)))
+           (&& (all p (filter p l)) (<= (ln (filter p l)) (ln l))))))
  ; an element consed on is found by memq
  (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (memq (cap v) (cons (cap v) (cabp v))))))
 
