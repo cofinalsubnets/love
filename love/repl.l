@@ -326,7 +326,7 @@
                   (? (twop t) (cons (cap s) (\ u (charms t)))   ; chars: lift, lazy tail
                      (nilp t) (cons (cap s) (\ u ()))           ; the last chars cell
                      s))                                        ; a hom tail: charms already
-      (handlep s) (: c (fgetc s)                                ; a port is the hot charms
+      (hotp s) (: c (fgetc s)                                ; a port is the hot charms
                      (? (= c -1) () (cons c (\ u (charms s)))))
       ())
    (charms->chars s)

@@ -44,8 +44,8 @@
 ; string < symbol < product < map < hom, each band ordered within itself (text and products
 ; lexicographically, maps and homs by an alpha-invariant hash). a map has its own rung
 ; just under the homs, though it still acts as a lookup hom for +/*/apply. the
-; opaque handles (buf/port -- `handlep`) sit in the hom band: truthy when nonempty
-; ($out = 1), compared by identity, and applying a handle acts like 0 (const-1). every
+; opaque hots (buf/port -- `hotp`) sit in the hom band: truthy when nonempty
+; ($out = 1), compared by identity, and applying one acts like 0 (const-1). every
 ; predicate ends in `p`; they are enumerated below.
 
 ; --- everything is a function --- (f x y) == ((f x) y) and (f) == f, so application is just
@@ -99,18 +99,20 @@
 ; first word dispatches. the storage predicates:
 ;   fixp bigp boxp  -- the integer reps (fixnum, bignum, wide-int box)
 ;   flop comp arrp  -- float, complex scalar, array; all three share one heap type, `tupp`
-;   strp symp twop mapp homp  -- string, symbol, product, map, hom (function)
+;   strp symp twop mapp  -- string, symbol, product, map
 ; derived: `nump` (any number: fix/box/big/float/complex/array), `intp` (any integer), `atomp`
-; (anything but a product). `i` is ~(0 1). opaque handles (buf/port) answer `handlep` -- and
-; `homp` too, since they act as functions; a task is referenced by a fixnum id, not a handle
-; object. `!` (nilp) and `done?` are truth/task tests, not type tests.
+; (anything but a product). `i` is ~(0 1). `homp` is PRESENCE, not a band: every heap
+; value answers it (anything with a hot -- everything but a fixnum), pairs and strings
+; included. the opaque hots (buf/port) answer `hotp`, the refinement that names the
+; zoo; a task is referenced by a fixnum id, not a handle object. `!` (nilp) and
+; `done?` are truth/task tests, not type tests.
 (assert
  (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (homp cap) (mapp #(1 2))
  (bigp (100 2)) (boxp (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (tupp 1.5)
  (nump 1.5) (nump i) (nump (62 2)) (intp (62 2)) (atomp 'x) !(atomp '(1))
- (handlep (buf 4)) (handlep out) (handlep (sip '(104)))   ; the handle zoo, named
- !(handlep #()) !(handlep cap) !(handlep 5) !(handlep "s")  ; maps/functions/data are not handles
- (homp (buf 4))                               ; a handle still answers homp -- it acts as a function
+ (hotp (buf 4)) (hotp out) (hotp (sip '(104)))   ; the hot zoo, named
+ !(hotp #()) !(hotp cap) !(hotp 5) !(hotp "s")   ; maps/functions/data are not hots
+ (homp (buf 4)) (homp '(1)) (homp "s") !(homp 5) ; homp is presence: any heap value
  (fixp (: p (spawn (\ x x) 0) _ (wait p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; fixnum overflow -> exact bignum ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
