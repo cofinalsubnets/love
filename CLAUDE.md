@@ -148,10 +148,15 @@
 ; overflow grows fixnum -> wide box -> bignum; a non-number gives nil. `/` is *true* division --
 ; an inexact integer quotient promotes to float ((/ 1 2) is 0.5) but an exact one stays integer
 ; ((/ 4 2) is 2); /0 gives IEEE inf/nan. `//` truncates toward zero (the partner of `%`).
-; bitwise << >> & | ^ on integers (complement is (^ x -1)).
+; bitwise << >> & | ^ on integers (complement is (^ x -1)). there are NO monadic puns:
+; the monadic readings are SECTIONS, by the curry law -- (- 0) is neg, (/ 1) is reciprocal,
+; generic like their operators -- and the numerals carry the power family ((-1 x) = 1/x,
+; ((/ 1 2) x) = sqrt; see numeric functions). the higher-order canon stays words by law:
+; (foldl (+) 0) is APL's +/ , and $ is +/ of the nets.
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (2 = 4 / 2) (fixp (4 / 2)) (-2 = (// -5 2))
+ (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
  !(fixp (2 * 2305843009213693952)) (flop (1 / 0)) (1e308 < 1 / 0) !((/ 0 0) = (/ 0 0))
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
@@ -278,10 +283,12 @@
 ; reached the end of the list); caap cabp .. cbbbp are the compounds, read right to left
 ; like their classic c[ad]+r ancestors (which are gone, as is the X alias).
 ; (sort l) orders by the total order, in C (descending = rev); (msort le l)
-; takes a predicate. the other higher-order functions live in the prelude.
+; takes a predicate. (iota n) counts out the first n charms, '(0 .. n-1).
+; the other higher-order functions live in the prelude.
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cbp '(1 2 3))) (3 = (cabp '(2 3 4))) ('(1 2) = (cons 1 (cons 2 0)))
  !(cap 0) ('x = (cap 'x)) !(cbp 'x)              ; no cap at the end of the list; an atom is its own cap
+ ('(0 1 2) = (iota 3)) !(iota 0) (3 = $(iota 3)) ; iota: the first n charms; the empty count is nothing
  ('(2 3 4) = (map inc '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
  ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (msort (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))

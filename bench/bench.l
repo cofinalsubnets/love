@@ -10,8 +10,7 @@
 ;     <name> love <reps> <ms> <checksum>
 ; work is a unary thunk (called as (work 0), since love has no nullary calls)
 ; and must return a deterministic checksum the other languages reproduce.
-(: (iota n)  ((: (go i) (? (< i n) (cons i (go (+ i 1))))) 0)         ; 0..n-1
-   (iota1 n) ((: (go i) (? (< i n) (cons (+ i 1) (go (+ i 1))))) 0)   ; 1..n
+(: (iota1 n) (map inc (iota n))                                       ; 1..n (iota is prelude now)
    bench-min-ms 200                                                   ; timing floor
    (bench-run work reps)                                              ; -> (ms . chk)
     (: t0  (clock 0)

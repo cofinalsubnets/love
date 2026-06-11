@@ -147,6 +147,7 @@
    memq (co any (=))
    (zip a b) (? (twop a) (? (twop b) (cons (cons (cap a) (cap b)) (zip (cbp a) (cbp b)))))
    rev (foldl (flip cons) 0)
+   (iota n) ((: (go i) (? (< i n) (cons i (go (+ i 1))))) 0)
    (drop n l) (? n (drop (- n 1) (cbp l)) l)
    (take n l) (? n (cons (cap l) (take (- n 1) (cbp l))))
    (part p) (foldr (\ a m (? (p a) (cons (cons a (cap m)) (cbp m))

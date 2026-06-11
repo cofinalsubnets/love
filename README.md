@@ -35,9 +35,9 @@ love has three special forms plus "operators". the forms are
 - `:` let
 
 the prefix reader operators aka sigils are
-- `$` sat (saturating sum to fixed width and clamp nonnegative)
+- `$` sat (saturating sum to fixed width and clamp nonnegative -- `$` of a list is APL's `+/`)
 - `.` dot (print and return item)
-- `!` not (negation); `!!$` defines the `?` condition
+- `!` not (negation); `!!$` is the iverson bracket, and defines the `?` condition
 - `'` quote (desugars to one-operand lambda)
 
 plus the data constructors
@@ -50,6 +50,12 @@ and the infix operators
 - `?` ternary (the cond form infix: `(t ? a b)`)
 - `%` mod
 - `<-` pin, `->` peep (the collection accessors: `(t <- k v)`, `(t -> k d)`)
+
+there are no monadic puns: the monadic readings are sections, by currying --
+`(- 0)` is neg, `(/ 1)` is reciprocal -- and the numerals carry the whole
+power family (`-1 x = 1 / x`, `(1 / 2) x = sqrt x`, `n x = x ** n`). words
+cover the rest (`abs int gcd // << >> ^ sin cos log pow`), and the
+higher-order canon stays words: `(foldl (+) 0)` is `+/`.
 
 pure lisp is the lassoc subset: `?` is still the cond form at the head of a
 list, and bare punct symbols escape in parens -- `(+)` is `+` as a value --
@@ -101,10 +107,12 @@ kilobytes of the whole back end.
   values is the enum order, and the lattice is literally the diagonal of the
   dispatch tables. `sort` is one C comparison per pair -- the total order is
   the comparator.
-- no interpreter state lives outside the heap: dict (an ordinary love hash)
-  carries the globals, macros, reader operator tables, the trap function and
-  the rng; C finds its own hooks by name, allocation-free. the egg pulls every
-  compiler-internal name -- dict's own included -- before the image is born.
+- no interpreter state lives outside the heap: the book (an ordinary love
+  hash) carries the globals, macros, the operators table, the trap function
+  and the rng; C finds its own hooks by name, allocation-free. the egg pulls
+  every compiler-internal name -- the book itself included -- before the
+  image is born. a name not in the book is an anon: reading one is a
+  trappable condition, and untrapped it reads `()`.
 - the compiler is written in love. at build time the evaluator sits on the egg
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,
   which recompiles itself -- and the hatchling bakes into the binary; `born`
