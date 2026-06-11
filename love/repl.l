@@ -3,12 +3,14 @@
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist is
 ; implicitly parenthesized and read as ONE expression via (sip ..) + read
-; -- a line `x y z` is the application (x y z), and reader infix works at
-; the prompt. read's more-bit conditions route through the trap
-; continuation, whose default delivers the port itself on more (input ends
-; inside an unfinished form, incl. a pending infix operand). that lets
-; parseall distinguish "submit" from "keep editing" -- parseall is the
-; lisp-visible face of the more bit; a global `trap` takes over that dispatch.
+; -- a line `x y z` is the application (x y z), and infix works at the
+; prompt (factored at compile time by opfix; reading is structural).
+; read's more-bit conditions route through the trap continuation, whose
+; default delivers the port itself on more (input ends inside an unfinished
+; SHAPE -- an unclosed paren or string; a trailing operator is a complete
+; datum that folds to a partial). that lets parseall distinguish "submit"
+; from "keep editing" -- parseall is the lisp-visible face of the more bit;
+; a global `trap` takes over that dispatch.
 ;
 ; the editor buffer is a four-zipper threaded positionally through
 ; the editor functions: u (lines above the cursor, reversed), l (chars
@@ -36,9 +38,9 @@
 
    ; parse a charlist as ONE expression: the line is implicitly parenthesized,
    ; so `x y z` reads as (x y z) -- a single application -- and infix works at
-   ; the prompt (`1 = 1` is ((= 1 1)) = 1). a lone value is unchanged by
-   ; (f) == f. returns m if the input ends inside an unfinished form (incl. a
-   ; pending infix operand), 0 for a blank line, else a one-form list.
+   ; the prompt (`1 = 1` factors to ((= 1 1)) = 1). a lone value is unchanged
+   ; by (f) == f. returns m if the input ends inside an unfinished shape
+   ; (an unclosed paren or string), 0 for a blank line, else a one-form list.
    (parseall cl)
      (: p (sip (cons 40 (cat cl (L 41))))
         r (read p eofsym)
@@ -305,3 +307,13 @@
               nhd (cbbp r)
               _ (each vs (\ v (: _ (do_eval v) (putc 10))))
               (repl nhu nhd)))))
+
+; zev: charms -> hom, the reverse shell of the compiler -- the lane every
+; shell ultimately feeds into. a charm is a sat (a non-negative fixnum); a
+; charms is a charlist. zev reads ONE form from the charms (structurally --
+; the reader knows no operators) and sends it through the same core as ev
+; (opfix, wev, ana, cata), so the full hull charms -> hom runs in one call.
+; nothing readable -- empty input or an unfinished shape -- is nothing.
+(: (zev cl)
+   (: p (sip cl) e (nom 0) r (read p e)
+      (? (idp r e) 0 (idp r p) 0 (ev r))))

@@ -1,7 +1,7 @@
 (assert
  (= : (:))
  (= \ (\))
- (= (?) ((?)))                  ; bare ? mid-list is the infix ternary now; (?) escapes it
+ (= (?) ((?)))                  ; bare ? mid-list is infix at three now; (?) escapes it
  (= ''x '(\ x))
  (= 1 (? 1))
  (= 1 (: 1))

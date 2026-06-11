@@ -1,13 +1,7 @@
-# cofinal subnets
+# love
 
-broadcasting live from the GTX tower
-
-the language is love; the project is cofinal subnets.
-
-## **love never fails**
-
-every love expression has a value up to oom or looping.
-stackless operation, all recursion on the heap, no overflow.
+every expression in love has a value up to OOM or looping.
+stackless operation, all recursion on heap, overflow safe.
 every quote below evals to 1. try them in the repl :)
 
 - `0 x = 1`
@@ -23,10 +17,11 @@ every quote below evals to 1. try them in the repl :)
 
 ## language
 
-rassoc infix with applicative lassoc subset, functions curried.
-basically, `love: love -> love = lisp * haskell * apl / c`
+basically, love is a fusion of lisp apl and haskell over c
+where every value is a total function of one argument and every
+action is as generic and efficient as possible by definition.
 
-- every value is a monadic total function
+- every value is a total function of one argument
 - all operations made as generic as possible
 - numeric tower with shaped array broadcasting
 - lambdas, macros, closures, multitasking
@@ -40,10 +35,10 @@ love has three special forms plus "operators". the forms are
 - `:` let
 
 the prefix reader operators aka sigils are
-- `.` dot (printing identity function, does what you want on strings)
-- `$` sat (saturating reduction to fixed width nat, len on hashes)
+- `$` sat (saturating sum to fixed width and clamp nonnegative)
+- `.` dot (print and return item)
 - `!` not (negation); `!!$` defines the `?` condition
-- `'` quote (desugars to monadic lambda)
+- `'` quote (desugars to one-operand lambda)
 
 plus the data constructors
 - `@` at (array literal)

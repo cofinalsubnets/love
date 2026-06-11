@@ -33,8 +33,8 @@
             (&& (< 1 ar) (= n ar)) (cons apx (cons 1 x))       ; multi-arg fn -> n-ary apply
             (cons apx (cons 0 x))))))                          ; generic l2r apply
     (go v as))
-   ; the infix table symbols are quoted one by one -- bare mid-list they would
-   ; capture their left neighbor at read time.
+   ; the operator symbols are quoted one by one -- bare mid-list they would
+   ; capture their left neighbor when this file compiles (the opfix pass).
    names (cat (L '+ '- '* '/ '% '& '| '< '<= '= '>= '>)
           '(// << >> ^
             idp gcd modpow inc dec abs
@@ -57,7 +57,7 @@
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
- x (wev c x)
+ x (wev c (opfix x))    ; opfix first: ev = the deserialized-data lane, opfix factors its sigil surface
  (ana c x (k0 c) 0 0)))
   g_vm_cur (peek 0 (+))
   (sco p a i) (pin (pin (pin (table 0) 'arg a) 'imp i) 'par p)
@@ -166,7 +166,7 @@
   (push c k x) (: _ (pin c k (cons x (c k))) x)
   (pop c k) (: x (c k) _ (pin c k (cbp x)) (cap x))
   (iap c b) (: op (cap b) as (cbp b)                       ; (iop op . args) -> inline the vm op
-   (? (atomp (cbp as)) (co (ana c (cap as)) (em1 op))      ; monadic
+   (? (atomp (cbp as)) (co (ana c (cap as)) (em1 op))      ; one arg
       (: s (c 'stk) k (apr2l c as) _ (pin c 'stk s) (co k (em1 op))))) ; n-ary, r2l args
   ; apxh: (apx nary head . args) -> apply. nary -> r2l arg eval + a single n-ary apply;
   ; else l2r 1-ary chain. kap detects tail vs non-tail by peeking the continuation.

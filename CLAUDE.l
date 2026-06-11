@@ -1,4 +1,4 @@
-; love -- a small lisp where every value is a monadic, auto-curried function.
+; love -- a small lisp where every value is an auto-curried function of one argument.
 ; a portable C runtime (love.c + love.h) plus a self-hosting compiler written in love
 ; (the love/{prelude,ev,repl}.l layers). source is .l; the host binary is `love`. see README.md.
 ;
@@ -19,8 +19,9 @@
 ;   ovmf/limine downloads).
 ; * C files EMBED lisp the .l sweeps cannot see: love.c (g_evals_'s driver string), main.c
 ;   (s2cl + runner), kmain.c (the K_TEST runner), wasm/. grep them on every rename.
-; * a bare all-punct symbol mid-list captures its left operand at read time -- escape it
-;   in parens ((+) is + as a value); quoted lists need each operator quoted alone.
+; * a bare all-punct symbol mid-list captures its left operand when code compiles (the
+;   opfix pass) -- escape it in parens ((+) is + as a value); quoted lists are data and
+;   keep their operators plain.
 ; * a corpus test that spawns must (wait p) its task: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
@@ -288,32 +289,49 @@
  (: b (buf 1) _ (pin b 0 257) (1 = (peep b 0 0))) (: b (buf 4) _ (blit b 0 "ABCD" 0 4) (68 = (peep b 3 0)))
  !((buf 2) = (buf 2)))
 
-; --- reader operators --- `;` line comment, `#!` pinbang (no block comments). TWO sibling
-; reader tables, split by the CHAR-CLASS law: the `operators` table keys prefix SIGILS by char --
-; token-BREAKING chars that desugar their next N datums to (name d1 .. dN); value name |
-; (name . arity), arity 1-7 -- and the `infix` table keys INFIX by interned all-punct symbol --
-; token-JOINING names (kebab keeps - inside names) whose valence resolves by position: with
-; a left operand the symbol captures it and collects arity-1 more, nesting RIGHT-
-; associatively; with none it reads as the plain symbol, so (+ 1 2), '+, and
-; (+)-as-a-value still work. both tables extend with a plain pin (see test/operator.l,
-; test/infixop.l). seven sigils ship (glyph / name): $ sat (saturation),
-; # hash (hash table), ' quote (= one-operand \), ! bang (negation), . dot (print),
-; @ tup (array), ` quasiquote; , unquote, ,@ splice, and ~ wave (complex/conjugate) stay
-; reader digraphs (~(re im) splices to (plex re im); a bare ~x is (clift x)). infix:
-; + - * / = < <= > >= | & ship dyadic and ? ternary -- the cond form infix, (t ? a b);
-; aliases ride (name . arity) entries: the accessors go infix as <- pin and
+; --- reader operators --- `;` line comment, `#!` pinbang (no block comments). reading is
+; STRUCTURAL and environment-free: the reader knows tokens, parens, strings, and the value
+; surface -- ' quote (= one-operand \), ` quasiquote, , unquote, ,@ splice, # hash, @ tup
+; (array), ~ wave (complex/conjugate: ~(re im) splices to (plex re im), a bare ~x is
+; (clift x)) -- and NO operator tables, so the same reader serves data (read) and code.
+; the LEXER LAW splits tokens by leading char: a name token (alnum/_) keeps - ? ! etc
+; inside (kebab law unchanged), while a punctuation-led token is a SIGIL -- a maximal run
+; of operator chars, read as ONE PLAIN SYMBOL (value-surface chars and delimiters break
+; the run). code then factors sigils against the ONE `operators` table at COMPILE time:
+; `opfix`, a source->source prepass hooked by both compilers (c0 probes dict['opfix] like
+; boxfix; ev runs it before wev -- ev is opfix after read, so the two input lanes, data
+; and characters, meet at one core). the table: symbol -> arity (the symbol names itself)
+; | (name . arity) (an alias), arity 1-7, extended with a plain pin -- live for the next
+; form, since opfix probes at compile time (see test/operator.l, test/infixop.l).
+; the FACTORIZATION LAW: greedy longest-prefix, no backtracking; every factor but the
+; last must be arity ONE (a prefix on the next datum, never capturing left); the
+; last factor takes the positional valence -- with a left operand it captures it and
+; collects arity-1 more, nesting RIGHT-associatively; with none it reads plain, so
+; (+ 1 2), '+, and (+)-as-a-value still work. a token that doesn't factor is a plain
+; symbol (&&, >>=, :-, ?- stay atomic); != factors to ! and =, !! double-negates. a
+; sigil at one binds TIGHTEST (folds the moment its operand lands), so $"ab" + 2 is
+; (+ ($ "ab") 2); only infix defers, which is what makes it right-associative. the
+; CURRY LAW: operands missing at the end of a list fold to the partial application.
+; quote interiors are DATA -- operators inside ' stay plain symbols; quasiquote descends
+; only through unquotes. shipped at one: $ sat, ! nilp, . dot; at two: + - * / %
+; = < <= > >= | &; ? at three -- the cond form infix, (t ? a b); aliases: <- pin and
 ; -> peep, collection-first -- (t <- k v) pins (giving back t, so it chains), (t -> k d)
-; peeps. (1 + 2) reads ((+ 1 2)) and evaluates via (f) == f.
+; peeps. (1 + 2) factors to ((+ 1 2)) and evaluates via (f) == f.
 (assert
  ('(1 (\ x) 3) = `(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) `(1 ,@xs 4)))
  (5 = $"hello") (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
- (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) ('(dot x) = '.x) (homp dot)
+ (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) (homp dot)
+ ('((dot x)) = (opfix '(. x))) ('! = (cabp '(a ! b)))   ; opfix factors; quotes stay data
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
+ (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
+ (4 = ($"ab" + 2))                               ; one binds tightest: (+ ($ "ab") 2)
+ (3 = ((1 +) 2))                                 ; the curry law: (1 +) folds to (+ 1)
  (20 = (#(1 10 2 20) -> 2 0)) (7 = ((#() <- 'k 7) 'k)) (9 = (#() -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
- (: t operators (&& (mapp t) ('sat = (t ("$" 0))) ('hash = (t ("#" 0)))))
- (: t infix
-    (&& (mapp t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%)))))
+ (: t operators
+    (&& (mapp t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%))
+        ((cons 'sat 1) = (t '$)) ((cons 'nilp 1) = (t '!))
+        ((cons 'pin 3) = (t '<-)) ((cons 'peep 3) = (t '->)))))
 
 ; --- macros --- a macro maps an argument list to code; install with `::`. the prelude ships
 ; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, the body-first
@@ -361,6 +379,8 @@
 ; from the prelude and shared by both compilers:
 ;   numap -- fixnum/number application (x**n, or compose ($ n) times), an n-fold text.
 ;   scomb/bcomb -- `+` and `*` of functions are church add and compose, so numerals agree.
+;   opfix -- the operator factor pass (see reader operators above): sigil surface -> core
+;     source, run FIRST, one source of truth shared with the C bootstrap compiler.
 ;   boxfix -- the letrec* "capture by location" rewrite; now a wev source pass run after
 ;     macroexpansion, one source of truth shared with the C bootstrap compiler.
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure
@@ -386,7 +406,7 @@
         (? born !lamb 1) (? born !dict 1))      ;  hence the born guards)
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
-; lattice above). a dyadic op is an NxN table indexed by the two kinds; a monadic op is its
+; lattice above). an op at two is an NxN table indexed by the two kinds; an op at one is its
 ; diagonal; the three core tables are + , * , and apply. a both-fixnum fast path skips the
 ; table; otherwise one indexed jump picks a lane that widens only as far as the operands need
 ; (array, complex, bignum, float, ...). the VM is tail-threaded over a two-space copying

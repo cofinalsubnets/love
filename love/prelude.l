@@ -16,7 +16,7 @@
 (: z 0 r 1 c 2 o 3)
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
 (: i ~(0 1))
-; the monadic ~ sigil (~x, i.e. ~ not followed by `(`): lift a real to ~(r 0),
+; the bare ~ digraph (~x, i.e. ~ not followed by `(`): lift a real to ~(r 0),
 ; conjugate a complex to ~(re -im), ~0 -> ~(0 0). One formula -- plex of the real
 ; part and the negated imaginary part -- since (re r)=r, (im r)=0 for a real, and
 ; (re z)/(im z) for a complex. (The 2-operand ~(a b) splices into (plex a b).)
@@ -149,7 +149,7 @@
  (pad _)
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (lamb 6)))))))
  (page o) (slice (peek 4 o) 0 (peek 5 o))
- (slurp i) (: (rl i) (: c (fgetc i) (? !(= c -1) (cons c (rl i)))) (string (rl i)))
+ (slurp i) (: (rl i) (: c (fgetc i) (? (= c -1) 0 (cons c (rl i)))) (string (rl i)))  ; (pre-opfix: no ! here)
  (show x) (: o (pad 0) _ (fputx o x) (page o)))
 ; trap status readers. a global `trap` function is called as (trap s a b):
 ; s = the status word, two bits -- sing (1: something went wrong) and more
@@ -168,6 +168,174 @@
 (:: '?- (\ a (cons '? (cat (cbp a) (cons (cap a) 0)))))
 (:: '>>= (\ l (cons (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
+
+; --- reader operators: the table + the opfix factor pass --------------------
+; a SIGIL is a maximal all-punct token (the reader's lexer law); the reader
+; leaves it a plain symbol. code factors a sigil into a composition of
+; operators against THIS table at compile time -- opfix below, the
+; source->source pass hooked by both compilers (c0 probes dict['opfix] like
+; boxfix; ev.l's wev runs it first) -- while data reading stays structural.
+; ONE table: symbol -> arity (the symbol names itself) | (name . arity) (an
+; alias). arity ONE applies to the next datum, never capturing a left
+; operand. arities two..seven are infix: with a left operand available it
+; captures it and collects arity-1 more, nesting RIGHT-associatively; with
+; none it reads as the plain symbol ((+) is + as a value, '+ quotes it).
+; extend with a plain pin. everything above this point is pre-opfix and
+; must stay operator-free (the bootstrap restriction: no unquoted sigil
+; before its definitions); everything after -- and every later file, the
+; corpus, the repl -- reads hot.
+(: operators (: t (table 0)
+   _ (pin t '$ (cons 'sat 1)) _ (pin t '! (cons 'nilp 1)) _ (pin t '. (cons 'dot 1))
+   _ (pin t '+ 2) _ (pin t '- 2) _ (pin t '* 2) _ (pin t '/ 2) _ (pin t '% 2)
+   _ (pin t '= 2) _ (pin t '< 2) _ (pin t '<= 2) _ (pin t '> 2) _ (pin t '>= 2)
+   _ (pin t '| 2) _ (pin t '& 2) _ (pin t '? 3)
+   _ (pin t '<- (cons 'pin 3)) _ (pin t '-> (cons 'peep 3))
+   t))
+; the FACTORIZATION LAW: greedy longest-prefix match against the table, no
+; backtracking; every factor but the last must be arity one; the last factor
+; takes the positional valence. a token that doesn't factor is a plain
+; symbol. so != factors to ! and = ((a != b) = (nilp (= a b))) while &&,
+; >>=, :-, ?- (two-led or unmatched) stay atomic names.
+(: (op-punc-byte c) (? (&& (<= 48 c) (<= c 57)) 0
+                       (&& (<= 65 c) (<= c 90)) 0
+                       (&& (<= 97 c) (<= c 122)) 0
+                       (= c 95) 0
+                       1)
+   ; cheap prefilter: only an all-punct symbol can factor
+   (op-puncp x)
+    (? (symp x)
+       (: s (string x)
+          (? (strp s)
+             (: n (sat s)
+                (? (< 0 n)
+                   ((: (go i) (? (< i n) (? (op-punc-byte (s i)) (go (+ 1 i)) 0) 1)) 0)
+                   0))
+             0))
+       0)
+   ; normalize a table entry for key k -> (name . arity), or 0
+   (op-ent k) (: v (operators k)
+                 (? (fixp v) (? (&& (< 0 v) (< v 8)) (cons k v) 0)
+                    (twop v) (? (&& (symp (cap v)) (fixp (cbp v)) (< 0 (cbp v)) (< (cbp v) 8)) v 0)
+                    0))
+   ; longest prefix of nm[i..n) that is a table key -> (len . entry), or 0
+   (op-long nm i n)
+    ((: (go k) (? (< k 1) 0
+                  (: e (op-ent (intern (slice nm i (+ i k))))
+                     (? (twop e) (cons k e) (go (- k 1))))))
+     (- n i))
+   ; factor symbol s -> a list of (name . arity) entries, or 0
+   (opfactor s)
+    (: nm (string s) n (sat nm)
+       ((: (go i)
+           (? (< i n)
+              (: m (op-long nm i n)
+                 (? (twop m) (: k (cap m) e (cbp m)
+                         (? (= (+ i k) n) (cons e 0)         ; the last factor: any arity
+                            (= (cbp e) 1) (: r (go (+ i k))  ; non-last factors must be arity one
+                                             (? (twop r) (cons e r) 0))
+                            0))
+                    0))
+              0))
+        0)))
+; the walk. a pending-operator frame is (orig chain name need . got): orig =
+; the source symbol (delivered back verbatim when no operand ever arrives --
+; a bare sigil is a plain symbol), chain = the arity-one wrapper names
+; (outermost first), need = operands still wanted (0 = FILLED, fold deferred
+; so a following infix operator can steal the last operand -- that deferral
+; IS right-associativity), got = operands so far, reversed. out/pend thread
+; as one (out . pend) pair through the helpers.
+(: (op-fr o ch nm nd gt) (cons o (cons ch (cons nm (cons nd gt))))
+   (op-fro f) (cap f) (op-frc f) (cabp f) (op-frn f) (cabbp f)
+   (op-frd f) (cap (cbbbp f)) (op-frg f) (cbp (cbbbp f))
+   ; wrap the chain of arity-one names around a folded form
+   (op-fin ch x) (? (twop ch) (cons (cap ch) (cons (op-fin (cbp ch) x) 0)) x)
+   ; fold a frame with whatever it has: nothing collected -> the plain
+   ; symbol; a shortfall folds to the partial application (curry law). a
+   ; frame at arity ONE (nil name: the whole op lives in the chain) wraps its
+   ; lone operand.
+   ; KIND tests throughout the walk, never truth: a collected operand list
+   ; like (0) or ("") NETS zero, so nilp would read it as empty and drop
+   ; the operand (the round-16 discipline: kinds for structure)
+   (op-fold f) (? (atomp (op-frg f)) (op-fro f)
+                  (symp (op-frn f)) (op-fin (op-frc f) (cons (op-frn f) (rev (op-frg f))))
+                  (op-fin (op-frc f) (cap (op-frg f))))
+   ; deliver datum d -> (out' . pend'). a collecting frame takes it; a FILLED
+   ; frame folds into its parent first (cascading), then d delivers. a
+   ; frame at one that fills folds AT ONCE -- ones bind tightest ($"ab" + 2
+   ; is (+ ($ "ab") 2)); only infix frames sit FILLED, deferring
+   ; their fold so a following operator can steal the last operand (that
+   ; deferral IS right-associativity).
+   (op-del d out pend)
+    (? (atomp pend) (cons (cons d out) pend)
+       (: f (cap pend)
+          (? (< 0 (op-frd f))
+             (: f2 (op-fr (op-fro f) (op-frc f) (op-frn f)
+                          (- (op-frd f) 1) (cons d (op-frg f)))
+                ; (nilp ..), not !: this block is pre-opfix (the bootstrap restriction)
+                (? (&& (= 0 (op-frd f2)) (nilp (symp (op-frn f2))))
+                   (op-del (op-fold f2) out (cbp pend))
+                   (cons out (cons f2 (cbp pend)))))
+             (: r (op-del (op-fold f) out (cbp pend))
+                (op-del d (cap r) (cbp r))))))
+   ; take a left operand if one is available -> (L . (out' . pend')), or 0.
+   ; a FILLED top frame re-arms (need 1) and yields its last operand -- the
+   ; C reader's A(F)=1 move; at top level the last finished datum is taken.
+   (op-steal out pend)
+    (? (twop pend)
+       (: f (cap pend)
+          (? (= 0 (op-frd f))
+             (cons (cap (op-frg f))
+                   (cons out (cons (op-fr (op-fro f) (op-frc f) (op-frn f)
+                                          1 (cbp (op-frg f)))
+                                   (cbp pend))))
+             0))
+       (twop out) (cons (cap out) (cons (cbp out) pend))
+       0)
+   ; drain at end of list: fold every pending frame innermost-out
+   (op-drain out pend)
+    (? (atomp pend) (rev out)
+       (: r (op-del (op-fold (cap pend)) out (cbp pend))
+          (op-drain (cap r) (cbp r))))
+   (op-w l out pend)
+    (? (atomp l) (op-drain out pend)
+       (: e (cap l)
+          (? (&& (symp e) (op-puncp e))
+             (: fs (opfactor e)
+                (? (atomp fs)
+                   (: r (op-del e out pend) (op-w (cbp l) (cap r) (cbp r)))
+                   (: ch (map cap (init fs)) en (last fs) nm (cap en) n (cbp en)
+                      (? (= n 1)                       ; arity one (or a one-chain): prefix --
+                         ; nil name, the op rides the chain: marks the frame to fold on fill
+                         (op-w (cbp l) out (cons (op-fr e (cat ch (cons nm 0)) 0 1 0) pend))
+                         (: st (op-steal out pend)     ; infix: capture if a left operand exists
+                            (? (twop st) (op-w (cbp l) (cap (cbp st))
+                                        (cons (op-fr e ch nm (- n 1) (cons (cap st) 0))
+                                              (cbp (cbp st))))
+                               (twop ch)               ; composite with no left: prefix
+                               (op-w (cbp l) out (cons (op-fr e ch nm 1 0) pend))
+                               (: r (op-del e out pend) ; bare operator: the plain symbol
+                                  (op-w (cbp l) (cap r) (cbp r)))))))))
+             (: r (op-del (opfix e) out pend)
+                (op-w (cbp l) (cap r) (cbp r))))))
+   ; quasiquote: the template is data; only unquote operands (at the right
+   ; depth, R7RS-style) re-enter the pass
+   (op-qq t d)
+    (? (atomp t) t
+       (: h (cap t)
+          (? (= h 'uq)  (cons 'uq  (cons (? (= d 1) (opfix (cabp t)) (op-qq (cabp t) (- d 1))) 0))
+             (= h 'uqs) (cons 'uqs (cons (? (= d 1) (opfix (cabp t)) (op-qq (cabp t) (- d 1))) 0))
+             (= h 'qq)  (cons 'qq  (cons (op-qq (cabp t) (+ d 1)) 0))
+             (map (\ e (op-qq e d)) t))))
+   ; opfix: the pass. quote interiors are DATA and stay verbatim (so a
+   ; quoted list keeps its operators as plain symbols); quasiquote descends
+   ; only through unquotes; everything else walks. idempotent: factored
+   ; output carries operators only in head position, where they read plain.
+   (opfix x)
+    (? (atomp x) x
+       (: h (cap x)
+          (? (&& (= h '\) (atomp (cbbp x))) x
+             (= h 'qq) (cons 'qq (cons (op-qq (cabp x) 1) 0))
+             (op-w x 0 0)))))
 ; the global RNG stream lives on dict ('rng-state) and advances by the pure
 ; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
 ; clock-seeds on first use; rng-set validates and installs (the state, or nil

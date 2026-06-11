@@ -40,10 +40,14 @@
   (nilp (ri-eval ""))
   (nilp (ri-eval "   "))
   ; --- the read side: parseall signals an incomplete form (not a datum list),
-  ;     which is how the repl decides "keep editing" rather than submit ---
+  ;     which is how the repl decides "keep editing" rather than submit.
+  ;     reading is STRUCTURAL: only an unclosed shape pends -- a trailing
+  ;     operator is a complete datum whose factor folds to a partial (curry
+  ;     law) at compile time, so those lines submit ---
   (nilp (twop (parseall (ri-cl "(+ 1"))))       ; unclosed list -> the more-sentinel
-  (nilp (twop (parseall (ri-cl "1 +"))))        ; pending infix operand -> keep editing
-  (nilp (twop (parseall (ri-cl "1 ? 'a"))))     ; partial ternary -> keep editing
+  (twop (parseall (ri-cl "1 +")))               ; complete: evals to the partial (+ 1)
+  (twop (parseall (ri-cl "1 ? 'a")))            ; complete: (? 1 'a), the curried cond
+  ("a\n" = (ri-eval "1 ? 'a"))                  ; ... which selects 'a
   (twop (parseall (ri-cl "(+ 1 2)")))           ; closed -> a one-form list
   (twop (parseall (ri-cl "1 = 1")))
   ; --- closed loop: the printed output re-reads + re-evals to the same result ---

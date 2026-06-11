@@ -1,8 +1,10 @@
 (: ; self evaluator test
- evr '(: ; expression for the evaluator
+ evr '(: ; expression for the evaluator -- QUOTED source: operators stay plain
+         ; symbols in a quote (data), and meta_eval has no opfix, so this
+         ; source is written in core form (nilp, not !)
   (meta_eval x) (?
    (symp x) (\ l (l x))
-   !(twop x) (const x)
+   (nilp (twop x)) (const x)
    (: x0 (cap x) a (cbp x)
     (? (= x0 'do) (foldl (\ a b l (do (a l) (b l))) 0 (map meta_eval a))
        (= x0 '\) (? (atomp (cbp a)) (const (cap a)) ; one operand: quote

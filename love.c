@@ -701,47 +701,12 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   if (g_ok(g = g_strof(g, LOVE_VERSION))) {
    struct g_def vd[] = {{"version-number", g_pop1(g)}};
    g = g_defn(g, vd, countof(vd)); }
-  // dict['operators]: the reader's operator table, char -> name | (name . arity).
-  // Seeded with the 7 builtin sigil operators at arity 1; `~` and `,` stay
-  // hardcoded digraphs. Lisp extends it with a plain pin (arity 1..7).
-  { struct { char c; char const *n; } const ops[] = {
-     {'\'', "\\"}, {'`', "qq"}, {'#', "hash"},
-     {'@', "tuple"}, {'$', "sat"}, {'!', "nilp"}, {'.', "dot"} };
-   g = map_new(g);                                  // sp[0] = the table
-   for (uintptr_t i = 0; i < countof(ops); i++) {
-    g = intern(g_strof(g, ops[i].n));               // sp[0]=name sp[1]=table
-    g = g_push(g, 1, putfix(ops[i].c));             // (key val map) for g_mapput
-    g = g_mapput(g); }                              // -> sp[0]=table
-   g = intern(g_strof(g, "operators"));             // sp[0]=key sp[1]=table
-   g = g_push(g, 1, nil);
-   if (g_ok(g)) {                                   // permute to (key val map)=(operators table dict)
-    g->sp[0] = g->sp[1], g->sp[1] = g->sp[2], g->sp[2] = g->dict;
-    g = g_pop(g_mapput(g), 1); } }
-  // dict['infix]: reader infix, SYMBOL -> arity (2..7). In operand position
-  // with a left operand available the symbol captures it and collects arity-1
-  // more datums, nesting right-associatively; with no left operand it reads
-  // as the plain symbol ((+) passes + as a value, '+ quotes it).
-  { char const *const ops2[] = { "+", "-", "*", "/", "%", "=", "<", "<=", ">", ">=", "|", "&" };
-   g = map_new(g);                                  // sp[0] = the table
-   for (uintptr_t i = 0; i < countof(ops2) + 1; i++) {
-    g = intern(g_strof(g, i < countof(ops2) ? ops2[i] : "?"));
-    g = g_push(g, 1, putfix(i < countof(ops2) ? 2 : 3)); // [arity sym table]
-    if (g_ok(g)) {                                  // swap to (key val map) = (sym arity table)
-     word t = g->sp[0]; g->sp[0] = g->sp[1], g->sp[1] = t;
-     g = g_mapput(g); } }                           // -> sp[0]=table
-   g = intern(g_strof(g, "pin"));                   // <- aliases pin: (t <- k v)
-   g = gxr(g_push(g, 1, putfix(3)));
-   g = intern(g_strof(g, "<-"));
-   g = g_mapput(g);
-   g = intern(g_strof(g, "peep"));                  // -> aliases peep: (t -> k d)
-   g = gxr(g_push(g, 1, putfix(3)));
-   g = intern(g_strof(g, "->"));
-   g = g_mapput(g);
-   g = intern(g_strof(g, "infix"));                 // [key table]
-   g = g_push(g, 1, nil);
-   if (g_ok(g)) {                                   // permute to (key val map)=(infix table dict)
-    g->sp[0] = g->sp[1], g->sp[1] = g->sp[2], g->sp[2] = g->dict;
-    g = g_pop(g_mapput(g), 1); } } }
+  // the reader owns no operator tables: dict['operators] (the ONE table,
+  // symbol -> arity | (name . arity)) is seeded by the prelude, and the
+  // opfix source pass (prelude.l, hooked by both compilers at c0 and wev)
+  // factors sigil tokens against it at compile time. data reading is
+  // purely structural.
+ }
  return g; }
 
 struct g *g_ini_m(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
@@ -985,6 +950,8 @@ static g_noinline intptr_t gcp(struct g *g, word x, word const *p0, word const *
 // ============================================================================
 static g_inline struct g *pushl(struct g*g) { return intern(g_strof(g, "\\")); }
 static struct g *c0(struct g *g, g_vm_t *y);
+static struct g *g_eval(struct g *g);
+static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n);
 
 // function state using this type
 struct env {
@@ -1045,6 +1012,22 @@ static struct g *append(struct g *g) {
 
 // don't inline this so callers can tail call optimize
 static g_noinline struct g *c0(struct g *g, g_vm_t *y) {
+ // the operator factor pass: c0 delegates the sigil surface -> core source
+ // rewrite to the l `opfix` prepass (prelude.l) -- evaluated like a macro,
+ // once that global exists (i.e. for everything after its own definition
+ // partway through the prelude) -- so both compilers see factored forms.
+ // A pair whose head is already a hom (a non-data heap value -- C homp is
+ // just the heap test) is a constructed direct application ((f 'x) calls
+ // built by this hook, boxfix's, or ana_2's -- never readable source):
+ // skipped, which also terminates the recursion through g_eval.
+ { word x0 = g->sp[0];
+   if (twop(x0) && (!homp(A(x0)) || datp(A(x0)))) {
+    struct g_atom *os = sym_probe(g_core_of(g), "opfix", 5);
+    word of = os ? g_mapget(g_core_of(g), 0, word(os), g_core_of(g)->dict) : 0;
+    if (of && homp(of)) {
+     g = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(g, 4, x0, nil, nil, of)))))));
+     if (!g_ok(g)) return g;
+     g->sp[1] = g->sp[0], g->sp += 1; } } }
  if (!g_ok(g = enscope(g, (struct env*) nil, nil, nil))) return g;
  struct env *c = (void*) ptr(pop1(g));
  word x = g->sp[0];
@@ -2934,48 +2917,59 @@ static struct g* g_z_getc(struct g*g) {
    continue; }
  return g; }
 
-// --- one non-recursive reader for both g_read1 (multi=0) and g_reads (multi=1) ---
+// --- one non-recursive STRUCTURAL reader for g_read1 (multi=0) and g_reads
+// (multi=1) --- it knows tokens, parens, strings, and the value surface (the
+// printer's read-back contract: ' ` , @ # ~), and nothing else: operator
+// sigils read as plain symbols, factored at COMPILE time by the opfix pass
+// (prelude.l) -- so reading is environment-free and the same machinery
+// serves data (read) and code (ev = opfix after read).
 // `ctx` (kept at sp[0]) is an explicit stack of frames, top = car, so the nesting
 // that used to recurse in C now lives on the l heap (and rides GC). A frame is
 // either a *list accumulator* — a pair (head . tail) holding the elements read so
 // far in source order, ((nil . nil) when empty), built in place by appending at
 // `tail` so no reverse pass is needed — or a *reader-macro* — the wrap symbol \ qq
-// uq uqs, recognised by symp. A finished datum is `delivered` to the top frame:
-// appended to a list, or wrapped and re-delivered; with no frame left it is the
-// result. Everything lives on the l stack so GC relocates it across the allocs
-// that reading does.
+// uq uqs hash tuple plex clift, recognised by symp. A finished datum is `delivered`
+// to the top frame: appended to a list, or wrapped/spliced and re-delivered; with
+// no frame left it is the result. Everything lives on the l stack so GC relocates
+// it across the allocs that reading does.
 
 static g_inline struct g *push_frame(struct g *g) {     // push an empty (head . tail) accumulator
  return gxl(gxl(g_push(g, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
 static g_inline struct g *push_wrap(struct g *g, char const *nom) {
  return gxl(intern(g_strof(g, nom))); }        // ctx' = (wrapsym . ctx)
-// N-ary operator wrap: frame = (count . (head . tail)), the accumulator seeded
-// with the operator name so completion delivers (name d1 .. dN) directly.
-static struct g *push_wrapn(struct g *g, word name, int n) {
- g = g_push(g, 1, name);
- g = gxr(g_push(g, 1, nil));                       // s = (name . nil)
- g = gxl(g_push(g, 1, g_ok(g) ? g->sp[0] : nil));  // (s . s): head = tail = s
- g = gxl(g_push(g, 1, putfix(n)));                 // (n . (s . s))
- return gxl(g); }                                  // ctx' = (frame . ctx)
-// a pending wrap (vs a list accumulator): an arity-1 wrapsym, or an N-ary frame
-// whose car is a positive count (a list frame's car is nil or a pair).
-static g_inline bool wrap_framep(word f) {
- return symp(f) || (twop(f) && fixp(A(f)) && !nilp(A(f))); }
-// a FILLED N-ary wrap: all operands in, fold deferred so a following infix
-// operator can capture the last operand (right-associativity). count nil
-// distinguishes it from an empty list frame, whose cdr is nil.
-static g_inline bool filled_wrapp(word f) {
- return twop(f) && nilp(A(f)) && twop(B(f)); }
-// could this symbol name be an infix operator? cheap pre-filter before the
-// dict probe: any alphanumeric byte rules it out.
-static g_inline bool punctsymp(word x) {
- struct g_str *s = symp(x) ? sym(x)->nom : 0;
- if (!s || !strp(word(s)) || !s->len) return false;
- for (uintptr_t i = 0; i < s->len; i++) {
-  char c = s->bytes[i];
-  if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
-   return false; }
- return true; }
+// the LEXER LAW, operator half. a token led by an operator (punctuation)
+// char is a maximal run of operator chars -- a SIGIL, read as one plain
+// symbol; the opfix compile pass (prelude.l) factors it against
+// dict['operators] later, so the reader is purely structural. a run stops
+// at name chars (alnum/_), whitespace, delimiters, and the value-surface
+// chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
+// still contain @ ~ $ ! . (the kebab law for names is unchanged).
+static g_inline bool op_break(int c) {
+ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+        c == '_' || c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' ||
+        c == ';' || c == '#' || c == '(' || c == ')' || c == '[' || c == ']' ||
+        c == '{' || c == '}' || c == '"' || c == '\'' || c == '`' || c == ',' ||
+        c == '@' || c == '~' || c == 0 || c == EOF || c >= 128; }
+// read a maximal operator run starting with c -> the interned symbol. a
+// trailing '-' immediately before a digit is the next number's sign, not
+// part of the run: the run is shortened by one and '-' re-dispatched via
+// *pending (the digit is ungot for gzread1sym), so `!-5` is ! then -5.
+static g_inline struct g *gzread1sym(struct g*g, int c);
+static struct g *gzread1op(struct g *g, int c, int *pending) {
+ uintptr_t n = 1, lim = sizeof(intptr_t);
+ if (g_ok(g = str0(g, sizeof(word))))
+  for (txt((struct g_str*) g->sp[0])[0] = c; g_ok(g); g = grbufg(g, lim), lim *= 2)
+   for (; n < lim; txt(g->sp[0])[n++] = c) {
+    if (!g_ok(g = zgetc(g))) return g;
+    c = g->b;
+    if (!op_break(c)) continue;
+    if (!g_ok(g = zungetc(g, c))) return g;
+    struct g_str *s = str(g->sp[0]);
+    if (n > 1 && txt(s)[n - 1] == '-' && c >= '0' && c <= '9')
+     n -= 1, *pending = '-';
+    len(s) = n;
+    return intern(g); }
+ return g; }
 // recognise the splicing reader-macro wraps -- `#` (interned `hash`) and `@`
 // (interned `tuple`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in gz_parse.
@@ -2991,9 +2985,13 @@ static struct g *gz_parse(struct g *g, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
  // source order); read1: ctx starts empty (returns the first complete datum).
  g = multi ? gxl(gxl(g_push(g, 3, nil, nil, nil))) : g_push(g, 1, nil);
+ int pending = 0;
  for (;;) {
-  if (!g_ok(g = g_z_getc(g))) return g;
-  int c = g->b, c2 = EOF;
+  int c, c2 = EOF;
+  if (pending) c = pending, pending = 0;               // a '-' shed from an operator run
+  else {
+   if (!g_ok(g = g_z_getc(g))) return g;
+   c = g->b; }
   switch (c) {
    case '(': case '[': case '{': g = push_frame(g); continue;   // [ ] { } are () synonyms
    case '~':                                            // ~(re im)->(plex re im) [construct]; ~x->(clift x)
@@ -3006,15 +3004,16 @@ static struct g *gz_parse(struct g *g, bool multi) {
     if ((c2 = g->b) == '@') { g = push_wrap(g, "uqs"); continue; }
     if (c2 != EOF) g = zungetc(g, c2);
     g = push_wrap(g, "uq"); continue;
+   // the value surface -- the printer's read-back contract, environment-free,
+   // so it lives here in the structural reader (with ~ and , above), NOT in
+   // the operator table: ' ` # @ each wrap the next datum.
+   case '\'': g = push_wrap(g, "\\"); continue;        // quote: 'x = (\ x)
+   case '`': g = push_wrap(g, "qq"); continue;
+   case '#': g = push_wrap(g, "hash"); continue;       // (#! comments die in g_z_getc)
+   case '@': g = push_wrap(g, "tuple"); continue;
    case ')': case ']': case '}':
     if (nilp(g->sp[0])) return encode(g_core_of(g), g_status_eof);   // stray ) / read1
-    if (filled_wrapp(A(g->sp[0]))) {                   // fold one filled wrap; requeue the closer
-     word F = A(g->sp[0]);
-     g->sp[0] = B(g->sp[0]);                           // pop the wrap (ctx is at sp[0] here)
-     g = g_push(g, 1, A(B(F)));                        // its (name ..) form is the datum
-     g = zungetc(g, c);
-     break; }
-    if (wrap_framep(A(g->sp[0]))) return encode(g_core_of(g), g_status_more); // wrap wants operands
+    if (symp(A(g->sp[0]))) return encode(g_core_of(g), g_status_more); // wrap wants its operand
     g = g_push(g, 1, AA(g->sp[0]));                    // d = head of the closed frame
     if (g_ok(g)) {
      if (nilp(g->sp[0])) g->sp[0] = empty_sym;         // () -- the empty symbol, not 0
@@ -3022,91 +3021,24 @@ static struct g *gz_parse(struct g *g, bool multi) {
     break;                                             // -> deliver d
    case EOF:
     if (nilp(g->sp[0])) return encode(g_core_of(g), g_status_eof);
-    if (filled_wrapp(A(g->sp[0]))) {                   // fold one filled wrap; EOF recurs
-     word F = A(g->sp[0]);
-     g->sp[0] = B(g->sp[0]);
-     g = g_push(g, 1, A(B(F)));
-     break; }
-    if (!(multi && nilp(B(g->sp[0])) && !wrap_framep(A(g->sp[0]))))
+    if (!(multi && nilp(B(g->sp[0])) && !symp(A(g->sp[0]))))
      return encode(g_core_of(g), g_status_more);       // unclosed list / pending wrap
     g = g_push(g, 1, AA(g->sp[0]));                    // close the top accumulator -> its head
     if (g_ok(g)) g->sp[1] = B(g->sp[1]);
     break;
    case '"': g = gzread1str(g); break;
-   default: {                                          // operator table, else a symbol/number token
-    struct g *cg = g_core_of(g);
-    struct g_atom *os = sym_probe(cg, "operators", 9);
-    word t = os ? g_mapget(cg, nil, word(os), cg->dict) : nil;
-    word v = mapp(t) ? g_mapget(cg, nil, putfix(c), t) : nil;
-    if (symp(v) && v != empty_sym) { g = gxl(g_push(g, 1, v)); continue; }   // name -> arity-1 wrap
-    if (twop(v) && symp(A(v)) && A(v) != empty_sym && fixp(B(v))) {          // (name . arity)
-     intptr_t n = getfix(B(v));
-     if (n == 1) { g = gxl(g_push(g, 1, A(v))); continue; }
-     if (n >= 2 && n <= 7) { g = push_wrapn(g, A(v), (int) n); continue; } } // junk arity: not an op
-    g = gzread1sym(g, c);
+   default:                                            // operator run, else a symbol/number token
+    g = c != '-' && c != '+' && !op_break(c)
+      ? gzread1op(g, c, &pending)                      // sigil: a plain symbol, factored by opfix later
+      : gzread1sym(g, c);                              // name/number ('-'/'+' lead numbers and -> etc.)
     if (!g_ok(g)) return g;
-    // reader infix: an all-punct symbol from dict['infix] with a left operand
-    // available -- the top frame is a non-empty list frame or a filled wrap.
-    // It captures the operand and pends for arity-1 more (right-associative:
-    // capturing FROM a filled wrap nests the new operator inside it).
-    if (symp(g->sp[0]) && punctsymp(g->sp[0]) && !nilp(g->sp[1])) {
-     struct g *c2 = g_core_of(g);    // NOT cg: gzread1sym may have MOVED the pool
-     word F = A(g->sp[1]);
-     bool fw = filled_wrapp(F);
-     bool lf = !fw && twop(F) && !fixp(A(F));          // list frame with elements (head is a cons)
-     if (fw || lf) {
-      struct g_atom *is = sym_probe(c2, "infix", 5);
-      word tb = is ? g_mapget(c2, nil, word(is), c2->dict) : nil;
-      word iv = mapp(tb) ? g_mapget(c2, nil, g->sp[0], tb) : nil;
-      if (twop(iv) && symp(A(iv)) && fixp(B(iv)))      // (name . arity): an alias --
-       g->sp[0] = A(iv), iv = B(iv);                   // % desugars to mod
-      if (fixp(iv) && getfix(iv) >= 2 && getfix(iv) <= 7) {
-       intptr_t n = getfix(iv);
-       word operand;
-       if (fw) {                                       // pop the wrap's last operand; it pends again
-        word acc = B(F), p = A(acc);
-        while (B(p) != B(acc)) p = B(p);
-        operand = A(B(acc));
-        B(p) = nil, B(acc) = p;
-        A(F) = putfix(1); }
-       else {                                          // pop the list frame's last element
-        word p = A(F);
-        if (p == B(F)) operand = A(p), A(F) = B(F) = nil;
-        else { while (B(p) != B(F)) p = B(p);
-               operand = A(B(F)), B(p) = nil, B(F) = p; } }
-       g = g_push(g, 1, operand);                      // [op sym ctx] -- operand rooted
-       g = gxr(g_push(g, 1, nil));                     // [(op) sym ctx]
-       g = gxr(g);                                     // [(sym op) ctx]
-       g = g_push(g, 1, g_ok(g) ? B(g->sp[0]) : nil);  // [last lst ctx]
-       g = gxr(g);                                     // [acc=(lst . last) ctx]
-       g = gxl(g_push(g, 1, putfix(n - 1)));           // [(n-1 . acc) ctx]
-       g = gxl(g);                                     // ctx' = (W . ctx)
-       continue; } } }
-    break; } }
+    break; }
   if (!g_ok(g)) return g;
   // deliver the datum at sp[0] into the frame stack at sp[1]
   for (bool done = false; g_ok(g) && !done; ) {
    if (nilp(g->sp[1])) {                               // no frame left: the result
     g->sp[1] = g->sp[0], g->sp++;
     return g; }
-   // filled wraps under an incoming (non-infix) datum fold first: each result
-   // is a completed datum delivered inline; the held datum stays at sp[0].
-   while (filled_wrapp(A(g->sp[1]))) {
-    word F = A(g->sp[1]), r = A(B(F));                 // r = the (name op ..) form
-    g->sp[1] = B(g->sp[1]);                            // pop the wrap
-    g = g_push(g, 1, r);                               // [r d ctx] -- r rooted
-    g = gxr(g_push(g, 1, nil));                        // [(r . nil) d ctx]
-    if (!g_ok(g)) return g;
-    word f2 = nilp(g->sp[2]) ? nil : A(g->sp[2]);
-    if (twop(f2) && fixp(A(f2)) && !nilp(A(f2))) {     // pending wrap: collect r
-     word acc = B(f2);
-     B(B(acc)) = g->sp[0], B(acc) = g->sp[0];
-     A(f2) = putfix(getfix(A(f2)) - 1); }              // may fill: the loop re-checks
-    else if (twop(f2)) {                               // list frame: append r
-     if (nilp(A(f2))) A(f2) = B(f2) = g->sp[0];
-     else B(B(f2)) = g->sp[0], B(f2) = g->sp[0]; }
-    else __builtin_trap();                             // unreachable under an N-ary wrap
-    g->sp++; }                                         // pop newcons -> [d ctx]
    if (symp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
     if (hashsym(A(g->sp[1])) && g->sp[0] == empty_sym) { // #() ONLY -> (table 0): the empty hash
      g->sp[0] = nil;                                   // (#0 is NOT empty: it boxes 0 -- see hashtx)
@@ -3123,13 +3055,6 @@ static struct g *gz_parse(struct g *g, bool multi) {
      g = gxr(g_push(g, 1, nil));                       // (d . nil)
      g = gxl(g_push(g, 1, g_ok(g) ? A(g->sp[1]) : nil)); // (wrapsym . (d))
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); } }
-   else if (twop(A(g->sp[1])) && fixp(AA(g->sp[1])) && !nilp(AA(g->sp[1]))) { // N-ary wrap: collect d
-    g = gxr(g_push(g, 1, nil));                        // newcons = (d . nil)
-    if (g_ok(g)) {
-     word f = A(g->sp[1]), acc = B(f);                 // f = (count . (head . tail))
-     B(B(acc)) = g->sp[0], B(acc) = g->sp[0];          // append at the tail (head pre-seeded)
-     A(f) = putfix(getfix(A(f)) - 1);                  // 0 = FILLED: folds lazily (right-assoc)
-     g->sp++; done = true; } }
    else {                                              // list: append d at the frame's tail
     g = gxr(g_push(g, 1, nil));                        // newcons = (d . nil)
     if (g_ok(g)) {
