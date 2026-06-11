@@ -283,12 +283,12 @@
 ; reached the end of the list); caap cabp .. cbbbp are the compounds, read right to left
 ; like their classic c[ad]+r ancestors (which are gone, as is the X alias).
 ; (sort l) orders by the total order, in C (descending = rev); (msort le l)
-; takes a predicate. (iota n) counts out the first n charms, '(0 .. n-1).
+; takes a predicate. (jot n) counts out the first n charms, '(0 .. n-1).
 ; the other higher-order functions live in the prelude.
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cbp '(1 2 3))) (3 = (cabp '(2 3 4))) ('(1 2) = (cons 1 (cons 2 0)))
  !(cap 0) ('x = (cap 'x)) !(cbp 'x)              ; no cap at the end of the list; an atom is its own cap
- ('(0 1 2) = (iota 3)) !(iota 0) (3 = $(iota 3)) ; iota: the first n charms; the empty count is nothing
+ ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n charms; the empty count is nothing
  ('(2 3 4) = (map inc '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
  ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (msort (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
