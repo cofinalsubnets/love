@@ -5,7 +5,7 @@
 ; charlist then realized with `string` (one O(n) allocation, not O(n^2) scat).
 ; the hash stays < 2^31, so the checksum is lua-safe and matches every language.
 (: hmod 1000000007
-   (strhash s) (: n (sat s)
+   (strhash s) (: n (tally s)
      (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
    (mkdata n) (string ((: (go i) (? (< i n) (cons (+ 32 (% (* 7 i) 95)) (go (+ i 1))))) 0))
    data (mkdata 20000)

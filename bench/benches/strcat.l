@@ -4,7 +4,7 @@
 ; the hash is taken mod a prime so it stays < 2^31 and every language -- lua
 ; included (64-bit ints, no bignums) -- agrees on the checksum.
 (: hmod 1000000007
-   (strhash s) (: n (sat s)
+   (strhash s) (: n (tally s)
      (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
    (strbuild n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 ""))
    strcat-n 4000
