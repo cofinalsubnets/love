@@ -70,15 +70,23 @@ out/lib/tests0.h: $t
 	@echo GEN	$@
 	@cat $t | $(sed_lit) > $@
 
-# love_version.h: the build's git hash, surfaced in the runtime as the `version-number`
-# global (love.c g_ini_0). Regenerated every make but only rewritten when the hash changes,
-# so l.o relinks on a new commit, not on every build. Frontends without it on the include
-# path fall back to "unknown" (love.c uses __has_include).
+# love_version.h: the build's VCS hash, surfaced in the runtime as the `version-number`
+# global (love.c g_ini_0). VCS-AGNOSTIC: a _darcs/ repo stamps darcs-<12-hex patch hash>
+# (-dirty when darcs whatsnew is non-empty), else git describe, else "unknown" -- so the
+# darcs snapshot import carries this rule verbatim and stamps itself. Regenerated every
+# make but only rewritten when the hash changes, so l.o relinks on a new commit, not on
+# every build. Frontends without it on the include path fall back to "unknown" (love.c
+# uses __has_include).
 .PHONY: force_version
 force_version: ;
 out/lib/love_version.h: force_version
 	@mkdir -p out/lib
-	@printf '#define LOVE_VERSION "%s"\n' "$$(git -C $(R) describe --always --dirty 2>/dev/null || echo unknown)" > $@.tmp
+	@if [ -d $(R)/_darcs ]; then \
+	  v="darcs-$$(darcs log --repodir $(R) --last 1 2>/dev/null | awk '/^patch/{print substr($$2,1,12)}')"; \
+	  darcs whatsnew --repodir $(R) >/dev/null 2>&1 && v="$$v-dirty"; \
+	else \
+	  v="$$(git -C $(R) describe --always --dirty 2>/dev/null || echo unknown)"; \
+	fi; printf '#define LOVE_VERSION "%s"\n' "$$v" > $@.tmp
 	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo GEN $@; fi
 
 # ====================================================================
