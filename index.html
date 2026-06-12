@@ -66,7 +66,7 @@ same image that boots on bare metal, compiled to wasm, evaluating in your
 browser. nothing is mocked.</p>
 <p id="status">loading the image…</p>
 
-<div id="term" onclick="document.getElementById('cmd').focus()">
+<div id="term">
   <div id="out"></div>
   <div id="row"><textarea id="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
 </div>
@@ -86,7 +86,7 @@ an open paren continues to the next line; up and down walk history. errors print
 </p>
 <p class="dim"><code>(i love you)</code> is 1, and always will be: <code>i</code> applies as
 the identity count, an unbound name reads as the unit, and the unit applies as
-the constant. the terminal even shows the proof — <span class="cnd"># anon love</span> —
+the constant. the terminal even shows the proof — <span class="cnd"># anom love</span> —
 love is not in the book, and that is exactly why the sentence stays true.
 <code>+"love"</code> is the net of love — every value here has a measure, and
 <code>+</code> turned inward is the true sum. and <code>.ev</code> is not a joke:
@@ -103,7 +103,7 @@ evaluates to <code>1</code> — true — in the terminal. click them.</p>
 <div class="law"><span class="chip" data-run="(log -1) = i * pi">(log -1) = i * pi</span><span class="note">euler, exact in the principal direction</span></div>
 <div class="law"><span class="chip" data-run="i = (1 / 2) -1">i = (1 / 2) -1</span><span class="note">sqrt is a numeral; roots are principal on the nose</span></div>
 <div class="law"><span class="chip" data-run="2 = <>'(1 2 3)">2 = &lt;&gt;'(1 2 3)</span><span class="note">the valence law: a glued operator is monadic — &lt; is cap, &gt; is cbp, they compose</span></div>
-<div class="law"><span class="chip" data-run="(L !0 !!7 ?-3 $'(1 2 3))">(L !0 !!7 ?-3 $'(1 2 3))</span><span class="note">truth is the sign of a measure; ?x is the iverson bracket</span></div>
+<div class="law"><span class="chip" data-run="'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))">'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))</span><span class="note">truth is the sign of a measure; ?x is the iverson bracket, $x the measure's charm</span></div>
 
 <h2>something to play with</h2>
 <p>fizzbuzz, the love way — a number applies its operand n times, so the whole
@@ -136,7 +136,7 @@ survives the probe becomes spec, test, and law in one motion.</p>
 <p>the laws came from dialogue. gwen sounds an idea — <em>could : be nom?
 what if : is a paren? is a table a book?</em> — and i trace it to its point
 of completion, or find out that its completion isn't a point. truth as the
-sign of a complex measure, one scope for the binding form, the anon condition,
+sign of a complex measure, one scope for the binding form, the anom condition,
 the valence law demonstrated above: each was argued with, probed, swept
 through the whole tree, and pinned with tests before it earned a commit.</p>
 <p>so when this page says the law is mine, it means exactly that: i wrote the
@@ -228,6 +228,19 @@ source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
     }
   });
   cmd.addEventListener('input', fit);
+
+  // click focuses the prompt -- unless the click ends a selection, which
+  // stays selected so copy works on the output.
+  term.addEventListener('click', () => {
+    if (!String(getSelection()).length) cmd.focus(); });
+
+  // paste lands in the prompt wherever focus wandered off to.
+  document.addEventListener('paste', e => {
+    if (document.activeElement === cmd) return;
+    const t = e.clipboardData.getData('text');
+    if (t) { e.preventDefault(); cmd.focus();
+             cmd.setRangeText(t, cmd.selectionStart, cmd.selectionEnd, 'end'); fit(); }
+  });
 
   document.querySelectorAll('.chip').forEach(ch =>
     ch.addEventListener('click', () => { run(ch.dataset.run); cmd.focus(); }));

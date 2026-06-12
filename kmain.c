@@ -532,7 +532,7 @@ void kmain(void) {
   // load the prelude, then run the l read-eval-print loop. its line
   // editor (in repl.l) drives the console; PS/2 keyboard and serial
   // input both arrive as ANSI escape sequences the l edev decodes.
-  g_fin(g_evals_(g, "("
+  struct g *r = g_evals_(g, "("
 #include "egg.h"
  g_egg_pre
 #include "prelude.h"
@@ -548,7 +548,10 @@ void kmain(void) {
 #else
  "(shell 0)"
 #endif
-  )); }
+  );
+  // a terminal scare gets the honest face on the serial console before reset
+  if (g_code_of(r) == g_status_scare) g_scare_face_(r);
+  g_fin(r); }
 #ifdef K_TEST
  k_qemu_exit(0);   // corpus done with no failures -> quit qemu (exit 0)
 #endif

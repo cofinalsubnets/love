@@ -134,38 +134,38 @@
     _ (wait a) _ (wait b)
     (= 1 (peep t 'flag 0)))
 
- ; --- kill ---
+ ; --- hush ---
 
- ; kill on an unknown pid: 0, no-op.
- (= 0 (kill 99999))
- ; kill on a non-numeric pid: 0.
- (= 0 (kill nil))
- ; kill on self (main = 0): 0 (self-kill impossible by construction).
- (= 0 (kill 0))
+ ; hush on an unknown pid: 0, no-op.
+ (= 0 (hush 99999))
+ ; hush on a non-numeric pid: 0.
+ (= 0 (hush nil))
+ ; hush on self (main = 0): 0 (self-hush impossible by construction).
+ (= 0 (hush 0))
 
- ; kill a running task: returns 1. The task is gone from the ring, so
+ ; hush a running task: returns 1. The task is gone from the ring, so
  ; wait on its pid returns 0 (unknown).
  (: t (tablet 0)
     _ (pin t 'flag 0)
     p (spawn (\ _ (: (loop _) (do (yield 0) (pin t 'flag 1) (loop 0)) (loop 0))) 0)
-    r (kill p)
+    r (hush p)
     (&& (= 1 r) (= 0 (wait p))))
 
- ; kill a dormant task (already finished): also returns 1, then wait sees 0.
+ ; hush a dormant task (already finished): also returns 1, then wait sees 0.
  (: p (spawn (\ _ 42) 0)
     _ (yield 0)
     ; p is dormant now (done? would be 1).
-    (&& (= 1 (kill p)) (= 0 (wait p))))
+    (&& (= 1 (hush p)) (= 0 (wait p))))
 
- ; double-kill: second kill is a no-op since the pid is gone from the ring.
+ ; double-hush: second hush is a no-op since the pid is gone from the ring.
  (: p (spawn (\ _ (: (loop _) (do (yield 0) (loop 0)) (loop 0))) 0)
-    (&& (= 1 (kill p)) (= 0 (kill p))))
+    (&& (= 1 (hush p)) (= 0 (hush p))))
 
  ; killing one of several tasks leaves the others intact.
  (: t (tablet 0)
     a (spawn (\ _ (: (loop _) (do (yield 0) (loop 0)) (loop 0))) 0)
     b (spawn (\ x (* x 10)) 7)
-    _ (kill a)
+    _ (hush a)
     rb (wait b)
     (&& (= 0 (wait a)) (= 70 rb)))
 
@@ -189,11 +189,11 @@
     _ (wait w) _ (wait t)
     (< 5 (peep ticks 0 0)))
 
- ; a peer can kill a task while it is mid-multiply, not only once it finishes:
- ; the worker parks at a yield inside the product, so kill finds it runnable.
+ ; a peer can hush a task while it is mid-multiply, not only once it finishes:
+ ; the worker parks at a yield inside the product, so hush finds it runnable.
  (: w (spawn (\ _ (* (200000 2) (200000 2))) 0)
     _ (yield 0)
-    (&& (= 1 (kill w)) (= 0 (wait w))))
+    (&& (= 1 (hush w)) (= 0 (wait w))))
 
  ; --- wake_at scheduler behavior ---
 
@@ -214,10 +214,10 @@
     rb (wait b)               ; ~70ms more
     (&& (= 1 ra) (nilp db) (= 2 rb)))
 
- ; kill a sleeping task: scheduler skips it via wake_at, but kill walks the
+ ; hush a sleeping task: scheduler skips it via wake_at, but hush walks the
  ; ring directly and finds it regardless of state.
  (: p (spawn (\ _ (do (sleep 10000) 'never)) 0)
-    r (kill p)
+    r (hush p)
     (&& (= 1 r) (= 0 (wait p))))
 
  ; sleep tasks coexist with non-sleeping ones: a worker that yields ap

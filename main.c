@@ -393,5 +393,8 @@ int main(int argc, char const **argv) {
     g = boot(g, argp); }
   switch (g_code_of(g)) {
    default: break;
-   case g_status_scare: fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(g)->len); break; }
+   case g_status_scare:               // the honest face: "# a b" when the scare
+    if (!g_scare_face_(g))            // said something; bare (no data) = oom
+     fprintf(stderr, "# oom@len=%ld\n", (long) g_core_of(g)->len);
+    break; }
   return g_fin(g); }

@@ -6,7 +6,7 @@
 #include <stdarg.h>
 
 #define Width(_) b2w(sizeof(_))
-#define g_core_of(g) ((struct g*)((intptr_t)(g)&~(sizeof(intptr_t)-1)))
+#define g_core_of(g_) ((struct g*)((intptr_t)(g_)&~(sizeof(intptr_t)-1)))
 #define g_code_of(g) ((enum g_status)((intptr_t)(g)&(sizeof(intptr_t)-1)))
 #define g_ok(g) (g_code_of(g) == g_status_ok)
 
@@ -127,9 +127,12 @@ struct g {
   struct {
    g_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
                   // macro table is book[nil] -- no separate field.
-   g_word anon;   // the pre-interned 'anon atom: the condition tag for reading
+   g_word anom;   // the pre-interned 'anom atom: the condition tag for reading
                   // a nom not in the book. rooted here (v0..end) so the raise
                   // path never allocates and the weak intern map keeps it.
+   g_word scare_a, scare_b; // the last bare scare's condition data, stashed at
+                  // the raise so a terminal exit can speak (g_scare_face_);
+                  // nil nil = the bare oom, which has no data. GC-traced here.
   union {
    g_word x;
    struct g_io {
@@ -194,6 +197,11 @@ struct g
  *g_ini_s(void*, uintptr_t),
  *g_evals_(struct g*, const char*),
  *g_defn(struct g*, struct g_def const*, uintptr_t);
+
+// the terminal scare face: print "# a b\n" (show forms) to the err port from
+// the stashed condition data and answer 1; the bare scare (nil nil -- oom,
+// which has no data) answers 0 so the frontend can report it raw.
+int g_scare_face_(struct g*);
 
 extern struct g_io g_stdin, g_stdout, g_stderr;
 

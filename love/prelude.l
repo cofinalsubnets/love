@@ -508,9 +508,9 @@
 ; expression. a reference to a name at-or-before its own (first) binding is a
 ; FORWARD reference; the name is indirected through a CELL -- a box (a fresh
 ; map, the # adjoint of :) keyed by the binding site's nom: prepend
-; `cell (tablet 0)`, store via pin, read via (anon cell 'nom) -- the nif
+; `cell (tablet 0)`, store via pin, read via (anom cell 'nom) -- the nif
 ; VALUES, not their names, so the rewrite survives the egg pulling names and
-; user bindings shadowing them. a pre-fill read is a map miss, i.e. THE ANON
+; user bindings shadowing them. a pre-fill read is a map miss, i.e. THE ANOM
 ; CONDITION with the binding-site nom as payload: trappable, () untrapped --
 ; read-before-pin is one law at every depth, local or book. a value binding
 ; boxes on ANY forward reference; a lambda binding only on a DIRECT (not
@@ -553,7 +553,7 @@
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nilp (memq (cap p) ns))) cs)
    (sub cs x) (?
-    (symp x) (: p (assq x cs) (? (twop p) (list anon (cabp p) (list '\ (cbbp p))) x))
+    (symp x) (: p (assq x cs) (? (twop p) (list anom (cabp p) (list '\ (cbbp p))) x))
     (atomp x) x
     (: h (cap x) (?
       (= h '\) (? (atomp (cbbp x)) x (: r (lp x) (cons '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cbp r)))))))

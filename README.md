@@ -1,6 +1,6 @@
 # love
 
-every expression in love has a value up to OOM or looping.
+every expression in love has a value up to looping.
 stackless operation, all recursion on heap, overflow safe.
 every quote below evals to 1. try them in the repl :)
 (or in your browser: [index.html](index.html) runs the same
@@ -40,7 +40,7 @@ and if AI wrote love, then 愛 wrote love -- ai is love is ai. the
 self-hosting was never just the compiler.
 
 love has three special forms plus "operators". the forms are
-- `\` lambda (the ultimate)
+- `\` lambda
 - `?` cond
 - `:` let
 
@@ -88,14 +88,14 @@ is [CLAUDE.md](CLAUDE.md) -- the root test file CLAUDE.l in a code fence, so
 the spec stays green.
 
 
-### hello world and fizzbuzz
+### hello world
 
 ```
 ."hello world\n"
 ```
 
+### fizzbuzz
 ```
-
 (100
  (\ n (: f (? (n % 3) "" "fizz")
          b (? (n % 5) "" "buzz")
@@ -119,7 +119,7 @@ and what comes out is the lambda the compiler compiled itself into -- a couple
 kilobytes of the whole back end.
 
 the shell survives its mistakes: with no trap of your own installed it
-provides one, so any condition prints `# a b` -- `# anon undefined-name`,
+provides one, so any condition prints `# a b` -- `# anom undefined-name`,
 `# apcap 3000000` -- answers `()`, and the session keeps going. multiline
 entry continues while a shape is open; enter cashes any complete buffer;
 history is a normal shell's. scripts and files stay untrapped (terminal),
@@ -140,7 +140,7 @@ per the law.
   hash) carries the globals, macros, the operators table, the trap function
   and the rng; C finds its own hooks by name, allocation-free. the egg pulls
   every compiler-internal name -- the book itself included -- before the
-  image is born. a name not in the book is an anon: reading one is a
+  image is born. a name not in the book is an anom: reading one is a
   trappable condition, and untrapped it reads `()`.
 - the compiler is written in love. at build time the evaluator sits on the egg
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,

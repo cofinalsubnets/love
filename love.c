@@ -132,7 +132,7 @@ lvm_t lvm_kcall,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
  lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
  lvm_callk, lvm_scare, lvm_anon, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
- lvm_sleep, lvm_donep, lvm_kill, lvm_key,
+ lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_read, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
@@ -566,7 +566,8 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_same, "idp", s2(lvm_same)) \
  _(nif_bsl, "<<", s2(lvm_bsl)) _(nif_bsr, ">>", s2(lvm_bsr))\
  _(nif_band, "&", s2(lvm_band)) _(nif_bor, "|", s2(lvm_bor)) _(nif_bxor, "^", s2(lvm_bxor))\
- _(nif_cons, "cons", s2(lvm_cons)) _(nif_car, "cap", s1(lvm_car)) _(nif_cdr, "cbp", s1(lvm_cdr)) _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
+ _(nif_cons, "cons", s2(lvm_cons)) _(nif_car, "cap", s1(lvm_car)) _(nif_cdr, "cbp", s1(lvm_cdr))\
+ _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
  _(nif_slice, "slice", s3(lvm_slice)) \
  _(nif_read, "read", s2(lvm_read))\
  _(nif_string, "string", s1(lvm_string))\
@@ -574,7 +575,8 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_lamb, "lamb", s1(lvm_lamb))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
  _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "sat", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
- _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull)) _(nif_table, "tablet", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
+ _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull))\
+ _(nif_table, "tablet", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
  _(nif_twop, "twop", s1(lvm_twop)) _(nif_strp, "strp", s1(lvm_strp))\
@@ -596,10 +598,11 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_symp, "symp", s1(lvm_symp)) _(nif_mapp, "mapp", s1(lvm_mapp)) _(nif_fixp, "fixp", s1(lvm_fixp))\
  _(nif_homp, "homp", s1(lvm_homp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
  _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
- _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare)) _(nif_anon, "anon", s2(lvm_anon)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
+ _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
+ _(nif_anon, "anom", s2(lvm_anon)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
  _(nif_spawn, "spawn", s2(lvm_spawn)) _(nif_wait, "wait", s1(lvm_wait)) \
  _(nif_sleep, "sleep", s1(lvm_sleep)) _(nif_donep, "done?", s1(lvm_donep)) \
- _(nif_kill, "kill", s1(lvm_kill)) \
+ _(nif_hush, "hush", s1(lvm_hush)) \
  _(nif_key, "key?", s1(lvm_key)) \
  _(nif_fputbn, "fputbn", s3(lvm_fputbn))\
  _(nif_fputx, "fputx", s2(lvm_fputx))\
@@ -675,6 +678,7 @@ char const *g_nif_name(intptr_t x) {
 static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  memset(g, 0, sizeof(struct g));
  g->len = len0, g->pool = (void*) g, g->malloc = ma, g->free = fr;
+ g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = g_clock();
  // book + macro maps (lookup-lambdas) then the main task text.
  if (g_ok(g = map_new(g)) && g_ok(g = map_new(g)) && g_ok(g = g_have(g, 6))) {
@@ -712,12 +716,12 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   if (g_ok(g = g_strof(g, LOVE_VERSION))) {
    struct g_def vd[] = {{"version-number", g_pop1(g)}};
    g = g_defn(g, vd, countof(vd)); }
-  // the anon condition tag ('anon), pre-interned and rooted (v0..end in
+  // the anom condition tag ('anom), pre-interned and rooted (v0..end in
   // struct g) so lvm_freev's raise path never allocates the tag and the
   // weak intern map keeps the atom across collections.
-  if (g_ok(g = g_strof(g, "anon"))) {
+  if (g_ok(g = g_strof(g, "anom"))) {
    g = intern(g);
-   if (g_ok(g)) g->anon = g_pop1(g); }
+   if (g_ok(g)) g->anom = g_pop1(g); }
   // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prelude, and the
   // opfix source pass (prelude.l, hooked by both compilers at c0 and wev)
@@ -919,7 +923,8 @@ g_noinline struct g *g_please(struct g *g, uintptr_t req0) {
  else return g->t0 = t2, g; // else right size -> all done
  return // allocate a new pool with target size
   !(h = g->malloc(g, len1 * 2 * sizeof(word))) ? // if malloc fails but pool is big enough
-   encode(g, req <= len0 ? g_status_ok : g_status_scare) : // we can still report success
+   (g->scare_a = g->scare_b = nil, // oom is the bare scare: clear any stale stash
+    encode(g, req <= len0 ? g_status_ok : g_status_scare)) : // we can still report success
   (h = gcg(h, h, len1, g),
    g->free(g, g->pool),
    h->t0 = g_clock(),
@@ -1550,7 +1555,7 @@ lvm(lvm_defglob) {
   !g_ok(g = g_mapput(g)) ? gtrap(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
 // lvm_freev (the late-bound global read) is defined below lvm_scare: its
-// miss path is the anon condition and borrows the whole trap apparatus.
+// miss path is the anom condition and borrows the whole trap apparatus.
 
 lvm(lvm_eval) { return Ip++, Pack(g),
  !g_ok(g = c0(g, lvm_jump)) ? gtrap(g) : (Unpack(g), Continue()); }
@@ -1647,6 +1652,7 @@ static union u const trap_drive[] =
 // always take the default.
 static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
                          union u const *K) {
+ if (s == g_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
  if (c->book) {
   struct g_atom *ts = sym_probe(c, "trap", 4);
   word h = ts ? g_mapget(c, nil, word(ts), c->book) : nil;
@@ -1689,18 +1695,18 @@ lvm(lvm_scare) {
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: trap_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
-// the anon miss sentinel: a private static address no book value can equal,
+// the anom miss sentinel: a private static address no book value can equal,
 // so a name bound to nil stays distinct from no entry at all.
-static union u const anon_miss[1];
+static union u const anom_miss[1];
 // The late-bound global read. A hit patches the site to a quote of the value
-// (the fold law's runtime tail). A miss is an ANON -- a nom not in the book,
+// (the fold law's runtime tail). A miss is an ANOM -- a nom not in the book,
 // a trappable condition: with a global trap installed the read raises
-// (trap 1 'anon nom) and the trap's result is the value here; untrapped it
+// (trap 1 'anom nom) and the trap's result is the value here; untrapped it
 // reads (). either way the site stays a freev (no quote patch on a miss):
 // the condition recurs, and a define that lands later is seen.
 lvm(lvm_freev) {
- word v = g_mapget(g, word(anon_miss), Ip[1].x, g->book);
- if (v != word(anon_miss)) return
+ word v = g_mapget(g, word(anom_miss), Ip[1].x, g->book);
+ if (v != word(anom_miss)) return
   Ip[0].ap = lvm_quote,
   Ip[1].x = v,
   Continue();
@@ -1711,20 +1717,20 @@ lvm(lvm_freev) {
   *--Sp = empty_sym,
   Ip += 2,
   Continue();
- word a = g->anon, b = Ip[1].x;
+ word a = g->anom, b = Ip[1].x;
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // trap_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
-// (anon t k): the book read as a value -- lvm_freev's law with the book as an
+// (anom t k): the book read as a value -- lvm_freev's law with the book as an
 // argument (a tablet is a little book; the book is just the outermost one).
-// k present in map t answers the value; a miss is the ANON CONDITION: with a
-// global trap installed the read raises (trap 1 'anon k) and the trap's result
+// k present in map t answers the value; a miss is the ANOM CONDITION: with a
+// global trap installed the read raises (trap 1 'anom k) and the trap's result
 // is the value, untrapped it reads (). boxfix's letrec cells read this way --
 // pre-fill is a miss, the binding-site nom the payload. distinct from peep,
 // whose caller names what absence means.
 lvm(lvm_anon) {
- word v = mapp(Sp[0]) ? g_mapget(g, word(anon_miss), Sp[1], Sp[0]) : word(anon_miss);
- if (v != word(anon_miss)) return
+ word v = mapp(Sp[0]) ? g_mapget(g, word(anom_miss), Sp[1], Sp[0]) : word(anom_miss);
+ if (v != word(anom_miss)) return
   Sp[1] = v,
   Sp++,
   Ip++,
@@ -1737,7 +1743,7 @@ lvm(lvm_anon) {
   Sp++,
   Ip++,
   Continue();
- word a = g->anon;
+ word a = g->anom;
  Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
  Sp[0] = word(Ip + 1), Sp[1] = a;
  return Pack(g), g_raise(g, g_status_scare, a, Sp[2], trap_more_k); }
@@ -1998,7 +2004,7 @@ lvm(lvm_donep) {
  Ip += 1;
  return Continue(); }
 
-lvm(lvm_kill) {
+lvm(lvm_hush) {
  word pid_arg = Sp[0], result = nil;
  intptr_t target = getfix(pid_arg);
  union u *prev = g->tasks;
@@ -2377,6 +2383,22 @@ static struct g*gzputc(struct g*g, int c) {
 static struct g*gzputs(struct g*g, char const *s) {
  while (*s) g = gzputc(g, *s++);
  return g; }
+
+// the terminal scare face (declared in love.h): an untrapped scare's stashed
+// condition data prints as "# a b" -- the shell trap's face -- to the err
+// port; the bare scare (nil nil) is oom, which has no data: answer 0 and let
+// the frontend report it raw. best-effort: a failure mid-print just stops.
+int g_scare_face_(struct g *g) {
+ struct g *c = g_core_of(g);
+ if (!c || (nilp(c->scare_a) && nilp(c->scare_b))) return 0;
+ c->io = &g_stderr;
+ struct g *h = gzputs(c, "# ");   // gfputx may GC and MOVE the core: re-derive
+ if (g_ok(h)) h = gfputx(h, &g_stderr, g_core_of(h)->scare_a);
+ if (g_ok(h)) h = gzputc(h, ' ');
+ if (g_ok(h)) h = gfputx(h, &g_stderr, g_core_of(h)->scare_b);
+ if (g_ok(h)) h = gzputc(h, '\n');
+ if (g_ok(h)) zflush(h);
+ return 1; }
 
 static struct g*gzputn(struct g *g, intptr_t n, uint8_t b) {
  uintptr_t
@@ -5282,7 +5304,7 @@ static g_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb,
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
-// symbols: the PRODUCT ORDER -- name lex first (anon -> "", so the nameless sit
+// symbols: the PRODUCT ORDER -- name lex first (anom -> "", so the nameless sit
 // below every named symbol), then on a name tie between distinct atoms the
 // interned one first (the canonical point precedes the fresh), then the mint
 // serial (`code`; creation order). same-name noms used to compare EQUAL here

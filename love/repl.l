@@ -288,7 +288,7 @@
         (poll _)
           (? (done? pid) (: r (wait pid) _ (putx r) -1)
              (key? 0)    (: c (getc 0)
-                            (? (= c 3) (do (puts "^C") (kill pid) -1)
+                            (? (= c 3) (do (puts "^C") (hush pid) -1)
                                (poll 0)))
              (do (yield 0) (poll 0)))
         (poll 0))
