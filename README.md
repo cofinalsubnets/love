@@ -36,46 +36,48 @@ action is as defined as generically efficient as possible.
 - public domain portable C with zero dependencies
 - claude can write love like a champ no cap
 
-and if AI wrote love, then 愛 wrote love -- ai is love is ai. the
-self-hosting was never just the compiler.
-
 love has three special forms plus "operators". the forms are
 - `\` lambda
 - `?` cond
 - `:` let
 
-the prefix reader operators aka sigils are
-- `$` sat (saturating sum to fixed width and clamp nonnegative -- `$` of a list is APL's `+/`)
-- `.` dot (print and return item)
-- `!` not (negation); `!!$` is the iverson bracket, and defines the `?` condition
+the reader is structural and knows no operator tables -- just tokens, parens,
+strings, and the value surface:
 - `'` quote (desugars to one-operand lambda)
-
-plus the data constructors
+- `` ` `` quasiquote, `,` unquote, `,@` splice
 - `@` at (array literal)
 - `#` hash (hash/box literal)
-- `~` plex (complex literal/conjugate)
+- `~` wave (complex literal `~(re im)`; a bare `~x` lifts a real, conjugates a complex)
 
-and the infix operators
-- `+ - * / = < <= > >= | &`
-- `?` ternary (the cond form infix: `(t ? a b)`)
-- `%` mod
-- `<-` pin, `->` peep (the collection accessors: `(t <- k v)`, `(t -> k d)`)
+operator sigils are plain symbols until the compiler factors them against the
+one `operators` table (per-form extensible: pin an entry and the next form
+compiles with it):
+- at one: `$` sat (the value's net -- its content measure -- clamped once,
+  `max(0, ceil)`; `!!$` is the iverson bracket, the truth bit `?` dispatches on),
+  `!` nilp (not), `.` dot (print and return item)
+- at two: `+ - * / % = < <= > >= | &`
+- at three: `?` (the cond form infix: `(t ? a b)`)
+- aliases: `<-` pin, `->` peep (the collection accessors: `(t <- k v)`, `(t -> k d)`)
+- factorization is greedy, longest prefix first: `!=` is `!` of `=`, `!!`
+  double-negates, and a token that doesn't factor stays one symbol (`&&`, `>>=`)
 
 and the valence law: every operator is two operators -- GLUED IS MONADIC,
 SPACED IS DYADIC. head position never fuses, so calls, sections and minified
 source read as ever (`(+ 1 2)`, `(1 +)`).
 - `<x >x` cap and cbp; `<>x ><x <<x >>x` the compounds, by factorization
 - `+l` the net -- the true sum, APL's `+/` -- and `*l` the product
-- `|x` abs, `-x` neg (of `(...)`-data; `-3` is a number, `-x` a name),
-  `/x` reciprocal, `%x` frac, `?x` the iverson bracket
+- `|x` abs, `-x` neg (`+` and `-` fuse only to `( ' " @ ~ #`, so `-3` stays a
+  number and `-x` a kebab name), `/x` reciprocal, `%x` frac, `?x` the iverson bracket
 - `$x !x .x` as ever: sat, not, print
+- a glued sigil binds tightest: `$"ab" + 2` is `(+ ($ "ab") 2)`, i.e. 197
 the numerals still carry the power family (`-1 x = 1 / x`, `(1 / 2) x =
 sqrt x`, `n x = x ** n`); words cover the rest (`abs int gcd // << >> ^
 sin cos log pow`), and general folds stay words: `(foldl f z l)`.
 
 pure lisp is the lassoc subset: `?` is still the cond form at the head of a
-list, and bare punct symbols escape in parens -- `(+)` is `+` as a value --
-so these are true too:
+list, bare punct symbols escape in parens -- `(+)` is `+` as a value -- and
+quote interiors are data (operators under `'` stay plain symbols), so these
+are true too:
 - `12 = (foldl (+) 0 '(3 4 5))`
 - `24 = (foldl (*) 1 '(1 2 3 4))`
 - `'(1 2 3) = (sort '(3 1 2))`
