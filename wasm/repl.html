@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ll lisp (wasm)</title>
+  <title>love (wasm)</title>
   <style>
     body { font-family: monospace; max-width: 60em; margin: 2em auto; padding: 0 1em; }
     h1 { margin-bottom: .25em; }
@@ -20,11 +20,11 @@
              resize: none; overflow: hidden; line-height: 1.5; outline: none; }
     #status { color: #888; font-size: .9em; }
   </style>
-  <script src="ll.js"></script>
+  <script src="llove.js"></script>
 </head>
 <body>
   <header>
-    <h1>ll lisp (wasm)</h1>
+    <h1>love (wasm)</h1>
     <p id="status">loading…</p>
   </header>
 
@@ -43,12 +43,12 @@
     const input  = document.getElementById('input');
 
     const t0 = performance.now();
-    const M = await GwenModule();
-    const init  = M.cwrap('gwen_init',      'number', []);
-    const eval_ = M.cwrap('gwen_eval',      'number', ['string']);
-    const oPtr  = M.cwrap('gwen_out_ptr',   'number', []);
-    const oLen  = M.cwrap('gwen_out_len',   'number', []);
-    const oRst  = M.cwrap('gwen_out_reset', null,     []);
+    const M = await Love();
+    const init  = M.cwrap('love_init',      'number', []);
+    const eval_ = M.cwrap('love_eval',      'number', ['string']);
+    const oPtr  = M.cwrap('love_out_ptr',   'number', []);
+    const oLen  = M.cwrap('love_out_len',   'number', []);
+    const oRst  = M.cwrap('love_out_reset', null,     []);
 
     const s = init();
     if (s !== 0) { status.textContent = 'init failed (status ' + s + ')'; return; }

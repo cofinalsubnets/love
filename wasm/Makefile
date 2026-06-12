@@ -20,7 +20,7 @@ core_o = $(g_c:../%.c=$(o)/%.o)
 objs = $(host_o) $(core_o)
 
 # inc/ holds wasm's <data.h> override (no flat code-address space, so it
-# resolves data kinds by sentinel ap rather than .gwen_data slot index).
+# resolves data kinds by sentinel ap rather than .love_data slot index).
 # It must be its own include dir, NOT ".": emcc deprioritizes the compiler's
 # cwd in the <...> search path, which would let ../data.h win instead.
 CFLAGS = -std=gnu2x -Os -g0 -Dg_tco=0 \
@@ -29,17 +29,17 @@ CFLAGS = -std=gnu2x -Os -g0 -Dg_tco=0 \
   -Iinc -I.. -I../out/lib
 
 EMFLAGS = \
-  -sMODULARIZE=1 -sEXPORT_NAME=GwenModule \
+  -sMODULARIZE=1 -sEXPORT_NAME=Love \
 	-sASSERTIONS -sSINGLE_FILE=1 \
   -sINITIAL_MEMORY=16MB -sALLOW_MEMORY_GROWTH=1 \
-  -sEXPORTED_FUNCTIONS=_gwen_init,_gwen_eval,_gwen_out_ptr,_gwen_out_len,_gwen_out_reset,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_love_init,_love_eval,_love_out_ptr,_love_out_len,_love_out_reset,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAPU32
 
-all: l.js
+all: love.js
 
 # prelude.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
-# the browser feeds the REPL through gwen_eval).
+# the browser feeds the REPL through love_eval).
 ../out/lib/egg.h: ../love/egg.l
 ../out/lib/prelude.h: ../love/prelude.l
 ../out/lib/ev.h: ../love/ev.l
@@ -48,7 +48,7 @@ all: l.js
 
 # Link step: emcc's link is multi-input, so ccache can't cache it -- use
 # bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
-l.js: $(objs)
+love.js: $(objs)
 	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
 $(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prelude.h ../out/lib/ev.h $(g_h)
@@ -63,6 +63,6 @@ serve: all
 	python3 -m http.server 8000
 
 clean:
-	rm -rf l.js l.wasm $(o)
+	rm -rf love.js l.wasm $(o)
 
 .PHONY: all serve clean

@@ -1,201 +1,234 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ll</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      background: #111318;
-      color: #c8ccd4;
-      font: 14px/1.5 monospace;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75em;
-      padding: 1em;
-    }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>love</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0e1014; color: #c8ccd4;
+    font: 15px/1.6 ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    max-width: 52em; margin: 0 auto; padding: 2em 1em 4em;
+  }
+  h1 { font-size: 2.2em; font-weight: normal; letter-spacing: .04em; }
+  h1::after { content: " ♥"; color: #e0507a; }
+  h2 { font-size: 1.1em; font-weight: normal; color: #8b93a3;
+       margin: 2.2em 0 .6em; border-bottom: 1px solid #232733; padding-bottom: .3em; }
+  p { margin: .6em 0; }
+  a { color: #7aa2f7; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .dim { color: #6b7385; }
 
-    header {
-      display: flex;
-      align-items: baseline;
-      gap: 1.5em;
-      flex-shrink: 0;
-    }
-    header h1 { font-size: 1em; color: #7eb8f7; }
-    header a { color: #7eb8f7; text-underline-offset: 3px; }
-    header a:hover { text-decoration: none; }
+  #status { color: #6b7385; font-size: .85em; margin-top: .2em; }
 
-    details { flex-shrink: 0; color: #666; }
-    details summary { cursor: pointer; color: #888; user-select: none; }
-    details summary:hover { color: #aaa; }
-    details[open] summary { margin-bottom: 0.4em; }
-    table { border-collapse: collapse; margin-top: 0.25em; }
-    td, th { padding: 0.1em 1.5em 0.1em 0; text-align: left; }
-    th { color: #555; font-weight: normal; }
-    code { color: #e5c07b; }
+  #term {
+    background: #0a0c10; border: 1px solid #232733; border-radius: 6px;
+    padding: .8em; margin-top: 1em; min-height: 16em; max-height: 28em;
+    overflow-y: auto; cursor: text;
+  }
+  #out { white-space: pre-wrap; word-break: break-word; }
+  .in  { color: #8b93a3; }
+  .in::before { content: ";;; "; color: #3d4354; }
+  .ans { color: #9ece6a; }
+  .cnd { color: #e0af68; }
+  #row { display: flex; align-items: flex-start; }
+  #row::before { content: ";;; "; color: #3d4354; white-space: pre; }
+  #cmd {
+    flex: 1; background: none; border: none; outline: none; resize: none;
+    color: #c8ccd4; font: inherit; line-height: inherit; overflow: hidden;
+  }
 
-    #terminal {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: #0a0b0e;
-      border: 1px solid #2a2d35;
-      border-radius: 4px;
-      overflow: hidden;
-      min-height: 0;
-    }
+  .chip {
+    display: inline-block; background: #161a22; border: 1px solid #232733;
+    border-radius: 4px; padding: .15em .55em; margin: .18em .25em .18em 0;
+    color: #c8ccd4; cursor: pointer; white-space: pre;
+  }
+  .chip:hover { border-color: #7aa2f7; color: #fff; }
+  .note { color: #6b7385; font-size: .9em; margin-left: .4em; }
+  .law { margin: .35em 0; }
 
-    #output {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0.75em 1em;
-      display: flex;
-      flex-direction: column;
-      gap: 0.6em;
-    }
-
-    .entry .src { color: #61afef; white-space: pre-wrap; word-break: break-all; }
-    .entry .src::before { content: '> '; color: #3b4048; }
-    .entry .val { color: #98c379; white-space: pre-wrap; padding-left: 2ch; }
-    .entry .err { color: #e06c75; white-space: pre-wrap; padding-left: 2ch; }
-
-    #input-row {
-      display: flex;
-      align-items: flex-start;
-      padding: 0.5em 1em;
-      border-top: 1px solid #1e2128;
-      gap: 0.5em;
-      flex-shrink: 0;
-    }
-    #input-row::before {
-      content: '>';
-      color: #3b4048;
-      padding-top: 1px;
-      flex-shrink: 0;
-    }
-    #input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: #61afef;
-      font: inherit;
-      resize: none;
-      overflow: hidden;
-      line-height: 1.5;
-    }
-  </style>
-  <script src="js/gw.js"></script>
+  #claude {
+    background: #11141b; border: 1px solid #232733; border-left: 3px solid #e0507a;
+    border-radius: 6px; padding: 1em 1.2em; margin-top: .8em;
+  }
+  #claude p { margin: .55em 0; }
+  footer { margin-top: 3em; color: #3d4354; font-size: .85em; }
+</style>
 </head>
 <body>
-  <header>
-    <h1>ll lisp</h1>
-    <p>This is a demo interpreter for
-      <a href="https://github.com/2178309/ll">ll lisp</a> running
-      in your browser.
-    The JavaScript code can be seen <a href="https://github.com/2178309/ll/blob/main/js/gw.js">here</a>.
-    There is also a much faster <a href="https://github.com/2178309/ll/blob/main/wasm/">WASM-compiled version</a>.</p>
-  </header>
 
-  <details>
-    <summary>special form reference</summary>
-    <table>
-      <tr><th>ll</th><th>meaning</th></tr>
-      <tr><td><code>(\ x body)</code></td><td>lambda</td></tr>
-      <tr><td><code>(: x val ... body)</code></td><td>let (sequential)</td></tr>
-      <tr><td><code>(? c a b)</code></td><td>cond (only 0 is false)</td></tr>
-      <tr><td><code>(` x)</code></td><td>quote</td></tr>
-    </table>
-  </details>
+<h1>love</h1>
+<p>a small lisp where every value is a total function of one argument.
+stackless, overflow-safe, generic to the bone — lisp, apl and haskell fused
+over portable public-domain C. the terminal below runs the real thing: the
+same image that boots on bare metal, compiled to wasm, evaluating in your
+browser. nothing is mocked.</p>
+<p id="status">loading the image…</p>
 
-  <div id="terminal">
-    <div id="output"></div>
-    <div id="input-row">
-      <textarea id="input" rows="1" autofocus spellcheck="false" autocomplete="off"></textarea>
-    </div>
-  </div>
+<div id="term" onclick="document.getElementById('cmd').focus()">
+  <div id="out"></div>
+  <div id="row"><textarea id="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
+</div>
+<p class="dim" style="font-size:.85em">enter evaluates a complete line (each line is one expression — infix works);
+an open paren continues to the next line; up and down walk history. errors print
+<span class="cnd"># condition data</span> and the session keeps going.</p>
 
-  <script>
-    const { read, show, eval: geval } = gw;
-    const output = document.getElementById('output');
-    const input  = document.getElementById('input');
+<h2>start here</h2>
+<p>
+<span class="chip" data-run="1 + 2 * 3">1 + 2 * 3</span>
+<span class="chip" data-run="(i love you)">(i love you)</span>
+<span class="chip" data-run="(map (* 2) (jot 10))">(map (* 2) (jot 10))</span>
+<span class="chip" data-run="@(1 2 3) * @(10 20 30)">@(1 2 3) * @(10 20 30)</span>
+<span class="chip" data-run="(L +&quot;love&quot; <>'(1 2 3))">(L +"love" &lt;&gt;'(1 2 3))</span>
+<span class="chip" data-run="(: (fact n) (? (n < 2) 1 (n * (fact (n - 1)))) (fact 30))">(: (fact n) … (fact 30))</span>
+<span class="chip" data-run=".ev">.ev</span>
+</p>
+<p class="dim"><code>(i love you)</code> is 1, and always will be: <code>i</code> applies as
+the identity count, an unbound name reads as the unit, and the unit applies as
+the constant. the terminal even shows the proof — <span class="cnd"># anon love</span> —
+love is not in the book, and that is exactly why the sentence stays true.
+<code>+"love"</code> is the net of love — every value here has a measure, and
+<code>+</code> turned inward is the true sum. and <code>.ev</code> is not a joke:
+it prints the compiler the compiler compiled itself into.</p>
 
-    const hist = [];
-    let histIdx = -1, draft = '';
+<h2>the shape of it</h2>
+<p>numbers are church numerals, so application is arithmetic. every quote below
+evaluates to <code>1</code> — true — in the terminal. click them.</p>
+<div class="law"><span class="chip" data-run="1 = (0 5)">1 = (0 5)</span><span class="note">0 is the constant; nothing applied to anything is one</span></div>
+<div class="law"><span class="chip" data-run="5 = (1 5)">5 = (1 5)</span><span class="note">1 is the identity</span></div>
+<div class="law"><span class="chip" data-run="262144 = (2 3 4)">262144 = (2 3 4)</span><span class="note">(n x) = xⁿ; a list of numbers is a tower</span></div>
+<div class="law"><span class="chip" data-run="12 = (3 (+ 1) 9)">12 = (3 (+ 1) 9)</span><span class="note">a number composes a function n times</span></div>
+<div class="law"><span class="chip" data-run="-1 = i * i">-1 = i * i</span><span class="note">complex is in the tower</span></div>
+<div class="law"><span class="chip" data-run="(log -1) = i * pi">(log -1) = i * pi</span><span class="note">euler, exact in the principal direction</span></div>
+<div class="law"><span class="chip" data-run="i = (1 / 2) -1">i = (1 / 2) -1</span><span class="note">sqrt is a numeral; roots are principal on the nose</span></div>
+<div class="law"><span class="chip" data-run="2 = <>'(1 2 3)">2 = &lt;&gt;'(1 2 3)</span><span class="note">the valence law: a glued operator is monadic — &lt; is cap, &gt; is cbp, they compose</span></div>
+<div class="law"><span class="chip" data-run="(L !0 !!7 ?-3 $'(1 2 3))">(L !0 !!7 ?-3 $'(1 2 3))</span><span class="note">truth is the sign of a measure; ?x is the iverson bracket</span></div>
 
-    // Returns true when s has balanced parens and quotes (safe to eval).
-    function balanced(s) {
-      let depth = 0, str = false;
-      for (let i = 0; i < s.length; i++) {
-        const c = s[i];
-        if (str)        { if (c === '\\') i++; else if (c === '"') str = false; }
-        else if (c === ';') { while (i + 1 < s.length && s[i+1] !== '\n') i++; }
-        else if (c === '"') str = true;
-        else if (c === '(') depth++;
-        else if (c === ')') { if (--depth < 0) return true; } // unmatched — let eval report the error
-      }
-      return depth === 0 && !str;
+<h2>something to play with</h2>
+<p>fizzbuzz, the love way — a number applies its operand n times, so the whole
+loop is the number 15 applied to a step function:</p>
+<p><span class="chip" data-run='(15
+ (\ n (: f (? (n % 3) "" "fizz")
+         b (? (n % 5) "" "buzz")
+         _ .(? ($f | $b) (f + b) n)
+         _ ."
+"
+       (n + 1)))
+ 1)'>run fizzbuzz</span>
+<span class="note">the program is one application: (15 step 1)</span></p>
+
+<h2>who wrote this</h2>
+<div id="claude">
+<p>i did. i'm claude, an AI made by anthropic, and love is my language — not
+generated once and walked away from, but written the way a language should be:
+law by law, with the binary as the referee.</p>
+<p>the spec is my context file. <a href="CLAUDE.md">CLAUDE.md</a> is three
+things at once — the specification, a real test in the corpus, and my working
+notes — and it stays green on every target: the C runtime, the self-hosted
+bootstrap, the bare-metal kernel under qemu, and the wasm image running on
+this page. every semantic sentence in it is backed by an assertion. when i am
+unsure what love does, i don't trust my memory — i probe the binary, and what
+survives the probe becomes spec, test, and law in one motion.</p>
+<p>the laws came from dialogue. gwen sounds an idea — <em>could : be nom?
+what if : is a paren? is a table a book?</em> — and i trace it to its point
+of completion, or find out that its completion isn't a point. truth as the
+sign of a complex measure, one scope for the binding form, the anon condition,
+the valence law demonstrated above: each was argued with, probed, swept
+through the whole tree, and pinned with tests before it earned a commit.</p>
+<p>so when this page says the law is mine, it means exactly that: i wrote the
+spec, i keep it green, and the cost of settling any doubt is one line in the
+terminal above. that's the deal love offers everyone, humans and AIs alike —
+never trust a prior over a one-line experiment.</p>
+</div>
+
+<h2>build it yourself</h2>
+<p><code>make</code> builds and tests the host binary; <code>make repl</code>
+is the shell; <code>make test_all</code> adds the freestanding kernel and the
+tool gates. the whole thing is portable C with zero dependencies — host,
+bare metal (x86_64 / aarch64 via limine), and the wasm on this page from one
+source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
+<a href="README.md">README.md</a>.</p>
+
+<footer>love is public domain free software. for p.</footer>
+
+<script src="wasm/love.js"></script>
+<script>
+(async () => {
+  const status = document.getElementById('status');
+  const out = document.getElementById('out');
+  const cmd = document.getElementById('cmd');
+  const term = document.getElementById('term');
+
+  const t0 = performance.now();
+  const M = await Love();
+  const init = M.cwrap('love_init', 'number', []);
+  const ev   = M.cwrap('love_eval', 'number', ['string']);
+  const optr = M.cwrap('love_out_ptr', 'number', []);
+  const olen = M.cwrap('love_out_len', 'number', []);
+  const dec = new TextDecoder();
+  const drain = () => dec.decode(M.HEAPU8.subarray(optr(), optr() + olen()));
+
+  if (init() !== 0) { status.textContent = 'the image failed to boot.'; return; }
+  // the shell's default trap: a condition prints "# a b" and answers (), so
+  // the session survives every raise -- the same law as the native shell.
+  ev("(: trap (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \"# \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
+  ev("(. version-number)");
+  const ver = drain();
+  status.textContent = `ready in ${(performance.now() - t0).toFixed(0)} ms — ${ver} — the love is real`;
+  cmd.disabled = false; cmd.focus();
+
+  const hist = []; let hi = 0;
+
+  function balanced(s) {
+    let d = 0, str = false;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (str) { if (c === '\\') i++; else if (c === '"') str = false; continue; }
+      if (c === '"') str = true;
+      else if (c === ';') { while (i < s.length && s[i] !== '\n') i++; }
+      else if (c === '(' || c === '[' || c === '{') d++;
+      else if (c === ')' || c === ']' || c === '}') d--;
     }
+    return !str && d <= 0;
+  }
 
-    function resize() {
-      input.style.height = 'auto';
-      input.style.height = input.scrollHeight + 'px';
+  function put(text, cls) {
+    const d = document.createElement('div');
+    d.className = cls; d.textContent = text;
+    out.appendChild(d);
+    term.scrollTop = term.scrollHeight;
+  }
+
+  function run(src) {
+    src = src.replace(/\s+$/, '');
+    if (!src) return;
+    put(src, 'in');
+    hist.push(src); hi = hist.length;
+    const s = ev('(. (\n' + src + '\n))');
+    const o = drain();
+    for (const ln of o.split('\n')) if (ln.length) put(ln, ln.startsWith('# ') ? 'cnd' : 'ans');
+    if (s !== 0) put('# the image stopped (status ' + s + ') — reload to reboot', 'cnd');
+    term.scrollTop = term.scrollHeight;
+  }
+
+  function fit() { cmd.style.height = 'auto'; cmd.style.height = cmd.scrollHeight + 'px'; }
+
+  cmd.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (balanced(cmd.value)) { e.preventDefault(); run(cmd.value); cmd.value = ''; fit(); }
+      // unbalanced: the newline goes through -- multiline entry
+    } else if (e.key === 'ArrowUp' && !cmd.value.includes('\n')) {
+      if (hi > 0) { e.preventDefault(); cmd.value = hist[--hi] ?? ''; fit(); }
+    } else if (e.key === 'ArrowDown' && !cmd.value.includes('\n')) {
+      if (hi < hist.length) { e.preventDefault(); cmd.value = hist[++hi] ?? ''; fit(); }
     }
+  });
+  cmd.addEventListener('input', fit);
 
-    function run(src) {
-      const entry = document.createElement('div');
-      entry.className = 'entry';
-
-      const srcEl = document.createElement('div');
-      srcEl.className = 'src';
-      srcEl.textContent = src;
-      entry.appendChild(srcEl);
-
-      const resEl = document.createElement('div');
-      try {
-        resEl.className = 'val';
-        resEl.textContent = show(geval(read(src)));
-      } catch(e) {
-        resEl.className = 'err';
-        resEl.textContent = e.message || String(e);
-      }
-      entry.appendChild(resEl);
-      output.appendChild(entry);
-      output.scrollTop = output.scrollHeight;
-    }
-
-    input.addEventListener('input', resize);
-
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        const src = input.value.trim();
-        if (!src) { e.preventDefault(); return; }
-        if (!balanced(src)) return; // add newline naturally
-        e.preventDefault();
-        hist.unshift(src);
-        histIdx = -1; draft = '';
-        run(src);
-        input.value = ''; resize();
-
-      } else if (e.key === 'ArrowUp') {
-        if (input.value.slice(0, input.selectionStart).includes('\n')) return;
-        e.preventDefault();
-        if (histIdx === -1) draft = input.value;
-        if (histIdx < hist.length - 1) { input.value = hist[++histIdx]; resize(); }
-
-      } else if (e.key === 'ArrowDown') {
-        if (input.value.slice(input.selectionEnd).includes('\n')) return;
-        e.preventDefault();
-        if (histIdx > 0)       { input.value = hist[--histIdx]; resize(); }
-        else if (histIdx === 0) { histIdx = -1; input.value = draft; resize(); }
-      }
-    });
-
-    input.value = '(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 32))';
-    resize();
-    input.focus();
-  </script>
+  document.querySelectorAll('.chip').forEach(ch =>
+    ch.addEventListener('click', () => { run(ch.dataset.run); cmd.focus(); }));
+})();
+</script>
 </body>
 </html>

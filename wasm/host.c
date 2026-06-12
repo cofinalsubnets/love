@@ -1,16 +1,16 @@
-// emscripten host shim for l lisp.
+// emscripten host shim for love.
 //
 // l's frontend contract (see g/g.h): the host must define g_clock, the
 // g_stdin/g_stdout ports, and the g_fd_port_vt vtable that backs any port
 // with fd >= 0. Here stdout's putc appends to a JS-visible byte buffer that
-// the page drains via gwen_out_ptr/len/reset; stdin always reads EOF (the
-// REPL feeds source through gwen_eval, not the stdin port). boot.l is
-// embedded and evaluated once by gwen_init.
+// the page drains via love_out_ptr/len/reset; stdin always reads EOF (the
+// REPL feeds source through love_eval, not the stdin port). boot.l is
+// embedded and evaluated once by love_init.
 #include "love.h"
 #include <emscripten.h>
 #include <time.h>
 
-static const char boot_g[] = "("
+static const char boot_love[] = "("
 #include "egg.h"
   g_egg_pre
 #include "prelude.h"
@@ -67,18 +67,18 @@ struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };
 static struct g *F;
 
 EMSCRIPTEN_KEEPALIVE
-int gwen_init(void) {
+int love_init(void) {
   F = g_ini();
   if (!g_ok(F)) return g_code_of(F);
-  F = g_evals_(F, boot_g);
+  F = g_evals_(F, boot_love);
   return g_code_of(F); }
 
 EMSCRIPTEN_KEEPALIVE
-int gwen_eval(const char *src) {
+int love_eval(const char *src) {
   out_len = 0;
   F = g_evals_(F, src);
   return g_code_of(F); }
 
-EMSCRIPTEN_KEEPALIVE char*    gwen_out_ptr(void) { return out_buf; }
-EMSCRIPTEN_KEEPALIVE uint32_t gwen_out_len(void) { return out_len; }
-EMSCRIPTEN_KEEPALIVE void     gwen_out_reset(void) { out_len = 0; }
+EMSCRIPTEN_KEEPALIVE char*    love_out_ptr(void) { return out_buf; }
+EMSCRIPTEN_KEEPALIVE uint32_t love_out_len(void) { return out_len; }
+EMSCRIPTEN_KEEPALIVE void     love_out_reset(void) { out_len = 0; }
