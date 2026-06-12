@@ -131,7 +131,7 @@ lvm_t lvm_kcall,
  lvm_argap, lvm_quoteap, lvm_argtap,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
  lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
- lvm_callk, lvm_scare, lvm_anon, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
+ lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_read, lvm_dot,
@@ -465,7 +465,7 @@ static g_inline union u *clip(struct g *g, union u *k) {
 
 
 
-static g_inline struct g_atom *ini_anon(struct g_atom *y, uintptr_t code) {
+static g_inline struct g_atom *ini_missing(struct g_atom *y, uintptr_t code) {
  return y->ap = lvm_sym, y->nom = 0, y->code = code, y; }
 
 static g_inline struct g_atom *ini_sym(struct g_atom *y, struct g_str *nom, uintptr_t code) {
@@ -599,7 +599,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_lamp, "lamp", s1(lvm_lamp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
  _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
- _(nif_anon, "anon", s2(lvm_anon)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
+ _(nif_missing, "missing", s2(lvm_missing)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
  _(nif_spawn, "spawn", s2(lvm_spawn)) _(nif_wait, "wait", s1(lvm_wait)) \
  _(nif_sleep, "sleep", s1(lvm_sleep)) _(nif_donep, "done?", s1(lvm_donep)) \
  _(nif_hush, "hush", s1(lvm_hush)) \
@@ -716,12 +716,12 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   if (g_ok(g = g_strof(g, LOVE_VERSION))) {
    struct g_def vd[] = {{"version-number", g_pop1(g)}};
    g = g_defn(g, vd, countof(vd)); }
-  // the anon condition tag ('anon), pre-interned and rooted (v0..end in
+  // the missing condition tag ('missing), pre-interned and rooted (v0..end in
   // struct g) so lvm_freev's raise path never allocates the tag and the
   // weak intern map keeps the atom across collections.
-  if (g_ok(g = g_strof(g, "anon"))) {
+  if (g_ok(g = g_strof(g, "missing"))) {
    g = intern(g);
-   if (g_ok(g)) g->anon = g_pop1(g); }
+   if (g_ok(g)) g->missing = g_pop1(g); }
   // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prelude, and the
   // opfix source pass (prelude.l, hooked by both compilers at c0 and wev)
@@ -960,7 +960,7 @@ static g_inline word copy_big(struct g*g, struct g_big *src, word const *const p
 // maintenance moved WHOLLY to the post-fixpoint table sweep (symbols_sweep).
 static g_inline word copy_sym(struct g*g, struct g_atom *src, word const *const p0, word const*const t0) {
  struct g_atom *dst = bump(g, Width(struct g_atom));
- if (!src->nom) ini_anon(dst, src->code);      // a mint: the serial rides
+ if (!src->nom) ini_missing(dst, src->code);      // a mint: the serial rides
  else ini_sym(dst, (struct g_str*) gcp(g, word(src->nom), p0, t0), src->code);
  return word(src->ap = (lvm_t*) dst); }
 
@@ -1555,7 +1555,7 @@ lvm(lvm_defglob) {
   !g_ok(g = g_mapput(g)) ? ghelp(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
 // lvm_freev (the late-bound global read) is defined below lvm_scare: its
-// miss path is the anon condition and borrows the whole help apparatus.
+// miss path is the missing condition and borrows the whole help apparatus.
 
 lvm(lvm_eval) { return Ip++, Pack(g),
  !g_ok(g = c0(g, lvm_jump)) ? ghelp(g) : (Unpack(g), Continue()); }
@@ -1695,18 +1695,18 @@ lvm(lvm_scare) {
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, help_more_k); }
-// the anon miss sentinel: a private static address no book value can equal,
+// the missing miss sentinel: a private static address no book value can equal,
 // so a name bound to nil stays distinct from no entry at all.
-static union u const anon_miss[1];
+static union u const no_entry[1];
 // The late-bound global read. A hit patches the site to a quote of the value
-// (the fold law's runtime tail). A miss is an ANON -- a nom not in the book,
+// (the fold law's runtime tail). A miss is a MISSING name -- a nom not in the book,
 // a call for help: with a global help installed the read raises
-// (help 1 'anon nom) and the help's result is the value here; helpless it
+// (help 1 'missing nom) and the help's result is the value here; helpless it
 // reads (). either way the site stays a freev (no quote patch on a miss):
 // the condition recurs, and a define that lands later is seen.
 lvm(lvm_freev) {
- word v = g_mapget(g, word(anon_miss), Ip[1].x, g->book);
- if (v != word(anon_miss)) return
+ word v = g_mapget(g, word(no_entry), Ip[1].x, g->book);
+ if (v != word(no_entry)) return
   Ip[0].ap = lvm_quote,
   Ip[1].x = v,
   Continue();
@@ -1717,20 +1717,20 @@ lvm(lvm_freev) {
   *--Sp = empty_sym,
   Ip += 2,
   Continue();
- word a = g->anon, b = Ip[1].x;
+ word a = g->missing, b = Ip[1].x;
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, help_more_k); }
-// (anon t k): the book read as a value -- lvm_freev's law with the book as an
+// (missing t k): the book read as a value -- lvm_freev's law with the book as an
 // argument (a tablet is a little book; the book is just the outermost one).
-// k present in map t answers the value; a miss is the ANON CONDITION: with a
-// global help installed the read raises (help 1 'anon k) and the help's result
+// k present in map t answers the value; a miss is the MISSING CONDITION: with a
+// global help installed the read raises (help 1 'missing k) and the help's result
 // is the value, helpless it reads (). boxfix's letrec cells read this way --
 // pre-fill is a miss, the binding-site nom the payload. distinct from peep,
 // whose caller names what absence means.
-lvm(lvm_anon) {
- word v = mapp(Sp[0]) ? g_mapget(g, word(anon_miss), Sp[1], Sp[0]) : word(anon_miss);
- if (v != word(anon_miss)) return
+lvm(lvm_missing) {
+ word v = mapp(Sp[0]) ? g_mapget(g, word(no_entry), Sp[1], Sp[0]) : word(no_entry);
+ if (v != word(no_entry)) return
   Sp[1] = v,
   Sp++,
   Ip++,
@@ -1743,7 +1743,7 @@ lvm(lvm_anon) {
   Sp++,
   Ip++,
   Continue();
- word a = g->anon;
+ word a = g->missing;
  Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
  Sp[0] = word(Ip + 1), Sp[1] = a;
  return Pack(g), g_raise(g, g_status_scare, a, Sp[2], help_more_k); }
@@ -3718,7 +3718,7 @@ lvm(lvm_mint) {
  Have(Width(struct g_atom));
  struct g_atom *y = (struct g_atom*) Hp;
  Hp += Width(struct g_atom);                   // atoms are uniform: ap, code, nom
- ini_anon(y, ++g->next_serial);
+ ini_missing(y, ++g->next_serial);
  return
   Sp[0] = word(y),
   Ip += 1,
@@ -5304,7 +5304,7 @@ static g_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb,
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
-// symbols: the PRODUCT ORDER -- name lex first (anon -> "", so the nameless sit
+// symbols: the PRODUCT ORDER -- name lex first (missing -> "", so the nameless sit
 // below every named symbol), then on a name tie between distinct atoms the
 // interned one first (the canonical point precedes the fresh), then the mint
 // serial (`code`; creation order). same-name noms used to compare EQUAL here

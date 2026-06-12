@@ -116,7 +116,7 @@
                    lam (cons '\ (cat (cap r) (list (wx (cbp r) (cat (cap r) bnd)))))
                    _ (push c 'src (cons (cbp lam) x))         ; tagged-body -> surface src for ala
                    lam))
-     (= h ':) (? (atomp (cbp x)) ':                      ; (:) = the head read -- (f)==f at zero operands, an anon (c0 agrees)
+     (= h ':) (? (atomp (cbp x)) ':                      ; (:) = the head read -- (f)==f at zero operands, a missing name (c0 agrees)
                  (atomp (cbbp x)) (cons ': (list (wx (cabp x) bnd)))
                  (cons ': (wxl (boxfix (cbp x)) bnd)))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
      (= h '?) (? (atomp (cbp x)) '?                      ; (?) likewise: the empty form is the head's value

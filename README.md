@@ -121,7 +121,7 @@ and what comes out is the lambda the compiler compiled itself into -- a couple
 kilobytes of the whole back end.
 
 the shell survives its mistakes: with no help of your own installed it
-provides one, so any condition prints `# a b` -- `# anon undefined-name`,
+provides one, so any condition prints `# a b` -- `# missing undefined-name`,
 `# apcap 3000000` -- answers `()`, and the session keeps going. multiline
 entry continues while a shape is open; enter cashes any complete buffer;
 history is a normal shell's. scripts and files stay helpless (terminal),
@@ -142,7 +142,7 @@ per the law.
   hash) carries the globals, macros, the operators table, the help function
   and the rng; C finds its own hooks by name, allocation-free. the egg pulls
   every compiler-internal name -- the book itself included -- before the
-  image is born. a name not in the book is an anon: reading one is a
+  image is born. a name not in the book is missing: reading one is a
   call for help, and helpless it reads `()`.
 - the compiler is written in love. at build time the evaluator sits on the egg
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,

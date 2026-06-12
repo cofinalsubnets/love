@@ -6,8 +6,8 @@
   (loop k (cap d) (cbp d)))
  (dict_get d k) (: x (dict_has d k) (? (twop x) (cap x)))
  (dict_set d k v) (cons (cons k (cap d)) (cons v (cbp d)))
- (anon? x) (&& (symp x) (symp (string x)))   ; string of a named sym is its name; of an anon sym, itself
- (var? x) (&& (twop x) (anon? (cbp x)))
+ (mintp x) (&& (symp x) (symp (string x)))   ; string of a named sym is its name; of a mint, itself
+ (var? x) (&& (twop x) (mintp (cbp x)))
  (var x) (cons x (nom 0))
  empty_dict '(0)
  has_s dict_has

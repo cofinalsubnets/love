@@ -127,7 +127,7 @@ struct g {
   struct {
    g_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
                   // macro table is book[nil] -- no separate field.
-   g_word anon;   // the pre-interned 'anon atom: the condition tag for reading
+   g_word missing;   // the pre-interned 'missing atom: the condition tag for reading
                   // a nom not in the book. rooted here (v0..end) so the raise
                   // path never allocates and the weak intern map keeps it.
    g_word scare_a, scare_b; // the last bare scare's condition data, stashed at

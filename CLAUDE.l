@@ -26,8 +26,8 @@
 ; * a corpus test that spawns must (wait p) its task: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the
 ;   interactive shell installs a default help when none is present (repl.l shell-help):
-;   a scare prints `# a b` and answers (), so the session survives every raise and an
-;   anon or apcap is VISIBLE; the more bits keep the read protocol (port back when
+;   a scare prints `# a b` and answers (), so the session survives every raise and a
+;   missing name or apcap is VISIBLE; the more bits keep the read protocol (port back when
 ;   incomplete, sentinel at eof). file mode stays helpless -- terminal, per the law.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 
@@ -76,11 +76,11 @@
 ; `:` doubles as sequencing (bind `_` for effect); `(f x)` on the left is define-sugar; a
 ; body-less top-level `:` leaks its bindings to the global scope (that's how tests share helpers).
 ; a body-having `:` is ONE SCOPE: every name binds over the whole form, so a read before the
-; pin is the ANON CONDITION (see control) with the binding site's nom as payload -- a call for
+; pin is the MISSING CONDITION (see control) with the binding site's nom as payload -- a call for
 ; help, () helpless; no read ever escapes to an outer binding of the same name. rebinding a name
 ; later in the form still reads the previous value (the sequence law); recursion among lambda
 ; bindings resolves lazily. an EMPTY form is its head's value -- (f) == f at zero operands --
-; and the heads are anons, so (:) (?) (\) all read ().
+; and the heads are missing, so (:) (?) (\) all read ().
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
 (assert
  (idp () (:)) (idp () (?)) (idp () (\))          ; the empty form is the head read, both lanes
@@ -358,14 +358,14 @@
 ; and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key away.
 ; also keys (the key list), $ is the key count. (t k) == (peep t k 0) -- a map is a lookup
 ; function. THREE ABSENCE LANES, one miss machinery: peep (the caller names what absence
-; means), apply (absence is 0), and (anon t k) -- the book read as a value: a present k
-; answers, a miss is the anon condition (the help's result, () helpless, k the payload).
+; means), apply (absence is 0), and (missing t k) -- the book read as a value: a present k
+; answers, a miss is the missing condition (the help's result, () helpless, k the payload).
 ; (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
 (assert
  (: b #0 (&& (mapp b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
- (10 = (anon #(1 10) 1)) (idp () (anon #() 'k)) (0 = (anon #(1 0) 1))   ; anon: the conditioned read; presence beats value
+ (10 = (missing #(1 10) 1)) (idp () (missing #() 'k)) (0 = (missing #(1 0) 1))   ; missing: the conditioned read; presence beats value
  (50 = (peep (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
  ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (mapp #()) !(mapp 5)
@@ -463,15 +463,15 @@
 ; deliberately -- the scare bit set unconditionally, and the help's result comes back
 ; as its value (no help installed -> terminal: the exit face prints `# a b`, show
 ; forms, from the condition data stashed at the raise -- the bare data-less scare,
-; oom, prints # oom@len instead). see test/help.l. an ANON -- a nom not
-; in the `book` (the global table) -- is a call for help: reading one raises
-; (scare 'anon nom) under an installed help (the help's result is the value); helpless
+; oom, prints # oom@len instead). see test/help.l. a nom not
+; in the `book` (the global table) is MISSING -- a call for help: reading one raises
+; (scare 'missing nom) under an installed help (the help's result is the value); helpless
 ; it reads (), not 0 -- false either way. the read happens where the code says it does:
-; a closure captures its free globals at creation, so an anon in a lambda body fires
-; the condition at the define, not the call. see test/anon.l. THE CONDITION IS ONE LAW
+; a closure captures its free globals at creation, so a missing read in a lambda body fires
+; the condition at the define, not the call. see test/missing.l. THE CONDITION IS ONE LAW
 ; AT EVERY DEPTH: a `:` binding read before its pin raises it with the binding site's
-; nom as payload (one scope, see the special forms), (anon t k) raises it for a miss on
-; any tablet (k the payload), and an empty special form reads its head -- the same anon.
+; nom as payload (one scope, see the special forms), (missing t k) raises it for a miss on
+; any tablet (k the payload), and an empty special form reads its head -- the same missing.
 ; numeral counts are
 ; CAPPED: a compose count or exact-power exponent above the `apcap` box (a public
 ; runtime tunable, default 2^20) raises (scare 'apcap k) instead of allocating O(k) --
@@ -482,7 +482,7 @@
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lamp scare)
  (mapp apcap) (1048576 = (apcap ()))             ; the count ceiling, a tunable box
- (idp () not-in-the-book) !not-in-the-book       ; an anon reads (): a nom not in the book
+ (idp () not-in-the-book) !not-in-the-book       ; a missing name reads (): a nom not in the book
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prelude wraps getc and
@@ -505,9 +505,9 @@
 ;     source, run FIRST, one source of truth shared with the C bootstrap compiler.
 ;   boxfix -- the letrec* "capture by location" rewrite (one scope): a forward-referenced
 ;     binding indirects through a CELL, a fresh tablet keyed by the binding site's nom --
-;     pin fills it, (anon cell 'nom) reads it, so a pre-fill read IS the anon condition.
+;     pin fills it, (missing cell 'nom) reads it, so a pre-fill read IS the missing condition.
 ;     a wev source pass run after macroexpansion, one source of truth shared with the C
-;     bootstrap compiler; it emits nif VALUES (pin/anon/tablet), immune to shadowing.
+;     bootstrap compiler; it emits nif VALUES (pin/missing/tablet), immune to shadowing.
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure
 ;     globals, mark apply strategy, and flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins; a map is a lookup function.
@@ -515,7 +515,7 @@
 ; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- and
 ; the hatchling installs as `ev`, baked into the image at C compile time, no allocation;
 ; `born` records the hatch time (unbound pre-egg: love0's first corpus pass runs PRE-egg,
-; and an unbound name is an anon, reading ()). before it is born the egg PULLS every runtime-
+; and an unbound name is missing, reading ()). before it is born the egg PULLS every runtime-
 ; internal name: the raw cell nifs (peek poke seek lamb -- (lamb 2 3) is a segfault, big
 ; scare; lamb is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE

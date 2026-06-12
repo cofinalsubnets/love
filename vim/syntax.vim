@@ -28,7 +28,7 @@ syn keyword LoveFunc twop strp symp mapp lamp hotp packp bigp widep arrp comp fl
 syn keyword LoveFunc arr array arank alen ashape atype asum aprod amax amin aall
 syn keyword LoveFunc a-rank a-shape a-type a-dim
 syn keyword LoveFunc string slice intern nom mint tally slurp show sip pad page
-syn keyword LoveFunc tablet keys dig sat non peep pin pull buf blit anon
+syn keyword LoveFunc tablet keys dig sat non peep pin pull buf blit missing
 syn keyword LoveFunc lamb peek poke seek trim mono
 syn keyword LoveFunc fgetc fungetc feof fputc fputs fputbn fputx fflush read
 syn keyword LoveFunc putc puts putn putx getc read in out dot

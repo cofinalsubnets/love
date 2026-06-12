@@ -3,7 +3,7 @@
 ; conversion (de bruijn levels as fresh vars, sigma- and pi-eta), type-in-type --
 ; the universe stance of the reference (UniMath/Foundations/Init.v: Unset
 ; Universe Checking). an axiom is a book entry with a type and no value: a
-; sanctioned anon. names follow UniMath so the port reads literally.
+; sanctioned missing. names follow UniMath so the port reads literally.
 ;
 ; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
 ;   (pi x A B) (lam x b) (total2 x A B) (tpair a b) (pr1 w) (pr2 w) (succ n)

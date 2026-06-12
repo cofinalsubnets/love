@@ -1,34 +1,34 @@
-; anon -- a nom not in the book (the global table). reading one is a
+; missing -- a nom not in the book (the global table). reading one is a
 ; CALL FOR HELP: with a global help installed the read raises
-; (help 1 'anon nom) and the help's result becomes the value at the site;
+; (help 1 'missing nom) and the help's result becomes the value at the site;
 ; helpless it reads () -- false, like the old nil read, but the canonical
 ; empty point. the read happens where the code says it does: a closure
-; captures its free globals at creation, so an anon in a lambda body fires
+; captures its free globals at creation, so a missing read in a lambda body fires
 ; the condition at the define, not the call.
 
 (assert
  (idp () an-never-defined)                       ; the default: () exactly
- !an-never-defined                               ; ... so an anon is false
+ !an-never-defined                               ; ... so a missing name is false
  (symp an-never-defined))                        ; ... and a symbol (THE symbol)
 
-; a name BOUND to nil is in the book -- not an anon, no condition
+; a name BOUND to nil is in the book -- not missing, no condition
 (: an-zero 0)
 (: help (\ s a b 'BOOM))
 (assert (0 = an-zero) !(idp () an-zero))
 (: help 0)
 
-; the help hears (help s 'anon nom) and its result is the value at the site
-(: help (\ s a b (? (&& (scare? s) (idp a 'anon)) (L 'anon-was b) 0)))
+; the help hears (help s 'missing nom) and its result is the value at the site
+(: help (\ s a b (? (&& (scare? s) (idp a 'missing)) (L 'missing-was b) 0)))
 (assert (: r an-ghost
-           (&& (twop r) (idp 'anon-was (cap r)) (idp 'an-ghost (cabp r)))))
+           (&& (twop r) (idp 'missing-was (cap r)) (idp 'an-ghost (cabp r)))))
 (: help 0)
 
 ; the read of a lambda's free global happens at closure creation (the runtime
 ; compiler captures it) or as a live site in the body (the bootstrap lane);
 ; with the help installed across both moments, both lanes answer the help.
 ; NOTE the discipline: love0 runs this corpus TWICE in one scope, so a name
-; asserted anon must NEVER be defined later -- the second pass would fold it.
-(: help (\ s a b (? (&& (scare? s) (idp a 'anon)) 42 0)))
+; asserted missing must NEVER be defined later -- the second pass would fold it.
+(: help (\ s a b (? (&& (scare? s) (idp a 'missing)) 42 0)))
 (: (an-g _) an-phantom)
 (assert (42 = (an-g 0)))
 (: help 0)
@@ -47,21 +47,21 @@
  (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the cell, once pinned
 
 ; the help hears the cell miss too; the payload is the binding-site nom
-(: help (\ s a b (? (&& (scare? s) (idp a 'anon) (twop b) ("an-fwd" = (cap b))) 'cell-nom 0)))
+(: help (\ s a b (? (&& (scare? s) (idp a 'missing) (twop b) ("an-fwd" = (cap b))) 'cell-nom 0)))
 (assert (idp 'cell-nom (: q an-fwd an-fwd 2 q)))
 (: help 0)
 
-; the empty special forms are their head reads -- the same anons under a help
-(: help (\ s a b (? (&& (scare? s) (idp a 'anon)) (L 'empty-form b) 0)))
+; the empty special forms are their head reads -- the same missing reads under a help
+(: help (\ s a b (? (&& (scare? s) (idp a 'missing)) (L 'empty-form b) 0)))
 (assert (: r (:) (&& (twop r) (idp ': (cabp r))))
         (: r (?) (&& (twop r) (idp '? (cabp r)))))
 (: help 0)
 
-; (anon t k) -- the book read as a value: k present in tablet t answers the
-; value, a miss is the anon condition with k as payload. a tablet is a little
+; (missing t k) -- the book read as a value: k present in tablet t answers the
+; value, a miss is the missing condition with k as payload. a tablet is a little
 ; book; `the` book is just the outermost one.
-(assert (10 = (anon #(1 10) 1)) (idp () (anon #() 'k)) (idp () (anon 5 'k))
-        (0 = (anon #(1 0) 1)))                   ; presence beats value: a pinned 0 answers 0
-(: help (\ s a b (? (&& (scare? s) (idp a 'anon) (idp b 'an-missing)) 'heard 0)))
-(assert (idp 'heard (anon #() 'an-missing)))
+(assert (10 = (missing #(1 10) 1)) (idp () (missing #() 'k)) (idp () (missing 5 'k))
+        (0 = (missing #(1 0) 1)))                   ; presence beats value: a pinned 0 answers 0
+(: help (\ s a b (? (&& (scare? s) (idp a 'missing) (idp b 'an-missing)) 'heard 0)))
+(assert (idp 'heard (missing #() 'an-missing)))
 (: help 0)

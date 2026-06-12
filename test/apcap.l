@@ -26,5 +26,8 @@
  (= 16 (4 2))
  (= 'capped (cap (5 2))))
 (pin apcap () 1048576)
-(: help apcap-t0)
+; restore. a missing prior help was saved as (), which would reinstall as the
+; unit (a lamp -- every missing read downstream would answer 1): the uninstall
+; is help = 0, a non-lamp, per the contract in help.l/missing.l.
+(: help (? apcap-t0 apcap-t0 0))
 (assert (= 1048576 (apcap ())) (= 64 (6 2)) (= 12 ((2 (+ 1)) 10)))

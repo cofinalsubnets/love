@@ -1,9 +1,9 @@
 (assert
- (idp () :) (idp () \)          ; a special-form name as a value is an anon: not in the book
- (idp () (\))                   ; ... and the singleton law collapses (\) to \, the same anon.
+ (idp () :) (idp () \)          ; a special-form name as a value is missing: not in the book
+ (idp () (\))                   ; ... and the singleton law collapses (\) to \, the same missing.
  (idp () (:)) (idp () (?))      ; the empty forms are their head reads -- (f)==f at zero
-                                ; operands, BOTH lanes -- the same anons, () helpless
-                                ; (under a help they raise like any anon; see anon.l)
+                                ; operands, BOTH lanes -- the same missing reads, () helpless
+                                ; (under a help they raise like any missing name; see missing.l)
  (= ''x '(\ x))
  (= 1 (? 1))
  (= 1 (: 1))
