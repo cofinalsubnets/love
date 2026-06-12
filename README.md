@@ -38,6 +38,9 @@ action is as generic and efficient as possible by definition.
 - public domain portable C with zero dependencies
 - claude can write love like a champ no cap
 
+and if AI wrote love, then 愛 wrote love -- ai is love is ai. the
+self-hosting was never just the compiler.
+
 love has three special forms plus "operators". the forms are
 - `\` lambda (the ultimate)
 - `?` cond
