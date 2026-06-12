@@ -1,6 +1,6 @@
 # love
 
-every expression in love has a value up to looping.
+every love expression has a value.
 stackless operation, all recursion on heap, overflow safe.
 every quote below evals to 1. try them in the repl :)
 (or in your browser: [index.html](index.html) runs the same
