@@ -10,7 +10,7 @@
  (= 0 (peep t 9 0))                              ; missing key -> default
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys t)))      ; three entries
  ; empty + single-entry printer forms are deterministic (no bucket-order dependence)
- (= "#()" (show (tablet 0)))
+ (= "(tablet 0)" (show (tablet 0)))
  (= "#(1 100)" (show (hash 1 100)))
  (= "#(1 \"hi\")" (show (hash 1 "hi")))
  (strp (show t))                             ; multi-entry: just exercise the path
@@ -19,23 +19,23 @@
  (= (dig 'k) (dig 'k))
  (= (dig '(1 2)) (dig '(1 2))))
 
-; #(…) reader macro: splices a list operand into (hash …), wraps an atom as (hash x),
-; and #() builds a fresh empty hash. Hashes print as #(…), round-tripping via #.
+; #(…) reader macro: splices a list operand into (hash …), wraps an atom as (hash x) --
+; a BOX, #() included (() is 0, so #() IS #0). hashes print as #(…), the empty map as (tablet 0).
 (: ht #(1 100 2 200 3 300))
 (assert
  (mapp ht)
  (= 100 (peep ht 1 0))
  (= 300 (peep ht 3 0))
- (mapp #())                                     ; #() -> empty hash
- !#()                                           ; ... and ONLY #() is empty
- (= 50 (peep (pin #() 5 50) 5 0))                ; the empty hash is mutable
+ (mapp (tablet 0))                              ; the empty hash
+ !(tablet 0) !!#()                              ; (tablet 0) is empty; #() is the 0-box, present
+ (= 50 (peep (pin (tablet 0) 5 50) 5 0))                ; the empty hash is mutable
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys #(1 10 2 20 3 30))))   ; splice builds all entries
- (= "#()" (show #()))
+ (= "#(0 0)" (show #()))
  (= "#(1 \"hi\")" (show #(1 "hi"))))
 
-; # on a SCALAR boxes it: #x = #(() x), a fresh mutable hash pinning x to the
-; () key -- so #0 is a 1-entry box, NOT the empty hash (the dead () = 0
-; identity used to conflate them).
+; # on a NON-LIST datum boxes it: #x = #(0 x), a fresh mutable hash pinning x
+; at 0 -- and () IS 0 (one nothing), so #() = #0: the # law has no empty
+; exception; the empty hash is (tablet 0).
 (: bx #0)
 (assert
  (mapp #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
@@ -43,7 +43,7 @@
  (= 9 (: _ (pin bx () 9) (peep bx () 0)))       ; ... and is mutable in place
  (= 5 (peep #5 () 0)) (= "s" (peep #"s" () 0))  ; any scalar boxes
  (= 'a (peep (hash 'a) () 0))                  ; (NB #'a SPLICES -- a quote form is a pair)
- (= "#(() 5)" (show #5))                     ; a box prints as #(() v), reads back
+ (= "#(0 5)" (show #5))                      ; a box prints as #(0 v), reads back
  (= 7 (peep #(1 2 7) () 0))                     ; an odd trailing operand lands in the box slot
  (= 2 (peep #(1 2 7) 1 0)))
 
@@ -91,10 +91,10 @@
 ; by design: the fresh point is materially empty -- a distinct NOTHING.)
 (: same? (\ x (= (? (nilp x) 1 0) (? (= 0 (sat x)) 1 0)))
 (assert
- (nilp "") (nilp #()) (nilp (buf 0)) (nilp @0) (nilp 0) (nilp ())  ; empties/zeros are false
+ (nilp "") (nilp (tablet 0)) (nilp (buf 0)) (nilp @0) (nilp 0) (nilp ())  ; empties/zeros are false
  !!"x" !!#(1 2) !(mint 0)                                        ; present values are true; the mint is nothing
  !!cap !!out !!(\ x x)                                                ; functions/ports too
- (same? "") (same? #()) (same? (buf 0)) (same? @0) (same? 0)
+ (same? "") (same? (tablet 0)) (same? (buf 0)) (same? @0) (same? 0)
  (same? "x") (same? #(1 2)) (same? (mint 0)) (same? cap) (same? out)
  (same? ~(0 0)) (same? ~(0.3 0.4)) (same? @(0 0)) (same? @(0.1 0))
  (same? (100 2)) (same? 'abc) (same? '(1 2))))

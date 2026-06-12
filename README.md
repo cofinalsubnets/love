@@ -122,7 +122,7 @@ kilobytes of the whole back end.
 
 the shell survives its mistakes: with no help of your own installed it
 provides one, so any condition prints `# a b` -- `# missing undefined-name`,
-`# apcap 3000000` -- answers `()`, and the session keeps going. multiline
+`# apcap 3000000` -- answers the zero point, and the session keeps going. multiline
 entry continues while a shape is open; enter cashes any complete buffer;
 history is a normal shell's. scripts and files stay helpless (terminal),
 per the law.
@@ -143,7 +143,7 @@ per the law.
   and the rng; C finds its own hooks by name, allocation-free. the egg pulls
   every compiler-internal name -- the book itself included -- before the
   image is born. a name not in the book is missing: reading one is a
-  call for help, and helpless it reads `()`.
+  call for help, and helpless it reads the zero point, a nameless unit.
 - the compiler is written in love. at build time the evaluator sits on the egg
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,
   which recompiles itself -- and the hatchling bakes into the binary; `born`

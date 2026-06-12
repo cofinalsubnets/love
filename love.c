@@ -301,9 +301,9 @@ static g_inline void tuple_put_obj(struct g_tuple *v, uintptr_t i, word x) {
 // g_pin (lvm_pin): same zero conditions.
 // a symbol's net, shared by g_net ($) and g_nilp (!): the SPELLING's charm
 // sum (a symbol nets what its nom pair nets -- chars measure by content now).
-// THE empty symbol (prints as ()) and every MINT (the nameless fresh point:
-// materially empty, a DISTINCT NOTHING) net 0 -> falsy; so does an all-NUL
-// spelling: a string of nothings is nothing, in or out of a symbol.
+// every MINT (the nameless fresh point: materially empty, a DISTINCT NOTHING)
+// nets 0 -> falsy; so does an all-NUL spelling: a string of nothings is
+// nothing, in or out of a symbol.
 static g_inline intptr_t pin_sym(word x) {
   struct g_str *nm = ((struct g_atom*) x)->nom;
   if (!nm) return 0;
@@ -479,14 +479,12 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // out-of-pool short-circuit, like g_stdin/stdout/stderr) -- immortal, never copied
 // or freed, so `const` is safe. Strings are immutable, so a single empty string
 // suffices and we NEVER heap-allocate a zero-length one (str0/strin/the reader and
-// the `+` string lane all hand back g_str_empty). g_sym_empty is the canonical
-// empty-named symbol (intern "" answers it; symbols have no + since the mint
-// round). Predicates read `ap`, so these behave as a normal
-// string/sym value; the FAM `bytes[]` is simply absent (len 0).
-// External linkage (declared in love.h with the EmptyString/empty_sym macros) so the
-// frontends can return them too (e.g. host_run's empty-output capture).
+// the `+` string lane all hand back g_str_empty). Predicates read `ap`, so it
+// behaves as a normal string value; the FAM `bytes[]` is simply absent (len 0).
+// External linkage (declared in love.h with the EmptyString macro) so the
+// frontends can return it too (e.g. host_run's empty-output capture). (the
+// empty SYMBOL died in the one-nothing round: () reads as 0.)
 const struct g_str g_str_empty = { .ap = lvm_str, .len = 0 };
-const struct g_atom g_sym_empty = { .ap = lvm_sym, .code = 0, .nom = 0 };
 
 static g_inline struct g_tuple *ini_scalar(struct g_tuple *v, enum g_tuple_type t) {
  return v->ap = lvm_tuple, v->type = t, v->rank = 0, v; }
@@ -707,10 +705,6 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
    {"err", (word) &g_stderr}, };
   g = g_defn(g, def0, countof(def0));
   g = g_defn(g, def1, countof(def1));
-  // () (the empty symbol) is self-evaluating: book[()] = ().
-  g = g_push(g, 3, empty_sym, empty_sym, g->book);
-  g = g_mapput(g);
-  g = g_pop(g, 1);
   // `version-number`: the build's git hash (love_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
   if (g_ok(g = g_strof(g, LOVE_VERSION))) {
@@ -1646,7 +1640,8 @@ static union u const help_drive[] =
  { {lvm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
 
 // Raise status s with condition data a/b to the help continuation. With a
-// global `help` function and 5 words of stack headroom (the raise path never
+// global `help` function -- present the way everything is present: by its
+// net -- and 5 words of stack headroom (the raise path never
 // allocates), build the (help s a b) frame and run it; else the C default
 // raise_c, which resumes the eof protocol raw. Pre-book raises (g_ini_0)
 // always take the default.
@@ -1656,7 +1651,7 @@ static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
  if (c->book) {
   struct g_atom *ts = sym_probe(c, "help", 4);
   word h = ts ? g_mapget(c, nil, word(ts), c->book) : nil;
-  if (lamp(h) && avail(c) >= 5) {
+  if (!g_nilp(h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
    sp[0] = putfix(s), sp[1] = h;
    sp[2] = a, sp[3] = b;
@@ -1698,11 +1693,19 @@ lvm(lvm_scare) {
 // the missing miss sentinel: a private static address no book value can equal,
 // so a name bound to nil stays distinct from no entry at all.
 static union u const no_entry[1];
+// THE ZERO POINT: what a helpless missing read answers. mint-shaped (nom 0,
+// serial 0 -- the one serial never drawn), nameless, $0, falsy, applying
+// const-1 like every unit. absence is a POINT, not a quantity: a number
+// would exponentiate under a numeral ((i love) = 0**i is honest nan), a
+// unit absorbs -- which is what keeps (i love you) = 1. data-segment
+// rooted (gcp's out-of-pool short-circuit), prints (mint 0).
+static const struct g_atom g_zero_point = { .ap = lvm_sym, .code = 0, .nom = 0 };
+#define zero_point ((word) &g_zero_point)
 // The late-bound global read. A hit patches the site to a quote of the value
 // (the fold law's runtime tail). A miss is a MISSING name -- a nom not in the book,
 // a call for help: with a global help installed the read raises
 // (help 1 'missing nom) and the help's result is the value here; helpless it
-// reads (). either way the site stays a freev (no quote patch on a miss):
+// reads the zero point. either way the site stays a freev (no quote patch on a miss):
 // the condition recurs, and a define that lands later is seen.
 lvm(lvm_freev) {
  word v = g_mapget(g, word(no_entry), Ip[1].x, g->book);
@@ -1713,8 +1716,8 @@ lvm(lvm_freev) {
  Have(8);                          // [resume a b] + g_raise's 5 words
  struct g_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
- if (!lamp(h)) return
-  *--Sp = empty_sym,
+ if (g_nilp(h)) return
+  *--Sp = zero_point,
   Ip += 2,
   Continue();
  word a = g->missing, b = Ip[1].x;
@@ -1725,7 +1728,7 @@ lvm(lvm_freev) {
 // argument (a tablet is a little book; the book is just the outermost one).
 // k present in map t answers the value; a miss is the MISSING CONDITION: with a
 // global help installed the read raises (help 1 'missing k) and the help's result
-// is the value, helpless it reads (). boxfix's letrec cells read this way --
+// is the value, helpless it reads the zero point. boxfix's letrec cells read this way --
 // pre-fill is a miss, the binding-site nom the payload. distinct from peep,
 // whose caller names what absence means.
 lvm(lvm_missing) {
@@ -1738,8 +1741,8 @@ lvm(lvm_missing) {
  Have(8);                          // [resume a b] + g_raise's 5 words
  struct g_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
- if (!lamp(h)) return
-  Sp[1] = empty_sym,
+ if (g_nilp(h)) return
+  Sp[1] = zero_point,
   Sp++,
   Ip++,
   Continue();
@@ -2577,12 +2580,11 @@ static g_inline struct g*gzput_str(struct g*g, word _) {
  return g_pop(gzputc(g, '"'), 1); }
 
 // A symbol's nom is its kind: 0 = a mint (the nameless fresh point), a string
-// = interned. Interned syms print bare; the empty symbol as `()` (round-trips);
-// a mint prints `(mint 0)` -- which re-reads to a FRESH point, the same
-// round-trip the mutables make (a printed map is a fresh map): identity is the
-// mint's whole product, so no spelling can carry it.
+// = interned. Interned syms print bare; a mint prints `(mint 0)` -- which
+// re-reads to a FRESH point, the same round-trip the mutables make (a printed
+// map is a fresh map): identity is the mint's whole product, so no spelling
+// can carry it.
 static g_inline struct g*gzput_sym(struct g*g, word _) {
- if (_ == empty_sym) return gzprintf(g, "()");
  if (g_ok(g = g_push(g, 1, _))) {
   word nom = word(sym(g->sp[0])->nom);
   if (!nom) g = gzprintf(g, "(mint 0)");                    // a mint: fresh on re-read
@@ -2593,7 +2595,7 @@ static g_inline struct g*gzput_sym(struct g*g, word _) {
  return g_pop(g, 1); }
 
 
-// Maps print as #(k v …), round-tripping through the #( reader.
+// Maps print as #(k v …), the empty map as (tablet 0); both round-trip.
 // A map is mutable and can hold itself, so guard the recursion with the seen
 // list. Snapshot k/v into a list first (printing may GC and move the map).
 static g_inline struct g*gzput_map(struct g*g, word x, uintptr_t off) {
@@ -2612,7 +2614,7 @@ static g_inline struct g*gzput_map(struct g*g, word x, uintptr_t off) {
    ini_two(kv, s[2 * i], s[2 * i + 1]);                 // (k . v)
    ini_two(p, (word) kv, list), list = (word) p++; }    // cons onto the snapshot
  fs0(g) = list;
- if (!twop(fs0(g))) g = gzputcs(g, "#()");             // empty map prints #() (#0 is the 0-box now)
+ if (!twop(fs0(g))) g = gzputcs(g, "(tablet 0)");             // the empty map prints (tablet 0): "#()" reads as #0, the 0-box
  else {
   if (g_ok(g = gzprintf(g, "#("))) for (bool sp = false;;) {
    if (sp) g = gzputc(g, ' ');
@@ -3138,9 +3140,7 @@ static struct g *gz_parse(struct g *g, bool multi) {
     if (nilp(g->sp[0])) return encode(g_core_of(g), g_status_eof);   // stray ) / read1
     if (symp(A(g->sp[0]))) return encode(g_core_of(g), g_status_more); // wrap wants its operand
     g = g_push(g, 1, AA(g->sp[0]));                    // d = head of the closed frame
-    if (g_ok(g)) {
-     if (nilp(g->sp[0])) g->sp[0] = empty_sym;         // () -- the empty symbol, not 0
-     g->sp[1] = B(g->sp[1]); }                         // pop the closed frame
+    if (g_ok(g)) g->sp[1] = B(g->sp[1]);               // pop the closed frame; () = 0
     break;                                             // -> deliver d
    case EOF:
     if (nilp(g->sp[0])) return encode(g_core_of(g), g_status_eof);
@@ -3205,15 +3205,9 @@ static struct g *gz_parse(struct g *g, bool multi) {
     g->sp[1] = g->sp[0], g->sp++;
     return g; }
    if (symp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    if (hashsym(A(g->sp[1])) && g->sp[0] == empty_sym) { // #() ONLY -> (tablet 0): the empty hash
-     g->sp[0] = nil;                                   // (#0 is NOT empty: it boxes 0 -- see hashtx)
-     g = gxr(g_push(g, 1, nil));
-     g = gxl(intern(g_strof(g, "tablet")));             // (tablet . (0)) = (tablet 0)
-     if (g_ok(g)) g->sp[1] = B(g->sp[1]); }            // pop wrap
-    else if (splicesym(A(g->sp[1])) &&
-             (twop(g->sp[0]) || g->sp[0] == empty_sym ||
-              (nilp(g->sp[0]) && !hashsym(A(g->sp[1]))))) {  // @0 splices empty; #0 wraps (a box)
-     if (g->sp[0] == empty_sym) g->sp[0] = nil;        // @() -> (tuple), ~() -> (com)
+    if (splicesym(A(g->sp[1])) &&
+        (twop(g->sp[0]) ||
+         (nilp(g->sp[0]) && !hashsym(A(g->sp[1]))))) { // @()/@0 splice empty; #()/#0 wrap (a box)
      g = gxl(g_push(g, 1, A(g->sp[1])));               // #(k v …)/@(e …)/@() : splice -> (sym . d)
      if (g_ok(g)) g->sp[1] = B(g->sp[1]); }
     else {                                             // 'x `x ,x  #x %atom/@atom -> (wrapsym d)
@@ -3695,11 +3689,11 @@ bool g_strp(g_word x) { return strp(x); }
 // sym
 // ============================================================================
 // (intern s) -> the interned symbol named by string s; identity on any other arg.
-// The empty name maps to the one canonical empty symbol (g_sym_empty), so it is
-// never interned into the tree and stays unique.
+// The empty spelling names nothing: (intern "") is 0, never an atom -- one
+// nothing (the empty symbol died with the one-nothing round).
 lvm(lvm_intern) {
  if (strp(Sp[0])) {
-  if (Sp[0] == EmptyString) return Sp[0] = empty_sym, Ip += 1, Continue();
+  if (Sp[0] == EmptyString) return Sp[0] = nil, Ip += 1, Continue();
   struct g_atom *y;
   Have(intern_reserve(g));
   Pack(g), y = intern_checked(g, (struct g_str*) g->sp[0]), Unpack(g);
@@ -3709,7 +3703,7 @@ lvm(lvm_intern) {
 // (mint _) -> a fresh POINT, adjoined to the value space: nameless, materially
 // empty ($mint = 0, applies const-1 like every unit), identity its only
 // property -- the arg is ignored. `code` gets THE MINT SERIAL (monotonic,
-// pre-incremented; 0 is the empty symbol's) -- the point's hash and its place
+// pre-incremented) -- the point's hash and its place
 // in the total order: mints order by creation, GC-stable. a NOM is now the
 // literal pair of a name string and a mint (prelude sugar over this nif) --
 // the named-uninterned atom species is gone, the McCarthy restoration's first
@@ -3947,13 +3941,13 @@ static lvm(lvm_add_seq) {
 // isym+usym -> usym, sym+str -> str, num+sym -> sym (lifted), num+str -> str. The
 // concat is built as one string in operand order, then returned per the result
 // rank: string as-is / nom'd to a fresh uninterned sym / interned. An empty
-// result is the g_str_empty / g_sym_empty singleton (the additive identity).
+// result is the g_str_empty singleton, or nil at symbol rank (the symbol
+// lane is gated off by the dispatch matrix since the mint round anyway).
 static g_inline struct g_str *add_name(word x) {        // symbol -> name string, or 0 (a mint)
  word nom = word(sym(x)->nom);
  return nom ? str(nom) : 0; }                           // interned: nom IS the name
 static g_inline int stringrank(word x) {                  // STR 0 / USYM 1 / ISYM|NUM 2
  if (strp(x)) return 0;
- if (x == empty_sym) return 2;                           // canonical (intern ""): the + identity
  if (symp(x)) { word n = word(sym(x)->nom); return n && strp(n) ? 2 : 1; }
  return 2; }
 static g_inline uintptr_t stringlen(word x) {             // bytes x contributes to a concat
@@ -3972,7 +3966,7 @@ static lvm(lvm_add_string) {
  if (!strp(b) && !symp(b) && seq_byte(b) < 0) return *++Sp = nil, Ip++, Continue();
  int rank = min(stringrank(a), stringrank(b));
  uintptr_t n = stringlen(a) + stringlen(b);
- if (!n) return *++Sp = rank ? empty_sym : EmptyString, Ip++, Continue();
+ if (!n) return *++Sp = rank ? nil : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(n);
  Have(req);
  a = Sp[0], b = Sp[1];                                  // re-read post-GC
@@ -4034,7 +4028,7 @@ static lvm(lvm_mul_rep) {
  int rank = strp(seq) ? 0 : stringrank(seq);         // 0 str / 1 usym / 2 isym
  struct g_str *src = strp(seq) ? str(seq) : add_name(seq);
  uintptr_t sl = src ? src->len : 0, total = sl * n;
- if (!total) return *++Sp = rank ? empty_sym : EmptyString, Ip++, Continue();
+ if (!total) return *++Sp = rank ? nil : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(total);
  Have(req);
  seq = (strp(Sp[0]) || symp(Sp[0])) ? Sp[0] : Sp[1];   // re-read post-GC
@@ -5304,13 +5298,13 @@ static g_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb,
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
-// symbols: the PRODUCT ORDER -- name lex first (missing -> "", so the nameless sit
-// below every named symbol), then on a name tie between distinct atoms the
-// interned one first (the canonical point precedes the fresh), then the mint
-// serial (`code`; creation order). same-name noms used to compare EQUAL here
-// while not being `=` -- the order wasn't total; the serial closes trichotomy.
+// symbols: the PRODUCT ORDER -- name lex first (nameless -> "", so mints sit
+// below every named symbol), then interned before fresh on a name tie, then
+// the mint serial (`code`; creation order). same-name noms used to compare
+// EQUAL here while not being `=` -- the order wasn't total; the serial closes
+// trichotomy.
 static g_inline bool sym_interned(word x) {
- return x == empty_sym || (sym(x)->nom && strp(word(sym(x)->nom))); }
+ return sym(x)->nom && strp(word(sym(x)->nom)); }
 static g_inline intptr_t sym_cmp(word a, word b) {
  if (a == b) return 0;
  struct g_str *na = add_name(a), *nb = add_name(b);

@@ -14,7 +14,7 @@
 ; so memoization here uses module-level hashes + named recursive functions,
 ; which compile correctly. Same algorithm, identical output.
 
-(: facts #() bells #() digits "0123456789abcdefghijklmnopqrstuvwxyz"
+(: facts (tablet 0) bells (tablet 0) digits "0123456789abcdefghijklmnopqrstuvwxyz"
    (digit d) (slice digits d (+ d 1))
    (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
    (fact n) (:

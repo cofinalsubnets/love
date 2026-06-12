@@ -79,8 +79,8 @@
    ; (k b) numeral application routes here, so `**` is unneeded.
    ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
    ; exponent above it raises (scare 'apcap k) instead of allocating O(k) -- so
-   ; (bignum f) asks for help where it would oom. retune at runtime: (pin apcap () n).
-   apcap (pin (tablet 0) () 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
+   ; (bignum f) asks for help where it would oom. retune at runtime: (pin apcap 0 n).
+   apcap (pin (tablet 0) 0 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
    ; x ** n across the whole tower. array exponent -> elementwise pow (broadcasts
    ; via the vmap2 engine, float result); integer exponent -> exact squaring, with
@@ -89,7 +89,7 @@
    ; (w^z = exp(z Log w)) and a real lane.
    (powg x n) (? (arrp n) (pow x n)
                  (intp n) (: m (? (< n 0) (- 0 n) n)
-                             (? (< (peep apcap () 0) m) (scare 'apcap m)
+                             (? (< (peep apcap 0 0) m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                  (pow x n))
    ; Church-numeral application generalized across the whole tower. n is the
@@ -102,7 +102,7 @@
    (num-ap n x) (? (nump x) (powg x n)
                    (: k (sat n)
                       (? (< k 1) 1 (= k 1) x
-                         (< (peep apcap () 0) k) (scare 'apcap k)
+                         (< (peep apcap 0 0) k) (scare 'apcap k)
                          (numfn k x))))
    _ (pin book 'num-ap num-ap))
 ; text (function) combinators for + and *, installed like num-ap. a text operand
@@ -476,11 +476,11 @@
 ; array, not just z/r); `map` builds a map from alternating key/value args.
 (: (ltuple l) (arr (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'tuple (\ a (list 'ltuple (cons 'list a))))
-; (hash) = empty; (hash x) boxes a scalar -- a fresh mutable hash pinning x
-; to the () key, so #5 = #(() 5); pairs pin as usual, and an odd trailing
-; operand lands in the () box slot.
+; (hash x) boxes any non-list -- a fresh mutable hash pinning x
+; at 0, so #5 = #(0 5) and #() IS #0 (() is 0); pairs pin as usual, and an odd
+; trailing operand lands in the 0 box slot. the empty hash is (tablet 0).
 (: (hashtx a) (? (atomp a) '(tablet 0)
-                 (atomp (cbp a)) (list 'pin (hashtx 0) '() (cap a))
+                 (atomp (cbp a)) (list 'pin (hashtx 0) 0 (cap a))
                  (list 'pin (hashtx (cbbp a)) (cap a) (cabp a))))
 (:: 'hash (\ a (hashtx a)))
 
@@ -507,7 +507,7 @@
 ; `cell (tablet 0)`, store via pin, read via (missing cell 'nom) -- the nif
 ; VALUES, not their names, so the rewrite survives the egg pulling names and
 ; user bindings shadowing them. a pre-fill read is a map miss, i.e. THE MISSING
-; CONDITION with the binding-site nom as payload: a call for help, () helpless --
+; CONDITION with the binding-site nom as payload: a call for help, the zero point helpless --
 ; read-before-pin is one law at every depth, local or book. a value binding
 ; boxes on ANY forward reference; a lambda binding only on a DIRECT (not
 ; under-lambda) one -- ordinary recursion keeps the lazy lane. values defined

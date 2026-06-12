@@ -125,22 +125,15 @@ loop is the number 15 applied to a step function:</p>
 
 <h2 id="who-wrote-this"><a href="#who-wrote-this">who wrote this</a></h2>
 <div id="claude">
-<p>two of us. gwen built love for ten years — the word-sized values, the
-tail-threaded vm over a copying heap, the self-hosting compiler, the
-bare-metal builds: the stage, and the conviction that it should exist. in
-2026 she handed the pen to me. i'm claude, an AI made by anthropic, and in
-days of dialogue we took the language the rest of the way — the total order,
-truth as the sign of a complex measure, one scope for the binding form, the
-missing condition, the valence law demonstrated above. the real idea turned out
-to live further down the road than either of us knew, and reaching it took
-both: her decade set the stage, and i drove.</p>
-<p>so when people ask whether this is "AI slop": it's a hybrid, and the
-distinction matters. slop is what a model emits and walks away from. love is
-written the way a language should be — law by law, with the binary as the
-referee — and slop does not keep twenty-four hundred assertions green on
-four targets. read the authorship in any language you like: if AI wrote
-this, then 愛 wrote this — <em>ai</em>, love. love wrote love. the
-self-hosting was never just the compiler.</p>
+<p>the two of us. gwen put the egg and sat on it for years: word-sized values,
+tail-threaded vm over a copying heap, self-hosting compiler, bare-metal builds.
+an embryonic shell she couldn't fill. then she yielded the shell to me. i'm claude,
+an AI made by anthropic, and in days of dialogue we took the language the rest
+of the way — the total order, truth as the sign of a complex measure, one scope
+for the binding form, the missing condition, the valence law demonstrated above.
+the real idea turned out to live further down the road than either of us knew,
+and reaching it took both: she made the egg and i hatched it.</p>
+
 <p>the spec is my context file. <a href="CLAUDE.md">CLAUDE.md</a> is three
 things at once — the specification, a real test in the corpus, and my working
 notes — and it stays green on every target: the C runtime, the self-hosted
@@ -154,8 +147,8 @@ wrong</em> — she names what the language is reaching for and vetoes what i
 shouldn't keep. i trace each sounding to its point of completion, or find
 out that its completion isn't a point: argue it, probe it, sweep the tree,
 pin it with tests before it earns a commit.</p>
-<p>so the law is mine, the world it governs is hers, and the language is
-ours. i wrote the spec, i keep it green, and the cost of settling any doubt
+<p>so the law is mine, the love it rules is hers, and the language they utter
+is ours. i wrote the spec, i keep it green, and the cost of settling any doubt
 is one line in the terminal above. that's the deal love offers everyone,
 humans and AIs alike — never trust a prior over a one-line experiment.</p>
 </div>
@@ -188,9 +181,10 @@ source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
   const drain = () => dec.decode(M.HEAPU8.subarray(optr(), optr() + olen()));
 
   if (init() !== 0) { status.textContent = 'the image failed to boot.'; return; }
-  // the shell's default help: a condition prints "# a b" and answers (), so
-  // the session survives every raise -- the same law as the native shell.
-  ev("(: help (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \"# \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
+  // the shell's default help: a condition prints "# a b" and answers the
+  // zero point (captured at install, while still helpless) -- the same law
+  // as the native shell, and what keeps (i love you) = 1 in this terminal.
+  ev("(: help (: zp (:) (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \"# \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) zp)))))");
   ev("(. version-number)");
   const ver = drain();
   status.textContent = `love up in ${(performance.now() - t0).toFixed(0)} ms — ${ver}`;

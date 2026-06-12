@@ -126,7 +126,7 @@
         m)
    (symtab-sizes d)                                       ; -> map: fn start address -> byte size
      (: st (find-symtab d (u64 d 40) (u16 d 58) (u16 d 60) 0)  ; e_shoff / e_shentsize / e_shnum
-        (? st (collect-syms d (cap st) (// (cbp st) 24) 0 #()) #())))
+        (? st (collect-syms d (cap st) (// (cbp st) 24) 0 (tablet 0)) (tablet 0))))
 
 ; --- the scan (vmret.py scan(), grouping by function header) ----------
 ; close the current watched function: flag it iff it collected any rets.

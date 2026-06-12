@@ -12,7 +12,7 @@
   !("ab" + 'ef) !('ef + "ab")                   ; sym <-> string
   !(65 + 'ef) !('ef + 65)                       ; sym <-> number
   !(@(1 2) + 'ef) !('ef + @(1 2))               ; sym <-> array
-  !(sa-z + 'ef) !('ef + sa-z)                   ; () lost its +-identity with the algebra
+  !(sa-z + 'ef) !('ef + sa-z)                   ; (intern "") is 0: nothing has no algebra
   !(sa-z + sa-z)
   ; --- no * either ---
   !('xy * 2) !(2 * 'xy) !('a * 'b) !(sa-z * 2)
@@ -48,5 +48,5 @@
      _ ((: (churn k) (? (< 0 k) (: _ (map (\ i (string (mint 0))) '(1 2 3 4 5 6 7 8)) (churn (- k 1))) 0)) 500)
      (pre = (L (a < b) (n1 < n2) (() < n1))))
   ; the serial is the mint's hash: same-name noms key a map apart, stably
-  (: t #() _ (pin t a 'one) _ (pin t b 'two)
+  (: t (tablet 0) _ (pin t a 'one) _ (pin t b 'two)
      (&& ('one = (t a)) ('two = (t b)) (2 = $t)))))

@@ -41,7 +41,7 @@
 
 ; cnt = every source symbol -> its occurrence count (also the fresh-name avoid-set);
 ; taint = the frozen set (here: symbols seen under qq). both mutated in place.
-(: cnt #() taint #())
+(: cnt (tablet 0) taint (tablet 0))
 
 ; === CORE -- naming-with-reuse for MACROEXPANDED forms (the part destined for the
 ; compiler). Knows only `\` / `:` / application; recurses through the hook `rec`.

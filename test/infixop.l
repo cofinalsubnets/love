@@ -60,7 +60,7 @@
 ; (t <- k v) pins (returns the collection, so it chains), (t -> k d) peeps.
 (assert
  (20 = (: t #(1 10) _ (t <- 2 20) (t -> 2 0)))   ; pin then peep, infix
- (7 = ((#() <- 'k 7) 'k))                        ; <- returns the collection
+ (7 = (((tablet 0) <- 'k 7) 'k))                        ; <- returns the collection
  (9 = (#(1 10) -> 2 9))                          ; -> falls back to the default
  (65 = (: b (buf 1) _ (b <- 0 65) (b -> 0 0)))  ; bufs take the same accessors
  ('pin = (cap (peep operators '<- 0)))  ; the table entries are (name . arity) aliases

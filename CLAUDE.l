@@ -26,7 +26,7 @@
 ; * a corpus test that spawns must (wait p) its task: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the
 ;   interactive shell installs a default help when none is present (repl.l shell-help):
-;   a scare prints `# a b` and answers (), so the session survives every raise and a
+;   a scare prints `# a b` and answers the zero point, so the session survives every raise and a
 ;   missing name or apcap is VISIBLE; the more bits keep the read protocol (port back when
 ;   incomplete, sentinel at eof). file mode stays helpless -- terminal, per the law.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
@@ -64,7 +64,8 @@
  (8 = (3 2)) (262144 = (2 3 4))                  ; (n x) = x**n; the tower (2 3 4) = 4**(3**2)
  (12 = (3 (+ 1) 9)) ('(2 3 4) = (map (+ 1) '(1 2 3)))  ; (n f) composes f ($ n) times; currying *is* partial application
  (10 = (-3 (+ 1) 10)) (13 = (2.5 (+ 1) 10))      ; the count SATURATES, true to !!$: (-3 f) = (0 f) = 1; a float ceils
- (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9)))             ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
+ (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9))              ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
+ (1 = (i love you)))                             ; the theorem: love is not in the book, and absence absorbs
 
 ; --- three special forms --- `:` is letrec*/sequence, `?` is cond, `\` is lambda (and, with a
 ; single operand, quote). everything else is a function call.
@@ -77,14 +78,14 @@
 ; body-less top-level `:` leaks its bindings to the global scope (that's how tests share helpers).
 ; a body-having `:` is ONE SCOPE: every name binds over the whole form, so a read before the
 ; pin is the MISSING CONDITION (see control) with the binding site's nom as payload -- a call for
-; help, () helpless; no read ever escapes to an outer binding of the same name. rebinding a name
+; help, the zero point helpless; no read ever escapes to an outer binding of the same name. rebinding a name
 ; later in the form still reads the previous value (the sequence law); recursion among lambda
 ; bindings resolves lazily. an EMPTY form is its head's value -- (f) == f at zero operands --
-; and the heads are missing, so (:) (?) (\) all read ().
+; and the heads are missing, so (:) (?) (\) all read the zero point.
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
 (assert
- (idp () (:)) (idp () (?)) (idp () (\))          ; the empty form is the head read, both lanes
- (idp () (: a b b 2 a)) (2 = (: a b b 2 b))      ; one scope: forward read = the condition, () helpless
+ (idp (:) (?)) (idp (?) (\)) !(:) (symp (:))     ; the empty form is the head read, both lanes: the zero point
+ (idp (:) (: a b b 2 a)) (2 = (: a b b 2 b))     ; one scope: forward read = the condition, the point helpless
  (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0. every value has a net
@@ -111,7 +112,7 @@
 ; charms, a list its spine, an array its cells, a map its keys, a symbol its spelling,
 ; a scalar nothing. tally is what "length" always was; $ never was.
 (assert
- !0 !"" !#() !@0 !() !0.0 !~(0 0)                ; zero / empty -> false
+ !0 !"" !(tablet 0) !@0 !() !0.0 !~(0 0)         ; zero / empty -> false
  !-5 !-3.9 !~(-3 4) !~(0 -1)                     ; <= 0 in the total order -> false (complex by re then im)
  !!5 !!"x" !!'a !!cap !!i !!~(3 -4)              ; positive / nonempty -> true
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a product of nothings is nothing, recursively
@@ -315,11 +316,14 @@
 ; identity its only property -- the unforgeable thing. a NOM is the literal pair of a
 ; name string and a mint -- (nom "x") = ("x" . fresh point) -- McCarthy's symbol
 ; restored as the product it always was (the named-uninterned atom species is gone).
-; `()` is THE empty symbol -- one canonical value, (intern ""), self-evaluating, false
-; by !!$ -- but a symbol, NOT the number 0. every mint draws a SERIAL from the one
-; mint stream (task pids draw from it too): symbols order by name first (mints below
-; every named symbol), then the interned one (the canonical point precedes the fresh),
-; then by serial -- creation order -- so the total order is TOTAL, GC-stable; the
+; `()` reads as 0 -- nothing's plain spelling -- and (intern "") is 0: the empty
+; spelling names nothing (the empty-symbol species is gone). ABSENCE is another
+; matter: a helpless missing read answers the ZERO POINT, the mint at serial 0 --
+; nameless, $0, false, and a UNIT: it absorbs application where a number would
+; exponentiate, which is what keeps (1 = (i love you)). every mint draws a SERIAL
+; from the one mint stream (task pids draw from it too): symbols order by name first
+; (mints below every named symbol), then by serial -- creation order -- so the total
+; order is TOTAL, GC-stable; the
 ; serial is also the mint's hash. noms inherit all of it through the pair: product
 ; order = (name lex, then mint), structural = stays identity-sharp (the mint inside),
 ; distinct map keys for free. SYMBOLS HAVE NO STRING ALGEBRA (+/* nil, apply const-1);
@@ -331,16 +335,17 @@
 ; slice takes a half-open slice; + concatenates ("" is the identity; scat is gone); string
 ; coerces; \n escapes.
 (assert
- (symp ()) !(() = 0) (idp () (intern "")) (idp () '()) (0 = $()) !() !!$'x
- ("()" = (show ()))
+ (0 = ()) !(symp ()) (0 = (intern "")) (idp 0 '()) (0 = $()) !() !!$'x
+ ("0" = (show ()))
+ (: z zz-never-pinned (&& (symp z) !z (idp z (:)) ("(mint 0)" = (show z))))   ; absence: the zero point
  (symp (mint 0)) (0 = $(mint 0)) !(mint 0)       ; the fresh point: a nameless atom, materially empty
  (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone
  !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (idp m m)))  ; distinct always; itself only
  (twop (nom 'x)) ("x" = (cap (nom 'x)))          ; a nom is the pair; the name is its cap
  (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; pair lex inherits the serial order
  ((mint 0) < (nom 'x))                           ; cross-kind: the point (symbol band) below the product
- (() < (mint 0))                                 ; the zero point sits first among the nameless
- (: a (nom 'k) b (nom 'k) t #() _ (pin t a 1) _ (pin t b 2)
+ (0 < (mint 0))                                  ; nothing is a number: every point sits above it
+ (: a (nom 'k) b (nom 'k) t (tablet 0) _ (pin t a 1) _ (pin t b 2)
     (&& (1 = (t a)) (2 = (t b)) (2 = $t)))      ; same-name noms are distinct map keys
  (97 = ("abc" 0)) (294 = $"abc") (3 = (tally "abc")) (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  !(string 0) !!(string 1)                        ; a NUL nets nothing: the product of nothings reaches the bytes
@@ -349,26 +354,27 @@
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("(mint 0)" = (show (mint 0))))
 
-; --- hashes --- #(k v ..) or (hash ..) build; #() is the empty hash -- ONLY #() (it reads as
-; (tablet 0), the empty-map constructor); mutable. a map is a BOOK -- a tablet is a little
-; book, and `the` book is just the outermost one. # on a scalar BOXES it: #x = #(() x), a
-; fresh mutable hash pinning x to the () key (a 1-entry
-; box, truthy -- the dead () = 0 identity used to conflate #0 with empty). the accessors are
+; --- hashes --- #(k v ..) or (hash ..) build; the empty hash is (tablet 0) (and prints so);
+; mutable. a map is a BOOK -- a tablet is a little book, and `the` book is just the
+; outermost one. # on any non-list datum BOXES it: #x = #(0 x), a fresh mutable hash
+; pinning x at 0 (a 1-entry box, truthy) -- and () IS 0, so #() is #0, the box of
+; nothing: the # law has no empty exception. the accessors are
 ; collection-first: (peep coll k default) reads, (pin coll k v) sets, (pull coll k default) removes-
 ; and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key away.
 ; also keys (the key list), $ is the key count. (t k) == (peep t k 0) -- a map is a lookup
 ; function. THREE ABSENCE LANES, one miss machinery: peep (the caller names what absence
 ; means), apply (absence is 0), and (missing t k) -- the book read as a value: a present k
-; answers, a miss is the missing condition (the help's result, () helpless, k the payload).
+; answers, a miss is the missing condition (the help's result, the zero point helpless, k the payload).
 ; (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
 (assert
- (: b #0 (&& (mapp b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
+ (: b #0 (&& (mapp b) (1 = $b) (0 = (peep b 0 9)) (: _ (pin b 0 7) (7 = (b 0)))))
+ (mapp #()) (1 = $#()) !!#()                     ; #() IS #0: the box of nothing, present
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
- (10 = (missing #(1 10) 1)) (idp () (missing #() 'k)) (0 = (missing #(1 0) 1))   ; missing: the conditioned read; presence beats value
- (50 = (peep (pin #() 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
+ (10 = (missing #(1 10) 1)) (idp (:) (missing (tablet 0) 'k)) (0 = (missing #(1 0) 1))   ; missing: the conditioned read; presence beats value
+ (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (mapp #()) !(mapp 5)
+ ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (mapp (tablet 0)) !(mapp 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
  (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
 
@@ -436,7 +442,7 @@
  (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; head position never fuses: call and section
  ('(mono (< x)) = (cabp (read (sip '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
  ('cap = (monadics '<)) ('net = (monadics '+))
- (20 = (#(1 10 2 20) -> 2 0)) (7 = ((#() <- 'k 7) 'k)) (9 = (#() -> 'k 9))
+ (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
  (: t operators
     (&& (mapp t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%))
@@ -459,14 +465,15 @@
 ; raise as (help s a b) -- s = the status word, two bits: scare (1, something wrong) and
 ; more (2, read control flow); more alone = incomplete, eof = more|scare. a/b = the
 ; condition data; the result is delivered per the bits (the more bit: to the reader's
-; resume; a bare scare: observed). scare?/more?/eof? read s. (scare a b) raises
+; resume; a bare scare: observed). scare?/more?/eof? read s. help is present the way
+; everything is present: by its net ((: help 0) uninstalls). (scare a b) raises
 ; deliberately -- the scare bit set unconditionally, and the help's result comes back
 ; as its value (no help installed -> terminal: the exit face prints `# a b`, show
 ; forms, from the condition data stashed at the raise -- the bare data-less scare,
 ; oom, prints # oom@len instead). see test/help.l. a nom not
 ; in the `book` (the global table) is MISSING -- a call for help: reading one raises
 ; (scare 'missing nom) under an installed help (the help's result is the value); helpless
-; it reads (), not 0 -- false either way. the read happens where the code says it does:
+; it reads the zero point -- a nameless unit. the read happens where the code says it does:
 ; a closure captures its free globals at creation, so a missing read in a lambda body fires
 ; the condition at the define, not the call. see test/missing.l. THE CONDITION IS ONE LAW
 ; AT EVERY DEPTH: a `:` binding read before its pin raises it with the binding site's
@@ -475,14 +482,14 @@
 ; numeral counts are
 ; CAPPED: a compose count or exact-power exponent above the `apcap` box (a public
 ; runtime tunable, default 2^20) raises (scare 'apcap k) instead of allocating O(k) --
-; (bignum f) asks for help where it would oom. retune with (pin apcap () n); see test/apcap.l.
+; (bignum f) asks for help where it would oom. retune with (pin apcap 0 n); see test/apcap.l.
 (assert
  (3 = (ev '(+ 1 2))) (lamp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lamp scare)
- (mapp apcap) (1048576 = (apcap ()))             ; the count ceiling, a tunable box
- (idp () not-in-the-book) !not-in-the-book       ; a missing name reads (): a nom not in the book
+ (mapp apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
+ (idp (:) not-in-the-book) !not-in-the-book      ; a missing name reads the zero point: a nom not in the book
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prelude wraps getc and
@@ -515,7 +522,7 @@
 ; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- and
 ; the hatchling installs as `ev`, baked into the image at C compile time, no allocation;
 ; `born` records the hatch time (unbound pre-egg: love0's first corpus pass runs PRE-egg,
-; and an unbound name is missing, reading ()). before it is born the egg PULLS every runtime-
+; and an unbound name is missing, reading the zero point). before it is born the egg PULLS every runtime-
 ; internal name: the raw cell nifs (peek poke seek lamb -- (lamb 2 3) is a segfault, big
 ; scare; lamb is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE

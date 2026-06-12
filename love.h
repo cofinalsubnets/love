@@ -100,8 +100,8 @@ struct g {
  union u *tasks;       // task ring head (running task's node); always non-NULL after g_ini
  uintptr_t yield_ctr,  // ap-cycles since last cooperative yield; counts up to yield_interval (level-triggered)
            next_serial, // THE MINT STREAM: one monotonic counter every fresh identity draws
-                        // from -- task pids and nom serials alike (pre-incremented; 0 = the
-                        // empty symbol's code). a nom's serial lands in its `code` slot: its
+                        // from -- task pids and nom serials alike (pre-incremented).
+                        // a nom's serial lands in its `code` slot: its
                         // hash AND its order tiebreak -- same-name noms order by creation,
                         // GC-stable (code rides the copy), closing trichotomy.
            next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
@@ -264,14 +264,12 @@ struct g_pair { lvm_t *ap; intptr_t a, b; };
 enum q { KFix, KTuple, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KHom, KN };
 #define g_data_n 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KHom-KTuple
 typedef g_word num, word;
-// The unique empty string and empty (anonymous) symbol -- data-segment globals the
-// GC never moves (gcp's out-of-pool short-circuit). Strings are immutable, so one
-// empty string suffices and zero-length ones are never heap-allocated; g_sym_empty
-// is the additive identity for `+` on symbols. See love.c for the rationale.
+// The unique empty string -- a data-segment global the GC never moves (gcp's
+// out-of-pool short-circuit). Strings are immutable, so one empty string
+// suffices and zero-length ones are never heap-allocated. (the empty SYMBOL
+// died in the one-nothing round: () reads as 0.)
 extern const struct g_str g_str_empty;
-extern const struct g_atom g_sym_empty;
 #define EmptyString ((word) &g_str_empty)
-#define empty_sym ((word) &g_sym_empty)
 void g_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool g_ready(int fd), g_strp(g_word);
 struct g

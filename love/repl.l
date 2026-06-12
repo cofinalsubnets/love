@@ -41,7 +41,7 @@
         r (read p eofsym)
         (? (= r p)      m                  ; ends inside an unfinished form
            (= r eofsym) 0                  ; unreachable: the wrap always closes
-           (idp r ())   0                  ; blank line reads the empty symbol
+           (idp r ())   0                  ; blank line reads 0 (the wrapped empty form)
            (L r)))
 
    ; --- editor ---
@@ -307,14 +307,20 @@
               (repl nhu nhd))))
 
    ; the shell's default help: a scare prints its condition -- # a b -- and
-   ; answers (), so the session survives every raise with an honest face
-   ; (helpless, the C default is terminal and wears the oom banner). the
+   ; answers the zero point, so the session survives every raise with an
+   ; honest face and (i love you) stays 1 at the prompt (the answer must be
+   ; a unit: a number would exponentiate under a numeral). the point is
+   ; captured HERE, helpless at load -- the body cannot say (:), since
+   ; reading the missing head under the installed shell-help would recurse.
+   ; (helpless, the C default is terminal and wears the oom banner.) the
    ; more bits reproduce the read protocol exactly: incomplete delivers the
    ; port back, eof the sentinel -- a = the port, b = the sentinel.
-   (shell-help s a b)
-     (? (eof? s) b
-        (more? s) a
-        (: _ (puts "# ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) ()))
+   shell-help
+     (: zp (:)
+        (\ s a b
+           (? (eof? s) b
+              (more? s) a
+              (: _ (puts "# ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) zp))))
 
    ; the interactive entry: install shell-help IF no help is present (the
    ; check and the define both go through ev -- a live read and a top-level
@@ -328,8 +334,8 @@
 ; charms: the global character construction -- the LAZY charlist. a charm is
 ; a sat (a non-negative fixnum); a CHARS is a bare charlist (eager, ends at
 ; 0); a CHARMS is the colist: (cap cs) is a charm, (cbp cs) is a top, and
-; the tail forced with the empty -- ((cbp cs) ()) -- types as charms + (),
-; the coproduct, () the end (the floor unit as the nil injection). consumers
+; the tail forced with the empty -- ((cbp cs) ()) -- types as charms + 0,
+; the coproduct, 0 the end (the floor as the nil injection). consumers
 ; dispatch on KIND: twop is a cell, anything else the end. `charms` is also
 ; the canonical lift into the construction: chars lift cell by cell, a port
 ; (the HOT charms) pulls one byte per force (-1 ends it), charms pass

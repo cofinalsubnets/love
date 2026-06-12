@@ -37,3 +37,13 @@
 (: help 0)                       ; uninstall: a non-lamp value defers to the raw default
 (assert !help (= 'eof (read (sip 0) 'eof))
         (: p (sip '(40)) (= p (read p 99))))
+
+; help is present by its net, like everything: "" is a lamp netting nothing,
+; so it is no help -- the missing read stays 0 and the read protocol stays
+; raw. the koan's help (\ s a b 1) is =-equal to 0 yet a top netting 1:
+; installed, and every scare answers 1.
+(: help "")
+(assert !help (idp (:) one-nothing-unpinned) (= 'eof (read (sip 0) 'eof)))
+(: help (\ s a b 1))
+(assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))
+(: help 0)
