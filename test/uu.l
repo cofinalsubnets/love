@@ -3,7 +3,7 @@
 ; conversion (de bruijn levels as fresh vars, sigma- and pi-eta), type-in-type --
 ; the universe stance of the reference (UniMath/Foundations/Init.v: Unset
 ; Universe Checking). an axiom is a book entry with a type and no value: a
-; sanctioned anom. names follow UniMath so the port reads literally.
+; sanctioned anon. names follow UniMath so the port reads literally.
 ;
 ; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
 ;   (pi x A B) (lam x b) (total2 x A B) (tpair a b) (pr1 w) (pr2 w) (succ n)
@@ -14,7 +14,7 @@
 ; and any other list is an application spine. (f) == f here too.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(: GLOB (tablet 0) TRAPC (tablet 0)
+(: GLOB (tablet 0) HELPC (tablet 0)
 
    (tagv v) (? (twop v) (cap v) v)
    (e2 l) (cap (cbp l))
@@ -260,7 +260,7 @@
 
 ; --- drivers: a definition is checked then pinned; an axiom is a book entry
 ; --- with a type and no value (its value is its own neutral name); rejects
-; --- runs a thunk expecting the kernel to refuse (the trap cell escapes).
+; --- runs a thunk expecting the kernel to refuse (the help cell escapes).
 (: (defn nm T t)
    (: _ (chk 0 0 0 T 'UU)
       Tv (vof 0 T)
@@ -282,10 +282,10 @@
       _ (pin GLOB nm (L Tv (L 'nv nm)))
       nm)
    (rejects th)
-   (: r (call-cc (\ k (: _ (pin TRAPC () (\ s a b (k 'rejected)))
+   (: r (call-cc (\ k (: _ (pin HELPC () (\ s a b (k 'rejected)))
                          v (th 0)
                          'accepted)))
-      _ (pin TRAPC () 0)
+      _ (pin HELPC () 0)
       r))
 
 ; --- UniMath Foundations PartA, the core slice: every name is the original.
@@ -1832,10 +1832,10 @@
    '(lam X (lam Y (lam w1 (lam w2
       (lam P (lam g (w1 P (lam x (w2 P (lam y (g (tpair x y))))))))))))))
 
-; --- the kernel refuses: ill-typed terms scare; the trap cell catches them.
-; --- (install per the trap law -- more/eof keep the read protocol.)
-(: (trap s p e) (? (more? s) p (eof? s) e
-                   (: h (peep TRAPC () 0) (? h (h s p e) 0))))
+; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
+; --- (install per the help law -- more/eof keep the read protocol.)
+(: (help s p e) (? (more? s) p (eof? s) e
+                   (: h (peep HELPC () 0) (? h (h s p e) 0))))
 (assert
  (idp 'rejected (rejects (\ z (defn 'uu-bad1 '(paths nat 1 2) '(idpath 1)))))
  (idp 'rejected (rejects (\ z (defn 'uu-bad2 '(pi x nat nat) '(lam x (succ y))))))
@@ -1843,4 +1843,4 @@
  (idp 'rejected (rejects (\ z (defn 'uu-bad4 '(coprod nat bool) '(ii1 true)))))
  (idp 'rejected (rejects (\ z (defn 'uu-bad5 'nat '(let x (lam y y) x)))))
  (idp 'accepted (rejects (\ z (defn 'uu-good '(paths nat 2 2) '(idpath 2))))))
-(: trap 0)
+(: help 0)

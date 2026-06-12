@@ -599,7 +599,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_lamp, "lamp", s1(lvm_lamp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
  _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
- _(nif_anon, "anom", s2(lvm_anon)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
+ _(nif_anon, "anon", s2(lvm_anon)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
  _(nif_spawn, "spawn", s2(lvm_spawn)) _(nif_wait, "wait", s1(lvm_wait)) \
  _(nif_sleep, "sleep", s1(lvm_sleep)) _(nif_donep, "done?", s1(lvm_donep)) \
  _(nif_hush, "hush", s1(lvm_hush)) \
@@ -641,19 +641,19 @@ nifs(native_implemented_function);
 static lvm(_lvm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_lvm_yield_c} };
 
-// lvm_trap: the default trap ap, a first-class vm ap (declared in love.h with
+// lvm_help: the default help ap, a first-class vm ap (declared in love.h with
 // ret0/cur/port_io). A throw enters it with the thrown status encoded into g
-// (see gtrap2 below). The MORE bit is read control flow, not a scare: the
+// (see ghelp2 below). The MORE bit is read control flow, not a scare: the
 // thrower left [resume port sentinel] on the stack (the read protocol), so
 // deliver the port (more: incomplete) or the sentinel (eof) to the resume
 // text and keep running. A scare re-encodes and yields to C. Define a global
-// `trap` function to land throws in l instead.
+// `help` function to land throws in l instead.
 // the scare exit door: re-encode and yield to C. Lives OUTSIDE the lvm_*
 // namespace (the underscore convention, like _lvm_yield_c above) because it
 // is the one designed return -- the vmret gate's no-ret invariant scans
-// lvm_*, and lvm_trap reaches here by tail call (a jmp under g_tco).
-static lvm(_lvm_trap_sing, enum g_status s) { return Pack(g), encode(g, s); }
-lvm(lvm_trap) {
+// lvm_*, and lvm_help reaches here by tail call (a jmp under g_tco).
+static lvm(_lvm_help_scare, enum g_status s) { return Pack(g), encode(g, s); }
+lvm(lvm_help) {
  enum g_status s = g_code_of(g);
  g = g_core_of(g);
  if (s & g_status_more) {
@@ -661,10 +661,10 @@ lvm(lvm_trap) {
   Sp[2] = s == g_status_more ? Sp[1] : Sp[2];         // more -> port, eof -> sentinel
   Sp += 2;
   return Continue(); }
- return Ap(_lvm_trap_sing, g, s); }
-static union u const throw_c[] = { {lvm_trap} };
+ return Ap(_lvm_help_scare, g, s); }
+static union u const throw_c[] = { {lvm_help} };
 
-// gtrap2/gtrap are defined after numap_drive (the trap call frame runs
+// ghelp2/ghelp are defined after numap_drive (the help call frame runs
 // through its 3-arg twin); declared in love.h.
 
 static struct g_def const def1[] = { nifs(niff) insts(i_entry)};
@@ -716,12 +716,12 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   if (g_ok(g = g_strof(g, LOVE_VERSION))) {
    struct g_def vd[] = {{"version-number", g_pop1(g)}};
    g = g_defn(g, vd, countof(vd)); }
-  // the anom condition tag ('anom), pre-interned and rooted (v0..end in
+  // the anon condition tag ('anon), pre-interned and rooted (v0..end in
   // struct g) so lvm_freev's raise path never allocates the tag and the
   // weak intern map keeps the atom across collections.
-  if (g_ok(g = g_strof(g, "anom"))) {
+  if (g_ok(g = g_strof(g, "anon"))) {
    g = intern(g);
-   if (g_ok(g)) g->anom = g_pop1(g); }
+   if (g_ok(g)) g->anon = g_pop1(g); }
   // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prelude, and the
   // opfix source pass (prelude.l, hooked by both compilers at c0 and wev)
@@ -787,7 +787,7 @@ struct g *gxr(struct g *g) {
 // ============================================================================
 lvm(lvm_gc, uintptr_t n) {
  Pack(g);
- if (!g_ok(g = g_please(g, n))) return gtrap(g);
+ if (!g_ok(g = g_please(g, n))) return ghelp(g);
  return Unpack(g), Continue(); }
 
 static word gcp(struct g*, word, word const *, word const *);
@@ -1552,13 +1552,13 @@ lvm(lvm_defglob) {
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
  return Sp[0] = k, Sp[1] = v, Sp[2] = g->book, Pack(g),
-  !g_ok(g = g_mapput(g)) ? gtrap(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
+  !g_ok(g = g_mapput(g)) ? ghelp(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
 // lvm_freev (the late-bound global read) is defined below lvm_scare: its
-// miss path is the anom condition and borrows the whole trap apparatus.
+// miss path is the anon condition and borrows the whole help apparatus.
 
 lvm(lvm_eval) { return Ip++, Pack(g),
- !g_ok(g = c0(g, lvm_jump)) ? gtrap(g) : (Unpack(g), Continue()); }
+ !g_ok(g = c0(g, lvm_jump)) ? ghelp(g) : (Unpack(g), Continue()); }
 
 g_noinline struct g *g_evals_(struct g*g, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(cap b))(cbp b))a)e)0)";
@@ -1589,7 +1589,7 @@ static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
 
 // Resolve a C->lisp ap from book (where the prelude pins it -- book is
 // GC-traced and egg-baked, so it survives into the runtime image), materializing
-// the key by name. Trap loud if undefined: a prelude-ordering contract
+// the key by name. Scare loud if undefined: a prelude-ordering contract
 // violation. Probe + mapget are reads, so no Have in the tail-jump callers.
 static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
  struct g_atom *y = sym_probe(g, nm, n);
@@ -1623,49 +1623,49 @@ static lvm(numap_swap) {
 union u const numap_drive[] = { {lvm_ap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
 
 // ============================================================================
-// the lisp trap calling convention
+// the lisp help calling convention
 // ============================================================================
-// With a global `trap` function installed, a throw becomes the call
-// (trap s a b): s = the status word (prelude readers scare?/more?/eof?),
+// With a global `help` function installed, a throw becomes the call
+// (help s a b): s = the status word (prelude readers scare?/more?/eof?),
 // a/b = the condition data -- for the more bit the port and the read sentinel,
 // for a scare nil nil (oom is bare; future scares define their shapes). The
-// frame runs through trap_drive (numap_drive's 3-arg twin) into a per-class
+// frame runs through help_drive (numap_drive's 3-arg twin) into a per-class
 // epilogue: the more bit delivers the ap's result to the thrower's resume
 // text (the read protocol -- the ap chooses what the reader's caller
 // sees); a scare is observed, then takes the default escape to C.
-static lvm(trap_ret_more) {   // [result resume port sentinel ..] -> resume sees result
+static lvm(help_ret_more) {   // [result resume port sentinel ..] -> resume sees result
  Ip = cell(Sp[1]);
  Sp[3] = Sp[0];
  Sp += 3;
  return Continue(); }
-static lvm(trap_ret_sing) {  // result ignored: scares are not (yet) resumable
+static lvm(help_ret_scare) {  // result ignored: scares are not (yet) resumable
  return Pack(g), encode(g, g_status_scare); }
-static union u const trap_more_k[] = { {trap_ret_more} };
-static union u const trap_sing_k[] = { {trap_ret_sing} };
-static union u const trap_drive[] =
+static union u const help_more_k[] = { {help_ret_more} };
+static union u const help_scare_k[] = { {help_ret_scare} };
+static union u const help_drive[] =
  { {lvm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
 
-// Throw status s with condition data a/b to the trap continuation. With a
-// global `trap` function and 5 words of stack headroom (the throw path never
-// allocates), build the (trap s a b) frame and run it; else the C default
+// Throw status s with condition data a/b to the help continuation. With a
+// global `help` function and 5 words of stack headroom (the throw path never
+// allocates), build the (help s a b) frame and run it; else the C default
 // throw_c, which resumes the eof protocol raw. Pre-book throws (g_ini_0)
 // always take the default.
 static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
                          union u const *K) {
  if (s == g_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
  if (c->book) {
-  struct g_atom *ts = sym_probe(c, "trap", 4);
+  struct g_atom *ts = sym_probe(c, "help", 4);
   word h = ts ? g_mapget(c, nil, word(ts), c->book) : nil;
   if (lamp(h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | thrower data ..]
    sp[0] = putfix(s), sp[1] = h;
    sp[2] = a, sp[3] = b;
    sp[4] = word(K);
-   c->ip = (union u*) trap_drive;
+   c->ip = (union u*) help_drive;
 #if g_tco
    return c->ip->ap(c, c->ip, c->hp, c->sp);
 #else
-   return c;                       // ok-g: the trampoline dispatches trap_drive
+   return c;                       // ok-g: the trampoline dispatches help_drive
 #endif
   } }
  union u *t = (union u*) throw_c;
@@ -1676,77 +1676,77 @@ static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
  return t->ap(encode(c, s));
 #endif
 }
-struct g *gtrap2(struct g *g, enum g_status s) {
+struct g *ghelp2(struct g *g, enum g_status s) {
  struct g *c = g_core_of(g);
  int rd = s & g_status_more;       // the more bit: a read-end condition --
  return g_raise(c, s,              // [resume port sentinel] sits on the stack
   rd ? c->sp[1] : nil, rd ? c->sp[2] : nil,
-  rd ? trap_more_k : trap_sing_k); }
+  rd ? help_more_k : help_scare_k); }
 // Throw on an already-tagged g: re-throw its own status.
-struct g *gtrap(struct g *g) { return gtrap2(g_core_of(g), g_code_of(g)); }
+struct g *ghelp(struct g *g) { return ghelp2(g_core_of(g), g_code_of(g)); }
 // (scare a b): the deliberate throw -- the user scares, the scare bit is set
-// unconditionally and the global trap hears (trap 1 a b). Unlike a C scare
-// (oom), the raise point here is a clean boundary, so the trap's result is
+// unconditionally and the global help hears (help 1 a b). Unlike a C scare
+// (oom), the raise point here is a clean boundary, so the help's result is
 // delivered back as (scare a b)'s value via the more continuation -- the
-// resume is this nif's own ret. With no trap installed the C default
+// resume is this nif's own ret. With no help installed the C default
 // applies and the scare is terminal.
 lvm(lvm_scare) {
  Have(1);
  word a = Sp[0], b = Sp[1];
- *--Sp = word(Ip + 1);             // [resume a b ..]: trap_more_k's layout
- return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
-// the anom miss sentinel: a private static address no book value can equal,
+ *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
+ return Pack(g), g_raise(g, g_status_scare, a, b, help_more_k); }
+// the anon miss sentinel: a private static address no book value can equal,
 // so a name bound to nil stays distinct from no entry at all.
-static union u const anom_miss[1];
+static union u const anon_miss[1];
 // The late-bound global read. A hit patches the site to a quote of the value
-// (the fold law's runtime tail). A miss is an ANOM -- a nom not in the book,
-// a trappable condition: with a global trap installed the read raises
-// (trap 1 'anom nom) and the trap's result is the value here; untrapped it
+// (the fold law's runtime tail). A miss is an ANON -- a nom not in the book,
+// a call for help: with a global help installed the read raises
+// (help 1 'anon nom) and the help's result is the value here; helpless it
 // reads (). either way the site stays a freev (no quote patch on a miss):
 // the condition recurs, and a define that lands later is seen.
 lvm(lvm_freev) {
- word v = g_mapget(g, word(anom_miss), Ip[1].x, g->book);
- if (v != word(anom_miss)) return
+ word v = g_mapget(g, word(anon_miss), Ip[1].x, g->book);
+ if (v != word(anon_miss)) return
   Ip[0].ap = lvm_quote,
   Ip[1].x = v,
   Continue();
  Have(8);                          // [resume a b] + g_raise's 5 words
- struct g_atom *ts = sym_probe(g, "trap", 4);
+ struct g_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
  if (!lamp(h)) return
   *--Sp = empty_sym,
   Ip += 2,
   Continue();
- word a = g->anom, b = Ip[1].x;
+ word a = g->anon, b = Ip[1].x;
  Sp -= 3;
- Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // trap_more_k's layout
- return Pack(g), g_raise(g, g_status_scare, a, b, trap_more_k); }
-// (anom t k): the book read as a value -- lvm_freev's law with the book as an
+ Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
+ return Pack(g), g_raise(g, g_status_scare, a, b, help_more_k); }
+// (anon t k): the book read as a value -- lvm_freev's law with the book as an
 // argument (a tablet is a little book; the book is just the outermost one).
-// k present in map t answers the value; a miss is the ANOM CONDITION: with a
-// global trap installed the read raises (trap 1 'anom k) and the trap's result
-// is the value, untrapped it reads (). boxfix's letrec cells read this way --
+// k present in map t answers the value; a miss is the ANON CONDITION: with a
+// global help installed the read raises (help 1 'anon k) and the help's result
+// is the value, helpless it reads (). boxfix's letrec cells read this way --
 // pre-fill is a miss, the binding-site nom the payload. distinct from peep,
 // whose caller names what absence means.
 lvm(lvm_anon) {
- word v = mapp(Sp[0]) ? g_mapget(g, word(anom_miss), Sp[1], Sp[0]) : word(anom_miss);
- if (v != word(anom_miss)) return
+ word v = mapp(Sp[0]) ? g_mapget(g, word(anon_miss), Sp[1], Sp[0]) : word(anon_miss);
+ if (v != word(anon_miss)) return
   Sp[1] = v,
   Sp++,
   Ip++,
   Continue();
  Have(8);                          // [resume a b] + g_raise's 5 words
- struct g_atom *ts = sym_probe(g, "trap", 4);
+ struct g_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
  if (!lamp(h)) return
   Sp[1] = empty_sym,
   Sp++,
   Ip++,
   Continue();
- word a = g->anom;
+ word a = g->anon;
  Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
  Sp[0] = word(Ip + 1), Sp[1] = a;
- return Pack(g), g_raise(g, g_status_scare, a, Sp[2], trap_more_k); }
+ return Pack(g), g_raise(g, g_status_scare, a, Sp[2], help_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: lvm_gc
@@ -1754,7 +1754,7 @@ lvm(lvm_anon) {
 // Instead gc by hand and re-Ap ourselves (we read but don't mutate before this, so
 // re-entry is idempotent); the dispatch never has to trust Ip.
 #define NumapHave(self) if (Sp < Hp + 2) { \
- Pack(g); g = g_please(g, 2); if (!g_ok(g)) return gtrap(g); \
+ Pack(g); g = g_please(g, 2); if (!g_ok(g)) return ghelp(g); \
  return Unpack(g), Ap(self, g); }
 static lvm(lvm_numap) {
  NumapHave(lvm_numap);
@@ -1928,7 +1928,7 @@ lvm(lvm_yield_sw) {
            need = my_height + restore_h + 6;
  if (Sp < Hp + need) {
   Pack(g);
-  if (!g_ok(g = g_please(g_push(g, 1, next), need))) return gtrap(g);
+  if (!g_ok(g = g_please(g_push(g, 1, next), need))) return ghelp(g);
   next = cell(pop1(g));
   Unpack(g);
   next_stack = next + 5; }   // recompute: next was forwarded by gc
@@ -2316,7 +2316,7 @@ lvm(lvm_fputc) {
  if (iop(Sp[0])) {
   g->io = (struct g_io*) Sp[0];
   Pack(g);
-  if (!g_ok(g = zputc(g, getfix(g->sp[1])))) return gtrap(g);
+  if (!g_ok(g = zputc(g, getfix(g->sp[1])))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
@@ -2325,7 +2325,7 @@ lvm(lvm_fflush) {
  if (iop(Sp[0])) {
   g->io = (struct g_io*) Sp[0];
   Pack(g);
-  if (!g_ok(g = zflush(g))) return gtrap(g);
+  if (!g_ok(g = zflush(g))) return ghelp(g);
   Unpack(g); }
  return Ip++, Continue(); }
 
@@ -2340,14 +2340,14 @@ lvm(lvm_fputs) {
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
   Pack(g);
   while (g_ok(g) && i < l) g = zputc(g, txt(bytes_of(g->sp[1]))[i++]);
-  if (!g_ok(g = zflush(g))) return gtrap(g);
+  if (!g_ok(g = zflush(g))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
 lvm(lvm_fputx) {
  if (iop(Sp[0])) {
   Pack(g);
-  if (!g_ok(g = gfputx(g, (struct g_io*) Sp[0], Sp[1]))) return gtrap(g);
+  if (!g_ok(g = gfputx(g, (struct g_io*) Sp[0], Sp[1]))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
@@ -2365,7 +2365,7 @@ lvm(lvm_dot) {
   while (g_ok(g) && i < l) g = zputc(g, txt(bytes_of(g->sp[0]))[i++]);
   if (g_ok(g)) g = zflush(g); }
  else g = gfputx(g, &g_stdout, x);
- if (!g_ok(g)) return gtrap(g);
+ if (!g_ok(g)) return ghelp(g);
  Unpack(g);
  return Ip++, Continue(); }
 
@@ -2373,7 +2373,7 @@ static struct g*gfputbn(struct g *g, intptr_t n, uint8_t b, struct g_io *o);
 lvm(lvm_fputbn) {
  if (iop(Sp[0])) {
    Pack(g);
-   if (!g_ok(g = gfputbn(g, getfix(Sp[1]), getfix(Sp[2]), (struct g_io*) Sp[0]))) return gtrap(g);
+   if (!g_ok(g = gfputbn(g, getfix(Sp[1]), getfix(Sp[2]), (struct g_io*) Sp[0]))) return ghelp(g);
    Unpack(g);
    Sp[2] = Sp[1]; }
  return Sp += 2, Ip++, Continue(); }
@@ -2384,8 +2384,8 @@ static struct g*gzputs(struct g*g, char const *s) {
  while (*s) g = gzputc(g, *s++);
  return g; }
 
-// the terminal scare face (declared in love.h): an untrapped scare's stashed
-// condition data prints as "# a b" -- the shell trap's face -- to the err
+// the terminal scare face (declared in love.h): an helpless scare's stashed
+// condition data prints as "# a b" -- the shell help's face -- to the err
 // port; the bare scare (nil nil) is oom, which has no data: answer 0 and let
 // the frontend report it raw. best-effort: a failure mid-print just stops.
 int g_scare_face_(struct g *g) {
@@ -2856,7 +2856,7 @@ lvm(lvm_feof) {
  if (iop(Sp[0])) {
   g->io = (struct g_io*) Sp[0];
   Pack(g);
-  if (!g_ok(g = zeof(g))) return gtrap(g);
+  if (!g_ok(g = zeof(g))) return ghelp(g);
   Unpack(g);
   Sp[0] = g->b ? putfix(1) : nil; }
  return Ip++, Continue(); }
@@ -2871,7 +2871,7 @@ lvm(lvm_fgetc) {
    return Ap(lvm_yield_sw, g); }
   Pack(g);
   g->io = i;
-  if (!g_ok(g = zgetc(g))) return gtrap(g);
+  if (!g_ok(g = zgetc(g))) return ghelp(g);
   Unpack(g);
   Sp[0] = putfix(g->b); }
  return Ip++, Continue(); }
@@ -2882,7 +2882,7 @@ lvm(lvm_fungetc) {
   struct g_io *i = (struct g_io*) Sp[0];
   Pack(g);
   g->io = i;
-  if (!g_ok(g = zungetc(g, getfix(g->sp[1])))) return gtrap(g);
+  if (!g_ok(g = zungetc(g, getfix(g->sp[1])))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
@@ -2973,14 +2973,14 @@ lvm(lvm_read) {
   struct g *c = g_core_of(g); // reset stack on parse fail
   c->sp = (word*) c + c->len - depth;
   switch (g_code_of(g)) {
-   default: return gtrap(g);                          // scare: condition data per thrower
+   default: return ghelp(g);                          // scare: condition data per thrower
    case g_status_more: case g_status_eof:
-    // The more bit routes control through the trap continuation: push the read protocol's
-    // resume text under [port sentinel] and throw -- the trap function (or
+    // The more bit routes control through the help continuation: push the read protocol's
+    // resume text under [port sentinel] and throw -- the help function (or
     // throw_c's default) decides flow from the bits. Headroom for the push is
     // the parse ctx frame, which exists wherever more/eof can arise.
     *--c->sp = word(c->ip);
-    return gtrap2(c, g_code_of(g)); } }
+    return ghelp2(c, g_code_of(g)); } }
  return Unpack(g), Continue(); }
 
 // (string x): a charlist -> the string of those bytes; a named symbol -> its
@@ -3527,7 +3527,7 @@ lvm(lvm_put) {
  if (mapp(x)) {
   Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // g_mapput wants (sp0,sp1,sp2)=(key,val,coll)
   Pack(g);
-  if (!g_ok(g = g_mapput(g))) return gtrap(g);
+  if (!g_ok(g = g_mapput(g))) return ghelp(g);
   Unpack(g); }
  else {
   if (bufp(x) && fixp(Sp[1]) && (n = getfix(Sp[1])) >= 0 && n < (word) len(buf_str(x)))
@@ -3806,7 +3806,7 @@ lvm(lvm_cons) {
    return *++Sp = _res, Ip++, Continue(); } } \
  if ((vop) == vop_mul) return Ap(lvm_bmul_start, g); /* O(n^2): run yieldable */ \
  Pack(g); g = g_big_binop(g, vop); \
- if (!g_ok(g)) return gtrap(g); \
+ if (!g_ok(g)) return ghelp(g); \
  return Unpack(g), Continue(); }
 #define avm_slowdiv(op, vop, c_op, fexpr) static lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
@@ -3822,7 +3822,7 @@ lvm(lvm_cons) {
   if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(av c_op bv); \
    return *++Sp = _res, Ip++, Continue(); } } \
  Pack(g); g = g_big_binop(g, vop); \
- if (!g_ok(g)) return gtrap(g); \
+ if (!g_ok(g)) return ghelp(g); \
  return Unpack(g), Continue(); }
 #define avm_ovf(op, builtin) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
@@ -3883,7 +3883,7 @@ static lvm(lvm_quotn) {
    Hp += box_req; flo_put(v->shape, (g_flo_t) av / (g_flo_t) bv); _res = word(v);
    return *++Sp = _res, Ip++, Continue(); } }
  Pack(g); g = g_big_quot_true(g);
- if (!g_ok(g)) return gtrap(g);
+ if (!g_ok(g)) return ghelp(g);
  return Unpack(g), Continue(); }
 
 avm_ovf(sub, __builtin_sub_overflow)
@@ -4957,7 +4957,7 @@ static struct g *g_bmul_setup(struct g *g) {
 
 lvm(lvm_bmul_start) {
  Pack(g); g = g_bmul_setup(g);
- if (!g_ok(g)) return gtrap(g);
+ if (!g_ok(g)) return ghelp(g);
  return Unpack(g), Continue(); }
 
 lvm(lvm_bmul) {
@@ -5121,7 +5121,7 @@ lvm(lvm_asum) {
  if (!tupp(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
  if (tuple(x)->type == g_O) {
   Pack(g); g = ored(g, 0);
-  if (!g_ok(g)) return gtrap(g);
+  if (!g_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
  if (tuple(x)->type == g_C) {                   // complex sum -> a complex box
   struct g_tuple *v = tuple(x); uintptr_t n = tuple_nelem(v);
@@ -5151,7 +5151,7 @@ lvm(lvm_aprod) {
  if (!tupp(x)) return Ip++, Continue();
  if (tuple(x)->type == g_O) {
   Pack(g); g = ored(g, 1);
-  if (!g_ok(g)) return gtrap(g);
+  if (!g_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
  if (tuple(x)->type == g_C) {                   // complex product -> a complex box
   struct g_tuple *v = tuple(x); uintptr_t n = tuple_nelem(v);
@@ -5183,7 +5183,7 @@ static lvm(lvm_aextreme, int kind) {
  if (!tupp(x)) return Ip++, Continue();
  if (tuple(x)->type == g_O) {
   Pack(g); g = ored(g, kind);
-  if (!g_ok(g)) return gtrap(g);
+  if (!g_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
  if (tuple(x)->type == g_C) return Sp[0] = nil, Ip++, Continue();   // complex: unordered
  struct g_tuple *v = tuple(x);
@@ -5304,7 +5304,7 @@ static g_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb,
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
-// symbols: the PRODUCT ORDER -- name lex first (anom -> "", so the nameless sit
+// symbols: the PRODUCT ORDER -- name lex first (anon -> "", so the nameless sit
 // below every named symbol), then on a name tie between distinct atoms the
 // interned one first (the canonical point precedes the fresh), then the mint
 // serial (`code`; creation order). same-name noms used to compare EQUAL here
@@ -5759,7 +5759,7 @@ static struct g *obin_run(struct g *g, int op) {
 lvm(lvm_obin, int op) {
  Pack(g);
  g = obin_run(g, op);
- if (!g_ok(g)) return gtrap(g);
+ if (!g_ok(g)) return ghelp(g);
  return Unpack(g), Continue(); }
 
 // g_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.

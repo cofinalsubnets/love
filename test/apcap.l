@@ -1,13 +1,13 @@
 ; apcap: the numeral count ceiling -- a public tunable box. a compose count or
 ; exact-power exponent above (apcap ()) raises (scare 'apcap k) instead of
-; allocating O(k), so applying a bignum traps where it would oom. the box is
+; allocating O(k), so applying a bignum asks for help where it would oom. the box is
 ; runtime tunable: (pin apcap () n). counts at or below the cap are untouched.
 (assert (mapp apcap) (= 1048576 (apcap ())) (= 1048576 (peep apcap () 0)))
 
-; install a trap that answers 'apcap scares with (capped k); anything else
-; falls through to whatever was installed before (nil pre-trap.l: const-1).
-(: apcap-t0 trap)
-(: trap (\ s a b (? (&& (scare? s) (= a 'apcap)) (L 'capped b) (apcap-t0 s a b))))
+; install a help that answers 'apcap scares with (capped k); anything else
+; falls through to whatever was installed before (nil pre-help.l: const-1).
+(: apcap-t0 help)
+(: help (\ s a b (? (&& (scare? s) (= a 'apcap)) (L 'capped b) (apcap-t0 s a b))))
 (assert
  ; a bignum compose count saturates to fix_max, far above the cap -> scares
  (: r ((100 2) (+ 1)) (&& (= 'capped (cap r)) (< 1048576 (cabp r))))
@@ -26,5 +26,5 @@
  (= 16 (4 2))
  (= 'capped (cap (5 2))))
 (pin apcap () 1048576)
-(: trap apcap-t0)
+(: help apcap-t0)
 (assert (= 1048576 (apcap ())) (= 64 (6 2)) (= 12 ((2 (+ 1)) 10)))

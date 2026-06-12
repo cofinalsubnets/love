@@ -252,7 +252,7 @@ g_noinline static struct g *host_run(struct g *g, g_word argv) {
 static lvm(lvm_run) {
  Pack(g);
  g = host_run(g, Sp[0]);
- if (!g_ok(g)) return gtrap(g);
+ if (!g_ok(g)) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];                                           // result over argv
  Sp += 1; Ip += 1;
@@ -273,7 +273,7 @@ static lvm(lvm_getenv) {
  char const *v = g_strp(Sp[0]) ? host_getenv((struct g_str*) Sp[0]) : NULL;
  if (!v) { Sp[0] = g_nil; Ip += 1; return Continue(); }
  Pack(g);
- if (!g_ok(g = g_strof(g, v))) return gtrap(g);
+ if (!g_ok(g = g_strof(g, v))) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;

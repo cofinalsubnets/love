@@ -16,7 +16,7 @@
  ; and finally book itself. compiled references were folded, so only the
  ; names die; an absent name reads as nil. names the printer or an expander
  ; EMITS (uq ltuple cons pin tablet mono ...) stay, as do the C-resolved hooks
- ; (num-ap scomb bcomb trap) and the repl's test-driven editor surface.
+ ; (num-ap scomb bcomb help) and the repl's test-driven editor surface.
  ; the sweep runs through the FRESH ev -- c0 is done by now, and
  ; late-binding through book['ev] is the egg's own idiom.
  (pull (pin book 'born (clock now)) 'book 0)))

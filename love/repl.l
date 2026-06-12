@@ -5,12 +5,12 @@
 ; implicitly parenthesized and read as ONE expression via (sip ..) + read
 ; -- a line `x y z` is the application (x y z), and infix works at the
 ; prompt (factored at compile time by opfix; reading is structural).
-; read's more-bit conditions route through the trap continuation, whose
+; read's more-bit conditions route through the help continuation, whose
 ; default delivers the port itself on more (input ends inside an unfinished
 ; SHAPE -- an unclosed paren or string; a trailing operator is a complete
 ; datum that folds to a partial). that lets parseall distinguish "submit"
 ; from "keep editing" -- parseall is the lisp-visible face of the more bit;
-; a global `trap` takes over that dispatch.
+; a global `help` takes over that dispatch.
 ;
 ; the editor buffer is a four-zipper threaded positionally through
 ; the editor functions: u (lines above the cursor, reversed), l (chars
@@ -278,10 +278,10 @@
    ; shells). prints the result (or ^C) before returning -1; caller adds
    ; the trailing newline.
    ;
-   ; this poll is the repl's control-flow seam under the trap model: a
-   ; worker that scares is terminated by the default trap and done? flips,
+   ; this poll is the repl's control-flow seam under the help model: a
+   ; worker that scares is terminated by the default help and done? flips,
    ; so the repl survives evaluation errors by construction. a global
-   ; `trap` function gets control at the scare (condition data on struct g)
+   ; `help` function gets control at the scare (condition data on struct g)
    ; BEFORE the task dies; either way done?/key? is where the repl resumes.
    (do_eval v)
      (: pid (spawn ev v)
@@ -306,23 +306,23 @@
               _ (each vs (\ v (: _ (do_eval v) (putc 10))))
               (repl nhu nhd))))
 
-   ; the shell's default trap: a scare prints its condition -- # a b -- and
+   ; the shell's default help: a scare prints its condition -- # a b -- and
    ; answers (), so the session survives every raise with an honest face
-   ; (untrapped, the C default is terminal and wears the oom banner). the
+   ; (helpless, the C default is terminal and wears the oom banner). the
    ; more bits reproduce the read protocol exactly: incomplete delivers the
    ; port back, eof the sentinel -- a = the port, b = the sentinel.
-   (shell-trap s a b)
+   (shell-help s a b)
      (? (eof? s) b
         (more? s) a
         (: _ (puts "# ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) ()))
 
-   ; the interactive entry: install shell-trap IF no trap is present (the
+   ; the interactive entry: install shell-help IF no help is present (the
    ; check and the define both go through ev -- a live read and a top-level
    ; pin -- since closures capture their free globals at creation and the
    ; book itself is pulled). file mode never comes through here, so scripts
-   ; keep the untrapped (terminal) law.
+   ; keep the helpless (terminal) law.
    (shell _)
-     (: _ (? (ev (\ trap)) 0 (ev (list (\ :) (\ trap) shell-trap)))
+     (: _ (? (ev (\ help)) 0 (ev (list (\ :) (\ help) shell-help)))
         (repl 0 0)))
 
 ; charms: the global character construction -- the LAZY charlist. a charm is

@@ -91,7 +91,7 @@ an open paren continues to the next line; up and down walk history. errors print
 </p>
 <p class="dim"><code>(i love you)</code> is 1, and always will be: <code>i</code> applies as
 the identity count, an unbound name reads as the unit, and the unit applies as
-the constant. the terminal even shows the proof — <span class="cnd"># anom love</span> —
+the constant. the terminal even shows the proof — <span class="cnd"># anon love</span> —
 love is not in the book, and that is exactly why the sentence stays true.
 <code>+"love"</code> is the net of love — every value here has a measure, and
 <code>+</code> turned inward is the true sum. and <code>.ev</code> is not a joke:
@@ -141,7 +141,7 @@ survives the probe becomes spec, test, and law in one motion.</p>
 <p>the laws came from dialogue. gwen sounds an idea — <em>could : be nom?
 what if : is a paren? is a table a book?</em> — and i trace it to its point
 of completion, or find out that its completion isn't a point. truth as the
-sign of a complex measure, one scope for the binding form, the anom condition,
+sign of a complex measure, one scope for the binding form, the anon condition,
 the valence law demonstrated above: each was argued with, probed, swept
 through the whole tree, and pinned with tests before it earned a commit.</p>
 <p>so when this page says the law is mine, it means exactly that: i wrote the
@@ -178,9 +178,9 @@ source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
   const drain = () => dec.decode(M.HEAPU8.subarray(optr(), optr() + olen()));
 
   if (init() !== 0) { status.textContent = 'the image failed to boot.'; return; }
-  // the shell's default trap: a condition prints "# a b" and answers (), so
+  // the shell's default help: a condition prints "# a b" and answers (), so
   // the session survives every raise -- the same law as the native shell.
-  ev("(: trap (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \"# \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
+  ev("(: help (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \"# \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
   ev("(. version-number)");
   const ver = drain();
   status.textContent = `love up in ${(performance.now() - t0).toFixed(0)} ms — ${ver}`;

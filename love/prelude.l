@@ -79,7 +79,7 @@
    ; (k b) numeral application routes here, so `**` is unneeded.
    ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
    ; exponent above it raises (scare 'apcap k) instead of allocating O(k) -- so
-   ; (bignum f) traps where it would oom. retune at runtime: (pin apcap () n).
+   ; (bignum f) asks for help where it would oom. retune at runtime: (pin apcap () n).
    apcap (pin (tablet 0) () 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
    ; x ** n across the whole tower. array exponent -> elementwise pow (broadcasts
@@ -176,7 +176,7 @@
  (page o) (slice (peek 4 o) 0 (peek 5 o))
  (slurp i) (: (rl i) (: c (fgetc i) (? (= c -1) 0 (cons c (rl i)))) (string (rl i)))  ; (pre-opfix: no ! here)
  (show x) (: o (pad 0) _ (fputx o x) (page o)))
-; trap status readers. a global `trap` function is called as (trap s a b):
+; help status readers. a global `help` function is called as (help s a b):
 ; s = the status word, two bits -- scare (1: something went wrong) and more
 ; (2: read control flow, more input wanted). more alone = incomplete; eof =
 ; more|scare (the end is the scary case of wanting more). a/b = the condition
@@ -508,10 +508,10 @@
 ; expression. a reference to a name at-or-before its own (first) binding is a
 ; FORWARD reference; the name is indirected through a CELL -- a box (a fresh
 ; map, the # adjoint of :) keyed by the binding site's nom: prepend
-; `cell (tablet 0)`, store via pin, read via (anom cell 'nom) -- the nif
+; `cell (tablet 0)`, store via pin, read via (anon cell 'nom) -- the nif
 ; VALUES, not their names, so the rewrite survives the egg pulling names and
-; user bindings shadowing them. a pre-fill read is a map miss, i.e. THE ANOM
-; CONDITION with the binding-site nom as payload: trappable, () untrapped --
+; user bindings shadowing them. a pre-fill read is a map miss, i.e. THE ANON
+; CONDITION with the binding-site nom as payload: a call for help, () helpless --
 ; read-before-pin is one law at every depth, local or book. a value binding
 ; boxes on ANY forward reference; a lambda binding only on a DIRECT (not
 ; under-lambda) one -- ordinary recursion keeps the lazy lane. values defined
@@ -553,7 +553,7 @@
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nilp (memq (cap p) ns))) cs)
    (sub cs x) (?
-    (symp x) (: p (assq x cs) (? (twop p) (list anom (cabp p) (list '\ (cbbp p))) x))
+    (symp x) (: p (assq x cs) (? (twop p) (list anon (cabp p) (list '\ (cbbp p))) x))
     (atomp x) x
     (: h (cap x) (?
       (= h '\) (? (atomp (cbbp x)) x (: r (lp x) (cons '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cbp r)))))))

@@ -28,12 +28,12 @@ syn keyword LoveFunc twop strp symp mapp lamp hotp tupp bigp boxp arrp comp flop
 syn keyword LoveFunc arr array arank alen ashape atype asum aprod amax amin aall
 syn keyword LoveFunc a-rank a-shape a-type a-dim
 syn keyword LoveFunc string slice intern nom mint tally slurp show sip pad page
-syn keyword LoveFunc tablet keys dig sat non peep pin pull buf blit anom
+syn keyword LoveFunc tablet keys dig sat non peep pin pull buf blit anon
 syn keyword LoveFunc lamb peek poke seek trim mono
 syn keyword LoveFunc fgetc fungetc feof fputc fputs fputbn fputx fflush read
 syn keyword LoveFunc putc puts putn putx getc read in out dot
 syn keyword LoveFunc ev call-cc yield spawn wait sleep done? hush key?
-syn keyword LoveFunc trap scare scare? more? eof?
+syn keyword LoveFunc help scare scare? more? eof?
 syn keyword LoveFunc rand randf rand-next randf-next rng-seed rng-get rng-set
 syn keyword LoveFunc open close run getenv exit
 syn keyword LoveFunc clock gauge book macros assert version-number argv cmdline

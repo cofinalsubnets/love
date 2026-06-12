@@ -1,9 +1,9 @@
 (assert
- (idp () :) (idp () \)          ; a special-form name as a value is an anom: not in the book
- (idp () (\))                   ; ... and the singleton law collapses (\) to \, the same anom.
+ (idp () :) (idp () \)          ; a special-form name as a value is an anon: not in the book
+ (idp () (\))                   ; ... and the singleton law collapses (\) to \, the same anon.
  (idp () (:)) (idp () (?))      ; the empty forms are their head reads -- (f)==f at zero
-                                ; operands, BOTH lanes -- the same anoms, () untrapped
-                                ; (under a trap they raise like any anom; see anom.l)
+                                ; operands, BOTH lanes -- the same anons, () helpless
+                                ; (under a help they raise like any anon; see anon.l)
  (= ''x '(\ x))
  (= 1 (? 1))
  (= 1 (: 1))

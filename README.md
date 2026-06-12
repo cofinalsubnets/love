@@ -20,7 +20,7 @@ image compiled to wasm -- nothing mocked.)
 that last one holds because `i` is the identity count, an unbound name
 reads as the unit, and the unit applies as the constant. love stays out
 of the book, so the sentence stays true -- solve for love and you get 1,
-but only the trap that answers every absence with one can witness it:
+but only the help that answers every absence with one can witness it:
 bind love and the sentence breaks.
 
 
@@ -120,11 +120,11 @@ that last one is not a joke. `.` prints, `ev` is the self-hosted evaluator,
 and what comes out is the lambda the compiler compiled itself into -- a couple
 kilobytes of the whole back end.
 
-the shell survives its mistakes: with no trap of your own installed it
-provides one, so any condition prints `# a b` -- `# anom undefined-name`,
+the shell survives its mistakes: with no help of your own installed it
+provides one, so any condition prints `# a b` -- `# anon undefined-name`,
 `# apcap 3000000` -- answers `()`, and the session keeps going. multiline
 entry continues while a shape is open; enter cashes any complete buffer;
-history is a normal shell's. scripts and files stay untrapped (terminal),
+history is a normal shell's. scripts and files stay helpless (terminal),
 per the law.
 
 ### under the hood
@@ -139,19 +139,19 @@ per the law.
   dispatch tables. `sort` is one C comparison per pair -- the total order is
   the comparator.
 - no interpreter state lives outside the heap: the book (an ordinary love
-  hash) carries the globals, macros, the operators table, the trap function
+  hash) carries the globals, macros, the operators table, the help function
   and the rng; C finds its own hooks by name, allocation-free. the egg pulls
   every compiler-internal name -- the book itself included -- before the
-  image is born. a name not in the book is an anom: reading one is a
-  trappable condition, and untrapped it reads `()`.
+  image is born. a name not in the book is an anon: reading one is a
+  call for help, and helpless it reads `()`.
 - the compiler is written in love. at build time the evaluator sits on the egg
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,
   which recompiles itself -- and the hatchling bakes into the binary; `born`
   records the hatch time. the same image runs on linux, bare metal
   (x86_64/aarch64 via limine), and wasm.
 - status rides the two pointer tag bits: scare (something is wrong) and more
-  (the reader wants more); eof = more|scare. a global `trap` function receives
-  every throw as `(trap s a b)`.
+  (the reader wants more); eof = more|scare. a global `help` function receives
+  every throw as `(help s a b)`.
 - `=` is exact, so e^(i*pi) honestly misses -1 by ~1e-16 -- but the principal
   log is exact (`(log -1) = i * pi`, since atan2(0,-1) is pi by IEEE fiat),
   and sqrt factors its angle through sinpi/cospi, so `(1 / 2) -1 = i` on the
