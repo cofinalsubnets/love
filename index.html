@@ -179,7 +179,9 @@ source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
   ev("(. version-number)");
   const ver = drain();
   status.textContent = `love up in ${(performance.now() - t0).toFixed(0)} ms — ${ver}`;
-  cmd.disabled = false; cmd.focus();
+  // focus must not steal the scroll: arriving on an anchor (#who-wrote-this)
+  // would otherwise snap back to the terminal when the image boots.
+  cmd.disabled = false; cmd.focus({preventScroll: true});
 
   const hist = []; let hi = 0;
 
