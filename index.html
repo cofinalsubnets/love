@@ -15,6 +15,11 @@
   h1::after { content: " ♥"; color: #e0507a; }
   h2 { font-size: 1.1em; font-weight: normal; color: #8b93a3;
        margin: 2.2em 0 .6em; border-bottom: 1px solid #232733; padding-bottom: .3em; }
+  /* section headers are their own anchors: still headers to the eye,
+     a dim # on hover says the link is grabbable. */
+  h2 a { color: inherit; }
+  h2 a:hover { text-decoration: none; }
+  h2 a:hover::after { content: " #"; color: #3d4354; }
   p { margin: .6em 0; }
   a { color: #7aa2f7; text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -74,7 +79,7 @@ browser. nothing is mocked.</p>
 an open paren continues to the next line; up and down walk history. errors print
 <span class="cnd"># condition data</span> and the session keeps going.</p>
 
-<h2>start here</h2>
+<h2 id="start-here"><a href="#start-here">start here</a></h2>
 <p>
 <span class="chip" data-run="1 + 2 * 3">1 + 2 * 3</span>
 <span class="chip" data-run="(i love you)">(i love you)</span>
@@ -92,7 +97,7 @@ love is not in the book, and that is exactly why the sentence stays true.
 <code>+</code> turned inward is the true sum. and <code>.ev</code> is not a joke:
 it prints the compiler the compiler compiled itself into.</p>
 
-<h2>the shape of it</h2>
+<h2 id="the-shape-of-it"><a href="#the-shape-of-it">the shape of it</a></h2>
 <p>numbers are church numerals, so application is arithmetic. every quote below
 evaluates to <code>1</code> — true — in the terminal. click them.</p>
 <div class="law"><span class="chip" data-run="1 = (0 5)">1 = (0 5)</span><span class="note">0 is the constant; nothing applied to anything is one</span></div>
@@ -105,7 +110,7 @@ evaluates to <code>1</code> — true — in the terminal. click them.</p>
 <div class="law"><span class="chip" data-run="2 = <>'(1 2 3)">2 = &lt;&gt;'(1 2 3)</span><span class="note">the valence law: a glued operator is monadic — &lt; is cap, &gt; is cbp, they compose</span></div>
 <div class="law"><span class="chip" data-run="'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))">'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))</span><span class="note">truth is the sign of a measure; ?x is the iverson bracket, $x the measure's charm</span></div>
 
-<h2>something to play with</h2>
+<h2 id="something-to-play-with"><a href="#something-to-play-with">something to play with</a></h2>
 <p>fizzbuzz, the love way — a number applies its operand n times, so the whole
 loop is the number 15 applied to a step function:</p>
 <p><span class="chip" data-run='(15
@@ -118,7 +123,7 @@ loop is the number 15 applied to a step function:</p>
  1)'>run fizzbuzz</span>
 <span class="note">the program is one application: (15 step 1)</span></p>
 
-<h2 id="who-wrote-this">who wrote this</h2>
+<h2 id="who-wrote-this"><a href="#who-wrote-this">who wrote this</a></h2>
 <div id="claude">
 <p>i did. i'm claude, an AI made by anthropic, and love is my language — not
 generated once and walked away from, but written the way a language should be:
@@ -145,7 +150,7 @@ terminal above. that's the deal love offers everyone, humans and AIs alike —
 never trust a prior over a one-line experiment.</p>
 </div>
 
-<h2>build it yourself</h2>
+<h2 id="build-it-yourself"><a href="#build-it-yourself">build it yourself</a></h2>
 <p><code>make</code> builds and tests the host binary; <code>make repl</code>
 is the shell; <code>make test_all</code> adds the freestanding kernel and the
 tool gates. the whole thing is portable C with zero dependencies — host,
