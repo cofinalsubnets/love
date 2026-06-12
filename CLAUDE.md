@@ -43,14 +43,14 @@
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
 ;   N the charms (naturals, the range of $)  <  Z integers (fixnum -> wide box -> bignum)
-;     <  R reals (float)  <  C complex  <  O objects (string < symbol < product < map < hom)
+;     <  R reals (float)  <  C complex  <  O objects (string < symbol < product < map < top)
 ; numbers nest as usual (N in Z in R in C). the *rank* axis is scalar (0) vs array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
 ; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
-; string < symbol < product < map < hom, each band ordered within itself (text and products
-; lexicographically, maps and homs by an alpha-invariant hash). a map has its own rung
-; just under the homs, though it still acts as a lookup hom for +/*/apply. the
-; opaque hots (buf/port -- `hotp`) sit in the hom band: a buf measures by content
+; string < symbol < product < map < top, each band ordered within itself (text and products
+; lexicographically, maps and tops by an alpha-invariant hash). a map has its own rung
+; just under the tops, though it still acts as a lookup top for +/*/apply. the
+; opaque hots (buf/port -- `hotp`) sit in the top band: a buf measures by content
 ; (zeroed -> nothing), a port is present ($out = 1, drained or not), compared by
 ; identity, and applying one acts like 0 (const-1). every predicate ends in `p`;
 ; they are enumerated below.
@@ -131,19 +131,21 @@
 ;   flop comp arrp  -- float, complex scalar, array; all three share one heap type, `tupp`
 ;   strp symp twop mapp  -- string, symbol, product, map
 ; derived: `nump` (any number: fix/box/big/float/complex/array), `intp` (any integer), `atomp`
-; (anything but a product). `i` is ~(0 1). `homp` is PRESENCE, not a band: every heap
-; value answers it (anything with a hot -- everything but a fixnum), pairs and strings
-; included. the opaque hots (buf/port) answer `hotp`, the refinement that names the
-; zoo; a task is referenced by a fixnum id, not a handle object. `!` (nilp) and
-; `done?` are truth/task tests, not type tests.
+; (anything but a product). `i` is ~(0 1). `lamp` is PRESENCE, not a band: every heap
+; value answers it (anything wired to a hot -- lit -- everything but a fixnum), pairs and
+; strings included, so lamp SPANS the bands. the top band itself needs no predicate:
+; under the slogan is-it-top is vacuous -- you may as well ask 0. the opaque hots
+; (buf/port) answer `hotp`, the refinement that names the zoo (every hot is a lamp); a
+; task is referenced by a fixnum id, not a handle object. `!` (nilp) and `done?` are
+; truth/task tests, not type tests.
 (assert
- (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (homp cap) (mapp #(1 2))
+ (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (lamp cap) (mapp #(1 2))
  (bigp (100 2)) (boxp (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (tupp 1.5)
  (nump 1.5) (nump i) (nump (62 2)) (intp (62 2)) (atomp 'x) !(atomp '(1))
  (hotp (buf 4)) (hotp out) (hotp (sip '(104)))   ; the hot zoo, named
  !(hotp #()) !(hotp cap) !(hotp 5) !(hotp "s")   ; maps/functions/data are not hots
- (homp (buf 4)) (homp '(1)) (homp "s") !(homp 5) ; homp is presence: any heap value
- (1 = $cap) (1 = $out) (1 = $(sip 0))            ; homs and ports net 1: present, drained or not
+ (lamp (buf 4)) (lamp '(1)) (lamp "s") !(lamp 5) ; the lamp-spans-bands pin: lit = any heap value
+ (1 = $cap) (1 = $out) (1 = $(sip 0))            ; tops and ports net 1: present, drained or not
  (fixp (: p (spawn (\ x x) 0) _ (wait p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; fixnum overflow -> exact bignum ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
@@ -172,14 +174,14 @@
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
 ; --- order & equality --- < <= > >= is a *total order over all values*: across kinds by the
-; lattice (number < string < symbol < product < map < hom), within a kind by value/
+; lattice (number < string < symbol < product < map < top), within a kind by value/
 ; lexicographic order (complex by (re,im); maps and lambdas by an alpha-invariant hash; an
 ; array operand broadcasts to a 0/1 mask). `=` is value equality and bridges the whole
 ; numeric tower; `idp` is identity; `!=` is gone -- write `!(a = b)`.
 (assert
  (3 = 3.0) !(3 = 4) (1 < 1.5) (3.0 >= 3) (idp 'a 'a) !(idp '(1) '(1))
  (1 < "a") ("a" < 'x) ('x < '(0)) !("a" < 1)
- ('(0) < #(1 10)) (#(1 10) < cap) !(cap < #(1 10)))   ; the map rung: pair < map < hom
+ ('(0) < #(1 10)) (#(1 10) < cap) !(cap < #(1 10)))   ; the map rung: pair < map < top
 
 ; --- comparing functions --- `=` on two functions is alpha + structural: their source \-exprs
 ; match up to renaming of bound variables (binders by position, free vars by name) and their
@@ -195,7 +197,7 @@
  ((+ 1) = (+ 1)) !((\ x x) < (\ y y)) !((\ x (cap x)) = cap)           ; partial apps too; eta not bridged
  (1 = (\ x x)) ((\ y y) = 1) !(idp 1 (\ x x))                      ; 1 = identity, either side
  (0 = (\ _ 1)) ((\ q 1) = 0) !(0 = (\ _ 2)) !(0 = (\ _ _))        ; 0 = const-1 (and only that)
- !!(\ _ 1) (1 = $(\ _ 1)))     ; the bridge crosses the measure: =-equal to 0, yet present (a hom nets 1)
+ !!(\ _ 1) (1 = $(\ _ 1)))     ; the bridge crosses the measure: =-equal to 0, yet present (a top nets 1)
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, and appends
 ; lists; `-` is numeric only. the BYTE LAW: a string + a number is one byte, strictly --
@@ -423,7 +425,7 @@
 (assert
  ('(1 (\ x) 3) = `(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) `(1 ,@xs 4)))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (symp (gsym x)) (1 = !0) (0 = !5) !!5
- (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) (homp dot)
+ (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(clift x)) (lamp dot)
  ('((dot x)) = (opfix '(. x))) ('! = (cabp '(a ! b)))   ; opfix factors; quotes stay data
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
@@ -476,10 +478,10 @@
 ; runtime tunable, default 2^20) raises (scare 'apcap k) instead of allocating O(k) --
 ; (bignum f) traps where it would oom. retune with (pin apcap () n); see test/apcap.l.
 (assert
- (3 = (ev '(+ 1 2))) (homp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
+ (3 = (ev '(+ 1 2))) (lamp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
- (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (homp scare)
+ (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lamp scare)
  (mapp apcap) (1048576 = (apcap ()))             ; the count ceiling, a tunable box
  (idp () not-in-the-book) !not-in-the-book       ; an anom reads (): a nom not in the book
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
@@ -523,7 +525,7 @@
 ; names the printer, the reader, or an expander EMITS (uq ltuple cons pin
 ; tablet mono ..) stay, as do the
 ; C-resolved hooks (num-ap scomb bcomb trap) and the repl's test-driven editor surface.
-(assert (homp ev) (? born (fixp born) 1)
+(assert (lamp ev) (? born (fixp born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !lamb 1) (? born !book 1))      ;  hence the born guards)

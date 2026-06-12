@@ -300,9 +300,9 @@ extern union u const numap_drive[];          // [ap; swap; ret0] driver that run
 lvm_t lvm_ap, lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big; // sentinels + ap: data.c & inline predicates
 uintptr_t hash(struct g*, word), g_tuple_bytes(struct g_tuple*);
 #define str(_) ((struct g_str*)(_))
-#define homp evenp
+#define lamp evenp
 #define two(_) ((struct g_pair*)(_))
-static g_inline bool twop(word _) { return homp(_) && cell(_)->ap == lvm_two; }
+static g_inline bool twop(word _) { return lamp(_) && cell(_)->ap == lvm_two; }
 static g_inline void *bump(struct g *g, uintptr_t n) {
   if (avail(g) < n) __builtin_trap();
   void *x = g->hp; g->hp += n; return x; }

@@ -40,7 +40,7 @@
             idp gcd modpow inc dec abs
             cons cap cbp caap cabp cbap cbbp
             dig lidx assq memq last rev cat
-            fixp symp twop mapp homp strp nilp flop comp atomp
+            fixp symp twop mapp lamp strp nilp flop comp atomp
             slice string
             re im conj arg real plex
             sin cos log pow))

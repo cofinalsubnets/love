@@ -34,6 +34,6 @@
         (= 'gotcha (scare 'any 'thing)))            ; the deliberate scare resumes the same way
 
 ; uninstall; the raw default is back
-(: trap 0)                       ; uninstall: a non-homp value defers to the raw default
+(: trap 0)                       ; uninstall: a non-lamp value defers to the raw default
 (assert !trap (= 'eof (read (sip 0) 'eof))
         (: p (sip '(40)) (= p (read p 99))))

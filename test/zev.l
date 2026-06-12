@@ -1,8 +1,8 @@
-; zev: charms -> hom -- the reverse shell of the compiler, the lane every
+; zev: charms -> top -- the reverse shell of the compiler, the lane every
 ; shell feeds into; ev is the data-level shell over the same core. a charm
 ; is a sat (a non-negative fixnum), a charms is a charlist. zev reads one
 ; form structurally and compiles it through opfix/wev/ana/cata, so the
-; whole hull -- characters to hom -- closes in lisp.
+; whole hull -- characters to top -- closes in lisp.
 (: (zs s) ((: (g i) (? (< i (tally s)) (cons (s i) (g (+ 1 i))))) 0)   ; string -> chars
  (assert
   (3 = (zev (zs "(+ 1 2)")))                  ; the plain lane
@@ -14,7 +14,7 @@
                                               ; shell's move (the repl's), not zev's
   ('x = (zev (zs "'x")))                      ; quote is the reader's
   ('! = (cabp (zev (zs "'(a ! b)"))))         ; quoted operators stay data
-  (homp (zev (zs "(\\ x (x + 1))")))          ; zev is the source of homs
+  (lamp (zev (zs "(\\ x (x + 1))")))          ; zev is the source of tops
   (5 = ((zev (zs "(\\ x (x + 2))")) 3))       ; ... which apply
   (9 = (zev (zs "(: q (\\ x (x * x)) (q 3))")))
   !(zev (zs ""))                              ; nothing readable is nothing
@@ -32,7 +32,7 @@
 (: (zs2 s) ((: (g i) (? (< i (tally s)) (cons (s i) (g (+ 1 i))))) 0)
    cs (charms (zs2 "(+ 1 2)"))
  (assert
-  (fixp (cap cs)) (homp (cbp cs))               ; a cell is charm x hom
+  (fixp (cap cs)) (lamp (cbp cs))               ; a cell is charm x top
   (40 = (cap cs))                               ; the charm is the byte
   (: r ((cbp cs) ()) (&& (twop r) (43 = (cap r))))  ; forcing with () yields the next cell
   (3 = (zev cs))                                ; zev drinks charms proper

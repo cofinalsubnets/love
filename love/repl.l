@@ -327,7 +327,7 @@
 
 ; charms: the global character construction -- the LAZY charlist. a charm is
 ; a sat (a non-negative fixnum); a CHARS is a bare charlist (eager, ends at
-; 0); a CHARMS is the colist: (cap cs) is a charm, (cbp cs) is a hom, and
+; 0); a CHARMS is the colist: (cap cs) is a charm, (cbp cs) is a top, and
 ; the tail forced with the empty -- ((cbp cs) ()) -- types as charms + (),
 ; the coproduct, () the end (the floor unit as the nil injection). consumers
 ; dispatch on KIND: twop is a cell, anything else the end. `charms` is also
@@ -335,25 +335,25 @@
 ; (the HOT charms) pulls one byte per force (-1 ends it), charms pass
 ; through, the end lifts to itself. charms->chars realizes a finite charms.
 ; NB the cell test dispatches on the TAIL's kind -- a pair or nil is chars,
-; anything else is taken as the forcing hom. (homp is no use here: it is
+; anything else is taken as the forcing top. (lamp is no use here: it is
 ; hot-based and answers true for every heap value, pairs included -- the
 ; lamp-spans-bands pin.)
 (: (charms s)
    (? (twop s) (: t (cbp s)
                   (? (twop t) (cons (cap s) (\ u (charms t)))   ; chars: lift, lazy tail
                      (nilp t) (cons (cap s) (\ u ()))           ; the last chars cell
-                     s))                                        ; a hom tail: charms already
+                     s))                                        ; a top tail: charms already
       (hotp s) (: c (fgetc s)                                ; a port is the hot charms
                      (? (= c -1) () (cons c (\ u (charms s)))))
       ())
    (charms->chars s)
    (: cs (charms s)
       (? (twop cs) (cons (cap cs) (charms->chars ((cbp cs) ()))) 0)))
-; zev: charms -> hom, the reverse shell of the compiler -- the lane every
+; zev: charms -> top, the reverse shell of the compiler -- the lane every
 ; shell ultimately feeds into. takes the global construction (anything the
 ; `charms` lift takes: chars, a port, charms proper), reads ONE form from it
 ; (structurally -- the reader knows no operators) and sends it through the
-; same core as ev (opfix, wev, ana, cata): the full hull charms -> hom in
+; same core as ev (opfix, wev, ana, cata): the full hull charms -> top in
 ; one call. nothing readable -- empty input or an unfinished shape -- is
 ; nothing. the C reader pulls from a port, so zev realizes the (finite)
 ; charms first; the lazy-pull seam is where the lisp reader lands next.

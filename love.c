@@ -139,7 +139,7 @@ lvm_t lvm_kcall,
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_arr, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall,
- lvm_tupp, lvm_bigp, lvm_boxp, lvm_arrp, lvm_intf, lvm_homp, lvm_hotp;
+ lvm_tupp, lvm_bigp, lvm_boxp, lvm_arrp, lvm_intf, lvm_lamp, lvm_hotp;
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
 // plain lvm_t list, which fixes the 4-argument ap signature. lvm_vbin
 // is the elementwise/broadcast dyadic engine (vop selects the op); lvm_vmap1
@@ -167,9 +167,9 @@ char const *g_nif_name(intptr_t);
 #define tuple(_) ((struct g_tuple*)(_))
 #define fixp oddp
 #define sym(_) ((struct g_atom*)(_))
-static g_inline bool symp(word _) { return homp(_) && cell(_)->ap == lvm_sym; }
-static g_inline bool tupp(word _) { return homp(_) && cell(_)->ap == lvm_tuple; }
-static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == lvm_str; }
+static g_inline bool symp(word _) { return lamp(_) && cell(_)->ap == lvm_sym; }
+static g_inline bool tupp(word _) { return lamp(_) && cell(_)->ap == lvm_tuple; }
+static g_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 // Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 lvm_buf (like lvm_port_io for ports), so the GC walks a buf
 // as a plain length-2 text -- [lvm_buf, backing g_str, terminator] -- and
@@ -179,7 +179,7 @@ static g_inline bool strp(word _) { return homp(_) && cell(_)->ap == lvm_str; }
 // (cf. the `to` output port). Earned by the build tools that back-patch a
 // binary image in place. Recognized by ap, like iop() for ports.
 struct g_buf { lvm_t *ap; struct g_str *str; };
-static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == lvm_buf; }
+static g_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == lvm_buf; }
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
 // texts: a fixed 2-word HEADER [lvm_map_lookup, backing, <tag>] that callers
@@ -192,7 +192,7 @@ static g_inline bool bufp(word _) { return homp(_) && cell(_)->ap == lvm_buf; }
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
 // a terminator. (m k) looks k up (nil if absent) through lvm_map_lookup.
 static lvm_t lvm_map_lookup, lvm_map_data;
-static g_inline bool mapp(word _) { return homp(_) && cell(_)->ap == lvm_map_lookup; }
+static g_inline bool mapp(word _) { return lamp(_) && cell(_)->ap == lvm_map_lookup; }
 static const word g_map_gap_cell = 0;
 #define map_gap ((word) &g_map_gap_cell)
 #define map_min_cap 4
@@ -218,7 +218,7 @@ static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : s
 // range is a fixnum, one in intptr_t range a wide-int box, only wider values a
 // bignum -- so fixp/boxp/bigp are mutually exclusive and =/eqv stay well defined.
 struct g_big { lvm_t *ap; intptr_t slen; uint32_t limb[]; };
-static g_inline bool bigp(word _) { return homp(_) && cell(_)->ap == lvm_big; }
+static g_inline bool bigp(word _) { return lamp(_) && cell(_)->ap == lvm_big; }
 static g_inline struct g_big *ini_big(struct g_big *b, intptr_t slen) {
  return b->ap = lvm_big, b->slen = slen, b; }
 uintptr_t g_big_bytes(struct g_big*);
@@ -596,7 +596,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_tupp, "tupp", s1(lvm_tupp)) _(nif_bigp, "bigp", s1(lvm_bigp)) _(nif_boxp, "boxp", s1(lvm_boxp))\
  _(nif_arrp, "arrp", s1(lvm_arrp)) _(nif_intf, "int", s1(lvm_intf))\
  _(nif_symp, "symp", s1(lvm_symp)) _(nif_mapp, "mapp", s1(lvm_mapp)) _(nif_fixp, "fixp", s1(lvm_fixp))\
- _(nif_homp, "homp", s1(lvm_homp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
+ _(nif_lamp, "lamp", s1(lvm_lamp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
  _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
  _(nif_anon, "anom", s2(lvm_anon)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
@@ -850,7 +850,7 @@ static g_noinline word symbols_rebuild(struct g *h, struct g *g) {
   word k = os[2 * j];
   if (k == map_gap) continue;
   word fwd = cell(os[2 * j + 1])->x;            // the atom's first word: its forward, if it survived
-  if (!(homp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
+  if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
   word nk = word(sym(fwd)->nom);                // the copied atom carries the forwarded name
   uintptr_t i = hash(h, nk) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
@@ -862,7 +862,7 @@ static g_inline void run_finalizers(struct g*g) {
  struct g_fz *new_fz = NULL;
  for (struct g_fz *fz = g->fz; fz; fz = fz->next) {
   word fwd = fz->p->x;
-  if (homp(fwd) && ptr(g) <= ptr(fwd) && ptr(fwd) < ptr(g) + g->len) {
+  if (lamp(fwd) && ptr(g) <= ptr(fwd) && ptr(fwd) < ptr(g) + g->len) {
    struct g_fz *nn = bump(g, Width(struct g_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
   } else fz->fn(fz->p); }
@@ -992,7 +992,7 @@ static g_noinline intptr_t gcp(struct g *g, word x, word const *p0, word const *
  union u *src = cell(x);
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer
- return homp(x) && ptr(g) <= ptr(x) && ptr(x) < ptr(g) + g->len ? x :
+ return lamp(x) && ptr(g) <= ptr(x) && ptr(x) < ptr(g) + g->len ? x :
         in_data((void*) x) ? copy_data(g, src, p0, t0) :
                                 copy_text(g, src, p0, t0); }
 
@@ -1067,15 +1067,15 @@ static g_noinline struct g *c0(struct g *g, lvm_t *y) {
  // rewrite to the l `opfix` prepass (prelude.l) -- evaluated like a macro,
  // once that global exists (i.e. for everything after its own definition
  // partway through the prelude) -- so both compilers see factored forms.
- // A pair whose head is already a hom (a non-data heap value -- C homp is
+ // A pair whose head is already a top (a non-data heap value -- C lamp is
  // just the heap test) is a constructed direct application ((f 'x) calls
  // built by this hook, boxfix's, or ana_2's -- never readable source):
  // skipped, which also terminates the recursion through g_eval.
  { word x0 = g->sp[0];
-   if (twop(x0) && (!homp(A(x0)) || datp(A(x0)))) {
+   if (twop(x0) && (!lamp(A(x0)) || datp(A(x0)))) {
     struct g_atom *os = sym_probe(g_core_of(g), "opfix", 5);
     word of = os ? g_mapget(g_core_of(g), 0, word(os), g_core_of(g)->book) : 0;
-    if (of && homp(of)) {
+    if (of && lamp(of)) {
      g = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(g, 4, x0, nil, nil, of)))))));
      if (!g_ok(g)) return g;
      g->sp[1] = g->sp[0], g->sp += 1; } } }
@@ -1339,7 +1339,7 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
  bool imfp =
   g->sp[0] == (word) c1_ix &&
   g->sp[1] == (word) lvm_quote &&
-  homp(g->sp[2]);
+  lamp(g->sp[2]);
  intptr_t
   ca = llen(x),
   va =
@@ -1434,7 +1434,7 @@ static g_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  // rooted across the alloc.
  if (g_ok(g = intern(g_strof(g, "boxfix")))) {
   word bf = g_mapget(g, 0, pop1(g), g->book);
-  if (bf && homp(bf)) {
+  if (bf && lamp(bf)) {
    g = g_eval(gxr(gxl(gxl(pushq(gxl(g_push(g, 4, exp, nil, nil, bf)))))));
    if (g_ok(g)) exp = pop1(g); } }
  g = enscope(g, *b, (*b)->args, (*b)->imps);
@@ -1594,7 +1594,7 @@ static struct g_atom *sym_probe(struct g *g, char const *nm, uintptr_t n) {
 static g_inline g_word resolve_hot(struct g *g, char const *nm, uintptr_t n) {
  struct g_atom *y = sym_probe(g, nm, n);
  g_word cur = y ? g_mapget(g, nil, word(y), g->book) : nil;
- if (!homp(cur)) __builtin_trap();
+ if (!lamp(cur)) __builtin_trap();
  return cur; }
 
 // Thread (function) combinators for `+` and `*`, pinned on book by the prelude
@@ -1656,7 +1656,7 @@ static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
  if (c->book) {
   struct g_atom *ts = sym_probe(c, "trap", 4);
   word h = ts ? g_mapget(c, nil, word(ts), c->book) : nil;
-  if (homp(h) && avail(c) >= 5) {
+  if (lamp(h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | thrower data ..]
    sp[0] = putfix(s), sp[1] = h;
    sp[2] = a, sp[3] = b;
@@ -1713,7 +1713,7 @@ lvm(lvm_freev) {
  Have(8);                          // [resume a b] + g_raise's 5 words
  struct g_atom *ts = sym_probe(g, "trap", 4);
  word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
- if (!homp(h)) return
+ if (!lamp(h)) return
   *--Sp = empty_sym,
   Ip += 2,
   Continue();
@@ -1738,7 +1738,7 @@ lvm(lvm_anon) {
  Have(8);                          // [resume a b] + g_raise's 5 words
  struct g_atom *ts = sym_probe(g, "trap", 4);
  word h = ts ? g_mapget(g, nil, word(ts), g->book) : nil;
- if (!homp(h)) return
+ if (!lamp(h)) return
   Sp[1] = empty_sym,
   Sp++,
   Ip++,
@@ -2231,7 +2231,7 @@ lvm(lvm_pin) { Sp[0] = putfix(g_pin(Sp[0])); Ip += 1; return Continue(); }
 // ============================================================================
 // io
 // ============================================================================
-static g_inline bool iop(word x) { return homp(x) && cell(x)->ap == lvm_port_io; }
+static g_inline bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io; }
 static g_inline struct g_port_vt const *port_vt(word fd_tagged) {
  intptr_t fd = getfix(fd_tagged);
  return fd >= 0 ? &g_fd_port_vt : &synth[-(fd + 1)]; }
@@ -2677,7 +2677,7 @@ static word fn_src(struct g *c, union u *k, word x) {
  if (!(ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len) || fn_partialp(k)) return 0;
  if (k == tag_head(ttag(c, k))) return 0;       // value at allocation start: no leading src cell
  word s = k[-1].x;
- return homp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
+ return lamp(s) && ptr(s) >= ptr(c) && ptr(s) < ptr(c) + c->len && twop(s) ? s : 0; }
 
 // --- de Bruijn canonical printing of a lambda's source ---------------------
 // A \-bound variable prints as $<level> where the level (de Bruijn LEVEL:
@@ -3454,11 +3454,11 @@ static lvm(lvm_map_lookup) {
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
 op11(lvm_mapp, mapp(Sp[0]) ? putfix(1) : nil)
-// (homp x): is x a heap object (a pointer), i.e. not a fixnum? true for every
+// (lamp x): is x lit -- wired to a hot, a heap pointer, not a fixnum? true for every
 // present non-fixnum value -- pairs, symbols, strings, tuples, maps, texts.
-op11(lvm_homp, homp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_lamp, lamp(Sp[0]) ? putfix(1) : nil)
 // (hotp x): is x an opaque hot handle -- a buf or a port? (a task is referenced
-// by a fixnum id, not a handle object.) a hot also answers homp (it acts as
+// by a fixnum id, not a handle object.) a hot also answers lamp (it acts as
 // a constant function); hotp is the refinement that names the zoo.
 op11(lvm_hotp, (bufp(Sp[0]) || iop(Sp[0])) ? putfix(1) : nil)
 
@@ -3472,7 +3472,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
   if (fixp(k) && (n = getfix(k)) >= 0 && n < (word) len(s))
    z = putfix((unsigned char) txt(s)[n]); }
  else if (mapp(x)) z = g_mapget(g, z, k, x);     // map lookup (not a data sentinel)
- else if (homp(x) && datp(x)) switch (typ(x)) {
+ else if (lamp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // KSym is not indexable
   case KTuple: {
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
@@ -4491,7 +4491,7 @@ static uintptr_t shash(struct g *g, word x, struct arib *env) {
 // equals 1, and one whose body is the literal 1 equals 0. All a-variants count;
 // idp stays false (distinct objects). Closures / multi-binder never match.
 static word lam_src1(struct g *c, word v) {           // 1-binder lambda -> (binder body), else 0
- if (!homp(v) || datp(v)) return 0;
+ if (!lamp(v) || datp(v)) return 0;
  if (!(ptr(v) > ptr(c) && ptr(v) < ptr(c) + c->len)) return 0;  // in-pool only: k[-1]/k valid
  union u *k = cell(v);
  if (fn_partialp(k)) return 0;
@@ -4515,7 +4515,7 @@ g_noinline bool eqv(struct g *g, word a, word b) {
    // is a partial-application chain (fn_partialp) -> compare the base function and each
    // captured arg pairwise, so (\ y (+ x y))[x=1] != [x=2]. Bifs / source-less / maps /
    // ports / mixed fall through to identity (a==b already failed -> false).
-   if (homp(a) && homp(b) && !datp(a) && !datp(b)) {
+   if (lamp(a) && lamp(b) && !datp(a) && !datp(b)) {
     union u *ka = cell(a), *kb = cell(b);
     if (fn_partialp(ka) && fn_partialp(kb)) {
      int na, nb; union u *ba = fn_base(ka, &na), *bb = fn_base(kb, &nb);

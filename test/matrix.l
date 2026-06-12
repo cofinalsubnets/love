@@ -140,8 +140,8 @@
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).
  ;     "1" + "1" == "2": apply (+ 1) twice to 0. ---
  (= 2 (((+ (\ f x (f x)) (\ f x (f x))) (+ 1)) 0))
- (homp (+ inc 2))   (homp (+ 2 inc))          ; num + fn (either order) -> a function
- (homp (+ inc inc)))                          ; fn + fn -> a function
+ (lamp (+ inc 2))   (lamp (+ 2 inc))          ; num + fn (either order) -> a function
+ (lamp (+ inc inc)))                          ; fn + fn -> a function
 
 ; ============================================================================
 ; `*` matrix (g_mul_mx): the multiplicative analog (semiring product of `+`)
