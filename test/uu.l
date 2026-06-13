@@ -2031,6 +2031,46 @@
    '(lam n (lam m (lam g (lam h
       (isirreflnatgth n (istransnatgth n m n g h))))))))
 
+; NATURALNUMBERS round 17 -- monotonicity: the strict order meets the monoids.
+; add computes on the left, so natgthandplusl just inducts on k -- the base
+; lands on g (add 0 _ is _) and every succ step lands on its own IH (natgtb
+; (succ _) (succ _) IS natgtb _ _, definitionally), no rewriting at all.
+; natgthandplusr is plusl twisted by natpluscomm on each argument. natgthandmultl
+; (k>0 as succ k) rides BOTH through istransnatgth: (mul (succ (succ p)) _)
+; computes to (add (mul (succ p) _) _), so the succ step is "plusr by the IH on
+; the left summand, then plusl by g on the right" -- and mul 1 _ is _ for the base.
+(assert
+ (defq 'natgthandplusl
+   '(pi n nat (pi m nat (pi k nat (pi g (paths bool (natgtb n m) true)
+      (paths bool (natgtb (add k n) (add k m)) true)))))
+   '(lam n (lam m (lam k (lam g
+      (nat_rect (lam q (paths bool (natgtb (add q n) (add q m)) true))
+        g
+        (lam p (lam IH IH))
+        k))))))
+ (defq 'natgthandplusr
+   '(pi n nat (pi m nat (pi k nat (pi g (paths bool (natgtb n m) true)
+      (paths bool (natgtb (add n k) (add m k)) true)))))
+   '(lam n (lam m (lam k (lam g
+      (pathscomp0 bool (natgtb (add n k) (add m k)) (natgtb (add k n) (add k m)) true
+        (pathscomp0 bool (natgtb (add n k) (add m k)) (natgtb (add k n) (add m k)) (natgtb (add k n) (add k m))
+          (maponpaths nat bool (lam w (natgtb w (add m k))) (add n k) (add k n) (natpluscomm n k))
+          (maponpaths nat bool (lam w (natgtb (add k n) w)) (add m k) (add k m) (natpluscomm m k)))
+        (natgthandplusl n m k g)))))))
+ (defq 'natgthandmultl
+   '(pi n nat (pi m nat (pi k nat (pi g (paths bool (natgtb n m) true)
+      (paths bool (natgtb (mul (succ k) n) (mul (succ k) m)) true)))))
+   '(lam n (lam m (lam k (lam g
+      (nat_rect (lam q (paths bool (natgtb (mul (succ q) n) (mul (succ q) m)) true))
+        g
+        (lam p (lam IH
+          (istransnatgth (add (mul (succ p) n) n) (add (mul (succ p) m) n) (add (mul (succ p) m) m)
+            (natgthandplusr (mul (succ p) n) (mul (succ p) m) n IH)
+            (natgthandplusl n m (mul (succ p) m) g))))
+        k))))))
+ (idp (vof 0 'true) (vof 0 '(natgtb (add 3 5) (add 3 2))))
+ (idp (vof 0 'true) (vof 0 '(natgtb (mul 2 5) (mul 2 2)))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e
