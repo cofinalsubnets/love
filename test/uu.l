@@ -1832,6 +1832,127 @@
    '(lam X (lam Y (lam w1 (lam w2
       (lam P (lam g (w1 P (lam x (w2 P (lam y (g (tpair x y))))))))))))))
 
+; NATURALNUMBERS round 15 -- the multiplicative monoid laws, literal to the
+; reference: mul right-appends ((mul (succ n) m) computes to (add (mul n m) m),
+; same as UniMath's), so multsnm is one natpluscomm, natmultl1 is one idpath
+; ((mul 1 n) computes through (add 0 n) to n), and natmultassoc closes by
+; natrdistr feeding the induction. the distributors ride the additive laws.
+(assert
+ (6 = (vof 0 '(mul 2 3)))
+ (defq 'multsnm
+   '(pi n nat (pi m nat (paths nat (mul (succ n) m) (add m (mul n m)))))
+   '(lam n (lam m (natpluscomm (mul n m) m))))
+ (defq 'multnsm
+   '(pi n nat (pi m nat (paths nat (mul n (succ m)) (add n (mul n m)))))
+   '(lam n (lam m
+      (nat_rect (lam q (paths nat (mul q (succ m)) (add q (mul q m))))
+        (idpath 0)
+        (lam k (lam IH
+          (pathscomp0 nat (mul (succ k) (succ m))
+                          (add (add k (mul k m)) (succ m))
+                          (add (succ k) (mul (succ k) m))
+            (maponpaths nat nat (lam w (add w (succ m)))
+              (mul k (succ m)) (add k (mul k m)) IH)
+            (pathscomp0 nat (add (add k (mul k m)) (succ m))
+                            (add k (add (mul k m) (succ m)))
+                            (add (succ k) (mul (succ k) m))
+              (natplusassoc k (mul k m) (succ m))
+              (pathscomp0 nat (add k (add (mul k m) (succ m)))
+                              (add k (add (succ (mul k m)) m))
+                              (add (succ k) (mul (succ k) m))
+                (maponpaths nat nat (lam w (add k w))
+                  (add (mul k m) (succ m)) (add (succ (mul k m)) m)
+                  (natplusnsm (mul k m) m))
+                (natplusnsm k (add (mul k m) m)))))))
+        n))))
+ (defq 'natmultcomm
+   '(pi n nat (pi m nat (paths nat (mul n m) (mul m n))))
+   '(lam n (lam m
+      (nat_rect (lam q (paths nat (mul q m) (mul m q)))
+        (pathsinv0 nat (mul m 0) 0 (natmultn0 m))
+        (lam k (lam IH
+          (pathscomp0 nat (mul (succ k) m) (add m (mul k m)) (mul m (succ k))
+            (multsnm k m)
+            (pathscomp0 nat (add m (mul k m)) (add m (mul m k)) (mul m (succ k))
+              (maponpaths nat nat (lam w (add m w)) (mul k m) (mul m k) IH)
+              (pathsinv0 nat (mul m (succ k)) (add m (mul m k)) (multnsm m k))))))
+        n))))
+ (defq 'natrdistr
+   '(pi n nat (pi m nat (pi k nat
+      (paths nat (mul (add n m) k) (add (mul n k) (mul m k))))))
+   '(lam n (lam m (lam k
+      (nat_rect (lam q (paths nat (mul (add q m) k) (add (mul q k) (mul m k))))
+        (idpath (mul m k))
+        (lam j (lam IH
+          (pathscomp0 nat (mul (add (succ j) m) k)
+                          (add (add (mul j k) (mul m k)) k)
+                          (add (mul (succ j) k) (mul m k))
+            (maponpaths nat nat (lam w (add w k))
+              (mul (add j m) k) (add (mul j k) (mul m k)) IH)
+            (pathscomp0 nat (add (add (mul j k) (mul m k)) k)
+                            (add (mul j k) (add (mul m k) k))
+                            (add (mul (succ j) k) (mul m k))
+              (natplusassoc (mul j k) (mul m k) k)
+              (pathscomp0 nat (add (mul j k) (add (mul m k) k))
+                              (add (mul j k) (add k (mul m k)))
+                              (add (mul (succ j) k) (mul m k))
+                (maponpaths nat nat (lam w (add (mul j k) w))
+                  (add (mul m k) k) (add k (mul m k))
+                  (natpluscomm (mul m k) k))
+                (pathsinv0 nat (add (add (mul j k) k) (mul m k))
+                               (add (mul j k) (add k (mul m k)))
+                               (natplusassoc (mul j k) k (mul m k))))))))
+        n)))))
+ (defq 'natldistr
+   '(pi m nat (pi k nat (pi n nat
+      (paths nat (mul n (add m k)) (add (mul n m) (mul n k))))))
+   '(lam m (lam k (lam n
+      (nat_rect (lam q (paths nat (mul n (add q k)) (add (mul n q) (mul n k))))
+        (maponpaths nat nat (lam w (add w (mul n k))) 0 (mul n 0)
+          (pathsinv0 nat (mul n 0) 0 (natmultn0 n)))
+        (lam j (lam IH
+          (pathscomp0 nat (mul n (add (succ j) k))
+                          (add n (mul n (add j k)))
+                          (add (mul n (succ j)) (mul n k))
+            (multnsm n (add j k))
+            (pathscomp0 nat (add n (mul n (add j k)))
+                            (add n (add (mul n j) (mul n k)))
+                            (add (mul n (succ j)) (mul n k))
+              (maponpaths nat nat (lam w (add n w))
+                (mul n (add j k)) (add (mul n j) (mul n k)) IH)
+              (pathscomp0 nat (add n (add (mul n j) (mul n k)))
+                              (add (add n (mul n j)) (mul n k))
+                              (add (mul n (succ j)) (mul n k))
+                (pathsinv0 nat (add (add n (mul n j)) (mul n k))
+                               (add n (add (mul n j) (mul n k)))
+                               (natplusassoc n (mul n j) (mul n k)))
+                (maponpaths nat nat (lam w (add w (mul n k)))
+                  (add n (mul n j)) (mul n (succ j))
+                  (pathsinv0 nat (mul n (succ j)) (add n (mul n j))
+                    (multnsm n j))))))))
+        m)))))
+ (defq 'natmultassoc
+   '(pi n nat (pi m nat (pi k nat
+      (paths nat (mul (mul n m) k) (mul n (mul m k))))))
+   '(lam n (lam m (lam k
+      (nat_rect (lam q (paths nat (mul (mul q m) k) (mul q (mul m k))))
+        (idpath 0)
+        (lam j (lam IH
+          (pathscomp0 nat (mul (mul (succ j) m) k)
+                          (add (mul (mul j m) k) (mul m k))
+                          (mul (succ j) (mul m k))
+            (natrdistr (mul j m) m k)
+            (maponpaths nat nat (lam w (add w (mul m k)))
+              (mul (mul j m) k) (mul j (mul m k)) IH))))
+        n)))))
+ (defq 'natmultl1 '(pi n nat (paths nat (mul 1 n) n))
+   '(lam n (idpath n)))
+ (defq 'natmultr1 '(pi n nat (paths nat (mul n 1) n))
+   '(lam n
+      (pathscomp0 nat (mul n 1) (mul 1 n) n
+        (natmultcomm n 1)
+        (natmultl1 n)))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e
