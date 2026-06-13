@@ -43,20 +43,21 @@
  (? w64 (fixp (- (* 2 2305843009213693952) 2305843009213693952)) 1) ; ...to a fixnum (64-bit: 2^61 is in range)
  (= (* 2 2305843009213693952) (* 2 2305843009213693952))           ; equal boxes compare =
 
- ; --- /0 promotes to IEEE inf / -inf / NaN ---
- ; the result is a real, not a fixnum; not equal to any finite value.
+ ; --- 1/0 promotes to IEEE inf / -inf; 0/0 collapses to 0 (NaN is gone) ---
+ ; the result is a real, not a fixnum; inf is not equal to any finite value.
  (flop (/ 1 0))
  (flop (/ -1 0))
- (flop (/ 0 0))
+ (flop (/ 0 0))                 ; 0/0 is 0.0 -- a real zero, not NaN
  (flop (/ 1.0 0.0))
  !(= 0 (/ 1 0))
+ (= 0 (/ 0 0))                  ; ... and equal to 0
  ; +inf is greater than every finite double we can write (f64 only -- a 32-bit
  ; port's f32 reals overflow 1e308 to inf, so the comparison is vacuous there)
  (? w64 (< 1e308 (/ 1 0)) 1)
  ; -inf is less than every finite double
  (? w64 (< (/ -1 0) -1e308) 1)
- ; NaN compares unequal to itself
- !(= (/ 0 0) (/ 0 0))
+ ; 0/0 is 0, so it equals itself (NaN's non-reflexivity is gone)
+ (= (/ 0 0) (/ 0 0))
 
  ; --- rem via fmod, works on floats and mixed ---
  (= 1.0 (% 7.0 2.0))

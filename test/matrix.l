@@ -243,8 +243,8 @@
  (aall (<= @(1 2) @(1 2)))   (aall (>= @(2 2) @(1 2)))
  (nilp (< @(1 2) "x"))                                 ; array vs non-number -> nil
  (nilp (< mx-ac mx-ac))                                ; a complex array is unordered -> nil
- ; --- NaN is unordered: every ordering of it is false ---
- (nilp (< (/ 0 0) (/ 0 0)))   (nilp (<= (/ 0 0) (/ 0 0)))   (nilp (> (/ 0 0) 1))
+ ; --- 0/0 collapses to 0, so it is ORDERED like any zero (no NaN to be unordered) ---
+ (nilp (< (/ 0 0) (/ 0 0)))   (<= (/ 0 0) (/ 0 0))   (nilp (> (/ 0 0) 1))
 
  ; --- equality `=`: bridges the numeric tower, elementwise over arrays, else eql ---
  (= 3 3.0)                                    ; fix = float (promotion)

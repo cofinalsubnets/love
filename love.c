@@ -406,6 +406,13 @@ typedef union { uintptr_t u; g_flo_t d; } g_flo_pun;
 static g_inline g_flo_t flo_get(word x) {
  return ((g_flo_pun){ .u = tuple(x)->shape[0] }).d; }
 static g_inline void flo_put(void *p, g_flo_t v) {
+ // NaN collapses to 0.0: love's "undefined is nothing" convention (a type error
+ // is nil) reaching the floats. This is the single real-float box-write, so 0/0
+ // and every other indeterminate land on 0 -- the value NaN's own net ($ = 0)
+ // already claimed. Restores the total order (NaN was its only incomparable
+ // point) and the !x == (0 = $x) coherence (NaN alone netted 0 yet read truthy).
+ // `inf` is untouched (it is comparable); complex NaN rides cplx_put, not here.
+ if (v != v) v = 0;                              // v != v iff v is NaN
  *(uintptr_t*) p = ((g_flo_pun){ .d = v }).u; }
 
 // Boxed complex access: re in shape[0], im in shape[1] (rank-0, so tuple_data ==
@@ -3324,7 +3331,8 @@ static g_inline struct g *gzread1sym(struct g*g, int c) {
       double d;
       if (n == 8 && !memcmp(tx, "ieee-inf", 8)) d = __builtin_inf();
       else if (n == 9 && !memcmp(tx, "-ieee-inf", 9)) d = -__builtin_inf();
-      else if (n == 8 && !memcmp(tx, "ieee-nan", 8)) d = NAN;
+      // no ieee-nan literal: NaN collapses to 0 (flo_put), so there is no NaN
+      // value to name -- "ieee-nan" reads as an honest symbol, free for binding.
       else {
        char c0 = *tx == '+' || *tx == '-' ? tx[1] : *tx;
        if (!(c0 >= '0' && c0 <= '9') && c0 != '.') return intern(g);
