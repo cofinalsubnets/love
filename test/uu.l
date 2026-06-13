@@ -2071,6 +2071,31 @@
  (idp (vof 0 'true) (vof 0 '(natgtb (add 3 5) (add 3 2))))
  (idp (vof 0 'true) (vof 0 '(natgtb (mul 2 5) (mul 2 2)))))
 
+; NATURALNUMBERS round 18 -- the order is decidable and total. natlth/natgeh are
+; natgth/natleh flipped; natleh is "natgtb is false" (the hProp, by isasetbool) --
+; the mirror of natgth's "natgtb is true". natgthorleh, the dichotomy the rest of
+; NaturalNumbers stands on, is one bool_rect on (natgtb n m): true -> ii1 (idpath
+; true), false -> ii2 (idpath false). No induction -- the decidability was already
+; sitting in natgtb's bit; the coprod_rect demos read the decision back out.
+(assert
+ (defn 'natlth '(pi n nat (pi m nat hProp))
+   '(lam n (lam m (natgth m n))))
+ (defn 'natleh '(pi n nat (pi m nat hProp))
+   '(lam n (lam m (tpair (paths bool (natgtb n m) false) (isasetbool (natgtb n m) false)))))
+ (defn 'natgeh '(pi n nat (pi m nat hProp))
+   '(lam n (lam m (natleh m n))))
+ (defn 'natgthorleh
+   '(pi n nat (pi m nat (coprod (paths bool (natgtb n m) true) (paths bool (natgtb n m) false))))
+   '(lam n (lam m
+      (bool_rect (lam b (coprod (paths bool b true) (paths bool b false)))
+        (ii1 (idpath true))
+        (ii2 (idpath false))
+        (natgtb n m)))))
+ ; the dichotomy DECIDES and computes: coprod_rect reads the chosen branch back
+ ; out -- 5>3 lands left (true), 3<5 lands right (false).
+ (idp (vof 0 'true)  (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 5 3))))
+ (idp (vof 0 'false) (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 3 5)))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e
