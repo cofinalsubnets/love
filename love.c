@@ -111,7 +111,7 @@ lvm_t lvm_kcall,
  lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_twop,
- lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call,
+ lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_forge,
  lvm_fixp,  lvm_symp,   lvm_strp,   lvm_mapp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
@@ -585,7 +585,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_table, "tablet", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
- _(nif_call, "call", s2(lvm_call))\
+ _(nif_call, "call", s2(lvm_call)) _(nif_forge, "forge", s1(lvm_forge))\
  _(nif_twop, "twop", s1(lvm_twop)) _(nif_strp, "strp", s1(lvm_strp))\
  _(nif_real, "real", s1(lvm_real)) _(nif_flop, "flop", s1(lvm_flop))\
  _(nif_sin, "sin", s1(lvm_sin)) _(nif_cos, "cos", s1(lvm_cos))\
@@ -3725,6 +3725,85 @@ lvm(lvm_call) {
  g_word (*fn)(g_word) = (g_word (*)(g_word)) txt(s);   // `word` is a macro; use g_word as a type
  g_word r = fn(x);
  return *++Sp = putfix(r), Ip++, Continue(); }   // arity 2: pop one, result at the new top
+
+// THE HOST EXEC ARENA (hosted builds only). The Linux malloc heap is NX, so a
+// buf of real code cannot be (call ...)ed directly -- the jump faults. forge
+// copies the bytes into a W^X mapping instead: mmap RW, write, mprotect to
+// R+X, and never write again (writable XOR executable, honored, so hardened
+// systems that forbid RWX still run it). The mapping is page-rounded and holds
+// a g_str header [len, bytes..] so the resulting buf is an ORDINARY buf whose
+// ->str simply lives outside the GC pool -- gcp's out-of-pool short-circuit
+// leaves the pointer untouched (like the immortal data-segment constants), and
+// a finalizer munmaps it when the buf is collected (mirrors io_close). The
+// freestanding kernel needs none of this: its HHDM is mapped executable, so a
+// plain heap buf already runs (see jit/README.md), and forge there is just a
+// buf copy. Either way the portable idiom is (call (forge bytes) x).
+#if __STDC_HOSTED__
+#include <sys/mman.h>
+#include <unistd.h>
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+static g_inline size_t g_pagesize(void) {
+ static size_t p; if (!p) { long q = sysconf(_SC_PAGESIZE); p = q > 0 ? (size_t) q : 4096; }
+ return p; }
+static g_inline size_t code_maplen(size_t codelen) {
+ size_t ps = g_pagesize(), need = sizeof(struct g_str) + codelen;
+ return (need + ps - 1) & ~(ps - 1); }
+// Finalizer (runs inside GC, fz->p is the from-space buf wrapper, still
+// readable): recover the arena base from ->str and unmap it. ->str is an
+// out-of-pool pointer the collector never rewrote, so it still names the map.
+static void code_unmap(void *p) {
+ struct g_str *base = ((struct g_buf*) p)->str;
+ munmap(base, code_maplen(base->len)); }
+#endif
+
+// (forge src) — an EXECUTABLE buf holding a copy of src's bytes (src a string or
+// buf; non-byte or empty -> 0). On a hosted build the bytes go into the W^X code
+// arena above; on the freestanding kernel a plain heap buf (the HHDM is already
+// executable). The returned buf feeds (call ...) on either target. The bytes are
+// the caller's responsibility, exactly as for (call ...): forge only places them
+// where they can run, it does not check them.
+lvm(lvm_forge) {
+ word src = Sp[0];
+ if (!(strp(src) || bufp(src))) return Sp[0] = putfix(0), Ip++, Continue();
+ struct g_str *in = bytes_of(src);
+ uintptr_t n = len(in);
+ if (n == 0) return Sp[0] = putfix(0), Ip++, Continue();   // nothing to forge -> nothing
+#if __STDC_HOSTED__
+ // The buf wrapper + finalizer node live in the heap; the g_str backing lives
+ // in the arena. Have() BEFORE the mmap so a GC retry (which re-runs the nif)
+ // never leaks a mapping -- past Have no GC fires, so `in` stays valid below.
+ Have(Width(struct g_buf) + Width(struct g_tag) + Width(struct g_fz));
+ size_t maplen = code_maplen(n);
+ void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+ if (base == MAP_FAILED) return Sp[0] = putfix(0), Ip++, Continue();   // OOM -> nothing
+ struct g_str *s = ini_str((struct g_str*) base, n);
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);   // reload src: a GC in Have may have moved it
+ if (mprotect(base, maplen, PROT_READ | PROT_EXEC))   // seal: writable -> executable
+  return munmap(base, maplen), Sp[0] = putfix(0), Ip++, Continue();
+ union u *k = (union u*) Hp; Hp += Width(struct g_buf) + Width(struct g_tag);
+ ((struct g_buf*) k)->ap = lvm_buf;
+ ((struct g_buf*) k)->str = s;
+ tagtext(k, Width(struct g_buf));
+ struct g_fz *z = (struct g_fz*) Hp; Hp += Width(struct g_fz);
+ z->p = k, z->fn = code_unmap, z->next = g->fz, g->fz = z;
+ return Sp[0] = word(k), Ip++, Continue();
+#else
+ // Freestanding: a heap buf copy (HHDM is RWX). Two objects under one Have, as
+ // in lvm_bufnew, so no GC ever sees a half-built buf.
+ uintptr_t sreq = str_type_width + b2w(n),
+           breq = Width(struct g_buf) + Width(struct g_tag);
+ Have(sreq + breq);
+ struct g_str *s = ini_str((struct g_str*) Hp, n); Hp += sreq;
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);   // reload src: a GC in Have may have moved it
+ union u *k = (union u*) Hp; Hp += breq;
+ ((struct g_buf*) k)->ap = lvm_buf;
+ ((struct g_buf*) k)->str = s;
+ tagtext(k, Width(struct g_buf));
+ return Sp[0] = word(k), Ip++, Continue();
+#endif
+}
 
 // (bcopy dst doff src soff n) — copy n bytes from src[soff..] into buf dst at
 // doff. src may be a string or buf; dst must be a buf. Ranges are clamped to
