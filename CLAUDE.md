@@ -141,7 +141,7 @@
 ; truth/task tests, not type tests.
 (assert
  (fixp 5) (twop '(1 2)) (strp "hi") (symp 'x) (lamp cap) (mapp #(1 2))
- (bigp (100 2)) (widep (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (packp 1.5)
+ (bigp (100 2)) ((? w64 widep bigp) (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (packp 1.5)
  (nump 1.5) (nump i) (nump (62 2)) (intp (62 2)) (atomp 'x) !(atomp '(1))
  (hotp (buf 4)) (hotp out) (hotp (sip '(104)))   ; the hot zoo, named
  !(hotp #()) !(hotp cap) !(hotp 5) !(hotp "s")   ; maps/functions/data are not hots
@@ -169,7 +169,7 @@
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (2 = 4 / 2) (fixp (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
- !(fixp (2 * 2305843009213693952)) (flop (1 / 0)) (1e308 < 1 / 0) !((/ 0 0) = (/ 0 0))
+ !(fixp (2 * 2305843009213693952)) (flop (1 / 0)) (? w64 (1e308 < 1 / 0) 1) !((/ 0 0) = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
  (flop ieee-nan) !(ieee-nan = ieee-nan) (symp 'inf) (symp 'nan)
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))

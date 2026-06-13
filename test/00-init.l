@@ -11,7 +11,11 @@
 
    test_state (tablet 0)
    (test_set k v) (pin test_state k v)
-   (test_get k) (peep test_state k 0))
+   (test_get k) (peep test_state k 0)
+   ; w64: a full 64-bit-word build (native, kernel) -- which is also where reals
+   ; are f64, libm is glibc's, a filesystem exists, and the RNG runs full-width.
+   ; false only on the 32-bit wasm shim; gates the asserts that need any of those.
+   w64 (< (32 2) fix-max))
 (:: 'assert (\ l
 (:
  (report x v) (do

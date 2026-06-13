@@ -13,7 +13,9 @@
 ; These children are chosen so none reads stdin: under the test harness the
 ; child inherits l's stdin (the test-corpus pipe), and a reader would eat it.
 
-(assert
+; run/getenv are host-only (subprocess + environment); the browser shim has
+; neither, so skip the whole file there (w64 = the hosted builds).
+(? w64 (assert
   ; --- ran successfully: a pair, exit 0, and (here) no output ---
   (twop (run (L "true")))
   (= 0 (cap (run (L "true"))))
@@ -41,4 +43,4 @@
 
   ; --- getenv: PATH is set (a string); a bogus name is unset (nil) ---
   (strp (getenv "PATH"))
-  (= 0 (getenv "GWEN_DEFINITELY_UNSET_12345")))
+  (= 0 (getenv "GWEN_DEFINITELY_UNSET_12345"))) 0)

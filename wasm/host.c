@@ -19,7 +19,10 @@ static const char boot_love[] = "("
   g_egg_post
 ;
 
-static char     out_buf[1 << 14];
+// 256K: a single love_eval can emit a lot before the page drains it -- the
+// whole test corpus (test_wasm) runs in one eval and prints ~25K of dots +
+// the summary. Output past the cap is dropped (never overruns, see _putc).
+static char     out_buf[1 << 18];
 static uint32_t out_len;
 
 uintptr_t g_clock(void) {

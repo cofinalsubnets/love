@@ -81,7 +81,7 @@
  (nilp (% i 2))
  (nilp (sin i))   (close 0.7071067811865476 (re ((/ 1 2) i)))   (nilp (plex 1 i))
  ; pow IS defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
- (close -1 (re (pow i 2)))   (close 0 (im (pow i 2)))
+ (close -1 (re (pow i 2)))   (? w64 (close 0 (im (pow i 2))) 1)   ; im residue exceeds close's tol under f32 powf
  (close 0.20787957635076193 (re (pow i i)))   (close 0 (im (pow i i)))
 
  ; --- truthiness: a complex is FALSE iff it sorts <= 0+0i by the total order (re, then

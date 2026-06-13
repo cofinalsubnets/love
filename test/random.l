@@ -12,7 +12,10 @@
    (gseq3 seed)  (: _ (rng-set (rng-seed seed))             ; first 3 global draws
                     a (rand 0) b (rand 0) c (rand 0) (L a b c))
    (ffirst seed) (cap (rand-next (rng-seed seed))))          ; 1st functional draw
-(assert
+; the RNG state is a word-int tuple -- 256 bits on a 64-bit word, 128 on a 32-bit
+; one -- so the generator and its reproducibility pins are 64-bit-only; skip on
+; the wasm shim (the rand-next truncation is filed).
+(? w64 (assert
  ; --- state-tuple structure: rank-1 word-int (Z) tuple, length 4 (C-typed on 32-bit,
  ; where C is the 8-byte-wide kind, so the 256-bit payload survives either way) ---
  (= 4 (alen (rng-seed 1)))
@@ -70,4 +73,4 @@
 
  ; --- cross-target reproducibility pins (64-bit host values) ---
  (= (gseq3 42) '(1186220554705070239 1269524112903976849 4314585860703317388))
- (= 978559313737459048 (ffirst 12345)))
+ (= 978559313737459048 (ffirst 12345))) 0)

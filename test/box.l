@@ -8,7 +8,9 @@
 ; by arithmetic, and checks either fold it back into fixnum range or compare
 ; two identically-built boxes.
 
-(assert
+; the whole file probes the 64-bit-word wide-int box (2^62 fixnum-max, bit-63
+; shift idioms); on a 32-bit word these are out of range, so skip there (w64).
+(? w64 (assert
  ; --- promotion / demotion boundary ---
  !(fixp (<< 1 62))                 ; 2^62 is boxed, not a fixnum
  !(flop (<< 1 62))                 ; ...integer, not float
@@ -60,4 +62,4 @@
  ; --- a box prints as a plain decimal integer (same as a fixnum) ---
  (= "4611686018427387904" (show (<< 1 62)))
  (= "-4611686018427387905" (show (^ (<< 1 62) -1)))
- (= "-9223372036854775808" (show (<< 1 63))))
+ (= "-9223372036854775808" (show (<< 1 63)))) 0)

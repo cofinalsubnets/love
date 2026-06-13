@@ -40,7 +40,7 @@
  !(flop (* 2 2305843009213693952))   ; ...and integer, not float
  (= 2305843009213693952 (/ (* 2 2305843009213693952) 2))           ; box / 2 demotes
  (= 2305843009213693952 (- (* 2 2305843009213693952) 2305843009213693952)) ; box - fix demotes
- (fixp (- (* 2 2305843009213693952) 2305843009213693952))          ; ...to a fixnum
+ (? w64 (fixp (- (* 2 2305843009213693952) 2305843009213693952)) 1) ; ...to a fixnum (64-bit: 2^61 is in range)
  (= (* 2 2305843009213693952) (* 2 2305843009213693952))           ; equal boxes compare =
 
  ; --- /0 promotes to IEEE inf / -inf / NaN ---
@@ -50,10 +50,11 @@
  (flop (/ 0 0))
  (flop (/ 1.0 0.0))
  !(= 0 (/ 1 0))
- ; +inf is greater than every finite double we can write
- (< 1e308 (/ 1 0))
+ ; +inf is greater than every finite double we can write (f64 only -- a 32-bit
+ ; port's f32 reals overflow 1e308 to inf, so the comparison is vacuous there)
+ (? w64 (< 1e308 (/ 1 0)) 1)
  ; -inf is less than every finite double
- (< (/ -1 0) -1e308)
+ (? w64 (< (/ -1 0) -1e308) 1)
  ; NaN compares unequal to itself
  !(= (/ 0 0) (/ 0 0))
 

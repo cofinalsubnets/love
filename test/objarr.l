@@ -76,7 +76,7 @@
  (= (+ 3 (100 2)) (peep (+ (100 2) oa-x) 2 0))   ; scalar on the left; oa-x elem 2 = 3
 
  ; mixed: object array (+) typed int array -> widens the int array, stays exact
- (= (* 2 oa-w) (peep (+ oa-oar oa-zar) 0 0))
+ (? w64 (= (* 2 oa-w) (peep (+ oa-oar oa-zar) 0 0)) 1)   ; 2^40 wraps differently in a 32-bit z-array
 
  ; comparison over object arrays -> 0/1 element
  (= 1 (peep (< (arr o '(2) '(1 5)) (arr o '(2) '(3 2))) 0 0))

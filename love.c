@@ -702,7 +702,11 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
    {"book", g->book},
    {"in", (word) &g_stdin},
    {"out", (word) &g_stdout},
-   {"err", (word) &g_stderr}, };
+   {"err", (word) &g_stderr},
+   // fix-max/fix-min: this build's fixnum bounds, exposed so width-specific
+   // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
+   {"fix-max", putfix((g_word)((uintptr_t)-1 >> 2))},
+   {"fix-min", putfix(-(g_word)((uintptr_t)-1 >> 2) - 1)}, };
   g = g_defn(g, def0, countof(def0));
   g = g_defn(g, def1, countof(def1));
   // `love-version`: the build's version-control id (love_version.h), surfaced on init so the user

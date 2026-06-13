@@ -91,17 +91,17 @@
  (= 7 (+ 5 2))                                ; fix + fix (overflow-free fast path)
  (= 7.5 (+ 5 2.5))   (= 7.5 (+ 2.5 5))        ; fix + float (both orders)
  (= 5.0 (+ 2.5 2.5))                          ; float + float
- (= (63 2) (+ (<< 1 62) (<< 1 62)))        ; box + box -> 2^63 overflows z -> bignum
- (bigp (+ (<< 1 62) (<< 1 62)))
- (widep (+ (<< 1 62) 1))                        ; box + fix stays a box (still > fixnum range)
- (= (+ (<< 1 62) 1) (+ 1 (<< 1 62)))          ; ...and commutes
+ (? w64 (= (63 2) (+ (<< 1 62) (<< 1 62))) 1)   ; box + box -> 2^63 (64-bit word only)
+ (? w64 (bigp (+ (<< 1 62) (<< 1 62))) 1)
+ (? w64 (widep (+ (<< 1 62) 1)) 1)              ; box + fix stays a box
+ (? w64 (= (+ (<< 1 62) 1) (+ 1 (<< 1 62))) 1) ; ...and commutes
  (= (+ 1 (100 2)) (+ (100 2) 1))        ; big + fix == fix + big (commutes)
  (= (* 2 (100 2)) (+ (100 2) (100 2))) ; big + big
  (flop (+ (100 2) 0.5))                    ; big + float -> float (widens)
  (= ~(4 6) (+ ~(1 2) ~(3 4)))              ; complex + complex
  (= ~(7 3) (+ 5 ~(2 3)))                    ; fix + complex (real -> (5,0))
  (= ~(4.0 3.0) (+ 1.5 ~(2.5 3)))            ; float + complex
- (comp (+ (<< 1 62) ~(0 1)))                   ; box + complex -> complex
+ (? w64 (comp (+ (<< 1 62) ~(0 1))) 1)         ; box + complex -> complex (64-bit word only)
  (comp (+ (100 2) ~(0 1)))                  ; big + complex -> complex (widens)
 
  ; --- array tower: each tier with a matching array and with a scalar broadcast ---
@@ -151,7 +151,7 @@
  ; --- muln: scalar tower + arrays ---
  (= 6 (* 2 3))                                ; fix * fix
  (= 7.5 (* 3 2.5))                            ; fix * float
- (= (124 2) (* (<< 1 62) (<< 1 62)))       ; box * box -> bignum (overflows the box)
+ (? w64 (= (124 2) (* (<< 1 62) (<< 1 62))) 1) ; box * box -> bignum (64-bit word only)
  (= (200 2) (* (100 2) (100 2)))     ; big * big
  (= -1 (* i i))                               ; complex * complex (i^2, bridges to real)
  (= ~(-5 10) (* ~(1 2) ~(3 4)))            ; Gaussian product
@@ -213,8 +213,8 @@
  ; `> >=` are `< <=` with operands reversed (a > b == b < a).
  ; --- within NUMBER: the whole tower orders by value (reps interleave) ---
  (< 1 2)   (< 1 1.5)   (< 1.5 2)                       ; fix / float
- (< (<< 1 62) (* 3 (<< 1 62)))                         ; box < box
- (< 5 (100 2))   (< (<< 1 62) (100 2))           ; fix/box < bignum (magnitude-exact)
+ (? w64 (< (<< 1 62) (* 3 (<< 1 62))) 1)               ; box < box (64-bit word only)
+ (< 5 (100 2))   (? w64 (< (<< 1 62) (100 2)) 1)  ; fix/box < bignum (magnitude-exact)
  (< (100 2) (101 2))                             ; bignum < bignum
  ; --- complex: lexicographic (re, im); a real r is (r, 0) ---
  (< i 1)   (< ~(1 9) ~(2 0))   (< ~(2 1) ~(2 2))   ; re decides, then im
@@ -248,8 +248,8 @@
 
  ; --- equality `=`: bridges the numeric tower, elementwise over arrays, else eql ---
  (= 3 3.0)                                    ; fix = float (promotion)
- (= (<< 1 62) (<< 1 62))                      ; box = box
- !(= (<< 1 62) 0)                          ; ...never = a fixnum
+ (? w64 (= (<< 1 62) (<< 1 62)) 1)            ; box = box (64-bit word only)
+ (? w64 !(= (<< 1 62) 0) 1)                ; ...never = a fixnum
  (= (100 2) (100 2))                    ; bignum = bignum
  (= ~(2 0) 2)                                ; complex bridges a real (im 0)
  !(= ~(2 1) 2)                            ; ...but not when im != 0

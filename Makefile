@@ -10,12 +10,13 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0
-.PHONY: test test_host test_all test_tools test_glove0
+.PHONY: test test_host test_all test_tools test_glove0 test_wasm
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench
 test: test_host test_glove0
-# test_kernel is in test_all but NOT the fast `test` target: it needs qemu + an
-# OVMF download and is x86_64-only (a no-op on other hosts). See its rule below.
-test_all: test_host test_glove0 test_tools test_kernel
+# test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
+# extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
+# is absent. See their rules below.
+test_all: test_host test_glove0 test_tools test_kernel test_wasm
 # love0 bakes prelude+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prelude (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dg_tco=0,
@@ -390,6 +391,25 @@ test_kernel: host $(R)/tools/ktest.$x
 else
 test_kernel:
 	@echo "test_kernel: skipped (host arch $a is not x86_64)"
+endif
+
+# --- wasm headless test (wired into test_all; emcc + node) -----------------
+# Build love.js and run the SAME $t corpus through it under node -- a third
+# runtime after the host and love0, exercising wasm's <data.h> override
+# (sentinel-ap data kinds, no flat code-address space). The harness evals the
+# whole corpus in one love_eval and greps the drained output for the zz-fin
+# summary, exactly as test_host greps `cat $t | love`. No-op when emcc or node
+# is missing (so a plain `make test_all` stays green on a host without them).
+NODE ?= $(shell command -v node 2>/dev/null)
+EMCC ?= $(or $(shell command -v emcc 2>/dev/null),/usr/lib/emscripten/emcc)
+.PHONY: test_wasm
+ifeq ($(and $(NODE),$(wildcard $(EMCC))),)
+test_wasm:
+	@echo "test_wasm: skipped (needs emcc + node)"
+else
+test_wasm: wasm
+	@echo TEST wasm/$n.js "(node)"
+	@$(NODE) $(R)/wasm/test.mjs $t
 endif
 
 # --- downloads -------------------------------------------------------
