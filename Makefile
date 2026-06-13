@@ -8,15 +8,15 @@ include common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
-.PHONY: all install uninstall clean distclean
+.PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm love0
-.PHONY: test test_host test_all test_tools test_glove0 test_wasm
+.PHONY: test test_host test_all test_tools test_love0 test_wasm
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench
-test: test_host test_glove0
+test: test_host test_love0
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_glove0 test_tools test_kernel test_wasm
+test_all: test_host test_love0 test_tools test_kernel test_wasm
 # love0 bakes prelude+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prelude (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dg_tco=0,
@@ -29,10 +29,10 @@ test_all: test_host test_glove0 test_tools test_kernel test_wasm
 # exits 0 without ever reaching zz-fin -- exit code alone green-lights a run
 # that only executed a prefix of the corpus. love0 must print TWO summaries
 # (the corpus runs under both c0 and the self-hosted ev).
-test_glove0: $(love0)
+test_love0: $(love0)
 	@echo TEST $(love0)
-	@$(love0) </dev/null > out/host/.test_glove0.out; s=$$?; cat out/host/.test_glove0.out; \
-	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_glove0.out` -eq 2 ]
+	@$(love0) </dev/null > out/host/.test_love0.out; s=$$?; cat out/host/.test_love0.out; \
+	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_love0.out` -eq 2 ]
 test_host: host
 	@echo TEST $m
 	@cat $t | $m > out/host/.test_host.out; s=$$?; cat out/host/.test_host.out; \
@@ -42,6 +42,12 @@ test_host: host
 test_tools: host
 	@$(MAKE) -C tools
 all: host kernel wasm
+
+# Point git at the tracked hooks dir (.githooks). The pre-commit hook rebuilds
+# wasm/love.js whenever a commit touches what it is built from, so the committed
+# artifact never lags the sources. One-time per clone; idempotent.
+hooks:
+	@git config core.hooksPath .githooks && echo "git hooks -> .githooks (pre-commit keeps wasm/love.js fresh)"
 
 # Static lisp headers: each love/*.l is serialized to a C string literal in
 # out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter love0). Frontends
@@ -131,7 +137,7 @@ $(ho)/data.o: data.c $(g_h)
 # prelude/ev/egg/repl + the test corpus), all produced without an interpreter --
 # hence -Iout/lib. Per-object into $(ho)/0/ so ccache caches each TU.
 gl0_cc = $(CCACHE) $(CC) $(g_cflags) -DGL_BOOTSTRAP -Dg_tco=0 -I. -Iout/lib
-glove0_o = $(ho)/0/main.o $(g_c:$(R)/%.c=$(ho)/0/%.o)
+love0_o = $(ho)/0/main.o $(g_c:$(R)/%.c=$(ho)/0/%.o)
 $(ho)/0/main.o: main.c $(g_h) $(gl0_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
@@ -140,10 +146,10 @@ $(ho)/0/%.o: $(R)/%.c $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(gl0_cc) -c $< -o $@
-$(love0): $(glove0_o) $(data_ld)
+$(love0): $(love0_o) $(data_ld)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(CC) $(g_cflags) $(ldflags) -o $@ $(glove0_o) -lm
+	@$(CC) $(g_cflags) $(ldflags) -o $@ $(love0_o) -lm
 
 # tools/gen_data.l reflects $(ho)/data.o's love_data.NN section sizes into
 # $(ho)/data.h, whose g_typ() shifts instead of the portable header's divides.
@@ -368,7 +374,7 @@ run-headless: $(ko)/$n-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 # printing the usual summary over the serial console, then quits qemu (the `exit`
 # nif -> isa-debug-exit). tools/ktest.l (run on
 # the host l) boots it under qemu headless, captures the serial output, and checks
-# it. So this exercises the freestanding kernel the way test_host/test_glove0 exercise
+# it. So this exercises the freestanding kernel the way test_host/test_love0 exercise
 # the host. x86_64 only (qemu + isa-debug-exit); a no-op on other hosts.
 #
 # Drop from the kernel corpus: io.l (host file open) and run.l (subprocess/getenv)
