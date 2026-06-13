@@ -39,16 +39,18 @@ is `w64 = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
   cross-target pins included; only the state's atype stays platform-visible
   (`z` on a 64-bit word, `c` on a 32-bit one).
 
+- **`io.l`'s real-file path OOMed on the wasm host.** `open`/`close` are
+  frontend nifs the wasm host doesn't install, so on wasm `open` is a missing
+  name that resolves to a non-port; the `slurp` loop then called `(fgetc <non-
+  port>)`, which *echoed its argument* instead of signalling EOF, so the loop
+  spun and grew a list until it threw "memory access out of bounds". Fixed at
+  the root: `fgetc` on a non-port now returns `-1` (EOF) -- a read of an empty
+  stream -- so a read-until-`-1` loop is bounded on every target (`io.l` pins
+  this directly; the real-file roundtrip stays gated, since wasm has no FS).
+
 ## Real bugs (to fix; gated meanwhile)
 
-1. **`io.l`'s real-file path OOMs on the wasm host.** The shim stubs fd-backed
-   ports (reads return EOF, writes go to the out buffer); the `open`/`fputs`/
-   `fgetc` round-trip then attempts a ~4 GB allocation and throws "memory access
-   out of bounds" instead of failing cleanly. Fix: make the stubbed / failed-open
-   path safe (bounded). (The file block is gated; in-memory `sip` ports still run
-   on wasm.)
-
-2. **`help-log` not recorded on the wasm host.** After `(scare 'deliberate
+1. **`help-log` not recorded on the wasm host.** After `(scare 'deliberate
    'data)`, `(peep help-log 1 0)` is `0` on wasm but `1` on the hosted builds --
    the deliberate scare's observation isn't logged. Root cause not yet isolated.
    (`help.l` line gated.)

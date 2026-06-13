@@ -2870,7 +2870,10 @@ lvm(lvm_feof) {
  return Ip++, Continue(); }
 
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
-// uses the port's own fd.
+// uses the port's own fd. A non-port reads as an already-empty stream: EOF
+// (-1), not the echoed argument, so a (fgetc ...)-until-(-1) loop over a
+// misused or absent port (e.g. `open` on a host with no filesystem) is
+// bounded instead of spinning forever on a value that never equals -1.
 lvm(lvm_fgetc) {
  if (iop(Sp[0])) {
   struct g_io *i = (struct g_io*) Sp[0];
@@ -2882,6 +2885,7 @@ lvm(lvm_fgetc) {
   if (!g_ok(g = zgetc(g))) return ghelp(g);
   Unpack(g);
   Sp[0] = putfix(g->b); }
+ else Sp[0] = putfix(EOF);
  return Ip++, Continue(); }
 
 // (fungetc port byte) — push back one byte, return the byte.

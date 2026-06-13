@@ -25,13 +25,22 @@
   ; ...and the pushed byte is then the next read.
   (= 99 (fgetc in))
 
+  ; A non-port reads as an already-empty stream: (fgetc x) is -1 (EOF), not the
+  ; echoed x, so a read-until-(-1) loop over an absent or misused port terminates
+  ; instead of spinning on a value that never equals -1. This is what keeps the
+  ; file roundtrip below bounded on a host with no filesystem, where `open` is a
+  ; missing name that resolves to a non-port.
+  (= -1 (fgetc 42))
+  (= -1 (fgetc "notaport"))
+
   ; File-I/O roundtrip: write a string to /tmp via fputs, read it back
   ; byte-by-byte via fgetc, rebuild as a string with str, and compare.
   ; The payload is (show (clock 0)) so the bytes vary every run --
   ; a literal string would let a stale file from a previous run pass.
   ; the wasm shim has no filesystem (fd ports are stubbed to EOF/out-buffer), so
-  ; real-file I/O can't round-trip there -- and that stubbed path currently OOMs
-  ; (filed). Gated to the hosted builds; in-memory ports (sip, below) still run.
+  ; real-file I/O can't round-trip there; gated to the hosted builds. The read
+  ; loop is bounded everywhere now (fgetc on a non-port is EOF), so the stubbed
+  ; path no longer OOMs. In-memory ports (sip, below) still run on wasm.
   (? w64 (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
      _ (fputs wp txt)
