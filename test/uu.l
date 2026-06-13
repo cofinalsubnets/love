@@ -2186,6 +2186,58 @@
    '(lam n (lam m (lam g
       (negnatgthtoleh n m (lam q (isasymmnatgth n m q g))))))))
 
+; NATURALNUMBERS round 21 -- truncated subtraction. natminus is the double rect
+; UniMath's match compiles to: 0 - m is 0 and (succ k) - (succ j) is k - j, both
+; definitional -- so 0-n=0 is one idpath. n-0=n and n-n=0 are one induction each
+; (n-n lands on its IH, like isreflnatleh). natlehsucc (a<=k weakens to a<=succ k)
+; is the missing rung; natminusleh (n-m <= n) then inducts down natminus's own
+; shape -- the m=0 corner is isreflnatleh, the succ corner weakens the IH.
+(assert
+ (defn 'natminus '(pi n nat (pi m nat nat))
+   '(lam n (nat_rect (lam x (pi m nat nat))
+      (lam m 0)
+      (lam k (lam IH (lam m (nat_rect (lam y nat)
+         (succ k)
+         (lam j (lam u (IH j)))
+         m))))
+      n)))
+ (defq 'natminus0n '(pi n nat (paths nat (natminus 0 n) 0))
+   '(lam n (idpath 0)))
+ (defq 'natminusn0 '(pi n nat (paths nat (natminus n 0) n))
+   '(lam n (nat_rect (lam q (paths nat (natminus q 0) q))
+      (idpath 0)
+      (lam k (lam IH (idpath (succ k))))
+      n)))
+ (defq 'natminusnn '(pi n nat (paths nat (natminus n n) 0))
+   '(lam n (nat_rect (lam q (paths nat (natminus q q) 0))
+      (idpath 0)
+      (lam k (lam IH IH))
+      n)))
+ (defq 'natlehsucc
+   '(pi a nat (pi k nat (pi g (paths bool (natgtb a k) false) (paths bool (natgtb a (succ k)) false))))
+   '(lam a (nat_rect
+      (lam q (pi k nat (pi g (paths bool (natgtb q k) false) (paths bool (natgtb q (succ k)) false))))
+      (lam k (lam g (idpath false)))
+      (lam ap (lam IH
+        (lam k (nat_rect
+           (lam r (pi g (paths bool (natgtb (succ ap) r) false) (paths bool (natgtb (succ ap) (succ r)) false)))
+           (lam g (fromempty (paths bool (natgtb (succ ap) (succ 0)) false) (nopathstruetofalse g)))
+           (lam kp (lam u (lam g (IH kp g))))
+           k))))
+      a)))
+ (defq 'natminusleh
+   '(pi n nat (pi m nat (paths bool (natgtb (natminus n m) n) false)))
+   '(lam n (nat_rect (lam q (pi m nat (paths bool (natgtb (natminus q m) q) false)))
+      (lam m (idpath false))
+      (lam k (lam IHn
+        (lam m (nat_rect (lam r (paths bool (natgtb (natminus (succ k) r) (succ k)) false))
+           (isreflnatleh k)
+           (lam j (lam u (natlehsucc (natminus k j) k (IHn j))))
+           m))))
+      n)))
+ (idp (vof 0 '2) (vof 0 '(natminus 5 3)))
+ (idp (vof 0 '0) (vof 0 '(natminus 2 5))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e
