@@ -2340,5 +2340,6 @@
  (idp 'rejected (rejects (\ z (defn 'uu-bad3 'nat '(lam x x)))))
  (idp 'rejected (rejects (\ z (defn 'uu-bad4 '(coprod nat bool) '(ii1 true)))))
  (idp 'rejected (rejects (\ z (defn 'uu-bad5 'nat '(let x (lam y y) x)))))
+ (idp 'rejected (rejects (\ z (defn 'uu-bad6 '(pi x nat 5) '(lam x x)))))  ; a non-type in the codomain
  (idp 'accepted (rejects (\ z (defn 'uu-good '(paths nat 2 2) '(idpath 2))))))
 (: help 0)
