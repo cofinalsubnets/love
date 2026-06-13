@@ -2158,6 +2158,34 @@
             m))))
         n))))
 
+; NATURALNUMBERS round 20 -- the bridge: natleh <-> not natgth. With natleh as
+; "natgtb is false" and natgth as "natgtb is true", the bridge is the bool
+; tautology (b = false) <-> not (b = true), no induction needed. -> is one
+; pathscomp0/pathsinv0 into nopathstruetofalse (false = true is absurd); <- is a
+; bool_rect carrying the negation hypothesis in its motive (true forces empty via
+; the hypothesis, false is idpath false). natlthtoleh then rides <- through
+; isasymmnatgth: m>n gives not (n>m), which is exactly n<=m.
+(assert
+ (defq 'natlehtonegnatgth
+   '(pi n nat (pi m nat (pi p (paths bool (natgtb n m) false)
+      (pi q (paths bool (natgtb n m) true) empty))))
+   '(lam n (lam m (lam p (lam q
+      (nopathstruetofalse
+        (pathscomp0 bool true (natgtb n m) false
+          (pathsinv0 bool (natgtb n m) true q) p)))))))
+ (defq 'negnatgthtoleh
+   '(pi n nat (pi m nat (pi ng (pi q (paths bool (natgtb n m) true) empty)
+      (paths bool (natgtb n m) false))))
+   '(lam n (lam m (lam ng
+      ((bool_rect (lam b (pi g (pi q (paths bool b true) empty) (paths bool b false)))
+         (lam g (fromempty (paths bool true false) (g (idpath true))))
+         (lam g (idpath false))
+         (natgtb n m)) ng)))))
+ (defq 'natlthtoleh
+   '(pi n nat (pi m nat (pi g (paths bool (natgtb m n) true) (paths bool (natgtb n m) false))))
+   '(lam n (lam m (lam g
+      (negnatgthtoleh n m (lam q (isasymmnatgth n m q g))))))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e
