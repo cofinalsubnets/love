@@ -24,24 +24,31 @@ asserts are correctly skipped on wasm and still run on the 64-bit hosted builds
 on the real boundary instead of a baked-in 64-bit literal; the single predicate
 is `w64 = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
 
+## Fixed
+
+- **`rand-next` truncated the 64-bit RNG on a 32-bit word.** The state was
+  always 256 bits (raw-byte limbs, a C/8-byte array on a 32-bit word), but the
+  *output* was masked with `fix_max` -- word-dependent (2^62-1 native, 2^30-1
+  wasm) -- so the draw was cut to ~30 bits and the stream diverged from every
+  other target. Fixed by masking to a fixed 62 bits and canonicalizing through
+  `g_big_canon`: the same integer on every target (a fixnum on a 64-bit word, a
+  bignum on a 32-bit one). A second site fell out of the same root -- the
+  prelude `rng-set` validator hard-coded the state's atype as `z`, so it
+  *rejected* a valid wasm seed (C-typed) and silently clock-seeded; it now
+  compares against a fresh seed's own type. `random.l` runs on wasm again,
+  cross-target pins included; only the state's atype stays platform-visible
+  (`z` on a 64-bit word, `c` on a 32-bit one).
+
 ## Real bugs (to fix; gated meanwhile)
 
-1. **`rand-next` truncates the 64-bit RNG on a 32-bit word.** The xoshiro256++
-   state is a *word-int* tuple -- 256 bits on a 64-bit word, only 128 on a 32-bit
-   one -- and the output is cut to the word (`(cap (rand-next (rng-seed 1)))` is
-   `788775579` on wasm vs `1136543726722859675` native). So the stream diverges
-   from every other target and `random.l`'s "same sequence on every target" pins
-   fail. Fix: carry the RNG state/output in fixed 64-bit limbs, word-size
-   independent. (`random.l` skipped on wasm.)
-
-2. **`io.l`'s real-file path OOMs on the wasm host.** The shim stubs fd-backed
+1. **`io.l`'s real-file path OOMs on the wasm host.** The shim stubs fd-backed
    ports (reads return EOF, writes go to the out buffer); the `open`/`fputs`/
    `fgetc` round-trip then attempts a ~4 GB allocation and throws "memory access
    out of bounds" instead of failing cleanly. Fix: make the stubbed / failed-open
    path safe (bounded). (The file block is gated; in-memory `sip` ports still run
    on wasm.)
 
-3. **`help-log` not recorded on the wasm host.** After `(scare 'deliberate
+2. **`help-log` not recorded on the wasm host.** After `(scare 'deliberate
    'data)`, `(peep help-log 1 0)` is `0` on wasm but `1` on the hosted builds --
    the deliberate scare's observation isn't logged. Root cause not yet isolated.
    (`help.l` line gated.)

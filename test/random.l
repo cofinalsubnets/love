@@ -12,15 +12,18 @@
    (gseq3 seed)  (: _ (rng-set (rng-seed seed))             ; first 3 global draws
                     a (rand 0) b (rand 0) c (rand 0) (L a b c))
    (ffirst seed) (cap (rand-next (rng-seed seed))))          ; 1st functional draw
-; the RNG state is a word-int tuple -- 256 bits on a 64-bit word, 128 on a 32-bit
-; one -- so the generator and its reproducibility pins are 64-bit-only; skip on
-; the wasm shim (the rand-next truncation is filed).
-(? w64 (assert
- ; --- state-tuple structure: rank-1 word-int (Z) tuple, length 4 (C-typed on 32-bit,
- ; where C is the 8-byte-wide kind, so the 256-bit payload survives either way) ---
+; the RNG state holds 256 bits whatever the word: a rank-1 length-4 array whose
+; limbs are 64-bit -- a Z (word-int) array on a 64-bit word, a C (8-byte) array
+; on a 32-bit one. The draw is canonicalized to a fixed 62 bits (a fixnum on a
+; 64-bit word, a bignum on a 32-bit one), so a seed reproduces the SAME sequence
+; on every target -- the only platform-visible difference is the state's atype.
+(assert
+ ; --- state-tuple structure: rank-1, length 4, 64-bit limbs (Z array, or C on
+ ; a 32-bit word where C is the 8-byte-wide kind -- the 256-bit payload either way) ---
  (= 4 (alen (rng-seed 1)))
  (= 1 (arank (rng-seed 1)))
- (= z (atype (rng-seed 1)))
+ (= (atype (rng-seed 0)) (atype (rng-seed 1)))  ; a seed's limb type is stable...
+ (? w64 (= z (atype (rng-seed 1))) 1)      ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
  (= 4 (alen (rng-get 0)))                  ; the global is a valid state tuple too
 
  ; --- determinism: same seed -> same sequence (global and functional) ---
@@ -71,6 +74,6 @@
  (: r (randint (rng-seed 9) 6) (= 4 (alen (cup r))))
  (: st (rng-seed 9) (= (cap (randint st 6)) (cap (randint st 6))))   ; purity
 
- ; --- cross-target reproducibility pins (64-bit host values) ---
+ ; --- cross-target reproducibility pins (the same on host, kernel, and wasm) ---
  (= (gseq3 42) '(1186220554705070239 1269524112903976849 4314585860703317388))
- (= 978559313737459048 (ffirst 12345))) 0)
+ (= 978559313737459048 (ffirst 12345)))

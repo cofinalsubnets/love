@@ -4401,18 +4401,25 @@ lvm(lvm_rng_seed) {
  g_rng_seed(v, seed);
  return Sp[0] = word(v), Ip++, Continue(); }
 
-// (rand-next st): functional draw -> (value . st'), value a full-width
-// non-negative fixnum. st is copied (referentially transparent); st' is the
-// stepped copy.
+// (rand-next st): functional draw -> (value . st'), value a non-negative
+// integer of a fixed 62 bits -- the 64-bit host's fixnum width -- so a seed
+// yields the IDENTICAL integer on every target (a fixnum on a 64-bit word, a
+// bignum on a 32-bit one), not a word-width truncation. The draw is split into
+// two 32-bit limbs and canonicalized; g_big_canon picks the tier. st is copied
+// (referentially transparent); st' is the stepped copy.
+#define rng_draw_mask (((uint64_t) 1 << 62) - 1)              // 62 bits = 64-bit fix_max
+#define rng_draw_req  (Width(struct g_big) + b2w(2 * sizeof(uint32_t)))  // worst case: a 2-limb bignum
 lvm(lvm_rand_next) {
  word st = Sp[0];
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
- Have(rng_vec_req + Width(struct g_pair));
+ Have(rng_vec_req + rng_draw_req + Width(struct g_pair));
  st = Sp[0];                                 // re-read post-Have
  struct g_tuple *v = rng_copy(&Hp, tuple(st));
- uint64_t r = rng_step(tuple_data(v));
+ uint64_t r = rng_step(tuple_data(v)) & rng_draw_mask;
+ uint32_t limb[2] = { (uint32_t) r, (uint32_t) (r >> 32) };
+ word val = g_big_canon(&Hp, limb, 2, false);
  struct g_pair *p = (struct g_pair*) Hp; Hp += Width(struct g_pair);
- ini_two(p, putfix((intptr_t) (r & (uint64_t) fix_max)), word(v));
+ ini_two(p, val, word(v));
  return Sp[0] = word(p), Ip++, Continue(); }
 
 // (randf-next st): functional draw -> (float . st'), float in [0,1).

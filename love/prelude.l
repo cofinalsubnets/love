@@ -416,7 +416,10 @@
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
 (: (rng-get _) (: st (peep book 'rng-state 0)
                   (? (arrp st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
-   (rng-set st) (? (&& (arrp st) (= 1 (arank st)) (= 4 (alen st)) (= z (atype st)))
+   ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
+   ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
+   ; one, so compare against a fresh seed's type, never a baked-in `z`.
+   (rng-set st) (? (&& (arrp st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
                    (: _ (pin book 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin book 'rng-state (cup r))
