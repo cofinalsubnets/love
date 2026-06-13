@@ -4401,6 +4401,15 @@ static g_inline struct g_tuple *rng_copy(g_word **hp, struct g_tuple *src) {
  memcpy(tuple_data(v), tuple_data(src), rng_payload_bytes);
  return v; }
 
+// Canonicalize a 62-bit draw to the smallest integer tier (a fixnum on a 64-bit
+// word, a bignum on a 32-bit one). Out-of-line so its limb[] scratch and the
+// g_big_canon call don't force a frame in lvm_rand_next -- a frame there would
+// turn the tail Continue() into a ret and trip `make vmret`. The caller has
+// already Have'd rng_draw_req; g_big_canon only bumps g->hp (no GC).
+static g_noinline word rng_canon(struct g *g, uint64_t r) {
+ uint32_t limb[2] = { (uint32_t) r, (uint32_t) (r >> 32) };
+ return g_big_canon(&g->hp, limb, 2, false); }
+
 // (rng-seed n): a fresh state tuple deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
 lvm(lvm_rng_seed) {
@@ -4426,8 +4435,9 @@ lvm(lvm_rand_next) {
  st = Sp[0];                                 // re-read post-Have
  struct g_tuple *v = rng_copy(&Hp, tuple(st));
  uint64_t r = rng_step(tuple_data(v)) & rng_draw_mask;
- uint32_t limb[2] = { (uint32_t) r, (uint32_t) (r >> 32) };
- word val = g_big_canon(&Hp, limb, 2, false);
+ Pack(g);
+ word val = rng_canon(g, r);
+ Unpack(g);
  struct g_pair *p = (struct g_pair*) Hp; Hp += Width(struct g_pair);
  ini_two(p, val, word(v));
  return Sp[0] = word(p), Ip++, Continue(); }
