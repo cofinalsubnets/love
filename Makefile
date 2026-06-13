@@ -70,11 +70,11 @@ out/lib/tests0.h: $t
 	@echo GEN	$@
 	@cat $t | $(sed_lit) > $@
 
-# love_version.h: the build's VCS hash, surfaced in the runtime as the `version-number`
+# love_version.h: the build's version-control id, surfaced in the runtime as the `love-version`
 # global (love.c g_ini_0). VCS-AGNOSTIC: a _darcs/ repo stamps darcs-<12-hex patch hash>
 # (-dirty when darcs whatsnew is non-empty), else git describe, else "unknown" -- so the
 # darcs snapshot import carries this rule verbatim and stamps itself. Regenerated every
-# make but only rewritten when the hash changes, so l.o relinks on a new commit, not on
+# make but only rewritten when the id changes, so l.o relinks on a new revision, not on
 # every build. Frontends without it on the include path fall back to "unknown" (love.c
 # uses __has_include).
 .PHONY: force_version
@@ -156,7 +156,7 @@ $(ho)/%.o: $(R)/%.c $(g_h) $(hdata_h)
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
-# l.o carries the version string (love_version.h); relink it when the hash changes.
+# l.o carries the version string (love_version.h); relink it when the id changes.
 $(ho)/love.o $(ho)/0/love.o: out/lib/love_version.h
 
 # main.c is compiled into the final l inline (G_EGG_PRE/POST assemble the lib
@@ -274,7 +274,7 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) $(kdata_h) out/lib/egg.h out/lib/prelude.h out/li
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-# l.o carries the version string (love_version.h); recompile it when the hash changes.
+# l.o carries the version string (love_version.h); recompile it when the id changes.
 $(k_odir)/love.o: out/lib/love_version.h
 
 $(k_odir)/%.o: $(R)/%.S $(k_h)

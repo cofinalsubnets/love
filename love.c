@@ -1,6 +1,6 @@
 #include "love.h"
-// The build's version string (the git hash), generated into out/lib/love_version.h by
-// the Makefile and surfaced in the runtime as the `version-number` global (g_ini_0).
+// The build's version string (the version-control id), generated into out/lib/love_version.h by
+// the Makefile and surfaced in the runtime as the `love-version` global (g_ini_0).
 // Optional include so a standalone/unwired compile still builds; falls back to "unknown".
 #if defined(__has_include) && __has_include("love_version.h")
 #include "love_version.h"
@@ -705,10 +705,10 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
    {"err", (word) &g_stderr}, };
   g = g_defn(g, def0, countof(def0));
   g = g_defn(g, def1, countof(def1));
-  // `version-number`: the build's git hash (love_version.h), surfaced on init so the user
+  // `love-version`: the build's version-control id (love_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
   if (g_ok(g = g_strof(g, LOVE_VERSION))) {
-   struct g_def vd[] = {{"version-number", g_pop1(g)}};
+   struct g_def vd[] = {{"love-version", g_pop1(g)}};
    g = g_defn(g, vd, countof(vd)); }
   // the missing condition tag ('missing), pre-interned and rooted (v0..end in
   // struct g) so lvm_freev's raise path never allocates the tag and the

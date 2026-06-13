@@ -36,7 +36,7 @@ syn keyword LoveFunc ev call-cc yield spawn wait sleep done? hush key?
 syn keyword LoveFunc help scare scare? more? eof?
 syn keyword LoveFunc rand randf rand-next randf-next rng-seed rng-get rng-set
 syn keyword LoveFunc open close run getenv exit
-syn keyword LoveFunc clock gauge book macros assert version-number argv cmdline
+syn keyword LoveFunc clock gauge book macros assert love-version argv cmdline
 
 " Macros (head-symbol rewrites installed with ::)
 syn keyword LoveMacro :: L list do begin progn let if cond quote qq tuple hash

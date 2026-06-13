@@ -10,7 +10,7 @@
  bold (fmt "B")
  ital (fmt "I")
  lines (L
-   (concat (L ".TH \"" upnom "\" \"" sec "\" \"\" \"Version " version-number "\" \"" upnom "\""))
+   (concat (L ".TH \"" upnom "\" \"" sec "\" \"\" \"Version " love-version "\" \"" upnom "\""))
    (section "NAME")
    (+ (bold nom) " \\- list expression interpreter")
    (section "SYNOPSIS")
