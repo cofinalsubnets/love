@@ -2238,6 +2238,40 @@
  (idp (vof 0 '2) (vof 0 '(natminus 5 3)))
  (idp (vof 0 '0) (vof 0 '(natminus 2 5))))
 
+; NATURALNUMBERS round 22 -- the subtraction order law. natminusplusnmm: when
+; m <= n, (n - m) + m = n -- subtraction is a genuine left inverse of +m below
+; the truncation. A double rect down natminus's own shape: the 0/0 corner is
+; idpath 0, the succ-0 corner is natplusr0, and the succ-succ corner walks
+; (n'-m') + (succ m') = succ ((n'-m') + m') = succ n' -- natplusnsm to push the
+; succ across the +, then the IH under a maponpaths. (the reader admits primes
+; now, so the predecessors read n' m', not the round-21 workaround.)
+(assert
+ (defq 'natminusplusnmm
+   '(pi n nat (pi m nat (pi h (paths bool (natgtb m n) false) (paths nat (add (natminus n m) m) n))))
+   '(lam n
+      (nat_rect
+        (lam q (pi m nat (pi h (paths bool (natgtb m q) false) (paths nat (add (natminus q m) m) q))))
+        (lam m (nat_rect
+           (lam r (pi h (paths bool (natgtb r 0) false) (paths nat (add (natminus 0 r) r) 0)))
+           (lam h (idpath 0))
+           (lam m' (lam u (lam h
+              (fromempty (paths nat (add (natminus 0 (succ m')) (succ m')) 0) (nopathstruetofalse h)))))
+           m))
+        (lam n' (lam IHn
+          (lam m (nat_rect
+             (lam r (pi h (paths bool (natgtb r (succ n')) false) (paths nat (add (natminus (succ n') r) r) (succ n'))))
+             (lam h (natplusr0 (succ n')))
+             (lam m' (lam u (lam h
+                (pathscomp0 nat
+                   (add (natminus (succ n') (succ m')) (succ m'))
+                   (add (succ (natminus n' m')) m')
+                   (succ n')
+                   (natplusnsm (natminus n' m') m')
+                   (maponpaths nat nat (lam w (succ w)) (add (natminus n' m') m') n' (IHn m' h))))))
+             m))))
+        n)))
+ (idp (vof 0 '7) (vof 0 '(add (natminus 7 3) 3))))   ; (7-3)+3 computes to 7
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e
