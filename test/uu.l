@@ -1953,6 +1953,84 @@
         (natmultcomm n 1)
         (natmultl1 n)))))
 
+; NATURALNUMBERS round 16 -- the order opens. natgtb by double rect (the
+; inner induction ignores its IH, so (natgtb (succ n) (succ m)) and
+; (natgtb n m) are the SAME neutral -- the reference's "note 1" is our NbE's
+; behavior for free), natgth the hProp, then the first laws: succ-succ steps
+; land on their IH definitionally, and istransnatgth's triple destruct is
+; three nested rects whose inner motives never touch their IHs.
+(assert
+ (defn 'natgtb '(pi n nat (pi m nat bool))
+   '(lam n (nat_rect (lam q (pi m nat bool))
+      (lam m false)
+      (lam k (lam IH (lam m (nat_rect (lam r bool) true (lam j (lam u (IH j))) m))))
+      n)))
+ (idp (vof 0 'true) (vof 0 '(natgtb 5 3)))
+ (idp (vof 0 'false) (vof 0 '(natgtb 3 5)))
+ (idp (vof 0 'false) (vof 0 '(natgtb 4 4)))
+ (defn 'natgth '(pi n nat (pi m nat hProp))
+   '(lam n (lam m (tpair (paths bool (natgtb n m) true)
+                         (isasetbool (natgtb n m) true)))))
+ (defq 'negnatgth0n
+   '(pi n nat (pi g (paths bool (natgtb 0 n) true) empty))
+   '(lam n (lam g (nopathsfalsetotrue g))))
+ (defq 'natgthsnn '(pi n nat (paths bool (natgtb (succ n) n) true))
+   '(lam n (nat_rect (lam q (paths bool (natgtb (succ q) q) true))
+      (idpath true)
+      (lam k (lam IH IH))
+      n)))
+ (defq 'natgthsn0 '(pi n nat (paths bool (natgtb (succ n) 0) true))
+   '(lam n (idpath true)))
+ (defq 'negnatgth0tois0
+   '(pi n nat (pi ng (pi g (paths bool (natgtb n 0) true) empty) (paths nat n 0)))
+   '(lam n (nat_rect (lam q (pi ng (pi g (paths bool (natgtb q 0) true) empty) (paths nat q 0)))
+      (lam ng (idpath 0))
+      (lam k (lam IH (lam ng (fromempty (paths nat (succ k) 0) (ng (natgthsn0 k))))))
+      n)))
+ (defq 'nat1gthtois0
+   '(pi n nat (pi g (paths bool (natgtb 1 n) true) (paths nat n 0)))
+   '(lam n (nat_rect (lam q (pi g (paths bool (natgtb 1 q) true) (paths nat q 0)))
+      (lam g (idpath 0))
+      (lam k (lam IH (lam g (fromempty (paths nat (succ k) 0) (negnatgth0n k g)))))
+      n)))
+ (defq 'istransnatgth
+   '(pi n nat (pi m nat (pi k nat (pi g (paths bool (natgtb n m) true)
+      (pi h (paths bool (natgtb m k) true) (paths bool (natgtb n k) true))))))
+   '(lam n
+      (nat_rect
+        (lam q (pi m nat (pi k nat (pi g (paths bool (natgtb q m) true)
+                 (pi h (paths bool (natgtb m k) true) (paths bool (natgtb q k) true))))))
+        (lam m (lam k (lam g (lam h
+          (fromempty (paths bool (natgtb 0 k) true) (negnatgth0n m g))))))
+        (lam p (lam IHn
+          (lam m (nat_rect
+            (lam r (pi k nat (pi g (paths bool (natgtb (succ p) r) true)
+                     (pi h (paths bool (natgtb r k) true)
+                       (paths bool (natgtb (succ p) k) true)))))
+            (lam k (lam g (lam h
+              (fromempty (paths bool (natgtb (succ p) k) true) (negnatgth0n k h)))))
+            (lam q (lam u
+              (lam k (nat_rect
+                (lam s (pi g (paths bool (natgtb (succ p) (succ q)) true)
+                         (pi h (paths bool (natgtb (succ q) s) true)
+                           (paths bool (natgtb (succ p) s) true))))
+                (lam g (lam h (idpath true)))
+                (lam j (lam v (lam g (lam h (IHn q j g h)))))
+                k))))
+            m))))
+        n)))
+ (defq 'isirreflnatgth
+   '(pi n nat (pi g (paths bool (natgtb n n) true) empty))
+   '(lam n (nat_rect (lam q (pi g (paths bool (natgtb q q) true) empty))
+      (lam g (negnatgth0n 0 g))
+      (lam k (lam IH IH))
+      n)))
+ (defq 'isasymmnatgth
+   '(pi n nat (pi m nat (pi g (paths bool (natgtb n m) true)
+      (pi h (paths bool (natgtb m n) true) empty))))
+   '(lam n (lam m (lam g (lam h
+      (isirreflnatgth n (istransnatgth n m n g h))))))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e
