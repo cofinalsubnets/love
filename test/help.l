@@ -26,7 +26,7 @@
 ; ap hears (help 1 a b). unlike a C scare (oom, terminal), the raise point is
 ; a clean boundary, so the ap's result comes back as (scare a b)'s value.
 (assert (= 0 (scare 'deliberate 'data)))            ; the counting ap returns 0 on a scare
-(? w64 (assert (= 1 (peep help-log 1 0))) 0)       ; ... and the observation logged (not on the wasm shim -- filed)
+(assert (= 1 (peep help-log 1 0)))                  ; ... and the observation logged, exactly once
 
 ; the help function owns the protocol: deliver a constant instead
 (: (help s p e) 'gotcha)

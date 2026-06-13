@@ -9,6 +9,8 @@
 #include "love.h"
 #include <emscripten.h>
 #include <time.h>
+#include <stdlib.h>
+#include <stdnoreturn.h>
 
 static const char boot_love[] = "("
 #include "egg.h"
@@ -66,12 +68,25 @@ struct g_io g_stderr = { .ap = lvm_port_io, .fd = putfix(1),
                          .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
 struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };
 
+// (exit n) -- a frontend nif, like main.c's and kmain.c's. The wasm host needs
+// it for the same reason they do: the test harness aborts a failed assert with
+// (exit 1), and -- subtler -- a closure captures its free globals at creation,
+// so a body that merely MENTIONS `exit` (e.g. an assert's unrun fail branch)
+// raises (scare 'missing 'exit) at the define if the name is absent. Without
+// this, every assert fired a spurious missing-scare on wasm, inflating help-log.
+// emscripten maps exit() to an ExitStatus the JS caller catches (see test.mjs).
+static noreturn lvm(lvm_exit) { exit(getfix(Sp[0])); }
+static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
+
 // --- exported entry points ------------------------------------------------
 static struct g *F;
 
 EMSCRIPTEN_KEEPALIVE
 int love_init(void) {
   F = g_ini();
+  if (!g_ok(F)) return g_code_of(F);
+  struct g_def d[] = {{"exit", (g_word) nif_exit}};
+  F = g_defn(F, d, countof(d));
   if (!g_ok(F)) return g_code_of(F);
   F = g_evals_(F, boot_love);
   return g_code_of(F); }

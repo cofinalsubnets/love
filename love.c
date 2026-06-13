@@ -1690,7 +1690,13 @@ struct g *ghelp(struct g *g) { return ghelp2(g_core_of(g), g_code_of(g)); }
 // resume is this nif's own ret. With no help installed the C default
 // applies and the scare is terminal.
 lvm(lvm_scare) {
- Have(1);
+ Have(6);                          // [resume] + g_raise's 5 words (a, b are the
+                                   // two args, already on the stack). Under-
+                                   // provisioning here lets g_raise's avail>=5
+                                   // guard fail and SILENTLY drop the help call,
+                                   // so a deliberate scare can miss its handler
+                                   // on a tight heap (cf. lvm_freev/lvm_missing,
+                                   // which Have(8) for the same reason).
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
  return Pack(g), g_raise(g, g_status_scare, a, b, help_more_k); }

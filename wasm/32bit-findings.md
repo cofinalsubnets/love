@@ -48,12 +48,18 @@ is `w64 = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
   stream -- so a read-until-`-1` loop is bounded on every target (`io.l` pins
   this directly; the real-file roundtrip stays gated, since wasm has no FS).
 
-## Real bugs (to fix; gated meanwhile)
-
-1. **`help-log` not recorded on the wasm host.** After `(scare 'deliberate
-   'data)`, `(peep help-log 1 0)` is `0` on wasm but `1` on the hosted builds --
-   the deliberate scare's observation isn't logged. Root cause not yet isolated.
-   (`help.l` line gated.)
+- **A deliberate scare's `help-log` entry was inflated on the wasm host** (the
+  observed symptom was `(peep help-log 1 0)` reading `0` when expected `1`).
+  Root cause: `exit` is a frontend nif the wasm host didn't install, and
+  `report` (the assert harness) mentions `(exit 1)` in its unrun fail branch.
+  A closure captures its free globals at creation, so the missing `exit`
+  raised `(scare 'missing 'exit)` at every assert's define -- an extra s=1
+  observation that pushed the count past 1. Fixed by installing `exit` in the
+  wasm host (`host.c`), like the native (`main.c`) and kernel (`kmain.c`)
+  frontends do. `help.l`'s pin runs on wasm again. (During the hunt, `lvm_scare`
+  was also brought in line with its siblings `lvm_freev`/`lvm_missing` --
+  `Have(6)` not `Have(1)`, so `g_raise`'s `avail>=5` guard can't silently drop a
+  scare's help under heap pressure; latent, not the cause here.)
 
 ## Not a bug
 
