@@ -398,7 +398,8 @@
 ; (array), ~ wave (complex/conjugate: ~(re im) splices to (plex re im), a bare ~x is
 ; (wave x)) -- and NO operator tables, so the same reader serves data (read) and code.
 ; the LEXER LAW splits tokens by leading char: a name token (alnum/_) keeps - ? ! etc
-; inside (kebab law unchanged), while a punctuation-led token is a SIGIL -- a maximal run
+; inside (kebab law) AND a trailing/internal ' (the prime: a', n'' -- a LEADING ' is still
+; quote, dispatched before the name scanner), while a punctuation-led token is a SIGIL -- a maximal run
 ; of operator chars (value-surface chars and delimiters break the run), read as ONE PLAIN
 ; SYMBOL when spaced, or fused to its datum as (mono (run datum)) when GLUED mid-list
 ; (the valence law below; head position and \ never fuse, - and + only to ( ' " @ ~ #).
@@ -438,6 +439,7 @@
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (plex 2 3)) ('~x = '(wave x)) (lamp dot)
  ('((dot x)) = (opfix '(. x))) ('! = (caup '(a ! b)))   ; opfix factors; quotes stay data
+ (6 = ((\ x' (x' + 1)) 5)) (symp 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)

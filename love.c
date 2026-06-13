@@ -1586,7 +1586,7 @@ lvm(lvm_eval) { return Ip++, Pack(g),
  !g_ok(g = c0(g, lvm_jump)) ? ghelp(g) : (Unpack(g), Continue()); }
 
 g_noinline struct g *g_evals_(struct g*g, char const*s) {
- static char const *t = "((:(e a b)(? b(e(ev'ev(cap b))(cup b))a)e)0)";
+ static char const *t = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
  struct ti i = {{lvm_port_io, putfix(-1), putfix(EOF), putfix(false)}, t, 0};
  g = push0(pushq(push0(g_eval(g_reads(g, (void*) &i)))));
  i.t = s, i.i = 0, i.io.ungetc_buf = putfix(EOF), i.io.eof_seen = putfix(false);
@@ -3111,7 +3111,8 @@ static g_inline struct g *push_wrap(struct g *g, char const *nom) {
 // book['operators] later, so the reader is purely structural. a run stops
 // at name chars (alnum/_), whitespace, delimiters, and the value-surface
 // chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
-// still contain @ ~ $ ! . (the kebab law for names is unchanged).
+// still contain @ ~ $ ! . and a trailing/internal ' (the prime: x', n'';
+// a LEADING ' is quote, dispatched before the name scanner -- see gzread1sym).
 static g_inline bool op_break(int c) {
  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
         c == '_' || c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' ||
@@ -3308,7 +3309,10 @@ static g_inline struct g *gzread1sym(struct g*g, int c) {
      default: continue;
      case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
      case '(': case ')': case '[': case ']': case '{': case '}':
-     case '"': case '\'': case '`': case ',': case 0 : case EOF:
+     // note: '\'' is NOT here -- a name keeps a trailing/internal prime (x', n'',
+     // the prover idiom). A LEADING ' is still quote: gz_parse dispatches it as a
+     // wrap before this scanner ever runs, so only a continuation ' reaches here.
+     case '"': case '`': case ',': case 0 : case EOF:
       if (!g_ok(g = zungetc(g, c))) return g;
       struct g_str *s = str(g->sp[0]);
       txt(s)[len(s) = n] = 0; // zero terminate for strtol ; n < lim so this is safe
