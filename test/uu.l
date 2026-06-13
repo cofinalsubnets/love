@@ -2218,11 +2218,11 @@
    '(lam a (nat_rect
       (lam q (pi k nat (pi g (paths bool (natgtb q k) false) (paths bool (natgtb q (succ k)) false))))
       (lam k (lam g (idpath false)))
-      (lam ap (lam IH
+      (lam a' (lam IH
         (lam k (nat_rect
-           (lam r (pi g (paths bool (natgtb (succ ap) r) false) (paths bool (natgtb (succ ap) (succ r)) false)))
-           (lam g (fromempty (paths bool (natgtb (succ ap) (succ 0)) false) (nopathstruetofalse g)))
-           (lam kp (lam u (lam g (IH kp g))))
+           (lam r (pi g (paths bool (natgtb (succ a') r) false) (paths bool (natgtb (succ a') (succ r)) false)))
+           (lam g (fromempty (paths bool (natgtb (succ a') (succ 0)) false) (nopathstruetofalse g)))
+           (lam k' (lam u (lam g (IH k' g))))
            k))))
       a)))
  (defq 'natminusleh
