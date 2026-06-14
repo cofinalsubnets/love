@@ -67,11 +67,13 @@ bytes into a buf; the real execution lives in the two standalone files
 ## The first kernel — `jit/kernel.l`
 
 A real (small) JIT, codegen and all written in love: a fixnum `(\ x <arith>)`
-over `+ - *` compiled to x86_64 and run via `(call (forge bytes) x)`. The whole
-backend is love emitting bytes into a buf — a recognizer (`arithp`), a recursive
-emitter (`x` re-derived from `%rdi` each use; binops via the machine stack), and
-a driver that returns a native closure or, on any non-match, the ordinary `(ev
-lam)` interpreter compile.
+over `+ - * // % < <= > >= =` compiled to x86_64 and run via `(call (forge bytes)
+x)`. The whole backend is love emitting bytes into a buf — a recognizer
+(`arithp`), a recursive emitter (`x` re-derived from `%rdi` each use; binops via
+the machine stack), and a driver that returns a native closure or, on any
+non-match, the ordinary `(ev lam)` interpreter compile. `//`/`%` use `idiv`
+(truncate-toward-zero quotient, dividend-signed remainder — exactly love's
+convention); comparisons use `setcc`+`movzx` → `0`/`1`.
 
 The ABI quirk and its fix: `(call ...)` passes the arg as its **raw tagged** word
 (`putfix X = 2X+1`) and re-tags the result, so the kernel untags on entry
@@ -83,8 +85,12 @@ There's no error channel through `call`'s fixnum return, so the result encodes o
 bit — **`2R` (even) on success, `1` (odd) on bail** — and the love wrapper reads
 the low bit: odd → fall back to the interpreter (exact, incl. bignums). This
 costs one bit of range (native covers `R ∈ [-2^61, 2^61)`; past that it bails to
-the VM), and it **never returns a wrong answer** — verified against the
-interpreter on success *and* overflow cases:
+the VM). **Division by zero bails the same way** — love's `(// 5 0)` is the float
+`ieee-inf` and `(% 5 0)` is `0.0`, which a native int kernel can't produce, so
+`//`/`%` mark the sticky flag on a zero divisor (and force a safe divisor to dodge
+`#DE`) and let the interpreter return the float. The kernel **never returns a
+wrong answer** — verified against the interpreter on success *and* overflow/
+div-by-zero cases:
 
 ```sh
 out/host/love jit/kernel.l        # x86_64 host: every line "==", then ALL PASS
