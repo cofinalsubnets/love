@@ -37,7 +37,7 @@
 ; `make vmret` checks it) over a two-space copying heap. every operation is *fully generic* --
 ; it dispatches on a value's *kind*, and the kinds form a lattice that is literally the
 ; diagonal of the dispatch tables. the C core is tiny; most of the language is love closures
-; installed reflectively from the prelude, then baked into a heap image (the *egg*) at
+; installed reflectively from the prelude, then woken into a heap image (the *egg*) at
 ; compile time. the gritty details sit at the bottom.
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
@@ -536,11 +536,11 @@
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure
 ;     globals, mark apply strategy, and flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins; a map is a lookup function.
-; the *egg* (love/egg.l): the evaluator SITS on the egg (the quoted prelude+ev corpus) twice --
-; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- and
-; the hatchling installs as `ev`, baked into the image at C compile time, no allocation;
-; `born` records the hatch time (unbound pre-egg: love0's first corpus pass runs PRE-egg,
-; and an unbound name is missing, reading the zero point). before it is born the egg PULLS every runtime-
+; the *egg* (love/egg.l): you WAKE the egg (the quoted prelude+ev corpus) and the evaluator SITS
+; on it twice -- compile the compiler with the C bootstrap, recompile the whole corpus through
+; itself -- then the hatchling installs as `ev` in the image at C compile time, no allocation;
+; `born` records the hatch time (unbound pre-egg: love0's first corpus pass runs PRE-egg, and an
+; unbound name is missing, reading the zero point). just before it is born the egg MOPS UP every runtime-
 ; internal name: the raw cell nifs (peek poke seek lamb -- (lamb 2 3) is a segfault, big
 ; scare; lamb is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
