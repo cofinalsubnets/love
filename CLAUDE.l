@@ -41,9 +41,13 @@
 ; compile time. the gritty details sit at the bottom.
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
-;   N the charms (naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
+;   N the light charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
 ;     <  R reals (float)  <  C complex  <  O objects (string < symbol < product < map < top)
-; numbers nest as usual (N in Z in R in C). the *rank* axis is scalar (0) vs array (>= 1, one
+; numbers nest as usual (N in Z in R in C). a fixnum is a CHARM: the LIGHT charms are N (the
+; nonnegatives, exactly what $ keeps unchanged), the DARK charms the negatives below it ($
+; extinguishes them to nothing) -- $ keeps the light and darkens the rest, and a charm is true
+; iff it is positive light (0 the lit boundary, still nothing). the *rank* axis is scalar (0) vs
+; array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
 ; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
 ; string < symbol < product < map < top, each band ordered within itself (text and products
