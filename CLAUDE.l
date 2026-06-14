@@ -409,7 +409,7 @@
 ; (wave x)) -- and NO operator tables, so the same reader serves data (read) and code.
 ; the LEXER LAW splits tokens by leading char: a name token (alnum/_) keeps - ? ! etc
 ; inside (kebab law) AND a trailing/internal ' (the prime: a', n'' -- a LEADING ' is still
-; quote, dispatched before the name scanner), while a punctuation-led token is a SIGIL -- a maximal run
+; quote, dispatched before the name sounder), while a punctuation-led token is a SIGIL -- a maximal run
 ; of operator chars (value-surface chars and delimiters break the run), read as ONE PLAIN
 ; SYMBOL when spaced, or fused to its datum as (mono (run datum)) when GLUED mid-list
 ; (the valence law below; head position and \ never fuse, - and + only to ( ' " @ ~ #).

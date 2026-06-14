@@ -174,7 +174,7 @@ static g_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 // Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 lvm_buf (like lvm_port_io for ports), so the GC walks a buf
 // as a plain length-2 text -- [lvm_buf, backing g_str, terminator] -- and
-// the generic text scan forwards the embedded string pointer for free; no
+// the generic text sound forwards the embedded string pointer for free; no
 // bespoke evac/copy rule, and the data-sentinel mechanism stays reserved for
 // kinds that need one. The bytes live in an ordinary g_str we mutate in place
 // (cf. the `to` output port). Earned by the build tools that back-patch a
@@ -208,7 +208,7 @@ static g_inline struct g_str *buf_str(word x) { return ((struct g_buf*) x)->str;
 static g_inline struct g_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
 // Arbitrary-precision integer (Step 6). Own data-sentinel kind KBig: a flat,
 // GC-trivial object (raw limbs, no embedded l pointers) the copying GC moves
-// by memcpy. A generic text scan can't hold inline limb words (a limb that's
+// by memcpy. A generic text sound can't hold inline limb words (a limb that's
 // even-and-in-pool would be spuriously forwarded, one matching g_text_tag would
 // truncate the object), so a flat bignum needs its own copy/evac rule -- like
 // KString strings -- which is exactly what the sentinel buys. slen = signed limb
@@ -446,7 +446,7 @@ g_noinline bool eqv(struct g*, word, word); // this is for checking equality of 
 static g_inline bool eql(struct g *g, word a, word b) { return a == b || eqv(g, a, b); }
 
 // Threads -- and every other variable-length heap object the GC copies by
-// scanning (continuations, task nodes, env scopes, ports) -- end with a single
+// sounding (continuations, task nodes, env scopes, ports) -- end with a single
 // tag word: the object's own head pointer with bit 1 set (g_text_tag), saving a
 // word over a separate NULL marker + head. Small ints are odd and l heap
 // pointers are word-aligned, so the only other word that can carry (x & 3) == 2
@@ -658,7 +658,7 @@ static union u const yield_c[] = { {_lvm_yield_c} };
 // `help` function to land raises in l instead.
 // the scare exit door: re-encode and yield to C. Lives OUTSIDE the lvm_*
 // namespace (the underscore convention, like _lvm_yield_c above) because it
-// is the one designed return -- the vmret gate's no-ret invariant scans
+// is the one designed return -- the vmret gate's no-ret invariant sounds
 // lvm_*, and lvm_help reaches here by tail call (a jmp under g_tco).
 static lvm(_lvm_help_scare, enum g_status s) { return Pack(g), encode(g, s); }
 lvm(lvm_help) {
@@ -913,7 +913,7 @@ static g_noinline struct g *gcg(struct g*h, struct g *p1, uintptr_t len1, struct
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                     // stack
  for (struct g_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0); // C live variables
  while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_text)(h, p0, t0);              // cheney algorithm
- // the weak intern table: rebuilt ONLY NOW, past the scan window, so the
+ // the weak intern table: rebuilt ONLY NOW, past the sound window, so the
  // cheney loop never traces it (an early copy would sit in [cp, hp) and get
  // walked -- resurrecting every atom). run_finalizers bumps after the
  // fixpoint the same way.
@@ -2723,9 +2723,9 @@ static struct g *gzput_fn_body(struct g *g, word x, uintptr_t off);
 // or an opaque handle puts its value AT the start -- no leading cell -- so reading value[-1]
 // there reads the neighbouring object: uninitialised/foreign (flaky to valgrind, and garbage
 // that looked like an in-pool pair would spuriously read back as a source). Probe the tag,
-// which records the true start, instead of reading value[-1]: ttag scans only defined text
+// which records the true start, instead of reading value[-1]: ttag sounds only defined text
 // cells. value > start <=> a reserved leading cell exists. (fn_partialp is a cheap fast
-// reject so the common curried-closure case skips the tag scan.)
+// reject so the common curried-closure case skips the tag sound.)
 static word fn_src(struct g *c, union u *k, word x) {
  if (!(ptr(x) > ptr(c) && ptr(x) < ptr(c) + c->len) || fn_partialp(k)) return 0;
  if (k == tag_head(ttag(c, k))) return 0;       // value at allocation start: no leading src cell
@@ -3124,7 +3124,7 @@ static g_inline struct g *push_wrap(struct g *g, char const *nom) {
 // at name chars (alnum/_), whitespace, delimiters, and the value-surface
 // chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
 // still contain @ ~ $ ! . and a trailing/internal ' (the prime: x', n'';
-// a LEADING ' is quote, dispatched before the name scanner -- see gzread1sym).
+// a LEADING ' is quote, dispatched before the name sounder -- see gzread1sym).
 static g_inline bool op_break(int c) {
  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
         c == '_' || c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' ||
@@ -3323,7 +3323,7 @@ static g_inline struct g *gzread1sym(struct g*g, int c) {
      case '(': case ')': case '[': case ']': case '{': case '}':
      // note: '\'' is NOT here -- a name keeps a trailing/internal prime (x', n'',
      // the prover idiom). A LEADING ' is still quote: gz_parse dispatches it as a
-     // wrap before this scanner ever runs, so only a continuation ' reaches here.
+     // wrap before this sounder ever runs, so only a continuation ' reaches here.
      case '"': case '`': case ',': case 0 : case EOF:
       if (!g_ok(g = zungetc(g, c))) return g;
       struct g_str *s = str(g->sp[0]);
@@ -3411,7 +3411,7 @@ static lvm(lvm_map_data) {
  return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
 
 // the backing slot of k, or -- if absent -- the first empty slot on its probe
-// chain. load is kept < 3/4 so an empty slot always terminates the scan.
+// chain. load is kept < 3/4 so an empty slot always terminates the sound.
 static g_inline uintptr_t map_probe(struct g *g, word m, word k, bool *found) {
  uintptr_t mask = map_cap(m) - 1, i = hash(g, k) & mask;
  word *s = map_slots(m);
@@ -3698,7 +3698,7 @@ lvm(lvm_slice) {
 // identity numeral) -- like every structureless value. Its address is still the
 // kind tag: g_noicf (on every lvm) keeps this byte-identical to lvm_port_io so
 // bufp and iop never collide. NOT a data sentinel, so the GC copies a buf via the
-// generic text path and the cheney scan forwards its backing-string pointer.
+// generic text path and the cheney sound forwards its backing-string pointer.
 lvm(lvm_buf) {
  return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
 
@@ -4434,7 +4434,7 @@ static lvm(lvm_math2, g_flo_t (*fn)(g_flo_t, g_flo_t)) {
 // g_sin .. g_pow are macro aliases (g/g.h) for the C library math
 // functions: libm on hosted builds, k/libc.c on the freestanding
 // kernel. The op generators reference them through g_##n, which the
-// preprocessor rescans into the real names after pasting.
+// preprocessor resounds into the real names after pasting.
 m1(mvm1)
 
 // (log x): natural log, climbing the tier lattice like everything else. A
@@ -5435,7 +5435,7 @@ lvm(lvm_aall) {
   for (uintptr_t i = 0; i < n; i++)
    if (fp[2*i] == 0 && fp[2*i+1] == 0) return Sp[0] = nil, Ip++, Continue();
   return Sp[0] = putfix(1), Ip++, Continue(); }
- // a short-circuit scan, NOT an accumulator chain -- already load-bound (the
+ // a short-circuit sound, NOT an accumulator chain -- already load-bound (the
  // compiler vectorizes it), so multi-accumulating buys nothing; left as is.
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
@@ -5891,7 +5891,7 @@ lvm(lvm_vbin, int op) {
   n *= bdim(da, db); }
  // `/` over an all-integer broadcast promotes the whole result to f64 the moment
  // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
- // integer. Scan only after conformance is known good (offsets are then in range).
+ // integer. Sound only after conformance is known good (offsets are then in range).
  if (op == vop_quot && !fdom && !cmp && vquot_needs_float(a, b)) fdom = true, ct = g_R;
  enum g_tuple_type rt = cmp ? g_Z : (enum g_tuple_type) ct;   // compare -> 0/1 Z mask
  uintptr_t bytes = sizeof(struct g_tuple) + R * sizeof(word) + n * g_T[rt];
