@@ -107,7 +107,10 @@
 ; one retraction at the boundary: `!` (the nif `nilp`, the classical name; `non` is its
 ; normal alias) reads the net's sign in the total order (re, then im -- applied ONCE,
 ; never per element), and `$` (sat) is ONE saturating clamp over the net's order-signed
-; magnitude, max(0, ceil), with the invariant !x == (0 = $x). net is additive wherever
+; magnitude, max(0, ceil), with the invariant !x == (0 = $x). `$` is the SOLE clamp, retracting
+; ANY value onto the light charms, so a clamped fold is mere composition -- $*x the clamped
+; product, $(aprod v) the clamped reduction, no per-fold saturator (the measure is additive,
+; $ its only observation). net is additive wherever
 ; + is total -- EXACTLY, complex included: $(a + b) saturates net a + net b over
 ; numbers, text, and lists alike, the byte law included (a string + a byte nets the
 ; byte: + is a true measure homomorphism), and the ARRANGEMENT does not matter: a
