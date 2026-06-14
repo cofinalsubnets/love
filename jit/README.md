@@ -168,6 +168,37 @@ aarch64/wasm eggs with dead code). The dormant `book['opjit]` seam is the
 permanent hook; the installer stays host/arch-specific. Known gaps (safe — only
 missed coverage): lambdas inside quasiquote-unquotes or unexpanded macro args.
 
+## Array kernels — `amap` + `jit/array.l`
+
+Roadmap **step 4**, and where a JIT pays the most: a packed `z`-array is already an
+unboxed `int64` C buffer, so an elementwise `(\ x <arith>)` becomes pure register
+arithmetic in a tight loop with no per-cell dispatch or boxing.
+
+The contract is *simpler* than the scalar kernel. Two probed facts decide it:
+**z-array cells are raw `int64`** (`tuple_get/put_int` read/write `((intptr_t*)p)[i]`
+verbatim), and **z-array arithmetic wraps** at 64 bits (`a*a` on a big cell gives
+the wrapped value, not the scalar path's exact bignum). So the kernel takes the
+raw cell in `%rdi`, computes, returns the raw result in `%rax` — **no untag, no
+overflow guard, no 2R encoding** — and a wrapping native kernel matches love's
+elementwise ops *exactly, the wrap included*.
+
+The `amap` nif (arity 3) does the loop in C, where the tuple layout is known and
+nothing allocates (so no GC moves the cell buffers mid-loop):
+
+```
+(amap code in out)    ; out[i] = fn(in[i]) over equal-length g_Z arrays; returns out
+```
+
+`jit/array.l` is the codegen + driver: `(ajit '(\ x <arith>))` forges a raw kernel
+and returns `(\ z-array → z-array)` that allocates a matching output array (love
+side) and fills it with `amap`. Ops: `+ - *` and comparisons (`// %` deferred —
+`idiv` `#DE`s on a zero cell). Verified equal to love's broadcast ops, wrap
+included:
+
+```sh
+out/host/love -l jit/kernel.l jit/array.l   # x*x, x+1, 2x-1, x<3 mask, wrap — ALL PASS
+```
+
 ## Reproducing the probe (x86_64 + qemu)
 
 ```sh
