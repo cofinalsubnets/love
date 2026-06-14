@@ -128,6 +128,36 @@ entry continues while a shape is open; enter cashes any complete buffer;
 history is a normal shell's. scripts and files stay helpless (terminal),
 per the law.
 
+### cook
+
+`make`, in love. [tools/cook.l](tools/cook.l) is a small dependency-driven
+build tool -- bring an item up to date when it is missing or older than any of
+its ingredients -- driven by a `Cards.l` recipe file:
+
+```
+(recipe "hello" '("hello.o" "greet.o")
+        '(("cc" "-o" "hello" "hello.o" "greet.o")))
+(recipe 'clean '() '(("rm" "-f" "hello" "hello.o" "greet.o")))
+(cook (ticket 0))
+```
+
+each card is `(recipe item ingredients steps)`: an item is a filename or a
+phony symbol, ingredients are the items it needs first, steps are argv lists
+(run as subprocesses) or thunks. item ages come from `stat` through the host
+`run` nif, so a phony symbol is ageless and always cooks. the whole kitchen:
+cook an item -- check its date, prep its ingredients, follow the recipe's
+steps, record what shipped, from the cards; the ticket names what to make
+(default: the first card, the standing check).
+
+- `love -l tools/cook.l Cards.l [ticket]` -- cook a ticket
+- `make -f cook.mk test` -- the make-shaped stub: bootstraps the binary, then
+  forwards to cook
+- [tools/cook-example/](tools/cook-example/) is a worked C build
+
+love builds itself this way too: the root [Cards.l](Cards.l) ports the
+cross-cutting verbs (`test clean valg vmret bench`), delegating the C
+bootstrap to the real Makefile -- cook runs on love, so it can't build love.
+
 ### under the hood
 - one word per value: a fixnum is a tagged odd word, anything else is a heap
   object whose first word is its hot -- a live external reference, the wire out
