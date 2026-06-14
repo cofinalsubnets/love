@@ -1,5 +1,16 @@
 # jit — the `(call ...)` trampoline and the `(forge ...)` loader
 
+> **Status (retracted to the floor).** The JIT was an experiment; it's been pulled
+> back to its substrate + its one finding. The native array/scalar kernels, folds,
+> and the `opjit` opfix hook are **gone** — they were a measured net loss (scalar)
+> or unused (kernels), and the one real win they revealed, **reduction
+> reassociation, now lives baked in the C builtins** `asum`/`aprod`/`amax`/`amin`
+> (multi-accumulator, portable to all targets — `git log` for the arc). What remains
+> is the live surface below: `call`/`call2`/`forge` (nifs) and `probe.l` (the kernel
+> finding). Sections past the substrate describe the retracted experiment, kept as a
+> record. The lesson: *a JIT wins only when it owns the loop, and the production form
+> of a fixed-code win is baked C unlocked by a sound algebraic law.*
+
 The floor under a love JIT: a nif that jumps into machine code stored in a
 `buf` and runs it natively, and a loader that puts the bytes somewhere they can
 run on either target.

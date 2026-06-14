@@ -357,13 +357,12 @@ static char const cli[] =
 static char const
  rel[] = "(zevs in)";   // non-tty stdin: the stream shell (repl.l) drinks the in port
 
-// NOTE: the always-on native-JIT self-install was REVERTED -- a benchmark showed
-// the scalar opfix hook is a net pessimization (a native function called from the
-// interpreted loop pays a call-boundary tax -- putfix marshal, the `call` nif, the
-// 2R decode -- heavier than interpreting the small arithmetic body). The JIT only
-// wins when it OWNS the loop: the explicit array kernels (afold/ajit/amap/areduce,
-// jit/array.l) run 35-50x by staying native across every iteration. So opjit stays
-// DORMANT (book['opjit]=0) and the kernels are invoked explicitly. See jit/README.md.
+// NOTE: the native-JIT experiment was retracted. It proved one durable finding
+// (you can run native code from a buf -- (call (forge bytes) x) -- and the kernel's
+// HHDM is executable, so a kernel JIT needs only a trampoline; see jit/probe.l) and
+// one real speedup (reduction reassociation), which now lives baked in the C builtins
+// asum/aprod/amax/amin. The scalar/array kernels themselves were a net loss or
+// unused, so only call/call2/forge remain. See jit/README.md.
 
 static struct g *boot(struct g *g, bool argp) {
   bool replp = !argp && isatty(STDIN_FILENO);

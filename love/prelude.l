@@ -409,13 +409,11 @@
                  fs (? (symp r) (monofactor r) 0)
                  (? (twop fs) (op-fin fs d) (cons r (cons d 0))))
              (op-w x 0 0)))))
-; opfix = op-core, then the optional native-codegen hook book['opjit]: a
-; source->source pass installed at RUNTIME (jit/opjit.l, x86_64) that rewrites
-; qualifying lambdas to forged native closures. DORMANT unless installed -- the
-; peep is 0, so opfix is identical to op-core and the bootstrap/gate are
-; unaffected. Applied ONCE at the top (op-core does the recursion) and AFTER
-; factoring, so infix arith like (\ x (x * x)) is seen in prefix form.
-(: (opfix x) (: r (op-core x) h (peep book 'opjit 0) (? (lamp h) (h r) r)))
+; opfix = op-core, the operator factor pass. (Historically opfix also ran an
+; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
+; its one real win, reduction reassociation, lives in the C builtins now, and the
+; trampoline finding in jit/probe.l + the call/forge nifs.)
+(: (opfix x) (op-core x))
 ; the global RNG stream lives on book ('rng-state) and advances by the pure
 ; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
 ; clock-seeds on first use; rng-set validates and installs (the state, or nil
