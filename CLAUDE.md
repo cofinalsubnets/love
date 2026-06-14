@@ -281,9 +281,11 @@
 ; literal. arank/alen/ashape/atype; peep (out of bounds -> the default). + - * // < =
 ; broadcast numpy-style to the widest type
 ; (compare -> a z mask); `/` promotes the whole result to r the moment any element divides
-; inexactly. reduce with asum aprod amax amin aall (a conjunction). an array nets the SUM of
-; its elements ($ = max(0, ceil(asum)), like a list), so an all-zero or net-negative array
-; is false. sin/cos/log/pow and the derived forms map elementwise. a 0-axis is real:
+; inexactly. reduce with asum aprod amax amin aall (a conjunction); CONTRACT with inner
+; (+.x -- a's last axis against b's first: 1D.1D is the dot product, 2D.2D matrix multiply)
+; and outer (o.x -- all pairwise products, rank ra+rb). an array nets the SUM of its elements
+; ($ = max(0, ceil(asum)), like a list), so an all-zero or net-negative array is false.
+; sin/cos/log/pow and the derived forms map elementwise. a 0-axis is real:
 ; broadcast keeps it empty (a 1-axis takes the OTHER size, 0 included), an empty
 ; rank-1 prints (array '(0)) (@ has no empty spelling), and EMPTY REDUCTIONS ANSWER
 ; THEIR MONOID UNITS -- (asum e) = 0, (aprod e) = 1, (aall e) true: the floor
@@ -298,7 +300,10 @@
  (@(4 6) = @(8 12) / 2) !(arr z '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2)) !(arr 99 '(3) 0)
  (0 = (asum (arr z '(0) 0))) (1 = (aprod (arr z '(0) 0))) (aall (arr z '(0) 0))
- ("(array '(0))" = (show (arr z '(0) 0))) (0 = (alen ((arr z '(0) 0) + 1))))
+ ("(array '(0))" = (show (arr z '(0) 0))) (0 = (alen ((arr z '(0) 0) + 1)))
+ (32 = (inner @(1 2 3) @(4 5 6))) (z = (atype (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
+ (: M (inner (arr z '(2 3) '(1 2 3 4 5 6)) (arr z '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
+    (&& ('(2 2) = (ashape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
 ; --- products & lists --- cons builds the product (the cartesian kind, classically the
 ; pair); cap and cup are its two projections -- the matched pair the string diagrams bend,
