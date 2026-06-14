@@ -5664,6 +5664,52 @@ static g_noinline void vbin_fill(struct g_tuple *r, word a, word b, int op, bool
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
  struct g_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
+ // CONTIGUOUS MONOTYPE FAST PATH: no size-1 broadcasting (each operand is either a
+ // scalar or a full-shape array of the compute domain's storage type), so oa==ob==p
+ // -- the per-cell odometer, offset recompute, and accessor/op dispatch all vanish.
+ // Raw pointers, the op hoisted out of the loop ONCE, a tight body the compiler
+ // vectorizes. Mixed types, bignum scalars, or genuine broadcasting fall through to
+ // the general odometer loop below (correct, just not accelerated). Results are
+ // bit-identical: same reads (raw f64/i64), same op (matches vop_flo/int/cmp).
+ { bool cmpf = op >= vop_lt;
+   bool aok = !aarr || tuple_nelem(va) == n, bok = !barr || tuple_nelem(vb) == n;
+   bool nobig = !((!aarr && bigp(a)) || (!barr && bigp(b)));
+   if (aok && bok && nobig) {
+    if (fdom && (!aarr || va->type == g_R) && (!barr || vb->type == g_R)) {
+     g_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
+     g_flo_t *ap = aarr ? (g_flo_t*) tuple_data(va) : 0, *bp = barr ? (g_flo_t*) tuple_data(vb) : 0;
+     if (cmpf) { intptr_t *rp = (intptr_t*) tuple_data(r);
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { g_flo_t av = aarr?ap[p]:sa, bv = barr?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
+      switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
+        case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
+      #undef VBF
+     } else { g_flo_t *rp = (g_flo_t*) tuple_data(r);
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { g_flo_t av = aarr?ap[p]:sa, bv = barr?bp[p]:sb; rp[p] = (E); } } while (0)
+      switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
+        case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
+        case vop_fquot: VBF(g_trunc(av/bv)); return; case vop_rem: VBF(g_fmod(av,bv)); return; }
+      #undef VBF
+     }
+    } else if (!fdom && (!aarr || va->type == g_Z) && (!barr || vb->type == g_Z)) {
+     intptr_t sia = aarr ? 0 : (fixp(a) ? (intptr_t) getfix(a) : box_get(a));
+     intptr_t sib = barr ? 0 : (fixp(b) ? (intptr_t) getfix(b) : box_get(b));
+     intptr_t *ap = aarr ? (intptr_t*) tuple_data(va) : 0, *bp = barr ? (intptr_t*) tuple_data(vb) : 0;
+     intptr_t *rp = (intptr_t*) tuple_data(r);   // r is g_Z for both int-arith and the mask
+     if (cmpf) {
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = aarr?ap[p]:sia, bv = barr?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
+      switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
+        case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
+      #undef VBF
+     } else {
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = aarr?ap[p]:sia, bv = barr?bp[p]:sib; rp[p] = (E); } } while (0)
+      switch (op) {
+        case vop_add: VBF((intptr_t)((uintptr_t)av+(uintptr_t)bv)); return;
+        case vop_sub: VBF((intptr_t)((uintptr_t)av-(uintptr_t)bv)); return;
+        case vop_mul: VBF((intptr_t)((uintptr_t)av*(uintptr_t)bv)); return;
+        case vop_quot: case vop_fquot: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av/bv); return;
+        case vop_rem: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av%bv); return; }
+      #undef VBF
+     } } } }
  // ca[j]/cb[j]: the operand flat-offset contribution of result axis j (0 when
  // that axis is absent in the operand or is a size-1 broadcast axis).
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
