@@ -204,6 +204,24 @@ cell). Verified equal to love's broadcast/reduction ops, wrap included:
 out/host/love -l jit/kernel.l jit/array.l   # map + zipWith + reductions (sum/prod, incl. wide box & wrap) — ALL PASS
 ```
 
+### Float arrays — `armap` + `jit/farray.l`
+
+`r`-array cells are raw `f64`, and the SysV ABI passes/returns a `double` in
+`%xmm0` (the same shape as the C math callbacks `lvm_vmap1` feeds for sin/cos), so
+`armap` is `amap` with a `g_flo_t(*)(g_flo_t)` kernel. `jit/farray.l` emits SSE
+scalar-double code: the cell is saved to `%xmm15` in the prologue and re-read on
+each use of `x` (the float analogue of re-deriving from `%rdi`), binops use the
+machine stack, integer literals convert with `cvtsi2sd`, and `+ - * /` are
+`addsd`/`subsd`/`mulsd`/`divsd`. Float `/0` is `ieee-inf` (no `#DE`), so `/` is
+safe; comparisons are omitted (they'd yield a `z` mask, not an `r`-array), and
+float literals are deferred (they'd need their raw IEEE bits). `(rjit '(\ x
+<arith>))` → `(\ r-array → r-array)`, verified bit-for-bit against love's
+elementwise ops:
+
+```sh
+out/host/love -l jit/kernel.l jit/farray.l   # x+x, x*2, x/2, x*x-1, x/0→ieee-inf — ALL PASS
+```
+
 ## Reproducing the probe (x86_64 + qemu)
 
 ```sh
