@@ -105,6 +105,56 @@
                              (cat (femit body regs) '(195)))))
             (\ in (arreduce code seed in))))))
 
+; --- FLOAT WHOLE-LOOP FOLD: (arfoldw '(\ acc x <float-arith>) seed). Unlike
+; arfold (whose C nif loops and calls the kernel per cell), the forged code OWNS
+; the loop -- the op is inlined and there is NO per-cell call. The forged fn is
+; fn(double *cells %rdi, uintptr_t n %rsi, double init %xmm0) -> double %xmm0.
+; acc lives in %xmm14 across iterations, the cell is loaded into %xmm15 each pass,
+; and the body is the SAME `femit` used by arfold (regs acc->%xmm14, cell->%xmm15,
+; result %xmm0). Two self-relative jumps frame the loop; their rel32 offsets are
+; computed from B = the body length (see the offset map below). ---
+; the accumulate PEEPHOLE: when the body is exactly (op acc cell), op in {+ - *},
+; the whole step is one register-to-register op into the live accumulator --
+; <op>sd %xmm14,%xmm15 -- no stack round-trip, no acc reload. This is what lets
+; the forged loop actually MATCH the C builtin; without it the general femit body
+; (which spills the left operand to the machine stack per cell) dominates and
+; owning the loop buys nothing.
+(: (unwrap e) (? (&& (twop e) (= 1 (tally e))) (unwrap (cap e)) e)   ; peel op-core's ((..))
+   (facc op)                                            ; acc <op>= cell, result in xmm14
+   (? (idp op '+) '(242 69 15 88 247)                   ; addsd xmm14,xmm15
+      (idp op '-) '(242 69 15 92 247)                   ; subsd xmm14,xmm15
+      (idp op '*) '(242 69 15 89 247)                   ; mulsd xmm14,xmm15
+      ())
+   (accfast body acc cell)                              ; the fused inner, or () if not the idiom
+   (: u (unwrap body)
+      (? (&& (twop u) (= 3 (tally u)) (memq (cap u) '(+ - *))
+             (symp (caup u)) (idp (caup u) acc) (idp (caup (cup u)) cell))
+         (cat '(242 68 15 16 60 207) (facc (cap u)))    ; movsd xmm15,[rdi+rcx*8] ; <op>sd xmm14,xmm15
+         ()))
+
+   (arfoldw lam seed)
+   (: rest (cup lam) body (last rest) ps (init rest)
+      (? !(&& (= 2 (tally ps)) (all symp ps) (farith body ps)) lam
+         (: regs (list (cons (cap ps) fr1) (cons (caup ps) fr0))   ; acc->xmm14, cell->xmm15
+            fast (accfast body (cap ps) (caup ps))
+            ; INNER = the per-iteration work (between jge and inc): the fast fused
+            ; step, or the general (load cell ; femit body -> xmm0 ; acc<-xmm0).
+            inner (? fast fast
+                     (cat '(242 68 15 16 60 207)                   ; movsd xmm15,[rdi+rcx*8]
+                      (cat (femit body regs)                       ; body -> xmm0
+                           '(242 68 15 16 240))))                  ; movsd xmm14,xmm0  (acc=res)
+            l (tally inner)
+            ; offsets from loop-start: cmp[0,3) jge[3,9) inner[9,9+l)
+            ; inc[9+l,12+l) jmp[12+l,17+l) done@17+l
+            loopb (cat '(72 57 241)                                ; cmp rcx,rsi
+                    (cat (cat '(15 141) (leb64 (+ 8 l) 4))         ; jge done  (rel = 8+l)
+                     (cat inner
+                      (cat '(72 255 193)                           ; inc rcx
+                       (cat '(233) (leb64 (- 0 (+ 17 l)) 4))))))   ; jmp loop (rel = -(17+l))
+            code (forge (l2b (cat '(242 68 15 16 240  72 49 201)   ; movsd xmm14,xmm0 (acc=init); xor rcx,rcx
+                            (cat loopb '(242 65 15 16 198  195))))) ; movsd xmm0,xmm14 (return acc); ret
+            (\ in (rfoldw code seed in))))))
+
 ; ============================================================================
 ; SELF-CHECK: the native float kernel must equal love's elementwise r-array ops,
 ; bit-for-bit (same IEEE doubles). (aeq a b) = every cell equal.
@@ -149,4 +199,12 @@
    prodf (arfold '(\ acc x (* acc x)) 1)
    _ (cks "sum  r @1..4 " (sumf @(1.0 2.0 3.0 4.0))   (asum @(1.0 2.0 3.0 4.0)))   ; 10.0
    _ (cks "prod r @1..4 " (prodf @(1.0 2.0 3.0 4.0))  (aprod @(1.0 2.0 3.0 4.0)))  ; 24.0
+   ; --- float WHOLE-LOOP FOLD (rfoldw): the forged code owns the loop ---
+   wsum (arfoldw '(\ acc x (+ acc x)) 0)
+   wprod (arfoldw '(\ acc x (* acc x)) 1)
+   wsq  (arfoldw '(\ acc x (+ acc (* x x))) 0)     ; sum of squares -- body clobbers regs
+   _ (cks "Wsum  r @1..4" (wsum @(1.0 2.0 3.0 4.0))   (asum @(1.0 2.0 3.0 4.0)))   ; 10.0
+   _ (cks "Wprod r @1..4" (wprod @(1.0 2.0 3.0 4.0))  (aprod @(1.0 2.0 3.0 4.0)))  ; 24.0
+   _ (cks "Wsumsq @1..4 " (wsq @(1.0 2.0 3.0 4.0))    (asum (@(1.0 2.0 3.0 4.0) * @(1.0 2.0 3.0 4.0)))) ; 30.0
+   _ (cks "Wsum  empty " (wsum (arr r '(0) 0))        (asum (arr r '(0) 0)))       ; 0.0 (empty loop)
    _ (dot (? (peep bad 0 0) (+ (show (peep bad 0 0)) " FAILED\n") "ALL PASS\n")))

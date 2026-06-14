@@ -124,7 +124,56 @@
             code (forge (l2b (cat '(242 68 15 16 224  242 68 15 16 233    ; xmm12=acc.re ; xmm13=acc.im
                                     242 68 15 16 242  242 68 15 16 251)   ; xmm14=cell.re ; xmm15=cell.im
                              (cat (cfemit body regs) '(195)))))
-            (\ in (acreduce code seed in))))))
+            (\ in (acreduce code seed in)))))
+
+   ; --- COMPLEX WHOLE-LOOP FOLD: (acfoldw '(\ acc x <complex-arith>) seed). The
+   ; forged code owns the loop (op inlined, no per-cell call, cf. acreduce). fn is
+   ; fn(double *cells %rdi, uintptr_t n %rsi, struct g_c2 init %xmm0/%xmm1) ->
+   ; struct g_c2 %xmm0/%xmm1. acc lives in (%xmm12,%xmm13), the cell's (re,im) is
+   ; loaded into (%xmm14,%xmm15) each pass; cells are interleaved so the loop
+   ; counts doubles (rsi = 2n via shl, rcx += 2). Body = the SAME cfemit acfold
+   ; uses (acc->cr0, cell->cr1, result %xmm0/%xmm1). Offsets from loop-start:
+   ; cmp[0,3) jge[3,9) re[9,15) im[15,22) body[22,22+b) acc<-res[22+b,32+b)
+   ; add[32+b,36+b) jmp[36+b,41+b) done@41+b. ---
+   ; the complex accumulate PEEPHOLE: (+ acc cell)/(- acc cell) is componentwise,
+   ; one op per lane straight into the live acc pair -- addsd/subsd xmm12,xmm14 and
+   ; xmm13,xmm15 -- no stack, no acc reload, so complex SUM ties asum. (Complex *
+   ; is irreducibly ~7 instructions, so it stays on the general cfemit path.)
+   (unwrap e) (? (&& (twop e) (= 1 (tally e))) (unwrap (cap e)) e)
+   (cacc op)                                            ; acc <op>= cell, lanes in xmm12/13
+   (? (idp op '+) '(242 69 15 88 230  242 69 15 88 239) ; addsd xmm12,xmm14 ; addsd xmm13,xmm15
+      (idp op '-) '(242 69 15 92 230  242 69 15 92 239) ; subsd xmm12,xmm14 ; subsd xmm13,xmm15
+      ())
+   (caccfast body acc cell)                             ; fused inner (load + lanes), or ()
+   (: u (unwrap body)
+      (? (&& (twop u) (= 3 (tally u)) (memq (cap u) '(+ -))
+             (symp (caup u)) (idp (caup u) acc) (idp (caup (cup u)) cell))
+         (cat '(242 68 15 16 52 207  242 68 15 16 124 207 8) (cacc (cap u)))  ; load re,im ; lanes
+         ()))
+
+   (acfoldw lam seed)
+   (: rest (cup lam) body (last rest) ps (init rest)
+      (? !(&& (= 2 (tally ps)) (all symp ps) (cfarith body (list (cons (cap ps) cr0) (cons (caup ps) cr1)))) lam
+         (: regs (list (cons (cap ps) cr0) (cons (caup ps) cr1))
+            fast (caccfast body (cap ps) (caup ps))
+            ; INNER (between jge and add): the fast fused step, or the general
+            ; (load re,im ; cfemit body -> xmm0/1 ; acc<-xmm0/1).
+            inner (? fast fast
+                     (cat '(242 68 15 16 52 207  242 68 15 16 124 207 8)   ; movsd xmm14,[..] ; xmm15,[..+8]
+                      (cat (cfemit body regs)                              ; body -> (xmm0,xmm1)
+                           '(242 68 15 16 224  242 68 15 16 233))))        ; xmm12=res.re ; xmm13=res.im
+            l (tally inner)
+            ; offsets: cmp[0,3) jge[3,9) inner[9,9+l) add[9+l,13+l) jmp[13+l,18+l) done@18+l
+            loopb (cat '(72 57 241)                                ; cmp rcx,rsi
+                    (cat (cat '(15 141) (leb64 (+ 9 l) 4))         ; jge done  (rel = 9+l)
+                     (cat inner
+                      (cat '(72 131 193 2)                         ; add rcx,2
+                       (cat '(233) (leb64 (- 0 (+ 18 l)) 4))))))   ; jmp loop (rel = -(18+l))
+            code (forge (l2b (cat '(242 68 15 16 224  242 68 15 16 233    ; xmm12=init.re ; xmm13=init.im
+                                    72 209 230  72 49 201)               ; shl rsi,1 ; xor rcx,rcx
+                            (cat loopb
+                             '(242 65 15 16 196  242 65 15 16 205  195))))) ; xmm0=acc.re ; xmm1=acc.im ; ret
+            (\ in (cfoldw code seed in))))))
 
 ; ============================================================================
 ; SELF-CHECK: the native complex kernel must equal love's elementwise c-array ops,
@@ -164,4 +213,12 @@
    prodc (acfold '(\ acc x (* acc x)) ~1)         ; complex product -> aprod (complex mul!)
    _ (cks "sum  c     " (sumc cv)   (asum cv))     ; ~(1 2)+~(3 4) = ~(4 6)
    _ (cks "prod c     " (prodc cv)  (aprod cv))    ; ~(1 2)*~(3 4) = ~(-5 10)
+   ; --- complex WHOLE-LOOP FOLD (cfoldw): the forged code owns the loop ---
+   wsumc (acfoldw '(\ acc x (+ acc x)) ~0)
+   wprodc (acfoldw '(\ acc x (* acc x)) ~1)
+   wssq (acfoldw '(\ acc x (+ acc (* x x))) ~0)    ; sum of complex squares (body clobbers regs)
+   _ (cks "Wsum  c    " (wsumc cv)  (asum cv))      ; ~(4 6)
+   _ (cks "Wprod c    " (wprodc cv) (aprod cv))     ; ~(-5 10)
+   _ (cks "Wsumsq c   " (wssq cv)   (asum (cv * cv))) ; ~(1 2)^2+~(3 4)^2 = ~(-3 4)+~(-7 24) = ~(-10 28)
+   _ (cks "Wsum  empty" (wsumc (arr c '(0) 0)) (asum (arr c '(0) 0)))  ; ~0 (empty loop)
    _ (dot (? (peep bad 0 0) (+ (show (peep bad 0 0)) " FAILED\n") "ALL PASS\n")))
