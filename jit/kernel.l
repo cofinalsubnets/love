@@ -39,6 +39,7 @@
 (: (arithp e vs)
    (? (symp e) (memq e vs)                      ; one of the bound variables (any names)
       (&& (fixp e) (<= 0 e)) 1
+      (&& (twop e) (= 1 (tally e))) (arithp (cap e) vs)   ; ((e)): op-core's (f)==f wrapper -- peel
       (&& (twop e) (= 3 (tally e)) (memq (cap e) '(+ - * // % < <= > >= =)))
         (&& (arithp (caup e) vs) (arithp (caup (cup e)) vs))
       0))
@@ -98,6 +99,7 @@
 (: (emit e regs)
    (? (symp e) (vreg e regs)                    ; a param -> untag from its arg register
       (fixp e) (cons 72 (cons 184 (leb e 8)))   ; k: mov rax,imm64            (48 B8 <le64>)
+      (&& (twop e) (= 1 (tally e))) (emit (cap e) regs)   ; peel op-core's ((e)) (f)==f wrapper
       (: op (cap e) a (caup e) b (caup (cup e))
          (cat (emit a regs)                     ; rax = A
           (cat '(80)                            ; push rax                    (50)

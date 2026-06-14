@@ -127,15 +127,46 @@ data, while still walking application/`:`/`?` subforms and lambda bodies (so a
 `(\ p arith)` in argument position — the HOF case — is caught). Verified: ordinary
 code and quoted data pass through untouched.
 
-**Why this is a runtime redefinition, not a compiler change.** The production hook
-belongs in `opfix` (which already has the exact code/data traversal), guarded by
-`born` (a forged buf is a host `mmap` address — it can **never** be baked into the
-egg) and target arch (x86_64 only; the VM stays the portable fallback, since wasm
-can't execute forged bytes and each arch needs its own codegen). That's a compiler
-change needing a full re-gate; redefining `ev` at runtime demonstrates the exact
-behavior with **zero risk to the bootstrap**. Known gaps (safe — they only miss
-coverage, never miscompile): lambdas inside quasiquote-unquotes or unexpanded
-macro args aren't reached. Standalone x86_64, kept out of the gate corpus.
+`auto.l` redefines `ev`, so it only reaches forms `ev` compiles directly. The
+production version lives one level deeper, in the compiler itself:
+
+## The production hook — `opfix` + `jit/opjit.l`
+
+`opfix` (the operator-factoring pass both compilers run, `love/prelude.l`) now
+ends with one extra step: after factoring, it applies `book['opjit]` if installed.
+
+```lisp
+(: (opfix x) (: r (op-core x) h (peep book 'opjit 0) (? (lamp h) (h r) r)))
+```
+
+This is **dormant in the shipped image** — `book['opjit]` is `0`, so `opfix` is
+identical to the old pass and the bootstrap/gate are byte-for-byte unaffected.
+`jit/opjit.l` is the x86_64 installer: it `(: opjit jit-walk)`s, and because a
+top-level def lands in the `book` tablet (via `lvm_defglob`) — the same tablet
+`opfix` captured at bake — `opfix`'s `(peep book 'opjit 0)` reads it, **even
+though the global name `book` was pulled at birth**. From then on every form
+compiled through `c0` *and* the self-hosted `wev` gets its qualifying lambdas
+turned native — no `ev` redefinition, the compiler does it.
+
+```sh
+out/host/love -l jit/kernel.l jit/opjit.l   # 5 lambdas jitted via the hook, ALL PASS
+```
+
+Two subtleties this surfaced:
+- **Re-entry.** `jit`'s VM fallback is `(ev lam)`, which now re-enters
+  `opfix → opjit → jit-walk → jit → (ev lam) …` forever. A one-bit guard
+  (`jguard`) makes `jit-walk` leave forms verbatim while inside a `jit`, so the
+  fallback compiles the plain VM closure.
+- **The `(f)==f` wrapper.** `opjit` runs *after* factoring, so it sees infix arith
+  in prefix form (`(\ x (x * x))` → `(\ x ((* x x)))`) — and `op-core` wraps a
+  factored expression as `((…))` (the empty-application identity). `arithp`/`emit`
+  peel that single-element wrapper, so **infix arith inside lambdas jits too**.
+
+Still deferred for a fully-baked-in (no runtime installer) version: arch
+detection in C and shipping the x86 codegen in the corpus (it would bloat the
+aarch64/wasm eggs with dead code). The dormant `book['opjit]` seam is the
+permanent hook; the installer stays host/arch-specific. Known gaps (safe — only
+missed coverage): lambdas inside quasiquote-unquotes or unexpanded macro args.
 
 ## Reproducing the probe (x86_64 + qemu)
 

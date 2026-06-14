@@ -381,22 +381,22 @@
                                (op-w (cup l) out (cons (op-fr e ch nm 1 0) pend))
                                (: r (op-del e out pend) ; bare operator: the plain symbol
                                   (op-w (cup l) (cap r) (cup r)))))))))
-             (: r (op-del (opfix e) out pend)
+             (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
    ; quasiquote: the template is data; only unquote operands (at the right
    ; depth, R7RS-style) re-enter the pass
    (op-qq t d)
     (? (atomp t) t
        (: h (cap t)
-          (? (= h 'uq)  (cons 'uq  (cons (? (= d 1) (opfix (caup t)) (op-qq (caup t) (- d 1))) 0))
-             (= h 'uqs) (cons 'uqs (cons (? (= d 1) (opfix (caup t)) (op-qq (caup t) (- d 1))) 0))
+          (? (= h 'uq)  (cons 'uq  (cons (? (= d 1) (op-core (caup t)) (op-qq (caup t) (- d 1))) 0))
+             (= h 'uqs) (cons 'uqs (cons (? (= d 1) (op-core (caup t)) (op-qq (caup t) (- d 1))) 0))
              (= h 'qq)  (cons 'qq  (cons (op-qq (caup t) (+ d 1)) 0))
              (map (\ e (op-qq e d)) t))))
-   ; opfix: the pass. quote interiors are DATA and stay verbatim (so a
+   ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
    ; quoted list keeps its operators as plain symbols); quasiquote descends
    ; only through unquotes; everything else walks. idempotent: factored
    ; output carries operators only in head position, where they read plain.
-   (opfix x)
+   (op-core x)
     (? (atomp x) x
        (: h (cap x)
           (? (&& (= h '\) (atomp (cuup x))) x
@@ -405,10 +405,17 @@
              ; monadically around the (recursively opfixed) datum; an
              ; unfactorable run is the plain application (run d)
              (&& (= h 'mono) (twop (cup x)) (twop (caup x)))
-              (: p (caup x) r (cap p) d (opfix (caup p))
+              (: p (caup x) r (cap p) d (op-core (caup p))
                  fs (? (symp r) (monofactor r) 0)
                  (? (twop fs) (op-fin fs d) (cons r (cons d 0))))
              (op-w x 0 0)))))
+; opfix = op-core, then the optional native-codegen hook book['opjit]: a
+; source->source pass installed at RUNTIME (jit/opjit.l, x86_64) that rewrites
+; qualifying lambdas to forged native closures. DORMANT unless installed -- the
+; peep is 0, so opfix is identical to op-core and the bootstrap/gate are
+; unaffected. Applied ONCE at the top (op-core does the recursion) and AFTER
+; factoring, so infix arith like (\ x (x * x)) is seen in prefix form.
+(: (opfix x) (: r (op-core x) h (peep book 'opjit 0) (? (lamp h) (h r) r)))
 ; the global RNG stream lives on book ('rng-state) and advances by the pure
 ; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
 ; clock-seeds on first use; rng-set validates and installs (the state, or nil
