@@ -111,7 +111,7 @@ lvm_t lvm_kcall,
  lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_twop,
- lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_call2, lvm_amap, lvm_forge,
+ lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_call2, lvm_amap, lvm_amap2, lvm_forge,
  lvm_fixp,  lvm_symp,   lvm_strp,   lvm_mapp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
@@ -562,6 +562,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
 #define s1(i) {{i}, {lvm_ret0}}
 #define s2(i) {{lvm_cur},{.x=putfix(2)},{i}, {lvm_ret0}}
 #define s3(i) {{lvm_cur},{.x=putfix(3)},{i}, {lvm_ret0}}
+#define s4(i) {{lvm_cur},{.x=putfix(4)},{i}, {lvm_ret0}}
 #define s5(i) {{lvm_cur},{.x=putfix(5)},{i}, {lvm_ret0}}
 #define nifs(_) \
  _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge))\
@@ -585,7 +586,8 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_table, "tablet", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
- _(nif_call, "call", s2(lvm_call)) _(nif_call2, "call2", s3(lvm_call2)) _(nif_amap, "amap", s3(lvm_amap)) _(nif_forge, "forge", s1(lvm_forge))\
+ _(nif_call, "call", s2(lvm_call)) _(nif_call2, "call2", s3(lvm_call2))\
+ _(nif_amap, "amap", s3(lvm_amap)) _(nif_amap2, "amap2", s4(lvm_amap2)) _(nif_forge, "forge", s1(lvm_forge))\
  _(nif_twop, "twop", s1(lvm_twop)) _(nif_strp, "strp", s1(lvm_strp))\
  _(nif_real, "real", s1(lvm_real)) _(nif_flop, "flop", s1(lvm_flop))\
  _(nif_sin, "sin", s1(lvm_sin)) _(nif_cos, "cos", s1(lvm_cos))\
@@ -3755,6 +3757,24 @@ lvm(lvm_amap) {
   for (uintptr_t i = 0, n = tuple_nelem(tuple(in)); i < n; i++) oc[i] = fn(ic[i]);
  }
  return Sp[2] = out, Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, out at the new top
+
+// (amap2 code a b out) — zipWith: fill z-array `out` cell-by-cell with fn(a_cell,
+// b_cell), fn = the native 2-arg code in buf `code` (a-cell in %rdi, b-cell in
+// %rsi; raw int64 in/out, wrapping — like amap). a, b, out must be equal-length
+// g_Z arrays. Same no-allocation C loop, so GC-safe. Returns out. Arity 4.
+lvm(lvm_amap2) {
+ word code = Sp[0], a = Sp[1], b = Sp[2], out = Sp[3];
+ if (bufp(code) && arrp(a) && arrp(b) && arrp(out)
+     && tuple(a)->type == g_Z && tuple(b)->type == g_Z && tuple(out)->type == g_Z
+     && tuple_nelem(tuple(a)) == tuple_nelem(tuple(out))
+     && tuple_nelem(tuple(b)) == tuple_nelem(tuple(out))) {
+  g_word (*fn)(g_word, g_word) = (g_word (*)(g_word, g_word)) txt(buf_str(code));
+  intptr_t *ac = (intptr_t*) tuple_data(tuple(a)),
+           *bc = (intptr_t*) tuple_data(tuple(b)),
+           *oc = (intptr_t*) tuple_data(tuple(out));
+  for (uintptr_t i = 0, n = tuple_nelem(tuple(out)); i < n; i++) oc[i] = fn(ac[i], bc[i]);
+ }
+ return Sp[3] = out, Sp += 3, Ip++, Continue(); }   // arity 4: collapse three, out at the new top
 
 // THE HOST EXEC ARENA (hosted builds only). The Linux malloc heap is NX, so a
 // buf of real code cannot be (call ...)ed directly -- the jump faults. forge

@@ -182,21 +182,23 @@ raw cell in `%rdi`, computes, returns the raw result in `%rax` — **no untag, n
 overflow guard, no 2R encoding** — and a wrapping native kernel matches love's
 elementwise ops *exactly, the wrap included*.
 
-The `amap` nif (arity 3) does the loop in C, where the tuple layout is known and
+The `amap`/`amap2` nifs do the loop in C, where the tuple layout is known and
 nothing allocates (so no GC moves the cell buffers mid-loop):
 
 ```
-(amap code in out)    ; out[i] = fn(in[i]) over equal-length g_Z arrays; returns out
+(amap  code in out)    ; out[i] = fn(in[i])        -- map, 1-arg kernel (cell in %rdi)
+(amap2 code a b out)   ; out[i] = fn(a[i], b[i])   -- zipWith, 2-arg kernel (%rdi, %rsi)
 ```
 
-`jit/array.l` is the codegen + driver: `(ajit '(\ x <arith>))` forges a raw kernel
-and returns `(\ z-array → z-array)` that allocates a matching output array (love
-side) and fills it with `amap`. Ops: `+ - *` and comparisons (`// %` deferred —
-`idiv` `#DE`s on a zero cell). Verified equal to love's broadcast ops, wrap
-included:
+`jit/array.l` is the codegen + driver: `(ajit '(\ x <arith>))` forges a raw 1-arg
+kernel and returns `(\ array → array)` over `amap`; `(ajit '(\ x y <arith>))`
+forges a raw 2-arg kernel (cells in `%rdi`/`%rsi`) and returns `(\ a b → array)`
+over `amap2`. Either way love allocates the matching output array and the native
+loop fills it. Ops: `+ - *` and comparisons (`// %` deferred — `idiv` `#DE`s on a
+zero cell). Verified equal to love's broadcast ops, wrap included:
 
 ```sh
-out/host/love -l jit/kernel.l jit/array.l   # x*x, x+1, 2x-1, x<3 mask, wrap — ALL PASS
+out/host/love -l jit/kernel.l jit/array.l   # map (x*x, x+1, x<3, wrap) + zipWith (a+b, a*b+1, a<b) — ALL PASS
 ```
 
 ## Reproducing the probe (x86_64 + qemu)
