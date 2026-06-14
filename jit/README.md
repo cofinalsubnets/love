@@ -64,6 +64,40 @@ aarch64 or wasm host — so it covers the guards and that `forge` round-trips
 bytes into a buf; the real execution lives in the two standalone files
 (`jit/forge.l` on the host, `jit/probe.l` on the kernel).
 
+## The first kernel — `jit/kernel.l`
+
+A real (small) JIT, codegen and all written in love: a fixnum `(\ x <arith>)`
+over `+ - *` compiled to x86_64 and run via `(call (forge bytes) x)`. The whole
+backend is love emitting bytes into a buf — a recognizer (`arithp`), a recursive
+emitter (`x` re-derived from `%rdi` each use; binops via the machine stack), and
+a driver that returns a native closure or, on any non-match, the ordinary `(ev
+lam)` interpreter compile.
+
+The ABI quirk and its fix: `(call ...)` passes the arg as its **raw tagged** word
+(`putfix X = 2X+1`) and re-tags the result, so the kernel untags on entry
+(`sar`, signed) and computes on the raw integer. love fixnums **auto-widen to
+bignum** but native int64 **wraps**, so the kernel carries an **overflow guard**:
+`seto r9b ; or r8b,r9b` after every op makes `r8` a *branchless sticky* OF flag
+(no forward jumps to backpatch), and the epilogue folds in a fixnum-range check.
+There's no error channel through `call`'s fixnum return, so the result encodes one
+bit — **`2R` (even) on success, `1` (odd) on bail** — and the love wrapper reads
+the low bit: odd → fall back to the interpreter (exact, incl. bignums). This
+costs one bit of range (native covers `R ∈ [-2^61, 2^61)`; past that it bails to
+the VM), and it **never returns a wrong answer** — verified against the
+interpreter on success *and* overflow cases:
+
+```sh
+out/host/love jit/kernel.l        # x86_64 host: every line "==", then ALL PASS
+```
+
+This is roadmap **step 2**. To make it automatic, the same logic hooks into the
+self-hosted lambda analyzer (`love/ev.l`, where `(= (cap e) '\)`), behind two
+mandatory guards: `born` (a forged buf is a host `mmap` address — it can **never**
+be baked into the egg) and target arch (x86_64 only; the VM stays the portable
+fallback, since wasm can't execute forged bytes and each arch needs its own
+codegen). Like `forge.l`/`probe.l`, it's a standalone x86_64 file with its own
+self-check, kept out of the architecture-neutral gate corpus.
+
 ## Reproducing the probe (x86_64 + qemu)
 
 ```sh
