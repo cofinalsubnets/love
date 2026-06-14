@@ -10,6 +10,8 @@
 > The lesson, in one line: *a JIT wins only when it owns the loop, and the production
 > form of a fixed-code win is baked C unlocked by a sound algebraic law — so the
 > experiment's keeper is the finding, not the scaffold.* (`git log` for the arc.)
+> The surface that remains is now **fault-safe** on the host — a bad forged body is
+> a catchable love condition, not a crash (see *The fault barrier*, below).
 
 A nif that jumps into machine code stored in a `buf` and runs it natively, and a
 loader that puts the bytes somewhere they can run on either target.
@@ -23,9 +25,11 @@ loader that puts the bytes somewhere they can run on either target.
 `call` jumps into the bytes of buf `b`, passing `x` as the sole argument and
 wrapping the returned machine word as a fixnum. The calling convention is the
 platform C ABI — SysV AMD64 puts the argument in `%rdi` and takes the result in
-`%rax`; AArch64 uses `x0` for both. The bytes inside `b` are entirely the
-caller's responsibility: an ill-formed body is a hard crash, by design. A
-non-buf argument runs nothing and returns nothing (`0`).
+`%rax`; AArch64 uses `x0` for both. The bytes inside `b` are the caller's
+responsibility, but an ill-formed body is no longer fatal on the host: the
+**fault barrier** (below) catches the hardware fault and `call` returns `0` — the
+same value a non-buf argument gives. A non-buf argument runs nothing and returns
+`0`.
 
 `forge` is how you get a `call`-able buf that works on **both** targets. The
 portable idiom is `(call (forge bytes) x)`:
@@ -43,6 +47,31 @@ portable idiom is `(call (forge bytes) x)`:
   is just a heap-buf copy; the bytes run in place.
 
 `src` may be a string or a buf; a non-byte value or an empty one forges to `0`.
+
+## The fault barrier — a bad body is survivable (host)
+
+Running forged bytes is the one place love can be handed code that faults the CPU.
+That used to be a hard crash; it no longer is. On the host a signal barrier
+(`SIGSEGV`/`SIGILL`/`SIGBUS`/`SIGFPE` + `sigsetjmp`) turns a hardware fault into an
+ordinary love condition:
+
+- **`call`/`call2`** wrap the native call in `call_run` (`love.c`, by `lvm_call`):
+  a fault in the body is caught and `call` returns `0` — the non-buf value — so a
+  bad body is survivable like any other error, never a core dump. The native body
+  never touches love state, so this recovery is unconditional.
+- **`g_eval`** carries the same barrier over the whole VM run, so *any* in-eval
+  hardware fault becomes a catchable `(scare 'fault <signal>)` delivered through
+  `help` — transparent, up through object-array ops, `lamb`, and `(ev …)`. In file
+  mode that is a clean terminal scare instead of a core dump; interactively the
+  fault recovers **per task** — the faulting ("burnt") task is unlinked from the
+  scheduler ring and a live peer resumes, so a faulting repl line just fails and the
+  session carries on (`^C` and cooperative scheduling intact).
+
+Host-only: the freestanding kernel has no signal layer (its fault vectors are a
+separate hookup), so there `call` is still the raw trampoline. The one residual
+unrecoverable corner is a fault *mid-GC or mid-ring-mutation*, where the heap itself
+is inconsistent. See `call_run` / `g_eval` / `g_eval_fault_raise` in `love.c`, and
+the compile-gated `__fault` harness (`-DG_FAULT_TEST`).
 
 Both nifs live in `love.c` — search `lvm_call` and `lvm_forge`; each is three
 lines of wiring (a forward-decl in the `lvm_t` block, the body, one nif-table
@@ -118,8 +147,10 @@ qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
 ## Caveats / TODO
 
 - **Always `forge` before you `call` on the host.** A bare `(call <heap buf> ...)`
-  of real code faults — the NX heap is unchanged. `forge` is the only host-safe way
-  to obtain executable bytes; the arena it returns is W^X and freed by a finalizer.
+  of real code faults on the NX heap — now *caught* by the fault barrier (`call`
+  returns `0`) rather than crashing, but it still won't run. `forge` is the only
+  host-safe way to obtain executable bytes; the arena it returns is W^X and freed by
+  a finalizer.
 - **AArch64 cache.** `lvm_call` omits the I-cache flush AArch64 needs after `forge`
   writes code (`__builtin___clear_cache(base, base+len)` before the first `call`).
   Correct on x86_64 only until that is added — and on AArch64 the flush belongs in
