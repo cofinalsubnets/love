@@ -1263,24 +1263,47 @@ static struct g *g_eval(struct g *g) {
  g = c0(g, _lvm_yieldk);
 #if __STDC_HOSTED__ && g_tco
  // The barrier wraps the VM RUN of the OUTERMOST eval: a fault anywhere below (a bad
- // native call, a null deref, an ill-formed op) unwinds here, the stack resets to the
- // eval boundary, and the fault is re-raised as a catchable scare through `help` --
- // transparent, up through object-array ops, lamb, and (ev ..). Nested evals run inside
- // this one barrier (g_eval_armed); compilation (c0, above) is outside it.
+ // native call, a null deref, an ill-formed op) unwinds here -- the task BURNT. If it has
+ // a runnable peer (the repl evaluates each line in a spawned task while its poll loop
+ // stays runnable), toss the burnt task -- unlink it from the ring -- and serve the
+ // survivors: resume a peer under the same barrier. done? reads an absent pid as done, so
+ // the poll then carries on, ^C and cooperative scheduling intact. With no runnable peer
+ // (file mode, the lone task) the stack resets to the eval boundary and the fault
+ // re-raises as a catchable (scare 'fault sig) through `help` -- transparent, up through
+ // object-array ops, lamb, and (ev ..). Nested evals run inside this one barrier
+ // (g_eval_armed); compilation (c0, above) is outside it.
  if (!g_ok(g)) return g;
  if (g_eval_armed) return g->ip->ap(g, g->ip, g->hp, g->sp);
  g_fault_arm();
  struct g *volatile vg = g; word *volatile esp = g->sp;   // entry g/sp, volatile across sigsetjmp
  sigjmp_buf prev; memcpy(&prev, &g_fault_jb, sizeof prev);
  g_eval_armed = 1, g_fault_depth++;
- int fsig = sigsetjmp(g_fault_jb, 1);
- if (fsig == 0) {
-  struct g *r = g->ip->ap(g, g->ip, g->hp, g->sp);
+ for (;;) {
+  int fsig = sigsetjmp(g_fault_jb, 1);
+  struct g *c = (struct g *) vg;
+  if (fsig == 0) {
+   struct g *r = c->ip->ap(c, c->ip, c->hp, c->sp);
+   g_fault_depth--, g_eval_armed = 0, memcpy(&g_fault_jb, &prev, sizeof prev);
+   return r; }
+  // BURNT (fsig = the signal). Find any LIVE peer to serve next -- not just an already-
+  // runnable one (find_runnable's wake_at/wait_fd test is for normal scheduling; for
+  // RECOVERY the goal is to survive, and a resumed peer re-checks its own wait/sleep
+  // conditions, e.g. the repl task re-parks on stdin). The lone task -> no peer -> scare.
+  union u *dead = c->tasks, *next = 0;
+  for (union u *n = dead->m; n != dead; n = n->m)
+   if (n[1].m->ap != lvm_task_exit) { next = n; break; }
+  if (next) {                                              // serve the survivors
+   union u *p = next; while (p->m != dead) p = p->m;
+   p->m = dead->m;                                         // toss the burnt task: unlink from the ring
+   union u *ns = next + 5, *end = (union u*) ttag(c, ns);
+   uintptr_t rh = end - ns;
+   c->tasks = next;
+   c->sp = memmove(topof(c) - rh, ns, rh * sizeof(word));  // restore the peer's stack + ip, resume
+   c->ip = next[1].m;
+   continue; }
   g_fault_depth--, g_eval_armed = 0, memcpy(&g_fault_jb, &prev, sizeof prev);
-  return r; }
- g_fault_depth--, g_eval_armed = 0, memcpy(&g_fault_jb, &prev, sizeof prev);
- ((struct g *) vg)->sp = esp;                             // FAULTED: reset stack, raise a scare
- return g_eval_fault_raise((struct g *) vg, fsig);        // fsig = the caught signal number
+  c->sp = esp;                                             // lone task: reset + raise (scare 'fault sig)
+  return g_eval_fault_raise(c, fsig); }
 #elif g_tco
  if (g_ok(g)) g = g->ip->ap(g, g->ip, g->hp, g->sp);
  return g;
