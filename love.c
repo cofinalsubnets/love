@@ -874,7 +874,7 @@ static g_inline void evac_data(struct g *g, word const *const p0, word const*con
 // whose atoms were forwarded into a fresh same-cap backing in to-space (the
 // copied atom carries its forwarded name; survivors <= len < 3/4 cap, so
 // everything fits with no growth). a dead atom's entry simply never crosses:
-// dead spellings vanish, the same weak interning the rebuilt tree gave for
+// dead spellings vanish, the same weak interning the rebuilt map gave for
 // free. bump-bounded: from-space held a table of the same size.
 static g_noinline word symbols_rebuild(struct g *h, struct g *g) {
  word om = g->symbols;
@@ -1666,7 +1666,7 @@ g_noinline struct g *g_evals_(struct g*g, char const*s) {
 // ============================================================================
 // vm
 // ============================================================================
-// Probe the symbol tree for a C-string name, materializing the lookup with a
+// Probe the symbol map for a C-string name, materializing the lookup with a
 // phantom g_str on the C stack -- same content hash, same walk as
 // intern_checked, but never interning or allocating. A miss means the name was
 // never read, so no global by that name was ever defined.
