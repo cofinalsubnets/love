@@ -142,8 +142,18 @@
          (: regs (? (= n 1) (list (cons (cap ps) argx))
                             (list (cons (cap ps) argx) (cons (caup ps) argy)))
             code (forge (l2b (cat prologue (cat (emit body regs) epilogue))))
-            (? (= n 1) (\ a   (: v (call  code a)   (? (& v 1) (vm a)       (// v 2))))
-                       (\ a b (: v (call2 code a b) (? (& v 1) ((vm a) b)   (// v 2)))))))))
+            ; Build the wrapper SOURCE with code + vm as QUOTED CONSTANTS, so the
+            ; compiled closure holds NO captures (not fn_partialp), then respec its
+            ; stashed \-expr to the ORIGINAL lam. eqv is fn_src-based, so the native
+            ; closure then compares EXACTLY like the interpreted one: (jit l) = l,
+            ; two forges of l are =, and 1=(\ x x) / 0=(\ _ 1) survive. ((\ X) quotes
+            ; X; ((\ vm) a) is (vm a) with vm a constant, not a capture.)
+            wsrc (? (= n 1)
+                   (L '\ 'a   (L ': 'v (L 'call  (L '\ code) 'a)
+                                  (L '? (L '& 'v 1) (L (L '\ vm) 'a)        (L '// 'v 2))))
+                   (L '\ 'a 'b (L ': 'v (L 'call2 (L '\ code) 'a 'b)
+                                  (L '? (L '& 'v 1) (L (L (L '\ vm) 'a) 'b) (L '// 'v 2)))))
+            (respec (ev wsrc) lam)))))
 
 ; ============================================================================
 ; SELF-CHECK: native must equal the interpreter on every case, success AND
