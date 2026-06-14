@@ -16,16 +16,21 @@
 ; x86_64 host; load after jit/kernel.l (reuses leb, l2b):
 ;     out/host/love -l jit/kernel.l jit/farray.l
 
-; --- recognizer: a closed float-arith expr in the single cell variable v ---
-(: (farith e v)
-   (? (symp e) (idp e v)
+; --- recognizer: a closed float-arith expr in the bound variables vs (1 or 2) ---
+(: (farith e vs)
+   (? (symp e) (memq e vs)
       (&& (fixp e) (<= 0 e)) 1                   ; non-negative int literal -> cvtsi2sd
       (flop e) 1                                 ; float literal (1.5, ...) -> via fbits
-      (&& (twop e) (= 1 (tally e))) (farith (cap e) v)    ; peel op-core's ((e)) wrapper
+      (&& (twop e) (= 1 (tally e))) (farith (cap e) vs)   ; peel op-core's ((e)) wrapper
       (&& (twop e) (= 3 (tally e)) (memq (cap e) '(+ - * /)))
-        (&& (farith (caup e) v) (farith (caup (cup e)) v))
+        (&& (farith (caup e) vs) (farith (caup (cup e)) vs))
       0))
 ; (leb64 -- the bit-op byte extractor for fbits patterns -- is in jit/kernel.l)
+
+; --- a parameter's "load to xmm0" bytes, by its SysV float-arg register ---
+(: fr0 '(242 65 15 16 199)                       ; movsd xmm0,xmm15  (last/only param)
+   fr1 '(242 65 15 16 198)                       ; movsd xmm0,xmm14  (1st of two)
+   (vregf e regs) (? !regs () (idp e (cap (cap regs))) (cup (cap regs)) (vregf e (cup regs))))
 
 ; --- combine: xmm0 (op)= xmm1 ---
 (: (fcombine op)
@@ -35,17 +40,17 @@
                   '(242 15 94 193)))             ; divsd xmm0,xmm1   (F2 0F 5E C1)
 
 ; --- emit: bytes leaving e's value in xmm0 ---
-(: (femit e v)
-   (? (symp e) '(242 65 15 16 199)               ; the cell: movsd xmm0,xmm15  (F2 41 0F 10 C7)
+(: (femit e regs)
+   (? (symp e) (vregf e regs)                    ; a param -> load from its xmm reg
       (fixp e) (cat (cons 72 (cons 184 (leb e 8)))   ; mov rax,imm64           (48 B8 <le64>)
                     '(242 72 15 42 192))         ; cvtsi2sd xmm0,rax           (F2 48 0F 2A C0)
       (flop e) (cat (cons 72 (cons 184 (leb64 (fbits e) 8)))   ; mov rax,<IEEE bits>  (48 B8 <le64>)
                     '(102 72 15 110 192))        ; movq xmm0,rax               (66 48 0F 6E C0)
-      (&& (twop e) (= 1 (tally e))) (femit (cap e) v)   ; peel op-core's ((e)) wrapper
+      (&& (twop e) (= 1 (tally e))) (femit (cap e) regs)   ; peel op-core's ((e)) wrapper
       (: op (cap e) a (caup e) b (caup (cup e))
-         (cat (femit a v)                        ; xmm0 = A
+         (cat (femit a regs)                     ; xmm0 = A
           (cat '(72 131 236 8  242 15 17 4 36)   ; sub rsp,8 ; movsd [rsp],xmm0   (push A)
-           (cat (femit b v)                      ; xmm0 = B
+           (cat (femit b regs)                   ; xmm0 = B
             (cat '(242 15 16 200                 ; movsd xmm1,xmm0  (xmm1 = B)    (F2 0F 10 C8)
                   242 15 16 4 36  72 131 196 8)  ; movsd xmm0,[rsp] ; add rsp,8   (pop A)
              (fcombine op))))))))                ; xmm0 = (A op B)
@@ -63,31 +68,42 @@
          '(15 182 192))))                        ; movzx eax,al  (0F B6 C0)
 
 ; --- is body a top-level float comparison (A op B) with float-arith A, B? ---
-(: (fcmp? body v)
+(: (fcmp? body vs)
    (&& (twop body) (= 3 (tally body)) (memq (cap body) '(< <= > >= =))
-       (farith (caup body) v) (farith (caup (cup body)) v)))
+       (farith (caup body) vs) (farith (caup (cup body)) vs)))
 
 ; --- emit a comparison body: compute A,B as doubles, compare -> int in rax ---
-(: (cemit-f body v)
+(: (cemit-f body regs)
    (: a (caup body) b (caup (cup body))
-      (cat (femit a v)                           ; xmm0 = A
+      (cat (femit a regs)                        ; xmm0 = A
        (cat '(72 131 236 8  242 15 17 4 36)      ; sub rsp,8 ; movsd [rsp],xmm0  (push A)
-        (cat (femit b v)                         ; xmm0 = B
+        (cat (femit b regs)                      ; xmm0 = B
          (cat '(242 15 16 200  242 15 16 4 36  72 131 196 8)   ; xmm1=B ; pop A
           (cmpc-f (cap body))))))))              ; -> 0/1 int in rax
 
 ; --- driver: float arith (\ x <arith>) -> (\ r-array -> r-array) via armap;
 ; a top-level float comparison -> (\ r-array -> z-MASK array) via armapz. ---
 (: (rjit lam)
-   (: v (caup lam) body (caup (cup lam))
+   (: v (caup lam) body (caup (cup lam)) vs (list v) regs (list (cons v fr0))
       (? !(symp v) lam
-         (fcmp? body v)                          ; comparison -> z-mask
-           (: code (forge (l2b (cat '(242 68 15 16 248) (cat (cemit-f body v) '(195)))))
+         (fcmp? body vs)                         ; comparison -> z-mask
+           (: code (forge (l2b (cat '(242 68 15 16 248) (cat (cemit-f body regs) '(195)))))
               (\ in (: out (arr z (ashape in) 0) _ (armapz code in out) out)))
-         (farith body v)                         ; float arith -> r-array
-           (: code (forge (l2b (cat '(242 68 15 16 248) (cat (femit body v) '(195)))))
+         (farith body vs)                        ; float arith -> r-array
+           (: code (forge (l2b (cat '(242 68 15 16 248) (cat (femit body regs) '(195)))))
               (\ in (: out (arr r (ashape in) 0) _ (armap code in out) out)))
          lam)))
+
+; --- FLOAT FOLD: (arfold '(\ acc x <float-arith>) seed) -> (\ r-array -> float).
+; acc -> %xmm14 (fr1), cell -> %xmm15 (fr0); the accumulator is a double, the
+; result a boxed float -- matching asum/aprod over an r-array. ---
+(: (arfold lam seed)
+   (: rest (cup lam) body (last rest) ps (init rest)
+      (? !(&& (= 2 (tally ps)) (all symp ps) (farith body ps)) lam
+         (: regs (list (cons (cap ps) fr1) (cons (caup ps) fr0))
+            code (forge (l2b (cat '(242 68 15 16 240  242 68 15 16 249)   ; xmm14=acc ; xmm15=cell
+                             (cat (femit body regs) '(195)))))
+            (\ in (arreduce code seed in))))))
 
 ; ============================================================================
 ; SELF-CHECK: the native float kernel must equal love's elementwise r-array ops,
@@ -96,6 +112,10 @@
    (aeq a b) (aall (a = b))
    (ck nm got want)
      (: ok (aeq got want)
+        _ (dot (+ nm (+ ": " (+ (show got) (+ (? ok "  ==  " "  =/=  ") (+ (show want) (? ok "\n" "  FAIL\n")))))))
+        (? ok 0 (pin bad 0 (+ 1 (peep bad 0 0)))))
+   (cks nm got want)                              ; scalar compare (the fold returns a float)
+     (: ok (= got want)
         _ (dot (+ nm (+ ": " (+ (show got) (+ (? ok "  ==  " "  =/=  ") (+ (show want) (? ok "\n" "  FAIL\n")))))))
         (? ok 0 (pin bad 0 (+ 1 (peep bad 0 0)))))
    dd  (rjit '(\ x (+ x x)))
@@ -124,4 +144,9 @@
    _ (ck "x>=2  @1..3 " (ge  @(1.0 2.0 3.0))   (@(1.0 2.0 3.0) >= 2.0))   ; @(0 1 1)
    _ (ck ".5x<1.5 @..  " (ev2 @(1.0 3.0 5.0))  ((@(1.0 3.0 5.0) * 0.5) < 1.5)) ; @(1 0 0)
    _ (dot (+ "  (x<2 type = " (+ (show (atype (lt @(1.0 2.0)))) (+ ", want z=" (+ (show z) ")\n")))))
+   ; --- float FOLD (arreduce): sum/prod, returns a float scalar ---
+   sumf (arfold '(\ acc x (+ acc x)) 0)
+   prodf (arfold '(\ acc x (* acc x)) 1)
+   _ (cks "sum  r @1..4 " (sumf @(1.0 2.0 3.0 4.0))   (asum @(1.0 2.0 3.0 4.0)))   ; 10.0
+   _ (cks "prod r @1..4 " (prodf @(1.0 2.0 3.0 4.0))  (aprod @(1.0 2.0 3.0 4.0)))  ; 24.0
    _ (dot (? (peep bad 0 0) (+ (show (peep bad 0 0)) " FAILED\n") "ALL PASS\n")))

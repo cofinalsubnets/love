@@ -79,6 +79,53 @@
                               (cat (cemit body v) '(195)))))              ; ... ; ret
             (\ in (: out (arr c (ashape in) 0) _ (acmap code in out) out))))))
 
+; --- COMPLEX FOLD: (acfold '(\ acc x <complex-arith>) seed) -> (\ c-array -> ~).
+; The acreduce ABI passes acc = (xmm0,xmm1) and cell = (xmm2,xmm3) (two two-double
+; structs), result in (xmm0,xmm1). The prologue stashes acc -> (xmm12,xmm13) and
+; cell -> (xmm14,xmm15); each param then re-reads from its pair on every use.
+; `regs` maps a param symbol to the byte run that loads it into (xmm0,xmm1).
+; Matches asum/aprod over a c-array. ---
+(: cr0 '(242 65 15 16 196  242 65 15 16 205)     ; acc:  movsd xmm0,xmm12 ; movsd xmm1,xmm13
+   cr1 '(242 65 15 16 198  242 65 15 16 207)     ; cell: movsd xmm0,xmm14 ; movsd xmm1,xmm15
+   (cvreg e regs) (? !regs () (idp e (cap (cap regs))) (cup (cap regs)) (cvreg e (cup regs)))
+
+   (cfarith e regs)                              ; closed complex-arith over the param regs
+   (? (symp e) (? (cvreg e regs) 1 0)
+      (&& (fixp e) (<= 0 e)) 1
+      (&& (twop e) (= 3 (tally e)) (idp (cap e) 'plex)
+          (|| (fixp (caup e)) (flop (caup e)))
+          (|| (fixp (caup (cup e))) (flop (caup (cup e))))) 1
+      (&& (twop e) (= 1 (tally e))) (cfarith (cap e) regs)
+      (&& (twop e) (= 3 (tally e)) (memq (cap e) '(+ - * /)))
+        (&& (cfarith (caup e) regs) (cfarith (caup (cup e)) regs))
+      0)
+
+   (cfemit e regs)                               ; bytes leaving e in (xmm0,xmm1)
+   (? (symp e) (cvreg e regs)
+      (fixp e) (cat (cons 72 (cons 184 (leb e 8))) '(242 72 15 42 192  102 15 239 201))
+      (&& (twop e) (= 3 (tally e)) (idp (cap e) 'plex))
+        (cat (cons 72 (cons 184 (leb64 (fbits (caup e)) 8)))
+          (cat '(102 72 15 110 192)
+           (cat (cons 72 (cons 184 (leb64 (fbits (caup (cup e))) 8)))
+                '(102 72 15 110 200))))
+      (&& (twop e) (= 1 (tally e))) (cfemit (cap e) regs)
+      (: op (cap e) a (caup e) b (caup (cup e))
+         (cat (cfemit a regs)
+          (cat '(72 131 236 16  242 15 17 4 36  242 15 17 76 36 8)
+           (cat (cfemit b regs)
+            (cat '(242 15 16 208  242 15 16 217
+                   242 15 16 4 36  242 15 16 76 36 8  72 131 196 16)
+             (ccombine op)))))))
+
+   (acfold lam seed)
+   (: rest (cup lam) body (last rest) ps (init rest)
+      (? !(&& (= 2 (tally ps)) (all symp ps) (cfarith body (list (cons (cap ps) cr0) (cons (caup ps) cr1)))) lam
+         (: regs (list (cons (cap ps) cr0) (cons (caup ps) cr1))
+            code (forge (l2b (cat '(242 68 15 16 224  242 68 15 16 233    ; xmm12=acc.re ; xmm13=acc.im
+                                    242 68 15 16 242  242 68 15 16 251)   ; xmm14=cell.re ; xmm15=cell.im
+                             (cat (cfemit body regs) '(195)))))
+            (\ in (acreduce code seed in))))))
+
 ; ============================================================================
 ; SELF-CHECK: the native complex kernel must equal love's elementwise c-array ops,
 ; bit-for-bit. (aeq a b) = every cell equal.
@@ -109,4 +156,12 @@
    _ (ck "x*x/x c    " (dvm cv)   ((cv * cv) / cv)) ; back to cv (up to fp)
    _ (ck "x+~(.5 1.5)" (lit cv)   (cv + ~(0.5 1.5)))  ; complex literal add
    _ (ck "x*i  (rot) " (rot cv)   (cv * ~(0 1)))       ; multiply by i
+   (cks nm got want)                              ; the fold returns a complex SCALAR
+     (: ok (got = want)
+        _ (dot (+ nm (+ ": " (+ (show got) (+ (? ok "  ==  " "  =/=  ") (+ (show want) (? ok "\n" "  FAIL\n")))))))
+        (? ok 0 (pin bad 0 (+ 1 (peep bad 0 0)))))
+   sumc (acfold '(\ acc x (+ acc x)) ~0)          ; complex sum -> asum
+   prodc (acfold '(\ acc x (* acc x)) ~1)         ; complex product -> aprod (complex mul!)
+   _ (cks "sum  c     " (sumc cv)   (asum cv))     ; ~(1 2)+~(3 4) = ~(4 6)
+   _ (cks "prod c     " (prodc cv)  (aprod cv))    ; ~(1 2)*~(3 4) = ~(-5 10)
    _ (dot (? (peep bad 0 0) (+ (show (peep bad 0 0)) " FAILED\n") "ALL PASS\n")))

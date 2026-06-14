@@ -111,7 +111,7 @@ lvm_t lvm_kcall,
  lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through g_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_twop,
- lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_call2, lvm_amap, lvm_amap2, lvm_areduce, lvm_armap, lvm_armapz, lvm_acmap, lvm_respec, lvm_fbits, lvm_forge,
+ lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_call2, lvm_amap, lvm_amap2, lvm_areduce, lvm_armap, lvm_armapz, lvm_arreduce, lvm_acmap, lvm_acreduce, lvm_respec, lvm_fbits, lvm_forge,
  lvm_fixp,  lvm_symp,   lvm_strp,   lvm_mapp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
@@ -589,7 +589,8 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_call, "call", s2(lvm_call)) _(nif_call2, "call2", s3(lvm_call2))\
  _(nif_amap, "amap", s3(lvm_amap)) _(nif_amap2, "amap2", s4(lvm_amap2))\
  _(nif_areduce, "areduce", s3(lvm_areduce)) _(nif_armap, "armap", s3(lvm_armap))\
- _(nif_armapz, "armapz", s3(lvm_armapz)) _(nif_acmap, "acmap", s3(lvm_acmap)) _(nif_respec, "respec", s2(lvm_respec))\
+ _(nif_armapz, "armapz", s3(lvm_armapz)) _(nif_arreduce, "arreduce", s3(lvm_arreduce))\
+ _(nif_acmap, "acmap", s3(lvm_acmap)) _(nif_acreduce, "acreduce", s3(lvm_acreduce)) _(nif_respec, "respec", s2(lvm_respec))\
  _(nif_fbits, "fbits", s1(lvm_fbits)) _(nif_forge, "forge", s1(lvm_forge))\
  _(nif_twop, "twop", s1(lvm_twop)) _(nif_strp, "strp", s1(lvm_strp))\
  _(nif_real, "real", s1(lvm_real)) _(nif_flop, "flop", s1(lvm_flop))\
@@ -3840,6 +3841,20 @@ lvm(lvm_armapz) {
  }
  return Sp[2] = out, Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, out at the new top
 
+// (arreduce code init in) — FLOAT fold: acc = init; acc = fn(acc, cell) over r-array
+// `in`; return acc as a boxed float. fn is g_flo_t(*)(g_flo_t,g_flo_t) (acc in
+// %xmm0, cell in %xmm1, result %xmm0). Matches asum/aprod over an r-array.
+lvm(lvm_arreduce) {
+ if (!(bufp(Sp[0]) && (fixp(Sp[1]) || flop(Sp[1]) || widep(Sp[1]) || bigp(Sp[1]))
+       && arrp(Sp[2]) && tuple(Sp[2])->type == g_R))
+  return Sp[2] = Sp[1], Sp += 2, Ip++, Continue();
+ Have(box_req);
+ g_flo_t (*fn)(g_flo_t, g_flo_t) = (g_flo_t (*)(g_flo_t, g_flo_t)) txt(buf_str(Sp[0]));
+ g_flo_t *ic = (g_flo_t*) tuple_data(tuple(Sp[2])), acc = toflo(Sp[1]);
+ for (uintptr_t i = 0, n = tuple_nelem(tuple(Sp[2])); i < n; i++) acc = fn(acc, ic[i]);
+ word _res; emit_flo(acc);
+ return Sp[2] = _res, Sp += 2, Ip++, Continue(); }   // arity 3
+
 // (acmap code in out) — the COMPLEX array kernel. g_C cells are interleaved
 // (re,im) f64 pairs; the SysV ABI passes/returns a two-double struct in %xmm0
 // (re) and %xmm1 (im), so fn is struct g_c2(*)(struct g_c2). in/out are
@@ -3858,6 +3873,24 @@ lvm(lvm_acmap) {
   }
  }
  return Sp[2] = out, Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, out at the new top
+
+// (acreduce code init in) — COMPLEX fold: acc = init; acc = fn(acc, cell) over
+// c-array `in`; return acc as a boxed complex scalar. fn is struct g_c2(*)(struct
+// g_c2, struct g_c2) (acc in %xmm0/%xmm1, cell in %xmm2/%xmm3 by the SysV
+// two-struct ABI; result in %xmm0/%xmm1). Matches asum/aprod over a c-array.
+lvm(lvm_acreduce) {
+ if (!(bufp(Sp[0]) && Cp(Sp[1]) && arrp(Sp[2]) && tuple(Sp[2])->type == g_C))
+  return Sp[2] = Sp[1], Sp += 2, Ip++, Continue();
+ Have(cplx_req);
+ struct g_c2 (*fn)(struct g_c2, struct g_c2) =
+   (struct g_c2 (*)(struct g_c2, struct g_c2)) txt(buf_str(Sp[0]));
+ double *ic = (double*) tuple_data(tuple(Sp[2]));
+ struct g_c2 acc = { cplx_re(Sp[1]), cplx_im(Sp[1]) };
+ for (uintptr_t i = 0, n = tuple_nelem(tuple(Sp[2])); i < n; i++)
+  acc = fn(acc, (struct g_c2){ ic[2*i], ic[2*i+1] });
+ struct g_tuple *bx = ini_scalar((struct g_tuple*) Hp, g_C); Hp += cplx_req;
+ cplx_put(bx, acc.re, acc.im);
+ return Sp[2] = word(bx), Sp += 2, Ip++, Continue(); }   // arity 3
 
 // (respec lam src) — override a source-bearing lambda's stashed \-expr (value[-1])
 // with `src`, so `=` and printing see `src` while the lambda still RUNS its own
