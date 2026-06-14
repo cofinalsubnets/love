@@ -55,8 +55,9 @@
    (? !(twop e) e                                       ; atom: unchanged
       (qual e) (: _ (pin jstat 0 (+ 1 (peep jstat 0 0))) (list '\ (jit e)))  ; count + (\ p arith) -> (\ <native closure>)
       (: h (cap e)
-       (? (idp h '\) (? (= 2 (tally e)) e               ; (\ d): quote = DATA, leave verbatim
-                        (cons '\ (map jit-walk (cup e))))  ; other lambda: walk body, keep params
+       (? (idp h '\) e          ; any other \-form (quote / non-qual lambda): leave ENTIRELY --
+                                ; never rewrite a lambda body, else the enclosing lambda's stashed
+                                ; \-expr changes, breaking its show (de Bruijn) and = (salpha)
           (idp h 'qq) e                                 ; quasiquote: DATA, leave (conservative)
           (idp h '::) e                                 ; macro def: template is data, leave
           (map jit-walk e)))))                          ; application / : / ? : walk every element

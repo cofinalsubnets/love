@@ -357,6 +357,17 @@ static char const cli[] =
 static char const
  rel[] = "(zevs in)";   // non-tty stdin: the stream shell (repl.l) drinks the in port
 
+#ifdef __x86_64__
+// The native-JIT self-installer (jit/install.l), baked in and run AFTER the egg so
+// `born` is set and `forge` works. It pins book['opjit], arming the opfix hook so
+// every qualifying (\ p <arith>) compiled hereafter -- by c0 AND the self-hosted
+// wev -- becomes native machine code. = is preserved (respec), so the language is
+// unchanged; x86_64-only because the codegen emits x86 bytes.
+static char const opjit_src[] =
+#include "opjit.h"
+ ;
+#endif
+
 static struct g *boot(struct g *g, bool argp) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
@@ -368,6 +379,9 @@ static struct g *boot(struct g *g, bool argp) {
     "))"
 #include "repl.h"
   );
+#ifdef __x86_64__
+  g = g_evals_(g, opjit_src);   // arm the native JIT (self-install)
+#endif
   return g_evals_(g, argp ? cli : replp ? "(shell 0)" : rel); }
 #endif
 

@@ -68,6 +68,11 @@ $(lib_h): out/lib/%.h: love/%.$x $(love0) tools/lcat.$x
 	@mkdir -p out/lib
 	@echo GEN	$@
 	@$(love0) -l love/prelude.$x tools/lcat.$x $< > $@
+# the x86_64 opjit self-installer (jit/install.l, outside love/ since it's x86 codegen).
+out/lib/opjit.h: jit/install.$x $(love0) tools/lcat.$x
+	@mkdir -p out/lib
+	@echo GEN	$@
+	@$(love0) -l love/prelude.$x tools/lcat.$x $< > $@
 out/lib/%0.h: love/%.$x
 	@mkdir -p out/lib
 	@echo GEN	$@
@@ -168,7 +173,7 @@ $(ho)/love.o $(ho)/0/love.o: out/lib/love_version.h
 
 # main.c is compiled into the final l inline (G_EGG_PRE/POST assemble the lib
 # headers); depend on them so it relinks when a lib source changes.
-$(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h out/lib/cli.h $(hdata_h) $(data_ld)
+$(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h out/lib/cli.h out/lib/opjit.h $(hdata_h) $(data_ld)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm

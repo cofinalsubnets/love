@@ -162,11 +162,39 @@ Two subtleties this surfaced:
   factored expression as `((…))` (the empty-application identity). `arithp`/`emit`
   peel that single-element wrapper, so **infix arith inside lambdas jits too**.
 
-Still deferred for a fully-baked-in (no runtime installer) version: arch
-detection in C and shipping the x86 codegen in the corpus (it would bloat the
-aarch64/wasm eggs with dead code). The dormant `book['opjit]` seam is the
-permanent hook; the installer stays host/arch-specific. Known gaps (safe — only
-missed coverage): lambdas inside quasiquote-unquotes or unexpanded macro args.
+## Self-installing — `jit/install.l` + `main.c` (always-on, x86_64)
+
+The host `love` binary now **arms opjit at boot**: `main.c`, under `#ifdef
+__x86_64__`, runs `jit/install.l` through `g_evals_` *after* the egg (so `born` is
+set and `forge` works). `install.l` is the self-contained codegen wrapped in one
+`(: opjit (: <helpers> jit-walk))` so **only `opjit` leaks** — it pins the hook,
+and from boot on every qualifying lambda compiled by *either* compiler goes
+native, transparently. x86_64-only (the codegen emits x86 bytes); aarch64/wasm
+never compile it (the `#ifdef`), so no egg bloat.
+
+**The whole corpus runs through opjit** in the gate (`make test` 2528 ×3, `make
+valg` 2528 with 0 errors/leaks) — the strongest validation: the JIT is exercised
+against the entire language, and the bootstrap depends on it.
+
+Making it transparent took two more fixes beyond re-entry and the `(f)==f`
+wrapper:
+- **`=` preservation (`respec`).** `eqv` is `fn_src`-based, so a native closure
+  would break closure equality and the `1=(\ x x)` / `0=(\ _ 1)` bridges. `jit`
+  builds the wrapper with the forged buf + VM fallback as *quoted constants* (no
+  captures → not `fn_partialp`), then `(respec w lam)` overrides its stashed
+  `\`-expr with the **original** source. Now a jitted closure `=` the interpreted
+  one exactly, while running native.
+- **Never rewrite a lambda body.** `jit-walk` only rewrites a *directly* qualifying
+  lambda; any other `\`-form is left **entirely** (it does not recurse into the
+  body). Rewriting a body would change the *enclosing* lambda's stashed `\`-expr,
+  breaking its `show` (de Bruijn, e.g. `(\ x (\ x x))` → `(\ d0 (\ d1 d1))`) and
+  its `=`. Lambdas in `:`/application bodies are still reached (those forms are
+  walked); only lambdas literally nested in another lambda's body are skipped.
+
+Known gaps (safe — only missed coverage, never miscompilation): lambdas literally
+nested in another lambda's body, and lambdas inside quasiquote-unquotes or
+unexpanded macro args. The kernel/wasm frontends don't self-install (host-only for
+now); `jit/opjit.l` remains the explicit runtime installer (same logic).
 
 ## Array kernels — `amap` + `jit/array.l`
 
