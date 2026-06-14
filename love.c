@@ -940,7 +940,17 @@ g_noinline struct g *g_please(struct g *g, uintptr_t req0) {
  uintptr_t const
   v_lo = 4,
   v_hi = v_lo * v_lo,
-  req = req0 + len0 - avail(g),
+  used = len0 - avail(g),                        // live set after this compaction (heap + stack)
+  // HEADROOM is mandatory, not just the immediate request. Each collection
+  // rebuilds the weak intern table fresh in the free sliver between hp and sp
+  // (symbols_rebuild). If the pool is sized to barely fit `req0 + used` it runs
+  // at ~100% load: that sliver shrinks to a couple of words, and a live stack
+  // root can come to alias the rebuilt backing -- the next collection then
+  // forwards through that root and stamps a forwarding pointer over the
+  // backing's cap field (garbage cap -> bump trap). Keeping >= 1/4 of the live
+  // set free holds the table clear of the roots. (See test/jit two-file load:
+  // 197 nifs fit, 198 tipped boot to the 2-word sliver and SIGILL'd.)
+  req = req0 + used + (used >> 2),
   t2 = g_clock();
  uintptr_t
   len1 = len0,
