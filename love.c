@@ -5530,10 +5530,11 @@ lvm(lvm_asum) {
   for (; i + 4 <= n; i += 4) a0+=tuple_get_flo(v,i), a1+=tuple_get_flo(v,i+1), a2+=tuple_get_flo(v,i+2), a3+=tuple_get_flo(v,i+3);
   for (; i < n; i++) a0 += tuple_get_flo(v, i);
   emit_flo((a0+a1)+(a2+a3)); }
- else {
-  intptr_t a = 0;
-  for (uintptr_t i = 0; i < n; i++) a = (intptr_t) ((uintptr_t) a + (uintptr_t) tuple_get_int(v, i));
-  emit_int(a); }
+ else {                                         // K=4 (modular, Z/2^64 is a commutative ring -> assoc+exact)
+  uintptr_t a0=0,a1=0,a2=0,a3=0, i = 0;
+  for (; i + 4 <= n; i += 4) a0+=(uintptr_t)tuple_get_int(v,i), a1+=(uintptr_t)tuple_get_int(v,i+1), a2+=(uintptr_t)tuple_get_int(v,i+2), a3+=(uintptr_t)tuple_get_int(v,i+3);
+  for (; i < n; i++) a0 += (uintptr_t) tuple_get_int(v, i);
+  emit_int((intptr_t) ((a0+a1)+(a2+a3))); }
  return Sp[0] = _res, Ip++, Continue(); }
 
 lvm(lvm_aprod) {
@@ -5573,9 +5574,11 @@ lvm(lvm_aprod) {
   for (; i + 4 <= n; i += 4) a0*=tuple_get_flo(v,i), a1*=tuple_get_flo(v,i+1), a2*=tuple_get_flo(v,i+2), a3*=tuple_get_flo(v,i+3);
   for (; i < n; i++) a0 *= tuple_get_flo(v, i);
   emit_flo((a0*a1)*(a2*a3)); }
- else { intptr_t a = 1;
-  for (uintptr_t i = 0; i < n; i++) a = (intptr_t)((uintptr_t) a * (uintptr_t) tuple_get_int(v, i));
-  emit_int(a); }
+ else {                                         // K=4 (modular product; imul is latency-bound, ~3x)
+  uintptr_t a0=1,a1=1,a2=1,a3=1, i = 0;
+  for (; i + 4 <= n; i += 4) a0*=(uintptr_t)tuple_get_int(v,i), a1*=(uintptr_t)tuple_get_int(v,i+1), a2*=(uintptr_t)tuple_get_int(v,i+2), a3*=(uintptr_t)tuple_get_int(v,i+3);
+  for (; i < n; i++) a0 *= (uintptr_t) tuple_get_int(v, i);
+  emit_int((intptr_t) ((a0*a1)*(a2*a3))); }
  return Sp[0] = _res, Ip++, Continue(); }
 
 // max / min over a non-empty array (kind 2 = max, 3 = min, matching ored);
