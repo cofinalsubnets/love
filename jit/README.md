@@ -96,13 +96,42 @@ div-by-zero cases:
 out/host/love jit/kernel.l        # x86_64 host: every line "==", then ALL PASS
 ```
 
-This is roadmap **step 2**. To make it automatic, the same logic hooks into the
-self-hosted lambda analyzer (`love/ev.l`, where `(= (cap e) '\)`), behind two
-mandatory guards: `born` (a forged buf is a host `mmap` address — it can **never**
-be baked into the egg) and target arch (x86_64 only; the VM stays the portable
-fallback, since wasm can't execute forged bytes and each arch needs its own
-codegen). Like `forge.l`/`probe.l`, it's a standalone x86_64 file with its own
-self-check, kept out of the architecture-neutral gate corpus.
+This is roadmap **step 2**. The kernel takes a single-param `(\ p <arith>)` with
+any param name (`p` is re-derived from `%rdi` on each use, so its spelling is
+irrelevant to the codegen).
+
+## The automatic hook — `jit/auto.l`
+
+Makes a qualifying `(\ p <arith>)` go native with **no explicit `(jit …)` call** —
+defining a lambda the normal way, or passing one to a higher-order function, just
+goes fast. Load it after the kernel:
+
+```sh
+out/host/love -l jit/kernel.l jit/auto.l   # kernel ALL PASS, then the hook demo, ALL PASS
+```
+
+The seam is the **global `ev`**. The repl and the cli/`g_evals_` loader compile
+each form via the late-bound `(ev 'ev form)` — the symbol `ev` is evaluated fresh
+every time — so redefining the global `ev` is picked up immediately. The new `ev`
+is `(\ form (base-ev (jit-walk form)))`: a source→source pass that rewrites every
+qualifying `(\ p <arith>)` into `(\ <forged native closure>)` (a quote of the
+closure value), then hands the result to the real compiler. The forge happens
+once, at compile time, per lambda expression. `jit-walk` is **conservative about
+the reader's code/data split** — it leaves quote (`(\ d)`, one operand),
+quasiquote (`(qq …)`), and macro-defs (`(:: …)`) verbatim, so it can never corrupt
+data, while still walking application/`:`/`?` subforms and lambda bodies (so a
+`(\ p arith)` in argument position — the HOF case — is caught). Verified: ordinary
+code and quoted data pass through untouched.
+
+**Why this is a runtime redefinition, not a compiler change.** The production hook
+belongs in `opfix` (which already has the exact code/data traversal), guarded by
+`born` (a forged buf is a host `mmap` address — it can **never** be baked into the
+egg) and target arch (x86_64 only; the VM stays the portable fallback, since wasm
+can't execute forged bytes and each arch needs its own codegen). That's a compiler
+change needing a full re-gate; redefining `ev` at runtime demonstrates the exact
+behavior with **zero risk to the bootstrap**. Known gaps (safe — they only miss
+coverage, never miscompile): lambdas inside quasiquote-unquotes or unexpanded
+macro args aren't reached. Standalone x86_64, kept out of the gate corpus.
 
 ## Reproducing the probe (x86_64 + qemu)
 

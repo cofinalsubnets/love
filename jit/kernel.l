@@ -32,14 +32,14 @@
 ; or r8b,r9b` after every op makes r8 a sticky OF accumulator, and the epilogue
 ; folds in the range check, so there are NO forward jumps to backpatch.
 
-; --- the recognizer: is e a closed arith expr in the single variable x? ---
+; --- the recognizer: is e a closed arith expr in the single variable v? ---
 ; (literals are non-negative fixnums: a negative literal needs two's-complement
 ; byte emission, deferred; negative *results* already work via the signed untag.)
-(: (arithp e)
-   (? (symp e) (idp e 'x)
+(: (arithp e v)
+   (? (symp e) (idp e v)                       ; the bound variable (any single name, not just x)
       (&& (fixp e) (<= 0 e)) 1
       (&& (twop e) (= 3 (tally e)) (memq (cap e) '(+ - * // % < <= > >= =)))
-        (&& (arithp (caup e)) (arithp (caup (cup e))))
+        (&& (arithp (caup e) v) (arithp (caup (cup e)) v))
       0))
 
 ; --- little-endian n bytes of a non-negative integer ---
@@ -115,11 +115,13 @@
       _ ((: (go i l) (? l (: _ (pin b i (cap l)) (go (+ i 1) (cup l))) 0)) 0 bs)
       b))
 
-; --- THE DRIVER: a (\ x <arith>) source form -> a native closure (VM fallback) ---
+; --- THE DRIVER: a single-param (\ p <arith>) source form -> a native closure
+; (VM fallback). The body's only free name must be the parameter p; emit re-derives
+; p from %rdi on each use, so the param's spelling is irrelevant to the codegen. ---
 (: (jit lam)
-   (: body (caup (cup lam))
+   (: param (caup lam) body (caup (cup lam))
       vm (ev lam)                               ; the interpreter compile -- always available
-      (? !(arithp body) vm                      ; not JIT-able: hand back the VM closure
+      (? !(arithp body param) vm                ; not JIT-able: hand back the VM closure
          (: code (forge (l2b (cat prologue (cat (emit body) epilogue))))
             (\ a (: v (call code a)             ; v = 2R (even, success) or 1 (odd, bail)
                     (? (& v 1) (vm a) (// v 2))))))))   ; odd -> interpret; even -> R
@@ -153,5 +155,7 @@
    _ (ck "x>=x*x   " 1          '(\ x (>= x (* x x))))         ; 1>=1 -> 1
    _ (ck "x=42     " 42         '(\ x (= x 42)))               ; equality -> 1
    _ (ck "(x%2)<1  " 8          '(\ x (< (% x 2) 1)))          ; even? composed: % then <
+   _ (ck "n*n+n (n)" 6          '(\ n (+ (* n n) n)))          ; param named n, not x: generalized
+   _ (ck "ident (q)" 99         '(\ q q))                      ; identity, param q
    _ (ck "fallback " 5          '(\ x (cap x)))                 ; non-arith: jit == vm (both interpret)
    _ (dot (? (peep bad 0 0) (+ (show (peep bad 0 0)) " FAILED\n") "ALL PASS\n")))
