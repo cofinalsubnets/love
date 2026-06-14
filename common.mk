@@ -25,7 +25,7 @@ g_c = $R/love.c $R/data.c
 f_c = $(wildcard $R/font/*.c)
 c_c = $(wildcard $R/libc/*.c)
 
-g_cflags = -std=gnu23 -g -O2 -pipe \
+g_cflags = -std=gnu23 -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector \

@@ -564,6 +564,17 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
 #define s3(i) {{lvm_cur},{.x=putfix(3)},{i}, {lvm_ret0}}
 #define s4(i) {{lvm_cur},{.x=putfix(4)},{i}, {lvm_ret0}}
 #define s5(i) {{lvm_cur},{.x=putfix(5)},{i}, {lvm_ret0}}
+// HARNESS (compile-gated, -DG_FAULT_TEST): __fault deliberately derefs null to
+// raise a hardware fault inside eval -- the one in-eval fault a user can trigger to
+// probe the g_eval fault barrier (the raw fault nifs lamb/peek/poke/seek are pulled
+// from the image at birth, so nothing else reaches it). NEVER in a shipping or kernel
+// build (the kernel has no signal recovery -- it would crash qemu).
+#ifdef G_FAULT_TEST
+lvm_t lvm_fault;
+#define NIF_FAULT(_) _(nif_fault, "__fault", s1(lvm_fault))
+#else
+#define NIF_FAULT(_)
+#endif
 #define nifs(_) \
  _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge))\
  _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
@@ -618,7 +629,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_fputc, "fputc", s2(lvm_fputc)) _(nif_fputs, "fputs", s2(lvm_fputs))  _(nif_fflush, "fflush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
  _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
- _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))
+ _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next)) NIF_FAULT(_)
 #define native_implemented_function(n, _, d) static union u const n[] = d;
 #define insts(_) _(lvm_unc) _(lvm_freev) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
@@ -1221,15 +1232,63 @@ static lvm(_lvm_yieldk) { return
  encode(g, g_status_yield); }
 
 
+#if __STDC_HOSTED__
+#include <signal.h>
+#include <setjmp.h>
+// THE FAULT BARRIER infra -- shared by g_eval (below) and call (lvm_call). A hardware
+// fault (SIGSEGV/SIGILL/SIGBUS/SIGFPE) inside an armed region siglongjmps to the
+// innermost barrier and becomes a survivable love condition; outside any barrier the
+// default handler runs, so a genuine crash stays a crash. Host-only: the kernel has no
+// signal layer (its fault vectors are a separate hookup). g_fault_jb is always the
+// INNERMOST barrier (each entry saves/restores it), so a fault in a native (call) body
+// recovers there (-> 0) while a fault in plain eval recovers at the g_eval barrier.
+static sigjmp_buf g_fault_jb;
+static volatile sig_atomic_t g_fault_depth;   // nesting depth of active barriers (the handler gate)
+static void g_fault_sig(int s) {
+ if (g_fault_depth) siglongjmp(g_fault_jb, s);
+ signal(s, SIG_DFL), raise(s); }
+static void g_fault_arm(void) {
+ static int armed; if (armed) return; armed = 1;
+ struct sigaction sa; memset(&sa, 0, sizeof sa);
+ sa.sa_handler = g_fault_sig; sigemptyset(&sa.sa_mask); sa.sa_flags = SA_NODEFER;
+ sigaction(SIGSEGV, &sa, 0); sigaction(SIGILL, &sa, 0);
+ sigaction(SIGBUS, &sa, 0); sigaction(SIGFPE, &sa, 0); }
+#if g_tco
+static volatile sig_atomic_t g_eval_armed;          // an outermost g_eval barrier is already up
+static struct g *g_eval_fault_raise(struct g *c);   // recovery, defined just after g_raise
+#endif
+#endif
+
 static struct g *g_eval(struct g *g) {
  g = c0(g, _lvm_yieldk);
-#if g_tco
+#if __STDC_HOSTED__ && g_tco
+ // The barrier wraps the VM RUN of the OUTERMOST eval: a fault anywhere below (a bad
+ // native call, a null deref, an ill-formed op) unwinds here, the stack resets to the
+ // eval boundary, and the fault is re-raised as a catchable scare through `help` --
+ // transparent, up through object-array ops, lamb, and (ev ..). Nested evals run inside
+ // this one barrier (g_eval_armed); compilation (c0, above) is outside it.
+ if (!g_ok(g)) return g;
+ if (g_eval_armed) return g->ip->ap(g, g->ip, g->hp, g->sp);
+ g_fault_arm();
+ struct g *volatile vg = g; word *volatile esp = g->sp;   // entry g/sp, volatile across sigsetjmp
+ sigjmp_buf prev; memcpy(&prev, &g_fault_jb, sizeof prev);
+ g_eval_armed = 1, g_fault_depth++;
+ if (sigsetjmp(g_fault_jb, 1) == 0) {
+  struct g *r = g->ip->ap(g, g->ip, g->hp, g->sp);
+  g_fault_depth--, g_eval_armed = 0, memcpy(&g_fault_jb, &prev, sizeof prev);
+  return r; }
+ g_fault_depth--, g_eval_armed = 0, memcpy(&g_fault_jb, &prev, sizeof prev);
+ ((struct g *) vg)->sp = esp;                             // FAULTED: reset stack, raise a scare
+ return g_eval_fault_raise((struct g *) vg);
+#elif g_tco
  if (g_ok(g)) g = g->ip->ap(g, g->ip, g->hp, g->sp);
+ return g;
 #else
  while (g_ok(g)) g = g->ip->ap(g);
  if (g_code_of(g) == g_status_eof) g = g_core_of(g);
+ return g;
 #endif
- return g; }
+}
 
 static word lidx(struct g*g, word x, word l) {
  word i = 0;
@@ -1714,6 +1773,15 @@ static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
  return t->ap(encode(c, s));
 #endif
 }
+#if __STDC_HOSTED__ && g_tco
+// The g_eval barrier's recovery (see g_eval): a caught hardware fault becomes a scare
+// delivered to `help`, like any other condition. The payload is generic -- a fault has
+// no love-level datum -- so the shell-help prints its face and the session survives.
+// Safe when the heap is intact at the fault (a bad native call, a null deref in a leaf
+// op); a fault mid-mutation or mid-GC is the residual unrecoverable corner.
+static struct g *g_eval_fault_raise(struct g *c) {
+ return g_raise(c, g_status_scare, nil, nil, help_scare_k); }
+#endif
 struct g *ghelp2(struct g *g, enum g_status s) {
  struct g *c = g_core_of(g);
  int rd = s & g_status_more;       // the more bit: a read-end condition --
@@ -3729,6 +3797,10 @@ lvm(lvm_bufnew) {
 // responsibility -- an ill-formed body is a hard crash, by design. AArch64 must
 // __builtin___clear_cache(txt(s), txt(s)+len(s)) before the jump (I-cache not
 // coherent with freshly-written D-cache); omitted for the x86_64 probe.
+#ifdef G_FAULT_TEST   // harness: trigger a hardware fault inside eval (see nifs)
+lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putfix(0), Ip++, Continue(); }
+#endif
+
 // THE FAULT BARRIER (hosted). Running forged/native code is love's one
 // un-survivable corner: an ill-formed body faults the CPU (SIGSEGV/SIGILL/...),
 // below help. call_run wraps the native call in a sigsetjmp; a fault during it is
@@ -3740,25 +3812,14 @@ lvm(lvm_bufnew) {
 // (The broad version -- a barrier at g_eval turning faults in object-array ops,
 // lamb, etc. into scares -- reuses this same handler; that's the next step.)
 #if __STDC_HOSTED__
-#include <signal.h>
-#include <setjmp.h>
-static sigjmp_buf call_jb;
-static volatile sig_atomic_t call_depth;
-static void call_sig(int s) {
- if (call_depth) siglongjmp(call_jb, s);          // faulted inside (call ..) -> recover
- signal(s, SIG_DFL), raise(s); }                  // a genuine love fault: let it die
 static g_noinline g_word call_run(void *fnp, g_word x, g_word y, int two, int *bad) {
- static int armed;
- if (!armed) { armed = 1; struct sigaction sa = {0};
-  sa.sa_handler = call_sig; sigemptyset(&sa.sa_mask); sa.sa_flags = SA_NODEFER;
-  sigaction(SIGSEGV, &sa, 0); sigaction(SIGILL, &sa, 0);
-  sigaction(SIGBUS, &sa, 0); sigaction(SIGFPE, &sa, 0); }
- sigjmp_buf prev; memcpy(&prev, &call_jb, sizeof prev);   // save outer (nesting)
- if (sigsetjmp(call_jb, 1) == 0) {
-  call_depth++;
+ g_fault_arm();                                          // shared barrier (defined before g_eval)
+ sigjmp_buf prev; memcpy(&prev, &g_fault_jb, sizeof prev);   // save outer (nesting)
+ g_fault_depth++;
+ if (sigsetjmp(g_fault_jb, 1) == 0) {
   g_word r = two ? ((g_word (*)(g_word, g_word)) fnp)(x, y) : ((g_word (*)(g_word)) fnp)(x);
-  call_depth--; *bad = 0; memcpy(&call_jb, &prev, sizeof prev); return r; }
- call_depth--; *bad = 1; memcpy(&call_jb, &prev, sizeof prev); return 0; }  // recovered from a fault
+  g_fault_depth--; *bad = 0; memcpy(&g_fault_jb, &prev, sizeof prev); return r; }
+ g_fault_depth--; *bad = 1; memcpy(&g_fault_jb, &prev, sizeof prev); return 0; }  // recovered from a fault
 #else
 static g_word call_run(void *fnp, g_word x, g_word y, int two, int *bad) {  // freestanding: no signals (yet)
  *bad = 0; return two ? ((g_word (*)(g_word, g_word)) fnp)(x, y) : ((g_word (*)(g_word)) fnp)(x); }
