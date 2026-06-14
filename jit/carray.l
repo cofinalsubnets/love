@@ -151,36 +151,49 @@
          (cat '(242 68 15 16 52 207  242 68 15 16 124 207 8) (cacc (cap u)))  ; load re,im ; lanes
          ()))
 
-   ; --- SIMD complex-PRODUCT kernel (cprodw, forged once; serves any seed). Keeps
-   ; strict left-to-right order -- ONE cell per iteration -- so it is bit-exact with
-   ; aprod (no reassociation), but does the per-cell complex multiply with PACKED
-   ; doubles via the SSE3 addsubpd idiom: acc=[re,im] in xmm12, cell=[c,d] loaded
-   ; with a single 16-byte movupd, and (a+bi)(c+di) = [ac-bd, bc+ad] falls out of
-   ; movddup/unpckhpd/shufpd + 2 mulpd + addsubpd. One 16B load and 2 packed muls
-   ; per cell instead of two movsd + 4 mulsd. (Needs SSE3 -- universal on x86_64
-   ; in practice; this is a host-only opt-in lib.) Loop body is a FIXED 64 bytes,
-   ; so the jump rel32s are constants: jge done = 55, jmp loop = -64. ---
-   cprodw (forge (l2b (cat
-            '(102 15 20 193  102 68 15 40 224  72 209 230  72 49 201)  ; unpcklpd xmm0,xmm1(=[re,im]); movapd xmm12,xmm0; shl rsi,1; xor rcx,rcx
-            (cat '(72 57 241  15 141)                                  ; cmp rcx,rsi ; jge done
-             (cat (leb64 55 4)                                         ;   rel = 55
-              (cat '(102 68 15 16 52 207                               ; movupd xmm14,[rdi+rcx*8]  ([c,d])
-                     242 65 15 18 198                                  ; movddup xmm0,xmm14        ([c,c])
-                     102 69 15 21 246                                  ; unpckhpd xmm14,xmm14      ([d,d])
-                     102 65 15 40 204                                  ; movapd xmm1,xmm12         ([a,b])
-                     102 15 89 200                                     ; mulpd xmm1,xmm0           ([ac,bc])
-                     102 69 15 198 228 1                               ; shufpd xmm12,xmm12,1      ([b,a])
-                     102 69 15 89 230                                  ; mulpd xmm12,xmm14         ([bd,ad])
-                     102 65 15 208 204                                 ; addsubpd xmm1,xmm12       ([ac-bd,bc+ad])
-                     102 68 15 40 225                                  ; movapd xmm12,xmm1         acc=[re,im]
-                     72 131 193 2  233)                                ; add rcx,2 ; jmp loop
-               (cat (leb64 (- 0 64) 4)                                 ;   rel = -64
-                '(102 65 15 40 196  102 65 15 40 204  102 15 21 201  195)))))))) ; movapd xmm0,xmm12; movapd xmm1,xmm12; unpckhpd xmm1,xmm1(=im); ret
+   ; --- MULTI-ACCUMULATOR complex-PRODUCT kernel (cprodw, K=4, forged once). A
+   ; product fold is LATENCY-bound -- acc_n depends on acc_n-1, so one sequential
+   ; chain stalls on the multiply latency. Four independent packed accumulators
+   ; (acc0..3 = xmm12,13,11,10), each taking every 4th cell and recombined at the
+   ; end, overlap four chains and run ~2.8x faster than aprod (K=2 1.6x, K=4 2.8x,
+   ; K=6 3.3x, saturating ~K=4-5). This REASSOCIATES the product, which is SOUND:
+   ; * is a commutative monoid, so the product's value is grouping-invariant BY
+   ; DEFINITION; IEEE * is commutative-but-not-associative, so groupings differ only
+   ; in the last-bit rounding -- each an equally valid approximation of the one true
+   ; product (aprod's left-to-right order is just one arbitrary choice, not canon).
+   ; Per cell: one 16B movupd + the SSE3 addsubpd complex-mul idiom. The main loop
+   ; does K cells (tail folds the <K remainder into acc0); offsets from segment
+   ; lengths. Needs SSE3; host-only opt-in lib. ---
+   (pcmul a)                                            ; xmm_a *= xmm14 (packed cell), scratch xmm0,1
+   (: lo (& a 7) m1 (| 200 lo) sh (| 192 (| (<< lo 3) lo)) mu (| 192 (| (<< lo 3) 6)) mv (| 192 (| (<< lo 3) 1))
+      (L 242 65 15 18 198  102 69 15 21 246  102 65 15 40 m1  102 15 89 200      ; movddup;unpckhpd;movapd xmm1,a;mulpd xmm1,xmm0
+         102 69 15 198 sh 1  102 69 15 89 mu  102 65 15 208 m1  102 68 15 40 mv)); shufpd a;mulpd a,xmm14;addsubpd xmm1,a;movapd a,xmm1
+   (cpmovq a)  (L 102 76 15 110 (| 192 (<< (& a 7) 3)))    ; movq xmm_a,rax   (init an accumulator to 1.0)
+   (cpmv14 a)  (L 102 69 15 40 (| 240 (& a 7)))            ; movapd xmm14,xmm_a (move an acc into the cell slot to recombine)
+   (cpld o) (? (= o 0) '(102 68 15 16 52 207) (L 102 68 15 16 116 207 o))   ; movupd xmm14,[rdi+rcx*8(+o)]
+   cpone (cons 72 (cons 184 (leb64 4607182418800017408 8)))                 ; mov rax, bits(1.0)
+   (cpbuild accs)                                        ; accs[0] MUST be 12 (init/result home)
+   (: k (tally accs) stride (* 2 k)
+      ids ((: (go l) (? l (cat (cpmovq (cap l)) (go (cup l))) ())) (cup accs))      ; acc1.. = 1.0 (identity)
+      pro (cat '(102 15 20 193  102 68 15 40 224) (cat cpone (cat ids '(72 209 230  72 49 201))))  ; unpcklpd xmm0,xmm1; movapd xmm12,xmm0(=acc0=init); ids; shl rsi,1; xor rcx,rcx
+      mb ((: (go i l) (? l (cat (cat (cpld (* 16 i)) (pcmul (cap l))) (go (+ i 1) (cup l))) ())) 0 accs)  ; K cells -> acc0..K-1
+      ml (+ 10 (+ 6 (+ (tally mb) 9)))                   ; main length (check 10 + jg 6 + body + addrcx 4 + jmp 5)
+      main (cat (cat '(72 137 200  72 131 192) (cat (L stride) '(72 57 240)))       ; mov rax,rcx; add rax,stride; cmp rax,rsi
+              (cat (cat '(15 143) (leb64 (- ml 16) 4))                              ; jg tail  (rel = ml-16)
+               (cat mb (cat (cat '(72 131 193) (L stride)) (cat '(233) (leb64 (- 0 ml) 4))))))  ; add rcx,stride; jmp main
+      tb (cat (cpld 0) (pcmul 12))                       ; tail: fold one remaining cell into acc0
+      tl (+ 3 (+ 6 (+ (tally tb) 9)))
+      tail (cat '(72 57 241) (cat (cat '(15 141) (leb64 (- tl 9) 4))                ; cmp rcx,rsi; jge comb (rel = tl-9)
+               (cat tb (cat '(72 131 193 2) (cat '(233) (leb64 (- 0 tl) 4))))))     ; add rcx,2; jmp tail
+      cmb ((: (go l) (? l (cat (cat (cpmv14 (cap l)) (pcmul 12)) (go (cup l))) ())) (cup accs))  ; acc0 *= acc1..
+      comb (cat cmb '(102 65 15 40 196  102 65 15 40 204  102 15 21 201  195))      ; movapd xmm0,xmm12; movapd xmm1,xmm12; unpckhpd xmm1,xmm1(=im); ret
+      (forge (l2b (cat pro (cat main (cat tail comb))))))
+   cprodw (cpbuild '(12 13 11 10))                       ; K=4
 
    (acfoldw lam seed)
    (: rest (cup lam) body (last rest) ps (init rest) u (unwrap body)
       (? !(&& (= 2 (tally ps)) (all symp ps) (cfarith body (list (cons (cap ps) cr0) (cons (caup ps) cr1)))) lam
-         (&& (twop u) (= 3 (tally u)) (idp (cap u) '*)             ; bare complex product -> SIMD kernel
+         (&& (twop u) (= 3 (tally u)) (idp (cap u) '*)             ; bare complex product -> K=4 unroll kernel
              (idp (caup u) (cap ps)) (idp (caup (cup u)) (caup ps)))
            (\ in (cfoldw cprodw seed in))
          (: regs (list (cons (cap ps) cr0) (cons (caup ps) cr1))   ; else: the general whole-loop frame
