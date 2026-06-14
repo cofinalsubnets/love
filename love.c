@@ -5596,12 +5596,31 @@ static lvm(lvm_aextreme, int kind) {
  if (!n) return Sp[0] = nil, Ip++, Continue();
  bool fdom = v->type >= g_R, ismax = kind == 2; word _res;
  Have(box_req); v = tuple(Sp[0]);
- if (fdom) { g_flo_t m = tuple_get_flo(v, 0);
-  for (uintptr_t i = 1; i < n; i++) { g_flo_t e = tuple_get_flo(v, i); if (ismax ? e > m : e < m) m = e; }
-  emit_flo(m); }
- else { intptr_t m = tuple_get_int(v, 0);
-  for (uintptr_t i = 1; i < n; i++) { intptr_t e = tuple_get_int(v, i); if (ismax ? e > m : e < m) m = e; }
-  emit_int(m); }
+ // K=4 INDEPENDENT running extremes break the m_n<-m_n-1 latency chain. max/min
+ // are commutative+associative+idempotent, so this is EXACT (it just selects an
+ // existing element -- no rounding, unlike sum/prod). Each chain seeds from v[0].
+ if (fdom) { g_flo_t m0 = tuple_get_flo(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
+  for (; i + 4 <= n; i += 4) {
+   e = tuple_get_flo(v,i);   if (ismax?e>m0:e<m0) m0=e;
+   e = tuple_get_flo(v,i+1); if (ismax?e>m1:e<m1) m1=e;
+   e = tuple_get_flo(v,i+2); if (ismax?e>m2:e<m2) m2=e;
+   e = tuple_get_flo(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
+  for (; i < n; i++) { e = tuple_get_flo(v,i); if (ismax?e>m0:e<m0) m0=e; }
+  if (ismax?m1>m0:m1<m0) m0=m1;
+  if (ismax?m2>m0:m2<m0) m0=m2;
+  if (ismax?m3>m0:m3<m0) m0=m3;
+  emit_flo(m0); }
+ else { intptr_t m0 = tuple_get_int(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
+  for (; i + 4 <= n; i += 4) {
+   e = tuple_get_int(v,i);   if (ismax?e>m0:e<m0) m0=e;
+   e = tuple_get_int(v,i+1); if (ismax?e>m1:e<m1) m1=e;
+   e = tuple_get_int(v,i+2); if (ismax?e>m2:e<m2) m2=e;
+   e = tuple_get_int(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
+  for (; i < n; i++) { e = tuple_get_int(v,i); if (ismax?e>m0:e<m0) m0=e; }
+  if (ismax?m1>m0:m1<m0) m0=m1;
+  if (ismax?m2>m0:m2<m0) m0=m2;
+  if (ismax?m3>m0:m3<m0) m0=m3;
+  emit_int(m0); }
  return Sp[0] = _res, Ip++, Continue(); }
 lvm(lvm_amax) { return Ap(lvm_aextreme, g, 2); }
 lvm(lvm_amin) { return Ap(lvm_aextreme, g, 3); }
@@ -5625,6 +5644,8 @@ lvm(lvm_aall) {
   for (uintptr_t i = 0; i < n; i++)
    if (fp[2*i] == 0 && fp[2*i+1] == 0) return Sp[0] = nil, Ip++, Continue();
   return Sp[0] = putfix(1), Ip++, Continue(); }
+ // a short-circuit scan, NOT an accumulator chain -- already load-bound (the
+ // compiler vectorizes it), so multi-accumulating buys nothing; left as is.
  bool fdom = v->type >= g_R;
  for (uintptr_t i = 0; i < n; i++)
   if (fdom ? tuple_get_flo(v, i) == 0 : tuple_get_int(v, i) == 0)
