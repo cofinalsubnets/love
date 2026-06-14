@@ -137,36 +137,55 @@
    ; add[32+b,36+b) jmp[36+b,41+b) done@41+b. ---
    ; the complex accumulate PEEPHOLE: (+ acc cell)/(- acc cell) is componentwise,
    ; one op per lane straight into the live acc pair -- addsd/subsd xmm12,xmm14 and
-   ; xmm13,xmm15 -- no stack, no acc reload, so complex SUM ties asum. (Complex *
-   ; is irreducibly ~7 instructions, so it stays on the general cfemit path.)
+   ; xmm13,xmm15 -- no stack, no acc reload, so complex SUM ties asum. Complex *
+   ; goes to its own SIMD kernel (cprodw, below); any other body is general cfemit.
    (unwrap e) (? (&& (twop e) (= 1 (tally e))) (unwrap (cap e)) e)
    (cacc op)                                            ; acc <op>= cell, result back in xmm12/13
    (? (idp op '+) '(242 69 15 88 230  242 69 15 88 239) ; addsd xmm12,xmm14 ; addsd xmm13,xmm15
       (idp op '-) '(242 69 15 92 230  242 69 15 92 239) ; subsd xmm12,xmm14 ; subsd xmm13,xmm15
-      ; complex MUL, HAND-EMITTED in registers (no stack, no cfemit spill): with
-      ; acc=(a,b)=(xmm12,xmm13) and cell=(c,d)=(xmm14,xmm15), compute both lanes
-      ; into scratch xmm0..3 (re=a*c-b*d, im=a*d+b*c) BEFORE writing acc back, so
-      ; the read of a,b isn't clobbered mid-compute.
-      (idp op '*) '(242 65 15 16 196  242 65 15 16 204   ; movsd xmm0,xmm12 ; movsd xmm1,xmm12   (a, a)
-                    242 65 15 89 198  242 65 15 89 207    ; mulsd xmm0,xmm14 (a*c) ; mulsd xmm1,xmm15 (a*d)
-                    242 65 15 16 213  242 65 15 16 221    ; movsd xmm2,xmm13 ; movsd xmm3,xmm13   (b, b)
-                    242 65 15 89 215  242 65 15 89 222    ; mulsd xmm2,xmm15 (b*d) ; mulsd xmm3,xmm14 (b*c)
-                    242 15 92 194     242 15 88 203       ; subsd xmm0,xmm2 (re) ; addsd xmm1,xmm3 (im)
-                    242 68 15 16 224  242 68 15 16 233)   ; movsd xmm12,xmm0 ; movsd xmm13,xmm1
       ())
    (caccfast body acc cell)                             ; fused inner (load + lanes), or ()
    (: u (unwrap body)
-      (? (&& (twop u) (= 3 (tally u)) (memq (cap u) '(+ - *))
+      (? (&& (twop u) (= 3 (tally u)) (memq (cap u) '(+ -))
              (symp (caup u)) (idp (caup u) acc) (idp (caup (cup u)) cell))
          (cat '(242 68 15 16 52 207  242 68 15 16 124 207 8) (cacc (cap u)))  ; load re,im ; lanes
          ()))
 
+   ; --- SIMD complex-PRODUCT kernel (cprodw, forged once; serves any seed). Keeps
+   ; strict left-to-right order -- ONE cell per iteration -- so it is bit-exact with
+   ; aprod (no reassociation), but does the per-cell complex multiply with PACKED
+   ; doubles via the SSE3 addsubpd idiom: acc=[re,im] in xmm12, cell=[c,d] loaded
+   ; with a single 16-byte movupd, and (a+bi)(c+di) = [ac-bd, bc+ad] falls out of
+   ; movddup/unpckhpd/shufpd + 2 mulpd + addsubpd. One 16B load and 2 packed muls
+   ; per cell instead of two movsd + 4 mulsd. (Needs SSE3 -- universal on x86_64
+   ; in practice; this is a host-only opt-in lib.) Loop body is a FIXED 64 bytes,
+   ; so the jump rel32s are constants: jge done = 55, jmp loop = -64. ---
+   cprodw (forge (l2b (cat
+            '(102 15 20 193  102 68 15 40 224  72 209 230  72 49 201)  ; unpcklpd xmm0,xmm1(=[re,im]); movapd xmm12,xmm0; shl rsi,1; xor rcx,rcx
+            (cat '(72 57 241  15 141)                                  ; cmp rcx,rsi ; jge done
+             (cat (leb64 55 4)                                         ;   rel = 55
+              (cat '(102 68 15 16 52 207                               ; movupd xmm14,[rdi+rcx*8]  ([c,d])
+                     242 65 15 18 198                                  ; movddup xmm0,xmm14        ([c,c])
+                     102 69 15 21 246                                  ; unpckhpd xmm14,xmm14      ([d,d])
+                     102 65 15 40 204                                  ; movapd xmm1,xmm12         ([a,b])
+                     102 15 89 200                                     ; mulpd xmm1,xmm0           ([ac,bc])
+                     102 69 15 198 228 1                               ; shufpd xmm12,xmm12,1      ([b,a])
+                     102 69 15 89 230                                  ; mulpd xmm12,xmm14         ([bd,ad])
+                     102 65 15 208 204                                 ; addsubpd xmm1,xmm12       ([ac-bd,bc+ad])
+                     102 68 15 40 225                                  ; movapd xmm12,xmm1         acc=[re,im]
+                     72 131 193 2  233)                                ; add rcx,2 ; jmp loop
+               (cat (leb64 (- 0 64) 4)                                 ;   rel = -64
+                '(102 65 15 40 196  102 65 15 40 204  102 15 21 201  195)))))))) ; movapd xmm0,xmm12; movapd xmm1,xmm12; unpckhpd xmm1,xmm1(=im); ret
+
    (acfoldw lam seed)
-   (: rest (cup lam) body (last rest) ps (init rest)
+   (: rest (cup lam) body (last rest) ps (init rest) u (unwrap body)
       (? !(&& (= 2 (tally ps)) (all symp ps) (cfarith body (list (cons (cap ps) cr0) (cons (caup ps) cr1)))) lam
-         (: regs (list (cons (cap ps) cr0) (cons (caup ps) cr1))
+         (&& (twop u) (= 3 (tally u)) (idp (cap u) '*)             ; bare complex product -> SIMD kernel
+             (idp (caup u) (cap ps)) (idp (caup (cup u)) (caup ps)))
+           (\ in (cfoldw cprodw seed in))
+         (: regs (list (cons (cap ps) cr0) (cons (caup ps) cr1))   ; else: the general whole-loop frame
             fast (caccfast body (cap ps) (caup ps))
-            ; INNER (between jge and add): the fast fused step, or the general
+            ; INNER (between jge and add): the fast fused step (+/-), or the general
             ; (load re,im ; cfemit body -> xmm0/1 ; acc<-xmm0/1).
             inner (? fast fast
                      (cat '(242 68 15 16 52 207  242 68 15 16 124 207 8)   ; movsd xmm14,[..] ; xmm15,[..+8]
