@@ -1255,7 +1255,7 @@ static void g_fault_arm(void) {
  sigaction(SIGBUS, &sa, 0); sigaction(SIGFPE, &sa, 0); }
 #if g_tco
 static volatile sig_atomic_t g_eval_armed;          // an outermost g_eval barrier is already up
-static struct g *g_eval_fault_raise(struct g *c);   // recovery, defined just after g_raise
+static struct g *g_eval_fault_raise(struct g *c, int sig);   // recovery, defined just after g_raise
 #endif
 #endif
 
@@ -1273,13 +1273,14 @@ static struct g *g_eval(struct g *g) {
  struct g *volatile vg = g; word *volatile esp = g->sp;   // entry g/sp, volatile across sigsetjmp
  sigjmp_buf prev; memcpy(&prev, &g_fault_jb, sizeof prev);
  g_eval_armed = 1, g_fault_depth++;
- if (sigsetjmp(g_fault_jb, 1) == 0) {
+ int fsig = sigsetjmp(g_fault_jb, 1);
+ if (fsig == 0) {
   struct g *r = g->ip->ap(g, g->ip, g->hp, g->sp);
   g_fault_depth--, g_eval_armed = 0, memcpy(&g_fault_jb, &prev, sizeof prev);
   return r; }
  g_fault_depth--, g_eval_armed = 0, memcpy(&g_fault_jb, &prev, sizeof prev);
  ((struct g *) vg)->sp = esp;                             // FAULTED: reset stack, raise a scare
- return g_eval_fault_raise((struct g *) vg);
+ return g_eval_fault_raise((struct g *) vg, fsig);        // fsig = the caught signal number
 #elif g_tco
  if (g_ok(g)) g = g->ip->ap(g, g->ip, g->hp, g->sp);
  return g;
@@ -1774,13 +1775,23 @@ static struct g *g_raise(struct g *c, enum g_status s, word a, word b,
 #endif
 }
 #if __STDC_HOSTED__ && g_tco
-// The g_eval barrier's recovery (see g_eval): a caught hardware fault becomes a scare
-// delivered to `help`, like any other condition. The payload is generic -- a fault has
-// no love-level datum -- so the shell-help prints its face and the session survives.
-// Safe when the heap is intact at the fault (a bad native call, a null deref in a leaf
-// op); a fault mid-mutation or mid-GC is the residual unrecoverable corner.
-static struct g *g_eval_fault_raise(struct g *c) {
- return g_raise(c, g_status_scare, nil, nil, help_scare_k); }
+// The g_eval barrier's recovery (see g_eval): a caught hardware fault `sig` becomes a
+// scare delivered to `help`, like any other condition -- (scare 'fault sig). Unlike
+// 'missing, 'fault is NOT rooted in struct g: it is a COLD tag (raised only on a real
+// fault, never during oom), so we re-create it on demand -- a clean fault, the only
+// recoverable kind, has the heap room to name itself. The intern runs UNDER the barrier
+// (re-armed here) so a heap too damaged to name the fault can't re-crash recovery: it
+// falls back to the bare scare, and the signal number still shows. A fault mid-mutation
+// or mid-GC is the residual unrecoverable corner.
+static struct g *g_eval_fault_raise(struct g *c, int sig) {
+ volatile word tag = nil; struct g *volatile vc = c;   // volatile: survive the recovery longjmp
+ sigjmp_buf prev; memcpy(&prev, &g_fault_jb, sizeof prev);
+ g_fault_depth++;
+ if (sigsetjmp(g_fault_jb, 1) == 0) {
+  struct g *h = g_strof((struct g *) vc, "fault");
+  if (g_ok(h)) { h = intern(h); if (g_ok(h)) vc = g_core_of(h), tag = g_pop1((struct g *) vc); } }
+ g_fault_depth--; memcpy(&g_fault_jb, &prev, sizeof prev);
+ return g_raise((struct g *) vc, g_status_scare, tag, putfix(sig), help_scare_k); }
 #endif
 struct g *ghelp2(struct g *g, enum g_status s) {
  struct g *c = g_core_of(g);
