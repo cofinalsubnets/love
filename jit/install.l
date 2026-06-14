@@ -1,13 +1,23 @@
 ; ============================================================================
-; jit/install.l -- the SELF-INSTALLING opjit hook (x86_64). Baked into the host
-; `love` binary and run via g_evals_ at boot, AFTER the egg, under #ifdef
-; __x86_64__ (see main.c). Pins book['opjit] = jit-walk, so from boot on the
-; opfix wrapper (love/prelude.l) turns qualifying (\ p <arith>) lambdas into
-; native machine code through BOTH compilers -- transparently, no file to load.
+; jit/install.l -- the opjit hook installer (x86_64), OPT-IN. Load it to arm the
+; opfix hook (book['opjit]): from then on qualifying (\ p <arith>) lambdas compile
+; to native code through both compilers, with = preserved (respec). It is
+; correct -- the whole corpus runs through it unchanged -- but NOT auto-installed:
+;
+;   out/host/love -l jit/install.l yourcode.l
+;
+; The boot-time self-install (main.c #ifdef __x86_64__) was REVERTED: a benchmark
+; showed the scalar hook is a NET LOSS -- a native function called from the
+; interpreted loop pays a call-boundary tax (putfix marshal + the `call` nif + the
+; 2R decode) heavier than interpreting the small arithmetic body (~15-25% slower
+; on hot scalar-arith loops, with no case where it wins). The JIT only pays off
+; when it OWNS the loop: the explicit array kernels (jit/array.l: afold/ajit/amap/
+; amap2/areduce) run 35-50x by staying native across every iteration. So this hook
+; stays dormant unless you load this file; the array kernels are the real win.
 ;
 ; Equality is preserved (respec): a jitted closure carries the ORIGINAL source
 ; and holds no captures, so it = the interpreted closure and the 1/0 numeral
-; bridges survive -- the corpus runs through this unchanged.
+; bridges survive.
 ;
 ; The whole codegen is wrapped in one (: opjit (: <helpers> jit-walk)) so ONLY
 ; `opjit` becomes a global -- no name collides with the prelude/corpus.

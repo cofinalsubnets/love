@@ -162,21 +162,35 @@ Two subtleties this surfaced:
   factored expression as `((…))` (the empty-application identity). `arithp`/`emit`
   peel that single-element wrapper, so **infix arith inside lambdas jits too**.
 
-## Self-installing — `jit/install.l` + `main.c` (always-on, x86_64)
+## Why the always-on scalar hook was reverted (the benchmark)
 
-The host `love` binary now **arms opjit at boot**: `main.c`, under `#ifdef
-__x86_64__`, runs `jit/install.l` through `g_evals_` *after* the egg (so `born` is
-set and `forge` works). `install.l` is the self-contained codegen wrapped in one
-`(: opjit (: <helpers> jit-walk))` so **only `opjit` leaks** — it pins the hook,
-and from boot on every qualifying lambda compiled by *either* compiler goes
-native, transparently. x86_64-only (the codegen emits x86 bytes); aarch64/wasm
-never compile it (the `#ifdef`), so no egg bloat.
+An always-on self-install was built (`main.c`, `#ifdef __x86_64__`, ran
+`jit/install.l` after the egg) and validated — the whole corpus passed through
+opjit, `=` preserved, `make valg` clean. **Then a benchmark killed it.**
 
-**The whole corpus runs through opjit** in the gate (`make test` 2528 ×3, `make
-valg` 2528 with 0 errors/leaks) — the strongest validation: the JIT is exercised
-against the entire language, and the bootstrap depends on it.
+| 5M ops | JIT | interpreter | |
+|---|---|---|---|
+| `x*x+1` | ~290 ms | ~230 ms | JIT **~25% slower** |
+| deg-4 poly | ~745 ms | ~660 ms | JIT **~12% slower** |
+| `sum x*x` (`areduce`) | ~10 ms | ~450 ms | JIT **~45× faster** |
 
-Making it transparent took two more fixes beyond re-entry and the `(f)==f`
+The scalar hook makes a native *function* still **called from the interpreted
+loop**, and the call boundary — `putfix` to marshal the arg, the `call` nif, the
+`(? (& v 1) (vm a) (// v 2))` decode — costs more than interpreting a 3–10-op
+arithmetic body. The native arithmetic is nanoseconds; the wrapper around it
+isn't. There's no case where it wins (an opjit'd closure is only ever called
+*from* the interpreter), so it's a pure ~15–25% pessimization plus a compile-time
+forge cost. **The JIT only pays off when it owns the loop** — the array kernels
+run ~45× because `areduce`/`amap` cross the boundary once and stay native across
+every iteration.
+
+So the self-install was **reverted**: `opjit` stays dormant (`book['opjit] = 0`),
+`jit/install.l` is an *opt-in* loader (`out/host/love -l jit/install.l …`), and
+the shipping value is the explicit array kernels. The transparency machinery
+below still holds (it's why the opt-in hook is correct), but the lesson is that a
+transparent scalar JIT across the interpreter boundary isn't worth its tax.
+
+Making the hook transparent took two fixes beyond re-entry and the `(f)==f`
 wrapper:
 - **`=` preservation (`respec`).** `eqv` is `fn_src`-based, so a native closure
   would break closure equality and the `1=(\ x x)` / `0=(\ _ 1)` bridges. `jit`

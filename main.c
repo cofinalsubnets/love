@@ -357,16 +357,13 @@ static char const cli[] =
 static char const
  rel[] = "(zevs in)";   // non-tty stdin: the stream shell (repl.l) drinks the in port
 
-#ifdef __x86_64__
-// The native-JIT self-installer (jit/install.l), baked in and run AFTER the egg so
-// `born` is set and `forge` works. It pins book['opjit], arming the opfix hook so
-// every qualifying (\ p <arith>) compiled hereafter -- by c0 AND the self-hosted
-// wev -- becomes native machine code. = is preserved (respec), so the language is
-// unchanged; x86_64-only because the codegen emits x86 bytes.
-static char const opjit_src[] =
-#include "opjit.h"
- ;
-#endif
+// NOTE: the always-on native-JIT self-install was REVERTED -- a benchmark showed
+// the scalar opfix hook is a net pessimization (a native function called from the
+// interpreted loop pays a call-boundary tax -- putfix marshal, the `call` nif, the
+// 2R decode -- heavier than interpreting the small arithmetic body). The JIT only
+// wins when it OWNS the loop: the explicit array kernels (afold/ajit/amap/areduce,
+// jit/array.l) run 35-50x by staying native across every iteration. So opjit stays
+// DORMANT (book['opjit]=0) and the kernels are invoked explicitly. See jit/README.md.
 
 static struct g *boot(struct g *g, bool argp) {
   bool replp = !argp && isatty(STDIN_FILENO);
@@ -379,9 +376,6 @@ static struct g *boot(struct g *g, bool argp) {
     "))"
 #include "repl.h"
   );
-#ifdef __x86_64__
-  g = g_evals_(g, opjit_src);   // arm the native JIT (self-install)
-#endif
   return g_evals_(g, argp ? cli : replp ? "(shell 0)" : rel); }
 #endif
 
