@@ -6,6 +6,7 @@ run on either target.
 
 ```
 (call b x)        ; jump into buf b's bytes, arg x, fixnum result
+(call2 b x y)     ; ... two args (SysV %rdi/%rsi; AArch64 x0/x1)
 (forge src)       ; an EXECUTABLE buf holding a copy of src's bytes
 ```
 
@@ -96,9 +97,12 @@ div-by-zero cases:
 out/host/love jit/kernel.l        # x86_64 host: every line "==", then ALL PASS
 ```
 
-This is roadmap **step 2**. The kernel takes a single-param `(\ p <arith>)` with
-any param name (`p` is re-derived from `%rdi` on each use, so its spelling is
-irrelevant to the codegen).
+This is roadmap **step 2**. The kernel takes a **1- or 2-param** `(\ p <arith>)` /
+`(\ p q <arith>)` with any param names — the params bind to the SysV argument
+registers (1st→`%rdi`, 2nd→`%rsi`), each re-derived from its register on use, so
+the spellings are irrelevant to the codegen. One param uses `call`, two use
+`call2`; the overflow/bail protocol is identical, and the wrapper is curried so
+`((f a) b)` works. `call2` is one more C nif (arity 3), the `lvm_call` pattern.
 
 ## The automatic hook — `jit/auto.l`
 
@@ -114,8 +118,8 @@ The seam is the **global `ev`**. The repl and the cli/`g_evals_` loader compile
 each form via the late-bound `(ev 'ev form)` — the symbol `ev` is evaluated fresh
 every time — so redefining the global `ev` is picked up immediately. The new `ev`
 is `(\ form (base-ev (jit-walk form)))`: a source→source pass that rewrites every
-qualifying `(\ p <arith>)` into `(\ <forged native closure>)` (a quote of the
-closure value), then hands the result to the real compiler. The forge happens
+qualifying `(\ p <arith>)` / `(\ p q <arith>)` into `(\ <forged native closure>)`
+(a quote of the closure value), then hands the result to the real compiler. The forge happens
 once, at compile time, per lambda expression. `jit-walk` is **conservative about
 the reader's code/data split** — it leaves quote (`(\ d)`, one operand),
 quasiquote (`(qq …)`), and macro-defs (`(:: …)`) verbatim, so it can never corrupt

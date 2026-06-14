@@ -32,14 +32,15 @@
 ; or r8b,r9b` after every op makes r8 a sticky OF accumulator, and the epilogue
 ; folds in the range check, so there are NO forward jumps to backpatch.
 
-; --- the recognizer: is e a closed arith expr in the single variable v? ---
-; (literals are non-negative fixnums: a negative literal needs two's-complement
-; byte emission, deferred; negative *results* already work via the signed untag.)
-(: (arithp e v)
-   (? (symp e) (idp e v)                       ; the bound variable (any single name, not just x)
+; --- the recognizer: is e a closed arith expr in the bound variables `vs`
+; (a list of 1 or 2 param symbols)? (literals are non-negative fixnums: a negative
+; literal needs two's-complement byte emission, deferred; negative *results*
+; already work via the signed untag.)
+(: (arithp e vs)
+   (? (symp e) (memq e vs)                      ; one of the bound variables (any names)
       (&& (fixp e) (<= 0 e)) 1
       (&& (twop e) (= 3 (tally e)) (memq (cap e) '(+ - * // % < <= > >= =)))
-        (&& (arithp (caup e) v) (arithp (caup (cup e)) v))
+        (&& (arithp (caup e) vs) (arithp (caup (cup e)) vs))
       0))
 
 ; --- little-endian n bytes of a non-negative integer ---
@@ -83,14 +84,24 @@
       (idp op '%)  (cat divsetup '(72 137 208)) ; ... ; mov rax,rdx       (48 89 D0)
       (cmpc op)))                               ; <, <=, >, >=, = -> 0/1
 
+; --- untag a parameter from its SysV argument register into rax (raw value) ---
+(: argx '(72 137 248  72 209 248))              ; 1st param: mov rax,rdi ; sar rax,1  (48 89 F8  48 D1 F8)
+(: argy '(72 137 240  72 209 248))              ; 2nd param: mov rax,rsi ; sar rax,1  (48 89 F0  48 D1 F8)
+
+; --- regs: assoc list (param-symbol . untag-bytes). vreg looks a name up. ---
+(: (vreg e regs)
+   (? !regs ()                                  ; unreachable post-arithp
+      (idp e (cap (cap regs))) (cup (cap regs))
+      (vreg e (cup regs))))
+
 ; --- emit e -> the bytes leaving e's value in rax, overflow folded into r8 ---
-(: (emit e)
-   (? (symp e) '(72 137 248  72 209 248)        ; x: mov rax,rdi ; sar rax,1  (48 89 F8  48 D1 F8)
+(: (emit e regs)
+   (? (symp e) (vreg e regs)                    ; a param -> untag from its arg register
       (fixp e) (cons 72 (cons 184 (leb e 8)))   ; k: mov rax,imm64            (48 B8 <le64>)
       (: op (cap e) a (caup e) b (caup (cup e))
-         (cat (emit a)                          ; rax = A
+         (cat (emit a regs)                     ; rax = A
           (cat '(80)                            ; push rax                    (50)
-           (cat (emit b)                        ; rax = B
+           (cat (emit b regs)                   ; rax = B
             (cat '(72 137 193  88)              ; mov rcx,rax ; pop rax (A)   (48 89 C1  58)
              (combine op))))))))                ; rax = (A op B), guard folded per op
 
@@ -115,16 +126,22 @@
       _ ((: (go i l) (? l (: _ (pin b i (cap l)) (go (+ i 1) (cup l))) 0)) 0 bs)
       b))
 
-; --- THE DRIVER: a single-param (\ p <arith>) source form -> a native closure
-; (VM fallback). The body's only free name must be the parameter p; emit re-derives
-; p from %rdi on each use, so the param's spelling is irrelevant to the codegen. ---
+; --- THE DRIVER: a 1- or 2-param (\ p <arith>) / (\ p q <arith>) source form -> a
+; native closure (VM fallback). Params bind to the SysV arg registers (1st->%rdi,
+; 2nd->%rsi); emit re-derives each from its register on use, so the spellings are
+; irrelevant to the codegen. The result protocol (2R even / 1 odd) is shared; the
+; only difference is call vs call2 and the curried arity of the wrapper. ---
 (: (jit lam)
-   (: param (caup lam) body (caup (cup lam))
+   (: rest (cup lam) body (last rest) ps (init rest) n (tally ps)
       vm (ev lam)                               ; the interpreter compile -- always available
-      (? !(arithp body param) vm                ; not JIT-able: hand back the VM closure
-         (: code (forge (l2b (cat prologue (cat (emit body) epilogue))))
-            (\ a (: v (call code a)             ; v = 2R (even, success) or 1 (odd, bail)
-                    (? (& v 1) (vm a) (// v 2))))))))   ; odd -> interpret; even -> R
+      (? (|| (< n 1) (> n 2)) vm                ; only 1 or 2 params
+         !(all symp ps) vm                      ; params must be names
+         !(arithp body ps) vm                   ; not JIT-able: hand back the VM closure
+         (: regs (? (= n 1) (list (cons (cap ps) argx))
+                            (list (cons (cap ps) argx) (cons (caup ps) argy)))
+            code (forge (l2b (cat prologue (cat (emit body regs) epilogue))))
+            (? (= n 1) (\ a   (: v (call  code a)   (? (& v 1) (vm a)       (// v 2))))
+                       (\ a b (: v (call2 code a b) (? (& v 1) ((vm a) b)   (// v 2)))))))))
 
 ; ============================================================================
 ; SELF-CHECK: native must equal the interpreter on every case, success AND
@@ -134,6 +151,11 @@
      (: j (jit form) vm (ev form) jr (j n) vr (vm n) ok (= jr vr)
         _ (dot (+ nm (+ " @" (+ (show n) (+ ": native=" (+ (show jr)
               (+ (? ok "  ==  " "  =/=  ") (+ (show vr) (? ok "\n" "   <-- FAIL\n")))))))))
+        (? ok 0 (pin bad 0 (+ 1 (peep bad 0 0)))))
+   (ck2 nm a b form)                            ; two-argument cases
+     (: j (jit form) vm (ev form) jr ((j a) b) vr ((vm a) b) ok (= jr vr)
+        _ (dot (+ nm (+ " @" (+ (show a) (+ "," (+ (show b) (+ ": native=" (+ (show jr)
+              (+ (? ok "  ==  " "  =/=  ") (+ (show vr) (? ok "\n" "   <-- FAIL\n")))))))))))
         (? ok 0 (pin bad 0 (+ 1 (peep bad 0 0)))))
    _ (ck "x*x      " 7          '(\ x (* x x)))
    _ (ck "x*x+1    " 7          '(\ x (+ (* x x) 1)))
@@ -158,4 +180,13 @@
    _ (ck "n*n+n (n)" 6          '(\ n (+ (* n n) n)))          ; param named n, not x: generalized
    _ (ck "ident (q)" 99         '(\ q q))                      ; identity, param q
    _ (ck "fallback " 5          '(\ x (cap x)))                 ; non-arith: jit == vm (both interpret)
+   ; --- two-argument kernels: x->%rdi, y->%rsi via call2 ---
+   _ (ck2 "x+y      " 11 13     '(\ x y (+ x y)))              ; 24
+   _ (ck2 "x*y-1    " 6 7       '(\ x y (- (* x y) 1)))        ; 41
+   _ (ck2 "a*a+b*b  " 3 4       '(\ a b (+ (* a a) (* b b))))  ; 25, both params used twice
+   _ (ck2 "x//y     " 100 7     '(\ x y (// x y)))             ; 14
+   _ (ck2 "x%y      " 100 7     '(\ x y (% x y)))              ; 2
+   _ (ck2 "x<y      " 3 5       '(\ x y (< x y)))              ; 1
+   _ (ck2 "x//y /0  " 5 0       '(\ x y (// x y)))             ; bail -> VM ieee-inf
+   _ (ck2 "x*y ovf  " 4000000000 4000000000 '(\ x y (* x y)))  ; 1.6e19 bignum via bail
    _ (dot (? (peep bad 0 0) (+ (show (peep bad 0 0)) " FAILED\n") "ALL PASS\n")))

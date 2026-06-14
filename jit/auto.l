@@ -44,10 +44,11 @@
 (: jstat (tablet 0)
    (njit _) (peep jstat 0 0))
 
-; --- is e exactly a single-param (\ p <arith>) we can compile? ---
+; --- is e a (\ p <arith>) / (\ p q <arith>) jit can compile (1 or 2 params)? ---
 (: (qual e)
-   (&& (twop e) (idp (cap e) '\) (= 3 (tally e)) (symp (caup e))
-       (arithp (caup (cup e)) (caup e))))       ; body is arith in the param (caup e)
+   (&& (twop e) (idp (cap e) '\)
+       (: rest (cup e) body (last rest) ps (init rest) n (tally ps)
+          (&& (|| (= n 1) (= n 2)) (all symp ps) (arithp body ps)))))
 
 ; --- source -> source: qualifying lambdas become quoted native closures ---
 (: (jit-walk e)
@@ -70,15 +71,17 @@
 ; lambdas in them are jitted as a side effect of being defined the NORMAL way.
 (: sq (\ x (* x x)))                            ; defined normally -> jitted, no (jit ...) call
 (: f  (\ n (- (* 3 n) 7)))                      ; param n, jitted
+(: hyp (\ a b (+ (* a a) (* b b))))             ; TWO params -> jitted via call2 (rdi, rsi)
 (: hof (foldl (+) 0 (map (\ k (* k k)) (jot 5))))   ; the map lambda jitted in ARGUMENT position
-(: _ (dot (+ "lambdas turned native so far: " (+ (show (njit 0)) "\n")))   ; sq, f, the map's (\ k ..) = 3
+(: _ (dot (+ "lambdas turned native so far: " (+ (show (njit 0)) "\n")))   ; sq, f, hyp, the map's (\ k ..) = 4
    _ (dot (+ "sq 12       = " (+ (show (sq 12)) "   (== 144)\n")))
    _ (dot (+ "f 10        = " (+ (show (f 10)) "   (== 23)\n")))
+   _ (dot (+ "hyp 3 4     = " (+ (show (hyp 3 4)) "   (== 25, two-arg native via call2)\n")))
    _ (dot (+ "sq 4e9      = " (+ (show (sq 4000000000)) "   (bignum via bail)\n")))
    _ (dot (+ "map-sum jot5= " (+ (show hof) "   (== 30, 0+1+4+9+16)\n")))
    ; SAFETY: ordinary code still computes correctly through the hooked ev
    _ (dot (+ "safety foldl= " (+ (show (foldl (+) 0 (jot 100))) "   (== 4950)\n")))
    _ (dot (+ "safety sort = " (+ (show (sort '(3 1 2))) "   (== (1 2 3))\n")))
    _ (dot (+ "safety quote= " (+ (show '(\ x (* x x))) "   (DATA, NOT jitted)\n")))   ; quote stays data
-   _ (dot (? (= 30 hof) (? (= 144 (sq 12)) (? (= 23 (f 10)) (? (= 4950 (foldl (+) 0 (jot 100)))
-        "ALL PASS\n" "FAIL foldl") "FAIL f") "FAIL sq") "FAIL hof")))
+   _ (dot (? (= 25 (hyp 3 4)) (? (= 30 hof) (? (= 144 (sq 12)) (? (= 23 (f 10)) (? (= 4950 (foldl (+) 0 (jot 100)))
+        "ALL PASS\n" "FAIL foldl") "FAIL f") "FAIL sq") "FAIL hof") "FAIL hyp")))
