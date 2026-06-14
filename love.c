@@ -138,7 +138,7 @@ lvm_t lvm_kcall,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_arr, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
- lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall,
+ lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_arrp, lvm_intf, lvm_lamp, lvm_hotp,
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
@@ -600,7 +600,7 @@ static g_inline struct g*g_pop(struct g*g, uintptr_t n) {
  _(nif_atype, "atype", s1(lvm_atype))\
  _(nif_asum, "asum", s1(lvm_asum)) _(nif_aprod, "aprod", s1(lvm_aprod))\
  _(nif_amax, "amax", s1(lvm_amax)) _(nif_amin, "amin", s1(lvm_amin))\
- _(nif_aall, "aall", s1(lvm_aall))\
+ _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
  _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "bigp", s1(lvm_bigp)) _(nif_widep, "widep", s1(lvm_widep))\
  _(nif_arrp, "arrp", s1(lvm_arrp)) _(nif_intf, "int", s1(lvm_intf))\
  _(nif_symp, "symp", s1(lvm_symp)) _(nif_mapp, "mapp", s1(lvm_mapp)) _(nif_fixp, "fixp", s1(lvm_fixp))\
@@ -5442,6 +5442,86 @@ lvm(lvm_aall) {
   if (fdom ? tuple_get_flo(v, i) == 0 : tuple_get_int(v, i) == 0)
    return Sp[0] = nil, Ip++, Continue();
  return Sp[0] = putfix(1), Ip++, Continue(); }
+
+// (outer a b) — OUTER PRODUCT with *: result[I,J] = a[I] * b[J], rank ra+rb,
+// shape a.shape ++ b.shape. z⊗z -> z (wrapping), any r -> r. complex/object or
+// rank > maxrank -> nil. a's cell is hoisted out of the inner (b) loop.
+lvm(lvm_outer) {
+ word a = Sp[0], b = Sp[1];
+ if (!(arrp(a) && arrp(b))) return *++Sp = nil, Ip++, Continue();
+ struct g_tuple *va = tuple(a), *vb = tuple(b);
+ if (va->type > g_R || vb->type > g_R) return *++Sp = nil, Ip++, Continue();
+ uintptr_t M = tuple_nelem(va), N = tuple_nelem(vb), n = M * N, rank = va->rank + vb->rank;
+ if (rank > maxrank) return *++Sp = nil, Ip++, Continue();
+ bool fdom = va->type == g_R || vb->type == g_R;
+ enum g_tuple_type rt = fdom ? g_R : g_Z;
+ uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + g_T[rt] * n;
+ Have(b2w(bytes));
+ va = tuple(Sp[0]), vb = tuple(Sp[1]);          // re-read post-Have
+ struct g_tuple *r = (struct g_tuple*) Hp; Hp += b2w(bytes);
+ ini_tuple(r, rt, rank);
+ for (uintptr_t i = 0; i < va->rank; i++) r->shape[i] = va->shape[i];
+ for (uintptr_t i = 0; i < vb->rank; i++) r->shape[va->rank + i] = vb->shape[i];
+ if (fdom) { g_flo_t *rp = tuple_data(r);
+  for (uintptr_t i = 0; i < M; i++) { g_flo_t av = tuple_get_flo(va, i);
+   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = av * tuple_get_flo(vb, j); } }
+ else { intptr_t *rp = tuple_data(r);
+  for (uintptr_t i = 0; i < M; i++) { intptr_t av = tuple_get_int(va, i);
+   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = (intptr_t)((uintptr_t)av * (uintptr_t)tuple_get_int(vb, j)); } }
+ return *++Sp = word(r), Ip++, Continue(); }   // arity 2
+
+// (inner a b) — INNER PRODUCT (+.×): contract a's LAST axis with b's FIRST axis.
+// a is [..M.., K], b is [K, ..N..]; result [..M.., ..N..] with
+// C[I,J] = sum_l a[I,l]*b[l,J]. 1D·1D = dot product -> a scalar number; 2D·2D =
+// matrix multiply. z -> z (modular sum-of-products), any r -> r. axis mismatch /
+// complex / object / rank > maxrank -> nil. ikj order streams b and c rows so the
+// inner j loop vectorizes (the l contraction is the dependency, hoisted one out).
+lvm(lvm_inner) {
+ word a = Sp[0], b = Sp[1];
+ if (!(arrp(a) && arrp(b))) return *++Sp = nil, Ip++, Continue();
+ struct g_tuple *va = tuple(a), *vb = tuple(b);
+ if (va->type > g_R || vb->type > g_R || va->rank < 1 || vb->rank < 1)
+  return *++Sp = nil, Ip++, Continue();
+ uintptr_t K = va->shape[va->rank - 1];
+ if (K != vb->shape[0]) return *++Sp = nil, Ip++, Continue();   // contracted axes must agree
+ uintptr_t M = 1, N = 1;
+ for (uintptr_t i = 0; i + 1 < va->rank; i++) M *= va->shape[i];
+ for (uintptr_t i = 1; i < vb->rank; i++) N *= vb->shape[i];
+ uintptr_t rank = (va->rank - 1) + (vb->rank - 1), n = M * N;
+ if (rank > maxrank) return *++Sp = nil, Ip++, Continue();
+ bool fdom = va->type == g_R || vb->type == g_R, ar = va->type == g_R, br = vb->type == g_R;
+ if (rank == 0) {                               // dot product -> scalar number
+  word _res;
+  if (fdom) { g_flo_t *Ad = tuple_data(va), *Bd = tuple_data(vb);
+   intptr_t *Ai = tuple_data(va), *Bi = tuple_data(vb); g_flo_t acc = 0;
+   for (uintptr_t l = 0; l < K; l++) acc += (ar ? Ad[l] : (g_flo_t) Ai[l]) * (br ? Bd[l] : (g_flo_t) Bi[l]);
+   Have(box_req); emit_flo(acc); }
+  else { intptr_t *A = tuple_data(va), *B = tuple_data(vb); uintptr_t acc = 0;
+   for (uintptr_t l = 0; l < K; l++) acc += (uintptr_t) A[l] * (uintptr_t) B[l];
+   Have(box_req); emit_int((intptr_t) acc); }
+  return *++Sp = _res, Ip++, Continue(); }
+ enum g_tuple_type rt = fdom ? g_R : g_Z;
+ uintptr_t bytes = sizeof(struct g_tuple) + rank * sizeof(word) + g_T[rt] * n;
+ Have(b2w(bytes));
+ va = tuple(Sp[0]), vb = tuple(Sp[1]);
+ struct g_tuple *r = (struct g_tuple*) Hp; Hp += b2w(bytes);
+ ini_tuple(r, rt, rank);
+ { uintptr_t s = 0;
+   for (uintptr_t i = 0; i + 1 < va->rank; i++) r->shape[s++] = va->shape[i];
+   for (uintptr_t i = 1; i < vb->rank; i++) r->shape[s++] = vb->shape[i]; }
+ if (fdom) { g_flo_t *C = tuple_data(r);
+  g_flo_t *Ad = tuple_data(va), *Bd = tuple_data(vb);
+  intptr_t *Ai = tuple_data(va), *Bi = tuple_data(vb);
+  for (uintptr_t p = 0; p < n; p++) C[p] = 0;
+  for (uintptr_t i = 0; i < M; i++)
+   for (uintptr_t l = 0; l < K; l++) { g_flo_t av = ar ? Ad[i*K+l] : (g_flo_t) Ai[i*K+l];
+    for (uintptr_t j = 0; j < N; j++) C[i*N+j] += av * (br ? Bd[l*N+j] : (g_flo_t) Bi[l*N+j]); } }
+ else { intptr_t *C = tuple_data(r), *A = tuple_data(va), *B = tuple_data(vb);
+  for (uintptr_t p = 0; p < n; p++) C[p] = 0;
+  for (uintptr_t i = 0; i < M; i++)
+   for (uintptr_t l = 0; l < K; l++) { intptr_t av = A[i*K+l];
+    for (uintptr_t j = 0; j < N; j++) C[i*N+j] = (intptr_t)((uintptr_t)C[i*N+j] + (uintptr_t)av * (uintptr_t)B[l*N+j]); } }
+ return *++Sp = word(r), Ip++, Continue(); }   // arity 2
 
 // --- elementwise monadic math over an array (sin/cos/sqrt/... ) --------------
 // Reached from lvm_math1 when its operand arrp. Result is a float array
