@@ -3729,24 +3729,56 @@ lvm(lvm_bufnew) {
 // responsibility -- an ill-formed body is a hard crash, by design. AArch64 must
 // __builtin___clear_cache(txt(s), txt(s)+len(s)) before the jump (I-cache not
 // coherent with freshly-written D-cache); omitted for the x86_64 probe.
+// THE FAULT BARRIER (hosted). Running forged/native code is love's one
+// un-survivable corner: an ill-formed body faults the CPU (SIGSEGV/SIGILL/...),
+// below help. call_run wraps the native call in a sigsetjmp; a fault during it is
+// caught and reported via *bad (the caller returns 0, the same value the non-buf
+// guard gives), so a bad body is survivable like any other love error -- never a
+// core dump. The handler only fires inside an active call (call_depth); a fault in
+// love's OWN code still crashes for real. The native body never touches love state
+// (the call contract), so recovery is clean -- no heap-consistency question here.
+// (The broad version -- a barrier at g_eval turning faults in object-array ops,
+// lamb, etc. into scares -- reuses this same handler; that's the next step.)
+#if __STDC_HOSTED__
+#include <signal.h>
+#include <setjmp.h>
+static sigjmp_buf call_jb;
+static volatile sig_atomic_t call_depth;
+static void call_sig(int s) {
+ if (call_depth) siglongjmp(call_jb, s);          // faulted inside (call ..) -> recover
+ signal(s, SIG_DFL), raise(s); }                  // a genuine love fault: let it die
+static g_noinline g_word call_run(void *fnp, g_word x, g_word y, int two, int *bad) {
+ static int armed;
+ if (!armed) { armed = 1; struct sigaction sa = {0};
+  sa.sa_handler = call_sig; sigemptyset(&sa.sa_mask); sa.sa_flags = SA_NODEFER;
+  sigaction(SIGSEGV, &sa, 0); sigaction(SIGILL, &sa, 0);
+  sigaction(SIGBUS, &sa, 0); sigaction(SIGFPE, &sa, 0); }
+ sigjmp_buf prev; memcpy(&prev, &call_jb, sizeof prev);   // save outer (nesting)
+ if (sigsetjmp(call_jb, 1) == 0) {
+  call_depth++;
+  g_word r = two ? ((g_word (*)(g_word, g_word)) fnp)(x, y) : ((g_word (*)(g_word)) fnp)(x);
+  call_depth--; *bad = 0; memcpy(&call_jb, &prev, sizeof prev); return r; }
+ call_depth--; *bad = 1; memcpy(&call_jb, &prev, sizeof prev); return 0; }  // recovered from a fault
+#else
+static g_word call_run(void *fnp, g_word x, g_word y, int two, int *bad) {  // freestanding: no signals (yet)
+ *bad = 0; return two ? ((g_word (*)(g_word, g_word)) fnp)(x, y) : ((g_word (*)(g_word)) fnp)(x); }
+#endif
+
 lvm(lvm_call) {
  word b = Sp[0], x = Sp[1];
  if (!bufp(b)) return *++Sp = putfix(0), Ip++, Continue();   // not a buf -> nothing
- struct g_str *s = buf_str(b);
- g_word (*fn)(g_word) = (g_word (*)(g_word)) txt(s);   // `word` is a macro; use g_word as a type
- g_word r = fn(x);
- return *++Sp = putfix(r), Ip++, Continue(); }   // arity 2: pop one, result at the new top
+ int bad; g_word r = call_run(txt(buf_str(b)), x, 0, 0, &bad);   // fault -> bad -> 0 (survivable)
+ return *++Sp = putfix(bad ? 0 : r), Ip++, Continue(); }   // arity 2: pop one, result at the new top
 
 // (call2 b x y) — like (call b x) but passes TWO arguments (SysV AMD64: x in
 // %rdi, y in %rsi; AArch64: x0, x1) for native two-argument kernels. Same raw
-// machine-word contract and fixnum-wrapped result as call. Arity 3.
+// machine-word contract and fixnum-wrapped result as call, and the same fault
+// barrier. Arity 3.
 lvm(lvm_call2) {
  word b = Sp[0], x = Sp[1], y = Sp[2];
  if (!bufp(b)) return Sp[2] = putfix(0), Sp += 2, Ip++, Continue();   // not a buf -> nothing
- struct g_str *s = buf_str(b);
- g_word (*fn)(g_word, g_word) = (g_word (*)(g_word, g_word)) txt(s);   // `word` is a macro; use g_word
- g_word r = fn(x, y);
- return Sp[2] = putfix(r), Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, result at the new top
+ int bad; g_word r = call_run(txt(buf_str(b)), x, y, 1, &bad);
+ return Sp[2] = putfix(bad ? 0 : r), Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, result at the new top
 
 // THE HOST EXEC ARENA (hosted builds only). The Linux malloc heap is NX, so a
 // buf of real code cannot be (call ...)ed directly -- the jump faults. forge
