@@ -26,13 +26,15 @@
 
    ; an integer binary operator symbol -> its Coq function (prefix), else 0
    (binop h) (? (idp h '+) "Z.add"  (idp h '-) "Z.sub"  (idp h '*) "Z.mul"
-                (idp h '//) "Z.quot" (idp h '%) "Z.rem"
+                (idp h '//) "Z.quot" (idp h '%) "Z.rem"  (idp h 'gcd) "Z.gcd"
                 (idp h '&) "Z.land"  (idp h '|) "Z.lor"  (idp h '^) "Z.lxor"  0)
+   (unop h) (? (idp h 'sat) "Z.max 0" (idp h 'abs) "Z.abs" 0)   ; $x -> max(0,x); abs
 
    ; integer-valued term? a fixnum, an operator tree, or a numeral-application spine
    (intv? x) (? (fixp x) 1
                 (twop x) (: h (cap x)
                             (? (binop h) (&& (len3? x) (intv? (e2 x)) (intv? (e3 x)))
+                               (unop h) (&& (twop (cup x)) (! (twop (cup (cup x)))) (intv? (e2 x)))
                                (fixp h) (allv? x)
                                0))
                 0)
@@ -40,8 +42,9 @@
 
    ; translate an integer-valued term to a Coq Z expression
    (tv x) (? (fixp x) (? (< x 0) (cat (L "(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
-             (: h (cap x) b (binop h)
-                (? b (cat (L "(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b)
+             (: h (cap x) b (binop h) u (unop h)
+                (? b (cat (L "(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
+                   u (cat (L "(" u " " (tv (e2 x)) ")"))                    ; (Z.abs x) / (Z.max 0 x)
                    (spine (tv h) (cup x)))))                                ; (app .. ..) spine
    (spine acc rest) (? (twop rest)
                        (spine (cat (L "(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
