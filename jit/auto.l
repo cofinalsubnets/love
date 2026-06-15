@@ -46,8 +46,16 @@
               (twop ACC) (= (cap ACC) '+) (= (caup ACC) A) (exprp B I))      ; (+ a B), B in the grammar over i
        (? ok (L B I) 0))
    (njit-loop lam B cv) (nat (emit (loopcode B cv)) (base-ev lam) lam)
-   (auto-ev e) (? (qual e) (njit e)
-                  (: li (loopinfo e) (? li (njit-loop e (cap li) (caup li)) (base-ev e))))
+   ; COMPILE CACHE: each source \-expr compiles ONCE (no re-mmap on repeated ev).
+   ; Keyed by source -- structurally-equal closures share the same native (sound:
+   ; they are =). The transparent form of a hot-trigger: an execution-count trigger
+   ; would need a counting wrapper, but a wrapper is not =/show its source; so the
+   ; trigger is "compile on first request, cached after". Loops stay eager (their
+   ; one application is internally hot). ⚠ pins natives (+ W^X arenas) for the run.
+   cache (tablet 0)
+   (memo e mk) (: g (peep cache e 0) (? g g (: h (mk e) _ (pin cache e h) h)))
+   (auto-ev e) (? (qual e) (memo e njit)
+                  (: li (loopinfo e) (? li (memo e (\ l (njit-loop l (cap li) (caup li)))) (base-ev e))))
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
@@ -63,5 +71,7 @@
     ; LOOP with a conditional body (sum i for i<50, capped) auto-detected
     (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
        h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
-       (&& (lamp (loopinfo L2)) (= c (h 1000)))))
+       (&& (lamp (loopinfo L2)) (= c (h 1000))))
+    (idp (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
+    (idp (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1)))))
  _ (puts "jit/auto: ev auto-natives qualifying closures + counted loops (transparent)") _ (putc 10))
