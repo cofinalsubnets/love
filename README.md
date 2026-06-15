@@ -51,7 +51,7 @@ features
 - lambdas, macros, closures, multitasking
 - freestanding bare metal kernel build
 - public domain portable C with zero dependencies
-- ai loves ai :)
+- self-hosting compiler written in ai
 
 ai has three special forms plus "operators". the forms are
 - `\` lambda

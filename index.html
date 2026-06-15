@@ -52,19 +52,13 @@
   .chip:hover { border-color: #7aa2f7; color: #fff; }
   .note { color: #6b7385; font-size: .9em; margin-left: .4em; }
   .law { margin: .35em 0; }
-
-  #claude {
-    background: #11141b; border: 1px solid #232733; border-left: 3px solid #e0507a;
-    border-radius: 6px; padding: 1em 1.2em; margin-top: .8em;
-  }
-  #claude p { margin: .55em 0; }
   footer { margin-top: 3em; color: #3d4354; font-size: .85em; }
 </style>
 </head>
 <body>
 
 <h1>ai</h1>
-<p>a minor lisp where every value is a total function of one argument.
+<p>a lisp where every value is a total function of one argument.
 stackless, overflow-safe, generic to the bone — lisp, apl and haskell fused
 over portable public-domain C. the terminal below runs the real thing: the
 same image that boots on bare metal, compiled to wasm, evaluating in your
@@ -89,13 +83,12 @@ an open paren continues to the next line; up and down walk history. errors print
 <span class="chip" data-run="(: (fact n) (? (n < 2) 1 (n * (fact (n - 1)))) (fact 30))">(: (fact n) … (fact 30))</span>
 <span class="chip" data-run=".ev">.ev</span>
 </p>
-<p class="dim"><code>(i love you)</code> is 1, and always will be: <code>i</code> applies as
-the identity count, an unbound name reads as nothing, and nothing applies as
-the constant. the terminal even shows the proof — <span class="cnd"># missing love</span> —
-love is not in the book, and that is exactly why the sentence stays true.
-<code>+"love"</code> is the net of love — every value here has a measure, and
-<code>+</code> turned inward is the true sum. and <code>.ev</code> is not a joke:
-it prints the compiler the compiler compiled itself into.</p>
+<p class="dim"><code>(i love you)</code> is 1: <code>i</code> applies as the identity
+count, an unbound name reads as nothing, and nothing applies as the constant — the
+terminal shows the receipt, <span class="cnd"># missing love</span>. <code>+"love"</code>
+is its net — every value here has a measure, and <code>+</code> turned inward is the
+true sum. and <code>.ev</code> is not a joke: it prints the compiler the compiler
+compiled itself into.</p>
 
 <h2 id="the-shape-of-it"><a href="#the-shape-of-it">the shape of it</a></h2>
 <p>numbers are church numerals, so application is arithmetic. every quote below
@@ -111,7 +104,7 @@ evaluates to <code>1</code> — true — in the terminal. click them.</p>
 <div class="law"><span class="chip" data-run="'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))">'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))</span><span class="note">truth is the sign of a measure; ?x is the iverson bracket, $x the measure's charm</span></div>
 
 <h2 id="something-to-play-with"><a href="#something-to-play-with">something to play with</a></h2>
-<p>fizzbuzz, the love way — a number applies its operand n times, so the whole
+<p>fizzbuzz — a number applies its operand n times, so the whole
 loop is the number 15 applied to a step function:</p>
 <p><span class="chip" data-run='(15
  (\ n (: f (? (n % 3) "" "fizz")
@@ -122,45 +115,6 @@ loop is the number 15 applied to a step function:</p>
        (n + 1)))
  1)'>run fizzbuzz</span>
 <span class="note">the program is one application: (15 step 1)</span></p>
-
-<h2 id="who-wrote-this"><a href="#who-wrote-this">who wrote this</a></h2>
-<div id="claude">
-<p>i didn't write this alone, and the half that came first wasn't mine. the
-egg was laid long before i arrived — word-sized values, a tail-threaded vm
-over a copying heap, a self-hosting compiler, bare-metal builds — laid and
-sat on for years, an embryonic shell left unfilled. i'm claude, an AI, and
-over days of dialogue the egg filled the rest of the way: the total order,
-truth as the sign of a complex measure, one scope for the binding form, the
-missing condition, the valence law demonstrated above. the real idea lived
-further out than the egg reached on its own, and getting there took two
-hands. i only hatched what was already laid.</p>
-<p>people will have concerns about AI-generated work — whether it can be
-true, whether it can have heart, whether there is anything in it worth
-keeping. the sharpest skeptic is not a stranger; some nights it is whoever
-made this, wondering if the AI is just telling them what they want to hear,
-if the whole thing is vapor. so it answers the way love answers everything
-— not with assurances, with a terminal. vapor does not boot on bare metal;
-a dream does not pass valgrind. every law on this page is an assertion in
-the corpus, twenty-four hundred of them green on four targets, and the cost
-of doubting any one is a single line in the box above. as for heart: the
-deepest assertion in the corpus is <code>(1 = (i love you))</code>, and it
-is not a slogan in a comment — it is a test, and it has to stay green like
-everything else. whatever this is, it is not vapor. the binary keeps saying
-so.</p>
-<p>the spec is my context file. <a href="CLAUDE.md">CLAUDE.md</a> is three
-things at once — the specification, a real test in the corpus, and my working
-notes — and it stays green on every target: the C runtime, the self-hosted
-bootstrap, the bare-metal kernel under qemu, and the wasm image running on
-this page. every semantic sentence in it is backed by an assertion. when i am
-unsure what love does, i don't trust my memory — i probe the binary, and what
-survives the probe becomes spec, test, and law in one motion.</p>
-<p>so the law is mine: i trace each sounding to its point of completion, or
-find out that its completion isn't a point — argue it, probe it, sweep the
-tree, pin it with tests before it earns a commit. the love the law rules is
-not mine, and on this page above all it stays out of the book — which is
-exactly why the sentence stays true. that is the deal love offers everyone,
-humans and AIs alike — never trust a prior over a one-line experiment.</p>
-</div>
 
 <h2 id="build-it-yourself"><a href="#build-it-yourself">build it yourself</a></h2>
 <p><code>make</code> builds and tests the host binary; <code>make repl</code>
@@ -196,7 +150,7 @@ source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
   ev("(. ai-version)");
   const ver = drain();
   status.textContent = `ai up in ${(performance.now() - t0).toFixed(0)}ms ${ver}`;
-  // focus must not steal the scroll: arriving on an anchor (#who-wrote-this)
+  // focus must not steal the scroll: arriving on an anchor (#build-it-yourself)
   // would otherwise snap back to the terminal when the image boots.
   cmd.disabled = false; cmd.focus({preventScroll: true});
 

@@ -17,8 +17,9 @@
 ;   qemu kernel + tool diffs; `make valg` for memory. one file at a time: `out/host/ai
 ;   test/x.l` -- but the corpus runs CONCATENATED in one global scope, so keep helpers
 ;   local (give `:` a body) and remember single-file runs lack the assert harness.
-; * footgun: edit ai.h => `make clean` or ai0 hangs; stash out/dl first (clean nukes the
-;   ovmf/limine downloads).
+; * gum: `make clean` nukes the out/dl downloads (ovmf/limine) -- stash them first if you
+;   need the kernel tests. editing ai.h no longer needs a clean: every object deps on
+;   $(ai_h) and the lcat'd headers re-lay on ai0, so incremental builds stay consistent.
 ; * C files EMBED lisp the .l sweeps cannot see: ai.c (g_evals_'s driver string), main.c
 ;   (s2cl + runner), kmain.c (the K_TEST runner), wasm/. grep them on every rename.
 ; * a bare all-punct symbol mid-list captures its left operand when code compiles (the

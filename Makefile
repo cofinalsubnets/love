@@ -83,7 +83,7 @@ sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/repl0.h out/lib/tests0.h
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
-$(lib_h): out/lib/%.h: ai/%.$x $(ai0) tools/lcat.$x
+$(lib_h): out/lib/%.h: ai/%.$x tools/lcat.$x   # + $(ai0), stated below where it is in scope
 	@mkdir -p out/lib
 	@echo GEN	$@
 	@$(ai0) -l ai/prel.$x tools/lcat.$x $< > $@
@@ -131,6 +131,14 @@ ai0 = $(ho)/ai0
 
 host: $(ho)/$n $(ho)/lib$n.so $(ho)/$n.1
 ai0: $(ai0)
+
+# The lcat'd lib headers (egg.h et al) are PRODUCED BY running ai0, so re-lay
+# them whenever ai0 changes. This dep belongs in the rule above, but $(ai0) is
+# defined on the line above this one (Make expands prerequisites at PARSE time),
+# so up there it expanded to empty -- the dep silently vanished. Stated here it
+# binds. (The old "edit a .h => make clean or ai0 hangs" gum is otherwise
+# cleaned: ai0's own objects already depend on $(ai_h), so ai0 can't go stale.)
+$(lib_h): $(ai0)
 
 $(ho)/lib$n.a: $(h_o)
 	@echo AR	$@
@@ -196,9 +204,11 @@ $(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm
 	@ln -sf $n $(ho)/love   # love is ai now: the compat alias (the theorem keeps the word)
 
-$(ho)/$n.1: $(ho)/$n ai/manpage.$x
+$(ho)/$n.1: doc/$n.1 out/lib/ai_version.h
 	@echo GEN	$@
-	@$(ho)/$n < ai/manpage.$x > $@
+	@mkdir -p $(dir $@)
+	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/ai_version.h); \
+	 sed "s/@VERSION@/$$v/" doc/$n.1 > $@
 
 # ====================================================================
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.

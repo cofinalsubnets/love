@@ -465,3 +465,105 @@ Proof.
   - intros [H1 H2]. apply Z.leb_le in H1. apply Z.leb_le in H2.
     rewrite H1, H2. cbn. discriminate.
 Qed.
+
+(* ============================================================ *)
+(* arrays: shaped, broadcasting, reductions, contraction        *)
+(* ============================================================ *)
+
+(* A rank-1 array is a vector (list Z); a shape is its dimension sizes. The
+   cell count is the PRODUCT of the shape (alen), the rank its length. Indexing
+   is row-major and out-of-bounds reads the default (peep). + and scalar-* and
+   the contractions are elementwise/bilinear, and the EMPTY REDUCTIONS ANSWER
+   THEIR MONOID UNITS (asum []=0, aprod []=1, aall []=true). Shapes/indices are
+   modeled as Z (via Z.to_nat for nth) to stay in one scope; the higher-rank
+   layout is sketched by the row-major flatten and the matmul cell. *)
+
+Open Scope Z_scope.
+
+(* shape metadata: cell count = product of the shape; rank = its length *)
+Definition alen  (shape : list Z) : Z := fold_right Z.mul 1 shape.
+Definition arank (shape : list Z) : Z := Z.of_nat (length shape).
+Theorem alen_23         : alen [2;3] = 6.    Proof. reflexivity. Qed.
+Theorem arank_23        : arank [2;3] = 2.   Proof. reflexivity. Qed.
+Theorem alen_empty_axis : alen [0] = 0.      Proof. reflexivity. Qed. (* a 0-axis -> 0 cells *)
+
+(* peep: indexed read, out-of-bounds -> the default (nth's own behavior) *)
+Definition znth (i : Z) (v : list Z) (d : Z) : Z := nth (Z.to_nat i) v d.
+Theorem peep_in  : znth 1 [10;20;30] (-1) = 20.   Proof. reflexivity. Qed.
+Theorem peep_oob : znth 9 [10;20;30] (-1) = -1.   Proof. reflexivity. Qed. (* OOB -> default *)
+(* row-major 2D: flat index (i,j) in a cols-wide grid = i*cols + j *)
+Definition znth2 (cols i j : Z) (v : list Z) (d : Z) : Z := znth (i*cols + j) v d.
+Theorem peep_22 : znth2 2 1 0 [1;2;3;4] (-1) = 3.  Proof. reflexivity. Qed. (* [1][0] in 2x2 -> vals[2]=3 *)
+
+(* reductions, and the empty-reduction-is-the-unit law *)
+Definition asum  (v : list Z)    : Z    := fold_right Z.add 0 v.
+Definition aprod (v : list Z)    : Z    := fold_right Z.mul 1 v.
+Definition amax  (v : list Z)    : Z    := match v with [] => 0 | x :: xs => fold_right Z.max x xs end.
+Definition aall  (v : list bool) : bool := forallb (fun b => b) v.
+Theorem asum_empty  : asum [] = 0.     Proof. reflexivity. Qed. (* the monoid units, as empty reductions *)
+Theorem aprod_empty : aprod [] = 1.    Proof. reflexivity. Qed.
+Theorem aall_empty  : aall [] = true.  Proof. reflexivity. Qed.
+Theorem asum_123    : asum [10;20;30] = 60.  Proof. reflexivity. Qed.
+Theorem amax_30     : amax [10;30;20] = 30.  Proof. reflexivity. Qed.
+
+(* broadcasting: + needs conforming shapes (else nil = None); scalar-* scales *)
+Fixpoint vadd (a b : list Z) : option (list Z) :=
+  match a, b with
+  | [], []         => Some []
+  | x :: a', y :: b' => match vadd a' b' with Some r => Some ((x + y) :: r) | None => None end
+  | _, _           => None
+  end.
+Theorem vadd_ok       : vadd [1;2;3] [10;20;30] = Some [11;22;33].  Proof. reflexivity. Qed.
+Theorem vadd_mismatch : vadd [1;2;3] [1;2] = None.                 Proof. reflexivity. Qed. (* shape mismatch -> nil *)
+
+Definition vscale (c : Z) (v : list Z) : list Z := map (Z.mul c) v.
+Theorem vscale_123 : vscale 2 [1;2;3] = [2;4;6].  Proof. reflexivity. Qed.
+
+(* + is the MEASURE HOMOMORPHISM on arrays; * scales the measure by the count *)
+Lemma asum_cons : forall x v, asum (x :: v) = x + asum v.
+Proof. reflexivity. Qed.
+Lemma asum_app : forall a b, asum (a ++ b) = asum a + asum b.
+Proof. induction a as [|x a IH]; intro b; simpl; [reflexivity | unfold asum in *; simpl; rewrite IH; lia]. Qed.
+Theorem asum_vadd : forall a b r, vadd a b = Some r -> asum r = asum a + asum b.
+Proof.
+  induction a as [|x a IH]; intros [|y b] r H; cbn in H; try discriminate.
+  - injection H as H. subst r. reflexivity.
+  - destruct (vadd a b) as [r'|] eqn:E; [|discriminate].
+    injection H as H. subst r. rewrite !asum_cons. rewrite (IH b r' E). lia.
+Qed.
+Theorem asum_vscale : forall c v, asum (vscale c v) = c * asum v.
+Proof. intros c v. unfold vscale, asum. induction v as [|x v IH]; simpl; [ring | rewrite IH; ring]. Qed.
+
+(* ajot: the z-array 0..n-1, jot's array twin, and its GAUSS SUM *)
+Definition ajot (n : nat) : list Z := map Z.of_nat (seq 0 n).
+Theorem ajot_3 : ajot 3 = [0;1;2].  Proof. reflexivity. Qed.
+Theorem ajot_0 : ajot 0 = [].       Proof. reflexivity. Qed. (* (ajot 0) empty -> nothing *)
+Lemma ajot_S : forall n, ajot (S n) = ajot n ++ [Z.of_nat n].
+Proof. intro n. unfold ajot. rewrite seq_S, map_app. reflexivity. Qed.
+Theorem asum_ajot : forall n, 2 * asum (ajot n) = Z.of_nat n * (Z.of_nat n - 1).
+Proof.
+  induction n as [|n IH].
+  - reflexivity.
+  - rewrite ajot_S, asum_app. cbn [asum fold_right]. rewrite Nat2Z.inj_succ. nia.
+Qed.
+Theorem asum_ajot_100 : asum (ajot 100) = 4950.  Proof. now vm_compute. Qed.
+
+(* contraction: the dot product (+.x), commutative; inner needs conforming length *)
+Fixpoint dot (a b : list Z) : Z :=
+  match a, b with x :: a', y :: b' => x * y + dot a' b' | _, _ => 0 end.
+Theorem dot_123_456 : dot [1;2;3] [4;5;6] = 32.  Proof. reflexivity. Qed.
+Theorem dot_comm : forall a b, dot a b = dot b a.
+Proof. induction a as [|x a IH]; intros [|y b]; cbn; try reflexivity; rewrite IH; lia. Qed.
+
+Definition inner (a b : list Z) : option Z :=
+  if Nat.eqb (length a) (length b) then Some (dot a b) else None.
+Theorem inner_ok       : inner [1;2;3] [4;5;6] = Some 32.  Proof. reflexivity. Qed.
+Theorem inner_mismatch : inner [1;2;3] [1;2] = None.       Proof. reflexivity. Qed. (* !(inner ..) *)
+
+(* matmul cell M[i][j] = row i of A, dotted with column j of B (row-major) *)
+Definition row (i : Z) (A : list (list Z)) : list Z := nth (Z.to_nat i) A [].
+Definition col (j : Z) (B : list (list Z)) : list Z := map (fun r => znth j r 0) B.
+Definition mm_cell (A B : list (list Z)) (i j : Z) : Z := dot (row i A) (col j B).
+Theorem matmul_cell :
+  mm_cell [[1;2;3];[4;5;6]] [[7;8];[9;10];[11;12]] 1 1 = 154.
+Proof. reflexivity. Qed.

@@ -1,0 +1,106 @@
+.TH AI 1 "" "ai @VERSION@" "ai manual"
+.SH NAME
+ai \- a curried lisp over a tiny generic core
+.SH SYNOPSIS
+.B ai
+.RB [ \-l
+.IR lib ]
+.RI [ file
+\&...]
+.SH DESCRIPTION
+.B ai
+is a small lisp in which every value is a total function of one argument and
+application is left-to-right currying:
+.RI ( f
+.IR x
+.IR y )
+is
+.RI (( f
+.IR x )
+.IR y )
+and
+.RI ( f )
+is
+.IR f .
+Numbers are Church numerals, a list of numbers is a tower of exponents, and
+data self-applies (it indexes). The core is fully generic: every operation
+dispatches on a value's kind, and the kinds form a lattice ordered by a single
+total order over all values.
+.PP
+There are three special forms \(em
+.B :
+(letrec*/sequence),
+.B ?
+(cond), and
+.B \e
+(lambda, or quote with a single operand) \(em and everything else is a function
+call. Truth is the net measure: a value is false when it nets to nothing and
+true when it nets positive.
+.PP
+With one or more
+.I file
+arguments,
+.B ai
+reads and evaluates each in order and exits. With no arguments it starts an
+interactive read-eval-print loop when standard input is a terminal, and
+otherwise reads and evaluates standard input to end of file.
+.SH OPTIONS
+.TP
+.BI \-l " lib"
+Load
+.I lib
+(read-eval it to end of file) before processing the remaining arguments. May be
+repeated; all
+.B \-l
+options must precede the
+.I file
+arguments.
+.TP
+.I file
+A script to evaluate. Files are processed in the order given. A file that
+cannot be opened is a fatal error.
+.SH EXAMPLES
+.PP
+Evaluate a file:
+.PP
+.RS
+.EX
+ai prog.l
+.EE
+.RE
+.PP
+Load a library, then run a script:
+.PP
+.RS
+.EX
+ai \-l lib.l prog.l
+.EE
+.RE
+.PP
+Evaluate from standard input:
+.PP
+.RS
+.EX
+echo '(+ 1 2)' | ai
+.EE
+.RE
+.PP
+Start the interactive shell:
+.PP
+.RS
+.EX
+ai
+.EE
+.RE
+.SH EXIT STATUS
+.B ai
+exits
+.B 0
+on success and non-zero on a fatal error, such as a file that cannot be opened
+or an explicit
+.RI ( exit
+.IR n ).
+.SH SEE ALSO
+The project README and the executable specification in
+.IR test/spec.l ,
+which asserts every claim of the language on every build target.
