@@ -567,3 +567,79 @@ Definition mm_cell (A B : list (list Z)) (i j : Z) : Z := dot (row i A) (col j B
 Theorem matmul_cell :
   mm_cell [[1;2;3];[4;5;6]] [[7;8];[9;10];[11;12]] 1 1 = 154.
 Proof. reflexivity. Qed.
+
+(* ============================================================ *)
+(* strings, symbols & mints                                     *)
+(* ============================================================ *)
+
+(* A string is its bytes (list Z): it INDEXES them, its NET is the charm sum (a
+   NUL byte nets nothing, so + reaches the bytes and an all-NUL text is
+   nothing), and tally COUNTS them. A symbol is a POINT: a mint is a fresh
+   nameless point -- serial-keyed, materially empty ($ = 0), applying const-1,
+   DISTINCT from every other and equal only to itself; the zero point is the
+   mint at serial 0, the face of absence. A nom is the pair (name . serial),
+   ordered lexicographically -- same-name noms split by serial. The bands order
+   number < symbol < product, so 0 < a mint < a nom (proved via the order
+   section's `lt`: a number is Onum, a point Osym, a nom Oprod). *)
+
+Open Scope Z_scope.
+
+(* --- strings: indexed bytes; net = charm sum; tally = count --- *)
+Definition sidx  (v : list Z) (i : Z) : Z := nth (Z.to_nat i) v 1. (* OOB applies as the unit, 1 *)
+Definition tally (v : list Z) : Z := Z.of_nat (length v).
+Theorem str_index     : sidx [97;98;99] 0 = 97.   Proof. reflexivity. Qed. (* ("abc" 0) = 97 *)
+Theorem str_index_oob : sidx [104;105] 9 = 1.     Proof. reflexivity. Qed. (* ("hi" 9) = 1 *)
+Theorem str_net       : asum [97;98;99] = 294.    Proof. reflexivity. Qed. (* $"abc" = 294 *)
+Theorem str_tally     : tally [97;98;99] = 3.     Proof. reflexivity. Qed. (* (tally "abc") = 3 *)
+
+(* the NUL byte nets nothing: + is the measure homomorphism down to the bytes *)
+Theorem nul_appends_free : asum [97; 0] = 97.   Proof. reflexivity. Qed. (* $(+ "a" 0) = 97 *)
+Theorem all_nul_nothing  : asum [0;0;0] = 0.    Proof. reflexivity. Qed. (* an all-NUL text IS nothing *)
+Theorem string_nul       : asum [0] = 0.        Proof. reflexivity. Qed. (* !(string 0) *)
+Theorem string_one       : asum [1] = 1.        Proof. reflexivity. Qed. (* !!(string 1) *)
+
+(* slice: half-open [i,j) *)
+Definition slice (v : list Z) (i j : Z) : list Z := firstn (Z.to_nat (j - i)) (skipn (Z.to_nat i) v).
+Theorem slice_forbidden :
+  slice [102;111;114;98;105;100;100;101;110;32;112;108;97;110;101;116] 3 9
+  = [98;105;100;100;101;110].   (* "forbidden planet"[3,9) = "bidden" *)
+Proof. reflexivity. Qed.
+Theorem slice_nul : slice [97; 0] 1 2 = [0].   (* (slice (+ "a" 0) 1 2) is the NUL -> nothing *)
+Proof. reflexivity. Qed.
+
+(* --- mints: fresh, distinct, nameless points --- *)
+Inductive mint := Mint (serial : nat).
+Definition mnet (_ : mint) : Z := 0.              (* materially empty: $ = 0 *)
+Definition mapp {A} (_ : mint) (_ : A) : Z := 1.  (* applies const-1 *)
+Definition zero_point : mint := Mint 0.           (* the face of absence (serial 0) *)
+
+Theorem mint_empty    : forall m, mnet m = 0.           Proof. reflexivity. Qed. (* $(mint 0) = 0 *)
+Theorem mint_const1   : forall m (x:Z), mapp m x = 1.   Proof. reflexivity. Qed. (* ((mint 0) 5) = 1 *)
+Theorem mint_self     : forall m : mint, m = m.         Proof. reflexivity. Qed. (* itself only *)
+Theorem mint_distinct : forall a b, Mint a = Mint b <-> a = b.  (* distinct iff serials agree *)
+Proof. intros a b. split; [intro H; injection H; auto | intro H; subst; reflexivity]. Qed.
+
+(* --- noms: the pair (name . serial), ordered (name lex, then serial) --- *)
+Definition nom := (list Z * nat)%type.
+Definition nom_name (n : nom) : list Z := fst n.   (* the name is its cap *)
+Theorem nom_cap : nom_name ([120], 7%nat) = [120].  Proof. reflexivity. Qed. (* (cap (nom 'x)) = "x" *)
+
+Fixpoint lex_lt (a b : list Z) : Prop :=
+  match a, b with
+  | [], [] => False
+  | [], _  => True
+  | _, []  => False
+  | x :: a', y :: b' => x < y \/ (x = y /\ lex_lt a' b')
+  end.
+Definition nom_lt (a b : nom) : Prop :=
+  lex_lt (fst a) (fst b) \/ (fst a = fst b /\ (snd a < snd b)%nat).
+
+(* same-name noms are DISTINCT and ordered by serial (the pair lex inherits it) *)
+Theorem same_name_serial   : forall nm s1 s2, (s1 < s2)%nat -> nom_lt (nm, s1) (nm, s2).
+Proof. intros nm s1 s2 H. right. split; [reflexivity | exact H]. Qed.
+Theorem same_name_distinct : forall (nm : list Z) (s1 s2 : nat), s1 <> s2 -> (nm, s1) <> (nm, s2).
+Proof. intros nm s1 s2 H C. apply H. injection C. auto. Qed.
+
+(* the bands: 0 < a mint < a nom -- number < symbol < product (via the order section) *)
+Theorem point_above_nothing : lt (Onum 0) (Osym 5).   Proof. left. cbn. lia. Qed. (* 0 < (mint 0) *)
+Theorem point_below_nom     : lt (Osym 5) (Oprod 0).   Proof. left. cbn. lia. Qed. (* (mint 0) < (nom 'x) *)
