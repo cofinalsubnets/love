@@ -1,18 +1,18 @@
-// emscripten host shim for love.
+// emscripten host shim for ai.
 //
 // l's frontend contract (see g/g.h): the host must define g_clock, the
 // g_stdin/g_stdout ports, and the g_fd_port_vt vtable that backs any port
 // with fd >= 0. Here stdout's putc appends to a JS-visible byte buffer that
-// the page drains via love_out_ptr/len/reset; stdin always reads EOF (the
-// REPL feeds source through love_eval, not the stdin port). boot.l is
-// embedded and evaluated once by love_init.
+// the page drains via ai_out_ptr/len/reset; stdin always reads EOF (the
+// REPL feeds source through ai_eval, not the stdin port). boot.l is
+// embedded and evaluated once by ai_init.
 #include "love.h"
 #include <emscripten.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdnoreturn.h>
 
-static const char boot_love[] = "("
+static const char boot_ai[] = "("
 #include "egg.h"
   g_egg_pre
 #include "prelude.h"
@@ -21,7 +21,7 @@ static const char boot_love[] = "("
   g_egg_post
 ;
 
-// 256K: a single love_eval can emit a lot before the page drains it -- the
+// 256K: a single ai_eval can emit a lot before the page drains it -- the
 // whole test corpus (test_wasm) runs in one eval and prints ~25K of dots +
 // the summary. Output past the cap is dropped (never overruns, see _putc).
 static char     out_buf[1 << 18];
@@ -82,21 +82,21 @@ static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 static struct g *F;
 
 EMSCRIPTEN_KEEPALIVE
-int love_init(void) {
+int ai_init(void) {
   F = g_ini();
   if (!g_ok(F)) return g_code_of(F);
   struct g_def d[] = {{"exit", (g_word) nif_exit}};
   F = g_defn(F, d, countof(d));
   if (!g_ok(F)) return g_code_of(F);
-  F = g_evals_(F, boot_love);
+  F = g_evals_(F, boot_ai);
   return g_code_of(F); }
 
 EMSCRIPTEN_KEEPALIVE
-int love_eval(const char *src) {
+int ai_eval(const char *src) {
   out_len = 0;
   F = g_evals_(F, src);
   return g_code_of(F); }
 
-EMSCRIPTEN_KEEPALIVE char*    love_out_ptr(void) { return out_buf; }
-EMSCRIPTEN_KEEPALIVE uint32_t love_out_len(void) { return out_len; }
-EMSCRIPTEN_KEEPALIVE void     love_out_reset(void) { out_len = 0; }
+EMSCRIPTEN_KEEPALIVE char*    ai_out_ptr(void) { return out_buf; }
+EMSCRIPTEN_KEEPALIVE uint32_t ai_out_len(void) { return out_len; }
+EMSCRIPTEN_KEEPALIVE void     ai_out_reset(void) { out_len = 0; }

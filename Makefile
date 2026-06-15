@@ -44,10 +44,10 @@ test_tools: host
 all: host kernel wasm
 
 # Point git at the tracked hooks dir (.githooks). The pre-commit hook rebuilds
-# wasm/love.js whenever a commit touches what it is built from, so the committed
+# wasm/ai.js whenever a commit touches what it is built from, so the committed
 # artifact never lags the sources. One-time per clone; idempotent.
 hooks:
-	@git config core.hooksPath .githooks && echo "git hooks -> .githooks (pre-commit keeps wasm/love.js fresh)"
+	@git config core.hooksPath .githooks && echo "git hooks -> .githooks (pre-commit keeps wasm/ai.js fresh)"
 
 # Static lisp headers: each love/*.l is serialized to a C string literal in
 # out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter love0). Frontends

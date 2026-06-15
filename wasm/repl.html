@@ -20,7 +20,7 @@
              resize: none; overflow: hidden; line-height: 1.5; outline: none; }
     #status { color: #888; font-size: .9em; }
   </style>
-  <script src="llove.js"></script>
+  <script src="ai.js"></script>
 </head>
 <body>
   <header>
@@ -43,12 +43,12 @@
     const input  = document.getElementById('input');
 
     const t0 = performance.now();
-    const M = await Love();
-    const init  = M.cwrap('love_init',      'number', []);
-    const eval_ = M.cwrap('love_eval',      'number', ['string']);
-    const oPtr  = M.cwrap('love_out_ptr',   'number', []);
-    const oLen  = M.cwrap('love_out_len',   'number', []);
-    const oRst  = M.cwrap('love_out_reset', null,     []);
+    const M = await Ai();
+    const init  = M.cwrap('ai_init',      'number', []);
+    const eval_ = M.cwrap('ai_eval',      'number', ['string']);
+    const oPtr  = M.cwrap('ai_out_ptr',   'number', []);
+    const oLen  = M.cwrap('ai_out_len',   'number', []);
+    const oRst  = M.cwrap('ai_out_reset', null,     []);
 
     const s = init();
     if (s !== 0) { status.textContent = 'init failed (status ' + s + ')'; return; }

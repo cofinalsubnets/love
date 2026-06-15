@@ -1,13 +1,13 @@
 #!/bin/sh
-# Keep wasm/love.js in lockstep with the sources it is built from. love.js is a
+# Keep wasm/ai.js in lockstep with the sources it is built from. ai.js is a
 # committed artifact (the page's engine ships from the repo), so when a commit
 # touches anything it is built from, rebuild it and stage it -- the committed
 # blob then never lags the committed code.
 #
 # The wasm image bakes the C core + prelude/ev/egg ONLY (not the test corpus,
 # not repl/cli), so only those sources trigger a rebuild; a test/*.l or CLAUDE.l
-# edit leaves love.js untouched. Builds from the working tree, so stage your
-# love.js-affecting changes before committing (the normal flow).
+# edit leaves ai.js untouched. Builds from the working tree, so stage your
+# ai.js-affecting changes before committing (the normal flow).
 #
 # Installed via `git config core.hooksPath .githooks` (run `make hooks`).
 # Bypass for a one-off with `git commit --no-verify`.
@@ -17,13 +17,13 @@ srcs=$(git diff --cached --name-only --diff-filter=ACMR | grep -E \
 [ -n "$srcs" ] || exit 0
 
 if ! command -v emcc >/dev/null 2>&1; then
-  echo "pre-commit: emcc not found -- wasm/love.js may be stale (skipping rebuild)" >&2
+  echo "pre-commit: emcc not found -- wasm/ai.js may be stale (skipping rebuild)" >&2
   exit 0
 fi
 
-echo "pre-commit: love.js sources changed, rebuilding wasm/love.js ..." >&2
+echo "pre-commit: ai.js sources changed, rebuilding wasm/ai.js ..." >&2
 if ! make wasm >/dev/null 2>&1; then
   echo "pre-commit: 'make wasm' failed -- fix the build, or commit with --no-verify" >&2
   exit 1
 fi
-git add wasm/love.js
+git add wasm/ai.js
