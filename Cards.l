@@ -1,13 +1,13 @@
-; Cards.l -- the project's build, as a cook recipe. make, in love, building love.
+; Cards.l -- the project's build, as a cook recipe. make, in ai, building ai.
 ;
 ; run it with the cook.mk front door (`make -f cook.mk test`) or straight:
-;     out/host/love -l tools/cook.l Cards.l [ticket]
+;     out/host/ai -l tools/cook.l Cards.l [ticket]
 ; the first recipe ('all) is the default ticket.
 ;
 ; SCOPE: the cross-cutting verbs + the host build. one rung is DELEGATED to the
 ; real Makefile rather than re-expressed here, on purpose:
-;   * host -- the C bootstrap (ai0 -> reflect data.h -> the love binary) is
-;     circular for cook: building love needs love. make owns that rung; this recipe
+;   * host -- the C bootstrap (ai0 -> reflect data.h -> the ai binary) is
+;     circular for cook: building ai needs ai. make owns that rung; this recipe
 ;     just leans on it (and make no-ops when the binary is already current).
 ; everything else (test, clean, valg, vmret, bench, install) is the genuine command, ported.
 ; the kernel/wasm/qemu/repl verbs stay with make (cook's `run` captures stdout and
@@ -33,7 +33,7 @@
 (recipe 'test '(host)
       (L (L "sh" "-c"
             (+ "o=out/host/.test_host; cat " (+ corpus
-               " | out/host/love >$o 2>&1; cat $o; grep -q 'tests pass' $o")))
+               " | out/host/ai >$o 2>&1; cat $o; grep -q 'tests pass' $o")))
          '("sh" "-c"
             "o=out/host/.test_ai0; out/host/ai0 </dev/null >$o 2>&1; cat $o; [ $(grep -c 'tests pass' $o) -eq 2 ]")))
 
@@ -41,10 +41,10 @@
 (recipe 'valg '(host)
       (L (L "sh" "-c"
             (+ "cat " (+ corpus
-               " | valgrind --error-exitcode=1 --suppressions=tools/valgrind.supp out/host/love")))))
+               " | valgrind --error-exitcode=1 --suppressions=tools/valgrind.supp out/host/ai")))))
 
 ; --- the VM no-return invariant ------------------------------------------------
-(recipe 'vmret '(host) '(("out/host/love" "tools/vmret.l" "out/host/love")))
+(recipe 'vmret '(host) '(("out/host/ai" "tools/vmret.l" "out/host/ai")))
 
 ; --- benchmarks ----------------------------------------------------------------
 (recipe 'bench '(host) '(("make" "-C" "bench" "bench")))
@@ -65,16 +65,16 @@
       (at dir sub) (+ (+ dir "/") sub)                       ; dir/sub
       (cp mode src dst) (L "install" "-D" "-m" mode src dst)
       (cps mode src dst) (L "install" "-D" "-m" mode "-s" src dst)
-      (L (cps "755" "out/host/love"        (at d "bin/love"))
-         (cp  "644" "out/host/love.1"       (at d "share/man/man1/love.1"))
+      (L (cps "755" "out/host/ai"        (at d "bin/ai"))
+         (cp  "644" "out/host/ai.1"       (at d "share/man/man1/ai.1"))
          (cp  "644" "ai/prelude.l"        (at d "lib/ai/prelude.l"))
          (cp  "644" "ai/ev.l"             (at d "lib/ai/ev.l"))
          (cp  "644" "ai/repl.l"           (at d "lib/ai/repl.l"))
          (cp  "644" "out/host/libai.a"    (at d "lib/libai.a"))
          (cps "755" "out/host/libai.so"   (at d "lib/libai.so"))
          (cp  "644" "ai.h"                (at d "include/ai.h"))
-         (cp  "644" "vim/ftdetect.vim"      (at vd "ftdetect/love.vim"))
-         (cp  "644" "vim/syntax.vim"        (at vd "syntax/love.vim"))
-         (cp  "644" "vim/ftplugin.vim"      (at vd "ftplugin/love.vim")))))
+         (cp  "644" "vim/ftdetect.vim"      (at vd "ftdetect/ai.vim"))
+         (cp  "644" "vim/syntax.vim"        (at vd "syntax/ai.vim"))
+         (cp  "644" "vim/ftplugin.vim"      (at vd "ftplugin/ai.vim")))))
 
 (cook (ticket 0))

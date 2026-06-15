@@ -404,7 +404,7 @@ endif
 # runtime after the host and ai0, exercising wasm's <data.h> override
 # (sentinel-ap data kinds, no flat code-address space). The harness evals the
 # whole corpus in one ai_eval and greps the drained output for the zz-fin
-# summary, exactly as test_host greps `cat $t | love`. No-op when emcc or node
+# summary, exactly as test_host greps `cat $t | ai`. No-op when emcc or node
 # is missing (so a plain `make test_all` stays green on a host without them).
 NODE ?= $(shell command -v node 2>/dev/null)
 EMCC ?= $(or $(shell command -v emcc 2>/dev/null),/usr/lib/emscripten/emcc)
@@ -455,7 +455,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@$m
 cloc:
-	cloc --by-file --force-lang=Lisp,$x love ai.c ai.h data.c data.h kmain.c main.c k.h arch tools test vim
+	cloc --by-file --force-lang=Lisp,$x ai ai.c ai.h data.c data.h kmain.c main.c k.h arch tools test vim
 cat: clean all test
 cata: clean all test_all
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.

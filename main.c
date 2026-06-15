@@ -333,7 +333,7 @@ static struct g *boot(struct g *g, bool argp) {
   return g_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
 
 #else
-// the full love: raw terminal mode for the interactive REPL (ai0 never needs
+// the full ai: raw terminal mode for the interactive REPL (ai0 never needs
 // it -- a build tool / self-test is non-interactive); the CLI driver is the
 // canonicalized lcat header; `rel` is the non-tty stdin runner.
 static struct termios saved_termios;

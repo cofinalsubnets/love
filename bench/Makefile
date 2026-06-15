@@ -1,18 +1,18 @@
 # Benchmark harness. Times equivalent numeric / list workloads written in many
 # languages and prints a side-by-side comparison. Each language self-times the
 # inner loop (auto-scaling reps past a 200ms floor) so interpreter startup is
-# excluded; see bench.love / lib/bench.* for the shared protocol.
+# excluded; see bench.ai / lib/bench.* for the shared protocol.
 #
 # Results are cached per language under out/bench/<lang>.txt. The user-facing
 # targets DEPEND on those files and just pretty-print them -- a bench is only
 # (re)run when its result file is missing or older than the bench sources (or,
-# for love, the love binary). So `make bench` reformats instantly once the files
+# for ai, the ai binary). So `make bench` reformats instantly once the files
 # exist; touch a source or `make clean` to force a re-run.
 #
-#   make / make bench   show the default column set (love cpython chez sbcl
+#   make / make bench   show the default column set (ai cpython chez sbcl
 #                          node luajit), running only what is stale
 #   make all            show every language present on this machine
-#   make <lang>         show one language (love is shown alongside for contrast),
+#   make <lang>         show one language (ai is shown alongside for contrast),
 #                          e.g. make chez / make pypy / make owl
 #   make BENCHES=fib …  restrict the workload set (then clean to refresh files)
 #   make TIMEOUT=60 …   per-bench wall-clock cutoff in seconds (default 30)
@@ -28,7 +28,7 @@ R := ..
 include $(R)/common.mk
 
 GL   := $(R)/out/host/$n
-HARN := bench.love
+HARN := bench.ai
 BDIR := $(R)/out/bench
 TIMEOUT ?= 30
 
@@ -39,14 +39,14 @@ BENCHES := fib tak sum mapfilter primes bell strcat strscan hash sort tree float
 # pays the timeout wall for them (re-test by removing one and `make clean`).
 SKIP := owl:bell
 
-# every language, in report-column order (grouped by family). love first.
-ALL_LANGS := love \
+# every language, in report-column order (grouped by family). ai first.
+ALL_LANGS := ai \
              chez petite guile racket mit-scheme chicken bigloo owl \
              sbcl clisp ecl clojure hy fennel elixir \
              python pypy ruby node deno lua luajit luajit-nojit
 
 # the columns `make bench` shows by default.
-DEFAULT_LANGS := love python chez sbcl node luajit elixir
+DEFAULT_LANGS := ai python chez sbcl node luajit elixir
 
 # per-language: source extension, harness file (a result depends on it), the
 # interpreter binary (for the PATH presence check), and any extra prereq.
@@ -126,8 +126,8 @@ BIN_luajit-nojit := luajit
 
 EXTRA_gwen := $(GL)
 
-# love is always available (we build it); others only if their binary is on PATH.
-present = $(if $(filter love,$(1)),$(1),$(if $(shell command -v $(BIN_$(1)) 2>/dev/null),$(1)))
+# ai is always available (we build it); others only if their binary is on PATH.
+present = $(if $(filter ai,$(1)),$(1),$(if $(shell command -v $(BIN_$(1)) 2>/dev/null),$(1)))
 PRESENT := $(foreach L,$(ALL_LANGS),$(call present,$(L)))
 SHOW    := $(filter $(PRESENT),$(DEFAULT_LANGS))
 
@@ -145,13 +145,13 @@ $(BDIR):
 
 # Per-language result file + single-language report target. The result file is
 # regenerated (benches re-run) only when its sources change; the phony <lang>
-# target just formats it, alongside love for contrast (love shows only itself).
+# target just formats it, alongside ai for contrast (ai shows only itself).
 define LANG_rule
 $$(BDIR)/$(1).txt: $(HARN_$(1)) $$(wildcard benches/*.$(EXT_$(1))) run.sh $(EXTRA_$(1)) | $$(BDIR)
 	@./run.sh $(1) "$$(BENCHES)" $$(TIMEOUT) "$$(SKIP)" > $$@
 
-$(1): $$(call txt,$(1)) $(if $(filter love,$(1)),,$$(call txt,love))
-	@awk -v langs='$(if $(filter love,$(1)),love,love $(1))' -f report.awk $$^
+$(1): $$(call txt,$(1)) $(if $(filter ai,$(1)),,$$(call txt,ai))
+	@awk -v langs='$(if $(filter ai,$(1)),ai,ai $(1))' -f report.awk $$^
 endef
 $(foreach L,$(ALL_LANGS),$(eval $(call LANG_rule,$(L))))
 

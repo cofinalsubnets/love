@@ -1,7 +1,7 @@
 ; Driver for `make test_kernel`: boot the headless serial test kernel under qemu,
 ; capture its serial console (the baked corpus runs at boot and prints the usual
 ; "N tests pass" summary, then (exit) quits qemu via isa-debug-exit), and report.
-; Run on the host love, which has the `run` subprocess nif. argv = (this iso ovmf).
+; Run on the host ai, which has the `run` subprocess nif. argv = (this iso ovmf).
 
 (: (sub-at s i t j) (? (>= j (tally t)) 1                    ; does t occur in s at index i?
        (? (= (peep s (+ i j) 0) (peep t j 0)) (sub-at s i t (+ 1 j)) 0))

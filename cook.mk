@@ -1,10 +1,10 @@
 # cook.mk -- a make-shaped front door to cook (tools/cook.l + the project Cards.l).
 #
-# `make` is muscle memory; cook is the build tool written in love. This STUB
-# bridges them: `make -f cook.mk <goal>` makes sure the love binary exists, then
+# `make` is muscle memory; cook is the build tool written in ai. This STUB
+# bridges them: `make -f cook.mk <goal>` makes sure the ai binary exists, then
 # hands the goal to cook, which reads Cards.l. The real Makefile is left untouched
 # and stays the source of truth for the irreducible C bootstrap -- cook RUNS on
-# love, so it cannot build love; that one rung is delegated to make, and cook
+# ai, so it cannot build ai; that one rung is delegated to make, and cook
 # ports everything above it (see Cards.l).
 #
 # usage:  make -f cook.mk            # the default goal (all = the host build)
@@ -15,8 +15,8 @@
 # (cook's `run` captures stdout and waits, so no streaming and no tty) -- is passed
 # straight to the real Makefile below.
 
-LOVE := out/host/love
-COOK := $(LOVE) -l tools/cook.l Cards.l
+AI := out/host/ai
+COOK := $(AI) -l tools/cook.l Cards.l
 
 .DEFAULT_GOAL := all
 
@@ -24,14 +24,14 @@ COOK := $(LOVE) -l tools/cook.l Cards.l
 # binary is absent (a fresh checkout), handing the C build to the real Makefile.
 # Source-change rebuilds are handled by Cards.l's 'host card (a `make host` that
 # no-ops when current), so this is not a staleness gate, just an existence one.
-$(LOVE):
+$(AI):
 	@$(MAKE) host
 
 # The verbs cook owns: it shells out to the toolchain itself. Ensure the binary
 # exists first, then let cook (via Cards.l) take over.
 COOKED := all test clean install bench vmret valg
 .PHONY: $(COOKED)
-$(COOKED): $(LOVE)
+$(COOKED): $(AI)
 	@$(COOK) $@
 
 # The verbs cook can't drive (interactive / streaming / sub-make): pass through to
