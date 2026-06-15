@@ -28,7 +28,7 @@ R := ..
 include $(R)/common.mk
 
 GL   := $(R)/out/host/$n
-HARN := bench.ai
+HARN := bench.l
 BDIR := $(R)/out/bench
 TIMEOUT ?= 30
 
@@ -50,7 +50,7 @@ DEFAULT_LANGS := ai python chez sbcl node luajit elixir
 
 # per-language: source extension, harness file (a result depends on it), the
 # interpreter binary (for the PATH presence check), and any extra prereq.
-EXT_gwen := g
+EXT_ai := l
 EXT_chez := ss
 EXT_petite := ss
 EXT_guile := scm
@@ -75,7 +75,7 @@ EXT_lua := lua
 EXT_luajit := lua
 EXT_luajit-nojit := lua
 
-HARN_gwen := $(HARN)
+HARN_ai := $(HARN)
 HARN_chez := lib/bench.ss
 HARN_petite := lib/bench.ss
 HARN_guile := lib/bench.scm
@@ -124,7 +124,7 @@ BIN_lua := lua
 BIN_luajit := luajit
 BIN_luajit-nojit := luajit
 
-EXTRA_gwen := $(GL)
+EXTRA_ai := $(GL)
 
 # ai is always available (we build it); others only if their binary is on PATH.
 present = $(if $(filter ai,$(1)),$(1),$(if $(shell command -v $(BIN_$(1)) 2>/dev/null),$(1)))
