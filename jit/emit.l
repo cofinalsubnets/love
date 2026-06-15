@@ -64,7 +64,7 @@
                      0)
    (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (twop x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
-   (jit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam)) 0) epilogue)) (ev lam) lam)
+   (jit lam) (: v (caup lam) (nat (emit (cat (cgv v ld-x (caup (cup lam)) 0) epilogue)) (ev lam) lam))  ; v = the param, any name (single arg at Sp[0])
    ; --- N-ary leaves (\ p0 .. p_{n-1} E): param i loads from Sp[i]=[rcx+8i]; the deopt
    ; jmps to interp's BODY (deopt-mn, interp+16 past its lvm_cur) where the saturated
    ; args already sit -- so the deopt/epilogue/return below are all arity-INDEPENDENT
@@ -122,6 +122,7 @@
   ((\ x (+ (* x 3) 1)) = f)                                  ; ... and are =-IDENTICAL to their source
   !(f = (\ x (+ (* x 3) 2)))
   (f = (jit '(\ x (+ (* x 3) 1))))                           ; two natives, same source
+  (: q (jit '(\ n (+ (* n 3) 1))) (&& (31 = (q 10)) ((\ n (+ (* n 3) 1)) = q) (q = f)))  ; arity-1 leaf, non-x param (= f up to alpha)
   ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))           ; compose with higher-order fns
   ((isum 1000) = (g 1000))                                   ; the loop agrees with the interpreter
   (9000000000000000000 = ((jit '(\ x (* x x))) 3000000000))  ; OVERFLOW -> deopt -> correct bignum

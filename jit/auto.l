@@ -25,8 +25,8 @@
                                   0))
                   0)
    ; --- leaf: (\ x E) ---
-   (qual lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (= (caup lam) 'x)
-                  (twop (cup (cup lam))) !(twop (cup (cup (cup lam)))) (exprp (caup (cup lam)) 'x))
+   (qual lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (symp (caup lam))                ; (\ v E), v any symbol
+                  (twop (cup (cup lam))) !(twop (cup (cup (cup lam)))) (exprp (caup (cup lam)) (caup lam)))
    ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
    (exprn ps e) (? (memq e ps) 1  (intp e) 1
                    (twop e) (: op (cap e)
@@ -40,7 +40,7 @@
                   (&& (twop lam) (= (cap lam) '\) (twop (cup lam))
                       (all symp ps) (< 1 (tally ps)) (distinctp ps)                     ; >=2 distinct symbol params
                       (exprn ps body)))
-   (njit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam)) 0) epilogue)) (base-ev lam) lam)
+   (njit lam) (: v (caup lam) (nat (emit (cat (cgv v ld-x (caup (cup lam)) 0) epilogue)) (base-ev lam) lam))  ; v any param name
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)
     (: M    (caup (cup lam))                                ; lambda body
@@ -96,6 +96,7 @@
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
     (23 = ((ev '(\ x (+ (* x 2) 3))) 10))
     (((base-ev '(\ x (+ (* x 9) 4))) 11) = ((ev '(\ x (+ (* x 9) 4))) 11))      ; native leaf == interp (catches njit codegen regressions)
+    (: ny (ev '(\ y (+ y 1))) (&& (6 = (ny 5)) ((\ y (+ y 1)) = ny)))   ; arity-1 leaf, non-x param, auto-natived
     (3 = ((ev '(\ x (cap x))) '(3 4)))                         ; non-qualifying -> interpreter
     (6 = (ev '(+ 1 2 3)))                                      ; non-lambda forms unaffected
     (9000000000000000000 = ((ev '(\ x (* x x))) 3000000000))   ; overflow deopts -> bignum

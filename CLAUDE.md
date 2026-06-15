@@ -38,16 +38,21 @@
 ; `make vmret` checks it) over a two-space copying heap. every operation is *fully generic* --
 ; it dispatches on a value's *kind*, and the kinds form a lattice that is literally the
 ; diagonal of the dispatch tables. the C core is tiny; most of the language is love closures
-; installed reflectively from the prelude, then woken into a heap image (the *egg*) at
+; installed reflectively from the prelude, then laid into a heap image (the *egg*) at
 ; compile time. the gritty details sit at the bottom.
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
 ;   N the green charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
 ;     <  R reals (float)  <  C complex  <  O objects (string < symbol < product < map < top)
-; numbers nest as usual (N in Z in R in C). a fixnum is a CHARM: the GREEN charms are N (the
-; nonnegatives, exactly what $ keeps), the RED charms the negatives below it ($ clamps them to
-; nothing) -- so $ passes the green and stops the red at nothing, and a charm is true iff it is
-; positive green (0 the green floor, still nothing). the *rank* axis is scalar (0) vs array (>= 1, one
+; numbers nest as usual (N in Z in R in C). a fixnum is a CHARM, and every value wears a COLOR --
+; the order-sign of its net: GREEN nets nonnegative (what $ keeps), RED nets negative (what $
+; clamps to nothing), and BLUE is green's FLOOR -- net exactly zero, kept like a green yet nothing.
+; so $ passes the green and stops the red at nothing, and a value is true iff it is POSITIVE green
+; (above the blue floor; blue and red both net false). the GREEN charms are N (the nonnegatives),
+; the RED charms the negatives below, and 0 is the ONE BLUE CHARM -- green by sign yet blue by
+; measure, the floor where green meets nothing. color spans the UNCHARMS too, by the same net:
+; '(1) is green, '(0)/()/""/~(0 0) are blue (every nothing is blue), '(-2 1) is red, while a box
+; stays green (#0 nets 1: presence over nothing). the *rank* axis is scalar (0) vs array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
 ; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
 ; string < symbol < product < map < top, each band ordered within itself (text and products
@@ -128,6 +133,7 @@
  (1 = $(cons 1 2)) !(cons 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
  (8 = $(L ~(3 4) ~(-3 4))) !(L ~(0 5) -1)        ; phases sum as vectors; the order signs the TOTAL, once
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
+ (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (idp non nilp) (1 = (non 0))  ; ! negates it; non is nilp
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
@@ -540,7 +546,7 @@
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure
 ;     globals, mark apply strategy, and flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins; a map is a lookup function.
-; the *egg* (love/egg.l): you WAKE the egg (the quoted prelude+ev corpus) and the evaluator SITS
+; the *egg* (love/egg.l): you WARM the egg (the quoted prelude+ev corpus) and the evaluator SITS
 ; on it twice -- compile the compiler with the C bootstrap, recompile the whole corpus through
 ; itself -- then the hatchling installs as `ev` in the image at C compile time, no allocation;
 ; `born` records the hatch time (unbound pre-egg: love0's first corpus pass runs PRE-egg, and an
