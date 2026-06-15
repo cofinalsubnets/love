@@ -1,7 +1,7 @@
 # 32-bit / wasm port: findings
 
 The wasm shim (`host.c`) is a 32-bit, browser-hosted build of love. Running the
-full test corpus against it (`make test_wasm`: love.js under node, the same `$t`
+full test corpus against it (`make test_wasm`: ai.js under node, the same `$t`
 the native gate eats) surfaced the differences below.
 
 ## Platform facts (gated in the corpus on `w64`, expected)

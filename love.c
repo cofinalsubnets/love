@@ -1,12 +1,12 @@
 #include "love.h"
-// The build's version string (the version-control id), generated into out/lib/love_version.h by
-// the Makefile and surfaced in the runtime as the `love-version` global (g_ini_0).
+// The build's version string (the version-control id), generated into out/lib/ai_version.h by
+// the Makefile and surfaced in the runtime as the `ai-version` global (g_ini_0).
 // Optional include so a standalone/unwired compile still builds; falls back to "unknown".
-#if defined(__has_include) && __has_include("love_version.h")
-#include "love_version.h"
+#if defined(__has_include) && __has_include("ai_version.h")
+#include "ai_version.h"
 #endif
-#ifndef LOVE_VERSION
-#define LOVE_VERSION "unknown"
+#ifndef AI_VERSION
+#define AI_VERSION "unknown"
 #endif
 
 // ============================================================================
@@ -755,10 +755,10 @@ static struct g *g_ini_0(struct g*g, uintptr_t len0, void *(*ma)(struct g*, size
   g = g_defn(g, def0, countof(def0));
   g = g_defn(g, def1, countof(def1));
   g = g_defn(g, frontend_defaults, countof(frontend_defaults));   // overridable by the frontend
-  // `love-version`: the build's version-control id (love_version.h), surfaced on init so the user
+  // `ai-version`: the build's version-control id (ai_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
-  if (g_ok(g = g_strof(g, LOVE_VERSION))) {
-   struct g_def vd[] = {{"love-version", g_pop1(g)}};
+  if (g_ok(g = g_strof(g, AI_VERSION))) {
+   struct g_def vd[] = {{"ai-version", g_pop1(g)}};
    g = g_defn(g, vd, countof(vd)); }
   // the missing condition tag ('missing), pre-interned and rooted (v0..end in
   // struct g) so lvm_freev's raise path never allocates the tag and the

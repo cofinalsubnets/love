@@ -3,7 +3,7 @@
 (: (load1 p)
    (: q (open p "r")
       (? q ((: (g e q) (: r (read q e) (? (= e r) 0 (: _ (ev 'ev r) (g e q))))) (mint 0) q)
-           (: _ (fputs err (+ "love: cannot open " p)) (exit 1)))))
+           (: _ (fputs err (+ "ai: cannot open " p)) (exit 1)))))
 (: (strip-l a)
    (? (& (twop a) (= (cap a) "-l"))
       (: _ (load1 (cap (cup a))) (strip-l (cup (cup a))))

@@ -198,7 +198,7 @@ source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
   // the shell's default help: a condition prints "# a b" and answers (), so
   // the session survives every raise -- the same law as the native shell.
   ev("(: help (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \"# \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
-  ev("(. love-version)");
+  ev("(. ai-version)");
   const ver = drain();
   status.textContent = `ai up in ${(performance.now() - t0).toFixed(0)}ms ${ver}`;
   // focus must not steal the scroll: arriving on an anchor (#who-wrote-this)

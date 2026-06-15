@@ -1,16 +1,16 @@
-; generates the manual page: out/host/love.1 (groff -man source on stdout)
+; generates the manual page: out/host/ai.1 (groff -man source on stdout)
 (:
  (putln s) (: _ (puts s) (putc 10))
  concat (foldl (+) "")
  sec "1"
- nom "love"
- upnom "LOVE"
+ nom "ai"
+ upnom "AI"
  section (+ ".SH ")
  (fmt i s) (concat (L "\\f[" i "]" s "\\f[R]"))
  bold (fmt "B")
  ital (fmt "I")
  lines (L
-   (concat (L ".TH \"" upnom "\" \"" sec "\" \"\" \"Version " love-version "\" \"" upnom "\""))
+   (concat (L ".TH \"" upnom "\" \"" sec "\" \"\" \"Version " ai-version "\" \"" upnom "\""))
    (section "NAME")
    (+ (bold nom) " \\- list expression interpreter")
    (section "SYNOPSIS")
