@@ -27,18 +27,19 @@
    ; --- leaf: (\ x E) ---
    (qual lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (= (caup lam) 'x)
                   (twop (cup (cup lam))) !(twop (cup (cup (cup lam)))) (exprp (caup (cup lam)) 'x))
-   ; --- arity-2 leaf: (\ x y E), E over {x,y} ---
-   (expr2 e) (? (= e 'x) 1 (= e 'y) 1 (intp e) 1
-                (twop e) (: op (cap e)
-                            (? (memq op '(+ - * // % & | ^ < <= > >= =)) (&& (expr2 (caup e)) (expr2 (caup (cup e))))
-                               (= op '?) (&& (twop (cup (cup (cup e)))) !(twop (cup (cup (cup (cup e)))))
-                                            (expr2 (caup e)) (expr2 (caup (cup e))) (expr2 (caup (cup (cup e)))))
-                               0))
-                0)
-   (qual2 lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (= (caup lam) 'x)
-                   (twop (cup (cup lam))) (= (caup (cup lam)) 'y)
-                   (twop (cup (cup (cup lam)))) !(twop (cup (cup (cup (cup lam)))))   ; exactly (\ x y body)
-                   (expr2 (caup (cup (cup lam)))))
+   ; --- arity-2 leaf: (\ p0 p1 E), E over {p0,p1} (any distinct symbols) ---
+   (expr2 e v0 v1) (? (= e v0) 1 (= e v1) 1 (intp e) 1
+                      (twop e) (: op (cap e)
+                                  (? (memq op '(+ - * // % & | ^ < <= > >= =)) (&& (expr2 (caup e) v0 v1) (expr2 (caup (cup e)) v0 v1))
+                                     (= op '?) (&& (twop (cup (cup (cup e)))) !(twop (cup (cup (cup (cup e)))))
+                                                  (expr2 (caup e) v0 v1) (expr2 (caup (cup e)) v0 v1) (expr2 (caup (cup (cup e))) v0 v1))
+                                     0))
+                      0)
+   (qual2 lam) (: p0 (caup lam) p1 (caup (cup lam))
+                  (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (symp p0)
+                      (twop (cup (cup lam))) (symp p1) !(= p0 p1)
+                      (twop (cup (cup (cup lam)))) !(twop (cup (cup (cup (cup lam)))))   ; exactly (\ p0 p1 body)
+                      (expr2 (caup (cup (cup lam))) p0 p1)))
    (njit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam))) epilogue)) (base-ev lam) lam)
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)

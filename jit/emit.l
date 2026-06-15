@@ -78,16 +78,19 @@
                       (= op '-) (cat pop-r8 (cat '(73 41 192) (cat (guard-mn d) '(76 137 192)))) 0)
    (idivseq-mn op d) (cat pop-r8 (cat '(72 133 192) (cat (guardz-mn d)
      (cat '(82 80 76 137 192 72 153 72 247 60 36) (cat (? (= op '%) '(72 137 208) 0) '(72 131 196 8 90))))))
-   (cg2 e d) (? (= e 'x) ld-x  (= e 'y) ld-y  (intp e) (cat '(72 184) (le8 e))
-                (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
-                            (? (memq op '(+ - *))      (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (opseq-mn op d))))
-                               (memq op '(// %))        (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (idivseq-mn op d))))
-                               (memq op '(& | ^))       (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (bitseq op))))
-                               (memq op '(< <= > >= =)) (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (cmpseq op))))
-                               (= op '?) (condcode (cg2 a d) (cg2 b d) (cg2 (caup (cup (cup e))) d))
-                               0))
-                0)
-   (jit2 lam) (natn (emit (cat (cg2 (caup (cup (cup lam))) 0) epilogue-mn)) (ev lam) lam 2)
+   ; v0 -> Sp[0] (the FIRST param: a capture when this native is partial-applied),
+   ; v1 -> Sp[1] (the second). Arbitrary names, so captures = partial-apply (below).
+   (cg2 v0 v1 e d) (? (= e v0) ld-x  (= e v1) ld-y  (intp e) (cat '(72 184) (le8 e))
+                      (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
+                                  (? (memq op '(+ - *))      (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (opseq-mn op d))))
+                                     (memq op '(// %))        (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (idivseq-mn op d))))
+                                     (memq op '(& | ^))       (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (bitseq op))))
+                                     (memq op '(< <= > >= =)) (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (cmpseq op))))
+                                     (= op '?) (condcode (cg2 v0 v1 a d) (cg2 v0 v1 b d) (cg2 v0 v1 (caup (cup (cup e))) d))
+                                     0))
+                      0)
+   (jit2 lam) (: p0 (caup lam) p1 (caup (cup lam)) body (caup (cup (cup lam)))
+                 (natn (emit (cat (cg2 p0 p1 body 0) epilogue-mn)) (ev lam) lam 2))
    ; (loopcode body cv) -- the native counted-loop bytes for sum_{cv<n} body(cv),
    ; cv the counter var (limit at Sp[0]). r9=n r10=cv r11=acc. Reusable by jitsum
    ; and by the auto loop-detector (jit/auto.l).
@@ -135,5 +138,9 @@
   (: ad (jit2 '(\ x y (+ x y)))           (&& (7 = (ad 3 4)) (7 = ((ad 3) 4))))
   (: sb (jit2 '(\ x y (- (* x x) y)))     (&& (5 = (sb 3 4)) (16000000000000000000 = (sb 4000000000 0))))
   ((\ x y (+ x y)) = (jit2 '(\ x y (+ x y))))
-  (: dd (jit2 '(\ x y (// x y)))          (&& (3 = (dd 13 4)) (-2 = (dd -7 3)))))
+  (: dd (jit2 '(\ x y (// x y)))          (&& (3 = (dd 13 4)) (-2 = (dd -7 3))))
+  ; CAPTURES = partial-apply a native multi-arg; the leading param(s) are the captures.
+  (: mk (jit2 '(\ n x (+ x n)))  a5 (mk 5)  a7 (mk 7)
+     (&& (15 = (a5 10)) (17 = (a7 10)) ('(6 7 8) = (map a5 '(1 2 3)))                 ; native captured closure, composes
+         (16000000000000000000 = ((mk 0) 4000000000)))))                             ; ... and deopts through the capture
  _ (puts "jit/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))
