@@ -1,6 +1,6 @@
 ; spec2coq: generate Coq from test/spec.l, in ai.
 ;
-; A slice of the .l -> .v pipeline (see proof/spec.v, the hand-written laws).
+; A slice of the .l -> .v pipeline (see rocq/spec.v, the hand-written laws).
 ; Each top-level (assert ..) operand is run through `opfix` (the compiler's own
 ; factor pass -- infix to prefix, precedence and currying resolved) and, when it
 ; is an INTEGER comparison whose operands are integer-valued (church-numeral
@@ -9,7 +9,7 @@
 ; Everything else (floats, strings, the predicates, the general laws) is SKIPPED
 ; and COUNTED -- never silently dropped (the trailing comment reports coverage).
 ; Modeled over Z, not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
-; Reads test/spec.l, writes Coq to `out`.  Run: out/host/ai tools/spec2coq.l > proof/gen.v
+; Reads test/spec.l, writes Coq to `out`.  Run: out/host/ai tools/spec2coq.l > rocq/gen.v
 
 (: (cat l) (foldl (+) "" l)                            ; join a list of strings
 
@@ -140,7 +140,7 @@
                    (walk (cup fs))))
 
    _ (. (cat (L
-     "(* proof/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;" (string 10)
+     "(* rocq/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;" (string 10)
      "   regenerate with `make test_gen`. Each integer-comparison corpus assert is" (string 10)
      "   translated to Coq, with its source assert shown in the comment above it." (string 10)
      "   The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation," (string 10)

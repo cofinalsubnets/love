@@ -1,4 +1,4 @@
-(* proof/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;
+(* rocq/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;
    regenerate with `make test_gen`. Each integer-comparison corpus assert is
    translated to Coq, with its source assert shown in the comment above it.
    The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation,

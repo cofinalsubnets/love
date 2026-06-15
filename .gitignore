@@ -1,10 +1,10 @@
 vgcore.*
 .gdb_history
 /out/
-# rocq/coqc build artifacts (proof/spec.v is checked by `make test_proof`)
+# rocq/coqc build artifacts (rocq/spec.v is checked by `make test_proof`)
 *.vo
 *.vok
 *.vos
 *.glob
-proof/.*.aux
+rocq/.*.aux
 .*.cache

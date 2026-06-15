@@ -1,4 +1,4 @@
-(* proof/spec.v -- ai's headline laws, machine-checked in Rocq.
+(* rocq/spec.v -- ai's headline laws, machine-checked in Rocq.
 
    The executable spec is test/spec.l: every claim assert-backed, on every
    target, green under `make test`. That DEMONSTRATES the laws (it exhibits
