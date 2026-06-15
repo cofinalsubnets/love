@@ -1,11 +1,11 @@
-# cook.mk -- a make-shaped front door to cook (tools/cook.l + the project Cards.l).
+# cook.mk -- a make-shaped front door to cook (tools/cook.l + the project Cookfile).
 #
 # `make` is muscle memory; cook is the build tool written in ai. This STUB
 # bridges them: `make -f cook.mk <goal>` makes sure the ai binary exists, then
-# hands the goal to cook, which reads Cards.l. The real Makefile is left untouched
+# hands the goal to cook, which reads Cookfile. The real Makefile is left untouched
 # and stays the source of truth for the irreducible C bootstrap -- cook RUNS on
 # ai, so it cannot build ai; that one rung is delegated to make, and cook
-# ports everything above it (see Cards.l).
+# ports everything above it (see Cookfile).
 #
 # usage:  make -f cook.mk            # the default goal (all = the host build)
 #         make -f cook.mk test
@@ -16,19 +16,19 @@
 # straight to the real Makefile below.
 
 AI := out/host/ai
-COOK := $(AI) -l tools/cook.l Cards.l
+COOK := $(AI) -l tools/cook.l Cookfile
 
 .DEFAULT_GOAL := all
 
 # The bootstrap rung cook can't climb. No prerequisites: this fires ONLY when the
 # binary is absent (a fresh checkout), handing the C build to the real Makefile.
-# Source-change rebuilds are handled by Cards.l's 'host card (a `make host` that
+# Source-change rebuilds are handled by Cookfile's 'host card (a `make host` that
 # no-ops when current), so this is not a staleness gate, just an existence one.
 $(AI):
 	@$(MAKE) host
 
 # The verbs cook owns: it shells out to the toolchain itself. Ensure the binary
-# exists first, then let cook (via Cards.l) take over.
+# exists first, then let cook (via Cookfile) take over.
 COOKED := all test clean install bench vmret valg
 .PHONY: $(COOKED)
 $(COOKED): $(AI)

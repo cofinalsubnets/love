@@ -1,8 +1,9 @@
-; Cards.l -- the project's build, as a cook recipe. make, in ai, building ai.
+; Cookfile -- the project's build, as a cook recipe. make, in ai, building ai.
 ;
 ; run it with the cook.mk front door (`make -f cook.mk test`) or straight:
-;     out/host/ai -l tools/cook.l Cards.l [ticket]
-; the first recipe ('all) is the default ticket.
+;     out/host/ai -l tools/cook.l Cookfile [ticket]
+; the first recipe ('all) is the default ticket. (cook discovers a Makefile before
+; a Cookfile, so name this one explicitly -- as cook.mk does -- to use it here.)
 ;
 ; SCOPE: the cross-cutting verbs + the host build. one rung is DELEGATED to the
 ; real Makefile rather than re-expressed here, on purpose:

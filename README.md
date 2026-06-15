@@ -130,7 +130,8 @@ in the corpus, so every claim stays green.
 - `make test_all` adds the freestanding kernel (qemu) + tool diffs
 - `make wasm` build the browser image (wasm/ai.js, used by index.html)
 - `make hooks` install the pre-commit hook that keeps wasm/ai.js fresh
-- `out/host/love` is a symlink to `ai` -- ai is the binary; love stays the word (the theorem)
+- `out/host/ai` is the binary -- ai is the word now; love is documentation (the
+  story the theorem still tells: `1 = (i love you)`)
 - `out/host/ai file.l` run a file
 - `echo .ev | ai` print the compiler
 
@@ -149,7 +150,7 @@ per the law.
 
 `make`, in ai. [tools/cook.l](tools/cook.l) is a small dependency-driven
 build tool -- bring an item up to date when it is missing or older than any of
-its ingredients -- driven by a `Cards.l` recipe file:
+its ingredients -- driven by a `Cookfile` recipe file:
 
 ```
 (recipe "hello" '("hello.o" "greet.o")
@@ -166,12 +167,18 @@ cook an item -- check its date, prep its ingredients, follow the recipe's
 steps, record what shipped, from the cards; the ticket names what to make
 (default: the first card, the standing check).
 
-- `ai -l tools/cook.l Cards.l [ticket]` -- cook a ticket
+- `ai -l tools/cook.l [ticket]` -- cook a ticket (cook discovers the build file:
+  a `Makefile` if present, else a `Cookfile`, else a legacy `Cards.l`; name one
+  explicitly to override)
+- cook reads a real **Makefile** directly, via a small parser-combinator import:
+  variable expansion, rules, `.PHONY` and the `$@ $< $^` automatics become cards
+  (each recipe line run under `sh -c`); pattern rules, `include` and conditionals
+  have no cook equivalent and are passed over
 - `make -f cook.mk test` -- the make-shaped stub: bootstraps the binary, then
-  forwards to cook
+  forwards to cook (it names the `Cookfile` explicitly)
 - [tools/cook-example/](tools/cook-example/) is a worked C build
 
-ai builds itself this way too: the root [Cards.l](Cards.l) ports the
+ai builds itself this way too: the root [Cookfile](Cookfile) ports the
 cross-cutting verbs (`test clean valg vmret bench`), delegating the C
 bootstrap to the real Makefile -- cook runs on ai, so it can't build ai.
 
