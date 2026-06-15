@@ -104,6 +104,22 @@
    (spine acc rest) (? (twop rest)
                        (spine (cat (L "(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
 
+   ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable
+   (tk x) (? (intv? x) "Vz"  (flop x) "Vflo"  (strp x) "Vstr"  (idp x 'i) "Vcx"
+             (twop x) (: h (cap x)
+                        (? (idp h bs) (tkq (e2 x))                     ; '(..) or 'x
+                           (idp h 'plex) "Vcx"                         ; ~(re im)
+                           (idp h 'hash) "Vmap"                        ; #(..)
+                           (| (idp h 'tuple) (idp h 'ajot)) "Varr"     ; @(..) / (ajot n)
+                           "Vbot"))
+             "Vbot")
+   (tkq q) (? (symp q) "Vsym" (twop q) "Vpair" (fixp q) "Vz" "Vbot")   ; the quoted datum's kind
+   (kpred h) (? (idp h 'fixp) "fixp" (idp h 'flop) "flop" (idp h 'comp) "comp"
+                (idp h 'strp) "strp" (idp h 'symp) "symp" (idp h 'twop) "twop"
+                (idp h 'mapp) "mapp" (idp h 'arrp) "arrp" (idp h 'nump) "nump"
+                (idp h 'intp) "intp" (idp h 'atomp) "atomp" (idp h 'packp) "packp"
+                (idp h 'lamp) "lamp" 0)
+
    ; translate a top-level predicate to a Coq bool, or 0 if not translatable.
    ; `!` factors to `nilp`: (nilp x) is the bit "x is nothing" (x <= 0 for integers);
    ; (nilp (nilp x)) is `!!x`, x truthy -- the negation of the inner bit.
@@ -113,6 +129,7 @@
                                    (? (intv? a)  (cat (L "(Z.leb " (tv a) " 0)"))
                                       (listv? a) (cat (L "(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
                                       (: p (tp a) (? p (cat (L "(negb " p ")")) 0))))
+                   (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 (cat (L "(" (kpred h) " " t ")"))))  ; (fixp 5), (twop '(..))..
                    (! (len3? f)) 0
                    (idp h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   (cat (L "(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
                                  (&& (listv? (e2 f)) (listv? (e3 f))) (cat (L "(leqb " (tl (e2 f)) " " (tl (e3 f)) ")"))  ; list/array =
@@ -162,7 +179,22 @@
      "Definition vscale (c:Z):list Z->list Z := map (Z.mul c)." (string 10)
      "Definition vquot (c:Z):list Z->list Z := map (fun e=>Z.quot e c)." (string 10)
      "Definition srep (n:nat) (s:list Z):list Z := concat (repeat s n)." (string 10)
-     "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end." (string 10) (string 10))))
+     "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end." (string 10)
+     ; the KIND lattice: a value's tag, for the type predicates (a literal's kind is syntactic)
+     "Inductive value := Vz | Vflo | Vcx | Vstr | Vsym | Vpair | Vmap | Varr | Vbot." (string 10)
+     "Definition fixp  v := match v with Vz   => true | _ => false end." (string 10)
+     "Definition flop  v := match v with Vflo => true | _ => false end." (string 10)
+     "Definition comp  v := match v with Vcx  => true | _ => false end." (string 10)
+     "Definition strp  v := match v with Vstr => true | _ => false end." (string 10)
+     "Definition symp  v := match v with Vsym => true | _ => false end." (string 10)
+     "Definition twop  v := match v with Vpair=> true | _ => false end." (string 10)
+     "Definition mapp  v := match v with Vmap => true | _ => false end." (string 10)
+     "Definition arrp  v := match v with Varr => true | _ => false end." (string 10)
+     "Definition intp  v := match v with Vz   => true | _ => false end." (string 10)
+     "Definition nump  v := match v with Vz|Vflo|Vcx|Varr => true | _ => false end." (string 10)
+     "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end." (string 10)
+     "Definition atomp v := match v with Vpair => false | _ => true end." (string 10)
+     "Definition lamp  v := match v with Vz|Vbot => false | _ => true end." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
