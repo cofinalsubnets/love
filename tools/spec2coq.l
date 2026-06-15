@@ -28,13 +28,25 @@
    (binop h) (? (idp h '+) "Z.add"  (idp h '-) "Z.sub"  (idp h '*) "Z.mul"
                 (idp h '//) "Z.quot" (idp h '%) "Z.rem"  (idp h 'gcd) "Z.gcd"
                 (idp h '&) "Z.land"  (idp h '|) "Z.lor"  (idp h '^) "Z.lxor"  0)
-   (unop h) (? (idp h 'sat) "Z.max 0" (idp h 'abs) "Z.abs" 0)   ; $x -> max(0,x); abs
+   bs (intern "\\")                                     ; the quote symbol \ (for '(..) z-list data)
+   (zlist? l) (? (twop l) (&& (fixp (cap l)) (zlist? (cup l))) (idp l ()))  ; PROPER fixnum list (ends in (), not any atom)
+   (qlist? x) (&& (twop x) (idp (cap x) bs) (un2? x) (zlist? (e2 x)))  ; '(1 2 3): \ + a z-list, EXACTLY 2 (a lambda is 3+)
+   (listv? x) (| (qlist? x) (strp x))                   ; list-valued: a z-list or a string
+   (un2? x) (&& (twop (cup x)) (! (twop (cup (cup x))))) ; a 2-element (op arg) form
+   ; translate a list-valued term to a Coq `list Z` literal
+   (joinl l) (? (twop l) (cat (L (tv (cap l)) (? (twop (cup l)) ";" "") (joinl (cup l)))) "")
+   (joinb s i) (? (< i (tally s)) (cat (L (show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
+   (tl x) (? (qlist? x) (cat (L "[" (joinl (e2 x)) "]"))
+             (strp x)   (cat (L "[" (joinb x 0) "]"))  "[]")
 
    ; integer-valued term? a fixnum, an operator tree, or a numeral-application spine
    (intv? x) (? (fixp x) 1
                 (twop x) (: h (cap x)
-                            (? (binop h) (&& (len3? x) (intv? (e2 x)) (intv? (e3 x)))
-                               (unop h) (&& (twop (cup x)) (! (twop (cup (cup x)))) (intv? (e2 x)))
+                            (? (binop h)     (&& (len3? x) (intv? (e2 x)) (intv? (e3 x)))
+                               (idp h 'sat)   (&& (un2? x) (| (intv? (e2 x)) (listv? (e2 x))))
+                               (idp h 'net)   (&& (un2? x) (listv? (e2 x)))
+                               (idp h 'tally) (&& (un2? x) (listv? (e2 x)))
+                               (idp h 'abs)   (&& (un2? x) (intv? (e2 x)))
                                (fixp h) (allv? x)
                                0))
                 0)
@@ -42,9 +54,13 @@
 
    ; translate an integer-valued term to a Coq Z expression
    (tv x) (? (fixp x) (? (< x 0) (cat (L "(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
-             (: h (cap x) b (binop h) u (unop h)
+             (: h (cap x) b (binop h)
                 (? b (cat (L "(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
-                   u (cat (L "(" u " " (tv (e2 x)) ")"))                    ; (Z.abs x) / (Z.max 0 x)
+                   (idp h 'sat)   (? (listv? (e2 x)) (cat (L "(Z.max 0 (asum " (tl (e2 x)) "))"))
+                                     (cat (L "(Z.max 0 " (tv (e2 x)) ")")))  ; $list / $int
+                   (idp h 'net)   (cat (L "(asum " (tl (e2 x)) ")"))         ; +list -- the net
+                   (idp h 'tally) (cat (L "(Z.of_nat (length " (tl (e2 x)) "))"))  ; the count
+                   (idp h 'abs)   (cat (L "(Z.abs " (tv (e2 x)) ")"))
                    (spine (tv h) (cup x)))))                                ; (app .. ..) spine
    (spine acc rest) (? (twop rest)
                        (spine (cat (L "(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
@@ -88,10 +104,13 @@
      "   The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation," (string 10)
      "   so vm_compute RUNS both sides (Coq's bytecode VM -- fast even on bignums like" (string 10)
      "   2^64) to a normal form, and reflexivity checks the two results are identical." (string 10)
-     "   A church numeral n applied to x is x ** n (the `app` model). *)" (string 10)
-     "From Stdlib Require Import ZArith." (string 10)
+     "   A church numeral n applied to x is x ** n (`app`); a list/string nets the" (string 10)
+     "   sum of its elements/bytes (`asum`); $ is max(0,net), tally the count. *)" (string 10)
+     "From Stdlib Require Import ZArith List." (string 10)
+     "Import ListNotations." (string 10)
      "Open Scope Z_scope." (string 10)
-     "Definition app (n x : Z) : Z := Z.pow x n." (string 10) (string 10))))
+     "Definition app (n x : Z) : Z := Z.pow x n." (string 10)
+     "Definition asum : list Z -> Z := fold_right Z.add 0." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
