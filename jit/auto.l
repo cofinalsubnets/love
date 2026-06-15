@@ -3,8 +3,10 @@
 ; always; qualifying ones are just faster, and =/show-IDENTICAL to their source.
 ; Everything else falls through to the base interpreter unchanged.
 ;
-; Two shapes qualify (the emitter's grammar):
-;   LEAF  (\ x E)   E := x | int | (+/-/* E E) | (cmp E E) | (? E E E), cmp in < <= > >= =
+; Shapes that qualify (the emitter's grammar; E := var | int | (OP E E) | (? E E E),
+; OP in + - * // % & | ^ < <= > >= =):
+;   LEAF1 (\ x E)            -- E over x
+;   LEAF2 (\ x y E)          -- E over x,y (currying via lvm_cur; natn)
 ;   LOOP  (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a B)) a)) 0 0))  -- a native counted
 ;         loop summing B(i) for i<n; B in the same grammar over i. Owning the LOOP is
 ;         where the big win is (cf. the leaf's ~6%): the back-edge stays native.
@@ -25,6 +27,18 @@
    ; --- leaf: (\ x E) ---
    (qual lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (= (caup lam) 'x)
                   (twop (cup (cup lam))) !(twop (cup (cup (cup lam)))) (exprp (caup (cup lam)) 'x))
+   ; --- arity-2 leaf: (\ x y E), E over {x,y} ---
+   (expr2 e) (? (= e 'x) 1 (= e 'y) 1 (intp e) 1
+                (twop e) (: op (cap e)
+                            (? (memq op '(+ - * // % & | ^ < <= > >= =)) (&& (expr2 (caup e)) (expr2 (caup (cup e))))
+                               (= op '?) (&& (twop (cup (cup (cup e)))) !(twop (cup (cup (cup (cup e)))))
+                                            (expr2 (caup e)) (expr2 (caup (cup e))) (expr2 (caup (cup (cup e)))))
+                               0))
+                0)
+   (qual2 lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (= (caup lam) 'x)
+                   (twop (cup (cup lam))) (= (caup (cup lam)) 'y)
+                   (twop (cup (cup (cup lam)))) !(twop (cup (cup (cup (cup lam)))))   ; exactly (\ x y body)
+                   (expr2 (caup (cup (cup lam)))))
    (njit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam))) epilogue)) (base-ev lam) lam)
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)
@@ -54,7 +68,8 @@
    ; one application is internally hot). ⚠ pins natives (+ W^X arenas) for the run.
    cache (tablet 0)
    (memo e mk) (: g (peep cache e 0) (? g g (: h (mk e) _ (pin cache e h) h)))
-   (auto-ev e) (? (qual e) (memo e njit)
+   (auto-ev e) (? (qual e)  (memo e njit)
+                  (qual2 e) (memo e jit2)
                   (: li (loopinfo e) (? li (memo e (\ l (njit-loop l (cap li) (caup li)))) (base-ev e))))
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
@@ -73,5 +88,6 @@
        h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
        (&& (lamp (loopinfo L2)) (= c (h 1000))))
     (idp (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
-    (idp (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1)))))
+    (idp (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
+    (: ad (ev '(\ x y (+ (* x x) y))) (&& (13 = (ad 3 4)) (13 = ((ad 3) 4)) ((\ x y (+ (* x x) y)) = ad))))  ; 2-arg leaf auto-natived
  _ (puts "jit/auto: ev auto-natives qualifying closures + counted loops (transparent)") _ (putc 10))

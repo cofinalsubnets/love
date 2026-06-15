@@ -65,6 +65,29 @@
    (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (twop x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
    (jit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam)) 0) epilogue)) (ev lam) lam)
+   ; --- arity-2 leaves (\ x y E): x=Sp[0], y=Sp[1]; deopt jmps to interp's BODY ---
+   ; (interp+16, past its own lvm_cur) where the saturated args already sit.
+   ld-y '(72 139 65 8  72 209 248)                          ; mov rax,[rcx+8]; sar rax,1
+   deopt-mn '(72 139 70 8  72 141 112 16  72 139 6  255 224)  ; mov rax,[rsi+8]; lea rsi,[rax+16]; mov rax,[rsi]; jmp rax
+   (guard-mn d)  (cat '(113 20) (cat (cat '(72 129 196) (le4 (* 8 d))) deopt-mn))   ; jno +20; add rsp,8d; deopt-mn
+   (guardz-mn d) (cat '(117 20) (cat (cat '(72 129 196) (le4 (* 8 d))) deopt-mn))   ; jnz +20; ...
+   epilogue-mn (cat '(72 1 192) (cat (guard-mn 0) (cat '(72 131 200 1) (cat '(72 137 1)
+                 (cat '(72 131 198 16) '(72 139 6  255 224))))))
+   (opseq-mn op d) (? (= op '+) (cat pop-r8 (cat '(76 1 192) (guard-mn d)))
+                      (= op '*) (cat pop-r8 (cat '(73 15 175 192) (guard-mn d)))
+                      (= op '-) (cat pop-r8 (cat '(73 41 192) (cat (guard-mn d) '(76 137 192)))) 0)
+   (idivseq-mn op d) (cat pop-r8 (cat '(72 133 192) (cat (guardz-mn d)
+     (cat '(82 80 76 137 192 72 153 72 247 60 36) (cat (? (= op '%) '(72 137 208) 0) '(72 131 196 8 90))))))
+   (cg2 e d) (? (= e 'x) ld-x  (= e 'y) ld-y  (intp e) (cat '(72 184) (le8 e))
+                (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
+                            (? (memq op '(+ - *))      (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (opseq-mn op d))))
+                               (memq op '(// %))        (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (idivseq-mn op d))))
+                               (memq op '(& | ^))       (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (bitseq op))))
+                               (memq op '(< <= > >= =)) (cat (cg2 a d) (cat push-rax (cat (cg2 b (+ d 1)) (cmpseq op))))
+                               (= op '?) (condcode (cg2 a d) (cg2 b d) (cg2 (caup (cup (cup e))) d))
+                               0))
+                0)
+   (jit2 lam) (natn (emit (cat (cg2 (caup (cup (cup lam))) 0) epilogue-mn)) (ev lam) lam 2)
    ; (loopcode body cv) -- the native counted-loop bytes for sum_{cv<n} body(cv),
    ; cv the counter var (limit at Sp[0]). r9=n r10=cv r11=acc. Reusable by jitsum
    ; and by the auto loop-detector (jit/auto.l).
@@ -107,5 +130,10 @@
   ; bitwise & | ^
   (: bt (jit '(\ x (& x 12))) (&& (8 = (bt 10)) (12 = (bt 13))))
   (: bo (jit '(\ x (| x 1)))  (&& (3 = (bo 2)) (5 = (bo 5))))
-  (: bx (jit '(\ x (^ x 5)))  (&& (15 = (bx 10)) (0 = (bx 5)))))
+  (: bx (jit '(\ x (^ x 5)))  (&& (15 = (bx 10)) (0 = (bx 5))))
+  ; arity-2 leaves: saturated + curried, transparent, deopt via interp body
+  (: ad (jit2 '(\ x y (+ x y)))           (&& (7 = (ad 3 4)) (7 = ((ad 3) 4))))
+  (: sb (jit2 '(\ x y (- (* x x) y)))     (&& (5 = (sb 3 4)) (16000000000000000000 = (sb 4000000000 0))))
+  ((\ x y (+ x y)) = (jit2 '(\ x y (+ x y))))
+  (: dd (jit2 '(\ x y (// x y)))          (&& (3 = (dd 13 4)) (-2 = (dd -7 3)))))
  _ (puts "jit/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))

@@ -140,7 +140,7 @@ lvm_t lvm_kcall,
  lvm_arr, lvm_ajot, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_arrp, lvm_intf, lvm_lamp, lvm_hotp,
- lvm_nat,                   // CODEGEN BACKEND brick 1: emitted bytes -> applicable native value
+ lvm_nat, lvm_natn,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
 // plain lvm_t list, which fixes the 4-argument ap signature. lvm_vbin
@@ -611,7 +611,7 @@ lvm_t lvm_fault;
  _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
  _(nif_arr, "arr", s3(lvm_arr))\
  _(nif_ajot, "ajot", s1(lvm_ajot))\
- _(nif_nat, "nat", s3(lvm_nat))\
+ _(nif_nat, "nat", s3(lvm_nat)) _(nif_natn, "natn", s4(lvm_natn))\
  _(nif_arank, "arank", s1(lvm_arank))\
  _(nif_alen, "alen", s1(lvm_alen)) _(nif_ashape, "ashape", s1(lvm_ashape))\
  _(nif_atype, "atype", s1(lvm_atype))\
@@ -4024,6 +4024,49 @@ lvm(lvm_nat) {
  z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
 #endif
  return Sp[2] = word(k + 2), Sp += 2, Ip++, Continue(); }
+
+// (natn code interp src arity) -- nat for arity>=2: the cell ENTRY is lvm_cur, so
+// applying it reuses the interpreter's currying to saturation, then runs the native
+// body at cell+2 (lvm_cur's Ip+2 resume) with args at Sp[0..arity-1] and retaddr at
+// Sp[arity]. The body runs with rsi=&code, so interp@rsi+8 and lvm_ret@rsi+16 -- the
+// SAME offsets as nat. value[-1]=src (=/show). DEOPT (emitter) jmps to interp's BODY
+// (interp+2, past its own lvm_cur), where the saturated args already sit. lvm_ret
+// pops n=arity via putfix(arity-1).
+lvm(lvm_natn) {
+ word codebuf = Sp[0];
+ intptr_t ar = oddp(Sp[3]) ? getfix(Sp[3]) : 0;     // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity
+ if (!(strp(codebuf) || bufp(codebuf)) || ar < 2) return Sp[3] = nil, Sp += 3, Ip++, Continue();
+ uintptr_t n = len(bytes_of(codebuf));
+ if (n == 0) return Sp[3] = nil, Sp += 3, Ip++, Continue();
+#if __STDC_HOSTED__
+ Have(9 + Width(struct g_fz));               // [hdr,src,cur,putfix(ar),code,interp,ret,putfix(ar-1)] + tag + fz
+ size_t maplen = code_maplen(n);
+ void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+ if (base == MAP_FAILED) return Sp[3] = nil, Sp += 3, Ip++, Continue();
+ struct g_str *s = ini_str((struct g_str*) base, n);
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);
+ if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
+  return munmap(base, maplen), Sp[3] = nil, Sp += 3, Ip++, Continue();
+#else
+ Have(str_type_width + b2w(n) + 9);
+ struct g_str *s = ini_str((struct g_str*) Hp, n); Hp += str_type_width + b2w(n);
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);
+#endif
+ union u *k = (union u*) Hp; Hp += 9;
+ k[0].ap = (lvm_t*) txt(s);                  // header (out-of-pool): finalizer dead-detect
+ k[1].x  = Sp[2];                            // src (reloaded): value[-1]
+ k[2].ap = lvm_cur;                          // value[0]: curry to saturation
+ k[3].x  = putfix(ar);
+ k[4].ap = (lvm_t*) txt(s);                  // native body (lvm_cur resume Ip+2)
+ k[5].x  = Sp[1];                            // interp (reloaded): deopt fallback
+ k[6].ap = lvm_ret;
+ k[7].x  = putfix(ar - 1);                   // ret pops n=arity
+ tagtext(k, 8);
+#if __STDC_HOSTED__
+ struct g_fz *z = (struct g_fz*) Hp; Hp += Width(struct g_fz);
+ z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
+#endif
+ return Sp[3] = word(k + 2), Sp += 3, Ip++, Continue(); }
 
 // (bcopy dst doff src soff n) — copy n bytes from src[soff..] into buf dst at
 // doff. src may be a string or buf; dst must be a buf. Ranges are clamped to
