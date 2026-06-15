@@ -141,7 +141,7 @@ int main(void) {
   g = ai_evals_(g, "("
 #include "egg.h"
     ai_egg_pre
-#include "prelude.h"
+#include "prel.h"
     " "
 #include "ev.h"
     ai_egg_post

@@ -126,7 +126,7 @@ The purely functional dialects (`owl`, `elixir`) have no mutable table, and
 multiply stays under 2⁵³ and every language — doubles included — produces the
 identical sequence), sorts ascending, and checksums an order-dependent rolling
 hash of the result (so the checksum verifies the *ordering*, not just the
-multiset). love uses the prelude's `sort` (a list merge sort added for this);
+multiset). love uses the prel's `sort` (a list merge sort added for this);
 every other dialect uses its built-in sort, so the column reads as library sort
 quality. `tree` is the classic binary-trees alloc/GC stress: build a perfect
 depth-16 tree (2¹⁶−1 nodes, leaves nil) and traverse counting nodes — it churns

@@ -65,7 +65,7 @@
   ; --- THE EMISSION INTERFACE (the codegen seam) --------------------------------------
   ; ana walks the analyzed form and emits code through these primitives. an EMITTER is a
   ; curried (\ k n ..): k = the continuation emitter, n = the current cell index (the
-  ; thread builds BACKWARD, poke -1 prepending). `co` (prelude: (co f g x) = (f (g x)))
+  ; thread builds BACKWARD, poke -1 prepending). `co` (prel: (co f g x) = (f (g x)))
   ; sequences emitters -- (co A B) emits A, then B, then k. the leaf emitters:
   ;   kim x    -- a quote / constant            karg i  -- an arg ref at frame index i
   ;   em1 op   -- a 1-word inline vm op          em2 op x -- a 2-word op (op + operand)

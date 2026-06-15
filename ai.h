@@ -212,7 +212,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 //   ai_evals_(g, "("
 //   #include "egg.h"          // (\ egg (: ...)) -- the boot driver, lcat'd
 //     ai_egg_pre
-//   #include "prelude.h"
+//   #include "prel.h"
 //     " "
 //   #include "ev.h"
 //     ai_egg_post
@@ -220,7 +220,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 //   );
 //
 // This applies the egg driver (l/egg.l) to the quoted corpus, i.e.
-// ((\ egg (: ...)) '(<prelude forms> <ev forms>)): it compiles the l
+// ((\ egg (: ...)) '(<prel forms> <ev forms>)): it compiles the l
 // compiler with c0, recompiles the whole corpus through itself (exercising
 // wev), and installs that as `ev`. Adjacent string-literal concatenation does
 // all the work at compile time -- no runtime allocation, freestanding-safe.

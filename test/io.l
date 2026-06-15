@@ -120,7 +120,7 @@
   (= 99 (read 42 99))
   (= 'x (read 'notaport 'x))
 
-  ; `read` in the prelude is defined as (read in) -- a curried read
+  ; `read` in the prel is defined as (read in) -- a curried read
   ; bound to the stdin port. Verify the binding is a function (callable
   ; closure), not the raw port or sentinel value.
   !(= read in))

@@ -1,5 +1,5 @@
 ; the read-eval-print loop and its multi-line line editor. loaded after
-; the prelude by the interactive frontends (host and kernel).
+; the prel by the interactive frontends (host and kernel).
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist is
 ; implicitly parenthesized and read as ONE expression via (sip ..) + read

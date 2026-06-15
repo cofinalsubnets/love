@@ -529,13 +529,13 @@ void kmain(void) {
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
 #endif
-  // load the prelude, then run the l read-eval-print loop. its line
+  // load the prel, then run the l read-eval-print loop. its line
   // editor (in repl.l) drives the console; PS/2 keyboard and serial
   // input both arrive as ANSI escape sequences the l edev decodes.
   struct ai *r = ai_evals_(g, "("
 #include "egg.h"
  ai_egg_pre
-#include "prelude.h"
+#include "prel.h"
  " "
 #include "ev.h"
  ai_egg_post

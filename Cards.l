@@ -67,7 +67,7 @@
       (cps mode src dst) (L "install" "-D" "-m" mode "-s" src dst)
       (L (cps "755" "out/host/ai"        (at d "bin/ai"))
          (cp  "644" "out/host/ai.1"       (at d "share/man/man1/ai.1"))
-         (cp  "644" "ai/prelude.l"        (at d "lib/ai/prelude.l"))
+         (cp  "644" "ai/prel.l"        (at d "lib/ai/prel.l"))
          (cp  "644" "ai/ev.l"             (at d "lib/ai/ev.l"))
          (cp  "644" "ai/repl.l"           (at d "lib/ai/repl.l"))
          (cp  "644" "out/host/libai.a"    (at d "lib/libai.a"))

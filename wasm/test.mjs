@@ -10,10 +10,10 @@ import { readFileSync } from 'node:fs';
 
 const files = process.argv.slice(2);
 if (!files.length) { console.error('usage: test.mjs <corpus.l...>'); process.exit(2); }
-// The shim bakes only prelude+ev (the page feeds the REPL through ai_eval),
+// The shim bakes only prel+ev (the page feeds the REPL through ai_eval),
 // but the native runner has repl.l baked too -- and the corpus tests its surface
 // (zev/charms in zev.l). Load it first so the wasm test sees the same full stack.
-const src = [readFileSync('love/repl.l', 'utf8'),
+const src = [readFileSync('ai/repl.l', 'utf8'),
              ...files.map(f => readFileSync(f, 'utf8'))].join('\n');
 
 const m = await Ai();

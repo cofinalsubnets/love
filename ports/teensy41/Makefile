@@ -30,7 +30,7 @@ te_rt := $(shell f=$$($(KCC) $(te_triple) $(te_fpu) -print-libgcc-file-name 2>/d
 
 te_h = $(g_h) $(wildcard *.h)
 data_h = $(o)/data.h
-lib_h = $(R)/out/lib/egg.h $(R)/out/lib/prelude.h $(R)/out/lib/ev.h $(R)/out/lib/repl.h
+lib_h = $(R)/out/lib/egg.h $(R)/out/lib/prel.h $(R)/out/lib/ev.h $(R)/out/lib/repl.h
 
 # Local arch sources (teensy41.c, main.c) stay rooted in cwd; the shared runtime
 # (ai.c, data.c, libc/) carries the $(R)/ prefix. Local rule is listed first

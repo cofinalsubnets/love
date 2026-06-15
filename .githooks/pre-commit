@@ -4,16 +4,16 @@
 # touches anything it is built from, rebuild it and stage it -- the committed
 # blob then never lags the committed code.
 #
-# The wasm image bakes the C core + prelude/ev/egg ONLY (not the test corpus,
-# not repl/cli), so only those sources trigger a rebuild; a test/*.l or CLAUDE.l
-# edit leaves ai.js untouched. Builds from the working tree, so stage your
+# The wasm image bakes the C core + prel/ev/egg ONLY (not the test corpus,
+# not repl/cli), so only those sources trigger a rebuild; a test/*.l (the spec
+# included) edit leaves ai.js untouched. Builds from the working tree, so stage your
 # ai.js-affecting changes before committing (the normal flow).
 #
 # Installed via `git config core.hooksPath .githooks` (run `make hooks`).
 # Bypass for a one-off with `git commit --no-verify`.
 
 srcs=$(git diff --cached --name-only --diff-filter=ACMR | grep -E \
-  '^(love\.c|data\.c|[^/]+\.h|ai/(prelude|ev|egg)\.l|wasm/(host\.c|Makefile|inc/.+\.h))$' || true)
+  '^(love\.c|data\.c|[^/]+\.h|ai/(prel|ev|egg)\.l|wasm/(host\.c|Makefile|inc/.+\.h))$' || true)
 [ -n "$srcs" ] || exit 0
 
 if ! command -v emcc >/dev/null 2>&1; then

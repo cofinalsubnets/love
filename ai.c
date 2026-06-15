@@ -767,8 +767,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*ma)(struct ai*, 
    g = intern(g);
    if (ai_ok(g)) g->missing = ai_pop1(g); }
   // the reader owns no operator tables: book['operators] (the ONE table,
-  // symbol -> arity | (name . arity)) is seeded by the prelude, and the
-  // opfix source pass (prelude.l, hooked by both compilers at c0 and wev)
+  // symbol -> arity | (name . arity)) is seeded by the prel, and the
+  // opfix source pass (prel.l, hooked by both compilers at c0 and wev)
   // factors sigil tokens against it at compile time. data reading is
   // purely structural.
  }
@@ -1118,9 +1118,9 @@ static struct ai *append(struct ai *g) {
 // don't inline this so callers can tail call optimize
 static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  // the operator factor pass: c0 delegates the sigil surface -> core source
- // rewrite to the l `opfix` prepass (prelude.l) -- evaluated like a macro,
+ // rewrite to the l `opfix` prepass (prel.l) -- evaluated like a macro,
  // once that global exists (i.e. for everything after its own definition
- // partway through the prelude) -- so both compilers see factored forms.
+ // partway through the prel) -- so both compilers see factored forms.
  // A pair whose head is already a top (a non-data heap value -- C lamp is
  // just the heap test) is a constructed direct application ((f 'x) calls
  // built by this hook, boxfix's, or ana_2's -- never readable source):
@@ -1552,10 +1552,10 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  struct ai_r *mm0 = ai_core_of(g)->root;
  mm(g, &exp);
  // recursive-value boxing: c0 is the bootstrap compiler, so it delegates the
- // letrec*-value rewrite to the l `boxfix` prepass (prelude.l) -- evaluated
+ // letrec*-value rewrite to the l `boxfix` prepass (prel.l) -- evaluated
  // like a macro -- once that global exists (i.e. for everything after its own
- // definition partway through the prelude). It indirects forward-referenced
- // bindings through nom-keyed cells -- one scope; see prelude.l. The runtime compiler
+ // definition partway through the prel). It indirects forward-referenced
+ // bindings through nom-keyed cells -- one scope; see prel.l. The runtime compiler
  // (ev.l) runs the same pass in wev, so both lanes share one boxfix. exp is
  // rooted across the alloc.
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
@@ -1713,9 +1713,9 @@ static struct ai_atom *sym_probe(struct ai *g, char const *nm, uintptr_t n) {
   if (k == map_gap) return 0;
   if (len(k) == n && !memcmp(txt(k), nm, n)) return sym(s[2 * i + 1]); } }
 
-// Resolve a C->lisp ap from book (where the prelude pins it -- book is
+// Resolve a C->lisp ap from book (where the prel pins it -- book is
 // GC-traced and egg-baked, so it survives into the runtime image), materializing
-// the key by name. Scare loud if undefined: a prelude-ordering contract
+// the key by name. Scare loud if undefined: a prel-ordering contract
 // violation. Probe + mapget are reads, so no Have in the tail-jump callers.
 static ai_inline ai_word resolve_hot(struct ai *g, char const *nm, uintptr_t n) {
  struct ai_atom *y = sym_probe(g, nm, n);
@@ -1723,7 +1723,7 @@ static ai_inline ai_word resolve_hot(struct ai *g, char const *nm, uintptr_t n) 
  if (!lamp(cur)) __builtin_trap();
  return cur; }
 
-// Thread (function) combinators for `+` and `*`, pinned on book by the prelude
+// Thread (function) combinators for `+` and `*`, pinned on book by the prel
 // like num-ap. A text operand takes precedence over every other type, so
 // `+`/`*` of a function build a new function -- the README's Church arithmetic,
 // agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
@@ -1752,7 +1752,7 @@ union u const numap_drive[] = { {lvm_ap}, {.ap = numap_swap}, {.ap = lvm_ret0} }
 // the lisp help calling convention
 // ============================================================================
 // With a global `help` function installed, a raise becomes the call
-// (help s a b): s = the status word (prelude readers scare?/more?/eof?),
+// (help s a b): s = the status word (prel readers scare?/more?/eof?),
 // a/b = the condition data -- for the more bit the port and the read sentinel,
 // for a scare nil nil (oom is bare; future scares define their shapes). The
 // frame runs through help_drive (numap_drive's 3-arg twin) into a per-class
@@ -3209,7 +3209,7 @@ static struct ai* ai_z_getc(struct ai*g) {
 // (multi=1) --- it knows tokens, parens, strings, and the value surface (the
 // printer's read-back contract: ' ` , @ # ~), and nothing else: operator
 // sigils read as plain symbols, factored at COMPILE time by the opfix pass
-// (prelude.l) -- so reading is environment-free and the same machinery
+// (prel.l) -- so reading is environment-free and the same machinery
 // serves data (read) and code (ev = opfix after read).
 // `ctx` (kept at sp[0]) is an explicit stack of frames, top = car, so the nesting
 // that used to recurse in C now lives on the l heap (and rides GC). A frame is
@@ -3227,7 +3227,7 @@ static ai_inline struct ai *push_wrap(struct ai *g, char const *nom) {
  return gxl(intern(ai_strof(g, nom))); }        // ctx' = (wrapsym . ctx)
 // the LEXER LAW, operator half. a token led by an operator (punctuation)
 // char is a maximal run of operator chars -- a SIGIL, read as one plain
-// symbol; the opfix compile pass (prelude.l) factors it against
+// symbol; the opfix compile pass (prel.l) factors it against
 // book['operators] later, so the reader is purely structural. a run stops
 // at name chars (alnum/_), whitespace, delimiters, and the value-surface
 // chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
@@ -4110,7 +4110,7 @@ lvm(lvm_intern) {
 // property -- the arg is ignored. `code` gets THE MINT SERIAL (monotonic,
 // pre-incremented) -- the point's hash and its place
 // in the total order: mints order by creation, GC-stable. a NOM is now the
-// literal pair of a name string and a mint (prelude sugar over this nif) --
+// literal pair of a name string and a mint (prel sugar over this nif) --
 // the named-uninterned atom species is gone, the McCarthy restoration's first
 // half. mints still answer symp (a nameless atom), so they bind as gensyms.
 lvm(lvm_mint) {
@@ -4724,7 +4724,7 @@ uintptr_t ai_tuple_bytes(struct ai_tuple *v) {
 // draws: the only primitives are rng-seed (fresh state from a fixnum) and the
 // functional steps rand-next/randf-next (copy the input state, step the copy,
 // return (value . new-state) -- the input is never mutated). The global stream
-// (rand/randf over book['rng-state]) is prelude lisp. Not a CSPRNG.
+// (rand/randf over book['rng-state]) is prel lisp. Not a CSPRNG.
 
 static ai_inline uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }
@@ -5457,7 +5457,7 @@ struct ai *ai_big_dec(struct ai *g) {
  return g; }
 
 // --- (arr type shape-list vals): THE typed array constructor ----------------
-// `type` is a fixnum element-type code (z/r/c/o, named in the prelude); `shape`
+// `type` is a fixnum element-type code (z/r/c/o, named in the prel); `shape`
 // is a list of non-negative fixnum dimensions (empty -> a rank-0 scalar box);
 // `vals` fills row-major from a list (a non-numeric or missing entry stays 0;
 // extras are ignored), and 0 (or any non-list) means zero-filled. A `c` array
@@ -5901,7 +5901,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
 // (left in the uncommitted gap, GC-invisible) -- then a bottom-up merge over
 // the scratch lanes and a single spine fill. cmp3 is alloc-free and
 // GC-stable, so nothing moves between the reservation and the fill. The
-// prelude's `sort` dispatches (<)/(>) here (descending = rev) and keeps the
+// prel's `sort` dispatches (<)/(>) here (descending = rev) and keeps the
 // lisp merge sort for arbitrary predicates. A non-pair passes through; a
 // 1-element list returns itself (identity preserved, like the lisp sort).
 // (tally l): the spine length of a list -- the number of pairs, blind to the

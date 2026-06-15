@@ -17,8 +17,8 @@ a ?= $(shell uname -m)
 # see the K_TEST block in the root Makefile).
 tco ?= 1
 
-# the corpus: 00-init's harness first, the root spec second, then the rest
-t = $R/test/00-init.$x $R/CLAUDE.$x $(filter-out %/00-init.$x,$(sort $(wildcard $R/test/*.$x)))
+# the corpus: 00-init's harness first, the spec second, then the rest
+t = $R/test/00-init.$x $R/test/spec.$x $(filter-out %/00-init.$x %/spec.$x,$(sort $(wildcard $R/test/*.$x)))
 
 ai_h = $(wildcard $R/*.h)
 ai_c = $R/ai.c $R/data.c

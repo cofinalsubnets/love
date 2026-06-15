@@ -1,4 +1,4 @@
-; prelude.l -- ai prelude: data + function + macro definitions.
+; prel.l -- ai prel: data + function + macro definitions.
 (: id 1
    (co f g x) (f (g x))
    (const x _) x
@@ -83,6 +83,11 @@
    ; (bignum f) asks for help where it would oom. retune at runtime: (pin apcap 0 n).
    apcap (pin (tablet 0) 0 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
+   ; does the count/exponent k top the apcap box? the shared predicate. each site
+   ; keeps its own (scare 'apcap k) as the cond RESULT, so a recovering help's value
+   ; (e.g. (capped k)) becomes the result directly -- no thunk, no allocation on the
+   ; hot num-ap path; the only duplication is the trivial, identical scare.
+   (apover k) (< (peep apcap 0 0) k)
    ; x ** n across the whole tower. array exponent -> elementwise pow (broadcasts
    ; via the vmap2 engine, float result); integer exponent -> exact squaring, with
    ; a NEGATIVE integer giving the reciprocal power (so (-1 x) == (/ 1 x) and
@@ -90,7 +95,7 @@
    ; (w^z = exp(z Log w)) and a real lane.
    (powg x n) (? (arrp n) (pow x n)
                  (intp n) (: m (? (< n 0) (- 0 n) n)
-                             (? (< (peep apcap 0 0) m) (scare 'apcap m)
+                             (? (apover m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                  (pow x n))
    ; Church-numeral application generalized across the whole tower. n is the
@@ -103,7 +108,7 @@
    (num-ap n x) (? (nump x) (powg x n)
                    (: k (sat n)
                       (? (< k 1) 1 (= k 1) x
-                         (< (peep apcap 0 0) k) (scare 'apcap k)
+                         (apover k) (scare 'apcap k)
                          (numfn k x))))
    _ (pin book 'num-ap num-ap))
 ; text (function) combinators for + and *, installed like num-ap. a text operand

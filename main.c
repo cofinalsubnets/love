@@ -311,15 +311,15 @@ static char const
  runner[] = "(zevs (sip (s2cl tests)))";   // the stream shell (repl.l) drinks the baked corpus
 
 // With args, run the build tool (lcat / gen_data) through the CLI driver.
-// With no args, self-test: eval prelude+repl and run the baked corpus via c0,
+// With no args, self-test: eval prel+repl and run the baked corpus via c0,
 // then bootstrap the self-hosted ev (egg) and run the corpus again through it.
 static struct ai *boot(struct ai *g, bool argp) {
   if (argp) return ai_evals_(g, cli);
   g = ai_strof(g, tests0);                            // the baked corpus, as a string
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
-  g = ai_evals_(g,                                    // prelude + repl, compiled by c0
-#include "prelude0.h"
+  g = ai_evals_(g,                                    // prel + repl, compiled by c0
+#include "prel0.h"
 #include "repl0.h"
   );
   g = ai_evals_(g, s2cldef);
@@ -327,7 +327,7 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_evals_(g, "("                                // bootstrap: install the self-hosted ev
 #include "egg0.h"
     "'("
-#include "prelude0.h"
+#include "prel0.h"
 #include "ev0.h"
     "))");
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
@@ -370,7 +370,7 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_evals_(g, "("
 #include "egg.h"
     "'("
-#include "prelude.h"
+#include "prel.h"
 #include "ev.h"
     "))"
 #include "repl.h"

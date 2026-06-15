@@ -54,7 +54,7 @@
 ;     mxrn). lcat2 only needs `rec` because it feeds in UN-expanded source.
 ;   * feed `cnt` from the compiler's symbol info (occurrence counts), and leave `taint`
 ;     empty -- or repurpose it as a general frozen "do not rename" set.
-;   * keep relying on the prelude binding-shape helpers lp/lambp/ln (already present).
+;   * keep relying on the prel binding-shape helpers lp/lambp/ln (already present).
 ; The SURFACE block below (collect/tcollect + rn with its :-/let/qq handling) stays in
 ; lcat2: it is exactly the un-expanded-source adaptation the compiler no longer needs. ===
 (: (sl-char d) (? (< d 26) (+ 97 d) (+ 65 (- d 26)))   ; shortlex over a-zA-Z (bijective base-52):

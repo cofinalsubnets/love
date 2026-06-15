@@ -15,7 +15,7 @@
 static const char boot_ai[] = "("
 #include "egg.h"
   ai_egg_pre
-#include "prelude.h"
+#include "prel.h"
   " "
 #include "ev.h"
   ai_egg_post

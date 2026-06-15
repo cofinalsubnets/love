@@ -93,7 +93,7 @@
  (= 'fk (peep (pin (pin (tablet 0) F25 'fk) B100 'hit) F25 'miss))
  (= 'miss (peep (pin (tablet 0) B100 'hit) (+ B100 1) 'miss))
 
- ; --- prelude ** / gcd / modpow: exact across the tower via * / % ---
+ ; --- prel ** / gcd / modpow: exact across the tower via * / % ---
  ; (`**` is exact-integer power; the float `pow` nif is tested in math.l)
  (= 8 (3 2))                           ; small ints stay fixnums
  (fixp (3 2))                          ; ...and stay integers (not float pow)

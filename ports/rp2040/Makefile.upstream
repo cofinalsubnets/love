@@ -18,7 +18,7 @@ rp_rt := $(shell f=$$($(KCC) $(rp_triple) -print-libgcc-file-name 2>/dev/null); 
   arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -print-libgcc-file-name 2>/dev/null)
 rp_h = $(g_h) $(wildcard $R/arch/rp2040/*.h)
 rp_data_h = $(ro)/data.h
-rp_lib_h = out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/lib/repl.h
+rp_lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h
 rp_src = $(g_c) $(c_c) $R/arch/rp2040/rp2040.c $R/arch/rp2040/main.c
 rp_o = $(rp_src:$(R)/%.c=$(ro)/%.o)
 

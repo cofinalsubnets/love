@@ -73,9 +73,9 @@ clean:
 
 # A lib header (and the host l, which runs gen_data.l) stand in for "the
 # host build ran"; built on demand here so a standalone `make -C playdate` works.
-# (playdate/main.c embeds no prelude -- this is just a build-order sentinel.)
-$(R)/out/lib/prelude.h:
-	@$(MAKE) -C $(R) out/lib/prelude.h
+# (playdate/main.c embeds no prel -- this is just a build-order sentinel.)
+$(R)/out/lib/prel.h:
+	@$(MAKE) -C $(R) out/lib/prel.h
 $(m):
 	@$(MAKE) -C $(R)/host
 
@@ -91,7 +91,7 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 # The data-sentinel TU bootstraps from the portable header (no -I$(o), no $(data_h)
 # prerequisite -- both would be circular, since $(o)/data.h is reflected out of
 # this object). Its explicit recipe overrides the pattern rules below.
-$(o)/data.o: $(R)/data.c | $(R)/out/lib/prelude.h
+$(o)/data.o: $(R)/data.c | $(R)/out/lib/prel.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
@@ -105,13 +105,13 @@ $(o)/data.h: $(o)/data.o $(gen_data) | $(m)
 # same-named top-level file: top-level main.c is the host frontend, which
 # must not be compiled here (it pulls in POSIX headers like <termios.h>).
 # Shared sources fall through to the $(R) rule (no local l.c/data.c exist).
-$(o)/%.o: %.c $(data_h) | $(R)/out/lib/prelude.h
+$(o)/%.o: %.c $(data_h) | $(R)/out/lib/prel.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
 
 # Shared C sources from l.c/data.c and font/.
-$(o)/%.o: $(R)/%.c $(data_h) | $(R)/out/lib/prelude.h
+$(o)/%.o: $(R)/%.c $(data_h) | $(R)/out/lib/prel.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@
@@ -125,7 +125,7 @@ $(o)/%.o: %.s
 
 # SDK setup.c is reached via an absolute path; an explicit rule keeps
 # its output filename predictable.
-$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(data_h) | $(R)/out/lib/prelude.h
+$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(data_h) | $(R)/out/lib/prel.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I$(o) -I. -I$(R)/out/host -I$(R)/font $(pd_incdir) $< -o $@

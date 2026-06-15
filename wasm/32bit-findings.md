@@ -33,7 +33,7 @@ is `w64 = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
   other target. Fixed by masking to a fixed 62 bits and canonicalizing through
   `g_big_canon`: the same integer on every target (a fixnum on a 64-bit word, a
   bignum on a 32-bit one). A second site fell out of the same root -- the
-  prelude `rng-set` validator hard-coded the state's atype as `z`, so it
+  prel `rng-set` validator hard-coded the state's atype as `z`, so it
   *rejected* a valid wasm seed (C-typed) and silently clock-seeded; it now
   compares against a fresh seed's own type. `random.l` runs on wasm again,
   cross-target pins included; only the state's atype stays platform-visible

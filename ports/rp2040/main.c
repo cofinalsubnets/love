@@ -140,7 +140,7 @@ int main(void) {
   g = g_evals_(g, "("
 #include "egg.h"
     G_EGG_PRE
-#include "prelude.h"
+#include "prel.h"
     " "
 #include "ev.h"
     G_EGG_POST

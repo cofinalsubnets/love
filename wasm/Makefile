@@ -37,13 +37,13 @@ EMFLAGS = \
 
 all: ai.js
 
-# prelude.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
+# prel.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
 # the browser feeds the REPL through ai_eval).
 ../out/lib/egg.h: ../ai/egg.l
-../out/lib/prelude.h: ../ai/prelude.l
+../out/lib/prel.h: ../ai/prel.l
 ../out/lib/ev.h: ../ai/ev.l
-../out/lib/egg.h ../out/lib/prelude.h ../out/lib/ev.h:
+../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
 # Link step: emcc's link is multi-input, so ccache can't cache it -- use
@@ -51,7 +51,7 @@ all: ai.js
 ai.js: $(objs)
 	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
-$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prelude.h ../out/lib/ev.h $(g_h)
+$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h $(g_h)
 	@mkdir -p $(dir $@)
 	$(emcc) $(CFLAGS) -c $< -o $@
 

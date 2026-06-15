@@ -14,7 +14,7 @@ syn iskeyword @,33,37,38,42-43,45-47,48-57,58,60-63,92,94-95,124,126
 " The three special forms: : (letrec*/seq), ? (cond), \ (lambda/quote)
 syn keyword AiForm : ? \\
 
-" Built-in functions (C nifs) + prelude functions
+" Built-in functions (C nifs) + prel functions
 syn keyword AiFunc cons cap cup caap caup cuap cuup
 syn keyword AiFunc caaap caaup cauap cauup cuaap cuaup cuuap cuuup
 syn keyword AiFunc id co const flip

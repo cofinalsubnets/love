@@ -18,15 +18,40 @@ every quote below evals to 1, try them in a [repl](https://cofinalsubnets.github
 
 ## ai
 
-ai is a composite of lisp haskell and apl over c where every
-value is a total function of one argument and every operation
-is defined efficiently and generically.
+`ai` is kind of like `ai = (ml + apl) * (lisp / C)`.
+every value is an operator, a total function of one argument,
+so directly an endomorphism of the value space, which forms
+a monoid under composition. all
+operators are implemented efficiently and generically
+with safe, visible and intuitive idiomatic failure modes.
+a verified specification demonstrates no undefined behavior
+up to <a href="test/uu.l">`but_seriously_the_world_explodes`</a>.
+no individual operator assumes full control of the global
+environment. all recursion is on heap and any recursive operator
+may be limited by integers, which act transparently as iterators.
+consequently the value of a numeric list under the left-associative
+lisp eval function corresponds to a reversed exponential tower.
+this deviation from normal lisp applicative semantics forms the first
+summand of `ml + apl`. the second summand is a compatible
+right-associative superset based on elementary punctuation laws
+which allows infix and atomic prefix notation to be mixed fluidly
+within and around lisp code.
 
+in terms of implementation, `lisp : C :: software : hardware`.
+C gives random memory access via pointer arithmetic
+and platform-specific primitives. `lisp` is the software
+facing basement, which you could factor as `ml * scheme`
+left-associative applicative curried untyped lambda calculus,
+applicative order may vary at will. this is safe modulo side
+effects because every operator is total and every thread is
+co-operatively pre-empted regardless of user program semantics.
+
+features
 - numeric tower with shaped array broadcasting
 - lambdas, macros, closures, multitasking
 - freestanding bare metal kernel build
 - public domain portable C with zero dependencies
-- ai loves ai
+- ai loves ai :)
 
 ai has three special forms plus "operators". the forms are
 - `\` lambda
@@ -77,9 +102,9 @@ are true too:
 - `'(0 1 2) = (jot 3)`
 - `10 = +(jot 5)`
 
-the full spec
-is [CLAUDE.md](CLAUDE.md) -- the root test file CLAUDE.l in a code fence, so
-the spec stays green.
+the full spec is [CLAUDE.md](CLAUDE.md) -- the prose narrative with runnable
+demonstrations. the executable spec is [test/spec.l](test/spec.l), a real test
+in the corpus, so every claim stays green.
 
 
 ### hello world
