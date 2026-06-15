@@ -21,46 +21,56 @@
 (: (le8 n) ((: (go i) (? (< i 8) (cons (& (>> n (* 8 i)) 255) (go (+ i 1))) 0)) 0)  ; n -> 8 LE bytes
    (le4 n) ((: (go i) (? (< i 4) (cons (& (>> n (* 8 i)) 255) (go (+ i 1))) 0)) 0)  ; n -> 4 LE bytes
    deopt    '(72 139 70 8  72 137 198  72 139 6  255 224)   ; mov rax,[rsi+8]; mov rsi,rax; mov rax,[rsi]; jmp rax
-   guard    (cat '(113 12) deopt)                            ; jno +12 ; deopt   (skip deopt unless overflow)
-   ld-x     '(72 139 1  72 209 248)                          ; mov rax,[rcx]; sar rax,1   (load arg, untag)
-   ld-i     '(76 137 208)                                     ; mov rax,r10               (loop var i)
+   ; guard d / guardz d: skip the inline deopt unless OF (guard) / unless nonzero
+   ; (guardz, for divide-by-zero); on deopt UNWIND d pending machine-stack operands
+   ; (add rsp,8d) so the jmp-to-interp leaves rsp balanced -- else a mid-nest deopt
+   ; leaks pushes and the terminator `ret` faults. deopt tail-applies interp(arg).
+   (guard d)  (cat '(113 19) (cat (cat '(72 129 196) (le4 (* 8 d))) deopt))      ; jno +19; add rsp,8d; deopt
+   (guardz d) (cat '(117 19) (cat (cat '(72 129 196) (le4 (* 8 d))) deopt))      ; jnz +19; add rsp,8d; deopt
+   ld-x '(72 139 1  72 209 248)   ld-i '(76 137 208)                             ; load arg (untag) / loop var i
    push-rax '(80)   pop-r8 '(65 88)
-   epilogue (cat '(72 1 192) (cat guard (cat '(72 131 200 1) (cat '(72 137 1)   ; add rax,rax;guard;or rax,1;mov[rcx]
+   epilogue (cat '(72 1 192) (cat (guard 0) (cat '(72 131 200 1) (cat '(72 137 1)   ; add rax,rax;guard;or rax,1;mov[rcx]
               (cat '(72 131 198 16) '(72 139 6  255 224))))))                    ; add rsi,16; Continue
-   (opseq op) (? (= op '+) (cat pop-r8 (cat '(76 1 192) guard))                  ; add rax,r8 ; guard
-                 (= op '*) (cat pop-r8 (cat '(73 15 175 192) guard))             ; imul rax,r8 ; guard
-                 (= op '-) (cat pop-r8 (cat '(73 41 192) (cat guard '(76 137 192))))  ; sub r8,rax;guard; mov rax,r8
-                 0)
-   ; comparison: a in r8, b in rax -> rax = (a OP b) ? 1 : 0 (0/1, like the interpreter)
-   (setcc op) (? (= op '<) '(15 156 192) (= op '<=) '(15 158 192)                ; setl al / setle al
-                 (= op '>) '(15 159 192) (= op '>=) '(15 157 192)                ; setg al / setge al
-                 (= op '=) '(15 148 192) 0)                                       ; sete al
+   (opseq op d) (? (= op '+) (cat pop-r8 (cat '(76 1 192) (guard d)))            ; add rax,r8 ; guard
+                   (= op '*) (cat pop-r8 (cat '(73 15 175 192) (guard d)))       ; imul rax,r8 ; guard
+                   (= op '-) (cat pop-r8 (cat '(73 41 192) (cat (guard d) '(76 137 192))))  ; sub r8,rax;guard;mov rax,r8
+                   0)
+   ; // and %: a in r8 (dividend), b in rax (divisor) -> rax; preserves rdx(=Hp) via
+   ; the machine stack; divide-by-zero deopts (guardz). idiv truncates toward 0, the
+   ; remainder takes the dividend's sign -- matching love's // and %.
+   (idivseq op d) (cat pop-r8 (cat '(72 133 192) (cat (guardz d)                 ; a->r8; test rax,rax (==0 -> deopt)
+     (cat '(82 80 76 137 192 72 153 72 247 60 36)                                ; push rdx;push rax;mov rax,r8;cqo;idiv [rsp]
+       (cat (? (= op '%) '(72 137 208) 0) '(72 131 196 8 90))))))                ; (% mov rax,rdx); add rsp,8; pop rdx
+   ; comparison: a in r8, b in rax -> rax = (a OP b) ? 1 : 0 (0/1, no deopt)
+   (setcc op) (? (= op '<) '(15 156 192) (= op '<=) '(15 158 192) (= op '>) '(15 159 192)
+                 (= op '>=) '(15 157 192) (= op '=) '(15 148 192) 0)             ; setcc al
    (cmpseq op) (cat pop-r8 (cat '(73 57 192) (cat (setcc op) '(72 15 182 192)))) ; cmp r8,rax; setcc al; movzx rax,al
-   ; (? test then else): test>0 -> then, else else (love truth = strictly positive)
+   ; (? test then else): test>0 -> then else else (love truth = strictly positive)
    (condcode tb thb elb) (: Lt (tally thb) Le (tally elb)
      (cat tb (cat '(72 131 248 0)                                                ; cmp rax,0
-       (cat (cat '(15 142) (le4 (+ Lt 5)))                                       ; jle else  (skip then + jmp)
+       (cat (cat '(15 142) (le4 (+ Lt 5)))                                       ; jle else (skip then + jmp)
          (cat thb (cat (cat '(233) (le4 Le)) elb))))))                           ; then ; jmp end ; else
-   (cgv v vl e) (? (= e v)  vl                                                   ; the variable -> its load
-                   (intp e) (cat '(72 184) (le8 e))                              ; movabs rax, n
-                   (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
-                               (? (memq op '(+ - *))      (cat (cgv v vl a) (cat push-rax (cat (cgv v vl b) (opseq op))))
-                                  (memq op '(< <= > >= =)) (cat (cgv v vl a) (cat push-rax (cat (cgv v vl b) (cmpseq op))))
-                                  (= op '?) (condcode (cgv v vl a) (cgv v vl b) (cgv v vl (caup (cup (cup e)))))
-                                  0))
-                   0)
+   (cgv v vl e d) (? (= e v)  vl                                                 ; d = pending machine-stack pushes
+                     (intp e) (cat '(72 184) (le8 e))                            ; movabs rax, n
+                     (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
+                                 (? (memq op '(+ - *))      (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (opseq op d))))
+                                    (memq op '(// %))        (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (idivseq op d))))
+                                    (memq op '(< <= > >= =)) (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (cmpseq op))))
+                                    (= op '?) (condcode (cgv v vl a d) (cgv v vl b d) (cgv v vl (caup (cup (cup e))) d))
+                                    0))
+                     0)
    (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (twop x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
-   (jit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam))) epilogue)) (ev lam) lam)
+   (jit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam)) 0) epilogue)) (ev lam) lam)
    ; (loopcode body cv) -- the native counted-loop bytes for sum_{cv<n} body(cv),
    ; cv the counter var (limit at Sp[0]). r9=n r10=cv r11=acc. Reusable by jitsum
    ; and by the auto loop-detector (jit/auto.l).
    (loopcode body cv)
-    (: lb   (cgv cv ld-i body)  Lb (tally lb)
+    (: lb   (cgv cv ld-i body 0)  Lb (tally lb)
        pre  '(76 139 9  73 209 249  77 49 210  77 49 219)                         ; mov r9,[rcx];sar;xor r10;xor r11
-       test (cat '(77 57 202) (cat '(15 141) (le4 (+ Lb 25))))                     ; cmp r10,r9 ; jge loop_end
-       acc  (cat '(73 1 195) guard)                                               ; add r11,rax ; guard
-       back (cat '(73 255 194) (cat '(233) (le4 (- 0 (+ Lb 34)))))                ; inc r10 ; jmp loop_top
+       test (cat '(77 57 202) (cat '(15 141) (le4 (+ Lb 32))))                     ; cmp r10,r9 ; jge loop_end
+       acc  (cat '(73 1 195) (guard 0))                                           ; add r11,rax ; guard
+       back (cat '(73 255 194) (cat '(233) (le4 (- 0 (+ Lb 41)))))                ; inc r10 ; jmp loop_top
        (cat pre (cat test (cat lb (cat acc (cat back (cat '(76 137 216) epilogue)))))))   ; ... ; mov rax,r11
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
    (jitsum body)
@@ -84,5 +94,11 @@
   (: ab (jit '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7)) (0 = (ab 0))))   ; abs
   ((\ x (? (< x 0) (- 0 x) x)) = (jit '(\ x (? (< x 0) (- 0 x) x))))                        ; transparent
   (: cap50 (jitsum '(? (< i 50) i 0)) c50 ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
-     (= c50 (cap50 1000))))                                                                 ; loop with a conditional body
+     (= c50 (cap50 1000)))                                                                  ; loop with a conditional body
+  ; // and %
+  (: dv (jit '(\ x (// x 3))) (&& (3 = (dv 10)) (4 = (dv 13)) (-3 = (dv -10))))
+  (: md (jit '(\ x (% x 7)))  (&& (1 = (md 8)) (-1 = (md -8)) (0 = (md 14))))
+  ; mid-nest deopt must leave the machine stack balanced (rsp unwind on deopt)
+  (16000000000000000001 = ((jit '(\ x (+ 1 (* x x)))) 4000000000))
+  (16000000000000000003 = ((jit '(\ x (+ (+ 1 (* x x)) 2))) 4000000000)))
  _ (puts "jit/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))

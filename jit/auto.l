@@ -17,7 +17,7 @@
    (exprp e v) (? (= e v)   1
                   (intp e)  1
                   (twop e)  (: op (cap e)
-                               (? (memq op '(+ - * < <= > >= =)) (&& (exprp (caup e) v) (exprp (caup (cup e)) v))
+                               (? (memq op '(+ - * // % < <= > >= =)) (&& (exprp (caup e) v) (exprp (caup (cup e)) v))
                                   (= op '?) (&& (twop (cup (cup (cup e)))) !(twop (cup (cup (cup (cup e)))))   ; exactly 3 operands
                                                (exprp (caup e) v) (exprp (caup (cup e)) v) (exprp (caup (cup (cup e))) v))
                                   0))
