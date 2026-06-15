@@ -65,9 +65,10 @@
    (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (twop x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
    (jit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam)) 0) epilogue)) (ev lam) lam)
-   ; --- arity-2 leaves (\ x y E): x=Sp[0], y=Sp[1]; deopt jmps to interp's BODY ---
-   ; (interp+16, past its own lvm_cur) where the saturated args already sit.
-   ld-y '(72 139 65 8  72 209 248)                          ; mov rax,[rcx+8]; sar rax,1
+   ; --- N-ary leaves (\ p0 .. p_{n-1} E): param i loads from Sp[i]=[rcx+8i]; the deopt
+   ; jmps to interp's BODY (deopt-mn, interp+16 past its lvm_cur) where the saturated
+   ; args already sit -- so the deopt/epilogue/return below are all arity-INDEPENDENT
+   ; and serve EVERY arity>=2 (only the per-param arg load varies, by frame index).
    deopt-mn '(72 139 70 8  72 141 112 16  72 139 6  255 224)  ; mov rax,[rsi+8]; lea rsi,[rax+16]; mov rax,[rsi]; jmp rax
    (guard-mn d)  (cat '(113 20) (cat (cat '(72 129 196) (le4 (* 8 d))) deopt-mn))   ; jno +20; add rsp,8d; deopt-mn
    (guardz-mn d) (cat '(117 20) (cat (cat '(72 129 196) (le4 (* 8 d))) deopt-mn))   ; jnz +20; ...
@@ -78,19 +79,26 @@
                       (= op '-) (cat pop-r8 (cat '(73 41 192) (cat (guard-mn d) '(76 137 192)))) 0)
    (idivseq-mn op d) (cat pop-r8 (cat '(72 133 192) (cat (guardz-mn d)
      (cat '(82 80 76 137 192 72 153 72 247 60 36) (cat (? (= op '%) '(72 137 208) 0) '(72 131 196 8 90))))))
-   ; v0 -> Sp[0] (the FIRST param: a capture when this native is partial-applied),
-   ; v1 -> Sp[1] (the second). Arbitrary names, so captures = partial-apply (below).
-   (cg2 v0 v1 e d) (? (= e v0) ld-x  (= e v1) ld-y  (intp e) (cat '(72 184) (le8 e))
-                      (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
-                                  (? (memq op '(+ - *))      (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (opseq-mn op d))))
-                                     (memq op '(// %))        (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (idivseq-mn op d))))
-                                     (memq op '(& | ^))       (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (bitseq op))))
-                                     (memq op '(< <= > >= =)) (cat (cg2 v0 v1 a d) (cat push-rax (cat (cg2 v0 v1 b (+ d 1)) (cmpseq op))))
-                                     (= op '?) (condcode (cg2 v0 v1 a d) (cg2 v0 v1 b d) (cg2 v0 v1 (caup (cup (cup e))) d))
-                                     0))
-                      0)
-   (jit2 lam) (: p0 (caup lam) p1 (caup (cup lam)) body (caup (cup (cup lam)))
-                 (natn (emit (cat (cg2 p0 p1 body 0) epilogue-mn)) (ev lam) lam 2))
+   ; param i -> Sp[i] = [rcx + 8i] (untag); param 0 is the FIRST capture when the native
+   ; is partial-applied. disp8 for i<16, disp32 beyond. argix finds a var's frame index.
+   (ld-arg i) (cat (? (= i 0)        '(72 139 1)                          ; mov rax,[rcx]
+                      (< (* 8 i) 128) (cat '(72 139 65) (cons (* 8 i) 0))  ; mov rax,[rcx+disp8]
+                                      (cat '(72 139 129) (le4 (* 8 i))))   ; mov rax,[rcx+disp32]
+                   '(72 209 248))                                         ; sar rax,1
+   (argix e ps i) (? !(twop ps) 0  (= e (cap ps)) i  (argix e (cup ps) (+ i 1)))   ; param -> index
+   (cgn ps e d) (? (intp e) (cat '(72 184) (le8 e))                       ; movabs rax, n
+                   (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
+                               (? (memq op '(+ - *))      (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (opseq-mn op d))))
+                                  (memq op '(// %))        (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (idivseq-mn op d))))
+                                  (memq op '(& | ^))       (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (bitseq op))))
+                                  (memq op '(< <= > >= =)) (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (cmpseq op))))
+                                  (= op '?) (condcode (cgn ps a d) (cgn ps b d) (cgn ps (caup (cup (cup e))) d))
+                                  0))
+                   (ld-arg (argix e ps 0)))                               ; else: a param var
+   ; (jitn '(\ p0 .. body)) -- an arity>=2 leaf -> native (natn curries to saturation).
+   (jitn lam) (: ps (init (cup lam))  body (last (cup lam))
+                 (natn (emit (cat (cgn ps body 0) epilogue-mn)) (ev lam) lam (tally ps)))
+   (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    ; (loopcode body cv) -- the native counted-loop bytes for sum_{cv<n} body(cv),
    ; cv the counter var (limit at Sp[0]). r9=n r10=cv r11=acc. Reusable by jitsum
    ; and by the auto loop-detector (jit/auto.l).
@@ -139,6 +147,11 @@
   (: sb (jit2 '(\ x y (- (* x x) y)))     (&& (5 = (sb 3 4)) (16000000000000000000 = (sb 4000000000 0))))
   ((\ x y (+ x y)) = (jit2 '(\ x y (+ x y))))
   (: dd (jit2 '(\ x y (// x y)))          (&& (3 = (dd 13 4)) (-2 = (dd -7 3))))
+  ; arity-3 / arity-4 leaves: param i at Sp[i], saturating at ANY split, transparent
+  (: t3 (jitn '(\ x y z (+ (+ x y) (* z 2)))) (&& (13 = (t3 1 2 5)) (13 = ((t3 1 2) 5)) (13 = ((t3 1) 2 5))))
+  ((\ x y z (+ (+ x y) (* z 2))) = (jitn '(\ x y z (+ (+ x y) (* z 2)))))
+  (: t4 (jitn '(\ a b c d (+ (* a b) (- c d)))) (&& (7 = (t4 2 3 7 6)) (7 = ((t4 2 3) 7 6)) (7 = ((t4 2) 3 7 6))))
+  (16000000000000000005 = ((jitn '(\ x y z (+ (+ (* x x) y) z))) 4000000000 0 5))   ; deopt through a middle param
   ; CAPTURES = partial-apply a native multi-arg; the leading param(s) are the captures.
   (: mk (jit2 '(\ n x (+ x n)))  a5 (mk 5)  a7 (mk 7)
      (&& (15 = (a5 10)) (17 = (a7 10)) ('(6 7 8) = (map a5 '(1 2 3)))                 ; native captured closure, composes

@@ -6,7 +6,7 @@
 ; Shapes that qualify (the emitter's grammar; E := var | int | (OP E E) | (? E E E),
 ; OP in + - * // % & | ^ < <= > >= =):
 ;   LEAF1 (\ x E)            -- E over x
-;   LEAF2 (\ x y E)          -- E over x,y (currying via lvm_cur; natn)
+;   LEAFN (\ p0 .. p_{n-1} E) -- E over the params, any arity n>=2 (currying via lvm_cur; natn)
 ;   LOOP  (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a B)) a)) 0 0))  -- a native counted
 ;         loop summing B(i) for i<n; B in the same grammar over i. Owning the LOOP is
 ;         where the big win is (cf. the leaf's ~6%): the back-edge stays native.
@@ -27,19 +27,19 @@
    ; --- leaf: (\ x E) ---
    (qual lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (= (caup lam) 'x)
                   (twop (cup (cup lam))) !(twop (cup (cup (cup lam)))) (exprp (caup (cup lam)) 'x))
-   ; --- arity-2 leaf: (\ p0 p1 E), E over {p0,p1} (any distinct symbols) ---
-   (expr2 e v0 v1) (? (= e v0) 1 (= e v1) 1 (intp e) 1
-                      (twop e) (: op (cap e)
-                                  (? (memq op '(+ - * // % & | ^ < <= > >= =)) (&& (expr2 (caup e) v0 v1) (expr2 (caup (cup e)) v0 v1))
-                                     (= op '?) (&& (twop (cup (cup (cup e)))) !(twop (cup (cup (cup (cup e)))))
-                                                  (expr2 (caup e) v0 v1) (expr2 (caup (cup e)) v0 v1) (expr2 (caup (cup (cup e))) v0 v1))
-                                     0))
-                      0)
-   (qual2 lam) (: p0 (caup lam) p1 (caup (cup lam))
-                  (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (symp p0)
-                      (twop (cup (cup lam))) (symp p1) !(= p0 p1)
-                      (twop (cup (cup (cup lam)))) !(twop (cup (cup (cup (cup lam)))))   ; exactly (\ p0 p1 body)
-                      (expr2 (caup (cup (cup lam))) p0 p1)))
+   ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
+   (exprn ps e) (? (memq e ps) 1  (intp e) 1
+                   (twop e) (: op (cap e)
+                               (? (memq op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
+                                  (= op '?) (&& (twop (cup (cup (cup e)))) !(twop (cup (cup (cup (cup e)))))
+                                               (exprn ps (caup e)) (exprn ps (caup (cup e))) (exprn ps (caup (cup (cup e)))))
+                                  0))
+                   0)
+   (distinctp l) (? !(twop l) 1  (memq (cap l) (cup l)) 0  (distinctp (cup l)))        ; no repeated param
+   (qualn lam) (: ps (? (twop (cup lam)) (init (cup lam)) 0)  body (? (twop (cup lam)) (last (cup lam)) 0)
+                  (&& (twop lam) (= (cap lam) '\) (twop (cup lam))
+                      (all symp ps) (< 1 (tally ps)) (distinctp ps)                     ; >=2 distinct symbol params
+                      (exprn ps body)))
    (njit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam)) 0) epilogue)) (base-ev lam) lam)
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)
@@ -71,7 +71,7 @@
                       (twop (cup (cup lam))) !(twop (cup (cup (cup lam))))               ; (\ p INNER), one body
                       (twop inner) (= (cap inner) '\) (twop (cup inner)) (symp (caup inner)) !(= p (caup inner))
                       (twop (cup (cup inner))) !(twop (cup (cup (cup inner))))            ; INNER = (\ q E), q != p
-                      (expr2 (caup (cup inner)) p (caup inner))))
+                      (exprn (L p (caup inner)) (caup (cup inner)))))
    (flatc lam) (: inner (caup (cup lam)) (L '\ (caup lam) (caup inner) (caup (cup inner))))  ; (\ p (\ q E)) -> (\ p q E)
    ; COMPILE CACHE: each source \-expr compiles ONCE (no re-mmap on repeated ev).
    ; Keyed by source -- structurally-equal closures share the same native (sound:
@@ -88,8 +88,8 @@
    ; equal-but-distinct closure semantics (!(idp (\ x E) (\ x E))). A safe creation hook
    ; needs the POST-macro opfix seam + a CODE cache (distinct cells per instance). Future.)
    (auto-ev e) (? (qual e)  (memo e njit)
-                  (qual2 e) (memo e jit2)
-                  (qualc e) (memo e (\ l (jit2 (flatc l))))
+                  (qualn e) (memo e jitn)
+                  (qualc e) (memo e (\ l (jitn (flatc l))))
                   (: li (loopinfo e) (? li (memo e (\ l (njit-loop l (cap li) (caup li)))) (base-ev e))))
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
@@ -111,6 +111,8 @@
     (idp (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
     (idp (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
     (: ad (ev '(\ x y (+ (* x x) y))) (&& (13 = (ad 3 4)) (13 = ((ad 3) 4)) ((\ x y (+ (* x x) y)) = ad)))  ; 2-arg leaf auto-natived
+    (: a3 (ev '(\ x y z (+ (+ x y) (* z 3))))                                                  ; 3-arg leaf auto-natived, currying at any split
+       (&& (13 = (a3 1 3 3)) (13 = ((a3 1 3) 3)) (13 = ((a3 1) 3 3)) ((\ x y z (+ (+ x y) (* z 3))) = a3)))
     ; captured-closure constructor auto-natived: captures transparent (= interp)
     (: adder (ev '(\ n (\ x (+ x n))))  a5 (adder 5)
        (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3))) (= a5 ((\ n (\ x (+ x n))) 5)))))
