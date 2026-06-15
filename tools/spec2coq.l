@@ -66,23 +66,32 @@
                    (idp h '>=) (cat (L "(Z.leb " (tv (e3 f)) " " (tv (e2 f)) ")"))
                    0)))
 
-   (thm n s) (cat (L "Theorem gen_" (show n) " : " s " = true.  Proof. vm_compute. reflexivity. Qed." (string 10)))
+   ; the original assert (infix, as in spec.l) shown above each theorem
+   (thm n f s) (cat (L "(* " (show f) " *)" (string 10)
+                       "Theorem gen_" (show n) " : " s " = true.  Proof. vm_compute. reflexivity. Qed." (string 10)))
 
    nt (tablet 0) ns (tablet 0)                          ; translated / seen counters
    (bump b) (pin b 0 (+ 1 (peep b 0 0)))
    (scan ops) (? (! ops) 0
                  (: f (cap ops) _ (bump ns) s (tp (fix1 f))
-                    _ (? s (: _ (bump nt) (. (thm (peep nt 0 0) s))) 0)
+                    _ (? s (: _ (bump nt) (. (thm (peep nt 0 0) f s))) 0)
                     (scan (cup ops))))
    (walk fs) (? (! fs) 0
                 (: f (cap fs)
                    _ (? (&& (twop f) (idp (cap f) 'assert)) (scan (cup f)) 0)
                    (walk (cup fs))))
 
-   _ (. "From Stdlib Require Import ZArith.") _ (. (string 10))
-   _ (. "(* generated from test/spec.l by tools/spec2coq.l *)") _ (. (string 10))
-   _ (. "Open Scope Z_scope.") _ (. (string 10))
-   _ (. "Definition app (n x : Z) : Z := Z.pow x n.") _ (. (string 10)) _ (. (string 10))
+   _ (. (cat (L
+     "(* proof/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;" (string 10)
+     "   regenerate with `make test_gen`. Each integer-comparison corpus assert is" (string 10)
+     "   translated to Coq, with its source assert shown in the comment above it." (string 10)
+     "   The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation," (string 10)
+     "   so vm_compute RUNS both sides (Coq's bytecode VM -- fast even on bignums like" (string 10)
+     "   2^64) to a normal form, and reflexivity checks the two results are identical." (string 10)
+     "   A church numeral n applied to x is x ** n (the `app` model). *)" (string 10)
+     "From Stdlib Require Import ZArith." (string 10)
+     "Open Scope Z_scope." (string 10)
+     "Definition app (n x : Z) : Z := Z.pow x n." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
