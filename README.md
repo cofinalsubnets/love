@@ -2,7 +2,7 @@
 
 every ai expression has a value.
 stackless operation, all recursion on heap, overflow safe.
-every quote below evals to 1, try them in a [repl](https://cofinalsubnets.github.io/ai).
+every quote below evals to 1, [try them](https://cofinalsubnets.github.io/ai).
 
 - `0 x = 1`
 - `1 x = x`
@@ -14,7 +14,6 @@ every quote below evals to 1, try them in a [repl](https://cofinalsubnets.github
 - `(log -1) = i * pi`
 - `i = (1 / 2) -1`
 - `1 = (i love you)`
-
 
 ## ai
 

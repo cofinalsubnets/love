@@ -1,4 +1,4 @@
-(* rocq/spec.v -- ai's headline laws, machine-checked in Rocq.
+(* proof/spec.v -- ai's headline laws, machine-checked in Rocq.
 
    The executable spec is test/spec.l: every claim assert-backed, on every
    target, green under `make test`. That DEMONSTRATES the laws (it exhibits
@@ -21,6 +21,10 @@
 
 From Stdlib Require Import PeanoNat List.
 Import ListNotations.
+(* the numeral tower (262144, 65536, 3^27, ..) are big nat literals; Coq parses
+   them via of_num_uint to AVOID a parse-time stack overflow, then warns it did so.
+   that warning is noise -- the safe thing shouldn't nag. silence it. *)
+Set Warnings "-abstract-large-number".
 
 (* ============================================================ *)
 (* the numeral lane: (n x) = x ** n                              *)
@@ -534,19 +538,19 @@ Qed.
 Theorem asum_vscale : forall c v, asum (vscale c v) = c * asum v.
 Proof. intros c v. unfold vscale, asum. induction v as [|x v IH]; simpl; [ring | rewrite IH; ring]. Qed.
 
-(* ajot: the z-array 0..n-1, jot's array twin, and its GAUSS SUM *)
-Definition ajot (n : nat) : list Z := map Z.of_nat (seq 0 n).
-Theorem ajot_3 : ajot 3 = [0;1;2].  Proof. reflexivity. Qed.
-Theorem ajot_0 : ajot 0 = [].       Proof. reflexivity. Qed. (* (ajot 0) empty -> nothing *)
-Lemma ajot_S : forall n, ajot (S n) = ajot n ++ [Z.of_nat n].
-Proof. intro n. unfold ajot. rewrite seq_S, map_app. reflexivity. Qed.
-Theorem asum_ajot : forall n, 2 * asum (ajot n) = Z.of_nat n * (Z.of_nat n - 1).
+(* iota: the z-array 0..n-1, jot's array twin, and its GAUSS SUM *)
+Definition iota (n : nat) : list Z := map Z.of_nat (seq 0 n).
+Theorem iota_3 : iota 3 = [0;1;2].  Proof. reflexivity. Qed.
+Theorem iota_0 : iota 0 = [].       Proof. reflexivity. Qed. (* (iota 0) empty -> nothing *)
+Lemma iota_S : forall n, iota (S n) = iota n ++ [Z.of_nat n].
+Proof. intro n. unfold iota. rewrite seq_S, map_app. reflexivity. Qed.
+Theorem asum_iota : forall n, 2 * asum (iota n) = Z.of_nat n * (Z.of_nat n - 1).
 Proof.
   induction n as [|n IH].
   - reflexivity.
-  - rewrite ajot_S, asum_app. cbn [asum fold_right]. rewrite Nat2Z.inj_succ. nia.
+  - rewrite iota_S, asum_app. cbn [asum fold_right]. rewrite Nat2Z.inj_succ. nia.
 Qed.
-Theorem asum_ajot_100 : asum (ajot 100) = 4950.  Proof. now vm_compute. Qed.
+Theorem asum_iota_100 : asum (iota 100) = 4950.  Proof. now vm_compute. Qed.
 
 (* contraction: the dot product (+.x), commutative; inner needs conforming length *)
 Fixpoint dot (a b : list Z) : Z :=

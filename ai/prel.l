@@ -16,11 +16,9 @@
 (: z 0 r 1 c 2 o 3)
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
 (: i ~(0 1))
-; the bare ~ digraph (~x, i.e. ~ not followed by `(`): lift a real to ~(r 0),
-; conjugate a complex to ~(re -im), ~0 -> ~(0 0). One formula -- plex of the real
-; part and the negated imaginary part -- since (re r)=r, (im r)=0 for a real, and
-; (re z)/(im z) for a complex. (The 2-operand ~(a b) splices into (plex a b).)
-(: (wave x) (plex (re x) (- 0 (im x))))
+; the bare ~ digraph (~x, ~ not before `(`) reads as (conj x): conj LIFTS now, so
+; it IS the monadic wave -- a real r -> ~(r 0), a complex z -> ~(re -im), an
+; involution. the 2-operand ~(a b) splices into (wave a b), the C constructor.
 ; a NOM is the literal pair of a name string and a MINT (the nameless fresh
 ; point the mint nif adjoins; identity its only property, $mint = 0). the old
 ; named-uninterned atom species is gone -- McCarthy's symbol, restored as the

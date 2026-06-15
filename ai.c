@@ -137,7 +137,7 @@ lvm_t lvm_kcall,
  lvm_fputbn, lvm_read, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
- lvm_arr, lvm_ajot, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
+ lvm_arr, lvm_iota, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_arrp, lvm_intf, lvm_lamp, lvm_hotp,
  lvm_nat, lvm_natn,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
@@ -606,11 +606,11 @@ lvm_t lvm_fault;
  _(nif_real, "real", s1(lvm_real)) _(nif_flop, "flop", s1(lvm_flop))\
  _(nif_sin, "sin", s1(lvm_sin)) _(nif_cos, "cos", s1(lvm_cos))\
  _(nif_log, "log", s1(lvm_log)) _(nif_pow, "pow", s2(lvm_pow))\
- _(nif_cplx, "plex", s2(lvm_cplx)) _(nif_Cp, "comp", s1(lvm_Cp))\
+ _(nif_cplx, "wave", s2(lvm_cplx)) _(nif_Cp, "comp", s1(lvm_Cp))\
  _(nif_re, "re", s1(lvm_re)) _(nif_im, "im", s1(lvm_im)) _(nif_conj, "conj", s1(lvm_conj))\
  _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
  _(nif_arr, "arr", s3(lvm_arr))\
- _(nif_ajot, "ajot", s1(lvm_ajot))\
+ _(nif_iota, "iota", s1(lvm_iota))\
  _(nif_nat, "nat", s3(lvm_nat)) _(nif_natn, "natn", s4(lvm_natn))\
  _(nif_arank, "arank", s1(lvm_arank))\
  _(nif_alen, "alen", s1(lvm_alen)) _(nif_ashape, "ashape", s1(lvm_ashape))\
@@ -2649,7 +2649,7 @@ static struct ai *gzput_tuple_elem(struct ai *g, uintptr_t i) {
  return gzputn(g, tuple_get_int(v, i), 10); }
 
 // Print element i of a packed ai_C array (at g->sp[0]) as ~(re im) -- the same
-// read-back form as a complex scalar (the `~` reader macro splices into (com …)).
+// read-back form as a complex scalar (the `~` reader macro splices into (wave …)).
 // re/im are copied to C locals before any gzputc/ai_dtoa2 (which may grow a string
 // port and relocate the array).
 static struct ai *gzput_carr_elem(struct ai *g, uintptr_t i) {
@@ -2701,7 +2701,7 @@ static ai_inline struct ai*gzput_tuple_scalar_float(struct ai*g) {
  return ai_dtoa2(g, (ai_flo_t) flo_get(g->sp[0])); }
 
 // complex -> ~(re im); round-trips by re-evaluation (the `~` reader macro splices
-// into (plex re im), and plex is a nif). re/im are read into C locals up front so a
+// into (wave re im), and wave is a nif). re/im are read into C locals up front so a
 // GC during ai_dtoa2 can't strand the operand.
 static ai_inline struct ai*gzput_tuple_scalar_complex(struct ai*g) {
  ai_flo_t re = cplx_re(g->sp[0]), im = cplx_im(g->sp[0]);
@@ -3268,7 +3268,7 @@ static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
  for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
  return true; }
 static ai_inline bool hashsym(word x) { return symeq(x, "hash", 4); }
-static ai_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "plex", 4); }
+static ai_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "wave", 4); }
 
 static struct ai *gz_parse(struct ai *g, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
@@ -3283,11 +3283,11 @@ static struct ai *gz_parse(struct ai *g, bool multi) {
    c = g->b; }
   switch (c) {
    case '(': case '[': case '{': g = push_frame(g); continue;   // [ ] { } are () synonyms
-   case '~':                                            // ~(re im)->(plex re im) [construct]; ~x->(wave x)
-    if (!ai_ok(g = zgetc(g))) return g;                 // peek the char after ~: `(` -> splice into plex (build
+   case '~':                                            // ~(re im)->(wave re im) [construct]; ~x->(conj x)
+    if (!ai_ok(g = zgetc(g))) return g;                 // peek the char after ~: `(` -> splice into wave (build
     c2 = g->b;                                         // a complex / curry); anything else -> monadic lift/conj
-    if (c2 != EOF) g = zungetc(g, c2);                 // (wave: real r -> ~(r 0); complex z -> conj z)
-    g = push_wrap(g, c2 == '(' ? "plex" : "wave"); continue;
+    if (c2 != EOF) g = zungetc(g, c2);                 // (conj: real r -> ~(r 0); complex z -> conj z)
+    g = push_wrap(g, c2 == '(' ? "wave" : "conj"); continue;
    case ',':                                            // unquote / unquote-splice
     if (!ai_ok(g = zgetc(g))) return g;
     if ((c2 = g->b) == '@') { g = push_wrap(g, "uqs"); continue; }
@@ -5498,10 +5498,10 @@ lvm(lvm_arr) {
                        : flop(e) ? (intptr_t) flo_get(e) : box_get(e)); }
  return Sp[2] = word(v), Sp += 2, Ip++, Continue(); }
 
-// (ajot n) -- a z-array of the first n charms, 0..n-1, filled in C (no cons
+// (iota n) -- a z-array of the first n charms, 0..n-1, filled in C (no cons
 // spine): the array twin of `jot`. n<0 or non-fixnum -> nil. This is the baked
-// range constructor, so (asum (ajot n)) reduces a range end to end in C.
-lvm(lvm_ajot) {
+// range constructor, so (asum (iota n)) reduces a range end to end in C.
+lvm(lvm_iota) {
  word nx = Sp[0];
  if (!fixp(nx) || getfix(nx) < 0) return Sp[0] = nil, Ip++, Continue();
  uintptr_t n = (uintptr_t) getfix(nx);
@@ -6647,7 +6647,10 @@ lvm(lvm_im) {
  if (isnum(a)) return Sp[0] = putfix(0), Ip++, Continue();   // im of a real is 0
  return Sp[0] = nil, Ip++, Continue(); }
 
-// (conj z): complex conjugate (re, -im). On a real number, the number itself.
+// (conj z): complex conjugate (re, -im). conj LIFTS: a real r becomes ~(r 0)
+// (= r by value, the tower bridges), so conj is the monadic `~` -- it always
+// lands in C. (It used to pass a real through; lifting makes conj == the old
+// `wave`, so `~x` reads as (conj x) and the constructor takes the name `wave`.)
 lvm(lvm_conj) {
  word a = Sp[0];
  if (Cp(a)) { ai_flo_t re = cplx_re(a), im = cplx_im(a);
@@ -6655,7 +6658,11 @@ lvm(lvm_conj) {
   struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C); Hp += cplx_req;
   cplx_put(v, re, -im);
   return Sp[0] = word(v), Ip++, Continue(); }
- if (isnum(a)) return Ip++, Continue();
+ if (isnum(a)) { ai_flo_t re = toflo(a);            // lift a real to ~(r 0)
+  Have(cplx_req);
+  struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C); Hp += cplx_req;
+  cplx_put(v, re, 0);
+  return Sp[0] = word(v), Ip++, Continue(); }
  return Sp[0] = nil, Ip++, Continue(); }
 
 // (abs z): type-aware magnitude. Complex -> sqrt(re^2+im^2) (a float). Real ->

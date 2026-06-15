@@ -1,13 +1,13 @@
 ; spec2coq: generate Coq from test/spec.l, in ai.
 ;
-; The GENERATED half of the verification (see rocq/spec.v for the hand-written
+; The GENERATED half of the verification (see proof/spec.v for the hand-written
 ; LAWS -- the half a generator structurally can't do). Each top-level (assert ..)
 ; operand is `opfix`-factored (infix -> prefix) and translated to a Coq theorem
 ; closed by vm_compute, over two models that together cover every EXACT, computable
 ; domain in the corpus:
 ;   * COMPUTATIONAL (Z / list Z / assoc lists) for value equalities: church
 ;     numerals (app), the integer algebra (+ - * // % & | ^, comparisons), nilp /
-;     sat / abs / gcd, lists / strings / arrays (asum/amax/.., ajot), array-valued
+;     sat / abs / gcd, lists / strings / arrays (asum/amax/.., iota), array-valued
 ;     = (broadcast / append / repeat), hashes & peep.
 ;   * a KIND lattice (value tags) for the type predicates (fixp/twop/strp/..) and
 ;     the band order (number < string < symbol < product < map).
@@ -15,7 +15,7 @@
 ; honest misses) and the universally-quantified LAWS. Untranslatable asserts are
 ; SKIPPED and COUNTED -- never silently dropped (the trailing comment reports it).
 ; Z not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
-; Reads test/spec.l, writes Coq to `out`.  Run: out/host/ai tools/spec2coq.l > rocq/gen.v
+; Reads test/spec.l, writes Coq to `out`.  Run: out/host/ai tools/spec2coq.l > proof/gen.v
 
 (: (cat l) (foldl (+) "" l)                            ; join a list of strings
 
@@ -38,10 +38,10 @@
    (zlist? l) (? (twop l) (&& (fixp (cap l)) (zlist? (cup l))) (idp l ()))  ; PROPER fixnum list (ends in (), not any atom)
    (qlist? x) (&& (twop x) (idp (cap x) bs) (un2? x) (zlist? (e2 x)))  ; '(1 2 3): \ + a z-list, EXACTLY 2 (a lambda is 3+)
    (arrv? x)  (&& (twop x) (idp (cap x) 'tuple) (zlist? (cup x)))      ; @(1 2 3) = (tuple 1 2 3): a z-array
-   (ajotv? x) (&& (twop x) (idp (cap x) 'ajot) (un2? x) (intv? (e2 x)))  ; (ajot n): the z-array 0..n-1
+   (iotav? x) (&& (twop x) (idp (cap x) 'iota) (un2? x) (intv? (e2 x)))  ; (iota n): the z-array 0..n-1
    (un2? x) (&& (twop (cup x)) (! (twop (cup (cup x))))) ; a 2-element (op arg) form
    ; the KIND of a collection value -- arrays BROADCAST elementwise, lists APPEND
-   (arr? x) (| (arrv? x) (| (ajotv? x)
+   (arr? x) (| (arrv? x) (| (iotav? x)
               (&& (twop x) (len3? x) (: h (cap x)
                  (? (idp h '+) (&& (arr? (e2 x)) (arr? (e3 x)))
                     (| (idp h '*) (idp h '//)) (&& (arr? (e2 x)) (intv? (e3 x))) 0)))))
@@ -66,7 +66,7 @@
    (joinb s i) (? (< i (tally s)) (cat (L (show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
    (tl x) (? (qlist? x)  (cat (L "[" (joinl (e2 x)) "]"))
              (arrv? x)   (cat (L "[" (joinl (cup x)) "]"))    ; tuple: the elements are the cup
-             (ajotv? x)  (cat (L "(ajot " (tv (e2 x)) ")"))   ; the Coq ajot model
+             (iotav? x)  (cat (L "(iota " (tv (e2 x)) ")"))   ; the Coq iota model
              (strp x)    (cat (L "[" (joinb x 0) "]"))
              (: h (cap x)                                     ; the broadcast / append / repeat ops
                 (? (idp h '+)  (? (arr? x)        (cat (L "(vadd " (tl (e2 x)) " " (tl (e3 x)) ")"))
@@ -114,9 +114,9 @@
    (tk x) (? (intv? x) "Vz"  (flop x) "Vflo"  (strp x) "Vstr"  (idp x 'i) "Vcx"
              (twop x) (: h (cap x)
                         (? (idp h bs) (tkq (e2 x))                     ; '(..) or 'x
-                           (idp h 'plex) "Vcx"                         ; ~(re im)
+                           (idp h 'wave) "Vcx"                         ; ~(re im)
                            (idp h 'hash) "Vmap"                        ; #(..)
-                           (| (idp h 'tuple) (idp h 'ajot)) "Varr"     ; @(..) / (ajot n)
+                           (| (idp h 'tuple) (idp h 'iota)) "Varr"     ; @(..) / (iota n)
                            "Vbot"))
              "Vbot")
    (tkq q) (? (symp q) "Vsym" (twop q) "Vpair" (fixp q) "Vz" "Vbot")   ; the quoted datum's kind
@@ -175,7 +175,7 @@
                    (walk (cup fs))))
 
    _ (. (cat (L
-     "(* rocq/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;" (string 10)
+     "(* proof/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;" (string 10)
      "   regenerate with `make test_gen`. Each integer-comparison corpus assert is" (string 10)
      "   translated to Coq, with its source assert shown in the comment above it." (string 10)
      "   The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation," (string 10)
@@ -191,7 +191,7 @@
      "Definition aprod : list Z -> Z := fold_right Z.mul 1." (string 10)
      "Definition amax (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.max x xs end." (string 10)
      "Definition amin (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.min x xs end." (string 10)
-     "Definition ajot (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n))." (string 10)
+     "Definition iota (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n))." (string 10)
      "Fixpoint leqb (a b:list Z):bool := match a,b with nil,nil=>true | x::a',y::b'=>andb (Z.eqb x y) (leqb a' b') | _,_=>false end." (string 10)
      "Fixpoint vadd (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vadd a' b' | _,_=>nil end." (string 10)
      "Definition vscale (c:Z):list Z->list Z := map (Z.mul c)." (string 10)

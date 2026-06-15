@@ -22,10 +22,10 @@ syn keyword AiFunc map foldl foldr foldl1 foldr1 filter init last each all any c
 syn keyword AiFunc rev take drop part zip ldel assq memq lidx sort sortsplit merge msort jot
 syn keyword AiFunc + - * / % < <= = >= > <- -> idp inc dec abs gcd modpow int
 syn keyword AiFunc ~ << >> & \| ^
-syn keyword AiFunc sin cos log pow plex re im conj arg wave
+syn keyword AiFunc sin cos log pow re im conj arg wave
 syn keyword AiFunc nump intp powg num-ap numfn randint net prod neg recip frac bit
 syn keyword AiFunc twop strp symp mapp lamp hotp packp bigp widep arrp comp flop fixp nilp atomp
-syn keyword AiFunc arr array arank alen ashape atype asum aprod amax amin aall
+syn keyword AiFunc arr array arank alen ashape atype asum aprod amax amin aall iota
 syn keyword AiFunc a-rank a-shape a-type a-dim
 syn keyword AiFunc string slice intern nom mint tally slurp show sip pad page
 syn keyword AiFunc tablet keys dig sat non peep pin pull buf blit missing

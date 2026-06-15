@@ -1,4 +1,4 @@
-(* rocq/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;
+(* proof/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;
    regenerate with `make test_gen`. Each integer-comparison corpus assert is
    translated to Coq, with its source assert shown in the comment above it.
    The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation,
@@ -14,7 +14,7 @@ Definition asum  : list Z -> Z := fold_right Z.add 0.
 Definition aprod : list Z -> Z := fold_right Z.mul 1.
 Definition amax (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.max x xs end.
 Definition amin (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.min x xs end.
-Definition ajot (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n)).
+Definition iota (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n)).
 Fixpoint leqb (a b:list Z):bool := match a,b with nil,nil=>true | x::a',y::b'=>andb (Z.eqb x y) (leqb a' b') | _,_=>false end.
 Fixpoint vadd (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vadd a' b' | _,_=>nil end.
 Definition vscale (c:Z):list Z->list Z := map (Z.mul c).
@@ -197,14 +197,14 @@ Theorem gen_78 : (leqb [2;4;6] (vscale 2 [1;2;3])) = true.  Proof. vm_compute. r
 Theorem gen_79 : (Z.eqb 60 (asum [10;20;30])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (30 = (amax (tuple 10 30 20))) *)
 Theorem gen_80 : (Z.eqb 30 (amax [10;30;20])) = true.  Proof. vm_compute. reflexivity. Qed.
-(* ((tuple 0 1 2) = (ajot 3)) *)
-Theorem gen_81 : (leqb [0;1;2] (ajot 3)) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (mono (! (ajot 0))) *)
-Theorem gen_82 : (Z.leb (asum (ajot 0)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (mono (! (ajot -1))) *)
-Theorem gen_83 : (Z.leb (asum (ajot (-1))) 0) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (4950 = (asum (ajot 100))) *)
-Theorem gen_84 : (Z.eqb 4950 (asum (ajot 100))) = true.  Proof. vm_compute. reflexivity. Qed.
+(* ((tuple 0 1 2) = (iota 3)) *)
+Theorem gen_81 : (leqb [0;1;2] (iota 3)) = true.  Proof. vm_compute. reflexivity. Qed.
+(* (mono (! (iota 0))) *)
+Theorem gen_82 : (Z.leb (asum (iota 0)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
+(* (mono (! (iota -1))) *)
+Theorem gen_83 : (Z.leb (asum (iota (-1))) 0) = true.  Proof. vm_compute. reflexivity. Qed.
+(* (4950 = (asum (iota 100))) *)
+Theorem gen_84 : (Z.eqb 4950 (asum (iota 100))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ((tuple 3 5) = (// (tuple 7 11) 2)) *)
 Theorem gen_85 : (leqb [3;5] (vquot 2 [7;11])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (0 = 0) *)

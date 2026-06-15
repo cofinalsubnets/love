@@ -1,7 +1,7 @@
 ; step 7: complex arithmetic.
 ; - a complex is a rank-0 scalar (comp), the widest numeric tier: complex >
 ;   float > int/bignum. ~(re im) builds one (the `~` reader macro splices into
-;   (plex re im)); `i` = ~(0 1) is the unit.
+;   (wave re im)); `i` = ~(0 1) is the unit.
 ; - + - * / promote a real operand to (r, 0); % is undefined (-> nil).
 ; - sticky: never demotes to a real, even when im is 0 (eql-distinct keys).
 ; - ordered: < <= > >= sort a complex lexicographically by (re, im); a real r is
@@ -14,7 +14,7 @@
    B100 (100 2))
 
 (assert
- ; --- printer: ~(re im) form, reads back by re-evaluation (splices into plex) ---
+ ; --- printer: ~(re im) form, reads back by re-evaluation (splices into wave) ---
  (= "~(0.0 1.0)" (show i))
  (= "~(2.0 3.0)" (show ~(2 3)))
  (= "~(2.0 -3.0)" (show ~(2 -3)))
@@ -45,10 +45,10 @@
  (= (conj ~(2 3)) ~(2 -3))
  (= 7 (re 7))                              ; re of a real is itself
  (nilp (im 7))                             ; im of a real is 0
- (= 5 (conj 5))                            ; conj of a real is itself
+ (= 5 (conj 5))                            ; conj LIFTS a real to ~(r 0) = r (the tower bridges)
 
- ; --- monadic ~ (wave): bare ~x (the `~` sigil not before `(`) lifts a real to
- ;     (r 0) and conjugates a complex; the 2-operand ~(a b) still splices into plex ---
+ ; --- monadic ~ (conj): bare ~x (the `~` sigil not before `(`) lifts a real to
+ ;     (r 0) and conjugates a complex; the 2-operand ~(a b) still splices into wave ---
  (= ~(5 0) ~5)   (comp ~5)                 ; ~r lifts a real to (r, 0) -- a true complex
  (= ~(0 0) ~0)   (= ~(-3.5 0) ~-3.5)       ; ~0 -> (0, 0); lift works on a negative real
  (= (conj ~(2 3)) ~~(2 3))                 ; ~z conjugates -- ~ generalizes conj
@@ -77,9 +77,9 @@
  (< ~(2 1) ~(2 5))   !(< ~(2 5) ~(2 1))
 
  ; --- % is undefined on complex; sin stays real-domain (-> nil); sqrt is ((/ 1 2) x)
- ;     and now works on a complex (via pow); plex rejects a complex part ---
+ ;     and now works on a complex (via pow); wave rejects a complex part ---
  (nilp (% i 2))
- (nilp (sin i))   (close 0.7071067811865476 (re ((/ 1 2) i)))   (nilp (plex 1 i))
+ (nilp (sin i))   (close 0.7071067811865476 (re ((/ 1 2) i)))   (nilp (wave 1 i))
  ; pow IS defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
  (close -1 (re (pow i 2)))   (? w64 (close 0 (im (pow i 2))) 1)   ; im residue exceeds close's tol under f32 powf
  (close 0.20787957635076193 (re (pow i i)))   (close 0 (im (pow i i)))

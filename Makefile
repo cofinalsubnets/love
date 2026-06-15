@@ -41,7 +41,7 @@ test_host: host
 # tools/py/ (gen_data / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host
 	@$(MAKE) -C tools
-# Machine-check rocq/spec.v -- ai's headline laws (the numeral / function /
+# Machine-check proof/spec.v -- ai's headline laws (the numeral / function /
 # absence core of test/spec.l) as Rocq theorems, axiom-free (every proof
 # "Closed under the global context"). This is what upgrades the executable
 # spec from DEMONSTRATED on every target to PROVED in a consistent metatheory
@@ -56,12 +56,12 @@ test_proof:
 	@echo "test_proof: skipped (needs rocq/coqc)"
 else
 test_proof:
-	@echo TEST rocq/spec.v "(coqc)"
-	@$(COQC) -q rocq/spec.v
-	@rm -f rocq/spec.vo rocq/spec.vok rocq/spec.vos rocq/spec.glob rocq/.spec.aux
+	@echo TEST proof/spec.v "(coqc)"
+	@$(COQC) -q proof/spec.v
+	@rm -f proof/spec.vo proof/spec.vok proof/spec.vos proof/spec.glob proof/.spec.aux
 endif
 # The .l -> .v pipeline: tools/spec2coq.l (run on the host binary $m) reads
-# test/spec.l and EMITS rocq/gen.v -- the spec generating Coq theorems for its
+# test/spec.l and EMITS proof/gen.v -- the spec generating Coq theorems for its
 # own pure-numeral corpus facts, each closed by computation (over Z, since nat
 # is unary and 3^27 would blow up vm_compute). coqc then checks them. Drift-proof:
 # the asserts and their proofs cannot diverge -- regenerated every run from .l.
@@ -71,11 +71,11 @@ test_gen:
 	@echo "test_gen: skipped (needs rocq/coqc)"
 else
 test_gen: host
-	@echo GEN	rocq/gen.v "(tools/spec2coq.$x on $m)"
-	@$m tools/spec2coq.$x > rocq/gen.v
-	@echo TEST rocq/gen.v "(coqc)"
-	@$(COQC) -q rocq/gen.v
-	@rm -f rocq/gen.vo rocq/gen.vok rocq/gen.vos rocq/gen.glob rocq/.gen.aux
+	@echo GEN	proof/gen.v "(tools/spec2coq.$x on $m)"
+	@$m tools/spec2coq.$x > proof/gen.v
+	@echo TEST proof/gen.v "(coqc)"
+	@$(COQC) -q proof/gen.v
+	@rm -f proof/gen.vo proof/gen.vok proof/gen.vos proof/gen.glob proof/.gen.aux
 endif
 all: host kernel wasm
 
@@ -503,7 +503,7 @@ wasm:
 
 clean:
 	rm -rf out
-	@rm -f rocq/*.vo rocq/*.vok rocq/*.vos rocq/*.glob rocq/.*.aux
+	@rm -f proof/*.vo proof/*.vok proof/*.vos proof/*.glob proof/.*.aux
 	@$(MAKE) -C wasm clean
 distclean: clean
 

@@ -62,7 +62,7 @@
     ; (nil counts as numeric — it's putnum(0).)
     (nilp (sin "x"))
     (nilp (pow "a" 1))
-    (nilp (plex "x" 1))      ; plex of a non-number -> nil (so (arg (plex 1 "x")) folds to 0)
+    (nilp (wave "x" 1))      ; wave of a non-number -> nil (so (arg (wave 1 "x")) folds to 0)
 
     ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo),
     ;     exactly as a scalar bignum already fed the scalar pow ---
