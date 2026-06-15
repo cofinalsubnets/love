@@ -106,20 +106,28 @@
    (jitn lam) (: ps (init (cup lam))  body (last (cup lam))
                  (natn (emit (cat (cgn ps body 0) epilogue-mn)) (ev lam) lam (tally ps)))
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
-   ; (loopcode body cv) -- the native counted-loop bytes for sum_{cv<n} body(cv),
-   ; cv the counter var (limit at Sp[0]). r9=n r10=cv r11=acc. Reusable by jitsum
-   ; and by the auto loop-detector (jit/auto.l).
-   (loopcode body cv)
+   ; --- counted fold loop: acc = (FOLD over cv<n of body(cv)), cv the counter, limit
+   ; at Sp[0]. r9=n r10=cv r11=acc. FOLD is a (op . init) -- + folds from 0, * from 1 --
+   ; and cmp is the loop test's comparison (the loop runs while (cmp cv n)). offsets are
+   ; COMPUTED from the piece lengths, not hardcoded, so a longer acc op (imul) is fine.
+   acc-add '(73 1 195)            acc-mul '(76 15 175 216)        ; add r11,rax / imul r11,rax
+   (r11-init a0) (? (= a0 0) '(77 49 219) (cat '(73 199 195) (le4 a0)))   ; xor r11,r11 / mov r11,a0
+   (foldbytes op) (? (= op '+) acc-add (= op '*) acc-mul 0)
+   (foldinit op)  (? (= op '*) 1 0)                               ; * folds from 1, + from 0
+   ; END jcc = the INVERSE of the continue-comparison (exit when (cmp cv n) is false).
+   (loopjcc cmp) (? (= cmp '<) '(15 141) (= cmp '<=) '(15 143) (= cmp '>) '(15 142)
+                    (= cmp '>=) '(15 140) (= cmp '=) '(15 133) 0)  ; jge/jg/jle/jl/jne
+   (loopcode body cv op cmp)
     (: lb   (cgv cv (\ d ld-i) body 0)  Lb (tally lb)
-       pre  '(76 139 9  73 209 249  77 49 210  77 49 219)                         ; mov r9,[rcx];sar;xor r10;xor r11
-       test (cat '(77 57 202) (cat '(15 141) (le4 (+ Lb 32))))                     ; cmp r10,r9 ; jge loop_end
-       acc  (cat '(73 1 195) (guard 0))                                           ; add r11,rax ; guard
-       back (cat '(73 255 194) (cat '(233) (le4 (- 0 (+ Lb 41)))))                ; inc r10 ; jmp loop_top
+       acc  (cat (foldbytes op) (guard 0))  La (tally acc)        ; r11 = r11 op rax ; overflow -> deopt
+       pre  (cat '(76 139 9  73 209 249  77 49 210) (r11-init (foldinit op)))    ; mov r9,[rcx];sar;xor r10; init r11
+       test (cat '(77 57 202) (cat (loopjcc cmp) (le4 (+ (+ Lb La) 8))))         ; cmp r10,r9 ; <inverse-cmp> end
+       back (cat '(73 255 194) (cat '(233) (le4 (- 0 (+ (+ Lb La) 17)))))        ; inc r10 ; jmp loop_top
        (cat pre (cat test (cat lb (cat acc (cat back (cat '(76 137 216) epilogue)))))))   ; ... ; mov rax,r11
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
    (jitsum body)
     (: src `(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a ,body)) a)) 0 0))
-       (nat (emit (loopcode body 'i)) (ev src) src))
+       (nat (emit (loopcode body 'i '+ '<)) (ev src) src))
    ; --- self-test (x86-64): native == interpreted, transparent, deopts ---------
    (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
    f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))

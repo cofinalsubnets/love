@@ -49,18 +49,20 @@
        GO   (cap G)   I (caup G)    A (caup (cup G))        ; (go i a)
        T    (caup IF) THEN (caup (cup IF)) ELS (caup (cup (cup IF)))   ; (? T THEN ELS)
        STEP (caup THEN) ACC (caup (cup THEN))               ; THEN = (go STEP ACC)
-       B    (caup (cup ACC))                                ; ACC = (+ a B)
+       B    (caup (cup ACC))                                ; ACC = (op a B)
+       op   (? (twop ACC) (cap ACC) 0)  cmp (? (twop T) (cap T) 0)   ; the fold op + the loop-test comparison
        ok (&& (twop lam) (= (cap lam) '\) (symp (caup lam))                  ; (\ N ..)
               (twop (cup (cup lam))) !(twop (cup (cup (cup lam))))           ; one body
-              (twop M) (= z1 0) (= z2 0) !(twop (cup (cup (cup M))))         ; (S 0 0)
+              (twop M) (= z1 0) !(twop (cup (cup (cup M))))                  ; (S 0 a0)
               (twop S) (= (cap S) ':) (symp GO) (symp I) (symp A) !(= I A)   ; (: (go i a) IF)
               (twop IF) (= (cap IF) '?) (= ELS A)                            ; (? .. .. a)
-              (twop T) (= (cap T) '<) (= (caup T) I) (= (caup (cup T)) (caup lam))  ; (< i n)
+              (twop T) (memq cmp '(< <= > >= =)) (= (caup T) I) (= (caup (cup T)) (caup lam))  ; (cmp i n)
               (= (cap THEN) GO)                                              ; (go ..)
               (twop STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)  ; (+ i 1)
-              (twop ACC) (= (cap ACC) '+) (= (caup ACC) A) (exprp B I))      ; (+ a B), B in the grammar over i
-       (? ok (L B I) 0))
-   (njit-loop lam B cv) (nat (emit (loopcode B cv)) (base-ev lam) lam)
+              (twop ACC) (memq op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
+              (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
+       (? ok (L B I op cmp) 0))
+   (njit-loop lam B cv op cmp) (nat (emit (loopcode B cv op cmp)) (base-ev lam) lam)
    ; --- captured-closure CONSTRUCTOR (\ p (\ q E)): a nest of 1-arg lambdas, E over
    ; {p,q}. Compiled as the flat 2-param native (\ p q E); applying it to p yields a
    ; native CAPTURED closure -- fully transparent (= the interpreter's ((2param) p)
@@ -90,7 +92,7 @@
    (auto-ev e) (? (qual e)  (memo e njit)
                   (qualn e) (memo e jitn)
                   (qualc e) (memo e (\ l (jitn (flatc l))))
-                  (: li (loopinfo e) (? li (memo e (\ l (njit-loop l (cap li) (caup li)))) (base-ev e))))
+                  (: li (loopinfo e) (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li)))))) (base-ev e))))
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
@@ -109,6 +111,14 @@
     (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
        h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
        (&& (lamp (loopinfo L2)) (= c (h 1000))))
+    ; GENERALIZED loop -- a PRODUCT fold (op=*, init 1): n! = prod_{i<n}(i+1)
+    (: P '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
+       f (ev P)  fi ((: (go i a) (? (< i 10) (go (+ i 1) (* a (+ i 1))) a)) 0 1)
+       (&& (lamp (loopinfo P)) (3628800 = (f 10)) (= fi (f 10)) (= (ev P) (ev P))
+           (15511210043330985984000000 = (f 25))))             ; overflow -> deopt -> bignum (transparent)
+    ; GENERALIZED loop -- a <= comparison: sum_{i<=n} i
+    (: Q '(\ n ((: (go i a) (? (<= i n) (go (+ i 1) (+ a i)) a)) 0 0))
+       g (ev Q)  (&& (lamp (loopinfo Q)) (55 = (g 10))))        ; 0+1+..+10 = 55
     (idp (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
     (idp (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
     (: ad (ev '(\ x y (+ (* x x) y))) (&& (13 = (ad 3 4)) (13 = ((ad 3) 4)) ((\ x y (+ (* x x) y)) = ad)))  ; 2-arg leaf auto-natived
