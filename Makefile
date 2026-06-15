@@ -172,7 +172,7 @@ $(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm
-	@ln -sf $n $(ho)/ai   # ai is love: the blessed alias
+	@ln -sf $n $(ho)/love   # love is ai now: the compat alias (the theorem keeps the word)
 
 $(ho)/$n.1: $(ho)/$n love/manpage.$x
 	@echo GEN	$@

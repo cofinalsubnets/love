@@ -5,7 +5,7 @@
 # Per-frontend build output lives under $R/out/<frontend>/.
 R ?= .
 
-n = love
+n = ai
 x = l
 m = $R/out/host/$n
 a ?= $(shell uname -m)
