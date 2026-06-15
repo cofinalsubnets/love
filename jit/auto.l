@@ -40,7 +40,7 @@
                       (twop (cup (cup lam))) (symp p1) !(= p0 p1)
                       (twop (cup (cup (cup lam)))) !(twop (cup (cup (cup (cup lam)))))   ; exactly (\ p0 p1 body)
                       (expr2 (caup (cup (cup lam))) p0 p1)))
-   (njit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam))) epilogue)) (base-ev lam) lam)
+   (njit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam)) 0) epilogue)) (base-ev lam) lam)
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)
     (: M    (caup (cup lam))                                ; lambda body
@@ -81,14 +81,21 @@
    ; one application is internally hot). ⚠ pins natives (+ W^X arenas) for the run.
    cache (tablet 0)
    (memo e mk) (: g (peep cache e 0) (? g g (: h (mk e) _ (pin cache e h) h)))
+   ; auto-ev: a WHOLE-FORM lambda -> native (cached), else the base interpreter. (The
+   ; creation hook -- rewriting embedded lambdas via a jit-walk -- was tried and pulled:
+   ; it's pre-macroexpansion so it can disturb a macro/quasiquote's data args, AND the
+   ; compile cache makes structurally-equal closures idp-IDENTICAL, breaking love's
+   ; equal-but-distinct closure semantics (!(idp (\ x E) (\ x E))). A safe creation hook
+   ; needs the POST-macro opfix seam + a CODE cache (distinct cells per instance). Future.)
    (auto-ev e) (? (qual e)  (memo e njit)
                   (qual2 e) (memo e jit2)
-                  (qualc e) (memo e (\ l (jit2 (flatc l))))     ; captured-closure constructor -> native
+                  (qualc e) (memo e (\ l (jit2 (flatc l))))
                   (: li (loopinfo e) (? li (memo e (\ l (njit-loop l (cap li) (caup li)))) (base-ev e))))
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
     (23 = ((ev '(\ x (+ (* x 2) 3))) 10))
+    (((base-ev '(\ x (+ (* x 9) 4))) 11) = ((ev '(\ x (+ (* x 9) 4))) 11))      ; native leaf == interp (catches njit codegen regressions)
     (3 = ((ev '(\ x (cap x))) '(3 4)))                         ; non-qualifying -> interpreter
     (6 = (ev '(+ 1 2 3)))                                      ; non-lambda forms unaffected
     (9000000000000000000 = ((ev '(\ x (* x x))) 3000000000))   ; overflow deopts -> bignum
