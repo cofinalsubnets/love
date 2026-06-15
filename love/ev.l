@@ -62,6 +62,25 @@
   lvm_cur (peek 0 (+))
   (sco p a i) (pin (pin (pin (tablet 0) 'arg a) 'imp i) 'par p)
   (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where wev stashes 'src
+  ; --- THE EMISSION INTERFACE (the codegen seam) --------------------------------------
+  ; ana walks the analyzed form and emits code through these primitives. an EMITTER is a
+  ; curried (\ k n ..): k = the continuation emitter, n = the current cell index (the
+  ; thread builds BACKWARD, poke -1 prepending). `co` (prelude: (co f g x) = (f (g x)))
+  ; sequences emitters -- (co A B) emits A, then B, then k. the leaf emitters:
+  ;   kim x    -- a quote / constant            karg i  -- an arg ref at frame index i
+  ;   em1 op   -- a 1-word inline vm op          em2 op x -- a 2-word op (op + operand)
+  ;   kap n    -- an n-ary apply (peeps the continuation for lvm_ret -> a tail call)
+  ;   aco      -- a cond (below);  k0/k0s -- thread terminators (start a thread)
+  ; fuse/spa/spq are THIS backend's peepholes (fuse an operand into a following ap/tap;
+  ; zero-operand opcodes for the hot arg/quote values). ava/avb resolve a variable to one
+  ; of karg (a local, at its [imps args] frame slot) / kim (a global constant) / em2 freev.
+  ; This is the THREADED (bytecode) backend -- the portable default that every target runs
+  ; (host, kernel, wasm, aarch64, and the little ones: playdate, teensy). A NATIVE backend
+  ; (jit/emit.l, x86-64, opt-in) implements the SAME leaf interface over a byte buffer
+  ; instead of cells -- kim -> movabs, karg -> mov [rcx+8i] + a fixnum guard, em1 -> the
+  ; op's machine code, aco -> cmp+jcc -- today via the ala creation hook (book['natjit])
+  ; for leaf bodies, with the unhandled ops (kap = a call) DEOPTing into this thread.
+  ; Pulling the rest of the interface through (kap as a native call) is the open work.
   (p2 i x k) (poke -1 i (poke -1 x k))
   (em1 x k n) (poke -1 x (k (+ 1 n)))
   (em2 i x k n) (poke -1 i (poke -1 x (k (+ 2 n))))
