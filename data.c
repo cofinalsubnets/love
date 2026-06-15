@@ -16,8 +16,18 @@
 // no body may use a per-sentinel literal, or the sizes would diverge).
 static lvm(data_apply) {
  return Ap(ai_apply_mx[ai_typ(Ip)][ai_kind(Sp[0])], g); }
+// ELF: each sentinel goes in its own ai_data.NN input subsection; the linker
+// (data.ld) sorts them into one enum-ordered block and ai_typ recovers a kind
+// from an ap's slot index. mach-o has no SORT_BY_NAME / __start_ symbol
+// equivalent and rejects a single-name "section" attribute, so there the
+// sentinels are ordinary functions and ai_typ (the __APPLE__ path in data.h)
+// compares an ap against their five addresses -- no layout dependency.
+#if defined(__APPLE__)
+#define data(idx, name) __attribute__((used)) lvm(name) { return Ap(data_apply, g); }
+#else
 #define data(idx, name) \
  __attribute__((section("ai_data." #idx), used)) lvm(name) { return Ap(data_apply, g); }
+#endif
 
 #define go(_)\
   _(00, lvm_tuple) _(01, lvm_big) _(02, lvm_str)\

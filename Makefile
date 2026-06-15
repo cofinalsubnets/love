@@ -141,9 +141,21 @@ h_o = $(ai_c:$(R)/%.c=$(ho)/%.o)
 # the host runs $(tco) (common.mk; default 1 = tail-threaded, vmret-checked);
 # ai0 below stays pinned 0, the deliberate trampoline-coverage lane.
 hcc = $(CC) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
+# The data-sentinel layout trick is ELF-only: data.ld (a GNU linker script) and
+# the generated $(ho)/data.h (reflected from data.o's ELF section sizes by
+# gen_data.l) give ai_typ its O(1) slot recovery. mach-o has neither, so on
+# Darwin drop both -- data.c/ai.c fall back to the portable top-level data.h,
+# whose __APPLE__ path recovers a kind by comparing an ap to the five sentinel
+# addresses (no section, no linker script, no reflection).
+ifeq ($(shell uname -s),Darwin)
+data_ld =
+ldflags =
+hdata_h =
+else
 data_ld = data.ld
 ldflags = -Wl,-T,$(data_ld)
 hdata_h = $(ho)/data.h
+endif
 ai0 = $(ho)/ai0
 
 host: $(ho)/$n $(ho)/lib$n.so $(ho)/$n.1
