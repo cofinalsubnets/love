@@ -17,7 +17,7 @@
    (forms path) (: q (open path "r") e (mint 0)
                    ((: (g acc) (: r (read q e) (? (= e r) (rev acc) (g (cons r acc))))) ()))
 
-   (e2 l) (cap (cup l))  (e3 l) (cap (cup (cup l)))     ; 2nd, 3rd of a list
+   (e2 l) (cap (cup l))  (e3 l) (cap (cup (cup l)))  (e4 l) (cap (cup (cup (cup l))))  ; 2nd 3rd 4th
    ; exactly three elements? (STRUCTURAL twop, never `!`: '(0) nets zero)
    (len3? x) (&& (twop x) (twop (cup x)) (twop (cup (cup x))) (! (twop (cup (cup (cup x))))))
    ; opfix wraps an operator form one layer ((f) == f); unwrap a 1-element list
@@ -47,6 +47,14 @@
    ; the list reducers: net/asum -> sum, tally/alen -> count, amax/amin/aprod
    (lop? h) (| (idp h 'net) (| (idp h 'asum) (| (idp h 'tally) (| (idp h 'alen)
               (| (idp h 'amax) (| (idp h 'amin) (idp h 'aprod)))))))
+   ; a hash literal #(k v ..) = (hash k v ..): an assoc list of fixnum pairs (EVEN count)
+   (even? l) (? (twop l) (! (even? (cup l))) 1)
+   (hashv? x) (&& (twop x) (idp (cap x) 'hash) (zlist? (cup x)) (even? (cup x)))
+   (len4? x) (&& (twop x) (twop (cup x)) (twop (cup (cup x)))
+                 (twop (cup (cup (cup x)))) (! (twop (cup (cup (cup (cup x)))))))
+   (pairs l) (? (&& (twop l) (twop (cup l)))
+               (cat (L "(" (tv (cap l)) ", " (tv (e2 l)) ")" (? (twop (cup (cup l))) ";" "") (pairs (cup (cup l))))) "")
+   (th x) (cat (L "[" (pairs (cup x)) "]"))             ; #(1 10 2 20) -> [(1, 10);(2, 20)]
    ; translate a collection value to a Coq `list Z`
    (joinl l) (? (twop l) (cat (L (tv (cap l)) (? (twop (cup l)) ";" "") (joinl (cup l)))) "")
    (joinb s i) (? (< i (tally s)) (cat (L (show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
@@ -66,9 +74,11 @@
    (intv? x) (? (fixp x) 1
                 (twop x) (: h (cap x)
                             (? (binop h)     (&& (len3? x) (intv? (e2 x)) (intv? (e3 x)))
-                               (idp h 'sat)   (&& (un2? x) (| (intv? (e2 x)) (listv? (e2 x))))
+                               (idp h 'sat)   (&& (un2? x) (| (intv? (e2 x)) (| (listv? (e2 x)) (hashv? (e2 x)))))
+                               (idp h 'peep)  (&& (len4? x) (| (hashv? (e2 x)) (listv? (e2 x))) (intv? (e3 x)) (intv? (e4 x)))
                                (lop? h)       (&& (un2? x) (listv? (e2 x)))
                                (idp h 'abs)   (&& (un2? x) (intv? (e2 x)))
+                               (hashv? h)     (&& (un2? x) (intv? (e2 x)))   ; (#(..) k) map lookup
                                (fixp h) (allv? x)
                                0))
                 0)
@@ -78,7 +88,8 @@
    (tv x) (? (fixp x) (? (< x 0) (cat (L "(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
              (: h (cap x) b (binop h)
                 (? b (cat (L "(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
-                   (idp h 'sat)   (? (listv? (e2 x)) (cat (L "(Z.max 0 (asum " (tl (e2 x)) "))"))
+                   (idp h 'sat)   (? (hashv? (e2 x)) (cat (L "(Z.of_nat (length " (th (e2 x)) "))"))  ; $hash = key count
+                                     (listv? (e2 x)) (cat (L "(Z.max 0 (asum " (tl (e2 x)) "))"))
                                      (cat (L "(Z.max 0 " (tv (e2 x)) ")")))  ; $list / $int
                    (| (idp h 'net) (idp h 'asum))   (cat (L "(asum " (tl (e2 x)) ")"))   ; +list / asum -- the sum
                    (| (idp h 'tally) (idp h 'alen)) (cat (L "(Z.of_nat (length " (tl (e2 x)) "))"))  ; count
@@ -86,6 +97,9 @@
                    (idp h 'amin)  (cat (L "(amin " (tl (e2 x)) ")"))
                    (idp h 'aprod) (cat (L "(aprod " (tl (e2 x)) ")"))
                    (idp h 'abs)   (cat (L "(Z.abs " (tv (e2 x)) ")"))
+                   (idp h 'peep)  (? (hashv? (e2 x)) (cat (L "(hget " (th (e2 x)) " " (tv (e3 x)) " " (tv (e4 x)) ")"))
+                                     (cat (L "(nth (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) " " (tv (e4 x)) ")")))  ; hash lookup / array index
+                   (hashv? h)     (cat (L "(hget " (th h) " " (tv (e2 x)) " 0)"))  ; (#(..) k) -- lookup, default 0
                    (spine (tv h) (cup x)))))                                ; (app .. ..) spine
    (spine acc rest) (? (twop rest)
                        (spine (cat (L "(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
@@ -147,7 +161,8 @@
      "Fixpoint vadd (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vadd a' b' | _,_=>nil end." (string 10)
      "Definition vscale (c:Z):list Z->list Z := map (Z.mul c)." (string 10)
      "Definition vquot (c:Z):list Z->list Z := map (fun e=>Z.quot e c)." (string 10)
-     "Definition srep (n:nat) (s:list Z):list Z := concat (repeat s n)." (string 10) (string 10))))
+     "Definition srep (n:nat) (s:list Z):list Z := concat (repeat s n)." (string 10)
+     "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
