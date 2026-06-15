@@ -10,13 +10,13 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench
-test: test_host test_ai0 test_proof
+test: test_host test_ai0 test_proof test_gen
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_tools test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_tools test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -59,6 +59,23 @@ test_proof:
 	@echo TEST proof/spec.v "(coqc)"
 	@$(COQC) -q proof/spec.v
 	@rm -f proof/spec.vo proof/spec.vok proof/spec.vos proof/spec.glob proof/.spec.aux
+endif
+# The .l -> .v pipeline: tools/spec2coq.l (run on the host binary $m) reads
+# test/spec.l and EMITS proof/gen.v -- the spec generating Coq theorems for its
+# own pure-numeral corpus facts, each closed by computation (over Z, since nat
+# is unary and 3^27 would blow up vm_compute). coqc then checks them. Drift-proof:
+# the asserts and their proofs cannot diverge -- regenerated every run from .l.
+# Needs the host binary AND coqc; no-ops without coqc, like test_proof.
+ifeq ($(COQC),)
+test_gen:
+	@echo "test_gen: skipped (needs rocq/coqc)"
+else
+test_gen: host
+	@echo GEN	proof/gen.v "(tools/spec2coq.$x on $m)"
+	@$m tools/spec2coq.$x > proof/gen.v
+	@echo TEST proof/gen.v "(coqc)"
+	@$(COQC) -q proof/gen.v
+	@rm -f proof/gen.vo proof/gen.vok proof/gen.vos proof/gen.glob proof/.gen.aux
 endif
 all: host kernel wasm
 
@@ -202,7 +219,6 @@ $(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm
-	@ln -sf $n $(ho)/love   # love is ai now: the compat alias (the theorem keeps the word)
 
 $(ho)/$n.1: doc/$n.1 out/lib/ai_version.h
 	@echo GEN	$@
