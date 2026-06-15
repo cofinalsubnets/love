@@ -8,7 +8,7 @@
 
 (: tri (flip co jot (map (co sat jot)))             ; n -> the first n partial sums of jot
    (assert
-    ('(0 0 1 3 6 10 15) = (tri 7))                   ; T(k-1); the double zero is the floor
+    ('(0 0 1 3 6 10 15 21 28 36 45 55) = (tri 12))   ; T(k-1); the double zero is the floor
     (0 = (sat (jot 0))) (0 = (sat (jot 1)))          ; () and (0): nothing == 0, both blue
     (1 = (sat (jot 2)))                              ; then 1, the first triangle, at k=2
 
