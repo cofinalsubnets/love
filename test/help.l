@@ -47,3 +47,13 @@
 (: help (\ s a b 1))
 (assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))
 (: help 0)
+
+; welp -- the floor handler (repl.l), the fromempty the introductions never
+; named: it keeps the read protocol (more -> the port, eof -> the sentinel)
+; and welps a bare scare to the zero point. it is a plain function, not the
+; installed help -- a policy that runs out of cases delegates to it, and
+; shell-help is welp WITH A FACE (it prints `# a b` first, then welps).
+(assert (= 'port (welp 2 'port 'sent))         ; more -> the port back
+        (= 'sent (welp 3 'port 'sent))         ; eof  -> the sentinel
+        (idp (:) (welp 1 'x 'y))               ; a bare scare -> the zero point
+        !(welp 1 'x 'y))                       ; ... which nets nothing (false)
