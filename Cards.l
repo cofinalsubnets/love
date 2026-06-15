@@ -56,7 +56,7 @@
 ; mirror `make install`: copy the binary, libs, header, manpage and vim files
 ; under $DESTDIR/$PREFIX (and $DESTDIR/$VIMPREFIX for the vim files), with the
 ; Makefile's env-overridable defaults. `install -D` makes the parent dirs; -s
-; strips the binary and the shared lib. the .a/.so land in lib/ beside lib/love/.
+; strips the binary and the shared lib. the .a/.so land in lib/ beside lib/ai/.
 (recipe 'install '(host)
    (: (getdef k dv) (: e (getenv k) (? e e dv))
       dest (getdef "DESTDIR" (+ (getenv "HOME") "/"))
@@ -67,11 +67,11 @@
       (cps mode src dst) (L "install" "-D" "-m" mode "-s" src dst)
       (L (cps "755" "out/host/love"        (at d "bin/love"))
          (cp  "644" "out/host/love.1"       (at d "share/man/man1/love.1"))
-         (cp  "644" "love/prelude.l"        (at d "lib/love/prelude.l"))
-         (cp  "644" "love/ev.l"             (at d "lib/love/ev.l"))
-         (cp  "644" "love/repl.l"           (at d "lib/love/repl.l"))
-         (cp  "644" "out/host/liblove.a"    (at d "lib/liblove.a"))
-         (cps "755" "out/host/liblove.so"   (at d "lib/liblove.so"))
+         (cp  "644" "ai/prelude.l"        (at d "lib/ai/prelude.l"))
+         (cp  "644" "ai/ev.l"             (at d "lib/ai/ev.l"))
+         (cp  "644" "ai/repl.l"           (at d "lib/ai/repl.l"))
+         (cp  "644" "out/host/libai.a"    (at d "lib/libai.a"))
+         (cps "755" "out/host/libai.so"   (at d "lib/libai.so"))
          (cp  "644" "ai.h"                (at d "include/ai.h"))
          (cp  "644" "vim/ftdetect.vim"      (at vd "ftdetect/love.vim"))
          (cp  "644" "vim/syntax.vim"        (at vd "syntax/love.vim"))

@@ -13,7 +13,7 @@
 # Bypass for a one-off with `git commit --no-verify`.
 
 srcs=$(git diff --cached --name-only --diff-filter=ACMR | grep -E \
-  '^(love\.c|data\.c|[^/]+\.h|love/(prelude|ev|egg)\.l|wasm/(host\.c|Makefile|inc/.+\.h))$' || true)
+  '^(love\.c|data\.c|[^/]+\.h|ai/(prelude|ev|egg)\.l|wasm/(host\.c|Makefile|inc/.+\.h))$' || true)
 [ -n "$srcs" ] || exit 0
 
 if ! command -v emcc >/dev/null 2>&1; then

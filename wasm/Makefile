@@ -40,9 +40,9 @@ all: ai.js
 # prelude.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
 # the browser feeds the REPL through ai_eval).
-../out/lib/egg.h: ../love/egg.l
-../out/lib/prelude.h: ../love/prelude.l
-../out/lib/ev.h: ../love/ev.l
+../out/lib/egg.h: ../ai/egg.l
+../out/lib/prelude.h: ../ai/prelude.l
+../out/lib/ev.h: ../ai/ev.l
 ../out/lib/egg.h ../out/lib/prelude.h ../out/lib/ev.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 

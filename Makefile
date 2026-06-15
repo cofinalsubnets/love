@@ -49,11 +49,11 @@ all: host kernel wasm
 hooks:
 	@git config core.hooksPath .githooks && echo "git hooks -> .githooks (pre-commit keeps wasm/ai.js fresh)"
 
-# Static lisp headers: each love/*.l is serialized to a C string literal in
+# Static lisp headers: each ai/*.l is serialized to a C string literal in
 # out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter love0). Frontends
 # #include these and assemble the bootstrap with G_EGG_PRE/POST (ai.h).
-# Drop a .l into love/ and it is picked up automatically -- no rule to edit.
-lib_h = $(patsubst love/%.$x,out/lib/%.h,$(wildcard love/*.$x))
+# Drop a .l into ai/ and it is picked up automatically -- no rule to edit.
+lib_h = $(patsubst ai/%.$x,out/lib/%.h,$(wildcard ai/*.$x))
 # love0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
 # interpreter -- the l reader strips the ; comments at read time), since love0
 # can't lcat the very sources it is assembled from (chicken/egg). cli.l doubles as
@@ -64,11 +64,11 @@ sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prelude0.h out/lib/ev0.h out/lib/repl0.h out/lib/tests0.h
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
-$(lib_h): out/lib/%.h: love/%.$x $(love0) tools/lcat.$x
+$(lib_h): out/lib/%.h: ai/%.$x $(love0) tools/lcat.$x
 	@mkdir -p out/lib
 	@echo GEN	$@
-	@$(love0) -l love/prelude.$x tools/lcat.$x $< > $@
-out/lib/%0.h: love/%.$x
+	@$(love0) -l ai/prelude.$x tools/lcat.$x $< > $@
+out/lib/%0.h: ai/%.$x
 	@mkdir -p out/lib
 	@echo GEN	$@
 	@$(sed_lit) $< > $@
@@ -153,9 +153,9 @@ $(love0): $(love0_o) $(data_ld)
 
 # tools/gen_data.l reflects $(ho)/data.o's love_data.NN section sizes into
 # $(ho)/data.h, whose g_typ() shifts instead of the portable header's divides.
-$(hdata_h): $(ho)/data.o $(love0) tools/gen_data.$x love/prelude.$x
+$(hdata_h): $(ho)/data.o $(love0) tools/gen_data.$x ai/prelude.$x
 	@echo GEN	$@
-	@$(love0) -l love/prelude.$x tools/gen_data.$x $< -o $@
+	@$(love0) -l ai/prelude.$x tools/gen_data.$x $< -o $@
 
 # ai.c/data.c -> out/host/*.o (against the generated data.h).
 $(ho)/%.o: $(R)/%.c $(g_h) $(hdata_h)
@@ -174,9 +174,9 @@ $(ho)/$n: main.c $(ho)/lib$n.a out/lib/egg.h out/lib/prelude.h out/lib/ev.h out/
 	@$(hcc) $(ldflags) -o $@ main.c $(ho)/lib$n.a -lm
 	@ln -sf $n $(ho)/love   # love is ai now: the compat alias (the theorem keeps the word)
 
-$(ho)/$n.1: $(ho)/$n love/manpage.$x
+$(ho)/$n.1: $(ho)/$n ai/manpage.$x
 	@echo GEN	$@
-	@$(ho)/$n < love/manpage.$x > $@
+	@$(ho)/$n < ai/manpage.$x > $@
 
 # ====================================================================
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
@@ -385,9 +385,9 @@ kt = $(filter-out %/io.l %/run.l %/math.l %/bell.l,$t)
 out/lib/ktests.$x: $(kt) $(R)/Makefile
 	@mkdir -p out/lib
 	@cat $(kt) > $@
-out/lib/ktests.h: out/lib/ktests.$x $(love0) tools/lcatv.$x love/prelude.$x
+out/lib/ktests.h: out/lib/ktests.$x $(love0) tools/lcatv.$x ai/prelude.$x
 	@echo GEN	$@
-	@$(love0) -l love/prelude.$x tools/lcatv.$x out/lib/ktests.$x > $@
+	@$(love0) -l ai/prelude.$x tools/lcatv.$x out/lib/ktests.$x > $@
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.$x
@@ -499,7 +499,7 @@ $d/include/ai.h: ai.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/$n/%.$x: love/%.$x
+$d/lib/$n/%.$x: ai/%.$x
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

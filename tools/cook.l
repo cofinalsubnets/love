@@ -9,7 +9,7 @@
 ;
 ; (this tool was first written as tools/bake.l; it was renamed to tools/cook.l so
 ; the file name does not collide with the OTHER, unrelated sense of "bake" in this
-; tree -- baking the heap image / the egg (love/egg.l), the array-perf bake. the
+; tree -- baking the heap image / the egg (ai/egg.l), the array-perf bake. the
 ; build VERB here is `cook`; "bake" is reserved for the egg. the messages this tool
 ; prints are prefixed `cook:` for the same reason.)
 ;

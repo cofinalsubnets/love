@@ -16,7 +16,7 @@ teensy41/ port is written against the current ai.h contract.
 Arch Linux package (`PKGBUILD`, `love-git`): a `-git` package that clones
 the GitHub repo, builds the host CLI (`make host`), runs `make test` as the
 check, and installs via the main Makefile's `install` target (binary, manpage,
-the `love/*.l` egg sources, `liblove.{a,so}`, `ai.h`, and the vim files)
+the `ai/*.l` egg sources, `libai.{a,so}`, `ai.h`, and the vim files)
 under `usr/` into `$pkgdir`. Not a device port -- the host package, kept here
 so every downstream packaging recipe lives under ports/.
 
