@@ -9,12 +9,12 @@
 >   applicable native closure. Cell `[code, src, code, interp, lvm_ret, 0]`, value at
 >   the 3rd word, so `value[-1]`=src (`fn_src`/printer/`salpha` → `=`/`show` see the
 >   source) and `value[1]`=interp (the deopt fallback). W^X arena with a finalizer.
-> - **`ai/jit/emit.l`** — a love-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
+> - **`ai/glaze/emit.l`** — a love-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
 >   and a counted-sum loop `(\ n Σ_{i<n} body)` to native, with a `jno`+inline-deopt
 >   guard on every `+`/`-`/`*` and on `putfix` (its `add rax,rax` overflow flag is
->   exactly the 62-bit fixnum boundary). x86-64 only; load with `-l ai/jit/emit.l`.
+>   exactly the 62-bit fixnum boundary). x86-64 only; load with `-l ai/glaze/emit.l`.
 >
-> This realizes the law the earlier experiment found — *a JIT wins only when it owns
+> This realizes the law the earlier experiment found — *a glaze wins only when it owns
 > the loop* — concretely: the counted-loop emitter owns the iteration end to end
 > (~tens-of-× on in-range arithmetic loops; deopts out of range). It is the
 > **generalization of the baked array kernels** (`asum`/`aprod`/…) to arbitrary
@@ -22,7 +22,7 @@
 > hook*: `ev` installing native for hot regions transparently, after which `nat` goes
 > internal (mopped like `boxfix`/`wev`) and there is no user-facing verb at all.
 >
-> **The leaf substrate** below — `call`/`call2`/`toast` (nifs) + `ai/jit/probe.l` (the
+> **The leaf substrate** below — `call`/`call2`/`toast` (nifs) + `ai/glaze/probe.l` (the
 > kernel finding) — predates `nat`: a *leaf* trampoline (word→word, an opaque handle
 > you `call`) the convention-following `nat` supersedes. It stays as the fault-safe
 > machine-code substrate and the kernel-RWX probe. The earlier scalar/array/fold
@@ -98,7 +98,7 @@ so the freestanding kernel never sees `mmap`.
 
 ## The finding: the kernel substrate is *just* this trampoline
 
-`ai/jit/probe.l` builds a buf holding six AMD64 bytes —
+`ai/glaze/probe.l` builds a buf holding six AMD64 bytes —
 
 ```
 B8 2A 00 00 00   mov eax, 42      ; imm32 little-endian
@@ -109,16 +109,16 @@ C3               ret
 under qemu it returns the immediate exactly (verified at 42 and at 12345). So Limine
 maps the HHDM — which backs the kernel heap, hence every toast's copy — **without the
 NX bit**: kernel data memory is already executable. No page-table work, no
-`mprotect`: a love JIT on the kernel is just love emitting bytes and calling a toast
+`mprotect`: a love glaze on the kernel is just love emitting bytes and calling a toast
 of them.
 
 The **host** is the opposite: Linux maps the malloc heap no-execute, so raw heap
 bytes can't be run. `toast` lifts exactly that limitation (the W^X arena above), so
 `(call (toast bytes) x)` runs real bytes natively on an x86_64 host too, no qemu. The
-corpus test (`test/jit.l`) stays architecture-neutral — x86_64 opcodes would crash an
+corpus test (`test/glaze.l`) stays architecture-neutral — x86_64 opcodes would crash an
 aarch64 or wasm host — so it covers the guards (non-callable → `0`) and the toast's
 opacity (`hotp` but no `peep`/`tally`), not live execution; the kernel finding lives
-in the standalone `ai/jit/probe.l`.
+in the standalone `ai/glaze/probe.l`.
 
 ## What the experiment found, and where it went
 
@@ -128,26 +128,26 @@ transparently, and array kernels (`amap`/`areduce`/…) over `z`/`r`/`c` arrays.
 transparency was made exact (`=`-preserving via `respec`, de-Bruijn `show` intact).
 Then the benchmark settled it:
 
-| 5M ops | JIT | interpreter | |
+| 5M ops | glaze | interpreter | |
 |---|---|---|---|
-| `x*x+1` (scalar hook) | ~290 ms | ~230 ms | JIT **~25% slower** |
-| `sum x*x` (array fold) | ~10 ms | ~450 ms | JIT **~45× faster** |
+| `x*x+1` (scalar hook) | ~290 ms | ~230 ms | glaze **~25% slower** |
+| `sum x*x` (array fold) | ~10 ms | ~450 ms | glaze **~45× faster** |
 
 A native *function* called from the interpreted loop pays a call-boundary tax
 (`putfix` marshal, the `call` nif, the result decode) heavier than interpreting a
-small arithmetic body — there's no case where the scalar hook wins. **The JIT only
+small arithmetic body — there's no case where the scalar hook wins. **The glaze only
 pays off when it owns the loop.** And the loops worth owning are the reductions —
 whose speedup, once reassociation was recognized as sound (`*`/`+` are commutative
 monoids), is just a multi-accumulator C loop the compiler schedules. So that win was
 **baked into the builtins** (`asum`/`aprod`/`amax`/`amin`, ~3× and portable), and the
-JIT scaffold — kernels, folds, the `opjit` hook, ~1200 lines — was retracted to the
+glaze scaffold — kernels, folds, the `opjit` hook, ~1200 lines — was retracted to the
 substrate above.
 
 ## Reproducing the probe (x86_64 + qemu)
 
 ```sh
 make host                                  # builds ai0 + the bake tools
-cp ai/jit/probe.l out/lib/ktests.l            # make the probe the whole K_TEST corpus
+cp ai/glaze/probe.l out/lib/ktests.l            # make the probe the whole K_TEST corpus
 out/host/ai0 -l ai/prelude.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
 touch out/lib/ktests.l out/lib/ktests.h
 make -s K_TEST=1 out/free/love-x86_64-test.iso
@@ -155,7 +155,7 @@ qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
   -drive if=pflash,unit=0,format=raw,file=out/dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on \
   -cdrom out/free/love-x86_64-test.iso \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04
-# expect:  JIT-PROBE-START / JIT-PROBE-RESULT=42 / JIT-PROBE-END
+# expect:  glaze-PROBE-START / glaze-PROBE-RESULT=42 / glaze-PROBE-END
 # then restore the real corpus:  make out/lib/ktests.h   (or rm it; the next build re-bakes)
 ```
 
@@ -175,6 +175,6 @@ qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
   the boundary. Keep what crosses `call` to unboxed machine words: no allocation, no
   heap pointers held inside — that is what keeps the trampoline GC-safe.
 - **No verification.** This is the raw trampoline plus a safe loader — no semantics,
-  no proof that the bytes mean the love they claim to. A *verified* JIT is a separate,
+  no proof that the bytes mean the love they claim to. A *verified* glaze is a separate,
   much larger effort (and the place love's in-tree prover could eventually earn its
   keep).

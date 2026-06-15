@@ -13,7 +13,7 @@
 ;
 ; ev is 1-arg, so the loader's `(ev 'ev r)` = `((ev 'ev) r)` still works after the
 ; rebind; njit/njit-loop call the captured base-ev -> no jit<->ev re-entry. Load AFTER
-; ai/jit/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
+; ai/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 (: base-ev ev
    ; the emitter's expression grammar over var v: var | int | arith | cmp | (? t a b)
    (exprp e v) (? (= e v)   1
@@ -161,4 +161,4 @@
     ; captured-closure constructor auto-natived: captures transparent (= interp)
     (: adder (ev '(\ n (\ x (+ x n))))  a5 (adder 5)
        (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3))) (= a5 ((\ n (\ x (+ x n))) 5)))))
- _ (puts "ai/jit/auto: ev auto-natives qualifying closures + counted loops (transparent)") _ (putc 10))
+ _ (puts "ai/glaze/auto: ev auto-natives qualifying closures + counted loops (transparent)") _ (putc 10))

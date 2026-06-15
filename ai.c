@@ -3894,7 +3894,7 @@ lvm(lvm_call2) {
 // gcp's out-of-pool short-circuit leaves the pointer untouched (like the immortal
 // data-segment constants), and a finalizer munmaps it when the toast is collected
 // (mirrors io_close). The freestanding kernel needs none of this: its HHDM is
-// mapped executable, so a plain heap copy already runs (see ai/jit/README.md), and
+// mapped executable, so a plain heap copy already runs (see ai/glaze/README.md), and
 // `toast` there is just that copy. Either way the idiom is (call (toast bytes) x).
 #if __STDC_HOSTED__
 #include <sys/mman.h>

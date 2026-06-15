@@ -359,10 +359,10 @@ static char const
 
 // NOTE: the native-JIT experiment was retracted. It proved one durable finding
 // (you can run native code from a buf -- (call (forge bytes) x) -- and the kernel's
-// HHDM is executable, so a kernel JIT needs only a trampoline; see ai/jit/probe.l) and
+// HHDM is executable, so a kernel JIT needs only a trampoline; see ai/glaze/probe.l) and
 // one real speedup (reduction reassociation), which now lives baked in the C builtins
 // asum/aprod/amax/amin. The scalar/array kernels themselves were a net loss or
-// unused, so only call/call2/forge remain. See ai/jit/README.md.
+// unused, so only call/call2/forge remain. See ai/glaze/README.md.
 
 static struct ai *boot(struct ai *g, bool argp) {
   bool replp = !argp && isatty(STDIN_FILENO);

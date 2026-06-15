@@ -1,6 +1,6 @@
 ; hook -- install the native-creation hook: book['natjit], read by ev.l's `ala` on
 ; EVERY closure built, top-level AND embedded in a fn/let body (the reach the ev-rebind
-; in ai/jit/auto.l never had -- it only saw the form handed to `ev`). A qualifying leaf (the
+; in ai/glaze/auto.l never had -- it only saw the form handed to `ev`). A qualifying leaf (the
 ; emit grammar over its frame [imps args]) is native-backed AT CREATION and DEOPTS into
 ; the closure's own bytecode `e` on overflow -- so native is never wrong, just faster.
 ;
@@ -15,7 +15,7 @@
 ;  * no double-compile -- the deopt target is `e` itself (the bytecode closure ala built),
 ;    passed as nat/natn's `interp`; no separate (ev lam) pass.
 ; Loops are NOT caught here (their body isn't leaf-grammar) -- they stay bytecode, or use
-; ai/jit/auto.l's counted-loop path. Load AFTER ai/jit/emit.l (uses cgn/emit/nat/natn/epilogue/
+; ai/glaze/auto.l's counted-loop path. Load AFTER ai/glaze/emit.l (uses cgn/emit/nat/natn/epilogue/
 ; epilogue-mn). x86-64 only.
 (: (exprn ps e) (? (memq e ps) 1  (intp e) 1                          ; var in frame | int literal
                    (twop e) (: op (cap e)
@@ -51,4 +51,4 @@
     (: id (ev '(\ z (\ x (+ x 0))))  f (id 9)  g (id 9)            ; two instances of the same embedded source
        (&& ((\ x (+ x 0)) = f) !(idp f g)))                         ; =/show its source, yet distinct objects
    )
- _ (puts "ai/jit/hook: ev.l ala native-backs every qualifying closure (embedded too), transparent") _ (putc 10))
+ _ (puts "ai/glaze/hook: ev.l ala native-backs every qualifying closure (embedded too), transparent") _ (putc 10))

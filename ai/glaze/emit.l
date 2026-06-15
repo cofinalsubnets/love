@@ -216,4 +216,4 @@
   (: mk (jit2 '(\ n x (+ x n)))  a5 (mk 5)  a7 (mk 7)
      (&& (15 = (a5 10)) (17 = (a7 10)) ('(6 7 8) = (map a5 '(1 2 3)))                 ; native captured closure, composes
          (16000000000000000000 = ((mk 0) 4000000000)))))                             ; ... and deopts through the capture
- _ (puts "ai/jit/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))
+ _ (puts "ai/glaze/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))

@@ -1,4 +1,4 @@
-; ai/jit/probe.l -- the RWX probe. Decides one fact: is love's data memory
+; ai/glaze/probe.l -- the RWX probe. Decides one fact: is love's data memory
 ; executable? i.e. can the bytes of a `toast` (on the kernel, a plain heap copy)
 ; be jumped into and run?
 ;
@@ -14,7 +14,7 @@
 ; nothing about how Limine mapped the HHDM that backs the kernel's bufs):
 ;
 ;   * prints 42  => data memory is ALREADY executable. The trampoline IS the
-;                   whole substrate; a love JIT is an afternoon away.
+;                   whole substrate; a love glaze is an afternoon away.
 ;   * faults     => HHDM is mapped no-execute. The substrate also needs a
 ;     (hang /     clear-the-NX-bit step in the kernel's page tables before a buf
 ;      reset)     can be run. Bounded work, but a real step up.

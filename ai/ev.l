@@ -76,7 +76,7 @@
   ; of karg (a local, at its [imps args] frame slot) / kim (a global constant) / em2 freev.
   ; This is the THREADED (bytecode) backend -- the portable default that every target runs
   ; (host, kernel, wasm, aarch64, and the little ones: playdate, teensy). A NATIVE backend
-  ; (ai/jit/emit.l, x86-64, opt-in) implements the SAME leaf interface over a byte buffer
+  ; (ai/glaze/emit.l, x86-64, opt-in) implements the SAME leaf interface over a byte buffer
   ; instead of cells -- kim -> movabs, karg -> mov [rcx+8i] + a fixnum guard, em1 -> the
   ; op's machine code, aco -> cmp+jcc -- today via the ala creation hook (book['natjit])
   ; for leaf bodies, with the unhandled ops (kap = a call) DEOPTing into this thread.

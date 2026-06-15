@@ -412,7 +412,7 @@
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
 ; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
 ; its one real win, reduction reassociation, lives in the C builtins now, and the
-; trampoline finding in ai/jit/probe.l + the call/toast nifs.)
+; trampoline finding in ai/glaze/probe.l + the call/toast nifs.)
 (: (opfix x) (op-core x))
 ; the global RNG stream lives on book ('rng-state) and advances by the pure
 ; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
