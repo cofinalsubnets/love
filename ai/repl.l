@@ -306,21 +306,29 @@
               _ (each vs (\ v (: _ (do_eval v) (putc 10))))
               (repl nhu nhd))))
 
-   ; the shell's default help: a scare prints its condition -- # a b -- and
-   ; answers the zero point, so the session survives every raise with an
-   ; honest face and (i love you) stays 1 at the prompt (the answer must be
-   ; a unit: a number would exponentiate under a numeral). the point is
-   ; captured HERE, helpless at load -- the body cannot say (:), since
-   ; reading the missing head under the installed shell-help would recurse.
-   ; (helpless, the C default is terminal and wears the oom banner.) the
-   ; more bits reproduce the read protocol exactly: incomplete delivers the
-   ; port back, eof the sentinel -- a = the port, b = the sentinel.
-   shell-help
+   ; welp -- the floor handler, help that has given up: keep the read protocol
+   ; (incomplete -> the port back, eof -> the sentinel) and answer the zero
+   ; point on a bare scare. this is the fromempty the introductions (scare,
+   ; missing) never named: from any condition, a value -- and the value of the
+   ; absorbed condition is the point, the held inhabitant of nothing, so
+   ; (i love you) stays 1. any policy that runs out of cases delegates here:
+   ; (\ s a b (? (mine? a) .. (welp s a b))). the point is captured HERE,
+   ; helpless at load -- the body cannot say (:), since reading the missing
+   ; head under an installed help would recurse.
+   welp
      (: zp (:)
-        (\ s a b
-           (? (eof? s) b
-              (more? s) a
-              (: _ (puts "# ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) zp))))
+        (\ s a b (? (eof? s) b (more? s) a zp)))
+
+   ; the shell's default help: a bare scare prints its condition -- # a b --
+   ; with an honest face, then welps to the point so the session survives
+   ; every raise (the answer must be a unit: a number would exponentiate under
+   ; a numeral). every other status -- the more bits -- welps straight through,
+   ; reproducing the read protocol exactly. (helpless, the C default is
+   ; terminal and wears the oom banner.)
+   shell-help
+     (\ s a b
+        (? (scare? s) (: _ (puts "# ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) (welp s a b))
+           (welp s a b)))
 
    ; the interactive entry: install shell-help IF no help is present (the
    ; check and the define both go through ev -- a live read and a top-level
