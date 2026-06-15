@@ -37,16 +37,20 @@
    (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (twop x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
    (jit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam))) epilogue)) (ev lam) lam)
-   ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
-   (jitsum body)
-    (: lb   (cgv 'i ld-i body)  Lb (tally lb)
+   ; (loopcode body cv) -- the native counted-loop bytes for sum_{cv<n} body(cv),
+   ; cv the counter var (limit at Sp[0]). r9=n r10=cv r11=acc. Reusable by jitsum
+   ; and by the auto loop-detector (jit/auto.l).
+   (loopcode body cv)
+    (: lb   (cgv cv ld-i body)  Lb (tally lb)
        pre  '(76 139 9  73 209 249  77 49 210  77 49 219)                         ; mov r9,[rcx];sar;xor r10;xor r11
        test (cat '(77 57 202) (cat '(15 141) (le4 (+ Lb 25))))                     ; cmp r10,r9 ; jge loop_end
        acc  (cat '(73 1 195) guard)                                               ; add r11,rax ; guard
        back (cat '(73 255 194) (cat '(233) (le4 (- 0 (+ Lb 34)))))                ; inc r10 ; jmp loop_top
-       code (cat pre (cat test (cat lb (cat acc (cat back (cat '(76 137 216) epilogue))))))   ; ... ; mov rax,r11
-       src  `(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a ,body)) a)) 0 0))
-       (nat (emit code) (ev src) src))
+       (cat pre (cat test (cat lb (cat acc (cat back (cat '(76 137 216) epilogue)))))))   ; ... ; mov rax,r11
+   ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
+   (jitsum body)
+    (: src `(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a ,body)) a)) 0 0))
+       (nat (emit (loopcode body 'i)) (ev src) src))
    ; --- self-test (x86-64): native == interpreted, transparent, deopts ---------
    (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
    f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
