@@ -151,10 +151,12 @@ ifeq ($(shell uname -s),Darwin)
 data_ld =
 ldflags =
 hdata_h =
+so_archive = -Wl,-force_load,$(ho)/lib$n.a       # ld64's whole-archive
 else
 data_ld = data.ld
 ldflags = -Wl,-T,$(data_ld)
 hdata_h = $(ho)/data.h
+so_archive = -Wl,--whole-archive $(ho)/lib$n.a -Wl,--no-whole-archive
 endif
 ai0 = $(ho)/ai0
 
@@ -180,7 +182,7 @@ $(ho)/lib$n.a: $(h_o)
 $(ho)/lib$n.so: $(ho)/lib$n.a $(data_ld)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) $(ldflags) -shared -o $@ -Wl,--whole-archive $(ho)/lib$n.a -Wl,--no-whole-archive -lm
+	@$(hcc) $(ldflags) -shared -o $@ $(so_archive) -lm
 
 # The data-sentinel TU bootstraps from the portable top-level data.h (no $(hdata_h)
 # prerequisite -- that would be circular, since $(hdata_h) is reflected out of it).
@@ -540,6 +542,7 @@ d = $(DESTDIR)/$(PREFIX)
 v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/$n \
+  $d/bin/cook \
   $d/share/man/man1/$n.1 \
   $d/lib/$n/prel.$x \
   $d/lib/$n/ev.$x \
@@ -575,6 +578,14 @@ $d/lib/lib$n.so: out/host/lib$n.so
 $d/bin/$n: out/host/$n
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
+
+# cook: the build tool (tools/cook.l) installed as an executable `cook` on PATH.
+# Its `#!/usr/bin/env -S ai -l` shebang re-execs the installed `ai` to load it,
+# then it discovers a Makefile/Cookfile/Cards.l in the cwd. A script, not a
+# binary, so no -s strip.
+$d/bin/cook: tools/cook.$x
+	@echo CP	$(abspath $@)
+	@install -D -m 755 $< $@
 
 $d/share/man/man1/$n.1: out/host/$n.1
 	@echo CP	$(abspath $@)

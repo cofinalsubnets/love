@@ -29,5 +29,10 @@ ai_cflags = -std=gnu23 -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector \
-  -fno-exceptions -fno-asynchronous-unwind-tables \
-  -fcf-protection=none
+  -fno-exceptions -fno-asynchronous-unwind-tables
+# -fcf-protection (Intel CET) is x86-only -- Apple/arm clang rejects it as an
+# error. Keep it on every non-Darwin build (Linux x86 + the cross kernels take
+# it as before); macOS does without (it has no CET to turn off).
+ifneq ($(shell uname -s),Darwin)
+ai_cflags += -fcf-protection=none
+endif

@@ -67,6 +67,7 @@
       (cp mode src dst) (L "install" "-D" "-m" mode src dst)
       (cps mode src dst) (L "install" "-D" "-m" mode "-s" src dst)
       (L (cps "755" "out/host/ai"        (at d "bin/ai"))
+         (cp  "755" "tools/cook.l"        (at d "bin/cook"))   ; the build tool, a script (no -s)
          (cp  "644" "out/host/ai.1"       (at d "share/man/man1/ai.1"))
          (cp  "644" "ai/prel.l"        (at d "lib/ai/prel.l"))
          (cp  "644" "ai/ev.l"             (at d "lib/ai/ev.l"))
