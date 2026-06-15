@@ -1,17 +1,33 @@
-# jit — the `(call ...)` trampoline and the `(toast ...)` loader
+# jit — the codegen backend (`ev` but faster), and the `(call …)`/`(toast …)` trampoline
 
-> **The floor.** This was a larger experiment; it has been pulled back to its
-> substrate and its one finding. The native scalar/array/fold kernels and the
-> `opjit` compiler hook are **gone** — the scalar hook was a measured net loss, the
-> array kernels had no caller, and the one real win they revealed (reduction
-> reassociation) now lives **baked in the C builtins** `asum`/`aprod`/`amax`/`amin`,
-> multi-accumulator and portable to every target. What's left is the live surface:
-> `call`/`call2`/`toast` (nifs in `love.c`) and `jit/probe.l` (the kernel finding).
-> The lesson, in one line: *a JIT wins only when it owns the loop, and the production
-> form of a fixed-code win is baked C unlocked by a sound algebraic law — so the
-> experiment's keeper is the finding, not the scaffold.* (`git log` for the arc.)
-> The surface that remains is now **fault-safe** on the host — a bad toasted body is
-> a catchable love condition, not a crash (see *The fault barrier*, below).
+> **What this is.** The aim is **`ev` but faster**: a closure compiled to native
+> machine code that is *indistinguishable from the interpreted closure* — applied by
+> juxtaposition (`(f x)`, no verb), `=`/`show`-identical to its source, and **deopting
+> to the interpreter on overflow** so it is never wrong, only faster. The bricks:
+>
+> - **`nat`** (nif, `love.c`) — the install seam: emitted bytes → a TRANSPARENT
+>   applicable native closure. Cell `[code, src, code, interp, lvm_ret, 0]`, value at
+>   the 3rd word, so `value[-1]`=src (`fn_src`/printer/`salpha` → `=`/`show` see the
+>   source) and `value[1]`=interp (the deopt fallback). W^X arena with a finalizer.
+> - **`jit/emit.l`** — a love-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
+>   and a counted-sum loop `(\ n Σ_{i<n} body)` to native, with a `jno`+inline-deopt
+>   guard on every `+`/`-`/`*` and on `putfix` (its `add rax,rax` overflow flag is
+>   exactly the 62-bit fixnum boundary). x86-64 only; load with `-l jit/emit.l`.
+>
+> This realizes the law the earlier experiment found — *a JIT wins only when it owns
+> the loop* — concretely: the counted-loop emitter owns the iteration end to end
+> (~tens-of-× on in-range arithmetic loops; deopts out of range). It is the
+> **generalization of the baked array kernels** (`asum`/`aprod`/…) to arbitrary
+> scalar/control-flow loops that have no array to bake. **WIP** toward the *auto
+> hook*: `ev` installing native for hot regions transparently, after which `nat` goes
+> internal (mopped like `boxfix`/`wev`) and there is no user-facing verb at all.
+>
+> **The leaf substrate** below — `call`/`call2`/`toast` (nifs) + `jit/probe.l` (the
+> kernel finding) — predates `nat`: a *leaf* trampoline (word→word, an opaque handle
+> you `call`) the convention-following `nat` supersedes. It stays as the fault-safe
+> machine-code substrate and the kernel-RWX probe. The earlier scalar/array/fold
+> kernels and the `opjit` hook are **gone**; their one fixed-code win (reduction
+> reassociation) lives **baked in the C builtins**. (`git log` for the arc.)
 
 A nif that jumps into native machine code and runs it, and a loader that bakes the
 bytes into an opaque, executable handle — a **toast** — that runs on either target.

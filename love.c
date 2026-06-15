@@ -140,6 +140,7 @@ lvm_t lvm_kcall,
  lvm_arr, lvm_ajot, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_arrp, lvm_intf, lvm_lamp, lvm_hotp,
+ lvm_nat,                   // CODEGEN BACKEND brick 1: emitted bytes -> applicable native value
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
 // plain lvm_t list, which fixes the 4-argument ap signature. lvm_vbin
@@ -610,6 +611,7 @@ lvm_t lvm_fault;
  _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
  _(nif_arr, "arr", s3(lvm_arr))\
  _(nif_ajot, "ajot", s1(lvm_ajot))\
+ _(nif_nat, "nat", s3(lvm_nat))\
  _(nif_arank, "arank", s1(lvm_arank))\
  _(nif_alen, "alen", s1(lvm_alen)) _(nif_ashape, "ashape", s1(lvm_ashape))\
  _(nif_atype, "atype", s1(lvm_atype))\
@@ -3961,6 +3963,67 @@ lvm(lvm_toast) {
  return Sp[0] = word(k), Ip++, Continue();
 #endif
 }
+
+// ============================================================================
+// CODEGEN BACKEND brick 1 -- the native-install seam (provisional; -> `ev`)
+// ============================================================================
+// the W^X arena finalizer: recover the g_str base from the code address (cell[0],
+// the header) and munmap it. Fires only on death (run_finalizers' survival test
+// reads z->p->x: the header is the out-of-pool code addr when dead, an in-pool
+// forward when alive -- so a dead native closure is correctly reclaimed).
+#if __STDC_HOSTED__
+static void nat_unmap(void *p) {
+ char *code = (char*) ((union u*) p)[0].ap;            // header == the W^X code address
+ struct g_str *base = (struct g_str*) (code - sizeof(struct g_str));   // code == s->bytes
+ munmap(base, code_maplen(base->len)); }
+#endif
+
+// (nat codebuf interp src) installs codebuf's machine code and returns a TRANSPARENT
+// applicable native closure. Cell: [code, src, code, interp, lvm_ret, putfix(0)] with
+// the VALUE pointing at the 3rd word (the second `code`), so:
+//   value[0]  = code      -- lvm_ap dispatches straight into the emitted body
+//   value[-1] = src       -- the source \-expr, where fn_src/the printer/salpha look,
+//                            so the native closure is =/show-IDENTICAL to its source
+//   value[1]  = interp    -- the deopt fallback (rsi+8): an overflow guard tail-applies
+//                            it to the original arg (Sp[0]) -> native is never wrong
+//   value[2]  = lvm_ret   -- the fast-path return (emitted: add rsi,16; Continue)
+// cell[0] is a HEADER duplicate of the code addr at the allocation start: out-of-pool,
+// so run_finalizers distinguishes a dead closure (header) from a live one (forward).
+// The code follows the lvm ABI (g=rdi Ip=rsi Hp=rdx Sp=rcx). Applied by JUXTAPOSITION
+// -- no run-verb; plumbing the compiler calls to emit native for a hot closure,
+// transparently. Internal: the egg mops it like boxfix/wev.
+lvm(lvm_nat) {
+ word codebuf = Sp[0];                       // Sp[0]=code, Sp[1]=interp, Sp[2]=src
+ if (!(strp(codebuf) || bufp(codebuf))) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+ uintptr_t n = len(bytes_of(codebuf));
+ if (n == 0) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+#if __STDC_HOSTED__
+ Have(7 + Width(struct g_fz));               // [code,src,code,interp,lvm_ret,putfix(0)] + tag + finalizer
+ size_t maplen = code_maplen(n);
+ void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+ if (base == MAP_FAILED) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+ struct g_str *s = ini_str((struct g_str*) base, n);
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);    // reload codebuf: a GC in Have may have moved it
+ if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
+  return munmap(base, maplen), Sp[2] = nil, Sp += 2, Ip++, Continue();
+#else
+ Have(str_type_width + b2w(n) + 7);          // freestanding: HHDM is RWX, a heap copy runs
+ struct g_str *s = ini_str((struct g_str*) Hp, n); Hp += str_type_width + b2w(n);
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);
+#endif
+ union u *k = (union u*) Hp; Hp += 7;
+ k[0].ap = (lvm_t*) txt(s);                  // header (== code, out-of-pool): finalizer dead-detect
+ k[1].x  = Sp[2];                            // src   (reloaded): value[-1], for =/show
+ k[2].ap = (lvm_t*) txt(s);                  // code  (value[0]): the emitted body
+ k[3].x  = Sp[1];                            // interp(reloaded): value[1], deopt fallback
+ k[4].ap = lvm_ret;                          // value[2]: fast-path return
+ k[5].x  = putfix(0);                        // ret n=1
+ tagtext(k, 6);
+#if __STDC_HOSTED__
+ struct g_fz *z = (struct g_fz*) Hp; Hp += Width(struct g_fz);
+ z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
+#endif
+ return Sp[2] = word(k + 2), Sp += 2, Ip++, Continue(); }
 
 // (bcopy dst doff src soff n) — copy n bytes from src[soff..] into buf dst at
 // doff. src may be a string or buf; dst must be a buf. Ranges are clamped to
