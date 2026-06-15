@@ -31,21 +31,27 @@
    bs (intern "\\")                                     ; the quote symbol \ (for '(..) z-list data)
    (zlist? l) (? (twop l) (&& (fixp (cap l)) (zlist? (cup l))) (idp l ()))  ; PROPER fixnum list (ends in (), not any atom)
    (qlist? x) (&& (twop x) (idp (cap x) bs) (un2? x) (zlist? (e2 x)))  ; '(1 2 3): \ + a z-list, EXACTLY 2 (a lambda is 3+)
-   (listv? x) (| (qlist? x) (strp x))                   ; list-valued: a z-list or a string
+   (arrv? x)  (&& (twop x) (idp (cap x) 'tuple) (zlist? (cup x)))      ; @(1 2 3) = (tuple 1 2 3): a z-array
+   (ajotv? x) (&& (twop x) (idp (cap x) 'ajot) (un2? x) (intv? (e2 x)))  ; (ajot n): the z-array 0..n-1
+   (listv? x) (| (qlist? x) (| (strp x) (| (arrv? x) (ajotv? x))))     ; list/array-valued
    (un2? x) (&& (twop (cup x)) (! (twop (cup (cup x))))) ; a 2-element (op arg) form
-   ; translate a list-valued term to a Coq `list Z` literal
+   ; the list reducers: net/asum -> sum, tally/alen -> count, amax/amin/aprod
+   (lop? h) (| (idp h 'net) (| (idp h 'asum) (| (idp h 'tally) (| (idp h 'alen)
+              (| (idp h 'amax) (| (idp h 'amin) (idp h 'aprod)))))))
+   ; translate a list/array-valued term to a Coq `list Z`
    (joinl l) (? (twop l) (cat (L (tv (cap l)) (? (twop (cup l)) ";" "") (joinl (cup l)))) "")
    (joinb s i) (? (< i (tally s)) (cat (L (show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
-   (tl x) (? (qlist? x) (cat (L "[" (joinl (e2 x)) "]"))
-             (strp x)   (cat (L "[" (joinb x 0) "]"))  "[]")
+   (tl x) (? (qlist? x)  (cat (L "[" (joinl (e2 x)) "]"))
+             (arrv? x)   (cat (L "[" (joinl (cup x)) "]"))    ; tuple: the elements are the cup
+             (ajotv? x)  (cat (L "(ajot " (tv (e2 x)) ")"))   ; the Coq ajot model
+             (strp x)    (cat (L "[" (joinb x 0) "]"))  "[]")
 
    ; integer-valued term? a fixnum, an operator tree, or a numeral-application spine
    (intv? x) (? (fixp x) 1
                 (twop x) (: h (cap x)
                             (? (binop h)     (&& (len3? x) (intv? (e2 x)) (intv? (e3 x)))
                                (idp h 'sat)   (&& (un2? x) (| (intv? (e2 x)) (listv? (e2 x))))
-                               (idp h 'net)   (&& (un2? x) (listv? (e2 x)))
-                               (idp h 'tally) (&& (un2? x) (listv? (e2 x)))
+                               (lop? h)       (&& (un2? x) (listv? (e2 x)))
                                (idp h 'abs)   (&& (un2? x) (intv? (e2 x)))
                                (fixp h) (allv? x)
                                0))
@@ -58,8 +64,11 @@
                 (? b (cat (L "(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
                    (idp h 'sat)   (? (listv? (e2 x)) (cat (L "(Z.max 0 (asum " (tl (e2 x)) "))"))
                                      (cat (L "(Z.max 0 " (tv (e2 x)) ")")))  ; $list / $int
-                   (idp h 'net)   (cat (L "(asum " (tl (e2 x)) ")"))         ; +list -- the net
-                   (idp h 'tally) (cat (L "(Z.of_nat (length " (tl (e2 x)) "))"))  ; the count
+                   (| (idp h 'net) (idp h 'asum))   (cat (L "(asum " (tl (e2 x)) ")"))   ; +list / asum -- the sum
+                   (| (idp h 'tally) (idp h 'alen)) (cat (L "(Z.of_nat (length " (tl (e2 x)) "))"))  ; count
+                   (idp h 'amax)  (cat (L "(amax " (tl (e2 x)) ")"))
+                   (idp h 'amin)  (cat (L "(amin " (tl (e2 x)) ")"))
+                   (idp h 'aprod) (cat (L "(aprod " (tl (e2 x)) ")"))
                    (idp h 'abs)   (cat (L "(Z.abs " (tv (e2 x)) ")"))
                    (spine (tv h) (cup x)))))                                ; (app .. ..) spine
    (spine acc rest) (? (twop rest)
@@ -71,7 +80,8 @@
    (tp f) (? (! (twop f)) 0
              (: h (cap f)
                 (? (idp h 'nilp) (: a (e2 f)
-                                   (? (intv? a) (cat (L "(Z.leb " (tv a) " 0)"))
+                                   (? (intv? a)  (cat (L "(Z.leb " (tv a) " 0)"))
+                                      (listv? a) (cat (L "(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
                                       (: p (tp a) (? p (cat (L "(negb " p ")")) 0))))
                    (! (len3? f)) 0
                    (! (&& (intv? (e2 f)) (intv? (e3 f)))) 0
@@ -110,7 +120,11 @@
      "Import ListNotations." (string 10)
      "Open Scope Z_scope." (string 10)
      "Definition app (n x : Z) : Z := Z.pow x n." (string 10)
-     "Definition asum : list Z -> Z := fold_right Z.add 0." (string 10) (string 10))))
+     "Definition asum  : list Z -> Z := fold_right Z.add 0." (string 10)
+     "Definition aprod : list Z -> Z := fold_right Z.mul 1." (string 10)
+     "Definition amax (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.max x xs end." (string 10)
+     "Definition amin (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.min x xs end." (string 10)
+     "Definition ajot (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n))." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
