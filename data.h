@@ -1,6 +1,6 @@
 #ifndef _g_data_h
 #define _g_data_h
-// Default data-kind recovery (see love.h for the contract). The five DATA_SENTINEL
+// Default data-kind recovery (see ai.h for the contract). The five DATA_SENTINEL
 // bodies (data.c) are laid out contiguously and in enum order in the
 // .love_data section by data.ld (host) or the equivalent inline
 // block in the kernel's full linker script (arch/<a>/<a>.lds). g_typ()

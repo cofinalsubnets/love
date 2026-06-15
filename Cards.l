@@ -72,7 +72,7 @@
          (cp  "644" "love/repl.l"           (at d "lib/love/repl.l"))
          (cp  "644" "out/host/liblove.a"    (at d "lib/liblove.a"))
          (cps "755" "out/host/liblove.so"   (at d "lib/liblove.so"))
-         (cp  "644" "love.h"                (at d "include/love.h"))
+         (cp  "644" "ai.h"                (at d "include/ai.h"))
          (cp  "644" "vim/ftdetect.vim"      (at vd "ftdetect/love.vim"))
          (cp  "644" "vim/syntax.vim"        (at vd "syntax/love.vim"))
          (cp  "644" "vim/ftplugin.vim"      (at vd "ftplugin/love.vim")))))

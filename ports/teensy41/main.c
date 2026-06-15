@@ -1,6 +1,6 @@
 // Teensy 4.1 (i.MX RT1062) frontend for love -- bare metal, no Teensyduino.
 //
-// love's frontend contract (love.h): the host defines g_clock, the
+// love's frontend contract (ai.h): the host defines g_clock, the
 // g_stdin/g_stdout ports, the g_fd_port_vt vtable, and the cooperative-wait
 // hooks. Here the console is LPUART6 on pin0(RX)/pin1(TX) at 115200 8N1,
 // reachable over a 3.3 V USB-serial adapter -- the analogue of the rp2040
@@ -9,7 +9,7 @@
 // timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
 // REPL line editor in repl.l drives the console exactly as it drives the
 // kernel's.
-#include "../../love.h"
+#include "../../ai.h"
 #include "teensy41.h"
 
 #ifndef EOF

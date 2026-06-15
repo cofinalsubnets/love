@@ -11,7 +11,7 @@ the self-hosting double-bake fits comfortably.
 ## Build
 
 ```
-cd ports/teensy41 && make            # -> $R/out/teensy41/love.hex
+cd ports/teensy41 && make            # -> $R/out/teensy41/ai.hex
 make flash                           # teensy_loader_cli --mcu=TEENSY41 -w -v ...
 ```
 
@@ -41,7 +41,7 @@ reconfiguration to have working memory.
 
 ## Status: scaffold, not silicon-verified
 
-Structurally complete and written against the current `love.h` contract
+Structurally complete and written against the current `ai.h` contract
 (`lvm_port_io`, the `g_*` frontend hooks, `.l` lcat headers), but **not yet run
 on hardware**. The register offsets, the FlexSPI config block, the IVT, and the
 QSPI read LUT are lifted from the i.MX RT1060 Reference Manual (Serial NOR boot)

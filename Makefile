@@ -51,7 +51,7 @@ hooks:
 
 # Static lisp headers: each love/*.l is serialized to a C string literal in
 # out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter love0). Frontends
-# #include these and assemble the bootstrap with G_EGG_PRE/POST (love.h).
+# #include these and assemble the bootstrap with G_EGG_PRE/POST (ai.h).
 # Drop a .l into love/ and it is picked up automatically -- no rule to edit.
 lib_h = $(patsubst love/%.$x,out/lib/%.h,$(wildcard love/*.$x))
 # love0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
@@ -455,7 +455,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@$m
 cloc:
-	cloc --by-file --force-lang=Lisp,$x love love.c love.h data.c data.h kmain.c main.c k.h arch tools test vim
+	cloc --by-file --force-lang=Lisp,$x love love.c ai.h data.c data.h kmain.c main.c k.h arch tools test vim
 cat: clean all test
 cata: clean all test_all
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.
@@ -485,7 +485,7 @@ installs = \
   $d/lib/$n/repl.$x \
   $d/lib/lib$n.a \
   $d/lib/lib$n.so \
-  $d/include/love.h \
+  $d/include/ai.h \
   $v/ftdetect/$n.vim \
   $v/syntax/$n.vim \
   $v/ftplugin/$n.vim
@@ -495,7 +495,7 @@ uninstall:
 	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
-$d/include/love.h: love.h
+$d/include/ai.h: ai.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

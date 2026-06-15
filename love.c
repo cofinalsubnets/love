@@ -1,4 +1,4 @@
-#include "love.h"
+#include "ai.h"
 // The build's version string (the version-control id), generated into out/lib/ai_version.h by
 // the Makefile and surfaced in the runtime as the `ai-version` global (g_ini_0).
 // Optional include so a standalone/unwired compile still builds; falls back to "unknown".
@@ -493,7 +493,7 @@ static g_inline struct g_str *ini_str(struct g_str *s, uintptr_t len) {
 // suffices and we NEVER heap-allocate a zero-length one (str0/strin/the reader and
 // the `+` string lane all hand back g_str_empty). Predicates read `ap`, so it
 // behaves as a normal string value; the FAM `bytes[]` is simply absent (len 0).
-// External linkage (declared in love.h with the EmptyString macro) so the
+// External linkage (declared in ai.h with the EmptyString macro) so the
 // frontends can return it too (e.g. host_run's empty-output capture). (the
 // empty SYMBOL died in the one-nothing round: () reads as 0.)
 const struct g_str g_str_empty = { .ap = lvm_str, .len = 0 };
@@ -666,7 +666,7 @@ nifs(native_implemented_function);
 static lvm(_lvm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_lvm_yield_c} };
 
-// lvm_help: the default help ap, a first-class vm ap (declared in love.h with
+// lvm_help: the default help ap, a first-class vm ap (declared in ai.h with
 // ret0/cur/port_io). A raise enters it with the raised status encoded into g
 // (see ghelp2 below). The MORE bit is read control flow, not a scare: the
 // raise site left [resume port sentinel] on the stack (the read protocol), so
@@ -690,7 +690,7 @@ lvm(lvm_help) {
 static union u const raise_c[] = { {lvm_help} };
 
 // ghelp2/ghelp are defined after numap_drive (the help call frame runs
-// through its 3-arg twin); declared in love.h.
+// through its 3-arg twin); declared in ai.h.
 
 static struct g_def const def1[] = { nifs(niff) insts(i_entry)};
 
@@ -2545,7 +2545,7 @@ static struct g*gzputs(struct g*g, char const *s) {
  while (*s) g = gzputc(g, *s++);
  return g; }
 
-// the terminal scare face (declared in love.h): an helpless scare's stashed
+// the terminal scare face (declared in ai.h): an helpless scare's stashed
 // condition data prints as "# a b" -- the shell help's face -- to the err
 // port; the bare scare (nil nil) is oom, which has no data: answer 0 and let
 // the frontend report it raw. best-effort: a failure mid-print just stops.
@@ -4384,7 +4384,7 @@ static lvm(lvm_add_string) {
 static lvm(lvm_0) {                             // unsupported mix (array <-> string)
  return *++Sp = nil, Ip++, Continue(); }
 
-// The fundamental value kind for generic-op dispatch (enum q in love.h): a fixnum is
+// The fundamental value kind for generic-op dispatch (enum q in ai.h): a fixnum is
 // the odd tag (KFix), a non-data heap pointer is a text/function (KHom), else g_typ
 // gives the data kind. The one refinement: a rank>=1 tuple (array) expands by element
 // tier to KArrZ..KArrO so the array tower dispatches inline with the scalar tower it
@@ -4504,7 +4504,7 @@ static lvm(data_pair_apply) {
 
 // === the three generic-op dispatch matrices, adjacent ======================
 // All indexed by g_kind (g_apply_mx's row by g_typ, the data-kind subrange). The kind
-// order (love.h) makes each lane a contiguous block: [KFix..KArrO] arithmetic (the
+// order (ai.h) makes each lane a contiguous block: [KFix..KArrO] arithmetic (the
 // scalar tower fix/tuple/big then the parallel array tower arrZ/arrR/arrC/arrO), then
 // [KString..KTwo] sequence, then KMap, then KHom. Lanes:
 //   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane ap still
@@ -5831,7 +5831,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 
 // === ordered comparison: a total order over lisp values ======================
 // `< <= > >=` extend across EVERY kind, not just numbers. The CROSS-kind order is
-// the enum q type lattice (love.h) -- fixnum/number LOW, lambda HIGH, the very
+// the enum q type lattice (ai.h) -- fixnum/number LOW, lambda HIGH, the very
 // order the generic-op matrix diagonals encode: number < string < symbol < pair <
 // map < lambda. (Arrays are the exception: an array operand compares ELEMENTWISE -> a
 // 0/1 mask via lvm_vbin, never the scalar order.) WITHIN a kind:
