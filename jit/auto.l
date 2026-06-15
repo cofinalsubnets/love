@@ -4,22 +4,27 @@
 ; Everything else falls through to the base interpreter unchanged.
 ;
 ; Two shapes qualify (the emitter's grammar):
-;   LEAF  (\ x E)            E := x | int | (+/-/* E E)        -- a native arith fn
+;   LEAF  (\ x E)   E := x | int | (+/-/* E E) | (cmp E E) | (? E E E), cmp in < <= > >= =
 ;   LOOP  (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a B)) a)) 0 0))  -- a native counted
-;         loop summing B(i) for i<n; B in the arith grammar over i. Owning the LOOP is
+;         loop summing B(i) for i<n; B in the same grammar over i. Owning the LOOP is
 ;         where the big win is (cf. the leaf's ~6%): the back-edge stays native.
 ;
 ; ev is 1-arg, so the loader's `(ev 'ev r)` = `((ev 'ev) r)` still works after the
 ; rebind; njit/njit-loop call the captured base-ev -> no jit<->ev re-entry. Load AFTER
 ; jit/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 (: base-ev ev
-   (arithpv e v) (? (= e v)   1
-                    (intp e)  1
-                    (twop e)  (&& (memq (cap e) '(+ - *)) (arithpv (caup e) v) (arithpv (caup (cup e)) v))
-                    0)
+   ; the emitter's expression grammar over var v: var | int | arith | cmp | (? t a b)
+   (exprp e v) (? (= e v)   1
+                  (intp e)  1
+                  (twop e)  (: op (cap e)
+                               (? (memq op '(+ - * < <= > >= =)) (&& (exprp (caup e) v) (exprp (caup (cup e)) v))
+                                  (= op '?) (&& (twop (cup (cup (cup e)))) !(twop (cup (cup (cup (cup e)))))   ; exactly 3 operands
+                                               (exprp (caup e) v) (exprp (caup (cup e)) v) (exprp (caup (cup (cup e))) v))
+                                  0))
+                  0)
    ; --- leaf: (\ x E) ---
    (qual lam) (&& (twop lam) (= (cap lam) '\) (twop (cup lam)) (= (caup lam) 'x)
-                  (twop (cup (cup lam))) !(twop (cup (cup (cup lam)))) (arithpv (caup (cup lam)) 'x))
+                  (twop (cup (cup lam))) !(twop (cup (cup (cup lam)))) (exprp (caup (cup lam)) 'x))
    (njit lam) (nat (emit (cat (cgv 'x ld-x (caup (cup lam))) epilogue)) (base-ev lam) lam)
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)
@@ -38,7 +43,7 @@
               (twop T) (= (cap T) '<) (= (caup T) I) (= (caup (cup T)) (caup lam))  ; (< i n)
               (= (cap THEN) GO)                                              ; (go ..)
               (twop STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)  ; (+ i 1)
-              (twop ACC) (= (cap ACC) '+) (= (caup ACC) A) (arithpv B I))    ; (+ a B), B arith in i
+              (twop ACC) (= (cap ACC) '+) (= (caup ACC) A) (exprp B I))      ; (+ a B), B in the grammar over i
        (? ok (L B I) 0))
    (njit-loop lam B cv) (nat (emit (loopcode B cv)) (base-ev lam) lam)
    (auto-ev e) (? (qual e) (njit e)
@@ -50,8 +55,13 @@
     (3 = ((ev '(\ x (cap x))) '(3 4)))                         ; non-qualifying -> interpreter
     (6 = (ev '(+ 1 2 3)))                                      ; non-lambda forms unaffected
     (9000000000000000000 = ((ev '(\ x (* x x))) 3000000000))   ; overflow deopts -> bignum
+    (: ab (ev '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7))))   ; conditional leaf auto-natived
     ; LOOP auto-detected -> native counted loop, =-identical + correct
     (: L1 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0))
        f  (ev L1)
-       (&& (= f (ev L1)) (3496500 = (f 1000)) (lamp (loopinfo L1)))))
+       (&& (= f (ev L1)) (3496500 = (f 1000)) (lamp (loopinfo L1))))
+    ; LOOP with a conditional body (sum i for i<50, capped) auto-detected
+    (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
+       h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
+       (&& (lamp (loopinfo L2)) (= c (h 1000)))))
  _ (puts "jit/auto: ev auto-natives qualifying closures + counted loops (transparent)") _ (putc 10))

@@ -10,6 +10,8 @@
 ; hook (ev installing native for hot regions, transparently); `nat` then goes
 ; internal (mopped like boxfix/wev) and there is no user-facing verb at all.
 ;
+; grammar: (\ x E), E := x | int | (+/-/* E E) | (cmp E E) | (? E E E), cmp in
+; < <= > >= = (-> 0/1 like the interpreter); ? is strictly-positive-test then/else.
 ; lvm ABI: g=rdi Ip=rsi Hp=rdx Sp=rcx. The body accumulates UNTAGGED in rax, the
 ; machine stack (push/pop) holds nested operands, r8 the popped temp; the loop uses
 ; r9=n r10=i r11=acc. Every +/-/* and the final putfix carry a `jno` over an inline
@@ -29,10 +31,23 @@
                  (= op '*) (cat pop-r8 (cat '(73 15 175 192) guard))             ; imul rax,r8 ; guard
                  (= op '-) (cat pop-r8 (cat '(73 41 192) (cat guard '(76 137 192))))  ; sub r8,rax;guard; mov rax,r8
                  0)
+   ; comparison: a in r8, b in rax -> rax = (a OP b) ? 1 : 0 (0/1, like the interpreter)
+   (setcc op) (? (= op '<) '(15 156 192) (= op '<=) '(15 158 192)                ; setl al / setle al
+                 (= op '>) '(15 159 192) (= op '>=) '(15 157 192)                ; setg al / setge al
+                 (= op '=) '(15 148 192) 0)                                       ; sete al
+   (cmpseq op) (cat pop-r8 (cat '(73 57 192) (cat (setcc op) '(72 15 182 192)))) ; cmp r8,rax; setcc al; movzx rax,al
+   ; (? test then else): test>0 -> then, else else (love truth = strictly positive)
+   (condcode tb thb elb) (: Lt (tally thb) Le (tally elb)
+     (cat tb (cat '(72 131 248 0)                                                ; cmp rax,0
+       (cat (cat '(15 142) (le4 (+ Lt 5)))                                       ; jle else  (skip then + jmp)
+         (cat thb (cat (cat '(233) (le4 Le)) elb))))))                           ; then ; jmp end ; else
    (cgv v vl e) (? (= e v)  vl                                                   ; the variable -> its load
                    (intp e) (cat '(72 184) (le8 e))                              ; movabs rax, n
-                   (twop e) (: a (caup e) b (caup (cup e))                       ; (op a b)
-                               (cat (cgv v vl a) (cat push-rax (cat (cgv v vl b) (opseq (cap e))))))
+                   (twop e) (: op (cap e)  a (caup e)  b (caup (cup e))
+                               (? (memq op '(+ - *))      (cat (cgv v vl a) (cat push-rax (cat (cgv v vl b) (opseq op))))
+                                  (memq op '(< <= > >= =)) (cat (cgv v vl a) (cat push-rax (cat (cgv v vl b) (cmpseq op))))
+                                  (= op '?) (condcode (cgv v vl a) (cgv v vl b) (cgv v vl (caup (cup (cup e)))))
+                                  0))
                    0)
    (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (twop x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
@@ -63,5 +78,11 @@
   ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))           ; compose with higher-order fns
   ((isum 1000) = (g 1000))                                   ; the loop agrees with the interpreter
   (9000000000000000000 = ((jit '(\ x (* x x))) 3000000000))  ; OVERFLOW -> deopt -> correct bignum
-  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit `(\ x (* x ,i))) 7) (* 7 i)))) a)) 0 1)))  ; agree 0..60
+  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit `(\ x (* x ,i))) 7) (* 7 i)))) a)) 0 1))  ; agree 0..60
+  ; comparisons (-> 0/1) and conditionals
+  (: lt (jit '(\ x (< x 5))) (&& (1 = (lt 3)) (1 = (lt -2)) (0 = (lt 5)) (0 = (lt 9))))
+  (: ab (jit '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7)) (0 = (ab 0))))   ; abs
+  ((\ x (? (< x 0) (- 0 x) x)) = (jit '(\ x (? (< x 0) (- 0 x) x))))                        ; transparent
+  (: cap50 (jitsum '(? (< i 50) i 0)) c50 ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
+     (= c50 (cap50 1000))))                                                                 ; loop with a conditional body
  _ (puts "jit/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))
