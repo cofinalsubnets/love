@@ -116,7 +116,10 @@ ai0: $(ai0)
 $(ho)/lib$n.a: $(h_o)
 	@echo AR	$@
 	@mkdir -p $(dir $@)
-	@ar rcs $@ $^
+	@rm -f $@; ar rcs $@ $^   # rm first: `ar r` REPLACES/ADDS but never REMOVES, so a
+	                          # renamed/dropped source (e.g. love.c -> ai.c) would leave a
+	                          # stale .o in the archive -> multiple-definition at link. the
+	                          # rm rebuilds it fresh, so a rename no longer needs `make clean`.
 
 $(ho)/lib$n.so: $(ho)/lib$n.a $(data_ld)
 	@echo LD	$@
