@@ -33,18 +33,34 @@
    (qlist? x) (&& (twop x) (idp (cap x) bs) (un2? x) (zlist? (e2 x)))  ; '(1 2 3): \ + a z-list, EXACTLY 2 (a lambda is 3+)
    (arrv? x)  (&& (twop x) (idp (cap x) 'tuple) (zlist? (cup x)))      ; @(1 2 3) = (tuple 1 2 3): a z-array
    (ajotv? x) (&& (twop x) (idp (cap x) 'ajot) (un2? x) (intv? (e2 x)))  ; (ajot n): the z-array 0..n-1
-   (listv? x) (| (qlist? x) (| (strp x) (| (arrv? x) (ajotv? x))))     ; list/array-valued
    (un2? x) (&& (twop (cup x)) (! (twop (cup (cup x))))) ; a 2-element (op arg) form
+   ; the KIND of a collection value -- arrays BROADCAST elementwise, lists APPEND
+   (arr? x) (| (arrv? x) (| (ajotv? x)
+              (&& (twop x) (len3? x) (: h (cap x)
+                 (? (idp h '+) (&& (arr? (e2 x)) (arr? (e3 x)))
+                    (| (idp h '*) (idp h '//)) (&& (arr? (e2 x)) (intv? (e3 x))) 0)))))
+   (lst? x) (| (qlist? x) (| (strp x)
+              (&& (twop x) (len3? x) (: h (cap x)
+                 (? (idp h '+) (&& (| (lst? (e2 x)) (intv? (e2 x))) (lst? (e3 x)))  ; append / scalar prepend
+                    (idp h '*) (&& (lst? (e2 x)) (intv? (e3 x))) 0)))))             ; repeat
+   (listv? x) (| (arr? x) (lst? x))                     ; any collection value
    ; the list reducers: net/asum -> sum, tally/alen -> count, amax/amin/aprod
    (lop? h) (| (idp h 'net) (| (idp h 'asum) (| (idp h 'tally) (| (idp h 'alen)
               (| (idp h 'amax) (| (idp h 'amin) (idp h 'aprod)))))))
-   ; translate a list/array-valued term to a Coq `list Z`
+   ; translate a collection value to a Coq `list Z`
    (joinl l) (? (twop l) (cat (L (tv (cap l)) (? (twop (cup l)) ";" "") (joinl (cup l)))) "")
    (joinb s i) (? (< i (tally s)) (cat (L (show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
    (tl x) (? (qlist? x)  (cat (L "[" (joinl (e2 x)) "]"))
              (arrv? x)   (cat (L "[" (joinl (cup x)) "]"))    ; tuple: the elements are the cup
              (ajotv? x)  (cat (L "(ajot " (tv (e2 x)) ")"))   ; the Coq ajot model
-             (strp x)    (cat (L "[" (joinb x 0) "]"))  "[]")
+             (strp x)    (cat (L "[" (joinb x 0) "]"))
+             (: h (cap x)                                     ; the broadcast / append / repeat ops
+                (? (idp h '+)  (? (arr? x)        (cat (L "(vadd " (tl (e2 x)) " " (tl (e3 x)) ")"))
+                                  (intv? (e2 x))  (cat (L "(" (tv (e2 x)) " :: " (tl (e3 x)) ")"))  ; scalar prepend
+                                  (cat (L "(" (tl (e2 x)) " ++ " (tl (e3 x)) ")")))                ; list append
+                   (idp h '*)  (? (arr? x) (cat (L "(vscale " (tv (e3 x)) " " (tl (e2 x)) ")"))     ; array scale
+                                  (cat (L "(srep (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) ")")))    ; list repeat
+                   (idp h '//) (cat (L "(vquot " (tv (e3 x)) " " (tl (e2 x)) ")"))  "[]")))
 
    ; integer-valued term? a fixnum, an operator tree, or a numeral-application spine
    (intv? x) (? (fixp x) 1
@@ -84,8 +100,10 @@
                                       (listv? a) (cat (L "(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
                                       (: p (tp a) (? p (cat (L "(negb " p ")")) 0))))
                    (! (len3? f)) 0
-                   (! (&& (intv? (e2 f)) (intv? (e3 f)))) 0
-                   (idp h '=)  (cat (L "(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
+                   (idp h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   (cat (L "(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
+                                 (&& (listv? (e2 f)) (listv? (e3 f))) (cat (L "(leqb " (tl (e2 f)) " " (tl (e3 f)) ")"))  ; list/array =
+                                 0)
+                   (! (&& (intv? (e2 f)) (intv? (e3 f)))) 0           ; the ORDERING ops below stay integer-only
                    (idp h '<)  (cat (L "(Z.ltb " (tv (e2 f)) " " (tv (e3 f)) ")"))
                    (idp h '<=) (cat (L "(Z.leb " (tv (e2 f)) " " (tv (e3 f)) ")"))
                    (idp h '>)  (cat (L "(Z.ltb " (tv (e3 f)) " " (tv (e2 f)) ")"))
@@ -124,7 +142,12 @@
      "Definition aprod : list Z -> Z := fold_right Z.mul 1." (string 10)
      "Definition amax (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.max x xs end." (string 10)
      "Definition amin (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.min x xs end." (string 10)
-     "Definition ajot (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n))." (string 10) (string 10))))
+     "Definition ajot (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n))." (string 10)
+     "Fixpoint leqb (a b:list Z):bool := match a,b with nil,nil=>true | x::a',y::b'=>andb (Z.eqb x y) (leqb a' b') | _,_=>false end." (string 10)
+     "Fixpoint vadd (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vadd a' b' | _,_=>nil end." (string 10)
+     "Definition vscale (c:Z):list Z->list Z := map (Z.mul c)." (string 10)
+     "Definition vquot (c:Z):list Z->list Z := map (fun e=>Z.quot e c)." (string 10)
+     "Definition srep (n:nat) (s:list Z):list Z := concat (repeat s n)." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
