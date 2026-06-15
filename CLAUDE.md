@@ -439,7 +439,13 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 ; raise as (help s a b) -- s = the status word, two bits: scare (1, something wrong) and
 ; more (2, read control flow); more alone = incomplete, eof = more|scare. a/b = the
 ; condition data; the result is delivered per the bits (the more bit: to the reader's
-; resume; a bare scare: observed). scare?/more?/eof? read s. help is present the way
+; resume; a bare scare: observed). scare?/more?/eof? read s. `welp` is the FLOOR
+; HANDLER -- help that has given up: it keeps the read protocol (eof -> the sentinel,
+; more -> the port back) and answers the zero point on a bare scare, the fromempty the
+; introductions (scare, missing) never named -- from any condition, a value. a policy
+; that runs out of cases delegates to it ((\ s a b (? (mine? a) .. (welp s a b)))), and
+; the shell's default help is welp WITH A FACE (it prints `# a b` first, then welps).
+; help is present the way
 ; everything is present: by its net ((: help 0) uninstalls). (scare a b) raises
 ; deliberately -- the scare bit set unconditionally, and the help's result comes back
 ; as its value (no help installed -> terminal: the exit face prints `# a b`, show
@@ -463,6 +469,7 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 (: p (spawn (\ x (x + 1)) 41) (wait p))   ; 42   tasks (always wait an orphan)
 (apcap 0)            ; 1048576   the count ceiling, a tunable box
 not-in-the-book      ; ()        a missing name reads the zero point (helpless)
+(welp 1 'a 'b)       ; ()        the floor: a bare scare welps to the zero point
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prel wraps getc and
 ; putc/puts/putn/putx, with per-port fgetc/fputc/.../read plus open/close/sip/pad/slurp.
