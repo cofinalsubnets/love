@@ -145,7 +145,16 @@
    neg (- 0)
    recip (/ 1)
    (frac x) (% x 1)
-   (bit x) (nilp (nilp x)))
+   (bit x) (nilp (nilp x))
+   ; a GEM is the numeric carrier, closed under the ring algebra: a CREST if it is
+   ; a tray, else a SCALAR GEM -- a self-netting scalar (charm/wide/float/complex/
+   ; big), the fixpoint of net (x IS its own net; idp, not `=`, since net returns a
+   ; number operand unchanged while a tray's net is a fresh sum). a CREST is a tray
+   ; of gems: keyed on the CELLS, not the O code, so a Z/R/C tray qualifies outright
+   ; and an object-typed tray of gem cells (e.g. bignums) still counts -- a tray of
+   ; strings does not. mutually recursive, one level deep (a cell is a scalar gem).
+   (gemp x) (? (arrp x) (crestp x) (idp x (net x)))
+   (crestp x) (? (arrp x) (? (< (atype x) O) 1 (gemp (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)

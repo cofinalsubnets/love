@@ -45,6 +45,12 @@
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (idp non nilp) (1 = (non 0))  ; ! negates it; non is nilp
+ (gemp 5) (gemp -3.5) (gemp ~(2 3)) (gemp (62 2))         ; scalar gems -- self-netting: charm, float, complex, wide
+ (gemp @(1 2 3)) (crestp @(1 2 3)) (gemp (net @(1 2 3)))  ; a CREST is a gem too (a numeric tray); it nets DOWN to a scalar gem
+ !(gemp "x") !(gemp 'a) !(gemp '(1 2))                    ; text/symbol/list are not gems -- they net to something else
+ (? (fixp 5) (gemp 5) 1)                                  ; a CHARM is a gem, by spec (net = self)
+ (crestp (array '(2) (200 2) (200 2))) !(crestp (array '(2) "a" "b"))  ; a tray of BIGS is a crest (gem cells); a tray of strings is not
+ !(crestp 5) !(crestp '(1 2))                             ; a scalar / a list is not a crest
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
 ; --- types & predicates --- storage: fixp bigp widep flop comp arrp strp symp twop mapp;

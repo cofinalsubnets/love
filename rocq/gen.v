@@ -184,4 +184,4 @@ Theorem gen_72 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity.
 (* (3 = (+ 1 2)) *)
 Theorem gen_73 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 
-(* 73 theorems generated from 465 asserts seen *)
+(* 73 theorems generated from 480 asserts seen *)
