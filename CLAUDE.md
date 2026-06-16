@@ -506,8 +506,8 @@ not-in-the-book      ; ()        a missing name reads the zero point (helpless)
 ; itself -- then the hatchling installs as `ev` in the image at C compile time, no allocation;
 ; `born` records the hatch time (unbound pre-egg: ai0's first corpus pass runs PRE-egg, and an
 ; unbound name is missing, reading the zero point). just before it is born the egg MOPS UP every runtime-
-; internal name: the raw cell nifs (peek poke seek lamb -- (lamb 2 3) is a segfault, big
-; scare; lamb is still there for real, it's ultimate), the compiler's machinery
+; internal name: the raw cell nifs (peek poke seek spin -- (spin 2 3) is a segfault, big
+; scare; spin is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), the repl sentinels, every hot lvm_* pointer,
 ; and finally the `book` itself. compiled references were folded, so only the names die.

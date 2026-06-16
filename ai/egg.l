@@ -3,7 +3,7 @@
  (mop _) ((peep book 'ev 0) '(:
    ; the non-lvm_ internals to retract (each verified live 2026-06-16); the lvm_*
    ; pointers are caught by the keys-of-book loop below, so they stay off this list.
-   _ (each '(peek poke seek lamb macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop do_eval numfn nfa nfq nfnest powg ipow a-coll a-dim a-emax a-rank a-shape a-type m eofsym prc _)
+   _ (each '(trim peek poke seek spin macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop do_eval numfn nfa nfq nfnest powg ipow a-coll a-dim a-emax a-rank a-shape a-type m eofsym prc _)
       (\ k (pull book k 0)))
    (each (keys book)
     (\ k (? (symp k) (? (= "lvm_" (slice (string k) 0 4)) (pull book k 0) 0) 0)))))

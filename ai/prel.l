@@ -59,7 +59,7 @@
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
 ; for every x, see below); n=1 -> x directly. numfn assembles the n-fold text
-; directly via lamb/poke (no `ev`, so applying a fixnum never re-enters the compiler):
+; directly via spin/poke (no `ev`, so applying a fixnum never re-enters the compiler):
 ; n quote-f's then n ap's -- apl2r's [head..][arg][ap..] shape -- via the interned
 ; opcode globals (kernel/g.c `insts`). Cell 0 is the source \-expr at value[-1] for
 ; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (seek 1 th), and
@@ -69,9 +69,9 @@
    (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) lvm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
    (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
-     src (cons '\ (cons 'x (cons (nfnest f n 'x) 0)))  ; alloc before lamb; printer source
-     th (lamb (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
-     _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past lamb: th can't move
+     src (cons '\ (cons 'x (cons (nfnest f n 'x) 0)))  ; alloc before spin; printer source
+     th (spin (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
+     _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past spin: th can't move
      _ (poke (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
      _ (nfa th 0 n)
      _ (poke (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
@@ -179,9 +179,9 @@
    (part p) (foldr (\ a m (? (p a) (cons (cons a (cap m)) (cup m))
                                         (cons (cap m) (cons a (cup m))))) '(0)))
 (: (sip cl)
- (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (lamb 5))))))
+ (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (spin 5))))))
  (pad _)
-  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (lamb 6)))))))
+  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (spin 6)))))))
  (page o) (slice (peek 4 o) 0 (peek 5 o))
  (slurp i) (: (rl i) (: c (fgetc i) (? (= c -1) 0 (cons c (rl i)))) (string (rl i)))  ; (pre-opfix: no ! here)
  (show x) (: o (pad 0) _ (fputx o x) (page o)))

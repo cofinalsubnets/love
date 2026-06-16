@@ -89,11 +89,11 @@
   ; continuation head. The same emit works for both: overwrite that op cell with
   ; the operand (seek 1 keeps what follows -- the rest for ap, the frame-size for
   ; tap) and prepend the fused op; only the ap differs. kap over-reserves a
-  ; word, so the reclaimed cell becomes -1 slack (lamb memsets it; GC-safe).
+  ; word, so the reclaimed cell becomes -1 slack (spin memsets it; GC-safe).
   ; operand-value specialization: a zero-operand opcode for the hottest arg indices
   ; / quote constants, emitted in the plain (non-ap/tap) path -- covers arg/quote
   ; consumed by inlined ops, e.g. n in (- n 1). 1-word op, no operand fetch; the
-  ; reclaimed operand cell is -1 slack (lamb memsets it; GC-safe).
+  ; reclaimed operand cell is -1 slack (spin memsets it; GC-safe).
   ; index/value -> specialized-op. A compare chain beats a `peep`-hash here: `peep`
   ; is a heavyweight polymorphic nif (type-dispatch + hash + eql), costing far more
   ; than a few fixnum compares that short-circuit on the common small values
@@ -113,11 +113,11 @@
   ; but not for quote. The rarest of the four cases; deferred.
   (karg x k n) (fuse lvm_argap   lvm_argtap lvm_arg   spa x k n)
   (kim  x k n) (fuse lvm_quoteap 0           lvm_quote spq x k n)
-  (k0 c n) (poke -1 lvm_ret (poke (+ 1 n) (ary c) (lamb (+ 2 n))))
+  (k0 c n) (poke -1 lvm_ret (poke (+ 1 n) (ary c) (spin (+ 2 n))))
   ; k0s: like k0 but reserves one extra LEADING cell (so the text is shifted up
   ; by one) for ala to stash the lambda's source \-expr at value[-1], where the
   ; printer (gzput_fn) finds it. entry = cell 1, src = cell 0.
-  (k0s c n) (poke -1 lvm_ret (poke (+ 2 n) (ary c) (lamb (+ 3 n))))
+  (k0s c n) (poke -1 lvm_ret (poke (+ 2 n) (ary c) (spin (+ 3 n))))
   (ary c) (+ (tally (c 'arg)) (tally (c 'imp)))
   (pro f) (? (fixp f) f (: a (peek 0 f) (?- f
    (= a lvm_unc) (pro (seek -2 (peek 2 f)))
