@@ -18,7 +18,7 @@ ai_noinline uintptr_t ai_clock(void) {
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
 
-static noreturn lvm(lvm_exit) { exit(getfix(Sp[0])); }
+static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // Returns only when poll succeeds (data ready / deadline elapsed) or fails
 // for a non-EINTR reason.
@@ -51,43 +51,43 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
 static struct ai *fd_getc(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = g->io;
-  if (getfix(i->ungetc_buf) != EOF) {
-    fc->b = getfix(i->ungetc_buf);
-    i->ungetc_buf = putfix(EOF);
+  if (getcharm(i->ungetc_buf) != EOF) {
+    fc->b = getcharm(i->ungetc_buf);
+    i->ungetc_buf = putcharm(EOF);
     return g; }
   uint8_t b;
-  ssize_t n = read(getfix(i->fd), &b, 1);
-  if (n <= 0) { i->eof_seen = putfix(true); fc->b = EOF; }
+  ssize_t n = read(getcharm(i->fd), &b, 1);
+  if (n <= 0) { i->eof_seen = putcharm(true); fc->b = EOF; }
   else fc->b = b;
   return g; }
 
 static struct ai *fd_ungetc(struct ai *g, int c) {
  struct ai *fc = ai_core_of(g);
  struct ai_io *i = fc->io;
- i->ungetc_buf = putfix(c);
- i->eof_seen = putfix(false);
+ i->ungetc_buf = putcharm(c);
+ i->eof_seen = putcharm(false);
  return fc->b = c, g; }
 
 static struct ai *fd_eof(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
-  return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
+  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 
 static struct ai *fd_putc(struct ai *g, int c) {
  uint8_t b = c;
- if (g->io->fd == putfix(STDOUT_FILENO)) fputc(b, stdout);
- else write(getfix(g->io->fd), &b, 1);
+ if (g->io->fd == putcharm(STDOUT_FILENO)) fputc(b, stdout);
+ else write(getcharm(g->io->fd), &b, 1);
  return g; }
 
 static struct ai *fd_flush(struct ai *g) {
- if (g->io->fd == putfix(STDOUT_FILENO)) fflush(stdout);
+ if (g->io->fd == putcharm(STDOUT_FILENO)) fflush(stdout);
  return g; }
 
 struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
-struct ai_io ai_stdin = { lvm_port_io, putfix(STDIN_FILENO), putfix(EOF), putfix(false) };
-struct ai_io ai_stdout = { lvm_port_io, putfix(STDOUT_FILENO), putfix(EOF), putfix(false) };
-struct ai_io ai_stderr = { lvm_port_io, putfix(STDERR_FILENO), putfix(EOF), putfix(false) };
+struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF), putcharm(false) };
+struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF), putcharm(false) };
+struct ai_io ai_stderr = { lvm_port_io, putcharm(STDERR_FILENO), putcharm(EOF), putcharm(false) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that ai_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live
@@ -146,10 +146,10 @@ static lvm(lvm_close) {
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
   if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == lvm_port_io) {
     struct ai_io *io = (struct ai_io*) Sp[0];
-    intptr_t fd = getfix(io->fd);
+    intptr_t fd = getcharm(io->fd);
     if (fd >= 0) {
       close(fd);
-      io->fd = putfix(-3); } }
+      io->fd = putcharm(-3); } }
   Sp[0] = ai_nil;
   Ip += 1;
   return Continue(); }
@@ -179,9 +179,9 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
  intptr_t argc = 0;
  uintptr_t total = 0;
  for (ai_word p = argv; twop(p); p = B(p)) {
-  if (!ai_strp(A(p))) return ai_push(g, 1, putfix(-1));   // misuse
+  if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));   // misuse
   argc++, total += len(A(p)) + 1; }                       // +1 for the NUL
- if (!argc) return ai_push(g, 1, putfix(-1));            // empty argv
+ if (!argc) return ai_push(g, 1, putcharm(-1));            // empty argv
 
  // Reserve gap for cav (argc+1 pointers, word-aligned) + the byte blob.
  // Written into the uncommitted region at Hp -- invisible to GC, holds no
@@ -204,14 +204,14 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
  // kernel closes ep[1] -> parent reads EOF; on failure the child writes errno
  // -> parent distinguishes "couldn't spawn" from "ran and exited 127".
  int op[2], ep[2];
- if (pipe(op)) return ai_push(g, 1, putfix(errno));
- if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]); return ai_push(g, 1, putfix(e)); }
+ if (pipe(op)) return ai_push(g, 1, putcharm(errno));
+ if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]); return ai_push(g, 1, putcharm(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  pid_t pid = fork();
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
-  return ai_push(g, 1, putfix(e)); }
+  return ai_push(g, 1, putcharm(e)); }
  if (!pid) {                                              // child
   dup2(op[1], STDOUT_FILENO);
   close(op[0]); close(op[1]); close(ep[0]);
@@ -225,7 +225,7 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
  if (childerr) {                                          // exec failed
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return ai_push(g, 1, putfix(childerr)); }
+  return ai_push(g, 1, putcharm(childerr)); }
 
  // drain stdout into a growing l string (bulk reads; stderr inherited).
  uintptr_t n = 0, lim = 1u << 16;
@@ -245,7 +245,7 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
               : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1;
    if (!ai_ok(g = ai_have(g, Width(struct ai_pair)))) return g;
    struct ai_pair *w = ini_two((struct ai_pair*) bump(g, Width(struct ai_pair)),
-                              putfix(status), g->sp[0]);
+                              putcharm(status), g->sp[0]);
    g->sp[0] = word(w); }                                  // [(status.output), argv]
  return g; }
 
@@ -281,7 +281,7 @@ static lvm(lvm_getenv) {
 
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
- nif_open[] = {{lvm_cur}, {.x = putfix(2)}, {lvm_open}, {lvm_ret0}},
+ nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
  nif_close[] = {{lvm_close}, {lvm_ret0}},
  nif_run[] = {{lvm_run}, {lvm_ret0}},
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}};

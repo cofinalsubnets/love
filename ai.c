@@ -50,7 +50,7 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // nilp: structural test for the nil word (the only false scalar). Distinct from
-// ai_nilp below (the language falsy predicate, which also counts an all-zero tuple);
+// ai_nilp below (the language falsy predicate, which also counts an all-zero vec);
 // the l `nilp` nif maps to ai_nilp, not this macro.
 #define nilp(_) (word(_)==nil)
 #define AB(o) A(B(o))
@@ -89,12 +89,12 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // arr rejects ty == C, so C never appears as a rank>=1 array element -- complex
 // only ever shows up as a rank-0 scalar (Cp), handled by explicit cplx branches.
 // O (object) is the odd tier out: its slots hold live l words (any value --
-// fixnum, bignum, box, complex, string, pair...), so it is the ONE tuple type the
-// copying GC must trace element-by-element (evac_tuple). It sits outside the numeric
+// fixnum, bignum, box, complex, string, pair...), so it is the ONE vec type the
+// copying GC must trace element-by-element (evac_vec). It sits outside the numeric
 // order; the typed fast lanes gate on `type <= ai_C`, the arith lane on `type == ai_O`
 // (lvm_obin), so O elements always route through the promoting scalar dispatch --
 // that is what makes a bignum array add/multiply exactly instead of wrapping.
-enum ai_tuple_type { ai_Z, ai_R, ai_C, ai_O, };
+enum ai_vec_type { ai_Z, ai_R, ai_C, ai_O, };
 // Elementwise dyadic opcodes for lvm_vbin (kernel/arr.c). The five arith codes
 // match the arith slow aps; the five compare codes (>= vop_lt) produce a
 // 0/1 bool array. vop_eq is `=` over arrays (whole-array eq is `(aall (= a b))`).
@@ -108,7 +108,7 @@ uintptr_t intern_reserve(struct ai*);
 uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
- lvm_two, lvm_tuple, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through ai_apply_mx
+ lvm_two, lvm_vec, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through ai_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_twop,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_call2, lvm_toast, lvm_toasted,
@@ -166,11 +166,11 @@ lvm(lvm_obin, int);
 // by comparing an ap against lvm_two..lvm_str directly.
 #include <data.h>
 char const *ai_nif_name(intptr_t);
-#define tuple(_) ((struct ai_tuple*)(_))
-#define fixp oddp
+#define vec(_) ((struct ai_vec*)(_))
+#define charmp oddp
 #define sym(_) ((struct ai_atom*)(_))
 static ai_inline bool symp(word _) { return lamp(_) && cell(_)->ap == lvm_sym; }
-static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_tuple; }
+static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_vec; }
 static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 // Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 lvm_buf (like lvm_port_io for ports), so the GC walks a buf
@@ -188,7 +188,7 @@ static ai_inline bool toastp(word _) { return lamp(_) && cell(_)->ap == lvm_toas
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
 // texts: a fixed 2-word HEADER [lvm_map_lookup, backing, <tag>] that callers
-// hold, and a BACKING [lvm_map_data, putfix(len), putfix(cap), k0,v0, … , <tag>]
+// hold, and a BACKING [lvm_map_data, putcharm(len), putcharm(cap), k0,v0, … , <tag>]
 // it points at -- open-addressed, linear-probed, cap a power of two. Growth
 // allocates a new backing and swaps header[1]; the header never moves, so an
 // aliased reference (ev's scopes) sees later inserts. Both are plain texts:
@@ -203,8 +203,8 @@ static const word ai_map_gap_cell = 0;
 #define map_min_cap 4
 static ai_inline word map_back(word m) { return cell(m)[1].x; }
 static ai_inline word *map_slots(word m) { return &cell(map_back(m))[3].x; }
-static ai_inline uintptr_t map_len(word m) { return getfix(cell(map_back(m))[1].x); }
-static ai_inline uintptr_t map_cap(word m) { return getfix(cell(map_back(m))[2].x); }
+static ai_inline uintptr_t map_len(word m) { return getcharm(cell(map_back(m))[1].x); }
+static ai_inline uintptr_t map_cap(word m) { return getcharm(cell(map_back(m))[2].x); }
 word ai_mapget(struct ai*, word, word, word);
 static struct ai *ai_mapput(struct ai*), *map_new(struct ai*);
 static ai_inline struct ai_str *buf_str(word x) { return ((struct ai_buf*) x)->str; }
@@ -221,7 +221,7 @@ static ai_inline struct ai_str *bytes_of(word x) { return bufp(x) ? buf_str(x) :
 // bignum (it demotes to the fixnum nil), so slen is never 0 and the sign is
 // unambiguous. Canonical demotion keeps the tiers disjoint: a value in fixnum
 // range is a fixnum, one in intptr_t range a wide-int box, only wider values a
-// bignum -- so fixp/widep/bigp are mutually exclusive and =/eqv stay well defined.
+// bignum -- so charmp/widep/bigp are mutually exclusive and =/eqv stay well defined.
 struct ai_big { lvm_t *ap; intptr_t slen; uint32_t limb[]; };
 static ai_inline bool bigp(word _) { return lamp(_) && cell(_)->ap == lvm_big; }
 static ai_inline struct ai_big *ini_big(struct ai_big *b, intptr_t slen) {
@@ -240,57 +240,57 @@ struct ai *ai_big_dec(struct ai*);             // sp[0] bignum -> decimal string
 struct ai *ai_big_read_dec(struct ai*);        // sp[0] [+-]?digits token -> canonical value
 
 static ai_inline bool flop(word _) {
-  return packp(_) && tuple(_)->rank == 0 && tuple(_)->type == ai_R; }
-// Wide-integer box: a rank-0 ai_Z scalar tuple. Arises only from
+  return packp(_) && vec(_)->rank == 0 && vec(_)->type == ai_R; }
+// Wide-integer box: a rank-0 ai_Z scalar vec. Arises only from
 // transparent fixnum overflow (kernel/math.c); never holds a value that
 // fits the fixnum tag (canonical demotion keeps box and fixnum ranges
-// disjoint), so widep and fixp never both hold for the same number.
+// disjoint), so widep and charmp never both hold for the same number.
 static ai_inline bool widep(word _) {
-  return packp(_) && tuple(_)->rank == 0 && tuple(_)->type == ai_Z; }
-// A complex scalar: a rank-0 ai_C tuple (two ai_flo_t, re then im). Deliberately
+  return packp(_) && vec(_)->rank == 0 && vec(_)->type == ai_Z; }
+// A complex scalar: a rank-0 ai_C vec (two ai_flo_t, re then im). Deliberately
 // NOT folded into isnum -- the real-tower macros (toflo/toint) would misread its
 // two-word payload, so the arith/eq paths handle complex via explicit Cp
 // branches placed before the real lanes (decision: complex > float > int/bignum).
 static ai_inline bool Cp(word _) {
-  return packp(_) && tuple(_)->rank == 0 && tuple(_)->type == ai_C; }
+  return packp(_) && vec(_)->rank == 0 && vec(_)->type == ai_C; }
 // A rank>=1 typed array (vs a rank-0 scalar box, which flop/widep catch). The
 // elementwise arith/compare lanes divert to lvm_vbin when either operand arrp.
-static ai_inline bool arrp(word _) { return packp(_) && tuple(_)->rank >= 1; }
+static ai_inline bool arrp(word _) { return packp(_) && vec(_)->rank >= 1; }
 
 // Max array rank (bounds the stack index/stride arrays in the broadcast loop).
 #define maxrank 8
-extern size_t const ai_vt_[];                 // element byte size by ai_tuple_type
+extern size_t const ai_vt_[];                 // element byte size by ai_vec_type
 // Element payload: laid out row-major just past the shape words.
-static ai_inline void *tuple_data(struct ai_tuple *v) { return (void*) (v->shape + v->rank); }
+static ai_inline void *vec_data(struct ai_vec *v) { return (void*) (v->shape + v->rank); }
 // Total element count = product of the dimensions (1 for a rank-0 scalar box).
-static ai_inline uintptr_t tuple_nelem(struct ai_tuple *v) {
+static ai_inline uintptr_t vec_nelem(struct ai_vec *v) {
  uintptr_t n = 1;
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  return n; }
-static ai_inline struct ai_tuple *ini_tuple(struct ai_tuple *v, enum ai_tuple_type t, uintptr_t rank) {
- return v->ap = lvm_tuple, v->type = t, v->rank = rank, v; }
+static ai_inline struct ai_vec *ini_vec(struct ai_vec *v, enum ai_vec_type t, uintptr_t rank) {
+ return v->ap = lvm_vec, v->type = t, v->rank = rank, v; }
 // Read element i of v as a double / as an integer (sign-extending the narrow
 // integer types; truncating a float toward zero for the int reader). The int
 // reader is only used on integer-typed arrays in practice.
-static ai_inline ai_flo_t tuple_get_flo(struct ai_tuple *v, uintptr_t i) {
- void *p = tuple_data(v);
+static ai_inline ai_flo_t vec_get_flo(struct ai_vec *v, uintptr_t i) {
+ void *p = vec_data(v);
  return v->type == ai_R ? ((ai_flo_t*) p)[i] : (ai_flo_t) ((intptr_t*) p)[i]; }
-static ai_inline intptr_t tuple_get_int(struct ai_tuple *v, uintptr_t i) {
- void *p = tuple_data(v);
+static ai_inline intptr_t vec_get_int(struct ai_vec *v, uintptr_t i) {
+ void *p = vec_data(v);
  return v->type == ai_R ? (intptr_t) ((ai_flo_t*) p)[i] : ((intptr_t*) p)[i]; }
 // Write element i of v, converting to v's element kind.
-static ai_inline void tuple_put_int(struct ai_tuple *v, uintptr_t i, intptr_t x) {
- void *p = tuple_data(v);
+static ai_inline void vec_put_int(struct ai_vec *v, uintptr_t i, intptr_t x) {
+ void *p = vec_data(v);
  if (v->type == ai_R) ((ai_flo_t*) p)[i] = (ai_flo_t) x; else ((intptr_t*) p)[i] = x; }
-static ai_inline void tuple_put_flo(struct ai_tuple *v, uintptr_t i, ai_flo_t x) {
- void *p = tuple_data(v);
+static ai_inline void vec_put_flo(struct ai_vec *v, uintptr_t i, ai_flo_t x) {
+ void *p = vec_data(v);
  if (v->type == ai_R) ((ai_flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = (intptr_t) x; }
 // Read/write element i of a ai_O array as a raw tagged l word (the GC traces
-// these; see evac_tuple). No conversion -- the slot IS a value.
-static ai_inline word tuple_get_obj(struct ai_tuple *v, uintptr_t i) {
- return ((word*) tuple_data(v))[i]; }
-static ai_inline void tuple_put_obj(struct ai_tuple *v, uintptr_t i, word x) {
- ((word*) tuple_data(v))[i] = x; }
+// these; see evac_vec). No conversion -- the slot IS a value.
+static ai_inline word vec_get_obj(struct ai_vec *v, uintptr_t i) {
+ return ((word*) vec_data(v))[i]; }
+static ai_inline void vec_put_obj(struct ai_vec *v, uintptr_t i, word x) {
+ ((word*) vec_data(v))[i] = x; }
 
 // Truthiness: x is false iff (= 0 ($ x)) -- the net's sign read in the total order.
 // THE NET'S CODOMAIN IS COMPLEX (ai_net below): a complex scalar nets ITSELF, phase
@@ -300,7 +300,7 @@ static ai_inline void tuple_put_obj(struct ai_tuple *v, uintptr_t i, word x) {
 // ai_nilp reads the lex sign (re, then im -- the flagged order choice, applied once,
 // never per element), ai_pin the order-signed magnitude. The common kinds short-
 // circuit with NO walk: nil (the 0 word), EmptyString, fixnum sign, table key count,
-// bignum sign, symbol name; products, tuples, strings and bufs compute their net
+// bignum sign, symbol name; products, vecs, strings and bufs compute their net
 // (content measures: an all-NUL text or zeroed buf is nothing, and a sum cannot
 // short-circuit -- a later negative can cancel an early positive). Lockstep with
 // ai_pin (lvm_pin): same zero conditions.
@@ -324,7 +324,7 @@ static ai_inline bool zn_nonpos(struct ai_zn z) {      // <= 0 in the total orde
 static struct ai_zn ai_net(struct ai *, word);         // fwd: aggregates sum their elements
 static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (x == nil || x == EmptyString) return true;
-  if (fixp(x)) return getfix(x) < 0;                 // 0 is nil (caught above); negatives false
+  if (charmp(x)) return getcharm(x) < 0;                 // 0 is nil (caught above); negatives false
   if (mapp(x)) return map_len(x) == 0;
   if (bigp(x)) return ((struct ai_big*) x)->slen < 0; // a negative bignum is false
   if (symp(x)) return pin_sym(g, x) == 0;            // empty/anonymous symbol name (or the core) -> nil (pin lockstep)
@@ -346,18 +346,18 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 
 // --- numeric tower helpers (shared by math.c, arr.c, hash.c) ----------------
 // Numeric scalar = a fixnum, a boxed float (flop), or a boxed wide int (widep).
-#define isnum(x) (fixp(x) || flop(x) || widep(x) || bigp(x))
+#define isnum(x) (charmp(x) || flop(x) || widep(x) || bigp(x))
 // Integer value of a fixnum-or-box operand (callers must exclude floats AND
 // bignums -- a bignum doesn't fit an intptr_t; integer lanes guard on !bigp).
-#define toint(x) (fixp(x) ? (intptr_t) getfix(x) : box_get(x))
+#define toint(x) (charmp(x) ? (intptr_t) getcharm(x) : box_get(x))
 // Double value of any numeric operand (a bignum widens via ai_big_to_flo).
-#define toflo(x) (fixp(x) ? (ai_flo_t) getfix(x) : flop(x) ? flo_get(x) : widep(x) ? (ai_flo_t) box_get(x) : ai_big_to_flo(x))
+#define toflo(x) (charmp(x) ? (ai_flo_t) getcharm(x) : flop(x) ? flo_get(x) : widep(x) ? (ai_flo_t) box_get(x) : ai_big_to_flo(x))
 // Heap words for one scalar box. The float box (ai_flo_t) and the wide-int box
 // (intptr_t) are both one pointer-width word, so one reservation fits.
-#define box_req (Width(struct ai_tuple) + Width(intptr_t))
+#define box_req (Width(struct ai_vec) + Width(intptr_t))
 // Heap words for one complex box: the (re, im) payload is two ai_flo_t words.
-#define cplx_req (Width(struct ai_tuple) + 2 * Width(ai_flo_t))
-// The tagged fixnum range: putfix spends one bit, so |value| <= 2^(Bits-2).
+#define cplx_req (Width(struct ai_vec) + 2 * Width(ai_flo_t))
+// The tagged fixnum range: putcharm spends one bit, so |value| <= 2^(Bits-2).
 #define fix_min (INTPTR_MIN >> 1)
 #define fix_max (INTPTR_MAX >> 1)
 // Emit an integer result R into `_res`: demote to a fixnum when it fits the
@@ -365,27 +365,27 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 // already hold Have(box_req). Takes no &local, so a ap that uses it keeps
 // its trailing tail call.
 #define emit_int(R) do { intptr_t _r = (R); \
- if (_r >= fix_min && _r <= fix_max) _res = putfix(_r); \
- else { struct ai_tuple *_v = ini_scalar((struct ai_tuple*) Hp, ai_Z); \
+ if (_r >= fix_min && _r <= fix_max) _res = putcharm(_r); \
+ else { struct ai_vec *_v = ini_scalar((struct ai_vec*) Hp, ai_Z); \
         Hp += box_req; box_put(_v->shape, _r); _res = word(_v); } } while (0)
 // Emit a double result R into `_res` as a rank-0 ai_R box. Same Have(box_req)
 // precondition and TCO discipline as emit_int.
-#define emit_flo(R) do { struct ai_tuple *_v = ini_scalar((struct ai_tuple*) Hp, ai_R); \
+#define emit_flo(R) do { struct ai_vec *_v = ini_scalar((struct ai_vec*) Hp, ai_R); \
  Hp += box_req; flo_put(_v->shape, (R)); _res = word(_v); } while (0)
 
-// Step 8 -- RNG (kernel/rng.c). State is a rank-1 i64 tuple of length 4 (256 bits,
-// xoshiro256++). It rides the existing tuple machinery (no data sentinel) but its
-// payload is treated as raw bytes -- moved by memcpy, never via tuple_get/put_int,
+// Step 8 -- RNG (kernel/rng.c). State is a rank-1 i64 vec of length 4 (256 bits,
+// xoshiro256++). It rides the existing vec machinery (no data sentinel) but its
+// payload is treated as raw bytes -- moved by memcpy, never via vec_get/put_int,
 // which would truncate the 64-bit limbs to intptr_t on 32-bit ports. The fixed
 // 8-byte limbs make a seed reproduce the same sequence on every target.
 #define rng_state_len 4
 #define rng_payload_bytes (rng_state_len * 8)
-#define rng_vec_bytes (sizeof(struct ai_tuple) + sizeof(uintptr_t) + rng_payload_bytes)
+#define rng_vec_bytes (sizeof(struct ai_vec) + sizeof(uintptr_t) + rng_payload_bytes)
 #define rng_vec_req (b2w(rng_vec_bytes))
-// State element kind: pick whichever kind is 8 bytes wide so ai_tuple_bytes (GC) sees
+// State element kind: pick whichever kind is 8 bytes wide so ai_vec_bytes (GC) sees
 // the full 256-bit payload -- Z (one word) on 64-bit, C (two words) on 32-bit.
 #define rng_vt (Bytes == 4 ? ai_C : ai_Z)
-void ai_rng_seed(struct ai_tuple*, uint64_t);   // shape an i64 state tuple + seed it (SplitMix64)
+void ai_rng_seed(struct ai_vec*, uint64_t);   // shape an i64 state vec + seed it (SplitMix64)
 lvm_t lvm_rng_seed, lvm_rand_next, lvm_randf_next;
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
@@ -409,7 +409,7 @@ double strtod(char const *restrict, char **restrict);
 _Static_assert(sizeof(ai_flo_t) == sizeof(uintptr_t), "float box assumes ai_flo_t is pointer-width");
 typedef union { uintptr_t u; ai_flo_t d; } ai_flo_pun;
 static ai_inline ai_flo_t flo_get(word x) {
- return ((ai_flo_pun){ .u = tuple(x)->shape[0] }).d; }
+ return ((ai_flo_pun){ .u = vec(x)->shape[0] }).d; }
 static ai_inline void flo_put(void *p, ai_flo_t v) {
  // NaN collapses to 0.0: love's "undefined is nothing" convention (a type error
  // is nil) reaching the floats. This is the single real-float box-write, so 0/0
@@ -420,20 +420,20 @@ static ai_inline void flo_put(void *p, ai_flo_t v) {
  if (v != v) v = 0;                              // v != v iff v is NaN
  *(uintptr_t*) p = ((ai_flo_pun){ .d = v }).u; }
 
-// Boxed complex access: re in shape[0], im in shape[1] (rank-0, so tuple_data ==
+// Boxed complex access: re in shape[0], im in shape[1] (rank-0, so vec_data ==
 // shape). Same union-pun discipline as flo_get/flo_put so an inlining VM ap
 // keeps its tail call. cplx_put writes both components of an already-shaped box.
 static ai_inline ai_flo_t cplx_re(word x) {
- return ((ai_flo_pun){ .u = tuple(x)->shape[0] }).d; }
+ return ((ai_flo_pun){ .u = vec(x)->shape[0] }).d; }
 static ai_inline ai_flo_t cplx_im(word x) {
- return ((ai_flo_pun){ .u = tuple(x)->shape[1] }).d; }
+ return ((ai_flo_pun){ .u = vec(x)->shape[1] }).d; }
 // |z| of a boxed complex scalar: the L2 norm of (re, im).
 static ai_inline ai_flo_t cplx_mod(word x) {
  ai_flo_t re = cplx_re(x), im = cplx_im(x);
  return ai_sqrt(re * re + im * im); }
 // (the total-order non-positive test for a boxed complex lives on the net now:
 // ai_net returns the value itself and zn_nonpos reads the lex sign -- once.)
-static ai_inline void cplx_put(struct ai_tuple *v, ai_flo_t re, ai_flo_t im) {
+static ai_inline void cplx_put(struct ai_vec *v, ai_flo_t re, ai_flo_t im) {
  v->shape[0] = ((ai_flo_pun){ .d = re }).u;
  v->shape[1] = ((ai_flo_pun){ .d = im }).u; }
 
@@ -443,7 +443,7 @@ static ai_inline void cplx_put(struct ai_tuple *v, ai_flo_t re, ai_flo_t im) {
 // uintptr_t slot. Neither helper takes the address of a stack local, so a
 // VM ap that inlines them keeps its trailing tail call (see the
 // flo_get/flo_put note above and tools/vmret.l).
-static ai_inline intptr_t box_get(word x) { return (intptr_t) tuple(x)->shape[0]; }
+static ai_inline intptr_t box_get(word x) { return (intptr_t) vec(x)->shape[0]; }
 static ai_inline void box_put(void *p, intptr_t v) { *(uintptr_t*) p = (uintptr_t) v; }
 
 // equality comparisons inline the fast identity check
@@ -499,8 +499,8 @@ static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
 // empty SYMBOL died in the one-nothing round: () reads as 0.)
 const struct ai_str ai_str_empty = { .ap = lvm_str, .len = 0 };
 
-static ai_inline struct ai_tuple *ini_scalar(struct ai_tuple *v, enum ai_tuple_type t) {
- return v->ap = lvm_tuple, v->type = t, v->rank = 0, v; }
+static ai_inline struct ai_vec *ini_scalar(struct ai_vec *v, enum ai_vec_type t) {
+ return v->ap = lvm_vec, v->type = t, v->rank = 0, v; }
 
 
 static ai_inline uintptr_t rot(uintptr_t x) {
@@ -544,7 +544,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
   if (g->tasks->m != g->tasks && ++g->yield_ctr >= yield_interval) \
     return Ap(lvm_yield_sw, g)
 #define argn(nom, i) lvm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
-#define quon(nom, v) lvm(nom) { Have1(); Sp -= 1; Sp[0] = putfix(v); Ip += 1; return Continue(); }
+#define quon(nom, v) lvm(nom) { Have1(); Sp -= 1; Sp[0] = putcharm(v); Ip += 1; return Continue(); }
 
 #define Ana(n, ...) struct ai *n(struct ai *g, struct env **c, intptr_t x, ##__VA_ARGS__)
 #define Cata(n, ...) struct ai *n(struct ai *g, struct env **c, ##__VA_ARGS__)
@@ -565,10 +565,10 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #endif
 
 #define s1(i) {{i}, {lvm_ret0}}
-#define s2(i) {{lvm_cur},{.x=putfix(2)},{i}, {lvm_ret0}}
-#define s3(i) {{lvm_cur},{.x=putfix(3)},{i}, {lvm_ret0}}
-#define s4(i) {{lvm_cur},{.x=putfix(4)},{i}, {lvm_ret0}}
-#define s5(i) {{lvm_cur},{.x=putfix(5)},{i}, {lvm_ret0}}
+#define s2(i) {{lvm_cur},{.x=putcharm(2)},{i}, {lvm_ret0}}
+#define s3(i) {{lvm_cur},{.x=putcharm(3)},{i}, {lvm_ret0}}
+#define s4(i) {{lvm_cur},{.x=putcharm(4)},{i}, {lvm_ret0}}
+#define s5(i) {{lvm_cur},{.x=putcharm(5)},{i}, {lvm_ret0}}
 // HARNESS (compile-gated, -DG_FAULT_TEST): __fault deliberately derefs null to
 // raise a hardware fault inside eval -- the one in-eval fault a user can trigger to
 // probe the ai_eval fault barrier (the raw fault nifs lamb/peek/poke/seek are pulled
@@ -709,7 +709,7 @@ static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
 lvm(lvm_absent)  { return Sp[0] = nil, Ip++, Continue(); }                 // 1-arg -> nil
 lvm(lvm_absent2) { return Sp[1] = nil, Sp += 1, Ip++, Continue(); }        // 2-arg -> nil (open)
 static union u const nif_absent[]      = {{lvm_absent}, {lvm_ret0}};
-static union u const nif_absent_open[] = {{lvm_cur}, {.x = putfix(2)}, {lvm_absent2}, {lvm_ret0}};
+static union u const nif_absent_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_absent2}, {lvm_ret0}};
 static struct ai_def const frontend_defaults[] = {
  {"exit", (word) nif_absent}, {"open", (word) nif_absent_open}, {"close", (word) nif_absent},
  {"run", (word) nif_absent},  {"getenv", (word) nif_absent} };
@@ -733,7 +733,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
-  M[4].x = putfix(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
+  M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   g->tasks = tagtext(M, 5);
   // book[nil] = macro (the macro table -- no separate field). Both are on the
   // stack; push the nil key so (sp2,sp1,sp0)=(book,macro,nil) for ai_mapput.
@@ -753,8 +753,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"err", (word) &ai_stderr},
    // fix-max/fix-min: this build's fixnum bounds, exposed so width-specific
    // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
-   {"fix-max", putfix((ai_word)((uintptr_t)-1 >> 2))},
-   {"fix-min", putfix(-(ai_word)((uintptr_t)-1 >> 2) - 1)}, };
+   {"fix-max", putcharm((ai_word)((uintptr_t)-1 >> 2))},
+   {"fix-min", putcharm(-(ai_word)((uintptr_t)-1 >> 2) - 1)}, };
   g = ai_defn(g, def0, countof(def0));
   g = ai_defn(g, def1, countof(def1));
   g = ai_defn(g, frontend_defaults, countof(frontend_defaults));   // overridable by the frontend
@@ -840,12 +840,12 @@ static ai_inline void evac_two(struct ai*g, word const*const p0, word const*cons
  w->a = gcp(g, w->a, p0, t0);
  w->b = gcp(g, w->b, p0, t0); }
 
-static ai_inline void evac_tuple(struct ai*g, word const*const p0, word const*const t0) {
- struct ai_tuple *v = tuple(g->cp);
- g->cp += b2w(ai_tuple_bytes(v));
+static ai_inline void evac_vec(struct ai*g, word const*const p0, word const*const t0) {
+ struct ai_vec *v = vec(g->cp);
+ g->cp += b2w(ai_vec_bytes(v));
  if (v->type != ai_O) return;                 // numeric vecs are GC leaves (flat payload)
- word *e = (word*) tuple_data(v);              // object tuple: forward each live element word
- uintptr_t n = tuple_nelem(v);
+ word *e = (word*) vec_data(v);              // object vec: forward each live element word
+ uintptr_t n = vec_nelem(v);
  while (n--) e[n] = gcp(g, e[n], p0, t0); }
 
 static ai_inline void evac_str(struct ai*g, word const*const p0, word const*const t0) {
@@ -866,7 +866,7 @@ static ai_inline void evac_text(struct ai *g, word const *const p0, word const*c
 static ai_inline void evac_data(struct ai *g, word const *const p0, word const*const t0) {
   switch (typ(g->cp)) {
    default: __builtin_trap();
-   case KTuple: return evac_tuple(g, p0, t0);
+   case KVec: return evac_vec(g, p0, t0);
    case KSym: return evac_sym(g, p0, t0);
    case KTwo: return evac_two(g, p0, t0);
    case KString: return evac_str(g, p0, t0);
@@ -897,7 +897,7 @@ static ai_noinline word symbols_rebuild(struct ai *h, struct ai *g) {
   uintptr_t i = hash(h, nk) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
   ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
- b[1].x = putfix(n);
+ b[1].x = putcharm(n);
  return (word) hd; }
 
 static ai_inline void run_finalizers(struct ai*g) {
@@ -997,9 +997,9 @@ static ai_inline word copy_two(struct ai*g, struct ai_pair *src, word const *con
  src->ap = (lvm_t*) dst;
  return word(dst); }
 
-static ai_inline word copy_tuple(struct ai*g, struct ai_tuple *src, word const *const p0, word const*const t0) {
- uintptr_t bytes = ai_tuple_bytes(src);
- struct ai_tuple *dst = bump(g, b2w(bytes));
+static ai_inline word copy_vec(struct ai*g, struct ai_vec *src, word const *const p0, word const*const t0) {
+ uintptr_t bytes = ai_vec_bytes(src);
+ struct ai_vec *dst = bump(g, b2w(bytes));
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
@@ -1029,7 +1029,7 @@ static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0
  switch (typ(src)) {
   default: __builtin_trap();
   case KTwo: return copy_two(g, two(src), p0, t0);
-  case KTuple: return copy_tuple(g, tuple(src), p0, t0);
+  case KVec: return copy_vec(g, vec(src), p0, t0);
   case KSym: return copy_sym(g, sym(src), p0, t0);
   case KString: return copy_str(g, str(src), p0, t0);
   case KBig: return copy_big(g, (struct ai_big*) src, p0, t0); } }
@@ -1049,7 +1049,7 @@ static ai_inline word copy_text(struct ai *g, union u *src, word const *const p0
 
 static ai_noinline intptr_t gcp(struct ai *g, word x, word const *p0, word const *t0) {
  // if it's a number or it's outside managed memory then return it
- if (fixp(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
+ if (charmp(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
  union u *src = cell(x);
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer
@@ -1151,7 +1151,7 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  return g; }
 
 static Cata(c1) {
- uintptr_t l = getfix((*c)->len);
+ uintptr_t l = getcharm((*c)->len);
  // a lambda carries its source \-expr: reserve one extra leading word for it so
  // it sits at value[-1] (the printer's discriminator) and rides inside the text
  // span (head = src word) for free GC tracing. top-level/aux texts have no src.
@@ -1176,7 +1176,7 @@ static Cata(c1_cond_pop_exit) { return
 
 static Cata(c1_apn) {
  word arity = pop1(g);
- if (arity == putfix(1)) {
+ if (arity == putcharm(1)) {
   if (Kp[0].ap == lvm_ret) Kp[0].ap = lvm_tap;
   else Kp -= 1, Kp[0].ap = lvm_ap; }
  else {
@@ -1212,7 +1212,7 @@ static Cata(c1_recv) {
 static Cata(c1_ar, lvm_t *i, word ar) { return
  Kp -= 2,
  Kp[0].ap = i,
- Kp[1].x = putfix(ar),
+ Kp[1].x = putcharm(ar),
  pull(g, c); }
 
 static Cata(c1_cur) {
@@ -1368,7 +1368,7 @@ static Ana(ana_v) {
    return g; }
   // let binding in the *current* scope -> a direct stack slot.
   if (d == *c && memq(g, d->stack, x)) return
-    c0_ix(g, c, lvm_arg, putfix(lidx(g, x, d->stack)));
+    c0_ix(g, c, lvm_arg, putcharm(lidx(g, x, d->stack)));
   // a let binding, closure var, or lambda arg -- possibly from an enclosing
   // scope. If enclosing, import it into this scope's free-variable (imps) list
   // so the offset c1_var emits is valid in *this* frame, not the defining one;
@@ -1391,7 +1391,7 @@ static Cata(c1_var) {
 out:
  return Kp -= 2,
         Kp[0].ap = lvm_arg,
-        Kp[1].x = putfix(i),
+        Kp[1].x = putcharm(i),
         pull(g, c); }
 
 static ai_noinline Ana(analyze) {
@@ -1478,7 +1478,7 @@ static struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x) {
   ca = llen(x),
   va =
    imfp && cell(g->sp[2])->ap == lvm_cur ?
-    getfix(cell(g->sp[2])[1].x) :
+    getcharm(cell(g->sp[2])[1].x) :
     1;
  bool b1p = ca == 1 && imfp && cell(g->sp[2])[1].ap == lvm_ret0,
       anp = va == ca && ca > 1,
@@ -1502,12 +1502,12 @@ static struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x) {
   if (anp) { // r2l 1 n-ary ap
    g = ana_ap_r2l(g, c, x),
    incl(*c, 2),
-   g = ai_push(g, 2, c1_apn, putfix(ca));
+   g = ai_push(g, 2, c1_apn, putcharm(ca));
    if (ai_ok(g)) while (ca--) (*c)->stack = B((*c)->stack); }
   else while (twop(x)) // l2r n 1-ary ap
    g = analyze(g, c, A(x)),
    incl(*c, 2),
-   g = ai_push(g, 2, c1_apn, putfix(1)),
+   g = ai_push(g, 2, c1_apn, putcharm(1)),
    x = B(x);
   um(g), (*c)->stack = B((*c)->stack); }
 
@@ -1672,7 +1672,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  return
   (*b)->stack = e,
   incl(*b, 2),
-  g = ai_push(g, 2, c1_apn, putfix(l)),
+  g = ai_push(g, 2, c1_apn, putcharm(l)),
   forget(); }
 
 static word ldels(struct ai *g, word lam, word l) {
@@ -1696,9 +1696,9 @@ lvm(lvm_eval) { return Ip++, Pack(g),
 
 ai_noinline struct ai *ai_evals_(struct ai*g, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
- struct ti i = {{lvm_port_io, putfix(-1), putfix(EOF), putfix(false)}, t, 0};
+ struct ti i = {{lvm_port_io, putcharm(-1), putcharm(EOF), putcharm(false)}, t, 0};
  g = push0(pushq(push0(ai_eval(ai_reads(g, (void*) &i)))));
- i.t = s, i.i = 0, i.io.ungetc_buf = putfix(EOF), i.io.eof_seen = putfix(false);
+ i.t = s, i.i = 0, i.io.ungetc_buf = putcharm(EOF), i.io.eof_seen = putcharm(false);
  return ai_pop(ai_eval(gxr(gxl(gxr(gxl(ai_reads(g, (void*) &i)))))), 1); }
 
 // ============================================================================
@@ -1793,7 +1793,7 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
   word h = ts ? ai_mapget(c, nil, word(ts), c->book) : nil;
   if (!ai_nilp(c, h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
-   sp[0] = putfix(s), sp[1] = h;
+   sp[0] = putcharm(s), sp[1] = h;
    sp[2] = a, sp[3] = b;
    sp[4] = word(K);
    c->ip = (union u*) help_drive;
@@ -1828,7 +1828,7 @@ static struct ai *ai_eval_fault_raise(struct ai *c, int sig) {
   struct ai *h = ai_strof((struct ai *) vc, "fault");
   if (ai_ok(h)) { h = intern(h); if (ai_ok(h)) vc = ai_core_of(h), tag = ai_pop1((struct ai *) vc); } }
  ai_fault_depth--; memcpy(&ai_fault_jb, &prev, sizeof prev);
- return ai_raise((struct ai *) vc, ai_status_scare, tag, putfix(sig), help_scare_k); }
+ return ai_raise((struct ai *) vc, ai_status_scare, tag, putcharm(sig), help_scare_k); }
 #endif
 struct ai *ghelp2(struct ai *g, enum ai_status s) {
  struct ai *c = ai_core_of(g);
@@ -1932,7 +1932,7 @@ static lvm(lvm_numap) {
 static lvm(lvm_numtap) {
  NumapHave(lvm_numtap);
  word h = resolve_hot(g, "num-ap", 6);
- word fs = getfix(Ip[1].x), n = Sp[1], x = Sp[0], *dst = &Sp[fs + 2] - 3, ret = Sp[fs + 2];
+ word fs = getcharm(Ip[1].x), n = Sp[1], x = Sp[0], *dst = &Sp[fs + 2] - 3, ret = Sp[fs + 2];
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
@@ -1966,14 +1966,14 @@ lvm(lvm_ap) {
 lvm(lvm_tap) {
  if (oddp(Sp[1])) return Ap(lvm_numtap, g);         // fixnum operator -> num-ap, deliver to caller
  intptr_t x = Sp[0], j = Sp[1];
- Sp += getfix(Ip[1].x) + 1;
+ Sp += getcharm(Ip[1].x) + 1;
  Ip = cell(j), Sp[0] = x;
  YieldCheck();
  return Continue(); }
 
 // apply to multiple arguments
 lvm(lvm_apn) {
- size_t n = getfix(Ip[1].x);
+ size_t n = getcharm(Ip[1].x);
  union u *r = Ip + 2; // return address
  // this instruction is only emitted when the callee is known to be a function
  // so putting a value off the stack into Ip is safe. the +2 is cause we leave
@@ -1985,8 +1985,8 @@ lvm(lvm_apn) {
 
 // tail call
 lvm(lvm_tapn) {
- size_t n = getfix(Ip[1].x),
-        r = getfix(Ip[2].x);
+ size_t n = getcharm(Ip[1].x),
+        r = getcharm(Ip[2].x);
  Ip = cell(Sp[n]) + 2;
  word *o = Sp;
  for (Sp += r + 1; n--; Sp[n] = o[n]);
@@ -1995,7 +1995,7 @@ lvm(lvm_tapn) {
 
 // return
 lvm(lvm_ret) {
- word n = getfix(Ip[1].x) + 1;
+ word n = getcharm(Ip[1].x) + 1;
  return Ip = cell(Sp[n]), Sp[n] = Sp[0], Sp += n, Continue(); }
 
 lvm(lvm_ret0) { return
@@ -2053,8 +2053,8 @@ static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
 // through yield_sw and filling the heap with stale task nodes.
 static ai_inline union u *find_runnable(union u *head, uintptr_t now) {
  for (union u *n = head->m; n != head; n = n->m)
-  if (n[1].m->ap != lvm_task_exit && (uintptr_t) getfix(n[3].x) <= now) {
-   int wf = (int) getfix(n[4].x);
+  if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
+   int wf = (int) getcharm(n[4].x);
    if (wf < 0 || ai_ready(wf)) return n; }
  return NULL; }
 
@@ -2064,9 +2064,9 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
  if (my_wait_fd >= 0) fds[nfds++] = my_wait_fd;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
   if (n[1].m->ap != lvm_task_exit) {
-   uintptr_t wa = (uintptr_t) getfix(n[3].x);
+   uintptr_t wa = (uintptr_t) getcharm(n[3].x);
    if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
-   int wf = (int) getfix(n[4].x);
+   int wf = (int) getcharm(n[4].x);
    if (wf >= 0 && nfds < ai_wait_fds_max) fds[nfds++] = wf; }
  if (!min_wake && !nfds) return NULL;
  uintptr_t now = ai_clock();
@@ -2108,8 +2108,8 @@ lvm(lvm_yield_sw) {
  N[0].m = g->tasks->m;
  N[1].m = Ip;
  N[2].x = g->tasks[2].x;
- N[3].x = putfix((intptr_t) my_wake);
- N[4].x = putfix(my_wait_fd);
+ N[3].x = putcharm((intptr_t) my_wake);
+ N[4].x = putcharm(my_wait_fd);
  memcpy(N + 5, Sp, my_height * sizeof(word));
  prev->m = tagtext(N, 5 + my_height);
  g->yield_ctr = 0;
@@ -2130,9 +2130,9 @@ lvm(lvm_spawn) {
  uintptr_t pid = ++g->next_serial;   // a pid is a fresh identity: drawn from the mint stream
  N[0].m = g->tasks->m;
  N[1].m = (union u*) spawn_body;
- N[2].x = Sp[1] = putfix(pid);
+ N[2].x = Sp[1] = putcharm(pid);
  N[3].x = nil;         // wake_at: sentinel for "always runnable"
- N[4].x = putfix(-1);  // wait_fd: -1 = not waiting on I/O
+ N[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O
  N[5].x = x;
  N[6].x = fn;
  g->tasks->m = tagtext(N, 7);
@@ -2140,9 +2140,9 @@ lvm(lvm_spawn) {
 
 lvm(lvm_wait) {
  word pid_arg = Sp[0], ret = nil;
- intptr_t target = getfix(pid_arg);
+ intptr_t target = getcharm(pid_arg);
  for (union u *node = g->tasks->m; node != g->tasks; node = node->m) {
-  if (getfix(node[2].x) != target) continue;
+  if (getcharm(node[2].x) != target) continue;
   if (node[1].m->ap == lvm_task_exit) {
    // dormant: dormant task's stack is just [retval] at node[5]
    ret = node[5].x;
@@ -2161,10 +2161,10 @@ lvm(lvm_wait) {
  return *Sp = ret, Ip++, Continue(); }
 
 lvm(lvm_donep) {
- word pid_arg = Sp[0], result = putfix(1);
- intptr_t target = getfix(pid_arg);
+ word pid_arg = Sp[0], result = putcharm(1);
+ intptr_t target = getcharm(pid_arg);
  for (union u *node = g->tasks->m; node != g->tasks; node = node->m)
-  if (getfix(node[2].x) == target) {
+  if (getcharm(node[2].x) == target) {
    if (node[1].m->ap != lvm_task_exit) result = nil;
    break; }
  Sp[0] = result;
@@ -2173,12 +2173,12 @@ lvm(lvm_donep) {
 
 lvm(lvm_hush) {
  word pid_arg = Sp[0], result = nil;
- intptr_t target = getfix(pid_arg);
+ intptr_t target = getcharm(pid_arg);
  union u *prev = g->tasks;
  for (union u *node = prev->m; node != g->tasks; prev = node, node = node->m)
-  if (getfix(node[2].x) == target) {
+  if (getcharm(node[2].x) == target) {
    prev->m = node->m;
-   result = putfix(1);
+   result = putcharm(1);
    break; }
  Sp[0] = result;
  Ip += 1;
@@ -2188,14 +2188,14 @@ lvm(lvm_sleep) {
  word n = Sp[0];
  Sp[0] = nil;
  Ip += 1;
- if (!fixp(n) || getfix(n) <= 0) return Continue();
- g->next_wake_at = (uintptr_t) ai_clock() + getfix(n);
+ if (!charmp(n) || getcharm(n) <= 0) return Continue();
+ g->next_wake_at = (uintptr_t) ai_clock() + getcharm(n);
  return Ap(lvm_yield_sw, g); }
 
 
 lvm(lvm_jump) { return Ip = Ip[1].m, Continue(); }
 // The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
-// language falsy predicate so an all-zero tuple (boxed 0.0, zero int box,
+// language falsy predicate so an all-zero vec (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
 lvm(lvm_cond) { return Ip = ai_nilp(g, *Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 lvm(lvm_unc) {
@@ -2209,12 +2209,12 @@ lvm(lvm_cur) {
  Have(S + 2);
  union u *k = (union u*) Hp, *j = k;
  Hp += S;
- size_t n = getfix(Ip[1].x);
+ size_t n = getcharm(Ip[1].x);
  // FIXME this does not always need to be a runtime check
  if (n > 2) Hp += 2,
             j += 2,
             k[0].ap = lvm_cur,
-            k[1].x = putfix(n - 1);
+            k[1].x = putcharm(n - 1);
  return
   j[0].ap = lvm_unc,
   j[1].x = *Sp++,
@@ -2247,13 +2247,13 @@ lvm(lvm_zp) {
 // a buf (byte-identical body, kept distinct by ai_noicf -- see lvm_buf).
 lvm(lvm_port_io) {
   Ip = cell(*++Sp);
-  *Sp = putfix(1);
+  *Sp = putcharm(1);
   return Continue(); }
 
 // push a value from the stack
 lvm(lvm_arg) {
  Have1();
- Sp[-1] = Sp[getfix(Ip[1].x)];
+ Sp[-1] = Sp[getcharm(Ip[1].x)];
  Sp -= 1;
  Ip += 2;
  return Continue(); }
@@ -2266,10 +2266,10 @@ lvm(lvm_arg) {
 lvm(lvm_argap) {
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, resume at Ip+2
   Have1();
-  Sp[-1] = Sp[getfix(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; resume now Ip+2
+  Sp[-1] = Sp[getcharm(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; resume now Ip+2
   return Ap(lvm_numap, g); }
  Have1();
- Sp[-1] = Sp[getfix(Ip[1].x)];
+ Sp[-1] = Sp[getcharm(Ip[1].x)];
  Sp -= 1;
  union u *k = cell(Sp[1]); Sp[1] = word(Ip + 2), Ip = k;
  YieldCheck();
@@ -2296,13 +2296,13 @@ lvm(lvm_quoteap) {
 lvm(lvm_argtap) {
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, deliver to caller
   Have1();
-  Sp[-1] = Sp[getfix(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; fs operand now Ip[1]
+  Sp[-1] = Sp[getcharm(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; fs operand now Ip[1]
   return Ap(lvm_numtap, g); }
  Have1();
- Sp[-1] = Sp[getfix(Ip[1].x)];
+ Sp[-1] = Sp[getcharm(Ip[1].x)];
  Sp -= 1;
  intptr_t x = Sp[0], j = Sp[1];
- Sp += getfix(Ip[2].x) + 1;
+ Sp += getcharm(Ip[2].x) + 1;
  Ip = cell(j), Sp[0] = x;
  YieldCheck();
  return Continue(); }
@@ -2318,19 +2318,19 @@ lvm(lvm_trim) { return
  clip(g, cell(Sp[0])), Ip++, Continue(); }
 
 lvm(lvm_seek) { return
- Sp[1] = word(cell(Sp[1]) + getfix(Sp[0])),
+ Sp[1] = word(cell(Sp[1]) + getcharm(Sp[0])),
  Sp++, Ip++, Continue(); }
 
 lvm(lvm_peek) { return
- Sp[1] = (cell(Sp[1]) + getfix(Sp[0]))->x,
+ Sp[1] = (cell(Sp[1]) + getcharm(Sp[0]))->x,
  Sp++, Ip++, Continue(); }
 
 lvm(lvm_poke) {
- union u *c = cell(Sp[2]) + getfix(Sp[0]);
+ union u *c = cell(Sp[2]) + getcharm(Sp[0]);
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
 lvm(lvm_lamb) {
- size_t n = getfix(Sp[0]);
+ size_t n = getcharm(Sp[0]);
  Have(n + Width(struct ai_tag));
  union u *k = (union u*) Hp;
  Hp += n + Width(struct ai_tag);
@@ -2339,7 +2339,7 @@ lvm(lvm_lamb) {
 
 // ceil a positive measure into a fixnum, saturating at fix_max. ceil (not floor)
 // so the result is 0 *only* when m is exactly 0 -- $ then doubles as a zero test:
-// (= 0 ($ x)) iff x is nothing. Never overflows putfix's tag.
+// (= 0 ($ x)) iff x is nothing. Never overflows putcharm's tag.
 static ai_inline intptr_t len_sat(ai_flo_t m) {
   if (m >= (ai_flo_t) fix_max) return fix_max;
   intptr_t i = (intptr_t) m;                    // trunc toward 0 (m >= 0)
@@ -2356,11 +2356,11 @@ static ai_inline intptr_t len_sat(ai_flo_t m) {
 // phases annihilate by VECTOR cancellation, not by the order's tiebreak. The
 // arrangement does not matter: a packed ai_C array and the o-list of the same
 // values net the same sum, and net(asum v) = net(v) by construction.
-//   ai_C  packed (re,im) float pairs at tuple_data -> componentwise sum
+//   ai_C  packed (re,im) float pairs at vec_data -> componentwise sum
 //   ai_O  object words -> each element's own ai_net (recursive; depth bounded by nesting)
-//   ai_Z/ai_R  the element values directly (tuple_get_flo), imaginary part 0
+//   ai_Z/ai_R  the element values directly (vec_get_flo), imaginary part 0
 static struct ai_zn ai_net(struct ai *g, word x) {
-  if (fixp(x)) return zn((ai_flo_t) getfix(x), 0);               // fixnum: its value
+  if (charmp(x)) return zn((ai_flo_t) getcharm(x), 0);               // fixnum: its value
   if (bufp(x)) { struct ai_str *b = buf_str(x); ai_flo_t t = 0;   // hot chars: Σ charms, like a string
     for (uintptr_t i = 0; i < b->len; i++) t += (uint8_t) b->bytes[i];
     return zn(t, 0); }
@@ -2379,20 +2379,20 @@ static struct ai_zn ai_net(struct ai *g, word x) {
     case KBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
     case KSym: return zn((ai_flo_t) pin_sym(g, x), 0);           // a symbol nets its SPELLING's charms
                                                                 // (a mint: the distinct nothing)
-    case KTuple: { struct ai_tuple *v = tuple(x);                 // boxed scalar or rank-n array
-      uintptr_t i, n = tuple_nelem(v);
+    case KVec: { struct ai_vec *v = vec(x);                 // boxed scalar or rank-n array
+      uintptr_t i, n = vec_nelem(v);
       if (!v->rank) {                                            // rank-0 scalar: its value
         if (v->type == ai_C) return zn(cplx_re(x), cplx_im(x));   // a complex nets ITSELF
         if (v->type == ai_R) return zn(flo_get(x), 0);
         return zn((ai_flo_t) box_get(x), 0); }                    // ai_Z wide-int box
       struct ai_zn s = zn(0, 0);                                  // rank>=1 array -> Σ elem
-      if (v->type == ai_C) { ai_flo_t *d = tuple_data(v);
+      if (v->type == ai_C) { ai_flo_t *d = vec_data(v);
         for (i = 0; i < n; i++) s.re += d[2*i], s.im += d[2*i+1];
         return s; }
       if (v->type == ai_O)
-        for (i = 0; i < n; i++) { struct ai_zn e = ai_net(g, tuple_get_obj(v, i));
+        for (i = 0; i < n; i++) { struct ai_zn e = ai_net(g, vec_get_obj(v, i));
           s.re += e.re, s.im += e.im; }
-      else for (i = 0; i < n; i++) s.re += tuple_get_flo(v, i);
+      else for (i = 0; i < n; i++) s.re += vec_get_flo(v, i);
       return s; } } }
 // The $ operator: the net observed once -- max(0, ceil) of its ORDER-SIGNED
 // MAGNITUDE (a real net is its own magnitude, exactly; a phaseful net takes
@@ -2400,11 +2400,11 @@ static struct ai_zn ai_net(struct ai *g, word x) {
 // rank: a negative real, a non-positive complex, a list or array whose net
 // sums <= 0 in the order all measure 0. Lockstep with ai_nilp.
 static intptr_t ai_pin(struct ai *g, word x) {
-  if (fixp(x)) { intptr_t n = getfix(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil), exact
+  if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil), exact
   struct ai_zn z = ai_net(g, x);
   if (zn_nonpos(z)) return 0;
   return len_sat(z.im == 0 ? z.re : ai_sqrt(z.re * z.re + z.im * z.im)); }
-lvm(lvm_pin) { Sp[0] = putfix(ai_pin(g, Sp[0])); Ip += 1; return Continue(); }
+lvm(lvm_pin) { Sp[0] = putcharm(ai_pin(g, Sp[0])); Ip += 1; return Continue(); }
 
 // ============================================================================
 // io
@@ -2421,7 +2421,7 @@ lvm(lvm_pin) { Sp[0] = putfix(ai_pin(g, Sp[0])); Ip += 1; return Continue(); }
 //   * to_putc itself re-derives o = g->io (GC-traced) and copy-then-swaps the
 //     grown buffer, so the swap is atomic across its own str0 GC.
 //   * scalar decompositions (re/im, float) are read to C locals BEFORE any zputc
-//     (ioput_tuple_scalar_complex, ioput_carr_elem).
+//     (ioput_vec_scalar_complex, ioput_carr_elem).
 //   * pure C-data emitters hold no heap operand, so need no park: ioputcs/ioputn/
 //     ioprintf (integer + char formats only -- no %s).
 //   * lvm edges Pack/Unpack and re-read bytes each step (lvm_dot/_fputs/_fputc),
@@ -2433,7 +2433,7 @@ lvm(lvm_pin) { Sp[0] = putfix(ai_pin(g, Sp[0])); Ip += 1; return Continue(); }
 // rebuild), so even ioput_fn_body -> lam_canon keeps the surrounding op atomic.
 static ai_inline bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io; }
 static ai_inline struct ai_port_vt const *port_vt(word fd_tagged) {
- intptr_t fd = getfix(fd_tagged);
+ intptr_t fd = getcharm(fd_tagged);
  return fd >= 0 ? &ai_fd_port_vt : &synth[-(fd + 1)]; }
 static ai_inline struct ai *zgetc(struct ai*g)          { return ai_ok(g) ? port_vt(g->io->fd)->getc(g) : g; }
 static ai_inline struct ai *zungetc(struct ai*g, int c) { return ai_ok(g) ? port_vt(g->io->fd)->ungetc(g, c) : g; }
@@ -2446,7 +2446,7 @@ static struct ai *ai_dtoa2(struct ai*, ai_flo_t);
 static struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x);
 
 static struct ai *noop_getc(struct ai *g) {
- ai_core_of(g)->io->eof_seen = putfix(true);
+ ai_core_of(g)->io->eof_seen = putcharm(true);
  return g->b = EOF, g; }
 static struct ai *noop_ungetc(struct ai *g, int c) { (void) c; return g; }
 static struct ai *noop_eof(struct ai *g) { return g->b = true, g; }
@@ -2455,37 +2455,37 @@ static struct ai *noop_flush(struct ai *g) { return g; }
 
 static struct ai *ti_eof(struct ai*g) {
  struct ti *i = (struct ti*) g->io;
- return g->b = (getfix(i->io.ungetc_buf) == EOF) && getfix(i->io.eof_seen), g; }
+ return g->b = (getcharm(i->io.ungetc_buf) == EOF) && getcharm(i->io.eof_seen), g; }
 
 static struct ai *ti_getc(struct ai*g) {
  struct ti *i = (struct ti*) g->io;
- if (getfix(i->io.ungetc_buf) != EOF) {
-  int c = getfix(i->io.ungetc_buf);
-  i->io.ungetc_buf = putfix(EOF);
+ if (getcharm(i->io.ungetc_buf) != EOF) {
+  int c = getcharm(i->io.ungetc_buf);
+  i->io.ungetc_buf = putcharm(EOF);
   return g->b = c, g; }
- if (!i->t[i->i]) { i->io.eof_seen = putfix(true); return g->b = EOF, g; }
+ if (!i->t[i->i]) { i->io.eof_seen = putcharm(true); return g->b = EOF, g; }
  return g->b = i->t[i->i++], g; }
 
 static struct ai *ti_ungetc(struct ai*g, int c) {
  struct ti *i = (struct ti*) g->io;
- i->io.ungetc_buf = putfix(c);
- i->io.eof_seen = putfix(false);
+ i->io.ungetc_buf = putcharm(c);
+ i->io.eof_seen = putcharm(false);
  return g->b = c, g; }
 
 static struct ai *ci_getc(struct ai *g) {
  struct ci *i = (struct ci*) g->io;
- if (getfix(i->io.ungetc_buf) != EOF) {
-  int c = getfix(i->io.ungetc_buf);
-  i->io.ungetc_buf = putfix(EOF);
+ if (getcharm(i->io.ungetc_buf) != EOF) {
+  int c = getcharm(i->io.ungetc_buf);
+  i->io.ungetc_buf = putcharm(EOF);
   return g->b = c, g; }
- if (!twop(i->head)) { i->io.eof_seen = putfix(true); return g->b = EOF, g; }
- int c = getfix(A(i->head));
+ if (!twop(i->head)) { i->io.eof_seen = putcharm(true); return g->b = EOF, g; }
+ int c = getcharm(A(i->head));
  i->head = B(i->head);
  return g->b = c, g; }
 
 static struct ai *to_putc(struct ai *g, int c) {
  struct to *o = (struct to*) g->io;
- uintptr_t i = getfix(o->i);
+ uintptr_t i = getcharm(o->i);
  if (i >= len(o->buf)) {
   uintptr_t new_cap = len(o->buf) * 2;
   g = str0(g, new_cap);
@@ -2496,14 +2496,14 @@ static struct ai *to_putc(struct ai *g, int c) {
   o->buf = nb;
   g->sp++; }
  txt(o->buf)[i] = c;
- o->i = putfix(i + 1);
+ o->i = putcharm(i + 1);
  return g; }
 static struct ai *to_flush(struct ai *g) { return g; }
 
 struct ai_port_vt const synth[] = {
  /* fd = -1, ti: read-only string source */
  { ti_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush },
- /* fd = -2, to: write-only tuple sink   */
+ /* fd = -2, to: write-only vec sink   */
  { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush   },
  /* fd = -3, closed port (post-close)  */
  { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush },
@@ -2516,7 +2516,7 @@ lvm(lvm_fputc) {
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
-  if (!ai_ok(g = zputc(g, getfix(g->sp[1])))) return ghelp(g);
+  if (!ai_ok(g = zputc(g, getcharm(g->sp[1])))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
@@ -2573,7 +2573,7 @@ static struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o);
 lvm(lvm_fputbn) {
  if (iop(Sp[0])) {
    Pack(g);
-   if (!ai_ok(g = gfputbn(g, getfix(Sp[1]), getfix(Sp[2]), (struct ai_io*) Sp[0]))) return ghelp(g);
+   if (!ai_ok(g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct ai_io*) Sp[0]))) return ghelp(g);
    Unpack(g);
    Sp[2] = Sp[1]; }
  return Sp += 2, Ip++, Continue(); }
@@ -2680,19 +2680,19 @@ static ai_inline struct ai*ioput_two(struct ai*g, word _, uintptr_t off) {
 // Print element i of the array parked at g->sp[0] as a bare number (float ->
 // ai_dtoa, integer -> base 10). The element value is read before any ioputc, so
 // a GC during printing (string-port growth) that relocates the array is safe;
-// callers re-fetch tuple(g->sp[0]) each call for the same reason.
-static struct ai *ioput_tuple_elem(struct ai *g, uintptr_t i) {
- struct ai_tuple *v = tuple(g->sp[0]);
+// callers re-fetch vec(g->sp[0]) each call for the same reason.
+static struct ai *ioput_vec_elem(struct ai *g, uintptr_t i) {
+ struct ai_vec *v = vec(g->sp[0]);
  if (v->type >= ai_R)
-  return ai_dtoa2(g, tuple_get_flo(v, i));
- return ioputn(g, tuple_get_int(v, i), 10); }
+  return ai_dtoa2(g, vec_get_flo(v, i));
+ return ioputn(g, vec_get_int(v, i), 10); }
 
 // Print element i of a packed ai_C array (at g->sp[0]) as ~(re im) -- the same
 // read-back form as a complex scalar (the `~` reader macro splices into (wave …)).
 // re/im are copied to C locals before any ioputc/ai_dtoa2 (which may grow a string
 // port and relocate the array).
 static struct ai *ioput_carr_elem(struct ai *g, uintptr_t i) {
- ai_flo_t *fp = tuple_data(tuple(g->sp[0]));
+ ai_flo_t *fp = vec_data(vec(g->sp[0]));
  ai_flo_t re = fp[2*i], im = fp[2*i+1];
  g = ioprintf(g, "~("); g = ai_dtoa2(g, re); g = ioputc(g, ' ');
  g = ai_dtoa2(g, im); return ioputc(g, ')'); }
@@ -2700,7 +2700,7 @@ static struct ai *ioput_carr_elem(struct ai *g, uintptr_t i) {
 // Print a rank>=1 array (g->sp[0]) as a constructor expression that reads back to
 // the same array -- always a SURFACE form, never the typed `arr` call. A rank-1
 // array uses the terse `@(a b …)` sugar (the `@` reader macro splices into
-// `(tuple a b …)`); rank>=2 uses `(array '(shape) elem …)`. Either way a-type
+// `(vec a b …)`); rank>=2 uses `(array '(shape) elem …)`. Either way a-type
 // re-infers the element type from the printed elements: bare numbers -> z/r,
 // ~(re im) -> c, anything else -> o, with symbol/pair elements quoted so eval
 // reconstructs them. (An o array of self-evaluating scalars re-reads at its
@@ -2710,14 +2710,14 @@ static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off);
 
 static struct ai *ioput_arr_elem(struct ai *g, uintptr_t i, uintptr_t type, uintptr_t off) {
  if (type == ai_C) return ioput_carr_elem(g, i);
- if (type != ai_O) return ioput_tuple_elem(g, i);
- word e = tuple_get_obj(tuple(g->sp[0]), i);           // kind test only; re-fetched below
+ if (type != ai_O) return ioput_vec_elem(g, i);
+ word e = vec_get_obj(vec(g->sp[0]), i);           // kind test only; re-fetched below
  if (symp(e) || twop(e)) g = ioputc(g, '\'');          // quote, so eval rebuilds the element
- return ioputx(g, tuple_get_obj(tuple(g->sp[0]), i), off); }
+ return ioputx(g, vec_get_obj(vec(g->sp[0]), i), off); }
 
 static struct ai *ioput_arr(struct ai *g, uintptr_t off) {
- struct ai_tuple *v = tuple(g->sp[0]);
- uintptr_t rank = v->rank, type = v->type, nelem = tuple_nelem(v);
+ struct ai_vec *v = vec(g->sp[0]);
+ uintptr_t rank = v->rank, type = v->type, nelem = vec_nelem(v);
  if (rank == 1 && nelem) {                             // terse rank-1: @(…)
   g = ioputc(g, '@'); g = ioputc(g, '(');
   for (uintptr_t i = 0; ai_ok(g) && i < nelem; i++) {
@@ -2730,19 +2730,19 @@ static struct ai *ioput_arr(struct ai *g, uintptr_t off) {
  g = ioprintf(g, "(array '(");                         // (array '(shape) elem …)
  for (uintptr_t i = 0; ai_ok(g) && i < rank; i++) {
   if (i) g = ioputc(g, ' ');
-  g = ioputn(g, tuple(g->sp[0])->shape[i], 10); }
+  g = ioputn(g, vec(g->sp[0])->shape[i], 10); }
  g = ioputc(g, ')');
  for (uintptr_t i = 0; ai_ok(g) && i < nelem; i++) {
   g = ioputc(g, ' '); g = ioput_arr_elem(g, i, type, off); }
  return ai_ok(g) ? ioputc(g, ')') : g; }
 
-static ai_inline struct ai*ioput_tuple_scalar_float(struct ai*g) {
+static ai_inline struct ai*ioput_vec_scalar_float(struct ai*g) {
  return ai_dtoa2(g, (ai_flo_t) flo_get(g->sp[0])); }
 
 // complex -> ~(re im); round-trips by re-evaluation (the `~` reader macro splices
 // into (wave re im), and wave is a nif). re/im are read into C locals up front so a
 // GC during ai_dtoa2 can't strand the operand.
-static ai_inline struct ai*ioput_tuple_scalar_complex(struct ai*g) {
+static ai_inline struct ai*ioput_vec_scalar_complex(struct ai*g) {
  ai_flo_t re = cplx_re(g->sp[0]), im = cplx_im(g->sp[0]);
  g = ioprintf(g, "~(");
  g = ai_dtoa2(g, re);
@@ -2750,14 +2750,13 @@ static ai_inline struct ai*ioput_tuple_scalar_complex(struct ai*g) {
  g = ai_dtoa2(g, im);
  return ioputc(g, ')'); }
 
-static ai_inline struct ai*ioput_tuple(struct ai*g, word _, uintptr_t off) {
- intptr_t rank = tuple(_)->rank, type = tuple(_)->type;
+static ai_inline struct ai*ioput_vec(struct ai*g, word _, uintptr_t off) {
+ intptr_t rank = vec(_)->rank, type = vec(_)->type;
  if (!ai_ok(g = ai_push(g, 1, _))) return g;
- if (rank == 0 && type == ai_R) g = ioput_tuple_scalar_float(g);
+ if (rank == 0 && type == ai_R) g = ioput_vec_scalar_float(g);
  else if (rank == 0 && type == ai_Z) g = ioputn(g, box_get(g->sp[0]), 10);
- else if (rank == 0 && type == ai_C) g = ioput_tuple_scalar_complex(g);
+ else if (rank == 0 && type == ai_C) g = ioput_vec_scalar_complex(g);
  else if (rank >= 1) g = ioput_arr(g, off);
- else g = ioprintf(g, ",tuple@%z:%d.%d", tuple(g->sp[0]), type, rank);
  return ai_pop(g, 1); }
 
 static ai_inline struct ai*ioput_str(struct ai*g, word _) {
@@ -2942,7 +2941,7 @@ static struct ai *lam_canon(struct ai *g) {
  word r = lam_build(g, g->sp[D], 0, 0, D);                     // alloc-free, GC-free; g->sp stays put
  return g->sp[D] = r, g->sp += D, g; }
 
-// Print a function value. Like tuple/cplx/hash it's a `,`-prefixed value form (so it
+// Print a function value. Like vec/cplx/hash it's a `,`-prefixed value form (so it
 // reads back via uq=identity): ,(base arg…) for a partial application / closure,
 // ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
 // text (continuation, top-level wrap) has no constructor form, so it prints as the
@@ -2979,14 +2978,14 @@ static struct ai *ioput_fn_body(struct ai *g, word x, uintptr_t off) {
  return ai_ok(g) ? ai_pop(g, 1) : g; }
 
 static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
- if (fixp(x)) return ioprintf(g, "%d", getfix(x));
+ if (charmp(x)) return ioprintf(g, "%d", getcharm(x));
  if (!datp(x)) return mapp(x) ? ioput_map(g, x, off) : ioput_fn(g, x, off);
  // Maps are the only mutable/self-referential value, and ioput_map guards its
  // own recursion (the seen list); the data kinds below are acyclic.
  switch (typ(x)) {
    default: __builtin_trap();
    case KTwo:  return ioput_two(g, x, off);
-   case KTuple:  return ioput_tuple(g, x, off);
+   case KVec:  return ioput_vec(g, x, off);
    case KSym:  return ioput_sym(g, x);
    case KString: return ioput_str(g, x);
    case KBig:  return ioput_big(g, x); } }
@@ -3058,7 +3057,7 @@ lvm(lvm_feof) {
   Pack(g);
   if (!ai_ok(g = zeof(g))) return ghelp(g);
   Unpack(g);
-  Sp[0] = g->b ? putfix(1) : nil; }
+  Sp[0] = g->b ? putcharm(1) : nil; }
  return Ip++, Continue(); }
 
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
@@ -3069,15 +3068,15 @@ lvm(lvm_feof) {
 lvm(lvm_fgetc) {
  if (iop(Sp[0])) {
   struct ai_io *i = (struct ai_io*) Sp[0];
-  if (!ai_ready(getfix(i->fd))) {
-   g->next_wait_fd = getfix(i->fd);
+  if (!ai_ready(getcharm(i->fd))) {
+   g->next_wait_fd = getcharm(i->fd);
    return Ap(lvm_yield_sw, g); }
   Pack(g);
   g->io = i;
   if (!ai_ok(g = zgetc(g))) return ghelp(g);
   Unpack(g);
-  Sp[0] = putfix(g->b); }
- else Sp[0] = putfix(EOF);
+  Sp[0] = putcharm(g->b); }
+ else Sp[0] = putcharm(EOF);
  return Ip++, Continue(); }
 
 // (fungetc port byte) — push back one byte, return the byte.
@@ -3086,7 +3085,7 @@ lvm(lvm_fungetc) {
   struct ai_io *i = (struct ai_io*) Sp[0];
   Pack(g);
   g->io = i;
-  if (!ai_ok(g = zungetc(g, getfix(g->sp[1])))) return ghelp(g);
+  if (!ai_ok(g = zungetc(g, getcharm(g->sp[1])))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
@@ -3096,7 +3095,7 @@ lvm(lvm_fungetc) {
 // either the port was already closed explicitly (fd mutated to a synth
 // sentinel) or the caller wrapped a non-OS fd.
 static void io_close(void *p) {
- intptr_t fd = getfix(((struct ai_io*)p)->fd);
+ intptr_t fd = getcharm(((struct ai_io*)p)->fd);
  if (fd >= 0) ai_fd_close(fd); }
 
 // Heap-allocate a stream port for the given OS fd. Pushes the port pointer
@@ -3109,9 +3108,9 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
   union u *k = bump(g, n + Width(struct ai_tag));
   struct ai_io *io = (struct ai_io*) k;
   io->ap = lvm_port_io;
-  io->fd = putfix(fd);
-  io->ungetc_buf = putfix(EOF);
-  io->eof_seen = putfix(false);
+  io->fd = putcharm(fd);
+  io->ungetc_buf = putcharm(EOF);
+  io->eof_seen = putcharm(false);
   *--g->sp = (word) tagtext(k, n);            // stack slot reserved by the +1 in have()
   struct ai_fz *z = bump(g, Width(struct ai_fz));
   z->p = k, z->fn = io_close, z->next = g->fz, g->fz = z; }
@@ -3158,9 +3157,9 @@ lvm(lvm_real) {
  word x = Sp[0];
  double d = strtod_wrap(g, x);
  if (d != d) return Sp[0] = nil, Ip += 1, Continue();
- uintptr_t req = b2w(sizeof(struct ai_tuple) + sizeof(ai_flo_t));
+ uintptr_t req = b2w(sizeof(struct ai_vec) + sizeof(ai_flo_t));
  Have(req);
- struct ai_tuple *r = ini_scalar((struct ai_tuple*) Hp, ai_R);
+ struct ai_vec *r = ini_scalar((struct ai_vec*) Hp, ai_R);
  Hp += req;
  flo_put(r->shape, (ai_flo_t) d);
  Sp[0] = word(r);
@@ -3193,13 +3192,13 @@ lvm(lvm_read) {
 lvm(lvm_string) {
  word x = Sp[0];
  if (x == nil) return Ip++, Continue();             // nil is the empty string (0)
- if (fixp(x)) {                                     // fixnum -> one-byte string
+ if (charmp(x)) {                                     // fixnum -> one-byte string
   uintptr_t req = str_type_width + b2w(1);
   Have(req);
   struct ai_str *s = (void*) Hp;
   Hp += req;
   ini_str(s, 1);
-  txt(s)[0] = (char) getfix(x);
+  txt(s)[0] = (char) getcharm(x);
   return Sp[0] = word(s), Ip++, Continue(); }
  if (symp(x)) {                                      // named symbol -> name string, else identity
   if (x == (word) ai_core_of(g)) return Ip++, Continue();  // the core: nameless, like a mint -> identity (its atom slots are never read)
@@ -3214,7 +3213,7 @@ lvm(lvm_string) {
   struct ai_str *s = (void*) Hp;
   Hp += req;
   ini_str(s, n);
-  for (uintptr_t i = 0; n--; x = B(x)) txt(s)[i++] = (char) getfix(A(x));
+  for (uintptr_t i = 0; n--; x = B(x)) txt(s)[i++] = (char) getcharm(A(x));
   return Sp[0] = word(s), Ip++, Continue(); }
  return Ip++, Continue(); }                          // any other type: identity
 
@@ -3256,7 +3255,7 @@ static struct ai* ai_z_getc(struct ai*g) {
 // either a *list accumulator* — a pair (head . tail) holding the elements read so
 // far in source order, ((nil . nil) when empty), built in place by appending at
 // `tail` so no reverse pass is needed — or a *reader-macro* — the wrap symbol \ qq
-// uq uqs hash tuple plex wave, recognised by symp. A finished datum is `delivered`
+// uq uqs hash vec plex wave, recognised by symp. A finished datum is `delivered`
 // to the top frame: appended to a list, or wrapped/spliced and re-delivered; with
 // no frame left it is the result. Everything lives on the l stack so GC relocates
 // it across the allocs that reading does.
@@ -3300,7 +3299,7 @@ static struct ai *ioread1op(struct ai *g, int c, int *pending) {
     return intern(g); }
  return g; }
 // recognise the splicing reader-macro wraps -- `#` (interned `hash`) and `@`
-// (interned `tuple`) -- so a list operand splices into the constructor call
+// (interned `vec`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in ioparse.
 static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
  struct ai_str *s = symp(x) ? sym(x)->nom : 0;
@@ -3489,9 +3488,9 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
       char *e;
       long j = strtol(txt(s), &e, 0);
       if (*e == 0) {
-       if (j >= fix_min && j <= fix_max) return g->sp[0] = putfix(j), g;
+       if (j >= fix_min && j <= fix_max) return g->sp[0] = putcharm(j), g;
        if (ai_ok(g = ai_have(g, box_req))) {
-        struct ai_tuple *b = ini_scalar(bump(g, box_req), ai_Z);
+        struct ai_vec *b = ini_scalar(bump(g, box_req), ai_Z);
         box_put(b->shape, j);
         g->sp[0] = word(b); }
        return g; }
@@ -3509,9 +3508,9 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
        if (!(c0 >= '0' && c0 <= '9') && c0 != '.') return intern(g);
        d = strtod(tx, &e);
        if (e == tx || *e != 0) return intern(g); }
-      uintptr_t req = b2w(sizeof(struct ai_tuple) + sizeof(ai_flo_t));
+      uintptr_t req = b2w(sizeof(struct ai_vec) + sizeof(ai_flo_t));
       if (ai_ok(g = ai_have(g, req))) {
-       struct ai_tuple *r = ini_scalar(bump(g, req), ai_R);
+       struct ai_vec *r = ini_scalar(bump(g, req), ai_R);
        flo_put(r->shape, d);
        g->sp[0] = word(r); }
       return g; } }
@@ -3520,7 +3519,7 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
 // ============================================================================
 // sys
 // ============================================================================
-op11(lvm_clock, putfix(ai_clock() - getfix(Sp[0])))
+op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 
 lvm(lvm_gauge) {
  size_t const req = 7 * Width(struct ai_pair);
@@ -3528,18 +3527,18 @@ lvm(lvm_gauge) {
  struct ai_pair *si = (struct ai_pair*) Hp;
  Hp += req;
  Sp[0] = word(si);
- ini_two(si + 0, putfix(g), word(si + 1));
- ini_two(si + 1, putfix(g->len), word(si + 2));
- ini_two(si + 2, putfix(Hp - ptr(g)), word(si + 3));
- ini_two(si + 3, putfix(ptr(g) + g->len - Sp), word(si + 4));
+ ini_two(si + 0, putcharm(g), word(si + 1));
+ ini_two(si + 1, putcharm(g->len), word(si + 2));
+ ini_two(si + 2, putcharm(Hp - ptr(g)), word(si + 3));
+ ini_two(si + 3, putcharm(ptr(g) + g->len - Sp), word(si + 4));
 #ifdef AI_STAT
- ini_two(si + 4, putfix(g->n_gc), word(si + 5));               // gc cycles
- ini_two(si + 5, putfix(g->max_len), word(si + 6));            // peak pool len (words)
- ini_two(si + 6, putfix(g->max_heap), nil);                    // peak live heap (words)
+ ini_two(si + 4, putcharm(g->n_gc), word(si + 5));               // gc cycles
+ ini_two(si + 5, putcharm(g->max_len), word(si + 6));            // peak pool len (words)
+ ini_two(si + 6, putcharm(g->max_heap), nil);                    // peak live heap (words)
 #else
- ini_two(si + 4, putfix(0), word(si + 5));                     // gc instrumentation gated off (-DAI_STAT to keep it)
- ini_two(si + 5, putfix(0), word(si + 6));
- ini_two(si + 6, putfix(0), nil);
+ ini_two(si + 4, putcharm(0), word(si + 5));                     // gc instrumentation gated off (-DAI_STAT to keep it)
+ ini_two(si + 5, putcharm(0), word(si + 6));
+ ini_two(si + 6, putcharm(0), nil);
 #endif
  Ip += 1;
  return Continue(); }
@@ -3559,7 +3558,7 @@ __attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {
   for (ticks += ai_clock(); ai_clock() < ticks;); }
 
 lvm(lvm_key) {
- Sp[0] = (getfix(ai_stdin.ungetc_buf) != EOF || ai_ready(getfix(ai_stdin.fd))) ? putfix(1) : nil;
+ Sp[0] = (getcharm(ai_stdin.ungetc_buf) != EOF || ai_ready(getcharm(ai_stdin.fd))) ? putcharm(1) : nil;
  Ip += 1;
  return Continue(); }
 
@@ -3569,7 +3568,7 @@ lvm(lvm_key) {
 // backing is internal -- only ever reached from a header[1], never applied as a
 // l value; its ap behaves-as-1 like lvm_buf should it ever be (it won't).
 static lvm(lvm_map_data) {
- return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
+ return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
 
 // the backing slot of k, or -- if absent -- the first empty slot on its probe
 // chain. load is kept < 3/4 so an empty slot always terminates the sound.
@@ -3587,7 +3586,7 @@ word ai_mapget(struct ai *g, word zero, word k, word m) {
 
 // fill an empty cap-slot backing at b (cap a power of two); caller reserves it.
 static ai_inline union u *map_fill_back(union u *b, uintptr_t cap) {
- b[0].ap = lvm_map_data, b[1].x = putfix(0), b[2].x = putfix(cap);
+ b[0].ap = lvm_map_data, b[1].x = putcharm(0), b[2].x = putcharm(cap);
  for (uintptr_t i = 0; i < cap; i++) b[3 + 2 * i].x = map_gap, b[4 + 2 * i].x = nil;
  return tagtext(b, 3 + 2 * cap); }
 
@@ -3609,7 +3608,7 @@ static ai_noinline struct ai *map_grow(struct ai *g) {
   uintptr_t i = hash(g, k) & nmask;
   while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
- nb[1].x = putfix(nlen);
+ nb[1].x = putcharm(nlen);
  return cell(m)[1].x = (word) nb, g; }            // swap backing; header identity stable
 
 // (put k v map): mutate in place; grow (may GC) on a new key past the load
@@ -3623,7 +3622,7 @@ static ai_noinline struct ai *ai_mapput(struct ai *g) {
   i = map_probe(g, g->sp[2], g->sp[0], &found); }   // re-probe larger backing
  word *s = map_slots(g->sp[2]);
  s[2 * i] = g->sp[0], s[2 * i + 1] = g->sp[1];
- cell(map_back(g->sp[2]))[1].x = putfix(map_len(g->sp[2]) + 1);
+ cell(map_back(g->sp[2]))[1].x = putcharm(map_len(g->sp[2]) + 1);
  return g->sp += 2, g; }
 
 // ai_mapdel: delete k, backward-shift the probe chain so no tombstone is
@@ -3639,7 +3638,7 @@ static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word zero) {
   bool gap = i <= j ? (h <= i || h > j) : (h <= i && h > j);   // h not in (i, j]
   if (gap) s[2 * i] = s[2 * j], s[2 * i + 1] = s[2 * j + 1], i = j; }
  s[2 * i] = map_gap, s[2 * i + 1] = nil;
- cell(map_back(m))[1].x = putfix(map_len(m) - 1);
+ cell(map_back(m))[1].x = putcharm(map_len(m) - 1);
  return m; }
 
 // C-callable fresh empty map, pushed on sp[0]. Same shape as lvm_table.
@@ -3668,67 +3667,67 @@ static lvm(lvm_map_lookup) {
  word v = ai_mapget(g, nil, Sp[0], (word) Ip);
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
-op11(lvm_mapp, mapp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_mapp, mapp(Sp[0]) ? putcharm(1) : nil)
 // (lamp x): is x lit -- wired to a hot, a heap pointer, not a fixnum? true for every
-// present non-fixnum value -- pairs, symbols, strings, tuples, maps, texts.
-op11(lvm_lamp, lamp(Sp[0]) ? putfix(1) : nil)
+// present non-fixnum value -- pairs, symbols, strings, vecs, maps, texts.
+op11(lvm_lamp, lamp(Sp[0]) ? putcharm(1) : nil)
 // (hotp x): is x an opaque hot handle -- a buf or a port? (a task is referenced
 // by a fixnum id, not a handle object.) a hot also answers lamp (it acts as
 // a constant function); hotp is the refinement that names the zoo.
-op11(lvm_hotp, (bufp(Sp[0]) || iop(Sp[0]) || toastp(Sp[0])) ? putfix(1) : nil)
+op11(lvm_hotp, (bufp(Sp[0]) || iop(Sp[0]) || toastp(Sp[0])) ? putcharm(1) : nil)
 
 // (hash x) -- the general hashing method exposed to l as a fixnum.
-op11(lvm_dig, putfix(hash(g, Sp[0])))
+op11(lvm_dig, putcharm(hash(g, Sp[0])))
 
 lvm(lvm_peep) {                                // (peep coll key default): collection-first
  word x = Sp[0], k = Sp[1], z = Sp[2], n;
  if (bufp(x)) {                                  // mutable byte string: byte index
   struct ai_str *s = buf_str(x);
-  if (fixp(k) && (n = getfix(k)) >= 0 && n < (word) len(s))
-   z = putfix((unsigned char) txt(s)[n]); }
+  if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(s))
+   z = putcharm((unsigned char) txt(s)[n]); }
  else if (mapp(x)) z = ai_mapget(g, z, k, x);     // map lookup (not a data sentinel)
  else if (lamp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // KSym is not indexable
-  case KTuple: {
+  case KVec: {
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
    // rank-N; an empty/nil key derefs a rank-0 scalar box. Out-of-bounds or a
    // wrong-rank key falls through to the default `z`. Integer elements keep
    // integer type (emit_int demotes-or-boxes); float elements box an f64.
-   struct ai_tuple *v = tuple(x);
+   struct ai_vec *v = vec(x);
    uintptr_t R = v->rank, off = 0; bool ok = false;
    if (R == 0) ok = nilp(k);
-   else if (R == 1 && fixp(k)) {
-    intptr_t ix = getfix(k);
+   else if (R == 1 && charmp(k)) {
+    intptr_t ix = getcharm(k);
     if (ix >= 0 && ix < (intptr_t) v->shape[0]) off = ix, ok = true; }
    else if (twop(k)) {
     uintptr_t a = 0; ok = true;
     for (word l = k;; l = B(l)) {
      if (!twop(l)) { ok = a == R; break; }
      word ki = A(l);
-     if (a >= R || !fixp(ki)) { ok = false; break; }
-     intptr_t ix = getfix(ki);
+     if (a >= R || !charmp(ki)) { ok = false; break; }
+     intptr_t ix = getcharm(ki);
      if (ix < 0 || ix >= (intptr_t) v->shape[a]) { ok = false; break; }
      off = off * v->shape[a] + ix, a++; } }
-   if (ok && v->type == ai_O) z = tuple_get_obj(v, off);   // object: the slot IS the value
+   if (ok && v->type == ai_O) z = vec_get_obj(v, off);   // object: the slot IS the value
    else if (ok && v->type == ai_C) {                       // packed complex -> a (re,im) box
-    Have(cplx_req); v = tuple(Sp[0]);                      // re-read coll (Sp[0]) post-Have
-    ai_flo_t *fp = tuple_data(v);
-    struct ai_tuple *bx = ini_scalar((struct ai_tuple*) Hp, ai_C); Hp += cplx_req;
+    Have(cplx_req); v = vec(Sp[0]);                      // re-read coll (Sp[0]) post-Have
+    ai_flo_t *fp = vec_data(v);
+    struct ai_vec *bx = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
     cplx_put(bx, fp[2*off], fp[2*off+1]); z = word(bx); }
-   else if (ok) { word _res; Have(box_req); v = tuple(Sp[0]);
-    if (v->type >= ai_R) emit_flo(tuple_get_flo(v, off));
-    else emit_int(tuple_get_int(v, off));
+   else if (ok) { word _res; Have(box_req); v = vec(Sp[0]);
+    if (v->type >= ai_R) emit_flo(vec_get_flo(v, off));
+    else emit_int(vec_get_int(v, off));
     z = _res; }
    break; }
   case KString:
    // Byte as its unsigned value 0..255 -- bytes are data, signedness is the
    // operator's job. txt is signed char[], so cast to avoid sign-extending a
    // high byte (e.g. 0xff -> -1) when binary data is indexed.
-   if (fixp(k) && (n = getfix(k)) >= 0 && n < (word) len(x))
-    z = putfix((unsigned char) txt(x)[n]);
+   if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(x))
+    z = putcharm((unsigned char) txt(x)[n]);
    break;
   case KTwo:
-   if (fixp(k) && (n = getfix(k)) >= 0) {
+   if (charmp(k) && (n = getcharm(k)) >= 0) {
     while (n-- && twop(x = B(x)));
     if (twop(x)) z = A(x); } }
  return Sp[2] = z, Sp += 2, Ip += 1, Continue(); }
@@ -3745,8 +3744,8 @@ lvm(lvm_put) {
   if (!ai_ok(g = ai_mapput(g))) return ghelp(g);
   Unpack(g); }
  else {
-  if (bufp(x) && fixp(Sp[1]) && (n = getfix(Sp[1])) >= 0 && n < (word) len(buf_str(x)))
-   txt(buf_str(x))[n] = (char) getfix(Sp[2]);     // index = key = Sp[1], val = Sp[2]
+  if (bufp(x) && charmp(Sp[1]) && (n = getcharm(Sp[1])) >= 0 && n < (word) len(buf_str(x)))
+   txt(buf_str(x))[n] = (char) getcharm(Sp[2]);     // index = key = Sp[1], val = Sp[2]
   Sp[2] = x, Sp += 2; }                           // leave coll as the result
  return Ip += 1, Continue(); }
 
@@ -3789,7 +3788,7 @@ static ai_noinline uintptr_t hash_two(struct ai *g, word x) {
 // general hashing method...
 struct arib; static uintptr_t shash(struct ai *g, word x, struct arib *env);  // α-invariant source hash
 uintptr_t hash(struct ai *g, intptr_t x) {
- if (fixp(x)) return rot(x*mix);
+ if (charmp(x)) return rot(x*mix);
  if (!datp(x)) {
    // out-of-pool (static nif): stable distinct address. in-pool: a compiled lambda
    // parks its source \-expr one cell before the entry (the tag head points there) and
@@ -3805,8 +3804,8 @@ uintptr_t hash(struct ai *g, intptr_t x) {
    default: __builtin_trap();
    case KTwo: return hash_two(g, x);
    case KSym: return sym(x)->code;
-   case KTuple: {
-    uintptr_t len = ai_tuple_bytes(tuple(x)), h = mix;
+   case KVec: {
+    uintptr_t len = ai_vec_bytes(vec(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
    case KBig: {
@@ -3834,13 +3833,13 @@ struct ai *ai_strof(struct ai *g, char const *cs) {
  if (ai_ok(g = str0(g, len))) memcpy(txt(g->sp[0]), cs, len);
  return g; }
 
-op11(lvm_strp, strp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_strp, strp(Sp[0]) ? putcharm(1) : nil)
 lvm(lvm_slice) {
  if (!strp(Sp[0])) Sp[2] = nil;
  else {
   struct ai_str *s = str(Sp[0]), *t;
-  intptr_t i = oddp(Sp[1]) ? getfix(Sp[1]) : 0,
-           j = oddp(Sp[2]) ? getfix(Sp[2]) : 0;
+  intptr_t i = oddp(Sp[1]) ? getcharm(Sp[1]) : 0,
+           j = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
   i = max(i, 0), i = min(i, (word) len(s));
   j = max(j, i), j = min(j, (word) len(s));
   if (i == j) Sp[2] = nil;
@@ -3861,11 +3860,11 @@ lvm(lvm_slice) {
 // bufp and iop never collide. NOT a data sentinel, so the GC copies a buf via the
 // generic text path and the cheney sound forwards its backing-string pointer.
 lvm(lvm_buf) {
- return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
+ return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
 // the toast ap (its type tag): applied, a toast is const-1 like any opaque hot -- it is
 // meant to be (call ..)'d, not applied. Distinct from lvm_buf so toastp tells them apart.
 lvm(lvm_toasted) {
- return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
+ return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
 
 // (buf n) — allocate a zeroed n-byte mutable buf. n<=0 / non-numeric -> the empty
 // string singleton EmptyString, so NO empty buf object ever exists (an un-writable 0-byte
@@ -3873,7 +3872,7 @@ lvm(lvm_toasted) {
 // Two heap objects under one Have (so no GC sees a half-built buf): the backing ai_str
 // holding the bytes, and the length-2 wrapper text [lvm_buf, str, terminator].
 lvm(lvm_bufnew) {
- intptr_t n = fixp(Sp[0]) ? getfix(Sp[0]) : 0;
+ intptr_t n = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
  if (n <= 0) return Sp[0] = EmptyString, Ip++, Continue();   // no empty buf: it is ""
  uintptr_t sreq = str_type_width + b2w(n),
            breq = Width(struct ai_buf) + Width(struct ai_tag);
@@ -3895,7 +3894,7 @@ lvm(lvm_bufnew) {
 // __builtin___clear_cache(txt(s), txt(s)+len(s)) before the jump (I-cache not
 // coherent with freshly-written D-cache); omitted for the x86_64 probe.
 #ifdef G_FAULT_TEST   // harness: trigger a hardware fault inside eval (see nifs)
-lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putfix(0), Ip++, Continue(); }
+lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putcharm(0), Ip++, Continue(); }
 #endif
 
 // THE FAULT BARRIER (hosted). Running native (toasted) code is love's one
@@ -3924,9 +3923,9 @@ static ai_word call_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {  /
 
 lvm(lvm_call) {
  word b = Sp[0], x = Sp[1];
- if (!toastp(b)) return *++Sp = putfix(0), Ip++, Continue();   // only a toast is callable -> else nothing
+ if (!toastp(b)) return *++Sp = putcharm(0), Ip++, Continue();   // only a toast is callable -> else nothing
  int bad; ai_word r = call_run(txt(buf_str(b)), x, 0, 0, &bad);   // fault -> bad -> 0 (survivable)
- return *++Sp = putfix(bad ? 0 : r), Ip++, Continue(); }   // arity 2: pop one, result at the new top
+ return *++Sp = putcharm(bad ? 0 : r), Ip++, Continue(); }   // arity 2: pop one, result at the new top
 
 // (call2 b x y) — like (call b x) but passes TWO arguments (SysV AMD64: x in
 // %rdi, y in %rsi; AArch64: x0, x1) for native two-argument kernels. Same raw
@@ -3934,9 +3933,9 @@ lvm(lvm_call) {
 // barrier. Arity 3.
 lvm(lvm_call2) {
  word b = Sp[0], x = Sp[1], y = Sp[2];
- if (!toastp(b)) return Sp[2] = putfix(0), Sp += 2, Ip++, Continue();   // only a toast is callable
+ if (!toastp(b)) return Sp[2] = putcharm(0), Sp += 2, Ip++, Continue();   // only a toast is callable
  int bad; ai_word r = call_run(txt(buf_str(b)), x, y, 1, &bad);
- return Sp[2] = putfix(bad ? 0 : r), Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, result at the new top
+ return Sp[2] = putcharm(bad ? 0 : r), Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, result at the new top
 
 // THE HOST EXEC ARENA (hosted builds only). The Linux malloc heap is NX, so a
 // buf of real code cannot be run directly -- the jump faults. `toast` copies the
@@ -3978,10 +3977,10 @@ static void code_unmap(void *p) {
 // it does not check them.
 lvm(lvm_toast) {
  word src = Sp[0];
- if (!(strp(src) || bufp(src))) return Sp[0] = putfix(0), Ip++, Continue();
+ if (!(strp(src) || bufp(src))) return Sp[0] = putcharm(0), Ip++, Continue();
  struct ai_str *in = bytes_of(src);
  uintptr_t n = len(in);
- if (n == 0) return Sp[0] = putfix(0), Ip++, Continue();   // nothing to toast -> nothing
+ if (n == 0) return Sp[0] = putcharm(0), Ip++, Continue();   // nothing to toast -> nothing
 #if __STDC_HOSTED__
  // The buf wrapper + finalizer node live in the heap; the ai_str backing lives
  // in the arena. Have() BEFORE the mmap so a GC retry (which re-runs the nif)
@@ -3989,11 +3988,11 @@ lvm(lvm_toast) {
  Have(Width(struct ai_buf) + Width(struct ai_tag) + Width(struct ai_fz));
  size_t maplen = code_maplen(n);
  void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
- if (base == MAP_FAILED) return Sp[0] = putfix(0), Ip++, Continue();   // OOM -> nothing
+ if (base == MAP_FAILED) return Sp[0] = putcharm(0), Ip++, Continue();   // OOM -> nothing
  struct ai_str *s = ini_str((struct ai_str*) base, n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);   // reload src: a GC in Have may have moved it
  if (mprotect(base, maplen, PROT_READ | PROT_EXEC))   // seal: writable -> executable
-  return munmap(base, maplen), Sp[0] = putfix(0), Ip++, Continue();
+  return munmap(base, maplen), Sp[0] = putcharm(0), Ip++, Continue();
  union u *k = (union u*) Hp; Hp += Width(struct ai_buf) + Width(struct ai_tag);
  ((struct ai_buf*) k)->ap = lvm_toasted;   // opaque toast tag, not lvm_buf: not peep/pin-able
  ((struct ai_buf*) k)->str = s;
@@ -4032,7 +4031,7 @@ static void nat_unmap(void *p) {
 #endif
 
 // (nat codebuf interp src) installs codebuf's machine code and returns a TRANSPARENT
-// applicable native closure. Cell: [code, src, code, interp, lvm_ret, putfix(0)] with
+// applicable native closure. Cell: [code, src, code, interp, lvm_ret, putcharm(0)] with
 // the VALUE pointing at the 3rd word (the second `code`), so:
 //   value[0]  = code      -- lvm_ap dispatches straight into the emitted body
 //   value[-1] = src       -- the source \-expr, where fn_src/the printer/salpha look,
@@ -4051,7 +4050,7 @@ lvm(lvm_nat) {
  uintptr_t n = len(bytes_of(codebuf));
  if (n == 0) return Sp[2] = nil, Sp += 2, Ip++, Continue();
 #if __STDC_HOSTED__
- Have(7 + Width(struct ai_fz));               // [code,src,code,interp,lvm_ret,putfix(0)] + tag + finalizer
+ Have(7 + Width(struct ai_fz));               // [code,src,code,interp,lvm_ret,putcharm(0)] + tag + finalizer
  size_t maplen = code_maplen(n);
  void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
  if (base == MAP_FAILED) return Sp[2] = nil, Sp += 2, Ip++, Continue();
@@ -4070,7 +4069,7 @@ lvm(lvm_nat) {
  k[2].ap = (lvm_t*) txt(s);                  // code  (value[0]): the emitted body
  k[3].x  = Sp[1];                            // interp(reloaded): value[1], deopt fallback
  k[4].ap = lvm_ret;                          // value[2]: fast-path return
- k[5].x  = putfix(0);                        // ret n=1
+ k[5].x  = putcharm(0);                        // ret n=1
  tagtext(k, 6);
 #if __STDC_HOSTED__
  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
@@ -4084,15 +4083,15 @@ lvm(lvm_nat) {
 // Sp[arity]. The body runs with rsi=&code, so interp@rsi+8 and lvm_ret@rsi+16 -- the
 // SAME offsets as nat. value[-1]=src (=/show). DEOPT (emitter) jmps to interp's BODY
 // (interp+2, past its own lvm_cur), where the saturated args already sit. lvm_ret
-// pops n=arity via putfix(arity-1).
+// pops n=arity via putcharm(arity-1).
 lvm(lvm_natn) {
  word codebuf = Sp[0];
- intptr_t ar = oddp(Sp[3]) ? getfix(Sp[3]) : 0;     // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity
+ intptr_t ar = oddp(Sp[3]) ? getcharm(Sp[3]) : 0;     // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity
  if (!(strp(codebuf) || bufp(codebuf)) || ar < 2) return Sp[3] = nil, Sp += 3, Ip++, Continue();
  uintptr_t n = len(bytes_of(codebuf));
  if (n == 0) return Sp[3] = nil, Sp += 3, Ip++, Continue();
 #if __STDC_HOSTED__
- Have(9 + Width(struct ai_fz));               // [hdr,src,cur,putfix(ar),code,interp,ret,putfix(ar-1)] + tag + fz
+ Have(9 + Width(struct ai_fz));               // [hdr,src,cur,putcharm(ar),code,interp,ret,putcharm(ar-1)] + tag + fz
  size_t maplen = code_maplen(n);
  void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
  if (base == MAP_FAILED) return Sp[3] = nil, Sp += 3, Ip++, Continue();
@@ -4109,11 +4108,11 @@ lvm(lvm_natn) {
  k[0].ap = (lvm_t*) txt(s);                  // header (out-of-pool): finalizer dead-detect
  k[1].x  = Sp[2];                            // src (reloaded): value[-1]
  k[2].ap = lvm_cur;                          // value[0]: curry to saturation
- k[3].x  = putfix(ar);
+ k[3].x  = putcharm(ar);
  k[4].ap = (lvm_t*) txt(s);                  // native body (lvm_cur resume Ip+2)
  k[5].x  = Sp[1];                            // interp (reloaded): deopt fallback
  k[6].ap = lvm_ret;
- k[7].x  = putfix(ar - 1);                   // ret pops n=arity
+ k[7].x  = putcharm(ar - 1);                   // ret pops n=arity
  tagtext(k, 8);
 #if __STDC_HOSTED__
  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
@@ -4130,7 +4129,7 @@ lvm(lvm_bcopy) {
  word dst = Sp[0], src = Sp[2];
  if (bufp(dst) && (strp(src) || bufp(src))) {
   struct ai_str *d = buf_str(dst), *s = bytes_of(src);
-  intptr_t doff = getfix(Sp[1]), soff = getfix(Sp[3]), n = getfix(Sp[4]),
+  intptr_t doff = getcharm(Sp[1]), soff = getcharm(Sp[3]), n = getcharm(Sp[4]),
            dl = len(d), sl = len(s);
   if (n < 0) n = 0;
   if (doff < 0) doff = 0;
@@ -4210,30 +4209,30 @@ ai_noinline struct ai_atom *intern_checked(struct ai *g, struct ai_str *b) {
    uintptr_t x = hash(g, k) & nmask;
    while (ns[2 * x] != map_gap) x = (x + 1) & nmask;
    ns[2 * x] = k, ns[2 * x + 1] = os[2 * j + 1], nlen++; }
-  nb[1].x = putfix(nlen);
+  nb[1].x = putcharm(nlen);
   cell(m)[1].x = (word) nb;                              // swap backing; header identity stable
   i = map_probe(g, m, word(b), &found); }
  struct ai_atom *y = ini_sym(bump(g, Width(struct ai_atom)), b, rot(hash(g, word(b))));
  word *slots = map_slots(m);
  slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
- cell(map_back(m))[1].x = putfix(map_len(m) + 1);
+ cell(map_back(m))[1].x = putcharm(map_len(m) + 1);
  return y; }
 
-op11(lvm_symp, symp(Sp[0]) ? putfix(1) : nil)
-op11(lvm_packp, packp(Sp[0]) ? putfix(1) : nil)
-op11(lvm_bigp, bigp(Sp[0]) ? putfix(1) : nil)
-op11(lvm_widep, widep(Sp[0]) ? putfix(1) : nil)
-op11(lvm_arrp, arrp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_symp, symp(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_packp, packp(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_widep, widep(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_arrp, arrp(Sp[0]) ? putcharm(1) : nil)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. Used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
-op11(lvm_intf, flop(Sp[0]) ? putfix((intptr_t) flo_get(Sp[0])) : Sp[0])
+op11(lvm_intf, flop(Sp[0]) ? putcharm((intptr_t) flo_get(Sp[0])) : Sp[0])
 
 // ============================================================================
 // pair
 // ============================================================================
 op11(lvm_car, twop(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cdr, twop(Sp[0]) ? B(Sp[0]) : nil)
-op11(lvm_twop, twop(Sp[0]) ? putfix(1) : nil)
+op11(lvm_twop, twop(Sp[0]) ? putcharm(1) : nil)
 lvm(lvm_cons) {
  Have(Width(struct ai_pair));
  struct ai_pair *w = (struct ai_pair*) Hp;
@@ -4250,7 +4249,7 @@ lvm(lvm_cons) {
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b)) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
-  struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_R); \
+  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R); \
   Hp += box_req; flo_put(v->shape, (fexpr)); _res = word(v); \
   return *++Sp = _res, Ip++, Continue(); } \
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b), t; \
@@ -4267,7 +4266,7 @@ lvm(lvm_cons) {
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
-  struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_R); \
+  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R); \
   Hp += box_req; flo_put(v->shape, (fexpr)); _res = word(v); \
   return *++Sp = _res, Ip++, Continue(); } \
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b); \
@@ -4278,25 +4277,25 @@ lvm(lvm_cons) {
  return Unpack(g), Continue(); }
 #define avm_ovf(op, builtin) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
- if (fixp(a) && fixp(b)) { intptr_t t; \
-  if (!builtin((intptr_t) getfix(a), (intptr_t) getfix(b), &t) && \
+ if (charmp(a) && charmp(b)) { intptr_t t; \
+  if (!builtin((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t) && \
       t >= fix_min && t <= fix_max) \
-   return *++Sp = putfix(t), Ip++, Continue(); } \
+   return *++Sp = putcharm(t), Ip++, Continue(); } \
  return Ap(lvm_##op##n, g); }
 #define avm_div(op, c_op) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
- if (fixp(a) && fixp(b)) { \
-  intptr_t av = getfix(a), bv = getfix(b); \
+ if (charmp(a) && charmp(b)) { \
+  intptr_t av = getcharm(a), bv = getcharm(b); \
   if (bv != 0 && !(av == INTPTR_MIN && bv == -1)) { \
    intptr_t t = av c_op bv; \
    if (t >= fix_min && t <= fix_max) \
-    return *++Sp = putfix(t), Ip++, Continue(); } } \
+    return *++Sp = putcharm(t), Ip++, Continue(); } } \
  return Ap(lvm_##op##n, g); }
 // the ordered comparisons (< <= > >=) and their total order over all values are
 // defined after vcmp_int/vcmp_flo (the per-op helpers they reuse), by lvm_vbin.
 #define bit_slow(n, c_op) static lvm(lvm_##n##_slow) {               \
  word a = Sp[0], b = Sp[1], _res;                                     \
- if (!(fixp(a) || widep(a)) || !(fixp(b) || widep(b)))                  \
+ if (!(charmp(a) || widep(a)) || !(charmp(b) || widep(b)))                  \
   return *++Sp = nil, Ip++, Continue();                               \
  Have(box_req);                                                       \
  emit_int(toint(a) c_op toint(b));                                    \
@@ -4323,7 +4322,7 @@ static lvm(lvm_quotn) {
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue();
  if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req);   // ±inf/NaN on ÷0
   ai_flo_t ad = toflo(a), bd = toflo(b);
-  struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_R);
+  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
   Hp += box_req; flo_put(v->shape, ad / bd); _res = word(v);
   return *++Sp = _res, Ip++, Continue(); }
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b);  // bv != 0 (b != nil)
@@ -4331,7 +4330,7 @@ static lvm(lvm_quotn) {
    if (av % bv == 0) { word _res; Have(box_req); emit_int(av / bv);
     return *++Sp = _res, Ip++, Continue(); }
    word _res; Have(box_req);                                        // inexact -> promote to float
-   struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_R);
+   struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
    Hp += box_req; flo_put(v->shape, (ai_flo_t) av / (ai_flo_t) bv); _res = word(v);
    return *++Sp = _res, Ip++, Continue(); } }
  Pack(g); g = ai_big_quot_true(g);
@@ -4361,7 +4360,7 @@ static const bool ai_add_lr = true;
 // integer 0..255 (rep-blind, like `=`: 66.0 is 66; a wide box/bignum is never in
 // range), anything else nil, like `-` on strings. Returns the byte or -1.
 static ai_inline intptr_t seq_byte(word x) {
- if (fixp(x)) { intptr_t v = getfix(x); return v < 0 || v > 255 ? -1 : v; }
+ if (charmp(x)) { intptr_t v = getcharm(x); return v < 0 || v > 255 ? -1 : v; }
  if (flop(x)) { ai_flo_t f = flo_get(x);
   if (!(f >= 0 && f <= 255)) return -1;                 // range first (nan fails); cast below is safe
   return f != (ai_flo_t) (intptr_t) f ? -1 : (intptr_t) f; }
@@ -4441,16 +4440,16 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
  return *++Sp = nil, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in ai.h): a fixnum is
-// the odd tag (KFix), a non-data heap pointer is a text/function (KHom), else ai_typ
-// gives the data kind. The one refinement: a rank>=1 tuple (array) expands by element
+// the odd tag (KCharm), a non-data heap pointer is a text/function (KTop), else ai_typ
+// gives the data kind. The one refinement: a rank>=1 vec (array) expands by element
 // tier to KArrZ..KArrO so the array tower dispatches inline with the scalar tower it
-// mirrors; rank-0 boxes (float/complex/wide-int) stay KTuple. Exported (not inline) so
+// mirrors; rank-0 boxes (float/complex/wide-int) stay KVec. Exported (not inline) so
 // data.c's apply sentinels share it.
 enum q ai_kind(word x) {
- if (fixp(x)) return KFix; // FIXME fix is charm
- if (!datp(x)) return mapp(x) ? KMap : KHom; // FIXME hom is top
+ if (charmp(x)) return KCharm;
+ if (!datp(x)) return mapp(x) ? KMap : KTop;
  enum q k = typ(x);
- return k == KTuple && tuple(x)->rank ? (enum q) (KArrZ + tuple(x)->type) : k; } // FIXME tup is vec
+ return k == KVec && vec(x)->rank ? (enum q) (KArrZ + vec(x)->type) : k; }
 
 // ============================================================================
 // generic-op lane aps, then all three dispatch matrices adjacent, then the
@@ -4514,9 +4513,9 @@ static lvm(lvm_mul_rep) {
 // 0..255 there, 1 if k is non-numeric or out of range (matches "" == 0: a numeric
 // ("" k) is the Church numeral k**0 == 1). No alloc, unwinds like self-quote.
 static lvm(data_string_apply) {
- word k = Sp[0], v = putfix(1), n;
- if (oddp(k) && (n = getfix(k)) >= 0 && n < (word) len(Ip))
-  v = putfix((unsigned char) txt(Ip)[n]);
+ word k = Sp[0], v = putcharm(1), n;
+ if (oddp(k) && (n = getcharm(k)) >= 0 && n < (word) len(Ip))
+  v = putcharm((unsigned char) txt(Ip)[n]);
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
 // (y k): applying a symbol indexes its underlying name string, so (y k) == (nom k).
@@ -4527,11 +4526,11 @@ static lvm(data_string_apply) {
 // symbols with the mint round) -- a symbol is a point with a spelling attribute,
 // and a point applies as every unit does: const-1, like 0, (), and the hots.
 static lvm(data_sym_apply) {
- return Ip = cell(*++Sp), *Sp = putfix(1), Continue(); }
+ return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
 
 // (n x): applying a number is Church-numeral application, like a fixnum (cf.
 // lvm_numap). Fixnums reach num-ap via the odd-tag check in lvm_ap; the rest of the
-// tower (floats, boxes, complex, arrays -- all lvm_tuple -- and bignums) are heap
+// tower (floats, boxes, complex, arrays -- all lvm_vec -- and bignums) are heap
 // pointers, so they arrive at their data sentinel. We lay the same [n, num-ap, x, ret]
 // frame and run numap_drive, handing the boxed operator n to the l num-ap ap,
 // which picks exponentiate / compose / self by operand+operator kind.
@@ -4560,27 +4559,27 @@ static lvm(data_pair_apply) {
 
 // === the three generic-op dispatch matrices, adjacent ======================
 // All indexed by ai_kind (ai_apply_mx's row by ai_typ, the data-kind subrange). The kind
-// order (ai.h) makes each lane a contiguous block: [KFix..KArrO] arithmetic (the
-// scalar tower fix/tuple/big then the parallel array tower arrZ/arrR/arrC/arrO), then
-// [KString..KTwo] sequence, then KMap, then KHom. Lanes:
+// order (ai.h) makes each lane a contiguous block: [KCharm..KArrO] arithmetic (the
+// scalar tower fix/vec/big then the parallel array tower arrZ/arrR/arrC/arrO), then
+// [KString..KTwo] sequence, then KMap, then KTop. Lanes:
 //   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane ap still
-//          refines by ai_tuple_type; the seven arithmetic kinds route identically today.
+//          refines by ai_vec_type; the seven arithmetic kinds route identically today.
 //   add_seq = a list anywhere (other operand a scalar element / spine); pair wins
 //   add_string = strings (+ a number as one byte -- the byte law; nils an array
 //              operand internally). SYMBOLS left the string algebra with the mint
 //              round: their string cells are lvm_0 (intern/string = the explicit bridge)
 //   mul_rep  = sequence * scalar-count -> repetition
-//   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KHom rows+cols) -- Church
+//   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KTop rows+cols) -- Church
 //          add / compose; a map IS a lookup lambda for +/*, kept deliberately, so
 //          its rung shares the lanes (the rung exists for the order)
 //   lvm_0 = undefined (-> nil): sequence*sequence
 // Precedence (high->low): lambda > map > pair > text > number(incl array).
-// cols (enum order): fix tuple big arrZ arrR arrC arrO | string sym | two | map lam
+// cols (enum order): fix vec big arrZ arrR arrC arrO | string sym | two | map lam
 
-// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KHom rows+cols all addl.
+// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KTop rows+cols all addl.
 static lvm_t *const ai_add_mx[KN][KN] = {
- [KFix]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KTuple]  = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KCharm]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
+ [KVec]  = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
  [KBig]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
  [KArrZ]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
  [KArrR]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
@@ -4590,13 +4589,13 @@ static lvm_t *const ai_add_mx[KN][KN] = {
  [KSym]    = { lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
  [KTwo]    = { lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_addh, lvm_addh },
  [KMap]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
- [KHom]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
+ [KTop]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
 };
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil.
 static lvm_t *const ai_mul_mx[KN][KN] = {
- [KFix]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KTuple]  = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KCharm]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
+ [KVec]  = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
  [KBig]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
  [KArrZ]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
  [KArrR]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
@@ -4606,15 +4605,15 @@ static lvm_t *const ai_mul_mx[KN][KN] = {
  [KSym]    = { lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
  [KTwo]    = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
  [KMap]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
- [KHom]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
+ [KTop]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
 };
 // apply: [applied data kind = ai_typ(Ip)][argument kind = ai_kind(arg)]. Every row is
 // arg-kind-uniform today (arow fills all columns); the 2-D shape is the hook for
 // later argument-kind branching (e.g. a number applied to a function vs a number).
-#define arow(h) { [KFix]=h,[KHom]=h,[KMap]=h,[KTwo]=h,[KTuple]=h,[KSym]=h,[KString]=h,[KBig]=h,\
+#define arow(h) { [KCharm]=h,[KTop]=h,[KMap]=h,[KTwo]=h,[KVec]=h,[KSym]=h,[KString]=h,[KBig]=h,\
                   [KArrZ]=h,[KArrR]=h,[KArrC]=h,[KArrO]=h }
 lvm_t *ai_apply_mx[KN][KN] = {
- [KTwo]  = arow(data_pair_apply), [KTuple]  = arow(data_num_apply),
+ [KTwo]  = arow(data_pair_apply), [KVec]  = arow(data_num_apply),
  [KSym]  = arow(data_sym_apply),
  [KString] = arow(data_string_apply), [KBig]  = arow(data_num_apply), };
 #undef arow
@@ -4622,17 +4621,17 @@ lvm_t *ai_apply_mx[KN][KN] = {
 // === the `+`/`*` dispatchers (fixnum fast path, then the matrix) ============
 lvm(lvm_add) {
  word a = Sp[0], b = Sp[1]; intptr_t t;
- if (fixp(a) && fixp(b)
-     && !__builtin_add_overflow((intptr_t) getfix(a), (intptr_t) getfix(b), &t)
+ if (charmp(a) && charmp(b)
+     && !__builtin_add_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
      && t >= fix_min && t <= fix_max)
-  return *++Sp = putfix(t), Ip++, Continue();
+  return *++Sp = putcharm(t), Ip++, Continue();
  return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }
 lvm(lvm_mul) {
  word a = Sp[0], b = Sp[1];
- if (fixp(a) && fixp(b)) { intptr_t t;
-  if (!__builtin_mul_overflow((intptr_t) getfix(a), (intptr_t) getfix(b), &t)
+ if (charmp(a) && charmp(b)) { intptr_t t;
+  if (!__builtin_mul_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
       && t >= fix_min && t <= fix_max)
-   return *++Sp = putfix(t), Ip++, Continue(); }
+   return *++Sp = putcharm(t), Ip++, Continue(); }
  return Ap(ai_mul_mx[ai_kind(a)][ai_kind(b)], g); }
 
 avm_div(fquot, /)                               // `//` fixnum fast path: truncating quotient
@@ -4641,10 +4640,10 @@ avm_div(rem, %)
 // promotes to a float box. The INT_MIN/-1 guard precedes the `%` (it would be UB).
 lvm(lvm_quot) {
  word a = Sp[0], b = Sp[1];
- if (fixp(a) && fixp(b)) { intptr_t av = getfix(a), bv = getfix(b);
+ if (charmp(a) && charmp(b)) { intptr_t av = getcharm(a), bv = getcharm(b);
   if (bv != 0 && !(av == INTPTR_MIN && bv == -1) && av % bv == 0) {
    intptr_t t = av / bv;
-   if (t >= fix_min && t <= fix_max) return *++Sp = putfix(t), Ip++, Continue(); } }
+   if (t >= fix_min && t <= fix_max) return *++Sp = putcharm(t), Ip++, Continue(); } }
  return Ap(lvm_quotn, g); }
 
 // The ordered comparisons (lvm_lt/le/gt/ge) and their total order are defined
@@ -4656,57 +4655,57 @@ lvm(lvm_quot) {
 // integer-only, so a float (or any non-integer) operand yields nil.
 bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
- if (fixp(a) && fixp(b)) return *++Sp = (a & b) | 1, Ip++, Continue();
+ if (charmp(a) && charmp(b)) return *++Sp = (a & b) | 1, Ip++, Continue();
  return Ap(lvm_band_slow, g); }
 lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
- if (fixp(a) && fixp(b)) return *++Sp = (a | b) | 1, Ip++, Continue();
+ if (charmp(a) && charmp(b)) return *++Sp = (a | b) | 1, Ip++, Continue();
  return Ap(lvm_bor_slow, g); }
 lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
- if (fixp(a) && fixp(b)) return *++Sp = (a ^ b) | 1, Ip++, Continue();
+ if (charmp(a) && charmp(b)) return *++Sp = (a ^ b) | 1, Ip++, Continue();
  return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `nilp`.)
 
 // >> : arithmetic right shift. A fixnum value only shrinks, so it keeps a
 // non-allocating fast path; a boxed value routes to the slow ap.
 static lvm(lvm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
- if (!(fixp(a) || widep(a)) || !fixp(b)) return *++Sp = nil, Ip++, Continue();
+ if (!(charmp(a) || widep(a)) || !charmp(b)) return *++Sp = nil, Ip++, Continue();
  Have(box_req);
- emit_int(toint(a) >> getfix(b));
+ emit_int(toint(a) >> getcharm(b));
  return *++Sp = _res, Ip++, Continue(); }
 lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
- if (fixp(a) && fixp(b))
-  return *++Sp = putfix(getfix(a) >> getfix(b)), Ip++, Continue();
+ if (charmp(a) && charmp(b))
+  return *++Sp = putcharm(getcharm(a) >> getcharm(b)), Ip++, Continue();
  return Ap(lvm_bsr_slow, g); }
 
 // << : can overflow the tag, so it always runs through the box/demote path
 // (emit_int still demotes small results — only genuinely wide values
 // allocate). Shift done in uintptr_t for well-defined overflow.
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
- if (!(fixp(a) || widep(a)) || !fixp(b)) return *++Sp = nil, Ip++, Continue();
+ if (!(charmp(a) || widep(a)) || !charmp(b)) return *++Sp = nil, Ip++, Continue();
  Have(box_req);
- emit_int((intptr_t)((uintptr_t) toint(a) << getfix(b)));
+ emit_int((intptr_t)((uintptr_t) toint(a) << getcharm(b)));
  return *++Sp = _res, Ip++, Continue(); }
 
-op(lvm_fixp, 1, oddp(Sp[0]) ? putfix(1) : nil)
+op(lvm_fixp, 1, oddp(Sp[0]) ? putcharm(1) : nil)
 // `nilp`/`not`: the falsy predicate -- the efficient generic form of (= 0 ($ x)),
 // via ai_nilp, which reads the net's sign without the clamp (a sym/string/fn is truthy
 // with no walk). The single truthiness oracle: `?` (lvm_cond), nilp, and aall all
 // consult ai_nilp, so `(? (nilp e) a b)` == `(? e b a)` -- the wev pass drops such a
 // nilp wrapper. Use `(= x 0)` for a literal scalar-zero test.
-op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putfix(1) : nil)
+op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : nil)
 
 // Unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
 // Non-numeric arg → nil. TCO-clean (no & escapes).
 static lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t)) {
  word a = Sp[0];
  if (arrp(a)) {                               // (sin arr) etc. -> float array; complex array undefined
-  if (tuple(a)->type == ai_C) return Sp[0] = nil, Ip++, Continue();
+  if (vec(a)->type == ai_C) return Sp[0] = nil, Ip++, Continue();
   return Ap(lvm_vmap1, g, fn); }
  if (!isnum(a)) return Sp[0] = nil, Ip++, Continue();
  ai_flo_t ad = toflo(a), rd = fn(ad);
- uintptr_t req = Width(struct ai_tuple) + Width(ai_flo_t);
+ uintptr_t req = Width(struct ai_vec) + Width(ai_flo_t);
  Have(req);
- struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_R);
+ struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
  Hp += req;
  flo_put(v->shape, rd);
  return Sp[0] = word(v), Ip++, Continue(); }
@@ -4714,15 +4713,15 @@ static lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t)) {
 static lvm(lvm_math2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  word a = Sp[0], b = Sp[1];
  if (arrp(a) || arrp(b)) {                               // (pow arr ..) etc. -> float array
-  if ((arrp(a) && tuple(a)->type == ai_C) || (arrp(b) && tuple(b)->type == ai_C))
+  if ((arrp(a) && vec(a)->type == ai_C) || (arrp(b) && vec(b)->type == ai_C))
    return *++Sp = nil, Ip++, Continue();                 // complex array undefined here
   return Ap(lvm_vmap2, g, fn); }
  if (!isnum(a) || !isnum(b)) return
   *++Sp = nil, Ip++, Continue();
  ai_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
- uintptr_t req = Width(struct ai_tuple) + Width(ai_flo_t);
+ uintptr_t req = Width(struct ai_vec) + Width(ai_flo_t);
  Have(req);
- struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_R);
+ struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
  Hp += req;
  flo_put(v->shape, rd);
  return *++Sp = word(v), Ip++, Continue(); }
@@ -4748,15 +4747,15 @@ lvm(lvm_log) {
   m = ai_log(-ad), th = ai_atan2(0, ad); }
  else return Ap(lvm_math1, g, ai_log);
  Have(cplx_req);
- struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C);
+ struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
  Hp += cplx_req;
  cplx_put(v, m, th);
  return Sp[0] = word(v), Ip++, Continue(); }
 
-op11(lvm_flop, flop(Sp[0]) ? putfix(1) : nil)
+op11(lvm_flop, flop(Sp[0]) ? putcharm(1) : nil)
 
 // ============================================================================
-// tuple
+// vec
 // ============================================================================
 size_t const ai_T[] = {
  [ai_Z] = Bytes,
@@ -4764,17 +4763,17 @@ size_t const ai_T[] = {
  [ai_C] = 2 * Bytes,      // complex scalar: (re, im)
  [ai_O] = Bytes, };       // object: one tagged l word per element
 
-uintptr_t ai_tuple_bytes(struct ai_tuple *v) {
- return sizeof(struct ai_tuple) + v->rank * sizeof(word) + ai_T[v->type] * tuple_nelem(v); }
+uintptr_t ai_vec_bytes(struct ai_vec *v) {
+ return sizeof(struct ai_vec) + v->rank * sizeof(word) + ai_T[v->type] * vec_nelem(v); }
 
 // ============================================================================
 // rng
 // ============================================================================
 // Step 8 -- random numbers. xoshiro256++ (Blackman & Vigna, public domain)
-// seeded by SplitMix64. State is a rank-1 i64 tuple of length 4 (256 bits) that
-// rides the existing tuple machinery -- no data sentinel, no enum q / ai_data_n
+// seeded by SplitMix64. State is a rank-1 i64 vec of length 4 (256 bits) that
+// rides the existing vec machinery -- no data sentinel, no enum q / ai_data_n
 // / gen_data / wasm-vt changes (cf. complex, Step 7). The payload is treated
-// as raw bytes (memcpy), never via the typed tuple_get/put accessors, so the
+// as raw bytes (memcpy), never via the typed vec_get/put accessors, so the
 // 64-bit limbs survive on 32-bit ports and a given seed reproduces the same
 // sequence on host/kernel/MCU/WASM/Playdate. C holds no RNG state and never
 // draws: the only primitives are rng-seed (fresh state from a fixnum) and the
@@ -4788,7 +4787,7 @@ static ai_inline uint64_t rotl64(uint64_t x, int k) {
 // All the uint64_t scratch (s[4]) lives in these ai_noinline helpers that move it
 // via memcpy: taking &s in a VM ap would defeat the Continue() sibcall (see
 // the flo_get note in i.h), and memcpy is alignment-safe (a 32-bit port's
-// tuple_data is only 4-byte aligned, so a raw uint64_t* deref could fault).
+// vec_data is only 4-byte aligned, so a raw uint64_t* deref could fault).
 
 // Advance the 4-word state stored at `payload` and return one 64-bit draw.
 static ai_noinline uint64_t rng_step(void *payload) {
@@ -4823,27 +4822,27 @@ static ai_inline ai_flo_t u64_to_unit(uint64_t u) {
 #endif
 }
 
-// Shape v as an i64 state tuple (rank 1, len 4) and seed it. ini_tuple + a
+// Shape v as an i64 state vec (rank 1, len 4) and seed it. ini_vec + a
 // pointer write only, so an inlining caller keeps its tail call; the &s
 // scratch stays inside rng_seed_into.
-void ai_rng_seed(struct ai_tuple *v, uint64_t seed) {
- ini_tuple(v, rng_vt, 1);
+void ai_rng_seed(struct ai_vec *v, uint64_t seed) {
+ ini_vec(v, rng_vt, 1);
  v->shape[0] = rng_state_len;
- rng_seed_into(tuple_data(v), seed); }
+ rng_seed_into(vec_data(v), seed); }
 
-// Is x a well-formed state tuple (rank-1 i64, length 4)?
+// Is x a well-formed state vec (rank-1 i64, length 4)?
 static ai_inline bool rng_state_p(word x) {
- return packp(x) && tuple(x)->rank == 1 && tuple(x)->type == rng_vt
-        && tuple(x)->shape[0] == rng_state_len; }
+ return packp(x) && vec(x)->rank == 1 && vec(x)->type == rng_vt
+        && vec(x)->shape[0] == rng_state_len; }
 
-// Build a fresh state tuple at Hp, copying the 4 limbs of `src` into it. Caller
+// Build a fresh state vec at Hp, copying the 4 limbs of `src` into it. Caller
 // holds Have(rng_vec_req). Both pointers are heap pointers -> no &local escape.
-static ai_inline struct ai_tuple *rng_copy(ai_word **hp, struct ai_tuple *src) {
- struct ai_tuple *v = (struct ai_tuple*) *hp;
+static ai_inline struct ai_vec *rng_copy(ai_word **hp, struct ai_vec *src) {
+ struct ai_vec *v = (struct ai_vec*) *hp;
  *hp += rng_vec_req;
- ini_tuple(v, rng_vt, 1);
+ ini_vec(v, rng_vt, 1);
  v->shape[0] = rng_state_len;
- memcpy(tuple_data(v), tuple_data(src), rng_payload_bytes);
+ memcpy(vec_data(v), vec_data(src), rng_payload_bytes);
  return v; }
 
 // Canonicalize a 62-bit draw to the smallest integer tier (a fixnum on a 64-bit
@@ -4855,13 +4854,13 @@ static ai_noinline word rng_canon(struct ai *g, uint64_t r) {
  uint32_t limb[2] = { (uint32_t) r, (uint32_t) (r >> 32) };
  return ai_big_canon(&g->hp, limb, 2, false); }
 
-// (rng-seed n): a fresh state tuple deterministically seeded from fixnum n. A
+// (rng-seed n): a fresh state vec deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
 lvm(lvm_rng_seed) {
  word n = Sp[0];
- uint64_t seed = fixp(n) ? (uint64_t) (intptr_t) getfix(n) : 0;
+ uint64_t seed = charmp(n) ? (uint64_t) (intptr_t) getcharm(n) : 0;
  Have(rng_vec_req);
- struct ai_tuple *v = (struct ai_tuple*) Hp; Hp += rng_vec_req;
+ struct ai_vec *v = (struct ai_vec*) Hp; Hp += rng_vec_req;
  ai_rng_seed(v, seed);
  return Sp[0] = word(v), Ip++, Continue(); }
 
@@ -4878,8 +4877,8 @@ lvm(lvm_rand_next) {
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
  Have(rng_vec_req + rng_draw_req + Width(struct ai_pair));
  st = Sp[0];                                 // re-read post-Have
- struct ai_tuple *v = rng_copy(&Hp, tuple(st));
- uint64_t r = rng_step(tuple_data(v)) & rng_draw_mask;
+ struct ai_vec *v = rng_copy(&Hp, vec(st));
+ uint64_t r = rng_step(vec_data(v)) & rng_draw_mask;
  Pack(g);
  word val = rng_canon(g, r);
  Unpack(g);
@@ -4893,8 +4892,8 @@ lvm(lvm_randf_next) {
  if (!rng_state_p(st)) return Sp[0] = nil, Ip++, Continue();
  Have(rng_vec_req + box_req + Width(struct ai_pair));
  st = Sp[0];                                 // re-read post-Have
- struct ai_tuple *v = rng_copy(&Hp, tuple(st));
- uint64_t r = rng_step(tuple_data(v));
+ struct ai_vec *v = rng_copy(&Hp, vec(st));
+ uint64_t r = rng_step(vec_data(v));
  ai_flo_t u = u64_to_unit(r);
  emit_flo(u);                                // box at Hp, into _res
  struct ai_pair *p = (struct ai_pair*) Hp; Hp += Width(struct ai_pair);
@@ -4976,7 +4975,7 @@ static bool id_lam(struct ai *c, word v) {             // (\ x x): body IS the b
  return ops && A(ops) == A(B(ops)); }
 static bool k1_lam(struct ai *c, word v) {             // (\ _ 1): body is the literal 1
  word ops = lam_src1(c, v);
- return ops && A(B(ops)) == putfix(1); }
+ return ops && A(B(ops)) == putcharm(1); }
 ai_noinline bool eqv(struct ai *g, word a, word b) {
  word *base = off_pool(g), *top = base + g->len, *w = base;
  struct ai *c = ai_core_of(g);
@@ -5001,8 +5000,8 @@ ai_noinline bool eqv(struct ai *g, word a, word b) {
      a = b; continue; }                                   // equal -> drain worklist
     return false; }
    // The numerals 1 and 0 bridge to their lambdas extensionally: (\ x x), (\ _ 1).
-   if ((a == putfix(1) && id_lam(c, b)) || (b == putfix(1) && id_lam(c, a))) { a = b; continue; }
-   if ((a == putfix(0) && k1_lam(c, b)) || (b == putfix(0) && k1_lam(c, a))) { a = b; continue; }
+   if ((a == putcharm(1) && id_lam(c, b)) || (b == putcharm(1) && id_lam(c, a))) { a = b; continue; }
+   if ((a == putcharm(0) && k1_lam(c, b)) || (b == putcharm(0) && k1_lam(c, a))) { a = b; continue; }
    if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return false;
    switch (typ(a)) {
     default: return false;
@@ -5010,9 +5009,9 @@ ai_noinline bool eqv(struct ai *g, word a, word b) {
      if (top - w < 2) __builtin_trap();     // worklist overflow: a cycle
      *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
      continue;
-    case KTuple: {
-     size_t la = ai_tuple_bytes(tuple(a)), lb = ai_tuple_bytes(tuple(b));
-     if (la != lb || memcmp(tuple(a), tuple(b), la)) return false;
+    case KVec: {
+     size_t la = ai_vec_bytes(vec(a)), lb = ai_vec_bytes(vec(b));
+     if (la != lb || memcmp(vec(a), vec(b), la)) return false;
      break; }
     case KBig: {
      struct ai_big *x = (struct ai_big*) a, *y = (struct ai_big*) b;
@@ -5029,7 +5028,7 @@ ai_noinline bool eqv(struct ai *g, word a, word b) {
 // (= a b) — value-equality with numeric promotion across the numeric tower
 // (fixnum / boxed float / boxed wide int). With a float operand we compare as
 // doubles (a box widens via box_get); otherwise eql handles it — two equal
-// wide-int boxes match through eqv's tuple arm (ai_tuple_bytes covers the type +
+// wide-int boxes match through eqv's vec arm (ai_vec_bytes covers the type +
 // payload), while a box and a fixnum never collide since boxes hold only
 // out-of-fixnum-range values. Falls through to eql for non-numeric operands so
 // symbol/pair/string identity is unchanged. Strictly looser than eqv, which
@@ -5047,7 +5046,7 @@ lvm(lvm_eq) {
   bool r = (Cp(a) || isnum(a)) && (Cp(b) || isnum(b))
         && (Cp(a) ? cplx_re(a) : toflo(a)) == (Cp(b) ? cplx_re(b) : toflo(b))
         && (Cp(a) ? cplx_im(a) : 0) == (Cp(b) ? cplx_im(b) : 0);
-  Sp[1] = r ? putfix(1) : nil;
+  Sp[1] = r ? putcharm(1) : nil;
   return Sp++, Ip++, Continue(); }
  bool r;
  // A float operand compares as doubles across the whole numeric tower (fixnum /
@@ -5057,14 +5056,14 @@ lvm(lvm_eq) {
  // distinct from any fixnum/box of a different value.
  if (flop(a) || flop(b)) r = isnum(a) && isnum(b) && (toflo(a) == toflo(b));
  else r = eql(g, a, b);
- Sp[1] = r ? putfix(1) : nil;
+ Sp[1] = r ? putcharm(1) : nil;
  return Sp++, Ip++, Continue(); }
 
 // (same a b) — pointer/word identity, no structural recursion. Distinguishes
 // two distinct objects that `=` would conflate (e.g. two equal pairs), so the
 // compiler can find a unique marker by identity.
 lvm(lvm_same) {
- Sp[1] = Sp[0] == Sp[1] ? putfix(1) : nil;
+ Sp[1] = Sp[0] == Sp[1] ? putcharm(1) : nil;
  return Sp++, Ip++, Continue(); }
 
 // ============================================================================
@@ -5207,7 +5206,7 @@ static ai_noinline void mag_divmod(uint32_t *q, uint32_t *r,
 static int load_int_mag(word x, uint32_t scratch[2], uint32_t const **out, bool *neg) {
  if (bigp(x)) { struct ai_big *b = (struct ai_big*) x; intptr_t s = b->slen;
   *neg = s < 0, *out = b->limb; return (int) (s < 0 ? -s : s); }
- intptr_t v = fixp(x) ? (intptr_t) getfix(x) : box_get(x);
+ intptr_t v = charmp(x) ? (intptr_t) getcharm(x) : box_get(x);
  *neg = v < 0;
  uintptr_t u = *neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
  scratch[0] = (uint32_t) u;
@@ -5267,14 +5266,14 @@ word ai_big_canon(ai_word **hp, uint32_t const *limb, int n, bool neg) {
   uintptr_t const boxmag = (uintptr_t) 1 << (Bits - 1);   // |INT_MIN|  = 2^(W-1)
   intptr_t val;
   if (!neg) {
-   if (u <= fixmag - 1) return putfix((intptr_t) u);       // fix_max = 2^(W-2)-1
+   if (u <= fixmag - 1) return putcharm((intptr_t) u);       // fix_max = 2^(W-2)-1
    if (u > boxmag - 1) goto big;                            // > INTPTR_MAX -> bignum
    val = (intptr_t) u; }
   else {
-   if (u <= fixmag) return putfix((intptr_t) ((uintptr_t) 0 - u));   // incl fix_min
+   if (u <= fixmag) return putcharm((intptr_t) ((uintptr_t) 0 - u));   // incl fix_min
    if (u > boxmag) goto big;                                          // < INTPTR_MIN -> bignum
    val = (intptr_t) ((uintptr_t) 0 - u); }                            // incl INTPTR_MIN
-  struct ai_tuple *bx = ini_scalar((struct ai_tuple*) *hp, ai_Z);
+  struct ai_vec *bx = ini_scalar((struct ai_vec*) *hp, ai_Z);
   *hp += box_req; box_put(bx->shape, val); return word(bx); }
 big:;
  struct ai_big *b = ini_big((struct ai_big*) *hp, neg ? -n : n);
@@ -5366,7 +5365,7 @@ struct ai *ai_big_quot_true(struct ai *g) {
   int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
   rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
  if (exact) g->sp[1] = ai_big_canon(&g->hp, rmag, rn, rneg);
- else { struct ai_tuple *v = ini_scalar((struct ai_tuple*) g->hp, ai_R);  // a,b still valid: no GC since the re-fetch, and toflo is alloc-free
+ else { struct ai_vec *v = ini_scalar((struct ai_vec*) g->hp, ai_R);  // a,b still valid: no GC since the re-fetch, and toflo is alloc-free
   g->hp += box_req; flo_put(v->shape, toflo(a) / toflo(b)); g->sp[1] = word(v); }
  g->sp++;
  g->ip = (union u*) g->ip + 1;
@@ -5421,7 +5420,7 @@ static struct ai *ai_bmul_setup(struct ai *g) {
  union u *k = (union u*) g->hp; g->hp += breq;
  ((struct ai_buf*) k)->ap = lvm_buf, ((struct ai_buf*) k)->str = s, tagtext(k, Width(struct ai_buf));
  g->sp -= 3;                                       // [i, r, ret_ip, abig, bbig]
- g->sp[0] = putfix(0), g->sp[1] = word(k), g->sp[2] = word(ret);
+ g->sp[0] = putcharm(0), g->sp[1] = word(k), g->sp[2] = word(ret);
  g->sp[3] = word(abig), g->sp[4] = word(bbig);
  g->ip = (union u*) bmul_loop;
  return g; }
@@ -5432,7 +5431,7 @@ lvm(lvm_bmul_start) {
  return Unpack(g), Continue(); }
 
 lvm(lvm_bmul) {
- int i = (int) getfix(Sp[0]);
+ int i = (int) getcharm(Sp[0]);
  struct ai_big *A = (struct ai_big*) Sp[3], *B = (struct ai_big*) Sp[4];
  intptr_t sla = A->slen, slb = B->slen;
  int na = sla < 0 ? -sla : sla, nb = slb < 0 ? -slb : slb;
@@ -5446,7 +5445,7 @@ lvm(lvm_bmul) {
    uint64_t t = ai * lb[j] + rl[i+j] + carry;
    rl[i+j] = (uint32_t) t, carry = t >> 32; }
   rl[i+nb] = (uint32_t) carry; }
- Sp[0] = putfix(i);                               // persist progress before any yield/GC
+ Sp[0] = putcharm(i);                               // persist progress before any yield/GC
  if (i < na) { YieldCheck(); return Continue(); }
  bool neg = (sla < 0) != (slb < 0); word ret;     // done: canonicalize the product
  Have(Width(struct ai_big) + b2w((size_t) (na + nb) * 4));
@@ -5520,36 +5519,36 @@ struct ai *ai_big_dec(struct ai *g) {
 // dim / over-rank -> nil.
 lvm(lvm_arr) {
  word t = Sp[0], shp = Sp[1];                  // vals = Sp[2]
- if (!fixp(t)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
- intptr_t ty = getfix(t);
+ if (!charmp(t)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+ intptr_t ty = getcharm(t);
  if (ty < 0 || ty > ai_O) return Sp[2] = nil, Sp += 2, Ip++, Continue();
  uintptr_t rank = 0, nelem = 1;
  for (word l = shp; twop(l); l = B(l)) {
   word d = A(l);
-  if (!fixp(d) || getfix(d) < 0) return Sp[2] = nil, Sp += 2, Ip++, Continue();
-  rank++, nelem *= (uintptr_t) getfix(d); }
+  if (!charmp(d) || getcharm(d) < 0) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+  rank++, nelem *= (uintptr_t) getcharm(d); }
  if (rank > maxrank || (ty == ai_O && rank == 0)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
- uintptr_t bytes = sizeof(struct ai_tuple) + rank * sizeof(word) + nelem * ai_T[ty];
+ uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + nelem * ai_T[ty];
  Have(b2w(bytes));
- struct ai_tuple *v = (struct ai_tuple*) Hp;
+ struct ai_vec *v = (struct ai_vec*) Hp;
  Hp += b2w(bytes);
- ini_tuple(v, ty, rank);
+ ini_vec(v, ty, rank);
  uintptr_t i = 0;                              // re-walk the (possibly moved) lists
- for (word l = Sp[1]; twop(l); l = B(l)) v->shape[i++] = (uintptr_t) getfix(A(l));
- if (ty == ai_O) for (i = 0; i < nelem; i++) tuple_put_obj(v, i, nil);
- else memset(tuple_data(v), 0, nelem * ai_T[ty]);
+ for (word l = Sp[1]; twop(l); l = B(l)) v->shape[i++] = (uintptr_t) getcharm(A(l));
+ if (ty == ai_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, nil);
+ else memset(vec_data(v), 0, nelem * ai_T[ty]);
  i = 0;                                        // no alloc below, so v/Sp[2] stay put
  for (word l = Sp[2]; twop(l) && i < nelem; l = B(l), i++) {
   word e = A(l);
-  if (ty == ai_O) { tuple_put_obj(v, i, e); continue; }   // store any value verbatim
+  if (ty == ai_O) { vec_put_obj(v, i, e); continue; }   // store any value verbatim
   if (ty == ai_C) {                                        // pack (re,im): a real -> (r,0)
-   ai_flo_t *fp = tuple_data(v);
+   ai_flo_t *fp = vec_data(v);
    if (Cp(e)) fp[2*i] = cplx_re(e), fp[2*i+1] = cplx_im(e);
    else if (isnum(e)) fp[2*i] = toflo(e), fp[2*i+1] = 0;
    continue; }
   if (!isnum(e)) continue;
-  if (ty >= ai_R) tuple_put_flo(v, i, toflo(e));
-  else tuple_put_int(v, i, fixp(e) ? (intptr_t) getfix(e)
+  if (ty >= ai_R) vec_put_flo(v, i, toflo(e));
+  else vec_put_int(v, i, charmp(e) ? (intptr_t) getcharm(e)
                        : flop(e) ? (intptr_t) flo_get(e) : box_get(e)); }
  return Sp[2] = word(v), Sp += 2, Ip++, Continue(); }
 
@@ -5558,40 +5557,40 @@ lvm(lvm_arr) {
 // range constructor, so (asum (iota n)) reduces a range end to end in C.
 lvm(lvm_iota) {
  word nx = Sp[0];
- if (!fixp(nx) || getfix(nx) < 0) return Sp[0] = nil, Ip++, Continue();
- uintptr_t n = (uintptr_t) getfix(nx);
- uintptr_t bytes = sizeof(struct ai_tuple) + 1 * sizeof(word) + n * ai_T[ai_Z];
+ if (!charmp(nx) || getcharm(nx) < 0) return Sp[0] = nil, Ip++, Continue();
+ uintptr_t n = (uintptr_t) getcharm(nx);
+ uintptr_t bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + n * ai_T[ai_Z];
  Have(b2w(bytes));
- struct ai_tuple *v = (struct ai_tuple*) Hp;
+ struct ai_vec *v = (struct ai_vec*) Hp;
  Hp += b2w(bytes);
- ini_tuple(v, ai_Z, 1);
+ ini_vec(v, ai_Z, 1);
  v->shape[0] = n;
- for (uintptr_t i = 0; i < n; i++) tuple_put_int(v, i, (intptr_t) i);
+ for (uintptr_t i = 0; i < n; i++) vec_put_int(v, i, (intptr_t) i);
  return Sp[0] = word(v), Ip++, Continue(); }
 
 // --- accessors -------------------------------------------------------------
-// rank / element-type code as fixnums; nil for a non-tuple. Both 0 for a scalar box.
-op11(lvm_arank, packp(Sp[0]) ? putfix(tuple(Sp[0])->rank) : nil)
-op11(lvm_atype, packp(Sp[0]) ? putfix(tuple(Sp[0])->type) : nil)
+// rank / element-type code as fixnums; nil for a non-vec. Both 0 for a scalar box.
+op11(lvm_arank, packp(Sp[0]) ? putcharm(vec(Sp[0])->rank) : nil)
+op11(lvm_atype, packp(Sp[0]) ? putcharm(vec(Sp[0])->type) : nil)
 
-// total element count (1 for a scalar box), nil for a non-tuple.
+// total element count (1 for a scalar box), nil for a non-vec.
 lvm(lvm_alen) {
  word x = Sp[0];
  if (!packp(x)) return Sp[0] = nil, Ip++, Continue();
- return Sp[0] = putfix(tuple_nelem(tuple(x))), Ip++, Continue(); }
+ return Sp[0] = putcharm(vec_nelem(vec(x))), Ip++, Continue(); }
 
-// dimensions as a list (allocates rank cons cells), nil for a non-tuple.
+// dimensions as a list (allocates rank cons cells), nil for a non-vec.
 lvm(lvm_ashape) {
  word x = Sp[0];
  if (!packp(x)) return Sp[0] = nil, Ip++, Continue();
- uintptr_t r = tuple(x)->rank;
+ uintptr_t r = vec(x)->rank;
  Have(r * Width(struct ai_pair));
- struct ai_tuple *v = tuple(Sp[0]);                 // re-read post-Have
+ struct ai_vec *v = vec(Sp[0]);                 // re-read post-Have
  struct ai_pair *p = (struct ai_pair*) Hp;
  Hp += r * Width(struct ai_pair);
  word list = nil;
  for (uintptr_t i = r; i--; )
-  ini_two(p, putfix(v->shape[i]), list), list = word(p), p++;
+  ini_two(p, putcharm(v->shape[i]), list), list = word(p), p++;
  return Sp[0] = list, Ip++, Continue(); }
 
 
@@ -5606,13 +5605,13 @@ static struct ai *ored(struct ai *g, int kind);   // kind: 0 sum, 1 prod, 2 max,
 lvm(lvm_asum) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
- if (tuple(x)->type == ai_O) {
+ if (vec(x)->type == ai_O) {
   Pack(g); g = ored(g, 0);
   if (!ai_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
- if (tuple(x)->type == ai_C) {                   // complex sum -> a complex box
-  struct ai_tuple *v = tuple(x); uintptr_t n = tuple_nelem(v);  // K=4 accumulators (see aprod)
-  ai_flo_t *fp = tuple_data(v);                   // read all parts before Have (no alloc here)
+ if (vec(x)->type == ai_C) {                   // complex sum -> a complex box
+  struct ai_vec *v = vec(x); uintptr_t n = vec_nelem(v);  // K=4 accumulators (see aprod)
+  ai_flo_t *fp = vec_data(v);                   // read all parts before Have (no alloc here)
   ai_flo_t a0=0,b0=0, a1=0,b1=0, a2=0,b2=0, a3=0,b3=0; uintptr_t j = 0;
   for (; j + 4 <= n; j += 4) {
    a0 += fp[2*j];   b0 += fp[2*j+1]; a1 += fp[2*j+2]; b1 += fp[2*j+3];
@@ -5620,41 +5619,41 @@ lvm(lvm_asum) {
   for (; j < n; j++) a0 += fp[2*j], b0 += fp[2*j+1];
   ai_flo_t sr = (a0+a1)+(a2+a3), si = (b0+b1)+(b2+b3);
   Have(cplx_req);
-  struct ai_tuple *r = ini_scalar((struct ai_tuple*) Hp, ai_C); Hp += cplx_req;
+  struct ai_vec *r = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
   cplx_put(r, sr, si);
   return Sp[0] = word(r), Ip++, Continue(); }
- struct ai_tuple *v = tuple(x);
- uintptr_t n = tuple_nelem(v);
+ struct ai_vec *v = vec(x);
+ uintptr_t n = vec_nelem(v);
  bool fdom = v->type >= ai_R; word _res;
  Have(box_req);
- v = tuple(Sp[0]);
+ v = vec(Sp[0]);
  if (fdom) {                                    // K=4 accumulators (see aprod complex)
   ai_flo_t a0=0,a1=0,a2=0,a3=0; uintptr_t i = 0;
-  for (; i + 4 <= n; i += 4) a0+=tuple_get_flo(v,i), a1+=tuple_get_flo(v,i+1), a2+=tuple_get_flo(v,i+2), a3+=tuple_get_flo(v,i+3);
-  for (; i < n; i++) a0 += tuple_get_flo(v, i);
+  for (; i + 4 <= n; i += 4) a0+=vec_get_flo(v,i), a1+=vec_get_flo(v,i+1), a2+=vec_get_flo(v,i+2), a3+=vec_get_flo(v,i+3);
+  for (; i < n; i++) a0 += vec_get_flo(v, i);
   emit_flo((a0+a1)+(a2+a3)); }
  else {                                         // K=4 (modular, Z/2^64 is a commutative ring -> assoc+exact)
   uintptr_t a0=0,a1=0,a2=0,a3=0, i = 0;
-  for (; i + 4 <= n; i += 4) a0+=(uintptr_t)tuple_get_int(v,i), a1+=(uintptr_t)tuple_get_int(v,i+1), a2+=(uintptr_t)tuple_get_int(v,i+2), a3+=(uintptr_t)tuple_get_int(v,i+3);
-  for (; i < n; i++) a0 += (uintptr_t) tuple_get_int(v, i);
+  for (; i + 4 <= n; i += 4) a0+=(uintptr_t)vec_get_int(v,i), a1+=(uintptr_t)vec_get_int(v,i+1), a2+=(uintptr_t)vec_get_int(v,i+2), a3+=(uintptr_t)vec_get_int(v,i+3);
+  for (; i < n; i++) a0 += (uintptr_t) vec_get_int(v, i);
   emit_int((intptr_t) ((a0+a1)+(a2+a3))); }
  return Sp[0] = _res, Ip++, Continue(); }
 
 lvm(lvm_aprod) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- if (tuple(x)->type == ai_O) {
+ if (vec(x)->type == ai_O) {
   Pack(g); g = ored(g, 1);
   if (!ai_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
- if (tuple(x)->type == ai_C) {                   // complex product -> a complex box
+ if (vec(x)->type == ai_C) {                   // complex product -> a complex box
   // K=4 INDEPENDENT accumulators break the multiply latency chain (acc_n depends
   // on acc_n-1); reassociation is sound -- * is a commutative monoid, so the
   // product is grouping-invariant by definition (fp * differs only in last-bit
   // rounding per grouping). ~3x faster than the sequential chain; the compiler
   // schedules the four chains. Tail folds the <4 remainder into chain 0.
-  struct ai_tuple *v = tuple(x); uintptr_t n = tuple_nelem(v);
-  ai_flo_t *fp = tuple_data(v);
+  struct ai_vec *v = vec(x); uintptr_t n = vec_nelem(v);
+  ai_flo_t *fp = vec_data(v);
   ai_flo_t r0=1,i0=0, r1=1,i1=0, r2=1,i2=0, r3=1,i3=0, t; uintptr_t j = 0;
   for (; j + 4 <= n; j += 4) {
    t = r0*fp[2*j]  -i0*fp[2*j+1]; i0 = r0*fp[2*j+1]+i0*fp[2*j];   r0 = t;
@@ -5665,22 +5664,22 @@ lvm(lvm_aprod) {
   ai_flo_t ra = r0*r1-i0*i1, ia = r0*i1+i0*r1, rb = r2*r3-i2*i3, ib = r2*i3+i2*r3;
   ai_flo_t pr = ra*rb-ia*ib, pi = ra*ib+ia*rb;
   Have(cplx_req);
-  struct ai_tuple *r = ini_scalar((struct ai_tuple*) Hp, ai_C); Hp += cplx_req;
+  struct ai_vec *r = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
   cplx_put(r, pr, pi);
   return Sp[0] = word(r), Ip++, Continue(); }
- struct ai_tuple *v = tuple(x);
- uintptr_t n = tuple_nelem(v);
+ struct ai_vec *v = vec(x);
+ uintptr_t n = vec_nelem(v);
  bool fdom = v->type >= ai_R; word _res;
- Have(box_req); v = tuple(Sp[0]);
+ Have(box_req); v = vec(Sp[0]);
  if (fdom) {                                    // K=4 accumulators (see complex above)
   ai_flo_t a0=1,a1=1,a2=1,a3=1; uintptr_t i = 0;
-  for (; i + 4 <= n; i += 4) a0*=tuple_get_flo(v,i), a1*=tuple_get_flo(v,i+1), a2*=tuple_get_flo(v,i+2), a3*=tuple_get_flo(v,i+3);
-  for (; i < n; i++) a0 *= tuple_get_flo(v, i);
+  for (; i + 4 <= n; i += 4) a0*=vec_get_flo(v,i), a1*=vec_get_flo(v,i+1), a2*=vec_get_flo(v,i+2), a3*=vec_get_flo(v,i+3);
+  for (; i < n; i++) a0 *= vec_get_flo(v, i);
   emit_flo((a0*a1)*(a2*a3)); }
  else {                                         // K=4 (modular product; imul is latency-bound, ~3x)
   uintptr_t a0=1,a1=1,a2=1,a3=1, i = 0;
-  for (; i + 4 <= n; i += 4) a0*=(uintptr_t)tuple_get_int(v,i), a1*=(uintptr_t)tuple_get_int(v,i+1), a2*=(uintptr_t)tuple_get_int(v,i+2), a3*=(uintptr_t)tuple_get_int(v,i+3);
-  for (; i < n; i++) a0 *= (uintptr_t) tuple_get_int(v, i);
+  for (; i + 4 <= n; i += 4) a0*=(uintptr_t)vec_get_int(v,i), a1*=(uintptr_t)vec_get_int(v,i+1), a2*=(uintptr_t)vec_get_int(v,i+2), a3*=(uintptr_t)vec_get_int(v,i+3);
+  for (; i < n; i++) a0 *= (uintptr_t) vec_get_int(v, i);
   emit_int((intptr_t) ((a0*a1)*(a2*a3))); }
  return Sp[0] = _res, Ip++, Continue(); }
 
@@ -5689,37 +5688,37 @@ lvm(lvm_aprod) {
 static lvm(lvm_aextreme, int kind) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- if (tuple(x)->type == ai_O) {
+ if (vec(x)->type == ai_O) {
   Pack(g); g = ored(g, kind);
   if (!ai_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
- if (tuple(x)->type == ai_C) return Sp[0] = nil, Ip++, Continue();   // complex: unordered
- struct ai_tuple *v = tuple(x);
- uintptr_t n = tuple_nelem(v);
+ if (vec(x)->type == ai_C) return Sp[0] = nil, Ip++, Continue();   // complex: unordered
+ struct ai_vec *v = vec(x);
+ uintptr_t n = vec_nelem(v);
  if (!n) return Sp[0] = nil, Ip++, Continue();
  bool fdom = v->type >= ai_R, ismax = kind == 2; word _res;
- Have(box_req); v = tuple(Sp[0]);
+ Have(box_req); v = vec(Sp[0]);
  // K=4 INDEPENDENT running extremes break the m_n<-m_n-1 latency chain. max/min
  // are commutative+associative+idempotent, so this is EXACT (it just selects an
  // existing element -- no rounding, unlike sum/prod). Each chain seeds from v[0].
- if (fdom) { ai_flo_t m0 = tuple_get_flo(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
+ if (fdom) { ai_flo_t m0 = vec_get_flo(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
   for (; i + 4 <= n; i += 4) {
-   e = tuple_get_flo(v,i);   if (ismax?e>m0:e<m0) m0=e;
-   e = tuple_get_flo(v,i+1); if (ismax?e>m1:e<m1) m1=e;
-   e = tuple_get_flo(v,i+2); if (ismax?e>m2:e<m2) m2=e;
-   e = tuple_get_flo(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
-  for (; i < n; i++) { e = tuple_get_flo(v,i); if (ismax?e>m0:e<m0) m0=e; }
+   e = vec_get_flo(v,i);   if (ismax?e>m0:e<m0) m0=e;
+   e = vec_get_flo(v,i+1); if (ismax?e>m1:e<m1) m1=e;
+   e = vec_get_flo(v,i+2); if (ismax?e>m2:e<m2) m2=e;
+   e = vec_get_flo(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
+  for (; i < n; i++) { e = vec_get_flo(v,i); if (ismax?e>m0:e<m0) m0=e; }
   if (ismax?m1>m0:m1<m0) m0=m1;
   if (ismax?m2>m0:m2<m0) m0=m2;
   if (ismax?m3>m0:m3<m0) m0=m3;
   emit_flo(m0); }
- else { intptr_t m0 = tuple_get_int(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
+ else { intptr_t m0 = vec_get_int(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
   for (; i + 4 <= n; i += 4) {
-   e = tuple_get_int(v,i);   if (ismax?e>m0:e<m0) m0=e;
-   e = tuple_get_int(v,i+1); if (ismax?e>m1:e<m1) m1=e;
-   e = tuple_get_int(v,i+2); if (ismax?e>m2:e<m2) m2=e;
-   e = tuple_get_int(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
-  for (; i < n; i++) { e = tuple_get_int(v,i); if (ismax?e>m0:e<m0) m0=e; }
+   e = vec_get_int(v,i);   if (ismax?e>m0:e<m0) m0=e;
+   e = vec_get_int(v,i+1); if (ismax?e>m1:e<m1) m1=e;
+   e = vec_get_int(v,i+2); if (ismax?e>m2:e<m2) m2=e;
+   e = vec_get_int(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
+  for (; i < n; i++) { e = vec_get_int(v,i); if (ismax?e>m0:e<m0) m0=e; }
   if (ismax?m1>m0:m1<m0) m0=m1;
   if (ismax?m2>m0:m2<m0) m0=m2;
   if (ismax?m3>m0:m3<m0) m0=m3;
@@ -5736,24 +5735,24 @@ lvm(lvm_amin) { return Ap(lvm_aextreme, g, 3); }
 lvm(lvm_aall) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- struct ai_tuple *v = tuple(x);
- uintptr_t n = tuple_nelem(v);
+ struct ai_vec *v = vec(x);
+ uintptr_t n = vec_nelem(v);
  if (v->type == ai_O) {                         // object: a falsy element fails the conjunction
   for (uintptr_t i = 0; i < n; i++)
-   if (ai_nilp(g, tuple_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
-  return Sp[0] = putfix(1), Ip++, Continue(); }
+   if (ai_nilp(g, vec_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
+  return Sp[0] = putcharm(1), Ip++, Continue(); }
  if (v->type == ai_C) {                         // complex: a 0+0i element fails the conjunction
-  ai_flo_t *fp = tuple_data(v);
+  ai_flo_t *fp = vec_data(v);
   for (uintptr_t i = 0; i < n; i++)
    if (fp[2*i] == 0 && fp[2*i+1] == 0) return Sp[0] = nil, Ip++, Continue();
-  return Sp[0] = putfix(1), Ip++, Continue(); }
+  return Sp[0] = putcharm(1), Ip++, Continue(); }
  // a short-circuit sound, NOT an accumulator chain -- already load-bound (the
  // compiler vectorizes it), so multi-accumulating buys nothing; left as is.
  bool fdom = v->type >= ai_R;
  for (uintptr_t i = 0; i < n; i++)
-  if (fdom ? tuple_get_flo(v, i) == 0 : tuple_get_int(v, i) == 0)
+  if (fdom ? vec_get_flo(v, i) == 0 : vec_get_int(v, i) == 0)
    return Sp[0] = nil, Ip++, Continue();
- return Sp[0] = putfix(1), Ip++, Continue(); }
+ return Sp[0] = putcharm(1), Ip++, Continue(); }
 
 // (outer a b) — OUTER PRODUCT with *: result[I,J] = a[I] * b[J], rank ra+rb,
 // shape a.shape ++ b.shape. z⊗z -> z (wrapping), any r -> r. complex/object or
@@ -5761,25 +5760,25 @@ lvm(lvm_aall) {
 lvm(lvm_outer) {
  word a = Sp[0], b = Sp[1];
  if (!(arrp(a) && arrp(b))) return *++Sp = nil, Ip++, Continue();
- struct ai_tuple *va = tuple(a), *vb = tuple(b);
+ struct ai_vec *va = vec(a), *vb = vec(b);
  if (va->type > ai_R || vb->type > ai_R) return *++Sp = nil, Ip++, Continue();
- uintptr_t M = tuple_nelem(va), N = tuple_nelem(vb), n = M * N, rank = va->rank + vb->rank;
+ uintptr_t M = vec_nelem(va), N = vec_nelem(vb), n = M * N, rank = va->rank + vb->rank;
  if (rank > maxrank) return *++Sp = nil, Ip++, Continue();
  bool fdom = va->type == ai_R || vb->type == ai_R;
- enum ai_tuple_type rt = fdom ? ai_R : ai_Z;
- uintptr_t bytes = sizeof(struct ai_tuple) + rank * sizeof(word) + ai_T[rt] * n;
+ enum ai_vec_type rt = fdom ? ai_R : ai_Z;
+ uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + ai_T[rt] * n;
  Have(b2w(bytes));
- va = tuple(Sp[0]), vb = tuple(Sp[1]);          // re-read post-Have
- struct ai_tuple *r = (struct ai_tuple*) Hp; Hp += b2w(bytes);
- ini_tuple(r, rt, rank);
+ va = vec(Sp[0]), vb = vec(Sp[1]);          // re-read post-Have
+ struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+ ini_vec(r, rt, rank);
  for (uintptr_t i = 0; i < va->rank; i++) r->shape[i] = va->shape[i];
  for (uintptr_t i = 0; i < vb->rank; i++) r->shape[va->rank + i] = vb->shape[i];
- if (fdom) { ai_flo_t *rp = tuple_data(r);
-  for (uintptr_t i = 0; i < M; i++) { ai_flo_t av = tuple_get_flo(va, i);
-   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = av * tuple_get_flo(vb, j); } }
- else { intptr_t *rp = tuple_data(r);
-  for (uintptr_t i = 0; i < M; i++) { intptr_t av = tuple_get_int(va, i);
-   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = (intptr_t)((uintptr_t)av * (uintptr_t)tuple_get_int(vb, j)); } }
+ if (fdom) { ai_flo_t *rp = vec_data(r);
+  for (uintptr_t i = 0; i < M; i++) { ai_flo_t av = vec_get_flo(va, i);
+   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = av * vec_get_flo(vb, j); } }
+ else { intptr_t *rp = vec_data(r);
+  for (uintptr_t i = 0; i < M; i++) { intptr_t av = vec_get_int(va, i);
+   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = (intptr_t)((uintptr_t)av * (uintptr_t)vec_get_int(vb, j)); } }
  return *++Sp = word(r), Ip++, Continue(); }   // arity 2
 
 // (inner a b) — INNER PRODUCT (+.×): contract a's LAST axis with b's FIRST axis.
@@ -5791,7 +5790,7 @@ lvm(lvm_outer) {
 lvm(lvm_inner) {
  word a = Sp[0], b = Sp[1];
  if (!(arrp(a) && arrp(b))) return *++Sp = nil, Ip++, Continue();
- struct ai_tuple *va = tuple(a), *vb = tuple(b);
+ struct ai_vec *va = vec(a), *vb = vec(b);
  if (va->type > ai_R || vb->type > ai_R || va->rank < 1 || vb->rank < 1)
   return *++Sp = nil, Ip++, Continue();
  uintptr_t K = va->shape[va->rank - 1];
@@ -5804,31 +5803,31 @@ lvm(lvm_inner) {
  bool fdom = va->type == ai_R || vb->type == ai_R, ar = va->type == ai_R, br = vb->type == ai_R;
  if (rank == 0) {                               // dot product -> scalar number
   word _res;
-  if (fdom) { ai_flo_t *Ad = tuple_data(va), *Bd = tuple_data(vb);
-   intptr_t *Ai = tuple_data(va), *Bi = tuple_data(vb); ai_flo_t acc = 0;
+  if (fdom) { ai_flo_t *Ad = vec_data(va), *Bd = vec_data(vb);
+   intptr_t *Ai = vec_data(va), *Bi = vec_data(vb); ai_flo_t acc = 0;
    for (uintptr_t l = 0; l < K; l++) acc += (ar ? Ad[l] : (ai_flo_t) Ai[l]) * (br ? Bd[l] : (ai_flo_t) Bi[l]);
    Have(box_req); emit_flo(acc); }
-  else { intptr_t *A = tuple_data(va), *B = tuple_data(vb); uintptr_t acc = 0;
+  else { intptr_t *A = vec_data(va), *B = vec_data(vb); uintptr_t acc = 0;
    for (uintptr_t l = 0; l < K; l++) acc += (uintptr_t) A[l] * (uintptr_t) B[l];
    Have(box_req); emit_int((intptr_t) acc); }
   return *++Sp = _res, Ip++, Continue(); }
- enum ai_tuple_type rt = fdom ? ai_R : ai_Z;
- uintptr_t bytes = sizeof(struct ai_tuple) + rank * sizeof(word) + ai_T[rt] * n;
+ enum ai_vec_type rt = fdom ? ai_R : ai_Z;
+ uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + ai_T[rt] * n;
  Have(b2w(bytes));
- va = tuple(Sp[0]), vb = tuple(Sp[1]);
- struct ai_tuple *r = (struct ai_tuple*) Hp; Hp += b2w(bytes);
- ini_tuple(r, rt, rank);
+ va = vec(Sp[0]), vb = vec(Sp[1]);
+ struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+ ini_vec(r, rt, rank);
  { uintptr_t s = 0;
    for (uintptr_t i = 0; i + 1 < va->rank; i++) r->shape[s++] = va->shape[i];
    for (uintptr_t i = 1; i < vb->rank; i++) r->shape[s++] = vb->shape[i]; }
- if (fdom) { ai_flo_t *C = tuple_data(r);
-  ai_flo_t *Ad = tuple_data(va), *Bd = tuple_data(vb);
-  intptr_t *Ai = tuple_data(va), *Bi = tuple_data(vb);
+ if (fdom) { ai_flo_t *C = vec_data(r);
+  ai_flo_t *Ad = vec_data(va), *Bd = vec_data(vb);
+  intptr_t *Ai = vec_data(va), *Bi = vec_data(vb);
   for (uintptr_t p = 0; p < n; p++) C[p] = 0;
   for (uintptr_t i = 0; i < M; i++)
    for (uintptr_t l = 0; l < K; l++) { ai_flo_t av = ar ? Ad[i*K+l] : (ai_flo_t) Ai[i*K+l];
     for (uintptr_t j = 0; j < N; j++) C[i*N+j] += av * (br ? Bd[l*N+j] : (ai_flo_t) Bi[l*N+j]); } }
- else { intptr_t *C = tuple_data(r), *A = tuple_data(va), *B = tuple_data(vb);
+ else { intptr_t *C = vec_data(r), *A = vec_data(va), *B = vec_data(vb);
   for (uintptr_t p = 0; p < n; p++) C[p] = 0;
   for (uintptr_t i = 0; i < M; i++)
    for (uintptr_t l = 0; l < K; l++) { intptr_t av = A[i*K+l];
@@ -5839,19 +5838,19 @@ lvm(lvm_inner) {
 // Reached from lvm_math1 when its operand arrp. Result is a float array
 // (ai_R) with the operand's shape. The fill loop takes no &local, so the
 // lvm wrapper keeps its trailing tail call.
-static ai_noinline void vmap1_fill(struct ai_tuple *r, struct ai_tuple *a, ai_flo_t (*fn)(ai_flo_t)) {
- uintptr_t n = tuple_nelem(r);
- for (uintptr_t i = 0; i < n; i++) tuple_put_flo(r, i, fn(tuple_get_flo(a, i))); }
+static ai_noinline void vmap1_fill(struct ai_vec *r, struct ai_vec *a, ai_flo_t (*fn)(ai_flo_t)) {
+ uintptr_t n = vec_nelem(r);
+ for (uintptr_t i = 0; i < n; i++) vec_put_flo(r, i, fn(vec_get_flo(a, i))); }
 
 lvm(lvm_vmap1, ai_flo_t (*fn)(ai_flo_t)) {
- struct ai_tuple *a = tuple(Sp[0]);
- uintptr_t rank = a->rank, n = tuple_nelem(a);
- uintptr_t bytes = sizeof(struct ai_tuple) + rank * sizeof(word) + n * ai_T[ai_R];
+ struct ai_vec *a = vec(Sp[0]);
+ uintptr_t rank = a->rank, n = vec_nelem(a);
+ uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + n * ai_T[ai_R];
  Have(b2w(bytes));
- a = tuple(Sp[0]);                               // re-read post-Have
- struct ai_tuple *r = (struct ai_tuple*) Hp;
+ a = vec(Sp[0]);                               // re-read post-Have
+ struct ai_vec *r = (struct ai_vec*) Hp;
  Hp += b2w(bytes);
- ini_tuple(r, ai_R, rank);
+ ini_vec(r, ai_R, rank);
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = a->shape[i];
  vmap1_fill(r, a, fn);
  return Sp[0] = word(r), Ip++, Continue(); }
@@ -5905,10 +5904,10 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // is finer -- hash-colliding lambdas compare EQUAL in the order but are not `=`
 // (symbols no longer: the mint serial made their order total).
 // cross-kind rank = the enum q kind, every numeric kind folded to the arith lane
-// (KFix) so fix/box/big/float/complex order by VALUE, not representation. Arrays
+// (KCharm) so fix/box/big/float/complex order by VALUE, not representation. Arrays
 // divert to lvm_vbin before this, so KArr* never appear. One source of truth:
 // the enum q order itself.
-static ai_inline int cmp_rank(word x) { return (isnum(x) || Cp(x)) ? KFix : (int) ai_kind(x); }
+static ai_inline int cmp_rank(word x) { return (isnum(x) || Cp(x)) ? KCharm : (int) ai_kind(x); }
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
@@ -5940,7 +5939,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
  int ra = cmp_rank(a), rb = cmp_rank(b);
  if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: type lattice
  switch (ra) {
-  case KFix:                                               // number band, by value
+  case KCharm:                                               // number band, by value
    if (Cp(a) || Cp(b)) {                                   // complex: (re, im) lexicographic
     ai_flo_t ar = Cp(a) ? cplx_re(a) : toflo(a), br = Cp(b) ? cplx_re(b) : toflo(b);
     if (ar != br) return ar < br ? -1 : 1;
@@ -5975,10 +5974,10 @@ lvm(lvm_tally) {
  if (strp(l)) n = (intptr_t) len(l);
  else if (bufp(l)) n = (intptr_t) len(buf_str(l));
  else if (mapp(l)) n = (intptr_t) map_len(l);
- else if (arrp(l)) n = (intptr_t) tuple_nelem(tuple(l));
+ else if (arrp(l)) n = (intptr_t) vec_nelem(vec(l));
  else if (symp(l)) n = (l != (word) ai_core_of(g) && sym(l)->nom) ? (intptr_t) len(sym(l)->nom) : 0;  // the core: nameless -> 0 charms
  else while (twop(l)) n++, l = B(l);
- Sp[0] = putfix(n);
+ Sp[0] = putcharm(n);
  return Ip++, Continue(); }
 
 lvm(lvm_sort) {
@@ -6013,7 +6012,7 @@ static lvm(lvm_cmp_ord, int op) {
  if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, op);      // array -> elementwise
  int ra = cmp_rank(a), rb = cmp_rank(b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: type lattice
- else if (ra != KFix) r = vcmp_int(op, cmp3(g, a, b), 0);  // string / sym / pair / lambda
+ else if (ra != KCharm) r = vcmp_int(op, cmp3(g, a, b), 0);  // string / sym / pair / lambda
  else if (Cp(a) || Cp(b)) {                                // complex: lexicographic, per op
   ai_flo_t ar = Cp(a) ? cplx_re(a) : toflo(a), br = Cp(b) ? cplx_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)
@@ -6021,14 +6020,14 @@ static lvm(lvm_cmp_ord, int op) {
  else if (flop(a) || flop(b)) r = vcmp_flo(op, toflo(a), toflo(b));
  else if (bigp(a) || bigp(b)) r = vcmp_int(op, ai_big_cmp(a, b), 0);
  else r = vcmp_int(op, toint(a), toint(b));
- return *++Sp = r ? putfix(1) : nil, Ip++, Continue(); }
+ return *++Sp = r ? putcharm(1) : nil, Ip++, Continue(); }
 // `<` `<=` -- the implemented side: both-fixnum fast path (tagged order is
 // monotonic), else the lane. `>` `>=` are the other side: reverse the operands and
 // reuse `<` `<=` (a > b == b < a; a >= b == b <= a).
 #define cmp_lt(nom, vop) lvm(nom) { \
  word a = Sp[0], b = Sp[1]; \
- if (__builtin_expect(fixp(a) && fixp(b), 1)) \
-  return *++Sp = vcmp_int(vop, a, b) ? putfix(1) : nil, Ip++, Continue(); \
+ if (__builtin_expect(charmp(a) && charmp(b), 1)) \
+  return *++Sp = vcmp_int(vop, a, b) ? putcharm(1) : nil, Ip++, Continue(); \
  return Ap(lvm_cmp_ord, g, vop); }
 cmp_lt(lvm_lt, vop_lt) cmp_lt(lvm_le, vop_le)
 #undef cmp_lt
@@ -6054,11 +6053,11 @@ static ai_inline uintptr_t bdim(uintptr_t da, uintptr_t db) {
 // Fill the (already-shaped) result r with a `op` b, broadcasting. All the
 // &-taking stack arrays (strides, odometer) live here so the lvm wrapper stays
 // TCO-clean. No allocation inside, so operand pointers can't move under us.
-static ai_noinline void vbin_fill(struct ai_tuple *r, word a, word b, int op, bool fdom) {
+static ai_noinline void vbin_fill(struct ai_vec *r, word a, word b, int op, bool fdom) {
  uintptr_t R = r->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
- struct ai_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
+ struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
  // CONTIGUOUS MONOTYPE FAST PATH: no size-1 broadcasting (each operand is either a
  // scalar or a full-shape array of the compute domain's storage type), so oa==ob==p
  // -- the per-cell odometer, offset recompute, and accessor/op dispatch all vanish.
@@ -6067,18 +6066,18 @@ static ai_noinline void vbin_fill(struct ai_tuple *r, word a, word b, int op, bo
  // the general odometer loop below (correct, just not accelerated). Results are
  // bit-identical: same reads (raw f64/i64), same op (matches vop_flo/int/cmp).
  { bool cmpf = op >= vop_lt;
-   bool aok = !aarr || tuple_nelem(va) == n, bok = !barr || tuple_nelem(vb) == n;
+   bool aok = !aarr || vec_nelem(va) == n, bok = !barr || vec_nelem(vb) == n;
    bool nobig = !((!aarr && bigp(a)) || (!barr && bigp(b)));
    if (aok && bok && nobig) {
     if (fdom && (!aarr || va->type == ai_R) && (!barr || vb->type == ai_R)) {
      ai_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
-     ai_flo_t *ap = aarr ? (ai_flo_t*) tuple_data(va) : 0, *bp = barr ? (ai_flo_t*) tuple_data(vb) : 0;
-     if (cmpf) { intptr_t *rp = (intptr_t*) tuple_data(r);
+     ai_flo_t *ap = aarr ? (ai_flo_t*) vec_data(va) : 0, *bp = barr ? (ai_flo_t*) vec_data(vb) : 0;
+     if (cmpf) { intptr_t *rp = (intptr_t*) vec_data(r);
       #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = aarr?ap[p]:sa, bv = barr?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
       switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
         case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
       #undef VBF
-     } else { ai_flo_t *rp = (ai_flo_t*) tuple_data(r);
+     } else { ai_flo_t *rp = (ai_flo_t*) vec_data(r);
       #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = aarr?ap[p]:sa, bv = barr?bp[p]:sb; rp[p] = (E); } } while (0)
       switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
         case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
@@ -6086,10 +6085,10 @@ static ai_noinline void vbin_fill(struct ai_tuple *r, word a, word b, int op, bo
       #undef VBF
      }
     } else if (!fdom && (!aarr || va->type == ai_Z) && (!barr || vb->type == ai_Z)) {
-     intptr_t sia = aarr ? 0 : (fixp(a) ? (intptr_t) getfix(a) : box_get(a));
-     intptr_t sib = barr ? 0 : (fixp(b) ? (intptr_t) getfix(b) : box_get(b));
-     intptr_t *ap = aarr ? (intptr_t*) tuple_data(va) : 0, *bp = barr ? (intptr_t*) tuple_data(vb) : 0;
-     intptr_t *rp = (intptr_t*) tuple_data(r);   // r is ai_Z for both int-arith and the mask
+     intptr_t sia = aarr ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : box_get(a));
+     intptr_t sib = barr ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : box_get(b));
+     intptr_t *ap = aarr ? (intptr_t*) vec_data(va) : 0, *bp = barr ? (intptr_t*) vec_data(vb) : 0;
+     intptr_t *rp = (intptr_t*) vec_data(r);   // r is ai_Z for both int-arith and the mask
      if (cmpf) {
       #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = aarr?ap[p]:sia, bv = barr?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
       switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
@@ -6123,8 +6122,8 @@ static ai_noinline void vbin_fill(struct ai_tuple *r, word a, word b, int op, bo
  // by low bits (modular). A *comparison* against a bignum, though, is decided
  // exactly by the bignum's sign below -- never by these low bits.
  ai_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
- intptr_t ia = aarr ? 0 : fixp(a) ? getfix(a) : bigp(a) ? ai_big_low(a) : box_get(a),
-          ib = barr ? 0 : fixp(b) ? getfix(b) : bigp(b) ? ai_big_low(b) : box_get(b);
+ intptr_t ia = aarr ? 0 : charmp(a) ? getcharm(a) : bigp(a) ? ai_big_low(a) : box_get(a),
+          ib = barr ? 0 : charmp(b) ? getcharm(b) : bigp(b) ? ai_big_low(b) : box_get(b);
  bool abig = !aarr && bigp(a), bbig = !barr && bigp(b);   // at most one (the other is an array)
  int asign = abig ? (((struct ai_big*) a)->slen < 0 ? -1 : 1) : 0;
  int bsign = bbig ? (((struct ai_big*) b)->slen < 0 ? -1 : 1) : 0;
@@ -6132,15 +6131,15 @@ static ai_noinline void vbin_fill(struct ai_tuple *r, word a, word b, int op, bo
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
   if (fdom) {
-   ai_flo_t av = aarr ? tuple_get_flo(va, oa) : sa, bv = barr ? tuple_get_flo(vb, ob) : sb;
-   if (cmp) tuple_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
-   else tuple_put_flo(r, p, vop_flo(op, av, bv)); }
+   ai_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
+   if (cmp) vec_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
+   else vec_put_flo(r, p, vop_flo(op, av, bv)); }
   else {
-   intptr_t av = aarr ? tuple_get_int(va, oa) : ia, bv = barr ? tuple_get_int(vb, ob) : ib;
+   intptr_t av = aarr ? vec_get_int(va, oa) : ia, bv = barr ? vec_get_int(vb, ob) : ib;
    if (cmp) {                                    // bignum side (if any) sorts by sign: a-b ~ asign, or -bsign
     intptr_t t = (abig || bbig) ? vcmp_sign(op, abig ? asign : -bsign) : vcmp_int(op, av, bv);
-    tuple_put_int(r, p, t ? 1 : 0); }
-   else tuple_put_int(r, p, vop_int(op, av, bv)); }
+    vec_put_int(r, p, t ? 1 : 0); }
+   else vec_put_int(r, p, vop_int(op, av, bv)); }
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
    if (++idx[j] < (intptr_t) r->shape[j]) break;
    idx[j] = 0; } } }
@@ -6153,7 +6152,7 @@ static ai_noinline void vbin_fill(struct ai_tuple *r, word a, word b, int op, bo
 static ai_noinline bool vquot_needs_float(word a, word b) {
  bool aarr = arrp(a), barr = arrp(b);
  if ((!aarr && bigp(a)) || (!barr && bigp(b))) return true;
- struct ai_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
+ struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
  uintptr_t ra = aarr ? va->rank : 0, rb = barr ? vb->rank : 0, R = ra > rb ? ra : rb, n = 1;
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank], shp[maxrank];
  for (uintptr_t k = 0; k < R; k++) {
@@ -6169,7 +6168,7 @@ static ai_noinline bool vquot_needs_float(word a, word b) {
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  intptr_t av = aarr ? tuple_get_int(va, oa) : ia, bv = barr ? tuple_get_int(vb, ob) : ib;
+  intptr_t av = aarr ? vec_get_int(va, oa) : ia, bv = barr ? vec_get_int(vb, ob) : ib;
   if (bv == 0 || av % bv != 0) return true;
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) { if (++idx[j] < shp[j]) break; idx[j] = 0; } }
  return false; }
@@ -6181,42 +6180,42 @@ lvm(lvm_vbin, int op) {
  // array (a complex scalar isn't isnum, so it must divert before the gate below).
  // Mixing ai_C with a ai_O object array is unsupported (neither reads the other's
  // element encoding) -- the ai_O lane wins there.
- if (((aarr && tuple(a)->type == ai_C) || (barr && tuple(b)->type == ai_C) || Cp(a) || Cp(b))
-     && !(aarr && tuple(a)->type == ai_O) && !(barr && tuple(b)->type == ai_O))
+ if (((aarr && vec(a)->type == ai_C) || (barr && vec(b)->type == ai_C) || Cp(a) || Cp(b))
+     && !(aarr && vec(a)->type == ai_O) && !(barr && vec(b)->type == ai_O))
   return Ap(lvm_cbin, g, op);
  if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
   return *++Sp = nil, Ip++, Continue();
- if ((aarr && tuple(a)->type == ai_O) || (barr && tuple(b)->type == ai_O))
+ if ((aarr && vec(a)->type == ai_O) || (barr && vec(b)->type == ai_O))
   return Ap(lvm_obin, g, op);                     // object array -> promoting lane
- uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
+ uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type
  // (i8) so it never widens an int array, a scalar float forces the float lane.
- int ta = aarr ? (int) tuple(a)->type : flop(a) ? (int) ai_R : (int) ai_Z;
- int tb = barr ? (int) tuple(b)->type : flop(b) ? (int) ai_R : (int) ai_Z;
+ int ta = aarr ? (int) vec(a)->type : flop(a) ? (int) ai_R : (int) ai_Z;
+ int tb = barr ? (int) vec(b)->type : flop(b) ? (int) ai_R : (int) ai_Z;
  int ct = ta > tb ? ta : tb;
  bool fdom = ct >= ai_R, cmp = op >= vop_lt;
  // broadcast shape + conformance, right-aligned; scalar locals only (no array,
  // so the trailing tail call below survives).
  uintptr_t n = 1;
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
   n *= bdim(da, db); }
  // `/` over an all-integer broadcast promotes the whole result to f64 the moment
  // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
  // integer. Sound only after conformance is known good (offsets are then in range).
  if (op == vop_quot && !fdom && !cmp && vquot_needs_float(a, b)) fdom = true, ct = ai_R;
- enum ai_tuple_type rt = cmp ? ai_Z : (enum ai_tuple_type) ct;   // compare -> 0/1 Z mask
- uintptr_t bytes = sizeof(struct ai_tuple) + R * sizeof(word) + n * ai_T[rt];
+ enum ai_vec_type rt = cmp ? ai_Z : (enum ai_vec_type) ct;   // compare -> 0/1 Z mask
+ uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1], aarr = arrp(a), barr = arrp(b);       // re-read post-Have
- struct ai_tuple *r = (struct ai_tuple*) Hp; Hp += b2w(bytes);
- ini_tuple(r, rt, R);
+ struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+ ini_vec(r, rt, R);
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   r->shape[R - 1 - k] = bdim(da, db); }
  vbin_fill(r, a, b, op, fdom);
  return *++Sp = word(r), Ip++, Continue(); }
@@ -6228,11 +6227,11 @@ lvm(lvm_vbin, int op) {
 // scalar feeds in at full magnitude (ai_big_to_flo), same as the scalar `pow`.
 // All the &-taking stack arrays live in this ai_noinline fill so the wrapper's
 // trailing tail call survives.
-static ai_noinline void vmap2_fill(struct ai_tuple *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
+static ai_noinline void vmap2_fill(struct ai_vec *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  uintptr_t R = r->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
- struct ai_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
+ struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1;
@@ -6247,8 +6246,8 @@ static ai_noinline void vmap2_fill(struct ai_tuple *r, word a, word b, ai_flo_t 
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  ai_flo_t av = aarr ? tuple_get_flo(va, oa) : sa, bv = barr ? tuple_get_flo(vb, ob) : sb;
-  tuple_put_flo(r, p, fn(av, bv));
+  ai_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
+  vec_put_flo(r, p, fn(av, bv));
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {  // odometer
    if (++idx[j] < (intptr_t) r->shape[j]) break;
    idx[j] = 0; } } }
@@ -6258,21 +6257,21 @@ lvm(lvm_vmap2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  bool aarr = arrp(a), barr = arrp(b);
  if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
   return *++Sp = nil, Ip++, Continue();
- uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
+ uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1;
  for (uintptr_t k = 0; k < R; k++) {               // broadcast shape, right-aligned
-  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
   n *= bdim(da, db); }
- uintptr_t bytes = sizeof(struct ai_tuple) + R * sizeof(word) + n * ai_T[ai_R];
+ uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_R];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1], aarr = arrp(a), barr = arrp(b);       // re-read post-Have
- struct ai_tuple *r = (struct ai_tuple*) Hp; Hp += b2w(bytes);
- ini_tuple(r, ai_R, R);
+ struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+ ini_vec(r, ai_R, R);
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   r->shape[R - 1 - k] = bdim(da, db); }
  vmap2_fill(r, a, b, fn);
  return *++Sp = word(r), Ip++, Continue(); }
@@ -6297,31 +6296,31 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
   intptr_t t = (flop(a) || flop(b)) ? vcmp_flo(op, toflo(a), toflo(b))
              : (bigp(a) || bigp(b)) ? vcmp_int(op, ai_big_cmp(a, b), 0)
                                     : vcmp_int(op, toint(a), toint(b));
-  return t ? putfix(1) : nil; }
+  return t ? putcharm(1) : nil; }
  if (!isnum(a) || !isnum(b)) return nil;
  struct ai *g = *fp;
  if (flop(a) || flop(b)) {                      // float domain -> ai_R box
   if (!ai_ok(g = ai_have(g, box_req))) return *fp = g, nil;
   *fp = g;
-  struct ai_tuple *v = ini_scalar((struct ai_tuple*) g->hp, ai_R);
+  struct ai_vec *v = ini_scalar((struct ai_vec*) g->hp, ai_R);
   g->hp += box_req; flo_put(v->shape, vop_flo(op, toflo(a), toflo(b)));
   return word(v); }
  if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
   intptr_t av = toint(a), bv = toint(b), t; bool of;
   switch (op) {
    case vop_quot: case vop_fquot:                         // object (ai_O) arrays truncate under both / and //
-                  if (bv == 0) return putfix(0);          // array convention: int /0 -> 0
+                  if (bv == 0) return putcharm(0);          // array convention: int /0 -> 0
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av / bv; break;
-   case vop_rem:  if (bv == 0) return putfix(0);
+   case vop_rem:  if (bv == 0) return putcharm(0);
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av % bv; break;
    case vop_sub:  of = __builtin_sub_overflow(av, bv, &t); break;
    case vop_mul:  of = __builtin_mul_overflow(av, bv, &t); break;
    default:       of = __builtin_add_overflow(av, bv, &t); break; }   // vop_add
   if (!of) {                                    // demote-or-box the result
-   if (t >= fix_min && t <= fix_max) return putfix(t);
+   if (t >= fix_min && t <= fix_max) return putcharm(t);
    if (!ai_ok(g = ai_have(g, box_req))) return *fp = g, nil;
    *fp = g;
-   struct ai_tuple *v = ini_scalar((struct ai_tuple*) g->hp, ai_Z);
+   struct ai_vec *v = ini_scalar((struct ai_vec*) g->hp, ai_Z);
    g->hp += box_req; box_put(v->shape, t); return word(v); } }
  // bignum lane: ai_big_binop computes sp[0] (op) sp[1], leaves it at sp[1],
  // pops one, and advances ip -- so save/restore ip and pop the net result.
@@ -6338,32 +6337,32 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
 // source (rooted at its slot) and the partially-built copy (parked on the stack)
 // are re-fetched after every box.
 static struct ai *arr_to_obj(struct ai *g, int slot) {
- struct ai_tuple *src = tuple(g->sp[slot]);
+ struct ai_vec *src = vec(g->sp[slot]);
  uintptr_t R = src->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= src->shape[i];
- uintptr_t bytes = sizeof(struct ai_tuple) + R * sizeof(word) + n * ai_T[ai_O];
+ uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_O];
  if (!ai_ok(g = ai_have(g, b2w(bytes)))) return g;
- src = tuple(g->sp[slot]);
- struct ai_tuple *dst = (struct ai_tuple*) g->hp; g->hp += b2w(bytes);
- ini_tuple(dst, ai_O, R);
+ src = vec(g->sp[slot]);
+ struct ai_vec *dst = (struct ai_vec*) g->hp; g->hp += b2w(bytes);
+ ini_vec(dst, ai_O, R);
  for (uintptr_t i = 0; i < R; i++) dst->shape[i] = src->shape[i];
- for (uintptr_t i = 0; i < n; i++) tuple_put_obj(dst, i, nil);   // safe pre-fill (GC may see it)
+ for (uintptr_t i = 0; i < n; i++) vec_put_obj(dst, i, nil);   // safe pre-fill (GC may see it)
  if (!ai_ok(g = ai_push(g, 1, word(dst)))) return g;             // sp[0]=dst, src now at slot+1
  for (uintptr_t i = 0; i < n; i++) {
-  struct ai_tuple *s = tuple(g->sp[slot + 1]);
+  struct ai_vec *s = vec(g->sp[slot + 1]);
   word v;
   if (s->type >= ai_R) {                                        // float -> ai_R box
-   ai_flo_t e = tuple_get_flo(s, i);
+   ai_flo_t e = vec_get_flo(s, i);
    if (!ai_ok(g = ai_have(g, box_req))) return g;
-   struct ai_tuple *bx = ini_scalar((struct ai_tuple*) g->hp, ai_R); g->hp += box_req;
+   struct ai_vec *bx = ini_scalar((struct ai_vec*) g->hp, ai_R); g->hp += box_req;
    flo_put(bx->shape, e); v = word(bx); }
   else {                                                       // int -> fixnum or ai_Z box
-   intptr_t e = tuple_get_int(s, i);
-   if (e >= fix_min && e <= fix_max) v = putfix(e);
+   intptr_t e = vec_get_int(s, i);
+   if (e >= fix_min && e <= fix_max) v = putcharm(e);
    else { if (!ai_ok(g = ai_have(g, box_req))) return g;
-    struct ai_tuple *bx = ini_scalar((struct ai_tuple*) g->hp, ai_Z); g->hp += box_req;
+    struct ai_vec *bx = ini_scalar((struct ai_vec*) g->hp, ai_Z); g->hp += box_req;
     box_put(bx->shape, e); v = word(bx); } }
-  tuple_put_obj(tuple(g->sp[0]), i, v); }                          // re-fetch dst post-box
+  vec_put_obj(vec(g->sp[0]), i, v); }                          // re-fetch dst post-box
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
  return g; }
 
@@ -6371,42 +6370,42 @@ static struct ai *arr_to_obj(struct ai *g, int slot) {
 static struct ai *obin_run(struct ai *g, int op) {
  word a = g->sp[0], b = g->sp[1];
  bool aarr = arrp(a), barr = arrp(b);
- if (aarr && tuple(a)->type != ai_O) { if (!ai_ok(g = arr_to_obj(g, 0))) return g; }
- if (barr && tuple(b)->type != ai_O) { if (!ai_ok(g = arr_to_obj(g, 1))) return g; }
+ if (aarr && vec(a)->type != ai_O) { if (!ai_ok(g = arr_to_obj(g, 0))) return g; }
+ if (barr && vec(b)->type != ai_O) { if (!ai_ok(g = arr_to_obj(g, 1))) return g; }
  a = g->sp[0], b = g->sp[1], aarr = arrp(a), barr = arrp(b);
- uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
+ uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1, shp[maxrank];
  for (uintptr_t k = 0; k < R; k++) {                           // broadcast shape, right-aligned
-  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) {                        // non-conforming -> nil
    g->sp[1] = nil, g->sp++, g->ip = (union u*) g->ip + 1; return g; }
   shp[R - 1 - k] = bdim(da, db); n *= bdim(da, db); }
- uintptr_t bytes = sizeof(struct ai_tuple) + R * sizeof(word) + n * ai_T[ai_O];
+ uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_O];
  if (!ai_ok(g = ai_have(g, b2w(bytes)))) return g;
- struct ai_tuple *r = (struct ai_tuple*) g->hp; g->hp += b2w(bytes);
- ini_tuple(r, ai_O, R);
+ struct ai_vec *r = (struct ai_vec*) g->hp; g->hp += b2w(bytes);
+ ini_vec(r, ai_O, R);
  for (uintptr_t k = 0; k < R; k++) r->shape[k] = shp[k];
- for (uintptr_t p = 0; p < n; p++) tuple_put_obj(r, p, nil);     // nil-fill before any GC
+ for (uintptr_t p = 0; p < n; p++) vec_put_obj(r, p, nil);     // nil-fill before any GC
  if (!ai_ok(g = ai_push(g, 1, word(r)))) return g;               // sp: [0]=r [1]=a [2]=b
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
- if (aarr) { intptr_t s = 1; struct ai_tuple *va = tuple(g->sp[1]);
+ if (aarr) { intptr_t s = 1; struct ai_vec *va = vec(g->sp[1]);
   for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
    intptr_t j = oa + (intptr_t) R - (intptr_t) va->rank;
    ca[j] = va->shape[oa] == 1 ? 0 : s; s *= (intptr_t) va->shape[oa]; } }
- if (barr) { intptr_t s = 1; struct ai_tuple *vb = tuple(g->sp[2]);
+ if (barr) { intptr_t s = 1; struct ai_vec *vb = vec(g->sp[2]);
   for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank;
    cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  word ae = aarr ? tuple_get_obj(tuple(g->sp[1]), oa) : g->sp[1];  // scalar operand re-read each step
-  word be = barr ? tuple_get_obj(tuple(g->sp[2]), ob) : g->sp[2];
+  word ae = aarr ? vec_get_obj(vec(g->sp[1]), oa) : g->sp[1];  // scalar operand re-read each step
+  word be = barr ? vec_get_obj(vec(g->sp[2]), ob) : g->sp[2];
   word res = obin_elem(&g, op, ae, be);
   if (!ai_ok(g)) return g;
-  tuple_put_obj(tuple(g->sp[0]), p, res);                          // re-fetch result post-alloc
+  vec_put_obj(vec(g->sp[0]), p, res);                          // re-fetch result post-alloc
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) {
    if (++idx[j] < (intptr_t) shp[j]) break;
    idx[j] = 0; } }
@@ -6422,21 +6421,21 @@ lvm(lvm_obin, int op) {
 
 // ai_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
 static struct ai *ored(struct ai *g, int kind) {
- struct ai_tuple *v = tuple(g->sp[0]);
+ struct ai_vec *v = vec(g->sp[0]);
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (kind >= 2) {                                              // max/min: pick an element, no alloc
   if (!n) { g->sp[0] = nil, g->ip = (union u*) g->ip + 1; return g; }
-  word acc = tuple_get_obj(tuple(g->sp[0]), 0);
+  word acc = vec_get_obj(vec(g->sp[0]), 0);
   int cop = kind == 2 ? vop_gt : vop_lt;
   for (uintptr_t i = 1; i < n; i++) {
-   word e = tuple_get_obj(tuple(g->sp[0]), i);
-   if (obin_elem(&g, cop, e, acc) == putfix(1)) acc = e; }
+   word e = vec_get_obj(vec(g->sp[0]), i);
+   if (obin_elem(&g, cop, e, acc) == putcharm(1)) acc = e; }
   g->sp[0] = acc, g->ip = (union u*) g->ip + 1; return g; }
- word init = kind == 0 ? putfix(0) : putfix(1);               // sum/prod: fold with allocation
+ word init = kind == 0 ? putcharm(0) : putcharm(1);               // sum/prod: fold with allocation
  int aop = kind == 0 ? vop_add : vop_mul;
  if (!ai_ok(g = ai_push(g, 1, init))) return g;                 // sp[0]=acc, sp[1]=array
  for (uintptr_t i = 0; i < n; i++) {
-  word e = tuple_get_obj(tuple(g->sp[1]), i);
+  word e = vec_get_obj(vec(g->sp[1]), i);
   word acc = obin_elem(&g, aop, g->sp[0], e);
   if (!ai_ok(g)) return g;
   g->sp[0] = acc; }
@@ -6456,7 +6455,7 @@ static ai_inline void cplx_parts(word x, ai_flo_t *re, ai_flo_t *im) {
 // Fill the rank-0 complex box v with a `vop` b. All the &-taking lives in this
 // ai_noinline helper so the lvm wrapper keeps its trailing tail call; no
 // allocation inside, so the operand pointers can't move under us.
-static ai_noinline void cplx_fill(struct ai_tuple *v, word a, word b, int vop) {
+static ai_noinline void cplx_fill(struct ai_vec *v, word a, word b, int vop) {
  ai_flo_t ar, ai, br, bi, re, im;
  cplx_parts(a, &ar, &ai); cplx_parts(b, &br, &bi);
  switch (vop) {
@@ -6477,7 +6476,7 @@ lvm(lvm_cplx_bin, int vop) {
   return *++Sp = nil, Ip++, Continue();
  Have(cplx_req);
  a = Sp[0], b = Sp[1];                              // re-read post-Have
- struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C);
+ struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
  Hp += cplx_req;
  cplx_fill(v, a, b, vop);
  return *++Sp = word(v), Ip++, Continue(); }
@@ -6489,17 +6488,17 @@ lvm(lvm_cplx_bin, int vop) {
 // formulas; `=` writes a ai_Z 0/1 mask (componentwise equal); ordering and % are
 // undefined on complex (handled in the wrapper -> nil). The &-taking odometer/
 // stride arrays live in this ai_noinline fill so the wrapper keeps its tail call.
-static ai_inline void cbin_part(bool isarr, struct ai_tuple *v, ai_flo_t sre, ai_flo_t sim,
+static ai_inline void cbin_part(bool isarr, struct ai_vec *v, ai_flo_t sre, ai_flo_t sim,
                                uintptr_t o, ai_flo_t *re, ai_flo_t *im) {
  if (!isarr) { *re = sre; *im = sim; return; }
- if (v->type == ai_C) { ai_flo_t *fp = tuple_data(v); *re = fp[2*o]; *im = fp[2*o+1]; }
- else { *re = tuple_get_flo(v, o); *im = 0; } }
+ if (v->type == ai_C) { ai_flo_t *fp = vec_data(v); *re = fp[2*o]; *im = fp[2*o+1]; }
+ else { *re = vec_get_flo(v, o); *im = 0; } }
 
-static ai_noinline void cbin_fill(struct ai_tuple *r, word a, word b, int op, bool cmp) {
+static ai_noinline void cbin_fill(struct ai_vec *r, word a, word b, int op, bool cmp) {
  uintptr_t R = r->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
- struct ai_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
+ struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1;
@@ -6513,14 +6512,14 @@ static ai_noinline void cbin_fill(struct ai_tuple *r, word a, word b, int op, bo
  ai_flo_t sar = 0, sai = 0, sbr = 0, sbi = 0;
  if (!aarr) { if (Cp(a)) sar = cplx_re(a), sai = cplx_im(a); else sar = toflo(a); }
  if (!barr) { if (Cp(b)) sbr = cplx_re(b), sbi = cplx_im(b); else sbr = toflo(b); }
- ai_flo_t *rf = cmp ? 0 : tuple_data(r);
+ ai_flo_t *rf = cmp ? 0 : vec_data(r);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
   ai_flo_t ar, ai, br, bi, re, im;
   cbin_part(aarr, va, sar, sai, oa, &ar, &ai);
   cbin_part(barr, vb, sbr, sbi, ob, &br, &bi);
-  if (cmp) tuple_put_int(r, p, (ar == br && ai == bi) ? 1 : 0);
+  if (cmp) vec_put_int(r, p, (ar == br && ai == bi) ? 1 : 0);
   else {
    switch (op) {
     case vop_sub: re = ar - br; im = ai - bi; break;
@@ -6542,22 +6541,22 @@ lvm(lvm_cbin, int op) {
      || op == vop_rem || op == vop_fquot || (op >= vop_lt && op != vop_eq))
   return *++Sp = nil, Ip++, Continue();
  bool cmp = op == vop_eq;
- uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
+ uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1;
  for (uintptr_t k = 0; k < R; k++) {                  // broadcast shape + conformance, right-aligned
-  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
   n *= bdim(da, db); }
- enum ai_tuple_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
- uintptr_t bytes = sizeof(struct ai_tuple) + R * sizeof(word) + n * ai_T[rt];
+ enum ai_vec_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
+ uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1], aarr = arrp(a), barr = arrp(b);     // re-read post-Have
- struct ai_tuple *r = (struct ai_tuple*) Hp; Hp += b2w(bytes);
- ini_tuple(r, rt, R);
+ struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+ ini_vec(r, rt, R);
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
   r->shape[R - 1 - k] = bdim(da, db); }
  cbin_fill(r, a, b, op, cmp);
  return *++Sp = word(r), Ip++, Continue(); }
@@ -6566,7 +6565,7 @@ lvm(lvm_cbin, int op) {
 // Log w = ln|w| + i*arg w. A real operand promotes to (r, 0) (cplx_parts). w == 0
 // falls out as the IEEE limit (exp(-inf) -> 0 for Re z > 0), same domain stance as
 // real pow. &-locals stay in this ai_noinline helper, off lvm_pow's tail call.
-static ai_noinline void cplx_pow_fill(struct ai_tuple *v, word wbase, word zexp) {
+static ai_noinline void cplx_pow_fill(struct ai_vec *v, word wbase, word zexp) {
  ai_flo_t wr, wi, zr, zi;
  cplx_parts(wbase, &wr, &wi); cplx_parts(zexp, &zr, &zi);
  ai_flo_t lr = (ai_flo_t) 0.5 * ai_log(wr * wr + wi * wi),    // ln|w|
@@ -6610,7 +6609,7 @@ lvm(lvm_pow) {
    return *++Sp = nil, Ip++, Continue();
   Have(cplx_req);
   a = Sp[0], b = Sp[1];                              // re-read post-Have
-  struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C);
+  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
   Hp += cplx_req;
   cplx_pow_fill(v, a, b);
   return *++Sp = word(v), Ip++, Continue(); }
@@ -6619,7 +6618,7 @@ lvm(lvm_pow) {
   if (ad < 0 && !__builtin_isinf(ad) && flo_fracp(bd)) {
    ai_flo_t m = ai_pow(-ad, bd), re = m * ai_cospi(bd), im = m * ai_sinpi(bd);
    Have(cplx_req);
-   struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C);
+   struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
    Hp += cplx_req;
    cplx_put(v, re, im);
    return *++Sp = word(v), Ip++, Continue(); } }
@@ -6629,11 +6628,11 @@ lvm(lvm_pow) {
 // Fill packed ai_C array r with (re = a-element, im = b-element) under numpy
 // broadcast; a, b are real (ai_Z/ai_R) arrays or real scalars. &-taking stride/
 // odometer arrays live in this ai_noinline fill so lvm_cplx keeps its tail call.
-static ai_noinline void cplx_build_fill(struct ai_tuple *r, word a, word b) {
+static ai_noinline void cplx_build_fill(struct ai_vec *r, word a, word b) {
  uintptr_t R = r->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= r->shape[i];
  bool aarr = arrp(a), barr = arrp(b);
- struct ai_tuple *va = aarr ? tuple(a) : 0, *vb = barr ? tuple(b) : 0;
+ struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) ca[j] = cb[j] = idx[j] = 0;
  if (aarr) { intptr_t s = 1; for (intptr_t oa = (intptr_t) va->rank - 1; oa >= 0; oa--) {
@@ -6641,12 +6640,12 @@ static ai_noinline void cplx_build_fill(struct ai_tuple *r, word a, word b) {
  if (barr) { intptr_t s = 1; for (intptr_t ob = (intptr_t) vb->rank - 1; ob >= 0; ob--) {
    intptr_t j = ob + (intptr_t) R - (intptr_t) vb->rank; cb[j] = vb->shape[ob] == 1 ? 0 : s; s *= (intptr_t) vb->shape[ob]; } }
  ai_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
- ai_flo_t *rf = tuple_data(r);
+ ai_flo_t *rf = vec_data(r);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  rf[2*p]   = aarr ? tuple_get_flo(va, oa) : sa;
-  rf[2*p+1] = barr ? tuple_get_flo(vb, ob) : sb;
+  rf[2*p]   = aarr ? vec_get_flo(va, oa) : sa;
+  rf[2*p+1] = barr ? vec_get_flo(vb, ob) : sb;
   for (intptr_t j = (intptr_t) R - 1; j >= 0; j--) { if (++idx[j] < (intptr_t) r->shape[j]) break; idx[j] = 0; } } }
 
 // (C re im): build a complex from two reals. Scalars -> a rank-0 complex box;
@@ -6657,37 +6656,37 @@ lvm(lvm_cplx) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
  if (aarr || barr) {
-  if ((aarr && tuple(a)->type >= ai_C) || (barr && tuple(b)->type >= ai_C)
+  if ((aarr && vec(a)->type >= ai_C) || (barr && vec(b)->type >= ai_C)
       || (!aarr && !isnum(a)) || (!barr && !isnum(b)))
    return *++Sp = nil, Ip++, Continue();
-  uintptr_t ra = aarr ? tuple(a)->rank : 0, rb = barr ? tuple(b)->rank : 0;
+  uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
   uintptr_t R = ra > rb ? ra : rb, n = 1;
   for (uintptr_t k = 0; k < R; k++) {
-   uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-   uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+   uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+   uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
    if (da != db && da != 1 && db != 1) return *++Sp = nil, Ip++, Continue();
    n *= bdim(da, db); }
-  uintptr_t bytes = sizeof(struct ai_tuple) + R * sizeof(word) + n * ai_T[ai_C];
+  uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_C];
   Have(b2w(bytes));
   a = Sp[0], b = Sp[1], aarr = arrp(a), barr = arrp(b);     // re-read post-Have
-  struct ai_tuple *r = (struct ai_tuple*) Hp; Hp += b2w(bytes);
-  ini_tuple(r, ai_C, R);
+  struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+  ini_vec(r, ai_C, R);
   for (uintptr_t k = 0; k < R; k++) {
-   uintptr_t da = (aarr && k < ra) ? tuple(a)->shape[ra - 1 - k] : 1;
-   uintptr_t db = (barr && k < rb) ? tuple(b)->shape[rb - 1 - k] : 1;
+   uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
+   uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
    r->shape[R - 1 - k] = bdim(da, db); }
   cplx_build_fill(r, a, b);
   return *++Sp = word(r), Ip++, Continue(); }
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue();
  ai_flo_t re = toflo(a), im = toflo(b);             // values extracted before alloc
  Have(cplx_req);
- struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C);
+ struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
  Hp += cplx_req;
  cplx_put(v, re, im);
  return *++Sp = word(v), Ip++, Continue(); }
 
 // (Cp x): is x a complex scalar?
-op11(lvm_Cp, Cp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_Cp, Cp(Sp[0]) ? putcharm(1) : nil)
 
 // (re z) / (im z): real / imaginary part as a rank-0 float box. On a real
 // number, re is the number itself and im is 0; on a non-number, nil.
@@ -6702,7 +6701,7 @@ lvm(lvm_im) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t im = cplx_im(a); Have(box_req); emit_flo(im);
   return Sp[0] = _res, Ip++, Continue(); }
- if (isnum(a)) return Sp[0] = putfix(0), Ip++, Continue();   // im of a real is 0
+ if (isnum(a)) return Sp[0] = putcharm(0), Ip++, Continue();   // im of a real is 0
  return Sp[0] = nil, Ip++, Continue(); }
 
 // (conj z): complex conjugate (re, -im). conj LIFTS: a real r becomes ~(r 0)
@@ -6713,12 +6712,12 @@ lvm(lvm_conj) {
  word a = Sp[0];
  if (Cp(a)) { ai_flo_t re = cplx_re(a), im = cplx_im(a);
   Have(cplx_req);
-  struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C); Hp += cplx_req;
+  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
   cplx_put(v, re, -im);
   return Sp[0] = word(v), Ip++, Continue(); }
  if (isnum(a)) { ai_flo_t re = toflo(a);            // lift a real to ~(r 0)
   Have(cplx_req);
-  struct ai_tuple *v = ini_scalar((struct ai_tuple*) Hp, ai_C); Hp += cplx_req;
+  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
   cplx_put(v, re, 0);
   return Sp[0] = word(v), Ip++, Continue(); }
  return Sp[0] = nil, Ip++, Continue(); }
@@ -6733,7 +6732,7 @@ lvm(lvm_abs) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t m = cplx_mod(a);
   Have(box_req); emit_flo(m); return Sp[0] = _res, Ip++, Continue(); }
- if (fixp(a)) { intptr_t n = getfix(a);
+ if (charmp(a)) { intptr_t n = getcharm(a);
   Have(box_req); emit_int(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
   return Sp[0] = _res, Ip++, Continue(); }
  if (flop(a)) { ai_flo_t v = flo_get(a); if (v < 0) v = -v;
@@ -6750,10 +6749,10 @@ lvm(lvm_abs) {
   memcpy(y, x, bytes); y->slen = -x->slen;           // flip the sign
   return Sp[0] = word(y), Ip++, Continue(); }
  if (arrp(a)) {                                       // vector -> scalar: the Euclidean (L2) norm
-  struct ai_tuple *v = tuple(a); uintptr_t i, n = tuple_nelem(v);   // sqrt(sum of squares); abs of a
+  struct ai_vec *v = vec(a); uintptr_t i, n = vec_nelem(v);   // sqrt(sum of squares); abs of a
   ai_flo_t s = 0;                                      // complex elem is its 2-vector modulus; ai_C sums 2n floats
-  if (v->type == ai_C) { ai_flo_t *fp = tuple_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
-  else for (i = 0; i < n; i++) { ai_flo_t e = tuple_get_flo(v, i); s += e * e; }
+  if (v->type == ai_C) { ai_flo_t *fp = vec_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
+  else for (i = 0; i < n; i++) { ai_flo_t e = vec_get_flo(v, i); s += e * e; }
   Have(box_req); emit_flo(ai_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
  if (mapp(a)) {                                       // table: its key count (so (int (abs t)) == (len t))
   Have(box_req); emit_int((intptr_t) map_len(a)); return Sp[0] = _res, Ip++, Continue(); }
@@ -6761,12 +6760,12 @@ lvm(lvm_abs) {
 
 // fill f64 array r with arg of each element of v (a ai_C packed or ai_Z/ai_R real
 // array, same shape). &-free, but ai_noinline to keep lvm_carg's tail call clean.
-static ai_noinline void carg_fill(struct ai_tuple *r, struct ai_tuple *v) {
- uintptr_t n = tuple_nelem(v);
- ai_flo_t *rf = tuple_data(r);
- if (v->type == ai_C) { ai_flo_t *fp = tuple_data(v);
+static ai_noinline void carg_fill(struct ai_vec *r, struct ai_vec *v) {
+ uintptr_t n = vec_nelem(v);
+ ai_flo_t *rf = vec_data(r);
+ if (v->type == ai_C) { ai_flo_t *fp = vec_data(v);
   for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(fp[2*p+1], fp[2*p]); }
- else for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(0, tuple_get_flo(v, p)); }
+ else for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(0, vec_get_flo(v, p)); }
 
 // (arg z): phase angle atan2(im, re) as a float. On a real number this is 0 for
 // non-negative and pi for negative; on a complex/real array, an f64 array of the
@@ -6776,14 +6775,14 @@ lvm(lvm_carg) {
  if (Cp(a)) { ai_flo_t r = ai_atan2(cplx_im(a), cplx_re(a));
   Have(box_req); emit_flo(r); return Sp[0] = _res, Ip++, Continue(); }
  if (arrp(a)) {
-  struct ai_tuple *v = tuple(a);
+  struct ai_vec *v = vec(a);
   if (v->type == ai_O) return Sp[0] = nil, Ip++, Continue();   // object array -> nil
   uintptr_t R = v->rank, n = 1; for (uintptr_t i = 0; i < R; i++) n *= v->shape[i];
-  uintptr_t bytes = sizeof(struct ai_tuple) + R * sizeof(word) + n * ai_T[ai_R];
+  uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_R];
   Have(b2w(bytes));
-  v = tuple(Sp[0]);                                           // re-read post-Have
-  struct ai_tuple *r = (struct ai_tuple*) Hp; Hp += b2w(bytes);
-  ini_tuple(r, ai_R, R);
+  v = vec(Sp[0]);                                           // re-read post-Have
+  struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+  ini_vec(r, ai_R, R);
   for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
   carg_fill(r, v);
   return Sp[0] = word(r), Ip++, Continue(); }

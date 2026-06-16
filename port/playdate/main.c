@@ -57,7 +57,7 @@ static union u
   nif_cur_row[] = {{cur_row}, {g_vm_ret0}},
   nif_cur_col[] = {{cur_col}, {g_vm_ret0}},
   nif_cur_put[] = {{cur_put}, {g_vm_ret0}},
-  nif_cur_set[] = {{g_vm_cur}, {.x=putfix(2)}, {cur_set}, {g_vm_ret0}},
+  nif_cur_set[] = {{g_vm_cur}, {.x=putcharm(2)}, {cur_set}, {g_vm_ret0}},
   nif_crank_angle[] = {{crank_angle}, {g_vm_ret0}};
 static struct g_def defs[] = {
   {"cur_row", (intptr_t) nif_cur_row},
@@ -152,7 +152,7 @@ static void g_log_update(void) {
 static g_vm(crank_angle) {
  int d = K.pd->system->isCrankDocked();
  float a = K.pd->system->getCrankAngle();
- Sp[0] = d ? g_nil : putfix((int)a%360);
+ Sp[0] = d ? g_nil : putcharm((int)a%360);
  Ip += 1;
  return Continue(); }
 
@@ -276,7 +276,7 @@ static void g_synth_update(void) {
       return; } }
 
 static g_vm(g_buttons) { return
-  Sp[0] = putfix(K.b.current),
+  Sp[0] = putcharm(K.b.current),
   Ip += 1,
   Continue(); }
 
@@ -292,17 +292,17 @@ static g_vm(ls_root) {
   if (!g_ok(g)) return g;
   return g->sp[1] = g->sp[0], g->sp++, g->ip++, Continue(); }
 
-static g_vm(cur_row) { return Sp[0] = putfix(kcb->wpos / kcb->cols), Ip++, Continue(); }
-static g_vm(cur_col) { return Sp[0] = putfix(kcb->wpos % kcb->cols), Ip++, Continue(); }
+static g_vm(cur_row) { return Sp[0] = putcharm(kcb->wpos / kcb->cols), Ip++, Continue(); }
+static g_vm(cur_col) { return Sp[0] = putcharm(kcb->wpos % kcb->cols), Ip++, Continue(); }
 static g_vm(cur_set) {
-  uintptr_t r = getfix(Sp[0]), c = getfix(Sp[1]);
+  uintptr_t r = getcharm(Sp[0]), c = getcharm(Sp[1]);
   cb_cur(kcb, r, c);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
 static g_vm(cur_put) {
-  kcb->cb[kcb->wpos] = getfix(Sp[0]);
+  kcb->cb[kcb->wpos] = getcharm(Sp[0]);
   Ip += 1;
   return Continue(); }
 
@@ -310,31 +310,31 @@ static struct g *_putc(struct g*g, int c) { return cb_putc(kcb, c), g; }
 static struct g* _flush(struct g*g) { return g; }
 static struct g*_getc(struct g*g) {
   struct g_io *i = g_core_of(g)->io;
-  if (getfix(i->ungetc_buf) != EOF) {
-    int c = getfix(i->ungetc_buf);
-    i->ungetc_buf = putfix(EOF);
+  if (getcharm(i->ungetc_buf) != EOF) {
+    int c = getcharm(i->ungetc_buf);
+    i->ungetc_buf = putcharm(EOF);
     return g_core_of(g)->b = c, g; }
   int c = cb_getc(kcb);
-  if (c == EOF) i->eof_seen = putfix(true);
+  if (c == EOF) i->eof_seen = putcharm(true);
   return g_core_of(g)->b = c, g; }
 static struct g* _ungetc(struct g*g, int c) {
   struct g_io *i = g_core_of(g)->io;
-  i->ungetc_buf = putfix(c);
-  i->eof_seen = putfix(false);
+  i->ungetc_buf = putcharm(c);
+  i->eof_seen = putcharm(false);
   return g_core_of(g)->b = c, g; }
 static struct g* _eof(struct g*g) {
   struct g_io *i = g_core_of(g)->io;
-  return g_core_of(g)->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
+  return g_core_of(g)->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 // fd values are nominal here — the playdate I/O goes through cb_getc / cb_putc
 // regardless. We just need fd >= 0 so the dispatcher routes to g_fd_port_vt
 // instead of a synthetic slot. The weak default g_ready returns true
 // unconditionally, so the fd is never poll()ed.
 struct g_io g_stdin = { .ap = g_vm_port_io,
-                        .fd = putfix(0), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
+                        .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 struct g_io g_stdout = { .ap = g_vm_port_io,
-                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
+                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 // No separate error stream on the device; route err to the same fd as out.
 struct g_io g_stderr = { .ap = g_vm_port_io,
-                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
+                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 
 struct g_port_vt const g_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush };

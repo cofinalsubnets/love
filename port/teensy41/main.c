@@ -45,9 +45,9 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
 static struct ai *fd_getc(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
-  if (getfix(i->ungetc_buf) != EOF) {
-    fc->b = getfix(i->ungetc_buf);
-    i->ungetc_buf = putfix(EOF);
+  if (getcharm(i->ungetc_buf) != EOF) {
+    fc->b = getcharm(i->ungetc_buf);
+    i->ungetc_buf = putcharm(EOF);
     return g; }
   fc->b = serial_getc();
   return g; }
@@ -55,14 +55,14 @@ static struct ai *fd_getc(struct ai *g) {
 static struct ai *fd_ungetc(struct ai *g, int c) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
-  i->ungetc_buf = putfix(c);
-  i->eof_seen = putfix(false);
+  i->ungetc_buf = putcharm(c);
+  i->eof_seen = putcharm(false);
   return fc->b = c, g; }
 
 static struct ai *fd_eof(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
-  return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
+  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 
 static struct ai *fd_putc(struct ai *g, int c) {
   if (c == '\n') serial_putc('\r');     // cook LF -> CRLF for terminals
@@ -71,10 +71,10 @@ static struct ai *fd_putc(struct ai *g, int c) {
 
 static struct ai *fd_flush(struct ai *g) { return g; }   // LPUART has no buffer here
 
-struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putfix(0), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
-struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
+struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 // No separate error stream; route err to the console too.
-struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false) };
+struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
 // --- GPIO builtins --------------------------------------------------------
@@ -82,31 +82,31 @@ struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, f
 // (gpio_dir pin out) -- direction: out non-nil => output; returns out.
 // (gpio_put pin val) -- drive an output: val non-nil => high; returns val.
 // (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
-// nil is putfix(0), so getfix(arg) != 0 reads a number or nil correctly.
+// nil is putcharm(0), so getcharm(arg) != 0 reads a number or nil correctly.
 static lvm(ai_gpio_init) {
-  gpio_init(getfix(Sp[0]));           // leaves Sp[0] (the pin) as the result
+  gpio_init(getcharm(Sp[0]));           // leaves Sp[0] (the pin) as the result
   Ip += 1;
   return Continue(); }
 
 static lvm(ai_gpio_get) {
-  Sp[0] = putfix(gpio_get(getfix(Sp[0])));
+  Sp[0] = putcharm(gpio_get(getcharm(Sp[0])));
   Ip += 1;
   return Continue(); }
 
 static lvm(ai_gpio_dir) {
-  unsigned pin = getfix(Sp[0]);
-  int out = getfix(Sp[1]) != 0;
+  unsigned pin = getcharm(Sp[0]);
+  int out = getcharm(Sp[1]) != 0;
   gpio_set_dir(pin, out);
-  Sp[1] = putfix(out);
+  Sp[1] = putcharm(out);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
 static lvm(ai_gpio_put) {
-  unsigned pin = getfix(Sp[0]);
-  int val = getfix(Sp[1]) != 0;
+  unsigned pin = getcharm(Sp[0]);
+  int val = getcharm(Sp[1]) != 0;
   gpio_put(pin, val);
-  Sp[1] = putfix(val);
+  Sp[1] = putcharm(val);
   Sp += 1;
   Ip += 1;
   return Continue(); }
@@ -116,8 +116,8 @@ static lvm(ai_gpio_put) {
 static union u const
   nif_gpio_init[] = {{ai_gpio_init}, {lvm_ret0}},
   nif_gpio_get[]  = {{ai_gpio_get}, {lvm_ret0}},
-  nif_gpio_dir[]  = {{lvm_cur}, {.x = putfix(2)}, {ai_gpio_dir}, {lvm_ret0}},
-  nif_gpio_put[]  = {{lvm_cur}, {.x = putfix(2)}, {ai_gpio_put}, {lvm_ret0}};
+  nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {ai_gpio_dir}, {lvm_ret0}},
+  nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {ai_gpio_put}, {lvm_ret0}};
 
 static struct ai_def defs[] = {
   {"gpio_init", (intptr_t) nif_gpio_init},

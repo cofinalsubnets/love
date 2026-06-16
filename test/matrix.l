@@ -1,7 +1,7 @@
 ; === the generic-op DISPATCH MATRICES, walked cell by cell ====================
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
-; (l.h enum q): KFix | KTuple(rank-0 box: float/complex/wide-int) | KBig |
-; KArrZ KArrR KArrC KArrO (the array tower) | KString KSym | KTwo(pair) | KHom.
+; (l.h enum q): KCharm | KVec(rank-0 box: float/complex/wide-int) | KBig |
+; KArrZ KArrR KArrC KArrO (the array tower) | KString KSym | KTwo(pair) | KTop.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
 ; < <= = >= >) are lane aps that refine the same lattice internally. This
@@ -12,12 +12,12 @@
 ; file adds the FINE within-category cells (fix vs box/float/complex vs bignum;
 ; the four array tiers) and the apply matrix, which had no systematic test.
 
-; one representative value per kind (the KTuple box has three reps that route to
+; one representative value per kind (the KVec box has three reps that route to
 ; one matrix cell but fan out by representation inside the lane).
-(: mx-fix 5                              ; KFix
-   mx-real 2.5                            ; KTuple, float box
-   mx-cpx ~(2 3)                        ; KTuple, complex scalar (Cp)
-   mx-box (<< 1 62)                      ; KTuple, wide int (widep)
+(: mx-fix 5                              ; KCharm
+   mx-real 2.5                            ; KVec, float box
+   mx-cpx ~(2 3)                        ; KVec, complex scalar (Cp)
+   mx-box (<< 1 62)                      ; KVec, wide int (widep)
    mx-big (100 2)                     ; KBig
    mx-az  @(10 20)                       ; KArrZ (int array)
    mx-ar  @(1.5 2.5)                     ; KArrR (float array)
@@ -27,8 +27,8 @@
    mx-sym 'ef                            ; KSym (interned)
    mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KTwo (pair / list)
-   mx-fn  (+ 1)                          ; KHom (nif partial application)
-   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KHom (a map is a lookup-lambda)
+   mx-fn  (+ 1)                          ; KTop (nif partial application)
+   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KTop (a map is a lookup-lambda)
 
 ; ============================================================================
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
@@ -61,7 +61,7 @@
  (= 1 ('abc 9))   (= 1 ('abc 'x))
  (= 1 ((mint 0) 5))
 
- ; --- row KTuple: a rank-0 box / array is a Church numeral (operand ** operator,
+ ; --- row KVec: a rank-0 box / array is a Church numeral (operand ** operator,
  ;     or operator-fold over a function). Full tower coverage in functions.l. ---
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 = 9
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8
@@ -71,13 +71,13 @@
 
  ; --- row KBig: a bignum is also a Church numeral, but its magnitude is always
  ;     astronomical (>= 2^62), so (bignum x) cannot terminate in a finite test.
- ;     The row exists (-> data_num_apply, same as KTuple) but is not exercised. ---
+ ;     The row exists (-> data_num_apply, same as KVec) but is not exercised. ---
 
  ; --- non-matrix apply paths --------------------------------------------------
- (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KFix numeral (odd-tag path)
- (= 36 ((\ x (* x x)) 6))                     ; KHom: a lambda applies directly
- (= 7 (((+) 3) 4))                            ; KHom: a nif / partial application
- (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KHom: a map looks its key up
+ (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KCharm numeral (odd-tag path)
+ (= 36 ((\ x (* x x)) 6))                     ; KTop: a lambda applies directly
+ (= 7 (((+) 3) 4))                            ; KTop: a nif / partial application
+ (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KTop: a map looks its key up
  (nilp (mx-map 9))                            ; ...missing key -> nil
  (= 1 ((buf 4) 'x)))                       ; opaque handle (buf) behaves as 0
 

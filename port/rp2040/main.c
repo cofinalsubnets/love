@@ -43,9 +43,9 @@ void g_wait_fds(int const *fds, int n, uintptr_t ms) {
 static struct g *fd_getc(struct g *g) {
   struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  if (getfix(i->ungetc_buf) != EOF) {
-    fc->b = getfix(i->ungetc_buf);
-    i->ungetc_buf = putfix(EOF);
+  if (getcharm(i->ungetc_buf) != EOF) {
+    fc->b = getcharm(i->ungetc_buf);
+    i->ungetc_buf = putcharm(EOF);
     return g; }
   fc->b = serial_getc();
   return g; }
@@ -53,14 +53,14 @@ static struct g *fd_getc(struct g *g) {
 static struct g *fd_ungetc(struct g *g, int c) {
   struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  i->ungetc_buf = putfix(c);
-  i->eof_seen = putfix(false);
+  i->ungetc_buf = putcharm(c);
+  i->eof_seen = putcharm(false);
   return fc->b = c, g; }
 
 static struct g *fd_eof(struct g *g) {
   struct g *fc = g_core_of(g);
   struct g_io *i = fc->io;
-  return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
+  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 
 static struct g *fd_putc(struct g *g, int c) {
   if (c == '\n') serial_putc('\r');     // cook LF -> CRLF for terminals
@@ -69,10 +69,10 @@ static struct g *fd_putc(struct g *g, int c) {
 
 static struct g *fd_flush(struct g *g) { return g; }   // UART has no buffer
 
-struct g_io g_stdin  = { g_vm_port_io, putfix(0), putfix(EOF), putfix(false) };
-struct g_io g_stdout = { g_vm_port_io, putfix(1), putfix(EOF), putfix(false) };
+struct g_io g_stdin  = { g_vm_port_io, putcharm(0), putcharm(EOF), putcharm(false) };
+struct g_io g_stdout = { g_vm_port_io, putcharm(1), putcharm(EOF), putcharm(false) };
 // No separate error stream; route err to the console too.
-struct g_io g_stderr = { g_vm_port_io, putfix(1), putfix(EOF), putfix(false) };
+struct g_io g_stderr = { g_vm_port_io, putcharm(1), putcharm(EOF), putcharm(false) };
 struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
 // --- GPIO builtins --------------------------------------------------------
@@ -80,31 +80,31 @@ struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_
 // (gpio_dir pin out) -- direction: out non-nil => output; returns out.
 // (gpio_put pin val) -- drive an output: val non-nil => high; returns val.
 // (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
-// nil is putfix(0), so getfix(arg) != 0 reads a number or nil correctly.
+// nil is putcharm(0), so getcharm(arg) != 0 reads a number or nil correctly.
 static g_vm(g_gpio_init) {
-  gpio_init(getfix(Sp[0]));           // leaves Sp[0] (the pin) as the result
+  gpio_init(getcharm(Sp[0]));           // leaves Sp[0] (the pin) as the result
   Ip += 1;
   return Continue(); }
 
 static g_vm(g_gpio_get) {
-  Sp[0] = putfix(gpio_get(getfix(Sp[0])));
+  Sp[0] = putcharm(gpio_get(getcharm(Sp[0])));
   Ip += 1;
   return Continue(); }
 
 static g_vm(g_gpio_dir) {
-  unsigned pin = getfix(Sp[0]);
-  int out = getfix(Sp[1]) != 0;
+  unsigned pin = getcharm(Sp[0]);
+  int out = getcharm(Sp[1]) != 0;
   gpio_set_dir(pin, out);
-  Sp[1] = putfix(out);
+  Sp[1] = putcharm(out);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
 static g_vm(g_gpio_put) {
-  unsigned pin = getfix(Sp[0]);
-  int val = getfix(Sp[1]) != 0;
+  unsigned pin = getcharm(Sp[0]);
+  int val = getcharm(Sp[1]) != 0;
   gpio_put(pin, val);
-  Sp[1] = putfix(val);
+  Sp[1] = putcharm(val);
   Sp += 1;
   Ip += 1;
   return Continue(); }
@@ -114,8 +114,8 @@ static g_vm(g_gpio_put) {
 static union u const
   nif_gpio_init[] = {{g_gpio_init}, {g_vm_ret0}},
   nif_gpio_get[]  = {{g_gpio_get}, {g_vm_ret0}},
-  nif_gpio_dir[]  = {{g_vm_cur}, {.x = putfix(2)}, {g_gpio_dir}, {g_vm_ret0}},
-  nif_gpio_put[]  = {{g_vm_cur}, {.x = putfix(2)}, {g_gpio_put}, {g_vm_ret0}};
+  nif_gpio_dir[]  = {{g_vm_cur}, {.x = putcharm(2)}, {g_gpio_dir}, {g_vm_ret0}},
+  nif_gpio_put[]  = {{g_vm_cur}, {.x = putcharm(2)}, {g_gpio_put}, {g_vm_ret0}};
 
 static struct g_def defs[] = {
   {"gpio_init", (intptr_t) nif_gpio_init},

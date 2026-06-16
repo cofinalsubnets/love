@@ -30,7 +30,7 @@ static lvm(data_apply) {
 #endif
 
 #define go(_)\
-  _(00, lvm_tuple) _(01, lvm_big) _(02, lvm_str)\
+  _(00, lvm_vec) _(01, lvm_big) _(02, lvm_str)\
   _(03, lvm_sym) _(04, lvm_two)
 
 go(data)

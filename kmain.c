@@ -177,45 +177,45 @@ static struct k_source k_sources[k_sources_max] = {
 static struct ai *fd_getc(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = g->io;
-  if (getfix(i->ungetc_buf) != EOF) {
-    fc->b = getfix(i->ungetc_buf);
-    i->ungetc_buf = putfix(EOF);
+  if (getcharm(i->ungetc_buf) != EOF) {
+    fc->b = getcharm(i->ungetc_buf);
+    i->ungetc_buf = putcharm(EOF);
     return g; }
-  int fd = getfix(i->fd);
+  int fd = getcharm(i->fd);
   int c = -1;
   if (fd >= 0 && fd < k_sources_max && k_sources[fd].getc)
     c = k_sources[fd].getc(fd);
-  if (c < 0) { i->eof_seen = putfix(true); fc->b = EOF; }
+  if (c < 0) { i->eof_seen = putcharm(true); fc->b = EOF; }
   else fc->b = c;
   return g; }
 static struct ai *fd_ungetc(struct ai *g, int c) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
-  i->ungetc_buf = putfix(c);
-  i->eof_seen = putfix(false);
+  i->ungetc_buf = putcharm(c);
+  i->eof_seen = putcharm(false);
   return fc->b = c, g; }
 static struct ai *fd_eof(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
-  return fc->b = (getfix(i->ungetc_buf) == EOF) && getfix(i->eof_seen), g; }
+  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 static struct ai *fd_putc(struct ai *g, int c) {
-  int fd = getfix(g->io->fd);
+  int fd = getcharm(g->io->fd);
   if (fd >= 0 && fd < k_sources_max && k_sources[fd].putc)
     k_sources[fd].putc(fd, c);
   return g; }
 static struct ai *fd_flush(struct ai *g) {
-  int fd = getfix(g->io->fd);
+  int fd = getcharm(g->io->fd);
   if (fd >= 0 && fd < k_sources_max && k_sources[fd].flush)
     k_sources[fd].flush(fd);
   return g; }
 
 struct ai_io ai_stdin = { .ap = lvm_port_io,
-                        .fd = putfix(0), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
+                        .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 struct ai_io ai_stdout = { .ap = lvm_port_io,
-                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
+                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 // No separate error stream; route err to the same fd as out (the console).
 struct ai_io ai_stderr = { .ap = lvm_port_io,
-                         .fd = putfix(1), .ungetc_buf = putfix(EOF), .eof_seen = putfix(false), };
+                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 
 struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
 
@@ -398,12 +398,12 @@ static lvm(draw) {
 
 static lvm(key) {
  int b = kqpop();
- Sp[0] = putfix(b < 0 ? 0 : b);
+ Sp[0] = putcharm(b < 0 ? 0 : b);
  Ip += 1;
  return Continue(); }
 
 static lvm(color) {
- uint8_t fg = getfix(*Sp++), bg = getfix(*Sp++);
+ uint8_t fg = getcharm(*Sp++), bg = getcharm(*Sp++);
  if (kcb) {
   cb_attr(kcb, fg, bg, 0);
   for (uint32_t i = 0, j = kcb->rows * kcb->cols; i < j; i++)
@@ -417,13 +417,13 @@ static lvm(color) {
 // the ap reports and halts, so k_fault_trigger does not return;
 // the post-call statements are reachable only if the fault did not fire.
 static lvm(lvm_fault) {
-  k_fault_trigger(getfix(Sp[0]));
+  k_fault_trigger(getcharm(Sp[0]));
   Ip += 1;
   return Continue(); }
 
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
-static lvm(lvm_kexit) { k_qemu_exit(getfix(Sp[0])); Ip += 1; return Continue(); }
+static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; return Continue(); }
 #endif
 
 
@@ -432,7 +432,7 @@ static union u
   nif_reset[] = {{ai_kreset}},
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
-  nif_color[] = {{lvm_cur}, {.x = putfix(2)}, {color}, {lvm_ret0}},
+  nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
 #endif
