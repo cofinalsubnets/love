@@ -205,7 +205,7 @@
         _ (? (< 0 col) (do (putc 27) (putc 91) (putn col) (putc 67)) 0)
         (fflush out))
 
-   ps1 "#! "
+   ps1 ";;; "
 
    ; print the prompt, then dispatch events until ^D or until enter
    ; at end-of-buffer with the buffer fully parsed. enter always

@@ -386,15 +386,14 @@
                                   (op-w (cup l) (cap r) (cup r)))))))))
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
-   ; quasiquote: the template is data; only unquote operands (at the right
-   ; depth, R7RS-style) re-enter the pass
-   (op-qq t d)
+   ; quasiquote: the template is data; only unquote operands re-enter the pass.
+   ; (nested quasiquote is gone -- `` is the list constructor now -- so no depth.)
+   (op-qq t)
     (? (atomp t) t
        (: h (cap t)
-          (? (= h 'uq)  (cons 'uq  (cons (? (= d 1) (op-core (caup t)) (op-qq (caup t) (- d 1))) 0))
-             (= h 'uqs) (cons 'uqs (cons (? (= d 1) (op-core (caup t)) (op-qq (caup t) (- d 1))) 0))
-             (= h 'qq)  (cons 'qq  (cons (op-qq (caup t) (+ d 1)) 0))
-             (map (\ e (op-qq e d)) t))))
+          (? (= h 'uq)  (cons 'uq  (cons (op-core (caup t)) 0))
+             (= h 'uqs) (cons 'uqs (cons (op-core (caup t)) 0))
+             (map (\ e (op-qq e)) t))))
    ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
    ; quoted list keeps its operators as plain symbols); quasiquote descends
    ; only through unquotes; everything else walks. idempotent: factored
@@ -403,7 +402,7 @@
     (? (atomp x) x
        (: h (cap x)
           (? (&& (= h '\) (atomp (cuup x))) x
-             (= h 'qq) (cons 'qq (cons (op-qq (caup x) 1) 0))
+             (= h 'qq) (cons 'qq (cons (op-qq (caup x)) 0))
              ; the reader's glued-run emission (mono (run d)): factor the run
              ; monadically around the (recursively opfixed) datum; an
              ; unfactorable run is the plain application (run d)
@@ -446,24 +445,20 @@
 (:: 'quote (\ a (cons '\ a)))
 
 ; quasiquote: `tmpl with ,x (unquote) and ,@xs (unquote-splice). The reader emits
-; (qq tmpl), (uq x), (uqs xs). qqx/qql walk the template tracking nesting depth d:
-; a nested `qq increments d, a ,/,@ decrements it, and an unquote only FIRES at d=1
-; (the outermost quasiquote, R7RS) -- deeper ones are rebuilt literally. qqx returns
-; CODE that reconstructs the template (X/cat over the spliced values). uq is also
-; bound to identity so a stray top-level ,x just evaluates its operand.
-(: (qqx t d) (?
+; (qq tmpl), (uq x), (uqs xs). qqx/qql walk the template; every unquote FIRES (there
+; is no nesting -- `` is the element-eval list constructor now, so no depth to track).
+; qqx returns CODE that reconstructs the template (cons/cat over the spliced values).
+; uq is also bound to identity so a stray top-level ,x just evaluates its operand.
+(: (qqx t) (?
     (atomp t)       (list '\ t)                              ; atom: quote it
-    (= (cap t) 'uq) (? (= d 1) (caup t)                      ; fire: value as-is
-                       (list 'list ''uq (qqx (caup t) (- d 1)))) ; rebuild literal uq
-    (= (cap t) 'qq) (list 'list ''qq (qqx (caup t) (+ d 1))) ; nested qq: walk one in
-                    (qql t d))                               ; other list
-   (qql t d) (?
-    (atomp t) (qqx t d)                                      ; nil / improper tail
+    (= (cap t) 'uq) (caup t)                                 ; unquote: fire the value
+                    (qql t))                                 ; other list
+   (qql t) (?
+    (atomp t) (qqx t)                                        ; nil / improper tail
     (&& (twop (cap t)) (= (caap t) 'uqs))
-     (? (= d 1) (list 'cat (caup (cap t)) (qql (cup t) d))   ; fire splice
-        (list 'cons (list 'list ''uqs (qqx (caup (cap t)) (- d 1))) (qql (cup t) d)))
-    (list 'cons (qqx (cap t) d) (qql (cup t) d))))           ; ordinary element
-(:: 'qq (\ a (qqx (cap a) 1)))
+     (list 'cat (caup (cap t)) (qql (cup t)))                ; splice: fire
+    (list 'cons (qqx (cap t)) (qql (cup t)))))               ; ordinary element
+(:: 'qq (\ a (qqx (cap a))))
 (: uq (\ x x))                                               ; stray ,x evaluates x
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
