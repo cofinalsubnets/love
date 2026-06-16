@@ -1,7 +1,7 @@
 #!/usr/bin/env -S ai -l
-; cook -- make, in love.
+; cook -- ai make
 ;
-; love reads the `#!` hashbang line above as a line comment (ai.c: `#!` runs to
+; ai reads the `#!` hashbang line above as a line comment (ai.c: `#!` runs to
 ; end of line, like `;`), so loading this file as a library is unaffected -- the
 ; same line serves the OS as a shebang. with the file marked executable and a `cook`
 ; symlink to it on PATH (the user installs that), running `cook Cookfile [ticket]`
@@ -26,7 +26,7 @@
 ;             a subprocess via the host `run` nif, or a THUNK (any lamp), called as
 ;             (step 0) for its effect. an empty step list is legal (a pure aggregate).
 ;
-; file ages come from stat(1) -- love has no stat nif, but it has `run`, and that
+; file ages come from stat(1) -- ai has no stat nif, but it has `run`, and that
 ; is enough. a missing file and a phony item both read as the ZERO POINT (nil):
 ; ageless, hence ancient, hence always rebuilt. the FIRST recipe declared is the
 ; default ticket, exactly as in make. drive it with (cook item) -- to cook an item
@@ -34,7 +34,7 @@
 ;
 ; usage:  cook <Cookfile> [ticket]            (with the symlink installed)
 ;     or:  ai -l tools/cook.l <Cookfile> [ticket]
-; A Cookfile is ordinary love source that lays out the recipes (recipe ..) then
+; A Cookfile is ordinary ai source that lays out the recipes (recipe ..) then
 ; (cook (ticket 0)). cook can ALSO read a real Makefile directly: when the file it
 ; is handed is named like one (Makefile, makefile, GNUmakefile, *.mk), cook imports
 ; its rules and cooks them -- no Cookfile needed (see "importing a Makefile" at the
@@ -145,7 +145,21 @@
                 (: _ (fputs err (+ "cook: command failed (exit " (+ (show (cap r)) ")")))
                    _ (fputc err 10) (exit 1))))
           (: _ (fputs err (+ "cook: cannot run " (join " " step)))
-             _ (fputc err 10) (exit 1)))))
+             _ (fputc err 10) (exit 1))))
+
+   ; run one make recipe line (via sh -c), make-style: echo the RAW command
+   ; (the expanded line, not the `sh -c` wrapper) unless @ silent, print its
+   ; captured stdout, and on a nonzero exit either carry on (- ignore, with a
+   ; note to err) or abort. The Makefile path's analogue of `shell`.
+   (sh-line silent ignore cmd)
+   (: _ (? silent 0 (: _ (puts cmd) (putc 10)))
+       r (run (L "sh" "-c" cmd))
+       ec (? (twop r) (cap r) -1)
+       _ (? (twop r) (puts (cup r)) 0)
+       (? (= 0 ec) 0
+          (! (twop r)) (: _ (fputs err (+ "cook: cannot run " cmd)) _ (fputc err 10) (exit 1))
+          ignore (: _ (fputs err (+ "cook: " (+ cmd (+ " (exit " (+ (show ec) ", ignored)"))))) (fputc err 10))
+          (: _ (fputs err (+ "cook: command failed (exit " (+ (show ec) ")"))) _ (fputc err 10) (exit 1)))))
 
 ; --- the entry points ----------------------------------------------------------
 
@@ -286,12 +300,18 @@
    ; classify a line -> (recipe TEXT) | (assign NAME OP VAL) | (rule TGTS PREREQS)
    ; | (inc TEXT) | (ifeq|ifneq|ifdef|ifndef|else REST) | (endif) | (skip).
    (recipep l)  (&& (< 0 (tally l)) (= (l 0) 9))
-   (recipe-body l)             ; drop the leading tab and any @ - + modifiers
-   (: b (slice l 1 (tally l))
-      ((: (g i) (? (&& (< i (tally b)) (|| (chws (b i)) (|| (= (b i) 64) (|| (= (b i) 45) (= (b i) 43)))))
-                   (g (+ 1 i)) (slice b i (tally b)))) 0))
+   ; parse a recipe body: strip a leading run of @ - + line modifiers (and any
+   ; interspersed whitespace), RECORDING whether @ (silent) and - (ignore-error)
+   ; appeared. -> (silent ignore . body). + (force) is a no-op here -- cook has no
+   ; dry-run mode -- so it is stripped without a flag. (64 = @, 45 = -, 43 = +.)
+   (parse-mods s)
+   ((: (g i sil ign)
+       (? (&& (< i (tally s)) (|| (chws (s i)) (|| (= (s i) 64) (|| (= (s i) 45) (= (s i) 43)))))
+          (g (+ 1 i) (|| sil (= (s i) 64)) (|| ign (= (s i) 45)))
+          (cons sil (cons ign (slice s i (tally s)))))) 0 0 0)
+   (recipe-parse l) (parse-mods (slice l 1 (tally l)))   ; drop the leading tab, then the modifier run
    (classify l)
-   (? (recipep l) (L 'recipe (recipe-body l))
+   (? (recipep l) (L 'recipe (recipe-parse l))
       (: t (strip-comment l) tt (trim t)
          (? (= 0 (tally tt)) (L 'skip)
             (: w (first-word tt) rest (after-word tt)
@@ -444,10 +464,15 @@
        0 ""))
    (expand-words ws as) (catmap (\ w (split-ws (expand w as 0))) ws)
    ; build a recipe's argv steps, pinning the automatic vars into the table first.
+   ; build a card's steps. each raw is (silent ignore . body) from recipe-parse;
+   ; expand the body NOW (the $@/$</$^/$* automatics are live in `as` at this
+   ; point, and get re-pinned per item) and close over the expanded command in a
+   ; thunk that runs it make-style via sh-line, carrying the @/- flags.
    (expand-steps raws t pr stem as)
    (: _ (pin as "@" t) _ (pin as "<" (? (twop pr) (cap pr) ""))
        _ (pin as "^" (join " " pr)) _ (pin as "*" stem)
-       (map (\ raw (L "sh" "-c" (expand raw as 0))) raws))
+       (map (\ raw (: cmd (expand (cup (cup raw)) as 0)
+                       (\ _ (sh-line (cap raw) (cap (cup raw)) cmd)))) raws))
 
    ; -- conditionals & assignment ops over the variable table `as` --
    (unquote-str s) (? (&& (>= (tally s) 2) (|| (= (s 0) 34) (= (s 0) 39))) (slice s 1 (- (tally s) 1)) s)
@@ -478,7 +503,7 @@
    (flushr cur rules) (? cur (cons (finalize cur) rules) rules)
    (mkrule c)                  ; -> (TGTS-text PREREQS-text . STEPS-rev); split off an inline ; recipe
    (: prr (r2 c) sc (splittop prr 59)
-      inl (? (&& (twop (cup sc)) (< 0 (tally (trim (cap (cup sc)))))) (L (trim (cap (cup sc)))) 0)
+      inl (? (&& (twop (cup sc)) (< 0 (tally (trim (cap (cup sc)))))) (L (parse-mods (trim (cap (cup sc))))) 0)
       (cons (r1 c) (cons (cap sc) inl)))
    (condon cond) (? (twop cond) (cap (cup (cup (cap cond)))) 1)
    (push-cond cond pon active) (cons (L pon active active) cond)
@@ -492,7 +517,7 @@
                 (= k 'rule)   (? on (loop rest (flushr cur rules) (mkrule c) cond)
                                     (loop rest (flushr cur rules) 0 cond))
                 (= k 'assign) (: _ (? on (do-assign as (r1 c) (r2 c) (r3 c)) 0) (loop rest (flushr cur rules) 0 cond))
-                (= k 'inc)    (? on (: more (catmap file-lines (split-ws (expand (r1 c) as 0)))
+                (= k 'inc)    (? on (: more (catmap (\ ip (map classify (lines (uncont (slurp-of ip))))) (split-ws (expand (r1 c) as 0)))
                                        (loop (cat more rest) (flushr cur rules) 0 cond))
                                     (loop rest (flushr cur rules) 0 cond))
                 ; conditionals thread `cur` (do NOT flush): a top-level rule is
@@ -507,9 +532,9 @@
                 (loop rest (flushr cur rules) 0 cond)))))
     cls 0 0 0)
 
-   ; read a file into its classified lines (for `include`).
+   ; read a file whole (for `include`); the read-and-classify is inlined at the one
+   ; `inc` call site as a fresh lambda rather than a named sibling helper here.
    (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (fputs err (+ "cook: cannot read " path)) _ (fputc err 10) (exit 1))))
-   (file-lines path) (map classify (lines (uncont (slurp-of path))))
 
    ; seed make's builtin defaults (overridable by the Makefile).
    (seed-defaults as)

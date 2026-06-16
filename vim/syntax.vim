@@ -21,7 +21,8 @@ syn keyword AiFunc id co const flip
 syn keyword AiFunc map foldl foldr foldl1 foldr1 filter init last each all any cat catmap
 syn keyword AiFunc rev take drop part zip ldel assq memq lidx sort sortsplit merge msort jot
 syn keyword AiFunc + - * / % < <= = >= > <- -> idp inc dec abs gcd modpow int
-syn keyword AiFunc ~ << >> & \| ^
+syn keyword AiFunc << >> & \| ^
+syn keyword AiFunc pin pull peep tablet mint gauge
 syn keyword AiFunc sin cos log pow re im conj arg wave
 syn keyword AiFunc nump intp powg num-ap numfn randint net prod neg recip frac bit
 syn keyword AiFunc twop strp symp mapp lamp hotp packp bigp widep arrp comp flop fixp nilp atomp
@@ -37,13 +38,14 @@ syn keyword AiFunc help scare scare? more? eof?
 syn keyword AiFunc rand randf rand-next randf-next rng-seed rng-get rng-set
 syn keyword AiFunc open close run getenv exit
 syn keyword AiFunc clock gauge book macros assert ai-version argv cmdline
+syn keyword AiSigilWord non wave qq uq sat
 
 " Macros (head-symbol rewrites installed with ::)
 syn keyword AiMacro :: L list do begin progn let if cond quote qq tuple hash
 syn keyword AiMacro && \|\| :- ?- >>= <=<
 
 " Constants: booleans (1/0), the tier-spine array element-kind codes, e pi i
-syn keyword AiConst true false e pi i ieee-inf ieee-nan
+syn keyword AiConst true false e pi tau i ieee-inf ieee-nan
 syn keyword AiConst z r c o
 
 " Quoted atoms: 'foo   (' is one-operand \ = quote)
@@ -55,7 +57,7 @@ syn match AiQuasi ",@\|[`,]"
 
 " Prefix operators: @(…) array  #(…) hash  $x sat  (the tables: book['operators],
 " book['monadics] -- glued runs are monadic, the valence law)
-syn match AiSigil "[@#$]"
+syn match AiSigil "[@#$~.!?%^*+/<>=-]"
 
 " Numbers (integer / bignum literals, possibly negative)
 syn match AiNumber "\<-\?\d\+\>"
@@ -72,7 +74,7 @@ syn region AiString start='"' skip='\\\\\|\\"' end='"'
 " Comments — ; to end of line, #! shebang; with TODO/FIXME highlighting inside
 syn match AiCommentTodo /\<\(TODO\|FIXME\|NOTE\|XXX\|HACK\)\>/ contained
 syn match AiComment ";.*$" contains=AiCommentTodo
-syn match AiComment "^#!.*$" contains=AiCommentTodo
+syn match AiComment "#!.*$" contains=AiCommentTodo
 
 " Unmatched close paren is an error
 syn match AiParenError ")"
@@ -80,13 +82,14 @@ syn match AiParenError ")"
 syn sync lines=100
 
 hi def link AiAtomMark       Delimiter
-hi def link AiSigil          Special
+hi def link AiSigil          Operator
+hi def link AiSigilWord      Operator
 hi def link AiAtom           Identifier
 hi def link AiComment        Comment
 hi def link AiCommentTodo    Todo
 hi def link AiForm           Statement
 hi def link AiFunc           Function
-hi def link AiMacro          Operator
+hi def link AiMacro          Special
 hi def link AiConst          Constant
 hi def link AiQuasi          Special
 hi def link AiNumber         Number

@@ -1,4 +1,6 @@
-;;; FIXME squeeze out of this file into ev etc
+;;; book is present in prelude
+;;; definitions in this file must not use infix notation
+;;; FIXME move ev support functions to ev where possible
 ; prel.l -- ai prel: data + function + macro definitions.
 (: id 1
    (co f g x) (f (g x))
@@ -6,17 +8,18 @@
    (flip f x y) (f y x))
 (: macros (peep book 0 0))
 (: pi 3.141592653589793
+   tau (* 2 pi) ;; no infix here
    e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
    true 1 false 0
-   non nilp                                     ; the normal name; !$x reads "non sat x"
+   i ~(0 1) ;; FIXME up top
+   z 0 r 1 c 2 o 3 ;; FIXME upcase
+   non nilp  ;;; FIXME keep nilp alias but standardize on non                                   ; the normal name; !$x reads "non sat x"
    (atomp x) (nilp (twop x))
-   caap (co cap cap) caup (co cap cup)
+   caap (co cap cap) caup (co cap cup) ;; FIXME emit pure code -- combine like operations and metaprogram a concrete thread for each definition
    cuap (co cup cap) cuup (co cup cup))
 ; array element-kind codes (enum g_tuple_type), named for the tier spine:
 ; z integers, r reals, c packed complex, o objects -- one word per element.
-(: z 0 r 1 c 2 o 3)
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
-(: i ~(0 1))
 ; the bare ~ digraph (~x, ~ not before `(`) reads as (conj x): conj LIFTS now, so
 ; it IS the monadic wave -- a real r -> ~(r 0), a complex z -> ~(re -im), an
 ; involution. the 2-operand ~(a b) splices into (wave a b), the C constructor.
@@ -24,7 +27,7 @@
 ; point the mint nif adjoins; identity its only property, $mint = 0). the old
 ; named-uninterned atom species is gone -- McCarthy's symbol, restored as the
 ; product it always was. (nom 0) (any non-text arg) is the bare mint.
-(: (nom n) (? (strp n) (cons n (mint 0))
+(: (nom n) (? (strp n) (cons n (mint 0)) ;; FIXME hook
               (symp n) (cons (string n) (mint 0))
               (mint 0)))
 ; integer power (b ** k) is just numeral application: (k b) == b**k. The squaring
@@ -34,24 +37,24 @@
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
 ; functional bounded draw: (value . st') with value in [0,n), riding rand-next
 ; (full-width draw) + modulo. The global-stream analogue is the `rand` nif.
-(: (randint st n) (: r (rand-next st) (cons (% (cap r) n) (cup r))))
-(: caaap (co cap caap) caaup (co cap caup)
+(: (randint st n) (: r (rand-next st) (cons (% (cap r) n) (cup r)))) ;; FIXME check interface & hook
+(: caaap (co cap caap) caaup (co cap caup) ;; FIXME group above
    cauap (co cap cuap) cauup (co cap cuup)
    cuaap (co cup caap) cuaup (co cup caup)
    cuuap (co cup cuap) cuuup (co cup cuup))
 ; X cons; cap/cup -- the pair's two projections, the matched pair the string diagrams bend
 ; (lineage: cap/cup <- cap/cbp <- car/cdr) -- and the caap..cuuup compounds above are the
 ; primitives; the older names are gone.
-(: inc (+ 1) dec (+ -1) (:: a b) (pin macros a b)
-   putc (fputc out)
-   puts (fputs out)
-   (putn n) (fputbn out n 10)
-   putx (fputx out)
-   (getc _) (fgetc in))
+(: inc (+ 1) dec (+ -1) ;; FIXME pure code
+ (:: a b) (pin macros a b) ;; FIXME needs a way better api
+   putc (fputc out) ;; FIXME rename to avoid f prefix
+   puts (fputs out) ;; FIXME rm f prefix
+   (putn n) (fputbn out n 10) ;; FIXME rm f prefix and make preferred base user configurable
+   putx (fputx out) ;; FIXME rm f prefix
+   (getc _) (fgetc in)) ;; FIXME rm f prefix
 ; the accessor aliases are plain globals too, so escaping works like (+)/'+ --
-; ((->) t k d) peeps. (punct names can't sit in `:` binding position -- they'd
-; capture the `:` -- so pin book directly.)
-(: _ (pin book '<- pin) (pin book '-> peep))
+; ((->) t k d) peeps.
+(: <- pin -> peep)
 ; fixnum-as-function application, pinned on book for the VM's apply path: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
@@ -73,6 +76,7 @@
      _ (nfa th 0 n)
      _ (poke (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
+   ;; FIXME rename | -> bit-or to free | for pipe operator
    (nump x) (| (fixp x) (| (packp x) (bigp x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
    (intp n) (| (fixp n) (| (widep n) (bigp n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --

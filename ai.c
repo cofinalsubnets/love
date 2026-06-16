@@ -4355,6 +4355,7 @@ avm_ovf(sub, __builtin_sub_overflow)
 // RUNTIME FLAG: ai_add_lr selects order-preserving (left->front, right->back); set
 // it false for the commutative reading (smaller operand always joins the front, so
 // a+b == b+a like numeric add). A plain mutable global -> toggleable at runtime.
+// FIXME we always want commutative reading so make this false then remove
 static const bool ai_add_lr = true;
 // THE BYTE LAW: text + number is one byte, STRICTLY -- the value must be an exact
 // integer 0..255 (rep-blind, like `=`: 66.0 is 66; a wide box/bignum is never in
