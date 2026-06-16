@@ -46,7 +46,7 @@ ALL_LANGS := ai \
              python pypy ruby node deno lua luajit luajit-nojit
 
 # the columns `make bench` shows by default.
-DEFAULT_LANGS := ai python chez sbcl node luajit elixir
+DEFAULT_LANGS := ai python pypy chez sbcl node luajit
 
 # per-language: source extension, harness file (a result depends on it), the
 # interpreter binary (for the PATH presence check), and any extra prereq.
