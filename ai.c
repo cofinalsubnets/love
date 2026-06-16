@@ -763,12 +763,9 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   if (ai_ok(g = ai_strof(g, AI_VERSION))) {
    struct ai_def vd[] = {{"ai-version", ai_pop1(g)}};
    g = ai_defn(g, vd, countof(vd)); }
-  // the missing condition tag ('missing), pre-interned and rooted (v0..end in
-  // struct ai) so lvm_freev's raise path never allocates the tag and the
-  // weak intern map keeps the atom across collections.
-  if (ai_ok(g = ai_strof(g, "missing"))) {
-   g = intern(g);
-   if (ai_ok(g)) g->missing = ai_pop1(g); }
+  // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
+  // name, so installing that nif interns it and the book roots it; the raise
+  // path reads it back alloc-free via sym_probe (lvm_freev/lvm_missing).
   // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prel, and the
   // opfix source pass (prel.l, hooked by both compilers at c0 and wev)
@@ -1887,7 +1884,7 @@ lvm(lvm_freev) {
   *--Sp = (word) ai_core_of(g),
   Ip += 2,
   Continue();
- word a = g->missing, b = Ip[1].x;
+ word a = word(sym_probe(g, "missing", 7)), b = Ip[1].x;   // 'missing: the nif's name, rooted by the book
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
@@ -1913,7 +1910,7 @@ lvm(lvm_missing) {
   Sp++,
   Ip++,
   Continue();
- word a = g->missing;
+ word a = word(sym_probe(g, "missing", 7));   // 'missing: the nif's name, rooted by the book
  Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
  Sp[0] = word(Ip + 1), Sp[1] = a;
  return Pack(g), ai_raise(g, ai_status_scare, a, Sp[2], help_more_k); }

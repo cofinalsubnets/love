@@ -134,10 +134,10 @@ struct ai {
   intptr_t v0;
   struct {
    ai_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
-                  // macro table is book[nil] -- no separate field.
-   ai_word missing;   // the pre-interned 'missing atom: the condition tag for reading
-                  // a nom not in the book. rooted here (v0..end) so the raise
-                  // path never allocates and the weak intern map keeps it.
+                  // macro table is book[nil] -- no separate field. The 'missing
+                  // condition tag needs no slot: it is the `missing` nif's name,
+                  // so the book roots it, and the raise path reads it back with
+                  // sym_probe (alloc-free, already on that path for `help`).
    ai_word scare_a, scare_b; // the last bare scare's condition data, stashed at
                   // the raise so a terminal exit can speak (ai_scare_face_);
                   // nil nil = the bare oom, which has no data. GC-traced here.
