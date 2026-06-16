@@ -323,68 +323,69 @@
   ;   link     -- emit each binding, backpatch recursive refs, apply the body
   ; boxing (the letrec* capture-by-location rewrite) already happened in wev (boxfix), so
   ; the defs compile directly. q = a child scope holding the let's lambdas + backpatch sites.
+  ; the phases run IN SEQUENCE (the :- body, last): collect the pairs (pure), pin the
+  ; sibling arity map, build+propagate the closures, then link (emit + backpatch + body).
   (ale c a b) (?
    (atomp b) (ana c a)
-   (:- (collect 0 a (cap b) (cup b))
+   (:- (link (cap cb) (caup cb) (cuup cb) (closures (cap cb)))
     q (sco c (c 'arg) (c 'imp))
     ; set-tail: overwrite pair p's tail (cell offset 2, the cup) in place; return x.
     (set-tail p x) (: _ (poke 2 x p) x)
-
-   ; collect: gather (name . def) pairs in source order. the body is the trailing odd
-   ; form; even = a body-LESS let (its last value is the result, top-level names defglob).
-   (collect prs n d rest) (: nd (dsug n d)
-    (? (atomp rest)       (closures (rev (cons nd prs)) (cap nd)   1)   ; body-less: the last NAME is the body
-       (atomp (cup rest)) (closures (rev (cons nd prs)) (cap rest) 0)   ; a trailing body form
-                          (collect (cons nd prs) (cap rest) (caup rest) (cuup rest))))
-
-   (closures prs body even) (:- (propagate 0 l l l)
-    s (c 'stk)
-    _ (push c 'stk 0)
-    ; far: {name -> arity} for the lambda siblings, SYNTACTIC (binder count off the
-    ; \-expr), so it's stable through the backpatch rebuild that zeroes closure cells.
-    ; only fixed-arity multi-arg lambdas (arity > 1) carry an arity; a value binding, a
-    ; single-arg lambda, or a name bound twice (a rebind -- sequence law) pins 0 so a
-    ; call to it stays l2r. Pinned on q BEFORE split, so every body analysis (and weave's
-    ; re-analysis, also under q) sees it via falook.
+    ; collect: gather (name . def) pairs in source order -> (prs body . even). the body is
+    ; the trailing odd form; even = a body-LESS let (last value is result, names defglob).
+    (collect prs n d rest) (: nd (dsug n d)
+     (? (atomp rest)       (cons (rev (cons nd prs)) (cons (cap nd)   1))   ; body-less: last NAME is the body
+        (atomp (cup rest)) (cons (rev (cons nd prs)) (cons (cap rest) 0))   ; a trailing body form
+                           (collect (cons nd prs) (cap rest) (caup rest) (cuup rest))))
+    cb (collect 0 a (cap b) (cup b))
+    ; far: {name -> arity} for the lambda siblings, SYNTACTIC (binder count off the \-expr),
+    ; stable through the backpatch rebuild that zeroes closure cells. only fixed-arity
+    ; multi-arg lambdas (arity > 1) carry one; a value binding, single-arg lambda, or a
+    ; rebound name (sequence law) pins 0 -> the call stays l2r. Pinned BEFORE the closures
+    ; analyze their bodies (and weave's re-analysis, also under q), so falook sees it.
     (farof ps t) (?- t (twop ps)
      (: pr (cap ps) k (cap pr) d (cup pr)
         a (? (&& (= -1 (peep t k -1)) (lambp d)) (- (tally (cup d)) 1) 0)
       (farof (cup ps) (pin t k (? (< 1 a) a 0)))))
-    _ (pin q 'far (farof prs (tablet 0)))
-    ; split: a lambda def -> a closure via ala (paired with its name); a non-lambda
-    ; binding -> just a stack slot. builds the stack layout [names..] in source order.
-    (split a ps) (?
-     (atomp ps) a
-     (nilp (lambp (cuap ps)))
-      (: _ (push c 'stk (caap ps))
-       (split a (cup ps)))
-     (: k (caap ps)
-        v (ala q 0 (cuuap ps))
-        a2 (cons (cons k v) a)
-      _ (push c 'stk k)
-      (split a2 (cup ps))))
-    l (split 0 prs)
-    _ (pin c 'stk s)
-    ; propagate: if closure k1 references sibling k2, k2 must ALSO capture k1's imports
-    ; (mutual recursion). sweep all ordered pairs, pouring k1's vars into k2 (addv); a
-    ; sweep that adds any var (n > 0) repeats, until a full pass is stable (the fixpoint).
-    (propagate n l k1 k2) (?
-     (&& k1 k2 !(= k1 k2) (memq (caap k1) (cuuap k2)))
-      (>>= n (cuuap k1) (: (addv n v)
-       (? (nilp v) (propagate n l k1 (cup k2))
-        (: var (cap v)
-           vars (cuuap k2)
-           n2 (? (memq var vars) n
-              (: _ (set-tail (cuap k2) (cons var vars))
-               (+ 1 n)))
-           (addv n2 (cup v))))))
-     k2 (propagate n l k1 (cup k2))
-     k1 (propagate n l (cup k1) l)
-     n (propagate 0 l l l)                                    ; a pass added vars -> sweep again
-     (link prs body even                                      ; stable: drop the let's own names from
-      (: j (map cap l)                                        ; each capture set (locals, not imports)
+    _ (pin q 'far (farof (cap cb) (tablet 0)))
+    ; closures: each lambda def -> a closure via ala (a non-lambda -> just a stack slot),
+    ; building [names..] on the stack; then PROPAGATE captures among mutually-recursive
+    ; closures to a fixpoint, and return the lambdas with the let's OWN names dropped from
+    ; each capture set (those are locals, resolved by link, not imports).
+    (closures prs) (:- (propagate 0 l l l)
+     s (c 'stk)
+     _ (push c 'stk 0)
+     (split a ps) (?
+      (atomp ps) a
+      (nilp (lambp (cuap ps)))
+       (: _ (push c 'stk (caap ps))
+        (split a (cup ps)))
+      (: k (caap ps)
+         v (ala q 0 (cuuap ps))
+         a2 (cons (cons k v) a)
+       _ (push c 'stk k)
+       (split a2 (cup ps))))
+     l (split 0 prs)
+     _ (pin c 'stk s)
+     ; propagate: if k1 references sibling k2, k2 must ALSO capture k1's imports (mutual
+     ; recursion). sweep all ordered pairs, pour k1's vars into k2 (addv); a sweep that adds
+     ; any var (n > 0) repeats until a full pass is stable -- then drop the let's own names.
+     (propagate n l k1 k2) (?
+      (&& k1 k2 !(= k1 k2) (memq (caap k1) (cuuap k2)))
+       (>>= n (cuuap k1) (: (addv n v)
+        (? (nilp v) (propagate n l k1 (cup k2))
+         (: var (cap v)
+            vars (cuuap k2)
+            n2 (? (memq var vars) n
+               (: _ (set-tail (cuap k2) (cons var vars))
+                (+ 1 n)))
+            (addv n2 (cup v))))))
+      k2 (propagate n l k1 (cup k2))
+      k1 (propagate n l (cup k1) l)
+      n (propagate 0 l l l)                                    ; a pass added vars -> sweep again
+      (: j (map cap l)                                         ; stable: drop the let's own names
          (dropj x) (cons (cap x) (cons (caup x) (foldl (flip ldel) (cuup x) j)))
-       (map dropj l)))))
+       (map dropj l))))
 
    (link prs body even lams) (:
     ; weave: emit the binding defs left-to-right. a lambda def is RE-analyzed with its
