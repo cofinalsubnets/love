@@ -12,7 +12,7 @@
 > - **`ai/glaze/emit.l`** — a love-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
 >   and a counted-sum loop `(\ n Σ_{i<n} body)` to native, with a `jno`+inline-deopt
 >   guard on every `+`/`-`/`*` and on `putfix` (its `add rax,rax` overflow flag is
->   exactly the 62-bit fixnum boundary). x86-64 only; load with `-r ai/glaze/emit.l`.
+>   exactly the 62-bit fixnum boundary). x86-64 only; load with `-l ai/glaze/emit.l`.
 >
 > This realizes the law the earlier experiment found — *a glaze wins only when it owns
 > the loop* — concretely: the counted-loop emitter owns the iteration end to end
@@ -148,7 +148,7 @@ substrate above.
 ```sh
 make host                                  # builds ai0 + the bake tools
 cp ai/glaze/probe.l out/lib/ktests.l            # make the probe the whole K_TEST corpus
-out/host/ai0 -r ai/prel.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
+out/host/ai0 -l ai/prel.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
 touch out/lib/ktests.l out/lib/ktests.h
 make -s K_TEST=1 out/free/love-x86_64-test.iso
 qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \

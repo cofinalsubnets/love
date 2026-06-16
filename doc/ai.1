@@ -5,8 +5,14 @@ ai \- a curried lisp over a tiny generic core
 .B ai
 .RB [ \-l
 .IR lib ]
+.RB [ \-e
+.IR expr ]
+.RB [ \-v ]
+.RB [ \-h ]
+.RB [ \-\- ]
 .RI [ file
-\&...]
+.RI [ arg
+\&...]]
 .SH DESCRIPTION
 .B ai
 is a small lisp in which every value is a total function of one argument and
@@ -37,28 +43,44 @@ There are three special forms \(em
 call. Truth is the net measure: a value is false when it nets to nothing and
 true when it nets positive.
 .PP
-With one or more
+With a
 .I file
-arguments,
+argument (or
+.BR \-e ),
 .B ai
-reads and evaluates each in order and exits. With no arguments it starts an
-interactive read-eval-print loop when standard input is a terminal, and
-otherwise reads and evaluates standard input to end of file.
+runs it as the program and exits; any further arguments are the program's, in
+.BR argv .
+With no program it starts an interactive read-eval-print loop when standard
+input is a terminal, and otherwise reads and evaluates standard input to end of
+file.
 .SH OPTIONS
 .TP
-.BI \-r " lib"
-Load
+\fB\-l\fP \fIlib\fP, \fB\-\-load\fP \fIlib\fP
+Preload
 .I lib
-(read-eval it to end of file) before processing the remaining arguments. May be
-repeated; all
-.B \-l
-options must precede the
-.I file
+(read-eval it to end of file) before the program. May be repeated.
+.TP
+\fB\-e\fP \fIexpr\fP, \fB\-\-eval\fP \fIexpr\fP
+Read-eval the forms in
+.IR expr ,
+as the program.
+.TP
+.BR \-v ", " \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary and exit.
+.TP
+.B \-\-
+End option processing: the next argument is the program, the rest are its
 arguments.
 .TP
 .I file
-A script to evaluate. Files are processed in the order given. A file that
-cannot be opened is a fatal error.
+A program to load. The first
+.I file
+is the program; further arguments are passed to it in
+.BR argv .
+A file that cannot be opened is a fatal error.
 .SH EXAMPLES
 .PP
 Evaluate a file:
@@ -73,7 +95,15 @@ Load a library, then run a script:
 .PP
 .RS
 .EX
-ai \-r lib.l prog.l
+ai \-l lib.l prog.l
+.EE
+.RE
+.PP
+Evaluate an expression:
+.PP
+.RS
+.EX
+ai \-e '(. (+ 1 2))'
 .EE
 .RE
 .PP

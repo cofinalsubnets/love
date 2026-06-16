@@ -103,7 +103,7 @@ lib: $(lib_h) $(gl0_h)
 $(lib_h): out/lib/%.h: ai/%.$x tools/lcat.$x   # + $(ai0), stated below where it is in scope
 	@mkdir -p out/lib
 	@echo GEN	$@
-	@$(ai0) -r ai/prel.$x tools/lcat.$x $< > $@
+	@$(ai0) -l ai/prel.$x tools/lcat.$x $< > $@
 out/lib/%0.h: ai/%.$x
 	@mkdir -p out/lib
 	@echo GEN	$@
@@ -216,7 +216,7 @@ $(ai0): $(ai0_o) $(data_ld)
 # $(ho)/data.h, whose ai_typ() shifts instead of the portable header's divides.
 $(hdata_h): $(ho)/data.o $(ai0) tools/gen_data.$x ai/prel.$x
 	@echo GEN	$@
-	@$(ai0) -r ai/prel.$x tools/gen_data.$x $< -o $@
+	@$(ai0) -l ai/prel.$x tools/gen_data.$x $< -o $@
 
 # ai.c/data.c -> out/host/*.o (against the generated data.h).
 $(ho)/%.o: $(R)/%.c $(ai_h) $(hdata_h)
@@ -449,7 +449,7 @@ out/lib/ktests.$x: $(kt) $(R)/Makefile
 	@cat $(kt) > $@
 out/lib/ktests.h: out/lib/ktests.$x $(ai0) tools/lcatv.$x ai/prel.$x
 	@echo GEN	$@
-	@$(ai0) -r ai/prel.$x tools/lcatv.$x out/lib/ktests.$x > $@
+	@$(ai0) -l ai/prel.$x tools/lcatv.$x out/lib/ktests.$x > $@
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.$x

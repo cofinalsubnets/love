@@ -6,7 +6,7 @@
 ; the bytes and wraps them in a closure cell [code, src, code, interp, lvm_ret, 0]
 ; whose value[-1]=src (=/show) and value[1]=interp (the deopt fallback).
 ;
-; ⚠ x86-64 ONLY (emits x86-64; load with -r on an x86-64 host). WIP toward the auto
+; ⚠ x86-64 ONLY (emits x86-64; load with -l on an x86-64 host). WIP toward the auto
 ; hook (ev installing native for hot regions, transparently); `nat` then goes
 ; internal (mopped like boxfix/wev) and there is no user-facing verb at all.
 ;
