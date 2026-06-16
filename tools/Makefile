@@ -11,8 +11,8 @@
 R := ..
 include $(R)/common.mk
 
-.PHONY: all test_gen_data test_vmret
-all: test_gen_data test_vmret
+.PHONY: all test_gen_data test_vmret test_cook
+all: test_gen_data test_vmret test_cook
 
 # Build the host love on demand (it runs the .l tools); only if it's missing.
 $(m):
@@ -44,3 +44,12 @@ test_vmret: | $(m)
 	    || { echo "  FAIL $$e"; diff $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l; exit 1; }; \
 	done; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l
 
+
+# cook.l: run its Makefile-importer test suite. cooktest.l writes fixture
+# Makefiles to a temp dir and runs cook on them as a subprocess, asserting over
+# the captured output (variable expansion, the make functions, conditionals,
+# include, pattern + static-pattern rules). It uses paths relative to the repo
+# root, so run it from there.
+test_cook: | $(m)
+	@echo TEST cook.l
+	@cd $(R) && out/host/$n tools/cooktest.$x
