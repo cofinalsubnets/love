@@ -126,7 +126,7 @@ lvm_t lvm_kcall,
  lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
  lvm_sub,   lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
  lvm_bmul_start, lvm_bmul,   // resumable (yieldable) bignum multiply
- lvm_quote, lvm_freev,  lvm_eval,   lvm_cond, lvm_jump,   lvm_defglob,
+ lvm_quote, lvm_index,  lvm_eval,   lvm_cond, lvm_jump,   lvm_defglob,
  lvm_ap,    lvm_tap,    lvm_apn,    lvm_tapn, lvm_ret,
  lvm_argap, lvm_quoteap, lvm_argtap,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
@@ -638,7 +638,7 @@ lvm_t lvm_fault;
  _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next)) NIF_FAULT(_)
 #define native_implemented_function(n, _, d) static union u const n[] = d;
-#define insts(_) _(lvm_unc) _(lvm_freev) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
+#define insts(_) _(lvm_unc) _(lvm_index) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
   _(lvm_argap) _(lvm_quoteap) _(lvm_argtap)\
   _(lvm_arg0) _(lvm_arg1) _(lvm_arg2) _(lvm_arg3)\
@@ -765,7 +765,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    g = ai_defn(g, vd, countof(vd)); }
   // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
   // name, so installing that nif interns it and the book roots it; the raise
-  // path reads it back alloc-free via sym_probe (lvm_freev/lvm_missing).
+  // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).
   // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prel, and the
   // opfix source pass (prel.l, hooked by both compilers at c0 and wev)
@@ -1338,7 +1338,7 @@ static Ana(ana_v) {
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) {
    if ((y = ai_mapget(g, 0, x, g->book))) return ana_q(g, c, y);
-   // undefined global: resolved by lvm_freev via the book at run time.
+   // undefined global: resolved by lvm_index via the book at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.l avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
    // is no enclosing frame to capture from, so adding x to imps would make a
@@ -1349,7 +1349,7 @@ static Ana(ana_v) {
    if (!nilp((*c)->par))
     g = gxl(ai_push(g, 2, x, (*c)->imps)),
     x = ai_ok(g) ? A((*c)->imps = pop1(g)) : nil;
-   return c0_ix(g, c, lvm_freev, x); }
+   return c0_ix(g, c, lvm_index, x); }
   // lambda definition of local let form?
   if ((y = assq(g, d->lams, x))) {
    // recursive-fn ref: record a backpatch site on d (the lams-owning scope) when
@@ -1688,7 +1688,7 @@ lvm(lvm_defglob) {
  return Sp[0] = k, Sp[1] = v, Sp[2] = g->book, Pack(g),
   !ai_ok(g = ai_mapput(g)) ? ghelp(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
-// lvm_freev (the late-bound global read) is defined below lvm_scare: its
+// lvm_index (the late-bound global read) is defined below lvm_scare: its
 // miss path is the missing condition and borrows the whole help apparatus.
 
 lvm(lvm_eval) { return Ip++, Pack(g),
@@ -1850,7 +1850,7 @@ lvm(lvm_scare) {
                                    // provisioning here lets ai_raise's avail>=5
                                    // guard fail and SILENTLY drop the help call,
                                    // so a deliberate scare can miss its handler
-                                   // on a tight heap (cf. lvm_freev/lvm_missing,
+                                   // on a tight heap (cf. lvm_index/lvm_missing,
                                    // which Have(8) for the same reason).
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
@@ -1865,17 +1865,19 @@ static union u const no_entry[1];
 // 0**i is honest nan), a unit absorbs -- which is what keeps (i love you) = 1. It FLOPS
 // with the dust (gcg forwards old->new core) and prints () -- the face of absence.
 // No named constant; the nothing is the core. DISTINCT from 0 (fixnum) and "" (string).
-// The late-bound global read. A hit patches the site to a quote of the value
-// (the fold law's runtime tail). A miss is a MISSING name -- a nom not in the book,
-// a call for help: with a global help installed the read raises
-// (help 1 'missing nom) and the help's result is the value here; helpless it
-// reads the zero point. either way the site stays a freev (no quote patch on a miss):
-// the condition recurs, and a define that lands later is seen.
-lvm(lvm_freev) {
+// A read of the LIVE book (the outermost cell) by name -- the missing-name law
+// at the global scope, the twin of boxfix's local (missing cell 'nom). A hit
+// pushes the current value; a miss is a MISSING name -- a nom not in the book,
+// a call for help: with a global help installed the read raises (help 1 'missing
+// nom) and the help's result is the value here; helpless it reads the zero point.
+// The site NEVER self-patches (it stays a live read, so a define that lands later
+// is seen, a rebind is honoured) and the name is NOT a frame import.
+lvm(lvm_index) {
+ Have1();                          // room for the push first (may GC; no live local held yet)
  word v = ai_mapget(g, word(no_entry), Ip[1].x, g->book);
  if (v != word(no_entry)) return
-  Ip[0].ap = lvm_quote,
-  Ip[1].x = v,
+  *--Sp = v,                       // present: push the live value, no quote patch
+  Ip += 2,
   Continue();
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_atom *ts = sym_probe(g, "help", 4);
@@ -1888,7 +1890,7 @@ lvm(lvm_freev) {
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
-// (missing t k): the book read as a value -- lvm_freev's law with the book as an
+// (missing t k): the book read as a value -- lvm_index's law with the book as an
 // argument (a tablet is a little book; the book is just the outermost one).
 // k present in map t answers the value; a miss is the MISSING CONDITION: with a
 // global help installed the read raises (help 1 'missing k) and the help's result

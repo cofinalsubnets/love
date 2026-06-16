@@ -73,7 +73,7 @@
   ;   aco      -- a cond (below);  k0/k0s -- thread terminators (start a thread)
   ; fuse/spa/spq are THIS backend's peepholes (fuse an operand into a following ap/tap;
   ; zero-operand opcodes for the hot arg/quote values). ava/avb resolve a variable to one
-  ; of karg (a local, at its [imps args] frame slot) / kim (a global constant) / em2 freev.
+  ; of karg (a local, at its [imps args] frame slot) / kim (a global constant) / em2 lvm_index.
   ; This is the THREADED (bytecode) backend -- the portable default that every target runs
   ; (host, kernel, wasm, aarch64, and the little ones: playdate, teensy). A NATIVE backend
   ; (ai/glaze/emit.l, x86-64, opt-in) implements the SAME leaf interface over a byte buffer
@@ -288,7 +288,7 @@
        (: y (peep book x Z) ; check global scope
         (? !(= y Z) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
-          (em2 lvm_freev x))))
+          (em2 lvm_index x))))
     (: lfd (assq x (d 'lam))
      (? (twop lfd) (lz c lfd d)
         (: s (d 'stk)
