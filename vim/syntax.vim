@@ -82,14 +82,14 @@ syn match AiParenError ")"
 syn sync lines=100
 
 hi def link AiAtomMark       Delimiter
-hi def link AiSigil          Operator
+hi def link AiSigil          Special
 hi def link AiSigilWord      Operator
 hi def link AiAtom           Identifier
 hi def link AiComment        Comment
 hi def link AiCommentTodo    Todo
 hi def link AiForm           Statement
 hi def link AiFunc           Function
-hi def link AiMacro          Special
+hi def link AiMacro          Operator
 hi def link AiConst          Constant
 hi def link AiQuasi          Special
 hi def link AiNumber         Number

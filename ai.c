@@ -4447,10 +4447,10 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
 // mirrors; rank-0 boxes (float/complex/wide-int) stay KTuple. Exported (not inline) so
 // data.c's apply sentinels share it.
 enum q ai_kind(word x) {
- if (fixp(x)) return KFix;
- if (!datp(x)) return mapp(x) ? KMap : KHom;
+ if (fixp(x)) return KFix; // FIXME fix is charm
+ if (!datp(x)) return mapp(x) ? KMap : KHom; // FIXME hom is top
  enum q k = typ(x);
- return k == KTuple && tuple(x)->rank ? (enum q) (KArrZ + tuple(x)->type) : k; }
+ return k == KTuple && tuple(x)->rank ? (enum q) (KArrZ + tuple(x)->type) : k; } // FIXME tup is vec
 
 // ============================================================================
 // generic-op lane aps, then all three dispatch matrices adjacent, then the
@@ -4463,7 +4463,7 @@ enum q ai_kind(word x) {
 // `*` REPEAT lane: the multiplicative analog of `+`'s concat. `*` is "repeated
 // `+`": a sequence (string / symbol / list) times a scalar count n is n copies
 // joined, just as `(* 2 3)` is 2+2+2. The count is the OTHER operand, SATURATED
-// to a nat (($ c) -- the count law, shared with numeral-apply and array shapes:
+// to a green charm (($ c) -- the count law, shared with numeral-apply and array shapes:
 // non-positive -> 0 -> the empty singleton, a float ceils, a complex counts by
 // total-order-guarded modulus); an array (or any non-number) is not a count ->
 // nil. A symbol stays at its own rank (no demotion): an interned name repeats
