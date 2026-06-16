@@ -4443,15 +4443,17 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
 
 // The fundamental value kind for generic-op dispatch (enum q in ai.h): a fixnum is
 // the odd tag (KCharm), a non-data heap pointer is a text/function (KTop), else ai_typ
-// gives the data kind. The one refinement: a rank>=1 vec (array) expands by element
-// tier to KArrZ..KArrO so the array tower dispatches inline with the scalar tower it
-// mirrors; rank-0 boxes (float/complex/wide-int) stay KVec. Exported (not inline) so
-// data.c's apply sentinels share it.
+// gives the data kind. The refinement: a vec expands by element tier -- a rank>=1 vec
+// (array) to KArrZ..KArrO and a rank-0 box (a scalar GEM: wide/float/complex) to
+// KWide..KCplx -- so the gem tower and the array tower it mirrors both dispatch inline.
+// ai_typ still gives KVec (the coarse sentinel) for both; only ai_kind splits them.
+// Exported (not inline) so data.c's apply sentinels share it.
 enum q ai_kind(word x) {
  if (charmp(x)) return KCharm;
  if (!datp(x)) return mapp(x) ? KMap : KTop;
  enum q k = typ(x);
- return k == KVec && vec(x)->rank ? (enum q) (KArrZ + vec(x)->type) : k; }
+ if (k != KVec) return k;
+ return (enum q) ((vec(x)->rank ? KArrZ : KWide) + vec(x)->type); }
 
 // ============================================================================
 // generic-op lane aps, then all three dispatch matrices adjacent, then the
@@ -4562,10 +4564,12 @@ static lvm(data_pair_apply) {
 // === the three generic-op dispatch matrices, adjacent ======================
 // All indexed by ai_kind (ai_apply_mx's row by ai_typ, the data-kind subrange). The kind
 // order (ai.h) makes each lane a contiguous block: [KCharm..KArrO] arithmetic (the
-// scalar tower fix/vec/big then the parallel array tower arrZ/arrR/arrC/arrO), then
-// [KString..KTwo] sequence, then KMap, then KTop. Lanes:
+// scalar GEM tower charm/wide/float/complex/big, the vec sentinel, then the parallel
+// array tower arrZ/arrR/arrC/arrO), then [KString..KTwo] sequence, then KMap, then KTop.
+// The rows below are NAMED-index (NUMK + the five) -- adding a kind can't shift a column.
+// Lanes:
 //   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane ap still
-//          refines by ai_vec_type; the seven arithmetic kinds route identically today.
+//          refines by ai_vec_type; every gem/array kind routes identically (NUMK).
 //   add_seq = a list anywhere (other operand a scalar element / spine); pair wins
 //   add_string = strings (+ a number as one byte -- the byte law; nils an array
 //              operand internally). SYMBOLS left the string algebra with the mint
@@ -4576,44 +4580,54 @@ static lvm(data_pair_apply) {
 //          its rung shares the lanes (the rung exists for the order)
 //   lvm_0 = undefined (-> nil): sequence*sequence
 // Precedence (high->low): lambda > map > pair > text > number(incl array).
-// cols (enum order): fix vec big arrZ arrR arrC arrO | string sym | two | map lam
 
 // `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KTop rows+cols all addl.
+// Named-index rows (NOT positional): one column value per OTHER-operand kind, so
+// inserting a kind can't silently shift a column. NUMK fills the whole arithmetic
+// lane -- every numeric kind (the scalar gems KCharm/KWide/KFlo/KCplx/KBig, the KVec
+// sentinel, and the arrays KArrZ..KArrO) with one value v; the five non-numeric
+// columns (string/sym/two/map/top) are named explicitly. Unnamed entries would be
+// NULL (a crash), so every row names all 15 columns via NUMK + the five.
+#define NUMK(v) [KCharm]=v,[KWide]=v,[KFlo]=v,[KCplx]=v,[KBig]=v,[KVec]=v,\
+                [KArrZ]=v,[KArrR]=v,[KArrC]=v,[KArrO]=v
+#define ADD_NUM { NUMK(lvm_addn),     [KString]=lvm_add_string, [KSym]=lvm_0,       [KTwo]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
+#define ADD_STR { NUMK(lvm_add_string),[KString]=lvm_add_string,[KSym]=lvm_0,       [KTwo]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
+#define ADD_SYM { NUMK(lvm_0),        [KString]=lvm_0,          [KSym]=lvm_0,       [KTwo]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
+#define ADD_TWO { NUMK(lvm_add_seq),  [KString]=lvm_add_seq,    [KSym]=lvm_add_seq, [KTwo]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
+#define ADD_H   { NUMK(lvm_addh),     [KString]=lvm_addh,       [KSym]=lvm_addh,    [KTwo]=lvm_addh,    [KMap]=lvm_addh, [KTop]=lvm_addh }
 static lvm_t *const ai_add_mx[KN][KN] = {
- [KCharm]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KVec]  = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KBig]    = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrZ]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrR]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrC]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KArrO]   = { lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_addn, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KString] = { lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_add_string, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KSym]    = { lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_add_seq, lvm_addh, lvm_addh },
- [KTwo]    = { lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_add_seq, lvm_addh, lvm_addh },
- [KMap]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
- [KTop]    = { lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh, lvm_addh },
+ [KCharm]=ADD_NUM, [KWide]=ADD_NUM, [KFlo]=ADD_NUM, [KCplx]=ADD_NUM, [KBig]=ADD_NUM, [KVec]=ADD_NUM,
+ [KArrZ]=ADD_NUM, [KArrR]=ADD_NUM, [KArrC]=ADD_NUM, [KArrO]=ADD_NUM,
+ [KString]=ADD_STR, [KSym]=ADD_SYM, [KTwo]=ADD_TWO, [KMap]=ADD_H, [KTop]=ADD_H,
 };
+#undef ADD_NUM
+#undef ADD_STR
+#undef ADD_SYM
+#undef ADD_TWO
+#undef ADD_H
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
-// * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil.
+// * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil (so the string
+// and two rows agree: a number repeats, everything else nils, lambda/map composes).
+#define MUL_NUM { NUMK(lvm_muln),    [KString]=lvm_mul_rep, [KSym]=lvm_0, [KTwo]=lvm_mul_rep, [KMap]=lvm_mulh, [KTop]=lvm_mulh }
+#define MUL_REP { NUMK(lvm_mul_rep), [KString]=lvm_0,       [KSym]=lvm_0, [KTwo]=lvm_0,       [KMap]=lvm_mulh, [KTop]=lvm_mulh }
+#define MUL_SYM { NUMK(lvm_0),       [KString]=lvm_0,       [KSym]=lvm_0, [KTwo]=lvm_0,       [KMap]=lvm_mulh, [KTop]=lvm_mulh }
+#define MUL_H   { NUMK(lvm_mulh),    [KString]=lvm_mulh,    [KSym]=lvm_mulh,[KTwo]=lvm_mulh,  [KMap]=lvm_mulh, [KTop]=lvm_mulh }
 static lvm_t *const ai_mul_mx[KN][KN] = {
- [KCharm]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KVec]  = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KBig]    = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrZ]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrR]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrC]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KArrO]   = { lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_muln, lvm_mul_rep, lvm_0, lvm_mul_rep, lvm_mulh, lvm_mulh },
- [KString] = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
- [KSym]    = { lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
- [KTwo]    = { lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_mul_rep, lvm_0, lvm_0, lvm_0, lvm_mulh, lvm_mulh },
- [KMap]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
- [KTop]    = { lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh, lvm_mulh },
+ [KCharm]=MUL_NUM, [KWide]=MUL_NUM, [KFlo]=MUL_NUM, [KCplx]=MUL_NUM, [KBig]=MUL_NUM, [KVec]=MUL_NUM,
+ [KArrZ]=MUL_NUM, [KArrR]=MUL_NUM, [KArrC]=MUL_NUM, [KArrO]=MUL_NUM,
+ [KString]=MUL_REP, [KSym]=MUL_SYM, [KTwo]=MUL_REP, [KMap]=MUL_H, [KTop]=MUL_H,
 };
-// apply: [applied data kind = ai_typ(Ip)][argument kind = ai_kind(arg)]. Every row is
-// arg-kind-uniform today (arow fills all columns); the 2-D shape is the hook for
-// later argument-kind branching (e.g. a number applied to a function vs a number).
-#define arow(h) { [KCharm]=h,[KTop]=h,[KMap]=h,[KTwo]=h,[KVec]=h,[KSym]=h,[KString]=h,[KBig]=h,\
-                  [KArrZ]=h,[KArrR]=h,[KArrC]=h,[KArrO]=h }
+#undef MUL_NUM
+#undef MUL_REP
+#undef MUL_SYM
+#undef MUL_H
+#undef NUMK
+// apply: [applied data kind = ai_typ(Ip)][argument kind = ai_kind(arg)]. Rows are by
+// ai_typ (the coarse data kind, so still KVec for any vec); the columns are ai_kind, so
+// arow names the gem kinds too. Every row is arg-kind-uniform today (arow fills all
+// columns); the 2-D shape is the hook for later argument-kind branching.
+#define arow(h) { [KCharm]=h,[KWide]=h,[KFlo]=h,[KCplx]=h,[KBig]=h,[KVec]=h,[KArrZ]=h,[KArrR]=h,\
+                  [KArrC]=h,[KArrO]=h,[KString]=h,[KSym]=h,[KTwo]=h,[KMap]=h,[KTop]=h }
 lvm_t *ai_apply_mx[KN][KN] = {
  [KTwo]  = arow(data_pair_apply), [KVec]  = arow(data_num_apply),
  [KSym]  = arow(data_sym_apply),

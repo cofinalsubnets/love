@@ -270,11 +270,13 @@ struct ai_pair { lvm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KCharm is the odd fixnum
 // tag; KTop is any non-data heap pointer (text/function/map). The five DATA kinds
 // (KVec, KBig, KString, KSym, KTwo) are the ones ai_typ recovers from an ap's section
-// slot (data.c go() order, via the data.h lookup); an array reads as KVec there
-// (coarse -- one array sentinel). The four KArr* kinds are NOT data sentinels: ai_kind
-// alone mints them, expanding a rank>=1 vec by its element tier (KArrZ + ai_vec_type)
-// so the array tower Z/R/C/O dispatches inline with the scalar tower it mirrors
-// (KArrZ~fix, KArrR~float, KArrC~complex, KArrO~big). The diagonal is the type lattice
+// slot (data.c go() order, via the data.h lookup); every vec reads as KVec there
+// (coarse -- one sentinel for scalar boxes and arrays alike). The SEVEN non-sentinel
+// numeric kinds are minted by ai_kind alone, refining a KVec by rank: a rank-0 box to
+// a scalar GEM (KWide + ai_vec_type -> KWide/KFlo/KCplx) and a rank>=1 vec to an array
+// (KArrZ + ai_vec_type). So the scalar GEM tower (charm/wide/float/complex/big -- the
+// self-netting fixed-width numbers) and the array tower it mirrors both dispatch inline
+// (KArrZ~int, KArrR~float, KArrC~complex, KArrO~object). The diagonal is the type lattice
 // by semantics then representation: arithmetic lane [KCharm..KArrO] (scalars then their
 // array counterparts), sequence/concat lane [KString..KTwo], then map, text last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
@@ -283,7 +285,7 @@ struct ai_pair { lvm_t *ap; intptr_t a, b; };
 // order's pair < map < lambda is the enum order itself (a map is still a lookup lambda
 // for +/*/apply -- the rung exists for the order and the honest matrix cells).
 // KN is the matrix dimension.
-enum q { KCharm, KVec, KBig, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KTop, KN };
+enum q { KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KTop, KN };
 #define ai_data_n 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KTop-KVec
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
