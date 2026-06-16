@@ -1431,7 +1431,7 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
   incl(d, 4);
   g = ai_push(g, 2, c1_cur, d);
   g = analyze(g, &d, exp);
-  // stash the source \-expr for the printer (gzput_fn), built AFTER analyze so the
+  // stash the source \-expr for the printer (ioput_fn), built AFTER analyze so the
   // captured imports (d->imps) are known. ops is (params… body); prepend the
   // imports as leading params (the frame layout is [imps, args]) so a closure
   // prints as `(\ imps… params… body)` applied to its captures and round-trips.
@@ -2557,10 +2557,10 @@ lvm(lvm_fputbn) {
    Sp[2] = Sp[1]; }
  return Sp += 2, Ip++, Continue(); }
 
-static struct ai*gzputc(struct ai*g, int c) {
+static struct ai*ioputc(struct ai*g, int c) {
   return port_vt(ai_core_of(g)->io->fd)->putc(g, c); }
-static struct ai*gzputs(struct ai*g, char const *s) {
- while (*s) g = gzputc(g, *s++);
+static struct ai*ioputs(struct ai*g, char const *s) {
+ while (*s) g = ioputc(g, *s++);
  return g; }
 
 // the terminal scare face (declared in ai.h): an helpless scare's stashed
@@ -2571,51 +2571,51 @@ int ai_scare_face_(struct ai *g) {
  struct ai *c = ai_core_of(g);
  if (!c || (nilp(c->scare_a) && nilp(c->scare_b))) return 0;
  c->io = &ai_stderr;
- struct ai *h = gzputs(c, ";; ");  // gfputx may GC and MOVE the core: re-derive
+ struct ai *h = ioputs(c, ";; ");  // gfputx may GC and MOVE the core: re-derive
  if (ai_ok(h)) h = gfputx(h, &ai_stderr, ai_core_of(h)->scare_a);
- if (ai_ok(h)) h = gzputc(h, ' ');
+ if (ai_ok(h)) h = ioputc(h, ' ');
  if (ai_ok(h)) h = gfputx(h, &ai_stderr, ai_core_of(h)->scare_b);
- if (ai_ok(h)) h = gzputc(h, '\n');
+ if (ai_ok(h)) h = ioputc(h, '\n');
  if (ai_ok(h)) zflush(h);
  return 1; }
 
-static struct ai*gzputn(struct ai *g, intptr_t n, uint8_t b) {
+static struct ai*ioputn(struct ai *g, intptr_t n, uint8_t b) {
  uintptr_t
-  m = n >= 0 || b != 10 ? (uintptr_t) n : (g = gzputc(g, '-'), -(uintptr_t) n),
+  m = n >= 0 || b != 10 ? (uintptr_t) n : (g = ioputc(g, '-'), -(uintptr_t) n),
   q = m / b,
   r = m % b;
- if (q) g = gzputn(g, q, b);
- return gzputc(g, ai_digits[r]); }
+ if (q) g = ioputn(g, q, b);
+ return ioputc(g, ai_digits[r]); }
 
 static ai_inline struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o) {
- return g->io = o, gzputn(g, n, b); }
+ return g->io = o, ioputn(g, n, b); }
 
 static struct ai*gvzprintf(struct ai*g, char const *fmt, va_list xs) {
  for (int c; (c = *fmt++);) {
-  if (c != '%') g = gzputc(g, c);
+  if (c != '%') g = ioputc(g, c);
   else pass: switch ((c = *fmt++)) {
    case 0: return g;
    case 'l': goto pass;
-   case 'b': g = gzputn(g, va_arg(xs, uintptr_t), 2); continue;
-   case 'n': g = gzputn(g, va_arg(xs, uintptr_t), 6); continue;
-   case 'o': g = gzputn(g, va_arg(xs, uintptr_t), 8); continue;
-   case 'd': g = gzputn(g, va_arg(xs, uintptr_t), 10); continue;
-   case 'u': g = gzputn(g, va_arg(xs, uintptr_t), 12); continue;
-   case 'x': g = gzputn(g, va_arg(xs, uintptr_t), 16); continue;
-   case 'z': g = gzputn(g, va_arg(xs, uintptr_t), 36); continue;
-   case '%': g = gzputc(g, '%'); continue;             // %% -> literal %
-   default: g = gzputc(g, c); } }
+   case 'b': g = ioputn(g, va_arg(xs, uintptr_t), 2); continue;
+   case 'n': g = ioputn(g, va_arg(xs, uintptr_t), 6); continue;
+   case 'o': g = ioputn(g, va_arg(xs, uintptr_t), 8); continue;
+   case 'd': g = ioputn(g, va_arg(xs, uintptr_t), 10); continue;
+   case 'u': g = ioputn(g, va_arg(xs, uintptr_t), 12); continue;
+   case 'x': g = ioputn(g, va_arg(xs, uintptr_t), 16); continue;
+   case 'z': g = ioputn(g, va_arg(xs, uintptr_t), 36); continue;
+   case '%': g = ioputc(g, '%'); continue;             // %% -> literal %
+   default: g = ioputc(g, c); } }
  return g; }
 
-static struct ai *gzprintf(struct ai *g, char const *fmt, ...) {
+static struct ai *ioprintf(struct ai *g, char const *fmt, ...) {
  va_list xs;
  va_start(xs, fmt);
  g = gvzprintf(g, fmt, xs);
  va_end(xs);
  return g; }
 
-static struct ai *gzputx(struct ai *g, intptr_t x, uintptr_t off);
-static struct ai *gzputcs(struct ai *g, char const *s);
+static struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off);
+static struct ai *ioputcs(struct ai *g, char const *s);
 
 // --- print cycle detection (tables only) --------------------------------------
 // A "seen" list of the tables on the current print path lives in a single stack
@@ -2642,39 +2642,39 @@ static void seen_pop(struct ai *g, uintptr_t off) {                 // drop the 
  word *slot = seen_slot(g, off);
  *slot = B(*slot); }
 
-static ai_inline struct ai*gzput_two(struct ai*g, word _, uintptr_t off) {
+static ai_inline struct ai*ioput_two(struct ai*g, word _, uintptr_t off) {
  if (!ai_ok(g = ai_push(g, 1, _))) return g;
  struct ai_str *n;
  // a one-operand `\` pair (`(\ x)`) is quote -> print as 'x; ≥2 operands is a lambda.
  if (symp(A(g->sp[0])) && A(g->sp[0]) != (word) ai_core_of(g) && (n = sym(A(g->sp[0]))->nom) && len(n) == 1 && txt(n)[0] == '\\'
      && twop(B(g->sp[0])) && !twop(BB(g->sp[0]))) {
-  g = gzputc(g, '\'');                          // GC here may relocate sp[0]; read AB after
-  g = gzputx(g, AB(g->sp[0]), off); }
- else for (g = gzputc(g, '(');; g = gzputc(g, ' '), g->sp[0] = B(g->sp[0])) {
-  g = gzputx(g, A(g->sp[0]), off);            // off threaded so nested tables are still tracked
-  if (!twop(B(g->sp[0]))) { g = gzputc(g, ')'); break; } }
+  g = ioputc(g, '\'');                          // GC here may relocate sp[0]; read AB after
+  g = ioputx(g, AB(g->sp[0]), off); }
+ else for (g = ioputc(g, '(');; g = ioputc(g, ' '), g->sp[0] = B(g->sp[0])) {
+  g = ioputx(g, A(g->sp[0]), off);            // off threaded so nested tables are still tracked
+  if (!twop(B(g->sp[0]))) { g = ioputc(g, ')'); break; } }
  return ai_pop(g, 1); }
 
 
 // Print element i of the array parked at g->sp[0] as a bare number (float ->
-// ai_dtoa, integer -> base 10). The element value is read before any gzputc, so
+// ai_dtoa, integer -> base 10). The element value is read before any ioputc, so
 // a GC during printing (string-port growth) that relocates the array is safe;
 // callers re-fetch tuple(g->sp[0]) each call for the same reason.
-static struct ai *gzput_tuple_elem(struct ai *g, uintptr_t i) {
+static struct ai *ioput_tuple_elem(struct ai *g, uintptr_t i) {
  struct ai_tuple *v = tuple(g->sp[0]);
  if (v->type >= ai_R)
   return ai_dtoa2(g, tuple_get_flo(v, i));
- return gzputn(g, tuple_get_int(v, i), 10); }
+ return ioputn(g, tuple_get_int(v, i), 10); }
 
 // Print element i of a packed ai_C array (at g->sp[0]) as ~(re im) -- the same
 // read-back form as a complex scalar (the `~` reader macro splices into (wave …)).
-// re/im are copied to C locals before any gzputc/ai_dtoa2 (which may grow a string
+// re/im are copied to C locals before any ioputc/ai_dtoa2 (which may grow a string
 // port and relocate the array).
-static struct ai *gzput_carr_elem(struct ai *g, uintptr_t i) {
+static struct ai *ioput_carr_elem(struct ai *g, uintptr_t i) {
  ai_flo_t *fp = tuple_data(tuple(g->sp[0]));
  ai_flo_t re = fp[2*i], im = fp[2*i+1];
- g = gzprintf(g, "~("); g = ai_dtoa2(g, re); g = gzputc(g, ' ');
- g = ai_dtoa2(g, im); return gzputc(g, ')'); }
+ g = ioprintf(g, "~("); g = ai_dtoa2(g, re); g = ioputc(g, ' ');
+ g = ai_dtoa2(g, im); return ioputc(g, ')'); }
 
 // Print a rank>=1 array (g->sp[0]) as a constructor expression that reads back to
 // the same array -- always a SURFACE form, never the typed `arr` call. A rank-1
@@ -2685,98 +2685,98 @@ static struct ai *gzput_carr_elem(struct ai *g, uintptr_t i) {
 // reconstructs them. (An o array of self-evaluating scalars re-reads at its
 // natural tier -- the type is inferred, not pinned.) The array may move on a GC
 // during printing, so shape/elements are re-fetched from g->sp[0] each step.
-static ai_noinline struct ai *gzputx(struct ai *g, intptr_t x, uintptr_t off);
+static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off);
 
-static struct ai *gzput_arr_elem(struct ai *g, uintptr_t i, uintptr_t type, uintptr_t off) {
- if (type == ai_C) return gzput_carr_elem(g, i);
- if (type != ai_O) return gzput_tuple_elem(g, i);
+static struct ai *ioput_arr_elem(struct ai *g, uintptr_t i, uintptr_t type, uintptr_t off) {
+ if (type == ai_C) return ioput_carr_elem(g, i);
+ if (type != ai_O) return ioput_tuple_elem(g, i);
  word e = tuple_get_obj(tuple(g->sp[0]), i);           // kind test only; re-fetched below
- if (symp(e) || twop(e)) g = gzputc(g, '\'');          // quote, so eval rebuilds the element
- return gzputx(g, tuple_get_obj(tuple(g->sp[0]), i), off); }
+ if (symp(e) || twop(e)) g = ioputc(g, '\'');          // quote, so eval rebuilds the element
+ return ioputx(g, tuple_get_obj(tuple(g->sp[0]), i), off); }
 
-static struct ai *gzput_arr(struct ai *g, uintptr_t off) {
+static struct ai *ioput_arr(struct ai *g, uintptr_t off) {
  struct ai_tuple *v = tuple(g->sp[0]);
  uintptr_t rank = v->rank, type = v->type, nelem = tuple_nelem(v);
  if (rank == 1 && nelem) {                             // terse rank-1: @(…)
-  g = gzputc(g, '@'); g = gzputc(g, '(');
+  g = ioputc(g, '@'); g = ioputc(g, '(');
   for (uintptr_t i = 0; ai_ok(g) && i < nelem; i++) {
-   if (i) g = gzputc(g, ' ');
-   g = gzput_arr_elem(g, i, type, off); }
-  return ai_ok(g) ? gzputc(g, ')') : g; }
+   if (i) g = ioputc(g, ' ');
+   g = ioput_arr_elem(g, i, type, off); }
+  return ai_ok(g) ? ioputc(g, ')') : g; }
  // rank>=2 -- and the EMPTY rank-1, which has no @ spelling: (array '(0))
  // reads back to the empty array (a-type of no elements infers z, the same
  // re-inference loss every surface form accepts).
- g = gzprintf(g, "(array '(");                         // (array '(shape) elem …)
+ g = ioprintf(g, "(array '(");                         // (array '(shape) elem …)
  for (uintptr_t i = 0; ai_ok(g) && i < rank; i++) {
-  if (i) g = gzputc(g, ' ');
-  g = gzputn(g, tuple(g->sp[0])->shape[i], 10); }
- g = gzputc(g, ')');
+  if (i) g = ioputc(g, ' ');
+  g = ioputn(g, tuple(g->sp[0])->shape[i], 10); }
+ g = ioputc(g, ')');
  for (uintptr_t i = 0; ai_ok(g) && i < nelem; i++) {
-  g = gzputc(g, ' '); g = gzput_arr_elem(g, i, type, off); }
- return ai_ok(g) ? gzputc(g, ')') : g; }
+  g = ioputc(g, ' '); g = ioput_arr_elem(g, i, type, off); }
+ return ai_ok(g) ? ioputc(g, ')') : g; }
 
-static ai_inline struct ai*gzput_tuple_scalar_float(struct ai*g) {
+static ai_inline struct ai*ioput_tuple_scalar_float(struct ai*g) {
  return ai_dtoa2(g, (ai_flo_t) flo_get(g->sp[0])); }
 
 // complex -> ~(re im); round-trips by re-evaluation (the `~` reader macro splices
 // into (wave re im), and wave is a nif). re/im are read into C locals up front so a
 // GC during ai_dtoa2 can't strand the operand.
-static ai_inline struct ai*gzput_tuple_scalar_complex(struct ai*g) {
+static ai_inline struct ai*ioput_tuple_scalar_complex(struct ai*g) {
  ai_flo_t re = cplx_re(g->sp[0]), im = cplx_im(g->sp[0]);
- g = gzprintf(g, "~(");
+ g = ioprintf(g, "~(");
  g = ai_dtoa2(g, re);
- g = gzputc(g, ' ');
+ g = ioputc(g, ' ');
  g = ai_dtoa2(g, im);
- return gzputc(g, ')'); }
+ return ioputc(g, ')'); }
 
-static ai_inline struct ai*gzput_tuple(struct ai*g, word _, uintptr_t off) {
+static ai_inline struct ai*ioput_tuple(struct ai*g, word _, uintptr_t off) {
  intptr_t rank = tuple(_)->rank, type = tuple(_)->type;
  if (!ai_ok(g = ai_push(g, 1, _))) return g;
- if (rank == 0 && type == ai_R) g = gzput_tuple_scalar_float(g);
- else if (rank == 0 && type == ai_Z) g = gzputn(g, box_get(g->sp[0]), 10);
- else if (rank == 0 && type == ai_C) g = gzput_tuple_scalar_complex(g);
- else if (rank >= 1) g = gzput_arr(g, off);
- else g = gzprintf(g, ",tuple@%z:%d.%d", tuple(g->sp[0]), type, rank);
+ if (rank == 0 && type == ai_R) g = ioput_tuple_scalar_float(g);
+ else if (rank == 0 && type == ai_Z) g = ioputn(g, box_get(g->sp[0]), 10);
+ else if (rank == 0 && type == ai_C) g = ioput_tuple_scalar_complex(g);
+ else if (rank >= 1) g = ioput_arr(g, off);
+ else g = ioprintf(g, ",tuple@%z:%d.%d", tuple(g->sp[0]), type, rank);
  return ai_pop(g, 1); }
 
-static ai_inline struct ai*gzput_str(struct ai*g, word _) {
+static ai_inline struct ai*ioput_str(struct ai*g, word _) {
  uintptr_t slen = len(_);
- g = gzputc(ai_push(g, 1, _), '"');
+ g = ioputc(ai_push(g, 1, _), '"');
  for (uintptr_t i = 0; ai_ok(g) && i < slen; i++) {
   char c = txt(g->sp[0])[i];
-  if (c == '\\' || c == '"') g = gzputc(g, '\\');
-  else if (c == '\n') g = gzputc(g, '\\'), c = 'n';
-  else if (c == '\t') g = gzputc(g, '\\'), c = 't';
-  else if (c == '\r') g = gzputc(g, '\\'), c = 'r';
-  else if (c == '\0') g = gzputc(g, '\\'), c = '0';
+  if (c == '\\' || c == '"') g = ioputc(g, '\\');
+  else if (c == '\n') g = ioputc(g, '\\'), c = 'n';
+  else if (c == '\t') g = ioputc(g, '\\'), c = 't';
+  else if (c == '\r') g = ioputc(g, '\\'), c = 'r';
+  else if (c == '\0') g = ioputc(g, '\\'), c = '0';
   else if ((unsigned char) c < 32)
-   g = gzputc(gzputc(gzputc(g, '\\'), 'x'), ai_digits[(c >> 4) & 0xf]),
+   g = ioputc(ioputc(ioputc(g, '\\'), 'x'), ai_digits[(c >> 4) & 0xf]),
    c = ai_digits[c & 0xf];
-  g = gzputc(g, c); }
- return ai_pop(gzputc(g, '"'), 1); }
+  g = ioputc(g, c); }
+ return ai_pop(ioputc(g, '"'), 1); }
 
 // A symbol's nom is its kind: 0 = a mint (the nameless fresh point), a string
 // = interned. Interned syms print bare; a mint prints `(mint 0)` -- which
 // re-reads to a FRESH point, the same round-trip the mutables make (a printed
 // map is a fresh map): identity is the mint's whole product, so no spelling
 // can carry it.
-static ai_inline struct ai*gzput_sym(struct ai*g, word _) {
- if (_ == (word) ai_core_of(g)) return gzputcs(g, "()");  // the face of absence
+static ai_inline struct ai*ioput_sym(struct ai*g, word _) {
+ if (_ == (word) ai_core_of(g)) return ioputcs(g, "()");  // the face of absence
  if (ai_ok(g = ai_push(g, 1, _))) {
   word nom = word(sym(g->sp[0])->nom);
-  if (!nom) g = gzprintf(g, "(mint 0)");                    // a mint: fresh on re-read
+  if (!nom) g = ioprintf(g, "(mint 0)");                    // a mint: fresh on re-read
   else {                                                    // interned: bare name
    g->sp[0] = nom;
    for (uintptr_t l = len(nom), i = 0; ai_ok(g) && i < l;)
-     g = gzputc(g, txt(g->sp[0])[i++]); } }
+     g = ioputc(g, txt(g->sp[0])[i++]); } }
  return ai_pop(g, 1); }
 
 
 // Maps print as #(k v …), the empty map as (tablet 0); both round-trip.
 // A map is mutable and can hold itself, so guard the recursion with the seen
 // list. Snapshot k/v into a list first (printing may GC and move the map).
-static ai_inline struct ai*gzput_map(struct ai*g, word x, uintptr_t off) {
- if (seen_member(g, off, x)) return gzputcs(g, "<cycle>");
+static ai_inline struct ai*ioput_map(struct ai*g, word x, uintptr_t off) {
+ if (seen_member(g, off, x)) return ioputcs(g, "<cycle>");
  if (!ai_ok(g = seen_push(g, off, x))) return g;        // sp[0] = seen list head (= x)
  x = A(*seen_slot(g, off));                             // reload x: seen_push may have GC'd
  if (!ai_ok(g = ai_push(g, 1, x))) return seen_pop(g, off), g;   // sp[0] = map
@@ -2791,32 +2791,32 @@ static ai_inline struct ai*gzput_map(struct ai*g, word x, uintptr_t off) {
    ini_two(kv, s[2 * i], s[2 * i + 1]);                 // (k . v)
    ini_two(p, (word) kv, list), list = (word) p++; }    // cons onto the snapshot
  fs0(g) = list;
- if (!twop(fs0(g))) g = gzputcs(g, "(tablet 0)");             // the empty map prints (tablet 0): "#()" reads as #0, the 0-box
+ if (!twop(fs0(g))) g = ioputcs(g, "(tablet 0)");             // the empty map prints (tablet 0): "#()" reads as #0, the 0-box
  else {
-  if (ai_ok(g = gzprintf(g, "#("))) for (bool sp = false;;) {
-   if (sp) g = gzputc(g, ' ');
+  if (ai_ok(g = ioprintf(g, "#("))) for (bool sp = false;;) {
+   if (sp) g = ioputc(g, ' ');
    sp = true;
-   g = gzputx(g, AA(ai_core_of(g)->sp[0]), off);
-   g = gzputc(g, ' '); g = gzputx(g, BA(ai_core_of(g)->sp[0]), off);
+   g = ioputx(g, AA(ai_core_of(g)->sp[0]), off);
+   g = ioputc(g, ' '); g = ioputx(g, BA(ai_core_of(g)->sp[0]), off);
    ai_core_of(g)->sp[0] = B(ai_core_of(g)->sp[0]);
    if (!ai_ok(g) || !twop(g->sp[0])) break; }
-  g = ai_ok(g) ? gzputc(g, ')') : g; }
+  g = ai_ok(g) ? ioputc(g, ')') : g; }
  g = ai_pop(g, 1);
  return seen_pop(g, off), g; }
 
 // A bignum prints in base 10 (with sign). ai_big_dec renders it to a fresh
 // string (repeated divide-by-10 of a heap-local copy); we then emit the bytes,
-// re-fetching sp[0] each step since gzputc may grow a string port and GC.
-static ai_inline struct ai*gzput_big(struct ai*g, word x) {
+// re-fetching sp[0] each step since ioputc may grow a string port and GC.
+static ai_inline struct ai*ioput_big(struct ai*g, word x) {
  if (!ai_ok(g = ai_push(g, 1, x))) return g;
  g = ai_big_dec(g);
  for (uintptr_t i = 0, n = ai_ok(g) ? len(g->sp[0]) : 0; ai_ok(g) && i < n; i++)
-  g = gzputc(g, txt(g->sp[0])[i]);
+  g = ioputc(g, txt(g->sp[0])[i]);
  return ai_pop(g, 1); }
 
 // emit a C string literal byte-for-byte.
-static struct ai *gzputcs(struct ai *g, char const *s) {
- for (; ai_ok(g) && *s; s++) g = gzputc(g, *s);
+static struct ai *ioputcs(struct ai *g, char const *s) {
+ for (; ai_ok(g) && *s; s++) g = ioputc(g, *s);
  return g; }
 
 // --- partial-application introspection (mirrors kernel/vm.c lvm_cur/lvm_unc) ---
@@ -2841,7 +2841,7 @@ static word fn_arg(union u *k, int i, int nargs) { // i-th arg in application or
  for (int w = nargs - 1 - i; w > 0; w--) u = u[2].m;
  return u[1].x; }
 
-static struct ai *gzput_fn_body(struct ai *g, word x, uintptr_t off);
+static struct ai *ioput_fn_body(struct ai *g, word x, uintptr_t off);
 
 // the in-pool source \-expr stashed at value[-1] by a compiled lambda, or 0.
 // Only an ala/k0s lambda reserves that leading cell, so its value pointer sits one past
@@ -2865,52 +2865,52 @@ static word fn_src(struct ai *c, union u *k, word x) {
 // identically -- (\ x x) and (\ y y) both -> (\ $a $a) -- and inspect agrees
 // with = (same binder convention as salpha). Free/global/:-bound vars keep
 // their names; quoted data (one-operand \) is shared verbatim, never renamed.
-// gz_canon rebuilds the source with bound syms replaced: it pre-interns the
+// lam_canon rebuilds the source with bound syms replaced: it pre-interns the
 // d<lvl> names and pre-reserves the cell count, so the rebuild itself allocates
 // nothing and cannot GC -- pointers into the parked source stay stable. The
 // names are interned plain symbols (d0,d1,…) so the printed form round-trips.
-struct gz_bv { word sym; uintptr_t lev; struct gz_bv *up; };  // a \-binder in scope
-static ai_inline bool gz_lamhead(word a) {                     // is a the symbol \ ?
- struct ai_str *nm;
- return symp(a) && (nm = sym(a)->nom) && strp(word(nm)) && len(nm) == 1 && txt(nm)[0] == '\\'; }
-static ai_inline bool gz_islam(word x) {                       // (\ b.. body): >=2 operands
- return twop(x) && gz_lamhead(A(x)) && twop(B(x)) && twop(BB(x)); }
-static ai_inline bool gz_isquote(word x) {                     // (\ datum): exactly 1 operand
- return twop(x) && gz_lamhead(A(x)) && twop(B(x)) && !twop(BB(x)); }
-static uintptr_t gz_cells(word x) {                           // pairs the rebuild will bump
- return !twop(x) || gz_isquote(x) ? 0 : 1 + gz_cells(A(x)) + gz_cells(B(x)); }
-static uintptr_t gz_depth(word x, uintptr_t d) {              // max binder level + 1 (= # d-syms)
- if (!twop(x) || gz_isquote(x)) return d;
- if (gz_islam(x)) {
+struct lam_bv { word sym; uintptr_t lev; struct lam_bv *up; };  // a \-binder in scope
+static ai_inline bool lam_head(struct ai *g, word a) {        // is a the symbol \ ?
+ struct ai_str *nm;                                          // the core heads no \ (identity-guarded: its nom slot is live VM state)
+ return symp(a) && a != (word) ai_core_of(g) && (nm = sym(a)->nom) && len(nm) == 1 && txt(nm)[0] == '\\'; }
+static ai_inline bool lam_isp(struct ai *g, word x) {         // (\ b.. body): >=2 operands
+ return twop(x) && lam_head(g, A(x)) && twop(B(x)) && twop(BB(x)); }
+static ai_inline bool lam_quotep(struct ai *g, word x) {       // (\ datum): exactly 1 operand
+ return twop(x) && lam_head(g, A(x)) && twop(B(x)) && !twop(BB(x)); }
+static uintptr_t lam_cells(struct ai *g, word x) {             // pairs the rebuild will bump
+ return !twop(x) || lam_quotep(g, x) ? 0 : 1 + lam_cells(g, A(x)) + lam_cells(g, B(x)); }
+static uintptr_t lam_depth(struct ai *g, word x, uintptr_t d) {  // max binder level + 1 (= # d-syms)
+ if (!twop(x) || lam_quotep(g, x)) return d;
+ if (lam_isp(g, x)) {
   word o = B(x); uintptr_t nb = 0;
   while (twop(B(o))) nb++, o = B(o);                          // every operand but the last = a binder
-  uintptr_t here = d + nb, body = gz_depth(A(o), here);
+  uintptr_t here = d + nb, body = lam_depth(g, A(o), here);
   return here > body ? here : body; }
- uintptr_t a = gz_depth(A(x), d), b = gz_depth(B(x), d);
+ uintptr_t a = lam_depth(g, A(x), d), b = lam_depth(g, B(x), d);
  return a > b ? a : b; }
-static word gz_build_ops(struct ai *g, word o, struct gz_bv *sc, uintptr_t d, uintptr_t D);
-static word gz_build(struct ai *g, word x, struct gz_bv *sc, uintptr_t d, uintptr_t D) {
+static word lam_build_ops(struct ai *g, word o, struct lam_bv *sc, uintptr_t d, uintptr_t D);
+static word lam_build(struct ai *g, word x, struct lam_bv *sc, uintptr_t d, uintptr_t D) {
  if (!twop(x)) {                                              // atom: a bound sym -> d<lev>, else as-is
-  if (symp(x)) for (struct gz_bv *p = sc; p; p = p->up) if (p->sym == x) return g->sp[D - 1 - p->lev];
+  if (symp(x)) for (struct lam_bv *p = sc; p; p = p->up) if (p->sym == x) return g->sp[D - 1 - p->lev];
   return x; }
- if (gz_isquote(x)) return x;                                 // quoted data: share, do not descend
+ if (lam_quotep(g, x)) return x;                              // quoted data: share, do not descend
  word a, b;
- if (gz_islam(x)) a = A(x), b = gz_build_ops(g, B(x), sc, d, D);  // share \, rename the operand spine
- else a = gz_build(g, A(x), sc, d, D), b = gz_build(g, B(x), sc, d, D);
+ if (lam_isp(g, x)) a = A(x), b = lam_build_ops(g, B(x), sc, d, D);  // share \, rename the operand spine
+ else a = lam_build(g, A(x), sc, d, D), b = lam_build(g, B(x), sc, d, D);
  struct ai_pair *p = bump(g, Width(struct ai_pair));
  return ini_two(p, a, b), (word) p; }
-static word gz_build_ops(struct ai *g, word o, struct gz_bv *sc, uintptr_t d, uintptr_t D) {
+static word lam_build_ops(struct ai *g, word o, struct lam_bv *sc, uintptr_t d, uintptr_t D) {
  word car, rest;
- if (!twop(B(o))) car = gz_build(g, A(o), sc, d, D), rest = nil;  // last operand = the body
- else { struct gz_bv fr = { A(o), d, sc };                        // a binder, level d, in scope for the rest
-        car = g->sp[D - 1 - d], rest = gz_build_ops(g, B(o), &fr, d + 1, D); }
+ if (!twop(B(o))) car = lam_build(g, A(o), sc, d, D), rest = nil;  // last operand = the body
+ else { struct lam_bv fr = { A(o), d, sc };                        // a binder, level d, in scope for the rest
+        car = g->sp[D - 1 - d], rest = lam_build_ops(g, B(o), &fr, d + 1, D); }
  struct ai_pair *p = bump(g, Width(struct ai_pair));
  return ini_two(p, car, rest), (word) p; }
 // sp[0] = a lambda's source \-expr; replace it with the de Bruijn-renamed copy.
-static struct ai *gz_canon(struct ai *g) {
+static struct ai *lam_canon(struct ai *g) {
  word s = g->sp[0];
- if (!gz_islam(s)) return g;                                  // not a lambda -> leave as-is
- uintptr_t P = gz_cells(s), D = gz_depth(s, 0);
+ if (!lam_isp(g, s)) return g;                               // not a lambda -> leave as-is
+ uintptr_t P = lam_cells(g, s), D = lam_depth(g, s, 0);
  for (uintptr_t i = 0; i < D; i++) {                          // push d0,d1,… (de Bruijn level); src parked below
   char b[24], *e = b + sizeof b; uintptr_t n = i;            // interned d<lvl> -> reads back as the same sym
   *--e = 0;
@@ -2918,7 +2918,7 @@ static struct ai *gz_canon(struct ai *g) {
   *--e = 'd';
   if (!ai_ok(g = intern(ai_strof(g, e)))) return g; }
  if (!ai_ok(g = ai_have(g, P * Width(struct ai_pair)))) return g;  // reserve cells: the last possible GC
- word r = gz_build(g, g->sp[D], 0, 0, D);                     // alloc-free, GC-free; g->sp stays put
+ word r = lam_build(g, g->sp[D], 0, 0, D);                     // alloc-free, GC-free; g->sp stays put
  return g->sp[D] = r, g->sp += D, g; }
 
 // Print a function value. Like tuple/cplx/hash it's a `,`-prefixed value form (so it
@@ -2926,49 +2926,49 @@ static struct ai *gz_canon(struct ai *g) {
 // ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
 // text (continuation, top-level wrap) has no constructor form, so it prints as the
 // opaque, re-parsable token ,thd@<addr>. The leading , is emitted once here; body w/o it.
-static struct ai *gzput_fn(struct ai *g, word x, uintptr_t off) {
+static struct ai *ioput_fn(struct ai *g, word x, uintptr_t off) {
  union u *k = cell(x);
  bool reprp = fn_partialp(k) || ai_nif_name(x) || fn_src(ai_core_of(g), k, x);
- return reprp ? gzput_fn_body(g, x, off) : gzprintf(g, "\\%z", x); }
+ return reprp ? ioput_fn_body(g, x, off) : ioprintf(g, "\\%z", x); }
 
 // Render a function as a bare constructor expression (NO leading ,). Detection
 // order matters: a bare multi-arg lambda and a partial-app both have a lvm_cur
 // head, and a nif's value[-1] is undefined static data. The partial-app base
-// recurses here (not gzput_fn) so it doesn't get its own comma.
-static struct ai *gzput_fn_body(struct ai *g, word x, uintptr_t off) {
+// recurses here (not ioput_fn) so it doesn't get its own comma.
+static struct ai *ioput_fn_body(struct ai *g, word x, uintptr_t off) {
  struct ai *c = ai_core_of(g);
  union u *k = cell(x);
  if (fn_partialp(k)) {                              // (base arg…)
   if (!ai_ok(g = ai_push(g, 1, x))) return g;         // park: GC relocates the closure
   int na; fn_base(cell(g->sp[0]), &na);
-  g = gzputc(g, '(');
-  { union u *bk = cell(g->sp[0]); int n2;           // base re-derived after each gzputc
-    g = gzput_fn_body(g, (word) fn_base(bk, &n2), off); }
+  g = ioputc(g, '(');
+  { union u *bk = cell(g->sp[0]); int n2;           // base re-derived after each ioputc
+    g = ioput_fn_body(g, (word) fn_base(bk, &n2), off); }
   for (int i = 0; ai_ok(g) && i < na; i++) {
-   g = gzputc(g, ' ');                              // separate stmt: re-read arg after GC
-   g = gzputx(g, fn_arg(cell(g->sp[0]), i, na), off); }
-  return ai_pop(ai_ok(g) ? gzputc(g, ')') : g, 1); }
+   g = ioputc(g, ' ');                              // separate stmt: re-read arg after GC
+   g = ioputx(g, fn_arg(cell(g->sp[0]), i, na), off); }
+  return ai_pop(ai_ok(g) ? ioputc(g, ')') : g, 1); }
  char const *nm = ai_nif_name(x);                    // builtin -> name
- if (nm) return gzputcs(g, nm);
+ if (nm) return ioputcs(g, nm);
  word s = fn_src(c, k, x);                          // compiled lambda -> source \-expr
- if (!s) return gzprintf(g, "\\%z", x);
- if (!ai_ok(g = ai_push(g, 1, s))) return g;          // park source across gz_canon's allocs
- g = gz_canon(g);                                   // sp[0] := de Bruijn-renamed copy
- if (ai_ok(g)) g = gzputx(g, g->sp[0], off);
+ if (!s) return ioprintf(g, "\\%z", x);
+ if (!ai_ok(g = ai_push(g, 1, s))) return g;          // park source across lam_canon's allocs
+ g = lam_canon(g);                                   // sp[0] := de Bruijn-renamed copy
+ if (ai_ok(g)) g = ioputx(g, g->sp[0], off);
  return ai_ok(g) ? ai_pop(g, 1) : g; }
 
-static ai_noinline struct ai *gzputx(struct ai *g, intptr_t x, uintptr_t off) {
- if (fixp(x)) return gzprintf(g, "%d", getfix(x));
- if (!datp(x)) return mapp(x) ? gzput_map(g, x, off) : gzput_fn(g, x, off);
- // Maps are the only mutable/self-referential value, and gzput_map guards its
+static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
+ if (fixp(x)) return ioprintf(g, "%d", getfix(x));
+ if (!datp(x)) return mapp(x) ? ioput_map(g, x, off) : ioput_fn(g, x, off);
+ // Maps are the only mutable/self-referential value, and ioput_map guards its
  // own recursion (the seen list); the data kinds below are acyclic.
  switch (typ(x)) {
    default: __builtin_trap();
-   case KTwo:  return gzput_two(g, x, off);
-   case KTuple:  return gzput_tuple(g, x, off);
-   case KSym:  return gzput_sym(g, x);
-   case KString: return gzput_str(g, x);
-   case KBig:  return gzput_big(g, x); } }
+   case KTwo:  return ioput_two(g, x, off);
+   case KTuple:  return ioput_tuple(g, x, off);
+   case KSym:  return ioput_sym(g, x);
+   case KString: return ioput_str(g, x);
+   case KBig:  return ioput_big(g, x); } }
 
 // Establish a fresh seen-list slot at the bottom of the print region, print, then
 // restore the original stack height (discarding the slot and the whole list).
@@ -2978,7 +2978,7 @@ static ai_inline struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x) {
  uintptr_t base = topof(c) - c->sp;                 // original height (GC-invariant)
  if (!ai_ok(g = ai_push(g, 1, nil))) return g;        // the seen-list slot
  c = ai_core_of(g);
- g = gzputx(g, x, topof(c) - c->sp);                // offset of the slot from the top
+ g = ioputx(g, x, topof(c) - c->sp);                // offset of the slot from the top
  c = ai_core_of(g);
  return c->sp = topof(c) - base, g; }               // restore original stack height
 
@@ -2987,9 +2987,9 @@ static ai_inline struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x) {
 
 static struct ai* ai_dtoa2(struct ai*g, ai_flo_t v) {
  int const max_frac = sizeof(ai_flo_t) == 4 ? 7 : 15;
- if (v != v) return gzputs(g, "ieee-nan");
- if (v < 0) g = gzputc(g, '-'), v = -v;
- if (v > dtoa_inf) return gzputs(g, "ieee-inf");
+ if (v != v) return ioputs(g, "ieee-nan");
+ if (v < 0) g = ioputc(g, '-'), v = -v;
+ if (v > dtoa_inf) return ioputs(g, "ieee-inf");
  int exp = 0;
  bool sci = false;
  if (v != 0 && (v >= dtoa_sci_hi || v < dtoa_sci_lo)) {
@@ -3003,7 +3003,7 @@ static struct ai* ai_dtoa2(struct ai*g, ai_flo_t v) {
  int ib_n = 0;
  if (ip == 0) ib[ib_n++] = '0';
  while (ip) ib[ib_n++] = '0' + ip % 10, ip /= 10;
- while (ib_n > 0) g = gzputc(g, ib[--ib_n]);
+ while (ib_n > 0) g = ioputc(g, ib[--ib_n]);
  // fractional digits; in non-scientific mode always emit at least ".0"
  // so the result is visually distinguishable from a fixnum.
  bool emit_frac = frac > 0 || !sci;
@@ -3019,15 +3019,15 @@ static struct ai* ai_dtoa2(struct ai*g, ai_flo_t v) {
   while (fb_n > 0 && fb[fb_n - 1] == '0') fb_n--;
   if (!sci && fb_n == 0) fb[fb_n++] = '0';      // force "X.0" for ints
   if (fb_n > 0) {
-   g = gzputc(g, '.');
-   for (int i = 0; i < fb_n; i++) g = gzputc(g, fb[i]); } }
+   g = ioputc(g, '.');
+   for (int i = 0; i < fb_n; i++) g = ioputc(g, fb[i]); } }
  if (sci) {
-  g = gzputc(g, 'e');
-  if (exp < 0) g = gzputc(g, '-'), exp = -exp;
+  g = ioputc(g, 'e');
+  if (exp < 0) g = ioputc(g, '-'), exp = -exp;
   char eb[8]; int eb_n = 0;
   if (exp == 0) eb[eb_n++] = '0';
   while (exp) eb[eb_n++] = '0' + exp % 10, exp /= 10;
-  while (eb_n > 0) g = gzputc(g, eb[--eb_n]); }
+  while (eb_n > 0) g = ioputc(g, eb[--eb_n]); }
  return g; }
 
 // (feof port) — -1 if at end of stream, nil otherwise.
@@ -3108,10 +3108,10 @@ static ai_inline bool is_dec_int(char const *s, uintptr_t n) {
  for (; i < n; i++) if (s[i] < '0' || s[i] > '9') return false;
  return true; }
 
-static struct ai *gz_parse(struct ai *g, bool multi);
-static ai_inline struct ai *gzread1sym(struct ai*g, int c), *gzread1str(struct ai*g);
-struct ai *ai_reads(struct ai *g, struct ai_io* i) { return ai_core_of(g)->io = i, gz_parse(g, true); }
-struct ai *ai_read1(struct ai*g, struct ai_io *i) { return ai_core_of(g)->io = i, gz_parse(g, false); }
+static struct ai *ioparse(struct ai *g, bool multi);
+static ai_inline struct ai *ioread1sym(struct ai*g, int c), *ioread1str(struct ai*g);
+struct ai *ai_reads(struct ai *g, struct ai_io* i) { return ai_core_of(g)->io = i, ioparse(g, true); }
+struct ai *ai_read1(struct ai*g, struct ai_io *i) { return ai_core_of(g)->io = i, ioparse(g, false); }
 
 static struct ai *grbufg(struct ai *g, uintptr_t len) {
  if (ai_ok(g = str0(g, 2 * len)))
@@ -3251,7 +3251,7 @@ static ai_inline struct ai *push_wrap(struct ai *g, char const *nom) {
 // at name chars (alnum/_), whitespace, delimiters, and the value-surface
 // chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
 // still contain @ ~ $ ! . and a trailing/internal ' (the prime: x', n'';
-// a LEADING ' is quote, dispatched before the name sounder -- see gzread1sym).
+// a LEADING ' is quote, dispatched before the name sounder -- see ioread1sym).
 static ai_inline bool op_break(int c) {
  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
         c == '_' || c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' ||
@@ -3261,9 +3261,9 @@ static ai_inline bool op_break(int c) {
 // read a maximal operator run starting with c -> the interned symbol. a
 // trailing '-' immediately before a digit is the next number's sign, not
 // part of the run: the run is shortened by one and '-' re-dispatched via
-// *pending (the digit is ungot for gzread1sym), so `!-5` is ! then -5.
-static ai_inline struct ai *gzread1sym(struct ai*g, int c);
-static struct ai *gzread1op(struct ai *g, int c, int *pending) {
+// *pending (the digit is ungot for ioread1sym), so `!-5` is ! then -5.
+static ai_inline struct ai *ioread1sym(struct ai*g, int c);
+static struct ai *ioread1op(struct ai *g, int c, int *pending) {
  uintptr_t n = 1, lim = sizeof(intptr_t);
  if (ai_ok(g = str0(g, sizeof(word))))
   for (txt((struct ai_str*) g->sp[0])[0] = c; ai_ok(g); g = grbufg(g, lim), lim *= 2)
@@ -3280,7 +3280,7 @@ static struct ai *gzread1op(struct ai *g, int c, int *pending) {
  return g; }
 // recognise the splicing reader-macro wraps -- `#` (interned `hash`) and `@`
 // (interned `tuple`) -- so a list operand splices into the constructor call
-// instead of being wrapped: see the deliver loop in gz_parse.
+// instead of being wrapped: see the deliver loop in ioparse.
 static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
  struct ai_str *s = symp(x) ? sym(x)->nom : 0;
  if (!s || !strp(word(s)) || s->len != n) return false;
@@ -3289,7 +3289,7 @@ static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
 static ai_inline bool hashsym(word x) { return symeq(x, "hash", 4); }
 static ai_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "wave", 4) || symeq(x, "list", 4); }
 
-static struct ai *gz_parse(struct ai *g, bool multi) {
+static struct ai *ioparse(struct ai *g, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
  // source order); read1: ctx starts empty (returns the first complete datum).
  g = multi ? gxl(gxl(ai_push(g, 3, nil, nil, nil))) : ai_push(g, 1, nil);
@@ -3339,7 +3339,7 @@ static struct ai *gz_parse(struct ai *g, bool multi) {
     g = ai_push(g, 1, AA(g->sp[0]));                    // close the top accumulator -> its head
     if (ai_ok(g)) g->sp[1] = B(g->sp[1]);
     break;
-   case '"': g = gzread1str(g); break;
+   case '"': g = ioread1str(g); break;
    default: {                                          // operator run, else a symbol/number token
     bool opp = c != '-' && c != '+' && !op_break(c);
     if (!opp && (c == '-' || c == '+')) {              // +/- lead numbers and names (kebab), EXCEPT
@@ -3350,7 +3350,7 @@ static struct ai *gz_parse(struct ai *g, bool multi) {
            cpm == '@' || cpm == '~' || cpm == '#'; }
     if (opp) {
      int lead = c;                                     // the run's first char: '\' never fuses (form space)
-     g = gzread1op(g, c, &pending);                    // sigil: a plain symbol, factored by opfix later
+     g = ioread1op(g, c, &pending);                    // sigil: a plain symbol, factored by opfix later
      if (!ai_ok(g)) return g;
      if (lead == '\\') break;
      // the VALENCE LAW, reader half: a run GLUED to a following datum is
@@ -3385,7 +3385,7 @@ static struct ai *gz_parse(struct ai *g, bool multi) {
       if (!ai_ok(g)) return g;
       continue; }                                      // the wraps take the next datum
      break; }
-    g = gzread1sym(g, c);                              // name/number ('-'/'+' lead numbers, -> and \names etc.)
+    g = ioread1sym(g, c);                              // name/number ('-'/'+' lead numbers, -> and \names etc.)
     if (!ai_ok(g)) return g;
     break; } }
   if (!ai_ok(g)) return g;
@@ -3414,7 +3414,7 @@ static struct ai *gz_parse(struct ai *g, bool multi) {
     done = true; } }
   if (!ai_ok(g)) return g; } }
 
-static ai_inline struct ai *gzread1str(struct ai*g) {
+static ai_inline struct ai *ioread1str(struct ai*g) {
  int c;
  size_t n = 0, lim = sizeof(word);
  for (g = str0(g, lim); ai_ok(g); g = grbufg(g, lim), lim *= 2)
@@ -3445,7 +3445,7 @@ static ai_inline struct ai *gzread1str(struct ai*g) {
 
 
 
-static ai_inline struct ai *gzread1sym(struct ai*g, int c) {
+static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
  uintptr_t n = 1, lim = sizeof(intptr_t);
  if (ai_ok(g = str0(g, sizeof(word))))
   for (txt((struct ai_str*) g->sp[0])[0] = c; ai_ok(g); g = grbufg(g, lim), lim *= 2)
@@ -3456,7 +3456,7 @@ static ai_inline struct ai *gzread1sym(struct ai*g, int c) {
      case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
      case '(': case ')': case '[': case ']': case '{': case '}':
      // note: '\'' is NOT here -- a name keeps a trailing/internal prime (x', n'',
-     // the prover idiom). A LEADING ' is still quote: gz_parse dispatches it as a
+     // the prover idiom). A LEADING ' is still quote: ioparse dispatches it as a
      // wrap before this sounder ever runs, so only a continuation ' reaches here.
      case '"': case '`': case ',': case 0 : case EOF:
       if (!ai_ok(g = zungetc(g, c))) return g;
@@ -4940,7 +4940,7 @@ static word lam_src1(struct ai *c, word v) {           // 1-binder lambda -> (bi
  union u *k = cell(v);
  if (fn_partialp(k)) return 0;
  word s = fn_src(c, k, v);                            // s = (\ b.. body)
- if (!s || !gz_islam(s)) return 0;
+ if (!s || !lam_isp(c, s)) return 0;
  word ops = B(s);                                     // (binder body ..)
  return !twop(B(B(ops))) && symp(A(ops)) ? ops : 0; } // exactly one binder
 static bool id_lam(struct ai *c, word v) {             // (\ x x): body IS the binder

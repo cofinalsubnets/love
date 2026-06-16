@@ -1,7 +1,5 @@
 # ai
 
-every ai expression has a value.
-stackless operation, all recursion on heap, overflow safe.
 every quote below evals to 1, [try them](https://cofinalsubnets.github.io/ai).
 
 - `0 x = 1`
@@ -10,39 +8,36 @@ every quote below evals to 1, [try them](https://cofinalsubnets.github.io/ai).
 - `f x y = (f x) y`
 - `2 f x = f (f x)`
 - `65536 = (2 2 2 2)`
-- `-1 = i * i`
-- `(log -1) = i * pi`
-- `i = (1 / 2) -1`
+- `-1 = (i * i)`
+- `(log -1) = (i * pi)`
+- `i = (1 / 2 -1)`
 - `1 = (i love you)`
 
 ## ai
 
-`ai` is kind of like `ai = (ml + apl) * (lisp / C)`.
-every value is an operator, a total function of one argument,
-so directly an endomorphism of the value space, which forms
-a monoid under composition. all
-operators are implemented efficiently and generically
-with safe, visible and intuitive idiomatic failure modes.
-an undefined operation just acts like 0, subject to `0 0 x = x`.
-no individual operator assumes full control of the global
-environment. all recursion is on heap and any recursive operator
-may be limited by integers, which act transparently as iterators.
-consequently the value of a numeric list under the left-associative
-lisp eval function corresponds to a reversed exponential tower.
-this deviation from normal lisp applicative semantics forms the first
-summand of `ml + apl`. the second summand is a compatible
-right-associative superset based on elementary punctuation laws
-which allows infix and atomic prefix notation to be mixed fluidly
-within and around lisp code.
+ai is kind of like `ai = (ml + apl) * (lisp / C)`.
+every value is an operator, a total function of its own type.
+all recursion is on heap and any recursive operator may be
+written to be limited by integers, which act transparently as
+iterators.  consequently the value of a numeric list under the
+left-associative lisp eval function corresponds to a reversed
+exponential tower. this lisp refinement forms the ML part of
+`ml + apl`. the APL part is a transparent right-associative
+superset that interprets sigils (all-punctuation
+symbols) as infix or prefix operators according to placement.
+the two forms mix well: infix operators take the lisp meaning
+in function position, and infix can be converted
+to left-associative by listing the sigil, eg. `3 = (+) 1 2`.
 
 in terms of implementation, `lisp : C :: software : hardware`.
 C gives random memory access via pointer arithmetic
 and platform-specific primitives. `lisp` is the software
 facing basement, which you could factor as `ml * scheme`
 left-associative applicative curried untyped lambda calculus,
-applicative order may vary at will. this is safe modulo side
-effects because every operator is total and every thread is
-co-operatively pre-empted regardless of user program semantics.
+allowing applicative order to vary at will. this is safe
+excluding side effects because every operator is total and
+every thread is co-operatively pre-empted regardless of user
+program behavior.
 
 features
 - numeric tower with shaped array broadcasting
@@ -168,17 +163,20 @@ steps, record what shipped, from the cards; the ticket names what to make
 - `ai -l tools/cook.l [ticket]` -- cook a ticket (cook discovers the build file:
   a `Makefile` if present, else a `Cookfile`, else a legacy `Cards.l`; name one
   explicitly to override)
-- cook reads a real **Makefile** directly, via a small parser-combinator import:
-  variable expansion, rules, `.PHONY` and the `$@ $< $^` automatics become cards
-  (each recipe line run under `sh -c`); pattern rules, `include` and conditionals
-  have no cook equivalent and are passed over
+- cook reads a real **Makefile** directly -- a reasonably GNU-make-compatible
+  import: `$(VAR)` expansion and substitution refs, the common functions
+  (`shell`, `wildcard`, `dir`, `patsubst`, `filter`, ...), `ifeq`/`ifdef`
+  conditionals, `include`, `:= ?= +=`, pattern + static-pattern rules,
+  order-only prereqs, and the `$@ $< $^ $*` automatics
 - `make -f cook.mk test` -- the make-shaped stub: bootstraps the binary, then
   forwards to cook (it names the `Cookfile` explicitly)
-- [tools/cook-example/](tools/cook-example/) is a worked C build
+- [tools/cook-example/](tools/cook-example/) is a worked C build;
+  [tools/cooktest.l](tools/cooktest.l) (`make test_cook`) tests the importer
 
-ai builds itself this way too: the root [Cookfile](Cookfile) ports the
-cross-cutting verbs (`test clean valg vmret bench`), delegating the C
-bootstrap to the real Makefile -- cook runs on ai, so it can't build ai.
+ai builds itself this way too: `ai -l tools/cook.l Makefile host` runs g's own
+Makefile from scratch, and the cook-built binary passes the whole corpus. cook
+runs *on* ai, so you need an ai to begin; the root [Cookfile](Cookfile) is the
+curated cross-cutting verbs (`test clean valg vmret bench install`).
 
 ### under the hood
 - one word per value: a fixnum is a tagged odd word, anything else is a heap

@@ -240,8 +240,10 @@ e                    ; 2.718281828459045
 ; --- a few identities --- tetration is just the tower with one base: (3 3) = 3^3, (3 3 3) =
 ; 3^(3^3), (2 2 2 2) = 2^2^2^2. i*i = -1 -- the algebraic heart of euler's e^(i*pi) = -1 -- and
 ; e^(i*0) = 1. the textbook (-1 = i * pi e) does *not* hold forward: `=` is exact and e^(i*pi)
-; carries a ~1e-16 imaginary residue, the honest price of an irrational pi in floats. read it
-; backwards instead -- the principal log IS exact: atan2(0 -1) is pi by IEEE fiat and i moves
+; carries a ~1.22e-16 imaginary residue -- cos rounds to exactly -1.0, but sin of the nearest
+; double to pi cannot land on 0, so what survives is pi's OWN representation error surfaced
+; through sin (~1.22e-16 = pi - the double nearest pi). the honest price of an irrational pi in
+; floats. read it backwards instead -- the principal log IS exact: atan2(0 -1) is pi by IEEE fiat and i moves
 ; it with exact 0/1 products, so ((log -1) = i * pi) bit-exactly. pow climbs the same way: a
 ; finite negative base to a non-integer power is its principal root, the angle pi*e factored
 ; exactly (sinpi/cospi), so ((/ 1 2) -1) = i on the nose. (i only assert what's bit-exact on

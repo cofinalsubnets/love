@@ -158,7 +158,7 @@ static lvm(lvm_close) {
 // Both are host-only nifs (POSIX fork/exec/wait, getenv), like open/close.
 // No malloc: argv is marshalled into the uncommitted l heap gap and the
 // child's stdout is captured into a growing l string (the reader's
-// str0 + grow + len-fixup pattern). See core/io.c gzread1str / grbufg.
+// str0 + grow + len-fixup pattern). See core/io.c ioread1str / grbufg.
 
 // Local copy of core/io.c's grbufg (static there): grow the string on sp[0]
 // to 2*len, copying the old `len` bytes in. str0 is the public allocator.
