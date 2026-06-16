@@ -309,7 +309,8 @@ static ai_inline void tuple_put_obj(struct ai_tuple *v, uintptr_t i, word x) {
 // every MINT (the nameless fresh point: materially empty, a DISTINCT NOTHING)
 // nets 0 -> falsy; so does an all-NUL spelling: a string of nothings is
 // nothing, in or out of a symbol.
-static ai_inline intptr_t pin_sym(word x) {
+static ai_inline intptr_t pin_sym(struct ai *g, word x) {
+  if (x == (word) ai_core_of(g)) return 0;  // () is the core: a nameless point, no spelling -> net 0 (its atom slots are live VM state, never read)
   struct ai_str *nm = ((struct ai_atom*) x)->nom;
   if (!nm) return 0;
   intptr_t t = 0;
@@ -320,15 +321,15 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
   struct ai_zn z = {re, im}; return z; }
 static ai_inline bool zn_nonpos(struct ai_zn z) {      // <= 0 in the total order
   return z.re < 0 || (z.re == 0 && z.im <= 0); }
-static struct ai_zn ai_net(word);                      // fwd: aggregates sum their elements
-static ai_inline bool ai_nilp(word x) {
+static struct ai_zn ai_net(struct ai *, word);         // fwd: aggregates sum their elements
+static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (x == nil || x == EmptyString) return true;
   if (fixp(x)) return getfix(x) < 0;                 // 0 is nil (caught above); negatives false
   if (mapp(x)) return map_len(x) == 0;
   if (bigp(x)) return ((struct ai_big*) x)->slen < 0; // a negative bignum is false
-  if (symp(x)) return pin_sym(x) == 0;               // empty/anonymous symbol name -> nil (pin lockstep)
+  if (symp(x)) return pin_sym(g, x) == 0;            // empty/anonymous symbol name (or the core) -> nil (pin lockstep)
   if (twop(x) || packp(x) || strp(x) || bufp(x))
-    return zn_nonpos(ai_net(x));                      // content measures: net <= 0 in the order
+    return zn_nonpos(ai_net(g, x));                   // content measures: net <= 0 in the order
   return false; }                                    // fn / port: present
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
@@ -721,7 +722,7 @@ char const *ai_nif_name(intptr_t x) {
 
 static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*ma)(struct ai*, size_t), void (*fr)(struct ai*, void*)) {
  memset(g, 0, sizeof(struct ai));
- g->zp.ap = lvm_sym;                   // () IS the core: its head is a nameless serial-0 mint (code/nom 0 from memset)
+ g->ap = lvm_sym;                      // () IS the core: its first word is an ap (a nameless point; no code/nom to read)
  g->len = len0, g->pool = (void*) g, g->malloc = ma, g->free = fr;
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
@@ -1401,7 +1402,7 @@ static ai_noinline Ana(analyze) {
  word a = A(x), b = B(x);                        // it must be a pair
  if (!twop(b)) return analyze(g, c, a); // singleton list has value of element
  // if it is a special form then do that
- if (symp(a) && sym(a)->nom && len(sym(a)->nom) == 1)
+ if (symp(a) && a != (word) ai_core_of(g) && sym(a)->nom && len(sym(a)->nom) == 1)  // the core heads no special form (its nom slot is live VM state)
   switch (*txt(sym(a)->nom)) {
    case '\\': return ana_l(g, c, b);
    case ':': return ana_d(g, c, b);
@@ -1525,7 +1526,7 @@ static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x) {
 
 static ai_inline bool lambp(struct ai *g, word x) {
  struct ai_str *n;
- return twop(x) && symp(A(x)) && twop(B(x)) && twop(B(B(x))) &&
+ return twop(x) && symp(A(x)) && A(x) != (word) ai_core_of(g) && twop(B(x)) && twop(B(B(x))) &&
   (n = sym(A(x))->nom) && len(n) == 1 && txt(n)[0] == '\\'; }
 
 static ai_inline word rev(word l) {
@@ -1791,7 +1792,7 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
  if (c->book) {
   struct ai_atom *ts = sym_probe(c, "help", 4);
   word h = ts ? ai_mapget(c, nil, word(ts), c->book) : nil;
-  if (!ai_nilp(h) && avail(c) >= 5) {
+  if (!ai_nilp(c, h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
    sp[0] = putfix(s), sp[1] = h;
    sp[2] = a, sp[3] = b;
@@ -1880,7 +1881,7 @@ lvm(lvm_freev) {
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
- if (ai_nilp(h)) return
+ if (ai_nilp(g, h)) return
   *--Sp = (word) ai_core_of(g),
   Ip += 2,
   Continue();
@@ -1905,7 +1906,7 @@ lvm(lvm_missing) {
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
- if (ai_nilp(h)) return
+ if (ai_nilp(g, h)) return
   Sp[1] = (word) ai_core_of(g),
   Sp++,
   Ip++,
@@ -2197,7 +2198,7 @@ lvm(lvm_jump) { return Ip = Ip[1].m, Continue(); }
 // The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
 // language falsy predicate so an all-zero tuple (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
-lvm(lvm_cond) { return Ip = ai_nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
+lvm(lvm_cond) { return Ip = ai_nilp(g, *Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 lvm(lvm_unc) {
  Have1();
  *--Sp = Ip[1].x;
@@ -2359,7 +2360,7 @@ static ai_inline intptr_t len_sat(ai_flo_t m) {
 //   ai_C  packed (re,im) float pairs at tuple_data -> componentwise sum
 //   ai_O  object words -> each element's own ai_net (recursive; depth bounded by nesting)
 //   ai_Z/ai_R  the element values directly (tuple_get_flo), imaginary part 0
-static struct ai_zn ai_net(word x) {
+static struct ai_zn ai_net(struct ai *g, word x) {
   if (fixp(x)) return zn((ai_flo_t) getfix(x), 0);               // fixnum: its value
   if (bufp(x)) { struct ai_str *b = buf_str(x); ai_flo_t t = 0;   // hot chars: Σ charms, like a string
     for (uintptr_t i = 0; i < b->len; i++) t += (uint8_t) b->bytes[i];
@@ -2372,12 +2373,12 @@ static struct ai_zn ai_net(word x) {
       for (uintptr_t i = 0; i < len(x); i++) t += (uint8_t) txt(x)[i];
       return zn(t, 0); }                                           // (the count moved to tally)
     case KTwo: { struct ai_zn s = zn(0, 0); word p = x;           // product: sum the SPINE's nets --
-      do { struct ai_zn e = ai_net(A(p));                          // complex sums, so negatives cancel,
+      do { struct ai_zn e = ai_net(g, A(p));                       // complex sums, so negatives cancel,
            s.re += e.re, s.im += e.im;                           // phases cancel, and a product of
            p = B(p); } while (twop(p));                          // nothings nets to nothing
       return s; }
     case KBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
-    case KSym: return zn((ai_flo_t) pin_sym(x), 0);              // a symbol nets its SPELLING's charms
+    case KSym: return zn((ai_flo_t) pin_sym(g, x), 0);           // a symbol nets its SPELLING's charms
                                                                 // (a mint: the distinct nothing)
     case KTuple: { struct ai_tuple *v = tuple(x);                 // boxed scalar or rank-n array
       uintptr_t i, n = tuple_nelem(v);
@@ -2390,7 +2391,7 @@ static struct ai_zn ai_net(word x) {
         for (i = 0; i < n; i++) s.re += d[2*i], s.im += d[2*i+1];
         return s; }
       if (v->type == ai_O)
-        for (i = 0; i < n; i++) { struct ai_zn e = ai_net(tuple_get_obj(v, i));
+        for (i = 0; i < n; i++) { struct ai_zn e = ai_net(g, tuple_get_obj(v, i));
           s.re += e.re, s.im += e.im; }
       else for (i = 0; i < n; i++) s.re += tuple_get_flo(v, i);
       return s; } } }
@@ -2399,12 +2400,12 @@ static struct ai_zn ai_net(word x) {
 // |z|, signed by zn_nonpos) -- so (nilp x) == (= 0 ($ x)) at every kind and
 // rank: a negative real, a non-positive complex, a list or array whose net
 // sums <= 0 in the order all measure 0. Lockstep with ai_nilp.
-static intptr_t ai_pin(word x) {
+static intptr_t ai_pin(struct ai *g, word x) {
   if (fixp(x)) { intptr_t n = getfix(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil), exact
-  struct ai_zn z = ai_net(x);
+  struct ai_zn z = ai_net(g, x);
   if (zn_nonpos(z)) return 0;
   return len_sat(z.im == 0 ? z.re : ai_sqrt(z.re * z.re + z.im * z.im)); }
-lvm(lvm_pin) { Sp[0] = putfix(ai_pin(Sp[0])); Ip += 1; return Continue(); }
+lvm(lvm_pin) { Sp[0] = putfix(ai_pin(g, Sp[0])); Ip += 1; return Continue(); }
 
 // ============================================================================
 // io
@@ -2645,7 +2646,7 @@ static ai_inline struct ai*gzput_two(struct ai*g, word _, uintptr_t off) {
  if (!ai_ok(g = ai_push(g, 1, _))) return g;
  struct ai_str *n;
  // a one-operand `\` pair (`(\ x)`) is quote -> print as 'x; ≥2 operands is a lambda.
- if (symp(A(g->sp[0])) && (n = sym(A(g->sp[0]))->nom) && len(n) == 1 && txt(n)[0] == '\\'
+ if (symp(A(g->sp[0])) && A(g->sp[0]) != (word) ai_core_of(g) && (n = sym(A(g->sp[0]))->nom) && len(n) == 1 && txt(n)[0] == '\\'
      && twop(B(g->sp[0])) && !twop(BB(g->sp[0]))) {
   g = gzputc(g, '\'');                          // GC here may relocate sp[0]; read AB after
   g = gzputx(g, AB(g->sp[0]), off); }
@@ -3180,6 +3181,7 @@ lvm(lvm_string) {
   txt(s)[0] = (char) getfix(x);
   return Sp[0] = word(s), Ip++, Continue(); }
  if (symp(x)) {                                      // named symbol -> name string, else identity
+  if (x == (word) ai_core_of(g)) return Ip++, Continue();  // the core: nameless, like a mint -> identity (its atom slots are never read)
   word y = x;
   while (symp(y) && sym(y)->nom && symp(word(sym(y)->nom))) y = word(sym(y)->nom);
   word nom = word(sym(y)->nom);
@@ -4372,20 +4374,22 @@ static lvm(lvm_add_seq) {
 // rank: string as-is / nom'd to a fresh uninterned sym / interned. An empty
 // result is the ai_str_empty singleton, or nil at symbol rank (the symbol
 // lane is gated off by the dispatch matrix since the mint round anyway).
-static ai_inline struct ai_str *add_name(word x) {        // symbol -> name string, or 0 (a mint)
+static ai_inline struct ai_str *add_name(struct ai *g, word x) {   // symbol -> name string, or 0 (a mint / the core)
+ if (x == (word) ai_core_of(g)) return 0;               // () is the core: a nameless point (its atom slots are live VM state, never read)
  word nom = word(sym(x)->nom);
- return nom ? str(nom) : 0; }                           // interned: nom IS the name
-static ai_inline int stringrank(word x) {                  // STR 0 / USYM 1 / ISYM|NUM 2
+ return nom ? str(nom) : 0; }                           // interned: nom IS the name; a mint nets nom 0 -> nameless
+static ai_inline int stringrank(struct ai *g, word x) {    // STR 0 / USYM 1 / ISYM|NUM 2
  if (strp(x)) return 0;
- if (symp(x)) { word n = word(sym(x)->nom); return n && strp(n) ? 2 : 1; }
+ if (x == (word) ai_core_of(g)) return 1;               // the core is a nameless point: an uninterned (fresh) symbol
+ if (symp(x)) return word(sym(x)->nom) ? 2 : 1;
  return 2; }
-static ai_inline uintptr_t stringlen(word x) {             // bytes x contributes to a concat
+static ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contributes to a concat
  if (strp(x)) return len(x);
- if (symp(x)) { struct ai_str *n = add_name(x); return n ? n->len : 0; }
+ if (symp(x)) { struct ai_str *n = add_name(g, x); return n ? n->len : 0; }
  return 1; }                                            // number -> one byte
-static ai_inline char *add_emit(char *w, word x) {       // append x's bytes; return advanced w
+static ai_inline char *add_emit(struct ai *g, char *w, word x) {  // append x's bytes; return advanced w
  if (strp(x)) return (void) memcpy(w, txt(x), len(x)), w + len(x);
- if (symp(x)) { struct ai_str *n = add_name(x);
+ if (symp(x)) { struct ai_str *n = add_name(g, x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
  return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (gated >= 0 by the byte law)
 static lvm(lvm_add_string) {
@@ -4393,14 +4397,14 @@ static lvm(lvm_add_string) {
  if (arrp(a) || arrp(b)) return *++Sp = nil, Ip++, Continue(); // array <-> string: undefined
  if (!strp(a) && !symp(a) && seq_byte(a) < 0) return *++Sp = nil, Ip++, Continue();  // the byte law
  if (!strp(b) && !symp(b) && seq_byte(b) < 0) return *++Sp = nil, Ip++, Continue();
- int rank = min(stringrank(a), stringrank(b));
- uintptr_t n = stringlen(a) + stringlen(b);
+ int rank = min(stringrank(g, a), stringrank(g, b));
+ uintptr_t n = stringlen(g, a) + stringlen(g, b);
  if (!n) return *++Sp = rank ? nil : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(n);
  Have(req);
  a = Sp[0], b = Sp[1];                                  // re-read post-GC
  struct ai_str *z = ini_str((struct ai_str*) Hp, n); Hp += req;
- add_emit(add_emit(txt(z), a), b);                      // a's bytes then b's, in order
+ add_emit(g, add_emit(g, txt(z), a), b);                      // a's bytes then b's, in order
  *++Sp = word(z);
  return rank == 0 ? (Ip++, Continue())                  // string
       : rank == 1 ? Ap(lvm_mint, g)                  // uninterned symbol (fresh)
@@ -4441,7 +4445,7 @@ static lvm(lvm_mul_rep) {
  bool aseq = strp(a) || symp(a) || twop(a);
  word seq = aseq ? a : b, cnt = aseq ? b : a;
  if (!isnum(cnt) && !Cp(cnt)) return *++Sp = nil, Ip++, Continue();   // array/non-number count
- uintptr_t n = (uintptr_t) ai_pin(cnt);
+ uintptr_t n = (uintptr_t) ai_pin(g, cnt);
  if (twop(seq)) {                                  // list -> n copies of the spine
   if (!n) return *++Sp = nil, Ip++, Continue();
   uintptr_t m = llen(seq), total = m * n;
@@ -4454,14 +4458,14 @@ static lvm(lvm_mul_rep) {
   (w - 1)->b = nil;
   return *++Sp = word(base), Ip++, Continue(); }
  // string / symbol: repeat the byte content (a symbol's name; anonymous -> empty)
- int rank = strp(seq) ? 0 : stringrank(seq);         // 0 str / 1 usym / 2 isym
- struct ai_str *src = strp(seq) ? str(seq) : add_name(seq);
+ int rank = strp(seq) ? 0 : stringrank(g, seq);         // 0 str / 1 usym / 2 isym
+ struct ai_str *src = strp(seq) ? str(seq) : add_name(g, seq);
  uintptr_t sl = src ? src->len : 0, total = sl * n;
  if (!total) return *++Sp = rank ? nil : EmptyString, Ip++, Continue();
  uintptr_t req = str_type_width + b2w(total);
  Have(req);
  seq = (strp(Sp[0]) || symp(Sp[0])) ? Sp[0] : Sp[1];   // re-read post-GC
- src = strp(seq) ? str(seq) : add_name(seq);
+ src = strp(seq) ? str(seq) : add_name(g, seq);
  struct ai_str *z = ini_str((struct ai_str*) Hp, total); Hp += req;
  for (uintptr_t i = 0; i < n; i++) memcpy(txt(z) + i * sl, txt(src), sl);
  *++Sp = word(z);
@@ -4661,7 +4665,7 @@ op(lvm_fixp, 1, oddp(Sp[0]) ? putfix(1) : nil)
 // with no walk). The single truthiness oracle: `?` (lvm_cond), nilp, and aall all
 // consult ai_nilp, so `(? (nilp e) a b)` == `(? e b a)` -- the wev pass drops such a
 // nilp wrapper. Use `(= x 0)` for a literal scalar-zero test.
-op11(lvm_nilp, ai_nilp(Sp[0]) ? putfix(1) : nil)
+op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putfix(1) : nil)
 
 // Unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
 // Non-numeric arg → nil. TCO-clean (no & escapes).
@@ -4882,8 +4886,8 @@ struct arib { word la, lb; int na, nb; struct arib *up; };  // binder rib: (p…
 static int arib_pos(word s, word l, int n) {                // index of s among the first n of l, else -1
  for (int i = 0; i < n && twop(l); i++, l = B(l)) if (A(l) == s) return i;
  return -1; }
-static bool ai_isbs(word h) {                                // h is the `\` symbol?
- struct ai_str *n; return symp(h) && (n = sym(h)->nom) && n->len == 1 && n->bytes[0] == '\\'; }
+static bool ai_isbs(struct ai *g, word h) {                  // h is the `\` symbol?
+ struct ai_str *n; return symp(h) && h != (word) ai_core_of(g) && (n = sym(h)->nom) && n->len == 1 && n->bytes[0] == '\\'; }
 static bool salpha(struct ai *g, word a, word b, struct arib *env) {
  if (symp(a) || symp(b)) {
   if (!symp(a) || !symp(b)) return false;
@@ -4892,7 +4896,7 @@ static bool salpha(struct ai *g, word a, word b, struct arib *env) {
    if (ia >= 0 || ib >= 0) return ia == ib; }               // bound at this rib: positions agree
   return a == b; }                                          // both free: same symbol
  if (!twop(a) || !twop(b)) return eqv(g, a, b);             // numbers / strings / atoms
- if (ai_isbs(A(a)) && ai_isbs(A(b))) {                        // both `\`-headed
+ if (ai_isbs(g, A(a)) && ai_isbs(g, A(b))) {                        // both `\`-headed
   word pa = B(a), pb = B(b);
   if (!twop(B(pa)) || !twop(B(pb))) return eqv(g, a, b);    // one-operand \ = quote: data
   int na = 0, nb = 0;                                       // (\ p1..pn body): params = init, body = last
@@ -4916,7 +4920,7 @@ static uintptr_t shash(struct ai *g, word x, struct arib *env) {
    if (i >= 0) return rot((uintptr_t) (d * 131 + i + 1) * mix); }
   return sym(x)->code; }
  if (!twop(x)) return hash(g, x);
- if (ai_isbs(A(x))) {
+ if (ai_isbs(g, A(x))) {
   word p = B(x);
   if (!twop(B(p))) return hash(g, x);                       // one-operand \ = quote: data
   int n = 0;
@@ -5709,7 +5713,7 @@ lvm(lvm_aall) {
  uintptr_t n = tuple_nelem(v);
  if (v->type == ai_O) {                         // object: a falsy element fails the conjunction
   for (uintptr_t i = 0; i < n; i++)
-   if (ai_nilp(tuple_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
+   if (ai_nilp(g, tuple_get_obj(v, i))) return Sp[0] = nil, Ip++, Continue();
   return Sp[0] = putfix(1), Ip++, Continue(); }
  if (v->type == ai_C) {                         // complex: a 0+0i element fails the conjunction
   ai_flo_t *fp = tuple_data(v);
@@ -5889,9 +5893,12 @@ static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb
 // trichotomy.
 static ai_inline bool sym_interned(word x) {
  return sym(x)->nom && strp(word(sym(x)->nom)); }
-static ai_inline intptr_t sym_cmp(word a, word b) {
+static ai_inline intptr_t sym_cmp(struct ai *g, word a, word b) {
  if (a == b) return 0;
- struct ai_str *na = add_name(a), *nb = add_name(b);
+ word core = (word) ai_core_of(g);                       // () is the nameless serial-0 point: least among symbols
+ if (a == core) return -1;                               // (a != b, so b is some other symbol above it)
+ if (b == core) return 1;                                // -- guarded by identity, its atom slots are never read
+ struct ai_str *na = add_name(g, a), *nb = add_name(g, b);
  intptr_t c = bytes_cmp(na ? txt(na) : "", na ? na->len : 0, nb ? txt(nb) : "", nb ? nb->len : 0);
  if (c) return c;
  bool ia = sym_interned(a), ib = sym_interned(b);
@@ -5915,7 +5922,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
    if (flop(a) || flop(b)) { ai_flo_t av = toflo(a), bv = toflo(b); return av < bv ? -1 : av > bv ? 1 : 0; }
    return ai_big_cmp(a, b);                                 // exact fix/box/big tower
   case KString: return bytes_cmp(txt(a), len(a), txt(b), len(b));
-  case KSym:    return sym_cmp(a, b);
+  case KSym:    return sym_cmp(g, a, b);
   case KTwo: { intptr_t c = cmp3(g, A(a), A(b)); return c ? c : cmp3(g, B(a), B(b)); }  // car, then cdr
   default: { uintptr_t ha = hash(g, a), hb = hash(g, b);   // lambda/map/port/buf: by repr hash
              return ha < hb ? -1 : ha > hb ? 1 : 0; } } }
@@ -5942,7 +5949,7 @@ lvm(lvm_tally) {
  else if (bufp(l)) n = (intptr_t) len(buf_str(l));
  else if (mapp(l)) n = (intptr_t) map_len(l);
  else if (arrp(l)) n = (intptr_t) tuple_nelem(tuple(l));
- else if (symp(l)) n = sym(l)->nom ? (intptr_t) len(sym(l)->nom) : 0;
+ else if (symp(l)) n = (l != (word) ai_core_of(g) && sym(l)->nom) ? (intptr_t) len(sym(l)->nom) : 0;  // the core: nameless -> 0 charms
  else while (twop(l)) n++, l = B(l);
  Sp[0] = putfix(n);
  return Ip++, Continue(); }
