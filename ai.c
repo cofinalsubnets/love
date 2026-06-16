@@ -5345,7 +5345,6 @@ struct ai *ai_big_binop(struct ai *g, int vop) {
 // at g->sp[0..1] are integers; a zero divisor is screened off by the caller.
 struct ai *ai_big_quot_true(struct ai *g) {
  word a = g->sp[0], b = g->sp[1];
- ai_flo_t fa = toflo(a), fb = toflo(b);          // captured before any allocation
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  int bound = na + nb + 2, work = 4 * (na + nb) + 16;
  uintptr_t res_area = Width(struct ai_big) + b2w((size_t) bound * 4),
@@ -5366,8 +5365,8 @@ struct ai *ai_big_quot_true(struct ai *g) {
   int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
   rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
  if (exact) g->sp[1] = ai_big_canon(&g->hp, rmag, rn, rneg);
- else { struct ai_tuple *v = ini_scalar((struct ai_tuple*) g->hp, ai_R);
-  g->hp += box_req; flo_put(v->shape, fa / fb); g->sp[1] = word(v); }
+ else { struct ai_tuple *v = ini_scalar((struct ai_tuple*) g->hp, ai_R);  // a,b still valid: no GC since the re-fetch, and toflo is alloc-free
+  g->hp += box_req; flo_put(v->shape, toflo(a) / toflo(b)); g->sp[1] = word(v); }
  g->sp++;
  g->ip = (union u*) g->ip + 1;
  return g; }
