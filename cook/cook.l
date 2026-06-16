@@ -7,7 +7,7 @@
 ; symlink to it on PATH (the user installs that), running `cook Cookfile [ticket]`
 ; execs `ai -l <this-file> Cookfile [ticket]`: the -l loads cook, then Cookfile runs.
 ;
-; (this tool was first written as tools/bake.l; it was renamed to tools/cook.l so
+; (this tool was first written as tools/bake.l; it was renamed to cook/cook.l so
 ; the file name does not collide with the OTHER, unrelated sense of "bake" in this
 ; tree -- baking the heap image / the egg (ai/egg.l), the array-perf bake. the
 ; build VERB here is `cook`; "bake" is reserved for the egg. the messages this tool
@@ -33,7 +33,7 @@
 ; is to prep it up to date by following its recipe over fresh ingredients.
 ;
 ; usage:  cook <Cookfile> [ticket]            (with the symlink installed)
-;     or:  ai -l tools/cook.l <Cookfile> [ticket]
+;     or:  ai -l cook/cook.l <Cookfile> [ticket]
 ; A Cookfile is ordinary ai source that lays out the recipes (recipe ..) then
 ; (cook (ticket 0)). cook can ALSO read a real Makefile directly: when the file it
 ; is handed is named like one (Makefile, makefile, GNUmakefile, *.mk), cook imports
@@ -193,7 +193,7 @@
 ; substitution refs, the common functions ($(shell)/$(wildcard)/$(dir)/
 ; $(patsubst)/$(filter)/...), ifeq/ifdef conditionals, `include`, the = := ?= +=
 ; flavors, pattern + static-pattern rules, order-only prereqs, and the $@ $< $^ $*
-; automatics. Each recipe LINE runs via ("sh" "-c" line). See tools/cooktest.l.
+; automatics. Each recipe LINE runs via ("sh" "-c" line). See cook/cooktest.l.
 ;
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
 ; names leak to the global scope (a body-less `:` would, and several -- `parse`,

@@ -579,11 +579,11 @@ $d/bin/$n: out/host/$n
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-# cook: the build tool (tools/cook.l) installed as an executable `cook` on PATH.
+# cook: the build tool (cook/cook.l) installed as an executable `cook` on PATH.
 # Its `#!/usr/bin/env -S ai -l` shebang re-execs the installed `ai` to load it,
 # then it discovers a Makefile/Cookfile/Cards.l in the cwd. A script, not a
 # binary, so no -s strip.
-$d/bin/cook: tools/cook.$x
+$d/bin/cook: cook/cook.$x
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
 

@@ -1,4 +1,4 @@
-; cooktest -- tests for cook's Makefile importer (tools/cook.l).
+; cooktest -- tests for cook's Makefile importer (cook/cook.l).
 ;
 ; Run on the host binary:  out/host/ai tools/cooktest.l
 ; (wired into the build as `make test_cook`, part of `make test`).
@@ -31,7 +31,7 @@
    ; run cook on a fixture Makefile, return its captured stdout.
    (run-cook src tgt)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (run (L ai "-l" "tools/cook.l" (+ dir "/Makefile") tgt))
+       r (run (L ai "-l" "cook/cook.l" (+ dir "/Makefile") tgt))
        (? (twop r) (cup r) ""))
 
    _ (sh (+ "rm -rf " (+ dir "; mkdir -p " dir)))

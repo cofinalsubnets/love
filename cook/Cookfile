@@ -1,7 +1,7 @@
 ; Cookfile -- the project's build, as a cook recipe. make, in ai, building ai.
 ;
 ; run it with the cook.mk front door (`make -f cook.mk test`) or straight:
-;     out/host/ai -l tools/cook.l Cookfile [ticket]
+;     out/host/ai -l cook/cook.l cook/Cookfile [ticket]
 ; the first recipe ('all) is the default ticket. (cook discovers a Makefile before
 ; a Cookfile, so name this one explicitly -- as cook.mk does -- to use it here.)
 ;
@@ -71,7 +71,7 @@
       (cp mode src dst) (L "install" "-D" "-m" (octstr mode) src dst)
       (cps mode src dst) (L "install" "-D" "-m" (octstr mode) "-s" src dst)
       (L (cps 0755 "out/host/ai"        (at d "bin/ai"))
-         (cp  0755 "tools/cook.l"        (at d "bin/cook"))   ; the build tool, a script (no -s)
+         (cp  0755 "cook/cook.l"         (at d "bin/cook"))   ; the build tool, a script (no -s)
          (cp  0644 "out/host/ai.1"       (at d "share/man/man1/ai.1"))
          (cp  0644 "ai/prel.l"        (at d "lib/ai/prel.l"))
          (cp  0644 "ai/ev.l"             (at d "lib/ai/ev.l"))

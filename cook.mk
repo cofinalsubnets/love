@@ -1,4 +1,4 @@
-# cook.mk -- a make-shaped front door to cook (tools/cook.l + the project Cookfile).
+# cook.mk -- a make-shaped front door to cook (cook/cook.l + cook/Cookfile).
 #
 # `make` is muscle memory; cook is the build tool written in ai. This STUB
 # bridges them: `make -f cook.mk <goal>` makes sure the ai binary exists, then
@@ -16,7 +16,7 @@
 # straight to the real Makefile below.
 
 AI := out/host/ai
-COOK := $(AI) -l tools/cook.l Cookfile
+COOK := $(AI) -l cook/cook.l cook/Cookfile
 
 .DEFAULT_GOAL := all
 

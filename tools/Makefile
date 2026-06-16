@@ -45,11 +45,11 @@ test_vmret: | $(m)
 	done; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l
 
 
-# cook.l: run its Makefile-importer test suite. cooktest.l writes fixture
+# cook/cook.l: run its Makefile-importer test suite. cooktest.l writes fixture
 # Makefiles to a temp dir and runs cook on them as a subprocess, asserting over
 # the captured output (variable expansion, the make functions, conditionals,
 # include, pattern + static-pattern rules). It uses paths relative to the repo
 # root, so run it from there.
 test_cook: | $(m)
 	@echo TEST cook.l
-	@cd $(R) && out/host/$n tools/cooktest.$x
+	@cd $(R) && out/host/$n cook/cooktest.$x
