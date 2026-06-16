@@ -175,11 +175,11 @@
 ; continuation n = rest; the parsed payload is a list that `seq` concatenates.
 ; love has no regex, so the leaves are `lit` (a literal prefix), `one` (one char
 ; by predicate) and `span` (a maximal run); alt/seq/opt/many build the rest.
-; Makefile variable assignments, $(VAR) expansion, rules and .PHONY become cook
-; cards; each recipe LINE is run via ("sh" "-c" line) so the shell handles pipes,
-; globs and redirections (cook's `run` is execvp, not a shell). Pattern rules
-; (%.o: %.c), `include` and the conditional directives have no cook equivalent and
-; are passed over.
+; The import is reasonably GNU-make-compatible: recursive $(VAR) expansion and
+; substitution refs, the common functions ($(shell)/$(wildcard)/$(dir)/
+; $(patsubst)/$(filter)/...), ifeq/ifdef conditionals, `include`, the = := ?= +=
+; flavors, pattern + static-pattern rules, order-only prereqs, and the $@ $< $^ $*
+; automatics. Each recipe LINE runs via ("sh" "-c" line). See tools/cooktest.l.
 ;
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
 ; names leak to the global scope (a body-less `:` would, and several -- `parse`,
