@@ -26,6 +26,9 @@
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
 (assert
  (idp (:) (?)) (idp (?) (\)) !(:) (symp (:))     ; the empty form is the head read, both lanes: the zero point
+ (0 = (? 0 'a)) (idp 0 (map inc ()))             ; today: a no-match `?` (and `map` of nothing) falls to fixnum 0, NOT the zero point ()
+ ; QUEUE (true-blue order): this fall-through flips to () -- absence/the empty chain bottoms at Nil;
+ ; when that lands, replace the two asserts above with (idp (:) (? 0 'a)) and (idp (:) (map inc ())).
  (idp (:) (: a b b 2 a)) (2 = (: a b b 2 b))     ; one scope: forward read = the condition, the point helpless
  (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
 

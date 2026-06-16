@@ -2,6 +2,8 @@ vgcore.*
 .gdb_history
 /out/
 # rocq/coqc build artifacts (rocq/spec.v is checked by `make test_proof`)
+# rocq/gen.v: generated from test/spec.l every run (test_gen); not a source
+rocq/gen.v
 *.vo
 *.vok
 *.vos
