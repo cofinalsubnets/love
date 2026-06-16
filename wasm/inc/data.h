@@ -9,7 +9,7 @@
 static ai_inline bool in_data(void *a) {
  lvm_t *p = a;
  return p == lvm_two || p == lvm_vec || p == lvm_sym
-     || p == lvm_str || p == lvm_big || p == lvm_flo || p == lvm_wide; }
+     || p == lvm_str || p == lvm_big || p == lvm_flo || p == lvm_wide || p == lvm_cbox; }
 
 static ai_inline enum q ai_typ(union u *o) {
  lvm_t *p = o->ap;
@@ -19,5 +19,6 @@ static ai_inline enum q ai_typ(union u *o) {
         p == lvm_str ? KString :
         p == lvm_flo ? KFlo :
         p == lvm_wide ? KWide :
+        p == lvm_cbox ? KCplx :
                         KBig; }
 #endif

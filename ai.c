@@ -253,12 +253,13 @@ static ai_inline bool flop(word _) {
 // charmp never both hold for the same number.
 static ai_inline bool widep(word _) {
   return lamp(_) && cell(_)->ap == lvm_wide; }
-// A complex scalar: a rank-0 ai_C vec (two ai_flo_t, re then im). Deliberately
-// NOT folded into isnum -- the real-tower macros (toflo/toint) would misread its
-// two-word payload, so the arith/eq paths handle complex via explicit Cp
-// branches placed before the real lanes (decision: complex > float > int/bignum).
+// A complex scalar: its own data sentinel (lvm_cbox) and a lean three-word
+// {ap, re, im} box (struct ai_cplx, below) vs the five a rank-0 ai_C vec spent.
+// Deliberately NOT folded into isnum -- the real-tower macros (toflo/toint)
+// would misread its two-word payload, so the arith/eq paths handle complex via
+// explicit Cp branches placed before the real lanes (complex > float > int/big).
 static ai_inline bool Cp(word _) {
-  return packp(_) && vec(_)->rank == 0 && vec(_)->type == ai_C; }
+  return lamp(_) && cell(_)->ap == lvm_cbox; }
 // A rank>=1 typed array (vs a rank-0 scalar box, which flop/widep catch). The
 // elementwise arith/compare lanes divert to lvm_vbin when either operand arrp.
 static ai_inline bool arrp(word _) { return packp(_) && vec(_)->rank >= 1; }
@@ -334,7 +335,7 @@ static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (mapp(x)) return map_len(x) == 0;
   if (bigp(x)) return ((struct ai_big*) x)->slen < 0; // a negative bignum is false
   if (symp(x)) return pin_sym(g, x) == 0;            // empty/anonymous symbol name (or the core) -> nil (pin lockstep)
-  if (twop(x) || packp(x) || flop(x) || widep(x) || strp(x) || bufp(x))
+  if (twop(x) || packp(x) || flop(x) || widep(x) || Cp(x) || strp(x) || bufp(x))
     return zn_nonpos(ai_net(g, x));                   // content measures: net <= 0 in the order
   return false; }                                    // fn / port: present
 
@@ -361,8 +362,8 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 // Heap words for one scalar box. The float box (ai_flo_t) and the wide-int box
 // (intptr_t) are both one pointer-width word, so one reservation fits.
 #define box_req (Width(struct ai_vec) + Width(intptr_t))
-// Heap words for one complex box: the (re, im) payload is two ai_flo_t words.
-#define cplx_req (Width(struct ai_vec) + 2 * Width(ai_flo_t))
+// Heap words for one lean complex box (struct ai_cplx, defined below): ap + re + im.
+#define cplx_req Width(struct ai_cplx)
 // The tagged fixnum range: putcharm spends one bit, so |value| <= 2^(Bits-2).
 #define fix_min (INTPTR_MIN >> 1)
 #define fix_max (INTPTR_MAX >> 1)
@@ -409,6 +410,9 @@ struct ai_flo { lvm_t *ap; ai_word w; };
 // reinterpretation, unlike the float box). Same shape/size as ai_flo, distinct ap.
 struct ai_wide { lvm_t *ap; intptr_t w; };
 #define wide_req Width(struct ai_wide)
+// The lean complex box: ap (lvm_cbox) then two punned-double payload words
+// (re, im) -- three words vs the five a rank-0 ai_C vec spent. Also a flat GC leaf.
+struct ai_cplx { lvm_t *ap; ai_word re, im; };
 // Boxed scalar float access. The payload occupies one uintptr_t-wide
 // word (ai_flo_t is f64 on 64-bit ports, f32 on 32-bit -- always
 // the width of uintptr_t). Pun through a union rather than
@@ -438,22 +442,25 @@ static ai_inline word mk_flo(ai_word **hpp, ai_flo_t v) {
  struct ai_flo *f = (struct ai_flo*) *hpp; *hpp += flo_req;
  f->ap = lvm_flo; flo_put(&f->w, v); return word(f); }
 
-// Boxed complex access: re in shape[0], im in shape[1] (rank-0, so vec_data ==
-// shape). Same union-pun discipline as flo_get/flo_put so an inlining VM ap
-// keeps its tail call. cplx_put writes both components of an already-shaped box.
+// Boxed complex access: the lean box's two punned-double payload words. Same
+// union-pun discipline as flo_get so an inlining VM ap keeps its tail call.
 static ai_inline ai_flo_t cplx_re(word x) {
- return ((ai_flo_pun){ .u = vec(x)->shape[0] }).d; }
+ return ((ai_flo_pun){ .u = ((struct ai_cplx*) x)->re }).d; }
 static ai_inline ai_flo_t cplx_im(word x) {
- return ((ai_flo_pun){ .u = vec(x)->shape[1] }).d; }
+ return ((ai_flo_pun){ .u = ((struct ai_cplx*) x)->im }).d; }
 // |z| of a boxed complex scalar: the L2 norm of (re, im).
 static ai_inline ai_flo_t cplx_mod(word x) {
  ai_flo_t re = cplx_re(x), im = cplx_im(x);
  return ai_sqrt(re * re + im * im); }
-// (the total-order non-positive test for a boxed complex lives on the net now:
-// ai_net returns the value itself and zn_nonpos reads the lex sign -- once.)
-static ai_inline void cplx_put(struct ai_vec *v, ai_flo_t re, ai_flo_t im) {
- v->shape[0] = ((ai_flo_pun){ .d = re }).u;
- v->shape[1] = ((ai_flo_pun){ .d = im }).u; }
+// cplx_set writes both components of an already-shaped box; mk_cplx allocates one
+// at *hpp (caller holds Have(cplx_req)) and fills it. Neither takes a &local, so
+// a VM ap that uses them keeps its trailing tail call.
+static ai_inline void cplx_set(struct ai_cplx *v, ai_flo_t re, ai_flo_t im) {
+ v->re = ((ai_flo_pun){ .d = re }).u;
+ v->im = ((ai_flo_pun){ .d = im }).u; }
+static ai_inline word mk_cplx(ai_word **hpp, ai_flo_t re, ai_flo_t im) {
+ struct ai_cplx *v = (struct ai_cplx*) *hpp; *hpp += cplx_req;
+ v->ap = lvm_cbox; cplx_set(v, re, im); return word(v); }
 
 // Boxed wide-int read: the lean box's raw intptr_t payload (no bit
 // reinterpretation, unlike the float box). Writes go through mk_wide below.
@@ -516,9 +523,6 @@ static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
 // frontends can return it too (e.g. host_run's empty-output capture). (the
 // empty SYMBOL died in the one-nothing round: () reads as 0.)
 const struct ai_str ai_str_empty = { .ap = lvm_str, .len = 0 };
-
-static ai_inline struct ai_vec *ini_scalar(struct ai_vec *v, enum ai_vec_type t) {
- return v->ap = lvm_vec, v->type = t, v->rank = 0, v; }
 
 
 static ai_inline uintptr_t rot(uintptr_t x) {
@@ -880,6 +884,10 @@ static ai_inline void evac_flo(struct ai*g, word const*const p0, word const*cons
 static ai_inline void evac_wide(struct ai*g, word const*const p0, word const*const t0) {
  g->cp += wide_req; }
 
+// the lean complex box: a flat three-word GC leaf.
+static ai_inline void evac_cplx(struct ai*g, word const*const p0, word const*const t0) {
+ g->cp += cplx_req; }
+
 static ai_inline void evac_sym(struct ai*g, word const*const p0, word const*const t0) {
  g->cp += Width(struct ai_atom); }              // uniform 3 words; copy_sym forwarded the nom
 
@@ -898,7 +906,8 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
    case KString: return evac_str(g, p0, t0);
    case KBig: return evac_big(g, p0, t0);
    case KFlo: return evac_flo(g, p0, t0);
-   case KWide: return evac_wide(g, p0, t0); } }
+   case KWide: return evac_wide(g, p0, t0);
+   case KCplx: return evac_cplx(g, p0, t0); } }
 
 // THE WEAK INTERN TABLE. the cheney phase never traces it (the map alone
 // keeps no atom alive); after the fixpoint, symbols_rebuild walks the OLD
@@ -1057,6 +1066,11 @@ static ai_inline word copy_wide(struct ai*g, struct ai_wide *src, word const *co
  src->ap = memcpy(dst, src, sizeof(struct ai_wide));
  return word(dst); }
 
+static ai_inline word copy_cplx(struct ai*g, struct ai_cplx *src, word const *const p0, word const*const t0) {
+ struct ai_cplx *dst = bump(g, cplx_req);
+ src->ap = memcpy(dst, src, sizeof(struct ai_cplx));
+ return word(dst); }
+
 // atoms copy like any object (the nom string forwards normally); interning
 // maintenance moved WHOLLY to the post-fixpoint table sweep (symbols_sweep).
 static ai_inline word copy_sym(struct ai*g, struct ai_atom *src, word const *const p0, word const*const t0) {
@@ -1074,7 +1088,8 @@ static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0
   case KString: return copy_str(g, str(src), p0, t0);
   case KBig: return copy_big(g, (struct ai_big*) src, p0, t0);
   case KFlo: return copy_flo(g, (struct ai_flo*) src, p0, t0);
-  case KWide: return copy_wide(g, (struct ai_wide*) src, p0, t0); } }
+  case KWide: return copy_wide(g, (struct ai_wide*) src, p0, t0);
+  case KCplx: return copy_cplx(g, (struct ai_cplx*) src, p0, t0); } }
 
 static ai_inline struct ai_tag *ttag2(union u *k, word const *const lo, word const *const hi) {
  while (!tagp(k->x, lo, hi)) k++;
@@ -2423,6 +2438,7 @@ static struct ai_zn ai_net(struct ai *g, word x) {
     case KBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
     case KFlo: return zn(flo_get(x), 0);                         // a boxed float nets its value
     case KWide: return zn((ai_flo_t) box_get(x), 0);             // a boxed wide int nets its value
+    case KCplx: return zn(cplx_re(x), cplx_im(x));               // a complex nets ITSELF (phase intact)
     case KSym: return zn((ai_flo_t) pin_sym(g, x), 0);           // a symbol nets its SPELLING's charms
                                                                 // (a mint: the distinct nothing)
     case KVec: { struct ai_vec *v = vec(x);                 // boxed scalar or rank-n array
@@ -3034,6 +3050,8 @@ static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
    case KVec:  return ioput_vec(g, x, off);
    case KFlo:  return ai_dtoa2(g, flo_get(x));
    case KWide: return ioputn(g, box_get(x), 10);
+   case KCplx: if (!ai_ok(g = ai_push(g, 1, x))) return g;  // ~(re im); the helper reads sp[0]
+               return ai_pop(ioput_vec_scalar_complex(g), 1);
    case KSym:  return ioput_sym(g, x);
    case KString: return ioput_str(g, x);
    case KBig:  return ioput_big(g, x); } }
@@ -3729,6 +3747,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
   default: break;                               // KSym is not indexable
   case KFlo:                                    // a rank-0 scalar float: a nil key derefs to itself
   case KWide:                                   // ... same for a wide-int scalar
+  case KCplx:                                   // ... and a complex scalar
    if (nilp(k)) z = x;
    break;
   case KVec: {
@@ -3755,8 +3774,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
    else if (ok && v->type == ai_C) {                       // packed complex -> a (re,im) box
     Have(cplx_req); v = vec(Sp[0]);                      // re-read coll (Sp[0]) post-Have
     ai_flo_t *fp = vec_data(v);
-    struct ai_vec *bx = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
-    cplx_put(bx, fp[2*off], fp[2*off+1]); z = word(bx); }
+    z = mk_cplx(&Hp, fp[2*off], fp[2*off+1]); }
    else if (ok) { word _res; Have(box_req); v = vec(Sp[0]);
     if (v->type >= ai_R) emit_flo(vec_get_flo(v, off));
     else emit_int(vec_get_int(v, off));
@@ -3861,6 +3879,10 @@ uintptr_t hash(struct ai *g, intptr_t x) {
     return h; }
    case KWide: {                                // same: hash the lean box bytes
     uintptr_t len = wide_req * sizeof(word), h = mix;
+    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
+    return h; }
+   case KCplx: {                                // same: hash the lean (ap, re, im) box bytes
+    uintptr_t len = cplx_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
    case KString: {
@@ -4270,7 +4292,7 @@ ai_noinline struct ai_atom *intern_checked(struct ai *g, struct ai_str *b) {
  return y; }
 
 op11(lvm_symp, symp(Sp[0]) ? putcharm(1) : nil)
-op11(lvm_packp, (packp(Sp[0]) || flop(Sp[0]) || widep(Sp[0])) ? putcharm(1) : nil)  // the pack family: arrays + rank-0 cplx vec box + the lean float/wide boxes
+op11(lvm_packp, (packp(Sp[0]) || flop(Sp[0]) || widep(Sp[0]) || Cp(Sp[0])) ? putcharm(1) : nil)  // the pack family: arrays + the lean float/wide/complex scalar boxes
 op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_widep, widep(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_arrp, arrp(Sp[0]) ? putcharm(1) : nil)
@@ -4676,7 +4698,7 @@ static lvm_t *const ai_mul_mx[KN][KN] = {
 lvm_t *ai_apply_mx[KN][KN] = {
  [KTwo]  = arow(data_pair_apply), [KVec]  = arow(data_num_apply),
  [KSym]  = arow(data_sym_apply), [KFlo]  = arow(data_num_apply),
- [KWide] = arow(data_num_apply),
+ [KWide] = arow(data_num_apply), [KCplx] = arow(data_num_apply),
  [KString] = arow(data_string_apply), [KBig]  = arow(data_num_apply), };
 #undef arow
 
@@ -4801,10 +4823,7 @@ lvm(lvm_log) {
   m = ai_log(-ad), th = ai_atan2(0, ad); }
  else return Ap(lvm_math1, g, ai_log);
  Have(cplx_req);
- struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
- Hp += cplx_req;
- cplx_put(v, m, th);
- return Sp[0] = word(v), Ip++, Continue(); }
+ return Sp[0] = mk_cplx(&Hp, m, th), Ip++, Continue(); }
 
 op11(lvm_flop, flop(Sp[0]) ? putcharm(1) : nil)
 
@@ -5069,6 +5088,9 @@ ai_noinline bool eqv(struct ai *g, word a, word b) {
      break; }
     case KWide:
      if (box_get(a) != box_get(b)) return false;       // two wide boxes: compare the payload
+     break;
+    case KCplx:
+     if (cplx_re(a) != cplx_re(b) || cplx_im(a) != cplx_im(b)) return false;  // re AND im
      break;
     case KBig: {
      struct ai_big *x = (struct ai_big*) a, *y = (struct ai_big*) b;
@@ -5674,9 +5696,7 @@ lvm(lvm_asum) {
   for (; j < n; j++) a0 += fp[2*j], b0 += fp[2*j+1];
   ai_flo_t sr = (a0+a1)+(a2+a3), si = (b0+b1)+(b2+b3);
   Have(cplx_req);
-  struct ai_vec *r = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
-  cplx_put(r, sr, si);
-  return Sp[0] = word(r), Ip++, Continue(); }
+  return Sp[0] = mk_cplx(&Hp, sr, si), Ip++, Continue(); }
  struct ai_vec *v = vec(x);
  uintptr_t n = vec_nelem(v);
  bool fdom = v->type >= ai_R; word _res;
@@ -5719,9 +5739,7 @@ lvm(lvm_aprod) {
   ai_flo_t ra = r0*r1-i0*i1, ia = r0*i1+i0*r1, rb = r2*r3-i2*i3, ib = r2*i3+i2*r3;
   ai_flo_t pr = ra*rb-ia*ib, pi = ra*ib+ia*rb;
   Have(cplx_req);
-  struct ai_vec *r = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
-  cplx_put(r, pr, pi);
-  return Sp[0] = word(r), Ip++, Continue(); }
+  return Sp[0] = mk_cplx(&Hp, pr, pi), Ip++, Continue(); }
  struct ai_vec *v = vec(x);
  uintptr_t n = vec_nelem(v);
  bool fdom = v->type >= ai_R; word _res;
@@ -6505,7 +6523,7 @@ static ai_inline void cplx_parts(word x, ai_flo_t *re, ai_flo_t *im) {
 // Fill the rank-0 complex box v with a `vop` b. All the &-taking lives in this
 // ai_noinline helper so the lvm wrapper keeps its trailing tail call; no
 // allocation inside, so the operand pointers can't move under us.
-static ai_noinline void cplx_fill(struct ai_vec *v, word a, word b, int vop) {
+static ai_noinline void cplx_fill(struct ai_cplx *v, word a, word b, int vop) {
  ai_flo_t ar, ai, br, bi, re, im;
  cplx_parts(a, &ar, &ai); cplx_parts(b, &br, &bi);
  switch (vop) {
@@ -6514,7 +6532,7 @@ static ai_noinline void cplx_fill(struct ai_vec *v, word a, word b, int vop) {
   case vop_quot: { ai_flo_t d = br * br + bi * bi;   // (ac+bd)/(c^2+d^2) + ...
    re = (ar * br + ai * bi) / d; im = (ai * br - ar * bi) / d; break; }
   default: re = ar + br; im = ai + bi; }            // vop_add
- cplx_put(v, re, im); }
+ cplx_set(v, re, im); }
 
 // The complex arithmetic lane. Reached from the arith slow paths when either
 // operand is complex. A real operand promotes to (r, 0); a non-numeric operand,
@@ -6526,8 +6544,7 @@ lvm(lvm_cplx_bin, int vop) {
   return *++Sp = nil, Ip++, Continue();
  Have(cplx_req);
  a = Sp[0], b = Sp[1];                              // re-read post-Have
- struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
- Hp += cplx_req;
+ struct ai_cplx *v = (struct ai_cplx*) Hp; v->ap = lvm_cbox; Hp += cplx_req;
  cplx_fill(v, a, b, vop);
  return *++Sp = word(v), Ip++, Continue(); }
 
@@ -6615,14 +6632,14 @@ lvm(lvm_cbin, int op) {
 // Log w = ln|w| + i*arg w. A real operand promotes to (r, 0) (cplx_parts). w == 0
 // falls out as the IEEE limit (exp(-inf) -> 0 for Re z > 0), same domain stance as
 // real pow. &-locals stay in this ai_noinline helper, off lvm_pow's tail call.
-static ai_noinline void cplx_pow_fill(struct ai_vec *v, word wbase, word zexp) {
+static ai_noinline void cplx_pow_fill(struct ai_cplx *v, word wbase, word zexp) {
  ai_flo_t wr, wi, zr, zi;
  cplx_parts(wbase, &wr, &wi); cplx_parts(zexp, &zr, &zi);
  ai_flo_t lr = (ai_flo_t) 0.5 * ai_log(wr * wr + wi * wi),    // ln|w|
          li = ai_atan2(wi, wr);                             // arg w
  ai_flo_t pr = zr * lr - zi * li, pi = zr * li + zi * lr,   // z * Log w
          e = ai_exp(pr);
- cplx_put(v, e * ai_cos(pi), e * ai_sin(pi)); }
+ cplx_set(v, e * ai_cos(pi), e * ai_sin(pi)); }
 
 // sin/cos of pi*x for finite non-integer x (the caller's flo_fracp guarantee,
 // so the int cast is safe). The angle is reduced BEFORE multiplying by pi, so
@@ -6659,8 +6676,7 @@ lvm(lvm_pow) {
    return *++Sp = nil, Ip++, Continue();
   Have(cplx_req);
   a = Sp[0], b = Sp[1];                              // re-read post-Have
-  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
-  Hp += cplx_req;
+  struct ai_cplx *v = (struct ai_cplx*) Hp; v->ap = lvm_cbox; Hp += cplx_req;
   cplx_pow_fill(v, a, b);
   return *++Sp = word(v), Ip++, Continue(); }
  if (isnum(a) && isnum(b)) {
@@ -6668,10 +6684,7 @@ lvm(lvm_pow) {
   if (ad < 0 && !__builtin_isinf(ad) && flo_fracp(bd)) {
    ai_flo_t m = ai_pow(-ad, bd), re = m * ai_cospi(bd), im = m * ai_sinpi(bd);
    Have(cplx_req);
-   struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
-   Hp += cplx_req;
-   cplx_put(v, re, im);
-   return *++Sp = word(v), Ip++, Continue(); } }
+   return *++Sp = mk_cplx(&Hp, re, im), Ip++, Continue(); } }
  return Ap(lvm_math2, g, ai_pow); }
 
 // (C re im): build a complex from two real numbers. Non-numeric arg -> nil.
@@ -6730,10 +6743,7 @@ lvm(lvm_cplx) {
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue();
  ai_flo_t re = toflo(a), im = toflo(b);             // values extracted before alloc
  Have(cplx_req);
- struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C);
- Hp += cplx_req;
- cplx_put(v, re, im);
- return *++Sp = word(v), Ip++, Continue(); }
+ return *++Sp = mk_cplx(&Hp, re, im), Ip++, Continue(); }
 
 // (Cp x): is x a complex scalar?
 op11(lvm_Cp, Cp(Sp[0]) ? putcharm(1) : nil)
@@ -6762,14 +6772,10 @@ lvm(lvm_conj) {
  word a = Sp[0];
  if (Cp(a)) { ai_flo_t re = cplx_re(a), im = cplx_im(a);
   Have(cplx_req);
-  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
-  cplx_put(v, re, -im);
-  return Sp[0] = word(v), Ip++, Continue(); }
+  return Sp[0] = mk_cplx(&Hp, re, -im), Ip++, Continue(); }
  if (isnum(a)) { ai_flo_t re = toflo(a);            // lift a real to ~(r 0)
   Have(cplx_req);
-  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_C); Hp += cplx_req;
-  cplx_put(v, re, 0);
-  return Sp[0] = word(v), Ip++, Continue(); }
+  return Sp[0] = mk_cplx(&Hp, re, 0), Ip++, Continue(); }
  return Sp[0] = nil, Ip++, Continue(); }
 
 // (abs z): type-aware magnitude. Complex -> sqrt(re^2+im^2) (a float). Real ->

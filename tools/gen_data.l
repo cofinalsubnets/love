@@ -28,8 +28,8 @@
    (pow2? n) (&& (< 0 n) (= 0 (& n (- n 1))))
    (bitlen n) ((: (f n k) (? (< 0 n) (f (>> n 1) (+ k 1)) k)) n 0))
 
-(: prefix "ai_data."   ; input subsections ai_data.00 .. .06
-   N 7)                     ; enum q data kinds: vec/big/str/sym/two/flo/wide -- must match ai.h
+(: prefix "ai_data."   ; input subsections ai_data.00 .. .07
+   N 8)                     ; enum q data kinds: vec/big/str/sym/two/flo/wide/cplx -- must match ai.h
 
 ; --- emit the generated header to port p ----------------------------
 (: (emit p unit po2 shift)
@@ -50,7 +50,7 @@
       _ (fputs p " return (uintptr_t) a >= (uintptr_t) __start_ai_data\n")
       _ (fputs p "     && (uintptr_t) a <  (uintptr_t) __stop_ai_data; }\n")
       _ (fputs p "static ai_inline enum q ai_typ(union u *o) {\n")
-      _ (fputs p " static const enum q kinds[] = { KVec, KBig, KString, KSym, KTwo, KFlo, KWide };\n")
+      _ (fputs p " static const enum q kinds[] = { KVec, KBig, KString, KSym, KTwo, KFlo, KWide, KCplx };\n")
       _ (fputs p " return kinds[((uintptr_t) o->ap - (uintptr_t) __start_ai_data) ")
       _ (? po2 (: _ (fputs p ">> ") (fputbn p shift 10)) (fputs p "/ G_DATA_UNIT"))
       _ (fputs p "]; }\n")

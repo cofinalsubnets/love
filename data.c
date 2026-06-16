@@ -31,6 +31,6 @@ static lvm(data_apply) {
 
 #define go(_)\
   _(00, lvm_vec) _(01, lvm_big) _(02, lvm_str)\
-  _(03, lvm_sym) _(04, lvm_two) _(05, lvm_flo) _(06, lvm_wide)
+  _(03, lvm_sym) _(04, lvm_two) _(05, lvm_flo) _(06, lvm_wide) _(07, lvm_cbox)
 
 go(data)
