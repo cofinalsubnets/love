@@ -163,6 +163,16 @@ ai0 = $(ho)/ai0
 host: $(ho)/$n $(ho)/lib$n.so $(ho)/$n.1
 ai0: $(ai0)
 
+# cook/Cookfile: this Makefile transpiled into a resolved cook recipe by
+# `cook --emit` (cook/cook.l). cook reads this Makefile directly too, but the
+# emitted Cookfile is the build with every $(shell)/$(wildcard)/var/pattern
+# RESOLVED -- a flat, self-documenting snapshot. Regenerate it whenever the
+# Makefile changes. (A baked snapshot: re-run `make cook/Cookfile` after adding
+# a source/test file, since the wildcard lists are frozen at emit time.)
+cook/Cookfile: Makefile cook/cook.l $(ho)/$n
+	@echo GEN	$@
+	@$(ho)/$n -l cook/cook.l --emit Makefile > $@
+
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running ai0, so re-lay
 # them whenever ai0 changes. This dep belongs in the rule above, but $(ai0) is
 # defined on the line above this one (Make expands prerequisites at PARSE time),

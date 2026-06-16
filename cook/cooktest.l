@@ -33,6 +33,11 @@
    (: _ (write-file (+ dir "/Makefile") src)
        r (run (L ai "-l" "cook/cook.l" (+ dir "/Makefile") tgt))
        (? (twop r) (cup r) ""))
+   ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
+   (run-emit src)
+   (: _ (write-file (+ dir "/Makefile") src)
+       r (run (L ai "-l" "cook/cook.l" "--emit" (+ dir "/Makefile")))
+       (? (twop r) (cup r) ""))
 
    _ (sh (+ "rm -rf " (+ dir "; mkdir -p " dir)))
 
@@ -130,6 +135,33 @@
    ops (run-cook (mk (L "a := base" "a += more" "b ?= keep" "b ?= nope"
                         "all:" "\techo \"O[$(a)|$(b)]\"")) "all")
    _ (ok "+= and ?=" (has ops "O[base more|keep]"))
+
+   ; ---------------------------------------------------------------------- emit
+   ; --emit transpiles a Makefile to a RESOLVED Cookfile: vars/patterns expanded,
+   ; .PHONY targets -> symbols, files -> strings, each recipe line an
+   ; ("sh" "-c" cmd) step, the default ticket first, a trailing (cook (ticket 0)).
+   em (run-emit (mk (L "CC := cc"  "OBJ := a.o b.o"  ".PHONY: all clean"
+                       "all: prog"
+                       "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
+                       "%.o: %.c"      "\t$(CC) -c -o $@ $<"
+                       "clean:"        "\t-rm -f prog $(OBJ)")))
+   _ (ok "emit: .PHONY target -> symbol"   (has em "(recipe 'all "))
+   _ (ok "emit: file target -> string"     (has em "(recipe '\"prog\" "))
+   _ (ok "emit: var-resolved step"         (has em "(\"sh\" \"-c\" \"cc -o prog a.o b.o\")"))
+   _ (ok "emit: pattern-resolved step"     (has em "(\"sh\" \"-c\" \"cc -c -o a.o a.c\")"))
+   _ (ok "emit: default ticket emitted first" (has em "(recipe 'all "))
+   _ (ok "emit: trailing cook call"        (has em "(cook (ticket 0))"))
+
+   ; round-trip: cook the emitted Cookfile and confirm it runs the recipe. The
+   ; rule just writes a file (no compiler / source lookup), so the test is hermetic.
+   _ (sh (+ "mkdir -p " (+ dir "/e")))
+   emc (run-emit (mk (L ".PHONY: all"
+                        (+ "all: " (+ dir "/e/out.txt"))
+                        (+ dir "/e/out.txt:") "\techo HI > $@")))
+   _ (write-file (+ dir "/e/Cookfile") emc)
+   _ (sh (+ "rm -f " (+ dir "/e/out.txt")))
+   _ (run (L ai "-l" "cook/cook.l" (+ dir "/e/Cookfile") "all"))
+   _ (ok "emit: round-trip cooks the emitted Cookfile" (= 0 (cap (sh (+ "test -f " (+ dir "/e/out.txt"))))))
 
    ; ---------------------------------------------------------------- summary
    np (peep pass 0 0) nf (peep fail 0 0)
