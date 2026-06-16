@@ -30,7 +30,7 @@
  !(tablet 0) !!#()                              ; (tablet 0) is empty; #() is the 0-box, present
  (= 50 (peep (pin (tablet 0) 5 50) 5 0))                ; the empty hash is mutable
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys #(1 10 2 20 3 30))))   ; splice builds all entries
- (= "#(0 0)" (show #()))
+ (= "#(0 ())" (show #()))
  (= "#(1 \"hi\")" (show #(1 "hi"))))
 
 ; # on a NON-LIST datum boxes it: #x = #(0 x), a fresh mutable hash pinning x
@@ -39,12 +39,12 @@
 (: bx #0)
 (assert
  (mapp #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
- (= 0 (peep bx () 9))                           ; the boxed value sits at ()
- (= 9 (: _ (pin bx () 9) (peep bx () 0)))       ; ... and is mutable in place
- (= 5 (peep #5 () 0)) (= "s" (peep #"s" () 0))  ; any scalar boxes
- (= 'a (peep (hash 'a) () 0))                  ; (NB #'a SPLICES -- a quote form is a pair)
+ (= 0 (peep bx 0 9))                            ; the boxed value sits at key 0 (the number, not the empty)
+ (= 9 (: _ (pin bx 0 9) (peep bx 0 0)))         ; ... and is mutable in place
+ (= 5 (peep #5 0 0)) (= "s" (peep #"s" 0 0))    ; any scalar boxes (at key 0)
+ (= 'a (peep (hash 'a) 0 0))                   ; (NB #'a SPLICES -- a quote form is a pair)
  (= "#(0 5)" (show #5))                      ; a box prints as #(0 v), reads back
- (= 7 (peep #(1 2 7) () 0))                     ; an odd trailing operand lands in the box slot
+ (= 7 (peep #(1 2 7) 0 0))                      ; an odd trailing operand lands in the box slot (key 0)
  (= 2 (peep #(1 2 7) 1 0)))
 
 ; # reader macro wraps its operand in (pin …): #x -> (pin x)

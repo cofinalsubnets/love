@@ -92,6 +92,12 @@ struct ai_atom {
   char bytes[]; } *nom; };
 
 struct ai {
+ // () IS the core: its head is a nameless serial-0 mint {lvm_sym, 0, 0} (set in
+ // ai_ini), so (word) ai_core_of(g) is a valid value -- symp, applies const-1, nets
+ // 0, prints (). The one true nothing, distinct from 0 (a fixnum) and "" (a string).
+ // It FLOPS with the dust; gcg leaves a forwarding pointer at the old core so every
+ // stored () follows. No named constant: the nothing is the core.
+ struct ai_atom zp;
  union u {
   lvm_t *ap;
   ai_word x;

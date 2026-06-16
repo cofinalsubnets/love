@@ -171,11 +171,12 @@
  (294 = $'(a b c)) (3 = (tally '(a b c))))  ; net sums spellings; tally counts the spine
 
 ; --- strings, symbols & mints --- a symbol is interned; (mint 0) adjoins a fresh nameless POINT
-; (materially empty, applies const-1); a NOM is (name . mint); () = 0; absence reads the ZERO
-; POINT (serial 0, printed ()); `$` clamps the net measure, `tally` counts; slice/+/string.
+; (materially empty, applies const-1); a NOM is (name . mint); () IS THE CORE -- the one
+; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
+; absence reads it; `$` clamps the net measure, `tally` counts; slice/+/string.
 (assert
- (0 = ()) !(symp ()) (0 = (intern "")) (idp 0 '()) (0 = $()) !() !!$'x
- ("0" = (show ()))
+ (() = (:)) (symp ()) !(0 = ()) !(idp 0 '()) (0 = (intern "")) (0 = $()) !() !!$'x
+ ("()" = (show ()))
  (: z zz-never-pinned (&& (symp z) !z (idp z (:)) ("()" = (show z))))   ; absence: the zero point, wearing ()
  (symp (mint 0)) (0 = $(mint 0)) !(mint 0)       ; the fresh point: a nameless atom, materially empty
  (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone

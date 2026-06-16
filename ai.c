@@ -130,7 +130,7 @@ lvm_t lvm_kcall,
  lvm_ap,    lvm_tap,    lvm_apn,    lvm_tapn, lvm_ret,
  lvm_argap, lvm_quoteap, lvm_argtap,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
- lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
+ lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2, lvm_zp,
  lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
@@ -641,7 +641,8 @@ lvm_t lvm_fault;
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
   _(lvm_argap) _(lvm_quoteap) _(lvm_argtap)\
   _(lvm_arg0) _(lvm_arg1) _(lvm_arg2) _(lvm_arg3)\
-  _(lvm_quo0) _(lvm_quo1) _(lvm_quo2) _(lvm_quo3) _(lvm_quom1) _(lvm_quom2)
+  _(lvm_quo0) _(lvm_quo1) _(lvm_quo2) _(lvm_quo3) _(lvm_quom1) _(lvm_quom2)\
+  _(lvm_zp)
 #define niff(b, n, _) {n, (intptr_t) b},
 #define i_entry(i) {#i, (intptr_t) i},
 
@@ -720,6 +721,7 @@ char const *ai_nif_name(intptr_t x) {
 
 static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*ma)(struct ai*, size_t), void (*fr)(struct ai*, void*)) {
  memset(g, 0, sizeof(struct ai));
+ g->zp.ap = lvm_sym;                   // () IS the core: its head is a nameless serial-0 mint (code/nom 0 from memset)
  g->len = len0, g->pool = (void*) g, g->malloc = ma, g->free = fr;
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
@@ -922,6 +924,11 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
             *sp0 = g->sp;
  word sh = t0 - sp0; // stack height
  h->sp = ptr(h) + len1 - sh;
+ // () IS the core, and it FLOPS with the dust: the old core sits at the from-space
+ // base (p0), so leave a forwarding pointer in its first word -> the new core (h).
+ // Every stored () then forwards through the normal gcp (h is in to-space), no
+ // per-pointer check -- there is only ONE core, so the existing evacuation carries it.
+ ((union u*) g)->ap = (lvm_t*) h;
  h->hp = h->cp = h->end;
  h->ip = cell(gcp(h, word(h->ip), p0, t0));
  h->tasks = cell(gcp(h, word(h->tasks), p0, t0));
@@ -1388,6 +1395,7 @@ out:
         pull(g, c); }
 
 static ai_noinline Ana(analyze) {
+ if (x == (word) ai_core_of(g)) return c0_i(g, c, lvm_zp); // () = the core: a runtime fetch (it flops; never bake/var-lookup it)
  if (symp(x)) return ana_v(g, c, x); // lookup symbol as variable
  if (!twop(x)) return ana_q(g, c, x); // non-pairs are self quoting
  word a = A(x), b = B(x);                        // it must be a pair
@@ -1850,15 +1858,13 @@ lvm(lvm_scare) {
 // the missing miss sentinel: a private static address no book value can equal,
 // so a name bound to nil stays distinct from no entry at all.
 static union u const no_entry[1];
-// THE ZERO POINT: what a helpless missing read answers. mint-shaped (nom 0,
-// serial 0 -- the one serial never drawn), nameless, $0, falsy, applying
-// const-1 like every unit. absence is a POINT, not a quantity: a number
-// would exponentiate under a numeral ((i love) = 0**i is honest nan), a
-// unit absorbs -- which is what keeps (i love you) = 1. data-segment
-// rooted (gcp's out-of-pool short-circuit). prints () -- the face of
-// absence; it re-reads as 0, but no spelling carries a point back anyway.
-static const struct ai_atom ai_zero_point = { .ap = lvm_sym, .code = 0, .nom = 0 };
-#define zero_point ((word) &ai_zero_point)
+// THE NOTHING IS THE CORE: () = (word) ai_core_of(g), what a helpless missing read
+// answers and what () reads as. The core's head is a nameless serial-0 mint (the one
+// serial never drawn), nameless, $0, falsy, applying const-1 like every unit. absence
+// is a POINT, not a quantity: a number would exponentiate under a numeral ((i love) =
+// 0**i is honest nan), a unit absorbs -- which is what keeps (i love you) = 1. It FLOPS
+// with the dust (gcg forwards old->new core) and prints () -- the face of absence.
+// No named constant; the nothing is the core. DISTINCT from 0 (fixnum) and "" (string).
 // The late-bound global read. A hit patches the site to a quote of the value
 // (the fold law's runtime tail). A miss is a MISSING name -- a nom not in the book,
 // a call for help: with a global help installed the read raises
@@ -1875,7 +1881,7 @@ lvm(lvm_freev) {
  struct ai_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
  if (ai_nilp(h)) return
-  *--Sp = zero_point,
+  *--Sp = (word) ai_core_of(g),
   Ip += 2,
   Continue();
  word a = g->missing, b = Ip[1].x;
@@ -1900,7 +1906,7 @@ lvm(lvm_missing) {
  struct ai_atom *ts = sym_probe(g, "help", 4);
  word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
  if (ai_nilp(h)) return
-  Sp[1] = zero_point,
+  Sp[1] = (word) ai_core_of(g),
   Sp++,
   Ip++,
   Continue();
@@ -2224,6 +2230,17 @@ lvm(lvm_quote) {
  Sp -= 1;
  Sp[0] = Ip[1].x;
  Ip += 2;
+ return Continue(); }
+
+// push () -- the core, the one true nothing. A RUNTIME FETCH (no operand): the core
+// FLOPS with the dust, so () can never be baked as a quote constant (the egg's build
+// core != the runtime core). analyze emits this for the core; the value is always the
+// live core, forwarded by gcg when it moves.
+lvm(lvm_zp) {
+ Have1();
+ Sp -= 1;
+ Sp[0] = (word) ai_core_of(g);
+ Ip += 1;
  return Continue(); }
 
 // A port has no function meaning either: applying it behaves as 0 (yields 1), like
@@ -2743,7 +2760,7 @@ static ai_inline struct ai*gzput_str(struct ai*g, word _) {
 // map is a fresh map): identity is the mint's whole product, so no spelling
 // can carry it.
 static ai_inline struct ai*gzput_sym(struct ai*g, word _) {
- if (_ == zero_point) return gzputcs(g, "()");  // the face of absence
+ if (_ == (word) ai_core_of(g)) return gzputcs(g, "()");  // the face of absence
  if (ai_ok(g = ai_push(g, 1, _))) {
   word nom = word(sym(g->sp[0])->nom);
   if (!nom) g = gzprintf(g, "(mint 0)");                    // a mint: fresh on re-read
@@ -3304,7 +3321,9 @@ static struct ai *gz_parse(struct ai *g, bool multi) {
     if (nilp(g->sp[0])) return encode(ai_core_of(g), ai_status_eof);   // stray ) / read1
     if (symp(A(g->sp[0]))) return encode(ai_core_of(g), ai_status_more); // wrap wants its operand
     g = ai_push(g, 1, AA(g->sp[0]));                    // d = head of the closed frame
-    if (ai_ok(g)) g->sp[1] = B(g->sp[1]);               // pop the closed frame; () = 0
+    if (ai_ok(g)) {
+     if (nilp(g->sp[0])) g->sp[0] = (word) ai_core_of(g);         // empty () IS the zero point (not the number 0)
+     g->sp[1] = B(g->sp[1]); }                          // pop the closed frame
     break;                                             // -> deliver d
    case EOF:
     if (nilp(g->sp[0])) return encode(ai_core_of(g), ai_status_eof);
