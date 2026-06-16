@@ -1,5 +1,5 @@
 # Teensy 4.1 (i.MX RT1062) build. Run from the project root via `make -C
-# ports/teensy41`, or directly via `cd ports/teensy41 && make`. Standalone:
+# port/teensy41`, or directly via `cd port/teensy41 && make`. Standalone:
 # it touches no file in the main tree -- it points R at a love checkout, pulls
 # the shared vars from common.mk, and delegates the host interpreter + lcat lib
 # headers back to the root Makefile on demand. Output lands in $(R)/out/teensy41/.
@@ -52,7 +52,7 @@ clean:
 
 # Delegate to the root: the host interpreter $m runs gen_data.l, and the lcat
 # lib headers are produced by the root's own rules. Built on demand so a
-# standalone `make -C ports/teensy41` works from a clean tree.
+# standalone `make -C port/teensy41` works from a clean tree.
 $(lib_h):
 	@$(MAKE) -C $(R) out/lib/$(@F)
 $(m):
