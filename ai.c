@@ -108,7 +108,7 @@ uintptr_t intern_reserve(struct ai*);
 uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
- lvm_two, lvm_vec, lvm_sym, lvm_str, lvm_big, // data sentinels (enum q order); apply dispatches through ai_apply_mx
+ lvm_two, lvm_vec, lvm_sym, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); apply dispatches through ai_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_twop,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_call2, lvm_toast, lvm_toasted,
@@ -239,8 +239,12 @@ struct ai *ai_big_quot_true(struct ai*);       // `/` bignum lane: exact quotien
 struct ai *ai_big_dec(struct ai*);             // sp[0] bignum -> decimal string
 struct ai *ai_big_read_dec(struct ai*);        // sp[0] [+-]?digits token -> canonical value
 
+// A boxed scalar float: its own data sentinel (lvm_flo) and a lean {ap, payload}
+// box (struct ai_flo, below) -- two words, vs the four a rank-0 ai_R vec spent.
+// Stage 2 of the scalar-gem split: float left the vec machinery, so flop is an
+// ap check (no rank/type fields to read), and ai_typ recovers KFlo directly.
 static ai_inline bool flop(word _) {
-  return packp(_) && vec(_)->rank == 0 && vec(_)->type == ai_R; }
+  return lamp(_) && cell(_)->ap == lvm_flo; }
 // Wide-integer box: a rank-0 ai_Z scalar vec. Arises only from
 // transparent fixnum overflow (kernel/math.c); never holds a value that
 // fits the fixnum tag (canonical demotion keeps box and fixnum ranges
@@ -328,7 +332,7 @@ static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (mapp(x)) return map_len(x) == 0;
   if (bigp(x)) return ((struct ai_big*) x)->slen < 0; // a negative bignum is false
   if (symp(x)) return pin_sym(g, x) == 0;            // empty/anonymous symbol name (or the core) -> nil (pin lockstep)
-  if (twop(x) || packp(x) || strp(x) || bufp(x))
+  if (twop(x) || packp(x) || flop(x) || strp(x) || bufp(x))
     return zn_nonpos(ai_net(g, x));                   // content measures: net <= 0 in the order
   return false; }                                    // fn / port: present
 
@@ -370,8 +374,7 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
         Hp += box_req; box_put(_v->shape, _r); _res = word(_v); } } while (0)
 // Emit a double result R into `_res` as a rank-0 ai_R box. Same Have(box_req)
 // precondition and TCO discipline as emit_int.
-#define emit_flo(R) do { struct ai_vec *_v = ini_scalar((struct ai_vec*) Hp, ai_R); \
- Hp += box_req; flo_put(_v->shape, (R)); _res = word(_v); } while (0)
+#define emit_flo(R) do { _res = mk_flo(&Hp, (R)); } while (0)
 
 // Step 8 -- RNG (kernel/rng.c). State is a rank-1 i64 vec of length 4 (256 bits,
 // xoshiro256++). It rides the existing vec machinery (no data sentinel) but its
@@ -396,8 +399,13 @@ long strtol(char const*restrict, char**restrict, int);
 size_t strlen(char const*);
 double strtod(char const *restrict, char **restrict);
 
+// The lean scalar-float box: ap (lvm_flo) then one payload word holding the
+// punned double -- two words, half the rank-0 ai_R vec it replaced. A GC leaf
+// (flat payload, no embedded l pointers), copied/evac'd like a bignum.
+struct ai_flo { lvm_t *ap; ai_word w; };
+#define flo_req Width(struct ai_flo)
 // Boxed scalar float access. The payload occupies one uintptr_t-wide
-// shape[] slot (ai_flo_t is f64 on 64-bit ports, f32 on 32-bit -- always
+// word (ai_flo_t is f64 on 64-bit ports, f32 on 32-bit -- always
 // the width of uintptr_t). Pun through a union rather than
 // memcpy(&local, ...): both are strict-aliasing clean, but the memcpy form
 // takes the address of a stack local, which clang -Os treats as an escape
@@ -409,7 +417,7 @@ double strtod(char const *restrict, char **restrict);
 _Static_assert(sizeof(ai_flo_t) == sizeof(uintptr_t), "float box assumes ai_flo_t is pointer-width");
 typedef union { uintptr_t u; ai_flo_t d; } ai_flo_pun;
 static ai_inline ai_flo_t flo_get(word x) {
- return ((ai_flo_pun){ .u = vec(x)->shape[0] }).d; }
+ return ((ai_flo_pun){ .u = ((struct ai_flo*) x)->w }).d; }
 static ai_inline void flo_put(void *p, ai_flo_t v) {
  // NaN collapses to 0.0: love's "undefined is nothing" convention (a type error
  // is nil) reaching the floats. This is the single real-float box-write, so 0/0
@@ -419,6 +427,11 @@ static ai_inline void flo_put(void *p, ai_flo_t v) {
  // `inf` is untouched (it is comparable); complex NaN rides cplx_put, not here.
  if (v != v) v = 0;                              // v != v iff v is NaN
  *(uintptr_t*) p = ((ai_flo_pun){ .d = v }).u; }
+// Allocate a lean float box at *hpp (caller holds Have(flo_req)) and return it.
+// Takes no &local, so a VM ap that uses it keeps its trailing tail call.
+static ai_inline word mk_flo(ai_word **hpp, ai_flo_t v) {
+ struct ai_flo *f = (struct ai_flo*) *hpp; *hpp += flo_req;
+ f->ap = lvm_flo; flo_put(&f->w, v); return word(f); }
 
 // Boxed complex access: re in shape[0], im in shape[1] (rank-0, so vec_data ==
 // shape). Same union-pun discipline as flo_get/flo_put so an inlining VM ap
@@ -854,6 +867,10 @@ static ai_inline void evac_str(struct ai*g, word const*const p0, word const*cons
 static ai_inline void evac_big(struct ai*g, word const*const p0, word const*const t0) {
  g->cp += b2w(ai_big_bytes((struct ai_big*) g->cp)); }
 
+// the lean float box is a flat GC leaf (ap + payload): advance past its two words.
+static ai_inline void evac_flo(struct ai*g, word const*const p0, word const*const t0) {
+ g->cp += flo_req; }
+
 static ai_inline void evac_sym(struct ai*g, word const*const p0, word const*const t0) {
  g->cp += Width(struct ai_atom); }              // uniform 3 words; copy_sym forwarded the nom
 
@@ -870,7 +887,8 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
    case KSym: return evac_sym(g, p0, t0);
    case KTwo: return evac_two(g, p0, t0);
    case KString: return evac_str(g, p0, t0);
-   case KBig: return evac_big(g, p0, t0); } }
+   case KBig: return evac_big(g, p0, t0);
+   case KFlo: return evac_flo(g, p0, t0); } }
 
 // THE WEAK INTERN TABLE. the cheney phase never traces it (the map alone
 // keeps no atom alive); after the fixpoint, symbols_rebuild walks the OLD
@@ -1017,6 +1035,13 @@ static ai_inline word copy_big(struct ai*g, struct ai_big *src, word const *cons
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
+// the lean float box is flat (ap + payload, no embedded l pointers) -- copy by
+// one memcpy and evac by advancing past its words, exactly like a bignum.
+static ai_inline word copy_flo(struct ai*g, struct ai_flo *src, word const *const p0, word const*const t0) {
+ struct ai_flo *dst = bump(g, flo_req);
+ src->ap = memcpy(dst, src, sizeof(struct ai_flo));
+ return word(dst); }
+
 // atoms copy like any object (the nom string forwards normally); interning
 // maintenance moved WHOLLY to the post-fixpoint table sweep (symbols_sweep).
 static ai_inline word copy_sym(struct ai*g, struct ai_atom *src, word const *const p0, word const*const t0) {
@@ -1032,7 +1057,8 @@ static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0
   case KVec: return copy_vec(g, vec(src), p0, t0);
   case KSym: return copy_sym(g, sym(src), p0, t0);
   case KString: return copy_str(g, str(src), p0, t0);
-  case KBig: return copy_big(g, (struct ai_big*) src, p0, t0); } }
+  case KBig: return copy_big(g, (struct ai_big*) src, p0, t0);
+  case KFlo: return copy_flo(g, (struct ai_flo*) src, p0, t0); } }
 
 static ai_inline struct ai_tag *ttag2(union u *k, word const *const lo, word const *const hi) {
  while (!tagp(k->x, lo, hi)) k++;
@@ -2379,6 +2405,7 @@ static struct ai_zn ai_net(struct ai *g, word x) {
            p = B(p); } while (twop(p));                          // nothings nets to nothing
       return s; }
     case KBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
+    case KFlo: return zn(flo_get(x), 0);                         // a boxed float nets its value
     case KSym: return zn((ai_flo_t) pin_sym(g, x), 0);           // a symbol nets its SPELLING's charms
                                                                 // (a mint: the distinct nothing)
     case KVec: { struct ai_vec *v = vec(x);                 // boxed scalar or rank-n array
@@ -2988,6 +3015,7 @@ static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
    default: __builtin_trap();
    case KTwo:  return ioput_two(g, x, off);
    case KVec:  return ioput_vec(g, x, off);
+   case KFlo:  return ai_dtoa2(g, flo_get(x));
    case KSym:  return ioput_sym(g, x);
    case KString: return ioput_str(g, x);
    case KBig:  return ioput_big(g, x); } }
@@ -3159,12 +3187,8 @@ lvm(lvm_real) {
  word x = Sp[0];
  double d = strtod_wrap(g, x);
  if (d != d) return Sp[0] = nil, Ip += 1, Continue();
- uintptr_t req = b2w(sizeof(struct ai_vec) + sizeof(ai_flo_t));
- Have(req);
- struct ai_vec *r = ini_scalar((struct ai_vec*) Hp, ai_R);
- Hp += req;
- flo_put(r->shape, (ai_flo_t) d);
- Sp[0] = word(r);
+ Have(flo_req);
+ Sp[0] = mk_flo(&Hp, (ai_flo_t) d);
  return Ip++, Continue(); }
 
 lvm(lvm_read) {
@@ -3510,11 +3534,8 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
        if (!(c0 >= '0' && c0 <= '9') && c0 != '.') return intern(g);
        d = strtod(tx, &e);
        if (e == tx || *e != 0) return intern(g); }
-      uintptr_t req = b2w(sizeof(struct ai_vec) + sizeof(ai_flo_t));
-      if (ai_ok(g = ai_have(g, req))) {
-       struct ai_vec *r = ini_scalar(bump(g, req), ai_R);
-       flo_put(r->shape, d);
-       g->sp[0] = word(r); }
+      if (ai_ok(g = ai_have(g, flo_req)))
+       g->sp[0] = mk_flo(&g->hp, d);
       return g; } }
  return g; }
 
@@ -3690,6 +3711,9 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
  else if (mapp(x)) z = ai_mapget(g, z, k, x);     // map lookup (not a data sentinel)
  else if (lamp(x) && datp(x)) switch (typ(x)) {
   default: break;                               // KSym is not indexable
+  case KFlo:                                    // a rank-0 scalar float: a nil key derefs to itself
+   if (nilp(k)) z = x;
+   break;
   case KVec: {
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
    // rank-N; an empty/nil key derefs a rank-0 scalar box. Out-of-bounds or a
@@ -3812,6 +3836,10 @@ uintptr_t hash(struct ai *g, intptr_t x) {
     return h; }
    case KBig: {
     uintptr_t len = ai_big_bytes((struct ai_big*) x), h = mix;
+    for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
+    return h; }
+   case KFlo: {                                 // hash the lean box (ap is GC-stable, payload is the value)
+    uintptr_t len = flo_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
    case KString: {
@@ -4221,7 +4249,7 @@ ai_noinline struct ai_atom *intern_checked(struct ai *g, struct ai_str *b) {
  return y; }
 
 op11(lvm_symp, symp(Sp[0]) ? putcharm(1) : nil)
-op11(lvm_packp, packp(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_packp, (packp(Sp[0]) || flop(Sp[0])) ? putcharm(1) : nil)  // the pack family: arrays + rank-0 vec boxes (wide/cplx) + the lean float box
 op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_widep, widep(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_arrp, arrp(Sp[0]) ? putcharm(1) : nil)
@@ -4251,8 +4279,7 @@ lvm(lvm_cons) {
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b)) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
-  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R); \
-  Hp += box_req; flo_put(v->shape, (fexpr)); _res = word(v); \
+  emit_flo(fexpr); \
   return *++Sp = _res, Ip++, Continue(); } \
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b), t; \
   if (!ovf(av, bv, &t)) { word _res; Have(box_req); emit_int(t); \
@@ -4268,8 +4295,7 @@ lvm(lvm_cons) {
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue(); \
  if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
-  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R); \
-  Hp += box_req; flo_put(v->shape, (fexpr)); _res = word(v); \
+  emit_flo(fexpr); \
   return *++Sp = _res, Ip++, Continue(); } \
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b); \
   if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(av c_op bv); \
@@ -4324,16 +4350,14 @@ static lvm(lvm_quotn) {
  if (!isnum(a) || !isnum(b)) return *++Sp = nil, Ip++, Continue();
  if (flop(a) || flop(b) || b == nil) { word _res; Have(box_req);   // ±inf/NaN on ÷0
   ai_flo_t ad = toflo(a), bd = toflo(b);
-  struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
-  Hp += box_req; flo_put(v->shape, ad / bd); _res = word(v);
+  emit_flo(ad / bd);
   return *++Sp = _res, Ip++, Continue(); }
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b);  // bv != 0 (b != nil)
   if (!(av == INTPTR_MIN && bv == -1)) {                            // INT_MIN/-1 is exact but overflows -> bignum lane
    if (av % bv == 0) { word _res; Have(box_req); emit_int(av / bv);
     return *++Sp = _res, Ip++, Continue(); }
    word _res; Have(box_req);                                        // inexact -> promote to float
-   struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
-   Hp += box_req; flo_put(v->shape, (ai_flo_t) av / (ai_flo_t) bv); _res = word(v);
+   emit_flo((ai_flo_t) av / (ai_flo_t) bv);
    return *++Sp = _res, Ip++, Continue(); } }
  Pack(g); g = ai_big_quot_true(g);
  if (!ai_ok(g)) return ghelp(g);
@@ -4630,7 +4654,7 @@ static lvm_t *const ai_mul_mx[KN][KN] = {
                   [KArrC]=h,[KArrO]=h,[KString]=h,[KSym]=h,[KTwo]=h,[KMap]=h,[KTop]=h }
 lvm_t *ai_apply_mx[KN][KN] = {
  [KTwo]  = arow(data_pair_apply), [KVec]  = arow(data_num_apply),
- [KSym]  = arow(data_sym_apply),
+ [KSym]  = arow(data_sym_apply), [KFlo]  = arow(data_num_apply),
  [KString] = arow(data_string_apply), [KBig]  = arow(data_num_apply), };
 #undef arow
 
@@ -4719,12 +4743,8 @@ static lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t)) {
   return Ap(lvm_vmap1, g, fn); }
  if (!isnum(a)) return Sp[0] = nil, Ip++, Continue();
  ai_flo_t ad = toflo(a), rd = fn(ad);
- uintptr_t req = Width(struct ai_vec) + Width(ai_flo_t);
- Have(req);
- struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
- Hp += req;
- flo_put(v->shape, rd);
- return Sp[0] = word(v), Ip++, Continue(); }
+ Have(flo_req);
+ return Sp[0] = mk_flo(&Hp, rd), Ip++, Continue(); }
 
 static lvm(lvm_math2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  word a = Sp[0], b = Sp[1];
@@ -4735,12 +4755,8 @@ static lvm(lvm_math2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  if (!isnum(a) || !isnum(b)) return
   *++Sp = nil, Ip++, Continue();
  ai_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
- uintptr_t req = Width(struct ai_vec) + Width(ai_flo_t);
- Have(req);
- struct ai_vec *v = ini_scalar((struct ai_vec*) Hp, ai_R);
- Hp += req;
- flo_put(v->shape, rd);
- return *++Sp = word(v), Ip++, Continue(); }
+ Have(flo_req);
+ return *++Sp = mk_flo(&Hp, rd), Ip++, Continue(); }
 
 
 // ai_sin .. ai_pow are macro aliases (g/g.h) for the C library math
@@ -5381,8 +5397,7 @@ struct ai *ai_big_quot_true(struct ai *g) {
   int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
   rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
  if (exact) g->sp[1] = ai_big_canon(&g->hp, rmag, rn, rneg);
- else { struct ai_vec *v = ini_scalar((struct ai_vec*) g->hp, ai_R);  // a,b still valid: no GC since the re-fetch, and toflo is alloc-free
-  g->hp += box_req; flo_put(v->shape, toflo(a) / toflo(b)); g->sp[1] = word(v); }
+ else g->sp[1] = mk_flo(&g->hp, toflo(a) / toflo(b));  // a,b still valid: no GC since the re-fetch, and toflo is alloc-free
  g->sp++;
  g->ip = (union u*) g->ip + 1;
  return g; }
@@ -6315,12 +6330,10 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
   return t ? putcharm(1) : nil; }
  if (!isnum(a) || !isnum(b)) return nil;
  struct ai *g = *fp;
- if (flop(a) || flop(b)) {                      // float domain -> ai_R box
-  if (!ai_ok(g = ai_have(g, box_req))) return *fp = g, nil;
+ if (flop(a) || flop(b)) {                      // float domain -> float box
+  if (!ai_ok(g = ai_have(g, flo_req))) return *fp = g, nil;
   *fp = g;
-  struct ai_vec *v = ini_scalar((struct ai_vec*) g->hp, ai_R);
-  g->hp += box_req; flo_put(v->shape, vop_flo(op, toflo(a), toflo(b)));
-  return word(v); }
+  return mk_flo(&g->hp, vop_flo(op, toflo(a), toflo(b))); }
  if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
   intptr_t av = toint(a), bv = toint(b), t; bool of;
   switch (op) {
@@ -6367,11 +6380,10 @@ static struct ai *arr_to_obj(struct ai *g, int slot) {
  for (uintptr_t i = 0; i < n; i++) {
   struct ai_vec *s = vec(g->sp[slot + 1]);
   word v;
-  if (s->type >= ai_R) {                                        // float -> ai_R box
+  if (s->type >= ai_R) {                                        // float -> float box
    ai_flo_t e = vec_get_flo(s, i);
-   if (!ai_ok(g = ai_have(g, box_req))) return g;
-   struct ai_vec *bx = ini_scalar((struct ai_vec*) g->hp, ai_R); g->hp += box_req;
-   flo_put(bx->shape, e); v = word(bx); }
+   if (!ai_ok(g = ai_have(g, flo_req))) return g;
+   v = mk_flo(&g->hp, e); }
   else {                                                       // int -> fixnum or ai_Z box
    intptr_t e = vec_get_int(s, i);
    if (e >= fix_min && e <= fix_max) v = putcharm(e);

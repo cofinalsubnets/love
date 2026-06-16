@@ -21,13 +21,14 @@ static ai_inline bool in_data(void *a) {
  uintptr_t p = (uintptr_t) a;
  return p == (uintptr_t) lvm_vec || p == (uintptr_t) lvm_big
      || p == (uintptr_t) lvm_str   || p == (uintptr_t) lvm_sym
-     || p == (uintptr_t) lvm_two; }
+     || p == (uintptr_t) lvm_two || p == (uintptr_t) lvm_flo; }
 static ai_inline enum q ai_typ(union u *o) {
  uintptr_t ap = (uintptr_t) o->ap;
  return ap == (uintptr_t) lvm_vec ? KVec
       : ap == (uintptr_t) lvm_big   ? KBig
       : ap == (uintptr_t) lvm_str   ? KString
       : ap == (uintptr_t) lvm_sym   ? KSym
+      : ap == (uintptr_t) lvm_flo   ? KFlo
       :                               KTwo; }
 #else
 extern char __start_ai_data[], __stop_ai_data[];
@@ -35,7 +36,7 @@ static ai_inline bool in_data(void *a) {
  return (uintptr_t) a >= (uintptr_t) __start_ai_data
      && (uintptr_t) a <  (uintptr_t) __stop_ai_data; }
 static ai_inline enum q ai_typ(union u *o) {
- static const enum q slot_kind[ai_data_n] = { KVec, KBig, KString, KSym, KTwo };
+ static const enum q slot_kind[ai_data_n] = { KVec, KBig, KString, KSym, KTwo, KFlo };
  uintptr_t base = (uintptr_t) __start_ai_data,
            unit = ((uintptr_t) __stop_ai_data - base) / ai_data_n;
  return slot_kind[((uintptr_t) o->ap - base) / unit]; }

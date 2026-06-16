@@ -1,6 +1,6 @@
-# Validation gates for the love rewrites of the old Python build tools.
+# Validation gates for the ai rewrites of the old Python build tools.
 #
-# Each love tool in this directory (gen_data.l, vmret.l) must
+# Each ai tool in this directory (gen_data.l, vmret.l) must
 # produce output identical to the frozen Python reference under py/ (see
 # py/README.md). These targets diff the two over every relevant build artifact
 # present in the tree -- so they only check what you've actually built. Run all
@@ -14,7 +14,7 @@ include $(R)/common.mk
 .PHONY: all test_gen_data test_vmret test_cook
 all: test_gen_data test_vmret test_cook
 
-# Build the host love on demand (it runs the .l tools); only if it's missing.
+# Build the host ai on demand (it runs the .l tools); only if it's missing.
 $(m):
 	@$(MAKE) -C $(R)/host
 
@@ -37,7 +37,7 @@ test_gen_data: | $(m)
 # expected -- the vmret signal is noise there.
 test_vmret: | $(m)
 	@echo TEST vmret.l
-	@for e in $(R)/out/host/love `find $(R)/out/free -name 'love-*.elf' 2>/dev/null`; do \
+	@for e in $(R)/out/host/$n `find $(R)/out/free -name '$n-*.elf' 2>/dev/null`; do \
 	  python3 $(R)/tools/py/vmret.py $$e > $(R)/out/host/.vmret.py 2>&1; \
 	  $(m) $(R)/tools/vmret.$x $$e > $(R)/out/host/.vmret.l 2>&1; \
 	  cmp -s $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l && echo "  ok   $$e" \

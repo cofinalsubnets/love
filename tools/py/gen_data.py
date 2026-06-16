@@ -32,8 +32,8 @@ Usage: gen_data.py <data.o> [-o data.h]   (writes stdout if no -o)
 
 import struct, sys
 
-PREFIX = "ai_data."      # input subsections: ai_data.00 .. .04
-N = 5                      # enum q data kinds: tuple/big/two/string/sym -- must match ll.h
+PREFIX = "ai_data."      # input subsections: ai_data.00 .. .05
+N = 6                      # enum q data kinds: vec/big/str/sym/two/flo -- must match ai.h
 
 
 def fail(msg):
@@ -150,7 +150,7 @@ static ai_inline bool in_data(void *a) {
  return (uintptr_t) a >= (uintptr_t) __start_ai_data
      && (uintptr_t) a <  (uintptr_t) __stop_ai_data; }
 static ai_inline enum q ai_typ(union u *o) {
- static const enum q kinds[] = { KTuple, KBig, KString, KSym, KTwo };
+ static const enum q kinds[] = { KVec, KBig, KString, KSym, KTwo, KFlo };
  return kinds[((uintptr_t) o->ap - (uintptr_t) __start_ai_data) %s]; }
 #endif
 """

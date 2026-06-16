@@ -194,12 +194,16 @@ $(ho)/lib$n.so: $(ho)/lib$n.a $(data_ld)
 	@mkdir -p $(dir $@)
 	@$(hcc) $(ldflags) -shared -o $@ $(so_archive) -lm
 
-# The data-sentinel TU bootstraps from the portable top-level data.h (no $(hdata_h)
-# prerequisite -- that would be circular, since $(hdata_h) is reflected out of it).
-$(ho)/data.o: data.c $(ai_h)
+# Reflection-only TU: data.c with the FINAL flags ($(tco)/fpic, so its ai_data.NN
+# sentinel sections size exactly like the linked data.o) but the PORTABLE top-level
+# data.h (NO -I$(ho), so a stale generated $(ho)/data.h can never shadow it). The
+# sentinel bodies don't inline ai_typ, so the section stride is header-independent --
+# gen_data.l reflects this object, breaking the data.o <-> data.h cycle so the linked
+# data.o (pattern rule below) can depend on the regenerated header. Never linked.
+$(ho)/data_boot.o: data.c $(ai_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -c $< -o $@
+	@$(CC) $(ai_cflags) -Dai_tco=$(tco) -fpic -I. -Iout/lib -c $< -o $@
 
 # Bootstrap interpreter, compiled against the fallback top-level data.h (no
 # -I$(ho)) + -DGL_BOOTSTRAP -Dai_tco=0 (also exercises the non-threaded trampoline
@@ -222,9 +226,12 @@ $(ai0): $(ai0_o) $(data_ld)
 	@mkdir -p $(dir $@)
 	@$(CC) $(ai_cflags) $(ldflags) -o $@ $(ai0_o) -lm
 
-# tools/gen_data.l reflects $(ho)/data.o's ai_data.NN section sizes into
+# tools/gen_data.l reflects $(ho)/data_boot.o's ai_data.NN section sizes into
 # $(ho)/data.h, whose ai_typ() shifts instead of the portable header's divides.
-$(hdata_h): $(ho)/data.o $(ai0) tools/gen_data.$x ai/prel.$x
+# Reflecting the boot TU (not the linked data.o) breaks the circular dependency:
+# the linked data.o (pattern rule) then depends on $(hdata_h) and is rebuilt
+# whenever the sentinel set changes, so its baked kinds[] can never go stale.
+$(hdata_h): $(ho)/data_boot.o $(ai0) tools/gen_data.$x ai/prel.$x
 	@echo GEN	$@
 	@$(ai0) -l ai/prel.$x tools/gen_data.$x $< -o $@
 
@@ -334,15 +341,18 @@ $(ko)/$n-$a$(ksuf).elf: $(R)/port/$a/$a.lds $(k_o)
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
 
-# The data-sentinel TU bootstraps from the portable header (no $(kdata_h) prereq
-# -- circular). On a clean build data.h doesn't exist yet, so -I$(k_odir) finds
-# nothing and the compile falls through to the portable top-level data.h.
-$(k_odir)/data.o: $(R)/data.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h
+# Reflection-only TU (mirrors the host's data_boot.o): data.c with this arch's
+# kernel flags but the PORTABLE header -- -I$(k_odir) is filtered out so a stale
+# generated $(kdata_h) can never shadow it. The sentinel section stride is header-
+# independent, so reflecting this object (not the linked data.o) breaks the
+# data.o <-> data.h cycle; the linked data.o (pattern rule) then depends on
+# $(kdata_h) and is rebuilt whenever the sentinel set changes. Never linked.
+$(k_odir)/data_boot.o: $(R)/data.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
-	@$(kcc) -c $< -o $@
+	@$(filter-out -I$(k_odir),$(kcc)) -c $< -o $@
 
-$(kdata_h): $(k_odir)/data.o $(gen_data) | $(m)
+$(kdata_h): $(k_odir)/data_boot.o $(gen_data) | $(m)
 	@echo GEN	$@
 	@$(m) $(gen_data) $< -o $@
 

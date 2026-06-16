@@ -286,7 +286,7 @@ struct ai_pair { lvm_t *ap; intptr_t a, b; };
 // for +/*/apply -- the rung exists for the order and the honest matrix cells).
 // KN is the matrix dimension.
 enum q { KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KTwo, KMap, KTop, KN };
-#define ai_data_n 5     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KTop-KVec
+#define ai_data_n 6     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KTop-KVec
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
 // out-of-pool short-circuit). Strings are immutable, so one empty string
@@ -319,7 +319,7 @@ enum q ai_kind(word);
 // (ai_typ returns one of the five data kinds), so the first dimension is KN, not ai_data_n.
 extern lvm_t *ai_apply_mx[KN][KN];
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-lvm_t lvm_ap, lvm_two, lvm_vec, lvm_sym, lvm_str, lvm_big; // sentinels + ap: data.c & inline predicates
+lvm_t lvm_ap, lvm_two, lvm_vec, lvm_sym, lvm_str, lvm_big, lvm_flo; // sentinels + ap: data.c & inline predicates
 uintptr_t hash(struct ai*, word), ai_vec_bytes(struct ai_vec*);
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp
