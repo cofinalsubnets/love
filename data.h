@@ -3,7 +3,7 @@
 // Default data-kind recovery (see ai.h for the contract). The five DATA_SENTINEL
 // bodies (data.c) are laid out contiguously and in enum order in the
 // .ai_data section by data.ld (host) or the equivalent inline
-// block in the kernel's full linker script (arch/<a>/<a>.lds). ai_typ()
+// block in the kernel's full linker script (port/<a>/<a>.lds). ai_typ()
 // reads a kind straight out of an ap's slot index: every sentinel shares one
 // body and size, so they tile the section evenly and the slot is
 // (ap - start) / unit, unit = span / count (the ARM Thumb low bit on ap washes

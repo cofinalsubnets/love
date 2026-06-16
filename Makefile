@@ -243,7 +243,7 @@ $(ho)/$n.1: doc/$n.1 out/lib/ai_version.h
 # ====================================================================
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
 # Arch-independent glue is kmain.c + k.h at the root; per-arch code lives in
-# arch/<a>/ (arch.c, *.S, *.lds). Boots via Limine.
+# port/<a>/ (arch.c, *.S, *.lds). Boots via Limine.
 # ====================================================================
 ko = out/free
 dl = out/dl
@@ -262,12 +262,12 @@ KCC ?= clang
 KLD ?= ld.lld
 KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1)
 
-k_arch_c = $(wildcard $(R)/arch/$a/*.c)
-k_asm = $(wildcard $(R)/arch/$a/*.asm)
+k_arch_c = $(wildcard $(R)/port/$a/*.c)
+k_asm = $(wildcard $(R)/port/$a/*.asm)
 k_free_c = $R/kmain.c
 k_shared_c = $(ai_c) $(f_c) $(c_c)
-k_S = $(wildcard $(R)/arch/$a/*.S)
-k_h = $(ai_h) $(wildcard *.h $(R)/arch/$a/*.h)
+k_S = $(wildcard $(R)/port/$a/*.S)
+k_h = $(ai_h) $(wildcard *.h $(R)/port/$a/*.h)
 
 k_odir = $(ko)/$a$(ksuf)
 
@@ -286,7 +286,7 @@ gen_data = $(R)/tools/gen_data.$x
 
 kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
-kldflags := -static -nostdlib --gc-sections -T $(R)/arch/$a/$a.lds -z max-page-size=0x1000
+kldflags := -static -nostdlib --gc-sections -T $(R)/port/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
   -I. -I$(R)/out/host -Iout/lib -I$(R)/font -I$(R) \
@@ -319,7 +319,7 @@ k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword 
 
 kernel: $(ko)/$n-$a$(ksuf).elf
 
-$(ko)/$n-$a$(ksuf).elf: $(R)/arch/$a/$a.lds $(k_o)
+$(ko)/$n-$a$(ksuf).elf: $(R)/port/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
@@ -336,7 +336,7 @@ $(kdata_h): $(k_odir)/data.o $(gen_data) | $(m)
 	@echo GEN	$@
 	@$(m) $(gen_data) $< -o $@
 
-# Shared C sources (ai.c/data.c, font/, c/) + per-arch arch/$a/.
+# Shared C sources (ai.c/data.c, font/, c/) + per-arch port//.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kdata_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h $(if $(K_TEST),out/lib/ktests.h)
 	@echo CC	$@
@@ -518,7 +518,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@$m
 cloc:
-	cloc --by-file --force-lang=Lisp,$x ai ai.c ai.h data.c data.h kmain.c main.c k.h arch tools test vim
+	cloc --by-file --force-lang=Lisp,$x ai ai.c ai.h data.c data.h kmain.c main.c k.h port tools test vim
 cat: clean all test
 cata: clean all test_all
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.

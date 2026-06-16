@@ -1,12 +1,18 @@
-# l-ports -- device ports of the l lisp
+# port -- the freestanding targets of the ai lisp
 
-Device ports of l, split out of the main repo's arch/ tree on 2026-06-09
+This tree holds every non-host target. The core freestanding kernel
+backends `x86_64/` and `aarch64/` (arch.c + the boot `.S` + the `.lds`
+linker script, built by the root Makefile's `kernel` target) live here
+alongside the device ports below; `arch/` was merged into `port/` on
+2026-06-15 (the `arch/<a>/` paths in the root Makefile became `port/<a>/`).
+
+The device ports were split out of the main repo's arch/ tree on 2026-06-09
 (main repo: the `l` darcs repo; git provenance hashes below refer to its
 git history). Each port was a subdirectory of arch/ in the main tree and
 builds against it (R := ../.. + common.mk); wiring them to build from this
 repo instead -- point R (or an L variable) at an l checkout -- is TODO.
 
-Pulled back into the main (now `love`) tree under ports/ on 2026-06-14 from
+Pulled back into the main (now `love`) tree under port/ on 2026-06-14 from
 the love-ports darcs repo (working files only, no _darcs history). The
 playdate/rp2040 entries below still carry their pre-rename notes; the new
 teensy41/ port is written against the current ai.h contract.
@@ -18,7 +24,7 @@ the GitHub repo, builds the host CLI (`make host`), runs `make test` as the
 check, and installs via the main Makefile's `install` target (binary, manpage,
 the `ai/*.l` egg sources, `libai.{a,so}`, `ai.h`, and the vim files)
 under `usr/` into `$pkgdir`. Not a device port -- the host package, kept here
-so every downstream packaging recipe lives under ports/.
+so every downstream packaging recipe lives under port/.
 
 ## playdate/
 
