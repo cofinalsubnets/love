@@ -3285,7 +3285,7 @@ static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
  for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
  return true; }
 static ai_inline bool hashsym(word x) { return symeq(x, "hash", 4); }
-static ai_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "wave", 4); }
+static ai_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "wave", 4) || symeq(x, "list", 4); }
 
 static struct ai *gz_parse(struct ai *g, bool multi) {
  // multi: ctx starts with one open accumulator (collects all top-level datums in
@@ -3314,7 +3314,12 @@ static struct ai *gz_parse(struct ai *g, bool multi) {
    // so it lives here in the structural reader (with ~ and , above), NOT in
    // the operator table: ' ` # @ each wrap the next datum.
    case '\'': g = push_wrap(g, "\\"); continue;        // quote: 'x = (\ x)
-   case '`': g = push_wrap(g, "qq"); continue;
+   case '`':                                            // ` quasiquote; `` (double) -> (list ...) the element-eval list ctor
+    if (!ai_ok(g = zgetc(g))) return g;                 // peek: a second ` -> the list constructor (each element evaluated)
+    c2 = g->b;
+    if (c2 == '`') { g = push_wrap(g, "list"); continue; }   // ``(a b c) -> (list a b c); resolves nested-qq too
+    if (c2 != EOF) g = zungetc(g, c2);
+    g = push_wrap(g, "qq"); continue;
    case '#': g = push_wrap(g, "hash"); continue;       // (#! comments die in ai_z_getc)
    case '@': g = push_wrap(g, "tuple"); continue;
    case ')': case ']': case '}':

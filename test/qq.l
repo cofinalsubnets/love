@@ -15,8 +15,9 @@
  (= '(a (x 2) c) `(a (x ,b) c))
  ; a stray top-level unquote just evaluates its operand (uq = identity)
  (= 3 ,(+ 1 2))
- ; nested quasiquote: the inner unquote stays LITERAL, only an outer one fires
- (= '(qq (b (uq c)))   ``(b ,c))
- (= '(qq (b (uq 9)))   ``(b ,,c))
  ; an empty splice contributes nothing
- (= '(a c) `(a ,@'() c)))
+ (= '(a c) `(a ,@'() c))
+ ; double backtick `` is the element-eval LIST constructor: ``(a b c) = (list a b c),
+ ; each element evaluated. (it also subsumes nested quasiquote -- one reader rule.)
+ (= '(2 4 3) ``((+ 1 1) (* 2 2) (+ 1 2)))
+ (: a 5 b 10 (= '(5 10 15) ``(a b (+ a b)))))
