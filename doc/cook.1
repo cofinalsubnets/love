@@ -1,0 +1,121 @@
+.TH COOK 1 "" "ai @VERSION@" "ai manual"
+.SH NAME
+cook \- a dependency-driven build tool, make in ai
+.SH SYNOPSIS
+.B cook
+.RI [ file ]
+.RI [ ticket ]
+.br
+.B ai
+.B \-l
+.I tools/cook.l
+.RI [ file ]
+.RI [ ticket ]
+.SH DESCRIPTION
+.B cook
+brings an
+.I item
+up to date when it is missing or older than any of its prerequisites, running
+the item's recipe over freshened prerequisites first \(em the whole of make's
+idea. It is written in
+.BR ai (1)
+and runs on it.
+.PP
+With no
+.IR file ,
+cook discovers a build file in the current directory, preferring a
+.B Makefile
+over a
+.B Cookfile
+over a legacy
+.BR Cards.l .
+Name one explicitly to override.
+.SS Makefile
+cook reads an ordinary
+.B Makefile
+directly \(em a reasonably GNU-make-compatible import: recursive
+.RB $( VAR )
+expansion and substitution references, the common functions
+.RB ( $( shell ),
+.RB $( wildcard ),
+.RB $( dir ),
+.RB $( patsubst ),
+.RB $( filter ),
+\&...),
+.BR ifeq / ifdef
+conditionals,
+.BR include ,
+the
+.B "= := ?= +="
+assignment flavors, pattern rules and static patterns, order-only
+prerequisites, and the
+.BR $@ " " $< " " $^ " " $*
+automatic variables. Each recipe line is run through
+.BR sh (1),
+so pipes, globs and redirections work.
+.SS Cookfile
+A
+.B Cookfile
+is ordinary ai source that registers recipes and then calls
+.BR cook :
+.PP
+.RS
+.EX
+(recipe "hello" '("hello.o" "greet.o")
+        '(("cc" "-o" "hello" "hello.o" "greet.o")))
+(recipe 'clean '() '(("rm" "-f" "hello" "hello.o")))
+(cook (ticket 0))
+.EE
+.RE
+.PP
+A card is
+.RI ( recipe
+.I "item ingredients steps" ):
+an
+.I item
+is a filename string or a phony symbol, ingredients are the items it needs
+first, and steps are argv lists (run as subprocesses) or thunks. Item ages come
+from
+.BR stat (1);
+a phony symbol owns no file, so it is ageless and always cooks.
+.SH OPERANDS
+.TP
+.I file
+The build file (Makefile or Cookfile). If omitted, it is discovered in the
+current directory.
+.TP
+.I ticket
+The item to build. Defaults to the first recipe declared.
+.SH EXAMPLES
+Build the default target from the build file in the current directory:
+.RS
+.EX
+cook
+.EE
+.RE
+.PP
+Build a named target:
+.RS
+.EX
+cook test
+.EE
+.RE
+.PP
+Without the installed symlink, loading cook by hand:
+.RS
+.EX
+ai \-l tools/cook.l Makefile host
+.EE
+.RE
+.SH EXIT STATUS
+.B cook
+exits
+.B 0
+when every cooked item is up to date, and non-zero when a recipe command fails
+or a needed item has neither a recipe nor a file.
+.SH SEE ALSO
+.BR ai (1),
+.BR make (1).
+The project README, and
+.I tools/cook-example/
+for a worked C build.
