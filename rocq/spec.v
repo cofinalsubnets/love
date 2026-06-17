@@ -266,8 +266,9 @@ Theorem blue_zero  : blue (Vnum 0).                              Proof. reflexiv
 (* order & equality: < is a TOTAL order over all values         *)
 (* ============================================================ *)
 
-(* The total order flattens the type lattice into BANDS, low to high:
-     number < string < symbol < product < map < top
+(* The total order flattens the type lattice into BANDS, low to high (TRUE-BLUE:
+   the symbol band -- mints AND noms -- is the floor, below string and number):
+     symbol < string < number < product < map < top
    and orders within each band by value / lexicographically. This slice
    models the band structure with one comparable key per band (the within-band
    lex order for text and products collapsed to that key -- the lexicographic
@@ -286,8 +287,10 @@ Inductive O :=
   | Onum (z : Z) | Ostr (z : Z) | Osym (z : Z)
   | Oprod (z : Z) | Omap (z : Z) | Otop (z : Z).
 
+(* TRUE-BLUE: the symbol band (mints + noms) is the FLOOR, below string and
+   number; a point thus sits below every number (the blue floor). *)
 Definition band (o : O) : Z :=
-  match o with Onum _ => 0 | Ostr _ => 1 | Osym _ => 2
+  match o with Osym _ => 0 | Ostr _ => 1 | Onum _ => 2
              | Oprod _ => 3 | Omap _ => 4 | Otop _ => 5 end.
 Definition key (o : O) : Z :=
   match o with Onum z | Ostr z | Osym z | Oprod z | Omap z | Otop z => z end.
@@ -346,10 +349,10 @@ Proof.
   - right. left. exact H.
 Qed.
 
-(* the LATTICE: the band chain number < string < symbol < product < map < top *)
-Theorem number_lt_string  : forall x y, lt (Onum x)  (Ostr y).  Proof. intros. left. cbn. lia. Qed.
-Theorem string_lt_symbol  : forall x y, lt (Ostr x)  (Osym y).  Proof. intros. left. cbn. lia. Qed.
-Theorem symbol_lt_product : forall x y, lt (Osym x)  (Oprod y). Proof. intros. left. cbn. lia. Qed.
+(* the LATTICE: the band chain symbol < string < number < product < map < top *)
+Theorem symbol_lt_string  : forall x y, lt (Osym x)  (Ostr y).  Proof. intros. left. cbn. lia. Qed.
+Theorem string_lt_number  : forall x y, lt (Ostr x)  (Onum y).  Proof. intros. left. cbn. lia. Qed.
+Theorem number_lt_product : forall x y, lt (Onum x)  (Oprod y). Proof. intros. left. cbn. lia. Qed.
 Theorem product_lt_map    : forall x y, lt (Oprod x) (Omap y).  Proof. intros. left. cbn. lia. Qed.
 Theorem map_lt_top        : forall x y, lt (Omap x)  (Otop y).  Proof. intros. left. cbn. lia. Qed.
 
@@ -594,10 +597,14 @@ Proof. reflexivity. Qed.
    nothing), and tally COUNTS them. A symbol is a POINT: a mint is a fresh
    nameless point -- serial-keyed, materially empty ($ = 0), applying const-1,
    DISTINCT from every other and equal only to itself; the zero point is the
-   mint at serial 0, the face of absence. A nom is the pair (name . serial),
-   ordered lexicographically -- same-name noms split by serial. The bands order
-   number < symbol < product, so 0 < a mint < a nom (proved via the order
-   section's `lt`: a number is Onum, a point Osym, a nom Oprod). *)
+   mint at serial 0, the face of absence. A nom is the explicit PRODUCT
+   (name . mint) -- a chain of a name string and a mint, EXACTLY as internally
+   (cap the name, cup the mint), ordered (name lex, then the mint's serial);
+   same-name noms split by serial. The symbol band (mints AND noms) is the
+   FLOOR: it sorts BELOW string and number, so every point sits below every
+   number -- (mint 0) < 0, the blue floor -- and a bare mint below a named nom
+   (proved via the order section's `lt`: a point or nom is Osym, a string Ostr,
+   a number Onum). *)
 
 Open Scope Z_scope.
 
@@ -636,10 +643,16 @@ Theorem mint_self     : forall m : mint, m = m.         Proof. reflexivity. Qed.
 Theorem mint_distinct : forall a b, Mint a = Mint b <-> a = b.  (* distinct iff serials agree *)
 Proof. intros a b. split; [intro H; injection H; auto | intro H; subst; reflexivity]. Qed.
 
-(* --- noms: the pair (name . serial), ordered (name lex, then serial) --- *)
-Definition nom := (list Z * nat)%type.
-Definition nom_name (n : nom) : list Z := fst n.   (* the name is its cap *)
-Theorem nom_cap : nom_name ([120], 7%nat) = [120].  Proof. reflexivity. Qed. (* (cap (nom 'x)) = "x" *)
+(* --- noms: the explicit PRODUCT (name . mint) -- a chain of a name string and
+   a mint, EXACTLY the internal representation: cap is the name, cup is the mint,
+   and the mint (its serial) keys same-name noms. Reuses the `mint` type above,
+   so a nom IS a name paired with a genuine point, not a flattened serial. --- *)
+Definition nom := (list Z * mint)%type.
+Definition nom_name (n : nom) : list Z := fst n.        (* the name is its cap *)
+Definition nom_mint (n : nom) : mint  := snd n.         (* the mint is its cup *)
+Definition nom_serial (n : nom) : nat := match snd n with Mint s => s end.
+Theorem nom_cap : nom_name ([120], Mint 7) = [120].   Proof. reflexivity. Qed. (* (cap (nom 'x)) = "x" *)
+Theorem nom_cup : nom_mint ([120], Mint 7) = Mint 7.  Proof. reflexivity. Qed. (* (cup (nom 'x)) is the mint *)
 
 Fixpoint lex_lt (a b : list Z) : Prop :=
   match a, b with
@@ -649,14 +662,16 @@ Fixpoint lex_lt (a b : list Z) : Prop :=
   | x :: a', y :: b' => x < y \/ (x = y /\ lex_lt a' b')
   end.
 Definition nom_lt (a b : nom) : Prop :=
-  lex_lt (fst a) (fst b) \/ (fst a = fst b /\ (snd a < snd b)%nat).
+  lex_lt (fst a) (fst b) \/ (fst a = fst b /\ (nom_serial a < nom_serial b)%nat).
 
-(* same-name noms are DISTINCT and ordered by serial (the pair lex inherits it) *)
-Theorem same_name_serial   : forall nm s1 s2, (s1 < s2)%nat -> nom_lt (nm, s1) (nm, s2).
+(* same-name noms are DISTINCT and ordered by the mint's serial (the pair lex inherits it) *)
+Theorem same_name_serial   : forall nm s1 s2, (s1 < s2)%nat -> nom_lt (nm, Mint s1) (nm, Mint s2).
 Proof. intros nm s1 s2 H. right. split; [reflexivity | exact H]. Qed.
-Theorem same_name_distinct : forall (nm : list Z) (s1 s2 : nat), s1 <> s2 -> (nm, s1) <> (nm, s2).
+Theorem same_name_distinct : forall (nm : list Z) (s1 s2 : nat), s1 <> s2 -> (nm, Mint s1) <> (nm, Mint s2).
 Proof. intros nm s1 s2 H C. apply H. injection C. auto. Qed.
 
-(* the bands: 0 < a mint < a nom -- number < symbol < product (via the order section) *)
-Theorem point_above_nothing : lt (Onum 0) (Osym 5).   Proof. left. cbn. lia. Qed. (* 0 < (mint 0) *)
-Theorem point_below_nom     : lt (Osym 5) (Oprod 0).   Proof. left. cbn. lia. Qed. (* (mint 0) < (nom 'x) *)
+(* the FLOOR: the symbol band (mints AND noms) sits BELOW the numbers -- the blue
+   floor, every point under every number. Within the floor a bare mint (lower
+   serial-key) sorts below a named nom; the nom_lt section refines that order. *)
+Theorem point_below_number : lt (Osym 5) (Onum 0).   Proof. left.  cbn. lia. Qed. (* (mint 0) < 0 *)
+Theorem mint_below_nom     : lt (Osym 3) (Osym 5).   Proof. right. cbn. split; [reflexivity | lia]. Qed. (* a bare mint < a nom *)

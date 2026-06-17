@@ -10,7 +10,7 @@
 ;     sat / abs / gcd, lists / strings / arrays (asum/amax/.., iota), array-valued
 ;     = (broadcast / append / repeat), hashes & peep.
 ;   * a KIND lattice (value tags) for the type predicates (fixp/chainp/strp/..) and
-;     the band order (number < string < symbol < chain < map).
+;     the band order (symbol < string < number < chain < map).
 ; Left to the hand-written laws: the float/complex tier (not vm_compute-able, the
 ; honest misses) and the universally-quantified LAWS. Untranslatable asserts are
 ; SKIPPED and COUNTED -- never silently dropped (the trailing comment reports it).
@@ -125,12 +125,13 @@
                 (idp h 'tabp) "tabp" (idp h 'trayp) "trayp" (idp h 'nump) "nump"
                 (idp h 'intp) "intp" (idp h 'atomp) "atomp" (idp h 'packp) "packp"
                 (idp h 'lamp) "lamp" 0)
-   ; cross-kind ORDER: number<string<symbol<chain<map by band; same band stays value/lex
+   ; cross-kind ORDER: symbol<string<number<chain<map by band; same band stays value/lex
    (ordop? h) (| (idp h '<) (| (idp h '<=) (| (idp h '>) (idp h '>=))))
    (litband x) (: t (tk x)
                  (? (= t "Vbot") -1
-                    (| (= t "Vz") (| (= t "Vflo") (| (= t "Vcx") (= t "Varr")))) 0
-                    (= t "Vstr") 1 (= t "Vsym") 2 (= t "Vpair") 3 (= t "Vmap") 4  9))
+                    (= t "Vsym") 0 (= t "Vstr") 1
+                    (| (= t "Vz") (| (= t "Vflo") (| (= t "Vcx") (= t "Varr")))) 2
+                    (= t "Vpair") 3 (= t "Vmap") 4  9))
    (xband? f) (&& (len3? f) (ordop? (cap f)) (>= (litband (e2 f)) 0) (>= (litband (e3 f)) 0)
                   (! (= (litband (e2 f)) (litband (e3 f)))))           ; both tagged, DIFFERENT bands
    (xband f) (: h (cap f) a (cat (L "(band " (tk (e2 f)) ")")) b (cat (L "(band " (tk (e3 f)) ")"))
@@ -151,7 +152,7 @@
                    (idp h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   (cat (L "(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
                                  (&& (listv? (e2 f)) (listv? (e3 f))) (cat (L "(leqb " (tl (e2 f)) " " (tl (e3 f)) ")"))  ; list/array =
                                  0)
-                   (xband? f) (xband f)                               ; cross-kind ordering: number<string<symbol<chain<map
+                   (xband? f) (xband f)                               ; cross-kind ordering: symbol<string<number<chain<map
                    (! (&& (intv? (e2 f)) (intv? (e3 f)))) 0           ; the within-band ORDERING ops below stay integer-only
                    (idp h '<)  (cat (L "(Z.ltb " (tv (e2 f)) " " (tv (e3 f)) ")"))
                    (idp h '<=) (cat (L "(Z.leb " (tv (e2 f)) " " (tv (e3 f)) ")"))
@@ -213,7 +214,7 @@
      "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end." (string 10)
      "Definition atomp v := match v with Vpair => false | _ => true end." (string 10)
      "Definition lamp  v := match v with Vz|Vbot => false | _ => true end." (string 10)
-     "Definition band  v : Z := match v with Vz|Vflo|Vcx|Varr => 0 | Vstr => 1 | Vsym => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
+     "Definition band  v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
