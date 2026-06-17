@@ -27,7 +27,7 @@
     (? v v (: v (? (< n 2) 1 (f n 0 0)) _ (pin bells n v) v)))
    (showloop acc n) (? (< n 1) acc (showloop (+ (digit (% n (tally digits))) acc)(// n (tally digits)) ))
    show (showloop "")
-   (gen i limit) (: b (show (bell i)) (? (<= (tally b) limit) (hook b (gen (+ i 1) limit))))
+   (gen i limit) (: b (show (bell i)) (? (<= (tally b) limit) (link b (gen (+ i 1) limit))))
    (leq a b) (? (chainp a) (? (chainp b) (? (= (cap a) (cap b)) (leq (cup a) (cup b)) 0) 0)
                          (? (chainp b) 0 1))
    (ln x) (foldl (\ n _ (+ 1 n)) 0 x)            ; line count ($ on a list is the net sum)

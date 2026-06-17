@@ -35,7 +35,7 @@
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
 ; ============================================================================
 ; Each data kind's sentinel tail-jumps through this. The arg-kind dimension is
-; uniform today (a hook for later), so we vary it to pin that. Non-data applies
+; uniform today (a link for later), so we vary it to pin that. Non-data applies
 ; (fixnum numeral, lambda/nif, map, opaque handle) take their own paths.
 (assert
  ; --- row KChain: a chain IS its own Church eliminator, (p f) == (f (A p) (B p)).
@@ -43,7 +43,7 @@
  ;     it (and it shares the failure mode that bit string/sym apply). ---
  (= '(1 (2)) ('(1 2) (\ a b (L a b))))        ; f sees car=1, cdr='(2)
  (= '(1 (2 3)) ('(1 2 3) (\ a b (L a b))))    ; longer cdr passed whole
- (= '(1 2) ((hook 1 2) (\ a b (L a b))))         ; improper chain: cdr=2 (a fixnum), raw
+ (= '(1 2) ((link 1 2) (\ a b (L a b))))         ; improper chain: cdr=2 (a fixnum), raw
  (= '(1 2) ('(1 2) (+)))                        ; arg = a nif: (+ 1 '(2)) = (1 2)
  (= '(1 2 3) ('(1 2 3) (+)))                    ; (+ 1 '(2 3))
  (nilp ('(1) (\ a b b)))                      ; cdr of (1) is nil -> 0

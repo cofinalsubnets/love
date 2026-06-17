@@ -76,7 +76,7 @@
        THEN (? (&& (chainp IF) (chainp (cup IF))) (caup (cup IF)) 0)
        R    (? (&& (chainp IF) (chainp (cup (cup IF)))) (caup (cup (cup IF))) 0)
        updates (? (chainp THEN) (cup THEN) 0)
-       fr   (hook (caup lam) vars)                                  ; cgl frame: {n, v0..vk}
+       fr   (link (caup lam) vars)                                  ; cgl frame: {n, v0..vk}
        ok (&& (chainp lam) (= (cap lam) '\) (symp (caup lam)) (chainp (cup (cup lam))) !(chainp (cup (cup (cup lam))))
               (chainp BODY) (chainp S) (= (cap S) ':) (chainp (cup S)) !(chainp (cup (cup (cup S))))   ; (: G IF)
               (chainp G) (symp GO) (chainp vars) (all symp vars) (distinctp vars) !(memq GO vars)

@@ -5,9 +5,9 @@
 ; governs the next form -- the test runner reads and compiles one form at a time.
 (: op-tbl operators)             ; leak to global scope for this file
 (assert (tabp op-tbl)
- ((hook 'sat 1) = (op-tbl '$)) ((hook 'nilp 1) = (op-tbl '!)) ((hook 'dot 1) = (op-tbl '.))
+ ((link 'sat 1) = (op-tbl '$)) ((link 'nilp 1) = (op-tbl '!)) ((link 'dot 1) = (op-tbl '.))
  (2 = (op-tbl '+)) (2 = (op-tbl '-)) (2 = (op-tbl '%)) (3 = (op-tbl '?))
- ((hook 'pin 3) = (op-tbl '<-)) ((hook 'peep 3) = (op-tbl '->)))
+ ((link 'pin 3) = (op-tbl '<-)) ((link 'peep 3) = (op-tbl '->)))
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
 (assert ('^ = (read (sip '(94)) 99)) ('+ = (read (sip '(43)) 99)))
@@ -16,7 +16,7 @@
 ; xor nif throughout -- the factorization law is greedy longest-prefix, so the
 ; two-char key wins while pinned (^ alone could never chain: a non-last factor
 ; must be arity one and ^ is at two).
-(pin op-tbl '^^ (hook 'list 2))
+(pin op-tbl '^^ (link 'list 2))
 (assert
  ('(1 2) = (1 ^^ 2))                            ; infix: captures the left operand
  ('(1 (2 3)) = (1 ^^ 2 ^^ 3))                   ; nests RIGHT-associatively
@@ -24,9 +24,9 @@
  ('("a" 7) = ("a" ^^ (tally "seven!!"))))      ; composes with the count word
 
 ; rebind: an alias at three, then at one
-(pin op-tbl '^^ (hook 'L 3))
+(pin op-tbl '^^ (link 'L 3))
 (assert ('(1 2 3) = (1 ^^ 2 3)) ('((1 2 3) 4 5) = ((1 ^^ 2 3) ^^ 4 5)))
-(pin op-tbl '^^ (hook 'inc 1))
+(pin op-tbl '^^ (link 'inc 1))
 (assert (6 = ^^5) (7 = ^^^^5)                   ; at one: prefix; chains factor greedily
         (0 = !^^5))                             ; mixed chain: (nilp (inc 5))
 

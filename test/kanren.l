@@ -5,10 +5,10 @@
    (? (= k (cap ks)) vs (loop k (cup ks) (cup vs))))
   (loop k (cap d) (cup d)))
  (dict_get d k) (: x (dict_has d k) (? (chainp x) (cap x)))
- (dict_set d k v) (hook (hook k (cap d)) (hook v (cup d)))
+ (dict_set d k v) (link (link k (cap d)) (link v (cup d)))
  (mintp x) (&& (symp x) (symp (string x)))   ; string of a named sym is its name; of a mint, itself
  (var? x) (&& (chainp x) (mintp (cup x)))
- (var x) (hook x (nom 0))
+ (var x) (link x (nom 0))
  empty_dict '(0)
  has_s dict_has
  ext_s dict_set
@@ -28,7 +28,7 @@
   (? (nilp i) s
    (s (\ _ s)
       (stake i)
-      (\ x s (hook x (stake (+ -1 i) s)))))
+      (\ x s (link x (stake (+ -1 i) s)))))
  (smap f s)
   (s (\ _ s)
      (\ s _ m _ (m (smap f s)))
@@ -37,7 +37,7 @@
   (s (\ _ z)
      (sfold f z)
      (\ x s (f x (sfold f z s))))
- slist (sfold hook 0)
+ slist (sfold link 0)
  (est u v s) (:
   (walk u s) (? (nilp (var? u)) u
               (: t (has_s s u)
@@ -51,10 +51,10 @@
  (Run n ks g) (:
   (walk_star u s) (?
    (var? u) (: t (has_s s u) (? (chainp t) (walk_star (cap t) s) u))
-   (chainp u) (hook (walk_star (cap u) s) (walk_star (cup u) s))
+   (chainp u) (link (walk_star (cap u) s) (walk_star (cup u) s))
    u)
   (reify st) (flip catmap ks (\ k
-   (: it (has_s (hook (map cap (cap st)) (cup st)) k)
+   (: it (has_s (link (map cap (cap st)) (cup st)) k)
     (? (chainp it) (L k (walk_star (cap it) st))))))
   (map reify ((? n (stake n) slist) (g empty_dict)))))
 
@@ -64,7 +64,7 @@
  (foldl (\ a b (L (\ a b s (s_star (a s) b)) a b)) x r))))
 (:: 'vel (\ xs (: x (cap xs) r (cup xs)
  (foldl (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) x r))))
-(:: '\\ (\ a (hook (hook '\ a) (map (\ a (L var (L '\ a))) (init a)))))
+(:: '\\ (\ a (link (link '\ a) (map (\ a (L var (L '\ a))) (init a)))))
 
 (assert
  (unord_eq '(1 2 3) '(2 1 3))

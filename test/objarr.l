@@ -4,7 +4,7 @@
 ; strings, symbols and nested arrays -- and is the one tuple type the collector
 ; traces element-by-element. a one-cell array demotes to its value (a boxed scalar is just a value).
 
-(: (oa-list n acc) (? (< n 1) acc (oa-list (- n 1) (hook n acc)))   ; build (1 .. n)
+(: (oa-list n acc) (? (< n 1) acc (oa-list (- n 1) (link n acc)))   ; build (1 .. n)
    (oa-churn n)    (? (< n 1) 0 (: g (oa-list 300) (oa-churn (- n 1)))) ; alloc + discard
    oa-big     (100 2)                          ; a bignum (past fixnum/box range)
    oa-vals  (L oa-big (* oa-big oa-big) (+ oa-big 7) "hi" 'sym)

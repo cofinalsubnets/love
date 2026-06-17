@@ -13,12 +13,12 @@
 ; yet change the parse). Spaces inside a string literal are data and never touched.
 ; Surviving bytes are C-escaped.
 
-(: (s2cl s) ((: (g i) (? (< i (tally s)) (hook (peep s i 0) (g (+ 1 i))))) 0)  ; string -> charlist
+(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)  ; string -> charlist
    ; the datums readable from s (stop on the eof sentinel or an incomplete form,
    ; which read signals by returning the port itself) -- the full forms, compared
    ; STRUCTURALLY, not just counted: a re-tokenization can preserve the count yet
    ; change the parse (name'(a b) and name '(a b) both read two datums).
-   (datums s) ((: (g p e a) (: r (read p e) (? (| (= e r) (= p r)) (rev a) (g p e (hook r a)))))
+   (datums s) ((: (g p e a) (: r (read p e) (? (| (= e r) (= p r)) (rev a) (g p e (link r a)))))
                (sip (s2cl s)) (nom 0) 0)
    ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
    (form1 cs) (: e (nom 0) p (sip cs) r (read p e) (? (| (idp r e) (idp r p)) 0 (show r)))
@@ -82,7 +82,7 @@
                        (g (cup cs) ctx 0)                 ; drop the space; ctx keeps accruing
                        (: _ (eb c) (g (cup cs) 0 0)))     ; keep it: a real boundary
                     (: _ (eb c)
-                       (g (cup cs) (? (hardb c) 0 (hook c ctx)) (= c 34))))))))
+                       (g (cup cs) (? (hardb c) 0 (link c ctx)) (= c 34))))))))
         (s2cl acc) 0 0)
    _ (fputc out 34)                                      ; closing "
    (fputc out 10))

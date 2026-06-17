@@ -8,7 +8,7 @@
 ; and the complex form ~(re im)
 ; reconstruct the value under eval -- those use rt.
 ; s2cl turns a string into a charlist of byte codes (get is generic over strings).
-(: (s2cl s) ((: (g i) (? (< i (tally s)) (hook (peep s i 0) (g (+ 1 i))))) 0)
+(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
    (rdr s) (read (sip (s2cl s)) (nom 0))
    (rd x) (rdr (show x))
    (rt x) (ev (rdr (show x))))

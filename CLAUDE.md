@@ -277,7 +277,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; --- arrays --- (arr type shape vals) is THE typed constructor: vals 0 zero-fills, a list
 ; fills row-major; (array shape elem..) infers the type and curries; @(..) is a rank-1
 ; literal; (iota n) is jot's array twin -- the z-array '(0 .. n-1) filled in one C loop,
-; no hook spine, so (asum (iota n)) reduces a range end to end in C.
+; no link spine, so (asum (iota n)) reduces a range end to end in C.
 ; a ONE-CELL array DEMOTES to its lone scalar gem -- a rank-0 (empty-shape) array, a
 ; rank-1-len-1 like @(5), or a 1x1 contraction IS the value (so @(5) = 5, (arr R '(1)
 ; '(3.5)) = 3.5, (iota 1) = 0): an array exists only at tally >= 2. there is thus NO
@@ -304,7 +304,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 (inner @(1 2 3) @(4 5 6)); 32            +.x dot product
 (asum (arr Z '(0) 0))    ; 0             empty reduction = the monoid unit
 
-; --- chains & lists --- hook builds the chain (the cartesian-product kind, classically the
+; --- chains & lists --- link builds the chain (the cartesian-product kind, classically the
 ; pair); cap and cup are its two projections -- the matched pair the string diagrams bend,
 ; cap the head and cup the rest, each the other's mirror (no cap: you have reached the end
 ; of the list); caap caup .. cuuup are the compounds, read right to left like their classic
@@ -519,7 +519,7 @@ not-in-the-book      ; ()        a missing name reads the zero point (helpless)
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), the repl sentinels, every hot lvm_* pointer,
 ; and finally the `book` itself. compiled references were folded, so only the names die.
-; names the printer, the reader, or an expander EMITS (uq ltuple hook pin
+; names the printer, the reader, or an expander EMITS (uq ltuple link pin
 ; tablet mono ..) stay, as do the
 ; C-resolved hooks (num-ap add mul help) and the repl's test-driven editor surface.
 ; demo:

@@ -18,8 +18,8 @@
 ; deopt (mov rax,[rsi+8](=interp); mov rsi,rax; mov rax,[rsi]; jmp rax) -- a tail
 ; apply of interp to the original arg (still in Sp[0]). putfix is add rax,rax (its OF
 ; flag is exactly the 62-bit fixnum boundary); jno; or rax,1.
-(: (le8 n) ((: (go i) (? (< i 8) (hook (& (>> n (* 8 i)) 255) (go (+ i 1))) 0)) 0)  ; n -> 8 LE bytes
-   (le4 n) ((: (go i) (? (< i 4) (hook (& (>> n (* 8 i)) 255) (go (+ i 1))) 0)) 0)  ; n -> 4 LE bytes
+(: (le8 n) ((: (go i) (? (< i 8) (link (& (>> n (* 8 i)) 255) (go (+ i 1))) 0)) 0)  ; n -> 8 LE bytes
+   (le4 n) ((: (go i) (? (< i 4) (link (& (>> n (* 8 i)) 255) (go (+ i 1))) 0)) 0)  ; n -> 4 LE bytes
    deopt    '(72 139 70 8  72 137 198  72 139 6  255 224)   ; mov rax,[rsi+8]; mov rsi,rax; mov rax,[rsi]; jmp rax
    ; guard d / guardz d: skip the inline deopt unless OF (guard) / unless nonzero
    ; (guardz, for divide-by-zero); on deopt UNWIND d pending machine-stack operands
@@ -30,7 +30,7 @@
    ld-i '(76 137 208)                                                           ; loop var i (raw, in r10)
    untag '(72 209 248)                                                           ; sar rax,1
    (fetch i) (? (= i 0)        '(72 139 1)                                       ; mov rax,[rcx]       (TAGGED, no untag)
-                (< (* 8 i) 128) (cat '(72 139 65) (hook (* 8 i) 0))              ; mov rax,[rcx+disp8]
+                (< (* 8 i) 128) (cat '(72 139 65) (link (* 8 i) 0))              ; mov rax,[rcx+disp8]
                                 (cat '(72 139 129) (le4 (* 8 i))))               ; mov rax,[rcx+disp32]
    ; FIXNUM INPUT GUARD: native arithmetic assumes fixnums (sar/imul/idiv), so a
    ; NON-fixnum arg (an even/heap word -- a list, mint, the zero point, ...) must DEOPT

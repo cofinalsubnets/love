@@ -55,7 +55,7 @@
       (? (&& (> j i) (= 58 (peep line j 0)))               ; hexrun then ':'
          (: k (skip-ws line (+ j 1))
             (? (> k (+ j 1))                                ; need >=1 ws after ':'
-               (hook (snip line i j) (snip line k (tally line)))
+               (link (snip line i j) (snip line k (tally line)))
                0))
          0)))
 
@@ -83,7 +83,7 @@
 (: (lines s)
    ((: (f start i)
        (? (< i (tally s))
-          (? (= 10 (peep s i 0)) (hook (snip s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
+          (? (= 10 (peep s i 0)) (link (snip s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
           (? (< start i) (L (snip s start i)) 0)))
     0 0))
 
@@ -115,7 +115,7 @@
    (find-symtab d base ent n k)                           ; SHT_SYMTAB (2) -> (off . size), else 0
      (? (< k n)
         (: sh (+ base (* k ent))
-           (? (= 2 (u32 d (+ sh 4))) (hook (u64 d (+ sh 24)) (u64 d (+ sh 32)))
+           (? (= 2 (u32 d (+ sh 4))) (link (u64 d (+ sh 24)) (u64 d (+ sh 32)))
               (find-symtab d base ent n (+ k 1))))
         0)
    (collect-syms d off n k m)                             ; Elf64_Sym (24 B): value -> size, sized FUNCs
@@ -131,7 +131,7 @@
 ; --- the scan (vmret.py scan(), grouping by function header) ----------
 ; close the current watched function: flag it iff it collected any rets.
 (: (close name watching rets flagged)
-   (? (&& watching (chainp rets)) (hook (hook name (rev rets)) flagged) flagged))
+   (? (&& watching (chainp rets)) (link (link name (rev rets)) flagged) flagged))
 
 ; -> (flagged . total), where flagged = ((name . rets) ...), total = count of
 ; prefix* functions seen. prefix, the ret matcher, and a function-start -> size
@@ -155,9 +155,9 @@
                       (loop rest h w2 lim2 0 fl2 (? w2 (+ total 1) total))))
                 (: ins (? watching (parse-insn line) 0)         ; instruction: maybe a ret
                    (? (&& ins (< (hex->int (cap ins)) lim) (ret? (mnemonic (cup ins))))
-                      (loop rest name watching lim (hook (cap ins) rets) flagged total)
+                      (loop rest name watching lim (link (cap ins) rets) flagged total)
                       (loop rest name watching lim rets flagged total)))))
-          (hook (close name watching rets flagged) total)))
+          (link (close name watching rets flagged) total)))
     ls 0 0 BIG 0 0 0))
 
 ; --- report helpers --------------------------------------------------
@@ -177,7 +177,7 @@
 ; the merge split counts the SPINE (entries are chains; $ is the net sum), so fold.
 (: (emerge a b) (? (chainp a) (? (chainp b)
                      (? (str< (cap (cap a)) (cap (cap b)))
-                        (hook (cap a) (emerge (cup a) b)) (hook (cap b) (emerge a (cup b))))
+                        (link (cap a) (emerge (cup a) b)) (link (cap b) (emerge a (cup b))))
                      a) b)
    (llen l) (foldl (\ n _ (+ 1 n)) 0 l)
    (esort l) (? (chainp (cup l)) (: n (>> (llen l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
@@ -202,7 +202,7 @@
 (: (try-cands cs elf)
    (? (chainp cs)
       (: r (run (L (cap cs) "-d" "--no-show-raw-insn" elf))
-         (? (chainp r) (hook (cap cs) r) (try-cands (cup cs) elf)))
+         (? (chainp r) (link (cap cs) r) (try-cands (cup cs) elf)))
       0))
 
 ; --- driver ----------------------------------------------------------

@@ -307,7 +307,7 @@ static char const tests0[] =
 #include "tests0.h"
  ;
 static char const
- s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (tally s)) (hook (peep s i 0) (g (+ 1 i))))) 0))",
+ s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))",
  runner[] = "(zevs (sip (s2cl tests)))";   // the stream shell (repl.l) drinks the baked corpus
 
 // With args, run the build tool (lcat / gen_data) through the CLI driver.

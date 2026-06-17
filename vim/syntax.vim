@@ -15,7 +15,7 @@ syn iskeyword @,33,37,38,42-43,45-47,48-57,58,60-63,92,94-95,124,126
 syn keyword AiForm : ? \\
 
 " Built-in functions (C nifs) + prel functions
-syn keyword AiFunc hook cap cup caap caup cuap cuup
+syn keyword AiFunc link cap cup caap caup cuap cuup
 syn keyword AiFunc caaap caaup cauap cauup cuaap cuaup cuuap cuuup
 syn keyword AiFunc id co const flip
 syn keyword AiFunc map foldl foldr foldl1 foldr1 filter init last each all any cat catmap

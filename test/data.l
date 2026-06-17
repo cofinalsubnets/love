@@ -30,12 +30,12 @@
  (assert
     (= 2 (sat t))
     (= 2 (ln (keys t)))
-    (: (lll t) (foldl (\ l k (hook k (hook (Get k) l))) 0 (keys t))
+    (: (lll t) (foldl (\ l k (link k (link (Get k) l))) 0 (keys t))
      (= (* 2 (sat t)) (ln (lll t))))))
 
 (:
  (stripPrefix p s) (? (= p (snip s 0 (tally p))) (snip s (tally p) (tally s)))
- (lit l y n s) ((\ ss (? ss (y ss (hook l 0)) (n s))) (stripPrefix l s))
+ (lit l y n s) ((\ ss (? ss (y ss (link l 0)) (n s))) (stripPrefix l s))
  (drop p y) (p (\ s _ (y s 0)))
  (opt p y _) (p y (\ s (y s 0)))
  (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
@@ -59,9 +59,9 @@
   (= (peep "vaporeon" 3 0) ("vaporeon" 3))   ; identical to get with a 0 default
   (= "eon" (stripPrefix "vapor" "vaporeon"))
  (= '("eon" "vapor")
-  (lit "vapor" hook 0 "vaporeon"))
+  (lit "vapor" link 0 "vaporeon"))
  (= '("rrq" "R")
-  (alt (lit "r") (lit "R") hook 0 "Rrrq"))
+  (alt (lit "r") (lit "R") link 0 "Rrrq"))
  (= '("q" "R" "r" "r")
-  (rep (alt (lit "r") (lit "R")) hook 0 "Rrrq"))))
+  (rep (alt (lit "r") (lit "R")) link 0 "Rrrq"))))
 

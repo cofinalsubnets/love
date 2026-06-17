@@ -31,10 +31,10 @@
      (| (= h "-l") (= h "--load"))    (: _ (need h t) _ (load1 (cap t)) (pre (cup t)))
      (| (= h "-v") (= h "--version")) (version 0)
      (| (= h "-h") (= h "--help"))    (usage 0)
-     (| (= h "-e") (= h "--eval"))    (: _ (need h t) (hook 'eval t))
-     (= h "--")                        (? (chainp t) (hook 'file t) (hook 'stdin 0))
-     (hook 'file a)))                  ; a positional file is the program
-    (hook 'stdin 0)))
+     (| (= h "-e") (= h "--eval"))    (: _ (need h t) (link 'eval t))
+     (= h "--")                        (? (chainp t) (link 'file t) (link 'stdin 0))
+     (link 'file a)))                  ; a positional file is the program
+    (link 'stdin 0)))
 (: parsed (pre (cup argv)))                         ; runs -l preloads + -v/-h; returns the program kind
 (: argv (? (= (cap parsed) 'eval) (cup (cup parsed)) (cup parsed)))  ; DEFGLOB: rebind argv to the program's view
 (? (= (cap parsed) 'eval) (eval1 (caup parsed))     ; run the program: -e code / a file / stdin

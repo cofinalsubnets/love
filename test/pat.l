@@ -15,9 +15,9 @@
   _ (ff id p)
   ks (keys t)
 
-  lam (hook '\ (cat ks (list b)))
+  lam (link '\ (cat ks (list b)))
   y (nom 0)
-  (ev (list '\ y (hook lam (map (\ k (list (peep t k 0) y)) ks)))))
+  (ev (list '\ y (link lam (map (\ k (list (peep t k 0) y)) ks)))))
 
  (pmatch x1 x2 f) (:
  p (pat2pred x1)

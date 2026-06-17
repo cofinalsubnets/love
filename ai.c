@@ -118,7 +118,7 @@ lvm_t lvm_kcall,
  // the arithmetic lane the scalar arith slow paths divert into.
  lvm_cplx, lvm_Cp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,
  lvm_bxor,  lvm_bsr,    lvm_bsl,    lvm_snip,
- lvm_hook,   lvm_car,  lvm_cdr,    lvm_puts,
+ lvm_link,   lvm_car,  lvm_cdr,    lvm_puts,
  lvm_getc,  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
  lvm_sort,  lvm_tally,
  lvm_put, lvm_pull, lvm_table,   lvm_keys,  lvm_dig,
@@ -618,7 +618,7 @@ lvm_t lvm_fault;
  _(nif_same, "idp", s2(lvm_same)) \
  _(nif_bsl, "<<", s2(lvm_bsl)) _(nif_bsr, ">>", s2(lvm_bsr))\
  _(nif_band, "&", s2(lvm_band)) _(nif_bor, "|", s2(lvm_bor)) _(nif_bxor, "^", s2(lvm_bxor))\
- _(nif_hook, "hook", s2(lvm_hook)) _(nif_car, "cap", s1(lvm_car)) _(nif_cdr, "cup", s1(lvm_cdr))\
+ _(nif_link, "link", s2(lvm_link)) _(nif_car, "cap", s1(lvm_car)) _(nif_cdr, "cup", s1(lvm_cdr))\
  _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
  _(nif_snip, "snip", s3(lvm_snip)) \
  _(nif_read, "read", s2(lvm_read))\
@@ -1505,7 +1505,7 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
    um(g);
    g = ai_push(g, 1, ops);                                   // tail = (params… body)
    while (ni-- > 0) g = gxr(g);                             // fold: imps ++ ops
-   g = gxl(pushl(g));                                       // hook '\ onto the front
+   g = gxl(pushl(g));                                       // link '\ onto the front
    if (ai_ok(g)) d->src = pop1(g); }
   if (ai_ok(g = ai_push(g, 2, c1_ret, d)))
     ip = g->ip,
@@ -2716,7 +2716,7 @@ static word *seen_slot(struct ai *g, uintptr_t off) {
 static bool seen_member(struct ai *g, uintptr_t off, word x) {
  for (word l = *seen_slot(g, off); chainp(l); l = B(l)) if (A(l) == x) return true;
  return false; }
-static struct ai *seen_push(struct ai *g, uintptr_t off, word x) {   // hook x onto seen
+static struct ai *seen_push(struct ai *g, uintptr_t off, word x) {   // link x onto seen
  if (!ai_ok(g = ai_push(g, 1, x))) return g;                         // protect x across GC
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return ai_pop(g, 1);
  struct ai_chain *p = bump(g, Width(struct ai_chain));
@@ -2867,7 +2867,7 @@ static ai_inline struct ai*ioput_map(struct ai*g, word x, uintptr_t off) {
   if (s[2 * --i] != map_gap) {
    struct ai_chain *kv = p++;
    ini_chain(kv, s[2 * i], s[2 * i + 1]);                 // (k . v)
-   ini_chain(p, (word) kv, list), list = (word) p++; }    // hook onto the snapshot
+   ini_chain(p, (word) kv, list), list = (word) p++; }    // link onto the snapshot
  fs0(g) = list;
  if (!chainp(fs0(g))) g = ioputcs(g, "(tablet 0)");             // the empty map prints (tablet 0): "#()" reads as #0, the 0-box
  else {
@@ -4316,7 +4316,7 @@ op11(lvm_intf, flop(Sp[0]) ? putcharm((intptr_t) flo_get(Sp[0])) : Sp[0])
 op11(lvm_car, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cdr, chainp(Sp[0]) ? B(Sp[0]) : nil)
 op11(lvm_chainp, chainp(Sp[0]) ? putcharm(1) : nil)
-lvm(lvm_hook) {
+lvm(lvm_link) {
  Have(Width(struct ai_chain));
  struct ai_chain *w = (struct ai_chain*) Hp;
  Hp += Width(struct ai_chain);
@@ -4427,9 +4427,9 @@ avm_ovf(sub, __builtin_sub_overflow)
 // order survives, since concatenation is inherently ordered. (nil counts as the
 // number 0 here, not the empty list.)
 //   str + str   -> byte concat            list + list -> spine append
-//   str + list  -> (hook str list)        list + str  -> (append list (list str))
+//   str + list  -> (link str list)        list + str  -> (append list (list str))
 //   num + str   -> byte at front          str + num   -> byte at back
-//   num + list  -> (hook num list)        list + num  -> (append list (list num))
+//   num + list  -> (link num list)        list + num  -> (append list (list num))
 // RUNTIME FLAG: ai_add_lr selects order-preserving (left->front, right->back); set
 // it false for the commutative reading (smaller operand always joins the front, so
 // a+b == b+a like numeric add). A plain mutable global -> toggleable at runtime.
@@ -4460,7 +4460,7 @@ static lvm(lvm_add_seq) {
  if (chainp(a) || chainp(b)) {                        // elt <-> list
   bool front = !ai_add_lr || chainp(b);              // element on the left -> front
   word lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
-  if (front) { Sp[0] = elt, Sp[1] = lst; return Ap(lvm_hook, g); }  // (hook elt list)
+  if (front) { Sp[0] = elt, Sp[1] = lst; return Ap(lvm_link, g); }  // (link elt list)
   uintptr_t n = llen(lst) + 1; Have(n * Width(struct ai_chain));        // append elt at tail
   lst = chainp(Sp[0]) ? Sp[0] : Sp[1], elt = chainp(Sp[0]) ? Sp[1] : Sp[0];
   struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
@@ -4622,7 +4622,7 @@ static lvm(data_num_apply) {
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
-// ((a . b) g) == (g a b): a chain is its own Church eliminator (hook = \a b g.g a b).
+// ((a . b) g) == (g a b): a chain is its own Church eliminator (link = \a b g.g a b).
 // Re-enter the apply protocol via a static driver text: lay the stack as the two
 // curried calls expect, then [ap ; swap+ap ; ret0] runs ((g a) b). pair_swap reorders
 // [result, b] -> [b, result] so the second ap sees arg=b, fn=(g a). The driver lives
@@ -5653,7 +5653,7 @@ lvm(lvm_arr) {
   return Sp[2] = _res, Sp += 2, Ip++, Continue(); }
  return Sp[2] = word(v), Sp += 2, Ip++, Continue(); }
 
-// (iota n) -- a z-array of the first n charms, 0..n-1, filled in C (no hook
+// (iota n) -- a z-array of the first n charms, 0..n-1, filled in C (no link
 // spine): the array twin of `jot`. n<0 or non-fixnum -> nil. This is the baked
 // range constructor, so (asum (iota n)) reduces a range end to end in C.
 lvm(lvm_iota) {
@@ -5681,7 +5681,7 @@ lvm(lvm_alen) {
  if (!packp(x)) return Sp[0] = nil, Ip++, Continue();
  return Sp[0] = putcharm(vec_nelem(vec(x))), Ip++, Continue(); }
 
-// dimensions as a list (allocates rank hook cells), nil for a non-vec.
+// dimensions as a list (allocates rank link cells), nil for a non-vec.
 lvm(lvm_ashape) {
  word x = Sp[0];
  if (!packp(x)) return Sp[0] = nil, Ip++, Continue();

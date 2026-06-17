@@ -13,25 +13,25 @@
 ; to see the offending input.
 (:
  ; --- generator monad: pure / map / bind over the functional RNG ---
- (fz-pure v) (\ st (hook v st))                          ; ignores the stream
- (fz-map f g) (\ st (: r (g st) (hook (f (cap r)) (cup r))))
+ (fz-pure v) (\ st (link v st))                          ; ignores the stream
+ (fz-map f g) (\ st (: r (g st) (link (f (cap r)) (cup r))))
  (fz-bind g k) (\ st (: r (g st) ((k (cap r)) (cup r)))) ; feed value into next gen
  ; --- primitive draws (every range below keeps hi > lo so randint never mods by 0) ---
  (fz-nat n) (\ st (randint st n))                        ; [0, n)
  (fz-int lo hi) (fz-map (+ lo) (fz-nat (- hi lo)))       ; [lo, hi)
- (fz-elt l) (\ st (: r (randint st (tally l)) (hook (cap (drop (cap r) l)) (cup r))))
+ (fz-elt l) (\ st (: r (randint st (tally l)) (link (cap (drop (cap r) l)) (cup r))))
  (fz-oneof gs) (fz-bind (fz-nat (tally gs)) (\ k (cap (drop k gs))))  ; pick a generator
  ; --- structured draws: fixed repetition, bounded-length list, tuples ---
  (fz-rep n g) (? (< n 1) (fz-pure 0)
-    (\ st (: a (g st) b ((fz-rep (- n 1) g) (cup a)) (hook (hook (cap a) (cap b)) (cup b)))))
+    (\ st (: a (g st) b ((fz-rep (- n 1) g) (cup a)) (link (link (cap a) (cap b)) (cup b)))))
  (fz-list mx g) (\ st (: r (randint st (+ 1 mx)) ((fz-rep (cap r) g) (cup r))))  ; pin in [0,mx]
- (fz-pair2 ga gb) (\ st (: a (ga st) b (gb (cup a)) (hook (L (cap a) (cap b)) (cup b))))
+ (fz-pair2 ga gb) (\ st (: a (ga st) b (gb (cup a)) (link (L (cap a) (cap b)) (cup b))))
  (fz-trip ga gb gc)
-   (\ st (: a (ga st) b (gb (cup a)) c (gc (cup b)) (hook (L (cap a) (cap b) (cap c)) (cup c))))
+   (\ st (: a (ga st) b (gb (cup a)) c (gc (cup b)) (link (L (cap a) (cap b) (cap c)) (cup c))))
  ; --- the driver: N trials from `seed`, first counterexample wins ---
  (fz-find n seed g p)
-   (: (go n st) (? (< n 1) (hook 1 0)
-        (: r (g st) (? (p (cap r)) (go (- n 1) (cup r)) (hook 0 (cap r)))))
+   (: (go n st) (? (< n 1) (link 1 0)
+        (: r (g st) (? (p (cap r)) (go (- n 1) (cup r)) (link 0 (cap r)))))
       (go n (rng-seed seed)))
  (fz-ok n seed g p) (cap (fz-find n seed g p)))
 
@@ -100,7 +100,7 @@
 (assert
  (fz-ok 300 20 fz-l (\ l (= l (rev (rev l)))))                          ; rev is involutive
  (fz-ok 300 21 fz-l (\ l (= l (map id l))))                            ; map id = id
- (fz-ok 300 22 fz-l (\ l (= l (foldr hook 0 l))))                      ; foldr X nil = id
+ (fz-ok 300 22 fz-l (\ l (= l (foldr link 0 l))))                      ; foldr X nil = id
  ; cat adds spine lengths, and the NET law holds exactly: $ of a cat is the
  ; saturated sum of the two lists' element sums (one clamp, at the top)
  (fz-ok 300 23 (fz-pair2 fz-l fz-l)
@@ -123,11 +123,11 @@
            p (\ x (= 0 (% x 2)))
            (&& (all p (filter p l)) (<= (ln (filter p l)) (ln l))))))
  ; an element consed on is found by memq
- (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (memq (cap v) (hook (cap v) (caup v))))))
+ (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (memq (cap v) (link (cap v) (caup v))))))
 
 ; ---- print -> read round trip on random s-expressions ----
 ; reuses the io.c reader: serialize via show, re-read the bytes, expect equality.
-(: (fz-s2cl s) ((: (g i) (? (< i (tally s)) (hook (peep s i 0) (g (+ 1 i))))) 0)
+(: (fz-s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
    (fz-rd x) (read (sip (fz-s2cl (show x))) (nom 0))
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof (L (fz-elt fz-syms) (fz-int -500 500)))
@@ -144,7 +144,7 @@
 ; fz-arrpair draws two z vectors of the same random length so elementwise ops line up.
 (: fz-arrpair (fz-bind (fz-int 1 6) (\ n (\ st
     (: a ((fz-rep n fz-elem) st) b ((fz-rep n fz-elem) (cup a))
-       (hook (L (arr Z (L n) (cap a)) (arr Z (L n) (cap b))) (cup b)))))))
+       (link (L (arr Z (L n) (cap a)) (arr Z (L n) (cap b))) (cup b)))))))
 (assert
  (fz-ok 250 40 fz-arrpair (\ v (aall (= (+ (cap v) (caup v)) (+ (caup v) (cap v))))))  ; + commutes
  (fz-ok 250 41 fz-arrpair (\ v (aall (= (* (cap v) (caup v)) (* (caup v) (cap v))))))  ; * commutes
@@ -168,7 +168,7 @@
    fz-s3   (fz-trip fz-s fz-s fz-s)
    fz-cl1  (fz-bind (fz-int 1 12) (\ n (fz-rep n fz-byte))) ; nonempty charlist
    ; a string paired with a split point i in [0, pin]
-   fz-s-i  (fz-bind fz-s (\ s (fz-map (\ i (hook s i)) (fz-int 0 (+ 1 (tally s))))))
+   fz-s-i  (fz-bind fz-s (\ s (fz-map (\ i (link s i)) (fz-int 0 (+ 1 (tally s))))))
    ; a string with 0 <= i <= j <= pin, as (L s i j)
    fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (+ 1 (tally s)))
               (\ i (fz-map (\ j (L s i j)) (fz-int i (+ 1 (tally s)))))))))

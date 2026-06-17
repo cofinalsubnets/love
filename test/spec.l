@@ -42,7 +42,7 @@
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a chain of nothings is nothing, recursively
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
- (1 = $(hook 1 2)) !(hook 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
+ (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
  (8 = $(L ~(3 4) ~(-3 4))) !(L ~(0 5) -1)        ; phases sum as vectors; the order signs the TOTAL, once
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
@@ -164,11 +164,11 @@
  (: M (inner (arr Z '(2 3) '(1 2 3 4 5 6)) (arr Z '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
     (&& ('(2 2) = (ashape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
-; --- chains & lists --- hook builds the chain; cap/cup the two projections (caap..cuuup
+; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
 ; the compounds); sort/msort by the total order; (jot n) the first n charms; the higher-order
 ; functions live in the prel.
 (assert
- (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (hook 1 (hook 2 0)))
+ (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 0)))
  !(cap 0) ('x = (cap 'x)) !(cup 'x)              ; no cap at the end of the list; an atom is its own cap
  ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n charms; the empty count is nothing
  ('(2 3 4) = (map inc '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
@@ -261,8 +261,8 @@
  (12 = (foldl (+) 0 '(3 4 5)))
  (: t operators
     (&& (tabp t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%))
-        ((hook 'sat 1) = (t '$)) ((hook 'nilp 1) = (t '!))
-        ((hook 'pin 3) = (t '<-)) ((hook 'peep 3) = (t '->)))))
+        ((link 'sat 1) = (t '$)) ((link 'nilp 1) = (t '!))
+        ((link 'pin 3) = (t '<-)) ((link 'peep 3) = (t '->)))))
 
 ; --- macros --- a macro maps an arg list to code; install with `::`. the prel ships
 ; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, :- and ?-, >>= <=<.

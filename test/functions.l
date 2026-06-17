@@ -73,7 +73,7 @@
 
 (: (c1895 m n) (+ m (/ (* (+ m n) (+ m (+ n 1))) 2))
    (c1895_inv p) (:
-    (f t n) (? (> (+ t n) p) (hook t (- n 1)) (f (+ t n) (+ n 1)))
+    (f t n) (? (> (+ t n) p) (link t (- n 1)) (f (+ t n) (+ n 1)))
     x (f 0 1)
     m (- p (cap x))
     n (- (cup x) m)

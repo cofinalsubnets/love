@@ -3,7 +3,7 @@
 ; is a sat (a non-negative fixnum), a charms is a charlist. zev reads one
 ; form structurally and compiles it through opfix/wev/ana/cata, so the
 ; whole hull -- characters to top -- closes in lisp.
-(: (zs s) ((: (g i) (? (< i (tally s)) (hook (s i) (g (+ 1 i))))) 0)   ; string -> chars
+(: (zs s) ((: (g i) (? (< i (tally s)) (link (s i) (g (+ 1 i))))) 0)   ; string -> chars
  (assert
   (3 = (zev (zs "(+ 1 2)")))                  ; the plain lane
   (3 = (zev (zs "(1 + 2)")))                  ; infix factors through the charm lane
@@ -29,7 +29,7 @@
 ; charms: the global construction -- the lazy colist. (cap cs) is a charm,
 ; ((cup cs) ()) is charms + () (the coproduct, () the end); chars and ports
 ; lift canonically; consumers dispatch on kind (chainp = cell, else end).
-(: (zs2 s) ((: (g i) (? (< i (tally s)) (hook (s i) (g (+ 1 i))))) 0)
+(: (zs2 s) ((: (g i) (? (< i (tally s)) (link (s i) (g (+ 1 i))))) 0)
    cs (charms (zs2 "(+ 1 2)"))
  (assert
   (fixp (cap cs)) (lamp (cup cs))               ; a cell is charm x top
@@ -39,4 +39,4 @@
   (idp () (charms ()))                          ; the end lifts to itself
   ('(40 43 41) = (charms->chars (zs2 "(+)")))   ; realize: charms end () -> chars end 0
   (6 = (zev (charms (sip (zs2 "(* 2 3)")))))    ; a port lifts: the hot charms
-  (1 = (zev (hook 49 (\ _ ()))))))              ; a hand-built one-cell charms: "1"
+  (1 = (zev (link 49 (\ _ ()))))))              ; a hand-built one-cell charms: "1"

@@ -6,16 +6,16 @@
 ; numeric values stand in for character codes; the editor doesn't
 ; interpret them, only the parser does.
 
-(: (k4 u l r d) (hook u (hook l (hook r d)))
-   (k7 u l r d hu hd cur) (hook u (hook l (hook r (hook d (hook hu (hook hd cur))))))
+(: (k4 u l r d) (link u (link l (link r d)))
+   (k7 u l r d hu hd cur) (link u (link l (link r (link d (link hu (link hd cur))))))
 
    (assert
      ; --- edleft: cursor moves left within the line ---
      (= (k4 0 '(1) '(2 3) 0)
         (edleft k4 0 '(2 1) '(3) 0))
      ; edleft at column 0 of a non-top line wraps to end of previous line
-     (= (k4 0 '(2 1) 0 (hook '(3) 0))
-        (edleft k4 (hook '(1 2) 0) 0 '(3) 0))
+     (= (k4 0 '(2 1) 0 (link '(3) 0))
+        (edleft k4 (link '(1 2) 0) 0 '(3) 0))
      ; edleft at start of buffer is a no-op
      (= (k4 0 0 '(1 2) 0)
         (edleft k4 0 0 '(1 2) 0))
@@ -24,8 +24,8 @@
      (= (k4 0 '(1) '(2 3) 0)
         (edright k4 0 0 '(1 2 3) 0))
      ; edright at end of a non-bottom line wraps to start of next
-     (= (k4 (hook '(1 2) 0) 0 '(3 4) 0)
-        (edright k4 0 '(2 1) 0 (hook '(3 4) 0)))
+     (= (k4 (link '(1 2) 0) 0 '(3 4) 0)
+        (edright k4 0 '(2 1) 0 (link '(3 4) 0)))
      ; edright at end of buffer is a no-op
      (= (k4 0 '(2 1) 0 0)
         (edright k4 0 '(2 1) 0 0))
@@ -35,7 +35,7 @@
         (edbsp k4 0 '(2 1) '(3) 0))
      ; edbsp at column 0 merges the current line onto the previous
      (= (k4 0 '(2 1) '(3) 0)
-        (edbsp k4 (hook '(1 2) 0) 0 '(3) 0))
+        (edbsp k4 (link '(1 2) 0) 0 '(3) 0))
      ; edbsp at start of buffer is a no-op
      (= (k4 0 0 '(1) 0)
         (edbsp k4 0 0 '(1) 0))
@@ -45,7 +45,7 @@
         (eddel k4 0 '(1) '(2 3) 0))
      ; eddel at end of line splices the next line onto the current
      (= (k4 0 '(1) '(2 3) 0)
-        (eddel k4 0 '(1) 0 (hook '(2 3) 0)))
+        (eddel k4 0 '(1) 0 (link '(2 3) 0)))
      ; eddel at end of buffer is a no-op
      (= (k4 0 '(1) 0 0)
         (eddel k4 0 '(1) 0 0))
@@ -65,123 +65,123 @@
      ; three-line buffer "1" / "2" / "3", cursor on bottom line:
      ; u = [(2) (1)] (closest first); l = (3); after edtop the cursor
      ; lands at the start of "1" and the rest of the buffer drops below.
-     (= (k4 0 0 '(1) (hook '(2) (hook '(3) 0)))
-        (edtop k4 (hook '(2) (hook '(1) 0)) '(3) 0 0))
+     (= (k4 0 0 '(1) (link '(2) (link '(3) 0)))
+        (edtop k4 (link '(2) (link '(1) 0)) '(3) 0 0))
      ; mirror: cursor on top of "1" / "2" / "3", edbot lands at end of "3"
-     (= (k4 (hook '(2) (hook '(1) 0)) '(3) 0 0)
-        (edbot k4 0 '(1) 0 (hook '(2) (hook '(3) 0))))
+     (= (k4 (link '(2) (link '(1) 0)) '(3) 0 0)
+        (edbot k4 0 '(1) 0 (link '(2) (link '(3) 0))))
      ; mid-line cursor: the current line gets reassembled and dropped
      ; into d at its document position. doc: top "1", mid "89" (cursor
      ; between 8 and 9), bot "4". after edtop: cursor at start of "1",
      ; d holds the reassembled "89" then "4".
-     (= (k4 0 0 '(1) (hook '(8 9) (hook '(4) 0)))
-        (edtop k4 (hook '(1) 0) '(8) '(9) (hook '(4) 0)))
+     (= (k4 0 0 '(1) (link '(8 9) (link '(4) 0)))
+        (edtop k4 (link '(1) 0) '(8) '(9) (link '(4) 0)))
 
      ; --- edup: preserve column on the line above ---
      ; cursor at column 1 of line "xy", previous line "abcd" (chars 1..4):
      ; after edup, cursor at column 1 of "abcd" and "xy" becomes a d entry.
-     (= (k4 0 '(1) '(2 3 4) (hook '(5 6) 0))
-        (edup k4 (hook '(1 2 3 4) 0) '(5) '(6) 0))
+     (= (k4 0 '(1) '(2 3 4) (link '(5 6) 0))
+        (edup k4 (link '(1 2 3 4) 0) '(5) '(6) 0))
      ; column beyond destination length clamps to end of destination line:
      ; cursor was at column 2 of "3456"; the line above is "12" (2 chars)
      ; so l becomes (2 1) -- the whole line reversed, cursor at end
-     (= (k4 0 '(2 1) 0 (hook '(3 4 5 6) 0))
-        (edup k4 (hook '(1 2) 0) '(4 3) '(5 6) 0))
+     (= (k4 0 '(2 1) 0 (link '(3 4 5 6) 0))
+        (edup k4 (link '(1 2) 0) '(4 3) '(5 6) 0))
      ; edup with no line above is a no-op
      (= (k4 0 '(1) '(2) 0)
         (edup k4 0 '(1) '(2) 0))
 
      ; --- eddown: preserve column on the line below ---
-     (= (k4 (hook '(5 6) 0) '(1) '(2 3 4) 0)
-        (eddown k4 0 '(5) '(6) (hook '(1 2 3 4) 0)))
+     (= (k4 (link '(5 6) 0) '(1) '(2 3 4) 0)
+        (eddown k4 0 '(5) '(6) (link '(1 2 3 4) 0)))
      ; eddown with no line below is a no-op
      (= (k4 0 '(1) '(2) 0)
         (eddown k4 0 '(1) '(2) 0))
 
      ; --- joinln: charlists -> charlist with \n separators ---
      (= 0 (joinln 0))
-     (= '(1 2 3) (joinln (hook '(1 2 3) 0)))
-     (= '(1 10 2) (joinln (hook '(1) (hook '(2) 0))))
-     (= '(1 2 10 3 10 4 5) (joinln (hook '(1 2) (hook '(3) (hook '(4 5) 0)))))
+     (= '(1 2 3) (joinln (link '(1 2 3) 0)))
+     (= '(1 10 2) (joinln (link '(1) (link '(2) 0))))
+     (= '(1 2 10 3 10 4 5) (joinln (link '(1 2) (link '(3) (link '(4 5) 0)))))
 
      ; --- flatten: editor state -> single charlist ---
      ; a single line "123" with cursor between 2 and 3
      (= '(1 2 3) (flatten 0 '(2 1) '(3) 0))
      ; two lines: top "1" then current "2" -- separated by \n
-     (= '(1 10 2) (flatten (hook '(1) 0) '(2) 0 0))
+     (= '(1 10 2) (flatten (link '(1) 0) '(2) 0 0))
      ; three lines: top, middle (with cursor), bottom
-     (= '(1 10 2 10 3) (flatten (hook '(1) 0) '(2) 0 (hook '(3) 0)))
+     (= '(1 10 2 10 3) (flatten (link '(1) 0) '(2) 0 (link '(3) 0)))
 
      ; --- splitat: take n chars into acc (reversed), call k with (acc rest) ---
-     (= (hook '(2 1) '(3 4)) (splitat hook 0 2 '(1 2 3 4)))
+     (= (link '(2 1) '(3 4)) (splitat link 0 2 '(1 2 3 4)))
      ; stops cleanly at end-of-input even if n exceeds list length
-     (= (hook '(2 1) 0)      (splitat hook 0 5 '(1 2)))
+     (= (link '(2 1) 0)      (splitat link 0 5 '(1 2)))
      ; n=0 takes nothing
-     (= (hook 0 '(1 2 3))    (splitat hook 0 0 '(1 2 3)))
+     (= (link 0 '(1 2 3))    (splitat link 0 0 '(1 2 3)))
 
      ; --- mkframe: pack a buffer slot ---
-     (= (hook 0 (hook '(1) (hook 0 0))) (mkframe 0 '(1) 0 0))
-     (= (hook (hook '(1) 0) (hook '(2 3) (hook '(4) (hook '(5) 0))))
-        (mkframe (hook '(1) 0) '(2 3) '(4) (hook '(5) 0)))
+     (= (link 0 (link '(1) (link 0 0))) (mkframe 0 '(1) 0 0))
+     (= (link (link '(1) 0) (link '(2 3) (link '(4) (link '(5) 0))))
+        (mkframe (link '(1) 0) '(2 3) '(4) (link '(5) 0)))
 
      ; --- detach: restore a pristine recall (a frame) to hu ---
      (= 0 (detach 0 0))                      ; cur=0: no change
      (: cur (mkframe 0 '(1) 0 0)
-        (= (hook cur 0) (detach 0 cur)))        ; cur a frame: prepend to hu
+        (= (link cur 0) (detach 0 cur)))        ; cur a frame: prepend to hu
      (: cur (mkframe 0 '(1) 0 0)
         old (mkframe 0 '(9) 0 0)
-        (= (hook cur (hook old 0)) (detach (hook old 0) cur)))
+        (= (link cur (link old 0)) (detach (link old 0) cur)))
 
      ; --- emptybuf: true iff all four halves are nil ---
      (emptybuf 0 0 0 0)
      !(emptybuf 0 '(1) 0 0)
-     !(emptybuf (hook '(1) 0) 0 0 0)
+     !(emptybuf (link '(1) 0) 0 0 0)
      !(emptybuf 0 0 '(1) 0)
-     !(emptybuf 0 0 0 (hook '(1) 0))
+     !(emptybuf 0 0 0 (link '(1) 0))
 
      ; --- parses: true iff parseall yields at least one value ---
      ; "1" (charlist [49]) parses to the integer 1
-     (parses 0 (hook 49 0) 0 0)
+     (parses 0 (link 49 0) 0 0)
      ; empty buffer doesn't parse to a value
      !(parses 0 0 0 0)
      ; "(" (unclosed list) returns m -- not chainp
-     !(parses 0 (hook 40 0) 0 0)
+     !(parses 0 (link 40 0) 0 0)
      ; multi-line "(\n)" -- u=["("], current line ")"
-     (parses (hook (hook 40 0) 0) (hook 41 0) 0 0)
+     (parses (link (link 40 0) 0) (link 41 0) 0 0)
 
      ; --- uphist: pop the next older entry into the buffer ---
      ; non-empty hu with non-empty buffer: push current to hd, pop hu
      (: cur (mkframe 0 '(1) 0 0)
         old (mkframe 0 '(9) 0 0)
-        (= (k7 0 '(9) 0 0 0 (hook cur 0) old)
-           (uphist k7 0 '(1) 0 0 (hook old 0) 0 cur)))
+        (= (k7 0 '(9) 0 0 0 (link cur 0) old)
+           (uphist k7 0 '(1) 0 0 (link old 0) 0 cur)))
      ; empty buffer skips the push onto hd
      (: old (mkframe 0 '(9) 0 0)
         (= (k7 0 '(9) 0 0 0 0 old)
-           (uphist k7 0 0 0 0 (hook old 0) 0 0)))
+           (uphist k7 0 0 0 0 (link old 0) 0 0)))
      ; off-top: hu empty, cur non-nil, buffer parses -> push, scroll into blank
-     (: cur (mkframe 0 (hook 49 0) 0 0)
-        (= (k7 0 0 0 0 0 (hook cur 0) 0)
-           (uphist k7 0 (hook 49 0) 0 0 0 0 cur)))
+     (: cur (mkframe 0 (link 49 0) 0 0)
+        (= (k7 0 0 0 0 0 (link cur 0) 0)
+           (uphist k7 0 (link 49 0) 0 0 0 0 cur)))
      ; off-top blocked when buffer doesn't parse (unclosed list)
-     (: cur (mkframe 0 (hook 40 0) 0 0)
-        (= (k7 0 (hook 40 0) 0 0 0 0 cur)
-           (uphist k7 0 (hook 40 0) 0 0 0 0 cur)))
+     (: cur (mkframe 0 (link 40 0) 0 0)
+        (= (k7 0 (link 40 0) 0 0 0 0 cur)
+           (uphist k7 0 (link 40 0) 0 0 0 0 cur)))
      ; off-top blocked when not on a real recall (cur=0)
-     (= (k7 0 (hook 49 0) 0 0 0 0 0)
-        (uphist k7 0 (hook 49 0) 0 0 0 0 0))
+     (= (k7 0 (link 49 0) 0 0 0 0 0)
+        (uphist k7 0 (link 49 0) 0 0 0 0 0))
 
      ; --- downhist: mirror of uphist on the hd side ---
      (: cur (mkframe 0 '(1) 0 0)
         new (mkframe 0 '(9) 0 0)
-        (= (k7 0 '(9) 0 0 (hook cur 0) 0 new)
-           (downhist k7 0 '(1) 0 0 0 (hook new 0) cur)))
+        (= (k7 0 '(9) 0 0 (link cur 0) 0 new)
+           (downhist k7 0 '(1) 0 0 0 (link new 0) cur)))
      (: new (mkframe 0 '(9) 0 0)
         (= (k7 0 '(9) 0 0 0 0 new)
-           (downhist k7 0 0 0 0 0 (hook new 0) 0)))
-     (: cur (mkframe 0 (hook 49 0) 0 0)
-        (= (k7 0 0 0 0 (hook cur 0) 0 0)
-           (downhist k7 0 (hook 49 0) 0 0 0 0 cur)))
+           (downhist k7 0 0 0 0 0 (link new 0) 0)))
+     (: cur (mkframe 0 (link 49 0) 0 0)
+        (= (k7 0 0 0 0 (link cur 0) 0 0)
+           (downhist k7 0 (link 49 0) 0 0 0 0 cur)))
 
      ; --- parseall: integration check (a line is ONE expression) ---
      ; "1 2 3" parses to the single form (1 2 3)

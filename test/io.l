@@ -46,7 +46,7 @@
      _ (fputs wp txt)
      _ (close wp)
      rp (open "/tmp/l-io-test" "r")
-     (slurp acc) (: c (fgetc rp) (? (= c -1) (rev acc) (slurp (hook c acc))))
+     (slurp acc) (: c (fgetc rp) (? (= c -1) (rev acc) (slurp (link c acc))))
      rd (string (slurp 0))
      _ (close rp)
      (= txt rd)) 1)
@@ -77,7 +77,7 @@
   (: r (read (sip '(39 49)) 99)                        ; "'1" -> (` 1)
      (do (chainp r) (= 1 (caup r))))
   ; "hi" -- string literal round-trip through the ci port.
-  (= (string (hook 104 (hook 105 0))) (read (sip '(34 104 105 34)) 99))
+  (= (string (link 104 (link 105 0))) (read (sip '(34 104 105 34)) 99))
 
   ; Sequential reads: pull each datum in source order; final read returns e.
   (: p (sip '(49 32 50 32 51))                          ; "1 2 3"

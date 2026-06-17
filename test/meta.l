@@ -17,13 +17,13 @@
         (\ l (foldl id id (map (\ x (x l)) y)))))))
 
   (cond_loop a f) (?
-   (nilp a) (cond_loop (hook 0 0) f)
+   (nilp a) (cond_loop (link 0 0) f)
    (nilp (cup a)) (f (meta_eval (cap a)))
    (: ant (meta_eval (cap a)) con (meta_eval (caup a))
     (cond_loop (cuup a) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
 
   (let_loop a b m) (?
-   (nilp a) (let_loop (hook 0 0) b m)
+   (nilp a) (let_loop (link 0 0) b m)
    (nilp (cup a)) (meta_eval (cap a) (b m))
    (desugar (cap a) (caup a) (\ k v
     (: t (tablet 0) (Get k) (peep t k 0) (Put v) (pin t 0 v)
@@ -31,7 +31,7 @@
                         (\ x (? (= x k) (Get 0) (m x))))))))
 
   (desugar k v c)
-   (? (chainp k) (desugar (cap k) (hook '\ (cat (cup k) (hook v 0))) c)
+   (? (chainp k) (desugar (cap k) (link '\ (cat (cup k) (link v 0))) c)
                (c k v))
   ;return
   meta_eval)

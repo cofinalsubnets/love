@@ -83,7 +83,7 @@
                      nm (cstr s (+ stroff (rd32 s o)))
                      (loop (+ i 1)
                            (? (prefix? prefix nm)
-                              (hook (hook (rdw s (+ o szoff))     ; sh_size
+                              (link (link (rdw s (+ o szoff))     ; sh_size
                                           (rdw s (+ o aloff))) acc) ; sh_addralign
                               acc)))
                   acc)
