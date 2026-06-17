@@ -150,7 +150,7 @@ static ai_inline bool in_data(void *a) {
  return (uintptr_t) a >= (uintptr_t) __start_ai_data
      && (uintptr_t) a <  (uintptr_t) __stop_ai_data; }
 static ai_inline enum q ai_typ(union u *o) {
- static const enum q kinds[] = { KVec, KBig, KString, KSym, KChain, KFlo, KWide, KCplx };
+ static const enum q kinds[] = { KVec, KBig, KString, KMint, KChain, KFlo, KWide, KCplx };
  return kinds[((uintptr_t) o->ap - (uintptr_t) __start_ai_data) %s]; }
 #endif
 """

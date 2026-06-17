@@ -50,7 +50,7 @@
       _ (fputs p " return (uintptr_t) a >= (uintptr_t) __start_ai_data\n")
       _ (fputs p "     && (uintptr_t) a <  (uintptr_t) __stop_ai_data; }\n")
       _ (fputs p "static ai_inline enum q ai_typ(union u *o) {\n")
-      _ (fputs p " static const enum q kinds[] = { KVec, KBig, KString, KSym, KChain, KFlo, KWide, KCplx };\n")
+      _ (fputs p " static const enum q kinds[] = { KVec, KBig, KString, KMint, KChain, KFlo, KWide, KCplx };\n")
       _ (fputs p " return kinds[((uintptr_t) o->ap - (uintptr_t) __start_ai_data) ")
       _ (? po2 (: _ (fputs p ">> ") (fputbn p shift 10)) (fputs p "/ G_DATA_UNIT"))
       _ (fputs p "]; }\n")

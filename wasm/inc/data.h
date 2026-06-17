@@ -15,7 +15,7 @@ static ai_inline enum q ai_typ(union u *o) {
  lvm_t *p = o->ap;
  return p == lvm_chain ? KChain :
         p == lvm_vec ? KVec :
-        p == lvm_sym ? KSym :
+        p == lvm_sym ? KMint :
         p == lvm_str ? KString :
         p == lvm_flo ? KFlo :
         p == lvm_wide ? KWide :

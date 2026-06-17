@@ -30,7 +30,7 @@ syn keyword AiFunc arr array arank alen ashape atype asum aprod amax amin aall i
 syn keyword AiFunc a-rank a-shape a-type a-dim
 syn keyword AiFunc string snip intern nom mint tally slurp show sip pad page
 syn keyword AiFunc tablet keys dig sat non peep pin pull buf blit missing
-syn keyword AiFunc spin peek poke seek trim snip
+syn keyword AiFunc spin peek poke seek snip chainp trayp unip
 syn keyword AiFunc fgetc fungetc feof fputc fputs fputbn fputx fflush read
 syn keyword AiFunc putc puts putn putx getc read in out dot
 syn keyword AiFunc ev call-cc yield spawn wait sleep done? hush key?

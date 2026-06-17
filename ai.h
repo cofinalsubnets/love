@@ -267,17 +267,19 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 #define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 #define nil ai_nil
 struct ai_chain { lvm_t *ap; intptr_t a, b; };
-// The fundamental value kind for generic-op dispatch (enum q). KCharm is the odd fixnum
-// tag; KHot is any non-data heap pointer (text/function/map). The five DATA kinds
-// (KVec, KBig, KString, KSym, KChain) are the ones ai_typ recovers from an ap's section
-// slot (data.c go() order, via the data.h lookup); every vec reads as KVec there
+// The fundamental value kind for generic-op dispatch (enum q). KMint is the bare point
+// (the blue floor: () and the nameless mints; named syms are (name . mint) CHAINS now);
+// KCharm is the odd fixnum tag; KHot is any non-data heap pointer (text/function/map). The
+// five DATA kinds (KVec, KBig, KString, KMint, KChain) are the ones ai_typ recovers from an
+// ap's section slot (data.c go() order, via the data.h lookup); every vec reads as KVec there
 // (coarse -- one sentinel for scalar boxes and arrays alike). The SEVEN non-sentinel
 // numeric kinds are minted by ai_kind alone, refining a KVec by rank: a rank-0 box to
 // a scalar GEM (KWide + ai_vec_type -> KWide/KFlo/KCplx) and a rank>=1 vec to an array
 // (KArrZ + ai_vec_type). So the scalar GEM tower (charm/wide/float/complex/big -- the
 // self-netting fixed-width numbers) and the array tower it mirrors both dispatch inline
 // (KArrZ~int, KArrR~float, KArrC~complex, KArrO~object). The diagonal is the type lattice
-// by semantics then representation: arithmetic lane [KCharm..KArrO] (scalars then their
+// by semantics then representation: KMint the blue floor (() and the nameless points,
+// least of all), then arithmetic lane [KCharm..KArrO] (scalars then their
 // array counterparts), sequence/concat lane [KString..KChain], then map, text last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (chain)
@@ -285,7 +287,7 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // order's chain < map < lambda is the enum order itself (a map is still a lookup lambda
 // for +/*/apply -- the rung exists for the order and the honest matrix cells).
 // KN is the matrix dimension.
-enum q { KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KChain, KMap, KHot, KN };
+enum q { KMint, KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KChain, KMap, KHot, KN };
 #define ai_data_n 8     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KHot-KVec
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
