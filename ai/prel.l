@@ -16,6 +16,7 @@
    (unip x) (= x (cap x))
    (atomp x) (nilp (twop x))
    (co f g) (\ x (f (g x)))
+   (names _ ) (keys book)
    caap (co cap cap) caup (co cap cup) ;; FIXME emit pure code -- combine like operations and metaprogram a concrete thread for each definition
    cuap (co cup cap) cuup (co cup cup))
 ; array element-kind codes (enum g_vec_type), named for the tier spine:

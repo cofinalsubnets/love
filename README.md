@@ -18,16 +18,16 @@ every quote below evals to 1, [try them](https://cofinalsubnets.github.io/ai).
 ai is kind of like `ai = (ml + apl) * (lisp / C)`.
 every value is an operator, a total function of its own type.
 all recursion is on heap and any recursive operator may be
-written to be limited by integers, which act transparently as
+boundedly applied by integers, which act transparently as
 iterators.  consequently the value of a numeric list under the
 left-associative lisp eval function corresponds to a reversed
 exponential tower. this lisp refinement forms the ML part of
 `ml + apl`. the APL part is a transparent right-associative
-superset that interprets sigils (all-punctuation
-symbols) as infix or prefix operators according to placement.
-the two forms mix well: infix operators take the lisp meaning
-in function position, and infix can be converted
-to left-associative by listing the sigil, eg. `3 = (+) 1 2`.
+superset that interprets sigils (all-punctuation symbols) as
+infix or prefix operators according to placement. the two forms
+mix fluidly: infix operators take the lisp meaning in function
+position, and infix can be converted to left-associative by
+listing the sigil, eg. `3 = (+) 1 2`.
 
 in terms of implementation, `lisp : C :: software : hardware`.
 C gives random memory access via pointer arithmetic
@@ -141,9 +141,9 @@ per the law.
 
 ### cook
 
-`make`, in ai. [cook/cook.l](cook/cook.l) is a small dependency-driven
-build tool -- bring an item up to date when it is missing or older than any of
-its ingredients -- driven by a `Cookfile` recipe file:
+ai includes a somewhat GNU-compatible `make` clone called `cook` written in pure
+ai and bootstrapped through normal `make`. `cook` accepts either the traditional
+`Makefile` format or its own `Cookfile` DSL.
 
 ```
 (recipe "hello" '("hello.o" "greet.o")
