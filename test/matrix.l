@@ -2,7 +2,7 @@
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
 ; (l.h enum q): KCharm | KWide KFlo KCplx (the lean scalar-gem boxes) | KBig |
 ; KVec (the coarse array sentinel; ai_kind refines it away) | KArrZ KArrR KArrC
-; KArrO (the array tower) | KString KSym | KChain(chain) | KTop.
+; KArrO (the array tower) | KString KSym | KChain(chain) | KHot.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
 ; < <= = >= >) are lane aps that refine the same lattice internally. This
@@ -28,8 +28,8 @@
    mx-sym 'ef                            ; KSym (interned)
    mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KChain (chain / list)
-   mx-fn  (+ 1)                          ; KTop (nif partial application)
-   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KTop (a map is a lookup-lambda)
+   mx-fn  (+ 1)                          ; KHot (nif partial application)
+   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KHot (a map is a lookup-lambda)
 
 ; ============================================================================
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
@@ -77,9 +77,9 @@
 
  ; --- non-matrix apply paths --------------------------------------------------
  (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KCharm numeral (odd-tag path)
- (= 36 ((\ x (* x x)) 6))                     ; KTop: a lambda applies directly
- (= 7 (((+) 3) 4))                            ; KTop: a nif / partial application
- (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KTop: a map looks its key up
+ (= 36 ((\ x (* x x)) 6))                     ; KHot: a lambda applies directly
+ (= 7 (((+) 3) 4))                            ; KHot: a nif / partial application
+ (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KHot: a map looks its key up
  (nilp (mx-map 9))                            ; ...missing key -> nil
  (= 1 ((buf 4) 'x)))                       ; opaque handle (buf) behaves as 0
 

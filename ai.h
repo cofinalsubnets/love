@@ -268,7 +268,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 #define nil ai_nil
 struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KCharm is the odd fixnum
-// tag; KTop is any non-data heap pointer (text/function/map). The five DATA kinds
+// tag; KHot is any non-data heap pointer (text/function/map). The five DATA kinds
 // (KVec, KBig, KString, KSym, KChain) are the ones ai_typ recovers from an ap's section
 // slot (data.c go() order, via the data.h lookup); every vec reads as KVec there
 // (coarse -- one sentinel for scalar boxes and arrays alike). The SEVEN non-sentinel
@@ -281,12 +281,12 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // array counterparts), sequence/concat lane [KString..KChain], then map, text last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (chain)
-// caps the sequence lane; KMap is the map's own rung just under KTop, so the total
+// caps the sequence lane; KMap is the map's own rung just under KHot, so the total
 // order's chain < map < lambda is the enum order itself (a map is still a lookup lambda
 // for +/*/apply -- the rung exists for the order and the honest matrix cells).
 // KN is the matrix dimension.
-enum q { KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KChain, KMap, KTop, KN };
-#define ai_data_n 8     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KTop-KVec
+enum q { KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KSym, KChain, KMap, KHot, KN };
+#define ai_data_n 8     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KHot-KVec
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
 // out-of-pool short-circuit). Strings are immutable, so one empty string
@@ -307,7 +307,7 @@ struct ai
  *ai_read1(struct ai*, struct ai_io*),
  *str0(struct ai*, uintptr_t);
 lvm(lvm_gc, uintptr_t);
-// ai_kind maps any value to its enum q: KCharm for a fixnum, KTop for a non-data heap
+// ai_kind maps any value to its enum q: KCharm for a fixnum, KHot for a non-data heap
 // pointer (text/function/map), else ai_typ's data kind -- refined for a rank>=1 vec,
 // which expands by element tier to KArrZ..KArrO (a rank-0 box stays KVec). Lives in
 // ai.c (it needs ai_typ from the generated data.h) and is shared by data.c's apply

@@ -4519,7 +4519,7 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
  return *++Sp = nil, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in ai.h): a fixnum is
-// the odd tag (KCharm), a non-data heap pointer is a text/function (KTop), else ai_typ
+// the odd tag (KCharm), a non-data heap pointer is a text/function (KHot), else ai_typ
 // gives the data kind. The refinement: a vec is always a rank>=1 array now (the
 // scalar gems wide/float/complex carry their own sentinels and ai_typ gives them
 // KWide/KFlo/KCplx directly), so a vec expands purely by element tier to
@@ -4527,7 +4527,7 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
 // Exported (not inline) so data.c's apply sentinels share it.
 enum q ai_kind(word x) {
  if (charmp(x)) return KCharm;
- if (!datp(x)) return tabp(x) ? KMap : KTop;
+ if (!datp(x)) return tabp(x) ? KMap : KHot;
  enum q k = typ(x);
  if (k != KVec) return k;
  return (enum q) (KArrZ + vec(x)->type); }
@@ -4642,7 +4642,7 @@ static lvm(data_pair_apply) {
 // All indexed by ai_kind (ai_apply_mx's row by ai_typ, the data-kind subrange). The kind
 // order (ai.h) makes each lane a contiguous block: [KCharm..KArrO] arithmetic (the
 // scalar GEM tower charm/wide/float/complex/big, the vec sentinel, then the parallel
-// array tower arrZ/arrR/arrC/arrO), then [KString..KChain] sequence, then KMap, then KTop.
+// array tower arrZ/arrR/arrC/arrO), then [KString..KChain] sequence, then KMap, then KHot.
 // The rows below are NAMED-index (NUMK + the five) -- adding a kind can't shift a column.
 // Lanes:
 //   *n   = numeric tower & arrays (arithmetic / broadcast) -- the lane ap still
@@ -4652,13 +4652,13 @@ static lvm(data_pair_apply) {
 //              operand internally). SYMBOLS left the string algebra with the mint
 //              round: their string cells are lvm_0 (intern/string = the explicit bridge)
 //   mul_rep  = sequence * scalar-count -> repetition
-//   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KTop rows+cols) -- Church
+//   *l   = a LAMBDA-or-MAP operand (precedence: the KMap/KHot rows+cols) -- Church
 //          add / compose; a map IS a lookup lambda for +/*, kept deliberately, so
 //          its rung shares the lanes (the rung exists for the order)
 //   lvm_0 = undefined (-> nil): sequence*sequence
 // Precedence (high->low): lambda > map > chain > text > number(incl array).
 
-// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KTop rows+cols all addl.
+// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KHot rows+cols all addl.
 // Named-index rows (NOT positional): one column value per OTHER-operand kind, so
 // inserting a kind can't silently shift a column. NUMK fills the whole arithmetic
 // lane -- every numeric kind (the scalar gems KCharm/KWide/KFlo/KCplx/KBig, the KVec
@@ -4667,15 +4667,15 @@ static lvm(data_pair_apply) {
 // NULL (a crash), so every row names all 15 columns via NUMK + the five.
 #define NUMK(v) [KCharm]=v,[KWide]=v,[KFlo]=v,[KCplx]=v,[KBig]=v,[KVec]=v,\
                 [KArrZ]=v,[KArrR]=v,[KArrC]=v,[KArrO]=v
-#define ADD_NUM { NUMK(lvm_addn),     [KString]=lvm_add_string, [KSym]=lvm_0,       [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
-#define ADD_STR { NUMK(lvm_add_string),[KString]=lvm_add_string,[KSym]=lvm_0,       [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
-#define ADD_SYM { NUMK(lvm_0),        [KString]=lvm_0,          [KSym]=lvm_0,       [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
-#define ADD_TWO { NUMK(lvm_add_seq),  [KString]=lvm_add_seq,    [KSym]=lvm_add_seq, [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KTop]=lvm_addh }
-#define ADD_H   { NUMK(lvm_addh),     [KString]=lvm_addh,       [KSym]=lvm_addh,    [KChain]=lvm_addh,    [KMap]=lvm_addh, [KTop]=lvm_addh }
+#define ADD_NUM { NUMK(lvm_addn),     [KString]=lvm_add_string, [KSym]=lvm_0,       [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_STR { NUMK(lvm_add_string),[KString]=lvm_add_string,[KSym]=lvm_0,       [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_SYM { NUMK(lvm_0),        [KString]=lvm_0,          [KSym]=lvm_0,       [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_TWO { NUMK(lvm_add_seq),  [KString]=lvm_add_seq,    [KSym]=lvm_add_seq, [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_H   { NUMK(lvm_addh),     [KString]=lvm_addh,       [KSym]=lvm_addh,    [KChain]=lvm_addh,    [KMap]=lvm_addh, [KHot]=lvm_addh }
 static lvm_t *const ai_add_mx[KN][KN] = {
  [KCharm]=ADD_NUM, [KWide]=ADD_NUM, [KFlo]=ADD_NUM, [KCplx]=ADD_NUM, [KBig]=ADD_NUM, [KVec]=ADD_NUM,
  [KArrZ]=ADD_NUM, [KArrR]=ADD_NUM, [KArrC]=ADD_NUM, [KArrO]=ADD_NUM,
- [KString]=ADD_STR, [KSym]=ADD_SYM, [KChain]=ADD_TWO, [KMap]=ADD_H, [KTop]=ADD_H,
+ [KString]=ADD_STR, [KSym]=ADD_SYM, [KChain]=ADD_TWO, [KMap]=ADD_H, [KHot]=ADD_H,
 };
 #undef ADD_NUM
 #undef ADD_STR
@@ -4685,14 +4685,14 @@ static lvm_t *const ai_add_mx[KN][KN] = {
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil (so the string
 // and two rows agree: a number repeats, everything else nils, lambda/map composes).
-#define MUL_NUM { NUMK(lvm_muln),    [KString]=lvm_mul_rep, [KSym]=lvm_0, [KChain]=lvm_mul_rep, [KMap]=lvm_mulh, [KTop]=lvm_mulh }
-#define MUL_REP { NUMK(lvm_mul_rep), [KString]=lvm_0,       [KSym]=lvm_0, [KChain]=lvm_0,       [KMap]=lvm_mulh, [KTop]=lvm_mulh }
-#define MUL_SYM { NUMK(lvm_0),       [KString]=lvm_0,       [KSym]=lvm_0, [KChain]=lvm_0,       [KMap]=lvm_mulh, [KTop]=lvm_mulh }
-#define MUL_H   { NUMK(lvm_mulh),    [KString]=lvm_mulh,    [KSym]=lvm_mulh,[KChain]=lvm_mulh,  [KMap]=lvm_mulh, [KTop]=lvm_mulh }
+#define MUL_NUM { NUMK(lvm_muln),    [KString]=lvm_mul_rep, [KSym]=lvm_0, [KChain]=lvm_mul_rep, [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_REP { NUMK(lvm_mul_rep), [KString]=lvm_0,       [KSym]=lvm_0, [KChain]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_SYM { NUMK(lvm_0),       [KString]=lvm_0,       [KSym]=lvm_0, [KChain]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_H   { NUMK(lvm_mulh),    [KString]=lvm_mulh,    [KSym]=lvm_mulh,[KChain]=lvm_mulh,  [KMap]=lvm_mulh, [KHot]=lvm_mulh }
 static lvm_t *const ai_mul_mx[KN][KN] = {
  [KCharm]=MUL_NUM, [KWide]=MUL_NUM, [KFlo]=MUL_NUM, [KCplx]=MUL_NUM, [KBig]=MUL_NUM, [KVec]=MUL_NUM,
  [KArrZ]=MUL_NUM, [KArrR]=MUL_NUM, [KArrC]=MUL_NUM, [KArrO]=MUL_NUM,
- [KString]=MUL_REP, [KSym]=MUL_SYM, [KChain]=MUL_REP, [KMap]=MUL_H, [KTop]=MUL_H,
+ [KString]=MUL_REP, [KSym]=MUL_SYM, [KChain]=MUL_REP, [KMap]=MUL_H, [KHot]=MUL_H,
 };
 #undef MUL_NUM
 #undef MUL_REP
@@ -4704,7 +4704,7 @@ static lvm_t *const ai_mul_mx[KN][KN] = {
 // arow names the gem kinds too. Every row is arg-kind-uniform today (arow fills all
 // columns); the 2-D shape is the hook for later argument-kind branching.
 #define arow(h) { [KCharm]=h,[KWide]=h,[KFlo]=h,[KCplx]=h,[KBig]=h,[KVec]=h,[KArrZ]=h,[KArrR]=h,\
-                  [KArrC]=h,[KArrO]=h,[KString]=h,[KSym]=h,[KChain]=h,[KMap]=h,[KTop]=h }
+                  [KArrC]=h,[KArrO]=h,[KString]=h,[KSym]=h,[KChain]=h,[KMap]=h,[KHot]=h }
 lvm_t *ai_apply_mx[KN][KN] = {
  [KChain]  = arow(data_pair_apply), [KVec]  = arow(data_num_apply),
  [KSym]  = arow(data_sym_apply), [KFlo]  = arow(data_num_apply),
