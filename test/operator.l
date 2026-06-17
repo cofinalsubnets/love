@@ -33,5 +33,5 @@
 ; restore: unpinned, ^^ no longer factors (^ is at two, can't lead a chain),
 ; so it reads as a plain symbol again
 (pull op-tbl '^^ 0)
-(assert !(op-tbl '^^) (symp '^^) ('(^^ 5) = (opfix '(^^ 5)))
+(assert !(op-tbl '^^) (nomp '^^) ('(^^ 5) = (opfix '(^^ 5)))
         (-2 = (^ 1 -1)) (6 = (^ 5 3)))          ; ^ was the xor nif all along

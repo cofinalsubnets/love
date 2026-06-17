@@ -30,7 +30,7 @@
 ; named-uninterned atom species is gone -- McCarthy's symbol, restored as the
 ; chain it always was. (nom 0) (any non-text arg) is the bare mint.
 (: (nom n) (? (strp n) (link n (mint 0)) ;; FIXME link
-              (symp n) (link (string n) (mint 0))
+              (nomp n) (link (string n) (mint 0))
               (mint 0)))
 ; integer power (b ** k) is just numeral application: (k b) == b**k. The squaring
 ; algorithm lives in `ipow`, local to the num-ap block below, so there is no `**`.
@@ -266,7 +266,7 @@
                        1)
    ; cheap prefilter: only an all-punct symbol can factor
    (op-puncp x)
-    (? (symp x)
+    (? (nomp x)
        (: s (string x)
           (? (strp s)
              (: n (tally s)
@@ -278,7 +278,7 @@
    ; normalize a table entry for key k -> (name . arity), or 0
    (op-ent k) (: v (operators k)
                  (? (fixp v) (? (&& (< 0 v) (< v 8)) (link k v) 0)
-                    (chainp v) (? (&& (symp (cap v)) (fixp (cup v)) (< 0 (cup v)) (< (cup v) 8)) v 0)
+                    (chainp v) (? (&& (nomp (cap v)) (fixp (cup v)) (< 0 (cup v)) (< (cup v) 8)) v 0)
                     0))
    ; longest prefix of nm[i..n) that is a table key -> (len . entry), or 0
    (op-long nm i n)
@@ -307,7 +307,7 @@
     ((: (go k) (? (< k 1) 0
                   (: s (intern (snip nm i (+ i k)))
                      e (monadics s)
-                     (? (symp e) (link k e)
+                     (? (nomp e) (link k e)
                         (: o (op-ent s)
                            (? (? (chainp o) (= 1 (cup o)) 0) (link k (cap o))
                               (go (- k 1))))))))
@@ -345,7 +345,7 @@
    ; like (0) or ("") NETS zero, so nilp would read it as empty and drop
    ; the operand (the round-16 discipline: kinds for structure)
    (op-fold f) (? (atomp (op-frg f)) (op-fro f)
-                  (symp (op-frn f)) (op-fin (op-frc f) (link (op-frn f) (rev (op-frg f))))
+                  (nomp (op-frn f)) (op-fin (op-frc f) (link (op-frn f) (rev (op-frg f))))
                   (op-fin (op-frc f) (cap (op-frg f))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a FILLED
    ; frame folds into its parent first (cascading), then d delivers. a
@@ -360,7 +360,7 @@
              (: f2 (op-fr (op-fro f) (op-frc f) (op-frn f)
                           (- (op-frd f) 1) (link d (op-frg f)))
                 ; (nilp ..), not !: this block is pre-opfix (the bootstrap restriction)
-                (? (&& (= 0 (op-frd f2)) (nilp (symp (op-frn f2))))
+                (? (&& (= 0 (op-frd f2)) (nilp (nomp (op-frn f2))))
                    (op-del (op-fold f2) out (cup pend))
                    (link out (link f2 (cup pend)))))
              (: r (op-del (op-fold f) out (cup pend))
@@ -387,7 +387,7 @@
    (op-w l out pend)
     (? (atomp l) (op-drain out pend)
        (: e (cap l)
-          (? (&& (symp e) (op-puncp e))
+          (? (&& (nomp e) (op-puncp e))
              (: fs (opfactor e)
                 (? (atomp fs)
                    (: r (op-del e out pend) (op-w (cup l) (cap r) (cup r)))
@@ -427,7 +427,7 @@
              ; unfactorable run is the plain application (run d)
              (&& (= h 'mono) (chainp (cup x)) (chainp (caup x)))
               (: p (caup x) r (cap p) d (op-core (caup p))
-                 fs (? (symp r) (monofactor r) 0)
+                 fs (? (nomp r) (monofactor r) 0)
                  (? (chainp fs) (op-fin fs d) (link r (link d 0))))
              (op-w x 0 0)))))
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
@@ -552,12 +552,12 @@
    ; &&/|| are seen as the compiler sees them). u tracks lambda depth; dm (direct
    ; mode) counts only references NOT under a lambda.
    (w v x bnd u dm) (?
-    (symp x) (&& (? dm (nilp u) 1) (= x v) (nilp (memq v bnd)))
+    (nomp x) (&& (? dm (nilp u) 1) (= x v) (nilp (memq v bnd)))
     (atomp x) 0
     (: h (cap x) (?
       (= h '\) (? (atomp (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
       (= h ':) (wl v (cup x) (cat (ln (cup x)) bnd) u dm)
-      (: m (? (symp h) (peep macros h 0) 0) (? m (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
+      (: m (? (nomp h) (peep macros h 0) 0) (? m (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
    (wl v bs bnd u dm) (?
     (atomp bs) 0
     (atomp (cup bs)) (w v (cap bs) bnd u dm)
@@ -576,12 +576,12 @@
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nilp (memq (cap p) ns))) cs)
    (sub cs x) (?
-    (symp x) (: p (assq x cs) (? (chainp p) (list missing (caup p) (list '\ (cuup p))) x))
+    (nomp x) (: p (assq x cs) (? (chainp p) (list missing (caup p) (list '\ (cuup p))) x))
     (atomp x) x
     (: h (cap x) (?
       (= h '\) (? (atomp (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r)))))))
       (= h ':) (link ': (subl (rmc cs (ln (cup x))) (cup x)))
-      (: m (? (symp h) (peep macros h 0) 0) (? m (sub cs (m (cup x))) (map (\ e (sub cs e)) x))))))
+      (: m (? (nomp h) (peep macros h 0) 0) (? m (sub cs (m (cup x))) (map (\ e (sub cs e)) x))))))
    (subl cs bs) (?
     (atomp bs) bs
     (atomp (cup bs)) (list (sub cs (cap bs)))

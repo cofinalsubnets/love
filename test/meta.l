@@ -3,7 +3,7 @@
          ; symbols in a quote (data), and meta_eval has no opfix, so this
          ; source is written in core form (nilp, not !)
   (meta_eval x) (?
-   (symp x) (\ l (l x))
+   (nomp x) (\ l (l x))
    (nilp (chainp x)) (const x)
    (: x0 (cap x) a (cup x)
     (? (= x0 'do) (foldl (\ a b l (do (a l) (b l))) 0 (map meta_eval a))

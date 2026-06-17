@@ -6,7 +6,7 @@
   (loop k (cap d) (cup d)))
  (dict_get d k) (: x (dict_has d k) (? (chainp x) (cap x)))
  (dict_set d k v) (link (link k (cap d)) (link v (cup d)))
- (mintp x) (&& (symp x) (symp (string x)))   ; string of a named sym is its name; of a mint, itself
+ (mintp x) (&& (nomp x) (nomp (string x)))   ; string of a named sym is its name; of a mint, itself
  (var? x) (&& (chainp x) (mintp (cup x)))
  (var x) (link x (nom 0))
  empty_dict '(0)

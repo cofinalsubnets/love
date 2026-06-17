@@ -1,5 +1,5 @@
 (: (pat2pred p)
- (? (symp p) (const true)
+ (? (nomp p) (const true)
     (atomp p) (= p)
     (&& (= '\ (cap p)) (atomp (cuup p))) (= (caup p)) ; one-operand \ is quote: literal match
   (: p1 (pat2pred (cap p))
@@ -9,7 +9,7 @@
   t (tablet 0)
 
   (ff q p) (?
-   (symp p) (pin t p q)
+   (nomp p) (pin t p q)
    (chainp p) (: _ (ff (co cap q) (cap p))
                 (ff (co cup q) (cup p))))
   _ (ff id p)

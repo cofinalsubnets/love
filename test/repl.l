@@ -199,4 +199,4 @@
      ; "1e3" parses as float, not symbol
      (= 1000.0 (cap (cap (parseall '(49 101 51)))))
      ; "1.2.3" stays a symbol (g_strtod partial-consume)
-     (symp (cap (cap (parseall '(49 46 50 46 51)))))))
+     (nomp (cap (cap (parseall '(49 46 50 46 51)))))))

@@ -25,7 +25,7 @@
  ('big = (? 0 'a (1 < 2) 'big 'else)))           ; `?` -- test/result pairs, then a final else
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
 (assert
- (idp (:) (?)) (idp (?) (\)) !(:) (symp (:))     ; the empty form is the head read, both lanes: the zero point
+ (idp (:) (?)) (idp (?) (\)) !(:) (nomp (:))     ; the empty form is the head read, both lanes: the zero point
  (0 = (? 0 'a)) (idp 0 (map inc ()))             ; today: a no-match `?` (and `map` of nothing) falls to fixnum 0, NOT the zero point ()
  ; QUEUE (true-blue order): this fall-through flips to () -- absence/the empty chain bottoms at Nil;
  ; when that lands, replace the two asserts above with (idp (:) (? 0 'a)) and (idp (:) (map inc ())).
@@ -59,10 +59,10 @@
  !(gemp @(1 2 3)) !(crestp 5) !(crestp '(1 2))            ; gemp/crestp are DISJOINT; a scalar / a list is neither a crest nor a tray
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: fixp bigp widep flop comp trayp strp symp chainp tabp;
+; --- types & predicates --- storage: fixp bigp widep flop comp trayp strp nomp chainp tabp;
 ; derived nump intp atomp; lamp = presence (any heap value); hotp names the buf/port zoo.
 (assert
- (fixp 5) (chainp '(1 2)) (strp "hi") (symp 'x) (lamp cap) (tabp #(1 2))
+ (fixp 5) (chainp '(1 2)) (strp "hi") (nomp 'x) (lamp cap) (tabp #(1 2))
  (bigp (100 2)) ((? w64 widep bigp) (62 2)) (flop 1.5) (comp i) (trayp @(1 2 3)) (packp 1.5)
  (nump 1.5) (nump i) (nump (62 2)) (intp (62 2)) (atomp 'x) !(atomp '(1))
  (hotp (buf 4)) (hotp out) (hotp (sip '(104)))   ; the hot zoo, named
@@ -82,7 +82,7 @@
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
  !(fixp (2 * 2305843009213693952)) (flop (1 / 0)) (? w64 (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
- ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (symp 'inf) (symp 'nan) (symp 'ieee-nan)
+ ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nomp 'inf) (nomp 'nan) (nomp 'ieee-nan)
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
 ; --- order & equality --- < <= > >= total over all values (across kinds by the lattice,
@@ -187,13 +187,13 @@
 ; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
 (assert
- (() = (:)) (symp ()) !(0 = ()) !(idp 0 '()) (0 = (intern "")) (0 = $()) !() !!$'x
+ (() = (:)) (nomp ()) !(0 = ()) !(idp 0 '()) (0 = (intern "")) (0 = $()) !() !!$'x
  ("()" = (show ()))
- (: z zz-never-pinned (&& (symp z) !z (idp z (:)) ("()" = (show z))))   ; absence: the zero point, wearing ()
- (symp (mint 0)) (0 = $(mint 0)) !(mint 0)       ; the fresh point: a nameless atom, materially empty
+ (: z zz-never-pinned (&& (nomp z) !z (idp z (:)) ("()" = (show z))))   ; absence: the zero point, wearing ()
+ (nomp (mint 0)) (0 = $(mint 0)) !(mint 0)       ; the fresh point: a nameless atom, materially empty
  (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone
  !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (idp m m)))  ; distinct always; itself only
- (symp (nom 'x)) !(chainp (nom 'x)) ("x" = (cap (nom 'x)))  ; a nom is a name (symp, an ATOM), repr'd as (name . mint); its name is its cap
+ (nomp (nom 'x)) !(chainp (nom 'x)) ("x" = (cap (nom 'x)))  ; a nom is a name (nomp, an ATOM), repr'd as (name . mint); its name is its cap
  (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; same-name noms order by the inner mint serial
  ((mint 0) < (nom 'x))                           ; within the mint band: a bare mint below a named symbol
  ((mint 0) < 0)                                  ; the blue floor: every point sits BELOW the numbers (true-blue)
@@ -249,7 +249,7 @@
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lamp dot)
  ('((dot x)) = (opfix '(. x))) ('! = (caup '(a ! b)))   ; opfix factors; quotes stay data
- (6 = ((\ x' (x' + 1)) 5)) (symp 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
+ (6 = ((\ x' (x' + 1)) 5)) (nomp 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)

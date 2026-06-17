@@ -75,8 +75,8 @@
                (g (cup ss) (link (link s s) m) u)))
          (link m u))) (msort cntle syms) 0 used)
    (mapped s m) (: p (assq s m) (? p (cup p) s))
-   (flat lhs) (? (symp lhs) (link lhs 0) (: r (flat (cap lhs)) (link (cap r) (cat (cup r) (cup lhs)))))  ; unwind : head-sugar
-   (lhs-rename lhs bmap am) (? (symp lhs) (mapped lhs (cat am bmap))  ; name via bmap, params via am
+   (flat lhs) (? (nomp lhs) (link lhs 0) (: r (flat (cap lhs)) (link (cap r) (cat (cup r) (cup lhs)))))  ; unwind : head-sugar
+   (lhs-rename lhs bmap am) (? (nomp lhs) (mapped lhs (cat am bmap))  ; name via bmap, params via am
        (chainp lhs) (link (lhs-rename (cap lhs) bmap am) (lhs-rename (cup lhs) bmap am)) lhs)
    (bodyless? bs) (? (atomp bs) 1 (atomp (cup bs)) 0 (bodyless? (cuup bs)))
    ; rebuild a : binding list; each binding's sugar params open a fresh sub-scope of its
@@ -95,7 +95,7 @@
    ; (its names are the global API -> kept). env/used thread scope; a one-operand `\`
    ; (quote) is data and is passed whole.
    (mxrn x env used top rec) (?
-     (symp x) (mapped x env)
+     (nomp x) (mapped x env)
      (atomp x) x
      (= '\ (cap x)) (? (lambp x)
         (: lb (lp x) ps (cap lb) bd (cup lb) r (assign ps used) am (cap r) u2 (cup r)
@@ -108,10 +108,10 @@
 ; === lcat2 SURFACE -- builds the core's inputs (cnt/taint) from un-expanded source, and
 ; adapts the binding/quote macros the compiler would have already expanded away. `rn` is
 ; the recursion the core threads, so nested `:-`/qq are adapted at every level. ===
-(: (collect x) (? (symp x) (pin cnt x (+ 1 (peep cnt x 0)))
+(: (collect x) (? (nomp x) (pin cnt x (+ 1 (peep cnt x 0)))
      (chainp x) (? (= 'qq (cap x)) (: _ (collect (cap x)) (tcollect (cup x)))   ; qq body -> taint
                  (: _ (collect (cap x)) (collect (cup x)))) 0)
-   (tcollect x) (? (symp x) (: _ (pin cnt x (+ 1 (peep cnt x 0))) (pin taint x 1))
+   (tcollect x) (? (nomp x) (: _ (pin cnt x (+ 1 (peep cnt x 0))) (pin taint x 1))
                     (chainp x) (: _ (tcollect (cap x)) (tcollect (cup x))) 0)
    (rn x env used top rec) (? (chainp x)
        (? (= ':- (cap x)) (: rl (rn-let (cat (cuup x) (list (caup x))) env used top rec)  ; :- = body-first :

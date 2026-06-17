@@ -5,7 +5,7 @@
 ; shapes: non-positive -> 0 -> empty, a float ceils, a complex by total-order-
 ; guarded modulus); an array/non-number count is undefined
 ; (nil); sequence x sequence is undefined; a thread anywhere -> composition.
-(: sm-i (\ x (? (symp x) (= x (intern (string x))) 0)))      ; interned symbol?
+(: sm-i (\ x (? (nomp x) (= x (intern (string x))) 0)))      ; interned symbol?
 (assert
  ; --- numbers unchanged ---
  (= 6 (* 2 3))   (= 7.5 (* 3 2.5))

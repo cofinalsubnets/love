@@ -15,7 +15,7 @@
 (: wevs (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
-   (cval e) (? (symp e) (link 0 0)               ; (const? . value): 1 head iff a literal
+   (cval e) (? (nomp e) (link 0 0)               ; (const? . value): 1 head iff a literal
                (atomp e) (link 1 e)
                (&& (= (cap e) '\) (atomp (cuup e))) (link 1 (caup e))
                (link 0 0))
@@ -40,7 +40,7 @@
             idp gcd modpow inc dec abs
             link cap cup caap caup cuap cuup
             dig lidx assq memq last rev cat
-            fixp symp chainp tabp lamp strp nilp flop comp atomp
+            fixp nomp chainp tabp lamp strp nilp flop comp atomp
             snip string
             re im conj arg real twin
             sin cos log pow))
@@ -140,7 +140,7 @@
                  (link ': (wxl (boxfix (cup x)) bnd)))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
      (= h '?) (? (atomp (cup x)) '?                      ; (?) likewise: the empty form is the head's value
                  (link '? (wxc (cup x) bnd)))
-     (: m (? (symp h) (macros h) 0)                     ; macro head? expand, then re-walk
+     (: m (? (nomp h) (macros h) 0)                     ; macro head? expand, then re-walk
       (? m (wx (m (cup x)) bnd)
          (fold (map (\ e (wx e bnd)) x) bnd))))))
    (wxl bs bnd) (wxb bs (cat (ln bs) bnd))        ; a let's names all shadow throughout
@@ -167,20 +167,20 @@
    ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h (cap x)
     (? (atomp (cup x)) x                          ; (f) single element -> ana's (atomp b) handles
-       (|| (nilp (symp h)) (memq h bnd)) (link apx (link 0 x))   ; local/computed head
+       (|| (nilp (nomp h)) (memq h bnd)) (link apx (link 0 x))   ; local/computed head
        (: v (book h) hd (wevs v)
         (? hd (hd x)
            (napof v (cup x)) (link apx (link 1 x))
            (link apx (link 0 x))))))
    (wx x 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
-  ; symp literal (the `()` a (\ _ ()) / failed parse / (L 'x) tail evaluates to).
+  ; nomp literal (the `()` a (\ _ ()) / failed parse / (L 'x) tail evaluates to).
   ; routing it to ava treats it as a free var and captures it as a SPURIOUS import:
   ; it inflates a closure's arity by one with no matching value applied at the ref
   ; site -> an under-saturated partial (silently wrong). it is a constant. the test is
   ; idp-the-zero-point, NOT nilp: boxfix's cell names are FRESH nameless mints (also
   ; nilp) bound and referenced as real variables, so they must still reach ava.
-  (ana c x) (? (&& (symp x) (! (idp x ())))  (ava c x)
+  (ana c x) (? (&& (nomp x) (! (idp x ())))  (ava c x)
                    (atomp x) (kim x)
                    (: a (cap x) b (cup x) (?
                     (atomp b) (ana c a)
@@ -210,7 +210,7 @@
   ; n-ary fires for a book-global multi-arg fn (fold/napof set nary) OR a saturated call
   ; to a letrec lambda sibling of matching arity (falook -- locals fold can't see).
   (apxh c b) (: nary (cap b) head (caup b) args (cuup b)
-              n2 (? nary 1 (&& (symp head) (: a (falook c head) (&& (< 1 a) (= (tally args) a)))))
+              n2 (? nary 1 (&& (nomp head) (: a (falook c head) (&& (< 1 a) (= (tally args) a)))))
               f (ana c head) s (c 'stk) _ (push c 'stk 0)
               g (? n2 (co (apr2l c args) (kap (tally args))) (apl2r c args))
               _ (pin c 'stk s)

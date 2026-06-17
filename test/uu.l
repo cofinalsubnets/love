@@ -53,7 +53,7 @@
 
    (vof en t)
    (? (fixp t) t
-      (symp t) (? (memq t '(UU nat bool unit empty tt true false)) t
+      (nomp t) (? (memq t '(UU nat bool unit empty tt true false)) t
                   (idp t 'zero) 0
                   (vof-sym en t))
       (: h (cap t)
@@ -88,7 +88,7 @@
    (conv d a b)
    (? (idp a b) 1                    ; the same heap object converts to itself:
       (&& (fixp a) (fixp b)) (a = b) ; O(1) across the shared neutral towers
-      (&& (symp a) (symp b)) (idp a b)
+      (&& (nomp a) (nomp b)) (idp a b)
       (|| (idp (tagv a) 'lam) (idp (tagv b) 'lam))
       (: fr (L 'nv d) (conv (d + 1) (vapp a fr) (vapp b fr)))
       (&& (idp (tagv a) 'chain) (chainp b) !(idp (cap b) 'chain))
@@ -160,7 +160,7 @@
 
    (inf cx en d t)
    (? (fixp t) 'nat
-      (symp t) (inf-sym cx t)
+      (nomp t) (inf-sym cx t)
       (: h (cap t)
          (? (chainp h) (inf-spine cx en d (inf cx en d h) (cup t))
             (idp h 'pi)

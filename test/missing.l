@@ -9,7 +9,7 @@
 (assert
  (idp (:) an-never-defined)                      ; the default: the zero point
  !an-never-defined                               ; ... so a missing name is false
- (symp an-never-defined))                        ; ... a nameless point, not a number
+ (nomp an-never-defined))                        ; ... a nameless point, not a number
 
 ; a name BOUND to 0 is in the book -- not missing, no condition: under an
 ; armed help the read still answers its own 0 (presence beats value; the
@@ -49,7 +49,7 @@
  (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the cell, once pinned
 
 ; the help hears the cell miss too; the payload is the binding-site nom
-(: help (\ s a b (? (&& (scare? s) (idp a 'missing) (symp b) ("an-fwd" = (cap b))) 'cell-nom 0)))
+(: help (\ s a b (? (&& (scare? s) (idp a 'missing) (nomp b) ("an-fwd" = (cap b))) 'cell-nom 0)))
 (assert (idp 'cell-nom (: q an-fwd an-fwd 2 q)))
 (: help 0)
 

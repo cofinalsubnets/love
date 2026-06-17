@@ -23,7 +23,7 @@
   ; the old $<name> form died with the named-uninterned species: a nom is a
   ; chain now and prints like one.
   (= "(mint 0)" (show (mint 0)))
-  (symp (mint 0))
+  (nomp (mint 0))
   (= "(mint 0)" (show (mint 'bar)))
 
   ; quote sugar: a chain (` x) prints as 'x
