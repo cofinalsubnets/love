@@ -63,8 +63,8 @@
 
  ; --- invalid state -> nil (rng-set / functional draws validate) ---
  (nilp (rng-set 5))
- (nilp (rng-set (arr Z '(3) 0)))           ; wrong length
- (nilp (rng-set (arr R '(4) 0)))           ; wrong element type
+ (nilp (rng-set (arr 0 '(3) 0)))           ; wrong length
+ (nilp (rng-set (arr 0.0 '(4) 0)))           ; wrong element type
  (nilp (rand-next 5))
  (nilp (randf-next 0))
 

@@ -151,19 +151,19 @@
 ; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. + - * // < = broadcast numpy-style;
 ; reduce asum/aprod/amax/amin/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
 (assert
- (6 = (alen (arr Z '(2 3) 0))) (2 = (arank (arr Z '(2 3) 0))) ('(2 3) = (ashape (arr Z '(2 3) 0)))
- (Z = (atype (arr Z '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
- (3 = (peep (arr Z '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
- (@(2 4 6) = @(1 2 3) * 2) (R = (atype ((arr Z '(2) 0) + 1.5))) (Z = (atype ((arr Z '(3) 0) < 1)))
+ (6 = (alen (arr 0 '(2 3) 0))) (2 = (arank (arr 0 '(2 3) 0))) ('(2 3) = (ashape (arr 0 '(2 3) 0)))
+ (Z = (atype (arr 0 '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
+ (3 = (peep (arr 0 '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
+ (@(2 4 6) = @(1 2 3) * 2) (R = (atype ((arr 0 '(2) 0) + 1.5))) (Z = (atype ((arr 0 '(3) 0) < 1)))
  (60 = (asum @(10 20 30))) (30 = (amax @(10 30 20))) (5 = (asum 5)) (aall (1 < 2))
  (@(0 1 2) = (iota 3)) (Z = (atype (iota 3))) !(iota 0) !(iota -1) (4950 = (asum (iota 100)))   ; iota: jot's range as a z-array
  (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = (// @(7 11) 2))
- (@(4 6) = @(8 12) / 2) !(arr Z '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
+ (@(4 6) = @(8 12) / 2) !(arr 0 '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2)) !(arr 99 '(3) 0)
- (0 = (asum (arr Z '(0) 0))) (1 = (aprod (arr Z '(0) 0))) (aall (arr Z '(0) 0))
- ("@()" = (show (arr Z '(0) 0))) (0 = (alen ((arr Z '(0) 0) + 1)))
+ (0 = (asum (arr 0 '(0) 0))) (1 = (aprod (arr 0 '(0) 0))) (aall (arr 0 '(0) 0))
+ ("@()" = (show (arr 0 '(0) 0))) (0 = (alen ((arr 0 '(0) 0) + 1)))
  (32 = (inner @(1 2 3) @(4 5 6))) (Z = (atype (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
- (: M (inner (arr Z '(2 3) '(1 2 3 4 5 6)) (arr Z '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
+ (: M (inner (arr 0 '(2 3) '(1 2 3 4 5 6)) (arr 0 '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
     (&& ('(2 2) = (ashape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup

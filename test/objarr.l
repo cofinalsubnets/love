@@ -8,18 +8,18 @@
    (oa-churn n)    (? (< n 1) 0 (: g (oa-list 300) (oa-churn (- n 1)))) ; alloc + discard
    oa-big     (100 2)                          ; a bignum (past fixnum/box range)
    oa-vals  (L oa-big (* oa-big oa-big) (+ oa-big 7) "hi" 'sym)
-   oa-a     (arr O '(5) oa-vals)
-   oa-z     (arr O '(3) 0)                         ; nil-filled
-   oa-nest  (arr O '(2) (L (arr O '(2) '(1 2)) (arr O '(2) '(3 4)))))
+   oa-a     (arr () '(5) oa-vals)
+   oa-z     (arr () '(3) 0)                         ; nil-filled
+   oa-nest  (arr () '(2) (L (arr () '(2) '(1 2)) (arr () '(2) '(3 4)))))
 
 (assert
  ; --- construction / accessors ---
  (= 3 O)   (= O (atype oa-a))                    ; type code 3
  (= 1 (arank oa-a))   (= 5 (alen oa-a))
  (= 5 (cap (ashape oa-a)))
- (nilp (arr O 0 0))                                ; rank-0 demotes to its lone cell -- nil-filled here
- (= 1 (arr O 0 '(1)))                              ; ... or the value: a one-cell array IS that value
- (nilp (arr O '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
+ (nilp (arr () 0 0))                                ; rank-0 demotes to its lone cell -- nil-filled here
+ (= 1 (arr () 0 '(1)))                              ; ... or the value: a one-cell array IS that value
+ (nilp (arr () '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
 
  ; --- holds arbitrary values verbatim (no boxing/coercion) ---
  (= oa-big (peep oa-a 0 0))
@@ -27,7 +27,7 @@
  (= (+ oa-big 7) (peep oa-a 2 0))
  (= "hi" (peep oa-a 3 0))
  (= 'sym (peep oa-a 4 0))
- (nilp (peep oa-z 0 0))                           ; (arr O ... 0) fills with nil
+ (nilp (peep oa-z 0 0))                           ; (arr () ... 0) fills with nil
 
  ; --- nested object arrays + index into the inner one ---
  (= 4 (peep (peep oa-nest 1 0) 1 0))
@@ -39,7 +39,7 @@
  ; --- print: an object array prints as the @(…)/(array …) surface form like any
  ;     other; the type is re-INFERRED on read-back, so an o array of plain
  ;     numbers re-reads at its natural tier (z) -- inferred, not pinned ---
- (= "@(10 20 30)" (show (arr O '(3) '(10 20 30))))
+ (= "@(10 20 30)" (show (arr () '(3) '(10 20 30))))
 
  ; --- GC stress: oa-a stays live (global root) across many collections; the
  ;     bignum element pointers must be forwarded, not dropped or truncated ---
@@ -51,13 +51,13 @@
 ; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
 ; the whole point of g_O: ops route through the promoting scalar dispatch, so a
 ; bignum array adds/multiplies EXACTLY where an z array would wrap.
-(: oa-x   (arr O '(3) (L (100 2) 2 3))
-   oa-y   (arr O '(3) (L 1 (100 2) 4))
+(: oa-x   (arr () '(3) (L (100 2) 2 3))
+   oa-y   (arr () '(3) (L 1 (100 2) 4))
    oa-sum (+ oa-x oa-y)
    oa-prd (* oa-x oa-y)
    oa-w   (40 2)                              ; 2^40 fits z; 2^40 * 2^40 = 2^80 overflows it
-   oa-zar (arr Z '(2) (L oa-w oa-w))          ; typed int array -> wraps
-   oa-oar (arr O   '(2) (L oa-w oa-w)))         ; object array   -> exact
+   oa-zar (arr 0 '(2) (L oa-w oa-w))          ; typed int array -> wraps
+   oa-oar (arr ()   '(2) (L oa-w oa-w)))         ; object array   -> exact
 
 (assert
  ; result of an op on a g_O array is itself g_O
@@ -79,18 +79,18 @@
  (? w64 (= (* 2 oa-w) (peep (+ oa-oar oa-zar) 0 0)) 1)   ; 2^40 wraps differently in a 32-bit z-array
 
  ; comparison over object arrays -> 0/1 element
- (= 1 (peep (< (arr O '(2) '(1 5)) (arr O '(2) '(3 2))) 0 0))
- (= 0 (peep (< (arr O '(2) '(1 5)) (arr O '(2) '(3 2))) 1 0))
+ (= 1 (peep (< (arr () '(2) '(1 5)) (arr () '(2) '(3 2))) 0 0))
+ (= 0 (peep (< (arr () '(2) '(1 5)) (arr () '(2) '(3 2))) 1 0))
 
  ; --- reductions fold exactly through the same dispatch ---
  (= (+ (100 2) 5) (asum oa-x))
  (= (* 6 (100 2)) (aprod oa-x))
- (= (100 2) (amax (arr O '(3) (L 5 (100 2) 7))))
- (= -3 (amin (arr O '(3) (L 5 -3 7))))
- (aall (arr O '(2) '(1 2)))
- (nilp (aall (arr O '(2) '(1 0))))
- (sat (arr O '(2) '(0 5)))
- (nilp (sat (arr O '(2) '(0 0))))
+ (= (100 2) (amax (arr () '(3) (L 5 (100 2) 7))))
+ (= -3 (amin (arr () '(3) (L 5 -3 7))))
+ (aall (arr () '(2) '(1 2)))
+ (nilp (aall (arr () '(2) '(1 0))))
+ (sat (arr () '(2) '(0 5)))
+ (nilp (sat (arr () '(2) '(0 0))))
 
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (= 0 (oa-churn 40))
@@ -145,7 +145,7 @@
  (= 0 (sat oa-z2)) (nilp oa-z2)                   ; all-zero object array -> falsy, pin 0
  (= 5 (sat oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(5)
  !!oa-b2                                          ; a bignum element is truthy
- (= 0 (sat (arr O '(2 2) 0)))                       ; all-nil object array -> pin 0
+ (= 0 (sat (arr () '(2 2) 0)))                       ; all-nil object array -> pin 0
  !!(array 2 'a 'b)                                ; symbol elements -> truthy
  ; the defining invariant (nilp x) == (= 0 (pin x)) on each:
  (= (? (nilp oa-z2) 1 0) (? (= 0 (sat oa-z2)) 1 0))

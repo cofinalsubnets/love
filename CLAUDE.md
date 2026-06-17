@@ -24,6 +24,9 @@
 ;   $(ai_h) and the lcat'd headers re-lay on ai0, so incremental builds stay consistent.
 ; * C files EMBED lisp the .l sweeps cannot see: ai.c (g_evals_'s driver string), main.c
 ;   (s2cl + runner), kmain.c (the K_TEST runner), wasm/. grep them on every rename.
+;   the docs EMBED rocq theorem names + ai vocab the sweeps also miss: bluepaper.{html,md}
+;   cite rocq/spec.v lemmas by name (the green chips) and index.html runs live demos --
+;   grep all three on a theorem rename or a vocab change.
 ; * a bare all-punct symbol mid-list captures its left operand when code compiles (the
 ;   opfix pass) -- escape it in parens ((+) is + as a value); GLUED to a datum it is
 ;   monadic instead (the valence law: space your dyadics); quoted lists are data and
@@ -284,7 +287,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; literal; (iota n) is jot's array twin -- the z-array '(0 .. n-1) filled in one C loop,
 ; no link spine, so (asum (iota n)) reduces a range end to end in C.
 ; a ONE-CELL array DEMOTES to its lone scalar gem -- a rank-0 (empty-shape) array, a
-; rank-1-len-1 like @(5), or a 1x1 contraction IS the value (so @(5) = 5, (arr R '(1)
+; rank-1-len-1 like @(5), or a 1x1 contraction IS the value (so @(5) = 5, (arr 0.0 '(1)
 ; '(3.5)) = 3.5, (iota 1) = 0): an array exists only at tally >= 2. there is thus NO
 ; rank-0 array kind; a scalar gem (charm/float/wide/complex) is the rank-0 point, and
 ; the array accessors (arank/alen/ashape) read nil on it. EMPTIES are the exception
@@ -307,7 +310,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 (asum @(10 20 30))       ; 60
 (iota 3)                 ; @(0 1 2)      the z-array 0..n-1
 (inner @(1 2 3) @(4 5 6)); 32            +.x dot product
-(asum (arr Z '(0) 0))    ; 0             empty reduction = the monoid unit
+(asum (arr 0 '(0) 0))    ; 0             empty reduction = the monoid unit
 
 ; --- chains & lists --- link builds the chain (the cartesian-product kind, classically the
 ; pair); cap and cup are its two projections -- the matched pair the string diagrams bend,

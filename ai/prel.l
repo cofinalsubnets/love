@@ -479,10 +479,11 @@
 (: uq (\ x x))                                               ; stray ,x evaluates x
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
-; a-type: the element type code, the highest of {Z=0 < R=1 < C=2 < O=3} present
-; in a list of values -- a box still fits z; a complex value lifts to a packed
-; (re,im) `c` array; only a value past the real numeric tower (bignum, symbol,
-; string, nested array, …) lifts the whole array to an object (o) array.
+; a-type: a WITNESS GEM of the element tier -- the highest of {Z<R<C<O} present in a
+; list of values, returned as an inhabitant (0/0.0/~(0 0)/()) for `arr` to read the
+; tier off (arr takes a witness, not a code). a box still fits z; a complex value lifts
+; to a packed (re,im) `c` array; only a value past the real numeric tower (bignum,
+; symbol, string, nested array, …) lifts the whole array to an object (o) array.
 ; a-dim/a-shape: a shape dimension may be any numeric -- a float, complex, or even
 ; a vector -- and is coerced to a nat by saturation (($ d) -- the count law:
 ; non-positive -> 0, a float ceils, a complex its modulus, a vector its net sum). a list
@@ -490,7 +491,7 @@
 ; means rank-1 length 3, (array ~(3 4) …) length 5).
 (: (a-rank x) (? (flop x) 1 (| (fixp x) (widep x)) 0 (comp x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
-   (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) Z (= k 1) R (= k 2) C O))
+   (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness gem of the tier
    (a-dim d) (? (chainp d) (tally d) (sat d))
    (a-shape s) (? (chainp s) (map a-dim s) (L (a-dim s))))
 

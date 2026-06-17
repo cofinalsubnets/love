@@ -5605,10 +5605,11 @@ struct ai *ai_big_dec(struct ai *g) {
 // packs two floats (re,im) per element; zero-fill is 0+0i. Bad type / negative
 // dim / over-rank -> nil.
 lvm(lvm_arr) {
- word t = Sp[0], shp = Sp[1];                  // vals = Sp[2]
- if (!charmp(t)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
- intptr_t ty = getcharm(t);
- if (ty < 0 || ty > ai_O) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+ word t = Sp[0], shp = Sp[1];                  // t = a WITNESS GEM (names its tier), vals = Sp[2]
+ // the type is read off the witness's KIND -- a value inhabiting the tier: 0 -> Z,
+ // 0.0 -> R, ~(0 0) -> C, and anything else (canonically (), the O floor) -> O.
+ intptr_t ty = Cp(t) ? ai_C : flop(t) ? ai_R
+             : (charmp(t) || widep(t) || bigp(t)) ? ai_Z : ai_O;
  uintptr_t rank = 0, nelem = 1;
  for (word l = shp; chainp(l); l = B(l)) {
   word d = A(l);
@@ -5622,7 +5623,7 @@ lvm(lvm_arr) {
  ini_vec(v, ty, rank);
  uintptr_t i = 0;                              // re-walk the (possibly moved) lists
  for (word l = Sp[1]; chainp(l); l = B(l)) v->shape[i++] = (uintptr_t) getcharm(A(l));
- if (ty == ai_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, nil);
+ if (ty == ai_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, (word) ai_core_of(g));  // O floor is () not 0
  else memset(vec_data(v), 0, nelem * ai_T[ty]);
  i = 0;                                        // no alloc below, so v/Sp[2] stay put
  for (word l = Sp[2]; chainp(l) && i < nelem; l = B(l), i++) {

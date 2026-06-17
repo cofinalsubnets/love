@@ -114,10 +114,10 @@
  ; --- int array vs bignum scalar: ordered by the bignum's true magnitude/sign,
  ;     NOT its low bits. 2^100's low word is 0, so a low-bits comparison would
  ;     wrongly treat B100 as 0 -- these assertions pin the magnitude-exact path. ---
- (aall (< (arr Z '(3) '(1 2 3)) B100))          ; every int < 2^100
- (aall (<= (arr Z '(3) '(1 2 3)) B100))
- (nilp (aall (> (arr Z '(3) '(1 2 3)) B100)))   ; nothing exceeds 2^100
- (nilp (aall (>= (arr Z '(3) '(1 2 3)) B100)))
- (aall (> (arr Z '(3) '(1 2 3)) (- 0 B100)))    ; every int > -2^100
- (aall (< (- 0 B100) (arr Z '(3) '(1 2 3))))    ; bignum on the left, too
- (nilp (aall (= (arr Z '(2) '(0 0)) B100))))    ; 0 != 2^100 (low word is 0!)
+ (aall (< (arr 0 '(3) '(1 2 3)) B100))          ; every int < 2^100
+ (aall (<= (arr 0 '(3) '(1 2 3)) B100))
+ (nilp (aall (> (arr 0 '(3) '(1 2 3)) B100)))   ; nothing exceeds 2^100
+ (nilp (aall (>= (arr 0 '(3) '(1 2 3)) B100)))
+ (aall (> (arr 0 '(3) '(1 2 3)) (- 0 B100)))    ; every int > -2^100
+ (aall (< (- 0 B100) (arr 0 '(3) '(1 2 3))))    ; bignum on the left, too
+ (nilp (aall (= (arr 0 '(2) '(0 0)) B100))))    ; 0 != 2^100 (low word is 0!)
