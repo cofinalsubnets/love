@@ -263,13 +263,20 @@
   (qsite site k n) (: cell (poke -1 0 (k (+ 2 n)))
                       _ (poke 2 cell site)
                     (poke -1 lvm_quote cell))
-  (lz c lfd scope)(: code (caup lfd)
+  ; a closure CELL is a box (tablet 0) holding the closure chain (entry . imports).
+  ; mkc makes one, cof reads it, cput stores into it -- the letrec* capture fixpoint and
+  ; the recursive-ref backpatch mutate THROUGH the box (pin/peep), so the shared mutable
+  ; cell is a proper heap object, not a chain tail poked in place (no raw set-tail).
+  (mkc v) (pin (tablet 0) 0 v)
+  (cof e) (peep (cup e) 0 0)
+  (cput e v) (: _ (pin (cup e) 0 v) v)
+  (lz c lfd scope)(: code (cap (cof lfd))
                    p (? code (em2 lvm_quote code)
                         (: site (hook lfd 0)
                            _ (pin scope 'sites (hook site (scope 'sites)))
                          (qsite site)))
                    _ (push c 'stk 0)
-                   q (apl2r c (cuup lfd))
+                   q (apl2r c (cup (cof lfd)))
                    _ (pop c 'stk)
                  (co p q))
   ; variable expression analyzer
@@ -336,8 +343,6 @@
    (atomp b) (ana c a)
    (:- (link (cap cb) (caup cb) (cuup cb) (closures (cap cb)))
     q (sco c (c 'arg) (c 'imp))
-    ; set-tail: overwrite chain p's tail (cell offset 2, the cup) in place; return x.
-    (set-tail p x) (: _ (poke 2 x p) x)
     ; collect: gather (name . def) chains in source order -> (prs body . even). the body is
     ; the trailing odd form; even = a body-LESS let (last value is result, names defglob).
     (collect prs n d rest) (: nd (dsug n d)
@@ -369,7 +374,7 @@
         (split a (cup ps)))
       (: k (caap ps)
          v (ala q 0 (cuuap ps))
-         a2 (hook (hook k v) a)
+         a2 (hook (hook k (mkc v)) a)
        _ (push c 'stk k)
        (split a2 (cup ps))))
      l (split 0 prs)
@@ -378,20 +383,20 @@
      ; recursion). sweep all ordered pairs, pour k1's vars into k2 (addv); a sweep that adds
      ; any var (n > 0) repeats until a full pass is stable -- then drop the let's own names.
      (propagate n l k1 k2) (?
-      (&& k1 k2 !(= k1 k2) (memq (caap k1) (cuuap k2)))
-       (>>= n (cuuap k1) (: (addv n v)
+      (&& k1 k2 !(= k1 k2) (memq (caap k1) (cup (cof (cap k2)))))
+       (>>= n (cup (cof (cap k1))) (: (addv n v)
         (? (nilp v) (propagate n l k1 (cup k2))
          (: var (cap v)
-            vars (cuuap k2)
+            vars (cup (cof (cap k2)))
             n2 (? (memq var vars) n
-               (: _ (set-tail (cuap k2) (hook var vars))
+               (: _ (cput (cap k2) (hook (cap (cof (cap k2))) (hook var vars)))
                 (+ 1 n)))
             (addv n2 (cup v))))))
       k2 (propagate n l k1 (cup k2))
       k1 (propagate n l (cup k1) l)
       n (propagate 0 l l l)                                    ; a pass added vars -> sweep again
       (: j (map cap l)                                         ; stable: drop the let's own names
-         (dropj x) (hook (cap x) (hook (caup x) (foldl (flip ldel) (cuup x) j)))
+         (dropj x) (hook (cap x) (mkc (hook (cap (cof x)) (foldl (flip ldel) (cup (cof x)) j))))
        (map dropj l))))
 
    (link prs body even lams) (:
@@ -400,8 +405,8 @@
     (weave nds) (? (atomp nds) id
      (: nd (cap nds) n (cap nd) d (cup nd)
         d (?- d (lambp d) (: cls (assq (cap nd) lams)
-                             x (ala q (cuup cls) (cup d))
-                           (set-tail cls x)))
+                             x (ala q (cup (cof cls)) (cup d))
+                           (cput cls x)))
         f (ana c d)
         g (?- id (&& even (nilp (c 'par))) (em2 lvm_defglob n))
         _ (push c 'stk n)
@@ -412,10 +417,10 @@
     _ (push c 'stk 0)
     ; clear stale first-build closures so a ref hit during the rebuild defers to a
     ; backpatch site; the import sets are kept.
-    _ (each lams (\ e (poke 1 0 (cup e))))
+    _ (each lams (\ e (cput e (hook 0 (cup (cof e))))))
     g (weave prs)
     ; closures final -> backpatch each recorded recursive-fn ref with its text.
-    _ (each (q 'sites) (\ s (poke 0 (caup (cap s)) (cup s))))
+    _ (each (q 'sites) (\ s (poke 0 (cap (cof (cap s))) (cup s))))
     _ (pin q 'sites 0)
     _ (pin c 'stk s)
     ; body-lambda analyzed AFTER inits (it takes the bindings as args; never makes sites)
