@@ -1,7 +1,8 @@
 ; === the generic-op DISPATCH MATRICES, walked cell by cell ====================
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
-; (l.h enum q): KCharm | KVec(rank-0 box: float/complex/wide-int) | KBig |
-; KArrZ KArrR KArrC KArrO (the array tower) | KString KSym | KTwo(pair) | KTop.
+; (l.h enum q): KCharm | KWide KFlo KCplx (the lean scalar-gem boxes) | KBig |
+; KVec (the coarse array sentinel; ai_kind refines it away) | KArrZ KArrR KArrC
+; KArrO (the array tower) | KString KSym | KTwo(pair) | KTop.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
 ; < <= = >= >) are lane aps that refine the same lattice internally. This
@@ -12,12 +13,12 @@
 ; file adds the FINE within-category cells (fix vs box/float/complex vs bignum;
 ; the four array tiers) and the apply matrix, which had no systematic test.
 
-; one representative value per kind (the KVec box has three reps that route to
-; one matrix cell but fan out by representation inside the lane).
+; one representative value per kind. The three scalar-gem boxes are now distinct
+; kinds (KFlo/KCplx/KWide) but still share one apply matrix cell (data_num_apply).
 (: mx-fix 5                              ; KCharm
-   mx-real 2.5                            ; KVec, float box
-   mx-cpx ~(2 3)                        ; KVec, complex scalar (Cp)
-   mx-box (<< 1 62)                      ; KVec, wide int (widep)
+   mx-real 2.5                            ; KFlo, float box (flop)
+   mx-cpx ~(2 3)                        ; KCplx, complex scalar (Cp)
+   mx-box (<< 1 62)                      ; KWide, wide int (widep)
    mx-big (100 2)                     ; KBig
    mx-az  @(10 20)                       ; KArrZ (int array)
    mx-ar  @(1.5 2.5)                     ; KArrR (float array)
@@ -61,8 +62,9 @@
  (= 1 ('abc 9))   (= 1 ('abc 'x))
  (= 1 ((mint 0) 5))
 
- ; --- row KVec: a rank-0 box / array is a Church numeral (operand ** operator,
- ;     or operator-fold over a function). Full tower coverage in functions.l. ---
+ ; --- the scalar-gem + array rows (KFlo/KCplx/KWide/KArr*, all -> data_num_apply):
+ ;     a gem or array is a Church numeral (operand ** operator, or operator-fold
+ ;     over a function). Full tower coverage in functions.l. ---
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 = 9
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8
  (= 13 ((2.5 (+ 1)) 10))                      ; float operator on a fn: ($ 2.5)=3 comps

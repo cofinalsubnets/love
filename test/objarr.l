@@ -2,7 +2,7 @@
 ; the numeric tuple types (z..r) fold to a flat word/float payload the GC moves
 ; by memcpy; an o-array instead holds tagged words, so it can carry bignums,
 ; strings, symbols and nested arrays -- and is the one tuple type the collector
-; traces element-by-element. rank-0 is rejected (a boxed scalar is just a value).
+; traces element-by-element. a one-cell array demotes to its value (a boxed scalar is just a value).
 
 (: (oa-list n acc) (? (< n 1) acc (oa-list (- n 1) (cons n acc)))   ; build (1 .. n)
    (oa-churn n)    (? (< n 1) 0 (: g (oa-list 300) (oa-churn (- n 1)))) ; alloc + discard
@@ -17,8 +17,8 @@
  (= 3 O)   (= O (atype oa-a))                    ; type code 3
  (= 1 (arank oa-a))   (= 5 (alen oa-a))
  (= 5 (cap (ashape oa-a)))
- (nilp (arr O 0 0))                                ; rank-0 object rejected
- (nilp (arr O 0 '(1)))
+ (nilp (arr O 0 0))                                ; rank-0 demotes to its lone cell -- nil-filled here
+ (= 1 (arr O 0 '(1)))                              ; ... or the value: a one-cell array IS that value
  (nilp (arr O '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
 
  ; --- holds arbitrary values verbatim (no boxing/coercion) ---

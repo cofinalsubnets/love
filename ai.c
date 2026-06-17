@@ -260,8 +260,11 @@ static ai_inline bool widep(word _) {
 // explicit Cp branches placed before the real lanes (complex > float > int/big).
 static ai_inline bool Cp(word _) {
   return lamp(_) && cell(_)->ap == lvm_cbox; }
-// A rank>=1 typed array (vs a rank-0 scalar box, which flop/widep catch). The
-// elementwise arith/compare lanes divert to lvm_vbin when either operand arrp.
+// A typed array. Since the Stage-3 invariant keeps a vec only at nelem>=2 (a
+// rank-0 point / rank-1-len-1 / empty array demotes or collapses at the build
+// seam), every vec is already rank>=1 -- so arrp coincides with packp; the rank
+// guard is kept as a documented assertion. flop/widep/Cp catch the scalar gems.
+// The elementwise arith/compare lanes divert to lvm_vbin when either operand arrp.
 static ai_inline bool arrp(word _) { return packp(_) && vec(_)->rank >= 1; }
 
 // Max array rank (bounds the stack index/stride arrays in the broadcast loop).
@@ -359,9 +362,8 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 #define toint(x) (charmp(x) ? (intptr_t) getcharm(x) : box_get(x))
 // Double value of any numeric operand (a bignum widens via ai_big_to_flo).
 #define toflo(x) (charmp(x) ? (ai_flo_t) getcharm(x) : flop(x) ? flo_get(x) : widep(x) ? (ai_flo_t) box_get(x) : ai_big_to_flo(x))
-// Heap words for one scalar box. The float box (ai_flo_t) and the wide-int box
-// (intptr_t) are both one pointer-width word, so one reservation fits.
-#define box_req (Width(struct ai_vec) + Width(intptr_t))
+// box_req (the Have for emit_int/emit_flo) is defined with the lean box structs
+// below -- a float/wide box is two words, no longer the rank-0 ai_R/ai_Z vec it was.
 // Heap words for one lean complex box (struct ai_cplx, defined below): ap + re + im.
 #define cplx_req Width(struct ai_cplx)
 // The tagged fixnum range: putcharm spends one bit, so |value| <= 2^(Bits-2).
@@ -410,6 +412,11 @@ struct ai_flo { lvm_t *ap; ai_word w; };
 // reinterpretation, unlike the float box). Same shape/size as ai_flo, distinct ap.
 struct ai_wide { lvm_t *ap; intptr_t w; };
 #define wide_req Width(struct ai_wide)
+// Heap words emit_int/emit_flo reserve: a lean float OR wide-int box (both two
+// words -- same shape, distinct ap). Was Width(ai_vec)+1 when these emitted a
+// rank-0 vec; the Stage-2 split made the box lean and the Stage-3 array
+// invariant (nelem>=2) retired the rank-0 vec for good.
+#define box_req (flo_req > wide_req ? flo_req : wide_req)
 // The lean complex box: ap (lvm_cbox) then two punned-double payload words
 // (re, im) -- three words vs the five a rank-0 ai_C vec spent. Also a flat GC leaf.
 struct ai_cplx { lvm_t *ap; ai_word re, im; };
@@ -2441,12 +2448,8 @@ static struct ai_zn ai_net(struct ai *g, word x) {
     case KCplx: return zn(cplx_re(x), cplx_im(x));               // a complex nets ITSELF (phase intact)
     case KSym: return zn((ai_flo_t) pin_sym(g, x), 0);           // a symbol nets its SPELLING's charms
                                                                 // (a mint: the distinct nothing)
-    case KVec: { struct ai_vec *v = vec(x);                 // boxed scalar or rank-n array
+    case KVec: { struct ai_vec *v = vec(x);                 // a rank>=1 array (scalar gems: KFlo/KWide/KCplx)
       uintptr_t i, n = vec_nelem(v);
-      if (!v->rank) {                                            // rank-0 scalar: its value
-        if (v->type == ai_C) return zn(cplx_re(x), cplx_im(x));   // a complex nets ITSELF
-        if (v->type == ai_R) return zn(flo_get(x), 0);
-        return zn((ai_flo_t) box_get(x), 0); }                    // ai_Z wide-int box
       struct ai_zn s = zn(0, 0);                                  // rank>=1 array -> Σ elem
       if (v->type == ai_C) { ai_flo_t *d = vec_data(v);
         for (i = 0; i < n; i++) s.re += d[2*i], s.im += d[2*i+1];
@@ -2798,9 +2801,6 @@ static struct ai *ioput_arr(struct ai *g, uintptr_t off) {
   g = ioputc(g, ' '); g = ioput_arr_elem(g, i, type, off); }
  return ai_ok(g) ? ioputc(g, ')') : g; }
 
-static ai_inline struct ai*ioput_vec_scalar_float(struct ai*g) {
- return ai_dtoa2(g, (ai_flo_t) flo_get(g->sp[0])); }
-
 // complex -> ~(re im); round-trips by re-evaluation (the `~` reader macro splices
 // into (wave re im), and wave is a nif). re/im are read into C locals up front so a
 // GC during ai_dtoa2 can't strand the operand.
@@ -2812,14 +2812,11 @@ static ai_inline struct ai*ioput_vec_scalar_complex(struct ai*g) {
  g = ai_dtoa2(g, im);
  return ioputc(g, ')'); }
 
+// A vec is always a rank>=1 array now (the scalar gems print via their own
+// KFlo/KWide/KCplx printer cases); ioput_arr does the surface @(…)/(array …) form.
 static ai_inline struct ai*ioput_vec(struct ai*g, word _, uintptr_t off) {
- intptr_t rank = vec(_)->rank, type = vec(_)->type;
  if (!ai_ok(g = ai_push(g, 1, _))) return g;
- if (rank == 0 && type == ai_R) g = ioput_vec_scalar_float(g);
- else if (rank == 0 && type == ai_Z) g = ioputn(g, box_get(g->sp[0]), 10);
- else if (rank == 0 && type == ai_C) g = ioput_vec_scalar_complex(g);
- else if (rank >= 1) g = ioput_arr(g, off);
- return ai_pop(g, 1); }
+ return ai_pop(ioput_arr(g, off), 1); }
 
 static ai_inline struct ai*ioput_str(struct ai*g, word _) {
  uintptr_t slen = len(_);
@@ -3752,13 +3749,12 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
    break;
   case KVec: {
    // Array index: a fixnum for a rank-1 array, or a shape-list (row-major) for
-   // rank-N; an empty/nil key derefs a rank-0 scalar box. Out-of-bounds or a
-   // wrong-rank key falls through to the default `z`. Integer elements keep
-   // integer type (emit_int demotes-or-boxes); float elements box an f64.
+   // rank-N. Out-of-bounds or a wrong-rank key falls through to the default `z`.
+   // Integer elements keep integer type (emit_int demotes-or-boxes); float
+   // elements box an f64. (A vec is always rank>=1 now; scalar gems deref above.)
    struct ai_vec *v = vec(x);
    uintptr_t R = v->rank, off = 0; bool ok = false;
-   if (R == 0) ok = nilp(k);
-   else if (R == 1 && charmp(k)) {
+   if (R == 1 && charmp(k)) {
     intptr_t ix = getcharm(k);
     if (ix >= 0 && ix < (intptr_t) v->shape[0]) off = ix, ok = true; }
    else if (twop(k)) {
@@ -4510,17 +4506,17 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
 
 // The fundamental value kind for generic-op dispatch (enum q in ai.h): a fixnum is
 // the odd tag (KCharm), a non-data heap pointer is a text/function (KTop), else ai_typ
-// gives the data kind. The refinement: a vec expands by element tier -- a rank>=1 vec
-// (array) to KArrZ..KArrO and a rank-0 box (a scalar GEM: wide/float/complex) to
-// KWide..KCplx -- so the gem tower and the array tower it mirrors both dispatch inline.
-// ai_typ still gives KVec (the coarse sentinel) for both; only ai_kind splits them.
+// gives the data kind. The refinement: a vec is always a rank>=1 array now (the
+// scalar gems wide/float/complex carry their own sentinels and ai_typ gives them
+// KWide/KFlo/KCplx directly), so a vec expands purely by element tier to
+// KArrZ..KArrO. ai_typ gives the coarse KVec; ai_kind splits it across the row.
 // Exported (not inline) so data.c's apply sentinels share it.
 enum q ai_kind(word x) {
  if (charmp(x)) return KCharm;
  if (!datp(x)) return mapp(x) ? KMap : KTop;
  enum q k = typ(x);
  if (k != KVec) return k;
- return (enum q) ((vec(x)->rank ? KArrZ : KWide) + vec(x)->type); }
+ return (enum q) (KArrZ + vec(x)->type); }
 
 // ============================================================================
 // generic-op lane aps, then all three dispatch matrices adjacent, then the
@@ -5604,7 +5600,7 @@ lvm(lvm_arr) {
   word d = A(l);
   if (!charmp(d) || getcharm(d) < 0) return Sp[2] = nil, Sp += 2, Ip++, Continue();
   rank++, nelem *= (uintptr_t) getcharm(d); }
- if (rank > maxrank || (ty == ai_O && rank == 0)) return Sp[2] = nil, Sp += 2, Ip++, Continue();
+ if (rank > maxrank) return Sp[2] = nil, Sp += 2, Ip++, Continue();
  uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + nelem * ai_T[ty];
  Have(b2w(bytes));
  struct ai_vec *v = (struct ai_vec*) Hp;
@@ -5627,6 +5623,20 @@ lvm(lvm_arr) {
   if (ty >= ai_R) vec_put_flo(v, i, toflo(e));
   else vec_put_int(v, i, charmp(e) ? (intptr_t) getcharm(e)
                        : flop(e) ? (intptr_t) flo_get(e) : box_get(e)); }
+ // Stage-3 array invariant: a vec exists at nelem != 1. A one-element array (a
+ // rank-0 point or a rank-1-len-1) demotes to its lone scalar gem -- read elem 0
+ // and box it canonically (the same extraction peep does), which is what retires
+ // every rank-0 vec (an empty shape is nelem 1). Empty arrays (nelem 0, always
+ // rank>=1) stay arrays: the APL empties carry the reduction monoid units and the
+ // 0-axis broadcast. Root the built vec first, since the box alloc can GC.
+ Sp[2] = word(v);
+ if (nelem == 1) {
+  if (ty == ai_O) return Sp[2] = vec_get_obj(v, 0), Sp += 2, Ip++, Continue();
+  if (ty == ai_C) { Have(cplx_req); v = vec(Sp[2]); ai_flo_t *fp = vec_data(v);
+   return Sp[2] = mk_cplx(&Hp, fp[0], fp[1]), Sp += 2, Ip++, Continue(); }
+  word _res; Have(box_req); v = vec(Sp[2]);
+  if (ty >= ai_R) emit_flo(vec_get_flo(v, 0)); else emit_int(vec_get_int(v, 0));
+  return Sp[2] = _res, Sp += 2, Ip++, Continue(); }
  return Sp[2] = word(v), Sp += 2, Ip++, Continue(); }
 
 // (iota n) -- a z-array of the first n charms, 0..n-1, filled in C (no cons
@@ -5636,6 +5646,7 @@ lvm(lvm_iota) {
  word nx = Sp[0];
  if (!charmp(nx) || getcharm(nx) < 0) return Sp[0] = nil, Ip++, Continue();
  uintptr_t n = (uintptr_t) getcharm(nx);
+ if (n == 1) return Sp[0] = putcharm(0), Ip++, Continue();  // @(0) singleton demotes to the scalar 0
  uintptr_t bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + n * ai_T[ai_Z];
  Have(b2w(bytes));
  struct ai_vec *v = (struct ai_vec*) Hp;
@@ -5874,7 +5885,7 @@ lvm(lvm_inner) {
  uintptr_t rank = (va->rank - 1) + (vb->rank - 1), n = M * N;
  if (rank > maxrank) return *++Sp = nil, Ip++, Continue();
  bool fdom = va->type == ai_R || vb->type == ai_R, ar = va->type == ai_R, br = vb->type == ai_R;
- if (rank == 0) {                               // dot product -> scalar number
+ if (n == 1) {                                  // 1D·1D dot, or any 1-cell contraction -> scalar (invariant)
   word _res;
   if (fdom) { ai_flo_t *Ad = vec_data(va), *Bd = vec_data(vb);
    intptr_t *Ai = vec_data(va), *Bi = vec_data(vb); ai_flo_t acc = 0;

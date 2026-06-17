@@ -13,15 +13,23 @@
 (assert
  ; --- constructor + accessors ---
  (= 2 (arank (arr Z '(2 3) 0)))
- (= 0 (arank (arr Z 0 0)))            ; empty shape (nil) -> rank-0 scalar
  (= 6 (alen (arr Z '(2 3) 0)))
- (= 1 (alen (arr R 0 0)))             ; rank-0 has one element
  (= Z (atype (arr Z '(2 3) 0)))
  (= R (atype (arr R '(4) 0)))
  (= '(2 3) (ashape (arr Z '(2 3) 0)))
- (= 0 (ashape (arr Z 0 0)))           ; rank-0 shape is the empty list (nil)
  (nilp (arank 5))                     ; non-tuple -> nil
  (nilp (atype "x"))
+
+ ; --- a one-element array DEMOTES to its lone scalar gem (no rank-0 / singleton
+ ; vec exists): an empty shape (rank 0, one cell) or a rank-1 length-1 array is
+ ; just the value, so the array accessors read nil on it like any scalar ---
+ (= 0 (arr Z 0 0))                    ; empty shape, zero-filled -> the fixnum 0
+ (flop (arr R 0 0)) (= 0.0 (arr R 0 0))      ; -> a boxed 0.0
+ (= 5 (arr Z '(1) '(5)))              ; rank-1 len-1 -> the fixnum 5
+ (= 3.5 @(3.5)) (flop @(3.5))         ; @(3.5) is the scalar 3.5
+ (nilp (arank (arr Z 0 0)))           ; a demoted scalar is not a tuple
+ (nilp (alen (arr R 0 0)))
+ (nilp (ashape (arr Z 0 0)))
 
  ; --- get: rank-1 fixnum index ---
  (= 10 (peep (arr Z '(3) '(10 20 30)) 0 -1))

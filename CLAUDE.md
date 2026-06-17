@@ -276,6 +276,12 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; fills row-major; (array shape elem..) infers the type and curries; @(..) is a rank-1
 ; literal; (iota n) is jot's array twin -- the z-array '(0 .. n-1) filled in one C loop,
 ; no cons spine, so (asum (iota n)) reduces a range end to end in C.
+; a ONE-CELL array DEMOTES to its lone scalar gem -- a rank-0 (empty-shape) array, a
+; rank-1-len-1 like @(5), or a 1x1 contraction IS the value (so @(5) = 5, (arr R '(1)
+; '(3.5)) = 3.5, (iota 1) = 0): an array exists only at tally >= 2. there is thus NO
+; rank-0 array kind; a scalar gem (charm/float/wide/complex) is the rank-0 point, and
+; the array accessors (arank/alen/ashape) read nil on it. EMPTIES are the exception
+; (a 0-axis has tally 0, not 1): they STAY arrays, carrying the reduction units below.
 ; arank/alen/ashape/atype; peep (out of bounds -> the default). + - * // < =
 ; broadcast numpy-style to the widest type
 ; (compare -> a z mask); `/` promotes the whole result to r the moment any element divides
