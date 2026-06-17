@@ -3363,8 +3363,8 @@ static struct ai *ioread1op(struct ai *g, int c, int *pending) {
 // (interned `vec`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in ioparse.
 static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
- struct ai_str *s = symp(x) ? sym(x)->nom : 0;
- if (!s || !strp(word(s)) || s->len != n) return false;
+ struct ai_str *s = (chainp(x) && strp(A(x)) && mintp(B(x))) ? str(A(x)) : 0;  // named sym (name . mint) -> its name; a bare mint is nameless
+ if (!s || s->len != n) return false;
  for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
  return true; }
 static ai_inline bool hashsym(word x) { return symeq(x, "hash", 4); }
@@ -4323,7 +4323,7 @@ op11(lvm_intf, flop(Sp[0]) ? putcharm((intptr_t) flo_get(Sp[0])) : Sp[0])
 // ============================================================================
 op11(lvm_car, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cdr, chainp(Sp[0]) ? B(Sp[0]) : nil)
-op11(lvm_chainp, chainp(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_chainp, (chainp(Sp[0]) && !symp(Sp[0])) ? putcharm(1) : nil)  // the SURFACE chainp = a real compound list (formp): a named symbol is (name . mint) but counts as an atom
 lvm(lvm_link) {
  Have(Width(struct ai_chain));
  struct ai_chain *w = (struct ai_chain*) Hp;
@@ -6022,7 +6022,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // (KCharm) so fix/box/big/float/complex order by VALUE, not representation. Arrays
 // divert to lvm_vbin before this, so KArr* never appear. One source of truth:
 // the enum q order itself.
-static ai_inline int cmp_rank(word x) { return (isnum(x) || Cp(x)) ? KCharm : (int) ai_kind(x); }
+static ai_inline int cmp_rank(word x) { return (isnum(x) || Cp(x)) ? KCharm : symp(x) ? KMint : (int) ai_kind(x); }  // a named symbol is a (name . mint) chain but ranks in the mint band (below chains)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
@@ -6037,7 +6037,16 @@ static ai_inline intptr_t mint_cmp(struct ai *g, word a, word b) {
  word core = (word) ai_core_of(g);                       // () is the nameless serial-0 point: least of all
  if (a == core) return -1;                               // (a != b, so b is some other mint above it)
  if (b == core) return 1;                                // -- guarded by identity, its atom slots are never read
- uintptr_t ca = sym(a)->code, cb = sym(b)->code;
+ // a named symbol is (name . mint); a bare mint is the atom. bare mints rank below
+ // every named symbol; within a band, named by (name lex, then serial), bare by serial.
+ bool na = chainp(a), nb = chainp(b);
+ if (na != nb) return na ? 1 : -1;                       // bare mint < named symbol
+ if (na) {                                               // both named: name first, then the inner mint's serial
+  intptr_t c = bytes_cmp(txt(A(a)), len(A(a)), txt(A(b)), len(A(b)));
+  if (c) return c;
+  uintptr_t ma = sym(B(a))->code, mb = sym(B(b))->code;
+  return ma < mb ? -1 : ma > mb ? 1 : 0; }
+ uintptr_t ca = sym(a)->code, cb = sym(b)->code;         // both bare: by serial
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
 // 3-way total-order comparator (-1/0/1); the recursive engine for the chain case.
 // Floats collapse NaN to "equal" here (a structural total order can't carry IEEE

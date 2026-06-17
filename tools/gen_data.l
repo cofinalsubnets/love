@@ -1,7 +1,9 @@
 #!/usr/bin/env l
 ; gen_data.l -- bake the data-sentinel stride into a generated data.h.
 ;
-; Port of tools/gen_data.py (see it for the full rationale). Reflects on an
+; This .l is the BUILD PATH; tools/gen_data.py is the original, kept only for
+; reference/testing/documentation (it carries the full prose rationale) -- it is
+; NOT run by the build. Reflects on an
 ; ELF object (data.o), recovers the per-sentinel byte stride of the
 ; ai_data.* input sections, and emits a data.h that hard-codes it so
 ; ai_typ()'s two link-time divides fold away (a shift when the stride is 2^k).
