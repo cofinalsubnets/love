@@ -48,19 +48,21 @@
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (idp non nilp) (1 = (non 0))  ; ! negates it; non is nilp
- (gemp 5) (gemp -3.5) (gemp ~(2 3)) (gemp (62 2))         ; scalar gems -- self-netting: charm, float, complex, wide
- (gemp @(1 2 3)) (crestp @(1 2 3)) (gemp (net @(1 2 3)))  ; a CREST is a gem too (a numeric tray); it nets DOWN to a scalar gem
+ (gemp 5) (gemp -3.5) (gemp ~(2 3)) (gemp (62 2))         ; a GEM is a self-netting SCALAR: charm, float, complex, wide
+ !(gemp @(1 2 3)) (gemp (net @(1 2 3)))                   ; a TRAY is NOT a gem -- it nets DOWN to a scalar gem (net is a fresh sum)
  !(gemp "x") !(gemp 'a) !(gemp '(1 2))                    ; text/symbol/list are not gems -- they net to something else
  (? (fixp 5) (gemp 5) 1)                                  ; a CHARM is a gem, by spec (net = self)
- (crestp (array '(2) (200 2) (200 2))) !(crestp (array '(2) "a" "b"))  ; a tray of BIGS is a crest (gem cells); a tray of strings is not
- !(crestp 5) !(crestp '(1 2))                             ; a scalar / a list is not a crest
+ (trayp @(1 2 3)) (trayp @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
+ (crestp @(1 2 3)) !(crestp @("a" "b"))                   ; a CREST is a NUMERIC tray (a tray of gems); a tray of strings is not
+ (crestp (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a crest -- bignum cells are gems (keyed on cells, not the O code)
+ !(gemp @(1 2 3)) !(crestp 5) !(crestp '(1 2))            ; gemp/crestp are DISJOINT; a scalar / a list is neither a crest nor a tray
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: fixp bigp widep flop comp arrp strp symp chainp tabp;
+; --- types & predicates --- storage: fixp bigp widep flop comp trayp strp symp chainp tabp;
 ; derived nump intp atomp; lamp = presence (any heap value); hotp names the buf/port zoo.
 (assert
  (fixp 5) (chainp '(1 2)) (strp "hi") (symp 'x) (lamp cap) (tabp #(1 2))
- (bigp (100 2)) ((? w64 widep bigp) (62 2)) (flop 1.5) (comp i) (arrp @(1 2 3)) (packp 1.5)
+ (bigp (100 2)) ((? w64 widep bigp) (62 2)) (flop 1.5) (comp i) (trayp @(1 2 3)) (packp 1.5)
  (nump 1.5) (nump i) (nump (62 2)) (intp (62 2)) (atomp 'x) !(atomp '(1))
  (hotp (buf 4)) (hotp out) (hotp (sip '(104)))   ; the hot zoo, named
  !(hotp #()) !(hotp cap) !(hotp 5) !(hotp "s")   ; maps/functions/data are not hots

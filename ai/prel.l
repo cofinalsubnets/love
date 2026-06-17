@@ -98,7 +98,7 @@
    ; a NEGATIVE integer giving the reciprocal power (so (-1 x) == (/ 1 x) and
    ; (sqrt x) == ((/ 1 2) x)); otherwise pow, which carries a complex lane
    ; (w^z = exp(z Log w)) and a real lane.
-   (powg x n) (? (arrp n) (pow x n)
+   (powg x n) (? (trayp n) (pow x n)
                  (intp n) (: m (? (< n 0) (- 0 n) n)
                              (? (apover m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
@@ -136,26 +136,27 @@
 ; cells, a list the nets of its spine, and everything else is non-negative
 ; so its net IS its sat. prod is the product twin; neg/recip/frac the
 ; dyadics turned inward; bit the truth bit (the Iverson bracket, !!).
-(: (net x) (? (arrp x) (asum x)
+(: (net x) (? (trayp x) (asum x)
               (nump x) x
               (chainp x) (foldl (\ a e (+ a (net e))) 0 x)
               (sat x))
-   (prod x) (? (arrp x) (aprod x)
+   (prod x) (? (trayp x) (aprod x)
                (chainp x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
    neg (- 0)
    recip (/ 1)
    (frac x) (% x 1)
    (bit x) (nilp (nilp x))
-   ; a GEM is the numeric carrier, closed under the ring algebra: a CREST if it is
-   ; a tray, else a SCALAR GEM -- a self-netting scalar (charm/wide/float/complex/
-   ; big), the fixpoint of net (x IS its own net; idp, not `=`, since net returns a
-   ; number operand unchanged while a tray's net is a fresh sum). a CREST is a tray
-   ; of gems: keyed on the CELLS, not the O code, so a Z/R/C tray qualifies outright
-   ; and an object-typed tray of gem cells (e.g. bignums) still counts -- a tray of
-   ; strings does not. mutually recursive, one level deep (a cell is a scalar gem).
-   (gemp x) (? (arrp x) (crestp x) (idp x (net x)))
-   (crestp x) (? (arrp x) (? (< (atype x) O) 1 (gemp (peep x 0 0))) 0))
+   ; a GEM is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
+   ; net (x IS its own net; idp, not `=`, since net returns a number operand unchanged
+   ; while a tray's net is a fresh sum). a TRAY (trayp) is an array of any element kind;
+   ; a CREST is a tray of GEMS -- a numeric tray. gemp and crestp are DISJOINT: a tray
+   ; never self-nets (its net is a fresh scalar), so a crest is never a gem -- it is
+   ; COMPOSED of gems, not a kind of gem. crestp keys on the CELLS, not the O code, so a
+   ; Z/R/C tray qualifies outright and an object-typed tray of gem cells (e.g. bignums)
+   ; still counts -- a tray of strings does not (a string is no gem).
+   (gemp x) (idp x (net x))
+   (crestp x) (? (trayp x) (? (< (atype x) O) 1 (gemp (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
@@ -438,11 +439,11 @@
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
 (: (rng-get _) (: st (peep book 'rng-state 0)
-                  (? (arrp st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
+                  (? (trayp st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (arrp st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
+   (rng-set st) (? (&& (trayp st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
                    (: _ (pin book 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin book 'rng-state (cup r))

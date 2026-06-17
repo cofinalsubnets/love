@@ -139,7 +139,7 @@ lvm_t lvm_kcall,
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_arr, lvm_iota, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
- lvm_packp, lvm_bigp, lvm_widep, lvm_arrp, lvm_intf, lvm_lamp, lvm_hotp,
+ lvm_packp, lvm_bigp, lvm_widep, lvm_trayp, lvm_intf, lvm_lamp, lvm_hotp,
  lvm_nat, lvm_natn,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
@@ -649,7 +649,7 @@ lvm_t lvm_fault;
  _(nif_amax, "amax", s1(lvm_amax)) _(nif_amin, "amin", s1(lvm_amin))\
  _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
  _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "bigp", s1(lvm_bigp)) _(nif_widep, "widep", s1(lvm_widep))\
- _(nif_arrp, "arrp", s1(lvm_arrp)) _(nif_intf, "int", s1(lvm_intf))\
+ _(nif_trayp, "trayp", s1(lvm_trayp)) _(nif_intf, "int", s1(lvm_intf))\
  _(nif_symp, "symp", s1(lvm_symp)) _(nif_tabp, "tabp", s1(lvm_tabp)) _(nif_fixp, "fixp", s1(lvm_fixp))\
  _(nif_lamp, "lamp", s1(lvm_lamp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
  _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
@@ -4305,7 +4305,7 @@ op11(lvm_symp, symp(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_packp, (packp(Sp[0]) || flop(Sp[0]) || widep(Sp[0]) || Cp(Sp[0])) ? putcharm(1) : nil)  // the pack family: arrays + the lean float/wide/complex scalar boxes
 op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_widep, widep(Sp[0]) ? putcharm(1) : nil)
-op11(lvm_arrp, arrp(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_trayp, arrp(Sp[0]) ? putcharm(1) : nil)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. Used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
 op11(lvm_intf, flop(Sp[0]) ? putcharm((intptr_t) flo_get(Sp[0])) : Sp[0])

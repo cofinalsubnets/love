@@ -140,10 +140,15 @@ $@(3 4)              ; 7
 ; --- types & predicates --- a fixnum is a tagged word; everything else is a heap object whose
 ; first word dispatches. the storage predicates:
 ;   fixp bigp widep  -- the integer reps (fixnum, bignum, wide int)
-;   flop comp arrp  -- float, complex scalar, array; all three share one heap type, `packp`
+;   flop comp trayp  -- float, complex scalar, array; all three share one heap type, `packp`
 ;   strp symp chainp tabp  -- string, symbol, chain, map
 ; derived: `nump` (any number: fix/wide/big/float/complex/array), `intp` (any integer), `atomp`
-; (anything but a chain). `i` is ~(0 1). `lamp` is PRESENCE, not a band: every heap
+; (anything but a chain). the NUMERIC vocab refines the numbers: a GEM is a self-netting
+; SCALAR (`gemp x` == `idp x (net x)`: charm/wide/big/float/complex), a TRAY is an array of
+; any kind (`trayp`, the renamed arrp), and a CREST is a numeric tray -- a tray of gems
+; (`crestp`). gemp and crestp are DISJOINT (a tray's net is a fresh scalar, so no tray
+; self-nets); a crest is COMPOSED of gems, not a kind of gem -- it nets DOWN to a scalar gem.
+; `i` is ~(0 1). `lamp` is PRESENCE, not a band: every heap
 ; value answers it (anything wired to a hot -- lit -- everything but a fixnum), chains and
 ; strings included, so lamp SPANS the bands. the top band itself needs no predicate:
 ; under the slogan is-it-top is vacuous -- you may as well ask 0. the opaque hots
