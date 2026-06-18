@@ -73,4 +73,20 @@
  _ (kill (cap r) 9)
  _ (waitfor (cap r)))
 
+; --- (ptyecho port on): silence the pty's input echo so bao's edraw owns it ---
+; with echo OFF, a child whose OUTPUT differs from its INPUT shows only the output:
+; `tr a-z A-Z` turns "hi" into "HI", so the lowercase line-discipline echo is gone.
+; (this is what stops wrap doubling each edited line.) tr's stdout is the slave tty,
+; so it line-buffers and flushes "HI\n" on the newline.
+(: r (ptyrun (L "tr" "a-z" "A-Z"))
+ m (cup r)
+ _ (assert (non (ptyecho m 0)))                  ; echo OFF -> () ok
+ _ (fputc m 104) _ (fputc m 105) _ (fputc m 10)  ; "hi\n"
+ _ (fflush m)
+ a (fgetc m) b (fgetc m)                          ; first bytes back are tr's OUTPUT
+ _ (assert (= a 72) (= b 73))                     ; "HI" -- the "hi" echo is suppressed
+ _ (kill (cap r) 9)
+ _ (waitfor (cap r)))
+(: _ (assert (fixp (ptyecho 5 0))))               ; non-port -> errno (EBADF)
+
 (puts "pty: ok") (putc 10)

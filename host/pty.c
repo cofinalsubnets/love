@@ -29,6 +29,7 @@
 #include <signal.h>     // kill
 #include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ struct winsize
 #include <sys/wait.h>   // waitpid WNOHANG WIF* WEXITSTATUS WTERMSIG
+#include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho)
 
 // Pull a live OS fd out of a port arg, or -1 if it isn't a port. Same inline
 // "is x a port" as main.c's lvm_close: a heap word whose discriminator is the
@@ -192,14 +193,34 @@ static lvm(lvm_setwinsize) {
   Sp[2] = rc ? putcharm(errno) : ai_nil;
   Sp += 2; Ip += 1; return Continue(); }
 
+// (ptyecho port on): toggle the pty's input ECHO. on = 0 / () clears it so a
+// line-editing wrapper (bao's edraw) owns the echo and the child's cooked-mode
+// echo doesn't double it; a truthy `on` restores it. ICANON is left intact -- the
+// child still reads whole lines and sees VEOF. tcsetattr on the master fd sets the
+// shared pty termios. () on success, errno on failure (non-port / closed -> EBADF).
+static lvm(lvm_ptyecho) {
+  intptr_t fd = port_fd(Sp[0]);
+  struct termios t;
+  int rc;
+  if (fd < 0) rc = EBADF;
+  else if (tcgetattr((int) fd, &t)) rc = errno;
+  else {
+    intptr_t on = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+    if (on) t.c_lflag |= ECHO; else t.c_lflag &= ~(tcflag_t) ECHO;
+    rc = tcsetattr((int) fd, TCSANOW, &t) ? errno : 0; }
+  Sp[1] = rc ? putcharm(rc) : ai_nil;
+  Sp += 1; Ip += 1; return Continue(); }
+
 static union u const
   nif_ptyrun[]     = {{lvm_ptyrun}, {lvm_ret0}},
   nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
   nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
-  nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}};
+  nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
+  nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
 AI_NIF("ptyrun", nif_ptyrun);
 AI_NIF("reap", nif_reap);
 AI_NIF("kill", nif_kill);
 AI_NIF("winsize", nif_winsize);
 AI_NIF("setwinsize", nif_setwinsize);
+AI_NIF("ptyecho", nif_ptyecho);
