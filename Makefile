@@ -10,13 +10,13 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen
-.PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_hostnif
+.PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 test: test_host test_ai0 test_proof test_gen
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_tools test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_tools test_hostnif test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -37,6 +37,31 @@ test_host: host
 	@echo TEST $m
 	@cat $t | $m > out/host/.test_host.out; s=$$?; cat out/host/.test_host.out; \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
+# Host-nif smoke tests: nifs defined in host/*.c link into `ai` but NOT ai0
+# (which bakes the corpus), so they cannot live in test/*.l -- ai0 would read the
+# names as missing and fail its self-test. Run them standalone against the built
+# binary instead. Each script prints a "<name>: ok" sentinel and uses the
+# test/00-init.l assert harness (which exits 1 on the first failure), so the gate
+# checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
+# Add a thread's smoke script to hostnif_tests (aineko: boot/net.l, &c).
+hostnif_tests = boot/pty.l boot/net.l
+test_hostnif: host
+	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
+	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
+	  cat out/host/.test_hostnif.out; \
+	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_hostnif.out; } \
+	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
+	done
+# aineko's two-process loopback gate: a server and a client over real TCP on
+# 127.0.0.1, full-duplex, asserting each side received what the other sent (the
+# socket nifs in host/net.c + the pump loops in tools/aineko.l). DELIBERATELY
+# separate from `make test`/`test_all` -- it needs two live processes and a free
+# loopback port, where the in-process `boot/net.l` smoke (in test_hostnif) covers
+# the nifs portably. Override the port with `make nettest PORT=NNNN`.
+PORT ?= 7390
+nettest: host
+	@echo NETTEST $m "(127.0.0.1:$(PORT))"
+	@sh $R/test/net/loopback.sh $m $(PORT)
 # Validate the l tool rewrites against their frozen Python references in
 # tools/py/ (gen_data / vmret). See tools/Makefile + tools/py/README.md.
 test_tools: host
@@ -207,7 +232,7 @@ $(ho)/libai.so: $(ho)/libai.a
 # hence -Iout/lib. Per-object into $(ho)/0/ so ccache caches each TU.
 gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -I. -Iout/lib
 ai0_o = $(ho)/0/main.o $(ai_c:$(R)/%.c=$(ho)/0/%.o)
-$(ho)/0/main.o: main.c $(ai_h) $(gl0_h)
+$(ho)/0/main.o: host/main.c $(ai_h) $(gl0_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(gl0_cc) -c $< -o $@
@@ -228,13 +253,18 @@ $(ho)/%.o: $(R)/%.c $(ai_h)
 
 # l.o carries the version string (ai_version.h); relink it when the id changes.
 $(ho)/ai.o $(ho)/0/ai.o: out/lib/ai_version.h
+# host/main.o bakes the lcat lib headers inline (egg + prel/ev/repl/cli/bao). Now
+# that it rides the host/*.c glob (compiled once, not recompiled on every link, as
+# the old inline `$(hcc) main.c` did), recompile it when any baked header changes.
+$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h out/lib/cli.h out/lib/bao.h
 
-# main.c is compiled into the final l inline (G_EGG_PRE/POST assemble the lib
-# headers); depend on them so it relinks when a lib source changes.
-$(ho)/ai: main.c $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h out/lib/cli.h
+# host/main.c (auto-globbed into $(host_o)) carries main() + the egg, assembled
+# inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c
+# glob now; the recompile-on-header-change dep is the line just above.
+$(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h out/lib/cli.h out/lib/bao.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ main.c $(host_o) $(ho)/libai.a -lm
+	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm
 
 $(ho)/ai.1: doc/ai.1 out/lib/ai_version.h
 	@echo GEN	$@
@@ -244,8 +274,8 @@ $(ho)/ai.1: doc/ai.1 out/lib/ai_version.h
 
 # ====================================================================
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
-# Arch-independent glue is kmain.c + k.h at the root; per-arch code lives in
-# port/<a>/ (arch.c, *.S, *.lds). Boots via Limine.
+# The kship kernel lives in port/kship/: arch-independent glue is kmain.c + k.h
+# there, per-arch code in port/kship/<a>/ (arch.c, *.S, *.lds). Boots via Limine.
 # ====================================================================
 ko = out/free
 dl = out/dl
@@ -256,6 +286,13 @@ dl = out/dl
 ifdef K_TEST
 ksuf := -test
 endif
+# KSHIP=1 bakes the kship agent (port/kship/kship.l) into the image and boots
+# straight into it (the heartbeat loop on the real timer tick) instead of the
+# shell -- the kernel AS the self-driving agent. Its own suffix so it never
+# clobbers the normal interactive kernel. See doc/kship.md.
+ifdef KSHIP
+ksuf := -kship
+endif
 
 # Cross toolchain defaults to clang + lld (one multi-target pair covers every
 # arch). Override for a GCC cross toolchain, e.g.
@@ -264,12 +301,12 @@ KCC ?= clang
 KLD ?= ld.lld
 KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1)
 
-k_arch_c = $(wildcard $(R)/port/$a/*.c)
-k_asm = $(wildcard $(R)/port/$a/*.asm)
-k_free_c = $R/kmain.c
+k_arch_c = $(wildcard $(R)/port/kship/$a/*.c)
+k_asm = $(wildcard $(R)/port/kship/$a/*.asm)
+k_free_c = $R/port/kship/kmain.c
 k_shared_c = $(ai_c) $(f_c) $(c_c)
-k_S = $(wildcard $(R)/port/$a/*.S)
-k_h = $(ai_h) $(wildcard *.h $(R)/port/$a/*.h)
+k_S = $(wildcard $(R)/port/kship/$a/*.S)
+k_h = $(ai_h) $(wildcard *.h $(R)/port/kship/*.h $(R)/port/kship/$a/*.h)
 
 k_odir = $(ko)/$a$(ksuf)
 
@@ -282,7 +319,7 @@ k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
 
 kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
-kldflags := -static -nostdlib --gc-sections -T $(R)/port/$a/$a.lds -z max-page-size=0x1000
+kldflags := -static -nostdlib --gc-sections -T $(R)/port/kship/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
   -I. -I$(R)/out/host -Iout/lib -I$(R)/font -I$(R) \
@@ -298,6 +335,12 @@ ifdef K_TEST
 # the tail-threaded path leans on). ai0 + this build are the two deliberate
 # trampoline lanes; the host runs $(tco) below.
 kcppflags += -DK_TEST -Dai_tco=0
+endif
+# KSHIP boots into the agent loop -- same settings as the normal interactive
+# kernel (it is the shell's read-eval loop with kship as the program), just
+# -DKSHIP to select the boot driver in kmain.c.
+ifdef KSHIP
+kcppflags += -DKSHIP
 endif
 
 ifeq ($(KCC_IS_CLANG),1)
@@ -315,14 +358,15 @@ k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword 
 
 kernel: $(ko)/ai-$a$(ksuf).elf
 
-$(ko)/ai-$a$(ksuf).elf: $(R)/port/$a/$a.lds $(k_o)
+$(ko)/ai-$a$(ksuf).elf: $(R)/port/kship/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
 
 # Shared C sources (ai.c, font/, c/) + per-arch port//.
-# Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h $(if $(K_TEST),out/lib/ktests.h)
+# Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h; under KSHIP
+# the baked agent out/lib/kship.h.
+$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h $(if $(K_TEST),out/lib/ktests.h) $(if $(KSHIP),out/lib/kship.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -434,6 +478,12 @@ out/lib/ktests.l: $(kt) $(R)/Makefile
 out/lib/ktests.h: out/lib/ktests.l $(ai0) tools/lcatv.l ai/prel.l
 	@echo GEN	$@
 	@$(ai0) -l ai/prel.l tools/lcatv.l out/lib/ktests.l > $@
+# The kship agent, baked VERBATIM (lcatv) to a C string literal kmain.c #includes
+# under KSHIP and drinks form-by-form through zevs at boot -- same path as the
+# K_TEST corpus, one program instead of the test suite.
+out/lib/kship.h: port/kship/kship.l $(ai0) tools/lcatv.l ai/prel.l
+	@echo GEN	$@
+	@$(ai0) -l ai/prel.l tools/lcatv.l port/kship/kship.l > $@
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.l
@@ -502,7 +552,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@$m
 cloc:
-	cloc --by-file ai ai.c ai.h kmain.c main.c k.h port tools test vim
+	cloc --by-file ai ai.c ai.h main.c port tools test vim
 cat: clean all test
 cata: clean all test_all
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.
@@ -531,6 +581,7 @@ installs = \
   $d/lib/ai/prel.l \
   $d/lib/ai/ev.l \
   $d/lib/ai/repl.l \
+  $d/lib/ai/bao.l \
   $d/lib/libai.a \
   $d/lib/libai.so \
   $d/include/ai.h \

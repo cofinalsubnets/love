@@ -1,13 +1,13 @@
 # kship — a freestanding ai-kernel as an autonomous agent
 
-A design sketch. **kship** grows the existing freestanding ai kernel (`kmain.c`,
+A design sketch. **kship** grows the existing freestanding ai kernel (`port/kship/kmain.c`,
 limine/ovmf under qemu) a network stack and a persistent agent loop, so the
 machine *perceives* (network + clock), *decides* (a policy), and *acts* (network +
 spawned tasks) unattended on bare metal — a prototype self-driving autonomous agent.
 
 This is not a greenfield OS. The substrate is mostly here already; kship is "the
 kernel grown a NIC and an agent loop on the egg." The runnable companion to this
-doc is `boot/kship.l`, which models the ai half (the perceive→decide→act fold, the
+doc is `port/kship/kship.l`, which models the ai half (the perceive→decide→act fold, the
 watchdog, the checkpoint) so the shape runs and probes on the host before any C.
 
 ## Agent brief — you are the kship thread
@@ -16,18 +16,18 @@ You build kship, in parallel with the aineko / bao / cook threads. You have the
 easiest territory: a **different frontend** (the freestanding kernel), so you don't
 share host files with anyone.
 
-- **Your territory (you own these):** `kmain.c`, `boot/kship.l`, `port/<arch>/*`
-  (the per-arch glue), the virtio-net driver you add.
+- **Your territory (you own these):** all of `port/kship/` — `kmain.c`, `kship.l`,
+  the per-arch `<arch>/` glue (`x86_64/`, `aarch64/`), and the virtio-net driver you add.
 - **Read-only for you:** `ai.h`, this doc. The perceive substrate already exists in
-  `kmain.c` — `k_sources[]`, `ai_wait_fds` (= select), `ai_ready`, `ai_clock`.
+  `port/kship/kmain.c` — `k_sources[]`, `ai_wait_fds` (= select), `ai_ready`, `ai_clock`.
 - **DO NOT EDIT `ai.c` / `ai.h`** (the shared core) or other threads' host files
   (`host/*.c`, `main.c`, `tools/aineko.l`, `bao.l`, `cook/cook.l`). The kernel
   links `ai.c` but does NOT link `main.c`, so the host nifs don't reach you — your
-  net layer is your own C in `kmain.c`/`port/`. Need a core change? **Ask the core
+  net layer is your own C in `port/kship/`. Need a core change? **Ask the core
   thread** (the main session); don't edit `ai.c`/`ai.h`.
 - **The shape:** new C is a virtio-net driver + one socket slot; the perceive→
   decide→act loop and the watchdog (a `help` handler with a face) stay **ai**, in
-  `boot/kship.l` → baked into the kernel. Model it on the host first (`boot/kship.l`
+  `port/kship/kship.l` → baked into the kernel. Model it on the host first (`port/kship/kship.l`
   runs there) before the bare-metal C.
 - **Conceptual sibling of aineko** (its net stack) and bao (the watchdog ≈ bao's
   debugger, both "a `help` handler with a face") — but **zero file overlap**, so you
@@ -44,13 +44,13 @@ share host files with anyone.
 
 The harness is **identical** for both: (B) is (A) with the decide step being a
 network round-trip — one `read` over a socket stream. Build (A) first; (B) falls out
-once the stack is up. `boot/kship.l`'s `policy` is the swap point.
+once the stack is up. `port/kship/kship.l`'s `policy` is the swap point.
 
 ## What already exists (the perceive substrate)
 
-`kmain.c` already carries most of the input machinery — kship reuses it verbatim:
+`port/kship/kmain.c` already carries most of the input machinery — kship reuses it verbatim:
 
-| capability                | already in `kmain.c`            | kship role                       |
+| capability                | already in `port/kship/kmain.c`            | kship role                       |
 |---------------------------|---------------------------------|----------------------------------|
 | per-source I/O vtable     | `k_sources[]` (getc/putc/flush/**ready**/close) | a socket is a new slot |
 | multi-source wait         | `ai_wait_fds(fds, n, ticks)`    | **this is `select`**             |
@@ -68,7 +68,7 @@ ai closures — the project discipline (as little new C as possible) holds.
 ## Layer cake
 
 ```
-┌─ boot/kship.l   the self-driving loop (perceive→decide→act), in ai   ← runnable today
+┌─ kship.l        the self-driving loop (perceive→decide→act), in ai   ← runnable today
 ├─ net.l          sockets as ai streams over the source surface
 ├─ ev / repl      the egg — already in the kernel image
 ├─ ai_io          path-A I/O surface (the aineko keystone)
@@ -100,10 +100,10 @@ Sockets as ai values, mirroring the aineko / path-A plan:
 - A connection is a **task**: `(spawn handler sock)`, and *always* `(wait p)` — an
   orphan stalls the kernel runner (the corpus law, doubly true on metal).
 
-## 3. The agent loop (`boot/kship.l`) — the self-driving part
+## 3. The agent loop (`port/kship/kship.l`) — the self-driving part
 
 A non-terminating perceive–decide–act fold, supervised by the condition system.
-The runnable model is in `boot/kship.l`; the on-metal version differs only in that
+The runnable model is in `port/kship/kship.l`; the on-metal version differs only in that
 the event stream is `ai_wait_fds` over real fds instead of a list:
 
 - **Perceive** — `ai_wait_fds` over {socket, clock}; block until ready, no busy-poll.
@@ -127,7 +127,7 @@ What separates "an agent loop" from "a *self-driving autonomous* agent":
   (`done?`); on death, respawn from the last checkpoint. Built from existing
   task + condition primitives.
 - **Checkpoint / persistence** — state is an ai value, so persistence is
-  `show`/`read` (see `save`/`restore` in `boot/kship.l`). Write to a flat region /
+  `show`/`read` (see `save`/`restore` in `port/kship/kship.l`). Write to a flat region /
   virtio-blk; a restart resumes mid-mission. No filesystem needed for the prototype.
 - **Heartbeat** — a clock event every N ticks so the agent acts with no network input
   (initiative, not just reaction).
@@ -138,8 +138,15 @@ What separates "an agent loop" from "a *self-driving autonomous* agent":
 ## 5. Staging (each milestone gates green: host + ai0)
 
 1. **Timer-tick + heartbeat stream** — agent loop runs on the clock alone, no net.
-   Proves the supervised-task + watchdog shape. *(Smallest real milestone; the ai
-   half is already runnable in `boot/kship.l`.)*
+   Proves the supervised-task + watchdog shape. ✅ **DONE.** The ai half
+   (`port/kship/kship.l`) rides `sleep`/`clock`/`spawn`/`wait` — all core nifs — so
+   it runs identically on the host and on metal. **`make kernel KSHIP=1`** bakes it
+   in (`out/lib/kship.h`, via lcatv) and boots straight into the heartbeat loop on
+   the real timer tick, then drops to a shell; the normal `make kernel` is unchanged.
+   **Boot-verified** under qemu/OVMF+Limine (`make out/free/ai-x86_64-kship.iso
+   KSHIP=1`, then qemu `-cdrom` it): all four demos print on the serial console
+   identically to the host — the `sleep`/`clock` heartbeats run on the kernel's
+   `kticks`, the supervised tasks spawn/restart on metal, checkpoint round-trips.
 2. **virtio-net RX/TX + a `k_sources[]` socket slot** — echo a UDP datagram from the
    kernel. *(Hardest C; the keystone.)*
 3. **`net.l` + `aineko` on bare metal** — the netcat clone runs *in the kernel*.
@@ -164,6 +171,6 @@ What separates "an agent loop" from "a *self-driving autonomous* agent":
 
 ## See also
 
-- `boot/kship.l` — the runnable ai model of §3–§4.
-- `kmain.c` — `k_sources[]`, `ai_wait_fds`, `ai_ready`, `ai_clock`, `ai_sleep`.
+- `port/kship/kship.l` — the runnable ai model of §3–§4.
+- `port/kship/kmain.c` — `k_sources[]`, `ai_wait_fds`, `ai_ready`, `ai_clock`, `ai_sleep`.
 - the aineko / `ai_io` path-A plan (the netcat keystone that forces the net surface).

@@ -490,6 +490,15 @@ static char const ktests[] =
 ;
 #endif
 
+#ifdef KSHIP
+// The kship agent (port/kship/kship.l), baked VERBATIM by lcatv (out/lib/kship.h).
+// Bound to the global `kship-src` and drunk form-by-form through zevs at boot --
+// the kernel boots straight into the self-driving heartbeat loop. See doc/kship.md.
+static char const kship_src[] =
+#include "kship.h"
+;
+#endif
+
 void kmain(void) {
 #if defined(__x86_64__)
  // Enable x87/SSE before ANY other C runs. Limine doesn't guarantee SSE is
@@ -529,6 +538,13 @@ void kmain(void) {
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
 #endif
+#ifdef KSHIP
+  // bind the baked agent to the global `kship-src`; the driver below drinks it
+  // through zevs, then drops into the shell so the machine stays usable.
+  g = ai_strof(g, kship_src);
+  struct ai_def kd[] = {{"kship-src", ai_pop1(g)}};
+  g = ai_defn(g, kd, countof(kd));
+#endif
   // load the prel, then run the l read-eval-print loop. its line
   // editor (in repl.l) drives the console; PS/2 keyboard and serial
   // input both arrive as ANSI escape sequences the l edev decodes.
@@ -545,6 +561,10 @@ void kmain(void) {
  // through zevs (repl.l) -- the same stream shell as the host's stdin runner.
  // zz-fin.l prints the summary and (exit 1)s on failure.
  "(zevs (sip ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))"
+#elif defined(KSHIP)
+ // agent build: drink the baked `kship-src` through zevs (the same stream shell),
+ // running the heartbeat loop on the real timer tick, then drop into the shell.
+ "(: _ (zevs (sip ((: (g i) (? (< i (tally kship-src)) (link (peep kship-src i 0) (g (+ 1 i))))) 0))) (shell 0))"
 #else
  "(shell 0)"
 #endif
