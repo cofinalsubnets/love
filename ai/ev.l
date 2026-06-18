@@ -257,7 +257,7 @@
             j (then (tojoin k) (+ 2 n))                    ; true: then, jump to join, into k
             (p2 lvm_cond (pop c 'alt) j)))))))))
 
-  Z (nom 'Z)
+  gone (nom 'gone)
   ; recursive-fn ref: bake `quote code` if the closure is built, else `quote 0`
   ; + a backpatch site `(lfd . cell)` on the scope for wire to resolve.
   (qsite site k n) (: cell (poke -1 0 (k (+ 2 n)))
@@ -292,8 +292,8 @@
 
   (avb c d x)
    (? (nil? d) ; outside all lexical scopes?
-       (: y (peep bag x Z) ; check global scope
-        (? !(= y Z) (kim y) ; if it's there use that
+       (: y (peep bag x gone) ; check global scope
+        (? !(= y gone) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
           (em2 lvm_index x))))
     (: lfd (assoc x (d 'lam))
