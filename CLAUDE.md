@@ -52,13 +52,12 @@
 ; --- vocabulary & house style --- the words here are a VOCABULARY -- we never say
 ; "terminology" or "nomenclature"; a vocabulary is living and chosen, warm not clinical.
 ; the house style is COZY: lowercase, plain, a touch playful, names that earn their keep
-; (you eat a toast; $ keeps the green stars; a chart is a star chart). we frame in the
+; (you eat a toast; $ keeps the green charms; a tray of stars is a galaxy). we frame in the
 ; GREEN -- name what a value IS and KEEPS, not what it lacks; green, not red. the surface
-; stays small and deliberate ((names ()) is the whole vocabulary). a STAR is a fixnum (the
-; word-sized value, star?); a CHARM is a byte -- the small star, 0..255 (so a string's
-; bytes are charms, and `charms`/`charms->chars` are byte lists); the global env is the
-; `bag` (not the "book"). [intended, not yet in the binary: a charm's COLOR reads SIGNED --
-; 0..127 green (the ASCII stars), 128..255 red -- so the highest green charm is 127.]
+; stays small and deliberate ((names ()) is the whole vocabulary). the celestial numerics:
+; a CHARM is a fixnum (a word); a STAR is a self-netting scalar (charm/full/big/float/complex);
+; a GALAXY is a tray of stars (a numeric array); a CONSTELLATION is any numeric (a star or a
+; galaxy) -- a charm is a star is a constellation. the global env is the `bag` (not the "book").
 
 ; --- the shape of it --- one cell is one word: a fixnum is a tagged odd word, anything else
 ; is a heap object whose first word is its hot -- a live external reference, the wire out of
@@ -70,14 +69,14 @@
 ; compile time. the gritty details sit at the bottom.
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
-;   N the green stars (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
+;   N the green charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
 ;     <  R reals (float)  <  C complex  <  O objects (string < symbol < chain < map < top)
-; numbers nest as usual (N in Z in R in C). a fixnum is a STAR, and every value wears a COLOR --
+; numbers nest as usual (N in Z in R in C). a fixnum is a CHARM, and every value wears a COLOR --
 ; the order-sign of its net: GREEN nets nonnegative (what $ keeps), RED nets negative (what $
 ; clamps to nothing), and BLUE is green's FLOOR -- net exactly zero, kept like a green yet nothing.
 ; so $ passes the green and stops the red at nothing, and a value is true iff it is POSITIVE green
-; (above the blue floor; blue and red both net false). the GREEN stars are N (the nonnegatives),
-; the RED stars the negatives below, and 0 is the ONE BLUE STAR -- green by sign yet blue by
+; (above the blue floor; blue and red both net false). the GREEN charms are N (the nonnegatives),
+; the RED charms the negatives below, and 0 is the ONE BLUE CHARM -- green by sign yet blue by
 ; measure, the floor where green meets nothing. color spans the UNSTARS too, by the same net:
 ; '(1) is green, '(0)/()/""/~(0 0) are blue (every nothing is blue), '(-2 1) is red, while a box
 ; stays green (#0 nets 1: presence over nothing). the *rank* axis is scalar (0) vs array (>= 1, one
@@ -142,7 +141,7 @@
 ; normal alias) reads the net's sign in the total order (re, then im -- applied ONCE,
 ; never per element), and `$` (sat) is ONE saturating clamp over the net's order-signed
 ; magnitude, max(0, ceil), with the invariant !x == (0 = $x). `$` is the SOLE clamp, retracting
-; ANY value onto the green stars, so a clamped fold is mere composition -- $*x the clamped
+; ANY value onto the green charms, so a clamped fold is mere composition -- $*x the clamped
 ; product, $(aprod v) the clamped reduction, no per-fold saturator (the measure is additive,
 ; $ its only observation). net is additive wherever
 ; + is total -- EXACTLY, complex included: $(a + b) saturates net a + net b over
@@ -166,12 +165,12 @@ $@(3 4)              ; 7
 ;   fix? big? full?  -- the integer reps (fixnum, bignum, wide int)
 ;   float? twin? tray?  -- float, complex scalar, array; all three share one heap type (the internal `pack` kind)
 ;   string? symp two? tab?  -- string, symbol, chain, map
-; derived: `jewel?` (any number: fix/wide/big/float/complex/array), `whole?` (any integer), `atom?`
-; (anything but a chain). the NUMERIC vocab refines the numbers: a GEM is a self-netting
-; SCALAR (`gem? x` == `id? x (net x)`: star/wide/big/float/complex), a TRAY is an array of
-; any kind (`tray?`, the renamed arrp), and a CREST is a numeric tray -- a tray of gems
-; (`chart?`). gem? and chart? are DISJOINT (a tray's net is a fresh scalar, so no tray
-; self-nets); a crest is COMPOSED of gems, not a kind of gem -- it nets DOWN to a scalar gem.
+; derived: `constellation?` (any number: fix/wide/big/float/complex/array), `whole?` (any integer), `atom?`
+; (anything but a chain). the NUMERIC vocab refines the numbers: a STAR is a self-netting
+; SCALAR (`star? x` == `id? x (net x)`: charm/wide/big/float/complex), a TRAY is an array of
+; any kind (`tray?`, the renamed arrp), and a GALAXY is a numeric tray -- a tray of stars
+; (`galaxy?`). star? and galaxy? are DISJOINT (a tray's net is a fresh scalar, so no tray
+; self-nets); a galaxy is COMPOSED of stars, not a kind of star -- it nets DOWN to a scalar star.
 ; `i` is ~(0 1). `lit?` is PRESENCE, not a band: every heap
 ; value answers it (anything wired to a hot -- lit -- everything but a fixnum), chains and
 ; strings included, so lit? SPANS the bands. the top band itself needs no predicate:
@@ -181,7 +180,7 @@ $@(3 4)              ; 7
 ; truth/task tests, not type tests.
 ; demo:
 (fix? 5) (two? '(1 2)) (string? "hi") (symp 'x) (tab? #(1 2))   ; the storage predicates
-(jewel? i) (whole? (62 2)) (atom? 'x)                            ; derived
+(constellation? i) (whole? (62 2)) (atom? 'x)                            ; derived
 (lit? "s") (lit? '(1)) !(lit? 5)                             ; lit? = presence (any heap value)
 (hot? (buf 4)) (hot? out) !(hot? cap)                        ; the hot zoo: buf/port only
 ((64 2) = 2 * (63 2))        ; true   fixnum overflow -> exact bignum ((k b) = b**k)
@@ -201,7 +200,7 @@ $@(3 4)              ; 7
 ; word-level spellings, generic like their operators, and the numerals carry the
 ; power family ((-1 x) = 1/x, ((/ 1 2) x) = sqrt; see numeric functions). the two
 ; monoid folds are notation now -- +l is the net, *l the product -- and general
-; higher-order stays words: (foldl f z l), $ = the net's star.
+; higher-order stays words: (foldl f z l), $ = the net's charm.
 ; demo:
 1 + 2                ; 3
 5 / 2                ; 2.5     true division (an exact quotient stays integer: 4 / 2 ; 2)
@@ -307,10 +306,10 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; fills row-major; (array shape elem..) infers the type and curries; @(..) is a rank-1
 ; literal; (iota n) is jot's array twin -- the z-array '(0 .. n-1) filled in one C loop,
 ; no link spine, so (asum (iota n)) reduces a range end to end in C.
-; a ONE-CELL array DEMOTES to its lone scalar gem -- a rank-0 (empty-shape) array, a
+; a ONE-CELL array DEMOTES to its lone scalar star -- a rank-0 (empty-shape) array, a
 ; rank-1-len-1 like @(5), or a 1x1 contraction IS the value (so @(5) = 5, (arr 0.0 '(1)
 ; '(3.5)) = 3.5, (iota 1) = 0): an array exists only at tally >= 2. there is thus NO
-; rank-0 array kind; a scalar gem (star/float/wide/complex) is the rank-0 point, and
+; rank-0 array kind; a scalar star (charm/float/wide/complex) is the rank-0 point, and
 ; the array accessors (arank/alen/ashape) read nil on it. EMPTIES are the exception
 ; (a 0-axis has tally 0, not 1): they STAY arrays, carrying the reduction units below.
 ; arank/alen/ashape/atype; peep (out of bounds -> the default). + - * // < =
@@ -340,7 +339,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; c[ad]+r ancestors -- the lineage runs cap/cup <- cap/cbp <- car/cdr, the older names gone
 ; now, as is the X alias.
 ; (sort l) orders by the total order, in C (descending = rev); (msort le l)
-; takes a predicate. (jot n) counts out the first n stars, '(0 .. n-1).
+; takes a predicate. (jot n) counts out the first n charms, '(0 .. n-1).
 ; the other higher-order functions live in the prel.
 ; demo:
 (cap '(1 2 3))       ; 1
@@ -348,7 +347,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 (map inc '(1 2 3))   ; (2 3 4)
 (foldl (*) 1 '(1 2 3 4))     ; 24
 (sort '(3 1 2))      ; (1 2 3)
-(jot 3)              ; (0 1 2)   the first n stars
+(jot 3)              ; (0 1 2)   the first n charms
 
 ; --- strings, symbols & mints --- a symbol is interned ('x): one canonical atom per
 ; spelling. a MINT ((mint 0), arg ignored) adjoins a fresh POINT to the value space:

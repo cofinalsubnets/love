@@ -136,7 +136,7 @@ This single order is the engine of `sort` — one comparison per chain, the comp
 
 ## 5 · generic dispatch {#dispatch}
 
-A value's **kind** is an enum whose order is the lattice of §4. A generic operator at two arguments is an N×N table indexed by the two kinds; an operator at one argument is that table's *diagonal*; the three core tables are `+`, `*`, and **apply**. A both-star (both-fixnum) fast path skips the table; otherwise one indexed jump selects a lane that widens only as far as the operands require (array ⊃ complex ⊃ bignum ⊃ float ⊃ …).
+A value's **kind** is an enum whose order is the lattice of §4. A generic operator at two arguments is an N×N table indexed by the two kinds; an operator at one argument is that table's *diagonal*; the three core tables are `+`, `*`, and **apply**. A both-charm (both-fixnum) fast path skips the table; otherwise one indexed jump selects a lane that widens only as far as the operands require (array ⊃ complex ⊃ bignum ⊃ float ⊃ …).
 
 The lattice, the dispatch, and the order are *the same object*: the diagonal of the dispatch matrix is the kind lattice, and the enum order of the kinds is the cross-kind comparison order. You maintain one structure and read it three ways. This section cites no Rocq lemmas on purpose: the dispatch matrix and the tail-threading are implementation invariants the runtime checks and the corpus exercises, not theorems in the Rocq slice — they live at the demonstrate layer (§11), where the chips go quiet.
 
@@ -182,19 +182,19 @@ The numerals bridge into the term language, but no further:
 
 The numeric carriers earn their own short names — each names a predicate you can probe, and they carry through the array laws below. They split the **number** band by rank.
 
-A **number** (`jewel?`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **gem** (`gem?`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `id? x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized gem, a fixnum, is a **star** (`star?`). A **tray** (`tray?`) is an array, numeric or not; a **crest** (`chart?`) is a tray *of gems* — a numeric array. So a number is a gem or a crest, and `$` lands every value on the **green gems** — the nonnegative integers (§3); a word-sized result is a star, but a saturated bignum is a green gem too.
+A **number** (`constellation?`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **star** (`star?`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `id? x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized star, a fixnum, is a **charm** (`charm?`). A **tray** (`tray?`) is an array, numeric or not; a **galaxy** (`galaxy?`) is a tray *of stars* — a numeric array. So a number is a star or a galaxy, and `$` lands every value on the **green charms** — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green star too.
 
 | name | predicate | what it is |
 |---|---|---|
-| `number` | `jewel?` | any numeric value, scalar or array — the bottom band |
-| `gem` | `gem?` | a scalar number, one that nets itself (rank 0) |
-| `star` | `star?` | a word-sized gem — a fixnum |
+| `constellation` | `constellation?` | any numeric value, scalar or array — the bottom band |
+| `star` | `star?` | a scalar number, one that nets itself (rank 0) |
+| `charm` | `charm?` | a word-sized star — a fixnum |
 | `tray` | `tray?` | an array, numeric or not (rank ≥ 1) |
-| `crest` | `chart?` | a tray of gems — a numeric array (rank ≥ 1) |
+| `galaxy` | `galaxy?` | a tray of stars — a numeric array (rank ≥ 1) |
 
-A crest is *not* a gem (`gem?` is false on a tray, whose net is a fresh sum): it is a tray whose cells are gems. A star is the smallest gem; a number is a gem or a crest.
+A galaxy is *not* a star (`star?` is false on a tray, whose net is a fresh sum): it is a tray whose cells are stars. A charm is the smallest star; a number is a star or a galaxy.
 
-The jewels have a structural twin. A gem is fixed under `net` (`id? x (net x)` — its own measure); an **atom** (`atom?`) is fixed under `cap` (`x = (cap x)` — its own head). The non-atom is a **pair** — the chain that `link` builds, whose `cap` and `cup` split a head from a rest. Every gem is an atom (a number is its own head too), so a star is a *special* atom — fixed under `net` as well as `cap`. `net` is what carves the gems out of the atoms.
+The stars have a structural twin. A star is fixed under `net` (`id? x (net x)` — its own measure); an **atom** (`atom?`) is fixed under `cap` (`x = (cap x)` — its own head). The non-atom is a **pair** — the chain that `link` builds, whose `cap` and `cup` split a head from a rest. Every star is an atom (a number is its own head too), so a star is a *special* atom — fixed under `net` as well as `cap`. `net` is what carves the stars out of the atoms.
 
 The **tray** is the APL half of the language. A shape is its list of axis sizes; the **cell count** is the product of the shape (`alen`), the **rank** its length (`arank`): `alen [2;3] = 6` (`thm:alen_23`), `arank [2;3] = 2` (`thm:arank_23`), and a 0-axis yields 0 cells (`thm:alen_empty_axis`). Indexing is row-major and out-of-bounds reads the default:
 
@@ -208,7 +208,7 @@ Broadcasting needs conforming shapes (else nil); scalar-`*` scales; and the meas
 
 > **(8.3) Broadcast `+`.** conforming ⟹ elementwise (`thm:vadd_ok`), mismatch ⟹ nil (`thm:vadd_mismatch`); scalar scale `thm:vscale_123`.
 
-> **(8.4) Net through arrays.** `asum (vadd a b) = asum a + asum b` (`thm:asum_vadd`) and `asum (vscale c v) = c · asum v` (`thm:asum_vscale`) — so a **crest** nets exactly like the list of the same values; *the arrangement does not matter*.
+> **(8.4) Net through arrays.** `asum (vadd a b) = asum a + asum b` (`thm:asum_vadd`) and `asum (vscale c v) = c · asum v` (`thm:asum_vscale`) — so a **galaxy** nets exactly like the list of the same values; *the arrangement does not matter*.
 
 `iota n` is the z-array `0..n-1` filled in one C loop (no link spine), so a range reduces end-to-end in C. Its Gauss sum is proved:
 
@@ -218,7 +218,7 @@ Contraction is the inner / outer product. The dot product is commutative and len
 
 > **(8.6) Contraction.** `dot [1;2;3] [4;5;6] = 32` (`thm:dot_123_456`), `dot a b = dot b a` (`thm:dot_comm`); `inner` is nil on a length mismatch (`thm:inner_mismatch`). The matmul cell `M[i][j] = rowᵢ(A) · colⱼ(B)` checks at `thm:matmul_cell` (= 154).
 
-A one-cell array **demotes** to its lone scalar (`@(5) = 5`): an array exists only at tally ≥ 2. Empties are the exception (a 0-axis has tally 0, not 1) — they stay arrays, carrying the reduction units of (8.2). There is thus no rank-0 array kind; a scalar gem *is* the rank-0 point.
+A one-cell array **demotes** to its lone scalar (`@(5) = 5`): an array exists only at tally ≥ 2. Empties are the exception (a 0-axis has tally 0, not 1) — they stay arrays, carrying the reduction units of (8.2). There is thus no rank-0 array kind; a scalar star *is* the rank-0 point.
 
 ## 9 · strings, names, and mints {#mints}
 

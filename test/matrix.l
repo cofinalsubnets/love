@@ -1,6 +1,6 @@
 ; === the generic-op DISPATCH MATRICES, walked cell by cell ====================
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
-; (l.h enum q): KCharm | KWide KFlo KCplx (the lean scalar-gem boxes) | KBig |
+; (l.h enum q): KCharm | KWide KFlo KCplx (the lean scalar-star boxes) | KBig |
 ; KVec (the coarse array sentinel; ai_kind refines it away) | KArrZ KArrR KArrC
 ; KArrO (the array tower) | KString KSym | KChain(chain) | KHot.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
@@ -13,7 +13,7 @@
 ; file adds the FINE within-category cells (fix vs box/float/complex vs bignum;
 ; the four array tiers) and the apply matrix, which had no systematic test.
 
-; one representative value per kind. The three scalar-gem boxes are now distinct
+; one representative value per kind. The three scalar-star boxes are now distinct
 ; kinds (KFlo/KCplx/KWide) but still share one apply matrix cell (data_num_apply).
 (: mx-fix 5                              ; KCharm
    mx-real 2.5                            ; KFlo, float box (float?)
@@ -62,8 +62,8 @@
  (= 1 ('abc 9))   (= 1 ('abc 'x))
  (= 1 ((mint 0) 5))
 
- ; --- the scalar-gem + array rows (KFlo/KCplx/KWide/KArr*, all -> data_num_apply):
- ;     a gem or array is a Church numeral (operand ** operator, or operator-fold
+ ; --- the scalar-star + array rows (KFlo/KCplx/KWide/KArr*, all -> data_num_apply):
+ ;     a star or array is a Church numeral (operand ** operator, or operator-fold
  ;     over a function). Full tower coverage in functions.l. ---
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 = 9
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8

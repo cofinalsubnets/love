@@ -20,7 +20,7 @@
  (nil? (arank 5))                     ; non-tuple -> nil
  (nil? (atype "x"))
 
- ; --- a one-element array DEMOTES to its lone scalar gem (no rank-0 / singleton
+ ; --- a one-element array DEMOTES to its lone scalar star (no rank-0 / singleton
  ; vec exists): an empty shape (rank 0, one cell) or a rank-1 length-1 array is
  ; just the value, so the array accessors read nil on it like any scalar ---
  (= 0 (arr 0 0 0))                    ; empty shape, zero-filled -> the fixnum 0

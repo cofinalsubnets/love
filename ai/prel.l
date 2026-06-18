@@ -79,7 +79,7 @@
      _ (poke (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    ;; FIXME rename | -> bit-or to free | for pipe operator
-   (jewel? x) (| (fix? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
+   (constellation? x) (| (fix? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
    (whole? n) (| (fix? n) (| (full? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
    ; (k b) numeral application routes here, so `**` is unneeded.
@@ -110,7 +110,7 @@
    ; zero numeral ((-3 f) = (0 f) = 1, the literal lambda construction), a float
    ; ceils, a complex its modulus when it sorts positive, an array its element
    ; sum -- the saturated net. k=0 -> 1 (const 1); k=1 -> x directly -- the snappy basics.
-   (num-ap n x) (? (jewel? x) (powg x n)
+   (num-ap n x) (? (constellation? x) (powg x n)
                    (: k (sat n)
                       (? (< k 1) 1 (= k 1) x
                          (apover k) (scare 'apcap k)
@@ -137,7 +137,7 @@
 ; so its net IS its sat. prod is the product twin; neg/recip/frac the
 ; dyadics turned inward; bit the truth bit (the Iverson bracket, !!).
 (: (net x) (? (tray? x) (asum x)
-              (jewel? x) x
+              (constellation? x) x
               (two? x) (foldl (\ a e (+ a (net e))) 0 x)
               (sat x))
    (prod x) (? (tray? x) (aprod x)
@@ -147,18 +147,18 @@
    recip (/ 1)
    (frac x) (% x 1)
    (bit x) (nil? (nil? x))
-   ; a GEM is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
+   ; a STAR is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
    ; net (x IS its own net; id?, not `=`, since net returns a number operand unchanged
    ; while a tray's net is a fresh sum). a TRAY (tray?) is an array of any element kind;
-   ; a CREST is a tray of GEMS -- a numeric tray. gem? and chart? are DISJOINT: a tray
-   ; never self-nets (its net is a fresh scalar), so a crest is never a gem -- it is
-   ; COMPOSED of gems, not a kind of gem. chart? keys on the CELLS, not the O code, so a
-   ; Z/R/C tray qualifies outright and an object-typed tray of gem cells (e.g. bignums)
-   ; still counts -- a tray of strings does not (a string is no gem).
-   (gem? x) (id? x (net x))
-   ; a CHARM is the word-sized gem -- a fixnum (the lisp predicate; oddp C-side).
-   (star? x) (fix? x)
-   (chart? x) (? (tray? x) (? (< (atype x) O) 1 (gem? (peep x 0 0))) 0))
+   ; a GALAXY is a tray of STARS -- a numeric tray. star? and galaxy? are DISJOINT: a tray
+   ; never self-nets (its net is a fresh scalar), so a galaxy is never a star -- it is
+   ; COMPOSED of stars, not a kind of star. galaxy? keys on the CELLS, not the O code, so a
+   ; Z/R/C tray qualifies outright and an object-typed tray of star cells (e.g. bignums)
+   ; still counts -- a tray of strings does not (a string is no star).
+   (star? x) (id? x (net x))
+   ; a CHARM is the word-sized star -- a fixnum (the lisp predicate; oddp C-side).
+   (charm? x) (fix? x)
+   (galaxy? x) (? (tray? x) (? (< (atype x) O) 1 (star? (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
@@ -486,7 +486,7 @@
 (: uq (\ x x))                                               ; stray ,x evaluates x
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
-; a-type: a WITNESS GEM of the element tier -- the highest of {Z<R<C<O} present in a
+; a-type: a WITNESS STAR of the element tier -- the highest of {Z<R<C<O} present in a
 ; list of values, returned as an inhabitant (0/0.0/~(0 0)/()) for `arr` to read the
 ; tier off (arr takes a witness, not a code). a box still fits z; a complex value lifts
 ; to a packed (re,im) `c` array; only a value past the real numeric tower (bignum,
@@ -498,7 +498,7 @@
 ; means rank-1 length 3, (array ~(3 4) …) length 5).
 (: (a-rank x) (? (float? x) 1 (| (fix? x) (full? x)) 0 (twin? x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
-   (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness gem of the tier
+   (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness star of the tier
    (a-dim d) (? (two? d) (tally d) (sat d))
    (a-shape s) (? (two? s) (map a-dim s) (L (a-dim s))))
 
