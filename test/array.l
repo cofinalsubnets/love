@@ -175,7 +175,7 @@
   (0 = (alen (e + e))) (0 = (alen (e * 2))) (0 = (alen (1 + e)))
   (0 = (alen (e < 1))) (0 = (alen (e = e)))      ; compare masks stay empty
   (0 = (alen (e 2)))                             ; an empty exponent array applies empty
-  (0 = (alen (sine e))) (0 = (alen (power e 2)))    ; elementwise maps stay empty
+  (0 = (alen (sine e))) (0 = (alen (2 e)))    ; elementwise maps stay empty
   (0 = (alen ((arr 0 '(1) '(5)) + e)))           ; a 1-axis broadcasts to 0, not 1
   (-1 = (peep e 0 -1))                           ; out of bounds -> the default
   ('(0 3) = (ashape ((arr 0.0 '(0 3) 0) + 1)))     ; rank-2 empties keep their shape

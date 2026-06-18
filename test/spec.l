@@ -131,7 +131,7 @@
 (assert
  (5 = (abs -5)) (fix? (abs -5)) (5.0 = (abs ~(3 4))) (2 = (int 2.9))
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
- (2.0 = ((/ 1 2) 4)) (1024.0 = (power 2 10)) (1 = (0 e)) (2.718281828459045 = e))
+ (2.0 = ((/ 1 2) 4)) (1024 = (10 2)) (1 = (0 e)) (2.718281828459045 = e))
 
 ; --- a few identities --- tetration is the tower with one base; i*i = -1; euler holds in the
 ; EXACT direction ((log -1) = i * pi -- `=` is exact, so e^(i*pi) does not hold forward); power's
@@ -142,7 +142,7 @@
  ((log -1) = i * pi) ((log i) = i * pi / 2)                                  ; euler, in the exact direction
  (twin? (log -1)) (gem? (log 2)) (twin? (log ~(2 3)))                          ; log widens only when it must
  (i = ((/ 1 2) -1)) (~(0 2) = ((/ 1 2) -4))                                  ; sqrt of a negative: principal, exact
- (-8 = (power -2 3)) (twin? ((/ 1 3) -8))                                       ; integer powers stay real; odd roots go principal
+ (-8 = (3 -2)) (twin? ((/ 1 3) -8))                                       ; integer powers stay real; odd roots go principal
  (0.0 = (sine 0) / (cosine 0)) (gem? (sine 0)))                                   ; tan 0 = 0
 
 ; --- complex --- a scalar at tier C; the `~` sigil: ~(re im) builds (twin re im), a bare ~x

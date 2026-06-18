@@ -46,38 +46,35 @@
     (close 1.0 (log (1 e)))
     (close 5.5 (log (5.5 e)))
 
-    ; --- power ---
-    (= 1.0 (power 2 0))
-    (= 2.0 (power 2 1))
-    (= 1024.0 (power 2 10))
-    (close 0.5 (power 2 -1))
-    (close 1.414213562373095 (power 2 0.5))
+    ; --- power IS application: (n b) = b**n; a float numeral forces the float lane ---
+    (= 1 (0 2))                  ; 2^0 (const-1)
+    (= 2 (1 2))                  ; 2^1 (identity)
+    (= 1024 (10 2))              ; 2^10 (exact, ipow)
+    (close 0.5 (-1 2))           ; 2^-1 -> reciprocal
+    (close 1.414213562373095 (0.5 2))   ; 2^0.5 = sqrt2 (the float lane)
 
     ; --- accepts fixnum args (promoted to float) ---
     (gem? (sine 0))
     (gem? ((/ 1 2) 4))
-    (gem? (power 2 3))
+    (gem? (3.0 2))               ; 2^3.0 -> float
 
     ; --- non-numeric arg → nil ---
     ; (nil counts as numeric — it's putnum(0).)
     (nil? (sine "x"))
-    (nil? (power "a" 1))
     (nil? (twin "x" 1))      ; twin of a non-number -> nil (so (arg (twin 1 "x")) folds to 0)
 
-    ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo),
-    ;     exactly as a scalar bignum already fed the scalar power ---
+    ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo) ---
     (= 1125899906842624.0 ((/ 1 2) 1267650600228229401496703205376))  ; sqrt(2^100) = 2^50
-    (gem? (power 1267650600228229401496703205376 2))
-    (? wint (< 1e300 (power 2 100000000000000000000)) 1)              ; f64 only -- 1e300 is inf in f32
+    (gem? (2.0 1267650600228229401496703205376))   ; bignum^2.0 -> float
+    (? wint (< 1e300 (1e20 2)) 1)              ; 2^1e20, f64 only -- 1e300 is inf in f32
 
-    ; --- power / atan2 elementwise over arrays (numpy broadcast); result is r ---
-    (= Gem (atype (power (arr 0 '(2) '(2 3)) 2)))                  ; always a float array
-    (aall (= (power (arr 0.0 '(3) '(1 2 3)) 2) (arr 0.0 '(3) '(1 4 9))))  ; array ^ scalar
-    (aall (= (power 2 (arr 0.0 '(3) '(1 2 3))) (arr 0.0 '(3) '(2 4 8))))  ; scalar ^ array
-    (aall (= (power (arr 0.0 '(3) '(1 2 3)) (arr 0.0 '(3) '(2 2 2)))      ; array ^ array
+    ; --- power elementwise over arrays (numpy broadcast); float lane -> r ---
+    (= Gem (atype (2.0 (arr 0 '(2) '(2 3)))))                  ; array^2.0 -> float array
+    (aall (= (2 (arr 0.0 '(3) '(1 2 3))) (arr 0.0 '(3) '(1 4 9))))  ; array ^ scalar
+    (aall (= ((arr 0.0 '(3) '(1 2 3)) 2) (arr 0.0 '(3) '(2 4 8))))  ; scalar ^ array (array numeral)
+    (aall (= ((arr 0.0 '(3) '(2 2 2)) (arr 0.0 '(3) '(1 2 3)))      ; array ^ array
              (arr 0.0 '(3) '(1 4 9))))
     (close 1.570796326794897 (peep (arg ~((arr 0.0 '(2) '(1 0)) (arr 0.0 '(2) '(1 1)))) 1 0))
-    (nil? (power (arr 0.0 '(2) '(1 2)) "x"))                         ; array vs non-number -> nil
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
     ;     the array's element form -- full magnitude in a float array, low bits in

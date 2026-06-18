@@ -81,8 +81,8 @@
  (nil? (% i 2))
  (nil? (sine i))   (close 0.7071067811865476 (re ((/ 1 2) i)))   (nil? (twin 1 i))
  ; power IS defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
- (close -1 (re (power i 2)))   (? wint (close 0 (im (power i 2))) 1)   ; im residue exceeds close's tol under f32 powf
- (close 0.20787957635076193 (re (power i i)))   (close 0 (im (power i i)))
+ (close -1 (re (2 i)))   (? wint (close 0 (im (2 i))) 1)   ; im residue exceeds close's tol under f32 powf
+ (close 0.20787957635076193 (re (i i)))   (close 0 (im (i i)))
 
  ; --- truthiness: a complex is FALSE iff it sorts <= 0+0i by the total order (re, then
  ;     im) -- 0, a negative real part, or re=0 with im<=0. re>0, or re=0 with im>0, is true.

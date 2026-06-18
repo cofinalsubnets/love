@@ -50,7 +50,7 @@
 (: p (sip '(49 32 43)) (assert (1 = (read p 99)) ('+ = (read p 99))))  ; "1 +" -> 1, +
 
 ; extensible with a plain pin; cleaned up after
-(: ** power)
+(: ** (\ b n (n b)))
 (pin in-tbl '** 2)
 (assert (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2)))  ; right-assoc: 2^(3^2)
 (pull in-tbl '** 0)
