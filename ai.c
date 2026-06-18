@@ -3420,21 +3420,11 @@ static struct ai *ioparse(struct ai *g, bool multi) {
     c2 = g->b;                                         // a complex / curry); anything else -> monadic lift/conj
     if (c2 != EOF) g = zungetc(g, c2);                 // (conj: real r -> ~(r 0); complex z -> conj z)
     g = push_wrap(g, c2 == '(' ? "twin" : "conj"); continue;
-   case ',':                                            // unquote / unquote-splice
-    if (!ai_ok(g = zgetc(g))) return g;
-    if ((c2 = g->b) == '@') { g = push_wrap(g, "uqs"); continue; }
-    if (c2 != EOF) g = zungetc(g, c2);
-    g = push_wrap(g, "uq"); continue;
    // the value surface -- the printer's read-back contract, environment-free,
-   // so it lives here in the structural reader (with ~ and , above), NOT in
+   // so it lives here in the structural reader (with ~ above), NOT in
    // the operator table: ' ` # @ each wrap the next datum.
    case '\'': g = push_wrap(g, "\\"); continue;        // quote: 'x = (\ x)
-   case '`':                                            // ` (single) -> element-eval list ctor; `` (double) -> quasiquote
-    if (!ai_ok(g = zgetc(g))) return g;                 // peek: a second ` -> quasiquote (the less-common macro lane)
-    c2 = g->b;
-    if (c2 == '`') { g = push_wrap(g, "qq"); continue; }     // ``(a ,b c) -> quasiquote (resolves nested qq -- one rule)
-    if (c2 != EOF) g = zungetc(g, c2);
-    g = push_wrap(g, "list"); continue;                      // `(a b c) -> (list a b c), each evaluated (the common ctor)
+   case '`': g = push_wrap(g, "list"); continue;            // `(a b c) -> (list a b c), each evaluated
    case '#': g = push_wrap(g, "hash"); continue;       // (#! comments die in ai_z_getc)
    case '@': g = push_wrap(g, "tuple"); continue;
    case ')': case ']': case '}':

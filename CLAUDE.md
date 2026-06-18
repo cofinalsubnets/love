@@ -412,7 +412,7 @@ $(buf 4)             ; 0       a zeroed buf is nothing
 
 ; --- reader operators --- `;` line comment, `#!` pinbang (no block comments). reading is
 ; STRUCTURAL and environment-free: the reader knows tokens, parens, strings, and the value
-; surface -- ' quote (= one-operand \), ` list (the element-eval ctor), `` quasiquote, , unquote, ,@ splice, # hash, @ tup
+; surface -- ' quote (= one-operand \), ` list (the element-eval ctor), # hash, @ tup
 ; (array), ~ twin (complex/conjugate: ~(re im) splices to (twin re im), a bare ~x is
 ; (twin x)) -- and NO operator tables, so the same reader serves data (read) and code.
 ; the LEXER LAW splits tokens by leading char: a name token (alnum/_) keeps - ? ! etc
@@ -436,8 +436,8 @@ $(buf 4)             ; 0       a zeroed buf is nothing
 ; sigil at one binds TIGHTEST (folds the moment its operand lands), so $"ab" + 2 is
 ; (+ ($ "ab") 2) = 197; only infix defers, which is what makes it right-associative. the
 ; CURRY LAW: operands missing at the end of a list fold to the partial application.
-; quote interiors are DATA -- operators inside ' stay plain symbols; quasiquote descends
-; only through unquotes. shipped at one: $ sat, ! nil?, . dot; at two: + - * / %
+; quote interiors are DATA -- operators inside ' stay plain symbols. shipped at one:
+; $ sat, ! nil?, . dot; at two: + - * / %
 ; = < <= > >= | &; ? at three -- the cond form infix, (t ? a b); aliases: <- pin and
 ; -> peep, collection-first -- (t <- k v) pins (giving back t, so it chains), (t -> k d)
 ; peeps. (1 + 2) factors to ((+ 1 2)) and evaluates via (f) == f.

@@ -405,23 +405,14 @@
                                   (op-w (cup l) (cap r) (cup r)))))))))
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
-   ; quasiquote: the template is data; only unquote operands re-enter the pass.
-   ; (nested quasiquote is gone -- ` is the list constructor, `` is quasiquote -- so no depth.)
-   (op-qq t)
-    (? (atom? t) t
-       (: h (cap t)
-          (? (= h 'uq)  (link 'uq  (link (op-core (caup t)) 0))
-             (= h 'uqs) (link 'uqs (link (op-core (caup t)) 0))
-             (map (\ e (op-qq e)) t))))
    ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
-   ; quoted list keeps its operators as plain symbols); quasiquote descends
-   ; only through unquotes; everything else walks. idempotent: factored
-   ; output carries operators only in head position, where they read plain.
+   ; quoted list keeps its operators as plain symbols); everything else walks.
+   ; idempotent: factored output carries operators only in head position, where
+   ; they read plain.
    (op-core x)
     (? (atom? x) x
        (: h (cap x)
           (? (&& (= h '\) (atom? (cuup x))) x
-             (= h 'qq) (link 'qq (link (op-qq (caup x)) 0))
              ; the reader's glued-run emission (mono (run d)): factor the run
              ; monadically around the (recursively opfixed) datum; an
              ; unfactorable run is the plain application (run d)
@@ -468,22 +459,6 @@
 ; `(quote x)` -> `(\ x)`: the CL/Scheme name for the one-arg-lambda quote (`'x` sugar).
 (:: 'quote (\ a (link '\ a)))
 
-; quasiquote: ``tmpl with ,x (unquote) and ,@xs (unquote-splice). The reader emits
-; (qq tmpl), (uq x), (uqs xs). qqx/qql walk the template; every unquote FIRES (there
-; is no nesting -- ` is the element-eval list constructor now, so no depth to track).
-; qqx returns CODE that reconstructs the template (link/cat over the spliced values).
-; uq is also bound to identity so a stray top-level ,x just evaluates its operand.
-(: (qqx t) (?
-    (atom? t)       (list '\ t)                              ; atom: quote it
-    (= (cap t) 'uq) (caup t)                                 ; unquote: fire the value
-                    (qql t))                                 ; other list
-   (qql t) (?
-    (atom? t) (qqx t)                                        ; nil / improper tail
-    (&& (two? (cap t)) (= (caap t) 'uqs))
-     (list 'cat (caup (cap t)) (qql (cup t)))                ; splice: fire
-    (list 'link (qqx (cap t)) (qql (cup t)))))               ; ordinary element
-(:: 'qq (\ a (qqx (cap a))))
-(: uq (\ x x))                                               ; stray ,x evaluates x
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
 ; a-type: a WITNESS STAR of the element tier -- the highest of {Z<R<C<O} present in a

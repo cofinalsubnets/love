@@ -259,7 +259,7 @@
 ; time by opfix against the `operators` table. the VALENCE LAW: glued is monadic, spaced is
 ; dyadic; head position never fuses. the FACTORIZATION/CURRY laws (see CLAUDE.md) govern the rest.
 (assert
- ('(1 (\ x) 3) = ``(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) ``(1 ,@xs 4)))
+ ('(1 (\ x) 3) = `(1 ''x 3)) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
  ('((dot x)) = (opfix '(. x))) ('! = (caup '(a ! b)))   ; opfix factors; quotes stay data
@@ -283,7 +283,7 @@
 
 ; --- macros --- a macro maps an arg list to code; install with `::`. the prel ships
 ; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, :- and ?-, >>= <=<.
-(:: 'unless (\ a ``(? ,(cap a) 0 ,(caup a))))
+(:: 'unless (\ a `('? (cap a) 0 (caup a))))
 (assert
  ('ok = (unless 0 'ok)) (0 = (unless 1 'ok)) (3 = (&& 1 2 3)) !(&& 1 0 3)
  (2 = (|| 0 2 3)) ('(1 2 3) = (L 1 2 3)) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
