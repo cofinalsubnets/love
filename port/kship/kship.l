@@ -76,6 +76,26 @@
    (beat st period) (: _ (sleep period) (guarded st (link 'tick (clock 0))))
    (run-beats st n period) (? (< n 1) st (run-beats (beat st period) (- n 1) period))
 
+; --- the LIVE nic agent loop (MILESTONE 3: perceive the real NIC) --- perceive one
+; UDP datagram off `port` ((slurp port) BLOCKS for it), tag it 'net, decide+act under
+; the watchdog, reply to its sender through the port, loop forever. The SAME policy +
+; watchdog as the scripted demos; only perceive (scripted list -> live slurp) and act
+; (say-tap -> port write) change -- the fold is identical, which is the whole point.
+; `port` is a PARAM, not a free `nic`, so this file still loads on the host (no nic
+; there); the kernel's net-agent build passes its `nic` port. acts on INITIATIVE the
+; instant a packet lands -- the agent IS the server (the C echo loop is gone).
+   (reply-to port bytes) (: _ (fputs port bytes) _ (fflush port) 0)
+   (serve st port)
+     (: d   (slurp port)                                 ; perceive: BLOCK for one datagram
+        _   (say (+ "  nic <- " d))                      ; narrate what landed (console observability)
+        out (policy st (link 'net d))                    ; decide (policy runs under the watchdog help)
+        st' (? (chainp out)                              ; watchdog by SHAPE: real step vs welped fault
+                 (: a (cup out)                          ; a real step: reply, advance the state
+                    _ (? (idp (cap a) 'send) (reply-to port (cup a)) 0)
+                    (cap out))
+                 st)                                     ; a caught fault: carry the old state forward
+        (serve st' port))
+
 ; --- checkpoint --- state is a plain value, so persistence is show/read. `bytes`
 ; lifts the saved string to the byte list `sip` reads (a string is a fn over its
 ; indices -- (map s (jot n))). on metal `save` writes to a flat region / virtio-blk
@@ -111,28 +131,27 @@
       (scare? s) (: _ (say (+ "  caught: " (show a))) (welp s a b))   ; a real fault: face, then welp
       (welp s a b))))
 
-; --- demo 1: the scripted merged stream --- two packets, two clock ticks, and one
-; MALFORMED event the watchdog must absorb. the wire taps print as it runs.
-(say "-- scripted {net, clock} stream; the watchdog absorbs the bad event --")
-(: evs (L (link 'net "ping") (link 'tick 1) (link 'bogus 0)
-          (link 'net "ping") (link 'tick 2))
-   st (run fresh evs)
-   _ (. "  replies=") _ (. (replies st))           ; 2   both packets answered
-   _ (. " beats=")    _ (. (beats st)) (. "\n"))    ; 2   both ticks beat (bogus skipped)
-
-; --- demo 2: MILESTONE 1 -- the heartbeat on the real clock, no net ---
-(say "-- milestone 1: heartbeat on the real clock alone, no net (3 beats) --")
-(: st (run-beats fresh 3 4)
-   _ (. "  beats=") _ (. (beats st)) (. "\n"))      ; 3   three real clock ticks
-
-; --- demo 3: the self-restart watchdog -- state survives task death ---
-(say "-- watchdog: 3 supervised task-restarts, 2 beats each; state persists --")
-(: end (mission (save fresh) 3 2 3)
-   _ (. "  beats across the restarts=") _ (. (beats (restore end))) (. "\n"))  ; 6
-
-; --- demo 4: the checkpoint round-trips faithfully ---
-(say "-- checkpoint save/restore is faithful --")
-(: a (run-beats fresh 4 3) back (restore (save a))
-   _ (. "  resume beats=") _ (. (beats back))       ; 4
-   _ (. " == live ")       _ (. (beats a))          ; 4
-   _ (. " equal? ")        _ (. (= a back)) (. "\n")); true
+; --- the demos, as a CALLABLE function (not auto-run) --- a body-less top-level `:`
+; leaks `demos` to the global scope. the host sketch + the -kship build call (demos 0)
+; explicitly; the net-agent build skips it and runs (serve fresh nic) directly (the
+; demos' sleeps/spawns leave the NIC RX unpolled, so a live agent must start clean --
+; exactly why netecho slurps immediately). run `out/host/ai port/kship/kship.l -e "(demos 0)"`.
+(: (demos _)
+   (: _ (say "-- scripted {net, clock} stream; the watchdog absorbs the bad event --")
+      _ (: evs (L (link 'net "ping") (link 'tick 1) (link 'bogus 0)
+                  (link 'net "ping") (link 'tick 2))
+           st (run fresh evs)
+           _ (. "  replies=") _ (. (replies st))           ; 2   both packets answered
+           _ (. " beats=")    _ (. (beats st)) (. "\n"))    ; 2   both ticks beat (bogus skipped)
+      _ (say "-- milestone 1: heartbeat on the real clock alone, no net (3 beats) --")
+      _ (: st (run-beats fresh 3 4)
+           _ (. "  beats=") _ (. (beats st)) (. "\n"))      ; 3   three real clock ticks
+      _ (say "-- watchdog: 3 supervised task-restarts, 2 beats each; state persists --")
+      _ (: end (mission (save fresh) 3 2 3)
+           _ (. "  beats across the restarts=") _ (. (beats (restore end))) (. "\n"))  ; 6
+      _ (say "-- checkpoint save/restore is faithful --")
+      _ (: a (run-beats fresh 4 3) back (restore (save a))
+           _ (. "  resume beats=") _ (. (beats back))       ; 4
+           _ (. " == live ")       _ (. (beats a))          ; 4
+           _ (. " equal? ")        _ (. (= a back)) (. "\n")) ; true
+      0))

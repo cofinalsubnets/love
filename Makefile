@@ -327,6 +327,12 @@ endif
 ifdef NETECHO
 ksuf := -netecho
 endif
+# NETAGENT=1 boots into the kship AGENT loop over the `nic` port (milestone 3):
+# the agent perceives a UDP datagram (slurp nic), DECIDES via the policy, replies,
+# and survives faults via the watchdog -- vs NETECHO's raw byte echo. Own suffix.
+ifdef NETAGENT
+ksuf := -netagent
+endif
 
 # Cross toolchain defaults to clang + lld (one multi-target pair covers every
 # arch). Override for a GCC cross toolchain, e.g.
@@ -379,6 +385,9 @@ endif
 ifdef NETECHO
 kcppflags += -DNETECHO
 endif
+ifdef NETAGENT
+kcppflags += -DNETAGENT
+endif
 
 ifeq ($(KCC_IS_CLANG),1)
 kcc_if_clang = -target $a-unknown-none-elf
@@ -403,7 +412,7 @@ $(ko)/ai-$a$(ksuf).elf: $(R)/port/kship/$a/$a.lds $(k_o)
 # Shared C sources (ai.c, font/, c/) + per-arch port//.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h; under KSHIP
 # the baked agent out/lib/kship.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h $(if $(K_TEST),out/lib/ktests.h) $(if $(KSHIP),out/lib/kship.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h $(if $(K_TEST),out/lib/ktests.h) $(if $(KSHIP)$(NETAGENT),out/lib/kship.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

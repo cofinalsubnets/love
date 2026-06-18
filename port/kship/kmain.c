@@ -506,7 +506,7 @@ static char const ktests[] =
 ;
 #endif
 
-#ifdef KSHIP
+#if defined(KSHIP) || defined(NETAGENT)
 // The kship agent (port/kship/kship.l), baked VERBATIM by lcatv (out/lib/kship.h).
 // Bound to the global `kship-src` and drunk form-by-form through zevs at boot --
 // the kernel boots straight into the self-driving heartbeat loop. See doc/kship.md.
@@ -555,7 +555,7 @@ void kmain(void) {
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
 #endif
-#ifdef KSHIP
+#if defined(KSHIP) || defined(NETAGENT)
   // bind the baked agent to the global `kship-src`; the driver below drinks it
   // through zevs, then drops into the shell so the machine stays usable.
   g = ai_strof(g, kship_src);
@@ -579,9 +579,16 @@ void kmain(void) {
  // zz-fin.l prints the summary and (exit 1)s on failure.
  "(zevs (sip ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))"
 #elif defined(KSHIP)
- // agent build: drink the baked `kship-src` through zevs (the same stream shell),
- // running the heartbeat loop on the real timer tick, then drop into the shell.
- "(: _ (zevs (sip ((: (g i) (? (< i (tally kship-src)) (link (peep kship-src i 0) (g (+ 1 i))))) 0))) (shell 0))"
+ // agent build: drink the baked `kship-src` (defines the agent; demos no longer
+ // auto-run), run (demos 0) to show the heartbeat/watchdog/checkpoint, then the shell.
+ "(: _ (zevs (sip ((: (g i) (? (< i (tally kship-src)) (link (peep kship-src i 0) (g (+ 1 i))))) 0))) _ (demos 0) (shell 0))"
+#elif defined(NETAGENT)
+ // net-agent build (MILESTONE 3): drink kship-src (defines + leaks the agent --
+ // policy, the watchdog `help`, `serve`), THEN run the live loop. (serve fresh nic)
+ // perceives a UDP datagram off the `nic` port, decides via the policy, replies
+ // "pong", and survives a faulting packet via the watchdog -- the AGENT loop on the
+ // real NIC, not NETECHO's raw byte echo. Non-terminating; the agent IS the server.
+ "(: _ (zevs (sip ((: (g i) (? (< i (tally kship-src)) (link (peep kship-src i 0) (g (+ 1 i))))) 0))) (serve fresh nic))"
 #elif defined(NETECHO)
  // net-echo build (stage 2e gate): the agent perceives one UDP datagram off the
  // `nic` port (slurp), then acts -- writes it back to its sender (fputs+fflush).
