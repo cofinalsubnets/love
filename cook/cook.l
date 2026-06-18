@@ -32,20 +32,23 @@
 ; default ticket, exactly as in make. drive it with (cook item) -- to cook an item
 ; is to prep it up to date by following its recipe over fresh ingredients.
 ;
-; usage:  cook <Cookfile> [ticket]            (with the symlink installed)
-;     or:  ai -l cook/cook.l <Cookfile> [ticket]
+; usage:  cook [-f FILE] [--emit] [recipe ..]  (with the symlink installed)
+;     or:  ai -l cook/cook.l [-f FILE] [recipe ..]
 ; A Cookfile is ordinary ai source that lays out the recipes (recipe ..) then
-; (cook (ticket 0)). cook can ALSO read a real Makefile directly: when the file it
-; is handed is named like one (Makefile, makefile, GNUmakefile, *.mk), cook imports
-; its rules and cooks them -- no Cookfile needed (see "importing a Makefile" at the
-; foot of this file). The first rule is the default ticket either way.
+; drives them: (cook-all 0) builds every recipe named on the command line (or the
+; default when none), and (cook (ticket 0)) builds just the first. cook can ALSO
+; read a real Makefile directly: ONLY a file NAMED like one (Makefile, makefile,
+; GNUmakefile, *.mk -- makefilep) is read as make; every other recipe file (Cards.l,
+; Cookfile, or a -f FILE) is ai source. See "importing a Makefile" at the foot of
+; this file. The first rule is the default ticket either way.
 
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
+   tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
    pgen (tablet 0)         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), installed by the Makefile importer (() until then)
 
    ; string -> charlist, so a captured stat string can be read as a port.
-   (s2cl s) ((: (g i) (? (< i (tally s)) (hook (peep s i 0) (g (+ 1 i))))) 0)
+   (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
 
    ; "a b c" from ("a" "b" "c"); "" from the empty list.
    (join sep l) (? (chainp l) (foldl (\ a x (+ a (+ sep x))) (cap l) (cup l)) "")
@@ -59,10 +62,10 @@
    (reg item ing oo steps)
    (: prev (peep cards item ())
       (? prev
-         (pin cards item (hook (cat (cap prev) ing)
-                               (hook (cat (cap (cup prev)) oo)
+         (pin cards item (link (cat (cap prev) ing)
+                               (link (cat (cap (cup prev)) oo)
                                      (? (chainp steps) steps (cup (cup prev))))))
-         (: _ (pin cards item (hook ing (hook oo steps)))
+         (: _ (pin cards item (link ing (link oo steps)))
              _ (? (peep check 0 0) 0 (pin check 0 item)) item)))
    ; the public Cookfile API: (recipe item ingredients steps) -- no order-only prereqs.
    (recipe item ingredients steps) (reg item ingredients 0 steps)
@@ -73,7 +76,7 @@
    ; there and `output` is its %.Y date (nanosecond resolution), which reads
    ; straight back as a number -- the sub-second part defeats same-second races.
    (date item)
-   (? (symp item) ()
+   (? (nomp item) ()
       (: r (run (L "sh" "-c" "stat -c %.Y \"$0\" 2>/dev/null" item))   ; %.Y: nanosecond float; stderr silenced (a miss is normal)
          (? (&& (chainp r) (= 0 (cap r))) (read (sip (s2cl (cup r))) ()) ()))))
 
@@ -172,14 +175,22 @@
             (: _ (puts (+ "cook: cooked " (show item))) (putc 10))
             (: _ (puts (+ "cook: " (+ (show item) " is already up to date"))) (putc 10)))))
 
-   ; the ticket to build: the last command-line word, when it names a recipe (as the
-   ; bare string, for a file item, or interned, for a phony symbol), else the
-   ; DEFAULT -- the first recipe declared. (argv still holds the WHOLE invocation here
-   ; -- the Cards file and any -l chain included -- so a trailing word that is no item
-   ; falls through to the default. the arg is ignored; (ticket 0) reads it all live.)
-   (ticket _) (: a (last argv) d (peep check 0 ())
-               (? (peep cards a 0) a
-                  (: s (intern a) (? (peep cards s 0) s d)))))
+   ; resolve a command-line word to an item: the bare string when it names a file
+   ; recipe, the interned symbol when it names a phony one, else the DEFAULT -- the
+   ; first recipe declared. an unknown word thus quietly cooks the default, as make's
+   ; trailing target does when nothing matches.
+   (pick a) (? (peep cards a 0) a
+              (: s (intern a) (? (peep cards s 0) s (peep check 0 ()))))
+
+   ; the ticket to build: the FIRST recipe word named on the command line (the
+   ; `tickets` box, filled by the dispatch from the non-flag args), else the default.
+   ; (ticket 0) reads it live, so a Cookfile's own (cook (ticket 0)) sees the args.
+   (ticket _) (: ts (peep tickets 0 ()) (? (chainp ts) (pick (cap ts)) (peep check 0 ())))
+
+   ; cook every recipe word named on the command line (make foo bar), or the default
+   ; when none were named. drives the Makefile path; a Cookfile drives itself.
+   (cook-all _) (: ts (peep tickets 0 ())
+                (? (chainp ts) (each ts (\ w (cook (pick w)))) (cook (peep check 0 ())))))
 
 ; --- importing a Makefile ------------------------------------------------------
 ; cook reads a Cookfile (ordinary love source) -- but it can also read a real
@@ -242,9 +253,9 @@
    (findc s i ch) (? (>= i (tally s)) i (? (= (s i) ch) i (findc s (+ 1 i) ch)))
    (split-ws s)
    ((: (g i st acc)
-       (? (>= i (tally s)) (rev (? (< st i) (hook (snip s st i) acc) acc))
+       (? (>= i (tally s)) (rev (? (< st i) (link (snip s st i) acc) acc))
           (? (chws (s i))
-             (g (+ 1 i) (+ 1 i) (? (< st i) (hook (snip s st i) acc) acc))
+             (g (+ 1 i) (+ 1 i) (? (< st i) (link (snip s st i) acc) acc))
              (g (+ 1 i) st acc))))
     0 0 0)
 
@@ -257,8 +268,8 @@
     0 "")
    (lines s)
    ((: (g i st acc)
-       (? (>= i (tally s)) (rev (hook (snip s st i) acc))
-          (? (= (s i) 10) (g (+ 1 i) (+ 1 i) (hook (snip s st i) acc))
+       (? (>= i (tally s)) (rev (link (snip s st i) acc))
+          (? (= (s i) 10) (g (+ 1 i) (+ 1 i) (link (snip s st i) acc))
              (g (+ 1 i) st acc))))
     0 0 0)
 
@@ -287,11 +298,11 @@
    ; static-pattern colon).
    (splittop s ch)
    ((: (g i depth st acc)
-       (? (>= i (tally s)) (rev (hook (snip s st i) acc))
+       (? (>= i (tally s)) (rev (link (snip s st i) acc))
           (: c (s i)
              (? (|| (= c 40) (= c 123)) (g (+ 1 i) (+ 1 depth) st acc)
                 (|| (= c 41) (= c 125)) (g (+ 1 i) (- depth 1) st acc)
-                (&& (= c ch) (= depth 0)) (g (+ 1 i) depth (+ 1 i) (hook (snip s st i) acc))
+                (&& (= c ch) (= depth 0)) (g (+ 1 i) depth (+ 1 i) (link (snip s st i) acc))
                 (g (+ 1 i) depth st acc)))))
     0 0 0 0)
 
@@ -313,7 +324,7 @@
    ((: (g i sil ign)
        (? (&& (< i (tally s)) (|| (chws (s i)) (|| (= (s i) 64) (|| (= (s i) 45) (= (s i) 43)))))
           (g (+ 1 i) (|| sil (= (s i) 64)) (|| ign (= (s i) 45)))
-          (hook sil (hook ign (snip s i (tally s)))))) 0 0 0)
+          (link sil (link ign (snip s i (tally s)))))) 0 0 0)
    (recipe-parse l) (parse-mods (snip l 1 (tally l)))   ; drop the leading tab, then the modifier run
    (classify l)
    (? (recipep l) (L 'recipe (recipe-parse l))
@@ -329,8 +340,8 @@
                   (= w "ifndef") (L 'ifndef rest)
                   (= w "else") (L 'else rest)
                   (= w "endif") (L 'endif)
-                  (: a (parse assignP t) (? (chainp a) (hook 'assign a)
-                     (: r (parse ruleP t) (? (chainp r) (hook 'rule r) (L 'skip))))))))))
+                  (: a (parse assignP t) (? (chainp a) (link 'assign a)
+                     (: r (parse ruleP t) (? (chainp r) (link 'rule r) (L 'skip))))))))))
 
    ; -- nested-paren-aware variable expansion + make functions --
    ; the index of the ) that matches the ( just opened, counting nested $(..).
@@ -395,7 +406,7 @@
    (fsuf w)  (: dot (flastdot w) (? (< dot (tally w)) (sub w dot (tally w)) ""))
    (fabs w) (? (&& (< 0 (tally w)) (= (w 0) 47)) w
               (: r (run (L "sh" "-c" "pwd")) (? (chainp r) (+ (chomp (cup r)) (+ "/" w)) w)))
-   (dedup l) (? (chainp l) (? (chainp (cup l)) (? (= (cap l) (cap (cup l))) (dedup (cup l)) (hook (cap l) (dedup (cup l)))) l) l)
+   (dedup l) (? (chainp l) (? (chainp (cup l)) (? (= (cap l) (cap (cup l))) (dedup (cup l)) (link (cap l) (dedup (cup l)))) l) l)
    (sortu l) (dedup (sort l))
    (strrep frm to s)
    (? (= 0 (tally frm)) s
@@ -486,9 +497,9 @@
    (: t (trim rest)
       (? (&& (< 0 (tally t)) (= (t 0) 40))
          (: cl (findclose t 1 40 41) parts (splittop (snip t 1 cl) 44)
-            (hook (? (chainp parts) (cap parts) "") (? (chainp (cup parts)) (cap (cup parts)) "")))
+            (link (? (chainp parts) (cap parts) "") (? (chainp (cup parts)) (cap (cup parts)) "")))
          (: ws (map unquote-str (split-ws t))
-            (hook (? (chainp ws) (cap ws) "") (? (chainp (cup ws)) (cap (cup ws)) "")))))
+            (link (? (chainp ws) (cap ws) "") (? (chainp (cup ws)) (cap (cup ws)) "")))))
    (eval-ifeq rest as) (: a (cond-args rest) (= (trim (expand (cap a) as 0)) (trim (expand (cup a) as 0))))
    (eval-ifdef rest as) (< 0 (tally (expand (peep as (trim (expand rest as 0)) "") as 0)))
    (do-assign as nm op val)
@@ -496,7 +507,7 @@
       (? (= op "=")   (pin as nm v)
          (= op ":=")  (pin as nm (expand v as 0))
          (= op "::=") (pin as nm (expand v as 0))
-         (= op "?=")  (: cur (peep as nm 'cook.undef) (? (symp cur) (pin as nm v) 0))
+         (= op "?=")  (: cur (peep as nm 'cook.undef) (? (nomp cur) (pin as nm v) 0))
          (= op "+=")  (: o (peep as nm "") (pin as nm (? (< 0 (tally o)) (+ o (+ " " v)) v)))
          (pin as nm v)))
 
@@ -504,17 +515,17 @@
    ; stack is a list of frames (pon taken active); `on` is the top frame's active
    ; (1 when there is no frame). include splices the named files' lines inline.
    (r1 c) (cap (cup c)) (r2 c) (cap (cup (cup c))) (r3 c) (cap (cup (cup (cup c))))
-   (addstep cur st) (hook (cap cur) (hook (cap (cup cur)) (hook st (cup (cup cur)))))
-   (finalize cur) (hook (cap cur) (hook (cap (cup cur)) (rev (cup (cup cur)))))
-   (flushr cur rules) (? cur (hook (finalize cur) rules) rules)
+   (addstep cur st) (link (cap cur) (link (cap (cup cur)) (link st (cup (cup cur)))))
+   (finalize cur) (link (cap cur) (link (cap (cup cur)) (rev (cup (cup cur)))))
+   (flushr cur rules) (? cur (link (finalize cur) rules) rules)
    (mkrule c)                  ; -> (TGTS-text PREREQS-text . STEPS-rev); split off an inline ; recipe
    (: prr (r2 c) sc (splittop prr 59)
       inl (? (&& (chainp (cup sc)) (< 0 (tally (trim (cap (cup sc)))))) (L (parse-mods (trim (cap (cup sc))))) 0)
-      (hook (r1 c) (hook (cap sc) inl)))
+      (link (r1 c) (link (cap sc) inl)))
    (condon cond) (? (chainp cond) (cap (cup (cup (cap cond)))) 1)
-   (push-cond cond pon active) (hook (L pon active active) cond)
+   (push-cond cond pon active) (link (L pon active active) cond)
    (else-cond cond) (: f (cap cond) pon (cap f) taken (cap (cup f)) na (&& pon (! taken))
-                       (hook (L pon (|| taken na) na) (cup cond)))
+                       (link (L pon (|| taken na) na) (cup cond)))
    (build cls as)
    ((: (loop cs rules cur cond)
        (? (! (chainp cs)) (rev (flushr cur rules))
@@ -548,8 +559,8 @@
        _ (pin as "MAKE" "make") _ (pin as "AR" "ar") _ (pin as "RM" "rm -f") as)
 
    ; split a prereq word list at a `|` into (normal . order-only).
-   (splitbar ws) ((: (g l acc) (? (! (chainp l)) (hook (rev acc) 0)
-                       (? (= (cap l) "|") (hook (rev acc) (cup l)) (g (cup l) (hook (cap l) acc))))) ws 0)
+   (splitbar ws) ((: (g l acc) (? (! (chainp l)) (link (rev acc) 0)
+                       (? (= (cap l) "|") (link (rev acc) (cup l)) (g (cup l) (link (cap l) acc))))) ws 0)
 
    ; parse a Makefile and REGISTER its rules. .PHONY members become phony SYMBOLS;
    ; every other item a file STRING. A rule line is one of: a STATIC pattern rule
@@ -578,7 +589,7 @@
                        ; implicit pattern rule, or normal rule
                        (: sb (splitbar (expand-words (L prtext) as)) prs (cap sb) oos (cup sb)
                           (? (any haspct tgts)
-                             (each tgts (\ t (? (haspct t) (pin patbox 0 (hook (L t prs oos raws) (peep patbox 0 0))) 0)))
+                             (each tgts (\ t (? (haspct t) (pin patbox 0 (link (L t prs oos raws) (peep patbox 0 0))) 0)))
                              (each tgts (\ t (reg (mk-item t) (map mk-item prs) (map mk-item oos)
                                                   (expand-steps raws (mk-item t) prs "" as))))))))))))
       patlist (peep patbox 0 0)
@@ -595,7 +606,7 @@
                ex (peep cards item ())
                allp (? ex (cat (map mk-item ping) (cap ex)) (map mk-item ping))
                oo   (? ex (cat (map mk-item poo) (cap (cup ex))) (map mk-item poo))
-               (hook allp (hook oo (expand-steps (cap (cup (cup (cup best)))) item ping stem as))))
+               (link allp (link oo (expand-steps (cap (cup (cup (cup best)))) item ping stem as))))
             0))
       (pin pgen 0 resolve))
 
@@ -638,7 +649,7 @@
        dflt (peep check 0 ())
        _ (? dflt (emit-walk dflt seen) 0)
        _ (each (keys cards) (\ k (emit-walk k seen)))
-       _ (putc 10) _ (puts "(cook (ticket 0))") (putc 10))
+       _ (putc 10) _ (puts "(cook-all 0)") (putc 10))
 
    ; is a recipe-file path named like a Makefile? then cook reads it as one.
    (mk-lastslash p) ((: (g j) (? (< 0 j) (? (= (p (- j 1)) 47) j (g (- j 1))) 0)) (tally p))
@@ -651,28 +662,63 @@
    ; not the program head or a -l chain) or DISCOVERED in the cwd. We cannot call
    ; cli.l's strip-l to find the explicit one -- it would re-load this file.
    (mk-args a) ((: (g x) (? (! (chainp x)) 0
-                  (? (= (cap x) "-l") (g (cup (cup x))) (hook (cap x) (g (cup x)))))) (cup a))
+                  (? (= (cap x) "-l") (g (cup (cup x))) (link (cap x) (g (cup x)))))) (cup a))
    (exists? p) (: q (open p "r") (? q 1 0))     ; a one-shot probe (the fd dies with the process)
-   ; discovery precedence: a Makefile wins over a Cookfile, which wins over a
-   ; legacy Cards.l (cook's old recipe-file name; read as a Cookfile, being love
-   ; source). (a dummy param: a nullary (f) would be \ with one operand = quote.)
+   ; discovery precedence: an ai-native recipe file wins over a Makefile -- a
+   ; legacy Cards.l first, then a Cookfile, then a Makefile. Only a Makefile-named
+   ; file (makefilep) is ever read as make; Cards.l and Cookfile are ai source.
+   ; (a dummy param: a nullary (f) would be \ with one operand = quote.)
    (discover _) ((: (g ps) (? (chainp ps) (? (exists? (cap ps)) (cap ps) (g (cup ps))) 0))
-               '("Makefile" "Cookfile" "Cards.l"))
+               '("Cards.l" "Cookfile" "Makefile"))
+
+   ; -- the command line ---------------------------------------------------------
+   ; cook owns its own arg parse over the rebound argv (cli.l stops at the first
+   ; non-flag; cook reads the rest via mk-args). Like make, it takes flags in any
+   ; order and treats every non-flag word as a recipe to build:
+   ;   -f, --file FILE   the build file (a Makefile or a Cookfile); else discovered
+   ;   --emit            transpile a Makefile to a resolved Cookfile on stdout, then exit
+   ;   -h, --help, help  print usage and exit
+   ;   -v, --version, version   print the version and exit
+   ;   RECIPE ...        the items to cook (default: the first recipe declared)
+   ; for back-compat with `cook <Makefile> [recipe]`, when no -f is given the first
+   ; positional word that names an existing file is taken as the build file and the
+   ; rest are recipes; with -f, every positional word is a recipe.
+   (bye s) (: _ (puts s) _ (putc 10) _ (fflush out) (exit 0))
+   (version _) (bye (+ "cook (ai " (+ ai-version ")")))
+   (usage _) (bye (+ "usage: cook [-f FILE] [--emit] [-v] [-h] [RECIPE ...]\n"
+              (+ "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
+              (+ "      --emit        transpile a Makefile to a resolved Cookfile, then exit\n"
+              (+ "  -v, --version     print the version and exit\n"
+              (+ "  -h, --help        print this help and exit\n"
+              (+ "  RECIPE ...        the items to build (default: the first recipe declared)\n"
+                 "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary ai source.")))))))
+   (need-arg h r) (? (chainp r) 0 (: _ (fputs err (+ "cook: " (+ h " needs an argument"))) _ (fputc err 10) (exit 2)))
+   (parse-args ws)             ; -> a tablet: 'file, 'emit, 'help, 'ver, 'pos (the recipe words, in order)
+   ((: (loop ws opt) (? (! (chainp ws)) opt
+       (: w (cap ws) r (cup ws)
+          (? (|| (= w "-f") (= w "--file")) (: _ (need-arg w r) _ (pin opt 'file (cap r)) (loop (cup r) opt))
+             (= w "--emit")                                       (: _ (pin opt 'emit 1) (loop r opt))
+             (|| (= w "-h") (|| (= w "--help") (= w "help")))      (: _ (pin opt 'help 1) (loop r opt))
+             (|| (= w "-v") (|| (= w "--version") (= w "version"))) (: _ (pin opt 'ver 1) (loop r opt))
+             (: _ (pin opt 'pos (cat (peep opt 'pos ()) (L w))) (loop r opt))))))
+    ws (tablet 0))
 
    ; -- the dispatch (this form's body) --
    ; cook is loaded with -l, then the host CLI driver loads the recipe file. We do
    ; the whole job HERE and exit first, so the driver never tries to read a Makefile
-   ; (or re-read the chosen file) as love source. The build file is the explicit arg
-   ; when it names an existing file, else the discovered one (Makefile, then Cookfile).
-   ; A Makefile is imported and cooked; a Cookfile is read and evaluated -- it calls
-   ; cook itself. The ticket is read live by (ticket 0) from argv, as ever.
-   ; --emit <Makefile>: transpile to a resolved Cookfile on stdout, then exit
-   ; (no cooking). Recognised anywhere in the args; the build file is the
-   ; remaining word, else discovered.
-   (: af0 (mk-args argv)
-      emit? (any (\ w (= w "--emit")) af0)
-      af (filter (\ w (! (= w "--emit"))) af0)
-      file (? (&& (chainp af) (exists? (cap af))) (cap af) (discover 0))
+   ; (or re-read the chosen file) as love source. A Makefile is imported and its
+   ; recipes cooked; a Cookfile is read and evaluated -- it drives cook itself, the
+   ; ticket read live by (ticket 0) from the tickets box this dispatch fills.
+   (: opt (parse-args (mk-args argv))
+      _ (? (peep opt 'help 0) (usage 0) 0)
+      _ (? (peep opt 'ver 0) (version 0) 0)
+      emit? (peep opt 'emit 0)
+      pos (peep opt 'pos ())
+      xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
+      _ (? (&& xf (! (exists? xf))) (: _ (fputs err (+ "cook: cannot open " xf)) _ (fputc err 10) (exit 1)) 0)
+      posfile (? (&& (! xf) (&& (chainp pos) (exists? (cap pos)))) (cap pos) 0)  ; a positional build file (back-compat)
+      file (? xf xf (? posfile posfile (discover 0)))
+      _ (pin tickets 0 (? posfile (cup pos) pos))                 ; the recipe words; the positional file is not a recipe
       (? emit?
          (: _ (? file 0 (: _ (fputs err "cook: --emit needs a Makefile") _ (fputc err 10) (exit 1)))
              q (open file "r")
@@ -683,9 +729,9 @@
          file
          (: q (open file "r")
             _ (? (makefilep file)
-                 (: _ (register-makefile (slurp q)) (cook (ticket 0)))
+                 (: _ (register-makefile (slurp q)) (cook-all 0))
                  ((: (g e) (: r (read q e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (mint 0)))
             (exit 0))
-         (chainp af)
-         (: _ (fputs err "cook: no Makefile, Cookfile or Cards.l found") _ (fputc err 10) (exit 1))
+         (chainp pos)
+         (: _ (fputs err "cook: no Cards.l, Cookfile or Makefile found") _ (fputc err 10) (exit 1))
          0)))

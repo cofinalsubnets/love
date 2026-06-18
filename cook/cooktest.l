@@ -150,7 +150,7 @@
    _ (ok "emit: var-resolved step"         (has em "(\"sh\" \"-c\" \"cc -o prog a.o b.o\")"))
    _ (ok "emit: pattern-resolved step"     (has em "(\"sh\" \"-c\" \"cc -c -o a.o a.c\")"))
    _ (ok "emit: default ticket emitted first" (has em "(recipe 'all "))
-   _ (ok "emit: trailing cook call"        (has em "(cook (ticket 0))"))
+   _ (ok "emit: trailing cook call"        (has em "(cook-all 0)"))
 
    ; round-trip: cook the emitted Cookfile and confirm it runs the recipe. The
    ; rule just writes a file (no compiler / source lookup), so the test is hermetic.

@@ -18,14 +18,28 @@ so it needs **no entry change and no core change** to make progress.
 - **DO NOT EDIT `ai.c` / `ai.h` / `main.c`** or other threads' files
   (`host/*.c`, `tools/aineko.l`, `bao.l`, `kmain.c`). Need a core change? **Ask the
   core thread** (the main session) — but cook almost certainly doesn't need one.
-- **First task — the red tests.** `test_cook` is currently **2 pass, 30 FAIL**
-  (pre-existing, in the silently-red `test_tools` that `make test` excludes — not a
-  regression). Fix them: the failures are cook's make-function handling
-  (`dir`/`notdir`/`patsubst`/`filter`/`subst`/…) + the `--emit` round-trip. This is
-  a clean, self-contained first task with an exact gate.
-- **Then the cook UX** (`cook-build-tool` memory): cook owns its own arg parse over
-  the rebound argv — recipes = non-flag args (like `make foo bar`), `-f FILE` for
-  the Cookfile, `--emit`, `help`/`version`. No entry change needed today; the fuller
-  multi-call decouple (`runtime-personalities-so`) is post-v1.
-- **Gate:** `make -C tools` (test_cook) goes green; `make test` stays green (you
-  don't touch the corpus or the core).
+- **✅ First task — the red tests (DONE).** `test_cook` was 2 pass / 30 FAIL — but
+  the cause was NOT make-function bugs: cook.l had drifted off the vocab renames
+  (`hook`→`link`, `symp`→`nomp`), so every list-building call read the zero point.
+  A two-token rename fixed all 30. **Lesson: when cook goes mass-red, first
+  `out/host/ai -e "(puts (show NAME))"` the prel names cook leans on (`link`/`nomp`/
+  `snip`/`trayp`/…) — a rename in the corpus surfaces as ALL tests red, not a logic
+  bug.** Now **32 pass**.
+- **✅ Then the cook UX (DONE).** cook owns its own arg parse over the rebound argv
+  (`parse-args`, a tablet of `'file 'emit 'help 'ver 'pos`):
+  - recipes = non-flag args, **all built in order** (`make foo bar`) via `cook-all`;
+  - `-f`/`--file FILE` (errors `cannot open` if missing); positional file still works
+    for back-compat (`cook Makefile all`) when no `-f`;
+  - `--emit`; `-h`/`--help`/`help`; `-v`/`--version`/`version` (bare words too).
+  - **`cook-all` is exposed** for Cookfiles: `(cook-all 0)` builds every named recipe
+    (or the default), `(cook (ticket 0))` builds just the first. `--emit` now ends the
+    generated Cookfile with `(cook-all 0)`.
+- **Policy (user-ratified):**
+  - **Only a Makefile is make.** Type is probed by **name** (`makefilep`:
+    `Makefile`/`makefile`/`GNUmakefile`/`*.mk`) — NOT by content. Everything else
+    (`Cards.l`, `Cookfile`, any `-f FILE`) is ai source. (Considered a content probe;
+    user said keep it name-based.)
+  - **Discovery order = `Cards.l` → `Cookfile` → `Makefile`** (ai-native wins over
+    make), reversed from the old Makefile-first order.
+- **Gate:** `make -C tools test_cook` green; `make test` stays green (cook touches
+  only `cook/` + `doc/`, never the corpus or core).
