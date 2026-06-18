@@ -37,14 +37,31 @@ share host files with anyone.
 
 ## Notes from the build (read before you start — these cost me time)
 
-**Where you are (2026-06-17):** milestones 1 AND 2 (incl. 2e) DONE and **boot-verified
-on metal**. The kernel lives in `port/kship/` (a ship in port); the agent
-(`port/kship/kship.l`) is baked in and runs the heartbeat on the real timer tick (m1).
-The virtio-net driver (`port/kship/x86_64/net.c`) is up; the NIC is exposed as the ai
-port **`nic`** and a pure-ai program echoes UDP datagrams end-to-end under qemu
-(`(slurp nic)`→`(fputs nic d)`→`(fflush nic)`). Next: **milestone 3** — `net.l` +
-aineko on metal, and wire the agent's perceive step to `ai_wait_fds` over {nic, clock}
-so kship's perceive→decide→act loop closes over the real network.
+**Where you are (2026-06-18):** milestones 1, 2 (incl. 2e), **AND 3 DONE**.
+**★ kship BOOTS ON REAL HARDWARE** (off a laptop, no Linux/libc) — the autonomous
+demos paint the framebuffer with no keyboard needed; PS/2-only input + virtio-net-only
+networking are the real-metal gaps (a USB-HID + a real-NIC driver are future). The
+kernel lives in `port/kship/` (a ship in port).
+
+**★ MILESTONE 3 — the agent loop on the live NIC + a content-driven policy (`596ce2c7`,
+`c0c45578`):** `kship.l` `(serve st port)` runs the perceive→decide→act fold over the
+real virtio-net NIC — `(slurp nic)` for a datagram, narrate `nic <- …`, DECIDE via the
+policy, `(fputs nic)(fflush)`, same watchdog (`port` is a param so kship.l still loads
+on the host). The policy now **decides on content**: `"ping"`→`"pong"`, `"stat"`→the live
+state, **anything else is EVALUATED AS AI and the result returned** — a bare-metal
+**network REPL** (the brain is `read+ev` today; an LLM/socket round-trip is the same
+one-line seam). Build: `make kernel NETAGENT=1` → `(serve fresh nic)`; the 4 demos became
+a callable `(demos _)` (no auto-run) so the live agent starts clean. Verified in qemu
+(virtio-net + python UDP to `127.0.0.1:5555`, recipe `hostfwd=udp::5555-:5555` — NOT `nc`):
+`(* 6 7)`→`42`, `(map inc (jot 3))`→`(1 2 3)`, `(3 2)`→`8`, `stat`→`replies=2 beats=0`,
+`nonsense`→`()` (watchdog). **⚠ Makefile gotcha killed:** non-KSHIP kship variants never
+re-baked `out/lib/kship.h` (dep was `$(if $(KSHIP),…)`), so a netagent ISO silently ran a
+STALE kship.l → "caught: missing serve". Fixed to `$(if $(KSHIP)$(NETAGENT),…)`.
+
+Next: **a real policy brain** (decide on content beyond eval — a socket round-trip / a
+model is the seam); **merged `{nic, clock}` perceive** via `ai_wait_fds` (react AND act on
+initiative); a **real-hardware NIC driver** (e1000e/Realtek) for metal networking; a
+**USB-HID keyboard** for the interactive shell on metal.
 
 **Build & run recipes:**
 - Host model (fast iteration, the ai half is real here too): `out/host/ai port/kship/kship.l`.
@@ -247,8 +264,10 @@ What separates "an agent loop" from "a *self-driving autonomous* agent":
    kernel. *(Hardest C; the keystone.)*
 3. **`net.l` + `aineko` on bare metal** — the netcat clone runs *in the kernel*.
    Validates the whole stack end to end.
-4. **`policy` reactive loop (A)** — a real policy over net + clock, checkpoint/restart
-   working.
+4. **`policy` reactive loop (A)** — ✅ **net DONE (m3, `596ce2c7`+`c0c45578`):**
+   `(serve st nic)` reacts to live UDP, the policy DECIDES ON CONTENT (commands +
+   eval = a bare-metal network REPL), watchdog + checkpoint working. Remaining: merge
+   {nic, clock} via `ai_wait_fds` so it reacts AND beats on initiative.
 5. **(optional) LLM-in-the-loop (B)** — swap `policy` for a remote round-trip; needs
    only a JSON/SSE codec in ai.
 
