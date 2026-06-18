@@ -45,7 +45,7 @@
  (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
  (8 = $(L ~(3 4) ~(-3 4))) !(L ~(0 5) -1)        ; phases sum as vectors; the order signs the TOTAL, once
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
- (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
+ (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) blue, '(0)/0 green, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
  (star? 5) (star? -3.5) (star? ~(2 3)) (star? (62 2))         ; a STAR is a self-netting SCALAR: charm, float, complex, wide
@@ -236,11 +236,11 @@
 
 ; --- the EMPTY SPELLINGS (the nothing surface) --- each kind's empty by its sigil: () the
 ; chain (the zero-point, DISTINCT from the number 0), "" the string, @() the array, #() the
-; map, ~(0 0) the zero complex, (buf 0) the buffer -- all net 0 -> blue -> false. spelled via
+; map, ~(0 0) the zero complex, (buf 0) the buffer -- all net 0 -> green -> false. spelled via
 ; 0/() too: @()/#() are the EMPTIES (the reader emits (iota 0)/(tablet 0)); @0/#0 wrap the
 ; VALUE 0 (a 1-cell -> the scalar 0, a box). every nothing is a MASK; () the bare-ish floor.
 (assert
- !() !0 !"" !@() !#() !~(0 0) !(buf 0)           ; every empty is false (blue)
+ !() !0 !"" !@() !#() !~(0 0) !(buf 0)           ; every empty is false (green)
  (nil? ()) (nil? 0) !(= () 0) !(id? () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
  ("@()" = (show @())) (1 = (arank @())) (0 = (alen @())) (Z = (atype @()))  ; @() the empty array, round-trips
  (tab? #()) (0 = $#()) ("(tablet 0)" = (show #()))   ; #() the empty map

@@ -52,7 +52,7 @@
 ; --- vocabulary & house style --- the words here are a VOCABULARY -- we never say
 ; "terminology" or "nomenclature"; a vocabulary is living and chosen, warm not clinical.
 ; the house style is COZY: lowercase, plain, a touch playful, names that earn their keep
-; (you eat a toast; $ keeps the green charms; a tray of stars is a galaxy). we frame in the
+; (you eat a toast; $ keeps the blue charms; a tray of stars is a galaxy). we frame in the
 ; GREEN -- name what a value IS and KEEPS, not what it lacks; green, not red. the surface
 ; stays small and deliberate ((names ()) is the whole vocabulary). the celestial numerics:
 ; a CHARM is a fixnum (a word); a STAR is a self-netting scalar (charm/full/big/float/complex);
@@ -69,17 +69,17 @@
 ; compile time. the gritty details sit at the bottom.
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
-;   N the green charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
+;   N the blue charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
 ;     <  R reals (float)  <  C complex  <  O objects (string < symbol < chain < map < top)
 ; numbers nest as usual (N in Z in R in C). a fixnum is a CHARM, and every value wears a COLOR --
-; the order-sign of its net: GREEN nets nonnegative (what $ keeps), RED nets negative (what $
-; clamps to nothing), and BLUE is green's FLOOR -- net exactly zero, kept like a green yet nothing.
-; so $ passes the green and stops the red at nothing, and a value is true iff it is POSITIVE green
-; (above the blue floor; blue and red both net false). the GREEN charms are N (the nonnegatives),
-; the RED charms the negatives below, and 0 is the ONE BLUE CHARM -- green by sign yet blue by
-; measure, the floor where green meets nothing. color spans the UNSTARS too, by the same net:
-; '(1) is green, '(0)/()/""/~(0 0) are blue (every nothing is blue), '(-2 1) is red, while a box
-; stays green (#0 nets 1: presence over nothing). the *rank* axis is scalar (0) vs array (>= 1, one
+; the order-sign of its net: BLUE nets nonnegative (what $ keeps), RED nets negative (what $
+; clamps to nothing), and GREEN is blue's FLOOR -- net exactly zero, kept like a blue yet nothing.
+; so $ passes the blue and stops the red at nothing, and a value is true iff it is POSITIVE blue
+; (above the green floor; green and red both net false). the BLUE charms are N (the nonnegatives),
+; the RED charms the negatives below, and 0 is the ONE GREEN CHARM -- blue by sign yet green by
+; measure, the floor where blue meets nothing. color spans the UNSTARS too, by the same net:
+; '(1) is blue, '(0)/()/""/~(0 0) are green (every nothing is green), '(-2 1) is red, while a box
+; stays blue (#0 nets 1: presence over nothing). the *rank* axis is scalar (0) vs array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
 ; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
 ; string < symbol < chain < map < top, each band ordered within itself (text and chains

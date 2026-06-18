@@ -196,7 +196,7 @@ Fixpoint net (v : V) : Z :=
 Definition sat (v : V) : Z := Z.max 0 (net v).
 (* ! (nilp): false is nothing -- net <= 0. *)
 Definition nilp (v : V) : bool := net v <=? 0.
-(* !! : the truth bit -- positive green, net > 0. *)
+(* !! : the truth bit -- positive blue, net > 0. *)
 Definition tru (v : V) : bool := 0 <? net v.
 
 (* THE INVARIANT  !x == (0 = $x)  -- spec.l: (!"" = 0 = $"") *)
@@ -211,7 +211,7 @@ Qed.
 Theorem sat_nonneg : forall v, 0 <= sat v.                Proof. intro v. unfold sat. lia. Qed.
 Theorem sat_keeps   : forall v, 0 < net v -> sat v = net v. Proof. intros v H. unfold sat. lia. Qed.
 
-(* the nothing surface, by net: every mask of nothing nets 0 (blue/false). The empty chain
+(* the nothing surface, by net: every mask of nothing nets 0 (green/false). The empty chain
    () (Vnil) and the number 0 (Vnum 0) are DISTINCT values yet both nilp -- masks of one
    nothing, not the same value. (spec.l: !() !0, !(= () 0).) *)
 Theorem nil_nothing  : nilp Vnil = true.        Proof. reflexivity. Qed.
@@ -219,17 +219,20 @@ Theorem zero_nothing : nilp (Vnum 0) = true.    Proof. reflexivity. Qed.
 Theorem nil_neq_zero : Vnil <> Vnum 0.          Proof. discriminate. Qed.
 Theorem sat_clamps  : forall v, net v <= 0 -> sat v = 0.    Proof. intros v H. unfold sat. lia. Qed.
 
-(* the COLORS, by the order-sign of the net: green nonneg, red neg, blue the floor *)
-Definition green (v : V) := 0 <= net v.
+(* the COLORS, by the order-sign of the net, in FREQUENCY order red < green < blue:
+   red neg, GREEN the floor (net 0), blue nonneg (positive). NB: green and blue were
+   previously SWAPPED here (green=nonneg, blue=floor) -- a mistake; corrected to the
+   spectral order and NOT grandfathered. *)
+Definition blue  (v : V) := 0 <= net v.
 Definition red   (v : V) := net v < 0.
-Definition blue  (v : V) := net v = 0.
+Definition green (v : V) := net v = 0.
 
-Theorem blue_is_green     : forall v, blue v -> green v.        Proof. unfold blue, green. lia. Qed.
-Theorem green_or_red      : forall v, green v \/ red v.         Proof. intro v. unfold green, red. lia. Qed.
-Theorem green_red_disjoint: forall v, ~ (green v /\ red v).     Proof. intro v. unfold green, red. lia. Qed.
-(* truth is POSITIVE green: above the blue floor *)
-Theorem truth_is_positive_green : forall v, tru v = true <-> (green v /\ net v <> 0).
-Proof. intro v. unfold tru, green. rewrite Z.ltb_lt. lia. Qed.
+Theorem green_is_blue     : forall v, green v -> blue v.        Proof. unfold green, blue. lia. Qed.
+Theorem blue_or_red       : forall v, blue v \/ red v.          Proof. intro v. unfold blue, red. lia. Qed.
+Theorem blue_red_disjoint : forall v, ~ (blue v /\ red v).      Proof. intro v. unfold blue, red. lia. Qed.
+(* truth is POSITIVE blue: above the green floor *)
+Theorem truth_is_positive_blue : forall v, tru v = true <-> (blue v /\ net v <> 0).
+Proof. intro v. unfold tru, blue. rewrite Z.ltb_lt. lia. Qed.
 
 (* the spine measure: a proper list nets the sum of its elements' nets *)
 Definition vlist (xs : list V) : V := fold_right Vcons Vnil xs.
@@ -260,7 +263,7 @@ Theorem nil_dotted : nilp (Vcons (Vnum 0) (Vnum 2)) = true.      Proof. reflexiv
 Theorem nothings   : nilp (vlist [Vnil; Vnil]) = true.           Proof. reflexivity. Qed. (* a product of nothings is nothing *)
 Theorem net_red    : net (vlist [Vnum (-2); Vnum 1]) = -1.       Proof. reflexivity. Qed. (* +'(-2 1) -- the net is unclamped *)
 Theorem red_red    : red (vlist [Vnum (-2); Vnum 1]).            Proof. reflexivity. Qed. (* ... and red *)
-Theorem blue_zero  : blue (Vnum 0).                              Proof. reflexivity. Qed.
+Theorem green_zero : green (Vnum 0).                              Proof. reflexivity. Qed.
 
 (* ============================================================ *)
 (* order & equality: < is a TOTAL order over all values         *)
@@ -288,7 +291,7 @@ Inductive O :=
   | Oprod (z : Z) | Omap (z : Z) | Otop (z : Z).
 
 (* TRUE-BLUE: the symbol band (mints + noms) is the FLOOR, below string and
-   number; a point thus sits below every number (the blue floor). *)
+   number; a point thus sits below every number (the green floor). *)
 Definition band (o : O) : Z :=
   match o with Osym _ => 0 | Ostr _ => 1 | Onum _ => 2
              | Oprod _ => 3 | Omap _ => 4 | Otop _ => 5 end.
@@ -356,7 +359,7 @@ Theorem number_lt_product : forall x y, lt (Onum x)  (Oprod y). Proof. intros. l
 Theorem product_lt_map    : forall x y, lt (Oprod x) (Omap y).  Proof. intros. left. cbn. lia. Qed.
 Theorem map_lt_top        : forall x y, lt (Omap x)  (Otop y).  Proof. intros. left. cbn. lia. Qed.
 
-(* the 0-vs-() discipline, ORDER side: () is a FLOOR MINT (an Osym, the bluest
+(* the 0-vs-() discipline, ORDER side: () is a FLOOR MINT (an Osym, the greenest
    point), so it sits strictly below the number 0 (an Onum) -- ORDER-distinct,
    while the value model has them =-equal-as-nothing (nil_neq_zero: both nilp, yet
    distinct values). Two of the three axes the flip thread asked the proof to keep
@@ -703,7 +706,7 @@ Proof. reflexivity. Qed.
    (cap the name, cup the mint), ordered (name lex, then the mint's serial);
    same-name noms split by serial. The symbol band (mints AND noms) is the
    FLOOR: it sorts BELOW string and number, so every point sits below every
-   number -- (mint 0) < 0, the blue floor -- and a bare mint below a named nom
+   number -- (mint 0) < 0, the green floor -- and a bare mint below a named nom
    (proved via the order section's `lt`: a point or nom is Osym, a string Ostr,
    a number Onum). *)
 

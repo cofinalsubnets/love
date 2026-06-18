@@ -97,11 +97,11 @@ tru  v = (0 <? net v)        -- !! : the truth bit
 |---|---|---|
 | green | `0 ≤ net` | nonnegative; what `$` keeps |
 | red | `net < 0` | negative; what `$` clamps to nothing |
-| blue | `net = 0` | the floor — green by sign yet nothing by measure |
+| green | `net = 0` | the floor — blue by sign yet nothing by measure |
 
-> **(3.3) Color laws.** blue ⟹ green (`thm:blue_is_green`); every value is green or red (`thm:green_or_red`); the two are disjoint (`thm:green_red_disjoint`); and **truth is positive green** — above the blue floor (`thm:truth_is_positive_green`).
+> **(3.3) Color laws.** green ⟹ blue (`thm:green_is_blue`); every value is blue or red (`thm:blue_or_red`); the two are disjoint (`thm:blue_red_disjoint`); and **truth is positive blue** — above the green floor (`thm:truth_is_positive_blue`).
 
-The floor matters: `0`, `()`, `""`, `@()`, `~(0 0)` are all blue (net 0, false), while a box `#0` nets 1 (presence over nothing, true). `'(-2 1)` is red (net −1, `thm:net_red` / `thm:red_red`), false despite being non-empty — saturation holds at every rank, so a list of negatives is nothing exactly like a negative scalar.
+The floor matters: `0`, `()`, `""`, `@()`, `~(0 0)` are all green (net 0, false), while a box `#0` nets 1 (presence over nothing, true). `'(-2 1)` is red (net −1, `thm:net_red` / `thm:red_red`), false despite being non-empty — saturation holds at every rank, so a list of negatives is nothing exactly like a negative scalar.
 
 The measure is a **homomorphism**: `+` is concatenation / adjunction at the value level, and the net distributes over it.
 
@@ -288,7 +288,7 @@ The compiler is written in ai. At build time the evaluator sits on the **egg** (
 | 2 | totality (no UB) | `thm:total` |
 | 3 | the invariant `!x ≡ (0=$x)` | `thm:nilp_iff_sat0` |
 | 3 | saturation | `thm:sat_nonneg` `thm:sat_keeps` `thm:sat_clamps` |
-| 3 | color | `thm:blue_is_green` `thm:green_or_red` `thm:truth_is_positive_green` |
+| 3 | color | `thm:green_is_blue` `thm:blue_or_red` `thm:truth_is_positive_blue` |
 | 3 | `+` is the measure homomorphism | `thm:net_homomorphism` |
 | 4 | `<` strict total order | `thm:lt_irrefl` `thm:lt_trans` `thm:lt_asym` `thm:lt_trichotomy` |
 | 4 | `<=` total order | `thm:le_refl` `thm:le_trans` `thm:le_antisym` `thm:le_total` |
