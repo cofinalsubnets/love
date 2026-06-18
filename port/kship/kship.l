@@ -1,5 +1,5 @@
 ; --- kship: a self-driving agent loop, modeled in ai (a runnable sketch) ---
-; the EXECUTABLE companion to doc/kship.md. the real kship is the freestanding
+; the EXECUTABLE companion to crew/kship.md. the real kship is the freestanding
 ; kernel (port/kship/kmain.c) grown a NIC; this file models the parts that STAY ai -- the
 ; perceive->decide->act fold, the watchdog, the checkpoint -- so the shape can be
 ; run and probed on the host before any C is written. like boot/tag.l, it is a
@@ -28,7 +28,7 @@
 ; --- the agent state --- a plain 2-list (replies beats): an IMMUTABLE ai value,
 ; so show/read checkpoint it for free. (a book would NOT round-trip -- it is
 ; mutable, identity-compared, and its show reparses to nothing; the list is the
-; honest carrier of doc/kship.md's "state is an ai value, persistence is
+; honest carrier of crew/kship.md's "state is an ai value, persistence is
 ; show/read".) replies = packets answered, beats = heartbeats emitted. `with`
 ; builds a fresh state, so every step is pure: the same `fresh` seeds many runs.
    fresh (L 0 0)

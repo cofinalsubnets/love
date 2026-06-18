@@ -13,7 +13,7 @@
 ;     asserts welp (test/help.l) -- all of it must be in the baked egg.
 ; so repl.l is the REUSABLE editor/repl core (host + kernel + the ai0 corpus), and
 ; bao is the host personality that drives it -- and the seam the pty-wrapper and
-; the debugger (doc/bao.md) grow into: wrapping host processes over a pty (ptyrun,
+; the debugger (crew/bao.md) grow into: wrapping host processes over a pty (ptyrun,
 ; host/pty.c) and a `help`-handler-with-a-face are bao's, not the core's.
 
 ; pump bytes from port `src` to port `dst`, one at a time, until src hits EOF
@@ -60,7 +60,7 @@
    ; primitives (edleft/edright/edbsp/eddel/edhome/edend/revcat/edrender, all
    ; in/out-free for the logic), but with PORT-PARAMETERIZED event decode so the
    ; input is any port: `in` for the tty, a (sip ..) for tests. This is the seed of
-   ; the editor that will replace repl's (doc/bao.md: bao supersedes the repl).
+   ; the editor that will replace repl's (crew/bao.md: bao supersedes the repl).
 
    ; bev/besc/besc1 are repl.l's edev/edesc/edesc1, reading (fgetc ip) instead of
    ; the global getc -- event codes are identical (printable >0; -1 left, -2 right,
@@ -113,7 +113,7 @@
    ; faced help if none is present, print the banner, run the editor repl. an arg
    ; is taken (ai has no nullary calls). `wrap` above is reachable from the bao
    ; prompt -- (wrap (L "python3")) pty-wraps a host program; the editor-as-line-
-   ; reader and the debug `help` are the later modes (doc/bao.md). the shell reads
+   ; reader and the debug `help` are the later modes (crew/bao.md). the shell reads
    ; from `in`; main.c puts the tty in raw mode before loading bao, restores on exit.
    (bao _) (shell 0))
 
@@ -122,4 +122,4 @@
 ; `(bao 0)` on a tty (so `ai` on a terminal is the bao shell), while a pipe stays
 ; the bare filter. Define-only is what makes bao loadable for tests (load the
 ; defs, read piped forms with the bare reader -- no editor intermediating stdin)
-; and is the shape bao needs to supersede the repl (doc/bao.md).
+; and is the shape bao needs to supersede the repl (crew/bao.md).

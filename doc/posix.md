@@ -53,7 +53,7 @@ unchanged. Drops a dependency, doesn't change the API.
 
 ### L2 — the freestanding kernel grows its own POSIX
 
-When there's no Unix under you (the `kship` bare-metal agent — see `doc/kship.md`),
+When there's no Unix under you (the `kship` bare-metal agent — see `crew/kship.md`),
 the kernel must *be* the OS. This is the only stratum that's a real OS build: a ramfs
 VFS, an in-kernel process model, signal delivery. The `k_sources[]` table in
 `kmain.c` is already "vfs-shaped" (its own comment says so, and anticipates ramfs),
@@ -122,6 +122,6 @@ Sockets are already covered by aineko; fold them in as the network slice.
 
 ## See also
 
-- `doc/kship.md` — the L2 consumer (a bare-metal agent that needs its own POSIX).
+- `crew/kship.md` — the L2 consumer (a bare-metal agent that needs its own POSIX).
 - the aineko / `ai_io` plan — the L0 pattern this generalizes (socket nifs in `main.c`).
 - todo `#8` (cli.l → shell.l) / `#10` (POSIX shell) — staging step 3 lives there.

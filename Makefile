@@ -317,7 +317,7 @@ endif
 # KSHIP=1 bakes the kship agent (port/kship/kship.l) into the image and boots
 # straight into it (the heartbeat loop on the real timer tick) instead of the
 # shell -- the kernel AS the self-driving agent. Its own suffix so it never
-# clobbers the normal interactive kernel. See doc/kship.md.
+# clobbers the normal interactive kernel. See crew/kship.md.
 ifdef KSHIP
 ksuf := -kship
 endif
@@ -623,6 +623,8 @@ v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/ai \
   $d/bin/cook \
+  $d/bin/aineko \
+  $d/bin/bao \
   $d/share/man/man1/ai.1 \
   $d/lib/ai/prel.l \
   $d/lib/ai/ev.l \
@@ -667,6 +669,23 @@ $d/bin/ai: out/host/ai
 $d/bin/cook: cook/cook.l
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
+
+# aineko: the netcat clone (tools/aineko.l). Same shebang-script mechanism as cook
+# (`#!/usr/bin/env -S ai -l` re-execs the installed `ai` to load it).
+$d/bin/aineko: tools/aineko.l
+	@echo CP	$(abspath $@)
+	@install -D -m 755 $< $@
+
+# bao: the interactive shell. Unlike cook/aineko, ai/bao.l is DEFINE-ONLY (the
+# launch `(bao 0)` is normally fired by main.c on a tty), so the bin is a tiny
+# relocatable launcher: it loads the installed bao.l next door and fires it.
+$d/bin/bao: Makefile
+	@echo GEN	$(abspath $@)
+	@install -d $(dir $@)
+	@{ echo '#!/bin/sh'; \
+	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
+	   echo 'exec "$$h/ai" -l "$$h/../lib/ai/bao.l" -e "(bao 0)" "$$@"'; } > $@
+	@chmod 755 $@
 
 $d/share/man/man1/ai.1: out/host/ai.1
 	@echo CP	$(abspath $@)

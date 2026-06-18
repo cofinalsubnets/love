@@ -381,7 +381,7 @@ static char const
 // so the frontend launches it: install the defs, then eval "(bao 0)". Done at
 // DISPATCH (not in the egg-warm above), so the egg-baked `shell` is already
 // installed; this is the seam bao's pty-wrapper + debugger modes grow into
-// (doc/bao.md). raw_mode() ran above.
+// (crew/bao.md). raw_mode() ran above.
 static char const bao[] =
 #include "bao.h"
  ;

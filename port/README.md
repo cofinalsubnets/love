@@ -7,7 +7,7 @@ This tree holds every non-host target. The core freestanding kernel is
 linker script, built by the root Makefile's `kernel` target). It lives here
 alongside the device ports below; `arch/` was merged into `port/` on
 2026-06-15 (`arch/<a>/` -> `port/<a>/`), then the kernel was gathered under
-`port/kship/<a>/` on 2026-06-17. See `doc/kship.md`.
+`port/kship/<a>/` on 2026-06-17. See `crew/kship.md`.
 
 The device ports were split out of the main repo's arch/ tree on 2026-06-09
 (main repo: the `l` darcs repo; git provenance hashes below refer to its

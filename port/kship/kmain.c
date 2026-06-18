@@ -509,7 +509,7 @@ static char const ktests[] =
 #if defined(KSHIP) || defined(NETAGENT)
 // The kship agent (port/kship/kship.l), baked VERBATIM by lcatv (out/lib/kship.h).
 // Bound to the global `kship-src` and drunk form-by-form through zevs at boot --
-// the kernel boots straight into the self-driving heartbeat loop. See doc/kship.md.
+// the kernel boots straight into the self-driving heartbeat loop. See crew/kship.md.
 static char const kship_src[] =
 #include "kship.h"
 ;

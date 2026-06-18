@@ -7,7 +7,7 @@
 //
 // Stage 2a here: PCI enumerate -> reset/feature handshake -> set up the receive
 // (q0) and transmit (q1) virtqueues -> DRIVER_OK -> read the MAC. RX fill, TX,
-// and the IP/UDP layer land in later stages (see doc/kship.md). x86-specific for
+// and the IP/UDP layer land in later stages (see crew/kship.md). x86-specific for
 // now (PIO + PCI mechanism #1); the virtqueue/virtio-net logic is portable and
 // will factor out when aarch64 grows a NIC.
 #include <stdint.h>

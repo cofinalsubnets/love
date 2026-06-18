@@ -1,3 +1,4 @@
+#!/usr/bin/env -S ai -l
 ; aineko -- a netcat clone in ~50 lines of ai (愛猫, "beloved cat").
 ;
 ;   aineko HOST PORT   TCP client: connect to HOST:PORT

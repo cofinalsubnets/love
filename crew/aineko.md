@@ -100,7 +100,7 @@ Two foundations, **decided before writing any socket nif:**
 - **(A) extend `ai_io`** — sockets as ports on the current model. The async
   substrate already exists (`ai_io_alloc` wraps any fd; the scheduler polls blocked
   fds; read/write free). Contained, ~1 session. But it builds *more* on the surface
-  the stream redesign (see `doc/bao.md`) calls "POSIX-in-core gum."
+  the stream redesign (see `crew/bao.md`) calls "POSIX-in-core gum."
 - **(B) ride the coinductive stream redesign** — replace `fgetc`/`ungetc`/`-1`/`key?`
   with `(source fd)` (a stream hot: bytes under `cap`/`cup`/`!`, EOF = `()`, `read`
   a pure `stream → (datum . stream')`). A socket is then just another `source`/`sink`.
