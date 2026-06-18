@@ -433,8 +433,13 @@
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
 ; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
 ; its one real win, reduction reassociation, lives in the C builtins now, and the
-; trampoline finding in ai/glaze/probe.l + the call/toast nifs.)
+; trampoline finding in ai/glaze/probe.l + the eat/toast nifs.)
 (: (opfix x) (op-core x))
+; eat -- run a toast's native code. the ARITY is the first operand and currying
+; selects the eater: (eat 1 t x) passes one machine word, (eat 2 t x y) two. eat1/
+; eat2 (the raw 1-/2-arg ABI nifs) are mopped post-egg and fold in here; only a
+; toast is eatable and a faulting body returns 0 (the host fault barrier).
+(: (eat n) (? (= n 2) eat2 eat1))
 ; the global RNG stream lives on book ('rng-state) and advances by the pure
 ; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
 ; clock-seeds on first use; rng-set validates and installs (the state, or nil

@@ -111,7 +111,7 @@ lvm_t lvm_kcall,
  lvm_chain, lvm_vec, lvm_sym, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); apply dispatches through ai_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_chainp,
- lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_call, lvm_call2, lvm_toast, lvm_toasted,
+ lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_eat1, lvm_eat2, lvm_toast, lvm_toasted,
  lvm_fixp,  lvm_nomp,   lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
@@ -645,7 +645,7 @@ lvm_t lvm_fault;
  _(nif_table, "tablet", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
- _(nif_call, "call", s2(lvm_call)) _(nif_call2, "call2", s3(lvm_call2)) _(nif_toast, "toast", s1(lvm_toast))\
+ _(nif_eat1, "eat1", s2(lvm_eat1)) _(nif_eat2, "eat2", s3(lvm_eat2)) _(nif_toast, "toast", s1(lvm_toast))\
  _(nif_chainp, "chainp", s1(lvm_chainp)) _(nif_strp, "strp", s1(lvm_strp))\
  _(nif_real, "real", s1(lvm_real)) _(nif_flop, "flop", s1(lvm_flop))\
  _(nif_sin, "sin", s1(lvm_sin)) _(nif_cos, "cos", s1(lvm_cos))\
@@ -1326,7 +1326,7 @@ static lvm(_lvm_yieldk) { return
 #if __STDC_HOSTED__
 #include <signal.h>
 #include <setjmp.h>
-// THE FAULT BARRIER infra -- shared by ai_eval (below) and call (lvm_call). A hardware
+// THE FAULT BARRIER infra -- shared by ai_eval (below) and eat (lvm_eat1/lvm_eat2). A hardware
 // fault (SIGSEGV/SIGILL/SIGBUS/SIGFPE) inside an armed region siglongjmps to the
 // innermost barrier and becomes a survivable love condition; outside any barrier the
 // default handler runs, so a genuine crash stays a crash. Host-only: the kernel has no
@@ -4017,7 +4017,7 @@ lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putcharm(0), Ip
 
 // THE FAULT BARRIER (hosted). Running native (toasted) code is love's one
 // un-survivable corner: an ill-formed body faults the CPU (SIGSEGV/SIGILL/...),
-// below help. call_run wraps the native call in a sigsetjmp; a fault during it is
+// below help. eat_run wraps the native call in a sigsetjmp; a fault during it is
 // caught and reported via *bad (the caller returns 0, the same value the non-buf
 // guard gives), so a bad body is survivable like any other love error -- never a
 // core dump. The handler only fires inside an active call (call_depth); a fault in
@@ -4026,7 +4026,7 @@ lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putcharm(0), Ip
 // (The broad version -- a barrier at ai_eval turning faults in object-array ops,
 // spin, etc. into scares -- reuses this same handler; that's the next step.)
 #if __STDC_HOSTED__
-static ai_noinline ai_word call_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {
+static ai_noinline ai_word eat_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {
  ai_fault_arm();                                          // shared barrier (defined before ai_eval)
  sigjmp_buf prev; memcpy(&prev, &ai_fault_jb, sizeof prev);   // save outer (nesting)
  ai_fault_depth++;
@@ -4035,24 +4035,24 @@ static ai_noinline ai_word call_run(void *fnp, ai_word x, ai_word y, int two, in
   ai_fault_depth--; *bad = 0; memcpy(&ai_fault_jb, &prev, sizeof prev); return r; }
  ai_fault_depth--; *bad = 1; memcpy(&ai_fault_jb, &prev, sizeof prev); return 0; }  // recovered from a fault
 #else
-static ai_word call_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {  // freestanding: no signals (yet)
+static ai_word eat_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {  // freestanding: no signals (yet)
  *bad = 0; return two ? ((ai_word (*)(ai_word, ai_word)) fnp)(x, y) : ((ai_word (*)(ai_word)) fnp)(x); }
 #endif
 
-lvm(lvm_call) {
+lvm(lvm_eat1) {
  word b = Sp[0], x = Sp[1];
  if (!toastp(b)) return *++Sp = putcharm(0), Ip++, Continue();   // only a toast is callable -> else nothing
- int bad; ai_word r = call_run(txt(buf_str(b)), x, 0, 0, &bad);   // fault -> bad -> 0 (survivable)
+ int bad; ai_word r = eat_run(txt(buf_str(b)), x, 0, 0, &bad);   // fault -> bad -> 0 (survivable)
  return *++Sp = putcharm(bad ? 0 : r), Ip++, Continue(); }   // arity 2: pop one, result at the new top
 
-// (call2 b x y) — like (call b x) but passes TWO arguments (SysV AMD64: x in
+// (eat2 b x y) — like (eat1 b x) but passes TWO arguments (SysV AMD64: x in
 // %rdi, y in %rsi; AArch64: x0, x1) for native two-argument kernels. Same raw
-// machine-word contract and fixnum-wrapped result as call, and the same fault
+// machine-word contract and fixnum-wrapped result as eat1, and the same fault
 // barrier. Arity 3.
-lvm(lvm_call2) {
+lvm(lvm_eat2) {
  word b = Sp[0], x = Sp[1], y = Sp[2];
  if (!toastp(b)) return Sp[2] = putcharm(0), Sp += 2, Ip++, Continue();   // only a toast is callable
- int bad; ai_word r = call_run(txt(buf_str(b)), x, y, 1, &bad);
+ int bad; ai_word r = eat_run(txt(buf_str(b)), x, y, 1, &bad);
  return Sp[2] = putcharm(bad ? 0 : r), Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, result at the new top
 
 // THE HOST EXEC ARENA (hosted builds only). The Linux malloc heap is NX, so a

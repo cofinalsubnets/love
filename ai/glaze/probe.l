@@ -7,7 +7,7 @@
 ;     B8 2A 00 00 00   mov eax, 42      ; imm32 little-endian = 42 (0x2A)
 ;     C3               ret              ; return; eax/rax = 42
 ;
-; -- then calls it via the (call ...) trampoline and taps the result to `out`.
+; -- then calls it via the (eat ...) trampoline and taps the result to `out`.
 ;
 ; READING THE OUTCOME (run on the KERNEL target under qemu, NOT the host: the
 ; Linux malloc heap is NX, so a host run faults no matter what and tells you
@@ -19,10 +19,10 @@
 ;     (hang /     clear-the-NX-bit step in the kernel's page tables before a buf
 ;      reset)     can be run. Bounded work, but a real step up.
 ;
-; REQUIRES the call + toast nifs wired into ai.c first. Until then `call`/`toast`
+; REQUIRES the eat + toast nifs wired into ai.c first. Until then `eat`/`toast`
 ; are missing names that read the zero point -- the probe is inert.
 ;
-; KEEP THIS OUT OF THE GATE CORPUS: if memory is NX, (call ...) faults the whole
+; KEEP THIS OUT OF THE GATE CORPUS: if memory is NX, (eat ...) faults the whole
 ; kernel (the kernel has no signal barrier), which would take `make test` down with
 ; it. Run it standalone.
 
@@ -30,5 +30,5 @@
    _ (pin b 0 184)              ; B8   mov eax, imm32
    _ (pin b 1 42)               ; 2A   imm32 = 42   (bytes 2..4 stay 0 from the zeroed buf)
    _ (pin b 5 195)              ; C3   ret
-   r (call (toast b) 0)         ; bake the bytes into a toast, jump in; arg ignored
+   r (eat 1 (toast b) 0)        ; bake the bytes into a toast, eat it (1 arg, ignored)
    _ (dot r))                   ; 42 on success

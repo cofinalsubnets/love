@@ -1,4 +1,4 @@
-# jit — the codegen backend (`ev` but faster), and the `(call …)`/`(toast …)` trampoline
+# jit — the codegen backend (`ev` but faster), and the `(eat …)`/`(toast …)` trampoline
 
 > **What this is.** The aim is **`ev` but faster**: a closure compiled to native
 > machine code that is *indistinguishable from the interpreted closure* — applied by
@@ -22,9 +22,9 @@
 > hook*: `ev` installing native for hot regions transparently, after which `nat` goes
 > internal (mopped like `boxfix`/`wev`) and there is no user-facing verb at all.
 >
-> **The leaf substrate** below — `call`/`call2`/`toast` (nifs) + `ai/glaze/probe.l` (the
+> **The leaf substrate** below — `eat` (the curried `eat1`/`eat2`)/`toast` (nifs) + `ai/glaze/probe.l` (the
 > kernel finding) — predates `nat`: a *leaf* trampoline (word→word, an opaque handle
-> you `call`) the convention-following `nat` supersedes. It stays as the fault-safe
+> you `eat`) the convention-following `nat` supersedes. It stays as the fault-safe
 > machine-code substrate and the kernel-RWX probe. The earlier scalar/array/fold
 > kernels and the `opjit` hook are **gone**; their one fixed-code win (reduction
 > reassociation) lives **baked in the C builtins**. (`git log` for the arc.)
@@ -33,23 +33,23 @@ A nif that jumps into native machine code and runs it, and a loader that bakes t
 bytes into an opaque, executable handle — a **toast** — that runs on either target.
 
 ```
-(call t x)        ; jump into toast t's code, arg x, fixnum result
-(call2 t x y)     ; ... two args (SysV %rdi/%rsi; AArch64 x0/x1)
+(eat 1 t x)       ; jump into toast t's code, one arg x, fixnum result
+(eat 2 t x y)     ; ... two args (SysV %rdi/%rsi; AArch64 x0/x1)
 (toast src)       ; bake src's bytes into an opaque, executable TOAST
 ```
 
-`call` jumps into the code of toast `t`, passing `x` as the sole argument and
-wrapping the returned machine word as a fixnum. The calling convention is the
-platform C ABI — SysV AMD64 puts the argument in `%rdi` and takes the result in
-`%rax`; AArch64 uses `x0` for both. Only a **toast** is callable — a plain `buf` (or
+`eat` jumps into the code of toast `t`, passing `x` as the sole argument (arity `1`
+first) and wrapping the returned machine word as a fixnum. The calling convention is
+the platform C ABI — SysV AMD64 puts the argument in `%rdi` and takes the result in
+`%rax`; AArch64 uses `x0` for both. Only a **toast** is eatable — a plain `buf` (or
 any non-toast) runs nothing and returns `0`. The code inside `t` is the caller's
 responsibility, but an ill-formed body is no longer fatal on the host: the **fault
-barrier** (below) catches the hardware fault and `call` returns `0`.
+barrier** (below) catches the hardware fault and `eat` returns `0`.
 
 `toast` bakes bytes into a callable handle that works on **both** targets; the idiom
-is `(call (toast bytes) x)`. A toast is **opaque**: it answers `hotp` like any hot
+is `(eat 1 (toast bytes) x)`. A toast is **opaque**: it answers `hotp` like any hot
 but it is *not* a `buf` — its code can't be `peep`/`pin`/`blit`/`tally`'d as data (no
-length, no byte access); only `call` runs it. That keeps the executable region from
+length, no byte access); only `eat` runs it. That keeps the executable region from
 masquerading as a writable byte buffer.
 
 - **Host** — the Linux malloc heap is mapped no-execute, so raw heap bytes can't be
@@ -72,8 +72,8 @@ That used to be a hard crash; it no longer is. On the host a signal barrier
 (`SIGSEGV`/`SIGILL`/`SIGBUS`/`SIGFPE` + `sigsetjmp`) turns a hardware fault into an
 ordinary love condition:
 
-- **`call`/`call2`** wrap the native call in `call_run` (`ai.c`, by `lvm_call`):
-  a fault in the body is caught and `call` returns `0` — the non-buf value — so a
+- **`eat1`/`eat2`** wrap the native call in `eat_run` (`ai.c`, by `lvm_eat1`):
+  a fault in the body is caught and `eat` returns `0` — the non-buf value — so a
   bad body is survivable like any other error, never a core dump. The native body
   never touches love state, so this recovery is unconditional.
 - **`g_eval`** carries the same barrier over the whole VM run, so *any* in-eval
@@ -85,7 +85,7 @@ ordinary love condition:
   session carries on (`^C` and cooperative scheduling intact).
 
 Host-only: the freestanding kernel has no signal layer (its fault vectors are a
-separate hookup), so there `call` is still the raw trampoline. The one residual
+separate hookup), so there `eat` is still the raw trampoline. The one residual
 unrecoverable corner is a fault *mid-GC or mid-ring-mutation*, where the heap itself
 is inconsistent. See `call_run` / `g_eval` / `g_eval_fault_raise` in `ai.c`, and
 the compile-gated `__fault` harness (`-DG_FAULT_TEST`).
@@ -105,7 +105,7 @@ B8 2A 00 00 00   mov eax, 42      ; imm32 little-endian
 C3               ret
 ```
 
-— then `(call (toast b) 0)` and prints the result. Run on the **kernel** target
+— then `(eat 1 (toast b) 0)` and prints the result. Run on the **kernel** target
 under qemu it returns the immediate exactly (verified at 42 and at 12345). So Limine
 maps the HHDM — which backs the kernel heap, hence every toast's copy — **without the
 NX bit**: kernel data memory is already executable. No page-table work, no
@@ -114,7 +114,7 @@ of them.
 
 The **host** is the opposite: Linux maps the malloc heap no-execute, so raw heap
 bytes can't be run. `toast` lifts exactly that limitation (the W^X arena above), so
-`(call (toast bytes) x)` runs real bytes natively on an x86_64 host too, no qemu. The
+`(eat 1 (toast bytes) x)` runs real bytes natively on an x86_64 host too, no qemu. The
 corpus test (`test/glaze.l`) stays architecture-neutral — x86_64 opcodes would crash an
 aarch64 or wasm host — so it covers the guards (non-callable → `0`) and the toast's
 opacity (`hotp` but no `peep`/`tally`), not live execution; the kernel finding lives
@@ -122,7 +122,7 @@ in the standalone `ai/glaze/probe.l`.
 
 ## What the experiment found, and where it went
 
-The full version generated x86_64/SSE in love and ran it via `(call (toast …) x)`:
+The full version generated x86_64/SSE in love and ran it via `(eat 1 (toast …) x)`:
 a scalar `(\ p <arith>)` kernel, an automatic `ev`/`opfix` hook to apply it
 transparently, and array kernels (`amap`/`areduce`/…) over `z`/`r`/`c` arrays. The
 transparency was made exact (`=`-preserving via `respec`, de-Bruijn `show` intact).
@@ -134,7 +134,7 @@ Then the benchmark settled it:
 | `sum x*x` (array fold) | ~10 ms | ~450 ms | glaze **~45× faster** |
 
 A native *function* called from the interpreted loop pays a call-boundary tax
-(`putfix` marshal, the `call` nif, the result decode) heavier than interpreting a
+(`putfix` marshal, the `eat` nif, the result decode) heavier than interpreting a
 small arithmetic body — there's no case where the scalar hook wins. **The glaze only
 pays off when it owns the loop.** And the loops worth owning are the reductions —
 whose speedup, once reassociation was recognized as sound (`*`/`+` are commutative
