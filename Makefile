@@ -96,7 +96,7 @@ test_gen:
 	@echo "test_gen: skipped (needs rocq/coqc)"
 else
 test_gen: host
-	@echo GEN	rocq/gen.v "(tools/spec2coq.l on $m)"
+	@echo AI	rocq/gen.v "(tools/spec2coq.l on $m)"
 	@$m tools/spec2coq.l > rocq/gen.v
 	@echo TEST rocq/gen.v "(coqc)"
 	@$(COQC) -q rocq/gen.v
@@ -155,15 +155,15 @@ gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0
 lib: $(lib_h) $(gl0_h)
 $(lib_h): out/lib/%.h: ai/%.l tools/lcat.l   # + $(ai0), stated below where it is in scope
 	@mkdir -p out/lib
-	@echo GEN	$@
+	@echo AI	$@
 	@$(ai0) -l ai/prel.l tools/lcat.l $< > $@
 out/lib/%0.h: ai/%.l
 	@mkdir -p out/lib
-	@echo GEN	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/tests0.h: $t
 	@mkdir -p out/lib
-	@echo GEN	$@
+	@echo AI	$@
 	@cat $t | $(sed_lit) > $@
 
 # ai_version.h: the build's version-control id, surfaced in the runtime as the `ai-version`
@@ -246,7 +246,7 @@ ai0: $(ai0)
 # Makefile changes. (A baked snapshot: re-run `make cook/Cookfile` after adding
 # a source/test file, since the wildcard lists are frozen at emit time.)
 cook/Cookfile: Makefile cook/cook.l $(ho)/ai
-	@echo GEN	$@
+	@echo AI	$@
 	@$(ho)/ai -l cook/cook.l --emit Makefile > $@
 
 # blue.html: the blue paper, generated from blue.md (with blue.css INLINED into a
@@ -257,7 +257,7 @@ cook/Cookfile: Makefile cook/cook.l $(ho)/ai
 .PHONY: blue
 blue: blue.html
 blue.html: blue.md blue.css tools/blue.l $(ho)/ai
-	@echo GEN	$@
+	@echo AI	$@
 	@$(ho)/ai -l ai/prel.l tools/blue.l blue.md > $@
 
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running ai0, so re-lay
@@ -325,7 +325,7 @@ $(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/
 	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm $(host_ldflags)
 
 $(ho)/ai.1: doc/ai.1 out/lib/ai_version.h
-	@echo GEN	$@
+	@echo SED	$@
 	@mkdir -p $(dir $@)
 	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/ai_version.h); \
 	 sed "s/@VERSION@/$$v/" doc/ai.1 > $@
@@ -517,11 +517,11 @@ k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
 run: run-$a
 run-hdd: run-hdd-$a
 run-$a: $(ko)/ai-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	$(k_qemu) -cdrom $<
+	exec $(k_qemu) -cdrom $<
 run-hdd-$a: $(ko)/ai-$a.hdd $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	$(k_qemu) -hda $<
+	exec $(k_qemu) -hda $<
 run-headless: $(ko)/ai-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	$(k_qemu) -cdrom $< -display none -no-reboot
+	exec $(k_qemu) -cdrom $< -display none -no-reboot
 
 # --- headless serial test (wired into test_all; x86_64 + qemu only) ------------
 # The K_TEST kernel boots, runs the baked corpus through the self-hosted ev, and
@@ -552,13 +552,13 @@ out/lib/ktests.l: $(kt) $(R)/Makefile
 	@mkdir -p out/lib
 	@cat $(kt) > $@
 out/lib/ktests.h: out/lib/ktests.l $(ai0) tools/lcatv.l ai/prel.l
-	@echo GEN	$@
+	@echo AI	$@
 	@$(ai0) -l ai/prel.l tools/lcatv.l out/lib/ktests.l > $@
 # The kship agent, baked VERBATIM (lcatv) to a C string literal kmain.c #includes
 # under KSHIP and drinks form-by-form through zevs at boot -- same path as the
 # K_TEST corpus, one program instead of the test suite.
 out/lib/kship.h: port/kship/kship.l $(ai0) tools/lcatv.l ai/prel.l
-	@echo GEN	$@
+	@echo AI	$@
 	@$(ai0) -l ai/prel.l tools/lcatv.l port/kship/kship.l > $@
 .PHONY: test_kernel
 ifeq ($a,x86_64)
@@ -622,11 +622,11 @@ valg: host
 out/host/perf.data: host
 	cat $t | perf record -o $@ $m
 perf: out/host/perf.data
-	perf report -i $<
+	exec perf report -i $<
 out/host/flamegraph.svg: out/host/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: host
-	@$m
+	@exec $m
 cloc:
 	cloc --by-file ai ai.c ai.h main.c port tools test vim
 cat: clean all test
@@ -635,9 +635,9 @@ cata: clean all test_all
 catav: clean all test_all valg
 
 disasm: host
-	rizin -A $m
+	exec rizin -A $m
 gdb: host
-	gdb $m
+	exec gdb $m
 vmret: host
 	@$m tools/vmret.l $m
 
@@ -709,7 +709,7 @@ $d/bin/aineko: tools/aineko.l
 # launch `(bao 0)` is normally fired by main.c on a tty), so the bin is a tiny
 # relocatable launcher: it loads the installed bao.l next door and fires it.
 $d/bin/bao: Makefile
-	@echo GEN	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
