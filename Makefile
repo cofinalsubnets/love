@@ -216,19 +216,23 @@ endif
 # regardless of glibc version AND still does DNS -- static *glibc* can't resolve
 # hostnames (getaddrinfo needs NSS via dlopen, impossible when static), but musl
 # resolves itself, so aineko's `connect host port` works:
-#   make STATIC=1 CC="zig cc -target x86_64-linux-musl"
-# zig cc is clang + a bundled musl + compiler-rt -- the clean path (matches our
-# clang default). VALIDATED: fully static, `ldd` = not-a-dynamic-executable, runs,
-# getaddrinfo baked in. The output lands in out/host-musl (hsuf), so the clang
-# out/host tree is untouched -- no need to clean between builds.
+#   make STATIC=1 CC=musl-clang
+# musl-clang is clang (matches our clang default) + the musl libc -- the clean
+# path. VALIDATED: fully static, `ldd` = not-a-dynamic-executable, runs, getaddrinfo
+# baked in. The output lands in out/host-musl (hsuf), so the clang out/host tree is
+# untouched -- no need to clean between builds.
 # musl is Linux-only -- this is the Linux portable-binary artifact, NOT the mac
 # build (mac = a native Apple-clang build).
-# FALLBACK only: `CC=musl-gcc` works too but is a gcc wrapper; on Arch its spec
-# injects a phantom `-latomic_asneeded` (we use no real atomics -- only volatile
+# FALLBACK: `CC=musl-gcc` works too but is a gcc wrapper; on Arch its spec injects
+# a phantom `-latomic_asneeded` (we use no real atomics -- only volatile
 # sig_atomic_t flags), so it needs an empty stub on the link path:
 #   ar rcs /tmp/libatomic_asneeded.a; make STATIC=1 CC=musl-gcc EXTRA_CFLAGS=-L/tmp
 ifdef STATIC
 host_ldflags = -static
+# the musl-clang wrapper injects LINK flags (-fuse-ld, -L…) into every clang call,
+# incl. -c compiles, where clang warns "unused during compilation" -> our -Werror
+# makes it fatal. Silence that one (harmless; gcc ignores unknown -Wno-*).
+ai_cflags += -Wno-unused-command-line-argument
 endif
 ai0 = out/host/ai0   # PINNED to the canonical tree (not $(ho)) -- see hsuf above
 

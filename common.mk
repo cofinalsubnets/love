@@ -13,7 +13,7 @@ a ?= $(shell uname -m)
 # plain `CC ?= clang` is a no-op -- make ships a built-in default `CC = cc` (origin
 # `default`, not `undefined`), so `?=` never fires. Override the built-in default
 # explicitly while still honoring an env/CLI `CC=` (origin command line/environment):
-# `make CC=gcc` or a static-musl cross `make CC="zig cc -target x86_64-linux-musl"`.
+# `make CC=gcc`, or a static-musl build `make STATIC=1 CC=musl-clang` (see hsuf).
 ifeq ($(origin CC),default)
 CC = clang
 endif
