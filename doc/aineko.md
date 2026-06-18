@@ -138,3 +138,55 @@ sockets) stay unaffected — no VM or `ai.c` change.
 **Risks:** `getaddrinfo` blocks (fine for one-shot); host-only test gating (→
 `make nettest`); half-close semantics (the `shutdown` nif); keeping kernel/wasm
 green (auto-excluded, but verify prel.l stays socket-free).
+
+## LANDED — Stage 1 + Stage 2 (2026-06-17, green) — commit info to fold in
+
+Built and verified. The doc body above describes the OLD `main.c`-everything nif
+pattern; the actual work used the newer `host/*.c` glob + `AI_NIF` auto-registration
+(commit `bf6535b4`) — **zero edits to `ai.c`/`ai.h`/`main.c`**, the brief's pattern.
+
+**New files (self-contained, commit as-is — same as bao's 9b15c90c pattern):**
+- `host/net.c` — the four socket nifs `(connect host port)` / `(listen port)` /
+  `(accept l)` / `(shutdown s how)`. Each mirrors `lvm_open`: make an fd →
+  `ai_io_alloc(g, fd)` → heap port (close finalizer); read/write then free via
+  fgetc/fputc. Auto-globbed into `host_o`, registered with `AI_NIF`. Blocking
+  (one-shot); `how` is the POSIX SHUT_* fixnum (1 = write half-close).
+- `tools/aineko.l` — client (`aineko HOST PORT`) + server (`aineko -l PORT`), two
+  pump loops. Run via `out/host/ai -l ai/prel.l tools/aineko.l …` until the egg
+  bakes it into a multi-call binary.
+- `boot/net.l` — in-process loopback smoke (assert harness, prints `net: ok`),
+  the `hostnif_tests` member.
+- `test/net/loopback.sh` — the two-process full-duplex fixture (`make nettest`).
+
+**Makefile fold-in (shared file — leave to the coordinated commit; 3 additive hunks):**
+1. `.PHONY` gains `nettest` (and `test_hostnif`, if not already in via the core thread).
+2. Append `boot/net.l` to `hostnif_tests` → `hostnif_tests = boot/pty.l boot/net.l`.
+3. The `nettest` target (after `test_hostnif`):
+   ```
+   PORT ?= 7390
+   nettest: host
+   	@echo NETTEST $m "(127.0.0.1:$(PORT))"
+   	@sh $R/test/net/loopback.sh $m $(PORT)
+   ```
+   Deliberately NOT in `make test`/`test_all` (needs two live processes + a free
+   port); `boot/net.l` in `test_hostnif` covers the nifs portably.
+
+**Suggested commit message:**
+`aineko: TCP socket nifs (host/net.c) + the netcat clone (tools/aineko.l)`
+
+**Teardown — corrects this doc's "hush the other pump" sketch.** The two
+directions are INDEPENDENT half-duplex channels: a socket-READ EOF does NOT mean
+the WRITE side is dead. "Hush the other pump on either EOF" TRUNCATES outbound
+data (a peer half-closing its write read-EOFs you while your stdin pump still has
+bytes). Correct shape: run **stdin→socket in the OWNING (main) task** so it always
+drains every stdin byte before any teardown (then `shutdown s 1`); run
+**socket→stdout in a spawned task**; **join with `wait`, not `hush`**. Verified
+full-duplex over loopback, no truncation, no deadlock. (This is the discipline
+bao/kship reuse — aineko is the shared trunk.)
+
+**Verification:** `cat test/00-init.l boot/net.l | out/host/ai` → 10/10 asserts,
+`net: ok`, exit 0. `sh test/net/loopback.sh out/host/ai 7390` → `nettest: PASS`
+(full-duplex, each side got exactly what the other sent). `ai/*.l` socket-free.
+⚠ `make host`/`make nettest` were transiently red during this session ONLY from
+the core thread's concurrent `main.c → host/main.c` move (their territory); the
+binary built before the move runs everything green.
