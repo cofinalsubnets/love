@@ -36,12 +36,20 @@
    (with rep bts) (L rep bts)
 
 ; --- decide: the policy --- pure (state, event) -> (state' . action), a chain.
-; in a reactive agent this is a rule table; swap it for a socket round-trip and the
-; SAME loop becomes an LLM-in-the-loop agent (the model IS the policy). an
-; unrecognized event RAISES -- the watchdog below turns that into a survivable miss.
+; the policy DECIDES ON CONTENT (`answer`): a 'net datagram is a request -- "ping"
+; and "stat" are commands, and ANYTHING ELSE is EVALUATED AS AI, the result returned.
+; that makes the agent a network REPL on bare metal -- the brain plugs in HERE.
+; today the "model" is read+ev, the language itself (send `(* 6 7)`, get `42`); swap
+; in a socket round-trip or an LLM and the SAME loop is that agent. a parse/eval
+; fault RAISES -> the watchdog welps it (old state carried, no crash). NB: inside
+; `policy` the PARAM `ev` shadows the global evaluator, so the eval lives in `answer`.
+   (answer st d)                                    ; d = the datagram (a string) -> a reply string
+     (? (= d "ping") "pong"
+        (= d "stat") (+ "replies=" (+ (show (replies st)) (+ " beats=" (show (beats st)))))  ; + is binary: nest right
+        (show (ev (read (sip (bytes d)) 0))))         ; else: run d AS AI, show the result
    (policy st ev)
-     (? (idp (ev-kind ev) 'net)                     ; a packet arrived
-          (link (with (+ 1 (replies st)) (beats st)) (link 'send "pong"))
+     (? (idp (ev-kind ev) 'net)                     ; a packet: answer by its content
+          (link (with (+ 1 (replies st)) (beats st)) (link 'send (answer st (ev-load ev))))
         (idp (ev-kind ev) 'tick)                     ; the heartbeat clock fired
           (link (with (replies st) (+ 1 (beats st))) (link 'send "<3"))
         (scare 'bad-event (ev-kind ev)))             ; anything else: raise
