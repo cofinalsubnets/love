@@ -159,7 +159,7 @@ $@(3 4)              ; 7
 ; (anything but a chain). the NUMERIC vocab refines the numbers: a GEM is a self-netting
 ; SCALAR (`gem? x` == `id? x (net x)`: charm/wide/big/float/complex), a TRAY is an array of
 ; any kind (`tray?`, the renamed arrp), and a CREST is a numeric tray -- a tray of gems
-; (`crest?`). gem? and crest? are DISJOINT (a tray's net is a fresh scalar, so no tray
+; (`chart?`). gem? and chart? are DISJOINT (a tray's net is a fresh scalar, so no tray
 ; self-nets); a crest is COMPOSED of gems, not a kind of gem -- it nets DOWN to a scalar gem.
 ; `i` is ~(0 1). `lit?` is PRESENCE, not a band: every heap
 ; value answers it (anything wired to a hot -- lit -- everything but a fixnum), chains and

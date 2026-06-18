@@ -182,15 +182,15 @@ The numerals bridge into the term language, but no further:
 
 The numeric carriers earn their own short names — each names a predicate you can probe, and they carry through the array laws below. They split the **number** band by rank.
 
-A **number** (`jewel?`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **gem** (`gem?`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `id? x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized gem, a fixnum, is a **charm** (`charm?`). A **tray** (`tray?`) is an array, numeric or not; a **crest** (`crest?`) is a tray *of gems* — a numeric array. So a number is a gem or a crest, and `$` lands every value on the **green gems** — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green gem too.
+A **number** (`jewel?`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **gem** (`gem?`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `id? x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized gem, a fixnum, is a **charm** (`star?`). A **tray** (`tray?`) is an array, numeric or not; a **crest** (`chart?`) is a tray *of gems* — a numeric array. So a number is a gem or a crest, and `$` lands every value on the **green gems** — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green gem too.
 
 | name | predicate | what it is |
 |---|---|---|
 | `number` | `jewel?` | any numeric value, scalar or array — the bottom band |
 | `gem` | `gem?` | a scalar number, one that nets itself (rank 0) |
-| `charm` | `charm?` | a word-sized gem — a fixnum |
+| `charm` | `star?` | a word-sized gem — a fixnum |
 | `tray` | `tray?` | an array, numeric or not (rank ≥ 1) |
-| `crest` | `crest?` | a tray of gems — a numeric array (rank ≥ 1) |
+| `crest` | `chart?` | a tray of gems — a numeric array (rank ≥ 1) |
 
 A crest is *not* a gem (`gem?` is false on a tray, whose net is a fresh sum): it is a tray whose cells are gems. A charm is the smallest gem; a number is a gem or a crest.
 

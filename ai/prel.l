@@ -150,15 +150,15 @@
    ; a GEM is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
    ; net (x IS its own net; id?, not `=`, since net returns a number operand unchanged
    ; while a tray's net is a fresh sum). a TRAY (tray?) is an array of any element kind;
-   ; a CREST is a tray of GEMS -- a numeric tray. gem? and crest? are DISJOINT: a tray
+   ; a CREST is a tray of GEMS -- a numeric tray. gem? and chart? are DISJOINT: a tray
    ; never self-nets (its net is a fresh scalar), so a crest is never a gem -- it is
-   ; COMPOSED of gems, not a kind of gem. crest? keys on the CELLS, not the O code, so a
+   ; COMPOSED of gems, not a kind of gem. chart? keys on the CELLS, not the O code, so a
    ; Z/R/C tray qualifies outright and an object-typed tray of gem cells (e.g. bignums)
    ; still counts -- a tray of strings does not (a string is no gem).
    (gem? x) (id? x (net x))
    ; a CHARM is the word-sized gem -- a fixnum (the lisp predicate; oddp C-side).
-   (charm? x) (fix? x)
-   (crest? x) (? (tray? x) (? (< (atype x) O) 1 (gem? (peep x 0 0))) 0))
+   (star? x) (fix? x)
+   (chart? x) (? (tray? x) (? (< (atype x) O) 1 (gem? (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)

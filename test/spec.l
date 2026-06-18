@@ -52,11 +52,11 @@
  !(gem? @(1 2 3)) (gem? (net @(1 2 3)))                   ; a TRAY is NOT a gem -- it nets DOWN to a scalar gem (net is a fresh sum)
  !(gem? "x") !(gem? 'a) !(gem? '(1 2))                    ; text/symbol/list are not gems -- they net to something else
  (? (fix? 5) (gem? 5) 1)                                  ; a CHARM is a gem, by spec (net = self)
- (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (gem? 5) 1)   ; a CHARM (charm?) is the word-sized gem: a fixnum, and every charm is a gem
+ (star? 5) !(star? 3.5) !(star? @(1 2 3)) !(star? 'a) (? (star? 5) (gem? 5) 1)   ; a CHARM (star?) is the word-sized gem: a fixnum, and every charm is a gem
  (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
- (crest? @(1 2 3)) !(crest? @("a" "b"))                   ; a CREST is a NUMERIC tray (a tray of gems); a tray of strings is not
- (crest? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a crest -- bignum cells are gems (keyed on cells, not the O code)
- !(gem? @(1 2 3)) !(crest? 5) !(crest? '(1 2))            ; gem?/crest? are DISJOINT; a scalar / a list is neither a crest nor a tray
+ (chart? @(1 2 3)) !(chart? @("a" "b"))                   ; a CREST is a NUMERIC tray (a tray of gems); a tray of strings is not
+ (chart? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a crest -- bignum cells are gems (keyed on cells, not the O code)
+ !(gem? @(1 2 3)) !(chart? 5) !(chart? '(1 2))            ; gem?/chart? are DISJOINT; a scalar / a list is neither a crest nor a tray
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
 ; --- types & predicates --- storage: fix? big? full? float? twin? tray? string? nom? two? tab?;
