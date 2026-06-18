@@ -21,7 +21,7 @@ and (for the runnable ones) installed on `PATH` by `make install`.
 | **cook** | a GNU-make-compatible build tool written in ai (builds the host from scratch) | `cook/cook.l` | `cook` |
 | **kship** | the ship itself — the freestanding ai-kernel as a self-driving agent: boots on bare metal, perceives the NIC, runs the language over UDP | `port/kship/` | (boot image: `make kernel KSHIP=1`) |
 | **siri** | the synthesist — makes the human words match the ai words so everything is green: converges the user-facing namespace, mops compiler internals out of sight | `ai/{ev,prel,egg}.l` + the docs | (no bin — a curator role) |
-| **telescope** | a PyTorch clone — tensors + reverse-mode autograd over the `tray`, with a small `nn`/`optim` layer; trains a neural net (even on bare metal via kship) | `telescope/telescope.l` | (library, `-l`'d; demo `telescope/xor.l`) |
+| **tele** | a PyTorch clone (telescope) — it scopes constellations: tensors + reverse-mode autograd over the galaxy (numeric tray), with a small `nn`/`optim` layer; trains a neural net (even on bare metal via kship) | `tele/tele.l` | (library, `-l`'d; demo `tele/xor.l`) |
 | **zev** | the parser combinator — a reusable parser-combinator library in ai, lifted and generalized from cook's embedded Makefile importer (one shared `(\ s y n)` vocabulary for the crew) | `parse/zev.l` | (no bin — a library) |
 
 The personality docs are the *source of truth* for each app's design and status;
