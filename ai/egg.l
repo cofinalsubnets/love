@@ -1,7 +1,7 @@
 (:
  (mop _) ((peep book 'ev 0) '(:
    ; delete interna
-   _ (each '(trim peek poke seek spin macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop do_eval numfn nfa nfq nfnest powg ipow a-coll a-dim a-emax a-rank a-shape a-type m eofsym prc _)
+   _ (each '(trim peek poke seek spin macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop do_eval numfn nfa nfq nfnest powg ipow a-coll a-dim a-emax a-rank a-shape a-type m eofsym prc op-fr op-fold op-frg op-frd op-frn op-frc op-fro op-fin op-ent op-del op-core op-steal op-drain op-w op-qq op-long op-puncp op-punc-byte opfactor monofactor mono-long _)
       (\ k (pull book k 0)))
    (each (keys book)
     (\ k (? (nomp k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))
