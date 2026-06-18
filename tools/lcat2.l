@@ -6,7 +6,7 @@
 ; --- scope-local renaming with name reuse --- the renamer is a scope-threaded
 ; walk carrying two things down the scope tree:
 ;   env  = assoc (orig-sym . new-sym), innermost binding first -- a reference is
-;          renamed by the nearest enclosing binding (assq), so kept bindings map to
+;          renamed by the nearest enclosing binding (assoc), so kept bindings map to
 ;          themselves and correctly SHADOW an outer renamed binding of the same name.
 ;   used = the new names live on the CURRENT path (root..here). A scope may not reuse
 ;          a name in `used` (would capture an outer reference), but SIBLING scopes
@@ -61,7 +61,7 @@
    (sl-digits n acc) (? (< n 1) acc (: m (+ -1 n) (sl-digits (/ m 52) (link (sl-char (% m 52)) acc))))
    (shortlex k) (string (sl-digits (+ 1 k) 0))         ; 0->a .. 25->z 26->A .. 51->Z 52->aa
    (freshname? nm) (= 0 (peep cnt nm 0))                ; nm occurs as no source symbol
-   (avail? nm u) (&& (freshname? nm) !(memq nm u))     ; ..and not live on this path
+   (avail? nm u) (&& (freshname? nm) !(has? nm u))     ; ..and not live on this path
    (pickname u) ((: (g k) (: nm (intern (shortlex k)) (? (avail? nm u) nm (g (+ 1 k))))) 0)
    (cntle a b) (: ca (peep cnt a 0) cb (peep cnt b 0)    ; order a scope's bindings: count desc,
        (? (> ca cb) 1 (< ca cb) 0                      ; then length desc, then name -- deterministic
@@ -73,8 +73,8 @@
             (? (&& !(peep taint s 0) (< (tally nm) (tally (string s))))
                (: i (intern nm) (g (cup ss) (link (link s i) m) (link i u)))
                (g (cup ss) (link (link s s) m) u)))
-         (link m u))) (msort cntle syms) 0 used)
-   (mapped s m) (: p (assq s m) (? p (cup p) s))
+         (link m u))) (sortby cntle syms) 0 used)
+   (mapped s m) (: p (assoc s m) (? p (cup p) s))
    (flat lhs) (? (nom? lhs) (link lhs 0) (: r (flat (cap lhs)) (link (cap r) (cat (cup r) (cup lhs)))))  ; unwind : head-sugar
    (lhs-rename lhs bmap am) (? (nom? lhs) (mapped lhs (cat am bmap))  ; name via bmap, params via am
        (two? lhs) (link (lhs-rename (cap lhs) bmap am) (lhs-rename (cup lhs) bmap am)) lhs)

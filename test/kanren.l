@@ -14,7 +14,7 @@
  ext_s dict_set
  (unord_eq a b) (&&
   (= (sat a) (sat b))
-  (all (flip memq a) b))
+  (all (flip has? a) b))
  (sX x s n m y) (y x s)
  (sno n m y) (n sno)
  (sun x) (sX x sno)

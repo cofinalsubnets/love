@@ -11,6 +11,7 @@
    e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
    true 1 false 0
    i ~(0 1) ;; FIXME up top
+   (tangent x) (/ (sine x) (cosine x))          ; derived: tan = sin/cos
    Z 0 R 1 C 2 O 3                              ; array element-kind codes (the tier spine)
    zero? nil?                                  ; zero? aliases nil? (the net-to-zero test)
    (one? x) (= x (cap x))
@@ -134,7 +135,7 @@
 ; bag['monadics] below). net is the CONTENT MEASURE as a value -- + turned
 ; inward: a number is its own net (phase intact, exact), an array sums its
 ; cells, a list the nets of its spine, and everything else is non-negative
-; so its net IS its sat. prod is the product twin; neg/recip/frac the
+; so its net IS its sat. prod is the product twin; neg/reciprocal/frac the
 ; dyadics turned inward; bit the truth bit (the Iverson bracket, !!).
 (: (net x) (? (set? x) (asum x)
               (constellation? x) x
@@ -144,7 +145,7 @@
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
    neg (- 0)
-   recip (/ 1)
+   reciprocal (/ 1)
    (frac x) (% x 1)
    (bit x) (nil? (nil? x))
    ; a STAR is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
@@ -173,18 +174,18 @@
 ; sort: (sort l) orders l ascending by the total order -- the C lane (a stable
 ; bottom-up merge in the heap gap, one cmp3 per compare, no lisp re-entry);
 ; descending is (rev (sort l)). an arbitrary strict less-than predicate takes
-; the lisp merge sort: (msort le l), top-down alternating split + merge.
+; the lisp merge sort: (sortby le l), top-down alternating split + merge.
 (: (merge le a b) (? (atom? a) b (atom? b) a
                      (le (cap a) (cap b)) (link (cap a) (merge le (cup a) b))
                      (link (cap b) (merge le a (cup b))))
    (sortsplit l) (? (atom? l) (link l 0) (atom? (cup l)) (link l 0)
                     (: r (sortsplit (cuup l)) (link (link (cap l) (cap r)) (link (caup l) (cup r)))))
-   (msort le l) (? (atom? l) l (atom? (cup l)) l
-                  (: s (sortsplit l) (merge le (msort le (cap s)) (msort le (cup s))))))
+   (sortby le l) (? (atom? l) l (atom? (cup l)) l
+                  (: s (sortsplit l) (merge le (sortby le (cap s)) (sortby le (cup s))))))
 (: catmap (compose (flip foldr 0) (compose cat))
-   (assq x l) (? (two? l) (? (= x (caap l)) (cap l) (assq x (cup l))))
+   (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
-   memq (compose any (=))
+   has? (compose any (=))
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) 0)
    (jot n) ((: (go i) (? (< i n) (link i (go (+ i 1))))) 0)
@@ -250,7 +251,7 @@
    _ (pin t '<< 'caap) _ (pin t '>> 'cuup)
    _ (pin t '+ 'net)   _ (pin t '* 'prod)
    _ (pin t '| 'abs)   _ (pin t '- 'neg)
-   _ (pin t '/ 'recip) _ (pin t '% 'frac)
+   _ (pin t '/ 'reciprocal) _ (pin t '% 'frac)
    _ (pin t '? 'bit)
    _ (pin t '$ 'sat)   _ (pin t '! 'nil?) _ (pin t '. 'dot)
    t))
@@ -532,7 +533,7 @@
    ; &&/|| are seen as the compiler sees them). u tracks lambda depth; dm (direct
    ; mode) counts only references NOT under a lambda.
    (w v x bnd u dm) (?
-    (nom? x) (&& (? dm (nil? u) 1) (= x v) (nil? (memq v bnd)))
+    (nom? x) (&& (? dm (nil? u) 1) (= x v) (nil? (has? v bnd)))
     (atom? x) 0
     (: h (cap x) (?
       (= h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
@@ -547,16 +548,16 @@
    ; reference; a lambda binding only on a DIRECT one (not under a lambda), so
    ; ordinary recursion keeps the lazy lane.
    (boxset prs) (: nm (map cap prs)
-     (filter (\ v (any (\ p (w v (cup p) 0 0 (lambp (cup (assq v prs)))))
+     (filter (\ v (any (\ p (w v (cup p) 0 0 (lambp (cup (assoc v prs)))))
                        (take (+ 1 (lidx v nm)) prs))) nm))
    (mkcs bx) (map (\ v (link v (link (nom 0) (nom v)))) bx)
    (cellbinds cs) (map (\ c (link (caup c) (list tablet 0))) cs))
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.
 (: (boxfix-core prs body) (:
-   (rmc cs ns) (filter (\ p (nil? (memq (cap p) ns))) cs)
+   (rmc cs ns) (filter (\ p (nil? (has? (cap p) ns))) cs)
    (sub cs x) (?
-    (nom? x) (: p (assq x cs) (? (two? p) (list missing (caup p) (list '\ (cuup p))) x))
+    (nom? x) (: p (assoc x cs) (? (two? p) (list missing (caup p) (list '\ (cuup p))) x))
     (atom? x) x
     (: h (cap x) (?
       (= h '\) (? (atom? (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r)))))))
@@ -570,8 +571,8 @@
       (? (nil? bx) 0
        (: cs (mkcs bx)
           (one p) (: d (sub cs (cup p))
-                     (? (memq (cap p) bx)
-                        (: c (assq (cap p) cs) (link '_ (list pin (caup c) (list '\ (cuup c)) d)))
+                     (? (has? (cap p) bx)
+                        (: c (assoc (cap p) cs) (link '_ (list pin (caup c) (list '\ (cuup c)) d)))
                         (link (cap p) d)))
           (link (cat (cellbinds cs) (map one prs)) (sub cs body)))))))
 ; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the

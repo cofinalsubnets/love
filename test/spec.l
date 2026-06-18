@@ -75,7 +75,7 @@
 
 ; --- arithmetic --- + - * / // % infix; fixnum fast path, overflow grows fix->wide->bignum;
 ; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^; monadics
-; ride the valence law (-(f x) neg, /4 recip, ...) while sections ((- 0), (/ 1)) stay words.
+; ride the valence law (-(f x) neg, /4 reciprocal, ...) while sections ((- 0), (/ 1)) stay words.
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (2 = 4 / 2) (fix? (4 / 2)) (-2 = (// -5 2))
@@ -182,17 +182,17 @@
     (&& ('(2 2) = (ashape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
-; the compounds); sort/msort by the total order; (jot n) the first n charms; the higher-order
+; the compounds); sort/sortby by the total order; (jot n) the first n charms; the higher-order
 ; functions live in the prel.
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 0)))
  !(cap 0) ("x" = (cap 'x)) !(cup 'x)              ; no cap at the end of the list; a symbol's cap is its NAME, its cup the mint (false)
  ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n charms; the empty count is nothing
  ('(2 3 4) = (map inc '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
- ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (msort (>) '(1 2 3)))
+ ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (sortby (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
- (20 = (caup (assq 2 (list (L 1 10) (L 2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
- (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (memq 3 '(1 2 3)) !(memq 9 '(1 2 3))
+ (20 = (caup (assoc 2 (list (L 1 10) (L 2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
+ (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (has? 3 '(1 2 3)) !(has? 9 '(1 2 3))
  (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3))
  (294 = $'(a b c)) (3 = (tally '(a b c))))  ; net sums spellings; tally counts the spine
 

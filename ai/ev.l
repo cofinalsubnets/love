@@ -39,7 +39,7 @@
           '(// << >> ^
             id? gcd modpow inc dec abs
             link cap cup caap caup cuap cuup
-            dig lidx assq memq last rev cat
+            dig lidx assoc has? last rev cat
             fix? nom? two? tab? lit? string? nil? float? twin? atom?
             snip string
             re im conj arg real twin
@@ -156,7 +156,7 @@
     ; (.. (nil? e) con else) == (.. e else con), since the cond tests g_false(e), == nil?(e).
     (&& (two? (cuup bs)) (atom? (cup (cuup bs)))                  ; bs is exactly (ant con else)
         (two? (cap bs)) (= (cap (cap bs)) 'nil?)
-        (two? (cup (cap bs))) (atom? (cuup (cap bs))) (nil? (memq (cap (cap bs)) bnd)))
+        (two? (cup (cap bs))) (atom? (cuup (cap bs))) (nil? (has? (cap (cap bs)) bnd)))
      (link (wx (caup (cap bs)) bnd) (link (wx (cap (cuup bs)) bnd) (list (wx (caup bs) bnd))))
     (link (wx (cap bs) bnd) (link (wx (caup bs) bnd) (wxc (cuup bs) bnd))))
    ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
@@ -167,7 +167,7 @@
    ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h (cap x)
     (? (atom? (cup x)) x                          ; (f) single element -> ana's (atom? b) handles
-       (|| (nil? (nom? h)) (memq h bnd)) (link apx (link 0 x))   ; local/computed head
+       (|| (nil? (nom? h)) (has? h bnd)) (link apx (link 0 x))   ; local/computed head
        (: v (bag h) hd (wevs v)
         (? hd (hd x)
            (napof v (cup x)) (link apx (link 1 x))
@@ -281,13 +281,13 @@
                  (compose p q))
   ; variable expression analyzer
   (ava c x)
-   (: lfd (assq x (c 'lam))
+   (: lfd (assoc x (c 'lam))
     (? (two? lfd) (lz c lfd c)
        (: s (c 'stk)
           (stki d) (lidx x (cat (d 'imp) (d 'arg)))
           (q i j m) (karg (+ i (stki c)) j m)
         (?- (avb c (c 'par) x)
-         (memq x s) (karg (lidx x s))
+         (has? x s) (karg (lidx x s))
          (>= (stki c) 0) (q (tally (c 'stk)))))))
 
   (avb c d x)
@@ -296,13 +296,13 @@
         (? !(= y Z) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
           (em2 lvm_index x))))
-    (: lfd (assq x (d 'lam))
+    (: lfd (assoc x (d 'lam))
      (? (two? lfd) (lz c lfd d)
         (: s (d 'stk)
            (stki d) (lidx x (cat (d 'imp) (d 'arg)))
            (q i j m) (karg (+ i (stki c)) j m)
          (?- (avb c (d 'par) x)
-          (memq x s) (: _ (? (c 'par) (push c 'imp x))
+          (has? x s) (: _ (? (c 'par) (push c 'imp x))
                          (q (tally (c 'stk))))
           (>= (stki d) 0) (: _ (? (c 'par) (push c 'imp x))
                            (q (tally (c 'stk)))))))))
@@ -317,7 +317,7 @@
    ; fall back to exp if unrecorded. prepend the captured imports as leading params
    ; (frame is [imps args]) so a closure prints as ,((\ y x …) capturedvals) and
    ; round-trips through read+eval.
-   os (assq exp ((rootc c) 'src))
+   os (assoc exp ((rootc c) 'src))
    s (link '\ (cat (d 'imp) (? (two? os) (cuup os) exp)))
    _ (poke -1 s e)                                  ; value[-1] = source \-expr
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
@@ -383,12 +383,12 @@
      ; recursion). sweep all ordered pairs, pour k1's vars into k2 (addv); a sweep that adds
      ; any var (n > 0) repeats until a full pass is stable -- then drop the let's own names.
      (propagate n l k1 k2) (?
-      (&& k1 k2 !(= k1 k2) (memq (caap k1) (cup (cof (cap k2)))))
+      (&& k1 k2 !(= k1 k2) (has? (caap k1) (cup (cof (cap k2)))))
        (>>= n (cup (cof (cap k1))) (: (addv n v)
         (? (nil? v) (propagate n l k1 (cup k2))
          (: var (cap v)
             vars (cup (cof (cap k2)))
-            n2 (? (memq var vars) n
+            n2 (? (has? var vars) n
                (: _ (cput (cap k2) (link (cap (cof (cap k2))) (link var vars)))
                 (+ 1 n)))
             (addv n2 (cup v))))))
@@ -404,7 +404,7 @@
     ; final import set (and backpatched in); a top-level body-less let's name is defglob'd.
     (weave nds) (? (atom? nds) id
      (: nd (cap nds) n (cap nd) d (cup nd)
-        d (?- d (lambp d) (: cls (assq (cap nd) lams)
+        d (?- d (lambp d) (: cls (assoc (cap nd) lams)
                              x (ala q (cup (cof cls)) (cup d))
                            (cput cls x)))
         f (ana c d)

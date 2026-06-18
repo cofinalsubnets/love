@@ -46,14 +46,14 @@
    (dojr P r ev) (? (id? (tagv ev) 'refl) r (L 'njr P r ev))
 
    (vof-sym en x)
-   (: e (assq x en)
+   (: e (assoc x en)
       (? e (e2 e)
          (: g (peep GLOB x 0)
             (? g (e2 g) (scare 'uu-unbound x)))))
 
    (vof en t)
    (? (fix? t) t
-      (nom? t) (? (memq t '(UU nat bool unit empty tt true false)) t
+      (nom? t) (? (has? t '(UU nat bool unit empty tt true false)) t
                   (id? t 'zero) 0
                   (vof-sym en t))
       (: h (cap t)
@@ -111,11 +111,11 @@
 
    (inf-sym cx x)
    (? (id? x 'UU) 'UU
-      (memq x '(nat bool unit empty)) 'UU
+      (has? x '(nat bool unit empty)) 'UU
       (id? x 'zero) 'nat
       (id? x 'tt) 'unit
-      (memq x '(true false)) 'bool
-      (: e (assq x cx)
+      (has? x '(true false)) 'bool
+      (: e (assoc x cx)
          (? e (e2 e)
             (: g (peep GLOB x 0)
                (? g (cap g) (scare 'uu-unbound x))))))
@@ -255,7 +255,7 @@
                      _ (chk cx en d (e3 t) (vapp (vapp Pv av) (L 'refl av)))
                      (vapp (vapp Pv bv) (vof en (e4 t))))
                   (scare 'uu-paths_rect t)))
-            (memq h '(lam tpair ii1 ii2)) (scare 'uu-cannot-infer t)
+            (has? h '(lam tpair ii1 ii2)) (scare 'uu-cannot-infer t)
             (inf-spine cx en d (inf-sym cx h) (cup t))))))
 
 ; --- drivers: a definition is checked then pinned; an axiom is a bag entry

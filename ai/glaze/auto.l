@@ -19,7 +19,7 @@
    (exprp e v) (? (= e v)   1
                   (whole? e)  1
                   (two? e)  (: op (cap e)
-                               (? (memq op '(+ - * // % & | ^ < <= > >= =)) (&& (exprp (caup e) v) (exprp (caup (cup e)) v))
+                               (? (has? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprp (caup e) v) (exprp (caup (cup e)) v))
                                   (= op '?) (&& (two? (cup (cup (cup e)))) !(two? (cup (cup (cup (cup e)))))   ; exactly 3 operands
                                                (exprp (caup e) v) (exprp (caup (cup e)) v) (exprp (caup (cup (cup e))) v))
                                   0))
@@ -28,14 +28,14 @@
    (qual lam) (&& (two? lam) (= (cap lam) '\) (two? (cup lam)) (symp (caup lam))                ; (\ v E), v any symbol
                   (two? (cup (cup lam))) !(two? (cup (cup (cup lam)))) (exprp (caup (cup lam)) (caup lam)))
    ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
-   (exprn ps e) (? (memq e ps) 1  (whole? e) 1
+   (exprn ps e) (? (has? e ps) 1  (whole? e) 1
                    (two? e) (: op (cap e)
-                               (? (memq op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
+                               (? (has? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
                                   (= op '?) (&& (two? (cup (cup (cup e)))) !(two? (cup (cup (cup (cup e)))))
                                                (exprn ps (caup e)) (exprn ps (caup (cup e))) (exprn ps (caup (cup (cup e)))))
                                   0))
                    0)
-   (distinctp l) (? !(two? l) 1  (memq (cap l) (cup l)) 0  (distinctp (cup l)))        ; no repeated param
+   (distinctp l) (? !(two? l) 1  (has? (cap l) (cup l)) 0  (distinctp (cup l)))        ; no repeated param
    (qualn lam) (: ps (? (two? (cup lam)) (init (cup lam)) 0)  body (? (two? (cup lam)) (last (cup lam)) 0)
                   (&& (two? lam) (= (cap lam) '\) (two? (cup lam))
                       (all symp ps) (< 1 (tally ps)) (distinctp ps)                     ; >=2 distinct symbol params
@@ -56,10 +56,10 @@
               (two? M) (= z1 0) !(two? (cup (cup (cup M))))                  ; (S 0 a0)
               (two? S) (= (cap S) ':) (symp GO) (symp I) (symp A) !(= I A)   ; (: (go i a) IF)
               (two? IF) (= (cap IF) '?) (= ELS A)                            ; (? .. .. a)
-              (two? T) (memq cmp '(< <= > >= =)) (= (caup T) I) (= (caup (cup T)) (caup lam))  ; (cmp i n)
+              (two? T) (has? cmp '(< <= > >= =)) (= (caup T) I) (= (caup (cup T)) (caup lam))  ; (cmp i n)
               (= (cap THEN) GO)                                              ; (go ..)
               (two? STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)  ; (+ i 1)
-              (two? ACC) (memq op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
+              (two? ACC) (has? op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
               (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
        (? ok (L B I op cmp) 0))
    (njit-loop lam B cv op cmp) (nat (emit (loopcode B cv op cmp)) (base-ev lam) lam)
@@ -79,11 +79,11 @@
        fr   (link (caup lam) vars)                                  ; cgl frame: {n, v0..vk}
        ok (&& (two? lam) (= (cap lam) '\) (symp (caup lam)) (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))
               (two? BODY) (two? S) (= (cap S) ':) (two? (cup S)) !(two? (cup (cup (cup S))))   ; (: G IF)
-              (two? G) (symp GO) (two? vars) (all symp vars) (distinctp vars) !(memq GO vars)
+              (two? G) (symp GO) (two? vars) (all symp vars) (distinctp vars) !(has? GO vars)
               (< (tally vars) 4)                                    ; <= 3 loop vars (register limit)
               (two? IF) (= (cap IF) '?) (two? THEN) (= (cap THEN) GO)   ; (? T (go U..) R)
               (= (tally updates) (tally vars)) (= (tally inits) (tally vars))
-              (two? T) (memq (cap T) '(< <= > >= =)) (exprn fr T)   ; TEST a comparison over {n,vars}
+              (two? T) (has? (cap T) '(< <= > >= =)) (exprn fr T)   ; TEST a comparison over {n,vars}
               (all (\ u (exprn fr u)) updates) (exprn fr R)         ; updates + RESULT exprs over {n,vars}
               (all whole? inits))                                     ; inits are fixnum consts
        (? ok (L vars updates T R inits) 0))

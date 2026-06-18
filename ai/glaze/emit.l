@@ -66,10 +66,10 @@
    (cgv v vl e d) (? (= e v)  (vl d)                                             ; vl = a load FN of d (leaf guards, loop counter doesn't)
                      (whole? e) (cat '(72 184) (le8 e))                            ; movabs rax, n
                      (two? e) (: op (cap e)  a (caup e)  b (caup (cup e))
-                                 (? (memq op '(+ - *))      (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (opseq op d))))
-                                    (memq op '(// %))        (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (idivseq op d))))
-                                    (memq op '(& | ^))       (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (bitseq op))))
-                                    (memq op '(< <= > >= =)) (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (cmpseq op))))
+                                 (? (has? op '(+ - *))      (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (opseq op d))))
+                                    (has? op '(// %))        (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (idivseq op d))))
+                                    (has? op '(& | ^))       (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (bitseq op))))
+                                    (has? op '(< <= > >= =)) (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (cmpseq op))))
                                     (= op '?) (condcode (cgv v vl a d) (cgv v vl b d) (cgv v vl (caup (cup (cup e))) d))
                                     0))
                      0)
@@ -95,10 +95,10 @@
    (argix e ps i) (? !(two? ps) 0  (= e (cap ps)) i  (argix e (cup ps) (+ i 1)))   ; param -> index
    (cgn ps e d) (? (whole? e) (cat '(72 184) (le8 e))                       ; movabs rax, n
                    (two? e) (: op (cap e)  a (caup e)  b (caup (cup e))
-                               (? (memq op '(+ - *))      (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (opseq-mn op d))))
-                                  (memq op '(// %))        (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (idivseq-mn op d))))
-                                  (memq op '(& | ^))       (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (bitseq op))))
-                                  (memq op '(< <= > >= =)) (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (cmpseq op))))
+                               (? (has? op '(+ - *))      (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (opseq-mn op d))))
+                                  (has? op '(// %))        (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (idivseq-mn op d))))
+                                  (has? op '(& | ^))       (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (bitseq op))))
+                                  (has? op '(< <= > >= =)) (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (cmpseq op))))
                                   (= op '?) (condcode (cgn ps a d) (cgn ps b d) (cgn ps (caup (cup (cup e))) d))
                                   0))
                    (fxmn (argix e ps 0) d))                               ; else: a param var (fixnum-guarded)
@@ -140,13 +140,13 @@
    ; cgl: an expr over {n (the fxv'd param) ; v0..vk (raw loop-var registers)} -> rax.
    (cgl n vars e d)
     (? (= e n)        (fxv 0 d)                                  ; the param: guarded Sp[0] load (untag)
-       (memq e vars)  (reg-ld (argix e vars 0))                  ; a loop var: raw register
+       (has? e vars)  (reg-ld (argix e vars 0))                  ; a loop var: raw register
        (whole? e)       (cat '(72 184) (le8 e))                    ; movabs
        (two? e) (: op (cap e)  a (caup e)  b (caup (cup e))
-                   (? (memq op '(+ - *))      (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (opseq op d))))
-                      (memq op '(// %))        (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (idivseq op d))))
-                      (memq op '(& | ^))       (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (bitseq op))))
-                      (memq op '(< <= > >= =)) (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (cmpseq op))))
+                   (? (has? op '(+ - *))      (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (opseq op d))))
+                      (has? op '(// %))        (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (idivseq op d))))
+                      (has? op '(& | ^))       (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (bitseq op))))
+                      (has? op '(< <= > >= =)) (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (cmpseq op))))
                       (= op '?) (condcode (cgl n vars a d) (cgl n vars b d) (cgl n vars (caup (cup (cup e))) d))
                       0))
        0)
