@@ -31,8 +31,11 @@ You build bao, in parallel with the aineko / cook / kship threads.
 - **The `repl.l` split needs core-thread coordination** (it changes `main.c`'s
   shell auto-select + the egg bake) — propose it to the core thread, don't do the
   `main.c` half yourself.
-- **Gate:** `make test` green; pty mechanics are scriptable, full interaction is
-  manual.
+- **Gate:** `make test` green; your pty nifs are gated by **`make test_hostnif`**
+  (runs `boot/pty.l` against the built `ai` — host nifs aren't in ai0, so they
+  can't be corpus tests; the target is the core thread's home for exactly this).
+  Your `boot/pty.l` is already wired in (`hostnif_tests` in the Makefile) and
+  passes. pty mechanics are scriptable; full interaction is manual.
 
 ## The core/shell split
 

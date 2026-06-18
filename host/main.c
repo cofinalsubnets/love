@@ -279,19 +279,32 @@ static lvm(lvm_getenv) {
  Sp += 1; Ip += 1;
  return Continue(); }
 
+// (getpid x) -> the running process id (x ignored). The host-nif worked example,
+// merged here from the former host/host.c. NOTE: unlike the host/*.c nifs, main.c
+// is linked into ai0 too, so getpid is present in the bootstrap as well -- not a
+// pure host-glob nif. net.c (aineko) / pty.c (bao) are the live not-in-ai0 ones.
+static lvm(lvm_getpid) { return Sp[0] = putcharm(getpid()), Ip++, Continue(); }
+
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
  nif_close[] = {{lvm_close}, {lvm_ret0}},
  nif_run[] = {{lvm_run}, {lvm_ret0}},
- nif_getenv[] = {{lvm_getenv}, {lvm_ret0}};
-// register them in the ai_nifs section (drained in main below); a host/*.c app
-// file does the same with AI_NIF and is auto-globbed into the build -- no edit here.
+ nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
+ nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
+// Register in the ai_nifs section (drained in main below). An app thread adds its
+// own nifs the same way in its OWN host/<app>.c -- auto-globbed, AI_NIF-registered,
+// NO edit here or to ai.c/ai.h:
+//   #include "ai.h"                                       // the nif-writing surface
+//   static lvm(lvm_foo) { ... return Sp[0] = <v>, Ip++, Continue(); }
+//   static union u const nif_foo[] = {{lvm_foo}, {lvm_ret0}};  // 1-arg; curry for more
+//   AI_NIF("foo", nif_foo);
 AI_NIF("exit", nif_exit);
 AI_NIF("open", nif_open);
 AI_NIF("close", nif_close);
 AI_NIF("run", nif_run);
 AI_NIF("getenv", nif_getenv);
+AI_NIF("getpid", nif_getpid);
 
 // --- the boot script ---------------------------------------------------
 // Everything the two builds disagree about lives in this ONE conditional
@@ -363,6 +376,13 @@ static char const cli[] =
  ;
 static char const
  rel[] = "(zevs in)";   // non-tty stdin: the stream shell (repl.l) drinks the in port
+// a tty: eval the bao personality (ai/bao.l, baked to bao.h) -- it defines (bao _)
+// and calls (bao 0), which drives the egg-baked `shell`. Eval'd at DISPATCH (not in
+// the egg-warm above), so `shell` is already installed; this is the seam bao's
+// pty-wrapper + debugger modes grow into (doc/bao.md). raw_mode() ran above.
+static char const bao[] =
+#include "bao.h"
+ ;
 
 // NOTE: the native-JIT experiment was retracted. It proved one durable finding
 // (you can run native code from a buf -- (call (forge bytes) x) -- and the kernel's
@@ -382,7 +402,7 @@ static struct ai *boot(struct ai *g, bool argp) {
     "))"
 #include "repl.h"
   );
-  return ai_evals_(g, argp ? cli : replp ? "(shell 0)" : rel); }
+  return ai_evals_(g, argp ? cli : replp ? bao : rel); }
 #endif
 
 int main(int argc, char const **argv) {
