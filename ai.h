@@ -136,6 +136,11 @@ struct ai {
  union {
   intptr_t v0;
   struct {
+   // The C->lisp hooks (num-ap, add, mul, help, operators) live on book
+   // (GC-traced, egg-baked): no slots, no key caches -- C materializes the
+   // keys by name per use (sym_probe walks the intern map allocation-free;
+   // hot numeric code is compiled by the lisp compiler, which holds the
+   // symbols directly, so the C dispatch only catches stragglers).
    ai_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
                   // macro table is book[nil] -- no separate field. The 'missing
                   // condition tag needs no slot: it is the `missing` nif's name,
@@ -150,13 +155,8 @@ struct ai {
     lvm_t *ap;
     ai_word fd;
     ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
-    ai_word eof_seen; } *io; };
-  // The C->lisp hooks (num-ap, add, mul, help, operators) live on book
-  // (GC-traced, egg-baked): no slots, no key caches -- C materializes the
-  // keys by name per use (sym_probe walks the intern map allocation-free;
-  // hot numeric code is compiled by the lisp compiler, which holds the
-  // symbols directly, so the C dispatch only catches stragglers).
-  }; };
+    ai_word eof_seen;
+   } *io; }; }; };
  intptr_t end[]; };
 
 struct ai_def { char const *n; intptr_t x; };
