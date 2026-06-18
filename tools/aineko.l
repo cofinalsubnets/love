@@ -7,7 +7,7 @@
 ; Either way it becomes a BIDIRECTIONAL PUMP -- stdin -> socket and socket ->
 ; stdout, both live at once. Two tasks, each parked in a port read on a different
 ; fd, interleave with no select loop: the cooperative scheduler poll()s the fd a
-; parked task blocks on (ai_wait_fds) and wakes the ready one (fgetc yields when
+; parked task blocks on (ai_wait_fds) and wakes the ready one (get yields when
 ; its fd is not ready -- see host/net.c / ai.c). So the whole program is just two
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
@@ -24,15 +24,15 @@
     ; parse a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48).
     (atoi s) (: (go i acc) (? (< i (tally s)) (go (+ 1 i) (+ (* 10 acc) (- (s i) 48))) acc)
                 (go 0 0))
-    (die m) (: _ (fputs err (+ "aineko: " (+ m "\n"))) (exit 1))
+    (die m) (: _ (say err (+ "aineko: " (+ m "\n"))) (exit 1))
 
     ; pump bytes from port `src` to port `dst`, one byte at a time, until src
-    ; hits EOF (fgetc -> -1). fflush after each byte makes stdout prompt (it is a
+    ; hits EOF (get -> -1). flush after each byte makes stdout prompt (it is a
     ; no-op on a socket port -- fd_flush only flushes the real stdout fd), so one
     ; pump serves both directions. Returns nil at EOF; the caller owns teardown.
-    (pump src dst) (: ch (fgetc src)
+    (pump src dst) (: ch (get src)
                       (? (= ch -1) 0
-                         (: _ (fputc dst ch) _ (fflush dst) (pump src dst))))
+                         (: _ (put dst ch) _ (flush dst) (pump src dst))))
 
     ; the conversation over a connected socket `s`. The two directions are
     ; INDEPENDENT half-duplex channels: a read-side EOF does NOT mean the write
@@ -49,7 +49,7 @@
                 _ (pump in s)                        ; stdin -> socket (drains fully here)
                 _ (shutdown s 1)                     ; half-close write: peer sees stdin EOF
                 _ (wait down)                        ; let the inbound pump drain to socket EOF
-                _ (fflush out)
+                _ (flush out)
                 _ (close s)
                 1)
 

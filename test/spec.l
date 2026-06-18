@@ -302,10 +302,10 @@
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- in/out are the default ports; getc + putc/puts/putn/putx, per-port
-; fgetc/fputc/.../read, open/close/sip/pad/slurp; `read` is port-first, one datum per call;
+; get/put/.../read, open/close/sip/pad/slurp; `read` is port-first, one datum per call;
 ; `dot` (the `.` operator, .x) prints x to out and returns it.
 (assert
- (string? (show out)) ("hi" = (slurp (sip '(104 105)))) (: o (pad 0) _ (fputx o 42) ("42" = (page o)))
+ (string? (show out)) ("hi" = (slurp (sip '(104 105)))) (: o (pad 0) _ (print o 42) ("42" = (page o)))
  (1 = (read (sip '(49)) 99)) ('eof = (read (sip 0) 'eof)) (: p (sip '(40)) (p = (read p 99))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,

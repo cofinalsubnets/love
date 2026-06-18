@@ -46,7 +46,7 @@ kernel lives in `port/kship/` (a ship in port).
 **★ MILESTONE 3 — the agent loop on the live NIC + a content-driven policy (`596ce2c7`,
 `c0c45578`):** `kship.l` `(serve st port)` runs the perceive→decide→act fold over the
 real virtio-net NIC — `(slurp nic)` for a datagram, narrate `nic <- …`, DECIDE via the
-policy, `(fputs nic)(fflush)`, same watchdog (`port` is a param so kship.l still loads
+policy, `(say nic)(flush)`, same watchdog (`port` is a param so kship.l still loads
 on the host). The policy now **decides on content**: `"ping"`→`"pong"`, `"stat"`→the live
 state, **anything else is EVALUATED AS AI and the result returned** — a bare-metal
 **network REPL** (the brain is `read+ev` today; an LLM/socket round-trip is the same
@@ -121,7 +121,7 @@ Stages (each gates by qemu boot with `-device virtio-net-pci`):
 - [x] **2d** UDP echo — **THE GATE, PASSED.** host→`localhost:5555`→SLIRP→guest RX→ARP→
       IPv4/UDP parse→echo (swap MAC/IP/ports, fix IP csum, UDP csum=0)→host gets it back.
 - [x] **2e** `k_sources[2]` socket slot → the ai port **`nic`**. ✅ boot-verified: a
-      pure-ai echo (`make ... NETECHO=1`) `(slurp nic)`→`(fputs nic d)`→`(fflush nic)`
+      pure-ai echo (`make ... NETECHO=1`) `(slurp nic)`→`(say nic d)`→`(flush nic)`
       round-trips a UDP datagram EXACTLY. RX enqueues per-peer datagrams (`dgq`); `nic_getc`
       hands one datagram's bytes then a single `-1` (so `slurp` reads one) and blocks for
       the next (keyboard model, never terminal EOF); `nic_flush` replies to that datagram's

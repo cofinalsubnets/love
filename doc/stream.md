@@ -20,8 +20,8 @@ to `out`, sending to the child only on Enter:
 ```
 (feedlines ip m)
   (: line (edraw ip "")
-     (? (id? line eofsym) (fputc m 4)
-        (: _ (each line (\ c (fputc m c))) _ (fputc m 10) _ (fflush m)
+     (? (id? line eofsym) (put m 4)
+        (: _ (each line (\ c (put m c))) _ (put m 10) _ (flush m)
            (feedlines ip m))))
 ```
 
@@ -29,14 +29,14 @@ Run `feedlines` (reads `in`, writes `out`) in one task and `pump m out` (reads
 `m`, writes `out`) in the other and it **hangs after one keystroke.** The *only*
 difference from the working transparent pump is that the editor task now writes to
 `out` (the render) instead of feeding the master. Single-task `edraw` on `in`
-works; a lone `fgetc`-in-a-spawned-task works; the concurrent two-task park is what
+works; a lone `get`-in-a-spawned-task works; the concurrent two-task park is what
 breaks. The exact proximate trigger could not be pinned statically (it wants a
 debug-build instrument) — but it does not need to be, because the substrate it
 rides on is structurally wrong, and path B removes that substrate entirely.
 
 ## 1. The diagnosis — four structural defects in the port surface
 
-The `fgetc`/`fungetc`/`feof`/`key?` surface is **POSIX wrongly embedded in the
+The `get`/`unget`/`end?`/`key?` surface is **POSIX wrongly embedded in the
 generic core.** Four leaks, each a place where the cooperative model and the
 read model disagree:
 
@@ -49,7 +49,7 @@ read model disagree:
    spin (`lvm_yield_sw_mono`, ai.c:2128) is bailed out by the user's next
    keystroke; under two tasks, `yield_sw` hands control away and the byte is never
    reconsidered. (`key?` already gets this right — ai.c:3663 tests
-   `ungetc_buf != EOF || ai_ready(fd)`; `fgetc` does not. The asymmetry is the bug.)
+   `ungetc_buf != EOF || ai_ready(fd)`; `get` does not. The asymmetry is the bug.)
 
 2. **The `-1` EOF sentinel is un-ai.** Absence in ai is the zero point `()`, not a
    magic integer; and `-1` collides with byte `0xFF`-as-`putcharm` reasoning and
@@ -64,7 +64,7 @@ read model disagree:
    hardcodes `ai_stdin` (ai.c:3663). The generic tail-threaded VM should know
    *generic-apply + scheduler-yield* and nothing about file descriptors.
 
-4. **The write side never yields.** `fputc`/`fputs`/`fflush`/`puts`/`putc`
+4. **The write side never yields.** `put`/`say`/`flush`/`puts`/`putc`
    (ai.c:2595-2625) block synchronously in `zputc`/`zflush` and never park. In a
    cooperative scheduler a blocking write to a flow-controlled fd stalls the *whole
    VM* — and with the editor and the pump both writing `out`, plus a child that can
@@ -156,11 +156,11 @@ force thunk (§8). Design `select`'s exact return shape (first-ready vs all-read
 mask) when building — a first-ready `source` is the minimal version; an all-ready
 list is the general one. Memory streams (`sip`) are always ready.
 
-## 6. The write side — keep `dot`, add `sink`, don't rebuild `fputc`
+## 6. The write side — keep `dot`, add `sink`, don't rebuild `put`
 
 Output is barely gummy. Keep `.`/`dot` (the generic tap writer). Add `(sink fd)`
 only as the dual *target* — `(sink 1)` is `out`'s writer end — so a pump is
-`(s->stream src) ... (sink dst)` symmetric. Do **not** rebuild `fputc`/`fputs`.
+`(s->stream src) ... (sink dst)` symmetric. Do **not** rebuild `put`/`say`.
 A write that would block can, if we want fairness, park through the same force/yield
 discipline; but the first cut keeps writes synchronous and relies on the reader-
 side fix to break the deadlock (the editor and pump both reading via streams is
@@ -192,14 +192,14 @@ Today three places know fds: `lvm_fgetc` (sets `next_wait_fd`), `lvm_key` (reads
   already multiplex N parked fds correctly. The bug was never the scheduler; it was
   the readiness *model* feeding it (defect 1). With lookahead in the source and EOF
   as `()`, a task never parks holding a byte, and `select` lets a task wait on
-  several streams deliberately rather than committing to one `fgetc`.
+  several streams deliberately rather than committing to one `get`.
 
 ## 9. Migration — staged, each stage gated
 
 Strictly additive first; delete only after parity.
 
 - **Stage 0 — add the surface alongside the old.** `source`/`sip`(re-pointed)/
-  `sink`/`ready?`/`select` as new nifs; `fgetc`/`key?`/`in`/`out` untouched. Gate:
+  `sink`/`ready?`/`select` as new nifs; `get`/`key?`/`in`/`out` untouched. Gate:
   full `make test` green; a `boot/stream.l` smoke (the pure half over a charlist
   producer — see §11) under `make test_hostnif`.
 - **Stage 1 — `read` as the pure fold** over a `source`, behind a flag or a new
@@ -214,7 +214,7 @@ Strictly additive first; delete only after parity.
   core, formerly `repl.l`) and the cli onto streams. Heaviest stage (the egg-baked
   editor; coordinate with the core thread — `bao.l` is shared, kernel- and
   corpus-pinned).
-- **Stage 4 — delete.** Remove `fgetc`/`fungetc`/`feof`/`key?`/`ungetc_buf`/
+- **Stage 4 — delete.** Remove `get`/`unget`/`end?`/`key?`/`ungetc_buf`/
   `eof_seen` and the more-bit/port-back protocol (§7). Gate: every tier green +
   valg 0/0 + vmret.
 
@@ -229,7 +229,7 @@ Map each defect to its removal:
 3. **scattered fd logic** → one force site sets `next_wait_fd`; the editor task and
    the pump task each block on their own `source`, or on `(select (L kbd master))`
    when they genuinely need to wait on both — a deliberate multiplex, not two blind
-   `fgetc`s racing.
+   `get`s racing.
 4. **blocking writes** → the render and the pump write through `dot`/`sink`; the
    reader-side fix removes the park-with-byte-in-hand stall that was the actual
    hang, and `select` makes the wait explicit so neither task spins or sleeps on

@@ -92,7 +92,7 @@
 ; `port` is a PARAM, not a free `nic`, so this file still loads on the host (no nic
 ; there); the kernel's net-agent build passes its `nic` port. acts on INITIATIVE the
 ; instant a packet lands -- the agent IS the server (the C echo loop is gone).
-   (reply-to port bytes) (: _ (fputs port bytes) _ (fflush port) 0)
+   (reply-to port bytes) (: _ (say port bytes) _ (flush port) 0)
    (serve st port)
      (: d   (slurp port)                                 ; perceive: BLOCK for one datagram
         _   (say (+ "  nic <- " d))                      ; narrate what landed (console observability)

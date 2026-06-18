@@ -55,19 +55,19 @@
                           (: lt (string (rev ctx)) rt (form1 cs)
                              (? rt (= (datums (+ lt rt)) (datums (+ (+ lt " ") rt))) 0)))
    ; emit one byte to out, C-escaped for the string literal.
-   (eb c) (? (= c 10) (fputs out "\\n")
-              (| (= c 92) (= c 34)) (: _ (fputc out 92) (fputc out c))
-              (fputc out c)))
+   (eb c) (? (= c 10) (say out "\\n")
+              (| (= c 92) (= c 34)) (: _ (put out 92) (put out c))
+              (put out c)))
 
 (: p (open (cap (cup argv)) "r")
-   _ (? p 0 (: _ (fputs err "lcat: cannot open input") (exit 1)))
+   _ (? p 0 (: _ (say err "lcat: cannot open input") (exit 1)))
    ; gather every canonical form into one space-joined string
    acc ((: (g acc e p first)
           (: r (read p e)
              (? (= e r) acc
                 (g (? first (show r) (+ (+ acc " ") (show r))) e p 0))))
         "" (nom 0) p 1)
-   _ (fputc out 34)                                      ; opening "
+   _ (put out 34)                                      ; opening "
    ; walk acc: drop redundant spaces (outside string literals), C-escape the rest.
    ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."
    ; literal (where \ escapes).
@@ -84,5 +84,5 @@
                     (: _ (eb c)
                        (g (cup cs) (? (hardb c) 0 (link c ctx)) (= c 34))))))))
         (s2cl acc) 0 0)
-   _ (fputc out 34)                                      ; closing "
-   (fputc out 10))
+   _ (put out 34)                                      ; closing "
+   (put out 10))

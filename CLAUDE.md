@@ -510,7 +510,7 @@ not-in-the-bag      ; ()        a missing name reads the zero point (helpless)
 (welp 1 'a 'b)       ; ()        the floor: a bare scare welps to the zero point
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prel wraps getc and
-; putc/puts/putn/putx, with per-port fgetc/fputc/.../read plus open/close/sip/pad/slurp.
+; putc/puts/putn/putx, with per-port get/put/.../read plus open/close/sip/pad/slurp.
 ; `read` (the renamed fread) is port-first -- (read in x) -- and reads one datum per
 ; call; its end conditions route through the help continuation via
 ; the status more bit, and the default help delivers a sentinel at EOF, the port back when

@@ -49,11 +49,11 @@
 ; primitives; the older names are gone.
 (: inc (+ 1) dec (+ -1) ;; FIXME pure code
  (:: a b) (pin macros a b) ;; FIXME needs a way better api
-   putc (fputc out) ;; FIXME rename to avoid f prefix
-   puts (fputs out) ;; FIXME rm f prefix
-   (putn n) (fputbn out n 10) ;; FIXME rm f prefix and make preferred base user configurable
-   putx (fputx out) ;; FIXME rm f prefix
-   (getc _) (fgetc in)) ;; FIXME rm f prefix
+   putc (put out) ;; FIXME rename to avoid f prefix
+   puts (say out) ;; FIXME rm f prefix
+   (putn n) (putbn out n 10) ;; FIXME rm f prefix and make preferred base user configurable
+   putx (print out) ;; FIXME rm f prefix
+   (getc _) (get in)) ;; FIXME rm f prefix
 ; the accessor aliases are plain globals too, so escaping works like (+)/'+ --
 ; ((->) t k d) peeps.
 (: <- pin -> peep)
@@ -197,8 +197,8 @@
  (pad _)
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (spin 6)))))))
  (page o) (snip (peek 4 o) 0 (peek 5 o))
- (slurp i) (: (rl i) (: c (fgetc i) (? (= c -1) 0 (link c (rl i)))) (string (rl i)))  ; (pre-opfix: no ! here)
- (show x) (: o (pad 0) _ (fputx o x) (page o)))
+ (slurp i) (: (rl i) (: c (get i) (? (= c -1) 0 (link c (rl i)))) (string (rl i)))  ; (pre-opfix: no ! here)
+ (show x) (: o (pad 0) _ (print o x) (page o)))
 ; help status readers. a global `help` function is called as (help s a b):
 ; s = the status word, two bits -- scare (1: something went wrong) and more
 ; (2: read control flow, more input wanted). more alone = incomplete; eof =

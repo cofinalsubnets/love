@@ -101,7 +101,7 @@ Two foundations, **decided before writing any socket nif:**
   substrate already exists (`ai_io_alloc` wraps any fd; the scheduler polls blocked
   fds; read/write free). Contained, ~1 session. But it builds *more* on the surface
   the stream redesign (see `crew/bao.md`) calls "POSIX-in-core gum."
-- **(B) ride the coinductive stream redesign** — replace `fgetc`/`ungetc`/`-1`/`key?`
+- **(B) ride the coinductive stream redesign** — replace `get`/`ungetc`/`-1`/`key?`
   with `(source fd)` (a stream hot: bytes under `cap`/`cup`/`!`, EOF = `()`, `read`
   a pure `stream → (datum . stream')`). A socket is then just another `source`/`sink`.
   Cleaner and unifies sip/fd/reader, but a multi-session rewrite before any socket
@@ -151,7 +151,7 @@ Makefile fold-in (`nettest` target, `hostnif_tests += boot/net.l`) is all landed
 - `host/net.c` — the four socket nifs `(connect host port)` / `(listen port)` /
   `(accept l)` / `(shutdown s how)`. Each mirrors `lvm_open`: make an fd →
   `ai_io_alloc(g, fd)` → heap port (close finalizer); read/write then free via
-  fgetc/fputc. Auto-globbed into `host_o`, registered with `AI_NIF`. Blocking
+  get/put. Auto-globbed into `host_o`, registered with `AI_NIF`. Blocking
   (one-shot); `how` is the POSIX SHUT_* fixnum (1 = write half-close).
 - `tools/aineko.l` — client (`aineko HOST PORT`) + server (`aineko -l PORT`), two
   pump loops. Carries a `#!/usr/bin/env -S ai -l` shebang and installs as

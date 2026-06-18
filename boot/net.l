@@ -9,16 +9,16 @@
 ;
 ; It runs a whole loopback in ONE process: a server task accepts and echoes a
 ; line, the main task connects as a client and checks the round trip. The two
-; tasks interleave through the cooperative scheduler -- fgetc on a not-ready fd
+; tasks interleave through the cooperative scheduler -- get on a not-ready fd
 ; yields, the scheduler poll()s the parked fd and wakes the ready task. The
 ; two-process integration gate is `make nettest` (test/net/loopback.sh).
 
 ; read a \n-terminated line off port p; the byte law ("" + byte appends one char)
-; rebuilds the text. EOF (fgetc -> -1) also ends the line.
-(: (rdline p) (: (go acc) (: ch (fgetc p) (? (= ch 10) acc (= ch -1) acc (go (acc + ch))))
+; rebuilds the text. EOF (get -> -1) also ends the line.
+(: (rdline p) (: (go acc) (: ch (get p) (? (= ch 10) acc (= ch -1) acc (go (acc + ch))))
                  (go "")))
 
-; --- listen / accept / connect / fgetc / fputs / shutdown over 127.0.0.1 ---
+; --- listen / accept / connect / get / say / shutdown over 127.0.0.1 ---
 (: port 7391
  l (listen port)
  _ (assert
@@ -27,14 +27,14 @@
  ; server task: accept one client, echo its line back, half-close, close.
  srv (spawn (\ _ (: c (accept l)
                     ln (rdline c)
-                    _ (fputs c (ln + "\n"))
+                    _ (say c (ln + "\n"))
                     _ (shutdown c 1)
                     _ (close c) 1)) 0)
  c (connect "127.0.0.1" port)
  _ (assert
     (lit? c)                              ; the client side is a heap port too
     (hot? c))
- _ (fputs c "neko\n")
+ _ (say c "neko\n")
  echo (rdline c)
  _ (assert
     (= echo "neko"))                      ; THE ROUND TRIP: what went out came back

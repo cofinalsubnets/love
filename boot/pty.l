@@ -66,9 +66,9 @@
 ; rides real tty fds, so it is verified manually, like aineko's `make nettest`.
 (: r (ptyrun (L "cat"))
  m (cup r)
- _ (fputc m 110) _ (fputc m 101) _ (fputc m 107) _ (fputc m 111) _ (fputc m 10)  ; "neko\n"
- _ (fflush m)
- a (fgetc m) b (fgetc m) c (fgetc m) d (fgetc m)    ; the first 4 bytes back off the master
+ _ (put m 110) _ (put m 101) _ (put m 107) _ (put m 111) _ (put m 10)  ; "neko\n"
+ _ (flush m)
+ a (get m) b (get m) c (get m) d (get m)    ; the first 4 bytes back off the master
  _ (assert (= a 110) (= b 101) (= c 107) (= d 111)) ; n e k o -- the round trip over the pty
  _ (kill (cap r) 9)
  _ (waitfor (cap r)))
@@ -81,9 +81,9 @@
 (: r (ptyrun (L "tr" "a-z" "A-Z"))
  m (cup r)
  _ (assert (nil? (ptyecho m 0)))                  ; echo OFF -> () ok
- _ (fputc m 104) _ (fputc m 105) _ (fputc m 10)  ; "hi\n"
- _ (fflush m)
- a (fgetc m) b (fgetc m)                          ; first bytes back are tr's OUTPUT
+ _ (put m 104) _ (put m 105) _ (put m 10)  ; "hi\n"
+ _ (flush m)
+ a (get m) b (get m)                          ; first bytes back are tr's OUTPUT
  _ (assert (= a 72) (= b 73))                     ; "HI" -- the "hi" echo is suppressed
  _ (kill (cap r) 9)
  _ (waitfor (cap r)))

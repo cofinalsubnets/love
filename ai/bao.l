@@ -53,7 +53,7 @@
                   (? (two? t) (link (cap s) (\ u (charms t)))   ; chars: lift, lazy tail
                      (nil? t) (link (cap s) (\ u ()))           ; the last chars cell
                      s))                                        ; a top tail: charms already
-      (hot? s) (: c (fgetc s)                                ; a port is the hot charms
+      (hot? s) (: c (get s)                                ; a port is the hot charms
                      (? (= c -1) () (link c (\ u (charms s)))))
       ())
    (charms->chars s)
@@ -262,7 +262,7 @@
         _ (? (< 0 ld) (do (putc 27) (putc 91) (putn ld) (putc 65)) 0)
         _ (putc 13)
         _ (? (< 0 col) (do (putc 27) (putc 91) (putn col) (putc 67)) 0)
-        (fflush out))
+        (flush out))
 
    ps1 "> "
 
@@ -409,9 +409,9 @@
    ; boot/pty.l).
 
    ; pump bytes from port `src` to port `dst`, one at a time, until src hits EOF
-   ; (fgetc -> -1); fflush after each byte keeps the far side prompt. (Same shape as
+   ; (get -> -1); flush after each byte keeps the far side prompt. (Same shape as
    ; aineko's pump -- prel stays socket/pty-free, so each app carries its own.)
-   (pump src dst) (: ch (fgetc src) (? (= ch -1) 0 (: _ (fputc dst ch) _ (fflush dst) (pump src dst))))
+   (pump src dst) (: ch (get src) (? (= ch -1) 0 (: _ (put dst ch) _ (flush dst) (pump src dst))))
 
    ; poll a non-blocking (reap pid) to its exited PAIR. the pair is told from
    ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
@@ -435,10 +435,10 @@
      (: r ((ev 'ptyrun) argv)
         (? (two? r)
            (: pid (cap r) m (cup r)
-              up (spawn (\ _ (: _ (pump in m) (fputc m 4))) 0)   ; stdin -> child; VEOF on user EOF
+              up (spawn (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF
               _ (pump m out)                                      ; child -> stdout; ends when the child dies
               _ (? (done? up) (wait up) (hush up))                ; join the input pump through the one death
-              _ (fflush out)
+              _ (flush out)
               _ (close m)
               (waitfor pid))                                      ; reap the child
            r))
@@ -452,22 +452,22 @@
    ; the logic), but with PORT-PARAMETERIZED event decode so the input is any
    ; port: `in` for the tty, a (sip ..) for tests.
    ;
-   ; bev/besc/besc1 are edev/edesc/edesc1, reading (fgetc ip) instead of the
+   ; bev/besc/besc1 are edev/edesc/edesc1, reading (get ip) instead of the
    ; global getc -- event codes are identical (printable >0; -1 left, -2 right,
    ; -3 bsp, -4 del, -5 home, -6 end, -7 quit/EOF; 10 = enter; up/down/^C ignored
    ; by a single-line reader).
    (besc1 ip c) (? (= c 126) -5
-                   (= c 59) (: _ (fgetc ip) d (fgetc ip)
+                   (= c 59) (: _ (get ip) d (get ip)
                               (? (= d 72) -5 (= d 70) -6 (= d 65) -8 (= d 66) -9
                                  (= d 67) -2 (= d 68) -1 0)))
-   (besc ip) (? !(= 91 (fgetc ip)) 0
-     (: c (fgetc ip)
+   (besc ip) (? !(= 91 (get ip)) 0
+     (: c (get ip)
         (? (= c 68) -1 (= c 67) -2 (= c 65) -8 (= c 66) -9 (= c 72) -5 (= c 70) -6
-           (= c 49) (besc1 ip (fgetc ip))
-           (= c 55) (: _ (fgetc ip) -5)
-           (|| (= c 52) (= c 56)) (: _ (fgetc ip) -6)
-           (= c 51) (: _ (fgetc ip) -4) 0)))
-   (bev ip) (: c (fgetc ip)
+           (= c 49) (besc1 ip (get ip))
+           (= c 55) (: _ (get ip) -5)
+           (|| (= c 52) (= c 56)) (: _ (get ip) -6)
+           (= c 51) (: _ (get ip) -4) 0)))
+   (bev ip) (: c (get ip)
      (? (|| (= c -1) (= c 4)) -7
         (= c 3) -12
         (|| (= c 13) (= c 10)) 10

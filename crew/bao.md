@@ -178,7 +178,7 @@ shell) and the pty-wrapper/debugger (wrapping *other* programs). Same bao, two r
 > the delete/keep ledger, the staged migration, and the minimal-fix fallback. This
 > section is the summary.
 
-The current `fgetc`/`fungetc`/`feof`/`key?` port surface is **POSIX wrongly
+The current `get`/`unget`/`end?`/`key?` port surface is **POSIX wrongly
 embedded in the core.** Four leaks: a mutable `ungetc_buf` in every port; the `-1`
 EOF sentinel (un-ai — absence is the zero point, and `-1` collides with byte 0,
 which already nets nothing); `next_wait_fd` set *inside* `lvm_fgetc` (the generic

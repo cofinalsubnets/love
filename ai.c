@@ -673,10 +673,10 @@ lvm_t lvm_fault;
  _(nif_sleep, "sleep", s1(lvm_sleep)) _(nif_donep, "done?", s1(lvm_donep)) \
  _(nif_hush, "hush", s1(lvm_hush)) \
  _(nif_key, "key?", s1(lvm_key)) \
- _(nif_fputbn, "fputbn", s3(lvm_fputbn))\
- _(nif_fputx, "fputx", s2(lvm_fputx))\
- _(nif_fgetc, "fgetc", s1(lvm_fgetc)) _(nif_fungetc, "fungetc", s2(lvm_fungetc)) _(nif_feof, "feof", s1(lvm_feof))\
- _(nif_fputc, "fputc", s2(lvm_fputc)) _(nif_fputs, "fputs", s2(lvm_fputs))  _(nif_fflush, "fflush", s1(lvm_fflush))\
+ _(nif_fputbn, "putbn", s3(lvm_fputbn))\
+ _(nif_fputx, "print", s2(lvm_fputx))\
+ _(nif_fgetc, "get", s1(lvm_fgetc)) _(nif_fungetc, "unget", s2(lvm_fungetc)) _(nif_feof, "end?", s1(lvm_feof))\
+ _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
  _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next)) NIF_FAULT(_)

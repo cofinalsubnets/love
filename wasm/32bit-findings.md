@@ -41,10 +41,10 @@ is `w64 = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
 
 - **`io.l`'s real-file path OOMed on the wasm host.** `open`/`close` are
   frontend nifs the wasm host doesn't install, so on wasm `open` is a missing
-  name that resolves to a non-port; the `slurp` loop then called `(fgetc <non-
+  name that resolves to a non-port; the `slurp` loop then called `(get <non-
   port>)`, which *echoed its argument* instead of signalling EOF, so the loop
   spun and grew a list until it threw "memory access out of bounds". Fixed at
-  the root: `fgetc` on a non-port now returns `-1` (EOF) -- a read of an empty
+  the root: `get` on a non-port now returns `-1` (EOF) -- a read of an empty
   stream -- so a read-until-`-1` loop is bounded on every target (`io.l` pins
   this directly; the real-file roundtrip stays gated, since wasm has no FS).
 

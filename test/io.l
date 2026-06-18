@@ -1,5 +1,5 @@
-; Port nifs that take an explicit port: fgetc, fungetc, feof, fputc, fputs,
-; fflush. Sibling forms of the static-port (getc/putc/key?) nifs that
+; Port nifs that take an explicit port: get, unget, end?, put, say,
+; flush. Sibling forms of the static-port (getc/putc/key?) nifs that
 ; dispatch via f->io. open/close round out the surface for heap-allocated
 ; stream ports backed by real OS file descriptors.
 
@@ -12,41 +12,41 @@
   (< 0 (sat (show in)))
   (< 0 (sat (show out)))
 
-  ; fungetc + fgetc roundtrip on stdin (within a single top-level form,
+  ; unget + get roundtrip on stdin (within a single top-level form,
   ; otherwise the REPL parser would consume the pushed-back byte itself).
-  (: (rt c) (: _ (fungetc in c) (fgetc in))
+  (: (rt c) (: _ (unget in c) (get in))
    (do (= 65  (rt 65))
       (= 32  (rt 32))
       (= 255 (rt 255))))
 
-  ; fungetc returns the byte it pushed.
-  (: _ (fgetc in)   ; pull and discard whatever's at the head
-   (= 99 (fungetc in 99)))
+  ; unget returns the byte it pushed.
+  (: _ (get in)   ; pull and discard whatever's at the head
+   (= 99 (unget in 99)))
   ; ...and the pushed byte is then the next read.
-  (= 99 (fgetc in))
+  (= 99 (get in))
 
-  ; A non-port reads as an already-empty stream: (fgetc x) is -1 (EOF), not the
+  ; A non-port reads as an already-empty stream: (get x) is -1 (EOF), not the
   ; echoed x, so a read-until-(-1) loop over an absent or misused port terminates
   ; instead of spinning on a value that never equals -1. This is what keeps the
   ; file roundtrip below bounded on a host with no filesystem, where `open` is a
   ; missing name that resolves to a non-port.
-  (= -1 (fgetc 42))
-  (= -1 (fgetc "notaport"))
+  (= -1 (get 42))
+  (= -1 (get "notaport"))
 
-  ; File-I/O roundtrip: write a string to /tmp via fputs, read it back
-  ; byte-by-byte via fgetc, rebuild as a string with str, and compare.
+  ; File-I/O roundtrip: write a string to /tmp via say, read it back
+  ; byte-by-byte via get, rebuild as a string with str, and compare.
   ; The payload is (show (clock 0)) so the bytes vary every run --
   ; a literal string would let a stale file from a previous run pass.
   ; the wasm shim has no filesystem (fd ports are stubbed to EOF/out-buffer), so
   ; real-file I/O can't round-trip there; gated to the hosted builds. The read
-  ; loop is bounded everywhere now (fgetc on a non-port is EOF), so the stubbed
+  ; loop is bounded everywhere now (get on a non-port is EOF), so the stubbed
   ; path no longer OOMs. In-memory ports (sip, below) still run on wasm.
   (? w64 (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
-     _ (fputs wp txt)
+     _ (say wp txt)
      _ (close wp)
      rp (open "/tmp/l-io-test" "r")
-     (slurp acc) (: c (fgetc rp) (? (= c -1) (rev acc) (slurp (link c acc))))
+     (slurp acc) (: c (get rp) (? (= c -1) (rev acc) (slurp (link c acc))))
      rd (string (slurp 0))
      _ (close rp)
      (= txt rd)) 1)

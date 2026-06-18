@@ -18,7 +18,7 @@
    _ (pin pass 0 0) _ (pin fail 0 0)
    (ok nm c) (? c (pin pass 0 (+ 1 (peep pass 0 0)))
                 (: _ (pin fail 0 (+ 1 (peep fail 0 0)))
-                    _ (fputs out (+ "FAIL " nm)) (fputc out 10)))
+                    _ (say out (+ "FAIL " nm)) (put out 10)))
 
    ; join a list of lines into Makefile text (each line gets a trailing newline).
    (mk l) (? (two? l) (+ (cap l) (+ "\n" (mk (cup l)))) "")
@@ -26,7 +26,7 @@
    (has s sub) ((: (g i) (? (> (+ i (tally sub)) (tally s)) 0
                             (? (= sub (snip s i (+ i (tally sub)))) 1 (g (+ 1 i))))) 0)
 
-   (write-file path content) (: q (open path "w") _ (fputs q content) (close q))
+   (write-file path content) (: q (open path "w") _ (say q content) (close q))
    (sh cmd) (run (L "sh" "-c" cmd))
    ; run cook on a fixture Makefile, return its captured stdout.
    (run-cook src tgt)

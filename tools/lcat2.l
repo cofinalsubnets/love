@@ -143,14 +143,14 @@
                   1)
    (redundant? a b) (? (&& (opb? a) (dstart? b)) 0
                        (= (nforms (string (L a b))) (nforms (string (L a 32 b)))))
-   (eb c) (? (= c 10) (fputs out "\\n")
-              (| (= c 92) (= c 34)) (: _ (fputc out 92) (fputc out c))
-              (fputc out c)))
+   (eb c) (? (= c 10) (say out "\\n")
+              (| (= c 92) (= c 34)) (: _ (put out 92) (put out c))
+              (put out c)))
 
 (: (readforms p e) (: r (read p e) (? (= e r) 0 (link r (readforms p e))))
    (joinforms fs) (? (atom? fs) "" (atom? (cup fs)) (show (rn (cap fs) 0 0 1 rn))
        (+ (+ (show (rn (cap fs) 0 0 1 rn)) " ") (joinforms (cup fs))))
-   (emit acc) (: _ (fputc out 34)
+   (emit acc) (: _ (put out 34)
        _ ((: (g i pc instr) (? (< i (tally acc))
             (: c (peep acc i 0) (? instr
                (? (= c 92) (: _ (eb c) _ (eb (peep acc (+ i 1) 0)) (g (+ i 2) 0 1))
@@ -159,13 +159,13 @@
                   (? (redundant? pc (peep acc (+ i 1) 0)) (g (+ i 1) pc 0)
                      (: _ (eb c) (g (+ i 1) c 0)))
                   (: _ (eb c) (g (+ i 1) c (= c 34)))))) 0)) 0 0 0)
-       (fputc out 34))
+       (put out 34))
    p (open (cap (cup argv)) "r")
-   _ (? p 0 (: _ (fputs err "lcat2: cannot open input") (exit 1)))
+   _ (? p 0 (: _ (say err "lcat2: cannot open input") (exit 1)))
    e (nom 0)
    forms (readforms p e)
    _ (map (\ m (pin cnt m (+ 1 (peep cnt m 0)))) (keys (peep bag 0 0)))  ; macro heads bypass scoping
    _ (map collect forms)                                        ; count symbols + taint qq
    acc (joinforms forms)
    _ (emit acc)
-   (fputc out 10))
+   (put out 10))

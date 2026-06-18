@@ -97,7 +97,7 @@
                          (link (L 'p (joinsp (cap sp))) (parse (cup sp)))))))
 
   ; --- emit ---
-  (o s) (fputs out s)
+  (o s) (say out s)
   (emit-toc bs) (? (two? bs)
                    (: b (cap bs)
                       (? (= (cap b) 'h2)

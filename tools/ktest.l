@@ -23,5 +23,5 @@
    out  (cup r)
    ok   (&& (has? out "tests pass") (! (has? out "failed:")))
    (? ok (: _ (puts (lineof out "tests pass")) (putc 10))
-         (: _ (fputs err "test_kernel: FAILED") _ (fputc err 10)
-            _ (fputs err out) _ (fputc err 10) (exit 1))))
+         (: _ (say err "test_kernel: FAILED") _ (put err 10)
+            _ (say err out) _ (put err 10) (exit 1))))

@@ -26,9 +26,9 @@
 (: _
  (: (rdev q) ((: (go e q) (: r (read q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
     (load1 p) (: q (open p "r")
-       (? q (rdev q) (: _ (fputs err (+ "ai: cannot open " p)) (exit 1))))
+       (? q (rdev q) (: _ (say err (+ "ai: cannot open " p)) (exit 1))))
     (eval1 s) (rdev (sip (map s (jot (tally s)))))   ; a string is a fn over its bytes -> a charlist port
-    (bye s) (: _ (puts s) _ (putc 10) _ (fflush out) (exit 0))   ; print a line to out, flush, exit 0
+    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (exit 0))   ; print a line to out, flush, exit 0
     (version _) (bye (+ "ai " ai-version))                       ; _ arg: ai has no nullary calls
     (usage _) (bye (+ "usage: ai [-l FILE] [-e EXPR] [-v] [-h] [--] [FILE ...]\n"
                (+ "  -l, --load FILE   preload FILE (read-eval) before the program\n"
@@ -37,7 +37,7 @@
                (+ "  -h, --help        print this help and exit\n"
                (+ "  --                end of options; the rest are files\n"
                   "with no program (no -e, no FILE), read-eval stdin to EOF.")))))))
-    (need h t) (? (two? t) 0 (: _ (fputs err (+ "ai: " (+ h " needs an argument"))) (exit 2)))
+    (need h t) (? (two? t) 0 (: _ (say err (+ "ai: " (+ h " needs an argument"))) (exit 2)))
     (pre a) (? (two? a)                              ; -> (kind . rest): 'eval code.args / 'file prog.args / 'stdin
      (: h (cap a) t (cup a) (?
       (| (= h "-l") (= h "--load"))    (: _ (need h t) _ (load1 (cap t)) (pre (cup t)))

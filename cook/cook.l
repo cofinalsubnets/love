@@ -124,8 +124,8 @@
                age)
             ; no card: a source leaf. it must already exist on disk.
             (: ta (date item)
-               _ (? ta 0 (: _ (fputs err (+ "cook: no recipe to make " (show item)))
-                            _ (fputc err 10) (exit 1)))
+               _ (? ta 0 (: _ (say err (+ "cook: no recipe to make " (show item)))
+                            _ (put err 10) (exit 1)))
                _ (pin done item ta)
                ta))))
 
@@ -148,9 +148,9 @@
    ; past it is the error path. exec is terminal by nature (the repl never returns),
    ; so cook's "cooked X" summary is correctly never reached.
    (do-exec argv)
-   (: _ (fflush out)
+   (: _ (flush out)
        _ (exec argv)
-       _ (fputs err (+ "cook: cannot exec " (join " " argv))) _ (fputc err 10) (exit 1))
+       _ (say err (+ "cook: cannot exec " (join " " argv))) _ (put err 10) (exit 1))
 
    ; run one argv: echo it, run it, echo its captured stdout, abort on failure.
    (shell step)
@@ -159,10 +159,10 @@
        (? (two? r)
           (: _ (puts (cup r))
              (? (= 0 (cap r)) 0
-                (: _ (fputs err (+ "cook: command failed (exit " (+ (show (cap r)) ")")))
-                   _ (fputc err 10) (exit 1))))
-          (: _ (fputs err (+ "cook: cannot run " (join " " step)))
-             _ (fputc err 10) (exit 1))))
+                (: _ (say err (+ "cook: command failed (exit " (+ (show (cap r)) ")")))
+                   _ (put err 10) (exit 1))))
+          (: _ (say err (+ "cook: cannot run " (join " " step)))
+             _ (put err 10) (exit 1))))
 
    ; run one make recipe line (via sh -c), make-style: echo the RAW command
    ; (the expanded line, not the `sh -c` wrapper) unless @ silent, print its
@@ -174,14 +174,14 @@
        ec (? (two? r) (cap r) -1)
        _ (? (two? r) (puts (cup r)) 0)
        (? (= 0 ec) 0
-          (! (two? r)) (: _ (fputs err (+ "cook: cannot run " cmd)) _ (fputc err 10) (exit 1))
-          ignore (: _ (fputs err (+ "cook: " (+ cmd (+ " (exit " (+ (show ec) ", ignored)"))))) (fputc err 10))
-          (: _ (fputs err (+ "cook: command failed (exit " (+ (show ec) ")"))) _ (fputc err 10) (exit 1)))))
+          (! (two? r)) (: _ (say err (+ "cook: cannot run " cmd)) _ (put err 10) (exit 1))
+          ignore (: _ (say err (+ "cook: " (+ cmd (+ " (exit " (+ (show ec) ", ignored)"))))) (put err 10))
+          (: _ (say err (+ "cook: command failed (exit " (+ (show ec) ")"))) _ (put err 10) (exit 1)))))
 
 ; --- the entry points ----------------------------------------------------------
 
 (: (cook item)                                ; prep item up to date and report
-   (? (! item) (: _ (fputs err "cook: nothing to cook") _ (fputc err 10) (exit 1))
+   (? (! item) (: _ (say err "cook: nothing to cook") _ (put err 10) (exit 1))
       (: shipped (tablet 0)
          _ (prep item (tablet 0) shipped)
          ; $ of a map is its key count: how many items actually ran a recipe.
@@ -577,7 +577,7 @@
     cls 0 0 0)
 
    ; read a file whole (for `include`), then split it into classified lines.
-   (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (fputs err (+ "cook: cannot read " path)) _ (fputc err 10) (exit 1))))
+   (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (say err (+ "cook: cannot read " path)) _ (put err 10) (exit 1))))
    (file-lines ip) (map classify (lines (uncont (slurp-of ip))))
 
    ; seed make's builtin defaults (overridable by the Makefile).
@@ -710,7 +710,7 @@
    ; for back-compat with `cook <Makefile> [recipe]`, when no -f is given the first
    ; positional word that names an existing file is taken as the build file and the
    ; rest are recipes; with -f, every positional word is a recipe.
-   (bye s) (: _ (puts s) _ (putc 10) _ (fflush out) (exit 0))
+   (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (exit 0))
    (version _) (bye (+ "cook (ai " (+ ai-version ")")))
    (usage _) (bye (+ "usage: cook [-f FILE] [--emit] [-v] [-h] [RECIPE ...]\n"
               (+ "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
@@ -719,7 +719,7 @@
               (+ "  -h, --help        print this help and exit\n"
               (+ "  RECIPE ...        the items to build (default: the first recipe declared)\n"
                  "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary ai source.")))))))
-   (need-arg h r) (? (two? r) 0 (: _ (fputs err (+ "cook: " (+ h " needs an argument"))) _ (fputc err 10) (exit 2)))
+   (need-arg h r) (? (two? r) 0 (: _ (say err (+ "cook: " (+ h " needs an argument"))) _ (put err 10) (exit 2)))
    (parse-args ws)             ; -> a tablet: 'file, 'emit, 'help, 'ver, 'pos (the recipe words, in order)
    ((: (loop ws opt) (? (! (two? ws)) opt
        (: w (cap ws) r (cup ws)
@@ -742,12 +742,12 @@
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
-      _ (? (&& xf (! (exists? xf))) (: _ (fputs err (+ "cook: cannot open " xf)) _ (fputc err 10) (exit 1)) 0)
+      _ (? (&& xf (! (exists? xf))) (: _ (say err (+ "cook: cannot open " xf)) _ (put err 10) (exit 1)) 0)
       posfile (? (&& (! xf) (&& (two? pos) (exists? (cap pos)))) (cap pos) 0)  ; a positional build file (back-compat)
       file (? xf xf (? posfile posfile (discover 0)))
       _ (pin tickets 0 (? posfile (cup pos) pos))                 ; the recipe words; the positional file is not a recipe
       (? emit?
-         (: _ (? file 0 (: _ (fputs err "cook: --emit needs a Makefile") _ (fputc err 10) (exit 1)))
+         (: _ (? file 0 (: _ (say err "cook: --emit needs a Makefile") _ (put err 10) (exit 1)))
              q (open file "r")
              _ (pin emitp 0 1)
              _ (register-makefile (slurp q))
@@ -760,5 +760,5 @@
                  ((: (g e) (: r (read q e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (mint 0)))
             (exit 0))
          (two? pos)
-         (: _ (fputs err "cook: no Cards.l, Cookfile or Makefile found") _ (fputc err 10) (exit 1))
+         (: _ (say err "cook: no Cards.l, Cookfile or Makefile found") _ (put err 10) (exit 1))
          0)))

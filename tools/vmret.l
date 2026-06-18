@@ -14,8 +14,8 @@
 ;
 ; This needs the host-only `run`/`getenv` nifs (subprocess + environment).
 
-(: (die m)   (: _ (fputs err "vmret: ") _ (fputs err m) _ (fputs err "\n") (exit 2))
-   (usage 0) (: _ (fputs out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n") (exit 0)))
+(: (die m)   (: _ (say err "vmret: ") _ (say err m) _ (say err "\n") (exit 2))
+   (usage 0) (: _ (say out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n") (exit 0)))
 
 ; --- character classes + cursors over a line (string s) --------------
 ; ws = Python \s within a line (space tab cr ff vtab); hex = [0-9a-fA-F].
@@ -226,9 +226,9 @@
    known?   (|| x86? (= mach 183))
    ret?     (? x86? retx? (? (= mach 183) reta? retx?))
    _        (? known? 0
-               (: _ (fputs err "vmret: note: ") _ (fputs err base)
-                  _ (fputs err " is an unrecognized arch (0x") _ (fputbn err mach 16)
-                  _ (fputs err "); falling back to the generic `ret` matcher\n") 0))
+               (: _ (say err "vmret: note: ") _ (say err base)
+                  _ (say err " is an unrecognized arch (0x") _ (putbn err mach 16)
+                  _ (say err "); falling back to the generic `ret` matcher\n") 0))
    ; objdump preference: GNU objdump for x86 (host-arch), llvm-objdump for the
    ; cross arches; an explicit --objdump or $OBJDUMP wins. execvp does the PATH
    ; search, so a candidate that isn't found just spawn-fails -> next one.
@@ -244,19 +244,19 @@
    total    (cup scanned)
    ; --- the report (byte-for-byte the same shape as vmret.py) ---
    (? (= 0 total)
-      (: _ (fputs err "vmret: no ") _ (fputs err prefix) _ (fputs err "* functions found in ")
-         _ (fputs err base) _ (fputs err " (stripped binary?)\n") (exit 2))
+      (: _ (say err "vmret: no ") _ (say err prefix) _ (say err "* functions found in ")
+         _ (say err base) _ (say err " (stripped binary?)\n") (exit 2))
    (? (two? flagged)
       (: k      (llen flagged)
          width  (maxlen flagged)
          sorted (esort flagged)
-         _ (fputs out base) _ (fputs out ": ") _ (fputbn out k 10) _ (fputs out " of ")
-         _ (fputbn out total 10) _ (fputs out " ") _ (fputs out prefix)
-         _ (fputs out "* functions contain a ret (TCO suspects):\n")
+         _ (say out base) _ (say out ": ") _ (putbn out k 10) _ (say out " of ")
+         _ (putbn out total 10) _ (say out " ") _ (say out prefix)
+         _ (say out "* functions contain a ret (TCO suspects):\n")
          _ (each sorted (\ e
               (: name (cap e) rets (cup e)
-                 _ (fputs out "  ") _ (fputs out name) _ (fputs out (spaces (- width (tally name))))
-                 _ (fputs out "  ret @ ") _ (fputs out (join-rets rets)) _ (fputc out 10) 0)))
+                 _ (say out "  ") _ (say out name) _ (say out (spaces (- width (tally name))))
+                 _ (say out "  ret @ ") _ (say out (join-rets rets)) _ (put out 10) 0)))
          (exit 1))
-      (: _ (fputs out base) _ (fputs out ": all ") _ (fputbn out total 10) _ (fputs out " ")
-         _ (fputs out prefix) _ (fputs out "* functions are ret-free\n") (exit 0)))))
+      (: _ (say out base) _ (say out ": all ") _ (putbn out total 10) _ (say out " ")
+         _ (say out prefix) _ (say out "* functions are ret-free\n") (exit 0)))))
