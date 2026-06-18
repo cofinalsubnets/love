@@ -53,7 +53,7 @@
  !(star? "x") !(star? 'a) !(star? '(1 2))                    ; text/symbol/list are not stars -- they net to something else
  (? (fix? 5) (star? 5) 1)                                  ; a CHARM is a star, by spec (net = self)
  (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (star? 5) 1)   ; a CHARM (charm?) is the word-sized star: a fixnum, and every charm is a star
- (set? @(1 2 3)) (set? @("a" "b"))                      ; a SET is an array of ANY element kind (numbers or objects)
+ (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a SET is an array of ANY element kind (numbers or objects)
  (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a GALAXY is a NUMERIC set (a set of stars); a set of strings is not
  (galaxy? (array '(2) (200 2) (200 2)))                    ; a set of BIGS is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
  !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a set
@@ -63,7 +63,7 @@
 ; derived constellation? whole? atom?; lit? = presence (any heap value); hot? names the cask/port zoo.
 (assert
  (fix? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tab? #(1 2))
- (big? (100 2)) ((? wint full? big?) (62 2)) (gem? 1.5) (twin? i) (set? @(1 2 3))
+ (big? (100 2)) ((? wint full? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
  !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots

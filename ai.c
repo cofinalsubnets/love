@@ -663,7 +663,7 @@ lvm_t lvm_fault;
  _(nif_amax, "amax", s1(lvm_amax)) _(nif_amin, "amin", s1(lvm_amin))\
  _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
  _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "big?", s1(lvm_bigp)) _(nif_widep, "full?", s1(lvm_widep))\
- _(nif_setp, "set?", s1(lvm_setp)) _(nif_intf, "int", s1(lvm_intf))\
+ _(nif_setp, "tray?", s1(lvm_setp)) _(nif_intf, "int", s1(lvm_intf))\
  _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_tabp, "tab?", s1(lvm_tabp)) _(nif_fixp, "fix?", s1(lvm_fixp))\
  _(nif_lamp, "lit?", s1(lvm_lamp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
  _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\

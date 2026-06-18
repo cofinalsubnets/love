@@ -99,7 +99,7 @@
    ; a NEGATIVE integer giving the reciprocal power (so (-1 x) == (/ 1 x) and
    ; (sqrt x) == ((/ 1 2) x)); otherwise power, which carries a complex lane
    ; (w^z = exp(z Log w)) and a real lane.
-   (powg x n) (? (set? n) (power x n)
+   (powg x n) (? (tray? n) (power x n)
                  (whole? n) (: m (? (< n 0) (- 0 n) n)
                              (? (apover m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
@@ -137,11 +137,11 @@
 ; cells, a list the nets of its spine, and everything else is non-negative
 ; so its net IS its sat. prod is the product twin; neg/reciprocal/frac the
 ; dyadics turned inward; bit the truth bit (the Iverson bracket, !!).
-(: (net x) (? (set? x) (asum x)
+(: (net x) (? (tray? x) (asum x)
               (constellation? x) x
               (two? x) (foldl (\ a e (+ a (net e))) 0 x)
               (sat x))
-   (prod x) (? (set? x) (aprod x)
+   (prod x) (? (tray? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
    neg (- 0)
@@ -159,7 +159,7 @@
    (star? x) (id? x (net x))
    ; a CHARM is the word-sized star -- a fixnum (the lisp predicate; oddp C-side).
    (charm? x) (fix? x)
-   (galaxy? x) (? (set? x) (? (< (atype x) Top) 1 (star? (peep x 0 0))) 0))
+   (galaxy? x) (? (tray? x) (? (< (atype x) Top) 1 (star? (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
@@ -440,11 +440,11 @@
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
 (: (rng-get _) (: st (peep bag 'rng-state 0)
-                  (? (set? st) st (: f (rng-seed (clock 0)) _ (pin bag 'rng-state f) f)))
+                  (? (tray? st) st (: f (rng-seed (clock 0)) _ (pin bag 'rng-state f) f)))
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (set? st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
+   (rng-set st) (? (&& (tray? st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
                    (: _ (pin bag 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin bag 'rng-state (cup r))
