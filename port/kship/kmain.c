@@ -421,6 +421,13 @@ static lvm(lvm_fault) {
   Ip += 1;
   return Continue(); }
 
+// (net x) -- run the polled virtio-net UDP echo server (net.c). Blocks forever
+// (hlt between polls), so the post-call statements are unreachable.
+static lvm(lvm_net) {
+  net_serve();
+  Ip += 1;
+  return Continue(); }
+
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
 static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; return Continue(); }
@@ -433,6 +440,7 @@ static union u
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
+  nif_net[] = {{lvm_net}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
 #endif
@@ -480,7 +488,8 @@ static struct ai_def defs[] = {
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
 #endif
-  {"color", (intptr_t) nif_color} };
+  {"color", (intptr_t) nif_color},
+  {"netserve", (intptr_t) nif_net} };   // `net` is taken (the prel content measure)
 
 #ifdef K_TEST
 // The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.l
@@ -530,6 +539,7 @@ void kmain(void) {
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {
   if (fbinit() && cbinit()) palette_init();
+  net_init();                          // bring up the NIC (no-op if absent)
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
 #ifdef K_TEST
   // bind the baked corpus to the global `tests`; below it is read form-by-form

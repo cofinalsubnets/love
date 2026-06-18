@@ -17,6 +17,21 @@ void
 #include <stdint.h>
 #include <stdbool.h>
 
+// khhdm -- the higher-half direct-map offset (physical P is reachable at
+// khhdm + P). Defined in kmain.c; the virtio-net driver reads it to turn heap
+// pointers into the guest-physical DMA addresses the device's rings need
+// (phys = virt - khhdm). 0 means identity-mapped.
+extern uintptr_t khhdm;
+
+// net.c (port/kship/<a>/): the virtio-net driver. net_init brings the NIC up
+// (PCI enum -> virtqueues -> DRIVER_OK); a no-op when no device is present.
+void net_init(void);
+
+// net_serve -- the polled UDP echo server (the `netserve` nif body; `net` is the
+// prel content measure): answer ARP for 10.0.2.15 and echo UDP datagrams back.
+// Blocks (hlt between polls).
+void net_serve(void);
+
 #define k_boot_ram_max 64
 
 struct k_boot {

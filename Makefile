@@ -322,7 +322,7 @@ kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
 kldflags := -static -nostdlib --gc-sections -T $(R)/port/kship/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
-  -I. -I$(R)/out/host -Iout/lib -I$(R)/font -I$(R) \
+  -I. -I$(R)/out/host -Iout/lib -I$(R)/font -I$(R) -I$(R)/port/kship \
   -Ilibc \
   -isystem c \
   $(kcppflags) \
