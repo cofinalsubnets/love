@@ -34,16 +34,16 @@
         (= 'gotcha (scare 'any 'thing)))            ; the deliberate scare resumes the same way
 
 ; uninstall; the raw default is back
-(: help 0)                       ; uninstall: a non-lamp value defers to the raw default
+(: help 0)                       ; uninstall: a non-lit? value defers to the raw default
 (assert !help (= 'eof (read (sip 0) 'eof))
         (: p (sip '(40)) (= p (read p 99))))
 
-; help is present by its net, like everything: "" is a lamp netting nothing,
+; help is present by its net, like everything: "" is a lit? netting nothing,
 ; so it is no help -- the missing read stays 0 and the read protocol stays
 ; raw. the koan's help (\ s a b 1) is =-equal to 0 yet a top netting 1:
 ; installed, and every scare answers 1.
 (: help "")
-(assert !help (idp (:) one-nothing-unpinned) (= 'eof (read (sip 0) 'eof)))
+(assert !help (id? (:) one-nothing-unpinned) (= 'eof (read (sip 0) 'eof)))
 (: help (\ s a b 1))
 (assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))
 (: help 0)
@@ -55,5 +55,5 @@
 ; shell-help is welp WITH A FACE (it prints `;; a b` first, then welps).
 (assert (= 'port (welp 2 'port 'sent))         ; more -> the port back
         (= 'sent (welp 3 'port 'sent))         ; eof  -> the sentinel
-        (idp (:) (welp 1 'x 'y))               ; a bare scare -> the zero point
+        (id? (:) (welp 1 'x 'y))               ; a bare scare -> the zero point
         !(welp 1 'x 'y))                       ; ... which nets nothing (false)

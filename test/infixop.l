@@ -6,7 +6,7 @@
 ; factors to ((+ 1 2)) -- and evaluates via (f)==f. the factoring happens at
 ; COMPILE time (opfix); reading is structural.
 (: in-tbl operators)
-(assert (tabp in-tbl) (2 = (in-tbl '+)) (2 = (in-tbl '<=)) (3 = (in-tbl '?)))
+(assert (tab? in-tbl) (2 = (in-tbl '+)) (2 = (in-tbl '<=)) (3 = (in-tbl '?)))
 
 (assert
  ; basics, every seeded operator
@@ -34,7 +34,7 @@
  ; operators as values and quoted operators are untouched
  (12 = (foldl (+) 0 '(3 4 5)))
  ('(1 2 3) = (sort '(3 1 2)))
- (nomp '+) (7 = ((+) 3 4))
+ (nom? '+) (7 = ((+) 3 4))
 
  ; composes with sigils at one ($ folds eagerly -- binds tightest -- then + steals it)
  (197 = ($"ab" + 2))
@@ -54,7 +54,7 @@
 (pin in-tbl '** 2)
 (assert (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2)))  ; right-assoc: 2^(3^2)
 (pull in-tbl '** 0)
-(assert !(in-tbl '**) (nomp '**))
+(assert !(in-tbl '**) (nom? '**))
 
 ; the accessor aliases: <- is (pin . 3), -> is (peep . 3) -- collection-first,
 ; (t <- k v) pins (returns the collection, so it chains), (t -> k d) peeps.
@@ -65,5 +65,5 @@
  (65 = (: b (buf 1) _ (b <- 0 65) (b -> 0 0)))  ; bufs take the same accessors
  ('pin = (cap (peep operators '<- 0)))  ; the table entries are (name . arity) aliases
  (3 = (cup (peep operators '-> 0)))
- (nomp '<-) (30 = ((->) #(3 30) 3 0))            ; escaped, -> is still peep-as-a-value
- (idp pin (<-)) (idp peep (->)) (1 = ((%) 5 2)))  ; every alias is a bound global
+ (nom? '<-) (30 = ((->) #(3 30) 3 0))            ; escaped, -> is still peep-as-a-value
+ (id? pin (<-)) (id? peep (->)) (1 = ((%) 5 2)))  ; every alias is a bound global

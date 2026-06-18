@@ -48,16 +48,16 @@
         (= d "stat") (+ "replies=" (+ (show (replies st)) (+ " beats=" (show (beats st)))))  ; + is binary: nest right
         (show (ev (read (sip (bytes d)) 0))))         ; else: run d AS AI, show the result
    (policy st ev)
-     (? (idp (ev-kind ev) 'net)                     ; a packet: answer by its content
+     (? (id? (ev-kind ev) 'net)                     ; a packet: answer by its content
           (link (with (+ 1 (replies st)) (beats st)) (link 'send (answer st (ev-load ev))))
-        (idp (ev-kind ev) 'tick)                     ; the heartbeat clock fired
+        (id? (ev-kind ev) 'tick)                     ; the heartbeat clock fired
           (link (with (replies st) (+ 1 (beats st))) (link 'send "<3"))
         (scare 'bad-event (ev-kind ev)))             ; anything else: raise
 
 ; --- act: perform the action, return state' --- here say taps the wire; on metal
 ; (send . bytes) becomes (. bytes sock).
    (act step) (: st' (cap step) a (cup step)
-                 _ (? (idp (cap a) 'send) (say (+ "  send: " (cup a))) 0)
+                 _ (? (id? (cap a) 'send) (say (+ "  send: " (cup a))) 0)
                  st')
 
 ; --- the watchdog (in-loop) --- the policy runs under the global `help` (installed
@@ -69,7 +69,7 @@
 ; "survives its own faults" property is what makes the agent self-driving. on metal
 ; the kernel's top help additionally logs to a ring buffer and can respawn the task.
    (guarded st ev) (: out (policy st ev)
-                      (? (chainp out) (act out) st))
+                      (? (two? out) (act out) st))
 
 ; --- the scripted run --- perceive (next event) -> decide+act (guarded) -> recurse.
 ; a fold over a LIST of events: the model of the merged {net, clock} stream, bounded
@@ -97,9 +97,9 @@
      (: d   (slurp port)                                 ; perceive: BLOCK for one datagram
         _   (say (+ "  nic <- " d))                      ; narrate what landed (console observability)
         out (policy st (link 'net d))                    ; decide (policy runs under the watchdog help)
-        st' (? (chainp out)                              ; watchdog by SHAPE: real step vs welped fault
+        st' (? (two? out)                              ; watchdog by SHAPE: real step vs welped fault
                  (: a (cup out)                          ; a real step: reply, advance the state
-                    _ (? (idp (cap a) 'send) (reply-to port (cup a)) 0)
+                    _ (? (id? (cap a) 'send) (reply-to port (cup a)) 0)
                     (cap out))
                  st)                                     ; a caught fault: carry the old state forward
         (serve st' port))
@@ -120,7 +120,7 @@
    (supervise ckpt n period)
      (: p (spawn (\ s (run-beats (restore s) n period)) ckpt)
         st' (wait p)
-        (? (chainp st') (save st') ckpt))
+        (? (two? st') (save st') ckpt))
 
 ; --- a mission --- many supervised rounds, each a FRESH task, the state carried only
 ; by the checkpoint between them: the persistence story end to end. the count

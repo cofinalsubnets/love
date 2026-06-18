@@ -17,9 +17,9 @@
  (= 3 O)   (= O (atype oa-a))                    ; type code 3
  (= 1 (arank oa-a))   (= 5 (alen oa-a))
  (= 5 (cap (ashape oa-a)))
- (nilp (arr () 0 0))                                ; rank-0 demotes to its lone cell -- nil-filled here
+ (nil? (arr () 0 0))                                ; rank-0 demotes to its lone cell -- nil-filled here
  (= 1 (arr () 0 '(1)))                              ; ... or the value: a one-cell array IS that value
- (nilp (arr () '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
+ (nil? (arr () '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
 
  ; --- holds arbitrary values verbatim (no boxing/coercion) ---
  (= oa-big (peep oa-a 0 0))
@@ -27,7 +27,7 @@
  (= (+ oa-big 7) (peep oa-a 2 0))
  (= "hi" (peep oa-a 3 0))
  (= 'sym (peep oa-a 4 0))
- (nilp (peep oa-z 0 0))                           ; (arr () ... 0) fills with nil
+ (nil? (peep oa-z 0 0))                           ; (arr () ... 0) fills with nil
 
  ; --- nested object arrays + index into the inner one ---
  (= 4 (peep (peep oa-nest 1 0) 1 0))
@@ -69,7 +69,7 @@
 
  ; transparency vs the typed lane: 2^40*2^40 = 2^80; z wraps to 0, o stays exact
  (= (80 2) (peep (* oa-oar oa-oar) 0 0))
- (nilp (= (80 2) (peep (* oa-zar oa-zar) 0 0)))
+ (nil? (= (80 2) (peep (* oa-zar oa-zar) 0 0)))
 
  ; broadcasting: object array (+) scalar bignum
  (= (* 2 (100 2)) (peep (+ oa-x (100 2)) 0 0))   ; (2^100)+(2^100)
@@ -88,9 +88,9 @@
  (= (100 2) (amax (arr () '(3) (L 5 (100 2) 7))))
  (= -3 (amin (arr () '(3) (L 5 -3 7))))
  (aall (arr () '(2) '(1 2)))
- (nilp (aall (arr () '(2) '(1 0))))
+ (nil? (aall (arr () '(2) '(1 0))))
  (sat (arr () '(2) '(0 5)))
- (nilp (sat (arr () '(2) '(0 0))))
+ (nil? (sat (arr () '(2) '(0 0))))
 
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (= 0 (oa-churn 40))
@@ -133,7 +133,7 @@
  (= O (atype @((100 2) 1)))                    ; bignum element -> object array
  (aall (= @(1 2 3) (array 3 1 2 3))))
 
-; --- pin / truthiness: (nilp x) == (= 0 (pin x)) holds across tuple types, via
+; --- pin / truthiness: (nil? x) == (= 0 (pin x)) holds across tuple types, via
 ; g_len recursing into each element's own magnitude (so an all-zero array is pin 0,
 ; not the garbage that a raw word-bits L2 norm would give). A bignum element forces
 ; an o array; a complex element packs into a c array (both keep the invariant).
@@ -142,12 +142,12 @@
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
 (assert
  (= C (atype oa-z2)) (= C (atype oa-c2)) (= O (atype oa-b2))
- (= 0 (sat oa-z2)) (nilp oa-z2)                   ; all-zero object array -> falsy, pin 0
+ (= 0 (sat oa-z2)) (nil? oa-z2)                   ; all-zero object array -> falsy, pin 0
  (= 5 (sat oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(5)
  !!oa-b2                                          ; a bignum element is truthy
  (= 0 (sat (arr () '(2 2) 0)))                       ; all-nil object array -> pin 0
  !!(array 2 'a 'b)                                ; symbol elements -> truthy
- ; the defining invariant (nilp x) == (= 0 (pin x)) on each:
- (= (? (nilp oa-z2) 1 0) (? (= 0 (sat oa-z2)) 1 0))
- (= (? (nilp oa-c2) 1 0) (? (= 0 (sat oa-c2)) 1 0))
- (= (? (nilp oa-b2) 1 0) (? (= 0 (sat oa-b2)) 1 0)))
+ ; the defining invariant (nil? x) == (= 0 (pin x)) on each:
+ (= (? (nil? oa-z2) 1 0) (? (= 0 (sat oa-z2)) 1 0))
+ (= (? (nil? oa-c2) 1 0) (? (= 0 (sat oa-c2)) 1 0))
+ (= (? (nil? oa-b2) 1 0) (? (= 0 (sat oa-b2)) 1 0)))

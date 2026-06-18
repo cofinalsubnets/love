@@ -25,15 +25,15 @@
  ('big = (? 0 'a (1 < 2) 'big 'else)))           ; `?` -- test/result pairs, then a final else
 (: (twice f x) (f (f x)) (assert (12 = (twice inc 10))))
 (assert
- (idp (:) (?)) (idp (?) (\)) !(:) (nomp (:))     ; the empty form is the head read, both lanes: the zero point
- (0 = (? 0 'a)) (idp 0 (map inc ()))             ; today: a no-match `?` (and `map` of nothing) falls to fixnum 0, NOT the zero point ()
+ (id? (:) (?)) (id? (?) (\)) !(:) (nom? (:))     ; the empty form is the head read, both lanes: the zero point
+ (0 = (? 0 'a)) (id? 0 (map inc ()))             ; today: a no-match `?` (and `map` of nothing) falls to fixnum 0, NOT the zero point ()
  ; QUEUE (true-blue order): this fall-through flips to () -- absence/the empty chain bottoms at Nil;
- ; when that lands, replace the two asserts above with (idp (:) (? 0 'a)) and (idp (:) (map inc ())).
- (idp (:) (: a b b 2 a)) (2 = (: a b b 2 b))     ; one scope: forward read = the condition, the point helpless
+ ; when that lands, replace the two asserts above with (id? (:) (? 0 'a)) and (id? (:) (map inc ())).
+ (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b))     ; one scope: forward read = the condition, the point helpless
  (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
-; numbers their value, text its charm sum, lists the sum of element nets). `!` (nilp) reads
+; numbers their value, text its charm sum, lists the sum of element nets). `!` (nil?) reads
 ; the net's sign in the total order; `$` (sat) is one saturating clamp, max(0, ceil); !x == (0 = $x).
 (assert
  !0 !"" !(tablet 0) !@0 !() !0.0 !~(0 0)         ; zero / empty -> false
@@ -47,29 +47,29 @@
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
- (0 = !5) (1 = !0) (idp non nilp) (1 = (non 0))  ; ! negates it; non is nilp
- (gemp 5) (gemp -3.5) (gemp ~(2 3)) (gemp (62 2))         ; a GEM is a self-netting SCALAR: charm, float, complex, wide
- !(gemp @(1 2 3)) (gemp (net @(1 2 3)))                   ; a TRAY is NOT a gem -- it nets DOWN to a scalar gem (net is a fresh sum)
- !(gemp "x") !(gemp 'a) !(gemp '(1 2))                    ; text/symbol/list are not gems -- they net to something else
- (? (fixp 5) (gemp 5) 1)                                  ; a CHARM is a gem, by spec (net = self)
- (charmp 5) !(charmp 3.5) !(charmp @(1 2 3)) !(charmp 'a) (? (charmp 5) (gemp 5) 1)   ; a CHARM (charmp) is the word-sized gem: a fixnum, and every charm is a gem
- (trayp @(1 2 3)) (trayp @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
- (crestp @(1 2 3)) !(crestp @("a" "b"))                   ; a CREST is a NUMERIC tray (a tray of gems); a tray of strings is not
- (crestp (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a crest -- bignum cells are gems (keyed on cells, not the O code)
- !(gemp @(1 2 3)) !(crestp 5) !(crestp '(1 2))            ; gemp/crestp are DISJOINT; a scalar / a list is neither a crest nor a tray
+ (0 = !5) (1 = !0) (id? non nil?) (1 = (non 0))  ; ! negates it; non is nil?
+ (gem? 5) (gem? -3.5) (gem? ~(2 3)) (gem? (62 2))         ; a GEM is a self-netting SCALAR: charm, float, complex, wide
+ !(gem? @(1 2 3)) (gem? (net @(1 2 3)))                   ; a TRAY is NOT a gem -- it nets DOWN to a scalar gem (net is a fresh sum)
+ !(gem? "x") !(gem? 'a) !(gem? '(1 2))                    ; text/symbol/list are not gems -- they net to something else
+ (? (fix? 5) (gem? 5) 1)                                  ; a CHARM is a gem, by spec (net = self)
+ (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (gem? 5) 1)   ; a CHARM (charm?) is the word-sized gem: a fixnum, and every charm is a gem
+ (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
+ (crest? @(1 2 3)) !(crest? @("a" "b"))                   ; a CREST is a NUMERIC tray (a tray of gems); a tray of strings is not
+ (crest? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a crest -- bignum cells are gems (keyed on cells, not the O code)
+ !(gem? @(1 2 3)) !(crest? 5) !(crest? '(1 2))            ; gem?/crest? are DISJOINT; a scalar / a list is neither a crest nor a tray
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: fixp bigp widep flop comp trayp strp nomp chainp tabp;
-; derived nump whole? atomp; lamp = presence (any heap value); hotp names the buf/port zoo.
+; --- types & predicates --- storage: fix? big? full? float? twin? tray? string? nom? two? tab?;
+; derived jewel? whole? atom?; lit? = presence (any heap value); hot? names the buf/port zoo.
 (assert
- (fixp 5) (chainp '(1 2)) (strp "hi") (nomp 'x) (lamp cap) (tabp #(1 2))
- (bigp (100 2)) ((? w64 widep bigp) (62 2)) (flop 1.5) (comp i) (trayp @(1 2 3)) (packp 1.5)
- (nump 1.5) (nump i) (nump (62 2)) (whole? (62 2)) (atomp 'x) !(atomp '(1))
- (hotp (buf 4)) (hotp out) (hotp (sip '(104)))   ; the hot zoo, named
- !(hotp #()) !(hotp cap) !(hotp 5) !(hotp "s")   ; maps/functions/data are not hots
- (lamp (buf 4)) (lamp '(1)) (lamp "s") !(lamp 5) ; the lamp-spans-bands pin: lit = any heap value
+ (fix? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tab? #(1 2))
+ (big? (100 2)) ((? w64 full? big?) (62 2)) (float? 1.5) (twin? i) (tray? @(1 2 3)) (packp 1.5)
+ (jewel? 1.5) (jewel? i) (jewel? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
+ (hot? (buf 4)) (hot? out) (hot? (sip '(104)))   ; the hot zoo, named
+ !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots
+ (lit? (buf 4)) (lit? '(1)) (lit? "s") !(lit? 5) ; the lit?-spans-bands pin: lit = any heap value
  (1 = $cap) (1 = $out) (1 = $(sip 0))            ; tops and ports net 1: present, drained or not
- (fixp (: p (spawn (\ x x) 0) _ (wait p) p))  ; a task id is a number, not a handle
+ (fix? (: p (spawn (\ x x) 0) _ (wait p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; fixnum overflow -> exact bignum ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
@@ -78,17 +78,17 @@
 ; ride the valence law (-(f x) neg, /4 recip, ...) while sections ((- 0), (/ 1)) stay words.
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
- (2 = 4 / 2) (fixp (4 / 2)) (-2 = (// -5 2))
+ (2 = 4 / 2) (fix? (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
- !(fixp (2 * 2305843009213693952)) (flop (1 / 0)) (? w64 (1e308 < 1 / 0) 1) (0 = (/ 0 0))
+ !(fix? (2 * 2305843009213693952)) (float? (1 / 0)) (? w64 (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
- ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nomp 'inf) (nomp 'nan) (nomp 'ieee-nan)
+ ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
 ; --- order & equality --- < <= > >= total over all values (across kinds by the lattice,
-; within by value/lex order); `=` bridges the numeric tower; `idp` is identity; `!=` is gone.
+; within by value/lex order); `=` bridges the numeric tower; `id?` is identity; `!=` is gone.
 (assert
- (3 = 3.0) !(3 = 4) (1 < 1.5) (3.0 >= 3) (idp 'a 'a) !(idp '(1) '(1))
+ (3 = 3.0) !(3 = 4) (1 < 1.5) (3.0 >= 3) (id? 'a 'a) !(id? '(1) '(1))
  ('x < "a") ("a" < 1) (1 < '(0)) !(1 < "a")          ; true-blue order: mint < string < number < chain
  ('(0) < #(1 10)) (#(1 10) < cap) !(cap < #(1 10))    ; the map rung: chain < map < hot
  ("abc" < "abd") ("ab" < "abc") ('(1 2) < '(1 3)))    ; within a band: text and chains order lexicographically
@@ -97,11 +97,11 @@
 ; free vars by name, captures pairwise); eta/beta not bridged; 1 = (\ x x), 0 = (\ _ 1).
 (assert
  ((\ x x) = (\ y y)) ((\ a b (+ a b)) = (\ x y (+ x y)))           ; alpha: bound vars by position
- ((\ x (+ x 1)) = (\ x (+ x 1))) !(idp (\ x (+ x 1)) (\ x (+ x 1)))  ; equal, yet distinct objects
+ ((\ x (+ x 1)) = (\ x (+ x 1))) !(id? (\ x (+ x 1)) (\ x (+ x 1)))  ; equal, yet distinct objects
  !((\ x x) = (\ y z)) !((\ x (+ x 1)) = (\ x (+ x 2)))             ; free /= bound; different body
  (: g (\ a (\ b (+ a b))) (&& ((g 1) = (g 1)) !((g 1) = (g 2))))   ; closures: equal iff captures match
  ((+ 1) = (+ 1)) !((\ x x) < (\ y y)) !((\ x (cap x)) = cap)           ; partial apps too; eta not bridged
- (1 = (\ x x)) ((\ y y) = 1) !(idp 1 (\ x x))                      ; 1 = identity, either side
+ (1 = (\ x x)) ((\ y y) = 1) !(id? 1 (\ x x))                      ; 1 = identity, either side
  (0 = (\ _ 1)) ((\ q 1) = 0) !(0 = (\ _ 2)) !(0 = (\ _ _))        ; 0 = const-1 (and only that)
  !!(\ _ 1) (1 = $(\ _ 1)))     ; the bridge crosses the measure: =-equal to 0, yet present (a top nets 1)
 
@@ -129,7 +129,7 @@
 ; transcendental nifs are pow sine cosine log; power/sqrt/exp/nth-root/tan/atan derived from
 ; numerals + complex (sqrt is total: ((/ 1 2) -1) = i).
 (assert
- (5 = (abs -5)) (fixp (abs -5)) (5.0 = (abs ~(3 4))) (2 = (int 2.9))
+ (5 = (abs -5)) (fix? (abs -5)) (5.0 = (abs ~(3 4))) (2 = (int 2.9))
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
  (2.0 = ((/ 1 2) 4)) (1024.0 = (pow 2 10)) (1 = (0 e)) (2.718281828459045 = e))
 
@@ -140,16 +140,16 @@
  (27 = (3 3)) (7625597484987 = (3 3 3)) (16 = (2 2 2)) (65536 = (2 2 2 2))   ; tetration
  (-1 = i * i) (-1 = (2 i)) (1 = ((i * 0) e))                                 ; i^2 = -1; e^(i*0) = 1
  ((log -1) = i * pi) ((log i) = i * pi / 2)                                  ; euler, in the exact direction
- (comp (log -1)) (flop (log 2)) (comp (log ~(2 3)))                          ; log widens only when it must
+ (twin? (log -1)) (float? (log 2)) (twin? (log ~(2 3)))                          ; log widens only when it must
  (i = ((/ 1 2) -1)) (~(0 2) = ((/ 1 2) -4))                                  ; sqrt of a negative: principal, exact
- (-8 = (pow -2 3)) (comp ((/ 1 3) -8))                                       ; integer powers stay real; odd roots go principal
- (0.0 = (sine 0) / (cosine 0)) (flop (sine 0)))                                   ; tan 0 = 0
+ (-8 = (pow -2 3)) (twin? ((/ 1 3) -8))                                       ; integer powers stay real; odd roots go principal
+ (0.0 = (sine 0) / (cosine 0)) (float? (sine 0)))                                   ; tan 0 = 0
 
 ; --- complex --- a scalar at tier C; the `~` sigil: ~(re im) builds (twin re im), a bare ~x
 ; lifts a real or conjugates (an involution); i = ~(0 1). a rank-N complex array packs (re,im)
 ; into a `c`-typed array; the net is the complex SUM of the cells, $v = $(asum v).
 (assert
- ((* i i) = -1) (~(2 0) = 2) (~(-5 10) = ~(1 2) * ~(3 4)) (comp ~5) !(comp 5)
+ ((* i i) = -1) (~(2 0) = 2) (~(-5 10) = ~(1 2) * ~(3 4)) (twin? ~5) !(twin? 5)
  (~(0 0) = ~0) ((conj ~(2 3)) = ~~(2 3)) ((conj ~(2 3)) = ~(2 -3)) (~(2 3) = ~~~(2 3))
  ((conj (~(2 3) + ~(4 5))) = (conj ~(2 3)) + (conj ~(4 5)))      ; conj is additive
  ((conj (~(2 3) * ~(4 5))) = (conj ~(2 3)) * (conj ~(4 5)))      ; ... and multiplicative
@@ -201,13 +201,13 @@
 ; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
 (assert
- (() = (:)) (nomp ()) !(0 = ()) !(idp 0 '()) (0 = (intern "")) (0 = $()) !() !!$'x
+ (() = (:)) (nom? ()) !(0 = ()) !(id? 0 '()) (0 = (intern "")) (0 = $()) !() !!$'x
  ("()" = (show ()))
- (: z zz-never-pinned (&& (nomp z) !z (idp z (:)) ("()" = (show z))))   ; absence: the zero point, wearing ()
- (nomp (mint 0)) (0 = $(mint 0)) !(mint 0)       ; the fresh point: a nameless atom, materially empty
+ (: z zz-never-pinned (&& (nom? z) !z (id? z (:)) ("()" = (show z))))   ; absence: the zero point, wearing ()
+ (nom? (mint 0)) (0 = $(mint 0)) !(mint 0)       ; the fresh point: a nameless atom, materially empty
  (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone
- !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (idp m m)))  ; distinct always; itself only
- (nomp (nom 'x)) !(chainp (nom 'x)) ("x" = (cap (nom 'x)))  ; a nom is a name (nomp, an ATOM), repr'd as (name . mint); its name is its cap
+ !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (id? m m)))  ; distinct always; itself only
+ (nom? (nom 'x)) !(two? (nom 'x)) ("x" = (cap (nom 'x)))  ; a nom is a name (nom?, an ATOM), repr'd as (name . mint); its name is its cap
  (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; same-name noms order by the inner mint serial
  ((mint 0) < (nom 'x))                           ; within the mint band: a bare mint below a named symbol
  ((mint 0) < 0)                                  ; the blue floor: every point sits BELOW the numbers (true-blue)
@@ -224,13 +224,13 @@
 ; MAP (the reader emits (tablet 0); () is the zero-point, distinct from 0); #x boxes a datum;
 ; accessors collection-first peep/pin/pull; (t k) == (peep t k 0); `missing` the conditioned read.
 (assert
- (: b #0 (&& (tabp b) (1 = $b) (0 = (peep b 0 9)) (: _ (pin b 0 7) (7 = (b 0)))))
- (tabp #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
+ (: b #0 (&& (tab? b) (1 = $b) (0 = (peep b 0 9)) (: _ (pin b 0 7) (7 = (b 0)))))
+ (tab? #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
- (10 = (missing #(1 10) 1)) (idp (:) (missing (tablet 0) 'k)) (0 = (missing #(1 0) 1))   ; missing: the conditioned read; presence beats value
+ (10 = (missing #(1 10) 1)) (id? (:) (missing (tablet 0) 'k)) (0 = (missing #(1 0) 1))   ; missing: the conditioned read; presence beats value
  (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (tabp (tablet 0)) !(tabp 5)
+ ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (tab? (tablet 0)) !(tab? 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
  (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
 
@@ -241,11 +241,11 @@
 ; VALUE 0 (a 1-cell -> the scalar 0, a box). every nothing is a MASK; () the bare-ish floor.
 (assert
  !() !0 !"" !@() !#() !~(0 0) !(buf 0)           ; every empty is false (blue)
- (nilp ()) (nilp 0) !(= () 0) !(idp () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
+ (nil? ()) (nil? 0) !(= () 0) !(id? () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
  ("@()" = (show @())) (1 = (arank @())) (0 = (alen @())) (Z = (atype @()))  ; @() the empty array, round-trips
- (tabp #()) (0 = $#()) ("(tablet 0)" = (show #()))   ; #() the empty map
- (0 = @0) (nilp (arank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
- (tabp #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
+ (tab? #()) (0 = $#()) ("(tablet 0)" = (show #()))   ; #() the empty map
+ (0 = @0) (nil? (arank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
+ (tab? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
 
 ; --- buffers --- (buf n) mutable zeroed bytes; peep/pin a byte 0..255; `$` nets the charms
 ; (a zeroed buf is nothing); blit; identity equality.
@@ -261,9 +261,9 @@
 (assert
  ('(1 (\ x) 3) = ``(1 'x 3)) ('(1 2 3 4) = (: xs '(2 3) ``(1 ,@xs 4)))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
- (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lamp dot)
+ (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
  ('((dot x)) = (opfix '(. x))) ('! = (caup '(a ! b)))   ; opfix factors; quotes stay data
- (6 = ((\ x' (x' + 1)) 5)) (nomp 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
+ (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
@@ -277,8 +277,8 @@
  (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
  (: t operators
-    (&& (tabp t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%))
-        ((link 'sat 1) = (t '$)) ((link 'nilp 1) = (t '!))
+    (&& (tab? t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%))
+        ((link 'sat 1) = (t '$)) ((link 'nil? 1) = (t '!))
         ((link 'pin 3) = (t '<-)) ((link 'peep 3) = (t '->)))))
 
 ; --- macros --- a macro maps an arg list to code; install with `::`. the prel ships
@@ -293,29 +293,29 @@
 ; the RNG is xoshiro256++; a global `help` takes every raise (scare/more bits); a missing name
 ; raises (scare 'missing nom); numeral counts are CAPPED by the `apcap` box.
 (assert
- (3 = (ev '(+ 1 2))) (lamp ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
+ (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
- !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (flop (randf 0))
- (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lamp scare)
- (tabp apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
- (idp (:) not-in-the-book) !not-in-the-book      ; a missing name reads the zero point: a nom not in the book
+ !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (float? (randf 0))
+ (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
+ (tab? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
+ (id? (:) not-in-the-book) !not-in-the-book      ; a missing name reads the zero point: a nom not in the book
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- in/out are the default ports; getc + putc/puts/putn/putx, per-port
 ; fgetc/fputc/.../read, open/close/sip/pad/slurp; `read` is port-first, one datum per call;
 ; `dot` (the `.` operator, .x) prints x to out and returns it.
 (assert
- (strp (show out)) ("hi" = (slurp (sip '(104 105)))) (: o (pad 0) _ (fputx o 42) ("42" = (page o)))
+ (string? (show out)) ("hi" = (slurp (sip '(104 105)))) (: o (pad 0) _ (fputx o 42) ("42" = (page o)))
  (1 = (read (sip '(49)) 99)) ('eof = (read (sip 0) 'eof)) (: p (sip '(40)) (p = (read p 99))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, wev, maps); the egg is WARMED and the evaluator sits on it twice;
 ; `born` records the hatch (unbound pre-egg); just before birth the egg mops up runtime names.
-(assert (lamp ev) (? born (fixp born) 1)
+(assert (lit? ev) (? born (fix? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !spin 1) (? born !book 1))      ;  hence the born guards)
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.
-(assert (strp (show @(1 2 3))) (fixp (clock 0)) (1 = ((buf 4) 'x)))
+(assert (string? (show @(1 2 3))) (fix? (clock 0)) (1 = ((buf 4) 'x)))

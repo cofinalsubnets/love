@@ -75,9 +75,9 @@
 ; string < symbol < chain < map < top, each band ordered within itself (text and chains
 ; lexicographically, maps and tops by an alpha-invariant hash). a map has its own rung
 ; just under the tops, though it still acts as a lookup top for +/*/apply. the
-; opaque hots (buf/port -- `hotp`) sit in the top band: a buf measures by content
+; opaque hots (buf/port -- `hot?`) sit in the top band: a buf measures by content
 ; (zeroed -> nothing), a port is present ($out = 1, drained or not), compared by
-; identity, and applying one acts like 0 (const-1). every predicate ends in `p`;
+; identity, and applying one acts like 0 (const-1). every predicate ends in `?`;
 ; they are enumerated below.
 
 ; --- everything is a function --- (f x y) == ((f x) y) and (f) == f, so application is just
@@ -127,7 +127,7 @@
 ; negatives is nothing, exactly like a negative scalar. maps stay key-counted: presence
 ; is information there, and #0 must stay truthy. there is no "truthy"/"falsy" -- true
 ; and false are the bits 1 and 0 of the `!!$` projection. the net is OBSERVED through
-; one retraction at the boundary: `!` (the nif `nilp`, the classical name; `non` is its
+; one retraction at the boundary: `!` (the nif `nil?`, the classical name; `non` is its
 ; normal alias) reads the net's sign in the total order (re, then im -- applied ONCE,
 ; never per element), and `$` (sat) is ONE saturating clamp over the net's order-signed
 ; magnitude, max(0, ceil), with the invariant !x == (0 = $x). `$` is the SOLE clamp, retracting
@@ -152,27 +152,27 @@ $@(3 4)              ; 7
 
 ; --- types & predicates --- a fixnum is a tagged word; everything else is a heap object whose
 ; first word dispatches. the storage predicates:
-;   fixp bigp widep  -- the integer reps (fixnum, bignum, wide int)
-;   flop comp trayp  -- float, complex scalar, array; all three share one heap type, `packp`
-;   strp symp chainp tabp  -- string, symbol, chain, map
-; derived: `nump` (any number: fix/wide/big/float/complex/array), `whole?` (any integer), `atomp`
+;   fix? big? full?  -- the integer reps (fixnum, bignum, wide int)
+;   float? twin? tray?  -- float, complex scalar, array; all three share one heap type, `packp`
+;   string? symp two? tab?  -- string, symbol, chain, map
+; derived: `jewel?` (any number: fix/wide/big/float/complex/array), `whole?` (any integer), `atom?`
 ; (anything but a chain). the NUMERIC vocab refines the numbers: a GEM is a self-netting
-; SCALAR (`gemp x` == `idp x (net x)`: charm/wide/big/float/complex), a TRAY is an array of
-; any kind (`trayp`, the renamed arrp), and a CREST is a numeric tray -- a tray of gems
-; (`crestp`). gemp and crestp are DISJOINT (a tray's net is a fresh scalar, so no tray
+; SCALAR (`gem? x` == `id? x (net x)`: charm/wide/big/float/complex), a TRAY is an array of
+; any kind (`tray?`, the renamed arrp), and a CREST is a numeric tray -- a tray of gems
+; (`crest?`). gem? and crest? are DISJOINT (a tray's net is a fresh scalar, so no tray
 ; self-nets); a crest is COMPOSED of gems, not a kind of gem -- it nets DOWN to a scalar gem.
-; `i` is ~(0 1). `lamp` is PRESENCE, not a band: every heap
+; `i` is ~(0 1). `lit?` is PRESENCE, not a band: every heap
 ; value answers it (anything wired to a hot -- lit -- everything but a fixnum), chains and
-; strings included, so lamp SPANS the bands. the top band itself needs no predicate:
+; strings included, so lit? SPANS the bands. the top band itself needs no predicate:
 ; under the slogan is-it-top is vacuous -- you may as well ask 0. the opaque hots
-; (buf/port) answer `hotp`, the refinement that names the zoo (every hot is a lamp); a
-; task is referenced by a fixnum id, not a handle object. `!` (nilp) and `done?` are
+; (buf/port) answer `hot?`, the refinement that names the zoo (every hot is a lit?); a
+; task is referenced by a fixnum id, not a handle object. `!` (nil?) and `done?` are
 ; truth/task tests, not type tests.
 ; demo:
-(fixp 5) (chainp '(1 2)) (strp "hi") (symp 'x) (tabp #(1 2))   ; the storage predicates
-(nump i) (whole? (62 2)) (atomp 'x)                            ; derived
-(lamp "s") (lamp '(1)) !(lamp 5)                             ; lamp = presence (any heap value)
-(hotp (buf 4)) (hotp out) !(hotp cap)                        ; the hot zoo: buf/port only
+(fix? 5) (two? '(1 2)) (string? "hi") (symp 'x) (tab? #(1 2))   ; the storage predicates
+(jewel? i) (whole? (62 2)) (atom? 'x)                            ; derived
+(lit? "s") (lit? '(1)) !(lit? 5)                             ; lit? = presence (any heap value)
+(hot? (buf 4)) (hot? out) !(hot? cap)                        ; the hot zoo: buf/port only
 ((64 2) = 2 * (63 2))        ; true   fixnum overflow -> exact bignum ((k b) = b**k)
 
 ; --- arithmetic --- + - * / // % (infix, like the rest). fixnum fast path; a float makes it
@@ -203,23 +203,23 @@ $@(3 4)              ; 7
 ; lattice (number < string < symbol < chain < map < top), within a kind by value/
 ; lexicographic order (complex by (re,im); maps and lambdas by an alpha-invariant hash; an
 ; array operand broadcasts to a 0/1 mask). `=` is value equality and bridges the whole
-; numeric tower; `idp` is identity; `!=` is gone -- write `!(a = b)`.
+; numeric tower; `id?` is identity; `!=` is gone -- write `!(a = b)`.
 ; demo:
 3 = 3.0              ; true    = bridges the numeric tower
 1 < 1.5              ; true
 "a" < 'x             ; true    number < string < symbol < chain < map < top
 #(1 10) < cap        ; true    the map rung: chain < map < top
-(idp 'a 'a)          ; true    idp is identity; !(idp '(1) '(1))
+(id? 'a 'a)          ; true    id? is identity; !(id? '(1) '(1))
 
 ; --- comparing functions --- `=` on two functions is alpha + structural: their source \-exprs
 ; match up to renaming of bound variables (binders by position, free vars by name) and their
-; captured values match pairwise. `<` agrees (the hash is alpha-invariant); `idp` stays
+; captured values match pairwise. `<` agrees (the hash is alpha-invariant); `id?` stays
 ; identity. eta ((\ x (f x)) = f) and beta are *not* bridged -- a closure versus its operator is
 ; a representation-crossing edge that stays false. two exceptions cross into the numerals:
 ; 1 = (\ x x) (the identity) and 0 = (\ _ 1) (const-1), each up to alpha.
 ; demo:
 (\ x x) = (\ y y)            ; true   alpha: bound vars by position
-(\ x (+ x 1)) = (\ x (+ x 1)); true   ... yet distinct objects (idp false)
+(\ x (+ x 1)) = (\ x (+ x 1)); true   ... yet distinct objects (id? false)
 (\ x x) = (\ y z)            ; false  free /= bound
 1 = (\ x x)                  ; true   1 is the identity numeral, up to alpha
 0 = (\ _ 1)                  ; true   0 is const-1 (and only that)
@@ -276,7 +276,7 @@ i * i                ; -1        the algebraic heart of euler
 (log -1) = i * pi    ; true      euler, in the EXACT direction
 ((/ 1 2) -1)         ; i         sqrt of -1: principal, exact
 
-; --- complex --- a discrete scalar at the top numeric tier (comp). the `~` reader sigil:
+; --- complex --- a discrete scalar at the top numeric tier (twin?). the `~` reader sigil:
 ; ~(re im) builds (twin re im) (3+ operands curry); a bare ~x lifts a real (~r = ~(r 0)) or
 ; conjugates a complex (~~(r i) = ~(r -i)), so `~` is conjugation and an involution. i = ~(0 1).
 ; + - * / promote a real and stick (no demotion); order is lexicographic by (re,im) and `=`
@@ -386,7 +386,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
 ; demo:
-(tabp #())                   ; true   #() IS #0, the box of nothing (present)
+(tab? #())                   ; true   #() IS #0, the box of nothing (present)
 $#(1 10 2 20)                ; 2      $ is the key count
 (peep #(1 10 2 20) 2 0)      ; 20
 (#(1 10 2 20) 2)             ; 20     a map is a lookup function: (t k) == (peep t k 0)
@@ -427,7 +427,7 @@ $(buf 4)             ; 0       a zeroed buf is nothing
 ; (+ ($ "ab") 2) = 197; only infix defers, which is what makes it right-associative. the
 ; CURRY LAW: operands missing at the end of a list fold to the partial application.
 ; quote interiors are DATA -- operators inside ' stay plain symbols; quasiquote descends
-; only through unquotes. shipped at one: $ sat, ! nilp, . dot; at two: + - * / %
+; only through unquotes. shipped at one: $ sat, ! nil?, . dot; at two: + - * / %
 ; = < <= > >= | &; ? at three -- the cond form infix, (t ? a b); aliases: <- pin and
 ; -> peep, collection-first -- (t <- k v) pins (giving back t, so it chains), (t -> k d)
 ; peeps. (1 + 2) factors to ((+ 1 2)) and evaluates via (f) == f.
@@ -543,7 +543,7 @@ not-in-the-book      ; ()        a missing name reads the zero point (helpless)
 ; closure-private (off the book by construction), and only its entry points --
 ; shell/welp/edraw/wrap/bao + the stream shell zev/zevs/charms -- are globals.
 ; demo:
-(lamp ev)            ; true    ev is installed in the image
+(lit? ev)            ; true    ev is installed in the image
 born                 ; a fixnum (the hatch time) post-egg; unbound pre-egg
 macros               ; ()      mopped up after birth (a runtime-internal name, gone)
 

@@ -29,7 +29,7 @@
  ('(f (mono (< x))) = (read (sip '(40 102 32 60 120 41)) 99))
  ; the words are real, the sigils their spellings
  (-7 = (neg 7)) (0.5 = (recip 2)) (0.25 = (frac 5.25)) (1 = (bit 9))
- (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))) (idp 'cap (monadics '<)))
+ (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))) (id? 'cap (monadics '<)))
 
 ; COHERENCE: the new words against the old laws, pinned as one system.
 ; $ is the clamp of the net (the word now states the law the sigil lived);

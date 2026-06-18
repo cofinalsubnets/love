@@ -65,7 +65,7 @@
          (cat thb (cat (cat '(233) (le4 Le)) elb))))))                           ; then ; jmp end ; else
    (cgv v vl e d) (? (= e v)  (vl d)                                             ; vl = a load FN of d (leaf guards, loop counter doesn't)
                      (whole? e) (cat '(72 184) (le8 e))                            ; movabs rax, n
-                     (chainp e) (: op (cap e)  a (caup e)  b (caup (cup e))
+                     (two? e) (: op (cap e)  a (caup e)  b (caup (cup e))
                                  (? (memq op '(+ - *))      (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (opseq op d))))
                                     (memq op '(// %))        (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (idivseq op d))))
                                     (memq op '(& | ^))       (cat (cgv v vl a d) (cat push-rax (cat (cgv v vl b (+ d 1)) (bitseq op))))
@@ -73,7 +73,7 @@
                                     (= op '?) (condcode (cgv v vl a d) (cgv v vl b d) (cgv v vl (caup (cup (cup e))) d))
                                     0))
                      0)
-   (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (chainp x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
+   (emit l) (: b (buf (tally l)) _ ((: (go i x) (? (two? x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
    (jit lam) (: v (caup lam) (nat (emit (cat (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (ev lam) lam))  ; v = the param (single arg at Sp[0], fixnum-guarded)
    ; --- N-ary leaves (\ p0 .. p_{n-1} E): param i loads from Sp[i]=[rcx+8i]; the deopt
@@ -92,9 +92,9 @@
      (cat '(82 80 76 137 192 72 153 72 247 60 36) (cat (? (= op '%) '(72 137 208) 0) '(72 131 196 8 90))))))
    ; param i -> frame index in [imps args]; loaded fixnum-guarded from Sp[i] (param 0 is
    ; the FIRST capture when partial-applied). argix finds a var's frame index in ps.
-   (argix e ps i) (? !(chainp ps) 0  (= e (cap ps)) i  (argix e (cup ps) (+ i 1)))   ; param -> index
+   (argix e ps i) (? !(two? ps) 0  (= e (cap ps)) i  (argix e (cup ps) (+ i 1)))   ; param -> index
    (cgn ps e d) (? (whole? e) (cat '(72 184) (le8 e))                       ; movabs rax, n
-                   (chainp e) (: op (cap e)  a (caup e)  b (caup (cup e))
+                   (two? e) (: op (cap e)  a (caup e)  b (caup (cup e))
                                (? (memq op '(+ - *))      (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (opseq-mn op d))))
                                   (memq op '(// %))        (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (idivseq-mn op d))))
                                   (memq op '(& | ^))       (cat (cgn ps a d) (cat push-rax (cat (cgn ps b (+ d 1)) (bitseq op))))
@@ -142,7 +142,7 @@
     (? (= e n)        (fxv 0 d)                                  ; the param: guarded Sp[0] load (untag)
        (memq e vars)  (reg-ld (argix e vars 0))                  ; a loop var: raw register
        (whole? e)       (cat '(72 184) (le8 e))                    ; movabs
-       (chainp e) (: op (cap e)  a (caup e)  b (caup (cup e))
+       (two? e) (: op (cap e)  a (caup e)  b (caup (cup e))
                    (? (memq op '(+ - *))      (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (opseq op d))))
                       (memq op '(// %))        (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (idivseq op d))))
                       (memq op '(& | ^))       (cat (cgl n vars a d) (cat push-rax (cat (cgl n vars b (+ d 1)) (bitseq op))))
@@ -151,8 +151,8 @@
                       0))
        0)
    (loopcode-n n vars updates test result inits)
-    (: pre  ((: (go j is) (? (chainp is) (cat (cat (reg-init j) (le4 (cap is))) (go (+ j 1) (cup is))) 0)) 0 inits)
-       ups  ((: (go j us) (? (chainp us) (cat (cat (cgl n vars (cap us) j) push-rax) (go (+ j 1) (cup us))) 0)) 0 updates)  ; push Uj at depth j
+    (: pre  ((: (go j is) (? (two? is) (cat (cat (reg-init j) (le4 (cap is))) (go (+ j 1) (cup is))) 0)) 0 inits)
+       ups  ((: (go j us) (? (two? us) (cat (cat (cgl n vars (cap us) j) push-rax) (go (+ j 1) (cup us))) 0)) 0 updates)  ; push Uj at depth j
        pops ((: (go j) (? (< j 0) 0 (cat (reg-pop j) (go (- j 1))))) (- (tally updates) 1))   ; pop reg(k-1)..reg(0)
        ub   (cat ups pops)  Lu (tally ub)
        tb   (cgl n vars test 0)  Lt (tally tb)
@@ -167,13 +167,13 @@
    (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
    f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
  _ (assert
-  (lamp f) (lamp g)                                          ; native closures are applicable values
+  (lit? f) (lit? g)                                          ; native closures are applicable values
   (31 = (f 10)) (315 = (g 10))                               ; they compute
   ((\ x (+ (* x 3) 1)) = f)                                  ; ... and are =-IDENTICAL to their source
   !(f = (\ x (+ (* x 3) 2)))
   (f = (jit '(\ x (+ (* x 3) 1))))                           ; two natives, same source
   ; fixnum INPUT guard: a non-fixnum arg DEOPTS (no sar/putfix corruption of a heap word)
-  (: idn (jit '(\ x x)) (&& (5 = (idn 5)) ('(1 2) = (idn '(1 2))) ('a = (idn 'a)) (idp (:) (idn (:)))))
+  (: idn (jit '(\ x x)) (&& (5 = (idn 5)) ('(1 2) = (idn '(1 2))) ('a = (idn 'a)) (id? (:) (idn (:)))))
   (: pls (jit '(\ x (+ x 1))) (&& (6 = (pls 5)) ((+ '(1 2) 1) = (pls '(1 2)))))   ; native == interp on a non-fixnum
   (: q (jit '(\ n (+ (* n 3) 1))) (&& (31 = (q 10)) ((\ n (+ (* n 3) 1)) = q) (q = f)))  ; arity-1 leaf, non-x param (= f up to alpha)
   ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))           ; compose with higher-order fns

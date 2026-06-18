@@ -17,19 +17,19 @@
  (= Z (atype (arr 0 '(2 3) 0)))
  (= R (atype (arr 0.0 '(4) 0)))
  (= '(2 3) (ashape (arr 0 '(2 3) 0)))
- (nilp (arank 5))                     ; non-tuple -> nil
- (nilp (atype "x"))
+ (nil? (arank 5))                     ; non-tuple -> nil
+ (nil? (atype "x"))
 
  ; --- a one-element array DEMOTES to its lone scalar gem (no rank-0 / singleton
  ; vec exists): an empty shape (rank 0, one cell) or a rank-1 length-1 array is
  ; just the value, so the array accessors read nil on it like any scalar ---
  (= 0 (arr 0 0 0))                    ; empty shape, zero-filled -> the fixnum 0
- (flop (arr 0.0 0 0)) (= 0.0 (arr 0.0 0 0))      ; -> a boxed 0.0
+ (float? (arr 0.0 0 0)) (= 0.0 (arr 0.0 0 0))      ; -> a boxed 0.0
  (= 5 (arr 0 '(1) '(5)))              ; rank-1 len-1 -> the fixnum 5
- (= 3.5 @(3.5)) (flop @(3.5))         ; @(3.5) is the scalar 3.5
- (nilp (arank (arr 0 0 0)))           ; a demoted scalar is not a tuple
- (nilp (alen (arr 0.0 0 0)))
- (nilp (ashape (arr 0 0 0)))
+ (= 3.5 @(3.5)) (float? @(3.5))         ; @(3.5) is the scalar 3.5
+ (nil? (arank (arr 0 0 0)))           ; a demoted scalar is not a tuple
+ (nil? (alen (arr 0.0 0 0)))
+ (nil? (ashape (arr 0 0 0)))
 
  ; --- get: rank-1 fixnum index ---
  (= 10 (peep (arr 0 '(3) '(10 20 30)) 0 -1))
@@ -52,7 +52,7 @@
 
  ; --- float element read boxes an r ---
  (= 1.5 (peep (arr 0.0 '(2) '(1.5 2.5)) 0 -1))
- (flop (peep (arr 0.0 '(2) '(1.5 2.5)) 0 -1))
+ (float? (peep (arr 0.0 '(2) '(1.5 2.5)) 0 -1))
 
  ; --- scalar broadcast: array (op) scalar ---
  (aall (= (arr 0 '(3) '(11 21 31)) (+ (arr 0 '(3) '(10 20 30)) 1)))
@@ -117,23 +117,23 @@
  (aall (< (arr 0 '(2) '(1 2)) (arr 0 '(2) '(3 4))))  ; array: same expression
 
  ; --- truthiness is the NET: a value is false iff its element sum nets <= 0 ---
- (nilp (arr 0 '(3) 0))                  ; zero array -> false
- (nilp (arr 0.0 '(2 2) 0))                ; zero float array -> false
- (nilp (arr 0 '(0) 0))                  ; empty array -> vacuously false
- (nilp 0.0)                             ; boxed 0.0 -> false (was a truthy wart)
- !(nilp 2.5)                         ; positive float -> true
- (nilp -5)                           ; a negative real is FALSE (<= 0)
- !(nilp (+ (arr 0 '(2) 0) 1))        ; positive array -> true
- (nilp @(-3 -4))                     ; a NEGATIVE array is false too -- the sign law at rank 1
- (nilp @(-2 1)) !(nilp @(-2 3))      ; the elements SUM: -2+1 <= 0 < -2+3
+ (nil? (arr 0 '(3) 0))                  ; zero array -> false
+ (nil? (arr 0.0 '(2 2) 0))                ; zero float array -> false
+ (nil? (arr 0 '(0) 0))                  ; empty array -> vacuously false
+ (nil? 0.0)                             ; boxed 0.0 -> false (was a truthy wart)
+ !(nil? 2.5)                         ; positive float -> true
+ (nil? -5)                           ; a negative real is FALSE (<= 0)
+ !(nil? (+ (arr 0 '(2) 0) 1))        ; positive array -> true
+ (nil? @(-3 -4))                     ; a NEGATIVE array is false too -- the sign law at rank 1
+ (nil? @(-2 1)) !(nil? @(-2 3))      ; the elements SUM: -2+1 <= 0 < -2+3
  (= 1 (? (arr 0 '(3) 0) 0 1))         ; zero array takes the false arm
  (= 0 (? (+ (arr 0 '(3) 0) 1) 0 1))    ; positive array takes the true arm
  ; a positive net makes the array truthy, per the tower:
- !(nilp @(0 0 5))                    ; one positive element -> true
- (nilp @(0.0 0.0))                      ; all-zero float tuple -> false
- (nilp ~(0 0))                         ; complex 0+0i -> false
- !(nilp ~(0 1))                     ; 0+1i sorts above 0 -> true
- !(nilp i)                           ; the imaginary unit is truthy
+ !(nil? @(0 0 5))                    ; one positive element -> true
+ (nil? @(0.0 0.0))                      ; all-zero float tuple -> false
+ (nil? ~(0 0))                         ; complex 0+0i -> false
+ !(nil? ~(0 1))                     ; 0+1i sorts above 0 -> true
+ !(nil? i)                           ; the imaginary unit is truthy
 
  ; --- elementwise transcendentals over an array ---
  (aall (= (arr 0.0 '(2) '(2.0 3.0)) ((/ 1 2) (arr 0.0 '(2) '(4.0 9.0)))))
@@ -156,10 +156,10 @@
  (aall (= (arr 0.0 '(2) '(1.5 2.5)) (tuple 1.5 2.5)))
 
  ; --- non-conforming / non-numeric -> nil ---
- (nilp (+ (arr 0 '(3) 0) (arr 0 '(4) 0)))   ; shapes [3] and [4] don't conform
- (nilp (+ (arr 0 '(3) 0) "x"))              ; non-numeric operand
- (nilp (arr 0 '(3) 0))                      ; (sanity) zero array is falsy
- (nilp (arr 99 '(3) 0)))                      ; bad type code -> nil
+ (nil? (+ (arr 0 '(3) 0) (arr 0 '(4) 0)))   ; shapes [3] and [4] don't conform
+ (nil? (+ (arr 0 '(3) 0) "x"))              ; non-numeric operand
+ (nil? (arr 0 '(3) 0))                      ; (sanity) zero array is falsy
+ (nil? (arr 99 '(3) 0)))                      ; bad type code -> nil
 
 ; --- empty arrays: the first stone of the APL buildout. a shape-(0) array
 ; prints the (array '(shape)) surface form (@ has no empty spelling and @0

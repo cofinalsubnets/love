@@ -10,7 +10,7 @@
 ; argv is then rebound (top-level (: argv ..) DEFGLOB -- book is mopped post-egg, so a
 ; pin/peep on it is a no-op; defglob writes g->book directly) to the program's view
 ; (program . args). cli.l is compiled by c0 BEFORE -l loads prel, so the always-run path
-; (pre/load1/rdev) uses only nifs/special-forms, NOT prel fns (chainp not atomp; |, the
+; (pre/load1/rdev) uses only nifs/special-forms, NOT prel fns (two? not atom?; |, the
 ; bitwise-or nif, not the || macro; link not the L macro for the export list).
 ;
 ; the helpers (rdev load1 eval1 bye version usage need pre) are CLOSURE-PRIVATE in the inner
@@ -37,14 +37,14 @@
                (+ "  -h, --help        print this help and exit\n"
                (+ "  --                end of options; the rest are files\n"
                   "with no program (no -e, no FILE), read-eval stdin to EOF.")))))))
-    (need h t) (? (chainp t) 0 (: _ (fputs err (+ "ai: " (+ h " needs an argument"))) (exit 2)))
-    (pre a) (? (chainp a)                              ; -> (kind . rest): 'eval code.args / 'file prog.args / 'stdin
+    (need h t) (? (two? t) 0 (: _ (fputs err (+ "ai: " (+ h " needs an argument"))) (exit 2)))
+    (pre a) (? (two? a)                              ; -> (kind . rest): 'eval code.args / 'file prog.args / 'stdin
      (: h (cap a) t (cup a) (?
       (| (= h "-l") (= h "--load"))    (: _ (need h t) _ (load1 (cap t)) (pre (cup t)))
       (| (= h "-v") (= h "--version")) (version 0)
       (| (= h "-h") (= h "--help"))    (usage 0)
       (| (= h "-e") (= h "--eval"))    (: _ (need h t) (link 'eval t))
-      (= h "--")                        (? (chainp t) (link 'file t) (link 'stdin 0))
+      (= h "--")                        (? (two? t) (link 'file t) (link 'stdin 0))
       (link 'file a)))                  ; a positional file is the program
      (link 'stdin 0))
     p (pre (cup argv))                  ; runs -l preloads + -v/-h; the program kind

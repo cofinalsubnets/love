@@ -19,7 +19,7 @@
  (= 49 (: p (spawn (\ x (* x x)) 7) (wait p)))
 
  ; spawn returns a positive integer pid (main reserves pid 0).
- (: p (spawn (\ _ 0) 0) _ (wait p) (&& (fixp p) (> p 0)))
+ (: p (spawn (\ _ 0) 0) _ (wait p) (&& (fix? p) (> p 0)))
 
  ; pids are monotonically increasing within a VM.
  (: a (spawn (\ x x) 0)
@@ -84,7 +84,7 @@
  (= 1 (done? 0))
 
  ; done? on a freshly spawned task is false: the task hasn't completed.
- (: p (spawn (\ _ 42) 0) r (done? p) _ (wait p) (nilp r))
+ (: p (spawn (\ _ 42) 0) r (done? p) _ (wait p) (nil? r))
 
  ; after yielding, the worker completes and done? becomes true.
  (: p (spawn (\ _ 42) 0) _ (yield 0) r (done? p) _ (wait p) (= 1 r))
@@ -95,9 +95,9 @@
  ; --- sleep ---
 
  ; sleep with non-positive n returns nil immediately without yielding.
- (nilp (sleep 0))
- (nilp (sleep -1))
- (nilp (sleep nil))
+ (nil? (sleep 0))
+ (nil? (sleep -1))
+ (nil? (sleep nil))
 
  ; sleep takes at least n ticks (g_clock ms on this frontend).
  ; allow generous slack for slow CI.
@@ -212,7 +212,7 @@
     ra (wait a)               ; ~10ms; b still sleeping
     db (done? b)              ; b should still be running
     rb (wait b)               ; ~70ms more
-    (&& (= 1 ra) (nilp db) (= 2 rb)))
+    (&& (= 1 ra) (nil? db) (= 2 rb)))
 
  ; hush a sleeping task: scheduler skips it via wake_at, but hush walks the
  ; ring directly and finds it regardless of state.

@@ -16,34 +16,34 @@
 ; --- the kernel: values, evaluation, conversion, checking ---
 (: GLOB (tablet 0) HELPC (tablet 0)
 
-   (tagv v) (? (chainp v) (cap v) v)
+   (tagv v) (? (two? v) (cap v) v)
    (e2 l) (cap (cup l))
    (e3 l) (cap (cup (cup l)))
    (e4 l) (cap (cup (cup (cup l))))
    (e5 l) (cap (cup (cup (cup (cup l))))))
 
-(: (vsucc v) (? (fixp v) (v + 1) (L 'succ v))
+(: (vsucc v) (? (fix? v) (v + 1) (L 'succ v))
 
    (capp cl v) (vof (link (L (e3 cl) v) (e2 cl)) (e4 cl))
 
-   (vapp f a) (? (idp (tagv f) 'lam) (capp (e2 f) a) (L 'na f a))
+   (vapp f a) (? (id? (tagv f) 'lam) (capp (e2 f) a) (L 'na f a))
 
-   (dop1 v) (? (idp (tagv v) 'chain) (e2 v) (L 'np1 v))
-   (dop2 v) (? (idp (tagv v) 'chain) (e3 v) (L 'np2 v))
+   (dop1 v) (? (id? (tagv v) 'chain) (e2 v) (L 'np1 v))
+   (dop2 v) (? (id? (tagv v) 'chain) (e3 v) (L 'np2 v))
 
    (donr P z s m)
-   (? (fixp m) (: (go k acc) (? (k = m) acc (go (k + 1) (vapp (vapp s k) acc)))
+   (? (fix? m) (: (go k acc) (? (k = m) acc (go (k + 1) (vapp (vapp s k) acc)))
                   (go 0 z))
-      (idp (tagv m) 'succ) (vapp (vapp s (e2 m)) (donr P z s (e2 m)))
+      (id? (tagv m) 'succ) (vapp (vapp s (e2 m)) (donr P z s (e2 m)))
       (L 'nnr P z s m))
 
-   (dobr P x y v) (? (idp v 'true) x (idp v 'false) y (L 'nbr P x y v))
-   (dour P x v) (? (idp v 'tt) x (L 'nur P x v))
-   (docr P f g v) (? (idp (tagv v) 'i1) (vapp f (e2 v))
-                     (idp (tagv v) 'i2) (vapp g (e2 v))
+   (dobr P x y v) (? (id? v 'true) x (id? v 'false) y (L 'nbr P x y v))
+   (dour P x v) (? (id? v 'tt) x (L 'nur P x v))
+   (docr P f g v) (? (id? (tagv v) 'i1) (vapp f (e2 v))
+                     (id? (tagv v) 'i2) (vapp g (e2 v))
                      (L 'ncr P f g v))
    (doer P v) (L 'ner P v)
-   (dojr P r ev) (? (idp (tagv ev) 'refl) r (L 'njr P r ev))
+   (dojr P r ev) (? (id? (tagv ev) 'refl) r (L 'njr P r ev))
 
    (vof-sym en x)
    (: e (assq x en)
@@ -52,68 +52,68 @@
             (? g (e2 g) (scare 'uu-unbound x)))))
 
    (vof en t)
-   (? (fixp t) t
-      (nomp t) (? (memq t '(UU nat bool unit empty tt true false)) t
-                  (idp t 'zero) 0
+   (? (fix? t) t
+      (nom? t) (? (memq t '(UU nat bool unit empty tt true false)) t
+                  (id? t 'zero) 0
                   (vof-sym en t))
       (: h (cap t)
-         (? (chainp h) (vof-spine en (vof en h) (cup t))
-            (idp h 'lam)    (L 'lam (L 'clo en (e2 t) (e3 t)))
-            (idp h 'pi)     (L 'pi  (vof en (e3 t)) (L 'clo en (e2 t) (e4 t)))
-            (idp h 'total2) (L 'sig (vof en (e3 t)) (L 'clo en (e2 t) (e4 t)))
-            (idp h 'tpair)  (L 'chain (vof en (e2 t)) (vof en (e3 t)))
-            (idp h 'pr1)    (dop1 (vof en (e2 t)))
-            (idp h 'pr2)    (dop2 (vof en (e2 t)))
-            (idp h 'succ)   (vsucc (vof en (e2 t)))
-            (idp h 'coprod) (L 'coprod (vof en (e2 t)) (vof en (e3 t)))
-            (idp h 'ii1)    (L 'i1 (vof en (e2 t)))
-            (idp h 'ii2)    (L 'i2 (vof en (e2 t)))
-            (idp h 'paths)  (L 'paths (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)))
-            (idp h 'idpath) (L 'refl (vof en (e2 t)))
-            (idp h 'the)    (vof en (e3 t))
-            (idp h 'let)    (vof (link (L (e2 t) (vof en (e3 t))) en) (e4 t))
-            (idp h 'nat_rect)    (donr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)) (vof en (e5 t)))
-            (idp h 'bool_rect)   (dobr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)) (vof en (e5 t)))
-            (idp h 'unit_rect)   (dour (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)))
-            (idp h 'coprod_rect) (docr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)) (vof en (e5 t)))
-            (idp h 'empty_rect)  (doer (vof en (e2 t)) (vof en (e3 t)))
-            (idp h 'paths_rect)  (dojr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)))
+         (? (two? h) (vof-spine en (vof en h) (cup t))
+            (id? h 'lam)    (L 'lam (L 'clo en (e2 t) (e3 t)))
+            (id? h 'pi)     (L 'pi  (vof en (e3 t)) (L 'clo en (e2 t) (e4 t)))
+            (id? h 'total2) (L 'sig (vof en (e3 t)) (L 'clo en (e2 t) (e4 t)))
+            (id? h 'tpair)  (L 'chain (vof en (e2 t)) (vof en (e3 t)))
+            (id? h 'pr1)    (dop1 (vof en (e2 t)))
+            (id? h 'pr2)    (dop2 (vof en (e2 t)))
+            (id? h 'succ)   (vsucc (vof en (e2 t)))
+            (id? h 'coprod) (L 'coprod (vof en (e2 t)) (vof en (e3 t)))
+            (id? h 'ii1)    (L 'i1 (vof en (e2 t)))
+            (id? h 'ii2)    (L 'i2 (vof en (e2 t)))
+            (id? h 'paths)  (L 'paths (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)))
+            (id? h 'idpath) (L 'refl (vof en (e2 t)))
+            (id? h 'the)    (vof en (e3 t))
+            (id? h 'let)    (vof (link (L (e2 t) (vof en (e3 t))) en) (e4 t))
+            (id? h 'nat_rect)    (donr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)) (vof en (e5 t)))
+            (id? h 'bool_rect)   (dobr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)) (vof en (e5 t)))
+            (id? h 'unit_rect)   (dour (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)))
+            (id? h 'coprod_rect) (docr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)) (vof en (e5 t)))
+            (id? h 'empty_rect)  (doer (vof en (e2 t)) (vof en (e3 t)))
+            (id? h 'paths_rect)  (dojr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)))
             (vof-spine en (vof en h) (cup t)))))
 
-   ; empty-list tests are STRUCTURAL (chainp): a love list of zeros NETS zero,
+   ; empty-list tests are STRUCTURAL (two?): a love list of zeros NETS zero,
    ; so !as would call (add n 0)'s final argument list (0) empty -- the net law.
    (vof-spine en f as)
-   (? !(chainp as) f (vof-spine en (vapp f (vof en (cap as))) (cup as)))
+   (? !(two? as) f (vof-spine en (vapp f (vof en (cap as))) (cup as)))
 
    (conv d a b)
-   (? (idp a b) 1                    ; the same heap object converts to itself:
-      (&& (fixp a) (fixp b)) (a = b) ; O(1) across the shared neutral towers
-      (&& (nomp a) (nomp b)) (idp a b)
-      (|| (idp (tagv a) 'lam) (idp (tagv b) 'lam))
+   (? (id? a b) 1                    ; the same heap object converts to itself:
+      (&& (fix? a) (fix? b)) (a = b) ; O(1) across the shared neutral towers
+      (&& (nom? a) (nom? b)) (id? a b)
+      (|| (id? (tagv a) 'lam) (id? (tagv b) 'lam))
       (: fr (L 'nv d) (conv (d + 1) (vapp a fr) (vapp b fr)))
-      (&& (idp (tagv a) 'chain) (chainp b) !(idp (cap b) 'chain))
+      (&& (id? (tagv a) 'chain) (two? b) !(id? (cap b) 'chain))
       (&& (conv d (e2 a) (dop1 b)) (conv d (e3 a) (dop2 b)))
-      (&& (idp (tagv b) 'chain) (chainp a) !(idp (cap a) 'chain))
+      (&& (id? (tagv b) 'chain) (two? a) !(id? (cap a) 'chain))
       (&& (conv d (dop1 a) (e2 b)) (conv d (dop2 a) (e3 b)))
-      (&& (idp (tagv a) 'pi) (idp (tagv b) 'pi))
+      (&& (id? (tagv a) 'pi) (id? (tagv b) 'pi))
       (&& (conv d (e2 a) (e2 b))
           (: fr (L 'nv d) (conv (d + 1) (capp (e3 a) fr) (capp (e3 b) fr))))
-      (&& (idp (tagv a) 'sig) (idp (tagv b) 'sig))
+      (&& (id? (tagv a) 'sig) (id? (tagv b) 'sig))
       (&& (conv d (e2 a) (e2 b))
           (: fr (L 'nv d) (conv (d + 1) (capp (e3 a) fr) (capp (e3 b) fr))))
-      (&& (chainp a) (chainp b) (idp (cap a) (cap b))) (conv-args d (cup a) (cup b))
+      (&& (two? a) (two? b) (id? (cap a) (cap b))) (conv-args d (cup a) (cup b))
       0)
 
    (conv-args d as bs)
-   (? (&& !(chainp as) !(chainp bs)) 1
-      (|| !(chainp as) !(chainp bs)) 0
+   (? (&& !(two? as) !(two? bs)) 1
+      (|| !(two? as) !(two? bs)) 0
       (&& (conv d (cap as) (cap bs)) (conv-args d (cup as) (cup bs))))
 
    (inf-sym cx x)
-   (? (idp x 'UU) 'UU
+   (? (id? x 'UU) 'UU
       (memq x '(nat bool unit empty)) 'UU
-      (idp x 'zero) 'nat
-      (idp x 'tt) 'unit
+      (id? x 'zero) 'nat
+      (id? x 'tt) 'unit
       (memq x '(true false)) 'bool
       (: e (assq x cx)
          (? e (e2 e)
@@ -121,36 +121,36 @@
                (? g (cap g) (scare 'uu-unbound x))))))
 
    (inf-spine cx en d f as)
-   (? !(chainp as) f
-      (idp (tagv f) 'pi)
+   (? !(two? as) f
+      (id? (tagv f) 'pi)
       (: a (cap as)
          _ (chk cx en d a (e2 f))
          (inf-spine cx en d (capp (e3 f) (vof en a)) (cup as)))
       (scare 'uu-not-a-pi as))
 
    (chk cx en d t T)
-   (? (&& (chainp t) (idp (cap t) 'lam))
-      (? (idp (tagv T) 'pi)
+   (? (&& (two? t) (id? (cap t) 'lam))
+      (? (id? (tagv T) 'pi)
          (: x (e2 t) fr (L 'nv d)
             (chk (link (L x (e2 T)) cx) (link (L x fr) en) (d + 1)
                  (e3 t) (capp (e3 T) fr)))
          (scare 'uu-lam-needs-pi t))
-      (&& (chainp t) (idp (cap t) 'tpair))
-      (? (idp (tagv T) 'sig)
+      (&& (two? t) (id? (cap t) 'tpair))
+      (? (id? (tagv T) 'sig)
          (: _ (chk cx en d (e2 t) (e2 T))
             (chk cx en d (e3 t) (capp (e3 T) (vof en (e2 t)))))
          (scare 'uu-tpair-needs-total2 t))
-      (&& (chainp t) (idp (cap t) 'ii1))
-      (? (idp (tagv T) 'coprod) (chk cx en d (e2 t) (e2 T)) (scare 'uu-ii1-needs-coprod t))
-      (&& (chainp t) (idp (cap t) 'ii2))
-      (? (idp (tagv T) 'coprod) (chk cx en d (e2 t) (e3 T)) (scare 'uu-ii2-needs-coprod t))
-      (&& (chainp t) (idp (cap t) 'idpath))
-      (? (idp (tagv T) 'paths)
+      (&& (two? t) (id? (cap t) 'ii1))
+      (? (id? (tagv T) 'coprod) (chk cx en d (e2 t) (e2 T)) (scare 'uu-ii1-needs-coprod t))
+      (&& (two? t) (id? (cap t) 'ii2))
+      (? (id? (tagv T) 'coprod) (chk cx en d (e2 t) (e3 T)) (scare 'uu-ii2-needs-coprod t))
+      (&& (two? t) (id? (cap t) 'idpath))
+      (? (id? (tagv T) 'paths)
          (: _ (chk cx en d (e2 t) (e2 T))
             v (vof en (e2 t))
             (? (&& (conv d v (e3 T)) (conv d v (e4 T))) 1 (scare 'uu-idpath-mismatch t)))
          (scare 'uu-idpath-needs-paths t))
-      (&& (chainp t) (idp (cap t) 'let))
+      (&& (two? t) (id? (cap t) 'let))
       (: x (e2 t)
          Av (inf cx en d (e3 t))
          va (vof en (e3 t))
@@ -159,51 +159,51 @@
          (? (conv d T Ti) 1 (scare 'uu-type-mismatch t))))
 
    (inf cx en d t)
-   (? (fixp t) 'nat
-      (nomp t) (inf-sym cx t)
+   (? (fix? t) 'nat
+      (nom? t) (inf-sym cx t)
       (: h (cap t)
-         (? (chainp h) (inf-spine cx en d (inf cx en d h) (cup t))
-            (idp h 'pi)
+         (? (two? h) (inf-spine cx en d (inf cx en d h) (cup t))
+            (id? h 'pi)
             (: x (e2 t)
                _ (chk cx en d (e3 t) 'UU)
                fr (L 'nv d)
                _ (chk (link (L x (vof en (e3 t))) cx) (link (L x fr) en) (d + 1) (e4 t) 'UU)
                'UU)
-            (idp h 'total2)
+            (id? h 'total2)
             (: x (e2 t)
                _ (chk cx en d (e3 t) 'UU)
                fr (L 'nv d)
                _ (chk (link (L x (vof en (e3 t))) cx) (link (L x fr) en) (d + 1) (e4 t) 'UU)
                'UU)
-            (idp h 'coprod)
+            (id? h 'coprod)
             (: _ (chk cx en d (e2 t) 'UU) _ (chk cx en d (e3 t) 'UU) 'UU)
-            (idp h 'paths)
+            (id? h 'paths)
             (: _ (chk cx en d (e2 t) 'UU)
                Av (vof en (e2 t))
                _ (chk cx en d (e3 t) Av)
                _ (chk cx en d (e4 t) Av)
                'UU)
-            (idp h 'succ) (: _ (chk cx en d (e2 t) 'nat) 'nat)
-            (idp h 'idpath)
+            (id? h 'succ) (: _ (chk cx en d (e2 t) 'nat) 'nat)
+            (id? h 'idpath)
             (: Av (inf cx en d (e2 t)) v (vof en (e2 t)) (L 'paths Av v v))
-            (idp h 'pr1)
+            (id? h 'pr1)
             (: S (inf cx en d (e2 t))
-               (? (idp (tagv S) 'sig) (e2 S) (scare 'uu-pr1-needs-total2 t)))
-            (idp h 'pr2)
+               (? (id? (tagv S) 'sig) (e2 S) (scare 'uu-pr1-needs-total2 t)))
+            (id? h 'pr2)
             (: S (inf cx en d (e2 t))
-               (? (idp (tagv S) 'sig) (capp (e3 S) (dop1 (vof en (e2 t))))
+               (? (id? (tagv S) 'sig) (capp (e3 S) (dop1 (vof en (e2 t))))
                   (scare 'uu-pr2-needs-total2 t)))
-            (idp h 'the)
+            (id? h 'the)
             (: _ (chk cx en d (e2 t) 'UU)
                Tv (vof en (e2 t))
                _ (chk cx en d (e3 t) Tv)
                Tv)
-            (idp h 'let)
+            (id? h 'let)
             (: x (e2 t)
                Av (inf cx en d (e3 t))
                va (vof en (e3 t))
                (inf (link (L x Av) cx) (link (L x va) en) d (e4 t)))
-            (idp h 'nat_rect)
+            (id? h 'nat_rect)
             (: P (e2 t)
                _ (chk cx en d (e5 t) 'nat)
                _ (chk cx en d P (vof 0 '(pi x nat UU)))
@@ -212,7 +212,7 @@
                _ (chk cx en d (e4 t)
                       (vof (L (L 'P Pv)) '(pi k nat (pi r (P k) (P (succ k))))))
                (vapp Pv (vof en (e5 t))))
-            (idp h 'bool_rect)
+            (id? h 'bool_rect)
             (: P (e2 t)
                _ (chk cx en d (e5 t) 'bool)
                _ (chk cx en d P (vof 0 '(pi x bool UU)))
@@ -220,21 +220,21 @@
                _ (chk cx en d (e3 t) (vapp Pv 'true))
                _ (chk cx en d (e4 t) (vapp Pv 'false))
                (vapp Pv (vof en (e5 t))))
-            (idp h 'unit_rect)
+            (id? h 'unit_rect)
             (: P (e2 t)
                _ (chk cx en d (e4 t) 'unit)
                _ (chk cx en d P (vof 0 '(pi x unit UU)))
                Pv (vof en P)
                _ (chk cx en d (e3 t) (vapp Pv 'tt))
                (vapp Pv (vof en (e4 t))))
-            (idp h 'empty_rect)
+            (id? h 'empty_rect)
             (: P (e2 t)
                _ (chk cx en d (e3 t) 'empty)
                _ (chk cx en d P (vof 0 '(pi x empty UU)))
                (vapp (vof en P) (vof en (e3 t))))
-            (idp h 'coprod_rect)
+            (id? h 'coprod_rect)
             (: S (inf cx en d (e5 t))
-               (? (idp (tagv S) 'coprod)
+               (? (id? (tagv S) 'coprod)
                   (: A (e2 S) B (e3 S) P (e2 t)
                      _ (chk cx en d P
                             (vof (L (L 'A A) (L 'B B)) '(pi x (coprod A B) UU)))
@@ -245,9 +245,9 @@
                             (vof (L (L 'B B) (L 'P Pv)) '(pi b B (P (ii2 b)))))
                      (vapp Pv (vof en (e5 t))))
                   (scare 'uu-coprod_rect t)))
-            (idp h 'paths_rect)
+            (id? h 'paths_rect)
             (: E (inf cx en d (e4 t))
-               (? (idp (tagv E) 'paths)
+               (? (id? (tagv E) 'paths)
                   (: A (e2 E) av (e3 E) bv (e4 E) P (e2 t)
                      _ (chk cx en d P
                             (vof (L (L 'A A) (L 'a av)) '(pi b A (pi e (paths A a b) UU))))
@@ -312,7 +312,7 @@
    '(lam A (lam a (lam b (lam e
       (paths_rect (lam bp (lam ep (paths A bp a))) (idpath a) e))))))
  ; pathscomp0 inducts on its FIRST argument, exactly as UniMath's @ does:
- ; (comp idpath e) computes to e, the right identity is the lemma below.
+ ; (twin? idpath e) computes to e, the right identity is the lemma below.
  (defn 'pathscomp0
    '(pi A UU (pi a A (pi b A (pi c A (pi e1 (paths A a b) (pi e2 (paths A b c) (paths A a c)))))))
    '(lam A (lam a (lam b (lam c (lam e1 (lam e2
@@ -537,7 +537,7 @@
 ; equivalence. the route is Voevodsky's: hfiber (f o g) y is contractible by
 ; homotopy from idisweq, and hfiber f y retracts onto it; the retraction
 ; equation is total2_paths_f over the cancellation !p @ (p @ q) = q, whose
-; J-base is ALL definitional under left-inducting comp. the corollaries pay
+; J-base is ALL definitional under left-inducting twin?. the corollaries pay
 ; immediately: the inverse of a weq is a weq, negb is a weq, and weqtopaths
 ; mints a path bool = bool in the universe that is not idpath.
 (assert
@@ -1965,9 +1965,9 @@
       (lam m false)
       (lam k (lam IH (lam m (nat_rect (lam r bool) true (lam j (lam u (IH j))) m))))
       n)))
- (idp (vof 0 'true) (vof 0 '(natgtb 5 3)))
- (idp (vof 0 'false) (vof 0 '(natgtb 3 5)))
- (idp (vof 0 'false) (vof 0 '(natgtb 4 4)))
+ (id? (vof 0 'true) (vof 0 '(natgtb 5 3)))
+ (id? (vof 0 'false) (vof 0 '(natgtb 3 5)))
+ (id? (vof 0 'false) (vof 0 '(natgtb 4 4)))
  (defn 'natgth '(pi n nat (pi m nat hProp))
    '(lam n (lam m (tpair (paths bool (natgtb n m) true)
                          (isasetbool (natgtb n m) true)))))
@@ -2068,8 +2068,8 @@
             (natgthandplusr (mul (succ p) n) (mul (succ p) m) n IH)
             (natgthandplusl n m (mul (succ p) m) g))))
         k))))))
- (idp (vof 0 'true) (vof 0 '(natgtb (add 3 5) (add 3 2))))
- (idp (vof 0 'true) (vof 0 '(natgtb (mul 2 5) (mul 2 2)))))
+ (id? (vof 0 'true) (vof 0 '(natgtb (add 3 5) (add 3 2))))
+ (id? (vof 0 'true) (vof 0 '(natgtb (mul 2 5) (mul 2 2)))))
 
 ; NATURALNUMBERS round 18 -- the order is decidable and total. natlth/natgeh are
 ; natgth/natleh flipped; natleh is "natgtb is false" (the hProp, by isasetbool) --
@@ -2093,8 +2093,8 @@
         (natgtb n m)))))
  ; the dichotomy DECIDES and computes: coprod_rect reads the chosen branch back
  ; out -- 5>3 lands left (true), 3<5 lands right (false).
- (idp (vof 0 'true)  (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 5 3))))
- (idp (vof 0 'false) (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 3 5)))))
+ (id? (vof 0 'true)  (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 5 3))))
+ (id? (vof 0 'false) (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 3 5)))))
 
 ; NATURALNUMBERS round 19 -- natleh is a partial order, on its "natgtb is false"
 ; carrier (the false mirror of round 16's true-direction laws). isreflnatleh is
@@ -2235,8 +2235,8 @@
            (lam j (lam u (natlehsucc (natminus k j) k (IHn j))))
            m))))
       n)))
- (idp (vof 0 '2) (vof 0 '(natminus 5 3)))
- (idp (vof 0 '0) (vof 0 '(natminus 2 5))))
+ (id? (vof 0 '2) (vof 0 '(natminus 5 3)))
+ (id? (vof 0 '0) (vof 0 '(natminus 2 5))))
 
 ; NATURALNUMBERS round 22 -- the subtraction order law. natminusplusnmm: when
 ; m <= n, (n - m) + m = n -- subtraction is a genuine left inverse of +m below
@@ -2270,7 +2270,7 @@
                    (maponpaths nat nat (lam w (succ w)) (add (natminus n' m') m') n' (IHn m' h))))))
              m))))
         n)))
- (idp (vof 0 '7) (vof 0 '(add (natminus 7 3) 3))))   ; (7-3)+3 computes to 7
+ (id? (vof 0 '7) (vof 0 '(add (natminus 7 3) 3))))   ; (7-3)+3 computes to 7
 
 ; NATURALNUMBERS round 23 -- natminus is monotone in the order: a triple rect
 ; (n, m, k) down natminus's shape, the n=0 corner free (0-k is 0, natgtb 0 _ is
@@ -2335,11 +2335,11 @@
 (: (help s p e) (? (more? s) p (eof? s) e
                    (: h (peep HELPC () 0) (? h (h s p e) 0))))
 (assert
- (idp 'rejected (rejects (\ z (defn 'uu-bad1 '(paths nat 1 2) '(idpath 1)))))
- (idp 'rejected (rejects (\ z (defn 'uu-bad2 '(pi x nat nat) '(lam x (succ y))))))
- (idp 'rejected (rejects (\ z (defn 'uu-bad3 'nat '(lam x x)))))
- (idp 'rejected (rejects (\ z (defn 'uu-bad4 '(coprod nat bool) '(ii1 true)))))
- (idp 'rejected (rejects (\ z (defn 'uu-bad5 'nat '(let x (lam y y) x)))))
- (idp 'rejected (rejects (\ z (defn 'uu-bad6 '(pi x nat 5) '(lam x x)))))  ; a non-type in the codomain
- (idp 'accepted (rejects (\ z (defn 'uu-good '(paths nat 2 2) '(idpath 2))))))
+ (id? 'rejected (rejects (\ z (defn 'uu-bad1 '(paths nat 1 2) '(idpath 1)))))
+ (id? 'rejected (rejects (\ z (defn 'uu-bad2 '(pi x nat nat) '(lam x (succ y))))))
+ (id? 'rejected (rejects (\ z (defn 'uu-bad3 'nat '(lam x x)))))
+ (id? 'rejected (rejects (\ z (defn 'uu-bad4 '(coprod nat bool) '(ii1 true)))))
+ (id? 'rejected (rejects (\ z (defn 'uu-bad5 'nat '(let x (lam y y) x)))))
+ (id? 'rejected (rejects (\ z (defn 'uu-bad6 '(pi x nat 5) '(lam x x)))))  ; a non-type in the codomain
+ (id? 'accepted (rejects (\ z (defn 'uu-good '(paths nat 2 2) '(idpath 2))))))
 (: help 0)

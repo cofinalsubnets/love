@@ -21,7 +21,7 @@
    (datums s) ((: (g p e a) (: r (read p e) (? (| (= e r) (= p r)) (rev a) (g p e (link r a)))))
                (sip (s2cl s)) (nom 0) 0)
    ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
-   (form1 cs) (: e (nom 0) p (sip cs) r (read p e) (? (| (idp r e) (idp r p)) 0 (show r)))
+   (form1 cs) (: e (nom 0) p (sip cs) r (read p e) (? (| (id? r e) (id? r p)) 0 (show r)))
    ; a HARD token boundary: whitespace, delimiters, string quote, comment, and
    ; the value-surface chars. tokens never span these under any lexer law, so
    ; the redundancy probe's left context resets there.
@@ -51,7 +51,7 @@
    ; just today's. the opb? clause still keeps an operator-then-datum space:
    ; the probe reads in isolation (head position, fusion off) but the run is
    ; monadic mid-list.
-   (redundant? ctx cs) (? (&& (chainp ctx) (opb? (cap ctx)) (dstart? (cap cs))) 0
+   (redundant? ctx cs) (? (&& (two? ctx) (opb? (cap ctx)) (dstart? (cap cs))) 0
                           (: lt (string (rev ctx)) rt (form1 cs)
                              (? rt (= (datums (+ lt rt)) (datums (+ (+ lt " ") rt))) 0)))
    ; emit one byte to out, C-escaped for the string literal.
@@ -72,7 +72,7 @@
    ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."
    ; literal (where \ escapes).
    _ ((: (g cs ctx instr)
-        (? (chainp cs)
+        (? (two? cs)
            (: c (cap cs)
               (? instr
                  (? (= c 92) (: _ (eb c) _ (eb (cap (cup cs))) (g (cup (cup cs)) 0 1))

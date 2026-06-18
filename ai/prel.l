@@ -12,9 +12,9 @@
    true 1 false 0
    i ~(0 1) ;; FIXME up top
    Z 0 R 1 C 2 O 3                              ; array element-kind codes (the tier spine)
-   non nilp  ;;; FIXME keep nilp alias but standardize on non                                   ; the normal name; !$x reads "non sat x"
-   (unip x) (= x (cap x))
-   (atomp x) (nilp (chainp x))
+   non nil?  ;;; FIXME keep nil? alias but standardize on non                                   ; the normal name; !$x reads "non sat x"
+   (one? x) (= x (cap x))
+   (atom? x) (nil? (two? x))
    (co f g) (\ x (f (g x)))
    (names _ ) (keys book)
    caap (co cap cap) caup (co cap cup) ;; FIXME emit pure code -- combine like operations and metaprogram a concrete thread for each definition
@@ -29,8 +29,8 @@
 ; point the mint nif adjoins; identity its only property, $mint = 0). the old
 ; named-uninterned atom species is gone -- McCarthy's symbol, restored as the
 ; chain it always was. (nom 0) (any non-text arg) is the bare mint.
-(: (nom n) (? (strp n) (link n (mint 0)) ;; FIXME link
-              (nomp n) (link (string n) (mint 0))
+(: (nom n) (? (string? n) (link n (mint 0)) ;; FIXME link
+              (nom? n) (link (string n) (mint 0))
               (mint 0)))
 ; integer power (b ** k) is just numeral application: (k b) == b**k. The squaring
 ; algorithm lives in `ipow`, local to the num-ap block below, so there is no `**`.
@@ -79,8 +79,8 @@
      _ (poke (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    ;; FIXME rename | -> bit-or to free | for pipe operator
-   (nump x) (| (fixp x) (| (packp x) (bigp x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
-   (whole? n) (| (fixp n) (| (widep n) (bigp n)))       ; integer-valued numeral (exact power exponent / composition count)
+   (jewel? x) (| (fix? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
+   (whole? n) (| (fix? n) (| (full? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
    ; (k b) numeral application routes here, so `**` is unneeded.
    ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
@@ -98,7 +98,7 @@
    ; a NEGATIVE integer giving the reciprocal power (so (-1 x) == (/ 1 x) and
    ; (sqrt x) == ((/ 1 2) x)); otherwise pow, which carries a complex lane
    ; (w^z = exp(z Log w)) and a real lane.
-   (powg x n) (? (trayp n) (pow x n)
+   (powg x n) (? (tray? n) (pow x n)
                  (whole? n) (: m (? (< n 0) (- 0 n) n)
                              (? (apover m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
@@ -110,7 +110,7 @@
    ; zero numeral ((-3 f) = (0 f) = 1, the literal lambda construction), a float
    ; ceils, a complex its modulus when it sorts positive, an array its element
    ; sum -- the saturated net. k=0 -> 1 (const 1); k=1 -> x directly -- the snappy basics.
-   (num-ap n x) (? (nump x) (powg x n)
+   (num-ap n x) (? (jewel? x) (powg x n)
                    (: k (sat n)
                       (? (< k 1) 1 (= k 1) x
                          (apover k) (scare 'apcap k)
@@ -127,65 +127,65 @@
 (: (add f g a x) (f a (g a x))
    (mul f g x) (f (g x))
    _ (pin book 'add add) _ (pin book 'mul mul))
-(: (map f l) (? (chainp l) (link (f (cap l)) (map f (cup l))))
-   (foldl f z l) (? (chainp l) (foldl f (f z (cap l)) (cup l)) z)
-   (foldr f z l) (? (chainp l) (f (cap l) (foldr f z (cup l))) z))
+(: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
+   (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
+   (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z))
 ; the monadic words behind the glued sigils (the valence law; see opfix and
 ; book['monadics] below). net is the CONTENT MEASURE as a value -- + turned
 ; inward: a number is its own net (phase intact, exact), an array sums its
 ; cells, a list the nets of its spine, and everything else is non-negative
 ; so its net IS its sat. prod is the product twin; neg/recip/frac the
 ; dyadics turned inward; bit the truth bit (the Iverson bracket, !!).
-(: (net x) (? (trayp x) (asum x)
-              (nump x) x
-              (chainp x) (foldl (\ a e (+ a (net e))) 0 x)
+(: (net x) (? (tray? x) (asum x)
+              (jewel? x) x
+              (two? x) (foldl (\ a e (+ a (net e))) 0 x)
               (sat x))
-   (prod x) (? (trayp x) (aprod x)
-               (chainp x) (foldl (\ a e (* a (prod e))) 1 x)
+   (prod x) (? (tray? x) (aprod x)
+               (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
    neg (- 0)
    recip (/ 1)
    (frac x) (% x 1)
-   (bit x) (nilp (nilp x))
+   (bit x) (nil? (nil? x))
    ; a GEM is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
-   ; net (x IS its own net; idp, not `=`, since net returns a number operand unchanged
-   ; while a tray's net is a fresh sum). a TRAY (trayp) is an array of any element kind;
-   ; a CREST is a tray of GEMS -- a numeric tray. gemp and crestp are DISJOINT: a tray
+   ; net (x IS its own net; id?, not `=`, since net returns a number operand unchanged
+   ; while a tray's net is a fresh sum). a TRAY (tray?) is an array of any element kind;
+   ; a CREST is a tray of GEMS -- a numeric tray. gem? and crest? are DISJOINT: a tray
    ; never self-nets (its net is a fresh scalar), so a crest is never a gem -- it is
-   ; COMPOSED of gems, not a kind of gem. crestp keys on the CELLS, not the O code, so a
+   ; COMPOSED of gems, not a kind of gem. crest? keys on the CELLS, not the O code, so a
    ; Z/R/C tray qualifies outright and an object-typed tray of gem cells (e.g. bignums)
    ; still counts -- a tray of strings does not (a string is no gem).
-   (gemp x) (idp x (net x))
+   (gem? x) (id? x (net x))
    ; a CHARM is the word-sized gem -- a fixnum (the lisp predicate; oddp C-side).
-   (charmp x) (fixp x)
-   (crestp x) (? (trayp x) (? (< (atype x) O) 1 (gemp (peep x 0 0))) 0))
+   (charm? x) (fix? x)
+   (crest? x) (? (tray? x) (? (< (atype x) O) 1 (gem? (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
-   (filter p l) (? (chainp l) (: m (filter p (cup l)) (? (p (cap l)) (link (cap l) m) m)))
-   (init l) (? (chainp (cup l)) (link (cap l) (init (cup l))))
-   (last l) (? (chainp (cup l)) (last (cup l)) (cap l))
-   (each l f) (? (chainp l) (: _ (f (cap l)) (each (cup l) f)))
-   (ldel x l) (? (chainp l) (? (= (cap l) x) (cup l) (link (cap l) (ldel x (cup l)))))
-   (all f l) (? (chainp l) (? (f (cap l)) (all f (cup l))) 1)
-   (any f l) (? (chainp l) (? (f (cap l)) 1 (any f (cup l))))
+   (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (link (cap l) m) m)))
+   (init l) (? (two? (cup l)) (link (cap l) (init (cup l))))
+   (last l) (? (two? (cup l)) (last (cup l)) (cap l))
+   (each l f) (? (two? l) (: _ (f (cap l)) (each (cup l) f)))
+   (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (link (cap l) (ldel x (cup l)))))
+   (all f l) (? (two? l) (? (f (cap l)) (all f (cup l))) 1)
+   (any f l) (? (two? l) (? (f (cap l)) 1 (any f (cup l))))
    (cat a b) (foldr link b a))
 ; sort: (sort l) orders l ascending by the total order -- the C lane (a stable
 ; bottom-up merge in the heap gap, one cmp3 per compare, no lisp re-entry);
 ; descending is (rev (sort l)). an arbitrary strict less-than predicate takes
 ; the lisp merge sort: (msort le l), top-down alternating split + merge.
-(: (merge le a b) (? (atomp a) b (atomp b) a
+(: (merge le a b) (? (atom? a) b (atom? b) a
                      (le (cap a) (cap b)) (link (cap a) (merge le (cup a) b))
                      (link (cap b) (merge le a (cup b))))
-   (sortsplit l) (? (atomp l) (link l 0) (atomp (cup l)) (link l 0)
+   (sortsplit l) (? (atom? l) (link l 0) (atom? (cup l)) (link l 0)
                     (: r (sortsplit (cuup l)) (link (link (cap l) (cap r)) (link (caup l) (cup r)))))
-   (msort le l) (? (atomp l) l (atomp (cup l)) l
+   (msort le l) (? (atom? l) l (atom? (cup l)) l
                   (: s (sortsplit l) (merge le (msort le (cap s)) (msort le (cup s))))))
 (: catmap (co (flip foldr 0) (co cat))
-   (assq x l) (? (chainp l) (? (= x (caap l)) (cap l) (assq x (cup l))))
-   (lidx x) ((: (f n l) (? (chainp l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
+   (assq x l) (? (two? l) (? (= x (caap l)) (cap l) (assq x (cup l))))
+   (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
    memq (co any (=))
-   (zip a b) (? (chainp a) (? (chainp b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
+   (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) 0)
    (jot n) ((: (go i) (? (< i n) (link i (go (+ i 1))))) 0)
    (drop n l) (? n (drop (- n 1) (cup l)) l)
@@ -210,8 +210,8 @@
    (eof? s) (= s 3))
 ; here are some macro definitions
 (: l (foldr (\ a l (link link (link a (link l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
-(:: '&& (\ l (: (and l) (? (chainp (cup l)) (list '? (cap l) (and (cup l)) 0) (cap l)) (? (chainp l) (and l) 1))))
-(:: '|| (\ l (: (or l) (? (chainp l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) 0) (or l))))
+(:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) 0) (cap l)) (? (two? l) (and l) 1))))
+(:: '|| (\ l (: (or l) (? (two? l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) 0) (or l))))
 (:: ':- (\ a (link ': (cat (cup a) (link (cap a) 0)))))
 (:: '?- (\ a (link '? (cat (cup a) (link (cap a) 0)))))
 (:: '>>= (\ l (link (last l) (init l))))
@@ -233,7 +233,7 @@
 ; before its definitions); everything after -- and every later file, the
 ; corpus, the repl -- reads hot.
 (: operators (: t (tablet 0)
-   _ (pin t '$ (link 'sat 1)) _ (pin t '! (link 'nilp 1)) _ (pin t '. (link 'dot 1))
+   _ (pin t '$ (link 'sat 1)) _ (pin t '! (link 'nil? 1)) _ (pin t '. (link 'dot 1))
    _ (pin t '+ 2) _ (pin t '- 2) _ (pin t '* 2) _ (pin t '/ 2) _ (pin t '% 2)
    _ (pin t '= 2) _ (pin t '< 2) _ (pin t '<= 2) _ (pin t '> 2) _ (pin t '>= 2)
    _ (pin t '| 2) _ (pin t '& 2) _ (pin t '? 3)
@@ -252,12 +252,12 @@
    _ (pin t '| 'abs)   _ (pin t '- 'neg)
    _ (pin t '/ 'recip) _ (pin t '% 'frac)
    _ (pin t '? 'bit)
-   _ (pin t '$ 'sat)   _ (pin t '! 'nilp) _ (pin t '. 'dot)
+   _ (pin t '$ 'sat)   _ (pin t '! 'nil?) _ (pin t '. 'dot)
    t))
 ; the FACTORIZATION LAW: greedy longest-prefix match against the table, no
 ; backtracking; every factor but the last must be arity one; the last factor
 ; takes the positional valence. a token that doesn't factor is a plain
-; symbol. so != factors to ! and = ((a != b) = (nilp (= a b))) while &&,
+; symbol. so != factors to ! and = ((a != b) = (nil? (= a b))) while &&,
 ; >>=, :-, ?- (two-led or unmatched) stay atomic names.
 (: (op-punc-byte c) (? (&& (<= 48 c) (<= c 57)) 0
                        (&& (<= 65 c) (<= c 90)) 0
@@ -266,9 +266,9 @@
                        1)
    ; cheap prefilter: only an all-punct symbol can factor
    (op-puncp x)
-    (? (nomp x)
+    (? (nom? x)
        (: s (string x)
-          (? (strp s)
+          (? (string? s)
              (: n (tally s)
                 (? (< 0 n)
                    ((: (go i) (? (< i n) (? (op-punc-byte (s i)) (go (+ 1 i)) 0) 1)) 0)
@@ -277,14 +277,14 @@
        0)
    ; normalize a table entry for key k -> (name . arity), or 0
    (op-ent k) (: v (operators k)
-                 (? (fixp v) (? (&& (< 0 v) (< v 8)) (link k v) 0)
-                    (chainp v) (? (&& (nomp (cap v)) (fixp (cup v)) (< 0 (cup v)) (< (cup v) 8)) v 0)
+                 (? (fix? v) (? (&& (< 0 v) (< v 8)) (link k v) 0)
+                    (two? v) (? (&& (nom? (cap v)) (fix? (cup v)) (< 0 (cup v)) (< (cup v) 8)) v 0)
                     0))
    ; longest prefix of nm[i..n) that is a table key -> (len . entry), or 0
    (op-long nm i n)
     ((: (go k) (? (< k 1) 0
                   (: e (op-ent (intern (snip nm i (+ i k))))
-                     (? (chainp e) (link k e) (go (- k 1))))))
+                     (? (two? e) (link k e) (go (- k 1))))))
      (- n i))
    ; factor symbol s -> a list of (name . arity) entries, or 0
    (opfactor s)
@@ -292,10 +292,10 @@
        ((: (go i)
            (? (< i n)
               (: m (op-long nm i n)
-                 (? (chainp m) (: k (cap m) e (cup m)
+                 (? (two? m) (: k (cap m) e (cup m)
                          (? (= (+ i k) n) (link e 0)         ; the last factor: any arity
                             (= (cup e) 1) (: r (go (+ i k))  ; non-last factors must be arity one
-                                             (? (chainp r) (link e r) 0))
+                                             (? (two? r) (link e r) 0))
                             0))
                     0))
               0))
@@ -307,9 +307,9 @@
     ((: (go k) (? (< k 1) 0
                   (: s (intern (snip nm i (+ i k)))
                      e (monadics s)
-                     (? (nomp e) (link k e)
+                     (? (nom? e) (link k e)
                         (: o (op-ent s)
-                           (? (? (chainp o) (= 1 (cup o)) 0) (link k (cap o))
+                           (? (? (two? o) (= 1 (cup o)) 0) (link k (cap o))
                               (go (- k 1))))))))
      (- n i))
    ; factor a glued run against the monadic table -> the word list
@@ -319,9 +319,9 @@
        ((: (go i)
            (? (< i n)
               (: m (mono-long nm i n)
-                 (? (chainp m)
+                 (? (two? m)
                     (? (= (+ i (cap m)) n) (link (cup m) 0)
-                       (: r (go (+ i (cap m))) (? (chainp r) (link (cup m) r) 0)))
+                       (: r (go (+ i (cap m))) (? (two? r) (link (cup m) r) 0)))
                     0))
               0))
         0)))
@@ -336,16 +336,16 @@
    (op-fro f) (cap f) (op-frc f) (caup f) (op-frn f) (cauup f)
    (op-frd f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
    ; wrap the chain of arity-one names around a folded form
-   (op-fin ch x) (? (chainp ch) (link (cap ch) (link (op-fin (cup ch) x) 0)) x)
+   (op-fin ch x) (? (two? ch) (link (cap ch) (link (op-fin (cup ch) x) 0)) x)
    ; fold a frame with whatever it has: nothing collected -> the plain
    ; symbol; a shortfall folds to the partial application (curry law). a
    ; frame at arity ONE (nil name: the whole op lives in the chain) wraps its
    ; lone operand.
    ; KIND tests throughout the walk, never truth: a collected operand list
-   ; like (0) or ("") NETS zero, so nilp would read it as empty and drop
+   ; like (0) or ("") NETS zero, so nil? would read it as empty and drop
    ; the operand (the round-16 discipline: kinds for structure)
-   (op-fold f) (? (atomp (op-frg f)) (op-fro f)
-                  (nomp (op-frn f)) (op-fin (op-frc f) (link (op-frn f) (rev (op-frg f))))
+   (op-fold f) (? (atom? (op-frg f)) (op-fro f)
+                  (nom? (op-frn f)) (op-fin (op-frc f) (link (op-frn f) (rev (op-frg f))))
                   (op-fin (op-frc f) (cap (op-frg f))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a FILLED
    ; frame folds into its parent first (cascading), then d delivers. a
@@ -354,13 +354,13 @@
    ; their fold so a following operator can steal the last operand (that
    ; deferral IS right-associativity).
    (op-del d out pend)
-    (? (atomp pend) (link (link d out) pend)
+    (? (atom? pend) (link (link d out) pend)
        (: f (cap pend)
           (? (< 0 (op-frd f))
              (: f2 (op-fr (op-fro f) (op-frc f) (op-frn f)
                           (- (op-frd f) 1) (link d (op-frg f)))
-                ; (nilp ..), not !: this block is pre-opfix (the bootstrap restriction)
-                (? (&& (= 0 (op-frd f2)) (nilp (nomp (op-frn f2))))
+                ; (nil? ..), not !: this block is pre-opfix (the bootstrap restriction)
+                (? (&& (= 0 (op-frd f2)) (nil? (nom? (op-frn f2))))
                    (op-del (op-fold f2) out (cup pend))
                    (link out (link f2 (cup pend)))))
              (: r (op-del (op-fold f) out (cup pend))
@@ -369,7 +369,7 @@
    ; a FILLED top frame re-arms (need 1) and yields its last operand -- the
    ; C reader's A(F)=1 move; at top level the last finished datum is taken.
    (op-steal out pend)
-    (? (chainp pend)
+    (? (two? pend)
        (: f (cap pend)
           (? (= 0 (op-frd f))
              (link (cap (op-frg f))
@@ -377,29 +377,29 @@
                                           1 (cup (op-frg f)))
                                    (cup pend))))
              0))
-       (chainp out) (link (cap out) (link (cup out) pend))
+       (two? out) (link (cap out) (link (cup out) pend))
        0)
    ; drain at end of list: fold every pending frame innermost-out
    (op-drain out pend)
-    (? (atomp pend) (rev out)
+    (? (atom? pend) (rev out)
        (: r (op-del (op-fold (cap pend)) out (cup pend))
           (op-drain (cap r) (cup r))))
    (op-w l out pend)
-    (? (atomp l) (op-drain out pend)
+    (? (atom? l) (op-drain out pend)
        (: e (cap l)
-          (? (&& (nomp e) (op-puncp e))
+          (? (&& (nom? e) (op-puncp e))
              (: fs (opfactor e)
-                (? (atomp fs)
+                (? (atom? fs)
                    (: r (op-del e out pend) (op-w (cup l) (cap r) (cup r)))
                    (: ch (map cap (init fs)) en (last fs) nm (cap en) n (cup en)
                       (? (= n 1)                       ; arity one (or a one-chain): prefix --
                          ; nil name, the op rides the chain: marks the frame to fold on fill
                          (op-w (cup l) out (link (op-fr e (cat ch (link nm 0)) 0 1 0) pend))
                          (: st (op-steal out pend)     ; infix: capture if a left operand exists
-                            (? (chainp st) (op-w (cup l) (cap (cup st))
+                            (? (two? st) (op-w (cup l) (cap (cup st))
                                         (link (op-fr e ch nm (- n 1) (link (cap st) 0))
                                               (cup (cup st))))
-                               (chainp ch)               ; composite with no left: prefix
+                               (two? ch)               ; composite with no left: prefix
                                (op-w (cup l) out (link (op-fr e ch nm 1 0) pend))
                                (: r (op-del e out pend) ; bare operator: the plain symbol
                                   (op-w (cup l) (cap r) (cup r)))))))))
@@ -408,7 +408,7 @@
    ; quasiquote: the template is data; only unquote operands re-enter the pass.
    ; (nested quasiquote is gone -- ` is the list constructor, `` is quasiquote -- so no depth.)
    (op-qq t)
-    (? (atomp t) t
+    (? (atom? t) t
        (: h (cap t)
           (? (= h 'uq)  (link 'uq  (link (op-core (caup t)) 0))
              (= h 'uqs) (link 'uqs (link (op-core (caup t)) 0))
@@ -418,17 +418,17 @@
    ; only through unquotes; everything else walks. idempotent: factored
    ; output carries operators only in head position, where they read plain.
    (op-core x)
-    (? (atomp x) x
+    (? (atom? x) x
        (: h (cap x)
-          (? (&& (= h '\) (atomp (cuup x))) x
+          (? (&& (= h '\) (atom? (cuup x))) x
              (= h 'qq) (link 'qq (link (op-qq (caup x)) 0))
              ; the reader's glued-run emission (mono (run d)): factor the run
              ; monadically around the (recursively opfixed) datum; an
              ; unfactorable run is the plain application (run d)
-             (&& (= h 'mono) (chainp (cup x)) (chainp (caup x)))
+             (&& (= h 'mono) (two? (cup x)) (two? (caup x)))
               (: p (caup x) r (cap p) d (op-core (caup p))
-                 fs (? (nomp r) (monofactor r) 0)
-                 (? (chainp fs) (op-fin fs d) (link r (link d 0))))
+                 fs (? (nom? r) (monofactor r) 0)
+                 (? (two? fs) (op-fin fs d) (link r (link d 0))))
              (op-w x 0 0)))))
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
 ; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
@@ -446,15 +446,15 @@
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
 (: (rng-get _) (: st (peep book 'rng-state 0)
-                  (? (trayp st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
+                  (? (tray? st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (trayp st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
+   (rng-set st) (? (&& (tray? st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
                    (: _ (pin book 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin book 'rng-state (cup r))
-               (? (&& (fixp n) (< 0 n)) (% (cap r) n) (cap r)))
+               (? (&& (fix? n) (< 0 n)) (% (cap r) n) (cap r)))
    (randf _) (: r (randf-next (rng-get 0)) _ (pin book 'rng-state (cup r)) (cap r)))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
@@ -474,12 +474,12 @@
 ; qqx returns CODE that reconstructs the template (link/cat over the spliced values).
 ; uq is also bound to identity so a stray top-level ,x just evaluates its operand.
 (: (qqx t) (?
-    (atomp t)       (list '\ t)                              ; atom: quote it
+    (atom? t)       (list '\ t)                              ; atom: quote it
     (= (cap t) 'uq) (caup t)                                 ; unquote: fire the value
                     (qql t))                                 ; other list
    (qql t) (?
-    (atomp t) (qqx t)                                        ; nil / improper tail
-    (&& (chainp (cap t)) (= (caap t) 'uqs))
+    (atom? t) (qqx t)                                        ; nil / improper tail
+    (&& (two? (cap t)) (= (caap t) 'uqs))
      (list 'cat (caup (cap t)) (qql (cup t)))                ; splice: fire
     (list 'link (qqx (cap t)) (qql (cup t)))))               ; ordinary element
 (:: 'qq (\ a (qqx (cap a))))
@@ -496,11 +496,11 @@
 ; non-positive -> 0, a float ceils, a complex its modulus, a vector its net sum). a list
 ; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …)
 ; means rank-1 length 3, (array ~(3 4) …) length 5).
-(: (a-rank x) (? (flop x) 1 (| (fixp x) (widep x)) 0 (comp x) 2 3)
+(: (a-rank x) (? (float? x) 1 (| (fix? x) (full? x)) 0 (twin? x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness gem of the tier
-   (a-dim d) (? (chainp d) (tally d) (sat d))
-   (a-shape s) (? (chainp s) (map a-dim s) (L (a-dim s))))
+   (a-dim d) (? (two? d) (tally d) (sat d))
+   (a-shape s) (? (two? s) (map a-dim s) (L (a-dim s))))
 
 ; tuple/hash value constructors (also the read-back targets of the `@(…)` / `#(…)`
 ; printer-sugar forms). `tuple` builds a rank-1 array from its element args,
@@ -511,8 +511,8 @@
 ; (hash x) boxes any non-list -- a fresh mutable hash pinning x
 ; at 0, so #5 = #(0 5) and #() IS #0 (() is 0); chains pin as usual, and an odd
 ; trailing operand lands in the 0 box slot. the empty hash is (tablet 0).
-(: (hashtx a) (? (atomp a) '(tablet 0)
-                 (atomp (cup a)) (list 'pin (hashtx 0) 0 (cap a))
+(: (hashtx a) (? (atom? a) '(tablet 0)
+                 (atom? (cup a)) (list 'pin (hashtx 0) 0 (cap a))
                  (list 'pin (hashtx (cuup a)) (cap a) (caup a))))
 (:: 'hash (\ a (hashtx a)))
 
@@ -548,24 +548,24 @@
 ; shared verbatim by both compilers: ev.l's wev and c0 (ev.c) both call the
 ; flat `boxfix` wrapper below, bpr+flatten around the same core. `lambp`/`dsug`
 ; are globals so `ale` shares them (lambda detection, binding desugaring).
-(: (lambp x) (? (chainp x) (&& (= '\ (cap x)) (chainp (cuup x)))) ; \ with >=1 param (one-operand \ is quote)
-   (dsug n d) (? (atomp n) (link n d) (dsug (cap n) (link '\ (cat (cup n) (list d)))))
-   (lp x) (: a (cup x) (? (atomp (cup a)) (link 0 (cap a)) (link (init a) (last a))))
-   (ln bs) (? (atomp bs) 0 (atomp (cup bs)) 0 (link (cap (dsug (cap bs) 0)) (ln (cuup bs))))
+(: (lambp x) (? (two? x) (&& (= '\ (cap x)) (two? (cuup x)))) ; \ with >=1 param (one-operand \ is quote)
+   (dsug n d) (? (atom? n) (link n d) (dsug (cap n) (link '\ (cat (cup n) (list d)))))
+   (lp x) (: a (cup x) (? (atom? (cup a)) (link 0 (cap a)) (link (init a) (last a))))
+   (ln bs) (? (atom? bs) 0 (atom? (cup bs)) 0 (link (cap (dsug (cap bs) 0)) (ln (cuup bs))))
    ; w/wl: does x / binding-list bs reference symbol v? multi-operand \ and
    ; : shadow; one-operand \ is quote (data, nothing free); macro expansion (so :- ?-
    ; &&/|| are seen as the compiler sees them). u tracks lambda depth; dm (direct
    ; mode) counts only references NOT under a lambda.
    (w v x bnd u dm) (?
-    (nomp x) (&& (? dm (nilp u) 1) (= x v) (nilp (memq v bnd)))
-    (atomp x) 0
+    (nom? x) (&& (? dm (nil? u) 1) (= x v) (nil? (memq v bnd)))
+    (atom? x) 0
     (: h (cap x) (?
-      (= h '\) (? (atomp (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
+      (= h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
       (= h ':) (wl v (cup x) (cat (ln (cup x)) bnd) u dm)
-      (: m (? (nomp h) (peep macros h 0) 0) (? m (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
+      (: m (? (nom? h) (peep macros h 0) 0) (? m (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
    (wl v bs bnd u dm) (?
-    (atomp bs) 0
-    (atomp (cup bs)) (w v (cap bs) bnd u dm)
+    (atom? bs) 0
+    (atom? (cup bs)) (w v (cap bs) bnd u dm)
     (: nd (dsug (cap bs) (caup bs)) (? (w v (cup nd) bnd u dm) 1 (wl v (cuup bs) bnd u dm))))
    ; boxset: ONE SCOPE -- a reference at-or-before the name's own (first) binding
    ; is a forward reference and earns a cell. a value binding boxes on ANY such
@@ -579,20 +579,20 @@
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.
 (: (boxfix-core prs body) (:
-   (rmc cs ns) (filter (\ p (nilp (memq (cap p) ns))) cs)
+   (rmc cs ns) (filter (\ p (nil? (memq (cap p) ns))) cs)
    (sub cs x) (?
-    (nomp x) (: p (assq x cs) (? (chainp p) (list missing (caup p) (list '\ (cuup p))) x))
-    (atomp x) x
+    (nom? x) (: p (assq x cs) (? (two? p) (list missing (caup p) (list '\ (cuup p))) x))
+    (atom? x) x
     (: h (cap x) (?
-      (= h '\) (? (atomp (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r)))))))
+      (= h '\) (? (atom? (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r)))))))
       (= h ':) (link ': (subl (rmc cs (ln (cup x))) (cup x)))
-      (: m (? (nomp h) (peep macros h 0) 0) (? m (sub cs (m (cup x))) (map (\ e (sub cs e)) x))))))
+      (: m (? (nom? h) (peep macros h 0) 0) (? m (sub cs (m (cup x))) (map (\ e (sub cs e)) x))))))
    (subl cs bs) (?
-    (atomp bs) bs
-    (atomp (cup bs)) (list (sub cs (cap bs)))
+    (atom? bs) bs
+    (atom? (cup bs)) (list (sub cs (cap bs)))
     (: nd (dsug (cap bs) (caup bs)) (link (cap nd) (link (sub cs (cup nd)) (subl cs (cuup bs))))))
    (: bx (boxset prs)
-      (? (nilp bx) 0
+      (? (nil? bx) 0
        (: cs (mkcs bx)
           (one p) (: d (sub cs (cup p))
                      (? (memq (cap p) bx)
@@ -603,8 +603,8 @@
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that
 ; need no boxing pass through verbatim.
 (: (boxfix fs) (:
-   (ev l) (? (atomp l) 1 (atomp (cup l)) 0 (ev (cuup l)))
-   (bpr fs) (? (atomp (cup fs)) (link 0 (cap fs))
+   (ev l) (? (atom? l) 1 (atom? (cup l)) 0 (ev (cuup l)))
+   (bpr fs) (? (atom? (cup fs)) (link 0 (cap fs))
                (: r (bpr (cuup fs)) (link (link (dsug (cap fs) (caup fs)) (cap r)) (cup r))))
    (? (ev fs) fs
     (: pb (bpr fs) r (boxfix-core (cap pb) (cup pb))

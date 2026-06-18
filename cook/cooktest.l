@@ -21,7 +21,7 @@
                     _ (fputs out (+ "FAIL " nm)) (fputc out 10)))
 
    ; join a list of lines into Makefile text (each line gets a trailing newline).
-   (mk l) (? (chainp l) (+ (cap l) (+ "\n" (mk (cup l)))) "")
+   (mk l) (? (two? l) (+ (cap l) (+ "\n" (mk (cup l)))) "")
    ; does string s contain the substring sub?
    (has s sub) ((: (g i) (? (> (+ i (tally sub)) (tally s)) 0
                             (? (= sub (snip s i (+ i (tally sub)))) 1 (g (+ 1 i))))) 0)
@@ -32,12 +32,12 @@
    (run-cook src tgt)
    (: _ (write-file (+ dir "/Makefile") src)
        r (run (L ai "-l" "cook/cook.l" (+ dir "/Makefile") tgt))
-       (? (chainp r) (cup r) ""))
+       (? (two? r) (cup r) ""))
    ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
    (run-emit src)
    (: _ (write-file (+ dir "/Makefile") src)
        r (run (L ai "-l" "cook/cook.l" "--emit" (+ dir "/Makefile")))
-       (? (chainp r) (cup r) ""))
+       (? (two? r) (cup r) ""))
 
    _ (sh (+ "rm -rf " (+ dir "; mkdir -p " dir)))
 

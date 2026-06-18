@@ -39,7 +39,7 @@
  (= 15 (((arr 0 '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
  (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ ~(3 4)) = |3+4i| = 5
  (= 10 ((~(-3 4) (+ 1)) 10))              ; ... but a complex sorting negative saturates to 0
- (comp (~(0 1) 5))                       ; complex operator on a number -> complex pow (5^i), no longer fenced
+ (twin? (~(0 1) 5))                       ; complex operator on a number -> complex pow (5^i), no longer fenced
  (< (abs (- 1 (abs (~(0 1) 5)))) 0.0001)  ; |5^i| = 1 exactly (w^z = exp(z Log w))
  (< (abs (im (~(0 1) ~(0 1)))) 0.0001)) ; i^i = e^(-pi/2) is real
 ; basic arithmetic

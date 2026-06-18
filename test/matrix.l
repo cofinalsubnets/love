@@ -16,9 +16,9 @@
 ; one representative value per kind. The three scalar-gem boxes are now distinct
 ; kinds (KFlo/KCplx/KWide) but still share one apply matrix cell (data_num_apply).
 (: mx-fix 5                              ; KCharm
-   mx-real 2.5                            ; KFlo, float box (flop)
+   mx-real 2.5                            ; KFlo, float box (float?)
    mx-cpx ~(2 3)                        ; KCplx, complex scalar (Cp)
-   mx-box (<< 1 62)                      ; KWide, wide int (widep)
+   mx-box (<< 1 62)                      ; KWide, wide int (full?)
    mx-big (100 2)                     ; KBig
    mx-az  @(10 20)                       ; KArrZ (int array)
    mx-ar  @(1.5 2.5)                     ; KArrR (float array)
@@ -46,7 +46,7 @@
  (= '(1 2) ((link 1 2) (\ a b (L a b))))         ; improper chain: cdr=2 (a fixnum), raw
  (= '(1 2) ('(1 2) (+)))                        ; arg = a nif: (+ 1 '(2)) = (1 2)
  (= '(1 2 3) ('(1 2 3) (+)))                    ; (+ 1 '(2 3))
- (nilp ('(1) (\ a b b)))                      ; cdr of (1) is nil -> 0
+ (nil? ('(1) (\ a b b)))                      ; cdr of (1) is nil -> 0
 
  ; --- row KString: applying a string indexes a byte (1 if oob/non-numeric) ---
  (= 97 ("ab" 0))   (= 98 ("ab" 1))            ; arg = fixnum
@@ -80,7 +80,7 @@
  (= 36 ((\ x (* x x)) 6))                     ; KHot: a lambda applies directly
  (= 7 (((+) 3) 4))                            ; KHot: a nif / partial application
  (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KHot: a map looks its key up
- (nilp (mx-map 9))                            ; ...missing key -> nil
+ (nil? (mx-map 9))                            ; ...missing key -> nil
  (= 1 ((buf 4) 'x)))                       ; opaque handle (buf) behaves as 0
 
 ; ============================================================================
@@ -94,17 +94,17 @@
  (= 7.5 (+ 5 2.5))   (= 7.5 (+ 2.5 5))        ; fix + float (both orders)
  (= 5.0 (+ 2.5 2.5))                          ; float + float
  (? w64 (= (63 2) (+ (<< 1 62) (<< 1 62))) 1)   ; box + box -> 2^63 (64-bit word only)
- (? w64 (bigp (+ (<< 1 62) (<< 1 62))) 1)
- (? w64 (widep (+ (<< 1 62) 1)) 1)              ; box + fix stays a box
+ (? w64 (big? (+ (<< 1 62) (<< 1 62))) 1)
+ (? w64 (full? (+ (<< 1 62) 1)) 1)              ; box + fix stays a box
  (? w64 (= (+ (<< 1 62) 1) (+ 1 (<< 1 62))) 1) ; ...and commutes
  (= (+ 1 (100 2)) (+ (100 2) 1))        ; big + fix == fix + big (commutes)
  (= (* 2 (100 2)) (+ (100 2) (100 2))) ; big + big
- (flop (+ (100 2) 0.5))                    ; big + float -> float (widens)
+ (float? (+ (100 2) 0.5))                    ; big + float -> float (widens)
  (= ~(4 6) (+ ~(1 2) ~(3 4)))              ; complex + complex
  (= ~(7 3) (+ 5 ~(2 3)))                    ; fix + complex (real -> (5,0))
  (= ~(4.0 3.0) (+ 1.5 ~(2.5 3)))            ; float + complex
- (? w64 (comp (+ (<< 1 62) ~(0 1))) 1)         ; box + complex -> complex (64-bit word only)
- (comp (+ (100 2) ~(0 1)))                  ; big + complex -> complex (widens)
+ (? w64 (twin? (+ (<< 1 62) ~(0 1))) 1)         ; box + complex -> complex (64-bit word only)
+ (twin? (+ (100 2) ~(0 1)))                  ; big + complex -> complex (widens)
 
  ; --- array tower: each tier with a matching array and with a scalar broadcast ---
  (aall (= @(11 22) (+ @(10 20) @(1 2))))      ; Z + Z
@@ -117,20 +117,20 @@
  (aall (= @(12 22) (+ @(10 20) 2)))           ; Z + scalar (broadcast, no widen)
  (= ~(11 2) (peep (+ ~(10 0) mx-ac) 0 0))    ; C array + complex scalar
  (= ~(11 2) (peep (+ @(10 20) mx-ac) 0 0))    ; R/Z array + C array (real promotes)
- (nilp (+ @(1 2) @(1 2 3)))                   ; non-conforming shapes -> nil
+ (nil? (+ @(1 2) @(1 2 3)))                   ; non-conforming shapes -> nil
 
  ; --- add_string lane: text x text, and a number as one byte ---
  (= "abcd" (+ "ab" "cd"))                     ; str + str
  (= "abC" (+ "ab" 67))   (= "Cab" (+ 67 "ab")) ; str + num (byte at the written end)
- (nilp (+ "ab" 'ef))                          ; sym left the string algebra (the mint round)
- (nilp (+ 'ef 'ef))                           ; ... in every direction
- (nilp (+ 'ef "ab"))
+ (nil? (+ "ab" 'ef))                          ; sym left the string algebra (the mint round)
+ (nil? (+ 'ef 'ef))                           ; ... in every direction
+ (nil? (+ 'ef "ab"))
 
  ; --- the arith<->seq SEAM (KArrO|KString) is ARRAY x text only -> nil. A SCALAR
  ;     number joins text as one byte ONLY under the byte law (exact 0..255), so a
  ;     bignum -- never in range -- is nil too. ---
- (nilp (+ @(1 2) "ab"))   (nilp (+ "ab" @(1 2)))   (nilp (+ @(1 2) 'ef))
- (nilp (+ mx-big "ab"))                       ; bignum: out of byte range -> nil
+ (nil? (+ @(1 2) "ab"))   (nil? (+ "ab" @(1 2)))   (nil? (+ @(1 2) 'ef))
+ (nil? (+ mx-big "ab"))                       ; bignum: out of byte range -> nil
 
  ; --- add_seq lane: a list anywhere (chain wins over text & number) ---
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))             ; list + list
@@ -142,8 +142,8 @@
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).
  ;     "1" + "1" == "2": apply (+ 1) twice to 0. ---
  (= 2 (((+ (\ f x (f x)) (\ f x (f x))) (+ 1)) 0))
- (lamp (+ inc 2))   (lamp (+ 2 inc))          ; num + fn (either order) -> a function
- (lamp (+ inc inc)))                          ; fn + fn -> a function
+ (lit? (+ inc 2))   (lit? (+ 2 inc))          ; num + fn (either order) -> a function
+ (lit? (+ inc inc)))                          ; fn + fn -> a function
 
 ; ============================================================================
 ; `*` matrix (g_mul_mx): the multiplicative analog (semiring product of `+`)
@@ -167,15 +167,15 @@
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
  (= "" (* "ab" -2))    (= "ababab" (* "ab" 2.9))   ; ($ count): saturates, ceils
- (nilp (* 'xy 2))                             ; sym left the string algebra: no repetition
+ (nil? (* 'xy 2))                             ; sym left the string algebra: no repetition
  (= '(1 2 1 2) (* '(1 2) 2))                  ; list
- (= "" (* "ab" 0))   (nilp (* '(1 2) 0))      ; 0 copies: empty str / empty list
+ (= "" (* "ab" 0))   (nil? (* '(1 2) 0))      ; 0 copies: empty str / empty list
 
  ; --- count must be a number: an array / non-number count -> nil ---
- (nilp (* "ab" @(1 2)))   (nilp (* @(1 2) "ab"))
+ (nil? (* "ab" @(1 2)))   (nil? (* @(1 2) "ab"))
 
  ; --- lvm_0: sequence * sequence is undefined -> nil ---
- (nilp (* "ab" "cd"))   (nilp (* 'a 'b))   (nilp (* '(1) '(2)))
+ (nil? (* "ab" "cd"))   (nil? (* 'a 'b))   (nil? (* '(1) '(2)))
 
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---
  (= 36 ((* (\ x (* x x)) (\ x (+ x 1))) 5))   ; sq(inc 5) = sq 6 = 36
@@ -192,20 +192,20 @@
  (= (100 2) (- (+ (100 2) 5) 5))        ; bignum
  (= ~(-2 -2) (- ~(1 2) ~(3 4)))            ; complex
  (aall (= @(9 18) (- @(10 20) @(1 2))))       ; array elementwise
- (nilp (- "a" "b"))   (nilp (- '(1) '(2)))    ; non-numeric -> nil
+ (nil? (- "a" "b"))   (nil? (- '(1) '(2)))    ; non-numeric -> nil
 
  ; --- division: `/` true (float on inexact), `//` truncating; array broadcast; complex defined ---
  (= 2.5 (/ 5 2))   (= 2 (// 5 2))   (= 2.5 (/ 5 2.0))   ; / promotes, // truncates
  (= 32 (/ (100 2) (95 2)))              ; bignum exact (2^5) stays integer
- (flop (/ 1 0))                               ; /0 -> IEEE inf (float)
+ (float? (/ 1 0))                               ; /0 -> IEEE inf (float)
  (aall (= @(5 10) (/ @(10 20) 2)))            ; array / scalar
- (nilp (/ "a" 2))                             ; non-numeric -> nil
+ (nil? (/ "a" 2))                             ; non-numeric -> nil
 
  ; --- modulo `mod` (fmod on floats); UNDEFINED on complex (-> nil) ---
  (= 1 (% 5 2))   (= 1.0 (% 7.0 2.0))
  (= 2 (% (100 2) 7))                     ; bignum mod fixnum
- (nilp (% ~(1 2) 2))                       ; complex -> nil
- (nilp (% "a" 2))                           ; non-numeric -> nil
+ (nil? (% ~(1 2) 2))                       ; complex -> nil
+ (nil? (% "a" 2))                           ; non-numeric -> nil
 
  ; === ordered comparison (< <= > >=): a TOTAL ORDER over all values. Cross-kind =
  ; the enum q type lattice (the order the matrix DIAGONAL encodes), fixnum/number
@@ -243,10 +243,10 @@
  (aall (< @(1 2) 10))   (= Z (atype (< @(1 2) 10)))   ; the mask is an z array
  (= 1 (peep (< @(1 5) @(3 2)) 0 0))   (= 0 (peep (< @(1 5) @(3 2)) 1 0))
  (aall (<= @(1 2) @(1 2)))   (aall (>= @(2 2) @(1 2)))
- (nilp (< @(1 2) "x"))                                 ; array vs non-number -> nil
- (nilp (< mx-ac mx-ac))                                ; a complex array is unordered -> nil
+ (nil? (< @(1 2) "x"))                                 ; array vs non-number -> nil
+ (nil? (< mx-ac mx-ac))                                ; a complex array is unordered -> nil
  ; --- 0/0 collapses to 0, so it is ORDERED like any zero (no NaN to be unordered) ---
- (nilp (< (/ 0 0) (/ 0 0)))   (<= (/ 0 0) (/ 0 0))   (nilp (> (/ 0 0) 1))
+ (nil? (< (/ 0 0) (/ 0 0)))   (<= (/ 0 0) (/ 0 0))   (nil? (> (/ 0 0) 1))
 
  ; --- equality `=`: bridges the numeric tower, elementwise over arrays, else eql ---
  (= 3 3.0)                                    ; fix = float (promotion)
@@ -267,7 +267,7 @@
 (assert
  (32 = (inner @(1 2 3) @(4 5 6)))                  ; 1D.1D dot -> scalar number
  (11.0 = (inner @(1.0 2.0) @(3.0 4.0)))            ; float dot
- (11.0 = (inner @(1 2) @(3.0 4.0))) (flop (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
+ (11.0 = (inner @(1 2) @(3.0 4.0))) (float? (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
  (: A (arr 0 '(2 3) '(1 2 3 4 5 6)) B (arr 0 '(3 2) '(7 8 9 10 11 12)) C (inner A B)
     (&& ('(2 2) = (ashape C)) (58 = (peep C '(0 0) 0)) (64 = (peep C '(0 1) 0))
         (139 = (peep C '(1 0) 0)) (154 = (peep C '(1 1) 0))))   ; 2x2 matmul

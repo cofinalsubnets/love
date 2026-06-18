@@ -2,8 +2,8 @@
 (: t (hash 1 100 2 200 3 300))
 (assert
  ; the constructor builds a working hash
- (tabp t) (nilp (tabp 5)) (nilp (tabp '(1 2)))   ; tabp: only maps, not fixnums/lists
- (lamp t) (lamp cap) (nilp (lamp 5)) (nilp (lamp 0))  ; lamp: any heap object, not a fixnum/nil
+ (tab? t) (nil? (tab? 5)) (nil? (tab? '(1 2)))   ; tab?: only maps, not fixnums/lists
+ (lit? t) (lit? cap) (nil? (lit? 5)) (nil? (lit? 0))  ; lit?: any heap object, not a fixnum/nil
  (= 100 (peep t 1 0))
  (= 200 (peep t 2 0))
  (= 300 (peep t 3 0))
@@ -13,9 +13,9 @@
  (= "(tablet 0)" (show (tablet 0)))
  (= "#(1 100)" (show (hash 1 100)))
  (= "#(1 \"hi\")" (show (hash 1 "hi")))
- (strp (show t))                             ; multi-entry: just exercise the path
+ (string? (show t))                             ; multi-entry: just exercise the path
  ; (dig x) exposes the runtime hashing method: a fixnum, equal for eql keys
- (fixp (dig 'k))
+ (fix? (dig 'k))
  (= (dig 'k) (dig 'k))
  (= (dig '(1 2)) (dig '(1 2))))
 
@@ -24,10 +24,10 @@
 ; zero-point, distinct from 0. hashes print as #(…), the empty map as (tablet 0).
 (: ht #(1 100 2 200 3 300))
 (assert
- (tabp ht)
+ (tab? ht)
  (= 100 (peep ht 1 0))
  (= 300 (peep ht 3 0))
- (tabp (tablet 0))                              ; the empty hash
+ (tab? (tablet 0))                              ; the empty hash
  !(tablet 0) !#()                               ; both the empty map (falsy); #() reads to (tablet 0)
  (= 50 (peep (pin (tablet 0) 5 50) 5 0))                ; the empty hash is mutable
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys #(1 10 2 20 3 30))))   ; splice builds all entries
@@ -39,7 +39,7 @@
 ; is NOT 0. the reader emits (tablet 0) for #() directly (the # empty exception).
 (: bx #0)
 (assert
- (tabp #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
+ (tab? #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
  (= 0 (peep bx 0 9))                            ; the boxed value sits at key 0 (the number, not the empty)
  (= 9 (: _ (pin bx 0 9) (peep bx 0 0)))         ; ... and is mutable in place
  (= 5 (peep #5 0 0)) (= "s" (peep #"s" 0 0))    ; any scalar boxes (at key 0)
@@ -82,17 +82,17 @@
  (= 2 (sat (hash 1 10 2 20)))                  ; table -> key count
  (= 2 (int (abs (hash 1 10 2 20))))            ; abs of a table is its key count too
  (= (sat (100 2)) (sat (200 2)))          ; any positive bignum saturates to FIX_MAX
- (= 0 (sat (- 0 (100 2)))) (nilp (- 0 (100 2)))  ; negative bignum -> 0, falsy
+ (= 0 (sat (- 0 (100 2)))) (nil? (- 0 (100 2)))  ; negative bignum -> 0, falsy
  (= 0 (sat (- 0 (62 2))))                 ; negative wide int -> 0
- (= 0 (sat -7)) (nilp -7))                      ; ordinary negative fixnum -> 0, falsy
+ (= 0 (sat -7)) (nil? -7))                      ; ordinary negative fixnum -> 0, falsy
 
-; the defining invariant: (nilp x) == (= 0 (pin x)) for every value. empty
+; the defining invariant: (nil? x) == (= 0 (pin x)) for every value. empty
 ; containers and exact zeros are false; every present value (incl. functions,
 ; ports, symbols, bignums) is truthy with pin >= 1. (a MINT is the exception
 ; by design: the fresh point is materially empty -- a distinct NOTHING.)
-(: same? (\ x (= (? (nilp x) 1 0) (? (= 0 (sat x)) 1 0)))
+(: same? (\ x (= (? (nil? x) 1 0) (? (= 0 (sat x)) 1 0)))
 (assert
- (nilp "") (nilp (tablet 0)) (nilp (buf 0)) (nilp @0) (nilp 0) (nilp ())  ; empties/zeros are false
+ (nil? "") (nil? (tablet 0)) (nil? (buf 0)) (nil? @0) (nil? 0) (nil? ())  ; empties/zeros are false
  !!"x" !!#(1 2) !(mint 0)                                        ; present values are true; the mint is nothing
  !!cap !!out !!(\ x x)                                                ; functions/ports too
  (same? "") (same? (tablet 0)) (same? (buf 0)) (same? @0) (same? 0)

@@ -7,8 +7,8 @@
   ; The static frontend ports are globally bound to `in` and `out`.
   ; They are heap-shaped (lvm_port_io discriminator), so the default
   ; printer renders them as a hex address — non-empty and string-typed.
-  (strp (show in))
-  (strp (show out))
+  (string? (show in))
+  (string? (show out))
   (< 0 (sat (show in)))
   (< 0 (sat (show out)))
 
@@ -53,7 +53,7 @@
 
   ; --- sip: charlist-backed read-only synth port (fd=-4, ci) ---
   ; sip returns a port whose show rendering is a non-empty string.
-  (strp (show (sip 0)))
+  (string? (show (sip 0)))
   (< 0 (sat (show (sip 0))))
   ; Each call allocates a fresh port object.
   (: p (sip 0) q (sip 0) !(= p q))
@@ -73,9 +73,9 @@
   (= 1 (read (sip '(49)) 99))                          ; "1"
   (= 'a (read (sip '(97)) 99))                         ; "a"
   (: r (read (sip '(40 49 32 50 41)) 99)               ; "(1 2)"
-     (do (chainp r) (= 1 (cap r)) (= 2 (caup r))))
+     (do (two? r) (= 1 (cap r)) (= 2 (caup r))))
   (: r (read (sip '(39 49)) 99)                        ; "'1" -> (` 1)
-     (do (chainp r) (= 1 (caup r))))
+     (do (two? r) (= 1 (caup r))))
   ; "hi" -- string literal round-trip through the ci port.
   (= (string (link 104 (link 105 0))) (read (sip '(34 104 105 34)) 99))
 

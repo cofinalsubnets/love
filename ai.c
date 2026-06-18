@@ -629,7 +629,7 @@ lvm_t lvm_fault;
  _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
  _(nif_lt, "<", s2(lvm_lt))  _(nif_le, "<=", s2(lvm_le)) _(nif_eq, "=", s2(lvm_eq))\
  _(nif_ge, ">=", s2(lvm_ge))  _(nif_gt, ">", s2(lvm_gt)) \
- _(nif_same, "idp", s2(lvm_same)) \
+ _(nif_same, "id?", s2(lvm_same)) \
  _(nif_bsl, "<<", s2(lvm_bsl)) _(nif_bsr, ">>", s2(lvm_bsr))\
  _(nif_band, "&", s2(lvm_band)) _(nif_bor, "|", s2(lvm_bor)) _(nif_bxor, "^", s2(lvm_bxor))\
  _(nif_link, "link", s2(lvm_link)) _(nif_car, "cap", s1(lvm_car)) _(nif_cdr, "cup", s1(lvm_cdr))\
@@ -646,11 +646,11 @@ lvm_t lvm_fault;
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
  _(nif_eat1, "eat1", s2(lvm_eat1)) _(nif_eat2, "eat2", s3(lvm_eat2)) _(nif_toast, "toast", s1(lvm_toast))\
- _(nif_chainp, "chainp", s1(lvm_chainp)) _(nif_strp, "strp", s1(lvm_strp))\
- _(nif_real, "real", s1(lvm_real)) _(nif_flop, "flop", s1(lvm_flop))\
+ _(nif_chainp, "two?", s1(lvm_chainp)) _(nif_strp, "string?", s1(lvm_strp))\
+ _(nif_real, "real", s1(lvm_real)) _(nif_flop, "float?", s1(lvm_flop))\
  _(nif_sin, "sine", s1(lvm_sin)) _(nif_cos, "cosine", s1(lvm_cos))\
  _(nif_log, "log", s1(lvm_log)) _(nif_pow, "pow", s2(lvm_pow))\
- _(nif_cplx, "twin", s2(lvm_cplx)) _(nif_Cp, "comp", s1(lvm_Cp))\
+ _(nif_cplx, "twin", s2(lvm_cplx)) _(nif_Cp, "twin?", s1(lvm_Cp))\
  _(nif_re, "re", s1(lvm_re)) _(nif_im, "im", s1(lvm_im)) _(nif_conj, "conj", s1(lvm_conj))\
  _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
  _(nif_arr, "arr", s3(lvm_arr))\
@@ -662,11 +662,11 @@ lvm_t lvm_fault;
  _(nif_asum, "asum", s1(lvm_asum)) _(nif_aprod, "aprod", s1(lvm_aprod))\
  _(nif_amax, "amax", s1(lvm_amax)) _(nif_amin, "amin", s1(lvm_amin))\
  _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
- _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "bigp", s1(lvm_bigp)) _(nif_widep, "widep", s1(lvm_widep))\
- _(nif_trayp, "trayp", s1(lvm_trayp)) _(nif_intf, "int", s1(lvm_intf))\
- _(nif_nomp, "nomp", s1(lvm_nomp)) _(nif_tabp, "tabp", s1(lvm_tabp)) _(nif_fixp, "fixp", s1(lvm_fixp))\
- _(nif_lamp, "lamp", s1(lvm_lamp)) _(nif_hotp, "hotp", s1(lvm_hotp))\
- _(nif_nilp, "nilp", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
+ _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "big?", s1(lvm_bigp)) _(nif_widep, "full?", s1(lvm_widep))\
+ _(nif_trayp, "tray?", s1(lvm_trayp)) _(nif_intf, "int", s1(lvm_intf))\
+ _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_tabp, "tab?", s1(lvm_tabp)) _(nif_fixp, "fix?", s1(lvm_fixp))\
+ _(nif_lamp, "lit?", s1(lvm_lamp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
+ _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
  _(nif_missing, "missing", s2(lvm_missing)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
  _(nif_spawn, "spawn", s2(lvm_spawn)) _(nif_wait, "wait", s1(lvm_wait)) \

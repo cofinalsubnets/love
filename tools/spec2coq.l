@@ -120,11 +120,11 @@
                            "Vbot"))
              "Vbot")
    (tkq q) (? (nomp q) "Vsym" (chainp q) "Vpair" (fixp q) "Vz" "Vbot")   ; the quoted datum's kind
-   (kpred h) (? (idp h 'fixp) "fixp" (idp h 'flop) "flop" (idp h 'comp) "comp"
-                (idp h 'strp) "strp" (idp h 'nomp) "nomp" (idp h 'chainp) "chainp"
-                (idp h 'tabp) "tabp" (idp h 'trayp) "trayp" (idp h 'nump) "nump"
-                (idp h 'whole?) "whole" (idp h 'atomp) "atomp" (idp h 'packp) "packp"
-                (idp h 'lamp) "lamp" 0)
+   (kpred h) (? (idp h 'fix?) "fixp" (idp h 'float?) "flop" (idp h 'twin?) "comp"
+                (idp h 'string?) "strp" (idp h 'nom?) "nomp" (idp h 'two?) "chainp"
+                (idp h 'tab?) "tabp" (idp h 'tray?) "trayp" (idp h 'jewel?) "nump"
+                (idp h 'whole?) "whole" (idp h 'atom?) "atomp" (idp h 'packp) "packp"
+                (idp h 'lit?) "lamp" 0)
    ; cross-kind ORDER: symbol<string<number<chain<map by band; same band stays value/lex
    (ordop? h) (| (idp h '<) (| (idp h '<=) (| (idp h '>) (idp h '>=))))
    (litband x) (: t (tk x)
@@ -143,7 +143,7 @@
    ; (nilp (nilp x)) is `!!x`, x truthy -- the negation of the inner bit.
    (tp f) (? (! (chainp f)) 0
              (: h (cap f)
-                (? (idp h 'nilp) (: a (e2 f)
+                (? (idp h 'nil?) (: a (e2 f)
                                    (? (intv? a)  (cat (L "(Z.leb " (tv a) " 0)"))
                                       (listv? a) (cat (L "(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
                                       (: p (tp a) (? p (cat (L "(negb " p ")")) 0))))

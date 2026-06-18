@@ -131,7 +131,7 @@
 ; --- the scan (vmret.py scan(), grouping by function header) ----------
 ; close the current watched function: flag it iff it collected any rets.
 (: (close name watching rets flagged)
-   (? (&& watching (chainp rets)) (link (link name (rev rets)) flagged) flagged))
+   (? (&& watching (two? rets)) (link (link name (rev rets)) flagged) flagged))
 
 ; -> (flagged . total), where flagged = ((name . rets) ...), total = count of
 ; prefix* functions seen. prefix, the ret matcher, and a function-start -> size
@@ -140,7 +140,7 @@
 ; the function's -- so it does not count. unsized symbols -> lim BIG (old behavior).
 (: (scan-all ls prefix ret? sizes)
    ((: (loop ls name watching lim rets flagged total)
-       (? (chainp ls)
+       (? (two? ls)
           (: line (cap ls)
              rest (cup ls)
              h    (parse-header line)
@@ -168,28 +168,28 @@
                                (: ca (peep a i 0) cb (peep b i 0)
                                   (? (< ca cb) 1 (? (> ca cb) 0 (f (+ i 1)))))))) 0)
    (maxlen fl)   (foldl (\ m e (: l (tally (cap e)) (? (< m l) l m))) 0 fl)
-   (join-rets rs) (? (chainp rs)
-                     (? (chainp (cup rs)) (+ (+ "0x" (cap rs)) (+ ", " (join-rets (cup rs))))
+   (join-rets rs) (? (two? rs)
+                     (? (two? (cup rs)) (+ (+ "0x" (cap rs)) (+ ", " (join-rets (cup rs))))
                                         (+ "0x" (cap rs)))
                      ""))
 
 ; sort the flagged entries by function name (ascending), matching .py.
 ; the merge split counts the SPINE (entries are chains; $ is the net sum), so fold.
-(: (emerge a b) (? (chainp a) (? (chainp b)
+(: (emerge a b) (? (two? a) (? (two? b)
                      (? (str< (cap (cap a)) (cap (cap b)))
                         (link (cap a) (emerge (cup a) b)) (link (cap b) (emerge a (cup b))))
                      a) b)
    (llen l) (foldl (\ n _ (+ 1 n)) 0 l)
-   (esort l) (? (chainp (cup l)) (: n (>> (llen l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
+   (esort l) (? (two? (cup l)) (: n (>> (llen l) 1) (emerge (esort (take n l)) (esort (drop n l)))) l))
 
 ; --- argument parsing ------------------------------------------------
 (: (parse-args args path prefix od)
-   (? (chainp args)
+   (? (two? args)
       (: a (cap args)
          (? (= a "--prefix")
-            (? (chainp (cup args)) (parse-args (cup (cup args)) path (cap (cup args)) od) (die "missing argument for --prefix"))
+            (? (two? (cup args)) (parse-args (cup (cup args)) path (cap (cup args)) od) (die "missing argument for --prefix"))
          (? (= a "--objdump")
-            (? (chainp (cup args)) (parse-args (cup (cup args)) path prefix (cap (cup args))) (die "missing argument for --objdump"))
+            (? (two? (cup args)) (parse-args (cup (cup args)) path prefix (cap (cup args))) (die "missing argument for --objdump"))
          (? (|| (= a "-h") (= a "--help")) (usage 0)
          (? (dash? a) (die (+ "unknown option: " a))
          (? path (die (+ "unexpected argument: " a))
@@ -200,9 +200,9 @@
 ; (run ...) returns (status . output) when the tool ran, else a fixnum errno
 ; (spawn failed -> try the next). -> (cand status . output) or 0 if exhausted.
 (: (try-cands cs elf)
-   (? (chainp cs)
+   (? (two? cs)
       (: r (run (L (cap cs) "-d" "--no-show-raw-insn" elf))
-         (? (chainp r) (link (cap cs) r) (try-cands (cup cs) elf)))
+         (? (two? r) (link (cap cs) r) (try-cands (cup cs) elf)))
       0))
 
 ; --- driver ----------------------------------------------------------
@@ -246,7 +246,7 @@
    (? (= 0 total)
       (: _ (fputs err "vmret: no ") _ (fputs err prefix) _ (fputs err "* functions found in ")
          _ (fputs err base) _ (fputs err " (stripped binary?)\n") (exit 2))
-   (? (chainp flagged)
+   (? (two? flagged)
       (: k      (llen flagged)
          width  (maxlen flagged)
          sorted (esort flagged)

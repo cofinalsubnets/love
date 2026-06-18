@@ -1,16 +1,16 @@
 (: (pat2pred p)
- (? (nomp p) (const true)
-    (atomp p) (= p)
-    (&& (= '\ (cap p)) (atomp (cuup p))) (= (caup p)) ; one-operand \ is quote: literal match
+ (? (nom? p) (const true)
+    (atom? p) (= p)
+    (&& (= '\ (cap p)) (atom? (cuup p))) (= (caup p)) ; one-operand \ is quote: literal match
   (: p1 (pat2pred (cap p))
      p2 (pat2pred (cup p))
-   (\ x (? (chainp x) (? (p1 (cap x)) (p2 (cup x)))))))
+   (\ x (? (two? x) (? (p1 (cap x)) (p2 (cup x)))))))
  (pat2x p b) (:
   t (tablet 0)
 
   (ff q p) (?
-   (nomp p) (pin t p q)
-   (chainp p) (: _ (ff (co cap q) (cap p))
+   (nom? p) (pin t p q)
+   (two? p) (: _ (ff (co cap q) (cap p))
                 (ff (co cup q) (cup p))))
   _ (ff id p)
   ks (keys t)

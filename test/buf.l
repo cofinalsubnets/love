@@ -9,8 +9,8 @@
  (= 4 (tally (buf 4)))   ; the COUNT is tally now
  (= 0 (sat (buf 4)))     ; a zeroed buf NETS nothing: hot chars measure by content
  (= 0 (tally (buf 0)))
- !(strp (buf 4))                          ; a buf is not a string
- !(fixp (buf 4))                          ; ...nor a number
+ !(string? (buf 4))                          ; a buf is not a string
+ !(fix? (buf 4))                          ; ...nor a number
 
  ; --- a fresh buf is zeroed ---
  (: b (buf 4) (= 0 (+ (peep b 0 0) (peep b 1 0) (peep b 2 0) (peep b 3 0))))

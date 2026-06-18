@@ -5,7 +5,7 @@
 ; shapes: non-positive -> 0 -> empty, a float ceils, a complex by total-order-
 ; guarded modulus); an array/non-number count is undefined
 ; (nil); sequence x sequence is undefined; a thread anywhere -> composition.
-(: sm-i (\ x (? (nomp x) (= x (intern (string x))) 0)))      ; interned symbol?
+(: sm-i (\ x (? (nom? x) (= x (intern (string x))) 0)))      ; interned symbol?
 (assert
  ; --- numbers unchanged ---
  (= 6 (* 2 3))   (= 7.5 (* 3 2.5))
@@ -13,27 +13,27 @@
 
  ; --- string repetition (commutative), empty, count coercion ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))
- (= "" (* "ab" 0))   (strp (* "ab" 0))          ; 0 -> the empty string
- (= "" (* "ab" -2)) (strp (* "ab" -2))          ; non-positive count saturates to 0 -> empty
+ (= "" (* "ab" 0))   (string? (* "ab" 0))          ; 0 -> the empty string
+ (= "" (* "ab" -2)) (string? (* "ab" -2))          ; non-positive count saturates to 0 -> empty
  (= "ababab" (* "ab" 2.9))                      ; float count ceils: ($ 2.9) = 3
  (= "ababababab" (* "ab" ~(3 4)))              ; |3+4i| = 5 copies
  (= "xxx" (* "x" 3))
 
  ; --- symbols left the string algebra (the mint round): * on a symbol is nil ---
- (nilp (* 'xy 2)) (nilp (* 2 'xy))
- (nilp ('cd * 2))
+ (nil? (* 'xy 2)) (nil? (* 2 'xy))
+ (nil? ('cd * 2))
 
  ; --- list repetition ---
  (= '(1 2 1 2 1 2) (* '(1 2) 3))
  (= '(1 2 1 2) (* 2 '(1 2)))                    ; commutative
- (nilp (* '(1 2) 0))                            ; 0 copies of a list -> nil
+ (nil? (* '(1 2) 0))                            ; 0 copies of a list -> nil
 
  ; --- undefined cells -> nil ---
- (nilp (* "ab" "cd"))                           ; seq x seq
- (nilp (* 'a 'b))
- (nilp (* '(1) '(2)))
- (nilp (* "ab" @(1 2)))                         ; array is not a count
- (nilp (* @(1 2) "ab"))
+ (nil? (* "ab" "cd"))                           ; seq x seq
+ (nil? (* 'a 'b))
+ (nil? (* '(1) '(2)))
+ (nil? (* "ab" @(1 2)))                         ; array is not a count
+ (nil? (* @(1 2) "ab"))
  ; a map is a lookup-lambda, so it takes the thread (composition) rule, not nil:
  ; (* m g) x = (m (g x)); here m maps 5->10, g adds 4, so (1) -> g 5 -> m 10
  (= 10 ((* (pin (tablet 0) 5 10) (\ x (+ x 4))) 1))

@@ -14,17 +14,17 @@ proof c0 is fine; it may be running a stale/pre-flip egg.
 (ai.h:98–103) the core's first word is `lvm_sym`, so `()` prints as `()` and
 applies as const-1. But that means the storage predicates misfire:
 
-- `lamp` is just `evenp` (ai.h:330); the core is word-aligned ⇒ `lamp(()) == true`.
-- `mintp(_) = lamp(_) && cell(_)->ap == lvm_sym` ⇒ **`mintp(()) == true`**.
-- `nomp(_) = mintp(_) || (chainp && strp(A) && mintp(B))` ⇒ **`nomp(()) == true`**,
+- `lit?` is just `evenp` (ai.h:330); the core is word-aligned ⇒ `lit?(()) == true`.
+- `mintp(_) = lit?(_) && cell(_)->ap == lvm_sym` ⇒ **`mintp(()) == true`**.
+- `nom?(_) = mintp(_) || (two? && string?(A) && mintp(B))` ⇒ **`nom?(()) == true`**,
   and also any `(string . ())` one-element list reads as a `(name . mint)` nom.
 
 So every compiler predicate asking "is this a named symbol?" answers *yes* for
 `()`. **Fix:** guard `mintp` against the core. It has no `g`, so thread one in:
-`mintp(struct ai *g, word _) = lamp(_) && !nilp(_) && cell(_)->ap == lvm_sym`.
-This cascades to `nomp`, `formp`, and the `symeq/hashsym/splicesym` and
+`mintp(struct ai *g, word _) = lit?(_) && !nil?(_) && cell(_)->ap == lvm_sym`.
+This cascades to `nom?`, `formp`, and the `symeq/hashsym/splicesym` and
 `cmp_rank` helpers — all gain a `g` parameter (every caller already has `g` or
-a `struct ai*` in scope, e.g. `lam_src1` uses `c`). NB the macro `nilp(_)` =
+a `struct ai*` in scope, e.g. `lam_src1` uses `c`). NB the macro `nil?(_)` =
 `word(_)==nil` needs `g` visible.
 
 This guard is **necessary but not sufficient** — see below.
@@ -34,11 +34,11 @@ This guard is **necessary but not sufficient** — see below.
 c0's env is `struct env` (ai.c:1133): `par, args, imps, stack, lams, len, …`.
 It is GC-traced as a text (`tagtext`), so `evac_text` forwards every word incl.
 `par` (the chain survives GC). A scope's fresh fields are set to `nil` (= `()`),
-which is fine for list fields because `chainp(()) == false`.
+which is fine for list fields because `two?(()) == false`.
 
 The **top-level scope is faked**: `c0` (ai.c:1221) calls
 `enscope(g, (struct env*)nil, nil, nil)` — `par = ()`. `ana_v`'s lookup walk
-(ai.c:1403) terminates on `nilp(d)` (d == core). There is **no persistent
+(ai.c:1403) terminates on `nil?(d)` (d == core). There is **no persistent
 global scope object** on `struct ai`; `()` doubles as both the value floor and
 the "no parent" sentinel. A persistent global-scope field would decouple them.
 
@@ -120,7 +120,7 @@ capture bug; there is at least one more.
   baked self-test (`s2cldef` then `(zevs (sip (s2cl tests)))`). To trace a
   specific compile, set a flag in `main.c` around `ai_evals_(g, s2cldef)` and
   gate C `dprintf(2,…)` on it (ai.c has no stdio; declare `dprintf` locally).
-- A value-skeleton dumper (chain → `(A . B)`, nomp → name, charm → number,
+- A value-skeleton dumper (chain → `(A . B)`, nom? → name, charm → number,
   core → `()`) printed at c0's opfix site (before/after) and in `ana_d`
   (before/after boxfix, plus `lambp` per binding) localizes the mangle to one
   pass.

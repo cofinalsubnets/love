@@ -160,7 +160,7 @@
 ; nil/string to a string). fz-s2cl / fz-rd are the helpers from the round-trip
 ; section above (string->charlist, print->read).
 (: fz-byte (fz-int 0 256)                                  ; any byte 0..255
-   (fz-cl->str cl) (? (chainp cl) (string cl) "")            ; charlist -> string ("" for nil)
+   (fz-cl->str cl) (? (two? cl) (string cl) "")            ; charlist -> string ("" for nil)
    (fz-norm x) (? x x "")                                  ; nil|string -> string
    (fz-str mx) (fz-map fz-cl->str (fz-list mx fz-byte))    ; string, pin 0..mx
    fz-s    (fz-str 12)

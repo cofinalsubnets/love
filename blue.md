@@ -83,7 +83,7 @@ So a number is its own value, `()` nets 0, and a list nets the **sum of its spin
 
 ```
 sat  v = max 0 (net v)       -- $  : the SOLE clamp, max(0, ceil net)
-nilp v = (net v <=? 0)       -- !  : false is nothing
+nil? v = (net v <=? 0)       -- !  : false is nothing
 tru  v = (0 <? net v)        -- !! : the truth bit
 ```
 
@@ -130,7 +130,7 @@ The band chain itself is proved link by link: `thm:symbol_lt_string`, `thm:strin
 Two refinements the model is explicit about *not* covering:
 
 - **`=` bridges the numeric tower** (`3 = 3.0`): a number band carries the mathematical value rep-blindly, so the float `3.0` and the fixnum `3` are the *same* `Onum` — there is no separate representation to model, by design.
-- **`idp` (pointer identity) is strictly finer than `=`**: `'(1) = '(1)` yet `!(idp '(1) '(1))`. Identity has no model in a setting where nothing is shared; this is a deliberate omission, not an oversight.
+- **`id?` (pointer identity) is strictly finer than `=`**: `'(1) = '(1)` yet `!(id? '(1) '(1))`. Identity has no model in a setting where nothing is shared; this is a deliberate omission, not an oversight.
 
 This single order is the engine of `sort` — one comparison per chain, the comparator *is* the total order — and of map / hash key ordering.
 
@@ -176,25 +176,25 @@ The numerals bridge into the term language, but no further:
 
 > **(7.4) η is not bridged.** `(\ x (f x)) ≠ f` (`thm:eta_not_bridged`): a closure and its operator are a representation-crossing edge that stays false.
 
-`<` agrees with `=` here because the comparison hash is α-invariant; `idp` stays identity (finer than both).
+`<` agrees with `=` here because the comparison hash is α-invariant; `id?` stays identity (finer than both).
 
 ## 8 · numerics {#numerics}
 
 The numeric carriers earn their own short names — each names a predicate you can probe, and they carry through the array laws below. They split the **number** band by rank.
 
-A **number** (`nump`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **gem** (`gemp`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `idp x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized gem, a fixnum, is a **charm** (`charmp`). A **tray** (`trayp`) is an array, numeric or not; a **crest** (`crestp`) is a tray *of gems* — a numeric array. So a number is a gem or a crest, and `$` lands every value on the **green gems** — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green gem too.
+A **number** (`jewel?`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **gem** (`gem?`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `id? x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized gem, a fixnum, is a **charm** (`charm?`). A **tray** (`tray?`) is an array, numeric or not; a **crest** (`crest?`) is a tray *of gems* — a numeric array. So a number is a gem or a crest, and `$` lands every value on the **green gems** — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green gem too.
 
 | name | predicate | what it is |
 |---|---|---|
-| `number` | `nump` | any numeric value, scalar or array — the bottom band |
-| `gem` | `gemp` | a scalar number, one that nets itself (rank 0) |
-| `charm` | `charmp` | a word-sized gem — a fixnum |
-| `tray` | `trayp` | an array, numeric or not (rank ≥ 1) |
-| `crest` | `crestp` | a tray of gems — a numeric array (rank ≥ 1) |
+| `number` | `jewel?` | any numeric value, scalar or array — the bottom band |
+| `gem` | `gem?` | a scalar number, one that nets itself (rank 0) |
+| `charm` | `charm?` | a word-sized gem — a fixnum |
+| `tray` | `tray?` | an array, numeric or not (rank ≥ 1) |
+| `crest` | `crest?` | a tray of gems — a numeric array (rank ≥ 1) |
 
-A crest is *not* a gem (`gemp` is false on a tray, whose net is a fresh sum): it is a tray whose cells are gems. A charm is the smallest gem; a number is a gem or a crest.
+A crest is *not* a gem (`gem?` is false on a tray, whose net is a fresh sum): it is a tray whose cells are gems. A charm is the smallest gem; a number is a gem or a crest.
 
-The jewels have a structural twin. A gem is fixed under `net` (`idp x (net x)` — its own measure); an **atom** (`atomp`) is fixed under `cap` (`x = (cap x)` — its own head). The non-atom is a **pair** — the chain that `link` builds, whose `cap` and `cup` split a head from a rest. Every gem is an atom (a number is its own head too), so a charm is a *special* atom — fixed under `net` as well as `cap`. `net` is what carves the gems out of the atoms.
+The jewels have a structural twin. A gem is fixed under `net` (`id? x (net x)` — its own measure); an **atom** (`atom?`) is fixed under `cap` (`x = (cap x)` — its own head). The non-atom is a **pair** — the chain that `link` builds, whose `cap` and `cup` split a head from a rest. Every gem is an atom (a number is its own head too), so a charm is a *special* atom — fixed under `net` as well as `cap`. `net` is what carves the gems out of the atoms.
 
 The **tray** is the APL half of the language. A shape is its list of axis sizes; the **cell count** is the product of the shape (`alen`), the **rank** its length (`arank`): `alen [2;3] = 6` (`thm:alen_23`), `arank [2;3] = 2` (`thm:arank_23`), and a 0-axis yields 0 cells (`thm:alen_empty_axis`). Indexing is row-major and out-of-bounds reads the default:
 
@@ -260,7 +260,7 @@ A claim about ai can be believed at three escalating strengths, and this documen
 
 The caveat every formal demonstration carries: the consistency of its own metatheory. The Rocq layer lives in universe-checked Rocq, so its theorems are unconditional — "the world does not explode here." Drop universe checking (type-in-type) and `empty` becomes inhabited, ex falso giving everything; the blue-paper theorems are stated where the world does *not* explode.
 
-What is **not** proved in Rocq, by design, lives at the demonstrate layer: the float / complex / bignum *values* of the tower (the algebra of §1–9 is proved over exact ℤ; §10 is demonstrated, not proved), pointer identity `idp` (nothing is shared in the model), and the implementation invariants of §5 (the dispatch matrix, the tail-threading), which the runtime checks rather than Rocq. A fourth bridge keeps the demonstrate and prove layers in step automatically: `tools/spec2coq.l` generates Rocq straight from the spec (see also, below).
+What is **not** proved in Rocq, by design, lives at the demonstrate layer: the float / complex / bignum *values* of the tower (the algebra of §1–9 is proved over exact ℤ; §10 is demonstrated, not proved), pointer identity `id?` (nothing is shared in the model), and the implementation invariants of §5 (the dispatch matrix, the tail-threading), which the runtime checks rather than Rocq. A fourth bridge keeps the demonstrate and prove layers in step automatically: `tools/spec2coq.l` generates Rocq straight from the spec (see also, below).
 
 ## 12 · implementation, in one breath {#impl}
 

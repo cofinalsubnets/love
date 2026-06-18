@@ -26,7 +26,7 @@
   (= "$" (snip (show (mint 0)) 0 1))
   (: m (mint 0) ((show m) = (show m)))             ; stable: same mint, same face
   (: a (mint 0) b (mint 0) !((show a) = (show b))) ; distinct mints, distinct faces
-  (nomp (mint 0))
+  (nom? (mint 0))
   (= "$" (snip (show (mint 'bar)) 0 1))            ; (mint 'bar) ignores its arg -- still a bare mint
 
   ; quote sugar: a chain (` x) prints as 'x
@@ -43,17 +43,17 @@
   (= "((1 2) (3 4))" (show '((1 2) (3 4))))
 
   ; result is always a string
-  (strp (show 0))
-  (strp (show "hi"))
-  (strp (show '(1 2 3)))
-  (strp (show (tablet 0)))
+  (string? (show 0))
+  (string? (show "hi"))
+  (string? (show '(1 2 3)))
+  (string? (show (tablet 0)))
 
   ; buffer growth: a 200-element list far exceeds the 32-byte initial buf,
   ; forcing several doublings inside to_putc.
   (: (rng n) (? (= n 0) 0 (link n (rng (- n 1))))
      s (show (rng 200))
      ; 200 numbers + 199 separators + 2 parens = at least 400 chars
-   (do (strp s) (< 400 (tally s))))
+   (do (string? s) (< 400 (tally s))))
 
   ; GC stress: 500 inspects in a loop. Each call alloc'd a heap port + buf,
   ; provoking many GCs. Final call must still produce the expected output.

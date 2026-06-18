@@ -22,8 +22,8 @@
 (: port 7391
  l (listen port)
  _ (assert
-    (lamp l)                              ; the listener is a heap port
-    (hotp l))                             ; ... an opaque hot, like any fd port
+    (lit? l)                              ; the listener is a heap port
+    (hot? l))                             ; ... an opaque hot, like any fd port
  ; server task: accept one client, echo its line back, half-close, close.
  srv (spawn (\ _ (: c (accept l)
                     ln (rdline c)
@@ -32,15 +32,15 @@
                     _ (close c) 1)) 0)
  c (connect "127.0.0.1" port)
  _ (assert
-    (lamp c)                              ; the client side is a heap port too
-    (hotp c))
+    (lit? c)                              ; the client side is a heap port too
+    (hot? c))
  _ (fputs c "neko\n")
  echo (rdline c)
  _ (assert
     (= echo "neko"))                      ; THE ROUND TRIP: what went out came back
  ; (shutdown s how) returns the port (chainable); a no-op on a non-port arg.
  _ (assert
-    (lamp (shutdown c 1))                 ; returns the port
+    (lit? (shutdown c 1))                 ; returns the port
     (= 5 (shutdown 5 1)))                 ; misuse: returns the arg unchanged
  _ (wait srv)                             ; reap the server task -- no orphan
  _ (close c)

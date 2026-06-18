@@ -4,11 +4,11 @@
 ; and compares as a string, yet the two are distinguishable objects.
 (assert
   ; the literal "" reads as a real string object, distinct from 0 ...
-  (strp "")                                  ; "" is a string
-  (nilp "")                                  ; ... but falsy now -- an empty container
-  !(idp "" 0)                               ; truthiness aside, "" is its own object, not 0/nil
-  (nilp (= "" 0))                            ; "" is not equal to 0
-  (nilp (idp "" 0))                         ; ... nor identical to it
+  (string? "")                                  ; "" is a string
+  (nil? "")                                  ; ... but falsy now -- an empty container
+  !(id? "" 0)                               ; truthiness aside, "" is its own object, not 0/nil
+  (nil? (= "" 0))                            ; "" is not equal to 0
+  (nil? (id? "" 0))                         ; ... nor identical to it
   (= "" "")                                  ; but all empty strings are equal
 
   ; pin: both the empty string and 0 have empty length
@@ -19,7 +19,7 @@
   (= "ab" (+ "" "ab"))   (= "ab" (+ "ab" ""))
   (= "ab" (+ "ab" ""))   (= "ab" (+ "" "ab"))
   (= "" (+ "" ""))                        ; empty join -> the empty string
-  (strp (+ "" ""))                        ; ... still a string, not 0
+  (string? (+ "" ""))                        ; ... still a string, not 0
   ; scat is gone; + takes the byte law instead: 0 is byte 0, not an empty operand
   (= 3 (tally (+ "ab" 0)))  (= 0 ((+ "ab" 0) 2))
   (= 0 (+ 0 0))
@@ -27,7 +27,7 @@
   ; snip: an empty string snip returns "" -- a string snip yields a STRING, the
   ; closest form of nothing for this kind, not the bare floor (0). only a non-string
   ; input (no string witness to preserve) gives 0.
-  (= "" (snip "abc" 1 1))   (strp (snip "abc" 1 1))
+  (= "" (snip "abc" 1 1))   (string? (snip "abc" 1 1))
   (= "" (snip "" 0 5))
   (= 0 (snip 0 0 5))
 
@@ -42,7 +42,7 @@
   (= 1 (0 5))
 
   ; string: coercing "" stays the empty string; coercing 0 stays 0
-  (= "" (string ""))   (strp (string ""))
+  (= "" (string ""))   (string? (string ""))
   (= 0 (string 0))
 
   ; puts writes nothing for an empty operand; "" returns "", 0 returns 0

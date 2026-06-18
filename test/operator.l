@@ -4,8 +4,8 @@
 ; sigils against the table at COMPILE time (the opfix pass), so a pin in one form
 ; governs the next form -- the test runner reads and compiles one form at a time.
 (: op-tbl operators)             ; leak to global scope for this file
-(assert (tabp op-tbl)
- ((link 'sat 1) = (op-tbl '$)) ((link 'nilp 1) = (op-tbl '!)) ((link 'dot 1) = (op-tbl '.))
+(assert (tab? op-tbl)
+ ((link 'sat 1) = (op-tbl '$)) ((link 'nil? 1) = (op-tbl '!)) ((link 'dot 1) = (op-tbl '.))
  (2 = (op-tbl '+)) (2 = (op-tbl '-)) (2 = (op-tbl '%)) (3 = (op-tbl '?))
  ((link 'pin 3) = (op-tbl '<-)) ((link 'peep 3) = (op-tbl '->)))
 
@@ -28,10 +28,10 @@
 (assert ('(1 2 3) = (1 ^^ 2 3)) ('((1 2 3) 4 5) = ((1 ^^ 2 3) ^^ 4 5)))
 (pin op-tbl '^^ (link 'inc 1))
 (assert (6 = ^^5) (7 = ^^^^5)                   ; at one: prefix; chains factor greedily
-        (0 = !^^5))                             ; mixed chain: (nilp (inc 5))
+        (0 = !^^5))                             ; mixed chain: (nil? (inc 5))
 
 ; restore: unpinned, ^^ no longer factors (^ is at two, can't lead a chain),
 ; so it reads as a plain symbol again
 (pull op-tbl '^^ 0)
-(assert !(op-tbl '^^) (nomp '^^) ('(^^ 5) = (opfix '(^^ 5)))
+(assert !(op-tbl '^^) (nom? '^^) ('(^^ 5) = (opfix '(^^ 5)))
         (-2 = (^ 1 -1)) (6 = (^ 5 3)))          ; ^ was the xor nif all along

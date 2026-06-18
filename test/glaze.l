@@ -6,23 +6,23 @@
 ; copy (the HHDM is already executable). The idiom is (call (toast bytes) x); see
 ; ai/glaze/README.md + ai/glaze/probe.l.
 ;
-; A toast is OPAQUE: hotp, but NOT a buf -- its code can't be peep/pin/tally'd as
+; A toast is OPAQUE: hot?, but NOT a buf -- its code can't be peep/pin/tally'd as
 ; data, only (call ..) runs it. These asserts are ARCHITECTURE-NEUTRAL on purpose:
 ; actually executing bytes is machine-specific (x86_64 opcodes crash an aarch64 or
 ; wasm host), so the real round-trip lives in the standalone ai/glaze/probe.l (kernel).
 ; Here we cover what holds on every target: the guards and the opacity, no run.
 (assert
- (lamp call) (lamp toast)     ; both nifs present and applicable
+ (lit? call) (lit? toast)     ; both nifs present and applicable
  !(call 5 0) (0 = (call 'sym 0)) !(call "text" 0) !(call () 0)   ; a non-toast -> nothing (no jump)
  !(call (buf 8) 0)            ; a plain buf is NOT callable -- only a toast runs
  (0 = (toast 5)) (0 = (toast 'x)) (0 = (toast ())) (0 = (toast ""))   ; non-bytes / empty -> 0
- (hotp (toast "AB")) !!(toast "AB")        ; a toast is an opaque hot, and present
+ (hot? (toast "AB")) !!(toast "AB")        ; a toast is an opaque hot, and present
  (0 = (tally (toast "AB")))                ; OPAQUE: not a buf, so no length to read
  (-1 = (peep (toast "AB") 0 -1))           ; OPAQUE: its code bytes are not readable
- (: b (buf 3) _ (pin b 0 144) _ (pin b 1 195) t (toast b) (&& (hotp t) (0 = (tally t))))  ; toast of a buf too
+ (: b (buf 3) _ (pin b 0 144) _ (pin b 1 195) t (toast b) (&& (hot? t) (0 = (tally t))))  ; toast of a buf too
  ; `nat` -- the codegen-backend install seam (ai.c): (nat code interp src) wraps
  ; emitted bytes in a TRANSPARENT applicable native closure. NEUTRAL here (no
  ; install/run -- the bytes are x86-64; the real round-trip lives in ai/glaze/emit.l):
  ; non-byte / empty code installs nothing.
- (lamp nat)
+ (lit? nat)
  !(nat 5 0 0) !(nat 'x 0 0) !(nat () 0 0) !(nat "" 0 0))

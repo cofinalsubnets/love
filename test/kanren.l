@@ -4,10 +4,10 @@
   (loop k ks vs) (? ks
    (? (= k (cap ks)) vs (loop k (cup ks) (cup vs))))
   (loop k (cap d) (cup d)))
- (dict_get d k) (: x (dict_has d k) (? (chainp x) (cap x)))
+ (dict_get d k) (: x (dict_has d k) (? (two? x) (cap x)))
  (dict_set d k v) (link (link k (cap d)) (link v (cup d)))
- (mintp x) (&& (nomp x) (nomp (string x)))   ; string of a named sym is its name; of a mint, itself
- (var? x) (&& (chainp x) (mintp (cup x)))
+ (mintp x) (&& (nom? x) (nom? (string x)))   ; string of a named sym is its name; of a mint, itself
+ (var? x) (&& (two? x) (mintp (cup x)))
  (var x) (link x (nom 0))
  empty_dict '(0)
  has_s dict_has
@@ -25,7 +25,7 @@
              (\ s _ m _ (m (s_star s g)))
              (\ x s (s_plus (g x) (s_star s g))))
  (stake i s)
-  (? (nilp i) s
+  (? (nil? i) s
    (s (\ _ s)
       (stake i)
       (\ x s (link x (stake (+ -1 i) s)))))
@@ -39,23 +39,23 @@
      (\ x s (f x (sfold f z s))))
  slist (sfold link 0)
  (est u v s) (:
-  (walk u s) (? (nilp (var? u)) u
+  (walk u s) (? (nil? (var? u)) u
               (: t (has_s s u)
-               (? (chainp t) (walk (cap t) s) u)))
+               (? (two? t) (walk (cap t) s) u)))
   x (walk u s) y (walk v s)
   (? (= x y) (sun s)
      (var? x) (sun (ext_s s x y))
      (var? y) (sun (ext_s s y x))
-     (&& (chainp x) (chainp y)
+     (&& (two? x) (two? y)
      (et (est (cap x) (cap y)) (est (cup x) (cup y)) s))))
  (Run n ks g) (:
   (walk_star u s) (?
-   (var? u) (: t (has_s s u) (? (chainp t) (walk_star (cap t) s) u))
-   (chainp u) (link (walk_star (cap u) s) (walk_star (cup u) s))
+   (var? u) (: t (has_s s u) (? (two? t) (walk_star (cap t) s) u))
+   (two? u) (link (walk_star (cap u) s) (walk_star (cup u) s))
    u)
   (reify st) (flip catmap ks (\ k
    (: it (has_s (link (map cap (cap st)) (cup st)) k)
-    (? (chainp it) (L k (walk_star (cap it) st))))))
+    (? (two? it) (L k (walk_star (cap it) st))))))
   (map reify ((? n (stake n) slist) (g empty_dict)))))
 
 (:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 (cap x)

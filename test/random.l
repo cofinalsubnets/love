@@ -56,17 +56,17 @@
  ; --- randf in [0,1), and is a float ---
  (: u (randf 0) (< u 1))
  (: u (randf 0) (<= 0 u))
- (flop (randf 0))
+ (float? (randf 0))
  (: p (randf-next (rng-seed 3)) (< (cap p) 1))
  (: p (randf-next (rng-seed 3)) (<= 0 (cap p)))
  (: p (randf-next (rng-seed 3)) (= 4 (alen (cup p))))
 
  ; --- invalid state -> nil (rng-set / functional draws validate) ---
- (nilp (rng-set 5))
- (nilp (rng-set (arr 0 '(3) 0)))           ; wrong length
- (nilp (rng-set (arr 0.0 '(4) 0)))           ; wrong element type
- (nilp (rand-next 5))
- (nilp (randf-next 0))
+ (nil? (rng-set 5))
+ (nil? (rng-set (arr 0 '(3) 0)))           ; wrong length
+ (nil? (rng-set (arr 0.0 '(4) 0)))           ; wrong element type
+ (nil? (rand-next 5))
+ (nil? (randf-next 0))
 
  ; --- randint (prel): bounded functional draw, pure in its state ---
  (: r (randint (rng-seed 9) 6) (<= 0 (cap r)))

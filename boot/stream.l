@@ -34,11 +34,11 @@
    ; the projections -- forcing once, reading the memo thereafter. shd/stl are only
    ; valid on a non-empty stream (guard with seof?), exactly like cap/cup on a list.
    ; EOF = the empty stream = (); a non-empty force is a (head . tail) chain. we test
-   ; that STRUCTURALLY (chainp), not with `!`: a raw chain nets by its BYTES (a (0 .
+   ; that STRUCTURALLY (two?), not with `!`: a raw chain nets by its BYTES (a (0 .
    ; tail) nets 0, and the tail box is a dotted tail net excludes), so `!` would
    ; misread a 0-byte head as empty. in C this subtlety vanishes -- a `source` hot is
    ; present-by-construction (nets truthy), so there `! source` IS the emptiness test.
-   (seof? s) (! (chainp (force s)))         ; force is a chain iff the stream has a byte
+   (seof? s) (! (two? (force s)))         ; force is a chain iff the stream has a byte
    (shd s)   (cap (force s))                ; the head byte (a charm; 0 is a real byte)
    (stl s)   (cup (force s))                ; the tail stream (a fresh stream box)
 
@@ -46,7 +46,7 @@
    ; (sip-l l): a stream over a byte LIST. each tail is a FRESH unforced (sip-l ..),
    ; so the spine is built lazily and `bump` counts only genuine productions.
    (sip-l l) (strm (\ _ (: _ (bump 0)
-                           (? (chainp l) (link (cap l) (sip-l (cup l))) ()))))
+                           (? (two? l) (link (cap l) (sip-l (cup l))) ()))))
    (chars s)    (map s (jot (tally s)))     ; "ab" -> (97 98) (a string indexes bytes)
    (strm-str s) (sip-l (chars s))           ; a stream straight off a string literal
 
@@ -81,7 +81,7 @@
    ; projects onto ai_ready and select onto ai_wait_fds. select returns the first
    ; ready (here: non-empty) stream, or () if every stream is at EOF.
    (ready? _) 1
-   (select ss) (? (chainp ss)
+   (select ss) (? (two? ss)
                   (? (seof? (cap ss)) (select (cup ss)) (cap ss))
                   ()))
 
@@ -113,7 +113,7 @@
    (! (seof? (sip-l (L 0 65))))
    (seof? (sip-l 0))                      ; the empty list IS the empty stream
    ; select: skip the spent stream, return the ready one; () when all are spent
-   (: a (strm-str "x") (idp a (select (L (sip-l 0) a))))
+   (: a (strm-str "x") (id? a (select (L (sip-l 0) a))))
    (! (select (L (sip-l 0) (strm-str ""))))))
 
 ; memoization: force the same stream's head twice -> the producer runs ONCE.
@@ -127,7 +127,7 @@
 ; help that hands back the condition tag, so an unterminated list surfaces 'eofmid
 ; instead of terminating; a well-formed read never trips it.
 (: help (\ s a b a))
-(: _ (assert (idp 'eofmid (read1 (strm-str "(1 2")))   ; "(1 2" with no ')' -> scare
+(: _ (assert (id? 'eofmid (read1 (strm-str "(1 2")))   ; "(1 2" with no ')' -> scare
              (= (L 1 2) (cap (read1 (strm-str "(1 2)")))))) ; closed -> clean datum
 (: help 0)                               ; uninstall (hygiene; back to the floor handler)
 

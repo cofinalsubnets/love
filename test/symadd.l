@@ -23,7 +23,7 @@
   ; --- the explicit bridge survives ---
   ("asdf" = (string 'asdf)) ('asdf = (intern "asdf"))
   ('xy = (intern (string 'xy)))                 ; intern . string = identity on interned
-  (idp sa-z (intern ""))
+  (id? sa-z (intern ""))
   ; --- noms carry their name as data: the chain's cap ---
   ("cd" = (cap (nom "cd"))) ("cd" = (cap (nom 'cd)))
   ; --- strings keep everything ---

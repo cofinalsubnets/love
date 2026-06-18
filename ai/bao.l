@@ -40,25 +40,25 @@
 ; 0); a CHARMS is the colist: (cap cs) is a charm, (cup cs) is a top, and
 ; the tail forced with the empty -- ((cup cs) ()) -- types as charms + 0,
 ; the coproduct, 0 the end (the floor as the nil injection). consumers
-; dispatch on KIND: chainp is a cell, anything else the end. `charms` is also
+; dispatch on KIND: two? is a cell, anything else the end. `charms` is also
 ; the canonical lift into the construction: chars lift cell by cell, a port
 ; (the HOT charms) pulls one byte per force (-1 ends it), charms pass
 ; through, the end lifts to itself. charms->chars realizes a finite charms.
 ; NB the cell test dispatches on the TAIL's kind -- a chain or nil is chars,
-; anything else is taken as the forcing top. (lamp is no use here: it is
+; anything else is taken as the forcing top. (lit? is no use here: it is
 ; hot-based and answers true for every heap value, chains included -- the
-; lamp-spans-bands pin.)
+; lit?-spans-bands pin.)
 (: (charms s)
-   (? (chainp s) (: t (cup s)
-                  (? (chainp t) (link (cap s) (\ u (charms t)))   ; chars: lift, lazy tail
-                     (nilp t) (link (cap s) (\ u ()))           ; the last chars cell
+   (? (two? s) (: t (cup s)
+                  (? (two? t) (link (cap s) (\ u (charms t)))   ; chars: lift, lazy tail
+                     (nil? t) (link (cap s) (\ u ()))           ; the last chars cell
                      s))                                        ; a top tail: charms already
-      (hotp s) (: c (fgetc s)                                ; a port is the hot charms
+      (hot? s) (: c (fgetc s)                                ; a port is the hot charms
                      (? (= c -1) () (link c (\ u (charms s)))))
       ())
    (charms->chars s)
    (: cs (charms s)
-      (? (chainp cs) (link (cap cs) (charms->chars ((cup cs) ()))) 0)))
+      (? (two? cs) (link (cap cs) (charms->chars ((cup cs) ()))) 0)))
 ; zev: charms -> top, the reverse shell of the compiler -- the lane every
 ; shell ultimately feeds into. takes the global construction (anything the
 ; `charms` lift takes: chars, a port, charms proper), reads ONE form from it
@@ -69,7 +69,7 @@
 ; charms first; the lazy-pull seam is where the lisp reader lands next.
 (: (zev s)
    (: p (sip (charms->chars s)) e (nom 0) r (read p e)
-      (? (idp r e) 0 (idp r p) 0 (ev r))))
+      (? (id? r e) 0 (id? r p) 0 (ev r))))
 ; zevs: the stream shell -- a port is the LAZY charms, and zevs drinks it:
 ; read and eval every form until the stream ends (eof, or input ends inside
 ; an unfinished shape); the value is the last form's. ev late-binds through
@@ -78,7 +78,7 @@
 ; ai0/kernel corpus runners are all this function now.
 (: (zevs p)
    ((: (g e z) (: r (read p e)
-       (? (idp r e) z (idp r p) z (g e (ev 'ev r)))))
+       (? (id? r e) z (id? r p) z (g e (ev 'ev r)))))
     (nom 0) 0))
 
 ; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
@@ -100,15 +100,15 @@
         r (read p eofsym)
         (? (= r p)      m                  ; ends inside an unfinished form
            (= r eofsym) 0                  ; unreachable: the wrap always closes
-           (idp r ())   0                  ; blank line reads 0 (the wrapped empty form)
+           (id? r ())   0                  ; blank line reads 0 (the wrapped empty form)
            (L r)))
 
    ; --- editor ---
 
    ; intersperse a list of charlists with newlines, in order
    (joinln ls)
-     (? (chainp ls)
-        (? (chainp (cup ls))
+     (? (two? ls)
+        (? (two? (cup ls))
            (cat (cap ls) (link 10 (joinln (cup ls))))
            (cap ls))
         0)
@@ -121,7 +121,7 @@
    ; call k with (rev (take n xs)) and (drop n xs). stops cleanly at
    ; end-of-xs even if n exceeds the list length.
    (splitat k acc n xs)
-     (? (&& (chainp xs) (< 0 n)) (splitat k (link (cap xs) acc) (- n 1) (cup xs))
+     (? (&& (two? xs) (< 0 n)) (splitat k (link (cap xs) acc) (- n 1) (cup xs))
         (k acc xs))
 
    ; map non-printables to space; otherwise pass through
@@ -134,20 +134,20 @@
    ; the next line on. up/down preserve column, clamped to the
    ; destination line's length.
    (edleft k u l r d)
-     (? (chainp l) (k u (cup l) (link (cap l) r) d)
-        (chainp u) (k (cup u) (rev (cap u)) 0 (link (revcat l r) d))
+     (? (two? l) (k u (cup l) (link (cap l) r) d)
+        (two? u) (k (cup u) (rev (cap u)) 0 (link (revcat l r) d))
         (k u l r d))
    (edright k u l r d)
-     (? (chainp r) (k u (link (cap r) l) (cup r) d)
-        (chainp d) (k (link (revcat l r) u) 0 (cap d) (cup d))
+     (? (two? r) (k u (link (cap r) l) (cup r) d)
+        (two? d) (k (link (revcat l r) u) 0 (cap d) (cup d))
         (k u l r d))
    (edbsp k u l r d)
-     (? (chainp l) (k u (cup l) r d)
-        (chainp u) (k (cup u) (rev (cap u)) r d)
+     (? (two? l) (k u (cup l) r d)
+        (two? u) (k (cup u) (rev (cap u)) r d)
         (k u l r d))
    (eddel k u l r d)
-     (? (chainp r) (k u l (cup r) d)
-        (chainp d) (k u l (cap d) (cup d))
+     (? (two? r) (k u l (cup r) d)
+        (two? d) (k u l (cap d) (cup d))
         (k u l r d))
    (edhome k u l r d) (k u 0 (revcat l r) d)
    (edend  k u l r d) (k u (revcat r l) 0 d)
@@ -155,19 +155,19 @@
    ; the topmost line / end of the bottommost line. on a single-line
    ; buffer they degenerate to edhome / edend.
    (edtop k u l r d)
-     (? (chainp u) (: ru (rev u)
+     (? (two? u) (: ru (rev u)
                   (k 0 0 (cap ru) (cat (cup ru) (link (revcat l r) d))))
         (k u 0 (revcat l r) d))
    (edbot k u l r d)
-     (? (chainp d) (: rd (rev d)
+     (? (two? d) (: rd (rev d)
                   (k (cat (cup rd) (link (revcat l r) u)) (revcat (cap rd) 0) 0 0))
         (k u (revcat r l) 0 d))
    (edup k u l r d)
-     (? (chainp u) (splitat (\ lz rr (k (cup u) lz rr (link (revcat l r) d)))
+     (? (two? u) (splitat (\ lz rr (k (cup u) lz rr (link (revcat l r) d)))
                           0 (tally l) (cap u))
         (k u l r d))
    (eddown k u l r d)
-     (? (chainp d) (splitat (\ lz rr (k (link (revcat l r) u) lz rr (cup d)))
+     (? (two? d) (splitat (\ lz rr (k (link (revcat l r) u) lz rr (cup d)))
                           0 (tally l) (cap d))
         (k u l r d))
 
@@ -178,13 +178,13 @@
 
    ; if cur holds a pristine recall, restore it at its slot in hu;
    ; called before any mutating edit so the original survives.
-   (detach hu cur) (? (chainp cur) (link cur hu) hu)
+   (detach hu cur) (? (two? cur) (link cur hu) hu)
 
    ; predicates over the buffer used by the history navigation rules
    ; below: empty buffers don't get pushed during normal nav, and
    ; off-the-end nav only pushes when the buffer parses to a value.
-   (emptybuf u l r d) (&& (nilp u) (nilp l) (nilp r) (nilp d))
-   (parses u l r d)   (chainp (parseall (flatten u l r d)))
+   (emptybuf u l r d) (&& (nil? u) (nil? l) (nil? r) (nil? d))
+   (parses u l r d)   (two? (parseall (flatten u l r d)))
 
    ; up/down through the history zipper. on a normal pop, push the
    ; current buffer onto the other side (skipping if empty); if the
@@ -192,20 +192,20 @@
    ; non-nil) and the buffer parses, push and scroll into a fresh
    ; empty line.
    (uphist k u l r d hu hd cur)
-     (? (chainp hu)
+     (? (two? hu)
         (: e (cap hu)
            nhd (? (emptybuf u l r d) hd (link (mkframe u l r d) hd))
            (k (cap e) (cap (cup e)) (cap (cup (cup e))) (cup (cup (cup e))) (cup hu) nhd e))
-        (&& (chainp cur) (parses u l r d))
+        (&& (two? cur) (parses u l r d))
         (: nhd (link (mkframe u l r d) hd)
            (k 0 0 0 0 hu nhd 0))
         (k u l r d hu hd cur))
    (downhist k u l r d hu hd cur)
-     (? (chainp hd)
+     (? (two? hd)
         (: e (cap hd)
            nhu (? (emptybuf u l r d) hu (link (mkframe u l r d) hu))
            (k (cap e) (cap (cup e)) (cap (cup (cup e))) (cup (cup (cup e))) nhu (cup hd) e))
-        (&& (chainp cur) (parses u l r d))
+        (&& (two? cur) (parses u l r d))
         (: nhu (link (mkframe u l r d) hu)
            (k 0 0 0 0 nhu hd 0))
         (k u l r d hu hd cur))
@@ -258,7 +258,7 @@
         _ (each (revcat l r) prc)
         _ (each d (\ ln (do (putc 10) (each ln prc))))
         ld (tally d)
-        col (+ (? (chainp u) 0 pl) (tally l))
+        col (+ (? (two? u) 0 pl) (tally l))
         _ (? (< 0 ld) (do (putc 27) (putc 91) (putn ld) (putc 65)) 0)
         _ (putc 13)
         _ (? (< 0 col) (do (putc 27) (putc 91) (putn col) (putc 67)) 0)
@@ -308,9 +308,9 @@
                 (= c 10) (: vs (parseall (flatten u l r d))
                             (? (= vs m)
                                (loop npra (link (rev l) u) 0 r d (detach hu cur) hd 0)
-                               (: _ (? (chainp d) (: _ (putc 27) _ (putc 91) _ (putn (tally d)) (putc 66)) 0)
+                               (: _ (? (two? d) (: _ (putc 27) _ (putc 91) _ (putn (tally d)) (putc 66)) 0)
                                   _ (putc 10)
-                                  nhu (? (nilp vs) (revcat hd (detach hu cur))
+                                  nhu (? (nil? vs) (revcat hd (detach hu cur))
                                          (take 100 (link (mkframe u l r d) (revcat hd (detach hu cur)))))
                                   (link vs (link nhu 0)))))
                 (< 0 c)  (loop npra u (link c l) r d (detach hu cur) hd 0)
@@ -320,9 +320,9 @@
                 (= c -4) (eddel   kedit u l r d)
                 (= c -5) (edhome  kloop u l r d)
                 (= c -6) (edend   kloop u l r d)
-                (= c -8) (? (chainp u) (edup    kloop u l r d)
+                (= c -8) (? (two? u) (edup    kloop u l r d)
                             (uphist   khist u l r d hu hd cur))
-                (= c -9) (? (chainp d) (eddown  kloop u l r d)
+                (= c -9) (? (two? d) (eddown  kloop u l r d)
                             (downhist khist u l r d hu hd cur))
                 (= c -10) (edtop kloop u l r d)
                 (= c -11) (edbot kloop u l r d)
@@ -414,9 +414,9 @@
    (pump src dst) (: ch (fgetc src) (? (= ch -1) 0 (: _ (fputc dst ch) _ (fflush dst) (pump src dst))))
 
    ; poll a non-blocking (reap pid) to its exited PAIR. the pair is told from
-   ; still-running (0) STRUCTURALLY (chainp), never by net: the status pair (0)
-   ; nets blue, so ! / non can't tell it from 0 -- only chainp can.
-   (waitfor pid) (: s ((ev 'reap) pid) (? (chainp s) s (= 0 s) (do (sleep 2) (waitfor pid)) s))
+   ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
+   ; nets blue, so ! / non can't tell it from 0 -- only two? can.
+   (waitfor pid) (: s ((ev 'reap) pid) (? (two? s) s (= 0 s) (do (sleep 2) (waitfor pid)) s))
 
    ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional
    ; pump: stdin -> the child, the child's output -> stdout, both live at once
@@ -433,7 +433,7 @@
    ; failure.
    (wrap argv)
      (: r ((ev 'ptyrun) argv)
-        (? (chainp r)
+        (? (two? r)
            (: pid (cap r) m (cup r)
               up (spawn (\ _ (: _ (pump in m) (fputc m 4))) 0)   ; stdin -> child; VEOF on user EOF
               _ (pump m out)                                      ; child -> stdout; ends when the child dies
@@ -593,16 +593,16 @@
      (= '((1 2 3)) (parseall '(49 32 50 32 51)))
      (= '(((1 2))) (parseall '(40 49 32 50 41)))
      (= 0 (parseall 0))
-     !(chainp (parseall '(40 49)))
+     !(two? (parseall '(40 49)))
      (= 1.5 (cap (cap (parseall '(49 46 53)))))
      (= 1000.0 (cap (cap (parseall '(49 101 51)))))
-     (nomp (cap (cap (parseall '(49 46 50 46 51)))))
-     ; the more-sentinel: an unclosed shape is m (not chainp); a complete datum is
-     (nilp (chainp (parseall (cat (L 40 43 32 49) 0))))   ; "(+ 1" unclosed
-     (chainp (parseall (cat (L 49 32 43) 0)))             ; "1 +" complete (the curry partial)
-     (chainp (parseall (cat (L 49 32 63 32 39 97) 0)))    ; "1 ? 'a" complete (curried cond)
-     (chainp (parseall (cat (L 40 43 32 49 32 50 41) 0))) ; "(+ 1 2)" closed
-     (chainp (parseall (cat (L 49 32 61 32 49) 0))))      ; "1 = 1"
+     (nom? (cap (cap (parseall '(49 46 50 46 51)))))
+     ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
+     (nil? (two? (parseall (cat (L 40 43 32 49) 0))))   ; "(+ 1" unclosed
+     (two? (parseall (cat (L 49 32 43) 0)))             ; "1 +" complete (the curry partial)
+     (two? (parseall (cat (L 49 32 63 32 39 97) 0)))    ; "1 ? 'a" complete (curried cond)
+     (two? (parseall (cat (L 40 43 32 49 32 50 41) 0))) ; "(+ 1 2)" closed
+     (two? (parseall (cat (L 49 32 61 32 49) 0))))      ; "1 = 1"
 
    ; the body: the public entry points, defglob'd below. everything above stays
    ; closure-private (off the book), which is what stops the ed* editor + repl

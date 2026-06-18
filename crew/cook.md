@@ -20,10 +20,10 @@ so it needs **no entry change and no core change** to make progress.
   core thread** (the main session) — but cook almost certainly doesn't need one.
 - **✅ First task — the red tests (DONE).** `test_cook` was 2 pass / 30 FAIL — but
   the cause was NOT make-function bugs: cook.l had drifted off the vocab renames
-  (`hook`→`link`, `symp`→`nomp`), so every list-building call read the zero point.
+  (`hook`→`link`, `symp`→`nom?`), so every list-building call read the zero point.
   A two-token rename fixed all 30. **Lesson: when cook goes mass-red, first
-  `out/host/ai -e "(puts (show NAME))"` the prel names cook leans on (`link`/`nomp`/
-  `snip`/`trayp`/…) — a rename in the corpus surfaces as ALL tests red, not a logic
+  `out/host/ai -e "(puts (show NAME))"` the prel names cook leans on (`link`/`nom?`/
+  `snip`/`tray?`/…) — a rename in the corpus surfaces as ALL tests red, not a logic
   bug.** Now **32 pass**.
 - **✅ Then the cook UX (DONE).** cook owns its own arg parse over the rebound argv
   (`parse-args`, a tablet of `'file 'emit 'help 'ver 'pos`):

@@ -23,21 +23,21 @@
  (= (bpow2 64) 18446744073709551616)
 
  ; --- a bignum is its own tier: not a fixnum, truthy, not falsy, not a chain ---
- (nilp (fixp B100))                       ; (fixp bignum) is false
+ (nil? (fix? B100))                       ; (fix? bignum) is false
  (? B100 1 0)                             ; a bignum is truthy
- (nilp (nilp B100))                       ; ...hence not falsy
- (atomp B100)
+ (nil? (nil? B100))                       ; ...hence not falsy
+ (atom? B100)
 
  ; --- canonical demotion: shrinking results fall back to the smallest tier ---
  (= 0 (- F25 F25))
- (fixp (- F25 F25))                       ; demoted all the way to a fixnum
+ (fix? (- F25 F25))                       ; demoted all the way to a fixnum
  ; exact bignum division stays an integer; an inexact one promotes to a float (`/`)
  (= 25 (/ F25 F24))
- (fixp (/ F25 F24))
+ (fix? (/ F25 F24))
  (= F24 (/ F25 25))
  (= 1 (/ B100 B100))
- (fixp (/ B100 B100))
- (flop (/ B100 7))                         ; 2^100 / 7 has a remainder -> float
+ (fix? (/ B100 B100))
+ (float? (/ B100 7))                         ; 2^100 / 7 has a remainder -> float
  (= 25 (// F25 F24))                       ; floor division `//` truncates, stays integer
 
  ; --- divmod identities (floor division `//`): a == (a//b)*b + a%b ---
@@ -75,12 +75,12 @@
  (< B100 (+ B100 1))
 
  ; --- mixed with floats: a float operand widens the bignum to double ---
- (flop (+ B100 0.5))
- (flop (* B100 1.0))
+ (float? (+ B100 0.5))
+ (float? (* B100 1.0))
  (< B100 1e40)
  (> B100 1e20)
  (= 0 (* B100 0))                         ; * fixnum 0 -> exact 0
- (fixp (* B100 0))
+ (fix? (* B100 0))
 
  ; --- printer round-trip (base 10, with sign) ---
  (= "1267650600228229401496703205376" (show B100))
@@ -96,7 +96,7 @@
  ; --- prel ** / gcd / modpow: exact across the tower via * / % ---
  ; (`**` is exact-integer power; the float `pow` nif is tested in math.l)
  (= 8 (3 2))                           ; small ints stay fixnums
- (fixp (3 2))                          ; ...and stay integers (not float pow)
+ (fix? (3 2))                          ; ...and stay integers (not float pow)
  (= B100 (100 2))                      ; promotes to a bignum
  (= (bpow2 200) (200 2))
  (= 1 (0 999))                         ; e <= 0 -> 1
@@ -116,8 +116,8 @@
  ;     wrongly treat B100 as 0 -- these assertions pin the magnitude-exact path. ---
  (aall (< (arr 0 '(3) '(1 2 3)) B100))          ; every int < 2^100
  (aall (<= (arr 0 '(3) '(1 2 3)) B100))
- (nilp (aall (> (arr 0 '(3) '(1 2 3)) B100)))   ; nothing exceeds 2^100
- (nilp (aall (>= (arr 0 '(3) '(1 2 3)) B100)))
+ (nil? (aall (> (arr 0 '(3) '(1 2 3)) B100)))   ; nothing exceeds 2^100
+ (nil? (aall (>= (arr 0 '(3) '(1 2 3)) B100)))
  (aall (> (arr 0 '(3) '(1 2 3)) (- 0 B100)))    ; every int > -2^100
  (aall (< (- 0 B100) (arr 0 '(3) '(1 2 3))))    ; bignum on the left, too
- (nilp (aall (= (arr 0 '(2) '(0 0)) B100))))    ; 0 != 2^100 (low word is 0!)
+ (nil? (aall (= (arr 0 '(2) '(0 0)) B100))))    ; 0 != 2^100 (low word is 0!)

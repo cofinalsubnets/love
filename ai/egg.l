@@ -7,8 +7,8 @@
    _ (each '(trim peek poke seek spin macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop numfn nfa nfq nfnest powg ipow a-coll a-dim a-emax a-rank a-shape a-type op-fr op-fold op-frg op-frd op-frn op-frc op-fro op-fin op-ent op-del op-core op-steal op-drain op-w op-qq op-long op-puncp op-punc-byte opfactor monofactor mono-long seqx sortsplit lidx ldel eat1 eat2 _)
       (\ k (pull book k 0)))
    (each (keys book)
-    (\ k (? (nomp k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))
- (sit e z a) (? (chainp a) (sit e (e (cap a)) (cup a)) z)
+    (\ k (? (nom? k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))
+ (sit e z a) (? (two? a) (sit e (e (cap a)) (cup a)) z)
 (\ egg (:
  now (clock 0)
  _ (mop (pin book 'ev (sit (sit ev 0 egg) 0 egg)))

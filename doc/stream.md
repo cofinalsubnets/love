@@ -20,7 +20,7 @@ to `out`, sending to the child only on Enter:
 ```
 (feedlines ip m)
   (: line (edraw ip "")
-     (? (idp line eofsym) (fputc m 4)
+     (? (id? line eofsym) (fputc m 4)
         (: _ (each line (\ c (fputc m c))) _ (fputc m 10) _ (fflush m)
            (feedlines ip m))))
 ```

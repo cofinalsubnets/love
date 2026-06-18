@@ -14,7 +14,7 @@
                                               ; shell's move (the repl's), not zev's
   ('x = (zev (zs "'x")))                      ; quote is the reader's
   ('! = (caup (zev (zs "'(a ! b)"))))         ; quoted operators stay data
-  (lamp (zev (zs "(\\ x (x + 1))")))          ; zev is the source of tops
+  (lit? (zev (zs "(\\ x (x + 1))")))          ; zev is the source of tops
   (5 = ((zev (zs "(\\ x (x + 2))")) 3))       ; ... which apply
   (9 = (zev (zs "(: q (\\ x (x * x)) (q 3))")))
   !(zev (zs ""))                              ; nothing readable is nothing
@@ -28,15 +28,15 @@
 
 ; charms: the global construction -- the lazy colist. (cap cs) is a charm,
 ; ((cup cs) ()) is charms + () (the coproduct, () the end); chars and ports
-; lift canonically; consumers dispatch on kind (chainp = cell, else end).
+; lift canonically; consumers dispatch on kind (two? = cell, else end).
 (: (zs2 s) ((: (g i) (? (< i (tally s)) (link (s i) (g (+ 1 i))))) 0)
    cs (charms (zs2 "(+ 1 2)"))
  (assert
-  (fixp (cap cs)) (lamp (cup cs))               ; a cell is charm x top
+  (fix? (cap cs)) (lit? (cup cs))               ; a cell is charm x top
   (40 = (cap cs))                               ; the charm is the byte
-  (: r ((cup cs) ()) (&& (chainp r) (43 = (cap r))))  ; forcing with () yields the next cell
+  (: r ((cup cs) ()) (&& (two? r) (43 = (cap r))))  ; forcing with () yields the next cell
   (3 = (zev cs))                                ; zev drinks charms proper
-  (idp () (charms ()))                          ; the end lifts to itself
+  (id? () (charms ()))                          ; the end lifts to itself
   ('(40 43 41) = (charms->chars (zs2 "(+)")))   ; realize: charms end () -> chars end 0
   (6 = (zev (charms (sip (zs2 "(* 2 3)")))))    ; a port lifts: the hot charms
   (1 = (zev (link 49 (\ _ ()))))))              ; a hand-built one-cell charms: "1"

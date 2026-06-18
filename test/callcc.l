@@ -31,7 +31,7 @@
  ; --- the continuation is a heap value ---
  ; when f returns k unchanged, the call_cc form resolves to the
  ; snapshot itself, which is a heap-allocated thread (non-nil).
- !(nilp (call-cc (\ k k)))
+ !(nil? (call-cc (\ k k)))
 
  ; --- escape from inside a recursive helper ---
  ; loop counts down; at n=5 it bails via (k 100); otherwise it falls

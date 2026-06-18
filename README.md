@@ -64,7 +64,7 @@ one `operators` table (per-form extensible: pin an entry and the next form
 compiles with it):
 - at one: `$` sat (the value's net -- its content measure -- clamped once,
   `max(0, ceil)`; `!!$` is the iverson bracket, the truth bit `?` dispatches on),
-  `!` nilp (not), `.` dot (print and return item)
+  `!` nil? (not), `.` dot (print and return item)
 - at two: `+ - * / % = < <= > >= | &`
 - at three: `?` (the cond form infix: `(t ? a b)`)
 - aliases: `<-` pin, `->` peep (the collection accessors: `(t <- k v)`, `(t -> k d)`)

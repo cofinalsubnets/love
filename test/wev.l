@@ -7,7 +7,7 @@
 ; excluded -- (tablet 0) must yield a fresh hash on every call under BOTH compilers.
 (assert
  ; --- impure / identity-minting heads are NOT folded (fresh each call) ---
- (: (f _) (tablet 0) (nilp (idp (f 0) (f 0))))    ; `table` excluded -> distinct hashes
+ (: (f _) (tablet 0) (nil? (id? (f 0) (f 0))))    ; `table` excluded -> distinct hashes
 
  ; --- arithmetic / numeric folds are correct (nested, bottom-up) ---
  (= 7  (+ 1 (* 2 3)))
@@ -31,13 +31,13 @@
  (= 5  (: (cap x) 5 (cap '(1 2))))               ; let-bound A
  (= 7  (: (f link) (link 3 4) (f (+))))            ; PARAM X shadows the global; f + -> (+ 3 4)
 
- ; --- nilp-flip: (? (nilp e) a b) == (? e b a); behavior-preserving under BOTH compilers ---
- (= 'z  (: (f x) (? (nilp x) 'z 'nz) (f 0)))        ; falsy e -> consequent
- (= 'nz (: (f x) (? (nilp x) 'z 'nz) (f 5)))        ; truthy e -> alternative
- (= 'z  (: (f x) (? (nilp x) 'z 'nz) (f "")))       ; empty string is falsy
- (= 'nz (: (f x) (? (nilp x) 'z 'nz) (f '(1))))     ; non-empty list is truthy
- (= 'z  (: (f x) (? !x 'z 'nz) (f 0)))              ; the `!` sigil reads as (nilp x), flips too
- (= 'c  (: (f x) (? (< 5 x) 'a (nilp x) 'c 'b) (f 0)))  ; final-clause flip inside a chain
- (= 'b  (: (f x) (? (< 5 x) 'a (nilp x) 'c 'b) (f 3)))  ; ... fall-through to the else
- (= 'a  (: (f x) (? (< 5 x) 'a (nilp x) 'c 'b) (f 9)))  ; ... first clause still wins
- (= 0   (: (f x) (? (nilp x) 'z) (f 5))))           ; no-else NOT flipped: truthy -> nil
+ ; --- nil?-flip: (? (nil? e) a b) == (? e b a); behavior-preserving under BOTH compilers ---
+ (= 'z  (: (f x) (? (nil? x) 'z 'nz) (f 0)))        ; falsy e -> consequent
+ (= 'nz (: (f x) (? (nil? x) 'z 'nz) (f 5)))        ; truthy e -> alternative
+ (= 'z  (: (f x) (? (nil? x) 'z 'nz) (f "")))       ; empty string is falsy
+ (= 'nz (: (f x) (? (nil? x) 'z 'nz) (f '(1))))     ; non-empty list is truthy
+ (= 'z  (: (f x) (? !x 'z 'nz) (f 0)))              ; the `!` sigil reads as (nil? x), flips too
+ (= 'c  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 0)))  ; final-clause flip inside a chain
+ (= 'b  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 3)))  ; ... fall-through to the else
+ (= 'a  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 9)))  ; ... first clause still wins
+ (= 0   (: (f x) (? (nil? x) 'z) (f 5))))           ; no-else NOT flipped: truthy -> nil

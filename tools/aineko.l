@@ -65,7 +65,7 @@
                        (? s (talk s) (die (+ "cannot connect to " (+ host (+ ":" (string port)))))))
 
     ; dispatch on the args: -l PORT = server, HOST PORT = client, else usage.
-    (? (= (cap as) "-l") (? (chainp (cup as)) (serve (atoi (caup as)))
+    (? (= (cap as) "-l") (? (two? (cup as)) (serve (atoi (caup as)))
                             (die "usage: aineko -l PORT"))
-       (chainp (cup as)) (dial (cap as) (atoi (caup as)))
+       (two? (cup as)) (dial (cap as) (atoi (caup as)))
        (die "usage: aineko HOST PORT  |  aineko -l PORT")))

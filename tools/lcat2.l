@@ -68,25 +68,25 @@
           (: la (tally (string a)) lb (tally (string b)) (? (> la lb) 1 (< la lb) 0 (< a b)))))
    ; assign fresh names to a scope's co-live bindings (count order). a frozen (tainted)
    ; or can't-shrink binding is kept (mapped to itself, no name spent). -> (env-frame . used').
-   (assign syms used) ((: (g ss m u) (? (chainp ss)
+   (assign syms used) ((: (g ss m u) (? (two? ss)
          (: s (cap ss) nm (pickname u)
             (? (&& !(peep taint s 0) (< (tally nm) (tally (string s))))
                (: i (intern nm) (g (cup ss) (link (link s i) m) (link i u)))
                (g (cup ss) (link (link s s) m) u)))
          (link m u))) (msort cntle syms) 0 used)
    (mapped s m) (: p (assq s m) (? p (cup p) s))
-   (flat lhs) (? (nomp lhs) (link lhs 0) (: r (flat (cap lhs)) (link (cap r) (cat (cup r) (cup lhs)))))  ; unwind : head-sugar
-   (lhs-rename lhs bmap am) (? (nomp lhs) (mapped lhs (cat am bmap))  ; name via bmap, params via am
-       (chainp lhs) (link (lhs-rename (cap lhs) bmap am) (lhs-rename (cup lhs) bmap am)) lhs)
-   (bodyless? bs) (? (atomp bs) 1 (atomp (cup bs)) 0 (bodyless? (cuup bs)))
+   (flat lhs) (? (nom? lhs) (link lhs 0) (: r (flat (cap lhs)) (link (cap r) (cat (cup r) (cup lhs)))))  ; unwind : head-sugar
+   (lhs-rename lhs bmap am) (? (nom? lhs) (mapped lhs (cat am bmap))  ; name via bmap, params via am
+       (two? lhs) (link (lhs-rename (cap lhs) bmap am) (lhs-rename (cup lhs) bmap am)) lhs)
+   (bodyless? bs) (? (atom? bs) 1 (atom? (cup bs)) 0 (bodyless? (cuup bs)))
    ; rebuild a : binding list; each binding's sugar params open a fresh sub-scope of its
    ; value (siblings all assign from u1, so their names recycle). recurse via `rec`.
    (rn-binds bs bmap env1 u1 rec) (?
-     (&& (chainp bs) (chainp (cup bs)))
+     (&& (two? bs) (two? (cup bs)))
        (: lhs (cap bs) val (caup bs) f (flat lhs) r (assign (cup f) u1) am (cap r) u2 (cup r)
           penv (cat am env1) lhs2 (lhs-rename lhs bmap am) val2 (rec val penv u2 0 rec)
           (link lhs2 (link val2 (rn-binds (cuup bs) bmap env1 u1 rec))))
-     (chainp bs) (link (rec (cap bs) env1 u1 0 rec) 0)         ; trailing body
+     (two? bs) (link (rec (cap bs) env1 u1 0 rec) 0)         ; trailing body
      0)
    (rn-let bs env used top rec) (: names (ln bs) leak (? top (bodyless? bs) 0)
        r (? leak (link 0 used) (assign names used)) bmap (cap r) u1 (cup r) env1 (cat bmap env)
@@ -95,8 +95,8 @@
    ; (its names are the global API -> kept). env/used thread scope; a one-operand `\`
    ; (quote) is data and is passed whole.
    (mxrn x env used top rec) (?
-     (nomp x) (mapped x env)
-     (atomp x) x
+     (nom? x) (mapped x env)
+     (atom? x) x
      (= '\ (cap x)) (? (lambp x)
         (: lb (lp x) ps (cap lb) bd (cup lb) r (assign ps used) am (cap r) u2 (cup r)
            env2 (cat am env) ps2 (map (\ p (mapped p am)) ps)
@@ -108,12 +108,12 @@
 ; === lcat2 SURFACE -- builds the core's inputs (cnt/taint) from un-expanded source, and
 ; adapts the binding/quote macros the compiler would have already expanded away. `rn` is
 ; the recursion the core threads, so nested `:-`/qq are adapted at every level. ===
-(: (collect x) (? (nomp x) (pin cnt x (+ 1 (peep cnt x 0)))
-     (chainp x) (? (= 'qq (cap x)) (: _ (collect (cap x)) (tcollect (cup x)))   ; qq body -> taint
+(: (collect x) (? (nom? x) (pin cnt x (+ 1 (peep cnt x 0)))
+     (two? x) (? (= 'qq (cap x)) (: _ (collect (cap x)) (tcollect (cup x)))   ; qq body -> taint
                  (: _ (collect (cap x)) (collect (cup x)))) 0)
-   (tcollect x) (? (nomp x) (: _ (pin cnt x (+ 1 (peep cnt x 0))) (pin taint x 1))
-                    (chainp x) (: _ (tcollect (cap x)) (tcollect (cup x))) 0)
-   (rn x env used top rec) (? (chainp x)
+   (tcollect x) (? (nom? x) (: _ (pin cnt x (+ 1 (peep cnt x 0))) (pin taint x 1))
+                    (two? x) (: _ (tcollect (cap x)) (tcollect (cup x))) 0)
+   (rn x env used top rec) (? (two? x)
        (? (= ':- (cap x)) (: rl (rn-let (cat (cuup x) (list (caup x))) env used top rec)  ; :- = body-first :
              rb (cup rl) (link ':- (link (last rb) (init rb))))                             ; reorder body back
           (= 'let (cap x)) (rn-let (cup x) env used top rec)                            ; let = :
@@ -148,7 +148,7 @@
               (fputc out c)))
 
 (: (readforms p e) (: r (read p e) (? (= e r) 0 (link r (readforms p e))))
-   (joinforms fs) (? (atomp fs) "" (atomp (cup fs)) (show (rn (cap fs) 0 0 1 rn))
+   (joinforms fs) (? (atom? fs) "" (atom? (cup fs)) (show (rn (cap fs) 0 0 1 rn))
        (+ (+ (show (rn (cap fs) 0 0 1 rn)) " ") (joinforms (cup fs))))
    (emit acc) (: _ (fputc out 34)
        _ ((: (g i pc instr) (? (< i (tally acc))

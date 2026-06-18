@@ -34,8 +34,8 @@
    ; END after HOME: a, HOME, END, b c, Enter -> "abc" (END returns to line tail)
    (= abc (edraw (keys (L 97 27 91 72 27 91 70 98 99 13)) ""))
    ; ^D -> the EOF sentinel (bao-private), never a stray line
-   (idp eof (edraw (keys (L 4)) ""))
+   (id? eof (edraw (keys (L 4)) ""))
    ; port EOF (empty input) -> the same sentinel
-   (idp eof (edraw (keys 0) ""))))
+   (id? eof (edraw (keys 0) ""))))
 
 (puts "baoedit: ok") (putc 10)

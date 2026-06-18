@@ -47,7 +47,7 @@ responsibility, but an ill-formed body is no longer fatal on the host: the **fau
 barrier** (below) catches the hardware fault and `eat` returns `0`.
 
 `toast` bakes bytes into a callable handle that works on **both** targets; the idiom
-is `(eat 1 (toast bytes) x)`. A toast is **opaque**: it answers `hotp` like any hot
+is `(eat 1 (toast bytes) x)`. A toast is **opaque**: it answers `hot?` like any hot
 but it is *not* a `buf` — its code can't be `peep`/`pin`/`blit`/`tally`'d as data (no
 length, no byte access); only `eat` runs it. That keeps the executable region from
 masquerading as a writable byte buffer.
@@ -117,7 +117,7 @@ bytes can't be run. `toast` lifts exactly that limitation (the W^X arena above),
 `(eat 1 (toast bytes) x)` runs real bytes natively on an x86_64 host too, no qemu. The
 corpus test (`test/glaze.l`) stays architecture-neutral — x86_64 opcodes would crash an
 aarch64 or wasm host — so it covers the guards (non-callable → `0`) and the toast's
-opacity (`hotp` but no `peep`/`tally`), not live execution; the kernel finding lives
+opacity (`hot?` but no `peep`/`tally`), not live execution; the kernel finding lives
 in the standalone `ai/glaze/probe.l`.
 
 ## What the experiment found, and where it went
