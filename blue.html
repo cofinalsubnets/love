@@ -87,7 +87,7 @@ footer { margin-top: 3.5em; color: #474e72; font-size: .85em;
 </style>
 </head>
 <body>
-<p class="topnav"><a href="index.html">← ai</a> · <a href="README.md">readme</a> · <a href="CLAUDE.md">the spec</a></p>
+<p class="topnav"><a href="index.html">← ai</a> · <a href="README.md">readme</a> · <a href="CLAUDE.md">the spec</a> · <a href="crew/index.html">the crew</a></p>
 <h1>ai blue paper</h1>
 <p class="sub"><em>The companion to the narrative. Where <a href="CLAUDE.md">CLAUDE.md</a> explains and <a href="README.md">README.md</a> pitches, this document states the laws as propositions and points each one at its evidence: the executable spec <a href="test/spec.l">test/spec.l</a> (every claim assert-backed, green on every target) and the machine-checked theorems in <a href="rocq/spec.v">rocq/spec.v</a> (axiom-free, in universe-checked Rocq). Theorem names below in <span class="thm">green</span> are the actual lemmas in that file; you can step them.</em></p>
 <p class="toc">
@@ -214,12 +214,14 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <p><code>&lt;</code> agrees with <code>=</code> here because the comparison hash is α-invariant; <code>id?</code> stays identity (finer than both).</p>
 <h2 id="numerics"><a href="#numerics">8 · numerics</a></h2>
 <p>The numeric carriers earn their own short names — each names a predicate you can probe, and they carry through the array laws below. They split the <strong>number</strong> band by rank.</p>
-<p>A <strong>number</strong> (<code>constellation?</code>) is any numeric value, scalar or array — the bottom band, closed under the ring algebra <code>+ - *</code>. A <strong>star</strong> (<code>star?</code>) is a <em>scalar</em> number, one that nets itself (<code>net x = x</code>, i.e. <code>id? x (net x)</code>): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized star, a fixnum, is a <strong>charm</strong> (<code>charm?</code>). A <strong>set</strong> (<code>set?</code>) is an array, numeric or not; a <strong>galaxy</strong> (<code>galaxy?</code>) is a set <em>of stars</em> — a numeric array. So a number is a star or a galaxy, and <code>$</code> lands every value on the <strong>green charms</strong> — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green star too.</p>
+<p>A <strong>number</strong> (<code>constellation?</code>) is any numeric value, scalar or array — the bottom band, closed under the ring algebra <code>+ - *</code>. A <strong>star</strong> (<code>star?</code>) is a <em>scalar</em> number, one that nets itself (<code>net x = x</code>, i.e. <code>id? x (net x)</code>): a fixnum, wide int, bignum, gem, or twin-gem scalar — the rank-0 point. The star carries two jewels: a <strong>charm</strong> (<code>charm?</code>) is a fixnum — the whole little word; a <strong>gem</strong> is a float — the smooth kind that falls between the charms. A <strong>twin gem</strong> is a complex (<code>twin?</code>): two gems paired as <code>(re, im)</code>, and <code>twin</code> is what pairs them. A <strong>set</strong> (<code>set?</code>) is an array, numeric or not; a <strong>galaxy</strong> (<code>galaxy?</code>) is a set <em>of stars</em> — a numeric array. So a number is a star or a galaxy, and <code>$</code> lands every value on the <strong>green charms</strong> — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green star too.</p>
 <table>
 <tr><th>name</th><th>predicate</th><th>what it is</th></tr>
 <tr><td><code>constellation</code></td><td><code>constellation?</code></td><td>any numeric value, scalar or array — the bottom band</td></tr>
 <tr><td><code>star</code></td><td><code>star?</code></td><td>a scalar number, one that nets itself (rank 0)</td></tr>
-<tr><td><code>charm</code></td><td><code>charm?</code></td><td>a word-sized star — a fixnum</td></tr>
+<tr><td><code>charm</code></td><td><code>charm?</code></td><td>a fixnum — the whole little word</td></tr>
+<tr><td><code>gem</code></td><td><code>float?</code></td><td>a float — the smooth kind, between the charms</td></tr>
+<tr><td><code>twin gem</code></td><td><code>twin?</code></td><td>a complex — two gems paired <code>(re, im)</code></td></tr>
 <tr><td><code>set</code></td><td><code>set?</code></td><td>an array, numeric or not (rank ≥ 1)</td></tr>
 <tr><td><code>galaxy</code></td><td><code>galaxy?</code></td><td>a set of stars — a numeric array (rank ≥ 1)</td></tr>
 </table>

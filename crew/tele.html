@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tele — the eye</title>
+<style>
+  /* the shared crew-bio chrome: the index palette, self-contained, no deps.
+     bg #0e1014, text #c8ccd4, links #7aa2f7, the green of a proved answer
+     #9ece6a, the dim #6b7385. one file per member; copy this skeleton. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0e1014; color: #c8ccd4;
+    font: 15px/1.6 ui-monospace, Menlo, Consolas, monospace;
+    max-width: 46em; margin: 0 auto; padding: 2em 1em 4em;
+  }
+  h1 { font-size: 2em; font-weight: normal; letter-spacing: .04em; }
+  h1 .what { color: #8b93a3; font-size: .55em; letter-spacing: 0; }
+  p { margin: .8em 0; }
+  a { color: #7aa2f7; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { color: #c8ccd4; background: #161a22; border: 1px solid #232733;
+         border-radius: 3px; padding: .03em .35em; }
+  em { color: #9aa3b5; }
+  strong { color: #e3e6ff; }
+  .dim { color: #6b7385; }
+
+  .topnav { font-size: .85em; margin-bottom: 1.6em; color: #6b7385; }
+  .topnav a { color: #7aa2f7; }
+
+  /* the creed: one line the member steers by, the green of a kept answer. */
+  .creed { border-left: 2px solid #2a5a2a; background: #0f140d;
+           color: #9ece6a; padding: .55em .9em; margin: 1.4em 0;
+           border-radius: 0 4px 4px 0; }
+  .lives { color: #6b7385; font-size: .9em; margin-top: 1.6em; }
+  .lives code { background: none; border: none; padding: 0; color: #8b93a3; }
+  footer { margin-top: 3em; color: #3d4354; font-size: .85em; }
+</style>
+</head>
+<body>
+
+<p class="topnav"><a href="../index.html">← ai</a> · <a href="index.html">the crew</a> · <a href="../blue.html">blue paper</a> · <a href="../README.md">readme</a></p>
+
+<h1>tele <span class="what">· the eye</span></h1>
+
+<p class="creed">ai already ships the tensor — it calls it a constellation.</p>
+
+<p>tele is a telescope. it adds tensors and reverse-mode autograd — PyTorch's spine
+in a few hundred lines — with a small <code>nn</code>/<code>optim</code> layer on
+top. but the heart of the pitch is that most of it is already here: a
+<strong>constellation</strong> is any numeric, and it already broadcasts, reduces,
+contracts, and carries complex numbers. that is a tensor minus one thing — the
+gradient — and tele adds exactly that, reimplementing nothing the constellation
+already does.</p>
+
+<p>the eye scopes the constellations: a <em>star</em> is a single self-netting
+scalar, a <em>galaxy</em> is a set of stars (a numeric array). tele points at one,
+focuses it through a glass, and traces the light back home — forward is the image
+you see, backward is the adjoint ray walked through the same lenses. the
+gradient-check is its own oracle: the analytic gradient must match the finite
+difference, so the math grades itself.</p>
+
+<p>and because tele is pure ai over the constellation layer, it runs on every
+frontend — host, wasm, and <a href="kship.html">kship</a>, the bare-metal kernel.
+training a neural net with no OS and no libc is the flagship story: a telescope on
+the ship.</p>
+
+<p class="lives">lives in <code>tele/tele.l</code> · the full brief is
+<a href="tele.md">crew/tele.md</a></p>
+
+<footer>for bee</footer>
+</body>
+</html>

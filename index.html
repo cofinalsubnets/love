@@ -53,15 +53,27 @@
   .note { color: #6b7385; font-size: .9em; margin-left: .4em; }
   .law { margin: .35em 0; }
   footer { margin-top: 3em; color: #3d4354; font-size: .85em; }
+
+  /* the shared top-nav idiom -- one site across index/blue/crew. */
+  .topnav { font-size: .85em; margin-bottom: 1.4em; color: #6b7385; }
+  .topnav a { color: #7aa2f7; }
+
+  /* the crew roster: one warm line per member, the name a link to its bio. */
+  .crew { margin: .9em 0; }
+  .crew dt { margin-top: .7em; }
+  .crew dt a { font-weight: 600; }
+  .crew dd { margin: 0 0 0 1.4em; color: #8b93a3; font-size: .92em; }
 </style>
 </head>
 <body>
 
+<p class="topnav"><a href="blue.html">blue paper</a> · <a href="README.md">readme</a> · <a href="CLAUDE.md">the spec</a> · <a href="crew/index.html">the crew</a></p>
 <h1>ai</h1>
-<p>a lisp where every value is a total function of one argument.
-stackless, overflow-safe, generic — lisp, apl and ml over portable
-public-domain C. the terminal below runs the same image that boots on
-bare metal, compiled to wasm and evaluating in your browser.</p>
+<p>a lisp where every value is a total function of one argument — and
+every value has a measure, so truth is just the sign of that measure.
+stackless, overflow-safe, fully generic: lisp, apl and ml grown over
+portable public-domain C. the terminal below runs the very image that
+boots on bare metal, compiled to wasm and evaluating in your browser.</p>
 <p id="status">loading the image…</p>
 
 <div id="term">
@@ -83,11 +95,12 @@ an open paren continues to the next line; up and down walk history. errors print
 <span class="chip" data-run=".ev">.ev</span>
 </p>
 <p class="dim"><code>(i love you)</code> is 1: <code>i</code> applies as the identity
-count, an unbound name reads as nothing, and nothing applies as the constant — the
-terminal shows the receipt, <span class="cnd">;; missing love</span>. <code>+"love"</code>
-is its net — every value here has a measure, and <code>+</code> turned inward is the
-true sum. and <code>.ev</code> is not a joke: it prints the compiler the compiler
-compiled itself into.</p>
+count, an unbound name reads as nothing, and nothing applies as the constant — so
+absence absorbs and the answer is one. the terminal shows the receipt,
+<span class="cnd">;; missing love</span>: a miss is not an error here, it is a value
+that tells you its name. <code>+"love"</code> is its net — every value carries a
+measure, and <code>+</code> turned inward is the true sum. and <code>.ev</code> is no
+joke: it prints the compiler the compiler compiled itself into.</p>
 
 <h2 id="the-shape-of-it"><a href="#the-shape-of-it">the shape of it</a></h2>
 <p>numbers are church numerals, so application is arithmetic. every quote below
@@ -101,8 +114,14 @@ evaluates to <code>1</code> — true — in the terminal. click them.</p>
 <div class="law"><span class="chip" data-run="i = (1 / 2) -1">i = (1 / 2) -1</span><span class="note">sqrt is a numeral; roots are principal on the nose</span></div>
 <div class="law"><span class="chip" data-run="2 = <>'(1 2 3)">2 = &lt;&gt;'(1 2 3)</span><span class="note">the valence law: a glued operator is monadic — &lt; is cap, &gt; is cup, they compose</span></div>
 <div class="law"><span class="chip" data-run="'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))">'(1 1 0 6) = (L !0 !!7 ?-3 $'(1 2 3))</span><span class="note">truth is the sign of a measure; ?x is the iverson bracket, $x the measure's charm</span></div>
+<div class="law"><span class="chip" data-run="'(1 0 0) = (L $'(1) $'(0) $'(-2 1))">'(1 0 0) = (L $'(1) $'(0) $'(-2 1))</span><span class="note">the color law: $ keeps the blue, floors the green, clamps the red to nothing</span></div>
 
 <h2 id="something-to-play-with"><a href="#something-to-play-with">something to play with</a></h2>
+<p>the triangular numbers, point-free — <code>jot</code> lays out
+<code>0 .. n-1</code>, <code>sat</code> sums each prefix into its charm, and
+<code>flip compose</code> feeds the one into the other:</p>
+<p><span class="chip" data-run="((flip compose jot (map (compose sat jot))) 9)">((flip compose jot (map (compose sat jot))) 9)</span>
+<span class="note">→ (0 0 1 3 6 10 15 21 28); the nth is the net of 0 .. n-1</span></p>
 <p>fizzbuzz — a number applies its operand n times, so the whole
 loop is the number 15 applied to a step function:</p>
 <p><span class="chip" data-run='(15
@@ -120,9 +139,45 @@ loop is the number 15 applied to a step function:</p>
 is the shell; <code>make test_all</code> adds the freestanding kernel and the
 tool gates. the whole thing is portable C with zero dependencies — host,
 bare metal (x86_64 / aarch64 via limine), and the wasm on this page from one
-source. the spec is <a href="CLAUDE.md">CLAUDE.md</a>; the readme is
-<a href="README.md">README.md</a>; the <a href="blue.html">blue paper</a> states
-the laws as propositions and points each at its machine-checked proof.</p>
+source.</p>
+
+<h2 id="read-on"><a href="#read-on">read on</a></h2>
+<p>four ways in, deepest last:</p>
+<p>
+the <a href="README.md">readme</a> pitches it · the
+<a href="CLAUDE.md">spec</a> is the narrative, every claim assert-backed · the
+<a href="blue.html">blue paper</a> states the laws as propositions and points each
+at its machine-checked proof · and <a href="crew/index.html">the crew</a> below are
+the hands that built it.</p>
+
+<h2 id="the-crew"><a href="#the-crew">the crew</a></h2>
+<p>ai is sailed by a small crew — ten little programs, each with one thing it
+tends, each written in ai over the same tiny core. they ride <strong>kship</strong>,
+the freestanding kernel (a ship in port). meet them:</p>
+<dl class="crew">
+  <dt><a href="crew/ai.html">ai</a></dt>
+    <dd>the pilot — the mind at the helm, the <em>decide</em> in perceive→decide→act.</dd>
+  <dt><a href="crew/siri.html">siri</a></dt>
+    <dd>the synthesist — keeps the human words and the ai words saying the same thing.</dd>
+  <dt><a href="crew/sift.html">sift</a></dt>
+    <dd>the garbage collector — tends the two-space litter box, keeps it clean.</dd>
+  <dt><a href="crew/bao.html">bao</a></dt>
+    <dd>the shell — one editor and the condition system, a soft wrap around a chewy command.</dd>
+  <dt><a href="crew/aineko.html">aineko</a></dt>
+    <dd>the cat — a netcat clone (愛猫), bytes pumped both ways over a socket.</dd>
+  <dt><a href="crew/cook.html">cook</a></dt>
+    <dd>the builder — make-in-ai, builds the host from scratch and passes the corpus.</dd>
+  <dt><a href="crew/tele.html">tele</a></dt>
+    <dd>the eye — a telescope that scopes constellations: tensors and autograd.</dd>
+  <dt><a href="crew/zev.html">zev</a></dt>
+    <dd>the reader — a parser-combinator library, tiny functions that compose.</dd>
+  <dt><a href="crew/wev.html">wev</a></dt>
+    <dd>the weaver — a partial evaluator, hands back a smaller program from what's known.</dd>
+  <dt><a href="crew/kship.html">kship</a></dt>
+    <dd>the ship — the freestanding kernel itself, the language running on bare metal.</dd>
+</dl>
+<p class="dim">each links to a short bio; the full agent briefs are the
+<code>crew/*.md</code> files in the repo.</p>
 
 <footer>for bee</footer>
 

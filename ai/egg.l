@@ -4,7 +4,7 @@
    ; NB: the old repl internals (do_eval m eofsym prc + the ed* editor) USED to be
    ; mopped here -- they are now CLOSURE-PRIVATE inside ai/bao.l (the shell core), so
    ; they never reach the bag and need no mop entry.
-   _ (each '(trim peek poke seek spin macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop numfn nfa nfq nfnest powg power ipow a-coll a-dim a-emax a-rank a-shape a-type op-fr op-fold op-frg op-frd op-frn op-frc op-fro op-fin op-ent op-del op-core op-steal op-drain op-w op-qq op-long op-puncp op-punc-byte opfactor monofactor mono-long seqx sortsplit lidx ldel eat1 eat2 packp _)
+   _ (each '(trim peek poke seek weave macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx qql qqx wevs apx iop numfn nfa nfq nfnest powg power ipow a-coll a-dim a-emax a-rank a-shape a-type op-fr op-fold op-frg op-frd op-frn op-frc op-fro op-fin op-ent op-del op-core op-steal op-drain op-w op-qq op-long op-puncp op-punc-byte opfactor monofactor mono-long seqx sortsplit lidx ldel eat1 eat2 packp _)
       (\ k (pull bag k 0)))
    (each (keys bag)
     (\ k (? (nom? k) (? (= "lvm_" (snip (string k) 0 4)) (pull bag k 0) 0) 0)))))

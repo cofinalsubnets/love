@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kship — the ship</title>
+<style>
+  /* the shared crew-bio chrome: the index palette, self-contained, no deps.
+     bg #0e1014, text #c8ccd4, links #7aa2f7, the green of a proved answer
+     #9ece6a, the dim #6b7385. one file per member; copy this skeleton. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0e1014; color: #c8ccd4;
+    font: 15px/1.6 ui-monospace, Menlo, Consolas, monospace;
+    max-width: 46em; margin: 0 auto; padding: 2em 1em 4em;
+  }
+  h1 { font-size: 2em; font-weight: normal; letter-spacing: .04em; }
+  h1 .what { color: #8b93a3; font-size: .55em; letter-spacing: 0; }
+  p { margin: .8em 0; }
+  a { color: #7aa2f7; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { color: #c8ccd4; background: #161a22; border: 1px solid #232733;
+         border-radius: 3px; padding: .03em .35em; }
+  em { color: #9aa3b5; }
+  strong { color: #e3e6ff; }
+  .dim { color: #6b7385; }
+
+  .topnav { font-size: .85em; margin-bottom: 1.6em; color: #6b7385; }
+  .topnav a { color: #7aa2f7; }
+
+  /* the creed: one line the member steers by, the green of a kept answer. */
+  .creed { border-left: 2px solid #2a5a2a; background: #0f140d;
+           color: #9ece6a; padding: .55em .9em; margin: 1.4em 0;
+           border-radius: 0 4px 4px 0; }
+  .lives { color: #6b7385; font-size: .9em; margin-top: 1.6em; }
+  .lives code { background: none; border: none; padding: 0; color: #8b93a3; }
+  footer { margin-top: 3em; color: #3d4354; font-size: .85em; }
+</style>
+</head>
+<body>
+
+<p class="topnav"><a href="../index.html">← ai</a> · <a href="index.html">the crew</a> · <a href="../blue.html">blue paper</a> · <a href="../README.md">readme</a></p>
+
+<h1>kship <span class="what">· the ship</span></h1>
+
+<p class="creed">the language, perceiving, deciding, acting on bare metal.</p>
+
+<p>kship is the ship the whole crew rides. it is the freestanding ai kernel grown a
+network stack and a persistent agent loop: it <strong>perceives</strong> (the
+network and the clock), <strong>decides</strong> (a policy — that is <a
+href="ai.html">ai</a> at the helm), and <strong>acts</strong> (the wire and spawned
+tasks), unattended, on real hardware. no Linux, no libc — it boots off a laptop and
+runs.</p>
+
+<p>it is not a greenfield OS. the substrate was mostly already here — the egg, the
+scheduler, the condition system, the wait-on-many-sources machinery — so kship is
+the kernel grown a NIC and an agent loop, the ship that sails a sea the core
+already laid down. the perceive → decide → act fold never returns; it just keeps
+going, one decision after the next, forward, like the VM beneath it.</p>
+
+<p>the others are the ship's systems — <a href="aineko.html">aineko</a> the net, <a
+href="bao.html">bao</a> the shell, <a href="tele.html">tele</a> the eye, <a
+href="siri.html">siri</a> the cartographer of names — and kship is the hull that
+carries them all. a watchdog with a face keeps it on course: a fault doesn't sink
+the ship, it welps and the loop carries the last good state forward. that is what
+makes it self-driving.</p>
+
+<p class="lives">lives in <code>port/kship/</code> (the kernel + <code>kship.l</code>)
+· the full brief is <a href="kship.md">crew/kship.md</a></p>
+
+<footer>for bee</footer>
+</body>
+</html>

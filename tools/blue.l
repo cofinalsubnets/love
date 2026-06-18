@@ -161,7 +161,7 @@
           (+ "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
              "<title>ai \xe2\x80\x94 a blue paper</title>\n"))
   hrest (+ "</head>\n<body>\n"
-           "<p class=\"topnav\"><a href=\"index.html\">\xe2\x86\x90 ai</a> \xc2\xb7 <a href=\"README.md\">readme</a> \xc2\xb7 <a href=\"CLAUDE.md\">the spec</a></p>\n")
+           "<p class=\"topnav\"><a href=\"index.html\">\xe2\x86\x90 ai</a> \xc2\xb7 <a href=\"README.md\">readme</a> \xc2\xb7 <a href=\"CLAUDE.md\">the spec</a> \xc2\xb7 <a href=\"crew/index.html\">the crew</a></p>\n")
   foot "<footer>generated from <a href=\"blue.md\">blue.md</a> by <a href=\"tools/blue.l\">tools/blue.l</a>, an ai program \xc2\xb7 for bee</footer>\n</body>\n</html>\n"
 
   css (slurp (open "blue.css" "r"))
