@@ -393,7 +393,7 @@ $(buf 4)             ; 0       a zeroed buf is nothing
 
 ; --- reader operators --- `;` line comment, `#!` pinbang (no block comments). reading is
 ; STRUCTURAL and environment-free: the reader knows tokens, parens, strings, and the value
-; surface -- ' quote (= one-operand \), ` quasiquote, , unquote, ,@ splice, # hash, @ tup
+; surface -- ' quote (= one-operand \), ` list (the element-eval ctor), `` quasiquote, , unquote, ,@ splice, # hash, @ tup
 ; (array), ~ twin (complex/conjugate: ~(re im) splices to (twin re im), a bare ~x is
 ; (twin x)) -- and NO operator tables, so the same reader serves data (read) and code.
 ; the LEXER LAW splits tokens by leading char: a name token (alnum/_) keeps - ? ! etc

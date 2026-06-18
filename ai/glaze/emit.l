@@ -126,7 +126,7 @@
        (cat pre (cat test (cat lb (cat acc (cat back (cat '(76 137 216) epilogue)))))))   ; ... ; mov rax,r11
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
    (jitsum body)
-    (: src `(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a ,body)) a)) 0 0))
+    (: src ``(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a ,body)) a)) 0 0))
        (nat (emit (loopcode body 'i '+ '<)) (ev src) src))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
@@ -179,7 +179,7 @@
   ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))           ; compose with higher-order fns
   ((isum 1000) = (g 1000))                                   ; the loop agrees with the interpreter
   (9000000000000000000 = ((jit '(\ x (* x x))) 3000000000))  ; OVERFLOW -> deopt -> correct bignum
-  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit `(\ x (* x ,i))) 7) (* 7 i)))) a)) 0 1))  ; agree 0..60
+  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit ``(\ x (* x ,i))) 7) (* 7 i)))) a)) 0 1))  ; agree 0..60
   ; comparisons (-> 0/1) and conditionals
   (: lt (jit '(\ x (< x 5))) (&& (1 = (lt 3)) (1 = (lt -2)) (0 = (lt 5)) (0 = (lt 9))))
   (: ab (jit '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7)) (0 = (ab 0))))   ; abs

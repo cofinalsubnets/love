@@ -52,7 +52,7 @@ syn keyword AiConst Z R C O
 syn match AiAtomMark "'"
 syn match AiAtom "'[^ \t\n()`',;#\"]\+" contains=AiAtomMark
 
-" Quasiquote marks: `tmpl  ,unquote  ,@unquote-splice
+" Reader marks: `(list ctor)  ``tmpl (quasiquote)  ,unquote  ,@unquote-splice
 syn match AiQuasi ",@\|[`,]"
 
 " Prefix operators: @(…) array  #(…) hash  $x sat  (the tables: book['operators],

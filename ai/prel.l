@@ -406,7 +406,7 @@
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
    ; quasiquote: the template is data; only unquote operands re-enter the pass.
-   ; (nested quasiquote is gone -- `` is the list constructor now -- so no depth.)
+   ; (nested quasiquote is gone -- ` is the list constructor, `` is quasiquote -- so no depth.)
    (op-qq t)
     (? (atomp t) t
        (: h (cap t)
@@ -463,9 +463,9 @@
 ; `(quote x)` -> `(\ x)`: the CL/Scheme name for the one-arg-lambda quote (`'x` sugar).
 (:: 'quote (\ a (link '\ a)))
 
-; quasiquote: `tmpl with ,x (unquote) and ,@xs (unquote-splice). The reader emits
+; quasiquote: ``tmpl with ,x (unquote) and ,@xs (unquote-splice). The reader emits
 ; (qq tmpl), (uq x), (uqs xs). qqx/qql walk the template; every unquote FIRES (there
-; is no nesting -- `` is the element-eval list constructor now, so no depth to track).
+; is no nesting -- ` is the element-eval list constructor now, so no depth to track).
 ; qqx returns CODE that reconstructs the template (link/cat over the spliced values).
 ; uq is also bound to identity so a stray top-level ,x just evaluates its operand.
 (: (qqx t) (?

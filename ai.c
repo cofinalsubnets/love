@@ -3429,12 +3429,12 @@ static struct ai *ioparse(struct ai *g, bool multi) {
    // so it lives here in the structural reader (with ~ and , above), NOT in
    // the operator table: ' ` # @ each wrap the next datum.
    case '\'': g = push_wrap(g, "\\"); continue;        // quote: 'x = (\ x)
-   case '`':                                            // ` quasiquote; `` (double) -> (list ...) the element-eval list ctor
-    if (!ai_ok(g = zgetc(g))) return g;                 // peek: a second ` -> the list constructor (each element evaluated)
+   case '`':                                            // ` (single) -> element-eval list ctor; `` (double) -> quasiquote
+    if (!ai_ok(g = zgetc(g))) return g;                 // peek: a second ` -> quasiquote (the less-common macro lane)
     c2 = g->b;
-    if (c2 == '`') { g = push_wrap(g, "list"); continue; }   // ``(a b c) -> (list a b c); resolves nested-qq too
+    if (c2 == '`') { g = push_wrap(g, "qq"); continue; }     // ``(a ,b c) -> quasiquote (resolves nested qq -- one rule)
     if (c2 != EOF) g = zungetc(g, c2);
-    g = push_wrap(g, "qq"); continue;
+    g = push_wrap(g, "list"); continue;                      // `(a b c) -> (list a b c), each evaluated (the common ctor)
    case '#': g = push_wrap(g, "hash"); continue;       // (#! comments die in ai_z_getc)
    case '@': g = push_wrap(g, "tuple"); continue;
    case ')': case ']': case '}':
