@@ -408,7 +408,7 @@
                              x (ala q (cup (cof cls)) (cup d))
                            (cput cls x)))
         f (ana c d)
-        g (?- id (&& even (nil? (c 'par))) (em2 lvm_defglob n))
+        g (?- id (&& even (nil? (c 'par)) !(id? n '_)) (em2 lvm_defglob n))  ; `_` binds locally, never to the bag
         _ (push c 'stk n)
         h (weave (cup nds))
         (\ x (f (g (h x))))))
