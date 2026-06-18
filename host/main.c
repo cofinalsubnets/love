@@ -376,13 +376,16 @@ static char const cli[] =
  ;
 static char const
  rel[] = "(zevs in)";   // non-tty stdin: the stream shell (repl.l) drinks the in port
-// a tty: eval the bao personality (ai/bao.l, baked to bao.h) -- it defines (bao _)
-// and calls (bao 0), which drives the egg-baked `shell`. Eval'd at DISPATCH (not in
-// the egg-warm above), so `shell` is already installed; this is the seam bao's
-// pty-wrapper + debugger modes grow into (doc/bao.md). raw_mode() ran above.
+// a tty: eval the bao personality (ai/bao.l, baked to bao.h). bao.l is DEFINE-ONLY
+// (installs (bao _) but does not launch -- that shape makes it loadable for tests),
+// so the frontend launches it: install the defs, then eval "(bao 0)". Done at
+// DISPATCH (not in the egg-warm above), so the egg-baked `shell` is already
+// installed; this is the seam bao's pty-wrapper + debugger modes grow into
+// (doc/bao.md). raw_mode() ran above.
 static char const bao[] =
 #include "bao.h"
  ;
+static char const baolaunch[] = "(bao 0)";   // bao.l is define-only -> the frontend starts it
 
 // NOTE: the native-JIT experiment was retracted. It proved one durable finding
 // (you can run native code from a buf -- (call (forge bytes) x) -- and the kernel's
@@ -402,7 +405,10 @@ static struct ai *boot(struct ai *g, bool argp) {
     "))"
 #include "repl.h"
   );
-  return ai_evals_(g, argp ? cli : replp ? bao : rel); }
+  if (argp) return ai_evals_(g, cli);
+  if (!replp) return ai_evals_(g, rel);
+  g = ai_evals_(g, bao);                 // install the personality (define-only)
+  return ai_evals_(g, baolaunch); }      // ... then launch it: (bao 0)
 #endif
 
 int main(int argc, char const **argv) {
