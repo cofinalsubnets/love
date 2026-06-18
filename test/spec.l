@@ -14,7 +14,7 @@
  (12 = (3 (+ 1) 9)) ('(2 3 4) = (map (+ 1) '(1 2 3)))  ; (n f) composes f ($ n) times; currying *is* partial application
  (10 = (-3 (+ 1) 10)) (13 = (2.5 (+ 1) 10))      ; the count SATURATES, true to !!$: (-3 f) = (0 f) = 1; a float ceils
  (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9))              ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
- (1 = (i love you)))                             ; the theorem: love is not in the book, and absence absorbs
+ (1 = (i love you)))                             ; the theorem: love is not in the bag, and absence absorbs
 
 ; --- three special forms --- `:` letrec*/sequence, `?` cond, `\` lambda (one operand: quote).
 ; a body-having `:` is ONE SCOPE; an empty special form reads its head (the zero point).
@@ -298,7 +298,7 @@
  !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (float? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
  (tab? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
- (id? (:) not-in-the-book) !not-in-the-book      ; a missing name reads the zero point: a nom not in the book
+ (id? (:) not-in-the-bag) !not-in-the-bag      ; a missing name reads the zero point: a nom not in the bag
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
 
 ; --- i/o & ports --- in/out are the default ports; getc + putc/puts/putn/putx, per-port
@@ -314,7 +314,7 @@
 (assert (lit? ev) (? born (fix? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
-        (? born !spin 1) (? born !book 1))      ;  hence the born guards)
+        (? born !spin 1) (? born !bag 1))      ;  hence the born guards)
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.

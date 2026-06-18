@@ -1,4 +1,4 @@
-; missing -- a nom not in the book (the global table). reading one is a
+; missing -- a nom not in the bag (the global table). reading one is a
 ; CALL FOR HELP: with a global help installed the read raises
 ; (help 1 'missing nom) and the help's result becomes the value at the site;
 ; helpless it reads the ZERO POINT -- the mint at serial 0: nameless, false,
@@ -11,7 +11,7 @@
  !an-never-defined                               ; ... so a missing name is false
  (nom? an-never-defined))                        ; ... a nameless point, not a number
 
-; a name BOUND to 0 is in the book -- not missing, no condition: under an
+; a name BOUND to 0 is in the bag -- not missing, no condition: under an
 ; armed help the read still answers its own 0 (presence beats value; the
 ; value no longer tells bound from missing apart -- the condition lane does)
 (: an-zero 0)
@@ -38,11 +38,11 @@
 ; ONE SCOPE -- a `:` binds every name over the whole form. reading a binding
 ; before its value is pinned is the SAME condition, with the binding site's
 ; nom (name . mint) as payload: a call for help, the zero point helpless. the two old silent
-; lanes -- a direct forward read escaping to the book, a boxed pre-fill read
-; of 0 -- are gone: one law at every depth, local or book.
+; lanes -- a direct forward read escaping to the bag, a boxed pre-fill read
+; of 0 -- are gone: one law at every depth, local or bag.
 (: an-outer 99)
 (assert
- (id? (:) (: a an-outer an-outer 2 a))            ; no silent capture of the book's an-outer
+ (id? (:) (: a an-outer an-outer 2 a))            ; no silent capture of the bag's an-outer
  (id? (:) (: a an-local an-local 2 a))            ; ... nor of nothing: the point helpless
  (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
  (id? (:) (: f (\ _ an-cell) v (f 0) an-cell 5 v))  ; the boxed lane reads the same point
@@ -59,9 +59,9 @@
         (: r (?) (&& (two? r) (id? '? (caup r)))))
 (: help 0)
 
-; (missing t k) -- the book read as a value: k present in tablet t answers the
+; (missing t k) -- the bag read as a value: k present in tablet t answers the
 ; value, a miss is the missing condition with k as payload. a tablet is a little
-; book; `the` book is just the outermost one.
+; bag; `the` bag is just the outermost one.
 (assert (10 = (missing #(1 10) 1)) (id? (:) (missing (tablet 0) 'k)) (id? (:) (missing 5 'k))
         (0 = (missing #(1 0) 1)))                   ; presence beats value: a pinned 0 answers 0
 (: help (\ s a b (? (&& (scare? s) (id? a 'missing) (id? b 'an-missing)) 'heard 0)))

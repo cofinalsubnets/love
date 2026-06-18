@@ -2,7 +2,7 @@
 ; (empty unit bool coprod nat paths total2), bidirectional checking, NbE
 ; conversion (de bruijn levels as fresh vars, sigma- and pi-eta), type-in-type --
 ; the universe stance of the reference (UniMath/Foundations/Init.v: Unset
-; Universe Checking). an axiom is a book entry with a type and no value: a
+; Universe Checking). an axiom is a bag entry with a type and no value: a
 ; sanctioned missing. names follow UniMath so the port reads literally.
 ;
 ; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
@@ -258,7 +258,7 @@
             (memq h '(lam tpair ii1 ii2)) (scare 'uu-cannot-infer t)
             (inf-spine cx en d (inf-sym cx h) (cup t))))))
 
-; --- drivers: a definition is checked then pinned; an axiom is a book entry
+; --- drivers: a definition is checked then pinned; an axiom is a bag entry
 ; --- with a type and no value (its value is its own neutral name); rejects
 ; --- runs a thunk expecting the kernel to refuse (the help cell escapes).
 (: (defn nm T t)

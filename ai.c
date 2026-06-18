@@ -701,7 +701,7 @@ enum ai_status ai_fin(struct ai *g) {
  return s; }
 
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- for (g = ai_push(g, 1, ai_core_of(g)->book); n--;
+ for (g = ai_push(g, 1, ai_core_of(g)->bag); n--;
   g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
  ai_core_of(g)->sp++;
  return g; }
@@ -741,7 +741,7 @@ static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
 
 // --- frontend-nif defaults ---------------------------------------------------
 // exit/open/close/run/getenv are FRONTEND nifs: each frontend overrides them via
-// ai_defn (main.c POSIX, kmain.c qemu, the wasm host emscripten) -- the book is
+// ai_defn (main.c POSIX, kmain.c qemu, the wasm host emscripten) -- the bag is
 // last-write-wins, and a frontend's ai_defn runs after ai_ini. The core installs
 // safe no-op defaults here so the NAMES ALWAYS EXIST. A frontend that omits one
 // then inherits a clean nil instead of a MISSING name -- whose capture-at-
@@ -769,20 +769,20 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->len = len0, g->pool = (void*) g, g->alloc = al;
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
- // book + macro maps (lookup-lambdas) then the main task text.
+ // bag + macro maps (lookup-lambdas) then the main task text.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 6))) {
-  union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
+  union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=bag (no GC since ai_have)
   M[0].m = M;
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   g->tasks = tagtext(M, 5);
-  // book[nil] = macro (the macro table -- no separate field). Both are on the
-  // stack; push the nil key so (sp2,sp1,sp0)=(book,macro,nil) for ai_mapput.
+  // bag[nil] = macro (the macro table -- no separate field). Both are on the
+  // stack; push the nil key so (sp2,sp1,sp0)=(bag,macro,nil) for ai_mapput.
   g = ai_push(g, 1, nil);
-  g = ai_mapput(g);                     // -> sp[0] = book
-  g->book = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
+  g = ai_mapput(g);                     // -> sp[0] = bag
+  g->bag = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
   g = ai_pop(g, 1);
   // the WEAK intern map (string -> the canonical atom), created before the
   // first intern (the def tables just below). it lives OUTSIDE the traced
@@ -790,7 +790,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = map_new(g);
   if (ai_ok(g)) g->symbols = ai_pop1(g);
   struct ai_def def0[] = {
-   {"book", g->book},
+   {"bag", g->bag},
    {"in", (word) &ai_stdin},
    {"out", (word) &ai_stdout},
    {"err", (word) &ai_stderr},
@@ -807,9 +807,9 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    struct ai_def vd[] = {{"ai-version", ai_pop1(g)}};
    g = ai_defn(g, vd, countof(vd)); }
   // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
-  // name, so installing that nif interns it and the book roots it; the raise
+  // name, so installing that nif interns it and the bag roots it; the raise
   // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).
-  // the reader owns no operator tables: book['operators] (the ONE table,
+  // the reader owns no operator tables: bag['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prel, and the
   // opfix source pass (prel.l, hooked by both compilers at c0 and wev)
   // factors sigil tokens against it at compile time. data reading is
@@ -987,7 +987,7 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
  h->ip = cell(gcp(h, word(h->ip), p0, t0));
  h->tasks = cell(gcp(h, word(h->tasks), p0, t0));
  h->symbols = 0;                               // the WEAK intern map: rebuilt below, after the fixpoint
- for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym book keys)
+ for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym bag keys)
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                     // stack
  for (struct ai_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0); // C live variables
  while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_text)(h, p0, t0);              // cheney algorithm
@@ -1213,7 +1213,7 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  { word x0 = g->sp[0];
    if (chainp(x0) && (!lamp(A(x0)) || datp(A(x0)))) {
     struct ai_mint *os = sym_probe(ai_core_of(g), "opfix", 5);
-    word of = os ? ai_mapget(ai_core_of(g), 0, word(os), ai_core_of(g)->book) : 0;
+    word of = os ? ai_mapget(ai_core_of(g), 0, word(os), ai_core_of(g)->bag) : 0;
     if (of && lamp(of)) {
      g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, nil, nil, of)))))));
      if (!ai_ok(g)) return g;
@@ -1415,8 +1415,8 @@ static Ana(ana_v) {
  if (!ai_ok(g)) return g;
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) {
-   if ((y = ai_mapget(g, 0, x, g->book))) return ana_q(g, c, y);
-   // undefined global: resolved by lvm_index via the book at run time.
+   if ((y = ai_mapget(g, 0, x, g->bag))) return ana_q(g, c, y);
+   // undefined global: resolved by lvm_index via the bag at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.l avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
    // is no enclosing frame to capture from, so adding x to imps would make a
@@ -1615,7 +1615,7 @@ static ai_inline word rev(word l) {
 static word ldels(struct ai *g, word lam, word l);
 
 static ai_inline Ana(ana_2, word a, word b) {
- if ((x = ai_mapget(g, 0, a, ai_mapget(g, nil, nil, ai_core_of(g)->book))))   // macro table = book[nil]
+ if ((x = ai_mapget(g, 0, a, ai_mapget(g, nil, nil, ai_core_of(g)->bag))))   // macro table = bag[nil]
   return g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, nil, nil, x))))))),
          analyze(g, c, ai_ok(g) ? pop1(g) : 0);
  return avec(g, b, g = analyze(g, c, a)),
@@ -1646,7 +1646,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // (ev.l) runs the same pass in wev, so both lanes share one boxfix. exp is
  // rooted across the alloc.
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
-  word bf = ai_mapget(g, 0, pop1(g), g->book);
+  word bf = ai_mapget(g, 0, pop1(g), g->bag);
   if (bf && lamp(bf)) {
    g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, nil, nil, bf)))))));
    if (ai_ok(g)) exp = pop1(g); } }
@@ -1764,7 +1764,7 @@ lvm(lvm_defglob) {
  Have(3);
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
- return Sp[0] = k, Sp[1] = v, Sp[2] = g->book, Pack(g),
+ return Sp[0] = k, Sp[1] = v, Sp[2] = g->bag, Pack(g),
   !ai_ok(g = ai_mapput(g)) ? ghelp(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
 // lvm_index (the late-bound global read) is defined below lvm_scare: its
@@ -1800,17 +1800,17 @@ static struct ai_mint *sym_probe(struct ai *g, char const *nm, uintptr_t n) {
   if (k == map_gap) return 0;
   if (len(k) == n && !memcmp(txt(k), nm, n)) return sym(s[2 * i + 1]); } }
 
-// Resolve a C->lisp ap from book (where the prel pins it -- book is
+// Resolve a C->lisp ap from bag (where the prel pins it -- bag is
 // GC-traced and egg-baked, so it survives into the runtime image), materializing
 // the key by name. Scare loud if undefined: a prel-ordering contract
 // violation. Probe + mapget are reads, so no Have in the tail-jump callers.
 static ai_inline ai_word resolve_hot(struct ai *g, char const *nm, uintptr_t n) {
  struct ai_mint *y = sym_probe(g, nm, n);
- ai_word cur = y ? ai_mapget(g, nil, word(y), g->book) : nil;
+ ai_word cur = y ? ai_mapget(g, nil, word(y), g->bag) : nil;
  if (!lamp(cur)) __builtin_trap();
  return cur; }
 
-// Thread (function) combinators for `+` and `*`, pinned on book by the prel
+// Thread (function) combinators for `+` and `*`, pinned on bag by the prel
 // like num-ap. A text operand takes precedence over every other type, so
 // `+`/`*` of a function build a new function -- the README's Church arithmetic,
 // agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
@@ -1819,7 +1819,7 @@ static ai_inline ai_word resolve_hot(struct ai *g, char const *nm, uintptr_t n) 
 // -- itself the new function -- and leave it as the result, resuming at Ip+1.
 
 // Fixnum-as-function application. A fixnum operator n applied to x is dispatched
-// to the l ap at book['num-ap] as (num-ap n x): numeric x -> x**n, a
+// to the l ap at bag['num-ap] as (num-ap n x): numeric x -> x**n, a
 // function x -> x iterated n times (Church numerals).
 //
 // The driver mirrors the chain driver: with the stack laid out [n, num-ap, x, ret]
@@ -1862,14 +1862,14 @@ static union u const help_drive[] =
 // global `help` function -- present the way everything is present: by its
 // net -- and 5 words of stack headroom (the raise path never
 // allocates), build the (help s a b) frame and run it; else the C default
-// raise_c, which resumes the eof protocol raw. Pre-book raises (ai_ini_0)
+// raise_c, which resumes the eof protocol raw. Pre-bag raises (ai_ini_0)
 // always take the default.
 static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
                          union u const *K) {
  if (s == ai_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
- if (c->book) {
+ if (c->bag) {
   struct ai_mint *ts = sym_probe(c, "help", 4);
-  word h = ts ? ai_mapget(c, nil, word(ts), c->book) : nil;
+  word h = ts ? ai_mapget(c, nil, word(ts), c->bag) : nil;
   if (!ai_nilp(c, h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
    sp[0] = putcharm(s), sp[1] = h;
@@ -1934,7 +1934,7 @@ lvm(lvm_scare) {
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
-// the missing miss sentinel: a private static address no book value can equal,
+// the missing miss sentinel: a private static address no bag value can equal,
 // so a name bound to nil stays distinct from no entry at all.
 static union u const no_entry[1];
 // THE NOTHING IS THE CORE: () = (word) ai_core_of(g), what a helpless missing read
@@ -1944,33 +1944,33 @@ static union u const no_entry[1];
 // 0**i is honest nan), a unit absorbs -- which is what keeps (i love you) = 1. It FLOPS
 // with the dust (gcg forwards old->new core) and prints () -- the face of absence.
 // No named constant; the nothing is the core. DISTINCT from 0 (fixnum) and "" (string).
-// A read of the LIVE book (the outermost cell) by name -- the missing-name law
+// A read of the LIVE bag (the outermost cell) by name -- the missing-name law
 // at the global scope, the twin of boxfix's local (missing cell 'nom). A hit
-// pushes the current value; a miss is a MISSING name -- a nom not in the book,
+// pushes the current value; a miss is a MISSING name -- a nom not in the bag,
 // a call for help: with a global help installed the read raises (help 1 'missing
 // nom) and the help's result is the value here; helpless it reads the zero point.
 // The site NEVER self-patches (it stays a live read, so a define that lands later
 // is seen, a rebind is honoured) and the name is NOT a frame import.
 lvm(lvm_index) {
  Have1();                          // room for the push first (may GC; no live local held yet)
- word v = ai_mapget(g, word(no_entry), Ip[1].x, g->book);
+ word v = ai_mapget(g, word(no_entry), Ip[1].x, g->bag);
  if (v != word(no_entry)) return
   *--Sp = v,                       // present: push the live value, no quote patch
   Ip += 2,
   Continue();
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
+ word h = ts ? ai_mapget(g, nil, word(ts), g->bag) : nil;
  if (ai_nilp(g, h)) return
   *--Sp = (word) ai_core_of(g),
   Ip += 2,
   Continue();
- word a = word(sym_probe(g, "missing", 7)), b = Ip[1].x;   // 'missing: the nif's name, rooted by the book
+ word a = word(sym_probe(g, "missing", 7)), b = Ip[1].x;   // 'missing: the nif's name, rooted by the bag
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
-// (missing t k): the book read as a value -- lvm_index's law with the book as an
-// argument (a tablet is a little book; the book is just the outermost one).
+// (missing t k): the bag read as a value -- lvm_index's law with the bag as an
+// argument (a tablet is a little bag; the bag is just the outermost one).
 // k present in map t answers the value; a miss is the MISSING CONDITION: with a
 // global help installed the read raises (help 1 'missing k) and the help's result
 // is the value, helpless it reads the zero point. boxfix's letrec cells read this way --
@@ -1985,13 +1985,13 @@ lvm(lvm_missing) {
   Continue();
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
+ word h = ts ? ai_mapget(g, nil, word(ts), g->bag) : nil;
  if (ai_nilp(g, h)) return
   Sp[1] = (word) ai_core_of(g),
   Sp++,
   Ip++,
   Continue();
- word a = word(sym_probe(g, "missing", 7));   // 'missing: the nif's name, rooted by the book
+ word a = word(sym_probe(g, "missing", 7));   // 'missing: the nif's name, rooted by the bag
  Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
  Sp[0] = word(Ip + 1), Sp[1] = a;
  return Pack(g), ai_raise(g, ai_status_scare, a, Sp[2], help_more_k); }
@@ -3360,7 +3360,7 @@ static ai_inline struct ai *push_wrap(struct ai *g, char const *nom) {
 // the LEXER LAW, operator half. a token led by an operator (punctuation)
 // char is a maximal run of operator chars -- a SIGIL, read as one plain
 // symbol; the opfix compile pass (prel.l) factors it against
-// book['operators] later, so the reader is purely structural. a run stops
+// bag['operators] later, so the reader is purely structural. a run stops
 // at name chars (alnum/_), whitespace, delimiters, and the value-surface
 // chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
 // still contain @ ~ $ ! . and a trailing/internal ' (the prime: x', n'';
@@ -3469,7 +3469,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
      // the VALENCE LAW, reader half: a run GLUED to a following datum is
      // monadic -- the run itself becomes a wrap under a `mono` wrap, so the
      // next datum d delivers as (mono (run d)); opfix factors the run
-     // against book['monadics] (glued is monadic, spaced is dyadic). a shed
+     // against bag['monadics] (glued is monadic, spaced is dyadic). a shed
      // '-' (pending) means a number follows: glued by definition. the
      // emission is a plain list, so data round-trips through show.
      int c3 = EOF;
@@ -4910,7 +4910,7 @@ uintptr_t ai_vec_bytes(struct ai_vec *v) {
 // draws: the only primitives are rng-seed (fresh state from a fixnum) and the
 // functional steps rand-next/randf-next (copy the input state, step the copy,
 // return (value . new-state) -- the input is never mutated). The global stream
-// (rand/randf over book['rng-state]) is prel lisp. Not a CSPRNG.
+// (rand/randf over bag['rng-state]) is prel lisp. Not a CSPRNG.
 
 static ai_inline uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }

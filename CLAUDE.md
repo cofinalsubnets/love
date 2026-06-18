@@ -93,7 +93,7 @@
 (2 3 4)              ; 262144  the tower 4**(3**2)
 (map (+ 1) '(1 2 3)) ; (2 3 4) currying *is* partial application
 ((/ 1 2) 9)          ; 3.0     (1/2 x) = sqrt x
-(i love you)         ; 1       love is not in the book, and absence absorbs
+(i love you)         ; 1       love is not in the bag, and absence absorbs
 
 ; --- three special forms --- `:` is letrec*/sequence, `?` is cond, `\` is lambda (and, with a
 ; single operand, quote). everything else is a function call.
@@ -373,7 +373,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 (cap (nom 'x))       ; "x"         a nom is (name . mint)
 
 ; --- hashes --- #(k v ..) or (hash ..) build; the empty hash is (tablet 0) (and prints so);
-; mutable. a map is a BOOK -- a tablet is a little book, and `the` book is just the
+; mutable. a map is a BOOK -- a tablet is a little bag, and `the` bag is just the
 ; outermost one. # on any non-list datum BOXES it: #x = #(0 x), a fresh mutable hash
 ; pinning x at 0 (a 1-entry box, truthy) -- and () IS 0, so #() is #0, the box of
 ; nothing: the # law has no empty exception. the accessors are
@@ -381,7 +381,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key away.
 ; also keys (the key list), $ is the key count. (t k) == (peep t k 0) -- a map is a lookup
 ; function. THREE ABSENCE LANES, one miss machinery: peep (the caller names what absence
-; means), apply (absence is 0), and (missing t k) -- the book read as a value: a present k
+; means), apply (absence is 0), and (missing t k) -- the bag read as a value: a present k
 ; answers, a miss is the missing condition (the help's result, the zero point helpless, k the payload).
 ; (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
@@ -412,7 +412,7 @@ $(buf 4)             ; 0       a zeroed buf is nothing
 ; SYMBOL when spaced, or fused to its datum as (mono (run datum)) when GLUED mid-list
 ; (the valence law below; head position and \ never fuse, - and + only to ( ' " @ ~ #).
 ; code then factors sigils against the ONE `operators` table at COMPILE time:
-; `opfix`, a source->source prepass hooked by both compilers (c0 probes book['opfix] like
+; `opfix`, a source->source prepass hooked by both compilers (c0 probes bag['opfix] like
 ; boxfix; ev runs it before wev -- ev is opfix after read, so the two input lanes, data
 ; and characters, meet at one core). the table: symbol -> arity (the symbol names itself)
 ; | (name . arity) (an alias), arity 1-7, extended with a plain pin -- live for the next
@@ -479,7 +479,7 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 ; as its value (no help installed -> terminal: the exit face prints `;; a b`, show
 ; forms, from the condition data stashed at the raise -- the bare data-less scare,
 ; oom, prints ;; oom@len instead). see test/help.l. a nom not
-; in the `book` (the global table) is MISSING -- a call for help: reading one raises
+; in the `bag` (the global table) is MISSING -- a call for help: reading one raises
 ; (scare 'missing nom) under an installed help (the help's result is the value); helpless
 ; it reads the zero point -- a nameless unit. the read happens where the code says it does:
 ; a closure captures its free globals at creation, so a missing read in a lambda body fires
@@ -496,7 +496,7 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 (call-cc (\ k (k 41)))       ; 41   a one-shot escape
 (: p (spawn (\ x (x + 1)) 41) (wait p))   ; 42   tasks (always wait an orphan)
 (apcap 0)            ; 1048576   the count ceiling, a tunable box
-not-in-the-book      ; ()        a missing name reads the zero point (helpless)
+not-in-the-bag      ; ()        a missing name reads the zero point (helpless)
 (welp 1 'a 'b)       ; ()        the floor: a bare scare welps to the zero point
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prel wraps getc and
@@ -536,11 +536,11 @@ not-in-the-book      ; ()        a missing name reads the zero point (helpless)
 ; scare; spin is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), every hot lvm_* pointer,
-; and finally the `book` itself. compiled references were folded, so only the names die.
+; and finally the `bag` itself. compiled references were folded, so only the names die.
 ; names the printer, the reader, or an expander EMITS (uq ltuple link pin
 ; tablet mono ..) stay, as do the C-resolved hooks (num-ap add mul help). the shell
 ; core (ai/bao.l) no longer needs mopping: its editor + repl internals are
-; closure-private (off the book by construction), and only its entry points --
+; closure-private (off the bag by construction), and only its entry points --
 ; shell/welp/edraw/wrap/bao + the stream shell zev/zevs/charms -- are globals.
 ; demo:
 (lit? ev)            ; true    ev is installed in the image

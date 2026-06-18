@@ -136,15 +136,15 @@ struct ai {
  union {
   intptr_t v0;
   struct {
-   // The C->lisp hooks (num-ap, add, mul, help, operators) live on book
+   // The C->lisp hooks (num-ap, add, mul, help, operators) live on bag
    // (GC-traced, egg-baked): no slots, no key caches -- C materializes the
    // keys by name per use (sym_probe walks the intern map allocation-free;
    // hot numeric code is compiled by the lisp compiler, which holds the
    // symbols directly, so the C dispatch only catches stragglers).
-   ai_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
-                  // macro table is book[nil] -- no separate field. The 'missing
+   ai_word bag;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
+                  // macro table is bag[nil] -- no separate field. The 'missing
                   // condition tag needs no slot: it is the `missing` nif's name,
-                  // so the book roots it, and the raise path reads it back with
+                  // so the bag roots it, and the raise path reads it back with
                   // sym_probe (alloc-free, already on that path for `help`).
    ai_word scare_a, scare_b; // the last bare scare's condition data, stashed at
                   // the raise so a terminal exit can speak (ai_scare_face_);

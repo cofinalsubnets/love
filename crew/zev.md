@@ -66,14 +66,14 @@ annoyance; it is the spec. zev must expose **exactly one** global.
 **Recommended (ratify with the user):** zev is a single global `zev`, a constructor
 that **injects** its combinator vocabulary into the scope of a grammar you hand it —
 the "with-combinators" form, every internal closure-private (the same trick bao used
-to keep its editor off the book):
+to keep its editor off the bag):
 
 ```
 (zev (\ eps lit one span alt seq seqs opt many pmap parse   ; ... fixed, documented order
    <your grammar, written against those names>))
 ```
 
-One book key (`zev`), no collisions by construction, no per-use tablet lookups. The
+One bag key (`zev`), no collisions by construction, no per-use tablet lookups. The
 alternative — `(zev)` returns a **tablet** of combinators you `peep` out — is simpler
 to extend but verbose at every use site. **Decide this first**; everything downstream
 (the test, the man page, every adopter) depends on the shape. Until ratified, develop
@@ -109,5 +109,5 @@ in `test/zev.l` and `make test` covers it (host + ai0×2) with **no Makefile edi
 the corpus globs `test/*.l` and runs them concatenated in one global scope. That scope
 is exactly why the single-global design is non-negotiable: if zev leaks a colliding
 name, the gate goes red and tells you immediately. Keep every helper local; the only
-name `test/zev.l` may add to the global book is `zev` itself. `make valg` and the order
+name `test/zev.l` may add to the global bag is `zev` itself. `make valg` and the order
 law are unaffected by a pure-library addition, but run host + ai0 before every handoff.

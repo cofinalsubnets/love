@@ -26,7 +26,7 @@
    ev-kind cap   ev-load cup
 
 ; --- the agent state --- a plain 2-list (replies beats): an IMMUTABLE ai value,
-; so show/read checkpoint it for free. (a book would NOT round-trip -- it is
+; so show/read checkpoint it for free. (a bag would NOT round-trip -- it is
 ; mutable, identity-compared, and its show reparses to nothing; the list is the
 ; honest carrier of crew/kship.md's "state is an ai value, persistence is
 ; show/read".) replies = packets answered, beats = heartbeats emitted. `with`

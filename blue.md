@@ -49,7 +49,7 @@ The second face of the same numeral is iteration. Define `appf n f = fun x => Na
 
 ## 2 · absence and totality {#absence}
 
-A name not in the **book** (the global table) is *missing*. Reading it does not crash and does not return an error token; helpless (no `help` installed) it reads **the zero point**: a nameless unit `Pt` — the **mint** (a fresh, nameless point with an identity and nothing else; §9) at serial 0, printed `()`. The zero point absorbs application in both directions:
+A name not in the **bag** (the global table) is *missing*. Reading it does not crash and does not return an error token; helpless (no `help` installed) it reads **the zero point**: a nameless unit `Pt` — the **mint** (a fresh, nameless point with an identity and nothing else; §9) at serial 0, printed `()`. The zero point absorbs application in both directions:
 
 > **(2.1) The unit as operator is const-1.** `(Pt x) = 1`. Evidence: `thm:unit_is_const_one`.
 
@@ -264,9 +264,9 @@ What is **not** proved in Rocq, by design, lives at the demonstrate layer: the f
 
 ## 12 · implementation, in one breath {#impl}
 
-One word is one value: a fixnum is a tagged odd word; anything else is a heap object whose first word is its **hot** — a live external reference, the wire out of the heap to the ap that runs it. The VM is **tail-threaded** (aps tail-jump, never return) over a **two-space copying** collector; out-of-pool constants are immortal. No interpreter state lives outside the heap: the **book** (an ordinary ai hash) carries the globals, macros, the operators table, the `help` function, and the rng; C finds its own hooks by name, allocation-free.
+One word is one value: a fixnum is a tagged odd word; anything else is a heap object whose first word is its **hot** — a live external reference, the wire out of the heap to the ap that runs it. The VM is **tail-threaded** (aps tail-jump, never return) over a **two-space copying** collector; out-of-pool constants are immortal. No interpreter state lives outside the heap: the **bag** (an ordinary ai hash) carries the globals, macros, the operators table, the `help` function, and the rng; C finds its own hooks by name, allocation-free.
 
-The compiler is written in ai. At build time the evaluator sits on the **egg** (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (`born` records the hatch time). The same image runs on Linux, wasm, and — as **kship** — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (**aineko**), an interactive shell + pty wrapper (**bao**), a GNU-make-compatible build tool written in ai (**cook**), and **siri**, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the book itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.
+The compiler is written in ai. At build time the evaluator sits on the **egg** (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (`born` records the hatch time). The same image runs on Linux, wasm, and — as **kship** — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (**aineko**), an interactive shell + pty wrapper (**bao**), a GNU-make-compatible build tool written in ai (**cook**), and **siri**, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the bag itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.
 
 ## · see also {#see-also}
 

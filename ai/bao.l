@@ -3,10 +3,10 @@
 ; pty wrapper (wrap). bao is the BAKED shell core for all three frontends -- the
 ; host (out/host/ai), the freestanding kernel (kmain.c), and the ai0 bootstrap
 ; self-test -- loaded after the prel. (It was repl.l; the editor/repl internals
-; used to LEAK as user-visible book globals because the corpus tested them by
+; used to LEAK as user-visible bag globals because the corpus tested them by
 ; name. Now the editor + repl + the pty wrapper live inside one closure, so only
 ; the entry points -- shell, welp, edraw, wrap, bao, plus the stream shell
-; zev/zevs/charms -- are book globals.)
+; zev/zevs/charms -- are bag globals.)
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist is
 ; implicitly parenthesized and read as ONE expression via (sip ..) + read
@@ -73,7 +73,7 @@
 ; zevs: the stream shell -- a port is the LAZY charms, and zevs drinks it:
 ; read and eval every form until the stream ends (eof, or input ends inside
 ; an unfinished shape); the value is the last form's. ev late-binds through
-; the book ((ev 'ev r)) so the one definition drives both of ai0's passes
+; the bag ((ev 'ev r)) so the one definition drives both of ai0's passes
 ; (c0 first, the hatched ev' second); the host's stdin runner and the
 ; ai0/kernel corpus runners are all this function now.
 (: (zevs p)
@@ -84,8 +84,8 @@
 ; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
 ; the body of this (: ..) returns the public entry points as a list, defglob'd
 ; below; everything else (the ed* editor, parseall, do_eval, the history zipper,
-; pump/waitfor, the raw-line decode) stays inside this scope, OFF the global book.
-(: _                                ; the export-list holder: `_` never leaks to the book
+; pump/waitfor, the raw-line decode) stays inside this scope, OFF the global bag.
+(: _                                ; the export-list holder: `_` never leaks to the bag
  (: m (nom 0) eofsym (nom 0)
 
    (revcat a b) (foldl (flip link) b a)
@@ -390,7 +390,7 @@
    ; the interactive entry: install shell-help IF no help is present (the
    ; check and the define both go through ev -- a live read and a top-level
    ; pin -- since closures capture their free globals at creation and the
-   ; book itself is pulled). file mode never comes through here, so scripts
+   ; bag itself is pulled). file mode never comes through here, so scripts
    ; keep the helpless (terminal) law.
    (shell _)
      (: _ (? (ev (\ help)) 0 (ev (list (\ :) (\ help) shell-help)))
@@ -502,7 +502,7 @@
    ; (bao a) -- the interactive entry the host frontend launches. `(bao 0)` is
    ; exactly the baked shell (an arg is taken: ai has no nullary calls); `(bao 'test)`
    ; runs the private unit battery (boot/baotest.l gates it -- the selftest stays
-   ; closure-private, off the book). `wrap` is reachable from the bao prompt; the
+   ; closure-private, off the bag). `wrap` is reachable from the bao prompt; the
    ; editor-as-line-reader (edraw) and the debug `help` are the later modes (crew/bao.md).
    (bao a) (? (= a 'test) (bao-selftest 0) (shell 0))
 
@@ -605,11 +605,11 @@
      (two? (parseall (cat (L 49 32 61 32 49) 0))))      ; "1 = 1"
 
    ; the body: the public entry points, defglob'd below. everything above stays
-   ; closure-private (off the book), which is what stops the ed* editor + repl
+   ; closure-private (off the bag), which is what stops the ed* editor + repl
    ; internals from leaking into (names ()).
    (L shell welp edraw wrap bao))
 
- ; defglob the public surface out of the export list (book is mopped post-egg, so
+ ; defglob the public surface out of the export list (bag is mopped post-egg, so
  ; a top-level body-less (: ..) is the only way to add a global; the privates above
  ; -- including bao-selftest, reached via (bao 'test) -- never reach it). the holder
  ; is `_` (the previous line's value, by the sequence law), so it never leaks either.
