@@ -8,8 +8,8 @@ The pitch: **ai already ships the tensor — it calls it a constellation.** A
 **constellation** is any numeric; it comes in two shapes:
 
 - a **star** — a self-netting scalar (a charm/wide/big/float/complex; ai's `gem?`);
-- a **galaxy** — a tray of stars, i.e. a typed, n-dimensional, numpy-broadcasting
-  numeric array (ai's `crest?`, a numeric `tray`).
+- a **galaxy** — a set of stars, i.e. a typed, n-dimensional, numpy-broadcasting
+  numeric array (ai's `galaxy?`, a numeric `set`).
 
 A constellation already has reductions (`asum`/`aprod`/`amax`/`amin`), contractions
 (`inner`/`outer`), and elementwise transcendentals (`sine`/`cosine`/`log`/`pow`).

@@ -182,9 +182,9 @@
  ; snip: any split reconcatenates to the original; the full snip is the string.
  ; gated: on 32-bit the RNG stream diverges (rand-next truncates the 64-bit word,
  ; filed), so these draw inputs that trip a real failure -- skip on the wasm shim.
- (? w64 (fz-ok 300 54 fz-s-i (\ v (= (cap v) (fz-norm (+ (fz-norm (snip (cap v) 0 (cup v)))
+ (? wint (fz-ok 300 54 fz-s-i (\ v (= (cap v) (fz-norm (+ (fz-norm (snip (cap v) 0 (cup v)))
                                             (fz-norm (snip (cap v) (cup v) (tally (cap v))))))))) 1)
- (? w64 (fz-ok 300 55 fz-s (\ s (= s (fz-norm (snip s 0 (tally s)))))) 1)
+ (? wint (fz-ok 300 55 fz-s (\ s (= s (fz-norm (snip s 0 (tally s)))))) 1)
  ; the snip length is j-i, and out-of-range indices clamp to [0, pin]
  (fz-ok 300 56 fz-s-ij (\ v (= (- (cauup v) (caup v)) (tally (snip (cap v) (caup v) (cauup v))))))
  (fz-ok 300 57 fz-s (\ s (= (fz-norm (snip s 0 (tally s))) (fz-norm (snip s -9 (+ 99 (tally s)))))))

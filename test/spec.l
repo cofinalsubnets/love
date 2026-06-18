@@ -49,21 +49,21 @@
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
  (star? 5) (star? -3.5) (star? ~(2 3)) (star? (62 2))         ; a STAR is a self-netting SCALAR: charm, float, complex, wide
- !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a TRAY is NOT a star -- it nets DOWN to a scalar star (net is a fresh sum)
+ !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a SET is NOT a star -- it nets DOWN to a scalar star (net is a fresh sum)
  !(star? "x") !(star? 'a) !(star? '(1 2))                    ; text/symbol/list are not stars -- they net to something else
  (? (fix? 5) (star? 5) 1)                                  ; a CHARM is a star, by spec (net = self)
  (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (star? 5) 1)   ; a CHARM (charm?) is the word-sized star: a fixnum, and every charm is a star
- (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
- (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a GALAXY is a NUMERIC tray (a tray of stars); a tray of strings is not
- (galaxy? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
- !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a tray
+ (set? @(1 2 3)) (set? @("a" "b"))                      ; a SET is an array of ANY element kind (numbers or objects)
+ (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a GALAXY is a NUMERIC set (a set of stars); a set of strings is not
+ (galaxy? (array '(2) (200 2) (200 2)))                    ; a set of BIGS is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
+ !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a set
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: fix? big? full? float? twin? tray? string? nom? two? tab?;
+; --- types & predicates --- storage: fix? big? full? float? twin? set? string? nom? two? tab?;
 ; derived constellation? whole? atom?; lit? = presence (any heap value); hot? names the buf/port zoo.
 (assert
  (fix? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tab? #(1 2))
- (big? (100 2)) ((? w64 full? big?) (62 2)) (float? 1.5) (twin? i) (tray? @(1 2 3))
+ (big? (100 2)) ((? wint full? big?) (62 2)) (float? 1.5) (twin? i) (set? @(1 2 3))
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (buf 4)) (hot? out) (hot? (sip '(104)))   ; the hot zoo, named
  !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots
@@ -80,7 +80,7 @@
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (2 = 4 / 2) (fix? (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
- !(fix? (2 * 2305843009213693952)) (float? (1 / 0)) (? w64 (1e308 < 1 / 0) 1) (0 = (/ 0 0))
+ !(fix? (2 * 2305843009213693952)) (float? (1 / 0)) (? wint (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))

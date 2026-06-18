@@ -3,8 +3,8 @@
 ; except where two errors compound (e.g. (sine pi) is ~1e-16, not exactly 0).
 
 (: (close? a b eps) (< (- (? (< a b) (- b a) (- a b)) 0) eps)
-   (close a b)       (close? a b (? w64 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
-   (very-close a b)  (close? a b (? w64 1e-15 1e-5))
+   (close a b)       (close? a b (? wint 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
+   (very-close a b)  (close? a b (? wint 1e-15 1e-5))
 
    (assert
     ; --- pi from boot.l, basic identities ---
@@ -68,7 +68,7 @@
     ;     exactly as a scalar bignum already fed the scalar pow ---
     (= 1125899906842624.0 ((/ 1 2) 1267650600228229401496703205376))  ; sqrt(2^100) = 2^50
     (float? (pow 1267650600228229401496703205376 2))
-    (? w64 (< 1e300 (pow 2 100000000000000000000)) 1)              ; f64 only -- 1e300 is inf in f32
+    (? wint (< 1e300 (pow 2 100000000000000000000)) 1)              ; f64 only -- 1e300 is inf in f32
 
     ; --- pow / atan2 elementwise over arrays (numpy broadcast); result is r ---
     (= R (atype (pow (arr 0 '(2) '(2 3)) 2)))                  ; always a float array

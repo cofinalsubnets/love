@@ -98,7 +98,7 @@
    ; a NEGATIVE integer giving the reciprocal power (so (-1 x) == (/ 1 x) and
    ; (sqrt x) == ((/ 1 2) x)); otherwise pow, which carries a complex lane
    ; (w^z = exp(z Log w)) and a real lane.
-   (powg x n) (? (tray? n) (pow x n)
+   (powg x n) (? (set? n) (pow x n)
                  (whole? n) (: m (? (< n 0) (- 0 n) n)
                              (? (apover m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
@@ -136,11 +136,11 @@
 ; cells, a list the nets of its spine, and everything else is non-negative
 ; so its net IS its sat. prod is the product twin; neg/recip/frac the
 ; dyadics turned inward; bit the truth bit (the Iverson bracket, !!).
-(: (net x) (? (tray? x) (asum x)
+(: (net x) (? (set? x) (asum x)
               (constellation? x) x
               (two? x) (foldl (\ a e (+ a (net e))) 0 x)
               (sat x))
-   (prod x) (? (tray? x) (aprod x)
+   (prod x) (? (set? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
    neg (- 0)
@@ -149,16 +149,16 @@
    (bit x) (nil? (nil? x))
    ; a STAR is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
    ; net (x IS its own net; id?, not `=`, since net returns a number operand unchanged
-   ; while a tray's net is a fresh sum). a TRAY (tray?) is an array of any element kind;
-   ; a GALAXY is a tray of STARS -- a numeric tray. star? and galaxy? are DISJOINT: a tray
+   ; while a set's net is a fresh sum). a SET (set?) is an array of any element kind;
+   ; a GALAXY is a set of STARS -- a numeric set. star? and galaxy? are DISJOINT: a set
    ; never self-nets (its net is a fresh scalar), so a galaxy is never a star -- it is
    ; COMPOSED of stars, not a kind of star. galaxy? keys on the CELLS, not the O code, so a
-   ; Z/R/C tray qualifies outright and an object-typed tray of star cells (e.g. bignums)
-   ; still counts -- a tray of strings does not (a string is no star).
+   ; Z/R/C set qualifies outright and an object-typed set of star cells (e.g. bignums)
+   ; still counts -- a set of strings does not (a string is no star).
    (star? x) (id? x (net x))
    ; a CHARM is the word-sized star -- a fixnum (the lisp predicate; oddp C-side).
    (charm? x) (fix? x)
-   (galaxy? x) (? (tray? x) (? (< (atype x) O) 1 (star? (peep x 0 0))) 0))
+   (galaxy? x) (? (set? x) (? (< (atype x) O) 1 (star? (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
@@ -437,11 +437,11 @@
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
 (: (rng-get _) (: st (peep bag 'rng-state 0)
-                  (? (tray? st) st (: f (rng-seed (clock 0)) _ (pin bag 'rng-state f) f)))
+                  (? (set? st) st (: f (rng-seed (clock 0)) _ (pin bag 'rng-state f) f)))
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (tray? st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
+   (rng-set st) (? (&& (set? st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
                    (: _ (pin bag 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin bag 'rng-state (cup r))

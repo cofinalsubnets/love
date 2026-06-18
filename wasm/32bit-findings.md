@@ -4,7 +4,7 @@ The wasm shim (`host.c`) is a 32-bit, browser-hosted build of love. Running the
 full test corpus against it (`make test_wasm`: ai.js under node, the same `$t`
 the native gate eats) surfaced the differences below.
 
-## Platform facts (gated in the corpus on `w64`, expected)
+## Platform facts (gated in the corpus on `wint`, expected)
 
 The 32-bit word makes love a genuinely different numeric/host platform; these
 asserts are correctly skipped on wasm and still run on the 64-bit hosted builds
@@ -22,7 +22,7 @@ asserts are correctly skipped on wasm and still run on the 64-bit hosted builds
 
 `fix-max`/`fix-min` are exposed from the core (`g_ini_0`) so the corpus can gate
 on the real boundary instead of a baked-in 64-bit literal; the single predicate
-is `w64 = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
+is `wint = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
 
 ## Fixed
 

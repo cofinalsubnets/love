@@ -23,7 +23,7 @@ so it needs **no entry change and no core change** to make progress.
   (`hook`→`link`, `symp`→`nom?`), so every list-building call read the zero point.
   A two-token rename fixed all 30. **Lesson: when cook goes mass-red, first
   `out/host/ai -e "(puts (show NAME))"` the prel names cook leans on (`link`/`nom?`/
-  `snip`/`tray?`/…) — a rename in the corpus surfaces as ALL tests red, not a logic
+  `snip`/`set?`/…) — a rename in the corpus surfaces as ALL tests red, not a logic
   bug.** Now **32 pass**.
 - **✅ Then the cook UX (DONE).** cook owns its own arg parse over the rebound argv
   (`parse-args`, a tablet of `'file 'emit 'help 'ver 'pos`):

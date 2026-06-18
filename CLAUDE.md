@@ -52,11 +52,11 @@
 ; --- vocabulary & house style --- the words here are a VOCABULARY -- we never say
 ; "terminology" or "nomenclature"; a vocabulary is living and chosen, warm not clinical.
 ; the house style is COZY: lowercase, plain, a touch playful, names that earn their keep
-; (you eat a toast; $ keeps the blue charms; a tray of stars is a galaxy). we frame in the
+; (you eat a toast; $ keeps the blue charms; a set of stars is a galaxy). we frame in the
 ; GREEN -- name what a value IS and KEEPS, not what it lacks; green, not red. the surface
 ; stays small and deliberate ((names ()) is the whole vocabulary). the celestial numerics:
 ; a CHARM is a fixnum (a word); a STAR is a self-netting scalar (charm/full/big/float/complex);
-; a GALAXY is a tray of stars (a numeric array); a CONSTELLATION is any numeric (a star or a
+; a GALAXY is a set of stars (a numeric array); a CONSTELLATION is any numeric (a star or a
 ; galaxy) -- a charm is a star is a constellation. the global env is the `bag` (not the "book").
 
 ; --- the shape of it --- one cell is one word: a fixnum is a tagged odd word, anything else
@@ -163,13 +163,13 @@ $@(3 4)              ; 7
 ; --- types & predicates --- a fixnum is a tagged word; everything else is a heap object whose
 ; first word dispatches. the storage predicates:
 ;   fix? big? full?  -- the integer reps (fixnum, bignum, wide int)
-;   float? twin? tray?  -- float, complex scalar, array; all three share one heap type (the internal `pack` kind)
+;   float? twin? set?  -- float, complex scalar, array; all three share one heap type (the internal `pack` kind)
 ;   string? symp two? tab?  -- string, symbol, chain, map
 ; derived: `constellation?` (any number: fix/wide/big/float/complex/array), `whole?` (any integer), `atom?`
 ; (anything but a chain). the NUMERIC vocab refines the numbers: a STAR is a self-netting
-; SCALAR (`star? x` == `id? x (net x)`: charm/wide/big/float/complex), a TRAY is an array of
-; any kind (`tray?`, the renamed arrp), and a GALAXY is a numeric tray -- a tray of stars
-; (`galaxy?`). star? and galaxy? are DISJOINT (a tray's net is a fresh scalar, so no tray
+; SCALAR (`star? x` == `id? x (net x)`: charm/wide/big/float/complex), a SET is an array of
+; any kind (`set?`, the renamed arrp), and a GALAXY is a numeric set -- a set of stars
+; (`galaxy?`). star? and galaxy? are DISJOINT (a set's net is a fresh scalar, so no set
 ; self-nets); a galaxy is COMPOSED of stars, not a kind of star -- it nets DOWN to a scalar star.
 ; `i` is ~(0 1). `lit?` is PRESENCE, not a band: every heap
 ; value answers it (anything wired to a hot -- lit -- everything but a fixnum), chains and

@@ -139,7 +139,7 @@ lvm_t lvm_kcall,
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_arr, lvm_iota, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
- lvm_packp, lvm_bigp, lvm_widep, lvm_trayp, lvm_intf, lvm_lamp, lvm_hotp,
+ lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_lamp, lvm_hotp,
  lvm_nat, lvm_natn,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
@@ -663,7 +663,7 @@ lvm_t lvm_fault;
  _(nif_amax, "amax", s1(lvm_amax)) _(nif_amin, "amin", s1(lvm_amin))\
  _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
  _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "big?", s1(lvm_bigp)) _(nif_widep, "full?", s1(lvm_widep))\
- _(nif_trayp, "tray?", s1(lvm_trayp)) _(nif_intf, "int", s1(lvm_intf))\
+ _(nif_setp, "set?", s1(lvm_setp)) _(nif_intf, "int", s1(lvm_intf))\
  _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_tabp, "tab?", s1(lvm_tabp)) _(nif_fixp, "fix?", s1(lvm_fixp))\
  _(nif_lamp, "lit?", s1(lvm_lamp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
  _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
@@ -4335,7 +4335,7 @@ op11(lvm_nomp, nomp(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_packp, (packp(Sp[0]) || flop(Sp[0]) || widep(Sp[0]) || Cp(Sp[0])) ? putcharm(1) : nil)  // the pack family: arrays + the lean float/wide/complex scalar boxes
 op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_widep, widep(Sp[0]) ? putcharm(1) : nil)
-op11(lvm_trayp, arrp(Sp[0]) ? putcharm(1) : nil)
+op11(lvm_setp, arrp(Sp[0]) ? putcharm(1) : nil)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. Used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
 op11(lvm_intf, flop(Sp[0]) ? putcharm((intptr_t) flo_get(Sp[0])) : Sp[0])
@@ -6044,10 +6044,10 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // (KCharm) so fix/box/big/float/complex order by VALUE, not representation. Arrays
 // divert to lvm_vbin before this, so KArr* never appear. One source of truth:
 // the enum q order itself.
-// the true-blue total order, low -> high: () < mint < string < number < chain < tray < map < hot.
+// the true-blue total order, low -> high: () < mint < string < number < chain < set < map < hot.
 // a symbol/mint is the blue floor; STRING sits above mint and just below the number band (the
 // charm -- a byte-valued fixnum -- bridges string-bytes up to the number tower, the byte law);
-// CHAIN is a special (1-D, hooked) tray, so it seats just BELOW the general n-D tray. numbers
+// CHAIN is a special (1-D, hooked) set, so it seats just BELOW the general n-D set. numbers
 // fold to one by-value band; map/hot stay on top. The compare order is decoupled from the enum
 // (dispatch) order: we remap kinds to lattice ranks here, the enum/matrices are untouched.
 static ai_inline int cmp_rank(word x) {
@@ -6055,8 +6055,8 @@ static ai_inline int cmp_rank(word x) {
  enum q k = ai_kind(x);
  if (k == KString) return 1;                       // string: above mint, below number
  if (isnum(x) || Cp(x)) return 2;                  // the number band, by value (charm bridges up from string)
- if (k == KChain) return 3;                        // chain: a special 1-D tray, just below the general tray
- return (int) k; }                                 // KVec..KArrO trays (>=6), KMap, KHot -- all above chain, relative order kept
+ if (k == KChain) return 3;                        // chain: a special 1-D set, just below the general set
+ return (int) k; }                                 // KVec..KArrO sets (>=6), KMap, KHot -- all above chain, relative order kept
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;

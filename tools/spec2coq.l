@@ -122,7 +122,7 @@
    (tkq q) (? (nom? q) "Vsym" (two? q) "Vpair" (fix? q) "Vz" "Vbot")   ; the quoted datum's kind
    (kpred h) (? (id? h 'fix?) "fixp" (id? h 'float?) "flop" (id? h 'twin?) "comp"
                 (id? h 'string?) "strp" (id? h 'nom?) "nomp" (id? h 'two?) "chainp"
-                (id? h 'tab?) "tabp" (id? h 'tray?) "trayp" (id? h 'constellation?) "nump"
+                (id? h 'tab?) "tabp" (id? h 'set?) "setp" (id? h 'constellation?) "nump"
                 (id? h 'whole?) "whole" (id? h 'atom?) "atomp" (id? h 'packp) "packp"
                 (id? h 'lit?) "lamp" 0)
    ; cross-kind ORDER: symbol<string<number<chain<map by band; same band stays value/lex
@@ -208,7 +208,7 @@
      "Definition nomp  v := match v with Vsym => true | _ => false end." (string 10)
      "Definition chainp  v := match v with Vpair=> true | _ => false end." (string 10)
      "Definition tabp  v := match v with Vmap => true | _ => false end." (string 10)
-     "Definition trayp  v := match v with Varr => true | _ => false end." (string 10)
+     "Definition setp  v := match v with Varr => true | _ => false end." (string 10)
      "Definition whole   v := match v with Vz   => true | _ => false end." (string 10)
      "Definition nump  v := match v with Vz|Vflo|Vcx|Varr => true | _ => false end." (string 10)
      "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end." (string 10)
