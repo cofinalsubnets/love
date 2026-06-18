@@ -52,6 +52,63 @@
               (waitfor pid))                                      ; reap the child
            r))
 
+   ; --- the raw-line editor (bao's own line reader) ---
+   ; repl.l's `edline` is wrong for wrapping a host program: it parses the buffer
+   ; as ai forms (submits only when it reads complete) and prints its own `> `. a
+   ; wrapped program (bash, python) wants the RAW bytes, submitted on Enter no
+   ; matter what. So bao reads its own line -- reusing repl.l's PURE zipper
+   ; primitives (edleft/edright/edbsp/eddel/edhome/edend/revcat/edrender, all
+   ; in/out-free for the logic), but with PORT-PARAMETERIZED event decode so the
+   ; input is any port: `in` for the tty, a (sip ..) for tests. This is the seed of
+   ; the editor that will replace repl's (doc/bao.md: bao supersedes the repl).
+
+   ; bev/besc/besc1 are repl.l's edev/edesc/edesc1, reading (fgetc ip) instead of
+   ; the global getc -- event codes are identical (printable >0; -1 left, -2 right,
+   ; -3 bsp, -4 del, -5 home, -6 end, -7 quit/EOF; 10 = enter; up/down/^C ignored
+   ; by a single-line reader).
+   (besc1 ip c) (? (= c 126) -5
+                   (= c 59) (: _ (fgetc ip) d (fgetc ip)
+                              (? (= d 72) -5 (= d 70) -6 (= d 65) -8 (= d 66) -9
+                                 (= d 67) -2 (= d 68) -1 0)))
+   (besc ip) (? !(= 91 (fgetc ip)) 0
+     (: c (fgetc ip)
+        (? (= c 68) -1 (= c 67) -2 (= c 65) -8 (= c 66) -9 (= c 72) -5 (= c 70) -6
+           (= c 49) (besc1 ip (fgetc ip))
+           (= c 55) (: _ (fgetc ip) -5)
+           (|| (= c 52) (= c 56)) (: _ (fgetc ip) -6)
+           (= c 51) (: _ (fgetc ip) -4) 0)))
+   (bev ip) (: c (fgetc ip)
+     (? (|| (= c -1) (= c 4)) -7
+        (= c 3) -12
+        (|| (= c 13) (= c 10)) 10
+        (|| (= c 8) (= c 127)) -3
+        (= c 1) -5 (= c 5) -6 (= c 27) (besc ip)
+        (&& (<= 32 c) (< c 127) c)))
+
+   ; (edraw ip pr) -- read ONE line off port `ip`, with in-line editing, prompt pr
+   ; echoed to out. Enter submits the raw line (its bytes, in order); ^D / port EOF
+   ; returns eofsym. single line, no history, no parseall -- the text goes straight
+   ; back to the caller (bao's wrapper feeds it to a child). the buffer is the
+   ; (l . r) halves of repl.l's zipper with the line count (u d) pinned empty, so
+   ; the baked single-line primitives drive it unchanged.
+   (edraw ip pr)
+     (: _ (puts pr) pl (tally pr)
+        (loop l r)
+          (: _ (edrender pl 0 0 l r 0)
+             c (bev ip)
+             (km uu ll rr dd) (loop ll rr)         ; motion: edleft/.. give (k u l r d), keep l r
+             (? (= c -7) eofsym                     ; ^D / EOF -> the sentinel
+                (= c 10) (: _ (putc 10) (revcat l r)); Enter -> submit the raw line, in order
+                (< 0 c)  (loop (link c l) r)         ; insert a printable
+                (= c -1) (edleft  km 0 l r 0)
+                (= c -2) (edright km 0 l r 0)
+                (= c -3) (edbsp   km 0 l r 0)
+                (= c -4) (eddel   km 0 l r 0)
+                (= c -5) (edhome  km 0 l r 0)
+                (= c -6) (edend   km 0 l r 0)
+                (loop l r)))                         ; up/down/^C/unknown: ignore in a line reader
+        (loop 0 0))
+
    ; the interactive entry. for now it is exactly the baked shell -- install the
    ; faced help if none is present, print the banner, run the editor repl. an arg
    ; is taken (ai has no nullary calls). `wrap` above is reachable from the bao
@@ -60,7 +117,9 @@
    ; from `in`; main.c puts the tty in raw mode before loading bao, restores on exit.
    (bao _) (shell 0))
 
-; load = launch (the -l lane read-evals each form, then falls through to the bare
-; stdin runner once the shell returns on ^D). the tty frontend loads bao for this
-; top-level call; nothing else here runs at load time.
-(bao 0)
+; bao.l is DEFINE-ONLY -- loading it (egg-bake or `-l ai/bao.l`) installs the
+; personality but does NOT launch. The frontend launches: host/main.c evals
+; `(bao 0)` on a tty (so `ai` on a terminal is the bao shell), while a pipe stays
+; the bare filter. Define-only is what makes bao loadable for tests (load the
+; defs, read piped forms with the bare reader -- no editor intermediating stdin)
+; and is the shape bao needs to supersede the repl (doc/bao.md).
