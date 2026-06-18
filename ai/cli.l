@@ -27,7 +27,7 @@
  (: (rdev q) ((: (go e q) (: r (read q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
     (load1 p) (: q (open p "r")
        (? q (rdev q) (: _ (say err (+ "ai: cannot open " p)) (nap 1))))
-    (eval1 s) (rdev (sip (map s (jot (tally s)))))   ; a string is a fn over its bytes -> a charlist port
+    (eval1 s) (rdev (tap (map s (jot (tally s)))))   ; a string is a fn over its bytes -> a charlist port
     (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (nap 0))   ; print a line to out, flush, exit 0
     (version _) (bye (+ "ai " ai-version))                       ; _ arg: ai has no nullary calls
     (usage _) (bye (+ "usage: ai [-l FILE] [-e EXPR] [-v] [-h] [--] [FILE ...]\n"

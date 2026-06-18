@@ -65,10 +65,10 @@
  (fix? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tab? #(1 2))
  (big? (100 2)) ((? wint full? big?) (62 2)) (gem? 1.5) (twin? i) (set? @(1 2 3))
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
- (hot? (cask 4)) (hot? out) (hot? (sip '(104)))   ; the hot zoo, named
+ (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
  !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots
  (lit? (cask 4)) (lit? '(1)) (lit? "s") !(lit? 5) ; the lit?-spans-bands pin: lit = any heap value
- (1 = $cap) (1 = $out) (1 = $(sip 0))            ; tops and ports net 1: present, drained or not
+ (1 = $cap) (1 = $out) (1 = $(tap 0))            ; tops and ports net 1: present, drained or not
  (fix? (: p (spin (\ x x) 0) _ (catch p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; fixnum overflow -> exact bignum ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
@@ -272,7 +272,7 @@
  (6 = +'(1 2 3)) (-1 = +'(-2 1)) (24 = *'(1 2 3 4))     ; +/ and */ -- the net, unclamped
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
  (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; head position never fuses: call and section
- ('(mono (< x)) = (caup (read (sip '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
+ ('(mono (< x)) = (caup (read (tap '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
  ('cap = (monadics '<)) ('net = (monadics '+))
  (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
@@ -305,8 +305,8 @@
 ; get/put/.../read, open/close/sip/pad/slurp; `read` is port-first, one datum per call;
 ; `dot` (the `.` operator, .x) prints x to out and returns it.
 (assert
- (string? (show out)) ("hi" = (slurp (sip '(104 105)))) (: o (pad 0) _ (print o 42) ("42" = (page o)))
- (1 = (read (sip '(49)) 99)) ('eof = (read (sip 0) 'eof)) (: p (sip '(40)) (p = (read p 99))))
+ (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (pot 0) _ (print o 42) ("42" = (slurp o)))
+ (1 = (read (tap '(49)) 99)) ('eof = (read (tap 0) 'eof)) (: p (tap '(40)) (p = (read p 99))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, wev, maps); the egg is WARMED and the evaluator sits on it twice;

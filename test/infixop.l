@@ -46,8 +46,8 @@
 ; structural incompleteness still pends: an unclosed list comes back as the port.
 ; a trailing operator does NOT pend -- "1 +" is two complete datums whose factor
 ; folds to the partial (+ 1) at compile time, not a reader state.
-(: p (sip '(40 49 32 43)) (assert (p = (read p 99))))   ; "(1 +" -> the port
-(: p (sip '(49 32 43)) (assert (1 = (read p 99)) ('+ = (read p 99))))  ; "1 +" -> 1, +
+(: p (tap '(40 49 32 43)) (assert (p = (read p 99))))   ; "(1 +" -> the port
+(: p (tap '(49 32 43)) (assert (1 = (read p 99)) ('+ = (read p 99))))  ; "1 +" -> 1, +
 
 ; extensible with a plain pin; cleaned up after
 (: ** (\ b n (n b)))

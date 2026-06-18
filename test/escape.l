@@ -30,7 +30,7 @@
 ; through the ci synth port (the editor's submit path).
 (:
  ; chars-of-source-with-quotes -> the parsed datum.
- (parse cl) (read (sip cl) 0)
+ (parse cl) (read (tap cl) 0)
  (assert
    (= (string (link 10 0))                   (parse '(34 92 110 34)))   ; "\n"
    (= (string (link 9 0))                    (parse '(34 92 116 34)))   ; "\t"

@@ -2,7 +2,7 @@
 ; edraw lives in ai/bao.l, now the BAKED shell core (in the host egg), so edraw is
 ; a bag global -- but it reads ai forms (it's the editor), so it can't be a corpus
 ; test (ai0 bakes the corpus and would run edraw on the test stream). edraw reads
-; from a PORT ARG (here a (sip ..), not stdin), so the bare stdin runner drives it:
+; from a PORT ARG (here a (tap ..), not stdin), so the bare stdin runner drives it:
 ; the piped forms read-eval off stdin (a pipe is the bare filter) while each edraw
 ; consumes its own sip. Run (assert comes from test/00-init.l):
 ;
@@ -17,7 +17,7 @@
 ; eof = the sentinel edraw returns at ^D / port EOF: captured by READING it back
 ; off an empty port (the sentinel is bao-private now -- the editor no longer leaks
 ; its `eofsym` global, so we name it by what edraw produces, not by its binding).
-(: (keys l) (sip l)
+(: (keys l) (tap l)
    abc (L 97 98 99)
    eof (edraw (keys 0) ""))
 

@@ -125,7 +125,7 @@
 ; re-parse to the same datum count without it; then C-escape the survivors. ---
 (: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
    (nforms s) ((: (g p e n) (: r (read p e) (? (| (= e r) (= p r)) n (g p e (+ 1 n)))))
-               (sip (s2cl s)) (nom 0) 0)
+               (tap (s2cl s)) (nom 0) 0)
    ; the valence-law guard (cf. lcat.l): a space between an operator byte and
    ; a datum start is semantic mid-list (glued = monadic); the probe below
    ; tests at head position where fusion is suppressed, so keep it.

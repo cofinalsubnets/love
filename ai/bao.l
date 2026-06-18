@@ -9,7 +9,7 @@
 ; zev/zevs/charms -- are bag globals.)
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist is
-; implicitly parenthesized and read as ONE expression via (sip ..) + read
+; implicitly parenthesized and read as ONE expression via (tap ..) + read
 ; -- a line `x y z` is the application (x y z), and infix works at the
 ; prompt (factored at compile time by opfix; reading is structural).
 ; read's more-bit conditions route through the help continuation, whose
@@ -68,7 +68,7 @@
 ; nothing. the C reader pulls from a port, so zev realizes the (finite)
 ; charms first; the lazy-pull seam is where the lisp reader lands next.
 (: (zev s)
-   (: p (sip (charms->chars s)) e (nom 0) r (read p e)
+   (: p (tap (charms->chars s)) e (nom 0) r (read p e)
       (? (id? r e) 0 (id? r p) 0 (ev r))))
 ; zevs: the stream shell -- a port is the LAZY charms, and zevs drinks it:
 ; read and eval every form until the stream ends (eof, or input ends inside
@@ -96,7 +96,7 @@
    ; by (f) == f. returns m if the input ends inside an unfinished shape
    ; (an unclosed paren or string), 0 for a blank line, else a one-form list.
    (parseall cl)
-     (: p (sip (link 40 (cat cl (L 41))))
+     (: p (tap (link 40 (cat cl (L 41))))
         r (read p eofsym)
         (? (= r p)      m                  ; ends inside an unfinished form
            (= r eofsym) 0                  ; unreachable: the wrap always closes
@@ -450,7 +450,7 @@
    ; matter what. So bao reads its own line -- reusing the PURE zipper primitives
    ; (edleft/edright/edbsp/eddel/edhome/edend/revcat/edrender, all in/out-free for
    ; the logic), but with PORT-PARAMETERIZED event decode so the input is any
-   ; port: `in` for the tty, a (sip ..) for tests.
+   ; port: `in` for the tty, a (tap ..) for tests.
    ;
    ; bev/besc/besc1 are edev/edesc/edesc1, reading (get ip) instead of the
    ; global getc -- event codes are identical (printable >0; -1 left, -2 right,

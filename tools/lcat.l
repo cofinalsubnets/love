@@ -19,9 +19,9 @@
    ; STRUCTURALLY, not just counted: a re-tokenization can preserve the count yet
    ; change the parse (name'(a b) and name '(a b) both read two datums).
    (datums s) ((: (g p e a) (: r (read p e) (? (| (= e r) (= p r)) (rev a) (g p e (link r a)))))
-               (sip (s2cl s)) (nom 0) 0)
+               (tap (s2cl s)) (nom 0) 0)
    ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
-   (form1 cs) (: e (nom 0) p (sip cs) r (read p e) (? (| (id? r e) (id? r p)) 0 (show r)))
+   (form1 cs) (: e (nom 0) p (tap cs) r (read p e) (? (| (id? r e) (id? r p)) 0 (show r)))
    ; a HARD token boundary: whitespace, delimiters, string quote, comment, and
    ; the value-surface chars. tokens never span these under any lexer law, so
    ; the redundancy probe's left context resets there.

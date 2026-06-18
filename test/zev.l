@@ -22,9 +22,9 @@
   (1 = (zev (zs "1")))
   ; zevs: the stream shell -- a port is the hot charms; every form evals,
   ; the last value is the value. the host/ai0/kernel runners ARE zevs.
-  (42 = (zevs (sip (zs "(: zq 41) (zq + 1)"))))  ; defines land: the second form reads the first's
-  !(zevs (sip (zs "")))
-  (7 = (zevs (sip (zs "1 2 (3 + 4)"))))))     ; forms eval in order; the last one answers
+  (42 = (zevs (tap (zs "(: zq 41) (zq + 1)"))))  ; defines land: the second form reads the first's
+  !(zevs (tap (zs "")))
+  (7 = (zevs (tap (zs "1 2 (3 + 4)"))))))     ; forms eval in order; the last one answers
 
 ; charms: the global construction -- the lazy colist. (cap cs) is a charm,
 ; ((cup cs) ()) is charms + () (the coproduct, () the end); chars and ports
@@ -38,5 +38,5 @@
   (3 = (zev cs))                                ; zev drinks charms proper
   (id? () (charms ()))                          ; the end lifts to itself
   ('(40 43 41) = (charms->chars (zs2 "(+)")))   ; realize: charms end () -> chars end 0
-  (6 = (zev (charms (sip (zs2 "(* 2 3)")))))    ; a port lifts: the hot charms
+  (6 = (zev (charms (tap (zs2 "(* 2 3)")))))    ; a port lifts: the hot charms
   (1 = (zev (link 49 (\ _ ()))))))              ; a hand-built one-cell charms: "1"

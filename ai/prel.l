@@ -193,13 +193,15 @@
    (take n l) (? n (link (cap l) (take (- n 1) (cup l))))
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(0)))
-(: (sip cl)
+(: (tap cl)
  (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (weave 5))))))
- (pad _)
+ (pot _)
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (weave 6)))))))
- (page o) (snip (peek 4 o) 0 (peek 5 o))
- (slurp i) (: (rl i) (: c (get i) (? (= c -1) 0 (link c (rl i)))) (string (rl i)))  ; (pre-opfix: no ! here)
- (show x) (: o (pad 0) _ (print o x) (page o)))
+ (sip o) (get o)                                  ; draw ONE unit (pairs with slurp = all)
+ ; slurp drains a vessel to a value: an output pot reads its backing buffer; a tap drains via get.
+ (slurp o) (? (string? (peek 4 o)) (snip (peek 4 o) 0 (peek 5 o))
+              (: (rl i) (: c (get i) (? (= c -1) 0 (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
+ (show x) (: o (pot 0) _ (print o x) (slurp o)))
 ; help status readers. a global `help` function is called as (help s a b):
 ; s = the status word, two bits -- scare (1: something went wrong) and more
 ; (2: read control flow, more input wanted). more alone = incomplete; eof =

@@ -675,7 +675,7 @@ lvm_t lvm_fault;
  _(nif_key, "cue?", s1(lvm_key)) \
  _(nif_fputbn, "putbn", s3(lvm_fputbn))\
  _(nif_fputx, "print", s2(lvm_fputx))\
- _(nif_fgetc, "get", s1(lvm_fgetc)) _(nif_fungetc, "unget", s2(lvm_fungetc)) _(nif_feof, "end?", s1(lvm_feof))\
+ _(nif_fgetc, "get", s1(lvm_fgetc)) _(nif_fungetc, "unget", s2(lvm_fungetc)) _(nif_feof, "empty?", s1(lvm_feof))\
  _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
  _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\

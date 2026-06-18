@@ -370,7 +370,7 @@ static char const tests0[] =
  ;
 static char const
  s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))",
- runner[] = "(zevs (sip (s2cl tests)))";   // the stream shell (ai/bao.l) drinks the baked corpus
+ runner[] = "(zevs (tap (s2cl tests)))";   // the stream shell (ai/bao.l) drinks the baked corpus
 
 // With args, run the build tool (lcat / gen_data) through the CLI driver.
 // With no args, self-test: eval prel+bao (the shell core) and run the baked corpus

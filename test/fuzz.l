@@ -128,7 +128,7 @@
 ; ---- print -> read round trip on random s-expressions ----
 ; reuses the io.c reader: serialize via show, re-read the bytes, expect equality.
 (: (fz-s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
-   (fz-rd x) (read (sip (fz-s2cl (show x))) (nom 0))
+   (fz-rd x) (read (tap (fz-s2cl (show x))) (nom 0))
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof (L (fz-elt fz-syms) (fz-int -500 500)))
    (fz-sexp d) (? (< d 1) fz-leaf

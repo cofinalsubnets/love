@@ -53,10 +53,10 @@
 
   ; --- sip: charlist-backed read-only synth port (fd=-4, ci) ---
   ; sip returns a port whose show rendering is a non-empty string.
-  (string? (show (sip 0)))
-  (< 0 (sat (show (sip 0))))
+  (string? (show (tap 0)))
+  (< 0 (sat (show (tap 0))))
   ; Each call allocates a fresh port object.
-  (: p (sip 0) q (sip 0) !(= p q))
+  (: p (tap 0) q (tap 0) !(= p q))
 
   ; --- read: one datum per call from a port. ---
   ; read returns datum on success, the caller-supplied sentinel `e` on
@@ -65,53 +65,53 @@
   ; tell them apart by equality.
   ;
   ; Empty input: immediately hits EOF, returns the sentinel.
-  (= 99 (read (sip 0) 99))
+  (= 99 (read (tap 0) 99))
   ; Caller chooses any sentinel value.
-  (= 'eof (read (sip 0) 'eof))
+  (= 'eof (read (tap 0) 'eof))
 
   ; Single datum: number, symbol, list, quoted form, string literal.
-  (= 1 (read (sip '(49)) 99))                          ; "1"
-  (= 'a (read (sip '(97)) 99))                         ; "a"
-  (: r (read (sip '(40 49 32 50 41)) 99)               ; "(1 2)"
+  (= 1 (read (tap '(49)) 99))                          ; "1"
+  (= 'a (read (tap '(97)) 99))                         ; "a"
+  (: r (read (tap '(40 49 32 50 41)) 99)               ; "(1 2)"
      (do (two? r) (= 1 (cap r)) (= 2 (caup r))))
-  (: r (read (sip '(39 49)) 99)                        ; "'1" -> (` 1)
+  (: r (read (tap '(39 49)) 99)                        ; "'1" -> (` 1)
      (do (two? r) (= 1 (caup r))))
   ; "hi" -- string literal round-trip through the ci port.
-  (= (string (link 104 (link 105 0))) (read (sip '(34 104 105 34)) 99))
+  (= (string (link 104 (link 105 0))) (read (tap '(34 104 105 34)) 99))
 
   ; Sequential reads: pull each datum in source order; final read returns e.
-  (: p (sip '(49 32 50 32 51))                          ; "1 2 3"
+  (: p (tap '(49 32 50 32 51))                          ; "1 2 3"
      (do (= 1 (read p 99))
         (= 2 (read p 99))
         (= 3 (read p 99))
         (= 99 (read p 99))))
 
   ; Whitespace and ;-comments are skipped between datums.
-  (= 1 (read (sip '(32 32 49 32 32)) 99))              ; "  1  "
-  (= 2 (read (sip '(59 32 99 109 116 10 50)) 99))      ; "; cmt\n2"
+  (= 1 (read (tap '(32 32 49 32 32)) 99))              ; "  1  "
+  (= 2 (read (tap '(59 32 99 109 116 10 50)) 99))      ; "; cmt\n2"
 
   ; A bare close-paren at top level is treated as clean end-of-input.
-  (= 99 (read (sip '(41)) 99))                          ; ")"
+  (= 99 (read (tap '(41)) 99))                          ; ")"
 
   ; --- g_status_more cases: read returns the port itself, distinct from e ---
   ; Unclosed list.
-  (: p (sip '(40)) r (read p 99) (do (= r p) !(= r 99)))
+  (: p (tap '(40)) r (read p 99) (do (= r p) !(= r 99)))
   ; Unterminated string.
-  (: p (sip '(34 97)) (= p (read p 99)))                ; "\"a"
+  (: p (tap '(34 97)) (= p (read p 99)))                ; "\"a"
   ; Dangling quote.
-  (: p (sip '(39)) (= p (read p 99)))                   ; "'"
+  (: p (tap '(39)) (= p (read p 99)))                   ; "'"
 
   ; After a g_status_more, the port's source is exhausted; the next read
   ; sees top-level EOF and returns the sentinel.
-  (: p (sip '(40)) _ (read p 99) (= 99 (read p 99)))
+  (: p (tap '(40)) _ (read p 99) (= 99 (read p 99)))
 
   ; Caller may pass the port itself as the EOF sentinel to collapse
   ; EOF and more into one "no datum" case.
-  (: p (sip 0)     (= p (read p p)))                    ; clean EOF
-  (: p (sip '(40)) (= p (read p p)))                    ; more
+  (: p (tap 0)     (= p (read p p)))                    ; clean EOF
+  (: p (tap '(40)) (= p (read p p)))                    ; more
 
   ; The port stays usable across complete forms in mixed sequences.
-  (: p (sip '(40 41 32 49))                              ; "() 1"
+  (: p (tap '(40 41 32 49))                              ; "() 1"
      (do (= 0 (read p 99))                                 ; () -> nil
         (= 1 (read p 99))
         (= 99 (read p 99))))

@@ -78,7 +78,7 @@
    (date item)
    (? (nom? item) ()
       (: r (run (L "sh" "-c" "stat -c %.Y \"$0\" 2>/dev/null" item))   ; %.Y: nanosecond float; stderr silenced (a miss is normal)
-         (? (&& (two? r) (= 0 (cap r))) (read (sip (s2cl (cup r))) ()) ()))))
+         (? (&& (two? r) (= 0 (cap r))) (read (tap (s2cl (cup r))) ()) ()))))
 
 ; --- prepping an item up to date ---------------------------------------------
 ; one cook call carries two books: `done` memoizes each item's settled age so a
@@ -457,7 +457,7 @@
          (= nm "addsuffix") (: a (argl 0) (join " " (map (\ w (+ w (nth a 0 ""))) (split-ws (nth a 1 "")))))
          (= nm "firstword") (: ws (split-ws (ex1 at)) (? (two? ws) (cap ws) ""))
          (= nm "lastword")  (: ws (split-ws (ex1 at)) (? (two? ws) (lastl ws) ""))
-         (= nm "word")      (: a (argl 0) ws (split-ws (nth a 1 "")) n (read (sip (s2cl (trim (nth a 0 "")))) 0) (nth ws (- n 1) ""))
+         (= nm "word")      (: a (argl 0) ws (split-ws (nth a 1 "")) n (read (tap (s2cl (trim (nth a 0 "")))) 0) (nth ws (- n 1) ""))
          (= nm "words")     (show (tally (split-ws (ex1 at))))
          (= nm "if")        (: a (rawl 0) c (trim (ex1 (nth a 0 ""))) (? (< 0 (tally c)) (ex1 (nth a 1 "")) (ex1 (nth a 2 ""))))
          (= nm "or")        (fn-or (rawl 0) as d)

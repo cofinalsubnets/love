@@ -26,7 +26,7 @@
  ; head position: the call, the section, the curry law -- never fused
  (3 = (+ 1 2)) (3 = ((1 +) 2)) (1 = ((< 5) 9)) (6 = (foldl (+) 0 '(1 2 3)))
  ; the data lane: a glued run READS as the mono node, and round-trips
- ('(f (mono (< x))) = (read (sip '(40 102 32 60 120 41)) 99))
+ ('(f (mono (< x))) = (read (tap '(40 102 32 60 120 41)) 99))
  ; the words are real, the sigils their spellings
  (-7 = (neg 7)) (0.5 = (reciprocal 2)) (0.25 = (frac 5.25)) (1 = (bit 9))
  (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))) (id? 'cap (monadics '<)))
