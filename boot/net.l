@@ -1,0 +1,55 @@
+; --- boot/net.l: a runnable smoke test for aineko's socket nifs (host/net.c) ---
+; NOT in the test/*.l corpus on purpose: the socket nifs (connect/listen/accept/
+; shutdown) live in host/net.c, which the final `ai` links but ai0 does NOT -- and
+; ai0 bakes the whole corpus, so a corpus test would read these names as missing
+; and fail ai0's self-test. So this is verified the host-nif way: standalone,
+; against the built binary. Run it (the assert macro comes from test/00-init.l):
+;
+;   cat test/00-init.l boot/net.l | out/host/ai      ; green dots = pass, exits 1 on fail
+;
+; It runs a whole loopback in ONE process: a server task accepts and echoes a
+; line, the main task connects as a client and checks the round trip. The two
+; tasks interleave through the cooperative scheduler -- fgetc on a not-ready fd
+; yields, the scheduler poll()s the parked fd and wakes the ready task. The
+; two-process integration gate is `make nettest` (test/net/loopback.sh).
+
+; read a \n-terminated line off port p; the byte law ("" + byte appends one char)
+; rebuilds the text. EOF (fgetc -> -1) also ends the line.
+(: (rdline p) (: (go acc) (: ch (fgetc p) (? (= ch 10) acc (= ch -1) acc (go (acc + ch))))
+                 (go "")))
+
+; --- listen / accept / connect / fgetc / fputs / shutdown over 127.0.0.1 ---
+(: port 7391
+ l (listen port)
+ _ (assert
+    (lamp l)                              ; the listener is a heap port
+    (hotp l))                             ; ... an opaque hot, like any fd port
+ ; server task: accept one client, echo its line back, half-close, close.
+ srv (spawn (\ _ (: c (accept l)
+                    ln (rdline c)
+                    _ (fputs c (ln + "\n"))
+                    _ (shutdown c 1)
+                    _ (close c) 1)) 0)
+ c (connect "127.0.0.1" port)
+ _ (assert
+    (lamp c)                              ; the client side is a heap port too
+    (hotp c))
+ _ (fputs c "neko\n")
+ echo (rdline c)
+ _ (assert
+    (= echo "neko"))                      ; THE ROUND TRIP: what went out came back
+ ; (shutdown s how) returns the port (chainable); a no-op on a non-port arg.
+ _ (assert
+    (lamp (shutdown c 1))                 ; returns the port
+    (= 5 (shutdown 5 1)))                 ; misuse: returns the arg unchanged
+ _ (wait srv)                             ; reap the server task -- no orphan
+ _ (close c)
+ _ (close l))
+
+; --- the failure lanes all return nil (never a stray fixnum / hang) ---
+(: _ (assert
+    (non (listen -1))                     ; bad port -> nil
+    (non (connect "127.0.0.1" 7392))      ; nothing listening on 7392 -> refused -> nil
+    (non (connect 12345 80))))            ; non-string host -> nil
+
+(puts "net: ok") (putc 10)
