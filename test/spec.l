@@ -47,7 +47,7 @@
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
- (0 = !5) (1 = !0) (id? non nil?) (1 = (non 0))  ; ! negates it; non is nil?
+ (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
  (gem? 5) (gem? -3.5) (gem? ~(2 3)) (gem? (62 2))         ; a GEM is a self-netting SCALAR: charm, float, complex, wide
  !(gem? @(1 2 3)) (gem? (net @(1 2 3)))                   ; a TRAY is NOT a gem -- it nets DOWN to a scalar gem (net is a fresh sum)
  !(gem? "x") !(gem? 'a) !(gem? '(1 2))                    ; text/symbol/list are not gems -- they net to something else
@@ -63,7 +63,7 @@
 ; derived jewel? whole? atom?; lit? = presence (any heap value); hot? names the buf/port zoo.
 (assert
  (fix? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tab? #(1 2))
- (big? (100 2)) ((? w64 full? big?) (62 2)) (float? 1.5) (twin? i) (tray? @(1 2 3)) (packp 1.5)
+ (big? (100 2)) ((? w64 full? big?) (62 2)) (float? 1.5) (twin? i) (tray? @(1 2 3))
  (jewel? 1.5) (jewel? i) (jewel? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (buf 4)) (hot? out) (hot? (sip '(104)))   ; the hot zoo, named
  !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots

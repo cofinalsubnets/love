@@ -12,7 +12,7 @@
    true 1 false 0
    i ~(0 1) ;; FIXME up top
    Z 0 R 1 C 2 O 3                              ; array element-kind codes (the tier spine)
-   non nil?  ;;; FIXME keep nil? alias but standardize on non                                   ; the normal name; !$x reads "non sat x"
+   zero? nil?                                  ; zero? aliases nil? (the net-to-zero test)
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
    (co f g) (\ x (f (g x)))

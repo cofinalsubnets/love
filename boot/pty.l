@@ -14,7 +14,7 @@
 ; exactly why reap returns a PAIR -- poll, don't spin. waitfor blocks for it.
 ; The exited pair is told from still-running STRUCTURALLY (two?), never by net:
 ; the status pair (0) nets blue (a chain of nothings is nothing), so it can't be
-; distinguished from 0 by ! / non -- only by being a chain.
+; distinguished from 0 by ! / nil? -- only by being a chain.
 (: (waitfor pid)
  (: s (reap pid) (? (two? s) s (= 0 s) (do (sleep 2) (waitfor pid)) s)))
 
@@ -46,7 +46,7 @@
 ; --- (setwinsize port r c): ok on a live master, errno on a non-port ---
 (: r (ptyrun (L "cat"))
  _ (assert
-    (non (setwinsize (cup r) 24 80))   ; () = ok
+    (nil? (setwinsize (cup r) 24 80))   ; () = ok
     (fix? (setwinsize 5 24 80)))       ; a bare fixnum (not a port) -> EBADF
  _ (kill (cap r) 9)
  _ (slurp (cup r))
@@ -80,7 +80,7 @@
 ; so it line-buffers and flushes "HI\n" on the newline.
 (: r (ptyrun (L "tr" "a-z" "A-Z"))
  m (cup r)
- _ (assert (non (ptyecho m 0)))                  ; echo OFF -> () ok
+ _ (assert (nil? (ptyecho m 0)))                  ; echo OFF -> () ok
  _ (fputc m 104) _ (fputc m 105) _ (fputc m 10)  ; "hi\n"
  _ (fflush m)
  a (fgetc m) b (fgetc m)                          ; first bytes back are tr's OUTPUT

@@ -48,8 +48,8 @@
 
 ; --- the failure lanes all return nil (never a stray fixnum / hang) ---
 (: _ (assert
-    (non (listen -1))                     ; bad port -> nil
-    (non (connect "127.0.0.1" 7392))      ; nothing listening on 7392 -> refused -> nil
-    (non (connect 12345 80))))            ; non-string host -> nil
+    (nil? (listen -1))                     ; bad port -> nil
+    (nil? (connect "127.0.0.1" 7392))      ; nothing listening on 7392 -> refused -> nil
+    (nil? (connect 12345 80))))            ; non-string host -> nil
 
 (puts "net: ok") (putc 10)

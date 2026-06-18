@@ -415,7 +415,7 @@
 
    ; poll a non-blocking (reap pid) to its exited PAIR. the pair is told from
    ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
-   ; nets blue, so ! / non can't tell it from 0 -- only two? can.
+   ; nets blue, so ! / nil? can't tell it from 0 -- only two? can.
    (waitfor pid) (: s ((ev 'reap) pid) (? (two? s) s (= 0 s) (do (sleep 2) (waitfor pid)) s))
 
    ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional

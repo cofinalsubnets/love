@@ -153,7 +153,7 @@ $@(3 4)              ; 7
 ; --- types & predicates --- a fixnum is a tagged word; everything else is a heap object whose
 ; first word dispatches. the storage predicates:
 ;   fix? big? full?  -- the integer reps (fixnum, bignum, wide int)
-;   float? twin? tray?  -- float, complex scalar, array; all three share one heap type, `packp`
+;   float? twin? tray?  -- float, complex scalar, array; all three share one heap type (the internal `pack` kind)
 ;   string? symp two? tab?  -- string, symbol, chain, map
 ; derived: `jewel?` (any number: fix/wide/big/float/complex/array), `whole?` (any integer), `atom?`
 ; (anything but a chain). the NUMERIC vocab refines the numbers: a GEM is a self-netting
