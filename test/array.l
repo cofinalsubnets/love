@@ -24,9 +24,9 @@
  ; vec exists): an empty shape (rank 0, one cell) or a rank-1 length-1 array is
  ; just the value, so the array accessors read nil on it like any scalar ---
  (= 0 (arr 0 0 0))                    ; empty shape, zero-filled -> the fixnum 0
- (float? (arr 0.0 0 0)) (= 0.0 (arr 0.0 0 0))      ; -> a boxed 0.0
+ (gem? (arr 0.0 0 0)) (= 0.0 (arr 0.0 0 0))      ; -> a boxed 0.0
  (= 5 (arr 0 '(1) '(5)))              ; rank-1 len-1 -> the fixnum 5
- (= 3.5 @(3.5)) (float? @(3.5))         ; @(3.5) is the scalar 3.5
+ (= 3.5 @(3.5)) (gem? @(3.5))         ; @(3.5) is the scalar 3.5
  (nil? (arank (arr 0 0 0)))           ; a demoted scalar is not a tuple
  (nil? (alen (arr 0.0 0 0)))
  (nil? (ashape (arr 0 0 0)))
@@ -52,7 +52,7 @@
 
  ; --- float element read boxes an r ---
  (= 1.5 (peep (arr 0.0 '(2) '(1.5 2.5)) 0 -1))
- (float? (peep (arr 0.0 '(2) '(1.5 2.5)) 0 -1))
+ (gem? (peep (arr 0.0 '(2) '(1.5 2.5)) 0 -1))
 
  ; --- scalar broadcast: array (op) scalar ---
  (aall (= (arr 0 '(3) '(11 21 31)) (+ (arr 0 '(3) '(10 20 30)) 1)))

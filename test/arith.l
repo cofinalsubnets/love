@@ -1,6 +1,6 @@
 ; arithmetic, comparison, equality:
 ; - fixnum fast paths unchanged
-; - mixed fix?/float? promotes to float
+; - mixed fix?/gem? promotes to float
 ; - integer overflow promotes to a boxed wide int (see test/box.l)
 ; - /0 promotes to IEEE inf/-inf/NaN
 ; - non-numeric operands return nil
@@ -18,7 +18,7 @@
  (= -2 (// -5 2))                   ; truncates toward zero (not floor -3)
  (= 1 (% 5 2))
 
- ; --- mixed fix? + float? promotes ---
+ ; --- mixed fix? + gem? promotes ---
  (= 3.5 (+ 1 2.5))
  (= 3.5 (+ 2.5 1))
  (= -1.5 (- 0 1.5))
@@ -37,7 +37,7 @@
  ; overflows the 62-bit tag into a box that holds the exact integer
  ; (which then demotes back to a fixnum once it fits again).
  !(fix? (* 2 2305843009213693952))   ; 2^62: now a box, not a fixnum
- !(float? (* 2 2305843009213693952))   ; ...and integer, not float
+ !(gem? (* 2 2305843009213693952))   ; ...and integer, not float
  (= 2305843009213693952 (/ (* 2 2305843009213693952) 2))           ; box / 2 demotes
  (= 2305843009213693952 (- (* 2 2305843009213693952) 2305843009213693952)) ; box - fix demotes
  (? wint (fix? (- (* 2 2305843009213693952) 2305843009213693952)) 1) ; ...to a fixnum (64-bit: 2^61 is in range)
@@ -45,10 +45,10 @@
 
  ; --- 1/0 promotes to IEEE inf / -inf; 0/0 collapses to 0 (NaN is gone) ---
  ; the result is a real, not a fixnum; inf is not equal to any finite value.
- (float? (/ 1 0))
- (float? (/ -1 0))
- (float? (/ 0 0))                 ; 0/0 is 0.0 -- a real zero, not NaN
- (float? (/ 1.0 0.0))
+ (gem? (/ 1 0))
+ (gem? (/ -1 0))
+ (gem? (/ 0 0))                 ; 0/0 is 0.0 -- a real zero, not NaN
+ (gem? (/ 1.0 0.0))
  !(= 0 (/ 1 0))
  (= 0 (/ 0 0))                  ; ... and equal to 0
  ; +inf is greater than every finite double we can write (f64 only -- a 32-bit
@@ -65,8 +65,8 @@
  (= 0.0 (% 7.5 2.5))
  (= -1.0 (% -7.0 2.0))
  ; % by zero is NaN (via fmod's identity), expressed as a real
- (float? (% 7 0))
- (float? (% 7.0 0.0))
+ (gem? (% 7 0))
+ (gem? (% 7.0 0.0))
 
  ; --- + is generic: string/list concat, order-preserving; - stays numeric (nil) ---
  (= "xB" (+ "x" 66))                ; str + num -> one byte at back (the byte law)
@@ -82,7 +82,7 @@
  (= '(1 2 5) (+ '(1 2) 5))          ; list + num -> append at back
  (nil? (- "a" "b"))
 
- ; --- equality with promotion across fix?/float? ---
+ ; --- equality with promotion across fix?/gem? ---
  (= 3 3)
  (= 3 3.0)
  (= 3.0 3)

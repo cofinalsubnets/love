@@ -54,9 +54,9 @@
     (close 1.414213562373095 (pow 2 0.5))
 
     ; --- accepts fixnum args (promoted to float) ---
-    (float? (sine 0))
-    (float? ((/ 1 2) 4))
-    (float? (pow 2 3))
+    (gem? (sine 0))
+    (gem? ((/ 1 2) 4))
+    (gem? (pow 2 3))
 
     ; --- non-numeric arg → nil ---
     ; (nil counts as numeric — it's putnum(0).)
@@ -67,7 +67,7 @@
     ; --- generic over bignums: the operand widens full-magnitude (g_big_to_flo),
     ;     exactly as a scalar bignum already fed the scalar pow ---
     (= 1125899906842624.0 ((/ 1 2) 1267650600228229401496703205376))  ; sqrt(2^100) = 2^50
-    (float? (pow 1267650600228229401496703205376 2))
+    (gem? (pow 1267650600228229401496703205376 2))
     (? wint (< 1e300 (pow 2 100000000000000000000)) 1)              ; f64 only -- 1e300 is inf in f32
 
     ; --- pow / atan2 elementwise over arrays (numpy broadcast); result is r ---

@@ -59,11 +59,11 @@
  !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a set
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: fix? big? full? float? twin? set? string? nom? two? tab?;
+; --- types & predicates --- storage: fix? big? full? gem? twin? set? string? nom? two? tab?;
 ; derived constellation? whole? atom?; lit? = presence (any heap value); hot? names the buf/port zoo.
 (assert
  (fix? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tab? #(1 2))
- (big? (100 2)) ((? wint full? big?) (62 2)) (float? 1.5) (twin? i) (set? @(1 2 3))
+ (big? (100 2)) ((? wint full? big?) (62 2)) (gem? 1.5) (twin? i) (set? @(1 2 3))
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (buf 4)) (hot? out) (hot? (sip '(104)))   ; the hot zoo, named
  !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots
@@ -80,7 +80,7 @@
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (2 = 4 / 2) (fix? (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
- !(fix? (2 * 2305843009213693952)) (float? (1 / 0)) (? wint (1e308 < 1 / 0) 1) (0 = (/ 0 0))
+ !(fix? (2 * 2305843009213693952)) (gem? (1 / 0)) (? wint (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
@@ -140,10 +140,10 @@
  (27 = (3 3)) (7625597484987 = (3 3 3)) (16 = (2 2 2)) (65536 = (2 2 2 2))   ; tetration
  (-1 = i * i) (-1 = (2 i)) (1 = ((i * 0) e))                                 ; i^2 = -1; e^(i*0) = 1
  ((log -1) = i * pi) ((log i) = i * pi / 2)                                  ; euler, in the exact direction
- (twin? (log -1)) (float? (log 2)) (twin? (log ~(2 3)))                          ; log widens only when it must
+ (twin? (log -1)) (gem? (log 2)) (twin? (log ~(2 3)))                          ; log widens only when it must
  (i = ((/ 1 2) -1)) (~(0 2) = ((/ 1 2) -4))                                  ; sqrt of a negative: principal, exact
  (-8 = (pow -2 3)) (twin? ((/ 1 3) -8))                                       ; integer powers stay real; odd roots go principal
- (0.0 = (sine 0) / (cosine 0)) (float? (sine 0)))                                   ; tan 0 = 0
+ (0.0 = (sine 0) / (cosine 0)) (gem? (sine 0)))                                   ; tan 0 = 0
 
 ; --- complex --- a scalar at tier C; the `~` sigil: ~(re im) builds (twin re im), a bare ~x
 ; lifts a real or conjugates (an involution); i = ~(0 1). a rank-N complex array packs (re,im)
@@ -295,7 +295,7 @@
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spawn (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
- !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (float? (randf 0))
+ !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
  (tab? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
  (id? (:) not-in-the-bag) !not-in-the-bag      ; a missing name reads the zero point: a nom not in the bag

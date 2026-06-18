@@ -472,7 +472,7 @@
 ; non-positive -> 0, a float ceils, a complex its modulus, a vector its net sum). a list
 ; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …)
 ; means rank-1 length 3, (array ~(3 4) …) length 5).
-(: (a-rank x) (? (float? x) 1 (| (fix? x) (full? x)) 0 (twin? x) 2 3)
+(: (a-rank x) (? (gem? x) 1 (| (fix? x) (full? x)) 0 (twin? x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness star of the tier
    (a-dim d) (? (two? d) (tally d) (sat d))

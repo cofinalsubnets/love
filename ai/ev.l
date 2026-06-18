@@ -40,9 +40,9 @@
             id? gcd modpow inc dec abs
             link cap cup caap caup cuap cuup
             dig lidx assoc has? last rev cat
-            fix? nom? two? tab? lit? string? nil? float? twin? atom?
+            fix? nom? two? tab? lit? string? nil? gem? twin? atom?
             snip string
-            re im conj arg real twin
+            re im conj arg gem twin
             sine cosine log pow))
    pureset (foldl (\ t s (: v (bag s) (? v (pin t v 1) t))) (tablet 0) names)
    (add t s) (: v (bag s)

@@ -647,7 +647,7 @@ lvm_t lvm_fault;
  _(nif_bufnew, "buf", s1(lvm_bufnew)) _(nif_bcopy, "blit", s5(lvm_bcopy))\
  _(nif_eat1, "eat1", s2(lvm_eat1)) _(nif_eat2, "eat2", s3(lvm_eat2)) _(nif_toast, "toast", s1(lvm_toast))\
  _(nif_chainp, "two?", s1(lvm_chainp)) _(nif_strp, "string?", s1(lvm_strp))\
- _(nif_real, "real", s1(lvm_real)) _(nif_flop, "float?", s1(lvm_flop))\
+ _(nif_real, "gem", s1(lvm_real)) _(nif_flop, "gem?", s1(lvm_flop))\
  _(nif_sin, "sine", s1(lvm_sin)) _(nif_cos, "cosine", s1(lvm_cos))\
  _(nif_log, "log", s1(lvm_log)) _(nif_pow, "pow", s2(lvm_pow))\
  _(nif_cplx, "twin", s2(lvm_cplx)) _(nif_Cp, "twin?", s1(lvm_Cp))\

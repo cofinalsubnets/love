@@ -111,7 +111,7 @@
                        (spine (cat (L "(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
 
    ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable
-   (tk x) (? (intv? x) "Vz"  (float? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
+   (tk x) (? (intv? x) "Vz"  (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
              (two? x) (: h (cap x)
                         (? (id? h bs) (tkq (e2 x))                     ; '(..) or 'x
                            (id? h 'twin) "Vcx"                         ; ~(re im)
@@ -120,7 +120,7 @@
                            "Vbot"))
              "Vbot")
    (tkq q) (? (nom? q) "Vsym" (two? q) "Vpair" (fix? q) "Vz" "Vbot")   ; the quoted datum's kind
-   (kpred h) (? (id? h 'fix?) "fixp" (id? h 'float?) "flop" (id? h 'twin?) "comp"
+   (kpred h) (? (id? h 'fix?) "fixp" (id? h 'gem?) "flop" (id? h 'twin?) "comp"
                 (id? h 'string?) "strp" (id? h 'nom?) "nomp" (id? h 'two?) "chainp"
                 (id? h 'tab?) "tabp" (id? h 'set?) "setp" (id? h 'constellation?) "nump"
                 (id? h 'whole?) "whole" (id? h 'atom?) "atomp" (id? h 'packp) "packp"

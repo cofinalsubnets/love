@@ -16,7 +16,7 @@
 ; one representative value per kind. The three scalar-star boxes are now distinct
 ; kinds (KFlo/KCplx/KWide) but still share one apply matrix cell (data_num_apply).
 (: mx-fix 5                              ; KCharm
-   mx-real 2.5                            ; KFlo, float box (float?)
+   mx-real 2.5                            ; KFlo, float box (gem?)
    mx-cpx ~(2 3)                        ; KCplx, complex scalar (Cp)
    mx-box (<< 1 62)                      ; KWide, wide int (full?)
    mx-big (100 2)                     ; KBig
@@ -99,7 +99,7 @@
  (? wint (= (+ (<< 1 62) 1) (+ 1 (<< 1 62))) 1) ; ...and commutes
  (= (+ 1 (100 2)) (+ (100 2) 1))        ; big + fix == fix + big (commutes)
  (= (* 2 (100 2)) (+ (100 2) (100 2))) ; big + big
- (float? (+ (100 2) 0.5))                    ; big + float -> float (widens)
+ (gem? (+ (100 2) 0.5))                    ; big + float -> float (widens)
  (= ~(4 6) (+ ~(1 2) ~(3 4)))              ; complex + complex
  (= ~(7 3) (+ 5 ~(2 3)))                    ; fix + complex (real -> (5,0))
  (= ~(4.0 3.0) (+ 1.5 ~(2.5 3)))            ; float + complex
@@ -197,7 +197,7 @@
  ; --- division: `/` true (float on inexact), `//` truncating; array broadcast; complex defined ---
  (= 2.5 (/ 5 2))   (= 2 (// 5 2))   (= 2.5 (/ 5 2.0))   ; / promotes, // truncates
  (= 32 (/ (100 2) (95 2)))              ; bignum exact (2^5) stays integer
- (float? (/ 1 0))                               ; /0 -> IEEE inf (float)
+ (gem? (/ 1 0))                               ; /0 -> IEEE inf (float)
  (aall (= @(5 10) (/ @(10 20) 2)))            ; array / scalar
  (nil? (/ "a" 2))                             ; non-numeric -> nil
 
@@ -267,7 +267,7 @@
 (assert
  (32 = (inner @(1 2 3) @(4 5 6)))                  ; 1D.1D dot -> scalar number
  (11.0 = (inner @(1.0 2.0) @(3.0 4.0)))            ; float dot
- (11.0 = (inner @(1 2) @(3.0 4.0))) (float? (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
+ (11.0 = (inner @(1 2) @(3.0 4.0))) (gem? (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
  (: A (arr 0 '(2 3) '(1 2 3 4 5 6)) B (arr 0 '(3 2) '(7 8 9 10 11 12)) C (inner A B)
     (&& ('(2 2) = (ashape C)) (58 = (peep C '(0 0) 0)) (64 = (peep C '(0 1) 0))
         (139 = (peep C '(1 0) 0)) (154 = (peep C '(1 1) 0))))   ; 2x2 matmul

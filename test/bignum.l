@@ -37,7 +37,7 @@
  (= F24 (/ F25 25))
  (= 1 (/ B100 B100))
  (fix? (/ B100 B100))
- (float? (/ B100 7))                         ; 2^100 / 7 has a remainder -> float
+ (gem? (/ B100 7))                         ; 2^100 / 7 has a remainder -> float
  (= 25 (// F25 F24))                       ; floor division `//` truncates, stays integer
 
  ; --- divmod identities (floor division `//`): a == (a//b)*b + a%b ---
@@ -75,8 +75,8 @@
  (< B100 (+ B100 1))
 
  ; --- mixed with floats: a float operand widens the bignum to double ---
- (float? (+ B100 0.5))
- (float? (* B100 1.0))
+ (gem? (+ B100 0.5))
+ (gem? (* B100 1.0))
  (< B100 1e40)
  (> B100 1e20)
  (= 0 (* B100 0))                         ; * fixnum 0 -> exact 0

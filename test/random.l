@@ -56,7 +56,7 @@
  ; --- randf in [0,1), and is a float ---
  (: u (randf 0) (< u 1))
  (: u (randf 0) (<= 0 u))
- (float? (randf 0))
+ (gem? (randf 0))
  (: p (randf-next (rng-seed 3)) (< (cap p) 1))
  (: p (randf-next (rng-seed 3)) (<= 0 (cap p)))
  (: p (randf-next (rng-seed 3)) (= 4 (alen (cup p))))

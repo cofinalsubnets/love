@@ -13,7 +13,7 @@
 (? wint (assert
  ; --- promotion / demotion boundary ---
  !(fix? (<< 1 62))                 ; 2^62 is boxed, not a fixnum
- !(float? (<< 1 62))                 ; ...integer, not float
+ !(gem? (<< 1 62))                 ; ...integer, not float
  (fix? (>> (<< 1 62) 1))              ; 2^62 >> 1 = 2^61 demotes to a fixnum
  (= 2305843009213693952 (>> (<< 1 62) 1))
  (fix? (- (<< 1 62) (<< 1 62)))       ; box - box = 0, a fixnum
