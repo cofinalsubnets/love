@@ -114,10 +114,10 @@ This is what makes "`$` of a fold is mere composition" true: because net is addi
 The kinds form a lattice flattened into **bands**, low to high:
 
 ```
-number  <  string  <  name  <  chain  <  map  <  hot
+() < name < string < number < chain < tray < map < hot
 ```
 
-with within-band order by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (maps and hots). The Rocq model takes one comparable key per band (`O := Onum z | Ostr z | Osym z | Oprod z | Omap z | Otop z`) and orders lexicographically on `(band, key)`. The result:
+The organizing axis is the **net** with the **charm as hinge**: the char-built kinds (name, string — measured by their charm sum) net *up* into the numbers, the numbers *self*-net (the fixpoint, the middle), and the value-built kinds (chain, tray, map — measured by their elements' sum) net *down*. The floor `()` is the bluest point of all, below even the number `0`. Within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (maps and hots). The Rocq model takes one comparable key per band (`O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z`, in band order — name/string/number/chain/map/hot) and orders lexicographically on `(band, key)`. The result:
 
 > **(4.1) `<` is a strict total order.** irreflexive (`thm:lt_irrefl`), transitive (`thm:lt_trans`), asymmetric (`thm:lt_asym`), and trichotomous (`thm:lt_trichotomy`).
 
@@ -125,7 +125,7 @@ with within-band order by value (numbers by magnitude, rep-blindly), or lexicogr
 
 > **(4.3) `=` is the Eq cell.** band and key together pin a value down (`thm:eq_from_band_key`): `=` is propositional equality, a linear order's equality and not a mere preorder.
 
-The band chain itself is proved link by link: `thm:number_lt_string`, `thm:string_lt_symbol`, `thm:symbol_lt_product`, `thm:product_lt_map`, `thm:map_lt_top`. (The Rocq identifiers keep the older spellings — `symbol`/`product`/`top` — for what the prose now calls name/chain/hot.)
+The band chain itself is proved link by link: `thm:symbol_lt_string`, `thm:string_lt_number`, `thm:number_lt_product`, `thm:product_lt_map`, `thm:map_lt_top` — and the floor sits below even the number 0, `() < 0` (`thm:unit_lt_zero`). The tray (a numeric array) sorts in the value-built region just above its chain. (The Rocq identifiers keep the older spellings — `symbol`/`product`/`top` — for what the prose now calls name/chain/hot.)
 
 Two refinements the model is explicit about *not* covering:
 
@@ -291,7 +291,7 @@ The compiler is written in ai. At build time the evaluator sits on the **egg** (
 | 3 | `+` is the measure homomorphism | `thm:net_homomorphism` |
 | 4 | `<` strict total order | `thm:lt_irrefl` `thm:lt_trans` `thm:lt_asym` `thm:lt_trichotomy` |
 | 4 | `<=` total order | `thm:le_refl` `thm:le_trans` `thm:le_antisym` `thm:le_total` |
-| 4 | the band chain | `thm:number_lt_string` `thm:map_lt_top` |
+| 4 | the band chain | `thm:symbol_lt_string` `thm:map_lt_top` `thm:unit_lt_zero` |
 | 6 | sequence monoid; `*` is repeated `+` | `thm:cat_assoc` `thm:star_is_repeated_plus` |
 | 6 | count saturates; byte law | `thm:count_saturates` `thm:byte_iff` |
 | 7 | α-equality; numeral bridge; η not bridged | `thm:alpha_dec` `thm:zero_is_const_one` `thm:eta_not_bridged` |
