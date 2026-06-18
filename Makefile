@@ -205,9 +205,24 @@ so_archive = -Wl,-force_load,$(ho)/libai.a       # ld64's whole-archive
 else
 so_archive = -Wl,--whole-archive $(ho)/libai.a -Wl,--no-whole-archive
 endif
+# STATIC=1 links a fully static `ai` (and skips libai.so, which a static build
+# can't use). Pair with a musl-targeting CC so the binary runs on ANY Linux distro
+# regardless of glibc version AND still does DNS -- static *glibc* can't resolve
+# hostnames (getaddrinfo needs NSS via dlopen, impossible when static), but musl
+# resolves itself, so aineko's `connect host port` works:
+#   make STATIC=1 CC="zig cc -target x86_64-linux-musl"   (or CC=musl-gcc)
+# (musl is Linux-only -- this is the Linux portable-binary artifact, NOT the mac
+# build, which is a native Apple-clang build.)
+# ⚠ SWITCHING CC CONTAMINATES out/host: the object tree is shared across compilers,
+# and a musl-compiled object references bare `sigsetjmp` where glibc wants the
+# `__sigsetjmp` macro -- so a later glibc/clang build fails to relink it. Always
+# `rm -rf out/host` when crossing the musl<->glibc boundary (in EITHER direction).
+ifdef STATIC
+host_ldflags = -static
+endif
 ai0 = $(ho)/ai0
 
-host: $(ho)/ai $(ho)/libai.so $(ho)/ai.1
+host: $(ho)/ai $(if $(STATIC),,$(ho)/libai.so) $(ho)/ai.1
 ai0: $(ai0)
 
 # cook/Cookfile: this Makefile transpiled into a resolved cook recipe by
@@ -292,7 +307,7 @@ $(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h out/
 $(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/repl.h out/lib/cli.h out/lib/bao.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm
+	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm $(host_ldflags)
 
 $(ho)/ai.1: doc/ai.1 out/lib/ai_version.h
 	@echo GEN	$@
