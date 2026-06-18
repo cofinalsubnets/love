@@ -114,10 +114,10 @@ This is what makes "`$` of a fold is mere composition" true: because net is addi
 The kinds form a lattice flattened into **bands**, low to high:
 
 ```
-() < name < string < number < chain < tray < map < hot
+() < name < string < number < chain < set < map < hot
 ```
 
-The organizing axis is the **net** with the **star as hinge**: the char-built kinds (name, string — measured by their charm sum) net *up* into the numbers, the numbers *self*-net (the fixpoint, the middle), and the value-built kinds (chain, tray, map — measured by their elements' sum) net *down*. The floor `()` is the bluest point of all, below even the number `0`. Within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (maps and hots). The Rocq model takes one comparable key per band (`O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z`, in band order — name/string/number/chain/map/hot) and orders lexicographically on `(band, key)`. The result:
+The organizing axis is the **net** with the **charm as hinge**: the char-built kinds (name, string — measured by their charm sum) net *up* into the numbers, the numbers *self*-net (the fixpoint, the middle), and the value-built kinds (chain, set, map — measured by their elements' sum) net *down*. The floor `()` is the bluest point of all, below even the number `0`. Within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (maps and hots). The Rocq model takes one comparable key per band (`O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z`, in band order — name/string/number/chain/map/hot) and orders lexicographically on `(band, key)`. The result:
 
 > **(4.1) `<` is a strict total order.** irreflexive (`thm:lt_irrefl`), transitive (`thm:lt_trans`), asymmetric (`thm:lt_asym`), and trichotomous (`thm:lt_trichotomy`).
 
@@ -125,7 +125,7 @@ The organizing axis is the **net** with the **star as hinge**: the char-built ki
 
 > **(4.3) `=` is the Eq cell.** band and key together pin a value down (`thm:eq_from_band_key`): `=` is propositional equality, a linear order's equality and not a mere preorder.
 
-The band chain itself is proved link by link: `thm:symbol_lt_string`, `thm:string_lt_number`, `thm:number_lt_product`, `thm:product_lt_map`, `thm:map_lt_top` — and the floor sits below even the number 0, `() < 0` (`thm:unit_lt_zero`). The tray (a numeric array) sorts in the value-built region just above its chain. (The Rocq identifiers keep the older spellings — `symbol`/`product`/`top` — for what the prose now calls name/chain/hot.)
+The band chain itself is proved link by link: `thm:symbol_lt_string`, `thm:string_lt_number`, `thm:number_lt_product`, `thm:product_lt_map`, `thm:map_lt_top` — and the floor sits below even the number 0, `() < 0` (`thm:unit_lt_zero`). The set (a numeric array) sorts in the value-built region just above its chain. (The Rocq identifiers keep the older spellings — `symbol`/`product`/`top` — for what the prose now calls name/chain/hot.)
 
 Two refinements the model is explicit about *not* covering:
 
@@ -182,21 +182,21 @@ The numerals bridge into the term language, but no further:
 
 The numeric carriers earn their own short names — each names a predicate you can probe, and they carry through the array laws below. They split the **number** band by rank.
 
-A **number** (`constellation?`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **star** (`star?`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `id? x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized star, a fixnum, is a **charm** (`charm?`). A **tray** (`tray?`) is an array, numeric or not; a **galaxy** (`galaxy?`) is a tray *of stars* — a numeric array. So a number is a star or a galaxy, and `$` lands every value on the **green charms** — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green star too.
+A **number** (`constellation?`) is any numeric value, scalar or array — the bottom band, closed under the ring algebra `+ - *`. A **star** (`star?`) is a *scalar* number, one that nets itself (`net x = x`, i.e. `id? x (net x)`): a fixnum, wide int, bignum, float, or complex scalar — the rank-0 point. The word-sized star, a fixnum, is a **charm** (`charm?`). A **set** (`set?`) is an array, numeric or not; a **galaxy** (`galaxy?`) is a set *of stars* — a numeric array. So a number is a star or a galaxy, and `$` lands every value on the **green charms** — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green star too.
 
 | name | predicate | what it is |
 |---|---|---|
 | `constellation` | `constellation?` | any numeric value, scalar or array — the bottom band |
 | `star` | `star?` | a scalar number, one that nets itself (rank 0) |
 | `charm` | `charm?` | a word-sized star — a fixnum |
-| `tray` | `tray?` | an array, numeric or not (rank ≥ 1) |
-| `galaxy` | `galaxy?` | a tray of stars — a numeric array (rank ≥ 1) |
+| `set` | `set?` | an array, numeric or not (rank ≥ 1) |
+| `galaxy` | `galaxy?` | a set of stars — a numeric array (rank ≥ 1) |
 
-A galaxy is *not* a star (`star?` is false on a tray, whose net is a fresh sum): it is a tray whose cells are stars. A charm is the smallest star; a number is a star or a galaxy.
+A galaxy is *not* a star (`star?` is false on a set, whose net is a fresh sum): it is a set whose cells are stars. A charm is the smallest star; a number is a star or a galaxy.
 
 The stars have a structural twin. A star is fixed under `net` (`id? x (net x)` — its own measure); an **atom** (`atom?`) is fixed under `cap` (`x = (cap x)` — its own head). The non-atom is a **pair** — the chain that `link` builds, whose `cap` and `cup` split a head from a rest. Every star is an atom (a number is its own head too), so a star is a *special* atom — fixed under `net` as well as `cap`. `net` is what carves the stars out of the atoms.
 
-The **tray** is the APL half of the language. A shape is its list of axis sizes; the **cell count** is the product of the shape (`alen`), the **rank** its length (`arank`): `alen [2;3] = 6` (`thm:alen_23`), `arank [2;3] = 2` (`thm:arank_23`), and a 0-axis yields 0 cells (`thm:alen_empty_axis`). Indexing is row-major and out-of-bounds reads the default:
+The **set** is the APL half of the language. A shape is its list of axis sizes; the **cell count** is the product of the shape (`alen`), the **rank** its length (`arank`): `alen [2;3] = 6` (`thm:alen_23`), `arank [2;3] = 2` (`thm:arank_23`), and a 0-axis yields 0 cells (`thm:alen_empty_axis`). Indexing is row-major and out-of-bounds reads the default:
 
 > **(8.1) peep.** in-bounds reads the cell (`thm:peep_in`), OOB reads the default (`thm:peep_oob`); 2-D row-major is `i·cols + j` (`thm:peep_22`).
 

@@ -258,7 +258,7 @@ cook/Cookfile: Makefile cook/cook.l $(ho)/ai
 blue: blue.html
 blue.html: blue.md blue.css tools/blue.l $(ho)/ai
 	@echo AI	$@
-	@$(ho)/ai -l ai/prel.l tools/blue.l blue.md > $@
+	@$(ho)/ai tools/blue.l blue.md > $@   # the egg already carries prel -- reloading it scares
 
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running ai0, so re-lay
 # them whenever ai0 changes. This dep belongs in the rule above, but $(ai0) is
