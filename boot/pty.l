@@ -57,4 +57,20 @@
  _ (waitfor dead)                      ; reap it so the pid is truly gone (not a zombie)
  _ (assert (fixp (kill dead 0))))      ; sig 0 probes existence -> ESRCH
 
+; --- bidirectional pty I/O: write to the master, read the child's echo back ---
+; the foundation of bao's wrapper -- a host process and bao talk over the master
+; port. cat echoes its input, and the pty's own line discipline echoes the typed
+; bytes too, so the literal input comes straight back; read it byte by byte (a
+; bounded read, NOT slurp -- cat never EOFs). proves the write AND read lanes of
+; the master port in one round trip; the full stdin<->stdout pump (bao's `wrap`)
+; rides real tty fds, so it is verified manually, like aineko's `make nettest`.
+(: r (ptyrun (L "cat"))
+ m (cup r)
+ _ (fputc m 110) _ (fputc m 101) _ (fputc m 107) _ (fputc m 111) _ (fputc m 10)  ; "neko\n"
+ _ (fflush m)
+ a (fgetc m) b (fgetc m) c (fgetc m) d (fgetc m)    ; the first 4 bytes back off the master
+ _ (assert (= a 110) (= b 101) (= c 107) (= d 111)) ; n e k o -- the round trip over the pty
+ _ (kill (cap r) 9)
+ _ (waitfor (cap r)))
+
 (puts "pty: ok") (putc 10)
