@@ -48,11 +48,11 @@
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
- (gem? 5) (gem? -3.5) (gem? ~(2 3)) (gem? (62 2))         ; a GEM is a self-netting SCALAR: charm, float, complex, wide
+ (gem? 5) (gem? -3.5) (gem? ~(2 3)) (gem? (62 2))         ; a GEM is a self-netting SCALAR: star, float, complex, wide
  !(gem? @(1 2 3)) (gem? (net @(1 2 3)))                   ; a TRAY is NOT a gem -- it nets DOWN to a scalar gem (net is a fresh sum)
  !(gem? "x") !(gem? 'a) !(gem? '(1 2))                    ; text/symbol/list are not gems -- they net to something else
- (? (fix? 5) (gem? 5) 1)                                  ; a CHARM is a gem, by spec (net = self)
- (star? 5) !(star? 3.5) !(star? @(1 2 3)) !(star? 'a) (? (star? 5) (gem? 5) 1)   ; a CHARM (star?) is the word-sized gem: a fixnum, and every charm is a gem
+ (? (fix? 5) (gem? 5) 1)                                  ; a STAR is a gem, by spec (net = self)
+ (star? 5) !(star? 3.5) !(star? @(1 2 3)) !(star? 'a) (? (star? 5) (gem? 5) 1)   ; a STAR (star?) is the word-sized gem: a fixnum, and every star is a gem
  (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
  (chart? @(1 2 3)) !(chart? @("a" "b"))                   ; a CREST is a NUMERIC tray (a tray of gems); a tray of strings is not
  (chart? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a crest -- bignum cells are gems (keyed on cells, not the O code)
@@ -182,12 +182,12 @@
     (&& ('(2 2) = (ashape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
-; the compounds); sort/msort by the total order; (jot n) the first n charms; the higher-order
+; the compounds); sort/msort by the total order; (jot n) the first n stars; the higher-order
 ; functions live in the prel.
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 0)))
  !(cap 0) ("x" = (cap 'x)) !(cup 'x)              ; no cap at the end of the list; a symbol's cap is its NAME, its cup the mint (false)
- ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n charms; the empty count is nothing
+ ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n stars; the empty count is nothing
  ('(2 3 4) = (map inc '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
  ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (msort (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
