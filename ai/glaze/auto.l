@@ -40,7 +40,7 @@
                   (&& (two? lam) (= (cap lam) '\) (two? (cup lam))
                       (all symp ps) (< 1 (tally ps)) (distinctp ps)                     ; >=2 distinct symbol params
                       (exprn ps body)))
-   (njit lam) (: v (caup lam) (nat (emit (cat (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (base-ev lam) lam))  ; v any param name, fixnum-guarded
+   (njit lam) (: v (caup lam) (nif (emit (cat (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (base-ev lam) lam 1))  ; v any param name, fixnum-guarded
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)
     (: M    (caup (cup lam))                                ; lambda body
@@ -62,7 +62,7 @@
               (two? ACC) (has? op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
               (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
        (? ok (L B I op cmp) 0))
-   (njit-loop lam B cv op cmp) (nat (emit (loopcode B cv op cmp)) (base-ev lam) lam)
+   (njit-loop lam B cv op cmp) (nif (emit (loopcode B cv op cmp)) (base-ev lam) lam 1)
    ; --- general N-VARIABLE loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)),
    ; up to 3 loop vars + arbitrary update exprs -- this is the shape iterative fib/tak
    ; take (i,a,b with updates b and a+b), not just the fold skeleton above.
@@ -88,7 +88,7 @@
               (all whole? inits))                                     ; inits are fixnum consts
        (? ok (L vars updates T R inits) 0))
    (njit-loop-n lam vars updates test result inits)
-    (nat (emit (loopcode-n (caup lam) vars updates test result inits)) (base-ev lam) lam)
+    (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (base-ev lam) lam 1)
    ; --- captured-closure CONSTRUCTOR (\ p (\ q E)): a nest of 1-arg lambdas, E over
    ; {p,q}. Compiled as the flat 2-param native (\ p q E); applying it to p yields a
    ; native CAPTURED closure -- fully transparent (= the interpreter's ((2param) p)

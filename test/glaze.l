@@ -25,4 +25,4 @@
  ; install/run -- the bytes are x86-64; the real round-trip lives in ai/glaze/emit.l):
  ; non-byte / empty code installs nothing.
  (lit? nat)
- !(nat 5 0 0) !(nat 'x 0 0) !(nat () 0 0) !(nat "" 0 0))
+ !(nif 5 0 0 1) !(nif 'x 0 0 1) !(nif () 0 0 1) !(nif "" 0 0 1))

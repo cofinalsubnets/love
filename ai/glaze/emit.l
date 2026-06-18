@@ -75,7 +75,7 @@
                      0)
    (emit l) (: b (cask (tally l)) _ ((: (go i x) (? (two? x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) 0)) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
-   (jit lam) (: v (caup lam) (nat (emit (cat (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (ev lam) lam))  ; v = the param (single arg at Sp[0], fixnum-guarded)
+   (jit lam) (: v (caup lam) (nif (emit (cat (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (ev lam) lam 1))  ; v = the param (single arg at Sp[0], fixnum-guarded)
    ; --- N-ary leaves (\ p0 .. p_{n-1} E): param i loads from Sp[i]=[rcx+8i]; the deopt
    ; jmps to interp's BODY (deopt-mn, interp+16 past its lvm_cur) where the saturated
    ; args already sit -- so the deopt/epilogue/return below are all arity-INDEPENDENT
@@ -104,7 +104,7 @@
                    (fxmn (argix e ps 0) d))                               ; else: a param var (fixnum-guarded)
    ; (jitn '(\ p0 .. body)) -- an arity>=2 leaf -> native (natn curries to saturation).
    (jitn lam) (: ps (init (cup lam))  body (last (cup lam))
-                 (natn (emit (cat (cgn ps body 0) epilogue-mn)) (ev lam) lam (tally ps)))
+                 (nif (emit (cat (cgn ps body 0) epilogue-mn)) (ev lam) lam (tally ps)))
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    ; --- counted fold loop: acc = (FOLD over cv<n of body(cv)), cv the counter, limit
    ; at Sp[0]. r9=n r10=cv r11=acc. FOLD is a (op . init) -- + folds from 0, * from 1 --
@@ -127,7 +127,7 @@
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
    (jitsum body)
     (: src `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('+ 'a body)) 'a)) 0 0))
-       (nat (emit (loopcode body 'i '+ '<)) (ev src) src))
+       (nif (emit (loopcode body 'i '+ '<)) (ev src) src 1))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if
@@ -162,7 +162,7 @@
        (cat pre (cat top (cat ub (cat back (cat rb epilogue))))))
    ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native.
    (jitloop-n lam vars updates test result inits)
-    (nat (emit (loopcode-n (caup lam) vars updates test result inits)) (ev lam) lam)
+    (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (ev lam) lam 1)
    ; --- self-test (x86-64): native == interpreted, transparent, deopts ---------
    (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
    f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
