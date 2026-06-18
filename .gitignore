@@ -10,3 +10,11 @@ rocq/gen.v
 *.glob
 rocq/.*.aux
 .*.cache
+# rocq/extract.v EXTRACTS this (test_extract); oracle_drive.ml is the source driver
+rocq/normalizer.ml
+rocq/normalizer.mli
+rocq/oracle_drive
+*.cmi
+*.cmx
+*.cmo
+rocq/*.o

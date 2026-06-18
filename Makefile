@@ -10,13 +10,13 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 .PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_hostnif
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_hostnif test_extract
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 test: test_host test_ai0 test_proof test_gen
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_tools test_hostnif test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_extract test_tools test_hostnif test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -101,6 +101,34 @@ test_gen: host
 	@echo TEST rocq/gen.v "(coqc)"
 	@$(COQC) -q rocq/gen.v
 	@rm -f rocq/gen.vo rocq/gen.vok rocq/gen.vos rocq/gen.glob rocq/.gen.aux
+endif
+
+# test_extract: the differential oracle with a ROCQ-EXTRACTED reference. coqc
+# extracts rocq/extract.v (the n-ary/CBV/weak/saturating normalizer built on
+# spec.v's PROVEN subst/shift) to OCaml; rocq/oracle_drive.ml generates random
+# closed affine terms, normalizes each with the extracted `nf`, and emits an ai
+# program that checks ev EXTENSIONALLY agrees. So the reference the fuzzer runs
+# IS the proven definitions (up to the standard nat->int mapping) -- machine-
+# checked end to end. The hand-transcribed twin (test/oracle.l) stays in the
+# fast `make test`; this heavier, higher-assurance variant needs coqc + ocamlopt,
+# so it lives in test_all and no-ops when either tool is absent (like test_proof).
+OCAMLOPT ?= $(shell command -v ocamlopt 2>/dev/null)
+ifeq ($(and $(COQC),$(OCAMLOPT)),)
+test_extract:
+	@echo "test_extract: skipped (needs coqc + ocamlopt)"
+else
+test_extract: host
+	@echo TEST rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
+	@cd rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" extract.v >/dev/null \
+	  && rm -f normalizer.mli && $(OCAMLOPT) -w -a normalizer.ml oracle_drive.ml -o oracle_drive
+	@rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
+	@$m out/.extract_oracle.l | grep -q "2000 / 2000 PASS" \
+	  || { echo "EXTRACT ORACLE FAILED:"; $m out/.extract_oracle.l; exit 1; }
+	@$m out/.extract_oracle.l
+	@rm -f rocq/spec.vo rocq/spec.vok rocq/spec.vos rocq/spec.glob rocq/.spec.aux \
+	  rocq/extract.vo rocq/extract.vok rocq/extract.vos rocq/extract.glob rocq/.extract.aux \
+	  rocq/normalizer.ml rocq/normalizer.mli rocq/oracle_drive rocq/*.cmi rocq/*.cmx rocq/*.o \
+	  out/.extract_oracle.l
 endif
 all: host kernel wasm blue
 
