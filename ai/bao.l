@@ -343,13 +343,13 @@
    ; `help` function gets control at the scare (condition data on struct g)
    ; BEFORE the task dies; either way done?/key? is where the repl resumes.
    (do_eval v)
-     (: pid (hatch ev v)
+     (: pid (spin ev v)
         (poll _)
-          (? (done? pid) (: r (wait pid) _ (putx r) -1)   ; the answer
-             (key? 0)    (: c (getc 0)
-                            (? (= c 3) (do (puts "^C") (chill pid) -1)
+          (? (back? pid) (: r (catch pid) _ (putx r) -1)   ; the answer
+             (cue? 0)    (: c (getc 0)
+                            (? (= c 3) (do (puts "^C") (freeze pid) -1)
                                (poll 0)))
-             (do (yield 0) (poll 0)))
+             (do (rest 0) (poll 0)))
         (poll 0))
 
    ; the read-eval-print loop proper. the host and kernel frontends start the
@@ -401,7 +401,7 @@
    ; reachable from the bao prompt to pty-wrap a host program -- (wrap (L
    ; "python3")). it uses the pty nifs (ptyrun, gather) which live in host/pty.c
    ; and are NOT present in ai0 or the kernel; bao is baked into both, so the
-   ; references are DEFERRED to call time through (ev 'ptyrun) / (ev 'gather)
+   ; references are DEFERRED to call time through (ev 'mind) / (ev 'gather)
    ; -- quoted symbols are inert data at bake time (no missing-name fires), and
    ; wrap is never CALLED on those frontends. on the host they resolve to the
    ; live nifs. NOTE: drives the real in/out tty fds, so it is exercised
@@ -416,7 +416,7 @@
    ; poll a non-blocking (gather pid) to its exited PAIR. the pair is told from
    ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
    ; nets blue, so ! / nil? can't tell it from 0 -- only two? can.
-   (waitfor pid) (: s ((ev 'gather) pid) (? (two? s) s (= 0 s) (do (sleep 2) (waitfor pid)) s))
+   (waitfor pid) (: s ((ev 'gather) pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
 
    ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional
    ; pump: stdin -> the child, the child's output -> stdout, both live at once
@@ -432,12 +432,12 @@
    ; returns the child's exited status pair, or ptyrun's errno fixnum on hatch
    ; failure.
    (wrap argv)
-     (: r ((ev 'ptyrun) argv)
+     (: r ((ev 'mind) argv)
         (? (two? r)
            (: pid (cap r) m (cup r)
-              up (hatch (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF
+              up (spin (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF
               _ (pump m out)                                      ; child -> stdout; ends when the child dies
-              _ (? (done? up) (wait up) (chill up))                ; join the input pump through the one death
+              _ (? (back? up) (catch up) (freeze up))                ; join the input pump through the one death
               _ (flush out)
               _ (close m)
               (waitfor pid))                                      ; gather the child

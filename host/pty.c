@@ -3,13 +3,13 @@
 // read/write its window size. Self-contained host nif file: auto-globbed +
 // AI_NIF-registered, no edit to ai.c / ai.h / main.c (see host/host.c).
 //
-// The keystone, (ptyrun argv), is host_run (main.c) with the stdout PIPE swapped
+// The keystone, (mind argv), is host_run (main.c) with the stdout PIPE swapped
 // for a pty pair: the same argv-marshal-into-the-uncommitted-gap + close-on-exec
 // errno-pipe handshake, but the child's 0/1/2 become the pty SLAVE and the parent
 // keeps the MASTER as a heap port (ai_io_alloc). So bao's editor talks to any
 // program over the master the way a terminal would.
 //
-//   (ptyrun argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
+//   (mind argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
 //   (reap pid)         -> (status)   exited (a PAIR, truthy even at status 0)
 //                       | ()         still running
 //                       | errno      waitpid error (e.g. ECHILD)
@@ -46,7 +46,7 @@ static int decode_status(int st) {
   return WIFEXITED(st) ? WEXITSTATUS(st)
        : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1; }
 
-// Workhorse for (ptyrun argv), called with g Packed; argv is the single arg and
+// Workhorse for (mind argv), called with g Packed; argv is the single arg and
 // the sole GC root at g->sp[0]. Leaves EXACTLY ONE net value above argv on every
 // non-OOM path (so lvm_ptyrun collapses uniformly, cf. host_run): the
 // (pid . master-port) chain on success, an errno/-1 fixnum otherwise. Returns a
@@ -218,7 +218,7 @@ static union u const
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AI_NIF("ptyrun", nif_ptyrun);
+AI_NIF("mind", nif_ptyrun);
 AI_NIF("gather", nif_reap);
 AI_NIF("still", nif_kill);
 AI_NIF("winsize", nif_winsize);

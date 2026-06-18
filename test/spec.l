@@ -69,7 +69,7 @@
  !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots
  (lit? (cask 4)) (lit? '(1)) (lit? "s") !(lit? 5) ; the lit?-spans-bands pin: lit = any heap value
  (1 = $cap) (1 = $out) (1 = $(sip 0))            ; tops and ports net 1: present, drained or not
- (fix? (: p (hatch (\ x x) 0) _ (wait p) p))  ; a task id is a number, not a handle
+ (fix? (: p (spin (\ x x) 0) _ (catch p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; fixnum overflow -> exact bignum ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
@@ -294,8 +294,8 @@
 ; raises (scare 'missing nom); numeral counts are CAPPED by the `apcap` box.
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
- (42 = (: p (hatch (\ x (do (yield 0) (x + 1))) 41) (wait p))) (0 = (wait 99999)) (done? 99999)
- !(sleep 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (gem? (randf 0))
+ (42 = (: p (spin (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
+ !(rest 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
  (tab? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
  (id? (:) not-in-the-bag) !not-in-the-bag      ; a missing name reads the zero point: a nom not in the bag
@@ -314,7 +314,7 @@
 (assert (lit? ev) (? born (fix? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
-        (? born !spin 1) (? born !bag 1))      ;  hence the born guards)
+        (? born !weave 1) (? born !bag 1))      ;  hence the born guards)
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.
