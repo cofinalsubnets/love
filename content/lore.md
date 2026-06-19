@@ -1,6 +1,6 @@
 # kship
 
-the canon: a ship that sails bare metal, written in **ai**, a **telescope** at the helm.
+a ship that sails bare metal, written in **ai**, a **telescope** at the helm.
 
 ## ai — the language
 
@@ -26,7 +26,7 @@ ai is `top`; the crew are its faces, in dual pairs.
 ## the keepers
 
 - **cook** — the builder. make, in ai.
-- **mow** — the gardener, a catcow. two-space copying GC; keeps the heap green.
+- **mow** — the gardener, a cow. two-space copying GC; keeps the heap green.
 - **ticks** — the scheduler, a clock. the cooperative heartbeat: spawn, yield, wait — each task its turn.
 - **tree** — version control. the history; what feel scopes out for gwen, through tele.
 - **gwen** — ai's debugger. probes the binary.

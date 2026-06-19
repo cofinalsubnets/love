@@ -2,10 +2,11 @@
 ; a small markdown-subset converter written in ai, run on the HOST (the egg already
 ; carries the prel -- DO NOT pass `-l ai/prel.l`, that loads it twice and scares):
 ;   out/host/ai tools/site.l <page-id> <content.md> > <page>.html
-; page-id is kship | repl | blue; it picks the <title>, the active top-nav item,
-; whether a table of contents is emitted (blue only), and an optional tail file
-; (content/repl.tail.html, the repl's wasm shim). one site.css is inlined into each
-; page, so every page is self-contained, and the top nav links all three.
+; page-id is home | kship | repl | blue; it picks the <title>, the active top-nav item,
+; whether a table of contents is emitted (home + blue), and an optional tail file
+; (content/repl.tail.html, the repl's wasm shim -- home injects the same shim above the
+; toc as the bao shell). one site.css is inlined into each page, so every page is
+; self-contained, and the top nav links them.
 ; the supported markdown subset (same as blue.md): a leading "# " is the title, the
 ; next paragraph is the subtitle, "## t {#id}" / "### t {#id}" are anchored headings,
 ; a "> " line is a LAW BOX, "- "/"N. " are lists, "|...|" rows are a table (a |---|
@@ -140,7 +141,7 @@
         (: b (cap bs) tag (cap b) pl (cap (cup b))
            (? (= tag 'h1) (: _ (o "<h1>") _ (o (inl pl)) _ (o "</h1>\n") (go (cup bs) subdone tocdone))
               (= tag 'p) (: _ (? subdone (o "<p>") (o "<p class=\"sub\">")) _ (o (inl pl)) _ (o "</p>\n") (go (cup bs) 1 tocdone))
-              (= tag 'h2) (: _ (? tocdone 0 (: _ (o "<p class=\"toc\">\n") _ (emit-toc bs) _ (o "</p>\n") (o "<hr>\n")))
+              (= tag 'h2) (: _ (? tocdone 0 (: _ (o shellh) _ (o "<p class=\"toc\">\n") _ (emit-toc bs) _ (o "</p>\n") (o "<hr>\n")))
                              sp (splitid pl) id (string (cup sp))
                              _ (o "<h2 id=\"") _ (o id) _ (o "\"><a href=\"#") _ (o id) _ (o "\">")
                              _ (o (inl (cap sp))) _ (o "</a></h2>\n")
@@ -214,10 +215,11 @@
   pageid (cap (cup argv))
   mdfile (cap (cup (cup argv)))
   crew? (= pageid "crew")
-  toc?  (= pageid "blue")                                ; only the paper gets a toc
+  toc?  (|| (= pageid "blue") (= pageid "home"))         ; the paper + the home page get a toc
   ; the per-page h1::before emoji (the telescope ::after is shared in site.css):
-  ; kship -> rocket, blue -> blue circle, repl(bao) -> dumpling. crew pages: none.
-  preji (? (= pageid "blue") "\xf0\x9f\x94\xb5" (= pageid "repl") "\xf0\x9f\xa5\x9f" "\xf0\x9f\x9a\x80")
+  ; kship -> rocket, repl(bao) -> dog, home/blue -> blue heart. crew pages: none.
+  preji (? (= pageid "kship") "\xf0\x9f\x9a\x80" (= pageid "repl") "\xf0\x9f\x90\x95" "\xf0\x9f\x92\x99")
+  shellh (? (= pageid "home") (slurp (open "content/repl.tail.html" "r")) "")  ; the bao shell, home only
   tailf (? (= pageid "repl") "content/repl.tail.html" "")  ; the repl injects the wasm shim
   sep " \xc2\xb7 "
   nav1 (\ id href label (? (= id pageid)
@@ -230,7 +232,7 @@
                    "<a href=\"../README.md\">readme</a></p>\n")))
   topnav (? crew? crewnav
             (cc (L "<p class=\"topnav\">"
-                   (nav1 "kship" "index.html" "kship") sep
+                   (nav1 "kship" "kship.html" "kship") sep
                    (nav1 "repl"  "repl.html"  "bao")  sep
                    (nav1 "blue"  "blue.html"  "blue paper") sep
                    "<a href=\"CLAUDE.md\">the spec</a>" sep
@@ -246,7 +248,13 @@
   cname (trim (cap h1sp))                       ; "<name>"
   crole (trim (beforedot (trim (cup h1sp))))    ; "<role>" (the rest, sign tail dropped)
   mname (string (stem (basename mdfile)))       ; the .md filename stem, for the .md link
+  ; the per-member crew h1::before animal: bellberry rabbit, aineko cat, gwen dove,
+  ; bao dog, mow cow; every other member none. (bound after mname, which it reads.)
+  crewji (? (= mname "bellberry") "\xf0\x9f\x90\xb0" (= mname "aineko") "\xf0\x9f\x90\xb1"
+            (= mname "gwen") "\xf0\x9f\x95\x8a\xef\xb8\x8f" (= mname "bao") "\xf0\x9f\x90\x95"
+            (= mname "mow") "\xf0\x9f\x90\x84" "")
   title (? crew? (cc (L (string cname) " \xe2\x80\x94 " (string crole)))
+            (= pageid "home") "ai"
             (= pageid "blue") "ai blue paper" (= pageid "repl") "bao \xc2\xb7 the shell" "kship")
   htop (cc (L "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
               "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
@@ -261,7 +269,8 @@
 
   _ (o htop)
   _ (o "<style>\n") _ (o css)
-  _ (? crew? 0 (: _ (o "h1::before { content: \"") _ (o preji) (o " \"; }\n")))
+  _ (? crew? (? (= crewji "") 0 (: _ (o "h1::before { content: \"") _ (o crewji) (o " \"; }\n")))
+       (: _ (o "h1::before { content: \"") _ (o preji) (o " \"; }\n")))
   _ (o "</style>\n")
   _ (o "</head>\n<body>\n")
   _ (? crew? (o "\n") 0)

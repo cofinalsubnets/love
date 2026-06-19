@@ -66,7 +66,7 @@ Every page, in order:
   say the same thing — that is green.* keeper of the user-facing vocabulary; probes
   the binary, never a prior over a one-line experiment.
 - **mow** — *the garbage collector · ♉ taurus.* creed: *keep the litter box clean —
-  never lose a live cell, never resurrect a dead one.* a catcow; the two-space copying
+  never lose a live cell, never resurrect a dead one.* a cow; the two-space copying
   collector, the blue floor. aineko's housemate: the cat hunts, mow cleans up.
 - **bao** — *the shell · ♋ cancer.* creed: *a soft wrap around a chewy command.* the
   interactive shell, the rlwrap pty wrapper, and the debugger — one editor, reused.

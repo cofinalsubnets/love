@@ -1,6 +1,6 @@
 # mow — the garbage collector · ♉ taurus
 
-**mow keeps the litter box clean.** A catcow. ai runs on a two-space copying
+**mow keeps the litter box clean.** A cow. ai runs on a two-space copying
 collector: when the pool fills, the live set is evacuated into a fresh half, the dead
 left behind, the old half free again. mow tends that machine — the Cheney loop, the
 off-pool flip, the forwarding pointers, the weak-intern rebuild, the finalizers, and

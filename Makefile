@@ -259,12 +259,14 @@ cook/Cookfile: Makefile cook/cook.l $(ho)/ai
 	@echo AI	$@
 	@$(ho)/ai -l cook/cook.l --emit Makefile > $@
 
-# The kship site: three self-contained pages (index/repl/blue) from content + one
+# The kship site: self-contained pages (index/repl/blue/kship) from content + one
 # template, by the ai markdown converter tools/site.l, with one site.css INLINED into
-# each page (so each stands alone and the top nav links all three). Committed artifacts
-# like wasm/ai.js -- they ship from the repo. The host carries the prel in the egg, so
-# NO `-l ai/prel.l` (that loads it twice and scares -- the ;; <data> honest face).
-# `make blue` refreshes just the paper (part of `all`); `make site` refreshes all three.
+# each page (so each stands alone and the top nav links them). index.html is the home --
+# the blue paper with a live bao shell above the toc; kship.html is the kship landing
+# (content/lore.md). Committed artifacts like wasm/ai.js -- they ship from the repo. The
+# host carries the prel in the egg, so NO `-l ai/prel.l` (that loads it twice and scares
+# -- the ;; <data> honest face).
+# `make blue` refreshes just the paper (part of `all`); `make site` refreshes them all.
 # `site` is NOT in `all` yet: index.html would clobber the live repl page until the repl
 # content is extracted (content/repl.md + content/repl.tail.html), which repl.html needs.
 .PHONY: site blue crew
@@ -273,7 +275,7 @@ CREW_GEN = tools/site.l crew/crew.css $(ho)/ai
 CREW = aineko bao bellberry cook gwen kship mow tele wev zev
 CREW_HTML = $(CREW:%=crew/%.html)
 blue: blue.html
-site: index.html repl.html blue.html
+site: index.html repl.html blue.html kship.html
 # the crew bio pages, generated FROM their .md (the .md is the source of truth);
 # crew/index.html is hand-built (no single .md) and stays out. not in `all`.
 crew: $(CREW_HTML)
@@ -283,7 +285,10 @@ crew/%.html: crew/%.md $(CREW_GEN)
 blue.html: blue.md $(SITE_GEN)
 	@echo AI	$@
 	@$(ho)/ai tools/site.l blue blue.md > $@
-index.html: content/lore.md $(SITE_GEN)
+index.html: blue.md content/repl.tail.html $(SITE_GEN)
+	@echo AI	$@
+	@$(ho)/ai tools/site.l home blue.md > $@
+kship.html: content/lore.md $(SITE_GEN)
 	@echo AI	$@
 	@$(ho)/ai tools/site.l kship content/lore.md > $@
 repl.html: content/repl.md content/repl.tail.html $(SITE_GEN)
@@ -388,7 +393,7 @@ ifdef NETECHO
 ksuf := -netecho
 endif
 # NETAGENT=1 boots into the kship AGENT loop over the `nic` port (milestone 3):
-# the agent perceives a UDP datagram (slurp nic), DECIDES via the policy, replies,
+# the agent perceives a UDP datagram (slurp nic), CHOOSES a reply,
 # and survives faults via the watchdog -- vs NETECHO's raw byte echo. Own suffix.
 ifdef NETAGENT
 ksuf := -netagent

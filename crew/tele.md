@@ -1,7 +1,7 @@
 # tele — the pilot · ♊ gemini
 
 **tele is the pilot: it sees and drives kship** — *sees* (perceives) and *drives*
-(decides), the policy at the helm that answers which way (the old `ai`-pilot role
+(decides), the decider at the helm that answers which way (the old `ai`-pilot role
 folded in here). it is still the telescope: a tensor + reverse-mode autograd library
 written in ai, with a small `nn`/`optim` layer — PyTorch's spine in a few hundred
 lines. **tele scopes constellations.**
@@ -10,8 +10,8 @@ The pitch: **ai already ships the tensor — it calls it a constellation.** A
 **constellation** is any numeric; it comes in two shapes:
 
 - a **star** — a self-netting scalar (a charm/wide/big/float/complex; ai's `gem?`);
-- a **galaxy** — a set of stars, i.e. a typed, n-dimensional, numpy-broadcasting
-  numeric array (ai's `galaxy?`, a numeric `set`).
+- a **galaxy** — a tray of stars, i.e. a typed, n-dimensional, numpy-broadcasting
+  numeric array (ai's `galaxy?`, a numeric `tray`).
 
 A constellation already has reductions (`asum`/`aprod`/`amax`/`amin`), contractions
 (`inner`/`outer`), and elementwise transcendentals (`sine`/`cosine`/`log`/`pow`).

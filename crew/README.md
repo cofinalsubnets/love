@@ -16,7 +16,7 @@ the core thread.)
 | **wev** | ♍ | the spinner — `feel`: the source prepass (macroexpand, boxfix, fold), grown into a partial evaluator | `peval/wev.l` |
 | **bellberry** | — | the evaluator — `ev`: compiles the language and runs it (feel ∘ sound = wev ∘ zev); a silver rabbit | `ai/ev.l` |
 | **gwen** | ♎ | the synthesist — keeps the human words and the ai words in agreement | `ai/{ev,prel,egg}.l` + the docs |
-| **mow** | ♉ | the garbage collector — a catcow; tends the two-space copying collector (the litter box) | the GC cluster in `ai.c` + `ai.h` |
+| **mow** | ♉ | the garbage collector — a cow; tends the two-space copying collector (the litter box) | the GC cluster in `ai.c` + `ai.h` |
 | **bao** | ♋ | the shell — soft wrapper / rlwrap-style pty wrapper / debugger | `ai/bao.l`, `host/pty.c`, `boot/pty.l` |
 | **aineko** | ♌ | the cat — netcat (愛猫, beloved cat) over the socket nifs | `tools/aineko.l`, `host/net.c` |
 | **cook** | ♑ | the builder — make-in-ai (builds the host from scratch, passes the corpus) | `cook/cook.l` |
