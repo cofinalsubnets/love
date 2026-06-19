@@ -187,6 +187,7 @@
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) 0)
    (jot n) ((: (go i) (? (< i n) (link i (go (+ i 1))))) 0)
+   (jotprod x) (? (star? x) (jot x) (prod x))     ; the monadic `*` reading: jot a star (0..n-1), else prod
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (link (cap l) (take (- n 1) (cup l))))
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
@@ -249,7 +250,7 @@
 (: monadics (: t (tablet 0)
    _ (pin t '< 'cap)   _ (pin t '> 'cup)
    _ (pin t '<< 'caap) _ (pin t '>> 'cuup)
-   _ (pin t '+ 'net)   _ (pin t '* 'prod)
+   _ (pin t '+ 'net)   _ (pin t '* 'jotprod)
    _ (pin t '| 'abs)   _ (pin t '- 'negate)
    _ (pin t '/ 'reciprocal) _ (pin t '% 'fraction)
    _ (pin t '? 'bit)

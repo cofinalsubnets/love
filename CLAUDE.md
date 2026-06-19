@@ -472,7 +472,8 @@ $(cask 4)             ; 0       a zeroed cask is nothing
 ; legal); + and - lead numbers and kebab names, fusing only to ( ' " @ ~ # -- so -3 is
 ; a number and -x a name, while -(f x) is negate. the monadic words: < cap, > cup
 ; (<< >> <> >< the compounds, riding the shifts' free slots), + net (the content
-; measure -- the true sum, + turned inward), * prod, | abs, - negate, / reciprocal, % fraction,
+; measure -- the true sum, + turned inward), * prod (but a STAR jots: *5 = 0..4, since prod of a
+; scalar is vacuously itself), | abs, - negate, / reciprocal, % fraction,
 ; ? bit (the Iverson bracket); $ ! . ride the same lane. \ never fuses (form space).
 ; demo:
 1 + 2 * 3            ; 7       infix, right-associative

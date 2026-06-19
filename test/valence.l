@@ -15,7 +15,7 @@
  (6 = +'(1 2 3)) (294 = +"abc") (0 = +"") (7 = +@(3 4))
  (-1 = +'(-2 1))                                ; the net, UNCLAMPED: $ would read 0
  (~(0 8) = +(L ~(3 4) ~(-3 4)))                 ; phases sum as vectors
- (24 = *'(1 2 3 4)) (7 = *7) (6 = *@(1 2 3))
+ (24 = *'(1 2 3 4)) ((jot 7) = *7) (6 = *@(1 2 3))   ; * of a star jots (0..n-1); a list/array prods
  ; the dyadics turned inward
  (5 = |-5) (5.0 = |~(3 4)) (-3 = -(1 + 2)) (0.25 = /4) (0.5 = %2.5)
  ; the truth panel: the bit is the Iverson bracket
