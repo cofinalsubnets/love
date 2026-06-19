@@ -60,7 +60,7 @@
       (char->chars s)
       (: cs (char s)
          (? (two? cs) (link (cap cs) (char->chars ((cup cs) ()))) 0))
-      p (tap (char->chars s)) e (nom 0) r (scan p e)
+      p (tap (char->chars s)) e (nom 0) r (sound p e)
       (? (id? r e) 0 (id? r p) 0 (ev r))))
 ; reads: the stream shell -- a port is the LAZY charms, and reads drinks it:
 ; read and eval every form until the stream ends (eof, or input ends inside
@@ -69,7 +69,7 @@
 ; (c0 first, the hatched ev' second); the host's stdin runner and the
 ; ai0/kernel corpus runners are all this function now.
 (: (reads p)
-   ((: (g e z) (: r (scan p e)
+   ((: (g e z) (: r (sound p e)
        (? (id? r e) z (id? r p) z (g e (ev 'ev r)))))
     (nom 0) 0))
 
@@ -89,7 +89,7 @@
    ; (an unclosed paren or string), 0 for a blank line, else a one-form list.
    (parseall cl)
      (: p (tap (link 40 (cat cl (L 41))))
-        r (scan p eofsym)
+        r (sound p eofsym)
         (? (= r p)      m                  ; ends inside an unfinished form
            (= r eofsym) 0                  ; unreachable: the wrap always closes
            (id? r ())   0                  ; blank line reads 0 (the wrapped empty form)

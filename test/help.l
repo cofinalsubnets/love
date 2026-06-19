@@ -18,8 +18,8 @@
 ; a counting ap that reproduces the default protocol
 (: (help s p e) (: _ (pin help-log s (+ 1 (peep help-log s 0)))
                    (? (more? s) p (eof? s) e 0)))
-(assert (= 'eof (scan (tap 0) 'eof)))             ; eof through the lisp help
-(: q (tap '(40)) (assert (= q (scan q 99))))      ; more through the lisp help
+(assert (= 'eof (sound (tap 0) 'eof)))             ; eof through the lisp help
+(: q (tap '(40)) (assert (= q (sound q 99))))      ; more through the lisp help
 (assert (= 1 (peep help-log 3 0)) (= 1 (peep help-log 2 0)))
 
 ; (scare a b) is the deliberate raise: the scare bit set unconditionally, the
@@ -30,20 +30,20 @@
 
 ; the help function owns the protocol: deliver a constant instead
 (: (help s p e) 'gotcha)
-(assert (= 'gotcha (scan (tap 0) 'x)) (= 'gotcha (scan (tap '(40)) 'x))
+(assert (= 'gotcha (sound (tap 0) 'x)) (= 'gotcha (sound (tap '(40)) 'x))
         (= 'gotcha (scare 'any 'thing)))            ; the deliberate scare resumes the same way
 
 ; uninstall; the raw default is back
 (: help 0)                       ; uninstall: a non-lit? value defers to the raw default
-(assert !help (= 'eof (scan (tap 0) 'eof))
-        (: p (tap '(40)) (= p (scan p 99))))
+(assert !help (= 'eof (sound (tap 0) 'eof))
+        (: p (tap '(40)) (= p (sound p 99))))
 
 ; help is present by its net, like everything: "" is a value netting nothing,
 ; so it is no help -- the missing read stays 0 and the read protocol stays
 ; raw. the koan's help (\ s a b 1) is =-equal to 0 yet a top netting 1:
 ; installed, and every scare answers 1.
 (: help "")
-(assert !help (id? (:) one-nothing-unpinned) (= 'eof (scan (tap 0) 'eof)))
+(assert !help (id? (:) one-nothing-unpinned) (= 'eof (sound (tap 0) 'eof)))
 (: help (\ s a b 1))
 (assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))
 (: help 0)

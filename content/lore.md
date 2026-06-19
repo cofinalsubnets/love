@@ -12,8 +12,8 @@ numerals that are also integers; truth as a measure, not a tag; a total order ov
 
 **ai** is the language — the laws. **tele** is an implementation of ai: the concrete core, the
 self-hosted compiler, the binary that pilots kship. scopes constellations (any number — the galaxy is
-the numeric set). tensors + reverse-mode autograd + a small `nn`/`optim` layer. the `decide` in kship's
-perceive → decide → act.
+the numeric set). tensors + reverse-mode autograd + a small `nn`/`optim` layer. **read** (sound ; ev) is
+its **perceive** — it reads its world and runs it — feeding the `decide` in kship's perceive → decide → act.
 
 ## the faces
 

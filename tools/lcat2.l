@@ -119,7 +119,7 @@
 ; --- minify (identical to lcat): drop a space only where the two flanking bytes
 ; re-parse to the same datum count without it; then C-escape the survivors. ---
 (: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
-   (nforms s) ((: (g p e n) (: r (scan p e) (? (| (= e r) (= p r)) n (g p e (+ 1 n)))))
+   (nforms s) ((: (g p e n) (: r (sound p e) (? (| (= e r) (= p r)) n (g p e (+ 1 n)))))
                (tap (s2cl s)) (nom 0) 0)
    ; the valence-law guard (cf. lcat.l): a space between an operator byte and
    ; a datum start is semantic mid-list (glued = monadic); the probe below
@@ -142,7 +142,7 @@
               (| (= c 92) (= c 34)) (: _ (put out 92) (put out c))
               (put out c)))
 
-(: (readforms p e) (: r (scan p e) (? (= e r) 0 (link r (readforms p e))))
+(: (readforms p e) (: r (sound p e) (? (= e r) 0 (link r (readforms p e))))
    (joinforms fs) (? (atom? fs) "" (atom? (cup fs)) (show (rn (cap fs) 0 0 1 rn))
        (+ (+ (show (rn (cap fs) 0 0 1 rn)) " ") (joinforms (cup fs))))
    (emit acc) (: _ (put out 34)

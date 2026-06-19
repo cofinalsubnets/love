@@ -134,7 +134,7 @@ lvm_t lvm_kcall,
  lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
- lvm_fputbn, lvm_scan, lvm_dot,
+ lvm_fputbn, lvm_sound, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_tray, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,
@@ -655,7 +655,7 @@ lvm_t lvm_fault;
  _(nif_link, "link", s2(lvm_link)) _(nif_car, "cap", s1(lvm_cap)) _(nif_cdr, "cup", s1(lvm_cup))\
  _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
  _(nif_snip, "snip", s3(lvm_snip)) \
- _(nif_scan, "scan", s2(lvm_scan))\
+ _(nif_sound, "sound", s2(lvm_sound))\
  _(nif_string, "string", s1(lvm_string))\
  _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
@@ -3314,7 +3314,7 @@ lvm(lvm_real) {
  Sp[0] = mk_flo(&Hp, (ai_flo_t) d);
  return Ip++, Continue(); }
 
-lvm(lvm_scan) {
+lvm(lvm_sound) {
  Ip++;
  if (!iop(Sp[0])) return Sp++, Continue();
  struct ai_io *i = (struct ai_io*) Sp[0];

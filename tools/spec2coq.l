@@ -21,7 +21,7 @@
 
    ; read a file's top-level forms as DATA (the reader strips ; comments)
    (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (scan q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
+                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
 
    (e2 l) (cap (cup l))  (e3 l) (cap (cup (cup l)))  (e4 l) (cap (cup (cup (cup l))))  ; 2nd 3rd 4th
    ; exactly three elements? (STRUCTURAL chainp, never `!`: '(0) nets zero)
