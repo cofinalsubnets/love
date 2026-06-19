@@ -119,9 +119,9 @@
 
    ; --------------------------------------------------------- pattern rules
    ; build x.o from x.c via an implicit pattern rule; check the file appears.
-   _ (sh (+ "mkdir -p " (+ dir "/p; echo SRC > " (+ dir "/p/x.c"))))
+   _ (sh (+ "mkdir -p " (+ (+ dir "/p; echo SRC > ") (+ dir "/p/x.c"))))
    _ (run-cook (mk (L (+ "all: " (+ dir "/p/x.o"))
-                      (+ dir "/p/%.o: " (+ dir "/p/%.c")) "\tcp $< $@")) (+ dir "/p/x.o"))
+                      (+ (+ dir "/p/%.o: ") (+ dir "/p/%.c")) "\tcp $< $@")) (+ dir "/p/x.o"))
    _ (ok "pattern rule builds target" (= 0 (cap (sh (+ "test -f " (+ dir "/p/x.o"))))))
 
    ; static pattern rule: targets: tgtpat: prereqpats
