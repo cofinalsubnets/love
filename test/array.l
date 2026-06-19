@@ -1,23 +1,23 @@
 ; step 5a: typed multi-rank arrays.
 ; - (star-tray shape 0) zero-fills; (star-tray shape vals) fills row-major (gem-/twin-/top-tray for r/c/o)
 ; - get: fixnum index (rank 1), shape-list index (rank N), oob -> default
-; - arank / alen / ashape / tier accessors
+; - rank / tally / shape / tier accessors
 ; - elementwise + - * / over arrays + scalar broadcast + numpy broadcasting
 ; - mixed element-type promotes to the widest type
 ; - < <= > >= = elementwise -> 0/1 bool array
-; - reductions asum aprod amax amin aall aany; identity on scalars
+; - reductions net prod max min aall aany; identity on scalars
 ; - vector falsiness: a tuple is false iff every element is 0
 ; - elementwise transcendentals (sqrt) over an array
 ; - print round-trip; non-conforming / non-numeric -> nil
 
 (assert
  ; --- constructor + accessors ---
- (= 2 (arank (star-tray '(2 3) 0)))
- (= 6 (alen (star-tray '(2 3) 0)))
+ (= 2 (rank (star-tray '(2 3) 0)))
+ (= 6 (tally (star-tray '(2 3) 0)))
  (= star-tray (tier (star-tray '(2 3) 0)))
  (= gem-tray (tier (gem-tray '(4) 0)))
- (= '(2 3) (ashape (star-tray '(2 3) 0)))
- (nil? (arank 5))                     ; non-tuple -> nil
+ (= '(2 3) (shape (star-tray '(2 3) 0)))
+ (nil? (rank 5))                     ; non-tuple -> nil
  (nil? (tier "x"))
 
  ; --- a one-element array DEMOTES to its lone scalar star (no rank-0 / singleton
@@ -27,9 +27,9 @@
  (gem? (gem-tray 0 0)) (= 0.0 (gem-tray 0 0))      ; -> a boxed 0.0
  (= 5 (star-tray '(1) '(5)))              ; rank-1 len-1 -> the fixnum 5
  (= 3.5 @(3.5)) (gem? @(3.5))         ; @(3.5) is the scalar 3.5
- (nil? (arank (star-tray 0 0)))           ; a demoted scalar is not a tuple
- (nil? (alen (gem-tray 0 0)))
- (nil? (ashape (star-tray 0 0)))
+ (nil? (rank (star-tray 0 0)))           ; a demoted scalar is not a tuple
+ (nil? (tally (gem-tray 0 0)))
+ (nil? (shape (star-tray 0 0)))
 
  ; --- get: rank-1 fixnum index ---
  (= 10 (peep (star-tray '(3) '(10 20 30)) 0 -1))
@@ -96,20 +96,20 @@
  !(aall (= (star-tray '(2) '(5 6)) (star-tray '(2) '(5 7))))
 
  ; --- reductions ---
- (= 60 (asum (star-tray '(3) '(10 20 30))))
- (= 6000 (aprod (star-tray '(3) '(10 20 30))))
- (= 30 (amax (star-tray '(3) '(10 30 20))))
- (= 10 (amin (star-tray '(3) '(20 10 30))))
- (= 6.0 (asum (gem-tray '(3) '(1.0 2.0 3.0))))
- (= 21 (asum (star-tray '(2 3) '(1 2 3 4 5 6))))    ; reduces over all axes
+ (= 60 (net (star-tray '(3) '(10 20 30))))
+ (= 6000 (prod (star-tray '(3) '(10 20 30))))
+ (= 30 (max (star-tray '(3) '(10 30 20))))
+ (= 10 (min (star-tray '(3) '(20 10 30))))
+ (= 6.0 (net (gem-tray '(3) '(1.0 2.0 3.0))))
+ (= 21 (net (star-tray '(2 3) '(1 2 3 4 5 6))))    ; reduces over all axes
  (aall (star-tray '(3) '(1 2 3)))                   ; no zero element
  !(aall (star-tray '(3) '(1 0 3)))               ; a zero element
  (sat (star-tray '(3) '(0 0 3)))
  !(sat (star-tray '(3) 0))                         ; all zero
 
  ; --- reductions are the identity on a scalar (rank-agnostic idiom) ---
- (= 5 (asum 5))
- (= 5 (amax 5))
+ (= 5 (net 5))
+ (= 5 (max 5))
  (= 1 (aall 1))
  (= 0 (aall 0))
  (aall (< 1 2))                                    ; scalar: (< 1 2) = 1, (aall 1) = 1
@@ -168,15 +168,15 @@
 ; their monoid UNITS: the floor appears as the values of empty reductions.
 (: e (star-tray '(0) 0)
  (assert
-  ("@()" = (show e)) ('(0) = (ashape e)) (1 = (arank e)) (0 = (alen e))   ; empty rank-1 prints @()
-  (0 = (asum e)) (1 = (aprod e)) (aall e)        ; the units: empty sum 0, empty product 1, empty conjunction true
+  ("@()" = (show e)) ('(0) = (shape e)) (1 = (rank e)) (0 = (tally e))   ; empty rank-1 prints @()
+  (0 = (net e)) (1 = (prod e)) (aall e)        ; the units: empty sum 0, empty product 1, empty conjunction true
   !e (0 = $e)                                    ; an empty nets nothing
-  (0 = (alen (e + e))) (0 = (alen (e * 2))) (0 = (alen (1 + e)))
-  (0 = (alen (e < 1))) (0 = (alen (e = e)))      ; compare masks stay empty
-  (0 = (alen (e 2)))                             ; an empty exponent array applies empty
-  (0 = (alen (sine e))) (0 = (alen (2 e)))    ; elementwise maps stay empty
-  (0 = (alen ((star-tray '(1) '(5)) + e)))           ; a 1-axis broadcasts to 0, not 1
+  (0 = (tally (e + e))) (0 = (tally (e * 2))) (0 = (tally (1 + e)))
+  (0 = (tally (e < 1))) (0 = (tally (e = e)))      ; compare masks stay empty
+  (0 = (tally (e 2)))                             ; an empty exponent array applies empty
+  (0 = (tally (sine e))) (0 = (tally (2 e)))    ; elementwise maps stay empty
+  (0 = (tally ((star-tray '(1) '(5)) + e)))           ; a 1-axis broadcasts to 0, not 1
   (-1 = (peep e 0 -1))                           ; out of bounds -> the default
-  ('(0 3) = (ashape ((gem-tray '(0 3) 0) + 1)))     ; rank-2 empties keep their shape
+  ('(0 3) = (shape ((gem-tray '(0 3) 0) + 1)))     ; rank-2 empties keep their shape
   (: rt @()                                      ; the printed form (@()) reads back
-     (&& (0 = (alen rt)) ('(0) = (ashape rt)) (star-tray = (tier rt))))))
+     (&& (0 = (tally rt)) ('(0) = (shape rt)) (star-tray = (tier rt))))))

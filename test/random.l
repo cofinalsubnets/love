@@ -20,11 +20,11 @@
 (assert
  ; --- state-tuple structure: rank-1, length 4, 64-bit limbs (Z array, or C on
  ; a 32-bit word where C is the 8-byte-wide kind -- the 256-bit payload either way) ---
- (= 4 (alen (rng-seed 1)))
- (= 1 (arank (rng-seed 1)))
+ (= 4 (tally (rng-seed 1)))
+ (= 1 (rank (rng-seed 1)))
  (= (tier (rng-seed 0)) (tier (rng-seed 1)))  ; a seed's limb type is stable...
  (? wint (= star-tray (tier (rng-seed 1))) 1)      ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
- (= 4 (alen (rng-get 0)))                  ; the global is a valid state tuple too
+ (= 4 (tally (rng-get 0)))                  ; the global is a valid state tuple too
 
  ; --- determinism: same seed -> same sequence (global and functional) ---
  (= (gseq3 42) (gseq3 42))
@@ -39,7 +39,7 @@
  (: st (rng-seed 7) a (cap (rand-next st)) b (cap (rand-next st)) (= a b))
  ; ...and chaining the returned state advances the stream
  (: st (rng-seed 7) p (rand-next st) q (rand-next (cup p)) !(= (cap p) (cap q)))
- (: st (rng-seed 7) p (rand-next st) (= 4 (alen (cup p))))   ; st' is a state tuple
+ (: st (rng-seed 7) p (rand-next st) (= 4 (tally (cup p))))   ; st' is a state tuple
 
  ; --- rng-get / rng-set snapshot + restore reproduces a draw ---
  (: _ (rng-set (rng-seed 55)) g0 (rng-get 0)
@@ -59,7 +59,7 @@
  (gem? (randf 0))
  (: p (randf-next (rng-seed 3)) (< (cap p) 1))
  (: p (randf-next (rng-seed 3)) (<= 0 (cap p)))
- (: p (randf-next (rng-seed 3)) (= 4 (alen (cup p))))
+ (: p (randf-next (rng-seed 3)) (= 4 (tally (cup p))))
 
  ; --- invalid state -> nil (rng-set / functional draws validate) ---
  (nil? (rng-set 5))
@@ -71,7 +71,7 @@
  ; --- randint (prel): bounded functional draw, pure in its state ---
  (: r (randint (rng-seed 9) 6) (<= 0 (cap r)))
  (: r (randint (rng-seed 9) 6) (< (cap r) 6))
- (: r (randint (rng-seed 9) 6) (= 4 (alen (cup r))))
+ (: r (randint (rng-seed 9) 6) (= 4 (tally (cup r))))
  (: st (rng-seed 9) (= (cap (randint st 6)) (cap (randint st 6))))   ; purity
 
  ; --- cross-target reproducibility pins (the same on host, kernel, and wasm) ---

@@ -15,8 +15,8 @@
 (assert
  ; --- construction / accessors ---
  (= top-tray (tier oa-a))                                 ; oa-a is an object tray
- (= 1 (arank oa-a))   (= 5 (alen oa-a))
- (= 5 (cap (ashape oa-a)))
+ (= 1 (rank oa-a))   (= 5 (tally oa-a))
+ (= 5 (cap (shape oa-a)))
  (nil? (top-tray 0 0))                                ; rank-0 demotes to its lone cell -- nil-filled here
  (= 1 (top-tray 0 '(1)))                              ; ... or the value: a one-cell array IS that value
  (nil? (top-tray '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
@@ -83,10 +83,10 @@
  (= 0 (peep (< (top-tray '(2) '(1 5)) (top-tray '(2) '(3 2))) 1 0))
 
  ; --- reductions fold exactly through the same dispatch ---
- (= (+ (100 2) 5) (asum oa-x))
- (= (* 6 (100 2)) (aprod oa-x))
- (= (100 2) (amax (top-tray '(3) (L 5 (100 2) 7))))
- (= -3 (amin (top-tray '(3) (L 5 -3 7))))
+ (= (+ (100 2) 5) (net oa-x))
+ (= (* 6 (100 2)) (prod oa-x))
+ (= (100 2) (max (top-tray '(3) (L 5 (100 2) 7))))
+ (= -3 (min (top-tray '(3) (L 5 -3 7))))
  (aall (top-tray '(2) '(1 2)))
  (nil? (aall (top-tray '(2) '(1 0))))
  (sat (top-tray '(2) '(0 5)))
@@ -94,7 +94,7 @@
 
  ; --- arithmetic under GC pressure: bignum products survive collection ---
  (= 0 (oa-churn 40))
- (= (* 2 (80 2)) (asum (* oa-oar oa-oar))))    ; [2^80 2^80] summed = 2^81
+ (= (* 2 (80 2)) (net (* oa-oar oa-oar))))    ; [2^80 2^80] summed = 2^81
 
 ; --- the `array` constructor: ergonomic front-end over the *-tray ctors -----
 ; no type code (inferred as the highest of z<r<o present), shape may be a
@@ -112,10 +112,10 @@
  (= top-tray (tier oa-q))
  (= top-tray (tier oa-bn))
  ; numeric shape -> rank-1 vector of length ($ n); a non-positive shape is empty
- (= 1 (arank (array 4 1 2 3 4)))
- (= 0 (alen (array -3))) (= "@()" (show (array -3)))
+ (= 1 (rank (array 4 1 2 3 4)))
+ (= 0 (tally (array -3))) (= "@()" (show (array -3)))
  ; shape list -> rank-N
- (= 2 (arank oa-m))   (= 4 (peep oa-m (L 1 1) 0))
+ (= 2 (rank oa-m))   (= 4 (peep oa-m (L 1 1) 0))
  ; elements stored verbatim, in order
  (= 'world (peep oa-q 1 0))
  (= (100 2) (peep oa-bn 0 0))                  ; full bignum, not truncated to z
@@ -126,9 +126,9 @@
  ; round-trips: numeric array result prints as the terse @(…) sugar
  (= "@(1 2 3)" (show (array 3 1 2 3)))
  ; saturating shape coercion: a float / complex / vector dimension -> ($ d)
- (= 3 (alen (array 2.9 7 8 9)))                   ; ($ 2.9) = 3 : rank-1 length 3
- (= 5 (alen (array ~(3 4) 0 0 0 0 0)))           ; ($ ~(3 4)) = 5
- (= 8 (alen (array (L 2.0 3.5) 1 2 3 4 5 6 7 8)))  ; dims (2 4) -> 8 elems
+ (= 3 (tally (array 2.9 7 8 9)))                   ; ($ 2.9) = 3 : rank-1 length 3
+ (= 5 (tally (array ~(3 4) 0 0 0 0 0)))           ; ($ ~(3 4)) = 5
+ (= 8 (tally (array (L 2.0 3.5) 1 2 3 4 5 6 7 8)))  ; dims (2 4) -> 8 elems
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
  (= top-tray (tier @((100 2) 1)))                    ; bignum element -> object array
  (aall (= @(1 2 3) (array 3 1 2 3))))

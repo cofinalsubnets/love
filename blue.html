@@ -168,10 +168,10 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <tr><th>color</th><th>condition</th><th>meaning</th></tr>
 <tr><td>green</td><td><code>0 ≤ net</code></td><td>nonnegative; what <code>$</code> keeps</td></tr>
 <tr><td>red</td><td><code>net &lt; 0</code></td><td>negative; what <code>$</code> clamps to nothing</td></tr>
-<tr><td>green</td><td><code>net = 0</code></td><td>the floor — blue by sign yet nothing by measure</td></tr>
+<tr><td>blue</td><td><code>net = 0</code></td><td>the floor — green by sign yet nothing by measure</td></tr>
 </table>
-<div class="law"><span class="n">(3.3) Color laws.</span> green ⟹ blue (<span class="thm">green_is_blue</span>); every value is blue or red (<span class="thm">blue_or_red</span>); the two are disjoint (<span class="thm">blue_red_disjoint</span>); and <strong>truth is positive blue</strong> — above the green floor (<span class="thm">truth_is_positive_blue</span>).</div>
-<p>The floor matters: <code>0</code>, <code>()</code>, <code>""</code>, <code>@()</code>, <code>~(0 0)</code> are all green (net 0, false), while a box <code>#0</code> nets 1 (presence over nothing, true). <code>'(-2 1)</code> is red (net −1, <span class="thm">net_red</span> / <span class="thm">red_red</span>), false despite being non-empty — saturation holds at every rank, so a list of negatives is nothing exactly like a negative scalar.</p>
+<div class="law"><span class="n">(3.3) Color laws.</span> blue ⟹ green (<span class="thm">blue_is_green</span>); every value is green or red (<span class="thm">green_or_red</span>); the two are disjoint (<span class="thm">green_red_disjoint</span>); and <strong>truth is positive green</strong> — above the blue floor (<span class="thm">truth_is_positive_green</span>).</div>
+<p>The floor matters: <code>0</code>, <code>()</code>, <code>""</code>, <code>@()</code>, <code>~(0 0)</code> are all blue (net 0, false), while a box <code>#0</code> nets 1 (presence over nothing, true). <code>'(-2 1)</code> is red (net −1, <span class="thm">net_red</span> / <span class="thm">red_red</span>), false despite being non-empty — saturation holds at every rank, so a list of negatives is nothing exactly like a negative scalar.</p>
 <p>The measure is a <strong>homomorphism</strong>: <code>+</code> is concatenation / adjunction at the value level, and the net distributes over it.</p>
 <div class="law"><span class="n">(3.4) <code>+</code> is the measure homomorphism.</span> <code>net (xs ++ ys) = net xs + net ys</code>. Evidence: <span class="thm">net_homomorphism</span> (via <span class="thm">netl_app</span>, <span class="thm">net_vlist</span>).</div>
 <p>This is what makes "<code>$</code> of a fold is mere composition" true: because net is additive wherever <code>+</code> is total, a clamped reduction is <code>$</code> <em>after</em> a plain sum; there is no per-fold saturator. Concrete corollaries the corpus pins: <code>$'(1 2 3) = 6</code> (<span class="thm">sat_123</span>), a dotted tail drops (<span class="thm">sat_dotted</span>, <code>$(cons 1 2) = 1</code>), a product of nothings is nothing (<span class="thm">nothings</span>).</p>
@@ -288,7 +288,7 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <tr><td>2</td><td>totality (no UB)</td><td><span class="thm">total</span></td></tr>
 <tr><td>3</td><td>the invariant <code>!x ≡ (0=$x)</code></td><td><span class="thm">nilp_iff_sat0</span></td></tr>
 <tr><td>3</td><td>saturation</td><td><span class="thm">sat_nonneg</span> <span class="thm">sat_keeps</span> <span class="thm">sat_clamps</span></td></tr>
-<tr><td>3</td><td>color</td><td><span class="thm">green_is_blue</span> <span class="thm">blue_or_red</span> <span class="thm">truth_is_positive_blue</span></td></tr>
+<tr><td>3</td><td>color</td><td><span class="thm">blue_is_green</span> <span class="thm">green_or_red</span> <span class="thm">truth_is_positive_green</span></td></tr>
 <tr><td>3</td><td><code>+</code> is the measure homomorphism</td><td><span class="thm">net_homomorphism</span></td></tr>
 <tr><td>4</td><td><code>&lt;</code> strict total order</td><td><span class="thm">lt_irrefl</span> <span class="thm">lt_trans</span> <span class="thm">lt_asym</span> <span class="thm">lt_trichotomy</span></td></tr>
 <tr><td>4</td><td><code>&lt;=</code> total order</td><td><span class="thm">le_refl</span> <span class="thm">le_trans</span> <span class="thm">le_antisym</span> <span class="thm">le_total</span></td></tr>

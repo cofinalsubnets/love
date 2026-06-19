@@ -45,7 +45,7 @@
  (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
  (8 = $(L ~(3 4) ~(-3 4))) !(L ~(0 5) -1)        ; phases sum as vectors; the order signs the TOTAL, once
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
- (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) blue, '(0)/0 green, '(-2 1) red
+ (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
  (star? 5) (star? -3.5) (star? ~(2 3)) (star? (62 2))         ; a STAR is a self-netting SCALAR: charm, float, complex, wide
@@ -150,7 +150,7 @@
 
 ; --- complex --- a scalar at tier C; the `~` sigil: ~(re im) builds (twin re im), a bare ~x
 ; lifts a real or conjugates (an involution); i = ~(0 1). a rank-N complex array packs (re,im)
-; into a `c`-typed array; the net is the complex SUM of the cells, $v = $(asum v).
+; into a `c`-typed array; the net is the complex SUM of the cells, $v = $(net v).
 (assert
  ((* i i) = -1) (~(2 0) = 2) (~(-5 10) = ~(1 2) * ~(3 4)) (twin? ~5) !(twin? 5)
  (~(0 0) = ~0) ((conj ~(2 3)) = ~~(2 3)) ((conj ~(2 3)) = ~(2 -3)) (~(2 3) = ~~~(2 3))
@@ -160,29 +160,29 @@
  (2.0 = (re ~(2 3))) (i < 1) !(1 < i) ("~(0.0 1.0)" = (show i))
  (0.0 = (peep (arg ~(1 @(1 0))) 1 0)))           ; arg broadcasts -- (arg ~(1 x)) = atan, elementwise
 (assert
- (: v (array 2 ~(1 2) ~(3 4)) (&& (twin-tray = (tier v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (asum v))
+ (: v (array 2 ~(1 2) ~(3 4)) (&& (twin-tray = (tier v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (net v))
     (~(2 4) = (peep (v + v) 0 0)) (~(2 4) = (peep (~(2 0) * v) 0 0)) !(v < v)
-    ($v = $(asum v)) ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v))))
+    ($v = $(net v)) ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v))))
  (8 = $(array 2 ~(3 4) ~(-3 4))) (8 = $(L ~(3 4) ~(-3 4))))
 
 ; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
 ; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. + - * // < = broadcast numpy-style;
-; reduce asum/aprod/amax/amin/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
+; reduce net/prod/max/min/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
 (assert
- (6 = (alen (star-tray '(2 3) 0))) (2 = (arank (star-tray '(2 3) 0))) ('(2 3) = (ashape (star-tray '(2 3) 0)))
+ (6 = (tally (star-tray '(2 3) 0))) (2 = (rank (star-tray '(2 3) 0))) ('(2 3) = (shape (star-tray '(2 3) 0)))
  (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
  (3 = (peep (star-tray '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
  (@(2 4 6) = @(1 2 3) * 2) (gem-tray = (tier ((star-tray '(2) 0) + 1.5))) (star-tray = (tier ((star-tray '(3) 0) < 1)))
- (60 = (asum @(10 20 30))) (30 = (amax @(10 30 20))) (5 = (asum 5)) (aall (1 < 2))
- (@(0 1 2) = (iota 3)) (star-tray = (tier (iota 3))) !(iota 0) !(iota -1) (4950 = (asum (iota 100)))   ; iota: jot's range as a z-array
+ (60 = (net @(10 20 30))) (30 = (max @(10 30 20))) (5 = (net 5)) (aall (1 < 2))
+ (@(0 1 2) = (iota 3)) (star-tray = (tier (iota 3))) !(iota 0) !(iota -1) (4950 = (net (iota 100)))   ; iota: jot's range as a z-array
  (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = (// @(7 11) 2))
  (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
- (0 = (asum (star-tray '(0) 0))) (1 = (aprod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
- ("@()" = (show (star-tray '(0) 0))) (0 = (alen ((star-tray '(0) 0) + 1)))
+ (0 = (net (star-tray '(0) 0))) (1 = (prod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
+ ("@()" = (show (star-tray '(0) 0))) (0 = (tally ((star-tray '(0) 0) + 1)))
  (32 = (inner @(1 2 3) @(4 5 6))) (star-tray = (tier (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
  (: M (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
-    (&& ('(2 2) = (ashape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
+    (&& ('(2 2) = (shape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
 ; the compounds); sort/sortby by the total order; (jot n) the first n charms; the higher-order
@@ -195,7 +195,7 @@
  ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (sortby (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
  (20 = (caup (assoc 2 (list (L 1 10) (L 2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
- (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (has? 3 '(1 2 3)) !(has? 9 '(1 2 3))
+ (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (member? 3 '(1 2 3)) !(member? 9 '(1 2 3))
  (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3))
  (294 = $'(a b c)) (3 = (tally '(a b c))))  ; net sums spellings; tally counts the spine
 
@@ -239,15 +239,15 @@
 
 ; --- the EMPTY SPELLINGS (the nothing surface) --- each kind's empty by its sigil: () the
 ; chain (the zero-point, DISTINCT from the number 0), "" the string, @() the array, #() the
-; map, ~(0 0) the zero complex, (cask 0) the buffer -- all net 0 -> green -> false. spelled via
+; map, ~(0 0) the zero complex, (cask 0) the buffer -- all net 0 -> blue -> false. spelled via
 ; 0/() too: @()/#() are the EMPTIES (the reader emits (iota 0)/(tablet 0)); @0/#0 wrap the
 ; VALUE 0 (a 1-cell -> the scalar 0, a box). every nothing is a MASK; () the bare-ish floor.
 (assert
- !() !0 !"" !@() !#() !~(0 0) !(cask 0)           ; every empty is false (green)
+ !() !0 !"" !@() !#() !~(0 0) !(cask 0)           ; every empty is false (blue)
  (nil? ()) (nil? 0) !(= () 0) !(id? () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
- ("@()" = (show @())) (1 = (arank @())) (0 = (alen @())) (star-tray = (tier @()))  ; @() the empty array, round-trips
+ ("@()" = (show @())) (1 = (rank @())) (0 = (tally @())) (star-tray = (tier @()))  ; @() the empty array, round-trips
  (tab? #()) (0 = $#()) ("(tablet 0)" = (show #()))   ; #() the empty map
- (0 = @0) (nil? (arank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
+ (0 = @0) (nil? (rank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
  (tab? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
 
 ; --- buffers --- (cask n) mutable zeroed bytes; peep/pin a byte 0..255; `$` nets the charms
@@ -298,7 +298,7 @@
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spin (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
- !(rest 0) (4 = (alen (rng-seed 1))) ((rand 10) < 10) (gem? (randf 0))
+ !(rest 0) (4 = (tally (rng-seed 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
  (tab? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
  (id? (:) not-in-the-bag) !not-in-the-bag      ; a missing name reads the zero point: a nom not in the bag

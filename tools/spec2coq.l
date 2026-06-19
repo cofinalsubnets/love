@@ -50,9 +50,8 @@
                  (? (id? h '+) (&& (| (lst? (e2 x)) (intv? (e2 x))) (lst? (e3 x)))  ; append / scalar prepend
                     (id? h '*) (&& (lst? (e2 x)) (intv? (e3 x))) 0)))))             ; repeat
    (listv? x) (| (arr? x) (lst? x))                     ; any collection value
-   ; the list reducers: net/asum -> sum, tally/alen -> count, amax/amin/aprod
-   (lop? h) (| (id? h 'net) (| (id? h 'asum) (| (id? h 'tally) (| (id? h 'alen)
-              (| (id? h 'amax) (| (id? h 'amin) (id? h 'aprod)))))))
+   ; the list reducers (ai surface -> coq): net -> asum, prod -> aprod, max/min, tally -> count
+   (lop? h) (| (id? h 'net) (| (id? h 'prod) (| (id? h 'tally) (| (id? h 'max) (id? h 'min)))))
    ; a hash literal #(k v ..) = (hash k v ..): an assoc list of fixnum chains (EVEN count)
    (even? l) (? (two? l) (! (even? (cup l))) 1)
    (hashv? x) (&& (two? x) (id? (cap x) 'hash) (zlist? (cup x)) (even? (cup x)))
@@ -97,11 +96,11 @@
                    (id? h 'sat)   (? (hashv? (e2 x)) (cat (L "(Z.of_nat (length " (th (e2 x)) "))"))  ; $hash = key count
                                      (listv? (e2 x)) (cat (L "(Z.max 0 (asum " (tl (e2 x)) "))"))
                                      (cat (L "(Z.max 0 " (tv (e2 x)) ")")))  ; $list / $int
-                   (| (id? h 'net) (id? h 'asum))   (cat (L "(asum " (tl (e2 x)) ")"))   ; +list / asum -- the sum
-                   (| (id? h 'tally) (id? h 'alen)) (cat (L "(Z.of_nat (length " (tl (e2 x)) "))"))  ; count
-                   (id? h 'amax)  (cat (L "(amax " (tl (e2 x)) ")"))
-                   (id? h 'amin)  (cat (L "(amin " (tl (e2 x)) ")"))
-                   (id? h 'aprod) (cat (L "(aprod " (tl (e2 x)) ")"))
+                   (id? h 'net)   (cat (L "(asum " (tl (e2 x)) ")"))   ; net/+list -- the sum
+                   (id? h 'tally) (cat (L "(Z.of_nat (length " (tl (e2 x)) "))"))  ; count
+                   (id? h 'max)  (cat (L "(amax " (tl (e2 x)) ")"))
+                   (id? h 'min)  (cat (L "(amin " (tl (e2 x)) ")"))
+                   (id? h 'prod) (cat (L "(aprod " (tl (e2 x)) ")"))
                    (id? h 'abs)   (cat (L "(Z.abs " (tv (e2 x)) ")"))
                    (id? h 'peep)  (? (hashv? (e2 x)) (cat (L "(hget " (th (e2 x)) " " (tv (e3 x)) " " (tv (e4 x)) ")"))
                                      (cat (L "(nth (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) " " (tv (e4 x)) ")")))  ; hash lookup / array index

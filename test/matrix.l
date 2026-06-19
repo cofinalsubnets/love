@@ -269,11 +269,11 @@
  (11.0 = (inner @(1.0 2.0) @(3.0 4.0)))            ; float dot
  (11.0 = (inner @(1 2) @(3.0 4.0))) (gem? (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
  (: A (star-tray '(2 3) '(1 2 3 4 5 6)) B (star-tray '(3 2) '(7 8 9 10 11 12)) C (inner A B)
-    (&& ('(2 2) = (ashape C)) (58 = (peep C '(0 0) 0)) (64 = (peep C '(0 1) 0))
+    (&& ('(2 2) = (shape C)) (58 = (peep C '(0 0) 0)) (64 = (peep C '(0 1) 0))
         (139 = (peep C '(1 0) 0)) (154 = (peep C '(1 1) 0))))   ; 2x2 matmul
  (aall (@(6 15) = (inner (star-tray '(2 3) '(1 2 3 4 5 6)) @(1 1 1))))   ; matrix . vector
  (: O (outer @(1 2 3) @(10 20))
-    (&& ('(3 2) = (ashape O)) (10 = (peep O '(0 0) 0)) (60 = (peep O '(2 1) 0))))  ; outer
+    (&& ('(3 2) = (shape O)) (10 = (peep O '(0 0) 0)) (60 = (peep O '(2 1) 0))))  ; outer
  (star-tray = (tier (outer @(1 2) @(3 4)))) (gem-tray = (tier (outer @(1 2) @(3.0 4.0))))       ; outer domain
  !(inner @(1 2 3) @(1 2))                          ; contracted-axis mismatch -> nil
  !(inner @(1 2) 5) !(outer @(1 2) 5))              ; non-array operand -> nil

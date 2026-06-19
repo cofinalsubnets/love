@@ -53,7 +53,7 @@
 
    (vof en t)
    (? (fix? t) t
-      (nom? t) (? (has? t '(UU nat bool unit empty tt true false)) t
+      (nom? t) (? (member? t '(UU nat bool unit empty tt true false)) t
                   (id? t 'zero) 0
                   (vof-sym en t))
       (: h (cap t)
@@ -111,10 +111,10 @@
 
    (inf-sym cx x)
    (? (id? x 'UU) 'UU
-      (has? x '(nat bool unit empty)) 'UU
+      (member? x '(nat bool unit empty)) 'UU
       (id? x 'zero) 'nat
       (id? x 'tt) 'unit
-      (has? x '(true false)) 'bool
+      (member? x '(true false)) 'bool
       (: e (assoc x cx)
          (? e (e2 e)
             (: g (peep GLOB x 0)
@@ -255,7 +255,7 @@
                      _ (chk cx en d (e3 t) (vapp (vapp Pv av) (L 'refl av)))
                      (vapp (vapp Pv bv) (vof en (e4 t))))
                   (scare 'uu-paths_rect t)))
-            (has? h '(lam tpair ii1 ii2)) (scare 'uu-cannot-infer t)
+            (member? h '(lam tpair ii1 ii2)) (scare 'uu-cannot-infer t)
             (inf-spine cx en d (inf-sym cx h) (cup t))))))
 
 ; --- drivers: a definition is checked then pinned; an axiom is a bag entry

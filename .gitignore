@@ -18,3 +18,6 @@ rocq/oracle_drive
 *.cmx
 *.cmo
 rocq/*.o
+
+# private dev notes / squeezed memory archive (keep local, out of the public cut)
+doc/archive/

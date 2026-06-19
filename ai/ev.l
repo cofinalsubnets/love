@@ -39,7 +39,7 @@
           '(// << >> ^
             id? gcd modpow inc dec abs
             link cap cup caap caup cuap cuup
-            dig lidx assoc has? last rev cat
+            dig lidx assoc member? last rev cat
             fix? nom? two? tab? lit? string? nil? gem? twin? atom?
             snip string
             re im conj arg gem twin
@@ -156,7 +156,7 @@
     ; (.. (nil? e) con else) == (.. e else con), since the cond tests g_false(e), == nil?(e).
     (&& (two? (cuup bs)) (atom? (cup (cuup bs)))                  ; bs is exactly (ant con else)
         (two? (cap bs)) (= (cap (cap bs)) 'nil?)
-        (two? (cup (cap bs))) (atom? (cuup (cap bs))) (nil? (has? (cap (cap bs)) bnd)))
+        (two? (cup (cap bs))) (atom? (cuup (cap bs))) (nil? (member? (cap (cap bs)) bnd)))
      (link (wx (caup (cap bs)) bnd) (link (wx (cap (cuup bs)) bnd) (list (wx (caup bs) bnd))))
     (link (wx (cap bs) bnd) (link (wx (caup bs) bnd) (wxc (cuup bs) bnd))))
    ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
@@ -167,7 +167,7 @@
    ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h (cap x)
     (? (atom? (cup x)) x                          ; (f) single element -> ana's (atom? b) handles
-       (|| (nil? (nom? h)) (has? h bnd)) (link apx (link 0 x))   ; local/computed head
+       (|| (nil? (nom? h)) (member? h bnd)) (link apx (link 0 x))   ; local/computed head
        (: v (bag h) hd (wevs v)
         (? hd (hd x)
            (napof v (cup x)) (link apx (link 1 x))
@@ -287,7 +287,7 @@
           (stki d) (lidx x (cat (d 'imp) (d 'arg)))
           (q i j m) (karg (+ i (stki c)) j m)
         (?- (avb c (c 'par) x)
-         (has? x s) (karg (lidx x s))
+         (member? x s) (karg (lidx x s))
          (>= (stki c) 0) (q (tally (c 'stk)))))))
 
   (avb c d x)
@@ -302,7 +302,7 @@
            (stki d) (lidx x (cat (d 'imp) (d 'arg)))
            (q i j m) (karg (+ i (stki c)) j m)
          (?- (avb c (d 'par) x)
-          (has? x s) (: _ (? (c 'par) (push c 'imp x))
+          (member? x s) (: _ (? (c 'par) (push c 'imp x))
                          (q (tally (c 'stk))))
           (>= (stki d) 0) (: _ (? (c 'par) (push c 'imp x))
                            (q (tally (c 'stk)))))))))
@@ -383,12 +383,12 @@
      ; recursion). sweep all ordered pairs, pour k1's vars into k2 (addv); a sweep that adds
      ; any var (n > 0) repeats until a full pass is stable -- then drop the let's own names.
      (propagate n l k1 k2) (?
-      (&& k1 k2 !(= k1 k2) (has? (caap k1) (cup (cof (cap k2)))))
+      (&& k1 k2 !(= k1 k2) (member? (caap k1) (cup (cof (cap k2)))))
        (>>= n (cup (cof (cap k1))) (: (addv n v)
         (? (nil? v) (propagate n l k1 (cup k2))
          (: var (cap v)
             vars (cup (cof (cap k2)))
-            n2 (? (has? var vars) n
+            n2 (? (member? var vars) n
                (: _ (cput (cap k2) (link (cap (cof (cap k2))) (link var vars)))
                 (+ 1 n)))
             (addv n2 (cup v))))))

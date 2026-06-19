@@ -107,7 +107,7 @@
 ; a complex value packs two floats per element into a `c` array (type code c = 2,
 ; the tier between r and o). twin-tray/array/@ all build them (a-type infers c);
 ; `get` returns a ~(re im) box; + - * / broadcast in the complex domain; `=` ->
-; a 0/1 mask, the orderings -> nil; asum/aprod fold complex; aall/aany lift the
+; a 0/1 mask, the orderings -> nil; net/prod fold complex; aall/aany lift the
 ; 0+0i-is-falsy rule. (body-less `:` -> ca-* leak to global, reused in roundtrip.l)
 (: ca-z (twin-tray '(3) 0)                             ; zero-filled: three 0+0i
    ca-v (twin-tray '(2) (L ~(1 2) ~(3 4)))        ; explicit packed chain
@@ -119,8 +119,8 @@
  ; --- construction / type / shape ---
  (= twin-tray (tier ca-v))   (= twin-tray (tier ca-z))   (= twin-tray (tier ca-a))
  (= twin-tray (tier ca-r))   (= twin-tray (tier ca-m))
- (= 1 (arank ca-v))   (= 2 (alen ca-v))
- (= 2 (arank ca-m))   (= 4 (alen ca-m))
+ (= 1 (rank ca-v))   (= 2 (tally ca-v))
+ (= 2 (rank ca-m))   (= 4 (tally ca-m))
 
  ; --- get returns a complex box; rank-N indexing; zero element ---
  (= ~(1 2) (peep ca-v 0 0))   (= ~(3 4) (peep ca-v 1 0))   (twin? (peep ca-v 0 0))
@@ -150,10 +150,10 @@
  (nil? (< ca-v ca-v))   (nil? (> ca-v ca-v))   (nil? (% ca-v ca-v))
 
  ; --- reductions: complex sum / product; max/min unordered -> nil ---
- (= ~(4 6) (asum ca-v))                         ; (1+2i)+(3+4i)
- (= ~(-5 10) (aprod ca-v))                      ; (1+2i)*(3+4i)
- (= ~(6 6) (asum ca-a))   (= ~(0 0) (asum ca-z))
- (nil? (amax ca-v))   (nil? (amin ca-v))
+ (= ~(4 6) (net ca-v))                         ; (1+2i)+(3+4i)
+ (= ~(-5 10) (prod ca-v))                      ; (1+2i)*(3+4i)
+ (= ~(6 6) (net ca-a))   (= ~(0 0) (net ca-z))
+ (nil? (max ca-v))   (nil? (min ca-v))
 
  ; --- aall/aany lift the 0+0i-is-falsy rule ---
  (aall ca-v)

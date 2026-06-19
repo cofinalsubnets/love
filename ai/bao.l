@@ -1,12 +1,12 @@
 ; bao -- the shell core: the read-eval-print loop, its multi-line line editor,
-; the stream shell (zev/zevs/charms), the floor handler (welp), and the host-only
+; the stream shell (zev/zevs), the floor handler (welp), and the host-only
 ; pty wrapper (wrap). bao is the BAKED shell core for all three frontends -- the
 ; host (out/host/ai), the freestanding kernel (kmain.c), and the ai0 bootstrap
 ; self-test -- loaded after the prel. (It was repl.l; the editor/repl internals
 ; used to LEAK as user-visible bag globals because the corpus tested them by
 ; name. Now the editor + repl + the pty wrapper live inside one closure, so only
 ; the entry points -- shell, welp, edraw, wrap, bao, plus the stream shell
-; zev/zevs/charms -- are bag globals.)
+; zev/zevs -- are bag globals.)
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist is
 ; implicitly parenthesized and read as ONE expression via (tap ..) + read
@@ -35,40 +35,32 @@
 ; to a recalled entry, the pristine version is restored to its slot
 ; and the buffer becomes a new entry, so the original survives.
 
-; charms: the global character construction -- the LAZY charlist. a charm is
-; a sat (a non-negative fixnum); a CHARS is a bare charlist (eager, ends at
-; 0); a CHARMS is the colist: (cap cs) is a charm, (cup cs) is a top, and
-; the tail forced with the empty -- ((cup cs) ()) -- types as charms + 0,
-; the coproduct, 0 the end (the floor as the nil injection). consumers
-; dispatch on KIND: two? is a cell, anything else the end. `charms` is also
-; the canonical lift into the construction: chars lift cell by cell, a port
-; (the HOT charms) pulls one byte per force (-1 ends it), charms pass
-; through, the end lifts to itself. charms->chars realizes a finite charms.
-; NB the cell test dispatches on the TAIL's kind -- a chain or nil is chars,
-; anything else is taken as the forcing top. (lit? is no use here: it is
-; hot-based and answers true for every heap value, chains included -- the
-; lit?-spans-bands pin.)
-(: (charms s)
-   (? (two? s) (: t (cup s)
-                  (? (two? t) (link (cap s) (\ u (charms t)))   ; chars: lift, lazy tail
-                     (nil? t) (link (cap s) (\ u ()))           ; the last chars cell
-                     s))                                        ; a top tail: charms already
-      (hot? s) (: c (get s)                                ; a port is the hot charms
-                     (? (= c -1) () (link c (\ u (charms s)))))
-      ())
-   (charms->chars s)
-   (: cs (charms s)
-      (? (two? cs) (link (cap cs) (charms->chars ((cup cs) ()))) 0)))
-; zev: charms -> top, the reverse shell of the compiler -- the lane every
-; shell ultimately feeds into. takes the global construction (anything the
-; `charms` lift takes: chars, a port, charms proper), reads ONE form from it
-; (structurally -- the reader knows no operators) and sends it through the
-; same core as ev (opfix, wev, ana, cata): the full hull charms -> top in
-; one call. nothing readable -- empty input or an unfinished shape -- is
-; nothing. the C reader pulls from a port, so zev realizes the (finite)
-; charms first; the lazy-pull seam is where the lisp reader lands next.
+; zev: chars -> top, the reverse shell of the compiler -- the lane every shell
+; ultimately feeds into. its `char` lift + `char->chars` realizer are CLOSURE-PRIVATE
+; here (off the bag). a charm is a sat (a non-negative fixnum); a CHARS is a bare
+; charlist (eager, ends at 0); the `char` colist is the LAZY form: (cap cs) is a charm,
+; (cup cs) a top, the tail forced with the empty -- ((cup cs) ()) -- typing as colist + 0
+; (the coproduct, 0 the end). consumers dispatch on KIND: two? is a cell, anything else
+; the end. `char` is the canonical lift -- chars cell by cell, a port (the HOT lane)
+; one byte per force (-1 ends it), a colist passing through, the end lifting to itself --
+; and `char->chars` realizes a finite colist. zev takes any of these as `s`, reads ONE
+; form (structurally -- the reader knows no operators) and sends it through ev's core
+; (opfix, wev, ana, cata): the full hull chars -> top in one call. nothing readable --
+; empty input or an unfinished shape -- is nothing. (lit? is no use for the cell test:
+; hot-based, it answers true for every heap value, chains included -- the lit?-spans-bands pin.)
 (: (zev s)
-   (: p (tap (charms->chars s)) e (nom 0) r (read p e)
+   (: (char s)
+      (? (two? s) (: t (cup s)
+                     (? (two? t) (link (cap s) (\ u (char t)))   ; chars: lift, lazy tail
+                        (nil? t) (link (cap s) (\ u ()))         ; the last chars cell
+                        s))                                      ; a top tail: char already
+         (hot? s) (: c (get s)                                   ; a port is the hot char
+                        (? (= c -1) () (link c (\ u (char s)))))
+         ())
+      (char->chars s)
+      (: cs (char s)
+         (? (two? cs) (link (cap cs) (char->chars ((cup cs) ()))) 0))
+      p (tap (char->chars s)) e (nom 0) r (read p e)
       (? (id? r e) 0 (id? r p) 0 (ev r))))
 ; zevs: the stream shell -- a port is the LAZY charms, and zevs drinks it:
 ; read and eval every form until the stream ends (eof, or input ends inside

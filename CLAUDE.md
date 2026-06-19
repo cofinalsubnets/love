@@ -52,7 +52,7 @@
 ; --- vocabulary & house style --- the words here are a VOCABULARY -- we never say
 ; "terminology" or "nomenclature"; a vocabulary is living and chosen, warm not clinical.
 ; the house style is COZY: lowercase, plain, a touch playful, names that earn their keep
-; (you eat a toast; $ keeps the blue charms; a set of stars is a galaxy). we frame in the
+; (you eat a toast; $ keeps the green charms; a set of stars is a galaxy). we frame in the
 ; GREEN -- name what a value IS and KEEPS, not what it lacks; green, not red. the surface
 ; stays small and deliberate ((names ()) is the whole vocabulary). the celestial numerics:
 ; a CHARM is a fixnum (a word); a STAR is a self-netting scalar (charm/full/big/gem/twin-gem);
@@ -72,17 +72,17 @@
 ; compile time. the gritty details sit at the bottom.
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
-;   N the blue charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
+;   N the green charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
 ;     <  R gems (the reals, as floats)  <  C twin gems (complex)  <  O objects (string < symbol < chain < map < top)
 ; numbers nest as usual (N in Z in R in C). a fixnum is a CHARM, and every value wears a COLOR --
-; the order-sign of its net: BLUE nets nonnegative (what $ keeps), RED nets negative (what $
-; clamps to nothing), and GREEN is blue's FLOOR -- net exactly zero, kept like a blue yet nothing.
-; so $ passes the blue and stops the red at nothing, and a value is true iff it is POSITIVE blue
-; (above the green floor; green and red both net false). the BLUE charms are N (the nonnegatives),
-; the RED charms the negatives below, and 0 is the ONE GREEN CHARM -- blue by sign yet green by
-; measure, the floor where blue meets nothing. color spans the UNSTARS too, by the same net:
-; '(1) is blue, '(0)/()/""/~(0 0) are green (every nothing is green), '(-2 1) is red, while a box
-; stays blue (#0 nets 1: presence over nothing). the *rank* axis is scalar (0) vs array (>= 1, one
+; the order-sign of its net: GREEN nets nonnegative (what $ keeps), RED nets negative (what $
+; clamps to nothing), and BLUE is green's FLOOR -- net exactly zero, kept like a green yet nothing.
+; so $ passes the green and stops the red at nothing, and a value is true iff it is POSITIVE green
+; (above the blue floor; blue and red both net false). the GREEN charms are N (the nonnegatives),
+; the RED charms the negatives below, and 0 is the ONE BLUE CHARM -- green by sign yet blue by
+; measure, the floor where green meets nothing. color spans the UNSTARS too, by the same net:
+; '(1) is green, '(0)/()/""/~(0 0) are blue (every nothing is blue), '(-2 1) is red, while a box
+; stays green (#0 nets 1: presence over nothing). the *rank* axis is scalar (0) vs array (>= 1, one
 ; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
 ; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
 ; string < symbol < chain < map < top, each band ordered within itself (text and chains
@@ -145,12 +145,12 @@
 ; never per element), and `$` (sat) is ONE saturating clamp over the net's order-signed
 ; magnitude, max(0, ceil), with the invariant !x == (0 = $x). `$` is the SOLE clamp, retracting
 ; ANY value onto the green charms, so a clamped fold is mere composition -- $*x the clamped
-; product, $(aprod v) the clamped reduction, no per-fold saturator (the measure is additive,
+; product, $(prod v) the clamped reduction, no per-fold saturator (the measure is additive,
 ; $ its only observation). net is additive wherever
 ; + is total -- EXACTLY, complex included: $(a + b) saturates net a + net b over
 ; numbers, text, and lists alike, the byte law included (a string + a byte nets the
 ; byte: + is a true measure homomorphism), and the ARRANGEMENT does not matter: a
-; packed complex array, the list of the same values, and their asum all net the same
+; packed complex array and the list of the same values net the same
 ; sum. the COUNT -- how many, not how much -- is `tally`: a string or buf counts its
 ; charms, a list its spine, an array its cells, a map its keys, a symbol its spelling,
 ; a scalar nothing. tally is what "length" always was; $ never was.
@@ -299,45 +299,47 @@ i * i                ; -1        the algebraic heart of euler
 ; lexicographic by (re,im) and `=` bridges the gems. `twin` and `arg` broadcast over arrays,
 ; so the derived forms stay elementwise.
 ; a rank-N complex array packs (re,im) into a `c`-typed array: peep yields a ~(..) box,
-; + - * / broadcast numpy-style, `=` gives a mask, and asum/aprod fold complex. the net
-; is the complex SUM of the cells, so $v = $(asum v) and a packed array nets exactly
+; + - * / broadcast numpy-style, `=` gives a mask, and net/prod fold complex. the net
+; is the complex SUM of the cells, so $v = $(net v) and a packed array nets exactly
 ; like the list of the same values -- the arrangement does not matter.
 ; demo:
 i                    ; ~(0.0 1.0)   i = ~(0 1)
 ~(1 2) * ~(3 4)      ; ~(-5 10)
 (conj ~(2 3))        ; ~(2 -3)      ~ is conjugation, an involution
 (re ~(2 3))          ; 2.0
-(asum (array 2 ~(1 2) ~(3 4)))   ; ~(4 6)   complex arrays fold complex
+(net (array 2 ~(1 2) ~(3 4)))   ; ~(4 6)   complex arrays fold complex
 
-; --- arrays --- (arr type shape vals) is THE typed constructor: vals 0 zero-fills, a list
-; fills row-major; (array shape elem..) infers the type and curries; @(..) is a rank-1
+; --- arrays --- star-tray / gem-tray / twin-tray / top-tray are THE typed constructors,
+; one per z/r/c/o tier: (star-tray shape vals) -- vals 0 zero-fills, a list fills row-major
+; (the generic witness ctor `tray` underneath them is off the surface, mopped); (array
+; shape elem..) infers the type and curries; @(..) is a rank-1
 ; literal; (iota n) is jot's array twin -- the z-array '(0 .. n-1) filled in one C loop,
-; no link spine, so (asum (iota n)) reduces a range end to end in C.
+; no link spine, so (net (iota n)) reduces a range end to end in C.
 ; a ONE-CELL array DEMOTES to its lone scalar star -- a rank-0 (empty-shape) array, a
-; rank-1-len-1 like @(5), or a 1x1 contraction IS the value (so @(5) = 5, (arr 0.0 '(1)
+; rank-1-len-1 like @(5), or a 1x1 contraction IS the value (so @(5) = 5, (gem-tray '(1)
 ; '(3.5)) = 3.5, (iota 1) = 0): an array exists only at tally >= 2. there is thus NO
 ; rank-0 array kind; a scalar star (charm/float/wide/complex) is the rank-0 point, and
-; the array accessors (arank/alen/ashape) read nil on it. EMPTIES are the exception
+; the array accessors (rank/tally/shape) read nil on it. EMPTIES are the exception
 ; (a 0-axis has tally 0, not 1): they STAY arrays, carrying the reduction units below.
-; arank/alen/ashape/atype; peep (out of bounds -> the default). + - * // < =
+; rank/tally/shape/tier; peep (out of bounds -> the default). + - * // < =
 ; broadcast numpy-style to the widest type
 ; (compare -> a z mask); `/` promotes the whole result to r the moment any element divides
-; inexactly. reduce with asum aprod amax amin aall (a conjunction); CONTRACT with inner
+; inexactly. reduce with net prod max min aall (a conjunction); CONTRACT with inner
 ; (+.x -- a's last axis against b's first: 1D.1D is the dot product, 2D.2D matrix multiply)
 ; and outer (o.x -- all pairwise products, rank ra+rb). an array nets the SUM of its elements
-; ($ = max(0, ceil(asum)), like a list), so an all-zero or net-negative array is false.
+; ($ = max(0, ceil(net)), like a list), so an all-zero or net-negative array is false.
 ; sine/cosine/log/pow and the derived forms map elementwise. a 0-axis is real:
 ; broadcast keeps it empty (a 1-axis takes the OTHER size, 0 included), an empty
 ; rank-1 prints (array '(0)) (@ has no empty spelling), and EMPTY REDUCTIONS ANSWER
-; THEIR MONOID UNITS -- (asum e) = 0, (aprod e) = 1, (aall e) true: the floor
+; THEIR MONOID UNITS -- (net e) = 0, (prod e) = 1, (aall e) true: the floor
 ; appears as the values of empty reductions.
 ; demo:
 @(1 2 3) + @(10 20 30)   ; @(11 22 33)   broadcast numpy-style
 @(1 2 3) * 2             ; @(2 4 6)
-(asum @(10 20 30))       ; 60
+(net @(10 20 30))       ; 60
 (iota 3)                 ; @(0 1 2)      the z-array 0..n-1
 (inner @(1 2 3) @(4 5 6)); 32            +.x dot product
-(asum (arr 0 '(0) 0))    ; 0             empty reduction = the monoid unit
+(net (star-tray '(0) 0)) ; 0            empty reduction = the monoid unit
 
 ; --- chains & lists --- link builds the chain (the cartesian-product kind, classically the
 ; pair); cap and cup are its two projections -- the matched pair the string diagrams bend,
@@ -557,7 +559,8 @@ not-in-the-bag      ; ()        a missing nom reads the zero point (helpless)
 ; tablet mono list ..) stay, as do the C-resolved hooks (num-ap add mul help). the shell
 ; core (ai/bao.l) no longer needs mopping: its editor + repl internals are
 ; closure-private (off the bag by construction), and only its entry points --
-; shell/welp/edraw/wrap/bao + the stream shell zev/zevs/charms -- are globals.
+; shell/welp/edraw/wrap/bao + the stream shell zev/zevs -- are globals (the `char`
+; colist lift is closure-private inside zev now).
 ; demo:
 (lit? ev)            ; true    ev is installed in the image
 born                 ; a fixnum (the hatch time) post-egg; unbound pre-egg

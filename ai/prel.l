@@ -21,8 +21,8 @@
    (names _ ) (keys bag)
    caap (compose cap cap) caup (compose cap cup) ;; FIXME emit pure code -- combine like operations and metaprogram a concrete thread for each definition
    cuap (compose cup cap) cuup (compose cup cup))
-; array element-kind codes (enum g_vec_type), named for the tier spine:
-; Z integers, R reals, C packed complex, O objects -- one word per element.
+; the four element tiers (enum g_vec_type, one word per element): z integers, r reals,
+; c packed complex, o objects -- surfaced by the star-/gem-/twin-/top-tray ctors + `tier`.
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
 ; the bare ~ digraph (~x, ~ not before `(`) reads as (conj x): conj LIFTS now, so
 ; it IS the monadic twin -- a real r -> ~(r 0), a complex z -> ~(re -im), an
@@ -186,7 +186,7 @@
 (: catmap (compose (flip foldr 0) (compose cat))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
-   has? (compose any (=))
+   member? (compose any (=))
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) 0)
    (jot n) ((: (go i) (? (< i n) (link i (go (+ i 1))))) 0)
@@ -445,7 +445,7 @@
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (tray? st) (= 1 (arank st)) (= 4 (alen st)) (= (tier (rng-seed 0)) (tier st)))
+   (rng-set st) (? (&& (tray? st) (= 1 (rank st)) (= 4 (tally st)) (= (tier (rng-seed 0)) (tier st)))
                    (: _ (pin bag 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin bag 'rng-state (cup r))
@@ -536,7 +536,7 @@
    ; &&/|| are seen as the compiler sees them). u tracks lambda depth; dm (direct
    ; mode) counts only references NOT under a lambda.
    (w v x bnd u dm) (?
-    (nom? x) (&& (? dm (nil? u) 1) (= x v) (nil? (has? v bnd)))
+    (nom? x) (&& (? dm (nil? u) 1) (= x v) (nil? (member? v bnd)))
     (atom? x) 0
     (: h (cap x) (?
       (= h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
@@ -558,7 +558,7 @@
 ; boxfix-core (c0): same prep + rewrites refs via sub/subl (c0 has no analysis-time
 ; redirect). Returns (prepped-prs . body') or 0.
 (: (boxfix-core prs body) (:
-   (rmc cs ns) (filter (\ p (nil? (has? (cap p) ns))) cs)
+   (rmc cs ns) (filter (\ p (nil? (member? (cap p) ns))) cs)
    (sub cs x) (?
     (nom? x) (: p (assoc x cs) (? (two? p) (list missing (caup p) (list '\ (cuup p))) x))
     (atom? x) x
@@ -574,7 +574,7 @@
       (? (nil? bx) 0
        (: cs (mkcs bx)
           (one p) (: d (sub cs (cup p))
-                     (? (has? (cap p) bx)
+                     (? (member? (cap p) bx)
                         (: c (assoc (cap p) cs) (link '_ (list pin (caup c) (list '\ (cuup c)) d)))
                         (link (cap p) d)))
           (link (cat (cellbinds cs) (map one prs)) (sub cs body)))))))

@@ -137,8 +137,8 @@ lvm_t lvm_kcall,
  lvm_fputbn, lvm_read, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
- lvm_tray, lvm_iota, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
- lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
+ lvm_tray, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,
+ lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_lamp, lvm_hotp,
  lvm_nif,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
@@ -663,11 +663,11 @@ lvm_t lvm_fault;
  _(nif_tray, "tray", s3(lvm_tray))\
  _(nif_iota, "iota", s1(lvm_iota))\
  _(nif_nif, "nif", s4(lvm_nif))\
- _(nif_arank, "arank", s1(lvm_arank))\
- _(nif_alen, "alen", s1(lvm_alen)) _(nif_ashape, "ashape", s1(lvm_ashape))\
+ _(nif_rank, "rank", s1(lvm_rank))\
+ _(nif_alen, "alen", s1(lvm_alen)) _(nif_shape, "shape", s1(lvm_shape))\
  _(nif_atype, "atype", s1(lvm_atype))\
  _(nif_asum, "asum", s1(lvm_asum)) _(nif_aprod, "aprod", s1(lvm_aprod))\
- _(nif_amax, "amax", s1(lvm_amax)) _(nif_amin, "amin", s1(lvm_amin))\
+ _(nif_max, "max", s1(lvm_max)) _(nif_min, "min", s1(lvm_min))\
  _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
  _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "big?", s1(lvm_bigp)) _(nif_widep, "full?", s1(lvm_widep))\
  _(nif_setp, "tray?", s1(lvm_setp)) _(nif_intf, "int", s1(lvm_intf))\
@@ -5710,7 +5710,7 @@ lvm(lvm_iota) {
 
 // --- accessors -------------------------------------------------------------
 // rank / element-type code as fixnums; nil for a non-vec. Both 0 for a scalar box.
-op11(lvm_arank, packp(Sp[0]) ? putcharm(vec(Sp[0])->rank) : nil)
+op11(lvm_rank, packp(Sp[0]) ? putcharm(vec(Sp[0])->rank) : nil)
 op11(lvm_atype, packp(Sp[0]) ? putcharm(vec(Sp[0])->type) : nil)
 
 // total element count (1 for a scalar box), nil for a non-vec.
@@ -5720,7 +5720,7 @@ lvm(lvm_alen) {
  return Sp[0] = putcharm(vec_nelem(vec(x))), Ip++, Continue(); }
 
 // dimensions as a list (allocates rank link cells), nil for a non-vec.
-lvm(lvm_ashape) {
+lvm(lvm_shape) {
  word x = Sp[0];
  if (!packp(x)) return Sp[0] = nil, Ip++, Continue();
  uintptr_t r = vec(x)->rank;
@@ -5860,8 +5860,8 @@ static lvm(lvm_aextreme, int kind) {
   if (ismax?m3>m0:m3<m0) m0=m3;
   emit_int(m0); }
  return Sp[0] = _res, Ip++, Continue(); }
-lvm(lvm_amax) { return Ap(lvm_aextreme, g, 2); }
-lvm(lvm_amin) { return Ap(lvm_aextreme, g, 3); }
+lvm(lvm_max) { return Ap(lvm_aextreme, g, 2); }
+lvm(lvm_min) { return Ap(lvm_aextreme, g, 3); }
 
 // aall: the bool conjunction reduction. Scalar -> identity (so (aall 1) = 1, the
 // linchpin of the rank-agnostic compare idiom). Over an array: "no zero element"
