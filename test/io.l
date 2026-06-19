@@ -65,62 +65,62 @@
   ; tell them apart by equality.
   ;
   ; Empty input: immediately hits EOF, returns the sentinel.
-  (= 99 (read (tap 0) 99))
+  (= 99 (scan (tap 0) 99))
   ; Caller chooses any sentinel value.
-  (= 'eof (read (tap 0) 'eof))
+  (= 'eof (scan (tap 0) 'eof))
 
   ; Single datum: number, symbol, list, quoted form, string literal.
-  (= 1 (read (tap '(49)) 99))                          ; "1"
-  (= 'a (read (tap '(97)) 99))                         ; "a"
-  (: r (read (tap '(40 49 32 50 41)) 99)               ; "(1 2)"
+  (= 1 (scan (tap '(49)) 99))                          ; "1"
+  (= 'a (scan (tap '(97)) 99))                         ; "a"
+  (: r (scan (tap '(40 49 32 50 41)) 99)               ; "(1 2)"
      (do (two? r) (= 1 (cap r)) (= 2 (caup r))))
-  (: r (read (tap '(39 49)) 99)                        ; "'1" -> (` 1)
+  (: r (scan (tap '(39 49)) 99)                        ; "'1" -> (` 1)
      (do (two? r) (= 1 (caup r))))
   ; "hi" -- string literal round-trip through the ci port.
-  (= (string (link 104 (link 105 0))) (read (tap '(34 104 105 34)) 99))
+  (= (string (link 104 (link 105 0))) (scan (tap '(34 104 105 34)) 99))
 
   ; Sequential reads: pull each datum in source order; final read returns e.
   (: p (tap '(49 32 50 32 51))                          ; "1 2 3"
-     (do (= 1 (read p 99))
-        (= 2 (read p 99))
-        (= 3 (read p 99))
-        (= 99 (read p 99))))
+     (do (= 1 (scan p 99))
+        (= 2 (scan p 99))
+        (= 3 (scan p 99))
+        (= 99 (scan p 99))))
 
   ; Whitespace and ;-comments are skipped between datums.
-  (= 1 (read (tap '(32 32 49 32 32)) 99))              ; "  1  "
-  (= 2 (read (tap '(59 32 99 109 116 10 50)) 99))      ; "; cmt\n2"
+  (= 1 (scan (tap '(32 32 49 32 32)) 99))              ; "  1  "
+  (= 2 (scan (tap '(59 32 99 109 116 10 50)) 99))      ; "; cmt\n2"
 
   ; A bare close-paren at top level is treated as clean end-of-input.
-  (= 99 (read (tap '(41)) 99))                          ; ")"
+  (= 99 (scan (tap '(41)) 99))                          ; ")"
 
   ; --- g_status_more cases: read returns the port itself, distinct from e ---
   ; Unclosed list.
-  (: p (tap '(40)) r (read p 99) (do (= r p) !(= r 99)))
+  (: p (tap '(40)) r (scan p 99) (do (= r p) !(= r 99)))
   ; Unterminated string.
-  (: p (tap '(34 97)) (= p (read p 99)))                ; "\"a"
+  (: p (tap '(34 97)) (= p (scan p 99)))                ; "\"a"
   ; Dangling quote.
-  (: p (tap '(39)) (= p (read p 99)))                   ; "'"
+  (: p (tap '(39)) (= p (scan p 99)))                   ; "'"
 
   ; After a g_status_more, the port's source is exhausted; the next read
   ; sees top-level EOF and returns the sentinel.
-  (: p (tap '(40)) _ (read p 99) (= 99 (read p 99)))
+  (: p (tap '(40)) _ (scan p 99) (= 99 (scan p 99)))
 
   ; Caller may pass the port itself as the EOF sentinel to collapse
   ; EOF and more into one "no datum" case.
-  (: p (tap 0)     (= p (read p p)))                    ; clean EOF
-  (: p (tap '(40)) (= p (read p p)))                    ; more
+  (: p (tap 0)     (= p (scan p p)))                    ; clean EOF
+  (: p (tap '(40)) (= p (scan p p)))                    ; more
 
   ; The port stays usable across complete forms in mixed sequences.
   (: p (tap '(40 41 32 49))                              ; "() 1"
-     (do (= 0 (read p 99))                                 ; () -> nil
-        (= 1 (read p 99))
-        (= 99 (read p 99))))
+     (do (= 0 (scan p 99))                                 ; () -> nil
+        (= 1 (scan p 99))
+        (= 99 (scan p 99))))
 
   ; Misuse: non-port first argument leaves the sentinel in place.
-  (= 99 (read 42 99))
-  (= 'x (read 'notaport 'x))
+  (= 99 (scan 42 99))
+  (= 'x (scan 'notaport 'x))
 
-  ; `read` in the prel is defined as (read in) -- a curried read
+  ; `scan` reads one datum; `(scan in)` is a curried scan
   ; bound to the stdin port. Verify the binding is a function (callable
   ; closure), not the raw port or sentinel value.
-  !(= read in))
+  !(= scan in))

@@ -53,7 +53,7 @@
    (answer st d)                                    ; d = the datagram (a string) -> a reply string
      (? (= d "ping") "pong"
         (= d "stat") (+ "replies=" (+ (show (replies st)) (+ " beats=" (show (beats st)))))  ; + is binary: nest right
-        (show (ev (read (tap (bytes d)) 0))))         ; else: run d AS AI, show the result
+        (show (ev (scan (tap (bytes d)) 0))))         ; else: run d AS AI, show the result
    (policy st ev)
      (? (id? (ev-kind ev) 'net)                     ; a packet: answer by its content
           (link (with (+ 1 (replies st)) (beats st)) (link 'send (answer st (ev-load ev))))
@@ -212,7 +212,7 @@
 ; so a restart resumes mid-mission.
    (bytes s)   (map s (jot (tally s)))
    (save st)   (show st)
-   (restore s) (read (tap (bytes s)) fresh)
+   (restore s) (scan (tap (bytes s)) fresh)
 
 ; --- the watchdog (task-level / self-restart) --- run the agent as a SUPERVISED
 ; task over a checkpoint string; re-checkpoint its result. a healthy round returns a

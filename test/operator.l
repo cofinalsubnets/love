@@ -10,7 +10,7 @@
  ((link 'pin 3) = (op-tbl '<-)) ((link 'peep 3) = (op-tbl '->)))
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
-(assert ('^ = (read (tap '(94)) 99)) ('+ = (read (tap '(43)) 99)))
+(assert ('^ = (scan (tap '(94)) 99)) ('+ = (scan (tap '(43)) 99)))
 
 ; wire ^^ as a temporary alias at two (list); restored below. ^ itself stays the
 ; xor nif throughout -- the factorization law is greedy longest-prefix, so the

@@ -21,7 +21,7 @@
 
    ; read a file's top-level forms as DATA (the reader strips ; comments)
    (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (read q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
+                   ((: (g acc) (: r (scan q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
 
    (e2 l) (cap (cup l))  (e3 l) (cap (cup (cup l)))  (e4 l) (cap (cup (cup (cup l))))  ; 2nd 3rd 4th
    ; exactly three elements? (STRUCTURAL chainp, never `!`: '(0) nets zero)
@@ -165,13 +165,13 @@
 
    nt (tablet 0) ns (tablet 0)                          ; translated / seen counters
    (bump b) (pin b 0 (+ 1 (peep b 0 0)))
-   (scan ops) (? (! ops) 0
+   (walkops ops) (? (! ops) 0
                  (: f (cap ops) _ (bump ns) s (tp (fix1 f))
                     _ (? s (: _ (bump nt) (. (thm (peep nt 0 0) f s))) 0)
-                    (scan (cup ops))))
+                    (walkops (cup ops))))
    (walk fs) (? (! fs) 0
                 (: f (cap fs)
-                   _ (? (&& (two? f) (id? (cap f) 'assert)) (scan (cup f)) 0)
+                   _ (? (&& (two? f) (id? (cap f) 'assert)) (walkops (cup f)) 0)
                    (walk (cup fs))))
 
    _ (. (cat (L

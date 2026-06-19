@@ -280,7 +280,7 @@
  (6 = +'(1 2 3)) (-1 = +'(-2 1)) (24 = *'(1 2 3 4))     ; +/ and */ -- the net, unclamped
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
  (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; head position never fuses: call and section
- ('(mono (< x)) = (caup (read (tap '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
+ ('(mono (< x)) = (caup (scan (tap '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
  ('cap = (monadics '<)) ('net = (monadics '+))
  (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
@@ -314,7 +314,7 @@
 ; `dot` (the `.` operator, .x) prints x to out and returns it.
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (pot 0) _ (print o 42) ("42" = (slurp o)))
- (1 = (read (tap '(49)) 99)) ('eof = (read (tap 0) 'eof)) (: p (tap '(40)) (p = (read p 99))))
+ (1 = (scan (tap '(49)) 99)) ('eof = (scan (tap 0) 'eof)) (: p (tap '(40)) (p = (scan p 99))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;

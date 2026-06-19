@@ -24,7 +24,7 @@
 ; FIRST, THEN call `(run 0)` -- the loaded program reads the global `argv`, so it must already
 ; be rebound before the load fires. (-v/-h still exit inside `pre`, before the rebind, as before.)
 (: _
- (: (rdev q) ((: (go e q) (: r (read q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
+ (: (rdev q) ((: (go e q) (: r (scan q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
     (load1 p) (: q (open p "r")
        (? q (rdev q) (: _ (say err (+ "ai: cannot open " p)) (nap 1))))
     (eval1 s) (rdev (tap (map s (jot (tally s)))))   ; a string is a fn over its bytes -> a charlist port

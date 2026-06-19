@@ -27,6 +27,7 @@ ai is `top`; the crew are its faces, in dual pairs.
 
 - **cook** — the builder. make, in ai.
 - **mow** — the gardener. two-space copying GC; keeps the heap green.
+- **ticks** — the scheduler. the cooperative heartbeat: spawn, yield, wait — each task its turn.
 - **gwen** — ai's debugger. probes the binary.
 
 ## come aboard
