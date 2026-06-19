@@ -62,7 +62,7 @@
    ;; bias un-broadcast: a (C,) added to an (N,C) output sums its cotangent over
    ;; the N rows it was stretched across.
    (tl-colsum g) (: sh (ashape g) r (cap sh) c (cap (cup sh))
-      (arr 0.0 (link c ())
+      (gem-tray (link c ())
            (map (\ j (tl-lsum (map (\ i (peep g (link i (link j ())) 0)) (jot r)))) (jot c))))
    ;; sh is the 1-vector (C,) where C is g's last axis -- checked element-wise.
    (tl-can-colsum g sh)
@@ -83,7 +83,7 @@
    ;; -- 2D transpose (functional rebuild; arrays are immutable). mm's adjoint
    ;; needs A-transpose, and `inner` only contracts last-of-a vs first-of-b.
    (transp2 m) (: sh (ashape m) r (cap sh) c (cap (cup sh))
-      (arr 0.0 (link c (link r ()))
+      (gem-tray (link c (link r ()))
            (tl-cat (map (\ j (map (\ i (peep m (link i (link j ())) 0)) (jot r))) (jot c)))))
 
    ;; -- the lens ops -- each returns its forward value and an adjoint that
@@ -156,8 +156,8 @@
    (params m)     (tl-mparams m)                         ; the parameter list (for the optimizer)
 
    ;; weight init: small uniform in [-0.5, 0.5). seed with (rng-set (rng-seed n)).
-   (tl-randmat r c) (arr 0.0 (link r (link c ())) (map (\ _ (- (randf 0) 0.5)) (jot (* r c))))
-   (tl-zeros n)     (arr 0.0 (link n ()) 0)
+   (tl-randmat r c) (gem-tray (link r (link c ())) (map (\ _ (- (randf 0) 0.5)) (jot (* r c))))
+   (tl-zeros n)     (gem-tray (link n ()) 0)
 
    ;; linear: y = x@W + b. linear-wb builds from given param glasses (handy for
    ;; tests); (linear i o) inits W (i,o) random, b (o,) zero. rides mm + the bias

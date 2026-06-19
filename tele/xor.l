@@ -11,8 +11,8 @@
 (: _ (rng-set (rng-seed 1))
    H 8  lr 0.6  epochs 4000
 
-   X (arr 0.0 '(4 2) '(0.0 0.0  0.0 1.0  1.0 0.0  1.0 1.0))   ; the four inputs
-   Y (arr 0.0 '(4 1) '(0.0 1.0 1.0 0.0))                       ; XOR of each
+   X (gem-tray '(4 2) '(0.0 0.0  0.0 1.0  1.0 0.0  1.0 1.0))   ; the four inputs
+   Y (gem-tray '(4 1) '(0.0 1.0 1.0 0.0))                       ; XOR of each
 
    model (seq (L (linear 2 H) tanh (linear H 1) sig))
    opt   (sgd (params model) lr)

@@ -26,7 +26,7 @@
    (gcell v k)   (? (tray? v) (peep v (decode (ashape v) k) 0) v)
    ;; functionally bump cell k of a constellation by d (arrays are immutable -> rebuild)
    (bump v k d)  (? (tray? v)
-                    (: sh (ashape v) (arr 0.0 sh (map (\ j (+ (gcell v j) (? (= j k) d 0)))
+                    (: sh (ashape v) (gem-tray sh (map (\ j (+ (gcell v j) (? (= j k) d 0)))
                                                       (jot (lprod sh)))))
                     (+ v d))
    (setnth l p x) (? (= p 0) (link x (cup l)) (link (cap l) (setnth (cup l) (- p 1) x)))
@@ -59,10 +59,10 @@
    r4  @(1.0 -2.0 0.5 -0.7)                          ; for relu: cells comfortably off the kink
    b3  @(10.0 20.0 30.0)
    t3  @(0.2 -0.4 1.1)
-   m23 (arr 0.0 (quote (2 3)) (quote (1.0 -2.0 0.5 3.0 1.0 -1.5)))
-   m32 (arr 0.0 (quote (3 2)) (quote (2.0 1.0 -1.0 0.5 0.0 3.0)))
-   x22 (arr 0.0 (quote (2 2)) (quote (0.5 -1.0 2.0 0.3)))
-   w23 (arr 0.0 (quote (2 3)) (quote (0.1 -0.2 0.3 0.4 -0.5 0.6)))
+   m23 (gem-tray (quote (2 3)) (quote (1.0 -2.0 0.5 3.0 1.0 -1.5)))
+   m32 (gem-tray (quote (3 2)) (quote (2.0 1.0 -1.0 0.5 0.0 3.0)))
+   x22 (gem-tray (quote (2 2)) (quote (0.5 -1.0 2.0 0.3)))
+   w23 (gem-tray (quote (2 3)) (quote (0.1 -0.2 0.3 0.4 -0.5 0.6)))
 
    ;; -- the cases (loss is always a scalar via sum) --
    _ (gradcheck "sum(v)"                (L v3)      (\ ls (sum (nth ls 0))))
@@ -90,10 +90,10 @@
    _ (ok "seq collects 4 params" (= 4 (tally (params (seq (L (linear 2 3) relu (linear 3 1)))))))
 
    ;; seq forward == an explicit hand composition over the same fixed params
-   _ (: W1 (glass (arr 0.0 (quote (2 2)) (quote (0.1 0.2 0.3 0.4)))) b1 (glass @(0.5 -0.5))
-        W2 (glass (arr 0.0 (quote (2 1)) (quote (0.7 -0.3))))       b2 (glass 0.2)
+   _ (: W1 (glass (gem-tray (quote (2 2)) (quote (0.1 0.2 0.3 0.4)))) b1 (glass @(0.5 -0.5))
+        W2 (glass (gem-tray (quote (2 1)) (quote (0.7 -0.3))))       b2 (glass 0.2)
         net (seq (L (linear-wb W1 b1) relu (linear-wb W2 b2)))
-        x  (arr 0.0 (quote (1 2)) (quote (1.0 2.0)))
+        x  (gem-tray (quote (1 2)) (quote (1.0 2.0)))
         _ (tl-reset 0) got  (tl-val (call net x))
         _ (tl-reset 0) want (tl-val (add (mm (relu (add (mm x W1) b1)) W2) b2))
         (ok "seq forward == manual compose" (close-c? got want)))
@@ -110,8 +110,8 @@
 
    ;; end-to-end: a linear layer learns a linear target; the loss collapses
    _ (: _ (rng-set (rng-seed 1))
-        Wt (arr 0.0 (quote (2 1)) (quote (1.5 -2.0)))
-        X  (arr 0.0 (quote (4 2)) (quote (1.0 0.0  0.0 1.0  1.0 1.0  2.0 -1.0)))
+        Wt (gem-tray (quote (2 1)) (quote (1.5 -2.0)))
+        X  (gem-tray (quote (4 2)) (quote (1.0 0.0  0.0 1.0  1.0 1.0  2.0 -1.0)))
         Y  (inner X Wt)                                  ; the true targets, X @ Wt
         (lossof model) (: _ (tl-reset 0) (tl-val (mse (call model X) Y)))
         (trainstep model opt) (: _ (tl-reset 0) _ (zero opt)
