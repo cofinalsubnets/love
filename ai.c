@@ -832,7 +832,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).
   // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prel, and the
-  // opfix source pass (prel.l, hooked by both compilers at c0 and wev)
+  // opfix source pass (prel.l, hooked by both compilers at c0 and feel)
   // factors sigil tokens against it at compile time. data reading is
   // purely structural.
  }
@@ -1677,7 +1677,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // like a macro -- once that global exists (i.e. for everything after its own
  // definition partway through the prel). It indirects forward-referenced
  // bindings through nom-keyed cells -- one scope; see prel.l. The runtime compiler
- // (ev.l) runs the same pass in wev, so both lanes share one boxfix. exp is
+ // (ev.l) runs the same pass in feel, so both lanes share one boxfix. exp is
  // rooted across the alloc.
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
   word bf = ai_mapget(g, 0, pop1(g), g->book);
@@ -3553,7 +3553,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
    if (nomp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
     bool emptyd = g->sp[0] == ZeroPoint;     // datum is the () zero-point (NOT the number 0)
     // @()/#() -> the DIRECT one-arg empty-collection nif, (iota 0) / (tablet 0). A one-arg nif
-    // call is ai0-safe; a ZERO-ARG macro (tuple)/(hash) is NOT expanded by the self-hosted wev,
+    // call is ai0-safe; a ZERO-ARG macro (tuple)/(hash) is NOT expanded by the self-hosted feel,
     // so @()->( tuple)->(spread (list)) would strand a macro value on ai0. The nif sidesteps it.
     char const *empty_ctor = !emptyd ? 0
                            : hashsym(A(g->sp[1])) ? "tablet"          // #() -> empty map
@@ -4208,7 +4208,7 @@ static void nat_unmap(void *p) {
 // so run_finalizers distinguishes a dead closure (header) from a live one (forward).
 // The code follows the lvm ABI (g=rdi Ip=rsi Hp=rdx Sp=rcx). Applied by JUXTAPOSITION
 // -- no run-verb; plumbing the compiler calls to emit native for a hot closure,
-// transparently. Internal: the egg mops it like boxfix/wev.
+// transparently. Internal: the egg mops it like boxfix/feel.
 // (nif code interp src arity) -- emitted bytes -> applicable native value; the merge
 // of the old nat (arity 1) and natn (arity>=2). ARITY 1: a 6-word cell whose ENTRY is
 // the native body directly (value[-1]=src, value[1]=interp deopt, value[2]=lvm_ret),
@@ -4873,7 +4873,7 @@ op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : nil)   // (charm? x): a fixnum -- 
 // `nilp`/`not`: the falsy predicate -- the efficient generic form of (= 0 ($ x)),
 // via ai_nilp, which reads the net's sign without the clamp (a sym/string/fn is truthy
 // with no walk). The single truthiness oracle: `?` (lvm_cond), nilp, and aall all
-// consult ai_nilp, so `(? (nilp e) a b)` == `(? e b a)` -- the wev pass drops such a
+// consult ai_nilp, so `(? (nilp e) a b)` == `(? e b a)` -- the feel pass drops such a
 // nilp wrapper. Use `(= x 0)` for a literal scalar-zero test.
 op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : nil)
 

@@ -8,7 +8,7 @@
 ;
 ; ⚠ x86-64 ONLY (emits x86-64; load with -l on an x86-64 host). WIP toward the auto
 ; hook (ev installing native for hot regions, transparently); `nat` then goes
-; internal (mopped like boxfix/wev) and there is no user-facing verb at all.
+; internal (mopped like boxfix/feel) and there is no user-facing verb at all.
 ;
 ; grammar: (\ x E), E := x | int | (+/-/* E E) | (cmp E E) | (? E E E), cmp in
 ; < <= > >= = (-> 0/1 like the interpreter); ? is strictly-positive-test then/else.

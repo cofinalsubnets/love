@@ -1,7 +1,7 @@
-; test/wev.l -- the wev pre-pass: macro expansion (exercised throughout the suite)
+; test/feel.l -- the feel pre-pass: macro expansion (exercised throughout the suite)
 ; and constant folding. Folding is semantics-preserving, so whether it FIRED is only
 ; observable via baked-literal identity (a folded (X 1 2) is shared across calls) --
-; which differs between the wev compiler and the c0/l0 control, so those positive
+; which differs between the feel compiler and the c0/l0 control, so those positive
 ; "fires" checks can't live in this cross-compiler suite (they're verified out of band).
 ; What CAN be asserted here: fold correctness, and that identity-minting heads stay
 ; excluded -- (tablet 0) must yield a fresh hash on every call under BOTH compilers.

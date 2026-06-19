@@ -317,7 +317,7 @@
  (1 = (read (tap '(49)) 99)) ('eof = (read (tap 0) 'eof)) (: p (tap '(40)) (p = (read p 99))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
-; add/mul, opfix, boxfix, wev, maps); the egg is WARMED and the evaluator sits on it twice;
+; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;
 ; `born` records the hatch (unbound pre-egg); just before birth the egg mops up runtime names.
 (assert (lit? ev) (? born (charm? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone

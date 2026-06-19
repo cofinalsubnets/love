@@ -1,18 +1,18 @@
-; iop/apx: unforgeable tag markers (uninterned) shared by wev -- which emits (iop op . args)
+; iop/apx: unforgeable tag markers (uninterned) shared by feel -- which emits (iop op . args)
 ; and (apx nary head . args) nodes -- and ana, which dispatches on them. Top-level globals,
-; NOT ev-block locals, so wev's per-global aps and ana resolve them by name. That keeps
+; NOT ev-block locals, so feel's per-global aps and ana resolve them by name. That keeps
 ; them out of ev's captured frame (and off every ap's import list: a ap closing over
-; a sibling that captured iop/apx would otherwise drag both in dead -- see .wevs).
+; a sibling that captured iop/apx would otherwise drag both in dead -- see .feels).
 (: iop (nom 'iop)
    apx (nom 'apx))
 
-; wevs: value->ap memo for global fns, built once by scanning every global. A ap
+; feels: value->ap memo for global fns, built once by scanning every global. A ap
 ; folds an application to a value when its args are constant (pure fns only), else emits an
 ; (iop op . args) node iap inlines (any nif of matching arity), else leaves it. A nif is found
 ; by text shape (lvm_ret0 terminator); fold eligibility from the curated `names`. It lives
-; as a global -- wev's fold reaches it by name -- so this ~126-entry table is NOT baked into
-; ev's value; `.ev` then prints as just the ana+wev logic, and the table prints under `.wevs`.
-(: wevs (:
+; as a global -- feel's fold reaches it by name -- so this ~126-entry table is NOT baked into
+; ev's value; `.ev` then prints as just the ana+feel logic, and the table prints under `.feels`.
+(: feels (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
    (cval e) (? (nom? e) (link 0 0)               ; (const? . value): 1 head iff a literal
@@ -57,11 +57,11 @@
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
- y (wev c (opfix x))    ; opfix first: ev = the deserialized-data lane, opfix factors its sigil surface
+ y (feel c (opfix x))    ; opfix first: ev = the deserialized-data lane, opfix factors its sigil surface
  (ana c y (k0 c) 0 0)))
   lvm_cur (peek 0 (+))
   (sco p a i) (pin (pin (pin (tablet 0) 'arg a) 'imp i) 'par p)
-  (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where wev stashes 'src
+  (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where feel stashes 'src
   ; --- THE EMISSION INTERFACE (the codegen seam) --------------------------------------
   ; ana walks the analyzed form and emits code through these primitives. an EMITTER is a
   ; curried (\ k n ..): k = the continuation emitter, n = the current cell index (the
@@ -123,10 +123,10 @@
    (= a lvm_unc) (pro (seek -2 (peek 2 f)))
    (= a lvm_cur) (?- f (= lvm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
-  ; wev: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks
+  ; feel: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks
   ; applies with their n-ary-vs-l2r strategy. Tail position is NOT tracked here -- kap detects
   ; tail by peeking the continuation for lvm_ret at analysis time.
-  (wev c x) (:
+  (feel c x) (:
    (wx x bnd) (?
     (atom? x) x
     (: h (cap x) (?
@@ -170,7 +170,7 @@
    (fold x bnd) (: h (cap x)
     (? (atom? (cup x)) x                          ; (f) single element -> ana's (atom? b) handles
        (|| (nil? (nom? h)) (member? h bnd)) (link apx (link 0 x))   ; local/computed head
-       (: v (book h) hd (wevs v)
+       (: v (book h) hd (feels v)
         (? hd (hd x)
            (napof v (cup x)) (link apx (link 1 x))
            (link apx (link 0 x))))))
@@ -248,7 +248,7 @@
    ; clauses: test/result pairs then a trailing else. a constant test folds to one
    ; branch; else emit lvm_cond -- true runs `then` + jumps to join, false falls to `rest`.
    (clauses b) (?
-    (atom? b)       (kim ())                                ; no else (wev usually supplies one)
+    (atom? b)       (kim ())                                ; no else (feel usually supplies one)
     (atom? (cup b)) (compose (ana c (cap b)) tojoin)            ; trailing else: result, then join
     (: test (ana c (cap b))
        then (ana c (caup b))
@@ -314,7 +314,7 @@
    k (ana d (last exp) (k0s d))
    a (ary d)
    e ((? (= a 1) k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
-   ; source \-expr for the printer. take the SURFACE body wev stashed for this node
+   ; source \-expr for the printer. take the SURFACE body feel stashed for this node
    ; (keyed by the tagged exp) so iop/apx tags don't leak into the printed source;
    ; fall back to exp if unrecorded. prepend the captured imports as leading params
    ; (frame is [imps args]) so a closure prints as ,((\ y x …) capturedvals) and
@@ -337,7 +337,7 @@
   ;   closures -- analyze each lambda def to a closure, then PROPAGATE captures among
   ;               mutually-recursive closures to a fixpoint (a sibling's captures flow in)
   ;   wire     -- emit each binding, backpatch recursive refs, apply the body
-  ; boxing (the letrec* capture-by-location rewrite) already happened in wev (boxfix), so
+  ; boxing (the letrec* capture-by-location rewrite) already happened in feel (boxfix), so
   ; the defs compile directly. q = a child scope holding the let's lambdas + backpatch sites.
   ; the phases run IN SEQUENCE (the :- body, last): collect the chains (pure), pin the
   ; sibling arity map, build+propagate the closures, then wire (emit + backpatch + body).

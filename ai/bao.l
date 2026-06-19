@@ -45,7 +45,7 @@
 ; one byte per force (-1 ends it), a colist passing through, the end lifting to itself --
 ; and `char->chars` realizes a finite colist. zev takes any of these as `s`, reads ONE
 ; form (structurally -- the reader knows no operators) and sends it through ev's core
-; (opfix, wev, ana, cata): the full hull chars -> top in one call. nothing readable --
+; (opfix, feel, ana, cata): the full hull chars -> top in one call. nothing readable --
 ; empty input or an unfinished shape -- is nothing. (lit? is no use for the cell test:
 ; it names the top region -- map/fn/hot -- so a chain or string answers false anyway.)
 (: (zev s)

@@ -221,7 +221,7 @@
 ; leaves it a plain symbol. code factors a sigil into a composition of
 ; operators against THIS table at compile time -- opfix below, the
 ; source->source pass hooked by both compilers (c0 probes book['opfix] like
-; boxfix; ev.l's wev runs it first) -- while data reading stays structural.
+; boxfix; ev.l's feel runs it first) -- while data reading stays structural.
 ; ONE table: symbol -> arity (the symbol names itself) | (name . arity) (an
 ; alias). arity ONE applies to the next datum, never capturing a left
 ; operand. arities two..seven are infix: with a left operand available it
@@ -519,7 +519,7 @@
 ; under-lambda) one -- ordinary recursion keeps the lazy lane. values defined
 ; before their users are untouched. It returns 0 when nothing needs boxing,
 ; else the rewritten (prs' . body'). This is the single source of truth,
-; shared verbatim by both compilers: ev.l's wev and c0 (ev.c) both call the
+; shared verbatim by both compilers: ev.l's feel and c0 (ev.c) both call the
 ; flat `boxfix` wrapper below, bpr+flatten around the same core. `lambp`/`dsug`
 ; are globals so `ale` shares them (lambda detection, binding desugaring).
 (: (lambp x) (? (two? x) (&& (= '\ (cap x)) (two? (cuup x)))) ; \ with >=1 param (one-operand \ is quote)

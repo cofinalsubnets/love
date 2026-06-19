@@ -1,7 +1,7 @@
 ; zev: charms -> top -- the reverse shell of the compiler, the lane every
 ; shell feeds into; ev is the data-level shell over the same core. a charm
 ; is a sat (a non-negative fixnum), a charms is a charlist. zev reads one
-; form structurally and compiles it through opfix/wev/ana/cata, so the
+; form structurally and compiles it through opfix/feel/ana/cata, so the
 ; whole hull -- characters to top -- closes in lisp.
 (: (zs s) ((: (g i) (? (< i (tally s)) (link (s i) (g (+ 1 i))))) 0)   ; string -> chars
  (assert
