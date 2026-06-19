@@ -254,7 +254,8 @@
    _ (pin t '| 'abs)   _ (pin t '- 'negate)
    _ (pin t '/ 'reciprocal) _ (pin t '% 'fraction)
    _ (pin t '? 'bit)
-   _ (pin t '$ 'sat)   _ (pin t '! 'nil?) _ (pin t '. 'dot)
+   _ (pin t '$ 'sat)   _ (pin t '$$ 'mint)   ; $$ -> mint: $ is idempotent ($$x=$x), so the slot is free to overload
+   _ (pin t '! 'nil?) _ (pin t '. 'dot)
    t))
 ; the FACTORIZATION LAW: greedy longest-prefix match against the table, no
 ; backtracking; every factor but the last must be arity one; the last factor
