@@ -693,11 +693,12 @@ $d/bin/ai: out/host/ai
 
 # cook: the build tool (cook/cook.l) installed as an executable `cook` on PATH.
 # Its `#!/usr/bin/env -S ai -l` shebang re-execs the installed `ai` to load it,
-# then it discovers a Makefile/Cookfile/Cards.l in the cwd. A script, not a
-# binary, so no -s strip.
+# then it discovers a Makefile/Cookfile/Cards.l in the cwd. Installed as a SYMLINK
+# to the source so edits to cook/cook.l are picked up without a reinstall.
 $d/bin/cook: cook/cook.l
-	@echo CP	$(abspath $@)
-	@install -D -m 755 $< $@
+	@echo LN	$(abspath $@)
+	@mkdir -p $(@D)
+	@ln -sf $(abspath $<) $@
 
 # aineko: the netcat clone (tools/aineko.l). Same shebang-script mechanism as cook
 # (`#!/usr/bin/env -S ai -l` re-execs the installed `ai` to load it).
