@@ -141,22 +141,32 @@ static lvm(lvm_ptyrun) {
   Sp += 1; Ip += 1;
   return Continue(); }
 
+// Workhorse for (reap pid), called with g Packed and pid at g->sp[0]. The &st
+// waitpid + the chain alloc live here (off the wrapper's frame so lvm_reap's
+// Continue() tail-jumps, cf. host_ptyrun). Leaves exactly one net value at sp[0]:
+// the (status) one-element list, () still-running, or an errno fixnum. Returns a
+// not-ok g only on OOM (lvm_reap routes that to ghelp).
+ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
+  intptr_t pid = (pidw & 1) ? getcharm(pidw) : 0;
+  int st;
+  pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
+  if (r == 0) { g->sp[0] = ai_nil; return g; }            // still running
+  if (r < 0)  { g->sp[0] = putcharm(errno); return g; }   // waitpid error
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(decode_status(st)), ai_nil);
+  g->sp[0] = word(w);
+  return g; }
+
 // (reap pid): non-blocking wait. A reaped child returns its decoded status as a
 // ONE-ELEMENT LIST so the result is a present chain even at status 0 -- a caller
 // polling in a loop tells "exited 0" (a pair) from "still running" (()) without
 // the two collapsing to the same blue. A bare fixnum means waitpid itself erred.
 static lvm(lvm_reap) {
-  intptr_t pid = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
-  int st;
-  pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
-  if (r == 0) { Sp[0] = ai_nil; Ip += 1; return Continue(); }          // still running
-  if (r < 0)  { Sp[0] = putcharm(errno); Ip += 1; return Continue(); } // waitpid error
   Pack(g);
-  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return ghelp(g);
-  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(decode_status(st)), ai_nil);
+  g = host_reap(g, Sp[0]);
+  if (!ai_ok(g)) return ghelp(g);
   Unpack(g);
-  Sp[0] = word(w);
   Ip += 1; return Continue(); }
 
 // (kill pid sig): POSIX kill(2). A negative pid (the caller writes (0 - pid),
@@ -168,29 +178,45 @@ static lvm(lvm_kill) {
   Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(errno) : ai_nil;
   Sp += 1; Ip += 1; return Continue(); }
 
+// Workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
+// The &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
+// (cf. host_ptyrun). Overwrites sp[0] with (rows . cols), or () if stdout isn't a
+// tty. Returns a not-ok g only on OOM (lvm_winsize routes that to ghelp).
+ai_noinline static struct ai *host_winsize(struct ai *g) {
+  struct winsize ws;
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = ai_nil; return g; }
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(ws.ws_row), putcharm(ws.ws_col));
+  g->sp[0] = word(w);
+  return g; }
+
 // (winsize): the controlling tty's size as (rows . cols), read off stdout; () if
 // stdout isn't a tty (ioctl fails). The size to MIRROR onto a wrapped child.
 static lvm(lvm_winsize) {
-  struct winsize ws;
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { Sp[0] = ai_nil; Ip += 1; return Continue(); }
   Pack(g);
-  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return ghelp(g);
-  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(ws.ws_row), putcharm(ws.ws_col));
+  g = host_winsize(g);
+  if (!ai_ok(g)) return ghelp(g);
   Unpack(g);
-  Sp[0] = word(w);
   Ip += 1; return Continue(); }
 
 // (setwinsize port rows cols): push a window size onto a master port; the kernel
 // raises SIGWINCH on the slave's foreground group. () on success, errno on
 // failure (incl. a non-port / closed port -> EBADF).
-static lvm(lvm_setwinsize) {
-  intptr_t fd = port_fd(Sp[0]);
+// The &ws ioctl for (setwinsize), off lvm_setwinsize's frame so its Continue()
+// tail-jumps. Returns 0 or the errno.
+ai_noinline static int host_setwinsize(intptr_t fd, intptr_t row, intptr_t col) {
   struct winsize ws = {0};
-  ws.ws_row = (Sp[1] & 1) ? (unsigned short) getcharm(Sp[1]) : 0;
-  ws.ws_col = (Sp[2] & 1) ? (unsigned short) getcharm(Sp[2]) : 0;
-  int rc = ioctl((int) fd, TIOCSWINSZ, &ws);
-  Sp[2] = rc ? putcharm(errno) : ai_nil;
+  ws.ws_row = (unsigned short) row;
+  ws.ws_col = (unsigned short) col;
+  return ioctl((int) fd, TIOCSWINSZ, &ws) ? errno : 0; }
+
+static lvm(lvm_setwinsize) {
+  intptr_t fd  = port_fd(Sp[0]);
+  intptr_t row = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+  intptr_t col = (Sp[2] & 1) ? getcharm(Sp[2]) : 0;
+  int rc = host_setwinsize(fd, row, col);
+  Sp[2] = rc ? putcharm(rc) : ai_nil;
   Sp += 2; Ip += 1; return Continue(); }
 
 // (ptyecho port on): toggle the pty's input ECHO. on = 0 / () clears it so a
@@ -198,16 +224,19 @@ static lvm(lvm_setwinsize) {
 // echo doesn't double it; a truthy `on` restores it. ICANON is left intact -- the
 // child still reads whole lines and sees VEOF. tcsetattr on the master fd sets the
 // shared pty termios. () on success, errno on failure (non-port / closed -> EBADF).
+// The &t tcget/tcsetattr for (ptyecho), off lvm_ptyecho's frame so its Continue()
+// tail-jumps. Returns 0 or the errno (EBADF for a non-port / closed fd).
+ai_noinline static int host_ptyecho(intptr_t fd, intptr_t on) {
+  struct termios t;
+  if (fd < 0) return EBADF;
+  if (tcgetattr((int) fd, &t)) return errno;
+  if (on) t.c_lflag |= ECHO; else t.c_lflag &= ~(tcflag_t) ECHO;
+  return tcsetattr((int) fd, TCSANOW, &t) ? errno : 0; }
+
 static lvm(lvm_ptyecho) {
   intptr_t fd = port_fd(Sp[0]);
-  struct termios t;
-  int rc;
-  if (fd < 0) rc = EBADF;
-  else if (tcgetattr((int) fd, &t)) rc = errno;
-  else {
-    intptr_t on = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
-    if (on) t.c_lflag |= ECHO; else t.c_lflag &= ~(tcflag_t) ECHO;
-    rc = tcsetattr((int) fd, TCSANOW, &t) ? errno : 0; }
+  intptr_t on = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+  int rc = host_ptyecho(fd, on);
   Sp[1] = rc ? putcharm(rc) : ai_nil;
   Sp += 1; Ip += 1; return Continue(); }
 
@@ -224,19 +253,20 @@ static struct termios raw_cooked;
 static int raw_have_cooked = 0;
 static void raw_restore(void) {
   if (raw_have_cooked) tcsetattr(STDIN_FILENO, TCSANOW, &raw_cooked); }
-static lvm(lvm_raw) {
+// All the &t termios work + the capture-once/atexit state for (raw on), off
+// lvm_raw's frame so its Continue() tail-jumps. Returns 0 or the errno.
+ai_noinline static int host_raw(intptr_t on) {
   struct termios t;
-  int rc;
-  if (tcgetattr(STDIN_FILENO, &t)) rc = errno;
-  else {
-    intptr_t on = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
-    if (on) {
-      if (!raw_have_cooked) { raw_cooked = t; raw_have_cooked = 1; atexit(raw_restore); }
-      t.c_lflag &= ~(tcflag_t) (ICANON | ECHO | ISIG | IEXTEN);
-      t.c_iflag &= ~(tcflag_t) (IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-      t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0;
-      rc = tcsetattr(STDIN_FILENO, TCSANOW, &t) ? errno : 0; }
-    else { raw_restore(); rc = 0; } }
+  if (tcgetattr(STDIN_FILENO, &t)) return errno;
+  if (!on) { raw_restore(); return 0; }
+  if (!raw_have_cooked) { raw_cooked = t; raw_have_cooked = 1; atexit(raw_restore); }
+  t.c_lflag &= ~(tcflag_t) (ICANON | ECHO | ISIG | IEXTEN);
+  t.c_iflag &= ~(tcflag_t) (IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+  t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0;
+  return tcsetattr(STDIN_FILENO, TCSANOW, &t) ? errno : 0; }
+static lvm(lvm_raw) {
+  intptr_t on = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
+  int rc = host_raw(on);
   Sp[0] = rc ? putcharm(rc) : ai_nil;
   Ip += 1; return Continue(); }
 
