@@ -57,10 +57,6 @@ A name not in the **book** (the global table) is *missing*. Reading it does not 
 
 > **(2.2) The unit absorbs under any numeric head.** `(g Pt) = Pt` for every numeral *and* every numeric operator `g` — the unit is the fixed point of all of them.
 
-From these two facts a sentence becomes a theorem. `i` is present and numeric (a complex scalar, not a nat — so the explicit quantifier in (2.2) is what licenses the `(i Pt)` step); `love` and `you` are missing, hence `Pt`:
-
-> **(2.3) Absence absorbs.** `(i love you) = ((i Pt) Pt) = (Pt Pt) = 1`. Evidence: `thm:love_theorem`.
-
 The model's value space `value := Num n | Cx | Pt` makes the evaluation function `vapp` **total** by exhaustive case analysis — Rocq checks the exhaustiveness, so there is no stuck state and no undefined behaviour over this fragment:
 
 > **(2.4) Totality (no UB).** `∀ f a, ∃ v, vapp f a = v`. Evidence: `thm:total`.
@@ -290,7 +286,7 @@ The compiler is written in ai. At build time the evaluator sits on the **egg** (
 | 1 | numeral law `(n x)=xⁿ` | `thm:const_one` `thm:identity` `thm:tower` `thm:tetration` |
 | 1 | one map, two faces | `thm:lanes_agree` `thm:church_two` |
 | 1 | currying, empty form | `thm:curry` `thm:empty_form` |
-| 2 | absence absorbs `1=(i love you)` | `thm:love_theorem` `thm:unit_is_const_one` |
+| 2 | the zero point absorbs (`(Pt x)=1`) | `thm:unit_is_const_one` |
 | 2 | totality (no UB) | `thm:total` |
 | 3 | the invariant `!x ≡ (0=$x)` | `thm:nilp_iff_sat0` |
 | 3 | saturation | `thm:sat_nonneg` `thm:sat_keeps` `thm:sat_clamps` |

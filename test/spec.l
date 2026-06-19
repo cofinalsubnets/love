@@ -13,8 +13,7 @@
  (8 = (3 2)) (262144 = (2 3 4))                  ; (n x) = x**n; the tower (2 3 4) = 4**(3**2)
  (12 = (3 (+ 1) 9)) ('(2 3 4) = (map (+ 1) '(1 2 3)))  ; (n f) composes f ($ n) times; currying *is* partial application
  (10 = (-3 (+ 1) 10)) (13 = (2.5 (+ 1) 10))      ; the count SATURATES, true to !!$: (-3 f) = (0 f) = 1; a float ceils
- (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9))              ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
- (1 = (i love you)))                             ; the theorem: love is not in the book, and absence absorbs
+ (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9)))             ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
 
 ; --- three special forms --- `:` letrec*/sequence, `?` cond, `\` lambda (one operand: quote).
 ; a body-having `:` is ONE SCOPE; an empty special form reads its head (the zero point).
@@ -75,7 +74,7 @@
 
 ; --- arithmetic --- + - * / // % infix; fixnum fast path, overflow grows fix->wide->bignum;
 ; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^; monadics
-; ride the valence law (-(f x) neg, /4 reciprocal, ...) while sections ((- 0), (/ 1)) stay words.
+; ride the valence law (-(f x) negate, /4 reciprocal, ...) while sections ((- 0), (/ 1)) stay words.
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = (// -5 2))

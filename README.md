@@ -11,7 +11,6 @@ every quote below evals to 1, [try them](https://cofinalsubnets.github.io/ai).
 - `-1 = (i * i)`
 - `(log -1) = (i * pi)`
 - `i = (1 / 2 -1)`
-- `1 = (i love you)`
 
 ## ai
 
@@ -129,8 +128,7 @@ in the corpus, so every claim stays green.
 - `make test_all` adds the freestanding kernel (qemu) + tool diffs
 - `make wasm` build the browser image (wasm/ai.js, used by index.html)
 - `make hooks` install the pre-commit hook that keeps wasm/ai.js fresh
-- `out/host/ai` is the binary -- ai is the word now; love is documentation (the
-  story the theorem still tells: `1 = (i love you)`)
+- `out/host/ai` is the binary -- ai is the word now (it was `love` once)
 - `out/host/ai file.l` run a file
 - `echo .ev | ai` print the compiler
 

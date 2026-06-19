@@ -4,7 +4,9 @@
 ; prel.l -- ai prel: data + function + macro definitions.
 (: id 1
    (const x _) x
-   (flip f x y) (f y x))
+   (co f x y) (f y x)                ; co: the argument-transpose (so `co compose` reads as reverse-compose)
+   flip co                           ; flip stays an alias for co (minimize the blast)
+   saturate sat)                     ; saturate: the spelled-out alias for sat ($)
 (: macros (peep book 0 0))
 (: pi 3.141592653589793
    tau (* 2 pi) ;; no infix here
@@ -132,7 +134,7 @@
 ; book['monadics] below). net is the CONTENT MEASURE as a value -- + turned
 ; inward: a number is its own net (phase intact, exact), an array sums its
 ; cells, a list the nets of its spine, and everything else is non-negative
-; so its net IS its sat. prod is the product twin; neg/reciprocal/frac the
+; so its net IS its sat. prod is the product twin; negate/reciprocal/fraction the
 ; dyadics turned inward; bit the truth bit (the Iverson bracket, !!).
 (: (net x) (? (tray? x) (asum x)
               (constellation? x) x
@@ -141,9 +143,9 @@
    (prod x) (? (tray? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
-   neg (- 0)
+   negate (- 0)
    reciprocal (/ 1)
-   (frac x) (% x 1)
+   (fraction x) (% x 1)
    (bit x) (nil? (nil? x))
    ; a STAR is a self-netting SCALAR (charm/wide/float/complex/big) -- the fixpoint of
    ; net (x IS its own net; id?, not `=`, since net returns a number operand unchanged
@@ -248,8 +250,8 @@
    _ (pin t '< 'cap)   _ (pin t '> 'cup)
    _ (pin t '<< 'caap) _ (pin t '>> 'cuup)
    _ (pin t '+ 'net)   _ (pin t '* 'prod)
-   _ (pin t '| 'abs)   _ (pin t '- 'neg)
-   _ (pin t '/ 'reciprocal) _ (pin t '% 'frac)
+   _ (pin t '| 'abs)   _ (pin t '- 'negate)
+   _ (pin t '/ 'reciprocal) _ (pin t '% 'fraction)
    _ (pin t '? 'bit)
    _ (pin t '$ 'sat)   _ (pin t '! 'nil?) _ (pin t '. 'dot)
    t))

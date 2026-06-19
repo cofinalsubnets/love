@@ -5,7 +5,7 @@
 ; a run right after an open delimiter is the form's operator -- the
 ; section/escape law, and what keeps minified source legal. the words
 ; behind the sigils: < cap, > cup (<< >> <> >< the compounds), + net,
-; * prod, | abs, - neg, / reciprocal, % frac, ? bit; $ ! . ride the same lane.
+; * prod, | abs, - negate, / reciprocal, % fraction, ? bit; $ ! . ride the same lane.
 (assert
  ; cap and cup, and the compounds by greedy monadic factorization
  (1 = <'(1 2 3)) ('(2 3) = >'(1 2 3))
@@ -28,7 +28,7 @@
  ; the data lane: a glued run READS as the mono node, and round-trips
  ('(f (mono (< x))) = (sound (tap '(40 102 32 60 120 41)) 99))
  ; the words are real, the sigils their spellings
- (-7 = (neg 7)) (0.5 = (reciprocal 2)) (0.25 = (frac 5.25)) (1 = (bit 9))
+ (-7 = (negate 7)) (0.5 = (reciprocal 2)) (0.25 = (fraction 5.25)) (1 = (bit 9))
  (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))) (id? 'cap (monadics '<)))
 
 ; COHERENCE: the new words against the old laws, pinned as one system.
@@ -40,9 +40,9 @@
  (0 = $(net '(-2 1))) (-1 = (net '(-2 1)))      ; the net unclamped, $ its one clamp
  (all (\ v ($v = $(net v))) (L 7 -5 '(1 -5) @(2 3) "ab" ~(0 2) #(1 10)))
  (all (\ v ((bit v) = !!v)) (L 7 0 -3 "" "a" '(0) ~(0 2)))
- (neg = (- 0)) (reciprocal = (/ 1))                  ; the words ARE the sections
+ (negate = (- 0)) (reciprocal = (/ 1))               ; the words ARE the sections
  ((net @(1 2 3)) = (net @(1 2 3))) ((net @(1 2 3)) = (net '(1 2 3)))
  ((net '(1 2 3)) = (foldl (+) 0 '(1 2 3)))
  ((prod '(2 3 4)) = (prod @(2 3 4))) (24 = (prod '(2 3 4)))
  (5 = (tally (jot 5))) (10 = +(jot 5))          ; jot counts what it jots; gauss agrees
- ((frac 5.25) = (5.25 % 1)) ((bit 9) = !!9) (!!9 = ?9))
+ ((fraction 5.25) = (5.25 % 1)) ((bit 9) = !!9) (!!9 = ?9))

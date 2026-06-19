@@ -114,7 +114,6 @@
 (2 3 4)              ; 262144  the tower 4**(3**2)
 (map (+ 1) '(1 2 3)) ; (2 3 4) currying *is* partial application
 ((/ 1 2) 9)          ; 3.0     (1/2 x) = sqrt x
-(i love you)         ; 1       love is not in the book, and absence absorbs
 
 ; --- three special forms --- `:` is letrec*/sequence, `?` is cond, `\` is lambda (and, with a
 ; single operand, quote). everything else is a function call.
@@ -208,8 +207,8 @@ $@(3 4)              ; 7
 ; stays total, and 0/0 nets 0 like its value now says. inf/nan/ieee-nan are honest symbols,
 ; free for binding. `//` truncates toward zero (the partner of `%`).
 ; bitwise << >> & | ^ on integers (complement is (^ x -1)). the MONADIC readings ride
-; the VALENCE LAW (see reader operators): glued is monadic -- -(f x) is neg, /4 is
-; reciprocal, |x abs, %x frac -- while the sections ((- 0), (/ 1)) remain their
+; the VALENCE LAW (see reader operators): glued is monadic -- -(f x) is negate, /4 is
+; reciprocal, |x abs, %x fraction -- while the sections ((- 0), (/ 1)) remain their
 ; word-level spellings, generic like their operators, and the numerals carry the
 ; power family ((-1 x) = 1/x, ((/ 1 2) x) = sqrt; see numeric functions). the two
 ; monoid folds are notation now -- +l is the net, *l the product -- and general
@@ -383,7 +382,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; matter: a helpless missing read answers the ZERO POINT, the mint at serial 0 --
 ; nameless, $0, false, printed as () (the face of absence; like any point, no
 ; spelling carries it back), and a UNIT: it absorbs application where a number
-; would exponentiate, which is what keeps (1 = (i love you)). every mint draws a SERIAL
+; would exponentiate (so a missing nom absorbs). every mint draws a SERIAL
 ; from the one mint stream (task pids draw from it too): symbols order by name first
 ; (mints below every named symbol), then by serial -- creation order -- so the total
 ; order is TOTAL, GC-stable; the serial is also the point's hash. a NOM carries a name +
@@ -471,9 +470,9 @@ $(cask 4)             ; 0       a zeroed cask is nothing
 ; <>x is (cap (cup x)). HEAD POSITION NEVER FUSES: a run right after an open delimiter
 ; is the form's operator (the section/escape law, and what keeps minified source
 ; legal); + and - lead numbers and kebab names, fusing only to ( ' " @ ~ # -- so -3 is
-; a number and -x a name, while -(f x) is neg. the monadic words: < cap, > cup
+; a number and -x a name, while -(f x) is negate. the monadic words: < cap, > cup
 ; (<< >> <> >< the compounds, riding the shifts' free slots), + net (the content
-; measure -- the true sum, + turned inward), * prod, | abs, - neg, / recip, % frac,
+; measure -- the true sum, + turned inward), * prod, | abs, - negate, / reciprocal, % fraction,
 ; ? bit (the Iverson bracket); $ ! . ride the same lane. \ never fuses (form space).
 ; demo:
 1 + 2 * 3            ; 7       infix, right-associative

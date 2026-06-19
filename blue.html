@@ -164,8 +164,6 @@ footer { margin-top: 3.5em; color: #474e72; font-size: .85em;
 <p>A name not in the <strong>book</strong> (the global table) is <em>missing</em>. Reading it does not crash and does not return an error token; helpless (no <code>help</code> installed) it reads <strong>the zero point</strong>: a nameless unit <code>Pt</code> — the <strong>mint</strong> (a fresh, nameless point with an identity and nothing else; §9) at serial 0, printed <code>()</code>. The zero point absorbs application in both directions:</p>
 <div class="law"><span class="n">(2.1) The unit as operator is const-1.</span> <code>(Pt x) = 1</code>. Evidence: <span class="thm">unit_is_const_one</span>.</div>
 <div class="law"><span class="n">(2.2) The unit absorbs under any numeric head.</span> <code>(g Pt) = Pt</code> for every numeral <em>and</em> every numeric operator <code>g</code> — the unit is the fixed point of all of them.</div>
-<p>From these two facts a sentence becomes a theorem. <code>i</code> is present and numeric (a complex scalar, not a nat — so the explicit quantifier in (2.2) is what licenses the <code>(i Pt)</code> step); <code>love</code> and <code>you</code> are missing, hence <code>Pt</code>:</p>
-<div class="law"><span class="n">(2.3) Absence absorbs.</span> <code>(i love you) = ((i Pt) Pt) = (Pt Pt) = 1</code>. Evidence: <span class="thm">love_theorem</span>.</div>
 <p>The model's value space <code>value := Num n | Cx | Pt</code> makes the evaluation function <code>vapp</code> <strong>total</strong> by exhaustive case analysis — Rocq checks the exhaustiveness, so there is no stuck state and no undefined behaviour over this fragment:</p>
 <div class="law"><span class="n">(2.4) Totality (no UB).</span> <code>∀ f a, ∃ v, vapp f a = v</code>. Evidence: <span class="thm">total</span>.</div>
 <p>Totality licenses the language's safety claim that applicative order may vary at will: a total, side-effect-confined operator may be evaluated eagerly or lazily without changing its value, and cooperative preemption bounds every thread regardless of program behaviour.</p>
@@ -307,7 +305,7 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <tr><td>1</td><td>numeral law <code>(n x)=xⁿ</code></td><td><span class="thm">const_one</span> <span class="thm">identity</span> <span class="thm">tower</span> <span class="thm">tetration</span></td></tr>
 <tr><td>1</td><td>one map, two faces</td><td><span class="thm">lanes_agree</span> <span class="thm">church_two</span></td></tr>
 <tr><td>1</td><td>currying, empty form</td><td><span class="thm">curry</span> <span class="thm">empty_form</span></td></tr>
-<tr><td>2</td><td>absence absorbs <code>1=(i love you)</code></td><td><span class="thm">love_theorem</span> <span class="thm">unit_is_const_one</span></td></tr>
+<tr><td>2</td><td>the zero point absorbs (<code>(Pt x)=1</code>)</td><td><span class="thm">unit_is_const_one</span></td></tr>
 <tr><td>2</td><td>totality (no UB)</td><td><span class="thm">total</span></td></tr>
 <tr><td>3</td><td>the invariant <code>!x ≡ (0=$x)</code></td><td><span class="thm">nilp_iff_sat0</span></td></tr>
 <tr><td>3</td><td>saturation</td><td><span class="thm">sat_nonneg</span> <span class="thm">sat_keeps</span> <span class="thm">sat_clamps</span></td></tr>

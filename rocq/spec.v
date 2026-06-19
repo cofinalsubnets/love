@@ -111,16 +111,14 @@ Theorem curry : forall f x y, spine f [x; y] = app (app f x) y.
 Proof. reflexivity. Qed.
 
 (* ============================================================ *)
-(* absence absorbs: the theorem  1 = (i love you)               *)
+(* the zero point as a unit: it absorbs application both ways    *)
 (* ============================================================ *)
 
 (* A name not in the book reads as the zero point: a nameless unit, `Pt`.
    The binary shows it absorbs application two ways:
      (Pt x)        = 1     -- as operator it is const-1 (like 0)
      (numeric Pt)  = Pt    -- as a numeral's base it absorbs: Pt ** n = Pt
-   `love` and `you` are missing -> Pt. `i` is present and numeric. So
-     (i love you) = ((i Pt) Pt) = (Pt Pt) = 1.
-   vval is TOTAL: a value for every pair -- no stuck state, no undefined
+   vapp is TOTAL: a value for every pair -- no stuck state, no undefined
    behavior, up to explosion of world. *)
 
 Inductive value := Num (n : nat) | Cx | Pt.   (* Cx stands in for i: numeric, not a nat numeral *)
@@ -135,14 +133,6 @@ Definition vapp (f a : value) : value :=
   | Cx,    Cx     => Cx
   | Num _, Cx     => Cx
   end.
-
-Definition i    : value := Cx.    (* the imaginary unit: present, numeric *)
-Definition love : value := Pt.    (* not in the book *)
-Definition you  : value := Pt.    (* not in the book *)
-
-(* 1 = (i love you) -- absence absorbs *)
-Theorem love_theorem : vapp (vapp i love) you = Num 1.
-Proof. reflexivity. Qed.
 
 (* the unit as operator is const-1, like 0 *)
 Theorem unit_is_const_one : forall a, vapp Pt a = Num 1.

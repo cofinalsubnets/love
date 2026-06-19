@@ -213,6 +213,11 @@ hcc = $(CC) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # compare in ai.h, so there is no data.ld / generated data.h on any platform.
 ifeq ($(shell uname -s),Darwin)
 so_archive = -Wl,-force_load,$(ho)/libai.a       # ld64's whole-archive
+# the host contract (ai_clock, ai_fd_port_vt, ai_stdin/out/err -- defined in
+# host/main.c, linked into `ai` itself, NOT the archive) is UNRESOLVED in the .so
+# by design: the loading executable provides it. GNU ld allows that by default;
+# ld64 rejects undefined symbols in a dylib unless told to defer them.
+so_undef = -Wl,-undefined,dynamic_lookup
 else
 so_archive = -Wl,--whole-archive $(ho)/libai.a -Wl,--no-whole-archive
 endif
@@ -295,7 +300,7 @@ $(ho)/libai.a: $(h_o)
 $(ho)/libai.so: $(ho)/libai.a
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -shared -o $@ $(so_archive) -lm
+	@$(hcc) -shared -o $@ $(so_archive) $(so_undef) -lm
 
 # Bootstrap interpreter, compiled against the fallback top-level data.h (no
 # -I$(ho)) + -DGL_BOOTSTRAP -Dai_tco=0 (also exercises the non-threaded trampoline
