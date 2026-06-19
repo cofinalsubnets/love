@@ -11,8 +11,8 @@
 R := ..
 include $(R)/common.mk
 
-.PHONY: all test_vmret test_cook
-all: test_vmret test_cook
+.PHONY: all test_vmret test_cook test_tele test_xor
+all: test_vmret test_cook test_tele test_xor
 
 # Build the host ai on demand (it runs the .l tools); only if it's missing.
 $(m):
@@ -40,3 +40,19 @@ test_vmret: | $(m)
 test_cook: | $(m)
 	@echo TEST cook.l
 	@cd $(R) && out/host/ai cook/cooktest.l
+
+# tele/tele.l: the PyTorch-style autograd library (pure ai over the constellation
+# algebra). teletest.l grad-checks every op -- the analytic gradient (from `back`)
+# vs the central finite difference -- so the oracle is self-validating. tele loads
+# as a user `-l` (NOT in the corpus), so `make test` is untouched; this is its gate.
+test_tele: | $(m)
+	@echo TEST tele.l
+	@cd $(R) && out/host/ai -l tele/tele.l tele/teletest.l
+
+# tele/xor.l: the flagship integration demo -- a 2-8-1 MLP learns XOR (the
+# not-linearly-separable problem a single linear layer can't solve). seeded, so it
+# converges identically every run; exits nonzero if the four outputs don't round
+# right. proves the whole stack (autograd + nn + optim) trains a real net.
+test_xor: | $(m)
+	@echo TEST xor.l
+	@cd $(R) && out/host/ai -l tele/tele.l tele/xor.l
