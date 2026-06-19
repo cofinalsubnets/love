@@ -392,8 +392,17 @@
    ; pin -- since closures capture their free globals at creation and the
    ; bag itself is pulled). file mode never comes through here, so scripts
    ; keep the helpless (terminal) law.
+   ; raw the tty BEFORE reading: the editor (edraw/edline) is the sole echo, so
+   ; the kernel's cooked-mode echo must be off or every line doubles. main.c only
+   ; raws on the no-arg path (replp = !argp); the bin/bao launch passes argv
+   ; (ai -l bao.l -e "(bao 0)"), so argp is set and that raw_mode never fires --
+   ; the shell owns it here instead, covering the launcher AND a manual -e launch.
+   ; deferred through (ev 'raw) like `wrap`'s host nifs: the bare nom is inert at
+   ; bake (no missing-name on the kernel/wasm bakes, where shell is never called),
+   ; live on the host. the nif captures cooked once + restores via atexit on exit.
    (shell _)
      (: _ (? (ev (\ help)) 0 (ev (list (\ :) (\ help) shell-help)))
+        _ ((ev 'raw) 1)
         _ (puts (";3 ai " + ai-version + "\n"))
         (repl 0 0))
 

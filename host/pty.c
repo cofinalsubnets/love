@@ -211,7 +211,37 @@ static lvm(lvm_ptyecho) {
   Sp[1] = rc ? putcharm(rc) : ai_nil;
   Sp += 1; Ip += 1; return Continue(); }
 
+// (raw on): own the interactive terminal discipline on stdin (fd 0). A truthy
+// `on` puts the tty in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is
+// the SOLE echo; on = 0 / () restores the cooked termios captured at the first
+// raw-on. bao's (shell _) calls (raw 1) because the bin/bao launch
+// (ai -l bao.l -e "(bao 0)") passes argv, so main.c's argp path skips raw_mode --
+// without this the kernel tty echo doubles every line the editor draws. The cooked
+// baseline is captured ONCE (a re-raw, e.g. main.c's no-arg path already raw'd,
+// never re-saves a raw state) and restored on exit via atexit. () on success,
+// errno on failure (stdin not a tty).
+static struct termios raw_cooked;
+static int raw_have_cooked = 0;
+static void raw_restore(void) {
+  if (raw_have_cooked) tcsetattr(STDIN_FILENO, TCSANOW, &raw_cooked); }
+static lvm(lvm_raw) {
+  struct termios t;
+  int rc;
+  if (tcgetattr(STDIN_FILENO, &t)) rc = errno;
+  else {
+    intptr_t on = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
+    if (on) {
+      if (!raw_have_cooked) { raw_cooked = t; raw_have_cooked = 1; atexit(raw_restore); }
+      t.c_lflag &= ~(tcflag_t) (ICANON | ECHO | ISIG | IEXTEN);
+      t.c_iflag &= ~(tcflag_t) (IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+      t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0;
+      rc = tcsetattr(STDIN_FILENO, TCSANOW, &t) ? errno : 0; }
+    else { raw_restore(); rc = 0; } }
+  Sp[0] = rc ? putcharm(rc) : ai_nil;
+  Ip += 1; return Continue(); }
+
 static union u const
+  nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
   nif_ptyrun[]     = {{lvm_ptyrun}, {lvm_ret0}},
   nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
   nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
@@ -224,3 +254,4 @@ AI_NIF("still", nif_kill);
 AI_NIF("winsize", nif_winsize);
 AI_NIF("setwinsize", nif_setwinsize);
 AI_NIF("ptyecho", nif_ptyecho);
+AI_NIF("raw", nif_raw);
