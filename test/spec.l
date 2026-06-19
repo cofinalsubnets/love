@@ -225,7 +225,7 @@
  !(snip (+ "a" 0) 1 2) (97 = $(+ "a" 0))        ; ... an all-NUL text IS nothing, and the NUL byte appends for free
  ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
- ("\"a\\nb\"" = (show "a\nb")) ("$" = (snip (show (mint 0)) 0 1)))   ; a mint prints $<serial>: a diagnostic face, not a round-trip
+ ("\"a\\nb\"" = (show "a\nb")) ("$$" = (snip (show (mint 0)) 0 2)))   ; a mint prints $$<serial>: factors out to the $$ maker (diagnostic, not an exact reparse)
 
 ; --- hashes --- #(k v ..)/(hash ..) build, (tablet 0) the empty hash; #() = the EMPTY
 ; MAP (the reader emits (tablet 0); () is the zero-point, distinct from 0); #x boxes a datum;

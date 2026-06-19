@@ -401,7 +401,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 (intern "asdf")      ; asdf
 (string 'asdf)       ; "asdf"      the explicit bridge (symbols have no string algebra)
 ("abc" 0)            ; 97          a string indexes its bytes
-(mint 0)             ; $<serial>   a fresh nameless point ($(mint 0) ; 0); the $face is diagnostic, not a reparse
+(mint 0)             ; $$<serial>  a fresh nameless point ($(mint 0) ; 0); the $$face factors out to `$$` (the monadic mint maker: $$x mints), diagnostic, not an exact reparse
 (string (nom 'x))    ; "x"         a nom is a named point (KNom), not a chain; read its name with string
 
 ; --- hashes --- #(k v ..) or (hash ..) build; the empty hash is (tablet 0) (and prints so);
@@ -474,7 +474,9 @@ $(cask 4)             ; 0       a zeroed cask is nothing
 ; (<< >> <> >< the compounds, riding the shifts' free slots), + net (the content
 ; measure -- the true sum, + turned inward), * prod (but a STAR jots: *5 = 0..4, since prod of a
 ; scalar is vacuously itself), | abs, - negate, / reciprocal, % fraction,
-; ? bit (the Iverson bracket); $ ! . ride the same lane. \ never fuses (form space).
+; ? bit (the Iverson bracket); $ ! . ride the same lane, and $$ mints a fresh point
+; ($ is idempotent, so $$ is a free overload: $$x = a fresh mint, printed $$<serial>).
+; \ never fuses (form space).
 ; demo:
 1 + 2 * 3            ; 7       infix, right-associative
 $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)

@@ -18,12 +18,12 @@
 
   ; interned symbols print as their name
   (= "foo" (show 'foo))
-  ; a mint prints $<serial> -- the serial in base 36, the point's GC-stable
-  ; identity and order key. NOT a round-trip ($x re-reads as (sat x)): identity
-  ; is the mint's whole product, no spelling carries it, so the face only has to
-  ; distinguish, which the serial does. the serial is non-deterministic, so we
-  ; assert the SHAPE: a leading $, stable on re-show, distinct mints distinct.
-  (= "$" (snip (show (mint 0)) 0 1))
+  ; a mint prints $$<serial> -- the serial in base 36, factoring back out to the
+  ; $$ mint maker. NOT an exact round-trip: $$<serial> re-reads as `($$ <serial>)`,
+  ; a FRESH mint, since identity is the mint's whole product and no spelling carries
+  ; it -- the face only has to distinguish, which the serial does. the serial is
+  ; non-deterministic, so we assert the SHAPE: a leading $$, stable, distinct.
+  (= "$$" (snip (show (mint 0)) 0 2))
   (: m (mint 0) ((show m) = (show m)))             ; stable: same mint, same face
   (: a (mint 0) b (mint 0) !((show a) = (show b))) ; distinct mints, distinct faces
   (nom? (mint 0))

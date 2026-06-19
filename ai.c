@@ -2929,7 +2929,7 @@ static ai_inline struct ai*ioput_str(struct ai*g, word _) {
 //     prints it as () -- so the absence face and a mint face never collide.
 static ai_inline struct ai*ioput_sym(struct ai*g, word _) {
  if (_ == ZeroPoint) return ioputcs(g, "()");  // the face of absence
- return ioputn(ioputc(g, '$'), (intptr_t) sym(_)->code, 36); }   // $<serial base36>
+ return ioputn(ioputcs(g, "$$"), (intptr_t) sym(_)->code, 36); }   // $$<serial base36>: factors back out to the $$ mint maker (diagnostic, not an exact reparse)
 // a named point prints its bare name (the spelling), no sigil -- it reparses to itself.
 // Park the nom: ioputc may GC and MOVE both the nom and its name, so re-derive each step.
 static ai_inline struct ai*ioput_nom(struct ai*g, word _) {
