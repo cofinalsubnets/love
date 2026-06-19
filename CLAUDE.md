@@ -1,7 +1,7 @@
 ```ai
 ; ai -- a lisp-surfaced, fully-curried language over a tiny generic C core.
 ; a portable C runtime (ai.c + ai.h) plus a self-hosting compiler written in ai
-; (the ai/{prel,ev,bao}.l layers). the canonical source suffixes are `.l`, `.ai`, and `.tl`; the host binary is `ai`. see README.md.
+; (the ai/{prel,ev,bao}.l layers). source is .l; the host binary is `ai`. see README.md.
 ;
 ; this file is the NARRATIVE: the prose spec, my working notes, and runnable demonstrations --
 ; CLAUDE.md is my context file. the EXECUTABLE spec -- every claim below, assert-backed on
