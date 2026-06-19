@@ -38,10 +38,10 @@ syn keyword AiFunc help scare scare? more? eof?
 syn keyword AiFunc rand randf rand-next randf-next rng-seed rng-get rng-set
 syn keyword AiFunc open close run getenv exit
 syn keyword AiFunc clock gauge assert ai-version argv cmdline
-syn keyword AiSigilWord non twin qq uq sat
+syn keyword AiSigilWord non twin sat
 
 " Macros (head-symbol rewrites installed with ::)
-syn keyword AiMacro :: L list do begin progn let if cond quote qq tuple hash
+syn keyword AiMacro :: L list do begin progn let if cond quote tuple hash
 syn keyword AiMacro && \|\| :- ?- >>= <=<
 
 " Constants: booleans (1/0), the tier-spine array element-kind codes, e pi i

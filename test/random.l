@@ -16,14 +16,14 @@
 ; limbs are 64-bit -- a Z (word-int) array on a 64-bit word, a C (8-byte) array
 ; on a 32-bit one. The draw is canonicalized to a fixed 62 bits (a fixnum on a
 ; 64-bit word, a bignum on a 32-bit one), so a seed reproduces the SAME sequence
-; on every target -- the only platform-visible difference is the state's atype.
+; on every target -- the only platform-visible difference is the state's tier.
 (assert
  ; --- state-tuple structure: rank-1, length 4, 64-bit limbs (Z array, or C on
  ; a 32-bit word where C is the 8-byte-wide kind -- the 256-bit payload either way) ---
  (= 4 (alen (rng-seed 1)))
  (= 1 (arank (rng-seed 1)))
- (= (atype (rng-seed 0)) (atype (rng-seed 1)))  ; a seed's limb type is stable...
- (? wint (= Star (atype (rng-seed 1))) 1)      ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
+ (= (tier (rng-seed 0)) (tier (rng-seed 1)))  ; a seed's limb type is stable...
+ (? wint (= star-tray (tier (rng-seed 1))) 1)      ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
  (= 4 (alen (rng-get 0)))                  ; the global is a valid state tuple too
 
  ; --- determinism: same seed -> same sequence (global and functional) ---
@@ -63,8 +63,8 @@
 
  ; --- invalid state -> nil (rng-set / functional draws validate) ---
  (nil? (rng-set 5))
- (nil? (rng-set (arr 0 '(3) 0)))           ; wrong length
- (nil? (rng-set (arr 0.0 '(4) 0)))           ; wrong element type
+ (nil? (rng-set (star-tray '(3) 0)))           ; wrong length
+ (nil? (rng-set (gem-tray '(4) 0)))           ; wrong element type
  (nil? (rand-next 5))
  (nil? (randf-next 0))
 

@@ -553,8 +553,8 @@ not-in-the-bag      ; ()        a missing nom reads the zero point (helpless)
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), every hot lvm_* pointer,
 ; and finally the `bag` itself. compiled references were folded, so only the noms die.
-; noms the printer, the reader, or an expander EMITS (uq ltuple link pin
-; tablet mono ..) stay, as do the C-resolved hooks (num-ap add mul help). the shell
+; noms the printer, the reader, or an expander EMITS (spread link pin
+; tablet mono list ..) stay, as do the C-resolved hooks (num-ap add mul help). the shell
 ; core (ai/bao.l) no longer needs mopping: its editor + repl internals are
 ; closure-private (off the bag by construction), and only its entry points --
 ; shell/welp/edraw/wrap/bao + the stream shell zev/zevs/charms -- are globals.

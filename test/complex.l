@@ -105,20 +105,20 @@
 
 ; --- step 7b: full-rank complex arrays (packed (re,im) g_C tuples) -----------
 ; a complex value packs two floats per element into a `c` array (type code c = 2,
-; the tier between r and o). arr/arr/array/@ all build them (a-type infers c);
+; the tier between r and o). twin-tray/array/@ all build them (a-type infers c);
 ; `get` returns a ~(re im) box; + - * / broadcast in the complex domain; `=` ->
 ; a 0/1 mask, the orderings -> nil; asum/aprod fold complex; aall/aany lift the
 ; 0+0i-is-falsy rule. (body-less `:` -> ca-* leak to global, reused in roundtrip.l)
-(: ca-z (arr ~(0 0) '(3) 0)                             ; zero-filled: three 0+0i
-   ca-v (arr ~(0 0) '(2) (L ~(1 2) ~(3 4)))        ; explicit packed chain
+(: ca-z (twin-tray '(3) 0)                             ; zero-filled: three 0+0i
+   ca-v (twin-tray '(2) (L ~(1 2) ~(3 4)))        ; explicit packed chain
    ca-a (array 3 ~(1 1) ~(2 2) ~(3 3))        ; `array` infers c from its args
    ca-r @(~(1 0) ~(0 1))                       ; `@` reader infers c too
    ca-m (array '(2 2) ~(1 0) ~(0 1) ~(2 0) ~(0 2)))  ; rank-2 complex
 
 (assert
  ; --- construction / type / shape ---
- (= 2 Twin)   (= Twin (atype ca-v))   (= Twin (atype ca-z))   (= Twin (atype ca-a))
- (= Twin (atype ca-r))   (= Twin (atype ca-m))
+ (= twin-tray (tier ca-v))   (= twin-tray (tier ca-z))   (= twin-tray (tier ca-a))
+ (= twin-tray (tier ca-r))   (= twin-tray (tier ca-m))
  (= 1 (arank ca-v))   (= 2 (alen ca-v))
  (= 2 (arank ca-m))   (= 4 (alen ca-m))
 
@@ -129,8 +129,8 @@
 
  ; --- elementwise broadcast: array (op) array ---
  (= ~(2 4) (peep (+ ca-v ca-v) 0 0))             ; (1+2i)+(1+2i) elementwise
- (aall (= ca-v (+ ca-v (arr ~(0 0) '(2) 0))))           ; + the zero array is identity
- (= ~(-5 10) (peep (* (arr ~(0 0) '(2) (L ~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
+ (aall (= ca-v (+ ca-v (twin-tray '(2) 0))))           ; + the zero array is identity
+ (= ~(-5 10) (peep (* (twin-tray '(2) (L ~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
  (= ~(1 2) (peep (/ (* ca-v ca-v) ca-v) 0 0))    ; (z*z)/z = z
 
  ; --- scalar broadcast: complex scalar (op) array, both orders ---
@@ -145,7 +145,7 @@
 
  ; --- `=` over complex arrays -> a 0/1 mask; orderings/% -> nil ---
  (= 1 (peep (= ca-v ca-v) 0 0))
- (= 0 (peep (= ca-v (arr ~(0 0) '(2) (L ~(9 9) ~(3 4)))) 0 0))
+ (= 0 (peep (= ca-v (twin-tray '(2) (L ~(9 9) ~(3 4)))) 0 0))
  (aall (= ca-v ca-v))
  (nil? (< ca-v ca-v))   (nil? (> ca-v ca-v))   (nil? (% ca-v ca-v))
 
@@ -157,12 +157,12 @@
 
  ; --- aall/aany lift the 0+0i-is-falsy rule ---
  (aall ca-v)
- (nil? (aall (arr ~(0 0) '(2) (L ~(0 0) ~(1 1)))))   ; a 0+0i element fails aall
- (sat (arr ~(0 0) '(2) (L ~(0 0) ~(1 1))))          ; the element sum ~(1 1) sorts positive
+ (nil? (aall (twin-tray '(2) (L ~(0 0) ~(1 1)))))   ; a 0+0i element fails aall
+ (sat (twin-tray '(2) (L ~(0 0) ~(1 1))))          ; the element sum ~(1 1) sorts positive
  (nil? (sat ca-z))
 
  ; --- abs of a complex array = the flat L2 norm over every (re, im) ---
- (= 5.0 (abs (arr ~(0 0) '(1) (L ~(3 4)))))          ; |3+4i| = 5
+ (= 5.0 (abs (twin-tray '(1) (L ~(3 4)))))          ; |3+4i| = 5
  (close ((/ 1 2) 30) (abs ca-v))                     ; sqrt(1+4+9+16)
 
  ; --- pin / nil?: the invariant (nil? x) == (= 0 (pin x)) holds here too ---

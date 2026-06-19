@@ -73,7 +73,7 @@
  (= 7 (sat @(3 4)))                             ; array -> element sum
  (= 0 (sat @(-3 -4)))                           ; a list or array of negatives nets <= 0 -> nothing
  (= 0 (sat '(-2 1))) !'(-2 1)                   ; negatives cancel positives -- net -1 -> 0, falsy
- (= 0 (sat (arr 0 '(2 3) 0)))                   ; all-zero array -> net 0
+ (= 0 (sat (star-tray '(2 3) 0)))                   ; all-zero array -> net 0
  (= 1 (sat @(0.3 0.4)))                         ; ceil makes any positive net -> >=1
  (= 1 (sat ~(0.001 0)))                        ; re>0 -> ceil(0.001) = 1; sat=0 iff sorts <= 0
  (= 120 (sat (nom 'x)))                      ; a nom nets its spelling's charms + the mint's 0

@@ -69,17 +69,17 @@
     (? wint (< 1e300 (1e20 2)) 1)              ; 2^1e20, f64 only -- 1e300 is inf in f32
 
     ; --- power elementwise over arrays (numpy broadcast); float lane -> r ---
-    (= Gem (atype (2.0 (arr 0 '(2) '(2 3)))))                  ; array^2.0 -> float array
-    (aall (= (2 (arr 0.0 '(3) '(1 2 3))) (arr 0.0 '(3) '(1 4 9))))  ; array ^ scalar
-    (aall (= ((arr 0.0 '(3) '(1 2 3)) 2) (arr 0.0 '(3) '(2 4 8))))  ; scalar ^ array (array numeral)
-    (aall (= ((arr 0.0 '(3) '(2 2 2)) (arr 0.0 '(3) '(1 2 3)))      ; array ^ array
-             (arr 0.0 '(3) '(1 4 9))))
-    (close 1.570796326794897 (peep (arg ~((arr 0.0 '(2) '(1 0)) (arr 0.0 '(2) '(1 1)))) 1 0))
+    (= gem-tray (tier (2.0 (star-tray '(2) '(2 3)))))                  ; array^2.0 -> float array
+    (aall (= (2 (gem-tray '(3) '(1 2 3))) (gem-tray '(3) '(1 4 9))))  ; array ^ scalar
+    (aall (= ((gem-tray '(3) '(1 2 3)) 2) (gem-tray '(3) '(2 4 8))))  ; scalar ^ array (array numeral)
+    (aall (= ((gem-tray '(3) '(2 2 2)) (gem-tray '(3) '(1 2 3)))      ; array ^ array
+             (gem-tray '(3) '(1 4 9))))
+    (close 1.570796326794897 (peep (arg ~((gem-tray '(2) '(1 0)) (gem-tray '(2) '(1 1)))) 1 0))
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
     ;     the array's element form -- full magnitude in a float array, low bits in
     ;     an int array (modular, so it wraps: 2^64 + 5 contributes 5). Comparison
     ;     against a bignum stays magnitude-exact -- see test/bignum.l ---
-    (aall (= (+ (arr 0 '(2) '(1 2)) 18446744073709551621)        ; 2^64 + 5 -> low word 5
-             (arr 0 '(2) '(6 7))))
-    (< 1e19 (peep (+ (arr 0.0 '(2) '(0 0)) 18446744073709551616) 0 0))))  ; 2^64 full magnitude
+    (aall (= (+ (star-tray '(2) '(1 2)) 18446744073709551621)        ; 2^64 + 5 -> low word 5
+             (star-tray '(2) '(6 7))))
+    (< 1e19 (peep (+ (gem-tray '(2) '(0 0)) 18446744073709551616) 0 0))))  ; 2^64 full magnitude

@@ -1,5 +1,5 @@
-; functions print as value forms (read back via uq=identity): builtins -> ,name;
-; lambdas -> ,(\ …) source with \-bound vars as interned d<lvl> de Bruijn LEVELS
+; functions print as value forms that reconstruct under eval: builtins -> the bare
+; name; lambdas -> (\ …) source with \-bound vars as interned d<lvl> de Bruijn LEVELS
 ; (a-canonical: outermost binder = d0). Interned names -> the print form round-trips
 ; (see roundtrip.l). a-equivalent lambdas print identically; capture = a leading binder.
 (assert

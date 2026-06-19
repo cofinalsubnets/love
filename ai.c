@@ -137,7 +137,7 @@ lvm_t lvm_kcall,
  lvm_fputbn, lvm_read, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
- lvm_arr, lvm_iota, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
+ lvm_tray, lvm_iota, lvm_arank, lvm_alen, lvm_ashape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_amax, lvm_amin, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_lamp, lvm_hotp,
  lvm_nif,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
@@ -660,7 +660,7 @@ lvm_t lvm_fault;
  _(nif_cplx, "twin", s2(lvm_cplx)) _(nif_Cp, "twin?", s1(lvm_Cp))\
  _(nif_re, "re", s1(lvm_re)) _(nif_im, "im", s1(lvm_im)) _(nif_conj, "conj", s1(lvm_conj))\
  _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
- _(nif_arr, "arr", s3(lvm_arr))\
+ _(nif_tray, "tray", s3(lvm_tray))\
  _(nif_iota, "iota", s1(lvm_iota))\
  _(nif_nif, "nif", s4(lvm_nif))\
  _(nif_arank, "arank", s1(lvm_arank))\
@@ -3052,20 +3052,20 @@ static struct ai *lam_canon(struct ai *g) {
  word r = lam_build(g, g->sp[D], 0, 0, D);                     // alloc-free, GC-free; g->sp stays put
  return g->sp[D] = r, g->sp += D, g; }
 
-// Print a function value. Like vec/cplx/hash it's a `,`-prefixed value form (so it
-// reads back via uq=identity): ,(base arg…) for a partial application / closure,
-// ,name for a builtin, ,(\ …) for a compiled lambda (its stored source). An opaque
-// text (continuation, top-level wrap) has no constructor form, so it prints as the
-// opaque, re-parsable token ,thd@<addr>. The leading , is emitted once here; body w/o it.
+// Print a function value as a bare, re-parsable form that reconstructs under eval
+// (like @(…)/~(…)/#(…)): (base arg…) for a partial application / closure, the bare
+// name for a builtin (\+ for an operator builtin), (\ …) for a compiled lambda (its
+// stored source). An opaque text (continuation, top-level wrap) has no constructor
+// form, so it prints as the opaque, re-parsable token \<addr>.
 static struct ai *ioput_fn(struct ai *g, word x, uintptr_t off) {
  union u *k = cell(x);
  bool reprp = fn_partialp(k) || ai_nif_name(x) || fn_src(ai_core_of(g), k, x);
  return reprp ? ioput_fn_body(g, x, off) : ioprintf(g, "\\%z", x); }
 
-// Render a function as a bare constructor expression (NO leading ,). Detection
+// Render a function as a bare constructor expression. Detection
 // order matters: a bare multi-arg lambda and a partial-app both have a lvm_cur
 // head, and a nif's value[-1] is undefined static data. The partial-app base
-// recurses here (not ioput_fn) so it doesn't get its own comma.
+// recurses here (not ioput_fn) so it renders inline.
 static struct ai *ioput_fn_body(struct ai *g, word x, uintptr_t off) {
  struct ai *c = ai_core_of(g);
  union u *k = cell(x);
@@ -3362,8 +3362,8 @@ static struct ai* ai_z_getc(struct ai*g) {
 // that used to recurse in C now lives on the l heap (and rides GC). A frame is
 // either a *list accumulator* — a chain (head . tail) holding the elements read so
 // far in source order, ((nil . nil) when empty), built in place by appending at
-// `tail` so no reverse pass is needed — or a *reader-macro* — the wrap symbol \ qq
-// uq uqs hash vec plex twin, recognised by nomp. A finished datum is `delivered`
+// `tail` so no reverse pass is needed — or a *reader-macro* — the wrap symbol \ list
+// hash tuple twin conj, recognised by nomp. A finished datum is `delivered`
 // to the top frame: appended to a list, or wrapped/spliced and re-delivered; with
 // no frame left it is the result. Everything lives on the l stack so GC relocates
 // it across the allocs that reading does.
@@ -3407,7 +3407,7 @@ static struct ai *ioread1op(struct ai *g, int c, int *pending) {
     return intern(g); }
  return g; }
 // recognise the splicing reader-macro wraps -- `#` (interned `hash`) and `@`
-// (interned `vec`) -- so a list operand splices into the constructor call
+// (interned `tuple`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in ioparse.
 static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
  struct ai_str *s = (chainp(x) && strp(A(x)) && mintp(B(x))) ? str(A(x)) : 0;  // named sym (name . mint) -> its name; a bare mint is nameless
@@ -3516,7 +3516,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
     bool emptyd = g->sp[0] == (word) ai_core_of(g);     // datum is the () zero-point (NOT the number 0)
     // @()/#() -> the DIRECT one-arg empty-collection nif, (iota 0) / (tablet 0). A one-arg nif
     // call is ai0-safe; a ZERO-ARG macro (tuple)/(hash) is NOT expanded by the self-hosted wev,
-    // so @()->( tuple)->(ltuple (list)) would strand a macro value on ai0. The nif sidesteps it.
+    // so @()->( tuple)->(spread (list)) would strand a macro value on ai0. The nif sidesteps it.
     char const *empty_ctor = !emptyd ? 0
                            : hashsym(A(g->sp[1])) ? "tablet"          // #() -> empty map
                            : symeq(A(g->sp[1]), "tuple", 5) ? "iota"  // @() -> empty z-array
@@ -5129,6 +5129,9 @@ ai_noinline bool eqv(struct ai *g, word a, word b) {
      size_t la = ai_vec_bytes(vec(a)), lb = ai_vec_bytes(vec(b));
      if (la != lb || memcmp(vec(a), vec(b), la)) return false;
      break; }
+    case KFlo:
+     if (flo_get(a) != flo_get(b)) return false;       // two float boxes: compare the payload (parallels = / cmp)
+     break;
     case KWide:
      if (box_get(a) != box_get(b)) return false;       // two wide boxes: compare the payload
      break;
@@ -5630,14 +5633,15 @@ struct ai *ai_big_dec(struct ai *g) {
  g->sp[0] = word(st);
  return g; }
 
-// --- (arr type shape-list vals): THE typed array constructor ----------------
-// `type` is a fixnum element-type code (z/r/c/o, named in the prel); `shape`
-// is a list of non-negative fixnum dimensions (empty -> a rank-0 scalar box);
-// `vals` fills row-major from a list (a non-numeric or missing entry stays 0;
-// extras are ignored), and 0 (or any non-list) means zero-filled. A `c` array
-// packs two floats (re,im) per element; zero-fill is 0+0i. Bad type / negative
-// dim / over-rank -> nil.
-lvm(lvm_arr) {
+// --- (tray witness shape-list vals): THE typed array constructor ------------
+// the generic ctor (off the surface -- mopped; the prel's star-/gem-/twin-/top-tray
+// wrap it). `witness` is a GEM that names its tier by example (0/0.0/~(0 0)/() ->
+// z/r/c/o); `shape` is a list of non-negative fixnum dimensions (empty -> a rank-0
+// scalar box); `vals` fills row-major from a list (a non-numeric or missing entry
+// stays 0; extras are ignored), and 0 (or any non-list) means zero-filled. A `c`
+// array packs two floats (re,im) per element; zero-fill is 0+0i. Bad witness /
+// negative dim / over-rank -> nil.
+lvm(lvm_tray) {
  word t = Sp[0], shp = Sp[1];                  // t = a WITNESS GEM (names its tier), vals = Sp[2]
  // the type is read off the witness's KIND -- a value inhabiting the tier: 0 -> Z,
  // 0.0 -> R, ~(0 0) -> C, and anything else (canonically (), the O floor) -> O.

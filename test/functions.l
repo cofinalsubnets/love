@@ -34,9 +34,9 @@
  (= 10 ((0 (+ 1)) 10))                        ; (0 f) = 1 = identity numeral -> 10 unchanged
  (= 1 (0 'anything))                          ; 0 is const-1: (0 x) = 1 for every x
  (= 1 ((cask 4) 'anything))                 ; opaque handles (cask/port) behave as 0 too
- (aall (= (2 (arr 0 '(3) '(2 3 4))) (arr 0 '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
- (aall (= ((arr 0 '(3) '(2 3 4)) 5) (arr 0.0 '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 power)
- (= 15 (((arr 0 '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
+ (aall (= (2 (star-tray '(3) '(2 3 4))) (star-tray '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
+ (aall (= ((star-tray '(3) '(2 3 4)) 5) (gem-tray '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 power)
+ (= 15 (((star-tray '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
  (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ ~(3 4)) = |3+4i| = 5
  (= 10 ((~(-3 4) (+ 1)) 10))              ; ... but a complex sorting negative saturates to 0
  (twin? (~(0 1) 5))                       ; complex operator on a number -> complex power (5^i), no longer fenced

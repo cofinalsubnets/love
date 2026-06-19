@@ -101,6 +101,7 @@
  !((\ x x) = (\ y z)) !((\ x (+ x 1)) = (\ x (+ x 2)))             ; free /= bound; different body
  (: g (\ a (\ b (+ a b))) (&& ((g 1) = (g 1)) !((g 1) = (g 2))))   ; closures: equal iff captures match
  ((+ 1) = (+ 1)) !((\ x x) < (\ y y)) !((\ x (cap x)) = cap)           ; partial apps too; eta not bridged
+ ((+ 1.5) = (+ 1.5)) !((+ 1.5) = (+ 2.5)) ('(1.5) = '(1.5)) !('(1.5) = '(2.5))  ; nested float boxes compare by value (eqv KFlo)
  (1 = (\ x x)) ((\ y y) = 1) !(id? 1 (\ x x))                      ; 1 = identity, either side
  (0 = (\ _ 1)) ((\ q 1) = 0) !(0 = (\ _ 2)) !(0 = (\ _ _))        ; 0 = const-1 (and only that)
  !!(\ _ 1) (1 = $(\ _ 1)))     ; the bridge crosses the measure: =-equal to 0, yet present (a top nets 1)
@@ -159,28 +160,28 @@
  (2.0 = (re ~(2 3))) (i < 1) !(1 < i) ("~(0.0 1.0)" = (show i))
  (0.0 = (peep (arg ~(1 @(1 0))) 1 0)))           ; arg broadcasts -- (arg ~(1 x)) = atan, elementwise
 (assert
- (: v (array 2 ~(1 2) ~(3 4)) (&& (Twin = (atype v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (asum v))
+ (: v (array 2 ~(1 2) ~(3 4)) (&& (twin-tray = (tier v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (asum v))
     (~(2 4) = (peep (v + v) 0 0)) (~(2 4) = (peep (~(2 0) * v) 0 0)) !(v < v)
     ($v = $(asum v)) ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v))))
  (8 = $(array 2 ~(3 4) ~(-3 4))) (8 = $(L ~(3 4) ~(-3 4))))
 
-; --- arrays --- (arr type shape vals) typed ctor (vals 0 zero-fills); (array shape elem..)
+; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
 ; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. + - * // < = broadcast numpy-style;
 ; reduce asum/aprod/amax/amin/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
 (assert
- (6 = (alen (arr 0 '(2 3) 0))) (2 = (arank (arr 0 '(2 3) 0))) ('(2 3) = (ashape (arr 0 '(2 3) 0)))
- (Star = (atype (arr 0 '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
- (3 = (peep (arr 0 '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
- (@(2 4 6) = @(1 2 3) * 2) (Gem = (atype ((arr 0 '(2) 0) + 1.5))) (Star = (atype ((arr 0 '(3) 0) < 1)))
+ (6 = (alen (star-tray '(2 3) 0))) (2 = (arank (star-tray '(2 3) 0))) ('(2 3) = (ashape (star-tray '(2 3) 0)))
+ (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
+ (3 = (peep (star-tray '(2 2) '(1 2 3 4)) '(1 0) -1)) (@(11 22 33) = @(1 2 3) + @(10 20 30))
+ (@(2 4 6) = @(1 2 3) * 2) (gem-tray = (tier ((star-tray '(2) 0) + 1.5))) (star-tray = (tier ((star-tray '(3) 0) < 1)))
  (60 = (asum @(10 20 30))) (30 = (amax @(10 30 20))) (5 = (asum 5)) (aall (1 < 2))
- (@(0 1 2) = (iota 3)) (Star = (atype (iota 3))) !(iota 0) !(iota -1) (4950 = (asum (iota 100)))   ; iota: jot's range as a z-array
+ (@(0 1 2) = (iota 3)) (star-tray = (tier (iota 3))) !(iota 0) !(iota -1) (4950 = (asum (iota 100)))   ; iota: jot's range as a z-array
  (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = (// @(7 11) 2))
- (@(4 6) = @(8 12) / 2) !(arr 0 '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
- (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2)) !(arr 99 '(3) 0)
- (0 = (asum (arr 0 '(0) 0))) (1 = (aprod (arr 0 '(0) 0))) (aall (arr 0 '(0) 0))
- ("@()" = (show (arr 0 '(0) 0))) (0 = (alen ((arr 0 '(0) 0) + 1)))
- (32 = (inner @(1 2 3) @(4 5 6))) (Star = (atype (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
- (: M (inner (arr 0 '(2 3) '(1 2 3 4 5 6)) (arr 0 '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
+ (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
+ (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
+ (0 = (asum (star-tray '(0) 0))) (1 = (aprod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
+ ("@()" = (show (star-tray '(0) 0))) (0 = (alen ((star-tray '(0) 0) + 1)))
+ (32 = (inner @(1 2 3) @(4 5 6))) (star-tray = (tier (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
+ (: M (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
     (&& ('(2 2) = (ashape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
@@ -244,7 +245,7 @@
 (assert
  !() !0 !"" !@() !#() !~(0 0) !(cask 0)           ; every empty is false (green)
  (nil? ()) (nil? 0) !(= () 0) !(id? () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
- ("@()" = (show @())) (1 = (arank @())) (0 = (alen @())) (Star = (atype @()))  ; @() the empty array, round-trips
+ ("@()" = (show @())) (1 = (arank @())) (0 = (alen @())) (star-tray = (tier @()))  ; @() the empty array, round-trips
  (tab? #()) (0 = $#()) ("(tablet 0)" = (show #()))   ; #() the empty map
  (0 = @0) (nil? (arank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
  (tab? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)

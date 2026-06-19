@@ -12,7 +12,8 @@
    true 1 false 0
    i ~(0 1) ;; FIXME up top
    (tangent x) (/ (sine x) (cosine x))          ; derived: tan = sin/cos
-   Star 0 Gem 1 Twin 2 Top 3                              ; array element-kind codes (the tier spine)
+   star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray ~(0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
+   (tier v) (? (tray? v) (: c (atype v) (? (= c 0) star-tray (= c 1) gem-tray (= c 2) twin-tray top-tray)) ())  ; a tray's tier IS its ctor; nil off a tray
    zero? nil?                                  ; zero? aliases nil? (the net-to-zero test)
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
@@ -159,7 +160,7 @@
    (star? x) (id? x (net x))
    ; a CHARM is the word-sized star -- a fixnum (the lisp predicate; oddp C-side).
    (charm? x) (fix? x)
-   (galaxy? x) (? (tray? x) (? (< (atype x) Top) 1 (star? (peep x 0 0))) 0))
+   (galaxy? x) (? (tray? x) (? (nil? (= top-tray (tier x))) 1 (star? (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id)
@@ -444,7 +445,7 @@
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (tray? st) (= 1 (arank st)) (= 4 (alen st)) (= (atype (rng-seed 0)) (atype st)))
+   (rng-set st) (? (&& (tray? st) (= 1 (arank st)) (= 4 (alen st)) (= (tier (rng-seed 0)) (tier st)))
                    (: _ (pin bag 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin bag 'rng-state (cup r))
@@ -465,8 +466,8 @@
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
 ; a-type: a WITNESS STAR of the element tier -- the highest of {Z<R<C<O} present in a
-; list of values, returned as an inhabitant (0/0.0/~(0 0)/()) for `arr` to read the
-; tier off (arr takes a witness, not a code). a box still fits z; a complex value lifts
+; list of values, returned as an inhabitant (0/0.0/~(0 0)/()) for `tray` to read the
+; tier off (the generic ctor takes a witness, not a code). a box still fits z; a complex value lifts
 ; to a packed (re,im) `c` array; only a value past the real numeric tower (bignum,
 ; symbol, string, nested array, …) lifts the whole array to an object (o) array.
 ; a-dim/a-shape: a shape dimension may be any numeric -- a float, complex, or even
@@ -484,8 +485,8 @@
 ; printer-sugar forms). `tuple` builds a rank-1 array from its element args,
 ; inferring the element type via a-type (so it carries bignums/symbols in an o
 ; array, not just z/r); `map` builds a map from alternating key/value args.
-(: (ltuple l) (arr (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
-(:: 'tuple (\ a (list 'ltuple (link 'list a))))
+(: (spread l) (tray (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
+(:: 'tuple (\ a (list 'spread (link 'list a))))
 ; (hash x) boxes any non-list -- a fresh mutable hash pinning x
 ; at 0, so #5 = #(0 5) and #() IS #0 (() is 0); chains pin as usual, and an odd
 ; trailing operand lands in the 0 box slot. the empty hash is (tablet 0).
@@ -504,7 +505,7 @@
 ; `array` curries them one at a time and builds once it has them all -- so
 ; (array 2 'a 'b), (array '(2 2) 1 2 3 4) and a partial like (array 3) (a collector
 ; awaiting 3 elems) all fall out of l's auto-currying, like numap's n-ary text.
-(: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (arr (a-type d) sh d))
+(: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (tray (a-type d) sh d))
                         (\ x (a-coll sh (- n 1) (link x acc))))
    (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 

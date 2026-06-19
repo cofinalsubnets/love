@@ -31,16 +31,15 @@
 ; core special forms `\` (lambda, and the one-operand quote) and `:` (letrec*), plus
 ; application -- on expanded input nothing else can bind. That is the piece meant to
 ; move into the compiler, which already macroexpands. lcat2 works on UN-expanded source,
-; so a surface wrapper `rn` adapts the few binding/quote macros the compiler would have
-; expanded away: `:-` (body-first let) is reordered to a `:` and back, `let` maps to `:`,
-; and `qq` (quasiquote) is passed whole with its symbols `taint`ed so they're never
-; renamed (an unquoted ,x is live code we don't rewrite). mxrn takes the recursion as a
+; so a surface wrapper `rn` adapts the few binding macros the compiler would have
+; expanded away: `:-` (body-first let) is reordered to a `:` and back, and `let` maps
+; to `:`. mxrn takes the recursion as a
 ; link `rec`: the compiler calls (mxrn x env used top mxrn); lcat2 passes `rn`, so nested
 ; macros get adapted too. Macro names are folded into `cnt` so no fresh name can shadow a
 ; macro head (which the compiler expands by name even past a local binding).
 
 ; cnt = every source symbol -> its occurrence count (also the fresh-name avoid-set);
-; taint = the frozen set (here: symbols seen under qq). both mutated in place.
+; taint = the frozen "do not rename" set (empty for the current corpus). both mutated in place.
 (: cnt (tablet 0) taint (tablet 0))
 
 ; === CORE -- naming-with-reuse for MACROEXPANDED forms (the part destined for the
@@ -55,7 +54,7 @@
 ;   * feed `cnt` from the compiler's symbol info (occurrence counts), and leave `taint`
 ;     empty -- or repurpose it as a general frozen "do not rename" set.
 ;   * keep relying on the prel binding-shape helpers lp/lambp/ln (already present).
-; The SURFACE block below (collect/tcollect + rn with its :-/let/qq handling) stays in
+; The SURFACE block below (collect + rn with its :-/let handling) stays in
 ; lcat2: it is exactly the un-expanded-source adaptation the compiler no longer needs. ===
 (: (sl-char d) (? (< d 26) (+ 97 d) (+ 65 (- d 26)))   ; shortlex over a-zA-Z (bijective base-52):
    (sl-digits n acc) (? (< n 1) acc (: m (+ -1 n) (sl-digits (/ m 52) (link (sl-char (% m 52)) acc))))
@@ -106,18 +105,14 @@
      (map (\ e (rec e env used 0 rec)) x)))
 
 ; === lcat2 SURFACE -- builds the core's inputs (cnt/taint) from un-expanded source, and
-; adapts the binding/quote macros the compiler would have already expanded away. `rn` is
-; the recursion the core threads, so nested `:-`/qq are adapted at every level. ===
+; adapts the binding macros the compiler would have already expanded away. `rn` is
+; the recursion the core threads, so nested `:-`/`let` are adapted at every level. ===
 (: (collect x) (? (nom? x) (pin cnt x (+ 1 (peep cnt x 0)))
-     (two? x) (? (= 'qq (cap x)) (: _ (collect (cap x)) (tcollect (cup x)))   ; qq body -> taint
-                 (: _ (collect (cap x)) (collect (cup x)))) 0)
-   (tcollect x) (? (nom? x) (: _ (pin cnt x (+ 1 (peep cnt x 0))) (pin taint x 1))
-                    (two? x) (: _ (tcollect (cap x)) (tcollect (cup x))) 0)
+     (two? x) (: _ (collect (cap x)) (collect (cup x))) 0)
    (rn x env used top rec) (? (two? x)
        (? (= ':- (cap x)) (: rl (rn-let (cat (cuup x) (list (caup x))) env used top rec)  ; :- = body-first :
              rb (cup rl) (link ':- (link (last rb) (init rb))))                             ; reorder body back
           (= 'let (cap x)) (rn-let (cup x) env used top rec)                            ; let = :
-          (= 'qq (cap x)) x                                                           ; quasiquote -> whole
           (mxrn x env used top rec))
        (mxrn x env used top rec)))
 
@@ -165,7 +160,7 @@
    e (nom 0)
    forms (readforms p e)
    _ (map (\ m (pin cnt m (+ 1 (peep cnt m 0)))) (keys (peep bag 0 0)))  ; macro heads bypass scoping
-   _ (map collect forms)                                        ; count symbols + taint qq
+   _ (map collect forms)                                        ; count symbols
    acc (joinforms forms)
    _ (emit acc)
    (put out 10))
