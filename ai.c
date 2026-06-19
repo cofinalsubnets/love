@@ -583,9 +583,16 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define limb_base ((uint64_t) 1 << limb_bits)
 
 #define yield_interval 64
+// A *fairness* yield (deep in compute, not an explicit I/O/timer wait): clear any
+// stale next_wait_fd/next_wake_at first. Those are one-shot intentions set right
+// before an explicit yield (lvm_fgetc/lvm_sleep), and lvm_fgetc never clears the fd
+// on a successful read -- so after e.g. `(slurp nic)` it lingers at the nic fd. If a
+// periodic yield then inherits it, yield_sw saves this task as parked on that fd and
+// find_runnable never reschedules it until the fd happens to fire again (deadlock).
+// Same hazard the lvm_wait path already guards against.
 #define YieldCheck() \
   if (g->tasks->m != g->tasks && ++g->yield_ctr >= yield_interval) \
-    return Ap(lvm_yield_sw, g)
+    { g->next_wait_fd = -1; g->next_wake_at = 0; return Ap(lvm_yield_sw, g); }
 #define argn(nom, i) lvm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
 #define quon(nom, v) lvm(nom) { Have1(); Sp -= 1; Sp[0] = putcharm(v); Ip += 1; return Continue(); }
 
@@ -2163,6 +2170,14 @@ lvm(lvm_yield_sw) {
  uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd;
  if (!next) {
+  // A *fairness* yield (this task is still runnable: no wake deadline, no I/O
+  // wait) with no runnable peer -- just keep running this task. Crucially do NOT
+  // fall into yield_sw_wait, which sleeps until the nearest peer's wake_at: that
+  // would throttle a compute-heavy task to the slowest sleeping peer's period
+  // (a 3 s heartbeat would crawl an `ev` to 64 ap-cycles per 3 s). A blocked task
+  // (my_wake set, or my_wait_fd >= 0) still waits properly below; sleeping peers
+  // are picked up by a later YieldCheck once their wake_at passes.
+  if (!my_wake && my_wait_fd < 0) { g->yield_ctr = 0; return Continue(); }
   next = yield_sw_wait(g, my_wake, my_wait_fd);
   if (!next) {
    g->next_wake_at = 0;
