@@ -93,6 +93,15 @@ struct ai_str {
 struct ai_mint {
  lvm_t *ap;
  uintptr_t code; };
+// a NOM: a NAMED point -- its OWN kind (KNom), not the (name . mint) chain the
+// KSym->KMint collapse made it. `name` is the spelling string (GC-forwarded);
+// `code` is the serial (order key on a name tie + the hash). No inner mint object:
+// a nom is a flat 3-word leaf, distinct from the bare KMint above. `nomp` = the
+// union (a bare mint OR a named nom); a chain is now ALWAYS a real compound.
+struct ai_nom {
+ lvm_t *ap;
+ uintptr_t name;
+ uintptr_t code; };
 
 struct ai {
  // () IS the core: its FIRST WORD is an ap (lvm_sym, set in ai_ini), enough to make
@@ -136,15 +145,15 @@ struct ai {
  union {
   intptr_t v0;
   struct {
-   // The C->lisp hooks (num-ap, add, mul, help, operators) live on bag
+   // The C->lisp hooks (num-ap, add, mul, help, operators) live on book
    // (GC-traced, egg-baked): no slots, no key caches -- C materializes the
    // keys by name per use (sym_probe walks the intern map allocation-free;
    // hot numeric code is compiled by the lisp compiler, which holds the
    // symbols directly, so the C dispatch only catches stragglers).
-   ai_word bag;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
-                  // macro table is bag[nil] -- no separate field. The 'missing
+   ai_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
+                  // macro table is book[nil] -- no separate field. The 'missing
                   // condition tag needs no slot: it is the `missing` nif's name,
-                  // so the bag roots it, and the raise path reads it back with
+                  // so the book roots it, and the raise path reads it back with
                   // sym_probe (alloc-free, already on that path for `help`).
    ai_word scare_a, scare_b; // the last bare scare's condition data, stashed at
                   // the raise so a terminal exit can speak (ai_scare_face_);
@@ -292,8 +301,8 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KMint is the bare point
 // (the blue floor: () and the nameless mints; named syms are (name . mint) CHAINS now);
 // KCharm is the odd fixnum tag; KHot is any non-data heap pointer (text/function/map). The
-// five DATA kinds (KVec, KBig, KString, KMint, KChain) are the ones ai_typ recovers from an
-// ap's section slot (data.c go() order, via the data.h lookup); every vec reads as KVec there
+// six DATA kinds (KVec, KBig, KString, KMint, KNom, KChain) are the ones ai_typ recovers from an
+// ap's sentinel address (a plain compare); every vec reads as KVec there
 // (coarse -- one sentinel for scalar boxes and arrays alike). The SEVEN non-sentinel
 // numeric kinds are minted by ai_kind alone, refining a KVec by rank: a rank-0 box to
 // a scalar GEM (KWide + ai_vec_type -> KWide/KFlo/KCplx) and a rank>=1 vec to an array
@@ -301,7 +310,7 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // self-netting fixed-width numbers) and the array tower it mirrors both dispatch inline
 // (KArrZ~int, KArrR~float, KArrC~complex, KArrO~object). The diagonal is the type lattice
 // by semantics then representation: KMint the blue floor (() and the nameless points,
-// least of all), then arithmetic lane [KCharm..KArrO] (scalars then their
+// least of all) then KNom (the named points), then arithmetic lane [KCharm..KArrO] (scalars then their
 // array counterparts), sequence/concat lane [KString..KChain], then map, text last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (chain)
@@ -309,8 +318,8 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // order's chain < map < lambda is the enum order itself (a map is still a lookup lambda
 // for +/*/apply -- the rung exists for the order and the honest matrix cells).
 // KN is the matrix dimension.
-enum q { KMint, KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KChain, KMap, KHot, KN };
-#define ai_data_n 8     // # of data sentinels (data.c go()); the KArr* kinds interleave, so no longer KHot-KVec
+enum q { KMint, KNom, KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KChain, KMap, KHot, KN };
+#define ai_data_n 9     // # of data sentinels (vestigial now: ai_typ is a plain address-compare, no section/stride)
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
 // out-of-pool short-circuit). Strings are immutable, so one empty string
@@ -318,6 +327,14 @@ typedef ai_word num, word;
 // died in the one-nothing round: () reads as 0.)
 extern const struct ai_str ai_str_empty;
 #define EmptyString ((word) &ai_str_empty)
+// () -- the one serial-0 mint, a data-segment const shared by EVERY core (like
+// ai_str_empty): immortal, never copied (gcp's out-of-pool short-circuit), the
+// SAME value across cores and GCs (so () is bakeable, unlike the old per-core
+// core-as-(): it relocated every collection). serial 0 is the one never drawn, so
+// it is unique and seated least in the order; .ap = lvm_sym gives mintp/KMint/
+// const-1-apply/()-print for free.
+extern const struct ai_mint ai_mint_zero;
+#define ZeroPoint ((word) &ai_mint_zero)
 void ai_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool ai_ready(int fd), ai_strp(ai_word);
 struct ai
@@ -343,7 +360,7 @@ enum q ai_kind(word);
 // (ai_typ returns one of the five data kinds), so the first dimension is KN, not ai_data_n.
 extern lvm_t *ai_apply_mx[KN][KN];
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-lvm_t lvm_ap, lvm_chain, lvm_vec, lvm_sym, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox; // the data-kind sentinels (+ ap); defined in ai.c, read by inline predicates and ai_typ
+lvm_t lvm_ap, lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox; // the data-kind sentinels (+ ap); defined in ai.c, read by inline predicates and ai_typ
 // ai_typ recovers a data value's kind by comparing its first word (ap) against
 // the sentinel addresses. A tiny compare on the COLD apply path (only reached
 // when a data value is applied). This replaces the old ai_data ELF-section
@@ -354,7 +371,7 @@ lvm_t lvm_ap, lvm_chain, lvm_vec, lvm_sym, lvm_str, lvm_big, lvm_flo, lvm_wide, 
 // no reflection, no platform split (this is what __APPLE__/wasm already did).
 static ai_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
- return p == lvm_vec || p == lvm_big || p == lvm_str || p == lvm_sym
+ return p == lvm_vec || p == lvm_big || p == lvm_str || p == lvm_sym || p == lvm_nom
      || p == lvm_chain || p == lvm_flo || p == lvm_wide || p == lvm_cbox; }
 static ai_inline enum q ai_typ(union u *o) {
  lvm_t *p = o->ap;
@@ -362,6 +379,7 @@ static ai_inline enum q ai_typ(union u *o) {
       : p == lvm_big    ? KBig
       : p == lvm_str    ? KString
       : p == lvm_sym    ? KMint
+      : p == lvm_nom    ? KNom
       : p == lvm_chain  ? KChain
       : p == lvm_flo    ? KFlo
       : p == lvm_wide   ? KWide

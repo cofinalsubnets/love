@@ -1,7 +1,7 @@
 ; tele -- a PyTorch-style reverse-mode autograd library, written in ai, over the
 ; CONSTELLATION algebra (ai's numeric tower: a `star` scalar, a `galaxy` numeric
 ; array). ai already ships the tensor -- it calls it a constellation, with
-; broadcasting +/*, reductions (asum), and contractions (inner). tele adds the one
+; broadcasting +/*, reductions (net), and contractions (inner). tele adds the one
 ; missing ingredient: the gradient. Stage 1 -- the autograd core.
 ;
 ; the mechanism is one idea, native to ai's currying: reverse-mode AD is the
@@ -36,7 +36,7 @@
    (tl-push n)  (: _ (pin tl-tape 0 (link n (peep tl-tape 0 ()))) n)
 
    ;; -- nodes --
-   (tl-node? x)  (tab? x)                          ; a tele node (a raw constellation is never a tab)
+   (tl-node? x)  (book? x)                          ; a tele node (a raw constellation is never a tab)
    (tl-val x)    (peep x 'val 0)
    (node x)      (? (tl-node? x) x (const x))       ; coerce a raw constellation to a const leaf
    (tl-accum n d)(pin n 'grad (+ (peep n 'grad 0) d))   ; cotangent += d (a fresh galaxy)
@@ -54,35 +54,35 @@
    ;; cshape: a constellation's shape, () for a scalar. sumto sums a cotangent back
    ;; to a target shape. Stage 1 covers a scalar target (sum all) and a matching
    ;; shape; the general numpy un-broadcast (size-1 / leading axes) is Stage 2.
-   (tl-cshape v) (? (tray? v) (ashape v) ())
+   (tl-cshape v) (? (tray? v) (shape v) ())
    (tl-lsum l)   (? (two? l) (+ (cap l) (tl-lsum (cup l))) 0)
    (tl-lprod l)  (? (two? l) (* (cap l) (tl-lprod (cup l))) 1)
-   (tl-ncells v) (? (tray? v) (tl-lprod (ashape v)) 1)
+   (tl-ncells v) (? (tray? v) (tl-lprod (shape v)) 1)
    ;; colsum: sum a rank-2 galaxy over axis 0 -> a length-C vector. this is the
    ;; bias un-broadcast: a (C,) added to an (N,C) output sums its cotangent over
    ;; the N rows it was stretched across.
-   (tl-colsum g) (: sh (ashape g) r (cap sh) c (cap (cup sh))
+   (tl-colsum g) (: sh (shape g) r (cap sh) c (cap (cup sh))
       (gem-tray (link c ())
            (map (\ j (tl-lsum (map (\ i (peep g (link i (link j ())) 0)) (jot r)))) (jot c))))
    ;; sh is the 1-vector (C,) where C is g's last axis -- checked element-wise.
    (tl-can-colsum g sh)
       (? (tray? g)
-         (? (= (arank g) 2)
-            (? (two? sh) (? (two? (cup sh)) 0 (= (cap sh) (cap (cup (ashape g))))) 0)
+         (? (= (rank g) 2)
+            (? (two? sh) (? (two? (cup sh)) 0 (= (cap sh) (cap (cup (shape g))))) 0)
             0)
          0)
    ;; sumto: un-broadcast a cotangent g back to a target shape. scalar target (sum
    ;; all), matching shape (identity), or an (N,C)->(C,) column reduction (the bias
    ;; case). higher-rank / general size-1 axes raise -- add them when a layer needs one.
    (tl-sumto g sh)
-      (? (! (two? sh))         (? (tray? g) (asum g) g)
+      (? (! (two? sh))         (? (tray? g) (net g) g)
          (= sh (tl-cshape g))  g
          (tl-can-colsum g sh)  (tl-colsum g)
          (scare 'sumto-todo sh))
 
    ;; -- 2D transpose (functional rebuild; arrays are immutable). mm's adjoint
    ;; needs A-transpose, and `inner` only contracts last-of-a vs first-of-b.
-   (transp2 m) (: sh (ashape m) r (cap sh) c (cap (cup sh))
+   (transp2 m) (: sh (shape m) r (cap sh) c (cap (cup sh))
       (gem-tray (link c (link r ()))
            (tl-cat (map (\ j (map (\ i (peep m (link i (link j ())) 0)) (jot r))) (jot c)))))
 
@@ -108,7 +108,7 @@
                     _ (tl-accum na (inner g (transp2 (tl-val nb))))     ; dA = G @ B^T
                       (tl-accum nb (inner (transp2 (tl-val na)) g))))))  ; dB = A^T @ G
    (sum x) (: nx (node x)                            ; reduce-all to a scalar
-      (tl-op (asum (tl-val nx))
+      (tl-op (net (tl-val nx))
              (\ s (tl-accum nx (+ (* (tl-val nx) 0) (peep s 'grad 0))))))  ; broadcast g to x's shape
 
    ;; ---- Stage 2: activations + loss ----
@@ -123,12 +123,12 @@
                       (tl-accum nb (tl-sumto (* -1 g) (tl-cshape (tl-val nb))))))))
 
    (mean x) (: nx (node x) xv (tl-val nx) n (tl-ncells xv)   ; sum / count
-      (tl-op (/ (asum xv) n)
+      (tl-op (/ (net xv) n)
              (\ s (tl-accum nx (+ (* xv 0) (/ (peep s 'grad 0) n))))))
 
    ;; relu IS the color law, differentiated: it passes the positive (blue) and
-   ;; clamps the rest to the green floor at 0. the local slope is the mask (x>0) --
-   ;; and the kink, where the subgradient switches, is exactly that green floor.
+   ;; clamps the rest to the blue floor at 0. the local slope is the mask (x>0) --
+   ;; and the kink, where the subgradient switches, is exactly that blue floor.
    (relu x) (: nx (node x) xv (tl-val nx) m (< 0 xv)
       (tl-op (* xv m) (\ s (tl-accum nx (* (peep s 'grad 0) m)))))
 
@@ -150,8 +150,8 @@
    ;; glasses PERSIST across steps (updated in place); each forward builds a fresh
    ;; graph over them (define-by-run), so a held glass trains while the tape resets.
    (tl-mod fwd ps) (: m (tablet 0) _ (pin m 'fwd fwd) _ (pin m 'params ps) m)
-   (tl-mfwd m)    (? (tab? m) (peep m 'fwd 0) m)        ; module-or-bare-fn -> its forward
-   (tl-mparams m) (? (tab? m) (peep m 'params 0) ())
+   (tl-mfwd m)    (? (book? m) (peep m 'fwd 0) m)        ; module-or-bare-fn -> its forward
+   (tl-mparams m) (? (book? m) (peep m 'params 0) ())
    (call m x)     ((tl-mfwd m) x)                        ; apply a module to an input node
    (params m)     (tl-mparams m)                         ; the parameter list (for the optimizer)
 

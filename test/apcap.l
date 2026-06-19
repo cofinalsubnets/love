@@ -2,7 +2,7 @@
 ; exact-power exponent above (apcap 0) raises (scare 'apcap k) instead of
 ; allocating O(k), so applying a bignum asks for help where it would oom. the box is
 ; runtime tunable: (pin apcap 0 n). counts at or below the cap are untouched.
-(assert (tab? apcap) (= 1048576 (apcap 0)) (= 1048576 (peep apcap 0 0)))
+(assert (book? apcap) (= 1048576 (apcap 0)) (= 1048576 (peep apcap 0 0)))
 
 ; install a help that answers 'apcap scares with (capped k); anything else
 ; falls through to whatever was installed before (nil pre-help.l: const-1).

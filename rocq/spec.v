@@ -196,7 +196,7 @@ Fixpoint net (v : V) : Z :=
 Definition sat (v : V) : Z := Z.max 0 (net v).
 (* ! (nilp): false is nothing -- net <= 0. *)
 Definition nilp (v : V) : bool := net v <=? 0.
-(* !! : the truth bit -- positive blue, net > 0. *)
+(* !! : the truth bit -- positive green, net > 0. *)
 Definition tru (v : V) : bool := 0 <? net v.
 
 (* THE INVARIANT  !x == (0 = $x)  -- spec.l: (!"" = 0 = $"") *)
@@ -219,20 +219,20 @@ Theorem zero_nothing : nilp (Vnum 0) = true.    Proof. reflexivity. Qed.
 Theorem nil_neq_zero : Vnil <> Vnum 0.          Proof. discriminate. Qed.
 Theorem sat_clamps  : forall v, net v <= 0 -> sat v = 0.    Proof. intros v H. unfold sat. lia. Qed.
 
-(* the COLORS, by the order-sign of the net, in FREQUENCY order red < green < blue:
-   red neg, GREEN the floor (net 0), blue nonneg (positive). NB: green and blue were
-   previously SWAPPED here (green=nonneg, blue=floor) -- a mistake; corrected to the
-   spectral order and NOT grandfathered. *)
-Definition blue  (v : V) := 0 <= net v.
+(* the COLORS, by the order-sign of the net: GREEN nonneg (the kept band, what $ keeps;
+   positive green = true), RED neg (below the floor, $ clamps it up), BLUE the floor
+   (net 0). green and blue are DUAL, not disjoint: 0 is green by sign AND blue by measure
+   -- the overlap where green meets nothing. (Reverts the b601b93b frequency flip.) *)
+Definition green (v : V) := 0 <= net v.
 Definition red   (v : V) := net v < 0.
-Definition green (v : V) := net v = 0.
+Definition blue  (v : V) := net v = 0.
 
-Theorem green_is_blue     : forall v, green v -> blue v.        Proof. unfold green, blue. lia. Qed.
-Theorem blue_or_red       : forall v, blue v \/ red v.          Proof. intro v. unfold blue, red. lia. Qed.
-Theorem blue_red_disjoint : forall v, ~ (blue v /\ red v).      Proof. intro v. unfold blue, red. lia. Qed.
-(* truth is POSITIVE blue: above the green floor *)
-Theorem truth_is_positive_blue : forall v, tru v = true <-> (blue v /\ net v <> 0).
-Proof. intro v. unfold tru, blue. rewrite Z.ltb_lt. lia. Qed.
+Theorem blue_is_green     : forall v, blue v -> green v.        Proof. unfold blue, green. lia. Qed.
+Theorem green_or_red      : forall v, green v \/ red v.         Proof. intro v. unfold green, red. lia. Qed.
+Theorem green_red_disjoint : forall v, ~ (green v /\ red v).    Proof. intro v. unfold green, red. lia. Qed.
+(* truth is POSITIVE green: above the blue floor *)
+Theorem truth_is_positive_green : forall v, tru v = true <-> (green v /\ net v <> 0).
+Proof. intro v. unfold tru, green. rewrite Z.ltb_lt. lia. Qed.
 
 (* the spine measure: a proper list nets the sum of its elements' nets *)
 Definition vlist (xs : list V) : V := fold_right Vcons Vnil xs.
@@ -263,7 +263,7 @@ Theorem nil_dotted : nilp (Vcons (Vnum 0) (Vnum 2)) = true.      Proof. reflexiv
 Theorem nothings   : nilp (vlist [Vnil; Vnil]) = true.           Proof. reflexivity. Qed. (* a product of nothings is nothing *)
 Theorem net_red    : net (vlist [Vnum (-2); Vnum 1]) = -1.       Proof. reflexivity. Qed. (* +'(-2 1) -- the net is unclamped *)
 Theorem red_red    : red (vlist [Vnum (-2); Vnum 1]).            Proof. reflexivity. Qed. (* ... and red *)
-Theorem green_zero : green (Vnum 0).                              Proof. reflexivity. Qed.
+Theorem blue_zero  : blue (Vnum 0).                              Proof. reflexivity. Qed.
 
 (* ============================================================ *)
 (* order & equality: < is a TOTAL order over all values         *)
@@ -291,7 +291,7 @@ Inductive O :=
   | Oprod (z : Z) | Omap (z : Z) | Otop (z : Z).
 
 (* TRUE-BLUE: the symbol band (mints + noms) is the FLOOR, below string and
-   number; a point thus sits below every number (the green floor). *)
+   number; a point thus sits below every number (the blue floor). *)
 Definition band (o : O) : Z :=
   match o with Osym _ => 0 | Ostr _ => 1 | Onum _ => 2
              | Oprod _ => 3 | Omap _ => 4 | Otop _ => 5 end.
@@ -706,7 +706,7 @@ Proof. reflexivity. Qed.
    (cap the name, cup the mint), ordered (name lex, then the mint's serial);
    same-name noms split by serial. The symbol band (mints AND noms) is the
    FLOOR: it sorts BELOW string and number, so every point sits below every
-   number -- (mint 0) < 0, the green floor -- and a bare mint below a named nom
+   number -- (mint 0) < 0, the blue floor -- and a bare mint below a named nom
    (proved via the order section's `lt`: a point or nom is Osym, a string Ostr,
    a number Onum). *)
 
@@ -752,11 +752,15 @@ Proof. intros a b. split; [intro H; injection H; auto | intro H; subst; reflexiv
    and the mint (its serial) keys same-name noms. Reuses the `mint` type above,
    so a nom IS a name paired with a genuine point, not a flattened serial. --- *)
 Definition nom := (list Z * mint)%type.
-Definition nom_name (n : nom) : list Z := fst n.        (* the name is its cap *)
-Definition nom_mint (n : nom) : mint  := snd n.         (* the mint is its cup *)
+(* A nom is its OWN kind (KNom: a name + a serial), modeled here as the abstract
+   pair name x identity -- NOT a surface chain. The projections below are the
+   abstract pair components (the cell's name / serial fields); the SURFACE reads
+   the name via `string` (a nom is not a chain, so `cap` no longer projects it). *)
+Definition nom_name (n : nom) : list Z := fst n.        (* the name component *)
+Definition nom_mint (n : nom) : mint  := snd n.         (* the identity component *)
 Definition nom_serial (n : nom) : nat := match snd n with Mint s => s end.
-Theorem nom_cap : nom_name ([120], Mint 7) = [120].   Proof. reflexivity. Qed. (* (cap (nom 'x)) = "x" *)
-Theorem nom_cup : nom_mint ([120], Mint 7) = Mint 7.  Proof. reflexivity. Qed. (* (cup (nom 'x)) is the mint *)
+Theorem nom_cap : nom_name ([120], Mint 7) = [120].   Proof. reflexivity. Qed. (* (string (nom 'x)) = "x" -- the name projection *)
+Theorem nom_cup : nom_mint ([120], Mint 7) = Mint 7.  Proof. reflexivity. Qed. (* the identity (serial) component *)
 
 Fixpoint lex_lt (a b : list Z) : Prop :=
   match a, b with
@@ -857,6 +861,45 @@ Proof. intro r. unfold cnilp, cof; cbn.
   try (symmetry; apply Z.leb_le; lia); try (symmetry; apply Z.leb_gt; lia). Qed.
 
 (* ============================================================ *)
+(* the crew as FACES of `top` (doc/faces.md)                    *)
+(* ============================================================ *)
+(* ai (the language) is `top` -- the universal object (everything applies; top is vacuous).
+   The apps are FACES of it, in dual pairs glued by DIFFERENT universal shapes. The
+   SOURCE faces COMPOSE: read (charms->forms) runs THROUGH feel (the weaver, forms->top),
+   so the charm face factors through the lisp face -- chars -> top <- forms, the two lanes
+   converging on one core. The WORLD faces are a COPRODUCT: one i/o trunk forks into bao
+   (local) and aineko (net). Both axiom-free; the coproduct's uniqueness is stated
+   POINTWISE, so no functional extensionality is needed. *)
+Section Faces.
+  Variables Top Charm Form Out Loc Net : Type.
+
+  (* SOURCE faces -- the charm face (read) composes THROUGH the lisp face (feel) *)
+  Variable read : Charm -> Form.            (* the read face: charms -> forms *)
+  Variable feel : Form  -> Top.             (* the feel face: forms -> top (the weaver) *)
+  Definition source (c : Charm) : Top := feel (read c).
+  Theorem source_factors : forall c, source c = feel (read c).
+  Proof. reflexivity. Qed.                  (* definitional: source = feel o read, lanes meet at top *)
+
+  (* WORLD faces -- one trunk forks; the coproduct universal property *)
+  Variable bao    : Loc -> Out.             (* the local face (the shell/bridge) *)
+  Variable aineko : Net -> Out.             (* the net face (the cat on the wire) *)
+  Definition fork (x : Loc + Net) : Out :=
+    match x with inl l => bao l | inr n => aineko n end.
+  Theorem world_inl : forall l, fork (inl l) = bao l.     Proof. reflexivity. Qed.
+  Theorem world_inr : forall n, fork (inr n) = aineko n.  Proof. reflexivity. Qed.
+  (* any mediating map agreeing on the injections IS fork (pointwise) -- the UP *)
+  Theorem world_unique :
+    forall h : Loc + Net -> Out,
+      (forall l, h (inl l) = bao l) -> (forall n, h (inr n) = aineko n) ->
+      forall x, h x = fork x.
+  Proof. intros h Hl Hr x. destruct x as [l | n]; cbn; [apply Hl | apply Hr]. Qed.
+
+  (* the object itself: everything is top (top is vacuous) *)
+  Definition is_top (_ : Top) : Prop := True.
+  Theorem top_vacuous : forall x, is_top x.  Proof. intro x; unfold is_top; constructor. Qed.
+End Faces.
+
+(* ============================================================ *)
 (* axiom audit: every headline law, closed under NO assumptions *)
 (* ============================================================ *)
 (* The cheapest attack on any machine-checked claim is "grep for Axiom/admit".
@@ -873,3 +916,5 @@ Print Assumptions le_total.          (* the total order *)
 Print Assumptions eta_not_bridged.   (* = is alpha+structural, no further *)
 Print Assumptions beta_id.           (* the reduction layer ev runs *)
 Print Assumptions cnilp_real.        (* the complex net agrees with the real one *)
+Print Assumptions world_unique.      (* the i/o faces are a coproduct (faces of top) *)
+Print Assumptions source_factors.    (* the source faces compose (source = feel o read) *)

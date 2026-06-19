@@ -47,12 +47,12 @@ folded into `main`/`post`; `post` is the dev branch).
 (host + kernel + ai0). The editor (`ed*`), the history zipper, `parseall`,
 `do_eval`, `repl`, `shell-help`, the raw-line decode (`bev`/`besc`), and the pty
 pump (`pump`/`waitfor`) now live INSIDE one closure in `bao.l`, off the global
-bag. Only the entry points are globals: `shell`, `welp`, `edraw`, `wrap`, `bao`,
+book. Only the entry points are globals: `shell`, `welp`, `edraw`, `wrap`, `bao`,
 `bao-selftest`, plus the stream shell `zev`/`zevs`/`charms`/`charms->chars` (+ one
 intermediate holder `bao-exports`). `(names ())` dropped **276 → 248** (−28); the
 `ed*` set went **15 → 1** (only the public `edraw` survives).
 
-KEY MECHANISM (probed): post-egg the `bag` table is mopped, so a top-level
+KEY MECHANISM (probed): post-egg the `book` table is mopped, so a top-level
 body-LESS `(: ..)` defglob is the ONLY way to add a global. The fix: a top-level
 body-having `(: ..)` defines all the privates and RETURNS the public closures as a
 list (`bao-exports`); a body-less `(: ..)` then defglobs `shell`/`welp`/... out of
@@ -68,7 +68,7 @@ corpus (zev/zevs/charms are public). Gate: host 2650 / ai0 2650×2 / kernel 2445
 
 The ORIGINAL plan (kept for the record):
 
-Goal (user, as bao): the editor/repl internals must NOT leak as user-visible bag
+Goal (user, as bao): the editor/repl internals must NOT leak as user-visible book
 globals just because the corpus tests them. **Move repl.l's content into bao.l,
 remove repl.l, move its tests, so bao becomes the shell core and the `ed*`/repl
 names leave the global namespace.** This is the bao half of [[siri-namespace-triage]]
@@ -90,7 +90,7 @@ stop being user globals because the editor lives inside bao's scope.
 Migration steps (atomic — gate host + ai0 + kernel together, can't half-land):
 1. Move repl.l's bodies into bao.l: the editor (`ed*`, history), the stream shell
    (`zev`/`zevs`/`shell`/`charms`/`s2cl`), the floor handler. Keep ONLY the entry
-   points the C bake resolves by name (`shell`, `zevs`, `s2cl`, `zev`) as bag
+   points the C bake resolves by name (`shell`, `zevs`, `s2cl`, `zev`) as book
    globals; wrap the `ed*` editor + helpers in a closure so they don't leak.
 2. Makefile: `repl0.h`/`repl.h` → `bao0.h`/`bao.h` (the `gl0_h` list, the `lib_h`
    lcat rule, the `$(ho)/host/main.o` + `$(ho)/ai` prereqs). bao.l is already lcat'd
@@ -103,7 +103,7 @@ Migration steps (atomic — gate host + ai0 + kernel together, can't half-land):
    editor-internal asserts to a bao-loaded test (the `boot/baoedit.l` pattern:
    `cat test/00-init.l boot/baoX.l | ai -l ai/bao.l`, gated by `make test_hostnif`);
    keep only the genuinely-public behavior (if any) in the corpus. The kernel
-   K_TEST corpus that needs `zevs` keeps reaching it (it's a baked bag entry still).
+   K_TEST corpus that needs `zevs` keeps reaching it (it's a baked book entry still).
 6. CLAUDE.md: the repl.l references (the "repl reads each LINE" note, the bootstrap
    section's `repl.l` mentions) → bao. grep repl across .l + C + docs.
 7. `(names ())` should drop the `ed*` set (~22) once the editor is closure-scoped.

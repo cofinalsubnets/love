@@ -1,14 +1,17 @@
-; blue.l -- generate blue.html from blue.md. a small markdown-subset converter
-; written in ai, run on the host with the prel loaded:
-;   out/host/ai -l ai/prel.l tools/blue.l blue.md > blue.html
-; the supported subset is exactly what blue.md uses (no more): a leading "# " is
-; the title, the next paragraph is the subtitle, "## t {#id}" / "### t {#id}" are
-; anchored headings, a "> " line is a LAW BOX, "- "/"N. " are lists, "|...|" rows
-; are a table (a |---| row splits header from body), a ``` fence is a code block,
-; and "---" is a rule. inline: `code` (a `thm:name` span renders as a green chip),
-; [text](url) links, **bold**, *italic*. the table of contents is built from the
-; ## headings; the chrome (head, top nav, footer) is templated below. style lives
-; in the single sheet blue.css. < > & are escaped; everything else is raw UTF-8.
+; site.l -- generate the kship site (index/repl/blue) from content + one template.
+; a small markdown-subset converter written in ai, run on the HOST (the egg already
+; carries the prel -- DO NOT pass `-l ai/prel.l`, that loads it twice and scares):
+;   out/host/ai tools/site.l <page-id> <content.md> > <page>.html
+; page-id is kship | repl | blue; it picks the <title>, the active top-nav item,
+; whether a table of contents is emitted (blue only), and an optional tail file
+; (content/repl.tail.html, the repl's wasm shim). one site.css is inlined into each
+; page, so every page is self-contained, and the top nav links all three.
+; the supported markdown subset (same as blue.md): a leading "# " is the title, the
+; next paragraph is the subtitle, "## t {#id}" / "### t {#id}" are anchored headings,
+; a "> " line is a LAW BOX, "- "/"N. " are lists, "|...|" rows are a table (a |---|
+; row splits header from body), a ``` fence is a code block, and "---" is a rule.
+; inline: `code` (a `thm:name` span renders as a green chip), [text](url) links,
+; **bold**, *italic*. < > & are escaped; everything else is raw UTF-8.
 
 (:
   ; --- charlist basics ---
@@ -154,21 +157,40 @@
               (= tag 'hr) (: _ (o "<hr>\n") (go (cup bs) subdone tocdone))
               (go (cup bs) subdone tocdone))))
 
-  ; the head splits around the stylesheet: blue.css is slurped and INLINED into a
-  ; <style> block, so blue.html is a single self-contained file (blue.css stays the
-  ; editable source the generator reads).
-  htop (+ "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
-          (+ "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-             "<title>ai \xe2\x80\x94 a blue paper</title>\n"))
-  hrest (+ "</head>\n<body>\n"
-           "<p class=\"topnav\"><a href=\"index.html\">\xe2\x86\x90 ai</a> \xc2\xb7 <a href=\"README.md\">readme</a> \xc2\xb7 <a href=\"CLAUDE.md\">the spec</a> \xc2\xb7 <a href=\"crew/index.html\">the crew</a></p>\n")
-  foot "<footer>generated from <a href=\"blue.md\">blue.md</a> by <a href=\"tools/blue.l\">tools/blue.l</a>, an ai program \xc2\xb7 for bee</footer>\n</body>\n</html>\n"
+  ; --- per-page chrome: one template, three pages, one site.css inlined ---
+  ; invoked `out/host/ai -l ai/prel.l tools/site.l <page-id> <content.md> > <page>.html`.
+  ; the page-id (kship | repl | blue) picks the title, the active nav item, whether a
+  ; table of contents is emitted, and an optional tail file (the repl's wasm shim).
+  (cc xs) (? (two? xs) (+ (cap xs) (cc (cup xs))) "")    ; concat a list of strings
+  pageid (cap (cup argv))
+  mdfile (cap (cup (cup argv)))
+  title (? (= pageid "blue") "ai blue paper" (= pageid "repl") "bao \xc2\xb7 the shell" "kship")
+  toc?  (= pageid "blue")                                ; only the paper gets a toc
+  tailf (? (= pageid "repl") "content/repl.tail.html" "")  ; the repl injects the wasm shim
+  sep " \xc2\xb7 "
+  nav1 (\ id href label (? (= id pageid)
+                           (cc (L "<span class=\"here\">" label "</span>"))
+                           (cc (L "<a href=\"" href "\">" label "</a>"))))
+  topnav (cc (L "<p class=\"topnav\">"
+                (nav1 "kship" "index.html" "kship") sep
+                (nav1 "repl"  "repl.html"  "bao")  sep
+                (nav1 "blue"  "blue.html"  "blue paper") sep
+                "<a href=\"CLAUDE.md\">the spec</a>" sep
+                "<a href=\"crew/index.html\">the crew</a></p>\n"))
+  htop (cc (L "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
+              "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+              "<title>" title "</title>\n"))
+  foot (cc (L "<footer>generated from <a href=\"" mdfile "\">" mdfile "</a> by "
+              "<a href=\"tools/site.l\">tools/site.l</a>, an ai program \xc2\xb7 for P B & E"
+              "</footer>\n</body>\n</html>\n"))
 
-  css (slurp (open "blue.css" "r"))
-  md (slurp (open (cap (cup argv)) "r"))
+  css (slurp (open "site.css" "r"))
+  md (slurp (open mdfile "r"))
   bs (parse (lines (s2cl md)))
   _ (o htop)
   _ (o "<style>\n") _ (o css) _ (o "</style>\n")
-  _ (o hrest)
-  _ (go bs 0 0)
+  _ (o "</head>\n<body>\n")
+  _ (o topnav)
+  _ (go bs 0 (? toc? 0 1))
+  _ (? (! (= tailf "")) (o (slurp (open tailf "r"))) 0)
   (o foot))

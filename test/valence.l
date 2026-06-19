@@ -1,5 +1,5 @@
 ; the VALENCE LAW: a glued operator run is MONADIC -- the reader emits
-; (mono (run datum)) and opfix factors the run against bag['monadics]
+; (mono (run datum)) and opfix factors the run against book['monadics]
 ; (then the operators table at one, so live pins keep the dynamic lane).
 ; spaced, a run keeps its dyadic/infix life. HEAD POSITION NEVER FUSES:
 ; a run right after an open delimiter is the form's operator -- the

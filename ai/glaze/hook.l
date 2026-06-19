@@ -1,4 +1,4 @@
-; hook -- install the native-creation hook: bag['natjit], read by ev.l's `ala` on
+; hook -- install the native-creation hook: book['natjit], read by ev.l's `ala` on
 ; EVERY closure built, top-level AND embedded in a fn/let body (the reach the ev-rebind
 ; in ai/glaze/auto.l never had -- it only saw the form handed to `ev`). A qualifying leaf (the
 ; emit grammar over its frame [imps args]) is native-backed AT CREATION and DEOPTS into

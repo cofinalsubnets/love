@@ -159,7 +159,7 @@
    _ (? p 0 (: _ (say err "lcat2: cannot open input") (nap 1)))
    e (nom 0)
    forms (readforms p e)
-   _ (map (\ m (pin cnt m (+ 1 (peep cnt m 0)))) (keys (peep bag 0 0)))  ; macro heads bypass scoping
+   _ (map (\ m (pin cnt m (+ 1 (peep cnt m 0)))) (keys (peep book 0 0)))  ; macro heads bypass scoping
    _ (map collect forms)                                        ; count symbols
    acc (joinforms forms)
    _ (emit acc)

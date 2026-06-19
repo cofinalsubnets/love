@@ -19,7 +19,7 @@
  (= 49 (: p (spin (\ x (* x x)) 7) (catch p)))
 
  ; hatch returns a positive integer pid (main reserves pid 0).
- (: p (spin (\ _ 0) 0) _ (catch p) (&& (fix? p) (> p 0)))
+ (: p (spin (\ _ 0) 0) _ (catch p) (&& (charm? p) (> p 0)))
 
  ; pids are monotonically increasing within a VM.
  (: a (spin (\ x x) 0)

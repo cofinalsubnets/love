@@ -206,7 +206,7 @@ onto PATH beside `ai`. each has a personality doc under [crew/](crew/).
   running the language over UDP -- a bare-metal network REPL. `make kernel KSHIP=1`
   builds the bootable image. [port/kship/](port/kship/).
 - **siri** -- the synthesist: keeps the user-facing surface coherent, converging
-  the names the bag exposes and mopping compiler internals out of sight, so the
+  the names the book exposes and mopping compiler internals out of sight, so the
   global namespace stays a deliberate vocabulary. [crew/siri.md](crew/siri.md).
 
 ### under the hood
@@ -220,11 +220,11 @@ onto PATH beside `ai`. each has a personality doc under [crew/](crew/).
   values is the enum order, and the lattice is literally the diagonal of the
   dispatch tables. `sort` is one C comparison per chain -- the total order is
   the comparator.
-- no interpreter state lives outside the heap: the bag (an ordinary ai
+- no interpreter state lives outside the heap: the book (an ordinary ai
   hash) carries the globals, macros, the operators table, the help function
   and the rng; C finds its own hooks by name, allocation-free. the egg pulls
-  every compiler-internal name -- the bag itself included -- before the
-  image is born. a name not in the bag is missing: reading one is a
+  every compiler-internal name -- the book itself included -- before the
+  image is born. a name not in the book is missing: reading one is a
   call for help, and helpless it reads the zero point, a nameless unit.
 - the compiler is written in ai. at build time the evaluator sits on the egg
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,

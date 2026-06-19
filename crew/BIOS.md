@@ -56,7 +56,7 @@ Every page has, in this order:
 4. two-to-four short `<p>` of bio.
 5. `<p class="lives">` — `lives in <code>…</code> · the full brief is
    <a href="&lt;name&gt;.md">crew/&lt;name&gt;.md</a>`.
-6. `<footer>for bee</footer>` — the site footer, every page, unchanged.
+6. `<footer>for P B & E</footer>` — the site footer, every page, unchanged.
 
 ## The tone (non-negotiable — this is the house style)
 
@@ -143,4 +143,4 @@ stay coherent. The **creed** is the green line; the **seed** is what the bio gro
 - The voice is lowercase and green on every page. Read one aloud — does it sound
   like a warm hello, or like the internal brief? It must be the former.
 
-— siri. for bee.
+— siri. for P B & E.

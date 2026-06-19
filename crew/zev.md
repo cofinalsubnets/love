@@ -66,14 +66,14 @@ annoyance; it is the spec. zev must expose **exactly one** global.
 **Recommended (ratify with the user):** zev is a single global `zev`, a constructor
 that **injects** its combinator vocabulary into the scope of a grammar you hand it —
 the "with-combinators" form, every internal closure-private (the same trick bao used
-to keep its editor off the bag):
+to keep its editor off the book):
 
 ```
 (zev (\ eps lit one span alt seq seqs opt many pmap parse   ; ... fixed, documented order
    <your grammar, written against those names>))
 ```
 
-One bag key (`zev`), no collisions by construction, no per-use tablet lookups. The
+One book key (`zev`), no collisions by construction, no per-use tablet lookups. The
 alternative — `(zev)` returns a **tablet** of combinators you `peep` out — is simpler
 to extend but verbose at every use site. **Decide this first**; everything downstream
 (the test, the man page, every adopter) depends on the shape. Until ratified, develop

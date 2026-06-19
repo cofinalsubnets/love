@@ -6,7 +6,7 @@
 ; factors to ((+ 1 2)) -- and evaluates via (f)==f. the factoring happens at
 ; COMPILE time (opfix); reading is structural.
 (: in-tbl operators)
-(assert (tab? in-tbl) (2 = (in-tbl '+)) (2 = (in-tbl '<=)) (3 = (in-tbl '?)))
+(assert (book? in-tbl) (2 = (in-tbl '+)) (2 = (in-tbl '<=)) (3 = (in-tbl '?)))
 
 (assert
  ; basics, every seeded operator

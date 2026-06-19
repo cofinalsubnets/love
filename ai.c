@@ -108,11 +108,11 @@ uintptr_t intern_reserve(struct ai*);
 uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
- lvm_chain, lvm_vec, lvm_sym, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); apply dispatches through ai_apply_mx
+ lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); apply dispatches through ai_apply_mx
  lvm_putn, lvm_gauge,    lvm_clock,
- lvm_nilp,  lvm_putc, lvm_mint, lvm_intern, lvm_chainp,
+ lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_eat1, lvm_eat2, lvm_toast, lvm_toasted,
- lvm_fixp,  lvm_nomp,   lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
+ lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
  // the arithmetic lane the scalar arith slow paths divert into.
@@ -139,7 +139,7 @@ lvm_t lvm_kcall,
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_tray, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
- lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_lamp, lvm_hotp,
+ lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_litp, lvm_hotp,
  lvm_nif,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
@@ -175,6 +175,7 @@ lvm(lvm_vec)   { return Ap(data_apply, g); }
 lvm(lvm_big)   { return Ap(data_apply, g); }
 lvm(lvm_str)   { return Ap(data_apply, g); }
 lvm(lvm_sym)   { return Ap(data_apply, g); }
+lvm(lvm_nom)   { return Ap(data_apply, g); }
 lvm(lvm_chain) { return Ap(data_apply, g); }
 lvm(lvm_flo)   { return Ap(data_apply, g); }
 lvm(lvm_wide)  { return Ap(data_apply, g); }
@@ -183,18 +184,21 @@ char const *ai_nif_name(intptr_t);
 #define vec(_) ((struct ai_vec*)(_))
 #define charmp oddp
 #define sym(_) ((struct ai_mint*)(_))
-// mintp: a bare POINT -- the KMint object (the old symbol atom, now nameless only:
-// () and the fresh mints). A named symbol is no longer an atom but the interned
-// CHAIN (name . mint); nomp recognizes EITHER -- a bare point or a named one -- so
-// "symbol-ish" still holds for gensyms (mints) and named syms alike (CLAUDE.md: mints
-// answer nomp). The named arm rides the chain, so +/*/apply dispatch it as a chain.
+#define nom(_) ((struct ai_nom*)(_))
+// mintp: a bare POINT -- the KMint object (the nameless atoms: () and the fresh mints).
+// namep: a NAMED point -- the KNom object (a name string + a serial, its own kind now,
+// not a chain). nomp recognizes EITHER -- a bare point or a named one -- so "symbol-ish"
+// holds for gensyms (mints) and named syms alike (CLAUDE.md: mints answer nomp). NEITHER
+// is a chain anymore, so a chain is ALWAYS a real compound (formp == chainp): the
+// (name . mint)-chain masquerade -- and its special-casing everywhere -- is gone.
 static ai_inline bool mintp(word _) { return lamp(_) && cell(_)->ap == lvm_sym; }
+static ai_inline bool namep(word _) { return lamp(_) && cell(_)->ap == lvm_nom; }
 static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_vec; }
 static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
-static ai_inline bool nomp(word _) { return mintp(_) || (chainp(_) && strp(A(_)) && mintp(B(_))); }
-// formp: a REAL compound list -- a chain that is NOT a (name . mint) symbol. This is what the
-// surface `chainp` nif means and what list-vs-atom logic wants: a named symbol counts as an ATOM.
-static ai_inline bool formp(word _) { return chainp(_) && !nomp(_); }
+static ai_inline bool nomp(word _) { return mintp(_) || namep(_); }
+// formp: a REAL compound list. A nom is its own kind (not a chain), so this is now exactly
+// chainp -- what the surface `two?` nif means and what list-vs-atom logic wants.
+static ai_inline bool formp(word _) { return chainp(_); }
 // Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 lvm_buf (like lvm_port_io for ports), so the GC walks a buf
 // as a plain length-2 text -- [lvm_buf, backing ai_str, terminator] -- and
@@ -289,6 +293,9 @@ static ai_inline bool Cp(word _) {
 // guard is kept as a documented assertion. flop/widep/Cp catch the scalar gems.
 // The elementwise arith/compare lanes divert to lvm_vbin when either operand arrp.
 static ai_inline bool arrp(word _) { return packp(_) && vec(_)->rank >= 1; }
+// A GALAXY: a numeric array (a set of stars). Bands into the number band by its net
+// (cmp_rank/cmp3); a tray (ai_O) stays above chain. type != ai_O catches Z/R/C.
+static ai_inline bool galaxyp(word _) { return arrp(_) && vec(_)->type != ai_O; }
 
 // Max array rank (bounds the stack index/stride arrays in the broadcast loop).
 #define maxrank 8
@@ -354,9 +361,9 @@ static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (charmp(x)) return getcharm(x) < 0;                 // 0 is nil (caught above); negatives false
   if (tabp(x)) return map_len(x) == 0;
   if (bigp(x)) return ((struct ai_big*) x)->slen < 0; // a negative bignum is false
-  if (mintp(x)) return true;                         // a bare point (a mint / the core) nets 0 -> nil; a named sym is a chain (below)
-  if (chainp(x) || packp(x) || flop(x) || widep(x) || Cp(x) || strp(x) || bufp(x))
-    return zn_nonpos(ai_net(g, x));                   // content measures: net <= 0 in the order
+  if (mintp(x)) return true;                         // a bare point (a mint / the zero point) nets 0 -> nil
+  if (chainp(x) || namep(x) || packp(x) || flop(x) || widep(x) || Cp(x) || strp(x) || bufp(x))
+    return zn_nonpos(ai_net(g, x));                   // content measures (a nom by its spelling): net <= 0 in the order
   return false; }                                    // fn / port: present
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
@@ -530,6 +537,9 @@ static ai_inline union u *clip(struct ai *g, union u *k) {
 static ai_inline struct ai_mint *ini_missing(struct ai_mint *y, uintptr_t code) {
  return y->ap = lvm_sym, y->code = code, y; }
 
+static ai_inline struct ai_nom *ini_nom(struct ai_nom *y, uintptr_t name, uintptr_t code) {
+ return y->ap = lvm_nom, y->name = name, y->code = code, y; }
+
 static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
  return s->ap = lvm_str, s->len = len, s; }
 
@@ -544,6 +554,9 @@ static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
 // frontends can return it too (e.g. host_run's empty-output capture). (the
 // empty SYMBOL died in the one-nothing round: () reads as 0.)
 const struct ai_str ai_str_empty = { .ap = lvm_str, .len = 0 };
+// () -- the one serial-0 mint, shared by every core (serial 0 is never drawn, so
+// it is unique + least in the order). See the ZeroPoint macro in ai.h.
+const struct ai_mint ai_mint_zero = { .ap = lvm_sym, .code = 0 };
 
 
 static ai_inline uintptr_t rot(uintptr_t x) {
@@ -645,6 +658,7 @@ lvm_t lvm_fault;
  _(nif_read, "read", s2(lvm_read))\
  _(nif_string, "string", s1(lvm_string))\
  _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
+ _(nif_nomctor, "nom", s1(lvm_nomctor))\
  _(nif_spin, "weave", s1(lvm_spin))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
  _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "sat", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
@@ -671,8 +685,8 @@ lvm_t lvm_fault;
  _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
  _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "big?", s1(lvm_bigp)) _(nif_widep, "full?", s1(lvm_widep))\
  _(nif_setp, "tray?", s1(lvm_setp)) _(nif_intf, "int", s1(lvm_intf))\
- _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_tabp, "tab?", s1(lvm_tabp)) _(nif_fixp, "fix?", s1(lvm_fixp))\
- _(nif_lamp, "lit?", s1(lvm_lamp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
+ _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_namep, "name?", s1(lvm_namep)) _(nif_tabp, "book?", s1(lvm_tabp)) _(nif_charmp, "charm?", s1(lvm_charmp))\
+ _(nif_litp, "lit?", s1(lvm_litp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
  _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
  _(nif_missing, "missing", s2(lvm_missing)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
@@ -708,7 +722,7 @@ enum ai_status ai_fin(struct ai *g) {
  return s; }
 
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- for (g = ai_push(g, 1, ai_core_of(g)->bag); n--;
+ for (g = ai_push(g, 1, ai_core_of(g)->book); n--;
   g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
  ai_core_of(g)->sp++;
  return g; }
@@ -748,7 +762,7 @@ static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
 
 // --- frontend-nif defaults ---------------------------------------------------
 // exit/open/close/run/getenv are FRONTEND nifs: each frontend overrides them via
-// ai_defn (main.c POSIX, kmain.c qemu, the wasm host emscripten) -- the bag is
+// ai_defn (main.c POSIX, kmain.c qemu, the wasm host emscripten) -- the book is
 // last-write-wins, and a frontend's ai_defn runs after ai_ini. The core installs
 // safe no-op defaults here so the NAMES ALWAYS EXIST. A frontend that omits one
 // then inherits a clean nil instead of a MISSING name -- whose capture-at-
@@ -776,20 +790,20 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->len = len0, g->pool = (void*) g, g->alloc = al;
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
- // bag + macro maps (lookup-lambdas) then the main task text.
+ // book + macro maps (lookup-lambdas) then the main task text.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 6))) {
-  union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=bag (no GC since ai_have)
+  union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
   M[0].m = M;
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   g->tasks = tagtext(M, 5);
-  // bag[nil] = macro (the macro table -- no separate field). Both are on the
-  // stack; push the nil key so (sp2,sp1,sp0)=(bag,macro,nil) for ai_mapput.
+  // book[nil] = macro (the macro table -- no separate field). Both are on the
+  // stack; push the nil key so (sp2,sp1,sp0)=(book,macro,nil) for ai_mapput.
   g = ai_push(g, 1, nil);
-  g = ai_mapput(g);                     // -> sp[0] = bag
-  g->bag = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
+  g = ai_mapput(g);                     // -> sp[0] = book
+  g->book = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
   g = ai_pop(g, 1);
   // the WEAK intern map (string -> the canonical atom), created before the
   // first intern (the def tables just below). it lives OUTSIDE the traced
@@ -797,7 +811,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = map_new(g);
   if (ai_ok(g)) g->symbols = ai_pop1(g);
   struct ai_def def0[] = {
-   {"bag", g->bag},
+   {"book", g->book},
    {"in", (word) &ai_stdin},
    {"out", (word) &ai_stdout},
    {"err", (word) &ai_stderr},
@@ -814,9 +828,9 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    struct ai_def vd[] = {{"ai-version", ai_pop1(g)}};
    g = ai_defn(g, vd, countof(vd)); }
   // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
-  // name, so installing that nif interns it and the bag roots it; the raise
+  // name, so installing that nif interns it and the book roots it; the raise
   // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).
-  // the reader owns no operator tables: bag['operators] (the ONE table,
+  // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prel, and the
   // opfix source pass (prel.l, hooked by both compilers at c0 and wev)
   // factors sigil tokens against it at compile time. data reading is
@@ -919,6 +933,11 @@ static ai_inline void evac_cplx(struct ai*g, word const*const p0, word const*con
 static ai_inline void evac_sym(struct ai*g, word const*const p0, word const*const t0) {
  g->cp += Width(struct ai_mint); }              // uniform 2 words; copy_sym forwards the serial
 
+static ai_inline void evac_nom(struct ai*g, word const*const p0, word const*const t0) {
+ struct ai_nom *w = (struct ai_nom*) g->cp;
+ g->cp += Width(struct ai_nom);                 // 3 words; forward the name string (the serial is a scalar)
+ w->name = gcp(g, w->name, p0, t0); }
+
 static ai_inline void evac_text(struct ai *g, word const *const p0, word const*const t0) {
   // terminator payloads point into the new pool (the copied object's home);
   // a stray 2-byte-aligned external content word is rejected by the range
@@ -930,6 +949,7 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
    default: __builtin_trap();
    case KVec: return evac_vec(g, p0, t0);
    case KMint: return evac_sym(g, p0, t0);
+   case KNom: return evac_nom(g, p0, t0);
    case KChain: return evac_chain(g, p0, t0);
    case KString: return evac_str(g, p0, t0);
    case KBig: return evac_big(g, p0, t0);
@@ -958,7 +978,7 @@ static ai_noinline word symbols_rebuild(struct ai *h, struct ai *g) {
   if (k == map_gap) continue;
   word fwd = cell(os[2 * j + 1])->x;            // the atom's first word: its forward, if it survived
   if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
-  word nk = A(fwd);                             // the copied (name . mint) chain carries the forwarded name in its car
+  word nk = nom(fwd)->name;                     // the copied KNom carries the forwarded name string
   uintptr_t i = hash(h, nk) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
   ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
@@ -994,7 +1014,7 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
  h->ip = cell(gcp(h, word(h->ip), p0, t0));
  h->tasks = cell(gcp(h, word(h->tasks), p0, t0));
  h->symbols = 0;                               // the WEAK intern map: rebuilt below, after the fixpoint
- for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym bag keys)
+ for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym book keys)
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                     // stack
  for (struct ai_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0); // C live variables
  while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_text)(h, p0, t0);              // cheney algorithm
@@ -1107,12 +1127,19 @@ static ai_inline word copy_sym(struct ai*g, struct ai_mint *src, word const *con
  ini_missing(dst, src->code);                     // just the serial rides
  return word(src->ap = (lvm_t*) dst); }
 
+static ai_inline word copy_nom(struct ai*g, struct ai_nom *src, word const *const p0, word const*const t0) {
+ struct ai_nom *dst = bump(g, Width(struct ai_nom));
+ (void) p0, (void) t0;                            // shallow: evac_nom forwards the name later (Cheney)
+ ini_nom(dst, src->name, src->code);              // name copied raw, serial rides
+ return word(src->ap = (lvm_t*) dst); }
+
 static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0, word const *const t0) {
  switch (typ(src)) {
   default: __builtin_trap();
   case KChain: return copy_chain(g, two(src), p0, t0);
   case KVec: return copy_vec(g, vec(src), p0, t0);
   case KMint: return copy_sym(g, sym(src), p0, t0);
+  case KNom: return copy_nom(g, nom(src), p0, t0);
   case KString: return copy_str(g, str(src), p0, t0);
   case KBig: return copy_big(g, (struct ai_big*) src, p0, t0);
   case KFlo: return copy_flo(g, (struct ai_flo*) src, p0, t0);
@@ -1220,7 +1247,7 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  { word x0 = g->sp[0];
    if (chainp(x0) && (!lamp(A(x0)) || datp(A(x0)))) {
     struct ai_mint *os = sym_probe(ai_core_of(g), "opfix", 5);
-    word of = os ? ai_mapget(ai_core_of(g), 0, word(os), ai_core_of(g)->bag) : 0;
+    word of = os ? ai_mapget(ai_core_of(g), 0, word(os), ai_core_of(g)->book) : 0;
     if (of && lamp(of)) {
      g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, nil, nil, of)))))));
      if (!ai_ok(g)) return g;
@@ -1422,8 +1449,8 @@ static Ana(ana_v) {
  if (!ai_ok(g)) return g;
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) {
-   if ((y = ai_mapget(g, 0, x, g->bag))) return ana_q(g, c, y);
-   // undefined global: resolved by lvm_index via the bag at run time.
+   if ((y = ai_mapget(g, 0, x, g->book))) return ana_q(g, c, y);
+   // undefined global: resolved by lvm_index via the book at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.l avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
    // is no enclosing frame to capture from, so adding x to imps would make a
@@ -1480,7 +1507,7 @@ out:
         pull(g, c); }
 
 static ai_noinline Ana(analyze) {
- if (x == (word) ai_core_of(g)) return c0_i(g, c, lvm_zp); // () = the core: a runtime fetch (it flops; never bake/var-lookup it)
+ if (x == ZeroPoint) return c0_i(g, c, lvm_zp); // () = the core: a runtime fetch (it flops; never bake/var-lookup it)
  if (nomp(x)) return ana_v(g, c, x); // lookup symbol as variable
  if (!chainp(x)) return ana_q(g, c, x); // non-chains are self quoting
  word a = A(x), b = B(x);                        // it must be a chain
@@ -1542,7 +1569,7 @@ static Ana(c0_cond_exit) { return
  ai_push(analyze(g, c, x), 1, c1_cond_exit); }
 
 static Ana(c0_cond_r) { return
- !chainp(x) ? c0_cond_exit(g, c, nil) :
+ !chainp(x) ? c0_cond_exit(g, c, nil) :   // clauses ran out: implicit else (QUEUE bug 3: -> ZeroPoint, but only WITH bug 1 -- the reader terminator; map's tail bottoms here)
  !chainp(B(x)) ? c0_cond_exit(g, c, A(x)) :
  (avec(g, x,
   incl(*c, 2),
@@ -1622,7 +1649,7 @@ static ai_inline word rev(word l) {
 static word ldels(struct ai *g, word lam, word l);
 
 static ai_inline Ana(ana_2, word a, word b) {
- if ((x = ai_mapget(g, 0, a, ai_mapget(g, nil, nil, ai_core_of(g)->bag))))   // macro table = bag[nil]
+ if ((x = ai_mapget(g, 0, a, ai_mapget(g, nil, nil, ai_core_of(g)->book))))   // macro table = book[nil]
   return g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, nil, nil, x))))))),
          analyze(g, c, ai_ok(g) ? pop1(g) : 0);
  return avec(g, b, g = analyze(g, c, a)),
@@ -1653,7 +1680,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // (ev.l) runs the same pass in wev, so both lanes share one boxfix. exp is
  // rooted across the alloc.
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
-  word bf = ai_mapget(g, 0, pop1(g), g->bag);
+  word bf = ai_mapget(g, 0, pop1(g), g->book);
   if (bf && lamp(bf)) {
    g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, nil, nil, bf)))))));
    if (ai_ok(g)) exp = pop1(g); } }
@@ -1771,7 +1798,7 @@ lvm(lvm_defglob) {
  Have(3);
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
- return Sp[0] = k, Sp[1] = v, Sp[2] = g->bag, Pack(g),
+ return Sp[0] = k, Sp[1] = v, Sp[2] = g->book, Pack(g),
   !ai_ok(g = ai_mapput(g)) ? ghelp(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
 // lvm_index (the late-bound global read) is defined below lvm_scare: its
@@ -1807,17 +1834,17 @@ static struct ai_mint *sym_probe(struct ai *g, char const *nm, uintptr_t n) {
   if (k == map_gap) return 0;
   if (len(k) == n && !memcmp(txt(k), nm, n)) return sym(s[2 * i + 1]); } }
 
-// Resolve a C->lisp ap from bag (where the prel pins it -- bag is
+// Resolve a C->lisp ap from book (where the prel pins it -- book is
 // GC-traced and egg-baked, so it survives into the runtime image), materializing
 // the key by name. Scare loud if undefined: a prel-ordering contract
 // violation. Probe + mapget are reads, so no Have in the tail-jump callers.
 static ai_inline ai_word resolve_hot(struct ai *g, char const *nm, uintptr_t n) {
  struct ai_mint *y = sym_probe(g, nm, n);
- ai_word cur = y ? ai_mapget(g, nil, word(y), g->bag) : nil;
+ ai_word cur = y ? ai_mapget(g, nil, word(y), g->book) : nil;
  if (!lamp(cur)) __builtin_trap();
  return cur; }
 
-// Thread (function) combinators for `+` and `*`, pinned on bag by the prel
+// Thread (function) combinators for `+` and `*`, pinned on book by the prel
 // like num-ap. A text operand takes precedence over every other type, so
 // `+`/`*` of a function build a new function -- the README's Church arithmetic,
 // agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
@@ -1826,7 +1853,7 @@ static ai_inline ai_word resolve_hot(struct ai *g, char const *nm, uintptr_t n) 
 // -- itself the new function -- and leave it as the result, resuming at Ip+1.
 
 // Fixnum-as-function application. A fixnum operator n applied to x is dispatched
-// to the l ap at bag['num-ap] as (num-ap n x): numeric x -> x**n, a
+// to the l ap at book['num-ap] as (num-ap n x): numeric x -> x**n, a
 // function x -> x iterated n times (Church numerals).
 //
 // The driver mirrors the chain driver: with the stack laid out [n, num-ap, x, ret]
@@ -1869,14 +1896,14 @@ static union u const help_drive[] =
 // global `help` function -- present the way everything is present: by its
 // net -- and 5 words of stack headroom (the raise path never
 // allocates), build the (help s a b) frame and run it; else the C default
-// raise_c, which resumes the eof protocol raw. Pre-bag raises (ai_ini_0)
+// raise_c, which resumes the eof protocol raw. Pre-book raises (ai_ini_0)
 // always take the default.
 static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
                          union u const *K) {
  if (s == ai_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
- if (c->bag) {
+ if (c->book) {
   struct ai_mint *ts = sym_probe(c, "help", 4);
-  word h = ts ? ai_mapget(c, nil, word(ts), c->bag) : nil;
+  word h = ts ? ai_mapget(c, nil, word(ts), c->book) : nil;
   if (!ai_nilp(c, h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
    sp[0] = putcharm(s), sp[1] = h;
@@ -1941,43 +1968,43 @@ lvm(lvm_scare) {
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
-// the missing miss sentinel: a private static address no bag value can equal,
+// the missing miss sentinel: a private static address no book value can equal,
 // so a name bound to nil stays distinct from no entry at all.
 static union u const no_entry[1];
-// THE NOTHING IS THE CORE: () = (word) ai_core_of(g), what a helpless missing read
+// THE NOTHING IS THE CORE: () = ZeroPoint, what a helpless missing read
 // answers and what () reads as. The core's head is a nameless serial-0 mint (the one
 // serial never drawn), nameless, $0, falsy, applying const-1 like every unit. absence
 // is a POINT, not a quantity: a number would exponentiate under a numeral ((i love) =
 // 0**i is honest nan), a unit absorbs -- which is what keeps (i love you) = 1. It FLOPS
 // with the dust (gcg forwards old->new core) and prints () -- the face of absence.
 // No named constant; the nothing is the core. DISTINCT from 0 (fixnum) and "" (string).
-// A read of the LIVE bag (the outermost cell) by name -- the missing-name law
+// A read of the LIVE book (the outermost cell) by name -- the missing-name law
 // at the global scope, the twin of boxfix's local (missing cell 'nom). A hit
-// pushes the current value; a miss is a MISSING name -- a nom not in the bag,
+// pushes the current value; a miss is a MISSING name -- a nom not in the book,
 // a call for help: with a global help installed the read raises (help 1 'missing
 // nom) and the help's result is the value here; helpless it reads the zero point.
 // The site NEVER self-patches (it stays a live read, so a define that lands later
 // is seen, a rebind is honoured) and the name is NOT a frame import.
 lvm(lvm_index) {
  Have1();                          // room for the push first (may GC; no live local held yet)
- word v = ai_mapget(g, word(no_entry), Ip[1].x, g->bag);
+ word v = ai_mapget(g, word(no_entry), Ip[1].x, g->book);
  if (v != word(no_entry)) return
   *--Sp = v,                       // present: push the live value, no quote patch
   Ip += 2,
   Continue();
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? ai_mapget(g, nil, word(ts), g->bag) : nil;
+ word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
  if (ai_nilp(g, h)) return
-  *--Sp = (word) ai_core_of(g),
+  *--Sp = ZeroPoint,
   Ip += 2,
   Continue();
- word a = word(sym_probe(g, "missing", 7)), b = Ip[1].x;   // 'missing: the nif's name, rooted by the bag
+ word a = word(sym_probe(g, "missing", 7)), b = Ip[1].x;   // 'missing: the nif's name, rooted by the book
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
-// (missing t k): the bag read as a value -- lvm_index's law with the bag as an
-// argument (a tablet is a little bag; the bag is just the outermost one).
+// (missing t k): the book read as a value -- lvm_index's law with the book as an
+// argument (a tablet is a little book; the book is just the outermost one).
 // k present in map t answers the value; a miss is the MISSING CONDITION: with a
 // global help installed the read raises (help 1 'missing k) and the help's result
 // is the value, helpless it reads the zero point. boxfix's letrec cells read this way --
@@ -1992,13 +2019,13 @@ lvm(lvm_missing) {
   Continue();
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? ai_mapget(g, nil, word(ts), g->bag) : nil;
+ word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
  if (ai_nilp(g, h)) return
-  Sp[1] = (word) ai_core_of(g),
+  Sp[1] = ZeroPoint,
   Sp++,
   Ip++,
   Continue();
- word a = word(sym_probe(g, "missing", 7));   // 'missing: the nif's name, rooted by the bag
+ word a = word(sym_probe(g, "missing", 7));   // 'missing: the nif's name, rooted by the book
  Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
  Sp[0] = word(Ip + 1), Sp[1] = a;
  return Pack(g), ai_raise(g, ai_status_scare, a, Sp[2], help_more_k); }
@@ -2335,7 +2362,7 @@ lvm(lvm_quote) {
 lvm(lvm_zp) {
  Have1();
  Sp -= 1;
- Sp[0] = (word) ai_core_of(g);
+ Sp[0] = ZeroPoint;
  Ip += 1;
  return Continue(); }
 
@@ -2476,8 +2503,10 @@ static struct ai_zn ai_net(struct ai *g, word x) {
     case KFlo: return zn(flo_get(x), 0);                         // a boxed float nets its value
     case KWide: return zn((ai_flo_t) box_get(x), 0);             // a boxed wide int nets its value
     case KCplx: return zn(cplx_re(x), cplx_im(x));               // a complex nets ITSELF (phase intact)
-    case KMint: return zn(0, 0);                                 // a bare point nets nothing (the distinct nothing;
-                                                                // a named sym is a chain -> nets its name's charms via KChain)
+    case KMint: return zn(0, 0);                                 // a bare point nets nothing (the distinct nothing)
+    case KNom: { ai_flo_t t = 0; struct ai_str *s = str(nom(x)->name);  // a named point nets its SPELLING's charms
+      for (uintptr_t i = 0; i < s->len; i++) t += (uint8_t) txt(s)[i];
+      return zn(t, 0); }
     case KVec: { struct ai_vec *v = vec(x);                 // a rank>=1 array (scalar gems: KFlo/KWide/KCplx)
       uintptr_t i, n = vec_nelem(v);
       struct ai_zn s = zn(0, 0);                                  // rank>=1 array -> Σ elem
@@ -2899,8 +2928,16 @@ static ai_inline struct ai*ioput_str(struct ai*g, word _) {
 //     face. And `$0` can never appear: the core is serial 0 and the guard above
 //     prints it as () -- so the absence face and a mint face never collide.
 static ai_inline struct ai*ioput_sym(struct ai*g, word _) {
- if (_ == (word) ai_core_of(g)) return ioputcs(g, "()");  // the face of absence
+ if (_ == ZeroPoint) return ioputcs(g, "()");  // the face of absence
  return ioputn(ioputc(g, '$'), (intptr_t) sym(_)->code, 36); }   // $<serial base36>
+// a named point prints its bare name (the spelling), no sigil -- it reparses to itself.
+// Park the nom: ioputc may GC and MOVE both the nom and its name, so re-derive each step.
+static ai_inline struct ai*ioput_nom(struct ai*g, word _) {
+ uintptr_t n = len(nom(_)->name);
+ g = ai_push(g, 1, _);
+ for (uintptr_t i = 0; ai_ok(g) && i < n; i++)
+  g = ioputc(g, (uint8_t) txt(str(nom(g->sp[0])->name))[i]);
+ return ai_ok(g) ? ai_pop(g, 1) : g; }
 
 
 // Maps print as #(k v …), the empty map as (tablet 0); both round-trip.
@@ -3102,6 +3139,7 @@ static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
    case KCplx: if (!ai_ok(g = ai_push(g, 1, x))) return g;  // ~(re im); the helper reads sp[0]
                return ai_pop(ioput_vec_scalar_complex(g), 1);
    case KMint:  return ioput_sym(g, x);
+   case KNom:   return ioput_nom(g, x);
    case KString: return ioput_str(g, x);
    case KBig:  return ioput_big(g, x); } }
 
@@ -3375,7 +3413,7 @@ static ai_inline struct ai *push_wrap(struct ai *g, char const *nom) {
 // the LEXER LAW, operator half. a token led by an operator (punctuation)
 // char is a maximal run of operator chars -- a SIGIL, read as one plain
 // symbol; the opfix compile pass (prel.l) factors it against
-// bag['operators] later, so the reader is purely structural. a run stops
+// book['operators] later, so the reader is purely structural. a run stops
 // at name chars (alnum/_), whitespace, delimiters, and the value-surface
 // chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
 // still contain @ ~ $ ! . and a trailing/internal ' (the prime: x', n'';
@@ -3410,7 +3448,7 @@ static struct ai *ioread1op(struct ai *g, int c, int *pending) {
 // (interned `tuple`) -- so a list operand splices into the constructor call
 // instead of being wrapped: see the deliver loop in ioparse.
 static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
- struct ai_str *s = (chainp(x) && strp(A(x)) && mintp(B(x))) ? str(A(x)) : 0;  // named sym (name . mint) -> its name; a bare mint is nameless
+ struct ai_str *s = namep(x) ? str(nom(x)->name) : 0;  // a named point -> its name; a bare mint is nameless
  if (!s || s->len != n) return false;
  for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
  return true; }
@@ -3447,7 +3485,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
     if (nomp(A(g->sp[0]))) return encode(ai_core_of(g), ai_status_more); // wrap wants its operand
     g = ai_push(g, 1, AA(g->sp[0]));                    // d = head of the closed frame
     if (ai_ok(g)) {
-     if (nilp(g->sp[0])) g->sp[0] = (word) ai_core_of(g);         // empty () IS the zero point (not the number 0)
+     if (nilp(g->sp[0])) g->sp[0] = ZeroPoint;         // empty () IS the zero point (not the number 0)
      g->sp[1] = B(g->sp[1]); }                          // pop the closed frame
     break;                                             // -> deliver d
    case EOF:
@@ -3474,7 +3512,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
      // the VALENCE LAW, reader half: a run GLUED to a following datum is
      // monadic -- the run itself becomes a wrap under a `mono` wrap, so the
      // next datum d delivers as (mono (run d)); opfix factors the run
-     // against bag['monadics] (glued is monadic, spaced is dyadic). a shed
+     // against book['monadics] (glued is monadic, spaced is dyadic). a shed
      // '-' (pending) means a number follows: glued by definition. the
      // emission is a plain list, so data round-trips through show.
      int c3 = EOF;
@@ -3513,7 +3551,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
     g->sp[1] = g->sp[0], g->sp++;
     return g; }
    if (nomp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    bool emptyd = g->sp[0] == (word) ai_core_of(g);     // datum is the () zero-point (NOT the number 0)
+    bool emptyd = g->sp[0] == ZeroPoint;     // datum is the () zero-point (NOT the number 0)
     // @()/#() -> the DIRECT one-arg empty-collection nif, (iota 0) / (tablet 0). A one-arg nif
     // call is ai0-safe; a ZERO-ARG macro (tuple)/(hash) is NOT expanded by the self-hosted wev,
     // so @()->( tuple)->(spread (list)) would strand a macro value on ai0. The nif sidesteps it.
@@ -3775,9 +3813,12 @@ static lvm(lvm_map_lookup) {
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : nil)
-// (lamp x): is x lit -- wired to a hot, a heap pointer, not a fixnum? true for every
-// present non-fixnum value -- chains, symbols, strings, vecs, maps, texts.
-op11(lvm_lamp, lamp(Sp[0]) ? putcharm(1) : nil)
+// (litp x): is x LIT -- a top-region reference value? lit? names the upper segment of
+// the lattice, ai_kind >= KMap: a map (mutable) and the tops above it (closures, nifs,
+// and the opaque hots cask/port/toast -- so `hot? ⟹ lit?`). NOT the fresh value-data
+// below (numbers, strings, points, chains, trays), so a missing nom's () is not lit?.
+// (the raw heap-pointer test is `lamp`, C-internal; lit? is the lattice cut, not storage.)
+op11(lvm_litp, ai_kind(Sp[0]) >= KMap ? putcharm(1) : nil)
 // (hotp x): is x an opaque hot handle -- a buf or a port? (a task is referenced
 // by a fixnum id, not a handle object.) a hot also answers lamp (it acts as
 // a constant function); hotp is the refinement that names the zoo.
@@ -3914,6 +3955,7 @@ uintptr_t hash(struct ai *g, intptr_t x) {
    default: __builtin_trap();
    case KChain: return hash_two(g, x);
    case KMint: return sym(x)->code;
+   case KNom: return nom(x)->code;                 // a named point: its serial (GC-stable, distinct per atom)
    case KVec: {
     uintptr_t len = ai_vec_bytes(vec(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
@@ -4252,7 +4294,7 @@ bool ai_strp(ai_word x) { return strp(x); }
 // nothing (the empty symbol died with the one-nothing round).
 lvm(lvm_intern) {
  if (strp(Sp[0])) {
-  if (Sp[0] == EmptyString) return Sp[0] = nil, Ip += 1, Continue();
+  if (Sp[0] == EmptyString) return Sp[0] = nil, Ip += 1, Continue();  // QUEUE (bug 2): -> ZeroPoint with the nil-ontology change (corpus + CLAUDE.md encode "(intern "") is 0")
   word y;
   Have(intern_reserve(g));
   Pack(g), y = intern_checked(g, (struct ai_str*) g->sp[0]), Unpack(g);
@@ -4263,10 +4305,9 @@ lvm(lvm_intern) {
 // empty ($mint = 0, applies const-1 like every unit), identity its only
 // property -- the arg is ignored. `code` gets THE MINT SERIAL (monotonic,
 // pre-incremented) -- the point's hash and its place
-// in the total order: mints order by creation, GC-stable. a NOM is now the
-// literal chain of a name string and a mint (prel sugar over this nif) --
-// the named-uninterned atom species is gone, the McCarthy restoration's first
-// half. mints still answer nomp (a nameless atom), so they bind as gensyms.
+// in the total order: mints order by creation, GC-stable. a named point is a KNom
+// (its own kind), built by intern (canonical) or the `nom` nif (fresh/uninterned) --
+// NOT a chain. mints still answer nomp (a nameless atom), so they bind as gensyms.
 lvm(lvm_mint) {
  Have(Width(struct ai_mint));
  struct ai_mint *y = (struct ai_mint*) Hp;
@@ -4276,6 +4317,19 @@ lvm(lvm_mint) {
   Sp[0] = word(y),
   Ip += 1,
   Continue(); }
+
+// (nom n) -> a FRESH, UNINTERNED named point (KNom): a string names it, a symbol
+// lends its spelling, anything else falls to a bare mint. Distinct from intern's
+// canonical noms -- two (nom 'x) are different points (distinct serials), so `nom`
+// is the gensym-with-a-name. The McCarthy symbol, restored as its own atom.
+lvm(lvm_nomctor) {
+ Have(Width(struct ai_nom));                    // >= Width(struct ai_mint), so the bare-mint fallback fits too
+ word n = Sp[0];                                // re-read post-GC (the stack is rooted)
+ struct ai_str *nm = strp(n) ? str(n) : add_name(g, n);   // a string is the name; a sym lends its spelling
+ if (!nm) return Ap(lvm_mint, g);               // no name -> a bare mint
+ struct ai_nom *y = (struct ai_nom*) Hp; Hp += Width(struct ai_nom);
+ ini_nom(y, word(nm), ++g->next_serial);
+ return Sp[0] = word(y), Ip += 1, Continue(); }
 
 struct ai *intern(struct ai*g) {
  if (ai_ok(g = ai_have(g, intern_reserve(g))))   // atom + (at the load factor) the doubled backing
@@ -4290,14 +4344,12 @@ struct ai *intern(struct ai*g) {
 uintptr_t intern_reserve(struct ai *g) {
  word m = g->symbols;
  uintptr_t extra = m && (map_len(m) + 1) * 4 >= map_cap(m) * 3 ? 4 + 4 * map_cap(m) : 0;
- // a named symbol is now the chain (name . mint): a bare mint atom + the chain cell.
- return Width(struct ai_mint) + Width(struct ai_chain) + extra; }
+ return Width(struct ai_nom) + extra; }   // a named symbol is one flat KNom (name + serial)
 
 // intern: probe the WEAK intern map by string content (string hash + content
 // equality -- the same value-keyed probe every map uses); a miss mints the
-// canonical (name . mint) CHAIN -- a fresh bare mint (code = its serial) hooked
-// under the name string -- and inserts it (keyed by the name). One canonical
-// chain per spelling, so `idp` survives; the mint inside is the irreducible point.
+// canonical KNom -- a flat named point (name string + a fresh serial) -- and
+// inserts it (keyed by the name). One canonical nom per spelling, so `idp` survives.
 // avail must be >= intern_reserve(g) when this is called: bump-only in here.
 ai_noinline word intern_checked(struct ai *g, struct ai_str *b) {
  word m = g->symbols;
@@ -4317,15 +4369,19 @@ ai_noinline word intern_checked(struct ai *g, struct ai_str *b) {
   nb[1].x = putcharm(nlen);
   cell(m)[1].x = (word) nb;                              // swap backing; header identity stable
   i = map_probe(g, m, word(b), &found); }
- struct ai_mint *mt = ini_missing(bump(g, Width(struct ai_mint)), ++g->next_serial);
- struct ai_chain *y = bump(g, Width(struct ai_chain));
- ini_chain(y, word(b), word(mt));                        // (name . mint)
+ struct ai_nom *y = ini_nom(bump(g, Width(struct ai_nom)), word(b), ++g->next_serial);  // the canonical KNom: name + serial
  word *slots = map_slots(m);
  slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
  cell(map_back(m))[1].x = putcharm(map_len(m) + 1);
  return word(y); }
 
-op11(lvm_nomp, nomp(Sp[0]) ? putcharm(1) : nil)
+// (nom? x): a REAL point -- a non-() mint or a named nom. () (the zero point, the
+// absence a missing read returns) is the one point that is NOT nom? -- anonymous AND
+// empty, it stands apart from every identity-bearing point. (name? below is narrower.)
+op11(lvm_nomp, (nomp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : nil)
+// (name? x): a NAMED point only (KNom) -- a nom with a spelling. name? => nom?; the gap
+// nom? \ name? is the anonymous-but-real mints (gensyms).
+op11(lvm_namep, namep(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_packp, (packp(Sp[0]) || flop(Sp[0]) || widep(Sp[0]) || Cp(Sp[0])) ? putcharm(1) : nil)  // the pack family: arrays + the lean float/wide/complex scalar boxes
 op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : nil)
 op11(lvm_widep, widep(Sp[0]) ? putcharm(1) : nil)
@@ -4509,11 +4565,11 @@ static lvm(lvm_add_seq) {
 // rank: string as-is / nom'd to a fresh uninterned sym / interned. An empty
 // result is the ai_str_empty singleton, or nil at symbol rank (the symbol
 // lane is gated off by the dispatch matrix since the mint round anyway).
-static ai_inline struct ai_str *add_name(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the core / a non-symbol)
- return (chainp(x) && strp(A(x)) && mintp(B(x))) ? str(A(x)) : 0; }  // a named sym is (name . mint): name string in the car, mint in the cdr -- BOTH required (else a list whose head is a string would masquerade as a name)
+static ai_inline struct ai_str *add_name(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
+ return namep(x) ? str(nom(x)->name) : 0; }  // a named point (KNom) carries its name; a bare mint is nameless
 static ai_inline int stringrank(struct ai *g, word x) {    // STR 0 / USYM 1 / ISYM|NUM 2
  if (strp(x)) return 0;
- if (x == (word) ai_core_of(g)) return 1;               // the core is a nameless point: an uninterned (fresh) symbol
+ if (x == ZeroPoint) return 1;               // the core is a nameless point: an uninterned (fresh) symbol
  if (nomp(x)) return chainp(x) ? 2 : 1;            // a named nom is a (name . mint) chain; a bare mint is not
  return 2; }
 static ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contributes to a concat
@@ -4655,12 +4711,9 @@ static lvm(pair_swap) {
  return Ap(lvm_ap, g); }
 static union u const pair_drive[] = { {lvm_ap}, {.ap = pair_swap}, {.ap = lvm_ret0} };
 static lvm(data_pair_apply) {
- // A named symbol IS the chain (name . mint), but for now it APPLIES AS A POINT --
- // const-1, like a bare mint -- so the bootstrap (which indexes/applies symbols
- // expecting 1) keeps working. The full chain-eliminator semantics for symbols are
- // a deferred refinement (true-blue notes: "fix the chain ap later"); the order and
- // the representation are what land now.
- if (strp(A(Ip)) && mintp(B(Ip))) return Ip = cell(*++Sp), *Sp = putcharm(1), Continue();
+ // A chain is its OWN Church eliminator. Named syms no longer reach here -- they are
+ // KNom now, applying as const-1 through their own apply row (data_sym_apply) -- so the
+ // old (name . mint)-chain special-case is gone: every chain here is a real compound.
  Have(2);
  word a = A(Ip), b = B(Ip), fn = Sp[0];     // re-read after the Have guard; no alloc past here
  Sp -= 2;                                    // grow the frame to [a, fn, b, ret]
@@ -4698,13 +4751,16 @@ static lvm(data_pair_apply) {
 // NULL (a crash), so every row names all 15 columns via NUMK + the five.
 #define NUMK(v) [KCharm]=v,[KWide]=v,[KFlo]=v,[KCplx]=v,[KBig]=v,[KVec]=v,\
                 [KArrZ]=v,[KArrR]=v,[KArrC]=v,[KArrO]=v
-#define ADD_NUM { NUMK(lvm_addn),     [KMint]=lvm_0,       [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_STR { NUMK(lvm_add_string),[KMint]=lvm_0,      [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_MINT { NUMK(lvm_0),       [KMint]=lvm_0,       [KString]=lvm_0,          [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_TWO { NUMK(lvm_add_seq),  [KMint]=lvm_add_seq, [KString]=lvm_add_seq,    [KChain]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_H   { NUMK(lvm_addh),     [KMint]=lvm_addh,    [KString]=lvm_addh,       [KChain]=lvm_addh,    [KMap]=lvm_addh, [KHot]=lvm_addh }
+// KNom (a named point) carries NO +/* algebra of its own -- it rides the KChain column/row
+// exactly as it did when it WAS a (name . mint) chain (the lane fns test formp/strp on the
+// value, and a nom answers neither), so every [KNom] entry mirrors that macro's [KChain].
+#define ADD_NUM { NUMK(lvm_addn),     [KMint]=lvm_0,       [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_STR { NUMK(lvm_add_string),[KMint]=lvm_0,      [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_MINT { NUMK(lvm_0),       [KMint]=lvm_0,       [KString]=lvm_0,          [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_TWO { NUMK(lvm_add_seq),  [KMint]=lvm_add_seq, [KString]=lvm_add_seq,    [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_H   { NUMK(lvm_addh),     [KMint]=lvm_addh,    [KString]=lvm_addh,       [KChain]=lvm_addh,    [KNom]=lvm_addh,    [KMap]=lvm_addh, [KHot]=lvm_addh }
 static lvm_t *const ai_add_mx[KN][KN] = {
- [KMint]=ADD_MINT,
+ [KMint]=ADD_MINT, [KNom]=ADD_TWO,
  [KCharm]=ADD_NUM, [KWide]=ADD_NUM, [KFlo]=ADD_NUM, [KCplx]=ADD_NUM, [KBig]=ADD_NUM, [KVec]=ADD_NUM,
  [KArrZ]=ADD_NUM, [KArrR]=ADD_NUM, [KArrC]=ADD_NUM, [KArrO]=ADD_NUM,
  [KString]=ADD_STR, [KChain]=ADD_TWO, [KMap]=ADD_H, [KHot]=ADD_H,
@@ -4717,12 +4773,12 @@ static lvm_t *const ai_add_mx[KN][KN] = {
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil (so the string
 // and two rows agree: a number repeats, everything else nils, lambda/map composes).
-#define MUL_NUM { NUMK(lvm_muln),    [KMint]=lvm_0, [KString]=lvm_mul_rep, [KChain]=lvm_mul_rep, [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_REP { NUMK(lvm_mul_rep), [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_MINT { NUMK(lvm_0),      [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_H   { NUMK(lvm_mulh),    [KMint]=lvm_mulh, [KString]=lvm_mulh, [KChain]=lvm_mulh,    [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_NUM { NUMK(lvm_muln),    [KMint]=lvm_0, [KString]=lvm_mul_rep, [KChain]=lvm_mul_rep, [KNom]=lvm_mul_rep, [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_REP { NUMK(lvm_mul_rep), [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,       [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_MINT { NUMK(lvm_0),      [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,       [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_H   { NUMK(lvm_mulh),    [KMint]=lvm_mulh, [KString]=lvm_mulh, [KChain]=lvm_mulh,    [KNom]=lvm_mulh,    [KMap]=lvm_mulh, [KHot]=lvm_mulh }
 static lvm_t *const ai_mul_mx[KN][KN] = {
- [KMint]=MUL_MINT,
+ [KMint]=MUL_MINT, [KNom]=MUL_REP,
  [KCharm]=MUL_NUM, [KWide]=MUL_NUM, [KFlo]=MUL_NUM, [KCplx]=MUL_NUM, [KBig]=MUL_NUM, [KVec]=MUL_NUM,
  [KArrZ]=MUL_NUM, [KArrR]=MUL_NUM, [KArrC]=MUL_NUM, [KArrO]=MUL_NUM,
  [KString]=MUL_REP, [KChain]=MUL_REP, [KMap]=MUL_H, [KHot]=MUL_H,
@@ -4736,11 +4792,11 @@ static lvm_t *const ai_mul_mx[KN][KN] = {
 // ai_typ (the coarse data kind, so still KVec for any vec); the columns are ai_kind, so
 // arow names the gem kinds too. Every row is arg-kind-uniform today (arow fills all
 // columns); the 2-D shape is the hook for later argument-kind branching.
-#define arow(h) { [KMint]=h,[KCharm]=h,[KWide]=h,[KFlo]=h,[KCplx]=h,[KBig]=h,[KVec]=h,[KArrZ]=h,[KArrR]=h,\
+#define arow(h) { [KMint]=h,[KNom]=h,[KCharm]=h,[KWide]=h,[KFlo]=h,[KCplx]=h,[KBig]=h,[KVec]=h,[KArrZ]=h,[KArrR]=h,\
                   [KArrC]=h,[KArrO]=h,[KString]=h,[KChain]=h,[KMap]=h,[KHot]=h }
 lvm_t *ai_apply_mx[KN][KN] = {
  [KChain]  = arow(data_pair_apply), [KVec]  = arow(data_num_apply),
- [KMint]  = arow(data_sym_apply), [KFlo]  = arow(data_num_apply),
+ [KMint]  = arow(data_sym_apply), [KNom] = arow(data_sym_apply), [KFlo]  = arow(data_num_apply),
  [KWide] = arow(data_num_apply), [KCplx] = arow(data_num_apply),
  [KString] = arow(data_string_apply), [KBig]  = arow(data_num_apply), };
 #undef arow
@@ -4813,7 +4869,7 @@ lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  emit_int((intptr_t)((uintptr_t) toint(a) << getcharm(b)));
  return *++Sp = _res, Ip++, Continue(); }
 
-op(lvm_fixp, 1, oddp(Sp[0]) ? putcharm(1) : nil)
+op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : nil)   // (charm? x): a fixnum -- a charm, the tagged odd word
 // `nilp`/`not`: the falsy predicate -- the efficient generic form of (= 0 ($ x)),
 // via ai_nilp, which reads the net's sign without the clamp (a sym/string/fn is truthy
 // with no walk). The single truthiness oracle: `?` (lvm_cond), nilp, and aall all
@@ -4895,7 +4951,7 @@ uintptr_t ai_vec_bytes(struct ai_vec *v) {
 // draws: the only primitives are rng-seed (fresh state from a fixnum) and the
 // functional steps rand-next/randf-next (copy the input state, step the copy,
 // return (value . new-state) -- the input is never mutated). The global stream
-// (rand/randf over bag['rng-state]) is prel lisp. Not a CSPRNG.
+// (rand/randf over book['rng-state]) is prel lisp. Not a CSPRNG.
 
 static ai_inline uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }
@@ -5660,7 +5716,7 @@ lvm(lvm_tray) {
  ini_vec(v, ty, rank);
  uintptr_t i = 0;                              // re-walk the (possibly moved) lists
  for (word l = Sp[1]; chainp(l); l = B(l)) v->shape[i++] = (uintptr_t) getcharm(A(l));
- if (ty == ai_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, (word) ai_core_of(g));  // O floor is () not 0
+ if (ty == ai_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, ZeroPoint);  // O floor is () not 0
  else memset(vec_data(v), 0, nelem * ai_T[ty]);
  i = 0;                                        // no alloc below, so v/Sp[2] stay put
  for (word l = Sp[2]; chainp(l) && i < nelem; l = B(l), i++) {
@@ -6054,33 +6110,49 @@ static ai_inline int cmp_rank(word x) {
  enum q k = ai_kind(x);
  if (k == KString) return 1;                       // string: above mint, below number
  if (isnum(x) || Cp(x)) return 2;                  // the number band, by value (charm bridges up from string)
+ if (k == KArrZ || k == KArrR || k == KArrC) return 2;  // a GALAXY folds into the number band, ordered by its net
  if (k == KChain) return 3;                        // chain: a special 1-D set, just below the general set
- return (int) k; }                                 // KVec..KArrO sets (>=6), KMap, KHot -- all above chain, relative order kept
+ return (int) k; }                                 // KArrO trays (>=6), KMap, KHot -- all above chain, relative order kept
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
-// bare mints (KMint, the blue floor): just the mint serial (`code`; creation
-// order), with () the serial-0 point seated least of all by an identity guard.
-// Named symbols are not here -- they are (name . mint) CHAINS, ordered by the
-// KChain case below: name lex first (so a named sym outranks every bare mint),
-// then the mint serial on a name tie -- which interned uniqueness makes moot.
+// the floor band (cmp_rank 0): () < bare mints (KMint, by serial) < named points
+// (KNom, by name lex then serial). () is the serial-0 point, seated least of all by
+// an identity guard; a named point outranks every bare mint (the na/nb split below).
 static ai_inline intptr_t mint_cmp(struct ai *g, word a, word b) {
  if (a == b) return 0;
- word core = (word) ai_core_of(g);                       // () is the nameless serial-0 point: least of all
+ word core = ZeroPoint;                       // () is the nameless serial-0 point: least of all
  if (a == core) return -1;                               // (a != b, so b is some other mint above it)
  if (b == core) return 1;                                // -- guarded by identity, its atom slots are never read
- // a named symbol is (name . mint); a bare mint is the atom. bare mints rank below
+ // a named point is a KNom; a bare mint is the nameless atom. bare mints rank below
  // every named symbol; within a band, named by (name lex, then serial), bare by serial.
- bool na = chainp(a), nb = chainp(b);
+ bool na = namep(a), nb = namep(b);
  if (na != nb) return na ? 1 : -1;                       // bare mint < named symbol
- if (na) {                                               // both named: name first, then the inner mint's serial
-  intptr_t c = bytes_cmp(txt(A(a)), len(A(a)), txt(A(b)), len(A(b)));
+ if (na) {                                               // both named (KNom): name first, then the serial
+  struct ai_str *sa = str(nom(a)->name), *sb = str(nom(b)->name);
+  intptr_t c = bytes_cmp(txt(sa), len(sa), txt(sb), len(sb));
   if (c) return c;
-  uintptr_t ma = sym(B(a))->code, mb = sym(B(b))->code;
+  uintptr_t ma = nom(a)->code, mb = nom(b)->code;
   return ma < mb ? -1 : ma > mb ? 1 : 0; }
  uintptr_t ca = sym(a)->code, cb = sym(b)->code;         // both bare: by serial
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
+// Two galaxies of EQUAL net: a strict tiebreak so cmp3 stays antisymmetric --
+// shape lexicographically (rank, then dims), then cell content (re, then im),
+// row-major. Reached only from the number band below, both operands galaxies.
+static ai_inline struct ai_zn vec_cell_zn(struct ai_vec *v, uintptr_t i) {
+ if (v->type == ai_C) { ai_flo_t *d = vec_data(v); return zn(d[2*i], d[2*i+1]); }
+ return zn(vec_get_flo(v, i), 0); }
+static intptr_t galaxy_tie(struct ai_vec *va, struct ai_vec *vb) {
+ if (va->rank != vb->rank) return va->rank < vb->rank ? -1 : 1;
+ for (uintptr_t i = 0; i < va->rank; i++)
+  if (va->shape[i] != vb->shape[i]) return va->shape[i] < vb->shape[i] ? -1 : 1;
+ uintptr_t n = vec_nelem(va);                             // same shape -> same nelem
+ for (uintptr_t i = 0; i < n; i++) {
+  struct ai_zn ea = vec_cell_zn(va, i), eb = vec_cell_zn(vb, i);
+  if (ea.re != eb.re) return ea.re < eb.re ? -1 : 1;
+  if (ea.im != eb.im) return ea.im < eb.im ? -1 : 1; }
+ return 0; }
 // 3-way total-order comparator (-1/0/1); the recursive engine for the chain case.
 // Floats collapse NaN to "equal" here (a structural total order can't carry IEEE
 // unorderedness); the scalar lane below keeps NaN unordered at the top level. hash
@@ -6092,8 +6164,15 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
  // string/chain off their enum ordinal). symbols first: a named sym IS a chain, so the chain
  // recursion below would otherwise grab it.
  if (nomp(a)) return mint_cmp(g, a, b);                    // mint band: () < bare mints < named syms
- if (isnum(a) || Cp(a)) {                                  // number band, by value
-  if (Cp(a) || Cp(b)) {                                    // complex: (re, im) lexicographic
+ if (ra == 2) {                                            // number band: stars + galaxies, ordered by net
+  if (galaxyp(a) || galaxyp(b)) {                          // a galaxy in play -> by net (re, im), then star<galaxy, then shape/content
+   bool ga = galaxyp(a), gb = galaxyp(b);
+   struct ai_zn na = ai_net(g, a), nb = ai_net(g, b);
+   if (na.re != nb.re) return na.re < nb.re ? -1 : 1;
+   if (na.im != nb.im) return na.im < nb.im ? -1 : 1;
+   if (ga != gb) return ga ? 1 : -1;                       // net tie: a star seats below a galaxy
+   return galaxy_tie(vec(a), vec(b)); }                    // both galaxies, equal net: shape then content
+  if (Cp(a) || Cp(b)) {                                    // both scalars -- complex: (re, im) lexicographic
    ai_flo_t ar = Cp(a) ? cplx_re(a) : toflo(a), br = Cp(b) ? cplx_re(b) : toflo(b);
    if (ar != br) return ar < br ? -1 : 1;
    ai_flo_t ai = Cp(a) ? cplx_im(a) : 0, bi = Cp(b) ? cplx_im(b) : 0;

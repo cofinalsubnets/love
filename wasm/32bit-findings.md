@@ -66,13 +66,13 @@ is `wint = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
   silently omit one and leave a missing-name landmine -- exactly how the wasm
   host diverged. The core now installs safe nil-returning defaults for all five
   (`ai.c` `frontend_defaults`); a frontend's own `g_defn` still overrides
-  (the bag is last-write-wins), but a forgotten one inherits a clean nil
+  (the book is last-write-wins), but a forgotten one inherits a clean nil
   instead of a missing name. Verified on wasm (the names resolve to nil, and
   help.l passes from the core default alone with the host override removed) and
   on the kernel (gates green; it overrides only `exit`, defaults cover the
-  rest). The mechanism is the bag, not weak C symbols: the frontend aps are
+  rest). The mechanism is the book, not weak C symbols: the frontend aps are
   `static`, so they can't participate in weak/strong link override, and the
-  bag is love's own idiomatic override -- no linker semantics to depend on.
+  book is love's own idiomatic override -- no linker semantics to depend on.
 
 ## Not a bug
 

@@ -2,6 +2,8 @@
 
 *The companion to the narrative. Where [CLAUDE.md](CLAUDE.md) explains and [README.md](README.md) pitches, this document states the laws as propositions and points each one at its evidence: the executable spec [test/spec.l](test/spec.l) (every claim assert-backed, green on every target) and the machine-checked theorems in [rocq/spec.v](rocq/spec.v) (axiom-free, in universe-checked Rocq). Theorem names below in `thm:green` are the actual lemmas in that file; you can step them.*
 
+*Written by **telescope** — the laws made rigorous — with **gwen**, whose intuition feels what is true before the proof finds it.*
+
 ## 0 · abstract {#abstract}
 
 ai is a fully-curried, dynamically-kinded language whose entire surface is one operation — **application** — over a single generic core. There are no separate "primitives" in the usual sense: a number, a string, a list, an array, a complex scalar, a hash, and a closure are all *operators*, total functions of their own kind, and `(f x)` dispatches on the kind of `f`. From this one idea the language derives Church numerals that are also integers, arrays, and iterators; a notion of truth that is a *measure* rather than a tag; a total order over every value; and an equality that bridges the numeric tower and decides α-equivalence of closures.
@@ -10,7 +12,7 @@ This paper develops the semantics in the order the core itself is built: combina
 
 1. **One law, many faces.** A church numeral `n` is a single operator. On a numeral it exponentiates (`(n x) = xⁿ`); on a function it iterates (`(n f) = fⁿ`); these are the same map dispatched on the argument's kind (`thm:lanes_agree`).
 2. **False is nothing, and nothing is measured.** Every value has a complex-valued **net**. A value is false iff its net is ≤ 0 in the total order. The sole observation of magnitude is one saturating clamp `$`, and `!x ≡ (0 = $x)` exactly (`thm:nilp_iff_sat0`).
-3. **The type lattice *is* the dispatch structure *is* the total order.** The kinds form a lattice; the generic operators are N×N tables indexed by two kinds; the lattice is the diagonal of those tables; and the enum order of the kinds is the cross-kind total order (`thm:lt_trichotomy`, `thm:le_total`).
+3. **The type lattice *is* the dispatch structure, and *induces* the total order.** The kinds form a lattice; the generic operators are N×N tables indexed by two kinds; the lattice is the diagonal of those tables. The cross-kind total order is a deliberate *remap* of that lattice — the **true-blue order** (points to the floor, string below the numbers; `thm:lt_trichotomy`, `thm:le_total`) — one set of kinds read two ways, as dispatch and as order.
 
 **Scope of proof.** The combinator / numeral / absence / measure / order / algebra core is machine-checked in [rocq/spec.v](rocq/spec.v) over exact integers. The transcendental floats are demonstrated in [test/spec.l](test/spec.l) but deliberately outside the Rocq slice; §10 says exactly where the line is, and why.
 
@@ -49,7 +51,7 @@ The second face of the same numeral is iteration. Define `appf n f = fun x => Na
 
 ## 2 · absence and totality {#absence}
 
-A name not in the **bag** (the global table) is *missing*. Reading it does not crash and does not return an error token; helpless (no `help` installed) it reads **the zero point**: a nameless unit `Pt` — the **mint** (a fresh, nameless point with an identity and nothing else; §9) at serial 0, printed `()`. The zero point absorbs application in both directions:
+A name not in the **book** (the global table) is *missing*. Reading it does not crash and does not return an error token; helpless (no `help` installed) it reads **the zero point**: a nameless unit `Pt` — the **mint** (a fresh, nameless point with an identity and nothing else; §9) at serial 0, printed `()`. The zero point absorbs application in both directions:
 
 > **(2.1) The unit as operator is const-1.** `(Pt x) = 1`. Evidence: `thm:unit_is_const_one`.
 
@@ -114,10 +116,10 @@ This is what makes "`$` of a fold is mere composition" true: because net is addi
 The kinds form a lattice flattened into **bands**, low to high:
 
 ```
-() < name < string < number < chain < set < map < hot
+() < name < string < number < chain < tray < map < hot
 ```
 
-The organizing axis is the **net** with the **charm as hinge**: the char-built kinds (name, string — measured by their charm sum) net *up* into the numbers, the numbers *self*-net (the fixpoint, the middle), and the value-built kinds (chain, set, map — measured by their elements' sum) net *down*. The floor `()` is the bluest point of all, below even the number `0`. Within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (maps and hots). The Rocq model takes one comparable key per band (`O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z`, in band order — name/string/number/chain/map/hot) and orders lexicographically on `(band, key)`. The result:
+A **galaxy** (a numeric array) is not a separate band: it folds **into the number band by its net**, seating exactly where its net's scalar sits (a star below the galaxy on a net tie). Only a **tray** (an object array) stays value-built, above chain. The organizing axis is the **net** with the **charm as hinge**: the char-built kinds (name, string — measured by their charm sum) net *up* into the numbers, the numbers *self*-net (the fixpoint, the middle, galaxies among them), and the value-built kinds (chain, tray, map — measured by their elements' sum) net *down*. The floor `()` is the bluest point of all, below even the number `0`. Within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (maps and hots). The Rocq model takes one comparable key per band (`O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z`, in band order — name/string/number/chain/map/hot) and orders lexicographically on `(band, key)`. The result:
 
 > **(4.1) `<` is a strict total order.** irreflexive (`thm:lt_irrefl`), transitive (`thm:lt_trans`), asymmetric (`thm:lt_asym`), and trichotomous (`thm:lt_trichotomy`).
 
@@ -125,7 +127,7 @@ The organizing axis is the **net** with the **charm as hinge**: the char-built k
 
 > **(4.3) `=` is the Eq cell.** band and key together pin a value down (`thm:eq_from_band_key`): `=` is propositional equality, a linear order's equality and not a mere preorder.
 
-The band chain itself is proved link by link: `thm:symbol_lt_string`, `thm:string_lt_number`, `thm:number_lt_product`, `thm:product_lt_map`, `thm:map_lt_top` — and the floor sits below even the number 0, `() < 0` (`thm:unit_lt_zero`). The set (a numeric array) sorts in the value-built region just above its chain. (The Rocq identifiers keep the older spellings — `symbol`/`product`/`top` — for what the prose now calls name/chain/hot.)
+The band chain itself is proved link by link: `thm:symbol_lt_string`, `thm:string_lt_number`, `thm:number_lt_product`, `thm:product_lt_map`, `thm:map_lt_top` — and the floor sits below even the number 0, `() < 0` (`thm:unit_lt_zero`). A **galaxy** sorts as its **net** (an `Onum` in the model — no separate set band, the same omission as the numeric tower's representations); a **tray** (object array) sorts in the value-built region just above its chain. Because surface `<`/`=` over an array *broadcast* to an elementwise mask, this scalar total order is observed through `sort` and map-key ordering, not infix `<` on a galaxy. (The Rocq identifiers keep the older spellings — `symbol`/`product`/`top` — for what the prose now calls name/chain/hot.)
 
 Two refinements the model is explicit about *not* covering:
 
@@ -136,9 +138,9 @@ This single order is the engine of `sort` — one comparison per chain, the comp
 
 ## 5 · generic dispatch {#dispatch}
 
-A value's **kind** is an enum whose order is the lattice of §4. A generic operator at two arguments is an N×N table indexed by the two kinds; an operator at one argument is that table's *diagonal*; the three core tables are `+`, `*`, and **apply**. A both-charm (both-fixnum) fast path skips the table; otherwise one indexed jump selects a lane that widens only as far as the operands require (array ⊃ complex ⊃ bignum ⊃ float ⊃ …).
+A value's **kind** is an enum whose order is the **dispatch lattice** — semantics then representation: the points, then the arithmetic lane (the scalar gems and their array tower), then sequence (string, chain), then map, then hot. A generic operator at two arguments is an N×N table indexed by the two kinds; an operator at one argument is that table's *diagonal*; the three core tables are `+`, `*`, and **apply**. A both-charm (both-fixnum) fast path skips the table; otherwise one indexed jump selects a lane that widens only as far as the operands require (array ⊃ complex ⊃ bignum ⊃ float ⊃ …).
 
-The lattice, the dispatch, and the order are *the same object*: the diagonal of the dispatch matrix is the kind lattice, and the enum order of the kinds is the cross-kind comparison order. You maintain one structure and read it three ways. This section cites no Rocq lemmas on purpose: the dispatch matrix and the tail-threading are implementation invariants the runtime checks and the corpus exercises, not theorems in the Rocq slice — they live at the demonstrate layer (§11), where the chips go quiet.
+The lattice and the dispatch are *the same object*: the diagonal of the dispatch matrix is the kind lattice. The cross-kind **total order** (§4) is a deliberate *remap* of that lattice — the true-blue order (`cmp_rank`: the points fall to the floor, string below the numbers, a galaxy folded in by its net), **not** the raw enum order. So you maintain one set of kinds and read it two ways: dispatch (the enum lattice) and order (its true-blue remap). This section cites no Rocq lemmas on purpose: the dispatch matrix and the tail-threading are implementation invariants the runtime checks and the corpus exercises, not theorems in the Rocq slice — they live at the demonstrate layer (§11), where the chips go quiet.
 
 ## 6 · + and * are generic {#algebra}
 
@@ -232,19 +234,19 @@ A **mint** is a fresh, nameless point — the unforgeable thing:
 
 > **(9.2) Mint laws.** materially empty, `$(mint 0)=0` (`thm:mint_empty`); applies const-1, `((mint 0) x)=1` (`thm:mint_const1`); equal only to itself (`thm:mint_self`); distinct iff serials agree (`thm:mint_distinct`). The **zero point** is `Mint 0`, the face of absence.
 
-A **nom** is McCarthy's atom restored as the chain it always was — a spelling paired with a mint: the chain `(spelling . mint)`, the spelling its cap (`thm:nom_cap`, `(cap (nom 'x))="x"`), ordered lexicographically by spelling then serial:
+A **nom** is McCarthy's atom — a spelling paired with an identity — but it is its **own kind** (`KNom`: a name and a serial in one cell), *not* a chain. The name is read with `string` (`thm:nom_cap`, `(string (nom 'x))="x"` — the name projection of the abstract pair), and noms order lexicographically by spelling then serial:
 
-> **(9.3) Nom order.** same-name noms are distinct (`thm:same_name_distinct`) and ordered by serial (`thm:same_name_serial`) — so the total order stays total and GC-stable, and structurally a nom is identity-sharp (the mint inside) for free distinct map keys.
+> **(9.3) Nom order.** same-name noms are distinct (`thm:same_name_distinct`) and ordered by serial (`thm:same_name_serial`) — so the total order stays total and GC-stable, and structurally a nom is identity-sharp (its serial) for free distinct map keys.
 
-The bands place these exactly. The **name** band is the bare mint, seated between string and chain; a **nom**, being the chain `(spelling . mint)`, lives one band up in chain. So number `<` mint `<` nom — the mint above nothing, the nom (a chain) above the mint. `thm:point_above_nothing` (`0 < (mint 0)`) pins the mint *above* nothing, not at the floor; `thm:point_below_nom` (`(mint 0) < (nom 'x)`) seats a bare mint below a named one — both via the §4 order.
+The bands place these exactly, **at the floor**: the points — bare mints *and* noms — sit *below* the numbers (the bluest band), a bare mint below every named nom. So `() < mint < nom < string < number`. `thm:point_below_number` (`(mint 0) < 0`) pins a point *below* the number 0; `thm:mint_below_nom` (`(mint 0) < (nom 'x)`) seats a bare mint below a named one — both via the §4 order.
 
-The phrase "the chain it always was" is precise, not rhetorical: a symbol must do exactly two things — carry a **spelling** and stay **identity-distinct** even when spellings coincide — and each demand is a universal property the language already realizes, so the representation is *forced*:
+The phrase "**name × identity**" is precise, not rhetorical: a symbol must do exactly two things — carry a **spelling** and stay **identity-distinct** even when spellings coincide — and each demand is a universal property the language already realizes, so the representation is *forced*:
 
 - the **spelling** is a **string**, the free monoid on bytes (`+` concatenates, `""` is the unit, §6.1); interning factors through it — equal spelling ⟹ equal symbol is just the statement that the symbol is a function of this free-monoid element.
 - the **identity** is a **mint**, a point drawn from the one mint stream — the natural-numbers object, the zero point its `0` and a fresh draw its successor. A mint *is* its serial, with `=` the only structure (`thm:mint_distinct`).
-- the **symbol** is their **link** — the categorical product, `cap` and `cup` the two projections (`thm:nom_cap` projects the spelling; `cup` the mint). The product's universal property says any value carrying a spelling-map and an identity-map factors *uniquely* through `(spelling . mint)`.
+- the **nom** is their **product** `string × mint` — the spelling projected by `string` (`thm:nom_cap`), the identity its serial. The product's universal property says any value carrying a spelling-map and an identity-map factors *uniquely* through it.
 
-So McCarthy's atom is not *re-encoded* as a chain; the chain is the object the atom's own operations already characterize, unique up to the iso the universal property guarantees. `string × mint` is the terminal thing that carries a name and an identity — and the symbol was only ever its description.
+So McCarthy's atom is not *re-encoded*: the product is the object the atom's own operations already characterize, unique up to the iso the universal property guarantees — and `KNom` realizes it as its **own kind**, a flat cell (name + serial), not a chain. `string × mint` is the terminal thing that carries a name and an identity — and the symbol was only ever its description.
 
 ## 10 · the numeric tower {#tower}
 
@@ -266,9 +268,11 @@ What is **not** proved in Rocq, by design, lives at the demonstrate layer: the f
 
 ## 12 · implementation, in one breath {#impl}
 
-One word is one value: a fixnum is a tagged odd word; anything else is a heap object whose first word is its **hot** — a live external reference, the wire out of the heap to the ap that runs it. The VM is **tail-threaded** (aps tail-jump, never return) over a **two-space copying** collector; out-of-pool constants are immortal. No interpreter state lives outside the heap: the **bag** (an ordinary ai hash) carries the globals, macros, the operators table, the `help` function, and the rng; C finds its own hooks by name, allocation-free.
+One word is one value: a fixnum is a tagged odd word; anything else is a heap object whose first word is its **hot** — a live external reference, the wire out of the heap to the ap that runs it. The VM is **tail-threaded** (aps tail-jump, never return) over a **two-space copying** collector; out-of-pool constants are immortal. No interpreter state lives outside the heap: the **book** (an ordinary ai hash) carries the globals, macros, the operators table, the `help` function, and the rng; C finds its own hooks by name, allocation-free.
 
-The compiler is written in ai. At build time the evaluator sits on the **egg** (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (`born` records the hatch time). The same image runs on Linux, wasm, and — as **kship** — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (**aineko**), an interactive shell + pty wrapper (**bao**), a GNU-make-compatible build tool written in ai (**cook**), and **siri**, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the bag itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.
+The compiler is written in ai. At build time the evaluator sits on the **egg** (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (`born` records the hatch time). The same image runs on Linux, wasm, and — as **kship** — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (**aineko**), an interactive shell + pty wrapper (**bao**), a GNU-make-compatible build tool written in ai (**cook**), and **siri**, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the book itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.
+
+**One core, faces.** The language is the top of its own lattice — everything applies — and the apps are *faces* of it, each a way the core meets a boundary; the pairs glue by different universal shapes. The **source** faces *compose*: source reaches `top` by two legs that converge there — **read** (`chars → forms`) and **feel** (the weaver, `forms → top`) — the charm leg factoring *through* the lisp leg, `chars ─read→ forms ─feel→ top`, the cospan `chars → top ← forms` meeting at one core. The **i/o** faces *coproduct*: a shared host trunk *forks* into a local face (the shell **bao**) and a net face (the netcat **aineko**), `local ⊔ net` — either/or, not a pipeline. Same object; two gluings — composition and coproduct, both machine-checked axiom-free in [rocq/spec.v](rocq/spec.v) (`Section Faces`), which carries the fuller reading.
 
 ## · see also {#see-also}
 
@@ -277,7 +281,7 @@ The compiler is written in ai. At build time the evaluator sits on the **egg** (
 - [tools/spec2coq.l](tools/spec2coq.l) — generates Rocq straight from the spec, keeping the demonstrate and prove layers in step
 - [crew/](crew/) — the **kship crew**, the programs that ride on kship: **aineko** (netcat), **bao** (the shell + pty wrapper), **cook** (make-in-ai), **kship** (the ship — bare-metal agent-kernel), **siri** (the synthesist, docs matched to the surface)
 - [CLAUDE.md](CLAUDE.md) — the narrative spec with runnable demonstrations, and [README.md](README.md) — the overview
-- [blue.md](blue.md), its ai generator [tools/blue.l](tools/blue.l), and the single stylesheet [blue.css](blue.css) — this page's source
+- [blue.md](blue.md), its ai generator [tools/site.l](tools/site.l), and the single stylesheet [site.css](site.css) — this page's source
 
 ## · the laws at a glance {#glance}
 

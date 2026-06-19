@@ -28,7 +28,7 @@
 (: CHAIN 0  CPLX 1  RSVD 2  OTHER 3            ; the four inline kinds (bits 3:2)
 
    ; --- word <-> fields (pure fixnum arithmetic) ---
-   (fix? w)     (& w 1)                        ; bit 0 set -> a fixnum
+   (charm? w)     (& w 1)                        ; bit 0 set -> a fixnum
    (val w)      (>> w 1)                       ; ... its carried value
    (fixnum n)   (| (<< n 1) 1)                 ; tag a value as a fixnum
    (threaded w) (& (>> w 1) 1)                 ; ref bit 1 -> a GC thread link
@@ -51,7 +51,7 @@
    (mk-cplx  re  im)  (ref (alloc re  im)  CPLX)
 
    ; --- dispatch: the kind comes from the TAG, never a memory read ---
-   (klass r) (? (fix? r)          'fixnum
+   (klass r) (? (charm? r)          'fixnum
                 (= CHAIN (kind r)) 'chain
                 (= CPLX  (kind r)) 'cplx
                                    'other)
@@ -75,6 +75,6 @@
 (: c (mk-chain 7 9) (tl c))    ; 9
 (threaded (mk-chain 7 9))      ; 0        bit 1 is the GC's, untouched by the kind
 (apply- (mk-cplx 3 4))         ; apply-cplx
-(fix? (fixnum 42))             ; 1
+(charm? (fixnum 42))             ; 1
 (val (fixnum 42))              ; 42
 (klass (fixnum 42))            ; fixnum

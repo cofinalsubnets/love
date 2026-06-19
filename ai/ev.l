@@ -19,7 +19,7 @@
                (atom? e) (link 1 e)
                (&& (= (cap e) '\) (atom? (cuup e))) (link 1 (caup e))
                (link 0 0))
-   (bake v) (? (fix? v) v (list '\ v))           ; value -> source: fixnum bare else quote
+   (bake v) (? (charm? v) v (list '\ v))           ; value -> source: fixnum bare else quote
    ; (op . arity) iff v is a nif. `id?` (identity) not `=`: a non-nif global may peep to
    ; a word that looks like a heap pointer, which `=`/eql would deref and crash on.
    (opof v) (? (id? lvm_ret0 (peek 1 v)) (link (peek 0 v) 1)
@@ -40,20 +40,20 @@
             id? gcd modpow inc dec abs
             link cap cup caap caup cuap cuup
             dig lidx assoc member? last rev cat
-            fix? nom? two? tab? lit? string? nil? gem? twin? atom?
+            charm? nom? two? book? lit? string? nil? gem? twin? atom?
             snip string
             re im conj arg gem twin
             sine cosine log power))
-   pureset (foldl (\ t s (: v (bag s) (? v (pin t v 1) t))) (tablet 0) names)
-   (add t s) (: v (bag s)
-    (? (fix? v) t
+   pureset (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (tablet 0) names)
+   (add t s) (: v (book s)
+    (? (charm? v) t
      (: o (opof v) p (pureset v)
       (? (|| o p)
        (: op (? o (cap o) 0)
           ar (? o (cup o) (id? lvm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (\ x (hgen v op ar p x))))
        t))))
-   (foldl add (tablet 0) (keys bag))))
+   (foldl add (tablet 0) (keys book))))
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
@@ -78,7 +78,7 @@
   ; (host, kernel, wasm, aarch64, and the little ones: playdate, teensy). A NATIVE backend
   ; (ai/glaze/emit.l, x86-64, opt-in) implements the SAME leaf interface over a byte buffer
   ; instead of cells -- kim -> movabs, karg -> mov [rcx+8i] + a fixnum guard, em1 -> the
-  ; op's machine code, aco -> cmp+jcc -- today via the ala creation hook (bag['natjit])
+  ; op's machine code, aco -> cmp+jcc -- today via the ala creation hook (book['natjit])
   ; for leaf bodies, with the unhandled ops (kap = a call) DEOPTing into this thread.
   ; Pulling the rest of the interface through (kap as a native call) is the open work.
   (p2 i x k) (poke -1 i (poke -1 x k))
@@ -98,9 +98,9 @@
   ; is a heavyweight polymorphic nif (type-dispatch + hash + eql), costing far more
   ; than a few fixnum compares that short-circuit on the common small values
   ; (measured: a hash made boot +13% vs +5% for this chain; frequency-reordering
-  ; the chain was a wash). The fix? guard keeps spq from ever hashing a heap value.
+  ; the chain was a wash). The charm? guard keeps spq from ever hashing a heap value.
   (spa i) (? (= i 0) lvm_arg0 (= i 1) lvm_arg1 (= i 2) lvm_arg2 (= i 3) lvm_arg3 0)
-  (spq v) (? (fix? v) (? (= v 0) lvm_quo0 (= v 1) lvm_quo1 (= v 2) lvm_quo2
+  (spq v) (? (charm? v) (? (= v 0) lvm_quo0 (= v 1) lvm_quo1 (= v 2) lvm_quo2
                          (= v 3) lvm_quo3 (= v -1) lvm_quom1 (= v -2) lvm_quom2 0) 0)
   (fuse a o t sp x k n)                          ; a=ap-op o=tap-op(0=none) t=plain-op sp=specializer
    (: tail (k (+ 2 n)) h (peek 0 tail)
@@ -119,7 +119,7 @@
   ; printer (gzput_fn) finds it. entry = cell 1, src = cell 0.
   (k0s c n) (poke -1 lvm_ret (poke (+ 2 n) (ary c) (weave (+ 3 n))))
   (ary c) (+ (tally (c 'arg)) (tally (c 'imp)))
-  (pro f) (? (fix? f) f (: a (peek 0 f) (?- f
+  (pro f) (? (charm? f) f (: a (peek 0 f) (?- f
    (= a lvm_unc) (pro (seek -2 (peek 2 f)))
    (= a lvm_cur) (?- f (= lvm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
@@ -151,6 +151,8 @@
      (link (cap nd) (link (wx (cup nd) bnd) (wxb (cuup bs) bnd)))))
    (wxc bs bnd) (?                                ; cond clauses (ant con ant con ... else)
     (atom? bs) (list 0)                           ; clauses ran out: supply the implicit 0 else
+    ; QUEUE (bug 3): flip to (list ()) when the reader terminator also becomes () (bug 1) -- they
+    ; are ONE change; on its own this breaks (= reader-list eval-list) since map's tail bottoms here.
     (atom? (cup bs)) (list (wx (cap bs) bnd))
     ; peephole: a FINAL (nil? e) test flips its branches, dropping the wrapper --
     ; (.. (nil? e) con else) == (.. e else con), since the cond tests g_false(e), == nil?(e).
@@ -161,14 +163,14 @@
     (link (wx (cap bs) bnd) (link (wx (caup bs) bnd) (wxc (cuup bs) bnd))))
    ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
    ; `id?`-safe peeps (a non-fn value never matches lvm_cur); mirrors app's old `fa`/`na`.
-   (napof v args) (? (fix? v) 0
+   (napof v args) (? (charm? v) 0
     (? (id? lvm_cur (peek 0 v)) (: ar (peek 1 v) (&& (< 1 ar) (= (tally args) ar))) 0))
    ; fold: un-shadowed global head -> ap (fold/iop/apx); else mark the call as an apx
    ; node (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h (cap x)
     (? (atom? (cup x)) x                          ; (f) single element -> ana's (atom? b) handles
        (|| (nil? (nom? h)) (member? h bnd)) (link apx (link 0 x))   ; local/computed head
-       (: v (bag h) hd (wevs v)
+       (: v (book h) hd (wevs v)
         (? hd (hd x)
            (napof v (cup x)) (link apx (link 1 x))
            (link apx (link 0 x))))))
@@ -201,13 +203,13 @@
   ; binding of that name that is NOT an n-ary-callable fixed-arity lambda (a value, a
   ; single-arg lambda, or a rebind) -- it SHADOWS outer fars, so stop; -1 = not bound
   ; in this scope, keep walking. So a saturated call to a letrec lambda sibling can take
-  ; the one-shot n-ary apply (apn/tapn) instead of currying, the same as a bag global.
+  ; the one-shot n-ary apply (apn/tapn) instead of currying, the same as a book global.
   (falook c h) (?- 0 c
-   (: far (c 'far) a (? (tab? far) (peep far h -1) -1)
+   (: far (c 'far) a (? (book? far) (peep far h -1) -1)
     (? (< 0 a) a (= -1 a) (falook (c 'par) h) 0)))
   ; apxh: (apx nary head . args) -> apply. nary -> r2l arg eval + a single n-ary apply;
   ; else l2r 1-ary chain. kap detects tail vs non-tail by peeking the continuation.
-  ; n-ary fires for a bag-global multi-arg fn (fold/napof set nary) OR a saturated call
+  ; n-ary fires for a book-global multi-arg fn (fold/napof set nary) OR a saturated call
   ; to a letrec lambda sibling of matching arity (falook -- locals fold can't see).
   (apxh c b) (: nary (cap b) head (caup b) args (cuup b)
               n2 (? nary 1 (&& (nom? head) (: a (falook c head) (&& (< 1 a) (= (tally args) a)))))
@@ -292,7 +294,7 @@
 
   (avb c d x)
    (? (nil? d) ; outside all lexical scopes?
-       (: y (peep bag x gone) ; check global scope
+       (: y (peep book x gone) ; check global scope
         (? !(= y gone) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
           (em2 lvm_index x))))
@@ -321,13 +323,13 @@
    s (link '\ (cat (d 'imp) (? (two? os) (cuup os) exp)))
    _ (poke -1 s e)                                  ; value[-1] = source \-expr
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
-   ; native-creation hook (dormant unless bag['natjit] is installed -- opt-in, x86-64):
+   ; native-creation hook (dormant unless book['natjit] is installed -- opt-in, x86-64):
    ; given the bytecode entry e, its source \-expr s (= (\ imps.. args.. body), so the
    ; frame [imps args] and surface body are right there) and arity a, it may return a
    ; native-backed entry that DEOPTS into e on overflow. transparent (value[-1]=s kept),
    ; id?-distinct (fresh per ala call), macro-safe (s is the surface, pre-tag). dormant
    ; -> peep gives 0 -> e unchanged, so the egg/bootstrap is untouched.
-   hk (peep bag 'natjit 0)
+   hk (peep book 'natjit 0)
    (link (? hk (hk e s a) e) (d 'imp)))
 
   ; --- let analyzer (the hard one) -- letrec* over (: name def .. body). three phases:
@@ -408,7 +410,7 @@
                              x (ala q (cup (cof cls)) (cup d))
                            (cput cls x)))
         f (ana c d)
-        g (?- id (&& even (nil? (c 'par)) !(id? n '_)) (em2 lvm_defglob n))  ; `_` binds locally, never to the bag
+        g (?- id (&& even (nil? (c 'par)) !(id? n '_)) (em2 lvm_defglob n))  ; `_` binds locally, never to the book
         _ (push c 'stk n)
         h (weave (cup nds))
         (\ x (f (g (h x))))))

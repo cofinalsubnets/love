@@ -50,14 +50,14 @@ concatenated scope** `make test` runs, so it may leak **exactly one** global.
 
 zev had to fight for its single global (`parse`/`span`/`sat` all collide with egg
 globals). wev gets its name **for free**, and the reason is the spec itself: the
-compiler's `wev` is a closure-private binding inside `ev` (`ev.l:129`, never a bag
+compiler's `wev` is a closure-private binding inside `ev` (`ev.l:129`, never a book
 key), and its `wevs` table is a global the **egg mops before birth** (the
 compiler-machinery mop list — `boxfix`, `wev`/`wevs`, the num-ap helpers). So at the
-surface, post-birth, **`wev` names nothing** — `(bag 'wev)` is the zero point. The
-crew member claims it with zero collision, by construction. One bag key (`wev`), every
+surface, post-birth, **`wev` names nothing** — `(book 'wev)` is the zero point. The
+crew member claims it with zero collision, by construction. One book key (`wev`), every
 internal closure-private, the same trick bao and zev use. (Confirm at the binary with
 `(id? wev ())` — TRUE, i.e. `wev` reads as the zero point, the face of a missing name;
-`bag` itself is mopped too, so even `(bag 'wev)` is the zero-point-as-const-1. Do NOT
+`book` itself is mopped too, so even `(book 'wev)` is the zero-point-as-const-1. Do NOT
 probe with `(lit? wev)`: the zero point is itself a `lit?`, so that can't tell missing
 from present. If `(id? wev ())` ever goes false, the mop list drifted — tell siri.)
 
@@ -137,7 +137,7 @@ in `test/wev.l` and `make test` covers it (host + ai0 ×2) with **no Makefile ed
 the corpus globs `test/*.l` and runs them concatenated in one global scope. That scope
 is exactly why the single-global design holds: leak a colliding name and the gate goes
 red and tells you. Keep every helper local; the only name `test/wev.l` may add to the
-global bag is `wev` itself. The rocq spec, the order law, and `make valg` are unaffected
+global book is `wev` itself. The rocq spec, the order law, and `make valg` are unaffected
 by a pure-library addition — but run host + ai0 before every handoff, and a fold that
 changes a value is a soundness bug, not a perf nit: every reduction must preserve meaning,
 asserted both ways (`(mix src env)` applied = `src` applied).

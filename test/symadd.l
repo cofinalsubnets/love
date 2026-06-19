@@ -24,8 +24,8 @@
   ("asdf" = (string 'asdf)) ('asdf = (intern "asdf"))
   ('xy = (intern (string 'xy)))                 ; intern . string = identity on interned
   (id? sa-z (intern ""))
-  ; --- noms carry their name as data: the chain's cap ---
-  ("cd" = (cap (nom "cd"))) ("cd" = (cap (nom 'cd)))
+  ; --- noms carry their name as data: read it with `string` ---
+  ("cd" = (string (nom "cd"))) ("cd" = (string (nom 'cd)))
   ; --- strings keep everything ---
   ("abcd" = ("ab" + "cd")) ("Aab" = (65 + "ab")) ("abA" = ("ab" + 65))
   ("ababab" = ("ab" * 3)) ("" = ("" + ""))))

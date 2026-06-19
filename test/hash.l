@@ -2,7 +2,7 @@
 (: t (hash 1 100 2 200 3 300))
 (assert
  ; the constructor builds a working hash
- (tab? t) (nil? (tab? 5)) (nil? (tab? '(1 2)))   ; tab?: only maps, not fixnums/lists
+ (book? t) (nil? (book? 5)) (nil? (book? '(1 2)))   ; book?: only maps, not fixnums/lists
  (lit? t) (lit? cap) (nil? (lit? 5)) (nil? (lit? 0))  ; lit?: any heap object, not a fixnum/nil
  (= 100 (peep t 1 0))
  (= 200 (peep t 2 0))
@@ -15,7 +15,7 @@
  (= "#(1 \"hi\")" (show (hash 1 "hi")))
  (string? (show t))                             ; multi-entry: just exercise the path
  ; (dig x) exposes the runtime hashing method: a fixnum, equal for eql keys
- (fix? (dig 'k))
+ (charm? (dig 'k))
  (= (dig 'k) (dig 'k))
  (= (dig '(1 2)) (dig '(1 2))))
 
@@ -24,10 +24,10 @@
 ; zero-point, distinct from 0. hashes print as #(…), the empty map as (tablet 0).
 (: ht #(1 100 2 200 3 300))
 (assert
- (tab? ht)
+ (book? ht)
  (= 100 (peep ht 1 0))
  (= 300 (peep ht 3 0))
- (tab? (tablet 0))                              ; the empty hash
+ (book? (tablet 0))                              ; the empty hash
  !(tablet 0) !#()                               ; both the empty map (falsy); #() reads to (tablet 0)
  (= 50 (peep (pin (tablet 0) 5 50) 5 0))                ; the empty hash is mutable
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys #(1 10 2 20 3 30))))   ; splice builds all entries
@@ -39,7 +39,7 @@
 ; is NOT 0. the reader emits (tablet 0) for #() directly (the # empty exception).
 (: bx #0)
 (assert
- (tab? #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
+ (book? #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
  (= 0 (peep bx 0 9))                            ; the boxed value sits at key 0 (the number, not the empty)
  (= 9 (: _ (pin bx 0 9) (peep bx 0 0)))         ; ... and is mutable in place
  (= 5 (peep #5 0 0)) (= "s" (peep #"s" 0 0))    ; any scalar boxes (at key 0)

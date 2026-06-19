@@ -11,9 +11,10 @@ import { readFileSync } from 'node:fs';
 const files = process.argv.slice(2);
 if (!files.length) { console.error('usage: test.mjs <corpus.l...>'); process.exit(2); }
 // The shim bakes only prel+ev (the page feeds the REPL through ai_eval),
-// but the native runner has repl.l baked too -- and the corpus tests its surface
-// (zev/charms in zev.l). Load it first so the wasm test sees the same full stack.
-const src = [readFileSync('ai/repl.l', 'utf8'),
+// but the native runner has the shell core baked too -- and the corpus tests its
+// surface (zev/charms). bao.l is that core (repl.l was consolidated into it), so
+// load it first so the wasm test sees the same full stack.
+const src = [readFileSync('ai/bao.l', 'utf8'),
              ...files.map(f => readFileSync(f, 'utf8'))].join('\n');
 
 const m = await Ai();

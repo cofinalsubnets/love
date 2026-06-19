@@ -4,7 +4,7 @@
 ; sigils against the table at COMPILE time (the opfix pass), so a pin in one form
 ; governs the next form -- the test runner reads and compiles one form at a time.
 (: op-tbl operators)             ; leak to global scope for this file
-(assert (tab? op-tbl)
+(assert (book? op-tbl)
  ((link 'sat 1) = (op-tbl '$)) ((link 'nil? 1) = (op-tbl '!)) ((link 'dot 1) = (op-tbl '.))
  (2 = (op-tbl '+)) (2 = (op-tbl '-)) (2 = (op-tbl '%)) (3 = (op-tbl '?))
  ((link 'pin 3) = (op-tbl '<-)) ((link 'peep 3) = (op-tbl '->)))

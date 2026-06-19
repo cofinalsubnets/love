@@ -33,7 +33,7 @@
    ev-kind cap   ev-load cup
 
 ; --- the agent state --- a plain 2-list (replies beats): an IMMUTABLE ai value,
-; so show/read checkpoint it for free. (a bag would NOT round-trip -- it is
+; so show/read checkpoint it for free. (a book would NOT round-trip -- it is
 ; mutable, identity-compared, and its show reparses to nothing; the list is the
 ; honest carrier of crew/kship.md's "state is an ai value, persistence is
 ; show/read".) replies = packets answered, beats = heartbeats emitted. `with`
@@ -122,7 +122,7 @@
 ; stdin-only, so the clean single-task poll isn't reachable from ai -- two tasks let
 ; the scheduler do the merge instead). the two tasks share ONE mutable counter cell:
 ; the immutable 2-list can't carry a live count between concurrent tasks, and under the
-; cooperative scheduler pin/peep never yield mid-op, so the bag is race-free (the
+; cooperative scheduler pin/peep never yield mid-op, so the book is race-free (the
 ; reactor only ever writes 'replies, the heartbeat only 'beats -- disjoint fields, no
 ; lost update even though each snapshots the whole cell). checkpoint reads it back to
 ; the honest 2-list. keys are INTEGER SLOTS (0 = replies, 1 = beats), NOT symbols: on

@@ -12,7 +12,7 @@
 ; wasm host), so the real round-trip lives in the standalone ai/glaze/probe.l (kernel).
 ; Here we cover what holds on every target: the guards and the opacity, no run.
 (assert
- (lit? call) (lit? toast)     ; both nifs present and applicable
+ (lit? eat) (lit? toast)      ; the runner + loader nifs are present and applicable (lit?: fns are top-region)
  !(call 5 0) (0 = (call 'sym 0)) !(call "text" 0) !(call () 0)   ; a non-toast -> nothing (no jump)
  !(call (cask 8) 0)            ; a plain cask is NOT callable -- only a toast runs
  (0 = (toast 5)) (0 = (toast 'x)) (0 = (toast ())) (0 = (toast ""))   ; non-bytes / empty -> 0
@@ -20,9 +20,9 @@
  (0 = (tally (toast "AB")))                ; OPAQUE: not a cask, so no length to read
  (-1 = (peep (toast "AB") 0 -1))           ; OPAQUE: its code bytes are not readable
  (: b (cask 3) _ (pin b 0 144) _ (pin b 1 195) t (toast b) (&& (hot? t) (0 = (tally t))))  ; toast of a cask too
- ; `nat` -- the codegen-backend install seam (ai.c): (nat code interp src) wraps
+ ; `nif` -- the codegen-backend install seam (ai.c): (nif code interp src ..) wraps
  ; emitted bytes in a TRANSPARENT applicable native closure. NEUTRAL here (no
  ; install/run -- the bytes are x86-64; the real round-trip lives in ai/glaze/emit.l):
  ; non-byte / empty code installs nothing.
- (lit? nat)
+ (lit? nif)
  !(nif 5 0 0 1) !(nif 'x 0 0 1) !(nif () 0 0 1) !(nif "" 0 0 1))

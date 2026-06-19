@@ -22,7 +22,7 @@
 (: r (mind (L "echo" "hello"))
  _ (assert
     (two? r)            ; (pid . master-port)
-    (fix? (cap r))        ; pid is a fixnum
+    (charm? (cap r))        ; pid is a fixnum
     (< 0 (cap r))         ; ... a real one
     (lit? (cup r)))       ; the master is a heap port
  out (slurp (cup r))      ; drain the master to EOF (echo exits -> slave closes)
@@ -47,7 +47,7 @@
 (: r (mind (L "cat"))
  _ (assert
     (nil? (setwinsize (cup r) 24 80))   ; () = ok
-    (fix? (setwinsize 5 24 80)))       ; a bare fixnum (not a port) -> EBADF
+    (charm? (setwinsize 5 24 80)))       ; a bare fixnum (not a port) -> EBADF
  _ (still (cap r) 9)
  _ (slurp (cup r))
  _ (waitfor (cap r)))
@@ -55,7 +55,7 @@
 ; --- (still pid sig) on a dead pid -> an errno fixnum (ESRCH), never () ---
 (: dead (cap (mind (L "true")))      ; exits immediately
  _ (waitfor dead)                      ; gather it so the pid is truly gone (not a zombie)
- _ (assert (fix? (still dead 0))))     ; sig 0 probes existence -> ESRCH
+ _ (assert (charm? (still dead 0))))     ; sig 0 probes existence -> ESRCH
 
 ; --- bidirectional pty I/O: write to the master, read the child's echo back ---
 ; the foundation of bao's wrapper -- a host process and bao talk over the master
@@ -87,6 +87,6 @@
  _ (assert (= a 72) (= b 73))                     ; "HI" -- the "hi" echo is suppressed
  _ (still (cap r) 9)
  _ (waitfor (cap r)))
-(: _ (assert (fix? (ptyecho 5 0))))               ; non-port -> errno (EBADF)
+(: _ (assert (charm? (ptyecho 5 0))))               ; non-port -> errno (EBADF)
 
 (puts "pty: ok") (putc 10)

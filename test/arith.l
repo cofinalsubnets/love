@@ -1,6 +1,6 @@
 ; arithmetic, comparison, equality:
 ; - fixnum fast paths unchanged
-; - mixed fix?/gem? promotes to float
+; - mixed charm?/gem? promotes to float
 ; - integer overflow promotes to a boxed wide int (see test/box.l)
 ; - /0 promotes to IEEE inf/-inf/NaN
 ; - non-numeric operands return nil
@@ -12,13 +12,13 @@
  (= 6 (* 2 3))
  (= 2.5 (/ 5 2))                    ; `/` true division: inexact -> float
  (= 2 (/ 4 2))                      ; exact -> stays integer
- (fix? (/ 4 2))
+ (charm? (/ 4 2))
  (= 0.5 (/ 1 2))
  (= 2 (// 5 2))                     ; `//` truncating integer division
  (= -2 (// -5 2))                   ; truncates toward zero (not floor -3)
  (= 1 (% 5 2))
 
- ; --- mixed fix? + gem? promotes ---
+ ; --- mixed charm? + gem? promotes ---
  (= 3.5 (+ 1 2.5))
  (= 3.5 (+ 2.5 1))
  (= -1.5 (- 0 1.5))
@@ -36,11 +36,11 @@
  ; 2^61 is the largest power of two that's still a fixnum; doubling it
  ; overflows the 62-bit tag into a box that holds the exact integer
  ; (which then demotes back to a fixnum once it fits again).
- !(fix? (* 2 2305843009213693952))   ; 2^62: now a box, not a fixnum
+ !(charm? (* 2 2305843009213693952))   ; 2^62: now a box, not a fixnum
  !(gem? (* 2 2305843009213693952))   ; ...and integer, not float
  (= 2305843009213693952 (/ (* 2 2305843009213693952) 2))           ; box / 2 demotes
  (= 2305843009213693952 (- (* 2 2305843009213693952) 2305843009213693952)) ; box - fix demotes
- (? wint (fix? (- (* 2 2305843009213693952) 2305843009213693952)) 1) ; ...to a fixnum (64-bit: 2^61 is in range)
+ (? wint (charm? (- (* 2 2305843009213693952) 2305843009213693952)) 1) ; ...to a fixnum (64-bit: 2^61 is in range)
  (= (* 2 2305843009213693952) (* 2 2305843009213693952))           ; equal boxes compare =
 
  ; --- 1/0 promotes to IEEE inf / -inf; 0/0 collapses to 0 (NaN is gone) ---
@@ -82,7 +82,7 @@
  (= '(1 2 5) (+ '(1 2) 5))          ; list + num -> append at back
  (nil? (- "a" "b"))
 
- ; --- equality with promotion across fix?/gem? ---
+ ; --- equality with promotion across charm?/gem? ---
  (= 3 3)
  (= 3 3.0)
  (= 3.0 3)

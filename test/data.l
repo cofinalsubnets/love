@@ -7,10 +7,10 @@
          !(= s1 s2)
          (= 'asdf (intern "asdf"))          ; intern: string -> the interned symbol
          (= 'asdf (intern 'asdf))           ; ...identity on any non-string arg
-         !(= 'asdf (nom "asdf"))         ; a nom is a PAIR (name . mint): never the interned symbol
-         !(= (nom "asdf") (nom "asdf")) ; ...nor another nom (the mint inside differs)
-         (= "asdf" (cap (nom "asdf")))  ; the name is the chain's cap -- the explicit bridge
-         (= "asdf" (cap (nom 'asdf)))   ; ...same for a symbol arg (string'd on the way in)
+         !(= 'asdf (nom "asdf"))         ; a fresh nom (its own kind, KNom): never the interned symbol
+         !(= (nom "asdf") (nom "asdf")) ; ...nor another nom (distinct serials)
+         (= "asdf" (string (nom "asdf")))  ; the name via `string` -- the explicit bridge (a nom is not a chain)
+         (= "asdf" (string (nom 'asdf)))   ; ...same for a symbol arg (string'd on the way in)
          (= "asdf" (string 'asdf))))
 (:
  t (tablet 0)

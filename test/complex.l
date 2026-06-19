@@ -58,7 +58,7 @@
  ; --- abs: type-aware. complex -> float magnitude; real stays in its tier ---
  (= 5.0 (abs ~(3 4)))
  (= 13.0 (abs ~(-5 12)))
- (= 5 (abs -5))   (fix? (abs -5))          ; fixnum abs stays a fixnum
+ (= 5 (abs -5))   (charm? (abs -5))          ; fixnum abs stays a fixnum
  (= 5 (abs 5))
  (= 5.5 (abs -5.5))                        ; float abs stays a float
  (= B100 (abs (- 0 B100)))                 ; bignum abs flips the sign, stays a bignum

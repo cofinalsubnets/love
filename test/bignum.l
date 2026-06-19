@@ -23,20 +23,20 @@
  (= (bpow2 64) 18446744073709551616)
 
  ; --- a bignum is its own tier: not a fixnum, truthy, not falsy, not a chain ---
- (nil? (fix? B100))                       ; (fix? bignum) is false
+ (nil? (charm? B100))                       ; (charm? bignum) is false
  (? B100 1 0)                             ; a bignum is truthy
  (nil? (nil? B100))                       ; ...hence not falsy
  (atom? B100)
 
  ; --- canonical demotion: shrinking results fall back to the smallest tier ---
  (= 0 (- F25 F25))
- (fix? (- F25 F25))                       ; demoted all the way to a fixnum
+ (charm? (- F25 F25))                       ; demoted all the way to a fixnum
  ; exact bignum division stays an integer; an inexact one promotes to a float (`/`)
  (= 25 (/ F25 F24))
- (fix? (/ F25 F24))
+ (charm? (/ F25 F24))
  (= F24 (/ F25 25))
  (= 1 (/ B100 B100))
- (fix? (/ B100 B100))
+ (charm? (/ B100 B100))
  (gem? (/ B100 7))                         ; 2^100 / 7 has a remainder -> float
  (= 25 (// F25 F24))                       ; floor division `//` truncates, stays integer
 
@@ -80,7 +80,7 @@
  (< B100 1e40)
  (> B100 1e20)
  (= 0 (* B100 0))                         ; * fixnum 0 -> exact 0
- (fix? (* B100 0))
+ (charm? (* B100 0))
 
  ; --- printer round-trip (base 10, with sign) ---
  (= "1267650600228229401496703205376" (show B100))
@@ -96,7 +96,7 @@
  ; --- prel ** / gcd / modpow: exact across the tower via * / % ---
  ; (`**` is exact-integer power; the float `power` nif is tested in math.l)
  (= 8 (3 2))                           ; small ints stay fixnums
- (fix? (3 2))                          ; ...and stay integers (not float power)
+ (charm? (3 2))                          ; ...and stay integers (not float power)
  (= B100 (100 2))                      ; promotes to a bignum
  (= (bpow2 200) (200 2))
  (= 1 (0 999))                         ; e <= 0 -> 1

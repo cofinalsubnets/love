@@ -106,7 +106,7 @@ never conflate them). Read the code, then assign.
   leaves the off-pool free and the floor is pre-stashed. **Take option B** (a band above
   `g->len`: only the off-pool grows `+F`, alloc ×2, `gcg` band-memcpy — leaves the
   `topof`/stack geometry byte-identical, avoiding option A's ~15-site `topof` ripple).
-  Settle the two pre-build decisions first (the ai0 `F==0` guard; the `born`-bag capture
+  Settle the two pre-build decisions first (the ai0 `F==0` guard; the `born`-book capture
   timing), then build against a `test/floor.l` that forces a *real* OOM, gated by valg.
   See the `blue-floor-oom-recovery` notes — it's prepped, banked, and lands alone.
 - **the lean-box perf line (#4, mostly landed).** Floats/wides/complex left the vec

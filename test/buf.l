@@ -10,7 +10,7 @@
  (= 0 (sat (cask 4)))     ; a zeroed cask NETS nothing: hot chars measure by content
  (= 0 (tally (cask 0)))
  !(string? (cask 4))                          ; a cask is not a string
- !(fix? (cask 4))                          ; ...nor a number
+ !(charm? (cask 4))                          ; ...nor a number
 
  ; --- a fresh cask is zeroed ---
  (: b (cask 4) (= 0 (+ (peep b 0 0) (peep b 1 0) (peep b 2 0) (peep b 3 0))))

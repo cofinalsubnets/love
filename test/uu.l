@@ -2,7 +2,7 @@
 ; (empty unit bool coprod nat paths total2), bidirectional checking, NbE
 ; conversion (de bruijn levels as fresh vars, sigma- and pi-eta), type-in-type --
 ; the universe stance of the reference (UniMath/Foundations/Init.v: Unset
-; Universe Checking). an axiom is a bag entry with a type and no value: a
+; Universe Checking). an axiom is a book entry with a type and no value: a
 ; sanctioned missing. names follow UniMath so the port reads literally.
 ;
 ; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
@@ -22,7 +22,7 @@
    (e4 l) (cap (cup (cup (cup l))))
    (e5 l) (cap (cup (cup (cup (cup l))))))
 
-(: (vsucc v) (? (fix? v) (v + 1) (L 'succ v))
+(: (vsucc v) (? (charm? v) (v + 1) (L 'succ v))
 
    (capp cl v) (vof (link (L (e3 cl) v) (e2 cl)) (e4 cl))
 
@@ -32,7 +32,7 @@
    (dop2 v) (? (id? (tagv v) 'chain) (e3 v) (L 'np2 v))
 
    (donr P z s m)
-   (? (fix? m) (: (go k acc) (? (k = m) acc (go (k + 1) (vapp (vapp s k) acc)))
+   (? (charm? m) (: (go k acc) (? (k = m) acc (go (k + 1) (vapp (vapp s k) acc)))
                   (go 0 z))
       (id? (tagv m) 'succ) (vapp (vapp s (e2 m)) (donr P z s (e2 m)))
       (L 'nnr P z s m))
@@ -52,7 +52,7 @@
             (? g (e2 g) (scare 'uu-unbound x)))))
 
    (vof en t)
-   (? (fix? t) t
+   (? (charm? t) t
       (nom? t) (? (member? t '(UU nat bool unit empty tt true false)) t
                   (id? t 'zero) 0
                   (vof-sym en t))
@@ -87,7 +87,7 @@
 
    (conv d a b)
    (? (id? a b) 1                    ; the same heap object converts to itself:
-      (&& (fix? a) (fix? b)) (a = b) ; O(1) across the shared neutral towers
+      (&& (charm? a) (charm? b)) (a = b) ; O(1) across the shared neutral towers
       (&& (nom? a) (nom? b)) (id? a b)
       (|| (id? (tagv a) 'lam) (id? (tagv b) 'lam))
       (: fr (L 'nv d) (conv (d + 1) (vapp a fr) (vapp b fr)))
@@ -159,7 +159,7 @@
          (? (conv d T Ti) 1 (scare 'uu-type-mismatch t))))
 
    (inf cx en d t)
-   (? (fix? t) 'nat
+   (? (charm? t) 'nat
       (nom? t) (inf-sym cx t)
       (: h (cap t)
          (? (two? h) (inf-spine cx en d (inf cx en d h) (cup t))
@@ -258,7 +258,7 @@
             (member? h '(lam tpair ii1 ii2)) (scare 'uu-cannot-infer t)
             (inf-spine cx en d (inf-sym cx h) (cup t))))))
 
-; --- drivers: a definition is checked then pinned; an axiom is a bag entry
+; --- drivers: a definition is checked then pinned; an axiom is a book entry
 ; --- with a type and no value (its value is its own neutral name); rejects
 ; --- runs a thunk expecting the kernel to refuse (the help cell escapes).
 (: (defn nm T t)

@@ -35,7 +35,7 @@
                 (id? h '//) "Z.quot" (id? h '%) "Z.rem"  (id? h 'gcd) "Z.gcd"
                 (id? h '&) "Z.land"  (id? h '|) "Z.lor"  (id? h '^) "Z.lxor"  0)
    bs (intern "\\")                                     ; the quote symbol \ (for '(..) z-list data)
-   (zlist? l) (? (two? l) (&& (fix? (cap l)) (zlist? (cup l))) (id? l ()))  ; PROPER fixnum list (ends in (), not any atom)
+   (zlist? l) (? (two? l) (&& (charm? (cap l)) (zlist? (cup l))) (id? l ()))  ; PROPER fixnum list (ends in (), not any atom)
    (qlist? x) (&& (two? x) (id? (cap x) bs) (un2? x) (zlist? (e2 x)))  ; '(1 2 3): \ + a z-list, EXACTLY 2 (a lambda is 3+)
    (arrv? x)  (&& (two? x) (id? (cap x) 'tuple) (zlist? (cup x)))      ; @(1 2 3) = (tuple 1 2 3): a z-array
    (iotav? x) (&& (two? x) (id? (cap x) 'iota) (un2? x) (intv? (e2 x)))  ; (iota n): the z-array 0..n-1
@@ -76,7 +76,7 @@
                    (id? h '//) (cat (L "(vquot " (tv (e3 x)) " " (tl (e2 x)) ")"))  "[]")))
 
    ; integer-valued term? a fixnum, an operator tree, or a numeral-application spine
-   (intv? x) (? (fix? x) 1
+   (intv? x) (? (charm? x) 1
                 (two? x) (: h (cap x)
                             (? (binop h)     (&& (len3? x) (intv? (e2 x)) (intv? (e3 x)))
                                (id? h 'sat)   (&& (un2? x) (| (intv? (e2 x)) (| (listv? (e2 x)) (hashv? (e2 x)))))
@@ -84,13 +84,13 @@
                                (lop? h)       (&& (un2? x) (listv? (e2 x)))
                                (id? h 'abs)   (&& (un2? x) (intv? (e2 x)))
                                (hashv? h)     (&& (un2? x) (intv? (e2 x)))   ; (#(..) k) map lookup
-                               (fix? h) (allv? x)
+                               (charm? h) (allv? x)
                                0))
                 0)
    (allv? l) (? (two? l) (&& (intv? (cap l)) (allv? (cup l))) (! (two? l)))
 
    ; translate an integer-valued term to a Coq Z expression
-   (tv x) (? (fix? x) (? (< x 0) (cat (L "(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
+   (tv x) (? (charm? x) (? (< x 0) (cat (L "(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
              (: h (cap x) b (binop h)
                 (? b (cat (L "(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
                    (id? h 'sat)   (? (hashv? (e2 x)) (cat (L "(Z.of_nat (length " (th (e2 x)) "))"))  ; $hash = key count
@@ -118,10 +118,10 @@
                            (| (id? h 'tuple) (id? h 'iota)) "Varr"     ; @(..) / (iota n)
                            "Vbot"))
              "Vbot")
-   (tkq q) (? (nom? q) "Vsym" (two? q) "Vpair" (fix? q) "Vz" "Vbot")   ; the quoted datum's kind
-   (kpred h) (? (id? h 'fix?) "fixp" (id? h 'gem?) "flop" (id? h 'twin?) "comp"
-                (id? h 'string?) "strp" (id? h 'nom?) "nomp" (id? h 'two?) "chainp"
-                (id? h 'tab?) "tabp" (id? h 'set?) "setp" (id? h 'constellation?) "nump"
+   (tkq q) (? (nom? q) "Vsym" (two? q) "Vpair" (charm? q) "Vz" "Vbot")   ; the quoted datum's kind
+   (kpred h) (? (id? h 'charm?) "fixp" (id? h 'gem?) "flop" (id? h 'twin?) "comp"
+                (id? h 'string?) "strp" (id? h 'nom?) "nomp" (id? h 'name?) "namep" (id? h 'two?) "chainp"
+                (id? h 'book?) "tabp" (id? h 'set?) "setp" (id? h 'constellation?) "nump"
                 (id? h 'whole?) "whole" (id? h 'atom?) "atomp" (id? h 'packp) "packp"
                 (id? h 'lit?) "lamp" 0)
    ; cross-kind ORDER: symbol<string<number<chain<map by band; same band stays value/lex
@@ -146,7 +146,7 @@
                                    (? (intv? a)  (cat (L "(Z.leb " (tv a) " 0)"))
                                       (listv? a) (cat (L "(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
                                       (: p (tp a) (? p (cat (L "(negb " p ")")) 0))))
-                   (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 (cat (L "(" (kpred h) " " t ")"))))  ; (fix? 5), (two? '(..))..
+                   (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 (cat (L "(" (kpred h) " " t ")"))))  ; (charm? 5), (two? '(..))..
                    (! (len3? f)) 0
                    (id? h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   (cat (L "(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
                                  (&& (listv? (e2 f)) (listv? (e3 f))) (cat (L "(leqb " (tl (e2 f)) " " (tl (e3 f)) ")"))  ; list/array =
@@ -205,6 +205,7 @@
      "Definition comp  v := match v with Vcx  => true | _ => false end." (string 10)
      "Definition strp  v := match v with Vstr => true | _ => false end." (string 10)
      "Definition nomp  v := match v with Vsym => true | _ => false end." (string 10)
+     "Definition namep v := match v with Vsym => true | _ => false end." (string 10)
      "Definition chainp  v := match v with Vpair=> true | _ => false end." (string 10)
      "Definition tabp  v := match v with Vmap => true | _ => false end." (string 10)
      "Definition setp  v := match v with Varr => true | _ => false end." (string 10)
@@ -212,7 +213,7 @@
      "Definition nump  v := match v with Vz|Vflo|Vcx|Varr => true | _ => false end." (string 10)
      "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end." (string 10)
      "Definition atomp v := match v with Vpair => false | _ => true end." (string 10)
-     "Definition lamp  v := match v with Vz|Vbot => false | _ => true end." (string 10)
+     "Definition lamp  v := match v with Vmap => true | _ => false end." (string 10)   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
      "Definition band  v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "

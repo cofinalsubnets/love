@@ -12,8 +12,8 @@
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
 ; Run (until the egg bakes aineko into a multi-call binary). prel is ALREADY in
-; the egg -- do NOT `-l ai/prel.l` (the egg mops bag/tray/etc after it hatches, so
-; re-feeding prel.l to the live ev raises `missing bag`/`missing tray`):
+; the egg -- do NOT `-l ai/prel.l` (the egg mops book/tray/etc after it hatches, so
+; re-feeding prel.l to the live ev raises `missing book`/`missing tray`):
 ;   out/host/ai tools/aineko.l HOST PORT
 ;   out/host/ai tools/aineko.l -l PORT
 ; The socket nifs (connect/listen/accept/seal) live in host/net.c; prel stays

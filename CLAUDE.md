@@ -1,7 +1,7 @@
 ```ai
 ; ai -- a lisp-surfaced, fully-curried language over a tiny generic C core.
 ; a portable C runtime (ai.c + ai.h) plus a self-hosting compiler written in ai
-; (the ai/{prel,ev,bao}.l layers). source is .l; the host binary is `ai`. see README.md.
+; (the ai/{prel,ev,bao}.l layers). the canonical source suffixes are `.l`, `.ai`, and `.tl`; the host binary is `ai`. see README.md.
 ;
 ; this file is the NARRATIVE: the prose spec, my working notes, and runnable demonstrations --
 ; CLAUDE.md is my context file. the EXECUTABLE spec -- every claim below, assert-backed on
@@ -25,7 +25,7 @@
 ; * C files EMBED lisp the .l sweeps cannot see: ai.c (g_evals_'s driver string), main.c
 ;   (s2cl + runner), kmain.c (the K_TEST runner), wasm/. grep them on every rename.
 ;   the docs EMBED rocq theorem names + ai vocab the sweeps also miss: blue.md (the
-;   blue-paper source, rendered to blue.html by tools/blue.l + blue.css) cites
+;   blue-paper source, rendered to blue.html by tools/site.l + site.css) cites
 ;   rocq/spec.v lemmas as `thm:name` chips, and index.html runs live demos -- grep
 ;   blue.md + index.html on a theorem rename or a vocab change.
 ; * a bare all-punct symbol mid-list captures its left operand when code compiles (the
@@ -57,7 +57,8 @@
 ; stays small and deliberate ((names ()) is the whole vocabulary). the celestial numerics:
 ; a CHARM is a fixnum (a word); a STAR is a self-netting scalar (charm/full/big/gem/twin-gem);
 ; a GALAXY is a set of stars (a numeric array); a CONSTELLATION is any numeric (a star or a
-; galaxy) -- a charm is a star is a constellation. the global env is the `bag` (not the "book").
+; galaxy) -- a charm is a star is a constellation. the global env is the `book` -- *the* book,
+; the outermost one; a map is a book, a tablet a little book, and a global is "pinned in the book under <name>".
 ; the jewels under the star: a CHARM is a fixnum, a whole little word; a GEM is a float, the
 ; smooth kind that falls between the charms; a TWIN GEM is a complex, two gems paired (re, im),
 ; and `twin` is what pairs them.
@@ -73,7 +74,8 @@
 
 ; --- the type lattice --- two axes. the *tier* spine, low to high:
 ;   N the green charms (the naturals, the range of $)  <  Z integers (fixnum -> wide int -> bignum)
-;     <  R gems (the reals, as floats)  <  C twin gems (complex)  <  O objects (string < symbol < chain < map < top)
+;     <  R gems (the reals, as floats)  <  C twin gems (complex)  <  O objects (string < chain < map < top)
+; (the POINTS -- mints and noms -- are not O objects; they FLOOR the total order, below string, see order below)
 ; numbers nest as usual (N in Z in R in C). a fixnum is a CHARM, and every value wears a COLOR --
 ; the order-sign of its net: GREEN nets nonnegative (what $ keeps), RED nets negative (what $
 ; clamps to nothing), and BLUE is green's FLOOR -- net exactly zero, kept like a green yet nothing.
@@ -83,12 +85,18 @@
 ; measure, the floor where green meets nothing. color spans the UNSTARS too, by the same net:
 ; '(1) is green, '(0)/()/""/~(0 0) are blue (every nothing is blue), '(-2 1) is red, while a box
 ; stays green (#0 nets 1: presence over nothing). the *rank* axis is scalar (0) vs array (>= 1, one
-; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS: all numbers are
-; ONE band ordered by value (representations interleave: 1 < 1.5 < 2 whatever the rep), then
-; string < symbol < chain < map < top, each band ordered within itself (text and chains
-; lexicographically, maps and tops by an alpha-invariant hash). a map has its own rung
-; just under the tops, though it still acts as a lookup top for +/*/apply. the
-; opaque hots (buf/port -- `hot?`) sit in the top band: a buf measures by content
+; per tier: arrZ/R/C/O). the total order < flattens this lattice into BANDS, the TRUE-BLUE
+; order: the POINTS at the floor (() < bare mints < named syms -- mints by serial, names by
+; name-lex then serial), then string, then all CONSTELLATIONS as ONE band ordered by NET
+; (stars and galaxies INTERLEAVE -- a galaxy seats exactly where its net's scalar sits, a
+; star below the galaxy on a net tie; representations interleave too: 1 < 1.5 < 2 whatever
+; the rep), then chain < tray (object array) < map < top, each band ordered within itself
+; (text and chains lexicographically, maps and tops by an alpha-invariant hash). a map has
+; its own rung just under the tops, though it still acts as a lookup top for +/*/apply. so
+; the points are the floor, string sits below the numbers, and a chain (a 1-D set) just below
+; the general trays -- NOTE surface `<`/`=` on an array BROADCAST to a mask, so this scalar
+; total order is observed through `sort` and map-key ordering, not infix `<` on a galaxy. the
+; opaque hots (cask/port -- `hot?`) sit in the top band: a cask measures by content
 ; (zeroed -> nothing), a port is present ($out = 1, drained or not), compared by
 ; identity, and applying one acts like 0 (const-1). every predicate ends in `?`;
 ; they are enumerated below.
@@ -106,7 +114,7 @@
 (2 3 4)              ; 262144  the tower 4**(3**2)
 (map (+ 1) '(1 2 3)) ; (2 3 4) currying *is* partial application
 ((/ 1 2) 9)          ; 3.0     (1/2 x) = sqrt x
-(i love you)         ; 1       love is not in the bag, and absence absorbs
+(i love you)         ; 1       love is not in the book, and absence absorbs
 
 ; --- three special forms --- `:` is letrec*/sequence, `?` is cond, `\` is lambda (and, with a
 ; single operand, quote). everything else is a function call.
@@ -131,7 +139,7 @@
 ; --- true and false --- false is *nothing*: whatever NETS <= 0. every value has a net
 ; measure, COMPLEX-VALUED: a number is its own value -- a complex nets ITSELF, phase
 ; intact -- text SUMS ITS CHARMS (a string is packed chars, measured by content -- a
-; NUL contributes nothing, so an all-NUL text or zeroed buf is nothing), a symbol nets
+; NUL contributes nothing, so an all-NUL text or zeroed cask is nothing), a symbol nets
 ; its spelling, a list or array is the SUM of its elements' nets -- a TRUE complex sum,
 ; recursive and unclamped, the SPINE only (a dotted tail is not an element) -- so
 ; negatives cancel positives, opposite phases cancel as VECTORS (never by the order's
@@ -151,7 +159,7 @@
 ; numbers, text, and lists alike, the byte law included (a string + a byte nets the
 ; byte: + is a true measure homomorphism), and the ARRANGEMENT does not matter: a
 ; packed complex array and the list of the same values net the same
-; sum. the COUNT -- how many, not how much -- is `tally`: a string or buf counts its
+; sum. the COUNT -- how many, not how much -- is `tally`: a string or cask counts its
 ; charms, a list its spine, an array its cells, a map its keys, a symbol its spelling,
 ; a scalar nothing. tally is what "length" always was; $ never was.
 ; demo:
@@ -165,27 +173,29 @@ $@(3 4)              ; 7
 
 ; --- types & predicates --- a fixnum is a tagged word; everything else is a heap object whose
 ; first word dispatches. the storage predicates:
-;   fix? big? full?  -- the integer reps (fixnum, bignum, wide int)
+;   charm? big? full?  -- the integer reps (fixnum, bignum, wide int)
 ;   float? twin? set?  -- float, complex scalar, array; all three share one heap type (the internal `pack` kind)
-;   string? symp two? tab?  -- string, symbol, chain, map
+;   string? nom? name? two? book?  -- string, point (a non-() mint or a name), named point (KNom), chain, map
 ; derived: `constellation?` (any number: fix/wide/big/float/complex/array), `whole?` (any integer), `atom?`
 ; (anything but a chain). the NUMERIC vocab refines the numbers: a STAR is a self-netting
 ; SCALAR (`star? x` == `id? x (net x)`: charm/wide/big/float/complex), a SET is an array of
 ; any kind (`set?`, the renamed arrp), and a GALAXY is a numeric set -- a set of stars
 ; (`galaxy?`). star? and galaxy? are DISJOINT (a set's net is a fresh scalar, so no set
 ; self-nets); a galaxy is COMPOSED of stars, not a kind of star -- it nets DOWN to a scalar star.
-; `i` is ~(0 1). `lit?` is PRESENCE, not a band: every heap
-; value answers it (anything wired to a hot -- lit -- everything but a fixnum), chains and
-; strings included, so lit? SPANS the bands. the top band itself needs no predicate:
-; under the slogan is-it-top is vacuous -- you may as well ask 0. the opaque hots
-; (buf/port) answer `hot?`, the refinement that names the zoo (every hot is a lit?); a
-; task is referenced by a fixnum id, not a handle object. `!` (nil?) and `done?` are
-; truth/task tests, not type tests.
+; `i` is ~(0 1). `lit?` is the TOP REGION (the upper lattice segment, ai_kind >= map): a map
+; (mutable) and the tops above it -- closures, nifs, and the opaque hots -- so `hot? ⟹ lit?`.
+; NOT the data leaves below (numbers, strings, points, chains, trays), so the () a missing nom
+; reads is NOT lit?. the opaque hots (cask/port) answer `hot?`, the refinement that names the
+; zoo; a task is referenced by a fixnum id, not a handle object. among the POINTS: `nom?` is a
+; REAL point -- a non-() mint or a named nom -- and `name?` is a NAMED point alone (name? => nom?;
+; the gap nom? \ name? is the anonymous mints, the gensyms). () is NEITHER: the absence stands
+; apart, anonymous and empty. `!` (nil?) and `done?` are truth/task tests, not type tests.
 ; demo:
-(fix? 5) (two? '(1 2)) (string? "hi") (symp 'x) (tab? #(1 2))   ; the storage predicates
+(charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (name? 'x) (book? #(1 2))   ; the storage predicates
 (constellation? i) (whole? (62 2)) (atom? 'x)                            ; derived
-(lit? "s") (lit? '(1)) !(lit? 5)                             ; lit? = presence (any heap value)
-(hot? (buf 4)) (hot? out) !(hot? cap)                        ; the hot zoo: buf/port only
+(lit? #(1 2)) (lit? cap) !(lit? "s") !(lit? '(1))           ; lit? = the top region (map/fn/hot), not data leaves
+(nom? (mint 0)) !(name? (mint 0)) !(nom? ())                ; a fresh mint: a point yet anonymous; () is neither
+(hot? (cask 4)) (hot? out) !(hot? cap)                       ; the hot zoo: cask/port only
 ((64 2) = 2 * (63 2))        ; true   fixnum overflow -> exact bignum ((k b) = b**k)
 
 ; --- arithmetic --- + - * / // % (infix, like the rest). fixnum fast path; a float makes it
@@ -213,14 +223,18 @@ $@(3 4)              ; 7
 8 | 4 | 2 | 1        ; 15      bitwise
 
 ; --- order & equality --- < <= > >= is a *total order over all values*: across kinds by the
-; lattice (number < string < symbol < chain < map < top), within a kind by value/
+; true-blue lattice (point < string < number < chain < tray < map < top -- the POINTS, mints
+; and noms, floor it; a galaxy folds into the number band by its net), within a kind by value/
 ; lexicographic order (complex by (re,im); maps and lambdas by an alpha-invariant hash; an
-; array operand broadcasts to a 0/1 mask). `=` is value equality and bridges the whole
+; array operand broadcasts to a 0/1 mask -- so the scalar order is observed through `sort`, not
+; infix `<` on a galaxy). `=` is value equality and bridges the whole
 ; numeric tower; `id?` is identity; for "not equal", write `!(a = b)`.
 ; demo:
 3 = 3.0              ; true    = bridges the numeric tower
 1 < 1.5              ; true
-"a" < 'x             ; true    number < string < symbol < chain < map < top
+'x < "a"             ; true    the floor: point (mint/nom) < string < number < chain < map < top
+"a" < 1              ; true    ... and string sits below the numbers
+(show (sort (L @(2 4) 5 "s")))   ; "(\"s\" 5 @(2 4))"   a galaxy (net 6) interleaves with the stars
 #(1 10) < cap        ; true    the map rung: chain < map < top
 (id? 'a 'a)          ; true    id? is identity; !(id? '(1) '(1))
 
@@ -361,9 +375,10 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; --- strings, symbols & mints --- a symbol is interned ('x): one canonical atom per
 ; spelling. a MINT ((mint 0), arg ignored) adjoins a fresh POINT to the value space:
 ; nameless, materially empty ($mint = 0, false), applying as every unit does (const-1),
-; identity its only property -- the unforgeable thing. a NOM is the literal chain of a
-; name string and a mint -- (nom "x") = ("x" . fresh point) -- McCarthy's symbol
-; restored as the chain it always was. `()` reads as 0 -- nothing's plain spelling --
+; identity its only property -- the unforgeable thing. a NOM is a NAMED point -- its OWN
+; kind (KNom: a spelling + a serial), NOT a chain -- so `(nom "x")` is a fresh uninterned
+; named atom, McCarthy's symbol restored as its own atom; `intern`/`'x` give the canonical
+; one per spelling, and `(string nom)` reads the name back. `()` reads as 0 -- nothing's plain spelling --
 ; and (intern "") is 0: the empty spelling names nothing. ABSENCE is another
 ; matter: a helpless missing read answers the ZERO POINT, the mint at serial 0 --
 ; nameless, $0, false, printed as () (the face of absence; like any point, no
@@ -371,11 +386,11 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; would exponentiate, which is what keeps (1 = (i love you)). every mint draws a SERIAL
 ; from the one mint stream (task pids draw from it too): symbols order by name first
 ; (mints below every named symbol), then by serial -- creation order -- so the total
-; order is TOTAL, GC-stable; the
-; serial is also the mint's hash. noms inherit all of it through the chain: chain
-; order = (name lex, then mint), structural = stays identity-sharp (the mint inside),
-; distinct map keys for free. SYMBOLS HAVE NO STRING ALGEBRA (+/* nil, apply const-1);
-; intern and string are the explicit bridge, and a nom's name is (cap nom).
+; order is TOTAL, GC-stable; the serial is also the point's hash. a NOM carries a name +
+; a serial in its own cell (KNom): it orders by (name lex, then serial), stays identity-sharp
+; by serial, and makes distinct map keys for free -- no chain, no special-casing. SYMBOLS
+; HAVE NO STRING ALGEBRA (+/* nil, apply const-1); intern and string are the explicit
+; bridge, and a nom's name is (string nom).
 ; a string indexes its bytes ("abc" 0 -> 97). $ (sat) clamps the net measure once,
 ; max(0, ceil(net)): a string's CHARM SUM, a symbol's spelling sum, a number's own value
 ; ($-3.9 = 0), a list's or array's element sum -- so $ and abs diverge ((abs -5) = 5 but
@@ -387,11 +402,11 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 (intern "asdf")      ; asdf
 (string 'asdf)       ; "asdf"      the explicit bridge (symbols have no string algebra)
 ("abc" 0)            ; 97          a string indexes its bytes
-(mint 0)             ; (mint 0)    a fresh nameless point ($(mint 0) ; 0)
-(cap (nom 'x))       ; "x"         a nom is (name . mint)
+(mint 0)             ; $<serial>   a fresh nameless point ($(mint 0) ; 0); the $face is diagnostic, not a reparse
+(string (nom 'x))    ; "x"         a nom is a named point (KNom), not a chain; read its name with string
 
 ; --- hashes --- #(k v ..) or (hash ..) build; the empty hash is (tablet 0) (and prints so);
-; mutable. a map is a BOOK -- a tablet is a little bag, and `the` bag is just the
+; mutable. a map is a BOOK -- a tablet is a little book, and `the` book is just the
 ; outermost one. # on any non-list datum BOXES it: #x = #(0 x), a fresh mutable hash
 ; pinning x at 0 (a 1-entry box, truthy) -- and () IS 0, so #() is #0, the box of
 ; nothing: the # law has no empty exception. the accessors are
@@ -399,24 +414,24 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key away.
 ; also keys (the key list), $ is the key count. (t k) == (peep t k 0) -- a map is a lookup
 ; function. THREE ABSENCE LANES, one miss machinery: peep (the caller names what absence
-; means), apply (absence is 0), and (missing t k) -- the bag read as a value: a present k
+; means), apply (absence is 0), and (missing t k) -- the book read as a value: a present k
 ; answers, a miss is the missing condition (the help's result, the zero point helpless, k the payload).
 ; (dig k) digests any key to a fixnum. a hash is MUTABLE, so `=` on hashes is
 ; identity (like buffers); infix, the accessors are (t <- k v) and (t -> k d).
 ; demo:
-(tab? #())                   ; true   #() IS #0, the box of nothing (present)
+(book? #())                   ; true   #() IS #0, the box of nothing (present)
 $#(1 10 2 20)                ; 2      $ is the key count
 (peep #(1 10 2 20) 2 0)      ; 20
 (#(1 10 2 20) 2)             ; 20     a map is a lookup function: (t k) == (peep t k 0)
 (missing #(1 10) 1)          ; 10     the conditioned read; a miss is the missing condition
 (: t #(1 10) _ (t <- 4 40) (t -> 4 0))   ; 40   the infix accessors
 
-; --- buffers --- (buf n) gives n mutable zeroed bytes; peep/pin a byte (0..255); $ nets
-; the charms (a zeroed buf is nothing); blit; identity equality.
+; --- casks --- (cask n) gives n mutable zeroed bytes; peep/pin a byte (0..255); $ nets
+; the charms (a zeroed cask is nothing); pour; identity equality.
 ; demo:
-(: b (buf 3) _ (pin b 0 65) (peep b 0 0))   ; 65
-$(buf 4)             ; 0       a zeroed buf is nothing
-(tally (buf 4))      ; 4       tally counts the bytes
+(: b (cask 3) _ (pin b 0 65) (peep b 0 0))   ; 65
+$(cask 4)             ; 0       a zeroed cask is nothing
+(tally (cask 4))      ; 4       tally counts the bytes
 
 ; --- reader operators --- `;` line comment, `#!` pinbang (no block comments). reading is
 ; STRUCTURAL and environment-free: the reader knows tokens, parens, strings, and the value
@@ -430,7 +445,7 @@ $(buf 4)             ; 0       a zeroed buf is nothing
 ; SYMBOL when spaced, or fused to its datum as (mono (run datum)) when GLUED mid-list
 ; (the valence law below; head position and \ never fuse, - and + only to ( ' " @ ~ #).
 ; code then factors sigils against the ONE `operators` table at COMPILE time:
-; `opfix`, a source->source prepass hooked by both compilers (c0 probes bag['opfix] like
+; `opfix`, a source->source prepass hooked by both compilers (c0 probes book['opfix] like
 ; boxfix; ev runs it before wev -- ev is opfix after read, so the two input lanes, data
 ; and characters, meet at one core). the table: symbol -> arity (the symbol names itself)
 ; | (name . arity) (an alias), arity 1-7, extended with a plain pin -- live for the next
@@ -497,7 +512,7 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 ; as its value (no help installed -> terminal: the exit face prints `;; a b`, show
 ; forms, from the condition data stashed at the raise -- the bare data-less scare,
 ; oom, prints ;; oom@len instead). see test/help.l. a nom not
-; in the `bag` (the global table) is MISSING -- a call for help: reading one raises
+; in the `book` (the global table) is MISSING -- a call for help: reading one raises
 ; (scare 'missing nom) under an installed help (the help's result is the value); helpless
 ; it reads the zero point -- a nameless unit. the read happens where the code says it does:
 ; a closure captures its free globals at creation, so a missing read in a lambda body fires
@@ -514,7 +529,7 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 (call-cc (\ k (k 41)))       ; 41   a one-shot escape
 (: p (spawn (\ x (x + 1)) 41) (wait p))   ; 42   tasks (always wait an orphan)
 (apcap 0)            ; 1048576   the count ceiling, a tunable box
-not-in-the-bag      ; ()        a missing nom reads the zero point (helpless)
+not-in-the-book      ; ()        a missing nom reads the zero point (helpless)
 (welp 1 'a 'b)       ; ()        the floor: a bare scare welps to the zero point
 
 ; --- i/o & ports --- `in`/`out` are the default ports; the prel wraps getc and
@@ -554,17 +569,17 @@ not-in-the-bag      ; ()        a missing nom reads the zero point (helpless)
 ; scare; spin is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), every hot lvm_* pointer,
-; and finally the `bag` itself. compiled references were folded, so only the noms die.
+; and finally the `book` itself. compiled references were folded, so only the noms die.
 ; noms the printer, the reader, or an expander EMITS (spread link pin
 ; tablet mono list ..) stay, as do the C-resolved hooks (num-ap add mul help). the shell
 ; core (ai/bao.l) no longer needs mopping: its editor + repl internals are
-; closure-private (off the bag by construction), and only its entry points --
+; closure-private (off the book by construction), and only its entry points --
 ; shell/welp/edraw/wrap/bao + the stream shell zev/zevs -- are globals (the `char`
 ; colist lift is closure-private inside zev now).
 ; demo:
 (lit? ev)            ; true    ev is installed in the image
 born                 ; a fixnum (the hatch time) post-egg; unbound pre-egg
-macros               ; ()      mopped up after birth -- off the bag, so the nom reads nothing
+macros               ; ()      mopped up after birth -- off the book, so the nom reads nothing
 
 ; --- under the hood --- a generic op dispatches on a value's kind (an enum whose order is the
 ; lattice above). an op at two is an NxN table indexed by the two kinds; an op at one is its
@@ -582,5 +597,5 @@ macros               ; ()      mopped up after birth -- off the bag, so the nom 
 ; demo:
 (show @(1 2 3))      ; "@(1 2 3)"   the reparsable printed form
 (clock 0)            ; a fixnum (ms)
-((buf 4) 'x)         ; 1            an opaque handle is a constant function
+((cask 4) 'x)        ; 1            an opaque handle is a constant function
 ```

@@ -1,11 +1,11 @@
-;;; bag is present in prelude
+;;; book is present in prelude
 ;;; definitions in this file must not use infix notation
 ;;; FIXME move ev support functions to ev where possible
 ; prel.l -- ai prel: data + function + macro definitions.
 (: id 1
    (const x _) x
    (flip f x y) (f y x))
-(: macros (peep bag 0 0))
+(: macros (peep book 0 0))
 (: pi 3.141592653589793
    tau (* 2 pi) ;; no infix here
    e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
@@ -18,7 +18,7 @@
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
    (compose f g) (\ x (f (g x)))
-   (names _ ) (keys bag)
+   (names _ ) (keys book)
    caap (compose cap cap) caup (compose cap cup) ;; FIXME emit pure code -- combine like operations and metaprogram a concrete thread for each definition
    cuap (compose cup cap) cuup (compose cup cup))
 ; the four element tiers (enum g_vec_type, one word per element): z integers, r reals,
@@ -27,13 +27,9 @@
 ; the bare ~ digraph (~x, ~ not before `(`) reads as (conj x): conj LIFTS now, so
 ; it IS the monadic twin -- a real r -> ~(r 0), a complex z -> ~(re -im), an
 ; involution. the 2-operand ~(a b) splices into (twin a b), the C constructor.
-; a NOM is the literal chain of a name string and a MINT (the nameless fresh
-; point the mint nif adjoins; identity its only property, $mint = 0). the old
-; named-uninterned atom species is gone -- McCarthy's symbol, restored as the
-; chain it always was. (nom 0) (any non-text arg) is the bare mint.
-(: (nom n) (? (string? n) (link n (mint 0)) ;; FIXME link
-              (nom? n) (link (string n) (mint 0))
-              (mint 0)))
+; a NOM is a NAMED point -- its own kind (KNom), built by the C `nom` nif: a fresh
+; uninterned named atom (a string names it, a symbol lends its spelling, else a bare
+; mint). McCarthy's symbol, restored as its own atom -- not the (name . mint) chain.
 ; integer power (b ** k) is just numeral application: (k b) == b**k. The squaring
 ; algorithm lives in `ipow`, local to the num-ap block below, so there is no `**`.
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
@@ -59,7 +55,7 @@
 ; the accessor aliases are plain globals too, so escaping works like (+)/'+ --
 ; ((->) t k d) peeps.
 (: <- pin -> peep)
-; fixnum-as-function application, pinned on bag for the VM's apply path: applying a
+; fixnum-as-function application, pinned on book for the VM's apply path: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
 ; for every x, see below); n=1 -> x directly. numfn assembles the n-fold text
@@ -81,8 +77,8 @@
      _ (poke (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    ;; FIXME rename | -> bit-or to free | for pipe operator
-   (constellation? x) (| (fix? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
-   (whole? n) (| (fix? n) (| (full? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
+   (constellation? x) (| (charm? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
+   (whole? n) (| (charm? n) (| (full? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
    ; (k b) numeral application routes here, so `**` is unneeded.
    ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
@@ -117,7 +113,7 @@
                       (? (< k 1) 1 (= k 1) x
                          (apover k) (scare 'apcap k)
                          (numfn k x))))
-   _ (pin bag 'num-ap num-ap))
+   _ (pin book 'num-ap num-ap))
 ; text (function) combinators for + and *, installed like num-ap. a text operand
 ; takes precedence over every other type, so +/* of a function build a function. these
 ; are the README's Church numeral arithmetic, so +/* on numerals agree with the numbers:
@@ -128,12 +124,12 @@
 ; with addition rather than the S combinator's (f x (g x)).
 (: (add f g a x) (f a (g a x))
    (mul f g x) (f (g x))
-   _ (pin bag 'add add) _ (pin bag 'mul mul))
+   _ (pin book 'add add) _ (pin book 'mul mul))
 (: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
    (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z))
 ; the monadic words behind the glued sigils (the valence law; see opfix and
-; bag['monadics] below). net is the CONTENT MEASURE as a value -- + turned
+; book['monadics] below). net is the CONTENT MEASURE as a value -- + turned
 ; inward: a number is its own net (phase intact, exact), an array sums its
 ; cells, a list the nets of its spine, and everything else is non-negative
 ; so its net IS its sat. prod is the product twin; neg/reciprocal/frac the
@@ -158,8 +154,7 @@
    ; Z/R/C set qualifies outright and an object-typed set of star cells (e.g. bignums)
    ; still counts -- a set of strings does not (a string is no star).
    (star? x) (id? x (net x))
-   ; a CHARM is the word-sized star -- a fixnum (the lisp predicate; oddp C-side).
-   (charm? x) (fix? x)
+   ; (charm? -- a fixnum, the word-sized star -- is the C nif now, oddp C-side.)
    (galaxy? x) (? (tray? x) (? (nil? (= top-tray (tier x))) 1 (star? (peep x 0 0))) 0))
 (: (foldl1 f l) (foldl f (cap l) (cup l))
    (foldr1 f l) (foldr f (last l) (init l))
@@ -225,7 +220,7 @@
 ; a SIGIL is a maximal all-punct token (the reader's lexer law); the reader
 ; leaves it a plain symbol. code factors a sigil into a composition of
 ; operators against THIS table at compile time -- opfix below, the
-; source->source pass hooked by both compilers (c0 probes bag['opfix] like
+; source->source pass hooked by both compilers (c0 probes book['opfix] like
 ; boxfix; ev.l's wev runs it first) -- while data reading stays structural.
 ; ONE table: symbol -> arity (the symbol names itself) | (name . arity) (an
 ; alias). arity ONE applies to the next datum, never capturing a left
@@ -281,8 +276,8 @@
        0)
    ; normalize a table entry for key k -> (name . arity), or 0
    (op-ent k) (: v (operators k)
-                 (? (fix? v) (? (&& (< 0 v) (< v 8)) (link k v) 0)
-                    (two? v) (? (&& (nom? (cap v)) (fix? (cup v)) (< 0 (cup v)) (< (cup v) 8)) v 0)
+                 (? (charm? v) (? (&& (< 0 v) (< v 8)) (link k v) 0)
+                    (two? v) (? (&& (nom? (cap v)) (charm? (cup v)) (< 0 (cup v)) (< (cup v) 8)) v 0)
                     0))
    ; longest prefix of nm[i..n) that is a table key -> (len . entry), or 0
    (op-long nm i n)
@@ -426,7 +421,7 @@
                  (? (two? fs) (op-fin fs d) (link r (link d 0))))
              (op-w x 0 0)))))
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
-; optional native-codegen hook, bag['opjit]; that JIT experiment was retracted --
+; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
 ; its one real win, reduction reassociation, lives in the C builtins now, and the
 ; trampoline finding in ai/glaze/probe.l + the eat/toast nifs.)
 (: (opfix x) (op-core x))
@@ -435,22 +430,22 @@
 ; eat2 (the raw 1-/2-arg ABI nifs) are mopped post-egg and fold in here; only a
 ; toast is eatable and a faulting body returns 0 (the host fault barrier).
 (: (eat n) (? (= n 2) eat2 eat1))
-; the global RNG stream lives on bag ('rng-state) and advances by the pure
+; the global RNG stream lives on book ('rng-state) and advances by the pure
 ; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
 ; clock-seeds on first use; rng-set validates and installs (the state, or nil
 ; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
 ; full-width non-negative fixnum; (randf _) -> float in [0,1).
-(: (rng-get _) (: st (peep bag 'rng-state 0)
-                  (? (tray? st) st (: f (rng-seed (clock 0)) _ (pin bag 'rng-state f) f)))
+(: (rng-get _) (: st (peep book 'rng-state 0)
+                  (? (tray? st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
    (rng-set st) (? (&& (tray? st) (= 1 (rank st)) (= 4 (tally st)) (= (tier (rng-seed 0)) (tier st)))
-                   (: _ (pin bag 'rng-state st) st)
+                   (: _ (pin book 'rng-state st) st)
                    0)
-   (rand n) (: r (rand-next (rng-get 0)) _ (pin bag 'rng-state (cup r))
-               (? (&& (fix? n) (< 0 n)) (% (cap r) n) (cap r)))
-   (randf _) (: r (randf-next (rng-get 0)) _ (pin bag 'rng-state (cup r)) (cap r)))
+   (rand n) (: r (rand-next (rng-get 0)) _ (pin book 'rng-state (cup r))
+               (? (&& (charm? n) (< 0 n)) (% (cap r) n) (cap r)))
+   (randf _) (: r (randf-next (rng-get 0)) _ (pin book 'rng-state (cup r)) (cap r)))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;
@@ -475,7 +470,7 @@
 ; non-positive -> 0, a float ceils, a complex its modulus, a vector its net sum). a list
 ; shape is coerced per-dim; a lone numeric is a rank-1 length (so (array 2.5 …)
 ; means rank-1 length 3, (array ~(3 4) …) length 5).
-(: (a-rank x) (? (gem? x) 1 (| (fix? x) (full? x)) 0 (twin? x) 2 3)
+(: (a-rank x) (? (gem? x) 1 (| (charm? x) (full? x)) 0 (twin? x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness star of the tier
    (a-dim d) (? (two? d) (tally d) (sat d))
@@ -519,7 +514,7 @@
 ; VALUES, not their names, so the rewrite survives the egg pulling names and
 ; user bindings shadowing them. a pre-fill read is a map miss, i.e. THE MISSING
 ; CONDITION with the binding-site nom as payload: a call for help, the zero point helpless --
-; read-before-pin is one law at every depth, local or bag. a value binding
+; read-before-pin is one law at every depth, local or book. a value binding
 ; boxes on ANY forward reference; a lambda binding only on a DIRECT (not
 ; under-lambda) one -- ordinary recursion keeps the lazy lane. values defined
 ; before their users are untouched. It returns 0 when nothing needs boxing,

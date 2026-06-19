@@ -38,7 +38,7 @@
 (assert !help (= 'eof (read (tap 0) 'eof))
         (: p (tap '(40)) (= p (read p 99))))
 
-; help is present by its net, like everything: "" is a lit? netting nothing,
+; help is present by its net, like everything: "" is a value netting nothing,
 ; so it is no help -- the missing read stays 0 and the read protocol stays
 ; raw. the koan's help (\ s a b 1) is =-equal to 0 yet a top netting 1:
 ; installed, and every scare answers 1.

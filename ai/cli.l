@@ -7,17 +7,17 @@
 ;   <file>              load the file (a program)
 ; with no program (no -e, no file), read-eval stdin to EOF. Loaded by main.c when args are
 ; present. `pre` handles leading -l preloads + -v/-h and returns (kind . rest); the global
-; argv is then rebound (top-level (: argv ..) DEFGLOB -- bag is mopped post-egg, so a
-; pin/peep on it is a no-op; defglob writes g->bag directly) to the program's view
+; argv is then rebound (top-level (: argv ..) DEFGLOB -- book is mopped post-egg, so a
+; pin/peep on it is a no-op; defglob writes g->book directly) to the program's view
 ; (program . args). cli.l is compiled by c0 BEFORE -l loads prel, so the always-run path
 ; (pre/load1/rdev) uses only nifs/special-forms, NOT prel fns (two? not atom?; |, the
 ; bitwise-or nif, not the || macro; link not the L macro for the export list).
 ;
 ; the helpers (rdev load1 eval1 bye version usage need pre) are CLOSURE-PRIVATE in the inner
-; body-having `:`, OFF the global bag -- only `parsed` and `argv` (the kept publics; argv is
+; body-having `:`, OFF the global book -- only `parsed` and `argv` (the kept publics; argv is
 ; read by test/run.l + host/main.c) are defglob'd out, the cli sibling of the repl->bao
 ; consolidation. The triple holder is bound to `_`, NOT a name: a top-level body-less `:`
-; defglobs every NAMED binding to the bag, and this form RE-RUNS at startup (so an egg mop
+; defglobs every NAMED binding to the book, and this form RE-RUNS at startup (so an egg mop
 ; can't catch it), but `_` never leaks -- the intermediate stays off (names ()). The reads
 ; below pick it up by the sequence law. The inner body returns (parsed program-view-argv run),
 ; where `run` is the dispatch THUNK. Order matters: we defglob `argv` to the program's view

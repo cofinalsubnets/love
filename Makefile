@@ -12,7 +12,9 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 .PHONY: host kernel wasm ai0
 .PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_hostnif test_extract
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
-test: test_host test_ai0 test_proof test_gen
+test: test_host test_ai0 test_proof test_gen test_tools
+# test_tools (vmret + cook + tele + xor) is in the fast `test` so an app breaks the
+# gate the moment a rename lands -- the crew apps are part of the contract, not extras.
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
@@ -252,16 +254,27 @@ cook/Cookfile: Makefile cook/cook.l $(ho)/ai
 	@echo AI	$@
 	@$(ho)/ai -l cook/cook.l --emit Makefile > $@
 
-# blue.html: the blue paper, generated from blue.md (with blue.css INLINED into a
-# <style> block) by the ai markdown converter tools/blue.l. A committed artifact
-# like wasm/ai.js -- it ships from the repo and is linked from index.html -- so it
-# is regenerated whenever its source, style, or generator changes. `make blue`
-# refreshes it; it is also part of `all`.
-.PHONY: blue
+# The kship site: three self-contained pages (index/repl/blue) from content + one
+# template, by the ai markdown converter tools/site.l, with one site.css INLINED into
+# each page (so each stands alone and the top nav links all three). Committed artifacts
+# like wasm/ai.js -- they ship from the repo. The host carries the prel in the egg, so
+# NO `-l ai/prel.l` (that loads it twice and scares -- the ;; <data> honest face).
+# `make blue` refreshes just the paper (part of `all`); `make site` refreshes all three.
+# `site` is NOT in `all` yet: index.html would clobber the live repl page until the repl
+# content is extracted (content/repl.md + content/repl.tail.html), which repl.html needs.
+.PHONY: site blue
+SITE_GEN = tools/site.l site.css $(ho)/ai
 blue: blue.html
-blue.html: blue.md blue.css tools/blue.l $(ho)/ai
+site: index.html repl.html blue.html
+blue.html: blue.md $(SITE_GEN)
 	@echo AI	$@
-	@$(ho)/ai tools/blue.l blue.md > $@   # the egg already carries prel -- reloading it scares
+	@$(ho)/ai tools/site.l blue blue.md > $@
+index.html: content/lore.md $(SITE_GEN)
+	@echo AI	$@
+	@$(ho)/ai tools/site.l kship content/lore.md > $@
+repl.html: content/repl.md content/repl.tail.html $(SITE_GEN)
+	@echo AI	$@
+	@$(ho)/ai tools/site.l repl content/repl.md > $@
 
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running ai0, so re-lay
 # them whenever ai0 changes. This dep belongs in the rule above, but $(ai0) is
