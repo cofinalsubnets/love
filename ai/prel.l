@@ -72,7 +72,7 @@
    (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
      src (link '\ (link 'x (link (nfnest f n 'x) 0)))  ; alloc before spin; printer source
-     th (weave (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
+     th (twirl (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
      _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past spin: th can't move
      _ (poke (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
      _ (nfa th 0 n)
@@ -193,9 +193,9 @@
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(0)))
 (: (tap cl)
- (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (weave 5))))))
+ (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (twirl 5))))))
  (pot _)
-  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (weave 6)))))))
+  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (twirl 6)))))))
  (sip o) (get o)                                  ; draw ONE unit (pairs with slurp = all)
  ; slurp drains a vessel to a value: an output pot reads its backing buffer; a tap drains via get.
  (slurp o) (? (string? (peek 4 o)) (snip (peek 4 o) 0 (peek 5 o))

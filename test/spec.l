@@ -321,7 +321,7 @@
 (assert (lit? ev) (? born (charm? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
-        (? born !weave 1) (? born !book 1))      ;  hence the born guards)
+        (? born !twirl 1) (? born !book 1))      ;  hence the born guards)
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.

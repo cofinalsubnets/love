@@ -567,8 +567,8 @@ not-in-the-book      ; ()        a missing nom reads the zero point (helpless)
 ; itself -- then the hatchling installs as `ev` in the image at C compile time, no allocation;
 ; `born` records the hatch time (unbound pre-egg: ai0's first corpus pass runs PRE-egg, and an
 ; unbound nom is missing, reading the zero point). just before it is born the egg MOPS UP every runtime-
-; internal nom: the raw cell nifs (peek poke seek spin -- (spin 2 3) is a segfault, big
-; scare; spin is still there for real, it's ultimate), the compiler's machinery
+; internal nom: the raw cell nifs (peek poke seek twirl -- (twirl 2 3) is a segfault, big
+; scare; twirl is still there for real, it's ultimate), the compiler's machinery
 ; (boxfix, wev, the num-ap and array-ctor helpers, the macro expanders -- the macro TABLE
 ; lives on inside the compiler's closures), every hot lvm_* pointer,
 ; and finally the `book` itself. compiled references were folded, so only the noms die.

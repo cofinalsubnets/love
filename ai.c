@@ -123,7 +123,7 @@ lvm_t lvm_kcall,
  lvm_sort,  lvm_tally,
  lvm_put, lvm_pull, lvm_table,   lvm_keys,  lvm_dig,
  lvm_unc, lvm_poke, lvm_peek,
- lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
+ lvm_seek,  lvm_trim,   lvm_twirl,   lvm_add,
  lvm_sub,   lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
  lvm_bmul_start, lvm_bmul,   // resumable (yieldable) bignum multiply
  lvm_quote, lvm_index,  lvm_eval,   lvm_cond, lvm_jump,   lvm_defglob,
@@ -634,7 +634,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define s5(i) {{lvm_cur},{.x=putcharm(5)},{i}, {lvm_ret0}}
 // HARNESS (compile-gated, -DG_FAULT_TEST): __fault deliberately derefs null to
 // raise a hardware fault inside eval -- the one in-eval fault a user can trigger to
-// probe the ai_eval fault barrier (the raw fault nifs spin/peek/poke/seek are pulled
+// probe the ai_eval fault barrier (the raw fault nifs twirl/peek/poke/seek are pulled
 // from the image at birth, so nothing else reaches it). NEVER in a shipping or kernel
 // build (the kernel has no signal recovery -- it would crash qemu).
 #ifdef G_FAULT_TEST
@@ -659,7 +659,7 @@ lvm_t lvm_fault;
  _(nif_string, "string", s1(lvm_string))\
  _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
- _(nif_spin, "weave", s1(lvm_spin))\
+ _(nif_twirl, "twirl", s1(lvm_twirl))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
  _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "sat", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
  _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull))\
@@ -2452,7 +2452,7 @@ lvm(lvm_poke) {
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
-lvm(lvm_spin) {
+lvm(lvm_twirl) {
  size_t n = getcharm(Sp[0]);
  Have(n + Width(struct ai_tag));
  union u *k = (union u*) Hp;
@@ -4079,7 +4079,7 @@ lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putcharm(0), Ip
 // love's OWN code still crashes for real. The native body never touches love state
 // (the call contract), so recovery is clean -- no heap-consistency question here.
 // (The broad version -- a barrier at ai_eval turning faults in object-array ops,
-// spin, etc. into scares -- reuses this same handler; that's the next step.)
+// twirl, etc. into scares -- reuses this same handler; that's the next step.)
 #if __STDC_HOSTED__
 static ai_noinline ai_word eat_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {
  ai_fault_arm();                                          // shared barrier (defined before ai_eval)
