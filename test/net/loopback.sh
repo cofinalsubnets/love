@@ -14,8 +14,7 @@ set -u
 
 AI="${1:?usage: loopback.sh <ai-binary> [port]}"
 PORT="${2:-7390}"
-PREL="ai/prel.l"
-AK="tools/aineko.l"
+AK="tools/aineko.l"   # prel is baked into the egg -- no -l ai/prel.l preload
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/aineko.XXXXXX")"
 trap 'kill "$srv" 2>/dev/null; rm -rf "$tmp"' EXIT
@@ -24,7 +23,7 @@ printf 'CLIENT-SAYS-HI\nsecond line from the client\n' > "$tmp/cli_in"
 printf 'SERVER-SAYS-HELLO\nsecond line from the server\n' > "$tmp/srv_in"
 
 # server: listen on PORT, pump srv_in -> socket and socket -> srv_got.
-"$AI" -l "$PREL" "$AK" -l "$PORT" < "$tmp/srv_in" > "$tmp/srv_got" 2> "$tmp/srv_err" &
+"$AI" "$AK" -l "$PORT" < "$tmp/srv_in" > "$tmp/srv_got" 2> "$tmp/srv_err" &
 srv=$!
 
 # wait until PORT is actually listening, WITHOUT consuming the single accept
@@ -44,7 +43,7 @@ while ! ready; do
 done
 
 # client: connect, pump cli_in -> socket and socket -> cli_got.
-"$AI" -l "$PREL" "$AK" 127.0.0.1 "$PORT" < "$tmp/cli_in" > "$tmp/cli_got" 2> "$tmp/cli_err"
+"$AI" "$AK" 127.0.0.1 "$PORT" < "$tmp/cli_in" > "$tmp/cli_got" 2> "$tmp/cli_err"
 crc=$?
 wait "$srv"; src=$?
 

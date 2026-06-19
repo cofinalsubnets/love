@@ -16,7 +16,7 @@ test: test_host test_ai0 test_proof test_gen
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_extract test_tools test_hostnif test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_extract test_tools test_hostnif nettest test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -54,10 +54,13 @@ test_hostnif: host
 	done
 # aineko's two-process loopback gate: a server and a client over real TCP on
 # 127.0.0.1, full-duplex, asserting each side received what the other sent (the
-# socket nifs in host/net.c + the pump loops in tools/aineko.l). DELIBERATELY
-# separate from `make test`/`test_all` -- it needs two live processes and a free
-# loopback port, where the in-process `boot/net.l` smoke (in test_hostnif) covers
-# the nifs portably. Override the port with `make nettest PORT=NNNN`.
+# socket nifs in host/net.c + the pump loops in tools/aineko.l). In `test_all`
+# (the thorough gate) but NOT the fast `test` -- it needs two live processes and
+# a free loopback port. It is the ONLY net gate that drives the real
+# `ai tools/aineko.l` cli path: the in-process `boot/net.l` smoke (in
+# test_hostnif) pipes straight into the binary, so it covers the nifs portably
+# but can't catch an invocation regression (e.g. a stale -l preload). Override
+# the port with `make nettest PORT=NNNN`.
 PORT ?= 7390
 nettest: host
 	@echo NETTEST $m "(127.0.0.1:$(PORT))"
@@ -363,6 +366,12 @@ endif
 ifdef NETAGENT
 ksuf := -netagent
 endif
+# NETBRAIN=1 boots into the OUTBOUND brain (milestone 5): on its own clock the agent
+# INITIATES a UDP round-trip to a remote oracle (aim+say+flush+slurp) and acts on the
+# reply -- the (B) fork of crew/kship.md, the decide step gone remote. Own suffix.
+ifdef NETBRAIN
+ksuf := -netbrain
+endif
 
 # Cross toolchain defaults to clang + lld (one multi-target pair covers every
 # arch). Override for a GCC cross toolchain, e.g.
@@ -418,6 +427,9 @@ endif
 ifdef NETAGENT
 kcppflags += -DNETAGENT
 endif
+ifdef NETBRAIN
+kcppflags += -DNETBRAIN
+endif
 
 ifeq ($(KCC_IS_CLANG),1)
 kcc_if_clang = -target $a-unknown-none-elf
@@ -442,7 +454,7 @@ $(ko)/ai-$a$(ksuf).elf: $(R)/port/kship/$a/$a.lds $(k_o)
 # Shared C sources (ai.c, font/, c/) + per-arch port//.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h; under KSHIP
 # the baked agent out/lib/kship.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h) $(if $(KSHIP)$(NETAGENT),out/lib/kship.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h) $(if $(KSHIP)$(NETAGENT)$(NETBRAIN),out/lib/kship.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

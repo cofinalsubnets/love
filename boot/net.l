@@ -1,6 +1,6 @@
 ; --- boot/net.l: a runnable smoke test for aineko's socket nifs (host/net.c) ---
 ; NOT in the test/*.l corpus on purpose: the socket nifs (connect/listen/accept/
-; shutdown) live in host/net.c, which the final `ai` links but ai0 does NOT -- and
+; seal) live in host/net.c, which the final `ai` links but ai0 does NOT -- and
 ; ai0 bakes the whole corpus, so a corpus test would read these names as missing
 ; and fail ai0's self-test. So this is verified the host-nif way: standalone,
 ; against the built binary. Run it (the assert macro comes from test/00-init.l):
@@ -18,17 +18,17 @@
 (: (rdline p) (: (go acc) (: ch (get p) (? (= ch 10) acc (= ch -1) acc (go (acc + ch))))
                  (go "")))
 
-; --- listen / accept / connect / get / say / shutdown over 127.0.0.1 ---
+; --- listen / accept / connect / get / say / seal over 127.0.0.1 ---
 (: port 7391
  l (listen port)
  _ (assert
     (lit? l)                              ; the listener is a heap port
     (hot? l))                             ; ... an opaque hot, like any fd port
  ; server task: accept one client, echo its line back, half-close, close.
- srv (spawn (\ _ (: c (accept l)
+ srv (spin (\ _ (: c (accept l)
                     ln (rdline c)
                     _ (say c (ln + "\n"))
-                    _ (shutdown c 1)
+                    _ (seal c 1)
                     _ (close c) 1)) 0)
  c (connect "127.0.0.1" port)
  _ (assert
@@ -38,10 +38,10 @@
  echo (rdline c)
  _ (assert
     (= echo "neko"))                      ; THE ROUND TRIP: what went out came back
- ; (shutdown s how) returns the port (chainable); a no-op on a non-port arg.
+ ; (seal s how) returns the port (chainable); a no-op on a non-port arg.
  _ (assert
-    (lit? (shutdown c 1))                 ; returns the port
-    (= 5 (shutdown 5 1)))                 ; misuse: returns the arg unchanged
+    (lit? (seal c 1))                     ; returns the port
+    (= 5 (seal 5 1)))                     ; misuse: returns the arg unchanged
  _ (catch srv)                             ; reap the server task -- no orphan
  _ (close c)
  _ (close l))
