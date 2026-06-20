@@ -85,7 +85,7 @@ footer { margin-top: 3.5em; color: #474e72; font-size: .85em;
 #clear:hover { border-color: #8fb0ff; color: #e3e6ff; }
 .in  { color: #a9b1de; } .in::before { content: "> "; color: #6c7398; }
 .ans { color: #9ece6a; }
-.cnd { color: #e0af68; }
+.cnd { color: #af5fff; }
 #row { display: flex; align-items: flex-start; }
 #row::before { content: "> "; color: #6c7398; white-space: pre; }
 #cmd { flex: 1; background: none; border: none; outline: none; resize: none;
