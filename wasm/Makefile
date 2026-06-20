@@ -64,7 +64,12 @@ $(o)/%.o: ../%.c $(g_h)
 serve: all
 	python3 -m http.server 8000
 
+# clean only the build intermediates ($(o) = ../out/wasm). ai.js is a TRACKED,
+# committed artifact (the .githooks pre-commit keeps it fresh), so clean must
+# NOT delete it -- doing so left a spurious `D wasm/ai.js` after every top-level
+# `make clean`. (l.wasm was a dead pre-rename name; SINGLE_FILE=1 embeds the
+# wasm into ai.js, so no standalone .wasm is ever emitted.)
 clean:
-	rm -rf ai.js l.wasm $(o)
+	rm -rf $(o)
 
 .PHONY: all serve clean
