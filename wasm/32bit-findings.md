@@ -20,9 +20,9 @@ asserts are correctly skipped on wasm and still run on the 64-bit hosted builds
 - **No filesystem, subprocess, or environment** in the browser host. (`io.l`'s
   real-file round-trip, `run.l`'s `run`/`getenv`)
 
-`fix-max`/`fix-min` are exposed from the core (`g_ini_0`) so the corpus can gate
+`max-charm`/`min-charm` are exposed from the core (`g_ini_0`) so the corpus can gate
 on the real boundary instead of a baked-in 64-bit literal; the single predicate
-is `wint = (< (32 2) fix-max)` (true on the full 64-bit hosted builds).
+is `wint = (< (32 2) max-charm)` (true on the full 64-bit hosted builds).
 
 ## Fixed
 

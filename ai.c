@@ -815,10 +815,10 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"in", (word) &ai_stdin},
    {"out", (word) &ai_stdout},
    {"err", (word) &ai_stderr},
-   // fix-max/fix-min: this build's fixnum bounds, exposed so width-specific
+   // max-charm/min-charm: this build's fixnum bounds, exposed so width-specific
    // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
-   {"fix-max", putcharm((ai_word)((uintptr_t)-1 >> 2))},
-   {"fix-min", putcharm(-(ai_word)((uintptr_t)-1 >> 2) - 1)}, };
+   {"max-charm", putcharm((ai_word)((uintptr_t)-1 >> 2))},
+   {"min-charm", putcharm(-(ai_word)((uintptr_t)-1 >> 2) - 1)}, };
   g = ai_defn(g, def0, countof(def0));
   g = ai_defn(g, def1, countof(def1));
   g = ai_defn(g, frontend_defaults, countof(frontend_defaults));   // overridable by the frontend
