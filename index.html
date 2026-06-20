@@ -120,6 +120,26 @@
 <div class="law"><span class="chip" data-run="log -1">log -1</span></div>
 <div class="law"><span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span></div>
 <div class="law"><span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span></div>
+<h2 id="crew"><a href="#crew">the crew (apps)</a></h2>
+<p class="qualifier">all apps are experimental and should be considered beta-minus quality</p>
+<dl class="crew">
+  <dt>🔭 tele</dt>
+    <dd>big telescope, drives kship, pytorch clone</dd>
+  <dt>🐰 bellsberry</dt>
+    <dd>a light brown rabbit with dark eyes and silver stripes</dd>
+  <dt>🕊 gwen</dt>
+    <dd>mourning dove friend of bellsberry and tele</dd>
+  <dt>🐄 mow</dt>
+    <dd>half cow half cat / grass chewer (garbage collector)</dd>
+  <dt>🐱 ain</dt>
+    <dd>white cat / netcat clone</dd>
+  <dt>🐶 bao</dt>
+    <dd>tan dog / rlwrap clone</dd>
+  <dt>🐀 cook</dt>
+    <dd>gray rat / make clone</dd>
+  <dt>⛵ kship</dt>
+    <dd>kernel network agent loop</dd>
+</dl>
 <h2 id="toc">language theory</h2>
 <ol>
 <li><a href="#abstract">abstract</a></li>
@@ -140,7 +160,6 @@
 <li><a href="#glance">language laws</a></li>
 <li><a href="#impl">implementation</a></li>
 <li><a href="#see-also">further reading</a></li>
-<li><a href="#crew">the crew</a></li>
 </ul>
 <hr>
 <h2 id="abstract"><a href="#abstract">0 · abstract</a></h2>
@@ -210,19 +229,19 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <p>This is what makes "<code>$</code> of a fold is mere composition" true: because net is additive wherever <code>+</code> is total, a clamped reduction is <code>$</code> <em>after</em> a plain sum; there is no per-fold saturator. Concrete corollaries the corpus pins: <code>$'(1 2 3) = 6</code> (<span class="thm">sat_123</span>), a dotted tail drops (<span class="thm">sat_dotted</span>, <code>$(cons 1 2) = 1</code>), a product of nothings is nothing (<span class="thm">nothings</span>).</p>
 <h2 id="order"><a href="#order">4 · the type lattice and the total order</a></h2>
 <p>The kinds form a lattice flattened into <strong>bands</strong>, low to high:</p>
-<pre><code>() &lt; name &lt; string &lt; number &lt; chain &lt; tray &lt; map &lt; hot
+<pre><code>() &lt; mint &lt; name &lt; string &lt; number &lt; chain &lt; tray &lt; tablet &lt; hot
 </code></pre>
-<p>A <strong>galaxy</strong> (a numeric array) is not a separate band: it folds <strong>into the number band by its net</strong>, seating exactly where its net's scalar sits (a star below the galaxy on a net tie). Only a <strong>tray</strong> (an object array) stays value-built, above chain. The organizing axis is the <strong>net</strong> with the <strong>charm as hinge</strong>: the char-built kinds (name, string — measured by their charm sum) net <em>up</em> into the numbers, the numbers <em>self</em>-net (the fixpoint, the middle, galaxies among them), and the value-built kinds (chain, tray, map — measured by their elements' sum) net <em>down</em>. The floor <code>()</code> is the bluest point of all, below even the number <code>0</code>. Within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (maps and hots). The Rocq model takes one comparable key per band (<code>O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z</code>, in band order — name/string/number/chain/map/hot) and orders lexicographically on <code>(band, key)</code>. The result:</p>
+<p>A <strong>galaxy</strong> (a numeric array) is not a separate band: it folds <strong>into the number band by its net</strong>, seating exactly where its net's scalar sits (a star below the galaxy on a net tie). Only a <strong>tray</strong> (an object array) stays value-built, above chain. The organizing axis is the <strong>net</strong> with the <strong>charm as hinge</strong>: the char-built kinds (name, string — measured by their charm sum) net <em>up</em> into the numbers, the numbers <em>self</em>-net (the fixpoint, the middle, galaxies among them), and the value-built kinds (chain, tray, tablet — measured by their elements' sum) net <em>down</em>. The floor is the <strong>points</strong>: the zero point <code>()</code> is the bluest of all (below even the number <code>0</code>), a bare <strong>mint</strong> (a fresh point with no spelling, net 0) seats just above it, and a <strong>name</strong> (a spelled point) above that — <code>() &lt; mint &lt; name</code>, all below string. Within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (tablets and hots). The Rocq model takes one comparable key per band (<code>O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z</code>, in band order — name/string/number/chain/tablet/hot) and orders lexicographically on <code>(band, key)</code>. The result:</p>
 <div class="law"><span class="n">(4.1) <code>&lt;</code> is a strict total order.</span> irreflexive (<span class="thm">lt_irrefl</span>), transitive (<span class="thm">lt_trans</span>), asymmetric (<span class="thm">lt_asym</span>), and trichotomous (<span class="thm">lt_trichotomy</span>).</div>
 <div class="law"><span class="n">(4.2) <code>&lt;=</code> is a total order.</span> reflexive (<span class="thm">le_refl</span>), transitive (<span class="thm">le_trans</span>), antisymmetric (<span class="thm">le_antisym</span>), total (<span class="thm">le_total</span>).</div>
 <div class="law"><span class="n">(4.3) <code>=</code> is the Eq cell.</span> band and key together pin a value down (<span class="thm">eq_from_band_key</span>): <code>=</code> is propositional equality, a linear order's equality and not a mere preorder.</div>
-<p>The band chain itself is proved link by link: <span class="thm">symbol_lt_string</span>, <span class="thm">string_lt_number</span>, <span class="thm">number_lt_product</span>, <span class="thm">product_lt_map</span>, <span class="thm">map_lt_top</span> — and the floor sits below even the number 0, <code>() &lt; 0</code> (<span class="thm">unit_lt_zero</span>). A <strong>galaxy</strong> sorts as its <strong>net</strong> (an <code>Onum</code> in the model — no separate tray band, the same omission as the numeric tower's representations); a <strong>tray</strong> (object array) sorts in the value-built region just above its chain. Because surface <code>&lt;</code>/<code>=</code> over an array <em>broadcast</em> to an elementwise mask, this scalar total order is observed through <code>sort</code> and map-key ordering, not infix <code>&lt;</code> on a galaxy. (The Rocq identifiers keep the older spellings — <code>symbol</code>/<code>product</code>/<code>top</code> — for what the prose now calls name/chain/hot.)</p>
+<p>The band chain itself is proved link by link: <span class="thm">symbol_lt_string</span>, <span class="thm">string_lt_number</span>, <span class="thm">number_lt_product</span>, <span class="thm">product_lt_map</span>, <span class="thm">map_lt_top</span> — and the floor sits below even the number 0, <code>() &lt; 0</code> (<span class="thm">unit_lt_zero</span>) — and within the points a bare mint sits below a named one (<span class="thm">mint_below_nom</span>), any point below the numbers (<span class="thm">point_below_number</span>). A <strong>galaxy</strong> sorts as its <strong>net</strong> (an <code>Onum</code> in the model — no separate tray band, the same omission as the numeric tower's representations); a <strong>tray</strong> (object array) sorts in the value-built region just above its chain. Because surface <code>&lt;</code>/<code>=</code> over an array <em>broadcast</em> to an elementwise mask, this scalar total order is observed through <code>sort</code> and tablet-key ordering, not infix <code>&lt;</code> on a galaxy. (The Rocq identifiers keep the older spellings — <code>symbol</code>/<code>product</code>/<code>map</code>/<code>top</code> — for what the prose now calls name/chain/tablet/hot.)</p>
 <p>Two refinements the model is explicit about <em>not</em> covering:</p>
 <ul>
 <li><strong><code>=</code> bridges the numeric tower</strong> (<code>3 = 3.0</code>): a number band carries the mathematical value rep-blindly, so the float <code>3.0</code> and the fixnum <code>3</code> are the <em>same</em> <code>Onum</code> — there is no separate representation to model, by design.</li>
 <li><strong><code>id?</code> (pointer identity) is strictly finer than <code>=</code></strong>: <code>'(1) = '(1)</code> yet <code>!(id? '(1) '(1))</code>. Identity has no model in a setting where nothing is shared; this is a deliberate omission, not an oversight.</li>
 </ul>
-<p>This single order is the engine of <code>sort</code> — one comparison per chain, the comparator <em>is</em> the total order — and of map / hash key ordering.</p>
+<p>This single order is the engine of <code>sort</code> — one comparison per chain, the comparator <em>is</em> the total order — and of tablet / hash key ordering.</p>
 <h2 id="dispatch"><a href="#dispatch">5 · generic dispatch</a></h2>
 <p>A value's <strong>kind</strong> is an enum whose order is the <strong>dispatch lattice</strong> — semantics then representation: the points, then the arithmetic lane (the scalar gems and their array tower), then sequence (string, chain), then map, then hot. A generic operator at two arguments is an N×N table indexed by the two kinds; an operator at one argument is that table's <em>diagonal</em>; the three core tables are <code>+</code>, <code>*</code>, and <strong>apply</strong>. A both-charm (both-fixnum) fast path skips the table; otherwise one indexed jump selects a lane that widens only as far as the operands require (array ⊃ complex ⊃ bignum ⊃ float ⊃ …).</p>
 <p>The lattice and the dispatch are <em>the same object</em>: the diagonal of the dispatch matrix is the kind lattice. The cross-kind <strong>total order</strong> (§4) is a deliberate <em>remap</em> of that lattice — the true-blue order (<code>cmp_rank</code>: the points fall to the floor, string below the numbers, a galaxy folded in by its net), <strong>not</strong> the raw enum order. So you maintain one set of kinds and read it two ways: dispatch (the enum lattice) and order (its true-blue remap). This section cites no Rocq lemmas on purpose: the dispatch matrix and the tail-threading are implementation invariants the runtime checks and the corpus exercises, not theorems in the Rocq slice — they live at the demonstrate layer (§11), where the chips go quiet.</p>
@@ -335,27 +354,6 @@ word; a <strong>gem</strong> is a float — the smooth kind that falls between t
 <li><a href="tools/spec2coq.l">tools/spec2coq.l</a> — generates Rocq straight from the spec, keeping the demonstrate and prove layers in step</li>
 <li><a href="CLAUDE.md">CLAUDE.md</a> — the narrative spec with runnable demonstrations, and <a href="README.md">README.md</a> — the overview</li>
 </ul>
-
-<h2 id="crew"><a href="#crew">the crew (apps)</a></h2>
-<p class="qualifier">all apps are experimental and should be considered beta-minus quality</p>
-<dl class="crew">
-  <dt>🔭 tele</dt>
-    <dd>big telescope, drives kship, pytorch clone</dd>
-  <dt>🐰 bellsberry</dt>
-    <dd>a light brown rabbit with dark eyes and silver stripes</dd>
-  <dt>🕊 gwen</dt>
-    <dd>mourning dove friend of bellsberry and tele</dd>
-  <dt>🐄 mow</dt>
-    <dd>half cow half cat / grass chewer (garbage collector)</dd>
-  <dt>🐱 ain</dt>
-    <dd>white cat / netcat clone</dd>
-  <dt>🐶 bao</dt>
-    <dd>tan dog / rlwrap clone</dd>
-  <dt>🐀 cook</dt>
-    <dd>gray rat / make clone</dd>
-  <dt>⛵ kship</dt>
-    <dd>kernel network agent loop</dd>
-</dl>
 
 <footer>for p., b. and e.</footer>
 </body>
