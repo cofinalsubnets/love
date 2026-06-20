@@ -19,10 +19,10 @@
    (bench-run work reps)                                              ; -> (ms . chk)
     (: t0  (clock 0)
        chk ((: (go i a) (? (< i reps) (go (+ i 1) (work 0)) a)) 0 0)
-     (hook (- (clock 0) t0) chk))
+     (link (- (clock 0) t0) chk))
    (bench-loop work reps)                                             ; double until >= floor
     (: r (bench-run work reps)
-       (? (< (cap r) bench-min-ms) (bench-loop work (* 2 reps)) (hook reps r)))
+       (? (< (cap r) bench-min-ms) (bench-loop work (* 2 reps)) (link reps r)))
    (bench name work)
     (: r    (bench-loop work 1)
        reps (cap r) ms (caup r) chk (cuup r)

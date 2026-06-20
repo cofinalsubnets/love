@@ -1,5 +1,5 @@
-; strcat: build an N-char string by repeated single-char concatenation (scat),
-; then fold a polynomial rolling hash over it. exercises scat (each step
+; strcat: build an N-char string by repeated single-char concatenation (+),
+; then fold a polynomial rolling hash over it. exercises + (each step
 ; allocates a fresh string, so the build is O(n^2)) and the peep/pin read path.
 ; the hash is taken mod a prime so it stays < 2^31 and every language -- lua
 ; included (64-bit ints, no bignums) -- agrees on the checksum.
