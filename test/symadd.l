@@ -1,7 +1,8 @@
-; symbols left the string algebra (the mint round): a symbol is a point with a
-; spelling ATTRIBUTE, not a string. + and * involving a symbol are nil in every
-; direction; applying a symbol is const-1 (the unit action -- the name index is
-; gone); intern and string are the EXPLICIT bridge, and a nom's name is its cap.
+; NAMED symbols left the string algebra (the mint round): a symbol is a point with a
+; spelling ATTRIBUTE, not a string. + and * involving a NAMED symbol are nil in every
+; direction; applying a symbol is const-1 (the unit action -- the name index is gone);
+; intern and string are the EXPLICIT bridge, and a nom's name is its cap. The EMPTY
+; symbol (intern "") is the zero point (), the +/* UNIT (() + x = () * x = x).
 ; strings keep the whole algebra (concat, the byte law, repetition) -- the byte
 ; column is unaffected; only the symbol band released it.
 
@@ -12,10 +13,10 @@
   !("ab" + 'ef) !('ef + "ab")                   ; sym <-> string
   !(65 + 'ef) !('ef + 65)                       ; sym <-> number
   !(@(1 2) + 'ef) !('ef + @(1 2))               ; sym <-> array
-  !(sa-z + 'ef) !('ef + sa-z)                   ; (intern "") is 0: nothing has no algebra
-  !(sa-z + sa-z)
-  ; --- no * either ---
-  !('xy * 2) !(2 * 'xy) !('a * 'b) !(sa-z * 2)
+  ; the EMPTY symbol is the exception: (intern "") is () -- the UNIT, so it's +'s identity --
+  ('ef = sa-z + 'ef) ('ef = 'ef + sa-z) (id? () (sa-z + sa-z))   ; () + x = x, either side; () + () = ()
+  ; --- no * for a NAMED symbol; but the empty symbol () is *'s unit too ---
+  !('xy * 2) !(2 * 'xy) !('a * 'b) (2 = sa-z * 2)
   ; --- apply: const-1, uniformly (the unit action; no more name indexing) ---
   (1 = ('xyz 1)) (1 = ('xyz 0)) (1 = (sa-z 5)) (1 = ((mint 0) 'x))
   ; --- lists still take any element, symbols included (the list law, not string algebra)

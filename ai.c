@@ -4298,11 +4298,11 @@ bool ai_strp(ai_word x) { return strp(x); }
 // sym
 // ============================================================================
 // (intern s) -> the interned symbol named by string s; identity on any other arg.
-// The empty spelling names nothing: (intern "") is 0, never an atom -- one
-// nothing (the empty symbol died with the one-nothing round).
+// The empty spelling names nothing: (intern "") is the zero point () -- never an
+// atom; the empty symbol IS the unit (() is +'s and *'s identity, applies const-1).
 lvm(lvm_intern) {
  if (strp(Sp[0])) {
-  if (Sp[0] == EmptyString) return Sp[0] = nil, Ip += 1, Continue();  // QUEUE (bug 2): -> ZeroPoint with the nil-ontology change (corpus + CLAUDE.md encode "(intern "") is 0")
+  if (Sp[0] == EmptyString) return Sp[0] = ZeroPoint, Ip += 1, Continue();  // (intern "") -> () (nil-ontology bug 2)
   word y;
   Have(intern_reserve(g));
   Pack(g), y = intern_checked(g, (struct ai_str*) g->sp[0]), Unpack(g);

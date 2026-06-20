@@ -214,7 +214,7 @@
 ; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
 (assert
- (() = (:)) !(nom? ()) !(name? ()) !(0 = ()) !(id? 0 '()) (0 = (intern "")) (0 = $()) !() !!$'x
+ (() = (:)) !(nom? ()) !(name? ()) !(0 = ()) !(id? 0 '()) (() = (intern "")) (0 = $()) !() !!$'x
  ("()" = (show ()))
  (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z))))   ; absence: the zero point, wearing () -- NOT a nom (anonymous and empty)
  (nom? (mint 0)) !(name? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; the fresh point: nom? (a real point) but NOT name? (anonymous), materially empty

@@ -324,7 +324,8 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; applying const-1, identity its only property -- the unforgeable thing. a NOM is a NAMED point -- its
 ; OWN kind (KNom: a spelling + a serial), NOT a chain -- so `(nom "x")` is a fresh uninterned named
 ; atom, McCarthy's symbol restored as its own atom; `intern`/`'x` give the canonical one per spelling,
-; `(string nom)` reads the name back. `()` reads as 0 (nothing's plain spelling) and (intern "") is 0.
+; `(string nom)` reads the name back. `()` reads as 0 (nothing's plain spelling) and (intern "") is ()
+; (the zero point -- the empty symbol is the +/* unit; nil-ontology: the reader's `()`→0 flips next).
 ; ABSENCE is another matter: a helpless missing read answers the ZERO POINT, the mint at serial 0 --
 ; nameless, $0, false, printed () (the face of absence), a UNIT that absorbs application where a
 ; number would exponentiate (so a missing nom absorbs). every mint draws a SERIAL from the one mint
@@ -336,7 +337,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; $-5 = 0). the count is tally. snip takes a half-open snip; + concatenates ("" the identity); string
 ; makes text of any value; \n escapes.
 ; demo:
-()                   ; 0           nothing's plain spelling; (intern "") ; 0
+()                   ; 0           nothing's plain spelling; (intern "") ; ()  (the +/* unit)
 (intern "asdf")      ; asdf
 (string 'asdf)       ; "asdf"      the explicit bridge (symbols have no string algebra)
 ("abc" 0)            ; 97          a string indexes its bytes
