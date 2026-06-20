@@ -3579,7 +3579,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
      g = gxl(ai_push(g, 1, A(g->sp[1])));               // splice -> (sym . d)
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); }
     else {                                             // 'x `x ,x  #x %atom/@atom -> (wrapsym d)
-     g = gxr(ai_push(g, 1, nil));                       // (d . nil)
+     g = gxr(ai_push(g, 1, ZeroPoint));                 // (d . ()) -- bug 1 wrapsym
      g = gxl(ai_push(g, 1, ai_ok(g) ? A(g->sp[1]) : nil)); // (wrapsym . (d))
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); } }
    else {                                              // list: append d at the frame's tail

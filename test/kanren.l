@@ -74,7 +74,7 @@
     s2 (smap (+ 3) s1)
   (unord_eq '(1 2 3 4 5 6) (slist (s_plus s1 s2))))
  (= '((a 1)) (Run 0 '(a) (\\ a (est a 1))))
- (= 0 (Run 0 '(a) (\\ a (et (est a 1) (est a 2)))))
+ (id? () (Run 0 '(a) (\\ a (et (est a 1) (est a 2)))))
  (= '((a (1 2 (3 (4))) b (3 (4)) c 4))
     (Run 0 '(a b c) (\\ a b c (et (est a `(1 2 b))
                                   (est b `(3 `(c)))

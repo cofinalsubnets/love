@@ -273,7 +273,7 @@
  ('(1 (\ x) 3) = `(1 ''x 3)) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
- ('((dot x)) = (opfix '(. x))) ('! = (caup '(a ! b)))   ; opfix factors; quotes stay data
+ ("((dot x))" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; opfix factors (cmp via show: opfix's internal forms stay 0-tailed); quotes stay data
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =

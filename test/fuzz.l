@@ -22,7 +22,7 @@
  (fz-elt l) (\ st (: r (randint st (tally l)) (link (cap (drop (cap r) l)) (cup r))))
  (fz-oneof gs) (fz-bind (fz-nat (tally gs)) (\ k (cap (drop k gs))))  ; pick a generator
  ; --- structured draws: fixed repetition, bounded-length list, tuples ---
- (fz-rep n g) (? (< n 1) (fz-pure 0)
+ (fz-rep n g) (? (< n 1) (fz-pure ())
     (\ st (: a (g st) b ((fz-rep (- n 1) g) (cup a)) (link (link (cap a) (cap b)) (cup b)))))
  (fz-list mx g) (\ st (: r (randint st (+ 1 mx)) ((fz-rep (cap r) g) (cup r))))  ; pin in [0,mx]
  (fz-pair2 ga gb) (\ st (: a (ga st) b (gb (cup a)) (link `((cap a) (cap b)) (cup b))))
@@ -100,7 +100,7 @@
 (assert
  (fz-ok 300 20 fz-l (\ l (= l (rev (rev l)))))                          ; rev is involutive
  (fz-ok 300 21 fz-l (\ l (= l (map id l))))                            ; map id = id
- (fz-ok 300 22 fz-l (\ l (= l (foldr link 0 l))))                      ; foldr X nil = id
+ (fz-ok 300 22 fz-l (\ l (= l (foldr link () l))))                     ; foldr X () = id
  ; cat adds spine lengths, and the NET law holds exactly: $ of a cat is the
  ; saturated sum of the two lists' element sums (one clamp, at the top)
  (fz-ok 300 23 (fz-pair2 fz-l fz-l)
