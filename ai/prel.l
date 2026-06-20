@@ -2,6 +2,12 @@
 ;;; definitions in this file must not use infix notation
 ;;; FIXME move ev support functions to ev where possible
 ; prel.l -- ai prel: data + function + macro definitions.
+; ┌─── PRE-OPERATORS ZONE: here down to the `operators` table (~the `(: operators ...)`
+; │    form below) is compiled by the bootstrap c0 BEFORE opfix/the operators table exist,
+; │    AND before the church `add`/`mul` hooks are installed (num-ap block). So this zone is
+; │    OPERATOR-FREE: no infix, no unquoted sigils, and no `*`-as-compose / `+`-as-cat (the
+; │    generic hooks aren't live yet). PREFIX nif calls only -- `(compose f g)`, `(cap (cap
+; │    x))`. Using `*` for caap..cuuup here cores the egg (host loops on every eval). ┐
 (: id 1
    (const x _) x
    (co f x y) (f y x)                ; co: the argument-transpose (so `co compose` reads as reverse-compose)
@@ -233,6 +239,7 @@
 ; must stay operator-free (the bootstrap restriction: no unquoted sigil
 ; before its definitions); everything after -- and every later file, the
 ; corpus, the repl -- reads hot.
+; └─── END PRE-OPERATORS ZONE: infix + operators are live from the `operators` table on. ┘
 (: operators (: t (tablet 0)
    _ (pin t '$ (link 'sat 1)) _ (pin t '! (link 'nil? 1)) _ (pin t '. (link 'dot 1))
    _ (pin t '+ 2) _ (pin t '- 2) _ (pin t '* 2) _ (pin t '/ 2) _ (pin t '% 2)
