@@ -146,7 +146,7 @@
         (two? d) (k u l (cap d) (cup d))
         (k u l r d))
    (edhome k u l r d) (k u 0 (revcat l r) d)
-   (edend  k u l r d) (k u (revcat r l) 0 d)
+   (edend  k u l r d) (k u (revcat r l) () d)
    ; edtop / edbot jump across the whole buffer: cursor at the start of
    ; the topmost line / end of the bottommost line. on a single-line
    ; buffer they degenerate to edhome / edend.
@@ -502,7 +502,7 @@
                 (= c -5) (edhome  km 0 l r 0)
                 (= c -6) (edend   km 0 l r 0)
                 (loop l r)))                         ; up/down/^C/unknown: ignore in a line reader
-        (loop 0 0))
+        (loop () ()))
 
    ; (bao a) -- the interactive entry the host frontend launches. `(bao 0)` is
    ; exactly the baked shell (an arg is taken: ai has no nullary calls); `(bao 'test)`
