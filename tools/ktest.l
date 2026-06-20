@@ -15,7 +15,7 @@
 (: a    (cup argv)
    iso  (cap a)
    ovmf (cap (cup a))
-   r    (run (L "timeout" "90" "qemu-system-x86_64" "-m" "256M" "-M" "q35"
+   r    (run `("timeout" "90" "qemu-system-x86_64" "-m" "256M" "-M" "q35"
                 "-serial" "stdio" "-display" "none" "-no-reboot"
                 "-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))
                 "-cdrom" iso

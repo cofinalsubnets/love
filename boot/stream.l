@@ -91,8 +91,8 @@
 (cap (read1 (strm-str "(1 2 3)")))       ; (1 2 3)     a list, parsed by the fold
 (cap (read1 (strm-str "(1 (2 3) 4)")))   ; (1 (2 3) 4) nested -- read1 recurses
 (read1 (strm-str ""))                    ; ()          empty input folds to the floor
-(shd (sip-l (L 0 65)))                   ; 0           a NUL byte is a real value...
-(seof? (sip-l (L 0 65)))                 ; 0           ...told from EOF by seof?, not -1
+(shd (sip-l `(0 65)))                   ; 0           a NUL byte is a real value...
+(seof? (sip-l `(0 65)))                 ; 0           ...told from EOF by seof?, not -1
 (ready? (strm-str "x"))                  ; 1           a memory stream is always ready
 
 ; --- the gate ---
@@ -101,20 +101,20 @@
    (= (chars "stream") (drain (strm-str "stream")))
    ; the pure read fold: a number, then a list, both with their rest-stream
    (= 42 (cap (read1 (strm-str "42 rest"))))
-   (= (L 1 2 3) (cap (read1 (strm-str "(1 2 3)"))))
-   (= (L 1 (L 2 3) 4) (cap (read1 (strm-str "(1 (2 3) 4)"))))
+   (= `(1 2 3) (cap (read1 (strm-str "(1 2 3)"))))
+   (= `(1 `(2 3) 4) (cap (read1 (strm-str "(1 (2 3) 4)"))))
    ; reading the rest: "1 2" -> 1, then the stream' still yields 2
    (= 2 (cap (read1 (cup (read1 (strm-str "1 2"))))))
    ; EOF folds to the floor () -- not a byte, not a raise
    (! (read1 (strm-str "")))
    (! (read1 (strm-str "   ")))           ; all whitespace -> EOF too
    ; a 0/NUL byte is a real head, distinct from end-of-stream
-   (= 0 (shd (sip-l (L 0 65))))
-   (! (seof? (sip-l (L 0 65))))
+   (= 0 (shd (sip-l `(0 65))))
+   (! (seof? (sip-l `(0 65))))
    (seof? (sip-l 0))                      ; the empty list IS the empty stream
    ; select: skip the spent stream, return the ready one; () when all are spent
-   (: a (strm-str "x") (id? a (select (L (sip-l 0) a))))
-   (! (select (L (sip-l 0) (strm-str ""))))))
+   (: a (strm-str "x") (id? a (select `((sip-l 0) a))))
+   (! (select `((sip-l 0) (strm-str ""))))))
 
 ; memoization: force the same stream's head twice -> the producer runs ONCE.
 ; this is the lookahead -- a held tail is a peeked byte, no ungetc, no re-read.
@@ -128,7 +128,7 @@
 ; instead of terminating; a well-formed read never trips it.
 (: help (\ s a b a))
 (: _ (assert (id? 'eofmid (read1 (strm-str "(1 2")))   ; "(1 2" with no ')' -> scare
-             (= (L 1 2) (cap (read1 (strm-str "(1 2)")))))) ; closed -> clean datum
+             (= `(1 2) (cap (read1 (strm-str "(1 2)")))))) ; closed -> clean datum
 (: help 0)                               ; uninstall (hygiene; back to the floor handler)
 
 (puts "stream: ok") (putc 10)

@@ -28,8 +28,8 @@
  (0 = (1 < 2 ? 'big 'small))                    ; right-assoc: ? takes 2 first -> (< 1 'big); a symbol sorts BELOW 1 (true-blue), so 0
 
  ; chain termination: a non-operator datum folds the pending chain
- ('(3 3) = (L 1 + 2 3))                         ; (L (+ 1 2) 3)
- ('(3 9) = (L (1 + 2) (4 + 5)))
+ ('(3 3) = `(1 + 2 3))                         ; `((+ 1 2) 3)
+ ('(3 9) = `((1 + 2) (4 + 5)))
 
  ; operators as values and quoted operators are untouched
  (12 = (foldl (+) 0 '(3 4 5)))

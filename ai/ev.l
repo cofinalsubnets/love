@@ -35,7 +35,7 @@
     (go v as))
    ; the operator symbols are quoted one by one -- bare mid-list they would
    ; capture their left neighbor when this file compiles (the opfix pass).
-   names (cat (L '+ '- '* '/ '% '& '| '< '<= '= '>= '>)
+   names (cat `('+ '- '* '/ '% '& '| '< '<= '= '>= '>)
           '(// << >> ^
             id? gcd modpow abs
             link cap cup caap caup cuap cuup
@@ -150,9 +150,7 @@
     (: nd (dsug (cap bs) (caup bs))               ; desugar (f a..) so wx's \ adds params to bnd
      (link (cap nd) (link (wx (cup nd) bnd) (wxb (cuup bs) bnd)))))
    (wxc bs bnd) (?                                ; cond clauses (ant con ant con ... else)
-    (atom? bs) (list 0)                           ; clauses ran out: supply the implicit 0 else
-    ; QUEUE (bug 3): flip to (list ()) when the reader terminator also becomes () (bug 1) -- they
-    ; are ONE change; on its own this breaks (= reader-list eval-list) since map's tail bottoms here.
+    (atom? bs) (list ())                          ; clauses ran out: supply the implicit () else (nil-ontology bug 3)
     (atom? (cup bs)) (list (wx (cap bs) bnd))
     ; peephole: a FINAL (nil? e) test flips its branches, dropping the wrapper --
     ; (.. (nil? e) con else) == (.. e else con), since the cond tests g_false(e), == nil?(e).
@@ -176,7 +174,7 @@
            (link apx (link 0 x))))))
    (wx x 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
-  ; nom? literal (the `()` a (\ _ ()) / failed parse / (L 'x) tail evaluates to).
+  ; nom? literal (the `()` a (\ _ ()) / failed parse / `('x) tail evaluates to).
   ; routing it to ava treats it as a free var and captures it as a SPURIOUS import:
   ; it inflates a closure's arity by one with no matching value applied at the ref
   ; site -> an under-saturated partial (silently wrong). it is a constant. the test is

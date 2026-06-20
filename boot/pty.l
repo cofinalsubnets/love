@@ -19,7 +19,7 @@
  (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s)))
 
 ; --- (mind argv): spawn `echo hello` on a pty, read its output off the master ---
-(: r (mind (L "echo" "hello"))
+(: r (mind `("echo" "hello"))
  _ (assert
     (two? r)            ; (pid . master-port)
     (charm? (cap r))        ; pid is a fixnum
@@ -34,7 +34,7 @@
     (= 0 (cap st))))      ; echo exited 0 -- the pair keeps 0 truthy/present
 
 ; --- (still pid sig) + signal-death gather: cat waits forever; SIGKILL it ---
-(: r (mind (L "cat"))
+(: r (mind `("cat"))
  _ (assert (two? r))
  _ (still (cap r) 9)       ; SIGKILL -- a positive pid, the process (not the group)
  _ (slurp (cup r))        ; drain to EOF (the killed cat's slave closes)
@@ -44,7 +44,7 @@
     (= 137 (cap st))))    ; 128 + 9: the signal-death encoding
 
 ; --- (setwinsize port r c): ok on a live master, errno on a non-port ---
-(: r (mind (L "cat"))
+(: r (mind `("cat"))
  _ (assert
     (nil? (setwinsize (cup r) 24 80))   ; () = ok
     (charm? (setwinsize 5 24 80)))       ; a bare fixnum (not a port) -> EBADF
@@ -53,7 +53,7 @@
  _ (waitfor (cap r)))
 
 ; --- (still pid sig) on a dead pid -> an errno fixnum (ESRCH), never () ---
-(: dead (cap (mind (L "true")))      ; exits immediately
+(: dead (cap (mind `("true")))      ; exits immediately
  _ (waitfor dead)                      ; gather it so the pid is truly gone (not a zombie)
  _ (assert (charm? (still dead 0))))     ; sig 0 probes existence -> ESRCH
 
@@ -64,7 +64,7 @@
 ; bounded read, NOT slurp -- cat never EOFs). proves the write AND read lanes of
 ; the master port in one round trip; the full stdin<->stdout pump (bao's `wrap`)
 ; rides real tty fds, so it is verified manually, like ain's `make nettest`.
-(: r (mind (L "cat"))
+(: r (mind `("cat"))
  m (cup r)
  _ (put m 110) _ (put m 101) _ (put m 107) _ (put m 111) _ (put m 10)  ; "neko\n"
  _ (flush m)
@@ -78,7 +78,7 @@
 ; `tr a-z A-Z` turns "hi" into "HI", so the lowercase line-discipline echo is gone.
 ; (this is what stops wrap doubling each edited line.) tr's stdout is the slave tty,
 ; so it line-buffers and flushes "HI\n" on the newline.
-(: r (mind (L "tr" "a-z" "A-Z"))
+(: r (mind `("tr" "a-z" "A-Z"))
  m (cup r)
  _ (assert (nil? (ptyecho m 0)))                  ; echo OFF -> () ok
  _ (put m 104) _ (put m 105) _ (put m 10)  ; "hi\n"

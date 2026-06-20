@@ -27,22 +27,22 @@
                             (? (= sub (snip s i (+ i (tally sub)))) 1 (g (+ 1 i))))) 0)
 
    (write-file path content) (: q (open path "w") _ (say q content) (close q))
-   (sh cmd) (run (L "sh" "-c" cmd))
+   (sh cmd) (run `("sh" "-c" cmd))
    ; run cook on a fixture Makefile, return its captured stdout.
    (run-cook src tgt)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (run (L ai "-l" "cook/cook.l" (+ dir "/Makefile") tgt))
+       r (run `(ai "-l" "cook/cook.l" (+ dir "/Makefile") tgt))
        (? (two? r) (cup r) ""))
    ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
    (run-emit src)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (run (L ai "-l" "cook/cook.l" "--emit" (+ dir "/Makefile")))
+       r (run `(ai "-l" "cook/cook.l" "--emit" (+ dir "/Makefile")))
        (? (two? r) (cup r) ""))
 
    _ (sh (+ "rm -rf " (+ dir "; mkdir -p " dir)))
 
    ; ---------------------------------------------------------------- expansion
-   ev (run-cook (mk (L "R := ."
+   ev (run-cook (mk `("R := ."
                       "ho = out/host"
                       "ai_c = $R/ai.c $R/data.c"
                       "h_o = $(ai_c:$(R)/%.c=$(ho)/%.o)"
@@ -56,7 +56,7 @@
    _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out/host]"))
 
    ; ---------------------------------------------------------------- functions
-   fn (run-cook (mk (L "files = a.c b.c sub/c.c"
+   fn (run-cook (mk `("files = a.c b.c sub/c.c"
                        "empty ="
                        "all:"
                        "\techo \"F1[$(dir $(files))]\""
@@ -91,7 +91,7 @@
    _ (ok "shell"      (has fn "F15[SH]"))
 
    ; ------------------------------------------------------------- conditionals
-   cnd (run-cook (mk (L "x = 1"
+   cnd (run-cook (mk `("x = 1"
                         "ifeq ($(x),1)"  "a = eqyes"  "else" "a = eqno"  "endif"
                         "ifneq ($(x),1)" "b = neqyes" "else" "b = neqno" "endif"
                         "ifdef x"  "c = def"  "endif"
@@ -101,7 +101,7 @@
    _ (ok "ifeq/ifneq/ifdef/ifndef" (has cnd "C[eqyes neqno def ndef]"))
 
    ; a conditional INSIDE a recipe block selects which recipe lines run.
-   rci (run-cook (mk (L "on = 1" "all:" "\techo R-a"
+   rci (run-cook (mk `("on = 1" "all:" "\techo R-a"
                         "ifeq ($(on),1)" "\techo R-b" "endif" "\techo R-c")) "all")
    _ (ok "recipe-internal ifeq" (&& (has rci "R-b") (has rci "R-c")))
 
@@ -109,30 +109,30 @@
    ; (make resolves an include relative to the cwd; the fixture lives elsewhere,
    ; so name it absolutely.)
    _ (write-file (+ dir "/common.mk") "FROM_INC = included-ok\n")
-   inc (run-cook (mk (L (+ "include " (+ dir "/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\"")) "all")
+   inc (run-cook (mk `((+ "include " (+ dir "/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\"")) "all")
    _ (ok "include" (has inc "I[included-ok]"))
 
    ; ----------------------------------------------------- automatic vars + dir
-   av (run-cook (mk (L "all: foo/bar.o"
+   av (run-cook (mk `("all: foo/bar.o"
                        "foo/bar.o:" "\techo \"A[@=$@ star=$* d=$(dir $@)]\"")) "foo/bar.o")
    _ (ok "auto-vars + $(dir $@)" (has av "A[@=foo/bar.o star= d=foo/]"))
 
    ; --------------------------------------------------------- pattern rules
    ; build x.o from x.c via an implicit pattern rule; check the file appears.
    _ (sh (+ "mkdir -p " (+ (+ dir "/p; echo SRC > ") (+ dir "/p/x.c"))))
-   _ (run-cook (mk (L (+ "all: " (+ dir "/p/x.o"))
+   _ (run-cook (mk `((+ "all: " (+ dir "/p/x.o"))
                       (+ (+ dir "/p/%.o: ") (+ dir "/p/%.c")) "\tcp $< $@")) (+ dir "/p/x.o"))
    _ (ok "pattern rule builds target" (= 0 (cap (sh (+ "test -f " (+ dir "/p/x.o"))))))
 
    ; static pattern rule: targets: tgtpat: prereqpats
    _ (sh (+ "echo S > " (+ dir "/p/y.in")))
-   _ (run-cook (mk (L (+ "outs = " (+ dir "/p/y.out"))
+   _ (run-cook (mk `((+ "outs = " (+ dir "/p/y.out"))
                       "all: $(outs)"
                       (+ "$(outs): " (+ dir (+ "/p/%.out: " (+ dir "/p/%.in")))) "\tcp $< $@")) "all")
    _ (ok "static pattern rule builds target" (= 0 (cap (sh (+ "test -f " (+ dir "/p/y.out"))))))
 
    ; ------------------------------------------------------------- assignment ops
-   ops (run-cook (mk (L "a := base" "a += more" "b ?= keep" "b ?= nope"
+   ops (run-cook (mk `("a := base" "a += more" "b ?= keep" "b ?= nope"
                         "all:" "\techo \"O[$(a)|$(b)]\"")) "all")
    _ (ok "+= and ?=" (has ops "O[base more|keep]"))
 
@@ -140,7 +140,7 @@
    ; --emit transpiles a Makefile to a RESOLVED Cookfile: vars/patterns expanded,
    ; .PHONY targets -> symbols, files -> strings, each recipe line an
    ; ("sh" "-c" cmd) step, the default ticket first, a trailing (cook (ticket 0)).
-   em (run-emit (mk (L "CC := cc"  "OBJ := a.o b.o"  ".PHONY: all clean"
+   em (run-emit (mk `("CC := cc"  "OBJ := a.o b.o"  ".PHONY: all clean"
                        "all: prog"
                        "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
                        "%.o: %.c"      "\t$(CC) -c -o $@ $<"
@@ -155,12 +155,12 @@
    ; round-trip: cook the emitted Cookfile and confirm it runs the recipe. The
    ; rule just writes a file (no compiler / source lookup), so the test is hermetic.
    _ (sh (+ "mkdir -p " (+ dir "/e")))
-   emc (run-emit (mk (L ".PHONY: all"
+   emc (run-emit (mk `(".PHONY: all"
                         (+ "all: " (+ dir "/e/out.txt"))
                         (+ dir "/e/out.txt:") "\techo HI > $@")))
    _ (write-file (+ dir "/e/Cookfile") emc)
    _ (sh (+ "rm -f " (+ dir "/e/out.txt")))
-   _ (run (L ai "-l" "cook/cook.l" (+ dir "/e/Cookfile") "all"))
+   _ (run `(ai "-l" "cook/cook.l" (+ dir "/e/Cookfile") "all"))
    _ (ok "emit: round-trip cooks the emitted Cookfile" (= 0 (cap (sh (+ "test -f " (+ dir "/e/out.txt"))))))
 
    ; ---------------------------------------------------------------- summary

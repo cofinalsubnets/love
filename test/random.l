@@ -10,7 +10,7 @@
 
 (: (gfirst seed) (: _ (rng-set (rng-seed seed)) (rand 0))   ; 1st global draw after seeding
    (gseq3 seed)  (: _ (rng-set (rng-seed seed))             ; first 3 global draws
-                    a (rand 0) b (rand 0) c (rand 0) (L a b c))
+                    a (rand 0) b (rand 0) c (rand 0) `(a b c))
    (ffirst seed) (cap (rand-next (rng-seed seed))))          ; 1st functional draw
 ; the RNG state holds 256 bits whatever the word: a rank-1 length-4 array whose
 ; limbs are 64-bit -- a Z (word-int) array on a 64-bit word, a C (8-byte) array

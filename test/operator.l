@@ -20,7 +20,7 @@
 (assert
  ('(1 2) = (1 ^^ 2))                            ; infix: captures the left operand
  ('(1 (2 3)) = (1 ^^ 2 ^^ 3))                   ; nests RIGHT-associatively
- ('(5 (1 2)) = (L 5 (1 ^^ 2)))                  ; works inside lists
+ ('(5 (1 2)) = `(5 (1 ^^ 2)))                  ; works inside lists
  ('("a" 7) = ("a" ^^ (tally "seven!!"))))      ; composes with the count word
 
 ; rebind: an alias at three, then at one

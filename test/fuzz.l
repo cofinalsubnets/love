@@ -25,9 +25,9 @@
  (fz-rep n g) (? (< n 1) (fz-pure 0)
     (\ st (: a (g st) b ((fz-rep (- n 1) g) (cup a)) (link (link (cap a) (cap b)) (cup b)))))
  (fz-list mx g) (\ st (: r (randint st (+ 1 mx)) ((fz-rep (cap r) g) (cup r))))  ; pin in [0,mx]
- (fz-pair2 ga gb) (\ st (: a (ga st) b (gb (cup a)) (link (L (cap a) (cap b)) (cup b))))
+ (fz-pair2 ga gb) (\ st (: a (ga st) b (gb (cup a)) (link `((cap a) (cap b)) (cup b))))
  (fz-trip ga gb gc)
-   (\ st (: a (ga st) b (gb (cup a)) c (gc (cup b)) (link (L (cap a) (cap b) (cap c)) (cup c))))
+   (\ st (: a (ga st) b (gb (cup a)) c (gc (cup b)) (link `((cap a) (cap b) (cap c)) (cup c))))
  ; --- the driver: N trials from `seed`, first counterexample wins ---
  (fz-find n seed g p)
    (: (go n st) (? (< n 1) (link 1 0)
@@ -40,7 +40,7 @@
    fz-fix-nz (fz-map (\ x (? (= x 0) 1 x)) fz-fix)       ; nonzero fixnum (safe divisor)
    ; s * 2^e with e up to 160 forces the box / bignum tiers and both signs
    fz-bignum (fz-bind (fz-int 58 160) (\ e (fz-map (\ s (* s (e 2))) (fz-elt '(-3 -1 1 3 5)))))
-   fz-num    (fz-oneof (L fz-fix fz-bignum))             ; mixed-tier value
+   fz-num    (fz-oneof `(fz-fix fz-bignum))             ; mixed-tier value
    fz-num-nz (fz-map (\ x (? (= x 0) 1 x)) fz-num)       ; nonzero mixed-tier (divisor)
    fz-elem   (fz-int -20 20)                             ; small list/array element
    fz-l      (fz-list 8 fz-elem))                        ; list of small ints, pin 0..8
@@ -114,7 +114,7 @@
  ; map preserves spine length ($ is the net sum, so count the spine explicitly)
  (fz-ok 300 25 fz-l (\ l (: (ln x) (foldl (\ n _ (+ 1 n)) 0 x) (= (ln (map (+ 1) l)) (ln l)))))
  ; take n ++ drop n = identity, for n drawn within [0, spine length]
- (fz-ok 300 26 (fz-bind fz-l (\ l (fz-map (\ n (L l n)) (fz-int 0 (+ 1 (foldl (\ n _ (+ 1 n)) 0 l))))))
+ (fz-ok 300 26 (fz-bind fz-l (\ l (fz-map (\ n `(l n)) (fz-int 0 (+ 1 (foldl (\ n _ (+ 1 n)) 0 l))))))
    (\ v (= (cap v) (cat (take (caup v) (cap v)) (drop (caup v) (cap v))))))
  ; filter keeps only matching elements and never grows the spine (the clamped $
  ; can GROW under filter -- dropping a negative raises the net -- so fold)
@@ -130,7 +130,7 @@
 (: (fz-s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
    (fz-rd x) (sound (tap (fz-s2cl (show x))) (nom 0))
    fz-syms '(a b c d foo bar baz qux)
-   fz-leaf (fz-oneof (L (fz-elt fz-syms) (fz-int -500 500)))
+   fz-leaf (fz-oneof `((fz-elt fz-syms) (fz-int -500 500)))
    (fz-sexp d) (? (< d 1) fz-leaf
       (\ st (: r (randint st 3)            ; 1/3 leaf, 2/3 a bounded list of sub-exprs
           (? (= (cap r) 0) (fz-leaf (cup r))
@@ -144,7 +144,7 @@
 ; fz-arrpair draws two z vectors of the same random length so elementwise ops line up.
 (: fz-arrpair (fz-bind (fz-int 1 6) (\ n (\ st
     (: a ((fz-rep n fz-elem) st) b ((fz-rep n fz-elem) (cup a))
-       (link (L (star-tray (L n) (cap a)) (star-tray (L n) (cap b))) (cup b)))))))
+       (link `((star-tray `(n) (cap a)) (star-tray `(n) (cap b))) (cup b)))))))
 (assert
  (fz-ok 250 40 fz-arrpair (\ v (aall (= (+ (cap v) (caup v)) (+ (caup v) (cap v))))))  ; + commutes
  (fz-ok 250 41 fz-arrpair (\ v (aall (= (* (cap v) (caup v)) (* (caup v) (cap v))))))  ; * commutes
@@ -169,9 +169,9 @@
    fz-cl1  (fz-bind (fz-int 1 12) (\ n (fz-rep n fz-byte))) ; nonempty charlist
    ; a string paired with a split point i in [0, pin]
    fz-s-i  (fz-bind fz-s (\ s (fz-map (\ i (link s i)) (fz-int 0 (+ 1 (tally s))))))
-   ; a string with 0 <= i <= j <= pin, as (L s i j)
+   ; a string with 0 <= i <= j <= pin, as `(s i j)
    fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (+ 1 (tally s)))
-              (\ i (fz-map (\ j (L s i j)) (fz-int i (+ 1 (tally s)))))))))
+              (\ i (fz-map (\ j `(s i j)) (fz-int i (+ 1 (tally s)))))))))
 (assert
  ; +: length adds, is associative, and "" is a two-sided identity
  (fz-ok 300 50 fz-s2 (\ v (= (sat (+ (cap v) (caup v))) (+ (sat (cap v)) (sat (caup v))))))

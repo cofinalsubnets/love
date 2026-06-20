@@ -96,8 +96,8 @@
      (: ds (rdall (tap cl) 0)
         (? (id? ds m)        m                     ; unfinished shape
            !(two? ds)        0                     ; blank line: no datums
-           !(two? (cup ds))  (L (cap ds))          ; ONE datum: as-is (leading monadic preserved)
-           (L ds)))                                ; MANY: the application (a b c)
+           !(two? (cup ds))  `((cap ds))          ; ONE datum: as-is (leading monadic preserved)
+           `(ds)))                                ; MANY: the application (a b c)
 
    ; --- editor ---
 
@@ -606,16 +606,16 @@
      (= 1000.0 (cap (parseall '(49 101 51))))
      (nom? (cap (parseall '(49 46 50 46 51))))
      ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
-     (nil? (two? (parseall (cat (L 40 43 32 49) 0))))   ; "(+ 1" unclosed
-     (two? (parseall (cat (L 49 32 43) 0)))             ; "1 +" complete (the curry partial)
-     (two? (parseall (cat (L 49 32 63 32 39 97) 0)))    ; "1 ? 'a" complete (curried cond)
-     (two? (parseall (cat (L 40 43 32 49 32 50 41) 0))) ; "(+ 1 2)" closed
-     (two? (parseall (cat (L 49 32 61 32 49) 0))))      ; "1 = 1"
+     (nil? (two? (parseall (cat `(40 43 32 49) 0))))   ; "(+ 1" unclosed
+     (two? (parseall (cat `(49 32 43) 0)))             ; "1 +" complete (the curry partial)
+     (two? (parseall (cat `(49 32 63 32 39 97) 0)))    ; "1 ? 'a" complete (curried cond)
+     (two? (parseall (cat `(40 43 32 49 32 50 41) 0))) ; "(+ 1 2)" closed
+     (two? (parseall (cat `(49 32 61 32 49) 0))))      ; "1 = 1"
 
    ; the body: the public entry points, defglob'd below. everything above stays
    ; closure-private (off the book), which is what stops the ed* editor + repl
    ; internals from leaking into (names ()).
-   (L shell welp edraw wrap bao))
+   `(shell welp edraw wrap bao))
 
  ; defglob the public surface out of the export list (book is mopped post-egg, so
  ; a top-level body-less (: ..) is the only way to add a global; the privates above

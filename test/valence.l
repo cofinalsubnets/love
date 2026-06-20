@@ -14,7 +14,7 @@
  ; the content measure and its product twin, + and * turned inward
  (6 = +'(1 2 3)) (294 = +"abc") (0 = +"") (7 = +@(3 4))
  (-1 = +'(-2 1))                                ; the net, UNCLAMPED: $ would read 0
- (~(0 8) = +(L ~(3 4) ~(-3 4)))                 ; phases sum as vectors
+ (~(0 8) = +`(~(3 4) ~(-3 4)))                 ; phases sum as vectors
  (24 = *'(1 2 3 4)) ((jot 7) = *7) (6 = *@(1 2 3))   ; * of a star jots (0..n-1); a list/array prods
  ; the dyadics turned inward
  (5 = |-5) (5.0 = |~(3 4)) (-3 = -(1 + 2)) (0.25 = /4) (0.5 = %2.5)
@@ -38,8 +38,8 @@
 ; prod; jot counts what it jots.
 (assert
  (0 = $(net '(-2 1))) (-1 = (net '(-2 1)))      ; the net unclamped, $ its one clamp
- (all (\ v ($v = $(net v))) (L 7 -5 '(1 -5) @(2 3) "ab" ~(0 2) #(1 10)))
- (all (\ v ((bit v) = !!v)) (L 7 0 -3 "" "a" '(0) ~(0 2)))
+ (all (\ v ($v = $(net v))) `(7 -5 '(1 -5) @(2 3) "ab" ~(0 2) #(1 10)))
+ (all (\ v ((bit v) = !!v)) `(7 0 -3 "" "a" '(0) ~(0 2)))
  (negate = (- 0)) (reciprocal = (/ 1))               ; the words ARE the sections
  ((net @(1 2 3)) = (net @(1 2 3))) ((net @(1 2 3)) = (net '(1 2 3)))
  ((net '(1 2 3)) = (foldl (+) 0 '(1 2 3)))

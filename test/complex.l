@@ -110,7 +110,7 @@
 ; a 0/1 mask, the orderings -> nil; net/prod fold complex; aall/aany lift the
 ; 0+0i-is-falsy rule. (body-less `:` -> ca-* leak to global, reused in roundtrip.l)
 (: ca-z (twin-tray '(3) 0)                             ; zero-filled: three 0+0i
-   ca-v (twin-tray '(2) (L ~(1 2) ~(3 4)))        ; explicit packed chain
+   ca-v (twin-tray '(2) `(~(1 2) ~(3 4)))        ; explicit packed chain
    ca-a (array 3 ~(1 1) ~(2 2) ~(3 3))        ; `array` infers c from its args
    ca-r @(~(1 0) ~(0 1))                       ; `@` reader infers c too
    ca-m (array '(2 2) ~(1 0) ~(0 1) ~(2 0) ~(0 2)))  ; rank-2 complex
@@ -124,13 +124,13 @@
 
  ; --- get returns a complex box; rank-N indexing; zero element ---
  (= ~(1 2) (peep ca-v 0 0))   (= ~(3 4) (peep ca-v 1 0))   (twin? (peep ca-v 0 0))
- (= ~(0 2) (peep ca-m (L 1 1) 0))                ; row-major (1,1)
+ (= ~(0 2) (peep ca-m `(1 1) 0))                ; row-major (1,1)
  (= ~(0 0) (peep ca-z 0 0))   (= ~(2 2) (peep ca-a 1 0))
 
  ; --- elementwise broadcast: array (op) array ---
  (= ~(2 4) (peep (+ ca-v ca-v) 0 0))             ; (1+2i)+(1+2i) elementwise
  (aall (= ca-v (+ ca-v (twin-tray '(2) 0))))           ; + the zero array is identity
- (= ~(-5 10) (peep (* (twin-tray '(2) (L ~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
+ (= ~(-5 10) (peep (* (twin-tray '(2) `(~(1 1) ~(1 2))) ca-v) 1 0))  ; (1+2i)(3+4i)
  (= ~(1 2) (peep (/ (* ca-v ca-v) ca-v) 0 0))    ; (z*z)/z = z
 
  ; --- scalar broadcast: complex scalar (op) array, both orders ---
@@ -145,7 +145,7 @@
 
  ; --- `=` over complex arrays -> a 0/1 mask; orderings/% -> nil ---
  (= 1 (peep (= ca-v ca-v) 0 0))
- (= 0 (peep (= ca-v (twin-tray '(2) (L ~(9 9) ~(3 4)))) 0 0))
+ (= 0 (peep (= ca-v (twin-tray '(2) `(~(9 9) ~(3 4)))) 0 0))
  (aall (= ca-v ca-v))
  (nil? (< ca-v ca-v))   (nil? (> ca-v ca-v))   (nil? (% ca-v ca-v))
 
@@ -157,12 +157,12 @@
 
  ; --- aall/aany lift the 0+0i-is-falsy rule ---
  (aall ca-v)
- (nil? (aall (twin-tray '(2) (L ~(0 0) ~(1 1)))))   ; a 0+0i element fails aall
- (sat (twin-tray '(2) (L ~(0 0) ~(1 1))))          ; the element sum ~(1 1) sorts positive
+ (nil? (aall (twin-tray '(2) `(~(0 0) ~(1 1)))))   ; a 0+0i element fails aall
+ (sat (twin-tray '(2) `(~(0 0) ~(1 1))))          ; the element sum ~(1 1) sorts positive
  (nil? (sat ca-z))
 
  ; --- abs of a complex array = the flat L2 norm over every (re, im) ---
- (= 5.0 (abs (twin-tray '(1) (L ~(3 4)))))          ; |3+4i| = 5
+ (= 5.0 (abs (twin-tray '(1) `(~(3 4)))))          ; |3+4i| = 5
  (close ((/ 1 2) 30) (abs ca-v))                     ; sqrt(1+4+9+16)
 
  ; --- pin / nil?: the invariant (nil? x) == (= 0 (pin x)) holds here too ---

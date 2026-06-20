@@ -55,16 +55,16 @@
    u)
   (reify st) (flip catmap ks (\ k
    (: it (has_s (link (map cap (cap st)) (cup st)) k)
-    (? (two? it) (L k (walk_star (cap it) st))))))
+    (? (two? it) `(k (walk_star (cap it) st))))))
   (map reify ((? n (stake n) slist) (g empty_dict)))))
 
 (:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 (cap x)
- (L '\ s n m y (L m (L x2 s))))))
+ `('\ s n m y `(m `(x2 s))))))
 (:: 'et (\ xs (: x (cap xs) r (cup xs)
- (foldl (\ a b (L (\ a b s (s_star (a s) b)) a b)) x r))))
+ (foldl (\ a b `((\ a b s (s_star (a s) b)) a b)) x r))))
 (:: 'vel (\ xs (: x (cap xs) r (cup xs)
- (foldl (\ a b (L (\ a b s (s_plus (a s) (b s))) a b)) x r))))
-(:: '\\ (\ a (link (link '\ a) (map (\ a (L var (L '\ a))) (init a)))))
+ (foldl (\ a b `((\ a b s (s_plus (a s) (b s))) a b)) x r))))
+(:: '\\ (\ a (link (link '\ a) (map (\ a `(var `('\ a))) (init a)))))
 
 (assert
  (unord_eq '(1 2 3) '(2 1 3))
@@ -76,8 +76,8 @@
  (= '((a 1)) (Run 0 '(a) (\\ a (est a 1))))
  (= 0 (Run 0 '(a) (\\ a (et (est a 1) (est a 2)))))
  (= '((a (1 2 (3 (4))) b (3 (4)) c 4))
-    (Run 0 '(a b c) (\\ a b c (et (est a (L 1 2 b))
-                                  (est b (L 3 (L c)))
+    (Run 0 '(a b c) (\\ a b c (et (est a `(1 2 b))
+                                  (est b `(3 `(c)))
                                   (est c 4)))))
  (unord_eq '((a 7 b 8 c 9) (a 4 b 5 c 6) (a 1 b 2 c 3))
   (Run 0 '(a b c) (\\ a b c (vel (et (est a 1) (est b 2) (est c 3))

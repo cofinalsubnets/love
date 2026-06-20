@@ -72,11 +72,11 @@
 ; the printer's fn_src (cf. ev.c c1); entry is cell 1, handed out via (seek 1 th), and
 ; the src rides the text span so GC traces it. Helpers pass th/f/n explicitly -- a
 ; closure over the forward-bound th miscompiles under the bootstrap c0.
-(: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (link f (link acc 0))))
+(: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (link f (link acc ()))))
    (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) lvm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
    (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
-     src (link '\ (link 'x (link (nfnest f n 'x) 0)))  ; alloc before spin; printer source
+     src (link '\ (link 'x (link (nfnest f n 'x) ())))  ; alloc before spin; printer source
      th (twirl (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
      _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past spin: th can't move
      _ (poke (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
@@ -181,16 +181,16 @@
 (: (merge le a b) (? (atom? a) b (atom? b) a
                      (le (cap a) (cap b)) (link (cap a) (merge le (cup a) b))
                      (link (cap b) (merge le a (cup b))))
-   (sortsplit l) (? (atom? l) (link l 0) (atom? (cup l)) (link l 0)
+   (sortsplit l) (? (atom? l) (link l ()) (atom? (cup l)) (link l ())
                     (: r (sortsplit (cuup l)) (link (link (cap l) (cap r)) (link (caup l) (cup r)))))
    (sortby le l) (? (atom? l) l (atom? (cup l)) l
                   (: s (sortsplit l) (merge le (sortby le (cap s)) (sortby le (cup s))))))
-(: catmap (compose (flip foldr 0) (compose cat))
+(: catmap (compose (flip foldr ()) (compose cat))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
    member? (compose any (=))
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
-   rev (foldl (flip link) 0)
+   rev (foldl (flip link) ())
    (jot n) ((: (go i) (? (< i n) (link i (go (+ i 1))))) 0)
    (pen x) (? (star? x) (jot x) (prod x))     ; pen: the monadic `*` reading -- jot a star (0..n-1), else prod (internal, mopped)
    (drop n l) (? n (drop (- n 1) (cup l)) l)
@@ -216,11 +216,11 @@
    (more? s) (= s 2)
    (eof? s) (= s 3))
 ; here are some macro definitions
-(: l (foldr (\ a l (link link (link a (link l 0)))) 0) (: _ (:: 'L l) _ (:: 'list l)))
+(: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) 0) (cap l)) (? (two? l) (and l) 1))))
 (:: '|| (\ l (: (or l) (? (two? l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) 0) (or l))))
-(:: ':- (\ a (link ': (cat (cup a) (link (cap a) 0)))))
-(:: '?- (\ a (link '? (cat (cup a) (link (cap a) 0)))))
+(:: ':- (\ a (link ': (cat (cup a) (link (cap a) ())))))
+(:: '?- (\ a (link '? (cat (cup a) (link (cap a) ())))))
 (:: '>>= (\ l (link (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
 
@@ -374,7 +374,7 @@
                    (link out (link f2 (cup pend)))))
              (: r (op-del (op-fold f) out (cup pend))
                 (op-del d (cap r) (cup r))))))
-   ; take a left operand if one is available -> (L . (out' . pend')), or 0.
+   ; take a left operand if one is available -> `(. (out' . pend')), or 0.
    ; a FILLED top frame re-arms (need 1) and yields its last operand -- the
    ; C reader's A(F)=1 move; at top level the last finished datum is taken.
    (op-steal out pend)
@@ -484,13 +484,13 @@
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness star of the tier
    (a-dim d) (? (two? d) (tally d) (sat d))
-   (a-shape s) (? (two? s) (map a-dim s) (L (a-dim s))))
+   (a-shape s) (? (two? s) (map a-dim s) `((a-dim s))))
 
 ; tuple/hash value constructors (also the read-back targets of the `@(…)` / `#(…)`
 ; printer-sugar forms). `tuple` builds a rank-1 array from its element args,
 ; inferring the element type via a-type (so it carries bignums/symbols in an o
 ; array, not just z/r); `map` builds a map from alternating key/value args.
-(: (spread l) (tray (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
+(: (spread l) (tray (a-type l) `((foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'tuple (\ a (list 'spread (link 'list a))))
 ; (hash x) boxes any non-list -- a fresh mutable hash pinning x
 ; at 0, so #5 = #(0 5) and #() IS #0 (() is 0); chains pin as usual, and an odd
