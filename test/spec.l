@@ -127,8 +127,10 @@
  ("abcd" = "ab" + "cd") ("xB" = "x" + 66) !('ef + 'ef) !("ab" + 'ef)
  ("xB" = "x" + 66.0) !("x" + 1.5) !("x" + -66) !("x" + 256)   ; the byte law: exact 0..255 or nil
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(5 1 2) = 5 + '(1 2)) !("a" - "b")
- ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint is + 's identity on lists, the zero point too
- (('ef + '(1 2)) = '(ef 1 2))                                ; ... but a NAMED symbol still adjoins
+ ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint -- the zero point () too -- is +'s
+ ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)      ; IDENTITY in every lane, not just on lists:
+ (~(1 2) = () + ~(1 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
+ (('ef + '(1 2)) = '(ef 1 2)) (0 = 'ef + 5)                  ; ... but a NAMED symbol still adjoins / has no number algebra
  ("ababab" = "ab" * 3) !('xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")
  !("ab" * -3) ("ababab" = "ab" * 2.5) !('(1 2) * 0))
 

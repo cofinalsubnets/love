@@ -479,15 +479,20 @@ Proof. exact (st_eta (Var 6)). Qed.
 (* ============================================================ *)
 
 (* `+` on sequences (strings, lists) is concatenation -- a MONOID: associative,
-   with the empty sequence as identity ("" and () are the units). `*` is
+   with the empty sequence as identity ("" and () are the units, cat_nil_l/r).
+   The runtime LIFTS that unit out of the sequence lane: a bare mint -- the zero
+   point () too -- nets 0 and is +'s identity in EVERY lane (() + x = x + () = x
+   for a number, string, complex, array, anything), not just on sequences. The
+   model is typed-by-sequences, so cat_nil_l/r is the witnessed fragment and the
+   scalar lanes are that same unit extended by dispatch. `*` is
    REPEATED `+`: a sequence times a count is that many copies concatenated, and
    the count SATURATES (max 0, ceil) -- a non-positive count gives the empty
    sequence. `+` is also the MEASURE HOMOMORPHISM: the net of a concatenation
    is the sum of the nets. The BYTE LAW (a string + an exact integer 0..255 is
    one byte; rep-blind, so 66 and 66.0 alike) is the one PARTIAL case, modeled
    as an option -- None is nil. The other failures are the same None lane:
-   symbol-`+` (symbols left the string algebra) and string-`-` (numeric only)
-   are nil, not modeled separately. *)
+   NAMED-symbol-`+` (named symbols left the string algebra) and string-`-`
+   (numeric only) are nil, not modeled separately. *)
 
 Open Scope Z_scope.
 

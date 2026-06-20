@@ -211,11 +211,13 @@ $@(3 4)              ; 7
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` is numeric
 ; only. the BYTE LAW: a string + a number is one byte, strictly -- an exact integer 0..255 (rep-blind,
-; like `=`: 66.0 is 66); anything else is nil, like `-` on strings. SYMBOLS LEFT THE STRING ALGEBRA
-; (the mint round): + and * on a symbol are nil -- a symbol is a point with a spelling attribute, and
-; intern/string are the explicit bridge. a BARE MINT is +'s IDENTITY on lists -- nothing adjoins
-; nothing, so `'(3) + ()` is `'(3)` either side (the zero point too: it is a mint); a NAMED symbol
-; still adjoins as an element. `*` is repeated `+`: a sequence times a count repeats it, and the
+; like `=`: 66.0 is 66); anything else is nil, like `-` on strings. NAMED SYMBOLS LEFT THE STRING
+; ALGEBRA (the mint round): + and * on a named symbol are nil -- a symbol is a point with a spelling
+; attribute, intern/string the explicit bridge. a BARE MINT is different: it nets 0, so it is +'s
+; IDENTITY in EVERY lane, not just on lists -- nothing adjoins nothing, so `() + x` is `x` either side
+; for ANY x (`'(3) + ()` is `'(3)`, `"ab" + ()` is `"ab"`, `5 + ()` is `5`); the zero point counts (it
+; is a mint), as does any fresh mint, not only (). a NAMED symbol still adjoins as an element. `*` is
+; repeated `+`: a sequence times a count repeats it, and the
 ; count SATURATES (($ c), the count law shared with numeral-apply and array shapes): a non-positive
 ; count gives the empty sequence, a float ceils.
 ; demo:
@@ -223,7 +225,8 @@ $@(3 4)              ; 7
 "x" + 66             ; "xB"      the byte law: exact 0..255 or nil
 '(1 2) + '(3 4)      ; (1 2 3 4)
 5 + '(1 2)           ; (5 1 2)   + adjoins (the measure homomorphism)
-'(3) + ()            ; (3)       a bare mint is +'s identity on lists, either side
+'(3) + ()            ; (3)       a bare mint -- () too -- is +'s identity in EVERY lane,
+"ab" + ()            ; "ab"      not just lists: () + x = x for any x (5 + () ; 5)
 "ab" * 3             ; "ababab"  * is repeated +; the count saturates
 
 ; --- numeric functions --- abs and int are type-aware; the constants are e pi i; also gcd and

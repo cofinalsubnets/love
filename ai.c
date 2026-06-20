@@ -4549,10 +4549,9 @@ static lvm(lvm_add_seq) {
   for (word l = a; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   (w - 1)->b = b;                                // last cdr -> b
   return *++Sp = word(base), Ip++, Continue(); }
- if (formp(a) || formp(b)) {                          // elt <-> list
-  bool front = !ai_add_lr || formp(b);               // element on the left -> front
+ if (formp(a) || formp(b)) {                          // elt <-> list (a bare mint never
+  bool front = !ai_add_lr || formp(b);               // reaches here -- lvm_add's identity early-out caught it)
   word lst = formp(a) ? a : b, elt = formp(a) ? b : a;
-  if (mintp(elt)) return *++Sp = lst, Ip++, Continue();  // a bare mint is + 's identity on lists (the zero point too): nothing adjoins nothing
   if (front) { Sp[0] = elt, Sp[1] = lst; return Ap(lvm_link, g); }  // (link elt list)
   uintptr_t n = llen(lst) + 1; Have(n * Width(struct ai_chain));        // append elt at tail
   lst = formp(Sp[0]) ? Sp[0] : Sp[1], elt = formp(Sp[0]) ? Sp[1] : Sp[0];
@@ -4816,6 +4815,12 @@ lvm(lvm_add) {
      && !__builtin_add_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
      && t >= fix_min && t <= fix_max)
   return *++Sp = putcharm(t), Ip++, Continue();
+ // a bare mint -- the zero point () too -- is +'s IDENTITY in every lane (not just on
+ // lists): it nets 0, nothing adjoins nothing, so () + x = x + () = x for all x. A NAMED
+ // symbol still adjoins as an element (mintp is false for it), keeping the string-algebra
+ // release. This subsumes the per-lane mint cells in ai_add_mx (now unreached for a mint).
+ if (mintp(a)) return *++Sp = b, Ip++, Continue();
+ if (mintp(b)) return *++Sp = a, Ip++, Continue();
  return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }
 lvm(lvm_mul) {
  word a = Sp[0], b = Sp[1];
