@@ -5239,6 +5239,14 @@ ai_noinline bool eqv(struct ai *g, word a, word b) {
 // still rejects mixed-type chains (so table keys 3 and 3.0 stay distinct).
 lvm(lvm_eq) {
  word a = Sp[0], b = Sp[1];
+ // Two fixnums: `=` iff identical (no numeral<->lambda bridge -- that needs a heap
+ // lambda -- and no tower widening). The common case (loop guards, table-key tests),
+ // so skip the arr/complex/float dispatch below, and fuse a following `?` directly
+ // (see the cmp_lt cond-fusion note: then -> Ip+3, else -> Ip[2].m).
+ if (__builtin_expect(charmp(a) && charmp(b), 1)) {
+  bool r = a == b;
+  if (Ip[1].ap == lvm_cond) return Sp += 2, Ip = r ? Ip + 3 : Ip[2].m, Continue();
+  return Sp[1] = r ? putcharm(1) : nil, Sp++, Ip++, Continue(); }
  // Over a rank>=1 array, `=` is elementwise -> a 0/1 bool array (whole-array
  // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
  if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_eq);
@@ -6278,10 +6286,23 @@ static lvm(lvm_cmp_ord, int op) {
 // `<` `<=` -- the implemented side: both-fixnum fast path (tagged order is
 // monotonic), else the lane. `>` `>=` are the other side: reverse the operands and
 // reuse `<` `<=` (a > b == b < a; a >= b == b <= a).
+//   COND FUSION: the overwhelmingly common consumer of a comparison is the very next
+// op, a `?` (lvm_cond) testing its result. When the fixnum fast path sees lvm_cond
+// next, it BRANCHES DIRECTLY -- pops both operands and jumps to the then/else arm --
+// instead of materializing a 0/1 boolean, paying a second indirect dispatch, and
+// re-reading it through ai_nilp. Layout: [Ip]=cmp [Ip+1]=cond [Ip+2]=else-addr
+// [Ip+3]=then, so true -> Ip+3, false -> Ip[2].m (exactly lvm_cond's own targets:
+// its Ip is our Ip+1, so its Ip+2 is our Ip+3 and its Ip[1].m is our Ip[2].m). The
+// slow path is untouched: it falls through to the retained lvm_cond, which handles
+// arrays (mask -> net), complex, strings, NaN unordered, everything. The gt/ge
+// reversers reach this through Ap(lvm_lt/le) with Ip still on their own 1-cell op,
+// so the same [cmp][cond] adjacency holds and they fuse for free.
 #define cmp_lt(nom, vop) lvm(nom) { \
  word a = Sp[0], b = Sp[1]; \
- if (__builtin_expect(charmp(a) && charmp(b), 1)) \
-  return *++Sp = vcmp_int(vop, a, b) ? putcharm(1) : nil, Ip++, Continue(); \
+ if (__builtin_expect(charmp(a) && charmp(b), 1)) { \
+  intptr_t r = vcmp_int(vop, a, b); \
+  if (Ip[1].ap == lvm_cond) return Sp += 2, Ip = r ? Ip + 3 : Ip[2].m, Continue(); \
+  return *++Sp = r ? putcharm(1) : nil, Ip++, Continue(); } \
  return Ap(lvm_cmp_ord, g, vop); }
 cmp_lt(lvm_lt, vop_lt) cmp_lt(lvm_le, vop_le)
 #undef cmp_lt
