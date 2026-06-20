@@ -30,14 +30,14 @@
  (assert
     (= 2 (sat t))
     (= 2 (ln (keys t)))
-    (: (lll t) (foldl (\ l k (link k (link (Get k) l))) 0 (keys t))
+    (: (lll t) (foldl (\ l k (link k (link (Get k) l))) () (keys t))
      (= (* 2 (sat t)) (ln (lll t))))))
 
 (:
  (stripPrefix p s) (? (= p (snip s 0 (tally p))) (snip s (tally p) (tally s)))
- (lit l y n s) ((\ ss (? ss (y ss (link l 0)) (n s))) (stripPrefix l s))
- (drop p y) (p (\ s _ (y s 0)))
- (opt p y _) (p y (\ s (y s 0)))
+ (lit l y n s) ((\ ss (? ss (y ss (link l ())) (n s))) (stripPrefix l s))
+ (drop p y) (p (\ s _ (y s ())))
+ (opt p y _) (p y (\ s (y s ())))
  (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
  (alt a b y n) (a y (b y n))
  (rep a y n s) ((opt (cats a (rep a))) y n s)

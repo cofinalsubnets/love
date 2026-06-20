@@ -18,23 +18,23 @@
 ; off an empty port (the sentinel is bao-private now -- the editor no longer leaks
 ; its `eofsym` global, so we name it by what edraw produces, not by its binding).
 (: (keys l) (tap l)
-   abc (L 97 98 99)
+   abc `(97 98 99)
    eof (edraw (keys 0) ""))
 
 ; submit, edit, and EOF -- all returning the RAW bytes (no parseall), prompt "".
 (: _ (assert
    ; plain: a b c Enter -> "abc"
-   (= abc (edraw (keys (L 97 98 99 13)) ""))
+   (= abc (edraw (keys `(97 98 99 13)) ""))
    ; insert mid-line: a c, LEFT, b, Enter -> "abc"
-   (= abc (edraw (keys (L 97 99 27 91 68 98 13)) ""))
+   (= abc (edraw (keys `(97 99 27 91 68 98 13)) ""))
    ; backspace: a b x <bsp> c Enter -> "abc"
-   (= abc (edraw (keys (L 97 98 120 127 99 13)) ""))
+   (= abc (edraw (keys `(97 98 120 127 99 13)) ""))
    ; HOME then insert: b c, HOME, a, Enter -> "abc"
-   (= abc (edraw (keys (L 98 99 27 91 72 97 13)) ""))
+   (= abc (edraw (keys `(98 99 27 91 72 97 13)) ""))
    ; END after HOME: a, HOME, END, b c, Enter -> "abc" (END returns to line tail)
-   (= abc (edraw (keys (L 97 27 91 72 27 91 70 98 99 13)) ""))
+   (= abc (edraw (keys `(97 27 91 72 27 91 70 98 99 13)) ""))
    ; ^D -> the EOF sentinel (bao-private), never a stray line
-   (id? eof (edraw (keys (L 4)) ""))
+   (id? eof (edraw (keys `(4)) ""))
    ; port EOF (empty input) -> the same sentinel
    (id? eof (edraw (keys 0) ""))))
 

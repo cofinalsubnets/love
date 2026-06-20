@@ -58,22 +58,22 @@
    (len4? x) (&& (two? x) (two? (cup x)) (two? (cup (cup x)))
                  (two? (cup (cup (cup x)))) (! (two? (cup (cup (cup (cup x)))))))
    (chains l) (? (&& (two? l) (two? (cup l)))
-               (cat (L "(" (tv (cap l)) ", " (tv (e2 l)) ")" (? (two? (cup (cup l))) ";" "") (chains (cup (cup l))))) "")
-   (th x) (cat (L "[" (chains (cup x)) "]"))             ; #(1 10 2 20) -> [(1, 10);(2, 20)]
+               (cat `("(" (tv (cap l)) ", " (tv (e2 l)) ")" (? (two? (cup (cup l))) ";" "") (chains (cup (cup l))))) "")
+   (th x) (cat `("[" (chains (cup x)) "]"))             ; #(1 10 2 20) -> [(1, 10);(2, 20)]
    ; translate a collection value to a Coq `list Z`
-   (joinl l) (? (two? l) (cat (L (tv (cap l)) (? (two? (cup l)) ";" "") (joinl (cup l)))) "")
-   (joinb s i) (? (< i (tally s)) (cat (L (show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
-   (tl x) (? (qlist? x)  (cat (L "[" (joinl (e2 x)) "]"))
-             (arrv? x)   (cat (L "[" (joinl (cup x)) "]"))    ; tuple: the elements are the cup
-             (iotav? x)  (cat (L "(iota " (tv (e2 x)) ")"))   ; the Coq iota model
-             (string? x)    (cat (L "[" (joinb x 0) "]"))
+   (joinl l) (? (two? l) (cat `((tv (cap l)) (? (two? (cup l)) ";" "") (joinl (cup l)))) "")
+   (joinb s i) (? (< i (tally s)) (cat `((show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
+   (tl x) (? (qlist? x)  (cat `("[" (joinl (e2 x)) "]"))
+             (arrv? x)   (cat `("[" (joinl (cup x)) "]"))    ; tuple: the elements are the cup
+             (iotav? x)  (cat `("(iota " (tv (e2 x)) ")"))   ; the Coq iota model
+             (string? x)    (cat `("[" (joinb x 0) "]"))
              (: h (cap x)                                     ; the broadcast / append / repeat ops
-                (? (id? h '+)  (? (arr? x)        (cat (L "(vadd " (tl (e2 x)) " " (tl (e3 x)) ")"))
-                                  (intv? (e2 x))  (cat (L "(" (tv (e2 x)) " :: " (tl (e3 x)) ")"))  ; scalar prepend
-                                  (cat (L "(" (tl (e2 x)) " ++ " (tl (e3 x)) ")")))                ; list append
-                   (id? h '*)  (? (arr? x) (cat (L "(vscale " (tv (e3 x)) " " (tl (e2 x)) ")"))     ; array scale
-                                  (cat (L "(srep (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) ")")))    ; list repeat
-                   (id? h '//) (cat (L "(vquot " (tv (e3 x)) " " (tl (e2 x)) ")"))  "[]")))
+                (? (id? h '+)  (? (arr? x)        (cat `("(vadd " (tl (e2 x)) " " (tl (e3 x)) ")"))
+                                  (intv? (e2 x))  (cat `("(" (tv (e2 x)) " :: " (tl (e3 x)) ")"))  ; scalar prepend
+                                  (cat `("(" (tl (e2 x)) " ++ " (tl (e3 x)) ")")))                ; list append
+                   (id? h '*)  (? (arr? x) (cat `("(vscale " (tv (e3 x)) " " (tl (e2 x)) ")"))     ; array scale
+                                  (cat `("(srep (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) ")")))    ; list repeat
+                   (id? h '//) (cat `("(vquot " (tv (e3 x)) " " (tl (e2 x)) ")"))  "[]")))
 
    ; integer-valued term? a fixnum, an operator tree, or a numeral-application spine
    (intv? x) (? (charm? x) 1
@@ -90,24 +90,24 @@
    (allv? l) (? (two? l) (&& (intv? (cap l)) (allv? (cup l))) (! (two? l)))
 
    ; translate an integer-valued term to a Coq Z expression
-   (tv x) (? (charm? x) (? (< x 0) (cat (L "(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
+   (tv x) (? (charm? x) (? (< x 0) (cat `("(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
              (: h (cap x) b (binop h)
-                (? b (cat (L "(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
-                   (id? h 'sat)   (? (hashv? (e2 x)) (cat (L "(Z.of_nat (length " (th (e2 x)) "))"))  ; $hash = key count
-                                     (listv? (e2 x)) (cat (L "(Z.max 0 (asum " (tl (e2 x)) "))"))
-                                     (cat (L "(Z.max 0 " (tv (e2 x)) ")")))  ; $list / $int
-                   (id? h 'net)   (cat (L "(asum " (tl (e2 x)) ")"))   ; net/+list -- the sum
-                   (id? h 'tally) (cat (L "(Z.of_nat (length " (tl (e2 x)) "))"))  ; count
-                   (id? h 'max)  (cat (L "(amax " (tl (e2 x)) ")"))
-                   (id? h 'min)  (cat (L "(amin " (tl (e2 x)) ")"))
-                   (id? h 'prod) (cat (L "(aprod " (tl (e2 x)) ")"))
-                   (id? h 'abs)   (cat (L "(Z.abs " (tv (e2 x)) ")"))
-                   (id? h 'peep)  (? (hashv? (e2 x)) (cat (L "(hget " (th (e2 x)) " " (tv (e3 x)) " " (tv (e4 x)) ")"))
-                                     (cat (L "(nth (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) " " (tv (e4 x)) ")")))  ; hash lookup / array index
-                   (hashv? h)     (cat (L "(hget " (th h) " " (tv (e2 x)) " 0)"))  ; (#(..) k) -- lookup, default 0
+                (? b (cat `("(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
+                   (id? h 'sat)   (? (hashv? (e2 x)) (cat `("(Z.of_nat (length " (th (e2 x)) "))"))  ; $hash = key count
+                                     (listv? (e2 x)) (cat `("(Z.max 0 (asum " (tl (e2 x)) "))"))
+                                     (cat `("(Z.max 0 " (tv (e2 x)) ")")))  ; $list / $int
+                   (id? h 'net)   (cat `("(asum " (tl (e2 x)) ")"))   ; net/+list -- the sum
+                   (id? h 'tally) (cat `("(Z.of_nat (length " (tl (e2 x)) "))"))  ; count
+                   (id? h 'max)  (cat `("(amax " (tl (e2 x)) ")"))
+                   (id? h 'min)  (cat `("(amin " (tl (e2 x)) ")"))
+                   (id? h 'prod) (cat `("(aprod " (tl (e2 x)) ")"))
+                   (id? h 'abs)   (cat `("(Z.abs " (tv (e2 x)) ")"))
+                   (id? h 'peep)  (? (hashv? (e2 x)) (cat `("(hget " (th (e2 x)) " " (tv (e3 x)) " " (tv (e4 x)) ")"))
+                                     (cat `("(nth (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) " " (tv (e4 x)) ")")))  ; hash lookup / array index
+                   (hashv? h)     (cat `("(hget " (th h) " " (tv (e2 x)) " 0)"))  ; (#(..) k) -- lookup, default 0
                    (spine (tv h) (cup x)))))                                ; (app .. ..) spine
    (spine acc rest) (? (two? rest)
-                       (spine (cat (L "(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
+                       (spine (cat `("(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
 
    ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable
    (tk x) (? (intv? x) "Vz"  (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
@@ -133,9 +133,9 @@
                     (= t "Vpair") 3 (= t "Vmap") 4  9))
    (xband? f) (&& (len3? f) (ordop? (cap f)) (>= (litband (e2 f)) 0) (>= (litband (e3 f)) 0)
                   (! (= (litband (e2 f)) (litband (e3 f)))))           ; both tagged, DIFFERENT bands
-   (xband f) (: h (cap f) a (cat (L "(band " (tk (e2 f)) ")")) b (cat (L "(band " (tk (e3 f)) ")"))
-               (? (id? h '<)  (cat (L "(Z.ltb " a " " b ")"))  (id? h '<=) (cat (L "(Z.leb " a " " b ")"))
-                  (id? h '>)  (cat (L "(Z.ltb " b " " a ")"))  (cat (L "(Z.leb " b " " a ")"))))
+   (xband f) (: h (cap f) a (cat `("(band " (tk (e2 f)) ")")) b (cat `("(band " (tk (e3 f)) ")"))
+               (? (id? h '<)  (cat `("(Z.ltb " a " " b ")"))  (id? h '<=) (cat `("(Z.leb " a " " b ")"))
+                  (id? h '>)  (cat `("(Z.ltb " b " " a ")"))  (cat `("(Z.leb " b " " a ")"))))
 
    ; translate a top-level predicate to a Coq bool, or 0 if not translatable.
    ; `!` factors to `nilp`: (nil? x) is the bit "x is nothing" (x <= 0 for integers);
@@ -143,24 +143,24 @@
    (tp f) (? (! (two? f)) 0
              (: h (cap f)
                 (? (id? h 'nil?) (: a (e2 f)
-                                   (? (intv? a)  (cat (L "(Z.leb " (tv a) " 0)"))
-                                      (listv? a) (cat (L "(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
-                                      (: p (tp a) (? p (cat (L "(negb " p ")")) 0))))
-                   (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 (cat (L "(" (kpred h) " " t ")"))))  ; (charm? 5), (two? '(..))..
+                                   (? (intv? a)  (cat `("(Z.leb " (tv a) " 0)"))
+                                      (listv? a) (cat `("(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
+                                      (: p (tp a) (? p (cat `("(negb " p ")")) 0))))
+                   (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 (cat `("(" (kpred h) " " t ")"))))  ; (charm? 5), (two? '(..))..
                    (! (len3? f)) 0
-                   (id? h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   (cat (L "(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
-                                 (&& (listv? (e2 f)) (listv? (e3 f))) (cat (L "(leqb " (tl (e2 f)) " " (tl (e3 f)) ")"))  ; list/array =
+                   (id? h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   (cat `("(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
+                                 (&& (listv? (e2 f)) (listv? (e3 f))) (cat `("(leqb " (tl (e2 f)) " " (tl (e3 f)) ")"))  ; list/array =
                                  0)
                    (xband? f) (xband f)                               ; cross-kind ordering: symbol<string<number<chain<map
                    (! (&& (intv? (e2 f)) (intv? (e3 f)))) 0           ; the within-band ORDERING ops below stay integer-only
-                   (id? h '<)  (cat (L "(Z.ltb " (tv (e2 f)) " " (tv (e3 f)) ")"))
-                   (id? h '<=) (cat (L "(Z.leb " (tv (e2 f)) " " (tv (e3 f)) ")"))
-                   (id? h '>)  (cat (L "(Z.ltb " (tv (e3 f)) " " (tv (e2 f)) ")"))
-                   (id? h '>=) (cat (L "(Z.leb " (tv (e3 f)) " " (tv (e2 f)) ")"))
+                   (id? h '<)  (cat `("(Z.ltb " (tv (e2 f)) " " (tv (e3 f)) ")"))
+                   (id? h '<=) (cat `("(Z.leb " (tv (e2 f)) " " (tv (e3 f)) ")"))
+                   (id? h '>)  (cat `("(Z.ltb " (tv (e3 f)) " " (tv (e2 f)) ")"))
+                   (id? h '>=) (cat `("(Z.leb " (tv (e3 f)) " " (tv (e2 f)) ")"))
                    0)))
 
    ; the original assert (infix, as in spec.l) shown above each theorem
-   (thm n f s) (cat (L "(* " (show f) " *)" (string 10)
+   (thm n f s) (cat `("(* " (show f) " *)" (string 10)
                        "Theorem gen_" (show n) " : " s " = true.  Proof. vm_compute. reflexivity. Qed." (string 10)))
 
    nt (tablet 0) ns (tablet 0)                          ; translated / seen counters
@@ -216,6 +216,6 @@
      "Definition lamp  v := match v with Vmap => true | _ => false end." (string 10)   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
      "Definition band  v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
-   _ (. (cat (L (string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
+   _ (. (cat `((string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
    (nap 0))

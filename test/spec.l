@@ -25,9 +25,7 @@
 (: (twice f x) (f (f x)) (assert (12 = (twice (+ 1) 10))))
 (assert
  (id? (:) (?)) (id? (?) (\)) !(:) !(nom? (:))     ; the empty form is the head read, both lanes: the zero point (absence, NOT a nom)
- (0 = (? 0 'a)) (id? 0 (map (+ 1) ()))           ; today: a no-match `?` (and `map` of nothing) falls to fixnum 0, NOT the zero point ()
- ; QUEUE (bug 3): this fall-through flips to () ONLY WITH bug 1 (the reader terminator -> ()); they are
- ; ONE change -- alone it breaks (= reader-list eval-list). Then: (id? (:) (? 0 'a)) and (id? (:) (map (+ 1) ())).
+ (id? (:) (? 0 'a)) (id? (:) (map (+ 1) ()))     ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), NOT fixnum 0
  (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b))     ; one scope: forward read = the condition, the point helpless
  (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
 
@@ -42,7 +40,7 @@
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
  (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
- (8 = $(L ~(3 4) ~(-3 4))) !(L ~(0 5) -1)        ; phases sum as vectors; the order signs the TOTAL, once
+ (8 = $`(~(3 4) ~(-3 4))) !`(~(0 5) -1)        ; phases sum as vectors; the order signs the TOTAL, once
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
@@ -92,9 +90,9 @@
  ('(0) < #(1 10)) (#(1 10) < cap) !(cap < #(1 10))    ; the map rung: chain < map < hot
  ("abc" < "abd") ("ab" < "abc") ('(1 2) < '(1 3))     ; within a band: text and chains order lexicographically
  ; a GALAXY folds into the number band by its net (probe via sort/show -- infix < on an array broadcasts to a mask).
- ("(@(1 1) 5 @(2 4))" = (show (sort (L @(2 4) 5 @(1 1)))))  ; nets 2 < 5 < 6, galaxies interleaving with the star
- ("(3 @(1 2))" = (show (sort (L @(1 2) 3))))          ; net tie -> a star seats below a galaxy
- ("((7 8) @('a 'b))" = (show (sort (L @('a 'b) '(7 8)))))   ; a tray (object array) stays ABOVE link
+ ("(@(1 1) 5 @(2 4))" = (show (sort `(@(2 4) 5 @(1 1)))))  ; nets 2 < 5 < 6, galaxies interleaving with the star
+ ("(3 @(1 2))" = (show (sort `(@(1 2) 3))))          ; net tie -> a star seats below a galaxy
+ ("((7 8) @('a 'b))" = (show (sort `(@('a 'b) '(7 8)))))   ; a tray (object array) stays ABOVE link
  (@(5) = 5))                                          ; a one-cell array still demotes to its scalar
 
 ; --- comparing functions --- `=` on functions is alpha + structural (binders by position,
@@ -173,7 +171,7 @@
  (: v (array 2 ~(1 2) ~(3 4)) (&& (twin-tray = (tier v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (net v))
     (~(2 4) = (peep (v + v) 0 0)) (~(2 4) = (peep (~(2 0) * v) 0 0)) !(v < v)
     ($v = $(net v)) ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v))))
- (8 = $(array 2 ~(3 4) ~(-3 4))) (8 = $(L ~(3 4) ~(-3 4))))
+ (8 = $(array 2 ~(3 4) ~(-3 4))) (8 = $`(~(3 4) ~(-3 4))))
 
 ; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
 ; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. + - * // < = broadcast numpy-style;
@@ -198,13 +196,13 @@
 ; the compounds); sort/sortby by the total order; (jot n) the first n charms; the higher-order
 ; functions live in the prel.
 (assert
- (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 0)))
+ (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 ())))
  !(cap 0) ("x" = (string 'x)) !(two? 'x)          ; no cap at the end of the list; a symbol is NOT a chain -- its name comes via `string`
  ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n charms; the empty count is nothing
  ('(2 3 4) = (map (+ 1) '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
  ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (sortby (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
- (20 = (caup (assoc 2 (list (L 1 10) (L 2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
+ (20 = (caup (assoc 2 (list `(1 10) `(2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (member? 3 '(1 2 3)) !(member? 9 '(1 2 3))
  (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3))
  (294 = $'(a b c)) (3 = (tally '(a b c))))  ; net sums spellings; tally counts the spine
@@ -275,7 +273,7 @@
  ('(1 (\ x) 3) = `(1 ''x 3)) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
- ('((dot x)) = (opfix '(. x))) ('! = (caup '(a ! b)))   ; opfix factors; quotes stay data
+ ("((dot x))" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; opfix factors (cmp via show: opfix's internal forms stay 0-tailed); quotes stay data
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
@@ -299,7 +297,7 @@
 (:: 'unless (\ a `('? (cap a) 0 (caup a))))
 (assert
  ('ok = (unless 0 'ok)) (0 = (unless 1 'ok)) (3 = (&& 1 2 3)) !(&& 1 0 3)
- (2 = (|| 0 2 3)) ('(1 2 3) = (L 1 2 3)) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
+ (2 = (|| 0 2 3)) ('(1 2 3) = `(1 2 3)) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4)))
 
 ; --- control --- ev compiles+runs; call-cc a one-shot escape; tasks hatch/wait/yield/sleep/done?;

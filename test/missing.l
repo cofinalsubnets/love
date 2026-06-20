@@ -20,7 +20,7 @@
 (: help 0)
 
 ; the help hears (help s 'missing nom) and its result is the value at the site
-(: help (\ s a b (? (&& (scare? s) (id? a 'missing)) (L 'missing-was b) 0)))
+(: help (\ s a b (? (&& (scare? s) (id? a 'missing)) `('missing-was b) 0)))
 (assert (: r an-ghost
            (&& (two? r) (id? 'missing-was (cap r)) (id? 'an-ghost (caup r)))))
 (: help 0)
@@ -54,7 +54,7 @@
 (: help 0)
 
 ; the empty special forms are their head reads -- the same missing reads under a help
-(: help (\ s a b (? (&& (scare? s) (id? a 'missing)) (L 'empty-form b) 0)))
+(: help (\ s a b (? (&& (scare? s) (id? a 'missing)) `('empty-form b) 0)))
 (assert (: r (:) (&& (two? r) (id? ': (caup r))))
         (: r (?) (&& (two? r) (id? '? (caup r)))))
 (: help 0)

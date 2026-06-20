@@ -162,7 +162,7 @@
    ;; linear: y = x@W + b. linear-wb builds from given param glasses (handy for
    ;; tests); (linear i o) inits W (i,o) random, b (o,) zero. rides mm + the bias
    ;; broadcast, whose adjoint is the colsum sumto from Stage 2.
-   (linear-wb W b) (tl-mod (\ x (add (mm x W) b)) (L W b))
+   (linear-wb W b) (tl-mod (\ x (add (mm x W) b)) `(W b))
    (linear i o)    (linear-wb (glass (tl-randmat i o)) (glass (tl-zeros o)))
 
    ;; seq: compose modules/functions left-to-right; params = the concatenation.

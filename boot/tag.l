@@ -63,7 +63,7 @@
 
    ; the apply-matrix ROW indexed by the tag -- the diagonal IS the table,
    ; reached with one mask, no header fetch
-   row (L (\ r 'apply-chain) (\ r 'apply-cplx) (\ r 'apply-rsvd) (\ r 'apply-other))
+   row `((\ r 'apply-chain) (\ r 'apply-cplx) (\ r 'apply-rsvd) (\ r 'apply-other))
    (apply- r) ((row (kind r)) r))
 
 ; --- demos (expr ; value) ---

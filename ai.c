@@ -1569,7 +1569,7 @@ static Ana(c0_cond_exit) { return
  ai_push(analyze(g, c, x), 1, c1_cond_exit); }
 
 static Ana(c0_cond_r) { return
- !chainp(x) ? c0_cond_exit(g, c, nil) :   // clauses ran out: implicit else (QUEUE bug 3: -> ZeroPoint, but only WITH bug 1 -- the reader terminator; map's tail bottoms here)
+ !chainp(x) ? c0_cond_exit(g, c, ZeroPoint) :   // clauses ran out: implicit else -> () (nil-ontology bug 3, welded to bug 1's reader terminator)
  !chainp(B(x)) ? c0_cond_exit(g, c, A(x)) :
  (avec(g, x,
   incl(*c, 2),
@@ -2960,7 +2960,7 @@ static ai_inline struct ai*ioput_map(struct ai*g, word x, uintptr_t off) {
  if (!ai_ok(g = ai_have(g, n * 2 * Width(struct ai_chain)))) return seen_pop(ai_pop(g, 1), off), g;
  word *s = map_slots(g->sp[0]);                         // re-fetch after possible GC
  struct ai_chain *p = bump(g, n * 2 * Width(struct ai_chain));
- word list = nil;
+ word list = ZeroPoint;                                 // () terminator (nil-ontology)
  for (uintptr_t i = cap; i;)
   if (s[2 * --i] != map_gap) {
    struct ai_chain *kv = p++;
@@ -3579,11 +3579,11 @@ static struct ai *ioparse(struct ai *g, bool multi) {
      g = gxl(ai_push(g, 1, A(g->sp[1])));               // splice -> (sym . d)
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); }
     else {                                             // 'x `x ,x  #x %atom/@atom -> (wrapsym d)
-     g = gxr(ai_push(g, 1, nil));                       // (d . nil)
+     g = gxr(ai_push(g, 1, ZeroPoint));                 // (d . ()) -- bug 1 wrapsym
      g = gxl(ai_push(g, 1, ai_ok(g) ? A(g->sp[1]) : nil)); // (wrapsym . (d))
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); } }
    else {                                              // list: append d at the frame's tail
-    g = gxr(ai_push(g, 1, nil));                        // newcons = (d . nil)
+    g = gxr(ai_push(g, 1, ZeroPoint));                  // newcons = (d . ()) -- reader lists are ()-terminated (nil-ontology bug 1)
     if (ai_ok(g)) {
      word frame = A(g->sp[1]);                         // (head . tail)
      if (nilp(A(frame))) A(frame) = B(frame) = g->sp[0];  // first element: head = tail = newcons
@@ -3687,11 +3687,11 @@ lvm(lvm_gauge) {
 #ifdef AI_STAT
  ini_chain(si + 4, putcharm(g->n_gc), word(si + 5));               // gc cycles
  ini_chain(si + 5, putcharm(g->max_len), word(si + 6));            // peak pool len (words)
- ini_chain(si + 6, putcharm(g->max_heap), nil);                    // peak live heap (words)
+ ini_chain(si + 6, putcharm(g->max_heap), ZeroPoint);             // peak live heap (words); () terminator
 #else
  ini_chain(si + 4, putcharm(0), word(si + 5));                     // gc instrumentation gated off (-DAI_STAT to keep it)
  ini_chain(si + 5, putcharm(0), word(si + 6));
- ini_chain(si + 6, putcharm(0), nil);
+ ini_chain(si + 6, putcharm(0), ZeroPoint);
 #endif
  Ip += 1;
  return Continue(); }
@@ -3920,7 +3920,7 @@ lvm(lvm_pull) {
  return Sp[2] = v, Sp += 2, Ip += 1, Continue(); }
 
 lvm(lvm_keys) {
- intptr_t list = nil;
+ intptr_t list = ZeroPoint;                         // () terminator / empty-map result (nil-ontology)
  if (tabp(Sp[0])) {
   uintptr_t cap = map_cap(Sp[0]), n = map_len(Sp[0]);
   Have(n * Width(struct ai_chain));
@@ -4558,7 +4558,7 @@ static lvm(lvm_add_seq) {
   struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
   Hp += n * Width(struct ai_chain);
   for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
-  ini_chain(w, elt, nil);                           // trailing (elt . nil)
+  ini_chain(w, elt, ZeroPoint);                     // trailing (elt . ()) -- list terminator (nil-ontology)
   return *++Sp = word(base), Ip++, Continue(); }
  return *++Sp = nil, Ip++, Continue(); }          // neither is a real list (e.g. sym + sym/str/num): no algebra -> nil
 
@@ -4646,7 +4646,7 @@ static lvm(lvm_mul_rep) {
   return *++Sp = nil, Ip++, Continue();             // seq not a real sequence (e.g. a symbol), or count not a number
  uintptr_t n = (uintptr_t) ai_pin(g, cnt);
  if (formp(seq)) {                                   // list -> n copies of the spine
-  if (!n) return *++Sp = nil, Ip++, Continue();
+  if (!n) return *++Sp = ZeroPoint, Ip++, Continue();   // 0 copies -> the empty list () (nil-ontology)
   uintptr_t m = llen(seq), total = m * n;
   Have(total * Width(struct ai_chain));
   seq = formp(Sp[0]) ? Sp[0] : Sp[1];                // re-read post-GC
@@ -4654,7 +4654,7 @@ static lvm(lvm_mul_rep) {
   Hp += total * Width(struct ai_chain);
   for (uintptr_t i = 0; i < n; i++)
    for (word l = seq; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
-  (w - 1)->b = nil;
+  (w - 1)->b = ZeroPoint;                            // list terminator () (nil-ontology)
   return *++Sp = word(base), Ip++, Continue(); }
  // string -> repeat the bytes
  struct ai_str *src = str(seq);
@@ -5803,7 +5803,7 @@ lvm(lvm_shape) {
  struct ai_vec *v = vec(Sp[0]);                 // re-read post-Have
  struct ai_chain *p = (struct ai_chain*) Hp;
  Hp += r * Width(struct ai_chain);
- word list = nil;
+ word list = ZeroPoint;                             // () terminator (nil-ontology)
  for (uintptr_t i = r; i--; )
   ini_chain(p, putcharm(v->shape[i]), list), list = word(p), p++;
  return Sp[0] = list, Ip++, Continue(); }
@@ -6251,7 +6251,7 @@ lvm(lvm_sort) {
    while (y < hi) b[o++] = a[y++]; }
   word *t = a; a = b; b = t; }
  for (i = 0; i < n; i++) ini_chain(spine + i, a[i], word(spine + i + 1));
- spine[n - 1].b = nil;
+ spine[n - 1].b = ZeroPoint;                        // () terminator (nil-ontology)
  return Sp[0] = word(spine), Ip++, Continue(); }
 
 // the `<` / `<=` lane (op is vop_lt or vop_le). An array operand -> elementwise

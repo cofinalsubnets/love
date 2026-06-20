@@ -23,4 +23,4 @@
    (? v (term_text green_dot)
     (do (term_text red_x) (putc 10)
        (puts "assert failed: ") (putx x) (putc 10) (nap 1))))
- (link 'do (map (\ l (L report (L '\ l) l)) l)))))
+ (link 'do (map (\ l `(report `('\ l) l)) l)))))

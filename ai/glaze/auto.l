@@ -61,7 +61,7 @@
               (two? STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)  ; (+ i 1)
               (two? ACC) (member? op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
               (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
-       (? ok (L B I op cmp) 0))
+       (? ok `(B I op cmp) 0))
    (njit-loop lam B cv op cmp) (nif (emit (loopcode B cv op cmp)) (base-ev lam) lam 1)
    ; --- general N-VARIABLE loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)),
    ; up to 3 loop vars + arbitrary update exprs -- this is the shape iterative fib/tak
@@ -86,7 +86,7 @@
               (two? T) (member? (cap T) '(< <= > >= =)) (exprn fr T)   ; TEST a comparison over {n,vars}
               (all (\ u (exprn fr u)) updates) (exprn fr R)         ; updates + RESULT exprs over {n,vars}
               (all whole? inits))                                     ; inits are fixnum consts
-       (? ok (L vars updates T R inits) 0))
+       (? ok `(vars updates T R inits) 0))
    (njit-loop-n lam vars updates test result inits)
     (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (base-ev lam) lam 1)
    ; --- captured-closure CONSTRUCTOR (\ p (\ q E)): a nest of 1-arg lambdas, E over
@@ -99,8 +99,8 @@
                       (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))               ; (\ p INNER), one body
                       (two? inner) (= (cap inner) '\) (two? (cup inner)) (symp (caup inner)) !(= p (caup inner))
                       (two? (cup (cup inner))) !(two? (cup (cup (cup inner))))            ; INNER = (\ q E), q != p
-                      (exprn (L p (caup inner)) (caup (cup inner)))))
-   (flatc lam) (: inner (caup (cup lam)) (L '\ (caup lam) (caup inner) (caup (cup inner))))  ; (\ p (\ q E)) -> (\ p q E)
+                      (exprn `(p (caup inner)) (caup (cup inner)))))
+   (flatc lam) (: inner (caup (cup lam)) `('\ (caup lam) (caup inner) (caup (cup inner))))  ; (\ p (\ q E)) -> (\ p q E)
    ; COMPILE CACHE: each source \-expr compiles ONCE (no re-mmap on repeated ev).
    ; Keyed by source -- structurally-equal closures share the same native (sound:
    ; they are =). The transparent form of a hot-trigger: an execution-count trigger

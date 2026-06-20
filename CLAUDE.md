@@ -19,8 +19,8 @@
 ; * `make clean` nukes out/dl (ovmf/limine) -- stash them first if you need the kernel tests.
 ;   editing ai.h needs no clean (every object deps on $(ai_h), the lcat'd headers re-lay on ai0).
 ; * C and docs EMBED ai the .l sweeps miss -- grep on every rename: ai.c (g_evals_'s driver string),
-;   main.c (s2cl + runner), kmain.c (the K_TEST runner), wasm/; and index.html (the static page +
-;   its index.css) cites rocq/spec.v lemmas as `thm:name` chips and runs live demos.
+;   main.c (s2cl + runner), kmain.c (the K_TEST runner), wasm/; and index.html (the static page,
+;   its CSS now inlined) cites rocq/spec.v lemmas as `thm:name` chips and runs live demos.
 ; * a bare all-punct symbol mid-list captures its left operand when code compiles (opfix) -- escape
 ;   in parens ((+) is + as a value); GLUED to a datum it is monadic instead (the valence law: space
 ;   your dyadics); quoted lists are data, operators plain.

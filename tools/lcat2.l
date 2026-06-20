@@ -137,7 +137,7 @@
                   (= b 32) 0 (= b 10) 0 (= b 9) 0
                   1)
    (redundant? a b) (? (&& (opb? a) (dstart? b)) 0
-                       (= (nforms (string (L a b))) (nforms (string (L a 32 b)))))
+                       (= (nforms (string `(a b))) (nforms (string `(a 32 b)))))
    (eb c) (? (= c 10) (say out "\\n")
               (| (= c 92) (= c 34)) (: _ (put out 92) (put out c))
               (put out c)))

@@ -38,9 +38,9 @@
 ; honest carrier of crew/kship.md's "state is an ai value, persistence is
 ; show/read".) replies = packets answered, beats = heartbeats emitted. `with`
 ; builds a fresh state, so every step is pure: the same `fresh` seeds many runs.
-   fresh (L 0 0)
+   fresh `(0 0)
    replies cap   beats caup
-   (with rep bts) (L rep bts)
+   (with rep bts) `(rep bts)
 
 ; --- decide: the policy --- pure (state, event) -> (state' . action), a chain.
 ; the policy DECIDES ON CONTENT (`answer`): a 'net datagram is a request -- "ping"
@@ -132,7 +132,7 @@
 ; default), so the cell counts by slot index. that is also the crew/kship.md advice
 ; ("avoid maps for state") honored at the one place state must be shared+mutable.
    (cell rep bts) (: c (tablet 0) _ (pin c 0 rep) _ (pin c 1 bts) c)   ; slot 0 replies, 1 beats
-   (snap c)       (L (peep c 0 0) (peep c 1 0))                ; the cell -> the 2-list
+   (snap c)       `((peep c 0 0) (peep c 1 0))                ; the cell -> the 2-list
 
 ; the reactor half: block for a datagram, answer it by content (the same policy +
 ; watchdog as serve), reply on the WIRE, commit the new reply count to slot 0.
@@ -251,7 +251,7 @@
 ; ignored trailing argv).
 (: (demos _)
    (: _ (note "-- scripted {net, clock} stream; the watchdog absorbs the bad event --")
-      _ (: evs (L (link 'net "ping") (link 'tick 1) (link 'bogus 0)
+      _ (: evs `((link 'net "ping") (link 'tick 1) (link 'bogus 0)
                   (link 'net "ping") (link 'tick 2))
            st (run fresh evs)
            _ (. "  replies=") _ (. (replies st))           ; 2   both packets answered
@@ -270,7 +270,7 @@
       _ (note "-- milestone 4: a heartbeat TASK + scripted reactor steps share one cell --")
       _ (: c (cell 0 0)
            p (spin (\ _ (pulse c 2 3)) 0)                 ; a concurrent heartbeat: 3 real beats
-           _ (each (L "ping" "stat")                       ; the reactor side, scripted (no host nic)
+           _ (each `("ping" "stat")                       ; the reactor side, scripted (no host nic)
                    (\ d (: out (policy (snap c) (link 'net d))
                            (? (two? out)
                               (: _ (note (+ "  reply: " (cup (cup out))))

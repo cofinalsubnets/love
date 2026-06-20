@@ -17,29 +17,29 @@
 ; neither, so skip the whole file there (wint = the hosted builds).
 (? wint (assert
   ; --- ran successfully: a chain, exit 0, and (here) no output ---
-  (two? (run (L "true")))
-  (= 0 (cap (run (L "true"))))
-  (= 0 (sat (cup (run (L "true")))))            ; `true` writes nothing
+  (two? (run `("true")))
+  (= 0 (cap (run `("true"))))
+  (= 0 (sat (cup (run `("true")))))            ; `true` writes nothing
 
   ; --- a nonzero exit code is reported as-is ---
-  (= 1 (cap (run (L "false"))))
+  (= 1 (cap (run `("false"))))
 
   ; --- stdout is captured (echo appends a newline) ---
-  (: r (run (L "echo" "hi")) (&& (= 0 (cap r)) (= "hi\n" (cup r))))
+  (: r (run `("echo" "hi")) (&& (= 0 (cap r)) (= "hi\n" (cup r))))
 
   ; --- multiple args are marshalled in order, with no shell in between ---
-  (: r (run (L "printf" "%s-%s" "ab" "cd")) (= "ab-cd" (cup r)))
+  (: r (run `("printf" "%s-%s" "ab" "cd")) (= "ab-cd" (cup r)))
 
   ; --- a program that can't be spawned -> positive errno fixnum, NOT a chain ---
-  (: r (run (L "/no/such/prog-xyzzy")) (&& (charm? r) (< 0 r)))   ; abs path: ENOENT
-  (: r (run (L "no-such-prog-xyzzy"))  (&& (charm? r) (< 0 r)))   ; PATH miss: ENOENT
+  (: r (run `("/no/such/prog-xyzzy")) (&& (charm? r) (< 0 r)))   ; abs path: ENOENT
+  (: r (run `("no-such-prog-xyzzy"))  (&& (charm? r) (< 0 r)))   ; PATH miss: ENOENT
 
   ; --- our-side misuse -> -1 (a negative fixnum, distinct from any errno) ---
   (= -1 (run 0))                                ; empty argv (nil)
-  (= -1 (run (L "echo" 5)))                     ; 5 is not a string
+  (= -1 (run `("echo" 5)))                     ; 5 is not a string
 
   ; --- output larger than the initial buffer exercises the grow path ---
-  (: r (run (L "seq" "20000")) (&& (= 0 (cap r)) (< 65536 (sat (cup r)))))
+  (: r (run `("seq" "20000")) (&& (= 0 (cap r)) (< 65536 (sat (cup r)))))
 
   ; --- getenv: PATH is set (a string); a bogus name is unset (nil) ---
   (string? (getenv "PATH"))

@@ -20,7 +20,7 @@
 (assert
  ('(1 2) = (1 ^^ 2))                            ; infix: captures the left operand
  ('(1 (2 3)) = (1 ^^ 2 ^^ 3))                   ; nests RIGHT-associatively
- ('(5 (1 2)) = (L 5 (1 ^^ 2)))                  ; works inside lists
+ ('(5 (1 2)) = `(5 (1 ^^ 2)))                  ; works inside lists
  ('("a" 7) = ("a" ^^ (tally "seven!!"))))      ; composes with the count word
 
 ; rebind: an alias at three, then at one
@@ -34,5 +34,5 @@
 ; restore: unpinned, ^^ no longer factors (^ is at two, can't lead a chain),
 ; so it reads as a plain symbol again
 (pull op-tbl '^^ 0)
-(assert !(op-tbl '^^) (nom? '^^) ('(^^ 5) = (opfix '(^^ 5)))
+(assert !(op-tbl '^^) (nom? '^^) ("(^^ 5)" = (show (opfix '(^^ 5))))
         (-2 = (^ 1 -1)) (6 = (^ 5 3)))          ; ^ was the xor nif all along

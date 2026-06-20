@@ -40,4 +40,4 @@
  (= 'c  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 0)))  ; final-clause flip inside a chain
  (= 'b  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 3)))  ; ... fall-through to the else
  (= 'a  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 9)))  ; ... first clause still wins
- (= 0   (: (f x) (? (nil? x) 'z) (f 5))))           ; no-else NOT flipped: truthy -> nil
+ (id? () (: (f x) (? (nil? x) 'z) (f 5))))         ; no-else cond falls to the zero point () (nil-ontology bug 3)

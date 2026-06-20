@@ -41,9 +41,9 @@
  ; --- row KChain: a chain IS its own Church eliminator, (p f) == (f (A p) (B p)).
  ;     This row had no test before -- a sentinel mis-route would silently break
  ;     it (and it shares the failure mode that bit string/sym apply). ---
- (= '(1 (2)) ('(1 2) (\ a b (L a b))))        ; f sees car=1, cdr='(2)
- (= '(1 (2 3)) ('(1 2 3) (\ a b (L a b))))    ; longer cdr passed whole
- (= '(1 2) ((link 1 2) (\ a b (L a b))))         ; improper chain: cdr=2 (a fixnum), raw
+ (= '(1 (2)) ('(1 2) (\ a b `(a b))))        ; f sees car=1, cdr='(2)
+ (= '(1 (2 3)) ('(1 2 3) (\ a b `(a b))))    ; longer cdr passed whole
+ (= '(1 2) ((link 1 2) (\ a b `(a b))))         ; improper chain: cdr=2 (a fixnum), raw
  (= '(1 2) ('(1 2) (+)))                        ; arg = a nif: (+ 1 '(2)) = (1 2)
  (= '(1 2 3) ('(1 2 3) (+)))                    ; (+ 1 '(2 3))
  (nil? ('(1) (\ a b b)))                      ; cdr of (1) is nil -> 0
@@ -162,7 +162,7 @@
  (= ~(2 4) (peep (* ~(2 0) mx-ac) 0 0))      ; complex scalar * C array
  (= top-tray (tier (* mx-ao mx-ao)))                ; O * O exact
  (= (80 2)                                 ; 2^40 * 2^40, exact (an z array would wrap)
-    (peep (* (top-tray '(2) (L (40 2) (40 2))) (top-tray '(2) (L (40 2) (40 2)))) 0 0))
+    (peep (* (top-tray '(2) `((40 2) (40 2))) (top-tray '(2) `((40 2) (40 2)))) 0 0))
 
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
