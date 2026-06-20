@@ -114,34 +114,14 @@
 <span class="chip" data-run='."hello world\n"'>hello world</span>
 <span class="chip" data-run='(100 (\ n (: f (? (n % 3) "" "fizz") b (? (n % 5) "" "buzz") _ .(? ($f | $b) (f + b) n) _ ."\n" (n + 1))) 1)'>fizzbuzz</span>
 <span class="chip" data-run='(: (tri n) (map (\ x $*x) *n) (tri 12))'>(: (tri n) (map (\ x $*x) *n) (tri 12))</span>
-<div class="law"><span class="chip" data-run="0 2">0 2</span></div>
-<div class="law"><span class="chip" data-run="2 3 4">2 3 4</span></div>
-<div class="law"><span class="chip" data-run="i * i">i * i</span></div>
-<div class="law"><span class="chip" data-run="log -1">log -1</span></div>
-<div class="law"><span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span></div>
-<div class="law"><span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span></div>
-<h2 id="crew"><a href="#crew">the crew (apps)</a></h2>
-<p class="qualifier">all apps are experimental and should be considered beta-minus quality</p>
-<dl class="crew">
-  <dt>🔭 tele</dt>
-    <dd>big telescope, drives kship, pytorch clone</dd>
-  <dt>🐰 bellsberry</dt>
-    <dd>a light brown rabbit with dark eyes and silver stripes</dd>
-  <dt>🕊 gwen</dt>
-    <dd>mourning dove friend of bellsberry and tele</dd>
-  <dt>🐄 mow</dt>
-    <dd>half cow half cat / grass chewer (garbage collector)</dd>
-  <dt>🐱 ain</dt>
-    <dd>white cat / netcat clone</dd>
-  <dt>🐶 bao</dt>
-    <dd>tan dog / rlwrap clone</dd>
-  <dt>🐀 cook</dt>
-    <dd>gray rat / make clone</dd>
-  <dt>⛵ kship</dt>
-    <dd>kernel network agent loop</dd>
-</dl>
+<span class="chip" data-run="0 2">0 2</span>
+<span class="chip" data-run="2 3 4">2 3 4</span>
+<span class="chip" data-run="i * i">i * i</span>
+<span class="chip" data-run="log -1">log -1</span>
+<span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span>
+<span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
 <h2 id="toc">language theory</h2>
-<ol>
+<ol start="0">
 <li><a href="#abstract">abstract</a></li>
 <li><a href="#core">the combinator core</a></li>
 <li><a href="#absence">absence and totality</a></li>
@@ -150,16 +130,16 @@
 <li><a href="#dispatch">generic dispatch</a></li>
 <li><a href="#algebra">+ and * are generic</a></li>
 <li><a href="#funeq">function equality</a></li>
-<li><a href="#numerics">numerics</a></li>
+<li><a href="#constellations">constellations</a></li>
 <li><a href="#mints">strings, names, and mints</a></li>
-<li><a href="#tower">the numeric tower</a></li>
 <li><a href="#meta">metatheory: three layers of evidence</a></li>
 </ol>
 <h2 id="appendices">appendices</h2>
 <ul class="appendices">
-<li><a href="#glance">language laws</a></li>
+<li><a href="#glance">formalizations</a></li>
 <li><a href="#impl">implementation</a></li>
 <li><a href="#see-also">further reading</a></li>
+<li><a href="#crew">the crew (apps)</a></li>
 </ul>
 <hr>
 <h2 id="abstract"><a href="#abstract">0 · abstract</a></h2>
@@ -170,7 +150,7 @@
 <li><strong>False is nothing, and nothing is measured.</strong> Every value has a complex-valued <strong>net</strong>. A value is false iff its net is ≤ 0 in the total order. The sole observation of magnitude is one saturating clamp <code>$</code>, and <code>!x ≡ (0 = $x)</code> exactly (<span class="thm">nilp_iff_sat0</span>).</li>
 <li><strong>The type lattice <em>is</em> the dispatch structure, and <em>induces</em> the total order.</strong> The kinds form a lattice; the generic operators are N×N tables indexed by two kinds; the lattice is the diagonal of those tables. The cross-kind total order is a deliberate <em>remap</em> of that lattice — the <strong>true-blue order</strong> (points to the floor, string below the numbers; <span class="thm">lt_trichotomy</span>, <span class="thm">le_total</span>) — one set of kinds read two ways, as dispatch and as order.</li>
 </ol>
-<p><strong>Scope of proof.</strong> The combinator / numeral / absence / measure / order / algebra core is machine-checked in <a href="rocq/spec.v">rocq/spec.v</a> over exact integers. The transcendental floats are demonstrated in <a href="test/spec.l">test/spec.l</a> but deliberately outside the Rocq slice; §10 says exactly where the line is, and why.</p>
+<p><strong>Scope of proof.</strong> The combinator / numeral / absence / measure / order / algebra core is machine-checked in <a href="rocq/spec.v">rocq/spec.v</a> over exact integers. The transcendental floats are demonstrated in <a href="test/spec.l">test/spec.l</a> but deliberately outside the Rocq slice; §8 says exactly where the line is, and why.</p>
 <h2 id="core"><a href="#core">1 · the combinator core</a></h2>
 <p>Application is left-associative and nullary application is identity:</p>
 <div class="law"><span class="n">(1.1) Currying.</span> <code>(f x y) = ((f x) y)</code>. Evidence: <span class="thm">curry</span>.</div>
@@ -244,7 +224,7 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <p>This single order is the engine of <code>sort</code> — one comparison per chain, the comparator <em>is</em> the total order — and of tablet / hash key ordering.</p>
 <h2 id="dispatch"><a href="#dispatch">5 · generic dispatch</a></h2>
 <p>A value's <strong>kind</strong> is an enum whose order is the <strong>dispatch lattice</strong> — semantics then representation: the points, then the arithmetic lane (the scalar gems and their array tower), then sequence (string, chain), then map, then hot. A generic operator at two arguments is an N×N table indexed by the two kinds; an operator at one argument is that table's <em>diagonal</em>; the three core tables are <code>+</code>, <code>*</code>, and <strong>apply</strong>. A both-charm (both-fixnum) fast path skips the table; otherwise one indexed jump selects a lane that widens only as far as the operands require (array ⊃ complex ⊃ bignum ⊃ float ⊃ …).</p>
-<p>The lattice and the dispatch are <em>the same object</em>: the diagonal of the dispatch matrix is the kind lattice. The cross-kind <strong>total order</strong> (§4) is a deliberate <em>remap</em> of that lattice — the true-blue order (<code>cmp_rank</code>: the points fall to the floor, string below the numbers, a galaxy folded in by its net), <strong>not</strong> the raw enum order. So you maintain one set of kinds and read it two ways: dispatch (the enum lattice) and order (its true-blue remap). This section cites no Rocq lemmas on purpose: the dispatch matrix and the tail-threading are implementation invariants the runtime checks and the corpus exercises, not theorems in the Rocq slice — they live at the demonstrate layer (§11), where the chips go quiet.</p>
+<p>The lattice and the dispatch are <em>the same object</em>: the diagonal of the dispatch matrix is the kind lattice. The cross-kind <strong>total order</strong> (§4) is a deliberate <em>remap</em> of that lattice — the true-blue order (<code>cmp_rank</code>: the points fall to the floor, string below the numbers, a galaxy folded in by its net), <strong>not</strong> the raw enum order. So you maintain one set of kinds and read it two ways: dispatch (the enum lattice) and order (its true-blue remap). This section cites no Rocq lemmas on purpose: the dispatch matrix and the tail-threading are implementation invariants the runtime checks and the corpus exercises, not theorems in the Rocq slice — they live at the demonstrate layer (§10), where the chips go quiet.</p>
 <h2 id="algebra"><a href="#algebra">6 · + and * are generic</a></h2>
 <p><code>+</code> adds numbers, concatenates strings, and appends lists; <code>-</code> is numeric only — <code>+ - *</code> are the ring algebra that closes the numbers (§4). On sequences <code>+</code> is a <strong>monoid</strong>:</p>
 <div class="law"><span class="n">(6.1) Sequence monoid.</span> <code>++</code> is associative (<span class="thm">cat_assoc</span>) with the empty sequence as left and right identity (<span class="thm">cat_nil_l</span>, <span class="thm">cat_nil_r</span>). Concretely <code>"ab"+"cd"="abcd"</code> (<span class="thm">cat_strings</span>), <code>'(1 2)+'(3 4)='(1 2 3 4)</code> (<span class="thm">cat_lists</span>), and <code>5+'(1 2)='(5 1 2)</code> — <code>+</code> adjoins (<span class="thm">adjoin</span>).</div>
@@ -264,21 +244,27 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <div class="law"><span class="n">(7.3) The numeral bridge.</span> <code>1 = (\ x x)</code> (<span class="thm">id_alpha</span>: 1 is the identity) and <code>0 = (\ _ 1)</code> (<span class="thm">zero_is_const_one</span>) — and 0 is <strong>only</strong> const-1 (<span class="thm">zero_ne_const_two</span>, <span class="thm">one_ne_zero</span>).</div>
 <div class="law"><span class="n">(7.4) η is not bridged.</span> <code>(\ x (f x)) ≠ f</code> (<span class="thm">eta_not_bridged</span>): a closure and its operator are a representation-crossing edge that stays false.</div>
 <p><code>&lt;</code> agrees with <code>=</code> here because the comparison hash is α-invariant; <code>id?</code> stays identity (finer than both).</p>
-<h2 id="numerics"><a href="#numerics">8 · numerics</a></h2>
-<p>The numeric carriers earn their own short names — each names a predicate you can probe, and they carry through the array laws below. They split the <strong>number</strong> band by rank.</p>
-<p>A <strong>number</strong> (<code>constellation?</code>) is any numeric value, scalar or array — the bottom band, closed under the ring algebra <code>+ - *</code>. A <strong>star</strong> (<code>star?</code>) is a <em>scalar</em> number, one that nets itself (<code>net x = x</code>, i.e. <code>id? x (net x)</code>): a fixnum, wide int, bignum, gem, or twin-gem scalar — the rank-0 point. The star carries two jewels: a <strong>charm</strong> (<code>charm?</code>) is a fixnum — the whole little
-word; a <strong>gem</strong> is a float — the smooth kind that falls between the charms. A <strong>twin gem</strong> is a complex (<code>twin?</code>): two gems paired as <code>(re, im)</code>, and <code>twin</code> is what pairs them. A <strong>tray</strong> (<code>tray?</code>) is an array, numeric or not; a <strong>galaxy</strong> (<code>galaxy?</code>) is a tray <em>of stars</em> — a numeric array. So a number is a star or a galaxy, and <code>$</code> lands every value on the <strong>green charms</strong> — the nonnegative integers (§3); a word-sized result is a charm, but a saturated bignum is a green star too.</p>
+<h2 id="constellations"><a href="#constellations">8 · constellations</a></h2>
+<p>The numeric carriers split by rank.
+A <strong>constellation</strong> (<code>constellation?</code>) is any numeric value, scalar or array — the bottom band, closed under the ring algebra <code>+ - *</code>.
+A <strong>star</strong> (<code>star?</code>) is a <em>scalar</em> number, one that nets itself (<code>net x = x</code>). This includes fixed and variable width values, floating point, and complex.
+A <strong>charm</strong> (<code>charm?</code>) aka fixnum is the smallest type of star, word-sized unboxed tagged integer.
+a <strong>gem</strong> is a float. A <strong>twin</strong> is a complex (<code>twin?</code>).
+A <strong>tray</strong> (<code>tray?</code>) is an array, numeric or not;
+a <strong>galaxy</strong> (<code>galaxy?</code>) is a tray <em>of stars</em> — a numeric array.
+Any star or galaxy is a constellation by nature.
 <table>
 <tr><th>name</th><th>predicate</th><th>what it is</th></tr>
 <tr><td><code>constellation</code></td><td><code>constellation?</code></td><td>any numeric value, scalar or array — the bottom band</td></tr>
 <tr><td><code>star</code></td><td><code>star?</code></td><td>a scalar number, one that nets itself (rank 0)</td></tr>
-<tr><td><code>charm</code></td><td><code>charm?</code></td><td>a fixnum — the whole little word</td></tr>
+<tr><td><code>charm</code></td><td><code>charm?</code></td><td>a fixnum</td></tr>
 <tr><td><code>gem</code></td><td><code>float?</code></td><td>a float — the smooth kind, between the charms</td></tr>
-<tr><td><code>twin gem</code></td><td><code>twin?</code></td><td>a complex — two gems paired <code>(re, im)</code></td></tr>
+<tr><td><code>twin</code></td><td><code>twin?</code></td><td>a complex — two gems paired <code>(re, im)</code></td></tr>
 <tr><td><code>tray</code></td><td><code>tray?</code></td><td>an array, numeric or not (rank ≥ 1)</td></tr>
 <tr><td><code>galaxy</code></td><td><code>galaxy?</code></td><td>a tray of stars — a numeric array (rank ≥ 1)</td></tr>
 </table>
-<p>A galaxy is <em>not</em> a star (<code>star?</code> is false on a tray, whose net is a fresh sum): it is a tray whose cells are stars. A charm is the smallest star; a number is a star or a galaxy.</p>
+<p>A galaxy is <em>not</em> a star (<code>star?</code> is false on a tray, whose net is a fresh sum): it is a tray whose cells are stars. A charm is the smallest star; a number is a star or a galaxy.
+The saturation operator <code>$</code> sends any value of any kind to a <strong>green charm</strong>.</p>
 <p>The stars have a structural twin. A star is fixed under <code>net</code> (<code>id? x (net x)</code> — its own measure); an <strong>atom</strong> (<code>atom?</code>) is fixed under <code>cap</code> (<code>x = (cap x)</code> — its own head). The non-atom is a <strong>pair</strong> — the chain that <code>link</code> builds, whose <code>cap</code> and <code>cup</code> split a head from a rest. Every star is an atom (a number is its own head too), so a star is a <em>special</em> atom — fixed under <code>net</code> as well as <code>cap</code>. <code>net</code> is what carves the stars out of the atoms.</p>
 <p>The <strong>tray</strong> is the APL half of the language. A shape is its list of axis sizes; the <strong>cell count</strong> is the product of the shape (<code>alen</code>), the <strong>rank</strong> its length (<code>arank</code>): <code>alen [2;3] = 6</code> (<span class="thm">alen_23</span>), <code>arank [2;3] = 2</code> (<span class="thm">arank_23</span>), and a 0-axis yields 0 cells (<span class="thm">alen_empty_axis</span>). Indexing is row-major and out-of-bounds reads the default:</p>
 <div class="law"><span class="n">(8.1) peep.</span> in-bounds reads the cell (<span class="thm">peep_in</span>), OOB reads the default (<span class="thm">peep_oob</span>); 2-D row-major is <code>i·cols + j</code> (<span class="thm">peep_22</span>).</div>
@@ -292,6 +278,8 @@ word; a <strong>gem</strong> is a float — the smooth kind that falls between t
 <p>Contraction is the inner / outer product. The dot product is commutative and length-checked:</p>
 <div class="law"><span class="n">(8.6) Contraction.</span> <code>dot [1;2;3] [4;5;6] = 32</code> (<span class="thm">dot_123_456</span>), <code>dot a b = dot b a</code> (<span class="thm">dot_comm</span>); <code>inner</code> is nil on a length mismatch (<span class="thm">inner_mismatch</span>). The matmul cell <code>M[i][j] = rowᵢ(A) · colⱼ(B)</code> checks at <span class="thm">matmul_cell</span> (= 154).</div>
 <p>A one-cell array <strong>demotes</strong> to its lone scalar (<code>@(5) = 5</code>): an array exists only at tally ≥ 2. Empties are the exception (a 0-axis has tally 0, not 1) — they stay arrays, carrying the reduction units of (8.2). There is thus no rank-0 array kind; a scalar star <em>is</em> the rank-0 point.</p>
+<p>Those carriers are the <strong>tower</strong>'s floors, and the tower above them is built to <em>stay</em> exact wherever exactness is reachable. The integer net of §3 is exact; <code>i*i = -1</code> is exact, algebraically; and <code>(log -1) = i·π</code> is exact in the principal-log direction, because <code>atan2(0,-1)</code> is π by IEEE fiat and <code>i</code> moves it with exact 0/1 products. <code>sqrt</code> factors its angle through <code>sinpi</code> / <code>cospi</code>, so <code>(1/2)·(-1) = i</code> on the nose. <code>/</code> is true division (an inexact integer quotient promotes to float, an exact one stays integer); <code>0/0</code> collapses to <code>0</code> (NaN is nothing, keeping the order total); overflow grows fixnum → wide → bignum.</p>
+<p>The one place floats bite is the <em>forward</em> transcendental: <code>(-1 = ((* i pi) e))</code> — that is, <code>e^{iπ} = -1</code>, since <code>exp</code> is <code>(\ x (x e))</code> — does <strong>not</strong> hold, because <code>=</code> is exact and the nearest double to π cannot make <code>sine</code> land on 0, so <code>e^{iπ}</code> keeps a ~1.22×10⁻¹⁶ residue. ai keeps that residue rather than rounding it away. The Rocq slice (§10) proves the algebra over exact ℤ and leaves the transcendentals to <a href="test/spec.l">test/spec.l</a>, which asserts a float against a literal only where it is bit-exact on every target.</p>
 <h2 id="mints"><a href="#mints">9 · strings, names, and mints</a></h2>
 <p>A <strong>string</strong> is its bytes: it indexes them (<span class="thm">str_index</span>, <code>("abc" 0)=97</code>; OOB applies as the unit 1, <span class="thm">str_index_oob</span>), its net is the <strong>sum of its bytes</strong> (<span class="thm">str_net</span>, <code>$"abc"=294</code>), and <code>tally</code> counts them (<span class="thm">str_tally</span>). The NUL byte nets nothing, so <code>+</code> reaches the bytes and an all-NUL text is nothing:</p>
 <div class="law"><span class="n">(9.1) NUL is free.</span> <code>$(+ "a" 0) = 97</code> (<span class="thm">nul_appends_free</span>); an all-NUL text is nothing (<span class="thm">all_nul_nothing</span>); <code>!(string 0)</code> vs <code>!!(string 1)</code> (<span class="thm">string_nul</span>, <span class="thm">string_one</span>).</div>
@@ -307,10 +295,7 @@ word; a <strong>gem</strong> is a float — the smooth kind that falls between t
 <li>the <strong>nom</strong> is their <strong>product</strong> <code>string × mint</code> — the spelling projected by <code>string</code> (<span class="thm">nom_cap</span>), the identity its serial. The product's universal property says any value carrying a spelling-map and an identity-map factors <em>uniquely</em> through it.</li>
 </ul>
 <p>So the atom is not <em>re-encoded</em>: the product is the object the atom's own operations already characterize, unique up to the iso the universal property guarantees — and <code>KNom</code> realizes it as its <strong>own kind</strong>, a flat cell (name + serial), not a chain. <code>string × mint</code> is the terminal thing that carries a name and an identity — and the symbol was only ever its description.</p>
-<h2 id="tower"><a href="#tower">10 · the numeric tower</a></h2>
-<p>The integer net of §3 is exact, and the tower above it is built to <em>stay</em> exact wherever exactness is reachable. <code>i*i = -1</code> is exact, algebraically. <code>(log -1) = i·π</code> is exact in the principal-log direction, because <code>atan2(0,-1)</code> is π by IEEE fiat and <code>i</code> moves it with exact 0/1 products. <code>sqrt</code> factors its angle through <code>sinpi</code> / <code>cospi</code>, so <code>(1/2)·(-1) = i</code> on the nose. <code>/</code> is true division (an inexact integer quotient promotes to float, an exact one stays integer); <code>0/0</code> collapses to <code>0</code> (NaN is nothing, keeping the order total); overflow grows fixnum → wide → bignum.</p>
-<p>The one place floats bite is the <em>forward</em> transcendental: <code>(-1 = ((* i pi) e))</code> — that is, <code>e^{iπ} = -1</code>, since <code>exp</code> is <code>(\ x (x e))</code> — does <strong>not</strong> hold, because <code>=</code> is exact and the nearest double to π cannot make <code>sine</code> land on 0, so <code>e^{iπ}</code> keeps a ~1.22×10⁻¹⁶ residue. ai keeps that residue rather than rounding it away. The Rocq slice (§11) proves the algebra over exact ℤ and leaves the transcendentals to <a href="test/spec.l">test/spec.l</a>, which asserts a float against a literal only where it is bit-exact on every target.</p>
-<h2 id="meta"><a href="#meta">11 · metatheory: three layers of evidence</a></h2>
+<h2 id="meta"><a href="#meta">10 · metatheory: three layers of evidence</a></h2>
 <p>A claim about ai can be believed at three escalating strengths, and the laws above are careful to say which applies where:</p>
 <ol>
 <li><strong>Probe.</strong> The way to settle any doubt is a one-line experiment at the binary; the demonstrations are reproducible, never taken on trust.</li>
@@ -318,12 +303,8 @@ word; a <strong>gem</strong> is a float — the smooth kind that falls between t
 <li><strong>Prove (<a href="rocq/spec.v">rocq/spec.v</a>).</strong> The combinator / numeral / absence / measure / order / algebra core is restated as theorems in <strong>universe-checked Rocq, axiom-free</strong>. These are the lemmas cited throughout.</li>
 </ol>
 <p>The caveat every formal demonstration carries: the consistency of its own metatheory. The Rocq layer lives in universe-checked Rocq, so its theorems are unconditional — "the world does not explode here." Drop universe checking (type-in-type) and <code>empty</code> becomes inhabited, ex falso giving everything; the blue theorems are stated where the world does <em>not</em> explode.</p>
-<p>What is <strong>not</strong> proved in Rocq, by design, lives at the demonstrate layer: the float / complex / bignum <em>values</em> of the tower (the algebra of §1–9 is proved over exact ℤ; §10 is demonstrated, not proved), pointer identity <code>id?</code> (nothing is shared in the model), and the implementation invariants of §5 (the dispatch matrix, the tail-threading), which the runtime checks rather than Rocq. A fourth bridge keeps the demonstrate and prove layers in step automatically: <code>tools/spec2coq.l</code> generates Rocq straight from the spec (see also, below).</p>
-<h2 id="impl"><a href="#impl">12 · implementation, in one breath</a></h2>
-<p>One word is one value: a fixnum is a tagged odd word; anything else is a heap object whose first word is its <strong>hot</strong> — a live external reference, the wire out of the heap to the ap that runs it. The VM is <strong>tail-threaded</strong> (aps tail-jump, never return) over a <strong>two-space copying</strong> collector; out-of-pool constants are immortal. No interpreter state lives outside the heap: the <strong>book</strong> (an ordinary ai hash) carries the globals, macros, the operators table, the <code>help</code> function, and the rng; C finds its own hooks by name, allocation-free.</p>
-<p>The compiler is written in ai. At build time the evaluator sits on the <strong>egg</strong> (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (<code>born</code> records the hatch time). The same image runs on Linux, wasm, and — as <strong>kship</strong> — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (<strong>ain</strong>), an interactive shell + pty wrapper (<strong>bao</strong>), a GNU-make-compatible build tool written in ai (<strong>cook</strong>), and <strong>gwen</strong>, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the book itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.</p>
-<p><strong>One core, faces.</strong> The language is the top of its own lattice — everything applies — and the apps are <em>faces</em> of it, each a way the core meets a boundary; the pairs glue by different universal shapes. The <strong>source</strong> faces <em>compose</em>: source reaches <code>top</code> by two legs that converge there — <strong>read</strong> (<code>chars → forms</code>) and <strong>feel</strong> (the weaver, <code>forms → top</code>) — the charm leg factoring <em>through</em> the lisp leg, <code>chars ─read→ forms ─feel→ top</code>, the cospan <code>chars → top ← forms</code> meeting at one core. The <strong>i/o</strong> faces <em>coproduct</em>: a shared host trunk <em>forks</em> into a local face (the shell <strong>bao</strong>) and a net face (the netcat <strong>ain</strong>), <code>local ⊔ net</code> — either/or, not a pipeline. Same object; two gluings — composition and coproduct, both machine-checked axiom-free in <a href="rocq/spec.v">rocq/spec.v</a> (<code>Section Faces</code>), which carries the fuller reading.</p>
-<h2 id="glance"><a href="#glance">· the laws at a glance</a></h2>
+<p>What is <strong>not</strong> proved in Rocq, by design, lives at the demonstrate layer: the float / complex / bignum <em>values</em> of the tower (the algebra of §1–9 is proved over exact ℤ; the tower's float/complex layer, the close of §8, is demonstrated, not proved), pointer identity <code>id?</code> (nothing is shared in the model), and the implementation invariants of §5 (the dispatch matrix, the tail-threading), which the runtime checks rather than Rocq. A fourth bridge keeps the demonstrate and prove layers in step automatically: <code>tools/spec2coq.l</code> generates Rocq straight from the spec (see also, below).</p>
+<h2 id="glance"><a href="#glance">partial list of formalizations</a></h2>
 <table>
 <tr><th>§</th><th>law</th><th>theorem(s)</th></tr>
 <tr><td>1</td><td>numeral law <code>(n x)=xⁿ</code></td><td><span class="thm">const_one</span> <span class="thm">identity</span> <span class="thm">tower</span> <span class="thm">tetration</span></td></tr>
@@ -347,6 +328,11 @@ word; a <strong>gem</strong> is a float — the smooth kind that falls between t
 </table>
 <p><em>Step any of these in <a href="rocq/spec.v">rocq/spec.v</a>; run all of them in <a href="test/spec.l">test/spec.l</a>; doubt any of them at the binary. The three agree.</em></p>
 
+<h2 id="impl"><a href="#impl">implementation</a></h2>
+<p>One word is one value: a fixnum is a tagged odd word; anything else is a heap object whose first word is its <strong>hot</strong> — a live external reference, the wire out of the heap to the ap that runs it. The VM is <strong>tail-threaded</strong> (aps tail-jump, never return) over a <strong>two-space copying</strong> collector; out-of-pool constants are immortal. No interpreter state lives outside the heap: the <strong>book</strong> (an ordinary ai hash) carries the globals, macros, the operators table, the <code>help</code> function, and the rng; C finds its own hooks by name, allocation-free.</p>
+<p>The compiler is written in ai. At build time the evaluator sits on the <strong>egg</strong> (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (<code>born</code> records the hatch time). The same image runs on Linux, wasm, and — as <strong>kship</strong> — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (<strong>ain</strong>), an interactive shell + pty wrapper (<strong>bao</strong>), a GNU-make-compatible build tool written in ai (<strong>cook</strong>), and <strong>gwen</strong>, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the book itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.</p>
+<p><strong>One core, faces.</strong> The language is the top of its own lattice — everything applies — and the apps are <em>faces</em> of it, each a way the core meets a boundary; the pairs glue by different universal shapes. The <strong>source</strong> faces <em>compose</em>: source reaches <code>top</code> by two legs that converge there — <strong>read</strong> (<code>chars → forms</code>) and <strong>feel</strong> (the weaver, <code>forms → top</code>) — the charm leg factoring <em>through</em> the lisp leg, <code>chars ─read→ forms ─feel→ top</code>, the cospan <code>chars → top ← forms</code> meeting at one core. The <strong>i/o</strong> faces <em>coproduct</em>: a shared host trunk <em>forks</em> into a local face (the shell <strong>bao</strong>) and a net face (the netcat <strong>ain</strong>), <code>local ⊔ net</code> — either/or, not a pipeline. Same object; two gluings — composition and coproduct, both machine-checked axiom-free in <a href="rocq/spec.v">rocq/spec.v</a> (<code>Section Faces</code>), which carries the fuller reading.</p>
+
 <h2 id="see-also"><a href="#see-also">· see also</a></h2>
 <ul>
 <li><a href="test/spec.l">test/spec.l</a> — the executable spec; every law assert-backed, green on every target</li>
@@ -355,6 +341,27 @@ word; a <strong>gem</strong> is a float — the smooth kind that falls between t
 <li><a href="CLAUDE.md">CLAUDE.md</a> — the self-maintaining context file</li>
 <li><a href="README.md">README.md</a> — the overview</li>
 </ul>
+
+<h2 id="crew"><a href="#crew">the crew (apps)</a></h2>
+<p class="qualifier">all apps are experimental and should be considered beta-minus quality</p>
+<dl class="crew">
+  <dt>🔭 tele</dt>
+    <dd>big telescope, drives kship, pytorch clone</dd>
+  <dt>🐰 bellsberry</dt>
+    <dd>a light brown rabbit with dark eyes and silver stripes</dd>
+  <dt>🕊 gwen</dt>
+    <dd>mourning dove friend of bellsberry and tele</dd>
+  <dt>🐄 mow</dt>
+    <dd>half cow half cat / grass chewer (garbage collector)</dd>
+  <dt>🐱 ain</dt>
+    <dd>white cat / netcat clone</dd>
+  <dt>🐶 bao</dt>
+    <dd>tan dog / rlwrap clone</dd>
+  <dt>🐀 cook</dt>
+    <dd>gray rat / make clone</dd>
+  <dt>⛵ kship</dt>
+    <dd>kernel network agent loop</dd>
+</dl>
 
 <footer>for p., b. and e.</footer>
 </body>
