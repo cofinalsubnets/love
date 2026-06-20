@@ -415,7 +415,7 @@
 
    ; pump bytes from port `src` to port `dst`, one at a time, until src hits EOF
    ; (get -> -1); flush after each byte keeps the far side prompt. (Same shape as
-   ; aineko's pump -- prel stays socket/pty-free, so each app carries its own.)
+   ; ain's pump -- prel stays socket/pty-free, so each app carries its own.)
    (pump src dst) (: ch (get src) (? (= ch -1) 0 (: _ (put dst ch) _ (flush dst) (pump src dst))))
 
    ; poll a non-blocking (gather pid) to its exited PAIR. the pair is told from
@@ -426,14 +426,14 @@
    ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional
    ; pump: stdin -> the child, the child's output -> stdout, both live at once
    ; (the two pumps park on different fds and interleave through the cooperative
-   ; scheduler, like aineko). The teardown differs from aineko's SYMMETRIC network
+   ; scheduler, like ain). The teardown differs from ain's SYMMETRIC network
    ; pump, though: a wrapped PROCESS can exit while stdin is still open, so the
    ; child's death is the primary signal -- master->stdout runs HERE and ends on
    ; master EOF (the child gone); the stdin->master side runs in `up` and, on the
    ; user's own EOF, forwards VEOF (byte 4) so a canonical child exits. funnel
    ; through one death: when master EOF lands, join `up` -- wait if it already
    ; finished (user EOF first), else chill it (still parked on stdin; the child is
-   ; dead so dropping pending input is correct, not aineko's data-loss case).
+   ; dead so dropping pending input is correct, not ain's data-loss case).
    ; returns the child's exited status pair, or ptyrun's errno fixnum on hatch
    ; failure.
    (wrap argv)

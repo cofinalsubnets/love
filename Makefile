@@ -45,7 +45,7 @@ test_host: host
 # binary instead. Each script prints a "<name>: ok" sentinel and uses the
 # test/00-init.l assert harness (which exits 1 on the first failure), so the gate
 # checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
-# Add a thread's smoke script to hostnif_tests (aineko: boot/net.l, &c).
+# Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
 hostnif_tests = boot/pty.l boot/net.l boot/baoedit.l boot/baotest.l
 test_hostnif: host
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
@@ -54,12 +54,12 @@ test_hostnif: host
 	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_hostnif.out; } \
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
 	done
-# aineko's two-process loopback gate: a server and a client over real TCP on
+# ain's two-process loopback gate: a server and a client over real TCP on
 # 127.0.0.1, full-duplex, asserting each side received what the other sent (the
-# socket nifs in host/net.c + the pump loops in tools/aineko.l). In `test_all`
+# socket nifs in host/net.c + the pump loops in tools/ain.l). In `test_all`
 # (the thorough gate) but NOT the fast `test` -- it needs two live processes and
 # a free loopback port. It is the ONLY net gate that drives the real
-# `ai tools/aineko.l` cli path: the in-process `boot/net.l` smoke (in
+# `ai tools/ain.l` cli path: the in-process `boot/net.l` smoke (in
 # test_hostnif) pipes straight into the binary, so it covers the nifs portably
 # but can't catch an invocation regression (e.g. a stale -l preload). Override
 # the port with `make nettest PORT=NNNN`.
@@ -225,7 +225,7 @@ endif
 # can't use). Pair with a musl-targeting CC so the binary runs on ANY Linux distro
 # regardless of glibc version AND still does DNS -- static *glibc* can't resolve
 # hostnames (getaddrinfo needs NSS via dlopen, impossible when static), but musl
-# resolves itself, so aineko's `connect host port` works:
+# resolves itself, so ain's `connect host port` works:
 #   make STATIC=1 CC=musl-clang
 # musl-clang is clang (matches our clang default) + the musl libc -- the clean
 # path. VALIDATED: fully static, `ldd` = not-a-dynamic-executable, runs, getaddrinfo
@@ -661,7 +661,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/ai \
   $d/bin/cook \
-  $d/bin/aineko \
+  $d/bin/ain \
   $d/bin/bao \
   $d/share/man/man1/ai.1 \
   $d/lib/ai/prel.l \
@@ -708,13 +708,13 @@ $d/bin/cook: cook/cook.l
 	@mkdir -p $(@D)
 	@ln -sf $(abspath $<) $@
 
-# aineko: the netcat clone (tools/aineko.l). Same shebang-script mechanism as cook
+# ain: the netcat clone (tools/ain.l). Same shebang-script mechanism as cook
 # (`#!/usr/bin/env -S ai -l` re-execs the installed `ai` to load it).
-$d/bin/aineko: tools/aineko.l
+$d/bin/ain: tools/ain.l
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
 
-# bao: the interactive shell. Unlike cook/aineko, ai/bao.l is DEFINE-ONLY (the
+# bao: the interactive shell. Unlike cook/ain, ai/bao.l is DEFINE-ONLY (the
 # launch `(bao 0)` is normally fired by main.c on a tty), so the bin is a tiny
 # relocatable launcher: it loads the installed bao.l next door and fires it.
 $d/bin/bao: Makefile

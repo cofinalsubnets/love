@@ -31,7 +31,7 @@
 ;   keep the read protocol (port back when incomplete, sentinel at eof). file mode stays helpless.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the APPS ride over the core, each owning NON-OVERLAPPING files so a session can take one in
-;   parallel: aineko (netcat, tools/aineko.l + host/net.c), bao (shell/rlwrap/debugger, ai/bao.l +
+;   parallel: ain (netcat, tools/ain.l + host/net.c), bao (shell/rlwrap/debugger, ai/bao.l +
 ;   host/pty.c), cook (make-in-ai, cook/cook.l), kship (freestanding agent-kernel, port/kship/). apps
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); ai.c/ai.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable

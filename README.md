@@ -189,12 +189,12 @@ cook is one of the **kship crew** -- a small crew of real programs that ride on
 tiny ai layer over a handful of host nifs; on a hosted system they `make install`
 onto PATH beside `ai`.
 
-- **aineko** -- a netcat clone in ~50 lines (愛猫, "beloved cat"): `aineko host
-  port` is a TCP client, `aineko -l port` a server, bytes pumping both ways at
+- **ain** -- a netcat clone in ~50 lines: `ain host
+  port` is a TCP client, `ain -l port` a server, bytes pumping both ways at
   once. it is the "real apps day one" demo, and the shape the cooperative scheduler
   was built for: two spawned pump loops, each parked in a port read on a different
   fd, interleave with no select loop. socket nifs in [host/net.c](host/net.c), the
-  program in [tools/aineko.l](tools/aineko.l).
+  program in [tools/ain.l](tools/ain.l).
 - **bao** -- the interactive shell as a loadable lib (`ai -l bao`, or the installed
   `bao`): raw `ai` shrinks to a bare read/eval/write filter, and bao is the editor +
   history + fault-face on top, doubling as a pty wrapper (one editor, the condition

@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/net/loopback.sh -- the aineko loopback gate (host-only, NOT in the portable
+# test/net/loopback.sh -- the ain loopback gate (host-only, NOT in the portable
 # corpus, so `make test` and the kernel/wasm builds stay socket-free). Drives the
 # real binary: a server task and a client over TCP 127.0.0.1, full-duplex, and
 # asserts each side received exactly what the other sent. This exercises every
@@ -14,9 +14,9 @@ set -u
 
 AI="${1:?usage: loopback.sh <ai-binary> [port]}"
 PORT="${2:-7390}"
-AK="tools/aineko.l"   # prel is baked into the egg -- no -l ai/prel.l preload
+AK="tools/ain.l"   # prel is baked into the egg -- no -l ai/prel.l preload
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/aineko.XXXXXX")"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/ain.XXXXXX")"
 trap 'kill "$srv" 2>/dev/null; rm -rf "$tmp"' EXIT
 
 printf 'CLIENT-SAYS-HI\nsecond line from the client\n' > "$tmp/cli_in"

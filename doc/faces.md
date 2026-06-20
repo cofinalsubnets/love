@@ -19,9 +19,9 @@ at ai's own limit, stands alone.
   characters, meet at one core": `charms ─read→ forms ─feel→ top`, the cospan `charms → top ← forms`
   converging on the core.
 
-**World faces — `bao` / `aineko` — COPRODUCT.** They do not compose; one shared i/o trunk
-**forks**: `bao` (the local face — the console, the shell/bridge) and `aineko` (the net face —
-the wire). `local ⊔ aineko` — either/or off the trunk, not a pipeline.
+**World faces — `bao` / `ain` — COPRODUCT.** They do not compose; one shared i/o trunk
+**forks**: `bao` (the local face — the console, the shell/bridge) and `ain` (the net face —
+the wire). `local ⊔ ain` — either/or off the trunk, not a pipeline.
 
 **Help face — `gwen` — the third boundary, INWARD.** source and world are *outward* — how ai meets
 what's outside it. `gwen` faces ai's own **help**: the boundary where the core *raises* because it
@@ -36,7 +36,7 @@ was missing. The runtime `help` handles conditions in a *program*; gwen handles 
 heap green — the two-space gardener).
 
 So: one object (`top` = ai, the language), three boundaries — **source** (read/feel, *compose*),
-**world** (bao/aineko, *coproduct*), **help** (gwen, the inward dual of the honest face). Two gluings
+**world** (bao/ain, *coproduct*), **help** (gwen, the inward dual of the honest face). Two gluings
 for the outward pairs, one inward face for the limit. Reflected in `content/lore.md` (lore voice)
 and `blue.md §12` (formal aside). Relates: [[serialize]] (the limit/colimit note over the mint-NNO).
 
@@ -61,14 +61,14 @@ Section Faces.
   (* WORLD faces coproduct: one trunk forks, local ⊔ net; the UP, pointwise-unique *)
   Variables Local Net Out : Type.
   Variable bao    : Local -> Out.
-  Variable aineko : Net   -> Out.
+  Variable ain : Net   -> Out.
   Definition fork (x : Local + Net) : Out :=
-    match x with inl l => bao l | inr n => aineko n end.
+    match x with inl l => bao l | inr n => ain n end.
   Theorem world_inl : forall l, fork (inl l) = bao l.    Proof. reflexivity. Qed.
-  Theorem world_inr : forall n, fork (inr n) = aineko n. Proof. reflexivity. Qed.
+  Theorem world_inr : forall n, fork (inr n) = ain n. Proof. reflexivity. Qed.
   Theorem world_unique :                                  (* any mediating h agrees with fork *)
     forall h : Local + Net -> Out,
-      (forall l, h (inl l) = bao l) -> (forall n, h (inr n) = aineko n) ->
+      (forall l, h (inl l) = bao l) -> (forall n, h (inr n) = ain n) ->
       forall x, h x = fork x.
   Proof. intros h Hl Hr x. destruct x; [apply Hl | apply Hr]. Qed.
 End Faces.
@@ -102,5 +102,5 @@ a limit (convergence, composition); output is a colimit (divergence, coproduct).
 *same duality* as [[serialize]]'s note — the numeric tower a **limit** (completion, converging), the
 string monoid a **colimit** (free, diverging), meeting at the mint-NNO. The architecture and the type
 theory rhyme: things converge inward by limits and composition, diverge outward by colimits and
-coproducts, with a center between. The reader-into-weaver and the bao/aineko fork are that one shape,
+coproducts, with a center between. The reader-into-weaver and the bao/ain fork are that one shape,
 wearing work clothes.

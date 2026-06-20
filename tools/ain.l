@@ -1,8 +1,8 @@
 #!/usr/bin/env -S ai -l
-; aineko -- a netcat clone in ~50 lines of ai (愛猫, "beloved cat").
+; ain -- a netcat clone in ~50 lines of ai (ai's cat).
 ;
-;   aineko HOST PORT   TCP client: connect to HOST:PORT
-;   aineko -l PORT     TCP server: listen on PORT, accept one client
+;   ain HOST PORT   TCP client: connect to HOST:PORT
+;   ain -l PORT     TCP server: listen on PORT, accept one client
 ;
 ; Either way it becomes a BIDIRECTIONAL PUMP -- stdin -> socket and socket ->
 ; stdout, both live at once. Two tasks, each parked in a port read on a different
@@ -11,22 +11,22 @@
 ; its fd is not ready -- see host/net.c / ai.c). So the whole program is just two
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
-; Run (until the egg bakes aineko into a multi-call binary). prel is ALREADY in
+; Run (until the egg bakes ain into a multi-call binary). prel is ALREADY in
 ; the egg -- do NOT `-l ai/prel.l` (the egg mops book/tray/etc after it hatches, so
 ; re-feeding prel.l to the live ev raises `missing book`/`missing tray`):
-;   out/host/ai tools/aineko.l HOST PORT
-;   out/host/ai tools/aineko.l -l PORT
+;   out/host/ai tools/ain.l HOST PORT
+;   out/host/ai tools/ain.l -l PORT
 ; The socket nifs (connect/listen/accept/seal) live in host/net.c; prel stays
 ; socket-free so the kernel/wasm frontends are unaffected.
 
 ; A top-level body-having `:` runs directly (and leaks no bindings). NOT wrapped
-; in a nullary (aineko-main) -- a bare (f) is `f` itself (the (f) == f law), so a
+; in a nullary (ain-main) -- a bare (f) is `f` itself (the (f) == f law), so a
 ; zero-arg call would never fire; the program body just IS this form.
 (: as (cup argv)                                   ; (cup argv) = the program's args
     ; parse a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48).
     (atoi s) (: (go i acc) (? (< i (tally s)) (go (+ 1 i) (+ (* 10 acc) (- (s i) 48))) acc)
                 (go 0 0))
-    (die m) (: _ (say err (+ "aineko: " (+ m "\n"))) (nap 1))
+    (die m) (: _ (say err (+ "ain: " (+ m "\n"))) (nap 1))
 
     ; pump bytes from port `src` to port `dst`, one byte at a time, until src
     ; hits EOF (get -> -1). flush after each byte makes stdout prompt (it is a
@@ -68,6 +68,6 @@
 
     ; dispatch on the args: -l PORT = server, HOST PORT = client, else usage.
     (? (= (cap as) "-l") (? (two? (cup as)) (serve (atoi (caup as)))
-                            (die "usage: aineko -l PORT"))
+                            (die "usage: ain -l PORT"))
        (two? (cup as)) (dial (cap as) (atoi (caup as)))
-       (die "usage: aineko HOST PORT  |  aineko -l PORT")))
+       (die "usage: ain HOST PORT  |  ain -l PORT")))

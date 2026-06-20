@@ -322,7 +322,7 @@ static lvm(lvm_getenv) {
 // (getpid x) -> the running process id (x ignored). The host-nif worked example,
 // merged here from the former host/host.c. NOTE: unlike the host/*.c nifs, main.c
 // is linked into ai0 too, so getpid is present in the bootstrap as well -- not a
-// pure host-glob nif. net.c (aineko) / pty.c (bao) are the live not-in-ai0 ones.
+// pure host-glob nif. net.c (ain) / pty.c (bao) are the live not-in-ai0 ones.
 static lvm(lvm_getpid) { return Sp[0] = putcharm(getpid()), Ip++, Continue(); }
 
 static union u const

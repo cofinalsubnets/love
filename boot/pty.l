@@ -63,7 +63,7 @@
 ; bytes too, so the literal input comes straight back; read it byte by byte (a
 ; bounded read, NOT slurp -- cat never EOFs). proves the write AND read lanes of
 ; the master port in one round trip; the full stdin<->stdout pump (bao's `wrap`)
-; rides real tty fds, so it is verified manually, like aineko's `make nettest`.
+; rides real tty fds, so it is verified manually, like ain's `make nettest`.
 (: r (mind (L "cat"))
  m (cup r)
  _ (put m 110) _ (put m 101) _ (put m 107) _ (put m 111) _ (put m 10)  ; "neko\n"

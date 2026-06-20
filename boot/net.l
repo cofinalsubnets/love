@@ -1,4 +1,4 @@
-; --- boot/net.l: a runnable smoke test for aineko's socket nifs (host/net.c) ---
+; --- boot/net.l: a runnable smoke test for ain's socket nifs (host/net.c) ---
 ; NOT in the test/*.l corpus on purpose: the socket nifs (connect/listen/accept/
 ; seal) live in host/net.c, which the final `ai` links but ai0 does NOT -- and
 ; ai0 bakes the whole corpus, so a corpus test would read these names as missing

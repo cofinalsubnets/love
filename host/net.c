@@ -1,14 +1,14 @@
-// host/net.c -- the aineko socket nifs. Host-only (links main.c), auto-globbed
+// host/net.c -- the ain socket nifs. Host-only (links main.c), auto-globbed
 // + auto-registered via AI_NIF; no ai.c/ai.h/main.c edit. Every nif mirrors
 // main.c's lvm_open: produce an OS fd, hand it to ai_io_alloc (ai.c) -> a heap
 // port carrying a close finalizer. Once an fd is a port, READ AND WRITE COME
 // FREE through the existing fgetc/fputc machinery (the fgetc read path even
 // yields cooperatively on a not-ready fd), so a socket nif only has to make the
 // fd. That is the whole netcat core: connect/listen/accept give you the ports,
-// the two .l pump loops (tools/aineko.l) shuttle bytes, and shutdown half-closes
+// the two .l pump loops (tools/ain.l) shuttle bytes, and shutdown half-closes
 // so a stdin-EOF lets the peer see EOF.
 //
-// Blocking is intentional here: aineko is one-shot, so a blocking getaddrinfo /
+// Blocking is intentional here: ain is one-shot, so a blocking getaddrinfo /
 // connect / accept is acceptable (the doc's Stage 1). The fgetc/fputc traffic
 // that follows is what interleaves cooperatively, not these setup calls.
 #include "ai.h"
@@ -105,7 +105,7 @@ static lvm(lvm_listen) {
  return Continue(); }
 
 // (accept l) -- block until a client connects to listener port `l`, wrap the
-// connection fd as a port. Blocking is fine for one-shot aineko: there is
+// connection fd as a port. Blocking is fine for one-shot ain: there is
 // nothing else to do until the first client arrives, and the pump tasks are
 // only spawned afterwards. nil on misuse / accept() failure.
 static lvm(lvm_accept) {

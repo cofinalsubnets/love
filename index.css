@@ -101,4 +101,4 @@ footer { margin-top: 3.5em; color: #474e72; font-size: .85em;
 .crew dt { margin-top: .7em; }
 .crew dt a { font-weight: 600; }
 .crew dd { margin: 0 0 0 1.4em; color: #8b91bd; font-size: .92em; }
-h1::before { content: "🟦 "; }
+h1::before { content: "🔵 "; }

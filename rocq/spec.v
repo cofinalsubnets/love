@@ -858,7 +858,7 @@ Proof. intro r. unfold cnilp, cof; cbn.
    SOURCE faces COMPOSE: read (charms->forms) runs THROUGH feel (the weaver, forms->top),
    so the charm face factors through the lisp face -- chars -> top <- forms, the two lanes
    converging on one core. The WORLD faces are a COPRODUCT: one i/o trunk forks into bao
-   (local) and aineko (net). Both axiom-free; the coproduct's uniqueness is stated
+   (local) and ain (net). Both axiom-free; the coproduct's uniqueness is stated
    POINTWISE, so no functional extensionality is needed. *)
 Section Faces.
   Variables Top Charm Form Out Loc Net : Type.
@@ -872,15 +872,15 @@ Section Faces.
 
   (* WORLD faces -- one trunk forks; the coproduct universal property *)
   Variable bao    : Loc -> Out.             (* the local face (the shell/bridge) *)
-  Variable aineko : Net -> Out.             (* the net face (the cat on the wire) *)
+  Variable ain : Net -> Out.             (* the net face (the cat on the wire) *)
   Definition fork (x : Loc + Net) : Out :=
-    match x with inl l => bao l | inr n => aineko n end.
+    match x with inl l => bao l | inr n => ain n end.
   Theorem world_inl : forall l, fork (inl l) = bao l.     Proof. reflexivity. Qed.
-  Theorem world_inr : forall n, fork (inr n) = aineko n.  Proof. reflexivity. Qed.
+  Theorem world_inr : forall n, fork (inr n) = ain n.  Proof. reflexivity. Qed.
   (* any mediating map agreeing on the injections IS fork (pointwise) -- the UP *)
   Theorem world_unique :
     forall h : Loc + Net -> Out,
-      (forall l, h (inl l) = bao l) -> (forall n, h (inr n) = aineko n) ->
+      (forall l, h (inl l) = bao l) -> (forall n, h (inr n) = ain n) ->
       forall x, h x = fork x.
   Proof. intros h Hl Hr x. destruct x as [l | n]; cbn; [apply Hl | apply Hr]. Qed.
 

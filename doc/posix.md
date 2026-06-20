@@ -6,9 +6,9 @@ apps. The guiding decision (user, 2026-06-17): **don't reimplement POSIX; expose
 the one already under us.** On the host, ai is already a Unix process — the OS layer
 isn't something to build, it's something to *surface*. And it's **host-agnostic**:
 target the POSIX standard, not a kernel, so the same nifs run on Linux, a BSD, or
-macOS (apt — `aineko` is an OpenBSD `nc` clone).
+macOS (apt — `ain` is an OpenBSD `nc` clone).
 
-This is the **aineko pattern, generalized.** aineko already wraps the socket
+This is the **ain pattern, generalized.** ain already wraps the socket
 syscalls as host nifs in `main.c`; the POSIX layer is "do that for the rest of the
 syscall surface." Nothing exotic.
 
@@ -27,7 +27,7 @@ backends swap underneath.
 ### L0 — ride the host Unix (the killer feature)
 
 ai-the-host-process already calls `read`/`write`/`malloc`. L0 widens that to the
-POSIX surface as nifs, exactly like aineko's `connect`/`listen`/`accept`:
+POSIX surface as nifs, exactly like ain's `connect`/`listen`/`accept`:
 
 > every host nif is `call_X` (an `ai_noinline` syscall worker) + `lvm_X` (the VM
 > tail wrapper) + `nif_X[]` thread + a `{"name", nif_X}` row in `d[]` (main.c). The
@@ -39,7 +39,7 @@ host's programs.** `(exec "ls" '("-l"))`, a `(pipe)` between two `(fork)`ed chil
 job control — ai runs `ls`/`grep`/`git` and pipes between them. "Use the host Unix as
 the shell substrate" — you get a usable Unix without writing one.
 
-Gating mirrors aineko: host-only `#ifdef`; the kernel (`kmain.c`) and wasm don't link
+Gating mirrors ain: host-only `#ifdef`; the kernel (`kmain.c`) and wasm don't link
 `main.c` so they auto-exclude; `prel.l` stays syscall-free; a separate
 `make ostest`-style target, not the portable corpus.
 
@@ -75,7 +75,7 @@ Most POSIX concepts already have an ai shape — L0 just wires them to the host:
 | signals — `sigaction`/`kill`   | **the condition system**: a delivered signal `raise`s through `help`/`scare`; `(kill pid sig)` is the planned bao nif |
 | environment — `getenv`/`environ`/argv | cli.l (#8) already parses argv; add env nifs    |
 | exit codes / std streams       | `in`/`out`/`err` ports exist; exit-code plumbing via #8/#10 |
-| sockets (BSD)                  | **aineko** — `connect`/`listen`/`accept`/`shutdown`/DNS |
+| sockets (BSD)                  | **ain** — `connect`/`listen`/`accept`/`shutdown`/DNS |
 | time — `clock_gettime`         | `ai_clock` / `(clock t)` exist                          |
 | `select`/`poll`                | `ai_wait_fds` / `ai_ready` exist (the scheduler's core) |
 
@@ -87,7 +87,7 @@ Two mappings are the elegant ones, and both are *already built*:
   *is* the signal machinery.
 - **fds → ports, select → `ai_wait_fds`.** The cooperative scheduler already blocks
   tasks on fds and wakes the ready one. Two `spawn`ed pumps on two fds interleave with
-  no select loop (this is why aineko's bidirectional pump is ~free).
+  no select loop (this is why ain's bidirectional pump is ~free).
 
 ## Staging (L0)
 
@@ -102,7 +102,7 @@ Two mappings are the elegant ones, and both are *already built*:
    control (`SIGTSTP`/`SIGCONT`) over `chill`/thaw.
 5. **env + std-stream polish** — `getenv`/`setenv`/`environ`, exit-code conventions (#10).
 
-Sockets are already covered by aineko; fold them in as the network slice.
+Sockets are already covered by ain; fold them in as the network slice.
 
 ## Open questions
 
@@ -123,5 +123,5 @@ Sockets are already covered by aineko; fold them in as the network slice.
 ## See also
 
 - `crew/kship.md` — the L2 consumer (a bare-metal agent that needs its own POSIX).
-- the aineko / `ai_io` plan — the L0 pattern this generalizes (socket nifs in `main.c`).
+- the ain / `ai_io` plan — the L0 pattern this generalizes (socket nifs in `main.c`).
 - todo `#8` (cli.l → shell.l) / `#10` (POSIX shell) — staging step 3 lives there.
