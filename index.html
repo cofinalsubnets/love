@@ -4,118 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ai</title>
-<style>
-/* site.css -- the single stylesheet for the kship site (index/repl/blue), inlined
-   into each page by tools/site.l. base theme from the blue paper (periwinkle on
-   deep blue, bitmap-VGA feel, green = a kept answer); the repl + chip + crew
-   components folded in from the old index. one sheet, every page. */
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  background: #0a0d1a; color: #c6ccf3;
-  font-family: "Px437 IBM VGA8", "Px437 IBM VGA 9x16", "ModernDOS 8x16",
-               "PxPlus IBM VGA8", "DejaVu Sans Mono", ui-monospace,
-               Menlo, Consolas, monospace;
-  font-size: 17px; line-height: 1.5;
-  font-variant-ligatures: none; text-rendering: optimizeSpeed;
-  -webkit-font-smoothing: none; font-smooth: never;
-  max-width: 54em; margin: 0 auto; padding: 2em 1em 5em;
-}
-
-h1 { font-size: 2.2em; font-weight: normal; letter-spacing: .04em; }
-h1::after { content: " 🔭"; }   /* the telescope, every page; site.l injects a per-page ::before */
-h2 { font-size: 1.15em; font-weight: normal; color: #8b91bd;
-     margin: 2.4em 0 .6em; border-bottom: 1px solid #222842; padding-bottom: .3em; }
-h3 { font-size: 1em; font-weight: normal; color: #a3a9d2; margin: 1.6em 0 .5em; }
-h2 a, h3 a { color: inherit; }
-h2 a:hover, h3 a:hover { text-decoration: none; }
-h2 a:hover::after, h3 a:hover::after { content: " #"; color: #3f4668; }
-
-p { margin: .7em 0; text-align: justify; hyphens: auto; }
-a { color: #8fb0ff; text-decoration: none; }
-a:hover { text-decoration: underline; }
-.dim { color: #6c7398; }
-strong { color: #e3e6ff; font-weight: 600; }
-em { color: #aab1de; }
-
-code { color: #c6ccf3; background: #14182a; border: 1px solid #1e2338;
-       border-radius: 3px; padding: .05em .35em; white-space: pre-wrap; }
-pre { background: #070a16; border: 1px solid #222842; border-radius: 6px;
-      padding: .9em 1em; margin: 1em 0; overflow-x: auto; line-height: 1.5; }
-pre code { background: none; border: none; padding: 0; white-space: pre; color: #a9b1de; }
-
-/* a theorem name: the green of a proved answer, popping against the blue */
-.thm { color: #9ece6a; background: #11160f; border: 1px solid #1e2a17;
-       border-radius: 3px; padding: .02em .35em; }
-
-/* a numbered law: the callout boxes that carry the propositions */
-.law { background: #0c1022; border-left: 2px solid #38427e;
-       border-radius: 0 4px 4px 0; padding: .55em .9em; margin: 1em 0;
-       text-align: justify; hyphens: auto; }
-.law .n { color: #8fb0ff; }
-.ev { color: #6c7398; }
-
-table { border-collapse: collapse; width: 100%; margin: 1.1em 0; font-size: .93em; }
-th, td { border: 1px solid #222842; padding: .35em .6em; text-align: left;
-         vertical-align: top; }
-th { color: #8b91bd; font-weight: normal; background: #12162a; }
-td code { background: none; border: none; padding: 0; }
-
-ul, ol { margin: .7em 0 .7em 1.4em; }
-li { margin: .35em 0; text-align: justify; hyphens: auto; }
-
-hr { border: none; border-top: 1px solid #222842; margin: 2.4em 0; }
-
-/* chrome the generator templates in: subtitle, table of contents, top nav. */
-.sub { color: #6c7398; font-size: .9em; margin: .4em 0 1.6em;
-       text-align: left; hyphens: none; }
-.toc { color: #8b91bd; font-size: .92em; line-height: 2;
-       text-align: left; hyphens: none; }
-.toc a { color: #8b91bd; }
-.toc a:hover { color: #8fb0ff; }
-.topnav { font-size: .85em; margin-bottom: 1.4em; text-align: left; hyphens: none; }
-.topnav a { color: #8fb0ff; }
-.topnav .here { color: #c6ccf3; }    /* the current page: named, not linked */
-footer { margin-top: 3.5em; color: #474e72; font-size: .85em;
-         border-top: 1px solid #222842; padding-top: 1em; }
-.blue { color: #8fb0ff; } .red { color: #e0af68; } .grn { color: #9ece6a; }
-
-/* --- the live repl (the repl page) --- */
-#status { color: #6c7398; font-size: .9em; margin-top: .2em; }
-#term { background: #070a16; border: 1px solid #222842; border-radius: 6px;
-        padding: .8em; margin-top: 1em; min-height: 16em; max-height: 28em;
-        overflow-y: auto; cursor: text; }
-#out { white-space: pre-wrap; word-break: break-word; }
-.in  { color: #8b91bd; } .in::before { content: ";;; "; color: #3f4668; }
-.ans { color: #9ece6a; }
-.cnd { color: #e0af68; }
-#row { display: flex; align-items: flex-start; }
-#row::before { content: ";;; "; color: #3f4668; white-space: pre; }
-#cmd { flex: 1; background: none; border: none; outline: none; resize: none;
-       color: #c6ccf3; font: inherit; line-height: inherit; overflow: hidden; }
-
-/* --- chips (runnable examples) + the crew roster --- */
-.chip { display: inline-block; background: #14182a; border: 1px solid #222842;
-        border-radius: 4px; padding: .15em .55em; margin: .18em .25em .18em 0;
-        color: #c6ccf3; cursor: pointer; white-space: pre; }
-.chip:hover { border-color: #8fb0ff; color: #fff; }
-.note { color: #6c7398; font-size: .9em; margin-left: .4em; }
-.crew { margin: .9em 0; }
-.crew dt { margin-top: .7em; }
-.crew dt a { font-weight: 600; }
-.crew dd { margin: 0 0 0 1.4em; color: #8b91bd; font-size: .92em; }
-h1::before { content: "💙 "; }
-</style>
+<link rel="stylesheet" href="index.css">
 </head>
 <body>
-<p class="topnav"><a href="kship.html">kship</a> · <a href="repl.html">bao</a> · <a href="blue.html">blue paper</a> · <a href="CLAUDE.md">the spec</a> · <a href="crew/index.html">the crew</a></p>
-<h1>ai blue paper</h1>
-<p class="sub"><em>The companion to the narrative. Where <a href="CLAUDE.md">CLAUDE.md</a> explains and <a href="README.md">README.md</a> pitches, this document states the laws as propositions and points each one at its evidence: the executable spec <a href="test/spec.l">test/spec.l</a> (every claim assert-backed, green on every target) and the machine-checked theorems in <a href="rocq/spec.v">rocq/spec.v</a> (axiom-free, in universe-checked Rocq). Theorem names below in <span class="thm">green</span> are the actual lemmas in that file; you can step them.</em></p>
+<p class="topnav"><a href="CLAUDE.md">the spec</a> · <a href="README.md">readme</a></p>
+<h1>ai</h1>
+<p class="sub"><em>Where <a href="CLAUDE.md">CLAUDE.md</a> explains and <a href="README.md">README.md</a> pitches, this states the laws as propositions and points each one at its evidence: the executable spec <a href="test/spec.l">test/spec.l</a> (every claim assert-backed, green on every target) and the machine-checked theorems in <a href="rocq/spec.v">rocq/spec.v</a> (axiom-free, in universe-checked Rocq). Theorem names below in <span class="thm">green</span> are the actual lemmas; you can step them.</em></p>
 <p><em>Written by </em><em>telescope</em><em> — the laws made rigorous — with </em><em>gwen</em><em>, whose intuition feels what is true before the proof finds it.</em></p>
-<!-- the live repl apparatus: status, terminal, runnable chips, and the wasm driver.
-     injected as the tail of repl.html by tools/site.l (page-id "repl"). raw HTML/JS,
-     since the terminal + the data-run chips are inherently markup, not markdown. -->
+<!-- the live bao shell: status, terminal, runnable chips, and the wasm driver.
+     raw HTML/JS, since the terminal + the data-run chips are markup, not prose. -->
 <p id="status">loading the image…</p>
 
 <div id="term">
@@ -260,7 +157,45 @@ loop is the number 15 applied to a step function:</p>
     ch.addEventListener('click', () => { run(ch.dataset.run); cmd.focus(); }));
 })();
 </script>
+<h2 id="crew"><a href="#crew">the crew</a></h2>
+<p>ai is sailed by a small crew — each tends one thing, each written in ai over the
+same tiny core. they ride <strong>kship</strong>, the freestanding kernel; non-overlapping
+territory, so the sessions run in parallel.</p>
+<dl class="crew">
+  <dt>tele · the pilot</dt>
+    <dd>sees and drives kship; the eye that scopes constellations.</dd>
+  <dt>zev · the sounder</dt>
+    <dd><code>sound</code> — charms into forms, bytes read into a tree.</dd>
+  <dt>wev · the spinner</dt>
+    <dd><code>feel</code> — the source prepass: macroexpand, boxfix, fold.</dd>
+  <dt>bellberry · the evaluator</dt>
+    <dd><code>ev</code> — feel ∘ sound = wev ∘ zev, the two lanes met and run.</dd>
+  <dt>gwen · the synthesist</dt>
+    <dd>keeps the human words and the ai words in agreement.</dd>
+  <dt>mow · the gardener</dt>
+    <dd>tends the two-space copying collector, keeps the heap green.</dd>
+  <dt>bao · the shell</dt>
+    <dd>a soft wrap around a chewy command; also the debugger.</dd>
+  <dt>aineko · the cat</dt>
+    <dd>netcat — bytes pumped both ways.</dd>
+  <dt>cook · the builder</dt>
+    <dd>make-in-ai — builds the host from scratch, passes the corpus.</dd>
+  <dt>kship · the ship</dt>
+    <dd>the freestanding kernel — the language on bare metal.</dd>
+</dl>
+
+<h2 id="kship"><a href="#kship">kship</a></h2>
+<p>kship is the freestanding ai-kernel: the same image that runs on Linux and wasm,
+booting on bare metal with no OS under it (x86_64 / aarch64 via limine) and running
+the language over UDP — a network REPL on the raw machine, a ship that sails bare
+metal with a telescope at the helm.</p>
+<p>On the ship ai is <code>top</code> and the crew are its faces. It is a self-driving
+agent: <strong>read</strong> (sound then ev) is its <em>perceive</em> — it reads its
+world and runs it — feeding the decide in kship's perceive → decide → act.</p>
+
 <p class="toc">
+<a href="#crew">· the crew</a><br>
+<a href="#kship">· kship</a><br>
 <a href="#abstract">0 · abstract</a><br>
 <a href="#core">1 · the combinator core</a><br>
 <a href="#absence">2 · absence and totality</a><br>
@@ -280,7 +215,7 @@ loop is the number 15 applied to a step function:</p>
 <hr>
 <h2 id="abstract"><a href="#abstract">0 · abstract</a></h2>
 <p>ai is a fully-curried, dynamically-kinded language whose entire surface is one operation — <strong>application</strong> — over a single generic core. There are no separate "primitives" in the usual sense: a number, a string, a list, an array, a complex scalar, a hash, and a closure are all <em>operators</em>, total functions of their own kind, and <code>(f x)</code> dispatches on the kind of <code>f</code>. From this one idea the language derives Church numerals that are also integers, arrays, and iterators; a notion of truth that is a <em>measure</em> rather than a tag; a total order over every value; and an equality that bridges the numeric tower and decides α-equivalence of closures.</p>
-<p>This paper develops the semantics in the order the core itself is built: combinator → absence → measure → order → generic algebra → tower. Three claims recur and are worth stating up front:</p>
+<p>This develops the semantics in the order the core itself is built: combinator → absence → measure → order → generic algebra → tower. Three claims recur and are worth stating up front:</p>
 <ol>
 <li><strong>One law, many faces.</strong> A church numeral <code>n</code> is a single operator. On a numeral it exponentiates (<code>(n x) = xⁿ</code>); on a function it iterates (<code>(n f) = fⁿ</code>); these are the same map dispatched on the argument's kind (<span class="thm">lanes_agree</span>).</li>
 <li><strong>False is nothing, and nothing is measured.</strong> Every value has a complex-valued <strong>net</strong>. A value is false iff its net is ≤ 0 in the total order. The sole observation of magnitude is one saturating clamp <code>$</code>, and <code>!x ≡ (0 = $x)</code> exactly (<span class="thm">nilp_iff_sat0</span>).</li>
@@ -426,26 +361,25 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <p>The integer net of §3 is exact, and the tower above it is built to <em>stay</em> exact wherever exactness is reachable. <code>i*i = -1</code> is exact, algebraically. <code>(log -1) = i·π</code> is exact in the principal-log direction, because <code>atan2(0,-1)</code> is π by IEEE fiat and <code>i</code> moves it with exact 0/1 products. <code>sqrt</code> factors its angle through <code>sinpi</code> / <code>cospi</code>, so <code>(1/2)·(-1) = i</code> on the nose. <code>/</code> is true division (an inexact integer quotient promotes to float, an exact one stays integer); <code>0/0</code> collapses to <code>0</code> (NaN is nothing, keeping the order total); overflow grows fixnum → wide → bignum.</p>
 <p>The one place floats bite is the <em>forward</em> transcendental: <code>(-1 = ((* i pi) e))</code> — that is, <code>e^{iπ} = -1</code>, since <code>exp</code> is <code>(\ x (x e))</code> — does <strong>not</strong> hold, because <code>=</code> is exact and the nearest double to π cannot make <code>sine</code> land on 0, so <code>e^{iπ}</code> keeps a ~1.22×10⁻¹⁶ residue. ai keeps that residue rather than rounding it away. The Rocq slice (§11) proves the algebra over exact ℤ and leaves the transcendentals to <a href="test/spec.l">test/spec.l</a>, which asserts a float against a literal only where it is bit-exact on every target.</p>
 <h2 id="meta"><a href="#meta">11 · metatheory: three layers of evidence</a></h2>
-<p>A claim about ai can be believed at three escalating strengths, and this document is careful to say which applies where:</p>
+<p>A claim about ai can be believed at three escalating strengths, and the laws above are careful to say which applies where:</p>
 <ol>
 <li><strong>Probe.</strong> The way to settle any doubt is a one-line experiment at the binary; the demonstrations are reproducible, never taken on trust.</li>
 <li><strong>Demonstrate (<a href="test/spec.l">test/spec.l</a>).</strong> Every law is assert-backed and runs green on every target — host, the self-hosted bootstrap, the freestanding kernel, and wasm — exhibiting the laws at runtime across the whole tower, floats included.</li>
 <li><strong>Prove (<a href="rocq/spec.v">rocq/spec.v</a>).</strong> The combinator / numeral / absence / measure / order / algebra core is restated as theorems in <strong>universe-checked Rocq, axiom-free</strong>. These are the lemmas cited throughout.</li>
 </ol>
-<p>The caveat every formal demonstration carries: the consistency of its own metatheory. The Rocq layer lives in universe-checked Rocq, so its theorems are unconditional — "the world does not explode here." Drop universe checking (type-in-type) and <code>empty</code> becomes inhabited, ex falso giving everything; the blue-paper theorems are stated where the world does <em>not</em> explode.</p>
+<p>The caveat every formal demonstration carries: the consistency of its own metatheory. The Rocq layer lives in universe-checked Rocq, so its theorems are unconditional — "the world does not explode here." Drop universe checking (type-in-type) and <code>empty</code> becomes inhabited, ex falso giving everything; the blue theorems are stated where the world does <em>not</em> explode.</p>
 <p>What is <strong>not</strong> proved in Rocq, by design, lives at the demonstrate layer: the float / complex / bignum <em>values</em> of the tower (the algebra of §1–9 is proved over exact ℤ; §10 is demonstrated, not proved), pointer identity <code>id?</code> (nothing is shared in the model), and the implementation invariants of §5 (the dispatch matrix, the tail-threading), which the runtime checks rather than Rocq. A fourth bridge keeps the demonstrate and prove layers in step automatically: <code>tools/spec2coq.l</code> generates Rocq straight from the spec (see also, below).</p>
 <h2 id="impl"><a href="#impl">12 · implementation, in one breath</a></h2>
 <p>One word is one value: a fixnum is a tagged odd word; anything else is a heap object whose first word is its <strong>hot</strong> — a live external reference, the wire out of the heap to the ap that runs it. The VM is <strong>tail-threaded</strong> (aps tail-jump, never return) over a <strong>two-space copying</strong> collector; out-of-pool constants are immortal. No interpreter state lives outside the heap: the <strong>book</strong> (an ordinary ai hash) carries the globals, macros, the operators table, the <code>help</code> function, and the rng; C finds its own hooks by name, allocation-free.</p>
-<p>The compiler is written in ai. At build time the evaluator sits on the <strong>egg</strong> (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (<code>born</code> records the hatch time). The same image runs on Linux, wasm, and — as <strong>kship</strong> — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (<strong>aineko</strong>), an interactive shell + pty wrapper (<strong>bao</strong>), a GNU-make-compatible build tool written in ai (<strong>cook</strong>), and <strong>siri</strong>, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the book itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.</p>
+<p>The compiler is written in ai. At build time the evaluator sits on the <strong>egg</strong> (the quoted compiler source) twice — the C bootstrap compiles the compiler, which recompiles itself — and the hatchling bakes into the binary (<code>born</code> records the hatch time). The same image runs on Linux, wasm, and — as <strong>kship</strong> — bare metal (x86_64 / aarch64 via limine): a freestanding kernel that boots with no OS and runs the language over UDP, a bare-metal network REPL. A small crew of real programs rides on it: a netcat clone in ~50 lines (<strong>aineko</strong>), an interactive shell + pty wrapper (<strong>bao</strong>), a GNU-make-compatible build tool written in ai (<strong>cook</strong>), and <strong>gwen</strong>, the synthesist, who keeps the human words matched to the ai words. Just before birth the egg mops up every compiler-internal name — the book itself included — so a runtime-internal name is missing, and a missing name reads the zero point. The language closes over its own construction.</p>
 <p><strong>One core, faces.</strong> The language is the top of its own lattice — everything applies — and the apps are <em>faces</em> of it, each a way the core meets a boundary; the pairs glue by different universal shapes. The <strong>source</strong> faces <em>compose</em>: source reaches <code>top</code> by two legs that converge there — <strong>read</strong> (<code>chars → forms</code>) and <strong>feel</strong> (the weaver, <code>forms → top</code>) — the charm leg factoring <em>through</em> the lisp leg, <code>chars ─read→ forms ─feel→ top</code>, the cospan <code>chars → top ← forms</code> meeting at one core. The <strong>i/o</strong> faces <em>coproduct</em>: a shared host trunk <em>forks</em> into a local face (the shell <strong>bao</strong>) and a net face (the netcat <strong>aineko</strong>), <code>local ⊔ net</code> — either/or, not a pipeline. Same object; two gluings — composition and coproduct, both machine-checked axiom-free in <a href="rocq/spec.v">rocq/spec.v</a> (<code>Section Faces</code>), which carries the fuller reading.</p>
 <h2 id="see-also"><a href="#see-also">· see also</a></h2>
 <ul>
 <li><a href="test/spec.l">test/spec.l</a> — the executable spec; every law assert-backed, green on every target</li>
 <li><a href="rocq/spec.v">rocq/spec.v</a> — the machine-checked theorems cited above as the green chips</li>
 <li><a href="tools/spec2coq.l">tools/spec2coq.l</a> — generates Rocq straight from the spec, keeping the demonstrate and prove layers in step</li>
-<li><a href="crew/">crew/</a> — the <strong>kship crew</strong>, the programs that ride on kship: <strong>aineko</strong> (netcat), <strong>bao</strong> (the shell + pty wrapper), <strong>cook</strong> (make-in-ai), <strong>kship</strong> (the ship — bare-metal agent-kernel), <strong>siri</strong> (the synthesist, docs matched to the surface)</li>
+<li><a href="#crew">the crew</a> — the programs that ride on kship: <strong>aineko</strong> (netcat), <strong>bao</strong> (the shell + pty wrapper), <strong>cook</strong> (make-in-ai), and <strong>kship</strong> (the ship — bare-metal agent-kernel)</li>
 <li><a href="CLAUDE.md">CLAUDE.md</a> — the narrative spec with runnable demonstrations, and <a href="README.md">README.md</a> — the overview</li>
-<li><a href="blue.md">blue.md</a>, its ai generator <a href="tools/site.l">tools/site.l</a>, and the single stylesheet <a href="site.css">site.css</a> — this page's source</li>
 </ul>
 <h2 id="glance"><a href="#glance">· the laws at a glance</a></h2>
 <table>
@@ -470,6 +404,6 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <tr><td>9</td><td>mint laws; nom order</td><td><span class="thm">mint_const1</span> <span class="thm">mint_distinct</span> <span class="thm">same_name_serial</span></td></tr>
 </table>
 <p><em>Step any of these in <a href="rocq/spec.v">rocq/spec.v</a>; run all of them in <a href="test/spec.l">test/spec.l</a>; doubt any of them at the binary. The three agree.</em></p>
-<footer>generated from <a href="blue.md">blue.md</a> by <a href="tools/site.l">tools/site.l</a>, an ai program · for p., b. and e.</footer>
+<footer>for p., b. and e.</footer>
 </body>
 </html>

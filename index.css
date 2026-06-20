@@ -1,14 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>kship</title>
-<style>
-/* site.css -- the single stylesheet for the kship site (index/repl/blue), inlined
-   into each page by tools/site.l. base theme from the blue paper (periwinkle on
-   deep blue, bitmap-VGA feel, green = a kept answer); the repl + chip + crew
-   components folded in from the old index. one sheet, every page. */
+/* index.css -- the single stylesheet for index.html. base theme periwinkle on
+   deep blue, bitmap-VGA feel, green = a kept answer; the bao-shell + chip + crew
+   components folded in. one page, one sheet. */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,7 +16,7 @@ body {
 }
 
 h1 { font-size: 2.2em; font-weight: normal; letter-spacing: .04em; }
-h1::after { content: " 🔭"; }   /* the telescope, every page; site.l injects a per-page ::before */
+h1::after { content: " 🔭"; }   /* the telescope */
 h2 { font-size: 1.15em; font-weight: normal; color: #8b91bd;
      margin: 2.4em 0 .6em; border-bottom: 1px solid #222842; padding-bottom: .3em; }
 h3 { font-size: 1em; font-weight: normal; color: #a3a9d2; margin: 1.6em 0 .5em; }
@@ -67,7 +59,7 @@ li { margin: .35em 0; text-align: justify; hyphens: auto; }
 
 hr { border: none; border-top: 1px solid #222842; margin: 2.4em 0; }
 
-/* chrome the generator templates in: subtitle, table of contents, top nav. */
+/* chrome: subtitle, table of contents, top nav. */
 .sub { color: #6c7398; font-size: .9em; margin: .4em 0 1.6em;
        text-align: left; hyphens: none; }
 .toc { color: #8b91bd; font-size: .92em; line-height: 2;
@@ -81,7 +73,7 @@ footer { margin-top: 3.5em; color: #474e72; font-size: .85em;
          border-top: 1px solid #222842; padding-top: 1em; }
 .blue { color: #8fb0ff; } .red { color: #e0af68; } .grn { color: #9ece6a; }
 
-/* --- the live repl (the repl page) --- */
+/* --- the live bao shell --- */
 #status { color: #6c7398; font-size: .9em; margin-top: .2em; }
 #term { background: #070a16; border: 1px solid #222842; border-radius: 6px;
         padding: .8em; margin-top: 1em; min-height: 16em; max-height: 28em;
@@ -105,41 +97,4 @@ footer { margin-top: 3.5em; color: #474e72; font-size: .85em;
 .crew dt { margin-top: .7em; }
 .crew dt a { font-weight: 600; }
 .crew dd { margin: 0 0 0 1.4em; color: #8b91bd; font-size: .92em; }
-h1::before { content: "🚀 "; }
-</style>
-</head>
-<body>
-<p class="topnav"><span class="here">kship</span> · <a href="repl.html">bao</a> · <a href="blue.html">blue paper</a> · <a href="CLAUDE.md">the spec</a> · <a href="crew/index.html">the crew</a></p>
-<h1>kship</h1>
-<p class="sub">a ship that sails bare metal, written in <strong>ai</strong>, a <strong>telescope</strong> at the helm.</p>
-<h2 id=""><a href="#">ai — the language</a></h2>
-<p>one operation — application — over a generic core. <code>(f x)</code> dispatches on the kind of <code>f</code>. church numerals that are also integers; truth as a measure, not a tag; a total order over every value; α-equivalence of closures.</p>
-<h2 id=""><a href="#">tele — the pilot</a></h2>
-<p><strong>ai</strong> is the language — the laws. <strong>tele</strong> is an implementation of ai: the concrete core, the self-hosted compiler, the binary that pilots kship. scopes constellations (any number — the galaxy is the numeric set). tensors + reverse-mode autograd + a small <code>nn</code>/<code>optim</code> layer. <strong>read</strong> (sound ; ev) is its <strong>perceive</strong> — it reads its world and runs it — feeding the <code>decide</code> in kship's perceive → decide → act.</p>
-<h2 id=""><a href="#">the faces</a></h2>
-<p>ai is <code>top</code>; the crew are its faces, in dual pairs.</p>
-<ul>
-<li><strong>source faces — compose.</strong> <strong>scan</strong> (charms → forms), then <strong>feel</strong> (forms → top, the partial</li>
-</ul>
-<p>  evaluator). scan ; feel — and <strong>read</strong> is the composition, the stream shell that reads and runs.</p>
-<ul>
-<li><strong>world faces — coproduct.</strong> <strong>bao</strong> — the shell / bridge. <strong>aineko</strong> 愛猫 — bao's net face (netcat).</li>
-</ul>
-<h2 id=""><a href="#">the keepers</a></h2>
-<ul>
-<li><strong>cook</strong> — the builder. make, in ai.</li>
-<li><strong>mow</strong> — the gardener, a cow. two-space copying GC; keeps the heap green.</li>
-<li><strong>ticks</strong> — the scheduler, a clock. the cooperative heartbeat: spawn, yield, wait — each task its turn.</li>
-<li><strong>tree</strong> — version control. the history; what feel scopes out for gwen, through tele.</li>
-<li><strong>gwen</strong> — ai's debugger. probes the binary.</li>
-</ul>
-<h2 id=""><a href="#">come aboard</a></h2>
-<ul>
-<li><strong><a href="repl.html">the repl</a></strong> — ai in the browser (wasm).</li>
-<li><strong><a href="blue.html">the blue paper</a></strong> — the laws as propositions, each pointed at its evidence.</li>
-<li><strong><a href="crew/index.html">the crew</a></strong> — the full roster.</li>
-</ul>
-<p><em>for p., b. and e.</em></p>
-<footer>generated from <a href="content/lore.md">content/lore.md</a> by <a href="tools/site.l">tools/site.l</a>, an ai program · for p., b. and e.</footer>
-</body>
-</html>
+h1::before { content: "💙 "; }
