@@ -32,8 +32,8 @@
     (: ps (init (cup s))  body (last (cup s))
        (? (&& (two? s) (two? (cup (cup s))) (exprn ps body))         ; >=1 param, a body, leaf grammar
           (: _ (pin fires 0 (+ 1 (peep fires 0 0)))
-             (? (= a 1) (nif (emit (cat (cgv (cap ps) (\ d (fxv 0 d)) body 0) epilogue))    e s 1)  ; arity 1 -> nat (deopt to e value[0])
-                        (nif (emit (cat (cgn ps body 0) epilogue-mn)) e s a))) ; arity>=2 -> natn (deopt to e body)
+             (? (= a 1) (nif (emit (+ (cgv (cap ps) (\ d (fxv 0 d)) body 0) epilogue))    e s 1)  ; arity 1 -> nat (deopt to e value[0])
+                        (nif (emit (+ (cgn ps body 0) epilogue-mn)) e s a))) ; arity>=2 -> natn (deopt to e body)
           e))
    (fired? n) (< n (peep fires 0 0))                 ; did the hook fire since count n?
  _ (assert
