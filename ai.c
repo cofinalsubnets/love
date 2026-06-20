@@ -222,7 +222,7 @@ static ai_inline bool toastp(word _) { return lamp(_) && cell(_)->ap == lvm_toas
 // len/cap are fixnums and keys/vals l words, so evac_text traces them with no
 // bespoke GC, like ai_buf. Empty slots hold map_gap, a unique word-aligned
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
-// a terminator. (m k) looks k up (nil if absent) through lvm_map_lookup.
+// a terminator. (m k) looks k up (() if absent) through lvm_map_lookup.
 static lvm_t lvm_map_lookup, lvm_map_data;
 static ai_inline bool tabp(word _) { return lamp(_) && cell(_)->ap == lvm_map_lookup; }
 static const word ai_map_gap_cell = 0;
@@ -3817,7 +3817,7 @@ lvm(lvm_table) {
 // so (m k) == (get 0 k m)). No alloc, unwinds like self-quote: drop the arg,
 // jump to the return address at Sp[1], leave the result on top.
 static lvm(lvm_map_lookup) {
- word v = ai_mapget(g, nil, Sp[0], (word) Ip);
+ word v = ai_mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a map miss answers () (the zero point), not the number 0
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : nil)

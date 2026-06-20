@@ -350,16 +350,16 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; IS 0, so #() is #0, the box of nothing (the # law has no empty exception). accessors are
 ; collection-first: (peep coll k default) reads, (pin coll k v) sets, (pull coll k default)
 ; removes-and-returns. peep and pull share the default-if-absent fallback; only pull mutates a key
-; away. also keys (the key list), $ the key count. (t k) == (peep t k 0) -- a map is a lookup
+; away. also keys (the key list), $ the key count. (t k) == (peep t k ()) -- a map is a lookup
 ; function. THREE ABSENCE LANES, one miss machinery: peep (the caller names absence), apply (absence
-; is 0), and (missing t k) -- the book read as a value: a present k answers, a miss is the missing
+; is (), the zero point), and (missing t k) -- the book read as a value: a present k answers, a miss is the missing
 ; condition (the zero point helpless, k the payload). (dig k) digests any key to a fixnum. a hash is
 ; MUTABLE, so `=` on hashes is identity (like casks); infix, (t <- k v) pins and (t -> k d) peeps.
 ; demo:
 (book? #())                   ; true   #() IS #0, the box of nothing (present)
 $#(1 10 2 20)                ; 2      $ is the key count
 (peep #(1 10 2 20) 2 0)      ; 20
-(#(1 10 2 20) 2)             ; 20     a map is a lookup function: (t k) == (peep t k 0)
+(#(1 10 2 20) 2)             ; 20     a map is a lookup function: (t k) == (peep t k ())
 (missing #(1 10) 1)          ; 10     the conditioned read; a miss is the missing condition
 (: t #(1 10) _ (t <- 4 40) (t -> 4 0))   ; 40   the infix accessors
 
