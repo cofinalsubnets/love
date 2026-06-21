@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ai for scheme programmers</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background:#0a0d1a; color:#c6ccf3;
+  font-family:"Px437 IBM VGA8","DejaVu Sans Mono",ui-monospace,Menlo,Consolas,monospace;
+  font-size:17px; line-height:1.5; font-variant-ligatures:none;
+  -webkit-font-smoothing:none; max-width:54em; margin:0 auto; padding:2em 1em 5em; }
+h1 { font-size:2em; font-weight:normal; letter-spacing:.04em; }
+h1::before { content:"🔵 "; }
+h2 { font-size:1.15em; font-weight:normal; color:#8b91bd;
+  margin:2.2em 0 .6em; border-bottom:1px solid #222842; padding-bottom:.3em; }
+p { margin:.7em 0; text-align:justify; hyphens:auto; }
+a { color:#8fb0ff; text-decoration:none; } a:hover { text-decoration:underline; }
+.dim { color:#6c7398; }
+strong { color:#e3e6ff; font-weight:600; } em { color:#aab1de; }
+code { color:#c6ccf3; background:#14182a; border:1px solid #1e2338; border-radius:3px;
+  padding:.05em .35em; white-space:pre-wrap; }
+pre { background:#070a16; border:1px solid #222842; border-radius:6px;
+  padding:.9em 1em; margin:1em 0; overflow-x:auto; }
+pre code { background:none; border:none; padding:0; white-space:pre; color:#a9b1de; }
+table { border-collapse:collapse; width:100%; margin:1.1em 0; font-size:.93em; }
+th,td { border:1px solid #222842; padding:.35em .6em; text-align:left; vertical-align:top; }
+th { color:#8b91bd; font-weight:normal; background:#12162a; }
+td code { background:none; border:none; padding:0; }
+ul,ol { margin:.7em 0 .7em 1.4em; } li { margin:.35em 0; }
+hr { border:none; border-top:1px solid #222842; margin:2.2em 0; }
+.topnav { font-size:.85em; margin-bottom:1.6em; } .topnav .here { color:#c6ccf3; }
+.lead { color:#aab1de; }
+footer { margin-top:3em; color:#474e72; font-size:.85em;
+  border-top:1px solid #222842; padding-top:1em; }
+</style>
+</head>
+<body>
+<nav class="topnav"><a href="index.html">ai</a> &nbsp;·&nbsp; for <a href="ai-for-js.html">js</a> · <a href="ai-for-python.html">python</a> · <span class="here">scheme</span></nav>
+
+<h1>ai for scheme programmers</h1>
+<p class="lead">If you read Lisp, you can read ai: s-expressions, <code>lambda</code>, lexical closures, tail calls, <code>call/cc</code>, and macros are all here. Three things are new — application is curried, numerals are Church numerals you can actually call, and <code>+</code>/<code>*</code> are generic — and one thing is genuinely different: truth.</p>
+
+<h2>what's already familiar</h2>
+<pre><code>(\ x (x + 1))           ; lambda
+(cap '(1 2 3))          ; 1      car
+(cup '(1 2 3))          ; (2 3)  cdr
+(link 1 '(2 3))         ; (1 2 3) cons
+(call-cc (\ k (k 41)))  ; 41     a one-shot call/cc</code></pre>
+<p><code>'()</code> is written <code>()</code>; <code>car</code>/<code>cdr</code>/<code>cons</code> are <code>cap</code>/<code>cup</code>/<code>link</code> (with <code>caap</code>…<code>cuup</code> compounds, read right-to-left like the old c[ad]+r).</p>
+
+<h2>rosetta</h2>
+<table>
+<tr><th>Scheme</th><th>ai</th></tr>
+<tr><td><code>(lambda (x) ...)</code></td><td><code>(\ x ...)</code></td></tr>
+<tr><td><code>(define (f x) ...)</code></td><td><code>(: (f x) ...)</code></td></tr>
+<tr><td><code>(let ((a 1) (b 2)) ...)</code></td><td><code>(: a 1 b 2 ...)</code> &nbsp;or&nbsp; <code>(let a 1 b 2 ...)</code></td></tr>
+<tr><td><code>(cond (t a) (else b))</code></td><td><code>(? t a b)</code></td></tr>
+<tr><td><code>(car x)</code> / <code>(cdr x)</code> / <code>(cons a b)</code></td><td><code>(cap x)</code> / <code>(cup x)</code> / <code>(link a b)</code></td></tr>
+<tr><td><code>'()</code> , <code>'(1 2 3)</code></td><td><code>()</code> , <code>'(1 2 3)</code></td></tr>
+<tr><td><code>(map f l)</code></td><td><code>(map f l)</code></td></tr>
+<tr><td><code>(quote x)</code> / <code>'x</code></td><td>same</td></tr>
+<tr><td><code>`(a ,b)</code> quasiquote</td><td><code>`(...)</code> — a list ctor that <em>evaluates</em> elements</td></tr>
+<tr><td><code>(define-syntax ...)</code></td><td><code>(:: 'name (\ args code))</code></td></tr>
+</table>
+
+<h2>currying changes the feel</h2>
+<p><code>(f x y)</code> is <code>((f x) y)</code> and <code>(f)</code> is just <code>f</code>. So partial application is automatic — <code>(+ 1)</code> is already a function, and <code>(map (+ 1) '(1 2 3))</code> reads as plainly as it runs (it yields <code>(2 3 4)</code>).</p>
+
+<h2>numerals really are Church numerals</h2>
+<p>The Church encoding isn't a teaching trick here — the numerals <em>are</em> the numbers, and applying one iterates its argument. Numeral-on-numeral is exponentiation.</p>
+<pre><code>(3 (+ 1) 0)   ; 3   apply (+ 1) three times to 0
+(3 2)         ; 8   2 to the 3rd</code></pre>
+<p>And because <code>+</code>/<code>*</code> are generic over the whole value lattice, on functions <code>*</code> is composition:</p>
+<pre><code>((* (+ 1) (+ 2)) 5)   ; 8</code></pre>
+
+<h2>truth is the one real difference</h2>
+<p>In Scheme only <code>#f</code> is false. In ai, false is <em>nothing</em> — any value that nets to zero or less: <code>()</code>, <code>0</code>, <code>""</code>, the empty list, even a list of negatives. <code>if</code>/<code>cond</code> test that net, not a boolean.</p>
+<pre><code>(? '() 'yes 'no)   ; no    -- '() is false here, unlike Scheme
+(? 0  'yes 'no)    ; no</code></pre>
+<p>This is the place your Scheme reflexes will bite: <code>(if '() 'yes 'no)</code> is <em>yes</em> in Scheme, <em>no</em> in ai.</p>
+
+<h2>define / letrec / sequence, one form</h2>
+<p><code>:</code> is letrec* + sequencing + define-sugar, all at once. Recursion just works; the last form is the value.</p>
+<pre><code>(: (fac n) (? (n &lt; 2) 1 (n * (fac (n - 1)))) (fac 5))   ; 120</code></pre>
+
+<h2>gotchas</h2>
+<ul>
+<li><strong>Right-associative infix, no precedence.</strong> <code>2 * 3 + 1</code> is <code>2 * (3 + 1)</code> = <strong>8</strong>. The infix is a thin reader pass over the prefix forms, folding right.</li>
+<li><strong>An unbound name isn't an error.</strong> A name not in the global "book" reads <code>()</code> (nothing) rather than raising.</li>
+<li><strong>Quasiquote is inverted.</strong> The <code>`</code> reader builds a list whose elements are <em>all</em> evaluated, so you quote the literal parts instead of unquoting the computed ones: <code>`(1 (+ 1 1) 3)</code> → <code>(1 2 3)</code>.</li>
+</ul>
+
+<footer>part of <a href="index.html">ai</a> · see also <a href="ai-for-js.html">ai for js</a>, <a href="ai-for-python.html">ai for python</a>.</footer>
+</body>
+</html>
