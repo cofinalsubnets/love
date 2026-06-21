@@ -17,7 +17,9 @@
    gives every value. This file lives in UNIVERSE-CHECKED Rocq: the world does
    not explode here, so the theorems below are unconditional. The caveat is
    honest about the only escape hatch any formal demonstration has -- the
-   consistency of its own metatheory. *)
+   consistency of its own metatheory.
+
+   Written by Claude (Anthropic), the Opus 4.8 model. *)
 
 From Stdlib Require Import PeanoNat List.
 Import ListNotations.
@@ -538,6 +540,54 @@ Proof. intros c H. unfold scount. rewrite Z.max_l by lia. reflexivity. Qed.
 Theorem count_keeps : forall c, 0 <= c -> Z.of_nat (scount c) = c.
 Proof. intros c H. unfold scount. rewrite Z.max_r by lia. apply Z2Nat.id. lia. Qed.
 
+(* ---- () is the IDENTITY OF BOTH MONOIDS, over ONE unit token -----------------
+   cat_nil_l/r and smul_one above witness the two FACES of () separately: it shows
+   as the empty sequence [] in + and as the count 1 in *. The prose claim is
+   stronger -- a SINGLE () that is the do-nothing element of + AND * across every
+   lane: () + x = () * x = x for a number, a sequence, anything. Model a value as
+   the unit (), a number, or a (nestable) sequence, with + and * the GENERIC ops
+   that send () to the OTHER operand and otherwise act per lane: numbers add /
+   multiply, sequences concatenate, a number-by-sequence * is the saturating repeat
+   -- * is iterated + -- and sequence-by-sequence * is the cartesian product, each
+   pair a 2-list, which is why the carrier must NEST (GSeq holds gval). Then () is a
+   two-sided identity of BOTH, over the SAME () token -- and is provably NOT the
+   number 0, which ANNIHILATES * (0 * x = []) while () never does. *)
+Inductive gval := GUnit | GNum (z : Z) | GSeq (xs : list gval).
+
+Definition gplus (a b : gval) : gval :=
+  match a, b with
+  | GUnit,   _       => b
+  | _,       GUnit   => a
+  | GNum m,  GNum n  => GNum (m + n)
+  | GSeq xs, GSeq ys => GSeq (xs ++ ys)
+  | GNum n,  GSeq ys => GSeq (GNum n :: ys)        (* adjoin: 5 + '(1 2) = '(5 1 2) *)
+  | GSeq xs, GNum n  => GSeq (xs ++ [GNum n])
+  end.
+
+Definition gtimes (a b : gval) : gval :=
+  match a, b with
+  | GUnit,   _       => b
+  | _,       GUnit   => a
+  | GNum m,  GNum n  => GNum (m * n)
+  | GNum n,  GSeq ys => GSeq (concat (repeat ys (Z.to_nat (Z.max 0 n))))  (* repeat: iterated + *)
+  | GSeq xs, GNum n  => GSeq (concat (repeat xs (Z.to_nat (Z.max 0 n))))
+  | GSeq xs, GSeq ys => GSeq (flat_map (fun x => map (fun y => GSeq [x; y]) ys) xs)  (* cartesian *)
+  end.
+
+(* the + monoid's identity, the SAME () token on either side: () + x = x = x + () *)
+Theorem gunit_plus_l  : forall x, gplus GUnit x = x.   Proof. reflexivity. Qed.
+Theorem gunit_plus_r  : forall x, gplus x GUnit = x.   Proof. intro x; destruct x; reflexivity. Qed.
+(* the * monoid's identity, over that same () token: () * x = x = x * () *)
+Theorem gunit_times_l : forall x, gtimes GUnit x = x.  Proof. reflexivity. Qed.
+Theorem gunit_times_r : forall x, gtimes x GUnit = x.  Proof. intro x; destruct x; reflexivity. Qed.
+
+(* () is NOT the number 0: the number 0 ANNIHILATES * (0 * x = []), the unit does
+   not (() * x = x) -- so they differ on the * lane (cf. unit_neq_zero). *)
+Theorem gzero_annihilates : forall ys, gtimes (GNum 0) (GSeq ys) = GSeq [].
+Proof. reflexivity. Qed.
+Theorem gunit_ne_zero : gtimes GUnit (GSeq [GNum 1]) <> gtimes (GNum 0) (GSeq [GNum 1]).
+Proof. cbn. congruence. Qed.
+
 (* LIST * LIST is the CARTESIAN PRODUCT (the chain lane, lvm_mul_cart): every ordered
    pairing, each pair a 2-list. This is the semiring product whose + is ++ -- but only
    ON THE CHAIN, whose cells hold pairs; strings (atomic bytes) carry the * UNIT
@@ -949,6 +999,7 @@ End Faces.
    semantics, the reduction layer, and the complex net. *)
 Print Assumptions sat_clamps.        (* the net/saturation law (value side) *)
 Print Assumptions numap_floor.       (* the count-law floor (count side, same $) *)
+Print Assumptions gunit_times_l.     (* () is the identity of BOTH monoids, + and * *)
 Print Assumptions unit_lt_zero.      (* () < 0: the floor below value-false (order side) *)
 Print Assumptions le_total.          (* the total order *)
 Print Assumptions eta_not_bridged.   (* = is alpha+structural, no further *)
