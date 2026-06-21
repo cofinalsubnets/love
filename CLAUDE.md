@@ -218,9 +218,13 @@ $@(3 4)              ; 7
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` is numeric
 ; only. the BYTE LAW: a string + a number is one byte, strictly -- an exact integer 0..255 (rep-blind,
-; like `=`: 66.0 is 66); anything else is nil, like `-` on strings. NAMED SYMBOLS LEFT THE STRING
-; ALGEBRA (the mint round): + and * on a named symbol are nil -- a symbol is a point with a spelling
-; attribute, intern/string the explicit bridge. a BARE MINT is different: it is the UNIT -- nothing,
+; like `=`: 66.0 is 66); anything else is nil, like `-` on strings. a NAMED SYMBOL INHERITS the string
+; lane under +/*: it acts as its SPELLING and RE-INTERNS the result (`'ef + 'ef` is `'efef`, `'xy * 2`
+; is `'xyxy`), DEMOTING to a string when a string operand is present (`'ef + "ab"` is `"efab"` -- the
+; rank min pulls to 0); it still ADJOINS to a list (`'ef + '(1 2)` is `'(ef 1 2)`, foo stays foo) and
+; `-` stays numeric-only (`'ef - 3` nil). `sym*sym` is nil (str*str has no product); coins override
+; per-kind. (intern/string remain the explicit bridge for the raw spelling.) a BARE MINT is different:
+; it is the UNIT -- nothing,
 ; the do-nothing element -- so it is the IDENTITY of BOTH + and * in EVERY lane (not just lists):
 ; `() + x` is `x` and `() * x` is `x`, either side, for ANY x (`"ab" + ()` is `"ab"`, `5 * ()` is `5`,
 ; `() * (\ x x)` is `(\ x x)`). 0 AND 1 ARE ITS TWO FACES -- the unit projects into each operation as
@@ -343,15 +347,16 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; number would exponentiate (so a missing nom absorbs). every mint draws a SERIAL from the one mint
 ; stream (task pids too): symbols order by name first (mints below every named symbol), then by serial
 ; -- so the order is TOTAL, GC-stable; the serial is also the hash. a NOM (name + serial in one cell)
-; orders by (name lex, then serial), stays identity-sharp, makes distinct map keys for free. SYMBOLS
-; HAVE NO STRING ALGEBRA (+/* nil, apply const-1); intern and string are the bridge. a string indexes
+; orders by (name lex, then serial), stays identity-sharp, makes distinct map keys for free. a SYMBOL
+; INHERITS the string lane under +/* (acts as its spelling, re-interns; demotes on a string operand),
+; applying it is const-1; intern and string are the bridge for the raw spelling. a string indexes
 ; its bytes ("abc" 0 -> 97); $ of a string is its CHARM SUM (so $ and abs diverge: (abs -5) = 5 but
 ; $-5 = 0). the count is tally. snip takes a half-open snip; + concatenates ("" the identity); string
 ; makes text of any value; \n escapes.
 ; demo:
 ()                   ; 0           nothing's plain spelling; (intern "") ; ()  (the +/* unit)
 (intern "asdf")      ; asdf
-(string 'asdf)       ; "asdf"      the explicit bridge (symbols have no string algebra)
+(string 'asdf)       ; "asdf"      the explicit bridge to the raw spelling ('a + 'b is 'ab, re-interned)
 ("abc" 0)            ; 97          a string indexes its bytes
 (mint 0)             ; $$<serial>  a fresh nameless point ($(mint 0) ; 0); $$x mints (diagnostic, not an exact reparse)
 (string (nom 'x))    ; "x"         a nom is a named point (KNom), not a chain; read its name with string

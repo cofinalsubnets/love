@@ -122,9 +122,9 @@
  ; --- add_string lane: text x text, and a number as one byte ---
  (= "abcd" (+ "ab" "cd"))                     ; str + str
  (= "abC" (+ "ab" 67))   (= "Cab" (+ 67 "ab")) ; str + num (byte at the written end)
- (nil? (+ "ab" 'ef))                          ; sym left the string algebra (the mint round)
- (nil? (+ 'ef 'ef))                           ; ... in every direction
- (nil? (+ 'ef "ab"))
+ ("abef" = (+ "ab" 'ef))                      ; a symbol inherits the string lane under +; a string operand DEMOTES
+ ('efef = (+ 'ef 'ef))                         ; sym + sym cats spellings and RE-INTERNS -> a symbol
+ ("efab" = (+ 'ef "ab"))                       ; ... demote again (the rank min pulls to string)
 
  ; --- the arith<->seq SEAM (KArrO|KString) is ARRAY x text only -> nil. A SCALAR
  ;     number joins text as one byte ONLY under the byte law (exact 0..255), so a
@@ -167,7 +167,7 @@
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
  (= "" (* "ab" -2))    (= "ababab" (* "ab" 2.9))   ; ($ count): saturates, ceils
- (nil? (* 'xy 2))                             ; sym left the string algebra: no repetition
+ ('xyxy = (* 'xy 2))                          ; sym * count repeats the spelling and RE-INTERNS -> a symbol
  (= '(1 2 1 2) (* '(1 2) 2))                  ; list
  (= "" (* "ab" 0))   (nil? (* '(1 2) 0))      ; 0 copies: empty str / empty list
 

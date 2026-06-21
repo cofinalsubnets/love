@@ -1,22 +1,21 @@
-; NAMED symbols left the string algebra (the mint round): a symbol is a point with a
-; spelling ATTRIBUTE, not a string. + and * involving a NAMED symbol are nil in every
-; direction; applying a symbol is const-1 (the unit action -- the name index is gone);
-; intern and string are the EXPLICIT bridge, and a nom's name is its cap. The EMPTY
-; symbol (intern "") is the zero point (), the +/* UNIT (() + x = () * x = x).
-; strings keep the whole algebra (concat, the byte law, repetition) -- the byte
-; column is unaffected; only the symbol band released it.
+; A NAMED symbol INHERITS the string lane under +/* (the totality philosophy: make use of
+; constructions others reject). a symbol acts as its SPELLING and RE-INTERNS the result,
+; but DEMOTES to a string when a string operand is present (the rank min pulls to 0). it
+; still ADJOINS to a list (foo stays foo -- the list law), applying it is const-1, and the
+; EMPTY symbol (intern "") is the zero point (), the +/* UNIT. coins are the per-kind
+; override. strings keep the whole algebra (concat, byte law, repetition) unchanged.
 
 (: sa-z (intern "")
  (assert
-  ; --- the release: no + in any direction ---
-  !('ef + 'ef) !('a + 'b)                       ; sym + sym
-  !("ab" + 'ef) !('ef + "ab")                   ; sym <-> string
-  !(65 + 'ef) !('ef + 65)                       ; sym <-> number
-  !(@(1 2) + 'ef) !('ef + @(1 2))               ; sym <-> array
-  ; the EMPTY symbol is the exception: (intern "") is () -- the UNIT, so it's +'s identity --
+  ; --- + inherits the string lane: sym+sym cats spellings and RE-INTERNS ---
+  ('efef = ('ef + 'ef)) ('ab = ('a + 'b))       ; sym + sym -> an interned symbol
+  ("abef" = ("ab" + 'ef)) ("efab" = ('ef + "ab"))   ; sym <-> string -> DEMOTE to a string
+  ('Aef = (65 + 'ef)) ('efA = ('ef + 65))       ; sym <-> number -> the byte law, re-interned
+  !(@(1 2) + 'ef) !('ef + @(1 2))               ; sym <-> array stays nil (no string algebra for arrays)
+  ; the EMPTY symbol (intern "") is () -- the UNIT, so it's +'s identity --
   ('ef = sa-z + 'ef) ('ef = 'ef + sa-z) (id? () (sa-z + sa-z))   ; () + x = x, either side; () + () = ()
-  ; --- no * for a NAMED symbol; but the empty symbol () is *'s unit too ---
-  !('xy * 2) !(2 * 'xy) !('a * 'b) (2 = sa-z * 2)
+  ; --- * repeats the spelling and re-interns; sym*sym stays nil (str*str); () is *'s unit ---
+  ('xyxy = ('xy * 2)) ('xyxy = (2 * 'xy)) !('a * 'b) (2 = sa-z * 2)
   ; --- apply: const-1, uniformly (the unit action; no more name indexing) ---
   (1 = ('xyz 1)) (1 = ('xyz 0)) (1 = (sa-z 5)) (1 = ((mint 0) 'x))
   ; --- lists still take any element, symbols included (the list law, not string algebra)

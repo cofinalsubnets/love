@@ -4693,11 +4693,11 @@ static lvm(lvm_add_seq) {
 // lane is gated off by the dispatch matrix since the mint round anyway).
 static ai_inline struct ai_str *add_name(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
  return namep(x) ? str(nom(x)->name) : 0; }  // a named point (KNom) carries its name; a bare mint is nameless
-static ai_inline int stringrank(struct ai *g, word x) {    // STR 0 / USYM 1 / ISYM|NUM 2
+static ai_inline int stringrank(struct ai *g, word x) {    // STR 0 / mint 1 / NAMED-sym|NUM 2
  if (strp(x)) return 0;
- if (x == ZeroPoint) return 1;               // the core is a nameless point: an uninterned (fresh) symbol
- if (nomp(x)) return chainp(x) ? 2 : 1;            // a named nom is a (name . mint) chain; a bare mint is not
- return 2; }
+ if (namep(x)) return 2;          // a NAMED symbol: result re-interns (the min pulls a string operand to 0 -> demote)
+ if (mintp(x)) return 1;          // a bare mint / the zero point: an uninterned (fresh) symbol
+ return 2; }                      // a number contributes one byte (rank 2)
 static ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contributes to a concat
  if (strp(x)) return len(x);
  if (nomp(x)) { struct ai_str *n = add_name(g, x); return n ? n->len : 0; }
@@ -4759,10 +4759,10 @@ enum q ai_kind(word x) {
 // real list nor a string here, so it nils out (intern/string are the bridge).
 static lvm(lvm_mul_rep) {
  word a = Sp[0], b = Sp[1];
- bool aseq = strp(a) || formp(a);                   // a real string/list repeats; a symbol does NOT
+ bool aseq = strp(a) || formp(a) || namep(a);       // a string / list / NAMED symbol repeats
  word seq = aseq ? a : b, cnt = aseq ? b : a;
- if ((!strp(seq) && !formp(seq)) || (!isnum(cnt) && !Cp(cnt)))
-  return *++Sp = nil, Ip++, Continue();             // seq not a real sequence (e.g. a symbol), or count not a number
+ if ((!strp(seq) && !formp(seq) && !namep(seq)) || (!isnum(cnt) && !Cp(cnt)))
+  return *++Sp = nil, Ip++, Continue();             // seq not a sequence/symbol, or count not a number
  uintptr_t n = (uintptr_t) ai_pin(g, cnt);
  if (formp(seq)) {                                   // list -> n copies of the spine
   if (!n) return *++Sp = ZeroPoint, Ip++, Continue();   // 0 copies -> the empty list () (nil-ontology)
@@ -4775,16 +4775,19 @@ static lvm(lvm_mul_rep) {
    for (word l = seq; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   (w - 1)->b = ZeroPoint;                            // list terminator () (nil-ontology)
   return *++Sp = word(base), Ip++, Continue(); }
- // string -> repeat the bytes
- struct ai_str *src = str(seq);
+ // string / symbol spelling -> repeat the bytes; a symbol RE-INTERNS the result
+ bool sym = namep(seq);
+ struct ai_str *src = sym ? str(nom(seq)->name) : str(seq);
  uintptr_t sl = src->len, total = sl * n;
- if (!total) return *++Sp = EmptyString, Ip++, Continue();
+ if (!total) return *++Sp = sym ? ZeroPoint : EmptyString, Ip++, Continue();  // 0 copies: () for a sym, "" for a string
  uintptr_t req = str_type_width + b2w(total);
  Have(req);
- src = str(strp(Sp[0]) ? Sp[0] : Sp[1]);               // re-read post-GC
+ word sw = sym ? (namep(Sp[0]) ? Sp[0] : Sp[1]) : (strp(Sp[0]) ? Sp[0] : Sp[1]);  // re-read post-GC
+ src = sym ? str(nom(sw)->name) : str(sw);
  struct ai_str *z = ini_str((struct ai_str*) Hp, total); Hp += req;
  for (uintptr_t i = 0; i < n; i++) memcpy(txt(z) + i * sl, txt(src), sl);
- return *++Sp = word(z), Ip++, Continue(); }
+ *++Sp = word(z);
+ return sym ? Ap(lvm_intern, g) : (Ip++, Continue()); }
 
 // `*` CARTESIAN lane: chain * chain -> the ordered cartesian product, the semiring
 // product whose `+` is `cat`. Each pair is a proper 2-list (ai bj), so the product
@@ -4907,19 +4910,27 @@ static lvm(data_pair_apply) {
 // KNom (a named point) carries NO +/* algebra of its own -- it rides the KChain column/row
 // exactly as it did when it WAS a (name . mint) chain (the lane fns test formp/strp on the
 // value, and a nom answers neither), so every [KNom] entry mirrors that macro's [KChain].
-#define ADD_NUM { NUMK(lvm_addn),     [KMint]=lvm_0,       [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_STR { NUMK(lvm_add_string),[KMint]=lvm_0,      [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+// a NAMED symbol now inherits the string lane under + (lvm_add_string): nom+nom cats
+// spellings and re-INTERNS (stringrank 2), nom+str DEMOTES to a string (the min pulls
+// rank to 0), nom+num rides the byte law. nom+chain stays lvm_add_seq -- a symbol ADJOINS
+// to a list (foo stays foo). coins are the per-kind override. so [KNom] no longer mirrors
+// [KChain]: the row is ADD_NOM, and the [KNom] COLUMN routes to lvm_add_string off the
+// number/string rows (the chain row keeps add_seq so list+sym adjoins).
+#define ADD_NUM { NUMK(lvm_addn),     [KMint]=lvm_0,       [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_STR { NUMK(lvm_add_string),[KMint]=lvm_0,      [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_NOM { NUMK(lvm_add_string),[KMint]=lvm_0,      [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
 #define ADD_MINT { NUMK(lvm_0),       [KMint]=lvm_0,       [KString]=lvm_0,          [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
 #define ADD_TWO { NUMK(lvm_add_seq),  [KMint]=lvm_add_seq, [KString]=lvm_add_seq,    [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
 #define ADD_H   { NUMK(lvm_addh),     [KMint]=lvm_addh,    [KString]=lvm_addh,       [KChain]=lvm_addh,    [KNom]=lvm_addh,    [KMap]=lvm_addh, [KHot]=lvm_addh }
 static lvm_t *const ai_add_mx[KN][KN] = {
- [KMint]=ADD_MINT, [KNom]=ADD_TWO,
+ [KMint]=ADD_MINT, [KNom]=ADD_NOM,
  [KCharm]=ADD_NUM, [KWide]=ADD_NUM, [KFlo]=ADD_NUM, [KCplx]=ADD_NUM, [KBig]=ADD_NUM, [KVec]=ADD_NUM,
  [KArrZ]=ADD_NUM, [KArrR]=ADD_NUM, [KArrC]=ADD_NUM, [KArrO]=ADD_NUM,
  [KString]=ADD_STR, [KChain]=ADD_TWO, [KMap]=ADD_H, [KHot]=ADD_H,
 };
 #undef ADD_NUM
 #undef ADD_STR
+#undef ADD_NOM
 #undef ADD_MINT
 #undef ADD_TWO
 #undef ADD_H
@@ -4958,9 +4969,9 @@ lvm(lvm_add) {
      && t >= fix_min && t <= fix_max)
   return *++Sp = putcharm(t), Ip++, Continue();
  // a bare mint -- the zero point () too -- is +'s IDENTITY in every lane (not just on
- // lists): it nets 0, nothing adjoins nothing, so () + x = x + () = x for all x. A NAMED
- // symbol still adjoins as an element (mintp is false for it), keeping the string-algebra
- // release. This subsumes the per-lane mint cells in ai_add_mx (now unreached for a mint).
+ // lists): it nets 0, nothing adjoins nothing, so () + x = x + () = x for all x. (mintp is
+ // false for a NAMED symbol, so it skips this unit lane and coerces just below.) This
+ // subsumes the per-lane mint cells in ai_add_mx (now unreached for a mint).
  if (mintp(a)) return *++Sp = b, Ip++, Continue();
  if (mintp(b)) return *++Sp = a, Ip++, Continue();
  return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }

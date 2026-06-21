@@ -20,9 +20,9 @@
  (= "ababababab" (* "ab" ~(3 4)))              ; |3+4i| = 5 copies
  (= "xxx" (* "x" 3))
 
- ; --- symbols left the string algebra (the mint round): * on a symbol is nil ---
- (nil? (* 'xy 2)) (nil? (* 2 'xy))
- (nil? ('cd * 2))
+ ; --- a symbol inherits the string lane: * repeats the spelling and RE-INTERNS -> a symbol ---
+ ('xyxy = (* 'xy 2)) ('xyxy = (* 2 'xy))
+ ('cdcd = ('cd * 2))
 
  ; --- list repetition ---
  (= '(1 2 1 2 1 2) (* '(1 2) 3))
