@@ -87,15 +87,15 @@
    ; (wrapping it in () would put the operator in HEAD position, where it never
    ; fuses -- the old `(+(-3))` -> `(+ -3)` bug); MULTIPLE datums become the
    ; application `(a b c)`, so `f x` applies and `1 = 1` factors infix. returns m if
-   ; the line ends inside an unfinished shape, 0 for a blank line, else a one-form list.
+   ; the line ends inside an unfinished shape, () for a blank line, else a one-form list.
    (rdall p acc) (: r (sound p eofsym)
                     (? (= r p)      m              ; unfinished shape -> more
                        (= r eofsym) (rev acc)      ; eof -> the datums, in order
                        (rdall p (link r acc))))
    (parseall cl)
-     (: ds (rdall (tap cl) 0)
+     (: ds (rdall (tap cl) ())
         (? (id? ds m)        m                     ; unfinished shape
-           !(two? ds)        0                     ; blank line: no datums
+           !(two? ds)        ()                    ; blank line: no datums
            !(two? (cup ds))  `((cap ds))          ; ONE datum: as-is (leading monadic preserved)
            `(ds)))                                ; MANY: the application (a b c)
 
@@ -107,7 +107,7 @@
         (? (two? (cup ls))
            (cat (cap ls) (link 10 (joinln (cup ls))))
            (cap ls))
-        0)
+        ())
 
    ; flatten the editor state into one charlist suitable for parseall
    (flatten u l r d)
@@ -131,11 +131,11 @@
    ; destination line's length.
    (edleft k u l r d)
      (? (two? l) (k u (cup l) (link (cap l) r) d)
-        (two? u) (k (cup u) (rev (cap u)) 0 (link (revcat l r) d))
+        (two? u) (k (cup u) (rev (cap u)) () (link (revcat l r) d))
         (k u l r d))
    (edright k u l r d)
      (? (two? r) (k u (link (cap r) l) (cup r) d)
-        (two? d) (k (link (revcat l r) u) 0 (cap d) (cup d))
+        (two? d) (k (link (revcat l r) u) () (cap d) (cup d))
         (k u l r d))
    (edbsp k u l r d)
      (? (two? l) (k u (cup l) r d)
@@ -145,26 +145,26 @@
      (? (two? r) (k u l (cup r) d)
         (two? d) (k u l (cap d) (cup d))
         (k u l r d))
-   (edhome k u l r d) (k u 0 (revcat l r) d)
+   (edhome k u l r d) (k u () (revcat l r) d)
    (edend  k u l r d) (k u (revcat r l) () d)
    ; edtop / edbot jump across the whole buffer: cursor at the start of
    ; the topmost line / end of the bottommost line. on a single-line
    ; buffer they degenerate to edhome / edend.
    (edtop k u l r d)
      (? (two? u) (: ru (rev u)
-                  (k 0 0 (cap ru) (cat (cup ru) (link (revcat l r) d))))
-        (k u 0 (revcat l r) d))
+                  (k () () (cap ru) (cat (cup ru) (link (revcat l r) d))))
+        (k u () (revcat l r) d))
    (edbot k u l r d)
      (? (two? d) (: rd (rev d)
-                  (k (cat (cup rd) (link (revcat l r) u)) (revcat (cap rd) 0) 0 0))
-        (k u (revcat r l) 0 d))
+                  (k (cat (cup rd) (link (revcat l r) u)) (revcat (cap rd) ()) () ()))
+        (k u (revcat r l) () d))
    (edup k u l r d)
      (? (two? u) (splitat (\ lz rr (k (cup u) lz rr (link (revcat l r) d)))
-                          0 (tally l) (cap u))
+                          () (tally l) (cap u))
         (k u l r d))
    (eddown k u l r d)
      (? (two? d) (splitat (\ lz rr (k (link (revcat l r) u) lz rr (cup d)))
-                          0 (tally l) (cap d))
+                          () (tally l) (cap d))
         (k u l r d))
 
    ; --- history zipper ---
@@ -194,7 +194,7 @@
            (k (cap e) (cap (cup e)) (cap (cup (cup e))) (cup (cup (cup e))) (cup hu) nhd e))
         (&& (two? cur) (parses u l r d))
         (: nhd (link (mkframe u l r d) hd)
-           (k 0 0 0 0 hu nhd 0))
+           (k () () () () hu nhd ()))
         (k u l r d hu hd cur))
    (downhist k u l r d hu hd cur)
      (? (two? hd)
@@ -203,7 +203,7 @@
            (k (cap e) (cap (cup e)) (cap (cup (cup e))) (cup (cup (cup e))) nhu (cup hd) e))
         (&& (two? cur) (parses u l r d))
         (: nhu (link (mkframe u l r d) hu)
-           (k 0 0 0 0 nhu hd 0))
+           (k () () () () nhu hd ()))
         (k u l r d hu hd cur))
 
    ; map a raw byte (or escape sequence) to an event code:
@@ -282,7 +282,7 @@
    ; the same for mutating ops (backspace, delete) and applies detach
    ; on the way. khist is the continuation used by uphist/downhist
    ; for history navigation. cur is the pristine frame of the
-   ; currently-recalled entry, or 0 if the buffer is a free edit.
+   ; currently-recalled entry, or () if the buffer is a free edit.
    (edline hu hd)
      (: pr ps1
         _ (puts pr)
@@ -292,7 +292,7 @@
              c (edev 0)
              npra (tally u)
              (kloop uu lz rr dd) (loop npra uu lz rr dd hu hd cur)
-             (kedit uu lz rr dd) (loop npra uu lz rr dd (detach hu cur) hd 0)
+             (kedit uu lz rr dd) (loop npra uu lz rr dd (detach hu cur) hd ())
              (khist uu lz rr dd nhu nhd ncur) (loop npra uu lz rr dd nhu nhd ncur)
              (? (= c -7) eofsym
                 ; enter CASHES the buffer wherever the cursor sits, as long as
@@ -303,13 +303,13 @@
                 ; detach at the first edit), capped at 100 entries.
                 (= c 10) (: vs (parseall (flatten u l r d))
                             (? (= vs m)
-                               (loop npra (link (rev l) u) 0 r d (detach hu cur) hd 0)
+                               (loop npra (link (rev l) u) () r d (detach hu cur) hd ())
                                (: _ (? (two? d) (: _ (putc 27) _ (putc 91) _ (putn (tally d)) (putc 66)) 0)
                                   _ (putc 10)
                                   nhu (? (nil? vs) (revcat hd (detach hu cur))
                                          (take 100 (link (mkframe u l r d) (revcat hd (detach hu cur)))))
-                                  (link vs (link nhu 0)))))
-                (< 0 c)  (loop npra u (link c l) r d (detach hu cur) hd 0)
+                                  (link vs (link nhu ())))))
+                (< 0 c)  (loop npra u (link c l) r d (detach hu cur) hd ())
                 (= c -1) (edleft  kloop u l r d)
                 (= c -2) (edright kloop u l r d)
                 (= c -3) (edbsp   kedit u l r d)
@@ -325,7 +325,7 @@
                 (= c -12) (: _ (puts "^C") _ (putc 10)
                              (? (emptybuf u l r d) eofsym (edline hu hd)))
                 (loop npra u l r d hu hd cur)))
-        (loop 0 0 0 0 0 hu hd 0))
+        (loop 0 () () () () hu hd ()))
 
    ; evaluate a single parsed datum cooperatively. (ev v) is spawned as a
    ; worker; the main task polls done?/key? and yields. on Ctrl+C (byte 3)
@@ -489,18 +489,18 @@
    (edraw ip pr)
      (: _ (puts pr) pl (tally pr)
         (loop l r)
-          (: _ (edrender pl 0 0 l r 0)
+          (: _ (edrender pl 0 () l r ())
              c (bev ip)
              (km uu ll rr dd) (loop ll rr)         ; motion: edleft/.. give (k u l r d), keep l r
              (? (= c -7) eofsym                     ; ^D / EOF -> the sentinel
                 (= c 10) (: _ (putc 10) (revcat l r)); Enter -> submit the raw line, in order
                 (< 0 c)  (loop (link c l) r)         ; insert a printable
-                (= c -1) (edleft  km 0 l r 0)
-                (= c -2) (edright km 0 l r 0)
-                (= c -3) (edbsp   km 0 l r 0)
-                (= c -4) (eddel   km 0 l r 0)
-                (= c -5) (edhome  km 0 l r 0)
-                (= c -6) (edend   km 0 l r 0)
+                (= c -1) (edleft  km () l r ())
+                (= c -2) (edright km () l r ())
+                (= c -3) (edbsp   km () l r ())
+                (= c -4) (eddel   km () l r ())
+                (= c -5) (edhome  km () l r ())
+                (= c -6) (edend   km () l r ())
                 (loop l r)))                         ; up/down/^C/unknown: ignore in a line reader
         (loop () ()))
 
@@ -524,93 +524,93 @@
    (k7 u l r d hu hd cur) (link u (link l (link r (link d (link hu (link hd cur))))))
    (bao-selftest _) (L
      ; --- edleft / edright / edbsp / eddel / edhome / edend ---
-     (= (k4 0 '(1) '(2 3) 0) (edleft k4 0 '(2 1) '(3) 0))
-     (= (k4 0 '(2 1) 0 (link '(3) 0)) (edleft k4 (link '(1 2) 0) 0 '(3) 0))
-     (= (k4 0 0 '(1 2) 0) (edleft k4 0 0 '(1 2) 0))
-     (= (k4 0 '(1) '(2 3) 0) (edright k4 0 0 '(1 2 3) 0))
-     (= (k4 (link '(1 2) 0) 0 '(3 4) 0) (edright k4 0 '(2 1) 0 (link '(3 4) 0)))
-     (= (k4 0 '(2 1) 0 0) (edright k4 0 '(2 1) 0 0))
-     (= (k4 0 '(1) '(3) 0) (edbsp k4 0 '(2 1) '(3) 0))
-     (= (k4 0 '(2 1) '(3) 0) (edbsp k4 (link '(1 2) 0) 0 '(3) 0))
-     (= (k4 0 0 '(1) 0) (edbsp k4 0 0 '(1) 0))
-     (= (k4 0 '(1) '(3) 0) (eddel k4 0 '(1) '(2 3) 0))
-     (= (k4 0 '(1) '(2 3) 0) (eddel k4 0 '(1) 0 (link '(2 3) 0)))
-     (= (k4 0 '(1) 0 0) (eddel k4 0 '(1) 0 0))
-     (= (k4 0 0 '(1 2 3) 0) (edhome k4 0 '(2 1) '(3) 0))
-     (= (k4 0 '(3 2 1) 0 0) (edend k4 0 '(2 1) '(3) 0))
+     (= (k4 () '(1) '(2 3) ()) (edleft k4 () '(2 1) '(3) ()))
+     (= (k4 () '(2 1) () (link '(3) ())) (edleft k4 (link '(1 2) ()) () '(3) ()))
+     (= (k4 () () '(1 2) ()) (edleft k4 () () '(1 2) ()))
+     (= (k4 () '(1) '(2 3) ()) (edright k4 () () '(1 2 3) ()))
+     (= (k4 (link '(1 2) ()) () '(3 4) ()) (edright k4 () '(2 1) () (link '(3 4) ())))
+     (= (k4 () '(2 1) () ()) (edright k4 () '(2 1) () ()))
+     (= (k4 () '(1) '(3) ()) (edbsp k4 () '(2 1) '(3) ()))
+     (= (k4 () '(2 1) '(3) ()) (edbsp k4 (link '(1 2) ()) () '(3) ()))
+     (= (k4 () () '(1) ()) (edbsp k4 () () '(1) ()))
+     (= (k4 () '(1) '(3) ()) (eddel k4 () '(1) '(2 3) ()))
+     (= (k4 () '(1) '(2 3) ()) (eddel k4 () '(1) () (link '(2 3) ())))
+     (= (k4 () '(1) () ()) (eddel k4 () '(1) () ()))
+     (= (k4 () () '(1 2 3) ()) (edhome k4 () '(2 1) '(3) ()))
+     (= (k4 () '(3 2 1) () ()) (edend k4 () '(2 1) '(3) ()))
      ; --- edtop / edbot ---
-     (= (k4 0 0 '(1 2 3) 0) (edtop k4 0 '(2 1) '(3) 0))
-     (= (k4 0 '(3 2 1) 0 0) (edbot k4 0 '(2 1) '(3) 0))
-     (= (k4 0 0 '(1) (link '(2) (link '(3) 0))) (edtop k4 (link '(2) (link '(1) 0)) '(3) 0 0))
-     (= (k4 (link '(2) (link '(1) 0)) '(3) 0 0) (edbot k4 0 '(1) 0 (link '(2) (link '(3) 0))))
-     (= (k4 0 0 '(1) (link '(8 9) (link '(4) 0))) (edtop k4 (link '(1) 0) '(8) '(9) (link '(4) 0)))
+     (= (k4 () () '(1 2 3) ()) (edtop k4 () '(2 1) '(3) ()))
+     (= (k4 () '(3 2 1) () ()) (edbot k4 () '(2 1) '(3) ()))
+     (= (k4 () () '(1) (link '(2) (link '(3) ()))) (edtop k4 (link '(2) (link '(1) ())) '(3) () ()))
+     (= (k4 (link '(2) (link '(1) ())) '(3) () ()) (edbot k4 () '(1) () (link '(2) (link '(3) ()))))
+     (= (k4 () () '(1) (link '(8 9) (link '(4) ()))) (edtop k4 (link '(1) ()) '(8) '(9) (link '(4) ())))
      ; --- edup / eddown ---
-     (= (k4 0 '(1) '(2 3 4) (link '(5 6) 0)) (edup k4 (link '(1 2 3 4) 0) '(5) '(6) 0))
-     (= (k4 0 '(2 1) 0 (link '(3 4 5 6) 0)) (edup k4 (link '(1 2) 0) '(4 3) '(5 6) 0))
-     (= (k4 0 '(1) '(2) 0) (edup k4 0 '(1) '(2) 0))
-     (= (k4 (link '(5 6) 0) '(1) '(2 3 4) 0) (eddown k4 0 '(5) '(6) (link '(1 2 3 4) 0)))
-     (= (k4 0 '(1) '(2) 0) (eddown k4 0 '(1) '(2) 0))
+     (= (k4 () '(1) '(2 3 4) (link '(5 6) ())) (edup k4 (link '(1 2 3 4) ()) '(5) '(6) ()))
+     (= (k4 () '(2 1) () (link '(3 4 5 6) ())) (edup k4 (link '(1 2) ()) '(4 3) '(5 6) ()))
+     (= (k4 () '(1) '(2) ()) (edup k4 () '(1) '(2) ()))
+     (= (k4 (link '(5 6) ()) '(1) '(2 3 4) ()) (eddown k4 () '(5) '(6) (link '(1 2 3 4) ())))
+     (= (k4 () '(1) '(2) ()) (eddown k4 () '(1) '(2) ()))
      ; --- joinln / flatten / splitat ---
-     (= 0 (joinln 0))
-     (= '(1 2 3) (joinln (link '(1 2 3) 0)))
-     (= '(1 10 2) (joinln (link '(1) (link '(2) 0))))
-     (= '(1 2 10 3 10 4 5) (joinln (link '(1 2) (link '(3) (link '(4 5) 0)))))
-     (= '(1 2 3) (flatten 0 '(2 1) '(3) 0))
-     (= '(1 10 2) (flatten (link '(1) 0) '(2) 0 0))
-     (= '(1 10 2 10 3) (flatten (link '(1) 0) '(2) 0 (link '(3) 0)))
-     (= (link '(2 1) '(3 4)) (splitat link 0 2 '(1 2 3 4)))
-     (= (link '(2 1) 0) (splitat link 0 5 '(1 2)))
-     (= (link 0 '(1 2 3)) (splitat link 0 0 '(1 2 3)))
+     (= () (joinln ()))
+     (= '(1 2 3) (joinln (link '(1 2 3) ())))
+     (= '(1 10 2) (joinln (link '(1) (link '(2) ()))))
+     (= '(1 2 10 3 10 4 5) (joinln (link '(1 2) (link '(3) (link '(4 5) ())))))
+     (= '(1 2 3) (flatten () '(2 1) '(3) ()))
+     (= '(1 10 2) (flatten (link '(1) ()) '(2) () ()))
+     (= '(1 10 2 10 3) (flatten (link '(1) ()) '(2) () (link '(3) ())))
+     (= (link '(2 1) '(3 4)) (splitat link () 2 '(1 2 3 4)))
+     (= (link '(2 1) ()) (splitat link () 5 '(1 2)))
+     (= (link () '(1 2 3)) (splitat link () 0 '(1 2 3)))
      ; --- mkframe / detach / emptybuf / parses ---
-     (= (link 0 (link '(1) (link 0 0))) (mkframe 0 '(1) 0 0))
-     (= (link (link '(1) 0) (link '(2 3) (link '(4) (link '(5) 0))))
-        (mkframe (link '(1) 0) '(2 3) '(4) (link '(5) 0)))
-     (= 0 (detach 0 0))
-     (: cur (mkframe 0 '(1) 0 0) (= (link cur 0) (detach 0 cur)))
-     (: cur (mkframe 0 '(1) 0 0) old (mkframe 0 '(9) 0 0)
-        (= (link cur (link old 0)) (detach (link old 0) cur)))
-     (emptybuf 0 0 0 0)
-     !(emptybuf 0 '(1) 0 0)
-     !(emptybuf (link '(1) 0) 0 0 0)
-     !(emptybuf 0 0 '(1) 0)
-     !(emptybuf 0 0 0 (link '(1) 0))
-     (parses 0 (link 49 0) 0 0)
-     !(parses 0 0 0 0)
-     !(parses 0 (link 40 0) 0 0)
-     (parses (link (link 40 0) 0) (link 41 0) 0 0)
+     (= (link () (link '(1) (link () ()))) (mkframe () '(1) () ()))
+     (= (link (link '(1) ()) (link '(2 3) (link '(4) (link '(5) ()))))
+        (mkframe (link '(1) ()) '(2 3) '(4) (link '(5) ())))
+     (= () (detach () ()))
+     (: cur (mkframe () '(1) () ()) (= (link cur ()) (detach () cur)))
+     (: cur (mkframe () '(1) () ()) old (mkframe () '(9) () ())
+        (= (link cur (link old ())) (detach (link old ()) cur)))
+     (emptybuf () () () ())
+     !(emptybuf () '(1) () ())
+     !(emptybuf (link '(1) ()) () () ())
+     !(emptybuf () () '(1) ())
+     !(emptybuf () () () (link '(1) ()))
+     (parses () (link 49 ()) () ())
+     !(parses () () () ())
+     !(parses () (link 40 ()) () ())
+     (parses (link (link 40 ()) ()) (link 41 ()) () ())
      ; --- uphist / downhist ---
-     (: cur (mkframe 0 '(1) 0 0) old (mkframe 0 '(9) 0 0)
-        (= (k7 0 '(9) 0 0 0 (link cur 0) old) (uphist k7 0 '(1) 0 0 (link old 0) 0 cur)))
-     (: old (mkframe 0 '(9) 0 0)
-        (= (k7 0 '(9) 0 0 0 0 old) (uphist k7 0 0 0 0 (link old 0) 0 0)))
-     (: cur (mkframe 0 (link 49 0) 0 0)
-        (= (k7 0 0 0 0 0 (link cur 0) 0) (uphist k7 0 (link 49 0) 0 0 0 0 cur)))
-     (: cur (mkframe 0 (link 40 0) 0 0)
-        (= (k7 0 (link 40 0) 0 0 0 0 cur) (uphist k7 0 (link 40 0) 0 0 0 0 cur)))
-     (= (k7 0 (link 49 0) 0 0 0 0 0) (uphist k7 0 (link 49 0) 0 0 0 0 0))
-     (: cur (mkframe 0 '(1) 0 0) new (mkframe 0 '(9) 0 0)
-        (= (k7 0 '(9) 0 0 (link cur 0) 0 new) (downhist k7 0 '(1) 0 0 0 (link new 0) cur)))
-     (: new (mkframe 0 '(9) 0 0)
-        (= (k7 0 '(9) 0 0 0 0 new) (downhist k7 0 0 0 0 0 (link new 0) 0)))
-     (: cur (mkframe 0 (link 49 0) 0 0)
-        (= (k7 0 0 0 0 (link cur 0) 0 0) (downhist k7 0 (link 49 0) 0 0 0 0 cur)))
+     (: cur (mkframe () '(1) () ()) old (mkframe () '(9) () ())
+        (= (k7 () '(9) () () () (link cur ()) old) (uphist k7 () '(1) () () (link old ()) () cur)))
+     (: old (mkframe () '(9) () ())
+        (= (k7 () '(9) () () () () old) (uphist k7 () () () () (link old ()) () ())))
+     (: cur (mkframe () (link 49 ()) () ())
+        (= (k7 () () () () () (link cur ()) ()) (uphist k7 () (link 49 ()) () () () () cur)))
+     (: cur (mkframe () (link 40 ()) () ())
+        (= (k7 () (link 40 ()) () () () () cur) (uphist k7 () (link 40 ()) () () () () cur)))
+     (= (k7 () (link 49 ()) () () () () ()) (uphist k7 () (link 49 ()) () () () () ()))
+     (: cur (mkframe () '(1) () ()) new (mkframe () '(9) () ())
+        (= (k7 () '(9) () () (link cur ()) () new) (downhist k7 () '(1) () () () (link new ()) cur)))
+     (: new (mkframe () '(9) () ())
+        (= (k7 () '(9) () () () () new) (downhist k7 () () () () () (link new ()) ())))
+     (: cur (mkframe () (link 49 ()) () ())
+        (= (k7 () () () () (link cur ()) () ()) (downhist k7 () (link 49 ()) () () () () cur)))
      ; --- parseall: a line is ONE expression; floats; the more-sentinel ---
      ; a SINGLE datum is returned as-is in a one-list (no extra wrap), so a leading
      ; monadic stays fused: "+(-3)" -> (mono (+ (-3))) -> -3, not the head-position (+ -3).
      (= '((1 2 3)) (parseall '(49 32 50 32 51)))           ; "1 2 3" -> the application
      (= '((1 2)) (parseall '(40 49 32 50 41)))             ; "(1 2)" -> the one form, as-is
      (= -3 (ev (cap (parseall '(43 40 45 51 41)))))        ; "+(-3)" -> monadic net = -3 (the bug fix)
-     (= 0 (parseall 0))
+     (= () (parseall ()))
      !(two? (parseall '(40 49)))
      (= 1.5 (cap (parseall '(49 46 53))))
      (= 1000.0 (cap (parseall '(49 101 51))))
      (nom? (cap (parseall '(49 46 50 46 51))))
      ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
-     (nil? (two? (parseall (cat `(40 43 32 49) 0))))   ; "(+ 1" unclosed
-     (two? (parseall (cat `(49 32 43) 0)))             ; "1 +" complete (the curry partial)
-     (two? (parseall (cat `(49 32 63 32 39 97) 0)))    ; "1 ? 'a" complete (curried cond)
-     (two? (parseall (cat `(40 43 32 49 32 50 41) 0))) ; "(+ 1 2)" closed
-     (two? (parseall (cat `(49 32 61 32 49) 0))))      ; "1 = 1"
+     (nil? (two? (parseall (cat `(40 43 32 49) ()))))   ; "(+ 1" unclosed
+     (two? (parseall (cat `(49 32 43) ())))             ; "1 +" complete (the curry partial)
+     (two? (parseall (cat `(49 32 63 32 39 97) ())))    ; "1 ? 'a" complete (curried cond)
+     (two? (parseall (cat `(40 43 32 49 32 50 41) ()))) ; "(+ 1 2)" closed
+     (two? (parseall (cat `(49 32 61 32 49) ()))))      ; "1 = 1"
 
    ; the body: the public entry points, defglob'd below. everything above stays
    ; closure-private (off the book), which is what stops the ed* editor + repl
