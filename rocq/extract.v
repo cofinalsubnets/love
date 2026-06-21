@@ -12,7 +12,7 @@
    unreduced). The beta primitive it uses IS spec.v's st_beta (lemma below). *)
 
 Require Import spec.
-Require Import List.
+From Stdlib Require Import List.
 Import ListNotations.
 
 (* leading-lambda count = ai closure arity *)
@@ -64,8 +64,10 @@ Print Assumptions beta_is_step.   (* must stay "Closed under the global context"
 (* --- extraction --- nat -> int for a usable executable (the proofs above stay
    over real nat; this mapping is the standard pragmatic choice for an extracted
    test driver, not a proven-correct compiler). *)
-Require Import Extraction.
+From Stdlib Require Import Extraction.
 Extraction Language OCaml.
+(* keep the .ml next to this file (cwd); silences the 9.x default-output-dir warning *)
+Set Extraction Output Directory ".".
 Extract Inductive nat => "int"
   [ "0" "(fun x -> x + 1)" ]
   "(fun zero succ n -> if n = 0 then zero () else succ (n - 1))".
