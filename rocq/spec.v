@@ -168,7 +168,7 @@ Proof. intros f a. exists (vapp f a). reflexivity. Qed.
    re then im in the total order; $ clamps the order-signed magnitude) needs
    reals and is the next slice; everything here is exact over the integer net. *)
 
-From Stdlib Require Import ZArith Lia.
+From Stdlib Require Import ZArith Lia Permutation.
 Open Scope Z_scope.
 
 Inductive V := Vnum (z : Z) | Vnil | Vcons (a b : V).
@@ -537,6 +537,40 @@ Theorem count_saturates : forall c, c <= 0 -> scount c = 0%nat.
 Proof. intros c H. unfold scount. rewrite Z.max_l by lia. reflexivity. Qed.
 Theorem count_keeps : forall c, 0 <= c -> Z.of_nat (scount c) = c.
 Proof. intros c H. unfold scount. rewrite Z.max_r by lia. apply Z2Nat.id. lia. Qed.
+
+(* LIST * LIST is the CARTESIAN PRODUCT (the chain lane, lvm_mul_cart): every ordered
+   pairing, each pair a 2-list. This is the semiring product whose + is ++ -- but only
+   ON THE CHAIN, whose cells hold pairs; strings (atomic bytes) carry the * UNIT
+   (smul, repeat) and no in-carrier product. tally (length) is the HOMOMORPHISM, and
+   the product is RIGHT-distributive on the nose; LEFT-distributivity holds only up to
+   a PERMUTATION (intrinsic to ordered pairs -- same multiset, different order). *)
+Definition cart {A B} (a : list A) (b : list B) : list (A * B) :=
+  flat_map (fun x => map (fun y => (x,y)) b) a.
+
+Theorem cart_12_34 : cart [1;2] [3;4] = ([(1,3);(1,4);(2,3);(2,4)] : list (Z*Z)).
+Proof. reflexivity. Qed.                                   (* '(1 2)*'(3 4) *)
+
+(* tally is the homomorphism: length (a*b) = length a * length b *)
+Theorem cart_length : forall (A B:Type) (a:list A) (b:list B),
+  length (cart a b) = (length a * length b)%nat.
+Proof. intros A B a b. unfold cart. induction a as [|x a IH]; simpl;
+  [reflexivity | rewrite length_app, length_map, IH; reflexivity]. Qed.
+
+(* right-distributive on the nose: (a++b)*c = a*c ++ b*c *)
+Theorem cart_distr_r : forall (A B:Type) (a b:list A) (c:list B),
+  cart (a ++ b) c = cart a c ++ cart b c.
+Proof. intros A B a b c. unfold cart. induction a as [|x a IH]; simpl;
+  [reflexivity | rewrite IH, app_assoc; reflexivity]. Qed.
+
+(* left-distributive only UP TO PERMUTATION: a*(b++c) ~ a*b ++ a*c *)
+Theorem cart_distr_l_perm : forall (A B:Type) (a:list A) (b c:list B),
+  Permutation (cart a (b ++ c)) (cart a b ++ cart a c).
+Proof. intros A B a b c. unfold cart. induction a as [|x a IH]; simpl.
+  - apply Permutation_refl.
+  - rewrite map_app. eapply Permutation_trans.
+    + apply Permutation_app_head. exact IH.
+    + rewrite <- !app_assoc. apply Permutation_app_head.
+      rewrite !app_assoc. apply Permutation_app_tail. apply Permutation_app_comm. Qed.
 
 (* THE COUNT LAW IS SHARED: numeral-apply (n f) composes f the SAME scount times.
    `*` repeats (smul) and a numeral composes (numap) through ONE saturated count,
