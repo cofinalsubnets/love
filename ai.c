@@ -5054,9 +5054,9 @@ op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : nil)
 static lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t)) {
  word a = Sp[0];
  if (arrp(a)) {                               // (sin arr) etc. -> float array; complex array undefined
-  if (vec(a)->type == ai_C) return Sp[0] = nil, Ip++, Continue();
+  if (vec(a)->type == ai_C) return Sp[0] = ZeroPoint, Ip++, Continue();
   return Ap(lvm_vmap1, g, fn); }
- if (!isnum(a)) return Sp[0] = nil, Ip++, Continue();
+ if (!isnum(a)) return Sp[0] = ZeroPoint, Ip++, Continue();
  ai_flo_t ad = toflo(a), rd = fn(ad);
  Have(flo_req);
  return Sp[0] = mk_flo(&Hp, rd), Ip++, Continue(); }
@@ -7116,14 +7116,14 @@ lvm(lvm_re) {
  if (Cp(a)) { ai_flo_t re = cplx_re(a); Have(box_req); emit_flo(re);
   return Sp[0] = _res, Ip++, Continue(); }
  if (isnum(a)) return Ip++, Continue();            // re of a real is itself
- return Sp[0] = nil, Ip++, Continue(); }
+ return Sp[0] = ZeroPoint, Ip++, Continue(); }
 
 lvm(lvm_im) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t im = cplx_im(a); Have(box_req); emit_flo(im);
   return Sp[0] = _res, Ip++, Continue(); }
  if (isnum(a)) return Sp[0] = putcharm(0), Ip++, Continue();   // im of a real is 0
- return Sp[0] = nil, Ip++, Continue(); }
+ return Sp[0] = ZeroPoint, Ip++, Continue(); }
 
 // (conj z): complex conjugate (re, -im). conj LIFTS: a real r becomes ~(r 0)
 // (= r by value, the tower bridges), so conj is the monadic `~` -- it always
@@ -7137,7 +7137,7 @@ lvm(lvm_conj) {
  if (isnum(a)) { ai_flo_t re = toflo(a);            // lift a real to ~(r 0)
   Have(cplx_req);
   return Sp[0] = mk_cplx(&Hp, re, 0), Ip++, Continue(); }
- return Sp[0] = nil, Ip++, Continue(); }
+ return Sp[0] = ZeroPoint, Ip++, Continue(); }
 
 // (abs z): type-aware magnitude. Complex -> sqrt(re^2+im^2) (a float). Real ->
 // |z| in its own tier: fixnum stays fixnum (or boxes if |fix_min| overflows the
@@ -7173,7 +7173,7 @@ lvm(lvm_abs) {
   Have(box_req); emit_flo(ai_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
  if (tabp(a)) {                                       // table: its key count (so (int (abs t)) == (len t))
   Have(box_req); emit_int((intptr_t) map_len(a)); return Sp[0] = _res, Ip++, Continue(); }
- return Sp[0] = nil, Ip++, Continue(); }
+ return Sp[0] = ZeroPoint, Ip++, Continue(); }
 
 // fill f64 array r with arg of each element of v (a ai_C packed or ai_Z/ai_R real
 // array, same shape). &-free, but ai_noinline to keep lvm_carg's tail call clean.
@@ -7193,7 +7193,7 @@ lvm(lvm_carg) {
   Have(box_req); emit_flo(r); return Sp[0] = _res, Ip++, Continue(); }
  if (arrp(a)) {
   struct ai_vec *v = vec(a);
-  if (v->type == ai_O) return Sp[0] = nil, Ip++, Continue();   // object array -> nil
+  if (v->type == ai_O) return Sp[0] = ZeroPoint, Ip++, Continue();   // object array -> nil
   uintptr_t R = v->rank, n = 1; for (uintptr_t i = 0; i < R; i++) n *= v->shape[i];
   uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_R];
   Have(b2w(bytes));
@@ -7205,4 +7205,4 @@ lvm(lvm_carg) {
   return Sp[0] = word(r), Ip++, Continue(); }
  if (isnum(a)) { ai_flo_t r = ai_atan2(0, toflo(a));
   Have(box_req); emit_flo(r); return Sp[0] = _res, Ip++, Continue(); }
- return Sp[0] = nil, Ip++, Continue(); }
+ return Sp[0] = ZeroPoint, Ip++, Continue(); }
