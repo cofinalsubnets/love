@@ -228,7 +228,7 @@ out/lib/ai_version.h: force_version
 	else \
 	  v="$$(git -C $(R) describe --always --dirty 2>/dev/null || echo unknown)"; \
 	fi; printf '#define AI_VERSION "%s"\n' "$$v" > $@.tmp
-	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo GEN $@; fi
+	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
 
 # ====================================================================
 # host (POSIX CLI) build -- outputs under out/host. Was host/Makefile.
