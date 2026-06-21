@@ -149,16 +149,19 @@
     (atom? (cup bs)) (list (wx (cap bs) bnd))
     (: nd (dsug (cap bs) (caup bs))               ; desugar (f a..) so wx's \ adds params to bnd
      (link (cap nd) (link (wx (cup nd) bnd) (wxb (cuup bs) bnd)))))
-   ; the nil?-flip peephole, now a unify-driven rewrite RULE (cflip-pat -> cflip-tpl): a
-   ; FINAL (nil? e) clause flips its branches and drops the wrapper, since the cond tests
-   ; g_false(e) == nil?(e). `unify` enforces the EXACT (.. (nil? e) con else) shape on its
-   ; own (proper-list tails must match), so only a 3-clause tail with a 2-elem (nil? e) head
-   ; fires -- the lone side-condition left is nil? being unshadowed. byte-identical to the
-   ; old hand-written guard; the FIRST use of the prel unifier inside the compiler.
+   ; cond-clause rewrite RULES (pat . tpl), tried in order by `firstr` (the prel unifier
+   ; inside the compiler). the nil?-flip family: a (nil? e) test flips its branches and
+   ; drops the wrapper, since the cond tests g_false(e) == nil?(e). `unify` enforces each
+   ; EXACT shape on its own (proper-list tails must match), so a rule fires only on its
+   ; arity; the lone side-condition left is nil? being unshadowed. rule 1 (3-clause) is
+   ; byte-identical to the old hand-written peephole; rule 2 (2-clause, no else) is a NEW
+   ; sound win the old guard never caught -- the table makes it nearly free.
    ve (var 'e)  vc (var 'con)  vl (var 'else)
-   cflip-pat (L (L 'nil? ve) vc vl)                   ; ((nil? ?e) ?con ?else)
-   cflip-tpl (L ve vl vc)                             ; (?e ?else ?con) -- drop nil?, swap branches
-   (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (rewrite cflip-pat cflip-tpl bs))   ; nil?-flip rule
+   cflip-rules (L (link (L (L 'nil? ve) vc vl) (L ve vl vc))   ; ((nil? ?e) ?c ?el) -> (?e ?el ?c)
+                  (link (L (L 'nil? ve) vc)    (L ve () vc)))   ; ((nil? ?e) ?c)     -> (?e () ?c)
+   (firstr rules x) (? (atom? rules) x                ; first matching rule wins; else x
+    (: r (rewrite (caap rules) (cuap rules) x) (? (id? r x) (firstr (cup rules) x) r)))
+   (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (firstr cflip-rules bs))
     (? (atom? fb) (list ())                           ; clauses ran out: implicit () else (nil-ontology bug 3)
        (atom? (cup fb)) (list (wx (cap fb) bnd))
        (link (wx (cap fb) bnd) (link (wx (caup fb) bnd) (wxc (cuup fb) bnd)))))
