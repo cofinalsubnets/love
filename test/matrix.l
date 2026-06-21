@@ -174,8 +174,8 @@
  ; --- count must be a number: an array / non-number count -> nil ---
  (nil? (* "ab" @(1 2)))   (nil? (* @(1 2) "ab"))
 
- ; --- lvm_0: sequence * sequence is undefined -> nil ---
- (nil? (* "ab" "cd"))   (nil? (* 'a 'b))   (nil? (* '(1) '(2)))
+ ; --- seq * seq: chain x chain is the cartesian product; string/sym stay nil (lvm_0) ---
+ (nil? (* "ab" "cd"))   (nil? (* 'a 'b))   (= '((1 2)) (* '(1) '(2)))
 
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---
  (= 36 ((* (\ x (* x x)) (\ x (+ x 1))) 5))   ; sq(inc 5) = sq 6 = 36

@@ -4,7 +4,8 @@
 ; count SATURATES (($ c) -- the count law, shared with numeral-apply and array
 ; shapes: non-positive -> 0 -> empty, a float ceils, a complex by total-order-
 ; guarded modulus); an array/non-number count is undefined
-; (nil); sequence x sequence is undefined; a thread anywhere -> composition.
+; (nil). chain x chain is the CARTESIAN PRODUCT (the semiring product whose `+` is cat --
+; see test/spec.l); string x string / sym x sym stay nil; a thread anywhere -> composition.
 (: sm-i (\ x (? (nom? x) (= x (intern (string x))) 0)))      ; interned symbol?
 (assert
  ; --- numbers unchanged ---
@@ -28,10 +29,11 @@
  (= '(1 2 1 2) (* 2 '(1 2)))                    ; commutative
  (nil? (* '(1 2) 0))                            ; 0 copies of a list -> nil
 
- ; --- undefined cells -> nil ---
- (nil? (* "ab" "cd"))                           ; seq x seq
- (nil? (* 'a 'b))
- (nil? (* '(1) '(2)))
+ ; --- chain x chain -> cartesian product; other seq x seq -> nil ---
+ (= '((1 2)) (* '(1) '(2)))                     ; chain x chain: the cartesian product (1-pair list)
+ (= '((1 3) (1 4) (2 3) (2 4)) (* '(1 2) '(3 4)))
+ (nil? (* "ab" "cd"))                           ; string x string still nil
+ (nil? (* 'a 'b))                               ; sym x sym still nil
  (nil? (* "ab" @(1 2)))                         ; array is not a count
  (nil? (* @(1 2) "ab"))
  ; a map is a lookup-lambda, so it takes the thread (composition) rule, not nil:

@@ -136,6 +136,24 @@
  ('(1 2) = '(1 2) * (mint 0)) (() = () * ()) ("@(1 2 3)" = show (() * @(1 2 3)))   ; identity FACE (1) of the unit,
  ("" = "ab" * 0) ((\ x x) = () * (\ x x)))                  ; mirroring its + face (0); 0 stays the number; () * hot = hot too
 
+; --- list * list is the CARTESIAN PRODUCT --- the semiring product whose `+` is cat: each
+; pair a proper 2-list (ai bj), so `tally` is the homomorphism (tally(a*b)=ta*tb). infix `*`
+; is right-associative, so a*b*c nests right. RIGHT-distributivity ((a+b)*c=a*c+b*c) holds on
+; the nose (the outer loop ranges the LEFT operand); LEFT-distributivity holds only up to a
+; permutation (intrinsic to ordered pairs -- same multiset, different order). `net` is NOT the
+; `*` measure (it's not multiplicative); `tally` is. () stays the * UNIT (identity), not the
+; cartesian annihilator -- the unit law preempts the empty-operand lane.
+(assert
+ (('(1 2) * '(3 4)) = '((1 3) (1 4) (2 3) (2 4)))                ; the product: every ordered pairing
+ (('(1 2) * '(3 4) * '(5 6)) = '((1 (3 5)) (1 (3 6)) (1 (4 5)) (1 (4 6)) (2 (3 5)) (2 (3 6)) (2 (4 5)) (2 (4 6))))  ; right-assoc nests right
+ (6 = tally ('(1 2) * '(3 4 5))) ((tally ('(1 2) * '(3 4 5))) = (tally '(1 2)) * (tally '(3 4 5)))   ; tally is the homomorphism
+ ((('(1 2) + '(8 9)) * '(3 4)) = (('(1 2) * '(3 4)) + ('(8 9) * '(3 4))))    ; right-distributive on the nose
+ (!(('(1 2) * ('(3 4) + '(5 6))) = (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; left-distrib FAILS as ordered lists ...
+ ((sort ('(1 2) * ('(3 4) + '(5 6)))) = (sort (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; ... but holds up to permutation
+ ('(1 3) = cap ('(1 2) * '(3 4)))                               ; pairs are real 2-lists -- reversible via cap/cup
+ (('(1 2) * ()) = '(1 2)) (() * '(3 4) = '(3 4))                ; () is the * UNIT (identity), not the annihilator
+ !("ab" * '(1 2)) !('(1 2) * "ab"))                            ; only chain*chain -- string*chain stays nil
+
 ; --- numeric functions --- abs int (type-aware); constants e pi i; gcd modpow; the only
 ; transcendental nifs are power sine cosine log; power/sqrt/exp/nth-root/tan/atan derived from
 ; numerals + complex (sqrt is total: ((/ 1 2) -1) = i).

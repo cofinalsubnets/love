@@ -223,7 +223,11 @@ $@(3 4)              ; 7
 ; (0 annihilates *, () does not). the zero point counts, as does any fresh mint; a NAMED symbol still
 ; adjoins as an element. `*` is repeated `+`: a sequence times a count repeats it, and the
 ; count SATURATES (($ c), the count law shared with numeral-apply and array shapes): a non-positive
-; count gives the empty sequence, a float ceils.
+; count gives the empty sequence, a float ceils. LIST times LIST is the CARTESIAN PRODUCT -- the
+; semiring product whose `+` is cat: every ordered pairing, each pair a 2-list, so `tally` is the
+; homomorphism (tally(a*b) = tally a * tally b -- net is NOT the * measure). right-distributivity
+; ((a+b)*c = a*c + b*c) is exact; left holds up to a permutation (intrinsic to ordered pairs).
+; string*string / sym*sym stay nil; () stays the * UNIT, not the cartesian annihilator.
 ; demo:
 "ab" + "cd"          ; "abcd"
 "x" + 66             ; "xB"      the byte law: exact 0..255 or nil
@@ -233,6 +237,7 @@ $@(3 4)              ; 7
 "ab" + ()            ; "ab"      every lane, either side -- () + x = () * x = x for any x
 "ab" * ()            ; "ab"      ... the unit, not the number 0: "ab" * 0 is "" (count zero)
 "ab" * 3             ; "ababab"  * is repeated +; the count saturates
+'(1 2) * '(3 4)      ; ((1 3) (1 4) (2 3) (2 4))   list*list = the cartesian product
 
 ; --- numeric functions --- abs and int are type-aware; the constants are e pi i; also gcd and
 ; modpow. the irreducible transcendental nifs are sine cosine log (float; bignums widen, arrays map

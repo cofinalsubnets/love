@@ -4682,6 +4682,34 @@ static lvm(lvm_mul_rep) {
  for (uintptr_t i = 0; i < n; i++) memcpy(txt(z) + i * sl, txt(src), sl);
  return *++Sp = word(z), Ip++, Continue(); }
 
+// `*` CARTESIAN lane: chain * chain -> the ordered cartesian product, the semiring
+// product whose `+` is `cat`. Each pair is a proper 2-list (ai bj), so the product
+// of an m-list and an n-list is an (m*n)-list of pairs -- tally is the homomorphism
+// (tally(a*b) = tally a * tally b), and the outer loop ranges the LEFT operand so
+// right-distributivity (a+b)*c = a*c + b*c holds on the nose (left-distributivity
+// holds up to a permutation -- intrinsic to ordered pairs). () is the annihilator
+// (an empty operand can't reach here -- it's a mint, caught by lvm_mul's identity
+// early-out -- but llen 0 -> () keeps the lane total). Layout: `pairs` outer spine
+// cells, then 2*pairs pair cells; 3*pairs chains total, one Have.
+static lvm(lvm_mul_cart) {
+ word a = Sp[0], b = Sp[1];
+ if (!formp(a) || !formp(b)) return *++Sp = nil, Ip++, Continue();   // chain*chain only
+ uintptr_t m = llen(a), n = llen(b), pairs = m * n;
+ if (!pairs) return *++Sp = ZeroPoint, Ip++, Continue();             // empty operand annihilates
+ Have(3 * pairs * Width(struct ai_chain));
+ a = Sp[0], b = Sp[1];                                               // re-read post-GC
+ struct ai_chain *spine = (struct ai_chain*) Hp, *pc = spine + pairs;
+ Hp += 3 * pairs * Width(struct ai_chain);
+ uintptr_t idx = 0;
+ for (word la = a; chainp(la); la = B(la)) {
+  word av = A(la);
+  for (word lb = b; chainp(lb); lb = B(lb), idx++) {
+   struct ai_chain *p0 = pc + 2 * idx, *p1 = p0 + 1;
+   ini_chain(p1, A(lb), ZeroPoint);                                  // (bj)
+   ini_chain(p0, av, word(p1));                                      // (ai bj)
+   ini_chain(spine + idx, word(p0), idx + 1 < pairs ? word(spine + idx + 1) : ZeroPoint); } }
+ return *++Sp = word(spine), Ip++, Continue(); }
+
 // --- apply lane (the data-value `(g x)` aps; moved here from data.c) -----
 // When a data value is applied, its sentinel (a data sentinel above) tail-jumps
 // STRAIGHT to one of these handlers -- the sentinel encodes the kind, so there is
@@ -4792,20 +4820,24 @@ static lvm_t *const ai_add_mx[KN][KN] = {
 #undef ADD_TWO
 #undef ADD_H
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
-// * count repeats, lambdas/maps compose (Church mul). seq*seq -> nil (so the string
-// and two rows agree: a number repeats, everything else nils, lambda/map composes).
+// * count repeats, lambdas/maps compose (Church mul). chain*chain is the CARTESIAN
+// product (lvm_mul_cart -- the KChain row); string*string / sym*sym stay nil.
 #define MUL_NUM { NUMK(lvm_muln),    [KMint]=lvm_0, [KString]=lvm_mul_rep, [KChain]=lvm_mul_rep, [KNom]=lvm_mul_rep, [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_REP { NUMK(lvm_mul_rep), [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,       [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_MINT { NUMK(lvm_0),      [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,       [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_H   { NUMK(lvm_mulh),    [KMint]=lvm_mulh, [KString]=lvm_mulh, [KChain]=lvm_mulh,    [KNom]=lvm_mulh,    [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_REP { NUMK(lvm_mul_rep), [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,        [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+// the KChain row: like MUL_REP (a number repeats the list), but chain*chain is the
+// CARTESIAN product (the semiring lane). string*chain / nom*chain stay nil.
+#define MUL_CHAIN { NUMK(lvm_mul_rep), [KMint]=lvm_0, [KString]=lvm_0,     [KChain]=lvm_mul_cart, [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_MINT { NUMK(lvm_0),      [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,        [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_H   { NUMK(lvm_mulh),    [KMint]=lvm_mulh, [KString]=lvm_mulh, [KChain]=lvm_mulh,     [KNom]=lvm_mulh,    [KMap]=lvm_mulh, [KHot]=lvm_mulh }
 static lvm_t *const ai_mul_mx[KN][KN] = {
  [KMint]=MUL_MINT, [KNom]=MUL_REP,
  [KCharm]=MUL_NUM, [KWide]=MUL_NUM, [KFlo]=MUL_NUM, [KCplx]=MUL_NUM, [KBig]=MUL_NUM, [KVec]=MUL_NUM,
  [KArrZ]=MUL_NUM, [KArrR]=MUL_NUM, [KArrC]=MUL_NUM, [KArrO]=MUL_NUM,
- [KString]=MUL_REP, [KChain]=MUL_REP, [KMap]=MUL_H, [KHot]=MUL_H,
+ [KString]=MUL_REP, [KChain]=MUL_CHAIN, [KMap]=MUL_H, [KHot]=MUL_H,
 };
 #undef MUL_NUM
 #undef MUL_REP
+#undef MUL_CHAIN
 #undef MUL_MINT
 #undef MUL_H
 #undef NUMK
