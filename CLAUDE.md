@@ -51,7 +51,14 @@
 ; --- the shape of it --- one cell is one word: a fixnum is a tagged odd word, anything else a heap
 ; object whose first word is its hot -- a live external reference, the wire out of the heap to the ap
 ; that runs it. every operation is *fully generic*: it dispatches on a value's *kind*, and the kinds
-; form a lattice that is literally the diagonal of the dispatch tables. the VM is tail-threaded (aps
+; form a lattice that is literally the diagonal of the dispatch tables. that ONE lattice is read FOUR
+; ways: dispatch (the enum), order (the true-blue remap, below), ALGEBRA (each band carries the
+; strongest +/* theory its rep affords -- a module on the numeric arrays with net the linear map, a
+; semiring on lists, a ring/field on numbers, a free monoid on strings; net the lone measure-hom
+; threading them, so the algebra varies COHERENTLY along the lattice, not bolted per kind), and
+; ABSTRACT DOMAIN (a compile pass climbs it by join to a fixpoint -- a kind per node -- so a +/* site
+; with statically-numeric operands skips the table for its lane: doc/proto/kinds.l, the rewrite
+; layer's analysis half). the VM is tail-threaded (aps
 ; tail-jump, never return -- `make vmret` checks it) over a two-space copying heap. the C core is
 ; tiny; most of the language is ai closures installed reflectively from the prel, then laid into a
 ; heap image (the *egg*) at compile time. gritty details at the bottom.
