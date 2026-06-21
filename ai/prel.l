@@ -624,13 +624,15 @@
    (krank k) (? (id? k 'charm) 1 (id? k 'whole) 2 (id? k 'real) 3 (id? k 'cplx) 4 0)   ; numeric tiers, else 0
    (knum? k) (< 0 (krank k))
    (klook env x) (? (atom? env) 'top (: p (cap env) (? (id? x (cap p)) (cup p) (klook (cup env) x))))
+   (kquote d) (? (nom? d) 'nom (two? d) 'list (string? d) 'str (charm? d) 'charm 'top)   ; the kind of a quoted literal
    (kof env e) (?                                          ; abstract kind of an expression
      (charm? e) 'charm
      (string? e) 'str
      (nom? e) (klook env e)
      (atom? e) 'top
      (: h (cap e) a (cap (cup e)) b (cap (cup (cup e)))
-       (? (id? h ':) (kof (kenv env (cup e)) (klast (cup e)))
+       (? (id? h '\) (? (atom? (cup (cup e))) (kquote a) 'top)   ; (\ d) quote -> the datum's literal kind ; (\ x..) lambda -> top
+          (id? h ':) (kof (kenv env (cup e)) (klast (cup e)))
           (id? h '+) (: ka (kof env a) kb (kof env b)       ; + : str.str=cat, num.num climbs (overflow), else top
                         (? (&& (id? ka 'str) (id? kb 'str)) 'str (&& (knum? ka) (knum? kb)) 'whole 'top))
           (|| (id? h '-) (id? h '//) (id? h '%)) (? (&& (knum? (kof env a)) (knum? (kof env b))) 'whole 'top)

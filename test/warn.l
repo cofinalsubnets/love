@@ -13,5 +13,13 @@
  (= '((- s 3)) (warn-kinds '(: s "hi" (- s 3))))              ; binding-flow: s inferred str
  (= '((* "a" "b")) (warn-kinds '(* "a" "b")))                 ; str*str -> nil
  (= '((- (+ "a" "b") 5)) (warn-kinds '(- (+ "a" "b") 5)))     ; nested: (+ str str)=str, so (- str 5) flagged
+ ; --- list ops + named-symbol arithmetic: numeric-only ops on a non-number ---
+ (= '((- '(1 2) 3)) (warn-kinds '(- '(1 2) 3)))               ; subtract a list literal
+ (= '((// '(1 2) 2)) (warn-kinds '(// '(1 2) 2)))             ; quotient of a list
+ (= '((- 'foo 3)) (warn-kinds '(- 'foo 3)))                   ; subtract a named symbol
+ (= '((% xs 2)) (warn-kinds '(: xs '(1 2) (% xs 2))))         ; binding-flow: xs inferred list
+ (nil? (warn-kinds '(+ '(1 2) '(3 4))))                       ; list+list = cat -- clean
+ (nil? (warn-kinds '(* '(1 2) '(3 4))))                       ; list*list = cartesian -- clean
+ (nil? (warn-kinds '(- (f x) 3)))                             ; computed (unquoted) list -> top -- clean (sound)
  ; --- the tunable box defaults OFF ---
  (= 0 (peep warns 0 0)))
