@@ -531,6 +531,24 @@
       (\ p (coin s p)))                                          ; the ctor: payload -> coin
    (monoid name plus) (ring name plus 0))                        ; a monoid is a ring with no product
 
+; --- rationals: an exact field shipped as a coin, the first multi-field newtype ---
+; payload is a REDUCED 2-list (num den), den > 0; the cached net is the true value
+; num/den (so $/truth/sort read the magnitude on the number line, not the meaningless
+; payload sum num+den). + and * cross-multiply and reduce; = is payload equality after
+; reduction (so (q 2 4) = (q 1 2)); show is (q (num den)), which reads back since `q`
+; also accepts a 2-list. q-red/q-coin are leaked helpers; the methods capture only `st`.
+(: (q-red n d) (? (= 0 n) (L 0 1)                               ; reduce: gcd out, sign on num, den > 0
+                  (: g (gcd (abs n) (abs d)) s (? (< d 0) -1 1)
+                     (L (// (* s n) g) (// (* s d) g))))
+   (q-coin st nd) (coinn st nd (/ (cap nd) (caup nd))))         ; payload -> coin; net = num/den (exact value)
+(: q (: st #(0 'q)
+        _ (pin st 1 (\ a b (: x (load a) y (load b)             ; (n1 d1)+(n2 d2)
+              (q-coin st (q-red (+ (* (cap x) (caup y)) (* (cap y) (caup x))) (* (caup x) (caup y)))))))
+        _ (pin st 2 (\ a b (: x (load a) y (load b)             ; (n1 d1)*(n2 d2)
+              (q-coin st (q-red (* (cap x) (cap y)) (* (caup x) (caup y)))))))
+        (\ n (? (two? n) (q-coin st (q-red (cap n) (caup n)))   ; (q (n d)) -- a 2-list (the show form)
+                (\ d (q-coin st (q-red n d)))))))               ; (q n d) -- the ergonomic curried form
+
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
 ; ONE SCOPE: every name bound in a `:` resolves locally over the whole form.
 ; `boxfix-core` takes a source-order (name . def) chain-list `prs` and the body

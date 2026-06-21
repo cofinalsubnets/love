@@ -11,8 +11,8 @@
    b  (z5 4)
    ; a SUM monoid -- a plus but no times (a monoid has no product)
    sm (monoid 'sm (\ x y (+ x y)))
-   p  (sm 2)
-   q  (sm 3)
+   smp (sm 2)
+   smq (sm 3)
    (assert
     ; --- what a coin IS ---
     (coin? a)                      ; a is a coin
@@ -40,8 +40,8 @@
     (= a (* a ()))
 
     ; --- a monoid has a +, but no * ---
-    (= (sm 5) (+ p q))             ; 2 + 3 = 5
-    (nil? (* p q))                 ; no times slot -> nil, like an undefined matrix cell
+    (= (sm 5) (+ smp smq))         ; 2 + 3 = 5
+    (nil? (* smp smq))             ; no times slot -> nil, like an undefined matrix cell
 
     ; --- net defaults over the payload: $, truth, sort ---
     (nil? (sat (z5 0)))            ; payload 0 nets nothing -> false
@@ -67,4 +67,16 @@
 
     ; --- tally delegates to the payload ---
     (= 3 (tally (sm (L 7 8 9))))   ; a coin over a 3-list tallies its payload
+
+    ; --- rationals (q): a multi-field coin with an explicit cached net ---
+    (= (q 5 6) (+ (q 1 2) (q 1 3)))    ; 1/2 + 1/3 = 5/6
+    (= (q 1 2) (* (q 2 3) (q 3 4)))    ; 2/3 * 3/4 = 1/2
+    (= (q 1 2) (q 2 4))                ; reduced on construction
+    (= (q 1 2) (q (L 1 2)))            ; the 2-list form (what show reads back)
+    (nil? (q 0 1))                     ; 0 is false -- the cached net is 0/1 = 0
+    (nil? (q -3 2))                    ; a negative rational is RED (net -3/2 < 0) -> false
+    (nil? (nil? (q 1 2)))              ; a positive rational is true
+    (= 1 (sat (q 1 2)))               ; $ = ceil(1/2) = 1
+    (= "(q (1 2))" (show (q 2 4)))     ; show is reduced + reparsable (q accepts the 2-list)
+    (= (L (q 1 2) (q 2 3) (q 3 4)) (sort (L (q 3 4) (q 1 2) (q 2 3))))  ; ordered BY VALUE (cached net)
     ))

@@ -112,7 +112,7 @@ lvm_t lvm_kcall,
  lvm_putn, lvm_gauge,    lvm_clock,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_eat1, lvm_eat2, lvm_toast, lvm_toasted,
- lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_add_coin, lvm_mul_coin,   // newtypes: a coin (class + payload), a typed hot riding KHot
+ lvm_coin, lvm_coinmk, lvm_coinn, lvm_load, lvm_coinp, lvm_add_coin, lvm_mul_coin,   // newtypes: a coin (stamp+payload+net), a typed hot riding KHot
  lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
@@ -243,20 +243,27 @@ static ai_inline struct ai_str *buf_str(word x) { return ((struct ai_buf*) x)->s
 // the byte ops read from a string or a buf; both resolve to a ai_str of bytes.
 static ai_inline struct ai_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
 // a COIN: a newtype value, a typed hot. Like a buf, NOT a data kind -- its head word
-// is the behaves-as-0 lvm_coin, so GC walks it as a plain length-3 text [lvm_coin,
-// class, payload, terminator] and forwards the two embedded words for free; no
+// is the behaves-as-0 lvm_coin, so GC walks it as a plain length-4 text [lvm_coin,
+// stamp, payload, net, terminator] and forwards the three embedded words for free; no
 // bespoke evac. ai_kind reads KHot (it is !datp and not a map), so the +/* matrix
 // already routes every coin combination to the KHot lane (lvm_addh/lvm_mulh), where a
 // coin operand is intercepted. The STAMP is the type descriptor (a map keyed by the
-// slot fixnums below -- a monoid/ring); the PAYLOAD is the backing value. The
-// ()-identity of +/* is inherited free -- the mint-identity hoist sits above the matrix.
-struct ai_coin { lvm_t *ap; word stamp; word payload; };
+// slot fixnums below -- a monoid/ring); the PAYLOAD is the backing value; NET is the
+// cached net value (see coin_net). The ()-identity of +/* is inherited free -- the
+// mint-identity hoist sits above the matrix.
+struct ai_coin { lvm_t *ap; word stamp; word payload; word net; };
 static ai_inline bool coinp(word _) { return lamp(_) && cell(_)->ap == lvm_coin; }
 static ai_inline word coin_stamp(word x) { return ((struct ai_coin*) x)->stamp; }
 static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload; }
+// the CACHED NET: a number computed at construction (by ai code), read VM-free by the
+// C net/truth path. `coin` defaults it to the payload (net = payload's net -- right for a
+// scalar like a mod-n residue); `coinn` takes it explicitly, so a multi-field payload
+// (a rational's (num den), where payload-net num+den is meaningless) nets its true value.
+static ai_inline word coin_net(word x) { return ((struct ai_coin*) x)->net; }
 // stamp slots (fixnum keys into the descriptor map). NAME is a symbol for show;
 // ADD/MUL/APPLY are closures run INSIDE the VM (+/* and apply are lvm handlers, so
-// they can call ai code). net/=/</show/tally default over the payload in pure C.
+// they can call ai code). =/</show/tally default over the payload in pure C; net reads
+// the cached coin_net (so a stamp customizes truth/$ by what its ctor caches there).
 enum { STAMP_NAME = 0, STAMP_ADD = 1, STAMP_MUL = 2, STAMP_APPLY = 3 };
 // read a stamp slot, or () if absent / the stamp is not a map.
 static ai_inline word stamp_get(struct ai *g, word stamp, intptr_t slot) {
@@ -737,7 +744,8 @@ lvm_t lvm_fault;
  _(nif_dot, "dot", s1(lvm_dot))\
  _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))\
- _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load)) _(nif_coinp, "coin?", s1(lvm_coinp)) NIF_FAULT(_)
+ _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_coinn, "coinn", s3(lvm_coinn))\
+ _(nif_load, "load", s1(lvm_load)) _(nif_coinp, "coin?", s1(lvm_coinp)) NIF_FAULT(_)
 #define native_implemented_function(n, _, d) static union u const n[] = d;
 #define insts(_) _(lvm_unc) _(lvm_index) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
@@ -2148,16 +2156,29 @@ lvm(lvm_coin) {
  dst[0] = self, dst[1] = f, dst[2] = arg, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
-// (coin stamp payload) -> a fresh coin wearing the stamp over the payload.
+// build a coin [stamp, payload, net]; nv is the cached net value.
+static ai_inline union u *coin_build(ai_word *hp, word stamp, word payload, word nv) {
+ union u *k = (union u*) hp;
+ ((struct ai_coin*) k)->ap = lvm_coin;
+ ((struct ai_coin*) k)->stamp = stamp;
+ ((struct ai_coin*) k)->payload = payload;
+ ((struct ai_coin*) k)->net = nv;
+ return tagtext(k, Width(struct ai_coin)); }
+// (coin stamp payload) -> a fresh coin; its net DEFAULTS to the payload (right when the
+// payload is the scalar that nets the value, e.g. a mod-n residue).
 lvm(lvm_coinmk) {
  Have(Width(struct ai_coin) + Width(struct ai_tag));
- union u *k = (union u*) Hp;
+ union u *k = coin_build(Hp, Sp[0], Sp[1], Sp[1]);
  Hp += Width(struct ai_coin) + Width(struct ai_tag);
- ((struct ai_coin*) k)->ap = lvm_coin;
- ((struct ai_coin*) k)->stamp = Sp[0];
- ((struct ai_coin*) k)->payload = Sp[1];
- tagtext(k, Width(struct ai_coin));
  return *++Sp = word(k), Ip++, Continue(); }
+// (coinn stamp payload net) -> a coin with an EXPLICIT cached net: for a multi-field
+// payload whose payload-net is meaningless (a rational's (num den)), the ctor passes the
+// value's true net (num/den) so $/truth read right.
+lvm(lvm_coinn) {
+ Have(Width(struct ai_coin) + Width(struct ai_tag));
+ union u *k = coin_build(Hp, Sp[0], Sp[1], Sp[2]);
+ Hp += Width(struct ai_coin) + Width(struct ai_tag);
+ return Sp[2] = word(k), Sp += 2, Ip++, Continue(); }
 // (load x) -> the payload of a coin, else x itself (a plain value loads as itself).
 lvm(lvm_load) {
  Sp[0] = coinp(Sp[0]) ? coin_load(Sp[0]) : Sp[0];
@@ -2583,7 +2604,7 @@ static struct ai_zn ai_net(struct ai *g, word x) {
     for (uintptr_t i = 0; i < b->len; i++) t += (uint8_t) b->bytes[i];
     return zn(t, 0); }
   if (tabp(x)) return zn((ai_flo_t) map_len(x), 0);              // table: key count
-  if (coinp(x)) return ai_net(g, coin_load(x));                // a coin nets its payload (the monoid hom)
+  if (coinp(x)) return ai_net(g, coin_net(x));                 // a coin nets its CACHED net value
   if (!datp(x)) return zn(1, 0);                                // opaque but present (fn / port): truthy
   switch (typ(x)) {
     default: return zn(1, 0);                                   // unknown present data kind -> truthy
@@ -6344,8 +6365,9 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
   return ai_big_cmp(a, b); }                                // exact fix/box/big tower
  if (strp(a)) return bytes_cmp(txt(a), len(a), txt(b), len(b));
  if (formp(a)) { intptr_t c = cmp3(g, A(a), A(b)); return c ? c : cmp3(g, B(a), B(b)); }  // chain: car, then cdr
- if (coinp(a) && coinp(b) && coin_stamp(a) == coin_stamp(b))  // same stamp: order by payload
-  return cmp3(g, coin_load(a), coin_load(b));
+ if (coinp(a) && coinp(b) && coin_stamp(a) == coin_stamp(b)) {  // same stamp: by net (value), then
+  intptr_t c = cmp3(g, coin_net(a), coin_net(b));               // payload (tiebreak, to stay = with eqv)
+  return c ? c : cmp3(g, coin_load(a), coin_load(b)); }
  uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/map/port/buf: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
