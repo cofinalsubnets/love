@@ -149,16 +149,19 @@
     (atom? (cup bs)) (list (wx (cap bs) bnd))
     (: nd (dsug (cap bs) (caup bs))               ; desugar (f a..) so wx's \ adds params to bnd
      (link (cap nd) (link (wx (cup nd) bnd) (wxb (cuup bs) bnd)))))
-   (wxc bs bnd) (?                                ; cond clauses (ant con ant con ... else)
-    (atom? bs) (list ())                          ; clauses ran out: supply the implicit () else (nil-ontology bug 3)
-    (atom? (cup bs)) (list (wx (cap bs) bnd))
-    ; peephole: a FINAL (nil? e) test flips its branches, dropping the wrapper --
-    ; (.. (nil? e) con else) == (.. e else con), since the cond tests g_false(e), == nil?(e).
-    (&& (two? (cuup bs)) (atom? (cup (cuup bs)))                  ; bs is exactly (ant con else)
-        (two? (cap bs)) (= (cap (cap bs)) 'nil?)
-        (two? (cup (cap bs))) (atom? (cuup (cap bs))) (nil? (member? (cap (cap bs)) bnd)))
-     (link (wx (caup (cap bs)) bnd) (link (wx (cap (cuup bs)) bnd) (list (wx (caup bs) bnd))))
-    (link (wx (cap bs) bnd) (link (wx (caup bs) bnd) (wxc (cuup bs) bnd))))
+   ; the nil?-flip peephole, now a unify-driven rewrite RULE (cflip-pat -> cflip-tpl): a
+   ; FINAL (nil? e) clause flips its branches and drops the wrapper, since the cond tests
+   ; g_false(e) == nil?(e). `unify` enforces the EXACT (.. (nil? e) con else) shape on its
+   ; own (proper-list tails must match), so only a 3-clause tail with a 2-elem (nil? e) head
+   ; fires -- the lone side-condition left is nil? being unshadowed. byte-identical to the
+   ; old hand-written guard; the FIRST use of the prel unifier inside the compiler.
+   ve (var 'e)  vc (var 'con)  vl (var 'else)
+   cflip-pat (L (L 'nil? ve) vc vl)                   ; ((nil? ?e) ?con ?else)
+   cflip-tpl (L ve vl vc)                             ; (?e ?else ?con) -- drop nil?, swap branches
+   (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (rewrite cflip-pat cflip-tpl bs))   ; nil?-flip rule
+    (? (atom? fb) (list ())                           ; clauses ran out: implicit () else (nil-ontology bug 3)
+       (atom? (cup fb)) (list (wx (cap fb) bnd))
+       (link (wx (cap fb) bnd) (link (wx (caup fb) bnd) (wxc (cuup fb) bnd)))))
    ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
    ; `id?`-safe peeps (a non-fn value never matches lvm_cur); mirrors app's old `fa`/`na`.
    (napof v args) (? (charm? v) 0

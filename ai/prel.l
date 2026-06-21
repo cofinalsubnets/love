@@ -574,6 +574,10 @@
         (var? y) (ext_s s y x)
         (&& (two? x) (two? y)) (: s1 (unify s (cap x) (cap y)) (? (ufail? s1) ufail (unify s1 (cup x) (cup y))))
         ufail))
+   (subst s t) (? (var? t) (: w (walk s t) (? (var? w) w (subst s w)))   ; instantiate a template under s
+                  (two? t) (link (subst s (cap t)) (subst s (cup t)))
+                  t)
+   (rewrite pat tpl x) (: r (unify '(0) pat x) (? (ufail? r) x (subst r tpl)))   ; pattern -> template, or x unchanged
    (sX x s n m y) (y x s)                            ; stream: cons
    (sno n m y) (n sno)                               ; stream: empty
    (sun x) (sX x sno)
