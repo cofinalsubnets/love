@@ -504,11 +504,18 @@ static ai_inline word mk_wide(ai_word **hpp, intptr_t v) {
 
 // equality comparisons inline the fast identity check
 ai_noinline bool eqv(struct ai*, word, word); // this is for checking equality of non-identical values
-// Two distinct ODD words can never be eqv: eqv's only cross-value bridges are the
-// numeral<->lambda ones (0/1 vs (\ _ 1)/(\ x x)), which need a heap lambda (even)
-// on one side, and its structural arms all bail on `(a|b)&1`. So skip the noinline
-// eqv call for the hot case of two unequal fixnums (charmp == oddp).
-static ai_inline bool eql(struct ai *g, word a, word b) { return a == b || (!(a & b & 1) && eqv(g, a, b)); }
+// eqv has no value-equality for two distinct fixnums (odd; its only cross-value
+// bridge, 0/1 <-> (\ _ 1)/(\ x x), needs a heap lambda) nor for two distinct POINTS
+// (mints/noms -- identity is their whole equality: interned syms collapse per
+// spelling, distinct noms are distinct keys; eqv's switch has no KMint/KNom arm).
+// Both answer false by identity alone, so eql settles them inline and skips the
+// noinline call -- the hot path under map-key and scope-variable lookup, which
+// compare nom/symbol keys by the thousand while compiling. lamp is evenp (no
+// deref); () is the core, a valid mint, so pointp's ap read is always safe.
+static ai_inline bool pointp(word x) {
+ lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); }
+static ai_inline bool eql(struct ai *g, word a, word b) {
+ return a == b ? true : (a & b & 1) || (pointp(a) && pointp(b)) ? false : eqv(g, a, b); }
 
 // Threads -- and every other variable-length heap object the GC copies by
 // sounding (continuations, task nodes, env scopes, ports) -- end with a single
