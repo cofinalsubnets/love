@@ -225,11 +225,32 @@ h1::before { content: "🔵 "; }
 <span class="chip" data-run="log -1">log -1</span>
 <span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span>
 <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
+<h2 id="background"><a href="#background">ai &lt;3</a></h2>
+<p>ai is a fully-curried, dynamically-kinded language whose entire surface is one operation — <strong>application</strong> — over a single generic core.
+all values are represented as one-argument total functions of a global type, called <strong>operators</strong>. fundamental operations such as + and * are fully
+generic. fundamental data are given function actions that define their application behavior in (hopefully) intuitive and useful ways. for example, a
+<strong>book</strong> (mutable hash table) acts as its own getter function. numeric application is interpreted as exponentiation or iteration depending on operand type.</p>
+<p>ai holds a unique interpretation of truth value, where false corresponds to "empty or negative", and the exact 0 | 1 truth bit of <code>x</code> is given by <code>!!$x</code>,
+where <code>$</code> (aka <code>sat</code> for <strong>saturate</strong>) is a basic operation that homomorphically reduces any value to a bounded nonnegative integer
+(aka a <strong>green charm</strong>).
+<code>0</code> is the unique blue green charm, the floor of the saturation operator, and the 0 truth bit value; any non-blue green charm saturates to 1 under <code>!!</code>,
+giving the truth bit.</p>
+<p>ai also develops an unusually formal type system for a dynamic language, where representations are fully classified
+up front to allow efficient generic operations over a minimum set of different types. the types form a fully runtime-reflective <strong>global lattice</strong>, which naturally
+allows "addition", "multiplication" and "exponentiation" to be extended to every operator. for example, like many language, string addition is equivalent to
+concatenation. unlike most languages, function multiplication is composition, and exponentiation corresponds to application. consequently, integers in ai act
+transparently as iterators, and
+<code>1</code> is literally the identity function, both extensionally and in the sense that <code>1 = (\ x x)</code> evaluates to <code>1</code> for all <code>x</code> (see below concerning α-equivalence of functions).
+</p>
+<p>
+the language surface is most immediately influenced by lisp (s-expressions, a program is a list of atoms) ml (left-associative
+curried application) and apl (right-associative infix and prefix notation, ranked array data types).
+</p>
 <h2 id="toc">language theory</h2>
 <ol start="0">
 <li><a href="#background">background</a></li>
 <li><a href="#core">the combinator core</a></li>
-<li><a href="#absence">absence and totality</a></li>
+<li><a href="#absence">absence and presence</a></li>
 <li><a href="#net">the net measure, truth, and color</a></li>
 <li><a href="#order">the type lattice and the total order</a></li>
 <li><a href="#dispatch">generic dispatch</a></li>
@@ -247,25 +268,6 @@ h1::before { content: "🔵 "; }
 <li><a href="#crew">the crew (apps)</a></li>
 </ul>
 <hr>
-<h2 id="background"><a href="#background">background</a></h2>
-<p>ai is a fully-curried, dynamically-kinded language whose entire surface is one operation — <strong>application</strong> — over a single generic core.
-all values are represented as one-argument total functions of a global type, called <em>operators</em>. fundamental operations such as + and * are fully
-generic. fundamental data are given function actions that define their application behavior in (hopefully) intuitive and useful ways. for example, a book (aka map)
-acts as its own getter function. numeric application is interpreted as exponentiation or iteration depending on operand type.</p>
-<p>ai develops an unusual interpretation of truth value, where false corresponds to "empty or negative", and the exact 0 | 1 truth bit of <code>x</code> is given by <code>!!$x</code>,
-where <code>$</code> (saturate) is a basic operation that homomorphically reduces any value to a bounded nonnegative integer, aka a <em>green charm</em>.
-zero is the one blue green charm, the floor of the saturation operator, and the 0 truth bit value; any non-blue green charm saturates to 1 under <code>!!</code>,
-giving the truth bit.</p>
-<p>ai also holds an unusually explicit type system for a dynamic language, where representations are fully classified
-up front to allow efficient generic operations over a minimum of different types. the types form a global lattice that's exact for any value, which
-naturally extends "addition", "multiplication" and "exponentiation" to every operator. for example, like many language, string addition is equivalent to concatenation. unlike most languages, function
-multiplication is composition, and exponentiation corresponds to application. consequently, integers in ai act transparently as iterators, and
-<code>1</code> is literally the identity function (<code>1 = (1 = (\ x x))</code> evaluates to <code>1</code> for all <code>x</code>).
-</p>
-<p>
-the language surface is most immediately influenced by lisp (s-expressions, a program is a list of atoms) ml (left-associative
-curried application) and apl (right-associative infix and prefix notation, ranked array data types).
-</p>
 <h2 id="core"><a href="#core">the combinator core</a></h2>
 <p>application is left-associative, and applying nothing at all is identity:</p>
 <div class="law"><span class="n">(1.1) Currying.</span> <code>(f x y) = ((f x) y)</code>. Evidence: <span class="thm">curry</span>.</div>
@@ -287,10 +289,11 @@ curried application) and apl (right-associative infix and prefix notation, ranke
 <div class="law"><span class="n">(1.4) The numeral iterates functions.</span> <code>(2 f x) = f (f x)</code> (<span class="thm">church_two</span>), <code>(3 (+1) 9) = 12</code> (<span class="thm">inc_three</span>).</div>
 <div class="law"><span class="n">(1.5) The two faces are one map.</span> <code>app n x = appf n (mul x) 1</code> — exponentiation is iteration of multiply-by-<code>x</code> from 1. Evidence: <span class="thm">lanes_agree</span>.</div>
 <p>(1.5) is what "every value is an operator" really says: <code>xⁿ</code> is not the <em>meaning</em> of a numeral, only its numeral-on-numeral face. the numeral is the iterator, and the tower is just what you get when the thing iterated is itself a numeral — so "any recursive operator may be boundedly applied by integers, which act transparently as iterators" (README).</p>
-<h2 id="absence"><a href="#absence">absence and fullness</a></h2>
-<p>a name not in the <strong>book</strong> (the global table) is <em>missing</em>. reading it neither crashes nor hands back an error token; helpless — no <code>help</code> installed — it reads <strong>the zero point</strong>, a nameless unit <code>Pt</code>: the <strong>mint</strong> (a fresh, nameless point with an identity and nothing else; §9) at serial 0, printed <code>()</code>. the zero point absorbs application from either side:</p>
+<h2 id="absence"><a href="#absence">absence and presence</a></h2>
+<p>a <strong>name</strong> not in the <strong>book</strong> (the global dictionary) is <em>missing</em>. reading it neither crashes nor hands back an error token; helpless — no <code>help</code> installed — it reads <strong>the zero point</strong>, a nameless unit <code>Pt</code>: the <strong>mint</strong> (a fresh, nameless point with an identity and nothing else; §9) at serial 0, printed <code>()</code>. the zero point absorbs application from either side:</p>
 <div class="law"><span class="n">(2.1) The unit as operator is const-1.</span> <code>(Pt x) = 1</code>. Evidence: <span class="thm">unit_is_const_one</span>.</div>
 <div class="law"><span class="n">(2.2) The unit absorbs under any numeric head.</span> <code>(g Pt) = Pt</code> for every numeral <em>and</em> every numeric operator <code>g</code> — the unit is the fixed point of all of them.</div>
+<div class="law"><span class="n">(2.3) The unit is not the charm 0.</span> <code>() ≠ 0</code> — the zero point and the number <code>0</code> net the same (both nothing) and print alike, yet they are distinct values: <span class="thm">unit_neq_zero</span>. they have to be. <code>()</code> is the <em>multiplicative</em> identity (<code>() * x = x</code>, the <code>1</code>-face it wears, <span class="thm">smul_one</span>) while the charm <code>0</code> <em>annihilates</em> <code>*</code> (<code>0 * x = 0</code>, <span class="thm">star_zero</span>); were they one, <code>x = () * x = 0 * x = 0</code> for every <code>x</code> and the whole algebra would collapse to nothing. so absence is the <code>+</code>/<code>*</code> unit, while the charm <code>0</code> is only one of its two faces — present and distinct, never erased into the other.</div>
 <p>the model's value space <code>value := Num n | Cx | Pt</code> makes the evaluation function <code>vapp</code> <strong>total</strong> by exhaustive case analysis — Rocq checks the exhaustiveness for us, so over this fragment there is no stuck state and no undefined behaviour:</p>
 <div class="law"><span class="n">(2.4) Totality (no UB).</span> <code>∀ f a, ∃ v, vapp f a = v</code>. Evidence: <span class="thm">total</span>.</div>
 <p>totality is what licenses the language's safety claim that applicative order may vary at will: a total, side-effect-confined operator evaluates eagerly or lazily to the same value, and cooperative preemption bounds every thread no matter what the program does.</p>
@@ -324,19 +327,23 @@ tru  v = (0 &lt;? net v)        -- !! : the truth bit
 <p>this is what makes "<code>$</code> of a fold is mere composition" true: because net is additive wherever <code>+</code> is total, a clamped reduction is just <code>$</code> <em>after</em> a plain sum — there is no per-fold saturator. concrete corollaries the corpus pins: <code>$'(1 2 3) = 6</code> (<span class="thm">sat_123</span>), a dotted tail drops (<span class="thm">sat_dotted</span>, <code>$(cons 1 2) = 1</code>), a product of nothings is nothing (<span class="thm">nothings</span>).</p>
 <h2 id="order"><a href="#order">the type lattice and the global order</a></h2>
 <p>the kinds form a lattice flattened into <strong>bands</strong>, low to high:</p>
-<pre><code>() &lt; mint &lt; name &lt; string &lt; number &lt; chain &lt; tray &lt; tablet &lt; hot
+<pre><code>() &lt; mint &lt; name &lt; string &lt; number &lt; chain &lt; tray &lt; book &lt; hot
 </code></pre>
-<p>a <strong>galaxy</strong> (a numeric array) is not a band of its own: it folds <strong>into the number band by its net</strong>, seating exactly where its net's scalar sits (a star below the galaxy on a net tie). only a <strong>tray</strong> (an object array) stays value-built, above chain. the organizing axis is the <strong>net</strong>, with the <strong>charm as hinge</strong>: the char-built kinds (name, string — measured by their charm sum) net <em>up</em> into the numbers, the numbers <em>self</em>-net (the fixpoint, the middle, galaxies among them), and the value-built kinds (chain, tray, tablet — measured by their elements' sum) net <em>down</em>. the floor is the <strong>points</strong>: the zero point <code>()</code> is the bluest of all (below even the number <code>0</code>), a bare <strong>mint</strong> (a fresh point with no spelling, net 0) seats just above it, and a <strong>name</strong> (a spelled point) above that — <code>() &lt; mint &lt; name</code>, all below string. within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (tablets and hots). the Rocq model takes one comparable key per band (<code>O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z</code>, in band order — name/string/number/chain/tablet/hot) and orders lexicographically on <code>(band, key)</code>. the result:</p>
+<p>a <strong>galaxy</strong> (a numeric array) is not a band of its own: it folds <strong>into the number band by its net</strong>, seating exactly where its net's scalar sits (a star below the galaxy on a net tie). only a <strong>tray</strong> (an object array) stays value-built, above chain. the organizing axis is the <strong>net</strong>, with the <strong>charm as hinge</strong>: the char-built kinds (name, string — measured by their charm sum) net <em>up</em> into the numbers, the numbers
+<em>self</em>-net (the fixpoint, the middle, galaxies among them), and the value-built kinds (chain, tray, book — measured by their elements' sum) net <em>down</em>. the floor is the <strong>points</strong>: the zero point <code>()</code> is the bluest of all (below even the number <code>0</code>), a bare <strong>mint</strong> (a fresh point with no spelling, net 0) seats just above it, and a <strong>name</strong> (a spelled point) above that — <code>() &lt; mint &lt; name</code>, all below
+string. within a band the order is by value (numbers by magnitude, rep-blindly), or lexicographically (text and chains), or by an α-invariant hash (books and hots). the Rocq model takes one comparable key per band (<code>O := Osym z | Ostr z | Onum z | Oprod z | Omap z | Otop z</code>, in band order — name/string/number/chain/book/hot) and orders lexicographically on <code>(band, key)</code>. the result:</p>
 <div class="law"><span class="n">(4.1) <code>&lt;</code> is a strict total order.</span> irreflexive (<span class="thm">lt_irrefl</span>), transitive (<span class="thm">lt_trans</span>), asymmetric (<span class="thm">lt_asym</span>), and trichotomous (<span class="thm">lt_trichotomy</span>).</div>
 <div class="law"><span class="n">(4.2) <code>&lt;=</code> is a total order.</span> reflexive (<span class="thm">le_refl</span>), transitive (<span class="thm">le_trans</span>), antisymmetric (<span class="thm">le_antisym</span>), total (<span class="thm">le_total</span>).</div>
 <div class="law"><span class="n">(4.3) <code>=</code> is the Eq cell.</span> band and key together pin a value down (<span class="thm">eq_from_band_key</span>): <code>=</code> is propositional equality, a linear order's equality and not a mere preorder.</div>
-<p>the band chain itself is proved link by link: <span class="thm">symbol_lt_string</span>, <span class="thm">string_lt_number</span>, <span class="thm">number_lt_product</span>, <span class="thm">product_lt_map</span>, <span class="thm">map_lt_top</span> — and the floor sits below even the number 0, <code>() &lt; 0</code> (<span class="thm">unit_lt_zero</span>), while within the points a bare mint sits below a named one (<span class="thm">mint_below_nom</span>), any point below the numbers (<span class="thm">point_below_number</span>). a <strong>galaxy</strong> sorts as its <strong>net</strong> (an <code>Onum</code> in the model — no separate tray band, the same omission as the numeric tower's representations); a <strong>tray</strong> (object array) sorts in the value-built region just above its chain. because surface <code>&lt;</code>/<code>=</code> over an array <em>broadcast</em> to an elementwise mask, this scalar total order is observed through <code>sort</code> and tablet-key ordering, not infix <code>&lt;</code> on a galaxy. (the Rocq identifiers keep the older spellings — <code>symbol</code>/<code>product</code>/<code>map</code>/<code>top</code> — for what the prose now calls name/chain/tablet/hot.)</p>
+<p>the band chain itself is proved link by link: <span class="thm">symbol_lt_string</span>, <span class="thm">string_lt_number</span>, <span class="thm">number_lt_product</span>, <span class="thm">product_lt_map</span>, <span class="thm">map_lt_top</span> — and the floor sits below even the number 0, <code>() &lt; 0</code> (<span class="thm">unit_lt_zero</span>), while within the points a bare mint sits below a named one (<span class="thm">mint_below_nom</span>), any point below the numbers
+(<span class="thm">point_below_number</span>). a <strong>galaxy</strong> sorts as its <strong>net</strong> (an <code>Onum</code> in the model — no separate tray band, the same omission as the numeric tower's representations); a <strong>tray</strong> (object array) sorts in the value-built region just above its chain. because surface <code>&lt;</code>/<code>=</code> over an array <em>broadcast</em> to an elementwise mask, this scalar total order is observed through <code>sort</code> and book-key
+ordering, not infix <code>&lt;</code> on a galaxy. (the Rocq identifiers keep the older spellings — <code>symbol</code>/<code>product</code>/<code>map</code>/<code>top</code> — for what the prose now calls name/chain/book/hot.)</p>
 <p>two refinements the model is explicit about <em>not</em> covering:</p>
 <ul>
 <li><strong><code>=</code> bridges the numeric tower</strong> (<code>3 = 3.0</code>): a number band carries the mathematical value rep-blindly, so the float <code>3.0</code> and the fixnum <code>3</code> are the <em>same</em> <code>Onum</code> — there is no separate representation to model, by design.</li>
 <li><strong><code>id?</code> (pointer identity) is strictly finer than <code>=</code></strong>: <code>'(1) = '(1)</code> yet <code>!(id? '(1) '(1))</code>. Identity has no model in a setting where nothing is shared; this is a deliberate omission, not an oversight.</li>
 </ul>
-<p>this single order is the engine of <code>sort</code> — one comparison per chain, the comparator <em>is</em> the total order — and of tablet / hash key ordering.</p>
+<p>this single order is the engine of <code>sort</code> — one comparison per chain, the comparator <em>is</em> the total order — and of book / hash key ordering.</p>
 <h2 id="dispatch"><a href="#dispatch">generic dispatch</a></h2>
 <p>a value's <strong>kind</strong> is an enum whose order is the <strong>dispatch lattice</strong> — semantics then representation: the points, then the arithmetic lane (the scalar gems and their array tower), then sequence (string, chain), then map, then hot. a generic operator at two arguments is an N×N table indexed by the two kinds; an operator at one argument is that table's <em>diagonal</em>. the two generic tables are <code>+</code> and <code>*</code>; <strong>apply</strong>, the third generic op, carries no table — a value's sentinel tail-jumps straight to its handler (apply is uniform in the argument kind, so a 2-D table would be pure indirection). a both-charm (both-fixnum) fast path skips the table; otherwise one indexed jump selects a lane that widens only as far as the operands require (array ⊃ complex ⊃ bignum ⊃ float ⊃ …).</p>
 <p>the lattice and the dispatch are <em>the same object</em>: the diagonal of either matrix is the kind lattice. the cross-kind <strong>total order</strong> (§4) is a deliberate <em>remap</em> of that lattice — the true-blue order (<code>cmp_rank</code>: the points fall to the floor, string below the numbers, a galaxy folded in by its net), <strong>not</strong> the raw enum order. so you keep one set of kinds and read it two ways: dispatch (the enum lattice) and order (its true-blue remap). this section cites no Rocq lemmas on purpose — the dispatch matrix and the tail-threading are implementation invariants the runtime checks and the corpus exercises, not theorems in the Rocq slice; they live at the demonstrate layer (§10), where the chips go quiet.</p>
