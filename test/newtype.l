@@ -1,9 +1,9 @@
-; newtypes -- a STAMP coins COINS: user-defined kinds that ride the generic +/*.
-; a coin is a typed hot (stamp + payload) reading KHot, so every +/* combination
-; routes to the KHot lane where the coin is intercepted and the stamp's plus/times
+; newtypes -- a DIE strikes COINS: user-defined kinds that ride the generic +/*.
+; a coin is a typed hot (die + payload) reading KHot, so every +/* combination
+; routes to the KHot lane where the coin is intercepted and the die's plus/times
 ; run over the loaded payloads. () stays the +/* identity for free (the mint hoist
 ; sits above the matrix); net/=/</show default over the payload in the C core.
-; `coin`/`load`/`coin?` are the raw primitives; `ring`/`monoid` the builders.
+; `coin`/`load`/`coin?`/`die-of` are the raw primitives; `ring`/`monoid` the builders.
 
 (: ; Z/5Z -- a ring: add and multiply the residues mod 5
    z5 (ring 'z5 (\ x y (% (+ x y) 5)) (\ x y (% (* x y) 5)))
@@ -20,15 +20,17 @@
     (nil? (coin? "s"))
     (= 3 (load a))                 ; load reads the payload
     (= 7 (load 7))                 ; load of a non-coin is itself
+    (id? (die-of a) (die-of (z5 3)))   ; every z5 coin shares one die
+    (nil? (die-of 5))              ; a non-coin has no die
 
-    ; --- value equality: same stamp + eqv payloads ---
+    ; --- value equality: same die + eqv payloads ---
     (= a (z5 3))                   ; by value, not identity
     (nil? (= a (z5 4)))            ; different payload
-    (nil? (= a (sm 3)))            ; different stamp (even with equal payload)
+    (nil? (= a (sm 3)))            ; different die (even with equal payload)
     (id? a a)                      ; id? stays identity-sharp
     (nil? (id? a (z5 3)))          ; ... distinct objects
 
-    ; --- + and * run the stamp's methods over the payloads ---
+    ; --- + and * run the die's methods over the payloads ---
     (= (z5 2) (+ a b))             ; (3+4) mod 5 = 2
     (= (z5 2) (* a b))             ; (3*4) mod 5 = 2
     (= (z5 0) (+ (z5 2) (z5 3)))   ; wraps to 0
@@ -63,7 +65,7 @@
     ; --- two DISTINCT newtypes have no canonical +/* -> nil (like string*string) ---
     (nil? (+ a (sm 3)))            ; z5 coin + sm coin
     (nil? (* a (sm 3)))
-    (= (sm 5) (+ (sm 2) (sm 3)))   ; ... but same-stamp still combines
+    (= (sm 5) (+ (sm 2) (sm 3)))   ; ... but same-die still combines
 
     ; --- tally delegates to the payload ---
     (= 3 (tally (sm (L 7 8 9))))   ; a coin over a 3-list tallies its payload

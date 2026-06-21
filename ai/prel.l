@@ -514,21 +514,21 @@
                         (\ x (a-coll sh (- n 1) (link x acc))))
    (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
-; --- newtypes: a STAMP coins COINS -- user kinds that ride +/* with ()-identity ---
-; a COIN (coin?) wears a stamp over a payload; the stamp is the type descriptor (a
-; monoid/ring -- a map of slot->method). + and * dispatch through the KHot lane to the
-; stamp's plus/times, run over the LOADED payloads and re-coined; () stays their
-; identity for free (the mint-identity hoist sits above the +/* matrix). net/=/</show
-; default over the payload in the C core, so $/truth, value-equality, sort and the
-; (name payload) show form all work with no extra ceremony. plus/times take payloads.
-; (ring 'z5 plus times) / (monoid 'z5 plus) -> a constructor: payload -> coin. LIVES HERE,
-; below the #(..) `hash` macro: a macro must precede its use in the prel, since the
-; bootstrap c0 is a single forward pass (no analysis-time macro hoist). slot 0 = show-name.
+; --- newtypes: a DIE strikes COINS -- user kinds that ride +/* with ()-identity ---
+; a COIN (coin?) is struck from a die over a payload; the die is the type descriptor (a
+; monoid/ring -- a map of slot->method); die-of reads it back. + and * dispatch through
+; the KHot lane to the die's plus/times, run over the LOADED payloads and re-struck; ()
+; stays their identity for free (the mint-identity hoist sits above the +/* matrix).
+; net/=/</show default over the payload in the C core, so $/truth, value-equality, sort
+; and the (name payload) show form all work with no extra ceremony. plus/times take
+; payloads. (ring 'z5 plus times) / (monoid 'z5 plus) -> a constructor: payload -> coin.
+; LIVES HERE, below the #(..) `hash` macro: a macro must precede its use in the prel,
+; since the bootstrap c0 is a single forward pass (no macro hoist). slot 0 = show-name.
 (: (ring name plus times) (:
-      s #(0 name)                                                ; the stamp; slot 0 = show-name
-      _ (pin s 1 (\ a b (coin s (plus (load a) (load b)))))      ; slot 1 = +
-      _ (? times (pin s 2 (\ a b (coin s (times (load a) (load b))))) 0)  ; slot 2 = * (a monoid has none)
-      (\ p (coin s p)))                                          ; the ctor: payload -> coin
+      d #(0 name)                                                ; the die; slot 0 = show-name
+      _ (pin d 1 (\ a b (coin d (plus (load a) (load b)))))      ; slot 1 = +
+      _ (? times (pin d 2 (\ a b (coin d (times (load a) (load b))))) 0)  ; slot 2 = * (a monoid has none)
+      (\ p (coin d p)))                                          ; the ctor: payload -> coin
    (monoid name plus) (ring name plus 0))                        ; a monoid is a ring with no product
 
 ; --- rationals: an exact field shipped as a coin over a reduced (num den) payload ---
