@@ -46,8 +46,9 @@
   (? (= x y) (sun s)
      (var? x) (sun (ext_s s x y))
      (var? y) (sun (ext_s s y x))
-     (&& (two? x) (two? y)
-     (et (est (cap x) (cap y)) (est (cup x) (cup y)) s))))
+     (&& (two? x) (two? y)) (et (est (cap x) (cap y)) (est (cup x) (cup y)) s)
+     sno))   ; a mismatch is the EMPTY stream (sno), not 0 -- so it fails cleanly as the
+             ; FIRST conjunct too (s_star sno = sno); 0 only worked as a disjunct (s_plus)
  (Run n ks g) (:
   (walk_star u s) (?
    (var? u) (: t (has_s s u) (? (two? t) (walk_star (cap t) s) u))
@@ -105,3 +106,23 @@
  (= '((a 1 b 2))
   (Run 0 '(a b) (\\ a b (load (* (rel (est a 1)) (rel (est b 2)))))))  ; a=1 AND b=2
 )
+
+; --- DEMO: relations read as algebra. `one` ties two terms (unify); + is OR, * is AND.
+; so a relation is a polynomial in unifications -- facts SUM, sub-relations MULTIPLY. ---
+(: one (\ u v (rel (est u v)))                          ; one u with v -- the archaic verb: unite
+   ; a family db -- parent is a SUM of (a-is-X * b-is-Y) facts:
+   (parent a b) (((one a 'tom) * (one b 'bob))
+               + ((one a 'bob) * (one b 'cyd))
+               + ((one a 'bob) * (one b 'deb)))
+   (grandparent a c) (rel (\\ b (load ((parent a b) * (parent b c)))))   ; = parent * parent
+   (boolean x) ((one x 0) + (one x 1))
+   (assert
+    (unord_eq '((k cyd) (k deb)) (Run 0 '(k) (\\ k (load (parent 'bob k)))))         ; bob's kids (OR)
+    (unord_eq '((g cyd) (g deb)) (Run 0 '(g) (\\ g (load (grandparent 'tom g)))))    ; tom's grandkids
+    ; SAT: a CNF formula (x|y)&(!x|z) is literally a PRODUCT of SUMS of literals
+    (: sat (Run 0 '(x y z) (\\ x y z (load
+              ((boolean x) * (boolean y) * (boolean z)
+                * ((one x 1) + (one y 1))
+                * ((one x 0) + (one z 1))))))
+       _ (member? '(x 0 y 1 z 1) sat)        ; a model
+       (nil? (member? '(x 0 y 0 z 1) sat)))))  ; x=0,y=0 violates (x|y) -> not a model
