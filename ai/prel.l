@@ -421,11 +421,11 @@
    (op-core x)
     (? (atom? x) x
        (: h (cap x)
-          (? (&& (= h '\) (atom? (cuup x))) x
+          (? (&& (id? h '\) (atom? (cuup x))) x
              ; the reader's glued-run emission (mono (run d)): factor the run
              ; monadically around the (recursively opfixed) datum; an
              ; unfactorable run is the plain application (run d)
-             (&& (= h 'mono) (two? (cup x)) (two? (caup x)))
+             (&& (id? h 'mono) (two? (cup x)) (two? (caup x)))
               (: p (caup x) r (cap p) d (op-core (caup p))
                  fs (? (nom? r) (monofactor r) 0)
                  (? (two? fs) (op-fin fs d) (link r (link d 0))))
@@ -532,7 +532,7 @@
 ; shared verbatim by both compilers: ev.l's feel and c0 (ev.c) both call the
 ; flat `boxfix` wrapper below, bpr+flatten around the same core. `lambp`/`dsug`
 ; are globals so `ale` shares them (lambda detection, binding desugaring).
-(: (lambp x) (? (two? x) (&& (= '\ (cap x)) (two? (cuup x)))) ; \ with >=1 param (one-operand \ is quote)
+(: (lambp x) (? (two? x) (&& (id? '\ (cap x)) (two? (cuup x)))) ; \ with >=1 param (one-operand \ is quote)
    (dsug n d) (? (atom? n) (link n d) (dsug (cap n) (link '\ (cat (cup n) (list d)))))
    (lp x) (: a (cup x) (? (atom? (cup a)) (link 0 (cap a)) (link (init a) (last a))))
    (ln bs) (? (atom? bs) 0 (atom? (cup bs)) 0 (link (cap (dsug (cap bs) 0)) (ln (cuup bs))))
@@ -541,11 +541,11 @@
    ; &&/|| are seen as the compiler sees them). u tracks lambda depth; dm (direct
    ; mode) counts only references NOT under a lambda.
    (w v x bnd u dm) (?
-    (nom? x) (&& (? dm (nil? u) 1) (= x v) (nil? (member? v bnd)))
+    (nom? x) (&& (? dm (nil? u) 1) (id? x v) (nil? (member? v bnd)))
     (atom? x) 0
     (: h (cap x) (?
-      (= h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
-      (= h ':) (wl v (cup x) (cat (ln (cup x)) bnd) u dm)
+      (id? h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
+      (id? h ':) (wl v (cup x) (cat (ln (cup x)) bnd) u dm)
       (: m (? (nom? h) (peep macros h 0) 0) (? m (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
    (wl v bs bnd u dm) (?
     (atom? bs) 0
@@ -568,8 +568,8 @@
     (nom? x) (: p (assoc x cs) (? (two? p) (list missing (caup p) (list '\ (cuup p))) x))
     (atom? x) x
     (: h (cap x) (?
-      (= h '\) (? (atom? (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r)))))))
-      (= h ':) (link ': (subl (rmc cs (ln (cup x))) (cup x)))
+      (id? h '\) (? (atom? (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r)))))))
+      (id? h ':) (link ': (subl (rmc cs (ln (cup x))) (cup x)))
       (: m (? (nom? h) (peep macros h 0) 0) (? m (sub cs (m (cup x))) (map (\ e (sub cs e)) x))))))
    (subl cs bs) (?
     (atom? bs) bs

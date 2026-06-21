@@ -17,7 +17,7 @@
    lvm_ret0 (peek 1 cap)
    (cval e) (? (nom? e) (link 0 0)               ; (const? . value): 1 head iff a literal
                (atom? e) (link 1 e)
-               (&& (= (cap e) '\) (atom? (cuup e))) (link 1 (caup e))
+               (&& (id? (cap e) '\) (atom? (cuup e))) (link 1 (caup e))
                (link 0 0))
    (bake v) (? (charm? v) v (list '\ v))           ; value -> source: fixnum bare else quote
    ; (op . arity) iff v is a nif. `id?` (identity) not `=`: a non-nif global may peep to
@@ -104,8 +104,8 @@
                          (= v 3) lvm_quo3 (= v -1) lvm_quom1 (= v -2) lvm_quom2 0) 0)
   (fuse a o t sp x k n)                          ; a=ap-op o=tap-op(0=none) t=plain-op sp=specializer
    (: tail (k (+ 2 n)) h (peek 0 tail)
-    (? (= h lvm_ap)         (p2 a x (seek 1 tail))
-       (&& o (= h lvm_tap)) (p2 o x (seek 1 tail))
+    (? (id? h lvm_ap)         (p2 a x (seek 1 tail))
+       (&& o (id? h lvm_tap)) (p2 o x (seek 1 tail))
        (: s (sp x) (? s (poke -1 s tail) (p2 t x tail)))))
   ; arg fuses both ap and tap; quote only ap. quote;tap (a constant arg to a tail
   ; call, e.g. (loop 0)) is left unfused: overwriting the shared tap cell in some
@@ -120,8 +120,8 @@
   (k0s c n) (poke -1 lvm_ret (poke (+ 2 n) (ary c) (twirl (+ 3 n))))
   (ary c) (+ (tally (c 'arg)) (tally (c 'imp)))
   (pro f) (? (charm? f) f (: a (peek 0 f) (?- f
-   (= a lvm_unc) (pro (seek -2 (peek 2 f)))
-   (= a lvm_cur) (?- f (= lvm_unc (peek 2 f))
+   (id? a lvm_unc) (pro (seek -2 (peek 2 f)))
+   (id? a lvm_cur) (?- f (id? lvm_unc (peek 2 f))
                           (pro (seek -2 (peek 4 f)))))))
   ; feel: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks
   ; applies with their n-ary-vs-l2r strategy. Tail position is NOT tracked here -- kap detects
@@ -130,15 +130,15 @@
    (wx x bnd) (?
     (atom? x) x
     (: h (cap x) (?
-     (= h '\) (? (atom? (cuup x)) x                          ; quote
+     (id? h '\) (? (atom? (cuup x)) x                          ; quote
                 (: r (lp x)
                    lam (link '\ (cat (cap r) (list (wx (cup r) (cat (cap r) bnd)))))
                    _ (push c 'src (link (cup lam) x))         ; tagged-body -> surface src for ala
                    lam))
-     (= h ':) (? (atom? (cup x)) ':                      ; (:) = the head read -- (f)==f at zero operands, a missing name (c0 agrees)
+     (id? h ':) (? (atom? (cup x)) ':                      ; (:) = the head read -- (f)==f at zero operands, a missing name (c0 agrees)
                  (atom? (cuup x)) (link ': (list (wx (caup x) bnd)))
                  (link ': (wxl (boxfix (cup x)) bnd)))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
-     (= h '?) (? (atom? (cup x)) '?                      ; (?) likewise: the empty form is the head's value
+     (id? h '?) (? (atom? (cup x)) '?                      ; (?) likewise: the empty form is the head's value
                  (link '? (wxc (cup x) bnd)))
      (: m (? (nom? h) (macros h) 0)                     ; macro head? expand, then re-walk
       (? m (wx (m (cup x)) bnd)
@@ -184,11 +184,11 @@
                    (atom? x) (kim x)
                    (: a (cap x) b (cup x) (?
                     (atom? b) (ana c a)
-                    (= a '? ) (aco c b)
-                    (= a '\ ) (? (atom? (cup b)) (kim (cap b)) (ana c (ala c 0 b)))
-                    (= a ': ) (ale c (cap b) (cup b))
-                    (= a iop) (iap c b)
-                    (= a apx) (apxh c b)
+                    (id? a '? ) (aco c b)
+                    (id? a '\ ) (? (atom? (cup b)) (kim (cap b)) (ana c (ala c 0 b)))
+                    (id? a ': ) (ale c (cap b) (cup b))
+                    (id? a iop) (iap c b)
+                    (id? a apx) (apxh c b)
                     (: m (macros a)
                      (? m (ana c (m b)) (app c a b))))))
   (push c k x) (: _ (pin c k (link x (c k))) x)
@@ -224,7 +224,7 @@
  (apr2l c b) (?- id (two? b) (: g (apr2l c (cup b)) f (ana c (cap b)) _ (push c 'stk 0) (compose g f)))
  (kap n k m)
   (: j (k (+ 2 m))
-   t (= (peek 0 j) lvm_ret)                              ; peep the continuation for ret -> tail
+   t (id? (peek 0 j) lvm_ret)                              ; peep the continuation for ret -> tail
    (? t (? (> n 1) (poke -1 lvm_tapn (poke 0 n j)) (poke 0 lvm_tap j))
         (? (> n 1) (p2 lvm_apn n j) (poke -1 lvm_ap j))))
 
@@ -240,8 +240,8 @@
     j (k (+ 3 n))
     a (cap (c 'join))
     i (peek 0 a)
-    (? (| (= lvm_ret i) (= lvm_tap i)) (p2 i (peek 1 a) j)
-       (= lvm_tapn i)                   (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
+    (? (| (id? lvm_ret i) (id? lvm_tap i)) (p2 i (peek 1 a) j)
+       (id? lvm_tapn i)                   (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
                                          (p2 lvm_jump a j)))
    ; clauses: test/result pairs then a trailing else. a constant test folds to one
    ; branch; else emit lvm_cond -- true runs `then` + jumps to join, false falls to `rest`.
@@ -293,7 +293,7 @@
   (avb c d x)
    (? (nil? d) ; outside all lexical scopes?
        (: y (peep book x gone) ; check global scope
-        (? !(= y gone) (kim y) ; if it's there use that
+        (? !(id? y gone) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
           (em2 lvm_index x))))
     (: lfd (assoc x (d 'lam))
