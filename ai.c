@@ -2110,16 +2110,21 @@ static lvm(lvm_mulh) {
 
 // --- coin +/* : run the stamp's ADD/MUL closure over the two operands ----------
 // Reached from the KHot lane when either operand is a coin (so coin + number, coin +
-// chain, coin + coin all land here). The dominant coin operand's stamp wins (left
-// on a tie); its method is `(\ a b ...)` and computes the result via numap_drive --
-// the same frame lvm_addh uses for church-add. A missing method (e.g. a monoid has
-// no `*`) yields nil, like the undefined matrix cells. The ()-identity never
-// reaches here -- lvm_add/lvm_mul hoist the mint case above the matrix.
+// chain, coin + coin all land here). One operand is a coin: ITS stamp's method runs,
+// `(\ a b ...)`, computing the result via numap_drive -- the same frame lvm_addh uses
+// for church-add. The method gets the RAW operands, so a coin + a non-coin is the
+// method's call (the default `(load b)` of a non-coin is b itself). But two DISTINCT
+// newtypes have no canonical combination, so coin + coin of different stamps is nil
+// (like string*string) -- the method never sees a foreign payload. A missing method
+// (e.g. a monoid has no `*`) is nil too, like the undefined matrix cells. The
+// ()-identity never reaches here -- lvm_add/lvm_mul hoist the mint case above the matrix.
 // Ip is still the +/* opcode here (lvm_add/lvm_addh/this are all reached via Ap,
 // which preserves Ip), so word(Ip + 1) is the true return -- the same continuation
 // the church-add path in lvm_addh uses.
 static lvm(lvm_coin_op, intptr_t slot) {
  word a = Sp[0], b = Sp[1];
+ if (coinp(a) && coinp(b) && coin_stamp(a) != coin_stamp(b))
+  return *++Sp = nil, Ip++, Continue();             // two distinct newtypes: no canonical +/*
  word f = stamp_get(g, coinp(a) ? coin_stamp(a) : coin_stamp(b), slot);
  if (ai_nilp(g, f)) return *++Sp = nil, Ip++, Continue();   // no method -> nil
  Have(2);

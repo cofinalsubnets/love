@@ -54,4 +54,17 @@
     ; --- show: (name payload), reparsable when the name is a bound constructor ---
     (= "(z5 3)" (show a))
     (= "(sm 5)" (show (sm 5)))
+
+    ; --- the measure law: net is additive through a net-preserving monoid (sm: plus = +) ---
+    (= (sat (+ (sm 3) (sm 4))) (sat (+ (sat (sm 3)) (sat (sm 4)))))   ; $(a+b) = $($a + $b) = 7
+    (= 6 (net (L (sm 1) (sm 2) (sm 3))))   ; net flows through a list of coins: 1+2+3
+    (= 6 (sat (L (sm 1) (sm 2) (sm 3))))   ; ... and $ saturates the same sum
+
+    ; --- two DISTINCT newtypes have no canonical +/* -> nil (like string*string) ---
+    (nil? (+ a (sm 3)))            ; z5 coin + sm coin
+    (nil? (* a (sm 3)))
+    (= (sm 5) (+ (sm 2) (sm 3)))   ; ... but same-stamp still combines
+
+    ; --- tally delegates to the payload ---
+    (= 3 (tally (sm (L 7 8 9))))   ; a coin over a 3-list tallies its payload
     ))
