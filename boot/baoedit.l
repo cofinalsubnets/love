@@ -38,4 +38,25 @@
    ; port EOF (empty input) -> the same sentinel
    (id? eof (edraw (keys 0) ""))))
 
+; --- edln: edraw PLUS command history. returns (line . nhist), or 'eof at EOF
+; (a public symbol, not edraw's private sentinel). same editing primitives; up/
+; down (ESC [ A / ESC [ B) recall through hist (past lines, most-recent first).
+(: _ (assert
+   ; the editing primitives carry over -- the line is now (cap r):
+   (= abc (cap (edln (keys `(97 98 99 13)) "" ())))              ; a b c -> "abc"
+   (= abc (cap (edln (keys `(97 99 27 91 68 98 13)) "" ())))     ; a c, LEFT, b -> "abc"
+   (= abc (cap (edln (keys `(97 98 120 127 99 13)) "" ())))      ; a b x <bsp> c -> "abc"
+   (id? 'eof (edln (keys `(4)) "" ()))                           ; ^D -> the 'eof sentinel
+   (id? 'eof (edln (keys 0) "" ()))                              ; port EOF -> the same
+   ; a submitted line is pushed onto history (most-recent first); blanks dropped:
+   (= (L abc) (cup (edln (keys `(97 98 99 13)) "" ())))          ; nhist on empty -> (abc)
+   (= (L abc abc) (cup (edln (keys `(97 98 99 13)) "" (L abc)))) ; ... pushed on front
+   (nil? (cap (edln (keys `(13)) "" (L abc))))                   ; blank line -> ()
+   (= (L abc) (cup (edln (keys `(13)) "" (L abc))))              ; ... NOT recorded
+   ; up recalls the most-recent entry; down past the draft is the empty draft:
+   (= abc (cap (edln (keys `(27 91 65 13)) "" (L abc))))         ; UP, enter -> "abc"
+   (nil? (cap (edln (keys `(27 91 66 13)) "" (L abc))))          ; DOWN (no newer) -> ""
+   ; the live draft survives an up/down round-trip:
+   (= `(120) (cap (edln (keys `(120 27 91 65 27 91 66 13)) "" (L abc))))))  ; x, UP, DOWN -> "x"
+
 (puts "baoedit: ok") (putc 10)

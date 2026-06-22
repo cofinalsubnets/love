@@ -5,7 +5,7 @@
 ; self-test -- loaded after the prel. (It was repl.l; the editor/repl internals
 ; used to LEAK as user-visible book globals because the corpus tested them by
 ; name. Now the editor + repl + the pty wrapper live inside one closure, so only
-; the entry points -- shell, welp, edraw, wrap, bao, plus the stream shell
+; the entry points -- shell, welp, edraw, edln, wrap, bao, plus the stream shell
 ; read/reads -- are book globals.)
 ;
 ; parsing is delegated to the C reader: the editor's flattened charlist is
@@ -508,6 +508,47 @@
                 (loop l r)))                         ; up/down/^C/unknown: ignore in a line reader
         (loop () ()))
 
+   ; --- the shell line reader: edraw + command history -------------------------
+   ; edraw is historyless; a command shell (init/sh.l) wants up/down recall. edln
+   ; keeps a flat history -- past lines as charlists, most-recent first -- and an
+   ; index i into it: i = 0 is the live draft (saved in `draft` the instant up
+   ; leaves it), i = k recalls the (k-1)th entry. up steps older, down newer;
+   ; editing a recall just edits the buffer (i and hist untouched), so the original
+   ; survives and the EDITED line is what Enter records on front. reuses the pure
+   ; zipper primitives + edrender + bev EXACTLY like edraw -- only the loop state
+   ; and the submit/recall policy differ (the edraw-vs-edline split, once more).
+   ;
+   ; (edln ip pr hist) -> 'eof at ^D / port EOF, else (line . nhist): the raw line
+   ; (a charlist) and hist with the line pushed on front (blank lines dropped,
+   ; capped at 100). thread nhist back in for recall across commands.
+   (edln ip pr hist)
+     (: _ (puts pr) pl (tally pr) hn (tally hist)
+        (hnth k) (cap (drop k hist))                  ; hist[k], 0-based (k < hn)
+        (loop l r i draft)
+          (: _ (edrender pl 0 () l r ())
+             c (bev ip)
+             (km uu ll rr dd) (loop ll rr i draft)     ; motion: index + draft kept
+             (recall ni)                               ; jump to view index ni (0 = the draft)
+               (: nd (? (= i 0) (revcat l r) draft)    ; save the live draft once, the instant up leaves it
+                  ln (? (= ni 0) nd (hnth (- ni 1)))
+                  (loop (rev ln) () ni nd))
+             (? (= c -7) 'eof
+                (= c 10) (: _ (putc 10)
+                            ln (revcat l r)
+                            nh (? (nil? ln) hist (take 100 (link ln hist)))
+                            (link ln nh))
+                (< 0 c)  (loop (link c l) r i draft)
+                (= c -1) (edleft  km () l r ())
+                (= c -2) (edright km () l r ())
+                (= c -3) (edbsp   km () l r ())
+                (= c -4) (eddel   km () l r ())
+                (= c -5) (edhome  km () l r ())
+                (= c -6) (edend   km () l r ())
+                (= c -8) (recall (? (< i hn) (+ i 1) i))   ; up: older
+                (= c -9) (recall (? (< 0 i) (- i 1) i))    ; down: newer
+                (loop l r i draft)))
+        (loop () () 0 ()))
+
    ; (bao a) -- the interactive entry the host frontend launches. `(bao 0)` is
    ; exactly the baked shell (an arg is taken: ai has no nullary calls); `(bao 'test)`
    ; runs the private unit battery (boot/baotest.l gates it -- the selftest stays
@@ -619,7 +660,7 @@
    ; the body: the public entry points, defglob'd below. everything above stays
    ; closure-private (off the book), which is what stops the ed* editor + repl
    ; internals from leaking into (names ()).
-   `(shell welp edraw wrap bao))
+   `(shell welp edraw wrap bao edln))
 
  ; defglob the public surface out of the export list (book is mopped post-egg, so
  ; a top-level body-less (: ..) is the only way to add a global; the privates above
@@ -629,7 +670,8 @@
  welp  (cap (cup _))
  edraw (cap (cup (cup _)))
  wrap  (cap (cup (cup (cup _))))
- bao   (cap (cup (cup (cup (cup _))))))
+ bao   (cap (cup (cup (cup (cup _)))))
+ edln  (cap (cup (cup (cup (cup (cup _)))))))
 
 ; bao.l is DEFINE-ONLY -- loading it (egg-bake or `-l ai/bao.l`) installs the shell
 ; core but does NOT launch. The frontend launches: host/main.c evals `(bao 0)` on a

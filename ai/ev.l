@@ -179,7 +179,7 @@
               (&& (atom? (cup t)) (atom? (cap t)) (nil? (nom? (cap t)))) (link 1 (nil? (cap t)))  ; (c) == c: a folded monadic (opfix wraps (! e) -> ((nil? e)), so a folded test lands wrapped)
               0)
    (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (firstr cflip-rules bs))
-    (? (atom? fb) (list ())                           ; clauses ran out: implicit () else (nil-ontology bug 3)
+    (? (atom? fb) (list ())                           ; clauses ran out: implicit () else (nil-ontology)
        (atom? (cup fb)) (list (wx (cap fb) bnd))      ; the lone else
        (: t (wx (cap fb) bnd) k (cst t)               ; walk the test; is it a static constant?
         (? (atom? k) (link t (link (wx (caup fb) bnd) (wxc (cuup fb) bnd)))   ; unknown -> keep the clause

@@ -510,7 +510,7 @@ not-in-the-book      ; ()        a missing nom reads the zero point (helpless)
 ; every hot lvm_* pointer, and finally the `book` itself. compiled references were folded, so only the
 ; noms die; noms the printer/reader/expanders EMIT (spread link pin tablet mono list ..) stay, as do
 ; the C-resolved hooks (num-ap add mul help). the shell core (ai/bao.l) needs no mopping: its internals
-; are closure-private, only its entry points (shell/welp/edraw/wrap/bao + the stream shell zev/zevs)
+; are closure-private, only its entry points (shell/welp/edraw/edln/wrap/bao + the stream shell zev/zevs)
 ; are globals.
 ; demo:
 (lit? ev)            ; true    ev is installed in the image

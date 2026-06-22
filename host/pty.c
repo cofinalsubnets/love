@@ -21,6 +21,7 @@
 // function itself -- (f) == f at zero operands -- so the call is (winsize 0).
 #define _GNU_SOURCE     // posix_openpt/grantpt/unlockpt/ptsname (not in gnu23's default set)
 #include "ai.h"
+#include "proc.h"       // proc_status -- the wait-status decode, shared with init.c
 #include <stdlib.h>     // posix_openpt grantpt unlockpt ptsname
 #include <unistd.h>     // fork setsid dup2 close execvp read write _exit
 #include <fcntl.h>      // open O_RDWR O_NOCTTY fcntl FD_CLOEXEC
@@ -40,11 +41,8 @@ static intptr_t port_fd(ai_word x) {
     return getcharm(((struct ai_io*) x)->fd);
   return -1; }
 
-// Decode a wait(2) status word the way host_run does: exit code, or 128+signal,
-// or -1 for the (shouldn't-happen) neither case.
-static int decode_status(int st) {
-  return WIFEXITED(st) ? WEXITSTATUS(st)
-       : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1; }
+// (the wait-status decode now lives in host/proc.h as proc_status, shared with
+// init.c -- bao and init agree on what a child's exit code means.)
 
 // Workhorse for (mind argv), called with g Packed; argv is the single arg and
 // the sole GC root at g->sp[0]. Leaves EXACTLY ONE net value above argv on every
@@ -154,7 +152,7 @@ ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
   if (r < 0)  { g->sp[0] = putcharm(errno); return g; }   // waitpid error
   if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(decode_status(st)), ai_nil);
+                                 putcharm(proc_status(st)), ai_nil);
   g->sp[0] = word(w);
   return g; }
 

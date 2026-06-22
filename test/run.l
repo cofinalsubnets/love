@@ -41,6 +41,6 @@
   ; --- output larger than the initial buffer exercises the grow path ---
   (: r (run `("seq" "20000")) (&& (= 0 (cap r)) (< 65536 (sat (cup r)))))
 
-  ; --- getenv: PATH is set (a string); a bogus name is unset (nil) ---
+  ; --- getenv: PATH is set (a string); a bogus name is unset -> () (the zero point) ---
   (string? (getenv "PATH"))
-  (= 0 (getenv "GWEN_DEFINITELY_UNSET_12345"))) 0)
+  (nil? (getenv "GWEN_DEFINITELY_UNSET_12345"))) 0)
