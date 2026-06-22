@@ -20,12 +20,13 @@ skip=" ${4:-} "   # padded so `case` can match whole " lang:bench " words
 # per-language file extension, interpreter binary, and run command. the command
 # is eval'd with $b bound to the bench name, so the source is benches/$b.$ext.
 case $lang in
-  # ai: for `float`, `fib`, `tak`, load the native glaze (ai/glaze/emit.l + auto.l) AHEAD of the bench
-  # on an x86-64 host -- the recognizers then read the bench's UNCHANGED source and compile it to native
-  # (float.l's float-recurrence grid -> a whole-grid SSE kernel; fib.l/tak.l's recursive arithmetic ->
-  # a native call tree, 1- and multi-arg), the ai analogue of LuaJIT auto-JITting Lua. The glaze self-
-  # tests print to stderr (discarded here); other benches stay interpreted (the glaze matches only these).
-  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = float ] || [ "$b" = fib ] || [ "$b" = tak ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l) bench.l benches/$b.l | ../out/host/ai' ;;
+  # ai: for `float`, `fib`, `tak`, `primes`, load the native glaze (ai/glaze/emit.l + auto.l) AHEAD of the
+  # bench on an x86-64 host -- the recognizers then read the bench's UNCHANGED source and compile it to
+  # native (float.l's float-recurrence grid -> a whole-grid SSE kernel; fib/tak/primes' integer call
+  # graph -> a native mutually-recursive group, with primes' named-let loops lambda-lifted into it), the
+  # ai analogue of LuaJIT auto-JITting Lua. The glaze self-tests print to stderr (discarded here); other
+  # benches stay interpreted (the glaze matches only these).
+  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = float ] || [ "$b" = fib ] || [ "$b" = tak ] || [ "$b" = primes ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l) bench.l benches/$b.l | ../out/host/ai' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   petite)       ext=ss;   bin=petite;     cmd='petite --script benches/$b.ss' ;;
   guile)        ext=scm;  bin=guile;      cmd='guile --no-auto-compile -s benches/$b.scm' ;;
