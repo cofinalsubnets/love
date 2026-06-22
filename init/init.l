@@ -149,6 +149,53 @@
         _ (rloop units pids tries (tally units) 500)
         (note "-- all real children reaped --")))
 
+; --- the PERCEIVE lane (Linux: host/init.c sigfd/sigtake + the core `await`) ---
+; the supervisor's perceive becomes a real PARK on a signalfd, not a poll loop.
+; (await sig) cooperatively yields until a signal lands; the scheduler folds the
+; parked sigfd and a heartbeat TASK's timer into ONE ai_wait_fds -- the {nic, clock}
+; merge, now {signals, clock}, so the heartbeat TICKS WHILE the supervisor sleeps on
+; the fd. on SIGCHLD we drain reap (it COALESCES, so loop) and restart per policy; a
+; SIGTERM (blocked -> queued to the fd: a graceful EVENT, not a kill) ends the loop.
+; Linux signal numbers: SIGCHLD 17, SIGTERM 15. run: out/host/ai -l init/init.l -e "(perceive 0)"
+(: sig-chld 17  sig-term 15
+   (heart n ms) (? (< n 1) 0 (: _ (rest ms) _ (note "  . beat") (heart (- n 1) ms)))
+
+   ; drain every dead child after a SIGCHLD wake, restarting each per policy; return
+   ; the new live count. SIGCHLD coalesces, so loop reap until it drains.
+   (harvest units pids tries live)
+     (: ev (reap 0)
+        (? !(two? ev) live
+           (: nm (peep pids (cap ev) 0)  st (cup ev)
+              u  (find units nm)
+              n  (+ 1 (peep tries nm 0))  _ (pin tries nm n)
+              _  (note (+ "  reap " (+ (show nm) (+ " status=" (show st)))))
+              (? (? (= st 0) 0 (? (id? (u-restart u) 'on-fail) (< n tries-cap) 0))
+                   (: _ (note (+ "    restart " (show nm))) _ (rstart pids u)
+                      (harvest units pids tries live))
+                   (harvest units pids tries (- live 1))))))
+
+   ; perceive: PARK on the sigfd, act on the signal, until all settle or a TERM.
+   (watch sig units pids tries live)
+     (? (< live 1) (note "  all services settled")
+        (: _  (await sig)                                ; PARK -- cooperative; merges with the heartbeat
+           ev (sigtake sig)
+           (? (id? (cap ev) sig-term) (note "  SIGTERM: a queued EVENT, not a kill -> shut down")
+              (id? (cap ev) sig-chld) (watch sig units pids tries (harvest units pids tries live))
+              (watch sig units pids tries live))))
+
+   (perceive _)
+     (: sig (sigfd 0)
+        (? !sig (note "  perceive: Linux signalfd only")
+           (: pids (tablet 0) tries (tablet 0)
+              units (L (unit 'slow 'service (L "sh" "-c" "sleep 0.15; exit 0") 'on-fail ())
+                       (unit 'flap 'service (L "sh" "-c" "exit 1")             'on-fail ()))
+              _ (note "-- PERCEIVE: park on a signalfd; a heartbeat task ticks alongside (the merge) --")
+              hb (spin (\ _ (heart 5 40)) 0)             ; heartbeat TASK: parks on the clock
+              _ (each units (\ u (rstart pids u)))
+              _ (watch sig units pids tries (tally units))
+              _ (catch hb)                               ; join the heartbeat (the orphan law)
+              0))))
+
 ; --- the demos, as a CALLABLE function (not auto-run) ---
 (: (demos _)
    (: cr (tablet 0)                                  ; per-name attempt counter for the flaky service

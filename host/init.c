@@ -19,10 +19,18 @@
 // status decode is shared with bao via host/proc.h (proc_status).
 #include "ai.h"
 #include "proc.h"
-#include <unistd.h>     // fork execvp _exit
+#include <unistd.h>     // fork execvp _exit read close
 #include <stdio.h>      // fflush
 #include <string.h>     // memcpy
 #include <errno.h>
+#include <signal.h>     // sigprocmask, SIGCHLD/SIGTERM (sigfd)
+#if defined(__linux__)
+#include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo (Linux only)
+#endif
+
+// is Sp-slot x a heap stream port, and its backing fd -- as in net.c.
+#define portp(x) (((x) & 1) == 0 && ((union u*) (x))->ap == lvm_port_io)
+#define port_fd(x) ((int) getcharm(((struct ai_io*) (x))->fd))
 
 // (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
 // a pid (positive) from a failure (negative) without a second value). fork +
@@ -86,8 +94,71 @@ static lvm(lvm_reapany) {
   Unpack(g);
   Ip += 1; return Continue(); }
 
+// --- the signal perceive source (Linux signalfd) --------------------------------
+// (sigfd _)     -> a PORT over a signalfd watching SIGCHLD + SIGTERM, those signals
+//                  first BLOCKED (sigprocmask) so they QUEUE to the fd instead of
+//                  their default disposition -- SIGCHLD's discard, SIGTERM's KILL.
+//                  That queuing is exactly what turns a TERM into a graceful EVENT,
+//                  not a death. () on failure. SIGINT is left unblocked so ^C bails.
+// (sigtake port) -> (signo . pid) of ONE pending signal, or () if none ready.
+// The supervisor PARKS with the core `(await sig)` (cooperative -- the scheduler
+// merges the sigfd with a heartbeat task's timer in one ai_wait_fds, the {nic, clock}
+// story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
+// 'chld wake still loops `reap` to harvest every zombie.
+#if defined(__linux__)
+static lvm(lvm_sigfd) {
+ sigset_t m;
+ sigemptyset(&m);
+ sigaddset(&m, SIGCHLD);
+ sigaddset(&m, SIGTERM);
+ if (sigprocmask(SIG_BLOCK, &m, NULL)) goto fail;
+ int fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
+ if (fd < 0) goto fail;
+ Pack(g);
+ struct ai *r = ai_io_alloc(g, fd);
+ if (!ai_ok(r)) { close(fd); goto fail; }    // OOM -> nil (cf. net.c lvm_listen)
+ g = r;
+ Unpack(g);
+ Sp[1] = Sp[0];                              // port over the dummy arg
+ Sp += 1; Ip += 1;
+ return Continue();
+ fail:
+ Sp[0] = ai_nil; Ip += 1;
+ return Continue(); }
+
+// read one signalfd_siginfo (non-blocking) into (signo . pid). signo is the raw
+// number (Linux: SIGCHLD 17, SIGTERM 15); pid is ssi_pid (the dead child on SIGCHLD).
+ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
+ struct signalfd_siginfo si;
+ ssize_t n = (fd >= 0) ? read(fd, &si, sizeof si) : -1;
+ if (n != (ssize_t) sizeof si) { g->sp[0] = ai_nil; return g; }   // EAGAIN / short read
+ if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+ struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                putcharm((intptr_t) si.ssi_signo),
+                                putcharm((intptr_t) si.ssi_pid));
+ g->sp[0] = word(w);
+ return g; }
+
+static lvm(lvm_sigtake) {
+ if (!portp(Sp[0])) { Sp[0] = ai_nil; return Ip++, Continue(); }
+ int fd = port_fd(Sp[0]);
+ Pack(g);
+ g = host_sigtake(g, fd);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Ip += 1; return Continue(); }
+#else
+// signalfd is Linux-only; keep the names present (so init.l loads) but inert.
+static lvm(lvm_sigfd)   { Sp[0] = ai_nil; return Ip++, Continue(); }
+static lvm(lvm_sigtake) { Sp[0] = ai_nil; return Ip++, Continue(); }
+#endif
+
 static union u const
   nif_spawn[]   = {{lvm_spawn}, {lvm_ret0}},
-  nif_reapany[] = {{lvm_reapany}, {lvm_ret0}};
+  nif_reapany[] = {{lvm_reapany}, {lvm_ret0}},
+  nif_sigfd[]   = {{lvm_sigfd}, {lvm_ret0}},
+  nif_sigtake[] = {{lvm_sigtake}, {lvm_ret0}};
 AI_NIF("spawn", nif_spawn);
 AI_NIF("reap",  nif_reapany);
+AI_NIF("sigfd", nif_sigfd);
+AI_NIF("sigtake", nif_sigtake);
