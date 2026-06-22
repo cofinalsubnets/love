@@ -67,7 +67,7 @@ test_host: host
 # test/00-init.l assert harness (which exits 1 on the first failure), so the gate
 # checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
 # Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
-hostnif_tests = boot/pty.l boot/net.l boot/baoedit.l boot/baotest.l
+hostnif_tests = boot/pty.l boot/net.l boot/baoedit.l boot/baotest.l boot/init.l
 test_hostnif: host
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
@@ -600,6 +600,19 @@ else
 run-netagent run-netbrain:
 	@echo "$@: x86_64 only (virtio-net driver is port/kship/x86_64/net.c); host arch is $a"
 endif
+
+# Boot init AS PID 1 in a container -- the Linux altitude of "ai as the system".
+# A private pid+user+mount namespace (unprivileged, no daemon/image/root): --pid
+# --fork makes the entrypoint pid 1, --user --map-root-user makes it root-in-ns so
+# mount works, --mount-proc gives it a fresh /proc reflecting the namespace. ai then
+# IS init: getpid 1, mounts the early filesystems, and reaps a reparented orphan
+# (pid 1's defining duty). (pid1 0) is the deterministic tour; swap in (perceive 0)
+# for the live signalfd supervisor. Needs unshare (util-linux) + unprivileged userns.
+.PHONY: init-container
+init-container: host
+	@command -v unshare >/dev/null || { echo "init-container: needs unshare (util-linux)"; exit 1; }
+	@echo "-- ai as PID 1 in a pid+user+mount namespace --"
+	unshare --pid --fork --mount-proc --user --map-root-user -- $m -l init/init.l -e "(pid1 0)"
 
 # --- headless serial test (wired into test_all; x86_64 + qemu only) ------------
 # The K_TEST kernel boots, runs the baked corpus through the self-hosted ev, and

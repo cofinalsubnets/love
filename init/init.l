@@ -224,6 +224,53 @@
              (note (+ "  place self in " (+ d (? (id? r 'ok) " -> ok" " -> needs root / a delegated subtree")))))
         0))
 
+; --- BOOT AS PID 1 (a container) ------------------------------------------------
+; the milestone the file is named for: ai running as process 1. launch it in a
+; private pid+user+mount namespace -- `make init-container`, or any runtime that
+; makes the entrypoint pid 1 (docker/systemd-nspawn). then ai IS init:
+;   * getpid is 1.
+;   * mount works -- we are root in a PID namespace, so proc mounts cleanly (the
+;     EPERM in boot-system was the no-pid-ns case; here every mount is `ok`).
+;   * ai REAPS REPARENTED ORPHANS -- pid 1's defining duty. when a process's parent
+;     dies the kernel reparents its children to pid 1, which must waitpid them or
+;     they leak as zombies forever. (reap _) is waitpid(-1), so ai harvests a pid it
+;     NEVER SPAWNED. run NOT as pid 1, the orphan reparents elsewhere and never shows.
+; (pid1 0) is the deterministic proof tour; (perceive 0) is the live supervisor
+; (park on the signalfd, restart per policy, SIGTERM -> graceful shutdown).
+(: (mount1 src tgt typ)                                  ; mount as pid1 (root in a pid-ns: it works)
+     (: _ (mkdir tgt 493) r (mount src tgt typ)          ; () success, +errno failure
+        (note (+ "  mount " (+ typ (+ " on " (+ tgt (? r (+ " -> errno " (show r)) " -> ok")))))))
+
+   ; drain reap until `target` children are collected (or steps run out). classify
+   ; each dead pid by `pids`: present -> a child WE started; absent -> a REPARENTED
+   ; ORPHAN (only pid 1 sees those). a non-pair reap -- () none pending (now the real
+   ; zero point) or -ECHILD none left -- just paces the loop.
+   (reap-tour pids got target steps)
+     (? (? (< steps 1) 1 (>= got target)) got
+        (: ev (reap 0)
+           (? (two? ev)
+                (: pid (cap ev) st (cup ev) nm (peep pids pid ())
+                   _ (note (+ (? nm (+ "  reap " (+ (show nm) " (a service we started)"))
+                                     "  reap an ORPHAN (reparented to us -- pid 1's duty)")
+                              (+ " pid=" (+ (show pid) (+ " status=" (show st))))))
+                   (reap-tour pids (+ got 1) target (- steps 1)))
+              (: _ (rest 5) (reap-tour pids got target (- steps 1))))))
+
+   (pid1 _)
+     (: me (getpid 0)
+        _ (note (+ "-- ai as PID " (+ (show me)
+                  (? (= me 1) " -- a real init --" " (NOT pid 1: use `make init-container`) --"))))
+        _ (note "-- mount the early filesystems (root in a pid-ns -> proc mounts) --")
+        _ (mount1 "tmpfs" "/tmp/ai-run"  "tmpfs")
+        _ (mount1 "proc"  "/tmp/ai-proc" "proc")
+        pids (tablet 0)
+        _ (note "-- spawn a child that orphans a grandchild, then reap (pid 1's duty) --")
+        p (spawn (L "sh" "-c" "(sleep 0.2; exit 7) & exit 0"))    ; parent exits 0; grandchild orphaned
+        _ (pin pids p 'orphan-parent)
+        n (reap-tour pids 0 2 800)                                ; parent settles fast; the orphan after its sleep
+        _ (note (+ "-- reaped " (+ (show n) " children, one a reparented orphan -- ai supervised pid 1 --")))
+        0))
+
 ; --- the demos, as a CALLABLE function (not auto-run) ---
 (: (demos _)
    (: cr (tablet 0)                                  ; per-name attempt counter for the flaky service
