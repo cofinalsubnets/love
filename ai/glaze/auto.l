@@ -101,6 +101,85 @@
                       (two? (cup (cup inner))) !(two? (cup (cup (cup inner))))            ; INNER = (\ q E), q != p
                       (exprn `(p (caup inner)) (caup (cup inner)))))
    (flatc lam) (: inner (caup (cup lam)) `('\ (caup lam) (caup inner) (caup (cup inner))))  ; (\ p (\ q E)) -> (\ p q E)
+   ; --- the GRID NEST (general, D-dimensional): a letrec of D counted-loop functions wrapping a
+   ; FLOAT RECURRENCE -- the inner def self-recurses with an (&& (< it LIM) (cmp TEST BOUND)) escape
+   ; test; each loop def is (? (< cnt N) (self ..outer.. (+ cnt 1) ..(+ acc INNERCALL)..) acc), the
+   ; outermost driven by the trailing (driver 0 ..). autonat reads this STRAIGHT FROM SOURCE, walks
+   ; the loop chain to recover D bounds + counters, classifies the recurrence into M invariants /
+   ; N float-vars / their updates, and builds the whole-grid native via jitfgridn (emit.l). Then it
+   ; rewrites the OUTERMOST loop's body to call the native. The mandelbrot 64x64 grid is the D=2,
+   ; M=2, N=2 instance; any D>=1 and M+N<=6 within the xmm budget glaze. Returns the form UNCHANGED
+   ; if it doesn't fit, so every other form passes through untouched. ⚠ x86-64 (-> jitfgridn).
+   (anat-defs bs) (? (atom? (cup bs)) (L () (cap bs))            ; a : binding list -> (pairs body); pairs = ((nameform . body)..)
+                     (: r (anat-defs (cuup bs))
+                        (L (link (link (cap bs) (caup bs)) (cap r)) (caup r))))
+   (anat-cond? e) (&& (two? e) (id? (cap e) '?))                 ; a (? ..) form?
+   (afind pred l) (? (atom? l) () (pred (cap l)) (cap l) (afind pred (cup l)))
+   (afilter pred l) (? (atom? l) () (pred (cap l)) (link (cap l) (afilter pred (cup l))) (afilter pred (cup l)))
+   ; the recurrence pair: a (? (&& ..) (SELF ..) ..) whose then-branch self-calls (head = its own name)
+   (anat-rec? p) (: nm (cap (cap p)) body (cup p)
+                    (&& (anat-cond? body) (two? (cup (cup body)))
+                        (: cond (opd body 0) then (opd body 1)
+                           (&& (two? cond) (id? (cap cond) '&&) (two? then) (id? (cap then) nm)))))
+   ; anat-callee: the next-inner function a loop def calls -- INNERCALL's head in (? (< cnt N)
+   ; (self .. (+ acc INNERCALL)) acc) -- or () if the pair doesn't match the loop shape. The OUTERMOST
+   ; loop is the one no other loop names (the driver reaches it -- maybe wrapped, e.g. (bench .. (g 0 0))).
+   (anat-callee q) (: body (cup q)
+      (? (! (&& (anat-cond? body) (< 1 (tally (cup (cup body)))))) ()
+         (: then (opd body 1)
+            (? (! (two? then)) ()
+               (: accarg (last (cup then))
+                  (? (! (&& (two? accarg) (id? (cap accarg) '+) (two? (cup (cup accarg))))) ()
+                     (: ic (caup (cup accarg)) (? (two? ic) (cap ic) ()))))))))
+   ; loopchain: walk loopnm's pair -- (? (< cnt N) (self ..(+ acc INNERCALL)..) acc) -- record
+   ; (cnt N rec-args), recursing on INNERCALL's head until it reaches the recurrence recnm. The list
+   ; runs OUTER->INNER; () on any structural mismatch (so autonat bails to the unchanged form).
+   (loopchain loopnm pairs recnm)
+    (: p (afind (\ q (id? (cap (cap q)) loopnm)) pairs)
+       (? (! (two? p)) ()
+          (: body (cup p)
+             (? (! (&& (anat-cond? body) (< 1 (tally (cup (cup body)))))) ()
+                (: cond (opd body 0) then (opd body 1)
+                   (? (! (&& (two? cond) (id? (cap cond) '<) (two? then))) ()
+                      (: cnt (opd cond 0) bnd (opd cond 1) accarg (last (cup then))
+                         (? (! (&& (two? accarg) (id? (cap accarg) '+) (two? (cup (cup accarg))))) ()
+                            (: ic (caup (cup accarg))
+                               (? (! (two? ic)) ()
+                                  (id? (cap ic) recnm) (L (L cnt bnd (cup ic)))             ; innermost: the recurrence call's args
+                                  (: rest (loopchain (cap ic) pairs recnm)                  ; else recurse on the next loop
+                                     (? (two? rest) (link (L cnt bnd ()) rest) ()))))))))))))
+   ; rebind: rebuild a : binding list, replacing the outermost loop's body with (native 0)
+   (anat-rebind bs outernm ng)
+    (? (atom? (cup bs)) bs
+       (: nm (cap bs) bd (caup bs)
+          (link nm (link (? (&& (two? nm) (id? (cap nm) outernm)) (L ng 0) bd) (anat-rebind (cuup bs) outernm ng)))))
+   (autonat form)
+    (? (! (two? form)) form
+       (! (id? (cap form) ':)) form
+       (atom? (cup form)) form
+       (: parsed (anat-defs (cup form)) pairs (cap parsed)
+          (? (! (< 1 (tally pairs))) form                        ; need a recurrence + >=1 loop
+             (: recp (afind anat-rec? pairs)
+                (? (! (two? recp)) form                          ; no float recurrence found
+                   (: recnm (cap (cap recp)) recps (cup (cap recp)) recbody (cup recp)
+                      cond (opd recbody 0) then (opd recbody 1)
+                      itcmp (opd cond 0) c2 (opd cond 1)
+                      (? (! (&& (two? itcmp) (id? (cap itcmp) '<) (two? c2))) form     ; cond = (&& (< it LIM) (cmp T B))
+                         (: lim (opd itcmp 1) cmpop (cap c2) testexpr (opd c2 0) bound (opd c2 1)
+                            cl (classify recps (cup then)) fvars (cap cl) updates (caup cl) invs (nthl cl 2)
+                            looppairs (afilter (\ q (! (id? q recp))) pairs)             ; the loop defs
+                            callees (map anat-callee looppairs)
+                            outerp (afind (\ q (! (member? (cap (cap q)) callees))) looppairs)   ; the loop no loop calls
+                            (? (! (two? outerp)) form
+                               (: chain (loopchain (cap (cap outerp)) pairs recnm)       ; outermost -> recurrence
+                                  D (tally chain) M (tally invs) N (tally fvars)
+                                  (? (! (&& (two? chain) (member? cmpop '(< <= > >=)) (< 0 N) (< (+ M N) 7) (< D 7))) form
+                                     (: cnames (map cap chain) dims (map caup chain)
+                                        margs (nthl (last chain) 2)
+                                        invd (map (\ iv (nthl margs (posof iv recps 0))) invs)
+                                        glam (L '\ '_ form)       ; faithful interp nest (deopt fallback / =-show)
+                                        ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim)
+                                        (? (lit? ng) (link ': (anat-rebind (cup form) (cap (cap outerp)) ng)) form)))))))))))))
    ; COMPILE CACHE: each source \-expr compiles ONCE (no re-mmap on repeated ev).
    ; Keyed by source -- structurally-equal closures share the same native (sound:
    ; they are =). The transparent form of a hot-trigger: an execution-count trigger
@@ -122,7 +201,7 @@
                      (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
                         (: ln (loopinfo-n e)
                            (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
-                              (base-ev e))))))
+                              (base-ev (autonat e)))))))    ; fall-through: glaze the mandelbrot grid nest if it fits, else interpret
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
@@ -161,4 +240,25 @@
     ; captured-closure constructor auto-natived: captures transparent (= interp)
     (: adder (ev '(\ n (\ x (+ x n))))  a5 (adder 5)
        (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3))) (= a5 ((\ n (\ x (+ x n))) 5)))))
- _ (puts "ai/glaze/auto: ev auto-natives qualifying closures + counted loops (transparent)") _ (putc 10))
+ _ (assert    ; D-DIMENSIONAL float-recurrence GRIDS auto-glazed from SOURCE -> native whole-grid kernel, bit-exact (== interp)
+    ; D=2 -- the mandelbrot 64x64 grid (M=2 invariants, N=2 fvars), the canonical instance -> checksum 87130
+    (: g2 '(: (mand cx cy zx zy it)
+               (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
+                  (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
+              (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
+              (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+            (grid 0 0))
+       (&& !(id? (autonat g2) g2) (= 87130 (ev g2)) (= (base-ev g2) (ev g2))))      ; autonat rewrote it -> native == interp
+    ; D=1 -- a single row of escape counts (cy a constant 0.0) -> native == interp
+    (: g1 '(: (mand cx cy zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
+              (row px acc) (? (< px 64) (row (+ px 1) (+ acc (mand (- (* px 0.046875) 2.0) 0.0 0.0 0.0 0))) acc)
+            (row 0 0))
+       (&& !(id? (autonat g1) g1) (= (base-ev g1) (ev g1))))
+    ; D=3 -- an 8x8x8 nest, M=3 invariants (cx cy cz), cz=pz*0.01 shifting zy -> native == interp (exercises r12 push/pop)
+    (: g3 '(: (mand cx cy cz zx zy it) (? (&& (< it 50) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy cz (+ (- (* zx zx) (* zy zy)) cx) (+ (+ (* (* 2.0 zx) zy) cy) cz) (+ it 1)) it)
+              (lz px py pz acc) (? (< pz 8) (lz px py (+ pz 1) (+ acc (mand (- (* px 0.046875) 2.0) (- (* py 0.046875) 1.5) (* pz 0.01) 0.0 0.0 0))) acc)
+              (ly px py acc) (? (< py 8) (ly px (+ py 1) (+ acc (lz px py 0 0))) acc)
+              (lx px acc) (? (< px 8) (lx (+ px 1) (+ acc (ly px 0 0))) acc)
+            (lx 0 0))
+       (&& !(id? (autonat g3) g3) (= (base-ev g3) (ev g3)))))
+ _ (say err "ai/glaze/auto: ev auto-natives qualifying closures + counted loops + D-dimensional float-recurrence grids (transparent)\n"))

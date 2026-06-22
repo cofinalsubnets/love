@@ -20,7 +20,12 @@ skip=" ${4:-} "   # padded so `case` can match whole " lang:bench " words
 # per-language file extension, interpreter binary, and run command. the command
 # is eval'd with $b bound to the bench name, so the source is benches/$b.$ext.
 case $lang in
-  ai)            ext=l;    bin=../out/host/ai;  cmd='cat bench.l benches/$b.l | ../out/host/ai' ;;
+  # ai: for `float`, load the native glaze (ai/glaze/emit.l + auto.l) AHEAD of the bench on an
+  # x86-64 host -- autonat then recognizes the float-recurrence grid in float.l's UNCHANGED source
+  # and compiles it to a native whole-grid kernel (the ai analogue of LuaJIT auto-JITting Lua). The
+  # glaze self-tests print to stderr (discarded here); other benches stay interpreted (the glaze
+  # only matches float-grid shapes, so it would only add startup cost elsewhere).
+  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $([ "$b" = float ] && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l) bench.l benches/$b.l | ../out/host/ai' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   petite)       ext=ss;   bin=petite;     cmd='petite --script benches/$b.ss' ;;
   guile)        ext=scm;  bin=guile;      cmd='guile --no-auto-compile -s benches/$b.scm' ;;

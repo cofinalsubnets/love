@@ -267,8 +267,8 @@
    (rgof leaf env) (: e (clook leaf env) (? (two? e) (caup e) (scare 'glaze-leaf leaf)))   ; leaf -> its fixed reg
    (asm ps) (foldl (\ a b (+ a b)) () ps)                                                  ; concat a LIST of byte pieces (+ is associative)
    (efold names i) (? (two? names) (link (L (cap names) i) (efold (cup names) (+ i 1))) ())   ; names -> (name reg) from reg i
-   (alloc dag rv env n)                                                                  ; -> (code . regof-tablet)
-    (: rg (tablet 0) pl (tablet 0) _ (pin pl 'p '(0 1 12 13 14 15))
+   (alloc dag rv env n pool)                                                             ; -> (code . regof-tablet); pool = the free working xmm regs
+    (: rg (tablet 0) pl (tablet 0) _ (pin pl 'p pool)
        (pop u) (: p (peep pl 'p ()) _ (pin pl 'p (cup p)) (cap p))
        (push r) (pin pl 'p (link r (peep pl 'p ())))
        code ((: (go i acc) (? (= i n) acc
@@ -311,50 +311,85 @@
    ; (jitfrec src '(px py) finit fvars updates testexpr cmpop bound lim) -> native pixel kernel.
    (jitfrec lam ips finit fvars updates testexpr cmpop bound lim)
     (nif (emit (+ (loopcode-f ips finit fvars updates testexpr cmpop bound lim) epilogue-mn)) (ev lam) lam (tally ips))
-   ; --- NESTED grid owner: own the WHOLE 2D nest (px,py int loops + inner escape loop) as ONE
-   ;     native kernel -- one boundary crossing per grid, not 4096. px->r10, py->r11 (raw counters,
-   ;     cvtsi2sd into the float lane); cx,cy in xmm8,9; zx,zy in xmm10,11; acc in r9. the acc add is
-   ;     GUARDED (the lane law -- it deopts to the interp grid on overflow -> bignum); the counters
-   ;     are bounded so they need none. arity 1 (a dummy arg), integer checksum out. offsets COMPUTED.
-   (loopcode-grid pxn pyn cxd cyd fvars updates testexpr cmpop bound lim)
-    (: fenv (cat '(cx cy) fvars)
-       cenv (L (L 'px '(242 73 15 42 194)) (L 'py '(242 73 15 42 195)))         ; px=cvtsi2sd r10, py=r11
-       ht (htbl (fcc bound (fccl updates (fcc testexpr (fcc cyd (fcc cxd ()))))) 2)   ; distinct consts -> xmm2..7
-       cxb (+ (cgF ht cenv () fenv cxd 0) (fstore 0))                           ; cx -> xmm8 (once per px)
-       cyb (+ (cgF ht cenv () fenv cyd 0) (fstore 1))                           ; cy -> xmm9 (once per py)
-       ini (asm (L (fzero 2) (fzero 3) '(77 49 192)))                          ; zx=zy=0 ; xor r8,r8 (it=0)
-       ; --- OPTIMIZING allocator on the inner body: mag + the fvar updates, CSE'd, register-only ---
-       aenv (cat (efold fenv 8) ht)                                            ; cx=8 cy=9 zx=10 zy=11 ; consts from ht
+   ; --- NESTED GRID OWNER (general, D-dimensional): own a WHOLE counted-loop NEST as ONE native
+   ;     kernel -- D nested integer loops over fixnum coords -> M derived-float invariants -> a float
+   ;     recurrence over N float-vars, accumulating an integer count -- one boundary crossing per grid,
+   ;     not one per cell. Mandelbrot's 64x64 grid is the D=2,M=2,N=2 instance; this handles any D>=1
+   ;     and any M,N within the xmm budget (M+N<=6). REGISTERS: counters r10.., invariants xmm8..,
+   ;     fvars next, hoisted consts xmm2..7, the inner recurrence's working pool = the leftover xmm.
+   ;     r12.. are CALLEE-SAVED (D>=3) -> push/pop, and the acc-overflow deopt restores them. The acc
+   ;     (r9) add is GUARDED (lane law -- overflow deopts to the interp nest -> bignum); counters and
+   ;     the float lane need no guard. arity 1 (a dummy arg ignored), integer checksum out. offsets COMPUTED.
+   (rangeL a b) (? (< a b) (link a (rangeL (+ a 1) b)) ())
+   (map2 f a b) (? (two? a) (link (f (cap a) (cap b)) (map2 f (cup a) (cup b))) ())
+   (xorR r)    (L 77 49 (+ 192 (* 9 (- r 8))))                 ; xor r,r   (r8-15)
+   (incR r)    (L 73 255 (+ 192 (- r 8)))                      ; inc r
+   (cmpRi r n) (+ (L 73 129 (+ 248 (- r 8))) (le4 n))          ; cmp r, imm32
+   (cvtcnt r)  (L 242 73 15 42 (+ 194 (- r 10)))               ; cvtsi2sd xmm0, r   (r10-15)
+   (pushR r)   (L 65 (+ 80 (- r 8)))                           ; push r   (r8-15)
+   (popR r)    (L 65 (+ 88 (- r 8)))                           ; pop r
+   ; cgFd: a derive expr over the COUNTER env ce (int loop counters -> cvtsi2sd) + hoisted consts,
+   ; using [rsp] scratch (xpush/xpop1) so it never touches an xmm8.. local reg -- run once per cell
+   ; (cold), so memory scratch costs nothing measurable.
+   (cgFd ht ce e) (? (gem? e)   (hcon e ht)
+                     (whole? e) (hcon (+ e 0.0) ht)
+                     (atom? e)  (: cb (clook e ce) (? (two? cb) (caup cb) ()))
+                     (two? e)   (: op (cap e) a (caup e) b (caup (cup e))
+                                   (? (member? op '(+ - * /)) (+ (cgFd ht ce a) (+ xpush (+ (cgFd ht ce b) (+ xpop1 (fbinop op))))) ()))
+                     ())
+   ; guard-acc: the acc-overflow guard. D<3 -> the plain guard (counters are caller-saved). D>=3 ->
+   ; pop the callee-saved counters (r12..) before the deopt, so the interp nest sees an ABI-clean frame.
+   (guard-acc D) (? (< D 3) (guard 0)
+                    (: pp (foldl (\ a r (+ a (popR r))) () (rev (rangeL 12 (+ 10 D))))
+                       (+ (L 113 (+ (tally pp) (tally deopt))) (+ pp deopt))))   ; jno over (pops + deopt)
+   ; loopwrap: wrap `inner` in one counted loop -- init counter cr=0; LTOP: cmp cr,bnd; jge EXIT;
+   ; <inner>; inc cr; jmp LTOP; EXIT. Offsets COMPUTED from (tally inner), so it nests to any depth.
+   (loopwrap cr bnd inner)
+    (: Li (tally inner)
+       (asm (L (xorR cr)                                       ; init counter = 0
+               (cmpRi cr bnd)                                  ; LTOP: cmp cr, bnd
+               (+ (L 15 141) (le4 (+ Li 8)))                   ; jge EXIT  (skip inner + inc(3) + jmp(5))
+               inner
+               (incR cr)                                       ; inc cr
+               (+ (L 233) (le4 (- 0 (+ Li 21)))))))            ; jmp LTOP  (back over cmp(7)+jge(6)+inner+inc(3)+jmp(5))
+   (nest loops inner) (? (atom? loops) inner
+                         (loopwrap (caap loops) (cuap loops) (nest (cup loops) inner)))
+   (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim)
+    (: D (tally dims)  M (tally invs)  N (tally fvars)
+       cregs (rangeL 10 (+ 10 D))                                              ; counter regs r10..r(9+D), outer->inner
+       saved (rangeL 12 (+ 10 D))                                              ; the callee-saved counters among them (r12..)
+       fenv (cat invs fvars)
+       cenv (map2 (\ nm r (L nm (cvtcnt r))) cnames cregs)                     ; counter name -> cvtsi2sd of its reg
+       ht (htbl (fcc bound (fccl invd (fccl updates (fcc testexpr ())))) 2)    ; distinct consts -> xmm2..7 (bound first -> reg 2)
+       derives (foldl (\ a p (+ a (+ (cgFd ht cenv (cup p)) (fstore (cap p))))) () (map2 (\ i d (link i d)) (rangeL 0 M) invd))  ; inv i -> xmm(8+i)
+       zerof (foldl (\ a j (+ a (fzero (+ M j)))) () (rangeL 0 N))             ; fvar j -> xmm(8+M+j) = 0
+       aenv (cat (efold fenv 8) ht)                                           ; invariants/fvars at xmm8.. ; consts from ht
+       pool (cat (L 0 1) (rangeL (+ 8 (+ M N)) 16))                           ; the inner allocator's working regs (the leftover xmm)
        AR (vnall (link testexpr updates) () ())  rootv (cap AR)  dag (caup AR)  nn (tally dag)
-       AL (alloc dag rootv aenv nn)  bodyc (cap AL)  rg (caup AL)
+       AL (alloc dag rootv aenv nn pool)  bodyc (cap AL)  rg (caup AL)
        magr (peep rg (cap rootv) 0)
-       wb (asm ((: (go j rs) (? (two? rs) (link (sse 'mov (+ 10 j) (peep rg (cap rs) 0)) (go (+ j 1) (cup rs))) ())) 0 (cup rootv)))   ; zx<-newzx etc
-       Lc (tally bodyc)  Lwb (tally wb)  Li (+ Lc (+ Lwb 29))                   ; itc4+jge6+body+ucom5+exj6+wb+incr8(3)+iback5
-       iblk (asm (L (+ '(73 131 248) (list lim))                               ; LTOP: cmp r8, lim
-                    (+ '(15 141) (le4 (+ Lc (+ Lwb 19))))                      ; jge ESC
-                    bodyc                                                      ; the CSE'd, register-only inner body
-                    (ucom magr (hlook bound ht))                              ; ucomisd mag, bound
-                    (+ (ucmp-exit cmpop) (le4 (+ Lwb 8)))                     ; <exit> ESC
-                    wb '(73 255 192)                                          ; writeback ; inc r8
-                    (+ '(233) (le4 (- 0 Li)))))                               ; jmp LTOP
-       acc (asm (L '(77 1 193) (guard 0)))                                     ; add r9,r8 ; jno over deopt (overflow -> bignum)
-       S (tally cxb)  Y (tally cyb)  La (tally acc)
-       (asm (L (hpre ht) '(77 49 201 77 49 210)                               ; preload consts (xmm2..7); xor r9,r9; xor r10,r10
-               (+ '(73 131 250) (list pxn))                                   ; LPX: cmp r10, pxn
-               (+ '(15 141) (le4 (+ 42 (+ S (+ Y (+ Li La))))))              ; jge DONE
-               cxb '(77 49 219)                                              ; cx->xmm8 ; xor r11,r11 (py=0)
-               (+ '(73 131 251) (list pyn))                                   ; LPY: cmp r11, pyn
-               (+ '(15 141) (le4 (+ 21 (+ Y (+ Li La)))))                    ; jge PXNEXT
-               cyb ini                                                       ; cy->xmm9 ; zero zx,zy,it
-               iblk                                                          ; LTOP..iback (the optimized inner loop)
-               acc '(73 255 195)                                            ; ESC: acc += it (guarded) ; inc r11
-               (+ '(233) (le4 (- 0 (+ 31 (+ Y (+ Li La))))))               ; jmp LPY
-               '(73 255 194)                                                ; PXNEXT: inc r10
-               (+ '(233) (le4 (- 0 (+ 52 (+ S (+ Y (+ Li La)))))))         ; jmp LPX
-               '(76 137 200))))                                             ; DONE: mov rax, r9
-   ; (jitfgrid src pxn pyn cxderive cyderive fvars updates testexpr cmpop bound lim) -> native grid.
+       wb (foldl (\ a j (+ a (sse 'mov (+ 8 (+ M j)) (peep rg (nthl rootv (+ 1 j)) 0)))) () (rangeL 0 N))   ; fvar j <- its update's result reg
+       Lc (tally bodyc)  Lwb (tally wb)  Li (+ Lc (+ Lwb 32))                  ; cmp7+jge6+body+ucom5+exj6+wb+incr8(3)+iback5
+       iblk (asm (L (+ (L 73 129 248) (le4 lim))                              ; LTOP: cmp r8, lim
+                    (+ (L 15 141) (le4 (+ Lc (+ Lwb 19))))                    ; jge ESC
+                    bodyc                                                     ; the CSE'd, register-only inner body
+                    (ucom magr (hlook bound ht))                             ; ucomisd mag, bound
+                    (+ (ucmp-exit cmpop) (le4 (+ Lwb 8)))                    ; <exit> ESC
+                    wb (L 73 255 192)                                        ; writeback fvars ; inc r8
+                    (+ (L 233) (le4 (- 0 Li)))))                             ; jmp LTOP
+       accb (asm (L (L 77 1 193) (guard-acc D)))                              ; ESC: add r9,r8 ; deopt (pops callee-saved for D>=3)
+       cell (asm (L derives zerof (L 77 49 192) iblk accb))                   ; derive invariants; zero fvars; xor r8(it=0); recur; acc += it
+       loops (map2 (\ r n (link r n)) cregs dims)                             ; (counter-reg . bound) pairs, outer->inner
+       pushes (foldl (\ a r (+ a (pushR r))) () saved)
+       pops   (foldl (\ a r (+ a (popR r))) () (rev saved))
+       (asm (L pushes (hpre ht) (L 77 49 201) (nest loops cell) pops (L 76 137 200))))   ; push callee-saved; preload consts; xor r9(acc); NEST; pop; mov rax,r9
+   ; (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim) -> native D-dim grid.
+   (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim)
+    (nif (emit (+ (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim) epilogue)) (ev lam) lam 1)
+   ; (jitfgrid src pxn pyn cxd cyd fvars updates testexpr cmpop bound lim) -> the 2D mandelbrot-class
+   ; delegate (the original signature) onto the general kernel: D=2 (px py), M=2 invariants (cx cy).
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim)
-    (nif (emit (+ (loopcode-grid pxn pyn cxd cyd fvars updates testexpr cmpop bound lim) epilogue)) (ev lam) lam 1)
+    (jitfgridn lam '(px py) (L pxn pyn) '(cx cy) (L cxd cyd) fvars updates testexpr cmpop bound lim)
    ; --- the AUTO-HOOK recognizer: read a float-recurrence GRID nest from SOURCE and extract the
    ;     jitfgrid structure, so ordinary interpreted code gets glazed transparently (no hand-call).
    ;     matches the shape: a mand recurrence (\ cx cy zx zy it (? (&& (< it LIM) (cmp TEST BOUND))
@@ -487,4 +522,4 @@
      ggrid '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
      ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid)
      (= 87130 (ng 0))))
- _ (puts "ai/glaze/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))
+ _ (say err "ai/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
