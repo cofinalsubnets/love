@@ -153,12 +153,57 @@ static lvm(lvm_sigfd)   { Sp[0] = ai_nil; return Ip++, Continue(); }
 static lvm(lvm_sigtake) { Sp[0] = ai_nil; return Ip++, Continue(); }
 #endif
 
+// --- foreground job control + cwd (the muscle a real shell needs) ---------------
+// (wait pid)   -> BLOCK until pid exits; its proc_status (exit / 128+sig), or -errno.
+//                 the foreground wait: spawn (inherited stdio) then wait, so a command
+//                 owns the terminal and the prompt returns only when it is done.
+// (chdir path) -> () ok | -errno | -1 misuse. the `cd` builtin.
+// (cwd _)      -> the current directory as a string, or () on failure. for the prompt.
+static lvm(lvm_waitpid) {
+ intptr_t pid = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
+ int st;
+ pid_t r;
+ do r = waitpid((pid_t) pid, &st, 0); while (r < 0 && errno == EINTR);
+ Sp[0] = (r < 0) ? putcharm(-errno) : putcharm(proc_status(st));
+ return Ip++, Continue(); }
+
+// copy an ai string into a NUL-terminated C buffer; false on non-string / too long.
+static bool str_cbuf(ai_word x, char *buf, size_t cap) {
+ if (!ai_strp(x)) return false;
+ struct ai_str *s = (struct ai_str*) x;
+ if ((size_t) s->len >= cap) return false;
+ memcpy(buf, s->bytes, s->len);
+ buf[s->len] = 0;
+ return true; }
+
+static lvm(lvm_chdir) {
+ char buf[4096];
+ if (!str_cbuf(Sp[0], buf, sizeof buf)) { Sp[0] = putcharm(-1); return Ip++, Continue(); }
+ Sp[0] = chdir(buf) ? putcharm(-errno) : ai_nil;
+ return Ip++, Continue(); }
+
+static lvm(lvm_cwd) {
+ char buf[4096];
+ if (!getcwd(buf, sizeof buf)) { Sp[0] = ai_nil; return Ip++, Continue(); }
+ Pack(g);
+ if (!ai_ok(g = ai_strof(g, buf))) return ghelp(g);
+ Unpack(g);
+ Sp[1] = Sp[0];                 // cwd string over the dummy arg
+ Sp += 1; Ip += 1;
+ return Continue(); }
+
 static union u const
   nif_spawn[]   = {{lvm_spawn}, {lvm_ret0}},
   nif_reapany[] = {{lvm_reapany}, {lvm_ret0}},
   nif_sigfd[]   = {{lvm_sigfd}, {lvm_ret0}},
-  nif_sigtake[] = {{lvm_sigtake}, {lvm_ret0}};
+  nif_sigtake[] = {{lvm_sigtake}, {lvm_ret0}},
+  nif_waitpid[] = {{lvm_waitpid}, {lvm_ret0}},
+  nif_chdir[]   = {{lvm_chdir}, {lvm_ret0}},
+  nif_cwd[]     = {{lvm_cwd}, {lvm_ret0}};
 AI_NIF("spawn", nif_spawn);
 AI_NIF("reap",  nif_reapany);
 AI_NIF("sigfd", nif_sigfd);
 AI_NIF("sigtake", nif_sigtake);
+AI_NIF("wait",  nif_waitpid);
+AI_NIF("chdir", nif_chdir);
+AI_NIF("cwd",   nif_cwd);
