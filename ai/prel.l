@@ -195,7 +195,7 @@
    (jot n) ((: (go i) (? (< i n) (link i (go (+ i 1))))) 0)
    (pen x) (? (star? x) (jot x) (prod x))     ; pen: the monadic `*` reading -- jot a star (0..n-1), else prod (internal, mopped)
    (drop n l) (? n (drop (- n 1) (cup l)) l)
-   (take n l) (? n (link (cap l) (take (- n 1) (cup l))))
+   (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(0)))
 (: (tap cl)
