@@ -11,16 +11,20 @@
 ;   hand   -- the straight-line residual => the ideal the specializer is chasing
 ;
 ; RESULT (host, 2026-06-22, 1e6 iters):
-;   interp 550 ms | pe 576 ms | hand 84 ms
-;   interpretation overhead interp/hand ~ 6.5x  -- THE PRIZE IS REAL AND LARGE
-;   unfold capture     interp/pe   ~ 1.0x  -- the unfold captures NONE of it (pe ~= interp, a hair slower)
-; WHY the unfold misses it: cprop folds the ARITHMETIC ops (opval = + - * ...) but NOT the structural
-;   navigation (cap/cup/caup/cuup) or id?, so it cannot fold (caup P) to a constant sub-AST and drive
-;   the recursion THROUGH the program; and cpcond was removed (wxc prunes downstream), so there is no
-;   cprop-level dispatch pruning to follow only the live branch. it specializes ~one level, then
-;   residualizes to full interpretation. CLOSING THE GAP (route #2) = add the structural ops to foldc
-;   AND restore a CORRECT cpcond so the unfold folds the dispatch and recurses on constant sub-ASTs.
-;   this benchmark is the yardstick for that work: pe should move from ~interp toward ~hand.
+;   interp ~610 ms | pe ~630 ms | hand ~84 ms
+;   interpretation overhead interp/hand ~ 7x  -- THE PRIZE IS REAL AND LARGE
+;   in-compiler capture interp/pe ~ 1.0x  -- cprop captures NONE of it (pe ~= interp)
+; WHY the in-compiler cprop misses it, and why we stopped chasing it HERE: cprop folds the ARITHMETIC
+;   ops (+ - * ...) but to drive recursion THROUGH a program it would also have to fold the structural
+;   navigation (cap/cup/caup/cuup, id?) over a static AST and PRUNE the dispatch cond, then UNFOLD the
+;   interpreter on each constant sub-AST. the bounded unfold that did the last step proved near-inert
+;   on this VM (cheap tail-threaded calls -> the residual's reconstruction cost cancels the saving),
+;   so it was dropped (ev.l cprop is now just fold + const-prop, which is why pe == interp here).
+; WHERE THE GAP IS CLOSED: the OFFLINE partial evaluator doc/proto/mix.l does exactly this -- static
+;   DATA folding (quote + cap/cup/caup/cuup/id?) and a multi-clause cond whose static tests collapse
+;   the dispatch -- and specializes ev1 to P down to the exact `hand` residual below, which then runs
+;   ~8x faster than interp (the 1st Futamura projection, measured). this benchmark is the yardstick;
+;   mix.l is where pe reaches ~hand.
 ;
 ; run:  out/host/ai doc/proto/interp-spec.l
 ((\ pd
@@ -40,8 +44,8 @@
      a0 (clock 0) _ (interp 0) a1 (clock 0) _ (pe 0) a2 (clock 0) _ (hand 0) a3 (clock 0)
      ti (- a1 a0) tp (- a2 a1) th (- a3 a2)
      _ (. (+ "interp (dynamic program):     " (+ (show ti) " ms\n")))
-     _ (. (+ "pe     (constant P, unfold):  " (+ (show tp) " ms\n")))
+     _ (. (+ "pe     (constant P, cprop):   " (+ (show tp) " ms\n")))
      _ (. (+ "hand   (ideal residual):      " (+ (show th) " ms\n")))
      _ (. (+ "interpretation overhead (interp/hand): x" (+ (show (// (* 100 ti) (+ 1 th))) "/100\n")))
-     (. (+ "unfold capture          (interp/pe):   x" (+ (show (// (* 100 ti) (+ 1 tp))) "/100\n")))))
+     (. (+ "in-compiler capture      (interp/pe):   x" (+ (show (// (* 100 ti) (+ 1 tp))) "/100\n")))))
  '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7)))

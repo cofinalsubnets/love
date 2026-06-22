@@ -199,90 +199,46 @@
            (napof v (cup x)) (link apx (link 1 x))
            (link apx (link 0 x))))))
    ; cprop: the partial-evaluation pre-pass. it threads a static VALUE env `se` (name . const-form)
-   ; AND a static FUNCTION env `fe` (name . lambda) and (1) propagates a constant-bound var to its
-   ; value, (2) FOLDS a pure-op call on constant args via the op's first-class nif (foldc -- NOT via
-   ; (book op): these ops are compiler-inlined, not runtime book keys, so (book '+) is not the nif),
-   ; and (3) bounded-UNFOLDS a call to an fe-bound local lambda (cpcall) when its static signature
-   ; strictly SHRINKS vs `seen` (a well-founded measure), under gensym HYGIENE (freshen), FUEL, and a
-   ; per-form structural SIZE CAP. it does NOT prune conds -- wxc does that, correctly, downstream.
-   ; runs before wx (pre-boxfix, pre-expansion); only an already-constant RHS propagates (a forward
-   ; ref / cell read never is -- letrec-safe); a non-constant rebind or a lambda param KILLS the name.
-   ; `uf` gates the unfold (the entry passes 1; pass 0 to land just constant-prop + folding).
+   ; and (1) propagates a constant-bound var to its value, (2) FOLDS a pure-op call on constant args
+   ; via the op's first-class nif (foldc -- NOT via (book op): these ops are compiler-inlined, not
+   ; runtime book keys, so (book '+) is not the nif). it does NOT prune conds (wxc does that,
+   ; correctly, downstream) and it does NOT unfold recursion: the in-compiler bounded-unfold proved
+   ; near-inert on this VM (cheap calls -> no measurable win; see doc/proto/interp-spec.l). true
+   ; interpreter specialization -- the 1st Futamura projection, ~8x on that yardstick -- lives in the
+   ; OFFLINE partial evaluator, doc/proto/mix.l, where static DATA folds too. cprop runs before wx
+   ; (pre-boxfix, pre-expansion); only an already-constant RHS propagates (a forward ref / cell read
+   ; never is -- letrec-safe); a non-constant rebind or a lambda param KILLS the name.
    (propk? v) (? (nom? v) 0 (atom? v) 1 (&& (id? (cap v) '\) (atom? (cuup v))) 1 0)   ; a constant FORM?
    (assq k se) (? (atom? se) 0 (id? k (caap se)) (cap se) (assq k (cup se)))
    (rmq k se) (? (atom? se) () (id? k (caap se)) (rmq k (cup se)) (link (cap se) (rmq k (cup se))))
    (strip ps se) (? (atom? ps) se (strip (cup ps) (rmq (cap ps) se)))                 ; kill all params
    (cnul? l) (! (two? l))                                                             ; end-of-spine (NOT net)
    (cbake v) (? (charm? v) v (L '\ v))                                                ; folded value -> source
-   (lamb? v) (&& (two? v) (id? (cap v) '\) (! (atom? (cuup v))))                      ; a real (non-quote) lambda
    (kval v) (? (atom? v) v (caup v))                                                  ; a const FORM -> its value
    (allk as) (? (cnul? as) 1 (? (propk? (cap as)) (allk (cup as)) 0))                 ; all args constant?
-   (lpar x) (cap (lp x))                                                              ; lambda params / body
-   (lbod x) (cup (lp x))
-   (csig as) (map (\ a (? (propk? a) (kval a) '_)) as)                                ; static signature (consts, '_ for dynamic)
-   (zipb ps as) (? (cnul? ps) () (link (cap ps) (link (cap as) (zipb (cup ps) (cup as)))))   ; -> a let binding-list
-   (ctake n l) (? (= n 0) () (link (cap l) (ctake (- n 1) (cup l))))
-   (cdrop n l) (? (= n 0) l (cdrop (- n 1) (cup l)))
-   (slot-m v) (? (id? v '_) 0 (whole? v) (+ 1 (abs v)) (atom? v) 1 (+ 1 (tally v)))   ; a slot's static weight
-   (measure s) (? (cnul? s) 0 (+ (slot-m (cap s)) (measure (cup s))))                 ; total static weight (the well-order)
-   (prior-m f sn) (? (cnul? sn) -1 (: e (cap sn) (? (id? (cap e) f) (cap (cup (cup e))) (prior-m f (cup sn)))))
-   gsc (tablet 0)                                                                     ; gensym counter (fresh per form)
-   (gsym u) (: n (peep gsc 'n 0) _ (pin gsc 'n (+ n 1)) (intern (+ "uq_" (show n))))
-   (flook k env) (? (cnul? env) 0 (id? k (caap env)) (caup (cap env)) (flook k (cup env)))   ; orig -> fresh, 0 if free
-   (pairup ks fs) (? (cnul? ks) () (link (L (cap ks) (cap fs)) (pairup (cup ks) (cup fs))))
-   (blet bs) (? (atom? (cup bs)) () (: nd (dsug (cap bs) (caup bs)) (link (cap nd) (blet (cuup bs)))))   ; a let's binder names
-   (flet bs env) (? (atom? bs) ()                                                      ; no trailing body (a body-less : ends after a pair)
-     (atom? (cup bs)) (L (freshen (cap bs) env))                                       ; lone body
-     (: nd (dsug (cap bs) (caup bs)) nm (cap nd) v (cup nd)
-        (link (flook nm env) (link (freshen v env) (flet (cuup bs) env)))))
-   (freshen x env) (?                                                                 ; capture-avoiding alpha-rename
-     (atom? x) (? (nom? x) (: f (flook x env) (? (id? f 0) x f)) x)                    ; bound -> fresh; free -> leave
-     (id? (cap x) '\) (? (atom? (cuup x)) x                                           ; (\ v) quote -> leave
-       (: ps (lpar x) fps (map gsym ps) env2 (cat (pairup ps fps) env)
-          (link '\ (cat fps (L (freshen (lbod x) env2))))))
-     (id? (cap x) ':) (: bs (cup x) nms (blet bs) fns (map gsym nms) env2 (cat (pairup nms fns) env)
-       (link ': (flet bs env2)))
-     (map (\ e (freshen e env)) x))
    opval (L (L '+ (+)) (L '- (-)) (L '* (*)) (L '// (//)) (L '% (%))                   ; pure ops -> first-class nif
             (L '= (=)) (L '< (<)) (L '<= (<=)) (L '> (>)) (L '>= (>=))
             (L '! (nil?)) (L 'nil? (nil?)))
    (inop k s) (? (cnul? s) 0 (id? k (caap s)) 1 (inop k (cup s)))                     ; is k a key of the op table?
    (opget h) (: e (assq h opval) (? (atom? e) 0 (caup e)))
    (foldc h as) (cbake (foldl (\ g a (g a)) (opget h) (map kval as)))                 ; apply the nif to the consts
-   fuel (tablet 0)                                                                    ; unfold budget (fresh per form)
-   (okfuel u) (: n (peep fuel 'n 0) (? (! n) 0 (: _ (pin fuel 'n (- n 1)) 1)))
-   csize (tablet 0)                                                                   ; per-form structural growth budget
-   (tsize x) (? (atom? x) 1 (+ (tsize (cap x)) (tsize (cup x))))
-   (cplam uf x se fe sn) (? (atom? (cuup x)) x                                        ; (\ v) quote -> leave
-    (: r (lp x) ps (cap r) (link '\ (cat ps (list (cprop uf (cup r) (strip ps se) (strip ps fe) sn))))))  ; params shadow
-   (cpbinds uf bs se fe sn) (?
+   (cplam x se) (? (atom? (cuup x)) x                                                 ; (\ v) quote -> leave
+    (: r (lp x) ps (cap r) (link '\ (cat ps (list (cprop (cup r) (strip ps se)))))))  ; params shadow
+   (cpbinds bs se) (?
     (atom? bs) bs
-    (atom? (cup bs)) (list (cprop uf (cap bs) se fe sn))                              ; the lone body
-    (: nd (dsug (cap bs) (caup bs)) nm (cap nd) v1 (cprop uf (cup nd) se fe sn)       ; desugar like wxb
+    (atom? (cup bs)) (list (cprop (cap bs) se))                                       ; the lone body
+    (: nd (dsug (cap bs) (caup bs)) nm (cap nd) v1 (cprop (cup nd) se)                ; desugar like wxb
        se2 (? (propk? v1) (link (list nm v1) (rmq nm se)) (rmq nm se))               ; extend or shadow se (consts)
-       fe2 (? (lamb? v1) (link (list nm v1) (rmq nm fe)) (rmq nm fe))                ; extend or shadow fe (local fns)
-       (link nm (link v1 (cpbinds uf (cuup bs) se2 fe2 sn)))))
-   (cpcall uf f lam as se fe sn) (: ps (lpar lam) np (tally ps) na (tally as) s (csig as) m (measure s) pm (prior-m f sn)
-    (? (< np na) (link f as)                                                          ; over-application -> residualize
-       (= m 0) (link f as)                                                            ; no static structure -> residualize
-       (&& (< -1 pm) (<= pm m)) (link f as)                                           ; measure didn't shrink -> residualize
-       (! (okfuel 0)) (link f as)                                                     ; out of fuel
-       (< (peep csize 0 0) (tsize (lbod lam))) (link f as)                            ; would bust the size budget
-       (: _ (pin csize 0 (- (peep csize 0 0) (tsize (lbod lam))))
-          l2 (freshen lam ()) p2 (lpar l2) b2 (lbod l2)                              ; HYGIENE: fresh binders
-          (? (= na np) (cprop uf (link ': (cat (zipb p2 as) (L b2))) se fe (link (L f s m) sn))             ; saturated: let+body
-             (cprop uf (link ': (cat (zipb (ctake na p2) as) (L (link '\ (cat (cdrop na p2) (L b2)))))) se fe (link (L f s m) sn))))))  ; partial: specialize the prefix
-   (cprop uf x se fe sn) (?
+       (link nm (link v1 (cpbinds (cuup bs) se2)))))
+   (cprop x se) (?
     (atom? x) (? (nom? x) (: e (assq x se) (? (atom? e) x (caup e))) x)               ; const-bound var -> value
-    (id? (cap x) '\) (cplam uf x se fe sn)
-    (id? (cap x) ':) (link ': (cpbinds uf (cup x) se fe sn))
-    (id? (cap x) '?) (link '? (map (\ e (cprop uf e se fe sn)) (cup x)))              ; no prune here -- wxc does it
-    (: h (cap x) as (map (\ e (cprop uf e se fe sn)) (cup x))
+    (id? (cap x) '\) (cplam x se)
+    (id? (cap x) ':) (link ': (cpbinds (cup x) se))
+    (id? (cap x) '?) (link '? (map (\ e (cprop e se)) (cup x)))                       ; no prune here -- wxc does it
+    (: h (cap x) as (map (\ e (cprop e se)) (cup x))
        (? (&& (nom? h) (inop h opval) (allk as)) (foldc h as)                         ; pure-op on consts -> fold
-          (: d (? (&& uf (nom? h)) (assq h fe) 0)
-             (? (atom? d) (link h as) (cpcall uf h (caup d) as se fe sn))))))         ; local-fn call -> maybe unfold
-   _ (pin fuel 'n 256) _ (pin gsc 'n 0) _ (pin csize 0 (tsize x))                     ; reset the per-form budgets
-   (wx (cprop 1 x () () ()) 0))
+          (link h as))))
+   (wx (cprop x ()) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
   ; nom? literal (the `()` a (\ _ ()) / failed parse / `('x) tail evaluates to).
   ; routing it to ava treats it as a free var and captures it as a SPURIOUS import:
