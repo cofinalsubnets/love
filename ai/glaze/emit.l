@@ -109,89 +109,99 @@
    (jitn lam) (: ps (init (cup lam))  body (last (cup lam))
                  (nif (emit (+ (cgn ps body 0) epilogue-mn)) (ev lam) lam (tally ps)))
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
-   ; --- RECURSIVE native (own the CALL TREE): a single-arg self-recursive arithmetic fn (\ n E),
-   ;     E := n | int | (op E E) | (cmp E E) | (? E E E) | (self E). The recursion STAYS NATIVE --
-   ;     `self` compiles to `call H` (a rel32 to the helper entry), n lives in rbx (saved per frame),
-   ;     the result in rax, spills on the machine stack. The OUTER reads Sp[0], calls H, putfixes (a
-   ;     result exceeding fixnum DEOPTS to the interp -> bignum). SOUND: every H arithmetic op carries
-   ;     a `jo -> OVF` (int64 overflow); OVF does `mov rsp,r12` (r12 = an anchor the OUTER set to the
-   ;     post-prologue rsp) to abandon ALL the native frames at once, restores the VM's rbx/r12, and
-   ;     tail-deopts to the interp fallback -- so a fn whose intermediate exceeds int64 (factorial 21+,
-   ;     fib 93+) is never WRONG, just interpreted. arity 1. x86-64 only.
+   ; --- RECURSIVE / MUTUALLY-RECURSIVE native (own a GROUP's CALL GRAPH): a set of first-order integer
+   ;     functions whose bodies are the arithmetic fragment  E := param | int | (op E E) | (cmp E E) |
+   ;     (// E E) | (% E E) | (bit E E) | (? E E E) | (g E..)  where g is ANY function of the group.
+   ;     EVERY call -- self OR sibling -- compiles to `call H_g` (a rel32 to that function's entry in
+   ;     the SAME buffer): the recursion AND the mutual recursion stay NATIVE, no interpreter per call
+   ;     (fib/tak are SINGLETON groups; even?/odd? a 2-fn group). Args pass on the machine stack; each H
+   ;     callee-saves its OWN k arg regs (rbx/r13/r14/r15, k<=4) -- a reg a deeper callee uses is saved
+   ;     by THAT callee, so a caller's args of ANY arity survive nested calls. ONE shared OVF handler
+   ;     lives in the entry's OUTER (r12 = its post-prologue rsp): every int +/-/* `jo`s there, a /,% by
+   ;     zero `jz`s there; OVF does `mov rsp,r12` to abandon ALL the native frames at once and tail-
+   ;     deopts to a faithful interpreted closure of the WHOLE group -- so an int64-exceeding
+   ;     intermediate (fib 93+, factorial 21+) is never WRONG, just interpreted. arity >=1, x86-64 only.
    (recop op) (? (= op '+) '(76 1 192) (= op '*) '(73 15 175 192) (= op '-) (asm (L '(73 41 192) '(76 137 192))) ())   ; add/imul/sub rax,r8
-   ; cgr: an expr over {v (the recursion var, in rbx) ; int ; self} -> rax. OVF = the abs offset of the
-   ; overflow handler (arith ops jo there); Hh = the helper entry (self calls there). off = abs offset.
-   (cgr v e off Hh OVF) (? (= e v) '(72 137 216)                         ; mov rax, rbx  (the recursion var)
-                           (whole? e) (asm (L '(72 184) (le8 e)))        ; movabs rax, e
-                           (two? e) (: op (cap e) a (caup e) b (caup (cup e))
-                              (? (= op 'self) (: ab (cgr v a off Hh OVF) cs (+ off (tally ab)) (asm (L ab '(232) (le4 (- Hh (+ cs 5))))))   ; arg->rax ; call H
-                                 (member? op '(+ - *)) (: ab (cgr v a off Hh OVF) po (+ off (tally ab)) bb (cgr v b (+ po 1) Hh OVF)
-                                    opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))   ; abs offset of the jo
-                                    (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6))))))   ; A;push;B;pop r8;op;jo OVF
-                                 (member? op '(< <= > >= =)) (: ab (cgr v a off Hh OVF) po (+ off (tally ab)) bb (cgr v b (+ po 1) Hh OVF)
-                                    (asm (L ab push-rax bb (cmpseq op))))
-                                 (= op '?) (: el (caup (cup (cup e))) tb (cgr v a off Hh OVF) thoff (+ off (+ (tally tb) 10)) thb (cgr v b thoff Hh OVF) eloff (+ thoff (+ (tally thb) 5)) elb (cgr v el eloff Hh OVF)
-                                    (asm (L tb '(72 131 248 0) '(15 142) (le4 (+ (tally thb) 5)) thb '(233) (le4 (tally elb)) elb)))   ; cmp rax,0; jle else; then; jmp end; else
-                                 ()))
-                           ())
-   ; (jitrec '(\ n E)) -- compile a single-arg self-recursive arithmetic closure to a native call tree.
-   ; OUTER+OVF+DEOPT is a fixed 64-byte prologue/epilogue (offsets below are computed once); H follows.
-   (jitrec lam) (: v (caup lam) body (caup (cup lam))
-                   p1 (asm (L '(72 139 1) '(72 209 248) '(65 84) '(83) '(73 137 228)))   ; mov rax,[rcx];sar;push r12;push rbx;mov r12,rsp  [12]
-                   p2 (asm (L '(91) '(65 92) '(72 1 192) '(113 5) '(233) (le4 22)         ; pop rbx;pop r12;add rax,rax;jno PUTOK(+5);jmp DEOPT
-                            '(72 131 200 1) '(72 137 1) '(72 131 198 16) '(72 139 6 255 224)   ; PUTOK: or rax,1;mov[rcx];add rsi,16;mov rax,[rsi];jmp
-                            '(76 137 228) '(91) '(65 92)                                   ; OVF: mov rsp,r12; pop rbx; pop r12
-                            deopt))                                                        ; DEOPT: tail-apply the interp fallback  [12]
-                   OVF (+ 17 (- (tally p2) 18)) Hh (+ 17 (tally p2))      ; OVF = the mov rsp,r12 (18 bytes before p2's end); Hh = right after DEOPT
-                   outer (asm (L p1 '(232) (le4 (- Hh 17)) p2))          ; call H (rel = Hh - 17)
-                   hbody (cgr v body (+ Hh 4) Hh OVF)
-                   hcode (asm (L '(83) '(72 137 195) hbody '(91) '(195))) ; H: push rbx; mov rbx,rax; BODY; pop rbx; ret
-                   fb (ev (L ': (L 'self v) body 'self))                  ; deopt fallback: a REAL recursive interp closure (self bound to itself)
-                   (nif (emit (asm (L outer hcode))) fb lam 1))           ; value[-1]=lam (self, for =/show); value[1]=fb (correct deopt)
-   ; --- MULTI-ARG recursion (jitrecn): k args (k<=4) in rbx/r13/r14/r15, r12 the OVF anchor. Args
-   ;     are PASSED ON THE MACHINE STACK and H saves/restores the arg regs per frame (callee-saved),
-   ;     so a caller's args survive across nested self-calls (tak makes three). Same OVF/deopt scheme
-   ;     as jitrec, but the deopt is deopt-mn (interp body) and the cell is arity-k (lvm_cur saturates).
+   (glook nm syms) (? (atom? syms) -1 (id? nm (caap syms)) (cuap syms) (glook nm (cup syms)))   ; group fn name -> its H offset (dotted (name . off); -1 if absent)
+   (gfind p l) (? (atom? l) () (p (cap l)) (cap l) (gfind p (cup l)))     ; first elt matching p
+   (gfilt p l) (? (atom? l) () (p (cap l)) (link (cap l) (gfilt p (cup l))) (gfilt p (cup l)))   ; keep elts matching p
+   ; cgg -- the GROUP arithmetic-fragment compiler (the WHOLE integer lane): an expr over {ps (this fn's
+   ; params, in arg regs rbx/r13/r14/r15) ; int ; group calls} -> rax. syms = the group's dotted (name .
+   ; offset) table (glook resolves a call's target, self or sibling, UNIFORMLY); off = the abs offset of
+   ; e; OVF = the abs offset of the shared overflow handler. A singleton group IS plain recursion.
+   (cgg syms ps e off OVF)
+    (? (member? e ps) (arx (argix e ps 0))                               ; a param -> its register
+       (whole? e) (asm (L '(72 184) (le8 e)))                            ; movabs rax, n
+       (two? e) (: op (cap e) a (caup e) b (caup (cup e)) Ho (glook op syms)
+          (? (< -1 Ho) (: as (cup e) ka (tally as) ab (gargs syms ps as off OVF) callabs (+ off (tally ab))   ; CALL g: push args; call H_g; pop them
+                          (asm (L ab '(232) (le4 (- Ho (+ callabs 5))) '(72 131 196) (list (* 8 ka)))))
+             (member? op '(+ - *)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
+                opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))                              ; abs offset of the jo
+                (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6))))))                        ; A;push;B;pop r8;op;jo OVF
+             (member? op '(// %)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
+                jza (+ (+ po 1) (+ (tally bb) 5))                                                             ; A;push;B(divisor);pop r8(=A);test;jz OVF;idiv
+                (asm (L ab push-rax bb '(65 88) '(72 133 192) '(15 132) (le4 (- OVF (+ jza 6)))
+                       '(82 80 76 137 192 72 153 72 247 60 36) (? (= op '%) '(72 137 208) ()) '(72 131 196 8 90))))
+             (member? op '(& | ^)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
+                (asm (L ab push-rax bb (bitseq op))))
+             (member? op '(< <= > >= =)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
+                (asm (L ab push-rax bb (cmpseq op))))
+             (= op '?) (: el (caup (cup (cup e))) tb (cgg syms ps a off OVF) thoff (+ off (+ (tally tb) 10)) thb (cgg syms ps b thoff OVF) eloff (+ thoff (+ (tally thb) 5)) elb (cgg syms ps el eloff OVF)
+                (asm (L tb '(72 131 248 0) '(15 142) (le4 (+ (tally thb) 5)) thb '(233) (le4 (tally elb)) elb)))   ; cmp rax,0; jle else; then; jmp end; else
+             ()))
+       ())
+   (gargs syms ps as off OVF) (? (atom? as) ()                           ; push each call arg left->right (offset-threaded)
+      (: ab (cgg syms ps (cap as) off OVF) nb (asm (L ab push-rax)) (asm (L nb (gargs syms ps (cup as) (+ off (tally nb)) OVF)))))
+   ; --- the ARG-REGISTER ABI (k<=4): args in rbx/r13/r14/r15, r12 the shared OVF anchor. A call passes
+   ;     args ON THE MACHINE STACK; the callee H saves/loads/restores its OWN k arg regs per frame, so a
+   ;     caller's args survive nested calls (tak nests three). The deopt is deopt-mn (interp body); the
+   ;     cell is arity-k (lvm_cur saturates the curry).
    (arx i)  (? (= i 0) '(72 137 216) (L 76 137 (+ 224 (* 8 i))))          ; mov rax, argreg_i  (rbx/r13/r14/r15)
    (pshr i) (? (= i 0) '(83) (L 65 (+ 84 i)))                             ; push argreg_i
    (popr i) (? (= i 0) '(91) (L 65 (+ 92 i)))                             ; pop  argreg_i
    (ldr i d) (? (= i 0) (asm (L '(72 139 156 36) (le4 d))) (asm (L (L 76 139 (+ 164 (* 8 i)) 36) (le4 d))))   ; mov argreg_i, [rsp+d]
-   (cgrn ps e off Hh OVF)
-    (? (member? e ps) (arx (argix e ps 0))                               ; a param -> its register
-       (whole? e) (asm (L '(72 184) (le8 e)))
-       (two? e) (: op (cap e) a (caup e) b (caup (cup e))
-          (? (= op 'self) (: as (cup e) ka (tally as) ab (rargs ps as off Hh OVF) callabs (+ off (tally ab))   ; push args; call H; pop args
-                             (asm (L ab '(232) (le4 (- Hh (+ callabs 5))) '(72 131 196) (list (* 8 ka)))))
-             (member? op '(+ - *)) (: ab (cgrn ps a off Hh OVF) po (+ off (tally ab)) bb (cgrn ps b (+ po 1) Hh OVF)
-                opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))
-                (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6))))))
-             (member? op '(< <= > >= =)) (: ab (cgrn ps a off Hh OVF) po (+ off (tally ab)) bb (cgrn ps b (+ po 1) Hh OVF)
-                (asm (L ab push-rax bb (cmpseq op))))
-             (= op '?) (: el (caup (cup (cup e))) tb (cgrn ps a off Hh OVF) thoff (+ off (+ (tally tb) 10)) thb (cgrn ps b thoff Hh OVF) eloff (+ thoff (+ (tally thb) 5)) elb (cgrn ps el eloff Hh OVF)
-                (asm (L tb '(72 131 248 0) '(15 142) (le4 (+ (tally thb) 5)) thb '(233) (le4 (tally elb)) elb)))
-             ()))
-       ())
-   (rargs ps as off Hh OVF) (? (atom? as) ()                             ; push each self-call arg (offset-threaded)
-      (: ab (cgrn ps (cap as) off Hh OVF) nb (asm (L ab push-rax)) (asm (L nb (rargs ps (cup as) (+ off (tally nb)) Hh OVF)))))
-   (jitrecn lam)
-    (: ps (init (cup lam)) body (last (cup lam)) k (tally ps)
-       saveargs (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k))                                    ; H: save the k arg regs
-       ldargs   (foldl (\ a i (+ a (ldr i (- (* 16 k) (* 8 i))))) () (rangeL 0 k))                ; H: load args from the stack
+   ; mkouter -- the entry's OUTER (prologue + putfix-epilogue + shared OVF handler + deopt-mn) for arity
+   ; k. The called H_entry sits RIGHT AFTER it (offset Lo = the OUTER's length), so jitgroup lays the
+   ; entry first among the H's. (This is the old single-fn outer, now factored out.) Returns (outer Aovf).
+   (mkouter k)
+    (: dpt (? (= k 1) deopt deopt-mn)                                                             ; arity 1 applies fb directly; >=2 enters its body past the lvm_cur
+       saveargs (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k))                                    ; save the k arg regs (callee-saved)
        restargs (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k))                        ; restore (reverse)
-       pushargs (foldl (\ a i (+ a (asm (L (fetch i) '(72 209 248) push-rax)))) () (rangeL 0 k))  ; OUTER: push Sp[0..k-1] untagged
+       pushargs (foldl (\ a i (+ a (asm (L (fetch i) '(72 209 248) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1] untagged
        s6 (asm (L '(72 131 196) (list (* 8 k))))  s10 (asm (L '(72 131 200 1) '(72 137 1) '(72 131 198 16) '(72 139 6 255 224)))
        Lr (tally restargs)
-       Acall (+ 2 (+ (tally saveargs) (+ 3 (tally pushargs))))   ; push r12(2)+saveargs+mov r12,rsp(3)+pushargs
-       Arest (+ Acall (+ 5 (tally s6)))  As8 (+ Arest Lr)  As9 (+ As8 2)  Ajmpend (+ As9 10)      ; ...call(5);s6; restores; pop r12(2); putfix
-       As10 Ajmpend  Aovf (+ As10 (tally s10))  Adeopt (+ Aovf (+ 3 (+ Lr 2)))  Hh (+ Adeopt 13)
-       callb (asm (L '(232) (le4 (- Hh (+ Acall 5)))))
+       Acall (+ 2 (+ (tally saveargs) (+ 3 (tally pushargs))))
+       Arest (+ Acall (+ 5 (tally s6)))  As8 (+ Arest Lr)  As9 (+ As8 2)  Ajmpend (+ As9 10)
+       As10 Ajmpend  Aovf (+ As10 (tally s10))  Adeopt (+ Aovf (+ 3 (+ Lr 2)))  Hh (+ Adeopt (tally dpt))
+       callb (asm (L '(232) (le4 (- Hh (+ Acall 5)))))                                            ; call H_entry (right after the OUTER)
        s9 (asm (L '(72 1 192) '(113 5) '(233) (le4 (- Adeopt Ajmpend))))                          ; add rax,rax; jno PUTOK(+5); jmp DEOPT
        s11 (asm (L '(76 137 228) restargs '(65 92)))                                              ; OVF: mov rsp,r12; restores; pop r12
-       outer (asm (L '(65 84) saveargs '(73 137 228) pushargs callb s6 restargs '(65 92) s9 s10 s11 deopt-mn))   ; push r12;saveargs;mov r12,rsp;...
-       hbody (cgrn ps body (+ Hh (+ (tally saveargs) (tally ldargs))) Hh Aovf)
-       hcode (asm (L saveargs ldargs hbody restargs '(195)))                                      ; H: save; load; BODY; restore; ret
-       fb (ev (link ': (link (link 'self ps) (link body (link 'self ())))))                       ; (: (self a..) body self)
-       (nif (emit (asm (L outer hcode))) fb lam k))
+       (L (asm (L '(65 84) saveargs '(73 137 228) pushargs callb s6 restargs '(65 92) s9 s10 s11 dpt)) Aovf))
+   ; jitgroup -- compile a GROUP of mutually-recursive integer fns (each a dotted (nameform . body)) to
+   ; native, exposing `entry` as the applicable value (its arity). Layout: the entry's OUTER, then
+   ; H_entry, then the other H's, in ONE buffer. TWO passes -- measure each H body's length (offset-
+   ; INDEPENDENT: a call rel32 is 5 bytes whatever its target), compute every H's offset, then emit with
+   ; the real (name . offset) syms so every self/sibling call resolves. The deopt fallback is the WHOLE
+   ; group as an interpreted letrec (mutual recursion intact) -> a faithful, never-wrong slow path.
+   (jitgroup defs entry)
+    (: info (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d) (- (tally nf) 1)))) defs)   ; (name params body arity)
+       efn  (gfind (\ f (id? (cap f) entry)) info)
+       ord  (link efn (gfilt (\ f (! (id? (cap f) entry))) info))                            ; entry FIRST (H_entry sits at Lo)
+       OU (mkouter (nthl efn 3)) outer (cap OU) Aovf (caup OU) Lo (tally outer)
+       sa (\ k (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k)))
+       ld (\ k (foldl (\ a i (+ a (ldr i (- (* 16 k) (* 8 i))))) () (rangeL 0 k)))
+       re (\ k (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k)))
+       dummy (map (\ f (link (cap f) 0)) ord)                                                ; membership-only syms (pass 1; offsets unused)
+       rows (map (\ f (: k (nthl f 3) (cat f (L (sa k) (ld k) (re k) (tally (cgg dummy (nthl f 1) (nthl f 2) 0 Aovf)))))) ord)   ; +sa +ld +re +bodylen
+       hlen (map (\ r (+ (tally (nthl r 4)) (+ (tally (nthl r 5)) (+ (nthl r 7) (+ (tally (nthl r 6)) 1))))) rows)   ; sa+ld+body+re+ret
+       offs ((: (go acc hs) (? (atom? hs) () (link acc (go (+ acc (cap hs)) (cup hs))))) Lo hlen)
+       syms (map2 (\ r o (link (cap r) o)) rows offs)                                         ; dotted (name . offset)
+       Hs (map2 (\ r o (: s (nthl r 4) l (nthl r 5)
+                          (asm (L s l (cgg syms (nthl r 1) (nthl r 2) (+ o (+ (tally s) (tally l))) Aovf) (nthl r 6) '(195))))) rows offs)   ; H: save; load; BODY; restore; ret
+       lr (\ ds (? (atom? ds) (L entry) (: d (cap ds) (link (cap d) (link (cup d) (lr (cup ds)))))))   ; defs -> (: (n p..) body .. entry)
+       fb (ev (link ': (lr defs)))                                                            ; interp the WHOLE group, yield the entry closure
+       elam (link '\ (cat (nthl efn 1) (L (nthl efn 2))))                                     ; the entry's source lambda (value[-1], =/show)
+       (nif (emit (asm (link outer Hs))) fb elam (nthl efn 3)))
    ; --- counted fold loop: acc = (FOLD over cv<n of body(cv)), cv the counter, limit
    ; at Sp[0]. r9=n r10=cv r11=acc. FOLD is a (op . init) -- + folds from 0, * from 1 --
    ; and cmp is the loop test's comparison (the loop runs while (cmp cv n)). offsets are
@@ -549,6 +559,24 @@
   (: mk (jit2 '(\ n x (+ x n)))  a5 (mk 5)  a7 (mk 7)
      (&& (15 = (a5 10)) (17 = (a7 10)) ('(6 7 8) = (map a5 '(1 2 3)))                 ; native captured closure, composes
          (8000000000000000000 = ((mk 4000000000000000000) 4000000000000000000))))    ; ... and deopts through the capture
+  ; --- GROUP recursion (jitgroup): self + multi-arg + MUTUAL, native == interp, overflow -> bignum ---
+  (: gfib (jitgroup (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib)
+     (&& (lit? gfib) (75025 = (gfib 25))
+         (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25) (gfib 25))
+         (gfib = (jitgroup (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib))))   ; two natives, same source -> = (cache soundness)
+  (: gtak (jitgroup (L (link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))) 'tak)
+     (&& (7 = (gtak 18 12 6)) (7 = ((gtak 18 12) 6)) (7 = ((gtak 18) 12 6))))            ; nested self-calls; curries at any split
+  ; MUTUAL recursion: evn/odn cross-call -- both compiled into ONE buffer, sibling calls native
+  (: geo (jitgroup (L (link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))) 'evn)
+     god (jitgroup (L (link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))) 'odn)
+     (&& (1 = (geo 10)) (0 = (geo 7)) (1 = (geo 0)) (1 = (geo 100))                      ; entry=evn
+         (0 = (god 10)) (1 = (god 7))))                                                  ; entry=odn (the other entry of the same group)
+  ; overflow in a singleton group deopts to the interp fallback -> exact bignum (2^70)
+  (: gp2 (jitgroup (L (link '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))) 'p2)
+     (= (ev '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))) (gp2 70)))
+  ; the // and % integer ops in the GROUP lane (trial-division residue), with /-by-0 deopt
+  (: gmod (jitgroup (L (link '(r n d) '(% n d))) 'r) (&& (1 = (gmod 10 3)) (0 = (gmod 12 4)) (= (% 7 0) (gmod 7 0))))
+  (: gdiv (jitgroup (L (link '(q n d) '(// n d))) 'q) (&& (3 = (gdiv 10 3)) (-3 = (gdiv -10 3))))
   ; --- added coverage: setcc <=/>/>=/=, multi-arg (cgn) %/&/|/cmp/?, *-fold loop, //-by-0 deopt ---
   ; comparison RESULT codes -- only `<` reached a setcc before, 4 of 5 opcodes were dark
   (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))            ; setcc <=

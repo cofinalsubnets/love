@@ -153,34 +153,46 @@
     (? (atom? (cup bs)) bs
        (: nm (cap bs) bd (caup bs)
           (link nm (link (? (&& (two? nm) (id? (cap nm) outernm)) (L ng 0) bd) (anat-rebind (cuup bs) outernm ng)))))
-   ; --- a RECURSIVE ARITHMETIC function: a 1-arg def (name v) BODY over {v ; int ; (op E E) ;
-   ; (cmp E E) ; (? E E E) ; (name E) -- self-calls}. autorec rewrites the binding to a native CALL
-   ; TREE (jitrec, emit.l) -- the recursion stays native, no interpreter per call. fib is the
-   ; canonical case. Returns the form UNCHANGED if no such def fits (list/other recursion passes
-   ; through). ⚠ x86-64.
-   (recok? nm ps e) (? (member? e ps) 1 (whole? e) 1
-                       (two? e) (: op (cap e)
-                          (? (id? op nm)                       (&& (= (tally (cup e)) (tally ps)) (foldl (\ a x (&& a (recok? nm ps x))) 1 (cup e)))   ; self-call: arity matches, all args ok
-                             (member? op '(+ - * < <= > >= =)) (&& (= 3 (tally e)) (recok? nm ps (caup e)) (recok? nm ps (caup (cup e))))
-                             (id? op '?)                       (&& (= 4 (tally e)) (recok? nm ps (caup e)) (recok? nm ps (caup (cup e))) (recok? nm ps (caup (cup (cup e)))))
-                             0))
-                       0)
-   (hasself? nm e) (? (two? e) (? (id? (cap e) nm) 1 (afind (\ x (hasself? nm x)) (cup e))) 0)   ; does e make a self-call?
-   (subst-rec e nm) (? (two? e) (? (id? (cap e) nm) (link 'self (map (\ x (subst-rec x nm)) (cup e))) (map (\ x (subst-rec x nm)) e)) e)   ; (nm E) -> (self E)
-   (rec-rebind bs nm ng) (? (atom? (cup bs)) bs
-                            (: nf (cap bs) bd (caup bs)
-                               (? (&& (two? nf) (id? (cap nf) nm)) (link nm (link ng (rec-rebind (cuup bs) nm ng)))   ; (name v) BODY -> name <native>
-                                  (link nf (link bd (rec-rebind (cuup bs) nm ng))))))
-   (autorec form)
+   ; --- a GROUP of mutually-recursive ARITHMETIC functions in a `:` -- each (name p..) BODY with BODY
+   ; in the integer fragment `groupok?` accepts: param | int | (op E E) | (cmp E E) | (? E E E) | (g E..)
+   ; where g is ANY function OF THE GROUP (self OR sibling) of matching arity. autogroup finds the
+   ; maximal CLOSED such subset (a fixpoint: a fn that calls OUT of the fragment -- into link/cap, a float
+   ; const, or an interpreted helper -- drops out, taking its callers with it), then rewrites EACH group
+   ; binding to its OWN native (jitgroup, emit.l), so every reference -- from the `:` body OR an
+   ; interpreted sibling -- resolves to native, while the calls AMONG the group stay native inside the
+   ; buffer. fib/tak are SINGLETON groups; even?/odd? a 2-fn group. `groupok?` is the standalone fragment
+   ; predicate (the futamura `mix` pass can reuse it as its "residual is ground arithmetic" stop oracle).
+   ; Returns the form UNCHANGED if nothing fits (lists/floats/other recursion pass through). ⚠ x86-64.
+   (clook2 nm al) (? (atom? al) -1 (id? nm (caap al)) (caup (cap al)) (clook2 nm (cup al)))   ; (name arity) alist -> arity (-1 absent)
+   (groupok? cands ps e)                                                                      ; is e in the fragment over cands (a (name arity) list)?
+    (? (member? e ps) 1  (whole? e) 1
+       (two? e) (: op (cap e) ar (clook2 op cands)
+          (? (< -1 ar)                                  (&& (= (tally (cup e)) ar) (foldl (\ a x (&& a (groupok? cands ps x))) 1 (cup e)))   ; call to a group fn: arity ok, args ok
+             (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (= 3 (tally e)) (groupok? cands ps (caup e)) (groupok? cands ps (caup (cup e))))
+             (id? op '?)                                  (&& (= 4 (tally e)) (groupok? cands ps (caup e)) (groupok? cands ps (caup (cup e))) (groupok? cands ps (caup (cup (cup e)))))
+             0))
+       0)
+   (grpok-1 fns c cands) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns) (groupok? cands (cup (cap p)) (cup p)))   ; candidate c's body ok over cands?
+   (grpfix fns cands) (: keep (afilter (\ c (grpok-1 fns c cands)) cands)                     ; drop fns that fail; iterate to a fixpoint
+                         (? (= (tally keep) (tally cands)) keep (grpfix fns keep)))
+   (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
+      (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
+         (link (? hit (cap nf) nf)                                                            ; drop the (name p..) define-sugar -> a PLAIN binding
+               (link (? hit (jitgroup gdefs (cap nf)) val)                                    ; ... name <native>, so it isn't re-wrapped in (\ p ..)
+                     (rewrite-bindings (cuup bl) gnames gdefs)))))
+   (autogroup form)
     (? (! (two? form)) form
        (! (id? (cap form) ':)) form
        (atom? (cup form)) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed)
-          rp (afind (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (recok? (cap nf) (cup nf) (cup p)) (hasself? (cap nf) (cup p))))) pairs)   ; 1..4 args
-          (? (! (two? rp)) form
-             (: nm (cap (cap rp)) ps (cup (cap rp)) k (tally ps) sl (subst-rec (cup rp) nm)   ; self-converted body
-                ng (? (= k 1) (jitrec (L '\ (cap ps) sl)) (jitrecn (link '\ (cat ps (list sl)))))   ; 1-arg fast path / multi-arg
-                (? (lit? ng) (link ': (rec-rebind (cup form) nm ng)) form)))))
+          fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all symp (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
+          (? (! (two? fns)) form                                                             ; no candidate functions
+             (: armap (map (\ p (L (cap (cap p)) (- (tally (cap p)) 1))) fns)                 ; (name arity) candidates
+                grp (grpfix fns armap)                                                        ; the closed glazeable subset
+                (? (atom? grp) form                                                           ; nothing survives the fixpoint
+                   (: gnames (map cap grp)
+                      gdefs (afilter (\ p (member? (cap (cap p)) gnames)) fns)                ; the (nameform . body) defs of the group
+                      (link ': (rewrite-bindings (cup form) gnames gdefs))))))))              ; each group binding -> its native
    (autonat form)
     (? (! (two? form)) form
        (! (id? (cap form) ':)) form
@@ -229,7 +241,7 @@
                      (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
                         (: ln (loopinfo-n e)
                            (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
-                              (base-ev (autorec (autonat e))))))))    ; fall-through: glaze a float-grid nest / a recursive-arith fn if either fits, else interpret
+                              (base-ev (autogroup (autonat e))))))))    ; fall-through: glaze a float-grid nest / a mutually-recursive arith group if either fits, else interpret
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
@@ -237,28 +249,28 @@
     (((base-ev '(\ x (+ (* x 9) 4))) 11) = ((ev '(\ x (+ (* x 9) 4))) 11))      ; native leaf == interp (catches njit codegen regressions)
     (: ny (ev '(\ y (+ y 1))) (&& (6 = (ny 5)) ((\ y (+ y 1)) = ny)))   ; arity-1 leaf, non-x param, auto-natived
     (3 = ((ev '(\ x (cap x))) '(3 4)))                         ; non-qualifying -> interpreter
-    (6 = (ev '(+ 1 2 3)))                                      ; non-lambda forms unaffected
+    ((base-ev '(+ 1 2 3)) = (ev '(+ 1 2 3)))                   ; non-lambda forms unaffected (ev == base-ev; curried + nets 27, not 6)
     (9000000000000000000 = ((ev '(\ x (* x x))) 3000000000))   ; overflow deopts -> bignum
     (: ab (ev '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7))))   ; conditional leaf auto-natived
     ; LOOP auto-detected -> native counted loop, =-identical + correct
     (: L1 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0))
        f  (ev L1)
-       (&& (= f (ev L1)) (3496500 = (f 1000)) (lit? (loopinfo L1))))
+       (&& (= f (ev L1)) (3496500 = (f 1000)) (two? (loopinfo L1))))
     ; LOOP with a conditional body (sum i for i<50, capped) auto-detected
     (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
        h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
-       (&& (lit? (loopinfo L2)) (= c (h 1000))))
+       (&& (two? (loopinfo L2)) (= c (h 1000))))
     ; GENERALIZED loop -- a PRODUCT fold (op=*, init 1): n! = prod_{i<n}(i+1)
     (: P '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
        f (ev P)  fi ((: (go i a) (? (< i 10) (go (+ i 1) (* a (+ i 1))) a)) 0 1)
-       (&& (lit? (loopinfo P)) (3628800 = (f 10)) (= fi (f 10)) (= (ev P) (ev P))
+       (&& (two? (loopinfo P)) (3628800 = (f 10)) (= fi (f 10)) (= (ev P) (ev P))
            (15511210043330985984000000 = (f 25))))             ; overflow -> deopt -> bignum (transparent)
     ; GENERALIZED loop -- a <= comparison: sum_{i<=n} i
     (: Q '(\ n ((: (go i a) (? (<= i n) (go (+ i 1) (+ a i)) a)) 0 0))
-       g (ev Q)  (&& (lit? (loopinfo Q)) (55 = (g 10))))        ; 0+1+..+10 = 55
+       g (ev Q)  (&& (two? (loopinfo Q)) (55 = (g 10))))        ; 0+1+..+10 = 55
     ; N-VARIABLE loop auto-detected: iterative fib (i,a,b -- updates b and a+b)
     (: F '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ a b)) a)) 0 0 1))
-       nf (ev F)  (&& (lit? (loopinfo-n F)) (832040 = (nf 30)) (= (ev F) (ev F))   ; fib(30)=832040, native+transparent
+       nf (ev F)  (&& (two? (loopinfo-n F)) (832040 = (nf 30)) (= (ev F) (ev F))   ; fib(30)=832040, native+transparent
                       (4660046610375530309 = (nf 91))))                            ; fib(91) -> deopt -> bignum
     (id? (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
     (id? (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
@@ -292,10 +304,18 @@
     ; RECURSIVE ARITHMETIC: naive fib auto-glazed to a native call tree -- native == interp, and an
     ; int64-overflowing recursion (pow2) deopts to the interp fallback -> the exact bignum (sound)
     (: rf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 25))
-       (&& !(id? (autorec rf) rf) (= 75025 (ev rf)) (= (base-ev rf) (ev rf))))
+       (&& !(id? (autogroup rf) rf) (= 75025 (ev rf)) (= (base-ev rf) (ev rf))))
     (: rp '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))
        (= (base-ev rp) (ev rp)))                               ; 2^70 overflows int64 in H -> OVF deopt -> bignum
     ; MULTI-ARG recursion: tak (3 args, nested self-calls -- args survive on the machine stack) == interp
     (: rt '(: (tak x y z) (? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z) (tak 18 12 6))
-       (&& !(id? (autorec rt) rt) (= 7 (ev rt)) (= (base-ev rt) (ev rt)))))
- _ (say err "ai/glaze/auto: ev auto-natives qualifying closures + counted loops + D-dim float grids + recursive-arith call trees (transparent)\n"))
+       (&& !(id? (autogroup rt) rt) (= 7 (ev rt)) (= (base-ev rt) (ev rt))))
+    ; MUTUAL recursion: evn/odn cross-call -- BOTH bindings glazed, sibling calls native inside one
+    ; buffer; the `:` body drives both. The systematic win over the old per-fn autorec: a closed call
+    ; GRAPH, not just self-recursion.
+    (: rm '(: (evn n) (? (= n 0) 1 (odn (- n 1))) (odn n) (? (= n 0) 0 (evn (- n 1))) (L (evn 100) (odn 100) (evn 7)))
+       (&& !(id? (autogroup rm) rm) ('(1 0 0) = (ev rm)) (= (base-ev rm) (ev rm))))
+    ; a fn that calls OUT of the fragment (into `link`) drops the whole group -> form unchanged, interpreted
+    (: ro '(: (build n) (? (< n 1) () (link n (build (- n 1)))) (build 3))
+       (&& (id? (autogroup ro) ro) ('(3 2 1) = (ev ro)))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
+ _ (say err "ai/glaze/auto: ev auto-natives qualifying closures + counted loops + D-dim float grids + mutually-recursive arith groups (transparent)\n"))
