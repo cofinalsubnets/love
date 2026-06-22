@@ -198,7 +198,31 @@
         (? hd (hd x)
            (napof v (cup x)) (link apx (link 1 x))
            (link apx (link 0 x))))))
-   (wx x 0))
+   ; cprop: a CONSTANT-PROPAGATION pre-pass (phase 1). it threads a static env (name . const-form)
+   ; and replaces a constant-bound variable ref with its value, so a test gated on a constant
+   ; binding folds and prunes (with the fold + cst above). runs before wx, so it sees pre-boxfix
+   ; `:` and pre-expansion source. only an already-constant RHS propagates (a forward ref / cell
+   ; read never is -- letrec-safe); a non-constant rebind or a lambda param KILLS the name (the
+   ; sequence law + shadowing). a propagated constant later folds its uses, the rest is untouched.
+   (propk? v) (? (nom? v) 0 (atom? v) 1 (&& (id? (cap v) '\) (atom? (cuup v))) 1 0)   ; a constant FORM?
+   (assq k se) (? (atom? se) 0 (id? k (caap se)) (cap se) (assq k (cup se)))
+   (rmq k se) (? (atom? se) () (id? k (caap se)) (rmq k (cup se)) (link (cap se) (rmq k (cup se))))
+   (strip ps se) (? (atom? ps) se (strip (cup ps) (rmq (cap ps) se)))                 ; kill all params
+   (cplam x se) (? (atom? (cuup x)) x                                                  ; (\ v) quote -> leave
+    (: r (lp x) ps (cap r) (link '\ (cat ps (list (cprop (cup r) (strip ps se)))))))  ; params shadow
+   (cpbinds bs se) (?
+    (atom? bs) bs
+    (atom? (cup bs)) (list (cprop (cap bs) se))                                        ; the lone body
+    (: nd (dsug (cap bs) (caup bs)) nm (cap nd) v1 (cprop (cup nd) se)                 ; desugar like wxb
+       se2 (? (propk? v1) (link (list nm v1) (rmq nm se)) (rmq nm se))                 ; extend or shadow
+       (link nm (link v1 (cpbinds (cuup bs) se2)))))
+   (cprop x se) (?
+    (atom? x) (? (nom? x) (: e (assq x se) (? (atom? e) x (caup e))) x)               ; const-bound var -> value
+    (id? (cap x) '\) (cplam x se)
+    (id? (cap x) ':) (link ': (cpbinds (cup x) se))
+    (id? (cap x) '?) (link '? (map (\ e (cprop e se)) (cup x)))
+    (map (\ e (cprop e se)) x))                                                        ; a call: recurse all
+   (wx (cprop x ()) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
   ; nom? literal (the `()` a (\ _ ()) / failed parse / `('x) tail evaluates to).
   ; routing it to ava treats it as a free var and captures it as a SPURIOUS import:
