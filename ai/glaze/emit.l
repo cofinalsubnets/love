@@ -165,6 +165,88 @@
    ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native.
    (jitloop-n lam vars updates test result inits)
     (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (ev lam) lam 1)
+   ; --- FLOAT lane (SSE) -- unboxed doubles in xmm ------------------------------
+   ; the LuaJIT lever: keep float values in registers, never boxed. xmm0 is the float
+   ; accumulator; a nested operand spills to the machine stack (movsd [rsp]). peek is
+   ; mopped, so a float CONSTANT is materialized arithmetically -- fbits computes its
+   ; IEEE-754 bits (the 52-bit mantissa makes frac*2^52 EXACT, no rounding). LANE LAW:
+   ; the float lane carries NO overflow guard (doubles saturate to inf, never promote
+   ; to bignum); only the INTEGER lane keeps the jno->deopt that preserves bignum
+   ; promotion. this first cut: a float PREDICATE leaf (\ x (cmp <fexpr> <fexpr>)) over
+   ; a FIXNUM arg -> 0/1 -- no gem args (deferred: needs the lvm_flo type guard), no
+   ; float result (deferred: needs a Have-checked box). a non-fixnum arg DEOPTS (fxv).
+   (fbits x)                                                          ; finite double -> its IEEE-754 u64 bits
+    (? (= x 0.0) 0
+       (: s (? (< x 0.0) 1 0) ax (? (< x 0.0) (- 0.0 x) x)
+          eu ((: (go e) (? (<= ((+ e 1) 2.0) ax) (go (+ e 1)) e)) (int (/ (log ax) (log 2.0))))   ; raise (log error)
+          e  ((: (go e) (? (< ax (e 2.0)) (go (- e 1)) e)) eu)                                     ; lower
+          (+ (* s 9223372036854775808) (+ (* (+ e 1023) 4503599627370496)
+             (int (* (- (/ ax (e 2.0)) 1.0) 4503599627370496.0))))))
+   xpush '(72 131 236 8 242 15 17 4 36)                              ; sub rsp,8 ; movsd [rsp],xmm0
+   xpop1 '(242 15 16 12 36 72 131 196 8)                             ; movsd xmm1,[rsp] ; add rsp,8
+   (fconst c) (+ '(72 184) (+ (le8 (fbits c)) '(102 72 15 110 192))) ; movabs rax,bits ; movq xmm0,rax
+   (fbinop op) (? (= op '+) '(242 15 88 193)                         ; addsd xmm0,xmm1
+                  (= op '*) '(242 15 89 193)                         ; mulsd xmm0,xmm1
+                  (= op '-) '(242 15 92 200 242 15 16 193)           ; subsd xmm1,xmm0 ; movsd xmm0,xmm1
+                  (= op '/) '(242 15 94 200 242 15 16 193)           ; divsd xmm1,xmm0 ; movsd xmm0,xmm1
+                  ())
+   (fsetcc op) (? (= op '<) '(15 146 192) (= op '<=) '(15 150 192) (= op '>) '(15 151 192)
+                  (= op '>=) '(15 147 192) (= op '=) '(15 148 192) ())   ; setb/setbe/seta/setae/sete al
+   ; cgf: a FLOAT subexpr over {x (the fixnum param -> cvtsi2sd) ; numeric consts} -> xmm0
+   (cgf v e d) (? (= e v)   (+ (fxv 0 d) '(242 72 15 42 192))        ; param: fixnum-guarded load + cvtsi2sd
+                  (gem? e)  (fconst e)                               ; a float constant
+                  (whole? e)(fconst (+ e 0.0))                       ; an int constant -> promote to double
+                  (two? e) (: op (cap e) a (caup e) b (caup (cup e))
+                     (? (member? op '(+ - * /)) (+ (cgf v a d) (+ xpush (+ (cgf v b (+ d 1)) (+ xpop1 (fbinop op))))) ()))
+                  ())
+   ; cgfp: a float PREDICATE (cmp A B) -> rax 0/1 (A->xmm1, B->xmm0; ucomisd)
+   (cgfp v e d) (: op (cap e) a (caup e) b (caup (cup e))
+      (+ (cgf v a d) (+ xpush (+ (cgf v b (+ d 1)) (+ xpop1
+         (+ '(102 15 46 200) (+ (fsetcc op) '(72 15 182 192))))))))   ; ucomisd xmm0,xmm1 ; setcc al ; movzx rax,al
+   ; (jitf '(\ x (cmp <fexpr> <fexpr>))) -- a float predicate over a fixnum arg -> native 0/1.
+   (jitf lam) (: v (caup lam) (nif (emit (+ (cgfp v (caup (cup lam)) 0) epilogue)) (ev lam) lam 1))
+   ; --- FLOAT RECURRENCE LOOP OWNER (the mandelbrot escape-loop class) ----------
+   ; owns a numeric escape loop end to end: FIXNUM inputs (pixel coords) -> derived
+   ; floats (computed once) -> a float recurrence over loop-vars in xmm8.. with an
+   ; INTEGER counter, a compound escape test (counter < lim AND a float predicate),
+   ; returning the COUNT (an integer -- no box). this is where owning the whole loop
+   ; pays (vs a per-pixel leaf that re-boxes + re-crosses the boundary). cgF is the
+   ; float-expr compiler over a multi-register env: float locals in xmm8.. (fload),
+   ; int params via cvtsi2sd, constants via fconst. the counter is bounded (it<lim)
+   ; so it needs no overflow guard; an int ACCUMULATOR would (the lane law) -- the
+   ; count here can't overflow a fixnum. xmm0/xmm1 + [rsp] stay the float scratch.
+   (fload j)  (+ '(242 65 15 16) (list (+ 192 j)))                   ; movsd xmm0, xmm(8+j)
+   (fstore j) (+ '(242 68 15 16) (list (+ 192 (* 8 j))))             ; movsd xmm(8+j), xmm0
+   (fzero j)  (+ '(102 69 15 87) (list (+ 192 (* 9 j))))             ; xorpd xmm(8+j), xmm(8+j)
+   (fpop j)   (+ '(242 68 15 16) (+ (list (+ 4 (* 8 j))) '(36 72 131 196 8)))   ; movsd xmm(8+j),[rsp] ; add rsp,8
+   (alook k al i) (? (atom? al) -1 (= k (cap al)) i (alook k (cup al) (+ i 1)))
+   (cgF ie fe e d) (? (gem? e)   (fconst e)
+                      (whole? e) (fconst (+ e 0.0))
+                      (atom? e)  (: fj (alook e fe 0)
+                         (? (< -1 fj) (fload fj)
+                            (: ai (alook e ie 0) (? (< -1 ai) (+ (fxv ai d) '(242 72 15 42 192)) ()))))   ; int param -> cvtsi2sd
+                      (two? e) (: op (cap e) a (caup e) b (caup (cup e))
+                         (? (member? op '(+ - * /)) (+ (cgF ie fe a d) (+ xpush (+ (cgF ie fe b (+ d 1)) (+ xpop1 (fbinop op))))) ()))
+                      ())
+   (ucmp-exit op) (? (= op '<=) '(15 135) (= op '<) '(15 131) (= op '>=) '(15 134) (= op '>) '(15 130) ())   ; EXIT jcc = inverse of the continue cmp
+   (loopcode-f ips finit fvars updates testexpr cmpop bound lim)
+    (: nf (tally finit)  fenv (cat (map cap finit) fvars)
+       pre-d ((: (go j fs) (? (two? fs) (+ (+ (cgF ips fenv (caup (cap fs)) 0) (fstore j)) (go (+ j 1) (cup fs))) ())) 0 finit)
+       pre-z ((: (go j) (? (< j (tally fvars)) (+ (fzero (+ nf j)) (go (+ j 1))) ())) 0)
+       pre   (+ pre-d (+ pre-z '(77 49 192)))                        ; xor r8,r8  (counter it = 0)
+       tint  (+ '(73 131 248) (list lim))                           ; cmp r8, lim
+       tflt  (+ (cgF ips fenv testexpr 0) (+ xpush (+ (fconst bound) (+ xpop1 '(102 15 46 200)))))   ; mag ; bound ; ucomisd xmm0,xmm1
+       ups   ((: (go us) (? (two? us) (+ (+ (cgF ips fenv (cap us) 0) xpush) (go (cup us))) ())) updates)
+       pops  ((: (go j) (? (< j nf) () (+ (fpop j) (go (- j 1))))) (+ nf (- (tally fvars) 1)))
+       body  (+ ups (+ pops '(73 255 192)))                         ; ... ; inc r8
+       Lb (tally body)  Lt (tally tflt)
+       jge (+ '(15 141) (le4 (+ (+ Lt 6) (+ Lb 5))))                ; counter exit: jge EXIT  (skip tflt+exj+body+back)
+       exj (+ (ucmp-exit cmpop) (le4 (+ Lb 5)))                     ; float  exit: skip body+back
+       back (+ '(233) (le4 (- 0 (+ (+ (+ (+ (+ 4 6) Lt) 6) Lb) 5))))   ; jmp TOP
+       (+ pre (+ tint (+ jge (+ tflt (+ exj (+ body (+ back '(76 137 192)))))))))   ; EXIT: mov rax,r8
+   ; (jitfrec src '(px py) finit fvars updates testexpr cmpop bound lim) -> native pixel kernel.
+   (jitfrec lam ips finit fvars updates testexpr cmpop bound lim)
+    (nif (emit (+ (loopcode-f ips finit fvars updates testexpr cmpop bound lim) epilogue-mn)) (ev lam) lam (tally ips))
    ; --- self-test (x86-64): native == interpreted, transparent, deopts ---------
    (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
    f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
@@ -236,5 +318,25 @@
      pf (\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
      (&& (120 = (prodf 5)) (= (pf 8) (prodf 8))))                                           ; n! via a product fold
   ; divide-by-zero takes the guardz deopt -- only nonzero divisors were tested
-  (: dz (jit '(\ x (// x 0))) (= (// 10 0) (dz 10))))                                       ; // by 0 -> deopt -> interp
+  (: dz (jit '(\ x (// x 0))) (= (// 10 0) (dz 10)))                                        ; // by 0 -> deopt -> interp
+  ; --- FLOAT predicate leaves (SSE): unboxed-double compares over a fixnum arg -> 0/1 ---
+  (= "4616189618054758400" (show (fbits 4.0)))                                              ; fbits: 4.0 -> 0x4010000000000000
+  (: flt (jitf '(\ x (< (* x 1.5) 10.0)))
+     (&& (1 = (flt 6)) (0 = (flt 7)) (1 = (flt 0)) (1 = (flt -3))                           ; 1.5x < 10  <=> x < 6.67
+         ((\ x (< (* x 1.5) 10.0)) = flt)                                                   ; transparent (=/show)
+         (= ((\ x (< (* x 1.5) 10.0)) '(1 2)) (flt '(1 2)))))                               ; non-fixnum arg -> deopt -> interp
+  (: fle (jitf '(\ x (<= (+ (* x x) 2.0) 38.0))) (&& (1 = (fle 6)) (0 = (fle 7)) (1 = (fle -6))))   ; x*x+2 <= 38 <=> |x|<=6
+  (: fgt (jitf '(\ x (> (/ 100.0 x) 7.0)))       (&& (1 = (fgt 10)) (0 = (fgt 20)) (1 = (fgt 5))))  ; 100/x > 7 <=> 0<x<14.3
+  (: fge (jitf '(\ x (>= (- (* x 0.5) 1.0) 2.0))) (&& (1 = (fge 6)) (0 = (fge 5))))                 ; x/2-1 >= 2 <=> x>=6
+  (: feq (jitf '(\ x (= (* x 0.25) 2.0)))         (&& (1 = (feq 8)) (0 = (feq 7))))                 ; x/4 == 2 <=> x==8
+  ; --- FLOAT RECURRENCE LOOP OWNER: a native mandelbrot pixel kernel == the interpreter ---
+  (: msrc '(\ px py (: cx (- (* px 0.046875) 2.0) cy (- (* py 0.046875) 1.5)
+                      ((: (go zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
+                            (go (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)) 0.0 0.0 0)))
+     mp (jitfrec msrc '(px py) '((cx (- (* px 0.046875) 2.0)) (cy (- (* py 0.046875) 1.5)))
+                 '(zx zy) '((+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy))
+                 '(+ (* zx zx) (* zy zy)) '<= 4.0 100)
+     mi (ev msrc)
+     (&& (= (mi 0 0) (mp 0 0)) (= (mi 32 32) (mp 32 32)) (= (mi 20 40) (mp 20 40))                  ; native == interp
+         (= (mi 63 63) (mp 63 63)) (= (mi 10 50) (mp 10 50)) (= (mi 45 18) (mp 45 18)))))
  _ (puts "ai/glaze/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))
