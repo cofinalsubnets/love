@@ -134,6 +134,7 @@ lvm_t lvm_kcall,
  lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2, lvm_zp,
  lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
+ lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
@@ -735,6 +736,7 @@ lvm_t lvm_fault;
  _(nif_key, "cue?", s1(lvm_key)) \
  _(nif_fputbn, "putbn", s3(lvm_fputbn))\
  _(nif_fputx, "print", s2(lvm_fputx))\
+ _(nif_await, "await", s1(lvm_await))\
  _(nif_fgetc, "get", s1(lvm_fgetc)) _(nif_fungetc, "unget", s2(lvm_fungetc)) _(nif_feof, "empty?", s1(lvm_feof))\
  _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
@@ -3349,6 +3351,22 @@ lvm(lvm_fgetc) {
   Unpack(g);
   Sp[0] = putcharm(g->b); }
  else Sp[0] = putcharm(EOF);
+ return Ip++, Continue(); }
+
+// (await port) — cooperatively PARK the running task until `port`'s fd is readable,
+// then return the port (so it chains into a read). lvm_fgetc buried this park inside
+// getc; pulled out, it serves the fds you CAN'T drain a byte at a time -- a signalfd,
+// a timerfd -- where a kind-specific nif reads the record AFTER the wait. The
+// scheduler folds every parked task's fd + the nearest timer into one ai_wait_fds, so
+// two tasks awaiting {signalfd, clock} ARE the {nic, clock} merge. A non-port (or a
+// synthetic fd<0) is vacuously ready -- returns the arg. Ip is unadvanced on the park,
+// so the task re-runs this ap on reschedule and re-checks readiness.
+lvm(lvm_await) {
+ if (iop(Sp[0])) {
+  intptr_t fd = getcharm(((struct ai_io*) Sp[0])->fd);
+  if (fd >= 0 && !ai_ready(fd)) {
+   g->next_wait_fd = fd;
+   return Ap(lvm_yield_sw, g); } }
  return Ip++, Continue(); }
 
 // (fungetc port byte) — push back one byte, return the byte.
