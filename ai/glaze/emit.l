@@ -18,8 +18,9 @@
 ; deopt (mov rax,[rsi+8](=interp); mov rsi,rax; mov rax,[rsi]; jmp rax) -- a tail
 ; apply of interp to the original arg (still in Sp[0]). putfix is add rax,rax (its OF
 ; flag is exactly the 62-bit fixnum boundary); jno; or rax,1.
-(: (le8 n) ((: (go i) (? (< i 8) (link (& (>> n (* 8 i)) 255) (go (+ i 1))) ())) 0)  ; n -> 8 LE bytes
-   (le4 n) ((: (go i) (? (< i 4) (link (& (>> n (* 8 i)) 255) (go (+ i 1))) ())) 0)  ; n -> 4 LE bytes
+(: (le8 n) (: u (? (< n 0) (+ n 18446744073709551616) n)                            ; two's-complement; & is broken on
+              ((: (go i) (? (< i 8) (link (% (// u (i 256)) 256) (go (+ i 1))) ())) 0))   ; a bignum >= 2^63, so use //% (n -> 8 LE bytes)
+   (le4 n) ((: (go i) (? (< i 4) (link (& (>> n (* 8 i)) 255) (go (+ i 1))) ())) 0)  ; n -> 4 LE bytes (offsets < 2^31, & ok)
    deopt    '(72 139 70 8  72 137 198  72 139 6  255 224)   ; mov rax,[rsi+8]; mov rsi,rax; mov rax,[rsi]; jmp rax
    ; guard d / guardz d: skip the inline deopt unless OF (guard) / unless nonzero
    ; (guardz, for divide-by-zero); on deopt UNWIND d pending machine-stack operands
@@ -354,6 +355,29 @@
    ; (jitfgrid src pxn pyn cxderive cyderive fvars updates testexpr cmpop bound lim) -> native grid.
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim)
     (nif (emit (+ (loopcode-grid pxn pyn cxd cyd fvars updates testexpr cmpop bound lim) epilogue)) (ev lam) lam 1)
+   ; --- the AUTO-HOOK recognizer: read a float-recurrence GRID nest from SOURCE and extract the
+   ;     jitfgrid structure, so ordinary interpreted code gets glazed transparently (no hand-call).
+   ;     matches the shape: a mand recurrence (\ cx cy zx zy it (? (&& (< it LIM) (cmp TEST BOUND))
+   ;     (mand ..updates.. (+ it 1)) it)) driven by two counted loops col/grid. extracts pxn pyn cxd
+   ;     cyd fvars updates testexpr cmpop bound lim, then jitfgrid. exactly 2 invariants (the point)
+   ;     + 2 fvars (the iterate); other shapes return () (stay interpreted). see tools/glaze-auto.l.
+   (opd e i) (nthl (cup e) i)                                       ; i-th operand of a form
+   (classify ps args)                                               ; mand params vs recursive args -> (fvars updates invariants)
+    (? (two? ps) (: p (cap ps) a (cap args) r (classify (cup ps) (cup args))
+                    (? (= a p)          (L (cap r) (caup r) (link p (nthl r 2)))            ; invariant (the point)
+                       (= a (L '+ p 1)) r                                                   ; counter (+ p 1)
+                                        (L (link p (cap r)) (link a (caup r)) (nthl r 2)))) ; fvar + update
+                 (L () () ()))
+   (posof k l i) (? (= k (cap l)) i (posof k (cup l) (+ i 1)))
+   (grok glam mps mbody cbody gbody)                               ; -> a native grid closure, or () if it doesn't match the shape
+    (: cond (opd mbody 0)  then (opd mbody 1)
+       c2 (opd cond 1)  lim (opd (opd cond 0) 1)  cmpop (cap c2)  testexpr (opd c2 0)  bound (opd c2 1)
+       cl (classify mps (cup then))  fvars (cap cl)  updates (caup cl)  invs (nthl cl 2)
+       pyn (opd (opd cbody 0) 1)  margs (cup (opd (nthl (cup (opd cbody 1)) 2) 1))
+       cxd (nthl margs (posof (nthl invs 0) mps 0))  cyd (nthl margs (posof (nthl invs 1) mps 0))
+       pxn (opd (opd gbody 0) 1)
+       (? (&& (= 2 (tally invs)) (= 2 (tally fvars)))
+          (jitfgrid glam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim) ()))
    ; --- self-test (x86-64): native == interpreted, transparent, deopts ---------
    (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
    f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
@@ -455,5 +479,12 @@
      mg (jitfgrid gsrc 64 64 '(- (* px 0.046875) 2.0) '(- (* py 0.046875) 1.5)
                   '(zx zy) '((+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy))
                   '(+ (* zx zx) (* zy zy)) '<= 4.0 100)
-     (&& (= 87130 (mg 0)) (= ((ev gsrc) 0) (mg 0)))))
+     (&& (= 87130 (mg 0)) (= ((ev gsrc) 0) (mg 0))))
+  ; --- AUTO-HOOK: recognize the (mand col grid) nest from SOURCE and glaze it -> checksum 87130 ---
+  (: gmand '(? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
+               (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
+     gcol '(? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
+     ggrid '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+     ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid)
+     (= 87130 (ng 0))))
  _ (puts "ai/glaze/emit: native codegen ok (arith + loop, transparent, deopt)") _ (putc 10))
