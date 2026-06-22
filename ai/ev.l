@@ -176,6 +176,7 @@
    (cst t) (? (nom? t) 0                              ; a variable (or the () zero point): unknown
               (atom? t) (link 1 (nil? t))             ; number/string literal: known by its net
               (&& (id? (cap t) '\) (atom? (cuup t))) (link 1 (nil? (caup t)))   ; a quote (\ v)
+              (&& (atom? (cup t)) (atom? (cap t)) (nil? (nom? (cap t)))) (link 1 (nil? (cap t)))  ; (c) == c: a folded monadic (opfix wraps (! e) -> ((nil? e)), so a folded test lands wrapped)
               0)
    (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (firstr cflip-rules bs))
     (? (atom? fb) (list ())                           ; clauses ran out: implicit () else (nil-ontology bug 3)
