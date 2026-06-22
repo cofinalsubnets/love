@@ -38,7 +38,7 @@ heap green — the two-space gardener).
 So: one object (`top` = ai, the language), three boundaries — **source** (read/feel, *compose*),
 **world** (bao/ain, *coproduct*), **help** (gwen, the inward dual of the honest face). Two gluings
 for the outward pairs, one inward face for the limit. Reflected in `content/lore.md` (lore voice)
-and `blue.md §12` (formal aside). Relates: [[serialize]] (the limit/colimit note over the mint-NNO).
+and `theory.html` (the "One core, faces" aside in the implementation section). Relates: [[serialize]] (the limit/colimit note over the mint-NNO).
 
 ## Rocq demo (proposed — "a great demo," user 2026-06-19)
 
@@ -80,7 +80,7 @@ spec.v by the imaginary unit `I : Zi`, so prove `True` via `constructor`, not th
 **LANDED 2026-06-19** — `Section Faces` in `rocq/spec.v`, axiom-free, gated by coqc: `source_factors`
 (reflexivity), `world_inl`/`world_inr`, `world_unique` (coproduct UP, pointwise), `top_vacuous`. The
 axiom audit runs `Print Assumptions world_unique` / `source_factors` → both "Closed under the global
-context." `blue.md §12` points here for the fuller reading.
+context." `theory.html` (the "One core, faces" aside in the implementation section) points here for the fuller reading.
 
 ## The hourglass reading (what the proof says)
 

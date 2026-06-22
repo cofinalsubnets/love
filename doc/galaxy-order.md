@@ -18,7 +18,8 @@ exactly where its net's scalar sits; on a net tie a scalar seats below the galax
 ## What recon already established (don't re-derive)
 
 - **Authoritative order today** lives in `ai.c`, not the docs: `ai.c:6049` comment +
-  `cmp_rank` (`ai.c:6055`) + `cmp3` (`ai.c:6091`). `test/spec.l:92` and blue.md §4 agree with it.
+  `cmp_rank` (`ai.c:6055`) + `cmp3` (`ai.c:6091`). `test/spec.l:92` and `theory.html` (lattice &
+  order) agree with it.
 - **Compare order is deliberately decoupled from the dispatch enum** (`ai.c:6053`). The
   `enum q` (`ai.h:312`: `KMint,KCharm,…,KString,KChain,KMap,KHot`) puts numbers *below*
   string; `cmp_rank` remaps to the true-blue order. **Do not touch `enum q` or the dispatch
@@ -67,18 +68,18 @@ Route order assertions through `sort` (→ `cmp3`) and assert via `show` — **n
 
 ## Edit 4 — Rocq (`rocq/spec.v`)
 
-`O` has 6 keys, no set band (already a documented near-omission in blue.md §4). After the C
+`O` has 6 keys, no set band (already a documented near-omission in `theory.html`, lattice & order). After the C
 lands, decide: fold galaxies into `Onum` by net, or keep arrays as an explicit omission. Make
 the proof track the binary, not lead it.
 
-## Edit 5 — docs (`blue.md` §4 + render)
+## Edit 5 — docs (`theory.html`, lattice & order)
 
 - Rewrite the band one-liner: `set` splits — galaxy folds into the number band by net, tray
   stays above chain.
 - Add the **surface-`<`-broadcasts caveat** to the "the comparator *is* the engine of sort"
   line: surface `<`/`=` on arrays give a mask; the scalar total order is `cmp3`, used by
   `sort` + map keys.
-- Grep `index.html` for order demos; regen `blue.html` via `tools/site.l` (`make blue`).
+- Grep `index.html` and `theory.html` for order demos; update the band one-liner in `theory.html` by hand.
 
 ## Verification
 

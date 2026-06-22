@@ -261,6 +261,10 @@
         (flush out))
 
    ps1 "> "
+   ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
+   ; SGR is zero-width to both the host terminal and the kship console (font/cb.c),
+   ; so `pl` below stays (tally ps1) and the cursor math is undisturbed.
+   ps1c (+ (+ "" 27) (+ "[38;5;117m" (+ ps1 (+ (+ "" 27) "[39m"))))
 
    ; print the prompt, then dispatch events until ^D or until enter
    ; at end-of-buffer with the buffer fully parsed. enter always
@@ -285,7 +289,7 @@
    ; currently-recalled entry, or () if the buffer is a free edit.
    (edline hu hd)
      (: pr ps1
-        _ (puts pr)
+        _ (puts ps1c)
         pl (tally pr)
         (loop pra u l r d hu hd cur)
           (: _ (edrender pl pra u l r d)

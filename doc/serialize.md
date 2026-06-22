@@ -57,11 +57,11 @@ treating as a bug.
 | D | closure-show edge audit (maps/casks/recursion knots, free-var policy doc) | read-only probe | independent — concurrent (done-ish above) |
 | E | freeze/thaw API + a `test/serialize.l` corpus | prel + test | **after A** (needs the mint form) |
 | F | apps-as-programs: ship bao/ain/cook/kship as program values | per-app crew territory | **after A–E**; then fans out per-app (non-overlapping → concurrent) |
-| G | paper remark: blue.md §7 (closure = source+captures, comparable AND serializable) | blue.md | draftable now, finalize after A |
+| G | doc remark: `theory.html` function-equivalence (closure = source+captures, comparable AND serializable) | theory.html | draftable now, finalize after A |
 
 Concurrency: **A is the blocker**; B, C, D, G-draft run concurrently now (distinct code paths /
 read-only / docs). E waits on A. F fans out per-app once A–E land (the egg already proves the
-idea — it serializes the whole corpus into a heap image). Relates: the egg, blue.md §7.
+idea — it serializes the whole corpus into a heap image). Relates: the egg, `theory.html` (function equivalence).
 
 ## Spec note — limit/colimit constructions over the mint-NNO (NOT to build; specification only)
 
@@ -83,8 +83,8 @@ that construction be the **string monoid**?
 **Answer:** gems & twins are **limits** (completion + product); the string monoid is the dual
 **colimit** (free). They are two poles of one adjunction over the mint-NNO, **joined by the net**:
 strings net *up* into ℕ (the charm-sum homomorphism), the value-built kinds net *down* — exactly
-the "**charm as hinge**" of blue.md §4. So the appealing unity is real and already latent in §4:
+the "**charm as hinge**" of `theory.html` (lattice & order). So the appealing unity is real and already latent there:
 one universal machinery over the mint-seed, read as *free* (→ strings/lists) and as
 *complete/product* (→ gems/twins), with the net the functor between them. The twin specifically
 IS a limit (its `re`/`im` are a literal projection cone) — the cleanest "limit over mints" in the
-surface. Candidate as a blue.md §10 (numeric tower) or a new §spec aside; specification only.
+surface. Candidate as a `theory.html` constellations (numeric tower) aside or a new §spec note; specification only.

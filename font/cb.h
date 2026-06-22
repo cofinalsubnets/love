@@ -25,6 +25,7 @@
 struct cb {
   uint16_t rpos, wpos, spos, flag, arg;  // spos: saved cursor; arg: CSI param
   uint8_t rows, cols, cur_fg, cur_bg, cur_font, esc;  // esc: escape-parser state
+  uint8_t pv[4], pn, def_fg, def_bg;  // pv/pn: CSI params (SGR); def_*: pen to reset to
   uint32_t cb[]; };
 
 void
