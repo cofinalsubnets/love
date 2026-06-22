@@ -7,21 +7,26 @@
 ; stack. the supervisor IS kship's watchdog (supervise/mission) generalized to N units.
 ;
 ; like kship.l and boot/tag.l this is a SKETCH -- it models the parts that STAY ai so
-; the shape runs and is probed on the host before the C is written. the ONLY genuinely
-; real part today is the ONESHOT lane: it forks/execs/waits a real child via the `run`
-; nif (host/main.c). long-running SERVICES are modeled as green tasks (spin/catch); a
-; crash is a `scare` the watchdog `help` welps to () -- the SAME shape recovery kship
-; uses, so the restart loop is real even though the "process" is a thunk. run it:
-;   out/host/ai -l init/init.l -e "(demos 0)"
+; the shape runs and is probed on the host. there are now TWO lanes:
+;   (demos 0) -- the MODELED supervisor: a deterministic tour where a "service" is a
+;     green task and a crash is a `scare` the watchdog `help` welps to () (the SAME
+;     shape recovery kship uses), so the dep graph / restart policy / checkpoint run
+;     with no OS processes. (the oneshot lane here is already real via the `run` nif.)
+;   (real 0) -- the REAL supervisor: services are OS processes. host/init.c adds the
+;     two missing primitives -- (spawn argv) forks+execs and returns a pid to track,
+;     (reap _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
+;     same supervisor shape, now over real children. (demos 0) ends by calling it.
+; run either:
+;   out/host/ai -l init/init.l -e "(demos 0)"      ; or "(real 0)"
 ; (the file only DEFINES -- a plain load prints nothing; -l preloads it into the shared
-; global scope so the -e call finds `demos`.)
+; global scope so the -e call finds `demos`/`real`.)
 ;
-; the new C an ACTUAL pid1 needs is small and core-clean (host/init.c via the AI_NIF
-; glob, no ai.c/ai.h edit -- the same discipline as ain/bao): fork/execve, a NON-blocking
-; waitpid loop (reap arbitrary reparented orphans), signalfd (SIGCHLD/SIGTERM become
-; perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}), mount
-; (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything BELOW that is this
-; file -- the dependency graph, the restart policy, the checkpoint -- already ai.
+; what an ACTUAL pid1 still needs is small and core-clean (host/init.c via the AI_NIF
+; glob, no ai.c/ai.h edit -- the same discipline as ain/bao). DONE: fork/execve +
+; the non-blocking waitpid reaper (spawn/reap). REMAINING: signalfd (SIGCHLD/SIGTERM
+; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
+; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything BELOW that
+; is this file -- the dependency graph, the restart policy, the checkpoint -- already ai.
 
 (: (note s) (: _ (puts s) (puts "\n"))               ; the narrator: a line to the console
 
@@ -104,6 +109,46 @@
 ; log the fault to the journal here). mirrors kship.l / repl.l's shell-help, quieter.
 (: help (\ s a b (? (more? s) (welp s a b) (welp s a b))))
 
+; --- the REAL supervisor (needs host/init.c: spawn + reap; kill via bao's `still`) ---
+; the same supervisor, now over OS PROCESSES. spawn each unit (a pid to track), then
+; poll `reap` -- the SIGCHLD core -- mapping each dead pid back to its unit and
+; restarting on a NONZERO exit per policy. on metal this poll is driven by signalfd
+; through ai_wait_fds (perceive), exactly as {nic, clock} is in kship; here a rest-paced
+; loop stands in. a real service's `cmd` is its argv (run by spawn); `pids` maps
+; pid->name, `tries` counts restarts. the dep graph / checkpoint above carry over
+; unchanged -- only start1's "modeled thunk" becomes "a real fork+exec".
+(: (rstart pids u)                                    ; spawn one unit, record pid->name
+     (: pid (spawn (u-cmd u))
+        _   (pin pids pid (u-name u))
+        _   (note (+ "  spawn " (+ (show (u-name u)) (+ " pid=" (show pid)))))
+        pid)
+   ; the reap loop: poll until every service has SETTLED (live hits 0) or steps run
+   ; out. each reaped (pid . status): a 0 exit (or a give-up) settles the unit; a
+   ; nonzero exit under Restart=on-fail, within the cap, respawns it (live unchanged).
+   (rloop units pids tries live steps)
+     (? (? (< live 1) 1 (< steps 1)) 0                ; done: all settled / out of steps
+        (: ev (reap 0)
+           (? (two? ev)                               ; a child died: (pid . status)
+                (: nm (peep pids (cap ev) 0)  st (cup ev)
+                   u  (find units nm)
+                   n  (+ 1 (peep tries nm 0))  _ (pin tries nm n)
+                   _  (note (+ "  exit " (+ (show nm) (+ " status=" (show st)))))
+                   (? (? (= st 0) 0 (? (id? (u-restart u) 'on-fail) (< n tries-cap) 0))
+                        (: _ (note (+ "    restart " (+ (show nm) (+ " #" (show n)))))
+                           _ (rstart pids u)
+                           (rloop units pids tries live (- steps 1)))         ; still live
+                        (rloop units pids tries (- live 1) (- steps 1))))     ; settled
+              (: _ (rest 2) (rloop units pids tries live (- steps 1))))))      ; nothing yet: wait
+   (real _)
+     (: pids (tablet 0) tries (tablet 0)
+        units (L
+          (unit 'worker 'service (L "sh" "-c" "exit 0") 'on-fail ())    ; exits 0 -> settles
+          (unit 'flaky  'service (L "sh" "-c" "exit 1") 'on-fail ()))   ; exits 1 -> restart, then give up
+        _ (note "-- REAL processes: spawn each, then poll reap (the SIGCHLD core) --")
+        _ (each units (\ u (rstart pids u)))
+        _ (rloop units pids tries (tally units) 500)
+        (note "-- all real children reaped --")))
+
 ; --- the demos, as a CALLABLE function (not auto-run) ---
 (: (demos _)
    (: cr (tablet 0)                                  ; per-name attempt counter for the flaky service
@@ -127,4 +172,5 @@
                 (\ pr (note (+ "  " (+ (show (cap pr)) (+ " = " (show (caup pr))))))))
       _   (note "-- graceful shutdown (reverse start order) --")
       _   (shutdown reg (rev (map u-name units)))
-      0))
+      _   (note "")
+      (real 0)))                                       ; ... and the same supervisor over REAL processes
