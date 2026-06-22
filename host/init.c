@@ -128,7 +128,7 @@ static lvm(lvm_sigfd) {
  Sp += 1; Ip += 1;
  return Continue();
  fail:
- Sp[0] = ai_nil; Ip += 1;
+ Sp[0] = ZeroPoint; Ip += 1;
  return Continue(); }
 
 // read one signalfd_siginfo (non-blocking) into (signo . pid). signo is the raw
@@ -145,7 +145,7 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  return g; }
 
 static lvm(lvm_sigtake) {
- if (!portp(Sp[0])) { Sp[0] = ai_nil; return Ip++, Continue(); }
+ if (!portp(Sp[0])) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
  int fd = port_fd(Sp[0]);
  Pack(g);
  g = host_sigtake(g, fd);
@@ -154,8 +154,8 @@ static lvm(lvm_sigtake) {
  Ip += 1; return Continue(); }
 #else
 // signalfd is Linux-only; keep the names present (so init.l loads) but inert.
-static lvm(lvm_sigfd)   { Sp[0] = ai_nil; return Ip++, Continue(); }
-static lvm(lvm_sigtake) { Sp[0] = ai_nil; return Ip++, Continue(); }
+static lvm(lvm_sigfd)   { Sp[0] = ZeroPoint; return Ip++, Continue(); }
+static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
 #endif
 
 // --- foreground job control + cwd (the muscle a real shell needs) ---------------
@@ -184,12 +184,12 @@ static bool str_cbuf(ai_word x, char *buf, size_t cap) {
 static lvm(lvm_chdir) {
  char buf[4096];
  if (!str_cbuf(Sp[0], buf, sizeof buf)) { Sp[0] = putcharm(-1); return Ip++, Continue(); }
- Sp[0] = chdir(buf) ? putcharm(-errno) : ai_nil;
+ Sp[0] = chdir(buf) ? putcharm(-errno) : ZeroPoint;
  return Ip++, Continue(); }
 
 static lvm(lvm_cwd) {
  char buf[4096];
- if (!getcwd(buf, sizeof buf)) { Sp[0] = ai_nil; return Ip++, Continue(); }
+ if (!getcwd(buf, sizeof buf)) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
  Pack(g);
  if (!ai_ok(g = ai_strof(g, buf))) return ghelp(g);
  Unpack(g);
@@ -275,7 +275,7 @@ static lvm(lvm_spawnio) {
 
 static lvm(lvm_shutfd) {
  intptr_t fd = (Sp[0] & 1) ? getcharm(Sp[0]) : -1;
- Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ai_nil;
+ Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
  return Ip++, Continue(); }
 
 // --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
@@ -292,7 +292,7 @@ static lvm(lvm_mkdir) {
  char p[4096];
  if (!str_cbuf(Sp[0], p, sizeof p)) { Sp[1] = putcharm(EINVAL); Sp += 1; return Ip++, Continue(); }
  intptr_t mode = (Sp[1] & 1) ? getcharm(Sp[1]) : 0755;
- Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(errno) : ai_nil;
+ Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(errno) : ZeroPoint;
  Sp += 1; return Ip++, Continue(); }
 
 #if defined(__linux__)
@@ -300,7 +300,7 @@ static lvm(lvm_mount) {
  char src[1024], tgt[1024], typ[64];
  if (!str_cbuf(Sp[0], src, sizeof src) || !str_cbuf(Sp[1], tgt, sizeof tgt)
      || !str_cbuf(Sp[2], typ, sizeof typ)) { Sp[2] = putcharm(EINVAL); Sp += 2; return Ip++, Continue(); }
- Sp[2] = mount(src, tgt, typ, 0, NULL) ? putcharm(errno) : ai_nil;
+ Sp[2] = mount(src, tgt, typ, 0, NULL) ? putcharm(errno) : ZeroPoint;
  Sp += 2; return Ip++, Continue(); }
 
 static int ns_write(char const *path, char const *s) {
@@ -315,7 +315,7 @@ static lvm(lvm_newns) {
  ns_write("/proc/self/setgroups", "deny");                       // required before gid_map
  snprintf(b, sizeof b, "0 %ld 1\n", uid); ns_write("/proc/self/uid_map", b);
  snprintf(b, sizeof b, "0 %ld 1\n", gid); ns_write("/proc/self/gid_map", b);
- Sp[0] = ai_nil; return Ip++, Continue(); }
+ Sp[0] = ZeroPoint; return Ip++, Continue(); }
 #else
 static lvm(lvm_mount) { Sp[2] = putcharm(ENOSYS); Sp += 2; return Ip++, Continue(); }   // Linux-only
 static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); return Ip++, Continue(); }

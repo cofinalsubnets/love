@@ -133,14 +133,14 @@ static lvm(lvm_open) {
   Ip += 1;
   return Continue();
  fail:
-  Sp[1] = ai_nil;
+  Sp[1] = ZeroPoint;
   Sp += 1;
   Ip += 1;
   return Continue(); }
 
 // (close p) — close a port, mark its fd as the closed-sentinel (-3) so
 // subsequent reads/writes/flush go to the noop slot, and the finalizer
-// (which checks fd >= 0) skips. Returns nil. No-op on misuse, matching
+// (which checks fd >= 0) skips. Returns (). No-op on misuse, matching
 // the existing fputc/etc. convention.
 static lvm(lvm_close) {
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
@@ -150,7 +150,7 @@ static lvm(lvm_close) {
     if (fd >= 0) {
       close(fd);
       io->fd = putcharm(-3); } }
-  Sp[0] = ai_nil;
+  Sp[0] = ZeroPoint;
   Ip += 1;
   return Continue(); }
 
@@ -311,7 +311,7 @@ ai_noinline static char const *host_getenv(struct ai_str *nv) {
 // error; the run fixnum-error convention does not apply here.
 static lvm(lvm_getenv) {
  char const *v = ai_strp(Sp[0]) ? host_getenv((struct ai_str*) Sp[0]) : NULL;
- if (!v) { Sp[0] = ai_nil; Ip += 1; return Continue(); }
+ if (!v) { Sp[0] = ZeroPoint; Ip += 1; return Continue(); }
  Pack(g);
  if (!ai_ok(g = ai_strof(g, v))) return ghelp(g);
  Unpack(g);

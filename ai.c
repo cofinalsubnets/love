@@ -1612,7 +1612,7 @@ static Ana(c0_cond_exit) { return
  ai_push(analyze(g, c, x), 1, c1_cond_exit); }
 
 static Ana(c0_cond_r) { return
- !chainp(x) ? c0_cond_exit(g, c, ZeroPoint) :   // clauses ran out: implicit else -> () (nil-ontology bug 3, welded to bug 1's reader terminator)
+ !chainp(x) ? c0_cond_exit(g, c, ZeroPoint) :   // clauses ran out: implicit else -> () (nil-ontology: the same () the reader terminates lists with)
  !chainp(B(x)) ? c0_cond_exit(g, c, A(x)) :
  (avec(g, x,
   incl(*c, 2),
@@ -3708,11 +3708,11 @@ static struct ai *ioparse(struct ai *g, bool multi) {
      g = gxl(ai_push(g, 1, A(g->sp[1])));               // splice -> (sym . d)
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); }
     else {                                             // 'x `x ,x  #x %atom/@atom -> (wrapsym d)
-     g = gxr(ai_push(g, 1, ZeroPoint));                 // (d . ()) -- bug 1 wrapsym
+     g = gxr(ai_push(g, 1, ZeroPoint));                 // (d . ()) -- the wrapsym tail, ()-terminated (nil-ontology)
      g = gxl(ai_push(g, 1, ai_ok(g) ? A(g->sp[1]) : nil)); // (wrapsym . (d))
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); } }
    else {                                              // list: append d at the frame's tail
-    g = gxr(ai_push(g, 1, ZeroPoint));                  // newcons = (d . ()) -- reader lists are ()-terminated (nil-ontology bug 1)
+    g = gxr(ai_push(g, 1, ZeroPoint));                  // newcons = (d . ()) -- reader lists are ()-terminated (nil-ontology)
     if (ai_ok(g)) {
      word frame = A(g->sp[1]);                         // (head . tail)
      if (nilp(A(frame))) A(frame) = B(frame) = g->sp[0];  // first element: head = tail = newcons
@@ -4439,7 +4439,7 @@ bool ai_strp(ai_word x) { return strp(x); }
 // atom; the empty symbol IS the unit (() is +'s and *'s identity, applies const-1).
 lvm(lvm_intern) {
  if (strp(Sp[0])) {
-  if (Sp[0] == EmptyString) return Sp[0] = ZeroPoint, Ip += 1, Continue();  // (intern "") -> () (nil-ontology bug 2)
+  if (Sp[0] == EmptyString) return Sp[0] = ZeroPoint, Ip += 1, Continue();  // (intern "") -> () (nil-ontology: the empty spelling is the zero point)
   word y;
   Have(intern_reserve(g));
   Pack(g), y = intern_checked(g, (struct ai_str*) g->sp[0]), Unpack(g);

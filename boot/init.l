@@ -26,6 +26,11 @@
        (charm? (reap 0)) (< (reap 0) 0) (nil? (reap 0)) !(id? (reap 0) ())
        ; the blocking foreground wait: spawn then wait -> the child's exit status
        (= 0 (wait (spawn (L "true"))))
-       (= 3 (wait (spawn (L "sh" "-c" "exit 3"))))))
+       (= 3 (wait (spawn (L "sh" "-c" "exit 3"))))
+       ; the "()"-returns are the REAL zero point now (the ai_nil -> () flip), not charm 0:
+       ; (id? x ()) holds and (charm? x) is false -- charm 0 would fail both.
+       (id? (shutfd -1) ()) !(charm? (shutfd -1))               ; shutfd nothing -> the real ()
+       (id? (getenv "AI_NO_SUCH_ENV_VAR_XYZZY") ())             ; getenv absent -> the real ()
+       !(charm? (getenv "AI_NO_SUCH_ENV_VAR_XYZZY"))))
 
 (puts "init: ok") (putc 10)
