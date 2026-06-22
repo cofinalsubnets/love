@@ -559,7 +559,20 @@ k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio $(k_qemu_ri
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
   -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
-.PHONY: run run-hdd run-$a run-hdd-$a run-headless
+# --- live-NIC agent boots (x86_64 only -- the virtio-net driver is port/kship/x86_64/net.c).
+# net.c probes for a TRANSITIONAL virtio-net (legacy PCI id 0x1000 with an I/O BAR), so
+# disable-modern=on is REQUIRED: a modern-only device (id 0x1040, no I/O BAR) is invisible to
+# it. SLIRP user networking seats the guest at 10.0.2.15, the host/gateway at 10.0.2.2.
+k_net = -device virtio-net-pci,netdev=n0,disable-modern=on
+# inbound (NETAGENT): forward host udp 5555 -> guest 5555, so you can drive the agent:
+#   printf '(* 6 7)' | nc -u -w1 127.0.0.1 5555    ->  42   (first datagram is lost to ARP)
+k_net_in = -netdev user,id=n0,hostfwd=udp::5555-:5555 $(k_net)
+# outbound (NETBRAIN): plain user net; the agent DIALS 10.0.2.2:9999 on its own clock, so
+# stand up a UDP server on the host :9999 first -- it receives each datagram and whatever it
+# replies is what the agent narrates (`oracle <- ...`). That server is the seam for a real brain.
+k_net_out = -netdev user,id=n0 $(k_net)
+
+.PHONY: run run-hdd run-$a run-hdd-$a run-headless run-kship run-netagent run-netbrain
 run: run-$a
 run-hdd: run-hdd-$a
 run-$a: $(ko)/ai-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
@@ -568,6 +581,25 @@ run-hdd-$a: $(ko)/ai-$a.hdd $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	exec $(k_qemu) -hda $<
 run-headless: $(ko)/ai-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	exec $(k_qemu) -cdrom $< -display none -no-reboot
+
+# Boot the baked kship agent. KSHIP = heartbeat/watchdog/checkpoint demos then a serial shell
+# (no NIC); NETAGENT = the inbound ai-REPL over the wire; NETBRAIN = the outbound brain that
+# dials an oracle on its own clock. Each (re)builds its own-suffixed iso, then boots headless
+# with serial on stdio so you watch the agent narrate in this terminal (Ctrl-C to stop).
+run-kship:
+	@$(MAKE) -s KSHIP=1 $(ko)/ai-$a-kship.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) -cdrom $(ko)/ai-$a-kship.iso -display none -no-reboot
+ifeq ($a,x86_64)
+run-netagent:
+	@$(MAKE) -s NETAGENT=1 $(ko)/ai-$a-netagent.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) $(k_net_in) -cdrom $(ko)/ai-$a-netagent.iso -display none -no-reboot
+run-netbrain:
+	@$(MAKE) -s NETBRAIN=1 $(ko)/ai-$a-netbrain.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) $(k_net_out) -cdrom $(ko)/ai-$a-netbrain.iso -display none -no-reboot
+else
+run-netagent run-netbrain:
+	@echo "$@: x86_64 only (virtio-net driver is port/kship/x86_64/net.c); host arch is $a"
+endif
 
 # --- headless serial test (wired into test_all; x86_64 + qemu only) ------------
 # The K_TEST kernel boots, runs the baked corpus through the self-hosted ev, and
