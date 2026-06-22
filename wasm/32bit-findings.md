@@ -1,12 +1,12 @@
 # 32-bit / wasm port: findings
 
-The wasm shim (`host.c`) is a 32-bit, browser-hosted build of love. Running the
+The wasm shim (`host.c`) is a 32-bit, browser-hosted build of ai. Running the
 full test corpus against it (`make test_wasm`: ai.js under node, the same `$t`
 the native gate eats) surfaced the differences below.
 
 ## Platform facts (gated in the corpus on `wint`, expected)
 
-The 32-bit word makes love a genuinely different numeric/host platform; these
+The 32-bit word makes ai a genuinely different numeric/host platform; these
 asserts are correctly skipped on wasm and still run on the 64-bit hosted builds
 (native, kernel):
 
@@ -72,7 +72,7 @@ is `wint = (< (32 2) max-charm)` (true on the full 64-bit hosted builds).
   on the kernel (gates green; it overrides only `exit`, defaults cover the
   rest). The mechanism is the book, not weak C symbols: the frontend aps are
   `static`, so they can't participate in weak/strong link override, and the
-  book is love's own idiomatic override -- no linker semantics to depend on.
+  book is ai's own idiomatic override -- no linker semantics to depend on.
 
 ## Not a bug
 

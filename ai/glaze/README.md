@@ -9,7 +9,7 @@
 >   applicable native closure. Cell `[code, src, code, interp, lvm_ret, 0]`, value at
 >   the 3rd word, so `value[-1]`=src (`fn_src`/printer/`salpha` → `=`/`show` see the
 >   source) and `value[1]`=interp (the deopt fallback). W^X arena with a finalizer.
-> - **`ai/glaze/emit.l`** — a love-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
+> - **`ai/glaze/emit.l`** — a ai-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
 >   and a counted-sum loop `(\ n Σ_{i<n} body)` to native, with a `jno`+inline-deopt
 >   guard on every `+`/`-`/`*` and on `putfix` (its `add rax,rax` overflow flag is
 >   exactly the 62-bit fixnum boundary). x86-64 only; load with `-l ai/glaze/emit.l`.
@@ -67,15 +67,15 @@ masquerading as a writable byte buffer.
 
 ## The fault barrier — a bad body is survivable (host)
 
-Running a toast's bytes is the one place love can be handed code that faults the CPU.
+Running a toast's bytes is the one place ai can be handed code that faults the CPU.
 That used to be a hard crash; it no longer is. On the host a signal barrier
 (`SIGSEGV`/`SIGILL`/`SIGBUS`/`SIGFPE` + `sigsetjmp`) turns a hardware fault into an
-ordinary love condition:
+ordinary ai condition:
 
 - **`eat1`/`eat2`** wrap the native call in `eat_run` (`ai.c`, by `lvm_eat1`):
   a fault in the body is caught and `eat` returns `0` — the non-buf value — so a
   bad body is survivable like any other error, never a core dump. The native body
-  never touches love state, so this recovery is unconditional.
+  never touches ai state, so this recovery is unconditional.
 - **`g_eval`** carries the same barrier over the whole VM run, so *any* in-eval
   hardware fault becomes a catchable `(scare 'fault <signal>)` delivered through
   `help` — transparent, up through object-array ops, `spin`, and `(ev …)`. In file
@@ -109,7 +109,7 @@ C3               ret
 under qemu it returns the immediate exactly (verified at 42 and at 12345). So Limine
 maps the HHDM — which backs the kernel heap, hence every toast's copy — **without the
 NX bit**: kernel data memory is already executable. No page-table work, no
-`mprotect`: a love glaze on the kernel is just love emitting bytes and calling a toast
+`mprotect`: a ai glaze on the kernel is just ai emitting bytes and calling a toast
 of them.
 
 The **host** is the opposite: Linux maps the malloc heap no-execute, so raw heap
@@ -122,7 +122,7 @@ in the standalone `ai/glaze/probe.l`.
 
 ## What the experiment found, and where it went
 
-The full version generated x86_64/SSE in love and ran it via `(eat 1 (toast …) x)`:
+The full version generated x86_64/SSE in ai and ran it via `(eat 1 (toast …) x)`:
 a scalar `(\ p <arith>)` kernel, an automatic `ev`/`opfix` hook to apply it
 transparently, and array kernels (`amap`/`areduce`/…) over `z`/`r`/`c` arrays. The
 transparency was made exact (`=`-preserving via `respec`, de-Bruijn `show` intact).
@@ -150,10 +150,10 @@ make host                                  # builds ai0 + the bake tools
 cp ai/glaze/probe.l out/lib/ktests.l            # make the probe the whole K_TEST corpus
 out/host/ai0 -l ai/prel.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
 touch out/lib/ktests.l out/lib/ktests.h
-make -s K_TEST=1 out/free/love-x86_64-test.iso
+make -s K_TEST=1 out/free/ai-x86_64-test.iso
 qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
   -drive if=pflash,unit=0,format=raw,file=out/dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on \
-  -cdrom out/free/love-x86_64-test.iso \
+  -cdrom out/free/ai-x86_64-test.iso \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04
 # expect:  glaze-PROBE-START / glaze-PROBE-RESULT=42 / glaze-PROBE-END
 # then restore the real corpus:  make out/lib/ktests.h   (or rm it; the next build re-bakes)
@@ -170,11 +170,11 @@ qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
   writes code (`__builtin___clear_cache(base, base+len)` before the first `call`).
   Correct on x86_64 only until that is added — and on AArch64 the flush belongs in
   `toast` (where the bytes are written), not `call`.
-- **The contract across `call`.** The argument arrives as its *raw tagged* love word
+- **The contract across `call`.** The argument arrives as its *raw tagged* ai word
   (`putfix A`) and the result is re-tagged (`putfix r`), so a codegen must untag at
   the boundary. Keep what crosses `call` to unboxed machine words: no allocation, no
   heap pointers held inside — that is what keeps the trampoline GC-safe.
 - **No verification.** This is the raw trampoline plus a safe loader — no semantics,
-  no proof that the bytes mean the love they claim to. A *verified* glaze is a separate,
-  much larger effort (and the place love's in-tree prover could eventually earn its
+  no proof that the bytes mean the ai they claim to. A *verified* glaze is a separate,
+  much larger effort (and the place ai's in-tree prover could eventually earn its
   keep).

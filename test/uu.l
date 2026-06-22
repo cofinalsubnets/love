@@ -80,7 +80,7 @@
             (id? h 'paths_rect)  (dojr (vof en (e2 t)) (vof en (e3 t)) (vof en (e4 t)))
             (vof-spine en (vof en h) (cup t)))))
 
-   ; empty-list tests are STRUCTURAL (two?): a love list of zeros NETS zero,
+   ; empty-list tests are STRUCTURAL (two?): a ai list of zeros NETS zero,
    ; so !as would call (add n 0)'s final argument list (0) empty -- the net law.
    (vof-spine en f as)
    (? !(two? as) f (vof-spine en (vapp f (vof en (cap as))) (cup as)))

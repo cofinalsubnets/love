@@ -1,6 +1,6 @@
-// wasm test harness: run the love test corpus through the emscripten build
+// wasm test harness: run the ai test corpus through the emscripten build
 // and gate on the zz-fin summary, the same contract as the native test_host
-// (`cat $t | love` then grep "tests pass"). A third runtime after the host
+// (`cat $t | ai` then grep "tests pass"). A third runtime after the host
 // binary and the love0 bootstrap -- this one exercises wasm's <data.h>
 // override (sentinel-ap data kinds, no flat code-address space).
 //

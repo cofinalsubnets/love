@@ -1,6 +1,6 @@
-# bench/ — love benchmark harness
+# bench/ — ai benchmark harness
 
-Times a small set of numeric and list-processing workloads across **love** and
+Times a small set of numeric and list-processing workloads across **ai** and
 every standard lisp / scripting language on the box, printing a side-by-side
 comparison. Each workload is implemented once per dialect, computing an identical
 checksum so the runs are verified equivalent (the `ok` column). The lineup:
@@ -26,9 +26,9 @@ a CPU-time clock (`(runtime)`, ~10 ms granularity) so its numbers are coarser, a
 
 ```sh
 make bench          # from the repo root, or `make` here: the default column set
-                    #   (love cpython chez sbcl node luajit elixir)
+                    #   (ai cpython chez sbcl node luajit elixir)
 make all            # every language present on this machine (a wide table)
-make chez           # one language, shown alongside love for contrast
+make chez           # one language, shown alongside ai for contrast
 make pypy           # ... any language name works as a target
 make BENCHES=fib    # restrict the workloads (then `make clean` to refresh files)
 make TIMEOUT=60 …   # per-bench wall-clock cutoff in seconds (default 30)
@@ -39,7 +39,7 @@ make clean          # remove out/bench/
 
 **Results are cached per language.** Each language writes its lines to
 `out/bench/<lang>.txt`, and that file depends on the language's bench sources (and,
-for love, the `love` binary). The user-facing targets just *pretty-print* those
+for ai, the `ai` binary). The user-facing targets just *pretty-print* those
 files — a bench is only (re)run when its result file is missing or older than the
 sources, so `make bench` reformats instantly once the files exist. Touch a source
 or `make clean` to force a re-run. The per-language run logic (extension,
@@ -58,7 +58,7 @@ errored, so stdout stays clean for the table.
 Example output (one column per dialect — the real table is wide; abridged slice):
 
 ```
-bench         love ms/it    chez ms/it  petite ms/it  racket ms/it    sbcl ms/it   clisp ms/it  luajit ms/it  python ms/it    pypy ms/it  ...   ok
+bench         ai ms/it    chez ms/it  petite ms/it  racket ms/it    sbcl ms/it   clisp ms/it  luajit ms/it  python ms/it    pypy ms/it  ...   ok
 fib              27.1250        6.5312       67.2500        5.4180       12.5636      748.8520        8.0017      101.7170        9.0407  ...  yes
 sum               6.4688        0.5918        3.7812        0.2874        0.7579       50.0703        0.0792        2.9250        0.2941  ...  yes
 mapfilter         1.0742        0.1128        0.2314        0.1087        0.1069        2.6892        0.0348        0.9911        0.0983  ...  yes
@@ -79,7 +79,7 @@ Every language self-times only the inner workload, so interpreter startup is
 excluded from the measurement. The harness auto-scales the repetition count —
 doubling until the run clears a 200 ms floor — then reports `(reps, ms)`. The
 report divides `ms / reps` for a per-iteration time, so the chosen rep count
-cancels out and benches of very different cost stay comparable. love's clock has
+cancels out and benches of very different cost stay comparable. ai's clock has
 1 ms resolution (`(clock 0)`), which the 200 ms floor keeps under ~0.5 % error.
 
 ## Benchmarks
@@ -91,7 +91,7 @@ cancels out and benches of very different cost stay comparable. love's clock has
 | `sum`       | list    | build `1..100000`, fold-sum it                             |
 | `mapfilter` | list    | square 10000 elems, keep evens, sum                        |
 | `primes`    | numeric | count primes below 30000 by trial division                |
-| `bell`      | bignum  | Bell numbers in base 36 to 280 digits (port of `test/bell.love`) |
+| `bell`      | bignum  | Bell numbers in base 36 to 280 digits (port of `test/bell.l`) |
 | `strcat`    | string  | build a 4000-char string by single-char concatenation, then hash it |
 | `strscan`   | string  | rolling-hash scan over a fixed 20000-char string (read path) |
 | `hash`      | table   | mutable hash table: 10000 sparse-int-keyed insert / lookup / update ops |
@@ -116,7 +116,7 @@ same result, same checksum.
 integer keys, sum-looks-them-up, does a read-modify-write update pass, then
 sum-looks-up again (checksum = N²). Keys are sparse (stride 97) on purpose, so
 Lua/Python can't service them from a contiguous-integer *array* fast-path and
-must actually hash. Each dialect uses its native mutable table — love `table`/
+must actually hash. Each dialect uses its native mutable table — ai `table`/
 `put`/`get`, the schemes' `*-hashtable`, CL `gethash`, JS `Map`, Lua tables,
 etc.; **Clojure** (persistent core maps) uses `java.util.HashMap` via interop.
 The purely functional dialects (`owl`, `elixir`) have no mutable table, and
@@ -126,44 +126,44 @@ The purely functional dialects (`owl`, `elixir`) have no mutable table, and
 multiply stays under 2⁵³ and every language — doubles included — produces the
 identical sequence), sorts ascending, and checksums an order-dependent rolling
 hash of the result (so the checksum verifies the *ordering*, not just the
-multiset). love uses the prel's `sort` (a list merge sort added for this);
+multiset). ai uses the prel's `sort` (a list merge sort added for this);
 every other dialect uses its built-in sort, so the column reads as library sort
 quality. `tree` is the classic binary-trees alloc/GC stress: build a perfect
 depth-16 tree (2¹⁶−1 nodes, leaves nil) and traverse counting nodes — it churns
-small two-field aggregates (cons pairs / 2-tuples / `[love r]`) and exercises the
+small two-field aggregates (cons pairs / 2-tuples / `[ai r]`) and exercises the
 collector more than any other bench. `float` is mandelbrot escape counts over a
 64×64 grid: pure f64 `+`/`−`/`*`/`<=` (no transcendentals) over exactly
 representable constants, with an integer checksum, so it is bit-identical
-everywhere — including love's *boxed*-float path, which is the point (it's the
+everywhere — including ai's *boxed*-float path, which is the point (it's the
 only bench that touches floats; `owl` has no IEEE doubles so it drops the cell,
 and the Common Lisps need `d0` double-float literals to agree). `closure`
-stresses love's defining feature — every value a curried unary function: per
+stresses ai's defining feature — every value a curried unary function: per
 iteration it builds `(adder i)` and `(twice (adder i))` and applies them, so it
 allocates and calls two closures 100000 times.
 
 The two string benches split the write and read paths. `strcat` builds a string
-one character at a time with each language's concatenation operator (love `scat`,
+one character at a time with each language's concatenation operator (ai `scat`,
 python/lua/lisp string-append, etc.) — an O(n²) build that measures how that
 operator copies, so it favours languages with mutable/rope-backed strings.
 `strscan` times only a linear rolling hash over a string built once outside the
-loop, isolating the byte-read path (love `get`/`len`). Both fold the same
+loop, isolating the byte-read path (ai `get`/`len`). Both fold the same
 polynomial hash `h = (h*31 + byte) mod 1e9+7`; taking it mod a prime keeps the
 checksum a 64-bit fixnum, so it is identical across every language (lua included)
 and doubles as the `ok` cross-check.
 
-The list benches compare *idiomatic* implementations: love and the lisps walk
+The list benches compare *idiomatic* implementations: ai and the lisps walk
 cons-cell linked lists, while python/ruby/node/lua use native dynamic arrays and
 built-ins — so `sum`/`mapfilter` largely measure linked lists vs. C array
 primitives, not just the language. The numeric/recursion benches (`fib`, `tak`,
 `primes`), `closure`, and `float` are the closest apples-to-apples comparison of
 the evaluators themselves; `float` in particular isolates the floating-point path
-(love boxes its floats, so it pays heap traffic the native-double languages do
+(ai boxes its floats, so it pays heap traffic the native-double languages do
 not), and `closure` isolates closure allocation + application.
 
 ## Layout
 
 ```
-bench.love          love harness — iota/iota1 + the (bench name work) timer
+bench.l          ai harness — iota/iota1 + the (bench name work) timer
 lib/bench.py     python harness — bench(name, work)   [also pypy, and hy imports it]
 lib/bench.rb     ruby harness   — bench(name) { work }
 lib/bench.ss     chez harness   — (bench name work)    [also petite]
@@ -172,7 +172,7 @@ lib/bench.rkt    racket harness — (provide bench)
 lib/bench.mit    mit-scheme harness
 lib/bench.ck     chicken harness (provides keep/sum-list; vector memo)
 lib/bench.bgl    bigloo harness
-lib/bench.owl    owl harness    — concatenated ahead of each bench, love-style
+lib/bench.owl    owl harness    — concatenated ahead of each bench, ai-style
 lib/bench.lisp   sbcl harness   — (bench name work)    [also clisp, ecl]
 lib/bench.clj    clojure harness
 lib/bench.exs    elixir harness (BEAM monotonic clock; functional ff-style memo)
@@ -193,7 +193,7 @@ Makefile         orchestration — per-language out/bench/<lang>.txt result file
    (`fib` is the smallest) for each extension and swap in the workload. Each ends
    in a single `bench("<name>", …)` call whose thunk returns a deterministic
    checksum identical across every language (the `ok` column checks this); see the
-   per-dialect preamble each existing file uses (`love`/`owl` rely on the harness
+   per-dialect preamble each existing file uses (`ai`/`owl` rely on the harness
    being concatenated ahead; the others `load`/`require`/`import` `lib/bench.*`).
 2. Add `<name>` to `BENCHES` in the `Makefile` (controls display order).
 
@@ -204,6 +204,6 @@ existing harness (a Python-hosted lisp importing `lib/bench.py`, a Lua-hosted on
 requiring `lib/bench.lua`, etc.), point `HARN_<lang>` at that file; otherwise add a
 `lib/bench.<ext>` that reads `BENCH_LANG` for its column label.
 
-Each love bench is concatenated after `bench.love` before being piped to `love`,
+Each ai bench is concatenated after `bench.l` before being piped to `ai`,
 exactly like the `test/` corpus — a top-level `:` form with no trailing body
 leaks its bindings into global scope, so the harness names are visible.
