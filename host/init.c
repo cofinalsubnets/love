@@ -24,6 +24,7 @@
 #include <string.h>     // memcpy
 #include <errno.h>
 #include <signal.h>     // sigprocmask, SIGCHLD/SIGTERM (sigfd)
+#include <fcntl.h>      // open, O_* (openfd, for shell redirects)
 #if defined(__linux__)
 #include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo (Linux only)
 #endif
@@ -192,6 +193,87 @@ static lvm(lvm_cwd) {
  Sp += 1; Ip += 1;
  return Continue(); }
 
+// --- pipes + redirects (the fd plumbing a shell pipeline needs) ------------------
+// (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or -errno.
+// (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
+//                   2 = write/create/append. -errno on failure, -1 on a bad path.
+// (spawnio argv in out err closes) -> pid. fork; in the child dup2 `in`/`out`/`err`
+//                   (each >=0) onto fd 0/1/2, close every fd in the list `closes`
+//                   (the pipe ends the child must not leak, so a downstream reader
+//                   sees EOF), then execvp. The parent keeps its fds and closes the
+//                   pipe ends itself with shutfd. -errno on a fork/marshal failure.
+// (shutfd fd)    -> close a raw fd (the parent's pipe ends). () ok | -errno.
+static lvm(lvm_pipe) {
+ int fds[2];
+ if (pipe(fds)) { Sp[0] = putcharm(-errno); return Ip++, Continue(); }
+ Pack(g);
+ if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) { close(fds[0]); close(fds[1]); return ghelp(g); }
+ struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                putcharm(fds[0]), putcharm(fds[1]));
+ g->sp[0] = word(w);
+ Unpack(g);
+ return Ip++, Continue(); }
+
+static lvm(lvm_openfd) {
+ char buf[4096];
+ if (!str_cbuf(Sp[0], buf, sizeof buf)) { Sp[1] = putcharm(-1); Sp += 1; return Ip++, Continue(); }
+ intptr_t m = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+ int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
+           : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
+           : O_RDONLY;
+ int fd = open(buf, flags, 0644);
+ Sp[1] = (fd < 0) ? putcharm(-errno) : putcharm(fd);
+ Sp += 1; return Ip++, Continue(); }
+
+ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int err) {
+ ai_word argv = g->sp[0];
+ intptr_t argc = 0; uintptr_t total = 0;
+ for (ai_word p = argv; chainp(p); p = B(p)) {
+  if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));
+  argc++, total += len(A(p)) + 1; }
+ if (!argc) return ai_push(g, 1, putcharm(-1));
+ if (!ai_ok(g = ai_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
+ argv = g->sp[0];                            // re-root post-ai_have (closes too, below)
+ ai_word closes = g->sp[4];
+ char **cav = (char**) g->hp;
+ char *blob = (char*) (g->hp + (argc + 1));
+ { uintptr_t off = 0; intptr_t i = 0;
+   for (ai_word p = argv; chainp(p); p = B(p), i++) {
+    struct ai_str *s = str(A(p));
+    memcpy(blob + off, txt(s), len(s)); blob[off + len(s)] = 0;
+    cav[i] = blob + off; off += len(s) + 1; }
+   cav[argc] = NULL; }
+ fflush(NULL);
+ pid_t pid = fork();
+ if (pid < 0) return ai_push(g, 1, putcharm(-errno));
+ if (!pid) {
+  if (in  >= 0) dup2(in, 0);
+  if (out >= 0) dup2(out, 1);
+  if (err >= 0) dup2(err, 2);
+  for (ai_word p = closes; chainp(p); p = B(p)) {
+   intptr_t fd = getcharm(A(p));
+   if (fd > 2) close((int) fd); }
+  execvp(cav[0], cav);
+  _exit(127); }
+ return ai_push(g, 1, putcharm(pid)); }
+
+static lvm(lvm_spawnio) {
+ int in  = (Sp[1] & 1) ? (int) getcharm(Sp[1]) : -1;
+ int out = (Sp[2] & 1) ? (int) getcharm(Sp[2]) : -1;
+ int err = (Sp[3] & 1) ? (int) getcharm(Sp[3]) : -1;
+ Pack(g);
+ g = host_spawnio(g, in, out, err);          // argv at sp[0], closes at sp[4]
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Sp[5] = Sp[0];                              // pid over the 5 args
+ Sp += 5; Ip += 1;
+ return Continue(); }
+
+static lvm(lvm_shutfd) {
+ intptr_t fd = (Sp[0] & 1) ? getcharm(Sp[0]) : -1;
+ Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ai_nil;
+ return Ip++, Continue(); }
+
 static union u const
   nif_spawn[]   = {{lvm_spawn}, {lvm_ret0}},
   nif_reapany[] = {{lvm_reapany}, {lvm_ret0}},
@@ -199,7 +281,11 @@ static union u const
   nif_sigtake[] = {{lvm_sigtake}, {lvm_ret0}},
   nif_waitpid[] = {{lvm_waitpid}, {lvm_ret0}},
   nif_chdir[]   = {{lvm_chdir}, {lvm_ret0}},
-  nif_cwd[]     = {{lvm_cwd}, {lvm_ret0}};
+  nif_cwd[]     = {{lvm_cwd}, {lvm_ret0}},
+  nif_pipe[]    = {{lvm_pipe}, {lvm_ret0}},
+  nif_openfd[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
+  nif_spawnio[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_spawnio}, {lvm_ret0}},
+  nif_shutfd[]  = {{lvm_shutfd}, {lvm_ret0}};
 AI_NIF("spawn", nif_spawn);
 AI_NIF("reap",  nif_reapany);
 AI_NIF("sigfd", nif_sigfd);
@@ -207,3 +293,7 @@ AI_NIF("sigtake", nif_sigtake);
 AI_NIF("wait",  nif_waitpid);
 AI_NIF("chdir", nif_chdir);
 AI_NIF("cwd",   nif_cwd);
+AI_NIF("pipe",  nif_pipe);
+AI_NIF("openfd", nif_openfd);
+AI_NIF("spawnio", nif_spawnio);
+AI_NIF("shutfd", nif_shutfd);
