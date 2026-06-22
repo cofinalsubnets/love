@@ -123,9 +123,9 @@
     (: lb   (cgv cv (\ d ld-i) body 0)  Lb (tally lb)
        acc  (+ (foldbytes op) (guard 0))  La (tally acc)        ; r11 = r11 op rax ; overflow -> deopt
        pre  (+ '(76 139 9  73 209 249  77 49 210) (r11-init (foldinit op)))    ; mov r9,[rcx];sar;xor r10; init r11
-       test (+ '(77 57 202) (+ (loopjcc cmp) (le4 (+ (+ Lb La) 8))))         ; cmp r10,r9 ; <inverse-cmp> end
-       back (+ '(73 255 194) (+ '(233) (le4 (- 0 (+ (+ Lb La) 17)))))        ; inc r10 ; jmp loop_top
-       (+ pre (+ test (+ lb (+ acc (+ back (+ '(76 137 216) epilogue)))))))   ; ... ; mov rax,r11
+       test (asm (L '(77 57 202) (loopjcc cmp) (le4 (+ (+ Lb La) 8))))       ; cmp r10,r9 ; <inverse-cmp> end
+       back (asm (L '(73 255 194) '(233) (le4 (- 0 (+ (+ Lb La) 17)))))      ; inc r10 ; jmp loop_top
+       (asm (L pre test lb acc back '(76 137 216) epilogue)))   ; ... ; mov rax,r11
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
    (jitsum body)
     (: src `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('+ 'a body)) 'a)) 0 0))
@@ -159,9 +159,9 @@
        ub   (+ ups pops)  Lu (tally ub)
        tb   (cgl n vars test 0)  Lt (tally tb)
        rb   (cgl n vars result 0)
-       top  (+ tb (+ '(72 131 248 0) (+ '(15 132) (le4 (+ Lu 5)))))   ; <test>; cmp rax,0; je end
+       top  (asm (L tb '(72 131 248 0) '(15 132) (le4 (+ Lu 5))))   ; <test>; cmp rax,0; je end
        back (+ '(233) (le4 (- 0 (+ (+ Lt Lu) 15))))                       ; jmp top
-       (+ pre (+ top (+ ub (+ back (+ rb epilogue))))))
+       (asm (L pre top ub back rb epilogue)))
    ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native.
    (jitloop-n lam vars updates test result inits)
     (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (ev lam) lam 1)
@@ -242,6 +242,43 @@
    ; inner loop's nested operands stay in registers instead of round-tripping through memory.
    (rpush d) (? (< d 4) (+ '(242 68 15 16) (list (+ 224 (* 8 d)))) xpush)   ; movsd xmm(12+d),xmm0 ; else sub rsp;movsd[rsp]
    (rpop d)  (? (< d 4) (+ '(242 65 15 16) (list (+ 204 d)))       xpop1)   ; movsd xmm1,xmm(12+d) ; else movsd[rsp];add rsp
+   ; --- the OPTIMIZING float-body allocator: value-numbered DAG (CSE) + linear-scan register
+   ;     allocation. compiles a SET of root exprs (the inner-loop mag + the fvar updates, which
+   ;     SHARE subexprs like zx*zx) to register-only SSE, each value in its own xmm reg so the CPU
+   ;     runs independent ops in parallel (ILP). leaves (fvars/consts) live in fixed regs (env);
+   ;     binop results allocate from the working pool {0,1,12..15}, freed at last use, reused in
+   ;     place where an operand dies -- exactly what the hand kernel did, which cgF above does not.
+   (snoc l x) (cat l (list x))
+   (nthl l i) (? (= i 0) (cap l) (nthl (cup l) (- i 1)))
+   (dfind nd dag i) (? (atom? dag) -1 (= nd (cap dag)) i (dfind nd (cup dag) (+ i 1)))   ; CSE: existing node?
+   (dadd nd dag) (: i (dfind nd dag 0) (? (< -1 i) (L i dag) (L (tally dag) (snoc dag nd))))
+   (vnum e dag) (? (two? e) (: ra (vnum (caup e) dag) rb (vnum (caup (cup e)) (caup ra))
+                              (dadd (L (cap e) (cap ra) (cap rb)) (caup rb)))            ; binop: (op vn-a vn-b)
+                            (dadd (L 'L e 0) dag))                                       ; leaf: (L datum 0)
+   (vnall rs dag acc) (? (two? rs) (: r (vnum (cap rs) dag) (vnall (cup rs) (caup r) (snoc acc (cap r)))) (L acc dag))
+   (binop? dag v) (! (id? (cap (nthl dag v)) 'L))
+   (luse v dag rv n) ((: (go i ds best) (? (atom? ds) (? (member? v rv) n best)         ; last index using v (roots live to n)
+       (go (+ i 1) (cup ds) (? (&& (binop? dag i) (|| (= v (caup (cap ds))) (= v (caup (cup (cap ds)))))) i best)))) 0 dag -1)
+   (dies? v i dag rv n) (&& (binop? dag v) (&& (= (luse v dag rv n) i) (! (member? v rv))))
+   (opc op) (? (id? op 'mov) 16 (id? op '+) 88 (id? op '*) 89 (id? op '-) 92 (id? op '/) 94 ())   ; movsd/addsd/mulsd/subsd/divsd
+   (sse op dst src) (L 242 (+ 64 (+ (? (> dst 7) 4 0) (? (> src 7) 1 0))) 15 (opc op) (+ 192 (+ (* 8 (% dst 8)) (% src 8))))
+   (ucom a b) (L 102 (+ 64 (+ (? (> a 7) 4 0) (? (> b 7) 1 0))) 15 46 (+ 192 (+ (* 8 (% a 8)) (% b 8))))   ; ucomisd a,b (a-b)
+   (rgof leaf env) (: e (clook leaf env) (? (two? e) (caup e) (scare 'glaze-leaf leaf)))   ; leaf -> its fixed reg
+   (asm ps) (foldl (\ a b (+ a b)) () ps)                                                  ; concat a LIST of byte pieces (+ is associative)
+   (efold names i) (? (two? names) (link (L (cap names) i) (efold (cup names) (+ i 1))) ())   ; names -> (name reg) from reg i
+   (alloc dag rv env n)                                                                  ; -> (code . regof-tablet)
+    (: rg (tablet 0) pl (tablet 0) _ (pin pl 'p '(0 1 12 13 14 15))
+       (pop u) (: p (peep pl 'p ()) _ (pin pl 'p (cup p)) (cap p))
+       (push r) (pin pl 'p (link r (peep pl 'p ())))
+       code ((: (go i acc) (? (= i n) acc
+          (: nd (nthl dag i)
+             (? (id? (cap nd) 'L) (: _ (pin rg i (rgof (caup nd) env)) (go (+ i 1) acc))   ; leaf: fixed reg, no code
+                (: op (cap nd) a (caup nd) b (caup (cup nd)) ra (peep rg a 0) rb (peep rg b 0)
+                   adie (dies? a i dag rv n) bdie (dies? b i dag rv n)
+                   dst (? adie ra (pop 0))                                                 ; reuse a's reg if a dies
+                   _ (? (&& bdie (! (= rb dst))) (push rb) 0) _ (pin rg i dst)             ; free b if it dies
+                   (go (+ i 1) (+ acc (+ (? (= dst ra) () (sse 'mov dst ra)) (sse op dst rb))))))))) 0 ())
+       (L code rg))
    ; cgF: a FLOAT subexpr -> xmm0, over the hoist table ht + THREE envs: fe (float locals in xmm8..,
    ; fload), ce (int loop-COUNTERS in raw regs -> cvtsi2sd), ie (int Sp params -> fxv+cvtsi2sd).
    (cgF ht ce ie fe e d) (? (gem? e)   (hcon e ht)
@@ -259,17 +296,17 @@
        ht (htbl (fcc bound (fccl updates (fcc testexpr (fccl (map (\ f (caup (cap f))) finit) ())))) 2)
        pre-d ((: (go j fs) (? (two? fs) (+ (+ (cgF ht () ips fenv (caup (cap fs)) 0) (fstore j)) (go (+ j 1) (cup fs))) ())) 0 finit)
        pre-z ((: (go j) (? (< j (tally fvars)) (+ (fzero (+ nf j)) (go (+ j 1))) ())) 0)
-       pre   (+ pre-d (+ pre-z '(77 49 192)))                        ; xor r8,r8  (counter it = 0)
+       pre   (asm (L pre-d pre-z '(77 49 192)))                     ; xor r8,r8  (counter it = 0)
        tint  (+ '(73 131 248) (list lim))                           ; cmp r8, lim
-       tflt  (+ (cgF ht () ips fenv testexpr 0) (+ (rpush 0) (+ (hcon bound ht) (+ (rpop 0) '(102 15 46 200)))))   ; mag ; bound ; ucomisd
+       tflt  (asm (L (cgF ht () ips fenv testexpr 0) (rpush 0) (hcon bound ht) (rpop 0) '(102 15 46 200)))   ; mag ; bound ; ucomisd
        ups   ((: (go us) (? (two? us) (+ (+ (cgF ht () ips fenv (cap us) 0) xpush) (go (cup us))) ())) updates)
        pops  ((: (go j) (? (< j nf) () (+ (fpop j) (go (- j 1))))) (+ nf (- (tally fvars) 1)))
-       body  (+ ups (+ pops '(73 255 192)))                         ; ... ; inc r8
+       body  (asm (L ups pops '(73 255 192)))                       ; ... ; inc r8
        Lb (tally body)  Lt (tally tflt)
        jge (+ '(15 141) (le4 (+ (+ Lt 6) (+ Lb 5))))                ; counter exit: jge EXIT  (skip tflt+exj+body+back)
        exj (+ (ucmp-exit cmpop) (le4 (+ Lb 5)))                     ; float  exit: skip body+back
        back (+ '(233) (le4 (- 0 (+ (+ (+ (+ (+ 4 6) Lt) 6) Lb) 5))))   ; jmp TOP
-       (+ (hpre ht) (+ pre (+ tint (+ jge (+ tflt (+ exj (+ body (+ back '(76 137 192))))))))))   ; preload consts; EXIT: mov rax,r8
+       (asm (L (hpre ht) pre tint jge tflt exj body back '(76 137 192))))   ; preload consts; EXIT: mov rax,r8
    ; (jitfrec src '(px py) finit fvars updates testexpr cmpop bound lim) -> native pixel kernel.
    (jitfrec lam ips finit fvars updates testexpr cmpop bound lim)
     (nif (emit (+ (loopcode-f ips finit fvars updates testexpr cmpop bound lim) epilogue-mn)) (ev lam) lam (tally ips))
@@ -282,31 +319,38 @@
     (: fenv (cat '(cx cy) fvars)
        cenv (L (L 'px '(242 73 15 42 194)) (L 'py '(242 73 15 42 195)))         ; px=cvtsi2sd r10, py=r11
        ht (htbl (fcc bound (fccl updates (fcc testexpr (fcc cyd (fcc cxd ()))))) 2)   ; distinct consts -> xmm2..7
-       cxb (+ (cgF ht cenv () fenv cxd 0) (fstore 0))                           ; cx -> xmm8
-       cyb (+ (cgF ht cenv () fenv cyd 0) (fstore 1))                           ; cy -> xmm9
-       ini (+ (fzero 2) (+ (fzero 3) '(77 49 192)))                            ; zx=zy=0 ; xor r8,r8 (it=0)
-       tflt (+ (cgF ht () () fenv testexpr 0) (+ (rpush 0) (+ (hcon bound ht) (+ (rpop 0) '(102 15 46 200)))))
-       ups ((: (go us) (? (two? us) (+ (+ (cgF ht () () fenv (cap us) 0) xpush) (go (cup us))) ())) updates)
-       pops ((: (go j) (? (< j 2) () (+ (fpop j) (go (- j 1))))) (+ 2 (- (tally fvars) 1)))
-       ibody (+ ups (+ pops '(73 255 192)))                                    ; ... ; inc r8
-       acc (+ '(77 1 193) (guard 0))                                           ; add r9,r8 ; jno over deopt (overflow -> bignum)
-       S (tally cxb)  Y (tally cyb)  T (tally tflt)  Bd (tally ibody)  La (tally acc)
-       (+ (hpre ht) (+ '(77 49 201 77 49 210)                                 ; preload consts (xmm2..7); xor r9,r9; xor r10,r10
-        (+ (+ '(73 131 250) (list pxn))                                       ; LPX: cmp r10, pxn
-         (+ (+ '(15 141) (le4 (+ 63 (+ S (+ Y (+ T (+ Bd La)))))))            ; jge DONE
-          (+ cxb (+ '(77 49 219)                                              ; cx->xmm8 ; xor r11,r11 (py=0)
-           (+ (+ '(73 131 251) (list pyn))                                    ; LPY: cmp r11, pyn
-            (+ (+ '(15 141) (le4 (+ 42 (+ Y (+ T (+ Bd La))))))               ; jge PXNEXT
-             (+ cyb (+ ini                                                    ; cy->xmm9 ; zero zx,zy,it
-              (+ (+ '(73 131 248) (list lim))                                 ; LTOP: cmp r8, lim
-               (+ (+ '(15 141) (le4 (+ 11 (+ T Bd))))                         ; jge ESC
-                (+ tflt (+ (+ (ucmp-exit cmpop) (le4 (+ 5 Bd)))               ; mag test ; <exit> ESC
-                 (+ ibody (+ (+ '(233) (le4 (- 0 (+ 21 (+ T Bd)))))           ; body ; jmp LTOP
-                  (+ acc (+ '(73 255 195)                                     ; ESC: acc += it (guarded) ; inc r11
-                   (+ (+ '(233) (le4 (- 0 (+ 52 (+ Y (+ T (+ Bd La)))))))     ; jmp LPY
-                    (+ '(73 255 194)                                          ; PXNEXT: inc r10
-                     (+ (+ '(233) (le4 (- 0 (+ 73 (+ S (+ Y (+ T (+ Bd La))))))))   ; jmp LPX
-                      '(76 137 200)))))))))))))))))))))))                     ; DONE: mov rax, r9
+       cxb (+ (cgF ht cenv () fenv cxd 0) (fstore 0))                           ; cx -> xmm8 (once per px)
+       cyb (+ (cgF ht cenv () fenv cyd 0) (fstore 1))                           ; cy -> xmm9 (once per py)
+       ini (asm (L (fzero 2) (fzero 3) '(77 49 192)))                          ; zx=zy=0 ; xor r8,r8 (it=0)
+       ; --- OPTIMIZING allocator on the inner body: mag + the fvar updates, CSE'd, register-only ---
+       aenv (cat (efold fenv 8) ht)                                            ; cx=8 cy=9 zx=10 zy=11 ; consts from ht
+       AR (vnall (link testexpr updates) () ())  rootv (cap AR)  dag (caup AR)  nn (tally dag)
+       AL (alloc dag rootv aenv nn)  bodyc (cap AL)  rg (caup AL)
+       magr (peep rg (cap rootv) 0)
+       wb (asm ((: (go j rs) (? (two? rs) (link (sse 'mov (+ 10 j) (peep rg (cap rs) 0)) (go (+ j 1) (cup rs))) ())) 0 (cup rootv)))   ; zx<-newzx etc
+       Lc (tally bodyc)  Lwb (tally wb)  Li (+ Lc (+ Lwb 29))                   ; itc4+jge6+body+ucom5+exj6+wb+incr8(3)+iback5
+       iblk (asm (L (+ '(73 131 248) (list lim))                               ; LTOP: cmp r8, lim
+                    (+ '(15 141) (le4 (+ Lc (+ Lwb 19))))                      ; jge ESC
+                    bodyc                                                      ; the CSE'd, register-only inner body
+                    (ucom magr (hlook bound ht))                              ; ucomisd mag, bound
+                    (+ (ucmp-exit cmpop) (le4 (+ Lwb 8)))                     ; <exit> ESC
+                    wb '(73 255 192)                                          ; writeback ; inc r8
+                    (+ '(233) (le4 (- 0 Li)))))                               ; jmp LTOP
+       acc (asm (L '(77 1 193) (guard 0)))                                     ; add r9,r8 ; jno over deopt (overflow -> bignum)
+       S (tally cxb)  Y (tally cyb)  La (tally acc)
+       (asm (L (hpre ht) '(77 49 201 77 49 210)                               ; preload consts (xmm2..7); xor r9,r9; xor r10,r10
+               (+ '(73 131 250) (list pxn))                                   ; LPX: cmp r10, pxn
+               (+ '(15 141) (le4 (+ 42 (+ S (+ Y (+ Li La))))))              ; jge DONE
+               cxb '(77 49 219)                                              ; cx->xmm8 ; xor r11,r11 (py=0)
+               (+ '(73 131 251) (list pyn))                                   ; LPY: cmp r11, pyn
+               (+ '(15 141) (le4 (+ 21 (+ Y (+ Li La)))))                    ; jge PXNEXT
+               cyb ini                                                       ; cy->xmm9 ; zero zx,zy,it
+               iblk                                                          ; LTOP..iback (the optimized inner loop)
+               acc '(73 255 195)                                            ; ESC: acc += it (guarded) ; inc r11
+               (+ '(233) (le4 (- 0 (+ 31 (+ Y (+ Li La))))))               ; jmp LPY
+               '(73 255 194)                                                ; PXNEXT: inc r10
+               (+ '(233) (le4 (- 0 (+ 52 (+ S (+ Y (+ Li La)))))))         ; jmp LPX
+               '(76 137 200))))                                             ; DONE: mov rax, r9
    ; (jitfgrid src pxn pyn cxderive cyderive fvars updates testexpr cmpop bound lim) -> native grid.
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim)
     (nif (emit (+ (loopcode-grid pxn pyn cxd cyd fvars updates testexpr cmpop bound lim) epilogue)) (ev lam) lam 1)
