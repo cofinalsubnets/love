@@ -242,6 +242,85 @@
              (: sub (\ e (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e consts))
                 keep (afilter (\ pr (! (&& (symp (cap pr)) (whole? (cup pr))))) pairs)
                 (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
+   ; --- SPECIALIZATION (autospec): mix (doc/proto/mix.l, the offline partial evaluator) wired in as a
+   ;     glaze recognizer -- the 1st Futamura projection COMPOSED with the native lane. an interpreter
+   ;     applied to a STATIC program (a const-bound quoted AST) and a DYNAMIC input specializes: the
+   ;     dispatch + AST navigation fold away to the program's straight-line arithmetic, which defoliate/
+   ;     lift/autogroup then native -- so an interpreter-over-static-data loop runs as COMPILED code,
+   ;     capturing the interpretation-overhead prize (interp-spec.l measured ~6.5x) the in-compiler
+   ;     unfold missed. `spe` is the proto engine with `defs` (the form's fn defs) threaded as a param,
+   ;     not a hardcoded table; a STATIC-driven recursion unrolls (the seen-set bounds re-entry of the
+   ;     same signature, sfuel bounds a runaway), a DYNAMIC-driven one residualizes clean. autospec is a
+   ;     NO-OP (id-identical) on any form with no defined-fn call over a static-data binding.
+   (sstat v) (L 's v)  (sdyn c) (L 'r c)  (sstat? p) (id? (cap p) 's)  (spval p) (caup p)
+   (sqv v) (L '\ v)                                                                ; quote a static datum -> seen as DATA
+   (sreify p) (: v (caup p) (? (&& (sstat? p) (! (constellation? v))) (sqv v) v))  ; non-number static -> quoted
+   (sstatval? p v) (&& (sstat? p) (= v (spval p)))
+   (ssig apv) (map (\ p (? (sstat? p) (spval p) '_)) apv)                          ; static signature (dyn slots -> _)
+   (szipenv ps apv) (? (atom? ps) () (link (L (cap ps) (cap apv)) (szipenv (cup ps) (cup apv))))
+   (slook env k) (? (atom? env) (sdyn k) (id? k (caap env)) (caup (cap env)) (slook (cup env) k))  ; unbound -> dynamic
+   (sdeflook nm defs) (? (atom? defs) () (id? nm (caap defs)) (cap defs) (sdeflook nm (cup defs)))
+   (sprim? h) (member? h '(* - + ! cap cup caap caup cuap cuup id?))               ; arith + static AST navigation
+   (ssimp1 h a b)
+    (? (&& (id? h '*) (sstatval? a 1)) b   (&& (id? h '*) (sstatval? b 1)) a       ; drop the * and + units on a residual
+       (&& (id? h '+) (sstatval? a 0)) b   (&& (id? h '+) (sstatval? b 0)) a
+       (sdyn (L h (sreify a) (sreify b))))
+   (speprim h apv)
+    (? (all sstat? apv) (sstat (base-ev (link h (map sqv (map spval apv)))))       ; all static -> FOLD over quoted data
+       (= 2 (tally apv)) (ssimp1 h (cap apv) (caup apv))                           ; binary -> residualize, drop units
+       (sdyn (link h (map sreify apv))))
+   (spcondm cs env seen defs)
+    (? (atom? (cup cs)) (spe (cap cs) env seen defs)                              ; lone else
+       (: cv (spe (cap cs) env seen defs)
+          (? (! (sstat? cv)) (sdyn (link '? (sresidcl cv (caup cs) (cuup cs) env seen defs)))  ; dynamic test -> residual tail
+             (! (spval cv)) (spcondm (cuup cs) env seen defs)                     ; static false -> drop clause
+             (spe (caup cs) env seen defs))))                                     ; static true  -> take result
+   (sresidcl cv then rest env seen defs)
+    (link (sreify cv) (link (sreify (spe then env seen defs)) (sresidtl rest env seen defs)))
+   (sresidtl cs env seen defs)
+    (? (atom? (cup cs)) (L (sreify (spe (cap cs) env seen defs)))
+       (: cv (spe (cap cs) env seen defs)
+          (? (! (sstat? cv)) (sresidcl cv (caup cs) (cuup cs) env seen defs)
+             (! (spval cv)) (sresidtl (cuup cs) env seen defs)
+             (L (sreify (spe (caup cs) env seen defs))))))
+   sfuel (tablet 0)
+   (specall def apv seen defs)                                                    ; unfold a defined-fn call, unless in progress / out of fuel
+    (: nm (cap def) ps (caup def) bd (caup (cup def)) key (link nm (ssig apv)) n (peep sfuel 'n 0)
+       (? (member? key seen) (sdyn (link nm (map sreify apv)))                    ; signature in progress -> residual call
+          (! n) (sdyn (link nm (map sreify apv)))                                 ; fuel out -> bail to a residual call (still correct)
+          (: _ (pin sfuel 'n (- n 1)) (spe bd (szipenv ps apv) (link key seen) defs))))
+   (spe x env seen defs)                                                          ; the partial evaluator
+    (? (constellation? x) (sstat x)
+       (nom? x) (slook env x)
+       (atom? x) (sstat x)
+       (: h (cap x) a (cup x)
+          (? (&& (id? h '\) (atom? (cup a))) (sstat (cap a))                      ; (\ datum) quote -> a static datum
+             (id? h '?) (spcondm a env seen defs)
+             (sprim? h) (speprim h (map (\ e (spe e env seen defs)) a))
+             (: d (sdeflook h defs)
+                (? d (specall d (map (\ e (spe e env seen defs)) a) seen defs)
+                     (sdyn (link h (map sreify (map (\ e (spe e env seen defs)) a)))))))))
+   (smix call statenv defs) (: _ (pin sfuel 'n 100000) (sreify (spe call statenv () defs)))   ; specialize one call -> residual source
+   ; autospec proper: build defs (fn bindings) + statenv (names bound to a quoted datum), then replace
+   ; every call to a defined fn that mentions a static name with its specialized residual (in place).
+   (sconst? v) (&& (two? v) (id? (cap v) '\) (= 2 (tally v)))                      ; a quoted-constant binding value (\ datum)
+   (sment? e statn) (? (symp e) (member? e statn)  (two? e) (srefany? e statn)  0)
+   (srefany? args statn) (? (atom? args) 0 (|| (sment? (cap args) statn) (srefany? (cup args) statn)))
+   (specall? e defn statn) (&& (two? e) (member? (cap e) defn) (srefany? (cup e) statn))   ; defined-fn call mentioning a static name
+   (swalk e statenv defs defn statn)
+    (? (atom? e) e
+       (dquote? e) e                                                              ; never descend into a quoted datum
+       (specall? e defn statn) (smix e statenv defs)                              ; specialize this call in place
+       (map (\ x (swalk x statenv defs defn statn)) e))                           ; walk EVERY element (a list head holds the loop body)
+   (autospec form)
+    (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
+       (: parsed (anat-defs (cup form)) pairs (cap parsed)
+          fnps (afilter (\ pr (two? (cap pr))) pairs)
+          defs (map (\ pr (link (caap pr) (link (cup (cap pr)) (link (cup pr) ())))) fnps)   ; (name (p..) body)
+          statps (afilter (\ pr (&& (symp (cap pr)) (sconst? (cup pr)))) pairs)
+          statenv (map (\ pr (L (cap pr) (sstat (caup (cup pr))))) statps)        ; name -> (stat datum)
+          (? (! (&& (two? defs) (two? statenv))) form                            ; need a defined fn AND a static-data binding
+             (swalk form statenv defs (map cap defs) (map cap statenv)))))
    ; --- DEFORESTATION: fuse a map/filter pipeline under a CONSUMER into ONE pass, then lower it over
    ;     (jot N) to the named-let LOOP `lift` already glazes -- so a combinator pipeline compiles to
    ;     native. The rewrite-level companion to the codegen recognizers; the standalone spec lives in
@@ -343,7 +422,7 @@
     (? (! (two? form0)) form0
        (! (id? (cap form0) ':)) form0
        (atom? (cup form0)) form0
-       (: form (lift (defoliate (fold-consts form0)))   ; deforest pipelines -> loops, THEN lambda-lift named-let bodies (primes' loops + fused folds -> flat group fns)
+       (: form (lift (defoliate (autospec (fold-consts form0))))   ; specialize interp-over-static-data, deforest pipelines -> loops, THEN lambda-lift named-let bodies -> flat group fns
           parsed (anat-defs (cup form)) pairs (cap parsed)
           fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all symp (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
           (? (! (two? fns)) form0                                                            ; no candidate functions -> original
@@ -546,5 +625,25 @@
        (&& !(id? (autogroup dap) dap) (1 = (ev dap)) (= (base-ev dap) (ev dap))))        ; all (+1 i)>0 -> producer fuses into the guard
     ; a fn that calls OUT of the fragment (into `link`) drops the whole group -> form unchanged, interpreted
     (: ro '(: (build n) (? (< n 1) () (link n (build (- n 1)))) (build 3))
-       (&& (id? (autogroup ro) ro) ('(3 2 1) = (ev ro)))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
+       (&& (id? (autogroup ro) ro) ('(3 2 1) = (ev ro))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
+    ; SPECIALIZATION (autospec/mix): a recursive interpreter ev1 applied to a STATIC program P (a const-
+    ; bound quoted AST) + a DYNAMIC loop var specializes -- the dispatch + AST navigation fold away to P's
+    ; straight-line arithmetic (the Horner residual), so the loop natives. == an interpreted ev1 loop (the
+    ; 1st Futamura projection composed with the glaze; the dispatch overhead interp-spec.l clocks at ~6.5x).
+    (: sp '(: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)  (id? (cap nd) 'var) x
+                            (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                            (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))  0)
+               P '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7))
+               (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ev1 P i))) a)) 0 0)  (run 1000))
+       (&& !(id? (autogroup sp) sp) (500001505000 = (ev sp)) (= (base-ev sp) (ev sp))))   ; sum P(i) i<1000, native == interp
+    ; a DIFFERENT static program (a mul of two sub-exprs) specializes to its OWN residual -- == interp (soundness breadth)
+    (: sp2 '(: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)  (id? (cap nd) 'var) x
+                             (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                             (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))  0)
+                Q '(mul (add (var) (lit 1)) (add (var) (lit 2)))
+                (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ev1 Q i))) a)) 0 0)  (run 50))
+       (&& !(id? (autogroup sp2) sp2) (= (base-ev sp2) (ev sp2))))   ; sum (i+1)(i+2) i<50, native == interp
+    ; autospec is a NO-OP without BOTH a defined fn and a static-data binding -> a plain fib group is byte-unchanged
+    (: nf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 10))
+       (id? (autospec nf) nf)))
  _ (say err "ai/glaze/auto: ev auto-natives qualifying closures + counted loops + D-dim float grids + mutually-recursive arith groups (transparent)\n"))
