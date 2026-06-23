@@ -380,6 +380,34 @@
                      '(242 15 17 66 8) '(72 137 208) '(72 131 194 16)))   ; movsd [rdx+8],xmm0 ; mov rax,rdx ; add rdx,16
        epifr '(72 137 1  72 131 198 16  72 139 6  255 224)           ; mov [rcx],rax ; add rsi,16 ; Continue  (NO putfix: rax IS the gem)
        (nif (emit (asm (L (cgf v (caup (cup lam)) 0) roomg nanc boxw epifr))) (ev lam) lam 1))
+   ; --- BYTE LAW (string RESULT): (jitba '(\ s (+ s B))) -- native s ++ [B], a fresh heap string. Same
+   ;     heap-result machinery as jitfr but VARIABLE-sized: read len=[s+8], reserve n = str_type_width +
+   ;     b2w(len+1) content words + 1 GC tag word, ROOM-GUARD-or-deopt (the alloc twin again), write the
+   ;     ai_str header (kind = lvm_str via apof, len+1), COPY len bytes (an inline loop -- rep movsb
+   ;     would clobber Ip=rsi/Sp=rcx), append B, write the tag word (head|2, the cheney terminator),
+   ;     return the raw ai_str ptr (no putfix). A non-string s (fixnum/list/num) hits the kind TYPE
+   ;     GUARD and deopts to the generic interpreter `+`. B is a compile-time byte (0..255). The
+   ;     emitted body is offset-independent: every branch is a fixed local distance. ⚠ x86-64.
+   (jitba lam)
+    (: body (caup (cup lam))  B (caup (cup body))  kind (apof "")
+       (nif (emit (asm (L
+          '(76 139 1) (L 65 246 192 1 116 (tally deopt)) deopt                  ; mov r8,[rcx](=s); test r8b,1; jz+; deopt (fixnum)
+          '(77 139 16 73 187) (le8 kind) (L 77 57 218 116 (tally deopt)) deopt   ; mov r10,[r8]; movabs r11,lvm_str; cmp; je+; deopt (non-str)
+          '(77 139 72 8)                                                        ; mov r9,[r8+8]  (len)
+          '(77 141 81 8 73 193 234 3 73 131 194 3)                              ; r10 = total_words = 3 + ((len+8)>>3)
+          '(78 141 20 210 73 131 194 64)                                        ; r10 = Hp + total*8 + floor(64)
+          (L 76 57 209 115 (tally deopt)) deopt                                 ; cmp rcx,r10; jae+; deopt (heap full)
+          '(76 137 26)                                                          ; mov [rdx],r11  (header: lvm_str)
+          '(77 141 81 1 76 137 82 8)                                            ; r10=len+1 ; mov [rdx+8],r10
+          '(49 192 76 57 200 15 141 16 0 0 0)                                   ; xor eax,eax ; COPY: cmp rax,r9 ; jge DONE(+16)
+          '(69 15 182 84 0 16 68 136 84 2 16 72 255 192 235 231)                ; movzx r10d,[r8+rax+16]; mov [rdx+rax+16],r10b; inc rax; jmp COPY
+          (L 66 198 68 10 16 B)                                                 ; DONE: mov byte [rdx+r9+16], B
+          '(77 141 81 8 73 193 234 3 73 131 194 2 78 141 28 210)                ; r10 = tag word offset n ; lea r11,[rdx+r10*8] (&tag)
+          '(73 137 210 73 131 202 2 77 137 19)                                  ; r10=Hp ; or r10,2 ; mov [r11],r10  (tag = head|2)
+          '(72 137 208)                                                         ; mov rax,rdx  (result = the new string ptr)
+          '(77 141 81 8 73 193 234 3 73 131 194 3 74 141 20 210)                ; r10=total_words ; lea rdx,[rdx+r10*8]  (Hp += total*8)
+          '(72 137 1 72 131 198 16 72 139 6 255 224))))                         ; mov [rcx],rax ; add rsi,16 ; Continue (NO putfix)
+        (ev lam) lam 1))
    ; --- FLOAT RECURRENCE LOOP OWNER (the mandelbrot escape-loop class) ----------
    ; owns a numeric escape loop end to end: FIXNUM inputs (pixel coords) -> derived
    ; floats (computed once) -> a float recurrence over loop-vars in xmm8.. with an
@@ -676,7 +704,17 @@
   ; traces/moves it like any gem. hold one across a big alloc (forces GC), and box thousands under
   ; pressure -- if the box were malformed or the bump corrupted Sp's region, these would diverge/crash.
   (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)))  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
-  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)))  ys (map gfr (jot 4000))  zs (map (\ x (+ (* x 1.5) 2.0)) (jot 4000)) (= ys zs))  ; 4000 boxes under GC pressure == interp   ; non-string -> guard deopts == interp
+  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)))  ys (map gfr (jot 4000))  zs (map (\ x (+ (* x 1.5) 2.0)) (jot 4000)) (= ys zs))  ; 4000 boxes under GC pressure == interp
+  ; BYTE LAW (jitba): native s ++ [B] -- a fresh heap string, == interp, transparent, GC-safe, deopts
+  (: ba (jitba '(\ s (+ s 66)))
+     (&& (string? (ba "abc")) (= "abcB" (ba "abc")) (= ((\ s (+ s 66)) "abc") (ba "abc"))   ; appends byte 66='B', == interp
+         (= "B" (ba "")) (4 = (tally (ba "abc")))                                            ; empty input -> a 1-byte string
+         ((\ s (+ s 66)) = ba)                                                               ; =-identical to source
+         (= (map (\ s (+ s 66)) (L "x" "ab" "")) (map ba (L "x" "ab" "")))                   ; composes == interp
+         (= (+ 5 66) (ba 5)) (= (+ '(1 2) 66) (ba '(1 2)))))                                 ; non-string s -> kind guard deopts -> generic +
+  (: ba (jitba '(\ s (+ s 90)))  b (ba "hello")  _ (tally (jot 200000))  (= "helloZ" b))     ; the string box survives a forced GC
+  (: ba (jitba '(\ s (+ s 33)))  xs (map (\ i (string (L (+ 97 (% i 26))))) (jot 1500))      ; 1500 strings ++ '!' under GC pressure == interp
+     (= (map (\ s (+ s 33)) xs) (map ba xs)))   ; non-string -> guard deopts == interp
   ; --- added coverage: setcc <=/>/>=/=, multi-arg (cgn) %/&/|/cmp/?, *-fold loop, //-by-0 deopt ---
   ; comparison RESULT codes -- only `<` reached a setcc before, 4 of 5 opcodes were dark
   (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))            ; setcc <=
