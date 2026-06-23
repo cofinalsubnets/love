@@ -192,8 +192,7 @@
    member? (compose any (=))
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) ())
-   (jot n) ((: (go i) (? (< i n) (link i (go (+ i 1))))) 0)
-   (pen x) (? (star? x) (jot x) (prod x))     ; pen: the monadic `*` reading -- jot a star (0..n-1), else prod (internal, mopped)
+   (jot x) (? (star? x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0) (prod x))   ; generic, the monadic `*`: jot a star to 0..x-1, else prod (a scalar prods vacuously to itself)
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
@@ -259,7 +258,7 @@
 ; unfactorable run falls back to the plain application.
 (: monadics
    (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
-      (L (L '< 'cap) (L '> 'cup) (L '<< 'caap) (L '>> 'cuup) (L '+ 'net) (L '* 'pen)
+      (L (L '< 'cap) (L '> 'cup) (L '<< 'caap) (L '>> 'cuup) (L '+ 'net) (L '* 'jot)
          (L '| 'abs) (L '- 'negate) (L '/ 'reciprocal) (L '% 'fraction) (L '? 'bit)
          (L '$ 'saturate)
          (L '! 'nil?) (L '. 'dot))))

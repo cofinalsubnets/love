@@ -327,8 +327,9 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; cap and cup are its two projections -- the matched pair the string diagrams bend, cap the head and
 ; cup the rest, each the other's mirror (no cap: end of the list); caap caup .. cuuup are the
 ; compounds, read right to left like their c[ad]+r ancestors (cap/cup <- cap/cbp <- car/cdr). (sort
-; l) orders by the total order, in C (descending = rev); (sortby le l) takes a predicate. (jot n)
-; counts out the first n charms, '(0 .. n-1). the other higher-order functions live in the prel.
+; l) orders by the total order, in C (descending = rev); (sortby le l) takes a predicate. (jot x) is
+; the monadic `*`, generic: a star counts out to the first x charms '(0 .. x-1), a list or array
+; products (a scalar prods vacuously to itself). the other higher-order functions live in the prel.
 ; demo:
 (cap '(1 2 3))       ; 1
 (cup '(1 2 3))       ; (2 3)
@@ -419,7 +420,7 @@ $(cask 4)             ; 0       a zeroed cask is nothing
 ; after an open delimiter is the form's operator (the section/escape law, what keeps minified source
 ; legal); + and - lead numbers and kebab names, fusing only to ( ' " @ ~ # -- so -3 is a number and -x
 ; a name, while -(f x) is negate. the monadic words: < cap, > cup (<< >> <> >< the compounds), + net (+
-; turned inward), * prod (but a STAR jots: *5 = 0..4, prod of a scalar being vacuously itself), | abs,
+; turned inward), * jot (a STAR jots: *5 = 0..4, else prod -- a scalar prods vacuously to itself), | abs,
 ; - negate, / reciprocal, % fraction, ? bit (the Iverson bracket); $ ! . ride the same lane ($ is
 ; saturate -- `$` factors to the `saturate` nif, `sat` its short alias). \ never fuses (form space).
 ; demo:
