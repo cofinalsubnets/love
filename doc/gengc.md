@@ -149,11 +149,15 @@ the minor.
 ## Staging into C (each stage keeps `make test` green)
 
 0. **instrumentation** — `n_seen`/`n_evac` in `gauge`. *(done)*
-1. **nursery region + `young?`** — allocate into a nursery, but make a minor
-   *collect everything* (semantically a no-op vs today). Gate stays green.
-2. **the barrier** — record old→young at `ai_mapput` + the `map_grow` backing
-   swap. Validate under `-DAI_STAT` with an assert: every old→young edge is in
-   the rem set (an audit walk at each collection).
+1. **the watermark + observability** — a `nursery` field (= `hp` after each
+   collection; `[nursery, hp)` is young, `[end, nursery)` old), maintained in
+   `gcg`, exposed as `gauge` `old`. No behaviour change (gate green, valgrind
+   clean). The `young?` predicate lands with its first caller (stage 2) — an
+   unused `static inline` is a `-Werror` failure here. *(done)*
+2. **the barrier + `young?`** — `ai_young(p) = lamp(p) && nursery <= p < hp`;
+   record old→young at `ai_mapput` + the `map_grow` backing swap. Validate under
+   `-DAI_STAT` with an assert: every old→young edge is in the rem set (an audit
+   walk at each collection).
 3. **the real minor** — `gcp` with nursery bounds, roots ∪ rem, promote into old;
    major stays `gcg`. Differential oracle: the GC-stress test (1500 strings under
    pressure == interp) that the glaze string lanes already lean on.

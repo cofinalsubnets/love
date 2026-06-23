@@ -834,6 +834,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->len = len0, g->pool = (void*) g, g->alloc = al;
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
+ g->nursery = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
  // book + macro maps (lookup-lambdas) then the main task text.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 6))) {
   union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
@@ -1068,6 +1069,7 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
  // fixpoint the same way.
  h->symbols = symbols_rebuild(h, g);
  run_finalizers(h);
+ h->nursery = h->hp;                  // everything compacted (incl. the rebuilt table + finalizers) is now OLD; future bumps are young
 #ifdef AI_STAT
  if (h->len > h->max_len) h->max_len = h->len;                                       // instrumentation: peak pool len
  { uintptr_t heap = h->hp - h->end; if (heap > h->max_heap) h->max_heap = heap; }    // peak live (compacted) heap
@@ -3818,11 +3820,12 @@ op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 //   [5] max_heap  peak live heap after a collection (words)
 //   [6] n_seen    Σ heap occupancy entering each collection (scanned = live + dead, words)
 //   [7] n_evac    Σ heap survivors copied out each collection (live, words)
-// derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap. Indices [3..7]
-// read 0 unless built -DAI_STAT. An array (not a list): every field is a charm, so a flat
-// numeric tray is the natural rep -- compact, and reductions (net/max) apply directly.
+//   [8] old       the tenured set: words in [end, nursery) -- carried by the last collection (always on)
+// derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap ; young = heap - old - core.
+// Indices [3..7] read 0 unless built -DAI_STAT ([8] is always live). An array (not a list): every
+// field is a charm, so a flat numeric tray is the natural rep -- compact, and net/max apply directly.
 lvm(lvm_gauge) {
- enum { N = 8 };
+ enum { N = 9 };
  uintptr_t const bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + N * ai_T[ai_Z];
  Have(b2w(bytes));
  struct ai_vec *v = (struct ai_vec*) Hp;
@@ -3839,8 +3842,9 @@ lvm(lvm_gauge) {
  vec_put_int(v, 6, (intptr_t) g->n_seen);
  vec_put_int(v, 7, (intptr_t) g->n_evac);
 #else
- for (int i = 3; i < N; i++) vec_put_int(v, i, 0);              // gc instrumentation gated off (-DAI_STAT to keep it)
+ for (int i = 3; i < 8; i++) vec_put_int(v, i, 0);              // gc instrumentation gated off (-DAI_STAT to keep it)
 #endif
+ vec_put_int(v, 8, (intptr_t) (g->nursery - (word*) g->end));   // old (tenured) set, words -- always live
  return Sp[0] = word(v), Ip++, Continue(); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. The string-lane glaze

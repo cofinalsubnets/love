@@ -139,6 +139,11 @@ struct ai {
  union { uintptr_t t0; ai_word *cp; };
  void *(*alloc)(struct ai*, void*, size_t);  // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
  uintptr_t b;
+ ai_word *nursery;      // GENERATIONAL watermark: hp right after the last collection, so [nursery, hp) is
+                        // the YOUNG set (allocated since) and [end, nursery) the OLD/tenured set. A raw pool
+                        // pointer (like hp/sp/cp), NOT a traced value -- recomputed every collection, never
+                        // forwarded. Stage 1: maintained + observed (gauge `old`); the minor that reaps the
+                        // young set lands later. See doc/gengc.md.
 #ifdef AI_STAT
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words) -- build -DAI_STAT to keep them; off, the core is 5 words leaner and gauge reports 0 for them
            n_seen, n_evac;          // Σ over collections: heap occupancy entering each (scanned = live+dead) and survivors copied out (live). mortality = (n_seen-n_evac)/n_seen; copy-amp = n_evac/max_heap -- the generational-GC justifier (does the same live set get recopied every cycle?)
