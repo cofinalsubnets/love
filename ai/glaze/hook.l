@@ -47,8 +47,10 @@
     (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)                      ; inner (\ x (+ x y)) is the embedded one
        (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3)))            ; native captured closure, composes
            (= a5 ((\ y (\ x (+ x y))) 5))))                         ; ... and = the interpreter's instance
-    ; --- transparency + id? on an embedded leaf pulled out as a value ---
-    (: id (ev '(\ z (\ x (+ x 0))))  f (id 9)  g (id 9)            ; two instances of the same embedded source
-       (&& ((\ x (+ x 0)) = f) !(id? f g)))                         ; =/show its source, yet distinct objects
+    ; --- id? + transparency on an embedded CAPTURING leaf pulled out as a value ---
+    ; (the leaf must CAPTURE (z) -- a closed leaf like (\ x (+ x 0)) hoists to a shared
+    ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
+    (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner CAPTURES z -> a fresh native cell per call
+       (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)) !(id? f g))) ; computes right, = the interp instance, yet distinct
    )
  _ (puts "ai/glaze/hook: ev.l ala native-backs every qualifying closure (embedded too), transparent") _ (putc 10))

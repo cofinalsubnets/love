@@ -469,6 +469,27 @@
 ; `(quote x)` -> `(\ x)`: the CL/Scheme name for the one-arg-lambda quote (`'x` sugar).
 (:: 'quote (\ a (link '\ a)))
 
+; --- assert / suite: the strict checkers, baked so they work with NO harness ---
+; assert was never a global -- a bare (assert ...) read the missing nom and ABSORBED
+; its args (a silent always-pass, the leniency that hid a stale claim). now it is real:
+; each form must net true or assert SCARES ('assert . the-source-form), terminal without
+; a help, so a false claim stops the run loud and CROSS-TARGET -- no `nap` (host-only),
+; so this fires on the kernel too. each form is checked once; the failing SOURCE prints,
+; not its (false) value. the big test corpus still pins its own dot-counting `assert`
+; over this in test/00-init.l (a richer report); everywhere else -- the glaze self-tests,
+; an app, the freestanding kernel -- gets this one. `suite` wraps the recurring shape:
+; a battery then a "<name>: ok" sentinel, so a file gates ITSELF (the asserts scare on
+; failure, no sentinel printed; else the name lands and the run is provably whole).
+; NOT named `test` -- that is a common local (ev.l binds it), and a macro ignores
+; lexical scope, so the name must be globally clear; `suite` is unused as a call head.
+; the message shows the SOURCE form: (assert (< x 3)) -> ";; assert (< x 3)" on failure.
+; a purely-constant assertion ((= 5 (+ 1 2))) is folded by cprop -- the partial-eval
+; pre-pass, BEFORE this macro expands -- so the macro is handed the value (0) and the
+; message reads ";; assert 0". harmless: the assertion still fails correctly, and a real
+; assert tests a RUNTIME value (never a closed constant), so its form survives intact.
+(:: 'assert (\ l (link 'do (map (\ e `('? e 0 `('scare `('\ 'assert) `('\ e)))) l))))
+(:: 'suite (\ l (link 'do (link (link 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
+
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
 ; a-type: a WITNESS STAR of the element tier -- the highest of {Z<R<C<O} present in a

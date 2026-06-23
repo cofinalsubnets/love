@@ -75,21 +75,26 @@ test_hostnif: host
 	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_hostnif.out; } \
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
 	done
-# Native-codegen self-test (ai/glaze/emit.l): the x86-64 jit emitter. Like the
-# host-nif tests it needs the built binary (uses the `nat` host nif) and the
-# 00-init assert harness -- emit.l's `(assert ...)` is a NO-OP under a bare -l
-# (no `assert` in scope, so it reads as a missing nom and absorbs its args), so
-# it MUST run with 00-init prepended or it silently always-passes. x86-64 ONLY
-# (emit.l emits x86-64 machine code); skipped elsewhere. Gate = exit 0 AND the
-# "native codegen ok" sentinel (a reader-stop exits 0 without it).
+# Native-codegen self-tests (the ai/glaze/ x86-64 jit): emit (the SSE emitter),
+# auto (ev's source-recognizer: counted loops, float grids, recursive arith
+# groups), hook (ev.l's ala creation-hook, native-backing every qualifying
+# closure). Each needs the built binary (the `nat` host nif). They NO LONGER
+# need 00-init: prel now ships a strict `assert` that SCARES on a false claim
+# (terminal, exit 1), so each file gates ITSELF -- a failure raises before its
+# "ai/glaze/<name>:" sentinel prints, a pass reaches it. auto and hook build on
+# emit's codegen, so each runs with emit.l prepended (alone they correctly scare
+# on the missing deps). x86-64 ONLY (real machine code); skipped elsewhere.
+# Gate per file = exit 0 AND its sentinel (a reader-stop exits 0 without it).
 .PHONY: test_glaze
 ifeq ($a,x86_64)
 test_glaze: host
-	@echo GLAZE ai/glaze/emit.l
-	@cat test/00-init.l ai/glaze/emit.l | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	@for s in emit auto hook; do echo "GLAZE ai/glaze/$$s.l"; \
+	  if [ $$s = emit ]; then src="ai/glaze/emit.l"; else src="ai/glaze/emit.l ai/glaze/$$s.l"; fi; \
+	  cat $$src | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
-	  { [ $$r -eq 0 ] && grep -q "native codegen ok" out/host/.test_glaze.out; } \
-	    || { echo "FAIL glaze (exit $$r)"; exit 1; }
+	  { [ $$r -eq 0 ] && grep -q "ai/glaze/$$s:" out/host/.test_glaze.out; } \
+	    || { echo "FAIL glaze/$$s (exit $$r)"; exit 1; }; \
+	done
 else
 test_glaze:
 	@echo "test_glaze: skipped (host arch $a is not x86_64)"
