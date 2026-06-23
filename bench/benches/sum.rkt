@@ -1,5 +1,0 @@
-#lang racket/base
-;; build the list 1..100000 then fold-sum it -- allocation + traversal.
-(require "../lib/bench.rkt")
-(define (iota1 n) (let loop ([i n] [a '()]) (if (< i 1) a (loop (- i 1) (cons i a)))))
-(bench "sum" (lambda () (sum-list (iota1 100000))))

@@ -8,10 +8,10 @@
 # times out or errors is skipped with a note and simply produces no line, so a
 # language that can't finish a workload drops that cell rather than failing the
 # build. `skip` is a space-separated list of <lang>:<bench> pairs known to time
-# out (e.g. owl:bell); those are dropped up front, so the build never pays the
-# timeout wall for them. If the interpreter isn't on PATH the whole language is
-# skipped. BENCH_LANG is exported so the shared harnesses (bench.ss/.lisp/.lua/
-# .js/.py) print the right column label.
+# out; those are dropped up front, so the build never pays the timeout wall for
+# them. If the interpreter/compiler isn't on PATH the whole language is skipped.
+# BENCH_LANG is exported so the shared harnesses (lib/bench.* + lib/Bench.*) print
+# the right column label.
 lang=$1
 benches=$2
 to=${3:-30}
@@ -29,28 +29,21 @@ case $lang in
   # benches stay interpreted (the glaze matches only these).
   ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = float ] || [ "$b" = fib ] || [ "$b" = tak ] || [ "$b" = primes ] || [ "$b" = strscan ] || [ "$b" = deforest ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l; [ "$b" = sat ] && printf "%s " ../sat/sat.l) bench.l benches/$b.l | ../out/host/ai' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
-  petite)       ext=ss;   bin=petite;     cmd='petite --script benches/$b.ss' ;;
-  guile)        ext=scm;  bin=guile;      cmd='guile --no-auto-compile -s benches/$b.scm' ;;
-  racket)       ext=rkt;  bin=racket;     cmd='racket benches/$b.rkt' ;;
-  mit-scheme)   ext=mit;  bin=mit-scheme; cmd='mit-scheme --quiet --load benches/$b.mit --eval "(%exit 0)"' ;;
   sbcl)         ext=lisp; bin=sbcl;       cmd='sbcl --script benches/$b.lisp' ;;
-  clisp)        ext=lisp; bin=clisp;      cmd='clisp -q benches/$b.lisp' ;;
-  ecl)          ext=lisp; bin=ecl;        cmd='ecl -eval "(setq *load-verbose* nil)" --shell benches/$b.lisp' ;;
   clojure)      ext=clj;  bin=clojure;    cmd='clojure -M benches/$b.clj' ;;
   elixir)       ext=exs;  bin=elixir;     cmd='elixir benches/$b.exs' ;;
-  chicken)      ext=ck;   bin=chicken-csi; cmd='chicken-csi -s benches/$b.ck' ;;
-  bigloo)       ext=bgl;  bin=bigloo;     cmd='bigloo -i benches/$b.bgl' ;;
-  owl)          ext=owl;  bin=ol;         cmd='cat lib/bench.owl benches/$b.owl | ol /dev/stdin' ;;
-  hy)           ext=hy;   bin=hy;         cmd='hy benches/$b.hy' ;;
-  fennel)       ext=fnl;  bin=fennel;     cmd='fennel benches/$b.fnl' ;;
-  python)       ext=py;   bin=python3;    cmd='python3 benches/$b.py' ;;
+  julia)        ext=jl;   bin=julia;      cmd='julia --startup-file=no benches/$b.jl' ;;
   pypy)         ext=py;   bin=pypy3;      cmd='pypy3 benches/$b.py' ;;
   ruby)         ext=rb;   bin=ruby;       cmd='ruby benches/$b.rb' ;;
   node)         ext=js;   bin=node;       cmd='node benches/$b.js' ;;
-  deno)         ext=js;   bin=deno;       cmd='deno run -A --quiet --unstable-detect-cjs benches/$b.js' ;;
-  lua)          ext=lua;  bin=lua;        cmd='lua benches/$b.lua' ;;
   luajit)       ext=lua;  bin=luajit;     cmd='luajit benches/$b.lua' ;;
-  luajit-nojit) ext=lua;  bin=luajit;     cmd='luajit -joff benches/$b.lua' ;;
+  # compiled languages: build to a scratch dir (the compile is NOT timed -- each
+  # bench self-times its inner loop), run, clean up. A compile failure produces no
+  # output, so run.sh drops the cell exactly as it does for a missing source file.
+  go)           ext=go;   bin=go;         cmd='d=$(mktemp -d); cp benches/$b.go "$d/main.go"; cp lib/bench.go "$d/bench.go"; go run "$d/main.go" "$d/bench.go"; rm -rf "$d"' ;;
+  rust)         ext=rs;   bin=rustc;      cmd='d=$(mktemp -d); rustc -O -o "$d/b" benches/$b.rs >/dev/null 2>&1 && "$d/b"; rm -rf "$d"' ;;
+  haskell)      ext=hs;   bin=ghc;        cmd='d=$(mktemp -d); ghc -O2 -fno-full-laziness -dynamic -ilib -outputdir "$d" -o "$d/b" benches/$b.hs >/dev/null 2>&1 && "$d/b"; rm -rf "$d"' ;;
+  java)         ext=java; bin=javac;      cmd='d=$(mktemp -d); javac -d "$d" benches/$b.java lib/Bench.java >/dev/null 2>&1 && java -cp "$d" Main; rm -rf "$d"' ;;
   *) echo "run.sh: unknown language '$lang'" >&2; exit 1 ;;
 esac
 

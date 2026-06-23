@@ -9,19 +9,19 @@
 # for ai, the ai binary). So `make bench` reformats instantly once the files
 # exist; touch a source or `make clean` to force a re-run.
 #
-#   make / make bench   show the default column set (ai cpython chez sbcl
-#                          node luajit), running only what is stale
+#   make / make bench   show the default column set (ai pypy ruby node
+#                          luajit julia go rust), running only what is stale
 #   make all            show every language present on this machine
 #   make <lang>         show one language (ai is shown alongside for contrast),
-#                          e.g. make chez / make pypy / make owl
+#                          e.g. make chez / make pypy / make rust
 #   make BENCHES=fib …  restrict the workload set (then clean to refresh files)
 #   make TIMEOUT=60 …   per-bench wall-clock cutoff in seconds (default 30)
 #   make raw            cat the raw "<name> <lang> <reps> <ms> <chk>" lines
 #   make clean          remove out/bench/
 #
-# A language whose interpreter is not on PATH is skipped automatically, as is any
-# bench a language has no implementation file for (e.g. lua/fennel lack bell --
-# no bignums); the cell drops out of the table. Pairs that exceed TIMEOUT are
+# A language whose interpreter/compiler is not on PATH is skipped automatically, as
+# is any bench a language has no implementation file for (e.g. luajit/rust lack bell
+# -- no bignums); the cell drops out of the table. Pairs that exceed TIMEOUT are
 # listed in SKIP (below) and dropped up front so the build never pays the timeout
 # wall for them. The per-language run logic lives in run.sh.
 R := ..
@@ -37,92 +37,62 @@ BENCHES := fib tak sum mapfilter deforest primes bell strcat strscan hash sort t
 
 # <lang>:<bench> pairs that exceed TIMEOUT -- dropped up front so the build never
 # pays the timeout wall for them (re-test by removing one and `make clean`).
-SKIP := owl:bell
+SKIP :=
 
 # every language, in report-column order (grouped by family). ai first.
 ALL_LANGS := ai \
-             chez petite guile racket mit-scheme chicken bigloo owl \
-             sbcl clisp ecl clojure hy fennel elixir \
-             python pypy ruby node deno lua luajit luajit-nojit
+             chez sbcl clojure \
+             elixir pypy ruby node luajit julia \
+             go java haskell rust
 
 # the columns `make bench` shows by default.
-DEFAULT_LANGS := ai python pypy chez sbcl node luajit
+DEFAULT_LANGS := ai pypy ruby node luajit julia go rust
 
 # per-language: source extension, harness file (a result depends on it), the
 # interpreter binary (for the PATH presence check), and any extra prereq.
 EXT_ai := l
 EXT_chez := ss
-EXT_petite := ss
-EXT_guile := scm
-EXT_racket := rkt
-EXT_mit-scheme := mit
-EXT_chicken := ck
-EXT_bigloo := bgl
-EXT_owl := owl
 EXT_sbcl := lisp
-EXT_clisp := lisp
-EXT_ecl := lisp
 EXT_clojure := clj
 EXT_elixir := exs
-EXT_hy := hy
-EXT_fennel := fnl
-EXT_python := py
 EXT_pypy := py
 EXT_ruby := rb
 EXT_node := js
-EXT_deno := js
-EXT_lua := lua
 EXT_luajit := lua
-EXT_luajit-nojit := lua
+EXT_julia := jl
+EXT_go := go
+EXT_java := java
+EXT_haskell := hs
+EXT_rust := rs
 
 HARN_ai := $(HARN)
 HARN_chez := lib/bench.ss
-HARN_petite := lib/bench.ss
-HARN_guile := lib/bench.scm
-HARN_racket := lib/bench.rkt
-HARN_mit-scheme := lib/bench.mit
-HARN_chicken := lib/bench.ck
-HARN_bigloo := lib/bench.bgl
-HARN_owl := lib/bench.owl
 HARN_sbcl := lib/bench.lisp
-HARN_clisp := lib/bench.lisp
-HARN_ecl := lib/bench.lisp
 HARN_clojure := lib/bench.clj
 HARN_elixir := lib/bench.exs
-HARN_hy := lib/bench.py
-HARN_fennel := lib/bench.lua
-HARN_python := lib/bench.py
 HARN_pypy := lib/bench.py
 HARN_ruby := lib/bench.rb
 HARN_node := lib/bench.js
-HARN_deno := lib/bench.js
-HARN_lua := lib/bench.lua
 HARN_luajit := lib/bench.lua
-HARN_luajit-nojit := lib/bench.lua
+HARN_julia := lib/bench.jl
+HARN_go := lib/bench.go
+HARN_java := lib/Bench.java
+HARN_haskell := lib/Bench.hs
+HARN_rust := lib/bench.rs
 
 BIN_chez := chez
-BIN_petite := petite
-BIN_guile := guile
-BIN_racket := racket
-BIN_mit-scheme := mit-scheme
-BIN_chicken := chicken-csi
-BIN_bigloo := bigloo
-BIN_owl := ol
 BIN_sbcl := sbcl
-BIN_clisp := clisp
-BIN_ecl := ecl
 BIN_clojure := clojure
 BIN_elixir := elixir
-BIN_hy := hy
-BIN_fennel := fennel
-BIN_python := python3
 BIN_pypy := pypy3
 BIN_ruby := ruby
 BIN_node := node
-BIN_deno := deno
-BIN_lua := lua
 BIN_luajit := luajit
-BIN_luajit-nojit := luajit
+BIN_julia := julia
+BIN_go := go
+BIN_java := javac
+BIN_haskell := ghc
+BIN_rust := rustc
 
 EXTRA_ai := $(GL)
 
@@ -133,7 +103,7 @@ SHOW    := $(filter $(PRESENT),$(DEFAULT_LANGS))
 
 txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 
-.PHONY: all bench run raw clean $(ALL_LANGS)
+.PHONY: all bench run raw html clean $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -165,6 +135,13 @@ all run: $(call txt,$(PRESENT))
 
 raw: $(call txt,$(PRESENT))
 	@cat $^
+
+# Self-contained results page: bench/bench.html, the full roster as columns
+# (a present-but-empty language shows a dotted column), with a transpose button
+# and a viewport-chosen initial orientation. Regenerate after a fresh `make all`.
+html: $(call txt,$(PRESENT)) mkhtml.sh | $(BDIR)
+	@cat $(call txt,$(PRESENT)) | ./mkhtml.sh "$(ALL_LANGS)" > bench.html
+	@echo "wrote bench/bench.html"
 
 clean:
 	@rm -rf $(BDIR)
