@@ -252,10 +252,22 @@ and the **major pool** (was "elder"), reaped by minor and major collections resp
 
 The model's invariants (`doc/proto/gengc.l`, 19 asserts) are the spec the C must
 meet — most importantly that the barrier is load-bearing (3b reproduces the bug a
-missing barrier *is*). The GC-stress differential test is the runtime oracle. A
-*verified* minor (a `gcp`-bounds argument in `rocq/`) is a much larger, separate
-effort — the place ai's in-tree prover could eventually earn its keep, the same
-caveat `ai/glaze/README.md` flags for a verified glaze.
+missing barrier *is*). The GC-stress differential test is the runtime oracle.
+
+`rocq/gc.v` PROVES the load-bearing one (axiom-free, wired into `make test` as
+`test_gc` beside `test_proof`): it lifts the proto's heap/region/rem-set model to
+Coq and shows `barrier_sound` — under `rem_complete` (every old→young edge
+remembered) the minor's nursery scan reaches every young object the mutator can
+reach, so **no live young object is lost**. The corollary
+`minor_loses_only_if_barrier_incomplete` is 3b's converse: a young object the minor
+drops *witnesses* an incomplete barrier. So 3b is upgraded from demonstrated-on-one-
+example to proved-in-general. `rem_complete` itself is what `gen_audit` checks
+empirically on the real heap (0 misses across the corpus).
+
+A proof that ai.c's *pointer code* (`gcp` bounds, the tagged words, the two-space
+copy) REFINES this model is the larger separate effort — the place ai's in-tree
+prover could eventually earn its keep, the same caveat `ai/glaze/README.md` flags
+for a verified glaze.
 
 ## Not yet / open
 
