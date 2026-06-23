@@ -28,7 +28,7 @@
                                   0))
                   0)
    ; --- leaf: (\ x E) ---
-   (qual lam) (&& (two? lam) (= (cap lam) '\) (two? (cup lam)) (symp (caup lam))                ; (\ v E), v any symbol
+   (qual lam) (&& (two? lam) (= (cap lam) '\) (two? (cup lam)) (name? (caup lam))                ; (\ v E), v any symbol
                   (two? (cup (cup lam))) !(two? (cup (cup (cup lam)))) (exprp (caup (cup lam)) (caup lam)))
    ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1
@@ -41,7 +41,7 @@
    (distinctp l) (? !(two? l) 1  (member? (cap l) (cup l)) 0  (distinctp (cup l)))        ; no repeated param
    (qualn lam) (: ps (? (two? (cup lam)) (init (cup lam)) 0)  body (? (two? (cup lam)) (last (cup lam)) 0)
                   (&& (two? lam) (= (cap lam) '\) (two? (cup lam))
-                      (all symp ps) (< 1 (tally ps)) (distinctp ps)                     ; >=2 distinct symbol params
+                      (all name? ps) (< 1 (tally ps)) (distinctp ps)                     ; >=2 distinct symbol params
                       (exprn ps body)))
    (njit lam) (: v (caup lam) (nif (emit (+ (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (base-ev lam) lam 1))  ; v any param name, fixnum-guarded
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
@@ -54,10 +54,10 @@
        STEP (caup THEN) ACC (caup (cup THEN))               ; THEN = (go STEP ACC)
        B    (caup (cup ACC))                                ; ACC = (op a B)
        op   (? (two? ACC) (cap ACC) 0)  cmp (? (two? T) (cap T) 0)   ; the fold op + the loop-test comparison
-       ok (&& (two? lam) (= (cap lam) '\) (symp (caup lam))                  ; (\ N ..)
+       ok (&& (two? lam) (= (cap lam) '\) (name? (caup lam))                  ; (\ N ..)
               (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))           ; one body
               (two? M) (= z1 0) !(two? (cup (cup (cup M))))                  ; (S 0 a0)
-              (two? S) (= (cap S) ':) (symp GO) (symp I) (symp A) !(= I A)   ; (: (go i a) IF)
+              (two? S) (= (cap S) ':) (name? GO) (name? I) (name? A) !(= I A)   ; (: (go i a) IF)
               (two? IF) (= (cap IF) '?) (= ELS A)                            ; (? .. .. a)
               (two? T) (member? cmp '(< <= > >= =)) (= (caup T) I) (= (caup (cup T)) (caup lam))  ; (cmp i n)
               (= (cap THEN) GO)                                              ; (go ..)
@@ -80,9 +80,9 @@
        R    (? (&& (two? IF) (two? (cup (cup IF)))) (caup (cup (cup IF))) 0)
        updates (? (two? THEN) (cup THEN) 0)
        fr   (link (caup lam) vars)                                  ; cgl frame: {n, v0..vk}
-       ok (&& (two? lam) (= (cap lam) '\) (symp (caup lam)) (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))
+       ok (&& (two? lam) (= (cap lam) '\) (name? (caup lam)) (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))
               (two? BODY) (two? S) (= (cap S) ':) (two? (cup S)) !(two? (cup (cup (cup S))))   ; (: G IF)
-              (two? G) (symp GO) (two? vars) (all symp vars) (distinctp vars) !(member? GO vars)
+              (two? G) (name? GO) (two? vars) (all name? vars) (distinctp vars) !(member? GO vars)
               (< (tally vars) 4)                                    ; <= 3 loop vars (register limit)
               (two? IF) (= (cap IF) '?) (two? THEN) (= (cap THEN) GO)   ; (? T (go U..) R)
               (= (tally updates) (tally vars)) (= (tally inits) (tally vars))
@@ -98,9 +98,9 @@
    ; partial form: native captures via partial-apply are =/show-identical to interp).
    ; The constructor itself normalizes to the flat 2-param (a curry-equivalent form).
    (qualc lam) (: p (caup lam)  inner (? (two? (cup lam)) (caup (cup lam)) 0)
-                  (&& (two? lam) (= (cap lam) '\) (two? (cup lam)) (symp p)
+                  (&& (two? lam) (= (cap lam) '\) (two? (cup lam)) (name? p)
                       (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))               ; (\ p INNER), one body
-                      (two? inner) (= (cap inner) '\) (two? (cup inner)) (symp (caup inner)) !(= p (caup inner))
+                      (two? inner) (= (cap inner) '\) (two? (cup inner)) (name? (caup inner)) !(= p (caup inner))
                       (two? (cup (cup inner))) !(two? (cup (cup (cup inner))))            ; INNER = (\ q E), q != p
                       (exprn `(p (caup inner)) (caup (cup inner)))))
    (flatc lam) (: inner (caup (cup lam)) `('\ (caup lam) (caup inner) (caup (cup inner))))  ; (\ p (\ q E)) -> (\ p q E)
@@ -120,7 +120,7 @@
                 0)
    (allsafe e v) (? (! (occurs? v e)) 1  (! (two? e)) 1  (id? (fty e v) 'I) 0                    ; an I-typed COMPOUND holding the param -> late promotion -> reject
                     (&& (allsafe (caup e) v) (allsafe (caup (cup e)) v)))
-   (qualfr lam) (&& (two? lam) (= (cap lam) '\) (two? (cup lam)) (symp (caup lam))
+   (qualfr lam) (&& (two? lam) (= (cap lam) '\) (two? (cup lam)) (name? (caup lam))
                     (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))                         ; (\ v BODY), one param + one body
                     (: v (caup lam) body (caup (cup lam))
                        (&& (id? (fty body v) 'F) (allsafe body v))))                             ; BODY is a float RESULT, param floated everywhere
@@ -200,7 +200,7 @@
    (named-let? e) (&& (two? e) (: nl (cap e)                                                      ; e = ((: (g q..) GBODY) inits..) ?
                       (&& (two? nl) (id? (cap nl) ':) (two? (cup nl))
                           (: gnf (caup nl)
-                             (&& (two? gnf) (symp (cap gnf)) (< 1 (tally gnf)) (all symp (cup gnf)) (distinctp (cup gnf))
+                             (&& (two? gnf) (name? (cap gnf)) (< 1 (tally gnf)) (all name? (cup gnf)) (distinctp (cup gnf))
                                  (two? (cup (cup nl))) !(two? (cup (cup (cup nl))))               ; (: (g q..) GBODY), body-less (one binding)
                                  (= (tally (cup e)) (tally (cup gnf))))))))                       ; inits arity == g's arity
    (subst-sym nm val e) (? (id? e nm) val (two? e) (map (\ x (subst-sym nm val x)) e) e)            ; symbol nm -> val in e
@@ -218,7 +218,7 @@
                       (link (link ': (link (link g q) (link (inl gbody) ()))) (map inl (cup result)))))))))
    (lift-pair p)                                                                                  ; (nameform . body) -> (rewritten-pair newdefs)
     (: nf (cap p) pbody (norm-let (cup p))
-       (? (! (&& (two? nf) (symp (cap nf)) (< 1 (tally nf)) (named-let? pbody))) (L p ())
+       (? (! (&& (two? nf) (name? (cap nf)) (< 1 (tally nf)) (named-let? pbody))) (L p ())
           (: F (cap nf) P (cup nf)  nl (cap pbody) inits (cup pbody)
              gnf (caup nl) g (cap gnf) q (cup gnf) GBODY (caup (cup nl))
              gn (intern (+ (string F) (+ "_" (string g))))                                        ; lifted name F_g (unique per enclosing fn)
@@ -237,11 +237,38 @@
    (fold-consts form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
-          consts (afilter (\ pr (&& (symp (cap pr)) (whole? (cup pr)))) pairs)
+          consts (afilter (\ pr (&& (name? (cap pr)) (whole? (cup pr)))) pairs)
           (? (atom? consts) form
              (: sub (\ e (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e consts))
-                keep (afilter (\ pr (! (&& (symp (cap pr)) (whole? (cup pr))))) pairs)
+                keep (afilter (\ pr (! (&& (name? (cap pr)) (whole? (cup pr))))) pairs)
                 (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
+   ; --- LOCAL LET (delet): inline a fn body that is a PURE value-let -- (: n1 v1 .. result), every binding
+   ;     a plain symbol (no local fn -> that is norm-let/lift's job), names distinct -- into ONE fragment
+   ;     expression by ordered substitution, so a fn that names its intermediates joins the group. The
+   ;     fragment is pure (arithmetic + pure sibling calls), so substitution is value-preserving (== the
+   ;     interpreter's once-evaluated shared binding); the ONLY divergence is recomputation, so a binding
+   ;     holding a CALL may inline only when used <=1 time -- a call-free (dup-cheap) value inlines freely,
+   ;     a multi-use call BAILS to the unchanged `:` body (which groupok? rejects -> interp, sound, no perf
+   ;     cliff). A non-let body / a body with a local fn passes through (fib/tak/strscan untouched). delet
+   ;     runs BEFORE lift: a value-let may WRAP a named-let loop, whose free vars it must fix up first.
+   (dcount s e) (? (id? e s) 1 (two? e) (foldl (\ a x (+ a (dcount s x))) 0 e) 0)            ; syntactic occurrences of s in e
+   (dcheap? e) (? (atom? e) 1  (dquote? e) 0                                                  ; dup-cheap: arith/cmp/bit/peep/tally, NO call
+                  (: h (cap e) (? (|| (id? h '?) (member? h '(+ - * // % & | ^ < <= > >= = peep tally))) (all dcheap? (cup e)) 0)))
+   (delet-go pairs result orig)
+    (? (atom? pairs) result
+       (: pr (cap pairs) nm (cap pr) val (cup pr) rest (cup pairs)
+          uses (foldl (\ a e (+ a (dcount nm e))) 0 (cat (map cup rest) (L result)))         ; uses in subsequent values + body
+          (? (&& (! (dcheap? val)) (< 1 uses)) orig                                          ; would duplicate a call -> bail to interp
+             (delet-go (map (\ p (link (cap p) (subst-sym nm val (cup p)))) rest) (subst-sym nm val result) orig))))
+   (delet-body body)
+    (? (! (&& (two? body) (id? (cap body) ':) (! (atom? (cup body))))) body
+       (: parsed (anat-defs (cup body)) pairs (cap parsed) result (caup parsed) names (map cap pairs)
+          (? (! (&& (all name? names) (distinctp names))) body                                ; named (non-define-sugar) distinct bindings only -- a (g q..) local fn defers to norm-let/lift
+             (delet-go pairs result body))))
+   (delet form)                                                                              ; inline value-lets in every fn body of a `:`
+    (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
+       (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
+          (link ': (unpair (map (\ pr (link (cap pr) (? (two? (cap pr)) (delet-body (cup pr)) (cup pr)))) pairs) body))))
    ; --- SPECIALIZATION (autospec): mix (doc/proto/mix.l, the offline partial evaluator) wired in as a
    ;     glaze recognizer -- the 1st Futamura projection COMPOSED with the native lane. an interpreter
    ;     applied to a STATIC program (a const-bound quoted AST) and a DYNAMIC input specializes: the
@@ -304,7 +331,7 @@
    ; autospec proper: build defs (fn bindings) + statenv (names bound to a quoted datum), then replace
    ; every call to a defined fn that mentions a static name with its specialized residual (in place).
    (sconst? v) (&& (two? v) (id? (cap v) '\) (= 2 (tally v)))                      ; a quoted-constant binding value (\ datum)
-   (sment? e statn) (? (symp e) (member? e statn)  (two? e) (srefany? e statn)  0)
+   (sment? e statn) (? (name? e) (member? e statn)  (two? e) (srefany? e statn)  0)
    (srefany? args statn) (? (atom? args) 0 (|| (sment? (cap args) statn) (srefany? (cup args) statn)))
    (specall? e defn statn) (&& (two? e) (member? (cap e) defn) (srefany? (cup e) statn))   ; defined-fn call mentioning a static name
    (swalk e statenv defs defn statn)
@@ -317,7 +344,7 @@
        (: parsed (anat-defs (cup form)) pairs (cap parsed)
           fnps (afilter (\ pr (two? (cap pr))) pairs)
           defs (map (\ pr (link (caap pr) (link (cup (cap pr)) (link (cup pr) ())))) fnps)   ; (name (p..) body)
-          statps (afilter (\ pr (&& (symp (cap pr)) (sconst? (cup pr)))) pairs)
+          statps (afilter (\ pr (&& (name? (cap pr)) (sconst? (cup pr)))) pairs)
           statenv (map (\ pr (L (cap pr) (sstat (caup (cup pr))))) statps)        ; name -> (stat datum)
           (? (! (&& (two? defs) (two? statenv))) form                            ; need a defined fn AND a static-data binding
              (swalk form statenv defs (map cap defs) (map cap statenv)))))
@@ -422,9 +449,9 @@
     (? (! (two? form0)) form0
        (! (id? (cap form0) ':)) form0
        (atom? (cup form0)) form0
-       (: form (lift (defoliate (autospec (fold-consts form0))))   ; specialize interp-over-static-data, deforest pipelines -> loops, THEN lambda-lift named-let bodies -> flat group fns
+       (: form (lift (delet (defoliate (autospec (fold-consts form0)))))   ; specialize interp-over-static-data, deforest pipelines -> loops, inline value-lets in fn bodies, THEN lambda-lift named-let bodies -> flat group fns
           parsed (anat-defs (cup form)) pairs (cap parsed)
-          fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all symp (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
+          fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
           (? (! (two? fns)) form0                                                            ; no candidate functions -> original
              (: armap (map (\ p (L (cap (cap p)) (- (tally (cap p)) 1))) fns)                 ; (name arity) candidates
                 grp (grpfix fns armap)                                                        ; the closed glazeable subset
@@ -645,5 +672,22 @@
        (&& !(id? (autogroup sp2) sp2) (= (base-ev sp2) (ev sp2))))   ; sum (i+1)(i+2) i<50, native == interp
     ; autospec is a NO-OP without BOTH a defined fn and a static-data binding -> a plain fib group is byte-unchanged
     (: nf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 10))
-       (id? (autospec nf) nf)))
+       (id? (autospec nf) nf))
+    ; LOCAL LET (delet): a fn body that NAMES intermediates -- a pure value-let -- inlines to one fragment
+    ; expression, so the fn joins the group. == interp, value exact.
+    (: lb '(: (f x) (: q (* x x) (+ q q)) (f 5))
+       (&& !(id? (autogroup lb) lb) (50 = (ev lb)) (= (base-ev lb) (ev lb))))                ; q=x*x, 2q = 50
+    ; a CHAIN of bindings, the first used TWICE -- but call-free (dup-cheap), so it inlines freely
+    (: lc '(: (f x) (: a (+ x 1) b (* a 2) (+ a b)) (f 5))
+       (&& !(id? (autogroup lc) lc) (18 = (ev lc)) (= (base-ev lc) (ev lc))))                ; a=6,b=12 -> 18
+    ; a binding holding a recursive sibling CALL, used ONCE -> inlines; the fn glazes and calls native g
+    (: ls '(: (g n) (? (< n 1) 0 (+ n (g (- n 1)))) (f n) (: h (g n) (* h 2)) (f 5))
+       (&& !(id? (autogroup ls) ls) (30 = (ev ls)) (= (base-ev ls) (ev ls))))                ; g(5)=15, h*2 = 30
+    ; a value-let WRAPPING a named-let loop: delet inlines k into the loop, lift then glazes it
+    (: lw '(: (f n) (: k (* n 1) ((: (go i a) (? (< i k) (go (+ i 1) (+ a i)) a)) 0 0)) (f 10))
+       (&& !(id? (autogroup lw) lw) (45 = (ev lw)) (= (base-ev lw) (ev lw))))                ; sum 0..9 = 45
+    ; BAIL: a binding holding a CALL used TWICE would duplicate the recursion -> NOT inlined -> f interprets
+    ; (sound, value exact; the sibling g still glazes, so the form is rewritten but f stays interpreted)
+    (: lbail '(: (g n) (? (< n 1) 1 (* n (g (- n 1)))) (f n) (: a (g n) (+ a a)) (f 5))
+       (= (base-ev lbail) (ev lbail))))                                                       ; g(5)=120, a+a = 240, interpreted
  _ (say err "ai/glaze/auto: ev auto-natives qualifying closures + counted loops + D-dim float grids + mutually-recursive arith groups (transparent)\n"))
