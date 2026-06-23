@@ -5,7 +5,7 @@
    p (? (< ms 10) ".00" (< ms 100) ".0" ".")
    (do (putc 10)
 
-     ;(: i (BBB (gauge 0)) (do (putx (AB i)) (puts " cycles ") (putx (ABB i)) (puts "/") (putx (A (BBB i))) (puts " pin/heap max") (putc 10)))
+     ;(: g (gauge 0) (do (putx (peep g 3 0)) (puts " gc, peak-live ") (putx (peep g 5 0)) (puts ", mortality ") (putx (// (* (- (peep g 6 0) (peep g 7 0)) 100) (peep g 6 0))) (puts "% (-DAI_STAT)") (putc 10)))
      (putx (- (test_get 'count) (tally f))) (puts " tests pass in ")
      (putx s) (puts p) (puts (putx ms) (puts " seconds") (putc 10))
      (? f (do

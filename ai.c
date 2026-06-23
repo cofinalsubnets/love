@@ -328,6 +328,7 @@ static ai_inline bool galaxyp(word _) { return arrp(_) && vec(_)->type != ai_O; 
 // Max array rank (bounds the stack index/stride arrays in the broadcast loop).
 #define maxrank 8
 extern size_t const ai_vt_[];                 // element byte size by ai_vec_type
+extern size_t const ai_T[];                   // element byte size by ai_vec_type (used pre-definition by lvm_gauge)
 // Element payload: laid out row-major just past the shape words.
 static ai_inline void *vec_data(struct ai_vec *v) { return (void*) (v->shape + v->rank); }
 // Total element count = product of the dimensions (1 for a rank-0 scalar box).
@@ -1081,9 +1082,14 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
   len0 = g->len;
  // find alternate pool
  struct ai *h = off_pool(g);
+#ifdef AI_STAT
+ uintptr_t seen = g->hp - g->end;   // from-space occupancy entering this collection (live + dead), words
+#endif
  g = gcg(h, g->pool, g->len, g);
 #ifdef AI_STAT
- g->n_gc += 1; // instrumentation: count one gc cycle per please
+ g->n_gc += 1;                      // one cycle per please (a resize copies twice but is one collection)
+ g->n_seen += seen;                 // Σ scanned
+ g->n_evac += g->hp - g->end;       // Σ survivors copied out (compacted live), words
 #endif
  uintptr_t const
   v_lo = 4,
@@ -3803,27 +3809,39 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
 // ============================================================================
 op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 
+// (gauge 0) -> a rank-1 Z array of VM stats (full machine words, not 62-bit fixnums):
+//   [0] len       pool size (words)
+//   [1] heap      words used from base (core + live heap)
+//   [2] stack     stack height (words)
+//   [3] n_gc      collections so far
+//   [4] max_len   peak pool size (words)
+//   [5] max_heap  peak live heap after a collection (words)
+//   [6] n_seen    Σ heap occupancy entering each collection (scanned = live + dead, words)
+//   [7] n_evac    Σ heap survivors copied out each collection (live, words)
+// derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap. Indices [3..7]
+// read 0 unless built -DAI_STAT. An array (not a list): every field is a charm, so a flat
+// numeric tray is the natural rep -- compact, and reductions (net/max) apply directly.
 lvm(lvm_gauge) {
- size_t const req = 7 * Width(struct ai_chain);
- Have(req);
- struct ai_chain *si = (struct ai_chain*) Hp;
- Hp += req;
- Sp[0] = word(si);
- ini_chain(si + 0, putcharm(g), word(si + 1));
- ini_chain(si + 1, putcharm(g->len), word(si + 2));
- ini_chain(si + 2, putcharm(Hp - ptr(g)), word(si + 3));
- ini_chain(si + 3, putcharm(ptr(g) + g->len - Sp), word(si + 4));
+ enum { N = 8 };
+ uintptr_t const bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + N * ai_T[ai_Z];
+ Have(b2w(bytes));
+ struct ai_vec *v = (struct ai_vec*) Hp;
+ Hp += b2w(bytes);
+ ini_vec(v, ai_Z, 1);
+ v->shape[0] = N;
+ vec_put_int(v, 0, (intptr_t) g->len);
+ vec_put_int(v, 1, (intptr_t) (Hp - ptr(g)));
+ vec_put_int(v, 2, (intptr_t) (ptr(g) + g->len - Sp));
 #ifdef AI_STAT
- ini_chain(si + 4, putcharm(g->n_gc), word(si + 5));               // gc cycles
- ini_chain(si + 5, putcharm(g->max_len), word(si + 6));            // peak pool len (words)
- ini_chain(si + 6, putcharm(g->max_heap), ZeroPoint);             // peak live heap (words); () terminator
+ vec_put_int(v, 3, (intptr_t) g->n_gc);
+ vec_put_int(v, 4, (intptr_t) g->max_len);
+ vec_put_int(v, 5, (intptr_t) g->max_heap);
+ vec_put_int(v, 6, (intptr_t) g->n_seen);
+ vec_put_int(v, 7, (intptr_t) g->n_evac);
 #else
- ini_chain(si + 4, putcharm(0), word(si + 5));                     // gc instrumentation gated off (-DAI_STAT to keep it)
- ini_chain(si + 5, putcharm(0), word(si + 6));
- ini_chain(si + 6, putcharm(0), ZeroPoint);
+ for (int i = 3; i < N; i++) vec_put_int(v, i, 0);              // gc instrumentation gated off (-DAI_STAT to keep it)
 #endif
- Ip += 1;
- return Continue(); }
+ return Sp[0] = word(v), Ip++, Continue(); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. The string-lane glaze
 // reads the kind of a reference string at codegen time and emits a `cmp [s], kind; jne deopt` type guard.
