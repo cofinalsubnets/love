@@ -12,7 +12,7 @@
 <h1><a href="https://github.com/cofinalsubnets/ai">ai</a></h1>
 <!-- the live bao shell: status, terminal, runnable chips, and the wasm driver.
      raw HTML/JS, since the terminal + the data-run chips are markup, not prose. -->
-<p id="status">loading the image…</p>
+<p id="status">loading the image...</p>
 
 <div id="term">
   <button id="clear" title="clear the session">clear</button>
@@ -78,10 +78,10 @@
     if (!src) return;
     put(src, 'in');
     hist.push(src); hi = hist.length;
-    const s = ev('(. (\n' + src + '\n))');
+    const s = ev('(puts (show (\n' + src + '\n)))');
     const o = drain();
     for (const ln of o.split('\n')) if (ln.length) put(ln, ln.startsWith('# ') ? 'cnd' : 'ans');
-    if (s !== 0) put('# the image stopped (status ' + s + ') — reload to reboot', 'cnd');
+    if (s !== 0) put('# the image stopped (status ' + s + ') -- reload to reboot', 'cnd');
     scroll.scrollTop = scroll.scrollHeight;
   }
 
@@ -126,7 +126,7 @@
 <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
 
 <h2 id="background"><a href="#background">background</a></h2>
-<p>ai is a fully-curried, dynamically-kinded language whose entire surface is one operation — <span class="term" data-g="application">application</span> — over a single generic core.
+<p>ai is a fully-curried, dynamically-kinded language whose entire surface is one operation -- <span class="term" data-g="application">application</span> -- over a single generic core.
 all values are represented as one-argument total functions of a global type, called <span class="term" data-g="operator">operators</span>. fundamental operations such as + and * are fully
 generic. fundamental data are given function actions that define their <span class="term" data-g="application">application</span> behavior in (hopefully) intuitive and useful ways. for example, a
 <strong><span class="term" data-g="book">book</span></strong> (mutable hash table) acts as its own getter function. numeric <span class="term" data-g="application">application</span> is interpreted as exponentiation or iteration depending on operand type.</p>
@@ -184,7 +184,7 @@ transparently as iterators, and
 })();
 </script>
 <footer>for ()
-  <span class="note">· repl set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
+  <span class="note">· set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V TWN16 + re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
 </footer>
 </body>
 </html>

@@ -3,9 +3,15 @@
    feel, green = a kept answer; the crew fly the name space in aurora teal/cyan; the
    bao-shell + chip + crew + glossary components folded in. one sheet, every page. */
 
-/* the live repl wears DOS/V re. PRC16 -- an 8x16 DOS/V bitmap (CP437), self-hosted.
-   © VileR, int10h.org Oldschool PC Font Pack, CC BY-SA 4.0. crisp at 16px (its
-   native cell). */
+/* self-hosted DOS/V bitmaps from the int10h Oldschool PC Font Pack (8x16 cells,
+   crisp at 16px native): DOS/V TWN16 for the body text, DOS/V re. PRC16 (CP437-
+   remapped) for the repl. © VileR, int10h.org, CC BY-SA 4.0. */
+@font-face {
+  font-family: "Web437 DOS/V TWN16";
+  src: url("fonts/Web437_DOS-V_TWN16.woff2") format("woff2"),
+       url("fonts/Web437_DOS-V_TWN16.woff") format("woff");
+  font-display: swap;
+}
 @font-face {
   font-family: "Web437 DOS/V re. PRC16";
   src: url("fonts/Web437_DOS-V_re_PRC16.woff2") format("woff2"),
@@ -17,10 +23,10 @@
 
 body {
   background: #1a1b26; color: #a9b1d6;
-  font-family: "Px437 IBM VGA8", "Px437 IBM VGA 9x16", "ModernDOS 8x16",
-               "PxPlus IBM VGA8", "DejaVu Sans Mono", ui-monospace,
-               Menlo, Consolas, monospace;
-  font-size: 17px; line-height: 1.5;
+  font-family: "Web437 DOS/V TWN16", "Px437 IBM VGA8", "Px437 IBM VGA 9x16",
+               "ModernDOS 8x16", "PxPlus IBM VGA8", "DejaVu Sans Mono",
+               ui-monospace, Menlo, Consolas, monospace;
+  font-size: 32px; line-height: 1.5;
   font-variant-ligatures: none; text-rendering: optimizeSpeed;
   -webkit-font-smoothing: none; font-smooth: never;
   max-width: 54em; margin: 0 auto; padding: 2em 1em 5em;
@@ -43,7 +49,8 @@ strong { color: #c0caf5; font-weight: 600; }
 em { color: #9aa5ce; }
 
 code { color: #a9b1d6; background: #1f2335; border: 1px solid #292e42;
-       border-radius: 3px; padding: .05em .35em; white-space: pre-wrap; }
+       border-radius: 3px; padding: .05em .35em; white-space: pre-wrap;
+       font-family: "Web437 DOS/V re. PRC16", "Px437 IBM VGA8", ui-monospace, monospace; }
 pre { background: #16161e; border: 1px solid #3b4261; border-radius: 6px;
       padding: .9em 1em; margin: 1em 0; overflow-x: auto; line-height: 1.5; }
 pre code { background: none; border: none; padding: 0; white-space: pre; color: #9aa5ce; }
@@ -91,7 +98,7 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
         border-radius: 6px; padding: .8em; margin-top: 1em; height: 24em;
         display: flex; flex-direction: column; cursor: text;
         font-family: "Web437 DOS/V re. PRC16", "Px437 IBM VGA8", ui-monospace, monospace;
-        font-size: 16px; line-height: 1; }
+        font-size: 32px; line-height: 1; }
 /* output and input share one scroll region, so the prompt flows directly under
    the last line of output (a real terminal) rather than pinned to the box floor. */
 #scroll { flex: 1; overflow-y: auto; }
