@@ -125,6 +125,13 @@
    (glook nm syms) (? (atom? syms) -1 (id? nm (caap syms)) (cuap syms) (glook nm (cup syms)))   ; group fn name -> its H offset (dotted (name . off); -1 if absent)
    (gfind p l) (? (atom? l) () (p (cap l)) (cap l) (gfind p (cup l)))     ; first elt matching p
    (gfilt p l) (? (atom? l) () (p (cap l)) (link (cap l) (gfilt p (cup l))) (gfilt p (cup l)))   ; keep elts matching p
+   ; immediate-operand peephole: `(+ E C)`/`(- E C)`/`(* E C)` with C a small int const -> E in rax, then
+   ; `add/sub/imul rax, imm32` (no push/movabs/pop). +/* commute, so `(C op E)` works too; - only `(- E C)`.
+   (whole-imm? x) (&& (whole? x) (<= -2147483648 x) (< x 2147483648))                ; fits a sign-extended imm32?
+   (immop op c) (? (= op '+) (asm (L '(72 5) (le4 c)))                               ; add  rax, imm32  (48 05 id)
+                   (= op '-) (asm (L '(72 45) (le4 c)))                              ; sub  rax, imm32  (48 2D id)
+                   (= op '*) (asm (L '(72 105 192) (le4 c))) ())                      ; imul rax, rax, imm32 (48 69 C0 id)
+   (immlen op) (? (= op '*) 7 6)
    ; cgg -- the GROUP arithmetic-fragment compiler (the WHOLE integer lane): an expr over {ps (this fn's
    ; params, in arg regs rbx/r13/r14/r15) ; int ; group calls} -> rax. syms = the group's dotted (name .
    ; offset) table (glook resolves a call's target, self or sibling, UNIFORMLY); off = the abs offset of
@@ -135,9 +142,14 @@
        (two? e) (: op (cap e) a (caup e) b (caup (cup e)) Ho (glook op syms)
           (? (< -1 Ho) (: as (cup e) ka (tally as) ab (gargs syms ps as off OVF) callabs (+ off (tally ab))   ; CALL g: push args; call H_g; pop them
                           (asm (L ab '(232) (le4 (- Ho (+ callabs 5))) '(72 131 196) (list (* 8 ka)))))
-             (member? op '(+ - *)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
-                opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))                              ; abs offset of the jo
-                (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6))))))                        ; A;push;B;pop r8;op;jo OVF
+             (member? op '(+ - *))
+                (? (whole-imm? b) (: ab (cgg syms ps a off OVF) joa (+ (+ off (tally ab)) (immlen op))        ; (E op C): E;op rax,C;jo OVF
+                                     (asm (L ab (immop op b) '(15 128) (le4 (- OVF (+ joa 6))))))
+                   (&& (whole-imm? a) (member? op '(+ *))) (: bb (cgg syms ps b off OVF) job (+ (+ off (tally bb)) (immlen op))   ; (C op E), commute
+                                     (asm (L bb (immop op a) '(15 128) (le4 (- OVF (+ job 6))))))
+                   (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)        ; generic: A;push;B;pop r8;op;jo OVF
+                      opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))
+                      (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6)))))))
              (member? op '(// %)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
                 jza (+ (+ po 1) (+ (tally bb) 5))                                                             ; A;push;B(divisor);pop r8(=A);test;jz OVF;idiv
                 (asm (L ab push-rax bb '(65 88) '(72 133 192) '(15 132) (le4 (- OVF (+ jza 6)))
@@ -148,10 +160,32 @@
                 (asm (L ab push-rax bb (cmpseq op))))
              (= op '?) (: el (caup (cup (cup e))) tb (cgg syms ps a off OVF) thoff (+ off (+ (tally tb) 10)) thb (cgg syms ps b thoff OVF) eloff (+ thoff (+ (tally thb) 5)) elb (cgg syms ps el eloff OVF)
                 (asm (L tb '(72 131 248 0) '(15 142) (le4 (+ (tally thb) 5)) thb '(233) (le4 (tally elb)) elb)))   ; cmp rax,0; jle else; then; jmp end; else
+             (&& (= op 'peep) (member? a ps)) (: ib (cgg syms ps b off OVF) d (caup (cup (cup e)))                ; (peep STR i d): native string byte read (plain ai_str: bytes at STR+16, len at STR+8)
+                defb (asm (L '(72 184) (le8 (? (whole? d) d 0)))) load '(65 15 182 68 0 16)
+                (asm (L ib push-rax (arx (argix a ps 0)) '(73 137 192) '(88) '(73 59 64 8)                        ; i;push; STR->rax; r8=STR; pop i; cmp i,[r8+8] len
+                       (L 114 (+ (tally defb) 2)) defb (L 235 (tally load)) load)))                               ; jb IN; OOB: movabs rax,d; jmp; IN: movzx eax,[r8+rax+16]
+             (&& (= op 'tally) (member? a ps)) (asm (L (arx (argix a ps 0)) '(72 139 64 8)))                      ; (tally STR): rax=STR; rax=[rax+8] = len
              ()))
        ())
    (gargs syms ps as off OVF) (? (atom? as) ()                           ; push each call arg left->right (offset-threaded)
       (: ab (cgg syms ps (cap as) off OVF) nb (asm (L ab push-rax)) (asm (L nb (gargs syms ps (cup as) (+ off (tally nb)) OVF)))))
+   ; cggt -- compile e in TAIL position. A tail SELF-call (selfnm, matching arity) becomes TCO: shuffle
+   ; the new args through the stack into the arg regs, then `jmp Lbody` (the body-start, past saveargs/
+   ; ldargs) -- the frame is REUSED, so a counted loop is O(1) stack with NO call/ret per iteration. A
+   ; tail `?` recurses tail into both branches (the test stays non-tail). Everything else (a value, an
+   ; arith expr, a sibling/non-tail call) delegates to cgg and falls through to restargs+ret as before.
+   (cggt syms ps e off OVF selfnm Lbody)
+    (? (&& (two? e) (id? (cap e) selfnm) (= (tally (cup e)) (tally ps)))   ; TAIL SELF-CALL -> loop
+         (: as (cup e) ka (tally as) ab (gargs syms ps as off OVF)                                  ; push the new args
+            pops (foldl (\ a i (+ a (popr (- (- ka 1) i)))) () (rangeL 0 ka))                       ; pop them into the arg regs (reverse)
+            joff (+ off (+ (tally ab) (tally pops)))
+            (asm (L ab pops '(233) (le4 (- Lbody (+ joff 5))))))                                    ; jmp Lbody (reuse the frame)
+       (&& (two? e) (id? (cap e) '?))                                      ; TAIL ? -> test non-tail, branches tail
+         (: a (caup e) b (caup (cup e)) el (caup (cup (cup e)))
+            tb (cgg syms ps a off OVF) thoff (+ off (+ (tally tb) 10)) thb (cggt syms ps b thoff OVF selfnm Lbody)
+            eloff (+ thoff (+ (tally thb) 5)) elb (cggt syms ps el eloff OVF selfnm Lbody)
+            (asm (L tb '(72 131 248 0) '(15 142) (le4 (+ (tally thb) 5)) thb '(233) (le4 (tally elb)) elb)))
+       (cgg syms ps e off OVF))                                           ; any other tail expr -> value in rax, then restargs+ret
    ; --- the ARG-REGISTER ABI (k<=4): args in rbx/r13/r14/r15, r12 the shared OVF anchor. A call passes
    ;     args ON THE MACHINE STACK; the callee H saves/loads/restores its OWN k arg regs per frame, so a
    ;     caller's args survive nested calls (tak nests three). The deopt is deopt-mn (interp body); the
@@ -163,41 +197,71 @@
    ; mkouter -- the entry's OUTER (prologue + putfix-epilogue + shared OVF handler + deopt-mn) for arity
    ; k. The called H_entry sits RIGHT AFTER it (offset Lo = the OUTER's length), so jitgroup lays the
    ; entry first among the H's. (This is the old single-fn outer, now factored out.) Returns (outer Aovf).
-   (mkouter k)
+   ; mkguards -- the string-param TYPE GUARD (soundness): for each string param (smask), check Sp[i] is a
+   ; PLAIN string (kind == strkind, the `apof` of a reference string); a fixnum or any other kind (cask,
+   ; list, map, ...) jumps to the OVF handler -> deopt to the interp fallback (which handles every type).
+   ; Without it a non-string arg would deref a bad pointer. off = guards' start offset; Aovf = the handler.
+   (mkguards ms strkind off Aovf)
+    (? (atom? ms) ()
+       (: i (cap ms) f (fetch i) jnz-end (+ off (+ (tally f) 8)) jne-end (+ jnz-end 22)
+          g (asm (L f '(168 1) '(15 133) (le4 (- Aovf jnz-end))                                  ; mov rax,Sp[i]; test al,1; jnz Aovf (fixnum)
+                    '(76 139 0) '(72 184) (le8 strkind) '(73 57 192) '(15 133) (le4 (- Aovf jne-end))))   ; mov r8,[rax]; movabs rax,strkind; cmp r8,rax; jne Aovf
+          (asm (L g (mkguards (cup ms) strkind jne-end Aovf)))))
+   (mkouter k smask strkind)
     (: dpt (? (= k 1) deopt deopt-mn)                                                             ; arity 1 applies fb directly; >=2 enters its body past the lvm_cur
        saveargs (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k))                                    ; save the k arg regs (callee-saved)
        restargs (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k))                        ; restore (reverse)
-       pushargs (foldl (\ a i (+ a (asm (L (fetch i) '(72 209 248) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1] untagged
+       pushargs (foldl (\ a i (+ a (asm (L (fetch i) (? (member? i smask) () '(72 209 248)) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1]; untag (sar) UNLESS a string param (smask = raw pointer)
        s6 (asm (L '(72 131 196) (list (* 8 k))))  s10 (asm (L '(72 131 200 1) '(72 137 1) '(72 131 198 16) '(72 139 6 255 224)))
        Lr (tally restargs)
-       Acall (+ 2 (+ (tally saveargs) (+ 3 (tally pushargs))))
+       Aguard (+ 2 (+ (tally saveargs) 3))                                                       ; guards sit after push r12(2)+saveargs+mov r12,rsp(3)
+       Lg (tally (mkguards smask strkind 0 0))                                                    ; guard length (offset-independent; 0 when no string params)
+       Acall (+ Aguard (+ Lg (tally pushargs)))
        Arest (+ Acall (+ 5 (tally s6)))  As8 (+ Arest Lr)  As9 (+ As8 2)  Ajmpend (+ As9 10)
        As10 Ajmpend  Aovf (+ As10 (tally s10))  Adeopt (+ Aovf (+ 3 (+ Lr 2)))  Hh (+ Adeopt (tally dpt))
+       guards (mkguards smask strkind Aguard Aovf)                                               ; real guards (jump to Aovf on a non-string)
        callb (asm (L '(232) (le4 (- Hh (+ Acall 5)))))                                            ; call H_entry (right after the OUTER)
        s9 (asm (L '(72 1 192) '(113 5) '(233) (le4 (- Adeopt Ajmpend))))                          ; add rax,rax; jno PUTOK(+5); jmp DEOPT
        s11 (asm (L '(76 137 228) restargs '(65 92)))                                              ; OVF: mov rsp,r12; restores; pop r12
-       (L (asm (L '(65 84) saveargs '(73 137 228) pushargs callb s6 restargs '(65 92) s9 s10 s11 dpt)) Aovf))
+       (L (asm (L '(65 84) saveargs '(73 137 228) guards pushargs callb s6 restargs '(65 92) s9 s10 s11 dpt)) Aovf))
    ; jitgroup -- compile a GROUP of mutually-recursive integer fns (each a dotted (nameform . body)) to
    ; native, exposing `entry` as the applicable value (its arity). Layout: the entry's OUTER, then
    ; H_entry, then the other H's, in ONE buffer. TWO passes -- measure each H body's length (offset-
    ; INDEPENDENT: a call rel32 is 5 bytes whatever its target), compute every H's offset, then emit with
    ; the real (name . offset) syms so every self/sibling call resolves. The deopt fallback is the WHOLE
    ; group as an interpreted letrec (mutual recursion intact) -> a faithful, never-wrong slow path.
+   (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used DIRECTLY as (peep P..)/(tally P)?
+   ; INTERPROCEDURAL string-param inference: a param is a string if used in peep/tally OR passed as the arg
+   ; to a sibling's string param. (strhash's `s` is a string because it flows into strhash_go's peep.) A
+   ; deduped fixpoint over the group's (name . smask) map -- smasks only grow, so the size stabilizes.
+   (dedup l) (? (atom? l) () (member? (cap l) (cup l)) (dedup (cup l)) (link (cap l) (dedup (cup l))))   ; unique elements
+   (gsm nm smap) (? (atom? smap) () (id? nm (caap smap)) (cuap smap) (gsm nm (cup smap)))                ; nm's smask in the (name . smask) map (() absent)
+   (fnsm fp body smap)
+    (dedup ((: (walk e acc) (? (two? e)
+                (: gm (gsm (cap e) smap)                                                                 ; if (cap e) is a group fn, its string-param indices
+                   a2 (? (atom? gm) acc (foldl (\ ac j (: arg (nthl (cup e) j) (? (member? arg fp) (link (posof arg fp 0) ac) ac))) acc gm))   ; a string arg that is OUR param -> our string param
+                   (foldl (\ ac x (walk x ac)) a2 (cup e)))
+                acc))
+              body (gfilt (\ k (suse? body (nthl fp k))) (rangeL 0 (tally fp)))))                        ; seed acc = DIRECT peep/tally params
+   (sm-size smap) (foldl (\ a e (+ a (tally (cup e)))) 0 smap)
+   (smfix info smap) (: nx (map (\ f (link (cap f) (fnsm (nthl f 1) (nthl f 2) smap))) info) (? (= (sm-size nx) (sm-size smap)) nx (smfix info nx)))   ; iterate to a fixpoint
    (jitgroup defs entry)
     (: info (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d) (- (tally nf) 1)))) defs)   ; (name params body arity)
        efn  (gfind (\ f (id? (cap f) entry)) info)
        ord  (link efn (gfilt (\ f (! (id? (cap f) entry))) info))                            ; entry FIRST (H_entry sits at Lo)
-       OU (mkouter (nthl efn 3)) outer (cap OU) Aovf (caup OU) Lo (tally outer)
+       smap0 (map (\ f (link (cap f) (gfilt (\ k (suse? (nthl f 2) (nthl (nthl f 1) k))) (rangeL 0 (nthl f 3))))) info)   ; per-fn DIRECT string params
+       smask (gsm entry (smfix info smap0))                                                   ; entry's STRING params, propagated to a fixpoint -> raw pointer, no sar
+       OU (mkouter (nthl efn 3) smask (apof "")) outer (cap OU) Aovf (caup OU) Lo (tally outer)   ; (apof "") = the plain-string kind, for the type guard
        sa (\ k (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k)))
        ld (\ k (foldl (\ a i (+ a (ldr i (- (* 16 k) (* 8 i))))) () (rangeL 0 k)))
        re (\ k (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k)))
        dummy (map (\ f (link (cap f) 0)) ord)                                                ; membership-only syms (pass 1; offsets unused)
-       rows (map (\ f (: k (nthl f 3) (cat f (L (sa k) (ld k) (re k) (tally (cgg dummy (nthl f 1) (nthl f 2) 0 Aovf)))))) ord)   ; +sa +ld +re +bodylen
+       rows (map (\ f (: k (nthl f 3) (cat f (L (sa k) (ld k) (re k) (tally (cggt dummy (nthl f 1) (nthl f 2) 0 Aovf (nthl f 0) 0)))))) ord)   ; +sa +ld +re +bodylen (cggt: TCO-aware length)
        hlen (map (\ r (+ (tally (nthl r 4)) (+ (tally (nthl r 5)) (+ (nthl r 7) (+ (tally (nthl r 6)) 1))))) rows)   ; sa+ld+body+re+ret
        offs ((: (go acc hs) (? (atom? hs) () (link acc (go (+ acc (cap hs)) (cup hs))))) Lo hlen)
        syms (map2 (\ r o (link (cap r) o)) rows offs)                                         ; dotted (name . offset)
-       Hs (map2 (\ r o (: s (nthl r 4) l (nthl r 5)
-                          (asm (L s l (cgg syms (nthl r 1) (nthl r 2) (+ o (+ (tally s) (tally l))) Aovf) (nthl r 6) '(195))))) rows offs)   ; H: save; load; BODY; restore; ret
+       Hs (map2 (\ r o (: s (nthl r 4) l (nthl r 5) bo (+ o (+ (tally s) (tally l)))                  ; bo = body start = Lbody (tail self-calls jmp here)
+                          (asm (L s l (cggt syms (nthl r 1) (nthl r 2) bo Aovf (nthl r 0) bo) (nthl r 6) '(195))))) rows offs)   ; H: save; load; BODY(tail); restore; ret
        lr (\ ds (? (atom? ds) (L entry) (: d (cap ds) (link (cap d) (link (cup d) (lr (cup ds)))))))   ; defs -> (: (n p..) body .. entry)
        fb (ev (link ': (lr defs)))                                                            ; interp the WHOLE group, yield the entry closure
        elam (link '\ (cat (nthl efn 1) (L (nthl efn 2))))                                     ; the entry's source lambda (value[-1], =/show)
@@ -577,6 +641,13 @@
   ; the // and % integer ops in the GROUP lane (trial-division residue), with /-by-0 deopt
   (: gmod (jitgroup (L (link '(r n d) '(% n d))) 'r) (&& (1 = (gmod 10 3)) (0 = (gmod 12 4)) (= (% 7 0) (gmod 7 0))))
   (: gdiv (jitgroup (L (link '(q n d) '(// n d))) 'q) (&& (3 = (gdiv 10 3)) (-3 = (gdiv -10 3))))
+  ; STRING LANE: native (peep s i) on a plain string (s passed RAW, byte at s+16); the apof TYPE GUARD
+  ; deopts a non-string (fixnum / cask / nil) to the interp fallback -- never a bad deref. glazed == interp.
+  (: gsb (jitgroup (L (link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))) 'sb)
+     isb (ev '(: (sb s i) (? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))) sb))
+     d (string (L 72 105 90 33 65))
+     (&& (365 = (gsb d 4)) (= (isb d 4) (gsb d 4))                                                ; string: native byte-sum == interp
+         (= (isb 5 4) (gsb 5 4)) (= (isb (cask 3) 4) (gsb (cask 3) 4)) (= (isb () 4) (gsb () 4))))   ; non-string -> guard deopts == interp
   ; --- added coverage: setcc <=/>/>=/=, multi-arg (cgn) %/&/|/cmp/?, *-fold loop, //-by-0 deopt ---
   ; comparison RESULT codes -- only `<` reached a setcc before, 4 of 5 opcodes were dark
   (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))            ; setcc <=

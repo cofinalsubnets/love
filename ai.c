@@ -109,7 +109,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); each tail-jumps to its apply handler
- lvm_putn, lvm_gauge,    lvm_clock,
+ lvm_putn, lvm_gauge,    lvm_clock, lvm_apof,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_eat1, lvm_eat2, lvm_toast, lvm_toasted,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -684,7 +684,7 @@ lvm_t lvm_fault;
 #define NIF_FAULT(_)
 #endif
 #define nifs(_) \
- _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge))\
+ _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
  _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
  _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
  _(nif_lt, "<", s2(lvm_lt))  _(nif_le, "<=", s2(lvm_le)) _(nif_eq, "=", s2(lvm_eq))\
@@ -3822,6 +3822,14 @@ lvm(lvm_gauge) {
  ini_chain(si + 5, putcharm(0), word(si + 6));
  ini_chain(si + 6, putcharm(0), ZeroPoint);
 #endif
+ Ip += 1;
+ return Continue(); }
+
+// (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. The string-lane glaze
+// reads the kind of a reference string at codegen time and emits a `cmp [s], kind; jne deopt` type guard.
+lvm(lvm_apof) {
+ word x = Sp[0];
+ Sp[0] = putcharm(lamp(x) ? (uintptr_t) cell(x)->ap : 0);
  Ip += 1;
  return Continue(); }
 
