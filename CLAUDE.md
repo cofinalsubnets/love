@@ -360,7 +360,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 (intern "asdf")      ; asdf
 (string 'asdf)       ; "asdf"      the explicit bridge to the raw spelling ('a + 'b is 'ab, re-interned)
 ("abc" 0)            ; 97          a string indexes its bytes
-(mint 0)             ; $$<serial>  a fresh nameless point ($(mint 0) ; 0); $$x mints (diagnostic, not an exact reparse)
+(mint 0)             ; $$<serial>  a fresh nameless point ($(mint 0) ; 0); the $$<serial> face is diagnostic, not an exact reparse
 (string (nom 'x))    ; "x"         a nom is a named point (KNom), not a chain; read its name with string
 
 ; --- hashes --- #(k v ..) or (hash ..) build; the empty hash is (tablet 0) (and prints so); mutable.
@@ -420,8 +420,8 @@ $(cask 4)             ; 0       a zeroed cask is nothing
 ; legal); + and - lead numbers and kebab names, fusing only to ( ' " @ ~ # -- so -3 is a number and -x
 ; a name, while -(f x) is negate. the monadic words: < cap, > cup (<< >> <> >< the compounds), + net (+
 ; turned inward), * prod (but a STAR jots: *5 = 0..4, prod of a scalar being vacuously itself), | abs,
-; - negate, / reciprocal, % fraction, ? bit (the Iverson bracket); $ ! . ride the same lane, and $$
-; mints a fresh point ($ is idempotent, so $$ is a free overload). \ never fuses (form space).
+; - negate, / reciprocal, % fraction, ? bit (the Iverson bracket); $ ! . ride the same lane ($ is
+; saturate -- `$` factors to the `saturate` nif, `sat` its short alias). \ never fuses (form space).
 ; demo:
 1 + 2 * 3            ; 7       infix, right-associative
 $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)

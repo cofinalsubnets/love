@@ -261,7 +261,7 @@
    (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
       (L (L '< 'cap) (L '> 'cup) (L '<< 'caap) (L '>> 'cuup) (L '+ 'net) (L '* 'pen)
          (L '| 'abs) (L '- 'negate) (L '/ 'reciprocal) (L '% 'fraction) (L '? 'bit)
-         (L '$ 'saturate) (L '$$ 'mint)        ; $$ -> mint: $ is idempotent ($$x=$x), so the slot is free to overload
+         (L '$ 'saturate)
          (L '! 'nil?) (L '. 'dot))))
 ; the FACTORIZATION LAW: greedy longest-prefix match against the table, no
 ; backtracking; every factor but the last must be arity one; the last factor
