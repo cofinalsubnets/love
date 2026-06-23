@@ -160,6 +160,23 @@ the evaluators themselves; `float` in particular isolates the floating-point pat
 (ai boxes its floats, so it pays heap traffic the native-double languages do
 not), and `closure` isolates closure allocation + application.
 
+`deforest` is the deforestation showcase. It is the same square/keep/sum work as
+`mapfilter`, but written as a genuine *list* pipeline read straight from source —
+`(foldl + 0 (map sq (filter odd (jot N))))` — which under a plain evaluator
+materializes three throwaway lists (the range, the odds, the squares). ai's
+native glaze **fuses** the whole pipeline into one counted loop with no
+intermediate allocation (the rewrite-level pass `defoliate` collapses the
+map/filter into the fold and lowers `foldl`-over-`jot` to the same loop codegen
+`fib`/`primes` use). Read the cross-language row **honestly**: it measures the
+*abstraction cost of the functional-pipeline idiom*, not a fixed algorithm — each
+column reflects how the implementation handles the intermediates (ai fuses them;
+`lua`/`fennel` have no `map`/`filter`, so a hand loop fuses them by hand;
+`python`/`clojure`/`hy` are lazy — no intermediate lists, per-element overhead;
+`node`/`ruby`/the schemes allocate eagerly). The anchor is that ai's deforested
+pipeline lands at `luajit`'s *hand-written loop* — the high-level functional
+source costs what the loop costs. (The purest A/B is ai with the glaze on vs off;
+we keep it always-on and watch the gate for regressions.)
+
 ## Layout
 
 ```
