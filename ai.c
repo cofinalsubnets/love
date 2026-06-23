@@ -48,6 +48,11 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 
 #include <stdarg.h>
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
+
+#ifdef AI_STAT
+#include <stdlib.h>          // malloc for the generational write-barrier audit's remembered set (host-only)
+#define AI_REM_CAP (1u << 16)
+#endif
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // nilp: structural test for the nil word (the only false scalar). Distinct from
 // ai_nilp below (the language falsy predicate, which also counts an all-zero vec);
@@ -835,6 +840,9 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
  g->nursery = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
+#ifdef AI_STAT
+ g->rem = malloc(AI_REM_CAP * sizeof(ai_word)), g->rem_cap = g->rem ? AI_REM_CAP : 0;  // write-barrier audit (host-only)
+#endif
  // book + macro maps (lookup-lambdas) then the main task text.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 6))) {
   union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
@@ -1076,6 +1084,82 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
 #endif
  return h; }
 
+#ifdef AI_STAT
+// ===== generational write barrier (stage 2; AI_STAT / host only) ================
+// A MINOR collection scavenges only [nursery, hp); it finds the young objects an
+// OLD object still points at two ways: the REMEMBERED SET (old MAPS that took a
+// young value -- the precise, common case) and the DIRTY flag (any OTHER old write,
+// which forces the collection to be a full MAJOR). ai's EXECUTION is functional
+// (no old is mutated), so dirty stays clear and minors are sound; only the COMPILER
+// mutates old in place (reader set-tail, poke into a tenured thread, c0 backpatch)
+// -> dirty -> major. Stage 2 builds this and AUDITS it: when dirty is clear (a minor
+// would run) there must be NO unremembered old->young edge. See doc/gengc.md.
+//
+// young?: a heap pointer allocated since the last collection -- in [nursery, hp).
+// The ADDRESS is the generation (ai objects carry no age bit).
+static ai_inline bool ai_young(struct ai *g, word p) {
+ return lamp(p) && ptr(p) >= g->nursery && ptr(p) < g->hp; }
+static ai_inline bool ai_old_cell(struct ai *g, word *c) {       // a heap cell already tenured (in [end, nursery))
+ return c >= (word*) g->end && c < g->nursery; }
+static bool gen_remembered(struct ai *g, word obj) {
+ for (uintptr_t i = 0; i < g->rem_n; i++) if (g->rem[i] == obj) return true;
+ return false; }
+static void gen_remember(struct ai *g, word obj) {
+ if (g->rem_n && g->rem[g->rem_n - 1] == obj) return;          // hot path: same map as last pin
+ if (gen_remembered(g, obj)) return;                           // deduped: the set stays small (book + a few)
+ if (g->rem_n < g->rem_cap) g->rem[g->rem_n++] = obj;          // overflow drops -> surfaces as an audit miss
+ if (g->rem_n > g->rem_hi) g->rem_hi = g->rem_n; }
+// the MAP barrier: an old map `src` gains a young key/value/backing `p` -> remember
+// src so a minor rescans it. Maps are the only mutable-pointer structure execution
+// touches; everything else is immutable, so this is the whole hot-path barrier.
+static ai_inline void gen_wb(struct ai *g, word src, word p) {
+ if (lamp(src) && ai_young(g, p) && !ai_young(g, src)) gen_remember(g, src); }
+// the COMPILER barrier: a non-map write to an old cell -> dirty (forces a major).
+static ai_inline void gen_dirty(struct ai *g, word *cell) {
+ if (ai_old_cell(g, cell)) g->dirty = 1; }
+// the AUDIT (runs only when dirty is clear -- i.e. a minor would run): the SOUNDNESS
+// claim is "every REACHABLE old object's young-pointing fields are remembered" => a
+// minor (scanning roots + rem) loses no live young object. So DFS the live graph from
+// the true GC roots (the same set gcg traces: ip, tasks, core vars, stack, C roots),
+// recurse through everything reachable, and at each reachable OLD object check its
+// young fields against the rem set. DEAD objects (orphaned map backings from grows)
+// are never reached -> no false positive. The WEAK INTERN MAP (g->symbols) is excluded
+// -- rebuilt wholesale by symbols_rebuild, never via the rem set. Allocates a seen-set
+// + worklist per call (host/AI_STAT only); on OOM it skips the audit rather than lie.
+static void gen_audit(struct ai *g) {
+ word *base = ptr(g), *top = base + g->len;
+ uintptr_t plen = g->len;
+ char *seen = calloc(plen, 1);
+ word *wl = seen ? malloc(plen * sizeof(word)) : 0;          // worklist of reachable object addresses
+ if (!wl) { free(seen); return; }
+ uintptr_t wn = 0;
+ word const *lo = base, *hi = top;
+ word sb = g->symbols ? map_back(g->symbols) : 0;
+# define PUSH(X) do { word _x = (X); word *_p = (word*) _x; \
+   if (lamp(_x) && _p >= base && _p < top && !seen[_p - base]) seen[_p - base] = 1, wl[wn++] = _x; } while (0)
+ PUSH((word) g->ip); PUSH((word) g->tasks);                  // seed the live roots gcg traces
+ for (word i = 0; i < g->end - &g->v0; i++) PUSH((&g->v0)[i]);   // core vars
+ for (word *s = g->sp; s < top; s++) PUSH(*s);                  // stack
+ for (struct ai_r *r = g->root; r; r = r->n) PUSH(*r->x);       // C live variables
+ while (wn) {
+  word obj = wl[--wn];
+  word *p = (word*) obj;
+  bool old = p >= (word*) g->end && p < g->nursery;
+  bool skip = old && (obj == g->symbols || obj == sb);
+# define FLD(f) do { word _f = (f); if (old && !skip && ai_young(g, _f) && !gen_remembered(g, obj)) g->rem_miss++; PUSH(_f); } while (0)
+  if (datp(obj)) switch (typ(obj)) {
+   case KChain: { struct ai_chain *w = (struct ai_chain*) p; FLD(w->a); FLD(w->b); break; }
+   case KVec: { struct ai_vec *v = (struct ai_vec*) p;
+                if (v->type == ai_O) for (uintptr_t i = 0, ne = vec_nelem(v); i < ne; i++) FLD(vec_get_obj(v, i)); break; }
+   case KNom: { struct ai_nom *w = (struct ai_nom*) p; FLD(w->name); break; }
+   default: break;                                            // KMint/KString/KBig/KFlo/KWide/KCplx: pointer-free leaves
+  } else { word *q = p + 1;                                    // text object: ap + content words to the tag terminator
+           while (q < top && !tagp(*q, lo, hi)) { FLD(*q); q++; } }
+# undef FLD
+ }
+# undef PUSH
+ free(seen), free(wl); }
+#endif
 
 ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  uintptr_t const
@@ -1086,12 +1170,14 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  struct ai *h = off_pool(g);
 #ifdef AI_STAT
  uintptr_t seen = g->hp - g->end;   // from-space occupancy entering this collection (live + dead), words
+ if (!g->dirty) gen_audit(g);       // dirty clear -> a minor would run -> verify it would lose no old->young edge
 #endif
  g = gcg(h, g->pool, g->len, g);
 #ifdef AI_STAT
  g->n_gc += 1;                      // one cycle per please (a resize copies twice but is one collection)
  g->n_seen += seen;                 // Σ scanned
  g->n_evac += g->hp - g->end;       // Σ survivors copied out (compacted live), words
+ g->rem_n = 0, g->dirty = 0;        // post-collection the nursery is empty: no old->young edges, no pending mutation
 #endif
  uintptr_t const
   v_lo = 4,
@@ -1287,6 +1373,10 @@ static struct ai *append(struct ai *g) {
 
 // don't inline this so callers can tail call optimize
 static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
+#ifdef AI_STAT
+ g->dirty = 1;   // c0 (the bootstrap compiler) builds threads + mutates its env in place; mark so any
+                 // collection during/after a c0 compile is a MAJOR. Boot-only: runtime ev self-hosts.
+#endif
  // the operator factor pass: c0 delegates the sigil surface -> core source
  // rewrite to the l `opfix` prepass (prel.l) -- evaluated like a macro,
  // once that global exists (i.e. for everything after its own definition
@@ -2345,6 +2435,9 @@ lvm(lvm_yield_sw) {
  N[4].x = putcharm(my_wait_fd);
  memcpy(N + 5, Sp, my_height * sizeof(word));
  prev->m = tagtext(N, 5 + my_height);
+#ifdef AI_STAT
+ gen_wb(g, (word) prev, (word) prev->m);   // task ring: an old node now links to the fresh (young) yield snapshot
+#endif
  g->yield_ctr = 0;
  g->tasks = next;
  Sp = memmove(topof(g) - restore_h, next_stack, restore_h * sizeof(word));
@@ -2369,6 +2462,9 @@ lvm(lvm_spawn) {
  N[5].x = x;
  N[6].x = fn;
  g->tasks->m = tagtext(N, 7);
+#ifdef AI_STAT
+ gen_wb(g, (word) g->tasks, (word) g->tasks->m);   // task ring: an old node now links to the fresh (young) spawned task
+#endif
  return Sp++, Ip++, Continue(); }
 
 lvm(lvm_wait) {
@@ -2382,6 +2478,9 @@ lvm(lvm_wait) {
    union u *prev = node;
    while (prev->m != node) prev = prev->m;
    prev->m = node->m;
+#ifdef AI_STAT
+   gen_wb(g, (word) prev, (word) prev->m);   // task ring: unsplicing relinks an old node to a (maybe young) successor
+#endif
    break; }
    // still running: yield without advancing Ip (re-enter wait on resume).
    // A task blocked in `wait` is polling a peer, NOT blocked on I/O or a timer,
@@ -2560,6 +2659,9 @@ lvm(lvm_peek) { return
 
 lvm(lvm_poke) {
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
+#ifdef AI_STAT
+ gen_dirty(g, (word*) c);            // a raw cell poke into a tenured object (ev thread-build / recursive-ref) -> major
+#endif
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
 lvm(lvm_twirl) {
@@ -3723,8 +3825,16 @@ static struct ai *ioparse(struct ai *g, bool multi) {
     g = gxr(ai_push(g, 1, ZeroPoint));                  // newcons = (d . ()) -- reader lists are ()-terminated (nil-ontology)
     if (ai_ok(g)) {
      word frame = A(g->sp[1]);                         // (head . tail)
-     if (nilp(A(frame))) A(frame) = B(frame) = g->sp[0];  // first element: head = tail = newcons
-     else B(B(frame)) = g->sp[0], B(frame) = g->sp[0];    // link onto tail, advance tail
+     if (nilp(A(frame))) { A(frame) = B(frame) = g->sp[0];  // first element: head = tail = newcons
+#ifdef AI_STAT
+       gen_dirty(g, (word*) frame);                       // reader set-tail: a young cons into the (maybe tenured) frame
+#endif
+     } else { word tail = B(frame);                    // the current last cons
+       B(tail) = g->sp[0], B(frame) = g->sp[0];           // link onto tail, advance tail (B(B(frame)) == B(tail))
+#ifdef AI_STAT
+       gen_dirty(g, (word*) tail), gen_dirty(g, (word*) frame);  // old tail/frame -> young newcons
+#endif
+     }
      g->sp++; }                                        // pop newcons -> ctx
     done = true; } }
   if (!ai_ok(g)) return g; } }
@@ -3821,11 +3931,13 @@ op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 //   [6] n_seen    Σ heap occupancy entering each collection (scanned = live + dead, words)
 //   [7] n_evac    Σ heap survivors copied out each collection (live, words)
 //   [8] old       the tenured set: words in [end, nursery) -- carried by the last collection (always on)
+//   [9] rem_miss  Σ old->young edges the write barrier FAILED to record (audit; must stay 0)
+//  [10] rem_hi    peak remembered-set size (distinct old objects with a young field)
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap ; young = heap - old - core.
-// Indices [3..7] read 0 unless built -DAI_STAT ([8] is always live). An array (not a list): every
-// field is a charm, so a flat numeric tray is the natural rep -- compact, and net/max apply directly.
+// Indices [3..7],[9..10] read 0 unless built -DAI_STAT ([8] is always live). An array (not a list):
+// every field is a charm, so a flat numeric tray is the natural rep -- compact, net/max apply directly.
 lvm(lvm_gauge) {
- enum { N = 9 };
+ enum { N = 11 };
  uintptr_t const bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + N * ai_T[ai_Z];
  Have(b2w(bytes));
  struct ai_vec *v = (struct ai_vec*) Hp;
@@ -3841,8 +3953,11 @@ lvm(lvm_gauge) {
  vec_put_int(v, 5, (intptr_t) g->max_heap);
  vec_put_int(v, 6, (intptr_t) g->n_seen);
  vec_put_int(v, 7, (intptr_t) g->n_evac);
+ vec_put_int(v, 9, (intptr_t) g->rem_miss);
+ vec_put_int(v, 10, (intptr_t) g->rem_hi);
 #else
  for (int i = 3; i < 8; i++) vec_put_int(v, i, 0);              // gc instrumentation gated off (-DAI_STAT to keep it)
+ vec_put_int(v, 9, 0), vec_put_int(v, 10, 0);
 #endif
  vec_put_int(v, 8, (intptr_t) (g->nursery - (word*) g->end));   // old (tenured) set, words -- always live
  return Sp[0] = word(v), Ip++, Continue(); }
@@ -3921,19 +4036,31 @@ static ai_noinline struct ai *map_grow(struct ai *g) {
   while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
  nb[1].x = putcharm(nlen);
- return cell(m)[1].x = (word) nb, g; }            // swap backing; header identity stable
+ cell(m)[1].x = (word) nb;                         // swap backing; header identity stable
+#ifdef AI_STAT
+ gen_wb(g, m, (word) nb);                          // barrier: old header now points at the fresh (young) backing
+#endif
+ return g; }
 
 // (put k v map): mutate in place; grow (may GC) on a new key past the load
 // factor, re-reading k/v from the stack afterwards. Leaves the map at sp[2].
 static ai_noinline struct ai *ai_mapput(struct ai *g) {
  if (!ai_ok(g)) return g;
  bool found; uintptr_t i = map_probe(g, g->sp[2], g->sp[0], &found);
- if (found) return map_slots(g->sp[2])[2 * i + 1] = g->sp[1], g->sp += 2, g;
+ if (found) {
+#ifdef AI_STAT
+  gen_wb(g, map_back(g->sp[2]), g->sp[1]);         // barrier: a young value into an old backing
+#endif
+  return map_slots(g->sp[2])[2 * i + 1] = g->sp[1], g->sp += 2, g; }
  if ((map_len(g->sp[2]) + 1) * 4 >= map_cap(g->sp[2]) * 3) {
   if (!ai_ok(g = map_grow(g))) return g;
   i = map_probe(g, g->sp[2], g->sp[0], &found); }   // re-probe larger backing
  word *s = map_slots(g->sp[2]);
  s[2 * i] = g->sp[0], s[2 * i + 1] = g->sp[1];
+#ifdef AI_STAT
+ gen_wb(g, map_back(g->sp[2]), g->sp[0]);          // barrier: a young key ...
+ gen_wb(g, map_back(g->sp[2]), g->sp[1]);          // ... or young value into an old backing
+#endif
  cell(map_back(g->sp[2]))[1].x = putcharm(map_len(g->sp[2]) + 1);
  return g->sp += 2, g; }
 
@@ -3948,7 +4075,12 @@ static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word zero) {
   if (s[2 * j] == map_gap) break;
   uintptr_t h = hash(g, s[2 * j]) & mask;            // ideal slot of the probed key
   bool gap = i <= j ? (h <= i || h > j) : (h <= i && h > j);   // h not in (i, j]
-  if (gap) s[2 * i] = s[2 * j], s[2 * i + 1] = s[2 * j + 1], i = j; }
+  if (gap) {
+   s[2 * i] = s[2 * j], s[2 * i + 1] = s[2 * j + 1];
+#ifdef AI_STAT
+   gen_wb(g, map_back(m), s[2 * i]), gen_wb(g, map_back(m), s[2 * i + 1]);  // delete shifts a (maybe young) k/v within an old backing
+#endif
+   i = j; } }
  s[2 * i] = map_gap, s[2 * i + 1] = nil;
  cell(map_back(m))[1].x = putcharm(map_len(m) - 1);
  return m; }

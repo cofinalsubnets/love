@@ -145,8 +145,18 @@ struct ai {
                         // forwarded. Stage 1: maintained + observed (gauge `old`); the minor that reaps the
                         // young set lands later. See doc/gengc.md.
 #ifdef AI_STAT
- uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words) -- build -DAI_STAT to keep them; off, the core is 5 words leaner and gauge reports 0 for them
+ uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words) -- build -DAI_STAT to keep them; off, the core is leaner and gauge reports 0 for them
            n_seen, n_evac;          // Σ over collections: heap occupancy entering each (scanned = live+dead) and survivors copied out (live). mortality = (n_seen-n_evac)/n_seen; copy-amp = n_evac/max_heap -- the generational-GC justifier (does the same live set get recopied every cycle?)
+ // generational write-barrier AUDIT (stage 2): the remembered set -- old objects that hold a young
+ // pointer (recorded by the barrier at ai_mapput/map_grow). A malloc'd buffer: AI_STAT is host-only,
+ // so the freestanding kernel never sees this. gen_audit walks the old region each collection and
+ // counts rem_miss = old->young edges the barrier failed to remember (a soundness hole for the minor).
+ ai_word *rem; uintptr_t rem_cap, rem_n, rem_hi, rem_miss;
+ // the DIRTY flag: a non-map write hit an old cell (reader set-tail / poke into a tenured thread /
+ // c0 backpatch) -- the compiler is the only thing that mutates old in place, and not via a map. A
+ // collection with dirty set must be a MAJOR (full); dirty clear -> a minor is sound. Cleared on
+ // every collection. The audit runs only when clear, so it proves a minor would lose nothing.
+ uintptr_t dirty;
 #endif
  union {
   intptr_t v0;

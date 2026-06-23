@@ -98,6 +98,34 @@ or the slot — because `map_grow` (`ai.c:~3920`, and the sibling swap at `~4541
 Recommend: remember the header; a minor walks its live backing. (Belt-and-braces:
 tenure backings too, since maps are tenured anyway — see below.)
 
+### What the audit found: the compiler mutates old in place too
+
+The "maps are the only mutable-pointer structure" premise holds for **execution**
+but **not for the compiler**. Stage 2's audit (below) proved this empirically:
+runtime pure compute (even heavy map mutation) produces *zero* unbarried old→young
+edges, but the *compiler* mutates old objects in place by three routes a map
+barrier can't see:
+
+- **the reader** builds lists by set-tail (`ai.c:~3803` — `B(tail) = newcons`);
+- **ev** builds continuation **threads** by `poke` (`lvm_poke`), and **c0** builds
+  threads + mutates its `struct env` scope in place;
+- the **task ring** splices a young yield/spawn snapshot into an existing node
+  (`lvm_yield_sw`/`spawn`/`wait`).
+
+So the v1 barrier is **two-part** (and this is what stage 2 ships):
+
+1. a **remembered set** for the precise, hot, minor-friendly case — an old *map*
+   (or task-ring node) taking a young value: `ai_mapput`, `map_grow`, `ai_mapdel`,
+   the task splices → `gen_wb(src, p)` remembers `src` when it's old and `p` young;
+2. a **dirty flag** for the compiler's in-place mutation — `lvm_poke`, the reader's
+   set-tail, and **c0 via its entry** set `g->dirty` when they write an old cell.
+   A collection with `dirty` set must be a **major**; clear → a minor is sound.
+   Since execution never sets it, compute gets minors and *compile bursts* get a
+   major to flush their edges (boot too, where c0 runs). This is far simpler than a
+   poke-precise rem set or card marking, and exact: dirty ⟺ "an unbarriered old
+   write happened since the last collection." See `doc/proto/gengc.l` for the model
+   (a precise rem set; the dirty flag is the C answer to non-map mutation).
+
 ## Tenure-on-birth
 
 Some kinds are born straight into old space, which dissolves the awkward minor-GC
@@ -154,13 +182,18 @@ the minor.
    `gcg`, exposed as `gauge` `old`. No behaviour change (gate green, valgrind
    clean). The `young?` predicate lands with its first caller (stage 2) — an
    unused `static inline` is a `-Werror` failure here. *(done)*
-2. **the barrier + `young?`** — `ai_young(p) = lamp(p) && nursery <= p < hp`;
-   record old→young at `ai_mapput` + the `map_grow` backing swap. Validate under
-   `-DAI_STAT` with an assert: every old→young edge is in the rem set (an audit
-   walk at each collection).
+2. **the barrier + audit** — `ai_young(p) = lamp(p) && nursery <= p < hp`; the
+   two-part barrier above (rem set `gen_wb` for old maps/task-nodes + `dirty` flag
+   for compiler mutation). `gen_audit` runs under `-DAI_STAT` when `dirty` is clear
+   (a minor would fire) and does a **reachability DFS from the GC roots**, checking
+   every reachable old object's young fields are remembered — dead/orphaned backings
+   are never visited, so no false positives. RESULT: 0 unremembered edges across the
+   full test corpus + benches; pure compute + map mutation 0 over many GCs. The
+   barrier/flag/audit are AI_STAT-gated, so the normal build & `make test` are
+   unchanged. *(done)*
 3. **the real minor** — `gcp` with nursery bounds, roots ∪ rem, promote into old;
-   major stays `gcg`. Differential oracle: the GC-stress test (1500 strings under
-   pressure == interp) that the glaze string lanes already lean on.
+   major stays `gcg`; a `dirty` collection forces a major. Differential oracle: the
+   GC-stress test (1500 strings under pressure == interp) the glaze string lanes lean on.
 4. **tune** — the two-level sizing.
 
 ## Verification
