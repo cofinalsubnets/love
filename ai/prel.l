@@ -172,8 +172,8 @@
    (last l) (? (two? (cup l)) (last (cup l)) (cap l))
    (each l f) (? (two? l) (: _ (f (cap l)) (each (cup l) f)))
    (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (link (cap l) (ldel x (cup l)))))
-   (all f l) (? (two? l) (? (f (cap l)) (all f (cup l))) 1)
-   (any f l) (? (two? l) (? (f (cap l)) 1 (any f (cup l))))
+   (all f l) (? (two? l) (? (f (cap l)) (all f (cup l)) 0) 1)   ; truth BITS (0/1, like =/</!), not ()
+   (any f l) (? (two? l) (? (f (cap l)) 1 (any f (cup l))) 0)   ; -- a predicate's false is 0, the green floor
    (cat a b) (foldr link b a))
 ; sort: (sort l) orders l ascending by the total order -- the C lane (a stable
 ; bottom-up merge in the heap gap, one cmp3 per compare, no lisp re-entry);

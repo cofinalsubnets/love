@@ -242,32 +242,41 @@
              (: sub (\ e (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e consts))
                 keep (afilter (\ pr (! (&& (symp (cap pr)) (whole? (cup pr))))) pairs)
                 (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
-   ; --- DEFORESTATION: fuse a map/filter pipeline under a foldl into ONE pass, then lower a
-   ;     foldl-over-(iota N) to the named-let LOOP `lift` already glazes -- so a combinator pipeline
-   ;     compiles to native. The rewrite-level companion to the codegen recognizers; the standalone
-   ;     spec + the foldr/each/all/any consumers live in doc/proto/forest.l (this is the glaze-path
-   ;     subset: foldl consumer, map/filter producers, iota source). Transducer view of shortcut
-   ;     fusion -- map f: elem|->(f elem); filter p: step|->(? (p elem) step acc). `dsimp` then beta-
-   ;     inlines the unary stage lambdas + flattens curried operator heads to a FIRST-ORDER step. Step
-   ;     binders are fresh gensym noms (hygienic substitution). `defoliate` is a NO-OP (id-identical)
-   ;     on any form with no pipeline -- so every non-pipeline glaze form is byte-unchanged.
+   ; --- DEFORESTATION: fuse a map/filter pipeline under a CONSUMER into ONE pass, then lower it over
+   ;     (jot N) to the named-let LOOP `lift` already glazes -- so a combinator pipeline compiles to
+   ;     native. The rewrite-level companion to the codegen recognizers; the standalone spec lives in
+   ;     doc/proto/forest.l. Consumers glazed: foldl/foldr (a reduction -> a counted loop, UP for foldl,
+   ;     DOWN for foldr) and all/any (a short-circuit predicate -> an early-exit loop returning the truth
+   ;     BITS 0/1). all/any glaze transparently ONLY because their false value is now the fixnum 0 (the
+   ;     green floor) like =/</!, not the zero point `()` -- the integer compiler returns 0, so it matches
+   ;     (see ai/prel.l: all/any return truth bits). `each` is NOT here: its body is an EFFECT, outside
+   ;     the arithmetic fragment. Transducer view of shortcut fusion -- map f: elem|->(f elem); filter p:
+   ;     step|->(? (p elem) step skip). `dsimp` then beta-inlines the unary stage lambdas + flattens
+   ;     curried operator heads to a FIRST-ORDER step. Step binders are fresh gensym noms (hygienic).
+   ;     `defoliate` is a NO-OP (id-identical) on any form with no pipeline -- so non-pipeline forms are byte-unchanged.
    (dsub old new B) (? (id? B old) new (two? B) (link (dsub old new (cap B)) (dsub old new (cup B))) B)
    (dquote? x) (&& (two? x) (id? (cap x) '\) (= 2 (tally x)))                  ; (\ datum) -> a quote, never descend
    (dmap? P)   (&& (two? P) (id? (cap P) 'map))
    (dfilt? P)  (&& (two? P) (id? (cap P) 'filter))
    (dprod? P)  (|| (dmap? P) (dfilt? P))
    (dsfn P)    (caup P)  (dssrc P) (caup (cup P))                              ; (map f P') -> f / P'
-   (dpeel B e a P)                                                            ; thread step body B over (elem e, acc-skip a) through the chain
-    (? (dmap? P)  (dpeel (dsub e (L (dforest (dsfn P)) e) B) e a (dssrc P))    ; e := (f e)
-       (dfilt? P) (dpeel (L '? (L (dforest (dsfn P)) e) B a) e a (dssrc P))    ; (? (p e) B a)
+   (dpeel B e felse P)                                                        ; thread step body B over (elem e, filter-skip felse) through the chain
+    (? (dmap? P)  (dpeel (dsub e (L (dforest (dsfn P)) e) B) e felse (dssrc P))   ; e := (f e)
+       (dfilt? P) (dpeel (L '? (L (dforest (dsfn P)) e) B felse) e felse (dssrc P)) ; (? (p e) B skip)
        (L B (dforest P)))                                                     ; base list (forest nested pipelines)
+   (dfold? x) (&& (member? (cap x) '(foldl foldr)) (= 4 (tally x)) (: P (caup (cuup x)) (|| (dprod? P) (djot? P))))   ; (foldl/foldr c z P)
+   (dpred? x) (&& (member? (cap x) '(all any)) (= 3 (tally x)) (: P (cap (cuup x)) (|| (dprod? P) (djot? P))))         ; (all/any q P)
    (dforest x)
     (? (atom? x)   x
        (dquote? x) x
-       (&& (id? (cap x) 'foldl) (= 4 (tally x)) (|| (dprod? (caup (cuup x))) (djot? (caup (cuup x)))))   ; (foldl c z P), P a producer or jot -> name the step (so dlower can build the loop)
-          (: c (caup x) z (cap (cuup x)) P (caup (cuup x))                     ; c=arg0, z=arg1, P=arg2
-             e (nom 'e) a (nom 'a) r (dpeel (L c a e) e a P)
-             (L 'foldl (L '\ a e (cap r)) (dforest z) (caup r)))
+       (dfold? x)  (: tag (cap x) c (caup x) z (cap (cuup x)) P (caup (cuup x)) e (nom 'e) a (nom 'a)
+                      B0 (? (id? tag 'foldl) (L c a e) (L c e a))             ; foldl step (c a e); foldr step (c e a)
+                      r (dpeel B0 e a P)                                      ; filter-skip = the acc (unchanged)
+                      hd (? (id? tag 'foldl) (L '\ a e (cap r)) (L '\ e a (cap r)))
+                      (L tag hd (dforest z) (caup r)))
+       (dpred? x)  (: tag (cap x) q (caup x) P (cap (cuup x)) e (nom 'e) unit (? (id? tag 'all) 1 0)   ; filter-skip = the short-circuit unit
+                      r (dpeel (L q e) e unit P)
+                      (L tag (L '\ e (cap r)) (caup r)))
        (link (cap x) (map dforest (cup x))))
    (dspecial? h) (|| (id? h '?) (|| (id? h '\) (id? h ':)))
    (dsimp x)                                                                  ; reduce to first-order: beta unary lambdas, flatten curried heads
@@ -282,18 +291,28 @@
    ; builds it. (NOT iota -- that is the ARRAY @(0..N-1), which foldl/map (chain ops) do NOT iterate,
    ; so a foldl over iota interprets to z; lowering THAT would be unsound. jot only.)
    (djot? s) (&& (two? s) (id? (cap s) 'jot) (= 2 (tally s)))                 ; (jot N)
-   (dstep? f) (&& (two? f) (id? (cap f) '\) (= 4 (tally f)))                  ; (\ A E BODY)
-   (dlower1 e)                                                                ; (foldl (\ A E BODY) Z (jot N)) -> ((: (go E A) (? (< E N) (go (+ E 1) BODY) A)) 0 Z)
-    (: STEP (caup e) Z (cap (cuup e)) SRC (caup (cuup e))                     ; STEP=arg0, Z=arg1, SRC=arg2
-       (? (&& (dstep? STEP) (djot? SRC))
-          (: A (caup STEP) E (cap (cuup STEP)) BODY (caup (cuup STEP)) N (caup SRC) go (nom 'go)
-             (L (L ': (L go E A) (L '? (L '< E N) (L go (L '+ E 1) BODY) A)) 0 Z))
-          e))
-   (dlower x) (? (atom? x) x (dquote? x) x
-                 (&& (id? (cap x) 'foldl) (= 4 (tally x))) (dlower1 (link 'foldl (map dlower (cup x))))
-                 (link (cap x) (map dlower (cup x))))
-   (glazey-foldl? x) (&& (id? (cap x) 'foldl) (= 4 (tally x)) (: s (caup (cuup x)) (|| (dprod? s) (djot? s))))
-   (has-pipe? x) (? (atom? x) 0  (dquote? x) 0  (dprod? x) 1  (glazey-foldl? x) 1  (any has-pipe? (cup x)))
+   (dstep? f)  (&& (two? f) (id? (cap f) '\) (= 4 (tally f)))                 ; (\ A E BODY)  -- a 2-param fold step
+   (dstep1? f) (&& (two? f) (id? (cap f) '\) (= 3 (tally f)))                 ; (\ E BODY)    -- a 1-param predicate
+   (dlowerfold x)                                                            ; (foldl/foldr STEP Z (jot N)) -> counted loop (up / down)
+    (: tag (cap x) STEP (caup x) Z (cap (cuup x)) SRC (caup (cuup x))
+       (? (! (&& (dstep? STEP) (djot? SRC))) x
+          (: P1 (caup STEP) P2 (cap (cuup STEP)) BODY (caup (cuup STEP)) N (caup SRC) go (nom 'go)
+             (? (id? tag 'foldl)                                            ; STEP=(\ a e B): P1=a P2=e ; count e UP 0..N-1
+                (L (L ': (L go P2 P1) (L '? (L '< P2 N) (L go (L '+ P2 1) BODY) P1)) 0 Z)
+                (L (L ': (L go P1 P2) (L '? (L '< P1 0) P2 (L go (L '- P1 1) BODY))) (L '- N 1) Z)))))   ; STEP=(\ e a B): count e DOWN N-1..0
+   (dlowerpred x)                                                            ; (all/any PRED (jot N)) -> short-circuit loop over one index
+    (: tag (cap x) PRED (caup x) SRC (cap (cuup x))
+       (? (! (&& (dstep1? PRED) (djot? SRC))) x
+          (: E (caup PRED) BODY (cap (cuup PRED)) N (caup SRC) go (nom 'go)
+             (? (id? tag 'all)                                              ; all: a false body returns 0 early; run-off returns 1
+                (L (L ': (L go E) (L '? (L '< E N) (L '? BODY (L go (L '+ E 1)) 0) 1)) 0)
+                (L (L ': (L go E) (L '? (L '< E N) (L '? BODY 1 (L go (L '+ E 1))) 0)) 0)))))   ; any: a true body returns 1 early; run-off 0
+   (dlower x)
+    (? (atom? x) x (dquote? x) x
+       (&& (member? (cap x) '(foldl foldr)) (= 4 (tally x))) (dlowerfold (link (cap x) (map dlower (cup x))))
+       (&& (member? (cap x) '(all any)) (= 3 (tally x)))     (dlowerpred (link (cap x) (map dlower (cup x))))
+       (link (cap x) (map dlower (cup x))))
+   (has-pipe? x) (? (atom? x) 0  (dquote? x) 0  (dprod? x) 1  (dfold? x) 1  (dpred? x) 1  (any has-pipe? (cup x)))
    (defol-body b) (? (has-pipe? b) (dlower (dsimp (dforest b))) b)            ; fuse+lower a pipeline body, else leave it
    (defol-bs bl) (? (atom? (cup bl)) (L (defol-body (cap bl)))                ; trailing body
                     (link (cap bl) (link (defol-body (caup bl)) (defol-bs (cuup bl)))))   ; (name value ..) -> transform each value
@@ -507,6 +526,24 @@
     ; a foldl over a list PARAM can't lower (no jot) -> interpreted, value still correct (defoliate no-op)
     (: dl '(: (g l) (foldl (+) 0 l) (g (jot 5)))
        (= (base-ev dl) (ev dl)))                                                         ; 0+1+2+3+4 = 10
+    ; foldr: a DOWN-counting reduction -- the fused down-loop lambda-lifts to a group fn and natives (the
+    ; operator consumer flattens to a first-order step). == interp, value exact.
+    (: dr '(: (f n) (foldr (+) 0 (map (\ x (* x x)) (jot n))) (f 100))
+       (&& !(id? (autogroup dr) dr) (328350 = (ev dr)) (= (base-ev dr) (ev dr))))        ; foldr +.map sq, sum i^2 for i<100
+    (: drf '(: (f n) (foldr (+) 0 (filter (\ x (= 1 (% x 2))) (jot n))) (f 20))
+       (&& !(id? (autogroup drf) drf) (100 = (ev drf)) (= (base-ev drf) (ev drf))))      ; foldr +.filter odd, 1+3+..+19 = 100
+    ; all/any: a short-circuit predicate -> an early-exit loop returning the truth BITS 0/1 (== interp, which
+    ; now returns bits too). a clean run-off and an early short-circuit both glaze, with or without a producer.
+    (: dall '(: (f n) (all (\ x (< x n)) (jot n)) (f 10))
+       (&& !(id? (autogroup dall) dall) (1 = (ev dall)) (= (base-ev dall) (ev dall))))   ; every i<n -> run off -> 1
+    (: dalf '(: (f n) (all (\ x (< x 5)) (jot n)) (f 10))
+       (&& !(id? (autogroup dalf) dalf) (0 = (ev dalf)) (= (base-ev dalf) (ev dalf))))   ; i=5 fails -> early 0
+    (: dany '(: (f n) (any (\ x (> x 7)) (jot n)) (f 10))
+       (&& !(id? (autogroup dany) dany) (1 = (ev dany)) (= (base-ev dany) (ev dany))))   ; i=8 hits -> early 1
+    (: danf '(: (f n) (any (\ x (> x 100)) (jot n)) (f 10))
+       (&& !(id? (autogroup danf) danf) (0 = (ev danf)) (= (base-ev danf) (ev danf))))   ; none -> run off -> 0
+    (: dap '(: (f n) (all (\ x (> x 0)) (map (+ 1) (jot n))) (f 10))
+       (&& !(id? (autogroup dap) dap) (1 = (ev dap)) (= (base-ev dap) (ev dap))))        ; all (+1 i)>0 -> producer fuses into the guard
     ; a fn that calls OUT of the fragment (into `link`) drops the whole group -> form unchanged, interpreted
     (: ro '(: (build n) (? (< n 1) () (link n (build (- n 1)))) (build 3))
        (&& (id? (autogroup ro) ro) ('(3 2 1) = (ev ro)))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
