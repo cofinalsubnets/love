@@ -1,24 +1,14 @@
-; dimacs -- a DIMACS CNF reader for the sat solver, built from PARSER COMBINATORS in the gw.js style
-; cook/cook.l uses (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a
-; failure continuation n = rest; payloads are lists that `seq` concatenates). cook keeps its set
-; private (body-having `:`), so this re-derives the handful it needs -- plus a signed-int LEAF `pint`
-; (love has no regex). `dimacs text` -> (formula . nvars): skip `c` comment lines, read the `p cnf N M`
-; header for N, parse the body integers, split them into clauses at each terminating 0. Standalone
-; (parse self-tests below); when loaded AFTER sat/sat.l it also self-tests parse->solve via `cdcl`.
-; Run: out/host/ai sat/dimacs.l   (or: cat sat/sat.l sat/dimacs.l | out/host/ai).
+; dimacs -- a DIMACS CNF reader for the sat solver, built from the PARSER COMBINATORS in the post-egg
+; layer ai/post.l (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a
+; failure continuation n = rest; payloads are lists that `seq` concatenates). post.l shares that set
+; (eps/lit/span/alt/seq/seqs/skip/many/runp) with cook; here we add only a signed-int LEAF `pint` (ai
+; has no regex) and the grammar. `dimacs text` -> (formula . nvars): skip `c` comment lines, read the
+; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
+; Standalone (parse self-tests below); when loaded AFTER sat/sat.l it also self-tests parse->solve via
+; `cdcl`. Run: out/host/ai sat/dimacs.l   (or: cat sat/sat.l sat/dimacs.l | out/host/ai).
 (:
-   ; -- the combinators (gw.js style; payload = a list, seq concatenates) --
-   eps (\ s y n (y s 0))
-   (lit l) (\ s y n (? (&& (<= (tally l) (tally s)) (= l (snip s 0 (tally l))))
-                       (y (snip s (tally l) (tally s)) (link l ())) (n s)))
-   (span p) (\ s y n (: i ((: (g j) (? (&& (< j (tally s)) (p (s j))) (g (+ 1 j)) j)) 0)
-                        (y (snip s i (tally s)) (link (snip s 0 i) ()))))
-   (alt a b) (\ s y n (a s y (\ _ (b s y n))))
-   (seq a b) (\ s y n (a s (\ s1 p1 (b s1 (\ s2 p2 (y s2 (cat p1 p2))) n)) n))
-   (seqs l)  (foldr seq eps l)
-   (skip a)  (\ s y n (a s (\ s1 _ (y s1 0)) n))
-   (many a)  (\ s y n (a s (\ s1 p1 (many a s1 (\ s2 p2 (y s2 (cat p1 p2))) (\ _ (y s1 p1)))) (\ _ (y s 0))))
-   (runp p s) (p s (\ r x x) (\ _ ()))                      ; LENIENT: return the payload, ignore trailing slack
+   ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
+   ;    the POST-EGG layer ai/post.l, baked once after the egg -- shared with cook, not re-derived here.
    ; -- character classes + the signed-integer leaf --
    (ws? c)   (|| (= c 32) (|| (= c 9) (|| (= c 13) (= c 10))))      ; space/tab/CR/LF
    (dig? c)  (&& (< 47 c) (< c 58))                                 ; '0'..'9'

@@ -440,6 +440,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "prel.h"
 #include "ev.h"
     "))"
+#include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
 #include "bao.h"
   );
   if (argp) return ai_evals_(g, cli);

@@ -209,48 +209,30 @@
 ; --- importing a Makefile ------------------------------------------------------
 ; cook reads a Cookfile (ordinary love source) -- but it can also read a real
 ; Makefile directly, the same dependency idea wearing make's notation. The reader
-; is a set of PARSER COMBINATORS (after the gw.js style): a parser is (\ s y n)
-; over a string s, with a success continuation y = rest parsed and a failure
-; continuation n = rest; the parsed payload is a list that `seq` concatenates.
-; love has no regex, so the leaves are `lit` (a literal prefix), `one` (one char
-; by predicate) and `span` (a maximal run); alt/seq/opt/many build the rest.
-; The import is reasonably GNU-make-compatible: recursive $(VAR) expansion and
-; substitution refs, the common functions ($(shell)/$(wildcard)/$(dir)/
-; $(patsubst)/$(filter)/...), ifeq/ifdef conditionals, `include`, the = := ?= +=
-; flavors, pattern + static-pattern rules, order-only prereqs, and the $@ $< $^ $*
-; automatics. Each recipe LINE runs via ("sh" "-c" line). See cook/cooktest.l.
+; is built on the PARSER COMBINATORS (after the gw.js style) now shared from the
+; post-egg layer ai/post.l: a parser is (\ s y n) over a string s, with a success
+; continuation y = rest parsed and a failure continuation n = rest; the parsed
+; payload is a list that `seq` concatenates. ai has no regex, so the leaves are
+; `lit` (a literal prefix), `one` (one char by predicate) and `span` (a maximal
+; run); alt/seq/opt/many build the rest. The import is reasonably GNU-make-
+; compatible: recursive $(VAR) expansion and substitution refs, the common
+; functions ($(shell)/$(wildcard)/$(dir)/$(patsubst)/$(filter)/...), ifeq/ifdef
+; conditionals, `include`, the = := ?= += flavors, pattern + static-pattern rules,
+; order-only prereqs, and the $@ $< $^ $* automatics. Each recipe LINE runs via
+; ("sh" "-c" line). See cook/cooktest.l.
 ;
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
-; names leak to the global scope (a body-less `:` would, and several -- `parse`,
-; `span`, `sat`/$ -- collide with egg globals). The form reads outer globals
-; (recipe, cook, ticket, the prel) freely; its body is the dispatch at the bottom.
+; names leak to the global scope. The form reads outer globals (the post.l
+; combinators, recipe, cook, ticket, the prel) freely; its body is the dispatch at
+; the bottom.
 (:
    ; --emit mode: a 1-cell box (0 = off). when set, expand-steps emits a
    ; serializable ("sh" "-c" cmd) argv step instead of a sh-line thunk, so the
    ; resolved cards can be SHOWN back as a Cookfile (see emit-cookfile below).
    emitp (tablet 0)
 
-   ; -- the combinators --
-   eps (\ s y n (y s 0))
-   (lit l) (\ s y n
-      (? (&& (<= (tally l) (tally s)) (= l (snip s 0 (tally l))))
-         (y (snip s (tally l) (tally s)) `(l)) (n s)))
-   (one p) (\ s y n
-      (? (&& (< 0 (tally s)) (p (s 0)))
-         (y (snip s 1 (tally s)) `((s 0))) (n s)))
-   (span p) (\ s y n
-      (: i ((: (g j) (? (&& (< j (tally s)) (p (s j))) (g (+ 1 j)) j)) 0)
-         (y (snip s i (tally s)) `((snip s 0 i)))))
-   (alt a b) (\ s y n (a s y (\ _ (b s y n))))
-   (seq a b) (\ s y n (a s (\ s1 p1 (b s1 (\ s2 p2 (y s2 (cat p1 p2))) n)) n))
-   (seqs l) (foldr seq eps l)
-   (opt a) (\ s y n (a s y (\ _ (y s 0))))
-   (skip a) (\ s y n (a s (\ s1 _ (y s1 0)) n))
-   (pmap f a) (\ s y n (a s (\ s1 x (y s1 (f x))) n))
-   (many a) (\ s y n
-      (a s (\ s1 p1 (many a s1 (\ s2 p2 (y s2 (cat p1 p2))) (\ _ (y s1 p1))))
-           (\ _ (y s 0))))
-   (parse p s) (p s (\ r x (? (= 0 (tally r)) x ())) (\ _ ()))
+   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) now live in the POST-EGG
+   ;    layer ai/post.l, baked once after the egg; this body-having `:` just reads them as outer globals.
 
    ; -- character classes and string utilities --
    (chws c)     (|| (= c 32) (= c 9))
