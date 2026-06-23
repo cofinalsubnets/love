@@ -150,3 +150,17 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
                text-align: justify; hyphens: auto; }
 .glossary dd code { background: none; border: none; padding: 0; }
 h1::before { content: "🌑 "; }
+
+/* --- mobile --- the 2x desktop size (32px) overflows a phone, so drop back to
+   the 16px native cell: still a crisp 1x bitmap (2-3x on a HiDPI phone), and the
+   em-based sizes (terminal, headings, chips) scale down with it. plus the usual
+   small-screen hygiene: left-align the justified prose (rivers read badly when
+   narrow), break long tokens, keep wide tables and tooltips inside the viewport. */
+@media (max-width: 768px) {
+  body { font-size: 16px; padding: 1.4em .8em 4em; overflow-x: clip; }
+  #term { font-size: 16px; }
+  p, li, .law, .glossary dd { text-align: left; }
+  code { overflow-wrap: anywhere; }
+  td { word-break: break-word; }
+  .term .tip { max-width: 90vw; }
+}
