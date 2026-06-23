@@ -382,9 +382,10 @@
        (nif (emit (asm (L (cgf v (caup (cup lam)) 0) roomg nanc boxw epifr))) (ev lam) lam 1))
    ; --- BYTE LAW (string RESULT): (jitba '(\ s (+ s B))) -- native s ++ [B], a fresh heap string. Same
    ;     heap-result machinery as jitfr but VARIABLE-sized: read len=[s+8], reserve n = str_type_width +
-   ;     b2w(len+1) content words + 1 GC tag word, ROOM-GUARD-or-deopt (the alloc twin again), write the
-   ;     ai_str header (kind = lvm_str via apof, len+1), COPY len bytes (an inline loop -- rep movsb
-   ;     would clobber Ip=rsi/Sp=rcx), append B, write the tag word (head|2, the cheney terminator),
+   ;     b2w(len+1) content words (NO GC tag -- the cheney scan derives a string's size from its len
+   ;     field, ai.c:959; only threads/continuations are tag-copied), ROOM-GUARD-or-deopt (the alloc
+   ;     twin again), write the ai_str header (kind = lvm_str via apof, len+1), COPY len bytes (an inline
+   ;     loop -- rep movsb would clobber Ip=rsi/Sp=rcx), append B,
    ;     return the raw ai_str ptr (no putfix). A non-string s (fixnum/list/num) hits the kind TYPE
    ;     GUARD and deopts to the generic interpreter `+`. B is a compile-time byte (0..255). The
    ;     emitted body is offset-independent: every branch is a fixed local distance. ⚠ x86-64.
@@ -394,7 +395,7 @@
           '(76 139 1) (L 65 246 192 1 116 (tally deopt)) deopt                  ; mov r8,[rcx](=s); test r8b,1; jz+; deopt (fixnum)
           '(77 139 16 73 187) (le8 kind) (L 77 57 218 116 (tally deopt)) deopt   ; mov r10,[r8]; movabs r11,lvm_str; cmp; je+; deopt (non-str)
           '(77 139 72 8)                                                        ; mov r9,[r8+8]  (len)
-          '(77 141 81 8 73 193 234 3 73 131 194 3)                              ; r10 = total_words = 3 + ((len+8)>>3)
+          '(77 141 81 8 73 193 234 3 73 131 194 2)                              ; r10 = total_words = 2 + ((len+8)>>3)  (b2w(len+1), NO GC tag)
           '(78 141 20 210 73 131 194 64)                                        ; r10 = Hp + total*8 + floor(64)
           (L 76 57 209 115 (tally deopt)) deopt                                 ; cmp rcx,r10; jae+; deopt (heap full)
           '(76 137 26)                                                          ; mov [rdx],r11  (header: lvm_str)
@@ -402,10 +403,8 @@
           '(49 192 76 57 200 15 141 16 0 0 0)                                   ; xor eax,eax ; COPY: cmp rax,r9 ; jge DONE(+16)
           '(69 15 182 84 0 16 68 136 84 2 16 72 255 192 235 231)                ; movzx r10d,[r8+rax+16]; mov [rdx+rax+16],r10b; inc rax; jmp COPY
           (L 66 198 68 10 16 B)                                                 ; DONE: mov byte [rdx+r9+16], B
-          '(77 141 81 8 73 193 234 3 73 131 194 2 78 141 28 210)                ; r10 = tag word offset n ; lea r11,[rdx+r10*8] (&tag)
-          '(73 137 210 73 131 202 2 77 137 19)                                  ; r10=Hp ; or r10,2 ; mov [r11],r10  (tag = head|2)
           '(72 137 208)                                                         ; mov rax,rdx  (result = the new string ptr)
-          '(77 141 81 8 73 193 234 3 73 131 194 3 74 141 20 210)                ; r10=total_words ; lea rdx,[rdx+r10*8]  (Hp += total*8)
+          '(77 141 81 8 73 193 234 3 73 131 194 2 74 141 20 210)                ; r10=total_words ; lea rdx,[rdx+r10*8]  (Hp += total*8)
           '(72 137 1 72 131 198 16 72 139 6 255 224))))                         ; mov [rcx],rax ; add rsi,16 ; Continue (NO putfix)
         (ev lam) lam 1))
    ; --- CASK-BACKED string BUILDER (sketch): (jitsb '(\ s <byte-map loop>) K) -- the O(n) PRODUCER lane.
