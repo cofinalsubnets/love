@@ -222,3 +222,9 @@ onto PATH beside `ai`.
   nose.
 - functions compare by alpha-equivalence of their source, and the numerals
   bridge: `1 = (\ x x)`, `0 = (\ _ 1)`.
+
+### credits
+
+- the live repl on the web page is set in **DOS/V re. PRC16**, an 8x16 DOS/V
+  bitmap font from the [Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/)
+  by VileR, used under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).

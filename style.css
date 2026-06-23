@@ -3,6 +3,16 @@
    feel, green = a kept answer; the crew fly the name space in aurora teal/cyan; the
    bao-shell + chip + crew + glossary components folded in. one sheet, every page. */
 
+/* the live repl wears DOS/V re. PRC16 -- an 8x16 DOS/V bitmap (CP437), self-hosted.
+   © VileR, int10h.org Oldschool PC Font Pack, CC BY-SA 4.0. crisp at 16px (its
+   native cell). */
+@font-face {
+  font-family: "Web437 DOS/V re. PRC16";
+  src: url("fonts/Web437_DOS-V_re_PRC16.woff2") format("woff2"),
+       url("fonts/Web437_DOS-V_re_PRC16.woff") format("woff");
+  font-display: swap;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -79,8 +89,13 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 #status { color: #565f89; font-size: .9em; margin-top: .2em; }
 #term { position: relative; background: #16161e; border: 1px solid #3b4261;
         border-radius: 6px; padding: .8em; margin-top: 1em; height: 24em;
-        display: flex; flex-direction: column; cursor: text; }
-#out { flex: 1; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+        display: flex; flex-direction: column; cursor: text;
+        font-family: "Web437 DOS/V re. PRC16", "Px437 IBM VGA8", ui-monospace, monospace;
+        font-size: 16px; line-height: 1; }
+/* output and input share one scroll region, so the prompt flows directly under
+   the last line of output (a real terminal) rather than pinned to the box floor. */
+#scroll { flex: 1; overflow-y: auto; }
+#out { white-space: pre-wrap; word-break: break-word; }
 #clear { position: absolute; top: .5em; right: .5em; z-index: 1;
          background: #1f2335; border: 1px solid #3b4261; border-radius: 4px;
          color: #565f89; font: inherit; font-size: .8em; padding: .1em .5em; cursor: pointer; }

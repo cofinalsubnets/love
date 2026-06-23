@@ -16,8 +16,10 @@
 
 <div id="term">
   <button id="clear" title="clear the session">clear</button>
-  <div id="out"></div>
-  <div id="row"><textarea id="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
+  <div id="scroll">
+    <div id="out"></div>
+    <div id="row"><textarea id="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
+  </div>
 </div>
 
 <script src="wasm/ai.js"></script>
@@ -27,6 +29,7 @@
   const out = document.getElementById('out');
   const cmd = document.getElementById('cmd');
   const term = document.getElementById('term');
+  const scroll = document.getElementById('scroll');
   const clear = document.getElementById('clear');
 
   const t0 = performance.now();
@@ -67,7 +70,7 @@
     const d = document.createElement('div');
     d.className = cls; d.textContent = text;
     out.appendChild(d);
-    out.scrollTop = out.scrollHeight;
+    scroll.scrollTop = scroll.scrollHeight;
   }
 
   function run(src) {
@@ -79,7 +82,7 @@
     const o = drain();
     for (const ln of o.split('\n')) if (ln.length) put(ln, ln.startsWith('# ') ? 'cnd' : 'ans');
     if (s !== 0) put('# the image stopped (status ' + s + ') — reload to reboot', 'cnd');
-    out.scrollTop = out.scrollHeight;
+    scroll.scrollTop = scroll.scrollHeight;
   }
 
   function fit() { cmd.style.height = 'auto'; cmd.style.height = cmd.scrollHeight + 'px'; }
@@ -142,14 +145,14 @@ transparently as iterators, and
 <p class="dim">the full prose spec, the numbered laws and their Rocq evidence, and the glossary live in the <a href="theory.html">technical discussion</a>; coming from another language, start with the <a href="ai-for.html">language comparison</a>.</p>
 
 <h2 id="crew"><a href="#crew">the crew</a></h2>
-<p>the ai kship <em>black rabbit of inle</em> and crew seek within the vast expanse of namespace for a certain location reputed to lie on the legendary island of svalbard</p>
+<p>the ai kship <em>black rabbit of inle</em> and crew search the wild expanse of namespace for a certain location reputed to lie on the legendary island of svalbard</p>
 <dl class="crew">
   <dt>🌑 inle</dt>
-    <dd>agent driven freestanding network kernel</dd>
-    <dd>kship sailing namespace</dd>
+    <dd>autonomous freestanding network kernel</dd>
+    <dd>sails the infinite layers of namespace</dd>
   <dt>🔭 tele</dt>
     <dd>pytorch clone</dd>
-    <dd>big telescope, pilots kship inle</dd>
+    <dd>big telescope, pilot of inle</dd>
   <dt>🐇 bellberry</dt>
     <dd>the navigator</dd>
     <dd>light brown rabbit with dark eyes and silver stripes</dd>
@@ -180,6 +183,8 @@ transparently as iterators, and
   });
 })();
 </script>
-<footer>for ()</footer>
+<footer>for ()
+  <span class="note">· repl set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
+</footer>
 </body>
 </html>
