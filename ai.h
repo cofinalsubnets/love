@@ -316,7 +316,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KMint is the bare point
 // (the blue floor: () and the nameless mints; named syms are (name . mint) CHAINS now);
-// KCharm is the odd fixnum tag; KHot is any non-data heap pointer (text/function/map). The
+// KCharm is the odd fixnum tag; KHot is any non-data heap pointer (thread/function/map). The
 // six DATA kinds (KVec, KBig, KString, KMint, KNom, KChain) are the ones ai_typ recovers from an
 // ap's sentinel address (a plain compare); every vec reads as KVec there
 // (coarse -- one sentinel for scalar boxes and arrays alike). The SEVEN non-sentinel
@@ -327,7 +327,7 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // (KArrZ~int, KArrR~float, KArrC~complex, KArrO~object). The diagonal is the type lattice
 // by semantics then representation: KMint the blue floor (() and the nameless points,
 // least of all) then KNom (the named points), then arithmetic lane [KCharm..KArrO] (scalars then their
-// array counterparts), sequence/concat lane [KString..KChain], then map, text last --
+// array counterparts), sequence/concat lane [KString..KChain], then map, thread last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (chain)
 // caps the sequence lane; KMap is the map's own rung just under KHot, so the total
@@ -365,7 +365,7 @@ struct ai
  *str0(struct ai*, uintptr_t);
 lvm(lvm_gc, uintptr_t);
 // ai_kind maps any value to its enum q: KCharm for a fixnum, KHot for a non-data heap
-// pointer (text/function/map), else ai_typ's data kind -- refined for a rank>=1 vec,
+// pointer (thread/function/map), else ai_typ's data kind -- refined for a rank>=1 vec,
 // which expands by element tier to KArrZ..KArrO (a rank-0 box stays KVec). Lives in
 // ai.c (it needs ai_typ from the generated data.h) and is shared by data.c's apply
 // sentinels. Both the `+`/`*` matrices and the apply matrix dispatch on this.

@@ -32,7 +32,7 @@ This guard is **necessary but not sufficient** — see below.
 ## The scope chain & the faked top scope
 
 c0's env is `struct env` (ai.c:1133): `par, args, imps, stack, lams, len, …`.
-It is GC-traced as a text (`tagtext`), so `evac_text` forwards every word incl.
+It is GC-traced as a thread (`tagthread`), so `evac_thread` forwards every word incl.
 `par` (the chain survives GC). A scope's fresh fields are set to `nil` (= `()`),
 which is fine for list fields because `two?(()) == false`.
 

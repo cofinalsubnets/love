@@ -212,8 +212,8 @@ static ai_inline bool nomp(word _) { return mintp(_) || namep(_); }
 static ai_inline bool formp(word _) { return chainp(_); }
 // Mutable flat byte string. NOT a data kind: its head word is the
 // behaves-as-0 lvm_buf (like lvm_port_io for ports), so the GC walks a buf
-// as a plain length-2 text -- [lvm_buf, backing ai_str, terminator] -- and
-// the generic text sound forwards the embedded string pointer for free; no
+// as a plain length-2 thread -- [lvm_buf, backing ai_str, terminator] -- and
+// the generic thread sound forwards the embedded string pointer for free; no
 // bespoke evac/copy rule, and the data-sentinel mechanism stays reserved for
 // kinds that need one. The bytes live in an ordinary ai_str we mutate in place
 // (cf. the `to` output port). Earned by the build tools that back-patch a
@@ -225,12 +225,12 @@ static ai_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == lvm_buf; }
 static ai_inline bool toastp(word _) { return lamp(_) && cell(_)->ap == lvm_toasted; }
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
-// texts: a fixed 2-word HEADER [lvm_map_lookup, backing, <tag>] that callers
+// threads: a fixed 2-word HEADER [lvm_map_lookup, backing, <tag>] that callers
 // hold, and a BACKING [lvm_map_data, putcharm(len), putcharm(cap), k0,v0, … , <tag>]
 // it points at -- open-addressed, linear-probed, cap a power of two. Growth
 // allocates a new backing and swaps header[1]; the header never moves, so an
-// aliased reference (ev's scopes) sees later inserts. Both are plain texts:
-// len/cap are fixnums and keys/vals l words, so evac_text traces them with no
+// aliased reference (ev's scopes) sees later inserts. Both are plain threads:
+// len/cap are fixnums and keys/vals l words, so evac_thread traces them with no
 // bespoke GC, like ai_buf. Empty slots hold map_gap, a unique word-aligned
 // out-of-pool address gcp leaves untouched, never a legal key and never read as
 // a terminator. (m k) looks k up (() if absent) through lvm_map_lookup.
@@ -249,7 +249,7 @@ static ai_inline struct ai_str *buf_str(word x) { return ((struct ai_buf*) x)->s
 // the byte ops read from a string or a buf; both resolve to a ai_str of bytes.
 static ai_inline struct ai_str *bytes_of(word x) { return bufp(x) ? buf_str(x) : str(x); }
 // a COIN: a newtype value, a typed hot. Like a buf, NOT a data kind -- its head word
-// is the behaves-as-0 lvm_coin, so GC walks it as a plain length-3 text [lvm_coin,
+// is the behaves-as-0 lvm_coin, so GC walks it as a plain length-3 thread [lvm_coin,
 // die, payload, terminator] and forwards the two embedded words for free; no
 // bespoke evac. ai_kind reads KHot (it is !datp and not a map), so the +/* matrix
 // already routes every coin combination to the KHot lane (lvm_addh/lvm_mulh), where a
@@ -272,8 +272,8 @@ static ai_inline word die_get(struct ai *g, word die, intptr_t slot) {
  return tabp(die) ? ai_mapget(g, nil, putcharm(slot), die) : nil; }
 // Arbitrary-precision integer (Step 6). Own data-sentinel kind KBig: a flat,
 // GC-trivial object (raw limbs, no embedded l pointers) the copying GC moves
-// by memcpy. A generic text sound can't hold inline limb words (a limb that's
-// even-and-in-pool would be spuriously forwarded, one matching ai_text_tag would
+// by memcpy. A generic thread sound can't hold inline limb words (a limb that's
+// even-and-in-pool would be spuriously forwarded, one matching ai_thread_tag would
 // truncate the object), so a flat bignum needs its own copy/evac rule -- like
 // KString strings -- which is exactly what the sentinel buys. slen = signed limb
 // count (negative => negative value); |slen| 32-bit limbs little-endian
@@ -554,19 +554,19 @@ static ai_inline bool eql(struct ai *g, word a, word b) {
 
 // Threads -- and every other variable-length heap object the GC copies by
 // sounding (continuations, task nodes, env scopes, ports) -- end with a single
-// tag word: the object's own head pointer with bit 1 set (ai_text_tag), saving a
+// tag word: the object's own head pointer with bit 1 set (ai_thread_tag), saving a
 // word over a separate NULL marker + head. Small ints are odd and l heap
 // pointers are word-aligned, so the only other word that can carry (x & 3) == 2
 // is an embedded *external* pointer (host data/function) that happens to land
 // on a 2-byte boundary. So the terminator test is not just the tag bits: the
 // payload must also point back into [lo, hi), the pool the object lives in --
 // which a stray external pointer never does.
-#define ai_text_tag 2
+#define ai_thread_tag 2
 static ai_inline bool tagp(word x, word const *lo, word const *hi) {
  word const *p = (word const*) (x & ~(word) 3);
- return (x & 3) == ai_text_tag && p >= lo && p < hi; }
-static ai_inline union u *tagtext(union u *h, uintptr_t len) {
-  return h[len].x = word(h) | ai_text_tag, h; }
+ return (x & 3) == ai_thread_tag && p >= lo && p < hi; }
+static ai_inline union u *tagthread(union u *h, uintptr_t len) {
+  return h[len].x = word(h) | ai_thread_tag, h; }
 #define topof(g) ((word*)g+g->len)
 static ai_inline struct ai_tag { union u *head; union u end[]; } *ttag(struct ai*g, union u *k) {
  word *lo = ptr(g), *hi = topof(g);
@@ -576,7 +576,7 @@ static ai_inline union u *tag_head(struct ai_tag *t) {
  return cell(word(t->head) & ~(word) 3); }
 
 static ai_inline union u *clip(struct ai *g, union u *k) {
- return tagtext(k, cell(ttag(g, k)) - k); }
+ return tagthread(k, cell(ttag(g, k)) - k); }
 
 
 
@@ -843,7 +843,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
 #ifdef AI_STAT
  g->rem = malloc(AI_REM_CAP * sizeof(ai_word)), g->rem_cap = g->rem ? AI_REM_CAP : 0;  // write-barrier audit (host-only)
 #endif
- // book + macro maps (lookup-lambdas) then the main task text.
+ // book + macro maps (lookup-lambdas) then the main task thread.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 6))) {
   union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
   M[0].m = M;
@@ -851,7 +851,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
-  g->tasks = tagtext(M, 5);
+  g->tasks = tagthread(M, 5);
   // book[nil] = macro (the macro table -- no separate field). Both are on the
   // stack; push the nil key so (sp2,sp1,sp0)=(book,macro,nil) for ai_mapput.
   g = ai_push(g, 1, nil);
@@ -991,7 +991,7 @@ static ai_inline void evac_nom(struct ai*g, word const*const p0, word const*cons
  g->cp += Width(struct ai_nom);                 // 3 words; forward the name string (the serial is a scalar)
  w->name = gcp(g, w->name, p0, t0); }
 
-static ai_inline void evac_text(struct ai *g, word const *const p0, word const*const t0) {
+static ai_inline void evac_thread(struct ai *g, word const *const p0, word const*const t0) {
   // terminator payloads point into the new pool (the copied object's home);
   // a stray 2-byte-aligned external content word is rejected by the range
   word const *lo = ptr(g), *hi = ptr(g) + g->len;
@@ -1023,7 +1023,7 @@ static ai_noinline word symbols_rebuild(struct ai *h, struct ai *g) {
  if (!om) return 0;
  uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
  union u *b = map_fill_back(bump(h, 4 + 2 * cap), cap), *hd = bump(h, 3);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagtext(hd, 2);
+ hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
  word *os = map_slots(om), *ns = &b[3].x;
  word const *lo = ptr(h), *hi = ptr(h) + h->len;
  for (uintptr_t j = 0; j < cap; j++) {
@@ -1070,7 +1070,7 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
  for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);               // core live variables (incl. the pre-interned *_sym book keys)
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                     // stack
  for (struct ai_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0); // C live variables
- while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_text)(h, p0, t0);              // cheney algorithm
+ while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_thread)(h, p0, t0);              // cheney algorithm
  // the weak intern table: rebuilt ONLY NOW, past the sound window, so the
  // cheney loop never traces it (an early copy would sit in [cp, hp) and get
  // walked -- resurrecting every atom). run_finalizers bumps after the
@@ -1153,7 +1153,7 @@ static void gen_audit(struct ai *g) {
                 if (v->type == ai_O) for (uintptr_t i = 0, ne = vec_nelem(v); i < ne; i++) FLD(vec_get_obj(v, i)); break; }
    case KNom: { struct ai_nom *w = (struct ai_nom*) p; FLD(w->name); break; }
    default: break;                                            // KMint/KString/KBig/KFlo/KWide/KCplx: pointer-free leaves
-  } else { word *q = p + 1;                                    // text object: ap + content words to the tag terminator
+  } else { word *q = p + 1;                                    // thread object: ap + content words to the tag terminator
            while (q < top && !tagp(*q, lo, hi)) { FLD(*q); q++; } }
 # undef FLD
  }
@@ -1287,14 +1287,14 @@ static ai_inline struct ai_tag *ttag2(union u *k, word const *const lo, word con
  while (!tagp(k->x, lo, hi)) k++;
  return (struct ai_tag*) k; }
 
-static ai_inline word copy_text(struct ai *g, union u *src, word const *const p0, word const *const t0) {
- // it's a text, find the end to find the head
+static ai_inline word copy_thread(struct ai *g, union u *src, word const *const p0, word const *const t0) {
+ // it's a thread, find the end to find the head
  struct ai_tag *t = ttag2(src, p0, t0);
  union u *ini = tag_head(t), *d = bump(g, t->end - ini), *dst = d;
  // copy each content word to dest and leave a forwarding pointer behind,
  // stopping at the terminator; then rewrite it as the new tagged head
  for (union u *s = ini; !tagp(s->x, p0, t0); s->x = (word) d, d++, s++) d->x = s->x;
- return (word) (tagtext(dst, d - dst) + (src - ini)); }
+ return (word) (tagthread(dst, d - dst) + (src - ini)); }
 
 static ai_noinline intptr_t gcp(struct ai *g, word x, word const *p0, word const *t0) {
  // if it's a number or it's outside managed memory then return it
@@ -1304,7 +1304,7 @@ static ai_noinline intptr_t gcp(struct ai *g, word x, word const *p0, word const
  // if it contains a pointer to the new space then return the pointer
  return lamp(x) && ptr(g) <= ptr(x) && ptr(x) < ptr(g) + g->len ? x :
         in_data((void*) x) ? copy_data(g, src, p0, t0) :
-                                copy_text(g, src, p0, t0); }
+                                copy_thread(g, src, p0, t0); }
 
 // ============================================================================
 // ev
@@ -1320,11 +1320,11 @@ struct env {
  word args, imps, // positional and closure variables
   stack, // computed arguments and let bindings on stack
   lams, // lambdas defined in a local let form
-  len,  // text length accumulator
+  len,  // thread length accumulator
   branches, // stack for conditional alternate branch addresses
   exits,
   sites, // recursive-fn ref backpatch: list of (lams-entry . operand-cell)
-  src,  // a lambda's source \-expr, stashed at the text head for printing (nil = none)
+  src,  // a lambda's source \-expr, stashed at the thread head for printing (nil = none)
   end[]; }; // stach for conditional exit addresses
 
 typedef Ana(ana);
@@ -1348,7 +1348,7 @@ static struct ai *enscope(struct ai *g, struct env *par, word args, word imps) {
   struct env *c = bump(g, n);
   c->stack = c->branches = c->exits = c->lams = c->len = c->sites = c->src = nil;
   c->args = g->sp[0], c->imps = g->sp[1], c->par = (struct env*) g->sp[2];
-  *(g->sp += 2) = (word) tagtext((union u*)c, Width(struct env)); }
+  *(g->sp += 2) = (word) tagthread((union u*)c, Width(struct env)); }
  return g; }
 
 static word memq(struct ai *g, word l, word k) {
@@ -1406,14 +1406,14 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
 static Cata(c1) {
  uintptr_t l = getcharm((*c)->len);
  // a lambda carries its source \-expr: reserve one extra leading word for it so
- // it sits at value[-1] (the printer's discriminator) and rides inside the text
- // span (head = src word) for free GC tracing. top-level/aux texts have no src.
+ // it sits at value[-1] (the printer's discriminator) and rides inside the thread
+ // span (head = src word) for free GC tracing. top-level/aux threads have no src.
  uintptr_t extra = nilp((*c)->src) ? 0 : 1;
  g = ai_have(g, l + extra + Width(struct ai_tag));
  if (ai_ok(g)) {
   union u *k = bump(g, l + extra + Width(struct ai_tag));
   memset(k, -1, (l + extra) * sizeof(word));
-  Kp = tagtext(k, l + extra) + l + extra;
+  Kp = tagthread(k, l + extra) + l + extra;
   if (ai_ok(g = pull(g, c))) {           // pull emits l words (may GC); Kp now = entry
    // read src AFTER all allocation: ai_have/pull can GC and relocate the env's src.
    if (extra) Kp[-1].x = (*c)->src,     // value[-1] = source \-expr
@@ -1910,7 +1910,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
    if (!ai_ok(g)) return forget();
    A(v) = B(d) = pop1(g); }
 
- // closures final -> backpatch each recorded recursive-fn ref with its text.
+ // closures final -> backpatch each recorded recursive-fn ref with its thread.
  for (d = (*c)->sites; chainp(d); d = B(d)) cell(B(A(d)))->x = AB(A(A(d)));
  (*c)->sites = nil;
 
@@ -1986,7 +1986,7 @@ static ai_inline ai_word resolve_hot(struct ai *g, char const *nm, uintptr_t n) 
  return cur; }
 
 // Thread (function) combinators for `+` and `*`, pinned on book by the prel
-// like num-ap. A text operand takes precedence over every other type, so
+// like num-ap. A thread operand takes precedence over every other type, so
 // `+`/`*` of a function build a new function -- the README's Church arithmetic,
 // agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
 // composition. add is the 4-arg add lambda, mul the 3-arg compose; the C
@@ -2260,7 +2260,7 @@ lvm(lvm_coinmk) {
  ((struct ai_coin*) k)->ap = lvm_coin;
  ((struct ai_coin*) k)->die = Sp[0];
  ((struct ai_coin*) k)->payload = Sp[1];
- tagtext(k, Width(struct ai_coin));
+ tagthread(k, Width(struct ai_coin));
  return *++Sp = word(k), Ip++, Continue(); }
 // (load x) -> the payload of a coin, else x itself (a plain value loads as itself).
 lvm(lvm_load) {
@@ -2334,15 +2334,15 @@ lvm(lvm_callk) {
  word f_val = Sp[0];                         // g, the call_cc arg
  if (oddp(f_val)) return Ip += 1, Continue();
  word height = topof(g) - Sp;
- uintptr_t n = 2 + height;                   // lvm_kcall + (ip + 1) + stack = text_contents
- Have(n + Width(struct ai_tag) + 1);          // text_contents + text_tag + 1 stack = _mem_req
+ uintptr_t n = 2 + height;                   // lvm_kcall + (ip + 1) + stack = thread_contents
+ Have(n + Width(struct ai_tag) + 1);          // thread_contents + thread_tag + 1 stack = _mem_req
  union u *k = (union u*) Hp;
- Hp += n + Width(struct ai_tag);              // text_contents + text_tag = _heap_alloc
+ Hp += n + Width(struct ai_tag);              // thread_contents + thread_tag = _heap_alloc
  k[0].ap = lvm_kcall;                       // 
  k[1].m  = Ip + 1;                           // resume at next instruction
  memcpy(k + 2, Sp, height * sizeof(word));
  Sp -= 1;
- Sp[0] = word(tagtext(k, n));
+ Sp[0] = word(tagthread(k, n));
  Sp[1] = f_val;
  return Ap(lvm_ap, g); }
 
@@ -2434,7 +2434,7 @@ lvm(lvm_yield_sw) {
  N[3].x = putcharm((intptr_t) my_wake);
  N[4].x = putcharm(my_wait_fd);
  memcpy(N + 5, Sp, my_height * sizeof(word));
- prev->m = tagtext(N, 5 + my_height);
+ prev->m = tagthread(N, 5 + my_height);
 #ifdef AI_STAT
  gen_wb(g, (word) prev, (word) prev->m);   // task ring: an old node now links to the fresh (young) yield snapshot
 #endif
@@ -2461,7 +2461,7 @@ lvm(lvm_spawn) {
  N[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O
  N[5].x = x;
  N[6].x = fn;
- g->tasks->m = tagtext(N, 7);
+ g->tasks->m = tagthread(N, 7);
 #ifdef AI_STAT
  gen_wb(g, (word) g->tasks, (word) g->tasks->m);   // task ring: an old node now links to the fresh (young) spawned task
 #endif
@@ -2552,7 +2552,7 @@ lvm(lvm_cur) {
   j[1].x = *Sp++,
   j[2].m = Ip + 2,
   Ip = cell(*Sp),
-  Sp[0] = (word) tagtext(k, j + 3 - k),
+  Sp[0] = (word) tagthread(k, j + 3 - k),
   Continue(); }
 
 // load instructions
@@ -2669,7 +2669,7 @@ lvm(lvm_twirl) {
  Have(n + Width(struct ai_tag));
  union u *k = (union u*) Hp;
  Hp += n + Width(struct ai_tag);
- Sp[0] = word(memset(tagtext(k, n), -1, n * sizeof(word)));
+ Sp[0] = word(memset(tagthread(k, n), -1, n * sizeof(word)));
  return Ip++, Continue(); }
 
 // ceil a positive measure into a fixnum, saturating at fix_max. ceil (not floor)
@@ -3209,7 +3209,7 @@ static struct ai *ioputcs(struct ai *g, char const *s) {
  return g; }
 
 // --- partial-application introspection (mirrors kernel/vm.c lvm_cur/lvm_unc) ---
-// A partial-app closure is a text whose head is lvm_unc (one more arg wanted)
+// A partial-app closure is a thread whose head is lvm_unc (one more arg wanted)
 // or [lvm_cur n][lvm_unc …] (more wanted). Each lvm_unc cell holds a captured
 // arg at [1] and a link at [2] that points either to the next (older) closure's
 // unc cell or, for the last one, two cells into the underlying function's body --
@@ -3238,7 +3238,7 @@ static struct ai *ioput_fn_body(struct ai *g, word x, uintptr_t off);
 // or an opaque handle puts its value AT the start -- no leading cell -- so reading value[-1]
 // there reads the neighbouring object: uninitialised/foreign (flaky to valgrind, and garbage
 // that looked like an in-pool chain would spuriously read back as a source). Probe the tag,
-// which records the true start, instead of reading value[-1]: ttag sounds only defined text
+// which records the true start, instead of reading value[-1]: ttag sounds only defined thread
 // cells. value > start <=> a reserved leading cell exists. (fn_partialp is a cheap fast
 // reject so the common curried-closure case skips the tag sound.)
 static word fn_src(struct ai *c, union u *k, word x) {
@@ -3313,7 +3313,7 @@ static struct ai *lam_canon(struct ai *g) {
 // Print a function value as a bare, re-parsable form that reconstructs under eval
 // (like @(…)/~(…)/#(…)): (base arg…) for a partial application / closure, the bare
 // name for a builtin (\+ for an operator builtin), (\ …) for a compiled lambda (its
-// stored source). An opaque text (continuation, top-level wrap) has no constructor
+// stored source). An opaque thread (continuation, top-level wrap) has no constructor
 // form, so it prints as the opaque, re-parsable token \<addr>.
 static struct ai *ioput_fn(struct ai *g, word x, uintptr_t off) {
  union u *k = cell(x);
@@ -3511,7 +3511,7 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
   io->fd = putcharm(fd);
   io->ungetc_buf = putcharm(EOF);
   io->eof_seen = putcharm(false);
-  *--g->sp = (word) tagtext(k, n);            // stack slot reserved by the +1 in have()
+  *--g->sp = (word) tagthread(k, n);            // stack slot reserved by the +1 in have()
   struct ai_fz *z = bump(g, Width(struct ai_fz));
   z->p = k, z->fn = io_close, z->next = g->fz, g->fz = z; }
  return g; }
@@ -3990,7 +3990,7 @@ lvm(lvm_key) {
  return Continue(); }
 
 // ============================================================================
-// map (lookup-lambda backed by an open-addressed text; see tabp comment)
+// map (lookup-lambda backed by an open-addressed thread; see tabp comment)
 // ============================================================================
 // backing is internal -- only ever reached from a header[1], never applied as a
 // l value; its ap behaves-as-1 like lvm_buf should it ever be (it won't).
@@ -4015,7 +4015,7 @@ word ai_mapget(struct ai *g, word zero, word k, word m) {
 static ai_inline union u *map_fill_back(union u *b, uintptr_t cap) {
  b[0].ap = lvm_map_data, b[1].x = putcharm(0), b[2].x = putcharm(cap);
  for (uintptr_t i = 0; i < cap; i++) b[3 + 2 * i].x = map_gap, b[4 + 2 * i].x = nil;
- return tagtext(b, 3 + 2 * cap); }
+ return tagthread(b, 3 + 2 * cap); }
 
 // double the backing of the map at sp[2] and rehash into it, then swap it into
 // header[1]; the header never moves, so aliased references stay valid. The
@@ -4090,7 +4090,7 @@ static struct ai *map_new(struct ai *g) {
  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  if (!ai_ok(g = ai_have(g, nb + 3))) return g;
  union u *b = map_fill_back((union u*) g->hp, cap), *h = (union u*) (g->hp + nb);
- h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
+ h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
  g->hp += nb + 3;
  return ai_push(g, 1, (word) h); }
 
@@ -4100,7 +4100,7 @@ lvm(lvm_table) {
  Have(nb + 3);
  union u *b = map_fill_back((union u*) Hp, cap);
  union u *h = (union u*) (Hp + nb);
- h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagtext(h, 2);
+ h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
  Sp[0] = (word) h;
  return Hp += nb + 3, Ip++, Continue(); }
 
@@ -4330,7 +4330,7 @@ lvm(lvm_snip) {
 // identity numeral) -- like every structureless value. Its address is still the
 // kind tag: ai_noicf (on every lvm) keeps this byte-identical to lvm_port_io so
 // bufp and iop never collide. NOT a data sentinel, so the GC copies a buf via the
-// generic text path and the cheney sound forwards its backing-string pointer.
+// generic thread path and the cheney sound forwards its backing-string pointer.
 lvm(lvm_buf) {
  return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
 // the toast ap (its type tag): applied, a toast is const-1 like any opaque hot -- it is
@@ -4342,7 +4342,7 @@ lvm(lvm_toasted) {
 // string singleton EmptyString, so NO empty buf object ever exists (an un-writable 0-byte
 // buf IS ""); this lets ai_nilp drop its buf branch (every real buf has len>=1, truthy).
 // Two heap objects under one Have (so no GC sees a half-built buf): the backing ai_str
-// holding the bytes, and the length-2 wrapper text [lvm_buf, str, terminator].
+// holding the bytes, and the length-2 wrapper thread [lvm_buf, str, terminator].
 lvm(lvm_bufnew) {
  intptr_t n = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
  if (n <= 0) return Sp[0] = EmptyString, Ip++, Continue();   // no empty buf: it is ""
@@ -4356,7 +4356,7 @@ lvm(lvm_bufnew) {
  Hp += breq;
  ((struct ai_buf*) k)->ap = lvm_buf;
  ((struct ai_buf*) k)->str = s;
- tagtext(k, Width(struct ai_buf));
+ tagthread(k, Width(struct ai_buf));
  return Sp[0] = word(k), Ip++, Continue(); }
 
 // (call b x) — the JIT trampoline: jump into the machine code stored in buf b,
@@ -4468,7 +4468,7 @@ lvm(lvm_toast) {
  union u *k = (union u*) Hp; Hp += Width(struct ai_buf) + Width(struct ai_tag);
  ((struct ai_buf*) k)->ap = lvm_toasted;   // opaque toast tag, not lvm_buf: not peep/pin-able
  ((struct ai_buf*) k)->str = s;
- tagtext(k, Width(struct ai_buf));
+ tagthread(k, Width(struct ai_buf));
  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
  z->p = k, z->fn = code_unmap, z->next = g->fz, g->fz = z;
  return Sp[0] = word(k), Ip++, Continue();
@@ -4483,7 +4483,7 @@ lvm(lvm_toast) {
  union u *k = (union u*) Hp; Hp += breq;
  ((struct ai_buf*) k)->ap = lvm_toasted;   // opaque toast tag, not lvm_buf
  ((struct ai_buf*) k)->str = s;
- tagtext(k, Width(struct ai_buf));
+ tagthread(k, Width(struct ai_buf));
  return Sp[0] = word(k), Ip++, Continue();
 #endif
 }
@@ -4552,7 +4552,7 @@ lvm(lvm_nif) {
   k[3].x  = Sp[1];                            // interp(value[1]): deopt fallback
   k[4].ap = lvm_ret;                          // value[2]: fast-path return
   k[5].x  = putcharm(0);                      // ret n=1
-  tagtext(k, 6);
+  tagthread(k, 6);
  } else {                                     // 8-word lvm_cur cell (the old natn)
   Hp += 9;
   k[0].ap = (lvm_t*) txt(s);                  // header (out-of-pool): finalizer dead-detect
@@ -4563,7 +4563,7 @@ lvm(lvm_nif) {
   k[5].x  = Sp[1];                            // interp: deopt fallback
   k[6].ap = lvm_ret;
   k[7].x  = putcharm(ar - 1);                 // ret pops n=arity
-  tagtext(k, 8);
+  tagthread(k, 8);
  }
 #if __STDC_HOSTED__
  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
@@ -4908,7 +4908,7 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
  return *++Sp = ZeroPoint, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in ai.h): a fixnum is
-// the odd tag (KCharm), a non-data heap pointer is a text/function (KHot), else ai_typ
+// the odd tag (KCharm), a non-data heap pointer is a thread/function (KHot), else ai_typ
 // gives the data kind. The refinement: a vec is always a rank>=1 array now (the
 // scalar gems wide/float/complex carry their own sentinels and ai_typ gives them
 // KWide/KFlo/KCplx directly), so a vec expands purely by element tier to
@@ -5003,7 +5003,7 @@ static lvm(lvm_mul_cart) {
 // no table. Every data kind has a meaningful apply (chain = eliminator,
 // string/symbol = byte index, numeric tower = Church numeral); opaque handles
 // (ports, buffers) behave as 0 via their own lvm_* sentinel, not through here.
-// Maps look up via lvm_map_lookup (a text ap, not a data sentinel).
+// Maps look up via lvm_map_lookup (a thread ap, not a data sentinel).
 
 // (s k): applying a string indexes it -- k a byte offset, result the unsigned byte
 // 0..255 there, 1 if k is non-numeric or out of range (matches "" == 0: a numeric
@@ -5038,7 +5038,7 @@ static lvm(data_num_apply) {
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // ((a . b) g) == (g a b): a chain is its own Church eliminator (link = \a b g.g a b).
-// Re-enter the apply protocol via a static driver text: lay the stack as the two
+// Re-enter the apply protocol via a static driver thread: lay the stack as the two
 // curried calls expect, then [ap ; swap+ap ; ret0] runs ((g a) b). pair_swap reorders
 // [result, b] -> [b, result] so the second ap sees arg=b, fn=(g a). The driver lives
 // in .data, so the return addresses it leaves on the stack fall outside the GC pool.
@@ -5964,7 +5964,7 @@ static struct ai *ai_bmul_setup(struct ai *g) {
  struct ai_str *s = ini_str((struct ai_str*) g->hp, rbytes);
  g->hp += sreq; memset(txt(s), 0, rbytes);
  union u *k = (union u*) g->hp; g->hp += breq;
- ((struct ai_buf*) k)->ap = lvm_buf, ((struct ai_buf*) k)->str = s, tagtext(k, Width(struct ai_buf));
+ ((struct ai_buf*) k)->ap = lvm_buf, ((struct ai_buf*) k)->str = s, tagthread(k, Width(struct ai_buf));
  g->sp -= 3;                                       // [i, r, ret_ip, abig, bbig]
  g->sp[0] = putcharm(0), g->sp[1] = word(k), g->sp[2] = word(ret);
  g->sp[3] = word(abig), g->sp[4] = word(bbig);
