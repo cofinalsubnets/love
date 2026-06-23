@@ -160,6 +160,11 @@
                 (asm (L ab push-rax bb (cmpseq op))))
              (= op '?) (: el (caup (cup (cup e))) tb (cgg syms ps a off OVF) thoff (+ off (+ (tally tb) 10)) thb (cgg syms ps b thoff OVF) eloff (+ thoff (+ (tally thb) 5)) elb (cgg syms ps el eloff OVF)
                 (asm (L tb '(72 131 248 0) '(15 142) (le4 (+ (tally thb) 5)) thb '(233) (le4 (tally elb)) elb)))   ; cmp rax,0; jle else; then; jmp end; else
+             (&& (= op 'peep) (member? a ps)) (: ib (cgg syms ps b off OVF) d (caup (cup (cup e)))                ; (peep STR i d): native string byte read (plain ai_str: bytes at STR+16, len at STR+8)
+                defb (asm (L '(72 184) (le8 (? (whole? d) d 0)))) load '(65 15 182 68 0 16)
+                (asm (L ib push-rax (arx (argix a ps 0)) '(73 137 192) '(88) '(73 59 64 8)                        ; i;push; STR->rax; r8=STR; pop i; cmp i,[r8+8] len
+                       (L 114 (+ (tally defb) 2)) defb (L 235 (tally load)) load)))                               ; jb IN; OOB: movabs rax,d; jmp; IN: movzx eax,[r8+rax+16]
+             (&& (= op 'tally) (member? a ps)) (asm (L (arx (argix a ps 0)) '(72 139 64 8)))                      ; (tally STR): rax=STR; rax=[rax+8] = len
              ()))
        ())
    (gargs syms ps as off OVF) (? (atom? as) ()                           ; push each call arg left->right (offset-threaded)
@@ -192,11 +197,11 @@
    ; mkouter -- the entry's OUTER (prologue + putfix-epilogue + shared OVF handler + deopt-mn) for arity
    ; k. The called H_entry sits RIGHT AFTER it (offset Lo = the OUTER's length), so jitgroup lays the
    ; entry first among the H's. (This is the old single-fn outer, now factored out.) Returns (outer Aovf).
-   (mkouter k)
+   (mkouter k smask)
     (: dpt (? (= k 1) deopt deopt-mn)                                                             ; arity 1 applies fb directly; >=2 enters its body past the lvm_cur
        saveargs (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k))                                    ; save the k arg regs (callee-saved)
        restargs (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k))                        ; restore (reverse)
-       pushargs (foldl (\ a i (+ a (asm (L (fetch i) '(72 209 248) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1] untagged
+       pushargs (foldl (\ a i (+ a (asm (L (fetch i) (? (member? i smask) () '(72 209 248)) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1]; untag (sar) UNLESS a string param (smask = raw pointer)
        s6 (asm (L '(72 131 196) (list (* 8 k))))  s10 (asm (L '(72 131 200 1) '(72 137 1) '(72 131 198 16) '(72 139 6 255 224)))
        Lr (tally restargs)
        Acall (+ 2 (+ (tally saveargs) (+ 3 (tally pushargs))))
@@ -212,11 +217,13 @@
    ; INDEPENDENT: a call rel32 is 5 bytes whatever its target), compute every H's offset, then emit with
    ; the real (name . offset) syms so every self/sibling call resolves. The deopt fallback is the WHOLE
    ; group as an interpreted letrec (mutual recursion intact) -> a faithful, never-wrong slow path.
+   (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used as (peep P..)/(tally P)?
    (jitgroup defs entry)
     (: info (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d) (- (tally nf) 1)))) defs)   ; (name params body arity)
        efn  (gfind (\ f (id? (cap f) entry)) info)
        ord  (link efn (gfilt (\ f (! (id? (cap f) entry))) info))                            ; entry FIRST (H_entry sits at Lo)
-       OU (mkouter (nthl efn 3)) outer (cap OU) Aovf (caup OU) Lo (tally outer)
+       smask (gfilt (\ i (suse? (nthl efn 2) (nthl (nthl efn 1) i))) (rangeL 0 (nthl efn 3)))   ; entry's STRING params (used in peep/tally) -> raw pointer, no sar
+       OU (mkouter (nthl efn 3) smask) outer (cap OU) Aovf (caup OU) Lo (tally outer)
        sa (\ k (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k)))
        ld (\ k (foldl (\ a i (+ a (ldr i (- (* 16 k) (* 8 i))))) () (rangeL 0 k)))
        re (\ k (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k)))

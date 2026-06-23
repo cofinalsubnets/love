@@ -203,6 +203,8 @@
           (? (< -1 ar)                                  (&& (= (tally (cup e)) ar) (foldl (\ a x (&& a (groupok? cands ps x))) 1 (cup e)))   ; call to a group fn: arity ok, args ok
              (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (= 3 (tally e)) (groupok? cands ps (caup e)) (groupok? cands ps (caup (cup e))))
              (id? op '?)                                  (&& (= 4 (tally e)) (groupok? cands ps (caup e)) (groupok? cands ps (caup (cup e))) (groupok? cands ps (caup (cup (cup e)))))
+             (id? op 'tally)                              (&& (= 2 (tally e)) (member? (caup e) ps))                                          ; (tally STR): STR a param (string lane)
+             (id? op 'peep)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cands ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (peep STR i d): STR param, i ok, d const
              0))
        0)
    (grpok-1 fns c cands) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns) (groupok? cands (cup (cap p)) (cup p)))   ; candidate c's body ok over cands?
@@ -356,6 +358,12 @@
                (count lo hi) ((: (go n c) (? (< n hi) (go (+ n 1) (? (prime? n) (+ c 1) c)) c)) lo 0)
                (count 2 30))
        (&& !(id? (autogroup rpr) rpr) (10 = (ev rpr)) (= (base-ev rpr) (ev rpr))))
+    ; STRING LANE: a recursive (peep s i) byte processor glazes from SOURCE -- s a STRING param (passed
+    ; raw, no sar; the native reads the plain ai_str's bytes at s+16), (tally s) -> the len at s+8.
+    (: rsl '(: data (string (L 72 105 90 33 65))
+               (bsum s i) (? (< i 0) 0 (+ (peep s i 0) (bsum s (- i 1))))
+               (bsum data 4))
+       (&& !(id? (autogroup rsl) rsl) (365 = (ev rsl)) (= (base-ev rsl) (ev rsl))))
     ; a fn that calls OUT of the fragment (into `link`) drops the whole group -> form unchanged, interpreted
     (: ro '(: (build n) (? (< n 1) () (link n (build (- n 1)))) (build 3))
        (&& (id? (autogroup ro) ro) ('(3 2 1) = (ev ro)))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
