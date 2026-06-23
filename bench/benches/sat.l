@@ -1,17 +1,11 @@
-; SAT model-counting via ai's generic ring -- a CNF formula is a product of sums
-; of unification literals (kanren is in prel: var/===/+/*/load). over n boolean
-; vars x0..x(n-1), clauses (x_i | x_(i+1)) cyclically -- "no two adjacent 0s".
-; the solution STREAM is counted tail-recursively (scount), never materialized,
-; so RAM stays flat; the count carries search multiplicity (a model is re-derived
-; once per clause that justifies it -- the stream is a semiring, not a set).
-; checksum = 6726 (n=10).  ai-only: no cross-language counterpart.
-(: (boolean x) ((x === 0) + (x === 1))
-   (nth l k) (? (= k 0) (cap l) (nth (cup l) (+ k -1)))
-   (scount s) ((: (go acc s) (s (\ _ acc) (\ s2 (go acc s2)) (\ x s2 (go (+ 1 acc) s2)))) 0 s)
-   (sat n) (:
-     vs (map var (map (\ i (intern (+ "x" (show i)))) (jot n)))
-     bools (map boolean vs)
-     clauses (map (\ i (+ ((nth vs i) === 1) ((nth vs (% (+ i 1) n)) === 1))) (jot n))
-     formula (foldl (*) () (cat bools clauses))
-     (scount ((load formula) '(0))))
- (bench "sat" (\ _ (sat 10))))
+; SAT bench -- the real CDCL solver (sat/sat.l, prepended by run.sh for b=sat) on a battery:
+; four UNSAT pigeonhole instances PHP(2..5) -- resolution-hard, so conflict learning + restarts get a
+; workout -- plus #SAT model-counting of the cyclic n=8 CNF (= 47 = Lucas(8), via blocking clauses).
+; checksum = 100*14 + 47 = 1447, a SOLVER-INDEPENDENT fact (the UNSAT verdicts sum 2+3+4+5=14; the
+; Lucas count is combinatorial), so it stays stable across heuristic changes. ai-only -- no
+; cross-language port. The kanren model-counter that used to live here moved to sat/kanren-count.l.
+(: (sat-work _)
+    (: u (foldl (\ a h (+ a (? (id? (cdcl (php h) (php-vars h)) 'unsat) h 0))) 0 (L 2 3 4 5))   ; 2+3+4+5 = 14 (all UNSAT)
+       c (count-cdcl (cyclic 8) 8)                                                                 ; 47 = Lucas(8)
+       (+ (* 100 u) c))
+   (bench "sat" sat-work))
