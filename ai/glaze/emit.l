@@ -217,12 +217,27 @@
    ; INDEPENDENT: a call rel32 is 5 bytes whatever its target), compute every H's offset, then emit with
    ; the real (name . offset) syms so every self/sibling call resolves. The deopt fallback is the WHOLE
    ; group as an interpreted letrec (mutual recursion intact) -> a faithful, never-wrong slow path.
-   (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used as (peep P..)/(tally P)?
+   (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used DIRECTLY as (peep P..)/(tally P)?
+   ; INTERPROCEDURAL string-param inference: a param is a string if used in peep/tally OR passed as the arg
+   ; to a sibling's string param. (strhash's `s` is a string because it flows into strhash_go's peep.) A
+   ; deduped fixpoint over the group's (name . smask) map -- smasks only grow, so the size stabilizes.
+   (dedup l) (? (atom? l) () (member? (cap l) (cup l)) (dedup (cup l)) (link (cap l) (dedup (cup l))))   ; unique elements
+   (gsm nm smap) (? (atom? smap) () (id? nm (caap smap)) (cuap smap) (gsm nm (cup smap)))                ; nm's smask in the (name . smask) map (() absent)
+   (fnsm fp body smap)
+    (dedup ((: (walk e acc) (? (two? e)
+                (: gm (gsm (cap e) smap)                                                                 ; if (cap e) is a group fn, its string-param indices
+                   a2 (? (atom? gm) acc (foldl (\ ac j (: arg (nthl (cup e) j) (? (member? arg fp) (link (posof arg fp 0) ac) ac))) acc gm))   ; a string arg that is OUR param -> our string param
+                   (foldl (\ ac x (walk x ac)) a2 (cup e)))
+                acc))
+              body (gfilt (\ k (suse? body (nthl fp k))) (rangeL 0 (tally fp)))))                        ; seed acc = DIRECT peep/tally params
+   (sm-size smap) (foldl (\ a e (+ a (tally (cup e)))) 0 smap)
+   (smfix info smap) (: nx (map (\ f (link (cap f) (fnsm (nthl f 1) (nthl f 2) smap))) info) (? (= (sm-size nx) (sm-size smap)) nx (smfix info nx)))   ; iterate to a fixpoint
    (jitgroup defs entry)
     (: info (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d) (- (tally nf) 1)))) defs)   ; (name params body arity)
        efn  (gfind (\ f (id? (cap f) entry)) info)
        ord  (link efn (gfilt (\ f (! (id? (cap f) entry))) info))                            ; entry FIRST (H_entry sits at Lo)
-       smask (gfilt (\ i (suse? (nthl efn 2) (nthl (nthl efn 1) i))) (rangeL 0 (nthl efn 3)))   ; entry's STRING params (used in peep/tally) -> raw pointer, no sar
+       smap0 (map (\ f (link (cap f) (gfilt (\ k (suse? (nthl f 2) (nthl (nthl f 1) k))) (rangeL 0 (nthl f 3))))) info)   ; per-fn DIRECT string params
+       smask (gsm entry (smfix info smap0))                                                   ; entry's STRING params, propagated to a fixpoint -> raw pointer, no sar
        OU (mkouter (nthl efn 3) smask) outer (cap OU) Aovf (caup OU) Lo (tally outer)
        sa (\ k (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k)))
        ld (\ k (foldl (\ a i (+ a (ldr i (- (* 16 k) (* 8 i))))) () (rangeL 0 k)))

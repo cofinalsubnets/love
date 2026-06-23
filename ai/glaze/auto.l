@@ -180,8 +180,21 @@
                              (&& (two? gnf) (symp (cap gnf)) (< 1 (tally gnf)) (all symp (cup gnf)) (distinctp (cup gnf))
                                  (two? (cup (cup nl))) !(two? (cup (cup (cup nl))))               ; (: (g q..) GBODY), body-less (one binding)
                                  (= (tally (cup e)) (tally (cup gnf))))))))                       ; inits arity == g's arity
+   (subst-sym nm val e) (? (id? e nm) val (two? e) (map (\ x (subst-sym nm val x)) e) e)            ; symbol nm -> val in e
+   ; norm-let: a fn body (: aux.. (g q..) GBODY (g inits..)) -- a let with VALUE aux bindings + ONE local
+   ; fn + a CALL result -- normalizes to the named-let ((: (g q..) GBODY[aux inlined]) inits..) lift handles.
+   ; strscan's strhash (: n (tally s) (go i h) .. (go 0 0)) is exactly this (n=(tally s) inlined into go).
+   (norm-let body)
+    (? (! (&& (two? body) (id? (cap body) ':) (! (atom? (cup body))))) body
+       (: parsed (anat-defs (cup body)) pairs (cap parsed) result (caup parsed)
+          fnps (afilter (\ pr (two? (cap pr))) pairs) auxps (afilter (\ pr (! (two? (cap pr)))) pairs)
+          (? (! (&& (= 1 (tally fnps)) (two? result))) body                                         ; need exactly one local fn + a call result
+             (: g (cap (cap (cap fnps))) q (cup (cap (cap fnps))) gbody (cup (cap fnps))
+                (? (! (&& (id? (cap result) g) (= (tally (cup result)) (tally q)))) body            ; result must be (g inits..) matching arity
+                   (: inl (\ x (foldl (\ b ap (subst-sym (cap ap) (cup ap) b)) x auxps))            ; inline every aux name -> its value
+                      (link (link ': (link (link g q) (link (inl gbody) ()))) (map inl (cup result)))))))))
    (lift-pair p)                                                                                  ; (nameform . body) -> (rewritten-pair newdefs)
-    (: nf (cap p) pbody (cup p)
+    (: nf (cap p) pbody (norm-let (cup p))
        (? (! (&& (two? nf) (symp (cap nf)) (< 1 (tally nf)) (named-let? pbody))) (L p ())
           (: F (cap nf) P (cup nf)  nl (cap pbody) inits (cup pbody)
              gnf (caup nl) g (cap gnf) q (cup gnf) GBODY (caup (cup nl))
@@ -196,6 +209,16 @@
           results (map lift-pair pairs)
           allpairs (cat (map cap results) (foldl (\ a r (cat a (caup r))) () results))            ; rewritten originals ++ all the lifted defs
           (link ': (unpair allpairs body))))
+   ; fold-consts: inline a top-level `:`'s WHOLE-constant value bindings (e.g. strscan's `hmod 1000000007`)
+   ; into every body and drop them -- so a folded constant doesn't read as an un-glazeable free symbol.
+   (fold-consts form)
+    (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
+       (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
+          consts (afilter (\ pr (&& (symp (cap pr)) (whole? (cup pr)))) pairs)
+          (? (atom? consts) form
+             (: sub (\ e (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e consts))
+                keep (afilter (\ pr (! (&& (symp (cap pr)) (whole? (cup pr))))) pairs)
+                (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
    (clook2 nm al) (? (atom? al) -1 (id? nm (caap al)) (caup (cap al)) (clook2 nm (cup al)))   ; (name arity) alist -> arity (-1 absent)
    (groupok? cands ps e)                                                                      ; is e in the fragment over cands (a (name arity) list)?
     (? (member? e ps) 1  (whole? e) 1
@@ -219,7 +242,7 @@
     (? (! (two? form0)) form0
        (! (id? (cap form0) ':)) form0
        (atom? (cup form0)) form0
-       (: form (lift form0)                                                                  ; lambda-lift named-let bodies first (primes' loops -> flat group fns)
+       (: form (lift (fold-consts form0))      ; lambda-lift named-let bodies first (primes' loops -> flat group fns)
           parsed (anat-defs (cup form)) pairs (cap parsed)
           fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all symp (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
           (? (! (two? fns)) form0                                                            ; no candidate functions -> original
@@ -364,6 +387,14 @@
                (bsum s i) (? (< i 0) 0 (+ (peep s i 0) (bsum s (- i 1))))
                (bsum data 4))
        (&& !(id? (autogroup rsl) rsl) (365 = (ev rsl)) (= (base-ev rsl) (ev rsl))))
+    ; FULL STRING LANE (strscan): fold-consts inlines hmod, norm-let normalizes (: n (tally s) (go ..)
+    ; (go 0 0)) into a named-let, lift lifts go, interprocedural inference types s (it flows strhash ->
+    ; strhash_go's peep), and the native rolling hash == interp. This is the strscan bench, glazed from source.
+    (: rss '(: hmod 1000000007
+               (strhash s) (: n (tally s) (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
+               data (string (L 72 105 90 33 65))
+               (strhash data))
+       (&& !(id? (autogroup rss) rss) (69709145 = (ev rss)) (= (base-ev rss) (ev rss))))
     ; a fn that calls OUT of the fragment (into `link`) drops the whole group -> form unchanged, interpreted
     (: ro '(: (build n) (? (< n 1) () (link n (build (- n 1)))) (build 3))
        (&& (id? (autogroup ro) ro) ('(3 2 1) = (ev ro)))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
