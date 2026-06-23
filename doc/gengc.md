@@ -205,11 +205,17 @@ the minor.
    rule that periodically sweeps floating DEAD tenured objects (which die in place, invisible to a
    minor) and lets the pool shrink. Result: the major-pool live set collapsed on every workload
    (revbig 12.4M→414k words, mapchurn 8.2M→714k), majors stay the minority (~67% minors), corpus
-   byte-identical. Open wart: a single huge allocation balloons the minor pool (the wall-clock minor
-   resize), which then over-sizes the worst-case major to-space — rooted in (c). (b) runtime-pluggable
-   sizing (today compile-time `ai_minor0` / `ai_major0`); (c) two-level pause/promotion heuristics
-   (incl. making the minor resize deterministic, not wall-clock-driven); (d) lifting the minor out of
-   AI_STAT into the kernel/host (a pool-backed rem set, since the kernel can't malloc).
+   byte-identical. (b) DETERMINISTIC minor resize + the memory BUDGET *(done)*: the wall-clock v-ratio
+   (total_time/gc_time) made the schedule nondeterministic (172 vs 179 collections, same binary) and let
+   a slow major feed back into the nursery; replaced by the SAME controller in WORDS -- overhead =
+   copied/allocated, accumulated over a window (grow above 1/8, shrink below 1/32). The schedule is now
+   reproducible (identical collection count + pool trajectory; byte-identical with ASLR off) and boots in
+   0.30s, same GC behaviour as before. The `ai_budget` knob (words; 0 = unbounded; a field, settable at
+   runtime like `g->alloc`) caps the whole footprint by APPEL'S RULE: the nursery gets the free budget
+   after the major pool. Verified: ai_budget=2^21 (~16 MB Teensy) settles total reservation == budget
+   exactly. (c) two-level pause/promotion heuristics (promotion threshold / survivor aging) -- still open;
+   (d) lifting the minor out of AI_STAT into the kernel/host (a pool-backed rem set, since the kernel
+   can't malloc). The (b) work also dissolved the old "huge allocation balloons the minor pool" wart.
 
 ## As built (stage 3)
 
