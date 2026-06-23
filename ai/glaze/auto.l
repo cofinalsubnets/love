@@ -269,6 +269,26 @@
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
           (link ': (unpair (map (\ pr (link (cap pr) (? (two? (cap pr)) (delet-body (cup pr)) (cup pr)))) pairs) body))))
+   ; --- BOOLEANS & CLAMPS (debool): lower &&/||/abs to the `?`-fragment the glaze already compiles --
+   ;     exact, value-preserving rewrites (verified): (&& a b)=(? a b 0), (|| a b)=(? a a (? b b 0)),
+   ;     (abs x)=(? (< x 0) (- 0 x) x). The &&/|| forms bake in the floor-clamp semantics (a false `&&`
+   ;     nets 0, like all/any's bits) -- which is exactly why they equal these `?` forms, not the looser
+   ;     (? a b a). && never duplicates an operand; ||/abs do, so they reuse delet's `dcheap?` guard -- a
+   ;     form that would duplicate a CALL is LEFT un-lowered (groupok? then rejects the head -> interp,
+   ;     sound). Bottom-up (operands lowered first), so nested compounds collapse. A no-op on any form
+   ;     with none of these heads, and runs INSIDE autogroup -- so autonat (which matches the float-grid
+   ;     escape test `(&& (< it L) ..)` on the RAW form, before autogroup) is unaffected. (NOTE: `min`/
+   ;     `max` are array REDUCERS, not binary scalar ops -- `(min 7 3)` is `((min 7) 3)` = `(7 3)` = 3^7,
+   ;     NOT 3 -- so a binary `(min a b)` is no language feature and is deliberately NOT lowered here.)
+   (dband as) (? (atom? as) 1  (atom? (cup as)) (cap as)  (L '? (cap as) (dband (cup as)) 0))   ; (&& a R..) = (? a (&& R..) 0)
+   (dbor as)  (? (atom? as) 0  (! (dcheap? (cap as))) (link '|| as)                             ; (|| a R..) = (? a a (|| R..)); a dup'd, so guard
+                 (L '? (cap as) (cap as) (dbor (cup as))))
+   (dbabs x) (? (! (dcheap? x)) (L 'abs x) (L '? (L '< x 0) (L '- 0 x) x))                       ; (abs x) = (? (< x 0) (- 0 x) x)
+   (debool e)                                                                                   ; recursively lower &&/||/abs to ?
+    (? (atom? e) e  (dquote? e) e
+       (: y (map debool e) h (cap y) as (cup y)                                                 ; lower operands first (bottom-up)
+          (? (id? h '&&) (dband as)  (id? h '||) (dbor as)
+             (&& (id? h 'abs) (= 1 (tally as))) (dbabs (cap as))  y)))
    ; --- SPECIALIZATION (autospec): mix (doc/proto/mix.l, the offline partial evaluator) wired in as a
    ;     glaze recognizer -- the 1st Futamura projection COMPOSED with the native lane. an interpreter
    ;     applied to a STATIC program (a const-bound quoted AST) and a DYNAMIC input specializes: the
@@ -449,7 +469,7 @@
     (? (! (two? form0)) form0
        (! (id? (cap form0) ':)) form0
        (atom? (cup form0)) form0
-       (: form (lift (delet (defoliate (autospec (fold-consts form0)))))   ; specialize interp-over-static-data, deforest pipelines -> loops, inline value-lets in fn bodies, THEN lambda-lift named-let bodies -> flat group fns
+       (: form (lift (delet (defoliate (autospec (debool (fold-consts form0))))))   ; lower &&/||/min/max/abs to ?, specialize interp-over-static-data, deforest pipelines -> loops, inline value-lets in fn bodies, THEN lambda-lift named-let bodies -> flat group fns
           parsed (anat-defs (cup form)) pairs (cap parsed)
           fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
           (? (! (two? fns)) form0                                                            ; no candidate functions -> original
@@ -689,5 +709,28 @@
     ; BAIL: a binding holding a CALL used TWICE would duplicate the recursion -> NOT inlined -> f interprets
     ; (sound, value exact; the sibling g still glazes, so the form is rewritten but f stays interpreted)
     (: lbail '(: (g n) (? (< n 1) 1 (* n (g (- n 1)))) (f n) (: a (g n) (+ a a)) (f 5))
-       (= (base-ev lbail) (ev lbail))))                                                       ; g(5)=120, a+a = 240, interpreted
+       (= (base-ev lbail) (ev lbail)))                                                        ; g(5)=120, a+a = 240, interpreted
+    ; BOOLEANS & CLAMPS (debool): &&/||/min/max/abs lower to the ?-fragment -> the fn glazes. == interp.
+    (: band '(: (f x n) (? (&& (< x n) (> x 0)) 1 0) (f 5 9))
+       (&& !(id? (autogroup band) band) (1 = (ev band)) (= (base-ev band) (ev band))))        ; 5<9 && 5>0 -> 1
+    (: bor '(: (f x) (? (|| (< x 0) (> x 9)) 1 0) (f 5))
+       (&& !(id? (autogroup bor) bor) (0 = (ev bor)) (= (base-ev bor) (ev bor))))             ; neither -> 0
+    (: babs '(: (f x) (+ (abs x) 1) (f -5))
+       (&& !(id? (autogroup babs) babs) (6 = (ev babs)) (= (base-ev babs) (ev babs))))        ; |-5|+1 -> 6
+    ; abs inside a hot loop: |i-50| summed for i<100 -> the running clamp natives
+    (: babl '(: (f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (abs (- i 50)))) a)) 0 0) (f 100))
+       (&& !(id? (autogroup babl) babl) (2500 = (ev babl)) (= (base-ev babl) (ev babl))))      ; sum|i-50| = 2*(1+..+50) = 2550-50 = 2500
+    ; nested compound: && of a cmp and an ||, guarding an abs -- all collapse to ?
+    (: bnest '(: (f x) (? (&& (> x 0) (|| (< x 5) (> x 10))) (abs x) 0) (f 3))
+       (&& !(id? (autogroup bnest) bnest) (3 = (ev bnest)) (= (base-ev bnest) (ev bnest))))    ; 3>0 && 3<5 -> abs 3 = 3
+    ; BAIL: || whose first operand is a recursive CALL would duplicate it -> left un-lowered -> f interprets (sound)
+    (: bbail '(: (g n) (? (< n 1) 0 (+ n (g (- n 1)))) (f n) (? (|| (g n) (< n 0)) 1 0) (f 5))
+       (= (base-ev bbail) (ev bbail)))                                                        ; (|| g(5)=15 ..) truthy -> 1, interpreted (g still glazes)
+    ; || AND abs nested in a loop accumulator -- the deep ?-nesting the perf demo exercises
+    (: bdeep '(: (f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0))) a)) 0 0) (f 1000))
+       (&& !(id? (autogroup bdeep) bdeep) (= (base-ev bdeep) (ev bdeep))))                     ; native == interp on the nested ||/abs loop
+    ; a debool'd HELPER called by a loop SIBLING -- clamp (||/abs) glazes as a group fn, run_go calls it native
+    (: bclamp '(: (clamp i) (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0)
+                  (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clamp i))) a)) 0 0) (run 1000))
+       (&& !(id? (autogroup bclamp) bclamp) (= (base-ev bclamp) (ev bclamp)))))                ; native == interp; clamp a glazed sibling
  _ (say err "ai/glaze/auto: ev auto-natives qualifying closures + counted loops + D-dim float grids + mutually-recursive arith groups (transparent)\n"))
