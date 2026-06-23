@@ -191,43 +191,49 @@ the minor.
    full test corpus + benches; pure compute + map mutation 0 over many GCs. The
    barrier/flag/audit are AI_STAT-gated, so the normal build & `make test` are
    unchanged. *(done)*
-3. **the real minor + the elder dipool** *(done; see "As built" below)* — the design
-   inverted from Option A: the NURSERY is the existing main pool (no allocation-path
-   change), the ELDER is a separate two-space dipool. A minor evacuates the nursery into
-   the elder; a major is one **reachability** pass over {elder ∪ nursery} (no linear
-   sweep). Both dipools grow independently, on configurable initial sizes. Differential
+3. **the real minor + the major pool** *(done; see "As built" below)* — the design
+   inverted from Option A: the **minor pool** is the existing main pool (no allocation-path
+   change), the **major pool** is a separate two-space region. A minor evacuates the minor
+   pool into the major pool; a major is one **reachability** pass over {major ∪ minor} (no
+   linear sweep). Both pools grow independently, on configurable initial sizes. Differential
    oracle: the whole test corpus runs **byte-identical** with minors, majors, and both
-   grows firing; `make test` stays green (AI_STAT-gated).
-4. **tune / graduate** — runtime-pluggable sizing (today compile-time `ai_nursery0` /
-   `ai_elder0`), two-level pause/promotion heuristics, and lifting the minor out of
-   AI_STAT into the kernel/host (a pool-backed rem set, since the kernel can't malloc).
+   grows firing; `make test` stays green (AI_STAT-gated). (The pools were called the
+   *nursery* and the *elder* through stage 3; renamed to the **minor pool** / **major pool**.)
+4. **tune / graduate** — (a) major-pool sizing: keep it small, grow by one step (not
+   doubling), shrink when the live set collapses *(in progress)*; (b) runtime-pluggable
+   sizing (today compile-time `ai_minor0` / `ai_major0`); (c) two-level pause/promotion
+   heuristics; (d) lifting the minor out of AI_STAT into the kernel/host (a pool-backed rem
+   set, since the kernel can't malloc).
 
 ## As built (stage 3)
 
 The shipped shape differs from the sketch above, steered by what the binary and the
-"() IS the core" archaeology actually showed:
+"() IS the core" archaeology actually showed. Two pools: the **minor pool** (was "nursery")
+and the **major pool** (was "elder"), reaped by minor and major collections respectively.
 
-- **Two dipools, core/stack with the nursery.** The NURSERY is the main pool —
+- **Two pools, core/stack with the minor pool.** The minor pool is the main pool —
   `[core | heap→ … ←stack]`, allocations bump `hp` *unchanged*, the whole heap is young.
-  The ELDER (`old_pool`) is a separate two-space region holding only tenured heap. This is
-  the opposite of Option A (which put old in the main pool) and needs **no** `Have`/`bump`
-  surgery.
-- **Minor** (`!dirty`, elder has headroom): Cheney the nursery → the elder active half
-  (append), then `hp = end`. Roots ∪ the **rem set** (old→young edges) ∪ a strong scan of
-  the weak intern map. The scan starts at the append point, so a minor never reads a dead
-  or non-object word.
-- **Major** (`dirty`, or the elder can't hold a worst-case promotion): one **reachability**
-  Cheney over BOTH from-spaces — the elder active half and the nursery (`gcp`'s second
-  range) — into the elder spare half (or a fresh pair sized to *elder-live + nursery-young*),
-  then rebuild symbols + run finalizers, flip, reset the nursery. Reachability means dead
-  objects (and their stale pointers) are simply never visited — the fix for the linear
-  sweep that crashed on dead task-ring nodes.
-- **Independent growth (decoupled).** The nursery resizes on its own GC/mutator ratio
+  The major pool (`major_pool`) is a separate two-space region holding only tenured heap.
+  This is the opposite of Option A (which put old in the main pool) and needs **no**
+  `Have`/`bump` surgery.
+- **Minor** (`gen_minor`; `!dirty`, major pool has headroom): Cheney the minor pool → the
+  major-pool active half (append), then `hp = end`. Roots ∪ the **rem set** (old→young
+  edges) ∪ a strong scan of the weak intern map. The scan starts at the append point, so a
+  minor never reads a dead or non-object word.
+- **Major** (`gen_major`; `dirty`, or the major pool can't hold a worst-case promotion): one
+  **reachability** Cheney over BOTH from-spaces — the major-pool active half and the minor
+  pool (`gcp`'s second range) — into the major-pool spare half (or a fresh pair sized to
+  *major-live + minor-young*), then rebuild symbols + run finalizers, flip, reset the minor
+  pool. Reachability means dead objects (and their stale pointers) are simply never visited —
+  the fix for the linear sweep that crashed on dead task-ring nodes.
+- **Independent growth (decoupled).** The minor pool resizes on its own GC/mutator ratio
   (`gen_grow`, which moves core+stack — safe because **`()` is `ZeroPoint`, an out-of-pool
   const, not the core**; the old "() IS the core" + the `gcg` core-flop are vestigial). The
-  elder grows only at a major, far less often. Initial sizes are **configurable** like the
-  custom allocator (`ai_nursery0`/`ai_elder0`): a Teensy picks small + accepts more GCs, a
-  host picks roomy + boots in a few.
+  major pool grows only at a major, far less often. Initial sizes are **configurable** like
+  the custom allocator (`ai_minor0`/`ai_major0`): a Teensy picks small + accepts more GCs, a
+  host picks roomy + boots in a few. *(Stage-4 note: the major pool currently only ever
+  grows — `to_len` doubles and never shrinks — which floats garbage on churn workloads; the
+  sizing heuristic addresses this.)*
 - All of it is `AI_STAT`-gated; the normal build and the kernel are byte-for-byte
   unchanged. (Also: the GC's tagged-object kind was renamed `text` → `thread`.)
 
@@ -244,10 +250,10 @@ caveat `ai/glaze/README.md` flags for a verified glaze.
 
 - AArch64: a major already needs no I-cache work, but if a toast is ever
   *promoted* the W^X arena's finalizer must follow it (it does, via `run_finalizers`
-  at the major); confirm a born-old toast never enters the nursery in the first
+  at the major); confirm a born-old toast never enters the minor pool in the first
   place.
 - Inter-task: tasks share one pool; the remembered set is global. A per-task
-  nursery is a later question (tied to the kship/init direction).
+  minor pool is a later question (tied to the kship/init direction).
 - Large objects: a big array allocated young then promoted is copied twice
-  (nursery→old at its first minor). A size threshold for born-old large objects
+  (minor pool→major at its first minor). A size threshold for born-old large objects
   is the standard mitigation; measure before adding.

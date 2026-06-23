@@ -139,8 +139,8 @@ struct ai {
  union { uintptr_t t0; ai_word *cp; };
  void *(*alloc)(struct ai*, void*, size_t);  // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
  uintptr_t b;
- ai_word *nursery;      // GENERATIONAL watermark: hp right after the last collection, so [nursery, hp) is
-                        // the YOUNG set (allocated since) and [end, nursery) the OLD/tenured set. A raw pool
+ ai_word *minor;      // the MINOR-POOL watermark: hp right after the last collection, so [minor, hp) is
+                        // the YOUNG set (allocated since) and [end, minor) the OLD/tenured set. A raw pool
                         // pointer (like hp/sp/cp), NOT a traced value -- recomputed every collection, never
                         // forwarded. Stage 1: maintained + observed (gauge `old`); the minor that reaps the
                         // young set lands later. See doc/gengc.md.
@@ -157,20 +157,20 @@ struct ai {
  // collection with dirty set must be a MAJOR (full); dirty clear -> a minor is sound. Cleared on
  // every collection. The audit runs only when clear, so it proves a minor would lose nothing.
  uintptr_t dirty;
- // stage 3: the MINOR + the ELDER dipool (AI_STAT/host only). The main pool is now a pure NURSERY
- // (the whole heap [end,hp) is young -- nursery stays == end, never advanced); OLD lives in the
- // `old_pool`, a separate two-space (di) region. A MINOR evacuates the nursery -> elder active half
- // (append) and resets hp=end; a MAJOR drains {nursery + a full elder scan} -> elder active, then
- // COMPACTS elder-active -> the spare half (or a fresh bigger pair), flips, rebuilds symbols, runs
+ // stage 3: the MINOR + the MAJOR pool (AI_STAT/host only). The main pool is now a pure MINOR pool
+ // (the whole heap [end,hp) is young -- the `minor` watermark stays == end, never advanced); OLD lives
+ // in the `major_pool`, a separate two-space (di) region. A MINOR evacuates the minor pool -> major-pool
+ // active half (append) and resets hp=end; a MAJOR drains {minor pool + a full major-pool scan} -> the
+ // major-pool active half, then COMPACTS it -> the spare half (or a fresh bigger pair), flips, rebuilds symbols, runs
  // finalizers. gc_to_{lo,hi} bound the to-space (a thread's home, for the terminator scan in
  // evac_thread); gc_fwd is the forwarding floor (word0 in [gc_fwd, gc_to_hi) <=> a copy made THIS
- // collection -- distinguishing it from a pointer to a PRE-EXISTING elder object). gc_gen redirects
- // bump() to old_hp during a generational collection.
- ai_word *old_pool, *old_base, *old_hp;   // elder: malloc base (2*old_len words), active-half base, active bump
- uintptr_t old_len;                       // elder half size (words)
+ // collection -- distinguishing it from a pointer to a PRE-EXISTING major object). gc_gen redirects
+ // bump() to major_hp during a generational collection.
+ ai_word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
+ uintptr_t major_len;                       // major half size (words)
  ai_word *gc_to_lo, *gc_to_hi, *gc_fwd;   // to-space tagp range [to_lo,to_hi) + forwarding floor (set per collection)
- ai_word *gc_f2lo, *gc_f2hi;              // a SECOND from-space range (0 = unused); a major traces {elder ∪ nursery} in one pass
- uintptr_t gc_gen;                        // !=0 during a generational collection: bump() targets old_hp, not hp
+ ai_word *gc_f2lo, *gc_f2hi;              // a SECOND from-space range (0 = unused); a major traces {major ∪ minor} in one pass
+ uintptr_t gc_gen;                        // !=0 during a generational collection: bump() targets major_hp, not hp
  uintptr_t n_minor;                       // MINOR collections so far (majors = n_gc - n_minor)
 #endif
  union {
@@ -420,7 +420,7 @@ uintptr_t hash(struct ai*, word), ai_vec_bytes(struct ai_vec*);
 static ai_inline bool chainp(word _) { return lamp(_) && cell(_)->ap == lvm_chain; }
 static ai_inline void *bump(struct ai *g, uintptr_t n) {
 #ifdef AI_STAT
-  if (g->gc_gen) { void *x = g->old_hp; g->old_hp += n; return x; }   // promoting into the elder
+  if (g->gc_gen) { void *x = g->major_hp; g->major_hp += n; return x; }   // promoting into the major
 #endif
   if (avail(g) < n) __builtin_trap();
   void *x = g->hp; g->hp += n; return x; }
