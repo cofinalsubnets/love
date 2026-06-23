@@ -308,7 +308,7 @@
  (12 = (foldl (+) 0 '(3 4 5)))
  (: t operators
     (&& (book? t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%))
-        ((link 'sat 1) = (t '$)) ((link 'nil? 1) = (t '!))
+        ((link 'saturate 1) = (t '$)) ((link 'nil? 1) = (t '!))
         ((link 'pin 3) = (t '<-)) ((link 'peep 3) = (t '->)))))
 
 ; --- macros --- a macro maps an arg list to code; install with `::`. the prel ships

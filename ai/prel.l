@@ -12,7 +12,7 @@
    (const x _) x
    (co f x y) (f y x)                ; co: the argument-transpose (so `co compose` reads as reverse-compose)
    flip co                           ; flip stays an alias for co (minimize the blast)
-   saturate sat)                     ; saturate: the spelled-out alias for sat ($)
+   sat saturate)                     ; `saturate` is the canonical name now (the `$` sigil factors to it); `sat` is the short alias
 (: macros (peep book 0 0))
 (: pi 3.141592653589793
    tau (* 2 pi) ;; no infix here
@@ -241,29 +241,28 @@
 ; before its definitions); everything after -- and every later file, the
 ; corpus, the repl -- reads hot.
 ; └─── END PRE-OPERATORS ZONE: infix + operators are live from the `operators` table on. ┘
-(: operators (: t (tablet 0)
-   _ (pin t '$ (link 'sat 1)) _ (pin t '! (link 'nil? 1)) _ (pin t '. (link 'dot 1))
-   _ (pin t '+ 2) _ (pin t '- 2) _ (pin t '* 2) _ (pin t '/ 2) _ (pin t '% 2)
-   _ (pin t '= 2) _ (pin t '< 2) _ (pin t '<= 2) _ (pin t '> 2) _ (pin t '>= 2)
-   _ (pin t '| 2) _ (pin t '& 2) _ (pin t '? 3)
-   _ (pin t '<- (link 'pin 3)) _ (pin t '-> (link 'peep 3))
-   t))
+; FOLD `pin` over the (key value) pairs (pin gives back its map). Open-coded as a fold, NOT the
+; #(..)/map macro: this is the PRE-OPFIX zone, compiled by the C bootstrap c0, which doesn't run the
+; self-hosted maps pass -- but foldl/L are already defined above and are operator-free.
+(: operators
+   (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
+      (L (L '$ (link 'saturate 1)) (L '! (link 'nil? 1)) (L '. (link 'dot 1))
+         (L '+ 2) (L '- 2) (L '* 2) (L '/ 2) (L '% 2)
+         (L '= 2) (L '< 2) (L '<= 2) (L '> 2) (L '>= 2)
+         (L '| 2) (L '& 2) (L '? 3)
+         (L '<- (link 'pin 3)) (L '-> (link 'peep 3)))))
 ; the VALENCE LAW's table: a glued operator run is MONADIC (the reader emits
 ; (mono (run datum))); spaced, the run keeps its dyadic/infix life. each entry
 ; maps a run-piece to its monadic word; a run factors greedily (longest
 ; prefix), all factors monadic, so <>x is (cap (cup x)) and !!x double-
 ; negates. << and >> ride the shift tokens' free monadic slots. an
 ; unfactorable run falls back to the plain application.
-(: monadics (: t (tablet 0)
-   _ (pin t '< 'cap)   _ (pin t '> 'cup)
-   _ (pin t '<< 'caap) _ (pin t '>> 'cuup)
-   _ (pin t '+ 'net)   _ (pin t '* 'pen)
-   _ (pin t '| 'abs)   _ (pin t '- 'negate)
-   _ (pin t '/ 'reciprocal) _ (pin t '% 'fraction)
-   _ (pin t '? 'bit)
-   _ (pin t '$ 'sat)   _ (pin t '$$ 'mint)   ; $$ -> mint: $ is idempotent ($$x=$x), so the slot is free to overload
-   _ (pin t '! 'nil?) _ (pin t '. 'dot)
-   t))
+(: monadics
+   (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
+      (L (L '< 'cap) (L '> 'cup) (L '<< 'caap) (L '>> 'cuup) (L '+ 'net) (L '* 'pen)
+         (L '| 'abs) (L '- 'negate) (L '/ 'reciprocal) (L '% 'fraction) (L '? 'bit)
+         (L '$ 'saturate) (L '$$ 'mint)        ; $$ -> mint: $ is idempotent ($$x=$x), so the slot is free to overload
+         (L '! 'nil?) (L '. 'dot))))
 ; the FACTORIZATION LAW: greedy longest-prefix match against the table, no
 ; backtracking; every factor but the last must be arity one; the last factor
 ; takes the positional valence. a token that doesn't factor is a plain

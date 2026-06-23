@@ -701,7 +701,7 @@ lvm_t lvm_fault;
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
  _(nif_twirl, "twirl", s1(lvm_twirl))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
- _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "sat", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
+ _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "saturate", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
  _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull))\
  _(nif_table, "tablet", s1(lvm_table)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
