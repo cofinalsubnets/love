@@ -33,7 +33,7 @@ BDIR := $(R)/out/bench
 TIMEOUT ?= 30
 
 # workloads, in display order; override with `make BENCHES="fib primes"`.
-BENCHES := fib tak sum mapfilter deforest primes bell strcat strscan hash sort tree float closure sat
+BENCHES := fib tak sum mapfilter deforest polysum primes bell strcat strscan hash sort tree float closure sat
 
 # <lang>:<bench> pairs that exceed TIMEOUT -- dropped up front so the build never
 # pays the timeout wall for them (re-test by removing one and `make clean`).
