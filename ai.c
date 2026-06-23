@@ -35,6 +35,33 @@ typedef float ai_flo_t;
 #define ai_pow   powf
 #endif
 
+// Bignum limbs are native-word-width where a double-width integer is available for
+// the limb products and the Knuth divmod q-hat step -- the host and the 64-bit
+// kernels: 64-bit limbs do a quarter the limb-ops of 32-bit limbs on the same
+// number (schoolbook mul/div are O(limbs^2)), the difference between ai and a
+// 64-bit-digit BigInt. The 32-bit wasm shim (no __int128) keeps 32-bit limbs with
+// a uint64_t accumulator. ai_dlimb is the unsigned double-limb (products, carries),
+// ai_sdlimb the signed one (subtract / divmod borrows). limb_clz counts a limb's
+// leading zeros at the chosen width.
+#if UINTPTR_MAX == UINT64_MAX && defined(__SIZEOF_INT128__)
+typedef uint64_t ai_limb;
+typedef unsigned __int128 ai_dlimb;
+typedef __int128 ai_sdlimb;
+#define limb_bits 64
+#else
+typedef uint32_t ai_limb;
+typedef uint64_t ai_dlimb;
+typedef int64_t ai_sdlimb;
+#define limb_bits 32
+#endif
+#define limb_clz(x) (__builtin_clzll((unsigned long long) (x)) - (8 * (int) sizeof(unsigned long long) - limb_bits))  // leading zeros of a nonzero limb, at limb width
+#define wlimbs (Bits / limb_bits)   // limbs to hold one machine word: 1 (native-width limbs) or 2 (32-bit limbs on a 64-bit word)
+// decimal digits a limb spans: floor(limb_bits * log10 2). The reader packs this
+// many digits per mul-add pass (10^chunk fits a limb); the printer bounds its byte
+// count by chunk+1 (a limb prints in < that many digits). 30103 = round(1e5 log10 2).
+#define limb_dec_chunk  (limb_bits * 30103 / 100000)
+#define limb_dec_digits (limb_dec_chunk + 1)
+
 #if __STDC_HOSTED__
 #include <math.h>
 #else
@@ -277,7 +304,7 @@ static ai_inline word die_get(struct ai *g, word die, intptr_t slot) {
 // unambiguous. Canonical demotion keeps the tiers disjoint: a value in fixnum
 // range is a fixnum, one in intptr_t range a wide-int box, only wider values a
 // bignum -- so charmp/widep/bigp are mutually exclusive and =/eqv stay well defined.
-struct ai_big { lvm_t *ap; intptr_t slen; uint32_t limb[]; };
+struct ai_big { lvm_t *ap; intptr_t slen; ai_limb limb[]; };
 static ai_inline bool bigp(word _) { return lamp(_) && cell(_)->ap == lvm_big; }
 static ai_inline struct ai_big *ini_big(struct ai_big *b, intptr_t slen) {
  return b->ap = lvm_big, b->slen = slen, b; }
@@ -285,7 +312,7 @@ uintptr_t ai_big_bytes(struct ai_big*);
 // Canonicalize a magnitude (limb[0..n), sign neg) into the smallest tier:
 // fixnum, else wide-int box, else bignum; bumps *hp when it boxes/bignums. One
 // sink shared by the reader and the arithmetic slow paths.
-word ai_big_canon(ai_word **hp, uint32_t const *limb, int n, bool neg);
+word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
 intptr_t ai_big_low(word);                   // bignum value mod 2^W (low machine word)
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
@@ -632,8 +659,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 
 
 
-#define limb_bits 32
-#define limb_base ((uint64_t) 1 << limb_bits)
+#define limb_base ((ai_dlimb) 1 << limb_bits)
 
 #define yield_interval 64
 // A *fairness* yield (deep in compute, not an explicit I/O/timer wait): clear any
@@ -5207,8 +5233,9 @@ static ai_inline struct ai_vec *rng_copy(ai_word **hp, struct ai_vec *src) {
 // turn the tail Continue() into a ret and trip `make vmret`. The caller has
 // already Have'd rng_draw_req; ai_big_canon only bumps g->hp (no GC).
 static ai_noinline word rng_canon(struct ai *g, uint64_t r) {
- uint32_t limb[2] = { (uint32_t) r, (uint32_t) (r >> 32) };
- return ai_big_canon(&g->hp, limb, 2, false); }
+ ai_limb limb[64 / limb_bits]; int nl = 0;               // split the 64-bit draw into native limbs (1 or 2)
+ for (int i = 0; (size_t) i * limb_bits < 64; i++) limb[i] = (ai_limb) (r >> (i * limb_bits)), nl = i + 1;
+ return ai_big_canon(&g->hp, limb, nl, false); }
 
 // (rng-seed n): a fresh state vec deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
@@ -5227,7 +5254,7 @@ lvm(lvm_rng_seed) {
 // two 32-bit limbs and canonicalized; ai_big_canon picks the tier. st is copied
 // (referentially transparent); st' is the stepped copy.
 #define rng_draw_mask (((uint64_t) 1 << 62) - 1)              // 62 bits = 64-bit fix_max
-#define rng_draw_req  (Width(struct ai_big) + b2w(2 * sizeof(uint32_t)))  // worst case: a 2-limb bignum
+#define rng_draw_req  (Width(struct ai_big) + b2w((64 / limb_bits) * sizeof(ai_limb)))  // worst case: the 62-bit draw split into native limbs
 lvm(lvm_rand_next) {
  word st = Sp[0];
  if (!rng_state_p(st)) return Sp[0] = ZeroPoint, Ip++, Continue();
@@ -5388,7 +5415,7 @@ ai_noinline bool eqv(struct ai *g, word a, word b) {
     case KBig: {
      struct ai_big *x = (struct ai_big*) a, *y = (struct ai_big*) b;
      if (x->slen != y->slen) return false;
-     size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(uint32_t);
+     size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(ai_limb);
      if (memcmp(x->limb, y->limb, nb)) return false;
      break; }
     case KString:
@@ -5471,18 +5498,18 @@ static ai_inline int big_nlimbs(word x) {
 
 uintptr_t ai_big_bytes(struct ai_big *b) {
  intptr_t n = b->slen < 0 ? -b->slen : b->slen;
- return sizeof(struct ai_big) + (uintptr_t) n * sizeof(uint32_t); }
+ return sizeof(struct ai_big) + (uintptr_t) n * sizeof(ai_limb); }
 
 // --- raw magnitude primitives (little-endian uint32_t limb arrays) ----------
 // Callers pass normalized inputs (no leading zero limbs) and normalize outputs
 // via ai_big_canon, which strips leading zeros itself.
 
-static int mag_copy(uint32_t *dst, uint32_t const *src, int n) {
+static int mag_copy(ai_limb *dst, ai_limb const *src, int n) {
  for (int i = 0; i < n; i++) dst[i] = src[i];
  return n; }
 
 // Compare magnitudes: -1 if a<b, 0 if equal, 1 if a>b.
-static ai_noinline int mag_cmp(uint32_t const *a, int na, uint32_t const *b, int nb) {
+static ai_noinline int mag_cmp(ai_limb const *a, int na, ai_limb const *b, int nb) {
  while (na > 0 && a[na-1] == 0) na--;
  while (nb > 0 && b[nb-1] == 0) nb--;
  if (na != nb) return na < nb ? -1 : 1;
@@ -5490,113 +5517,110 @@ static ai_noinline int mag_cmp(uint32_t const *a, int na, uint32_t const *b, int
  return 0; }
 
 // r = a + b. r distinct from a,b; capacity >= max(na,nb)+1. Returns limb count.
-static ai_noinline int mag_add(uint32_t *r, uint32_t const *a, int na, uint32_t const *b, int nb) {
- if (na < nb) { uint32_t const *t = a; a = b; b = t; int u = na; na = nb; nb = u; }
- uint64_t c = 0; int i = 0;
- for (; i < nb; i++) { uint64_t s = (uint64_t) a[i] + b[i] + c; r[i] = (uint32_t) s; c = s >> 32; }
- for (; i < na; i++) { uint64_t s = (uint64_t) a[i] + c;        r[i] = (uint32_t) s; c = s >> 32; }
- if (c) r[i++] = (uint32_t) c;
+static ai_noinline int mag_add(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb) {
+ if (na < nb) { ai_limb const *t = a; a = b; b = t; int u = na; na = nb; nb = u; }
+ ai_dlimb c = 0; int i = 0;
+ for (; i < nb; i++) { ai_dlimb s = (ai_dlimb) a[i] + b[i] + c; r[i] = (ai_limb) s; c = s >> limb_bits; }
+ for (; i < na; i++) { ai_dlimb s = (ai_dlimb) a[i] + c;        r[i] = (ai_limb) s; c = s >> limb_bits; }
+ if (c) r[i++] = (ai_limb) c;
  return i; }
 
 // r = a - b, requires a >= b (magnitudes). r distinct from a,b. Returns na
 // (caller normalizes away any high zero limbs the subtraction produced).
-static ai_noinline int mag_sub(uint32_t *r, uint32_t const *a, int na, uint32_t const *b, int nb) {
- int64_t borrow = 0; int i = 0;
+static ai_noinline int mag_sub(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb) {
+ ai_sdlimb borrow = 0; int i = 0;
  for (; i < nb; i++) {
-  int64_t d = (int64_t) a[i] - b[i] - borrow;
-  if (d < 0) d += (int64_t) limb_base, borrow = 1; else borrow = 0;
-  r[i] = (uint32_t) d; }
+  ai_sdlimb d = (ai_sdlimb) a[i] - b[i] - borrow;
+  if (d < 0) d += (ai_sdlimb) limb_base, borrow = 1; else borrow = 0;
+  r[i] = (ai_limb) d; }
  for (; i < na; i++) {
-  int64_t d = (int64_t) a[i] - borrow;
-  if (d < 0) d += (int64_t) limb_base, borrow = 1; else borrow = 0;
-  r[i] = (uint32_t) d; }
+  ai_sdlimb d = (ai_sdlimb) a[i] - borrow;
+  if (d < 0) d += (ai_sdlimb) limb_base, borrow = 1; else borrow = 0;
+  r[i] = (ai_limb) d; }
  return na; }
 
 // r = a * b (schoolbook). r must be distinct from a,b; capacity >= na+nb. Used
 // one-shot by ai_big_binop (the object-array elementwise lane); the scalar `*`
 // path instead drives a chunked, yieldable copy of this loop in lvm_bmul.
-static ai_noinline void mag_mul(uint32_t *r, uint32_t const *a, int na, uint32_t const *b, int nb) {
+static ai_noinline void mag_mul(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb) {
  for (int i = 0; i < na + nb; i++) r[i] = 0;
  for (int i = 0; i < na; i++) {
-  uint64_t carry = 0, ai = a[i];
+  ai_dlimb carry = 0; ai_limb ai = a[i];          // ai stays a limb so ai*b[j] is the hardware 64x64->128 (not a 128x128 __multi3)
   for (int j = 0; j < nb; j++) {
-   uint64_t s = ai * b[j] + r[i+j] + carry;
-   r[i+j] = (uint32_t) s; carry = s >> 32; }
-  r[i+nb] = (uint32_t) carry; } }
+   ai_dlimb s = (ai_dlimb) ai * b[j] + r[i+j] + carry;
+   r[i+j] = (ai_limb) s; carry = s >> limb_bits; }
+  r[i+nb] = (ai_limb) carry; } }
 
-// a = a*mul + add, in place (mul,add < 2^32). a capacity must allow one carry
-// limb at a[n]. Returns the new limb count. Used by the decimal reader.
-static ai_noinline int mag_mul_add_small(uint32_t *a, int n, uint32_t mul, uint32_t add) {
- uint64_t c = add;
- for (int i = 0; i < n; i++) { uint64_t s = (uint64_t) a[i] * mul + c; a[i] = (uint32_t) s; c = s >> 32; }
- if (c) a[n++] = (uint32_t) c;
+// a = a*mul + add, in place (mul,add < 2^limb_bits). a capacity must allow one
+// carry limb at a[n]. Returns the new limb count. Used by the decimal reader.
+static ai_noinline int mag_mul_add_small(ai_limb *a, int n, ai_limb mul, ai_limb add) {
+ ai_dlimb c = add;
+ for (int i = 0; i < n; i++) { ai_dlimb s = (ai_dlimb) a[i] * mul + c; a[i] = (ai_limb) s; c = s >> limb_bits; }
+ if (c) a[n++] = (ai_limb) c;
  return n; }
 
 // a /= d in place (d != 0), returning the remainder. Used by the printer.
-static ai_noinline uint32_t mag_divmod_small(uint32_t *a, int n, uint32_t d) {
- uint64_t rem = 0;
- for (int i = n - 1; i >= 0; i--) { uint64_t cur = (rem << 32) | a[i]; a[i] = (uint32_t) (cur / d); rem = cur % d; }
- return (uint32_t) rem; }
+static ai_noinline ai_limb mag_divmod_small(ai_limb *a, int n, ai_limb d) {
+ ai_dlimb rem = 0;
+ for (int i = n - 1; i >= 0; i--) { ai_dlimb cur = (rem << limb_bits) | a[i]; a[i] = (ai_limb) (cur / d); rem = cur % d; }
+ return (ai_limb) rem; }
 
 // Knuth Algorithm D long division (Hacker's Delight `divmnu`). Divides u (m
 // limbs) by v (n limbs, v[n-1] != 0, m >= n): q gets the m-n+1 quotient limbs,
 // r the n remainder limbs. un (scratch, >= m+1) and vn (scratch, >= n) hold the
-// normalized dividend/divisor. q,r,un,vn all distinct from u,v.
-static ai_noinline void mag_divmod(uint32_t *q, uint32_t *r,
-  uint32_t const *u, int m, uint32_t const *v, int n, uint32_t *un, uint32_t *vn) {
- uint64_t const B = limb_base;
+// normalized dividend/divisor. q,r,un,vn all distinct from u,v. The q-hat step
+// and multiply-subtract run in the double-limb types (a 128/64 divide on 64-bit
+// limbs -- the reason the wide-limb lane needs a double-width integer).
+static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
+  ai_limb const *u, int m, ai_limb const *v, int n, ai_limb *un, ai_limb *vn) {
+ ai_dlimb const B = limb_base;
  if (n == 1) {                                  // single-limb divisor: simple
-  uint64_t rem = 0;
-  for (int j = m - 1; j >= 0; j--) { uint64_t cur = (rem << 32) | u[j]; q[j] = (uint32_t) (cur / v[0]); rem = cur % v[0]; }
-  r[0] = (uint32_t) rem; return; }
- int s = __builtin_clz(v[n-1]);                 // normalize so v[n-1] has its top bit set
- for (int i = n - 1; i > 0; i--) vn[i] = (v[i] << s) | (s ? (uint64_t) v[i-1] >> (32 - s) : 0);
+  ai_dlimb rem = 0;
+  for (int j = m - 1; j >= 0; j--) { ai_dlimb cur = (rem << limb_bits) | u[j]; q[j] = (ai_limb) (cur / v[0]); rem = cur % v[0]; }
+  r[0] = (ai_limb) rem; return; }
+ int s = limb_clz(v[n-1]);                       // normalize so v[n-1] has its top bit set
+ for (int i = n - 1; i > 0; i--) vn[i] = (v[i] << s) | (s ? (ai_dlimb) v[i-1] >> (limb_bits - s) : 0);
  vn[0] = v[0] << s;
- un[m] = s ? (uint64_t) u[m-1] >> (32 - s) : 0;
- for (int i = m - 1; i > 0; i--) un[i] = (u[i] << s) | (s ? (uint64_t) u[i-1] >> (32 - s) : 0);
+ un[m] = s ? (ai_dlimb) u[m-1] >> (limb_bits - s) : 0;
+ for (int i = m - 1; i > 0; i--) un[i] = (u[i] << s) | (s ? (ai_dlimb) u[i-1] >> (limb_bits - s) : 0);
  un[0] = u[0] << s;
  for (int j = m - n; j >= 0; j--) {
-  uint64_t num = ((uint64_t) un[j+n] << 32) | un[j+n-1];
-  uint64_t qhat = num / vn[n-1], rhat = num % vn[n-1];
-  while (qhat >= B || qhat * vn[n-2] > ((rhat << 32) | un[j+n-2])) {
+  ai_dlimb num = ((ai_dlimb) un[j+n] << limb_bits) | un[j+n-1];
+  ai_dlimb qhat = num / vn[n-1], rhat = num % vn[n-1];
+  while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | un[j+n-2])) {
    qhat--; rhat += vn[n-1];
    if (rhat >= B) break; }
-  int64_t borrow = 0;                           // multiply and subtract qhat*v
+  ai_sdlimb borrow = 0;                          // multiply and subtract qhat*v
   for (int i = 0; i < n; i++) {
-   uint64_t p = qhat * vn[i];
-   int64_t sub = (int64_t) un[i+j] - borrow - (int64_t) (uint32_t) p;
-   un[i+j] = (uint32_t) sub;
-   borrow = (int64_t) (p >> 32) - (sub >> 32); }
-  int64_t sub = (int64_t) un[j+n] - borrow;
-  un[j+n] = (uint32_t) sub;
-  q[j] = (uint32_t) qhat;
+   ai_dlimb p = (ai_dlimb) (ai_limb) qhat * vn[i];   // qhat < B here: a limb, so 64x64->128 not 128x128
+   ai_sdlimb sub = (ai_sdlimb) un[i+j] - borrow - (ai_sdlimb) (ai_limb) p;
+   un[i+j] = (ai_limb) sub;
+   borrow = (ai_sdlimb) (p >> limb_bits) - (sub >> limb_bits); }
+  ai_sdlimb sub = (ai_sdlimb) un[j+n] - borrow;
+  un[j+n] = (ai_limb) sub;
+  q[j] = (ai_limb) qhat;
   if (sub < 0) {                                // qhat was one too big: add back
    q[j]--;
-   uint64_t carry = 0;
-   for (int i = 0; i < n; i++) { uint64_t t = (uint64_t) un[i+j] + vn[i] + carry; un[i+j] = (uint32_t) t; carry = t >> 32; }
-   un[j+n] = (uint32_t) (un[j+n] + carry); } }
- for (int i = 0; i < n; i++) r[i] = s ? (un[i] >> s) | ((uint64_t) un[i+1] << (32 - s)) : un[i]; }
+   ai_dlimb carry = 0;
+   for (int i = 0; i < n; i++) { ai_dlimb t = (ai_dlimb) un[i+j] + vn[i] + carry; un[i+j] = (ai_limb) t; carry = t >> limb_bits; }
+   un[j+n] = (ai_limb) (un[j+n] + carry); } }
+ for (int i = 0; i < n; i++) r[i] = s ? (un[i] >> s) | ((ai_dlimb) un[i+1] << (limb_bits - s)) : un[i]; }
 
 // --- operand loading + tier conversions -------------------------------------
 
 // Load integer operand x (fixnum / wide-int box / bignum -- never a float) as a
-// magnitude. A fixnum/box fills `scratch` (1-2 limbs) and points *out at it; a
-// bignum points *out into its heap limbs (stable only while no GC runs). Sets
-// *neg and returns the limb count (0 for the value zero).
-static int load_int_mag(word x, uint32_t scratch[2], uint32_t const **out, bool *neg) {
+// magnitude. A fixnum/box fills `scratch` (wlimbs limbs: 1 with native-width
+// limbs, 2 with 32-bit limbs on a 64-bit word) and points *out at it; a bignum
+// points *out into its heap limbs (stable only while no GC runs). Sets *neg and
+// returns the limb count (0 for the value zero). wlimbs = limbs to hold one word.
+static int load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg) {
  if (bigp(x)) { struct ai_big *b = (struct ai_big*) x; intptr_t s = b->slen;
   *neg = s < 0, *out = b->limb; return (int) (s < 0 ? -s : s); }
  intptr_t v = charmp(x) ? (intptr_t) getcharm(x) : box_get(x);
  *neg = v < 0;
  uintptr_t u = *neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
- scratch[0] = (uint32_t) u;
- int k;
-#if Bits == 64
- scratch[1] = (uint32_t) (u >> 32);
- k = scratch[1] ? 2 : scratch[0] ? 1 : 0;
-#else
- k = scratch[0] ? 1 : 0;
-#endif
+ int k = 0;
+ for (int i = 0; i < wlimbs; i++) { scratch[i] = (ai_limb) (u >> (limb_bits * i)); if (scratch[i]) k = i + 1; }
  *out = scratch;
  return k; }
 
@@ -5606,7 +5630,7 @@ ai_flo_t ai_big_to_flo(word x) {
  bool neg = sl < 0;
  int n = (int) (neg ? -sl : sl);
  double r = 0;
- for (int i = n - 1; i >= 0; i--) r = r * 4294967296.0 + (double) b->limb[i];
+ for (int i = n - 1; i >= 0; i--) r = r * (double) limb_base + (double) b->limb[i];
  return (ai_flo_t) (neg ? -r : r); }
 
 // The bignum's two's-complement value mod 2^W (its low machine word). Used when
@@ -5616,15 +5640,13 @@ intptr_t ai_big_low(word x) {
  struct ai_big *b = (struct ai_big*) x;
  intptr_t sl = b->slen;
  bool neg = sl < 0;
- uintptr_t u = b->limb[0];
-#if Bits == 64
- int n = (int) (neg ? -sl : sl);   // limb count only consulted for the 2nd limb
- if (n >= 2) u |= ((uintptr_t) b->limb[1] << 16) << 16;
-#endif
+ int n = (int) (neg ? -sl : sl);
+ uintptr_t u = 0;
+ for (int i = 0; i < n && i < wlimbs; i++) u |= (uintptr_t) b->limb[i] << (limb_bits * i);
  return (intptr_t) (neg ? (uintptr_t) 0 - u : u); }
 
 int ai_big_cmp(word a, word b) {
- uint32_t sa[2], sb[2]; uint32_t const *la, *lb; bool na, nb;
+ ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool na, nb;
  int nla = load_int_mag(a, sa, &la, &na), nlb = load_int_mag(b, sb, &lb, &nb);
  bool aneg = na && nla > 0, bneg = nb && nlb > 0;   // zero is non-negative
  if (aneg != bneg) return aneg ? -1 : 1;
@@ -5634,14 +5656,15 @@ int ai_big_cmp(word a, word b) {
 // Demote a magnitude to the smallest tier. Strip leading zeros; a value in
 // fixnum range -> a tagged fixnum; in intptr_t range -> a wide-int box; wider
 // -> a fresh bignum. Bumps *hp for the box/bignum cases. The single sink that
-// keeps the tiers disjoint, so eqv / table keys stay well defined.
-word ai_big_canon(ai_word **hp, uint32_t const *limb, int n, bool neg) {
+// keeps the tiers disjoint, so eqv / table keys stay well defined. (With native-
+// width limbs a machine word is one limb, so a 1-limb magnitude can still exceed
+// the box range and become a bignum -- the goto handles it.)
+word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg) {
  while (n > 0 && limb[n-1] == 0) n--;
  if (n == 0) return nil;
- int const wlimbs = Bits / 32;                 // 2 on 64-bit, 1 on 32-bit ports
  if (n <= wlimbs) {
-  uintptr_t u = limb[0];
-  if (wlimbs == 2 && n == 2) u |= ((uintptr_t) limb[1] << 16) << 16;
+  uintptr_t u = 0;
+  for (int i = 0; i < n; i++) u |= (uintptr_t) limb[i] << (limb_bits * i);   // combine limbs into a word
   uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2);   // |fix_min|  = 2^(W-2)
   uintptr_t const boxmag = (uintptr_t) 1 << (Bits - 1);   // |INT_MIN|  = 2^(W-1)
   intptr_t val;
@@ -5657,14 +5680,14 @@ word ai_big_canon(ai_word **hp, uint32_t const *limb, int n, bool neg) {
 big:;
  struct ai_big *b = ini_big((struct ai_big*) *hp, neg ? -n : n);
  for (int i = 0; i < n; i++) b->limb[i] = limb[i];
- *hp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(uint32_t));
+ *hp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(ai_limb));
  return word(b); }
 
 // --- arithmetic (sign-magnitude over the loaded operands) -------------------
 
 // r = a +/- b (subtract flips b's sign), result magnitude + sign.
-static void big_addsub(uint32_t *r, int *rn, bool *rneg,
-  uint32_t const *a, int na, bool nega, uint32_t const *b, int nb, bool negb, bool subtract) {
+static void big_addsub(ai_limb *r, int *rn, bool *rneg,
+  ai_limb const *a, int na, bool nega, ai_limb const *b, int nb, bool negb, bool subtract) {
  bool sb = subtract ? !negb : negb;             // effective sign of the b operand
  if (nega == sb) { *rn = mag_add(r, a, na, b, nb); *rneg = nega; }
  else { int c = mag_cmp(a, na, b, nb);
@@ -5672,8 +5695,38 @@ static void big_addsub(uint32_t *r, int *rn, bool *rneg,
   else if (c > 0) { *rn = mag_sub(r, a, na, b, nb); *rneg = nega; }
   else { *rn = mag_sub(r, b, nb, a, na); *rneg = sb; } } }
 
-static int big_mul_mag(uint32_t *r, uint32_t const *a, int na, uint32_t const *b, int nb) {
- mag_mul(r, a, na, b, nb);
+// Add magnitude s (sn limbs) into r at limb offset off, carrying up. r is sized
+// for the full result, so the carry settles within it.
+static void mag_add_off(ai_limb *r, int rn, ai_limb const *s, int sn, int off) {
+ ai_dlimb c = 0; int i = 0;
+ for (; i < sn; i++)            { ai_dlimb t = (ai_dlimb) r[off+i] + s[i] + c; r[off+i] = (ai_limb) t; c = t >> limb_bits; }
+ for (; c && off + i < rn; i++) { ai_dlimb t = (ai_dlimb) r[off+i] + c;        r[off+i] = (ai_limb) t; c = t >> limb_bits; } }
+
+// Karatsuba for EQUAL-length operands (n limbs each): split each at the low m =
+// n/2 limbs, recurse the halves' products z0 = a0*b0 (-> r[0..2m)) and z2 = a1*b1
+// (-> r[2m..2n)), then add z1 = (a0+a1)(b0+b1) - z0 - z2 at offset m -- three
+// half-size products in place of one full one (~3/4 the limb-mults, recursively).
+// Below kara_cutoff schoolbook's lower constant wins. t is scratch (the divmod
+// scratch ai_big_binop already reserves covers it). Equal length is the case worth
+// splitting (squaring, modpow); the unequal lane stays schoolbook (big_mul_mag).
+#define kara_cutoff 40   // limbs/operand above which Karatsuba beats schoolbook (measured crossover)
+static void mag_mul_kara(ai_limb *r, ai_limb const *a, ai_limb const *b, int n, ai_limb *t) {
+ if (n < kara_cutoff) { mag_mul(r, a, n, b, n); return; }
+ int m = n / 2, h = n - m;                           // low m limbs, high h (m or m+1) limbs
+ mag_mul_kara(r,       a,     b,     m, t);           // z0 -> r[0..2m)
+ mag_mul_kara(r + 2*m, a + m, b + m, h, t);           // z2 -> r[2m..2n)
+ int z0n = 2*m;  while (z0n > 0 && r[z0n-1] == 0) z0n--;
+ int z2n = 2*h;  while (z2n > 0 && r[2*m + z2n-1] == 0) z2n--;
+ ai_limb *sa = t, *sb = sa + (h+1), *z1 = sb + (h+1);
+ int nsa = mag_add(sa, a, m, a + m, h), nsb = mag_add(sb, b, m, b + m, h);
+ mag_mul(z1, sa, nsa, sb, nsb);                       // z1 = (a0+a1)(b0+b1) on the half-size sums
+ int nz1 = nsa + nsb;                       while (nz1 > 0 && z1[nz1-1] == 0) nz1--;
+ nz1 = mag_sub(z1, z1, nz1, r,       z0n);  while (nz1 > 0 && z1[nz1-1] == 0) nz1--;   // z1 -= z0
+ nz1 = mag_sub(z1, z1, nz1, r + 2*m, z2n);  while (nz1 > 0 && z1[nz1-1] == 0) nz1--;   // z1 -= z2
+ mag_add_off(r, 2*n, z1, nz1, m); }                  // r += z1 * B^m
+
+static int big_mul_mag(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb, ai_limb *t) {
+ if (na == nb) mag_mul_kara(r, a, b, na, t); else mag_mul(r, a, na, b, nb);
  int n = na + nb; while (n > 0 && r[n-1] == 0) n--;
  return n; }
 
@@ -5688,24 +5741,24 @@ struct ai *ai_big_binop(struct ai *g, int vop) {
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  int bound = na + nb + 2;                        // result magnitude upper bound
  int work = 4 * (na + nb) + 16;                  // divmod scratch upper bound
- uintptr_t res_area = Width(struct ai_big) + b2w((size_t) bound * 4),
-           ws_words = b2w((size_t) (bound + work) * 4);
+ uintptr_t res_area = Width(struct ai_big) + b2w((size_t) bound * sizeof(ai_limb)),
+           ws_words = b2w((size_t) (bound + work) * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, res_area + ws_words))) return g;
  a = g->sp[0], b = g->sp[1];                     // re-fetch (ai_have may have GC'd)
- uint32_t sa[2], sb[2]; uint32_t const *la, *lb; bool nega, negb;
+ ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
  int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
- uint32_t *rmag = (uint32_t*) (g->hp + res_area), *scr = rmag + bound;
+ ai_limb *rmag = (ai_limb*) (g->hp + res_area), *scr = rmag + bound;
  int rn = 0; bool rneg = false;
  switch (vop) {
   case vop_add: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, false); break;
   case vop_sub: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, true); break;
-  case vop_mul: rn = big_mul_mag(rmag, la, nla, lb, nlb); rneg = nega != negb; break;
+  case vop_mul: rn = big_mul_mag(rmag, la, nla, lb, nlb, scr); rneg = nega != negb; break;
   default: {                                     // vop_quot / vop_rem (truncated)
    int c = mag_cmp(la, nla, lb, nlb);
    if (c < 0) {                                  // |a| < |b|: q = 0, r = a
     if (vop == vop_rem) rn = mag_copy(rmag, la, nla), rneg = nega; }
    else {
-    uint32_t *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
+    ai_limb *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
     mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
     if (vop != vop_rem) {                          // vop_quot / vop_fquot: truncated quotient
      int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
@@ -5726,18 +5779,18 @@ struct ai *ai_big_quot_true(struct ai *g) {
  word a = g->sp[0], b = g->sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  int bound = na + nb + 2, work = 4 * (na + nb) + 16;
- uintptr_t res_area = Width(struct ai_big) + b2w((size_t) bound * 4),
-           ws_words = b2w((size_t) (bound + work) * 4);
+ uintptr_t res_area = Width(struct ai_big) + b2w((size_t) bound * sizeof(ai_limb)),
+           ws_words = b2w((size_t) (bound + work) * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, res_area + ws_words + box_req))) return g;
  a = g->sp[0], b = g->sp[1];                     // re-fetch (ai_have may have GC'd)
- uint32_t sa[2], sb[2]; uint32_t const *la, *lb; bool nega, negb;
+ ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
  int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
- uint32_t *rmag = (uint32_t*) (g->hp + res_area), *scr = rmag + bound;
+ ai_limb *rmag = (ai_limb*) (g->hp + res_area), *scr = rmag + bound;
  int rn = 0; bool rneg = false, exact;
  int c = mag_cmp(la, nla, lb, nlb);
  if (c < 0) exact = (nla == 0);                  // |a| < |b|: q = 0, exact iff a == 0
  else {
-  uint32_t *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
+  ai_limb *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
   mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
   int rr = nlb; while (rr > 0 && rem[rr-1] == 0) rr--;
   exact = (rr == 0);
@@ -5772,12 +5825,11 @@ static union u *as_big(ai_word **hp, word x) {
  intptr_t v = toint(x);
  bool neg = v < 0;
  uintptr_t u = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
- uint32_t lo = (uint32_t) u, hi = (uint32_t) ((u >> 16) >> 16);   // hi=0 on 32-bit ports
- int n = hi ? 2 : lo ? 1 : 0;
+ ai_limb tmp[wlimbs]; int n = 0;                                  // a machine word is wlimbs limbs
+ for (int i = 0; i < wlimbs; i++) { tmp[i] = (ai_limb) (u >> (limb_bits * i)); if (tmp[i]) n = i + 1; }
  struct ai_big *b = ini_big((struct ai_big*) *hp, neg ? -n : n);
- if (n >= 1) b->limb[0] = lo;
- if (n >= 2) b->limb[1] = hi;
- *hp += b2w(sizeof(struct ai_big) + (size_t) n * 4);
+ for (int i = 0; i < n; i++) b->limb[i] = tmp[i];
+ *hp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(ai_limb));
  return cell((word) b); }
 
 // g->sp[0]=a g->sp[1]=b (integers whose product overflows a word). Promote both
@@ -5786,10 +5838,10 @@ static union u *as_big(ai_word **hp, word x) {
 static struct ai *ai_bmul_setup(struct ai *g) {
  word a = g->sp[0], b = g->sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
- uintptr_t rbytes = (uintptr_t) (na + nb) * 4,
+ uintptr_t rbytes = (uintptr_t) (na + nb) * sizeof(ai_limb),
            sreq = str_type_width + b2w(rbytes),
            breq = Width(struct ai_buf) + Width(struct ai_tag),
-           bigmax = Width(struct ai_big) + b2w(2 * 4);
+           bigmax = Width(struct ai_big) + b2w((size_t) wlimbs * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, 2 * bigmax + sreq + breq + 3))) return g;
  a = g->sp[0], b = g->sp[1];                       // re-fetch (ai_have may have GC'd)
  union u *abig = as_big(&g->hp, a), *bbig = as_big(&g->hp, b), *ret = g->ip + 1;
@@ -5831,19 +5883,19 @@ lvm(lvm_bmul) {
  int na = sla < 0 ? -sla : sla, nb = slb < 0 ? -slb : slb;
  if (!na || !nb) {                                // a zero operand: product is 0
   word ret = Sp[2]; return Sp += 4, Sp[0] = nil, Ip = cell(ret), Continue(); }
- uint32_t *la = A->limb, *lb = B->limb, *rl = (uint32_t*) txt(buf_str(Sp[1]));
+ ai_limb *la = A->limb, *lb = B->limb, *rl = (ai_limb*) txt(buf_str(Sp[1]));
  int end = min(i + max(1, bmul_chunk / nb), na);
  for (; i < end; i++) {                           // schoolbook outer loop, one chunk of rows
-  uint64_t carry = 0, ai = la[i];
+  ai_dlimb carry = 0; ai_limb ai = la[i];         // limb-typed so ai*lb[j] is the hardware 64x64->128, not a 128x128 multiply
   for (int j = 0; j < nb; j++) {
-   uint64_t t = ai * lb[j] + rl[i+j] + carry;
-   rl[i+j] = (uint32_t) t, carry = t >> 32; }
-  rl[i+nb] = (uint32_t) carry; }
+   ai_dlimb t = (ai_dlimb) ai * lb[j] + rl[i+j] + carry;
+   rl[i+j] = (ai_limb) t, carry = t >> limb_bits; }
+  rl[i+nb] = (ai_limb) carry; }
  Sp[0] = putcharm(i);                               // persist progress before any yield/GC
  if (i < na) { YieldCheck(); return Continue(); }
  bool neg = (sla < 0) != (slb < 0); word ret;     // done: canonicalize the product
- Have(Width(struct ai_big) + b2w((size_t) (na + nb) * 4));
- ret = Sp[2]; uint32_t *rmag = (uint32_t*) txt(buf_str(Sp[1]));   // re-fetch (Have may have GC'd)
+ Have(Width(struct ai_big) + b2w((size_t) (na + nb) * sizeof(ai_limb)));
+ ret = Sp[2]; ai_limb *rmag = (ai_limb*) txt(buf_str(Sp[1]));   // re-fetch (Have may have GC'd)
  Pack(g);                                          // canon needs the synced g->hp (not &Hp: stack-local escapes block the sibcall)
  word res = ai_big_canon(&g->hp, rmag, na + nb, neg);
  Unpack(g);
@@ -5859,15 +5911,15 @@ struct ai *ai_big_read_dec(struct ai *g) {
  char const *s = tok->bytes;
  bool neg = n && s[0] == '-';
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0, ndig = n - i;
- int cap = (int) (ndig / 9) + 3;                 // upper-bound magnitude limbs
- uintptr_t res_area = Width(struct ai_big) + b2w((size_t) cap * 4);
- if (!ai_ok(g = ai_have(g, res_area + b2w((size_t) cap * 4)))) return g;
+ int cap = (int) (ndig / limb_dec_chunk) + 3;    // upper-bound magnitude limbs (>= ndig/digits-per-limb)
+ uintptr_t res_area = Width(struct ai_big) + b2w((size_t) cap * sizeof(ai_limb));
+ if (!ai_ok(g = ai_have(g, res_area + b2w((size_t) cap * sizeof(ai_limb))))) return g;
  tok = str(g->sp[0]), s = tok->bytes;            // re-fetch post-GC
- uint32_t *mag = (uint32_t*) (g->hp + res_area);
+ ai_limb *mag = (ai_limb*) (g->hp + res_area);
  int m = 0;
  while (i < n) {
-  uint32_t chunk = 0, pw = 1; int k = 0;
-  for (; i < n && k < 9; i++, k++) chunk = chunk * 10 + (uint32_t) (s[i] - '0'), pw *= 10;
+  ai_limb chunk = 0, pw = 1; int k = 0;          // limb_dec_chunk digits per pass (10^chunk fits a limb)
+  for (; i < n && k < limb_dec_chunk; i++, k++) chunk = chunk * 10 + (ai_limb) (s[i] - '0'), pw *= 10;
   m = mag_mul_add_small(mag, m, pw, chunk); }
  g->sp[0] = ai_big_canon(&g->hp, mag, m, neg);
  return g; }
@@ -5881,18 +5933,18 @@ struct ai *ai_big_dec(struct ai *g) {
  intptr_t sl = a->slen;
  bool neg = sl < 0;
  int n = (int) (neg ? -sl : sl),
-     cap = n * 10 + 2 + (neg ? 1 : 0);           // upper-bound bytes (1 limb ~ 9.633 digits)
+     cap = n * limb_dec_digits + 2 + (neg ? 1 : 0);   // upper-bound bytes (a limb prints in < limb_dec_digits digits)
  uintptr_t str_words = str_type_width + b2w((size_t) cap),
-           scratch_words = b2w((size_t) n * 4);
+           scratch_words = b2w((size_t) n * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, str_words + scratch_words))) return g;
  a = (struct ai_big*) g->sp[0];                   // re-fetch post-GC
  struct ai_str *st = (struct ai_str*) g->hp;
- uint32_t *work = (uint32_t*) (g->hp + str_words);
+ ai_limb *work = (ai_limb*) (g->hp + str_words);
  for (int i = 0; i < n; i++) work[i] = a->limb[i];
  char *out = txt(st);                            // bytes area (offset only; st not yet inited)
  int m = n, pos = cap;
  while (m > 0) {
-  uint32_t r = mag_divmod_small(work, m, 10);
+  ai_limb r = mag_divmod_small(work, m, 10);
   while (m > 0 && work[m-1] == 0) m--;
   out[--pos] = (char) ('0' + r); }
  if (pos == cap) out[--pos] = '0';               // (a bignum is never zero; defensive)
