@@ -125,6 +125,13 @@
    (glook nm syms) (? (atom? syms) -1 (id? nm (caap syms)) (cuap syms) (glook nm (cup syms)))   ; group fn name -> its H offset (dotted (name . off); -1 if absent)
    (gfind p l) (? (atom? l) () (p (cap l)) (cap l) (gfind p (cup l)))     ; first elt matching p
    (gfilt p l) (? (atom? l) () (p (cap l)) (link (cap l) (gfilt p (cup l))) (gfilt p (cup l)))   ; keep elts matching p
+   ; immediate-operand peephole: `(+ E C)`/`(- E C)`/`(* E C)` with C a small int const -> E in rax, then
+   ; `add/sub/imul rax, imm32` (no push/movabs/pop). +/* commute, so `(C op E)` works too; - only `(- E C)`.
+   (whole-imm? x) (&& (whole? x) (<= -2147483648 x) (< x 2147483648))                ; fits a sign-extended imm32?
+   (immop op c) (? (= op '+) (asm (L '(72 5) (le4 c)))                               ; add  rax, imm32  (48 05 id)
+                   (= op '-) (asm (L '(72 45) (le4 c)))                              ; sub  rax, imm32  (48 2D id)
+                   (= op '*) (asm (L '(72 105 192) (le4 c))) ())                      ; imul rax, rax, imm32 (48 69 C0 id)
+   (immlen op) (? (= op '*) 7 6)
    ; cgg -- the GROUP arithmetic-fragment compiler (the WHOLE integer lane): an expr over {ps (this fn's
    ; params, in arg regs rbx/r13/r14/r15) ; int ; group calls} -> rax. syms = the group's dotted (name .
    ; offset) table (glook resolves a call's target, self or sibling, UNIFORMLY); off = the abs offset of
@@ -135,9 +142,14 @@
        (two? e) (: op (cap e) a (caup e) b (caup (cup e)) Ho (glook op syms)
           (? (< -1 Ho) (: as (cup e) ka (tally as) ab (gargs syms ps as off OVF) callabs (+ off (tally ab))   ; CALL g: push args; call H_g; pop them
                           (asm (L ab '(232) (le4 (- Ho (+ callabs 5))) '(72 131 196) (list (* 8 ka)))))
-             (member? op '(+ - *)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
-                opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))                              ; abs offset of the jo
-                (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6))))))                        ; A;push;B;pop r8;op;jo OVF
+             (member? op '(+ - *))
+                (? (whole-imm? b) (: ab (cgg syms ps a off OVF) joa (+ (+ off (tally ab)) (immlen op))        ; (E op C): E;op rax,C;jo OVF
+                                     (asm (L ab (immop op b) '(15 128) (le4 (- OVF (+ joa 6))))))
+                   (&& (whole-imm? a) (member? op '(+ *))) (: bb (cgg syms ps b off OVF) job (+ (+ off (tally bb)) (immlen op))   ; (C op E), commute
+                                     (asm (L bb (immop op a) '(15 128) (le4 (- OVF (+ job 6))))))
+                   (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)        ; generic: A;push;B;pop r8;op;jo OVF
+                      opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))
+                      (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6)))))))
              (member? op '(// %)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
                 jza (+ (+ po 1) (+ (tally bb) 5))                                                             ; A;push;B(divisor);pop r8(=A);test;jz OVF;idiv
                 (asm (L ab push-rax bb '(65 88) '(72 133 192) '(15 132) (le4 (- OVF (+ jza 6)))
