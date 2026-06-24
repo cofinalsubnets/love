@@ -29,11 +29,15 @@
    ;; point). instruction forms read their operands through this. --
    (at l k) (? (= k 0) (cap l) (at (cup l) (- k 1)))
 
-   ;; -- bytes, little-endian. the leaves a backend emits immediates with. --
+   ;; -- bytes, little-endian. the leaves a backend emits immediates with. byte/le16/le32 ride the fast
+   ;; &/>> path (their inputs are offsets/imm32, always < 2^31, where & is exact). le64 must NOT: a movabs
+   ;; immediate can be a full 64-bit word >= 2^63 -- a BIGNUM in ai, on which `&` is broken (the high limb
+   ;; is dropped). so le64 normalizes negatives into [0,2^64) and slices with //% (both bignum-exact). --
    (byte n)  (& n 255)
    (le16 n)  (L (byte n) (byte (>> n 8)))
    (le32 n)  (L (byte n) (byte (>> n 8)) (byte (>> n 16)) (byte (>> n 24)))
-   (le64 n)  (cat (le32 n) (le32 (>> n 32)))
+   (le64 n)  (: u (? (< n 0) (+ n 18446744073709551616) n)                            ; two's-complement into [0,2^64)
+              ((: (go i) (? (< i 8) (link (% (// u (i 256)) 256) (go (+ i 1))) ())) 0))   ; 8 LE bytes via //% (i 256)=256^i
    (fits8  n) (&& (>= n -128) (<= n 127))
    (fits32 n) (&& (>= n -2147483648) (<= n 2147483647))
 

@@ -88,6 +88,38 @@
             (cat (emit-mov d a) (imul-rr d b)))
          (imul-ri d a b))
 
+   ;; shift/rotate by an immediate count: C1 /ext ib in general, the 1-byte-shorter D1 /ext for a count
+   ;; of 1 (what tag math -- sar/shr by 1 -- mostly wants). ext selects the op (shl/shr/sar/rol/ror).
+   (shift-ext op) (? (= op 'shl) 4 (= op 'shr) 5 (= op 'sar) 7 (= op 'rol) 0 (= op 'ror) 1 (scare 'badshift op))
+   (emit-shift op d c)
+      (: dn (rn d) ext (shift-ext op)
+         (? (= c 1) (L (rex 1 0 0 (hi dn)) 209 (modrm 3 ext dn))                       ; D1 /ext        (count 1)
+            (cat (L (rex 1 0 0 (hi dn)) 193 (modrm 3 ext dn)) (L (byte c)))))           ; C1 /ext ib
+
+   ;; test: set flags from a AND b, discarding the result. 0x85 /r for reg,reg; 0xF7 /0 id for reg,imm32.
+   (emit-test a b)
+      (? (reg? b) (: an (rn a) bn (rn b) (L (rex 1 (hi bn) 0 (hi an)) 133 (modrm 3 bn an)))   ; 85 test r/m64,r64
+         (: an (rn a) (cat (L (rex 1 0 0 (hi an)) 247 (modrm 3 0 an)) (le32 b))))             ; F7 /0 id
+
+   ;; an indexed memory operand [base + index*scale + disp], scale in {1,2,4,8}: ALWAYS a SIB byte. the
+   ;; rbp/r13-base 0-disp quirk applies (force a disp byte); rsp can be a base but NOT an index (enc 4 =
+   ;; "no index"), which the abstract file already keeps as `sp`, never a general r0..r14.
+   (scale-bits s) (? (= s 1) 0 (= s 2) 1 (= s 4) 2 (= s 8) 3 (scare 'badscale s))
+   (memx regf base index scale disp)
+      (: bn (rn base) ixn (rn index) sc (scale-bits scale)
+         md (? (&& (= disp 0) (! (= (lo bn) 5))) 0 (? (fits8 disp) 1 2))
+         dispb (? (= md 0) () (? (= md 1) (L (byte disp)) (le32 disp)))
+         (cat (L (modrm md (lo regf) 4) (sib sc ixn bn)) dispb))
+   (emit-ldx d base index scale disp)                              ; 0x8B mov r64, [base+index*scale+disp]
+      (: dn (rn d) bn (rn base) ixn (rn index)
+         (cat (L (rex 1 (hi dn) (hi ixn) (hi bn)) 139) (memx dn base index scale disp)))
+   (emit-stx base index scale disp s)                              ; 0x89 mov [base+index*scale+disp], r64
+      (: sn (rn s) bn (rn base) ixn (rn index)
+         (cat (L (rex 1 (hi sn) (hi ixn) (hi bn)) 137) (memx sn base index scale disp)))
+   (emit-leax d base index scale disp)                             ; 0x8D lea r64, [base+index*scale+disp]
+      (: dn (rn d) bn (rn base) ixn (rn index)
+         (cat (L (rex 1 (hi dn) (hi ixn) (hi bn)) 141) (memx dn base index scale disp)))
+
    ;; a memory operand [base+disp]: ModRM (+ SIB for an rsp/r12 base) (+ displacement). picks the
    ;; shortest disp form, and forces a 0-disp byte for an rbp/r13 base (its disp-less slot is taken).
    (mem regf base disp)
@@ -127,6 +159,11 @@
             (= op 'ld)   (emit-ld   (at ins 1) (at ins 2) (at ins 3))
             (= op 'st)   (emit-st   (at ins 1) (at ins 2) (at ins 3))
             (= op 'lea)  (emit-lea  (at ins 1) (at ins 2) (at ins 3))
+            (= op 'ldx)  (emit-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldx d base index scale disp)
+            (= op 'stx)  (emit-stx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (stx base index scale disp s)
+            (= op 'leax) (emit-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (leax d base index scale disp)
+            (= op 'test) (emit-test (at ins 1) (at ins 2))
+            (member? op '(shl shr sar rol ror)) (emit-shift op (at ins 1) (at ins 2))
             (= op 'push) (emit-push (at ins 1))
             (= op 'pop)  (emit-pop  (at ins 1))
             (= op 'neg)  (emit-un 247 3 (at ins 1))

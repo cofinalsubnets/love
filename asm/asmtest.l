@@ -52,6 +52,21 @@
       ;; stack
       (L "push.pop"    "5059"                  '((push r0) (pop r1)))
       (L "push.ext"    "41504158"              '((push r7) (pop r7)))
+      ;; shifts & rotates: D1 /ext for a count of 1, C1 /ext ib otherwise
+      (L "sar.1"       "48d1f8"                '((sar r0 1)))      ; the fixnum untag (rax)
+      (L "shr.1.ext"   "49d1e9"                '((shr r8 1)))      ; r8 -> x86 r9 (REX.B): shr r9,1
+      (L "shl.imm"     "48c1e004"              '((shl r0 4)))
+      (L "rol.32"      "48c1c020"              '((rol r0 32)))     ; the hash rotate (rol rax,32)
+      (L "sar.imm.ext" "49c1fd05"              '((sar r12 5)))     ; r12 -> x86 r13: sar r13,5
+      ;; test: 0x85 /r reg,reg ; 0xF7 /0 id reg,imm32
+      (L "test.rr"     "4885c0"                '((test r0 r0)))    ; test rax,rax (divide-by-zero check)
+      (L "test.imm"    "48f7c001000000"        '((test r0 1)))     ; test rax,1   (the fixnum low-bit guard)
+      ;; SIB memory: [base + index*scale + disp]. r7->x86 r8, r10->x86 r11 (the map-probe's slot regs)
+      (L "leax.1.1"    "488d4c0001"            '((leax r1 r0 r0 1 1)))   ; lea rcx,[rax+rax*1+1]
+      (L "leax.dbl"    "4c8d1c12"              '((leax r10 r2 r2 1 0)))  ; lea r11,[rdx+rdx*1]
+      (L "ldx.scale8"  "4b8b04d8"              '((ldx r0 r7 r10 8 0)))   ; mov rax,[r8+r11*8]
+      (L "ldx.s8.d8"   "4b8b44d808"            '((ldx r0 r7 r10 8 8)))   ; mov rax,[r8+r11*8+8]
+      (L "stx.scale4"  "48890c98"              '((stx r0 r3 4 0 r1)))    ; mov [rax+rbx*4],rcx
       ;; unary in-place
       (L "neg"         "48f7d8"                '((neg r0)))
       (L "not"         "48f7d3"                '((not r3)))

@@ -19,7 +19,7 @@ ai0 = out/host/ai0
 
 .PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_gc test_hostnif test_glaze test_sat test_extract
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_gc test_hostnif test_glaze test_sat test_asm test_extract
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` runs its five independent phases in PARALLEL by default, via a
 # recursive -j sub-make: the bootstrap deps serialize the ai0/host build under
@@ -39,7 +39,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_gc test_extract test_tools test_hostnif test_glaze test_sat nettest test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm nettest test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -108,6 +108,17 @@ test_sat: host
 	  cat out/host/.test_sat.out; \
 	  { [ $$r -eq 0 ] && grep -q "sat: Stages 1-3 ok" out/host/.test_sat.out && grep -q "sat/dimacs: ok" out/host/.test_sat.out; } \
 	    || { echo "FAIL sat (exit $$r)"; exit 1; }
+# The neutral assembler (asm/) + its x86-64 backend: every encoder golden is
+# objdump-checked (asm/asmtest.l). A host-only app (like sat) -- it rides the
+# core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
+# the "N passed, 0 failed" sentinel AND exit 0 (a silent reader-stop exits 0).
+.PHONY: test_asm
+test_asm: host
+	@echo "ASM asm/asmtest.l"; \
+	  cat asm/asm.l asm/x64.l asm/text.l asm/elf.l asm/asmtest.l | $m > out/host/.test_asm.out 2>&1; r=$$?; \
+	  cat out/host/.test_asm.out; \
+	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_asm.out; } \
+	    || { echo "FAIL asm (exit $$r)"; exit 1; }
 # ain's two-process loopback gate: a server and a client over real TCP on
 # 127.0.0.1, full-duplex, asserting each side received what the other sent (the
 # socket nifs in host/net.c + the pump loops in tools/ain.l). In `test_all`
