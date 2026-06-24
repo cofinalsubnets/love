@@ -213,9 +213,18 @@ the minor.
    0.30s, same GC behaviour as before. The `ai_budget` knob (words; 0 = unbounded; a field, settable at
    runtime like `g->alloc`) caps the whole footprint by APPEL'S RULE: the nursery gets the free budget
    after the major pool. Verified: ai_budget=2^21 (~16 MB Teensy) settles total reservation == budget
-   exactly. (c) two-level pause/promotion heuristics (promotion threshold / survivor aging) -- still open;
-   (d) lifting the minor out of AI_STAT into the kernel/host (a pool-backed rem set, since the kernel
-   can't malloc). The (b) work also dissolved the old "huge allocation balloons the minor pool" wart.
+   exactly. (c) two-level pause/promotion heuristics (promotion threshold / survivor aging) -- still open.
+   (d) GRADUATE the minor out of AI_STAT *(done)*: gen is now the DEFAULT runtime, not a dev-only build.
+   AI_STAT defaults on (a no-op gate naming the counters); all gen allocation routes through `g->alloc`
+   (freestanding -- no raw malloc), so the collector ACTIVATES wherever the frontend's allocator supplies
+   the major pool. The **host and wasm** (emscripten) run generational and pass the whole corpus; a fixed-
+   arena embedded target falls back to gcg; `-DAI_NOGEN` forces gcg (the kernel build sets it -- kship must
+   bound gen with `g->budget` = its RAM before flipping it on, else two growing pools exhaust kmallocw).
+   Running the FULL corpus on gen for the first time (it never had been -- only the diff oracle) exposed a
+   latent **print-path** bug, here since stage 3: `fn_src`/`ttag` assumed a single pool, so `show` of a
+   TENURED closure could not find its source `value[-1]` in the major pool (the closure itself was always
+   correct -- only the printer's range check). Fixed by `in_heap()` accepting both pools. The (b) work
+   also dissolved the old "huge allocation balloons the minor pool" wart.
 
 ## As built (stage 3)
 
