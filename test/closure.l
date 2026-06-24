@@ -89,3 +89,17 @@
                       (+ a (self 3)))
                  r)
             q))))
+
+; --- tenured closures (generational): a major promotes fa/ga into the MAJOR pool, so the
+;     print/introspect paths -- show, = (alpha-equivalence), and the alpha-hash a map keys
+;     by -- must read the source at value[-1] THERE, not just the main pool (fn_src/ttag/hash/
+;     lam_src1 via in_heap). before the gen graduation `=` said equal while the address-hash
+;     split, so a map keyed on fa could not find the alpha-equal ga. (a no-op on the single-pool
+;     gcg build, where nothing tenures elsewhere.)
+(: (lots n) ((: (go i a) (? (< i n) (go (+ i 1) (link i a)) (tally a))) 0 ())
+   (fa a b) (+ a b) (ga a b) (+ a b)
+   _ (lots 200000)                                       ; force a major -> fa/ga tenured
+   (assert
+     (= fa ga)                                           ; alpha-equal across the major pool
+     (= 9 (peep #(fa 9) ga 0))                           ; map keyed on fa, found by alpha-equal ga (eq/hash consistent)
+     (< 8 (tally (show fa)))))                           ; show finds the tenured source

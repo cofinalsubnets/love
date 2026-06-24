@@ -4512,7 +4512,7 @@ uintptr_t hash(struct ai *g, intptr_t x) {
    // parks its source \-expr one cell before the entry (the tag head points there) and
    // hashes it α-invariantly (so the order agrees with `=`'s α-equivalence); else by
    // length. All GC-stable (buckets survive copy).
-   if ((word*) x < ptr(g) || (word*) x >= topof(g)) return rot(x * mix);
+   if (!in_heap(g, x)) return rot(x * mix);             // a tenured closure lives in the major pool, still in-heap
    union u *k = cell(x); struct ai_tag *tg = ttag(g, k);
    if (tag_head(tg) < k) return shash(g, k[-1].x, 0);
    uintptr_t r = mix;
@@ -5747,7 +5747,7 @@ static uintptr_t shash(struct ai *g, word x, struct arib *env) {
 // idp stays false (distinct objects). Closures / multi-binder never match.
 static word lam_src1(struct ai *c, word v) {           // 1-binder lambda -> (binder body), else 0
  if (!lamp(v) || datp(v)) return 0;
- if (!(ptr(v) > ptr(c) && ptr(v) < ptr(c) + c->len)) return 0;  // in-pool only: k[-1]/k valid
+ if (!in_heap(c, v)) return 0;                                  // in-heap only (main OR major pool): k[-1]/k valid
  union u *k = cell(v);
  if (fn_partialp(k)) return 0;
  word s = fn_src(c, k, v);                            // s = (\ b.. body)
