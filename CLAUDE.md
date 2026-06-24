@@ -25,9 +25,7 @@
 ;   in parens ((+) is + as a value); GLUED to a datum it is monadic instead (the valence law: space
 ;   your dyadics); quoted lists are data, operators plain.
 ; * arithmetic operators are DYADIC: `(+ a b c)` is `((+ a b) c)` -- APPLICATION, not a 3-way sum, so it
-;   church-EXPONENTIATES ((+ 192 40 5) = (232 5) = 5^232, a bignum). bites HARD in codegen/byte math where a
-;   stray 3-arg `+`/`*` masks to a garbage byte and derails the whole function; ALWAYS nest ((+ (+ a b) c)),
-;   or fold (+l / (foldl (+) ..)). same for * /. (a real `eae6bc28` bug, found by objdumping the bytes.)
+;   church-EXPONENTIATES ((+ 192 40 5) = (232 5) = 5^232, a bignum).
 ; * a corpus test that spins a task must (catch p) it: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the interactive
 ;   shell installs a default help (ai/bao.l shell-help): a scare prints `;; a b` and answers the zero
