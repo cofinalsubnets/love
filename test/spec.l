@@ -335,7 +335,7 @@
 ; get/put/.../read, open/close/sip/pad/slurp; `read` is port-first, one datum per call;
 ; `dot` (the `.` operator, .x) prints x to out and returns it.
 (assert
- (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (pot 0) _ (print o 42) ("42" = (slurp o)))
+ (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
  (1 = (sound (tap '(49)) 99)) ('eof = (sound (tap 0) 'eof)) (: p (tap '(40)) (p = (sound p 99))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,

@@ -199,13 +199,13 @@
                                         (link (cap m) (link a (cup m))))) '(0)))
 (: (tap cl)
  (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (twirl 5))))))
- (pot _)
+ (jug _)                                          ; the output dual of `tap`: a memory-backed output PORT -- say INTO it, slurp it back OUT (you pour both ways, like a jug). NOT a cask (a cask is a byte ARRAY)
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (twirl 6)))))))
  (sip o) (get o)                                  ; draw ONE unit (pairs with slurp = all)
- ; slurp drains a vessel to a value: an output pot reads its backing buffer; a tap drains via get.
+ ; slurp drains a vessel to a value: an output jug reads its backing buffer; a tap drains via get.
  (slurp o) (? (string? (peek 4 o)) (snip (peek 4 o) 0 (peek 5 o))
               (: (rl i) (: c (get i) (? (= c -1) 0 (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
- (show x) (: o (pot 0) _ (print o x) (slurp o)))
+ (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; help status readers. a global `help` function is called as (help s a b):
 ; s = the status word, two bits -- scare (1: something went wrong) and more
 ; (2: read control flow, more input wanted). more alone = incomplete; eof =

@@ -477,8 +477,9 @@ not-in-the-book      ; ()        a missing nom reads the zero point (helpless)
 
 ; --- i/o & ports --- `in`/`out`/`err` are the default ports; the prel wraps getc and
 ; putc/puts/putn/putx, per-port get/put/... . the vessels: (tap cl) is an input SOURCE over a colist,
-; (pot 0) an output SINK with a backing buffer, (sip o) draws ONE unit and (slurp o) drains ALL to a
-; value (a pot reads its buffer, a tap drains via get). the datum reader is `sound`: (sound port eof)
+; (jug 0) an output PORT with a growable backing buffer -- say INTO it, slurp it back OUT (a jug pours both
+; ways; it is a PORT, not a cask -- a cask is the mutable byte ARRAY), (sip o) draws ONE unit and (slurp o)
+; drains ALL to a value (a jug reads its buffer, a tap drains via get). the datum reader is `sound`: (sound port eof)
 ; reads ONE datum, returning the datum, the PORT itself on an unfinished shape (incomplete), or the eof
 ; sentinel at end -- the whole read protocol IS that return value, no help needed. `read` rides it:
 ; (read s) over a colist or port reads ONE form and EVALS it (the hull chars -> top in one call), and

@@ -196,7 +196,7 @@ by a native counted loop (a machine-code byte store per iteration), converted to
 string once at the end. The build drops from O(n²) to an O(n) machine-code loop without
 touching the source (the output-side dual of `deforest`'s pipeline fusion); a more
 general builder — multi-char appends, irregular counters — falls back to a threaded
-`pot` (an O(1)-amortized growable sink, interpreted). With the rolling hash also glazed
+`jug` (the memory output port — O(1)-amortized appends, interpreted). With the rolling hash also glazed
 via the string lane, ai's `strcat` leads the field (ahead of elixir/node/pypy). `strscan`
 times only a linear rolling hash over a string built once outside the loop, isolating
 the byte-read path (ai `get`/`len`). Both fold the same polynomial hash

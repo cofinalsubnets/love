@@ -232,14 +232,16 @@
           results (map lift-pair pairs)
           allpairs (cat (map cap results) (foldl (\ a r (cat a (caup r))) () results))            ; rewritten originals ++ all the lifted defs
           (link ': (unpair allpairs body))))
-   ; --- CASK BUILDER (castbuild): a string-accumulator LOOP -- (: (g v.. s ..) (? COND (g u.. (+ s X) ..) s)
+   ; --- STRING-BUILDER fusion (castbuild): a string-accumulator LOOP -- (: (g v.. s ..) (? COND (g u.. (+ s X) ..) s)
    ;     (g i.. "" ..)) builds a string by repeated append; each `+` copies the whole prefix, so the build is
-   ;     O(n^2). Rewrite it to a `pot` (the growable output sink: append is O(1) amortized, then ONE final O(n)
-   ;     drain). The pot REPLACES the accumulator IN PLACE as a threaded loop param -- init (pot 0) (born ONCE
-   ;     at the call), passed UNCHANGED each step (the pot is mutated, not rebound), with (say s (string X)) as
-   ;     the per-step effect; the base `s` becomes (slurp s). Threading the pot as a loop var (not an aux let)
-   ;     is what lets it survive autogroup's purity-assuming inliners -- an aux (pot 0) binding would be
-   ;     substituted into both use sites and reborn empty each step. SOUND: (say s (string X)) reproduces +'s
+   ;     O(n^2). Two rewrites: the clean single-byte counted case lowers to a NATIVE cask-fill (cbcask, below);
+   ;     the GENERAL case (cbrw, here) threads a `jug` (the memory output PORT -- say into it, O(1)-amortized,
+   ;     then ONE final O(n) drain). The jug REPLACES the accumulator IN PLACE as a threaded loop param -- init
+   ;     (jug 0) (born ONCE at the call), passed UNCHANGED each step (the jug is mutated, not rebound), with
+   ;     (say s (string X)) as the per-step effect; the base `s` becomes (slurp s). Threading the jug as a loop
+   ;     var (not an aux let) is what lets it survive autogroup's purity-assuming inliners -- an aux (jug 0)
+   ;     binding would be substituted into both use sites and reborn empty each step. (NB: a jug is a PORT, not
+   ;     a cask -- a cask is the byte ARRAY the native path fills.) SOUND: (say s (string X)) reproduces +'s
    ;     string coercion EXACTLY (charm->1 byte, string->itself, named sym->spelling), so it equals (+ s X)
    ;     wherever the `+` string lane is defined; the only divergence is where (+ s X) is nil -- a broken build.
    ;     The guard demands s be a PURE append accumulator: init "", s appearing ONLY as (+ s X) (s the LEFT
@@ -263,13 +265,13 @@
                          (: X (opd sa 1)
                             (? (&& (string? IN) (= 0 (tally IN)) (! (occurs? base c)) (! (occurs? base X)) (cbnotelse? base (cup r) si))
                                (L si X g q c r rth) ())))))))))                       ; init "" + s only in (+ s X)@si and the base
-   (cbrw nf info)                                                                    ; build the THREADED-pot rewrite: the accumulator param becomes a pot, init (pot 0)
+   (cbrw nf info)                                                                    ; build the THREADED-jug rewrite: the accumulator param becomes a jug, init (jug 0)
     (: si (nthl info 0) X (nthl info 1) g (nthl info 2) q (nthl info 3) c (nthl info 4) r (nthl info 5) rth (nthl info 6)
-       inits (cup nf)  s (nthl q si)                                                 ; s = the accumulator param (now the pot, threaded unchanged)
+       inits (cup nf)  s (nthl q si)                                                 ; s = the accumulator param (now the jug, threaded unchanged)
        app  (? (cbsay? X) (L 'say s X) (L 'say s (L 'string X)))                     ; (say s X) | (say s (string X)) -- mirrors (+ s X)
-       r2   (link ': (L '_ app (link g (cbset (cup r) si s))))                       ; (: _ (say s ..) (g ..s..)) -- pass the pot UNCHANGED
+       r2   (link ': (L '_ app (link g (cbset (cup r) si s))))                       ; (: _ (say s ..) (g ..s..)) -- pass the jug UNCHANGED
        b2   (? rth (L '? c r2 (L 'slurp s)) (L '? c (L 'slurp s) r2))                ; keep the original branch orientation; base -> (slurp s)
-       (link ': (L (link g q) b2 (link g (cbset inits si '(pot 0))))))               ; (: (g q..) b2 (g ..(pot 0)..)) -- pot born ONCE at the call
+       (link ': (L (link g q) b2 (link g (cbset inits si '(jug 0))))))               ; (: (g q..) b2 (g ..(jug 0)..)) -- the jug born ONCE at the call
    (cbwalk e) (? (atom? e) e  (cbquote? e) e
                  (: nf (norm-let e) info (cbacc nf) (? (two? info) (cbrw nf info) (map cbwalk e))))
    ; --- the NATIVE CASK variant: a CLEAN single-byte counted builder -- (: (F p..) (: (go i s) (? (< i n)
@@ -279,7 +281,7 @@
    ;     that returns the count (a fixnum, glazeable) and threads the cask as a buf param (pin), while the
    ;     wrapper F holds the cask and converts it: (F p..) (: F-cb (cask n) _ (F-fill p.. 0 F-cb) (string
    ;     F-cb)). F-fill glazes (pin native); F stays interp (cask/string nifs). This is the elixir-class path
-   ;     -- the build runs as machine code, one O(n) drain at the end. Falls back to the threaded `pot` (cbwalk)
+   ;     -- the build runs as machine code, one O(n) drain at the end. Falls back to the threaded `jug` (cbwalk)
    ;     for multi-char appends, non-0/1 counters, or the else-orientation.
    (cbbyte? e i) (? (whole? e) 1  (id? e i) 1  (&& (two? e) (id? (cap e) 'peep)) 1                ; a CHARM expr: const | the counter | a peep byte | arith thereof
                     (&& (two? e) (member? (cap e) '(+ - * // % & | ^ << >>)) (= 3 (tally e))) (&& (cbbyte? (opd e 0) i) (cbbyte? (opd e 1) i)) 0)
@@ -297,7 +299,7 @@
                             fbody (L '? cond (link fillnm (cat fv (cbset rargs si (L 'pin s i E)))) i)   ; (? COND (F-fill fv.. (+ i 1) (pin s i E)) i)
                             wbody (link ': (L cbn (L 'cask n) '_ (link fillnm (cat fv (cbset inits si cbn))) (L 'string cbn)))
                             (L (link nf wbody) (link (link fillnm (cat fv q)) fbody))))))))))
-   (cbcpair p) (: info (cbcask (norm-let (cup p)) (cap p)) (? (two? info) info (L (link (cap p) (cbwalk (cup p))))))   ; cask variant, else keep (pot via cbwalk)
+   (cbcpair p) (: info (cbcask (norm-let (cup p)) (cap p)) (? (two? info) info (L (link (cap p) (cbwalk (cup p))))))   ; cask variant, else keep (jug via cbwalk)
    (cbflat ps) (? (atom? ps) () (: pr (cap ps) (link (cap pr) (link (cup pr) (cbflat (cup ps))))))   ; pairs -> a binding list, NO trailing body (preserves a body-less `:`)
    (castbuild form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) (cbwalk form)              ; a `:` group: try the cask variant per binding (adds F-fill siblings); else the in-place walk
@@ -677,7 +679,7 @@
                      (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
                         (: ln (loopinfo-n e)
                            (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
-                              (base-ev (autogroup (autonat (castbuild e)))))))))    ; fall-through: cask-build a string-accumulator loop (the pot threads as a loop param -> survives autogroup's pure passes), then glaze a float-grid nest / mutually-recursive arith group if either fits, else interpret
+                              (base-ev (autogroup (autonat (castbuild e)))))))))    ; fall-through: cask-build a string-accumulator loop (the jug threads as a loop param -> survives autogroup's pure passes), then glaze a float-grid nest / mutually-recursive arith group if either fits, else interpret
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
@@ -827,11 +829,11 @@
     (: lcnp '(: (f n) (foldl (+) 0 (map (\ x (? (< x 5) (* x x) 0)) (jot n))) (f 12))
        (= (base-ev lcnp) (ev lcnp)))                                                          ; 0+1+4+9+16 = 30, defoliated/interpreted
     ; CASK BUILDER (castbuild): a string-accumulator loop -- (: (go i s) (? COND (go .. (+ s X)) s) (go 0 "")) --
-    ; rewrites to a threaded `pot` (O(1)-amortized append + one drain), == interp. "did it fire" is STRUCTURAL
+    ; rewrites to a threaded `jug` (O(1)-amortized append + one drain), == interp. "did it fire" is STRUCTURAL
     ; (!(= ..)) -- castbuild rebuilds via map, so id? never holds even on a no-op.
     (: cb1 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 "")) (tally (build 100)))
-       (&& !(= (castbuild cb1) cb1) (100 = (ev cb1)) (= (base-ev cb1) (ev cb1))))             ; a 100-char build -> pot, == interp
-    ; the strcat bench shape: strhash glazes (string lane) WHILE strbuild pots -- both in one form, hash exact
+       (&& !(= (castbuild cb1) cb1) (100 = (ev cb1)) (= (base-ev cb1) (ev cb1))))             ; a 100-char build -> jug, == interp
+    ; the strcat bench shape: strhash glazes (string lane) WHILE strbuild fills a cask -- both in one form, hash exact
     (: cb2 '(: hmod 1000000007 (strhash s) (: n (tally s) (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
                (strbuild n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 "")) (strhash (strbuild 500)))
        (&& !(= (castbuild cb2) cb2) (= (base-ev cb2) (ev cb2))))                              ; build 500 chars then rolling-hash
