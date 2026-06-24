@@ -132,6 +132,22 @@
                    (= op '-) (asm (L '(72 45) (le4 c)))                              ; sub  rax, imm32  (48 2D id)
                    (= op '*) (asm (L '(72 105 192) (le4 c))) ())                      ; imul rax, rax, imm32 (48 69 C0 id)
    (immlen op) (? (= op '*) 7 6)
+   ; register-operand peephole: when one operand is a PARAM (already in an arg register rbx/r13/r14/r15),
+   ; combine it DIRECTLY (op rax,reg / cmp rax,reg) instead of push-rax..pop-r8 -- the stack traffic that
+   ; made the integer lane lag a register machine (e.g. primes' (* d d), (< n ..), (= 0 ..) every iter).
+   (pregn i) (nthl '(3 13 14 15) i)                                                 ; arg-slot i -> x86 reg num
+   (rrm reg) (+ 192 (% reg 8))                                                      ; ModRM mod11: reg-field=rax, rm=reg
+   (rrr reg) (+ 192 (* 8 (% reg 8)))                                                ; ModRM mod11: reg-field=reg, rm=rax
+   (rexb reg) (? (< reg 8) 72 73)                                                   ; REX.W (+B if reg extended, in rm)
+   (rexr reg) (? (< reg 8) 72 76)                                                   ; REX.W (+R if reg extended, in reg-field)
+   (opreg op reg) (? (= op '+) (L (rexr reg) 1 (rrr reg))                           ; add  rax, reg
+                     (= op '*) (L (rexb reg) 15 175 (rrm reg))                      ; imul rax, reg
+                     (= op '-) (L (rexb reg) 43 (rrm reg)) ())                      ; sub  rax, reg  (rax - reg)
+   (cmpimm c)     (asm (L '(72 61) (le4 c)))                                        ; cmp rax, imm32  (rax - imm)
+   (cmprb reg)    (L (rexb reg) 59 (rrm reg))                                       ; cmp rax, reg    (rax - reg)
+   (cmpra reg)    (L (rexb reg) 57 (rrm reg))                                       ; cmp reg, rax    (reg - rax)
+   (flipc op) (? (= op '<) '> (= op '<=) '>= (= op '>) '< (= op '>=) '<= op)        ; mirror a cmp's operands (= stays)
+   (setx op c)    (asm (L c (setcc op) '(72 15 182 192)))                           ; <cmp bytes>; setcc al; movzx rax,al
    ; cgg -- the GROUP arithmetic-fragment compiler (the WHOLE integer lane): an expr over {ps (this fn's
    ; params, in arg regs rbx/r13/r14/r15) ; int ; group calls} -> rax. syms = the group's dotted (name .
    ; offset) table (glook resolves a call's target, self or sibling, UNIFORMLY); off = the abs offset of
@@ -147,6 +163,10 @@
                                      (asm (L ab (immop op b) '(15 128) (le4 (- OVF (+ joa 6))))))
                    (&& (whole-imm? a) (member? op '(+ *))) (: bb (cgg syms ps b off OVF) job (+ (+ off (tally bb)) (immlen op))   ; (C op E), commute
                                      (asm (L bb (immop op a) '(15 128) (le4 (- OVF (+ job 6))))))
+                   (member? b ps) (: ab (cgg syms ps a off OVF) opb (opreg op (pregn (argix b ps 0))) joa (+ (+ off (tally ab)) (tally opb))   ; (E op p): E;op rax,p_reg;jo OVF
+                                     (asm (L ab opb '(15 128) (le4 (- OVF (+ joa 6))))))
+                   (&& (member? a ps) (member? op '(+ *))) (: bb (cgg syms ps b off OVF) opb (opreg op (pregn (argix a ps 0))) job (+ (+ off (tally bb)) (tally opb))   ; (p op E), commute
+                                     (asm (L bb opb '(15 128) (le4 (- OVF (+ job 6))))))
                    (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)        ; generic: A;push;B;pop r8;op;jo OVF
                       opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))
                       (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6)))))))
@@ -156,8 +176,13 @@
                        '(82 80 76 137 192 72 153 72 247 60 36) (? (= op '%) '(72 137 208) ()) '(72 131 196 8 90))))
              (member? op '(& | ^)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
                 (asm (L ab push-rax bb (bitseq op))))
-             (member? op '(< <= > >= =)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
-                (asm (L ab push-rax bb (cmpseq op))))
+             (member? op '(< <= > >= =))
+                (? (whole-imm? b) (: ab (cgg syms ps a off OVF) (asm (L ab (setx op (cmpimm b)))))                              ; (E < C): E;cmp rax,C;setcc
+                   (member? b ps)  (: ab (cgg syms ps a off OVF) (asm (L ab (setx op (cmprb (pregn (argix b ps 0)))))))         ; (E < p): cmp rax,p
+                   (member? a ps)  (: bb (cgg syms ps b off OVF) (asm (L bb (setx op (cmpra (pregn (argix a ps 0)))))))         ; (p < E): cmp p,rax
+                   (whole-imm? a)  (: bb (cgg syms ps b off OVF) (asm (L bb (setx (flipc op) (cmpimm a)))))                     ; (C < E): cmp rax,C, flip
+                   (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)                          ; generic: A;push;B;pop r8;cmp;setcc
+                      (asm (L ab push-rax bb (cmpseq op)))))
              (= op '?) (: el (caup (cup (cup e))) tb (cgg syms ps a off OVF) thoff (+ off (+ (tally tb) 10)) thb (cgg syms ps b thoff OVF) eloff (+ thoff (+ (tally thb) 5)) elb (cgg syms ps el eloff OVF)
                 (asm (L tb '(72 131 248 0) '(15 142) (le4 (+ (tally thb) 5)) thb '(233) (le4 (tally elb)) elb)))   ; cmp rax,0; jle else; then; jmp end; else
              (&& (= op 'peep) (member? a ps)) (: ib (cgg syms ps b off OVF) d (caup (cup (cup e)))                ; (peep STR i d): native string byte read (plain ai_str: bytes at STR+16, len at STR+8)
