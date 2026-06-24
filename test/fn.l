@@ -35,9 +35,5 @@
   ; but a differing tail must stay NOT equal (the bridge's re-entrant eqv must not clobber pending pairs)
   (! (= (link ((\ v x (+ x v)) '(1 2)) (link 5 6)) (link ((\ v x (+ x v)) '(1 2)) (link 5 7))))
   (= (link ((\ v x (+ x v)) '(1 2)) (link 5 6)) (link ((\ v x (+ x v)) '(1 2)) (link 5 6)))
-  ; (keep f) -- PROTOTYPE weak value-interning: the canonical copy, so equal-but-differently-built
-  ; closures collapse to ONE object (id?). (The weak SWEEP is GC-timing-dependent, so not asserted here.)
-  (id? (keep ((\ a b (+ a b)) 1)) (keep (\ b (+ 1 b))))   ; factory and literal residual -> the SAME kept object
-  (! (id? (keep ((\ a b (+ a b)) 1)) (keep ((\ a b (+ a b)) 2))))   ; distinct captures -> distinct kept objects
   (string? (show map))
   (< 10 (tally (show map)))))

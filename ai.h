@@ -138,11 +138,6 @@ struct ai {
                         // above): value-keyed by string content; gcg clones it untraced and
                         // sweeps it after the cheney fixpoint, so a dead atom's entry drops --
                         // dead spellings vanish. 0 only during early init.
- ai_word kept;           // PROTOTYPE: a parallel WEAK value-intern map (a value -> itself), keyed by the
-                        // generic hash + eqv (the beta bridge), so `keep` hands back the one canonical copy
-                        // of a closure. Swept by the SAME mechanism as `symbols` (untraced during the
-                        // fixpoint, rebuilt re-keying survivors by hash), so a kept closure nothing else
-                        // references vanishes -- weak interning for closures, not just names. 0 if unused.
  uintptr_t len;
  struct ai *pool;
  struct ai_r { ai_word *x; struct ai_r *n; } *root; // gc roots list
