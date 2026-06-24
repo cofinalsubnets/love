@@ -148,6 +148,8 @@
    (cmpra reg)    (L (rexb reg) 57 (rrm reg))                                       ; cmp reg, rax    (reg - rax)
    (flipc op) (? (= op '<) '> (= op '<=) '>= (= op '>) '< (= op '>=) '<= op)        ; mirror a cmp's operands (= stays)
    (setx op c)    (asm (L c (setcc op) '(72 15 182 192)))                           ; <cmp bytes>; setcc al; movzx rax,al
+   (testreg reg)  (L (? (< reg 8) 72 77) 133 (+ (+ 192 (* 8 (% reg 8))) (% reg 8))) ; test reg, reg
+   (idivr reg)    (L (rexb reg) 247 (+ 248 (% reg 8)))                              ; idiv reg
    ; cgg -- the GROUP arithmetic-fragment compiler (the WHOLE integer lane): an expr over {ps (this fn's
    ; params, in arg regs rbx/r13/r14/r15) ; int ; group calls} -> rax. syms = the group's dotted (name .
    ; offset) table (glook resolves a call's target, self or sibling, UNIFORMLY); off = the abs offset of
@@ -170,6 +172,10 @@
                    (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)        ; generic: A;push;B;pop r8;op;jo OVF
                       opb (recop op) joa (+ (+ po 1) (+ (tally bb) (+ 2 (tally opb))))
                       (asm (L ab push-rax bb pop-r8 opb '(15 128) (le4 (- OVF (+ joa 6)))))))
+             (&& (member? op '(// %)) (member? b ps))
+                (: ab (cgg syms ps a off OVF) reg (pregn (argix b ps 0)) tb (testreg reg)
+                   jzo (+ (+ off (tally ab)) (tally tb))
+                   (asm (L ab tb '(15 132) (le4 (- OVF (+ jzo 6))) '(82) '(72 153) (idivr reg) (? (= op '%) '(72 137 208) ()) '(90))))
              (member? op '(// %)) (: ab (cgg syms ps a off OVF) po (+ off (tally ab)) bb (cgg syms ps b (+ po 1) OVF)
                 jza (+ (+ po 1) (+ (tally bb) 5))                                                             ; A;push;B(divisor);pop r8(=A);test;jz OVF;idiv
                 (asm (L ab push-rax bb '(65 88) '(72 133 192) '(15 132) (le4 (- OVF (+ jza 6)))
