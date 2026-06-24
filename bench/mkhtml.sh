@@ -52,8 +52,8 @@ cat <<'HEAD'
              box-shadow: inset -1px 0 #3b4261; font-weight: normal; }
   td.miss { color: #3b4261; }
   td.fast { color: #9ece6a; font-weight: bold; }              /* a kept answer: the green */
-  .ai { background: rgba(169,177,214,.09) !important; }        /* the ai axis: translucent periwinkle */
-  th.ai { background: rgba(169,177,214,.20) !important; color: #c0caf5 !important; }
+  .ai { background: rgba(115,218,202,.13) !important; }        /* the ai axis: aurora teal (the crew palette) */
+  th.ai { background: rgba(115,218,202,.30) !important; color: #7dcfff !important; }   /* cyan call-sign header */
   td.okc, .okrow td { color: #9ece6a; }
   td.bad, .okrow td.bad { color: #f7768e; }
 </style>
