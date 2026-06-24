@@ -232,6 +232,47 @@
           results (map lift-pair pairs)
           allpairs (cat (map cap results) (foldl (\ a r (cat a (caup r))) () results))            ; rewritten originals ++ all the lifted defs
           (link ': (unpair allpairs body))))
+   ; --- PARTIAL LIFT (plift): hoist a READ-ONLY loop fn OUT of a fn's nested `:` body, all the way to the
+   ;     TOP level, threading its lexical captures (the enclosing fn's params + the nested value-bindings it
+   ;     reads) as LEADING params -- so a read loop buried among ALLOCATING siblings surfaces as a top-level
+   ;     group candidate while the allocators stay interpreted. The sibling case `lift` can't reach: hash's
+   ;     `hash-run` has THREE local fns (ins/scan/bump) sharing the mutable map `h` + a compound `(+ a (scan
+   ;     0 0))` result, so norm-let/named-let? bail. Read-only = no pin/link/tablet/cask/say (a write can't
+   ;     hoist past the interpreted fills it interleaves with); self-recursive, no sibling call (v1). ==
+   ;     interp: the lifted fn gets the SAME captures BY VALUE. The lifted `(g .. h ..)` then needs the MAP
+   ;     lane (groupok?/cgg) to glaze; until that lands plift is STANDALONE -- OFF the autogroup chain.
+   roalloc '(pin link tablet hash cask say pour jug tap)                                          ; allocating/mutating heads
+   (uses-head? hs e) (? (two? e) (|| (member? (cap e) hs) (foldl (\ a x (|| a (uses-head? hs x))) 0 (cup e))) 0)
+   (fnpair? pr) (: nf (cap pr) (&& (two? nf) (name? (cap nf)) (< 1 (tally nf)) (all name? (cup nf)) (distinctp (cup nf))))  ; (g q..) define-sugar
+   (roloop? pr sibs) (: g (caap pr) body (cup pr)                                                 ; a hoistable READ-ONLY self-loop
+      (&& (fnpair? pr) (occurs? g body) (! (uses-head? roalloc body))
+          (! (any (\ s (&& (! (id? s g)) (occurs? s body))) sibs))))                              ; calls no SIBLING fn
+   (subst-pairs g gn fv pairs) (map (\ pr (link (cap pr) (subst-call g gn fv (cup pr)))) pairs)    ; rewrite (g A..) in every pair's value
+   (plift-fn Fpair)                                                                               ; ((F P..) . FBODY) -> (L Fpair' newdefs)
+    (: nf (cap Fpair) FBODY (cup Fpair)
+       (? (! (&& (two? nf) (name? (cap nf)) (two? FBODY) (id? (cap FBODY) ':) (! (atom? (cup FBODY))))) (L Fpair ())
+          (: F (cap nf) P (cup nf)
+             parsed (anat-defs (cup FBODY)) ipairs (cap parsed) ibody (caup parsed)
+             sibnames (map caap (gfilt fnpair? ipairs))                                           ; all inner fn NAMES
+             valnames (map cap (gfilt (\ pr (! (fnpair? pr))) ipairs))                            ; inner value-binding names (bare symbols)
+             lifts (gfilt (\ pr (roloop? pr sibnames)) ipairs)
+             (? (atom? lifts) (L Fpair ())
+                (: remain (gfilt (\ pr (! (any (\ lp (id? pr lp)) lifts))) ipairs)                ; the NON-lifted inner bindings (by identity)
+                   specs (map (\ pr (link (caap pr)                                               ; per lift a spec (g gn fv..): name, hoisted name F_g, captures
+                                  (link (intern (+ (string F) (+ "_" (string (caap pr)))))
+                                        (gfilt (\ s (&& (! (member? s (cuap pr))) (occurs? s (cup pr)))) (cat P valnames))))) lifts)
+                   rwp (foldl (\ ps sp (subst-pairs (cap sp) (caup sp) (cuup sp) ps)) remain specs)   ; rewrite (g A..) calls through every spec, in the remaining bindings
+                   rwb (foldl (\ b sp (subst-call (cap sp) (caup sp) (cuup sp) b)) ibody specs)       ; ... and in the trailing body
+                   newdefs (map (\ sp (: lp (afind (\ pr (id? (caap pr) (cap sp))) lifts)            ; the hoisted def: (gn fv.. q..) . body'[g->gn]
+                                  (link (link (caup sp) (cat (cuup sp) (cuap lp))) (subst-call (cap sp) (caup sp) (cuup sp) (cup lp))))) specs)
+                   (L (link nf (link ': (unpair rwp rwb))) newdefs))))))
+   (plift form)                                                                                   ; hoist read-only loops out of every top-level fn's nested :
+    (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
+       (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
+          results (map plift-fn pairs)
+          extradefs (foldl (\ a r (cat a (caup r))) () results)
+          (? (atom? extradefs) form
+             (link ': (unpair (cat (map cap results) extradefs) body)))))
    ; --- STRING-BUILDER fusion (castbuild): a string-accumulator LOOP -- (: (g v.. s ..) (? COND (g u.. (+ s X) ..) s)
    ;     (g i.. "" ..)) builds a string by repeated append; each `+` copies the whole prefix, so the build is
    ;     O(n^2). Two rewrites: the clean single-byte counted case lowers to a NATIVE cask-fill (cbcask, below);
@@ -827,6 +868,22 @@
     ; the recognizer REJECTS it (cap is chain-valued), so it stays interpreted; cap under two? is fine.
     (: rcb '(: (g t) (+ (cap t) 0) (g (link 7 8)))
        (&& (id? (autogroup rcb) rcb) (= (base-ev rcb) (ev rcb))))                         ; NOT rewritten (rejected) -> == interp
+    ; PARTIAL LIFT (plift): the hash bench's `scan` -- a READ-ONLY loop buried among the allocating
+    ; ins/bump inside hash-run, sharing the mutable map h -- HOISTS to a top-level sibling `hash-run_scan`
+    ; threading (n h), the two (scan 0 0) call sites rewritten. `lift` can't (3 sibling fns + a compound
+    ; result); plift can. Tested via base-ev (the SOURCE->SOURCE transform preserves meaning, hash-run(N)
+    ; = N^2): the hoisted map-read still needs the MAP lane (groupok?/cgg) to glaze SOUNDLY -- the string
+    ; peep-recognizer would mis-admit it -- so plift is NOT yet on the autogroup chain.
+    (: rpl '(: (hash-run n)
+                (: h (tablet 0)
+                   (ins i)      (? (< i n) (: _ (pin h (+ 1 (* 97 i)) i) (ins (+ i 1))) h)
+                   (scan i acc) (? (< i n) (scan (+ i 1) (+ acc (peep h (+ 1 (* 97 i)) 0))) acc)
+                   (bump i)     (? (< i n) (: k (+ 1 (* 97 i)) _ (pin h k (+ 1 (peep h k 0))) (bump (+ i 1))) h)
+                   _  (ins 0) a (scan 0 0) __ (bump 0) (+ a (scan 0 0)))
+                (hash-run 30))
+       pl (plift rpl)
+       (&& !(id? pl rpl) (900 = (base-ev rpl)) (900 = (base-ev pl))                       ; fired + source->source semantic equivalence
+           (member? 'hash-run_scan (map (\ pr (? (two? (cap pr)) (caap pr) (cap pr))) (cap (anat-defs (cup pl)))))))   ; scan HOISTED to a top-level sibling
     ; DEFORESTATION: a map/filter/fold pipeline over (jot N) -- defoliate FUSES the producers into the
     ; foldl step (one pass, no intermediate lists) and LOWERS foldl-over-jot to the named-let LOOP `lift`
     ; already glazes, so the whole combinator pipeline compiles to a native counted loop. == interp.
