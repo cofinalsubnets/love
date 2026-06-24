@@ -35,10 +35,12 @@ case $lang in
   # named-let loops lambda-lifted into it; deforest's map/filter/fold list pipeline DEFORESTED into one
   # native loop; polysum's pure-polynomial pipeline CLOSED to its O(1) closed form by the loop-closer;
   # strcat's O(n^2) string-accumulator loop rebuilt to a native O(n) cask-fill while its rolling hash glazes
-  # via the string lane; closure's curried HOFs (twice/adder) INLINED to a first-order recurrence by dehof),
+  # via the string lane; closure's curried HOFs (twice/adder) INLINED to a first-order recurrence by dehof;
+  # tree's binary-tree node-count TRAVERSE (ck) compiled to a native chain fold via the chain lane -- (two? t)/
+  # (cap t)/(cup t) lowered inline, the build half (mk, which allocates) staying interpreted),
   # the ai analogue of LuaJIT auto-JITting Lua. The glaze self-tests print to stderr
   # (discarded here); other benches stay interpreted (the glaze matches only these).
-  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = float ] || [ "$b" = fib ] || [ "$b" = tak ] || [ "$b" = primes ] || [ "$b" = strscan ] || [ "$b" = strcat ] || [ "$b" = deforest ] || [ "$b" = polysum ] || [ "$b" = closure ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l; [ "$b" = sat ] && printf "%s " ../sat/sat.l) bench.l benches/$b.l | ../out/host/ai' ;;
+  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = float ] || [ "$b" = fib ] || [ "$b" = tak ] || [ "$b" = primes ] || [ "$b" = strscan ] || [ "$b" = strcat ] || [ "$b" = deforest ] || [ "$b" = polysum ] || [ "$b" = closure ] || [ "$b" = tree ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l; [ "$b" = sat ] && printf "%s " ../sat/sat.l) bench.l benches/$b.l | ../out/host/ai' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   sbcl)         ext=lisp; bin=sbcl;       cmd='sbcl --script benches/$b.lisp' ;;
   elixir)       ext=exs;  bin=elixir;     cmd='elixir benches/$b.exs' ;;

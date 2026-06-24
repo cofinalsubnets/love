@@ -47,52 +47,62 @@ style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","mapfilter","deforest","polysum","primes","bell","strcat","strscan","hash","sort","tree","float","closure","sat"];
 const PER={},OK={};
-PER["fib"]={"ai":3.2031,"go":3.6617,"rust":1.9109,"java":2.5671,"julia":4.3037,"luajit":7.3805,"pypy":8.2715,"node":7.2925,"elixir":7.1411,"chez":5.7500,"sbcl":10.9072};
+PER["fib"]={"ai":3.2344,"go":3.6089,"rust":1.9109,"java":2.5671,"julia":4.3037,"luajit":7.3805,"pypy":8.2715,"node":7.2925,"elixir":7.1411,"chez":5.7500,"sbcl":10.9072};
 OK["fib"]=true;
-PER["tak"]={"ai":0.4688,"go":0.4453,"rust":0.3280,"java":0.3034,"julia":0.6341,"luajit":1.3027,"pypy":2.2845,"node":0.9373,"elixir":0.8134,"chez":0.5469,"sbcl":3.9691};
+PER["tak"]={"ai":0.4785,"go":0.4366,"rust":0.3280,"java":0.3034,"julia":0.6341,"luajit":1.3027,"pypy":2.2845,"node":0.9373,"elixir":0.8134,"chez":0.5469,"sbcl":3.9691};
 OK["tak"]=true;
-PER["sum"]={"ai":0.0620,"go":0.1025,"rust":0.0491,"java":0.1896,"julia":0.0812,"luajit":0.0696,"pypy":0.2735,"node":0.7451,"elixir":0.4769,"chez":0.4648,"sbcl":0.6817};
+PER["sum"]={"ai":0.0667,"go":0.1144,"rust":0.0491,"java":0.1896,"julia":0.0812,"luajit":0.0696,"pypy":0.2735,"node":0.7451,"elixir":0.4769,"chez":0.4648,"sbcl":0.6817};
 OK["sum"]=true;
-PER["mapfilter"]={"ai":0.0828,"go":0.0207,"rust":0.0049,"java":0.0055,"julia":0.0139,"luajit":0.0304,"pypy":0.0933,"node":0.2103,"elixir":0.2396,"chez":0.1035,"sbcl":0.0947};
+PER["mapfilter"]={"ai":0.0879,"go":0.0212,"rust":0.0049,"java":0.0055,"julia":0.0139,"luajit":0.0304,"pypy":0.0933,"node":0.2103,"elixir":0.2396,"chez":0.1035,"sbcl":0.0947};
 OK["mapfilter"]=true;
-PER["deforest"]={"ai":0.0515,"go":0.0440,"rust":0.0146,"java":0.0130,"julia":0.0177,"luajit":0.0605,"pypy":0.1485,"node":1.1701,"elixir":0.4371,"chez":0.2295,"sbcl":0.2295};
+PER["deforest"]={"ai":0.0535,"go":0.0462,"rust":0.0146,"java":0.0130,"julia":0.0177,"luajit":0.0605,"pypy":0.1485,"node":1.1701,"elixir":0.4371,"chez":0.2295,"sbcl":0.2295};
 OK["deforest"]=true;
-PER["polysum"]={"ai":0.0000,"go":0.0372,"rust":0.0098,"java":0.0066,"julia":0.0138,"luajit":0.0597,"pypy":0.1461,"node":1.1667,"elixir":0.4046,"chez":0.1914,"sbcl":0.1973};
+PER["polysum"]={"ai":0.0001,"go":0.0387,"rust":0.0098,"java":0.0066,"julia":0.0138,"luajit":0.0597,"pypy":0.1461,"node":1.1667,"elixir":0.4046,"chez":0.1914,"sbcl":0.1973};
 OK["polysum"]=true;
-PER["primes"]={"ai":0.9609,"go":0.8835,"rust":0.7709,"java":0.7549,"julia":0.8813,"luajit":0.7970,"pypy":1.3050,"node":0.7576,"elixir":2.2933,"chez":1.6016,"sbcl":4.6410};
+PER["primes"]={"ai":0.9961,"go":0.8897,"rust":0.7709,"java":0.7549,"julia":0.8813,"luajit":0.7970,"pypy":1.3050,"node":0.7576,"elixir":2.2933,"chez":1.6016,"sbcl":4.6410};
 OK["primes"]=true;
-PER["bell"]={"ai":49.6250,"go":23.9438,"java":36.5609,"julia":74.0605,"pypy":24.2373,"node":27.7789,"elixir":32.7639,"chez":63.5000,"sbcl":50.2545};
+PER["bell"]={"ai":49.2500,"go":24.3498,"java":36.5609,"julia":74.0605,"pypy":24.2373,"node":27.7789,"elixir":32.7639,"chez":63.5000,"sbcl":50.2545};
 OK["bell"]=true;
-PER["strcat"]={"ai":0.0272,"go":0.8686,"rust":0.0171,"java":1.6665,"julia":1.4594,"luajit":1.3921,"pypy":0.1702,"node":0.1097,"elixir":0.0428,"chez":1.3086,"sbcl":4.3285};
+PER["strcat"]={"ai":0.0264,"go":0.8918,"rust":0.0171,"java":1.6665,"julia":1.4594,"luajit":1.3921,"pypy":0.1702,"node":0.1097,"elixir":0.0428,"chez":1.3086,"sbcl":4.3285};
 OK["strcat"]=true;
-PER["strscan"]={"ai":0.0737,"go":0.0637,"rust":0.0635,"java":0.0633,"julia":0.0636,"luajit":0.1289,"pypy":0.0619,"node":0.3834,"elixir":0.0978,"chez":0.1235,"sbcl":0.1665};
+PER["strscan"]={"ai":0.0754,"go":0.0641,"rust":0.0635,"java":0.0633,"julia":0.0636,"luajit":0.1289,"pypy":0.0619,"node":0.3834,"elixir":0.0978,"chez":0.1235,"sbcl":0.1665};
 OK["strscan"]=true;
-PER["hash"]={"ai":3.0859,"go":0.5395,"rust":0.7418,"java":0.5398,"julia":0.4641,"luajit":0.9840,"pypy":0.4271,"node":0.6999,"chez":0.7363,"sbcl":0.9141};
+PER["hash"]={"ai":3.0625,"go":0.5517,"rust":0.7418,"java":0.5398,"julia":0.4641,"luajit":0.9840,"pypy":0.4271,"node":0.6999,"chez":0.7363,"sbcl":0.9141};
 OK["hash"]=true;
-PER["sort"]={"ai":0.9375,"go":0.3478,"rust":0.0636,"java":0.1601,"julia":0.0588,"luajit":1.1449,"pypy":0.3548,"node":0.9797,"elixir":0.7422,"chez":0.3945,"sbcl":0.5899};
+PER["sort"]={"ai":0.9883,"go":0.3571,"rust":0.0636,"java":0.1601,"julia":0.0588,"luajit":1.1449,"pypy":0.3548,"node":0.9797,"elixir":0.7422,"chez":0.3945,"sbcl":0.5899};
 OK["sort"]=true;
-PER["tree"]={"ai":3.8750,"go":1.5214,"rust":4.5344,"java":0.4013,"julia":3.0270,"luajit":3.4780,"pypy":1.8633,"node":1.3508,"elixir":0.9745,"chez":0.5977,"sbcl":1.4689};
+PER["tree"]={"ai":2.5625,"go":1.5806,"rust":4.5344,"java":0.4013,"julia":3.0270,"luajit":3.4780,"pypy":1.8633,"node":1.3508,"elixir":0.9745,"chez":0.5977,"sbcl":1.4689};
 OK["tree"]=true;
-PER["float"]={"ai":0.2881,"go":0.1941,"rust":0.1842,"java":0.1794,"julia":0.1808,"luajit":0.2104,"pypy":0.3040,"node":0.1861,"elixir":4.3804,"chez":3.1250,"sbcl":5.1254};
+PER["float"]={"ai":0.2930,"go":0.1961,"rust":0.1842,"java":0.1794,"julia":0.1808,"luajit":0.2104,"pypy":0.3040,"node":0.1861,"elixir":4.3804,"chez":3.1250,"sbcl":5.1254};
 OK["float"]=true;
-PER["closure"]={"ai":0.0723,"go":0.0228,"rust":0.0231,"java":0.0301,"julia":0.0097,"luajit":13.0104,"pypy":0.0735,"node":0.7819,"elixir":2.0105,"chez":0.9727,"sbcl":1.9846};
+PER["closure"]={"ai":0.0747,"go":0.0233,"rust":0.0231,"java":0.0301,"julia":0.0097,"luajit":13.0104,"pypy":0.0735,"node":0.7819,"elixir":2.0105,"chez":0.9727,"sbcl":1.9846};
 OK["closure"]=true;
-PER["sat"]={"ai":40.2500};
+PER["sat"]={"ai":43.7500};
 OK["sat"]=true;
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
+
+// column order: ai FIRST, then the rest by NET time ascending -- Σ of a
+// language's per-bench ms/it EXCLUDING bell (luajit/rust lack a bell impl, so
+// counting it would skew them fast). A language with no data sorts last.
+const NET = l => BENCHES.reduce((s, b) => s +
+  (b === "bell" ? 0 : (PER[b] && PER[b][l] != null ? PER[b][l] : 0)), 0);
+const HAS = l => BENCHES.some(b => PER[b] && PER[b][l] != null);
+const LANGORD = LANGS.slice().sort((a, b) =>
+  a === "ai" ? -1 : b === "ai" ? 1 :
+  (HAS(a) ? NET(a) : Infinity) - (HAS(b) ? NET(b) : Infinity));
 
 // default arrangement: benches down the side, languages across; the button
 // flips to languages-down-the-side (handy on a narrow portrait screen).
 let transposed = false;
 
 function build() {
-  const rows = transposed ? LANGS : BENCHES;
-  const cols = transposed ? BENCHES : LANGS;
+  const rows = transposed ? LANGORD : BENCHES;
+  const cols = transposed ? BENCHES : LANGORD;
   const minB = {};
   for (const b of BENCHES) {
     let m = Infinity;
-    for (const l of LANGS) { const v = PER[b] && PER[b][l]; if (v != null && v < m) m = v; }
+    for (const l of LANGORD) { const v = PER[b] && PER[b][l]; if (v != null && v < m) m = v; }
     minB[b] = m;
   }
   const td = (b, l) => {

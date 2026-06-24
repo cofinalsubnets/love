@@ -5,9 +5,11 @@
 # raw` prints) into a self-contained benchmarks page: one table of per-iteration
 # milliseconds (benches down the side, languages across), and a button that
 # transposes benches<->languages (handy on a narrow portrait screen).
-# <lang-roster> is the full column order (e.g. $(ALL_LANGS)); a language
-# with no rows (toolchain absent/broken, e.g. no luajit on PATH) shows a column of
-# dots. The page embeds its data, so it opens straight off disk -- no server.
+# <lang-roster> is the column SET (e.g. $(ALL_LANGS)). The page (in JS, at render)
+# orders columns ai FIRST, then the rest by NET time ascending -- Σ of a language's
+# per-bench ms/it EXCLUDING bell (which luajit/rust lack, so it would skew them
+# fast); a language with no rows sorts last as a column of dots.
+# The page embeds its data, so it opens straight off disk -- no server.
 roster="$1"
 
 cat <<'HEAD'
@@ -95,17 +97,27 @@ cat <<'TAIL'
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
+// column order: ai FIRST, then the rest by NET time ascending -- Σ of a
+// language's per-bench ms/it EXCLUDING bell (luajit/rust lack a bell impl, so
+// counting it would skew them fast). A language with no data sorts last.
+const NET = l => BENCHES.reduce((s, b) => s +
+  (b === "bell" ? 0 : (PER[b] && PER[b][l] != null ? PER[b][l] : 0)), 0);
+const HAS = l => BENCHES.some(b => PER[b] && PER[b][l] != null);
+const LANGORD = LANGS.slice().sort((a, b) =>
+  a === "ai" ? -1 : b === "ai" ? 1 :
+  (HAS(a) ? NET(a) : Infinity) - (HAS(b) ? NET(b) : Infinity));
+
 // default arrangement: benches down the side, languages across; the button
 // flips to languages-down-the-side (handy on a narrow portrait screen).
 let transposed = false;
 
 function build() {
-  const rows = transposed ? LANGS : BENCHES;
-  const cols = transposed ? BENCHES : LANGS;
+  const rows = transposed ? LANGORD : BENCHES;
+  const cols = transposed ? BENCHES : LANGORD;
   const minB = {};
   for (const b of BENCHES) {
     let m = Infinity;
-    for (const l of LANGS) { const v = PER[b] && PER[b][l]; if (v != null && v < m) m = v; }
+    for (const l of LANGORD) { const v = PER[b] && PER[b][l]; if (v != null && v < m) m = v; }
     minB[b] = m;
   }
   const td = (b, l) => {

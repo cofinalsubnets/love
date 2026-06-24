@@ -136,6 +136,7 @@
    ; combine it DIRECTLY (op rax,reg / cmp rax,reg) instead of push-rax..pop-r8 -- the stack traffic that
    ; made the integer lane lag a register machine (e.g. primes' (* d d), (< n ..), (= 0 ..) every iter).
    (pregn i) (nthl '(3 13 14 15) i)                                                 ; arg-slot i -> x86 reg num
+   chainkind (apof (link 0 0))                                                      ; lvm_chain's ap sentinel, for the inline two?/cap/cup kind test (cf. (apof "") for the string lane)
    (rrm reg) (+ 192 (% reg 8))                                                      ; ModRM mod11: reg-field=rax, rm=reg
    (rrr reg) (+ 192 (* 8 (% reg 8)))                                                ; ModRM mod11: reg-field=reg, rm=rax
    (rexb reg) (? (< reg 8) 72 73)                                                   ; REX.W (+B if reg extended, in rm)
@@ -204,6 +205,12 @@
                           (movr9 creg) '(77 139 73 8)                                                              ; r9=C (buf ptr); r9=[r9+8] (the backing str)
                           '(67 136 68 8 16)                                                                        ; mov [r9+r8+16], al  (store V's low byte at str's bytes + idx)
                           (arx (argix a ps 0)))))                                                                  ; rax = C (chain the buf)
+             (= op 'two?) (: ab (cgg syms ps a off OVF)                                                            ; (two? E): chainp(E) -> 0/1 (TOTAL -- no deopt; a non-chain is just false)
+                (asm (L ab '(168 1 117 25 76 139 16) '(73 187) (le8 chainkind) '(77 57 218 117 7 184 1 0 0 0 235 2 49 192))))   ; test al,1;jnz z; r10=[rax];movabs r11,kind;cmp r10,r11;jne z; eax=1;jmp e; z:xor eax,eax; e:
+             (= op 'cap) (: ab (cgg syms ps a off OVF) base (+ off (tally ab))                                     ; (cap E): chain guard, then rax=[E+8] (non-chain -> deopt to interp; in ck always under two?)
+                (asm (L ab '(168 1 15 133) (le4 (- OVF (+ base 8))) '(76 139 16 73 187) (le8 chainkind) '(77 57 218 15 133) (le4 (- OVF (+ base 30))) '(72 139 64 8))))
+             (= op 'cup) (: ab (cgg syms ps a off OVF) base (+ off (tally ab))                                     ; (cup E): chain guard, then rax=[E+16]
+                (asm (L ab '(168 1 15 133) (le4 (- OVF (+ base 8))) '(76 139 16 73 187) (le8 chainkind) '(77 57 218 15 133) (le4 (- OVF (+ base 30))) '(72 139 64 16))))
              ()))
        ())
    (gargs syms ps as off OVF) (? (atom? as) ()                           ; push each call arg left->right (offset-threaded)
@@ -247,12 +254,12 @@
           g (asm (L f '(168 1) '(15 133) (le4 (- Aovf jnz-end))                                  ; mov rax,Sp[i]; test al,1; jnz Aovf (fixnum)
                     '(76 139 0) '(72 184) (le8 kind) '(73 57 192) '(15 133) (le4 (- Aovf jne-end))))   ; mov r8,[rax]; movabs rax,kind; cmp r8,rax; jne Aovf
           (asm (L g (mkguards (cup ms) bufmask strkind bufkind jne-end Aovf)))))
-   (mkouter k smask bufmask strkind)
+   (mkouter k smask bufmask cmask strkind)
     (: bufkind (apof (cask 1))                                                                    ; a cask's kind, for a pin (buf) param's type guard
        dpt (? (= k 1) deopt deopt-mn)                                                             ; arity 1 applies fb directly; >=2 enters its body past the lvm_cur
        saveargs (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k))                                    ; save the k arg regs (callee-saved)
        restargs (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k))                        ; restore (reverse)
-       pushargs (foldl (\ a i (+ a (asm (L (fetch i) (? (member? i smask) () '(72 209 248)) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1]; untag (sar) UNLESS a string param (smask = raw pointer)
+       pushargs (foldl (\ a i (+ a (asm (L (fetch i) (? (|| (member? i smask) (member? i cmask)) () '(72 209 248)) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1]; untag (sar) UNLESS a string (smask) or chain (cmask) param -- both pass a raw pointer
        s6 (asm (L '(72 131 196) (list (* 8 k))))  s10 (asm (L '(72 131 200 1) '(72 137 1) '(72 131 198 16) '(72 139 6 255 224)))
        Lr (tally restargs)
        Aguard (+ 2 (+ (tally saveargs) 3))                                                       ; guards sit after push r12(2)+saveargs+mov r12,rsp(3)
@@ -273,6 +280,7 @@
    ; group as an interpreted letrec (mutual recursion intact) -> a faithful, never-wrong slow path.
    (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally pin)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used DIRECTLY as (peep P..)/(tally P)/(pin P..)?
    (buse? e P) (? (two? e) (? (&& (id? (cap e) 'pin) (id? (caup e) P)) 1 (foldl (\ a x (|| a (buse? x P))) 0 (cup e))) 0)   ; P used as a CASK -- (pin P..) -- so its guard wants the buf kind, not str
+   (cuse? e P) (? (two? e) (? (&& (member? (cap e) '(cap cup two?)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (cuse? x P))) 0 (cup e))) 0)   ; P used as a CHAIN -- (cap P)/(cup P)/(two? P) -- raw pointer, NO entry guard (two? is total: a non-chain reads false)
    ; INTERPROCEDURAL string-param inference: a param is a string if used in peep/tally OR passed as the arg
    ; to a sibling's string param. (strhash's `s` is a string because it flows into strhash_go's peep.) A
    ; deduped fixpoint over the group's (name . smask) map -- smasks only grow, so the size stabilizes.
@@ -294,7 +302,8 @@
        smap0 (map (\ f (link (cap f) (gfilt (\ k (suse? (nthl f 2) (nthl (nthl f 1) k))) (rangeL 0 (nthl f 3))))) info)   ; per-fn DIRECT string params
        smask (gsm entry (smfix info smap0))                                                   ; entry's STRING params, propagated to a fixpoint -> raw pointer, no sar
        bufmask (gfilt (\ k (buse? (nthl efn 2) (nthl (nthl efn 1) k))) (rangeL 0 (nthl efn 3)))   ; entry params used as a CASK (pin) -> guard with the buf kind, not str
-       OU (mkouter (nthl efn 3) smask bufmask (apof "")) outer (cap OU) Aovf (caup OU) Lo (tally outer)   ; (apof "") = the plain-string kind for the type guard; bufmask overrides to buf
+       cmask (gfilt (\ k (cuse? (nthl efn 2) (nthl (nthl efn 1) k))) (rangeL 0 (nthl efn 3)))   ; entry params used as a CHAIN (cap/cup/two?) -> raw pointer, no entry guard
+       OU (mkouter (nthl efn 3) smask bufmask cmask (apof "")) outer (cap OU) Aovf (caup OU) Lo (tally outer)   ; (apof "") = the plain-string kind for the type guard; bufmask overrides to buf
 
        sa (\ k (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k)))
        ld (\ k (foldl (\ a i (+ a (ldr i (- (* 16 k) (* 8 i))))) () (rangeL 0 k)))

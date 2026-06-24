@@ -612,19 +612,36 @@
    (lc-has-fold? x) (? (atom? x) 0 (lcquote? x) 0 (lcfold? x) 1 (any lc-has-fold? (cup x)))
    (loopclose form) (? (lc-has-fold? form) (lcwalk form) form)                                ; byte-identical when no closeable fold
    (clook2 nm al) (? (atom? al) -1 (id? nm (caap al)) (caup (cap al)) (clook2 nm (cup al)))   ; (name arity) alist -> arity (-1 absent)
-   (groupok? cands ps e)                                                                      ; is e in the fragment over cands (a (name arity) list)?
-    (? (member? e ps) 1  (whole? e) 1
+   (cmlook nm cm) (? (atom? cm) () (id? nm (caap cm)) (cuap cm) (cmlook nm (cup cm)))          ; (name . chain-param-INDEX-list) -> indices (() absent)
+   ; cok? -- e is CHAIN-valued (a raw chain word, NOT an untagged int): a chain param (in cps) or cap/cup
+   ; of a chain-valued expr. A chain word MUST NOT reach an arith/cmp operand (the body would mistreat it
+   ; as an int -- the (cap t) stores putcharm(v), not v); it may only flow to two?/cap/cup or a callee's
+   ; CHAIN slot. ck stays sound because (cap t)/(cup t) feed only the recursive ck (a chain param).
+   (cok? cm cands cps ps e) (? (member? e cps) 1
+                               (&& (two? e) (member? (cap e) '(cap cup)) (= 2 (tally e))) (cok? cm cands cps ps (caup e))
+                               0)
+   (gargok? cm cands cps ps as i callee) (? (atom? as) 1                                       ; call args: slot i a chain param (per callee's cmap) -> cok?, else int (groupok?)
+      (&& (? (member? i (cmlook callee cm)) (cok? cm cands cps ps (cap as)) (groupok? cm cands cps ps (cap as)))
+          (gargok? cm cands cps ps (cup as) (+ i 1) callee)))
+   (groupok? cm cands cps ps e)                                                               ; INT-valued e over cands; cps = the current fn's chain-param NAMES
+    (? (member? e cps) 0                                                                       ; a chain param is NOT int-valued (only valid via cok?)
+       (member? e ps) 1  (whole? e) 1
        (two? e) (: op (cap e) ar (clook2 op cands)
-          (? (< -1 ar)                                  (&& (= (tally (cup e)) ar) (foldl (\ a x (&& a (groupok? cands ps x))) 1 (cup e)))   ; call to a group fn: arity ok, args ok
-             (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (= 3 (tally e)) (groupok? cands ps (caup e)) (groupok? cands ps (caup (cup e))))
-             (id? op '?)                                  (&& (= 4 (tally e)) (groupok? cands ps (caup e)) (groupok? cands ps (caup (cup e))) (groupok? cands ps (caup (cup (cup e)))))
+          (? (< -1 ar)                                  (&& (= (tally (cup e)) ar) (gargok? cm cands cps ps (cup e) 0 op))   ; group call: arity ok, each arg ok for its slot's kind
+             (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (= 3 (tally e)) (groupok? cm cands cps ps (caup e)) (groupok? cm cands cps ps (caup (cup e))))
+             (id? op '?)                                  (&& (= 4 (tally e)) (groupok? cm cands cps ps (caup e)) (groupok? cm cands cps ps (caup (cup e))) (groupok? cm cands cps ps (caup (cup (cup e)))))
              (id? op 'tally)                              (&& (= 2 (tally e)) (member? (caup e) ps))                                          ; (tally STR): STR a param (string lane)
-             (id? op 'peep)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cands ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (peep STR i d): STR param, i ok, d const
-             (id? op 'pin)                                (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cands ps (caup (cup e))) (groupok? cands ps (caup (cup (cup e)))))   ; (pin BUF i V): BUF a param (raw buf), i ok, V ok -- native byte store (cask fill)
-             0))
+             (id? op 'peep)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (peep STR i d): STR param, i ok, d const
+             (id? op 'pin)                                (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (groupok? cm cands cps ps (caup (cup (cup e)))))   ; (pin BUF i V): BUF a raw-buf param, i ok, V ok
+             (id? op 'two?)                               (&& (= 2 (tally e)) (cok? cm cands cps ps (caup e)))               ; (two? CE): CE chain-valued; result int 0/1 (TOTAL -- a non-chain reads false)
+             0))                                                                               ; bare cap/cup are CHAIN-valued -> not admitted in an int position (cok? carries them)
        0)
-   (grpok-1 fns c cands) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns) (groupok? cands (cup (cap p)) (cup p)))   ; candidate c's body ok over cands?
-   (grpfix fns cands) (: keep (afilter (\ c (grpok-1 fns c cands)) cands)                     ; drop fns that fail; iterate to a fixpoint
+   (chps body ps) (gfilt (\ k (cuse? body (nthl ps k))) (rangeL 0 (tally ps)))                ; chain-param INDICES: params used in cap/cup/two? (cuse? from emit.l)
+   (grpok-1 fns cm c cands) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns)
+                                cps (map (\ k (nthl (cup (cap p)) k)) (cmlook (cap c) cm))      ; this fn's chain-param NAMES (its index list -> names)
+                                (groupok? cm cands cps (cup (cap p)) (cup p)))                  ; candidate c's body ok over cands?
+   (grpfix fns cands) (: cm (map (\ f (link (cap (cap f)) (chps (cup f) (cup (cap f))))) fns)   ; (name . chain-param-index-list) for every candidate fn
+                         keep (afilter (\ c (grpok-1 fns cm c cands)) cands)                    ; drop fns that fail; iterate to a fixpoint
                          (? (= (tally keep) (tally cands)) keep (grpfix fns keep)))
    (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
       (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
@@ -798,6 +815,18 @@
                data (string (L 72 105 90 33 65))
                (strhash data))
        (&& !(id? (autogroup rss) rss) (69709145 = (ev rss)) (= (base-ev rss) (ev rss))))
+    ; CHAIN LANE: a binary-tree node-count fold glazes from SOURCE -- t a CHAIN param (raw pointer, NO
+    ; entry guard, since two? is total: a non-chain reads false), with (two? t)/(cap t)/(cup t) lowered
+    ; inline (cap/cup chain-guarded, deopting a non-chain) and the recursive ck a native sibling call.
+    ; == interp, transparent. This is the `tree` bench's traverse half (the allocating mk stays interp).
+    (: rcl '(: (mk d) (? (< d 1) 0 (link (mk (- d 1)) (mk (- d 1))))
+               (ck t) (? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0)
+               (ck (mk 8)))
+       (&& !(id? (autogroup rcl) rcl) (255 = (ev rcl)) (= (base-ev rcl) (ev rcl))))      ; depth 8 = 2^8-1 = 255 nodes
+    ; CHAIN-LANE SOUNDNESS: a cap feeding ARITHMETIC ((+ (cap t) 0)) is a chain word in an int slot --
+    ; the recognizer REJECTS it (cap is chain-valued), so it stays interpreted; cap under two? is fine.
+    (: rcb '(: (g t) (+ (cap t) 0) (g (link 7 8)))
+       (&& (id? (autogroup rcb) rcb) (= (base-ev rcb) (ev rcb))))                         ; NOT rewritten (rejected) -> == interp
     ; DEFORESTATION: a map/filter/fold pipeline over (jot N) -- defoliate FUSES the producers into the
     ; foldl step (one pass, no intermediate lists) and LOWERS foldl-over-jot to the named-let LOOP `lift`
     ; already glazes, so the whole combinator pipeline compiles to a native counted loop. == interp.
