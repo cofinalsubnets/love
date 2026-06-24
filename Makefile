@@ -115,7 +115,7 @@ test_sat: host
 .PHONY: test_asm
 test_asm: host
 	@echo "ASM asm/asmtest.l"; \
-	  cat asm/asm.l asm/x64.l asm/text.l asm/elf.l asm/asmtest.l | $m > out/host/.test_asm.out 2>&1; r=$$?; \
+	  cat asm/asm.l asm/x64.l asm/arm64.l asm/text.l asm/elf.l asm/asmtest.l | $m > out/host/.test_asm.out 2>&1; r=$$?; \
 	  cat out/host/.test_asm.out; \
 	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_asm.out; } \
 	    || { echo "FAIL asm (exit $$r)"; exit 1; }
