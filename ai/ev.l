@@ -12,6 +12,20 @@
 ; by text shape (lvm_ret0 terminator); fold eligibility from the curated `names`. It lives
 ; as a global -- feel's fold reaches it by name -- so this ~126-entry table is NOT baked into
 ; ev's value; `.ev` then prints as just the ana+feel logic, and the table prints under `.feels`.
+;
+; `names`/`pureset` are LIFTED to the top level (out of feels' body) so feel's INLINER (cprop, below)
+; shares the same effect-free set its purity gates read -- a broad table (arith, comparisons, the c[ad]r
+; family, type predicates, the transcendentals), not just the dyadic fold ops. pureset is keyed by VALUE.
+(: names (cat `('+ '- '* '/ '% '& '| '< '<= '= '>= '>)
+          '(// << >> ^
+            id? gcd modpow abs
+            link cap cup caap caup cuap cuup
+            dig lidx assoc member? last rev cat
+            charm? nom? two? book? lit? string? nil? gem? twin? atom?
+            snip string
+            re im conj arg gem twin
+            sine cosine log power))
+   pureset (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (tablet 0) names))
 (: feels (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
@@ -37,16 +51,6 @@
     (go v as))
    ; the operator symbols are quoted one by one -- bare mid-list they would
    ; capture their left neighbor when this file compiles (the opfix pass).
-   names (cat `('+ '- '* '/ '% '& '| '< '<= '= '>= '>)
-          '(// << >> ^
-            id? gcd modpow abs
-            link cap cup caap caup cuap cuup
-            dig lidx assoc member? last rev cat
-            charm? nom? two? book? lit? string? nil? gem? twin? atom?
-            snip string
-            re im conj arg gem twin
-            sine cosine log power))
-   pureset (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (tablet 0) names)
    (add t s) (: v (book s)
     (? (charm? v) t
      (: o (opof v) p (pureset v)
@@ -237,13 +241,14 @@
    ; only when CONSUMED (op=1, an enclosing application's head); at a VALUE position (op=0) we
    ; REVERT to the un-inlined source, preserving the capturing closure. ((twice (adder i)) i)
    ; collapses to 3i (a value -> fine); ((\ n ..) 5) stays a capturing closure (it escapes).
+   (pure-head? h) (! (! (peep pureset (book h) 0)))                                    ; h's global value is a KNOWN PURE fn (the lifted ~50-fn set)
    (allp as se) (? (cnul? as) 1 (? (purep (cap as) se) (allp (cup as) se) 0))          ; all args effect-free?
    (purep a se) (?                                                                     ; effect-free -> duplicable/droppable
     (atom? a) 1                                                                         ; nom / number / string
     (id? (cap a) '\) 1                                                                  ; a lambda value (pure to build)
     (id? (cap a) '?) (allp (cup a) se)                                                  ; cond: pure iff every limb is
-    (nom? (cap a)) (: e (assq (cap a) se)                                               ; a known pure lambda OR a pure op, applied to pure args
-       (? (&& (two? e) (lambp (caup e))) (allp (cup a) se) (inop (cap a) opval) (allp (cup a) se) 0))
+    (nom? (cap a)) (: e (assq (cap a) se)                                               ; a known pure lambda OR a pure fn, applied to pure args
+       (? (&& (two? e) (lambp (caup e))) (allp (cup a) se) (pure-head? (cap a)) (allp (cup a) se) 0))
     0)
    (smpl? x) (?                                                                        ; bsub-safe body: no : / macro head
     (atom? x) 1
@@ -257,11 +262,11 @@
     (id? (cap x) '\) (? (atom? (cuup x)) () (: r (lp x) (fvs (last x) (cat (cap r) bs))))
     (foldl (\ a e (cat a (fvs e bs))) () x))
    (closedl? lam) (all (\ v (! (! (book v)))) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
-   (pbody? x bnd) (?                                                                   ; body is PURE: every call head a pure op or a param
+   (pbody? x bnd) (?                                                                   ; body is PURE: every call head a pure fn or a param
     (atom? x) 1
     (id? (cap x) '?) (all (\ e (pbody? e bnd)) (cup x))
     (id? (cap x) '\) (? (atom? (cuup x)) 1 (: r (lp x) (pbody? (last x) (cat (cap r) bnd))))
-    (nom? (cap x)) (&& (|| (inop (cap x) opval) (member? (cap x) bnd)) (all (\ e (pbody? e bnd)) (cup x)))
+    (nom? (cap x)) (&& (|| (pure-head? (cap x)) (member? (cap x) bnd)) (all (\ e (pbody? e bnd)) (cup x)))
     (all (\ e (pbody? e bnd)) x))
    (inlinable? nm lam) (&& (lambp lam) (smpl? lam) (closedl? lam) (pbody? lam ()) (! (w nm lam 0 0 0)))
    (rmkeys ps env) (filter (\ p (! (member? (cap p) ps))) env)                         ; drop shadowed substitutions
