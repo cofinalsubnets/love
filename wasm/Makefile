@@ -46,7 +46,20 @@ all: ai.js
 # regenerate it through the parent (force_version) and recompile ai.o when the
 # id changes -- mirrors the host build's l.o relink. Without this the browser
 # banner (ai-version) drifts to whatever revision ai.o was last built at.
-$(o)/ai.o: ../out/lib/ai_version.h
+#
+# The committed ai.js is ALWAYS built from a tree that ai.js itself dirties, so
+# `git describe --dirty` would brand the page banner "-dirty" in perpetuity --
+# cosmetic, but it reads as broken. Map it to "-wasm" in a wasm-local copy (same
+# revision, honest "this is the browser build"); a clean tree just keeps the bare
+# id. Compile ai.o against it -- -I$(o) wins the "ai_version.h" quote-include
+# over ../out/lib, so the host build's honest -dirty is untouched.
+$(o)/ai_version.h: ../out/lib/ai_version.h
+	@mkdir -p $(dir $@)
+	@sed 's/-dirty"/-wasm"/' $< > $@
+
+$(o)/ai.o: ../ai.c $(g_h) $(o)/ai_version.h
+	@mkdir -p $(dir $@)
+	$(emcc) -I$(o) $(CFLAGS) -c $< -o $@
 
 # Link step: emcc's link is multi-input, so ccache can't cache it -- use
 # bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
