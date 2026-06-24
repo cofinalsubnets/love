@@ -140,6 +140,7 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
   background: #1f2335; border: 1px solid #3b4261; border-radius: 4px;
   color: #a9b1d6; font-weight: normal; font-size: .8em; line-height: 1.45;
   padding: .45em .65em; text-align: left; white-space: normal; hyphens: none;
+  text-shadow: none; /* don't inherit the color word's hover glow */
   cursor: pointer; opacity: 0; visibility: hidden; transition: opacity .1s; }
 /* a transparent bridge over the gap so the card stays hoverable / clickable */
 .term .tip::before { content: ""; position: absolute; left: 0; right: 0;

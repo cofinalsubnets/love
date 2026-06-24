@@ -1,6 +1,6 @@
 # python benchmark harness -- mirrors bench/bench.l.
 # bench(name, work) auto-scales the repetition count (doubling until the run
-# clears MIN_MS), then prints one line matching the ll/ruby harnesses:
+# clears MIN_MS), then prints one line matching the other harnesses:
 #     <name> <lang> <reps> <ms> <checksum>
 # the same file serves cpython, pypy, and hy (which imports it); BENCH_LANG sets
 # the label so the columns stay distinct, default "python".

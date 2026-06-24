@@ -44,47 +44,47 @@ style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
 </div>
 <div class="wrap"><div id="t"></div></div>
 <script>
-const LANGS=["ai","chez","sbcl","clojure","elixir","pypy","ruby","node","luajit","julia","go","java","haskell","rust"];
+const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","mapfilter","deforest","polysum","primes","bell","strcat","strscan","hash","sort","tree","float","closure","sat"];
 const PER={},OK={};
-PER["fib"]={"ai":3.2031,"chez":5.7500,"sbcl":10.9072,"clojure":5.9854,"elixir":7.1411,"pypy":8.2715,"ruby":74.6273,"node":7.2925,"luajit":7.3805,"julia":4.3037,"go":3.6617,"java":2.5671,"haskell":26.5835,"rust":1.9109};
+PER["fib"]={"ai":3.2031,"go":3.6617,"rust":1.9109,"java":2.5671,"julia":4.3037,"luajit":7.3805,"pypy":8.2715,"node":7.2925,"elixir":7.1411,"chez":5.7500,"sbcl":10.9072};
 OK["fib"]=true;
-PER["tak"]={"ai":0.4688,"chez":0.5469,"sbcl":3.9691,"clojure":0.7061,"elixir":0.8134,"pypy":2.2845,"ruby":9.5698,"node":0.9373,"luajit":1.3027,"julia":0.6341,"go":0.4453,"java":0.3034,"haskell":3.1054,"rust":0.3280};
+PER["tak"]={"ai":0.4688,"go":0.4453,"rust":0.3280,"java":0.3034,"julia":0.6341,"luajit":1.3027,"pypy":2.2845,"node":0.9373,"elixir":0.8134,"chez":0.5469,"sbcl":3.9691};
 OK["tak"]=true;
-PER["sum"]={"ai":0.0620,"chez":0.4648,"sbcl":0.6817,"clojure":0.6858,"elixir":0.4769,"pypy":0.2735,"ruby":2.1593,"node":0.7451,"luajit":0.0696,"julia":0.0812,"go":0.1025,"java":0.1896,"haskell":1.0322,"rust":0.0491};
+PER["sum"]={"ai":0.0620,"go":0.1025,"rust":0.0491,"java":0.1896,"julia":0.0812,"luajit":0.0696,"pypy":0.2735,"node":0.7451,"elixir":0.4769,"chez":0.4648,"sbcl":0.6817};
 OK["sum"]=true;
-PER["mapfilter"]={"ai":0.0828,"chez":0.1035,"sbcl":0.0947,"clojure":0.3077,"elixir":0.2396,"pypy":0.0933,"ruby":0.9012,"node":0.2103,"luajit":0.0304,"julia":0.0139,"go":0.0207,"java":0.0055,"haskell":0.2011,"rust":0.0049};
+PER["mapfilter"]={"ai":0.0828,"go":0.0207,"rust":0.0049,"java":0.0055,"julia":0.0139,"luajit":0.0304,"pypy":0.0933,"node":0.2103,"elixir":0.2396,"chez":0.1035,"sbcl":0.0947};
 OK["mapfilter"]=true;
-PER["deforest"]={"ai":0.0515,"chez":0.2295,"sbcl":0.2295,"clojure":0.5562,"elixir":0.4371,"pypy":0.1485,"ruby":1.9677,"node":1.1701,"luajit":0.0605,"julia":0.0177,"go":0.0440,"java":0.0130,"haskell":0.2912,"rust":0.0146};
+PER["deforest"]={"ai":0.0515,"go":0.0440,"rust":0.0146,"java":0.0130,"julia":0.0177,"luajit":0.0605,"pypy":0.1485,"node":1.1701,"elixir":0.4371,"chez":0.2295,"sbcl":0.2295};
 OK["deforest"]=true;
-PER["polysum"]={"ai":0.0000,"chez":0.1914,"sbcl":0.1973,"clojure":0.5512,"elixir":0.4046,"pypy":0.1461,"ruby":1.9477,"node":1.1667,"luajit":0.0597,"julia":0.0138,"go":0.0372,"java":0.0066,"haskell":0.2211,"rust":0.0098};
+PER["polysum"]={"ai":0.0000,"go":0.0372,"rust":0.0098,"java":0.0066,"julia":0.0138,"luajit":0.0597,"pypy":0.1461,"node":1.1667,"elixir":0.4046,"chez":0.1914,"sbcl":0.1973};
 OK["polysum"]=true;
-PER["primes"]={"ai":0.9609,"chez":1.6016,"sbcl":4.6410,"clojure":0.9491,"elixir":2.2933,"pypy":1.3050,"ruby":18.4462,"node":0.7576,"luajit":0.7970,"julia":0.8813,"go":0.8835,"java":0.7549,"haskell":1.0110,"rust":0.7709};
+PER["primes"]={"ai":0.9609,"go":0.8835,"rust":0.7709,"java":0.7549,"julia":0.8813,"luajit":0.7970,"pypy":1.3050,"node":0.7576,"elixir":2.2933,"chez":1.6016,"sbcl":4.6410};
 OK["primes"]=true;
-PER["bell"]={"ai":49.6250,"chez":63.5000,"sbcl":50.2545,"clojure":420.7573,"elixir":32.7639,"pypy":24.2373,"ruby":119.4030,"node":27.7789,"julia":74.0605,"go":23.9438,"java":36.5609,"haskell":492.1090};
+PER["bell"]={"ai":49.6250,"go":23.9438,"java":36.5609,"julia":74.0605,"pypy":24.2373,"node":27.7789,"elixir":32.7639,"chez":63.5000,"sbcl":50.2545};
 OK["bell"]=true;
-PER["strcat"]={"ai":0.0272,"chez":1.3086,"sbcl":4.3285,"clojure":14.8623,"elixir":0.0428,"pypy":0.1702,"ruby":1.7933,"node":0.1097,"luajit":1.3921,"julia":1.4594,"go":0.8686,"java":1.6665,"haskell":68.7330,"rust":0.0171};
+PER["strcat"]={"ai":0.0272,"go":0.8686,"rust":0.0171,"java":1.6665,"julia":1.4594,"luajit":1.3921,"pypy":0.1702,"node":0.1097,"elixir":0.0428,"chez":1.3086,"sbcl":4.3285};
 OK["strcat"]=true;
-PER["strscan"]={"ai":0.0737,"chez":0.1235,"sbcl":0.1665,"clojure":59.5396,"elixir":0.0978,"pypy":0.0619,"ruby":0.9818,"node":0.3834,"luajit":0.1289,"julia":0.0636,"go":0.0637,"java":0.0633,"haskell":0.3791,"rust":0.0635};
+PER["strscan"]={"ai":0.0737,"go":0.0637,"rust":0.0635,"java":0.0633,"julia":0.0636,"luajit":0.1289,"pypy":0.0619,"node":0.3834,"elixir":0.0978,"chez":0.1235,"sbcl":0.1665};
 OK["strscan"]=true;
-PER["hash"]={"ai":3.0859,"chez":0.7363,"sbcl":0.9141,"clojure":1.0521,"pypy":0.4271,"ruby":3.3372,"node":0.6999,"luajit":0.9840,"julia":0.4641,"go":0.5395,"java":0.5398,"haskell":4.4365,"rust":0.7418};
+PER["hash"]={"ai":3.0859,"go":0.5395,"rust":0.7418,"java":0.5398,"julia":0.4641,"luajit":0.9840,"pypy":0.4271,"node":0.6999,"chez":0.7363,"sbcl":0.9141};
 OK["hash"]=true;
-PER["sort"]={"ai":0.9375,"chez":0.3945,"sbcl":0.5899,"clojure":0.6840,"elixir":0.7422,"pypy":0.3548,"ruby":0.8965,"node":0.9797,"luajit":1.1449,"julia":0.0588,"go":0.3478,"java":0.1601,"haskell":1.4542,"rust":0.0636};
+PER["sort"]={"ai":0.9375,"go":0.3478,"rust":0.0636,"java":0.1601,"julia":0.0588,"luajit":1.1449,"pypy":0.3548,"node":0.9797,"elixir":0.7422,"chez":0.3945,"sbcl":0.5899};
 OK["sort"]=true;
-PER["tree"]={"ai":3.8750,"chez":0.5977,"sbcl":1.4689,"clojure":1.8900,"elixir":0.9745,"pypy":1.8633,"ruby":11.0888,"node":1.3508,"luajit":3.4780,"julia":3.0270,"go":1.5214,"java":0.4013,"haskell":1.5053,"rust":4.5344};
+PER["tree"]={"ai":3.8750,"go":1.5214,"rust":4.5344,"java":0.4013,"julia":3.0270,"luajit":3.4780,"pypy":1.8633,"node":1.3508,"elixir":0.9745,"chez":0.5977,"sbcl":1.4689};
 OK["tree"]=true;
-PER["float"]={"ai":0.2881,"chez":3.1250,"sbcl":5.1254,"clojure":0.2363,"elixir":4.3804,"pypy":0.3040,"ruby":8.9401,"node":0.1861,"luajit":0.2104,"julia":0.1808,"go":0.1941,"java":0.1794,"haskell":0.2866,"rust":0.1842};
+PER["float"]={"ai":0.2881,"go":0.1941,"rust":0.1842,"java":0.1794,"julia":0.1808,"luajit":0.2104,"pypy":0.3040,"node":0.1861,"elixir":4.3804,"chez":3.1250,"sbcl":5.1254};
 OK["float"]=true;
-PER["closure"]={"ai":0.0723,"chez":0.9727,"sbcl":1.9846,"clojure":0.7237,"elixir":2.0105,"pypy":0.0735,"ruby":63.2740,"node":0.7819,"luajit":13.0104,"julia":0.0097,"go":0.0228,"java":0.0301,"haskell":1.0826,"rust":0.0231};
+PER["closure"]={"ai":0.0723,"go":0.0228,"rust":0.0231,"java":0.0301,"julia":0.0097,"luajit":13.0104,"pypy":0.0735,"node":0.7819,"elixir":2.0105,"chez":0.9727,"sbcl":1.9846};
 OK["closure"]=true;
 PER["sat"]={"ai":40.2500};
 OK["sat"]=true;
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
-// portrait viewport -> languages down the side (fewer-but-taller is easier to
-// scan on a narrow screen); landscape -> benches down the side, languages across.
-let transposed = window.innerWidth < window.innerHeight;
+// default arrangement: benches down the side, languages across; the button
+// flips to languages-down-the-side (handy on a narrow portrait screen).
+let transposed = false;
 
 function build() {
   const rows = transposed ? LANGS : BENCHES;

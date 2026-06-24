@@ -16,8 +16,8 @@
 ;
 ; WHAT THE CROSS-LANGUAGE ROW MEASURES (read honestly): the abstraction cost of the functional-pipeline
 ; IDIOM, not a fixed algorithm. each language's number reflects how it handles the intermediates -- ai
-; FUSES them (deforestation); lua has no map/filter so a hand loop fuses them by hand; python/clojure
-; are LAZY (no intermediate lists, per-element overhead); node/ruby/schemes allocate eagerly. the clean
+; FUSES them (deforestation); lua has no map/filter so a hand loop fuses them by hand; python
+; is LAZY (no intermediate lists, per-element overhead); node/schemes allocate eagerly. the clean
 ; reading is the anchor: ai's deforested pipeline lands at luajit's HAND-WRITTEN loop -- i.e. the
 ; high-level functional source costs what the loop costs.
 (: (work n) (foldl (+) 0 (map (\ x (% (* x x) 1000003)) (filter (\ x (= 1 (% x 2))) (jot n))))

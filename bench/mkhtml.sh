@@ -3,10 +3,10 @@
 #
 # Turn the raw "<name> <lang> <reps> <ms> <chk>" lines (the same stream `make
 # raw` prints) into a self-contained benchmarks page: one table of per-iteration
-# milliseconds, a button that transposes benches<->languages, and an initial
-# orientation chosen from the viewport aspect (portrait drops languages down the
-# side). <lang-roster> is the full column order (e.g. $(ALL_LANGS)); a language
-# with no rows (toolchain absent/broken, e.g. a stale ghc) shows a column of
+# milliseconds (benches down the side, languages across), and a button that
+# transposes benches<->languages (handy on a narrow portrait screen).
+# <lang-roster> is the full column order (e.g. $(ALL_LANGS)); a language
+# with no rows (toolchain absent/broken, e.g. no luajit on PATH) shows a column of
 # dots. The page embeds its data, so it opens straight off disk -- no server.
 roster="$1"
 
@@ -95,9 +95,9 @@ cat <<'TAIL'
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
-// portrait viewport -> languages down the side (fewer-but-taller is easier to
-// scan on a narrow screen); landscape -> benches down the side, languages across.
-let transposed = window.innerWidth < window.innerHeight;
+// default arrangement: benches down the side, languages across; the button
+// flips to languages-down-the-side (handy on a narrow portrait screen).
+let transposed = false;
 
 function build() {
   const rows = transposed ? LANGS : BENCHES;

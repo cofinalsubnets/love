@@ -41,11 +41,9 @@ case $lang in
   ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = float ] || [ "$b" = fib ] || [ "$b" = tak ] || [ "$b" = primes ] || [ "$b" = strscan ] || [ "$b" = strcat ] || [ "$b" = deforest ] || [ "$b" = polysum ] || [ "$b" = closure ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l; [ "$b" = sat ] && printf "%s " ../sat/sat.l) bench.l benches/$b.l | ../out/host/ai' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   sbcl)         ext=lisp; bin=sbcl;       cmd='sbcl --script benches/$b.lisp' ;;
-  clojure)      ext=clj;  bin=clojure;    cmd='clojure -M benches/$b.clj' ;;
   elixir)       ext=exs;  bin=elixir;     cmd='elixir benches/$b.exs' ;;
   julia)        ext=jl;   bin=julia;      cmd='julia --startup-file=no benches/$b.jl' ;;
   pypy)         ext=py;   bin=pypy3;      cmd='pypy3 benches/$b.py' ;;
-  ruby)         ext=rb;   bin=ruby;       cmd='ruby benches/$b.rb' ;;
   node)         ext=js;   bin=node;       cmd='node benches/$b.js' ;;
   luajit)       ext=lua;  bin=luajit;     cmd='luajit benches/$b.lua' ;;
   # compiled languages: build to a scratch dir (the compile is NOT timed -- each
@@ -53,7 +51,6 @@ case $lang in
   # output, so run.sh drops the cell exactly as it does for a missing source file.
   go)           ext=go;   bin=go;         cmd='d=$(mktemp -d); cp benches/$b.go "$d/main.go"; cp lib/bench.go "$d/bench.go"; go run "$d/main.go" "$d/bench.go"; rm -rf "$d"' ;;
   rust)         ext=rs;   bin=rustc;      cmd='d=$(mktemp -d); rustc -O -o "$d/b" benches/$b.rs >/dev/null 2>&1 && "$d/b"; rm -rf "$d"' ;;
-  haskell)      ext=hs;   bin=ghc;        cmd='d=$(mktemp -d); ghc -O2 -fno-full-laziness -dynamic -ilib -outputdir "$d" -o "$d/b" benches/$b.hs >/dev/null 2>&1 && "$d/b"; rm -rf "$d"' ;;
   java)         ext=java; bin=javac;      cmd='d=$(mktemp -d); javac -d "$d" benches/$b.java lib/Bench.java >/dev/null 2>&1 && java -cp "$d" Main; rm -rf "$d"' ;;
   *) echo "run.sh: unknown language '$lang'" >&2; exit 1 ;;
 esac

@@ -8,27 +8,26 @@ language** — the fastest readily available — so the columns compare *languag
 not JIT-vs-bytecode variants of one. The lineup:
 
 - **ai** — the subject.
-- **lisps** — `chez` (Scheme, compiled), `sbcl` (Common Lisp, native compiler),
-  `clojure` (JVM).
-- **dynamic** — `pypy` (Python), `ruby`, `node` (JS, V8), `luajit` (Lua, JIT),
-  `elixir` (BEAM), `julia` (LLVM JIT).
-- **static / compiled** — `go`, `java` (JVM, JIT), `haskell` (GHC `-O2`),
-  `rust` (`rustc -O`).
+- **static / compiled** — `go`, `rust` (`rustc -O`), `java` (JVM, JIT).
+- **JIT** — `julia` (LLVM JIT), `luajit` (Lua, JIT), `pypy` (Python),
+  `node` (JS, V8).
+- **other** — `elixir` (BEAM), `chez` (Scheme, compiled),
+  `sbcl` (Common Lisp, native compiler).
 
 The interpreted languages run their source directly; the compiled ones
-(`go`/`java`/`haskell`/`rust`) are built to a scratch dir first and then run — the
+(`go`/`rust`/`java`) are built to a scratch dir first and then run — the
 compile is **not** timed (each bench self-times only its inner loop), so every
 column reflects steady-state execution. `BENCH_LANG` sets each column's label; the
-per-language timing primitive lives in `lib/bench.*` (and `lib/Bench.*` for Java
-and Haskell). One implementation per extension now, so a column maps to its file:
-`.ss` chez, `.lisp` sbcl, `.py` pypy, `.js` node, `.lua` luajit, plus `.clj`/`.exs`/
-`.jl`/`.rb`/`.go`/`.java`/`.hs`/`.rs`.
+per-language timing primitive lives in `lib/bench.*` (and `lib/Bench.java` for
+Java). One implementation per extension now, so a column maps to its file:
+`.ss` chez, `.lisp` sbcl, `.py` pypy, `.js` node, `.lua` luajit, plus `.exs`/
+`.jl`/`.go`/`.java`/`.rs`.
 
 ## Running
 
 ```sh
 make bench          # from the repo root, or `make` here: the default column set
-                    #   (ai pypy ruby node luajit julia go rust)
+                    #   (ai go rust julia luajit pypy node)
 make all            # every language present on this machine (a wide table)
 make chez           # one language, shown alongside ai for contrast
 make pypy           # ... any language name works as a target
@@ -125,7 +124,7 @@ or broken) shows a dotted column.
 hundreds of digits long) and rebuilds its memo tables each iteration so every rep recomputes
 from scratch. It's the most evaluator-neutral comparison here — every language does identical
 big-integer arithmetic (node and julia via `BigInt`, go via `math/big`, java via `BigInteger`,
-the lisps/python/ruby/haskell natively). **luajit and rust are omitted**: Lua's number model is
+the lisps/pypy natively). **luajit and rust are omitted**: Lua's number model is
 a 64-bit float and the Rust standard library has no arbitrary-precision integer (and these
 single-file benches pull in no crates), so there is no `bell.lua`/`bell.rs` and the cell shows
 `–`. The memo also shows a dialect difference: most implementations use a mutable hashtable,
@@ -137,7 +136,7 @@ sum-looks-up again (checksum = N²). Keys are sparse (stride 97) on purpose, so
 luajit/pypy can't service them from a contiguous-integer *array* fast-path and
 must actually hash. Each language uses its native mutable table — ai `table`/
 `put`/`get`, chez/sbcl hashtables, JS `Map`, luajit tables, julia `Dict`, go/rust
-hash maps, java's `HashMap` (and `clojure` via the same interop). The functional
+hash maps, java's `HashMap`. The functional
 `elixir` has no mutable table, so it drops the `hash` cell.
 
 `sort` builds 5000 ints from a MINSTD LCG (`x = 16807·x mod 2³¹−1`, chosen so the
@@ -205,7 +204,7 @@ fixnum, so it is identical across every language (luajit's floats included) and
 doubles as the `ok` cross-check.
 
 The list benches compare *idiomatic* implementations: ai and the lisps walk
-cons-cell linked lists, while pypy/ruby/node/luajit use native dynamic arrays and
+cons-cell linked lists, while pypy/node/luajit use native dynamic arrays and
 built-ins — so `sum`/`mapfilter` largely measure linked lists vs. C array
 primitives, not just the language. The numeric/recursion benches (`fib`, `tak`,
 `primes`), `closure`, and `float` are the closest apples-to-apples comparison of
@@ -223,9 +222,9 @@ map/filter into the fold and lowers `foldl`-over-`jot` to the same loop codegen
 `fib`/`primes` use). Read the cross-language row **honestly**: it measures the
 *abstraction cost of the functional-pipeline idiom*, not a fixed algorithm — each
 column reflects how the implementation handles the intermediates (ai fuses them;
-`luajit` has no `map`/`filter`, so its bench fuses by hand; `pypy`/`clojure` are
+`luajit` has no `map`/`filter`, so its bench fuses by hand; `pypy` is
 lazy — no intermediate lists, per-element overhead; `rust`'s iterator chain fuses
-and vectorizes; `node`/`ruby`/the schemes allocate eagerly). The anchor is that
+and vectorizes; `node`/the schemes allocate eagerly). The anchor is that
 ai's deforested pipeline lands near `luajit`'s *hand-written loop* — the high-level
 functional source costs what the loop costs. (The purest A/B is ai with the glaze on vs off;
 we keep it always-on and watch the gate for regressions.)
@@ -235,19 +234,16 @@ we keep it always-on and watch the gate for regressions.)
 ```
 bench.l          ai harness — iota1 + the (bench name work) timer
 lib/bench.py     python harness — bench(name, work)        [pypy]
-lib/bench.rb     ruby harness   — bench(name) { work }
 lib/bench.ss     chez harness   — (bench name work)
 lib/bench.lisp   sbcl harness   — (bench name work)
-lib/bench.clj    clojure harness
 lib/bench.exs    elixir harness (BEAM monotonic clock; functional map memo)
 lib/bench.js     node harness   — bench(name, work)
 lib/bench.lua    luajit harness — bench(name, work)
 lib/bench.jl     julia harness  — bench(name, work); warms the JIT, then times
 lib/bench.go     go harness     — bench(name, func() int64)   [package main, no main]
 lib/Bench.java   java harness   — Bench.bench(name, LongSupplier)
-lib/Bench.hs     haskell harness — module Bench (bench); NOINLINE forcing for -O2
 lib/bench.rs     rust harness   — bench(name, FnMut()->i64); include!d by each bench
-benches/<x>.{l,ss,lisp,clj,exs,jl,py,rb,js,lua,go,java,hs,rs}
+benches/<x>.{l,ss,lisp,exs,jl,py,js,lua,go,java,rs}
                  each language's implementation of a workload
 run.sh           per-language run/compile command + PATH check + per-bench timeout
 report.awk       formats the raw result lines into the terminal table
@@ -270,7 +266,7 @@ Makefile         orchestration — per-language out/bench/<lang>.txt result file
 To add a whole new **language**, give it a unique extension, add a `case` arm in
 `run.sh`, and add its `EXT_`/`HARN_`/`BIN_` lines plus an `ALL_LANGS` entry in the
 `Makefile`. Interpreted languages run their source directly; a **compiled** one
-builds to a scratch dir and runs the binary (see the `go`/`rust`/`haskell`/`java`
+builds to a scratch dir and runs the binary (see the `go`/`rust`/`java`
 arms) — the compile isn't timed, and a build failure simply drops the cell. Add a
 `lib/bench.<ext>` (or `lib/Bench.<ext>`) that reads `BENCH_LANG` for its column
 label and implements the rep-doubling timer. If the language has an optimizing

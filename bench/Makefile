@@ -9,8 +9,8 @@
 # for ai, the ai binary). So `make bench` reformats instantly once the files
 # exist; touch a source or `make clean` to force a re-run.
 #
-#   make / make bench   show the default column set (ai pypy ruby node
-#                          luajit julia go rust), running only what is stale
+#   make / make bench   show the default column set (ai go rust julia
+#                          luajit pypy node), running only what is stale
 #   make all            show every language present on this machine
 #   make <lang>         show one language (ai is shown alongside for contrast),
 #                          e.g. make chez / make pypy / make rust
@@ -42,59 +42,51 @@ BENCHES := fib tak sum mapfilter deforest polysum primes bell strcat strscan has
 # pays the timeout wall for them (re-test by removing one and `make clean`).
 SKIP :=
 
-# every language, in report-column order (grouped by family). ai first.
+# every language, in report-column order. ai first, then native (go rust java),
+# JIT (julia luajit pypy node), BEAM (elixir), and the schemes/lisps (chez sbcl).
 ALL_LANGS := ai \
-             chez sbcl clojure \
-             elixir pypy ruby node luajit julia \
-             go java haskell rust
+             go rust java \
+             julia luajit pypy node \
+             elixir chez sbcl
 
 # the columns `make bench` shows by default.
-DEFAULT_LANGS := ai pypy ruby node luajit julia go rust
+DEFAULT_LANGS := ai go rust julia luajit pypy node
 
 # per-language: source extension, harness file (a result depends on it), the
 # interpreter binary (for the PATH presence check), and any extra prereq.
 EXT_ai := l
 EXT_chez := ss
 EXT_sbcl := lisp
-EXT_clojure := clj
 EXT_elixir := exs
 EXT_pypy := py
-EXT_ruby := rb
 EXT_node := js
 EXT_luajit := lua
 EXT_julia := jl
 EXT_go := go
 EXT_java := java
-EXT_haskell := hs
 EXT_rust := rs
 
 HARN_ai := $(HARN)
 HARN_chez := lib/bench.ss
 HARN_sbcl := lib/bench.lisp
-HARN_clojure := lib/bench.clj
 HARN_elixir := lib/bench.exs
 HARN_pypy := lib/bench.py
-HARN_ruby := lib/bench.rb
 HARN_node := lib/bench.js
 HARN_luajit := lib/bench.lua
 HARN_julia := lib/bench.jl
 HARN_go := lib/bench.go
 HARN_java := lib/Bench.java
-HARN_haskell := lib/Bench.hs
 HARN_rust := lib/bench.rs
 
 BIN_chez := chez
 BIN_sbcl := sbcl
-BIN_clojure := clojure
 BIN_elixir := elixir
 BIN_pypy := pypy3
-BIN_ruby := ruby
 BIN_node := node
 BIN_luajit := luajit
 BIN_julia := julia
 BIN_go := go
 BIN_java := javac
-BIN_haskell := ghc
 BIN_rust := rustc
 
 EXTRA_ai := $(GL)

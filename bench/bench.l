@@ -6,7 +6,7 @@
 ; `bench` auto-scales the repetition count: it runs `work` an increasing power
 ; of two times until the wall time clears bench-min-ms, then reports the chosen
 ; reps and the total ms so a per-iteration time is reps-independent. one line is
-; printed per bench, matching the python/ruby harnesses:
+; printed per bench, matching the python/node harnesses:
 ;     <name> ai <reps> <ms> <checksum>
 ; the lang label comes from BENCH_LANG (run.sh exports it), default "ai" -- the
 ; SAME contract as lib/bench.* (bench.py/.lisp/...); it MUST equal the column key
