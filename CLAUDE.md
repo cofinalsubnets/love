@@ -193,7 +193,7 @@ $@(3 4)              ; 7
 8 | 4 | 2 | 1        ; 15      bitwise
 
 ; --- order & equality --- < <= > >= is a *total order over all values*: across kinds by the
-; true-blue lattice (point < string < number < chain < tray < map < top; a galaxy folds into the
+; true-blue lattice (point (() < bare mints < named noms) < string < number < chain < tray < map < top; a galaxy folds into the
 ; number band by its net), within a kind by value/lexicographic order (complex by (re,im); maps and
 ; lambdas by an alpha-invariant hash; an array operand broadcasts to a 0/1 mask, so the scalar order
 ; is observed through `sort`, not infix `<` on a galaxy). `=` is value equality and bridges the whole
@@ -201,10 +201,10 @@ $@(3 4)              ; 7
 ; demo:
 3 = 3.0              ; true    = bridges the numeric tower
 1 < 1.5              ; true
-'x < "a"             ; true    the floor: point (mint/nom) < string < number < chain < map < top
+'x < "a"             ; true    the floor: point (mint/nom) < string < number < chain < tray < map < top
 "a" < 1              ; true    ... and string sits below the numbers
 (show (sort (L @(2 4) 5 "s")))   ; "(\"s\" 5 @(2 4))"   a galaxy (net 6) interleaves with the stars
-#(1 10) < cap        ; true    the map rung: chain < map < top
+#(1 10) < cap        ; true    the map rung: chain < tray < map < top
 (id? 'a 'a)          ; true    id? is identity; !(id? '(1) '(1))
 
 ; --- comparing functions --- `=` on two closures is alpha + structural: their source \-exprs match

@@ -364,15 +364,18 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // a scalar GEM (KWide + ai_vec_type -> KWide/KFlo/KCplx) and a rank>=1 vec to an array
 // (KArrZ + ai_vec_type). So the scalar GEM tower (charm/wide/float/complex/big -- the
 // self-netting fixed-width numbers) and the array tower it mirrors both dispatch inline
-// (KArrZ~int, KArrR~float, KArrC~complex, KArrO~object). The diagonal is the type lattice
-// by semantics then representation: KMint the blue floor (() and the nameless points,
+// (KArrZ~int, KArrR~float, KArrC~complex, KArrO~object). The diagonal is the DISPATCH
+// lattice by semantics then representation: KMint the blue floor (() and the nameless points,
 // least of all) then KNom (the named points), then arithmetic lane [KCharm..KArrO] (scalars then their
 // array counterparts), sequence/concat lane [KString..KChain], then map, thread last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (chain)
-// caps the sequence lane; KMap is the map's own rung just under KHot, so the total
-// order's chain < map < lambda is the enum order itself (a map is still a lookup lambda
-// for +/*/apply -- the rung exists for the order and the honest matrix cells).
+// caps the sequence lane; KMap is the map's own rung just under KHot (a map is still a
+// lookup lambda for +/*/apply -- the rung exists for the dispatch matrix's honest cells).
+// This enum is the DISPATCH order ONLY. The total COMPARE order is a SEPARATE remap --
+// cmp_rank in ai.c -- which reseats string just below the number band and the KArrO tray
+// just ABOVE chain (point < string < number < chain < tray < map < hot). The two coincide
+// only on the chain < map < hot tail; do NOT read this enum as the compare order.
 // KN is the matrix dimension.
 enum q { KMint, KNom, KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KChain, KMap, KHot, KN };
 #define ai_data_n 9     // # of data sentinels (vestigial now: ai_typ is a plain address-compare, no section/stride)
