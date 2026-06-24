@@ -22,7 +22,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: #1a1b26; color: #a9b1d6;
+  background: #04060e; color: #a9b1d6;
   font-family: "Web437 DOS/V TWN16", "Px437 IBM VGA8", "Px437 IBM VGA 9x16",
                "ModernDOS 8x16", "PxPlus IBM VGA8", "DejaVu Sans Mono",
                ui-monospace, Menlo, Consolas, monospace;
@@ -94,7 +94,8 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 
 /* --- the live bao shell --- */
 #status { color: #565f89; font-size: .9em; margin-top: .2em; }
-#term { position: relative; background: #16161e; border: 1px solid #3b4261;
+#term { position: relative; background: #000000; color: #ffffff; border: 1px solid #34406e;
+        box-shadow: 0 0 30px -4px rgba(122,162,247,.28), 0 0 90px -22px rgba(122,162,247,.22);
         border-radius: 6px; padding: .8em; margin-top: 1em; height: 24em;
         display: flex; flex-direction: column; cursor: text;
         font-family: "Web437 DOS/V re. PRC16", "Px437 IBM VGA8", ui-monospace, monospace;
@@ -107,13 +108,13 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
          background: #1f2335; border: 1px solid #3b4261; border-radius: 4px;
          color: #565f89; font: inherit; font-size: .8em; padding: .1em .5em; cursor: pointer; }
 #clear:hover { border-color: #7aa2f7; color: #c0caf5; }
-.in  { color: #9aa5ce; } .in::before { content: "> "; color: #565f89; }
-.ans { color: #9ece6a; }
-.cnd { color: #bb9af7; }
+.in  { color: #aaaaaa; } .in::before { content: "> "; color: #555555; }
+.ans { color: #55ff55; }
+.cnd { color: #ff55ff; }
 #row { display: flex; align-items: flex-start; }
-#row::before { content: "> "; color: #565f89; white-space: pre; }
+#row::before { content: "> "; color: #555555; white-space: pre; }
 #cmd { flex: 1; background: none; border: none; outline: none; resize: none;
-       color: #c0caf5; font: inherit; line-height: inherit; overflow: hidden; }
+       color: #ffffff; font: inherit; line-height: inherit; overflow: hidden; }
 
 /* --- chips (runnable examples) + the crew roster --- */
 .chip { display: inline-block; background: #1f2335; border: 1px solid #3b4261;
@@ -149,6 +150,18 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 .glossary dd { margin: .1em 0 0 1.4em; color: #737aa2; font-size: .94em;
                text-align: justify; hyphens: auto; }
 .glossary dd code { background: none; border: none; padding: 0; }
+/* a term wears its color: the color words in their hue, nothing/() the deep
+   slate blue-grey of the floor. attribute/compound selectors out-specify .term. */
+.term[data-g="green"] { color: #34ff9e; }
+.term[data-g="red"]   { color: #ff3b6b; }
+.term[data-g="blue"]  { color: #3a9dff; }
+.term.nul             { color: #565f89; }
+/* the color stars glow, just barely, on hover */
+.term[data-g="green"]:hover { text-shadow: 0 0 6px #34ff9e; }
+.term[data-g="red"]:hover   { text-shadow: 0 0 6px #ff3b6b; }
+.term[data-g="blue"]:hover  { text-shadow: 0 0 6px #3a9dff; }
+/* the color words' glossary entries wear their color too */
+#g-green { color: #34ff9e; } #g-red { color: #ff3b6b; } #g-blue { color: #3a9dff; }
 h1::before { content: "🌑 "; }
 
 /* --- mobile --- the 2x desktop size (32px) overflows a phone, so drop back to
