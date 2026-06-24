@@ -2,8 +2,8 @@
 ; hex the assembler emits, and EVERY one was checked against the real toolchain: emit the bytes,
 ; `objdump -d -M intel`, confirm the mnemonic. so this file is the frozen record of that round-trip
 ; -- if a golden drifts, either the encoder broke or the disassembler disagrees, and either is a bug.
-; run: out/host/ai -l asm/asm.l -l asm/x64.l -l asm/text.l -l asm/elf.l asm/asmtest.l
-; (exits nonzero on any miss). it gates the encoder goldens, the text front-end, and the ELF linker.
+; run: out/host/ai -l asm/asm.l -l asm/x64.l -l asm/arm64.l -l asm/text.l -l asm/elf.l asm/asmtest.l
+; (exits nonzero on any miss). it gates both backends, the text front-end, and the ELF linker.
 
 (: pass (tablet 0) _ (pin pass 0 0)
    fail (tablet 0) _ (pin fail 0 0)
@@ -13,7 +13,8 @@
       (? (= want got) (bump pass)
          (: _ (bump fail)
             (sayln (+ "FAIL " (+ name (+ ": want " (+ (show want) (+ " got " (+ (show got) "\n")))))))))
-   (chk name want prog) (chk-eq name want (asm-hex 'x64 prog))
+   (chk2 name want target prog) (chk-eq name want (asm-hex target prog))
+   (chk name want prog) (chk2 name want 'x64 prog)
 
    ;; -- the golden table: (name  expected-hex  IR-program). --
    tests (L
@@ -112,12 +113,47 @@
 
    ;; -- the ELF linker (asm/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))
-   elfres  (elf64 (\ a elfprog) (L 65 66 67))
+   elfres  (elf64 'x64 (\ a elfprog) (L 65 66 67))
    elfimg  (peep elfres 'bytes 0)
-   _ (chk-eq "elf.magic"  127      (at elfimg 0))        ; \x7f E L F
+   _ (chk-eq "elf.magic"   127     (at elfimg 0))        ; \x7f E L F
    _ (chk-eq "elf.machine" 62      (at elfimg 18))       ; e_machine = x86-64
-   _ (chk-eq "elf.entry"  4194424  (peep elfres 'entry 0))
-   _ (chk-eq "elf.size"   (+ 120 (+ (tally (asm 'x64 elfprog)) 3)) (tally elfimg))
+   _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
+   _ (chk-eq "elf.size"    (+ 120 (+ (tally (asm 'x64 elfprog)) 3)) (tally elfimg))
+   _ (chk-eq "elf.arm64-machine" 183 (at (peep (elf64 'arm64 (\ a elfprog) ()) 'bytes 0) 18))
+
+   ;; -- the aarch64 backend (asm/arm64.l): the SAME neutral IR, a second target. fixed 32-bit
+   ;; little-endian words; every golden checked vs llvm-mc / llvm-objdump. --
+   a64tests (L
+      (L "a64.li"     "800780d2"          '((li r0 60)))
+      (L "a64.movk"   "00cf8ad28046a2f2"  '((li r0 305419896)))    ; 0x12345678: movz + movk
+      (L "a64.mov"    "e00301aa"          '((mov r0 r1)))
+      (L "a64.add"    "2000028b"          '((add r0 r1 r2)))        ; native 3-address, no dance
+      (L "a64.sub"    "200002cb"          '((sub r0 r1 r2)))
+      (L "a64.and"    "2000028a"          '((and r0 r1 r2)))
+      (L "a64.or"     "200002aa"          '((or  r0 r1 r2)))
+      (L "a64.xor"    "200002ca"          '((xor r0 r1 r2)))        ; -> eor
+      (L "a64.addi"   "20140091"          '((add r0 r1 5)))
+      (L "a64.subi"   "201400d1"          '((sub r0 r1 5)))
+      (L "a64.addneg" "201400d1"          '((add r0 r1 -5)))        ; negative imm flips add->sub
+      (L "a64.cmp"    "1f0001eb"          '((cmp r0 r1)))
+      (L "a64.cmpi"   "1f1c00f1"          '((cmp r0 7)))
+      (L "a64.mul"    "207c029b"          '((imul r0 r1 r2)))
+      (L "a64.neg"    "e00300cb"          '((neg r0)))
+      (L "a64.not"    "e00320aa"          '((not r0)))              ; -> mvn
+      (L "a64.ldr"    "200040f9"          '((ld r0 r1 0)))
+      (L "a64.ldr8"   "200440f9"          '((ld r0 r1 8)))
+      (L "a64.str"    "e30b00f9"          '((st sp 16 r3)))
+      (L "a64.ldur"   "20805ff8"          '((ld r0 r1 -8)))         ; unaligned/neg -> LDUR
+      (L "a64.push"   "e00f1ff8"          '((push r0)))             ; str x0,[sp,#-16]!
+      (L "a64.pop"    "e00741f8"          '((pop r0)))              ; ldr x0,[sp],#16
+      (L "a64.lea"    "ff8300d1"          '((lea sp sp -32)))
+      (L "a64.ret"    "c0035fd6"          '((ret)))
+      (L "a64.svc"    "010000d4"          '((sys)))
+      (L "a64.nop"    "1f2003d5"          '((nop)))
+      (L "a64.brk"    "000020d4"          '((trap)))
+      (L "a64.loop"   "1f0001eb60000054000400d1fdffff17c0035fd6"
+                      '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))))
+   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)

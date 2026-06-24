@@ -2,9 +2,10 @@
 ; instruction forms (a RISC-ish three-address surface over abstract registers r0..r14 + sp); a
 ; BACKEND lowers each form to machine-code bytes. this file is the arch-NEUTRAL half: the IR shape,
 ; the two-pass layout (assign addresses, then resolve label-relative fixups), the backend registry,
-; and the byte/hex plumbing every target shares. the x86-64 backend lives next door in asm/x64.l;
-; an aarch64 one drops in the same way -- pin a `lower`/`patch` pair under a target name and the
-; driver below never changes. load with `-l asm/asm.l -l asm/x64.l`; the gate is asm/asmtest.l.
+; and the byte/hex plumbing every target shares. two backends ride on it -- asm/x64.l (x86-64) and
+; asm/arm64.l (aarch64) -- and a third drops in the same way: pin a `lower`/`patch` pair under a
+; target name and the driver below never changes. load with `-l asm/asm.l -l asm/x64.l` (and/or
+; `-l asm/arm64.l`); the gate is asm/asmtest.l.
 ;
 ; the IR (each form a list, the head an op symbol):
 ;   (label name)            ; a named address (emits no bytes)
@@ -33,6 +34,7 @@
    ;; &/>> path (their inputs are offsets/imm32, always < 2^31, where & is exact). le64 must NOT: a movabs
    ;; immediate can be a full 64-bit word >= 2^63 -- a BIGNUM in ai, on which `&` is broken (the high limb
    ;; is dropped). so le64 normalizes negatives into [0,2^64) and slices with //% (both bignum-exact). --
+   (catall ls) (foldr cat () ls)                     ; concat a list of byte-lists
    (byte n)  (& n 255)
    (le16 n)  (L (byte n) (byte (>> n 8)))
    (le32 n)  (L (byte n) (byte (>> n 8)) (byte (>> n 16)) (byte (>> n 24)))
@@ -47,20 +49,23 @@
 
    ;; -- a FIXUP: a relocation placeholder a backend drops where a label-relative field goes. it
    ;; occupies `w` bytes in the layout; the driver fills it in pass two via the backend's `patch`.
-   ;; carried inline among the bytes as ('fix w kind label) so length and order just fall out.
-   (fix w kind label) (L 'fix w kind label)
+   ;; carried inline among the bytes as ('fix w kind label aux) so length and order just fall out.
+   ;; `aux` is a backend scratch value -- x86 ignores it; a fixed-width arch (aarch64) stashes the
+   ;; base instruction word there, since its branch offset is a bitfield WITHIN the word, not bytes.
+   (fix w kind label aux) (L 'fix w kind label aux)
    (fix? x)   (? (two? x) (= (cap x) 'fix) 0)
    (fix-w x)  (at x 1)
    (fix-k x)  (at x 2)
    (fix-l x)  (at x 3)
+   (fix-a x)  (at x 4)
    (item-len x) (? (fix? x) (fix-w x) 1)              ; a byte is 1; a fixup is its field width
    (chunk-len l) (foldl (\ a x (+ a (item-len x))) 0 l)
 
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }. --
    backends (tablet 0)
    (defbackend name be) (pin backends name be)
-   (lower-with be ins)        ((peep be 'lower 0) ins)
-   (patch-with be k t s w)    ((peep be 'patch 0) k t s w)
+   (lower-with be ins)         ((peep be 'lower 0) ins)
+   (patch-with be k t s w aux) ((peep be 'patch 0) k t s w aux)
 
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels. returns
    ;; (items . labels): the flat byte/fixup stream and a name->address tablet. --
@@ -79,7 +84,7 @@
             (? (fix? x)
                (: tgt (peep labels (fix-l x) ())
                   _ (? (imm? tgt) 0 (scare 'undef-label (fix-l x)))
-                  bs (patch-with be (fix-k x) tgt addr (fix-w x))
+                  bs (patch-with be (fix-k x) tgt addr (fix-w x) (fix-a x))
                   (cat bs (resolve (cup items) labels be (+ addr (fix-w x)))))
                (link x (resolve (cup items) labels be (+ addr 1))))))
 

@@ -145,9 +145,9 @@
    ;; control transfer. call/jmp are E8/E9 cd; a conditional is 0F 8x cd. each leaves a rel32 fixup
    ;; the driver fills once the target label's address is known.
    (jcc-op c) (: o (peep x64-cc c -1) (? (< o 0) (scare 'badcc c) o))
-   (emit-call label)     (L 232 (fix 4 'rel32 label))
-   (emit-jmp  label)     (L 233 (fix 4 'rel32 label))
-   (emit-br cond label)  (L 15 (jcc-op cond) (fix 4 'rel32 label))
+   (emit-call label)     (L 232 (fix 4 'rel32 label 0))
+   (emit-jmp  label)     (L 233 (fix 4 'rel32 label 0))
+   (emit-br cond label)  (L 15 (jcc-op cond) (fix 4 'rel32 label 0))
 
    ;; the dispatch: one IR form -> its byte/fixup chunk.
    (x64-lower ins)
@@ -181,7 +181,7 @@
             (scare 'bad-op op)))
 
    ;; the only relocation kind: a 32-bit pc-relative field, measured from the END of the field.
-   (x64-patch kind target site width)
+   (x64-patch kind target site width aux)
       (? (= kind 'rel32) (le32 (- target (+ site width))) (scare 'badfix kind))
 
    ;; -- register the backend under its target names. --
