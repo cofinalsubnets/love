@@ -19,7 +19,7 @@ ai0 = out/host/ai0
 
 .PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_hostnif test_glaze test_sat test_extract
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_gc test_hostnif test_glaze test_sat test_extract
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` runs its five independent phases in PARALLEL by default, via a
 # recursive -j sub-make: the bootstrap deps serialize the ai0/host build under
@@ -31,7 +31,7 @@ ai0 = out/host/ai0
 # so the outer (serial) make doesn't build them before the parallel sub-make.
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_ai0 test_proof test_gen test_tools
+test_phases = test_host test_ai0 test_proof test_gen test_gc test_tools
 test:
 	@$(MAKE) --no-print-directory -j$(JOBS) $(osync) $(test_phases)
 # test_tools (vmret + cook + tele + xor) is in the fast `test` so an app breaks the
@@ -39,7 +39,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_extract test_tools test_hostnif test_glaze test_sat nettest test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_gc test_extract test_tools test_hostnif test_glaze test_sat nettest test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -143,6 +143,20 @@ test_proof:
 	@echo TEST rocq/spec.v "(coqc)"
 	@$(COQC) -q rocq/spec.v
 	@rm -f rocq/spec.vo rocq/spec.vok rocq/spec.vos rocq/spec.glob rocq/.spec.aux
+endif
+# Machine-check rocq/gc.v -- the generational MINOR is SOUND: under a complete
+# write barrier (rem_complete) the nursery scan reaches every live young object,
+# so no live young is lost (barrier_sound) -- the Coq proof of doc/proto/gengc.l's
+# load-bearing self-check (3b, the barrier is necessary). Axiom-free like spec.v;
+# the C stays connected by the differential oracle + gen_audit. No-op without coqc.
+ifeq ($(COQC),)
+test_gc:
+	@echo "test_gc: skipped (needs rocq/coqc)"
+else
+test_gc:
+	@echo TEST rocq/gc.v "(coqc)"
+	@$(COQC) -q rocq/gc.v
+	@rm -f rocq/gc.vo rocq/gc.vok rocq/gc.vos rocq/gc.glob rocq/.gc.aux
 endif
 # The .l -> .v pipeline: tools/spec2coq.l (run on the host binary $m) reads
 # test/spec.l and EMITS rocq/gen.v -- the spec generating Coq theorems for its
@@ -444,7 +458,11 @@ k_S_o = $(k_S:$(R)/%.S=$(k_odir)/%.o)
 k_asm_o = $(k_asm:$(R)/%.asm=$(k_odir)/%.o)
 k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
 
-kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
+# -DAI_NOGEN: the freestanding targets stay on the single-pool gcg collector for now. The generational
+# minor graduated as the host default, but on a constrained device it must be BOUNDED (set g->budget to
+# the available RAM -- the Appel knob) or its two growing pools exhaust kmallocw / blow the gate timeout.
+# Wiring that budget from the limine memmap is the kship port's call; until then the kernel runs gcg.
+kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC -DAI_NOGEN \
   -ffunction-sections -fdata-sections
 kldflags := -static -nostdlib --gc-sections -T $(R)/port/kship/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \

@@ -41,6 +41,15 @@
 #define ai_tco 1
 #endif
 
+// The generational collector GRADUATED out of AI_STAT: it is the default runtime on every frontend
+// whose g->alloc can supply the major pool (host + the kship kernel both malloc; a fixed-arena embedded
+// target falls back to gcg). AI_STAT thus defaults ON -- it no longer gates the mechanism, only names
+// the (always-cheap) instrumentation `gauge` reports. `-DAI_NOGEN` keeps the major pool unallocated, so
+// ai_please runs the single-pool gcg everywhere (the escape hatch / A-B switch); see ai_ini_0.
+#ifndef AI_STAT
+#define AI_STAT
+#endif
+
 #if ai_tco
 #define _lvm(n, ...) struct ai *n(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp, ##__VA_ARGS__)
 #define Ap(fn, g, ...) fn(g, Ip, Hp, Sp, ##__VA_ARGS__)
@@ -139,9 +148,56 @@ struct ai {
  union { uintptr_t t0; ai_word *cp; };
  void *(*alloc)(struct ai*, void*, size_t);  // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
  uintptr_t b;
-#ifdef AI_STAT
- uintptr_t n_gc, max_len, max_heap; // gc instrumentation (cycles, peak pool len, peak live heap; words) -- build -DAI_STAT to keep them; off, the core is 3 words leaner and gauge reports 0 for them
-#endif
+ ai_word *minor;      // the MINOR-POOL watermark: hp right after the last collection, so [minor, hp) is
+                        // the YOUNG set (allocated since) and [end, minor) the OLD/tenured set. A raw pool
+                        // pointer (like hp/sp/cp), NOT a traced value -- recomputed every collection, never
+                        // forwarded. Stage 1: maintained + observed (gauge `old`); the minor that reaps the
+                        // young set lands later. See doc/gengc.md.
+ // GENERATIONAL collector state -- ALWAYS present (the minor graduated out of AI_STAT). The mechanism
+ // activates when major_pool != 0 (the frontend's g->alloc supplied it; a fixed-arena embedded target
+ // leaves it 0 and runs gcg). The counters are cheap (a handful of adds per collection, which is rare)
+ // and `gauge` reports them; -DAI_STAT no longer gates them. -DAI_NOGEN forces gcg (no major pool).
+ uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
+           n_seen, n_evac;          // Σ over collections: heap occupancy entering each (scanned = live+dead) and survivors copied out (live). mortality = (n_seen-n_evac)/n_seen; copy-amp = n_evac/max_heap -- the generational-GC justifier (does the same live set get recopied every cycle?)
+ // generational write-barrier AUDIT (stage 2): the remembered set -- old objects that hold a young
+ // pointer (recorded by the barrier at ai_mapput/map_grow). A malloc'd buffer: AI_STAT is host-only,
+ // so the freestanding kernel never sees this. gen_audit walks the old region each collection and
+ // counts rem_miss = old->young edges the barrier failed to remember (a soundness hole for the minor).
+ ai_word *rem; uintptr_t rem_cap, rem_n, rem_hi, rem_miss;
+ // the DIRTY flag: a non-map write hit an old cell (reader set-tail / poke into a tenured thread /
+ // c0 backpatch) -- the compiler is the only thing that mutates old in place, and not via a map. A
+ // collection with dirty set must be a MAJOR (full); dirty clear -> a minor is sound. Cleared on
+ // every collection. The audit runs only when clear, so it proves a minor would lose nothing.
+ uintptr_t dirty;
+ // stage 3: the MINOR + the MAJOR pool (AI_STAT/host only). The main pool is now a pure MINOR pool
+ // (the whole heap [end,hp) is young -- the `minor` watermark stays == end, never advanced); OLD lives
+ // in the `major_pool`, a separate two-space (di) region. A MINOR evacuates the minor pool -> major-pool
+ // active half (append) and resets hp=end; a MAJOR drains {minor pool + a full major-pool scan} -> the
+ // major-pool active half, then COMPACTS it -> the spare half (or a fresh bigger pair), flips, rebuilds symbols, runs
+ // finalizers. gc_to_{lo,hi} bound the to-space (a thread's home, for the terminator scan in
+ // evac_thread); gc_fwd is the forwarding floor (word0 in [gc_fwd, gc_to_hi) <=> a copy made THIS
+ // collection -- distinguishing it from a pointer to a PRE-EXISTING major object). gc_gen redirects
+ // bump() to major_hp during a generational collection.
+ ai_word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
+ uintptr_t major_len;                       // major half size (words)
+ ai_word *gc_to_lo, *gc_to_hi, *gc_fwd;   // to-space tagp range [to_lo,to_hi) + forwarding floor (set per collection)
+ ai_word *gc_f2lo, *gc_f2hi;              // a SECOND from-space range (0 = unused); a major traces {major ∪ minor} in one pass
+ uintptr_t gc_gen;                        // !=0 during a generational collection: bump() targets major_hp, not hp
+ uintptr_t n_minor;                       // MINOR collections so far (majors = n_gc - n_minor)
+ uintptr_t since_major, major_live0;      // young words scanned since the last major; major-pool live right after it.
+                                          // A major fires once since_major > major_live0 + 4*minor-pool -- majors amortized
+                                          // against allocation, so floating dead tenured objects are swept periodically
+                                          // (occupancy alone never triggers it: dead old garbage dies in place) and the
+                                          // pool can SHRINK. See gen_please.
+ uintptr_t win_alloc, win_copied;         // a sliding window (words) for the DETERMINISTIC minor-resize ratio: young
+                                          // allocated vs survivors copied since the last resize. overhead = copied/alloc
+                                          // (the GC's share of the work, in words not clock ticks); grow the nursery while
+                                          // it exceeds 1/ratio, shrink when far below. Accumulating smooths the spikes a
+                                          // per-collection ratio would chase. Reset on a resize. See gen_please.
+ uintptr_t budget;                        // total memory CAP in words (2*minor + 2*major, both two-space); 0 = unbounded.
+                                          // Appel's rule: the nursery gets the free budget after the major pool. Inited from
+                                          // the ai_budget tunable (the Teensy knob) but a field, so it can be set at runtime
+                                          // like the g->alloc hook. See gen_please.
  union {
   intptr_t v0;
   struct {
@@ -300,7 +356,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KMint is the bare point
 // (the blue floor: () and the nameless mints; named syms are (name . mint) CHAINS now);
-// KCharm is the odd fixnum tag; KHot is any non-data heap pointer (text/function/map). The
+// KCharm is the odd fixnum tag; KHot is any non-data heap pointer (thread/function/map). The
 // six DATA kinds (KVec, KBig, KString, KMint, KNom, KChain) are the ones ai_typ recovers from an
 // ap's sentinel address (a plain compare); every vec reads as KVec there
 // (coarse -- one sentinel for scalar boxes and arrays alike). The SEVEN non-sentinel
@@ -311,7 +367,7 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // (KArrZ~int, KArrR~float, KArrC~complex, KArrO~object). The diagonal is the type lattice
 // by semantics then representation: KMint the blue floor (() and the nameless points,
 // least of all) then KNom (the named points), then arithmetic lane [KCharm..KArrO] (scalars then their
-// array counterparts), sequence/concat lane [KString..KChain], then map, text last --
+// array counterparts), sequence/concat lane [KString..KChain], then map, thread last --
 // so each dyadic lane is one contiguous range, `max` is the within-lane promotion join,
 // and the lone undefined seam (arith <-> seq) is the KArrO|KString boundary. two (chain)
 // caps the sequence lane; KMap is the map's own rung just under KHot, so the total
@@ -349,7 +405,7 @@ struct ai
  *str0(struct ai*, uintptr_t);
 lvm(lvm_gc, uintptr_t);
 // ai_kind maps any value to its enum q: KCharm for a fixnum, KHot for a non-data heap
-// pointer (text/function/map), else ai_typ's data kind -- refined for a rank>=1 vec,
+// pointer (thread/function/map), else ai_typ's data kind -- refined for a rank>=1 vec,
 // which expands by element tier to KArrZ..KArrO (a rank-0 box stays KVec). Lives in
 // ai.c (it needs ai_typ from the generated data.h) and is shared by data.c's apply
 // sentinels. Both the `+`/`*` matrices and the apply matrix dispatch on this.
@@ -388,6 +444,7 @@ uintptr_t hash(struct ai*, word), ai_vec_bytes(struct ai_vec*);
 #define two(_) ((struct ai_chain*)(_))
 static ai_inline bool chainp(word _) { return lamp(_) && cell(_)->ap == lvm_chain; }
 static ai_inline void *bump(struct ai *g, uintptr_t n) {
+  if (g->gc_gen) { void *x = g->major_hp; g->major_hp += n; return x; }   // a generational collection is promoting into the major pool (gc_gen==0 during normal mutation: one predictable branch)
   if (avail(g) < n) __builtin_trap();
   void *x = g->hp; g->hp += n; return x; }
 static ai_inline struct ai_chain *ini_chain(struct ai_chain *w, intptr_t a, intptr_t b) {
