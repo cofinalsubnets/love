@@ -1083,54 +1083,36 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
    case KWide: return evac_wide(g, p0, t0);
    case KCplx: return evac_cplx(g, p0, t0); } }
 
-// THE WEAK INTERN TABLE. the cheney phase never traces it (the map alone
-// keeps no atom alive); after the fixpoint, symbols_rebuild walks the OLD
-// from-space table -- still ours to read -- and inserts only the entries
-// whose atoms were forwarded into a fresh same-cap backing in to-space (the
-// copied atom carries its forwarded name; survivors <= len < 3/4 cap, so
-// everything fits with no growth). a dead atom's entry simply never crosses:
-// dead spellings vanish, the same weak interning the rebuilt map gave for
-// free. bump-bounded: from-space held a table of the same size.
-static ai_noinline word symbols_rebuild(struct ai *h, struct ai *g) {
- word om = g->symbols;
+// THE WEAK INTERN TABLES (g->symbols, and the prototype g->kept). the cheney phase never traces them
+// (the map alone keeps no value alive); after the fixpoint, weak_rebuild walks the OLD from-space table
+// -- still ours to read -- and inserts only the entries whose VALUES were forwarded, into a fresh
+// same-cap backing in to-space (survivors <= len < 3/4 cap, so everything fits with no growth). a dead
+// value's entry simply never crosses: dead spellings (and dead keeps) vanish, the weak interning the
+// rebuilt map gives for free. bump-bounded: from-space held a table of the same size.
+// weak_rebuild: rebuild ONE weak table `om` into a fresh same-cap backing in `c`'s to-space, carrying
+// only the survivors -- entries whose VALUE forwarded into [lo, hi). The sweep itself is value-kind
+// blind (gcp parks a survivor's forward at cell(value)->x for ANY kind, closures and data alike); only
+// the RE-KEY varies: a `sym` table (g->symbols) re-derives the name string from the surviving KNom
+// (key != value), a value table (g->kept) SELF-keys by the survivor (key = value) -- both re-bucketed by
+// the same generic hash() the table is probed with. So a dead atom's entry, or a kept value nothing
+// else references, simply never crosses: dead spellings AND dead keeps vanish for free. Serves both
+// collectors: gcg passes c = h (the new pool) and [ptr(h), end); a major passes c = g and the to-space
+// [gc_to_lo, gc_to_hi) (major_base pre-flipped, so a kept closure's clo_nfhash reads survivors through
+// in_heap). bump-bounded: from-space held a table of the same size.
+static ai_noinline word weak_rebuild(struct ai *c, word om, word const *lo, word const *hi, bool sym) {
  if (!om) return 0;
  uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
- union u *b = map_fill_back(bump(h, 4 + 2 * cap), cap), *hd = bump(h, 3);
+ union u *b = map_fill_back(bump(c, 4 + 2 * cap), cap), *hd = bump(c, 3);
  hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
  word *os = map_slots(om), *ns = &b[3].x;
- word const *lo = ptr(h), *hi = ptr(h) + h->len;
- for (uintptr_t j = 0; j < cap; j++) {
-  word k = os[2 * j];
-  if (k == map_gap) continue;
-  word fwd = cell(os[2 * j + 1])->x;            // the atom's first word: its forward, if it survived
-  if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
-  word nk = nom(fwd)->name;                     // the copied KNom carries the forwarded name string
-  uintptr_t i = hash(h, nk) & mask;
-  while (ns[2 * i] != map_gap) i = (i + 1) & mask;
-  ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
- b[1].x = putcharm(n);
- return (word) hd; }
-
-// kept_rebuild: the WEAK VALUE-intern table's sweep (PROTOTYPE), parallel to symbols_rebuild. The
-// survival half is identical -- gcp leaves a survivor's forward at cell(value)->x for any kind, closures
-// included. The re-key half is GENERIC: a survivor is re-hashed by the same hash() the map uses
-// (clo_nfhash for a closure -- GC-stable across relocation, verified), and SELF-keyed (key = value), so a
-// kept closure nothing else referenced never crosses -- it vanishes, exactly like a dead spelling.
-static ai_noinline word kept_rebuild(struct ai *h, struct ai *g) {
- word om = g->kept;
- if (!om) return 0;
- uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
- union u *b = map_fill_back(bump(h, 4 + 2 * cap), cap), *hd = bump(h, 3);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
- word *os = map_slots(om), *ns = &b[3].x;
- word const *lo = ptr(h), *hi = ptr(h) + h->len;
  for (uintptr_t j = 0; j < cap; j++) {
   if (os[2 * j] == map_gap) continue;
   word fwd = cell(os[2 * j + 1])->x;            // the value's first word: its forward, if it survived
   if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
-  uintptr_t i = hash(h, fwd) & mask;            // re-key by the survivor's generic (bridged) hash
+  word key = sym ? nom(fwd)->name : fwd;        // symbols: the survivor's name string | kept: the survivor itself
+  uintptr_t i = hash(c, key) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
-  ns[2 * i] = fwd, ns[2 * i + 1] = fwd, n++; }  // self-keyed
+  ns[2 * i] = key, ns[2 * i + 1] = fwd, n++; }
  b[1].x = putcharm(n);
  return (word) hd; }
 
@@ -1175,8 +1157,8 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
  // cheney loop never traces it (an early copy would sit in [cp, hp) and get
  // walked -- resurrecting every atom). run_finalizers bumps after the
  // fixpoint the same way.
- h->symbols = symbols_rebuild(h, g);
- h->kept = kept_rebuild(h, g);                 // PROTOTYPE: sweep the weak value-intern map likewise
+ h->symbols = weak_rebuild(h, g->symbols, ptr(h), ptr(h) + h->len, true);
+ h->kept = weak_rebuild(h, g->kept, ptr(h), ptr(h) + h->len, false);   // PROTOTYPE: the weak value-intern map, same sweep
  run_finalizers(h);
  h->minor = h->hp;                  // everything compacted (incl. the rebuilt table + finalizers) is now OLD; future bumps are young
 #ifdef AI_STAT
@@ -1257,47 +1239,10 @@ static void gen_fz_relocate(struct ai *g) {
   } else link = &fz->next;
   fz = next; } }
 
-// major_symbols_rebuild / major_run_finalizers: the weak-table sweep and finalizer pass of
-// a MAJOR's compact -- exactly symbols_rebuild / run_finalizers, but bumping into the major
-// to-space (gc_gen redirects bump -> major_hp) and testing survival against gc_to_{lo,hi}
-// (the spare/new half) instead of the main pool. Run after the compact's cheney fixpoint.
-static word major_symbols_rebuild(struct ai *g, word om) {
- if (!om) return 0;
- uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
- union u *b = map_fill_back(bump(g, 4 + 2 * cap), cap), *hd = bump(g, 3);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
- word *os = map_slots(om), *ns = &b[3].x;
- word const *lo = g->gc_to_lo, *hi = g->gc_to_hi;
- for (uintptr_t j = 0; j < cap; j++) {
-  word k = os[2 * j];
-  if (k == map_gap) continue;
-  word fwd = cell(os[2 * j + 1])->x;            // the atom's first word: its forward, if it survived
-  if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
-  word nk = nom(fwd)->name;
-  uintptr_t i = hash(g, nk) & mask;
-  while (ns[2 * i] != map_gap) i = (i + 1) & mask;
-  ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
- b[1].x = putcharm(n);
- return (word) hd; }
-// PROTOTYPE: the major's sweep of the weak VALUE-intern table -- kept_rebuild for a major's compact
-// (bump into the major to-space, survival vs gc_to_{lo,hi}). Requires major_base already flipped to the
-// to-space so in_heap accepts the survivors and hash() takes the clo_nfhash lane (see gen_major).
-static word major_kept_rebuild(struct ai *g, word om) {
- if (!om) return 0;
- uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
- union u *b = map_fill_back(bump(g, 4 + 2 * cap), cap), *hd = bump(g, 3);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
- word *os = map_slots(om), *ns = &b[3].x;
- word const *lo = g->gc_to_lo, *hi = g->gc_to_hi;
- for (uintptr_t j = 0; j < cap; j++) {
-  if (os[2 * j] == map_gap) continue;
-  word fwd = cell(os[2 * j + 1])->x;
-  if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
-  uintptr_t i = hash(g, fwd) & mask;
-  while (ns[2 * i] != map_gap) i = (i + 1) & mask;
-  ns[2 * i] = fwd, ns[2 * i + 1] = fwd, n++; }
- b[1].x = putcharm(n);
- return (word) hd; }
+// major_run_finalizers: a MAJOR's compact runs the finalizer pass like run_finalizers, but bumps into
+// the major to-space (gc_gen redirects bump -> major_hp) and tests survival against gc_to_{lo,hi} (the
+// spare/new half) instead of the main pool. (The weak-table sweep is the shared weak_rebuild, called
+// for g->symbols and g->kept with the to-space range.) Run after the compact's cheney fixpoint.
 static void major_run_finalizers(struct ai *g) {
  struct ai_fz *new_fz = NULL;
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) {
@@ -1385,8 +1330,8 @@ static void gen_major(struct ai *g) {
  g->major_base = to;                                         // flip EARLY: the kept rebuild's hash() (clo_nfhash) needs
                                                             // in_heap to accept the to-space survivors. No existing
                                                             // step between the fixpoint and the old flip reads major_base.
- g->symbols = major_symbols_rebuild(g, om);
- g->kept = major_kept_rebuild(g, omk);                       // PROTOTYPE: sweep the weak value-intern map
+ g->symbols = weak_rebuild(g, om, g->gc_to_lo, g->gc_to_hi, true);
+ g->kept = weak_rebuild(g, omk, g->gc_to_lo, g->gc_to_hi, false);   // PROTOTYPE: sweep the weak value-intern map
  major_run_finalizers(g);
  g->gc_f2lo = g->gc_f2hi = 0;                                // the minor range is consumed
  if (resized) g->alloc(g, g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
@@ -5976,11 +5921,24 @@ static word keep_intern(struct ai *g, word v) {
  slots[2 * i] = v, slots[2 * i + 1] = v;
  cell(map_back(m))[1].x = putcharm(map_len(m) + 1);
  return v; }
-// (keep x): intern a source-backed closure / partial-app; anything else (a bif, map, port, raw datum)
-// passes through untouched -- only the kinds clo_load handles (and that the weak sweep can re-key) enter.
+// keepable: a value `keep` canonicalizes -- an IN-HEAP, structurally-compared, relocatable value: data
+// (strings, chains, arrays, bignums/floats/complex) or a source-backed closure / partial-app. NOT
+// fixnums (already canonical, and non-pointers -- cell() would be bogus), POINTS (mints unique by serial,
+// named noms canonical via g->symbols), out-of-pool immortals (nifs / interned consts -- never forwarded,
+// so the weak sweep would wrongly drop them), or identity-compared hots (maps / ports / casks -- each is
+// its own canonical, so interning is a no-op). The survival check + per-value re-key in weak_rebuild are
+// kind-blind, so any kept-in value sweeps correctly; this just excludes the kinds where it's unsound or
+// pointless. A string and the SYMBOL of the same spelling never collide -- they live in different tables.
+static bool keepable(struct ai *c, word x) {
+ if (charmp(x) || !in_heap(c, x) || nomp(x)) return false;
+ if (datp(x)) return true;                       // strings / chains / arrays / numbers (points already excluded)
+ struct clonf o; return clo_load(c, x, &o); }    // a function value: only a source-backed closure
+// (keep x): hand back the one canonical copy of a keepable value (deduped by hash + eqv -- the beta
+// bridge for closures, structural equality for data); a hit returns the kept one, a miss keeps THIS one.
+// Anything not keepable passes through untouched. The table is WEAK -- a kept value nothing else holds
+// is reclaimed at the next major (gauge[13] is the live count).
 lvm(lvm_keep) {
- struct clonf o;
- if (clo_load(ai_core_of(g), Sp[0], &o)) {
+ if (keepable(ai_core_of(g), Sp[0])) {
   word y;
   Have(keep_reserve(g));
   Pack(g), y = keep_intern(g, g->sp[0]), Unpack(g);
