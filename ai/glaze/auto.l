@@ -272,7 +272,39 @@
        (link ': (L (link g q) b2 (link g (cbset inits si '(pot 0))))))               ; (: (g q..) b2 (g ..(pot 0)..)) -- pot born ONCE at the call
    (cbwalk e) (? (atom? e) e  (cbquote? e) e
                  (: nf (norm-let e) info (cbacc nf) (? (two? info) (cbrw nf info) (map cbwalk e))))
-   (castbuild form) (cbwalk form)
+   ; --- the NATIVE CASK variant: a CLEAN single-byte counted builder -- (: (F p..) (: (go i s) (? (< i n)
+   ;     (go (+ i 1) (+ s (string E))) s) (go 0 "")) ..) with i:0-by-1 the counter (cask index), E a CHARM
+   ;     expr -- compiles the FILL loop to a native counted byte-store. We can't return the cask from native
+   ;     (the epilogue tags rax as a fixnum, mangling the pointer), so we LIFT the loop to a sibling F-fill
+   ;     that returns the count (a fixnum, glazeable) and threads the cask as a buf param (pin), while the
+   ;     wrapper F holds the cask and converts it: (F p..) (: F-cb (cask n) _ (F-fill p.. 0 F-cb) (string
+   ;     F-cb)). F-fill glazes (pin native); F stays interp (cask/string nifs). This is the elixir-class path
+   ;     -- the build runs as machine code, one O(n) drain at the end. Falls back to the threaded `pot` (cbwalk)
+   ;     for multi-char appends, non-0/1 counters, or the else-orientation.
+   (cbbyte? e i) (? (whole? e) 1  (id? e i) 1  (&& (two? e) (id? (cap e) 'peep)) 1                ; a CHARM expr: const | the counter | a peep byte | arith thereof
+                    (&& (two? e) (member? (cap e) '(+ - * // % & | ^ << >>)) (= 3 (tally e))) (&& (cbbyte? (opd e 0) i) (cbbyte? (opd e 1) i)) 0)
+   (cbcask nlval nf)                                                                              ; -> (wrapper-pair fill-pair) on a clean single-byte counted match, else ()
+    (? (! (&& (two? nf) (name? (cap nf)) (< 1 (tally nf)))) ()                                    ; nf must be (F p..) so we can sibling the fill
+       (: info (cbacc nlval)
+          (? (! (two? info)) ()
+             (: si (nthl info 0) X (nthl info 1) g (nthl info 2) q (nthl info 3) cond (nthl info 4) r (nthl info 5) rth (nthl info 6) inits (cup nlval)
+                (? (! (&& rth (two? cond) (id? (cap cond) '<) (= 3 (tally cond)) (member? (opd cond 0) q)   ; recur-then; cond = (< i n)
+                         (two? X) (id? (cap X) 'string) (= 2 (tally X)) (cbbyte? (opd X 0) (opd cond 0)))) ()   ; append = (string E), E a charm in the counter
+                   (: i (opd cond 0) n (opd cond 1) ci (posof i q 0) E (opd X 0) rargs (cup r) ia (nthl rargs ci)
+                      (? (! (&& (= 0 (nthl inits ci)) (two? ia) (id? (cap ia) '+) (= 3 (tally ia)) (id? (opd ia 0) i) (= 1 (opd ia 1)))) ()   ; counter init 0, step (+ i 1)
+                         (: F (cap nf) Fp (cup nf) s (nthl q si) fillnm (intern (+ (string F) "-fill")) cbn (intern (+ (string F) "-cb"))
+                            fv (gfilt (\ p (|| (occurs? p cond) (occurs? p r))) Fp)               ; enclosing params the loop reads
+                            fbody (L '? cond (link fillnm (cat fv (cbset rargs si (L 'pin s i E)))) i)   ; (? COND (F-fill fv.. (+ i 1) (pin s i E)) i)
+                            wbody (link ': (L cbn (L 'cask n) '_ (link fillnm (cat fv (cbset inits si cbn))) (L 'string cbn)))
+                            (L (link nf wbody) (link (link fillnm (cat fv q)) fbody))))))))))
+   (cbcpair p) (: info (cbcask (norm-let (cup p)) (cap p)) (? (two? info) info (L (link (cap p) (cbwalk (cup p))))))   ; cask variant, else keep (pot via cbwalk)
+   (cbflat ps) (? (atom? ps) () (: pr (cap ps) (link (cap pr) (link (cup pr) (cbflat (cup ps))))))   ; pairs -> a binding list, NO trailing body (preserves a body-less `:`)
+   (castbuild form)
+    (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) (cbwalk form)              ; a `:` group: try the cask variant per binding (adds F-fill siblings); else the in-place walk
+       (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
+          newpairs (foldl (\ a r (cat a r)) () (map cbcpair pairs))
+          (? (= 1 (% (tally (cup form)) 2)) (link ': (unpair newpairs (cbwalk body)))             ; ODD count -> has a body
+             (link ': (cbflat newpairs)))))                                                       ; EVEN -> body-less (leaks globals: bench.l!), keep it so
    ; fold-consts: inline a top-level `:`'s WHOLE-constant value bindings (e.g. strscan's `hmod 1000000007`)
    ; into every body and drop them -- so a folded constant doesn't read as an un-glazeable free symbol.
    (fold-consts form)
@@ -571,6 +603,7 @@
              (id? op '?)                                  (&& (= 4 (tally e)) (groupok? cands ps (caup e)) (groupok? cands ps (caup (cup e))) (groupok? cands ps (caup (cup (cup e)))))
              (id? op 'tally)                              (&& (= 2 (tally e)) (member? (caup e) ps))                                          ; (tally STR): STR a param (string lane)
              (id? op 'peep)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cands ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (peep STR i d): STR param, i ok, d const
+             (id? op 'pin)                                (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cands ps (caup (cup e))) (groupok? cands ps (caup (cup (cup e)))))   ; (pin BUF i V): BUF a param (raw buf), i ok, V ok -- native byte store (cask fill)
              0))
        0)
    (grpok-1 fns c cands) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns) (groupok? cands (cup (cap p)) (cup p)))   ; candidate c's body ok over cands?

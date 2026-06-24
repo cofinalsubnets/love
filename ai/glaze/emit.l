@@ -150,6 +150,7 @@
    (setx op c)    (asm (L c (setcc op) '(72 15 182 192)))                           ; <cmp bytes>; setcc al; movzx rax,al
    (testreg reg)  (L (? (< reg 8) 72 77) 133 (+ (+ 192 (* 8 (% reg 8))) (% reg 8))) ; test reg, reg
    (idivr reg)    (L (rexb reg) 247 (+ 248 (% reg 8)))                              ; idiv reg
+   (movr9 reg)    (L (? (< reg 8) 73 77) 137 (+ (+ 192 (* 8 (% reg 8))) 1))         ; mov r9, reg  (load a raw buf-param pointer)
    ; cgg -- the GROUP arithmetic-fragment compiler (the WHOLE integer lane): an expr over {ps (this fn's
    ; params, in arg regs rbx/r13/r14/r15) ; int ; group calls} -> rax. syms = the group's dotted (name .
    ; offset) table (glook resolves a call's target, self or sibling, UNIFORMLY); off = the abs offset of
@@ -196,6 +197,13 @@
                 (asm (L ib push-rax (arx (argix a ps 0)) '(73 137 192) '(88) '(73 59 64 8)                        ; i;push; STR->rax; r8=STR; pop i; cmp i,[r8+8] len
                        (L 114 (+ (tally defb) 2)) defb (L 235 (tally load)) load)))                               ; jb IN; OOB: movabs rax,d; jmp; IN: movzx eax,[r8+rax+16]
              (&& (= op 'tally) (member? a ps)) (asm (L (arx (argix a ps 0)) '(72 139 64 8)))                      ; (tally STR): rax=STR; rax=[rax+8] = len
+             (&& (= op 'pin) (member? a ps))                                                                       ; (pin C i V): native byte store into a raw buf-param C, returns C
+                (: idx (caup (cup e)) val (caup (cup (cup e))) creg (pregn (argix a ps 0))
+                   ixb (cgg syms ps idx off OVF) po (+ off (tally ixb)) vb (cgg syms ps val (+ po 1) OVF)
+                   (asm (L ixb push-rax vb '(65 88)                                                                ; idx->rax;push; V->rax; pop r8(=idx)
+                          (movr9 creg) '(77 139 73 8)                                                              ; r9=C (buf ptr); r9=[r9+8] (the backing str)
+                          '(67 136 68 8 16)                                                                        ; mov [r9+r8+16], al  (store V's low byte at str's bytes + idx)
+                          (arx (argix a ps 0)))))                                                                  ; rax = C (chain the buf)
              ()))
        ())
    (gargs syms ps as off OVF) (? (atom? as) ()                           ; push each call arg left->right (offset-threaded)
@@ -232,25 +240,27 @@
    ; PLAIN string (kind == strkind, the `apof` of a reference string); a fixnum or any other kind (cask,
    ; list, map, ...) jumps to the OVF handler -> deopt to the interp fallback (which handles every type).
    ; Without it a non-string arg would deref a bad pointer. off = guards' start offset; Aovf = the handler.
-   (mkguards ms strkind off Aovf)
+   (mkguards ms bufmask strkind bufkind off Aovf)                                                ; a raw param's kind: a pin-param (bufmask) must be a CASK, else a plain STRING
     (? (atom? ms) ()
-       (: i (cap ms) f (fetch i) jnz-end (+ off (+ (tally f) 8)) jne-end (+ jnz-end 22)
+       (: i (cap ms) f (fetch i) kind (? (member? i bufmask) bufkind strkind)
+          jnz-end (+ off (+ (tally f) 8)) jne-end (+ jnz-end 22)
           g (asm (L f '(168 1) '(15 133) (le4 (- Aovf jnz-end))                                  ; mov rax,Sp[i]; test al,1; jnz Aovf (fixnum)
-                    '(76 139 0) '(72 184) (le8 strkind) '(73 57 192) '(15 133) (le4 (- Aovf jne-end))))   ; mov r8,[rax]; movabs rax,strkind; cmp r8,rax; jne Aovf
-          (asm (L g (mkguards (cup ms) strkind jne-end Aovf)))))
-   (mkouter k smask strkind)
-    (: dpt (? (= k 1) deopt deopt-mn)                                                             ; arity 1 applies fb directly; >=2 enters its body past the lvm_cur
+                    '(76 139 0) '(72 184) (le8 kind) '(73 57 192) '(15 133) (le4 (- Aovf jne-end))))   ; mov r8,[rax]; movabs rax,kind; cmp r8,rax; jne Aovf
+          (asm (L g (mkguards (cup ms) bufmask strkind bufkind jne-end Aovf)))))
+   (mkouter k smask bufmask strkind)
+    (: bufkind (apof (cask 1))                                                                    ; a cask's kind, for a pin (buf) param's type guard
+       dpt (? (= k 1) deopt deopt-mn)                                                             ; arity 1 applies fb directly; >=2 enters its body past the lvm_cur
        saveargs (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k))                                    ; save the k arg regs (callee-saved)
        restargs (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k))                        ; restore (reverse)
        pushargs (foldl (\ a i (+ a (asm (L (fetch i) (? (member? i smask) () '(72 209 248)) push-rax)))) () (rangeL 0 k))  ; push Sp[0..k-1]; untag (sar) UNLESS a string param (smask = raw pointer)
        s6 (asm (L '(72 131 196) (list (* 8 k))))  s10 (asm (L '(72 131 200 1) '(72 137 1) '(72 131 198 16) '(72 139 6 255 224)))
        Lr (tally restargs)
        Aguard (+ 2 (+ (tally saveargs) 3))                                                       ; guards sit after push r12(2)+saveargs+mov r12,rsp(3)
-       Lg (tally (mkguards smask strkind 0 0))                                                    ; guard length (offset-independent; 0 when no string params)
+       Lg (tally (mkguards smask bufmask strkind bufkind 0 0))                                                    ; guard length (offset-independent; 0 when no string params)
        Acall (+ Aguard (+ Lg (tally pushargs)))
        Arest (+ Acall (+ 5 (tally s6)))  As8 (+ Arest Lr)  As9 (+ As8 2)  Ajmpend (+ As9 10)
        As10 Ajmpend  Aovf (+ As10 (tally s10))  Adeopt (+ Aovf (+ 3 (+ Lr 2)))  Hh (+ Adeopt (tally dpt))
-       guards (mkguards smask strkind Aguard Aovf)                                               ; real guards (jump to Aovf on a non-string)
+       guards (mkguards smask bufmask strkind bufkind Aguard Aovf)                                               ; real guards (jump to Aovf on a non-string)
        callb (asm (L '(232) (le4 (- Hh (+ Acall 5)))))                                            ; call H_entry (right after the OUTER)
        s9 (asm (L '(72 1 192) '(113 5) '(233) (le4 (- Adeopt Ajmpend))))                          ; add rax,rax; jno PUTOK(+5); jmp DEOPT
        s11 (asm (L '(76 137 228) restargs '(65 92)))                                              ; OVF: mov rsp,r12; restores; pop r12
@@ -261,7 +271,8 @@
    ; INDEPENDENT: a call rel32 is 5 bytes whatever its target), compute every H's offset, then emit with
    ; the real (name . offset) syms so every self/sibling call resolves. The deopt fallback is the WHOLE
    ; group as an interpreted letrec (mutual recursion intact) -> a faithful, never-wrong slow path.
-   (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used DIRECTLY as (peep P..)/(tally P)?
+   (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally pin)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used DIRECTLY as (peep P..)/(tally P)/(pin P..)?
+   (buse? e P) (? (two? e) (? (&& (id? (cap e) 'pin) (id? (caup e) P)) 1 (foldl (\ a x (|| a (buse? x P))) 0 (cup e))) 0)   ; P used as a CASK -- (pin P..) -- so its guard wants the buf kind, not str
    ; INTERPROCEDURAL string-param inference: a param is a string if used in peep/tally OR passed as the arg
    ; to a sibling's string param. (strhash's `s` is a string because it flows into strhash_go's peep.) A
    ; deduped fixpoint over the group's (name . smask) map -- smasks only grow, so the size stabilizes.
@@ -282,7 +293,9 @@
        ord  (link efn (gfilt (\ f (! (id? (cap f) entry))) info))                            ; entry FIRST (H_entry sits at Lo)
        smap0 (map (\ f (link (cap f) (gfilt (\ k (suse? (nthl f 2) (nthl (nthl f 1) k))) (rangeL 0 (nthl f 3))))) info)   ; per-fn DIRECT string params
        smask (gsm entry (smfix info smap0))                                                   ; entry's STRING params, propagated to a fixpoint -> raw pointer, no sar
-       OU (mkouter (nthl efn 3) smask (apof "")) outer (cap OU) Aovf (caup OU) Lo (tally outer)   ; (apof "") = the plain-string kind, for the type guard
+       bufmask (gfilt (\ k (buse? (nthl efn 2) (nthl (nthl efn 1) k))) (rangeL 0 (nthl efn 3)))   ; entry params used as a CASK (pin) -> guard with the buf kind, not str
+       OU (mkouter (nthl efn 3) smask bufmask (apof "")) outer (cap OU) Aovf (caup OU) Lo (tally outer)   ; (apof "") = the plain-string kind for the type guard; bufmask overrides to buf
+
        sa (\ k (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k)))
        ld (\ k (foldl (\ a i (+ a (ldr i (- (* 16 k) (* 8 i))))) () (rangeL 0 k)))
        re (\ k (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k)))

@@ -113,7 +113,7 @@ or broken) shows a dotted column.
 | `polysum`   | list    | sum `k²` of the odds in `[0,N)` — same shape, pure-polynomial body, CLOSED to O(1) by the loop-closer |
 | `primes`    | numeric | count primes below 30000 by trial division                |
 | `bell`      | bignum  | Bell numbers in base 36 to 280 digits (port of `test/bell.l`) |
-| `strcat`    | string  | build a 4000-char string by single-char concatenation, then hash it — ai glazes the O(n²) accumulator loop to an O(n) `pot` buffer |
+| `strcat`    | string  | build a 4000-char string by single-char concatenation, then hash it — ai glazes the O(n²) accumulator loop to a native O(n) cask-fill |
 | `strscan`   | string  | rolling-hash scan over a fixed 20000-char string (read path) |
 | `hash`      | table   | mutable hash table: 10000 sparse-int-keyed insert / lookup / update ops |
 | `sort`      | sort    | merge/quick-sort 5000 LCG-random ints, hash the sorted order |
@@ -190,11 +190,14 @@ one character at a time with each language's concatenation operator (pypy/luajit
 lisp string-append, etc.). Written naïvely as `s = s + c`, that is an O(n²) build —
 each `+` copies the whole prefix — so it favours languages with mutable/rope-backed
 strings. ai's glaze reads that *same* `(+ s c)` accumulator loop from source and
-rewrites it to a threaded **`pot`** (the growable output sink): the immutable string
-accumulator becomes a mutable buffer appended to in O(1) amortized, drained once at
-the end, so the build drops to O(n) without touching the source (the output-side dual
-of `deforest`'s pipeline fusion). With the rolling hash also glazed via the string
-lane, ai's `strcat` lands ahead of luajit and ruby and near pypy/node. `strscan`
+rewrites it: a clean single-byte counted builder lowers to a **native cask-fill** — the
+immutable string accumulator becomes a pre-sized mutable byte buffer (a `cask`) filled
+by a native counted loop (a machine-code byte store per iteration), converted to a
+string once at the end. The build drops from O(n²) to an O(n) machine-code loop without
+touching the source (the output-side dual of `deforest`'s pipeline fusion); a more
+general builder — multi-char appends, irregular counters — falls back to a threaded
+`pot` (an O(1)-amortized growable sink, interpreted). With the rolling hash also glazed
+via the string lane, ai's `strcat` leads the field (ahead of elixir/node/pypy). `strscan`
 times only a linear rolling hash over a string built once outside the loop, isolating
 the byte-read path (ai `get`/`len`). Both fold the same polynomial hash
 `h = (h*31 + byte) mod 1e9+7`; taking it mod a prime keeps the checksum a 64-bit

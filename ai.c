@@ -3510,6 +3510,15 @@ lvm(lvm_string) {
   ini_str(s, n);
   for (uintptr_t i = 0; n--; x = B(x)) txt(s)[i++] = (char) getcharm(A(x));
   return Sp[0] = word(s), Ip++, Continue(); }
+ if (bufp(x)) {                                       // a cask/buf -> a fresh string copy of its bytes
+  uintptr_t n = len(buf_str(x)), req = str_type_width + b2w(n);
+  Have(req);
+  struct ai_str *src = buf_str(Sp[0]);                // re-read post-Have (a GC may have moved the buf)
+  struct ai_str *s = (void*) Hp;
+  Hp += req;
+  ini_str(s, n);
+  memcpy(txt(s), txt(src), n);
+  return Sp[0] = word(s), Ip++, Continue(); }
  return Ip++, Continue(); }                          // any other type: identity
 
 ////
