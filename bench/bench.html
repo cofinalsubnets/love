@@ -41,6 +41,10 @@
   th.ai { background: rgba(169,177,214,.20) !important; color: #c0caf5 !important; }
   td.okc, .okrow td { color: #9ece6a; }
   td.bad, .okrow td.bad { color: #f7768e; }
+  .netrow th, .netrow td { border-top: 2px solid #545c7e; color: #e0af68; }   /* selective net: Σ ms/it excl bell+sat -- the column-ordering key, made visible */
+  th.net, td.net { border-left: 2px solid #545c7e; color: #e0af68; }          /* ... as a column in the transposed view */
+  td.to { color: #f7768e; }                                                   /* a solver that exceeded the timeout */
+  h2 { font-weight: normal; color: #c0caf5; margin: 1.6em 0 .4em; }
 </style>
 </head>
 <body>
@@ -55,41 +59,57 @@ style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
   <span id="mode"></span>
 </div>
 <div class="wrap"><div id="t"></div></div>
+<h2>SAT solvers &mdash; pigeonhole UNSAT, milliseconds to solve</h2>
+<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/sat.l</code>)
+against reference C solvers on PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i>
+holes, UNSAT and resolution-hard, so CDCL is <b>exponential</b> here. ai is timed by its
+own solve clock (interpreter warmup excluded); the C solvers by process wall-clock (their
+startup is ~ms). <code>timeout</code> = exceeded the cutoff. This is where a tuned C
+solver pulls away from an interpreted one &mdash; the honest other side of the language
+table above.</p>
+<div class="wrap">
+<table><thead><tr><th>instance</th><th>cadical</th><th>kissat</th><th>picosat</th><th>minisat</th><th>glucose</th><th class='ai'>ai</th></tr></thead><tbody>
+<tr><th>php5</th><td class=''>4.470</td><td class=''>3.604</td><td class='fast '>2.806</td><td class=''>3.877</td><td class=''>4.307</td><td class='ai '>10.000</td></tr>
+<tr><th>php6</th><td class=''>5.433</td><td class=''>5.845</td><td class='fast '>5.052</td><td class=''>7.140</td><td class=''>5.995</td><td class='ai '>216.0</td></tr>
+<tr><th>php7</th><td class='fast '>8.099</td><td class=''>17.750</td><td class=''>26.419</td><td class=''>39.593</td><td class=''>42.277</td><td class='ai '>6813.0</td></tr>
+<tr><th>php8</th><td class='fast '>13.107</td><td class=''>73.605</td><td class=''>229.3</td><td class=''>275.2</td><td class=''>909.4</td><td class='ai to'>timeout</td></tr>
+<tr class='netrow'><th>net</th><td class='net'>31.109</td><td class='net'>100.8</td><td class='net'>263.5</td><td class='net'>325.8</td><td class='net'>962.0</td><td class='net ai'>dnf</td></tr></tbody></table>
+</div>
 <script>
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","mapfilter","deforest","polysum","primes","bell","strcat","strscan","hash","sort","tree","float","closure","sat"];
 const PER={},OK={};
-PER["fib"]={"ai":3.2656,"go":3.7940,"rust":1.9919,"java":2.5978,"julia":4.4285,"luajit":7.2590,"pypy":8.2508,"node":7.1700,"elixir":6.9793,"chez":5.8594,"sbcl":11.0322};
+PER["fib"]={"ai":3.4688,"go":3.7940,"rust":1.9919,"java":2.5978,"julia":4.4285,"luajit":7.2590,"pypy":8.2508,"node":7.1700,"elixir":6.9793,"chez":5.8594,"sbcl":11.0322};
 OK["fib"]=true;
-PER["tak"]={"ai":0.4824,"go":0.4563,"rust":0.3432,"java":0.3090,"julia":0.6845,"luajit":1.3362,"pypy":2.3009,"node":0.9251,"elixir":0.8075,"chez":0.6074,"sbcl":4.0628};
+PER["tak"]={"ai":0.5078,"go":0.4563,"rust":0.3432,"java":0.3090,"julia":0.6845,"luajit":1.3362,"pypy":2.3009,"node":0.9251,"elixir":0.8075,"chez":0.6074,"sbcl":4.0628};
 OK["tak"]=true;
-PER["sum"]={"ai":0.0657,"go":0.1053,"rust":0.0518,"java":0.1958,"julia":0.0843,"luajit":0.0696,"pypy":0.2586,"node":0.7428,"elixir":0.4797,"chez":0.4922,"sbcl":0.7032};
+PER["sum"]={"ai":0.1753,"go":0.1053,"rust":0.0518,"java":0.1958,"julia":0.0843,"luajit":0.0696,"pypy":0.2586,"node":0.7428,"elixir":0.4797,"chez":0.4922,"sbcl":0.7032};
 OK["sum"]=true;
-PER["mapfilter"]={"ai":0.0906,"go":0.0214,"rust":0.0050,"java":0.0056,"julia":0.0141,"luajit":0.0306,"pypy":0.0907,"node":0.2086,"elixir":0.2426,"chez":0.1055,"sbcl":0.0964};
+PER["mapfilter"]={"ai":0.0813,"go":0.0214,"rust":0.0050,"java":0.0056,"julia":0.0141,"luajit":0.0306,"pypy":0.0907,"node":0.2086,"elixir":0.2426,"chez":0.1055,"sbcl":0.0964};
 OK["mapfilter"]=true;
-PER["deforest"]={"ai":0.0540,"go":0.0452,"rust":0.0150,"java":0.0134,"julia":0.0179,"luajit":0.0608,"pypy":0.1464,"node":1.1832,"elixir":0.4436,"chez":0.2354,"sbcl":0.2373};
+PER["deforest"]={"ai":0.0566,"go":0.0452,"rust":0.0150,"java":0.0134,"julia":0.0179,"luajit":0.0608,"pypy":0.1464,"node":1.1832,"elixir":0.4436,"chez":0.2354,"sbcl":0.2373};
 OK["deforest"]=true;
 PER["polysum"]={"ai":0.0001,"go":0.0387,"rust":0.0100,"java":0.0068,"julia":0.0145,"luajit":0.0598,"pypy":0.1464,"node":1.1752,"elixir":0.4088,"chez":0.1919,"sbcl":0.2031};
 OK["polysum"]=true;
-PER["primes"]={"ai":1.0000,"go":0.8985,"rust":0.7771,"java":0.7723,"julia":0.8952,"luajit":0.8013,"pypy":1.3022,"node":0.7764,"elixir":2.2513,"chez":1.6875,"sbcl":4.7817};
+PER["primes"]={"ai":1.0469,"go":0.8985,"rust":0.7771,"java":0.7723,"julia":0.8952,"luajit":0.8013,"pypy":1.3022,"node":0.7764,"elixir":2.2513,"chez":1.6875,"sbcl":4.7817};
 OK["primes"]=true;
-PER["bell"]={"ai":49.6250,"go":24.5733,"java":34.5015,"julia":75.7190,"pypy":24.2535,"node":28.3709,"elixir":32.9438,"chez":67.0000,"sbcl":52.0045};
+PER["bell"]={"ai":54.0000,"go":24.5733,"java":34.5015,"julia":75.7190,"pypy":24.2535,"node":28.3709,"elixir":32.9438,"chez":67.0000,"sbcl":52.0045};
 OK["bell"]=true;
-PER["strcat"]={"ai":0.0270,"go":0.8986,"rust":0.0173,"java":1.4579,"julia":1.5431,"luajit":1.3867,"pypy":0.1650,"node":0.1146,"elixir":0.0429,"chez":1.3516,"sbcl":4.5160};
+PER["strcat"]={"ai":0.0284,"go":0.8986,"rust":0.0173,"java":1.4579,"julia":1.5431,"luajit":1.3867,"pypy":0.1650,"node":0.1146,"elixir":0.0429,"chez":1.3516,"sbcl":4.5160};
 OK["strcat"]=true;
-PER["strscan"]={"ai":0.0769,"go":0.0642,"rust":0.0639,"java":0.0644,"julia":0.0646,"luajit":0.1291,"pypy":0.0626,"node":0.3913,"elixir":0.0991,"chez":0.1304,"sbcl":0.1709};
+PER["strscan"]={"ai":0.0793,"go":0.0642,"rust":0.0639,"java":0.0644,"julia":0.0646,"luajit":0.1291,"pypy":0.0626,"node":0.3913,"elixir":0.0991,"chez":0.1304,"sbcl":0.1709};
 OK["strscan"]=true;
-PER["hash"]={"ai":2.5000,"go":0.5484,"rust":0.7342,"java":0.2920,"julia":0.4783,"luajit":0.9951,"pypy":0.4295,"node":0.7274,"chez":0.7930,"sbcl":0.9337};
+PER["hash"]={"ai":1.2227,"go":0.5484,"rust":0.7342,"java":0.2920,"julia":0.4783,"luajit":0.9951,"pypy":0.4295,"node":0.7274,"chez":0.7930,"sbcl":0.9337};
 OK["hash"]=true;
-PER["sort"]={"ai":0.9883,"go":0.3561,"rust":0.0640,"java":0.1666,"julia":0.0600,"luajit":1.1623,"pypy":0.3547,"node":1.0116,"elixir":0.7462,"chez":0.4258,"sbcl":0.5899};
+PER["sort"]={"ai":0.9922,"go":0.3561,"rust":0.0640,"java":0.1666,"julia":0.0600,"luajit":1.1623,"pypy":0.3547,"node":1.0116,"elixir":0.7462,"chez":0.4258,"sbcl":0.5899};
 OK["sort"]=true;
-PER["tree"]={"ai":2.3750,"go":1.5823,"rust":4.6465,"java":0.4045,"julia":3.1515,"luajit":3.5409,"pypy":1.9398,"node":1.4106,"elixir":0.9533,"chez":0.6152,"sbcl":1.4611};
+PER["tree"]={"ai":2.3984,"go":1.5823,"rust":4.6465,"java":0.4045,"julia":3.1515,"luajit":3.5409,"pypy":1.9398,"node":1.4106,"elixir":0.9533,"chez":0.6152,"sbcl":1.4611};
 OK["tree"]=true;
-PER["float"]={"ai":0.2949,"go":0.1974,"rust":0.1863,"java":0.1819,"julia":0.1830,"luajit":0.2113,"pypy":0.3077,"node":0.1881,"elixir":4.4388,"chez":3.1406,"sbcl":5.2505};
+PER["float"]={"ai":0.2979,"go":0.1974,"rust":0.1863,"java":0.1819,"julia":0.1830,"luajit":0.2113,"pypy":0.3077,"node":0.1881,"elixir":4.4388,"chez":3.1406,"sbcl":5.2505};
 OK["float"]=true;
-PER["closure"]={"ai":0.0754,"go":0.0234,"rust":0.0242,"java":0.0310,"julia":0.0107,"luajit":13.1328,"pypy":0.0742,"node":0.7902,"elixir":2.0329,"chez":1.0000,"sbcl":2.0158};
+PER["closure"]={"ai":0.0781,"go":0.0234,"rust":0.0242,"java":0.0310,"julia":0.0107,"luajit":13.1328,"pypy":0.0742,"node":0.7902,"elixir":2.0329,"chez":1.0000,"sbcl":2.0158};
 OK["closure"]=true;
-PER["sat"]={"ai":43.7500};
+PER["sat"]={"ai":44.1250};
 OK["sat"]=true;
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
@@ -125,20 +145,26 @@ function build() {
     if (v == null) c.push("miss"); else if (v === minB[b]) c.push("fast");
     return "<td" + (c.length ? " class='" + c.join(" ") + "'" : "") + ">" + fmt(v) + "</td>";
   };
+  const netc = (l) => "<td class='net" + (l === "ai" ? " ai" : "") + "'>" + (HAS(l) ? fmt(NET(l)) : "·") + "</td>";
   let h = "<table><thead><tr><th>" + (transposed ? "language" : "bench") + "</th>";
   for (const c of cols) h += "<th" + (c === "ai" ? " class='ai'" : "") + ">" + c + "</th>";
-  if (!transposed) h += "<th>ok</th>";
+  h += !transposed ? "<th>ok</th>" : "<th class='net'>selective net</th>";   // ok column (benches down) / net column (langs down)
   h += "</tr></thead><tbody>";
   for (const r of rows) {
     h += "<tr><th" + (r === "ai" ? " class='ai'" : "") + ">" + r + "</th>";
     for (const c of cols) h += td(transposed ? c : r, transposed ? r : c);
     if (!transposed) h += "<td class='" + (OK[r] ? "okc" : "bad") + "'>" + (OK[r] ? "✓" : "✗") + "</td>";
+    else h += netc(r);                                                       // per-language selective net (transposed)
     h += "</tr>";
   }
   if (transposed) {
-    h += "<tr class='okrow'><th>ok</th>";
+    h += "<tr class='okrow'><th>ok</th>";                                    // the ok marks as a bottom row (langs down)
     for (const c of cols) h += "<td class='" + (OK[c] ? "" : "bad") + "'>" + (OK[c] ? "✓" : "✗") + "</td>";
-    h += "</tr>";
+    h += "<td class='net'></td></tr>";
+  } else {
+    h += "<tr class='netrow'><th>selective net</th>";                        // the column-ordering key, as a bottom row (benches × languages)
+    for (const c of cols) h += netc(c);
+    h += "<td class='net'></td></tr>";
   }
   h += "</tbody></table>";
   document.getElementById("t").innerHTML = h;

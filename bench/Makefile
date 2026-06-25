@@ -98,7 +98,7 @@ SHOW    := $(filter $(PRESENT),$(DEFAULT_LANGS))
 
 txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 
-.PHONY: all bench run raw html clean $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -131,11 +131,21 @@ all run: $(call txt,$(PRESENT))
 raw: $(call txt,$(PRESENT))
 	@cat $^
 
+# The SAT-solver shootout (the page's SECOND table): ai's CDCL vs the reference C
+# solvers on PHP(5..8). Cached like the language results -- re-run only when the
+# runner or the solver changes. `make satrace` to refresh it on its own.
+SATRACE := $(BDIR)/satrace.txt
+$(SATRACE): satrace.sh $(R)/sat/sat.l $(GL) | $(BDIR)
+	@./satrace.sh $(TIMEOUT) > $@
+satrace: $(SATRACE)
+	@cat $(SATRACE)
+
 # Self-contained results page: bench/bench.html, the full roster as columns
 # (a present-but-empty language shows a dotted column), with a transpose button
-# and a viewport-chosen initial orientation. Regenerate after a fresh `make all`.
-html: $(call txt,$(PRESENT)) mkhtml.sh | $(BDIR)
-	@cat $(call txt,$(PRESENT)) | ./mkhtml.sh "$(ALL_LANGS)" > bench.html
+# and a viewport-chosen initial orientation, plus the SAT-solver shootout table.
+# Regenerate after a fresh `make all` (and `make satrace` for fresh solver times).
+html: $(call txt,$(PRESENT)) $(SATRACE) mkhtml.sh | $(BDIR)
+	@cat $(call txt,$(PRESENT)) | ./mkhtml.sh "$(ALL_LANGS)" "$(SATRACE)" > bench.html
 	@echo "wrote bench/bench.html"
 
 clean:

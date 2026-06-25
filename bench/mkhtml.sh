@@ -6,9 +6,10 @@
 # milliseconds (benches down the side, languages across), and a button that
 # transposes benches<->languages (handy on a narrow portrait screen).
 # <lang-roster> is the column SET (e.g. $(ALL_LANGS)). The page (in JS, at render)
-# orders columns ai FIRST, then the rest by NET time ascending -- Σ of a language's
-# per-bench ms/it EXCLUDING bell (which luajit/rust lack, so it would skew them
-# fast); a language with no rows sorts last as a column of dots.
+# orders EVERY column by NET time ascending -- Σ of a language's per-bench ms/it
+# EXCLUDING bell and sat (single-implementation benches: luajit/rust lack bell, sat
+# is ai-only, so counting either hands the skippers a free 0 and skews the net). ai
+# takes its HONEST position (still tinted gold); a language with no rows sorts last.
 # The page embeds its data, so it opens straight off disk -- no server.
 roster="$1"
 
@@ -56,6 +57,10 @@ cat <<'HEAD'
   th.ai { background: rgba(169,177,214,.20) !important; color: #c0caf5 !important; }
   td.okc, .okrow td { color: #9ece6a; }
   td.bad, .okrow td.bad { color: #f7768e; }
+  .netrow th, .netrow td { border-top: 2px solid #545c7e; color: #e0af68; }   /* selective net: Σ ms/it excl bell+sat -- the column-ordering key, made visible */
+  th.net, td.net { border-left: 2px solid #545c7e; color: #e0af68; }          /* ... as a column in the transposed view */
+  td.to { color: #f7768e; }                                                   /* a solver that exceeded the timeout */
+  h2 { font-weight: normal; color: #c0caf5; margin: 1.6em 0 .4em; }
 </style>
 </head>
 <body>
@@ -70,8 +75,51 @@ style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
   <span id="mode"></span>
 </div>
 <div class="wrap"><div id="t"></div></div>
-<script>
 HEAD
+
+# -- the SECOND table: the SAT-solver shootout (arg 2 = a satrace.sh result file,
+# "<instance> <solver> <ms> <verdict>" lines). Rendered STATIC at generation time
+# (no transpose needed), solvers ordered by net ms ascending -- ai its honest
+# position, a timeout ranking it last. Skipped if no file. --
+if [ -n "$2" ] && [ -s "$2" ]; then
+cat <<'SAT'
+<h2>SAT solvers &mdash; pigeonhole UNSAT, milliseconds to solve</h2>
+<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/sat.l</code>)
+against reference C solvers on PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i>
+holes, UNSAT and resolution-hard, so CDCL is <b>exponential</b> here. ai is timed by its
+own solve clock (interpreter warmup excluded); the C solvers by process wall-clock (their
+startup is ~ms). <code>timeout</code> = exceeded the cutoff. This is where a tuned C
+solver pulls away from an interpreted one &mdash; the honest other side of the language
+table above.</p>
+<div class="wrap">
+SAT
+awk '
+  function fmt(x){ return x<1?sprintf("%.4f",x):x<100?sprintf("%.3f",x):sprintf("%.1f",x) }
+  { inst=$1; solv=$2; ms=$3
+    if(!(inst in si)){iord[++ni]=inst; si[inst]=1}
+    if(!(solv in ss)){sord[++ns]=solv; ss[solv]=1}
+    val[inst,solv]=ms }
+  END{
+    for(j=1;j<=ns;j++){s=sord[j]; net=0; to=0; for(i=1;i<=ni;i++){v=val[iord[i],s]; if(v=="timeout"){to=1; net+=1e9}else net+=v+0} netv[s]=net; anyto[s]=to; ord[j]=s}
+    for(a=1;a<=ns;a++)for(b=a+1;b<=ns;b++)if(netv[ord[b]]<netv[ord[a]]){t=ord[a];ord[a]=ord[b];ord[b]=t}
+    for(i=1;i<=ni;i++){m=1e18; for(j=1;j<=ns;j++){v=val[iord[i],ord[j]]; if(v!="timeout"&&v!=""&&v+0<m)m=v+0} minr[iord[i]]=m}
+    printf "<table><thead><tr><th>instance</th>"
+    for(j=1;j<=ns;j++){s=ord[j]; printf "<th%s>%s</th>", (s=="ai"?" class=\047ai\047":""), s}
+    print "</tr></thead><tbody>"
+    for(i=1;i<=ni;i++){inst=iord[i]; printf "<tr><th>%s</th>", inst
+      for(j=1;j<=ns;j++){s=ord[j]; v=val[inst,s]; c=(s=="ai"?"ai ":"")
+        if(v==""){printf "<td class=\047%smiss\047>·</td>",c}
+        else if(v=="timeout"){printf "<td class=\047%sto\047>timeout</td>",c}
+        else{f=(v+0==minr[inst]?"fast ":""); printf "<td class=\047%s%s\047>%s</td>",c,f,fmt(v+0)}}
+      print "</tr>"}
+    printf "<tr class=\047netrow\047><th>net</th>"
+    for(j=1;j<=ns;j++){s=ord[j]; printf "<td class=\047net%s\047>%s</td>", (s=="ai"?" ai":""), (anyto[s]?"dnf":fmt(netv[s]))}
+    print "</tr></tbody></table>"
+  }' "$2"
+echo "</div>"
+fi
+
+echo "<script>"
 
 awk -v langs="$roster" '
   BEGIN { nl = split(langs, L, " ") }
@@ -140,20 +188,26 @@ function build() {
     if (v == null) c.push("miss"); else if (v === minB[b]) c.push("fast");
     return "<td" + (c.length ? " class='" + c.join(" ") + "'" : "") + ">" + fmt(v) + "</td>";
   };
+  const netc = (l) => "<td class='net" + (l === "ai" ? " ai" : "") + "'>" + (HAS(l) ? fmt(NET(l)) : "·") + "</td>";
   let h = "<table><thead><tr><th>" + (transposed ? "language" : "bench") + "</th>";
   for (const c of cols) h += "<th" + (c === "ai" ? " class='ai'" : "") + ">" + c + "</th>";
-  if (!transposed) h += "<th>ok</th>";
+  h += !transposed ? "<th>ok</th>" : "<th class='net'>selective net</th>";   // ok column (benches down) / net column (langs down)
   h += "</tr></thead><tbody>";
   for (const r of rows) {
     h += "<tr><th" + (r === "ai" ? " class='ai'" : "") + ">" + r + "</th>";
     for (const c of cols) h += td(transposed ? c : r, transposed ? r : c);
     if (!transposed) h += "<td class='" + (OK[r] ? "okc" : "bad") + "'>" + (OK[r] ? "✓" : "✗") + "</td>";
+    else h += netc(r);                                                       // per-language selective net (transposed)
     h += "</tr>";
   }
   if (transposed) {
-    h += "<tr class='okrow'><th>ok</th>";
+    h += "<tr class='okrow'><th>ok</th>";                                    // the ok marks as a bottom row (langs down)
     for (const c of cols) h += "<td class='" + (OK[c] ? "" : "bad") + "'>" + (OK[c] ? "✓" : "✗") + "</td>";
-    h += "</tr>";
+    h += "<td class='net'></td></tr>";
+  } else {
+    h += "<tr class='netrow'><th>selective net</th>";                        // the column-ordering key, as a bottom row (benches × languages)
+    for (const c of cols) h += netc(c);
+    h += "<td class='net'></td></tr>";
   }
   h += "</tbody></table>";
   document.getElementById("t").innerHTML = h;
