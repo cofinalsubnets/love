@@ -204,7 +204,7 @@
  (sip o) (get o)                                  ; draw ONE unit (pairs with slurp = all)
  ; slurp drains a vessel to a value: an output jug reads its backing buffer; a tap drains via get.
  (slurp o) (? (string? (peek 4 o)) (snip (peek 4 o) 0 (peek 5 o))
-              (: (rl i) (: c (get i) (? (= c -1) 0 (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
+              (: (rl i) (: c (get i) (? (= c -1) () (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; help status readers. a global `help` function is called as (help s a b):
 ; s = the status word, two bits -- scare (1: something went wrong) and more
