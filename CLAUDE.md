@@ -26,6 +26,15 @@
 ;   your dyadics); quoted lists are data, operators plain.
 ; * arithmetic operators are DYADIC: `(+ a b c)` is `((+ a b) c)` -- APPLICATION, not a 3-way sum, so it
 ;   church-EXPONENTIATES ((+ 192 40 5) = (232 5) = 5^232, a bignum).
+; * ⚠ `(f)` IS NOT A CALL -- (f) == f at zero operands, so a NULLARY helper hands its CLOSURE BACK
+;   UNRUN: `(go)` `(loop)` `(step)` `(again)` never fire, a thunk never forces, a counted loop never
+;   iterates -- and NOTHING ERRORS (the value you wanted is one curry away, a SILENT no-op). this
+;   keeps biting loops / named-lets / recursion. fire every thunk WITH AN OPERAND, and let that
+;   operand be the UNIT: `(go ())`, () not 0. a 0 supplied as an IGNORED ARG is a 0-FOSSIL -- a second
+;   kind, sibling to the nil-tail fossil (terminating a list with 0): both are the 0->() flip, the
+;   do-nothing slot is NOTHING, the unit, not a number (a number would church-exponentiate; the unit
+;   just rides through). so `(work ())` `(loop ())` `(go ())` for a thunk/loop trigger, never a bare
+;   0 the callee ignores.
 ; * a corpus test that spins a task must (catch p) it: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the interactive
 ;   shell installs a default help (ai/bao.l shell-help): a scare prints `;; a b` and answers the zero
@@ -114,11 +123,15 @@
 ; CONDITION (see control) carrying the binding site's nom -- the zero point helpless; no read escapes
 ; to an outer binding of the same name. rebinding a name still reads the previous value (the sequence
 ; law); recursion among lambda bindings resolves lazily. an EMPTY form is its head's value -- (f) ==
-; f at zero operands -- and the heads are missing, so (:) (?) (\) all read the zero point.
+; f at zero operands -- and the heads are missing, so (:) (?) (\) all read the zero point. a nullary
+; HELPER call is the SAME law and the SAME trap: `(go)` is `go` UNRUN, never the loop step -- fire
+; every thunk with an operand, the UNIT `(go ())` (() not 0, the 0->() flip: a do-nothing arg is
+; nothing, not a number that would exponentiate).
 ; demo:
 (: (twice f x) (f (f x)))    ; defines twice; (twice (+ 1) 10) ; 12
 (: x 1 x (x + 1) x)          ; 2     the sequence law: a rebind reads the previous value
 (:)                          ; ()    an empty special form reads its head: the zero point
+(: (go x) (+ x 1) (go ()))   ; 1     fire a thunk with the UNIT; (go) ALONE is go UNRUN, never 1
 
 ; --- true and false (the net measure) --- false is *nothing*: whatever NETS <= 0. every value has a
 ; net, COMPLEX-VALUED: a number is its own value (a complex nets ITSELF, phase intact), text SUMS ITS

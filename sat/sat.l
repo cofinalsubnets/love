@@ -127,7 +127,7 @@
    (propagate s)                                            ; drain the trail queue through the watches; -> conflict cid or -1
     ((: (loop _) (? (>= (peep s 'qhead 0) (peep s 'top 0)) -1
                    (: p (peep (vmap s 'trail) (peep s 'qhead 0) ()) _ (pin s 'qhead (+ 1 (peep s 'qhead 0)))
-                      confl (prop-lit s (neg p)) (? (> confl -1) confl (loop 0))))) 0)
+                      confl (prop-lit s (neg p)) (? (> confl -1) confl (loop ()))))) ())
    ; --- 1-UIP conflict analysis -----------------------------------------------
    ; absorb a reason clause's literals into (counter . learnt): mark each unseen
    ; level>0 var, count those at the conflict level, collect the rest as the
@@ -201,13 +201,13 @@
                     _ (decay s) _ (pin s 'nconf (+ 1 (peep s 'nconf 0)))
                     _ (backjump s (cup res))
                     _ (? (atom? (cup learnt)) 0 (watch2 s cid (cap learnt) (caup learnt)))   ; watch the learnt clause (unit learnt: a level-0 fact, unwatched)
-                    _ (assign s (cap learnt) cid) (loop 0)))
+                    _ (assign s (cap learnt) cid) (loop ())))
               (&& (> (peep s 'level 0) 0) (>= (peep s 'nconf 0) (peep s 'climit 0)))    ; Luby restart: keep learnt clauses, jump to level 0
-                 (: _ (backjump s 0) _ (next-restart s) (loop 0))
+                 (: _ (backjump s 0) _ (next-restart s) (loop ()))
               (: v (pick-branch s)                            ; decide: highest-activity free var, saved phase
                  (? (= v 0) 'sat
                     (: _ (pin s 'level (+ 1 (peep s 'level 0)))
-                       _ (assign s (* v (peep (vmap s 'phase) v -1)) -1) (loop 0))))))) 0)
+                       _ (assign s (* v (peep (vmap s 'phase) v -1)) -1) (loop ()))))))) ())
    (extract-model s nvars) (map (\ v (link v (val-of s v))) (rng 1 (+ nvars 1)))
    (cdcl formula nvars) (: s (mk formula nvars)
                            (? (= 1 (peep s 'bad 0)) 'unsat                       ; empty clause / contradictory units at construction

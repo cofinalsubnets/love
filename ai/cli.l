@@ -21,7 +21,7 @@
 ; can't catch it), but `_` never leaks -- the intermediate stays off (names ()). The reads
 ; below pick it up by the sequence law. The inner body returns (parsed program-view-argv run),
 ; where `run` is the dispatch THUNK. Order matters: we defglob `argv` to the program's view
-; FIRST, THEN call `(run 0)` -- the loaded program reads the global `argv`, so it must already
+; FIRST, THEN call `(run ())` -- the loaded program reads the global `argv`, so it must already
 ; be rebound before the load fires. (-v/-h still exit inside `pre`, before the rebind, as before.)
 (: _
  (: (rdev q) ((: (go e q) (: r (sound q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
@@ -55,4 +55,4 @@
     (link p (link av (link run ()))))   ; the body: return (parsed program-argv run)
  parsed (cap _)                         ; DEFGLOB the kept publics out of the triple (the prev `_`)
  argv   (cap (cup _))                   ; rebind argv to the program's view, BEFORE the run
- _ ((caup (cup _)) 0))                  ; (run 0): dispatch now that argv is the program's view
+ _ ((caup (cup _)) ()))                 ; (run ()): dispatch now that argv is the program's view (the unit -- run ignores its arg)

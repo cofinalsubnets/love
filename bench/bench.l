@@ -11,14 +11,15 @@
 ; the lang label comes from BENCH_LANG (run.sh exports it), default "ai" -- the
 ; SAME contract as lib/bench.* (bench.py/.lisp/...); it MUST equal the column key
 ; in bench/Makefile's lang lists or report.awk drops the column.
-; work is a unary thunk (called as (work 0), since ai has no nullary calls)
+; work is a unary thunk (called as (work ()), since ai has no nullary calls -- the
+; do-nothing arg is the UNIT, not 0)
 ; and must return a deterministic checksum the other languages reproduce.
 (: (iota1 n) (map (+ 1) (jot n))                                     ; 1..n (iota is prel now)
    bench-lang (|| (getenv "BENCH_LANG") "ai")                         ; column key; matches lib/bench.* default-to-own-name
    bench-min-ms 200                                                   ; timing floor
    (bench-run work reps)                                              ; -> (ms . chk)
     (: t0  (clock 0)
-       chk ((: (go i a) (? (< i reps) (go (+ i 1) (work 0)) a)) 0 0)
+       chk ((: (go i a) (? (< i reps) (go (+ i 1) (work ())) a)) 0 0)
      (link (- (clock 0) t0) chk))
    (bench-loop work reps)                                             ; double until >= floor
     (: r (bench-run work reps)
