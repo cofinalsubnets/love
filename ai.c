@@ -823,7 +823,8 @@ lvm_t lvm_fault;
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))\
  _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load))\
  _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp))\
- _(nif_image_check, "image-check", s1(lvm_image_check)) NIF_FAULT(_)
+ _(nif_image_check, "image-check", s1(lvm_image_check))\
+ _(nif_image_rt, "image-rt", s1(lvm_image_rt)) NIF_FAULT(_)
 #define native_implemented_function(n, _, d) static union u const n[] = d;
 #define insts(_) _(lvm_unc) _(lvm_index) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
@@ -851,6 +852,7 @@ struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
  return g; }
 
 lvm_t lvm_image_check;   /* image-check spike (defined near end, after all lvm_* sentinels) */
+lvm_t lvm_image_rt;      /* image-rt: Phase-1 serialize/deserialize round-trip */
 nifs(native_implemented_function);
 
 static lvm(_lvm_yield_c) { return Pack(g), g; }
@@ -4981,6 +4983,96 @@ lvm(lvm_image_check) {
    (unsigned long) n, (unsigned long) gap, (unsigned long) drift);
 #endif
  return Sp[0] = putcharm((intptr_t) gap), Ip++, Continue(); }   // -> the GO/NO-GO number: real table gaps
+
+// ============================================================================
+// image-rt -- Phase 1 of the heap-image snapshot (doc/snapshot.md): serialize the
+// COMPACTED live heap to a blob, deserialize into a FRESH region, and verify the
+// round-trip -- the REAL relocation (internal pointers <-> base-relative offsets)
+// + lvm_* re-resolution (C-pointers <-> a symbolic table index), over the whole
+// live heap. Compact-first (a MAJOR GC, the spike's lesson) so [major_base,major_hp)
+// is contiguous + soundly linear-walkable. ADDITIVE debug nif; runs only when
+// called; gen host only (the major holds the compacted live half). `(image-rt ())`
+// -> 0 on a clean round-trip, else a >0 fault count (or -1 non-gen / -2 OOM).
+// ============================================================================
+// bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, then def1 E..
+static intptr_t image_ap_index(intptr_t ap) {
+ for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
+  if ((intptr_t) image_extra_aps[i] == ap) return (intptr_t) i;
+ for (uintptr_t j = 0; j < countof(def1); j++)
+  if (def1[j].x == ap) return (intptr_t)(countof(image_extra_aps) + j);
+ return -1; }
+static intptr_t image_ap_resolve(intptr_t idx) {
+ return idx < (intptr_t) countof(image_extra_aps)
+   ? (intptr_t) image_extra_aps[idx]
+   : def1[idx - countof(image_extra_aps)].x; }
+// reloc tables (WORD offsets into the blob): heap pointers (relocate by base delta) vs
+// lvm_* aps (re-resolve via index). raw words (doubles/limbs/bytes/lengths/serials) and
+// out-of-pool immortals (ZeroPoint/EmptyString/stdio) are left as-is.
+struct image_rel { uintptr_t *hwo, nh, *lwo, *lix, nl; };
+static void image_rec(struct image_rel *R, uintptr_t wo, intptr_t val, intptr_t lo, intptr_t hi) {
+ if (oddp(val)) return;                                   // fixnum
+ intptr_t idx = image_ap_index(val);
+ if (idx >= 0) { R->lwo[R->nl] = wo, R->lix[R->nl] = (uintptr_t) idx, R->nl++; return; }   // lvm_* ap
+ if (val >= lo && val < hi) R->hwo[R->nh++] = wo;         // in-pool heap pointer (the terminator rides here too: head|2)
+ // else: out-of-pool immortal -- left absolute (in-process; a cross-process image needs an immortal index)
+}
+// walk [base,hp) recording every pointer-bearing word (per-kind, mirroring evac_*); -> object count.
+static uintptr_t image_ser_walk(struct ai *g, word *base, word *hp, struct image_rel *R) {
+ intptr_t lo = (intptr_t) base, hi = (intptr_t) hp;
+ uintptr_t n = 0;
+ for (union u *p = (union u*) base; (word*) p < hp; n++) {
+  uintptr_t off = (uintptr_t)((word*) p - base), sz = image_objsize(g, p);
+  image_rec(R, off, (intptr_t) p->ap, lo, hi);            // word0: ap (always lvm_*)
+  if (in_data(p->ap)) switch (ai_typ(p)) {
+   case KChain: image_rec(R, off + 1, ((struct ai_chain*) p)->a, lo, hi);
+                image_rec(R, off + 2, ((struct ai_chain*) p)->b, lo, hi); break;
+   case KNom:   image_rec(R, off + 1, (intptr_t) nom(p)->name, lo, hi); break;
+   case KVec:   if (vec(p)->type == ai_O) {
+                 word *e = (word*) vec_data(vec(p)); uintptr_t ne = vec_nelem(vec(p)), eo = (uintptr_t)(e - (word*) p);
+                 for (uintptr_t i = 0; i < ne; i++) image_rec(R, off + eo + i, e[i], lo, hi); }
+                break;
+   default: break;                                        // KMint/KStr/KBig/KFlo/KWide/KCplx: flat leaves
+  } else for (uintptr_t i = 1; i < sz; i++)               // thread: every interior word + the terminator
+   image_rec(R, off + i, ((word*) p)[i], lo, hi);
+  p = (union u*) ((word*) p + sz);
+ }
+ return n; }
+lvm(lvm_image_rt) {
+ Pack(g);
+ if (!g->major_pool) { Unpack(g); return Sp[0] = putcharm(-1), Ip++, Continue(); }   // gen host only
+ gen_major(g);                                            // COMPACT: live set -> [major_base, major_hp) contiguous
+ word *base = g->major_base, *hp = g->major_hp;
+ uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
+ uintptr_t bookoff = (uintptr_t)((word*) cell(g->book) - base);
+ struct image_rel R = { g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0 };
+ word *blob = g->alloc(g, NULL, bytes), *nu = g->alloc(g, NULL, bytes);
+ intptr_t status;
+ if (!R.hwo || !R.lwo || !R.lix || !blob || !nu) status = -2;
+ else {
+  uintptr_t nobj = image_ser_walk(g, base, hp, &R);
+  memcpy(blob, base, bytes);                                                   // SERIALIZE
+  for (uintptr_t i = 0; i < R.nh; i++) blob[R.hwo[i]] -= (intptr_t) base;       //  heap ptr -> base-relative offset
+  for (uintptr_t i = 0; i < R.nl; i++) blob[R.lwo[i]] = (intptr_t) R.lix[i];    //  ap -> table index
+  memcpy(nu, blob, bytes);                                                      // DESERIALIZE into a fresh region
+  for (uintptr_t i = 0; i < R.nh; i++) nu[R.hwo[i]] += (intptr_t) nu;           //  offset -> newbase + offset
+  for (uintptr_t i = 0; i < R.nl; i++) nu[R.lwo[i]] = image_ap_resolve(R.lix[i]);//  index -> live lvm_*
+  uintptr_t bad = 0;                                                            // VERIFY: faithful relocation
+  for (uintptr_t i = 0; i < R.nh; i++) { uintptr_t wo = R.hwo[i];
+   intptr_t oo = base[wo] - (intptr_t) base, no = nu[wo] - (intptr_t) nu;       //  offset preserved + in-range?
+   if (oo != no || no < 0 || (uintptr_t) no >= bytes) bad++; }
+  for (uintptr_t i = 0; i < R.nl; i++)                                          //  ap re-resolves (in-process: identity) to a real lvm_*
+   if (nu[R.lwo[i]] != base[R.lwo[i]] || !image_ap_covered(nu[R.lwo[i]])) bad++;
+  if ((intptr_t) ((union u*)((word*) nu + bookoff))->ap != (intptr_t) lvm_map_lookup) bad++;   // the relocated book is a map
+#if __STDC_HOSTED__
+  fprintf(stderr, "image-rt: %lu objects, %lu words (%lu KB), %lu heap-ptrs, %lu aps -> %lu BAD\n",
+    (unsigned long) nobj, (unsigned long) nw, (unsigned long)(bytes / 1024),
+    (unsigned long) R.nh, (unsigned long) R.nl, (unsigned long) bad);
+#endif
+  status = (intptr_t) bad;
+ }
+ g->alloc(g, R.hwo, 0), g->alloc(g, R.lwo, 0), g->alloc(g, R.lix, 0), g->alloc(g, blob, 0), g->alloc(g, nu, 0);
+ Unpack(g);
+ return Sp[0] = putcharm(status), Ip++, Continue(); }
 
 // ============================================================================
 // sym
