@@ -441,6 +441,20 @@ static char const baolaunch[] = "(bao 0)";   // bao.l is define-only -> the fron
 extern int image_dump(struct ai*, char const*);          // ai.c, __STDC_HOSTED__
 extern struct ai *image_load(char const*);
 static char const *image_dump_path = NULL;
+// the glaze (native JIT, ai/glaze/{emit,auto}.l), x86-64 only. Baked but evaled ONLY
+// before a --dump-image -- so a normal boot never pays the ~810 ms native-compile of
+// its self-tests, while the dumped snapshot carries the JIT always-on at zero startup
+// (Phase 4, doc/snapshot.md). The asserts compile transient native closures; the
+// gen_major inside image_dump drops them, so the serialized heap is pure closures
+// (ev rebound to auto-ev) with no W^X arena to serialize -- natives JIT lazily on load.
+#if defined(__x86_64__)
+static char const glaze_emit[] =
+#include "emit.h"
+ ;
+static char const glaze_auto[] =
+#include "auto.h"
+ ;
+#endif
 // the post-warm dispatch (shared by boot() and the --load-image path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   if (argp) return ai_evals_(g, cli);
@@ -463,6 +477,14 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "bao.h"
   );
   if (image_dump_path) {                                 // --dump-image: snapshot the post-warm heap, then exit
+#if defined(__x86_64__)
+    g = ai_evals_(g, glaze_emit);                        // load the native JIT BEFORE the dump (x86 only):
+    g = ai_evals_(g, glaze_auto);                        //   the snapshot bakes ev = auto-ev, glaze always-on
+    // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
+    // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
+    // with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
+    g = ai_evals_(g, "(map (\\ k (pull cache k 0)) (keys cache))");
+#endif
     int rc = image_dump(g, image_dump_path);
     if (rc) fprintf(stderr, "ai: image-dump failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }

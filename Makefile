@@ -235,6 +235,12 @@ lib_h = $(patsubst ai/%.l,out/lib/%.h,$(wildcard ai/*.l))
 # asm0_h = sed-wrapped raw source (ai0, the bootstrap -- can't lcat its own sources).
 asm_h  = out/lib/asm.h  out/lib/x64.h  out/lib/arm64.h
 asm0_h = out/lib/asm0.h out/lib/x640.h out/lib/arm640.h
+# the glaze (native JIT, ai/glaze/{emit,auto}.l): baked to raw-text headers (sed_lit,
+# like asm0 -- no lcat reader round-trip). Evaled ONLY before a --dump-image (x86-gated
+# in main.c), so a normal boot never pays the ~810 ms; the dumped snapshot then carries
+# an always-on JIT at zero startup (Phase 4, doc/snapshot.md). Their self-test asserts
+# native-compile transient closures -- image_dump's gen_major drops them before serializing.
+glaze_h = out/lib/emit.h out/lib/auto.h
 # ai0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
 # interpreter -- the l reader strips the ; comments at read time), since ai0
 # can't lcat the very sources it is assembled from (chicken/egg). cli.l doubles as
@@ -280,6 +286,16 @@ out/lib/arm640.h: asm/arm64.l
 	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/%0.h: ai/%.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(sed_lit) $< > $@
+# the glaze headers (ai/glaze/ -- outside the ai/*.l wildcard, so explicit). Raw sed_lit:
+# the glaze source is sigil-heavy, so skip the lcat reader round-trip and bake it verbatim.
+out/lib/emit.h: ai/glaze/emit.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(sed_lit) $< > $@
+out/lib/auto.h: ai/glaze/auto.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@
@@ -428,12 +444,12 @@ $(ho)/ai.o $(ho)/0/ai.o: out/lib/ai_version.h
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
 # main.c` did), recompile it when any baked header changes.
-$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h)
+$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h) $(glaze_h)
 
 # host/main.c (auto-globbed into $(host_o)) carries main() + the egg, assembled
 # inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c
 # glob now; the recompile-on-header-change dep is the line just above.
-$(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h)
+$(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm $(host_ldflags)

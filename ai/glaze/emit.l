@@ -761,9 +761,12 @@
        (? (&& (= 2 (tally invs)) (= 2 (tally fvars)))
           (jitfgrid glam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim) ()))
    ; --- self-test (x86-64): native == interpreted, transparent, deopts ---------
-   (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
-   f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
- _ (assert
+   ; WRAPPED in `_ (: ...)`: emit.l is a body-less `:`, so a top-level binding LEAKS to the
+   ; global book -- and a native test fixture (f/g, ap = a W^X mmap addr) can't be serialized,
+   ; breaking --dump-image. Keep the natives LOCAL to this inner scope (doc/snapshot.md Phase 4).
+ _ (: (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
+      f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
+    _ (assert
   (lit? f) (lit? g)                                          ; native closures are applicable values
   (31 = (f 10)) (315 = (g 10))                               ; they compute
   ((\ x (+ (* x 3) 1)) = f)                                  ; ... and are =-IDENTICAL to their source
@@ -930,4 +933,4 @@
      ggrid '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
      ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid)
      (= 87130 (ng 0))))
- _ (say err "ai/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
+    (say err "ai/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n")))
