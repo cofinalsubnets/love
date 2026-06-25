@@ -117,7 +117,7 @@
 </script>
 <span class="chip" data-run='."hello world\n"'>hello world</span>
 <span class="chip" data-run='(100 (\ n (: f (? (n % 3) "" "fizz") b (? (n % 5) "" "buzz") _ .(? ($f | $b) (f + b) n) _ ."\n" (n + 1))) 1)'>fizzbuzz</span>
-<span class="chip" data-run=': (tri n) (map (\ x $*x) *n) (tri 67)'>: (tri n) (map (\ x $*x) *n) (tri 67)</span>
+<span class="chip" data-run=': tri ((map (sat * jot * (+ 2))) * jot) (tri 67)'>: tri ((map (sat * jot * (+ 2))) * jot) (tri 67)</span>
 <span class="chip" data-run="0 2">0 2</span>
 <span class="chip" data-run="2 3 4">2 3 4</span>
 <span class="chip" data-run="i * i">i * i</span>
@@ -126,9 +126,9 @@
 <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
 
 
-<p class="toc">contents: <a href="#for-programmers">ai for programmers</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#infodump">infodump</a> &nbsp;&middot;&nbsp; <a href="#crew">the crew</a></p>
+<p class="toc">contents: <a href="#for-programmers">ai intro</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#infodump">infodump</a> &nbsp;&middot;&nbsp; <a href="#crew">the crew</a></p>
 <hr>
-<h2 id="for-programmers"><a href="#for-programmers">ai for programmers</a></h2>
+<h2 id="for-programmers"><a href="#for-programmers">ai intro</a></h2>
 
 <p>ai is a small lisp-surfaced language over a tiny generic core.
 if you've written javascript, python, lua, ruby, lisp, or any other high-level
@@ -295,8 +295,8 @@ forward reference lifting, like <code>letrec*</code> in scheme.</p>
     <dd>an object array, seated just above chain.</dd>
   <dt id="g-twin">twin</dt>
     <dd>a complex: two gems <code>(re, im)</code>, built and conjugated by <code>~</code>.</dd>
-  <dt id="g-unit">unit / the zero point</dt>
-    <dd>the do-nothing element: <code>() + x = () * x = x</code>, the identity of both <code>+</code> and <code>*</code> in every lane -- its faces are <code>0</code> (for <code>+</code>) and <code>1</code> (for <code>*</code>), not the number 0. <em>the zero point</em> is the canonical value that wears that role: the mint at serial 0, printed <code>()</code>, the face of absence a missing read returns.</dd>
+  <dt id="g-unit">unit / zero point</dt>
+    <dd>the global empty element: <code>() + x = () * x = x</code>. canonically a mint, therefore false. the face of absence a missing read returns.</dd>
 </dl>
 
 <hr>
