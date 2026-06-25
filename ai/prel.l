@@ -612,7 +612,7 @@
    has_s dict_has
    ext_s dict_set
    (mintp x) (&& (nom? x) (nom? (string x)))       ; string of a named sym is its name; of a mint, itself
-   (var? x) (&& (two? x) (mintp (cup x)))
+   (var? x) (&& (two? x) (mintp (caup x)))
    (var x) (link x (nom 0))                         ; (label . fresh-nom) -- identity by the nom
    (walk s u) (? (nil? (var? u)) u (: t (has_s s u) (? (two? t) (walk s (cap t)) u)))
    ufail (nom 0)
@@ -632,7 +632,7 @@
    (sun x) (sX x sno)
    (s_plus s t) (s (\ _ t) (\ s _ m _ (m (s_plus t s))) (\ x s (sX x (s_plus s t))))   ; interleave (disj)
    (s_star s g) (s (\ _ s) (\ s _ m _ (m (s_star s g))) (\ x s (s_plus (g x) (s_star s g))))  ; bind (conj)
-   (stake i s) (? (nil? i) s (s (\ _ s) (stake i) (\ x s (link x (stake (+ -1 i) s)))))
+   (stake i s) (? (nil? i) () (s (\ _ ()) (stake i) (\ x s (link x (stake (+ -1 i) s)))))
    (smap f s) (s (\ _ s) (\ s _ m _ (m (smap f s))) (\ x s (sX (f x) (smap f s))))
    (sfold f z s) (s (\ _ z) (sfold f z) (\ x s (f x (sfold f z s))))
    slist (sfold link ())
