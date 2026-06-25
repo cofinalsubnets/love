@@ -44,15 +44,15 @@
       (| (= h "-v") (= h "--version")) (version 0)
       (| (= h "-h") (= h "--help"))    (usage 0)
       (| (= h "-e") (= h "--eval"))    (: _ (need h t) (link 'eval t))
-      (= h "--")                        (? (two? t) (link 'file t) (link 'stdin 0))
+      (= h "--")                        (? (two? t) (link 'file t) (link 'stdin ()))
       (link 'file a)))                  ; a positional file is the program
-     (link 'stdin 0))
+     (link 'stdin ()))
     p (pre (cup argv))                  ; runs -l preloads + -v/-h; the program kind
     av (? (= (cap p) 'eval) (cup (cup p)) (cup p))   ; the program's view of argv
     run (\ _ (? (= (cap p) 'eval) (eval1 (caup p))   ; the dispatch thunk: -e code / a file / stdin
               (= (cap p) 'file) (load1 (caup p))
               (rdev in)))
-    (link p (link av (link run 0))))    ; the body: return (parsed program-argv run)
+    (link p (link av (link run ()))))   ; the body: return (parsed program-argv run)
  parsed (cap _)                         ; DEFGLOB the kept publics out of the triple (the prev `_`)
  argv   (cap (cup _))                   ; rebind argv to the program's view, BEFORE the run
  _ ((caup (cup _)) 0))                  ; (run 0): dispatch now that argv is the program's view

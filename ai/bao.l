@@ -59,7 +59,7 @@
          ())
       (char->chars s)
       (: cs (char s)
-         (? (two? cs) (link (cap cs) (char->chars ((cup cs) ()))) 0))
+         (? (two? cs) (link (cap cs) (char->chars ((caup cs) ()))) ()))
       p (tap (char->chars s)) e (nom 0) r (sound p e)
       (? (id? r e) 0 (id? r p) 0 (ev r))))
 ; reads: the stream shell -- a port is the LAZY charms, and reads drinks it:
