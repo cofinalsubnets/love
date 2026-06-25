@@ -23,7 +23,7 @@
  (= 4 (tally (rng-seed 1)))
  (= 1 (rank (rng-seed 1)))
  (= (tier (rng-seed 0)) (tier (rng-seed 1)))  ; a seed's limb type is stable...
- (? wint (= star-tray (tier (rng-seed 1))) 1)      ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
+ (? word (= star-tray (tier (rng-seed 1))) 1)      ; ...a Z (word-int) array on a 64-bit word (a C array on wasm)
  (= 4 (tally (rng-get 0)))                  ; the global is a valid state tuple too
 
  ; --- determinism: same seed -> same sequence (global and functional) ---

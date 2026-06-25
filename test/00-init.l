@@ -12,10 +12,10 @@
    test_state (tablet 0)
    (test_set k v) (pin test_state k v)
    (test_get k) (peep test_state k 0)
-   ; wint: a full 64-bit-word build (native, kernel) -- which is also where reals
+   ; word: a full 64-bit-word build (native, kernel) -- which is also where reals
    ; are f64, libm is glibc's, a filesystem exists, and the RNG runs full-width.
    ; false only on the 32-bit wasm shim; gates the asserts that need any of those.
-   wint (< (32 2) max-charm))
+   word (< (32 2) max-charm))
 (:: 'assert (\ l
 (:
  (report x v) (do

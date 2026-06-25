@@ -60,7 +60,7 @@
 ; derived constellation? whole? atom?; lit? = a top-region reference (map/fn/hot, ai_kind>=KMap); hot? the opaque cask/port subset.
 (assert
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (book? #(1 2))
- (big? (100 2)) ((? wint full? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
+ (big? (100 2)) ((? word full? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
  !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots
@@ -77,7 +77,7 @@
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
- !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? wint (1e308 < 1 / 0) 1) (0 = (/ 0 0))
+ !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))

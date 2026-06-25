@@ -41,7 +41,7 @@
   ; real-file I/O can't round-trip there; gated to the hosted builds. The read
   ; loop is bounded everywhere now (get on a non-port is EOF), so the stubbed
   ; path no longer OOMs. In-memory ports (sip, below) still run on wasm.
-  (? wint (: txt (show (clock 0))
+  (? word (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
      _ (say wp txt)
      _ (close wp)

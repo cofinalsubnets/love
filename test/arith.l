@@ -40,7 +40,7 @@
  !(gem? (* 2 2305843009213693952))   ; ...and integer, not float
  (= 2305843009213693952 (/ (* 2 2305843009213693952) 2))           ; box / 2 demotes
  (= 2305843009213693952 (- (* 2 2305843009213693952) 2305843009213693952)) ; box - fix demotes
- (? wint (charm? (- (* 2 2305843009213693952) 2305843009213693952)) 1) ; ...to a fixnum (64-bit: 2^61 is in range)
+ (? word (charm? (- (* 2 2305843009213693952) 2305843009213693952)) 1) ; ...to a fixnum (64-bit: 2^61 is in range)
  (= (* 2 2305843009213693952) (* 2 2305843009213693952))           ; equal boxes compare =
 
  ; --- 1/0 promotes to IEEE inf / -inf; 0/0 collapses to 0 (NaN is gone) ---
@@ -53,9 +53,9 @@
  (= 0 (/ 0 0))                  ; ... and equal to 0
  ; +inf is greater than every finite double we can write (f64 only -- a 32-bit
  ; port's f32 reals overflow 1e308 to inf, so the comparison is vacuous there)
- (? wint (< 1e308 (/ 1 0)) 1)
+ (? word (< 1e308 (/ 1 0)) 1)
  ; -inf is less than every finite double
- (? wint (< (/ -1 0) -1e308) 1)
+ (? word (< (/ -1 0) -1e308) 1)
  ; 0/0 is 0, so it equals itself (NaN's non-reflexivity is gone)
  (= (/ 0 0) (/ 0 0))
 

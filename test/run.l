@@ -14,8 +14,8 @@
 ; child inherits l's stdin (the test-corpus pipe), and a reader would eat it.
 
 ; run/getenv are host-only (subprocess + environment); the browser shim has
-; neither, so skip the whole file there (wint = the hosted builds).
-(? wint (assert
+; neither, so skip the whole file there (word = the hosted builds).
+(? word (assert
   ; --- ran successfully: a chain, exit 0, and (here) no output ---
   (two? (run `("true")))
   (= 0 (cap (run `("true"))))
