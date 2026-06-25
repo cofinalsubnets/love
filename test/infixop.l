@@ -64,7 +64,7 @@
  (9 = (#(1 10) -> 2 9))                          ; -> falls back to the default
  (65 = (: b (cask 1) _ (b <- 0 65) (b -> 0 0)))  ; bufs take the same accessors
  ('pin = (cap (peep operators '<- 0)))  ; the table entries are (name . arity) aliases
- (3 = (cup (peep operators '-> 0)))
+ (3 = (caup (peep operators '-> 0)))
  (nom? '<-) (30 = ((->) #(3 30) 3 0))            ; escaped, -> is still peep-as-a-value
  (id? pin (<-)) (id? peep (->)) (1 = ((%) 5 2)))  ; every alias is a bound global
 

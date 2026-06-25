@@ -292,7 +292,7 @@
    ; normalize a table entry for key k -> (name . arity), or 0
    (op-ent k) (: v (operators k)
                  (? (charm? v) (? (&& (< 0 v) (< v 8)) (link k v) 0)
-                    (two? v) (? (&& (nom? (cap v)) (charm? (cup v)) (< 0 (cup v)) (< (cup v) 8)) v 0)
+                    (two? v) (? (&& (nom? (cap v)) (charm? (caup v)) (< 0 (caup v)) (< (caup v) 8)) v 0)
                     0))
    ; longest prefix of nm[i..n) that is a table key -> (len . entry), or 0
    (op-long nm i n)
@@ -307,8 +307,8 @@
            (? (< i n)
               (: m (op-long nm i n)
                  (? (two? m) (: k (cap m) e (cup m)
-                         (? (= (+ i k) n) (link e 0)         ; the last factor: any arity
-                            (= (cup e) 1) (: r (go (+ i k))  ; non-last factors must be arity one
+                         (? (= (+ i k) n) (link e ())        ; the last factor: any arity
+                            (= (caup e) 1) (: r (go (+ i k)) ; non-last factors must be arity one
                                              (? (two? r) (link e r) 0))
                             0))
                     0))
@@ -323,7 +323,7 @@
                      e (monadics s)
                      (? (nom? e) (link k e)
                         (: o (op-ent s)
-                           (? (? (two? o) (= 1 (cup o)) 0) (link k (cap o))
+                           (? (? (two? o) (= 1 (caup o)) 0) (link k (cap o))
                               (go (- k 1))))))))
      (- n i))
    ; factor a glued run against the monadic table -> the word list
@@ -334,8 +334,8 @@
            (? (< i n)
               (: m (mono-long nm i n)
                  (? (two? m)
-                    (? (= (+ i (cap m)) n) (link (cup m) 0)
-                       (: r (go (+ i (cap m))) (? (two? r) (link (cup m) r) 0)))
+                    (? (= (+ i (cap m)) n) (link (caup m) ())
+                       (: r (go (+ i (cap m))) (? (two? r) (link (caup m) r) 0)))
                     0))
               0))
         0)))
@@ -350,7 +350,7 @@
    (op-fro f) (cap f) (op-frc f) (caup f) (op-frn f) (cauup f)
    (op-frd f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
    ; wrap the chain of arity-one names around a folded form
-   (op-fin ch x) (? (two? ch) (link (cap ch) (link (op-fin (cup ch) x) 0)) x)
+   (op-fin ch x) (? (two? ch) (link (cap ch) (link (op-fin (cup ch) x) ())) x)
    ; fold a frame with whatever it has: nothing collected -> the plain
    ; symbol; a shortfall folds to the partial application (curry law). a
    ; frame at arity ONE (nil name: the whole op lives in the chain) wraps its
@@ -408,17 +408,17 @@
              ; =/= 2, the aliases, the arity-one sigils). with no left operand the
              ; infix frame still folds to the plain symbol (op-fold's bare case).
              (: fs0 (opfactor e)
-                fs (? (two? fs0) fs0 (link (link e 2) 0))
-                ch (map cap (init fs)) en (last fs) nm (cap en) n (cup en)
+                fs (? (two? fs0) fs0 (link (link e 2) ()))
+                ch (map cap (init fs)) en (last fs) nm (cap en) n (caup en)
                 (? (= n 1)                       ; arity one (or a one-chain): prefix --
                    ; nil name, the op rides the chain: marks the frame to fold on fill
-                   (op-w (cup l) out (link (op-fr e (cat ch (link nm 0)) 0 1 0) pend))
+                   (op-w (cup l) out (link (op-fr e (cat ch (link nm ())) 0 1 ()) pend))
                    (: st (op-steal out pend)     ; infix: capture if a left operand exists
                       (? (two? st) (op-w (cup l) (cap (cup st))
-                                  (link (op-fr e ch nm (- n 1) (link (cap st) 0))
+                                  (link (op-fr e ch nm (- n 1) (link (cap st) ()))
                                         (cup (cup st))))
                          (two? ch)               ; composite with no left: prefix
-                         (op-w (cup l) out (link (op-fr e ch nm 1 0) pend))
+                         (op-w (cup l) out (link (op-fr e ch nm 1 ()) pend))
                          (: r (op-del e out pend) ; bare operator: the plain symbol
                             (op-w (cup l) (cap r) (cup r)))))))
              (: r (op-del (op-core e) out pend)
@@ -431,14 +431,14 @@
    ; eval pairing, exactly, so a punct binder like (: >< (\ ..) ..) keeps its name.
    (op-colon fs)
     (? (atom? fs) fs
-       (atom? (cup fs)) (link (op-core (cap fs)) 0)         ; a lone form is the body
+       (atom? (cup fs)) (link (op-core (cap fs)) ())        ; a lone form is the body
        (link (cap fs)                                       ; the name: verbatim
              (link (op-core (caup fs))                      ; the value: factored
                    (op-colon (cuup fs)))))                  ; the rest: pairs on
    ; a \ lambda is a binder too: the args stay verbatim, only the body factors.
    ; (\ x) -- one operand -- is quote, kept whole by op-core's first clause.
    (op-lam fs)
-    (? (atom? (cup fs)) (link (op-core (cap fs)) 0)         ; the last operand is the body
+    (? (atom? (cup fs)) (link (op-core (cap fs)) ())        ; the last operand is the body
        (link (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
    ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
    ; quoted list keeps its operators as plain symbols); the binding forms keep
@@ -456,7 +456,7 @@
              (&& (id? h 'mono) (two? (cup x)) (two? (caup x)))
               (: p (caup x) r (cap p) d (op-core (caup p))
                  fs (? (nom? r) (monofactor r) 0)
-                 (? (two? fs) (op-fin fs d) (link r (link d 0))))
+                 (? (two? fs) (op-fin fs d) (link r (link d ()))))
              (op-w x 0 0)))))
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
 ; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
