@@ -5112,8 +5112,8 @@ int image_dump(struct ai *g, char const *path) {
  word *base = g->major_base, *hp = g->major_hp;
  if ((word*) g->sp != topof(g)) return -3;               // expect an empty AI stack at the quiescent dump point
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
- struct image_rel R = { malloc(bytes), 0, malloc(bytes), malloc(bytes), 0, malloc(bytes), malloc(bytes), 0, malloc(bytes), 0 };
- word *blob = malloc(bytes);
+ struct image_rel R = { g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), 0 };
+ word *blob = g->alloc(g, NULL, bytes);
  int rc = -2;
  if (R.hwo && R.lwo && R.lix && R.iwo && R.iix && R.bwo && blob) {
   image_ser_walk(g, base, hp, &R);
@@ -5135,7 +5135,7 @@ int image_dump(struct ai *g, char const *path) {
       ? 0 : -4;
   if (f) fclose(f);
  }
- free(R.hwo), free(R.lwo), free(R.lix), free(R.iwo), free(R.iix), free(R.bwo), free(blob);
+ g->alloc(g, R.hwo, 0), g->alloc(g, R.lwo, 0), g->alloc(g, R.lix, 0), g->alloc(g, R.iwo, 0), g->alloc(g, R.iix, 0), g->alloc(g, R.bwo, 0), g->alloc(g, blob, 0);
  return rc; }
 // load PATH into a FRESH g; NULL on any problem -> caller boots normally.
 struct ai *image_load(char const *path) {
@@ -5152,8 +5152,8 @@ struct ai *image_load(char const *path) {
   if (!g->major_pool) { fclose(f); return NULL; }
  }
  word *base = g->major_base;
- uintptr_t *hwo = malloc(H.nh * 8 + 8), *lwo = malloc(H.nl * 8 + 8), *lix = malloc(H.nl * 8 + 8),
-           *iwo = malloc(H.ni * 8 + 8), *iix = malloc(H.ni * 8 + 8), *bwo = malloc(H.nb * 8 + 8);
+ uintptr_t *hwo = g->alloc(g, NULL, H.nh * 8 + 8), *lwo = g->alloc(g, NULL, H.nl * 8 + 8), *lix = g->alloc(g, NULL, H.nl * 8 + 8),
+           *iwo = g->alloc(g, NULL, H.ni * 8 + 8), *iix = g->alloc(g, NULL, H.ni * 8 + 8), *bwo = g->alloc(g, NULL, H.nb * 8 + 8);
  int ok = base && hwo && lwo && lix && iwo && iix && bwo
    && fread(base, sizeof(word), nw, f) == nw
    && fread(hwo, 8, H.nh, f) == H.nh
@@ -5161,14 +5161,14 @@ struct ai *image_load(char const *path) {
    && fread(iwo, 8, H.ni, f) == H.ni && fread(iix, 8, H.ni, f) == H.ni
    && fread(bwo, 8, H.nb, f) == H.nb;
  fclose(f);
- if (!ok) { free(hwo), free(lwo), free(lix), free(iwo), free(iix), free(bwo); return NULL; }
+ if (!ok) { g->alloc(g, hwo, 0), g->alloc(g, lwo, 0), g->alloc(g, lix, 0), g->alloc(g, iwo, 0), g->alloc(g, iix, 0), g->alloc(g, bwo, 0); return NULL; }
  g->major_hp = base + nw;
  for (uintptr_t i = 0; i < H.nh; i++) base[hwo[i]] += (intptr_t) base;            // offset -> newbase+offset
  for (uintptr_t i = 0; i < H.nl; i++) base[lwo[i]] = image_ap_resolve(lix[i]);    // index -> live lvm_*
  for (uintptr_t i = 0; i < H.ni; i++) base[iwo[i]] = image_immortals[iix[i]];     // index -> live immortal
  intptr_t delta = (intptr_t)(word) image_immortals - (intptr_t) H.refsym;        // the ASLR shift between dump and load (same binary, one PIE base)
  for (uintptr_t i = 0; i < H.nb; i++) base[bwo[i]] += delta;                      // un-tabled out-of-pool binary pointers (host nifs / .rodata) -> live
- free(hwo), free(lwo), free(lix), free(iwo), free(iix), free(bwo);
+ g->alloc(g, hwo, 0), g->alloc(g, lwo, 0), g->alloc(g, lix, 0), g->alloc(g, iwo, 0), g->alloc(g, iix, 0), g->alloc(g, bwo, 0);
  g->book    = image_root_dec(H.root_tag[0], H.root_val[0], base);
  g->symbols = image_root_dec(H.root_tag[1], H.root_val[1], base);
  g->tasks   = (union u*) image_root_dec(H.root_tag[2], H.root_val[2], base);
