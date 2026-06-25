@@ -8,11 +8,19 @@ field — **`hash`** and **`tree`** — are built from *heap operators* (`link`/
 columns run compiled. This is the plan to extend the glaze's reach to the
 allocation-free halves of those workloads, and an honest account of what that buys.
 
-**Status — Stage A/B LANDED (2026-06-24, commit `3fff0157`); C/D still a study.**
-The **chain lane** ships: the `tree` traverse `ck` — `(two? t)`/`(cap t)`/`(cup t)`
-over a cons spine — now compiles to a native chain fold (Stages A+B below). The
-allocating build half (`mk`) and all of `hash` (Stages C/D) stay interpreted and
-remain a study. The recognizer gate is also modelled and runnable in
+**Status — Stage A/B/C LANDED; D still a study.** The **chain lane** (Stage B,
+2026-06-24, `3fff0157`): the `tree` traverse `ck` — `(two? t)`/`(cap t)`/`(cup t)`
+over a cons spine — compiles to a native chain fold. The **map-read lane** (Stage C,
+`8ec459ad`): `plift` hoists `hash`'s read-only `scan` out of its nested `:` into a
+flat group fn, and the recognizer rewrites a map-valued `(peep h k d)` to `mpeep`,
+which the emitter lays as a native open-addressed probe — so `hash`'s two `scan`
+passes now glaze (383 → 252 ms/it on the full bench; the `ins`/`bump` writes stay
+interpreted, Stage D). A later robustness fix (`delet` now inlines a pure value-let
+*nested in a sub-expression*, not just at a body root — bottom-up, parity- and
+effect-preserving) keeps the glaze from deopting on the natural "bind an
+intermediate" loop idiom (a `(g i (: x v (+ x x)))` accumulator), turning a class of
+deopt-*losses* into ~10× wins. Only the allocating halves remain: `tree`'s `mk` and
+`hash`'s `ins`/`bump` (Stage D). The recognizer gate is also modelled and runnable in
 [`doc/proto/glaze-data.l`](proto/glaze-data.l) (its asserts pin which bench bodies
 cross which stage). The substrate this builds on is documented in
 [`ai/glaze/README.md`](../ai/glaze/README.md); the measurements below were taken on
@@ -22,8 +30,9 @@ this host, 2026-06-24, via the [`bench/`](../bench/) harness.
 
 The benches where ai trails are exactly the ones it runs **interpreted**. The glaze
 was prepended only for `float`/`fib`/`tak`/`primes`/`strscan`/`strcat`/`deforest`/
-`polysum`/`closure` (`bench/run.sh`) — `tree` has since joined it (Stage B); `hash`,
-`sum`, `mapfilter`, `sort`, `bell` still ride the tree-threaded interpreter, while
+`polysum`/`closure` (`bench/run.sh`) — `tree` (Stage B) and `hash`'s read passes
+(Stage C) have since joined it; `hash`'s writes, `sum`, `mapfilter`, `sort`, `bell`
+still ride the tree-threaded interpreter, while
 their columns are native compilers (chez, sbcl) and JITs (node/V8, luajit, pypy,
 clojure/JVM). So those rows read "ai's interpreter vs everyone's compiler", and a
 good threaded interpreter is the usual 2–10× off native:
@@ -39,8 +48,9 @@ match), while the same glaze is **~12×** on `primes` (interpreted 15.25 → gla
 1.28 ms/it). The glaze is worth an order of magnitude on the code it owns; these two
 just weren't in its grammar. **Stage B put `tree`'s traverse in the grammar**: the
 full bench is now **3.68 → 2.43 ms/it (1.5×)** — the build half (`mk`) still
-interpreted, the traverse (`ck`) native at **6.7×** in isolation. `hash` remains
-out of grammar (Stages C/D).
+interpreted, the traverse (`ck`) native at **6.7×** in isolation. **Stage C since put
+`hash`'s `scan` in the grammar** (the map-read lane: 383 → 252 ms/it); only its
+`ins`/`bump` writes remain interpreted (Stage D).
 
 ### Where the interpreted time goes — dispatch, not GC, not hashing
 
@@ -130,13 +140,16 @@ Per the scalar-hook lesson, every kernel is benchmarked against the interpreter
   autogroup path: **1740 → 260 us/it (6.7×)** on the traverse, **3.68 → 2.43 ms/it
   (1.5×)** on the full bench, moving `tree` ahead of node/pypy/luajit into the
   chez/sbcl tier.
-- **Stage C — emit the map read probe loop.** Inline `hash()` + the linear probe
-  over the backing, accumulate. Allocation-free; the smaller absolute prize (scan
-  ~325 us), but it proves "the glaze owns a map read". **⚠️ Real dependency:** unlike
-  `ck` (whose `t` is a clean param), `hash`'s `scan`/`ins`/`bump` **capture `h` and
-  `n` as free vars** of the enclosing `:`, not params. So Stage C is blocked on
-  `lift` (auto.l) threading captured free vars into params — verify that first; if it
-  only flattens named-lets, C needs a `lift` enhancement before any emitter work.
+- **Stage C — emit the map read probe loop. ✅ LANDED (`8ec459ad`).** Inline `hash()`
+  + the linear probe over the backing, accumulate. Allocation-free; the smaller
+  absolute prize (scan ~325 us), but it proves "the glaze owns a map read". The
+  free-var dependency below was resolved by **`plift`** (`43e29838`): unlike `ck`
+  (whose `t` is a clean param), `hash`'s `scan`/`ins`/`bump` **captured `h` and `n`
+  as free vars** of the enclosing `:`, not params — `plift` partial-lifts a read-only
+  loop (`scan`) out of the nested `:` into a top-level `hash-run_scan(n h i acc)`, and
+  the recognizer rewrites that fn's map-valued `(peep h k d)` to `mpeep`, which the
+  emitter lays as the native probe (a map-param entry guard deopts a non-map). `ins`/
+  `bump` write, so they stay interpreted (Stage D).
 - **Stage D — frontier, defer.** Allocation under the collector (`tree`'s `mk`,
   `hash`'s `ins`). Native code that bumps `Hp` must keep the two-space/generational
   invariants — a GC mid-build forwards the half-built structure, and the write
@@ -182,8 +195,9 @@ raises for the pointer code).
 
 ## Not yet / open
 
-- **Stage C — the `hash` scan read.** The immediate next step, blocked on the `lift`
-  free-var dependency above (its `h`/`n` are captured, not params).
+- **Stage C — the `hash` scan read. ✅ LANDED** (`plift` `43e29838` + map-read lane
+  `8ec459ad`); the `lift` free-var dependency was resolved by `plift`. Next frontier
+  is Stage D (the `ins`/`bump` writes — allocation/growth under the moving collector).
 - **Chain-guard redundancy (Stage B follow-on).** `ck`'s `cap`/`cup` always sit under
   a `(two? t)` that already proved `t` a chain, so their inline chain-guards are
   redundant — the 6.7× (vs the probe's 11×) is mostly that. A dataflow pass that

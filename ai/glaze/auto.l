@@ -384,15 +384,20 @@
              (: sub (\ e (dsimp (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e lamcs)))   ; inline each lamc, then beta-collapse
                 keep (afilter (\ pr (! (dehof-lam? pr))) pairs)
                 (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
-   ; --- LOCAL LET (delet): inline a fn body that is a PURE value-let -- (: n1 v1 .. result), every binding
-   ;     a plain symbol (no local fn -> that is norm-let/lift's job), names distinct -- into ONE fragment
-   ;     expression by ordered substitution, so a fn that names its intermediates joins the group. The
-   ;     fragment is pure (arithmetic + pure sibling calls), so substitution is value-preserving (== the
-   ;     interpreter's once-evaluated shared binding); the ONLY divergence is recomputation, so a binding
-   ;     holding a CALL may inline only when used <=1 time -- a call-free (dup-cheap) value inlines freely,
-   ;     a multi-use call BAILS to the unchanged `:` body (which groupok? rejects -> interp, sound, no perf
-   ;     cliff). A non-let body / a body with a local fn passes through (fib/tak/strscan untouched). delet
-   ;     runs BEFORE lift: a value-let may WRAP a named-let loop, whose free vars it must fix up first.
+   ; --- LOCAL LET (delet): inline a PURE value-let -- (: n1 v1 .. result), every binding a plain symbol
+   ;     (no local fn -> that is norm-let/lift's job), names distinct -- into ONE fragment expression by
+   ;     ordered substitution, so a fn that names its intermediates joins the group. The fragment is pure
+   ;     (arithmetic + pure sibling calls), so substitution is value-preserving (== the interpreter's
+   ;     once-evaluated shared binding); the ONLY divergence is recomputation, so a binding holding a CALL
+   ;     may inline only when used <=1 time -- a call-free (dup-cheap) value inlines freely, a multi-use
+   ;     call BAILS to the unchanged `:` (which groupok? rejects -> interp, sound, no perf cliff).
+   ;     delet-body walks the WHOLE body BOTTOM-UP, so a value-let inlines wherever it sits -- at the body
+   ;     root OR nested in a sub-expression (e.g. the accumulator arg of a tail call, `(g i (: x v (+ x x)))`,
+   ;     the natural "bind an intermediate" idiom). Without this the emitter hits a raw `:` in arg position
+   ;     and the whole group DEOPTS (slower than interp); with it the loop glazes. Bottom-up is what makes a
+   ;     SHADOWING inner let resolve before its outer namesake substitutes. A `\` (quote/lambda) is opaque
+   ;     -- never descended; a local-fn `(g q..)` binding is left as-is (defer to norm-let/lift). delet runs
+   ;     BEFORE lift: a value-let may WRAP a named-let loop, whose free vars it must fix up first.
    (dcount s e) (? (id? e s) 1 (two? e) (foldl (\ a x (+ a (dcount s x))) 0 e) 0)            ; syntactic occurrences of s in e
    (dcheap? e) (? (atom? e) 1  (dquote? e) 0                                                  ; dup-cheap: arith/cmp/bit/peep/tally, NO call
                   (: h (cap e) (? (|| (id? h '?) (member? h '(+ - * // % & | ^ < <= > >= = peep tally))) (all dcheap? (cup e)) 0)))
@@ -402,11 +407,18 @@
           uses (foldl (\ a e (+ a (dcount nm e))) 0 (cat (map cup rest) (L result)))         ; uses in subsequent values + body
           (? (&& (! (dcheap? val)) (< 1 uses)) orig                                          ; would duplicate a call -> bail to interp
              (delet-go (map (\ p (link (cap p) (subst-sym nm val (cup p)))) rest) (subst-sym nm val result) orig))))
-   (delet-body body)
-    (? (! (&& (two? body) (id? (cap body) ':) (! (atom? (cup body))))) body
-       (: parsed (anat-defs (cup body)) pairs (cap parsed) result (caup parsed) names (map cap pairs)
-          (? (! (&& (all name? names) (distinctp names))) body                                ; named (non-define-sugar) distinct bindings only -- a (g q..) local fn defers to norm-let/lift
-             (delet-go pairs result body))))
+   (delet-body e)                                                                             ; inline value-lets ANYWHERE in a fn body (root OR nested), bottom-up
+    (? (atom? e) e
+       (id? (cap e) '\) e                                                                     ; a quote / lambda is opaque -- never descend
+       (! (id? (cap e) ':)) (map delet-body e)                                                ; a (?/call/arith) form -> recurse into children to reach a nested let
+       (atom? (cup e)) e                                                                      ; a bare (:) -> leave
+       (: parsed (anat-defs (cup e)) pairs (cap parsed) result (caup parsed) names (map cap pairs)
+          hasbody (= 1 (% (tally (cup e)) 2))                                                  ; ODD count -> a trailing result; EVEN -> body-less (a named-let returning its fn)
+          pairs2  (map (\ pr (link (cap pr) (delet-body (cup pr)))) pairs)                     ; bottom-up: inline within each value (incl. a local-fn's BODY) ...
+          result2 (delet-body result)                                                         ; ... and within the result
+          (? (|| (! hasbody) (! (&& (all name? names) (distinctp names))) (uses-head? roalloc e)) ; body-less, a local-fn `(g q..)`, OR an EFFECTFUL let (a `_`-bound `pin`/`say`/.. used 0x must NOT be dropped) -> KEEP the structure (parity-preserving),
+               (link ': (? hasbody (unpair pairs2 result2) (cbflat pairs2)))                   ; but surface a value-let nested in any body (else it survives lift -> deopt)
+             (delet-go pairs2 result2 (link ': (unpair pairs2 result2))))))                    ; a PURE value-let with a body -> inline it (a bail keeps the walked `:`, sound)
    (delet form)                                                                              ; inline value-lets in every fn body of a `:`
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
@@ -1030,6 +1042,15 @@
     ; (sound, value exact; the sibling g still glazes, so the form is rewritten but f stays interpreted)
     (: lbail '(: (g n) (? (< n 1) 1 (* n (g (- n 1)))) (f n) (: a (g n) (+ a a)) (f 5))
        (= (base-ev lbail) (ev lbail)))                                                        ; g(5)=120, a+a = 240, interpreted
+    ; NESTED in a sub-expression: a pure value-let in the accumulator ARG of a tail call -- the natural
+    ; "bind an intermediate" idiom. delet-body recurses to surface it; without that it survives lift and
+    ; the whole loop DEOPTS (slower than interp). x=(% i 13) is dup-cheap, so it inlines (used twice).
+    (: ldeep '(: (f N) (: (lp i acc) (? (< i N) (lp (+ i 1) (: x (% i 13) (+ acc (* x x)))) acc) (lp 0 0)) (f 20))
+       (&& !(id? (autogroup ldeep) ldeep) (741 = (ev ldeep)) (= (base-ev ldeep) (ev ldeep))))  ; sum (i%13)^2 for i<20, native == interp
+    ; an EFFECTFUL nested let (a `_`-bound write used 0x) is NOT inlined -- dropping it would lose the
+    ; effect; the let is kept (the fn stays interpreted, sound). The trailing pure step still glazes.
+    (: leff '(: (f N) (: (lp i b) (? (< i N) (: _ (pin b 0 (+ 1 (peep b 0 0))) (lp (+ i 1) b)) (peep b 0 0)) (lp 0 (cask 1))) (f 7))
+       (= (base-ev leff) (ev leff)))                                                          ; pin 7x -> 7, write preserved
     ; BOOLEANS & CLAMPS (debool): &&/||/min/max/abs lower to the ?-fragment -> the fn glazes. == interp.
     (: band '(: (f x n) (? (&& (< x n) (> x 0)) 1 0) (f 5 9))
        (&& !(id? (autogroup band) band) (1 = (ev band)) (= (base-ev band) (ev band))))        ; 5<9 && 5>0 -> 1
