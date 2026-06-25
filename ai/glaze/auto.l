@@ -786,6 +786,95 @@
                    (: gnames (map cap grp)
                       gdefs (map mapfix-def (afilter (\ p (member? (cap (cap p)) gnames)) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
                       (link ': (rewrite-bindings (cup form) gnames gdefs))))))))              ; each binding of the LIFTED form -> its native
+   ; --- TWIN LOWERING (twolow): a complex(TWIN)-recurrence grid -> the real-pair float grid the
+   ;     float-grid lane (autonat/jitfgridn) ALREADY glazes -- so idiomatic complex code glazes with
+   ;     NO new codegen (Route A). A `:` whose recurrence carries TWIN params (a var built/updated
+   ;     with ~(re im), `*`, `+`, `-`, read with `re`/`im`) is lowered: each twin param p splits into
+   ;     (p_r p_i), twin ops become real-pair arithmetic ((a+bi)(c+di) = (ac-bd, ad+bc)), and every
+   ;     call site's twin args split in two. A small twin-TYPE fixpoint (propagate twin-ness from
+   ;     call-site args to callee params) picks which params are twin. BIT-EXACT: z*z's imag rides
+   ;     re*im+im*re = 2*re*im, and scaling a rounded product by 2 is exact, so the lowered floats
+   ;     match the interpreted twins to the bit. Returns the form UNCHANGED with no twin param (every
+   ;     non-twin form passes through). Runs BEFORE autonat in the chain. ⚠ x86-64 (-> autonat).
+   (twolow form)
+    (: (nthl2 l i) (? (= i 0) (cap l) (nthl2 (cup l) (- i 1)))
+       (op2 e i)  (nthl2 (cup e) i)
+       (memq x l) (? (atom? l) 0 (id? (cap l) x) 1 (memq x (cup l)))
+       (negf x)   (L '- 0.0 x)
+       (zero0? x) (&& (gem? x) (= x 0.0))
+       (mkadd a b) (? (zero0? a) b (zero0? b) a (L '+ a b))
+       (mksub a b) (? (zero0? b) a (L '- a b))
+       (mkmul a b) (? (|| (zero0? a) (zero0? b)) 0.0 (L '* a b))
+       (adefs bs) (? (atom? (cup bs)) (link () (cap bs))                          ; binding list -> (pairs . body)
+                     (: r (adefs (cuup bs)) (link (link (link (cap bs) (caup bs)) (cap r)) (cup r))))
+       (fnpair? pr) (two? (cap pr))                                               ; nameform is a (name params..) list
+       (fnname pr) (cap (cap pr))  (fnparams pr) (cup (cap pr))  (fnbody pr) (cup pr)
+       (twname p suf) (intern (+ (string p) suf))                                ; p_r / p_i
+       (? (! (&& (two? form) (id? (cap form) ':))) form
+          (atom? (cup form)) form
+          (: parsed (adefs (cup form)) pairs (cap parsed) body (cup parsed)
+             (? (! (all fnpair? pairs)) form                                      ; only the all-function-def `:` shape
+                (: fnames (map fnname pairs)
+                   pt (tablet 0) chg (tablet 0)                                   ; (L fn i) -> 1 if param i of fn is twin
+                   ; --- twin-type inference: is e twin under env (param-name -> twin bool)? ---
+                   (tty e env) (? (two? e)
+                                    (: op (cap e)
+                                       (? (id? op 'twin) 1
+                                          (|| (id? op 're) (id? op 'im)) 0
+                                          (memq op '(+ - *)) (|| (tty (op2 e 0) env) (tty (op2 e 1) env))
+                                          (id? op '?) (|| (tty (op2 e 1) env) (tty (op2 e 2) env))
+                                          0))                                      ; a defined-fn call returns int here
+                                  (peep env e 0))
+                   (mkenv fn ps) (: e (tablet 0) _ (mke fn ps 0 e) e)
+                   (mke fn ps i e) (? (atom? ps) e (: _ (pin e (cap ps) (peep pt (L fn i) 0)) (mke fn (cup ps) (+ i 1) e)))
+                   (propargs g as i env) (? (atom? as) 0                          ; call-site arg twin-ness -> callee param
+                      (: _ (? (&& (memq g fnames) (tty (cap as) env) (! (peep pt (L g i) 0))) (: _ (pin pt (L g i) 1) (pin chg 0 1)) 0)
+                         (propargs g (cup as) (+ i 1) env)))
+                   (walkprop env e) (? (! (two? e)) 0
+                      (: op (cap e) _ (? (memq op fnames) (propargs op (cup e) 0 env) 0) (: _ (map (\ a (walkprop env a)) (cup e)) 0)))
+                   (infer _) (: _ (pin chg 0 0)                                   ; fixpoint (monotone: flags only flip 0->1)
+                               _ (map (\ pr (walkprop (mkenv (fnname pr) (fnparams pr)) (fnbody pr))) pairs)
+                               _ (walkprop (tablet 0) body)
+                               (? (peep chg 0 0) (infer ()) 0))
+                   _ (infer ())
+                   (anytwin? prs) (? (atom? prs) 0 (|| (twfn? (fnname (cap prs)) 0) (anytwin? (cup prs))))
+                   (twfn? fn i) (? (peep pt (L fn i) 0) 1 (< i 8) (twfn? fn (+ i 1)) 0)
+                   (? (! (anytwin? pairs)) form                                   ; no twin param -> pass through
+                      ; --- lowering: loR scalar-valued ; loT twin-valued -> (re-expr . im-expr) ---
+                      (: (mknmap fn ps) (: m (tablet 0) _ (mkn fn ps 0 m) m)      ; twin param -> (p_r . p_i) pair
+                         (mkn fn ps i m) (? (atom? ps) m (: _ (? (peep pt (L fn i) 0) (pin m (cap ps) (link (twname (cap ps) "_r") (twname (cap ps) "_i"))) 0) (mkn fn (cup ps) (+ i 1) m)))
+                         (flatps fn ps i) (? (atom? ps) ()                        ; flatten params, splitting twins
+                            (: p (cap ps) rest (flatps fn (cup ps) (+ i 1))
+                               (? (peep pt (L fn i) 0) (link (twname p "_r") (link (twname p "_i") rest)) (link p rest))))
+                         (loR e env nm) (? (atom? e) e
+                            (: op (cap e)
+                               (? (id? op 're) (: x (op2 e 0) (? (tty x env) (cap (loT x env nm)) (loR x env nm)))
+                                  (id? op 'im) (: x (op2 e 0) (? (tty x env) (cup (loT x env nm)) 0.0))
+                                  (memq op fnames) (link op (splitargs op (cup e) 0 env nm))
+                                  (link op (map (\ a (loR a env nm)) (cup e))))))
+                         (loT2 e env nm) (? (tty e env) (loT e env nm) (link (loR e env nm) 0.0))
+                         (loT e env nm) (? (atom? e) (peep nm e (link e e))
+                            (: op (cap e)
+                               (? (id? op 'twin) (? (< 1 (tally (cup e))) (link (loR (op2 e 0) env nm) (loR (op2 e 1) env nm))
+                                                    (: x (op2 e 0) (? (tty x env) (: p (loT x env nm) (link (cap p) (negf (cup p)))) (link (loR x env nm) 0.0))))
+                                  (id? op '+) (: a (loT2 (op2 e 0) env nm) b (loT2 (op2 e 1) env nm) (link (mkadd (cap a) (cap b)) (mkadd (cup a) (cup b))))
+                                  (id? op '-) (: a (loT2 (op2 e 0) env nm) b (loT2 (op2 e 1) env nm) (link (mksub (cap a) (cap b)) (mksub (cup a) (cup b))))
+                                  (id? op '*) (: a (loT2 (op2 e 0) env nm)
+                                                 (? (= (op2 e 0) (op2 e 1))                                       ; SQUARING (z*z): im = 2*ar*ai, ONE product (not ar*ai + ai*ar); also better ILP than the M+M chain
+                                                    (: ar (cap a) ai (cup a) (link (mksub (mkmul ar ar) (mkmul ai ai)) (mkmul (mkmul 2.0 ar) ai)))
+                                                    (: b (loT2 (op2 e 1) env nm) ar (cap a) ai (cup a) br (cap b) bi (cup b)
+                                                       (link (mksub (mkmul ar br) (mkmul ai bi)) (mkadd (mkmul ar bi) (mkmul ai br))))))
+                                  (id? op '?) (: c (loR (op2 e 0) env nm) a (loT (op2 e 1) env nm) b (loT (op2 e 2) env nm)
+                                                 (link (L '? c (cap a) (cap b)) (L '? c (cup a) (cup b))))
+                                  (link e e))))
+                         (splitargs g as i env nm) (? (atom? as) ()
+                            (: a (cap as) rest (splitargs g (cup as) (+ i 1) env nm)
+                               (? (peep pt (L g i) 0) (: p (loT2 a env nm) (link (cap p) (link (cup p) rest))) (link (loR a env nm) rest))))
+                         (lowerfn pr) (: fn (fnname pr) ps (fnparams pr) bd (fnbody pr) env (mkenv fn ps) nm (mknmap fn ps)
+                                         (link (link fn (flatps fn ps 0)) (loR bd env nm)))
+                         (rebuild lowfns) (? (atom? lowfns) (link (loR body (tablet 0) (tablet 0)) ())
+                            (: lf (cap lowfns) (link (cap lf) (link (cup lf) (rebuild (cup lowfns))))))
+                         (link ': (rebuild (map lowerfn pairs))))))))))
    (autonat form)
     (? (! (two? form)) form
        (! (id? (cap form) ':)) form
@@ -835,7 +924,7 @@
                      (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
                         (: ln (loopinfo-n e)
                            (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
-                              (base-ev (autogroup (autonat (castbuild e)))))))))    ; fall-through: cask-build a string-accumulator loop (the jug threads as a loop param -> survives autogroup's pure passes), then glaze a float-grid nest / mutually-recursive arith group if either fits, else interpret
+                              (base-ev (autogroup (autonat (twolow (castbuild e))))))))))    ; fall-through: cask-build a string-accumulator loop (the jug threads as a loop param -> survives autogroup's pure passes), LOWER a complex(twin) grid to real-pairs (twolow), then glaze a float-grid nest / mutually-recursive arith group if either fits, else interpret
    ev auto-ev                                                  ; rebind the global: ev is now auto-native
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
@@ -904,6 +993,16 @@
               (lx px acc) (? (< px 8) (lx (+ px 1) (+ acc (ly px 0 0))) acc)
             (lx 0 0))
        (&& !(id? (autonat g3) g3) (= (base-ev g3) (ev g3))))
+    ; TWIN(complex) grid: idiomatic ~(re im) code -- twolow lowers c/z to real-pairs, autonat glazes
+    ; it, bit-exact (== the interpreted twins). The D=2 mandelbrot with z<-z*z+c written in twin gems.
+    (: g2t '(: (mand c z it)
+                 (? (&& (< it 100) (<= (+ (* (re z) (re z)) (* (im z) (im z))) 4.0)) (mand c (+ (* z z) c) (+ it 1)) it)
+               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand ~((+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875))) ~(0.0 0.0) 0))) acc)
+               (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+             (grid 0 0))
+       (&& !(id? (twolow g2t) g2t)                                                    ; twolow rewrote the twin grid
+           !(id? (autonat (twolow g2t)) (twolow g2t))                                 ; ... and autonat then glazes the real-pair form
+           (= 87130 (ev g2t)) (= (base-ev g2t) (ev g2t))))                            ; native == interp, same checksum as the plain-float g2
     ; RECURSIVE ARITHMETIC: naive fib auto-glazed to a native call tree -- native == interp, and an
     ; int64-overflowing recursion (pow2) deopts to the interp fallback -> the exact bignum (sound)
     (: rf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 25))

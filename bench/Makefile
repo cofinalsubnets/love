@@ -36,7 +36,7 @@ TIMEOUT ?= 30
 SAMPLES ?= 5
 
 # workloads, in display order; override with `make BENCHES="fib primes"`.
-BENCHES := fib tak sum mapfilter deforest polysum primes bell strcat strscan hash sort tree bintrees float mandelbrot closure cdcl
+BENCHES := fib tak sum mapfilter deforest polysum primes bell strcat strscan hash sort tree bintrees mandelbrot closure cdcl
 
 # <lang>:<bench> pairs that exceed TIMEOUT -- dropped up front so the build never
 # pays the timeout wall for them (re-test by removing one and `make clean`).

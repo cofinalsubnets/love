@@ -54,8 +54,7 @@ per bench is <b style="color:#9ece6a">green</b>; the <span class="ai"
 style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
 (or an unavailable toolchain). The <b>net</b> row ranks the columns &mdash; it sums the
 lightweight fundamentals only. Below it, shown but not ranked: <b>bell</b> (bignum),
-<b>bintrees</b> (heavy GC throughput), <b>mandelbrot</b> (ai runs it interpreted &mdash; no
-complex codegen lane yet), and <b>setup</b> (cold start: source &rarr; trivial result, so
+<b>bintrees</b> (heavy GC throughput), and <b>setup</b> (cold start: source &rarr; trivial result, so
 compiled languages pay their compile).</p>
 <div class="bar">
   <button id="btn" type="button">transpose</button>
@@ -80,26 +79,25 @@ table above.</p>
 </div>
 <script>
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez"];
-const BENCHES=["fib","tak","sum","mapfilter","deforest","polysum","primes","bell","strcat","strscan","hash","sort","tree","bintrees","float","mandelbrot","closure","cdcl","setup"];
+const BENCHES=["fib","tak","sum","mapfilter","deforest","polysum","primes","bell","strcat","strscan","hash","sort","tree","bintrees","mandelbrot","closure","cdcl","setup"];
 const PER={};
-PER["fib"]={"ai":3.5000,"go":3.9540,"rust":2.0794,"java":2.7116,"julia":4.8098,"luajit":8.2483,"pypy":8.6442,"node":7.7669,"elixir":7.5673,"chez":5.9375};
-PER["tak"]={"ai":0.5098,"go":0.4743,"rust":0.3590,"java":0.3253,"julia":0.7221,"luajit":1.3844,"pypy":2.3987,"node":1.0059,"elixir":0.8622,"chez":0.6074};
-PER["sum"]={"ai":0.1748,"go":0.1066,"rust":0.0538,"java":0.1683,"julia":0.0850,"luajit":0.0729,"pypy":0.2697,"node":0.8003,"elixir":0.5006,"chez":0.5332};
-PER["mapfilter"]={"ai":0.0813,"go":0.0214,"rust":0.0053,"java":0.0059,"julia":0.0139,"luajit":0.0330,"pypy":0.0943,"node":0.2273,"elixir":0.2537,"chez":0.1069};
+PER["fib"]={"ai":3.4375,"go":3.9540,"rust":2.0794,"java":2.7116,"julia":4.8098,"luajit":8.2483,"pypy":8.6442,"node":7.7669,"elixir":7.5673,"chez":5.9375};
+PER["tak"]={"ai":0.5020,"go":0.4743,"rust":0.3590,"java":0.3253,"julia":0.7221,"luajit":1.3844,"pypy":2.3987,"node":1.0059,"elixir":0.8622,"chez":0.6074};
+PER["sum"]={"ai":0.1841,"go":0.1066,"rust":0.0538,"java":0.1683,"julia":0.0850,"luajit":0.0729,"pypy":0.2697,"node":0.8003,"elixir":0.5006,"chez":0.5332};
+PER["mapfilter"]={"ai":0.0842,"go":0.0214,"rust":0.0053,"java":0.0059,"julia":0.0139,"luajit":0.0330,"pypy":0.0943,"node":0.2273,"elixir":0.2537,"chez":0.1069};
 PER["deforest"]={"ai":0.0571,"go":0.0492,"rust":0.0158,"java":0.0141,"julia":0.0190,"luajit":0.0629,"pypy":0.1528,"node":1.2572,"elixir":0.4716,"chez":0.2471};
 PER["polysum"]={"ai":0.0000,"go":0.0468,"rust":0.0104,"java":0.0071,"julia":0.0151,"luajit":0.0624,"pypy":0.1510,"node":1.2443,"elixir":0.4266,"chez":0.2041};
-PER["primes"]={"ai":1.0508,"go":0.9166,"rust":0.8034,"java":0.8177,"julia":0.9114,"luajit":0.8443,"pypy":1.3747,"node":0.8140,"elixir":2.3572,"chez":1.7734};
-PER["bell"]={"ai":51.2500,"go":25.2188,"java":37.6442,"julia":77.5125,"pypy":26.5156,"node":29.4394,"elixir":34.0162,"chez":71.2500};
-PER["strcat"]={"ai":0.0282,"go":0.9005,"rust":0.0176,"java":1.7797,"julia":1.4887,"luajit":1.4986,"pypy":0.1694,"node":0.1130,"elixir":0.0448,"chez":1.6719};
-PER["strscan"]={"ai":0.0798,"go":0.0661,"rust":0.0654,"java":0.0662,"julia":0.0658,"luajit":0.1329,"pypy":0.0658,"node":0.3948,"elixir":0.1038,"chez":0.1382};
-PER["hash"]={"ai":1.1445,"go":0.5629,"rust":0.7768,"java":0.3070,"julia":0.5045,"luajit":1.0588,"pypy":0.4491,"node":0.7464,"chez":0.8125};
+PER["primes"]={"ai":1.0469,"go":0.9166,"rust":0.8034,"java":0.8177,"julia":0.9114,"luajit":0.8443,"pypy":1.3747,"node":0.8140,"elixir":2.3572,"chez":1.7734};
+PER["bell"]={"ai":50.7500,"go":25.2188,"java":37.6442,"julia":77.5125,"pypy":26.5156,"node":29.4394,"elixir":34.0162,"chez":71.2500};
+PER["strcat"]={"ai":0.0269,"go":0.9005,"rust":0.0176,"java":1.7797,"julia":1.4887,"luajit":1.4986,"pypy":0.1694,"node":0.1130,"elixir":0.0448,"chez":1.6719};
+PER["strscan"]={"ai":0.0791,"go":0.0661,"rust":0.0654,"java":0.0662,"julia":0.0658,"luajit":0.1329,"pypy":0.0658,"node":0.3948,"elixir":0.1038,"chez":0.1382};
+PER["hash"]={"ai":1.0391,"go":0.5629,"rust":0.7768,"java":0.3070,"julia":0.5045,"luajit":1.0588,"pypy":0.4491,"node":0.7464,"chez":0.8125};
 PER["sort"]={"ai":0.8438,"go":0.3730,"rust":0.0681,"java":0.1735,"julia":0.0624,"luajit":1.2322,"pypy":0.3747,"node":1.0494,"elixir":0.7905,"chez":0.4375};
-PER["tree"]={"ai":0.8516,"go":1.6521,"rust":4.8581,"java":0.8297,"julia":3.2817,"luajit":3.6806,"pypy":1.9735,"node":1.4394,"elixir":0.9674,"chez":0.6543};
-PER["bintrees"]={"ai":102.5000,"go":39.5045,"rust":83.4020,"java":15.3301,"julia":85.3213,"luajit":83.7130,"pypy":32.1349,"node":29.1689,"elixir":22.4212,"chez":15.7500};
-PER["float"]={"ai":0.2988,"go":0.2022,"rust":0.1898,"java":0.1851,"julia":0.1886,"luajit":0.2169,"pypy":0.3255,"node":0.1925,"elixir":4.6323,"chez":3.2656};
-PER["mandelbrot"]={"ai":86.2500,"go":0.9805,"rust":0.9456,"java":0.9255,"julia":0.9408,"luajit":1.0469,"pypy":1.4697,"node":0.9660,"elixir":22.5768,"chez":15.0625};
-PER["closure"]={"ai":0.0823,"go":0.0243,"rust":0.0252,"java":0.0327,"julia":0.0105,"luajit":13.8895,"pypy":0.0786,"node":0.8506,"elixir":2.1261,"chez":1.0039};
-PER["cdcl"]={"ai":46.0000};
+PER["tree"]={"ai":0.8379,"go":1.6521,"rust":4.8581,"java":0.8297,"julia":3.2817,"luajit":3.6806,"pypy":1.9735,"node":1.4394,"elixir":0.9674,"chez":0.6543};
+PER["bintrees"]={"ai":100.0000,"go":39.5045,"rust":83.4020,"java":15.3301,"julia":85.3213,"luajit":83.7130,"pypy":32.1349,"node":29.1689,"elixir":22.4212,"chez":15.7500};
+PER["mandelbrot"]={"ai":1.3984,"go":0.9805,"rust":0.9456,"java":0.9255,"julia":0.9408,"luajit":1.0469,"pypy":1.4697,"node":0.9660,"elixir":22.5768,"chez":15.0625};
+PER["closure"]={"ai":0.0776,"go":0.0243,"rust":0.0252,"java":0.0327,"julia":0.0105,"luajit":13.8895,"pypy":0.0786,"node":0.8506,"elixir":2.1261,"chez":1.0039};
+PER["cdcl"]={"ai":45.0000};
 PER["setup"]={"ai":235.6310,"go":29.0130,"rust":63.4090,"java":354.6040,"julia":142.3920,"luajit":2.2640,"pypy":49.2330,"node":29.8080,"elixir":229.0900,"chez":59.9990};
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
@@ -111,18 +109,19 @@ const fmt = x => x == null ? "·"
 // ai is still TINTED (the gold column) wherever it lands. No-data langs sort last.
 // NORANK benches are NOT in the net (the ranking key), each for a reason that would skew a sum of
 // the lightweight fundamentals: bell (bignum -- luajit/rust lack it, and it dwarfs), bintrees (a
-// heavy GC-throughput workload, tens of ms for every language), mandelbrot (ai runs it interpreted
-// -- no complex glaze lane yet -- so an outlier until the twin lane lands), cdcl (ai-only; its perf
-// lives in the SAT-solver table), setup (a one-time cold-start cost, not a per-iteration time). All
-// but cdcl still SHOW, as rows below the net.
-const NORANK = b => b === "bell" || b === "bintrees" || b === "mandelbrot" || b === "cdcl" || b === "setup";
+// heavy GC-throughput workload, tens of ms for every language), cdcl (ai-only; its perf lives in the
+// SAT-solver table), setup (a one-time cold-start cost, not a per-iteration time). All but cdcl still
+// SHOW, as rows below the net. (mandelbrot is the net's float-grid bench -- it REPLACED the smaller
+// plain-f64 `float`, the same escape-grid workload: its idiomatic complex ~(re im) recurrence lowers
+// to the real-pair float-grid kernel (twolow) and glazes to native.)
+const NORANK = b => b === "bell" || b === "bintrees" || b === "cdcl" || b === "setup";
 const NET = l => BENCHES.reduce((s, b) => s + (NORANK(b) ? 0 : (PER[b] && PER[b][l] != null ? PER[b][l] : 0)), 0);
 const HAS = l => BENCHES.some(b => !NORANK(b) && PER[b] && PER[b][l] != null);
 const LANGORD = LANGS.slice().sort((a, b) =>
   (HAS(a) ? NET(a) : Infinity) - (HAS(b) ? NET(b) : Infinity));
 // the fundamentals (ranked, the main block) and the informational rows shown BELOW the net.
 const FUND  = BENCHES.filter(b => !NORANK(b));
-const EXTRA = ["bell", "bintrees", "mandelbrot", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; cdcl is dropped from the table entirely
+const EXTRA = ["bell", "bintrees", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; cdcl is dropped from the table entirely
 
 // default arrangement: benches down the side, languages across; the button
 // flips to languages-down-the-side (handy on a narrow portrait screen).

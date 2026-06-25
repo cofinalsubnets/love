@@ -70,8 +70,7 @@ per bench is <b style="color:#9ece6a">green</b>; the <span class="ai"
 style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
 (or an unavailable toolchain). The <b>net</b> row ranks the columns &mdash; it sums the
 lightweight fundamentals only. Below it, shown but not ranked: <b>bell</b> (bignum),
-<b>bintrees</b> (heavy GC throughput), <b>mandelbrot</b> (ai runs it interpreted &mdash; no
-complex codegen lane yet), and <b>setup</b> (cold start: source &rarr; trivial result, so
+<b>bintrees</b> (heavy GC throughput), and <b>setup</b> (cold start: source &rarr; trivial result, so
 compiled languages pay their compile).</p>
 <div class="bar">
   <button id="btn" type="button">transpose</button>
@@ -163,18 +162,19 @@ const fmt = x => x == null ? "·"
 // ai is still TINTED (the gold column) wherever it lands. No-data langs sort last.
 // NORANK benches are NOT in the net (the ranking key), each for a reason that would skew a sum of
 // the lightweight fundamentals: bell (bignum -- luajit/rust lack it, and it dwarfs), bintrees (a
-// heavy GC-throughput workload, tens of ms for every language), mandelbrot (ai runs it interpreted
-// -- no complex glaze lane yet -- so an outlier until the twin lane lands), cdcl (ai-only; its perf
-// lives in the SAT-solver table), setup (a one-time cold-start cost, not a per-iteration time). All
-// but cdcl still SHOW, as rows below the net.
-const NORANK = b => b === "bell" || b === "bintrees" || b === "mandelbrot" || b === "cdcl" || b === "setup";
+// heavy GC-throughput workload, tens of ms for every language), cdcl (ai-only; its perf lives in the
+// SAT-solver table), setup (a one-time cold-start cost, not a per-iteration time). All but cdcl still
+// SHOW, as rows below the net. (mandelbrot is the net's float-grid bench -- it REPLACED the smaller
+// plain-f64 `float`, the same escape-grid workload: its idiomatic complex ~(re im) recurrence lowers
+// to the real-pair float-grid kernel (twolow) and glazes to native.)
+const NORANK = b => b === "bell" || b === "bintrees" || b === "cdcl" || b === "setup";
 const NET = l => BENCHES.reduce((s, b) => s + (NORANK(b) ? 0 : (PER[b] && PER[b][l] != null ? PER[b][l] : 0)), 0);
 const HAS = l => BENCHES.some(b => !NORANK(b) && PER[b] && PER[b][l] != null);
 const LANGORD = LANGS.slice().sort((a, b) =>
   (HAS(a) ? NET(a) : Infinity) - (HAS(b) ? NET(b) : Infinity));
 // the fundamentals (ranked, the main block) and the informational rows shown BELOW the net.
 const FUND  = BENCHES.filter(b => !NORANK(b));
-const EXTRA = ["bell", "bintrees", "mandelbrot", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; cdcl is dropped from the table entirely
+const EXTRA = ["bell", "bintrees", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; cdcl is dropped from the table entirely
 
 // default arrangement: benches down the side, languages across; the button
 // flips to languages-down-the-side (handy on a narrow portrait screen).
