@@ -5005,16 +5005,23 @@ static intptr_t image_ap_resolve(intptr_t idx) {
  return idx < (intptr_t) countof(image_extra_aps)
    ? (intptr_t) image_extra_aps[idx]
    : def1[idx - countof(image_extra_aps)].x; }
-// reloc tables (WORD offsets into the blob): heap pointers (relocate by base delta) vs
-// lvm_* aps (re-resolve via index). raw words (doubles/limbs/bytes/lengths/serials) and
-// out-of-pool immortals (ZeroPoint/EmptyString/stdio) are left as-is.
-struct image_rel { uintptr_t *hwo, nh, *lwo, *lix, nl; };
+// the out-of-pool IMMORTALS (a small symbolic table like the lvm_* one, for cross-process):
+// ZeroPoint (()), EmptyString (""), and the three std ports. Serialize -> index, load -> re-resolve.
+static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr };
+static intptr_t image_imm_index(word v) {
+ for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
+ return -1; }
+// reloc tables (WORD offsets into the blob): heap pointers (relocate by base delta), lvm_* aps and
+// out-of-pool immortals (re-resolve via index). raw words (doubles/limbs/bytes/lengths/serials) pass.
+struct image_rel { uintptr_t *hwo, nh, *lwo, *lix, nl, *iwo, *iix, ni; };
 static void image_rec(struct image_rel *R, uintptr_t wo, intptr_t val, intptr_t lo, intptr_t hi) {
  if (oddp(val)) return;                                   // fixnum
  intptr_t idx = image_ap_index(val);
  if (idx >= 0) { R->lwo[R->nl] = wo, R->lix[R->nl] = (uintptr_t) idx, R->nl++; return; }   // lvm_* ap
- if (val >= lo && val < hi) R->hwo[R->nh++] = wo;         // in-pool heap pointer (the terminator rides here too: head|2)
- // else: out-of-pool immortal -- left absolute (in-process; a cross-process image needs an immortal index)
+ if (val >= lo && val < hi) { R->hwo[R->nh++] = wo; return; }   // in-pool heap pointer (terminator head|2 rides here)
+ if (R->iwo) { intptr_t ii = image_imm_index((word) val);       // out-of-pool immortal -> a re-resolvable index
+   if (ii >= 0) { R->iwo[R->ni] = wo, R->iix[R->ni] = (uintptr_t) ii, R->ni++; return; } }
+ // else: unknown out-of-pool (a W^X native, etc.) -- left absolute (the boot heap has none)
 }
 // walk [base,hp) recording every pointer-bearing word (per-kind, mirroring evac_*); -> object count.
 static uintptr_t image_ser_walk(struct ai *g, word *base, word *hp, struct image_rel *R) {
@@ -5044,7 +5051,7 @@ lvm(lvm_image_rt) {
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
  uintptr_t bookoff = (uintptr_t)((word*) cell(g->book) - base);
- struct image_rel R = { g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0 };
+ struct image_rel R = { g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0, NULL, NULL, 0 };
  word *blob = g->alloc(g, NULL, bytes), *nu = g->alloc(g, NULL, bytes);
  intptr_t status;
  if (!R.hwo || !R.lwo || !R.lix || !blob || !nu) status = -2;
@@ -5073,6 +5080,101 @@ lvm(lvm_image_rt) {
  g->alloc(g, R.hwo, 0), g->alloc(g, R.lwo, 0), g->alloc(g, R.lix, 0), g->alloc(g, blob, 0), g->alloc(g, nu, 0);
  Unpack(g);
  return Sp[0] = putcharm(status), Ip++, Continue(); }
+
+#if __STDC_HOSTED__
+// ============================================================================
+// image-dump / image-load -- Phase 2/3: the ON-DISK boot image. Dump the post-warm
+// heap to a file (compact + serialize: pointers->offsets, lvm_*->indices,
+// immortals->indices, the roots encoded); load it in a FRESH process to skip the
+// ~233 ms egg-eval. The image is an OPTIMIZATION: a missing/mismatched/bad file
+// makes image_load return NULL and the caller boots normally -- never wrong.
+// ============================================================================
+#define IMAGE_MAGIC 0x31304f4e53494114ULL   /* bump if the wire format changes */
+struct image_hdr {
+ uint64_t magic, wordsize, nwords, nh, nl, ni, next_serial;
+ uint64_t root_tag[6], root_val[6];          /* book, symbols, tasks, scare_a, scare_b, x */
+};
+// encode a live value (post-compaction) -> portable (tag,payload):
+//  0 FIX raw | 1 PTR word-offset into the blob | 2 LVM table index | 3 IMM immortal index
+static void image_root_enc(word v, word *base, word *hp, uint64_t *tag, uint64_t *val) {
+ if (oddp(v)) { *tag = 0, *val = (uint64_t) v; return; }
+ intptr_t li = image_ap_index((intptr_t) v); if (li >= 0) { *tag = 2, *val = (uint64_t) li; return; }
+ if ((word*) v >= base && (word*) v < hp) { *tag = 1, *val = (uint64_t)((word*) v - base); return; }
+ intptr_t ii = image_imm_index(v); if (ii >= 0) { *tag = 3, *val = (uint64_t) ii; return; }
+ *tag = 0, *val = (uint64_t) v; }            // out-of-pool non-immortal root (unexpected): keep absolute
+static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
+ return tag == 1 ? (word)(base + val) : tag == 2 ? (word) image_ap_resolve((intptr_t) val)
+      : tag == 3 ? image_immortals[val] : (word) val; }
+// dump g to PATH (compacts g -- call at a quiescent point). 0 ok, <0 error.
+int image_dump(struct ai *g, char const *path) {
+ if (!g->major_pool) return -1;
+ gen_major(g);                                           // COMPACT: live half -> [major_base, major_hp)
+ word *base = g->major_base, *hp = g->major_hp;
+ if ((word*) g->sp != topof(g)) return -3;               // expect an empty AI stack at the quiescent dump point
+ uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
+ struct image_rel R = { malloc(bytes), 0, malloc(bytes), malloc(bytes), 0, malloc(bytes), malloc(bytes), 0 };
+ word *blob = malloc(bytes);
+ int rc = -2;
+ if (R.hwo && R.lwo && R.lix && R.iwo && R.iix && blob) {
+  image_ser_walk(g, base, hp, &R);
+  memcpy(blob, base, bytes);
+  for (uintptr_t i = 0; i < R.nh; i++) blob[R.hwo[i]] -= (intptr_t) base;         // ptr -> offset
+  for (uintptr_t i = 0; i < R.nl; i++) blob[R.lwo[i]] = (intptr_t) R.lix[i];      // ap  -> lvm index
+  for (uintptr_t i = 0; i < R.ni; i++) blob[R.iwo[i]] = (intptr_t) R.iix[i];      // imm -> immortal index
+  struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, R.nh, R.nl, R.ni, g->next_serial, {0}, {0} };
+  word roots[6] = { g->book, g->symbols, (word) g->tasks, g->scare_a, g->scare_b, g->x };
+  for (int i = 0; i < 6; i++) image_root_enc(roots[i], base, hp, &H.root_tag[i], &H.root_val[i]);
+  FILE *f = fopen(path, "wb");
+  rc = !f ? -4 : (fwrite(&H, sizeof H, 1, f) == 1
+       && fwrite(blob, sizeof(word), nw, f) == nw
+       && fwrite(R.hwo, sizeof(uintptr_t), R.nh, f) == R.nh
+       && fwrite(R.lwo, sizeof(uintptr_t), R.nl, f) == R.nl && fwrite(R.lix, sizeof(uintptr_t), R.nl, f) == R.nl
+       && fwrite(R.iwo, sizeof(uintptr_t), R.ni, f) == R.ni && fwrite(R.iix, sizeof(uintptr_t), R.ni, f) == R.ni)
+      ? 0 : -4;
+  if (f) fclose(f);
+ }
+ free(R.hwo), free(R.lwo), free(R.lix), free(R.iwo), free(R.iix), free(blob);
+ return rc; }
+// load PATH into a FRESH g; NULL on any problem -> caller boots normally.
+struct ai *image_load(char const *path) {
+ FILE *f = fopen(path, "rb"); if (!f) return NULL;
+ struct image_hdr H;
+ if (fread(&H, sizeof H, 1, f) != 1 || H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word)) { fclose(f); return NULL; }
+ struct ai *g = ai_ini();
+ if (!g) { fclose(f); return NULL; }
+ uintptr_t nw = H.nwords;
+ if (nw > g->major_len) {                                // grow the major pool to fit the image
+  g->alloc(g, g->major_pool, 0);
+  g->major_len = nw + (nw >> 2);
+  g->major_pool = g->major_base = g->alloc(g, NULL, 2 * g->major_len * sizeof(word));
+  if (!g->major_pool) { fclose(f); return NULL; }
+ }
+ word *base = g->major_base;
+ uintptr_t *hwo = malloc(H.nh * 8 + 8), *lwo = malloc(H.nl * 8 + 8), *lix = malloc(H.nl * 8 + 8),
+           *iwo = malloc(H.ni * 8 + 8), *iix = malloc(H.ni * 8 + 8);
+ int ok = base && hwo && lwo && lix && iwo && iix
+   && fread(base, sizeof(word), nw, f) == nw
+   && fread(hwo, 8, H.nh, f) == H.nh
+   && fread(lwo, 8, H.nl, f) == H.nl && fread(lix, 8, H.nl, f) == H.nl
+   && fread(iwo, 8, H.ni, f) == H.ni && fread(iix, 8, H.ni, f) == H.ni;
+ fclose(f);
+ if (!ok) { free(hwo), free(lwo), free(lix), free(iwo), free(iix); return NULL; }
+ g->major_hp = base + nw;
+ for (uintptr_t i = 0; i < H.nh; i++) base[hwo[i]] += (intptr_t) base;            // offset -> newbase+offset
+ for (uintptr_t i = 0; i < H.nl; i++) base[lwo[i]] = image_ap_resolve(lix[i]);    // index -> live lvm_*
+ for (uintptr_t i = 0; i < H.ni; i++) base[iwo[i]] = image_immortals[iix[i]];     // index -> live immortal
+ free(hwo), free(lwo), free(lix), free(iwo), free(iix);
+ g->book    = image_root_dec(H.root_tag[0], H.root_val[0], base);
+ g->symbols = image_root_dec(H.root_tag[1], H.root_val[1], base);
+ g->tasks   = (union u*) image_root_dec(H.root_tag[2], H.root_val[2], base);
+ g->scare_a = image_root_dec(H.root_tag[3], H.root_val[3], base);
+ g->scare_b = image_root_dec(H.root_tag[4], H.root_val[4], base);
+ g->x       = image_root_dec(H.root_tag[5], H.root_val[5], base);
+ g->next_serial = H.next_serial;
+ // sp stays at ai_ini's topof(g) (empty AI stack); the dispatch re-establishes ip
+ g->major_live0 = nw, g->since_major = 0;
+ return g; }
+#endif
 
 // ============================================================================
 // sym

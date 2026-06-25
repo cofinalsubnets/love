@@ -436,6 +436,17 @@ static char const baolaunch[] = "(bao 0)";   // bao.l is define-only -> the fron
 // asum/aprod/amax/amin. The scalar/array kernels themselves were a net loss or
 // unused, so only eat (the curried eat1/eat2 nifs) + toast remain. See ai/glaze/README.md.
 
+// --dump-image / --load-image: the heap-image snapshot (doc/snapshot.md). Boot from a serialized
+// image instead of eval'ing the egg (~233 ms). Opt-in flags; a normal run is the same code path.
+extern int image_dump(struct ai*, char const*);          // ai.c, __STDC_HOSTED__
+extern struct ai *image_load(char const*);
+static char const *image_dump_path = NULL;
+// the post-warm dispatch (shared by boot() and the --load-image path, which skips the warm).
+static struct ai *run_program(struct ai *g, bool argp, bool replp) {
+  if (argp) return ai_evals_(g, cli);
+  if (!replp) return ai_evals_(g, rel);
+  return ai_evals_(g, baolaunch); }      // a tty: launch the baked bao shell: (bao 0)
+
 static struct ai *boot(struct ai *g, bool argp) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
@@ -451,13 +462,23 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "arm64.h"                                       //   execute), so every target is arch-neutral. the glaze (x86 client) executes x64
 #include "bao.h"
   );
-  if (argp) return ai_evals_(g, cli);
-  if (!replp) return ai_evals_(g, rel);
-  return ai_evals_(g, baolaunch); }      // a tty: launch the baked bao shell: (bao 0)
+  if (image_dump_path) {                                 // --dump-image: snapshot the post-warm heap, then exit
+    int rc = image_dump(g, image_dump_path);
+    if (rc) fprintf(stderr, "ai: image-dump failed (rc=%d)\n", rc);
+    exit(rc ? 1 : 0); }
+  return run_program(g, argp, replp); }
 #endif
 
 int main(int argc, char const **argv) {
-  struct ai *g = ai_ini();
+  struct ai *g = NULL;
+#ifndef GL_BOOTSTRAP
+  // --dump-image PATH / --load-image PATH must lead the args; strip them (keep argv[0]).
+  char const *image_load_path = NULL;
+  if (argc >= 3 && !strcmp(argv[1], "--dump-image")) { image_dump_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
+  else if (argc >= 3 && !strcmp(argv[1], "--load-image")) { image_load_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
+  if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
+#endif
+  if (!g) g = ai_ini();
   bool argp = argc > 1;
   // The WHOLE C argv (incl. argv[0]/program name): cli.l drops the head for its own
   // use, while `cmdline` keeps the full list, pinned for user visibility.
@@ -471,7 +492,14 @@ int main(int argc, char const **argv) {
     // from the ai_nifs section; argv/cmdline are runtime values, defined here.
     g = ai_defn(g, __start_ai_nifs, __stop_ai_nifs - __start_ai_nifs);
     struct ai_def d[] = {{"argv", full_argv}, {"cmdline", full_argv}};
-    g = ai_defn(g, d, countof(d));
+    g = ai_defn(g, d, countof(d));      // re-pins the host nifs (live addresses) into the loaded book too
+#ifndef GL_BOOTSTRAP
+    if (image_load_path) {              // --load-image: skip the egg warm, dispatch straight to the program
+      bool replp = !argp && isatty(STDIN_FILENO);
+      if (replp) raw_mode();
+      g = run_program(g, argp, replp);
+    } else
+#endif
     g = boot(g, argp); }
   switch (ai_code_of(g)) {
    default: break;
