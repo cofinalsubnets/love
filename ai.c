@@ -5013,7 +5013,7 @@ static intptr_t image_imm_index(word v) {
  return -1; }
 // reloc tables (WORD offsets into the blob): heap pointers (relocate by base delta), lvm_* aps and
 // out-of-pool immortals (re-resolve via index). raw words (doubles/limbs/bytes/lengths/serials) pass.
-struct image_rel { uintptr_t *hwo, nh, *lwo, *lix, nl, *iwo, *iix, ni; };
+struct image_rel { uintptr_t *hwo, nh, *lwo, *lix, nl, *iwo, *iix, ni, *bwo, nb; };
 static void image_rec(struct image_rel *R, uintptr_t wo, intptr_t val, intptr_t lo, intptr_t hi) {
  if (oddp(val)) return;                                   // fixnum
  intptr_t idx = image_ap_index(val);
@@ -5021,7 +5021,7 @@ static void image_rec(struct image_rel *R, uintptr_t wo, intptr_t val, intptr_t 
  if (val >= lo && val < hi) { R->hwo[R->nh++] = wo; return; }   // in-pool heap pointer (terminator head|2 rides here)
  if (R->iwo) { intptr_t ii = image_imm_index((word) val);       // out-of-pool immortal -> a re-resolvable index
    if (ii >= 0) { R->iwo[R->ni] = wo, R->iix[R->ni] = (uintptr_t) ii, R->ni++; return; } }
- // else: unknown out-of-pool (a W^X native, etc.) -- left absolute (the boot heap has none)
+ if (R->bwo) R->bwo[R->nb++] = wo;   // out-of-pool BINARY pointer (host nif / .rodata) -> base-delta on load (cross-process); in-process (bwo NULL): left absolute
 }
 // walk [base,hp) recording every pointer-bearing word (per-kind, mirroring evac_*); -> object count.
 static uintptr_t image_ser_walk(struct ai *g, word *base, word *hp, struct image_rel *R) {
@@ -5051,7 +5051,7 @@ lvm(lvm_image_rt) {
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
  uintptr_t bookoff = (uintptr_t)((word*) cell(g->book) - base);
- struct image_rel R = { g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0, NULL, NULL, 0 };
+ struct image_rel R = { g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0, NULL, NULL, 0, NULL, 0 };   // in-process: no immortal/binary tables (left absolute)
  word *blob = g->alloc(g, NULL, bytes), *nu = g->alloc(g, NULL, bytes);
  intptr_t status;
  if (!R.hwo || !R.lwo || !R.lix || !blob || !nu) status = -2;
@@ -5089,9 +5089,9 @@ lvm(lvm_image_rt) {
 // ~233 ms egg-eval. The image is an OPTIMIZATION: a missing/mismatched/bad file
 // makes image_load return NULL and the caller boots normally -- never wrong.
 // ============================================================================
-#define IMAGE_MAGIC 0x31304f4e53494114ULL   /* bump if the wire format changes */
+#define IMAGE_MAGIC 0x31304f4e53494115ULL   /* bump if the wire format changes */
 struct image_hdr {
- uint64_t magic, wordsize, nwords, nh, nl, ni, next_serial;
+ uint64_t magic, wordsize, nwords, nh, nl, ni, nb, refsym, next_serial;
  uint64_t root_tag[6], root_val[6];          /* book, symbols, tasks, scare_a, scare_b, x */
 };
 // encode a live value (post-compaction) -> portable (tag,payload):
@@ -5112,16 +5112,17 @@ int image_dump(struct ai *g, char const *path) {
  word *base = g->major_base, *hp = g->major_hp;
  if ((word*) g->sp != topof(g)) return -3;               // expect an empty AI stack at the quiescent dump point
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
- struct image_rel R = { malloc(bytes), 0, malloc(bytes), malloc(bytes), 0, malloc(bytes), malloc(bytes), 0 };
+ struct image_rel R = { malloc(bytes), 0, malloc(bytes), malloc(bytes), 0, malloc(bytes), malloc(bytes), 0, malloc(bytes), 0 };
  word *blob = malloc(bytes);
  int rc = -2;
- if (R.hwo && R.lwo && R.lix && R.iwo && R.iix && blob) {
+ if (R.hwo && R.lwo && R.lix && R.iwo && R.iix && R.bwo && blob) {
   image_ser_walk(g, base, hp, &R);
   memcpy(blob, base, bytes);
   for (uintptr_t i = 0; i < R.nh; i++) blob[R.hwo[i]] -= (intptr_t) base;         // ptr -> offset
   for (uintptr_t i = 0; i < R.nl; i++) blob[R.lwo[i]] = (intptr_t) R.lix[i];      // ap  -> lvm index
   for (uintptr_t i = 0; i < R.ni; i++) blob[R.iwo[i]] = (intptr_t) R.iix[i];      // imm -> immortal index
-  struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, R.nh, R.nl, R.ni, g->next_serial, {0}, {0} };
+  // bwo (out-of-pool binary pointers) stay ABSOLUTE in the blob; the load shifts them by the base delta.
+  struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, R.nh, R.nl, R.ni, R.nb, (uint64_t)(word) image_immortals, g->next_serial, {0}, {0} };
   word roots[6] = { g->book, g->symbols, (word) g->tasks, g->scare_a, g->scare_b, g->x };
   for (int i = 0; i < 6; i++) image_root_enc(roots[i], base, hp, &H.root_tag[i], &H.root_val[i]);
   FILE *f = fopen(path, "wb");
@@ -5129,11 +5130,12 @@ int image_dump(struct ai *g, char const *path) {
        && fwrite(blob, sizeof(word), nw, f) == nw
        && fwrite(R.hwo, sizeof(uintptr_t), R.nh, f) == R.nh
        && fwrite(R.lwo, sizeof(uintptr_t), R.nl, f) == R.nl && fwrite(R.lix, sizeof(uintptr_t), R.nl, f) == R.nl
-       && fwrite(R.iwo, sizeof(uintptr_t), R.ni, f) == R.ni && fwrite(R.iix, sizeof(uintptr_t), R.ni, f) == R.ni)
+       && fwrite(R.iwo, sizeof(uintptr_t), R.ni, f) == R.ni && fwrite(R.iix, sizeof(uintptr_t), R.ni, f) == R.ni
+       && fwrite(R.bwo, sizeof(uintptr_t), R.nb, f) == R.nb)
       ? 0 : -4;
   if (f) fclose(f);
  }
- free(R.hwo), free(R.lwo), free(R.lix), free(R.iwo), free(R.iix), free(blob);
+ free(R.hwo), free(R.lwo), free(R.lix), free(R.iwo), free(R.iix), free(R.bwo), free(blob);
  return rc; }
 // load PATH into a FRESH g; NULL on any problem -> caller boots normally.
 struct ai *image_load(char const *path) {
@@ -5151,19 +5153,22 @@ struct ai *image_load(char const *path) {
  }
  word *base = g->major_base;
  uintptr_t *hwo = malloc(H.nh * 8 + 8), *lwo = malloc(H.nl * 8 + 8), *lix = malloc(H.nl * 8 + 8),
-           *iwo = malloc(H.ni * 8 + 8), *iix = malloc(H.ni * 8 + 8);
- int ok = base && hwo && lwo && lix && iwo && iix
+           *iwo = malloc(H.ni * 8 + 8), *iix = malloc(H.ni * 8 + 8), *bwo = malloc(H.nb * 8 + 8);
+ int ok = base && hwo && lwo && lix && iwo && iix && bwo
    && fread(base, sizeof(word), nw, f) == nw
    && fread(hwo, 8, H.nh, f) == H.nh
    && fread(lwo, 8, H.nl, f) == H.nl && fread(lix, 8, H.nl, f) == H.nl
-   && fread(iwo, 8, H.ni, f) == H.ni && fread(iix, 8, H.ni, f) == H.ni;
+   && fread(iwo, 8, H.ni, f) == H.ni && fread(iix, 8, H.ni, f) == H.ni
+   && fread(bwo, 8, H.nb, f) == H.nb;
  fclose(f);
- if (!ok) { free(hwo), free(lwo), free(lix), free(iwo), free(iix); return NULL; }
+ if (!ok) { free(hwo), free(lwo), free(lix), free(iwo), free(iix), free(bwo); return NULL; }
  g->major_hp = base + nw;
  for (uintptr_t i = 0; i < H.nh; i++) base[hwo[i]] += (intptr_t) base;            // offset -> newbase+offset
  for (uintptr_t i = 0; i < H.nl; i++) base[lwo[i]] = image_ap_resolve(lix[i]);    // index -> live lvm_*
  for (uintptr_t i = 0; i < H.ni; i++) base[iwo[i]] = image_immortals[iix[i]];     // index -> live immortal
- free(hwo), free(lwo), free(lix), free(iwo), free(iix);
+ intptr_t delta = (intptr_t)(word) image_immortals - (intptr_t) H.refsym;        // the ASLR shift between dump and load (same binary, one PIE base)
+ for (uintptr_t i = 0; i < H.nb; i++) base[bwo[i]] += delta;                      // un-tabled out-of-pool binary pointers (host nifs / .rodata) -> live
+ free(hwo), free(lwo), free(lix), free(iwo), free(iix), free(bwo);
  g->book    = image_root_dec(H.root_tag[0], H.root_val[0], base);
  g->symbols = image_root_dec(H.root_tag[1], H.root_val[1], base);
  g->tasks   = (union u*) image_root_dec(H.root_tag[2], H.root_val[2], base);
