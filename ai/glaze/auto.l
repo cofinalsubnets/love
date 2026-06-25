@@ -247,6 +247,37 @@
    (roloop? pr sibs) (: g (caap pr) body (cup pr)                                                 ; a hoistable READ-ONLY self-loop
       (&& (fnpair? pr) (occurs? g body) (! (uses-head? roalloc body))
           (! (any (\ s (&& (! (id? s g)) (occurs? s body))) sibs))))                              ; calls no SIBLING fn
+   ; --- WRITE-LOOP (the map UPDATE-in-place lane): hash's `bump` -- (g i) (? COND (: k.. _ (pin H k V) (g STEP)) H)
+   ;     -- a read-modify-WRITE self-loop over a captured MAP H whose ONLY effect is the in-place (pin H k V)
+   ;     (the key was inserted by an earlier pass, so the pin never grows the table -> allocation-free) and
+   ;     whose result is the MAP H. plift hoists it like a roloop (H threaded as a captured param), but the
+   ;     hoisted body is THREADED: the (pin H k V) folds into the recursive call's H slot as (mpin H k V)
+   ;     (mpin writes AND returns H, like the cask lane threads (pin s i E)), peep->mpeep, the base H -> 0
+   ;     (native returns a fixnum, not the pointer the nif would tag). SOUND only when H's result is
+   ;     DISCARDED at every call site (we return 0, not H) -- bumpok? enforces it; a missing key DEOPTS.
+   (wmaph pr sibs) (: g (caap pr) body (cup pr)                                                   ; the captured MAP H of an RMW write-loop pr, else ()
+      (? (! (&& (fnpair? pr) (occurs? g body) (! (any (\ s (&& (! (id? s g)) (occurs? s body))) sibs))
+                (two? body) (id? (cap body) '?) (= 4 (tally body)))) ()
+         (: THEN (opd body 1) BASE (opd body 2)
+            (? (! (&& (name? BASE) (two? THEN) (id? (cap THEN) ':) (! (atom? (cup THEN))))) ()
+               (: pp (anat-defs (cup THEN)) binds (cap pp) call (caup pp)
+                  pinpr (afind (\ b (: v (cup b) (&& (two? v) (id? (cap v) 'pin) (= 4 (tally v)) (id? (caup v) BASE)))) binds)
+                  (? (&& (two? pinpr)
+                         (all (\ b (|| (id? b pinpr) (! (uses-head? roalloc (cup b))))) binds)   ; the ONLY effect is that one pin
+                         (two? call) (id? (cap call) g)) BASE ()))))))                            ; tail self-call (H is captured pre-lift; wthread threads it via the recursive call after plift adds it)
+   (wthread g gn fv H pr) (: body (cup pr) COND (opd body 0) THEN (opd body 1)                    ; the threaded hoisted body for a write-loop (still peep/pin -> interpretable; mapfix rewrites to mpeep/mpin later)
+      pp (anat-defs (cup THEN)) binds (cap pp) call (caup pp)
+      pinpr (afind (\ b (: v (cup b) (&& (two? v) (id? (cap v) 'pin) (id? (caup v) H)))) binds)
+      pv (cup pinpr) K (opd pv 1) V (opd pv 2)
+      others (afilter (\ b (! (id? b pinpr))) binds)
+      inl (\ e (foldl (\ acc ob (subst-sym (cap ob) (cup ob) acc)) e others))                    ; inline the pure value-binds (e.g. k)
+      nc (map (\ x (? (id? x H) (L 'pin H (inl K) (inl V)) x)) (subst-call g gn fv call))         ; (gn fv.. STEP) with H's slot threaded as (pin H k v) -- pin writes AND returns H, threading the map
+      (L '? (subst-call g gn fv COND) nc 0))                                                      ; base -> 0 (the map result is discarded -- bumpok?)
+   (other-use? nm self ipairs ibody) (|| (occurs? nm ibody) (any (\ pr (&& (! (id? pr self)) (occurs? nm (cup pr)))) ipairs))   ; nm used outside its own binding?
+   (bumpok? g defpr ipairs ibody)                                                                ; every (g ..) call (besides g's def) is a DISCARDED whole-binding value
+    (&& (! (occurs? g ibody))
+        (all (\ pr (|| (id? pr defpr) (! (occurs? g (cup pr)))
+                       (&& (! (fnpair? pr)) (: v (cup pr) (&& (two? v) (id? (cap v) g))) (! (other-use? (cap pr) pr ipairs ibody))))) ipairs))
    (subst-pairs g gn fv pairs) (map (\ pr (link (cap pr) (subst-call g gn fv (cup pr)))) pairs)    ; rewrite (g A..) in every pair's value
    (plift-fn Fpair)                                                                               ; ((F P..) . FBODY) -> (L Fpair' newdefs)
     (: nf (cap Fpair) FBODY (cup Fpair)
@@ -255,16 +286,20 @@
              parsed (anat-defs (cup FBODY)) ipairs (cap parsed) ibody (caup parsed)
              sibnames (map caap (gfilt fnpair? ipairs))                                           ; all inner fn NAMES
              valnames (map cap (gfilt (\ pr (! (fnpair? pr))) ipairs))                            ; inner value-binding names (bare symbols)
-             lifts (gfilt (\ pr (roloop? pr sibnames)) ipairs)
+             wlifts (gfilt (\ pr (&& (name? (wmaph pr sibnames)) (bumpok? (caap pr) pr ipairs ibody))) ipairs)   ; the hoistable WRITE-loops (map RMW, discarded result)
+             lifts (cat (gfilt (\ pr (roloop? pr sibnames)) ipairs) wlifts)
              (? (atom? lifts) (L Fpair ())
                 (: remain (gfilt (\ pr (! (any (\ lp (id? pr lp)) lifts))) ipairs)                ; the NON-lifted inner bindings (by identity)
                    specs (map (\ pr (link (caap pr)                                               ; per lift a spec (g gn fv..): name, hoisted name F_g, captures
                                   (link (intern (+ (string F) (+ "_" (string (caap pr)))))
-                                        (gfilt (\ s (&& (! (member? s (cuap pr))) (occurs? s (cup pr)))) (cat P valnames))))) lifts)
+                                        (gfilt (\ s (&& (! (id? s '_)) (! (member? s (cuap pr))) (occurs? s (cup pr)))) (cat P valnames))))) lifts)   ; `_` is the throwaway/effect binding -- the loop body REBINDS it locally (the pin slot), never captures the enclosing one
                    rwp (foldl (\ ps sp (subst-pairs (cap sp) (caup sp) (cuup sp) ps)) remain specs)   ; rewrite (g A..) calls through every spec, in the remaining bindings
                    rwb (foldl (\ b sp (subst-call (cap sp) (caup sp) (cuup sp) b)) ibody specs)       ; ... and in the trailing body
                    newdefs (map (\ sp (: lp (afind (\ pr (id? (caap pr) (cap sp))) lifts)            ; the hoisted def: (gn fv.. q..) . body'[g->gn]
-                                  (link (link (caup sp) (cat (cuup sp) (cuap lp))) (subst-call (cap sp) (caup sp) (cuup sp) (cup lp))))) specs)
+                                  wl (any (\ w (id? w lp)) wlifts)                                   ; a WRITE-loop -> threaded body; else the plain read-only rename
+                                  (link (link (caup sp) (cat (cuup sp) (cuap lp)))
+                                        (? wl (wthread (cap sp) (caup sp) (cuup sp) (wmaph lp sibnames) lp)
+                                           (subst-call (cap sp) (caup sp) (cuup sp) (cup lp)))))) specs)
                    (L (link nf (link ': (unpair rwp rwb))) newdefs))))))
    (plift form)                                                                                   ; hoist read-only loops out of every top-level fn's nested :
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
@@ -281,9 +316,10 @@
    (puse? e P) (? (two? e) (? (&& (id? (cap e) 'peep) (id? (caup e) P)) 1 (foldl (\ a x (|| a (puse? x P))) 0 (cup e))) 0)   ; P used as (peep P k d)?
    (tuse? e P) (? (two? e) (? (&& (id? (cap e) 'tally) (id? (caup e) P)) 1 (foldl (\ a x (|| a (tuse? x P))) 0 (cup e))) 0)   ; P used as (tally P)?
    (peep->mpeep P e) (? (two? e) (? (&& (id? (cap e) 'peep) (id? (caup e) P)) (link 'mpeep (map (\ x (peep->mpeep P x)) (cup e))) (map (\ x (peep->mpeep P x)) e)) e)
+   (pin->mpin P e)   (? (two? e) (? (&& (id? (cap e) 'pin)  (id? (caup e) P)) (link 'mpin  (map (\ x (pin->mpin  P x)) (cup e))) (map (\ x (pin->mpin  P x)) e)) e)   ; a map param's (pin P k v) UPDATE -> (mpin P k v); a cask param is pin'd-not-peep'd so never in mps
    (mapfix-def def) (: nf (cap def) body (cup def)
       mps (gfilt (\ P (&& (puse? body P) (! (tuse? body P)))) (cup nf))                              ; this fn's MAP params (peep'd, not tally'd)
-      (link nf (foldl (\ b P (peep->mpeep P b)) body mps)))
+      (link nf (foldl (\ b P (pin->mpin P (peep->mpeep P b))) body mps)))
    ; --- STRING-BUILDER fusion (castbuild): a string-accumulator LOOP -- (: (g v.. s ..) (? COND (g u.. (+ s X) ..) s)
    ;     (g i.. "" ..)) builds a string by repeated append; each `+` copies the whole prefix, so the build is
    ;     O(n^2). Two rewrites: the clean single-byte counted case lowers to a NATIVE cask-fill (cbcask, below);
@@ -697,6 +733,7 @@
              (id? op 'tally)                              (&& (= 2 (tally e)) (member? (caup e) ps))                                          ; (tally STR): STR a param (string lane)
              (id? op 'peep)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (peep STR i d): STR param, i ok, d const
              (id? op 'mpeep)                              (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (mpeep MAP k d): MAP param, key ok, d const (the map lane -- mapfix rewrote a map-valued peep here)
+             (id? op 'mpin)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (groupok? cm cands cps ps (caup (cup (cup e)))))   ; (mpin MAP k v): MAP param, key ok, v ok -- UPDATE-in-place; produces the MAP (threaded into a call's map slot, or a discarded result)
              (id? op 'pin)                                (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (groupok? cm cands cps ps (caup (cup (cup e)))))   ; (pin BUF i V): BUF a raw-buf param, i ok, V ok
              (id? op 'two?)                               (&& (= 2 (tally e)) (cok? cm cands cps ps (caup e)))               ; (two? CE): CE chain-valued; result int 0/1 (TOTAL -- a non-chain reads false)
              0))                                                                               ; bare cap/cup are CHAIN-valued -> not admitted in an int position (cok? carries them)

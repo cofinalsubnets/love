@@ -19,8 +19,21 @@ interpreted, Stage D). A later robustness fix (`delet` now inlines a pure value-
 *nested in a sub-expression*, not just at a body root — bottom-up, parity- and
 effect-preserving) keeps the glaze from deopting on the natural "bind an
 intermediate" loop idiom (a `(g i (: x v (+ x x)))` accumulator), turning a class of
-deopt-*losses* into ~10× wins. Only the allocating halves remain: `tree`'s `mk` and
-`hash`'s `ins`/`bump` (Stage D). The recognizer gate is also modelled and runnable in
+deopt-*losses* into ~10× wins. The **map-WRITE lane** (`bump`, the read-modify-write
+pass) now glazes too: `plift` hoists `bump`'s self-loop and *threads* the map through
+its recursive call as `(mpin h k v)` — a native open-addressed update-in-place (probe,
+then store the tagged value at the slot; a missing key deopts). `mpin` writes AND
+returns the map, the same trick the cask-fill lane uses to thread a mutable object as
+a loop param; the result is discarded (we return a fixnum, not the pointer), enforced
+by `bumpok?`. So `hash`'s read passes (`scan`×2) AND its update pass (`bump`) are all
+native; only the allocating `ins` (which grows the table) stays interpreted —
+~1.8× on the `hash` bench (2.30 → 1.29 ms/it, host). The probe itself is now emitted
+through the **asm/ assembler**, baked into the post-egg layer as a core language
+service (the glaze is its client, like the parser combinators): `mpeep`'s probe is
+written as readable IR — `(label loop) … (br eq hit) …` — and the assembler resolves
+the hit/miss/loop branches to rel32, retiring the hand-counted `je`/`jmp` offsets that
+were the fragile part. Only the allocating halves remain: `tree`'s `mk` and `hash`'s
+`ins` (Stage D). The recognizer gate is also modelled and runnable in
 [`doc/proto/glaze-data.l`](proto/glaze-data.l) (its asserts pin which bench bodies
 cross which stage). The substrate this builds on is documented in
 [`ai/glaze/README.md`](../ai/glaze/README.md); the measurements below were taken on

@@ -227,6 +227,14 @@ hooks:
 # #include these and assemble the bootstrap with G_EGG_PRE/POST (ai.h).
 # Drop a .l into ai/ and it is picked up automatically -- no rule to edit.
 lib_h = $(patsubst ai/%.l,out/lib/%.h,$(wildcard ai/*.l))
+# the asm/ assembler baked into BOTH runtimes as a core language service: the
+# neutral core + BOTH backends. They are pure ai (produce machine-code bytes as
+# DATA, never execute them), so every backend is arch-neutral and rides along on
+# every host -- only the glaze, which EXECUTES the bytes, is arch-bound (and it is
+# cat-loaded + x86-gated separately, never baked). asm_h = lcat headers (host ai);
+# asm0_h = sed-wrapped raw source (ai0, the bootstrap -- can't lcat its own sources).
+asm_h  = out/lib/asm.h  out/lib/x64.h  out/lib/arm64.h
+asm0_h = out/lib/asm0.h out/lib/x640.h out/lib/arm640.h
 # ai0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
 # interpreter -- the l reader strips the ; comments at read time), since ai0
 # can't lcat the very sources it is assembled from (chicken/egg). cli.l doubles as
@@ -234,13 +242,43 @@ lib_h = $(patsubst ai/%.l,out/lib/%.h,$(wildcard ai/*.l))
 # are baked in so ai0 self-tests both compilers in one run (see main.c). The final
 # l uses the canonicalized lcat headers from the rule below instead.
 sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/tests0.h
+gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/tests0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 $(lib_h): out/lib/%.h: ai/%.l tools/lcat.l   # + $(ai0), stated below where it is in scope
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(ai0) -l ai/prel.l tools/lcat.l $< > $@
+# the asm/ assembler (asm/asm.l + asm/x64.l) rides the SAME lcat pipeline into the
+# post-egg layer -- a core language service (the glaze is its client). Explicit rules
+# (their sources live in asm/, not ai/, so the pattern rule above misses them).
+out/lib/asm.h: asm/asm.l tools/lcat.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(ai0) -l ai/prel.l tools/lcat.l $< > $@
+out/lib/x64.h: asm/x64.l tools/lcat.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(ai0) -l ai/prel.l tools/lcat.l $< > $@
+out/lib/arm64.h: asm/arm64.l tools/lcat.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(ai0) -l ai/prel.l tools/lcat.l $< > $@
+# ai0's sed-wrapped raw source of the same three (no interpreter -- the l reader
+# strips ; comments at read time), baked into the bootstrap so the corpus can test
+# the assembler under BOTH compilers (c0 + the self-hosted ev), like prel/ev/bao.
+out/lib/asm0.h: asm/asm.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(sed_lit) $< > $@
+out/lib/x640.h: asm/x64.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(sed_lit) $< > $@
+out/lib/arm640.h: asm/arm64.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(sed_lit) $< > $@
 out/lib/%0.h: ai/%.l
 	@mkdir -p out/lib
 	@echo AI	$@
@@ -390,12 +428,12 @@ $(ho)/ai.o $(ho)/0/ai.o: out/lib/ai_version.h
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
 # main.c` did), recompile it when any baked header changes.
-$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h
+$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h)
 
 # host/main.c (auto-globbed into $(host_o)) carries main() + the egg, assembled
 # inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c
 # glob now; the recompile-on-header-change dep is the line just above.
-$(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h
+$(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm $(host_ldflags)

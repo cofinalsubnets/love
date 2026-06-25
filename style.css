@@ -162,6 +162,10 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 .term[data-g="red"]   { color: #ff3b6b; }
 .term[data-g="blue"]  { color: #3a9dff; }
 .term.nul             { color: #565f89; }
+.hi.red { color: #ff3b6b; }
+.hi.green { color: #34ff9e; }
+.hi.blue { color: #3a9dff; }
+.hi.gray { color: #565f89; }
 /* the color stars glow, just barely, on hover */
 .term[data-g="green"]:hover { text-shadow: 0 0 6px #34ff9e; }
 .term[data-g="red"]:hover   { text-shadow: 0 0 6px #ff3b6b; }

@@ -139,6 +139,18 @@
    chainkind (apof (link 0 0))                                                      ; lvm_chain's ap sentinel, for the inline two?/cap/cup kind test (cf. (apof "") for the string lane)
    mapkind (apof (tablet 0))                                                        ; lvm_map_lookup's sentinel, for the map-param entry guard + the (mpeep ..) probe
    mapmix 11400714819323198485                                                      ; the hash multiplier 0x9e3779b97f4a7c15 (= ai.c's map hash mult), for the inline probe
+   ; -- the map probe, via the asm/ assembler SERVICE (baked into the post-egg layer; the glaze is its
+   ;    client). asm/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
+   ;    fragile bit. reg map: asm r0=rax, r7=x86-r8, r8=x86-r9, r9=x86-r10, r10=x86-r11. The probe wants
+   ;    the MAP in rax and the TAGGED key in r11 (asm r10); it ends branched to `hit` (match) / `miss` (gap).
+   (asmx ir) (peep (assemble 'x64 ir) 'bytes 0)                                     ; assemble neutral IR -> flat bytes (the post-egg `assemble` service; emit.l's own `asm` is byte-concat, untouched)
+   mprobe-ir (L '(ld r7 r0 8) '(ld r8 r7 16) '(shr r8 1) '(dec r8) '(add r7 r7 24)    ; r8=backing; r9=cap; >>1; --(=mask); r8=&slots
+      (L 'li 'r0 mapmix) '(imul r0 r0 r10) '(rol r0 32) '(and r0 r0 r8) '(mov r9 r0)    ; rax=rot(mix*tagkey)&mask=I -> r10
+      '(label loop) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 0) '(cmp r0 r10) '(br eq hit)  ; slot[I].key == tagkey? -> hit
+      '(test r0 1) '(br eq miss) '(inc r9) '(and r9 r9 r8) '(jmp loop))                  ; gap (even) -> miss; else I=(I+1)&mask, loop
+   (mpeep-ir d) (cat mprobe-ir                                                      ; READ tails: MISS -> default d; HIT -> slot[I].value, untagged
+      (L (L 'label 'miss) (L 'li 'r0 d) '(jmp end)
+         '(label hit) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 8) '(sar r0 1) '(label end)))
    (rrm reg) (+ 192 (% reg 8))                                                      ; ModRM mod11: reg-field=rax, rm=reg
    (rrr reg) (+ 192 (* 8 (% reg 8)))                                                ; ModRM mod11: reg-field=reg, rm=rax
    (rexb reg) (? (< reg 8) 72 73)                                                   ; REX.W (+B if reg extended, in rm)
@@ -202,11 +214,18 @@
              (&& (= op 'mpeep) (member? a ps))                                                                    ; (mpeep MAP k d): native open-addressed map probe -- hash k, linear-probe the backing for the value
                 (: kb (cgg syms ps b off OVF) d (caup (cup (cup e)))                                               ; k->rax(untagged); regs rax/r8/r9/r10/r11 ONLY (rcx=Sp, rdx=Hp are LIVE for the interp after Continue)
                    (asm (L kb '(76 141 92 0 1) (arx (argix a ps 0))                                                 ; lea r11,[rax+rax+1] (tagged key); rax=MAP
-                          '(76 139 64 8 77 139 72 16 73 209 233 73 255 201 73 129 192 24 0 0 0)                     ; r8=[rax+8]=backing; r9=[r8+16]=cap; shr; dec(=mask); r8+=24=&slots
-                          '(72 184) (le8 mapmix)                                                                    ; movabs rax, mix
-                          '(73 15 175 195 72 193 192 32 76 33 200 73 137 194 75 141 4 18 73 139 4 192 76 57 216 15 132 39 0 0 0 72 247 192 1 0 0 0 15 132 11 0 0 0 73 255 194 77 33 202 233 215 255 255 255)  ; rax=rot(mix*tagkey)&mask=I->r10; loop: rax=slot key; cmp r11; je hit; test gap; je miss; I=(I+1)&mask; jmp loop (gap terminates; no budget)
-                          '(72 184) (le8 (? (whole? d) d 0))                                                        ; miss: movabs rax, default
-                          '(233 12 0 0 0 75 141 4 18 73 139 68 192 8 72 209 248))))                                ; jmp end; hit: rax=slot value(+8); sar (untag)
+                          (asmx (mpeep-ir (? (whole? d) d 0))))))                                                   ; the probe (asm/ IR, labels -> rel32): I=hash; loop over slots; gap-terminated; hit -> value, miss -> default
+             (&& (= op 'mpin) (member? a ps))                                                                     ; (mpin MAP k v): native open-addressed UPDATE-IN-PLACE -- probe; HIT store tagged v; MISS (key absent) DEOPT
+                (: v (caup (cup (cup e))) mapld (arx (argix a ps 0))                                               ; v = the value expr; MAP->rax (3 bytes); SAME probe as mpeep, only the hit/miss tails differ
+                   vb (cgg syms ps v off OVF) po (+ off (tally vb)) kb (cgg syms ps b (+ po 1) OVF)                ; v->rax; PUSH (spill v across the probe); k->rax(untagged)
+                   premiss (asm (L vb push-rax kb '(76 141 92 0 1) mapld                                          ; ASM (flat) -- vb/kb are byte-lists, so a bare (L ..) leaves them as SUBLISTS; asm is one-level concat, so (tally premiss) would count SPINE pieces, not bytes -> every downstream offset (joa, the call's back-jump) skews. asm it.
+                              '(76 139 64 8 77 139 72 16 73 209 233 73 255 201 73 129 192 24 0 0 0)               ; lea r11,[2k+1] (tagged key); MAP->rax; r8=backing; r9=cap; shr; dec(=mask); r8+=24=&slots
+                              '(72 184) (le8 mapmix)                                                              ; movabs rax, mix
+                              '(73 15 175 195 72 193 192 32 76 33 200 73 137 194)                                 ; rax=rot(mix*tagkey)&mask=I->r10
+                              '(75 141 4 18 73 139 4 192 76 57 216 15 132 29 0 0 0 72 247 192 1 0 0 0 15 132 11 0 0 0 73 255 194 77 33 202 233 215 255 255 255)))   ; loop: slot key; cmp r11; je HIT(+29); test gap; je MISS(+11); I=(I+1)&mask; jmp loop
+                   joa (+ off (tally premiss))                                                                    ; abs offset of the MISS jmp
+                   (asm (L premiss '(233) (le4 (- OVF (+ joa 5)))                                                 ; MISS: jmp OVF (deopt -- the key is absent, so this fn's caller wasn't an in-place update)
+                          '(75 141 4 18 65 89 79 141 76 9 1 77 137 76 192 8) mapld)))                             ; HIT: lea[2I]; pop r9=v; lea r9,[2v+1] (tag); mov [r8+rax*8+8],r9 (store at slot value); MAP->rax (thread the map)
              (&& (= op 'tally) (member? a ps)) (asm (L (arx (argix a ps 0)) '(72 139 64 8)))                      ; (tally STR): rax=STR; rax=[rax+8] = len
              (&& (= op 'pin) (member? a ps))                                                                       ; (pin C i V): native byte store into a raw buf-param C, returns C
                 (: idx (caup (cup e)) val (caup (cup (cup e))) creg (pregn (argix a ps 0))
@@ -292,7 +311,7 @@
    (suse? e P) (? (two? e) (? (&& (member? (cap e) '(peep tally pin)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (suse? x P))) 0 (cup e))) 0)   ; P used DIRECTLY as (peep P..)/(tally P)/(pin P..)?
    (buse? e P) (? (two? e) (? (&& (id? (cap e) 'pin) (id? (caup e) P)) 1 (foldl (\ a x (|| a (buse? x P))) 0 (cup e))) 0)   ; P used as a CASK -- (pin P..) -- so its guard wants the buf kind, not str
    (cuse? e P) (? (two? e) (? (&& (member? (cap e) '(cap cup two?)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (cuse? x P))) 0 (cup e))) 0)   ; P used as a CHAIN -- (cap P)/(cup P)/(two? P) -- raw pointer, NO entry guard (two? is total: a non-chain reads false)
-   (muse? e P) (? (two? e) (? (&& (id? (cap e) 'mpeep) (id? (caup e) P)) 1 (foldl (\ a x (|| a (muse? x P))) 0 (cup e))) 0)   ; P used as a MAP -- (mpeep P k d) -- raw pointer, guarded as a map (the recognizer rewrites a map-valued (peep ..) to mpeep)
+   (muse? e P) (? (two? e) (? (&& (|| (id? (cap e) 'mpeep) (id? (cap e) 'mpin)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (muse? x P))) 0 (cup e))) 0)   ; P used as a MAP -- (mpeep P k d) READ or (mpin P k v) UPDATE -- raw pointer, guarded as a map
    ; INTERPROCEDURAL string-param inference: a param is a string if used in peep/tally OR passed as the arg
    ; to a sibling's string param. (strhash's `s` is a string because it flows into strhash_go's peep.) A
    ; deduped fixpoint over the group's (name . smask) map -- smasks only grow, so the size stabilizes.
@@ -329,7 +348,7 @@
        Hs (map2 (\ r o (: s (nthl r 4) l (nthl r 5) bo (+ o (+ (tally s) (tally l)))                  ; bo = body start = Lbody (tail self-calls jmp here)
                           (asm (L s l (cggt syms (nthl r 1) (nthl r 2) bo Aovf (nthl r 0) bo) (nthl r 6) '(195))))) rows offs)   ; H: save; load; BODY(tail); restore; ret
        lr (\ ds (? (atom? ds) (L entry) (: d (cap ds) (link (cap d) (link (cup d) (lr (cup ds)))))))   ; defs -> (: (n p..) body .. entry)
-       fb (ev (link ': (link '(mpeep mc mk md) (link '(peep mc mk md) (lr defs)))))            ; interp the WHOLE group (mpeep = a local peep, so the deopt path reads the map faithfully)
+       fb (ev (link ': (link '(mpeep mc mk md) (link '(peep mc mk md) (link '(mpin mc mk mv) (link '(pin mc mk mv) (lr defs)))))))   ; interp the WHOLE group (mpeep = a local peep READ, mpin = a local pin UPDATE -- the deopt path reads/writes the map faithfully)
        elam (link '\ (cat (nthl efn 1) (L (nthl efn 2))))                                     ; the entry's source lambda (value[-1], =/show)
        (nif (emit (asm (link outer Hs))) fb elam (nthl efn 3)))
    ; --- counted fold loop: acc = (FOLD over cv<n of body(cv)), cv the counter, limit

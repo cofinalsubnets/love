@@ -117,7 +117,7 @@
 </script>
 <span class="chip" data-run='."hello world\n"'>hello world</span>
 <span class="chip" data-run='(100 (\ n (: f (? (n % 3) "" "fizz") b (? (n % 5) "" "buzz") _ .(? ($f | $b) (f + b) n) _ ."\n" (n + 1))) 1)'>fizzbuzz</span>
-<span class="chip" data-run=': tri ((map (sat * jot * (+ 2))) * jot) (tri 67)'>: tri ((map (sat * jot * (+ 2))) * jot) (tri 67)</span>
+<span class="chip" data-run=': tri ((map (net * jot * (+ 2))) * jot) (tri 67)'>: tri ((map (net * jot * (+ 2))) * jot) (tri 67)</span>
 <span class="chip" data-run="0 2">0 2</span>
 <span class="chip" data-run="2 3 4">2 3 4</span>
 <span class="chip" data-run="i * i">i * i</span>
@@ -131,14 +131,14 @@
 <h2 id="for-programmers"><a href="#for-programmers">ai intro</a></h2>
 
 <p>ai is a small lisp-surfaced language over a tiny generic core.
-if you've written javascript, python, lua, ruby, lisp, or any other high-level
+if you've written javascript, python, lua, ruby, scheme, or any other high-level
 dynamic language, you already know the essentials of ai. functions, closures, lists,
 maps, and recursion all transfer. however, many details of syntax and semantics are
 different in ai.</p>
 
-<p>as a language, ai would rather be felt than seen. the syntax has three layers:</p>
+<p>ai would rather be felt than seen. the syntax has three layers:</p>
 <ul>
-  <li>lisp: classical recursive functions of symbolic expressions</li>
+  <li>lisp: lambda calculus over lists of symbolic expressions</li>
   <li>ml: left-associative <span class="term" data-g="currying">curried</span> function <span class="term" data-g="application">application</span></li>
   <li>apl: right-associative infix/prefix <span class="term" data-g="operator">operators</span></li>
 </ul>
@@ -164,7 +164,7 @@ different in ai.</p>
   <li><code>#(0 0)</code> <span class="term" data-g="book">book</span>: hash constructor</li>
   <li><code>@(0 0)</code> <span class="term" data-g="tray">tray</span>: array constructor</li>
   <li><code>+(0 0)</code> <span class="term" data-g="net">net</span>: structurally reduce a value to a <span class="term" data-g="twin">twin</span></li>
-  <li><code>$(0 0)</code> <span class="term" data-g="sat">saturate</span>: structurally reduce a value to a <span class="term" data-g="green">green</span> <span class="term" data-g="charm">charm</span></li>
+  <li><code>$(0 0)</code> <span class="term" data-g="sat">saturate</span>: retraction of net onto <span class="term" data-g="green">green</span> <span class="term" data-g="charm">charms</span></li>
   <li><code>!(0 0)</code> not: 1 if the value saturates to 0, else 0.</li>
 </ul>
 
@@ -271,10 +271,10 @@ forward reference lifting, like <code>letrec*</code> in scheme.</p>
     <dd>a value's type tag; the kinds form the dispatch lattice.</dd>
   <dt id="g-mint">mint</dt>
     <dd>a fresh nameless point: an identity and nothing else, materially empty.</dd>
-  <dt id="g-net">net</dt>
+  <dt id="g-net">net (<code>+</code>)</dt>
     <dd>a value's content measure, a complex number; truth is its sign. a list nets its spine, text its charms.</dd>
   <dt id="g-nom">nom / name</dt>
-    <dd>a named point (spelling + serial), its own kind -- not a chain. a <em>name</em> is the interned one.</dd>
+    <dd>a named point (spelling + serial). a <em>name</em> is interned by the environment and pinned to one canonical object.</dd>
   <dt id="g-numeral">numeral</dt>
     <dd>a charm as a Church numeral: <code>(n x)</code> iterates <code>x</code> <code>n</code> times. <code>1</code> is identity, <code>0</code> const-1.</dd>
   <dt id="g-operator">operator</dt>
@@ -284,7 +284,7 @@ forward reference lifting, like <code>letrec*</code> in scheme.</p>
   <dt id="g-red">red</dt>
     <dd>net &lt; 0 -- what <code>$</code> clamps to nothing.</dd>
   <dt id="g-sat">saturate (<code>$</code>)</dt>
-    <dd>projection onto green charms: <code>$x = (max 0 (min max-charm (net x)))</code>. the truth value of <code>x</code> is <code>!!$x</code>.</dd>
+    <dd>retraction of the net measure onto <span class="hi green">green</span> charms: <code>$x = (max 0 (min max-charm (net x)))</code>. the truth value of <code>x</code> is <code>!!$x</code>.</dd>
   <dt id="g-star">star</dt>
     <dd>a self-netting scalar: a number that is its own net.</dd>
   <dt id="g-string">string</dt>
@@ -296,7 +296,7 @@ forward reference lifting, like <code>letrec*</code> in scheme.</p>
   <dt id="g-twin">twin</dt>
     <dd>a complex: two gems <code>(re, im)</code>, built and conjugated by <code>~</code>.</dd>
   <dt id="g-unit">unit / zero point</dt>
-    <dd>the global empty element: <code>() + x = () * x = x</code>. canonically a mint, therefore false. the face of absence a missing read returns.</dd>
+    <dd>the global <span class="hi gray">empty</span> element: <code>() + x = () * x = x</code>. canonically a mint, therefore false. the face of absence a missing read returns.</dd>
 </dl>
 
 <hr>
@@ -552,7 +552,7 @@ the transcendental floats are demonstrated in <a href="test/spec.l">test/spec.l<
 
 <hr>
 <h2 id="crew"><a href="#crew">the crew</a></h2>
-<p>the <em>black rabbit of inle</em> and crew travel through namespace in search of the legendary island of svalbard</p>
+<p>the <em>black rabbit of inle</em> and crew travel through namespace searching for the legendary island of svalbard</p>
 <dl class="crew">
   <dt>🌑 inle</dt>
     <dd>autonomous freestanding network kernel</dd>
