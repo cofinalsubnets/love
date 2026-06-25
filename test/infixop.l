@@ -67,3 +67,28 @@
  (3 = (cup (peep operators '-> 0)))
  (nom? '<-) (30 = ((->) #(3 30) 3 0))            ; escaped, -> is still peep-as-a-value
  (id? pin (<-)) (id? peep (->)) (1 = ((%) 5 2)))  ; every alias is a bound global
+
+; DEFAULT INFIX: any all-punct symbol acts dyadic (arity two) with NO table pin --
+; the table holds only the EXCEPTIONS (other arities, the aliases, the arity-one
+; sigils). a fresh punct symbol, never registered, factors infix all the same.
+(: >< (\ a b (L a b))                            ; a fresh punct op, never pinned
+ (assert
+  !(operators '><)                               ; not in the table ...
+  ('(3 5) = (3 >< 5))                             ; ... yet infix: captures the left operand
+  ('(7 (3 5)) = (7 >< 3 >< 5))                    ; nests RIGHT-associatively
+  ('(9 (3 5)) = `(9 (3 >< 5)))                   ; works inside a list
+  (nom? '><) (id? >< (><))                        ; no left operand / escaped: the plain symbol
+  ("((>< 3 5))" = (show (opfix '(3 >< 5))))))     ; parenthesized infix double-wraps, like (1 + 2)
+
+; opfix does NOT rearrange a binding form: a `:` keeps its binder names (a symbol
+; OR a define-sugar header) verbatim -- only each pair's value and the trailing
+; body factor -- and a `\` keeps its args, factoring only the body. so a punct
+; binder survives (define-then-use needs no pin) and the sequence law is untouched.
+; (compared through show: opfix threads its spines with the 0-nil terminator, the
+; reader with (); show renders both the same reparsable form, so the factor shows.)
+(assert
+ ((show '(: >< (\ a b (L a b)) ((>< 3 5)))) = (show (opfix '(: >< (\ a b (L a b)) (3 >< 5)))))  ; explicit binder kept
+ ((show '(: (>< a b) (L a b) ((>< 3 5)))) = (show (opfix '(: (>< a b) (L a b) (3 >< 5)))))      ; sugar header kept
+ ((show '(\ a b ((+ a b)))) = (show (opfix '(\ a b (a + b)))))                                  ; \ args verbatim, body factored
+ ((show '(: a 1 b 2 ((+ a b)))) = (show (opfix '(: a 1 b 2 (a + b)))))                          ; : values/body factored, names kept
+ (2 = (: x 1 x (x + 1) x)))                                                                     ; the sequence law, intact

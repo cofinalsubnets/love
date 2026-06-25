@@ -235,7 +235,13 @@
 ; operand. arities two..seven are infix: with a left operand available it
 ; captures it and collects arity-1 more, nesting RIGHT-associatively; with
 ; none it reads as the plain symbol ((+) is + as a value, '+ quotes it).
-; extend with a plain pin. everything above this point is pre-opfix and
+; the DEFAULT is infix at TWO: ANY all-punct symbol absent from the table
+; still reads dyadic, so the table holds the EXCEPTIONS -- the arity-one
+; sigils, the cond ?, the aliases -- PLUS the dyadic words a COMPOSITE run
+; factors against (!= -> ! =, op-long reads them here). a binding form is
+; exempt: opfix keeps a `:`/`\` binder name verbatim, so a fresh punct
+; operator is define-then-use with no pin. extend with a plain pin (a new
+; arity, an alias); the default needs none. everything above this point is pre-opfix and
 ; must stay operator-free (the bootstrap restriction: no unquoted sigil
 ; before its definitions); everything after -- and every later file, the
 ; corpus, the repl -- reads hot.
@@ -396,31 +402,54 @@
     (? (atom? l) (op-drain out pend)
        (: e (cap l)
           (? (&& (nom? e) (op-puncp e))
-             (: fs (opfactor e)
-                (? (atom? fs)
-                   (: r (op-del e out pend) (op-w (cup l) (cap r) (cup r)))
-                   (: ch (map cap (init fs)) en (last fs) nm (cap en) n (cup en)
-                      (? (= n 1)                       ; arity one (or a one-chain): prefix --
-                         ; nil name, the op rides the chain: marks the frame to fold on fill
-                         (op-w (cup l) out (link (op-fr e (cat ch (link nm 0)) 0 1 0) pend))
-                         (: st (op-steal out pend)     ; infix: capture if a left operand exists
-                            (? (two? st) (op-w (cup l) (cap (cup st))
-                                        (link (op-fr e ch nm (- n 1) (link (cap st) 0))
-                                              (cup (cup st))))
-                               (two? ch)               ; composite with no left: prefix
-                               (op-w (cup l) out (link (op-fr e ch nm 1 0) pend))
-                               (: r (op-del e out pend) ; bare operator: the plain symbol
-                                  (op-w (cup l) (cap r) (cup r)))))))))
+             ; an all-punct symbol factors against the table; whatever does NOT
+             ; factor DEFAULTS to infix at two -- a fresh punct symbol acts dyadic
+             ; with no table pin, the table now holding only the EXCEPTIONS (arity
+             ; =/= 2, the aliases, the arity-one sigils). with no left operand the
+             ; infix frame still folds to the plain symbol (op-fold's bare case).
+             (: fs0 (opfactor e)
+                fs (? (two? fs0) fs0 (link (link e 2) 0))
+                ch (map cap (init fs)) en (last fs) nm (cap en) n (cup en)
+                (? (= n 1)                       ; arity one (or a one-chain): prefix --
+                   ; nil name, the op rides the chain: marks the frame to fold on fill
+                   (op-w (cup l) out (link (op-fr e (cat ch (link nm 0)) 0 1 0) pend))
+                   (: st (op-steal out pend)     ; infix: capture if a left operand exists
+                      (? (two? st) (op-w (cup l) (cap (cup st))
+                                  (link (op-fr e ch nm (- n 1) (link (cap st) 0))
+                                        (cup (cup st))))
+                         (two? ch)               ; composite with no left: prefix
+                         (op-w (cup l) out (link (op-fr e ch nm 1 0) pend))
+                         (: r (op-del e out pend) ; bare operator: the plain symbol
+                            (op-w (cup l) (cap r) (cup r)))))))
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
+   ; a `:` is a BINDING form, not an application -- opfix must NOT rearrange it.
+   ; binder positions are NAMES (a symbol, or a define-sugar header list) -- left
+   ; verbatim, never infix-factored -- and only each pair's VALUE and the trailing
+   ; body are expressions to factor. (: a 1 b 2 body) pairs (a 1)(b 2); a lone
+   ; trailing form is the body, an even count leaks the bindings (no body): the
+   ; eval pairing, exactly, so a punct binder like (: >< (\ ..) ..) keeps its name.
+   (op-colon fs)
+    (? (atom? fs) fs
+       (atom? (cup fs)) (link (op-core (cap fs)) 0)         ; a lone form is the body
+       (link (cap fs)                                       ; the name: verbatim
+             (link (op-core (caup fs))                      ; the value: factored
+                   (op-colon (cuup fs)))))                  ; the rest: pairs on
+   ; a \ lambda is a binder too: the args stay verbatim, only the body factors.
+   ; (\ x) -- one operand -- is quote, kept whole by op-core's first clause.
+   (op-lam fs)
+    (? (atom? (cup fs)) (link (op-core (cap fs)) 0)         ; the last operand is the body
+       (link (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
    ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
-   ; quoted list keeps its operators as plain symbols); everything else walks.
-   ; idempotent: factored output carries operators only in head position, where
-   ; they read plain.
+   ; quoted list keeps its operators as plain symbols); the binding forms keep
+   ; their binders (op-colon/op-lam); everything else walks. idempotent: factored
+   ; output carries operators only in head position, where they read plain.
    (op-core x)
     (? (atom? x) x
        (: h (cap x)
-          (? (&& (id? h '\) (atom? (cuup x))) x
+          (? (&& (id? h '\) (atom? (cuup x))) x              ; (\) / (\ x): quote, verbatim
+             (id? h '\) (link '\ (op-lam (cup x)))           ; (\ a.. body): only the body factors
+             (id? h ':) (link ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run
              ; monadically around the (recursively opfixed) datum; an
              ; unfactorable run is the plain application (run d)
