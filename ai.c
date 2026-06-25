@@ -64,6 +64,7 @@ typedef int64_t ai_sdlimb;
 
 #if __STDC_HOSTED__
 #include <math.h>
+#include <stdio.h>   /* image-check spike: debug diagnostics (host-only) */
 #else
 ai_flo_t ai_sin(ai_flo_t), ai_cos(ai_flo_t),
         ai_atan2(ai_flo_t, ai_flo_t), ai_sqrt(ai_flo_t), ai_exp(ai_flo_t),
@@ -821,7 +822,8 @@ lvm_t lvm_fault;
  _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))\
  _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load))\
- _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp)) NIF_FAULT(_)
+ _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp))\
+ _(nif_image_check, "image-check", s1(lvm_image_check)) NIF_FAULT(_)
 #define native_implemented_function(n, _, d) static union u const n[] = d;
 #define insts(_) _(lvm_unc) _(lvm_index) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
@@ -848,6 +850,7 @@ struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
  ai_core_of(g)->sp++;
  return g; }
 
+lvm_t lvm_image_check;   /* image-check spike (defined near end, after all lvm_* sentinels) */
 nifs(native_implemented_function);
 
 static lvm(_lvm_yield_c) { return Pack(g), g; }
@@ -4896,6 +4899,93 @@ lvm(lvm_bcopy) {
 
 // public predicate for frontends that need to check string args
 bool ai_strp(ai_word x) { return strp(x); }
+
+// ============================================================================
+// image-check -- Phase-0 of the heap-image snapshot spike (doc/snapshot.md).
+// Linearly walk the live heap region(s) and verify every object's `ap` (word0)
+// is covered by the lvm_* relocation table -- the one genuinely-new risk (the
+// copying GC already round-trips heap pointers; it never maps C-function ptrs
+// through a symbolic table). ADDITIVE, read-only debug nif; no behavior change.
+// `(image-check ())` -> the object count; prints uncovered aps to stderr.
+// ============================================================================
+// lvm_* that appear as an object's ap but are NOT in def1[] (data sentinels +
+// thread aps/dispatchers). def1[] (via ai_nif_name) covers the nifs + insts.
+static lvm_t *const image_extra_aps[] = {
+ lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox,  // data sentinels
+ lvm_map_lookup, lvm_map_data, lvm_buf, lvm_coin, lvm_toasted, lvm_port_io,            // thread aps
+ lvm_cur, lvm_help, lvm_ret0, lvm_ap, lvm_ret };                                       // dispatchers
+static char const *const image_extra_names[] = {
+ "lvm_chain","lvm_vec","lvm_sym","lvm_nom","lvm_str","lvm_big","lvm_flo","lvm_wide","lvm_cbox",
+ "lvm_map_lookup","lvm_map_data","lvm_buf","lvm_coin","lvm_toasted","lvm_port_io",
+ "lvm_cur","lvm_help","lvm_ret0","lvm_ap","lvm_ret" };
+static char const *image_ap_name(intptr_t ap) {
+ for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
+  if ((intptr_t) image_extra_aps[i] == ap) return image_extra_names[i];
+ char const *n = ai_nif_name(ap); return n ? n : "?"; }
+static bool image_ap_covered(intptr_t ap) {
+ for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
+  if ((intptr_t) image_extra_aps[i] == ap) return true;
+ return ai_nif_name(ap) != 0; }
+// size (words) of the object at p, using the SAME per-kind logic as the GC:
+// data kinds by their copy_* sizes; threads via the production terminator scan
+// (ttag, which picks the right pool bounds -- the hand-rolled [lo,hi) scan drifted).
+static uintptr_t image_objsize(struct ai *g, union u *p) {
+ if (in_data(p->ap)) switch (ai_typ(p)) {
+  case KChain: return Width(struct ai_chain);
+  case KMint:  return Width(struct ai_mint);
+  case KNom:   return Width(struct ai_nom);
+  case KFlo:   return Width(struct ai_flo);
+  case KWide:  return Width(struct ai_wide);
+  case KCplx:  return Width(struct ai_cplx);
+  case KString:return b2w(sizeof(struct ai_str) + str(p)->len);
+  case KBig:   return b2w(ai_big_bytes((struct ai_big*) p));
+  default:     return b2w(ai_vec_bytes((struct ai_vec*) p)); }   // KVec
+ word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
+ return (uintptr_t)(term - (word*) p) + 1; }
+// walk [lo,hi) object by object; tally objects + real coverage gaps + drift.
+// drift = landing on a fixnum word (odd ap) -> a preceding object was mis-sized;
+// gap = an even, pointer-like ap NOT in the lvm_* table (the real risk).
+static uintptr_t image_walk(struct ai *g, word *lo, word *hi, uintptr_t *gap, uintptr_t *drift) {
+ uintptr_t n = 0;
+ union u *prev = 0; uintptr_t prevsz = 0;
+ for (union u *p = (union u*) lo; (word*) p < hi; n++) {
+  intptr_t ap = (intptr_t) p->ap;
+  if (oddp(ap)) {                                        // a fixnum where an ap should be -> sizing drift
+   (*drift)++;
+#if __STDC_HOSTED__
+   if (*drift <= 12) fprintf(stderr, "image-check: DRIFT obj#%lu (ap=%lx); culprit prev=%s ap=%p sz=%lu in_data=%d\n",
+     (unsigned long) n, (unsigned long) ap, prev?image_ap_name((intptr_t)prev->ap):"-", (void*)(prev?(intptr_t)prev->ap:0), (unsigned long) prevsz, (int)(prev?in_data(prev->ap):0));
+   if (*drift == 1 && prev) for (int k = 0; k < 14; k++) {
+     intptr_t w = ((word*) prev)[k];
+     fprintf(stderr, "   prev w[%d] = %lx  (%s)\n", k, (unsigned long) w,
+       oddp(w) ? "fixnum" : in_data((void*) w) ? "data-sentinel" : image_ap_name(w)[0]=='?' ? "heap-ptr/other" : image_ap_name(w)); }
+#endif
+  } else if (!image_ap_covered(ap)) {                   // even, pointer-like, but unknown -> a REAL table gap
+   (*gap)++;
+#if __STDC_HOSTED__
+   if (*gap <= 20) fprintf(stderr, "image-check: GAP uncovered ap %p obj#%lu in_data=%d w1=%lx\n",
+     (void*) ap, (unsigned long) n, (int) in_data((void*) ap), (unsigned long) ((word*) p)[1]);
+#endif
+  }
+  uintptr_t sz = image_objsize(g, p);
+  if (!sz) {
+#if __STDC_HOSTED__
+   fprintf(stderr, "image-check: ZERO-SIZE at obj#%lu ap %p -- aborting walk\n", (unsigned long) n, (void*) ap);
+#endif
+   break; }
+  prev = p, prevsz = sz;
+  p = (union u*) ((word*) p + sz); }
+ return n; }
+lvm(lvm_image_check) {
+ uintptr_t gap = 0, drift = 0;
+ uintptr_t n = image_walk(g, (word*) g->end, g->hp, &gap, &drift);
+ if (g->major_pool && g->major_hp > g->major_base)
+  n += image_walk(g, g->major_base, g->major_hp, &gap, &drift);
+#if __STDC_HOSTED__
+ fprintf(stderr, "image-check: %lu objects, %lu REAL gaps (uncovered lvm_*), %lu drift (sizing)\n",
+   (unsigned long) n, (unsigned long) gap, (unsigned long) drift);
+#endif
+ return Sp[0] = putcharm((intptr_t) gap), Ip++, Continue(); }   // -> the GO/NO-GO number: real table gaps
 
 // ============================================================================
 // sym
