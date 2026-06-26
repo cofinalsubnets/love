@@ -3,7 +3,9 @@ vgcore.*
 /out/
 # rocq/coqc build artifacts (rocq/spec.v is checked by `make test_proof`)
 # rocq/gen.v: generated from test/spec.l every run (test_gen); not a source
+# rocq/uugen.v: generated from test/uu.l every run (test_uugen); not a source
 rocq/gen.v
+rocq/uugen.v
 *.vo
 *.vok
 *.vos

@@ -1953,6 +1953,20 @@
         (natmultcomm n 1)
         (natmultl1 n)))))
 
+; spec.v's NUMERAL LANE, ported to uu (rocq/spec.v: const_one / identity / const_of_const
+; / pow_3_2 / tower). The internal prover now SOURCES these, so the nat model is single
+; across the LAWS (uugen.v), the INSTANCES (rocq/gen.v), and spec.v. `uu-app n x = x^n`
+; (recurse on the exponent), matching spec.v's `app`; the universal laws hold by refl
+; (const1) or natmultr1 (x^1 = mul x 1 = x), the tower by ground reduction.
+(assert
+ (defn 'uu-app '(pi n nat (pi x nat nat))
+   '(lam n (lam x (nat_rect (lam q nat) 1 (lam p (lam r (mul x r))) n))))
+ (defn 'uu-app-const1 '(pi x nat (paths nat (uu-app 0 x) 1)) '(lam x (idpath 1)))
+ (defn 'uu-app-ident '(pi x nat (paths nat (uu-app 1 x) x)) '(lam x (natmultr1 x)))
+ (defn 'uu-app-const-of-const '(pi x nat (paths nat (uu-app (uu-app 0 0) x) x)) '(lam x (natmultr1 x)))
+ (defn 'uu-app-3-2 '(paths nat (uu-app 3 2) 8) '(idpath 8))
+ (defn 'uu-app-tower '(paths nat (uu-app (uu-app 2 3) 4) 262144) '(idpath 262144)))
+
 ; NATURALNUMBERS round 16 -- the order opens. natgtb by double rect (the
 ; inner induction ignores its IH, so (natgtb (succ n) (succ m)) and
 ; (natgtb n m) are the SAME neutral -- the reference's "note 1" is our NbE's

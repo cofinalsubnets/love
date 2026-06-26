@@ -65,10 +65,10 @@
    (joinb s i) (? (< i (tally s)) (cat `((show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
    (tl x) (? (qlist? x)  (cat `("[" (joinl (e2 x)) "]"))
              (arrv? x)   (cat `("[" (joinl (cup x)) "]"))    ; tuple: the elements are the cup
-             (iotav? x)  (cat `("(iota " (tv (e2 x)) ")"))   ; the Coq iota model
+             (iotav? x)  (cat `("(iotaZ " (tv (e2 x)) ")"))   ; spec.v's iota, Z-arg face
              (string? x)    (cat `("[" (joinb x 0) "]"))
              (: h (cap x)                                     ; the broadcast / append / repeat ops
-                (? (id? h '+)  (? (arr? x)        (cat `("(vadd " (tl (e2 x)) " " (tl (e3 x)) ")"))
+                (? (id? h '+)  (? (arr? x)        (cat `("(vaddt " (tl (e2 x)) " " (tl (e3 x)) ")"))
                                   (intv? (e2 x))  (cat `("(" (tv (e2 x)) " :: " (tl (e3 x)) ")"))  ; scalar prepend
                                   (cat `("(" (tl (e2 x)) " ++ " (tl (e3 x)) ")")))                ; list append
                    (id? h '*)  (? (arr? x) (cat `("(vscale " (tv (e3 x)) " " (tl (e2 x)) ")"))     ; array scale
@@ -107,7 +107,7 @@
                    (hashv? h)     (cat `("(hget " (th h) " " (tv (e2 x)) " 0)"))  ; (#(..) k) -- lookup, default 0
                    (spine (tv h) (cup x)))))                                ; (app .. ..) spine
    (spine acc rest) (? (two? rest)
-                       (spine (cat `("(app " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
+                       (spine (cat `("(appZ " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
 
    ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable
    (tk x) (? (intv? x) "Vz"  (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
@@ -133,7 +133,7 @@
                     (= t "Vpair") 3 (= t "Vmap") 4  9))
    (xband? f) (&& (len3? f) (ordop? (cap f)) (>= (litband (e2 f)) 0) (>= (litband (e3 f)) 0)
                   (! (= (litband (e2 f)) (litband (e3 f)))))           ; both tagged, DIFFERENT bands
-   (xband f) (: h (cap f) a (cat `("(band " (tk (e2 f)) ")")) b (cat `("(band " (tk (e3 f)) ")"))
+   (xband f) (: h (cap f) a (cat `("(vband " (tk (e2 f)) ")")) b (cat `("(vband " (tk (e3 f)) ")"))
                (? (id? h '<)  (cat `("(Z.ltb " a " " b ")"))  (id? h '<=) (cat `("(Z.leb " a " " b ")"))
                   (id? h '>)  (cat `("(Z.ltb " b " " a ")"))  (cat `("(Z.leb " b " " a ")"))))
 
@@ -181,25 +181,24 @@
      "   The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation," (string 10)
      "   so vm_compute RUNS both sides (Coq's bytecode VM -- fast even on bignums like" (string 10)
      "   2^64) to a normal form, and reflexivity checks the two results are identical." (string 10)
-     "   A church numeral n applied to x is x ** n (`app`); a list/string nets the" (string 10)
-     "   sum of its elements/bytes (`asum`); $ is max(0,net), tally the count. *)" (string 10)
+     "   A church numeral n applied to x is x ** n (`appZ`); a list/string nets the" (string 10)
+     "   sum of its elements/bytes (`asum`). The MODEL IS SHARED: this file imports" (string 10)
+     "   rocq/spec.v and checks against ITS definitions -- appZ/asum/aprod/amax/vscale/srep" (string 10)
+     "   verbatim, iotaZ the Z-arg face, app_appZ proving appZ IS the nat `app` -- so the" (string 10)
+     "   generated instances and the hand-written LAWS speak one model. The defs below are" (string 10)
+     "   gen-only (no spec.v twin): amin, leqb, the TOTAL vaddt (spec.v's vadd is option-" (string 10)
+     "   valued for its shape-mismatch law), vquot, hget, and the syntactic kind lattice. *)" (string 10)
      "From Stdlib Require Import ZArith List." (string 10)
+     "Require Import spec." (string 10)
      "Import ListNotations." (string 10)
      "Open Scope Z_scope." (string 10)
-     "Definition app (n x : Z) : Z := Z.pow x n." (string 10)
-     "Definition asum  : list Z -> Z := fold_right Z.add 0." (string 10)
-     "Definition aprod : list Z -> Z := fold_right Z.mul 1." (string 10)
-     "Definition amax (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.max x xs end." (string 10)
      "Definition amin (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.min x xs end." (string 10)
-     "Definition iota (n:Z) : list Z := map Z.of_nat (seq 0 (Z.to_nat n))." (string 10)
      "Fixpoint leqb (a b:list Z):bool := match a,b with nil,nil=>true | x::a',y::b'=>andb (Z.eqb x y) (leqb a' b') | _,_=>false end." (string 10)
-     "Fixpoint vadd (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vadd a' b' | _,_=>nil end." (string 10)
-     "Definition vscale (c:Z):list Z->list Z := map (Z.mul c)." (string 10)
+     "Fixpoint vaddt (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vaddt a' b' | _,_=>nil end." (string 10)
      "Definition vquot (c:Z):list Z->list Z := map (fun e=>Z.quot e c)." (string 10)
-     "Definition srep (n:nat) (s:list Z):list Z := concat (repeat s n)." (string 10)
      "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end." (string 10)
-     ; the KIND lattice: a value's tag, for the type predicates (a literal's kind is syntactic)
-     "Inductive value := Vz | Vflo | Vcx | Vstr | Vsym | Vpair | Vmap | Varr | Vbot." (string 10)
+     ; the KIND lattice: a value's tag, for the type predicates (a literal's kind is syntactic; vkind/vband avoid spec.v's value/band)
+     "Inductive vkind := Vz | Vflo | Vcx | Vstr | Vsym | Vpair | Vmap | Varr | Vbot." (string 10)
      "Definition fixp  v := match v with Vz   => true | _ => false end." (string 10)
      "Definition flop  v := match v with Vflo => true | _ => false end." (string 10)
      "Definition comp  v := match v with Vcx  => true | _ => false end." (string 10)
@@ -214,7 +213,7 @@
      "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end." (string 10)
      "Definition atomp v := match v with Vpair => false | _ => true end." (string 10)
      "Definition lamp  v := match v with Vmap => true | _ => false end." (string 10)   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
-     "Definition band  v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
+     "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
    _ (walk (forms "test/spec.l"))
    _ (. (cat `((string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))

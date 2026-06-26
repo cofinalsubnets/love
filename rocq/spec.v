@@ -780,6 +780,21 @@ Proof.
 Qed.
 Theorem asum_iota_100 : asum (iota 100) = 4950.  Proof. now vm_compute. Qed.
 
+(* ============================================================ *)
+(* the Z lane: ONE model, shared with the generated rocq/gen.v  *)
+(* ============================================================ *)
+(* The nat `app` (Nat.pow) above carries the numeral LAWS by clean unary induction.
+   The GENERATED corpus checks (rocq/gen.v, from tools/spec2coq.l) instead need Z --
+   3^27 would blow unary-nat vm_compute -- so they run over `appZ`. These are not two
+   models: `app_appZ` PROVES appZ and app are ONE function under the nat->Z embedding,
+   so gen.v `Require Import spec` and checks its instances against THIS file's
+   definitions (asum/aprod/amax/vscale/srep shared verbatim, appZ/iotaZ the Z faces),
+   not a separate copy. The closing of the two-models gap. *)
+Definition appZ  (n x : Z) : Z := Z.pow x n.
+Definition iotaZ (n : Z) : list Z := iota (Z.to_nat n).   (* iota's Z-arg face, same data *)
+Theorem app_appZ : forall n x, appZ (Z.of_nat n) (Z.of_nat x) = Z.of_nat (app n x).
+Proof. intros n x. unfold appZ, app. symmetry. apply Nat2Z.inj_pow. Qed.
+
 (* contraction: the dot product (+.x), commutative; inner needs conforming length *)
 Fixpoint dot (a b : list Z) : Z :=
   match a, b with x :: a', y :: b' => x * y + dot a' b' | _, _ => 0 end.
@@ -1018,6 +1033,7 @@ End Faces.
    representative theorem per pillar: saturation, the total order, the function
    semantics, the reduction layer, and the complex net. *)
 Print Assumptions sat_clamps.        (* the net/saturation law (value side) *)
+Print Assumptions app_appZ.          (* the Z lane IS the nat lane: gen.v shares this model *)
 Print Assumptions numap_floor.       (* the count-law floor (count side, same $) *)
 Print Assumptions gunit_times_l.     (* () is the identity of BOTH monoids, + and * *)
 Print Assumptions unit_lt_zero.      (* () < 0: the floor below value-false (order side) *)

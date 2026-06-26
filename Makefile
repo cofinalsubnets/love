@@ -24,7 +24,7 @@ export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_gc test_hostnif test_glaze test_sat test_asm test_extract
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_gc test_hostnif test_glaze test_sat test_asm test_extract
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` runs its five independent phases in PARALLEL by default, via a
 # recursive -j sub-make: the bootstrap deps serialize the ai0/host build under
@@ -36,7 +36,7 @@ export AI_NO_IMAGE := 1
 # so the outer (serial) make doesn't build them before the parallel sub-make.
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_ai0 test_proof test_gen test_gc test_tools
+test_phases = test_host test_ai0 test_proof test_gen test_uugen test_gc test_tools
 test:
 	@$(MAKE) --no-print-directory -j$(JOBS) $(osync) $(test_phases)
 # test_tools (vmret + cook + tele + xor) is in the fast `test` so an app breaks the
@@ -44,7 +44,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm nettest test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm nettest test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -187,9 +187,28 @@ else
 test_gen: host
 	@echo AI	rocq/gen.v "(tools/spec2coq.l on $m)"
 	@$m tools/spec2coq.l > rocq/gen.v
-	@echo TEST rocq/gen.v "(coqc)"
-	@$(COQC) -q rocq/gen.v
-	@rm -f rocq/gen.vo rocq/gen.vok rocq/gen.vos rocq/gen.glob rocq/.gen.aux
+	@echo TEST rocq/gen.v "(coqc, against spec.v's shared model)"
+	@cd rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" gen.v
+	@rm -f rocq/spec.vo rocq/spec.vok rocq/spec.vos rocq/spec.glob rocq/.spec.aux \
+	  rocq/gen.vo rocq/gen.vok rocq/gen.vos rocq/gen.glob rocq/.gen.aux
+endif
+# The PROOF half of the .l -> .v pipeline (cf. test_gen, which exports concrete
+# ASSERTS): tools/uu2coq.l loads uu's kernel (test/uu.l), has it TYPE-CHECK a proof
+# term against its theorem, and EMITS rocq/uugen.v -- the same term in Gallina, which
+# coqc re-checks independently. So a LAW (forall x, x^0 = 1 -- spec.v's const_one) is
+# proved in ai's own kernel and certified by Rocq, axiom-free. Drift-proof like gen.v:
+# regenerated every run, so the internal proof and the exported one cannot diverge.
+# The skeleton of the internal-prover bridge. Needs the host binary AND coqc.
+ifeq ($(COQC),)
+test_uugen:
+	@echo "test_uugen: skipped (needs rocq/coqc)"
+else
+test_uugen: host
+	@echo AI	rocq/uugen.v "(tools/uu2coq.l on $m)"
+	@$m tools/uu2coq.l > rocq/uugen.v
+	@echo TEST rocq/uugen.v "(coqc)"
+	@$(COQC) -q rocq/uugen.v
+	@rm -f rocq/uugen.vo rocq/uugen.vok rocq/uugen.vos rocq/uugen.glob rocq/.uugen.aux
 endif
 
 # test_extract: the differential oracle with a ROCQ-EXTRACTED reference. coqc
