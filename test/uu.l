@@ -2016,6 +2016,18 @@
       _ (spin1 0)
       (! (relax1 ())))                                                ; one more relaxation still moves => positive cycle => unsat
 
+   ; --- IMPLICIT level inference: elaborate bare UU to a fresh level metavar, then check. So a
+   ;     definition checks with NO (UU l) annotation -- the levels are INFERRED (as metavars;
+   ;     for constraint-free defs like idfun/funcomp they stay fully polymorphic). What remains
+   ;     of the whole-corpus migration: ACCUMULATING the cross-site constraints a *cumulative*
+   ;     def generates (a global usat? over the check -- the conservative bit), the full
+   ;     recursor/sigma checker, and generalize/instantiate-per-use. The type-in-type-exploiting
+   ;     defs (the_world_explodes, the ordinal descent) stay correctly REJECTED -- by design.
+   MVC (tablet 0)                                                     ; fresh-metavar counter
+   (freshmv z) (: i (peep MVC 0 0) _ (pin MVC 0 (+ i 1)) `('mv i))    ; a fresh universe level metavariable (mv i)
+   (elab t) (? (id? t 'UU) `('UU (freshmv ()))                        ; bare UU -> (UU (mv i)); leave annotated (UU l) alone
+              (&& (two? t) (id? (cap t) 'UU)) t  (two? t) (map elab t)  t)
+
    (psym cx x)                                                         ; UU0 : UU1
    (? (id? x 'UU) '(U 1)
       (member? x '(nat bool unit empty)) 'UU
@@ -2024,7 +2036,7 @@
 
    (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (id? l 'no) (scare 'uu-not-a-type T) l))
 
-   (cleq d ti t)                                                       ; CUMULATIVE: UU_i sits in UU_j iff i<=j is SATISFIABLE (the solver); else exact conv
+   (cleq d ti t)
    (? (&& !(id? (ulvl ti) 'no) !(id? (ulvl t) 'no)) (usat? (L (L (ulvl ti) (ulvl t)))) (conv d ti t))
 
    (predpi cx en d t)                                                  ; PI / SIGMA formation -> U_max(i,j)
@@ -2066,7 +2078,10 @@
       (: x (e2 t) Av (pinf cx en d (e3 t)) va (vof en (e3 t)) (pchk (link `(x Av) cx) (link `(x va) en) d (e4 t) T))
       (: Ti (pinf cx en d t) (? (cleq d Ti T) 1 (scare 'uu-type-mismatch t))))
 
-   (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) _ (pchk 0 0 0 t Tv) nm))   ; vof now normalizes (UU l)
+   (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) _ (pchk 0 0 0 t Tv) nm)   ; vof now normalizes (UU l)
+
+   (qdefn nm T t)                                                     ; IMPLICIT: elaborate bare UU to fresh metavars, then check -- levels inferred, no annotation
+   (: eT (elab T) _ (sortof 0 0 0 eT) Tv (vof 0 eT) _ (pchk 0 0 0 (elab t) Tv) nm))
 
 ; landmarks as PURE BOOLEANS (so a false one scares loudly here, before the negative-test
 ; section installs its scare-swallowing help) -- no `rejects`, which needs that help.
@@ -2090,7 +2105,12 @@
  (usat? (L (L '(lv a) '(lv b)) (L '(lv b) '(lv a))))                              ; a<=b, b<=a : SAT (forces a=b)
  (! (usat? (L (L '(lsuc (lv a)) '(lv a)))))                                       ; a+1<=a : UNSAT (a<a)
  (! (usat? (L (L '(lv a) '(lv b)) (L '(lsuc (lv b)) '(lv a)))))                   ; a<=b, b+1<=a : UNSAT -- a CROSS-SITE cycle no local check sees
- (! (usat? (L (L 1 0)))))                                                         ; 1<=0 : UNSAT (the keystone constraint, concretely)
+ (! (usat? (L (L 1 0))))                                                          ; 1<=0 : UNSAT (the keystone constraint, concretely)
+ ; --- IMPLICIT inference: real UniMath defs check with BARE UU (no (UU l) annotations), levels inferred ---
+ (id? 'qidfun (qdefn 'qidfun '(pi T UU (pi x T T)) '(lam T (lam x x))))           ; idfun: forall(T:UU),T->T -- UU's level inferred
+ (id? 'qfuncomp (qdefn 'qfuncomp
+    '(pi X UU (pi Y UU (pi Z UU (pi f (pi x X Y) (pi g (pi y Y Z) (pi x X Z))))))
+    '(lam X (lam Y (lam Z (lam f (lam g (lam x (g (f x)))))))))))                 ; funcomp: three independent UU levels, all inferred
 
 ; NATURALNUMBERS round 16 -- the order opens. natgtb by double rect (the
 ; inner induction ignores its IH, so (natgtb (succ n) (succ m)) and

@@ -169,12 +169,33 @@ This is COMPLETE where `lle` was conservative — verified by assert (break-test
 `cleq` now decides cumulativity as "the constraint `i≤j` is satisfiable," so the checker's universe
 reasoning goes through the real solver; all prior Stage 1/2 asserts still pass through it.
 
-Still open (the whole-corpus migration, to make predicative the DEFAULT and retire type-in-type):
-**wiring the solver into a global, accumulating check** — generalize each def over its level vars +
-the constraints it generates, instantiate fresh per use, and verify the WHOLE accumulated set with
-`usat?` — so the user writes bare `UU` (no `(UU l)` annotations) and the univalence tower comes green.
-`usat?` is the engine that integration needs; the integration itself (generalize/instantiate across
-all 250 defns) + the full recursor large-elimination rules are the remaining lift.
+## LANDED (implicit inference, partial) + the honest wall (2026-06-26)
+
+`qdefn` does **implicit level inference**: `elab` replaces each bare `UU` with a fresh metavariable
+`(UU (mv i))`, then the def is checked — so it type-checks with **NO `(UU l)` annotation**, the levels
+inferred. Demonstrated (break-tested) on the *actual* UniMath defs `idfun` and `funcomp` written with
+bare `UU` (idfun: one inferred level; funcomp: three independent inferred levels). For constraint-free
+defs like these (π-formation only, no cumulativity) this is the whole story — the metavars stay
+unconstrained, i.e. fully polymorphic.
+
+**What it is NOT (the whole-corpus migration is a genuine multi-session project, partly impossible):**
+1. **Constraint ACCUMULATION** (for *cumulative* defs) needs `cleq` to record into a global store
+   instead of deciding locally, then a global `usat?`. The mode-flag version of `cleq` was built and
+   *worked on the host* but **OOM'd under ai0's baked self-test** (`oom@len=2^30`): `(peep UMODE 0 0)`
+   on every `cleq` miscompiles through c0 / the non-TCO trampoline — the same baked-ev fragility as the
+   spec2coq counter and the glaze leak-parity work. Reverted; left the constraint-free path, which
+   doesn't touch it. Re-landing needs either a c0-robust accumulation or running it off the baked path.
+2. **generalize / instantiate-per-use** across all 250 defns (a polymorphic def used at several levels).
+3. the **full recursor/sigma checker** — `pinf`/`pchk` only handle the constructs the core + these
+   demos need (π/Σ-formation, λ, app, paths/idpath, the/let/succ); the corpus's `nat_rect`/`total2`/
+   `coprod_rect`/… inference isn't built.
+4. The **type-in-type-exploiting defs** (`the_world_explodes`, the ordinal descent) **cannot** be made
+   predicatively consistent — they MUST stay rejected. So "all 250 green under predicative" is not a
+   goal; it's "the predicatively-sound corpus green, the paradox defs rejected."
+
+So the engine (`usat?`) and the inference front (`elab`/`qdefn`) both exist; the remaining integration
+is real work, and the ai0-bake fragility around mutable-tablet state in a hot path is a concrete
+blocker to solve first.
 
 ## Why this is the right first expansion
 It is the one change that alters uu's *kind* — from "a proof format sound only after export" to
