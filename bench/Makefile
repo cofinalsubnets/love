@@ -44,14 +44,13 @@ SKIP :=
 
 # every language, in report-column order. ai first, then native (go rust java),
 # JIT (julia luajit pypy node), BEAM (elixir), a scheme (chez), and a CL (sbcl).
-# (lean dropped: the per-sample AOT compile made the column slow and its numbers
-# uninteresting. luajit stays -- it's the inspiration for the auto-JIT.) apl
-# (Dyalog) is the array language, top wherever a bench is one vectorized primitive,
-# last on scalar recursion -- the cleanest array-tradeoff illustration in the suite.
+# (lean + apl dropped from the report: lean's per-sample AOT compile made it slow;
+# apl, once sum/mapfilter close, only sorted to the end. luajit stays -- it's the
+# inspiration for the auto-JIT.)
 ALL_LANGS := ai \
              go rust java \
              julia luajit pypy node \
-             elixir chez sbcl apl
+             elixir chez sbcl
 
 # the columns `make bench` shows by default.
 DEFAULT_LANGS := ai go rust julia luajit pypy node

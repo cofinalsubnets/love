@@ -6,10 +6,10 @@
 # milliseconds (benches down the side, languages across), and a button that
 # transposes benches<->languages (handy on a narrow portrait screen).
 # <lang-roster> is the column SET (e.g. $(ALL_LANGS)). The page (in JS, at render)
-# orders EVERY column by NET time ascending -- Σ of a language's per-bench ms/it
-# EXCLUDING bell and cdcl (single-implementation benches: luajit/rust lack bell, cdcl
-# is ai-only, so counting either hands the skippers a free 0 and skews the net). ai
-# takes its HONEST position (still tinted gold); a language with no rows sorts last.
+# orders EVERY column by NET ascending -- the GEOMETRIC MEAN of a language's per-bench
+# ms/it (magnitude-robust, so each bench counts in proportion and no heavy one dominates;
+# bintrees ranks, bell/cdcl/setup don't -- see NET). ai takes its HONEST position (still
+# tinted gold); a language with no rows sorts last.
 # The page embeds its data, so it opens straight off disk -- no server.
 roster="$1"
 
@@ -68,10 +68,11 @@ cat <<'HEAD'
 auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
 per bench is <b style="color:#9ece6a">green</b>; the <span class="ai"
 style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
-(or an unavailable toolchain). The <b>net</b> row ranks the columns &mdash; it sums the
-lightweight fundamentals only. Below it, shown but not ranked: <b>bell</b> (bignum),
-<b>bintrees</b> (heavy GC throughput), and <b>setup</b> (cold start: source &rarr; trivial result, so
-compiled languages pay their compile).</p>
+(or an unavailable toolchain). The <b>net</b> row ranks the columns &mdash; the
+<b>geometric mean</b> of each language's per-bench times, so every bench counts in proportion and no
+single heavy one dominates (a language is fast at some things, slow at others). Below it, shown but
+not ranked: <b>bell</b> (bignum &mdash; not every language has it) and <b>setup</b> (cold start:
+source &rarr; trivial result, so compiled languages pay their compile).</p>
 <div class="bar">
   <button id="btn" type="button">transpose</button>
   <span id="mode"></span>
@@ -156,25 +157,33 @@ const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
 // column order: every language (ai included -- its HONEST position) by NET time
-// ascending -- Σ of a language's per-bench ms/it EXCLUDING bell and cdcl. Both are
-// single-implementation benches (luajit/rust lack bell; cdcl is ai-only), so
-// counting either gives the languages that skip it a free 0 and skews the net.
+// ascending by the net (the GEOMETRIC MEAN of a language's per-bench ms/it; see NET below).
 // ai is still TINTED (the gold column) wherever it lands. No-data langs sort last.
-// NORANK benches are NOT in the net (the ranking key), each for a reason that would skew a sum of
-// the lightweight fundamentals: bell (bignum -- luajit/rust lack it, and it dwarfs), bintrees (a
-// heavy GC-throughput workload, tens of ms for every language), cdcl (ai-only; its perf lives in the
-// SAT-solver table), setup (a one-time cold-start cost, not a per-iteration time). All but cdcl still
-// SHOW, as rows below the net. (mandelbrot is the net's float-grid bench -- it REPLACED the smaller
+// NORANK benches are kept OUT of the net, each for a reason geomean can't fix: bell (bignum --
+// luajit/rust lack it entirely, so it's not a fair cross-language axis), cdcl (ai-only; its perf
+// lives in the SAT-solver table), setup (a one-time cold-start cost, not a per-iteration time).
+// bell + setup still SHOW as rows below the net; cdcl is dropped from this table. bintrees DOES
+// rank now -- the geomean lets the GC/alloc axis count proportionally without a heavy bench
+// dominating, and every language allocates distinct nodes (no flatten-to-index optimization), so
+// it's apples-to-apples. (mandelbrot is the net's float-grid bench -- it REPLACED the smaller
 // plain-f64 `float`, the same escape-grid workload: its idiomatic complex ~(re im) recurrence lowers
 // to the real-pair float-grid kernel (twolow) and glazes to native.)
-const NORANK = b => b === "bell" || b === "bintrees" || b === "cdcl" || b === "setup";
-const NET = l => BENCHES.reduce((s, b) => s + (NORANK(b) ? 0 : (PER[b] && PER[b][l] != null ? PER[b][l] : 0)), 0);
+const NORANK = b => b === "bell" || b === "cdcl" || b === "setup";
+// the net is the GEOMETRIC MEAN of a language's per-bench ms/it (over the benches it
+// has). Geomean, not a sum, so it is magnitude-robust: every bench counts in PROPORTION
+// (a 2x on a 0.3 ms fundamental and a 2x on a 30 ms bintrees move the net equally), so a
+// heavy bench can't dominate the order and a closed-form O(1) win helps by its ratio, not
+// by rounding to 0. That is what lets bintrees (the GC/alloc axis) sit IN the ranking
+// honestly instead of being excluded -- languages are fast at some things, slow at others,
+// and the geomean is the fair single order across that.
+const NET = l => { const xs = BENCHES.filter(b => !NORANK(b) && PER[b] && PER[b][l] != null).map(b => PER[b][l]);
+  return xs.length ? Math.exp(xs.reduce((s, x) => s + Math.log(x), 0) / xs.length) : Infinity; };
 const HAS = l => BENCHES.some(b => !NORANK(b) && PER[b] && PER[b][l] != null);
 const LANGORD = LANGS.slice().sort((a, b) =>
   (HAS(a) ? NET(a) : Infinity) - (HAS(b) ? NET(b) : Infinity));
 // the fundamentals (ranked, the main block) and the informational rows shown BELOW the net.
 const FUND  = BENCHES.filter(b => !NORANK(b));
-const EXTRA = ["bell", "bintrees", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; cdcl is dropped from the table entirely
+const EXTRA = ["bell", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; bintrees now ranks (geomean); cdcl is dropped from the table entirely
 
 // default arrangement: benches down the side, languages across; the button
 // flips to languages-down-the-side (handy on a narrow portrait screen).

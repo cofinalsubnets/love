@@ -20,7 +20,7 @@ printf '0\n'                                                    > "$T/t.l"
 printf 'package main\nfunc main(){}\n'                          > "$T/t.go"
 printf 'fn main(){}\n'                                          > "$T/t.rs"
 printf 'public class T{public static void main(String[] a){}}\n'> "$T/T.java"
-: > "$T/t.jl"; : > "$T/t.lua"; : > "$T/t.py"; : > "$T/t.js"; : > "$T/t.exs"; : > "$T/t.ss"
+: > "$T/t.jl"; : > "$T/t.lua"; : > "$T/t.py"; : > "$T/t.js"; : > "$T/t.exs"; : > "$T/t.ss"; : > "$T/t.lisp"
 
 # median (ms) of running CMD $SAMPLES times, each in its own subshell (so a `cd` can't leak).
 med() {
@@ -46,3 +46,4 @@ emit pypy   pypy3            "pypy3 $T/t.py"
 emit node   node             "node $T/t.js"
 emit elixir elixir           "elixir $T/t.exs"
 emit chez   chez             "chez --script $T/t.ss"
+emit sbcl   sbcl             "sbcl --script $T/t.lisp"

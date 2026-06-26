@@ -1,44 +1,27 @@
 include!("../lib/bench.rs");
 
-// binary-trees allocation/GC stress (see bench/benches/tree.l). checksum = 2^D-1.
-// APPLES-TO-APPLES with ai's COPYING GC (which bump-allocates and bulk-reclaims dead
-// nodes): the naive `Box<Tree>` is a malloc + an individual `drop` (free) PER NODE --
-// rust's worst case for ephemeral tiny-object churn, and the only reason a GC'd ai/go
-// "win" it. So we use a bump ARENA -- nodes pushed into a pre-sized Vec, children held
-// as indices, the whole arena bulk-freed at the end -- rust's memory model used WELL, the
-// same bump-then-bulk-reclaim shape ai's collector has (~10x the Box version; lands ahead).
-struct Arena {
-    n: Vec<(i32, i32)>,
+// binary-trees allocation/GC stress (see bench/benches/tree.l). checksum = 2^16-1.
+// distinct heap-allocated nodes (Box): a malloc + an individual free PER NODE -- the
+// honest ephemeral-object churn every GC'd language does here, just with rust's
+// malloc/free instead of a collector. (we deliberately do NOT flatten to an index
+// arena: that measures array indexing, not allocating/reclaiming distinct nodes.)
+// a leaf is None and counts 0.
+enum Tree {
+    Leaf,
+    Node(Box<Tree>, Box<Tree>),
 }
 
-impl Arena {
-    fn mk(&mut self, d: i64) -> i32 {
-        if d < 1 {
-            self.n.push((-1, -1)); // leaf
-            (self.n.len() - 1) as i32
-        } else {
-            let l = self.mk(d - 1);
-            let r = self.mk(d - 1);
-            self.n.push((l, r));
-            (self.n.len() - 1) as i32
-        }
-    }
-    fn ck(&self, i: i32) -> i64 {
-        let (l, r) = self.n[i as usize];
-        if l < 0 {
-            0
-        } else {
-            1 + self.ck(l) + self.ck(r)
-        }
+fn mk(d: i64) -> Tree {
+    if d < 1 { Tree::Leaf } else { Tree::Node(Box::new(mk(d - 1)), Box::new(mk(d - 1))) }
+}
+
+fn ck(t: &Tree) -> i64 {
+    match t {
+        Tree::Leaf => 0,
+        Tree::Node(l, r) => 1 + ck(l) + ck(r),
     }
 }
 
 fn main() {
-    bench("tree", || {
-        let mut a = Arena {
-            n: Vec::with_capacity(1 << 17),
-        };
-        let root = a.mk(16);
-        a.ck(root)
-    });
+    bench("tree", || ck(&mk(16)));
 }

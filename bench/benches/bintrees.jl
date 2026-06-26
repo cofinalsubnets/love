@@ -6,8 +6,8 @@ include(joinpath(@__DIR__, "..", "lib", "bench.jl"))
 # depth d in min..max step 2 build 2^(max-d+min) short-lived trees and sum their
 # node counts. a leaf is nothing and counts 0.
 struct BNode
-    l
-    r
+    l::Union{BNode,Nothing}    # TYPED fields: untyped (::Any) boxes every node and
+    r::Union{BNode,Nothing}    # defeats inference -- the classic Julia perf trap.
 end
 
 mk(d) = d < 1 ? nothing : BNode(mk(d - 1), mk(d - 1))
