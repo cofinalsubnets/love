@@ -1967,6 +1967,85 @@
  (defn 'uu-app-3-2 '(paths nat (uu-app 3 2) 8) '(idpath 8))
  (defn 'uu-app-tower '(paths nat (uu-app (uu-app 2 3) 4) 262144) '(idpath 262144)))
 
+; === STAGE 1: predicative universes (doc/uu-universes.md) =============================
+; A SOUND checker beside the type-in-type one above. It SHARES the evaluator (vof) and
+; conversion (conv) verbatim -- universes are a TYPING-rule change, not an evaluator one --
+; and adds levels: UU_i : UU_{i+1}, with PI/SIGMA landing at max(dom,cod) (predicative, like
+; the UniMath reference, which only Unset Universe Checking for convenience). So `UU : UU`
+; does NOT hold -- the soundness keystone: Girard's paradox cannot form the fixpoint -- while
+; the exported predicative core (nat arithmetic, path algebra) still checks, at level 0.
+; The universe-POLYMORPHIC tower (weq/hProp/univalence) needs floating levels (Stage 2), so
+; it stays PARKED in the checker above -- exactly the fragment uu2coq already skips. Sorts:
+; UU0 is the symbol `UU` (as in the kernel above), UU_i (i>=1) is ('U i).
+(: (ulvl u) (? (id? u 'UU) 0 (&& (two? u) (id? (cap u) 'U)) (e2 u) -1)   ; universe value -> level (-1 = not a universe)
+   (umk l) (? (= l 0) 'UU `('U l))                                       ; level -> universe value
+   (umax a b) (? (< a b) b a)
+
+   (psym cx x)                                                           ; predicative inf-sym: UU0 : UU1
+   (? (id? x 'UU) '(U 1)
+      (member? x '(nat bool unit empty)) 'UU
+      (id? x 'zero) 'nat (id? x 'tt) 'unit (member? x '(true false)) 'bool
+      (: e (assoc x cx) (? e (e2 e) (: g (peep GLOB x 0) (? g (cap g) (scare 'uu-unbound x))))))
+
+   (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (< l 0) (scare 'uu-not-a-type T) l))
+
+   (cleq d ti t)                                                         ; CUMULATIVE: a UU_i type sits in UU_j for i<=j; else exact conv
+   (? (&& (>= (ulvl ti) 0) (>= (ulvl t) 0)) (<= (ulvl ti) (ulvl t)) (conv d ti t))
+
+   (predpi cx en d t)                                                    ; PI / SIGMA formation -> U_max(i,j)
+   (: i (sortof cx en d (e3 t)) fr `('nv d)
+      j (sortof (link `((e2 t) (vof en (e3 t))) cx) (link `((e2 t) fr) en) (+ d 1) (e4 t))
+      (umk (umax i j)))
+
+   (pinf-spine cx en d f as)
+   (? !(two? as) f
+      (id? (tagv f) 'pi) (: a (cap as) _ (pchk cx en d a (e2 f)) (pinf-spine cx en d (capp (e3 f) (vof en a)) (cup as)))
+      (scare 'uu-not-a-pi as))
+
+   (pinf cx en d t)
+   (? (charm? t) 'nat
+      (nom? t) (psym cx t)
+      (: h (cap t)
+         (? (two? h)        (pinf-spine cx en d (pinf cx en d h) (cup t))
+            (id? h 'UU)     (umk (+ 1 (e2 t)))                           ; (UU i) : UU(i+1)
+            (id? h 'pi)     (predpi cx en d t)
+            (id? h 'total2) (predpi cx en d t)
+            (id? h 'paths)  (: l (sortof cx en d (e2 t)) Av (vof en (e2 t))
+                              _ (pchk cx en d (e3 t) Av) _ (pchk cx en d (e4 t) Av) (umk l))
+            (id? h 'succ)   (: _ (pchk cx en d (e2 t) 'nat) 'nat)
+            (id? h 'the)    (: l (sortof cx en d (e2 t)) Tv (vof en (e2 t)) _ (pchk cx en d (e3 t) Tv) Tv)
+            (id? h 'let)    (: x (e2 t) Av (pinf cx en d (e3 t)) va (vof en (e3 t)) (pinf (link `(x Av) cx) (link `(x va) en) d (e4 t)))
+            (id? h 'idpath) (: Av (pinf cx en d (e2 t)) v (vof en (e2 t)) `('paths Av v v))
+            (pinf-spine cx en d (pinf cx en d h) (cup t)))))
+
+   (pchk cx en d t T)
+   (? (&& (two? t) (id? (cap t) 'lam))
+      (? (id? (tagv T) 'pi)
+         (: x (e2 t) fr `('nv d) (pchk (link `(x (e2 T)) cx) (link `(x fr) en) (+ d 1) (e3 t) (capp (e3 T) fr)))
+         (scare 'uu-lam-needs-pi t))
+      (&& (two? t) (id? (cap t) 'idpath))
+      (? (id? (tagv T) 'paths)
+         (: _ (pchk cx en d (e2 t) (e2 T)) v (vof en (e2 t)) (? (&& (conv d v (e3 T)) (conv d v (e4 T))) 1 (scare 'uu-idpath-mismatch t)))
+         (scare 'uu-idpath-needs-paths t))
+      (&& (two? t) (id? (cap t) 'let))
+      (: x (e2 t) Av (pinf cx en d (e3 t)) va (vof en (e3 t)) (pchk (link `(x Av) cx) (link `(x va) en) d (e4 t) T))
+      (: Ti (pinf cx en d t) (? (cleq d Ti T) 1 (scare 'uu-type-mismatch t))))
+
+   (tval T) (? (id? T 'UU) 'UU (&& (two? T) (id? (cap T) 'UU)) (umk (e2 T)) (vof 0 T))
+   (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (tval T) _ (pchk 0 0 0 t Tv) nm))
+
+; landmarks as PURE BOOLEANS (so a false one scares loudly here, before the negative-test
+; section installs its scare-swallowing help) -- no `rejects`, which needs that help.
+(assert
+ (= 1 (ulvl (pinf 0 0 0 'UU)))                                   ; UU0 : UU1 -- a real hierarchy, NOT UU:UU
+ (= 0 (ulvl (pinf 0 0 0 'nat)))                                  ; nat : UU0
+ (= 1 (sortof 0 0 0 '(pi T UU T)))                               ; PREDICATIVITY: forall(T:UU),T lives ONE LEVEL UP, in UU1
+ (= 0 (sortof 0 0 0 '(pi x nat nat)))                            ; nat->nat stays in UU0
+ (id? 'p-const1 (pdefn 'p-const1 '(pi x nat (paths nat (uu-app 0 x) 1)) '(lam x (idpath 1))))   ; the ported core laws check
+ (id? 'p-ident  (pdefn 'p-ident  '(pi x nat (paths nat (uu-app 1 x) x)) '(lam x (natmultr1 x)))) ; ... predicatively too
+ (! (cleq 0 (pinf 0 0 0 'UU) 'UU))                               ; THE KEYSTONE: UU's type does NOT fit in UU0 -- type-in-type gone
+ (cleq 0 (pinf 0 0 0 'UU) '(U 1)))                               ; ... but UU : UU1 is accepted
+
 ; NATURALNUMBERS round 16 -- the order opens. natgtb by double rect (the
 ; inner induction ignores its IH, so (natgtb (succ n) (succ m)) and
 ; (natgtb n m) are the SAME neutral -- the reference's "note 1" is our NbE's
