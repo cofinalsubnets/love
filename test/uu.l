@@ -58,6 +58,7 @@
                   (vof-sym en t))
       (: h (cap t)
          (? (two? h) (vof-spine en (vof en h) (cup t))
+            (id? h 'UU)     (? (= (e2 t) 0) 'UU `('U (e2 t)))         ; (UU level) -> a sort value (UU0 stays the symbol UU; level may be an expr, Stage 2)
             (id? h 'lam)    `('lam `('clo en (e2 t) (e3 t)))
             (id? h 'pi)     `('pi  (vof en (e3 t)) `('clo en (e2 t) (e4 t)))
             (id? h 'total2) `('sig (vof en (e3 t)) `('clo en (e2 t) (e4 t)))
@@ -1967,32 +1968,44 @@
  (defn 'uu-app-3-2 '(paths nat (uu-app 3 2) 8) '(idpath 8))
  (defn 'uu-app-tower '(paths nat (uu-app (uu-app 2 3) 4) 262144) '(idpath 262144)))
 
-; === STAGE 1: predicative universes (doc/uu-universes.md) =============================
-; A SOUND checker beside the type-in-type one above. It SHARES the evaluator (vof) and
-; conversion (conv) verbatim -- universes are a TYPING-rule change, not an evaluator one --
-; and adds levels: UU_i : UU_{i+1}, with PI/SIGMA landing at max(dom,cod) (predicative, like
-; the UniMath reference, which only Unset Universe Checking for convenience). So `UU : UU`
-; does NOT hold -- the soundness keystone: Girard's paradox cannot form the fixpoint -- while
-; the exported predicative core (nat arithmetic, path algebra) still checks, at level 0.
-; The universe-POLYMORPHIC tower (weq/hProp/univalence) needs floating levels (Stage 2), so
-; it stays PARKED in the checker above -- exactly the fragment uu2coq already skips. Sorts:
-; UU0 is the symbol `UU` (as in the kernel above), UU_i (i>=1) is ('U i).
-(: (ulvl u) (? (id? u 'UU) 0 (&& (two? u) (id? (cap u) 'U)) (e2 u) -1)   ; universe value -> level (-1 = not a universe)
-   (umk l) (? (= l 0) 'UU `('U l))                                       ; level -> universe value
-   (umax a b) (? (< a b) b a)
+; === predicative universes + Stage 2 polymorphism (doc/uu-universes.md) ===============
+; A SOUND checker beside the type-in-type one above, SHARING the evaluator (vof, now aware
+; of (UU level)) and conversion (conv) verbatim -- universes are a TYPING-rule change.
+; Levels are EXPRESSIONS -- a charm i, (lsuc l), or a level VARIABLE (lv x) -- so a
+; definition checks for an ARBITRARY level (Stage 2 universe POLYMORPHISM), not just
+; concrete ones: UU_i : UU_{i+1}, with PI/SIGMA at max(dom,cod) (predicative, like the
+; UniMath reference). So `UU : UU` does NOT hold -- the soundness keystone, holding even
+; over a level VARIABLE (UU_a : UU_a is rejected: lle (a+1) a is false, so Girard's
+; fixpoint can't form). `lle` is a CONSERVATIVE decision for <= over level exprs -- enough
+; for the core + the polymorphic identity; the full constraint solver (whole-corpus
+; implicit inference) is the remaining migration. Sorts: UU0 is the symbol `UU`; UU_l (l a
+; level expr) is ('U l); the surface (UU l) picks the level. The univalence tower still
+; stays PARKED in the type-in-type checker above (it needs that inference) -- the fragment
+; uu2coq already skips.
+(: (lsuc l) (? (charm? l) (+ l 1) `('lsuc l))                          ; smart successor: fold concretes, else build the expr
+   (lle a b)                                                           ; CONSERVATIVE a <= b over level exprs (the universe constraint, decided structurally)
+   (? (= a b) 1
+      (= a 0) 1                                                        ; 0 <= any level
+      (&& (charm? a) (charm? b)) (<= a b)
+      (&& (two? b) (id? (cap b) 'lsuc)) (lle a (e2 b))                 ; a <= b' => a <= (lsuc b')
+      0)
+   (umax a b) (? (&& (charm? a) (charm? b)) (? (< a b) b a)            ; max of level exprs
+                 (lle a b) b  (lle b a) a  `('lmax a b))
+   (ulvl u) (? (id? u 'UU) 0 (&& (two? u) (id? (cap u) 'U)) (e2 u) 'no)   ; universe value -> level expr ('no = not a universe)
+   (umk l) (? (= l 0) 'UU `('U l))                                     ; level expr -> universe value
 
-   (psym cx x)                                                           ; predicative inf-sym: UU0 : UU1
+   (psym cx x)                                                         ; UU0 : UU1
    (? (id? x 'UU) '(U 1)
       (member? x '(nat bool unit empty)) 'UU
       (id? x 'zero) 'nat (id? x 'tt) 'unit (member? x '(true false)) 'bool
       (: e (assoc x cx) (? e (e2 e) (: g (peep GLOB x 0) (? g (cap g) (scare 'uu-unbound x))))))
 
-   (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (< l 0) (scare 'uu-not-a-type T) l))
+   (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (id? l 'no) (scare 'uu-not-a-type T) l))
 
-   (cleq d ti t)                                                         ; CUMULATIVE: a UU_i type sits in UU_j for i<=j; else exact conv
-   (? (&& (>= (ulvl ti) 0) (>= (ulvl t) 0)) (<= (ulvl ti) (ulvl t)) (conv d ti t))
+   (cleq d ti t)                                                       ; CUMULATIVE: UU_i sits in UU_j by lle; else exact conv
+   (? (&& !(id? (ulvl ti) 'no) !(id? (ulvl t) 'no)) (lle (ulvl ti) (ulvl t)) (conv d ti t))
 
-   (predpi cx en d t)                                                    ; PI / SIGMA formation -> U_max(i,j)
+   (predpi cx en d t)                                                  ; PI / SIGMA formation -> U_max(i,j)
    (: i (sortof cx en d (e3 t)) fr `('nv d)
       j (sortof (link `((e2 t) (vof en (e3 t))) cx) (link `((e2 t) fr) en) (+ d 1) (e4 t))
       (umk (umax i j)))
@@ -2007,7 +2020,7 @@
       (nom? t) (psym cx t)
       (: h (cap t)
          (? (two? h)        (pinf-spine cx en d (pinf cx en d h) (cup t))
-            (id? h 'UU)     (umk (+ 1 (e2 t)))                           ; (UU i) : UU(i+1)
+            (id? h 'UU)     (umk (lsuc (e2 t)))                          ; (UU l) : UU(l+1) -- l a level expr
             (id? h 'pi)     (predpi cx en d t)
             (id? h 'total2) (predpi cx en d t)
             (id? h 'paths)  (: l (sortof cx en d (e2 t)) Av (vof en (e2 t))
@@ -2031,8 +2044,7 @@
       (: x (e2 t) Av (pinf cx en d (e3 t)) va (vof en (e3 t)) (pchk (link `(x Av) cx) (link `(x va) en) d (e4 t) T))
       (: Ti (pinf cx en d t) (? (cleq d Ti T) 1 (scare 'uu-type-mismatch t))))
 
-   (tval T) (? (id? T 'UU) 'UU (&& (two? T) (id? (cap T) 'UU)) (umk (e2 T)) (vof 0 T))
-   (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (tval T) _ (pchk 0 0 0 t Tv) nm))
+   (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) _ (pchk 0 0 0 t Tv) nm))   ; vof now normalizes (UU l)
 
 ; landmarks as PURE BOOLEANS (so a false one scares loudly here, before the negative-test
 ; section installs its scare-swallowing help) -- no `rejects`, which needs that help.
@@ -2044,7 +2056,13 @@
  (id? 'p-const1 (pdefn 'p-const1 '(pi x nat (paths nat (uu-app 0 x) 1)) '(lam x (idpath 1))))   ; the ported core laws check
  (id? 'p-ident  (pdefn 'p-ident  '(pi x nat (paths nat (uu-app 1 x) x)) '(lam x (natmultr1 x)))) ; ... predicatively too
  (! (cleq 0 (pinf 0 0 0 'UU) 'UU))                               ; THE KEYSTONE: UU's type does NOT fit in UU0 -- type-in-type gone
- (cleq 0 (pinf 0 0 0 'UU) '(U 1)))                               ; ... but UU : UU1 is accepted
+ (cleq 0 (pinf 0 0 0 'UU) '(U 1))                                ; ... but UU : UU1 is accepted
+ ; --- Stage 2: universe POLYMORPHISM (levels are exprs, incl. a level variable a) ---
+ (id? 'pidfun (pdefn 'pidfun '(pi T (UU (lv a)) (pi x T T)) '(lam T (lam x x))))   ; idfun's body checks for an ARBITRARY level a
+ (= '(lsuc (lv a)) (sortof 0 0 0 '(pi T (UU (lv a)) (pi x T T))))                  ; ... living one level up: forall(T:UU_a),T->T : UU_{a+1}
+ (id? 'idf0 (pdefn 'idf0 '(pi T (UU 0) (pi x T T)) '(lam T (lam x x))))            ; the SAME body instantiates at UU0 ...
+ (id? 'idf1 (pdefn 'idf1 '(pi T (UU 1) (pi x T T)) '(lam T (lam x x))))            ; ... and at UU1 (multi-level use Stage 1 concrete couldn't do)
+ (! (cleq 0 (pinf 0 0 0 '(UU (lv a))) (vof 0 '(UU (lv a))))))                      ; SOUNDNESS over a VARIABLE level: UU_a : UU_a rejected
 
 ; NATURALNUMBERS round 16 -- the order opens. natgtb by double rect (the
 ; inner induction ignores its IH, so (natgtb (succ n) (succ m)) and

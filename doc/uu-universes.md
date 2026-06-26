@@ -136,9 +136,29 @@ Gotchas hit:
 - A silent reader-stop also exits 0 — confirm a section ran by probing a binding it defines AND by
   break-testing an assert (flip it, expect a `;; assert …` scare), not by exit code alone.
 
-Still open for "make predicative the DEFAULT / retire type-in-type": Stage 2 universe polymorphism
-(floating levels + acyclicity) to bring the univalence tower; and the full recursor large-elimination
-rules if the predicative checker is to type the whole corpus.
+## LANDED (Stage 2, 2026-06-26) — universe polymorphism mechanism, gate green
+
+Generalized the Stage 1 checker from concrete levels to level **expressions**: a level is a charm,
+`(lsuc l)`, or a level VARIABLE `(lv x)`. `lle` is a conservative `≤` decision over these; `umax`
+builds/folds maxes; `ulvl`/`umk`/`cleq`/`sortof` carry exprs. The kernel `vof` learned ONE inert case
+— `(UU level) → ('U level)` (UU0 stays the symbol `UU`) — so `(UU l)` normalizes everywhere,
+including under binders, enabling polymorphic *body*-checking (the corpus has no `(UU x)` lists, so
+it's a no-op there; gate confirms).
+
+Verified by assert (break-tested):
+- **Polymorphism:** `pidfun` — idfun's body `(lam T (lam x x))` — checks against
+  `∏(T:UU_{(lv a)}),T→T` for an ARBITRARY level variable `a` (one body, every universe), and
+  `sortof` computes its universe symbolically as `(lsuc (lv a))` = UU_{a+1}.
+- **Multi-level:** the same body also `pdefn`s at `(UU 0)` and `(UU 1)` — the multi-level use Stage 1's
+  concrete (level-0-only) checker could not do.
+- **Soundness over a variable:** `UU_{(lv a)} : UU_{(lv a)}` is rejected (`lle (lsuc (lv a)) (lv a)`
+  is false) — the keystone holds over a floating level, not just concretes.
+
+Still open (the whole-corpus migration, to make predicative the DEFAULT and retire type-in-type):
+**implicit level inference** — solving universe constraints across definitions so the user doesn't
+write `(UU l)` annotations and the univalence tower comes green — which is a real constraint-graph +
+acyclicity solver, plus the full recursor large-elimination rules. `lle` here is conservative (decides
+the core's simple inequalities, not arbitrary max/var constraints); that solver is the remaining lift.
 
 ## Why this is the right first expansion
 It is the one change that alters uu's *kind* — from "a proof format sound only after export" to
