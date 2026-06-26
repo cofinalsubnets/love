@@ -16,7 +16,7 @@
 ; `names`/`pureset` are LIFTED to the top level (out of feels' body) so feel's INLINER (cprop, below)
 ; shares the same effect-free set its purity gates read -- a broad table (arith, comparisons, the c[ad]r
 ; family, type predicates, the transcendentals), not just the dyadic fold ops. pureset is keyed by VALUE.
-(: names (cat `('+ '- '* '/ '% '& '| '< '<= '= '>= '>)
+(: pureset (: names (cat `('+ '- '* '/ '% '& '| '< '<= '= '>= '>)
           '(// << >> ^
             id? gcd modpow abs
             link cap cup caap caup cuap cuup
@@ -25,7 +25,7 @@
             snip string
             re im conj arg gem twin
             sine cosine log power))
-   pureset (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (tablet 0) names))
+   (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (tablet 0) names)))
 (: feels (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
