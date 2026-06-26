@@ -17,6 +17,10 @@ static struct mem {
   uintptr_t _[];
 } *kmem;
 
+// total free RAM linked into kmem, in words -- summed in meminit, used to bound the generational
+// collector (g->budget) so its two growing pools stay within the device's RAM. See kmain.
+static uintptr_t kram_words;
+
 struct cb *kcb;
 
 static struct {
@@ -473,6 +477,7 @@ static bool meminit(void) {
   for (uint32_t i = 0; i < kboot.ram_n; i++) {
     struct mem *m = (struct mem*) (kboot.hhdm + kboot.ram[i].base);
     m->len = kboot.ram[i].len / sizeof(uintptr_t);
+    kram_words += m->len;
     m->next = kmem;
     kmem = m; }
   return true; }
@@ -560,6 +565,12 @@ void kmain(void) {
   if (fbinit() && cbinit()) palette_init();
   net_init();                          // bring up the NIC (no-op if absent)
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
+  // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
+  // kmallocw for a contiguous block bigger than physical RAM -> OOM. An eighth of free RAM leaves ample
+  // headroom for the major's double-buffered resize, the kernel free list, and kmallocw fragmentation.
+  // (The host runs g->budget == 0 / unbounded -- it has virtual memory and a fragmentation-proof malloc.)
+  if (ai_ok(g)) ai_core_of(g)->budget = kram_words / 8;
 #ifdef K_TEST
   // bind the baked corpus to the global `tests`; below it is read form-by-form
   // and run through ev at boot (no console), then qemu is quit.

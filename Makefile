@@ -537,11 +537,13 @@ k_S_o = $(k_S:$(R)/%.S=$(k_odir)/%.o)
 k_asm_o = $(k_asm:$(R)/%.asm=$(k_odir)/%.o)
 k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
 
-# -DAI_NOGEN: the freestanding targets stay on the single-pool gcg collector for now. The generational
-# minor graduated as the host default, but on a constrained device it must be BOUNDED (set g->budget to
-# the available RAM -- the Appel knob) or its two growing pools exhaust kmallocw / blow the gate timeout.
-# Wiring that budget from the limine memmap is the kship port's call; until then the kernel runs gcg.
-kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC -DAI_NOGEN \
+# The kernel runs the GENERATIONAL collector (the host default), BOUNDED by g->budget: kmain sums the
+# limine memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob). Without
+# that bound the nursery's copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive)
+# sizing then asks kmallocw for a contiguous block bigger than the largest physical RAM range -> OOM. Add
+# -DAI_NOGEN here to fall back to the single-pool gcg (the A-B escape hatch), e.g. on a fixed-arena target
+# whose g->alloc can't supply the major pool. See gen_please (ai.c) and the budget wiring (kmain.c).
+kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
 kldflags := -static -nostdlib --gc-sections -T $(R)/port/kship/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \

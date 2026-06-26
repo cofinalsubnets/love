@@ -142,22 +142,29 @@ Departures from the original plan above, worth noting:
    `ai_image_load` are now buffer-based + stdio-free (confirmed: the codec sits OUTSIDE the one
    `#if __STDC_HOSTED__` region, so it compiles into the freestanding kernel), so the kernel (`port/kship/`,
    `kmain.c` — no filesystem) could `objcopy` a dumped image into a C byte array and `ai_image_load(array,
-   len)` at startup instead of eval'ing the baked corpus. **ATTEMPTED 2026-06-25, blocked on knot 1
-   (gen-in-kernel), reverted.** The two knots:
+   len)` at startup instead of eval'ing the baked corpus. **Knot 1 (gen-in-kernel) RESOLVED 2026-06-26;
+   knot 2 (a kernel-loadable image) still open.** The two knots:
 
-   - **Knot 1 — gen-in-kernel (the blocker hit).** The codec relocates into the MAJOR pool, which only the
-     generational collector has; the kernel builds `-DAI_NOGEN` (single-pool gcg, no major pool), so
-     `ai_image_save` can't even run there. Tried building the kernel "normal" (drop `-DAI_NOGEN` → gen) and
-     BOUNDING it via the Appel knob: sum the free RAM in `meminit` (`kram_words`) and set
-     `ai_core_of(g)->budget = kram_words/2` after `ai_ini` (the memmap-driven cap the Makefile comment left
-     as the port's TODO). RESULT: the gen kernel **builds + boots** (limine/archinit/meminit/net_init all
-     run) but **HANGS during the corpus compile** (`ai_evals_` of egg+prel+ev+bao) — qemu silent before the
-     first test dot. So gen needs MORE than the budget to work freestanding: suspect the remembered-set /
-     write-barrier malloc or the `gen_major` major-pool grow path interacting with `kmallocw` (NULL-on-OOM
-     not handled, or the realloc-via-alloc-then-free). This is a STANDALONE prerequisite: get K_TEST green
-     with gen first (add serial traces, find where the compile stalls), THEN the snapshot is tractable.
-     (Reverted Makefile kcflags + the kmain.c budget wiring.) The interactive kernel is already `tco=1`;
-     only K_TEST forces `tco=0` (a separate freestanding-sibcall hang), orthogonal to gen.
+   - **Knot 1 — gen-in-kernel. RESOLVED.** The codec relocates into the MAJOR pool, which only the
+     generational collector has; the kernel used to build `-DAI_NOGEN` (single-pool gcg, no major pool), so
+     `ai_image_save` couldn't run there. The kernel now runs **gen, bounded** (dropped `-DAI_NOGEN`;
+     `meminit` sums the limine memmap into `kram_words`, `kmain` sets `ai_core_of(g)->budget = kram_words/8`
+     after `ai_ini`). **K_TEST green with gen: 2569 tests pass in ~3.8 s** (`make test_kernel`). The earlier
+     "hang" was actually a TRIPLE FAULT: the diagnosis (qemu `-d int,cpu_reset` → #GP at `k_reset`'s `int
+     $0x0`, last live code in `gcp`; a serial GC trace then nailed it) was a heap OVERFLOW, not a malloc
+     deadlock. Two real causes, both masked on the host by glibc's effectively-infinite, fragmentation-proof
+     `malloc`: (a) with `budget=0` the nursery's copy-overhead resizer grew to ~33 MB, so `gen_major`'s
+     worst-case (all-survive) sizing asked `kmallocw` for an ~86 MB CONTIGUOUS block — but free RAM is 10
+     discontiguous memmap ranges, largest ~145 MB, and live pools pin its middle, so the request failed
+     (`kfree` coalesces fine — it just can't span ranges or merge across a live block); (b) on that alloc
+     failure `gen_major` fell back to the existing (smaller) spare half and "hoped it fits" — UNSOUND when
+     the live set exceeds a half, overflowing it → corruption. Fix (ai.c `gen_major`/`gen_please`, all
+     `g->budget`-gated so the host is untouched): cap the major `to_len` by the budget (never below the tight
+     `need`), and make the OOM path SOUND — retry at the tight size, use the spare only when `need <=
+     major_len`, else a clean OOM scare (no overflow). The nursery cap is also tightened to reserve for the
+     major that must hold it: `~(budget - 2*live)/4`, since `2*major + 2*minor <= budget` with `major ~ live
+     + nursery`. Host gate + `make test_kernel` both green. The interactive kernel is already `tco=1`; only
+     K_TEST forces `tco=0` (a separate freestanding-sibcall hang), orthogonal to gen.
    - **Knot 2 — a kernel-LOADABLE image.** Even past knot 1, a host-dumped image won't load in the kernel:
      the arch+anchor stamp rejects a different binary (different lvm_* table order + binary-pointer
      addresses). Options: dump from the KERNEL binary (unexec — boot in qemu, serialize, emit the bytes

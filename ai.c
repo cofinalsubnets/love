@@ -1317,7 +1317,7 @@ static void gen_minor(struct ai *g) {
 // rem set. Then rebuild the weak intern map + run finalizers into the to-space, flip, and reset the
 // (now fully promoted) minor. The core stays put in the main pool, so -- unlike gcg -- there is no
 // core-flop: nil is ZeroPoint (an out-of-pool const), not the core.
-static void gen_major(struct ai *g) {
+static struct ai *gen_major(struct ai *g) {
  word const *p0 = g->major_base, *t0 = g->major_hp;              // from-range 1: major active
  // size the to-space for the WORST CASE: all of major-active AND all of the minor survive (the
  // major promotes both -- the minor can dwarf the major half, so size for both, never just double).
@@ -1329,10 +1329,24 @@ static void gen_major(struct ai *g) {
  uintptr_t step = ai_major0, want = need + (need >> 2) + 16;
  uintptr_t to_len = ((want + step - 1) / step) * step;
  if (to_len < step) to_len = step;
+ uintptr_t need_step = ((need + step - 1) / step) * step;       // the TIGHT size: smallest step-multiple holding `need`
+ if (need_step < step) need_step = step;
+ // BUDGET CAP: keep the major pair within its share of the bound so the whole footprint (2*major +
+ // 2*minor) stays bounded on a constrained device -- but NEVER below the tight `need_step`, or the
+ // to-space can't hold the worst-case promotion. A budget too small for the live set falls through to
+ // the OOM path below. (Unbounded host: g->budget == 0, so this is skipped and the sizing is unchanged.)
+ if (g->budget) {
+  uintptr_t cap = g->budget > 2 * (uintptr_t) g->len ? (g->budget - 2 * (uintptr_t) g->len) / 2 : 0;
+  if (to_len > cap) to_len = cap > need_step ? (cap / step) * step : need_step; }
  word *spare = (g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool;  // the same-size other half
  word *to, *resized = 0;
  if (to_len != g->major_len) {                                 // a different-size pair: alloc it, free the old
-  if ((resized = g->alloc(g, NULL, 2 * to_len * sizeof(word)))) to = resized; else to_len = g->major_len, to = spare;  // OOM -> spare, hope it fits
+  resized = g->alloc(g, NULL, 2 * to_len * sizeof(word));
+  if (!resized && to_len > need_step)                          // the headroom alloc failed: retry at the TIGHT size
+   to_len = need_step, resized = (need_step == g->major_len) ? 0 : g->alloc(g, NULL, 2 * need_step * sizeof(word));
+  if (resized) to = resized;
+  else if (need <= g->major_len) to_len = g->major_len, to = spare;   // alloc failed, but the existing spare half holds the live set
+  else return g->gc_gen = 0, encode(g, ai_status_scare);             // true OOM: compacting would overflow the spare -> clean scare, no corruption
  } else to = spare;
  g->gc_gen = 1;
  g->major_hp = to, g->cp = to;
@@ -1351,7 +1365,7 @@ static void gen_major(struct ai *g) {
  if (resized) g->alloc(g, g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
- g->gc_gen = 0; }
+ return g->gc_gen = 0, g; }
 
 // gen_grow: resize the MINOR pool (the main pool) to len1 -- its own copy/growth, decoupled from the
 // major. Called right after a collection, so the minor heap is EMPTY: only the core + stack move,
@@ -1400,7 +1414,8 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
    || g->since_major > g->major_live0 + 4 * (uintptr_t) g->len;
  word *before = g->major_hp;
  if (major) {
-  gen_major(g), g->n_gc += 1;
+  if (!ai_ok(g = gen_major(g))) return g;     // a true OOM mid-major (compacting would overflow the spare): propagate the scare
+  g->n_gc += 1;
   g->since_major = 0, g->major_live0 = (uintptr_t)(g->major_hp - g->major_base);   // reset the amortization window
  } else gen_minor(g), g->n_gc += 1, g->n_minor += 1;
  uintptr_t copied = major ? (uintptr_t)(g->major_hp - g->major_base) : (uintptr_t)(g->major_hp - before);
@@ -1425,8 +1440,11 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
   arena = len1 >> 1;                                           // shrink ONE step (gentle -- multi-step collapses on a lucky GC)
   g->win_alloc = g->win_copied = 0;
  } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0;   // in band: cap the window so it stays responsive
- if (g->budget) {                                              // Appel cap: nursery <= free budget / 2
-  uintptr_t two_major = 2 * g->major_len, room = g->budget > two_major ? (g->budget - two_major) / 2 : 0;
+ if (g->budget) {                                              // Appel cap, sized so the MAJOR (which must hold the
+  // worst-case promotion = the live tenured set PLUS this whole nursery) also fits the budget. With 2*major +
+  // 2*nursery <= budget and major ~ live + nursery, the nursery gets ~(budget - 2*live)/4 -- reserve for the
+  // major that holds it, or it balloons past what gen_major can allocate (the freestanding OOM that motivated this).
+  uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / 4 : 0;
   if (arena > room) arena = room; }
  if (arena < (uintptr_t) ai_minor0) arena = ai_minor0;         // floor
  if (arena < req) arena = req;                                 // hard floor: hold the pending allocation
@@ -5010,7 +5028,7 @@ static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta)
 void *ai_image_save(struct ai *g, uintptr_t *outlen) {
  if (!g->major_pool) return NULL;                        // gen host only (the major holds the compacted live half)
  if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty AI stack at the dump point
- gen_major(g);                                           // COMPACT: live half -> [major_base, major_hp)
+ if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word), hb = bytes, total = sizeof(struct image_hdr) + bytes;
  char *buf = g->alloc(g, NULL, total);
