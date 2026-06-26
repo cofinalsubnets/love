@@ -830,6 +830,14 @@
     (? (! (two? form0)) form0
        (! (id? (cap form0) ':)) form0
        (atom? (cup form0)) form0
+       ; DECLINE a BODY-LESS `:` (even # of forms) -- the global-leaking top-level-define form (sat.l, the
+       ; corpus, apps). The lift pipeline rebuilds the `:` and can't faithfully preserve the leak (it
+       ; appends a () body -> the natives go globally UNBOUND -> (() x)=const-1=1, a SILENT miscompile),
+       ; and the group codegen is unverified in that context. Interp is correct; the benches that matter
+       ; (fib/tak/primes) are body-HAVING (they call their fns locally inside the bench `:`) so they still
+       ; glaze. Sound > fast: never hand back a wrong answer. (The real cure is explicit global-binding
+       ; syntax instead of the parity-of-`:` leak convention; until then, decline.)
+       (= 0 (% (tally (cup form0)) 2)) form0
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (fold-consts form0)))))))))   ; inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
           parsed (anat-defs (cup form)) pairs (cap parsed)
           fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
@@ -1066,6 +1074,11 @@
     ; int64-overflowing recursion (pow2) deopts to the interp fallback -> the exact bignum (sound)
     (: rf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 25))
        (&& !(id? (autogroup rf) rf) (= 75025 (ev rf)) (= (base-ev rf) (ev rf))))
+    ; SOUNDNESS REGRESSION: a BODY-LESS group `:` (the global-leaking top-level-define form -- sat.l's
+    ; shape) is DECLINED (returned UNCHANGED), NOT glazed. The lift pipeline can't preserve the leak, so
+    ; glazing it would silently miscompile the leaked globals to const-1 (broke sat.l's cdcl under the
+    ; image). Body-LESS = even # of forms after `:`. (rf above is body-HAVING -> still glazes.)
+    (: bl '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))  (id? (autogroup bl) bl))
     (: rp '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))
        (= (base-ev rp) (ev rp)))                               ; 2^70 overflows int64 in H -> OVF deopt -> bignum
     ; MULTI-ARG recursion: tak (3 args, nested self-calls -- args survive on the machine stack) == interp
