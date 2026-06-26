@@ -151,7 +151,8 @@
 ; -- + is a true measure homomorphism), and the ARRANGEMENT does not matter (a packed complex array
 ; nets like the list of the same values). the COUNT -- how many, not how much -- is `tally`: a string
 ; or cask counts charms, a list its spine, an array its cells, a map its keys, a symbol its spelling,
-; a scalar nothing. tally is what "length" always was; $ never was.
+; a scalar nothing. tally is what "length" always was; $ never was. (net & tally as the value space's
+; two measures, and the monadic-`*`=prod design: doc/measures.md.)
 ; demo:
 !0  !""  !()  !0.0  !~(0 0)   ; nothing -> false
 !-5  !'(-5)  !@(-3 -4)        ; net <= 0 at every rank -> false
