@@ -1994,6 +1994,28 @@
    (ulvl u) (? (id? u 'UU) 0 (&& (two? u) (id? (cap u) 'U)) (e2 u) 'no)   ; universe value -> level expr ('no = not a universe)
    (umk l) (? (= l 0) 'UU `('U l))                                     ; level expr -> universe value
 
+   ; --- the universe CONSTRAINT SOLVER: difference constraints + positive-cycle detection.
+   ;     A level expr parses to (base offset): lparse (lsuc^k atom) = (atom k). A constraint
+   ;     x<=y becomes the edge base(x)->base(y) of weight off(x)-off(y) (so base(y) >= base(x)+w);
+   ;     a POSITIVE cycle (some level >= itself + positive) is UNSATISFIABLE. usat? is
+   ;     Bellman-Ford longest-path: relax |atoms| times, then once more -- if it still moves, a
+   ;     positive cycle exists. COMPLETE where lle is conservative: it catches cross-site cycles
+   ;     (a<=b, b<a) no local check sees. (Whole-corpus IMPLICIT inference -- generalize a def
+   ;     over its level vars + instantiate per use -- is the remaining integration on top.)
+   (lparse l) (? (charm? l) (L 'ground l)
+                 (&& (two? l) (id? (cap l) 'lsuc)) (: p (lparse (e2 l)) (L (cap p) (+ 1 (e2 p))))
+                 (&& (two? l) (id? (cap l) 'lv)) (L l 0)
+                 (L 'ground 0))
+   (atomset prs) (: s (tablet 0) _ (map (\ e (: _ (pin s (cap e) 1) (pin s (e2 e) 1))) prs) (keys s))
+   (usat? cs)                                                          ; cs: list of (L x y), each meaning x <= y
+   (: prs (map (\ c (: x (lparse (cap c)) y (lparse (e2 c)) (L (cap x) (cap y) (- (e2 x) (e2 y))))) cs)
+      atoms (atomset prs) pot (tablet 0) _ (map (\ a (pin pot a 0)) atoms)
+      (relax1 z) (foldl (\ ch e (: uu (peep pot (cap e) 0) w (e3 e) v (peep pot (e2 e) 0)
+                                   (? (> (+ uu w) v) (: _ (pin pot (e2 e) (+ uu w)) 1) ch))) 0 prs)
+      (spin1 k) (? (< k (tally atoms)) (: _ (relax1 ()) (spin1 (+ k 1))) 0)
+      _ (spin1 0)
+      (! (relax1 ())))                                                ; one more relaxation still moves => positive cycle => unsat
+
    (psym cx x)                                                         ; UU0 : UU1
    (? (id? x 'UU) '(U 1)
       (member? x '(nat bool unit empty)) 'UU
@@ -2002,8 +2024,8 @@
 
    (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (id? l 'no) (scare 'uu-not-a-type T) l))
 
-   (cleq d ti t)                                                       ; CUMULATIVE: UU_i sits in UU_j by lle; else exact conv
-   (? (&& !(id? (ulvl ti) 'no) !(id? (ulvl t) 'no)) (lle (ulvl ti) (ulvl t)) (conv d ti t))
+   (cleq d ti t)                                                       ; CUMULATIVE: UU_i sits in UU_j iff i<=j is SATISFIABLE (the solver); else exact conv
+   (? (&& !(id? (ulvl ti) 'no) !(id? (ulvl t) 'no)) (usat? (L (L (ulvl ti) (ulvl t)))) (conv d ti t))
 
    (predpi cx en d t)                                                  ; PI / SIGMA formation -> U_max(i,j)
    (: i (sortof cx en d (e3 t)) fr `('nv d)
@@ -2062,7 +2084,13 @@
  (= '(lsuc (lv a)) (sortof 0 0 0 '(pi T (UU (lv a)) (pi x T T))))                  ; ... living one level up: forall(T:UU_a),T->T : UU_{a+1}
  (id? 'idf0 (pdefn 'idf0 '(pi T (UU 0) (pi x T T)) '(lam T (lam x x))))            ; the SAME body instantiates at UU0 ...
  (id? 'idf1 (pdefn 'idf1 '(pi T (UU 1) (pi x T T)) '(lam T (lam x x))))            ; ... and at UU1 (multi-level use Stage 1 concrete couldn't do)
- (! (cleq 0 (pinf 0 0 0 '(UU (lv a))) (vof 0 '(UU (lv a))))))                      ; SOUNDNESS over a VARIABLE level: UU_a : UU_a rejected
+ (! (cleq 0 (pinf 0 0 0 '(UU (lv a))) (vof 0 '(UU (lv a)))))                       ; SOUNDNESS over a VARIABLE level: UU_a : UU_a rejected
+ ; --- the CONSTRAINT SOLVER (usat?): global satisfiability, beyond the conservative lle ---
+ (usat? (L (L '(lv a) '(lv b)) (L '(lv b) '(lv c))))                              ; a<=b<=c : satisfiable
+ (usat? (L (L '(lv a) '(lv b)) (L '(lv b) '(lv a))))                              ; a<=b, b<=a : SAT (forces a=b)
+ (! (usat? (L (L '(lsuc (lv a)) '(lv a)))))                                       ; a+1<=a : UNSAT (a<a)
+ (! (usat? (L (L '(lv a) '(lv b)) (L '(lsuc (lv b)) '(lv a)))))                   ; a<=b, b+1<=a : UNSAT -- a CROSS-SITE cycle no local check sees
+ (! (usat? (L (L 1 0)))))                                                         ; 1<=0 : UNSAT (the keystone constraint, concretely)
 
 ; NATURALNUMBERS round 16 -- the order opens. natgtb by double rect (the
 ; inner induction ignores its IH, so (natgtb (succ n) (succ m)) and

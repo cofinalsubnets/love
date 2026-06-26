@@ -154,11 +154,27 @@ Verified by assert (break-tested):
 - **Soundness over a variable:** `UU_{(lv a)} : UU_{(lv a)}` is rejected (`lle (lsuc (lv a)) (lv a)`
   is false) — the keystone holds over a floating level, not just concretes.
 
+## LANDED (the constraint solver, 2026-06-26) — gate green
+
+`usat?` — the universe constraint solver — replaces the conservative `lle` inside `cleq`. A level
+expr parses to `(base offset)` (`lparse`: `lsuc^k(atom) = (atom k)`); a constraint `x ≤ y` becomes the
+difference edge `base(x) → base(y)` of weight `off(x) − off(y)` (so `base(y) ≥ base(x) + w`); a
+POSITIVE cycle (some level `≥` itself + positive) is unsatisfiable. `usat?` is Bellman-Ford
+longest-path: relax `|atoms|` times, then once more — if it still moves, a positive cycle exists.
+
+This is COMPLETE where `lle` was conservative — verified by assert (break-tested):
+- satisfiable: `[a≤b, b≤c]`; `[a≤b, b≤a]` (forces `a=b`).
+- unsatisfiable: `[a+1≤a]` (`a<a`); **`[a≤b, b+1≤a]` — a CROSS-SITE cycle no local/per-constraint
+  check sees**; `[1≤0]` (the keystone concretely).
+`cleq` now decides cumulativity as "the constraint `i≤j` is satisfiable," so the checker's universe
+reasoning goes through the real solver; all prior Stage 1/2 asserts still pass through it.
+
 Still open (the whole-corpus migration, to make predicative the DEFAULT and retire type-in-type):
-**implicit level inference** — solving universe constraints across definitions so the user doesn't
-write `(UU l)` annotations and the univalence tower comes green — which is a real constraint-graph +
-acyclicity solver, plus the full recursor large-elimination rules. `lle` here is conservative (decides
-the core's simple inequalities, not arbitrary max/var constraints); that solver is the remaining lift.
+**wiring the solver into a global, accumulating check** — generalize each def over its level vars +
+the constraints it generates, instantiate fresh per use, and verify the WHOLE accumulated set with
+`usat?` — so the user writes bare `UU` (no `(UU l)` annotations) and the univalence tower comes green.
+`usat?` is the engine that integration needs; the integration itself (generalize/instantiate across
+all 250 defns) + the full recursor large-elimination rules are the remaining lift.
 
 ## Why this is the right first expansion
 It is the one change that alters uu's *kind* — from "a proof format sound only after export" to
