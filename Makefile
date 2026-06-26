@@ -17,6 +17,11 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # test_ai0 then races ahead of the ai0 link ("out/host/ai0: No such file").
 ai0 = out/host/ai0
 
+# every ai run UNDER make boots deterministically: the test gate must exercise the freshly-built egg
+# (not a stale baked image), and the bench controls glazed-vs-interp itself. So suppress the startup
+# image auto-load for all recipes. The USER's binary (run outside make) still auto-loads <exe>.img.
+export AI_NO_IMAGE := 1
+
 .PHONY: all install uninstall clean distclean hooks
 .PHONY: host kernel wasm ai0
 .PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_gc test_hostnif test_glaze test_sat test_asm test_extract
@@ -377,8 +382,17 @@ host_ldflags = -static
 # makes it fatal. Silence that one (harmless; gcc ignores unknown -Wno-*).
 ai_cflags += -Wno-unused-command-line-argument
 endif
-host: $(ho)/ai $(if $(STATIC),,$(ho)/libai.so) $(ho)/ai.1
+host: $(ho)/ai $(ho)/ai.img $(if $(STATIC),,$(ho)/libai.so) $(ho)/ai.1
 ai0: $(ai0)
+# the default BOOT IMAGE: dump the post-warm heap (the glaze baked in, x86-64) next to the binary as
+# <exe>.img, so a plain `ai` auto-loads it at ~4 ms cold start (glazed by default) instead of eval'ing
+# the egg (~230 ms). Rebuilt whenever the binary changes (which itself deps on ai.c/prel/ev/glaze).
+# image-load is an OPTIMIZATION -- main.c falls back to a normal egg boot if the image is missing or
+# stale, so an out-of-date .img is never fatal, only slower. (~1.5 s to dump: the glaze self-tests
+# native-compile; that cost is paid once per ai rebuild, not per run.)
+$(ho)/ai.img: $(ho)/ai
+	@echo IMG	$@
+	@$(ho)/ai --dump-image $@
 
 # cook/Cookfile: this Makefile transpiled into a resolved cook recipe by
 # `cook --emit` (cook/cook.l). cook reads this Makefile directly too, but the
@@ -840,6 +854,7 @@ d = $(DESTDIR)/$(PREFIX)
 v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/ai \
+  $d/bin/ai.img \
   $d/bin/cook \
   $d/bin/ain \
   $d/bin/bao \
@@ -878,6 +893,12 @@ $d/lib/libai.so: out/host/libai.so
 $d/bin/ai: out/host/ai
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
+# the boot image, installed beside the binary so the installed `ai` auto-loads it. The binary is
+# installed STRIPPED, but strip removes only the symbol table -- .text/.rodata vaddrs are unchanged,
+# so the image's lvm-table indices and base-delta still resolve. (A bad match just falls back to boot.)
+$d/bin/ai.img: out/host/ai.img
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
 
 # cook: the build tool (cook/cook.l) installed as an executable `cook` on PATH.
 # Its `#!/usr/bin/env -S ai -l` shebang re-execs the installed `ai` to load it,

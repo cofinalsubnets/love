@@ -499,6 +499,15 @@ int main(int argc, char const **argv) {
   if (argc >= 3 && !strcmp(argv[1], "--dump-image")) { image_dump_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
   else if (argc >= 3 && !strcmp(argv[1], "--load-image")) { image_load_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
   if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
+  // AUTO-LOAD: with no image flag, try the default image baked next to the binary (<exe>.img), so a
+  // plain `ai` is glazed-by-default at ~4 ms cold start instead of the ~230 ms egg eval. Opt out with
+  // AI_NO_IMAGE (the bench does, to control glazed-vs-interp itself). Any problem -- missing, stale,
+  // truncated -- makes image_load return NULL, so we fall through to the normal egg boot. Never wrong.
+  static char autopath[4096];
+  if (!g && !image_dump_path && !getenv("AI_NO_IMAGE")) {
+    ssize_t n = readlink("/proc/self/exe", autopath, sizeof autopath - 5);
+    if (n > 0) { memcpy(autopath + n, ".img", 5);                            // ".img\0" past the exe path
+      if ((g = image_load(autopath))) image_load_path = autopath; } }
 #endif
   if (!g) g = ai_ini();
   bool argp = argc > 1;

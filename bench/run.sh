@@ -45,7 +45,7 @@ case $lang in
   # (peep h k) compiled to a native open-addressed map probe via the map lane, the allocating ins/bump staying
   # interpreted), the ai analogue of LuaJIT auto-JITting Lua. The glaze self-tests print to stderr
   # (discarded here); other benches stay interpreted (the glaze matches only these).
-  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = mandelbrot ] || [ "$b" = fib ] || [ "$b" = tak ] || [ "$b" = primes ] || [ "$b" = strscan ] || [ "$b" = strcat ] || [ "$b" = deforest ] || [ "$b" = polysum ] || [ "$b" = closure ] || [ "$b" = tree ] || [ "$b" = bintrees ] || [ "$b" = hash ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l; [ "$b" = cdcl ] && printf "%s " ../sat/sat.l) bench.l benches/$b.l | ../out/host/ai' ;;
+  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $({ [ "$b" = mandelbrot ] || [ "$b" = fib ] || [ "$b" = tak ] || [ "$b" = primes ] || [ "$b" = strscan ] || [ "$b" = strcat ] || [ "$b" = deforest ] || [ "$b" = polysum ] || [ "$b" = closure ] || [ "$b" = tree ] || [ "$b" = bintrees ] || [ "$b" = hash ]; } && [ "$(uname -m)" = x86_64 ] && printf "%s %s " ../ai/glaze/emit.l ../ai/glaze/auto.l; [ "$b" = cdcl ] && printf "%s " ../sat/sat.l) bench.l benches/$b.l | AI_NO_IMAGE=1 ../out/host/ai' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   sbcl)         ext=lisp; bin=sbcl;       cmd='sbcl --script benches/$b.lisp' ;;
   elixir)       ext=exs;  bin=elixir;     cmd='elixir benches/$b.exs' ;;
