@@ -2,15 +2,18 @@ include!("../lib/bench.rs");
 
 use std::hint::black_box;
 
-// sum of squares of the odd numbers in [0, N) -- a map/filter/fold pipeline.
-// checksum = 4891344686 (< 2^53). The iterator chain would otherwise be
-// scalar-evolved to a closed form, so the source index is fed through black_box.
+// sum of (k^2 mod p) of the odd numbers in [0, N) -- a map/filter/fold pipeline.
+// checksum = 4891344686 (< 2^53). APPLES-TO-APPLES with ai's glaze: only the INPUT n is
+// opaque (black_box, no compile-time fold / rep-doubling hang); the `% p` makes the body
+// non-polynomial so NEITHER compiler can close it -- both run an honest O(n) FUSED loop
+// (ai deforests to one native counted loop; rustc -O fuses + vectorizes the chain), which
+// is exactly what this bench measures: the abstraction cost of the functional pipeline.
 const N: i64 = 20000;
 
 fn main() {
     bench("deforest", || {
-        (0..N)
-            .map(black_box)
+        let n = black_box(N);
+        (0..n)
             .filter(|x| x % 2 == 1)
             .map(|x| (x * x) % 1000003)
             .fold(0i64, |a, b| a + b)
