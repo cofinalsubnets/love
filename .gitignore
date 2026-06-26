@@ -6,6 +6,9 @@ vgcore.*
 # rocq/uugen.v: generated from test/uu.l every run (test_uugen); not a source
 rocq/gen.v
 rocq/uugen.v
+# lean/uugen.lean: generated from test/uu.l every run (test_uulean); not a source
+lean/uugen.lean
+lean/*.olean
 *.vo
 *.vok
 *.vos

@@ -36,7 +36,7 @@ export AI_NO_IMAGE := 1
 # so the outer (serial) make doesn't build them before the parallel sub-make.
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_ai0 test_proof test_gen test_uugen test_gc test_tools test_glaze
+test_phases = test_host test_ai0 test_proof test_gen test_uugen test_uulean test_gc test_tools test_glaze
 test:
 	@$(MAKE) --no-print-directory -j$(JOBS) $(osync) $(test_phases)
 # test_tools (vmret + cook + tele + xor) is in the fast `test` so an app breaks the
@@ -154,6 +154,7 @@ test_tools: host
 # source; clean them on success. No-op when coqc is missing, so the gate stays
 # green without a Rocq install (like test_kernel / test_wasm).
 COQC ?= $(shell command -v coqc 2>/dev/null)
+LEAN ?= $(shell command -v lean 2>/dev/null)
 ifeq ($(COQC),)
 test_proof:
 	@echo "test_proof: skipped (needs rocq/coqc)"
@@ -212,6 +213,23 @@ test_uugen: host
 	@echo TEST rocq/uugen.v "(coqc)"
 	@$(COQC) -q rocq/uugen.v
 	@rm -f rocq/uugen.vo rocq/uugen.vok rocq/uugen.vos rocq/uugen.glob rocq/.uugen.aux
+endif
+
+# The LEAN leg of the proof bridge (cf. test_uugen, the Rocq leg): tools/uu2lean.l emits
+# the SAME uu corpus to Lean 4, which re-checks it -- a SECOND independent kernel, so each
+# law is agreed by two unrelated implementations (the de Bruijn criterion, diversified).
+# Drift-proof: regenerated every run. Needs the host binary AND lean.
+ifeq ($(LEAN),)
+test_uulean:
+	@echo "test_uulean: skipped (needs lean)"
+else
+test_uulean: host
+	@mkdir -p lean
+	@echo AI	lean/uugen.lean "(tools/uu2lean.l on $m)"
+	@$m tools/uu2lean.l > lean/uugen.lean
+	@echo TEST lean/uugen.lean "(lean)"
+	@$(LEAN) lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
+	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
 endif
 
 # test_extract: the differential oracle with a ROCQ-EXTRACTED reference. coqc
