@@ -288,6 +288,14 @@ struct ai
  *ai_evals_(struct ai*, const char*),
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t);
 
+// the heap-image snapshot CODEC (ai.c, stdio-free): save compacts g and serializes
+// {header, blob} into a fresh g->alloc'd buffer (free it with g->alloc(g, buf, 0)); load
+// reconstructs a fresh g from such a buffer, or NULL on any mismatch (the caller boots
+// normally). The host wraps these with file I/O (host/image.c). Buffer-based so a
+// freestanding frontend can load a baked image with no filesystem.
+void *ai_image_save(struct ai*, uintptr_t *outlen);
+struct ai *ai_image_load(void const *buf, uintptr_t len);
+
 // the terminal scare face: print ";; a b\n" (show forms) to the err port from
 // the stashed condition data and answer 1; the bare scare (nil nil -- oom,
 // which has no data) answers 0 so the frontend can report it raw.

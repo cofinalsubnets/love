@@ -64,7 +64,6 @@ typedef int64_t ai_sdlimb;
 
 #if __STDC_HOSTED__
 #include <math.h>
-#include <stdio.h>   /* image-check spike: debug diagnostics (host-only) */
 #else
 ai_flo_t ai_sin(ai_flo_t), ai_cos(ai_flo_t),
         ai_atan2(ai_flo_t, ai_flo_t), ai_sqrt(ai_flo_t), ai_exp(ai_flo_t),
@@ -822,9 +821,7 @@ lvm_t lvm_fault;
  _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))\
  _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load))\
- _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp))\
- _(nif_image_check, "image-check", s1(lvm_image_check))\
- _(nif_image_rt, "image-rt", s1(lvm_image_rt)) NIF_FAULT(_)
+ _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp)) NIF_FAULT(_)
 #define native_implemented_function(n, _, d) static union u const n[] = d;
 #define insts(_) _(lvm_unc) _(lvm_index) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
@@ -851,8 +848,6 @@ struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
  ai_core_of(g)->sp++;
  return g; }
 
-lvm_t lvm_image_check;   /* image-check spike (defined near end, after all lvm_* sentinels) */
-lvm_t lvm_image_rt;      /* image-rt: Phase-1 serialize/deserialize round-trip */
 nifs(native_implemented_function);
 
 static lvm(_lvm_yield_c) { return Pack(g), g; }
@@ -4898,12 +4893,12 @@ lvm(lvm_bcopy) {
 bool ai_strp(ai_word x) { return strp(x); }
 
 // ============================================================================
-// image-check -- Phase-0 of the heap-image snapshot spike (doc/snapshot.md).
-// Linearly walk the live heap region(s) and verify every object's `ap` (word0)
-// is covered by the lvm_* relocation table -- the one genuinely-new risk (the
-// copying GC already round-trips heap pointers; it never maps C-function ptrs
-// through a symbolic table). ADDITIVE, read-only debug nif; no behavior change.
-// `(image-check ())` -> the object count; prints uncovered aps to stderr.
+// the heap-image snapshot (doc/snapshot.md): serialize the compacted live heap to a
+// flat blob with every pointer-bearing word range-encoded in place, so a fresh process
+// reconstructs the runtime by re-walking -- skipping the ~230 ms egg eval. The core
+// owns the BUFFER codec (ai_image_save/ai_image_load, no stdio); the host wraps it with
+// file I/O. The one genuinely-new risk (the copying GC round-trips heap pointers but
+// never maps C-function pointers) is the lvm_* symbolic table below.
 // ============================================================================
 // lvm_* that appear as an object's ap but are NOT in def1[] (data sentinels +
 // thread aps/dispatchers). def1[] (via ai_nif_name) covers the nifs + insts.
@@ -4911,18 +4906,6 @@ static lvm_t *const image_extra_aps[] = {
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox,  // data sentinels
  lvm_map_lookup, lvm_map_data, lvm_buf, lvm_coin, lvm_toasted, lvm_port_io,            // thread aps
  lvm_cur, lvm_help, lvm_ret0, lvm_ap, lvm_ret };                                       // dispatchers
-static char const *const image_extra_names[] = {
- "lvm_chain","lvm_vec","lvm_sym","lvm_nom","lvm_str","lvm_big","lvm_flo","lvm_wide","lvm_cbox",
- "lvm_map_lookup","lvm_map_data","lvm_buf","lvm_coin","lvm_toasted","lvm_port_io",
- "lvm_cur","lvm_help","lvm_ret0","lvm_ap","lvm_ret" };
-static char const *image_ap_name(intptr_t ap) {
- for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
-  if ((intptr_t) image_extra_aps[i] == ap) return image_extra_names[i];
- char const *n = ai_nif_name(ap); return n ? n : "?"; }
-static bool image_ap_covered(intptr_t ap) {
- for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
-  if ((intptr_t) image_extra_aps[i] == ap) return true;
- return ai_nif_name(ap) != 0; }
 // size (words) of the object at p, using the SAME per-kind logic as the GC:
 // data kinds by their copy_* sizes; threads via the production terminator scan
 // (ttag, which picks the right pool bounds -- the hand-rolled [lo,hi) scan drifted).
@@ -4939,61 +4922,6 @@ static uintptr_t image_objsize(struct ai *g, union u *p) {
   default:     return b2w(ai_vec_bytes((struct ai_vec*) p)); }   // KVec
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
  return (uintptr_t)(term - (word*) p) + 1; }
-// walk [lo,hi) object by object; tally objects + real coverage gaps + drift.
-// drift = landing on a fixnum word (odd ap) -> a preceding object was mis-sized;
-// gap = an even, pointer-like ap NOT in the lvm_* table (the real risk).
-static uintptr_t image_walk(struct ai *g, word *lo, word *hi, uintptr_t *gap, uintptr_t *drift) {
- uintptr_t n = 0;
- union u *prev = 0; uintptr_t prevsz = 0;
- for (union u *p = (union u*) lo; (word*) p < hi; n++) {
-  intptr_t ap = (intptr_t) p->ap;
-  if (oddp(ap)) {                                        // a fixnum where an ap should be -> sizing drift
-   (*drift)++;
-#if __STDC_HOSTED__
-   if (*drift <= 12) fprintf(stderr, "image-check: DRIFT obj#%lu (ap=%lx); culprit prev=%s ap=%p sz=%lu in_data=%d\n",
-     (unsigned long) n, (unsigned long) ap, prev?image_ap_name((intptr_t)prev->ap):"-", (void*)(prev?(intptr_t)prev->ap:0), (unsigned long) prevsz, (int)(prev?in_data(prev->ap):0));
-   if (*drift == 1 && prev) for (int k = 0; k < 14; k++) {
-     intptr_t w = ((word*) prev)[k];
-     fprintf(stderr, "   prev w[%d] = %lx  (%s)\n", k, (unsigned long) w,
-       oddp(w) ? "fixnum" : in_data((void*) w) ? "data-sentinel" : image_ap_name(w)[0]=='?' ? "heap-ptr/other" : image_ap_name(w)); }
-#endif
-  } else if (!image_ap_covered(ap)) {                   // even, pointer-like, but unknown -> a REAL table gap
-   (*gap)++;
-#if __STDC_HOSTED__
-   if (*gap <= 20) fprintf(stderr, "image-check: GAP uncovered ap %p obj#%lu in_data=%d w1=%lx\n",
-     (void*) ap, (unsigned long) n, (int) in_data((void*) ap), (unsigned long) ((word*) p)[1]);
-#endif
-  }
-  uintptr_t sz = image_objsize(g, p);
-  if (!sz) {
-#if __STDC_HOSTED__
-   fprintf(stderr, "image-check: ZERO-SIZE at obj#%lu ap %p -- aborting walk\n", (unsigned long) n, (void*) ap);
-#endif
-   break; }
-  prev = p, prevsz = sz;
-  p = (union u*) ((word*) p + sz); }
- return n; }
-lvm(lvm_image_check) {
- uintptr_t gap = 0, drift = 0;
- uintptr_t n = image_walk(g, (word*) g->end, g->hp, &gap, &drift);
- if (g->major_pool && g->major_hp > g->major_base)
-  n += image_walk(g, g->major_base, g->major_hp, &gap, &drift);
-#if __STDC_HOSTED__
- fprintf(stderr, "image-check: %lu objects, %lu REAL gaps (uncovered lvm_*), %lu drift (sizing)\n",
-   (unsigned long) n, (unsigned long) gap, (unsigned long) drift);
-#endif
- return Sp[0] = putcharm((intptr_t) gap), Ip++, Continue(); }   // -> the GO/NO-GO number: real table gaps
-
-// ============================================================================
-// image-rt -- Phase 1 of the heap-image snapshot (doc/snapshot.md): serialize the
-// COMPACTED live heap to a blob, deserialize into a FRESH region, and verify the
-// round-trip -- the REAL relocation (internal pointers <-> base-relative offsets)
-// + lvm_* re-resolution (C-pointers <-> a symbolic table index), over the whole
-// live heap. Compact-first (a MAJOR GC, the spike's lesson) so [major_base,major_hp)
-// is contiguous + soundly linear-walkable. ADDITIVE debug nif; runs only when
-// called; gen host only (the major holds the compacted live half). `(image-rt ())`
-// -> 0 on a clean round-trip, else a >0 fault count (or -1 non-gen / -2 OOM).
-// ============================================================================
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, then def1 E..
 static intptr_t image_ap_index(intptr_t ap) {
  for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
@@ -5011,87 +4939,29 @@ static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
  return -1; }
-// reloc tables (WORD offsets into the blob): heap pointers (relocate by base delta), lvm_* aps and
-// out-of-pool immortals (re-resolve via index). raw words (doubles/limbs/bytes/lengths/serials) pass.
-struct image_rel { uintptr_t *hwo, nh, *lwo, *lix, nl, *iwo, *iix, ni, *bwo, nb; };
-static void image_rec(struct image_rel *R, uintptr_t wo, intptr_t val, intptr_t lo, intptr_t hi) {
- if (oddp(val)) return;                                   // fixnum
- intptr_t idx = image_ap_index(val);
- if (idx >= 0) { R->lwo[R->nl] = wo, R->lix[R->nl] = (uintptr_t) idx, R->nl++; return; }   // lvm_* ap
- if (val >= lo && val < hi) { R->hwo[R->nh++] = wo; return; }   // in-pool heap pointer (terminator head|2 rides here)
- if (R->iwo) { intptr_t ii = image_imm_index((word) val);       // out-of-pool immortal -> a re-resolvable index
-   if (ii >= 0) { R->iwo[R->ni] = wo, R->iix[R->ni] = (uintptr_t) ii, R->ni++; return; } }
- if (R->bwo) R->bwo[R->nb++] = wo;   // out-of-pool BINARY pointer (host nif / .rodata) -> base-delta on load (cross-process); in-process (bwo NULL): left absolute
-}
-// walk [base,hp) recording every pointer-bearing word (per-kind, mirroring evac_*); -> object count.
-static uintptr_t image_ser_walk(struct ai *g, word *base, word *hp, struct image_rel *R) {
- intptr_t lo = (intptr_t) base, hi = (intptr_t) hp;
- uintptr_t n = 0;
- for (union u *p = (union u*) base; (word*) p < hp; n++) {
-  uintptr_t off = (uintptr_t)((word*) p - base), sz = image_objsize(g, p);
-  image_rec(R, off, (intptr_t) p->ap, lo, hi);            // word0: ap (always lvm_*)
-  if (in_data(p->ap)) switch (ai_typ(p)) {
-   case KChain: image_rec(R, off + 1, ((struct ai_chain*) p)->a, lo, hi);
-                image_rec(R, off + 2, ((struct ai_chain*) p)->b, lo, hi); break;
-   case KNom:   image_rec(R, off + 1, (intptr_t) nom(p)->name, lo, hi); break;
-   case KVec:   if (vec(p)->type == ai_O) {
-                 word *e = (word*) vec_data(vec(p)); uintptr_t ne = vec_nelem(vec(p)), eo = (uintptr_t)(e - (word*) p);
-                 for (uintptr_t i = 0; i < ne; i++) image_rec(R, off + eo + i, e[i], lo, hi); }
-                break;
-   default: break;                                        // KMint/KStr/KBig/KFlo/KWide/KCplx: flat leaves
-  } else for (uintptr_t i = 1; i < sz; i++)               // thread: every interior word + the terminator
-   image_rec(R, off + i, ((word*) p)[i], lo, hi);
-  p = (union u*) ((word*) p + sz);
- }
- return n; }
-lvm(lvm_image_rt) {
- Pack(g);
- if (!g->major_pool) { Unpack(g); return Sp[0] = putcharm(-1), Ip++, Continue(); }   // gen host only
- gen_major(g);                                            // COMPACT: live set -> [major_base, major_hp) contiguous
- word *base = g->major_base, *hp = g->major_hp;
- uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
- uintptr_t bookoff = (uintptr_t)((word*) cell(g->book) - base);
- struct image_rel R = { g->alloc(g, NULL, bytes), 0, g->alloc(g, NULL, bytes), g->alloc(g, NULL, bytes), 0, NULL, NULL, 0, NULL, 0 };   // in-process: no immortal/binary tables (left absolute)
- word *blob = g->alloc(g, NULL, bytes), *nu = g->alloc(g, NULL, bytes);
- intptr_t status;
- if (!R.hwo || !R.lwo || !R.lix || !blob || !nu) status = -2;
- else {
-  uintptr_t nobj = image_ser_walk(g, base, hp, &R);
-  memcpy(blob, base, bytes);                                                   // SERIALIZE
-  for (uintptr_t i = 0; i < R.nh; i++) blob[R.hwo[i]] -= (intptr_t) base;       //  heap ptr -> base-relative offset
-  for (uintptr_t i = 0; i < R.nl; i++) blob[R.lwo[i]] = (intptr_t) R.lix[i];    //  ap -> table index
-  memcpy(nu, blob, bytes);                                                      // DESERIALIZE into a fresh region
-  for (uintptr_t i = 0; i < R.nh; i++) nu[R.hwo[i]] += (intptr_t) nu;           //  offset -> newbase + offset
-  for (uintptr_t i = 0; i < R.nl; i++) nu[R.lwo[i]] = image_ap_resolve(R.lix[i]);//  index -> live lvm_*
-  uintptr_t bad = 0;                                                            // VERIFY: faithful relocation
-  for (uintptr_t i = 0; i < R.nh; i++) { uintptr_t wo = R.hwo[i];
-   intptr_t oo = base[wo] - (intptr_t) base, no = nu[wo] - (intptr_t) nu;       //  offset preserved + in-range?
-   if (oo != no || no < 0 || (uintptr_t) no >= bytes) bad++; }
-  for (uintptr_t i = 0; i < R.nl; i++)                                          //  ap re-resolves (in-process: identity) to a real lvm_*
-   if (nu[R.lwo[i]] != base[R.lwo[i]] || !image_ap_covered(nu[R.lwo[i]])) bad++;
-  if ((intptr_t) ((union u*)((word*) nu + bookoff))->ap != (intptr_t) lvm_map_lookup) bad++;   // the relocated book is a map
-#if __STDC_HOSTED__
-  fprintf(stderr, "image-rt: %lu objects, %lu words (%lu KB), %lu heap-ptrs, %lu aps -> %lu BAD\n",
-    (unsigned long) nobj, (unsigned long) nw, (unsigned long)(bytes / 1024),
-    (unsigned long) R.nh, (unsigned long) R.nl, (unsigned long) bad);
+// ============================================================================
+// ai_image_save / ai_image_load -- the BUFFER codec (no stdio: the host wraps these
+// with file I/O). save compacts g and serializes {header, blob} into a g->alloc'd
+// buffer; load validates the header, reconstructs a fresh g, and decodes the blob in
+// place. A mismatched/bad buffer -> NULL, so the caller boots normally -- never wrong.
+// ============================================================================
+#define IMAGE_MAGIC 0x31304f4e53494117ULL   /* bump if the wire format changes */
+#if defined(__x86_64__)
+#define IMAGE_ARCH 1
+#elif defined(__aarch64__)
+#define IMAGE_ARCH 2
+#else
+#define IMAGE_ARCH 0
 #endif
-  status = (intptr_t) bad;
- }
- g->alloc(g, R.hwo, 0), g->alloc(g, R.lwo, 0), g->alloc(g, R.lix, 0), g->alloc(g, blob, 0), g->alloc(g, nu, 0);
- Unpack(g);
- return Sp[0] = putcharm(status), Ip++, Continue(); }
-
-#if __STDC_HOSTED__
-// ============================================================================
-// image-dump / image-load -- Phase 2/3: the ON-DISK boot image. Dump the post-warm
-// heap to a file (compact + serialize: pointers->offsets, lvm_*->indices,
-// immortals->indices, the roots encoded); load it in a FRESH process to skip the
-// ~233 ms egg-eval. The image is an OPTIMIZATION: a missing/mismatched/bad file
-// makes image_load return NULL and the caller boots normally -- never wrong.
-// ============================================================================
-#define IMAGE_MAGIC 0x31304f4e53494116ULL   /* bump if the wire format changes */
+// The image is binary-SPECIFIC: its lvm-table indices and binary pointers only mean anything in the
+// exact binary that dumped it. magic+wordsize don't distinguish x86 from aarch64 (same source ->
+// same magic, both wordsize 8), so a cross-arch (or stale-rebuild) load would mis-resolve and crash.
+// Two guards reject a mismatch -> image_load NULL -> normal boot: `arch` (a compile-time arch tag)
+// and `anchor` (the dump-time address of image_dump itself). Under ASLR the WHOLE binary shifts by one
+// base delta, so the refsym (image_immortals) delta must equal the anchor (image_dump) delta -- a
+// different binary lays its symbols out differently, so the two deltas disagree and the load is refused.
 struct image_hdr {
- uint64_t magic, wordsize, nwords, nh, nl, ni, nb, refsym, next_serial;
+ uint64_t magic, wordsize, nwords, arch, anchor, rsv0, rsv1, refsym, next_serial;
  uint64_t root_tag[6], root_val[6];          /* book, symbols, tasks, scare_a, scare_b, x */
 };
 // encode a live value (post-compaction) -> portable (tag,payload):
@@ -5136,62 +5006,61 @@ static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta)
 // dump g to PATH (compacts g -- call at a quiescent point). 0 ok, <0 error. The file is just
 // {header, blob}: the blob is the compacted heap with every pointer-bearing word range-encoded in
 // place (img_encode), so the load re-derives the relocation by re-walking -- NO stored reloc tables.
-int image_dump(struct ai *g, char const *path) {
- if (!g->major_pool) return -1;
- if ((word*) g->sp != topof(g)) return -3;               // expect an empty AI stack at the quiescent dump point
+// serialize g -> a fresh g->alloc'd {header, blob} buffer; *outlen = its byte length; NULL on failure.
+void *ai_image_save(struct ai *g, uintptr_t *outlen) {
+ if (!g->major_pool) return NULL;                        // gen host only (the major holds the compacted live half)
+ if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty AI stack at the dump point
  gen_major(g);                                           // COMPACT: live half -> [major_base, major_hp)
  word *base = g->major_base, *hp = g->major_hp;
- uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word), hb = bytes;
- word *blob = g->alloc(g, NULL, bytes);
- int rc = -2;
- if (blob) {
-  memcpy(blob, base, bytes);
-  int fail = 0;
-  for (union u *p = (union u*) base; (word*) p < hp; ) {  // walk the LIVE heap (ttag works on it), encode into blob
-   uintptr_t off = (uintptr_t)((word*) p - base), sz = image_objsize(g, p);
-   blob[off] = img_encode(((word*) p)[0], base, hp, hb, &fail);                                   // word0: the ap
-   if (in_data(p->ap)) switch (ai_typ(p)) {
-    case KChain: blob[off + 1] = img_encode(((struct ai_chain*) p)->a, base, hp, hb, &fail);
-                 blob[off + 2] = img_encode(((struct ai_chain*) p)->b, base, hp, hb, &fail); break;
-    case KNom:   blob[off + 1] = img_encode((intptr_t) nom(p)->name, base, hp, hb, &fail); break;
-    case KVec:   if (vec(p)->type == ai_O) {
-                  word *e = (word*) vec_data(vec(p)); uintptr_t ne = vec_nelem(vec(p)), eo = (uintptr_t)(e - (word*) p);
-                  for (uintptr_t i = 0; i < ne; i++) blob[off + eo + i] = img_encode(e[i], base, hp, hb, &fail); }
-                 break;
-    default: break; }                                    // KMint/KStr/KBig/KFlo/KWide/KCplx: flat leaves
-   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(((word*) p)[i], base, hp, hb, &fail);   // thread interior + terminator
-   p = (union u*) ((word*) p + sz); }
-  if (fail) rc = -5;                                      // a binary pointer landed in the index range -> refuse (caller boots normally)
-  else {
-   struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, 0, 0, 0, 0, (uint64_t)(word) image_immortals, g->next_serial, {0}, {0} };
-   word roots[6] = { g->book, g->symbols, (word) g->tasks, g->scare_a, g->scare_b, g->x };
-   for (int i = 0; i < 6; i++) image_root_enc(roots[i], base, hp, &H.root_tag[i], &H.root_val[i]);
-   FILE *f = fopen(path, "wb");
-   rc = !f ? -4 : (fwrite(&H, sizeof H, 1, f) == 1 && fwrite(blob, sizeof(word), nw, f) == nw) ? 0 : -4;
-   if (f) fclose(f); } }
- g->alloc(g, blob, 0);
- return rc; }
-// load PATH into a FRESH g; NULL on any problem -> caller boots normally.
-struct ai *image_load(char const *path) {
- FILE *f = fopen(path, "rb"); if (!f) return NULL;
+ uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word), hb = bytes, total = sizeof(struct image_hdr) + bytes;
+ char *buf = g->alloc(g, NULL, total);
+ if (!buf) return NULL;
+ word *blob = (word*) (buf + sizeof(struct image_hdr));  // the blob follows the header in one buffer
+ memcpy(blob, base, bytes);
+ int fail = 0;
+ for (union u *p = (union u*) base; (word*) p < hp; ) {   // walk the LIVE heap (ttag works on it), encode into blob
+  uintptr_t off = (uintptr_t)((word*) p - base), sz = image_objsize(g, p);
+  blob[off] = img_encode(((word*) p)[0], base, hp, hb, &fail);                                    // word0: the ap
+  if (in_data(p->ap)) switch (ai_typ(p)) {
+   case KChain: blob[off + 1] = img_encode(((struct ai_chain*) p)->a, base, hp, hb, &fail);
+                blob[off + 2] = img_encode(((struct ai_chain*) p)->b, base, hp, hb, &fail); break;
+   case KNom:   blob[off + 1] = img_encode((intptr_t) nom(p)->name, base, hp, hb, &fail); break;
+   case KVec:   if (vec(p)->type == ai_O) {
+                 word *e = (word*) vec_data(vec(p)); uintptr_t ne = vec_nelem(vec(p)), eo = (uintptr_t)(e - (word*) p);
+                 for (uintptr_t i = 0; i < ne; i++) blob[off + eo + i] = img_encode(e[i], base, hp, hb, &fail); }
+                break;
+   default: break; }                                     // KMint/KStr/KBig/KFlo/KWide/KCplx: flat leaves
+  else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(((word*) p)[i], base, hp, hb, &fail);   // thread interior + terminator
+  p = (union u*) ((word*) p + sz); }
+ if (fail) { g->alloc(g, buf, 0); return NULL; }         // a binary pointer landed in the index range -> refuse (caller boots normally)
+ struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, (uint64_t)(word) &ai_image_save, 0, 0, (uint64_t)(word) image_immortals, g->next_serial, {0}, {0} };
+ word roots[6] = { g->book, g->symbols, (word) g->tasks, g->scare_a, g->scare_b, g->x };
+ for (int i = 0; i < 6; i++) image_root_enc(roots[i], base, hp, &H.root_tag[i], &H.root_val[i]);
+ memcpy(buf, &H, sizeof H);
+ return *outlen = total, buf; }
+// reconstruct a fresh g from a SAVE buffer ({header, blob} of byte length len); NULL on any problem.
+struct ai *ai_image_load(void const *buf, uintptr_t len) {
  struct image_hdr H;
- if (fread(&H, sizeof H, 1, f) != 1 || H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word)) { fclose(f); return NULL; }
+ if (len < sizeof H) return NULL;
+ memcpy(&H, buf, sizeof H);
+ if (H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word) || H.arch != IMAGE_ARCH) return NULL;
+ uintptr_t nw = H.nwords, bytes = nw * sizeof(word);
+ if (len < sizeof H + bytes) return NULL;                // truncated buffer
  struct ai *g = ai_ini();
- if (!g) { fclose(f); return NULL; }
- uintptr_t nw = H.nwords;
+ if (!g) return NULL;
  if (nw > g->major_len) {                                // grow the major pool to fit the image
   g->alloc(g, g->major_pool, 0);
   g->major_len = nw + (nw >> 2);
   g->major_pool = g->major_base = g->alloc(g, NULL, 2 * g->major_len * sizeof(word));
-  if (!g->major_pool) { fclose(f); return NULL; }
+  if (!g->major_pool) return NULL;
  }
  word *base = g->major_base;
- int ok = base && fread(base, sizeof(word), nw, f) == nw;
- fclose(f);
- if (!ok) return NULL;
+ if (!base) return NULL;
+ memcpy(base, (char const*) buf + sizeof H, bytes);      // the blob -> the major pool
  g->major_hp = base + nw;
- uintptr_t hb = nw * sizeof(word);
+ uintptr_t hb = bytes;
  intptr_t delta = (intptr_t)(word) image_immortals - (intptr_t) H.refsym;        // the ASLR shift dump->load (same binary, one PIE base)
+ if ((intptr_t)((word) &ai_image_save - (intptr_t) H.anchor) != delta) return NULL; // anchor delta != refsym delta -> a DIFFERENT binary (cross-arch/stale) -> normal boot
  for (union u *p = (union u*) base; (word*) p < base + nw; ) {                    // re-walk the blob, decode in place (no tables)
   uintptr_t off = (uintptr_t)((word*) p - base), sz;
   ((word*) p)[0] = img_decode(((word*) p)[0], base, hb, delta);                   // word0 first: the ap (sizing needs it real)
@@ -5220,7 +5089,6 @@ struct ai *image_load(char const *path) {
  // sp stays at ai_ini's topof(g) (empty AI stack); the dispatch re-establishes ip
  g->major_live0 = nw, g->since_major = 0;
  return g; }
-#endif
 
 // ============================================================================
 // sym

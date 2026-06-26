@@ -438,7 +438,7 @@ static char const baolaunch[] = "(bao 0)";   // bao.l is define-only -> the fron
 
 // --dump-image / --load-image: the heap-image snapshot (doc/snapshot.md). Boot from a serialized
 // image instead of eval'ing the egg (~233 ms). Opt-in flags; a normal run is the same code path.
-extern int image_dump(struct ai*, char const*);          // ai.c, __STDC_HOSTED__
+extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around ai.c's codec)
 extern struct ai *image_load(char const*);
 static char const *image_dump_path = NULL;
 // the glaze (native JIT, ai/glaze/{emit,auto}.l), x86-64 only. Baked but evaled ONLY
