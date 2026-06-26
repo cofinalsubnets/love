@@ -192,7 +192,7 @@
    member? (compose any (=))
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) ())
-   (jot x) (? (star? x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0) (prod x))   ; generic, the monadic `*`: jot a star to 0..x-1, else prod (a scalar prods vacuously to itself)
+   (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1 (iota its array twin); a section of tally, off the `*` glyph -- monadic `*` is prod now
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
@@ -264,10 +264,10 @@
 ; unfactorable run falls back to the plain application.
 (: monadics
    (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
-      (L (L '< 'cap) (L '> 'cup) (L '<< 'caap) (L '>> 'cuup) (L '+ 'net) (L '* 'jot)
-         (L '| 'abs) (L '- 'negate) (L '/ 'reciprocal) (L '% 'fraction) (L '? 'bit)
-         (L '$ 'saturate)
-         (L '! 'nil?) (L '. 'dot))))
+      `('(< cap) '(> cup) '(<< caap) '(>> cuup) '(+ net) '(* prod)
+        '(| abs) '(- negate) '(/ reciprocal) '(% fraction) '(? bit)
+        '($ saturate)
+        '(! nil?) '(. dot))))
 ; the FACTORIZATION LAW: greedy longest-prefix match against the table, no
 ; backtracking; every factor but the last must be arity one; the last factor
 ; takes the positional valence. a token that doesn't factor is a plain

@@ -15,7 +15,7 @@
  (6 = +'(1 2 3)) (294 = +"abc") (0 = +"") (7 = +@(3 4))
  (-1 = +'(-2 1))                                ; the net, UNCLAMPED: $ would read 0
  (~(0 8) = +`(~(3 4) ~(-3 4)))                 ; phases sum as vectors
- (24 = *'(1 2 3 4)) ((jot 7) = *7) (6 = *@(1 2 3))   ; * of a star jots (0..n-1); a list/array prods
+ (24 = *'(1 2 3 4)) (7 = *7) (6 = *@(1 2 3))   ; * is prod inward: a star vacuously itself (like +5), a list/array its product
  ; the dyadics turned inward
  (5 = |-5) (5.0 = |~(3 4)) (-3 = -(1 + 2)) (0.25 = /4) (0.5 = %2.5)
  ; the truth panel: the bit is the Iverson bracket
@@ -48,4 +48,4 @@
  ((fraction 5.25) = (5.25 % 1)) ((bit 9) = !!9) (!!9 = ?9)
  ; a glued monadic prints back as its source -- byte-exact, like ' / ~ / @
  ("*5" = (show (\ *5))) ("+(-3)" = (show (\ +(-3)))) ("$$0" = (show (\ $$0)))
- ('(0 1 2 3 4) = (ev (\ *5))))                       ; ... and round-trips through show -> read -> ev
+ (5 = (ev (\ *5))))                                  ; ... and round-trips show -> read -> ev (now prod: *5 = 5)

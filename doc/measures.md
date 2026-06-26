@@ -89,22 +89,22 @@ Rejected alternative: bind `*` → `tally` so the operator literally *is* the me
 `tally` is not "`*` folded inward" — it would break the one invariant every `monadics` entry
 honors (sigil = its dyadic op, monadic). `prod` keeps that invariant; `tally` stays a named word.
 
-## Pending implementation (the doc leads the binary here)
+## Implementation (landed 2026-06-26)
 
-The grep proved the surface is tiny — glued `*<scalar>`-as-iota lives **only** in
-`test/valence.l`; `(jot n)` the named word is used everywhere and stays.
+The grep proved the surface was tiny — glued `*<scalar>`-as-iota lived **only** in
+`test/valence.l`; every `(jot n)` call passes a scalar, so the named word stays and the
+`(prod x)` else-branch was dead.
 
-1. `ai/prel.l:267` — flip the `monadics` table cell: `(L '* 'jot)` → `(L '* 'prod)`.
-   *(the whole semantic change)*
-2. `ai/prel.l:195` — make `jot` range-only (drop the dead `(prod x)` else-branch; no call site
-   passes `jot` a list):
+1. `ai/prel.l` — flipped the `monadics` cell `* → prod` (the whole semantic change), and moved
+   the table to the backtick/quoted-list form (`` `('(< cap) … '(* prod) …) ``).
+2. `ai/prel.l` — `jot` is now range-only (dropped the dead `(prod x)` else-branch):
    ```lisp
-   (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1 (iota its array twin); the * fold is prod
+   (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1, a section of tally
    ```
-3. `test/valence.l` — `((jot 7) = *7)` → `(7 = *7)` (line 18); `('(0 1 2 3 4) = (ev (\ *5)))`
-   → `(5 = (ev (\ *5)))` (line 51). Line 50 `("*5" = (show (\ *5)))` should stay green (the
-   printer re-glues the sigil, surface unchanged) — `make test` confirms.
-4. `make test` (host + ai0, both reach `zz-fin`).
+3. `test/valence.l` — `((jot 7) = *7)` → `(7 = *7)`; `('(0 1 2 3 4) = (ev (\ *5)))`
+   → `(5 = (ev (\ *5)))`. The printer round-trip `("*5" = (show (\ *5)))` stayed green
+   (the sigil re-glues; surface unchanged).
+4. CLAUDE.md updated: `* prod` in the monadic words, `(jot x)` a range / section of tally.
 
-Until this lands, the **binary** still gives `*5 = (0 1 2 3 4)`; CLAUDE.md is kept truthful to
-that (it still reads "(jot x) is the monadic `*`"). This doc holds the target and the rationale.
+The **binary** now gives `*5 = 5` (vacuous, like `+5`), `*'(1 2 3 4) = 24`. `make test` green
+(host + ai0, both reach `zz-fin`).
