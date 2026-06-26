@@ -36,7 +36,7 @@ export AI_NO_IMAGE := 1
 # so the outer (serial) make doesn't build them before the parallel sub-make.
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_ai0 test_proof test_gen test_uugen test_gc test_tools
+test_phases = test_host test_ai0 test_proof test_gen test_uugen test_gc test_tools test_glaze
 test:
 	@$(MAKE) --no-print-directory -j$(JOBS) $(osync) $(test_phases)
 # test_tools (vmret + cook + tele + xor) is in the fast `test` so an app breaks the
@@ -80,26 +80,29 @@ test_hostnif: host
 	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_hostnif.out; } \
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
 	done
-# Native-codegen self-tests (the ai/glaze/ x86-64 jit): emit (the SSE emitter),
+# Native-codegen self-tests (the ai/glaze/ x86-64 jit): emit (the SSE emitter) +
 # auto (ev's source-recognizer: counted loops, float grids, recursive arith
-# groups), hook (ev.l's ala creation-hook, native-backing every qualifying
-# closure). Each needs the built binary (the `nat` host nif). They NO LONGER
-# need 00-init: prel now ships a strict `assert` that SCARES on a false claim
-# (terminal, exit 1), so each file gates ITSELF -- a failure raises before its
-# "ai/glaze/<name>:" sentinel prints, a pass reaches it. auto and hook build on
-# emit's codegen, so each runs with emit.l prepended (alone they correctly scare
-# on the missing deps). x86-64 ONLY (real machine code); skipped elsewhere.
-# Gate per file = exit 0 AND its sentinel (a reader-stop exits 0 without it).
+# groups) are exercised by test/glaze-x86.l (the asserts moved out of emit.l/
+# auto.l so they no longer run at every glaze load/bake); it cats emit.l + auto.l
+# ahead of itself, then runs each block through base-ev (the loader's global ev is
+# now auto-ev, which mis-opfixes some pathological self-test forms). hook (ev.l's
+# ala creation-hook) keeps its inline self-test, run with emit.l prepended. Each
+# needs the built binary (the `nat` host nif) and prel's strict `assert` (SCARES
+# on a false claim, terminal exit 1). x86-64 ONLY (real machine code); skipped
+# elsewhere. Gate = exit 0 AND the sentinel (a reader-stop exits 0 without it).
 .PHONY: test_glaze
 ifeq ($a,x86_64)
 test_glaze: host
-	@for s in emit auto hook; do echo "GLAZE ai/glaze/$$s.l"; \
-	  if [ $$s = emit ]; then src="ai/glaze/emit.l"; else src="ai/glaze/emit.l ai/glaze/$$s.l"; fi; \
-	  cat $$src | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	@echo "GLAZE test/glaze-x86.l (emit + auto)"; \
+	  cat ai/glaze/emit.l ai/glaze/auto.l test/glaze-x86.l | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
-	  { [ $$r -eq 0 ] && grep -q "ai/glaze/$$s:" out/host/.test_glaze.out; } \
-	    || { echo "FAIL glaze/$$s (exit $$r)"; exit 1; }; \
-	done
+	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
+	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
+	  echo "GLAZE ai/glaze/hook.l"; \
+	  cat ai/glaze/emit.l ai/glaze/hook.l | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	  cat out/host/.test_glaze.out; \
+	  { [ $$r -eq 0 ] && grep -q "ai/glaze/hook:" out/host/.test_glaze.out; } \
+	    || { echo "FAIL glaze/hook (exit $$r)"; exit 1; }
 else
 test_glaze:
 	@echo "test_glaze: skipped (host arch $a is not x86_64)"

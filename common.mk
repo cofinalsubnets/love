@@ -25,8 +25,10 @@ endif
 # see the K_TEST block in the root Makefile).
 tco ?= 1
 
-# the corpus: 00-init's harness first, the spec second, then the rest
-t = $R/test/00-init.l $R/test/spec.l $(filter-out %/00-init.l %/spec.l,$(sort $(wildcard $R/test/*.l)))
+# the corpus: 00-init's harness first, the spec second, then the rest. glaze-x86 is EXCLUDED:
+# it needs emit.l/auto.l cat'd ahead of it and EXECUTES x86-64 native code, so it runs only under
+# the x86-guarded `test_glaze`, never the arch-neutral corpus (which would crash on a non-x86 host).
+t = $R/test/00-init.l $R/test/spec.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l,$(sort $(wildcard $R/test/*.l)))
 
 ai_h = $(wildcard $R/*.h)
 ai_c = $R/ai.c

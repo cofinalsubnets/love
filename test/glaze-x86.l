@@ -1,0 +1,506 @@
+; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (ai/glaze/{emit,auto}.l), the
+; EXECUTING counterpart to the arch-neutral test/glaze.l (which only checks the substrate). HOST-
+; x86-ONLY: these INSTALL and EXECUTE native machine code, so they're run only by the x86-guarded
+; `make test_glaze` (never the arch-neutral corpus -- common.mk filters this file out). test_glaze
+; cats emit.l + auto.l ahead of this file, so jit/jitsum/jitgroup/.../base-ev/autogroup are bound.
+;
+; Each block compiles through `base-ev` (auto.l's captured pre-rebind compiler), because the
+; loader's global `ev` is now auto-ev and mis-opfixes some pathological self-test forms. The EMIT
+; block also shadows `ev` -> base-ev so its `(ev src)` reference values are the pure INTERPRETER
+; (as when these lived inline, pre-rebind). The AUTO block leaves `ev` = the live auto-ev, since
+; those tests exist to exercise the glazing path.
+
+(base-ev '(: ev base-ev
+(: (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
+      f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
+    _ (assert
+  (lit? f) (lit? g)                                          ; native closures are applicable values
+  (31 = (f 10)) (315 = (g 10))                               ; they compute
+  ((\ x (+ (* x 3) 1)) = f)                                  ; ... and are =-IDENTICAL to their source
+  !(f = (\ x (+ (* x 3) 2)))
+  (f = (jit '(\ x (+ (* x 3) 1))))                           ; two natives, same source
+  ; fixnum INPUT guard: a non-fixnum arg DEOPTS (no sar/putfix corruption of a heap word)
+  (: idn (jit '(\ x x)) (&& (5 = (idn 5)) ('(1 2) = (idn '(1 2))) ('a = (idn 'a)) (id? (:) (idn (:)))))
+  (: pls (jit '(\ x (+ x 1))) (&& (6 = (pls 5)) ((+ '(1 2) 1) = (pls '(1 2)))))   ; native == interp on a non-fixnum
+  (: q (jit '(\ n (+ (* n 3) 1))) (&& (31 = (q 10)) ((\ n (+ (* n 3) 1)) = q) (q = f)))  ; arity-1 leaf, non-x param (= f up to alpha)
+  ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))           ; compose with higher-order fns
+  ((isum 1000) = (g 1000))                                   ; the loop agrees with the interpreter
+  (9000000000000000000 = ((jit '(\ x (* x x))) 3000000000))  ; OVERFLOW -> deopt -> correct bignum
+  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit `('\ 'x `('* 'x i))) 7) (* 7 i)))) a)) 0 1))  ; agree 0..60
+  ; comparisons (-> 0/1) and conditionals
+  (: lt (jit '(\ x (< x 5))) (&& (1 = (lt 3)) (1 = (lt -2)) (0 = (lt 5)) (0 = (lt 9))))
+  (: ab (jit '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7)) (0 = (ab 0))))   ; abs
+  ((\ x (? (< x 0) (- 0 x) x)) = (jit '(\ x (? (< x 0) (- 0 x) x))))                        ; transparent
+  (: cap50 (jitsum '(? (< i 50) i 0)) c50 ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
+     (= c50 (cap50 1000)))                                                                  ; loop with a conditional body
+  ; // and %
+  (: dv (jit '(\ x (// x 3))) (&& (3 = (dv 10)) (4 = (dv 13)) (-3 = (dv -10))))
+  (: md (jit '(\ x (% x 7)))  (&& (1 = (md 8)) (-1 = (md -8)) (0 = (md 14))))
+  ; mid-nest deopt must leave the machine stack balanced (rsp unwind on deopt)
+  (16000000000000000001 = ((jit '(\ x (+ 1 (* x x)))) 4000000000))
+  (16000000000000000003 = ((jit '(\ x (+ (+ 1 (* x x)) 2))) 4000000000))
+  ; bitwise & | ^
+  (: bt (jit '(\ x (& x 12))) (&& (8 = (bt 10)) (12 = (bt 13))))
+  (: bo (jit '(\ x (| x 1)))  (&& (3 = (bo 2)) (5 = (bo 5))))
+  (: bx (jit '(\ x (^ x 5)))  (&& (15 = (bx 10)) (0 = (bx 5))))
+  ; arity-2 leaves: saturated + curried, transparent, deopt via interp body
+  (: ad (jit2 '(\ x y (+ x y)))           (&& (7 = (ad 3 4)) (7 = ((ad 3) 4))))
+  (: sb (jit2 '(\ x y (- (* x x) y)))     (&& (5 = (sb 3 4)) (16000000000000000000 = (sb 4000000000 0))))
+  ((\ x y (+ x y)) = (jit2 '(\ x y (+ x y))))
+  (: dd (jit2 '(\ x y (// x y)))          (&& (3 = (dd 13 4)) (-2 = (dd -7 3))))
+  ; arity-3 / arity-4 leaves: param i at Sp[i], saturating at ANY split, transparent
+  (: t3 (jitn '(\ x y z (+ (+ x y) (* z 2)))) (&& (13 = (t3 1 2 5)) (13 = ((t3 1 2) 5)) (13 = ((t3 1) 2 5))))
+  ((\ x y z (+ (+ x y) (* z 2))) = (jitn '(\ x y z (+ (+ x y) (* z 2)))))
+  (: t4 (jitn '(\ a b c d (+ (* a b) (- c d)))) (&& (7 = (t4 2 3 7 6)) (7 = ((t4 2 3) 7 6)) (7 = ((t4 2) 3 7 6))))
+  (16000000000000000005 = ((jitn '(\ x y z (+ (+ (* x x) y) z))) 4000000000 0 5))   ; deopt through a middle param
+  ; N-VARIABLE loop: iterative fib (3 loop vars i,a,b) -- native == interp, deopts at overflow
+  (: nf (jitloop-n '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ a b)) a)) 0 0 1))
+                   '(i a b) '((+ i 1) b (+ a b)) '(< i n) 'a '(0 0 1))
+     fi (\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ a b)) a)) 0 0 1))
+     (&& (55 = (nf 10)) (832040 = (nf 30)) (= (fi 30) (nf 30))                       ; fib(10)=55, fib(30)=832040
+         (4660046610375530309 = (nf 91))))                                          ; fib(91) > fixnum -> deopt -> bignum
+  ; CAPTURES = partial-apply a native multi-arg; the leading param(s) are the captures.
+  (: mk (jit2 '(\ n x (+ x n)))  a5 (mk 5)  a7 (mk 7)
+     (&& (15 = (a5 10)) (17 = (a7 10)) ('(6 7 8) = (map a5 '(1 2 3)))                 ; native captured closure, composes
+         (8000000000000000000 = ((mk 4000000000000000000) 4000000000000000000))))    ; ... and deopts through the capture
+  ; --- GROUP recursion (jitgroup): self + multi-arg + MUTUAL, native == interp, overflow -> bignum ---
+  (: gfib (jitgroup (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib)
+     (&& (lit? gfib) (75025 = (gfib 25))
+         (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25) (gfib 25))
+         (gfib = (jitgroup (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib))))   ; two natives, same source -> = (cache soundness)
+  (: gtak (jitgroup (L (link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))) 'tak)
+     (&& (7 = (gtak 18 12 6)) (7 = ((gtak 18 12) 6)) (7 = ((gtak 18) 12 6))))            ; nested self-calls; curries at any split
+  ; MUTUAL recursion: evn/odn cross-call -- both compiled into ONE buffer, sibling calls native
+  (: geo (jitgroup (L (link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))) 'evn)
+     god (jitgroup (L (link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))) 'odn)
+     (&& (1 = (geo 10)) (0 = (geo 7)) (1 = (geo 0)) (1 = (geo 100))                      ; entry=evn
+         (0 = (god 10)) (1 = (god 7))))                                                  ; entry=odn (the other entry of the same group)
+  ; overflow in a singleton group deopts to the interp fallback -> exact bignum (2^70)
+  (: gp2 (jitgroup (L (link '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))) 'p2)
+     (= (ev '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))) (gp2 70)))
+  ; the // and % integer ops in the GROUP lane (trial-division residue), with /-by-0 deopt
+  (: gmod (jitgroup (L (link '(r n d) '(% n d))) 'r) (&& (1 = (gmod 10 3)) (0 = (gmod 12 4)) (= (% 7 0) (gmod 7 0))))
+  (: gdiv (jitgroup (L (link '(q n d) '(// n d))) 'q) (&& (3 = (gdiv 10 3)) (-3 = (gdiv -10 3))))
+  ; STRING LANE: native (peep s i) on a plain string (s passed RAW, byte at s+16); the apof TYPE GUARD
+  ; deopts a non-string (fixnum / cask / nil) to the interp fallback -- never a bad deref. glazed == interp.
+  (: gsb (jitgroup (L (link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))) 'sb)
+     isb (ev '(: (sb s i) (? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))) sb))
+     d (string (L 72 105 90 33 65))
+     (&& (365 = (gsb d 4)) (= (isb d 4) (gsb d 4))                                                ; string: native byte-sum == interp
+         (= (isb 5 4) (gsb 5 4)) (= (isb (cask 3) 4) (gsb (cask 3) 4)) (= (isb () 4) (gsb () 4))))
+  ; HEAP RESULT (jitfr): a float-result leaf BOXES on the heap -- a gem out, == interp, transparent, deopts
+  (: fr (jitfr '(\ x (+ (* x 1.5) 2.0)))  ifr (\ x (+ (* x 1.5) 2.0))
+     (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (ifr 7) (fr 7))                  ; a FLOAT box; 4*1.5+2=8.0; == interp
+         (lit? fr) ((\ x (+ (* x 1.5) 2.0)) = fr)                         ; applicable + =-IDENTICAL to source
+         (= (map ifr '(1 2 3)) (map fr '(1 2 3)))                         ; composes with map, == interp
+         (= (ifr (:)) (fr (:)))))                                         ; non-fixnum arg -> fxv deopt -> interp
+  (: frz (jitfr '(\ x (/ (- x x) (- x x)))) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (flo_put's law)
+  ; GC-SAFETY: a native-written box is a normal ai_flo (kind=lvm_flo, 2 words) -> the cheney copier
+  ; traces/moves it like any gem. hold one across a big alloc (forces GC), and box thousands under
+  ; pressure -- if the box were malformed or the bump corrupted Sp's region, these would diverge/crash.
+  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)))  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
+  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)))  ys (map gfr (jot 4000))  zs (map (\ x (+ (* x 1.5) 2.0)) (jot 4000)) (= ys zs))  ; 4000 boxes under GC pressure == interp
+  ; BYTE LAW (jitba): native s ++ [B] -- a fresh heap string, == interp, transparent, GC-safe, deopts
+  (: ba (jitba '(\ s (+ s 66)))
+     (&& (string? (ba "abc")) (= "abcB" (ba "abc")) (= ((\ s (+ s 66)) "abc") (ba "abc"))   ; appends byte 66='B', == interp
+         (= "B" (ba "")) (4 = (tally (ba "abc")))                                            ; empty input -> a 1-byte string
+         ((\ s (+ s 66)) = ba)                                                               ; =-identical to source
+         (= (map (\ s (+ s 66)) (L "x" "ab" "")) (map ba (L "x" "ab" "")))                   ; composes == interp
+         (= (+ 5 66) (ba 5)) (= (+ '(1 2) 66) (ba '(1 2)))))                                 ; non-string s -> kind guard deopts -> generic +
+  (: ba (jitba '(\ s (+ s 90)))  b (ba "hello")  _ (tally (jot 200000))  (= "helloZ" b))     ; the string box survives a forced GC
+  (: ba (jitba '(\ s (+ s 33)))  xs (map (\ i (string (L (+ 97 (% i 26))))) (jot 1500))      ; 1500 strings ++ '!' under GC pressure == interp
+     (= (map (\ s (+ s 33)) xs) (map ba xs)))
+  ; CASK-BACKED BUILDER (jitsb, sketch): O(n) string producer -- map each byte b -> (b+K)&255, == interp
+  (: bsrc '(\ s ((: (go i acc) (? (< i (tally s)) (go (+ i 1) (+ acc (& (+ (peep s i 0) 1) 255))) acc)) 0 ""))
+     sb (jitsb bsrc 1)  isb (ev bsrc)
+     (&& (string? (sb "abc")) (= "bcd" (sb "abc")) (= (isb "abc") (sb "abc"))                ; +1 byte-map: abc->bcd, == interp
+         (= "" (sb "")) (3 = (tally (sb "abc")))                                             ; empty -> empty; length preserved
+         (= isb sb)                                                                          ; =-identical to its interpreted twin (same source)
+         (= (map isb (L "Hello!" "xyz" "")) (map sb (L "Hello!" "xyz" "")))                  ; composes == interp
+         (= (isb 5) (sb 5))))                                                                ; non-string s -> deopt -> interp
+  (: sb (jitsb '(\ s ((: (go i acc) (? (< i (tally s)) (go (+ i 1) (+ acc (& (+ (peep s i 0) 3) 255))) acc)) 0 "")) 3)
+     b (sb "hello")  _ (tally (jot 200000))  (= "khoor" b))                                  ; +3 build survives a forced GC (no tag needed)
+  (: bs '(\ s ((: (go i acc) (? (< i (tally s)) (go (+ i 1) (+ acc (& (+ (peep s i 0) 1) 255))) acc)) 0 ""))
+     sb (jitsb bs 1)  isb (ev bs)
+     xs (map (\ i (string (L (+ 97 (% i 26)) (+ 65 (% i 7))))) (jot 1500))                   ; 1500 2-char strings, +1 byte-map under GC pressure == interp
+     (= (map isb xs) (map sb xs)))   ; non-string -> guard deopts == interp
+  ; --- added coverage: setcc <=/>/>=/=, multi-arg (cgn) %/&/|/cmp/?, *-fold loop, //-by-0 deopt ---
+  ; comparison RESULT codes -- only `<` reached a setcc before, 4 of 5 opcodes were dark
+  (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))            ; setcc <=
+  (: gt (jit '(\ x (>  x 5))) (&& (1 = (gt 6)) (0 = (gt 5)) (0 = (gt 2))))            ; setcc >
+  (: ge (jit '(\ x (>= x 5))) (&& (1 = (ge 5)) (1 = (ge 9)) (0 = (ge 4))))            ; setcc >=
+  (: eq (jit '(\ x (=  x 5))) (&& (1 = (eq 5)) (0 = (eq 4)) (0 = (eq 6))))            ; setcc =
+  ; multi-arg (cgn) op dispatch -- only + - * // were exercised on the N-ary path
+  (: mdn (jit2 '(\ x y (% x y))) (&& (1 = (mdn 8 7)) (-1 = (mdn -8 7)) (0 = (mdn 14 7))))   ; idivseq-mn %
+  (: ban (jit2 '(\ x y (& x y))) (&& (8 = (ban 10 12)) (4 = (ban 4 5))))                    ; cgn -> bitseq
+  (: bon (jit2 '(\ x y (| x y))) (&& (3 = (bon 2 1)) (7 = (bon 5 3))))
+  (: ltn (jit2 '(\ x y (< x y))) (&& (1 = (ltn 3 5)) (0 = (ltn 5 3))))                      ; cgn -> cmpseq
+  (: mnn (jit2 '(\ x y (? (< x y) x y))) (&& (3 = (mnn 3 5)) (4 = (mnn 9 4))))              ; cgn -> condcode (min)
+  ; *-fold counted loop -- jitsum hardcodes +/<, so drive acc-mul + nonzero r11-init via loopcode
+  (: prodf (: psrc `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('* 'a `('+ 'i 1))) 'a)) 0 1))
+              (nif (emit (loopcode '(+ i 1) 'i '* '<)) (ev psrc) psrc 1))
+     pf (\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
+     (&& (120 = (prodf 5)) (= (pf 8) (prodf 8))))                                           ; n! via a product fold
+  ; divide-by-zero takes the guardz deopt -- only nonzero divisors were tested
+  (: dz (jit '(\ x (// x 0))) (= (// 10 0) (dz 10)))                                        ; // by 0 -> deopt -> interp
+  ; --- FLOAT predicate leaves (SSE): unboxed-double compares over a fixnum arg -> 0/1 ---
+  (= "4616189618054758400" (show (fbits 4.0)))                                              ; fbits: 4.0 -> 0x4010000000000000
+  (: flt (jitf '(\ x (< (* x 1.5) 10.0)))
+     (&& (1 = (flt 6)) (0 = (flt 7)) (1 = (flt 0)) (1 = (flt -3))                           ; 1.5x < 10  <=> x < 6.67
+         ((\ x (< (* x 1.5) 10.0)) = flt)                                                   ; transparent (=/show)
+         (= ((\ x (< (* x 1.5) 10.0)) '(1 2)) (flt '(1 2)))))                               ; non-fixnum arg -> deopt -> interp
+  (: fle (jitf '(\ x (<= (+ (* x x) 2.0) 38.0))) (&& (1 = (fle 6)) (0 = (fle 7)) (1 = (fle -6))))   ; x*x+2 <= 38 <=> |x|<=6
+  (: fgt (jitf '(\ x (> (/ 100.0 x) 7.0)))       (&& (1 = (fgt 10)) (0 = (fgt 20)) (1 = (fgt 5))))  ; 100/x > 7 <=> 0<x<14.3
+  (: fge (jitf '(\ x (>= (- (* x 0.5) 1.0) 2.0))) (&& (1 = (fge 6)) (0 = (fge 5))))                 ; x/2-1 >= 2 <=> x>=6
+  (: feq (jitf '(\ x (= (* x 0.25) 2.0)))         (&& (1 = (feq 8)) (0 = (feq 7))))                 ; x/4 == 2 <=> x==8
+  ; --- FLOAT RECURRENCE LOOP OWNER: a native mandelbrot pixel kernel == the interpreter ---
+  (: msrc '(\ px py (: cx (- (* px 0.046875) 2.0) cy (- (* py 0.046875) 1.5)
+                      ((: (go zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
+                            (go (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)) 0.0 0.0 0)))
+     mp (jitfrec msrc '(px py) '((cx (- (* px 0.046875) 2.0)) (cy (- (* py 0.046875) 1.5)))
+                 '(zx zy) '((+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy))
+                 '(+ (* zx zx) (* zy zy)) '<= 4.0 100)
+     mi (ev msrc)
+     (&& (= (mi 0 0) (mp 0 0)) (= (mi 32 32) (mp 32 32)) (= (mi 20 40) (mp 20 40))                  ; native == interp
+         (= (mi 63 63) (mp 63 63)) (= (mi 10 50) (mp 10 50)) (= (mi 45 18) (mp 45 18))))
+  ; --- NESTED grid owner: native whole-grid mandelbrot == interpreter (checksum 87130) ---
+  (: gsrc '(\ _ (: (mand cx cy zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
+                       (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
+                   (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand (- (* px 0.046875) 2.0) (- (* py 0.046875) 1.5) 0.0 0.0 0))) acc)
+                   (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+                 (grid 0 0)))
+     mg (jitfgrid gsrc 64 64 '(- (* px 0.046875) 2.0) '(- (* py 0.046875) 1.5)
+                  '(zx zy) '((+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy))
+                  '(+ (* zx zx) (* zy zy)) '<= 4.0 100)
+     (&& (= 87130 (mg 0)) (= ((ev gsrc) 0) (mg 0))))
+  ; --- AUTO-HOOK: recognize the (mand col grid) nest from SOURCE and glaze it -> checksum 87130 ---
+  (: gmand '(? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
+               (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
+     gcol '(? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
+     ggrid '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+     ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid)
+     (= 87130 (ng 0))))
+    (say err "ai/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
+))
+
+(base-ev '(:
+ _ (assert
+    ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
+    (23 = ((ev '(\ x (+ (* x 2) 3))) 10))
+    (((base-ev '(\ x (+ (* x 9) 4))) 11) = ((ev '(\ x (+ (* x 9) 4))) 11))      ; native leaf == interp (catches njit codegen regressions)
+    (: ny (ev '(\ y (+ y 1))) (&& (6 = (ny 5)) ((\ y (+ y 1)) = ny)))   ; arity-1 leaf, non-x param, auto-natived
+    (3 = ((ev '(\ x (cap x))) '(3 4)))                         ; non-qualifying -> interpreter
+    ((base-ev '(+ 1 2 3)) = (ev '(+ 1 2 3)))                   ; non-lambda forms unaffected (ev == base-ev; curried + nets 27, not 6)
+    (9000000000000000000 = ((ev '(\ x (* x x))) 3000000000))   ; overflow deopts -> bignum
+    (: ab (ev '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7))))   ; conditional leaf auto-natived
+    ; LOOP auto-detected -> native counted loop, =-identical + correct
+    (: L1 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0))
+       f  (ev L1)
+       (&& (= f (ev L1)) (3496500 = (f 1000)) (two? (loopinfo L1))))
+    ; LOOP with a conditional body (sum i for i<50, capped) auto-detected
+    (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
+       h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
+       (&& (two? (loopinfo L2)) (= c (h 1000))))
+    ; GENERALIZED loop -- a PRODUCT fold (op=*, init 1): n! = prod_{i<n}(i+1)
+    (: P '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
+       f (ev P)  fi ((: (go i a) (? (< i 10) (go (+ i 1) (* a (+ i 1))) a)) 0 1)
+       (&& (two? (loopinfo P)) (3628800 = (f 10)) (= fi (f 10)) (= (ev P) (ev P))
+           (15511210043330985984000000 = (f 25))))             ; overflow -> deopt -> bignum (transparent)
+    ; GENERALIZED loop -- a <= comparison: sum_{i<=n} i
+    (: Q '(\ n ((: (go i a) (? (<= i n) (go (+ i 1) (+ a i)) a)) 0 0))
+       g (ev Q)  (&& (two? (loopinfo Q)) (55 = (g 10))))        ; 0+1+..+10 = 55
+    ; N-VARIABLE loop auto-detected: iterative fib (i,a,b -- updates b and a+b)
+    (: F '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ a b)) a)) 0 0 1))
+       nf (ev F)  (&& (two? (loopinfo-n F)) (832040 = (nf 30)) (= (ev F) (ev F))   ; fib(30)=832040, native+transparent
+                      (4660046610375530309 = (nf 91))                              ; fib(91) -> deopt -> bignum
+                      (354224848179261915075 = (nf 100))))                         ; fib(100) overflows -> C-FINITE matrix-power deopt, exact bignum
+    ; C-FINITE deopt on a constant-scaled (* 2 b) update: pell(60) overflows int64, so the native loop
+    ; deopts to the matrix-power closed form -- which must equal the interpreted loop (base-ev) exactly.
+    (: PL '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ (* 2 b) a)) a)) 0 0 1))
+       pf (ev PL)  (&& (two? (loopinfo-n PL)) (= ((base-ev PL) 60) (pf 60)) (= 12 (pf 4))))  ; pell(60) deopt == interp; pell(4)=12 in-range
+    (id? (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
+    (id? (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
+    (: ad (ev '(\ x y (+ (* x x) y))) (&& (13 = (ad 3 4)) (13 = ((ad 3) 4)) ((\ x y (+ (* x x) y)) = ad)))  ; 2-arg leaf auto-natived
+    (: a3 (ev '(\ x y z (+ (+ x y) (* z 3))))                                                  ; 3-arg leaf auto-natived, currying at any split
+       (&& (13 = (a3 1 3 3)) (13 = ((a3 1 3) 3)) (13 = ((a3 1) 3 3)) ((\ x y z (+ (+ x y) (* z 3))) = a3)))
+    ; captured-closure constructor auto-natived: captures transparent (= interp)
+    (: adder (ev '(\ n (\ x (+ x n))))  a5 (adder 5)
+       (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3))) (= a5 ((\ n (\ x (+ x n))) 5))))
+    ; FLOAT-RESULT leaf auto-natived -> a heap-boxed gem, == interp, transparent
+    (: fr (ev '(\ x (+ (* x 1.5) 2.0)))
+       (&& (gem? (fr 4)) (8.0 = (fr 4)) (= ((base-ev '(\ x (+ (* x 1.5) 2.0))) 7) (fr 7))
+           ((\ x (+ (* x 1.5) 2.0)) = fr)))                     ; =-identical to source
+    (qualfr '(\ x (/ (+ x 1.0) 2.0)))                          ; float-division leaf: param floated at first use -> SOUND
+    !(qualfr '(\ x (+ (* x 3) 1.5)))                           ; param inside an INT subexpr (* x 3) -> late promotion diverges -> rejected
+    !(qualfr '(\ x (/ x 2)))                                   ; int/int division: result type value-dependent -> rejected
+    !(qualfr '(\ x (+ (* x 2) 3)))                             ; an all-INTEGER leaf is no float result (qual handles it)
+    (: ii (ev '(\ x (+ (* x 2) 3))) (&& (7 = (ii 2)) !(gem? (ii 2)))))   ; ... and stays a fixnum (qualfr did not steal it)
+ _ (assert    ; D-DIMENSIONAL float-recurrence GRIDS auto-glazed from SOURCE -> native whole-grid kernel, bit-exact (== interp)
+    ; D=2 -- the mandelbrot 64x64 grid (M=2 invariants, N=2 fvars), the canonical instance -> checksum 87130
+    (: g2 '(: (mand cx cy zx zy it)
+               (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
+                  (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
+              (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
+              (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+            (grid 0 0))
+       (&& !(id? (autonat g2) g2) (= 87130 (ev g2)) (= (base-ev g2) (ev g2))))      ; autonat rewrote it -> native == interp
+    ; D=1 -- a single row of escape counts (cy a constant 0.0) -> native == interp
+    (: g1 '(: (mand cx cy zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
+              (row px acc) (? (< px 64) (row (+ px 1) (+ acc (mand (- (* px 0.046875) 2.0) 0.0 0.0 0.0 0))) acc)
+            (row 0 0))
+       (&& !(id? (autonat g1) g1) (= (base-ev g1) (ev g1))))
+    ; D=3 -- an 8x8x8 nest, M=3 invariants (cx cy cz), cz=pz*0.01 shifting zy -> native == interp (exercises r12 push/pop)
+    (: g3 '(: (mand cx cy cz zx zy it) (? (&& (< it 50) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy cz (+ (- (* zx zx) (* zy zy)) cx) (+ (+ (* (* 2.0 zx) zy) cy) cz) (+ it 1)) it)
+              (lz px py pz acc) (? (< pz 8) (lz px py (+ pz 1) (+ acc (mand (- (* px 0.046875) 2.0) (- (* py 0.046875) 1.5) (* pz 0.01) 0.0 0.0 0))) acc)
+              (ly px py acc) (? (< py 8) (ly px (+ py 1) (+ acc (lz px py 0 0))) acc)
+              (lx px acc) (? (< px 8) (lx (+ px 1) (+ acc (ly px 0 0))) acc)
+            (lx 0 0))
+       (&& !(id? (autonat g3) g3) (= (base-ev g3) (ev g3))))
+    ; TWIN(complex) grid: idiomatic ~(re im) code -- twolow lowers c/z to real-pairs, autonat glazes
+    ; it, bit-exact (== the interpreted twins). The D=2 mandelbrot with z<-z*z+c written in twin gems.
+    (: g2t '(: (mand c z it)
+                 (? (&& (< it 100) (<= (+ (* (re z) (re z)) (* (im z) (im z))) 4.0)) (mand c (+ (* z z) c) (+ it 1)) it)
+               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand ~((+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875))) ~(0.0 0.0) 0))) acc)
+               (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+             (grid 0 0))
+       (&& !(id? (twolow g2t) g2t)                                                    ; twolow rewrote the twin grid
+           !(id? (autonat (twolow g2t)) (twolow g2t))                                 ; ... and autonat then glazes the real-pair form
+           (= 87130 (ev g2t)) (= (base-ev g2t) (ev g2t))))                            ; native == interp, same checksum as the plain-float g2
+    ; RECURSIVE ARITHMETIC: naive fib auto-glazed to a native call tree -- native == interp, and an
+    ; int64-overflowing recursion (pow2) deopts to the interp fallback -> the exact bignum (sound)
+    (: rf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 25))
+       (&& !(id? (autogroup rf) rf) (= 75025 (ev rf)) (= (base-ev rf) (ev rf))))
+    ; SOUNDNESS REGRESSION: a BODY-LESS group `:` (the global-leaking top-level-define form -- sat.l's
+    ; shape) is DECLINED (returned UNCHANGED), NOT glazed. The lift pipeline can't preserve the leak, so
+    ; glazing it would silently miscompile the leaked globals to const-1 (broke sat.l's cdcl under the
+    ; image). Body-LESS = even # of forms after `:`. (rf above is body-HAVING -> still glazes.)
+    (: bl '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))  (id? (autogroup bl) bl))
+    (: rp '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))
+       (= (base-ev rp) (ev rp)))                               ; 2^70 overflows int64 in H -> OVF deopt -> bignum
+    ; MULTI-ARG recursion: tak (3 args, nested self-calls -- args survive on the machine stack) == interp
+    (: rt '(: (tak x y z) (? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z) (tak 18 12 6))
+       (&& !(id? (autogroup rt) rt) (= 7 (ev rt)) (= (base-ev rt) (ev rt))))
+    ; MUTUAL recursion: evn/odn cross-call -- BOTH bindings glazed, sibling calls native inside one
+    ; buffer; the `:` body drives both. The systematic win over the old per-fn autorec: a closed call
+    ; GRAPH, not just self-recursion.
+    (: rm '(: (evn n) (? (= n 0) 1 (odn (- n 1))) (odn n) (? (= n 0) 0 (evn (- n 1))) (L (evn 100) (odn 100) (evn 7)))
+       (&& !(id? (autogroup rm) rm) ('(1 0 0) = (ev rm)) (= (base-ev rm) (ev rm))))
+    ; LAMBDA-LIFTING: primes' prime?/count are each a named-let LOOP -- lifted to flat group fns
+    ; (prime?_go count_go), so the WHOLE trial-division graph glazes (prime? count prime?_go count_go,
+    ; sibling calls native, the % trial division in the H). count(2 30) = 10 primes below 30.
+    (: rpr '(: (prime? n) ((: (go d) (? (< n (* d d)) 1 (? (= 0 (% n d)) 0 (go (+ d 1))))) 2)
+               (count lo hi) ((: (go n c) (? (< n hi) (go (+ n 1) (? (prime? n) (+ c 1) c)) c)) lo 0)
+               (count 2 30))
+       (&& !(id? (autogroup rpr) rpr) (10 = (ev rpr)) (= (base-ev rpr) (ev rpr))))
+    ; STRING LANE: a recursive (peep s i) byte processor glazes from SOURCE -- s a STRING param (passed
+    ; raw, no sar; the native reads the plain ai_str's bytes at s+16), (tally s) -> the len at s+8.
+    (: rsl '(: data (string (L 72 105 90 33 65))
+               (bsum s i) (? (< i 0) 0 (+ (peep s i 0) (bsum s (- i 1))))
+               (bsum data 4))
+       (&& !(id? (autogroup rsl) rsl) (365 = (ev rsl)) (= (base-ev rsl) (ev rsl))))
+    ; FULL STRING LANE (strscan): fold-consts inlines hmod, norm-let normalizes (: n (tally s) (go ..)
+    ; (go 0 0)) into a named-let, lift lifts go, interprocedural inference types s (it flows strhash ->
+    ; strhash_go's peep), and the native rolling hash == interp. This is the strscan bench, glazed from source.
+    (: rss '(: hmod 1000000007
+               (strhash s) (: n (tally s) (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
+               data (string (L 72 105 90 33 65))
+               (strhash data))
+       (&& !(id? (autogroup rss) rss) (69709145 = (ev rss)) (= (base-ev rss) (ev rss))))
+    ; CHAIN LANE: a binary-tree node-count fold glazes from SOURCE -- t a CHAIN param (raw pointer, NO
+    ; entry guard, since two? is total: a non-chain reads false), with (two? t)/(cap t)/(cup t) lowered
+    ; inline (cap/cup chain-guarded, deopting a non-chain) and the recursive ck a native sibling call.
+    ; == interp, transparent. This is the `tree` bench's traverse half (the allocating mk stays interp).
+    (: rcl '(: (mk d) (? (< d 1) 0 (link (mk (- d 1)) (mk (- d 1))))
+               (ck t) (? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0)
+               (ck (mk 8)))
+       (&& !(id? (autogroup rcl) rcl) (255 = (ev rcl)) (= (base-ev rcl) (ev rcl))))      ; depth 8 = 2^8-1 = 255 nodes
+    ; CHAIN-LANE SOUNDNESS: a cap feeding ARITHMETIC ((+ (cap t) 0)) is a chain word in an int slot --
+    ; the recognizer REJECTS it (cap is chain-valued), so it stays interpreted; cap under two? is fine.
+    (: rcb '(: (g t) (+ (cap t) 0) (g (link 7 8)))
+       (&& (id? (autogroup rcb) rcb) (= (base-ev rcb) (ev rcb))))                         ; NOT rewritten (rejected) -> == interp
+    ; PARTIAL LIFT (plift): the hash bench's `scan` -- a READ-ONLY loop buried among the allocating
+    ; ins/bump inside hash-run, sharing the mutable map h -- HOISTS to a top-level sibling `hash-run_scan`
+    ; threading (n h), the two (scan 0 0) call sites rewritten. `lift` can't (3 sibling fns + a compound
+    ; result); plift can. Tested via base-ev (the SOURCE->SOURCE transform preserves meaning, hash-run(N)
+    ; = N^2): the hoisted map-read still needs the MAP lane (groupok?/cgg) to glaze SOUNDLY -- the string
+    ; peep-recognizer would mis-admit it -- so plift is NOT yet on the autogroup chain.
+    (: rpl '(: (hash-run n)
+                (: h (tablet 0)
+                   (ins i)      (? (< i n) (: _ (pin h (+ 1 (* 97 i)) i) (ins (+ i 1))) h)
+                   (scan i acc) (? (< i n) (scan (+ i 1) (+ acc (peep h (+ 1 (* 97 i)) 0))) acc)
+                   (bump i)     (? (< i n) (: k (+ 1 (* 97 i)) _ (pin h k (+ 1 (peep h k 0))) (bump (+ i 1))) h)
+                   _  (ins 0) a (scan 0 0) __ (bump 0) (+ a (scan 0 0)))
+                (hash-run 30))
+       pl (plift rpl)
+       (&& !(id? pl rpl) (900 = (base-ev rpl)) (900 = (base-ev pl))                       ; fired + source->source semantic equivalence
+           (member? 'hash-run_scan (map (\ pr (? (two? (cap pr)) (caap pr) (cap pr))) (cap (anat-defs (cup pl)))))))   ; scan HOISTED to a top-level sibling
+    ; MAP LANE: a read-only map probe glazes from SOURCE -- `h` a MAP param (raw pointer, mapkind entry
+    ; guard; the native hashes the key 0x9e37.. then linear-probes the open-addressed backing -- regs
+    ; rax/r8-r11 only, NEVER rcx=Sp or rdx=Hp, both LIVE for the interp after Continue). mapfix rewrites
+    ; (peep h k 0)->(mpeep h k 0) because h is peep'd but never tally'd (strscan's s is BOTH -> stays a
+    ; string). == interp; a non-map arg deopts via the guard.
+    (: rmap '(: (msum m i acc) (? (< i 5) (msum m (+ i 1) (+ acc (peep m (+ 1 (* 97 i)) 0))) acc)
+                h (tablet 0) _ (pin h 1 10) _ (pin h 98 20) _ (pin h 195 30) _ (pin h 292 40) _ (pin h 389 50)
+                (msum h 0 0))
+       (&& !(id? (autogroup rmap) rmap) (150 = (ev rmap)) (= (base-ev rmap) (ev rmap))))
+    ; THE HASH BENCH, glazed END TO END: plift hoists the read-only `scan` out of hash-run to a top-level
+    ; hash-run_scan(n h i acc), mapfix maps its peep, the allocating ins/bump + the pins stay interpreted.
+    ; == interp (hash-run(N) = N^2). The map lane owns the read; the build stays on the collector.
+    (: rhash '(: (hash-run n) (: h (tablet 0)
+                  (ins i)      (? (< i n) (: _ (pin h (+ 1 (* 97 i)) i) (ins (+ i 1))) h)
+                  (scan i acc) (? (< i n) (scan (+ i 1) (+ acc (peep h (+ 1 (* 97 i)) 0))) acc)
+                  (bump i)     (? (< i n) (: k (+ 1 (* 97 i)) _ (pin h k (+ 1 (peep h k 0))) (bump (+ i 1))) h)
+                  _ (ins 0) a (scan 0 0) __ (bump 0) (+ a (scan 0 0)))
+                (hash-run 50))
+       (&& !(id? (autogroup rhash) rhash) (2500 = (ev rhash)) (= (base-ev rhash) (ev rhash))))   ; hash-run(50) = 2500
+    ; DEFORESTATION: a map/filter/fold pipeline over (jot N) -- defoliate FUSES the producers into the
+    ; foldl step (one pass, no intermediate lists) and LOWERS foldl-over-jot to the named-let LOOP `lift`
+    ; already glazes, so the whole combinator pipeline compiles to a native counted loop. == interp.
+    (: dq '(: (sumsq n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (sumsq 100))
+       (&& !(id? (autogroup dq) dq) (328350 = (ev dq)) (= (base-ev dq) (ev dq))))      ; sum i^2 for i<100
+    ; map after FILTER: the filter guards the fused step; map-after-map composes the element subs
+    (: dpf '(: (f n) (foldl (+) 0 (map (+ 1) (filter (\ x (> x 2)) (jot n)))) (f 10))
+       (&& !(id? (autogroup dpf) dpf) (49 = (ev dpf)) (= (base-ev dpf) (ev dpf))))      ; keep>2, +1, sum = 49
+    (: dmm '(: (sm n) (foldl (+) 0 (map (* 2) (map (+ 1) (jot n)))) (sm 5))
+       (&& !(id? (autogroup dmm) dmm) (30 = (ev dmm)) (= (base-ev dmm) (ev dmm))))      ; (*2).(+1) over 0..4 = 30
+    ; a BARE foldl over jot (no producers) lowers straight to the loop
+    (: dj '(: (s n) (foldl (+) 0 (jot n)) (s 100))
+       (&& !(id? (autogroup dj) dj) (4950 = (ev dj)) (= (base-ev dj) (ev dj))))         ; sum 0..99 = 4950
+    ; SOUNDNESS: a foldl over (iota N) is the ARRAY -- foldl/map (chain ops) don't iterate it, so it is
+    ; degenerate (=z); fusion preserves that (both sides z) and it is NOT lowered (djot? only) -> == interp
+    (: di '(: (h n) (foldl (+) 0 (map (\ x (* x x)) (iota n))) (h 100))
+       (= (base-ev di) (ev di)))                                                         ; iota: degenerate to 0, transparent
+    ; a foldl over a list PARAM can't lower (no jot) -> interpreted, value still correct (defoliate no-op)
+    (: dl '(: (g l) (foldl (+) 0 l) (g (jot 5)))
+       (= (base-ev dl) (ev dl)))                                                         ; 0+1+2+3+4 = 10
+    ; foldr: a DOWN-counting reduction -- the fused down-loop lambda-lifts to a group fn and natives (the
+    ; operator consumer flattens to a first-order step). == interp, value exact.
+    (: dr '(: (f n) (foldr (+) 0 (map (\ x (* x x)) (jot n))) (f 100))
+       (&& !(id? (autogroup dr) dr) (328350 = (ev dr)) (= (base-ev dr) (ev dr))))        ; foldr +.map sq, sum i^2 for i<100
+    (: drf '(: (f n) (foldr (+) 0 (filter (\ x (= 1 (% x 2))) (jot n))) (f 20))
+       (&& !(id? (autogroup drf) drf) (100 = (ev drf)) (= (base-ev drf) (ev drf))))      ; foldr +.filter odd, 1+3+..+19 = 100
+    ; LOOP-CLOSER (loopclose): a polynomial fold over jot (optionally odd/even-filtered) collapses to a
+    ; CLOSED FORM in the bound (no loop), == interp. Runs before defoliate, so the jot-fold cases above
+    ; (dq/dj/dr/drf) now close HERE; non-period-2 filters (dpf) and map-of-map (dmm) still defoliate.
+    (: lcsq '(: (f n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (f 100))
+       (&& !(id? (autogroup lcsq) lcsq) (328350 = (ev lcsq)) (= (base-ev lcsq) (ev lcsq))))   ; Σ i^2 for i<100, closed
+    (: lcid '(: (f n) (foldl (+) 0 (jot n)) (f 100))
+       (&& !(id? (autogroup lcid) lcid) (4950 = (ev lcid)) (= (base-ev lcid) (ev lcid))))     ; Σ i for i<100 = C(100,2)
+    ; the SCEV-beating `deforest` case: Σ of the odd squares, the odd-filter reparametrized k=2j+1
+    (: lcodd '(: (f n) (foldl (+) 0 (map (\ x (* x x)) (filter (\ x (= 1 (% x 2))) (jot n)))) (f 20000))
+       (&& !(id? (autogroup lcodd) lcodd) (1333333330000 = (ev lcodd)) (= (base-ev lcodd) (ev lcodd))))   ; Σ odd k^2 -> a literal, SCEV keeps the loop
+    ; SYMBOLIC bound: the closed form is a polynomial in n, exact at MULTIPLE n (not one folded point)
+    (: lcvar '(: (f n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (+ (f 7) (* 1000 (f 13))))
+       (= (base-ev lcvar) (ev lcvar)))                                                        ; f(7)+1000*f(13), the closed form reused at two n
+    ; DECLINE 1: a non-period-2 filter (>2) is left to defoliate; value preserved
+    (: lcdec '(: (f n) (foldl (+) 0 (map (\ x (+ x 1)) (filter (\ x (> x 2)) (jot n)))) (f 10))
+       (= (base-ev lcdec) (ev lcdec)))                                                        ; keep>2,+1 -> defoliate
+    ; DECLINE 2: a piecewise body quals but is NOT polynomial -> the difference table never dies -> declines
+    (: lcnp '(: (f n) (foldl (+) 0 (map (\ x (? (< x 5) (* x x) 0)) (jot n))) (f 12))
+       (= (base-ev lcnp) (ev lcnp)))                                                          ; 0+1+4+9+16 = 30, defoliated/interpreted
+    ; CASK BUILDER (castbuild): a string-accumulator loop -- (: (go i s) (? COND (go .. (+ s X)) s) (go 0 "")) --
+    ; rewrites to a threaded `jug` (O(1)-amortized append + one drain), == interp. "did it fire" is STRUCTURAL
+    ; (!(= ..)) -- castbuild rebuilds via map, so id? never holds even on a no-op.
+    (: cb1 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 "")) (tally (build 100)))
+       (&& !(= (castbuild cb1) cb1) (100 = (ev cb1)) (= (base-ev cb1) (ev cb1))))             ; a 100-char build -> jug, == interp
+    ; the strcat bench shape: strhash glazes (string lane) WHILE strbuild fills a cask -- both in one form, hash exact
+    (: cb2 '(: hmod 1000000007 (strhash s) (: n (tally s) (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
+               (strbuild n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 "")) (strhash (strbuild 500)))
+       (&& !(= (castbuild cb2) cb2) (= (base-ev cb2) (ev cb2))))                              ; build 500 chars then rolling-hash
+    ; MULTI-CHAR append (the say path): a 2-char piece per step -> (say s (string (L .. ..)))
+    (: cb3 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (L (+ 65 (% i 5)) 45)))) s) (go 0 "")) (tally (build 30)))
+       (&& !(= (castbuild cb3) cb3) (60 = (ev cb3)) (= (base-ev cb3) (ev cb3))))              ; 30 steps x 2 chars = 60
+    ; ORIENTATION: the recursion in the ELSE branch -- (? (>= i n) s (go ..)) -- handled, branch order preserved
+    (: cb4 '(: (build n) (: (go i s) (? (>= i n) s (go (+ i 1) (+ s (string 88)))) (go 0 "")) (tally (build 40)))
+       (&& !(= (castbuild cb4) cb4) (40 = (ev cb4)) (= (base-ev cb4) (ev cb4))))
+    ; DECLINE: s is also READ (via (tally s)) so the recur arg is not a bare (+ s X) -> NOT a pure append -> left alone
+    (: cb5 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (? (< (tally s) 3) (+ s (string 65)) s)) s) (go 0 "")) (tally (build 10)))
+       (&& (= (castbuild cb5) cb5) (= (base-ev cb5) (ev cb5))))                               ; not rewritten, value still exact
+    ; all/any: a short-circuit predicate -> an early-exit loop returning the truth BITS 0/1 (== interp, which
+    ; now returns bits too). a clean run-off and an early short-circuit both glaze, with or without a producer.
+    (: dall '(: (f n) (all (\ x (< x n)) (jot n)) (f 10))
+       (&& !(id? (autogroup dall) dall) (1 = (ev dall)) (= (base-ev dall) (ev dall))))   ; every i<n -> run off -> 1
+    (: dalf '(: (f n) (all (\ x (< x 5)) (jot n)) (f 10))
+       (&& !(id? (autogroup dalf) dalf) (0 = (ev dalf)) (= (base-ev dalf) (ev dalf))))   ; i=5 fails -> early 0
+    (: dany '(: (f n) (any (\ x (> x 7)) (jot n)) (f 10))
+       (&& !(id? (autogroup dany) dany) (1 = (ev dany)) (= (base-ev dany) (ev dany))))   ; i=8 hits -> early 1
+    (: danf '(: (f n) (any (\ x (> x 100)) (jot n)) (f 10))
+       (&& !(id? (autogroup danf) danf) (0 = (ev danf)) (= (base-ev danf) (ev danf))))   ; none -> run off -> 0
+    (: dap '(: (f n) (all (\ x (> x 0)) (map (+ 1) (jot n))) (f 10))
+       (&& !(id? (autogroup dap) dap) (1 = (ev dap)) (= (base-ev dap) (ev dap))))        ; all (+1 i)>0 -> producer fuses into the guard
+    ; a fn that calls OUT of the fragment (into `link`) drops the whole group -> form unchanged, interpreted
+    (: ro '(: (build n) (? (< n 1) () (link n (build (- n 1)))) (build 3))
+       (&& (id? (autogroup ro) ro) ('(3 2 1) = (ev ro))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
+    ; SPECIALIZATION (autospec/mix): a recursive interpreter ev1 applied to a STATIC program P (a const-
+    ; bound quoted AST) + a DYNAMIC loop var specializes -- the dispatch + AST navigation fold away to P's
+    ; straight-line arithmetic (the Horner residual), so the loop natives. == an interpreted ev1 loop (the
+    ; 1st Futamura projection composed with the glaze; the dispatch overhead interp-spec.l clocks at ~6.5x).
+    (: sp '(: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)  (id? (cap nd) 'var) x
+                            (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                            (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))  0)
+               P '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7))
+               (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ev1 P i))) a)) 0 0)  (run 1000))
+       (&& !(id? (autogroup sp) sp) (500001505000 = (ev sp)) (= (base-ev sp) (ev sp))))   ; sum P(i) i<1000, native == interp
+    ; a DIFFERENT static program (a mul of two sub-exprs) specializes to its OWN residual -- == interp (soundness breadth)
+    (: sp2 '(: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)  (id? (cap nd) 'var) x
+                             (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                             (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))  0)
+                Q '(mul (add (var) (lit 1)) (add (var) (lit 2)))
+                (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ev1 Q i))) a)) 0 0)  (run 50))
+       (&& !(id? (autogroup sp2) sp2) (= (base-ev sp2) (ev sp2))))   ; sum (i+1)(i+2) i<50, native == interp
+    ; autospec is a NO-OP without BOTH a defined fn and a static-data binding -> a plain fib group is byte-unchanged
+    (: nf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 10))
+       (id? (autospec nf) nf))
+    ; LOCAL LET (delet): a fn body that NAMES intermediates -- a pure value-let -- inlines to one fragment
+    ; expression, so the fn joins the group. == interp, value exact.
+    (: lb '(: (f x) (: q (* x x) (+ q q)) (f 5))
+       (&& !(id? (autogroup lb) lb) (50 = (ev lb)) (= (base-ev lb) (ev lb))))                ; q=x*x, 2q = 50
+    ; a CHAIN of bindings, the first used TWICE -- but call-free (dup-cheap), so it inlines freely
+    (: lc '(: (f x) (: a (+ x 1) b (* a 2) (+ a b)) (f 5))
+       (&& !(id? (autogroup lc) lc) (18 = (ev lc)) (= (base-ev lc) (ev lc))))                ; a=6,b=12 -> 18
+    ; a binding holding a recursive sibling CALL, used ONCE -> inlines; the fn glazes and calls native g
+    (: ls '(: (g n) (? (< n 1) 0 (+ n (g (- n 1)))) (f n) (: h (g n) (* h 2)) (f 5))
+       (&& !(id? (autogroup ls) ls) (30 = (ev ls)) (= (base-ev ls) (ev ls))))                ; g(5)=15, h*2 = 30
+    ; a value-let WRAPPING a named-let loop: delet inlines k into the loop, lift then glazes it
+    (: lw '(: (f n) (: k (* n 1) ((: (go i a) (? (< i k) (go (+ i 1) (+ a i)) a)) 0 0)) (f 10))
+       (&& !(id? (autogroup lw) lw) (45 = (ev lw)) (= (base-ev lw) (ev lw))))                ; sum 0..9 = 45
+    ; BAIL: a binding holding a CALL used TWICE would duplicate the recursion -> NOT inlined -> f interprets
+    ; (sound, value exact; the sibling g still glazes, so the form is rewritten but f stays interpreted)
+    (: lbail '(: (g n) (? (< n 1) 1 (* n (g (- n 1)))) (f n) (: a (g n) (+ a a)) (f 5))
+       (= (base-ev lbail) (ev lbail)))                                                        ; g(5)=120, a+a = 240, interpreted
+    ; NESTED in a sub-expression: a pure value-let in the accumulator ARG of a tail call -- the natural
+    ; "bind an intermediate" idiom. delet-body recurses to surface it; without that it survives lift and
+    ; the whole loop DEOPTS (slower than interp). x=(% i 13) is dup-cheap, so it inlines (used twice).
+    (: ldeep '(: (f N) (: (lp i acc) (? (< i N) (lp (+ i 1) (: x (% i 13) (+ acc (* x x)))) acc) (lp 0 0)) (f 20))
+       (&& !(id? (autogroup ldeep) ldeep) (741 = (ev ldeep)) (= (base-ev ldeep) (ev ldeep))))  ; sum (i%13)^2 for i<20, native == interp
+    ; an EFFECTFUL nested let (a `_`-bound write used 0x) is NOT inlined -- dropping it would lose the
+    ; effect; the let is kept (the fn stays interpreted, sound). The trailing pure step still glazes.
+    (: leff '(: (f N) (: (lp i b) (? (< i N) (: _ (pin b 0 (+ 1 (peep b 0 0))) (lp (+ i 1) b)) (peep b 0 0)) (lp 0 (cask 1))) (f 7))
+       (= (base-ev leff) (ev leff)))                                                          ; pin 7x -> 7, write preserved
+    ; BOOLEANS & CLAMPS (debool): &&/||/min/max/abs lower to the ?-fragment -> the fn glazes. == interp.
+    (: band '(: (f x n) (? (&& (< x n) (> x 0)) 1 0) (f 5 9))
+       (&& !(id? (autogroup band) band) (1 = (ev band)) (= (base-ev band) (ev band))))        ; 5<9 && 5>0 -> 1
+    (: bor '(: (f x) (? (|| (< x 0) (> x 9)) 1 0) (f 5))
+       (&& !(id? (autogroup bor) bor) (0 = (ev bor)) (= (base-ev bor) (ev bor))))             ; neither -> 0
+    (: babs '(: (f x) (+ (abs x) 1) (f -5))
+       (&& !(id? (autogroup babs) babs) (6 = (ev babs)) (= (base-ev babs) (ev babs))))        ; |-5|+1 -> 6
+    ; abs inside a hot loop: |i-50| summed for i<100 -> the running clamp natives
+    (: babl '(: (f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (abs (- i 50)))) a)) 0 0) (f 100))
+       (&& !(id? (autogroup babl) babl) (2500 = (ev babl)) (= (base-ev babl) (ev babl))))      ; sum|i-50| = 2*(1+..+50) = 2550-50 = 2500
+    ; nested compound: && of a cmp and an ||, guarding an abs -- all collapse to ?
+    (: bnest '(: (f x) (? (&& (> x 0) (|| (< x 5) (> x 10))) (abs x) 0) (f 3))
+       (&& !(id? (autogroup bnest) bnest) (3 = (ev bnest)) (= (base-ev bnest) (ev bnest))))    ; 3>0 && 3<5 -> abs 3 = 3
+    ; BAIL: || whose first operand is a recursive CALL would duplicate it -> left un-lowered -> f interprets (sound)
+    (: bbail '(: (g n) (? (< n 1) 0 (+ n (g (- n 1)))) (f n) (? (|| (g n) (< n 0)) 1 0) (f 5))
+       (= (base-ev bbail) (ev bbail)))                                                        ; (|| g(5)=15 ..) truthy -> 1, interpreted (g still glazes)
+    ; || AND abs nested in a loop accumulator -- the deep ?-nesting the perf demo exercises
+    (: bdeep '(: (f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0))) a)) 0 0) (f 1000))
+       (&& !(id? (autogroup bdeep) bdeep) (= (base-ev bdeep) (ev bdeep))))                     ; native == interp on the nested ||/abs loop
+    ; a debool'd HELPER called by a loop SIBLING -- clamp (||/abs) glazes as a group fn, run_go calls it native
+    (: bclamp '(: (clamp i) (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0)
+                  (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clamp i))) a)) 0 0) (run 1000))
+       (&& !(id? (autogroup bclamp) bclamp) (= (base-ev bclamp) (ev bclamp)))))                ; native == interp; clamp a glazed sibling
+   (say err "ai/glaze/auto: native codegen ok
+")))
+
+(say err "test/glaze-x86: emit + auto native codegen ok\n")
