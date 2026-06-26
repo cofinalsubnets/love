@@ -83,11 +83,46 @@ are now exposed.
 - **Assembler — done & gated** (`asm/asmtest.l`, both targets, every encoding objdump/llvm-mc-verified):
   P0 `jmpr`/`adds`/`subs`/`vs`/`vc`/`mulo`/`set`; P1 shifts/`test`/`div`/`rem`/indexed + the bitmask-
   immediate encoder + the bignum-`li` fix; `lr`/`fp` + the callee-saved bank; the sp-via-`lea` idiom.
-- **Proven end to end on arm64**: `emit.l`'s map-probe IR assembles unchanged into a faithful
-  open-addressed hash probe; a whole glaze leaf (`\ x (+ x 1)`) assembles with the role map above
-  (fetch+guard, overflow→deopt, putfix, Continue, deopt tail). Both are `asm/asmtest.l` goldens.
-- **Remaining (the retarget itself):** rewrite `emit.l`'s codegen (cgv/cgn/cgg/cggt/cggv/loopcode*/
-  mkouter/the entry points) to emit neutral IR via a per-target role table instead of raw x86 byte
-  lists, pick the target in `auto.l`'s `assemble`, and add the I-cache flush. Then **P2**: byte
-  load/store for the string/cask lane, and a float register file (SSE→NEON) for the float/grid lane.
-  Running arm64 output needs the qemu kernel harness (no aarch64 host here; cf. `ai/glaze/probe.l`).
+
+- **The codegen retarget — three lanes done & full-`make test`-green**, in `emit.l`, ADDITIVE (the live
+  x86 byte path — `jit`/`njit`/`jitn`/`jitgroup` — and `auto.l` are untouched; these are parallel
+  `(jit*ir lam tgt)` entries). Shared scaffold: `greg` (the per-target role→reg map above), `cgir`
+  (leaf/n-ary expr→IR), `coreir`/`jitcore` (prologue/body/putfix-epilogue+Continue/deopt + install),
+  `deoptir`. IR chunks concatenate FLAT via `asm` (emit.l's `foldl-(+)`; on lists of IR forms `+`
+  appends) — NOT nested `(cat (cat …))`, which bites paren-counting. ⚠ each `(L 'op …)` builds a form;
+  a quoted `'(op A …)` embeds the literal symbol `A`, not the register value — only quote all-literal
+  forms (`'(br eq OVF)`), use `(L …)` when a role-reg is an operand.
+  - **leaf** `jitir` (arity 1): `var | int | +-*//%&|^ | cmp | ?`; machine-stack nesting; deopt→interp.
+  - **n-ary** `jitnir` (arity ≥2): `Sp[i]` param fetch (`fxir`); deopt→interp BODY (`value[1]+16`).
+  - **group** `jitgroupir` (mutual recursion): `cggir`/`gargsir`/`mkhir`/`mkouterir`. Calls = `(call
+    <name>)`+`(label <name>)` (asm/ resolves rel offsets — the byte path's two-pass offset math is
+    gone). Callee-saved arg bank + OVF anchor; per-H save/load/restore + arm64 `lr`-save; the shared
+    OVF handler `lea`s sp from the anchor (abandons all frames) then deopts. `slotsz` (8/16) unifies
+    the stack math. Covers fib/tak/even-odd + overflow→deopt→bignum.
+  Tests live in **`test/glaze-x86.l`** (`make test_glaze`, x86-host-only): x86 native == interp;
+  arm64 assembles (data) and is llvm-mc-checked by hand — arm64 EXECUTION still needs the qemu kernel
+  harness (no aarch64 host here; cf. `ai/glaze/probe.l`).
+
+- **Remaining (in order):**
+  1. **counted-loop lane** — `loopcode` (`jitsum`) and `loopcode-n` (`jitloop-n`) → IR (the back-edge
+     loop owner: iterative sums, fib-as-loop). Reuses `greg`/`cgir`; the new piece is the loop
+     back-edge + the loop-var registers.
+  2. **TCO** — a tail self-call in the group lane → `jmp Lbody` (reuse the frame; O(1) stack), per
+     `cggt`. Add a `Lbody` label after the H prologue and detect tail self-calls in `cggir`.
+  3. **value-mode** (`cggv`) — list-returning group fns (a `(link A B)` cons body): a room-guard + heap
+     write, value-epilogue (store rax as-is, no putfix). Needs `consemit` in IR.
+  4. **special ops** — `peep`/`tally` (string), `mpeep`/`mpin` (map — already neutral IR via the
+     `asm/` probe, just wire it in), `pin` (cask), `cap`/`cup`/`two?` (chain). Needs byte load/store
+     (`ldrb`/`strb`) on the arm64 backend (P2 item) for the string/cask sub-cases.
+  5. **wire into `auto.l`** — once a lane is proven equal to the byte path, pick the host target and
+     route `auto.l`'s recognizers through the IR entries; then retire the byte path. Add the I-cache
+     flush in `nat`/`toast` (`ai.c`) so arm64 can actually run installed code.
+  - **P2 (separate sub-project):** the **float/grid lane** (`cgf`/`jitfr`/`loopcode-gridn`) — needs a
+    FLOAT register file in `asm/` (xmm/NEON + `movsd`/`addsd`/`mulsd`/`divsd`/`cvtsi2sd`/`ucomisd`/
+    `movq`), which the integer-only IR doesn't model yet.
+
+  **How to add a lane** (the proven loop): prototype in scratchpad against `cat emit.l proto.l | ai`
+  (x86 behavioral == interp); disassemble the arm64 output with `llvm-mc --disassemble
+  --triple=aarch64`; integrate into `emit.l` additively; add `test/glaze-x86.l` coverage; `make
+  test_glaze`; then the full `make test`. The glaze is corpus-independent (unbound under
+  `AI_NO_IMAGE`; `emit.l` is a host-only bake, not in `ai0`), so only `test_glaze` exercises it.
