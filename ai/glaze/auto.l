@@ -90,8 +90,62 @@
               (all (\ u (exprn fr u)) updates) (exprn fr R)         ; updates + RESULT exprs over {n,vars}
               (all whole? inits))                                     ; inits are fixnum consts
        (? ok `(vars updates T R inits) 0))
+   ; --- C-FINITE smart bignum deopt (doc/proto/cfinite.l): a constant-coefficient LINEAR-state
+   ;     recurrence with a canonical counter (c: init 0, step (+ c 1), test (< c n) -> trips = n) closes
+   ;     to its result by EXACT integer MATRIX POWER M^n x0 in O(log n). The native loop above already
+   ;     wins IN THE FIXNUM RANGE, so this changes ONLY njit-loop-n's post-overflow path: the deopt
+   ;     fallback computes the bignum result by SQUARING M instead of re-running the naive O(n) bignum
+   ;     loop. SOUND -- bit-exact vs the loop at every n (the asserts below + the spike), linearity a
+   ;     STRUCTURAL certificate (cf-lin reads coeffs off the syntax, no sampling, nothing piecewise can
+   ;     fool); ANY non-linear update / non-canonical counter / n-referencing update DECLINES to
+   ;     (base-ev lam), the prior behavior. State HOMOGENIZED by a trailing `1` coordinate so an affine
+   ;     update reads linear. M' rows 0..d-1 are the updates' coeff rows, the last [0..0 1] keeps the 1.
+   (cf-nul? l)     (! (two? l))
+   (cf-zeros m)    (? (= m 0) () (link 0 (cf-zeros (- m 1))))
+   (cf-unit m i)   (: (go j) (? (< j m) (link (? (= j i) 1 0) (go (+ j 1))) ()) (go 0))      ; e_i in dim m
+   (cf-const m k)  (cat (cf-zeros (- m 1)) (L k))                                            ; [0..0 k]
+   (cf-idx l v)    (: (go xs i) (? (cf-nul? xs) -1 (id? (cap xs) v) i (go (cup xs) (+ i 1))) (go l 0))
+   (cf-nth l i)    (? (= i 0) (cap l) (cf-nth (cup l) (- i 1)))
+   (cf-dot a b)    (? (cf-nul? a) 0 (+ (* (cap a) (cap b)) (cf-dot (cup a) (cup b))))
+   (cf-rowf f a b) (? (cf-nul? a) () (link (f (cap a) (cap b)) (cf-rowf f (cup a) (cup b))))  ; elementwise
+   (cf-scale k r)  (map (\ x (* k x)) r)
+   (cf-const? r)   (all (\ x (= x 0)) (init r))                                              ; pure constant row
+   (cf-lin vs e)                                                                            ; e -> augmented coeff row, or () if NOT integer-affine
+    (: m (+ (tally vs) 1)
+       (? (whole? e) (cf-const m e)
+          (name? e)  (: i (cf-idx vs e) (? (< i 0) () (cf-unit m i)))                        ; a state var -> e_i ; else (e.g. n) decline
+          (&& (two? e) (member? (cap e) '(+ -)) (= 3 (tally e)))
+            (: a (cf-lin vs (caup e)) b (cf-lin vs (caup (cup e)))
+               (? (|| (cf-nul? a) (cf-nul? b)) () (cf-rowf (? (id? (cap e) '+) (\ x y (+ x y)) (\ x y (- x y))) a b)))
+          (&& (two? e) (id? (cap e) '*) (= 3 (tally e)))                                     ; a product is linear only if a side is constant
+            (: a (cf-lin vs (caup e)) b (cf-lin vs (caup (cup e)))
+               (? (|| (cf-nul? a) (cf-nul? b)) ()
+                  (cf-const? a) (cf-scale (last a) b)
+                  (cf-const? b) (cf-scale (last b) a)
+                  ()))                                                                       ; var*var -> nonlinear -> decline
+          ()))
+   (cf-mat vs ups) (: m (+ (tally vs) 1) rows (map (\ u (cf-lin vs u)) ups)
+                      (? (any cf-nul? rows) () (cat rows (L (cf-unit m (- m 1))))))          ; () if any update is non-linear
+   (cf-id m)       (: (go i) (? (< i m) (link (cf-unit m i) (go (+ i 1))) ()) (go 0))
+   (cf-tpose M)    (? (cf-nul? (cap M)) () (link (map cap M) (cf-tpose (map cup M))))
+   (cf-mv M v)     (map (\ r (cf-dot r v)) M)
+   (cf-mul A B)    (: Bt (cf-tpose B) (map (\ r (map (\ c (cf-dot r c)) Bt)) A))
+   (cf-mpow M n)   (: D (tally M) (go p acc base)
+                      (? (= p 0) acc (: b2 (cf-mul base base) (? (= 1 (% p 2)) (go (// p 2) (cf-mul acc base) b2) (go (// p 2) acc b2))))
+                      (go n (cf-id D) M))                                                    ; M^n by repeated squaring, O(log n) matmuls
+   (cf-aug inits)  (cat inits (L 1))                                                         ; x0 = [inits.. 1]
+   (cf-canon? lam vs ups test inits)                                                        ; counter c -> EXACTLY n trips (the lambda param)?
+    (&& (two? test) (id? (cap test) '<) (= 3 (tally test)) (id? (caup (cup test)) (caup lam))
+        (: c (caup test) i (cf-idx vs c)
+           (&& (>= i 0) (= (cf-nth inits i) 0)
+               (: u (cf-nth ups i) (&& (two? u) (id? (cap u) '+) (= 3 (tally u)) (id? (caup u) c) (= (caup (cup u)) 1))))))
+   (cf-deopt lam vs ups test result inits)                                                  ; the deopt closure: matrix power if linear+canonical, else base-ev
+    (: M (cf-mat vs ups) rrow (cf-lin vs result)
+       (? (&& (cf-canon? lam vs ups test inits) (! (cf-nul? M)) (! (cf-nul? rrow)))
+          (\ n (cf-dot rrow (cf-mv (cf-mpow M n) (cf-aug inits))))
+          (base-ev lam)))
    (njit-loop-n lam vars updates test result inits)
-    (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (base-ev lam) lam 1)
+    (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (cf-deopt lam vars updates test result inits) lam 1)
    ; --- captured-closure CONSTRUCTOR (\ p (\ q E)): a nest of 1-arg lambdas, E over
    ; {p,q}. Compiled as the flat 2-param native (\ p q E); applying it to p yields a
    ; native CAPTURED closure -- fully transparent (= the interpreter's ((2param) p)
@@ -954,7 +1008,12 @@
     ; N-VARIABLE loop auto-detected: iterative fib (i,a,b -- updates b and a+b)
     (: F '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ a b)) a)) 0 0 1))
        nf (ev F)  (&& (two? (loopinfo-n F)) (832040 = (nf 30)) (= (ev F) (ev F))   ; fib(30)=832040, native+transparent
-                      (4660046610375530309 = (nf 91))))                            ; fib(91) -> deopt -> bignum
+                      (4660046610375530309 = (nf 91))                              ; fib(91) -> deopt -> bignum
+                      (354224848179261915075 = (nf 100))))                         ; fib(100) overflows -> C-FINITE matrix-power deopt, exact bignum
+    ; C-FINITE deopt on a constant-scaled (* 2 b) update: pell(60) overflows int64, so the native loop
+    ; deopts to the matrix-power closed form -- which must equal the interpreted loop (base-ev) exactly.
+    (: PL '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ (* 2 b) a)) a)) 0 0 1))
+       pf (ev PL)  (&& (two? (loopinfo-n PL)) (= ((base-ev PL) 60) (pf 60)) (= 12 (pf 4))))  ; pell(60) deopt == interp; pell(4)=12 in-range
     (id? (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
     (id? (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
     (: ad (ev '(\ x y (+ (* x x) y))) (&& (13 = (ad 3 4)) (13 = ((ad 3) 4)) ((\ x y (+ (* x x) y)) = ad)))  ; 2-arg leaf auto-natived
