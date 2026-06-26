@@ -92,3 +92,57 @@ rides on this once images are per-target.
 
 Relates: the egg (ai/egg.l, the double-sat), [[glaze-float]] (the bake this unlocks), serialize.md
 (source-level serialization), gengc.md (the collector + immortal region).
+
+## Status — landed (Phases 0–4 + cross-arch + the host/core split)
+
+The snapshot ships. A plain `ai` auto-loads `<exe>.img` (built by `make host`, beside the binary; found
+via `/proc/self/exe`) and boots a **glaze-baked** runtime in **~4–12 ms** instead of the ~230 ms egg eval
+— the native JIT is always-on, no flags. Opt out with `AI_NO_IMAGE` (the Makefile exports it for all
+recipes so the gate tests the fresh egg and the bench controls glaze itself). A bad/stale/cross-arch image
+→ `image_load` NULL → normal boot, never wrong. The bench cold-start row reflects it (ai 12 ms vs egg 230).
+
+Departures from the original plan above, worth noting:
+- **No reloc tables.** The blob is self-describing: every pointer-bearing word is RANGE-encoded in place
+  (heap → byte offset; lvm ap → `hb+2·idx`; immortal → `hb+2·NLVM+2·ii`; binary → absolute ≥ TBOUND),
+  even-vs-odd separates pointer from fixnum, so the load re-derives relocation by re-walking. File =
+  header + heap (~2.5 MB, was 6.2 MB with tables). Thread sizing at load scans the encoded terminator
+  (`off·8+2`, unique since object starts are 8-aligned), not `ttag`.
+- **The stamp is two-anchor, not a build hash.** `arch` (compile-time tag) + `anchor` (dump-time address
+  of `ai_image_save`): under ASLR the whole binary shifts by one base delta, so the immortals/refsym
+  delta must equal the ai_image_save/anchor delta; a different binary (cross-arch or stale rebuild) lays
+  symbols out differently → deltas disagree → refused. The 4-way {x86,aarch64}×{bin,img} matrix is clean.
+- **Core/host split (stdio out of ai.c).** The core owns the stdio-free buffer codec `ai_image_save` /
+  `ai_image_load` (ai.h); file I/O lives in `host/image.c`. The Phase-0 `image-check` and Phase-1
+  `image-rt` spikes are retired.
+- **The glaze bake is the corpus eval, not a split assert-free lib.** `--dump-image` evals the glaze
+  (emit.l+auto.l, x86-gated) before dumping; the asserts' transient natives die in `gen_major`. emit.l's
+  self-test fixtures were wrapped local (they'd leaked as globals); auto.l's `memo` cache is cleared
+  pre-dump. (Dump-time chain hash-cons was BUILT then BACKED OUT — unsound with the glaze, see follow-up 2.)
+
+## Three follow-ups (open, in rough priority)
+
+1. **A per-arch aarch64 glaze emitter — make the aarch64 image GLAZED too** ("even on an MCU, try"). The
+   aarch64 host image works (cross-built + qemu-tested) but is glaze-LESS: the glaze emits x86-64 machine
+   code, so `main.c` gates the dump-time glaze load on `__x86_64__`. The recognizers (`ai/glaze/auto.l`)
+   are arch-NEUTRAL (they analyze ai source); only the codegen (`ai/glaze/emit.l` — `cgv`/`cgn`/
+   `loopcode`/the SSE/register layer) is x86. The `asm/` assembler already has an arm64 backend
+   (`asm/arm64.l`, emits bytes as DATA), so the scope is a parallel arm64 instruction-selection path in
+   emit.l + an arch dispatch in `auto-ev`'s `njit`, then dump a glazed aarch64 image. Biggest payoff for
+   the embedded/Nerves target.
+
+2. **The glaze-CSE refactor — make dump-time chain dedup SOUND.** The compacted image is ~71 % source-AST
+   chains; merging structurally-equal sub-trees (hash-cons) shrank it ~36 % (6.2→4.3 MB, pre-table-
+   removal) but is UNSOUND: the glaze reads source by IDENTITY, so merging bintrees' two `(mk (- d 1))`
+   cells changed its native cons codegen (checksum 1600174→1582768). Fix upstream: make the glaze key its
+   CSE/codegen on structural equality (`=`), not cell `id?`, so `=`-equal sub-expressions are already one.
+   Then the reverted `image_dedup` (union-find hash-cons over chain starts) can re-land safely. Scope:
+   audit emit.l/auto.l for `id?` on source sub-terms. Sibling caution to [[value-interning-dropped]].
+
+3. **A freestanding kernel snapshot — boot the kernel from a baked image, no eval.** `ai_image_save`/
+   `ai_image_load` are now buffer-based + stdio-free, so the freestanding kernel (`port/kship/`, `kmain.c`
+   — no filesystem) could `objcopy` a dumped image into a C byte array and `ai_image_load(array, len)` at
+   startup instead of eval'ing the baked corpus. Two knots: the image must be dumped from a binary with
+   the SAME lvm_* layout as the kernel (the arch+anchor stamp guards mismatches, but the kernel and host
+   are different binaries — needs a kernel-built dump, or a layout-stable shared TU); and the kernel runs
+   `AI_NOGEN` (gcg, no major pool) while `ai_image_save` needs `g->major_pool` (gen host only) — so either
+   a gen kernel build or a non-major serialize path. Resolves the cold-start cost on the MCU too.
