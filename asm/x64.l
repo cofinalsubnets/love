@@ -179,6 +179,35 @@
                  (L 90)                                     ; pop rdx
                  (? (reg-eq d 'r0) () (emit-mov d 'r0))))   ; d <- rax
 
+   ;; -- SSE2 / packed-double (the float-grid glaze lane). xmm regs are a SEPARATE abstract file
+   ;;    f0..f15 -> 0..15 (so the GP file is untouched); a `raw` escape splices pre-encoded bytes
+   ;;    (the cold derive/preload sequences the float emitter already produces). every encoding here
+   ;;    was objdump-checked. REX is emitted only when an operand is r>=8/xmm>=8 or REX.W is needed. --
+   x64-xregs (tablet 0)
+   _ (foldl (\ _ i (pin x64-xregs (intern (+ "f" (show i))) i)) 0 (jot 16))         ; f0..f15 -> 0..15
+   (xrn r) (: e (peep x64-xregs r -1) (? (< e 0) (scare 'badxreg r) e))
+   ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
+   x64-sse (tablet 0)
+   _ (foldl (\ _ p (pin x64-sse (cap p) (cup p))) 0
+        (L `('movupd 102 16) `('movsd 242 16) `('movhlps 0 18) `('unpcklpd 102 20)
+           `('mulpd 102 89) `('addpd 102 88) `('subpd 102 92) `('divpd 102 94)
+           `('mulsd 242 89) `('addsd 242 88) `('subsd 242 92) `('divsd 242 94)
+           `('xorpd 102 87) `('pcmpeqd 102 118) `('andpd 102 84) `('psubq 102 251)))
+   (xrex w r b) (? (|| (= w 1) (|| (>= r 8) (>= b 8))) (L (rex w (hi r) 0 (hi b))) ())   ; REX only when needed
+   (emit-sse op d s)                                                                     ; xmm <- xmm two-address
+      (: meta (peep x64-sse op 0) pfx (at meta 0) opc (at meta 1) dn (xrn d) sn (xrn s)
+         (catall (L (? (= pfx 0) () (L pfx)) (xrex 0 dn sn) (L 15 opc (modrm 3 dn sn)))))
+   (emit-cmppd d s imm) (: dn (xrn d) sn (xrn s)                                         ; 66 0F C2 /r ib  (predicate imm: 1=LT 2=LE)
+      (catall (L (L 102) (xrex 0 dn sn) (L 15 194 (modrm 3 dn sn) (byte imm)))))
+   (emit-movmskpd g x) (: gn (rn g) xn (xrn x)                                           ; 66 0F 50 /r  gp(reg) <- xmm(rm)
+      (catall (L (L 102) (xrex 0 gn xn) (L 15 80 (modrm 3 gn xn)))))
+   (emit-cvtsi2sd x g) (: xn (xrn x) gn (rn g)                                           ; F2 REX.W 0F 2A /r  xmm(reg) <- gp(rm)
+      (catall (L (L 242) (L (rex 1 (hi xn) 0 (hi gn))) (L 15 42 (modrm 3 xn gn)))))
+   (emit-movqxr x g) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 6E /r  xmm(reg) <- gp(rm)
+      (catall (L (L 102) (L (rex 1 (hi xn) 0 (hi gn))) (L 15 110 (modrm 3 xn gn)))))
+   (emit-movqrx g x) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 7E /r  gp(rm) <- xmm(reg)
+      (catall (L (L 102) (L (rex 1 (hi xn) 0 (hi gn))) (L 15 126 (modrm 3 xn gn)))))
+
    ;; the dispatch: one IR form -> its byte/fixup chunk.
    (x64-lower ins)
       (: op (cap ins)
@@ -212,6 +241,13 @@
             (= op 'sys)  (L 15 5)
             (= op 'nop)  (L 144)
             (= op 'trap) (L 204)
+            (= op 'raw)  (at ins 1)                                                       ; splice pre-encoded bytes verbatim (no fixups)
+            (two? (peep x64-sse op ())) (emit-sse op (at ins 1) (at ins 2))               ; xmm<-xmm (movupd/movsd/mulpd/addpd/subpd/.../psubq/unpcklpd/movhlps)
+            (= op 'cmppd)    (emit-cmppd    (at ins 1) (at ins 2) (at ins 3))
+            (= op 'movmskpd) (emit-movmskpd (at ins 1) (at ins 2))                        ; (movmskpd gp xmm)
+            (= op 'cvtsi2sd) (emit-cvtsi2sd (at ins 1) (at ins 2))                        ; (cvtsi2sd xmm gp)
+            (= op 'movqxr)   (emit-movqxr   (at ins 1) (at ins 2))                        ; (movqxr xmm gp)  xmm <- gp
+            (= op 'movqrx)   (emit-movqrx   (at ins 1) (at ins 2))                        ; (movqrx gp xmm)  gp <- xmm
             (two? (peep x64-alu op ())) (emit-alu op (at ins 1) (at ins 2) (at ins 3))
             (scare 'bad-op op)))
 

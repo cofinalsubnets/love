@@ -152,9 +152,18 @@
       (L (L 'label 'miss) (L 'li 'r0 d) '(jmp end)
          '(label hit) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 8) '(sar r0 1) '(label end)))
    (asmx-seed ir nm addr) (: t (tablet 0) _ (pin t nm addr) (peep (assemble-at 'x64 ir t) 'bytes 0))   ; assemble with ONE pre-bound external label nm->addr (the glaze's deopt handler)
-   mpin-ir (cat mprobe-ir                                                           ; the SAME probe; WRITE tails: MISS -> `deopt` (an EXTERNAL label the caller seeds); HIT -> store the tagged spilled v at slot[I].value, then fall through to the caller's map-thread
-      (L (L 'label 'miss) '(jmp deopt)
-         '(label hit) '(leax r0 r9 r9 1 0) '(pop r8) '(leax r8 r8 r8 1 1) (L 'stx 'r7 'r0 8 8 'r8)))
+   ; the SAME probe; WRITE tails (the correct `pin` = insert-OR-update). MISS (absent key, a GAP at slot I):
+   ; guard the load factor -- if (len+1)*4 >= cap*3 a grow is due, which native can't do, so DEOPT (an
+   ; EXTERNAL label the caller seeds); else INSERT (store the tagged key + spilled value, bump len). HIT:
+   ; update in place. `(tablet n)` presizes so a counted insert loop of n keys never hits the deopt. The
+   ; key/value are FIXNUMS (the group compiler is integer-only), so no GC write-barrier is needed.
+   mpin-ir (mprobe-ir + '((label miss)
+      (ld r0 r7 -16) (sar r0 1) (cmp r0 r8) (br ge deopt)                           ; len >= mask(=cap-1) -> table near-full -> deopt (r8 still holds the mask)
+      (leax r0 r9 r9 1 0) (stx r7 r0 8 0 r10)                                       ; slot[I].key = tagged key
+      (pop r8) (leax r8 r8 r8 1 1) (stx r7 r0 8 8 r8)                               ; slot[I].value = tag(v)
+      (ld r0 r7 -16) (add r0 r0 2) (st r7 -16 r0) (jmp end)                         ; len++ (putcharm: +2)
+      (label hit) (leax r0 r9 r9 1 0) (pop r8) (leax r8 r8 r8 1 1) (stx r7 r0 8 8 r8)
+      (label end)))
    (rrm reg) (+ 192 (% reg 8))                                                      ; ModRM mod11: reg-field=rax, rm=reg
    (rrr reg) (+ 192 (* 8 (% reg 8)))                                                ; ModRM mod11: reg-field=reg, rm=rax
    (rexb reg) (? (< reg 8) 72 73)                                                   ; REX.W (+B if reg extended, in rm)
@@ -730,9 +739,83 @@
        pushes (foldl (\ a r (+ a (pushR r))) () saved)
        pops   (foldl (\ a r (+ a (popR r))) () (rev saved))
        (asm (L pushes (hpre ht) (L 77 49 201) (nest loops cell) pops (L 76 137 200))))   ; push callee-saved; preload consts; xor r9(acc); NEST; pop; mov rax,r9
+   ; --- 2-WIDE PACKED-SSE2 grid kernel (loopcode-grid2): the SAME D-dim float-recurrence grid, but the
+   ;     INNERMOST dim is processed TWO cells at a time -- lanes [c, c+1] packed [low,high] in each xmm.
+   ;     The recurrence runs PACKED (addpd/mulpd/subpd via the asm/ SSE2 lane) so both pixels advance per op; the
+   ;     two independent chains hide the mul latency the SCALAR kernel (one z, serial dependency) is bound
+   ;     by -- ~2.4x on mandelbrot. The escape test -> a per-lane mask (cmplepd) ANDed into a sticky `alive`;
+   ;     the per-lane iteration count is a packed-int vector bumped by `psubq count,alive` (alive lane =
+   ;     all-ones = -1, so -=(-1) = +1); the loop runs while ANY lane is alive (movmskpd) AND k<lim. BIT-EXACT
+   ;     vs the scalar interp (identical IEEE per-lane ops, same count-until-first-escape-capped-at-lim).
+   ;     Gated (grid2-ok?) to the mandelbrot/float shape: D<=2, M+N<=4 (invs/fvars at xmm8..11), <=2 inner
+   ;     consts (xmm2,3 -> xmm4,5,6 free for count/alive/scratch), cmpop in {< <=}, even innermost dim. The
+   ;     acc adds keep the lane-law overflow guard (deopt to the faithful interp nest). ⚠ x86-64 (SSE2).
+   (fr n)   (intern ("f" + (show n)))                                                    ; an xmm NUMBER -> its asm/ IR symbol f0..f15
+   (gr p)   (intern ("r" + (show (- p 1))))                                              ; a physical GPR encoding (>=8) -> its abstract-file IR name (r10->r9 ..)
+   (sseop op) (? (= op '+) 'addpd (= op '*) 'mulpd (= op '-) 'subpd (= op '/) 'divpd 'movupd)   ; DAG op -> packed-double mnemonic
+   (allocp dag rv env n pool)                                                            ; the float-body allocator (CSE + linear-scan, like `alloc`) emitting PACKED-double asm/ IR FORMS
+    (: rg (tablet 0) pl (tablet 0) _ (pin pl 'p pool)
+       (pop u) (: p (peep pl 'p ()) _ (pin pl 'p (cup p)) (cap p))
+       (push r) (pin pl 'p (link r (peep pl 'p ())))
+       forms ((: (go i acc) (? (= i n) acc
+          (: nd (nthl dag i)
+             (? (id? (cap nd) 'L) (: _ (pin rg i (rgof (caup nd) env)) (go (+ i 1) acc))
+                (: op (cap nd) a (caup nd) b (caup (cup nd)) ra (peep rg a 0) rb (peep rg b 0)
+                   adie (dies? a i dag rv n) bdie (dies? b i dag rv n)
+                   dst (? adie ra (pop 0))
+                   _ (? (&& bdie (! (= rb dst))) (push rb) 0) _ (pin rg i dst)
+                   mv (? (= dst ra) () `(`('movupd (fr dst) (fr ra))))                   ; move only if dst != a's reg
+                   (go (+ i 1) (acc + mv + `(`((sseop op) (fr dst) (fr rb)))))))))) 0 ())
+       `(forms rg))
+   (cmppd-imm op) (? (= op '<=) 2 (= op '<) 1 ())                                        ; cmppd predicate: LE / LT (the "continue while small" escape tests)
+   (grid2-ok? dims invs fvars updates testexpr cmpop bound)                              ; the packed shape fits?
+    (&& (member? cmpop '(< <=)) (< (tally dims) 3) (< 1 (last dims)) (= 0 (% (last dims) 2))
+        (< (+ (tally invs) (tally fvars)) 5)
+        (< (tally (htbl (fcc bound (fccl updates (fcc testexpr ()))) 2)) 3))
+   ; the kernel as a neutral asm/ IR PROGRAM (asmx): control flow is LABELS (no hand-counted offsets),
+   ; the SSE ops are NAMED (no raw opcode bytes). GP IR regs: r0=rax(scratch), r5=rsi(Ip, the deopt
+   ; tail), r7=k(iter), r8=acc, r9../r10..=the grid counters. XMM: f2,f3=consts, f4=count, f5=alive,
+   ; f6=scratch, f8,f9=invariants, f10,f11=fvars, f0,f1,f12..15=the DAG pool. The cold per-cell DERIVES
+   ; (cgFd) stay raw bytes spliced via `(raw ..)`.
+   (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim)
+    (: D (tally dims)  M (tally invs)  N (tally fvars)
+       cregs (rangeL 10 (+ 10 D))  rinner (last cregs)  iir (gr rinner)                  ; iir = inner counter's IR reg (bumped for lane1)
+       fenv (invs + fvars)
+       cenv (map2 (\ nm r `(nm (cvtcnt r))) cnames cregs)                                ; counter name -> cvtsi2sd bytes (cgFd reads these)
+       ht (htbl (fcc bound (fccl updates (fcc testexpr ()))) 2)                          ; ONLY inner-recurrence consts (bound+..) -> f2,f3; derive consts inline -> f4,5,6 free
+       breg (fr (hlook bound ht))  pred (cmppd-imm cmpop)
+       idx (map2 (\ i d (link i d)) (rangeL 0 M) invd)                                   ; (inv-index . derive-expr) pairs
+       d0 (foldl (\ a p (a + `(`('raw (cgFd ht cenv (cup p))) `('movsd (fr (8 + (cap p))) 'f0)))) () idx)       ; inv i lane0 -> low of f(8+i)
+       d1 (foldl (\ a p (a + `(`('raw (cgFd ht cenv (cup p))) `('unpcklpd (fr (8 + (cap p))) 'f0)))) () idx)    ; inv i lane1 (counter+1) -> high
+       derives (d0 + `(`('inc iir)) + d1 + `(`('dec iir)))                               ; lane1 = the same derive at counter+1
+       zerof (foldl (\ a j (a + `(`('xorpd (fr (8 + M + j)) (fr (8 + M + j)))))) () (rangeL 0 N))   ; fvars := 0 (both lanes)
+       aenv ((efold fenv 8) + ht)
+       pool (`(0 1) + (rangeL (+ 8 (+ M N)) 16))
+       AR (vnall (link testexpr updates) () ())  rootv (cap AR)  dag (caup AR)  nn (tally dag)
+       AL (allocp dag rootv aenv nn pool)  bodyc (cap AL)  rg (caup AL)
+       magr (peep rg (cap rootv) 0)
+       wb (foldl (\ a j (a + `(`('movupd (fr (8 + M + j)) (fr (peep rg (nthl rootv (1 + j)) 0)))))) () (rangeL 0 N))   ; fvar <- its update's reg
+       maskc `(`('movupd 'f6 (fr magr)) `('cmppd 'f6 breg pred) '(andpd f5 f6) '(psubq f4 f5) '(movmskpd r0 f5))
+       iter (`('(label itop) `('cmp 'r7 lim) '(br ge iesc)) + bodyc + maskc             ; while k<lim AND any lane alive
+             + '((test r0 r0) (br eq iesc)) + wb + '((inc r7) (jmp itop) (label iesc)))
+       deopt '((ld r0 r5 8) (mov r5 r0) (ld r0 r5 0) (jmpr r0))                          ; tail-apply the interp fallback (overflow)
+       accb ('((movqrx r0 f4) (adds r8 r8 r0) (br vc cont0)) + deopt                     ; acc += count.lane0 ; guard
+             + '((label cont0) (movhlps f6 f4) (movqrx r0 f6) (adds r8 r8 r0) (br vc cont1)) + deopt + '((label cont1)))   ; acc += count.lane1 ; guard
+       cell (derives + zerof + '((xorpd f4 f4) (pcmpeqd f5 f5) (li r7 0)) + iter + accb)   ; count=0; alive=ones; k=0; loop; acc
+       (loop-nest ci body) (: p (nthl cregs ci) cr (gr p) b (nthl dims ci)               ; counted loops outer->inner; innermost STEPS BY 2
+          tp (intern ("lt" + (show ci))) en (intern ("le" + (show ci)))
+          inner (? (= ci (- D 1)) body (loop-nest (+ ci 1) body))
+          step  (? (= ci (- D 1)) `(`('add cr cr 2)) `(`('inc cr)))
+          (`(`('li cr 0) `('label tp) `('cmp cr b) `('br 'ge en)) + inner + step + `(`('jmp tp) `('label en))))
+       preload (foldl (\ a e (a + `(`('li 'r0 (fbits (cap e))) `('movqxr (fr (caup e)) 'r0) `('unpcklpd (fr (caup e)) (fr (caup e)))))) () ht)   ; broadcast each const [c,c]
+       prog (preload + '((li r8 0)) + (loop-nest 0 cell) + '((mov r0 r8)))                ; acc=0 ; NEST ; rax<-acc
+       (asmx prog))
    ; (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim) -> native D-dim grid.
+   ; Tries the 2-wide PACKED kernel when the shape fits (grid2-ok?), else the scalar grid kernel.
    (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim)
-    (nif (emit (+ (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim) epilogue)) (ev lam) lam 1)
+    (: pk (? (grid2-ok? dims invs fvars updates testexpr cmpop bound)
+             (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim) ())
+       (nif (emit (+ (? (atom? pk) (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim) pk) epilogue)) (ev lam) lam 1))
    ; (jitfgrid src pxn pyn cxd cyd fvars updates testexpr cmpop bound lim) -> the 2D mandelbrot-class
    ; delegate (the original signature) onto the general kernel: D=2 (px py), M=2 invariants (cx cy).
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim)
