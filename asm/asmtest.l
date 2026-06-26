@@ -191,7 +191,24 @@
       (L "a64.leax"   "2101098b21040091"  '((leax r1 r9 r9 1 1)))       ; add x1,x9,x9 ; add x1,x1,#1
       (L "a64.stx"    "f00c008b080600f9"  '((stx r7 r0 8 8 r8)))        ; add x16,x7,x0,lsl#3 ; str x8,[x16,#8]
       (L "a64.li.big" "a0828fd240e9aff22037cff2e0c6f3f2"               ; movz+3 movk = 0x9e3779b97f4a7c15 (bignum-safe lane via //%)
-                      '((li r0 11400714819323198485))))
+                      '((li r0 11400714819323198485)))
+      ;; the link register (x30) by name -- a callee spills it across nested calls (BL clobbers it).
+      (L "a64.push.lr" "fe0f1ff8"         '((push lr)))                ; str x30, [sp,#-16]!
+      (L "a64.pop.lr"  "fe0741f8"         '((pop lr)))                 ; ldr x30, [sp],#16
+      (L "a64.grpfn"  "fe0f1ff8040000940000038bfe0741f8c0035fd6e00303aac0035fd6"   ; the nested-call shape: save lr; bl sib; work; restore lr; ret; sib: ...
+                      '((push lr) (call sib) (add r0 r0 r3) (pop lr) (ret) (label sib) (mov r0 r3) (ret)))
+      ;; the OVF-anchor idiom -- mov to/from sp MUST be `lea` (add #0), not the ORR-based `mov` (which
+      ;; reads/writes XZR for reg 31, never sp). set anchor = sp ; deopt abandons frames with sp = anchor.
+      (L "a64.anchor"  "f7030091"          '((lea r23 sp 0)))           ; mov x23, sp
+      (L "a64.abandon" "ff020091"          '((lea sp r23 0)))           ; mov sp, x23
+      ;; a WHOLE glaze leaf for (\ x (+ x 1)) -- the integer leaf ABI end to end: g/Ip/Hp/Sp kept in
+      ;; x0..x3, acc=x4, temp=x5. fetch+fixnum-guard Sp[0]; untag; +1 with overflow->deopt; putfix;
+      ;; store Sp[0]; Continue (Ip+=16; br [Ip]); deopt tail-applies interp (value[1] at [Ip+8]).
+      (L "a64.glaze.leaf"
+         "640040f99f0040f26001005484fc4193840400b106010054840004abc6000054840040b2640000f921400091250040f9a0001fd6250440f9e10305aa250040f9a0001fd6"
+         '((ld r4 r3 0) (test r4 1) (br eq deopt) (sar r4 1) (adds r4 r4 1) (br vs deopt)
+           (adds r4 r4 r4) (br vs deopt) (or r4 r4 1) (st r3 0 r4) (add r1 r1 16) (ld r5 r1 0) (jmpr r5)
+           (label deopt) (ld r5 r1 8) (mov r1 r5) (ld r5 r1 0) (jmpr r5))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --

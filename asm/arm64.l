@@ -14,13 +14,21 @@
 ; encoding / a scratch register), so an immediate there RAISES rather than emit wrong bytes -- put
 ; the value in a register. load after asm.l.
 
-(: ;; -- registers: r0..r14 -> x0..x14, sp -> 31 (the SP/XZR slot; we only use 31 as SP). --
+(: ;; -- registers: r0..r14 -> x0..x14, sp -> 31 (the SP/XZR slot; we only use 31 as SP). x16 (IP0) is
+   ;;    an UNNAMED scratch the indexed stores borrow. `lr` (x30) and `fp` (x29) are exposed by name so
+   ;;    a callee that makes nested calls can spill its return address (BL clobbers x30) -- aarch64-only,
+   ;;    no x86 analogue (CALL/RET there keep the return address on the stack implicitly). --
+   ;; abstract number = hardware x-number (identity), so x15..x18 are simply ABSENT: x16/x17 are the
+   ;; IP0/IP1 scratch (the indexed stores borrow x16) and x18 is platform-reserved. r19..r28 are the
+   ;; CALLEE-SAVED bank -- a glaze's args + OVF anchor live here so they survive nested `bl` (call) sites.
    arm64-regs (tablet 0)
    _ (foldl (\ _ p (pin arm64-regs (cap p) (cup p))) 0
-        (L (link 'sp 31)
+        (L (link 'sp 31) (link 'fp 29) (link 'lr 30)
            (link 'r0 0) (link 'r1 1) (link 'r2 2) (link 'r3 3)  (link 'r4 4)
            (link 'r5 5) (link 'r6 6) (link 'r7 7) (link 'r8 8)  (link 'r9 9)
-           (link 'r10 10) (link 'r11 11) (link 'r12 12) (link 'r13 13) (link 'r14 14)))
+           (link 'r10 10) (link 'r11 11) (link 'r12 12) (link 'r13 13) (link 'r14 14) (link 'r15 15)
+           (link 'r19 19) (link 'r20 20) (link 'r21 21) (link 'r22 22) (link 'r23 23) (link 'r24 24)
+           (link 'r25 25) (link 'r26 26) (link 'r27 27) (link 'r28 28)))
 
    ;; -- ALU: op -> (reg-reg base word . imm base word | 0 if no immediate form). --
    arm64-alu (tablet 0)
