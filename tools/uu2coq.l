@@ -55,34 +55,51 @@
    _ (map (\ n (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
 
    ; --- the translator: a uu term -> a Gallina string ---
-   ; the unhandled CONSTRUCTORS (sigma / coprod) -- a term using one is not in the fragment
-   un (tablet 0) _ (map (\ n (pin un n 1)) '(total2 tpair pr1 pr2 coprod ii1 ii2 coprod_rect))
+   ; every MLTT constructor is now mapped (Sigma -> sigT, coprod -> sum, the -> ascription);
+   ; `un` stays as the safety net for any head u2c can't translate -- empty today, so the
+   ; dependency closure + coqc are what filter (a stray head would emit a bad spine -> coqc red).
+   un (tablet 0)
    bases (tablet 0)
    _ (pin bases 'nat "nat") _ (pin bases 'UU "Type") _ (pin bases 'bool "bool")
    _ (pin bases 'unit "unit") _ (pin bases 'empty "Empty_set")
    _ (pin bases 'true "true") _ (pin bases 'false "false") _ (pin bases 'tt "tt")
    (atom-c t) (peep bases t (? (corpus? t) (rocqn t) (string t)))   ; base type / global / bound var
 
-   (spine-c l) (? (two? l) (cat (L (u2c (cap l)) (? (two? (cup l)) " " "") (spine-c (cup l)))) "")
+   (spine-c l) (? (two? l) ((u2c (cap l)) + (? (two? (cup l)) " " "") + (spine-c (cup l))) "")
    (u2c t)
    (? (charm? t) (show t)
       (nom? t) (atom-c t)
       (two? t) (: h (cap t)
-        (? (id? h 'pi)        (cat (L "(forall " (string (e2 t)) " : " (u2c (e3 t)) ", " (u2c (e4 t)) ")"))
-           (id? h 'lam)       (cat (L "(fun " (string (e2 t)) " => " (u2c (e3 t)) ")"))
-           (id? h 'let)       (cat (L "(let " (string (e2 t)) " := " (u2c (e3 t)) " in " (u2c (e4 t)) ")"))
-           (id? h 'succ)      (cat (L "(S " (u2c (e2 t)) ")"))
-           (id? h 'idpath)    (cat (L "(@eq_refl _ " (u2c (e2 t)) ")"))
-           (id? h 'paths)     (cat (L "(@eq " (u2c (e2 t)) " " (u2c (e3 t)) " " (u2c (e4 t)) ")"))
-           (id? h 'nat_rect)  (cat (L "(nat_rect " (u2c (e2 t)) " " (u2c (e3 t)) " " (u2c (e4 t)) " " (u2c (e5 t)) ")"))
-           (id? h 'bool_rect) (cat (L "(bool_rect " (u2c (e2 t)) " " (u2c (e3 t)) " " (u2c (e4 t)) " " (u2c (e5 t)) ")"))
-           (id? h 'unit_rect) (cat (L "(unit_rect " (u2c (e2 t)) " " (u2c (e3 t)) " " (u2c (e4 t)) ")"))
-           (id? h 'empty_rect)(cat (L "(Empty_set_rect " (u2c (e2 t)) " " (u2c (e3 t)) ")"))
-           ; full path induction (J): uu (paths_rect P pr e) -> match on Coq's eq
+        (? (id? h 'pi)        ("(forall " + (string (e2 t)) + " : " + (u2c (e3 t)) + ", " + (u2c (e4 t)) + ")")
+           (id? h 'lam)       ("(fun " + (string (e2 t)) + " => " + (u2c (e3 t)) + ")")
+           (id? h 'let)       ("(let " + (string (e2 t)) + " := " + (u2c (e3 t)) + " in " + (u2c (e4 t)) + ")")
+           (id? h 'succ)      ("(S " + (u2c (e2 t)) + ")")
+           (id? h 'idpath)    ("(idpath " + (u2c (e2 t)) + ")")
+           (id? h 'paths)     ("(@paths " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + ")")
+           (id? h 'nat_rect)  ("(nat_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + " " + (u2c (e5 t)) + ")")
+           (id? h 'bool_rect) ("(bool_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + " " + (u2c (e5 t)) + ")")
+           (id? h 'unit_rect) ("(unit_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + ")")
+           (id? h 'empty_rect)("(Empty_set_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + ")")
+           ; Sigma -> a PRIMITIVE-PROJECTION total2 record (preamble below): it has the
+           ; SAME definitional eta uu's Sigma has, so eta-dependent proofs (idisweq ..)
+           ; export soundly. total2 mirrors pi (e2 var, e3 domain, e4 body); tpair's
+           ; family is implicit, inferred from the def's stated type.
+           (id? h 'total2)    ("(total2 (fun " + (string (e2 t)) + " : " + (u2c (e3 t)) + " => " + (u2c (e4 t)) + "))")
+           (id? h 'tpair)     ("(tpair " + (u2c (e2 t)) + " " + (u2c (e3 t)) + ")")
+           (id? h 'pr1)       ("(pr1 " + (u2c (e2 t)) + ")")
+           (id? h 'pr2)       ("(pr2 " + (u2c (e2 t)) + ")")
+           ; coprod -> sum; ii1/ii2 -> inl/inr (other summand inferred), the eliminator -> sum_rect
+           (id? h 'coprod)    ("(sum " + (u2c (e2 t)) + " " + (u2c (e3 t)) + ")")
+           (id? h 'ii1)       ("(inl " + (u2c (e2 t)) + ")")
+           (id? h 'ii2)       ("(inr " + (u2c (e2 t)) + ")")
+           (id? h 'coprod_rect)("(sum_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + " " + (u2c (e5 t)) + ")")
+           ; (the T t) is a type ascription -- emit it as one
+           (id? h 'the)       ("(" + (u2c (e3 t)) + " : " + (u2c (e2 t)) + ")")
+           ; full path induction (J): uu (paths_rect P pr e) -> match on the paths Id type
            (id? h 'paths_rect)
-             (cat (L "(match " (u2c (e4 t)) " as ep0 in (_ = bp0) return ("
-                     (u2c (e2 t)) " bp0 ep0) with eq_refl => " (u2c (e3 t)) " end)"))
-           (cat (L "(" (spine-c t) ")"))))                          ; an application spine
+             ("(match " + (u2c (e4 t)) + " as ep0 in (paths _ bp0) return ("
+              + (u2c (e2 t)) + " bp0 ep0) with idpath _ => " + (u2c (e3 t)) + " end)")
+           ("(" + (spine-c t) + ")")))                              ; an application spine
       (show t))
 
    ; --- translatability: every head handled (no unhandled constructor anywhere) ---
@@ -119,10 +136,28 @@
        "   against its theorem (test/uu.l, green under `make test`); this is the SAME term" (string 10)
        "   translated to Gallina, which coqc re-checks -- the independent second witness," (string 10)
        "   and the universe filter uu's type-in-type kernel lacks. Only the MLTT primitives" (string 10)
-       "   are mapped (nat/bool/unit/empty + recursors, paths<->eq, paths_rect<->J-match);" (string 10)
-       "   the univalence tower and sigma/coprod proofs are skipped (counted at the foot). *)" (string 10)
+       "   are mapped (nat/bool/unit/empty + recursors, paths<->a Type-valued Id type + J-match," (string 10)
+       "   Sigma<->a primitive-projection total2 record with eta, coprod<->sum); only the" (string 10)
+       "   univalence tower (an axm) is skipped, on its own via the dependency closure" (string 10)
+       "   (counted at the foot). *)" (string 10)
        "From Stdlib Require Import PeanoNat." (string 10)
-       "Set Warnings \"-notation-overridden,-abstract-large-number\"." (string 10) (string 10))))
+       "Set Warnings \"-notation-overridden,-abstract-large-number\"." (string 10)
+       "(* universe polymorphism -- the faithful encoding of uu's structures (large Sigmas like" (string 10)
+       "   wfs/hProp reuse total2 AT the universe of UU). It does NOT re-enable type-in-type:" (string 10)
+       "   Type@{i} : Type@{i+1} stays strict, so the cheats below are still rightly rejected. *)" (string 10)
+       "Set Universe Polymorphism." (string 10)
+       "Set Polymorphic Inductive Cumulativity.  (* Prop-valued paths flow into Type carriers *)" (string 10)
+       "(* uu's Sigma has definitional eta; the faithful Coq target is a primitive-projection" (string 10)
+       "   record (eta in the kernel, axiom-free), NOT stdlib sigT (no eta). pr1/pr2/tpair" (string 10)
+       "   mirror uu's own vocabulary; coprod stays stdlib sum (no eta needed). *)" (string 10)
+       "Set Primitive Projections." (string 10)
+       "Record total2 {A : Type} (B : A -> Type) : Type := tpair { pr1 : A ; pr2 : B pr1 }." (string 10)
+       "Unset Primitive Projections." (string 10)
+       "Arguments tpair {A B} _ _.  Arguments pr1 {A B} _.  Arguments pr2 {A B} _." (string 10)
+       "(* uu's paths is the Type-valued identity type (UniMath's `paths`), NOT Prop's eq:" (string 10)
+       "   a path can be a Sigma CARRIER (an element of UU), as in the hProp-valued nat order." (string 10)
+       "   paths_to_eq (below) bridges it back to Coq's = for the Nat.* headline laws. *)" (string 10)
+       "Inductive paths {A : Type} (a : A) : A -> Type := idpath : paths a a." (string 10) (string 10))))
    _ (map (\ e (. (emit e))) exports)
    ; --- the bridge: a STATIC tail tying uu's nat ops to Coq's standard ones, so the
    ;     headline laws RESTATE on Nat.* (spec.v's vocabulary) and discharge FROM the
@@ -133,6 +168,8 @@
        "   Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std" (string 10)
        "   (induction over the shared recursion) tie them to the standard vocabulary, by which" (string 10)
        "   the headline arithmetic laws are RESTATED on Nat.* and discharged FROM ai's exports. *)" (string 10)
+       "Lemma paths_to_eq : forall (A : Type) (a b : A), paths a b -> a = b." (string 10)
+       "Proof. intros A a b p; destruct p; reflexivity. Qed." (string 10)
        "Lemma uu_add_std : forall n m, uu_add n m = Nat.add n m." (string 10)
        "Proof. intros n m; induction n as [|n IHn]; [reflexivity|]." (string 10)
        "  change (uu_add (S n) m) with (S (uu_add n m)); rewrite IHn; reflexivity. Qed." (string 10)
@@ -141,11 +178,11 @@
        "  change (uu_mul (S n) m) with (uu_add (uu_mul n m) m);" (string 10)
        "  rewrite uu_add_std, IHn, Nat.add_comm; reflexivity. Qed." (string 10)
        "Theorem add_comm_std : forall n m, Nat.add n m = Nat.add m n." (string 10)
-       "Proof. intros n m; rewrite <- (uu_add_std n m), <- (uu_add_std m n); apply uu_natpluscomm. Qed." (string 10)
+       "Proof. intros n m; rewrite <- (uu_add_std n m), <- (uu_add_std m n); apply paths_to_eq, uu_natpluscomm. Qed." (string 10)
        "Theorem add_assoc_std : forall n m k, Nat.add (Nat.add n m) k = Nat.add n (Nat.add m k)." (string 10)
-       "Proof. intros n m k; rewrite <- !uu_add_std; apply uu_natplusassoc. Qed." (string 10)
+       "Proof. intros n m k; rewrite <- !uu_add_std; apply paths_to_eq, uu_natplusassoc. Qed." (string 10)
        "Theorem mul_comm_std : forall n m, Nat.mul n m = Nat.mul m n." (string 10)
-       "Proof. intros n m; rewrite <- (uu_mul_std n m), <- (uu_mul_std m n); apply uu_natmultcomm. Qed." (string 10))))
+       "Proof. intros n m; rewrite <- (uu_mul_std n m), <- (uu_mul_std m n); apply paths_to_eq, uu_natmultcomm. Qed." (string 10))))
    _ (. (cat (L (string 10) "Print Assumptions uu_natplusr0." (string 10)
                 "Print Assumptions add_comm_std." (string 10)
                 "Print Assumptions add_assoc_std." (string 10)
