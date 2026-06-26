@@ -7318,10 +7318,13 @@ lvm(lvm_sort) {
  word *a = (word*) Hp, *b = a + n;                 // scratch: the uncommitted gap
  uintptr_t i = 0;
  for (word p = l; chainp(p); p = B(p)) a[i++] = A(p);
+ for (i = 0; i < n; i++) if (!charmp(a[i])) break;   // all-fixnum FAST PATH: a tagged fixnum (v<<1|1)
+ bool allfix = i == n;                               // orders as a signed word, so skip the generic cmp3
  for (uintptr_t w = 1; w < n; w *= 2) {            // bottom-up stable merge
   for (uintptr_t lo = 0; lo < n; lo += 2 * w) {
    uintptr_t m = min(lo + w, n), hi = min(lo + 2 * w, n), x = lo, y = m, o = lo;
-   while (x < m && y < hi) b[o++] = cmp3(g, a[y], a[x]) < 0 ? a[y++] : a[x++];
+   if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];   // branch ONCE per segment, not per compare
+   else        while (x < m && y < hi) b[o++] = cmp3(g, a[y], a[x]) < 0 ? a[y++] : a[x++];
    while (x < m) b[o++] = a[x++];
    while (y < hi) b[o++] = a[y++]; }
   word *t = a; a = b; b = t; }
