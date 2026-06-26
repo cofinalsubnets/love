@@ -39,8 +39,8 @@
   td.fast { color: #9ece6a; font-weight: bold; }              /* a kept answer: the green */
   .ai { background: rgba(169,177,214,.09) !important; }        /* the ai axis: translucent periwinkle */
   th.ai { background: rgba(169,177,214,.20) !important; color: #c0caf5 !important; }
-  .netrow th, .netrow td { border-top: 2px solid #545c7e; color: #e0af68; }   /* net: Σ ms/it of the fundamentals -- the column-ordering key */
-  .extra th, .extra td { color: #737aa2; }                                    /* below the net: bell (bignum) + setup (cold start) -- shown, not ranked */
+  .netrow th, .netrow td { border-top: 2px solid #545c7e; color: #e0af68; }   /* geomean: geometric-mean ms/it of the fundamentals -- the column-ordering key */
+  .extra th, .extra td { color: #737aa2; }                                    /* below the geomean: bell (bignum) + setup (cold start) -- shown, not ranked */
   th.net, td.net { border-left: 2px solid #545c7e; color: #e0af68; }          /* ... as a column in the transposed view */
   td.to { color: #f7768e; }                                                   /* a solver that exceeded the timeout */
   h2 { font-weight: normal; color: #c0caf5; margin: 1.6em 0 .4em; }
@@ -52,14 +52,20 @@
 auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
 per bench is <b style="color:#9ece6a">green</b>; the <span class="ai"
 style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
-(or an unavailable toolchain). The <b>net</b> row ranks the columns &mdash; the
-<b>geometric mean</b> of each language's per-bench times, so every bench counts in proportion and no
-single heavy one dominates (a language is fast at some things, slow at others). Below it, shown but
+(or an unavailable toolchain). The ranking row orders the columns by the metric you pick above
+&mdash; default the <b>geometric mean</b> of each language's per-bench times, so every bench counts in
+proportion and no single heavy one dominates (a language is fast at some things, slow at others; try
+<b>harmonic</b> or <b>arithmetic</b> and watch the order shift). Below it, shown but
 not ranked: <b>bell</b> (bignum &mdash; not every language has it) and <b>setup</b> (cold start:
 source &rarr; trivial result, so compiled languages pay their compile).</p>
 <div class="bar">
   <button id="btn" type="button">transpose</button>
   <span id="mode"></span>
+  <span class="rank">rank by:
+    <label><input type="radio" name="metric" value="harmonic">harmonic</label>
+    <label><input type="radio" name="metric" value="geometric" checked>geometric</label>
+    <label><input type="radio" name="metric" value="arithmetic">arithmetic</label>
+  </span>
 </div>
 <div class="wrap"><div id="t"></div></div>
 <h2>SAT solvers &mdash; pigeonhole UNSAT, milliseconds to solve</h2>
@@ -71,35 +77,35 @@ startup is ~ms). <code>timeout</code> = exceeded the cutoff. This is where a tun
 solver pulls away from an interpreted one &mdash; the honest other side of the language
 table above.</p>
 <div class="wrap">
-<table><thead><tr><th>instance</th><th>kissat</th><th>picosat</th><th>cadical</th><th>minisat</th><th>glucose</th><th class='ai'>ai</th></tr></thead><tbody>
-<tr><th>php5</th><td class='fast '>2.941</td><td class=''>3.840</td><td class=''>3.566</td><td class=''>4.803</td><td class=''>4.533</td><td class='ai '>20.000</td></tr>
-<tr><th>php6</th><td class=''>2.685</td><td class='fast '>2.553</td><td class=''>3.880</td><td class=''>4.058</td><td class=''>4.352</td><td class='ai '>270.0</td></tr>
-<tr><th>php7</th><td class=''>2.748</td><td class='fast '>2.620</td><td class=''>3.465</td><td class=''>3.658</td><td class=''>4.570</td><td class='ai '>7277.0</td></tr>
-<tr><th>php8</th><td class=''>2.569</td><td class='fast '>2.387</td><td class=''>3.677</td><td class=''>3.711</td><td class=''>4.467</td><td class='ai to'>timeout</td></tr>
-<tr class='netrow'><th>net</th><td class='net'>10.943</td><td class='net'>11.400</td><td class='net'>14.588</td><td class='net'>16.230</td><td class='net'>17.922</td><td class='net ai'>dnf</td></tr></tbody></table>
+<table><thead><tr><th>instance</th><th>picosat</th><th>kissat</th><th>cadical</th><th>minisat</th><th>glucose</th><th class='ai'>ai</th></tr></thead><tbody>
+<tr><th>php5</th><td class='fast '>2.327</td><td class=''>2.619</td><td class=''>3.097</td><td class=''>3.175</td><td class=''>4.019</td><td class='ai '>18.000</td></tr>
+<tr><th>php6</th><td class='fast '>2.264</td><td class=''>2.460</td><td class=''>3.205</td><td class=''>3.608</td><td class=''>3.745</td><td class='ai '>237.0</td></tr>
+<tr><th>php7</th><td class='fast '>2.281</td><td class=''>2.448</td><td class=''>3.202</td><td class=''>3.592</td><td class=''>3.913</td><td class='ai '>6472.0</td></tr>
+<tr><th>php8</th><td class='fast '>2.293</td><td class=''>2.460</td><td class=''>3.129</td><td class=''>3.585</td><td class=''>3.673</td><td class='ai to'>timeout</td></tr>
+<tr class='netrow'><th>net</th><td class='net'>9.165</td><td class='net'>9.987</td><td class='net'>12.633</td><td class='net'>13.960</td><td class='net'>15.350</td><td class='net ai'>dnf</td></tr></tbody></table>
 </div>
 <script>
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","mapfilter","deforest","polysum","primes","bell","strcat","strscan","hash","sort","tree","bintrees","mandelbrot","closure","cdcl","setup"];
 const PER={};
-PER["fib"]={"ai":3.7188,"go":3.9632,"rust":2.1005,"java":2.7281,"julia":4.6831,"luajit":8.0570,"pypy":8.7951,"node":8.1657,"elixir":7.4599,"chez":6.1562,"sbcl":11.6885};
-PER["tak"]={"ai":0.5430,"go":0.4810,"rust":0.3595,"java":0.3272,"julia":0.7218,"luajit":1.4241,"pypy":2.4811,"node":1.0506,"elixir":0.8735,"chez":0.6270,"sbcl":4.2816};
+PER["fib"]={"ai":3.2344,"go":3.9632,"rust":2.1005,"java":2.7281,"julia":4.6831,"luajit":8.0570,"pypy":8.7951,"node":8.1657,"elixir":7.4599,"chez":6.1562,"sbcl":11.6885};
+PER["tak"]={"ai":0.4805,"go":0.4810,"rust":0.3595,"java":0.3272,"julia":0.7218,"luajit":1.4241,"pypy":2.4811,"node":1.0506,"elixir":0.8735,"chez":0.6270,"sbcl":4.2816};
 PER["sum"]={"ai":0.0001,"go":0.1120,"rust":0.0540,"java":0.2094,"julia":0.0861,"luajit":0.0750,"pypy":0.2881,"node":0.8250,"elixir":0.5068,"chez":0.5215,"sbcl":0.7227};
-PER["mapfilter"]={"ai":0.0001,"go":0.0221,"rust":0.0053,"java":0.0060,"julia":0.0155,"luajit":0.0331,"pypy":0.1006,"node":0.2380,"elixir":0.2469,"chez":0.1123,"sbcl":0.1021};
-PER["deforest"]={"ai":0.0613,"go":0.0474,"rust":0.0124,"java":0.0142,"julia":0.0183,"luajit":0.0657,"pypy":0.1622,"node":1.3130,"elixir":0.4680,"chez":0.2510,"sbcl":0.2471};
+PER["mapfilter"]={"ai":0.0000,"go":0.0221,"rust":0.0053,"java":0.0060,"julia":0.0155,"luajit":0.0331,"pypy":0.1006,"node":0.2380,"elixir":0.2469,"chez":0.1123,"sbcl":0.1021};
+PER["deforest"]={"ai":0.0535,"go":0.0474,"rust":0.0124,"java":0.0142,"julia":0.0183,"luajit":0.0657,"pypy":0.1622,"node":1.3130,"elixir":0.4680,"chez":0.2510,"sbcl":0.2471};
 PER["polysum"]={"ai":0.0001,"go":0.0406,"rust":0.0025,"java":0.0072,"julia":0.0152,"luajit":0.0639,"pypy":0.1584,"node":1.2844,"elixir":0.4302,"chez":0.2041,"sbcl":0.2129};
-PER["primes"]={"ai":1.1641,"go":0.9596,"rust":0.8358,"java":0.8278,"julia":0.9572,"luajit":0.8531,"pypy":1.4532,"node":0.8603,"elixir":2.3922,"chez":1.7812,"sbcl":5.0473};
-PER["bell"]={"ai":58.5000,"go":25.7089,"java":36.8759,"julia":78.3863,"pypy":28.6606,"node":31.1756,"elixir":34.5496,"chez":70.7500,"sbcl":53.5048};
-PER["strcat"]={"ai":0.0310,"go":0.9282,"rust":0.0184,"java":1.7796,"julia":1.8123,"luajit":1.4973,"pypy":0.1790,"node":0.1239,"elixir":0.0453,"chez":1.4727,"sbcl":4.6254};
-PER["strscan"]={"ai":0.0864,"go":0.0691,"rust":0.0701,"java":0.0688,"julia":0.0687,"luajit":0.1345,"pypy":0.0692,"node":0.4325,"elixir":0.1050,"chez":0.1377,"sbcl":0.1797};
-PER["hash"]={"ai":1.1055,"go":0.5745,"rust":0.7867,"java":0.3203,"julia":0.5005,"luajit":1.0662,"pypy":0.4695,"node":0.7890,"chez":0.8164,"sbcl":0.9806};
-PER["sort"]={"ai":0.5840,"go":0.3760,"rust":0.0686,"java":0.1737,"julia":0.0622,"luajit":1.2500,"pypy":0.3931,"node":1.1023,"elixir":0.7952,"chez":0.4316,"sbcl":0.6251};
-PER["tree"]={"ai":0.8828,"go":1.6404,"rust":4.9554,"java":0.8342,"julia":3.3348,"luajit":3.7033,"pypy":2.1799,"node":1.4941,"elixir":1.0165,"chez":0.6484,"sbcl":1.4845};
-PER["bintrees"]={"ai":26.8750,"go":39.0460,"rust":85.7212,"java":15.2521,"julia":26.5689,"luajit":85.1783,"pypy":32.4967,"node":30.1441,"elixir":22.3216,"chez":15.7500,"sbcl":26.0023};
-PER["mandelbrot"]={"ai":0.6543,"go":1.0644,"rust":0.9871,"java":0.9615,"julia":0.9805,"luajit":1.0901,"pypy":1.5713,"node":1.0048,"elixir":22.1290,"chez":15.7500};
-PER["closure"]={"ai":0.0818,"go":0.0260,"rust":0.0000,"java":0.0333,"julia":0.0106,"luajit":14.0421,"pypy":0.0816,"node":0.8728,"elixir":2.1286,"chez":1.0586,"sbcl":2.0783};
-PER["cdcl"]={"ai":49.6250};
-PER["setup"]={"ai":14.4020,"go":30.7100,"rust":65.0770,"java":374.4040,"julia":159.4780,"luajit":2.4920,"pypy":53.8690,"node":30.8500,"elixir":227.4330,"chez":58.7070,"sbcl":5.6210};
+PER["primes"]={"ai":0.9961,"go":0.9596,"rust":0.8358,"java":0.8278,"julia":0.9572,"luajit":0.8531,"pypy":1.4532,"node":0.8603,"elixir":2.3922,"chez":1.7812,"sbcl":5.0473};
+PER["bell"]={"ai":51.0000,"go":25.7089,"java":36.8759,"julia":78.3863,"pypy":28.6606,"node":31.1756,"elixir":34.5496,"chez":70.7500,"sbcl":53.5048};
+PER["strcat"]={"ai":0.0264,"go":0.9282,"rust":0.0184,"java":1.7796,"julia":1.8123,"luajit":1.4973,"pypy":0.1790,"node":0.1239,"elixir":0.0453,"chez":1.4727,"sbcl":4.6254};
+PER["strscan"]={"ai":0.0757,"go":0.0691,"rust":0.0701,"java":0.0688,"julia":0.0687,"luajit":0.1345,"pypy":0.0692,"node":0.4325,"elixir":0.1050,"chez":0.1377,"sbcl":0.1797};
+PER["hash"]={"ai":1.0234,"go":0.5745,"rust":0.7867,"java":0.3203,"julia":0.5005,"luajit":1.0662,"pypy":0.4695,"node":0.7890,"chez":0.8164,"sbcl":0.9806};
+PER["sort"]={"ai":0.4844,"go":0.3760,"rust":0.0686,"java":0.1737,"julia":0.0622,"luajit":1.2500,"pypy":0.3931,"node":1.1023,"elixir":0.7952,"chez":0.4316,"sbcl":0.6251};
+PER["tree"]={"ai":0.8809,"go":1.6404,"rust":4.9554,"java":0.8342,"julia":3.3348,"luajit":3.7033,"pypy":2.1799,"node":1.4941,"elixir":1.0165,"chez":0.6484,"sbcl":1.4845};
+PER["bintrees"]={"ai":20.2500,"go":39.0460,"rust":85.7212,"java":15.2521,"julia":26.5689,"luajit":85.1783,"pypy":32.4967,"node":30.1441,"elixir":22.3216,"chez":15.7500,"sbcl":26.0023};
+PER["mandelbrot"]={"ai":0.5586,"go":1.0644,"rust":0.9871,"java":0.9615,"julia":0.9805,"luajit":1.0901,"pypy":1.5713,"node":1.0048,"elixir":22.1290,"chez":15.7500};
+PER["closure"]={"ai":0.0754,"go":0.0260,"rust":0.0000,"java":0.0333,"julia":0.0106,"luajit":14.0421,"pypy":0.0816,"node":0.8728,"elixir":2.1286,"chez":1.0586,"sbcl":2.0783};
+PER["cdcl"]={"ai":43.8750};
+PER["setup"]={"ai":13.1270,"go":27.5540,"rust":60.2520,"java":317.0340,"julia":144.8510,"luajit":2.1490,"pypy":46.6090,"node":26.8470,"elixir":196.6710,"chez":52.8170,"sbcl":5.0340};
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
@@ -116,18 +122,23 @@ const fmt = x => x == null ? "·"
 // plain-f64 `float`, the same escape-grid workload: its idiomatic complex ~(re im) recurrence lowers
 // to the real-pair float-grid kernel (twolow) and glazes to native.)
 const NORANK = b => b === "bell" || b === "cdcl" || b === "setup";
-// the net is the GEOMETRIC MEAN of a language's per-bench ms/it (over the benches it
-// has). Geomean, not a sum, so it is magnitude-robust: every bench counts in PROPORTION
-// (a 2x on a 0.3 ms fundamental and a 2x on a 30 ms bintrees move the net equally), so a
-// heavy bench can't dominate the order and a closed-form O(1) win helps by its ratio, not
-// by rounding to 0. That is what lets bintrees (the GC/alloc axis) sit IN the ranking
-// honestly instead of being excluded -- languages are fast at some things, slow at others,
-// and the geomean is the fair single order across that.
-const NET = l => { const xs = BENCHES.filter(b => !NORANK(b) && PER[b] && PER[b][l] != null).map(b => PER[b][l]);
-  return xs.length ? Math.exp(xs.reduce((s, x) => s + Math.log(x), 0) / xs.length) : Infinity; };
+// RANK(l): the ranking aggregate of a language's per-bench ms/it (lower = faster), chosen by
+// the radio. GEOMETRIC is the default + the fair one: magnitude-robust, every bench counts in
+// PROPORTION (a 2x on a 0.3 ms fundamental and a 2x on a 30 ms bintrees move it equally), so no
+// heavy bench dominates and a closed-form O(1) win helps by its ratio. HARMONIC rewards being
+// fast SOMEWHERE (the small values dominate); ARITHMETIC (the mean) lets a heavy bench dominate.
+// (A plain SUM is omitted: it is just the mean times the bench count -- the same order.) The
+// radio shows how it shifts: ai leads geometric/harmonic (the loop-closer), trails arithmetic.
+// A bench timed below the clock's resolution records as 0.0000 ms/it (rust's no-op closure);
+// 1/0 and log(0) would blow up the harmonic/geometric means, so floor at the display res.
+const GEOFLOOR = 1e-4;
+let metric = "geometric";
+const vals = l => BENCHES.filter(b => !NORANK(b) && PER[b] && PER[b][l] != null).map(b => Math.max(PER[b][l], GEOFLOOR));
+const RANK = l => { const xs = vals(l), n = xs.length; if (!n) return Infinity;
+  return metric === "harmonic"   ? n / xs.reduce((s, x) => s + 1 / x, 0)
+       : metric === "arithmetic" ? xs.reduce((s, x) => s + x, 0) / n
+       :                           Math.exp(xs.reduce((s, x) => s + Math.log(x), 0) / n); };
 const HAS = l => BENCHES.some(b => !NORANK(b) && PER[b] && PER[b][l] != null);
-const LANGORD = LANGS.slice().sort((a, b) =>
-  (HAS(a) ? NET(a) : Infinity) - (HAS(b) ? NET(b) : Infinity));
 // the fundamentals (ranked, the main block) and the informational rows shown BELOW the net.
 const FUND  = BENCHES.filter(b => !NORANK(b));
 const EXTRA = ["bell", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; bintrees now ranks (geomean); cdcl is dropped from the table entirely
@@ -137,7 +148,7 @@ const EXTRA = ["bell", "setup"].filter(b => BENCHES.includes(b));   // below the
 let transposed = false;
 
 function build() {
-  const langs = LANGORD;
+  const langs = LANGS.slice().sort((a, b) => (HAS(a) ? RANK(a) : Infinity) - (HAS(b) ? RANK(b) : Infinity));
   const minB = {};
   for (const b of BENCHES) {
     let m = Infinity;
@@ -151,11 +162,11 @@ function build() {
     if (v == null) c.push("miss"); else if (v === minB[b]) c.push("fast");
     return "<td" + (c.length ? " class='" + c.join(" ") + "'" : "") + ">" + fmt(v) + "</td>";
   };
-  const netc = (l) => "<td class='net" + (l === "ai" ? " ai" : "") + "'>" + (HAS(l) ? fmt(NET(l)) : "·") + "</td>";
+  const netc = (l) => "<td class='net" + (l === "ai" ? " ai" : "") + "'>" + (HAS(l) ? fmt(RANK(l)) : "·") + "</td>";
   let h = "<table><thead><tr><th>" + (transposed ? "language" : "bench") + "</th>";
   if (transposed) {                                                          // languages down the rows: FUND benches, then net, then the EXTRA benches, as COLUMNS
     for (const b of FUND) h += "<th>" + b + "</th>";
-    h += "<th class='net'>net</th>";
+    h += "<th class='net'>" + metric + "</th>";
     for (const b of EXTRA) h += "<th>" + b + "</th>";
     h += "</tr></thead><tbody>";
     for (const l of langs) {
@@ -169,7 +180,7 @@ function build() {
     for (const l of langs) h += "<th" + (l === "ai" ? " class='ai'" : "") + ">" + l + "</th>";
     h += "</tr></thead><tbody>";
     for (const b of FUND) { h += "<tr><th>" + b + "</th>"; for (const l of langs) h += td(b, l); h += "</tr>"; }
-    h += "<tr class='netrow'><th>net</th>";
+    h += "<tr class='netrow'><th>" + metric + "</th>";
     for (const l of langs) h += netc(l);
     h += "</tr>";
     for (const b of EXTRA) { h += "<tr class='extra'><th>" + b + "</th>"; for (const l of langs) h += td(b, l); h += "</tr>"; }
@@ -180,6 +191,8 @@ function build() {
     transposed ? "languages × benches" : "benches × languages";
 }
 document.getElementById("btn").onclick = () => { transposed = !transposed; build(); };
+document.querySelectorAll("input[name=metric]").forEach(r =>
+  r.onchange = (e) => { metric = e.target.value; build(); });
 build();
 </script>
 </body>

@@ -55,8 +55,8 @@ cat <<'HEAD'
   td.fast { color: #9ece6a; font-weight: bold; }              /* a kept answer: the green */
   .ai { background: rgba(169,177,214,.09) !important; }        /* the ai axis: translucent periwinkle */
   th.ai { background: rgba(169,177,214,.20) !important; color: #c0caf5 !important; }
-  .netrow th, .netrow td { border-top: 2px solid #545c7e; color: #e0af68; }   /* net: Σ ms/it of the fundamentals -- the column-ordering key */
-  .extra th, .extra td { color: #737aa2; }                                    /* below the net: bell (bignum) + setup (cold start) -- shown, not ranked */
+  .netrow th, .netrow td { border-top: 2px solid #545c7e; color: #e0af68; }   /* geomean: geometric-mean ms/it of the fundamentals -- the column-ordering key */
+  .extra th, .extra td { color: #737aa2; }                                    /* below the geomean: bell (bignum) + setup (cold start) -- shown, not ranked */
   th.net, td.net { border-left: 2px solid #545c7e; color: #e0af68; }          /* ... as a column in the transposed view */
   td.to { color: #f7768e; }                                                   /* a solver that exceeded the timeout */
   h2 { font-weight: normal; color: #c0caf5; margin: 1.6em 0 .4em; }
@@ -68,14 +68,20 @@ cat <<'HEAD'
 auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
 per bench is <b style="color:#9ece6a">green</b>; the <span class="ai"
 style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
-(or an unavailable toolchain). The <b>net</b> row ranks the columns &mdash; the
-<b>geometric mean</b> of each language's per-bench times, so every bench counts in proportion and no
-single heavy one dominates (a language is fast at some things, slow at others). Below it, shown but
+(or an unavailable toolchain). The ranking row orders the columns by the metric you pick above
+&mdash; default the <b>geometric mean</b> of each language's per-bench times, so every bench counts in
+proportion and no single heavy one dominates (a language is fast at some things, slow at others; try
+<b>harmonic</b> or <b>arithmetic</b> and watch the order shift). Below it, shown but
 not ranked: <b>bell</b> (bignum &mdash; not every language has it) and <b>setup</b> (cold start:
 source &rarr; trivial result, so compiled languages pay their compile).</p>
 <div class="bar">
   <button id="btn" type="button">transpose</button>
   <span id="mode"></span>
+  <span class="rank">rank by:
+    <label><input type="radio" name="metric" value="harmonic">harmonic</label>
+    <label><input type="radio" name="metric" value="geometric" checked>geometric</label>
+    <label><input type="radio" name="metric" value="arithmetic">arithmetic</label>
+  </span>
 </div>
 <div class="wrap"><div id="t"></div></div>
 HEAD
@@ -169,18 +175,23 @@ const fmt = x => x == null ? "·"
 // plain-f64 `float`, the same escape-grid workload: its idiomatic complex ~(re im) recurrence lowers
 // to the real-pair float-grid kernel (twolow) and glazes to native.)
 const NORANK = b => b === "bell" || b === "cdcl" || b === "setup";
-// the net is the GEOMETRIC MEAN of a language's per-bench ms/it (over the benches it
-// has). Geomean, not a sum, so it is magnitude-robust: every bench counts in PROPORTION
-// (a 2x on a 0.3 ms fundamental and a 2x on a 30 ms bintrees move the net equally), so a
-// heavy bench can't dominate the order and a closed-form O(1) win helps by its ratio, not
-// by rounding to 0. That is what lets bintrees (the GC/alloc axis) sit IN the ranking
-// honestly instead of being excluded -- languages are fast at some things, slow at others,
-// and the geomean is the fair single order across that.
-const NET = l => { const xs = BENCHES.filter(b => !NORANK(b) && PER[b] && PER[b][l] != null).map(b => PER[b][l]);
-  return xs.length ? Math.exp(xs.reduce((s, x) => s + Math.log(x), 0) / xs.length) : Infinity; };
+// RANK(l): the ranking aggregate of a language's per-bench ms/it (lower = faster), chosen by
+// the radio. GEOMETRIC is the default + the fair one: magnitude-robust, every bench counts in
+// PROPORTION (a 2x on a 0.3 ms fundamental and a 2x on a 30 ms bintrees move it equally), so no
+// heavy bench dominates and a closed-form O(1) win helps by its ratio. HARMONIC rewards being
+// fast SOMEWHERE (the small values dominate); ARITHMETIC (the mean) lets a heavy bench dominate.
+// (A plain SUM is omitted: it is just the mean times the bench count -- the same order.) The
+// radio shows how it shifts: ai leads geometric/harmonic (the loop-closer), trails arithmetic.
+// A bench timed below the clock's resolution records as 0.0000 ms/it (rust's no-op closure);
+// 1/0 and log(0) would blow up the harmonic/geometric means, so floor at the display res.
+const GEOFLOOR = 1e-4;
+let metric = "geometric";
+const vals = l => BENCHES.filter(b => !NORANK(b) && PER[b] && PER[b][l] != null).map(b => Math.max(PER[b][l], GEOFLOOR));
+const RANK = l => { const xs = vals(l), n = xs.length; if (!n) return Infinity;
+  return metric === "harmonic"   ? n / xs.reduce((s, x) => s + 1 / x, 0)
+       : metric === "arithmetic" ? xs.reduce((s, x) => s + x, 0) / n
+       :                           Math.exp(xs.reduce((s, x) => s + Math.log(x), 0) / n); };
 const HAS = l => BENCHES.some(b => !NORANK(b) && PER[b] && PER[b][l] != null);
-const LANGORD = LANGS.slice().sort((a, b) =>
-  (HAS(a) ? NET(a) : Infinity) - (HAS(b) ? NET(b) : Infinity));
 // the fundamentals (ranked, the main block) and the informational rows shown BELOW the net.
 const FUND  = BENCHES.filter(b => !NORANK(b));
 const EXTRA = ["bell", "setup"].filter(b => BENCHES.includes(b));   // below the net, not ranked; bintrees now ranks (geomean); cdcl is dropped from the table entirely
@@ -190,7 +201,7 @@ const EXTRA = ["bell", "setup"].filter(b => BENCHES.includes(b));   // below the
 let transposed = false;
 
 function build() {
-  const langs = LANGORD;
+  const langs = LANGS.slice().sort((a, b) => (HAS(a) ? RANK(a) : Infinity) - (HAS(b) ? RANK(b) : Infinity));
   const minB = {};
   for (const b of BENCHES) {
     let m = Infinity;
@@ -204,11 +215,11 @@ function build() {
     if (v == null) c.push("miss"); else if (v === minB[b]) c.push("fast");
     return "<td" + (c.length ? " class='" + c.join(" ") + "'" : "") + ">" + fmt(v) + "</td>";
   };
-  const netc = (l) => "<td class='net" + (l === "ai" ? " ai" : "") + "'>" + (HAS(l) ? fmt(NET(l)) : "·") + "</td>";
+  const netc = (l) => "<td class='net" + (l === "ai" ? " ai" : "") + "'>" + (HAS(l) ? fmt(RANK(l)) : "·") + "</td>";
   let h = "<table><thead><tr><th>" + (transposed ? "language" : "bench") + "</th>";
   if (transposed) {                                                          // languages down the rows: FUND benches, then net, then the EXTRA benches, as COLUMNS
     for (const b of FUND) h += "<th>" + b + "</th>";
-    h += "<th class='net'>net</th>";
+    h += "<th class='net'>" + metric + "</th>";
     for (const b of EXTRA) h += "<th>" + b + "</th>";
     h += "</tr></thead><tbody>";
     for (const l of langs) {
@@ -222,7 +233,7 @@ function build() {
     for (const l of langs) h += "<th" + (l === "ai" ? " class='ai'" : "") + ">" + l + "</th>";
     h += "</tr></thead><tbody>";
     for (const b of FUND) { h += "<tr><th>" + b + "</th>"; for (const l of langs) h += td(b, l); h += "</tr>"; }
-    h += "<tr class='netrow'><th>net</th>";
+    h += "<tr class='netrow'><th>" + metric + "</th>";
     for (const l of langs) h += netc(l);
     h += "</tr>";
     for (const b of EXTRA) { h += "<tr class='extra'><th>" + b + "</th>"; for (const l of langs) h += td(b, l); h += "</tr>"; }
@@ -233,6 +244,8 @@ function build() {
     transposed ? "languages × benches" : "benches × languages";
 }
 document.getElementById("btn").onclick = () => { transposed = !transposed; build(); };
+document.querySelectorAll("input[name=metric]").forEach(r =>
+  r.onchange = (e) => { metric = e.target.value; build(); });
 build();
 </script>
 </body>
