@@ -832,6 +832,16 @@
          (link (? hit (cap nf) nf)                                                            ; drop the (name p..) define-sugar -> a PLAIN binding
                (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) 'x64) val) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets); else interp (jgir-supported spans the recognizer grammar, so this fallback is a soundness backstop, not a live lane)
                      (rewrite-bindings (cuup bl) gnames gdefs)))))
+   ; memo-leak? -- a candidate fn FREELY reads/writes a `:`-sibling MAP (a memo tablet/hash bound in the
+   ; same form, e.g. fact/bell's global `facts`/`bells`): the native group lane can only touch a map that
+   ; is one of the fn's own PARAMS (mpeep/mpin), so a non-param map is mishandled -> a SILENT miscompile
+   ; (fact jitted to a constant 1). DECLINE -> interp, which is correct. The map-PARAM lane (a map threaded
+   ; as a call arg, read via the param) is unaffected: the binding name never occurs inside the callee.
+   (memo-leak? form)
+    (: ps (cap (anat-defs (cup form)))
+       mn (gfilt (\ p (&& (atom? (cap p)) (two? (cup p)) (member? (cap (cup p)) '(tablet hash)))) ps)   ; names bound to a tablet/hash
+       (! (atom? (gfilt (\ p (&& (two? (cap p))                                                    ; a fn binding whose body ...
+          (! (atom? (gfilt (\ m (&& (occurs? (cap m) (cup p)) (! (member? (cap m) (cup (cap p)))))) mn))))) ps))))   ; ... references a mapname that is NOT its param
    (autogroup form0)
     (? (! (two? form0)) form0
        (! (id? (cap form0) ':)) form0
@@ -844,6 +854,7 @@
        ; glaze. Sound > fast: never hand back a wrong answer. (The real cure is explicit global-binding
        ; syntax instead of the parity-of-`:` leak convention; until then, decline.)
        (= 0 (% (tally (cup form0)) 2)) form0
+       (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (fold-consts form0)))))))))   ; inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
           parsed (anat-defs (cup form)) pairs (cap parsed)
           fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
