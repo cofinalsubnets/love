@@ -1015,29 +1015,20 @@
               `(`('label 'DEOPT)) (deoptmn tgt (> arity 1)))))
    ; jgir-ok? -- the transitional GATE: is a group fully glazeable by jitgroupir's CURRENT op coverage?
    ; autogroup routes here when true, else to the byte-list jitgroup (which still owns the lanes not yet
-   ; ported). `jgir-ops` is the supported-op set; it GROWS as each lane lands, and when it covers every op
-   ; jitgroup does the gate becomes vacuous and jitgroup can retire. (No tail-call detection needed: a tail
-   ; self-call compiles as a plain `call` -- correct, just not yet O(1)-stack; the loop lanes catch counted
-   ; loops upstream, so the groups reaching here are bounded-depth recursion.)
-   jgir-ops '(+ - * // % & | ^ < <= > >= =)                                     ; binary int ops cggir handles (grows per lane)
-   (jgir-e? syms ps e) (? (member? e ps) 1  (whole? e) 1
-      (two? e) (: op (cap e)
-         (? (member? op syms)        (all (\ x (jgir-e? syms ps x)) (cup e))    ; a group CALL: every arg supported
-            (member? op jgir-ops)    (&& (= 3 (tally e)) (jgir-e? syms ps (caup e)) (jgir-e? syms ps (caup (cup e))))
-            (id? op '?)              (&& (= 4 (tally e)) (jgir-e? syms ps (caup e)) (jgir-e? syms ps (caup (cup e))) (jgir-e? syms ps (caup (cup (cup e)))))
-            0))
-      0)
-   ; jgvir-e? -- the VALUE grammar (a fn whose body conses -> cggvir): int-const | param | (link V V) |
-   ; (? INT V V) (int test, value branches) | (g E..) (a value-group call; args INT). Mirrors cggvir.
-   (jgvir-e? syms ps e) (? (whole? e) 1  (member? e ps) 1
-      (two? e) (: op (cap e)
-         (? (member? op syms)        (all (\ x (jgir-e? syms ps x)) (cup e))         ; value-group call: args INT-ok
-            (id? op 'link)           (&& (= 3 (tally e)) (jgvir-e? syms ps (caup e)) (jgvir-e? syms ps (caup (cup e))))
-            (id? op '?)              (&& (= 4 (tally e)) (jgir-e? syms ps (caup e)) (jgvir-e? syms ps (caup (cup e))) (jgvir-e? syms ps (caup (cup (cup e)))))
-            0))
-      0)
+   ; ported). The gate is reached ONLY after the recognizer (auto.l groupok?/vok?/cok?/grpfix) has already
+   ; proven the group glazeable by the byte path's full grammar -- shapes, arities, the int/chain/value
+   ; typing, the interprocedural string inference, all of it. So the gate does NOT re-derive the grammar;
+   ; its lone job is op COVERAGE: does the IR path implement every op this group uses, yet? `jgir-supported`
+   ; is that op set -- it GROWS one entry per lane landed, and when it covers every op jitgroup handles the
+   ; gate is vacuously true for any admitted group, so jitgroup retires. (`?`/`link` already covered: int +
+   ; value-mode cons. No tail-call detection needed: a tail self-call compiles as a plain `call` -- correct,
+   ; just not yet O(1)-stack; the loop lanes catch counted loops upstream.)
+   jgir-supported '(+ - * // % & | ^ < <= > >= = ? link)                        ; ops cggir/cggvir handle (grows per lane: peep tally pin mpeep mpin cap cup two?)
+   (jgir-ops-ok? syms e) (? (two? e)                                            ; every op head in e is a group call or a supported op; recurse into every operand
+      (: op (cap e) (&& (|| (member? op syms) (member? op jgir-supported)) (all (\ x (jgir-ops-ok? syms x)) (cup e))))
+      1)
    (jgir-ok? defs) (: syms (map (\ d (cap (cap d))) defs)
-      (all (\ d (: nf (cap d) body (cup d) (? (hasl body) (jgvir-e? syms (cup nf) body) (jgir-e? syms (cup nf) body)))) defs))
+      (all (\ d (jgir-ops-ok? syms (cup d))) defs))
    ; (jitgroupir defs entry tgt) -- defs = ((nameform . body) ..); compile the group, entry as the value.
    (jitgroupir defs entry tgt)
     (: parse (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d)))) defs)            ; (name params body) per fn
