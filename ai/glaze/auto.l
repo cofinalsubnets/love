@@ -984,8 +984,8 @@
    ; compile cache makes structurally-equal closures id?-IDENTICAL, breaking love's
    ; equal-but-distinct closure semantics (!(id? (\ x E) (\ x E))). A safe creation hook
    ; needs the POST-macro opfix seam + a CODE cache (distinct cells per instance). Future.)
-   (auto-ev e) (? (qual e)  (memo e njit)
-                  (qualn e) (memo e jitn)
+   (auto-ev e) (? (qual e)  (memo e (\ l (jitir l 'x64)))
+                  (qualn e) (memo e (\ l (jitnir l 'x64)))
                   (qualc e) (memo e (\ l (jitn (flatc l))))
                   (qualfr e) (memo e jitfr)                       ; float-RESULT leaf -> heap-boxed gem (sound: param floated at first use)
                   (: li (loopinfo e)
