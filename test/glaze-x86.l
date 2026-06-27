@@ -68,6 +68,17 @@
      (&& (lit? gfib) (75025 = (gfib 25))
          (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25) (gfib 25))
          (gfib = (jitgroup (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib))))   ; two natives, same source -> = (cache soundness)
+  ; INTEGER-PARAM FIXNUM GUARD (the soundness twin of the string guard below): an int param is loaded
+  ; sar'd (untagged), ASSUMING a fixnum -- so a HEAP arg must DEOPT to the interp, never get sar'd then
+  ; re-tagged into a garbage fixnum (pointer|1). Was a real glaze miscompile: identity on a list came
+  ; back a bad fixnum (charm?=1), surfacing only through the .img boot (auto-ev), which the gate's
+  ; AI_NO_IMAGE hid. So: heap arg in {list, string, cask} -> deopt -> EXACTLY the interp's value.
+  (: gid (jitgroup (L (link '(id1 x) 'x)) 'id1)  iid (\ x x)
+     (&& (5 = (gid 5)) (= (iid 5) (gid 5))                                                       ; fixnum: native, == interp
+         !(charm? (gid '(a b))) (= (iid '(a b)) (gid '(a b)))                                    ; HEAP list arg -> deopt -> the list, NOT pointer|1
+         (= (iid "hi") (gid "hi")) (hot? (gid (cask 2)))))                                       ; heap string -> deopt == interp; cask stays a CASK (not a mangled fixnum)
+  (: ginc (jitgroup (L (link '(inc n) '(+ n 1))) 'inc)  iinc (\ n (+ n 1))
+     (&& (42 = (ginc 41)) (= (iinc '(a)) (ginc '(a)))))                                          ; arith on a heap arg -> deopt == interp (not a mangled fixnum)
   (: gtak (jitgroup (L (link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))) 'tak)
      (&& (7 = (gtak 18 12 6)) (7 = ((gtak 18 12) 6)) (7 = ((gtak 18) 12 6))))            ; nested self-calls; curries at any split
   ; MUTUAL recursion: evn/odn cross-call -- both compiled into ONE buffer, sibling calls native

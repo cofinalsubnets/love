@@ -323,9 +323,19 @@
           g (asm (L f '(168 1) '(15 133) (le4 (- Aovf jnz-end))                                  ; mov rax,Sp[i]; test al,1; jnz Aovf (fixnum)
                     '(76 139 0) '(72 184) (le8 kind) '(73 57 192) '(15 133) (le4 (- Aovf jne-end))))   ; mov r8,[rax]; movabs rax,kind; cmp r8,rax; jne Aovf
           (asm (L g (mkguards (cup ms) bufmask mmask strkind bufkind jne-end Aovf)))))
+   ; mkig -- the INTEGER-param fixnum guard (the soundness twin of mkguards). An integer param is
+   ; loaded with `sar` (untagged), ASSUMING a fixnum; so a NON-fixnum (heap) arg must DEOPT, else the
+   ; sar+re-tag mangles the pointer (pointer|1 -- identity on a list returned a bad fixnum). `test al,1`;
+   ; a CLEAR low bit (even/heap) jumps to the OVF handler -> the whole-group interp fallback (total).
+   ; `is` = the integer-param indices (every param NOT a string/chain/map/cask raw param).
+   (mkig is off Aovf) (? (atom? is) ()
+      (: i (cap is) f (fetch i) jz-end (+ off (+ (tally f) 8))
+         g (asm (L f '(168 1) '(15 132) (le4 (- Aovf jz-end))))                                  ; mov rax,Sp[i]; test al,1; jz Aovf (non-fixnum -> deopt)
+         (asm (L g (mkig (cup is) jz-end Aovf)))))
    (mkouter k smask bufmask cmask mmask strkind valt)                                            ; valt: a VALUE-typed entry (returns a heap ptr / tagged value) -> epilogue stores rax AS-IS, no putfix
     (: bufkind (apof (cask 1))                                                                    ; a cask's kind, for a pin (buf) param's type guard
        gmask (cat smask mmask)                                                                    ; the entry-GUARDED raw params: strings + maps (disjoint by construction)
+       imask (gfilt (\ i (! (|| (member? i smask) (|| (member? i cmask) (|| (member? i mmask) (member? i bufmask)))))) (rangeL 0 k))   ; the INT params (sar'd, fixnum-assumed) -> fixnum-guarded
        dpt (? (= k 1) deopt deopt-mn)                                                             ; arity 1 applies fb directly; >=2 enters its body past the lvm_cur
        saveargs (foldl (\ a i (+ a (pshr i))) () (rangeL 0 k))                                    ; save the k arg regs (callee-saved)
        restargs (foldl (\ a i (+ a (popr (- (- k 1) i)))) () (rangeL 0 k))                        ; restore (reverse)
@@ -336,14 +346,16 @@
        Lr (tally restargs)
        Aguard (+ 2 (+ (tally saveargs) 3))                                                       ; guards sit after push r12(2)+saveargs+mov r12,rsp(3)
        Lg (tally (mkguards gmask bufmask mmask strkind bufkind 0 0))                                              ; guard length (offset-independent; 0 when no raw params)
-       Acall (+ Aguard (+ Lg (tally pushargs)))
+       Lig (tally (mkig imask 0 0))                                                                                ; integer fixnum-guard length (offset-independent; 0 when no int params)
+       Acall (+ Aguard (+ Lg (+ Lig (tally pushargs))))
        Arest (+ Acall (+ 5 (tally s6)))  As8 (+ Arest Lr)  As9 (+ As8 2)  Ajmpend (+ As9 (? valt 0 10))   ; s9 is 0 bytes in value mode (no putfix-overflow check)
        As10 Ajmpend  Aovf (+ As10 (tally s10))  Adeopt (+ Aovf (+ 3 (+ Lr 2)))  Hh (+ Adeopt (tally dpt))
        guards (mkguards gmask bufmask mmask strkind bufkind Aguard Aovf)                                          ; real guards (jump to Aovf on a wrong-kind raw arg)
+       iguards (mkig imask (+ Aguard Lg) Aovf)                                                                    ; the integer fixnum guards (sit right after the raw-param guards, before pushargs's sar)
        callb (asm (L '(232) (le4 (- Hh (+ Acall 5)))))                                            ; call H_entry (right after the OUTER)
        s9 (? valt () (asm (L '(72 1 192) '(113 5) '(233) (le4 (- Adeopt Ajmpend)))))               ; add rax,rax; jno PUTOK(+5); jmp DEOPT  (value mode: none -- rax is already a value)
        s11 (asm (L '(76 137 228) restargs '(65 92)))                                              ; OVF: mov rsp,r12; restores; pop r12
-       (L (asm (L '(65 84) saveargs '(73 137 228) guards pushargs callb s6 restargs '(65 92) s9 s10 s11 dpt)) Aovf))
+       (L (asm (L '(65 84) saveargs '(73 137 228) guards iguards pushargs callb s6 restargs '(65 92) s9 s10 s11 dpt)) Aovf))
    ; jitgroup -- compile a GROUP of mutually-recursive integer fns (each a dotted (nameform . body)) to
    ; native, exposing `entry` as the applicable value (its arity). Layout: the entry's OUTER, then
    ; H_entry, then the other H's, in ONE buffer. TWO passes -- measure each H body's length (offset-
