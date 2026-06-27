@@ -830,7 +830,7 @@
    (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
       (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
          (link (? hit (cap nf) nf)                                                            ; drop the (name p..) define-sugar -> a PLAIN binding
-               (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) 'x64) (jitgroup gdefs (cap nf))) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets); else the byte path
+               (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) 'x64) val) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets); else interp (the byte path jitgroup is retired -- the gate is vacuous, so this fallback is a soundness backstop, not a live lane)
                      (rewrite-bindings (cuup bl) gnames gdefs)))))
    (autogroup form0)
     (? (! (two? form0)) form0

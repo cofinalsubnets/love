@@ -155,9 +155,15 @@ porting a lane just re-routes its asserts from `jitgroup` to `jitgroupir` with n
    recurses tail; else `cggir`) + `Lbody` label in `mkhir` after loadargs. Self-only (sibling tail-calls
    stay `call`, as the byte path). **Required before the vacuous gate is safe**: a 1M-deep tail loop via
    jitgroupir without TCO SIGSEGVs (verified exit 139 → fixed; the 1M loop now returns its value).
-7. **retire** — once the gate is vacuous for every recognizer-admitted group, drop the
-   `(jgir-ok? …) … (jitgroup …)` fallback and delete `cgg`/`cggv`/`cggt`/`mkouter`/`jitgroup` +
-   `consemit`/`mkguards`/`mkig` from `emit.l`. (Keep `suse?`/`cuse?`/`muse?`/`buse?`/`smfix` — reused.)
+7. **retire** ✅ (functional) — the gate's `jitgroup` fallback is replaced by `val` (interp), so
+   `autogroup` never calls the byte path; `jgir-ok?` stays as a soundness backstop (an uncovered group
+   interps, never miscompiles). `jitgroupir` is the **sole live group lane**. *Queued hygiene* (a clean
+   follow-up — the removal is interleaved with KEEP items, so do it fresh): physically delete
+   `cgg`/`cggv`/`cggt`/`gargs`/`consemit`/`mkguards`/`mkig`/`mkouter`/`jitgroup` + the byte-ABI helpers
+   (`arx`/`pshr`/`popr`/`ldr`) from `emit.l`, and the now-redundant byte-path `jitgroup` asserts from
+   `test/glaze-x86.l`'s EMIT block. KEEP `hasl`, `suse?`/`cuse?`/`muse?`/`buse?`/`dedup`/`gsm`/`fnsm`/
+   `smfix` (jitgroupir reuses them), `mprobe-ir`/`mpeep-ir`/`mpin-ir`, the kind consts, and the
+   leaf/loop/float byte lanes (those are separate, not retired here).
 
 ## Touch list & gotchas
 
