@@ -68,6 +68,8 @@
       (L "ldx.scale8"  "4b8b04d8"              '((ldx r0 r7 r10 8 0)))   ; mov rax,[r8+r11*8]
       (L "ldx.s8.d8"   "4b8b44d808"            '((ldx r0 r7 r10 8 8)))   ; mov rax,[r8+r11*8+8]
       (L "stx.scale4"  "48890c98"              '((stx r0 r3 4 0 r1)))    ; mov [rax+rbx*4],rcx
+      (L "ldxb.s1.d16" "480fb6440310"          '((ldxb r0 r3 r0 1 16)))  ; movzx rax,byte [rbx+rax*1+16]  (the string-lane peep read)
+      (L "stxb.s1.d16" "4088440310"            '((stxb r3 r0 1 16 r0)))  ; mov byte [rbx+rax*1+16],al     (the cask-lane pin store)
       ;; unary in-place
       (L "neg"         "48f7d8"                '((neg r0)))
       (L "not"         "48f7d3"                '((not r3)))

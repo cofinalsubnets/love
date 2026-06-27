@@ -10,6 +10,12 @@
 ; (as when these lived inline, pre-rebind). The AUTO block leaves `ev` = the live auto-ev, since
 ; those tests exist to exercise the glazing path.
 
+; CONTEXT GUARD (top-level, runs FIRST): this file needs emit.l+auto.l cat'd ahead (`make test_glaze`).
+; run STANDALONE, base-ev/jitgroupir/.. are unbound -> ()=zero point -> (base-ev '(..))=const-1=1 SILENTLY
+; skips every block, yet the final top-level "ok" still prints (a false pass -- the const-1 trap). assert
+; the harness names are bound so a wrong invocation SCARES `;; assert (lit? base-ev)` instead.
+(assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
+
 (base-ev '(: ev base-ev
 (: (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
       f (jit '(\ x (+ (* x 3) 1)))   g (jitsum '(* i 7))
@@ -520,6 +526,11 @@
 ;     per-target register-role map. compiled through base-ev with ev->base-ev for interp references.
 (base-ev '(: ev base-ev
    _ (assert
+      ; LOUD dependency guard -- these glaze internals MUST be bound (cat'd from emit.l). an unbound name
+      ; reads ()=the zero point, so (() x)=const-1=1: a SILENT miscompile that fakes a pass. assert lit?
+      ; so an un-exposure (or a cat-order slip) SCARES here, `;; assert (lit? <name>)`, not downstream.
+      (lit? assemble) (lit? jitir) (lit? jitnir) (lit? jitgroupir) (lit? coreir) (lit? deoptir)
+      (lit? cggir) (lit? cggvir) (lit? consir) (lit? mkhir) (lit? mkouterir)
       ; x86 native == interp
       (31 = ((jitir '(\ x (+ (* x 3) 1)) 'x64) 10))
       (= ((ev '(\ x (+ (* x 3) 1))) 10) ((jitir '(\ x (+ (* x 3) 1)) 'x64) 10))
@@ -562,8 +573,16 @@
          (&& (1 = ((jitgroupir eo 'evn 'x64) 10)) (0 = ((jitgroupir eo 'evn 'x64) 7)) (1 = ((jitgroupir eo 'odn 'x64) 7))))   ; MUTUAL recursion (either entry)
       (= (jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64)
          (jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64))               ; two natives, same source -> = (transparent)
+      ; STRING lane (peep/tally): s a string param (kind-guarded, passed RAW); peep reads byte [s+16], tally the len [s+8]
+      (: data (string (L 72 105 90 33 65))                                                                       ; "HiZ!A": byte-sum 365, len 5
+         sbn (jitgroupir (L (link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))) 'sb 'x64)            ; recursive byte-sum
+         tln (jitgroupir (L (link '(tl s) '(tally s))) 'tl 'x64)
+         pkn (jitgroupir (L (link '(pk s i) '(peep s i 0))) 'pk 'x64)
+         (&& (365 = (sbn data 4)) (= ((ev '(: (sb s i) (? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))) sb)) data 4) (sbn data 4))   ; native byte-sum == interp
+             (5 = (tln data)) (! (tln 5))                                                                         ; tally native; a FIXNUM arg -> guard rejects -> deopt -> interp tally of a scalar = ()
+             (72 = (pkn data 0)) (0 = (pkn data 99))))                                                            ; peep in-bounds (byte 'H'=72); OOB -> the default 0 (pure-native branch, no deopt)
       ; arm64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
-      (< 0 (tally (peep (assemble 'arm64 (asm (L (mkouterir 'arm64 1 'fib 1 0)
+      (< 0 (tally (peep (assemble 'arm64 (asm (L (mkouterir 'arm64 1 'fib 1 0 () () () ())
                   (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))))) 'bytes 0))))
    (say err "ai/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
 

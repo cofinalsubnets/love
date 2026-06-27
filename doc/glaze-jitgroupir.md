@@ -12,13 +12,18 @@ back to the byte path; `auto.l`'s `rewrite-bindings` calls it (line ~833). This 
 
 | lane | byte path | IR path | gate |
 |---|---|---|---|
-| integer arith (`+ - * // % & \| ^ < <= > >= =`, `?`, calls) | `cgg` | `cggir` ✅ | `jgir-e?` |
-| value-mode cons (`link`, `?`, param-return, value-group calls) | `cggv` | `cggvir`+`consir` ✅ | `jgvir-e?` |
+| integer arith (`+ - * // % & \| ^ < <= > >= =`, `?`, calls) | `cgg` | `cggir` ✅ | op-coverage |
+| value-mode cons (`link`, `?`, param-return, value-group calls) | `cggv` | `cggvir`+`consir` ✅ | op-coverage |
+| string (`peep`/`tally`) | `cgg` 223-237 | `cggir` ✅ (+ `smask` guard in `mkouterir`) | op-coverage |
 | chain (`cap`/`cup`/`two?`) | `cgg` 245-250 | — | — |
-| string (`peep`/`tally`) | `cgg` 223-237 | — | — |
 | map (`mpeep`/`mpin`) | `cgg` 227-236 (asmx) | — | — |
 | cask (`pin`) | `cgg` 238-244 | — | — |
 | TCO (tail self-call → loop) | `cggt` | — (compiles as `call`: correct, O(n) stack) | n/a |
+
+The string lane needed a new assembler primitive: the IR had no byte-width memory op, but `peep` is a
+`movzx` byte read (and `pin`, stage 3, a byte store). Added **`ldxb`/`stxb`** (indexed zero-extend
+load / low-byte store) to `asm/x64.l` — objdump-verified, `asmtest.l` entries, baked into ai0. Shared
+prerequisite for string + cask.
 
 The IR path's neutral register roles are stable: `argregir` = the callee-saved arg bank (x64
 `r3/r12/r13/r14`), `govf` = the OVF anchor (x64 `r11` IR = machine `r12`), `acc`=`r0`, `tmp`=`r7`,
@@ -121,10 +126,12 @@ restore+ret. TCO is an **optimization, not a correctness gate** — without it t
 The AUTO block already asserts each lane end-to-end (`= (base-ev …) (ev …)`, i.e. native == interp);
 porting a lane just re-routes its asserts from `jitgroup` to `jitgroupir` with no test change:
 
-1. **gate refactor** — replace `jgir-e?`/`jgvir-e?` with the op-coverage `jgir-ok?`; no behavior change
-   (supported set = the current ops). Verify green. *Prereq for additive lane landing.*
-2. **string** (`peep`/`tally` + `smask` in `mkouterir` + `suse?`/`smfix` in `jitgroupir`) → `rsl`,
-   `rss` (strscan/strhash) route through IR.
+1. **gate refactor** ✅ (`a7975b15`) — op-coverage `jgir-ok?`/`jgir-ops-ok?` over a growing
+   `jgir-supported`; behavioral no-op.
+2. **string** ✅ — `peep`/`tally` in `cggir`; `mkouterir` grew four masks (`smask mmask bufmask cmask`,
+   all computed now, only `smask` populated this stage) with per-param guards (int fixnum-guard + sar;
+   string/map/cask kind-guard `(test;br ne)` + raw; chain raw); `ldxb`/`stxb` in `asm/x64.l`.
+   Verified through `make test_glaze` (NOT a standalone run — see gotchas).
 3. **cask** (`pin` + `bufmask`) → the `cb*`/hash-build asserts.
 4. **map** (`mpeep`/`mpin` + `mmask` + the `relabel` pass) → `rmap`/`rpl`/`rhash`.
 5. **chain** (`cap`/`cup`/`two?` + `cmask`) → `rcl` (tree walk); `rcb` stays interp (recognizer rejects
@@ -144,6 +151,15 @@ porting a lane just re-routes its asserts from `jitgroup` to `jitgroupir` with n
   (that church-exponentiates). The idiv "hang" bug was exactly this.
 - A silent reader stop (exit 0, no `zz-fin`) = paren imbalance. The whole `test/glaze-x86.l` runs in
   ~1.5–1.8s; a hang/crawl is a *bug*, not slow benches (see CLAUDE.md "SPEED IS A SIGNAL").
+- **Run the glaze test via `make test_glaze`, never `out/host/ai test/glaze-x86.l` standalone.** The
+  harness *cats emit.l + auto.l ahead* of the test; standalone, `base-ev`/`jitgroupir`/the internals are
+  unbound → `()` → `(base-ev '(..))` = const-1 = 1 SILENTLY skips every assert block, yet the top-level
+  `(say "..ok")` still prints — a false pass. Same trap when probing an internal (`(cggir ..)` with
+  cggir unbound = `(() ..)` = 1, not an error). Defenses now in the file: a **top-level** `(assert
+  (lit? base-ev) (lit? jitgroupir) ..)` that scares on a wrong invocation, and a per-block `lit?`
+  dependency guard. When probing by hand, cat the same files: `cat ai/glaze/emit.l ai/glaze/auto.l
+  probe.l | out/host/ai`. (`assemble` is a core service — bound even standalone — so it alone won't
+  catch a wrong context.)
 - x64 only in practice (`auto.l` calls `jitgroupir … 'x64`); the IR is kept neutral where free, but
   arm64 group codegen is unverified (no harness) — don't chase it here.
 - Discriminator for image-vs-egg divergence: `AI_NO_IMAGE=1` / `rm out/host/ai.img`.

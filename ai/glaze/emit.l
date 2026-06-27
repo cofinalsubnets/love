@@ -968,6 +968,10 @@
                  (: el (mint 0) en (mint 0)
                     (asm (L (cggir tgt syms ps a) (L (L 'cmp A 0) (L 'br 'le el)) (cggir tgt syms ps b)
                             (L (L 'jmp en) (L 'label el)) (cggir tgt syms ps (caup (cup (cup e)))) (L (L 'label en)))))
+               (id? op 'tally) (: R (argregir tgt (argix a ps 0)) `(`('ld A R 8)))                        ; (tally STR): acc = the len at [STR+8] (raw)
+               (id? op 'peep) (: R (argregir tgt (argix a ps 0)) d (caup (cup (cup e))) inl (mint 0) endl (mint 0)   ; (peep STR i d): i unsigned-vs-len, OOB -> d, else byte [STR+i+16]
+                  (asm `((cggir tgt syms ps b)
+                         `(`('ld T R 8) `('cmp A T) `('br 'below inl) `('li A (? (whole? d) d 0)) `('jmp endl) `('label inl) `('ldxb A R A 1 16) `('label endl)))))
                ()))
          ()))
    (gargsir tgt syms ps as) (? (atom? as) () (asm (L (cggir tgt syms ps (cap as)) (L (L 'push (greg tgt 'acc))) (gargsir tgt syms ps (cup as)))))
@@ -1003,9 +1007,16 @@
                (restargsir tgt k) (hrest tgt) (L '(ret)))))
    ; mkouterir: the entry's OUTER -- save anchor+arg regs; anchor=sp; fixnum-guard+push the args; call
    ; H_entry; pop args; restore; putfix + Continue; OVF (mov sp,anchor -> abandon frames; restore) -> DEOPT.
-   (mkouterir tgt k entry arity valt)                                              ; valt: a VALUE-typed entry (returns a heap ptr / tagged scalar) -> store acc AS-IS, no putfix
-    (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) OVFR (govf tgt) ss (slotsz tgt)
-       pushargs (foldl (\ a i (asm `(a `(`('ld A S (* 8 i)) `('test A 1) '(br eq OVF) `('sar A 1) `('push A))))) () (rangeL 0 k))
+   (mkouterir tgt k entry arity valt smask mmask bufmask cmask)                    ; valt: VALUE-typed entry (heap ptr / tagged scalar) -> store acc AS-IS, no putfix. the masks
+    (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) OVFR (govf tgt) ss (slotsz tgt)   ; partition the entry's EXTERNAL args: int (sar) / string|map|cask (kind-guard, raw) / chain (raw, no guard)
+       strk (apof "") mapk mapkind bufk (apof (cask 1))                            ; the kind sentinels the raw-param guards check against
+       (pusharg1 i) (: o (* 8 i)                                                   ; one external arg: load Sp[i] -> acc, guard by type, push
+          (? (member? i cmask) `(`('ld A S o) `('push A))                          ; chain: raw, NO guard (two? total; cap/cup deopt a non-chain inline)
+             (|| (member? i smask) (|| (member? i mmask) (member? i bufmask)))     ; string/map/cask: a fixnum can't be a heap obj (-> OVF), and [arg]'s kind must match (-> OVF); push RAW
+               (: kind (? (member? i mmask) mapk (member? i bufmask) bufk strk)
+                  `(`('ld A S o) `('test A 1) '(br ne OVF) `('ld T A 0) `('li 'r8 kind) `('cmp T 'r8) '(br ne OVF) `('push A)))   ; a FIXNUM (odd, br ne) deopts; then the kind word must match (br ne)
+             `(`('ld A S o) `('test A 1) '(br eq OVF) `('sar A 1) `('push A))))    ; int: fixnum-guard (non-fixnum -> OVF), untag (sar), push
+       pushargs (foldl (\ a i (asm `(a (pusharg1 i)))) () (rangeL 0 k))
        epi (? valt `(`('st S 0 A) `('add IP IP 16) `('ld T IP 0) `('jmpr T))                                  ; VALUE: store acc as-is; Continue (no putfix)
                  `(`('adds A A A) '(br vs DEOPT) `('or A A 1) `('st S 0 A) `('add IP IP 16) `('ld T IP 0) `('jmpr T)))   ; INT: putfix (overflow -> deopt); Continue
        (asm `(`(`('push OVFR)) (saveargsir tgt k) `(`('lea OVFR 'sp 0)) pushargs
@@ -1023,7 +1034,7 @@
    ; gate is vacuously true for any admitted group, so jitgroup retires. (`?`/`link` already covered: int +
    ; value-mode cons. No tail-call detection needed: a tail self-call compiles as a plain `call` -- correct,
    ; just not yet O(1)-stack; the loop lanes catch counted loops upstream.)
-   jgir-supported '(+ - * // % & | ^ < <= > >= = ? link)                        ; ops cggir/cggvir handle (grows per lane: peep tally pin mpeep mpin cap cup two?)
+   jgir-supported '(+ - * // % & | ^ < <= > >= = ? link peep tally)             ; ops cggir/cggvir handle (grows per lane: pin mpeep mpin cap cup two?)
    (jgir-ops-ok? syms e) (? (two? e)                                            ; every op head in e is a group call or a supported op; recurse into every operand
       (: op (cap e) (&& (|| (member? op syms) (member? op jgir-supported)) (all (\ x (jgir-ops-ok? syms x)) (cup e))))
       1)
@@ -1033,10 +1044,16 @@
    (jitgroupir defs entry tgt)
     (: parse (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d)))) defs)            ; (name params body) per fn
        syms (map cap parse)                                                            ; the fn names (call targets)
-       efn (gfind (\ f (id? (cap f) entry)) parse)  k (tally (nthl efn 1))
+       efn (gfind (\ f (id? (cap f) entry)) parse)  k (tally (nthl efn 1))  eps (nthl efn 1) eb (nthl efn 2)
        ord (link efn (gfilt (\ f (! (id? (cap f) entry))) parse))                      ; entry first (H_entry sits right after the OUTER)
-       valt (hasl (nthl efn 2))                                                       ; entry value-typed (body conses) -> the value epilogue stores acc as-is
-       outer (mkouterir tgt k entry k valt)
+       valt (hasl eb)                                                                 ; entry value-typed (body conses) -> the value epilogue stores acc as-is
+       info (map (\ f (L (cap f) (nthl f 1) (nthl f 2) (tally (nthl f 1)))) parse)     ; (name params body arity) -- for the interprocedural string fixpoint
+       smap0 (map (\ f (link (cap f) (gfilt (\ j (suse? (nthl f 2) (nthl (nthl f 1) j))) (rangeL 0 (nthl f 3))))) info)   ; per-fn DIRECT string params (peep/tally/pin)
+       smask (gsm entry (smfix info smap0))                                            ; the entry's STRING params, propagated to a fixpoint -> raw pointer, kind-guarded
+       mmask (gfilt (\ j (muse? eb (nthl eps j))) (rangeL 0 k))                         ; entry MAP params (mpeep/mpin)
+       bufmask (gfilt (\ j (buse? eb (nthl eps j))) (rangeL 0 k))                       ; entry CASK params (pin)
+       cmask (gfilt (\ j (cuse? eb (nthl eps j))) (rangeL 0 k))                         ; entry CHAIN params (cap/cup/two?) -> raw, no guard
+       outer (mkouterir tgt k entry k valt smask mmask bufmask cmask)
        Hs (foldl (\ a f (asm (L a (mkhir tgt syms (cap f) (nthl f 1) (nthl f 2))))) () ord)
        lrf (\ ds (? (atom? ds) (L entry) (: d (cap ds) (link (cap d) (link (cup d) (lrf (cup ds)))))))
        fb (ev (link ': (lrf defs)))                                                    ; the WHOLE group interpreted -- the deopt fallback

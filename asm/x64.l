@@ -121,6 +121,12 @@
    (emit-leax d base index scale disp)                             ; 0x8D lea r64, [base+index*scale+disp]
       (: dn (rn d) bn (rn base) ixn (rn index)
          (cat (L (rex 1 (hi dn) (hi ixn) (hi bn)) 141) (memx dn base index scale disp)))
+   (emit-ldxb d base index scale disp)                             ; 0F B6 movzx r64, BYTE [base+index*scale+disp]  (zero-extend)
+      (: dn (rn d) bn (rn base) ixn (rn index)
+         (cat (L (rex 1 (hi dn) (hi ixn) (hi bn)) 15 182) (memx dn base index scale disp)))
+   (emit-stxb base index scale disp s)                             ; 0x88 mov BYTE [base+index*scale+disp], sl  (REX.W=0; REX present forces spl/sil.. not ah/ch.. for s 4-7)
+      (: sn (rn s) bn (rn base) ixn (rn index)
+         (cat (L (rex 0 (hi sn) (hi ixn) (hi bn)) 136) (memx sn base index scale disp)))
 
    ;; a memory operand [base+disp]: ModRM (+ SIB for an rsp/r12 base) (+ displacement). picks the
    ;; shortest disp form, and forces a 0-disp byte for an rbp/r13 base (its disp-less slot is taken).
@@ -221,6 +227,8 @@
             (= op 'ldx)  (emit-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldx d base index scale disp)
             (= op 'stx)  (emit-stx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (stx base index scale disp s)
             (= op 'leax) (emit-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (leax d base index scale disp)
+            (= op 'ldxb) (emit-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldxb d base index scale disp) -- zero-extend byte load
+            (= op 'stxb) (emit-stxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (stxb base index scale disp s) -- low-byte store
             (= op 'test) (emit-test (at ins 1) (at ins 2))
             (member? op '(shl shr sar rol ror)) (emit-shift op (at ins 1) (at ins 2))
             (= op 'push) (emit-push (at ins 1))
