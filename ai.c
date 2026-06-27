@@ -2423,9 +2423,6 @@ static union u const no_entry[1];
 static struct ai *ioputs(struct ai*, char const*);
 static struct ai *ioputc(struct ai*, int);
 static ai_inline struct ai *zflush(struct ai*);
-// AI_WARN_MISSING: when set (by the frontend from the env), a helpless missing read prints
-// ";; missing <nom>" on err instead of silently reading the zero point. Off by default. (ai.h extern.)
-int ai_warn_missing = 0;
 // THE NOTHING IS THE CORE: () = ZeroPoint, what a helpless missing read
 // answers and what () reads as. The core's head is a nameless serial-0 mint (the one
 // serial never drawn), nameless, $0, falsy, applying const-1 like every unit. absence
@@ -2453,15 +2450,13 @@ lvm(lvm_index) {
  if (ai_nilp(g, h)) {
 #if __STDC_HOSTED__
   // helpless (file mode): the zero point is otherwise SILENT, so an unbound name reads
-  // ()=ZeroPoint and (() x)=const-1=1 -- a silent miscompile that fakes a result. Under the
-  // AI_WARN_MISSING flag (off by default; the frontend sets ai_warn_missing from the env),
+  // ()=ZeroPoint and (() x)=const-1=1 -- a silent miscompile that fakes a result. So ALWAYS
   // SURFACE it on err: ";; missing <nom>", then still answer the zero point. NON-terminal and
   // MISSING-SPECIFIC -- a deliberate (scare ..) keeps the terminal helpless law, so an assert
   // failure still stops the run. add_name + ioput* hold no heap operand -> no GC, so Sp/Ip
-  // survive; best-effort, a print error just stops. (default off because the corpus itself still
-  // has live-read-of-a-not-in-book noms -- gone/cflip-rules in ev.l, a systemic scope subtlety;
-  // until that's cleaned up, always-on would spam every boot. flip it on to hunt.)
-  struct ai_str *nm = ai_warn_missing ? add_name(g, Ip[1].x) : 0;
+  // survive; best-effort, a print error just stops. (The egg boot is clean; the remaining
+  // warnings are deliberate test fixtures -- helpless missing-read / mop tests over this very path.)
+  struct ai_str *nm = add_name(g, Ip[1].x);
   if (nm) { struct ai_io *sv = g->io; g->io = &ai_stderr;
             struct ai *w = ioputs(g, ";; missing ");
             for (uintptr_t i = 0; ai_ok(w) && i < nm->len; i++) w = ioputc(w, nm->bytes[i]);

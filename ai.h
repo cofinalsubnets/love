@@ -300,9 +300,6 @@ struct ai *ai_image_load(void const *buf, uintptr_t len);
 // the stashed condition data and answer 1; the bare scare (nil nil -- oom,
 // which has no data) answers 0 so the frontend can report it raw.
 int ai_scare_face_(struct ai*);
-// AI_WARN_MISSING (the frontend sets it from the env): a helpless missing read prints ";; missing
-// <nom>" on err rather than silently reading the zero point. Off (0) by default. See lvm_index.
-extern int ai_warn_missing;
 
 extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 

@@ -493,7 +493,6 @@ static struct ai *boot(struct ai *g, bool argp) {
 
 int main(int argc, char const **argv) {
   struct ai *g = NULL;
-  ai_warn_missing = getenv("AI_WARN_MISSING") != NULL;   // off by default: surface helpless missing reads on err when set (see ai.c lvm_index)
 #ifndef GL_BOOTSTRAP
   // --dump-image PATH / --load-image PATH must lead the args; strip them (keep argv[0]).
   char const *image_load_path = NULL;
