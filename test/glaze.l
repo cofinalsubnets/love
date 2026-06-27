@@ -1,16 +1,6 @@
-; jit -- the (eat 1 <toast> x) trampoline jumps into the machine code held by a
-; TOAST (an opaque executable handle) and runs it natively (SysV/AArch64 ABI: the
-; arg in the first register, the result in the return register, wrapped as a fixnum).
-; (toast src) is the loader: it bakes src's bytes into an opaque toast -- on the host
-; a W^X mmap arena (the malloc heap is NX), on the freestanding kernel a plain heap
-; copy (the HHDM is already executable). The idiom is (eat 1 (toast bytes) x); see
-; ai/glaze/README.md + ai/glaze/probe.l.
-;
-; A toast is OPAQUE: hot?, but NOT a cask -- its code can't be peep/pin/tally'd as
-; data, only (eat ..) runs it. These asserts are ARCHITECTURE-NEUTRAL on purpose:
-; actually executing bytes is machine-specific (x86_64 opcodes crash an aarch64 or
-; wasm host), so the real round-trip lives in the standalone ai/glaze/probe.l (kernel).
-; Here we cover what holds on every target: the guards and the opacity, no run.
+; the glaze's toast/eat substrate, arch-neutral half: guards and OPACITY only, never an actual run
+; (executing bytes is machine-specific). The executing tests are test/glaze-x86.l; the real kernel
+; round-trip, ai/glaze/probe.l; the mechanism, ai/glaze/README.md.
 (assert
  (lit? eat) (lit? toast)      ; the runner + loader nifs are present and applicable (lit?: fns are top-region)
  !(eat 1 5 0) (0 = (eat 1 'sym 0)) !(eat 1 "text" 0) !(eat 1 () 0)   ; a non-toast -> nothing (no jump)
