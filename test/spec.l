@@ -332,10 +332,10 @@
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spin (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
- !(rest 0) (4 = (tally (rng-seed 1))) ((rand 10) < 10) (gem? (randf 0))
+ !(rest 0) (4 = (tally (seed 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
  (book? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
- (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
+ (: st (seed 7) ((cap (random st 0)) = (cap (random st 0)))))
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
 (: help welp)
 (assert (id? (:) not-in-the-book) !not-in-the-book)   ; a nom not in the book

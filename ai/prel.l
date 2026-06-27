@@ -44,9 +44,6 @@
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
    (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (% (* h h) m)
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
-; functional bounded draw: (value . st') with value in [0,n), riding rand-next
-; (full-width draw) + modulo. The global-stream analogue is the `rand` nif.
-(: (randint st n) (: r (rand-next st) (link (% (cap r) n) (cup r)))) ;; FIXME check interface & link
 (: caaap (compose cap caap) caaup (compose cap caup) ;; FIXME group above
    cauap (compose cap cuap) cauup (compose cap cuup)
    cuaap (compose cup caap) cuaup (compose cup caup)
@@ -469,22 +466,27 @@
 ; eat2 (the raw 1-/2-arg ABI nifs) are mopped post-egg and fold in here; only a
 ; toast is eatable and a faulting body returns 0 (the host fault barrier).
 (: (eat n) (? (= n 2) eat2 eat1))
-; the global RNG stream lives on book ('rng-state) and advances by the pure
-; rand-next/randf-next -- C holds no state and never draws. rng-get lazily
-; clock-seeds on first use; rng-set validates and installs (the state, or nil
-; if malformed). (rand n) -> fixnum in [0,n), n <= 0 (or non-fixnum) -> a
-; full-width non-negative fixnum; (randf _) -> float in [0,1).
-(: (rng-get _) (: st (peep book 'rng-state 0)
-                  (? (tray? st) st (: f (rng-seed (clock 0)) _ (pin book 'rng-state f) f)))
+; the RNG, two layers over the pure C steps (seed -> a fresh 256-bit state; C holds
+; no state). FUNCTIONAL (reproducible): (random st n) draws once -> (value . st'),
+; value's TYPE by n -- float -> float in [0,n), positive int -> int in [0,n), n <= 0
+; -> a full-width int. GLOBAL (hidden stream on book ('rng-state), lazily clock-seeded
+; -> non-reproducible; use seed/random for a fixed sequence): (rand n) -> int in [0,n)
+; (n<=0 full-width); (randf n) -> float in [0,n) (n<=0 -> [0,1)). rng-get/rng-set plumb it.
+(: (random st n) (? (gem? n) (: r (randf-next st) (link (* n (cap r)) (cup r)))
+                    (< 0 n)  (: r (rand-next st)  (link (% (cap r) n) (cup r)))
+                    (rand-next st))
+   (rng-get _) (: st (peep book 'rng-state 0)
+                  (? (tray? st) st (: f (seed (clock 0)) _ (pin book 'rng-state f) f)))
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (tray? st) (= 1 (rank st)) (= 4 (tally st)) (= (tier (rng-seed 0)) (tier st)))
+   (rng-set st) (? (&& (tray? st) (= 1 (rank st)) (= 4 (tally st)) (= (tier (seed 0)) (tier st)))
                    (: _ (pin book 'rng-state st) st)
                    0)
    (rand n) (: r (rand-next (rng-get 0)) _ (pin book 'rng-state (cup r))
                (? (&& (charm? n) (< 0 n)) (% (cap r) n) (cap r)))
-   (randf _) (: r (randf-next (rng-get 0)) _ (pin book 'rng-state (cup r)) (cap r)))
+   (randf n) (: r (randf-next (rng-get 0)) _ (pin book 'rng-state (cup r))
+               (? (&& (constellation? n) (< 0 n)) (* n (cap r)) (cap r))))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;

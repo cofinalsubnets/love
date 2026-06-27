@@ -466,9 +466,11 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 
 ; --- control --- ev compiles and runs; call-cc is a one-shot escape; tasks are
 ; spin/catch/rest/freeze/back?/cue? ((spin f x) forks and returns an id, (catch p) blocks for the
-; result, (rest n) sleeps and (rest 0) yields, (cue? p) polls). the RNG is xoshiro256++: C ships only
-; rng-seed and the pure rand-next/randf-next over explicit state -- the global rand/randf stream is
-; prel lisp over hidden state. a global `help` receives every raise as (help s a b): s = the status
+; result, (rest n) sleeps and (rest 0) yields, (cue? p) polls). the RNG is xoshiro256++, two layers:
+; FUNCTIONAL (seed n) -> a fresh state, (random st n) -> (value . st') with value's TYPE by n (positive
+; int -> int in [0,n), float -> float in [0,n), n<=0 -> a full-width int) -- explicit-state, reproducible;
+; GLOBAL (rand n)/(randf n) ride a hidden clock-seeded stream (non-reproducible, zero setup). C holds no
+; state: only seed + the pure steps under random; rand/randf are prel lisp. a global `help` receives every raise as (help s a b): s = the status
 ; word, two bits -- scare (1, something wrong) and more (2, read control flow); more alone =
 ; incomplete, eof = more|scare. a/b = the condition data; the result is delivered per the bits (the
 ; more bit to the reader's resume; a bare scare observed). scare?/more?/eof? read s. `welp` is the

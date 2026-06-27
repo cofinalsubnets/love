@@ -63,13 +63,13 @@
  ; random CLOSED AFFINE term: partition splits a scope so f/a never share a var
  (partition sc st)
    (? !sc `(0 0 st)
-      (: r (randint st 2) rest (partition (cup sc) (cup r))
+      (: r (random st 2) rest (partition (cup sc) (cup r))
          (? (= (cap r) 0)
             `((link (cap sc) (cap rest)) (caup rest) (cauup rest))
             `((cap rest) (link (cap sc) (caup rest)) (cauup rest)))))
  tI (dlam (dvar 0))
  (gen g sc st)
-   (: r (randint st 10) pick (cap r) st1 (cup r)
+   (: r (random st 10) pick (cap r) st1 (cup r)
       (? (< g 1) (? !sc `(tI 0 st1) `((dvar (cap sc)) (cup sc) st1))
          (&& !!sc (< pick 4)) `((dvar (cap sc)) (cup sc) st1)
          (< pick 7)
@@ -84,13 +84,13 @@
 
  ; EXTENSIONAL agreement: apply both results to marker symbols, then compare
  (ground v) (v 'm1 'm2 'm3 'm4 'm5)
- (oracle-ok n seed g)
+ (oracle-ok n sd g)
    (: (go n st good)
         (? (< n 1) good
            (: res (gen g 0 st) t (cap res) st' (cauup res)
               ok (= (ground (ev (render 0 t))) (ground (ev (render 0 (teval t)))))
               (go (- n 1) st' (+ good (? ok 1 0)))))
-      (= n (go n (rng-seed seed) 0)))
+      (= n (go n (seed sd) 0)))
 
  ; spec.v's reduction theorems, as binary twins (beta_id / beta_const / nested / eta)
  (assert

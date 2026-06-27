@@ -819,7 +819,7 @@ lvm_t lvm_fault;
  _(nif_fgetc, "get", s1(lvm_fgetc)) _(nif_fungetc, "unget", s2(lvm_fungetc)) _(nif_feof, "empty?", s1(lvm_feof))\
  _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
- _(nif_rng_seed, "rng-seed", s1(lvm_rng_seed))\
+ _(nif_rng_seed, "seed", s1(lvm_rng_seed))\
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))\
  _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load))\
  _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp)) NIF_FAULT(_)
@@ -5841,10 +5841,11 @@ uintptr_t ai_vec_bytes(struct ai_vec *v) {
 // as raw bytes (memcpy), never via the typed vec_get/put accessors, so the
 // 64-bit limbs survive on 32-bit ports and a given seed reproduces the same
 // sequence on host/kernel/MCU/WASM/Playdate. C holds no RNG state and never
-// draws: the only primitives are rng-seed (fresh state from a fixnum) and the
+// draws: the only primitives are seed (fresh state from a fixnum) and the
 // functional steps rand-next/randf-next (copy the input state, step the copy,
-// return (value . new-state) -- the input is never mutated). The global stream
-// (rand/randf over book['rng-state]) is prel lisp. Not a CSPRNG.
+// return (value . new-state) -- the input is never mutated). seed + random are
+// the explicit-state surface; the global rand/randf stream (over book['rng-state])
+// is prel lisp riding the same steps. Not a CSPRNG.
 
 static ai_inline uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }
@@ -5920,7 +5921,7 @@ static ai_noinline word rng_canon(struct ai *g, uint64_t r) {
  for (int i = 0; (size_t) i * limb_bits < 64; i++) limb[i] = (ai_limb) (r >> (i * limb_bits)), nl = i + 1;
  return ai_big_canon(&g->hp, limb, nl, false); }
 
-// (rng-seed n): a fresh state vec deterministically seeded from fixnum n. A
+// (seed n): a fresh state vec deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
 lvm(lvm_rng_seed) {
  word n = Sp[0];

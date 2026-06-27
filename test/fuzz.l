@@ -1,6 +1,6 @@
 ; property-based fuzzer built on the step-8 RNG (xoshiro256++ functional stream).
 ;
-; a GENERATOR is a function st -> (value . st'), the exact shape of rand-next, so
+; a GENERATOR is a function st -> (value . st'), the shape a curried (random st _) yields, so
 ; generators thread the random state purely and compose by plumbing the returned
 ; st onward. fz-find drives a generator N times against a predicate from a fixed
 ; seed (so any failure is reproducible) and reports the first counterexample;
@@ -16,24 +16,24 @@
  (fz-pure v) (\ st (link v st))                          ; ignores the stream
  (fz-map f g) (\ st (: r (g st) (link (f (cap r)) (cup r))))
  (fz-bind g k) (\ st (: r (g st) ((k (cap r)) (cup r)))) ; feed value into next gen
- ; --- primitive draws (every range below keeps hi > lo so randint never mods by 0) ---
- (fz-nat n) (\ st (randint st n))                        ; [0, n)
+ ; --- primitive draws (every range below keeps hi > lo so random never mods by 0) ---
+ (fz-nat n) (\ st (random st n))                        ; [0, n)
  (fz-int lo hi) (fz-map (+ lo) (fz-nat (- hi lo)))       ; [lo, hi)
- (fz-elt l) (\ st (: r (randint st (tally l)) (link (cap (drop (cap r) l)) (cup r))))
+ (fz-elt l) (\ st (: r (random st (tally l)) (link (cap (drop (cap r) l)) (cup r))))
  (fz-oneof gs) (fz-bind (fz-nat (tally gs)) (\ k (cap (drop k gs))))  ; pick a generator
  ; --- structured draws: fixed repetition, bounded-length list, tuples ---
  (fz-rep n g) (? (< n 1) (fz-pure ())
     (\ st (: a (g st) b ((fz-rep (- n 1) g) (cup a)) (link (link (cap a) (cap b)) (cup b)))))
- (fz-list mx g) (\ st (: r (randint st (+ 1 mx)) ((fz-rep (cap r) g) (cup r))))  ; pin in [0,mx]
+ (fz-list mx g) (\ st (: r (random st (+ 1 mx)) ((fz-rep (cap r) g) (cup r))))  ; pin in [0,mx]
  (fz-pair2 ga gb) (\ st (: a (ga st) b (gb (cup a)) (link `((cap a) (cap b)) (cup b))))
  (fz-trip ga gb gc)
    (\ st (: a (ga st) b (gb (cup a)) c (gc (cup b)) (link `((cap a) (cap b) (cap c)) (cup c))))
- ; --- the driver: N trials from `seed`, first counterexample wins ---
- (fz-find n seed g p)
+ ; --- the driver: N trials from seed `sd`, first counterexample wins ---
+ (fz-find n sd g p)
    (: (go n st) (? (< n 1) (link 1 0)
         (: r (g st) (? (p (cap r)) (go (- n 1) (cup r)) (link 0 (cap r)))))
-      (go n (rng-seed seed)))
- (fz-ok n seed g p) (cap (fz-find n seed g p)))
+      (go n (seed sd)))
+ (fz-ok n sd g p) (cap (fz-find n sd g p)))
 
 ; --- concrete value generators over the numeric tower ---
 (: fz-fix    (fz-int -1000 1000)                         ; fixnums straddling 0
@@ -132,7 +132,7 @@
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof `((fz-elt fz-syms) (fz-int -500 500)))
    (fz-sexp d) (? (< d 1) fz-leaf
-      (\ st (: r (randint st 3)            ; 1/3 leaf, 2/3 a bounded list of sub-exprs
+      (\ st (: r (random st 3)            ; 1/3 leaf, 2/3 a bounded list of sub-exprs
           (? (= (cap r) 0) (fz-leaf (cup r))
              ((fz-list 4 (fz-sexp (- d 1))) (cup r)))))))
 (assert
