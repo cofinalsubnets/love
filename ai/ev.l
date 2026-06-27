@@ -6,6 +6,14 @@
 (: iop (nom 'iop)
    apx (nom 'apx))
 
+; gone: avb's not-in-book sentinel (the `(peep book x gone)` default). A TOP-LEVEL GLOBAL
+; for the SAME reason as iop/apx -- it is folded into avb as a kim constant at compile time
+; (it lives in the book when avb compiles), then mopped. As a :- block LOCAL it failed
+; capture in the 2-sat egg (ev1 mis-resolved the ref -> ev2's avb did `lvm_index gone`,
+; missing the book at runtime -> () degrade: a global genuinely bound to () then mis-analyzed
+; as a free import). A global resolves identically in every bootstrap generation.
+(: gone (nom 'gone))
+
 ; feels: value->ap memo for global fns, built once by scanning every global. A ap
 ; folds an application to a value when its args are constant (pure fns only), else emits an
 ; (iop op . args) node iap inlines (any nif of matching arity), else leaves it. A nif is found
@@ -389,7 +397,6 @@
             j (then (tojoin k) (+ 2 n))                    ; true: then, jump to join, into k
             (p2 lvm_cond (pop c 'alt) j)))))))))
 
-  gone (nom 'gone)
   ; recursive-fn ref: bake `quote code` if the closure is built, else `quote 0`
   ; + a backpatch site `(lfd . cell)` on the scope for wire to resolve.
   (qsite site k n) (: cell (poke -1 0 (k (+ 2 n)))
