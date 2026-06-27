@@ -15,9 +15,9 @@ back to the byte path; `auto.l`'s `rewrite-bindings` calls it (line ~833). This 
 | integer arith (`+ - * // % & \| ^ < <= > >= =`, `?`, calls) | `cgg` | `cggir` ✅ | op-coverage |
 | value-mode cons (`link`, `?`, param-return, value-group calls) | `cggv` | `cggvir`+`consir` ✅ | op-coverage |
 | string (`peep`/`tally`) | `cgg` 223-237 | `cggir` ✅ (+ `smask` guard in `mkouterir`) | op-coverage |
+| cask (`pin`) | `cgg` 238-244 | `cggir` ✅ (`stxb`; + `bufmask` guard) | op-coverage |
 | chain (`cap`/`cup`/`two?`) | `cgg` 245-250 | — | — |
 | map (`mpeep`/`mpin`) | `cgg` 227-236 (asmx) | — | — |
-| cask (`pin`) | `cgg` 238-244 | — | — |
 | TCO (tail self-call → loop) | `cggt` | — (compiles as `call`: correct, O(n) stack) | n/a |
 
 The string lane needed a new assembler primitive: the IR had no byte-width memory op, but `peep` is a
@@ -132,7 +132,9 @@ porting a lane just re-routes its asserts from `jitgroup` to `jitgroupir` with n
    all computed now, only `smask` populated this stage) with per-param guards (int fixnum-guard + sar;
    string/map/cask kind-guard `(test;br ne)` + raw; chain raw); `ldxb`/`stxb` in `asm/x64.l`.
    Verified through `make test_glaze` (NOT a standalone run — see gotchas).
-3. **cask** (`pin` + `bufmask`) → the `cb*`/hash-build asserts.
+3. **cask** ✅ — `pin` in `cggir` (`stxb` byte store into `[C+8]`'s backing + idx; returns `C`, so it
+   threads as a sibling-call cask arg); `bufmask` already computed+guarded (stage 2). `leff` stays
+   interp (effectful `_`-bound `pin`); the glazed path is `castbuild`'s lifted fill loop (cb*).
 4. **map** (`mpeep`/`mpin` + `mmask` + the `relabel` pass) → `rmap`/`rpl`/`rhash`.
 5. **chain** (`cap`/`cup`/`two?` + `cmask`) → `rcl` (tree walk); `rcb` stays interp (recognizer rejects
    `cap`-into-arith — unchanged).

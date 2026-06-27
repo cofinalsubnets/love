@@ -261,7 +261,7 @@ forward reference lifting, like <code>letrec*</code> in scheme.</p>
     <dd>a numeric array (a tray of stars); folds into the number band by its net.</dd>
   <dt id="g-gem">gem</dt>
     <dd>a float -- the smooth kind between the charms.</dd>
-  <dt id="g-lattice">the global lattice</dt>
+  <dt id="g-lattice">the kind lattice</dt>
     <dd>the runtime-reflective type lattice that indexes the dispatch tables, extending the generic ops to every kind.</dd>
   <dt id="g-green">green</dt>
     <dd>net &#8805; 0 -- what <code>$</code> keeps; the naturals.</dd>
@@ -292,7 +292,7 @@ forward reference lifting, like <code>letrec*</code> in scheme.</p>
   <dt id="g-tally">tally</dt>
     <dd>the count -- how many cells, charms, or keys -- versus the net's how-much.</dd>
   <dt id="g-tray">tray</dt>
-    <dd>an object array, seated just above chain.</dd>
+    <dd>a shaped array, cells of any <em>kind</em> -- seated just above <em>chain</em> in the band. a shape lists its axis sizes, the rank counts them; indexing is row-major and out of bounds reads the default. typed per numeric tier (star/gem/twin) or holding objects; a numeric tray is a <em>galaxy</em> and nets its cells' sum. one cell demotes to the bare scalar, so a tray exists only at <code>tally &#8805; 2</code> -- save the empties, which stay to carry the reduction units.</dd>
   <dt id="g-twin">twin</dt>
     <dd>a complex: two gems <code>(re, im)</code>, built and conjugated by <code>~</code>.</dd>
   <dt id="g-unit">unit / zero point</dt>
@@ -322,7 +322,7 @@ forward reference lifting, like <code>letrec*</code> in scheme.</p>
 <details class="dump"><summary><h3 id="background">background</h3></summary>
 <p>ai is a fully-curried, dynamically-kinded language whose entire surface is one operation -- <span class="term" data-g="application">application</span> -- over a single generic core. every value is a one-argument total function of a global type, the <span class="term" data-g="operator">operators</span>; fundamental operations like + and * are fully generic, and each datum carries a function action giving its <span class="term" data-g="application">application</span> behavior -- a <strong><span class="term" data-g="book">book</span></strong> (mutable hash) is its own getter, and numeric <span class="term" data-g="application">application</span> is exponentiation or iteration by operand type.</p>
 <p>truth is unusual: false is "empty or negative", and the exact 0|1 truth bit of <code>x</code> is <code>!!$x</code>, where <code>$</code> (<span class="term" data-g="sat">saturate</span>) homomorphically reduces any value to a bounded nonnegative integer -- a <strong><span class="term" data-g="green">green</span></strong> <strong><span class="term" data-g="charm">charm</span></strong>. <code>0</code> is the one <span class="term" data-g="blue">blue</span> <span class="term" data-g="green">green</span> <span class="term" data-g="charm">charm</span>, the floor of <code>$</code> and the 0 truth bit; any non-blue green charm saturates to 1 under <code>!!</code>.</p>
-<p>the type system is unusually formal for a dynamic language: representations are classified up front into a runtime-reflective <strong><span class="term" data-g="lattice">global lattice</span></strong>, so "addition", "multiplication" and "exponentiation" extend to every <span class="term" data-g="operator">operator</span>. <span class="term" data-g="string">string</span> addition is concatenation, as usual; less usually, function multiplication is composition and exponentiation is <span class="term" data-g="application">application</span> -- so integers act transparently as iterators, and <code>1</code> is literally the identity function, both extensionally and in that <code>1 = (\ x x)</code> evaluates to <code>1</code> (see α-equivalence below).</p>
+<p>the type system is unusually formal for a dynamic language: representations are classified up front into a runtime-reflective <strong><span class="term" data-g="lattice">kind lattice</span></strong>, so "addition", "multiplication" and "exponentiation" extend to every <span class="term" data-g="operator">operator</span>. <span class="term" data-g="string">string</span> addition is concatenation, as usual; less usually, function multiplication is composition and exponentiation is <span class="term" data-g="application">application</span> -- so integers act transparently as iterators, and <code>1</code> is literally the identity function, both extensionally and in that <code>1 = (\ x x)</code> evaluates to <code>1</code> (see α-equivalence below).</p>
 </details>
 <details class="dump"><summary><h3 id="syntax">syntax</h3></summary>
 <p>the surface is most immediately influenced by <em>lisp</em> (s-expressions -- a program is a list of atoms), <em>ml</em> (left-associative <span class="term" data-g="currying">curried</span> <span class="term" data-g="application">application</span>), and <em>apl</em> (right-associative infix/prefix notation, ranked array data).</p>

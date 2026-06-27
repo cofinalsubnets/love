@@ -972,6 +972,9 @@
                (id? op 'peep) (: R (argregir tgt (argix a ps 0)) d (caup (cup (cup e))) inl (mint 0) endl (mint 0)   ; (peep STR i d): i unsigned-vs-len, OOB -> d, else byte [STR+i+16]
                   (asm `((cggir tgt syms ps b)
                          `(`('ld T R 8) `('cmp A T) `('br 'below inl) `('li A (? (whole? d) d 0)) `('jmp endl) `('label inl) `('ldxb A R A 1 16) `('label endl)))))
+               (id? op 'pin) (: R (argregir tgt (argix a ps 0)) val (caup (cup (cup e)))     ; (pin C i V): store V's low byte at C's backing[i] (r8=[C+8]=backing str), return C
+                  (asm `((cggir tgt syms ps b) `(`('push A)) (cggir tgt syms ps val)         ; i -> acc, push; V -> acc
+                         `(`('pop T) `('ld 'r8 R 8) `('stxb 'r8 T 1 16 A) `('mov A R)))))      ; pop T(=i); r8=backing; [backing+i+16]=V.lo; acc=C
                ()))
          ()))
    (gargsir tgt syms ps as) (? (atom? as) () (asm (L (cggir tgt syms ps (cap as)) (L (L 'push (greg tgt 'acc))) (gargsir tgt syms ps (cup as)))))
@@ -1034,7 +1037,7 @@
    ; gate is vacuously true for any admitted group, so jitgroup retires. (`?`/`link` already covered: int +
    ; value-mode cons. No tail-call detection needed: a tail self-call compiles as a plain `call` -- correct,
    ; just not yet O(1)-stack; the loop lanes catch counted loops upstream.)
-   jgir-supported '(+ - * // % & | ^ < <= > >= = ? link peep tally)             ; ops cggir/cggvir handle (grows per lane: pin mpeep mpin cap cup two?)
+   jgir-supported '(+ - * // % & | ^ < <= > >= = ? link peep tally pin)         ; ops cggir/cggvir handle (grows per lane: mpeep mpin cap cup two?)
    (jgir-ops-ok? syms e) (? (two? e)                                            ; every op head in e is a group call or a supported op; recurse into every operand
       (: op (cap e) (&& (|| (member? op syms) (member? op jgir-supported)) (all (\ x (jgir-ops-ok? syms x)) (cup e))))
       1)

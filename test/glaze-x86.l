@@ -581,6 +581,12 @@
          (&& (365 = (sbn data 4)) (= ((ev '(: (sb s i) (? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))) sb)) data 4) (sbn data 4))   ; native byte-sum == interp
              (5 = (tln data)) (! (tln 5))                                                                         ; tally native; a FIXNUM arg -> guard rejects -> deopt -> interp tally of a scalar = ()
              (72 = (pkn data 0)) (0 = (pkn data 99))))                                                            ; peep in-bounds (byte 'H'=72); OOB -> the default 0 (pure-native branch, no deopt)
+      ; CASK lane (pin): c a cask param (kind-guarded, raw); pin stores V's low byte at backing[i], returns c (so it threads as a call arg)
+      (: c (cask 5)
+         fil (jitgroupir (L (link '(fill c i) '(? (< i 0) 0 (fill (pin c i (+ 65 i)) (- i 1))))) 'fill 'x64)        ; fill bytes 0..i with 65+i, recursing on (pin ..)'s returned cask
+         _ (fil c 4)
+         (&& (= '(65 66 67 68 69) (L (peep c 0 0) (peep c 1 0) (peep c 2 0) (peep c 3 0) (peep c 4 0)))             ; each byte written natively
+             (88 = (: c2 (cask 4) _ ((jitgroupir (L (link '(g c) '(pin c 2 88))) 'g 'x64) c2) (peep c2 2 0)))))     ; a single native pin -> byte 2
       ; arm64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
       (< 0 (tally (peep (assemble 'arm64 (asm (L (mkouterir 'arm64 1 'fib 1 0 () () () ())
                   (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))))) 'bytes 0))))
