@@ -177,7 +177,8 @@
     ; LOOP auto-detected -> native counted loop, =-identical + correct
     (: L1 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0))
        f  (ev L1)
-       (&& (= f (ev L1)) (3496500 = (f 1000)) (two? (loopinfo L1))))
+       (&& (= f (ev L1)) (3496500 = (f 1000)) (two? (loopinfo L1))
+           (id? (ev L1) (ev L1))))                                  ; CACHE: same source -> same native (compiled once, memoized)
     ; LOOP with a conditional body (sum i for i<50, capped) auto-detected
     (: L2 '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0))
        h  (ev L2)  c ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
@@ -199,7 +200,6 @@
     ; deopts to the matrix-power closed form -- which must equal the interpreted loop (base-ev) exactly.
     (: PL '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ (* 2 b) a)) a)) 0 0 1))
        pf (ev PL)  (&& (two? (loopinfo-n PL)) (= ((base-ev PL) 60) (pf 60)) (= 12 (pf 4))))  ; pell(60) deopt == interp; pell(4)=12 in-range
-    (id? (ev L1) (ev L1))                                       ; CACHE: same source -> same native (compiled once)
     (id? (ev '(\ x (+ x 1))) (ev '(\ x (+ x 1))))
     (: ad (ev '(\ x y (+ (* x x) y))) (&& (13 = (ad 3 4)) (13 = ((ad 3) 4)) ((\ x y (+ (* x x) y)) = ad)))  ; 2-arg leaf auto-natived
     (: a3 (ev '(\ x y z (+ (+ x y) (* z 3))))                                                  ; 3-arg leaf auto-natived, currying at any split
@@ -421,7 +421,8 @@
                             (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))  0)
                P '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7))
                (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ev1 P i))) a)) 0 0)  (run 1000))
-       (&& !(id? (autogroup sp) sp) (500001505000 = (ev sp)) (= (base-ev sp) (ev sp))))   ; sum P(i) i<1000, native == interp
+       (&& !(id? (autogroup sp) sp) (500001505000 = (ev sp)) (= (base-ev sp) (ev sp))         ; sum P(i) i<1000, native == interp
+           (! (occurs? 'ev1 (nthl (autospec sp) 6)))))   ; ... and the interpreter ev1 FOLDS AWAY: the run body (elt 6) is pure Horner arithmetic, no dispatch -- guards specialization actually FIRING (the value tests above pass even if autospec degrades to a no-op)
     ; a DIFFERENT static program (a mul of two sub-exprs) specializes to its OWN residual -- == interp (soundness breadth)
     (: sp2 '(: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)  (id? (cap nd) 'var) x
                              (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))

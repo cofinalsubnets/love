@@ -17,6 +17,7 @@
 ; ev is 1-arg, so the loader's `(ev 'ev r)` = `((ev 'ev) r)` still works after the
 ; rebind; njit/njit-loop call the captured base-ev -> no jit<->ev re-entry. Load AFTER
 ; ai/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
+(: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)
 (: base-ev ev
    ; the emitter's expression grammar over var v: var | int | arith | cmp | (? t a b)
    (exprp e v) (? (= e v)   1
@@ -580,7 +581,6 @@
           (? (! (sstat? cv)) (sresidcl cv (caup cs) (cuup cs) env seen defs)
              (! (spval cv)) (sresidtl (cuup cs) env seen defs)
              (L (sreify (spe (caup cs) env seen defs))))))
-   sfuel (tablet 0)
    (specall def apv seen defs)                                                    ; unfold a defined-fn call, unless in progress / out of fuel
     (: nm (cap def) ps (caup def) bd (caup (cup def)) key (link nm (ssig apv)) n (peep sfuel 'n 0)
        (? (member? key seen) (sdyn (link nm (map sreify apv)))                    ; signature in progress -> residual call
