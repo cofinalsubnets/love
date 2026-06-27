@@ -7,7 +7,7 @@
 ; objdump-checked, + the text/elf frontends) stays in asm/asmtest.l (`make test_asm`);
 ; this is the SMOKE that the service reaches the runtime and assembles bit-identically.
 ; reg map: r0=rax, r7=x86-r8 .. r10=x86-r11; goldens copied from asmtest.l (objdump-verified).
-(? (lit? assemble)
+(? (lit? (peep book 'assemble 0))                         ; presence check via the book -- no helpless-read warning when asm isn't baked (wasm/kernel)
    (assert
       ; -- x86-64 backend: the SIB + rotate + bignum-movabs forms the glaze's map probe leans on --
       (= "488d4c0001"  (asm-hex 'x64 '((leax r1 r0 r0 1 1))))         ; lea rcx,[rax+rax*1+1]  (the tagged-key lea)

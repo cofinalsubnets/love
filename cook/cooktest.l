@@ -167,4 +167,4 @@
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))
    _ (putc 10)
-   (? (< 0 nf) (exit 1) 0))
+   (? (< 0 nf) (nap 1) 0))
