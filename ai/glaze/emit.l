@@ -986,6 +986,22 @@
                (L (L 'adds A A A) '(br vs DEOPT) (L 'or A A 1) (L 'st S 0 A) (L 'add IP IP 16) (L 'ld T IP 0) (L 'jmpr T))
                (L (L 'label 'OVF) (L 'lea 'sp OVFR 0)) (restargsir tgt k) (L (L 'pop OVFR))
                (L (L 'label 'DEOPT)) (deoptmn tgt (> arity 1)))))
+   ; jgir-ok? -- the transitional GATE: is a group fully glazeable by jitgroupir's CURRENT op coverage?
+   ; autogroup routes here when true, else to the byte-list jitgroup (which still owns the lanes not yet
+   ; ported). `jgir-ops` is the supported-op set; it GROWS as each lane lands, and when it covers every op
+   ; jitgroup does the gate becomes vacuous and jitgroup can retire. (No tail-call detection needed: a tail
+   ; self-call compiles as a plain `call` -- correct, just not yet O(1)-stack; the loop lanes catch counted
+   ; loops upstream, so the groups reaching here are bounded-depth recursion.)
+   jgir-ops '(+ - * // % & | ^ < <= > >= =)                                     ; binary int ops cggir handles (grows per lane)
+   (jgir-e? syms ps e) (? (member? e ps) 1  (whole? e) 1
+      (two? e) (: op (cap e)
+         (? (member? op syms)        (all (\ x (jgir-e? syms ps x)) (cup e))    ; a group CALL: every arg supported
+            (member? op jgir-ops)    (&& (= 3 (tally e)) (jgir-e? syms ps (caup e)) (jgir-e? syms ps (caup (cup e))))
+            (id? op '?)              (&& (= 4 (tally e)) (jgir-e? syms ps (caup e)) (jgir-e? syms ps (caup (cup e))) (jgir-e? syms ps (caup (cup (cup e)))))
+            0))
+      0)
+   (jgir-ok? defs) (: syms (map (\ d (cap (cap d))) defs)
+      (all (\ d (: nf (cap d) (jgir-e? syms (cup nf) (cup d)))) defs))
    ; (jitgroupir defs entry tgt) -- defs = ((nameform . body) ..); compile the group, entry as the value.
    (jitgroupir defs entry tgt)
     (: parse (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d)))) defs)            ; (name params body) per fn

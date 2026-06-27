@@ -830,7 +830,7 @@
    (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
       (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
          (link (? hit (cap nf) nf)                                                            ; drop the (name p..) define-sugar -> a PLAIN binding
-               (link (? hit (jitgroup gdefs (cap nf)) val)                                    ; ... name <native>, so it isn't re-wrapped in (\ p ..)
+               (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) 'x64) (jitgroup gdefs (cap nf))) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets); else the byte path
                      (rewrite-bindings (cuup bl) gnames gdefs)))))
    (autogroup form0)
     (? (! (two? form0)) form0
