@@ -16,6 +16,12 @@
 ;   so the exit code alone proves nothing). `make test_all` adds the qemu kernel + tool diffs; `make
 ;   valg` for memory. one file: `out/host/ai test/x.l` -- but the corpus runs CONCATENATED in one
 ;   global scope, so keep helpers local (give `:` a body), and a single-file run lacks the asserts.
+; * SPEED IS A SIGNAL: every test runs in a second or two, the glaze self-tests included (the whole
+;   test/glaze-x86.l is ~1.5s). a test that HANGS or crawls is a bug announcing itself, never "slow
+;   benches" to wait out or split off -- chase the slowness, it IS the bug. the classic: a native
+;   lane fell through to garbage and now loops (or reads OOB and segfaults), e.g. a baked lcat header
+;   came up EMPTY (a failed ai0 gen left a 0-byte .h that make thinks is fresh) so `assemble` is
+;   unbound and the glaze's map lane emits nothing. one bug, two faces -- infinite loop or crash.
 ; * `make clean` nukes out/dl (ovmf/limine) -- stash them first if you need the kernel tests.
 ;   editing ai.h needs no clean (every object deps on $(ai_h), the lcat'd headers re-lay on ai0).
 ; * C and docs EMBED ai the .l sweeps miss -- grep on every rename: ai.c (g_evals_'s driver string),
