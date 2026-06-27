@@ -387,11 +387,15 @@
         (? (scare? s) (: _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) (welp s a b))
            (welp s a b)))
 
-   ; the interactive entry: install shell-help IF no help is present (the
-   ; check and the define both go through ev -- a live read and a top-level
-   ; pin -- since closures capture their free globals at creation and the
-   ; book itself is pulled). file mode never comes through here, so scripts
-   ; keep the helpless (terminal) law.
+   ; the interactive entry: install shell-help IF no help is present. the CHECK
+   ; reads the book directly with a default -- (peep book 'help 0), peep's
+   ; named-absence lane -- NOT a bare (ev 'help): a live read of an ABSENT help
+   ; would trip the always-on `;; missing help` warning (the helpless missing-read
+   ; path probes `help` itself to decide terminal-vs-raise, so reading help-while-
+   ; absent reads as helpless). `book` folds to the book object at bake (captured
+   ; like rng-state's), live past the image's surface-seal. the DEFINE still goes
+   ; through ev -- a live top-level pin, so a later (: help 0) uninstall is seen.
+   ; file mode never comes through here, so scripts keep the helpless (terminal) law.
    ; raw the tty BEFORE reading: the editor (edraw/edline) is the sole echo, so
    ; the kernel's cooked-mode echo must be off or every line doubles. main.c only
    ; raws on the no-arg path (replp = !argp); the bin/bao launch passes argv
@@ -401,7 +405,7 @@
    ; bake (no missing-name on the kernel/wasm bakes, where shell is never called),
    ; live on the host. the nif captures cooked once + restores via atexit on exit.
    (shell _)
-     (: _ (? (ev (\ help)) 0 (ev (list (\ :) (\ help) shell-help)))
+     (: _ (? (peep book (\ help) 0) 0 (ev (list (\ :) (\ help) shell-help)))
         _ ((ev 'raw) 1)
         _ (puts (";3 ai " + ai-version + "\n"))
         (repl 0 0))
