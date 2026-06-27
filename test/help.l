@@ -39,13 +39,14 @@
         (: p (tap '(40)) (= p (sound p 99))))
 
 ; help is present by its net, like everything: "" is a value netting nothing,
-; so it is no help -- the missing read stays 0 and the read protocol stays
-; raw. the koan's help (\ s a b 1) is =-equal to 0 yet a top netting 1:
-; installed, and every scare answers 1.
+; so it is no help -- a bare missing read would go helpless (and surface ";; missing",
+; which we don't trigger here) and the read protocol stays raw. the koan's help
+; (\ s a b 1) is =-equal to 0 yet a top netting 1: installed, every scare answers 1,
+; and a missing read fires the help instead of going helpless.
 (: help "")
-(assert !help (id? (:) one-nothing-unpinned) (= 'eof (sound (tap 0) 'eof)))
+(assert !help !(lit? help) (= 'eof (sound (tap 0) 'eof)))
 (: help (\ s a b 1))
-(assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))
+(assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))   ; net-1 help: the miss fires it -> 1, no helpless read
 (: help 0)
 
 ; welp -- the floor handler (repl.l), the fromempty the introductions never

@@ -97,6 +97,9 @@
 
 ; --- comparing functions --- `=` on functions is alpha + structural (binders by position,
 ; free vars by name, captures pairwise); eta/beta not bridged; 1 = (\ x x), 0 = (\ _ 1).
+; (\ y z) below holds a FREE var z; welp answers its read with the zero point so the closure
+; builds with no warning surfaced -- it stays distinct from (\ x x) (free body /= bound body).
+(: help welp)
 (assert
  ((\ x x) = (\ y y)) ((\ a b (+ a b)) = (\ x y (+ x y)))           ; alpha: bound vars by position
  ((\ x (+ x 1)) = (\ x (+ x 1))) !(id? (\ x (+ x 1)) (\ x (+ x 1)))  ; equal, yet distinct objects
@@ -107,6 +110,7 @@
  (1 = (\ x x)) ((\ y y) = 1) !(id? 1 (\ x x))                      ; 1 = identity, either side
  (0 = (\ _ 1)) ((\ q 1) = 0) !(0 = (\ _ 2)) !(0 = (\ _ _))        ; 0 = const-1 (and only that)
  !!(\ _ 1) (1 = $(\ _ 1)))     ; the bridge crosses the measure: =-equal to 0, yet present (a top nets 1)
+(: help 0)
 
 ; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it REDUCES. these are the
 ; binary twins of rocq/spec.v's reduction layer (step/subst): the proof says "valid by the
@@ -230,10 +234,13 @@
 ; (materially empty, applies const-1); a NOM is a named point (its own kind); () IS THE CORE -- the one
 ; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
+; a missing read answers the zero point under the floor handler welp (no warning surfaced)
+(: help welp)
+(assert (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z)))))   ; absence: the zero point, wearing ()
+(: help 0)
 (assert
  (() = (:)) !(nom? ()) !(name? ()) !(0 = ()) !(id? 0 '()) (() = (intern "")) (0 = $()) !() !!$'x
  ("()" = (show ()))
- (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z))))   ; absence: the zero point, wearing () -- NOT a nom (anonymous and empty)
  (nom? (mint 0)) !(name? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; the fresh point: nom? (a real point) but NOT name? (anonymous), materially empty
  (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone
  !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (id? m m)))  ; distinct always; itself only
@@ -328,8 +335,11 @@
  !(rest 0) (4 = (tally (rng-seed 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
  (book? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
- (id? (:) not-in-the-book) !not-in-the-book      ; a missing name reads the zero point: a nom not in the book
  (: st (rng-seed 7) ((cap (rand-next st)) = (cap (rand-next st)))))
+; a missing name reads the zero point under the floor handler welp (no warning surfaced)
+(: help welp)
+(assert (id? (:) not-in-the-book) !not-in-the-book)   ; a nom not in the book
+(: help 0)
 
 ; --- i/o & ports --- in/out are the default ports; getc + putc/puts/putn/putx, per-port
 ; get/put/.../read, open/close/sip/pad/slurp; `read` is port-first, one datum per call;
@@ -341,10 +351,13 @@
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;
 ; `born` records the hatch (unbound pre-egg); just before birth the egg mops up runtime names.
+; the mopped names are GONE post-birth; the floor handler welp answers the miss with the zero point (no warning)
+(: help welp)
 (assert (lit? ev) (? born (charm? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !twirl 1))                       ;  hence the born guards)
+(: help 0)
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.

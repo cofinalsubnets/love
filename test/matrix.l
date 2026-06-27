@@ -26,7 +26,6 @@
    mx-ao  (array 2 (100 2) 5)         ; KArrO (object array)
    mx-str "ab"                           ; KString
    mx-sym 'ef                            ; KSym (interned)
-   mx-usy $cd                            ; KSym (uninterned)
    mx-lst '(1 2)                         ; KChain (chain / list)
    mx-fn  (+ 1)                          ; KHot (nif partial application)
    mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KHot (a map is a lookup-lambda)

@@ -6,10 +6,15 @@
 ; captures its free globals at creation, so a missing read in a lambda body fires
 ; the condition at the define, not the call.
 
+; welp is the FLOOR HANDLER: install it and a missing read answers the zero point with
+; no warning. (Truly helpless -- no help at all -- it still answers the zero point, but
+; SURFACES ";; missing nom" on err to catch the silent const-1 trap; we don't trigger that.)
+(: help welp)
 (assert
- (id? (:) an-never-defined)                      ; the default: the zero point
+ (id? (:) an-never-defined)                      ; the floor handler: the zero point
  !an-never-defined                               ; ... so a missing name is false
  !(nom? an-never-defined))                       ; ... the zero point (absence): NOT a nom -- anonymous and empty
+(: help 0)
 
 ; a name BOUND to 0 is in the book -- not missing, no condition: under an
 ; armed help the read still answers its own 0 (presence beats value; the
