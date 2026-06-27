@@ -235,7 +235,7 @@
    ; where g is ANY function OF THE GROUP (self OR sibling) of matching arity. autogroup finds the
    ; maximal CLOSED such subset (a fixpoint: a fn that calls OUT of the fragment -- into link/cap, a float
    ; const, or an interpreted helper -- drops out, taking its callers with it), then rewrites EACH group
-   ; binding to its OWN native (jitgroup, emit.l), so every reference -- from the `:` body OR an
+   ; binding to its OWN native (jitgroupir, emit.l), so every reference -- from the `:` body OR an
    ; interpreted sibling -- resolves to native, while the calls AMONG the group stay native inside the
    ; buffer. fib/tak are SINGLETON groups; even?/odd? a 2-fn group. `groupok?` is the standalone fragment
    ; predicate (the futamura `mix` pass can reuse it as its "residual is ground arithmetic" stop oracle).
@@ -246,7 +246,7 @@
    ;     the ENCLOSING fn's params that occur free in GBODY -- threading FV through g's self-calls -- and
    ;     replace the body with (g' FV.. inits..). primes' `prime?` and `count` are each such a named-let
    ;     loop, so after lifting the whole trial-division graph (prime? count prime?_go count_go) is a flat
-   ;     mutually-recursive group autogroup+jitgroup glaze. ONE level (whole-body named-let; GBODY flat);
+   ;     mutually-recursive group autogroup+jitgroupir glaze. ONE level (whole-body named-let; GBODY flat);
    ;     a non-named-let body passes through untouched, so fib/tak/even-odd are unaffected.
    (occurs? s e) (? (two? e) (foldl (\ a x (|| a (occurs? s x))) 0 e) (id? e s))                  ; s occurs (syntactically) in e?
    (subst-call g gn fv e) (? (two? e) (? (id? (cap e) g) (link gn (cat fv (map (\ x (subst-call g gn fv x)) (cup e))))   ; (g A..) -> (gn fv.. A'..)
@@ -294,7 +294,7 @@
    ;     0 0))` result, so norm-let/named-let? bail. Read-only = no pin/link/tablet/cask/say (a write can't
    ;     hoist past the interpreted fills it interleaves with); self-recursive, no sibling call (v1). ==
    ;     interp: the lifted fn gets the SAME captures BY VALUE. The lifted `(g .. h ..)` then needs the MAP
-   ;     lane (groupok?/cgg) to glaze; until that lands plift is STANDALONE -- OFF the autogroup chain.
+   ;     lane (groupok?/jitgroupir) to glaze; until that lands plift is STANDALONE -- OFF the autogroup chain.
    roalloc '(pin link tablet hash cask say pour jug tap)                                          ; allocating/mutating heads
    (uses-head? hs e) (? (two? e) (|| (member? (cap e) hs) (foldl (\ a x (|| a (uses-head? hs x))) 0 (cup e))) 0)
    (fnpair? pr) (: nf (cap pr) (&& (two? nf) (name? (cap nf)) (< 1 (tally nf)) (all name? (cup nf)) (distinctp (cup nf))))  ; (g q..) define-sugar
@@ -799,12 +799,12 @@
              0))                                                                               ; bare cap/cup are CHAIN-valued -> not admitted in an int position (cok? carries them)
        0)
    ; --- STAGE D: vok? -- the VALUE grammar (a heap-allocating fn's body, e.g. tree's `mk`). An expr is
-   ;     VALUE-valued if it is: an int const (-> the tagged value) | a param (cggv re-tags it) | (link V V)
+   ;     VALUE-valued if it is: an int const (-> the tagged value) | a param (cggvir re-tags it) | (link V V)
    ;     (a cons; both operands value-ok) | (? INT V V) (int test via groupok?, value branches) | (g E..)
    ;     a call to a VALUE-typed candidate (vcands; args int/chain-ok via gargok?, as for an int call).
    ;     CROSS-CALL SOUNDNESS by candidate-set SEPARATION: vok?'s calls resolve only in `vcands`,
    ;     groupok?'s only in `icands` -- so an int fn can't call a value fn (not in its set) and vice
-   ;     versa, with NO change to groupok?. The value fns glaze via cggv + the value-epilogue (emit.l).
+   ;     versa, with NO change to groupok?. The value fns glaze via cggvir + the value-epilogue (emit.l).
    (vok? cm icands vcands cps ps e)
     (? (whole? e) 1
        (member? e ps) 1
@@ -830,7 +830,7 @@
    (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
       (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
          (link (? hit (cap nf) nf)                                                            ; drop the (name p..) define-sugar -> a PLAIN binding
-               (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) 'x64) val) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets); else interp (the byte path jitgroup is retired -- the gate is vacuous, so this fallback is a soundness backstop, not a live lane)
+               (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) 'x64) val) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets); else interp (jgir-supported spans the recognizer grammar, so this fallback is a soundness backstop, not a live lane)
                      (rewrite-bindings (cuup bl) gnames gdefs)))))
    (autogroup form0)
     (? (! (two? form0)) form0

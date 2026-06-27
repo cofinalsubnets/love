@@ -2,7 +2,7 @@
 ; EXECUTING counterpart to the arch-neutral test/glaze.l (which only checks the substrate). HOST-
 ; x86-ONLY: these INSTALL and EXECUTE native machine code, so they're run only by the x86-guarded
 ; `make test_glaze` (never the arch-neutral corpus -- common.mk filters this file out). test_glaze
-; cats emit.l + auto.l ahead of this file, so jit/jitsum/jitgroup/.../base-ev/autogroup are bound.
+; cats emit.l + auto.l ahead of this file, so jit/jitsum/jitgroupir/.../base-ev/autogroup are bound.
 ;
 ; Each block compiles through `base-ev` (auto.l's captured pre-rebind compiler), because the
 ; loader's global `ev` is now auto-ev and mis-opfixes some pathological self-test forms. The EMIT
@@ -69,42 +69,6 @@
   (: mk (jit2 '(\ n x (+ x n)))  a5 (mk 5)  a7 (mk 7)
      (&& (15 = (a5 10)) (17 = (a7 10)) ('(6 7 8) = (map a5 '(1 2 3)))                 ; native captured closure, composes
          (8000000000000000000 = ((mk 4000000000000000000) 4000000000000000000))))    ; ... and deopts through the capture
-  ; --- GROUP recursion (jitgroup): self + multi-arg + MUTUAL, native == interp, overflow -> bignum ---
-  (: gfib (jitgroup (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib)
-     (&& (lit? gfib) (75025 = (gfib 25))
-         (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25) (gfib 25))
-         (gfib = (jitgroup (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib))))   ; two natives, same source -> = (cache soundness)
-  ; INTEGER-PARAM FIXNUM GUARD (the soundness twin of the string guard below): an int param is loaded
-  ; sar'd (untagged), ASSUMING a fixnum -- so a HEAP arg must DEOPT to the interp, never get sar'd then
-  ; re-tagged into a garbage fixnum (pointer|1). Was a real glaze miscompile: identity on a list came
-  ; back a bad fixnum (charm?=1), surfacing only through the .img boot (auto-ev), which the gate's
-  ; AI_NO_IMAGE hid. So: heap arg in {list, string, cask} -> deopt -> EXACTLY the interp's value.
-  (: gid (jitgroup (L (link '(id1 x) 'x)) 'id1)  iid (\ x x)
-     (&& (5 = (gid 5)) (= (iid 5) (gid 5))                                                       ; fixnum: native, == interp
-         !(charm? (gid '(a b))) (= (iid '(a b)) (gid '(a b)))                                    ; HEAP list arg -> deopt -> the list, NOT pointer|1
-         (= (iid "hi") (gid "hi")) (hot? (gid (cask 2)))))                                       ; heap string -> deopt == interp; cask stays a CASK (not a mangled fixnum)
-  (: ginc (jitgroup (L (link '(inc n) '(+ n 1))) 'inc)  iinc (\ n (+ n 1))
-     (&& (42 = (ginc 41)) (= (iinc '(a)) (ginc '(a)))))                                          ; arith on a heap arg -> deopt == interp (not a mangled fixnum)
-  (: gtak (jitgroup (L (link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))) 'tak)
-     (&& (7 = (gtak 18 12 6)) (7 = ((gtak 18 12) 6)) (7 = ((gtak 18) 12 6))))            ; nested self-calls; curries at any split
-  ; MUTUAL recursion: evn/odn cross-call -- both compiled into ONE buffer, sibling calls native
-  (: geo (jitgroup (L (link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))) 'evn)
-     god (jitgroup (L (link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))) 'odn)
-     (&& (1 = (geo 10)) (0 = (geo 7)) (1 = (geo 0)) (1 = (geo 100))                      ; entry=evn
-         (0 = (god 10)) (1 = (god 7))))                                                  ; entry=odn (the other entry of the same group)
-  ; overflow in a singleton group deopts to the interp fallback -> exact bignum (2^70)
-  (: gp2 (jitgroup (L (link '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))) 'p2)
-     (= (ev '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))) (gp2 70)))
-  ; the // and % integer ops in the GROUP lane (trial-division residue), with /-by-0 deopt
-  (: gmod (jitgroup (L (link '(r n d) '(% n d))) 'r) (&& (1 = (gmod 10 3)) (0 = (gmod 12 4)) (= (% 7 0) (gmod 7 0))))
-  (: gdiv (jitgroup (L (link '(q n d) '(// n d))) 'q) (&& (3 = (gdiv 10 3)) (-3 = (gdiv -10 3))))
-  ; STRING LANE: native (peep s i) on a plain string (s passed RAW, byte at s+16); the apof TYPE GUARD
-  ; deopts a non-string (fixnum / cask / nil) to the interp fallback -- never a bad deref. glazed == interp.
-  (: gsb (jitgroup (L (link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))) 'sb)
-     isb (ev '(: (sb s i) (? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))) sb))
-     d (string (L 72 105 90 33 65))
-     (&& (365 = (gsb d 4)) (= (isb d 4) (gsb d 4))                                                ; string: native byte-sum == interp
-         (= (isb 5 4) (gsb 5 4)) (= (isb (cask 3) 4) (gsb (cask 3) 4)) (= (isb () 4) (gsb () 4))))
   ; HEAP RESULT (jitfr): a float-result leaf BOXES on the heap -- a gem out, == interp, transparent, deopts
   (: fr (jitfr '(\ x (+ (* x 1.5) 2.0)))  ifr (\ x (+ (* x 1.5) 2.0))
      (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (ifr 7) (fr 7))                  ; a FLOAT box; 4*1.5+2=8.0; == interp
@@ -339,7 +303,7 @@
     ; ins/bump inside hash-run, sharing the mutable map h -- HOISTS to a top-level sibling `hash-run_scan`
     ; threading (n h), the two (scan 0 0) call sites rewritten. `lift` can't (3 sibling fns + a compound
     ; result); plift can. Tested via base-ev (the SOURCE->SOURCE transform preserves meaning, hash-run(N)
-    ; = N^2): the hoisted map-read still needs the MAP lane (groupok?/cgg) to glaze SOUNDLY -- the string
+    ; = N^2): the hoisted map-read still needs the MAP lane (groupok?/jitgroupir) to glaze SOUNDLY -- the string
     ; peep-recognizer would mis-admit it -- so plift is NOT yet on the autogroup chain.
     (: rpl '(: (hash-run n)
                 (: h (tablet 0)
@@ -567,6 +531,13 @@
       (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25)
          ((jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64) 25))          ; fib(25)=75025 == interp
       (1180591620717411303424 = ((jitgroupir (L (link '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))) 'p2 'x64) 70)) ; 2^70: mul overflow -> OVF -> deopt -> bignum
+      ; integer-param FIXNUM GUARD (mkouterir's, distinct from the leaf coreir guard): a HEAP arg to a plain
+      ; int param must DEOPT to the interp, never sar+re-tag into a garbage fixnum (pointer|1). glazed == interp.
+      (: gidh ((jitgroupir (L (link '(id1 x) 'x)) 'id1 'x64) '(a b)) (&& ('(a b) = gidh) !(charm? gidh)))   ; identity on a list -> the list, not a mangled fixnum
+      (= (+ '(1 2) 1) ((jitgroupir (L (link '(inc n) '(+ n 1))) 'inc 'x64) '(1 2)))                          ; arith on a heap arg -> deopt == interp
+      ; // and % in the GROUP lane (divir), with /-by-0 deopt -- a path the jitir/jitnir cases don't reach
+      (3 = ((jitgroupir (L (link '(q n d) '(// n d))) 'q 'x64) 10 3)) (-3 = ((jitgroupir (L (link '(q n d) '(// n d))) 'q 'x64) -10 3))
+      (1 = ((jitgroupir (L (link '(r n d) '(% n d))) 'r 'x64) 10 3)) (= (% 7 0) ((jitgroupir (L (link '(r n d) '(% n d))) 'r 'x64) 7 0))   ; /-by-0 -> deopt -> interp
       (7 = ((jitgroupir (L (link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))) 'tak 'x64) 18 12 6))   ; multi-arg, nested self-calls
       (7 = (((jitgroupir (L (link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))) 'tak 'x64) 18 12) 6)) ; ... curries at any split
       (: eo (L (link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1)))))
