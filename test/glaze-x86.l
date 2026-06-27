@@ -563,7 +563,7 @@
       (= (jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64)
          (jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64))               ; two natives, same source -> = (transparent)
       ; arm64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
-      (< 0 (tally (peep (assemble 'arm64 (asm (L (mkouterir 'arm64 1 'fib 1)
+      (< 0 (tally (peep (assemble 'arm64 (asm (L (mkouterir 'arm64 1 'fib 1 0)
                   (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))))) 'bytes 0))))
    (say err "ai/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
 

@@ -971,21 +971,48 @@
                ()))
          ()))
    (gargsir tgt syms ps as) (? (atom? as) () (asm (L (cggir tgt syms ps (cap as)) (L (L 'push (greg tgt 'acc))) (gargsir tgt syms ps (cup as)))))
+   ; consir: build a chain cell (cons) on the heap -> acc. ROOM-GUARD first (Sp - Hp >= 3w + floor, else
+   ;   br OVF -> deopt, so no GC fires mid-native), then [Hp]=chainkind, [Hp+8]=cap(=tmp), [Hp+16]=cup(=acc),
+   ;   acc=Hp (an even ptr IS the value, no putfix), Hp+=3w. Mirrors the byte path's consemit. r9/r10 are
+   ;   free scratch in the group ABI (args r3/r12-r14, anchor r11, acc r0, tmp r7, sp r1, hp r2, ip r5).
+   (consir tgt) (: A (greg tgt 'acc) T (greg tgt 'tmp) S (greg tgt 'sp) HP (greg tgt 'hp)
+      `(`('lea 'r9 HP 88) `('cmp S 'r9) '(br below OVF)                             ; room for 3w+floor; Sp < Hp+88 -> heap full -> deopt
+        `('li 'r10 chainkind) `('st HP 0 'r10)                                      ; [Hp] = chain header
+        `('st HP 8 T) `('st HP 16 A)                                               ; [Hp+8] = cap (the popped a); [Hp+16] = cup (b)
+        `('mov A HP) `('add HP HP 24)))                                            ; acc = Hp (result ptr); bump Hp by 3 words
+   ; cggvir -- VALUE-mode codegen: e yields an AI VALUE (heap ptr or tagged scalar) in acc, NOT a raw int.
+   ;   int-const C -> tagged value | param -> re-tag the raw arg reg (2p+1) | (link A B) cons (A,B values) |
+   ;   (? T A B) int test via cggir, value branches | (g E..) a value-group CALL (args INT via cggir).
+   (cggvir tgt syms ps e)
+    (: A (greg tgt 'acc) T (greg tgt 'tmp)
+      (? (whole? e) `(`('li A (+ (* 2 e) 1)))                                        ; the tagged VALUE C
+         (member? e ps) (: R (argregir tgt (argix e ps 0)) `(`('leax A R R 1 1)))    ; param: acc = 2*reg + 1 (re-tag)
+         (two? e) (: op (cap e)
+            (? (member? op syms) (cggir tgt syms ps e)                              ; a value-group call -> cggir's call (result is the value)
+               (id? op 'link) (asm `((cggvir tgt syms ps (caup e)) `(`('push A)) (cggvir tgt syms ps (caup (cup e))) `(`('pop T)) (consir tgt)))   ; A;push;B;pop T(=A); cons(T,A)
+               (id? op '?) (: el (mint 0) en (mint 0)
+                  (asm `((cggir tgt syms ps (caup e)) `(`('cmp A 0) `('br 'le el)) (cggvir tgt syms ps (caup (cup e)))
+                         `(`('jmp en) `('label el)) (cggvir tgt syms ps (caup (cup (cup e)))) `(`('label en)))))
+               ()))
+         ()))
    ; mkhir: one function. label; [push lr]; save arg regs; load the passed args; body; restore; [pop lr]; ret.
    (mkhir tgt syms nm ps body)
     (: k (tally ps)
        (asm (L (L (L 'label nm)) (hsave tgt) (saveargsir tgt k) (loadargsir tgt k)
-               (cggir tgt syms ps body) (restargsir tgt k) (hrest tgt) (L '(ret)))))
+               (? (hasl body) (cggvir tgt syms ps body) (cggir tgt syms ps body))   ; VALUE-typed body (conses) -> cggvir, else integer cggir
+               (restargsir tgt k) (hrest tgt) (L '(ret)))))
    ; mkouterir: the entry's OUTER -- save anchor+arg regs; anchor=sp; fixnum-guard+push the args; call
    ; H_entry; pop args; restore; putfix + Continue; OVF (mov sp,anchor -> abandon frames; restore) -> DEOPT.
-   (mkouterir tgt k entry arity)
+   (mkouterir tgt k entry arity valt)                                              ; valt: a VALUE-typed entry (returns a heap ptr / tagged scalar) -> store acc AS-IS, no putfix
     (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) OVFR (govf tgt) ss (slotsz tgt)
-       pushargs (foldl (\ a i (asm (L a (L (L 'ld A S (* 8 i)) (L 'test A 1) '(br eq OVF) (L 'sar A 1) (L 'push A))))) () (rangeL 0 k))
-       (asm (L (L (L 'push OVFR)) (saveargsir tgt k) (L (L 'lea OVFR 'sp 0)) pushargs
-               (L (L 'call entry) (L 'add 'sp 'sp (* ss k))) (restargsir tgt k) (L (L 'pop OVFR))
-               (L (L 'adds A A A) '(br vs DEOPT) (L 'or A A 1) (L 'st S 0 A) (L 'add IP IP 16) (L 'ld T IP 0) (L 'jmpr T))
-               (L (L 'label 'OVF) (L 'lea 'sp OVFR 0)) (restargsir tgt k) (L (L 'pop OVFR))
-               (L (L 'label 'DEOPT)) (deoptmn tgt (> arity 1)))))
+       pushargs (foldl (\ a i (asm `(a `(`('ld A S (* 8 i)) `('test A 1) '(br eq OVF) `('sar A 1) `('push A))))) () (rangeL 0 k))
+       epi (? valt `(`('st S 0 A) `('add IP IP 16) `('ld T IP 0) `('jmpr T))                                  ; VALUE: store acc as-is; Continue (no putfix)
+                 `(`('adds A A A) '(br vs DEOPT) `('or A A 1) `('st S 0 A) `('add IP IP 16) `('ld T IP 0) `('jmpr T)))   ; INT: putfix (overflow -> deopt); Continue
+       (asm `(`(`('push OVFR)) (saveargsir tgt k) `(`('lea OVFR 'sp 0)) pushargs
+              `(`('call entry) `('add 'sp 'sp (* ss k))) (restargsir tgt k) `(`('pop OVFR))
+              epi
+              `(`('label 'OVF) `('lea 'sp OVFR 0)) (restargsir tgt k) `(`('pop OVFR))
+              `(`('label 'DEOPT)) (deoptmn tgt (> arity 1)))))
    ; jgir-ok? -- the transitional GATE: is a group fully glazeable by jitgroupir's CURRENT op coverage?
    ; autogroup routes here when true, else to the byte-list jitgroup (which still owns the lanes not yet
    ; ported). `jgir-ops` is the supported-op set; it GROWS as each lane lands, and when it covers every op
@@ -1000,15 +1027,25 @@
             (id? op '?)              (&& (= 4 (tally e)) (jgir-e? syms ps (caup e)) (jgir-e? syms ps (caup (cup e))) (jgir-e? syms ps (caup (cup (cup e)))))
             0))
       0)
+   ; jgvir-e? -- the VALUE grammar (a fn whose body conses -> cggvir): int-const | param | (link V V) |
+   ; (? INT V V) (int test, value branches) | (g E..) (a value-group call; args INT). Mirrors cggvir.
+   (jgvir-e? syms ps e) (? (whole? e) 1  (member? e ps) 1
+      (two? e) (: op (cap e)
+         (? (member? op syms)        (all (\ x (jgir-e? syms ps x)) (cup e))         ; value-group call: args INT-ok
+            (id? op 'link)           (&& (= 3 (tally e)) (jgvir-e? syms ps (caup e)) (jgvir-e? syms ps (caup (cup e))))
+            (id? op '?)              (&& (= 4 (tally e)) (jgir-e? syms ps (caup e)) (jgvir-e? syms ps (caup (cup e))) (jgvir-e? syms ps (caup (cup (cup e)))))
+            0))
+      0)
    (jgir-ok? defs) (: syms (map (\ d (cap (cap d))) defs)
-      (all (\ d (: nf (cap d) (jgir-e? syms (cup nf) (cup d)))) defs))
+      (all (\ d (: nf (cap d) body (cup d) (? (hasl body) (jgvir-e? syms (cup nf) body) (jgir-e? syms (cup nf) body)))) defs))
    ; (jitgroupir defs entry tgt) -- defs = ((nameform . body) ..); compile the group, entry as the value.
    (jitgroupir defs entry tgt)
     (: parse (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d)))) defs)            ; (name params body) per fn
        syms (map cap parse)                                                            ; the fn names (call targets)
        efn (gfind (\ f (id? (cap f) entry)) parse)  k (tally (nthl efn 1))
        ord (link efn (gfilt (\ f (! (id? (cap f) entry))) parse))                      ; entry first (H_entry sits right after the OUTER)
-       outer (mkouterir tgt k entry k)
+       valt (hasl (nthl efn 2))                                                       ; entry value-typed (body conses) -> the value epilogue stores acc as-is
+       outer (mkouterir tgt k entry k valt)
        Hs (foldl (\ a f (asm (L a (mkhir tgt syms (cap f) (nthl f 1) (nthl f 2))))) () ord)
        lrf (\ ds (? (atom? ds) (L entry) (: d (cap ds) (link (cap d) (link (cup d) (lrf (cup ds)))))))
        fb (ev (link ': (lrf defs)))                                                    ; the WHOLE group interpreted -- the deopt fallback
