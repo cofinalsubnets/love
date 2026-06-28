@@ -1175,21 +1175,29 @@ static ai_noinline struct ai *gcg(struct ai*h, struct ai *p1, uintptr_t len1, st
 
 #ifdef AI_STAT
 // ===== generational write barrier (stage 2; AI_STAT / host only) ================
-// A MINOR collection scavenges only [minor, hp); it finds the young objects an
-// OLD object still points at two ways: the REMEMBERED SET (old MAPS that took a
-// young value -- the precise, common case) and the DIRTY flag (any OTHER old write,
-// which forces the collection to be a full MAJOR). ai's EXECUTION is functional
-// (no old is mutated), so dirty stays clear and minors are sound; only the COMPILER
-// mutates old in place (reader set-tail, poke into a tenured thread, c0 backpatch)
-// -> dirty -> major. Stage 2 builds this and AUDITS it: when dirty is clear (a minor
-// would run) there must be NO unremembered old->young edge. See doc/gengc.md.
+// A MINOR collection scavenges only [minor, hp); it finds the young objects an OLD
+// object still points at through the REMEMBERED SET -- gen_wb records any old `src`
+// that takes a young `p`, so the minor rescans src. Every old->young edge EXECUTION
+// or the READER mints (a map pin, a reader set-tail) goes through gen_wb, so a minor
+// under a complete rem set is sound -- exactly the barrier rocq/gc.v's `barrier_sound`
+// proves (rem_complete => the minor reaches every young object the mutator can). See
+// doc/gengc.md, doc/gc-single-barrier.md.
+//
+// The DIRTY flag is NOT a second barrier on the same edges -- it is "skip the minor,
+// do a MAJOR" (a major traces from roots with no rem set, so it is unconditionally
+// sound). COMPILATION sets it: c0 (boot) and ev's poke-based thread-build (lvm_poke,
+// runtime) mutate threads/env in place by routes the rem set can't safely track -- a
+// poke can hit a cell the minor's terminator-bounded inplace-scan won't reach, so a
+// precise rem-set entry there would be UNSOUND (an early gen_wb attempt hung the
+// egg-warm). Forcing a major is the safe call. A minor only ever runs with dirty
+// clear (no compile pending), so its soundness rests solely on the rem set, which is
+// what gc.v covers. Retiring the dirty leg entirely needs the thread-builder to build
+// young + tenure its group atomically (doc/gc-single-barrier.md Step 3, not done).
 //
 // young?: a heap pointer allocated since the last collection -- in [minor, hp).
 // The ADDRESS is the generation (ai objects carry no age bit).
 static ai_inline bool ai_young(struct ai *g, word p) {
  return lamp(p) && ptr(p) >= g->minor && ptr(p) < g->hp; }
-static ai_inline bool ai_major_cell(struct ai *g, word *c) {       // a tenured cell: inside the major pool
- return (ai_word*) c >= g->major_base && (ai_word*) c < g->major_hp; }
 static bool gen_remembered(struct ai *g, word obj) {
  for (uintptr_t i = 0; i < g->rem_n; i++) if (g->rem[i] == obj) return true;
  return false; }
@@ -1198,12 +1206,17 @@ static void gen_remember(struct ai *g, word obj) {
  if (gen_remembered(g, obj)) return;                           // deduped: the set stays small (book + a few)
  if (g->rem_n < g->rem_cap) g->rem[g->rem_n++] = obj;          // overflow drops -> surfaces as an audit miss
  if (g->rem_n > g->rem_hi) g->rem_hi = g->rem_n; }
-// the MAP barrier: an old map `src` gains a young key/value/backing `p` -> remember
-// src so a minor rescans it. Maps are the only mutable-pointer structure execution
-// touches; everything else is immutable, so this is the whole hot-path barrier.
+// the write barrier: an old `src` gains a young key/value/backing/tail `p` -> remember
+// src so a minor rescans it. Old maps (a pin) and reader spines (set-tail) are the
+// structures execution/the reader mutate in place; everything else is immutable, so
+// this is the whole hot-path barrier.
 static ai_inline void gen_wb(struct ai *g, word src, word p) {
  if (lamp(src) && ai_young(g, p) && !ai_young(g, src)) gen_remember(g, src); }
-// the COMPILER barrier: a non-map write to an old cell -> dirty (forces a major).
+static ai_inline bool ai_major_cell(struct ai *g, word *c) {       // a tenured cell: inside the major pool
+ return (ai_word*) c >= g->major_base && (ai_word*) c < g->major_hp; }
+// the poke barrier: a raw cell poke into a tenured object -> dirty (force a major). A poke
+// can target a cell the minor's terminator-bounded inplace-scan won't reach, so the precise
+// rem set is unsafe here; a major traces from roots and is always sound. Boot/compile-only.
 static ai_inline void gen_dirty(struct ai *g, word *cell) {
  if (ai_major_cell(g, cell)) g->dirty = 1; }
 // (Stage 2's reachability AUDIT -- which proved the rem set complete for a hypothetical
@@ -1404,7 +1417,7 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end);
  uintptr_t major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  g->since_major += seen_young;                                  // young allocated (∝ scanned) since the last major
- // a MAJOR (else a minor): forced by an in-place mutation (dirty); or the major can't hold a worst-case
+ // a MAJOR (else a minor): forced by a compile-time in-place mutation (dirty: c0 at boot, ev's thread-build poke); or the major can't hold a worst-case
  // promotion; or we've allocated the post-major live set + 4 minor-pools' worth since the last major --
  // the amortization rule that periodically traces, so floating DEAD tenured objects (which never grow
  // occupancy -- they die in place, invisible to a minor) get swept and the pool can shrink back. The
@@ -1681,8 +1694,11 @@ static struct ai *append(struct ai *g) {
 // don't inline this so callers can tail call optimize
 static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
 #ifdef AI_STAT
- g->dirty = 1;   // c0 (the bootstrap compiler) builds threads + mutates its env in place; mark so any
-                 // collection during/after a c0 compile is a MAJOR. Boot-only: runtime ev self-hosts.
+ g->dirty = 1;   // c0 (the bootstrap compiler) builds threads + mutates its env in place by routes the
+                 // rem set doesn't track -> force a MAJOR (always sound, no barrier needed). Boot-only:
+                 // after the egg, runtime compilation self-hosts through ev, whose thread-build pokes
+                 // also dirty (lvm_poke). A minor never coincides with a compile, so gc.v's rem-set
+                 // barrier covers every minor; dirty just keeps compile-time collections major.
 #endif
  // the operator factor pass: c0 delegates the sigil surface -> core source
  // rewrite to the l `opfix` prepass (prel.l) -- evaluated like a macro,
@@ -4154,12 +4170,12 @@ static struct ai *ioparse(struct ai *g, bool multi) {
      word frame = A(g->sp[1]);                         // (head . tail)
      if (nilp(A(frame))) { A(frame) = B(frame) = g->sp[0];  // first element: head = tail = newcons
 #ifdef AI_STAT
-       gen_dirty(g, (word*) frame);                       // reader set-tail: a young cons into the (maybe tenured) frame
+       gen_wb(g, frame, g->sp[0]);                        // reader set-tail: precise rem-set, an old frame takes the young newcons
 #endif
      } else { word tail = B(frame);                    // the current last cons
        B(tail) = g->sp[0], B(frame) = g->sp[0];           // link onto tail, advance tail (B(B(frame)) == B(tail))
 #ifdef AI_STAT
-       gen_dirty(g, (word*) tail), gen_dirty(g, (word*) frame);  // old tail/frame -> young newcons
+       gen_wb(g, tail, g->sp[0]), gen_wb(g, frame, g->sp[0]);  // precise rem-set: old tail/frame take the young newcons
 #endif
      }
      g->sp++; }                                        // pop newcons -> ctx

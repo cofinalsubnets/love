@@ -69,13 +69,38 @@ A *young* cell pointing at anything (young or old) is always safe. So if a struc
 built such that every pointer it holds points *backward in age*, generation drops out of
 the analysis entirely.
 
-## The plan
+## Session finding (2026-06-27) — Step 1 is RIGHT for the reader, WRONG for the poke
 
-### Step 1 — collapse to one mechanism (cheap, do first)
+Tried Step 1 as written (convert all three `gen_dirty` sites to `gen_wb`). Result:
+
+- **Reader set-tail → `gen_wb`: SOUND, landed.** Validated end-to-end — `make test` green
+  (host+ai0, 2717×3), `gc.v` green, the differential oracle 2000/2000, and a read-heavy
+  gauge probe shows minors now fire (`n_minor` > 0) with `rem_miss=0`, `rem_hi=41` (of 65536):
+  the rem set stays complete and tiny. The reader was "the steady-state trigger of dirty";
+  it no longer forces majors. This is the real Step-1 win.
+- **`lvm_poke` → `gen_wb`: UNSOUND — hung the egg-warm.** A poke writes `cell(base)+idx` at an
+  ARBITRARY index, but a minor reaches a remembered object only through `gen_scan_inplace`,
+  which walks a thread **only up to its tag terminator**. A poke past that (ev's thread-build /
+  recursive back-ref) leaves a young value the minor never sees → it drops the live object →
+  corruption → infinite loop. `gen_dirty`'s forced **major** caught it (a major traces from
+  roots, ignoring the rem set). So the precise rem-set is **not a drop-in** for the poke; it
+  needs Step 3 (build the thread young + tenure its group atomically) or it keeps `dirty`.
+- **c0 (boot) → kept `gen_dirty`.** Boot-only; ~21 in-place env/thread mutation sites across
+  the compiler (see "how hard" below) — same terminator hazard, same atomic-tenure answer.
+
+**End state of this pass:** reader on `gen_wb`; poke + c0 on `gen_dirty`. `dirty` is NOT
+deleted — it is now purely COMPILATION's "force a major" knob (c0 at boot, ev's poke at
+runtime-compile), never EXECUTION's. Every minor still runs only with `dirty` clear, so its
+soundness rests solely on the rem set = exactly what `gc.v` proves. Deleting `dirty` entirely
+is gated on Step 3 for BOTH the poke and c0, not the cheap swap Step 1 assumed.
+
+### Step 1 (original plan, now amended by the finding above) — collapse to one mechanism
 
 Convert the three `gen_dirty` calls to precise `gen_wb` (remember the old source), then
 delete `g->dirty`, the `major |= dirty` clause (`~1413`), the resets (`~1425/~1471`), and
-`gen_dirty` itself (`~1207`).
+`gen_dirty` itself (`~1207`). **AMENDED:** this works for the reader only; the poke/c0 sites
+write at arbitrary thread offsets the minor's inplace-scan can't reach, so they need Step 3,
+not a `gen_wb` swap. `gen_dirty` stays for them.
 
 - Result: the rem set is the only barrier; `gc.v`'s `barrier_sound` covers it end-to-end.
 - This is the "poke-precise rem set" the author called more complex than the flag — but the
