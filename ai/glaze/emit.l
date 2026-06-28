@@ -77,7 +77,7 @@
                      ())
    (emit l) (: b (cask (tally l)) _ ((: (go i x) (? (two? x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) ())) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
-   (jit lam) (: v (caup lam) (nif (emit (+ (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (ev lam) lam 1))  ; v = the param (single arg at Sp[0], fixnum-guarded)
+   (jit lam) (jitir lam 'x64)  ; arity-1 leaf -> the neutral-IR lane (cgir). the byte cgv body-codegen below stays: the loop lanes (loopcode/loopcode-n) reuse it.
    ; --- the arity-INDEPENDENT deopt/epilogue blobs for the >=2-arity natives: the deopt jmps to interp's
    ; BODY (interp+16 past its lvm_cur) where the saturated args already sit. The byte n-ary ARITH lane
    ; (cgn + opseq-mn/idivseq-mn) is retired -- jitn now routes through the neutral-IR cgir (below); these

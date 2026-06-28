@@ -15,7 +15,7 @@
 ;         where the big win is (cf. the leaf's ~6%): the back-edge stays native.
 ;
 ; ev is 1-arg, so the loader's `(ev 'ev r)` = `((ev 'ev) r)` still works after the
-; rebind; njit/njit-loop call the captured base-ev -> no jit<->ev re-entry. Load AFTER
+; rebind; njit-loop/njit-loop-n call the captured base-ev -> no jit<->ev re-entry. Load AFTER
 ; ai/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 (: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)
 (: base-ev ev
@@ -44,7 +44,6 @@
                   (&& (two? lam) (= (cap lam) '\) (two? (cup lam))
                       (all name? ps) (< 1 (tally ps)) (distinctp ps)                     ; >=2 distinct symbol params
                       (exprn ps body)))
-   (njit lam) (: v (caup lam) (nif (emit (+ (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (base-ev lam) lam 1))  ; v any param name, fixnum-guarded
    ; --- loop: match the tail-recursive counted-sum skeleton, extract (B counter) ---
    (loopinfo lam)
     (: M    (caup (cup lam))                                ; lambda body
