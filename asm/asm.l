@@ -31,6 +31,11 @@
 ;   (set cond d)                               ; d <- (cond holds) ? 1 : 0, from the last cmp's flags
 ;   (call label) (ret) (sys)                   ; sys = syscall/svc
 ;   (nop) (trap)
+;   -- SSE2 double lane (x86-64 only; the float glaze): xmm registers f0..f15 --
+;   (addsd/mulsd/subsd/divsd d s) etc.         ; reg-reg packed/scalar double ops (see x64-sse)
+;   (ucomisd a b)                              ; compare doubles, set flags
+;   (cvtsi2sd f g) (movqxr f g) (movqrx g f)   ; int->double ; gp<->xmm bit moves
+;   (stsd base disp f) (ldsd f base disp)      ; movsd [base+disp]<->xmm  (spill / box store)
 ;
 ; a register operand is a SYMBOL (r0..); an immediate is a NUMBER -- `reg?` tells them apart, so the
 ; ALU ops take a register or an immediate in the same slot with no syntax. the abstract register

@@ -166,16 +166,24 @@
    (r11-init a0) (? (= a0 0) '(77 49 219) (+ '(73 199 195) (le4 a0)))   ; xor r11,r11 / mov r11,a0
    (foldbytes op) (? (= op '+) acc-add (= op '*) acc-mul ())
    (foldinit op)  (? (= op '*) 1 0)                               ; * folds from 1, + from 0
-   ; END jcc = the INVERSE of the continue-comparison (exit when (cmp cv n) is false).
-   (loopjcc cmp) (? (= cmp '<) '(15 141) (= cmp '<=) '(15 143) (= cmp '>) '(15 142)
-                    (= cmp '>=) '(15 140) (= cmp '=) '(15 133) ())  ; jge/jg/jle/jl/jne
+   ; END condition = the INVERSE of the continue-comparison (exit when (cmp cv n) is false).
+   (exitcc cmp) (? (= cmp '<) 'ge (= cmp '<=) 'gt (= cmp '>) 'le
+                   (= cmp '>=) 'lt (= cmp '=) 'ne ())  ; ge/gt/le/lt/ne
    (loopcode body cv op cmp)
-    (: lb   (cgv cv (\ d ld-i) body 0)  Lb (tally lb)
-       acc  (+ (foldbytes op) (guard 0))  La (tally acc)        ; r11 = r11 op rax ; overflow -> deopt
+    (: lb   (cgv cv (\ d ld-i) body 0)                         ; body -> rax (cv loaded raw via ld-i)
+       acc  (+ (foldbytes op) (guard 0))                       ; r11 = r11 op rax ; overflow -> deopt
        pre  (+ '(76 139 9  73 209 249  77 49 210) (r11-init (foldinit op)))    ; mov r9,[rcx];sar;xor r10; init r11
-       test (asm (L '(77 57 202) (loopjcc cmp) (le4 (+ (+ Lb La) 8))))       ; cmp r10,r9 ; <inverse-cmp> end
-       back (asm (L '(73 255 194) '(233) (le4 (- 0 (+ (+ Lb La) 17)))))      ; inc r10 ; jmp loop_top
-       (asm (L pre test lb acc back '(76 137 216) epilogue)))   ; ... ; mov rax,r11
+       ; control flow via the asm/ assembler -- the back-edge/exit offsets are
+       ; LABEL-resolved (no hand-counted le4); the pre/body/acc/epi blobs splice in
+       ; as `raw`. phys r9=n r10=cv r11=acc -> IR r8 r9 r10, so cmp r10,r9 = (cmp r9 r8).
+       (asmx `(`('raw pre)
+               '(label top)
+               '(cmp r9 r8) `('br (exitcc cmp) 'end)          ; cmp cv,n ; exit when (cmp cv n) false
+               `('raw lb) `('raw acc)
+               '(inc r9) '(jmp top)                           ; cv++ ; loop top
+               '(label end)
+               '(mov r0 r10)                                  ; mov rax,r11
+               `('raw epilogue))))
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
    (jitsum body)
     (: src `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('+ 'a body)) 'a)) 0 0))
@@ -206,12 +214,18 @@
     (: pre  ((: (go j is) (? (two? is) (+ (+ (reg-init j) (le4 (cap is))) (go (+ j 1) (cup is))) ())) 0 inits)
        ups  ((: (go j us) (? (two? us) (+ (+ (cgl n vars (cap us) j) push-rax) (go (+ j 1) (cup us))) ())) 0 updates)  ; push Uj at depth j
        pops ((: (go j) (? (< j 0) () (+ (reg-pop j) (go (- j 1))))) (- (tally updates) 1))   ; pop reg(k-1)..reg(0)
-       ub   (+ ups pops)  Lu (tally ub)
-       tb   (cgl n vars test 0)  Lt (tally tb)
+       ub   (+ ups pops)
+       tb   (cgl n vars test 0)
        rb   (cgl n vars result 0)
-       top  (asm (L tb '(72 131 248 0) '(15 132) (le4 (+ Lu 5))))   ; <test>; cmp rax,0; je end
-       back (+ '(233) (le4 (- 0 (+ (+ Lt Lu) 15))))                       ; jmp top
-       (asm (L pre top ub back rb epilogue)))
+       ; control flow via the asm/ assembler -- the test-exit/back-edge offsets are
+       ; LABEL-resolved (no hand-counted le4); the pre/tb/ub/rb/epi blobs splice as `raw`.
+       (asmx `(`('raw pre)
+               '(label top)
+               `('raw tb) '(cmp r0 0) '(br eq end)            ; <test>; rax==0 (false) -> end
+               `('raw ub) '(jmp top)                          ; updates ; loop top
+               '(label end)
+               `('raw rb)                                     ; result -> rax
+               `('raw epilogue))))
    ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native.
    (jitloop-n lam vars updates test result inits)
     (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (ev lam) lam 1)
@@ -232,29 +246,31 @@
           e  ((: (go e) (? (< ax (e 2.0)) (go (- e 1)) e)) eu)                                     ; lower
           (+ (* s 9223372036854775808) (+ (* (+ e 1023) 4503599627370496)
              (int (* (- (/ ax (e 2.0)) 1.0) 4503599627370496.0))))))
-   xpush '(72 131 236 8 242 15 17 4 36)                              ; sub rsp,8 ; movsd [rsp],xmm0
+   xpush '(72 131 236 8 242 15 17 4 36)                              ; sub rsp,8 ; movsd [rsp],xmm0  (bytes, for the byte-built grid lanes)
    xpop1 '(242 15 16 12 36 72 131 196 8)                             ; movsd xmm1,[rsp] ; add rsp,8
-   (fconst c) (+ '(72 184) (+ (le8 (fbits c)) '(102 72 15 110 192))) ; movabs rax,bits ; movq xmm0,rax
-   (fbinop op) (? (= op '+) '(242 15 88 193)                         ; addsd xmm0,xmm1
-                  (= op '*) '(242 15 89 193)                         ; mulsd xmm0,xmm1
-                  (= op '-) '(242 15 92 200 242 15 16 193)           ; subsd xmm1,xmm0 ; movsd xmm0,xmm1
-                  (= op '/) '(242 15 94 200 242 15 16 193)           ; divsd xmm1,xmm0 ; movsd xmm0,xmm1
-                  ())
-   (fsetcc op) (? (= op '<) '(15 146 192) (= op '<=) '(15 150 192) (= op '>) '(15 151 192)
-                  (= op '>=) '(15 147 192) (= op '=) '(15 148 192) ())   ; setb/setbe/seta/setae/sete al
-   ; cgf: a FLOAT subexpr over {x (the fixnum param -> cvtsi2sd) ; numeric consts} -> xmm0
-   (cgf v e d) (? (= e v)   (+ (fxv 0 d) '(242 72 15 42 192))        ; param: fixnum-guarded load + cvtsi2sd
+   xpushir '((sub sp sp 8) (stsd sp 0 f0))                           ; the same spill, as asm/ IR (the scalar float lane): xmm0 -> [rsp]
+   xpop1ir '((ldsd f1 sp 0) (add sp sp 8))                           ; the same reload, as asm/ IR: [rsp] -> xmm1
+   (fconst c) `(`('li 'r0 (fbits c)) '(movqxr f0 r0))               ; movabs rax,bits ; movq xmm0,rax
+   (fbinop op) (? (= op '+) '((addsd f0 f1))                         ; addsd xmm0,xmm1
+                  (= op '*) '((mulsd f0 f1))                         ; mulsd xmm0,xmm1
+                  (= op '-) '((subsd f1 f0) (movsd f0 f1))           ; subsd xmm1,xmm0 ; movsd xmm0,xmm1
+                  (= op '/) '((divsd f1 f0) (movsd f0 f1))           ; divsd xmm1,xmm0 ; movsd xmm0,xmm1
+                  ())                                                ; asm/ IR (reg-reg SSE); byte-lane callers wrap via (asmx (fbinop op))
+   ; cgf: a FLOAT subexpr over {x (the fixnum param -> cvtsi2sd) ; numeric consts} -> xmm0, as asm/ IR.
+   ; the [rsp] spills are now IR too (xpushir/xpop1ir); only the param load (fxv) stays a raw byte blob.
+   (cgf v e d) (? (= e v)   `(`('raw (fxv 0 d)) '(cvtsi2sd f0 r0))   ; param: fixnum-guarded load + cvtsi2sd
                   (gem? e)  (fconst e)                               ; a float constant
                   (whole? e)(fconst (+ e 0.0))                       ; an int constant -> promote to double
                   (two? e) (: op (cap e) a (caup e) b (caup (cup e))
-                     (? (member? op '(+ - * /)) (+ (cgf v a d) (+ xpush (+ (cgf v b (+ d 1)) (+ xpop1 (fbinop op))))) ()))
+                     (? (member? op '(+ - * /)) (+ (cgf v a d) (+ xpushir (+ (cgf v b (+ d 1)) (+ xpop1ir (fbinop op))))) ()))
                   ())
-   ; cgfp: a float PREDICATE (cmp A B) -> rax 0/1 (A->xmm1, B->xmm0; ucomisd)
+   ; cgfp: a float PREDICATE (cmp A B) -> rax 0/1 (A->xmm1, B->xmm0; ucomisd then set).
    (cgfp v e d) (: op (cap e) a (caup e) b (caup (cup e))
-      (+ (cgf v a d) (+ xpush (+ (cgf v b (+ d 1)) (+ xpop1
-         (+ '(102 15 46 200) (+ (fsetcc op) '(72 15 182 192))))))))   ; ucomisd xmm0,xmm1 ; setcc al ; movzx rax,al
+      cc (? (= op '<) 'below (= op '<=) 'be (= op '>) 'above (= op '>=) 'ae 'eq)
+      (+ (cgf v a d) (+ xpushir (+ (cgf v b (+ d 1)) (+ xpop1ir
+         (+ '((ucomisd f1 f0)) `(`('set cc 'r0))))))))               ; ucomisd xmm1,xmm0 ; rax = (cc) ? 1 : 0
    ; (jitf '(\ x (cmp <fexpr> <fexpr>))) -- a float predicate over a fixnum arg -> native 0/1.
-   (jitf lam) (: v (caup lam) (nif (emit (+ (cgfp v (caup (cup lam)) 0) epilogue)) (ev lam) lam 1))
+   (jitf lam) (: v (caup lam) (nif (emit (asmx (+ (cgfp v (caup (cup lam)) 0) `(`('raw epilogue))))) (ev lam) lam 1))
    ; --- HEAP RESULT (the deferred "Have-checked box"): (jitfr '(\ x <fexpr>)) returns a GEM, not 0/1.
    ; the lane never allocates because it can't GC (its raw regs aren't roots) -- so it does the alloc
    ; twin of the overflow guard: a ROOM GUARD (Sp - Hp >= flo_req+floor words) DEOPTS to interp when
@@ -263,15 +279,20 @@
    ; string guard), the double at [Hp+8] with NaN->0 (flo_put's law), return Hp UNTAGGED (an even heap
    ; ptr IS the gem), bump Hp by flo_req. the epilogue stores the POINTER (NO putfix) and threads the
    ; advanced Hp on through Continue, so the box is live to the next op and the GC at the next safepoint.
-   floflo '(72 141 66 80  72 57 193)                                 ; lea rax,[rdx+80](=Hp+(flo_req+floor)w); cmp rcx,rax (Sp ? room)
    (jitfr lam)
     (: v (caup lam)  kind (apof 1.5)                                 ; lvm_flo's address, captured now (code never moves)
-       roomg (asm (L floflo (L 115 (tally deopt)) deopt))            ; jae +|deopt| (room) ; else deopt-to-interp (heap full)
-       nanc  '(102 15 46 192  123 4  102 15 87 192)                  ; ucomisd xmm0,xmm0 ; jnp +4 ; xorpd xmm0,xmm0  (NaN -> 0.0)
-       boxw  (asm (L '(73 184) (le8 kind) '(76 137 2)                ; movabs r8,kind ; mov [rdx],r8       (box header = lvm_flo)
-                     '(242 15 17 66 8) '(72 137 208) '(72 131 194 16)))   ; movsd [rdx+8],xmm0 ; mov rax,rdx ; add rdx,16
-       epifr '(72 137 1  72 131 198 16  72 139 6  255 224)           ; mov [rcx],rax ; add rsi,16 ; Continue  (NO putfix: rax IS the gem)
-       (nif (emit (asm (L (cgf v (caup (cup lam)) 0) roomg nanc boxw epifr))) (ev lam) lam 1))
+       nanc '(102 15 46 192  123 4  102 15 87 192)                   ; ucomisd xmm0,xmm0 ; jnp +4 ; xorpd (NaN->0): parity cc + self-jump -> raw
+       ; asm/ IR: the room-guard skips the deopt blob by LABEL (no hand offset); the box store is the
+       ; new SSE-mem op `stsd`. cgf/deopt/nanc stay raw (float blob / self-contained jumps).
+       (nif (emit (asmx (+ (cgf v (caup (cup lam)) 0)                ; cgf now emits IR -> concat (not raw)
+          `('(lea r0 r2 80)                                          ; lea rax,[Hp+(flo_req+floor)w]
+            '(cmp r1 r0) '(br ae okroom) `('raw deopt) '(label okroom)   ; cmp Sp,rax ; jae over deopt (else heap-full deopt)
+            `('raw nanc)                                             ; NaN -> 0.0
+            `('li 'r7 kind) '(st r2 0 r7)                            ; movabs r8,lvm_flo ; mov [Hp],r8  (box header)
+            '(stsd r2 8 f0)                                          ; movsd [Hp+8],xmm0
+            '(mov r0 r2) '(add r2 r2 16)                             ; rax = Hp (the gem ptr) ; Hp += 16
+            '(st r1 0 r0) '(add r5 r5 16) '(ld r0 r5 0) '(jmpr r0)))))   ; mov [Sp],rax ; Continue (NO putfix: rax IS the gem)
+        (ev lam) lam 1))
    ; --- BYTE LAW (string RESULT): (jitba '(\ s (+ s B))) -- native s ++ [B], a fresh heap string. Same
    ;     heap-result machinery as jitfr but VARIABLE-sized: read len=[s+8], reserve n = str_type_width +
    ;     b2w(len+1) content words (NO GC tag -- the cheney scan derives a string's size from its len
@@ -356,7 +377,7 @@
    (hlook v ht) (? (atom? ht) -1 (= v (caap ht)) (caup (cap ht)) (hlook v (cup ht)))
    (hpre ht) (? (atom? ht) () (: e (cap ht)                                      ; preload: movabs bits,rax ; movq xmm_r,rax
       (+ (+ '(72 184) (+ (le8 (fbits (cap e))) (+ '(102 72 15 110) (list (+ 192 (* 8 (caup e))))))) (hpre (cup ht)))))
-   (hcon v ht) (: r (hlook v ht) (? (< -1 r) (+ '(242 15 16) (list (+ 192 r))) (fconst v)))   ; hoisted -> movsd xmm0,xmm_r ; else inline
+   (hcon v ht) (: r (hlook v ht) (? (< -1 r) (+ '(242 15 16) (list (+ 192 r))) (asmx (fconst v))))   ; hoisted -> movsd xmm0,xmm_r ; else inline fconst
    ; register-scratch spill/reload for the float-expr stack: xmm12..15 hold nesting depth 0..3 (no
    ; memory traffic), falling back to the [rsp] xpush/xpop1 below depth 4. THIS is the win -- the
    ; inner loop's nested operands stay in registers instead of round-tripping through memory.
@@ -408,7 +429,7 @@
                                   (: cb (clook e ce) (? (two? cb) (caup cb)               ; loop counter (raw reg) -> cvtsi2sd
                                      (: ai (alook e ie 0) (? (< -1 ai) (+ (fxv ai d) '(242 72 15 42 192)) ()))))))   ; Sp param
                             (two? e) (: op (cap e) a (caup e) b (caup (cup e))
-                               (? (member? op '(+ - * /)) (+ (cgF ht ce ie fe a d) (+ (rpush d) (+ (cgF ht ce ie fe b (+ d 1)) (+ (rpop d) (fbinop op))))) ()))
+                               (? (member? op '(+ - * /)) (+ (cgF ht ce ie fe a d) (+ (rpush d) (+ (cgF ht ce ie fe b (+ d 1)) (+ (rpop d) (asmx (fbinop op)))))) ()))
                             ())
    (ucmp-exit op) (? (= op '<=) '(15 135) (= op '<) '(15 131) (= op '>=) '(15 134) (= op '>) '(15 130) ())   ; EXIT jcc = inverse of the continue cmp
    (loopcode-f ips finit fvars updates testexpr cmpop bound lim)
@@ -454,7 +475,7 @@
                      (whole? e) (hcon (+ e 0.0) ht)
                      (atom? e)  (: cb (clook e ce) (? (two? cb) (caup cb) ()))
                      (two? e)   (: op (cap e) a (caup e) b (caup (cup e))
-                                   (? (member? op '(+ - * /)) (+ (cgFd ht ce a) (+ xpush (+ (cgFd ht ce b) (+ xpop1 (fbinop op))))) ()))
+                                   (? (member? op '(+ - * /)) (+ (cgFd ht ce a) (+ xpush (+ (cgFd ht ce b) (+ xpop1 (asmx (fbinop op)))))) ()))
                      ())
    ; guard-acc: the acc-overflow guard. D<3 -> the plain guard (counters are caller-saved). D>=3 ->
    ; pop the callee-saved counters (r12..) before the deopt, so the interp nest sees an ABI-clean frame.

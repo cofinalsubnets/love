@@ -104,7 +104,17 @@
       ;; a whole program: write(1, buf, 13); exit(0)  -- r0=rax carries the syscall number
       (L "syscall.prog"
          "48c7c00100000048c7c70100000048c7c60010000048c7c20d0000000f0548c7c03c00000048c7c7000000000f05"
-         '((li r0 1) (li r6 1) (li r5 4096) (li r2 13) (sys) (li r0 60) (li r6 0) (sys))))
+         '((li r0 1) (li r6 1) (li r5 4096) (li r2 13) (sys) (li r0 60) (li r6 0) (sys)))
+      ;; SSE2 / double lane (the float glaze). reg-reg binops, gp<->xmm moves, and the xmm<->[mem]
+      ;; spill/box ops + ucomisd that the glaze's float-result lane uses. objdump-verified (-M intel).
+      (L "addsd"       "f20f58c1"               '((addsd f0 f1)))         ; addsd xmm0,xmm1
+      (L "mulsd"       "f20f59c1"               '((mulsd f0 f1)))         ; mulsd xmm0,xmm1
+      (L "cvtsi2sd"    "f2480f2ac0"             '((cvtsi2sd f0 r0)))      ; cvtsi2sd xmm0,rax
+      (L "movqxr"      "66480f6ec0"             '((movqxr f0 r0)))        ; movq xmm0,rax
+      (L "ucomisd"     "660f2ec8"               '((ucomisd f1 f0)))       ; ucomisd xmm1,xmm0 (sets flags)
+      (L "stsd.disp"   "f20f114208"             '((stsd r2 8 f0)))        ; movsd [rdx+8],xmm0   (box store)
+      (L "stsd.rsp"    "f20f110424"             '((stsd sp 0 f0)))        ; movsd [rsp],xmm0     (spill)
+      (L "ldsd.rsp"    "f20f100c24"             '((ldsd f1 sp 0))))       ; movsd xmm1,[rsp]     (reload)
    _ (foldl (\ _ t (chk (at t 0) (at t 1) (at t 2))) 0 tests)
 
    ;; -- label addresses are exposed on the assemble result, for a loader/linker to read. --

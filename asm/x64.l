@@ -198,7 +198,8 @@
         (L `('movupd 102 16) `('movsd 242 16) `('movhlps 0 18) `('unpcklpd 102 20)
            `('mulpd 102 89) `('addpd 102 88) `('subpd 102 92) `('divpd 102 94)
            `('mulsd 242 89) `('addsd 242 88) `('subsd 242 92) `('divsd 242 94)
-           `('xorpd 102 87) `('pcmpeqd 102 118) `('andpd 102 84) `('psubq 102 251)))
+           `('xorpd 102 87) `('pcmpeqd 102 118) `('andpd 102 84) `('psubq 102 251)
+           `('ucomisd 102 46)))                                                       ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
    (xrex w r b) (? (|| (= w 1) (|| (>= r 8) (>= b 8))) (L (rex w (hi r) 0 (hi b))) ())   ; REX only when needed
    (emit-sse op d s)                                                                     ; xmm <- xmm two-address
       (: meta (peep x64-sse op 0) pfx (at meta 0) opc (at meta 1) dn (xrn d) sn (xrn s)
@@ -213,6 +214,12 @@
       (catall (L (L 102) (L (rex 1 (hi xn) 0 (hi gn))) (L 15 110 (modrm 3 xn gn)))))
    (emit-movqrx g x) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 7E /r  gp(rm) <- xmm(reg)
       (catall (L (L 102) (L (rex 1 (hi xn) 0 (hi gn))) (L 15 126 (modrm 3 xn gn)))))
+   ;; movsd to/from MEMORY [base+disp] -- the spill/box ops the reg-reg SSE lane can't reach. F2 0F 11 /r
+   ;; stores xmm->[mem], F2 0F 10 /r loads [mem]->xmm; the xmm number rides ModRM.reg via `mem`.
+   (emit-stsd base disp s)                                                               ; (stsd base disp f)  [base+disp] <- xmm(s)
+      (: sn (xrn s) (catall (L (L 242) (xrex 0 sn (rn base)) (L 15 17) (mem sn base disp))))
+   (emit-ldsd d base disp)                                                               ; (ldsd f base disp)  xmm(d) <- [base+disp]
+      (: dn (xrn d) (catall (L (L 242) (xrex 0 dn (rn base)) (L 15 16) (mem dn base disp))))
 
    ;; the dispatch: one IR form -> its byte/fixup chunk.
    (x64-lower ins)
@@ -256,6 +263,8 @@
             (= op 'cvtsi2sd) (emit-cvtsi2sd (at ins 1) (at ins 2))                        ; (cvtsi2sd xmm gp)
             (= op 'movqxr)   (emit-movqxr   (at ins 1) (at ins 2))                        ; (movqxr xmm gp)  xmm <- gp
             (= op 'movqrx)   (emit-movqrx   (at ins 1) (at ins 2))                        ; (movqrx gp xmm)  gp <- xmm
+            (= op 'stsd)     (emit-stsd     (at ins 1) (at ins 2) (at ins 3))             ; (stsd base disp xmm)  [base+disp] <- xmm
+            (= op 'ldsd)     (emit-ldsd     (at ins 1) (at ins 2) (at ins 3))             ; (ldsd xmm base disp)  xmm <- [base+disp]
             (two? (peep x64-alu op ())) (emit-alu op (at ins 1) (at ins 2) (at ins 3))
             (scare 'bad-op op)))
 
