@@ -227,6 +227,16 @@ the evaluators themselves; `float` in particular isolates the floating-point pat
 (ai boxes its floats, so it pays heap traffic the native-double languages do
 not), and `closure` isolates closure allocation + application.
 
+One asymmetry to call out: the **`sbcl` `fib` column is type-declared** (an
+`ftype` + `fixnum` declaration on the body), the lone annotated cell in the
+table. SBCL compiles ahead-of-time with no runtime type feedback, so naive
+`fib` leaves the inner `+` as a generic (overflow-checking) call and runs ~11.5
+ms here; declaring the return type inlines fixnum arithmetic and roughly halves
+that to ~6 ms. The tracing JITs (`node`/`luajit`/`pypy`) specialize the same
+naive source at runtime and need no annotation, so the declaration just lets
+SBCL reach the speed idiomatic performance-CL would already write — but it does
+mean that one cell is not the bare naive form the others use.
+
 `deforest` is the deforestation showcase. It is the same square/keep/sum work as
 `mapfilter`, but written as a genuine *list* pipeline read straight from source —
 `(foldl + 0 (map sq (filter odd (jot N))))` — which under a plain evaluator
