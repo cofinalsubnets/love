@@ -39,7 +39,6 @@
    ; a fixnum RESULT leaving range, never a bad INPUT. test al,1 (fixnum = odd); a clear
    ; low bit (even) falls through to the deopt -- structurally a guardz (jnz over it).
    (fxv  i d) ((fetch i) + '(168 1) + (guardz d)    + untag)           ; nat deopt (interp value[0])
-   (fxmn i d) ((fetch i) + '(168 1) + (guardz-mn d) + untag)           ; natn deopt (interp body)
    push-rax '(80)   pop-r8 '(65 88)
    epilogue
     ; add rax,rax;guard;or rax,1;mov[rcx]
@@ -79,35 +78,20 @@
    (emit l) (: b (cask (tally l)) _ ((: (go i x) (? (two? x) (: _ (pin b i (cap x)) (go (+ i 1) (cup x))) ())) 0 l) b)
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
    (jit lam) (: v (caup lam) (nif (emit (+ (cgv v (\ d (fxv 0 d)) (caup (cup lam)) 0) epilogue)) (ev lam) lam 1))  ; v = the param (single arg at Sp[0], fixnum-guarded)
-   ; --- N-ary leaves (\ p0 .. p_{n-1} E): param i loads from Sp[i]=[rcx+8i]; the deopt
-   ; jmps to interp's BODY (deopt-mn, interp+16 past its lvm_cur) where the saturated
-   ; args already sit -- so the deopt/epilogue/return below are all arity-INDEPENDENT
-   ; and serve EVERY arity>=2 (only the per-param arg load varies, by frame index).
+   ; --- the arity-INDEPENDENT deopt/epilogue blobs for the >=2-arity natives: the deopt jmps to interp's
+   ; BODY (interp+16 past its lvm_cur) where the saturated args already sit. The byte n-ary ARITH lane
+   ; (cgn + opseq-mn/idivseq-mn) is retired -- jitn now routes through the neutral-IR cgir (below); these
+   ; three blobs stay because the float loop driver (loopcode-f) reuses epilogue-mn.
    deopt-mn '(72 139 70 8  72 141 112 16  72 139 6  255 224)  ; mov rax,[rsi+8]; lea rsi,[rax+16]; mov rax,[rsi]; jmp rax
    (guard-mn d)  (+ '(113 20) (+ (+ '(72 129 196) (le4 (* 8 d))) deopt-mn))   ; jno +20; add rsp,8d; deopt-mn
-   (guardz-mn d) (+ '(117 20) (+ (+ '(72 129 196) (le4 (* 8 d))) deopt-mn))   ; jnz +20; ...
    epilogue-mn (+ '(72 1 192) (+ (guard-mn 0) (+ '(72 131 200 1) (+ '(72 137 1)
                  (+ '(72 131 198 16) '(72 139 6  255 224))))))
-   (opseq-mn op d) (? (= op '+) (+ pop-r8 (+ '(76 1 192) (guard-mn d)))
-                      (= op '*) (+ pop-r8 (+ '(73 15 175 192) (guard-mn d)))
-                      (= op '-) (+ pop-r8 (+ '(73 41 192) (+ (guard-mn d) '(76 137 192)))) ())
-   (idivseq-mn op d) (+ pop-r8 (+ '(72 133 192) (+ (guardz-mn d)
-     (+ '(82 80 76 137 192 72 153 72 247 60 36) (+ (? (= op '%) '(72 137 208) ()) '(72 131 196 8 90))))))
-   ; param i -> frame index in [imps args]; loaded fixnum-guarded from Sp[i] (param 0 is
-   ; the FIRST capture when partial-applied). argix finds a var's frame index in ps.
+   ; argix finds a param var's frame index in ps (shared with the IR lane's fxir/cgir).
    (argix e ps i) (? !(two? ps) 0  (= e (cap ps)) i  (argix e (cup ps) (+ i 1)))   ; param -> index
-   (cgn ps e d) (? (whole? e) (+ '(72 184) (le8 e))                       ; movabs rax, n
-                   (two? e) (: op (cap e)  a (caup e)  b (caup (cup e))
-                               (? (member? op '(+ - *))      (+ (cgn ps a d) (+ push-rax (+ (cgn ps b (+ d 1)) (opseq-mn op d))))
-                                  (member? op '(// %))        (+ (cgn ps a d) (+ push-rax (+ (cgn ps b (+ d 1)) (idivseq-mn op d))))
-                                  (member? op '(& | ^))       (+ (cgn ps a d) (+ push-rax (+ (cgn ps b (+ d 1)) (bitseq op))))
-                                  (member? op '(< <= > >= =)) (+ (cgn ps a d) (+ push-rax (+ (cgn ps b (+ d 1)) (cmpseq op))))
-                                  (= op '?) (condcode (cgn ps a d) (cgn ps b d) (cgn ps (caup (cup (cup e))) d))
-                                  ()))
-                   (fxmn (argix e ps 0) d))                               ; else: a param var (fixnum-guarded)
-   ; (jitn '(\ p0 .. body)) -- an arity>=2 leaf -> native (natn curries to saturation).
-   (jitn lam) (: ps (init (cup lam))  body (last (cup lam))
-                 (nif (emit (+ (cgn ps body 0) epilogue-mn)) (ev lam) lam (tally ps)))
+   ; (jitn '(\ p0 .. body)) -- an arity>=2 leaf -> native (natn curries to saturation). Now an ALIAS for
+   ; the neutral-IR lane (jitnir): cgir already serves the n-ary case in IR, so the old byte cgn/-mn
+   ; family below is retired (deleted) -- one lane, label-resolved, and arm64 falls out for free.
+   (jitn lam) (jitnir lam 'x64)
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    (gfind p l) (? (atom? l) () (p (cap l)) (cap l) (gfind p (cup l)))     ; first elt matching p
    (gfilt p l) (? (atom? l) () (p (cap l)) (link (cap l) (gfilt p (cup l))) (gfilt p (cup l)))   ; keep elts matching p
