@@ -426,34 +426,39 @@
    (nest loops inner) (? (atom? loops) inner
                          (loopwrap (caap loops) (cuap loops) (nest (cup loops) inner)))
    (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim)
+    ; the scalar D-dim grid kernel as a neutral asm/ IR PROGRAM (the grid2 pattern, single-step): control
+    ; flow is LABELS (no hand offsets), the recurrence is allocp's CSE'd named-SSE forms, the cold derives
+    ; (cgFd) stay raw. k=r7(iter), acc=r8, counters=r9..(gr); xmm: consts xmm2.., invariants xmm8.., fvars
+    ; next, the rest the DAG pool. D>=3 spills callee-saved counters; the acc-overflow deopt restores them.
     (: D (tally dims)  M (tally invs)  N (tally fvars)
-       cregs (rangeL 10 (+ 10 D))                                              ; counter regs r10..r(9+D), outer->inner
-       saved (rangeL 12 (+ 10 D))                                              ; the callee-saved counters among them (r12..)
+       cregs (rangeL 10 (+ 10 D))                                             ; counter regs (phys r10..), outer->inner
+       saved (rangeL 12 (+ 10 D))                                            ; the callee-saved counters (phys r12..) for D>=3
        fenv (cat invs fvars)
-       cenv (map2 (\ nm r (L nm (cvtcnt r))) cnames cregs)                     ; counter name -> cvtsi2sd of its reg
-       ht (htbl (fcc bound (fccl invd (fccl updates (fcc testexpr ())))) 2)    ; distinct consts -> xmm2..7 (bound first -> reg 2)
-       derives (foldl (\ a p (+ a (+ (cgFd ht cenv (cup p)) (fstore (cap p))))) () (map2 (\ i d (link i d)) (rangeL 0 M) invd))  ; inv i -> xmm(8+i)
-       zerof (foldl (\ a j (+ a (fzero (+ M j)))) () (rangeL 0 N))             ; fvar j -> xmm(8+M+j) = 0
-       aenv (cat (efold fenv 8) ht)                                           ; invariants/fvars at xmm8.. ; consts from ht
-       pool (cat (L 0 1) (rangeL (+ 8 (+ M N)) 16))                           ; the inner allocator's working regs (the leftover xmm)
+       cenv (map2 (\ nm r `(nm (cvtcnt r))) cnames cregs)                     ; counter name -> cvtsi2sd bytes (cgFd reads, raw)
+       ht (htbl (fcc bound (fccl invd (fccl updates (fcc testexpr ())))) 2)   ; distinct consts -> xmm2..7
+       derives (foldl (\ a p (a + `(`('raw (cgFd ht cenv (cup p))) `('movsd (fr (8 + (cap p))) 'f0)))) () (map2 (\ i d (link i d)) (rangeL 0 M) invd))   ; inv i -> xmm(8+i)
+       zerof (foldl (\ a j (a + `(`('xorpd (fr (8 + M + j)) (fr (8 + M + j)))))) () (rangeL 0 N))   ; fvar j -> xmm(8+M+j) = 0
+       aenv ((efold fenv 8) + ht)
+       pool (`(0 1) + (rangeL (+ 8 (+ M N)) 16))
        AR (vnall (link testexpr updates) () ())  rootv (cap AR)  dag (caup AR)  nn (tally dag)
-       AL (alloc dag rootv aenv nn pool)  bodyc (cap AL)  rg (caup AL)
-       magr (peep rg (cap rootv) 0)
-       wb (foldl (\ a j (+ a (sse 'mov (+ 8 (+ M j)) (peep rg (nthl rootv (+ 1 j)) 0)))) () (rangeL 0 N))   ; fvar j <- its update's result reg
-       Lc (tally bodyc)  Lwb (tally wb)  Li (+ Lc (+ Lwb 32))                  ; cmp7+jge6+body+ucom5+exj6+wb+incr8(3)+iback5
-       iblk (asm (L (+ (L 73 129 248) (le4 lim))                              ; LTOP: cmp r8, lim
-                    (+ (L 15 141) (le4 (+ Lc (+ Lwb 19))))                    ; jge ESC
-                    bodyc                                                     ; the CSE'd, register-only inner body
-                    (ucom magr (hlook bound ht))                             ; ucomisd mag, bound
-                    (+ (ucmp-exit cmpop) (le4 (+ Lwb 8)))                    ; <exit> ESC
-                    wb (L 73 255 192)                                        ; writeback fvars ; inc r8
-                    (+ (L 233) (le4 (- 0 Li)))))                             ; jmp LTOP
-       accb (asm (L (L 77 1 193) (guard-acc D)))                              ; ESC: add r9,r8 ; deopt (pops callee-saved for D>=3)
-       cell (asm (L derives zerof (L 77 49 192) iblk accb))                   ; derive invariants; zero fvars; xor r8(it=0); recur; acc += it
-       loops (map2 (\ r n (link r n)) cregs dims)                             ; (counter-reg . bound) pairs, outer->inner
-       pushes (foldl (\ a r (+ a (pushR r))) () saved)
-       pops   (foldl (\ a r (+ a (popR r))) () (rev saved))
-       (asm (L pushes (hpre ht) (L 77 49 201) (nest loops cell) pops (L 76 137 200))))   ; push callee-saved; preload consts; xor r9(acc); NEST; pop; mov rax,r9
+       AL (allocp dag rootv aenv nn pool 'movsd sseops)  bodyc (cap AL)  rg (caup AL)
+       magr (peep rg (cap rootv) 0)  breg (fr (hlook bound ht))
+       wb (foldl (\ a j (a + `(`('movsd (fr (8 + M + j)) (fr (peep rg (nthl rootv (1 + j)) 0)))))) () (rangeL 0 N))   ; fvar <- its update's reg
+       deopt '((ld r0 r5 8) (mov r5 r0) (ld r0 r5 0) (jmpr r0))               ; tail-apply the interp fallback (overflow)
+       iter (`('(label itop) `('cmp 'r7 lim) '(br ge iesc))                   ; while k<lim AND (cmp mag bound)
+             + bodyc + `(`('ucomisd (fr magr) breg) `('br (ucmpx cmpop) 'iesc))
+             + wb + '((inc r7) (jmp itop) (label iesc)))
+       popsv (foldl (\ a r (a + `(`('pop (gr r))))) () (rev saved))           ; D>=3: restore callee-saved counters before deopt
+       accb (`('(adds r8 r8 r7) '(br vc cont)) + popsv + deopt + '((label cont)))   ; ESC: acc += k ; overflow -> deopt
+       cell (derives + zerof + '((li r7 0)) + iter + accb)                    ; derive invariants; zero fvars; k=0; recur; acc += k
+       (loop-nest ci body) (: cr (gr (nthl cregs ci))  b (nthl dims ci)       ; counted loops outer->inner (single-step)
+          tp (intern ("lt" + (show ci)))  en (intern ("le" + (show ci)))
+          inner (? (= ci (- D 1)) body (loop-nest (+ ci 1) body))
+          (`(`('li cr 0) `('label tp) `('cmp cr b) `('br 'ge en)) + inner + `(`('inc cr) `('jmp tp) `('label en))))
+       pushsv (foldl (\ a r (a + `(`('push (gr r))))) () saved)
+       popsv2 (foldl (\ a r (a + `(`('pop (gr r))))) () (rev saved))
+       preload (foldl (\ a e (a + `(`('li 'r0 (fbits (cap e))) `('movqxr (fr (caup e)) 'r0)))) () ht)   ; load each const
+       (asmx (pushsv + preload + '((li r8 0)) + (loop-nest 0 cell) + popsv2 + '((mov r0 r8)))))   ; push saved; consts; acc=0; NEST; pop; rax<-acc
    ; --- 2-WIDE PACKED-SSE2 grid kernel (loopcode-grid2): the SAME D-dim float-recurrence grid, but the
    ;     INNERMOST dim is processed TWO cells at a time -- lanes [c, c+1] packed [low,high] in each xmm.
    ;     The recurrence runs PACKED (addpd/mulpd/subpd via the asm/ SSE2 lane) so both pixels advance per op; the
@@ -467,8 +472,10 @@
    ;     acc adds keep the lane-law overflow guard (deopt to the faithful interp nest). ⚠ x86-64 (SSE2).
    (fr n)   (intern ("f" + (show n)))                                                    ; an xmm NUMBER -> its asm/ IR symbol f0..f15
    (gr p)   (intern ("r" + (show (- p 1))))                                              ; a physical GPR encoding (>=8) -> its abstract-file IR name (r10->r9 ..)
-   (sseop op) (? (= op '+) 'addpd (= op '*) 'mulpd (= op '-) 'subpd (= op '/) 'divpd 'movupd)   ; DAG op -> packed-double mnemonic
-   (allocp dag rv env n pool)                                                            ; the float-body allocator (CSE + linear-scan, like `alloc`) emitting PACKED-double asm/ IR FORMS
+   (sseop op) (? (= op '+) 'addpd (= op '*) 'mulpd (= op '-) 'subpd (= op '/) 'divpd 'movupd)   ; DAG op -> PACKED-double mnemonic (grid2)
+   (sseops op) (? (= op '+) 'addsd (= op '*) 'mulsd (= op '-) 'subsd (= op '/) 'divsd 'movsd)   ; DAG op -> SCALAR-double mnemonic (gridn)
+   (ucmpx op) (? (= op '<=) 'above (= op '<) 'ae (= op '>=) 'be (= op '>) 'below ())     ; EXIT cc after ucomisd = inverse of the continue cmp
+   (allocp dag rv env n pool mv opmap)                                                   ; the float-body allocator (CSE + linear-scan); emits asm/ IR FORMS via mv (move) + opmap (op->mnemonic): scalar OR packed
     (: rg (tablet 0) pl (tablet 0) _ (pin pl 'p pool)
        (pop u) (: p (peep pl 'p ()) _ (pin pl 'p (cup p)) (cap p))
        (push r) (pin pl 'p (link r (peep pl 'p ())))
@@ -479,8 +486,8 @@
                    adie (dies? a i dag rv n) bdie (dies? b i dag rv n)
                    dst (? adie ra (pop 0))
                    _ (? (&& bdie (! (= rb dst))) (push rb) 0) _ (pin rg i dst)
-                   mv (? (= dst ra) () `(`('movupd (fr dst) (fr ra))))                   ; move only if dst != a's reg
-                   (go (+ i 1) (acc + mv + `(`((sseop op) (fr dst) (fr rb)))))))))) 0 ())
+                   mvc (? (= dst ra) () `(`(mv (fr dst) (fr ra))))                       ; move only if dst != a's reg
+                   (go (+ i 1) (acc + mvc + `(`((opmap op) (fr dst) (fr rb)))))))))) 0 ())
        `(forms rg))
    (cmppd-imm op) (? (= op '<=) 2 (= op '<) 1 ())                                        ; cmppd predicate: LE / LT (the "continue while small" escape tests)
    (grid2-ok? dims invs fvars updates testexpr cmpop bound)                              ; the packed shape fits?
@@ -507,7 +514,7 @@
        aenv ((efold fenv 8) + ht)
        pool (`(0 1) + (rangeL (+ 8 (+ M N)) 16))
        AR (vnall (link testexpr updates) () ())  rootv (cap AR)  dag (caup AR)  nn (tally dag)
-       AL (allocp dag rootv aenv nn pool)  bodyc (cap AL)  rg (caup AL)
+       AL (allocp dag rootv aenv nn pool 'movupd sseop)  bodyc (cap AL)  rg (caup AL)
        magr (peep rg (cap rootv) 0)
        wb (foldl (\ a j (a + `(`('movupd (fr (8 + M + j)) (fr (peep rg (nthl rootv (1 + j)) 0)))))) () (rangeL 0 N))   ; fvar <- its update's reg
        maskc `(`('movupd 'f6 (fr magr)) `('cmppd 'f6 breg pred) '(andpd f5 f6) '(psubq f4 f5) '(movmskpd r0 f5))
