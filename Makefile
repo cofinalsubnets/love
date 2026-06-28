@@ -24,7 +24,7 @@ export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_gc test_hostnif test_glaze test_sat test_asm test_extract
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_gc test_hostnif test_glaze test_sat test_asm test_extract test_arm64
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `ai`
 # from-source under AI_NO_IMAGE, and ai0 -- c0 + the self-hosted ev, twice). It does
@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm nettest test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -804,6 +804,13 @@ out/lib/ktests.h: out/lib/ktests.l $(ai0) tools/lcatv.l ai/prel.l
 out/lib/kship.h: port/kship/kship.l $(ai0) tools/lcatv.l ai/prel.l
 	@echo AI	$@
 	@$(ai0) -l ai/prel.l tools/lcatv.l port/kship/kship.l > $@
+# arm64 EXECUTION validator: cross-build `ai` for aarch64 + run the corpus under
+# qemu-aarch64 (the trustworthy check for the glaze's second target -- asmtest
+# proves byte encodings, this proves they run). No-ops without qemu + a cross-gcc.
+.PHONY: test_arm64
+test_arm64: host
+	@./tools/arm64check.sh
+
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.l
