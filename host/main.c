@@ -457,7 +457,7 @@ extern uintptr_t ai_baked_image_len;
 // (Phase 4, doc/snapshot.md). The asserts compile transient native closures; the
 // gen_major inside image_dump drops them, so the serialized heap is pure closures
 // (ev rebound to auto-ev) with no W^X arena to serialize -- natives JIT lazily on load.
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__aarch64__)
 static char const glaze_emit[] =
 #include "emit.h"
  ;
@@ -486,10 +486,11 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "arm64.h"                                       //   execute), so every target is arch-neutral. the glaze (x86 client) executes x64
 #include "bao.h"
   );
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__aarch64__)
   g = ai_evals_(g, glaze_emit);                          // load the native JIT post-egg -> ev = auto-ev, glaze always-on
   g = ai_evals_(g, glaze_auto);                          // (no fragile stale image; base-ev captures the hatched ev).
-#endif                                                   // ~680ms from-scratch; the image snapshots past it.
+#endif                                                   // ~680ms from-scratch; the image snapshots past it. arm64: integer lanes native, x86-only lanes (float/loops) fall to interp -- see auto.l's `x86?` gate.
+
   if (image_dump_path) {                                 // --dump-image: snapshot the post-warm heap, then exit
 #if defined(__x86_64__)
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif

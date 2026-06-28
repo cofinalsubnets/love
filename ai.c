@@ -964,6 +964,18 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   if (ai_ok(g = ai_strof(g, AI_VERSION))) {
    struct ai_def vd[] = {{"ai-version", ai_pop1(g)}};
    g = ai_defn(g, vd, countof(vd)); }
+  // `ai-arch`: the host CPU the glaze emits for. auto-ev interns it as the assembler
+  // target ('x64 / 'arm64) and gates the still-x86-only lanes (float / loops).
+#if defined(__x86_64__)
+  #define AI_ARCH "x64"
+#elif defined(__aarch64__)
+  #define AI_ARCH "arm64"
+#else
+  #define AI_ARCH "other"
+#endif
+  if (ai_ok(g = ai_strof(g, AI_ARCH))) {
+   struct ai_def ad[] = {{"ai-arch", ai_pop1(g)}};
+   g = ai_defn(g, ad, countof(ad)); }
   // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
   // name, so installing that nif interns it and the book roots it; the raise
   // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).
@@ -4897,10 +4909,12 @@ lvm(lvm_nif) {
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);     // reload codebuf: a GC in Have may have moved it
  if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
   return munmap(base, maplen), Sp[3] = nil, Sp += 3, Ip++, Continue();
-#else
+ __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is NOT coherent with the freshly
+#else                                          // written D-cache -- flush or it runs stale bytes (no-op on x86)
  Have(str_type_width + b2w(n) + 9);           // freestanding: HHDM is RWX, a heap copy runs
  struct ai_str *s = ini_str((struct ai_str*) Hp, n); Hp += str_type_width + b2w(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
+ __builtin___clear_cache(txt(s), txt(s) + n);  // same I-cache flush on the freestanding (RWX) path
 #endif
  union u *k = (union u*) Hp;
  if (ar == 1) {                               // 6-word direct-entry cell (the old nat)

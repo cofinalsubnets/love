@@ -19,6 +19,8 @@
 ; ai/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 (: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)
 (: base-ev ev
+   arch (intern ai-arch)                ; the host CPU as the assembler target ('x64 / 'arm64); glaze loads only on these
+   x86? (id? arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v: var | int | arith | cmp | (? t a b)
    (exprp e v) (? (= e v)   1
                   (whole? e)  1
@@ -829,7 +831,7 @@
    (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
       (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
          (link (? hit (cap nf) nf)                                                            ; drop the (name p..) define-sugar -> a PLAIN binding
-               (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) 'x64) val) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets); else interp (jgir-supported spans the recognizer grammar, so this fallback is a soundness backstop, not a live lane)
+               (link (? hit (? (jgir-ok? gdefs) (jitgroupir gdefs (cap nf) arch) val) val)   ; jgir-ok? -> the neutral-IR group lane (no hand offsets, both targets); else interp (jgir-supported spans the recognizer grammar, so this fallback is a soundness backstop, not a live lane)
                      (rewrite-bindings (cuup bl) gnames gdefs)))))
    ; memo-leak? -- a candidate fn FREELY reads/writes a `:`-sibling MAP (a memo tablet/hash bound in the
    ; same form, e.g. fact/bell's global `facts`/`bells`): the native group lane can only touch a map that
@@ -994,9 +996,14 @@
    ; compile cache makes structurally-equal closures id?-IDENTICAL, breaking love's
    ; equal-but-distinct closure semantics (!(id? (\ x E) (\ x E))). A safe creation hook
    ; needs the POST-macro opfix seam + a CODE cache (distinct cells per instance). Future.)
-   (auto-ev e) (? (qual e)  (memo e (\ l (jitir l 'x64)))
-                  (qualn e) (memo e (\ l (jitnir l 'x64)))
-                  (qualc e) (memo e (\ l (jitn (flatc l))))
+   ; the lanes route to `arch` (the assembler target). on x86 (arch='x64) the full glaze runs. on arm64
+   ; the codegen has open bugs (the validator `make test_arm64` surfaces them: a state-dependent leaf/n-ary
+   ; crash in oracle, a group-lane fault in fib) -- so for now arm64 falls to the interpreter. The lane
+   ; routing is target-parameterized and ready; flip this gate per lane as each goes green under qemu.
+   (auto-ev e) (? (! x86?) (base-ev e)                            ; arm64: glaze codegen WIP -> interp (base runtime IS at parity; see test_arm64)
+                  (qual e)  (memo e (\ l (jitir l arch)))
+                  (qualn e) (memo e (\ l (jitnir l arch)))
+                  (qualc e) (memo e (\ l (jitnir (flatc l) arch)))
                   (qualfr e) (memo e jitfr)                       ; float-RESULT leaf -> heap-boxed gem (sound: param floated at first use)
                   (: li (loopinfo e)
                      (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
