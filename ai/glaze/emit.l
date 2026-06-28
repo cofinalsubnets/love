@@ -332,25 +332,9 @@
    (luse v dag rv n) ((: (go i ds best) (? (atom? ds) (? (member? v rv) n best)         ; last index using v (roots live to n)
        (go (+ i 1) (cup ds) (? (&& (binop? dag i) (|| (= v (caup (cap ds))) (= v (caup (cup (cap ds)))))) i best)))) 0 dag -1)
    (dies? v i dag rv n) (&& (binop? dag v) (&& (= (luse v dag rv n) i) (! (member? v rv))))
-   (opc op) (? (id? op 'mov) 16 (id? op '+) 88 (id? op '*) 89 (id? op '-) 92 (id? op '/) 94 ())   ; movsd/addsd/mulsd/subsd/divsd
-   (sse op dst src) (L 242 (+ 64 (+ (? (> dst 7) 4 0) (? (> src 7) 1 0))) 15 (opc op) (+ 192 (+ (* 8 (% dst 8)) (% src 8))))
-   (ucom a b) (L 102 (+ 64 (+ (? (> a 7) 4 0) (? (> b 7) 1 0))) 15 46 (+ 192 (+ (* 8 (% a 8)) (% b 8))))   ; ucomisd a,b (a-b)
    (rgof leaf env) (: e (clook leaf env) (? (two? e) (caup e) (scare 'glaze-leaf leaf)))   ; leaf -> its fixed reg
    (asm ps) (foldl (\ a b (+ a b)) () ps)                                                  ; concat a LIST of byte pieces (+ is associative)
    (efold names i) (? (two? names) (link (L (cap names) i) (efold (cup names) (+ i 1))) ())   ; names -> (name reg) from reg i
-   (alloc dag rv env n pool)                                                             ; -> (code . regof-tablet); pool = the free working xmm regs
-    (: rg (tablet 0) pl (tablet 0) _ (pin pl 'p pool)
-       (pop u) (: p (peep pl 'p ()) _ (pin pl 'p (cup p)) (cap p))
-       (push r) (pin pl 'p (link r (peep pl 'p ())))
-       code ((: (go i acc) (? (= i n) acc
-          (: nd (nthl dag i)
-             (? (id? (cap nd) 'L) (: _ (pin rg i (rgof (caup nd) env)) (go (+ i 1) acc))   ; leaf: fixed reg, no code
-                (: op (cap nd) a (caup nd) b (caup (cup nd)) ra (peep rg a 0) rb (peep rg b 0)
-                   adie (dies? a i dag rv n) bdie (dies? b i dag rv n)
-                   dst (? adie ra (pop 0))                                                 ; reuse a's reg if a dies
-                   _ (? (&& bdie (! (= rb dst))) (push rb) 0) _ (pin rg i dst)             ; free b if it dies
-                   (go (+ i 1) (+ acc (+ (? (= dst ra) () (sse 'mov dst ra)) (sse op dst rb))))))))) 0 ())
-       (L code rg))
    ; cgF: a FLOAT subexpr -> xmm0, over the hoist table ht + THREE envs: fe (float locals in xmm8..,
    ; fload), ce (int loop-COUNTERS in raw regs -> cvtsi2sd), ie (int Sp params -> fxv+cvtsi2sd).
    (cgF ht ce ie fe e d) (? (gem? e)   (hcon e ht)
@@ -393,12 +377,7 @@
    ;     the float lane need no guard. arity 1 (a dummy arg ignored), integer checksum out. offsets COMPUTED.
    (rangeL a b) (? (< a b) (link a (rangeL (+ a 1) b)) ())
    (map2 f a b) (? (two? a) (link (f (cap a) (cap b)) (map2 f (cup a) (cup b))) ())
-   (xorR r)    (L 77 49 (+ 192 (* 9 (- r 8))))                 ; xor r,r   (r8-15)
-   (incR r)    (L 73 255 (+ 192 (- r 8)))                      ; inc r
-   (cmpRi r n) (+ (L 73 129 (+ 248 (- r 8))) (le4 n))          ; cmp r, imm32
-   (cvtcnt r)  (L 242 73 15 42 (+ 194 (- r 10)))               ; cvtsi2sd xmm0, r   (r10-15)
-   (pushR r)   (L 65 (+ 80 (- r 8)))                           ; push r   (r8-15)
-   (popR r)    (L 65 (+ 88 (- r 8)))                           ; pop r
+   (cvtcnt r)  (L 242 73 15 42 (+ 194 (- r 10)))               ; cvtsi2sd xmm0, r   (r10-15) -- byte, read by cgFd (raw) in both grids
    ; cgFd: a derive expr over the COUNTER env ce (int loop counters -> cvtsi2sd) + hoisted consts,
    ; using [rsp] scratch (xpush/xpop1) so it never touches an xmm8.. local reg -- run once per cell
    ; (cold), so memory scratch costs nothing measurable.
@@ -408,23 +387,6 @@
                      (two? e)   (: op (cap e) a (caup e) b (caup (cup e))
                                    (? (member? op '(+ - * /)) (+ (cgFd ht ce a) (+ xpush (+ (cgFd ht ce b) (+ xpop1 (asmx (fbinop op)))))) ()))
                      ())
-   ; guard-acc: the acc-overflow guard. D<3 -> the plain guard (counters are caller-saved). D>=3 ->
-   ; pop the callee-saved counters (r12..) before the deopt, so the interp nest sees an ABI-clean frame.
-   (guard-acc D) (? (< D 3) (guard 0)
-                    (: pp (foldl (\ a r (+ a (popR r))) () (rev (rangeL 12 (+ 10 D))))
-                       (+ (L 113 (+ (tally pp) (tally deopt))) (+ pp deopt))))   ; jno over (pops + deopt)
-   ; loopwrap: wrap `inner` in one counted loop -- init counter cr=0; LTOP: cmp cr,bnd; jge EXIT;
-   ; <inner>; inc cr; jmp LTOP; EXIT. Offsets COMPUTED from (tally inner), so it nests to any depth.
-   (loopwrap cr bnd inner)
-    (: Li (tally inner)
-       (asm (L (xorR cr)                                       ; init counter = 0
-               (cmpRi cr bnd)                                  ; LTOP: cmp cr, bnd
-               (+ (L 15 141) (le4 (+ Li 8)))                   ; jge EXIT  (skip inner + inc(3) + jmp(5))
-               inner
-               (incR cr)                                       ; inc cr
-               (+ (L 233) (le4 (- 0 (+ Li 21)))))))            ; jmp LTOP  (back over cmp(7)+jge(6)+inner+inc(3)+jmp(5))
-   (nest loops inner) (? (atom? loops) inner
-                         (loopwrap (caap loops) (cuap loops) (nest (cup loops) inner)))
    (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim)
     ; the scalar D-dim grid kernel as a neutral asm/ IR PROGRAM (the grid2 pattern, single-step): control
     ; flow is LABELS (no hand offsets), the recurrence is allocp's CSE'd named-SSE forms, the cold derives
