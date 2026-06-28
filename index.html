@@ -128,35 +128,31 @@
 
 <p class="lead"><em>ai would rather be felt than seen.</em></p>
 
-<p>ai is a lisp surface over a tiny generic core. one operation:
-<span class="term" data-g="application">application</span>. one measure:
-<span class="term" data-g="net">net</span> -- a complex sum over a value's parts, opposite
-phases cancelling. every value is a total unary function, so application is
-always defined; truth is the sign of the net, so nothing is ever stuck and
-nothing is ever an error.</p>
+<p>ai is a lisp / ml / apl hybrid over a tiny portable C core.
+every value is a total unary function, so application is
+always defined, and almost no expression is an error.</p>
 
 <hr>
 
-<div class="law"><span class="n">the lambda law.</span> application and abstraction are one coin -- both <span class="term" data-g="currying">curry</span>. <code>(f)</code> is <code>f</code>, <code>(f x y)</code> is <code>((f x) y)</code>; partial application is leaving arguments off the end. a <code>\</code> handed one operand has nothing left to bind and gives it back unevaluated, so <code>'x</code> is <code>(\ x)</code> -- quote falls out of currying.</div>
-<div class="law"><span class="n">the unit law.</span> <span class="term nul" data-g="unit">()</span> does nothing, everywhere. it is the ring's two-sided identity: <code>() + x</code> and <code>() * x</code> are both <code>x</code>. it is false in every test. applied, it is const-1. one value, doing nothing three ways -- never the number <code>0</code>, which annihilates <code>*</code>. the same net, printed apart.</div>
-<div class="law"><span class="n">the net law.</span> every value has a <span class="term" data-g="net">net</span>, summed from its parts: a number is itself, a <span class="term" data-g="string">string</span> its bytes, a list its spine, phases cancelling as vectors. its sign is the value's <span class="term" data-g="color">color</span> -- <span class="term" data-g="green">green</span> nonnegative, <span class="term" data-g="red">red</span> below, <span class="term" data-g="blue">blue</span> the floor where the net is exactly zero: present yet nothing. truth is positive green; there is no separate boolean. <code>$</code> clamps any net back onto the green <span class="term" data-g="charm">charms</span>.</div>
-<div class="law"><span class="n">the ring law.</span> <code>+</code> and <code>*</code> are the two generic operations, and they fit as a ring -- each a monoid sharing the <span class="term nul" data-g="unit">()</span>-unit, <code>*</code> distributing over <code>+</code>. the theory only strengthens along the <span class="term" data-g="lattice">lattice</span>: a free monoid on strings, a semiring on lists, a ring on numbers. and the lattice is open -- a <em>die</em> strikes your own <em>coin</em>, a value family that rides the same dispatch and inherits the <span class="term nul" data-g="unit">()</span>-nothing for free.</div>
-
-<p>one order holds everything:</p>
-<pre><code>() &lt; mint &lt; name &lt; string &lt; number &lt; chain &lt; tray &lt; book &lt; hot
-</code></pre>
-
-<p>and every <span class="term" data-g="operator">operator</span> is secretly two -- <em>spaced is dyadic, glued is monadic</em>: <code>a - b</code> subtracts, <code>-x</code> negates. space your operators.</p>
+<div class="law"><span class="n">application.</span> every value is a one-argument function, and application <span class="term" data-g="currying">curries</span> -- that is the whole language. <code>(f)</code> is <code>f</code>, <code>(f x y)</code> is <code>((f x) y)</code>, so partial application is just leaving arguments off the end. three special forms do the rest: <code>:</code> binds and sequences (letrec*, the last form its value), <code>?</code> is cond (test/result pairs, then an else), and <code>\</code> is lambda -- handed a single operand it has nothing left to bind, so it returns it unevaluated and quote falls out, <code>'x</code> is <code>(\ x)</code>.</div>
+<div class="law"><span class="n">net.</span> every value has a <span class="term" data-g="net">net</span> -- one complex number summed from its parts: a number is itself, a <span class="term" data-g="string">string</span> its bytes, a list its spine, opposite phases cancelling as vectors. the sign of the net is the value's <span class="term" data-g="color">color</span> -- <span class="term" data-g="green">green</span> nonnegative, <span class="term" data-g="red">red</span> negative,
+  <span class="term" data-g="blue">blue</span> zero. the <code>$</code> operator (saturate) pulls any value through its net onto the <span class="term" data-g="green">green</span> <span class="term" data-g="charm">charms</span>,
+  sending <span class="term" data-g="red">red</span> values to <span class="term" data-g="blue">blue</span>. this defines truth value in conditionals, so in ai false means "negative or empty".</div>
+<div class="law"><span class="n">ring.</span> <code>+</code> and <code>*</code> are two generic operations, total across every kind, and <code>+</code> is the <span class="term" data-g="net">net</span> made total. <span class="term nul" data-g="unit">()</span> -- nothing -- is their shared unit, doing nothing everywhere: the two-sided identity of both (<code>() + x</code> and <code>() * x</code> are <code>x</code>), false in every test, const-1 when applied -- never the number <code>0</code>, which annihilates <code>*</code>. together they form a ring that only strengthens along the <span class="term" data-g="lattice">lattice</span> (a free monoid on strings, a semiring on lists, a ring on numbers), and the lattice is open: a <em>die</em> strikes your own <em>coin</em>, a value family riding the same dispatch with <span class="term nul" data-g="unit">()</span> for nothing.</div>
+<div class="law"><span class="n">notation.</span> ai is a lisp, with two notations layered over the parentheses: <em>application binds to the left, operators to the right.</em> a call is ml-style and curried, read leftward -- <code>(f x y)</code> is <code>((f x) y)</code>. operators are apl-style and have no precedence, read rightward -- <code>1 + 2 * 3</code> is <code>1 + (2 * 3)</code>. and every operator is secretly two: <em>spaced is dyadic, glued is monadic</em> -- <code>a - b</code> subtracts, <code>-x</code> negates. space your operators.</div>
 
 <hr>
 
 <h2 id="four-ways"><a href="#four-ways">one object, four ways</a></h2>
 
-<p>the <span class="term" data-g="kind">kinds</span> form a <span class="term" data-g="lattice">lattice</span>. that lattice <em>is</em> the dispatch table -- a generic operator is a matrix indexed by its operands' kinds.</p>
+<p>the <span class="term" data-g="kind">kinds</span> form a <span class="term" data-g="lattice">lattice</span>, flattened into one total order over all values:</p>
+
+<pre><code>() &lt; mint &lt; name &lt; string &lt; number &lt; chain &lt; tray &lt; book &lt; hot
+</code></pre>
+
+<p>that lattice <em>is</em> the dispatch table -- a generic operator is a matrix indexed by its operands' kinds.</p>
 
 <p>read it as <strong>order</strong> and it is a deliberate remap: the <span class="term" data-g="point">points</span> fall to the floor, a <span class="term" data-g="galaxy">galaxy</span> folds in by its <span class="term" data-g="net">net</span>. read it as <strong>algebra</strong> and it is the strongest <code>+</code>/<code>*</code> theory each band affords. read it as <strong>abstract domain</strong> and it is a compile pass climbing the same lattice by join to a fixpoint, so a statically-numeric site skips the matrix.</p>
-
-<p>one object -- dispatched, ordered, algebraic, analyzed.</p>
 
 <hr>
 
