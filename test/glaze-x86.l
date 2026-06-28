@@ -82,30 +82,6 @@
   ; pressure -- if the box were malformed or the bump corrupted Sp's region, these would diverge/crash.
   (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)))  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
   (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)))  ys (map gfr (jot 4000))  zs (map (\ x (+ (* x 1.5) 2.0)) (jot 4000)) (= ys zs))  ; 4000 boxes under GC pressure == interp
-  ; BYTE LAW (jitba): native s ++ [B] -- a fresh heap string, == interp, transparent, GC-safe, deopts
-  (: ba (jitba '(\ s (+ s 66)))
-     (&& (string? (ba "abc")) (= "abcB" (ba "abc")) (= ((\ s (+ s 66)) "abc") (ba "abc"))   ; appends byte 66='B', == interp
-         (= "B" (ba "")) (4 = (tally (ba "abc")))                                            ; empty input -> a 1-byte string
-         ((\ s (+ s 66)) = ba)                                                               ; =-identical to source
-         (= (map (\ s (+ s 66)) (L "x" "ab" "")) (map ba (L "x" "ab" "")))                   ; composes == interp
-         (= (+ 5 66) (ba 5)) (= (+ '(1 2) 66) (ba '(1 2)))))                                 ; non-string s -> kind guard deopts -> generic +
-  (: ba (jitba '(\ s (+ s 90)))  b (ba "hello")  _ (tally (jot 200000))  (= "helloZ" b))     ; the string box survives a forced GC
-  (: ba (jitba '(\ s (+ s 33)))  xs (map (\ i (string (L (+ 97 (% i 26))))) (jot 1500))      ; 1500 strings ++ '!' under GC pressure == interp
-     (= (map (\ s (+ s 33)) xs) (map ba xs)))
-  ; CASK-BACKED BUILDER (jitsb, sketch): O(n) string producer -- map each byte b -> (b+K)&255, == interp
-  (: bsrc '(\ s ((: (go i acc) (? (< i (tally s)) (go (+ i 1) (+ acc (& (+ (peep s i 0) 1) 255))) acc)) 0 ""))
-     sb (jitsb bsrc 1)  isb (ev bsrc)
-     (&& (string? (sb "abc")) (= "bcd" (sb "abc")) (= (isb "abc") (sb "abc"))                ; +1 byte-map: abc->bcd, == interp
-         (= "" (sb "")) (3 = (tally (sb "abc")))                                             ; empty -> empty; length preserved
-         (= isb sb)                                                                          ; =-identical to its interpreted twin (same source)
-         (= (map isb (L "Hello!" "xyz" "")) (map sb (L "Hello!" "xyz" "")))                  ; composes == interp
-         (= (isb 5) (sb 5))))                                                                ; non-string s -> deopt -> interp
-  (: sb (jitsb '(\ s ((: (go i acc) (? (< i (tally s)) (go (+ i 1) (+ acc (& (+ (peep s i 0) 3) 255))) acc)) 0 "")) 3)
-     b (sb "hello")  _ (tally (jot 200000))  (= "khoor" b))                                  ; +3 build survives a forced GC (no tag needed)
-  (: bs '(\ s ((: (go i acc) (? (< i (tally s)) (go (+ i 1) (+ acc (& (+ (peep s i 0) 1) 255))) acc)) 0 ""))
-     sb (jitsb bs 1)  isb (ev bs)
-     xs (map (\ i (string (L (+ 97 (% i 26)) (+ 65 (% i 7))))) (jot 1500))                   ; 1500 2-char strings, +1 byte-map under GC pressure == interp
-     (= (map isb xs) (map sb xs)))   ; non-string -> guard deopts == interp
   ; --- added coverage: setcc <=/>/>=/=, multi-arg (cgn) %/&/|/cmp/?, *-fold loop, //-by-0 deopt ---
   ; comparison RESULT codes -- only `<` reached a setcc before, 4 of 5 opcodes were dark
   (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))            ; setcc <=

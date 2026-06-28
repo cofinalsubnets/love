@@ -216,59 +216,6 @@
             '(mov r0 r2) '(add r2 r2 16)                             ; rax = Hp (the gem ptr) ; Hp += 16
             '(st r1 0 r0) '(add r5 r5 16) '(ld r0 r5 0) '(jmpr r0)))))   ; mov [Sp],rax ; Continue (NO putfix: rax IS the gem)
         (ev lam) lam 1))
-   ; --- BYTE LAW (string RESULT): (jitba '(\ s (+ s B))) -- native s ++ [B], a fresh heap string. Same
-   ;     heap-result machinery as jitfr but VARIABLE-sized: read len=[s+8], reserve n = str_type_width +
-   ;     b2w(len+1) content words (NO GC tag -- the cheney scan derives a string's size from its len
-   ;     field, ai.c:959; only threads/continuations are tag-copied), ROOM-GUARD-or-deopt (the alloc
-   ;     twin again), write the ai_str header (kind = lvm_str via apof, len+1), COPY len bytes (an inline
-   ;     loop -- rep movsb would clobber Ip=rsi/Sp=rcx), append B,
-   ;     return the raw ai_str ptr (no putfix). A non-string s (fixnum/list/num) hits the kind TYPE
-   ;     GUARD and deopts to the generic interpreter `+`. B is a compile-time byte (0..255). The
-   ;     emitted body is offset-independent: every branch is a fixed local distance. ⚠ x86-64.
-   (jitba lam)
-    (: body (caup (cup lam))  B (caup (cup body))  kind (apof "")
-       (nif (emit (asm (L
-          '(76 139 1) (L 65 246 192 1 116 (tally deopt)) deopt                  ; mov r8,[rcx](=s); test r8b,1; jz+; deopt (fixnum)
-          '(77 139 16 73 187) (le8 kind) (L 77 57 218 116 (tally deopt)) deopt   ; mov r10,[r8]; movabs r11,lvm_str; cmp; je+; deopt (non-str)
-          '(77 139 72 8)                                                        ; mov r9,[r8+8]  (len)
-          '(77 141 81 8 73 193 234 3 73 131 194 2)                              ; r10 = total_words = 2 + ((len+8)>>3)  (b2w(len+1), NO GC tag)
-          '(78 141 20 210 73 131 194 64)                                        ; r10 = Hp + total*8 + floor(64)
-          (L 76 57 209 115 (tally deopt)) deopt                                 ; cmp rcx,r10; jae+; deopt (heap full)
-          '(76 137 26)                                                          ; mov [rdx],r11  (header: lvm_str)
-          '(77 141 81 1 76 137 82 8)                                            ; r10=len+1 ; mov [rdx+8],r10
-          '(49 192 76 57 200 15 141 16 0 0 0)                                   ; xor eax,eax ; COPY: cmp rax,r9 ; jge DONE(+16)
-          '(69 15 182 84 0 16 68 136 84 2 16 72 255 192 235 231)                ; movzx r10d,[r8+rax+16]; mov [rdx+rax+16],r10b; inc rax; jmp COPY
-          (L 66 198 68 10 16 B)                                                 ; DONE: mov byte [rdx+r9+16], B
-          '(72 137 208)                                                         ; mov rax,rdx  (result = the new string ptr)
-          '(77 141 81 8 73 193 234 3 73 131 194 2 74 141 20 210)                ; r10=total_words ; lea rdx,[rdx+r10*8]  (Hp += total*8)
-          '(72 137 1 72 131 198 16 72 139 6 255 224))))                         ; mov [rcx],rax ; add rsi,16 ; Continue (NO putfix)
-        (ev lam) lam 1))
-   ; --- CASK-BACKED string BUILDER (sketch): (jitsb '(\ s <byte-map loop>) K) -- the O(n) PRODUCER lane.
-   ;     the cask insight: allocate the RESULT once (sized N=len s; ONE room-guard-or-deopt), then a native
-   ;     pin-LOOP writes out[i] = low8((peep s i 0)+K) with ZERO per-iteration allocation -- so no GC fires
-   ;     in the loop (the whole wall), and it is O(n), not the immutable-append O(n^2). a non-string s
-   ;     deopts to the interpreter. NO GC tag word (the cheney scan derives a string's size from len, so
-   ;     unlike a tagged thread a string carries none -- this is the right framing jitba's surplus tag had
-   ;     wrong). BOUNDED output only: out len == in len (a 1:1 byte map). K is the per-byte add, masked to
-   ;     a byte by the low-8 store (matching (& (+ b K) 255)). The body is offset-independent. ⚠ x86-64.
-   (jitsb lam K)
-    (: kind (apof "")
-       (nif (emit (asm (L
-          '(76 139 1) (L 65 246 192 1 116 (tally deopt)) deopt                  ; mov r8,[rcx](=s); test r8b,1; jz+; deopt (fixnum)
-          '(77 139 16 73 187) (le8 kind) (L 77 57 218 116 (tally deopt)) deopt   ; mov r10,[r8]; movabs r11,lvm_str; cmp; je+; deopt (non-str)
-          '(77 139 72 8)                                                        ; mov r9,[r8+8]  (N = output len = input len)
-          '(77 141 81 7 73 193 234 3 73 131 194 2)                              ; r10 = total = 2 + ((N+7)>>3)   (b2w(N), no tag)
-          '(78 141 20 210 73 131 194 64)                                        ; r10 = Hp + total*8 + floor(64)
-          (L 76 57 209 115 (tally deopt)) deopt                                 ; cmp rcx,r10; jae+; deopt (heap full)
-          '(76 137 26 76 137 74 8)                                              ; mov [rdx],r11 (kind); mov [rdx+8],r9 (len=N)
-          '(49 192)                                                             ; xor eax,eax  (i=0)
-          '(76 57 200 15 141 23 0 0 0)                                          ; LOOP: cmp rax,r9 ; jge DONE(+23)
-          '(69 15 182 84 0 16) (L 65 129 194) (le4 K)                           ; movzx r10d,[r8+rax+16] ; add r10d, K
-          '(68 136 84 2 16 72 255 192 235 224)                                  ; mov [rdx+rax+16],r10b (low8 = &255) ; inc rax ; jmp LOOP(-32)
-          '(72 137 208)                                                         ; DONE: mov rax,rdx  (result)
-          '(77 141 81 7 73 193 234 3 73 131 194 2 74 141 20 210)                ; r10=total ; lea rdx,[rdx+r10*8]  (Hp += total*8)
-          '(72 137 1 72 131 198 16 72 139 6 255 224))))                         ; mov [rcx],rax ; add rsi,16 ; Continue (NO putfix)
-        (ev lam) lam 1))
    (clook k ce) (? (atom? ce) () (= k (caap ce)) (cap ce) (clook k (cup ce)))   ; counter env: name -> (name regbytes; cgFd/rgof read it)
    ; --- CONSTANT HOISTING: peek is mopped so a float constant costs a movabs+movq to materialize;
    ;     re-emitting that inside a loop body is the dominant cost. so collect the DISTINCT float
