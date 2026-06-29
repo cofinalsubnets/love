@@ -2862,6 +2862,9 @@ lvm(lvm_hush) {
  for (union u *node = prev->m; node != g->tasks; prev = node, node = node->m)
   if (getcharm(node[2].x) == target) {
    prev->m = node->m;
+#ifdef AI_STAT
+   gen_wb(g, (word) prev, (word) prev->m);   // unsplice relinks an old node to a (maybe young) successor
+#endif
    result = putcharm(1);
    break; }
  Sp[0] = result;
@@ -3183,6 +3186,9 @@ static struct ai *to_putc(struct ai *g, int c) {
   struct ai_str *nb = (struct ai_str*) g->sp[0];
   memcpy(txt(nb), txt(o->buf), i);
   o->buf = nb;
+#ifdef AI_STAT
+  gen_wb(g, (word) o, (word) nb);   // a tenured string-sink takes a fresh young backing -> remember it
+#endif
   g->sp++; }
  txt(o->buf)[i] = c;
  o->i = putcharm(i + 1);
