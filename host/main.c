@@ -214,6 +214,13 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
   return ai_push(g, 1, putcharm(e)); }
  if (!pid) {                                              // child
   dup2(op[1], STDOUT_FILENO);
+  // DETACH stdin from the controlling terminal: this is a CAPTURE spawn (we want the child's
+  // output, never interactive input), so give it /dev/null. Otherwise a child that touches the
+  // tty -- e.g. qemu `-serial stdio` doing tcsetattr -- gets SIGTTOU/SIGTTIN as a background
+  // process and STOPS, producing no output (the `make test_kernel` hang under an interactive
+  // shell; invisible when run with no controlling tty). stdout is already the pipe, also non-tty.
+  int nul = open("/dev/null", O_RDONLY);
+  if (nul >= 0) { dup2(nul, STDIN_FILENO); if (nul > 2) close(nul); }
   close(op[0]); close(op[1]); close(ep[0]);
   execvp(cav[0], cav);
   int e = errno; ssize_t w = write(ep[1], &e, sizeof e); (void) w;
