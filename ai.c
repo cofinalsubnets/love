@@ -635,6 +635,22 @@ static ai_inline bool eql(struct ai *g, word a, word b) {
 static ai_inline bool tagp(word x, word const *lo, word const *hi) {
  word const *p = (word const*) (x & ~(word) 3);
  return (x & 3) == ai_thread_tag && p >= lo && p < hi; }
+// A terminator is tag-2 with its payload (the object head) in a LIVE heap region. GC scans
+// run with DIFFERENT [lo,hi) -- a minor's copy uses the young from-range, but evac/scan-in-place
+// use the major to-range -- so a terminator must be recognized by which pool its head lands in,
+// NOT the single range the caller happens to scan. Else a young-pointing terminator met under
+// the major range is missed, gcp'd as a field, and followed off the heap (the kernel tco=1 #PF).
+// A stray 2-byte-aligned EXTERNAL pointer lands in NO pool, so it is still rejected. Live
+// regions: the minor/main pool, the current to-space (a major's resized half), both major halves.
+static ai_inline bool in_live_pool(struct ai *g, word const *p) {
+ if (p >= ptr(g) && p < ptr(g) + g->len) return true;             // minor / main pool
+#ifdef AI_STAT
+ if (g->gc_to_lo && p >= g->gc_to_lo && p < g->gc_to_hi) return true;   // current to-space
+ if (g->major_pool && p >= g->major_pool && p < g->major_pool + 2 * g->major_len) return true;   // both major halves
+#endif
+ return false; }
+static ai_inline bool tagl(struct ai *g, word x) {                  // range-independent terminator test
+ return (x & 3) == ai_thread_tag && in_live_pool(g, (word const*) (x & ~(word) 3)); }
 static ai_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | ai_thread_tag, h; }
 #define topof(g) ((word*)g+g->len)
@@ -1089,14 +1105,10 @@ static ai_inline void evac_nom(struct ai*g, word const*const p0, word const*cons
  w->name = gcp(g, w->name, p0, t0); }
 
 static ai_inline void evac_thread(struct ai *g, word const *const p0, word const*const t0) {
-  // terminator payloads point into the copied object's home (the to-space);
-  // a stray 2-byte-aligned external content word is rejected by the range
-#ifdef AI_STAT
-  word const *lo = g->gc_to_lo, *hi = g->gc_to_hi;   // to-space = major/spare/new pool, where the scanned copy lives
-#else
-  word const *lo = ptr(g), *hi = ptr(g) + g->len;
-#endif
-  for (g->cp += 1; !tagp(g->cp[-1], lo, hi); g->cp[-1] = gcp(g, g->cp[-1], p0, t0), g->cp++); }
+  // a terminator (head in ANY live pool, tagl) ends the thread -- recognized regardless of which
+  // space the scan runs over, so a young-pointing terminator here isn't gcp'd as a field and
+  // followed off the heap (the kernel tco=1 #PF). A stray external content word is still rejected.
+  for (g->cp += 1; !tagl(g, g->cp[-1]); g->cp[-1] = gcp(g, g->cp[-1], p0, t0), g->cp++); }
 
 static ai_inline void evac_data(struct ai *g, word const *const p0, word const*const t0) {
   switch (typ(g->cp)) {
@@ -1250,8 +1262,7 @@ static void gen_scan_inplace(struct ai *g, word obj, word const *p0, word const 
                  for (uintptr_t i = 0, ne = vec_nelem(v); i < ne; i++) e[i] = gcp(g, e[i], p0, t0); } break; }
   case KNom:   { nom(p)->name = gcp(g, nom(p)->name, p0, t0); break; }
   default: break;                                  // KMint/KString/KBig/KFlo/KWide/KCplx: pointer-free leaves
- } else { word const *lo = g->gc_to_lo, *hi = g->gc_to_hi;     // a thread: every word to the tag terminator,
-          for (union u *q = p; !tagp(q->x, lo, hi); q++) q->x = gcp(g, q->x, p0, t0); } }
+ } else { for (union u *q = p; !tagl(g, q->x); q++) q->x = gcp(g, q->x, p0, t0); } }   // a thread: every word to the tag terminator (tagl: head in any live pool)
           // INCLUDING word0 -- a normal thread's ap is out-of-pool (gcp no-op) but a task-ring node's
           // word0 is its `next` pointer, the very old->young edge the rem set exists to chase.
 
@@ -1599,17 +1610,17 @@ static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0
   case KWide: return copy_wide(g, (struct ai_wide*) src, p0, t0);
   case KCplx: return copy_cplx(g, (struct ai_cplx*) src, p0, t0); } }
 
-static ai_inline struct ai_tag *ttag2(union u *k, word const *const lo, word const *const hi) {
- while (!tagp(k->x, lo, hi)) k++;
+static ai_inline struct ai_tag *ttag2(struct ai *g, union u *k) {
+ while (!tagl(g, k->x)) k++;                                 // tagl: terminator head in any live pool
  return (struct ai_tag*) k; }
 
 static ai_inline word copy_thread(struct ai *g, union u *src, word const *const p0, word const *const t0) {
  // it's a thread, find the end to find the head
- struct ai_tag *t = ttag2(src, p0, t0);
+ struct ai_tag *t = ttag2(g, src);
  union u *ini = tag_head(t), *d = bump(g, t->end - ini), *dst = d;
  // copy each content word to dest and leave a forwarding pointer behind,
  // stopping at the terminator; then rewrite it as the new tagged head
- for (union u *s = ini; !tagp(s->x, p0, t0); s->x = (word) d, d++, s++) d->x = s->x;
+ for (union u *s = ini; !tagl(g, s->x); s->x = (word) d, d++, s++) d->x = s->x;
  return (word) (tagthread(dst, d - dst) + (src - ini)); }
 
 static ai_noinline intptr_t gcp(struct ai *g, word x, word const *p0, word const *t0) {

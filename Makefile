@@ -594,13 +594,14 @@ kcppflags := \
   $(kcppflags) \
   -DLIMINE_API_REVISION=3
 ifdef K_TEST
-# Trampoline (ai_tco=0): the kernel test build HANGS at ai_tco=1 -- re-verified
-# 2026-06-11 (clean build, qemu silent before the first corpus dot, killed by
-# the gate's timeout; the host corpus is green at ai_tco=1, so this is kernel-
-# specific -- likely the freestanding toolchain not guaranteeing the sibcall
-# the tail-threaded path leans on). ai0 + this build are the two deliberate
-# trampoline lanes; the host runs $(tco) below.
-kcppflags += -DK_TEST -Dai_tco=0
+# tail-threaded (ai_tco=1, matching the real kernel + host). This build was long
+# PINNED to tco=0 because it "hung" at tco=1 -- ROOT-CAUSED 2026-06-29 (gdb on the
+# qemu gdbstub): not a hang but a #PF, the GC's terminator scan following a tag-2
+# young-pointing terminator off the heap (gcp gets a terminator as a field because
+# range-gated tagp missed it). The kmallocw layout triggered it; glibc/host didn't.
+# Fixed by range-independent terminator recognition (tagl/in_live_pool in ai.c), so
+# the test gate now exercises tco=1 like everything else. ai0 stays the trampoline lane.
+kcppflags += -DK_TEST -Dai_tco=1
 endif
 # KSHIP boots into the agent loop -- same settings as the normal interactive
 # kernel (it is the shell's read-eval loop with kship as the program), just
