@@ -37,6 +37,14 @@ corpus — the question was whether that's a quick eval-loop fix.
 - **Not clang-specific.** `make test_kernel KCC=gcc` at `tco=1` hangs the same
   way. Two independent compilers ⇒ a real bug, not a miscompilation.
 
+- **Not pre-existing / not in the old collector.** `-DAI_NOGEN` forces the old
+  single-pool collector (`gcg`) everywhere — the pre-generational behavior. Built
+  at `-Dai_tco=1 -DAI_NOGEN`, the FULL corpus passes **2593, reliably (3/3)**. So
+  the hang did NOT predate gen GC; it is specifically the **generational
+  collector**. (This also gives a stopgap: a glaze-in-kernel build could run
+  `tco=1 + AI_NOGEN` today, at the cost of gen GC's throughput, until the real
+  bug is found.)
+
 ## what it IS (the evidence)
 
 - **Heap-layout-sensitive.** Bisecting the corpus is unreliable because the baked
@@ -60,10 +68,19 @@ corpus — the question was whether that's a quick eval-loop fix.
   it slightly (~+6 tests) but never fixes it — so it's not OOM, and not a simple
   cached-field reload.
 
-Net: a latent corruption in the compacting major collection — a root the cheney
-pass misses, a rem-set entry dropped, or a major-pool boundary off-by-one — that
-only manifests at certain heap layouts. `tco=1` shifts the layout enough to hit
-it on the full corpus; certain subsets hit it even at `tco=0`.
+Net: a latent corruption in the **generational** collector (confirmed by the
+`AI_NOGEN` pass above) — a root the cheney pass misses, a rem-set entry dropped,
+or a major-pool boundary off-by-one — that only manifests at certain heap
+layouts. `tco=1` shifts the layout enough to hit it on the full corpus; certain
+subsets hit it even at `tco=0`.
+
+Because `gcg` (old collector) is clean and `gen` is not, the bug is in the
+gen-only machinery: the rem set + `dirty` flag, `gen_scan_inplace` (the minor's
+TERMINATOR-BOUNDED rescan of remembered major objects — see the warning in
+`doc/gc-single-barrier.md` that a poke past a thread's terminator escapes it),
+or `gen_major`'s two-from-space cheney. `tco=1` plausibly shifts the compiled
+THREAD layout (the threaded-ABI cells) so a young pointer lands where the
+terminator-bounded minor scan misses it. Start the audit there.
 
 ## the heisenbug trap
 
@@ -92,6 +109,10 @@ timeout 40 qemu-system-x86_64 -m 256M -M q35 \
 grep -c "tests pass" /tmp/ser.txt    # 0 = hung (no "tests pass" in the serial)
 git checkout Makefile                  # restore tco=0
 ```
+
+Control (proves it's the generational collector): build the same at
+`-Dai_tco=1 -DAI_NOGEN` (append `-DAI_NOGEN` to the `K_TEST` kcppflags line) and
+it passes 2593 reliably.
 
 `-serial file:` (not `stdio`) keeps the run independent of any controlling
 terminal — unrelated to this bug, but see the `run`-nif TTY fix (`05c7296b`):
