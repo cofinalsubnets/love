@@ -29,9 +29,12 @@ fi
 test -f out/lib/egg.h || { echo "test_arm64: run 'make host' first (need out/lib/*.h)"; exit 1; }
 
 O=out/arm64; mkdir -p $O
-# portable trampoline (ai_tco=0): the glaze native code is independent of the
-# interpreter's dispatch, so this validates codegen without the threaded build.
-CF="-std=gnu2x -O2 -Dai_tco=0 -I. -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
+# ai_tco=1 (the DEFAULT threaded dispatch): the glaze native code is NOT
+# dispatch-independent -- it emits the threaded ABI (Ip/Hp/Sp in x1/x2/x3) and
+# its own Continue (advance Ip, br [Ip]). Under tco=0 the native is entered as
+# ap(g) with x1/x2/x3 garbage, so the codegen ONLY runs under tco=1. -O2 gives
+# the sibling-call optimization the threaded loop relies on.
+CF="-std=gnu2x -O2 -Dai_tco=1 -I. -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
 echo "AARCH64 cross-build ($GCC)"
 for f in ai.c host/*.c; do
   o=$O/$(basename "$f" .c).o

@@ -996,11 +996,17 @@
    ; compile cache makes structurally-equal closures id?-IDENTICAL, breaking love's
    ; equal-but-distinct closure semantics (!(id? (\ x E) (\ x E))). A safe creation hook
    ; needs the POST-macro opfix seam + a CODE cache (distinct cells per instance). Future.)
-   ; the lanes route to `arch` (the assembler target). on x86 (arch='x64) the full glaze runs. on arm64
-   ; the codegen has open bugs (the validator `make test_arm64` surfaces them: a state-dependent leaf/n-ary
-   ; crash in oracle, a group-lane fault in fib) -- so for now arm64 falls to the interpreter. The lane
-   ; routing is target-parameterized and ready; flip this gate per lane as each goes green under qemu.
-   (auto-ev e) (? (! x86?) (base-ev e)                            ; arm64: glaze codegen WIP -> interp (base runtime IS at parity; see test_arm64)
+   ; the lanes route to `arch` (the assembler target). on x86 (arch='x64) the FULL glaze runs. on arm64 the
+   ; INTEGER lanes are live -- leaf/n-ary/closure (jitir/jitnir) and the mutually-recursive arith GROUP
+   ; (autogroup -> jitgroupir), all arch-parameterized and validated under qemu (`make test_arm64`, which
+   ; builds tco=1 to match the native ABI: Ip/Hp/Sp in x1/x2/x3, the threaded Continue). The FLOAT-result,
+   ; counted-loop and float-grid lanes (jitfr / loopcode / autonat / castbuild's cask-fill) are still
+   ; x86-only emitters, so on arm64 they fall to the interpreter (autogroup carries every source rewrite
+   ; that lowers to the integer group, so fib/tak/primes still glaze).
+   (auto-ev e) (? (! x86?) (? (qual e)  (memo e (\ l (jitir l arch)))        ; arm64: integer lanes native, the rest interp
+                               (qualn e) (memo e (\ l (jitnir l arch)))
+                               (qualc e) (memo e (\ l (jitnir (flatc l) arch)))
+                               (base-ev (autogroup e)))                      ; group native (arch-aware); float/loops/grids -> interp
                   (qual e)  (memo e (\ l (jitir l arch)))
                   (qualn e) (memo e (\ l (jitnir l arch)))
                   (qualc e) (memo e (\ l (jitnir (flatc l) arch)))
