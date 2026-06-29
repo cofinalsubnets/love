@@ -28,3 +28,4 @@ doc/archive/
 # python bytecode caches (bench ports) -- build artifacts, never tracked
 __pycache__/
 *.pyc
+*.core

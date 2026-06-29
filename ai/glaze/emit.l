@@ -104,54 +104,62 @@
    (sm-size smap) (foldl (\ a e (+ a (tally (cup e)))) 0 smap)
    (smfix info smap) (: nx (map (\ f (link (cap f) (fnsm (nthl f 1) (nthl f 2) smap))) info) (? (= (sm-size nx) (sm-size smap)) nx (smfix info nx)))   ; iterate to a fixpoint
    ; --- counted fold loop: acc = (FOLD over cv<n of body(cv)), cv the counter, limit
-   ; at Sp[0]. r9=n r10=cv r11=acc. FOLD is a (op . init) -- + folds from 0, * from 1 --
-   ; and cmp is the loop test's comparison (the loop runs while (cmp cv n)). offsets are
-   ; COMPUTED from the piece lengths, not hardcoded, so a longer acc op (imul) is fine.
-   (r11-init a0) (? (= a0 0) '(77 49 219) (+ '(73 199 195) (le4 a0)))   ; xor r11,r11 / mov r11,a0  (loopcode pre; acc-fold is IR)
+   ; at Sp[0]. FOLD is a (op . init) -- + folds from 0, * from 1 -- and cmp is the loop
+   ; test's comparison (the loop runs while (cmp cv n)). Now fully neutral IR, both targets.
    (foldinit op)  (? (= op '*) 1 0)                               ; * folds from 1, + from 0
+   ; loopregs: the 3 loop-state registers (n / counter / accumulator). CALLER-SAVED on both targets, so
+   ; they survive the body's acc/tmp/scratch (and there is no anchor in the loop lane). arm64 picks x6/x7/x8
+   ; to dodge scratch=x10 / anchor=x9; x86 keeps r9/r10/r11 (IR r8/r9/r10).
+   (loopregs tgt) (? (id? tgt 'x64) '(r8 r9 r10) '(r6 r7 r8))
+   ; loopepi: result already in acc -- putfix (overflow -> inline deopt) + Continue (Ip+=16; jmp [Ip]).
+   (loopepi tgt) (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp)
+      (cat (L (L 'adds A A A)) (cat (ldeopt tgt 0) (L (L 'or A A 1) (L 'st S 0 A) (L 'add IP IP 16) (L 'ld T IP 0) (L 'jmpr T)))))
    ; END condition = the INVERSE of the continue-comparison (exit when (cmp cv n) is false).
    (exitcc cmp) (? (= cmp '<) 'ge (= cmp '<=) 'gt (= cmp '>) 'le
                    (= cmp '>=) 'lt (= cmp '=) 'ne ())  ; ge/gt/le/lt/ne
-   (loopcode body cv op cmp)
-    (: bodyir (cgvir 'x64 (\ e d (? (= e cv) '((mov r0 r9)) ())) body 0)      ; body -> acc(rax); cv loaded raw from r10 (IR r9)
-       accir  (cat (? (id? op '+) '((adds r10 r10 r0)) (id? op '*) '((imul r10 r10 r0)) ()) (ldeopt 'x64 0))   ; r11 = r11 op rax ; overflow -> deopt
-       pre  (+ '(76 139 9  73 209 249  77 49 210) (r11-init (foldinit op)))    ; mov r9,[rcx];sar;xor r10; init r11
-       ; whole loop in asm/ IR now: pre/epilogue are raw x86 blobs, the BODY + acc-fold + control flow are
-       ; label-resolved IR. phys r9=n r10=cv r11=acc -> IR r8 r9 r10, so cmp r10,r9 = (cmp r9 r8).
-       (asmx (cat (L `('raw pre) '(label top) '(cmp r9 r8) `('br (exitcc cmp) 'end))   ; cmp cv,n ; exit when (cmp cv n) false
+   (loopcode body cv op cmp tgt)
+    (: rs (loopregs tgt) N (nthl rs 0) CV (nthl rs 1) ACC (nthl rs 2) A (greg tgt 'acc) S (greg tgt 'sp)
+       bodyir (cgvir tgt (\ e d (? (= e cv) (L (L 'mov A CV)) ())) body 0)      ; body -> acc; the counter is read from CV
+       accir  (? (id? op '+) (cat (L (L 'adds ACC ACC A)) (ldeopt tgt 0))                              ; ACC += acc ; overflow -> inline deopt
+                 (id? op '*) (: dl (mint 0) ok (mint 0)                                                ; ACC *= acc ; mulo (no arm64 flag) branches to the inline deopt
+                    (cat (L (L 'mulo ACC ACC A (greg tgt 'scratch) dl)) (cat (L (L 'jmp ok) (L 'label dl)) (cat (deoptbody tgt 0) (L (L 'label ok)))))) ())
+       pre  (L (L 'ld N S 0) (L 'sar N 1) (L 'li CV 0) (L 'li ACC (foldinit op)))   ; n = Sp[0]>>1 (assumed fixnum) ; cv = 0 ; acc = init
+       (asmx (cat pre (cat (L '(label top) (L 'cmp CV N) (L 'br (exitcc cmp) 'end))   ; cmp cv,n ; exit when (cmp cv n) false
               (cat bodyir (cat accir
-                   (L '(inc r9) '(jmp top) '(label end) '(mov r0 r10) `('raw epilogue)))))))   ; cv++ ; loop ; mov rax,r11
-   ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop.
+                   (cat (L (L 'inc CV) '(jmp top) '(label end) (L 'mov A ACC)) (loopepi tgt))))))))   ; cv++ ; loop ; acc <- ACC ; putfix + Continue
+   ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop (x86 self-test helper).
    (jitsum body)
     (: src `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('+ 'a body)) 'a)) 0 0))
-       (nif (emit (loopcode body 'i '+ '<)) (ev src) src 1))
+       (nif (emit (loopcode body 'i '+ '< 'x64)) (ev src) src 1))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if
    ; TEST, compute EVERY Uj from the OLD regs -- push all, then pop into the regs in
    ; reverse -- so the updates read pre-update values (e.g. fib's `b` and `a+b`); else
    ; RESULT. r9/r10/r11 survive the expr scratch (rax/r8/stack), so no save needed.
-   ; lvreg: loop var j -> its abstract register (v0/v1/v2 = phys r9/r10/r11 = IR r8/r9/r10).
-   (lvreg j) (nthl '(r8 r9 r10) j)
-   (loopcode-n n vars updates test result inits)
-    ; the whole N-var loop in asm/ IR. nvld loads a var: n from Sp[0] (fxvir, guarded), a loop var from its
-    ; raw register. updates are computed from the OLD regs (all pushed at depth j, then popped reverse so
-    ; reg(j) <- Uj). control flow + per-depth deopt are label-resolved; only epilogue stays a raw blob.
-    (: nvld (\ e d (? (= e n) (fxvir 'x64 0 d)
-                       (member? e vars) (L (L 'mov 'r0 (lvreg (argix e vars 0))))
+   ; lvreg: loop var j -> its abstract register (arch-aware, the loopregs bank: x86 IR r8/r9/r10 = phys
+   ; r9/r10/r11 ; arm64 r6/r7/r8 = x6/x7/x8, dodging scratch/anchor).
+   (lvreg tgt j) (nthl (loopregs tgt) j)
+   (loopcode-n n vars updates test result inits tgt)
+    ; the whole N-var loop in neutral IR, both targets. nvld loads a var: n from Sp[0] (fxvir, guarded), a
+    ; loop var from its register. updates are computed from the OLD regs (all pushed at depth j, then popped
+    ; reverse so reg(j) <- Uj). control flow + per-depth deopt + the putfix epilogue are all label-resolved.
+    (: A (greg tgt 'acc)
+       nvld (\ e d (? (= e n) (fxvir tgt 0 d)
+                       (member? e vars) (L (L 'mov A (lvreg tgt (argix e vars 0))))
                        ()))
-       pre  ((: (go j is) (? (two? is) (cat (L (L 'li (lvreg j) (cap is))) (go (+ j 1) (cup is))) ())) 0 inits)        ; reg-init
-       ups  ((: (go j us) (? (two? us) (cat (cgvir 'x64 nvld (cap us) j) (cat (L '(push r0)) (go (+ j 1) (cup us)))) ())) 0 updates)   ; push Uj at depth j
-       pops ((: (go j) (? (< j 0) () (cat (L (L 'pop (lvreg j))) (go (- j 1))))) (- (tally updates) 1))                ; pop reg(k-1)..reg(0)
-       tb   (cgvir 'x64 nvld test 0)
-       rb   (cgvir 'x64 nvld result 0)
+       pre  ((: (go j is) (? (two? is) (cat (L (L 'li (lvreg tgt j) (cap is))) (go (+ j 1) (cup is))) ())) 0 inits)        ; reg-init
+       ups  ((: (go j us) (? (two? us) (cat (cgvir tgt nvld (cap us) j) (cat (L (L 'push A)) (go (+ j 1) (cup us)))) ())) 0 updates)   ; push Uj at depth j
+       pops ((: (go j) (? (< j 0) () (cat (L (L 'pop (lvreg tgt j))) (go (- j 1))))) (- (tally updates) 1))                ; pop reg(k-1)..reg(0)
+       tb   (cgvir tgt nvld test 0)
+       rb   (cgvir tgt nvld result 0)
        (asmx (cat pre (cat (L '(label top))
-              (cat tb (cat (L '(cmp r0 0) '(br eq end))                ; <test>; rax==0 (false) -> end
+              (cat tb (cat (cat (L (L 'cmp A 0)) (L '(br eq end)))     ; <test>; acc==0 (false) -> end
               (cat ups (cat pops (cat (L '(jmp top) '(label end))      ; updates ; loop top
-              (cat rb (L `('raw epilogue))))))))))))                    ; result -> rax
-   ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native.
+              (cat rb (loopepi tgt)))))))))))                          ; result -> acc ; putfix + Continue
+   ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native (x86 self-test helper).
    (jitloop-n lam vars updates test result inits)
-    (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (ev lam) lam 1)
+    (nif (emit (loopcode-n (caup lam) vars updates test result inits 'x64)) (ev lam) lam 1)
    ; --- FLOAT lane (SSE) -- unboxed doubles in xmm ------------------------------
    ; the LuaJIT lever: keep float values in registers, never boxed. xmm0 is the float
    ; accumulator; a nested operand spills to the machine stack (movsd [rsp]). peek is
@@ -487,17 +495,19 @@
    ; guard deopts INLINE -- unwind the d pending machine-stack pushes, then tail-apply interp (value[1] to
    ; the arg still in Sp[0]) -- instead of cgir's anchor-restore. A var is loaded by `varld` (the counter
    ; from its raw register; an n-loop param via fxir). Replaces the byte cgv/cgl + opseq/cmpseq/... lane.
-   (ldeopt tgt d) (: A (greg tgt 'acc) IP (greg tgt 'ip) ok (mint 0)   ; jno over deopt; on overflow: unwind d, tail to interp
-      (cat (L (L 'br 'vc ok)) (cat (? (> d 0) (L (L 'add 'sp 'sp (* 8 d))) ())
-           (L (L 'ld A IP 8) (L 'mov IP A) (L 'ld A IP 0) (L 'jmpr A) (L 'label ok)))))
-   (zdeopt tgt d) (: A (greg tgt 'acc) IP (greg tgt 'ip) ok (mint 0)   ; jnz over deopt (the /-by-0 AND fixnum-input guard)
-      (cat (L (L 'br 'ne ok)) (cat (? (> d 0) (L (L 'add 'sp 'sp (* 8 d))) ())
-           (L (L 'ld A IP 8) (L 'mov IP A) (L 'ld A IP 0) (L 'jmpr A) (L 'label ok)))))
+   ; deoptbody: unwind d pending machine-stack pushes (slotsz each -- x86 8 / arm64 16), then tail-apply
+   ; interp (value[1]) to the arg still in Sp[0]. NO branch/label of its own; ldeopt/zdeopt/the *-overflow
+   ; lane wrap it with the guard branch + a skip label. The loop lanes have no free anchor reg (state fills
+   ; the loop registers), so the unwind is by COUNT here, not the leaf/group's anchor-restore.
+   (deoptbody tgt d) (: A (greg tgt 'acc) IP (greg tgt 'ip)
+      (cat (? (> d 0) (L (L 'add 'sp 'sp (* (slotsz tgt) d))) ()) (L (L 'ld A IP 8) (L 'mov IP A) (L 'ld A IP 0) (L 'jmpr A))))
+   (ldeopt tgt d) (: ok (mint 0) (cat (L (L 'br 'vc ok)) (cat (deoptbody tgt d) (L (L 'label ok)))))   ; skip the deopt unless OVerflow
+   (zdeopt tgt d) (: ok (mint 0) (cat (L (L 'br 'ne ok)) (cat (deoptbody tgt d) (L (L 'label ok)))))   ; skip unless nonzero (the /-by-0 AND fixnum-input guard)
    (fxvir tgt i d) (: A (greg tgt 'acc) S (greg tgt 'sp)   ; load Sp[i] TAGGED, fixnum-guard (inline deopt at depth d), untag
       (cat (L (L 'ld A S (* 8 i)) (L 'test A 1)) (cat (zdeopt tgt d) (L (L 'sar A 1)))))
-   (arithl tgt op d) (: A (greg tgt 'acc) T (greg tgt 'tmp)   ; acc = (popped a) OP acc, overflow -> inline deopt
+   (arithl tgt op d) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch) dl (mint 0) ok (mint 0)   ; acc = (popped a) OP acc, overflow -> inline deopt
       (? (id? op '+) (cat (L (L 'adds A A T)) (ldeopt tgt d))
-         (id? op '*) (cat (L (L 'imul A A T)) (ldeopt tgt d))
+         (id? op '*) (cat (L (L 'mulo A A T SC dl)) (cat (L (L 'jmp ok) (L 'label dl)) (cat (deoptbody tgt d) (L (L 'label ok)))))   ; mulo sets no arm64 flag -> it branches to the inline deopt (SC the smulh scratch)
          (id? op '-) (cat (L (L 'subs T T A)) (cat (ldeopt tgt d) (L (L 'mov A T)))) ()))
    (divl tgt op d) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)   ; a in tmp (popped), b in acc -> acc; b==0 deopts
       (cat (L (L 'pop T) (L 'test A A)) (cat (zdeopt tgt d) (? (id? op '//) (L (L 'div A T A)) (id? op '%) (L (L 'rem A T A SC)) ()))))

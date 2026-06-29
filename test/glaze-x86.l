@@ -96,7 +96,7 @@
   (: mnn (jit2 '(\ x y (? (< x y) x y))) (&& (3 = (mnn 3 5)) (4 = (mnn 9 4))))              ; cgn -> condcode (min)
   ; *-fold counted loop -- jitsum hardcodes +/<, so drive acc-mul + nonzero r11-init via loopcode
   (: prodf (: psrc `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('* 'a `('+ 'i 1))) 'a)) 0 1))
-              (nif (emit (loopcode '(+ i 1) 'i '* '<)) (ev psrc) psrc 1))
+              (nif (emit (loopcode '(+ i 1) 'i '* '< 'x64)) (ev psrc) psrc 1))
      pf (\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
      (&& (120 = (prodf 5)) (= (pf 8) (prodf 8))))                                           ; n! via a product fold
   ; divide-by-zero takes the guardz deopt -- only nonzero divisors were tested

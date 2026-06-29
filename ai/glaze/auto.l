@@ -67,7 +67,7 @@
               (two? ACC) (member? op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
               (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
        (? ok `(B I op cmp) 0))
-   (njit-loop lam B cv op cmp) (nif (emit (loopcode B cv op cmp)) (base-ev lam) lam 1)
+   (njit-loop lam B cv op cmp) (nif (emit (loopcode B cv op cmp arch)) (base-ev lam) lam 1)
    ; --- general N-VARIABLE loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)),
    ; up to 3 loop vars + arbitrary update exprs -- this is the shape iterative fib/tak
    ; take (i,a,b with updates b and a+b), not just the fold skeleton above.
@@ -147,7 +147,7 @@
           (\ n (cf-dot rrow (cf-mv (cf-mpow M n) (cf-aug inits))))
           (base-ev lam)))
    (njit-loop-n lam vars updates test result inits)
-    (nif (emit (loopcode-n (caup lam) vars updates test result inits)) (cf-deopt lam vars updates test result inits) lam 1)
+    (nif (emit (loopcode-n (caup lam) vars updates test result inits arch)) (cf-deopt lam vars updates test result inits) lam 1)
    ; --- captured-closure CONSTRUCTOR (\ p (\ q E)): a nest of 1-arg lambdas, E over
    ; {p,q}. Compiled as the flat 2-param native (\ p q E); applying it to p yields a
    ; native CAPTURED closure -- fully transparent (= the interpreter's ((2param) p)
@@ -997,16 +997,20 @@
    ; equal-but-distinct closure semantics (!(id? (\ x E) (\ x E))). A safe creation hook
    ; needs the POST-macro opfix seam + a CODE cache (distinct cells per instance). Future.)
    ; the lanes route to `arch` (the assembler target). on x86 (arch='x64) the FULL glaze runs. on arm64 the
-   ; INTEGER lanes are live -- leaf/n-ary/closure (jitir/jitnir) and the mutually-recursive arith GROUP
-   ; (autogroup -> jitgroupir), all arch-parameterized and validated under qemu (`make test_arm64`, which
-   ; builds tco=1 to match the native ABI: Ip/Hp/Sp in x1/x2/x3, the threaded Continue). The FLOAT-result,
-   ; counted-loop and float-grid lanes (jitfr / loopcode / autonat / castbuild's cask-fill) are still
-   ; x86-only emitters, so on arm64 they fall to the interpreter (autogroup carries every source rewrite
-   ; that lowers to the integer group, so fib/tak/primes still glaze).
-   (auto-ev e) (? (! x86?) (? (qual e)  (memo e (\ l (jitir l arch)))        ; arm64: integer lanes native, the rest interp
+   ; INTEGER lanes are live -- leaf/n-ary/closure (jitir/jitnir), the COUNTED LOOPS (loopcode/loopcode-n)
+   ; and the mutually-recursive arith GROUP (autogroup -> jitgroupir), all arch-parameterized and validated
+   ; under qemu (`make test_arm64`, which builds tco=1 to match the native ABI: Ip/Hp/Sp in x1/x2/x3, the
+   ; threaded Continue). The FLOAT lanes (jitfr float-result / autonat float-grids / castbuild's cask-fill)
+   ; are still x86-only emitters, so on arm64 they fall to the interpreter (autogroup carries every source
+   ; rewrite that lowers to the integer group, so fib/tak/primes still glaze).
+   (auto-ev e) (? (! x86?) (? (qual e)  (memo e (\ l (jitir l arch)))        ; arm64: integer lanes native, float interp
                                (qualn e) (memo e (\ l (jitnir l arch)))
                                (qualc e) (memo e (\ l (jitnir (flatc l) arch)))
-                               (base-ev (autogroup e)))                      ; group native (arch-aware); float/loops/grids -> interp
+                               (: li (loopinfo e)                            ; counted loops (arch-aware loopcode)
+                                  (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
+                                     (: ln (loopinfo-n e)
+                                        (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
+                                           (base-ev (autogroup e)))))))      ; group native (arch-aware); float -> interp
                   (qual e)  (memo e (\ l (jitir l arch)))
                   (qualn e) (memo e (\ l (jitnir l arch)))
                   (qualc e) (memo e (\ l (jitnir (flatc l) arch)))
