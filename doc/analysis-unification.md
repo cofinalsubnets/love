@@ -8,9 +8,15 @@ Landed so far:
 - `dechurch` (commit `3fcdc9ec`) — the canary peephole, below. `(N f x)` with a function
   operand → `f^N(x)` at compile time, so idiomatic church (`(2 (+ i) i)`) glazes instead of
   riding `num-ap`/interp.
-- **Step 1** (commit `9cf27181`) — `smfix` + `ho-fix` factored onto ONE shared
-  monotone-fixpoint harness, `monofix info st step size` in emit.l (the shared glaze layer).
-  Proves "one driver, many lattices" on already-sound code. Pure refactor, gate green.
+- **Step 1 — COMPLETE.** All four of the compiler's monotone fixpoints now run on one harness,
+  `(monofix st step size)` in prel (below every consumer; survives the egg mop). Commits:
+  `9cf27181` (`smfix` + `ho-fix`, the ascending fact-maps), `8e460f5d` (generalized to the
+  whole-transformer form + folded `gfix`, the descending candidate-set), `950b1181` (the
+  interpreter's in-place-mutating closure-capture fixpoint, via snapshot-before-step). One
+  driver, four lattices: ascending/descending/mutating. Pure refactor throughout, gate green
+  (2717×3, ai0 included — it bootstraps through the capture code). This proves the harness leg
+  of the plan end-to-end; steps 2–4 (fact table, kinds.l abstract interp, datalog.l rewrites)
+  build on it.
 
 ## Why
 
@@ -73,10 +79,12 @@ seminaive fixpoint once → a per-node fact table. Then:
 - New win: **devirt** — the dispatch-table skip on proven-numeric sites that `warn-kinds`
   never delivered.
 
-**(B) One fixpoint harness.** `ale:propagate` + `gfix` + `smfix` + `ho-fix` are the same
-monotone-ascending shape with different measures (`tally`/`sm-size`/`ho-sz`). One worklist
-driver parameterized by lattice (A), run **interleaved** — strictly *more precise* (string-ness,
-HO-ness, int/value typing cross-inform), not just less code.
+**(B) One fixpoint harness.** ✅ the driver exists — `monofix` (prel) hosts all four
+(`ale:propagate`/`gfix`/`smfix`/`ho-fix`), each a monotone chain with its own measure
+(`capsize`/`tally`/`sm-size`/`ho-sz`), ascending or descending or mutating. What's still future:
+running them **interleaved** over the shared lattice (A) — strictly *more precise* (string-ness,
+HO-ness, int/value typing cross-inform), not just less code. Today they're still separate
+passes that happen to share the engine.
 
 **(C) One rewrite engine — wire `datalog.l`'s guarded rewriting.** `debool`, `dechurch`,
 `dehof`-inline, `fold-consts`, `delet`, `defoliate` are all *guarded rewrite rules* whose guard
@@ -92,12 +100,13 @@ analysis, orthogonal.
 
 ## Sequencing (de-risked — no big-bang)
 
-1. **Merge `ho-fix` + `smfix` into one fixpoint harness.** ✅ DONE (`9cf27181`): the shared
-   `monofix info st step size` lives in emit.l; both fixpoints are now projections. Both
-   already sound and the right shape — proved "one driver, many lattices" with zero new
-   analysis risk. Pure refactor. NEXT: fold `gfix`/`grpfix` and `ale:propagate` onto it too
-   (they cross file/layer boundaries — `ale:propagate` is in ev.l, the interpreter layer, so a
-   truly-shared driver may want to live lower than emit.l).
+1. **Merge the fixpoints into one harness.** ✅ DONE — all four. `(monofix st step size)` lives
+   in prel (below every consumer, survives the mop). `smfix`+`ho-fix` (`9cf27181`), then a
+   generalization to the whole-transformer form + `gfix` (`8e460f5d`, the descending
+   candidate-set), then `ale:propagate` (`950b1181`, the interpreter's in-place-mutating
+   capture fixpoint, via measure-snapshot-before-step). One driver, four lattices
+   (ascending/descending/mutating), proved with zero analysis risk on already-sound code. The
+   one remaining int/value fixpoint, `grpfix`, is just `gfix`'s caller (already on monofix).
 2. **Add a fact table; move the QUERY sites** (`dcheap?`/`propk?`/`cval`) to read it — pass by
    pass, each contained, gate-checked.
 3. **Extend the lattice to the real `kinds.l` abstract interpretation + devirt** (the
