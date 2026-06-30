@@ -1,8 +1,11 @@
-; sum 0..N. written as a fold over a range -- the deforest/closeable idiom -- so
-; ai plays to its strength: the loop-closer (ai/glaze/auto.l loopclose) reads it and
-; collapses Σ_{i<N} i to the closed form N(N-1)/2, O(1) independent of N (the
-; degree-1 case of the engine that closes polysum). exact integer arithmetic,
-; promoting fixnum->wide->bignum exactly as the fold would, so it is =/show-identical
-; at every N. checksum = sum 0..100000 = 5000050000.
-(: (work n) (foldl (+) 0 (jot n))
- (bench "sum" (\ _ (work 100001))))
+; sum 0..N over a contiguous ARRAY -- the honest O(n) twin of sum.rs, structurally
+; matched: sum.rs collects a Vec<i64> and folds it, so ai builds the galaxy (iota,
+; the z-array 0..N-1 filled in one C loop) and reduces it with net (a C loop over
+; the cells) -- contiguous memory both sides, not a cons-spine with per-cell
+; interpreted dispatch. NEITHER side gets to close the sum: sum.rs funnels each
+; element through black_box, and here the array is MATERIALIZED into a value before
+; net, so ai's loop-closer (which only matches foldl/foldr over jot/map/filter
+; ranges) has nothing to fold -- the honest O(n) reduction runs. both sides build
+; AND reduce each rep. checksum = sum 0..100000 = 5000050000.
+(: (work _) (: d (iota 100001) (net d))
+ (bench "sum" work))

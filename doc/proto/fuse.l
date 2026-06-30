@@ -9,6 +9,29 @@
 ;
 ; metavars are 'f 'g 'x 'z 'a 'b; the rhs binders (acc elt w) are chosen OUTSIDE that
 ; set so subst leaves them alone (no capture). run: out/host/ai doc/proto/fuse.l
+;
+; --- fit with tele (autograd) --- this spike and tele/tele.l are the two halves of
+; one categorical picture from opposite directions. fuse is the COMPILE-TIME symbolic
+; rewrite (functor/nt laws, no eval, forward); tele is the RUNTIME define-by-run trace
+; (AD as the category of LENSES, reverse). same frame -- differentiation IS a
+; structure-preserving functor (Elliott, "the simple essence of AD") -- so they LAYER,
+; they don't merge: fuse optimizes the dataflow tele then differentiates. they meet at
+; the graph. three joins, cheapest first:
+;   1. fuse AS a graph optimizer over tele's forward source -- collapse elementwise
+;      chains BEFORE taping, so the fused op gets one tape node + one adjoint instead of
+;      three (kernel fusion, the XLA/torch.compile move). tele's forward exprs are
+;      first-order ((add (mul a b) c)) shapes the matcher ALREADY handles -- no new
+;      machinery. THE join to start with.
+;   2. law 3 (net.cat => +.(net x net), the +-hom) IS tele's backward pass: `back`
+;      sums a twice-consumed node's cotangents (tl-accum), and tl-sumto/tl-colsum are
+;      the adjoint of broadcast -- the reduce<->broadcast nt. fuse's naturality laws and
+;      tele's adjoint correctness are the SAME equations; stating sumto as fuse rules
+;      would machine-check them via run1's ev-both-and-compare.
+;   3. differentiation AS a rule IN the table (D(map g) = map (D g), D(f.g) = ..) would
+;      give SYMBOLIC forward-mode AD, complementing tele's runtime reverse mode. BLOCKED
+;      on the matcher: it is deliberately FIRST-ORDER (binders left untouched so subst
+;      can't capture), but D must recurse INTO (\ x body). needs binding-aware /
+;      higher-order matching -- a matcher upgrade, not a table row. the pretty endgame.
 
 (:
  none (mint 0)                                              ; the unforgeable fail/absent token
