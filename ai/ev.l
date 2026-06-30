@@ -502,7 +502,7 @@
     ; building [names..] on the stack; then PROPAGATE captures among mutually-recursive
     ; closures to a fixpoint, and return the lambdas with the let's OWN names dropped from
     ; each capture set (those are locals, resolved by wire, not imports).
-    (closures prs) (:- (propagate 0 l l l)
+    (closures prs) (:- (fixcaps l)
      s (c 'stk)
      _ (push c 'stk 0)
      (split a ps) (?
@@ -517,25 +517,23 @@
        (split a2 (cup ps))))
      l (split 0 prs)
      _ (pin c 'stk s)
-     ; propagate: if k1 references sibling k2, k2 must ALSO capture k1's imports (mutual
-     ; recursion). sweep all ordered pairs, pour k1's vars into k2 (addv); a sweep that adds
-     ; any var (n > 0) repeats until a full pass is stable -- then drop the let's own names.
-     (propagate n l k1 k2) (?
-      (&& k1 k2 !(= k1 k2) (member? (caap k1) (cup (cof (cap k2)))))
-       (>>= n (cup (cof (cap k1))) (: (addv n v)
-        (? (nil? v) (propagate n l k1 (cup k2))
-         (: var (cap v)
-            vars (cup (cof (cap k2)))
-            n2 (? (member? var vars) n
-               (: _ (cput (cap k2) (link (cap (cof (cap k2))) (link var vars)))
-                (+ 1 n)))
-            (addv n2 (cup v))))))
-      k2 (propagate n l k1 (cup k2))
-      k1 (propagate n l (cup k1) l)
-      n (propagate 0 l l l)                                    ; a pass added vars -> sweep again
-      (: j (map cap l)                                         ; stable: drop the let's own names
-         (dropj x) (link (cap x) (mkc (link (cap (cof x)) (foldl (flip ldel) (cup (cof x)) j))))
-       (map dropj l))))
+     ; capture propagation: if k1 references sibling k2, k2 must ALSO capture k1's imports (mutual
+     ; recursion). `pass1` sweeps all ordered pairs ONCE, pouring k1's vars into k2 IN PLACE (cput);
+     ; `monofix` (prel, the shared harness) repeats the pass until `capsize` (total imports, ascending)
+     ; stops growing -- the pass mutates the cells and returns the SAME list, so monofix's snapshot-BEFORE
+     ; size catches each pass's growth. Then drop the let's own names (locals, resolved by wire not import).
+     (pour e1 e2) (each (cup (cof e1))                         ; pour e1's imports into e2 (skip dups; prepend)
+        (\ var (? (member? var (cup (cof e2))) 0 (cput e2 (link (cap (cof e2)) (link var (cup (cof e2))))))))
+     (pass1 lst k1 k2) (? (atom? k1) lst                       ; one full sweep over ordered pairs k1 x k2
+        (atom? k2) (pass1 lst (cup k1) lst)                    ; k2 done -> next k1, reset k2
+        (&& !(= k1 k2) (member? (caap k1) (cup (cof (cap k2)))))   ; k2 references k1
+         (: _ (pour (cap k1) (cap k2)) (pass1 lst k1 (cup k2)))
+        (pass1 lst k1 (cup k2)))
+     (capsize lst) (foldl (\ a e (+ a (tally (cup (cof e))))) 0 lst)   ; total imports across closures (the measure)
+     (fixcaps lst) (: done (monofix lst (\ st (pass1 st st st)) capsize)
+                      j (map cap done)
+                      (dropj x) (link (cap x) (mkc (link (cap (cof x)) (foldl (flip ldel) (cup (cof x)) j))))
+                      (map dropj done)))
 
    (wire prs body even lams) (:
     ; weave: emit the binding defs left-to-right. a lambda def is RE-analyzed with its
