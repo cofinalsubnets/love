@@ -36,7 +36,6 @@
    (jitn lam) (jitnir lam 'x64)
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    (gfind p l) (? (atom? l) () (p (cap l)) (cap l) (gfind p (cup l)))     ; first elt matching p
-   (gfilt p l) (? (atom? l) () (p (cap l)) (link (cap l) (gfilt p (cup l))) (gfilt p (cup l)))   ; keep elts matching p
    chainkind (apof (link 0 0))                                                      ; lvm_chain's ap sentinel, for the inline two?/cap/cup kind test (cf. (apof "") for the string lane)
    mapkind (apof (tablet 0))                                                        ; lvm_map_lookup's sentinel, for the map-param entry guard + the (mpeep ..) probe
    mapmix 11400714819323198485                                                      ; the hash multiplier 0x9e3779b97f4a7c15 (= ai.c's map hash mult), for the inline probe
@@ -82,7 +81,7 @@
                    a2 (? (atom? gm) acc (foldl (\ ac j (: arg (nthl (cup e) j) (? (member? arg fp) (link (posof arg fp 0) ac) ac))) acc gm))   ; a string arg that is OUR param -> our string param
                    (foldl (\ ac x (walk x ac)) a2 (cup e)))
                 acc))
-              body (gfilt (\ k (suse? body (nthl fp k))) (rangeL 0 (tally fp)))))                        ; seed acc = DIRECT peep/tally params
+              body (filter (\ k (suse? body (nthl fp k))) (rangeL 0 (tally fp)))))                        ; seed acc = DIRECT peep/tally params
    (sm-size smap) (foldl (\ a e (+ a (tally (cup e)))) 0 smap)
    ; INTERPROCEDURAL string-param inference as a projection of the shared `monofix` harness (prel): the
    ; step recomputes every fn's smask from the whole (name . smask) map; sm-size (total mask width, ascending)
@@ -697,14 +696,14 @@
     (: parse (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d)))) defs)            ; (name params body) per fn
        syms (map cap parse)                                                            ; the fn names (call targets)
        efn (gfind (\ f (id? (cap f) entry)) parse)  k (tally (nthl efn 1))  eps (nthl efn 1) eb (nthl efn 2)
-       ord (link efn (gfilt (\ f (! (id? (cap f) entry))) parse))                      ; entry first (H_entry sits right after the OUTER)
+       ord (link efn (filter (\ f (! (id? (cap f) entry))) parse))                      ; entry first (H_entry sits right after the OUTER)
        valt (hasl eb)                                                                 ; entry value-typed (body conses) -> the value epilogue stores acc as-is
        info (map (\ f (L (cap f) (nthl f 1) (nthl f 2) (tally (nthl f 1)))) parse)     ; (name params body arity) -- for the interprocedural string fixpoint
-       smap0 (map (\ f (link (cap f) (gfilt (\ j (suse? (nthl f 2) (nthl (nthl f 1) j))) (rangeL 0 (nthl f 3))))) info)   ; per-fn DIRECT string params (peep/tally/pin)
+       smap0 (map (\ f (link (cap f) (filter (\ j (suse? (nthl f 2) (nthl (nthl f 1) j))) (rangeL 0 (nthl f 3))))) info)   ; per-fn DIRECT string params (peep/tally/pin)
        smask (gsm entry (smfix info smap0))                                            ; the entry's STRING params, propagated to a fixpoint -> raw pointer, kind-guarded
-       mmask (gfilt (\ j (muse? eb (nthl eps j))) (rangeL 0 k))                         ; entry MAP params (mpeep/mpin)
-       bufmask (gfilt (\ j (buse? eb (nthl eps j))) (rangeL 0 k))                       ; entry CASK params (pin)
-       cmask (gfilt (\ j (cuse? eb (nthl eps j))) (rangeL 0 k))                         ; entry CHAIN params (cap/cup/two?) -> raw, no guard
+       mmask (filter (\ j (muse? eb (nthl eps j))) (rangeL 0 k))                         ; entry MAP params (mpeep/mpin)
+       bufmask (filter (\ j (buse? eb (nthl eps j))) (rangeL 0 k))                       ; entry CASK params (pin)
+       cmask (filter (\ j (cuse? eb (nthl eps j))) (rangeL 0 k))                         ; entry CHAIN params (cap/cup/two?) -> raw, no guard
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask)
        Hs (foldl (\ a f (asm (L a (mkhir tgt syms (cap f) (nthl f 1) (nthl f 2))))) () ord)
        lrf (\ ds (? (atom? ds) (L entry) (: d (cap ds) (link (cap d) (link (cup d) (lrf (cup ds)))))))

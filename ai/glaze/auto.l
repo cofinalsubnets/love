@@ -194,7 +194,6 @@
                         (L (link (link (cap bs) (caup bs)) (cap r)) (caup r))))
    (anat-cond? e) (&& (two? e) (id? (cap e) '?))                 ; a (? ..) form?
    (afind pred l) (? (atom? l) () (pred (cap l)) (cap l) (afind pred (cup l)))
-   (afilter pred l) (? (atom? l) () (pred (cap l)) (link (cap l) (afilter pred (cup l))) (afilter pred (cup l)))
    ; the recurrence pair: a (? (&& ..) (SELF ..) ..) whose then-branch self-calls (head = its own name)
    (anat-rec? p) (: nm (cap (cap p)) body (cup p)
                     (&& (anat-cond? body) (two? (cup (cup body)))
@@ -266,7 +265,7 @@
    (norm-let body)
     (? (! (&& (two? body) (id? (cap body) ':) (! (atom? (cup body))))) body
        (: parsed (anat-defs (cup body)) pairs (cap parsed) result (caup parsed)
-          fnps (afilter (\ pr (two? (cap pr))) pairs) auxps (afilter (\ pr (! (two? (cap pr)))) pairs)
+          fnps (filter (\ pr (two? (cap pr))) pairs) auxps (filter (\ pr (! (two? (cap pr)))) pairs)
           (? (! (&& (= 1 (tally fnps)) (two? result))) body                                         ; need exactly one local fn + a call result
              (: g (cap (cap (cap fnps))) q (cup (cap (cap fnps))) gbody (cup (cap fnps))
                 (? (! (&& (id? (cap result) g) (= (tally (cup result)) (tally q)))) body            ; result must be (g inits..) matching arity
@@ -278,7 +277,7 @@
           (: F (cap nf) P (cup nf)  nl (cap pbody) inits (cup pbody)
              gnf (caup nl) g (cap gnf) q (cup gnf) GBODY (caup (cup nl))
              gn (intern (+ (string F) (+ "_" (string g))))                                        ; lifted name F_g (unique per enclosing fn)
-             fv (gfilt (\ pp (&& (occurs? pp GBODY) (! (member? pp q)))) P)                        ; enclosing params free in GBODY
+             fv (filter (\ pp (&& (occurs? pp GBODY) (! (member? pp q)))) P)                        ; enclosing params free in GBODY
              (L (link nf (link gn (cat fv inits)))                                                ; F's body -> (gn fv.. inits..)
                 (L (link (link gn (cat fv q)) (subst-call g gn fv GBODY)))))))                     ; new def: (gn fv.. q..) . GBODY'
    (unpair ps body) (? (atom? ps) (L body) (: pr (cap ps) (link (cap pr) (link (cup pr) (unpair (cup ps) body)))))   ; pairs + body -> a : binding list
@@ -325,7 +324,7 @@
       pp (anat-defs (cup THEN)) binds (cap pp) call (caup pp)
       pinpr (afind (\ b (: v (cup b) (&& (two? v) (id? (cap v) 'pin) (id? (caup v) H)))) binds)
       pv (cup pinpr) K (opd pv 1) V (opd pv 2)
-      others (afilter (\ b (! (id? b pinpr))) binds)
+      others (filter (\ b (! (id? b pinpr))) binds)
       inl (\ e (foldl (\ acc ob (subst-sym (cap ob) (cup ob) acc)) e others))                    ; inline the pure value-binds (e.g. k)
       nc (map (\ x (? (id? x H) (L 'pin H (inl K) (inl V)) x)) (subst-call g gn fv call))         ; (gn fv.. STEP) with H's slot threaded as (pin H k v) -- pin writes AND returns H, threading the map
       (L '? (subst-call g gn fv COND) nc 0))                                                      ; base -> 0 (the map result is discarded -- bumpok?)
@@ -340,19 +339,19 @@
        (? (! (&& (two? nf) (name? (cap nf)) (two? FBODY) (id? (cap FBODY) ':) (! (atom? (cup FBODY))))) (L Fpair ())
           (: F (cap nf) P (cup nf)
              parsed (anat-defs (cup FBODY)) ipairs (cap parsed) ibody (caup parsed)
-             sibnames (map caap (gfilt fnpair? ipairs))                                           ; all inner fn NAMES
-             valnames (map cap (gfilt (\ pr (! (fnpair? pr))) ipairs))                            ; inner value-binding names (bare symbols)
-             wlifts (gfilt (\ pr (&& (name? (wmaph pr sibnames)) (bumpok? (caap pr) pr ipairs ibody))) ipairs)   ; the hoistable WRITE-loops (map RMW, discarded result)
+             sibnames (map caap (filter fnpair? ipairs))                                           ; all inner fn NAMES
+             valnames (map cap (filter (\ pr (! (fnpair? pr))) ipairs))                            ; inner value-binding names (bare symbols)
+             wlifts (filter (\ pr (&& (name? (wmaph pr sibnames)) (bumpok? (caap pr) pr ipairs ibody))) ipairs)   ; the hoistable WRITE-loops (map RMW, discarded result)
              mapsz (foldl (\ m w (: H (wmaph w sibnames) bd (cup w)                                  ; PRESIZE: each write-loop's map H -> its counted bound N
                             cnd (? (&& (two? bd) (id? (cap bd) '?)) (opd bd 0) ())
                             N (? (&& (two? cnd) (id? (cap cnd) '<)) (opd cnd 1) ())                   ; cond (< i N) -> the bound
                             (? (&& (name? H) (! (id? N ()))) (link (link H N) m) m))) () wlifts)       ; so `(tablet 0)` -> `(tablet N)`: the native inserts never grow
-             lifts (cat (gfilt (\ pr (roloop? pr sibnames)) ipairs) wlifts)
+             lifts (cat (filter (\ pr (roloop? pr sibnames)) ipairs) wlifts)
              (? (atom? lifts) (L Fpair ())
-                (: remain (gfilt (\ pr (! (any (\ lp (id? pr lp)) lifts))) ipairs)                ; the NON-lifted inner bindings (by identity)
+                (: remain (filter (\ pr (! (any (\ lp (id? pr lp)) lifts))) ipairs)                ; the NON-lifted inner bindings (by identity)
                    specs (map (\ pr (link (caap pr)                                               ; per lift a spec (g gn fv..): name, hoisted name F_g, captures
                                   (link (intern (+ (string F) (+ "_" (string (caap pr)))))
-                                        (gfilt (\ s (&& (! (id? s '_)) (! (member? s (cuap pr))) (occurs? s (cup pr)))) (cat P valnames))))) lifts)   ; `_` is the throwaway/effect binding -- the loop body REBINDS it locally (the pin slot), never captures the enclosing one
+                                        (filter (\ s (&& (! (id? s '_)) (! (member? s (cuap pr))) (occurs? s (cup pr)))) (cat P valnames))))) lifts)   ; `_` is the throwaway/effect binding -- the loop body REBINDS it locally (the pin slot), never captures the enclosing one
                    (presz pr) (? (fnpair? pr) pr (: ms (afind (\ x (id? (cap x) (cap pr))) mapsz) v (cup pr)   ; a map binding `(H (tablet 0))` -> `(H (tablet N))`
                                   (? (&& (two? ms) (two? v) (id? (cap v) 'tablet)) (link (cap pr) `('tablet (cup ms))) pr)))   ; presize `(tablet N)` so the N native inserts never grow
                    rwp (map presz (foldl (\ ps sp (subst-pairs (cap sp) (caup sp) (cuup sp) ps)) remain specs))   ; rewrite (g A..) calls through every spec, then PRESIZE the maps
@@ -380,7 +379,7 @@
    (peep->mpeep P e) (? (two? e) (? (&& (id? (cap e) 'peep) (id? (caup e) P)) (link 'mpeep (map (\ x (peep->mpeep P x)) (cup e))) (map (\ x (peep->mpeep P x)) e)) e)
    (pin->mpin P e)   (? (two? e) (? (&& (id? (cap e) 'pin)  (id? (caup e) P)) (link 'mpin  (map (\ x (pin->mpin  P x)) (cup e))) (map (\ x (pin->mpin  P x)) e)) e)   ; a map param's (pin P k v) UPDATE -> (mpin P k v); a cask param is pin'd-not-peep'd so never in mps
    (mapfix-def def) (: nf (cap def) body (cup def)
-      mps (gfilt (\ P (&& (puse? body P) (! (tuse? body P)))) (cup nf))                              ; this fn's MAP params (peep'd, not tally'd)
+      mps (filter (\ P (&& (puse? body P) (! (tuse? body P)))) (cup nf))                              ; this fn's MAP params (peep'd, not tally'd)
       (link nf (foldl (\ b P (pin->mpin P (peep->mpeep P b))) body mps)))
    ; --- STRING-BUILDER fusion (castbuild): a string-accumulator LOOP -- (: (g v.. s ..) (? COND (g u.. (+ s X) ..) s)
    ;     (g i.. "" ..)) builds a string by repeated append; each `+` copies the whole prefix, so the build is
@@ -445,7 +444,7 @@
                    (: i (opd cond 0) n (opd cond 1) ci (posof i q 0) E (opd X 0) rargs (cup r) ia (nthl rargs ci)
                       (? (! (&& (= 0 (nthl inits ci)) (two? ia) (id? (cap ia) '+) (= 3 (tally ia)) (id? (opd ia 0) i) (= 1 (opd ia 1)))) ()   ; counter init 0, step (+ i 1)
                          (: F (cap nf) Fp (cup nf) s (nthl q si) fillnm (intern (+ (string F) "-fill")) cbn (intern (+ (string F) "-cb"))
-                            fv (gfilt (\ p (|| (occurs? p cond) (occurs? p r))) Fp)               ; enclosing params the loop reads
+                            fv (filter (\ p (|| (occurs? p cond) (occurs? p r))) Fp)               ; enclosing params the loop reads
                             fbody (L '? cond (link fillnm (cat fv (cbset rargs si (L 'pin s i E)))) i)   ; (? COND (F-fill fv.. (+ i 1) (pin s i E)) i)
                             wbody (link ': (L cbn (L 'cask n) '_ (link fillnm (cat fv (cbset inits si cbn))) (L 'string cbn)))
                             (L (link nf wbody) (link (link fillnm (cat fv q)) fbody))))))))))
@@ -462,10 +461,10 @@
    (fold-consts form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
-          consts (afilter (\ pr (&& (name? (cap pr)) (whole? (cup pr)))) pairs)
+          consts (filter (\ pr (&& (name? (cap pr)) (whole? (cup pr)))) pairs)
           (? (atom? consts) form
              (: sub (\ e (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e consts))
-                keep (afilter (\ pr (! (&& (name? (cap pr)) (whole? (cup pr))))) pairs)
+                keep (filter (\ pr (! (&& (name? (cap pr)) (whole? (cup pr))))) pairs)
                 (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
    ; --- HOF INLINE (dehof): inline a top-level `:`'s non-recursive lambda-CONSTANT bindings -- a plain-name
    ;     binding to a (\ ..) value, like the closure bench's twice/adder -- into every body, then `dsimp`
@@ -515,15 +514,15 @@
    (dehof form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
-          fns (afilter (\ p (ho-lamb? (cup p))) (map dehead pairs))                              ; lambda-valued (desugared) bindings = the group fns
+          fns (filter (\ p (ho-lamb? (cup p))) (map dehead pairs))                              ; lambda-valued (desugared) bindings = the group fns
           info (map (\ p (L (cap p) (ho-initl (cup (cup p))) (last (cup p)))) fns)                ; (name params body)
           hm (ho-fix info (map (\ f (link (cap f) (link 0 ()))) info))                            ; the higher-order fixpoint
           ho? (\ nm (: e (ho-assq nm hm) (&& (two? e) (|| (caup e) (two? (cuup e))))))             ; returns-fn OR takes-fn -> inline it
           lamc? (\ pr (: nd (dehead pr) (&& (ho-lamb? (cup nd)) (! (dcount (cap nd) (cup nd))) (ho? (cap nd)))))   ; a NON-RECURSIVE higher-order const
-          lamcs (map dehead (afilter lamc? pairs))
+          lamcs (map dehead (filter lamc? pairs))
           (? (atom? lamcs) form                                                                  ; no HOF const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
              (: sub (\ e (dsimp (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e lamcs)))         ; inline each HOF lamc, then beta-collapse
-                keep (afilter (\ pr (! (lamc? pr))) pairs)                                         ; non-HOF bindings keep their RAW form (grpfix recognizes define-sugar function heads)
+                keep (filter (\ pr (! (lamc? pr))) pairs)                                         ; non-HOF bindings keep their RAW form (grpfix recognizes define-sugar function heads)
                 (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
    ; --- CHURCH LOWERING (dechurch): a literal church application (N f x) -- N a small whole numeral,
    ;     f a FUNCTION (a lambda literal or a partial of a dyadic op, e.g. (+ i)) -- is f applied to x
@@ -676,9 +675,9 @@
    (autospec form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed)
-          fnps (afilter (\ pr (two? (cap pr))) pairs)
+          fnps (filter (\ pr (two? (cap pr))) pairs)
           defs (map (\ pr (link (caap pr) (link (cup (cap pr)) (link (cup pr) ())))) fnps)   ; (name (p..) body)
-          statps (afilter (\ pr (&& (name? (cap pr)) (sconst? (cup pr)))) pairs)
+          statps (filter (\ pr (&& (name? (cap pr)) (sconst? (cup pr)))) pairs)
           statenv (map (\ pr (L (cap pr) (sstat (caup (cup pr))))) statps)        ; name -> (stat datum)
           (? (! (&& (two? defs) (two? statenv))) form                            ; need a defined fn AND a static-data binding
              (swalk form statenv defs (map cap defs) (map cap statenv)))))
@@ -878,7 +877,7 @@
              (id? op '?)       (&& (= 4 (tally e)) (groupok? cm icands cps ps (caup e)) (vok? cm icands vcands cps ps (caup (cup e))) (vok? cm icands vcands cps ps (caup (cup (cup e)))))
              0))
        0)
-   (chps body ps) (gfilt (\ k (cuse? body (nthl ps k))) (rangeL 0 (tally ps)))                ; chain-param INDICES: params used in cap/cup/two? (cuse? from emit.l)
+   (chps body ps) (filter (\ k (cuse? body (nthl ps k))) (rangeL 0 (tally ps)))                ; chain-param INDICES: params used in cap/cup/two? (cuse? from emit.l)
    (grpok-1 fns cm icands vcands vnames c) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns)
                                 cps (map (\ k (nthl (cup (cap p)) k)) (cmlook (cap c) cm))      ; this fn's chain-param NAMES (its index list -> names)
                                 (? (member? (cap c) vnames) (vok? cm icands vcands cps (cup (cap p)) (cup p))   ; a VALUE fn -> value grammar
@@ -888,12 +887,12 @@
    ; set; tally (shrinking) is the measure. Converges when a pass drops nothing -- the closed glazeable subset.
    (gfix fns cm vnames cands)
     (monofix cands
-       (\ st (: icands (afilter (\ c (! (member? (cap c) vnames))) st)
-                vcands (afilter (\ c (member? (cap c) vnames)) st)
-                (afilter (\ c (grpok-1 fns cm icands vcands vnames c)) st)))
+       (\ st (: icands (filter (\ c (! (member? (cap c) vnames))) st)
+                vcands (filter (\ c (member? (cap c) vnames)) st)
+                (filter (\ c (grpok-1 fns cm icands vcands vnames c)) st)))
        tally)
    (grpfix fns cands) (: cm (map (\ f (link (cap (cap f)) (chps (cup f) (cup (cap f))))) fns)   ; (name . chain-param-index-list) for every candidate fn
-                         vnames (map (\ f (cap (cap f))) (afilter (\ f (hasl (cup f))) fns))    ; the VALUE-typed candidate names (body conses)
+                         vnames (map (\ f (cap (cap f))) (filter (\ f (hasl (cup f))) fns))    ; the VALUE-typed candidate names (body conses)
                          (gfix fns cm vnames cands))
    (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
       (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
@@ -907,9 +906,9 @@
    ; as a call arg, read via the param) is unaffected: the binding name never occurs inside the callee.
    (memo-leak? form)
     (: ps (cap (anat-defs (cup form)))
-       mn (gfilt (\ p (&& (atom? (cap p)) (two? (cup p)) (member? (cap (cup p)) '(tablet hash)))) ps)   ; names bound to a tablet/hash
-       (! (atom? (gfilt (\ p (&& (two? (cap p))                                                    ; a fn binding whose body ...
-          (! (atom? (gfilt (\ m (&& (occurs? (cap m) (cup p)) (! (member? (cap m) (cup (cap p)))))) mn))))) ps))))   ; ... references a mapname that is NOT its param
+       mn (filter (\ p (&& (atom? (cap p)) (two? (cup p)) (member? (cap (cup p)) '(tablet hash)))) ps)   ; names bound to a tablet/hash
+       (! (atom? (filter (\ p (&& (two? (cap p))                                                    ; a fn binding whose body ...
+          (! (atom? (filter (\ m (&& (occurs? (cap m) (cup p)) (! (member? (cap m) (cup (cap p)))))) mn))))) ps))))   ; ... references a mapname that is NOT its param
    (autogroup form0)
     (? (! (two? form0)) form0
        (! (id? (cap form0) ':)) form0
@@ -925,13 +924,13 @@
        (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
           parsed (anat-defs (cup form)) pairs (cap parsed)
-          fns (afilter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
+          fns (filter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
           (? (! (two? fns)) form0                                                            ; no candidate functions -> original
              (: armap (map (\ p (L (cap (cap p)) (- (tally (cap p)) 1))) fns)                 ; (name arity) candidates
                 grp (grpfix fns armap)                                                        ; the closed glazeable subset
                 (? (atom? grp) form0                                                          ; nothing survives the fixpoint -> original (un-lifted)
                    (: gnames (map cap grp)
-                      gdefs (map mapfix-def (afilter (\ p (member? (cap (cap p)) gnames)) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
+                      gdefs (map mapfix-def (filter (\ p (member? (cap (cap p)) gnames)) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
                       (link ': (rewrite-bindings (cup form) gnames gdefs))))))))              ; each binding of the LIFTED form -> its native
    ; --- TWIN LOWERING (twolow): a complex(TWIN)-recurrence grid -> the real-pair float grid the
    ;     float-grid lane (autonat/jitfgridn) ALREADY glazes -- so idiomatic complex code glazes with
@@ -1036,7 +1035,7 @@
                       (? (! (&& (two? itcmp) (id? (cap itcmp) '<) (two? c2))) form     ; cond = (&& (< it LIM) (cmp T B))
                          (: lim (opd itcmp 1) cmpop (cap c2) testexpr (opd c2 0) bound (opd c2 1)
                             cl (classify recps (cup then)) fvars (cap cl) updates (caup cl) invs (nthl cl 2)
-                            looppairs (afilter (\ q (! (id? q recp))) pairs)             ; the loop defs
+                            looppairs (filter (\ q (! (id? q recp))) pairs)             ; the loop defs
                             callees (map anat-callee looppairs)
                             outerp (afind (\ q (! (member? (cap (cap q)) callees))) looppairs)   ; the loop no loop calls
                             (? (! (two? outerp)) form
