@@ -511,7 +511,7 @@
        (: hd (cap e) ar (ho-ar hd info) (? (< ar 0) 0 (< (tally (cup e)) ar) 1 (ho-rf hd hm))))    ; non-group->0; PARTIAL->fn; full->g's result
    (ho-fn fp body info hm) (: fpm (ho-walkfp fp body hm) (link (? (ho-ret? body fp fpm info hm) 1 0) fpm))
    (ho-sz hm) (foldl (\ a e (+ a (+ (caup e) (tally (cuup e))))) 0 hm)                            ; monotone measure (rflags + |fpmask|)
-   (ho-fix info hm) (monofix info hm ho-fn ho-sz)                                                 ; higher-order lattice over the SHARED harness (emit.l); ho-fn already has the (fp body info st) shape
+   (ho-fix info hm) (monofix hm (\ st (map (\ f (link (cap f) (ho-fn (ho-nth f 1) (ho-nth f 2) info st))) info)) ho-sz)   ; higher-order lattice (ascending: rflags+|fpmask|) over the SHARED harness (prel)
    (dehof form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
@@ -883,11 +883,15 @@
                                 cps (map (\ k (nthl (cup (cap p)) k)) (cmlook (cap c) cm))      ; this fn's chain-param NAMES (its index list -> names)
                                 (? (member? (cap c) vnames) (vok? cm icands vcands cps (cup (cap p)) (cup p))   ; a VALUE fn -> value grammar
                                    (groupok? cm icands cps (cup (cap p)) (cup p))))             ; an INT fn -> int grammar (over INT candidates only)
-   (gfix fns cm vnames cands)                                                                  ; one fixpoint step over candidates split into int/value sets
-    (: icands (afilter (\ c (! (member? (cap c) vnames))) cands)
-       vcands (afilter (\ c (member? (cap c) vnames)) cands)
-       keep (afilter (\ c (grpok-1 fns cm icands vcands vnames c)) cands)                       ; drop fns that fail; iterate to a fixpoint
-       (? (= (tally keep) (tally cands)) keep (gfix fns cm vnames keep)))
+   ; the group-membership fixpoint as a DESCENDING projection of the shared `monofix` (prel): each step
+   ; drops candidates that fail the int/value grammar, recomputing the int/value split from the surviving
+   ; set; tally (shrinking) is the measure. Converges when a pass drops nothing -- the closed glazeable subset.
+   (gfix fns cm vnames cands)
+    (monofix cands
+       (\ st (: icands (afilter (\ c (! (member? (cap c) vnames))) st)
+                vcands (afilter (\ c (member? (cap c) vnames)) st)
+                (afilter (\ c (grpok-1 fns cm icands vcands vnames c)) st)))
+       tally)
    (grpfix fns cands) (: cm (map (\ f (link (cap (cap f)) (chps (cup f) (cup (cap f))))) fns)   ; (name . chain-param-index-list) for every candidate fn
                          vnames (map (\ f (cap (cap f))) (afilter (\ f (hasl (cup f))) fns))    ; the VALUE-typed candidate names (body conses)
                          (gfix fns cm vnames cands))

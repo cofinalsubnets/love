@@ -189,6 +189,13 @@
    (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (link (cap l) (ldel x (cup l)))))
    (all f l) (? (two? l) (? (f (cap l)) (all f (cup l)) 0) 1)   ; truth BITS (0/1, like =/</!), not ()
    (any f l) (? (two? l) (? (f (cap l)) 1 (any f (cup l))) 0)   ; -- a predicate's false is 0, the green floor
+   ; monofix: the shared monotone-fixpoint driver. Iterate `step` on the state until the `size` measure
+   ; stops changing -- one engine for every ascending/descending chain (the compiler's interprocedural
+   ; analyses: the glaze's smfix/ho-fix/gfix, the interpreter's closure-capture propagate). `size` must be
+   ; strictly monotone under `step` until the fixpoint, so equality == convergence (it ascends for a
+   ; growing fact-map, descends for a shrinking candidate set). The measure is snapshot BEFORE the step,
+   ; so a step that mutates the state IN PLACE (and returns it) is detected by the pre/post size delta.
+   (monofix st step size) (: b (size st) nx (step st) (? (= (size nx) b) nx (monofix nx step size)))
    (cat a b) (foldr link b a))
 ; sort: (sort l) orders l ascending by the total order -- the C lane (a stable
 ; bottom-up merge in the heap gap, one cmp3 per compare, no lisp re-entry);
