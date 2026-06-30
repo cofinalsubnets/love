@@ -1,7 +1,16 @@
 # Unifying the analysis & rewrite layers
 
-Status: design (2026-06-30). No code moved yet. Probe the binary before trusting any claim
-here — this is a plan, the passes it describes are live and `make test` green.
+Status: in progress (2026-06-30). Step 1 landed + `dechurch` ("rule #1") landed; steps 2–4
+pending. Probe the binary before trusting any claim here — the passes it describes are live
+and `make test` green.
+
+Landed so far:
+- `dechurch` (commit `3fcdc9ec`) — the canary peephole, below. `(N f x)` with a function
+  operand → `f^N(x)` at compile time, so idiomatic church (`(2 (+ i) i)`) glazes instead of
+  riding `num-ap`/interp.
+- **Step 1** (commit `9cf27181`) — `smfix` + `ho-fix` factored onto ONE shared
+  monotone-fixpoint harness, `monofix info st step size` in emit.l (the shared glaze layer).
+  Proves "one driver, many lattices" on already-sound code. Pure refactor, gate green.
 
 ## Why
 
@@ -83,8 +92,12 @@ analysis, orthogonal.
 
 ## Sequencing (de-risked — no big-bang)
 
-1. **Merge `ho-fix` + `smfix` into one fixpoint harness.** Both already sound and the right
-   shape — proves "one driver, many lattices" with zero new analysis risk. Pure refactor.
+1. **Merge `ho-fix` + `smfix` into one fixpoint harness.** ✅ DONE (`9cf27181`): the shared
+   `monofix info st step size` lives in emit.l; both fixpoints are now projections. Both
+   already sound and the right shape — proved "one driver, many lattices" with zero new
+   analysis risk. Pure refactor. NEXT: fold `gfix`/`grpfix` and `ale:propagate` onto it too
+   (they cross file/layer boundaries — `ale:propagate` is in ev.l, the interpreter layer, so a
+   truly-shared driver may want to live lower than emit.l).
 2. **Add a fact table; move the QUERY sites** (`dcheap?`/`propk?`/`cval`) to read it — pass by
    pass, each contained, gate-checked.
 3. **Extend the lattice to the real `kinds.l` abstract interpretation + devirt** (the
