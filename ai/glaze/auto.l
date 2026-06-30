@@ -473,14 +473,57 @@
    ;     reduces to first-order arithmetic (3i) that lift+autogroup glaze; the inlined lambdas are dropped
    ;     (like fold-consts). dsimp is the same hygienic beta engine deforestation uses; the closed-lambda /
    ;     distinct-loop-var common case is capture-safe. No-op on any `:` with no lambda-const binding.
-   (dehof-lam? pr) (&& (name? (cap pr)) (: v (cup pr) (&& (two? v) (id? (cap v) '\) (< 2 (tally v)) (! (dcount (cap pr) v)))))
+   ; desugar a binding head so a define-sugar `(f a..) body` is treated the SAME as the explicit
+   ; `f (\ a.. body)` -- the surface form must not decide anything (was: `(name? (cap pr))` on the RAW
+   ; head, which rejected define-sugar, making glazeability depend on how a sibling binding was spelled).
+   (dehead pr) (: h (cap pr) (? (atom? h) pr (link (cap h) (link '\ (cat (cup h) (L (cup pr)))))))   ; (f a..) body -> (f . (\ a.. body)); a plain name binding passes through (dsug is mopped post-egg)
+   ; --- HIGHER-ORDER inference (smfix-shaped): a group fn is HIGHER-ORDER iff it RETURNS a function or
+   ;     TAKES a function param. dehof inlines exactly the HO fns -- the group lane is FIRST-ORDER (params
+   ;     are integer values), so a HOF can ONLY glaze by being inlined + dsimp-collapsed; a first-order fn
+   ;     (prime?/count, identity) is left for grpfix to GROUP. A monotone fixpoint over the call graph
+   ;     (cf. emit.l's smask string-param inference): func-param(f,k) = param k is APPLIED in operator
+   ;     position OR PASSED to a callee's func-param; func-result(f) = body yields a function (a lambda,
+   ;     a PARTIAL call, a call to a HO-result fn, a func-typed param, or a ?-branch that does). SOUND:
+   ;     marks HO only when PROVABLE -- a missed HOF merely falls to interp (the param fixnum-guard deopts),
+   ;     never a wrong answer. Semantic + desugared, so it no longer depends on surface form. Local helpers
+   ;     (ho-*) avoid the post-egg-mopped boxfix globals (dsug/lambp/assoc/init).
+   (ho-initl l) (? (atom? (cup l)) () (link (cap l) (ho-initl (cup l))))                         ; all but the last
+   (ho-lamb? v) (&& (two? v) (id? (cap v) '\) (< 2 (tally v)))
+   (ho-any p l) (foldl (\ a x (|| a (p x))) 0 l)
+   (ho-memb x l) (? (atom? l) 0 (id? (cap l) x) 1 (ho-memb x (cup l)))
+   (ho-posn x l i) (? (atom? l) -1 (id? (cap l) x) i (ho-posn x (cup l) (+ i 1)))
+   (ho-dedup l) (? (atom? l) () (ho-memb (cap l) (cup l)) (ho-dedup (cup l)) (link (cap l) (ho-dedup (cup l))))
+   (ho-assq k l) (? (atom? l) () (id? (cap (cap l)) k) (cap l) (ho-assq k (cup l)))                ; entry (k . rest) by car
+   (ho-nth l i) (? (= i 0) (cap l) (ho-nth (cup l) (+ -1 i)))
+   (ho-fpm nm hm) (: e (ho-assq nm hm) (? (two? e) (cuup e) ()))                                  ; nm's func-param mask
+   (ho-rf nm hm) (: e (ho-assq nm hm) (? (two? e) (caup e) 0))                                    ; nm returns a function?
+   (ho-ar nm info) (: e (ho-assq nm info) (? (two? e) (tally (caup e)) -1))                       ; nm's arity, -1 if not a group fn
+   (ho-walkfp fp body hm)                                                                         ; func-param mask of fp in body
+    (ho-dedup ((: (walk e acc) (? (! (two? e)) acc
+                  (: hd (cap e) a0 (? (ho-memb hd fp) (link (ho-posn hd fp 0) acc) acc)            ; (p ..) -> p applied as a fn
+                     gm (ho-fpm hd hm)
+                     a1 (? (atom? gm) a0 (foldl (\ ac j (: arg (ho-nth (cup e) j) (? (ho-memb arg fp) (link (ho-posn arg fp 0) ac) ac))) a0 gm))   ; OUR param at a callee's func-pos
+                     (foldl (\ ac x (walk x ac)) a1 (cup e))))) body ()))
+   (ho-ret? e fp fpm info hm)                                                                     ; does e yield a function?
+    (? (atom? e) (&& (ho-memb e fp) (ho-memb (ho-posn e fp 0) fpm))                               ; a func-typed param
+       (id? (cap e) '\) (ho-lamb? e)                                                              ; a lambda literal
+       (id? (cap e) '?) (ho-any (\ b (ho-ret? b fp fpm info hm)) (cup e))                          ; a ?-branch that does
+       (: hd (cap e) ar (ho-ar hd info) (? (< ar 0) 0 (< (tally (cup e)) ar) 1 (ho-rf hd hm))))    ; non-group->0; PARTIAL->fn; full->g's result
+   (ho-fn fp body info hm) (: fpm (ho-walkfp fp body hm) (link (? (ho-ret? body fp fpm info hm) 1 0) fpm))
+   (ho-sz hm) (foldl (\ a e (+ a (+ (caup e) (tally (cuup e))))) 0 hm)                            ; monotone measure (rflags + |fpmask|)
+   (ho-fix info hm) (: nx (map (\ f (link (cap f) (ho-fn (ho-nth f 1) (ho-nth f 2) info hm))) info) (? (= (ho-sz nx) (ho-sz hm)) nx (ho-fix info nx)))
    (dehof form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
-          lamcs (afilter dehof-lam? pairs)
-          (? (atom? lamcs) form
-             (: sub (\ e (dsimp (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e lamcs)))   ; inline each lamc, then beta-collapse
-                keep (afilter (\ pr (! (dehof-lam? pr))) pairs)
+          fns (afilter (\ p (ho-lamb? (cup p))) (map dehead pairs))                              ; lambda-valued (desugared) bindings = the group fns
+          info (map (\ p (L (cap p) (ho-initl (cup (cup p))) (last (cup p)))) fns)                ; (name params body)
+          hm (ho-fix info (map (\ f (link (cap f) (link 0 ()))) info))                            ; the higher-order fixpoint
+          ho? (\ nm (: e (ho-assq nm hm) (&& (two? e) (|| (caup e) (two? (cuup e))))))             ; returns-fn OR takes-fn -> inline it
+          lamc? (\ pr (: nd (dehead pr) (&& (ho-lamb? (cup nd)) (! (dcount (cap nd) (cup nd))) (ho? (cap nd)))))   ; a NON-RECURSIVE higher-order const
+          lamcs (map dehead (afilter lamc? pairs))
+          (? (atom? lamcs) form                                                                  ; no HOF const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
+             (: sub (\ e (dsimp (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e lamcs)))         ; inline each HOF lamc, then beta-collapse
+                keep (afilter (\ pr (! (lamc? pr))) pairs)                                         ; non-HOF bindings keep their RAW form (grpfix recognizes define-sugar function heads)
                 (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
    ; --- LOCAL LET (delet): inline a PURE value-let -- (: n1 v1 .. result), every binding a plain symbol
    ;     (no local fn -> that is norm-let/lift's job), names distinct -- into ONE fragment expression by
