@@ -511,7 +511,7 @@
        (: hd (cap e) ar (ho-ar hd info) (? (< ar 0) 0 (< (tally (cup e)) ar) 1 (ho-rf hd hm))))    ; non-group->0; PARTIAL->fn; full->g's result
    (ho-fn fp body info hm) (: fpm (ho-walkfp fp body hm) (link (? (ho-ret? body fp fpm info hm) 1 0) fpm))
    (ho-sz hm) (foldl (\ a e (+ a (+ (caup e) (tally (cuup e))))) 0 hm)                            ; monotone measure (rflags + |fpmask|)
-   (ho-fix info hm) (: nx (map (\ f (link (cap f) (ho-fn (ho-nth f 1) (ho-nth f 2) info hm))) info) (? (= (ho-sz nx) (ho-sz hm)) nx (ho-fix info nx)))
+   (ho-fix info hm) (monofix info hm ho-fn ho-sz)                                                 ; higher-order lattice over the SHARED harness (emit.l); ho-fn already has the (fp body info st) shape
    (dehof form)
     (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
        (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)

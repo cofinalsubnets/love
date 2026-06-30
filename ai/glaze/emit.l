@@ -84,7 +84,17 @@
                 acc))
               body (gfilt (\ k (suse? body (nthl fp k))) (rangeL 0 (tally fp)))))                        ; seed acc = DIRECT peep/tally params
    (sm-size smap) (foldl (\ a e (+ a (tally (cup e)))) 0 smap)
-   (smfix info smap) (: nx (map (\ f (link (cap f) (fnsm (nthl f 1) (nthl f 2) smap))) info) (? (= (sm-size nx) (sm-size smap)) nx (smfix info nx)))   ; iterate to a fixpoint
+   ; --- the SHARED monotone-fixpoint harness (analysis-unification step 1). The glaze's interprocedural
+   ;     analyses are all the same ascending-chain shape: a (name . fact) map over a group's fns, each fn's
+   ;     fact recomputed from the whole map's current state, iterated until a SIZE measure stops growing.
+   ;     `monofix` is that one driver, parameterized by `step` (recompute one fn's fact: (params body info st))
+   ;     and `size` (the monotone measure). Both the string-param fixpoint (smfix, here) and the higher-order
+   ;     fixpoint (ho-fix, auto.l) are projections of it -- different lattice, same engine. info entries are
+   ;     (name params body ..), so params/body sit at indices 1/2 for every lattice.
+   (monofix info st step size)
+    (: nx (map (\ f (link (cap f) (step (nthl f 1) (nthl f 2) info st))) info)
+       (? (= (size nx) (size st)) nx (monofix info nx step size)))
+   (smfix info smap) (monofix info smap (\ fp body inf st (fnsm fp body st)) sm-size)   ; string-param lattice: fnsm ignores info (no cross-fn arity needed)
    ; --- counted fold loop: acc = (FOLD over cv<n of body(cv)), cv the counter, limit
    ; at Sp[0]. FOLD is a (op . init) -- + folds from 0, * from 1 -- and cmp is the loop
    ; test's comparison (the loop runs while (cmp cv n)). Now fully neutral IR, both targets.
