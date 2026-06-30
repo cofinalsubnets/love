@@ -196,6 +196,15 @@
    ; growing fact-map, descends for a shrinking candidate set). The measure is snapshot BEFORE the step,
    ; so a step that mutates the state IN PLACE (and returns it) is detected by the pre/post size delta.
    (monofix st step size) (: b (size st) nx (step st) (? (= (size nx) b) nx (monofix nx step size)))
+   ; kconst: the one constant-form recognizer -- a present (1 . value) iff e is a constant form (a
+   ; non-symbol atom or a (\ v) quote of one), else () (no fact, NOT a number -- absence is the unit).
+   ; The compiler's constant queries are projections of it across scopes that can't otherwise share
+   ; (feels' cval, cprop's propk?, wxc's cst) -- one fact, many readers. (No `&&`: it is a macro defined
+   ; later in prel, and a single-pass bootstrap can't expand a forward macro.)
+   (kconst e) (? (nom? e) ()                                                    ; a variable -> no fact
+                 (atom? e) (link 1 e)                                           ; a literal -> (1 . itself)
+                 (id? (cap e) '\) (? (atom? (cuup e)) (link 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
+                 ())
    (cat a b) (foldr link b a))
 ; sort: (sort l) orders l ascending by the total order -- the C lane (a stable
 ; bottom-up merge in the heap gap, one cmp3 per compare, no lisp re-entry);

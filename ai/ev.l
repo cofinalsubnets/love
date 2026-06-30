@@ -37,10 +37,6 @@
 (: feels (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
-   (cval e) (? (nom? e) (link 0 0)               ; (const? . value): 1 head iff a literal
-               (atom? e) (link 1 e)
-               (&& (id? (cap e) '\) (atom? (cuup e))) (link 1 (caup e))
-               (link 0 0))
    (bake v) (? (charm? v) v (list '\ v))           ; value -> source: fixnum bare else quote
    ; (op . arity) iff v is a nif. `id?` (identity) not `=`: a non-nif global may peep to
    ; a word that looks like a heap pointer, which `=`/eql would deref and crash on.
@@ -49,7 +45,7 @@
                0)
    (hgen v op ar pure x) (: as (cup x) n (tally as)
     (go hv a) (? (atom? a) (bake hv)             ; all args constant -> fold to a value
-     (: cv (cval (cap a))
+     (: cv (kconst (cap a))
       (? (&& pure (cap cv)) (go (hv (cup cv)) (cup a))         ; static arg: fold it into the partial
          (&& op (= n ar)) (link iop (link op as))              ; matching-arity nif -> inline (the hot path, keep)
          (id? hv v)                                            ; no static prefix folded -> the original apply
@@ -184,18 +180,11 @@
    ; cst: a post-wx test that is a compile-time CONSTANT -> (1 . falsy?), else 0. mirrors feels'
    ; cval (a non-symbol atom, or a (\ v) quote of one); the cond tests g_false == nil?, so the
    ; constant's truth is exactly nil? of its value -- a folded test prunes its dead branch.
-   ; kc: the constant-form recognizer (const? . value) for this compiler block -- one recognizer, the
-   ; cprop/wxc constant queries (cst, propk?) are its projections. Identical to feels' `cval` but
-   ; re-derived: feels is a SEPARATE top-level scope (its bindings are local to its block), so the two
-   ; can't share without a global. A shared low layer would unify them (analysis-unification step 2).
-   (kc e) (? (nom? e) (link 0 0)
-              (atom? e) (link 1 e)
-              (&& (id? (cap e) '\) (atom? (cuup e))) (link 1 (caup e))
-              (link 0 0))
-   ; cst: re-read kc's (const? . value) as (const? . falsy?) -- the constant's truth is exactly nil? of
-   ; its value, so a folded test prunes its dead branch.
-   (cst t) (: c (kc t)
-              (? (cap c) (link 1 (nil? (cup c)))       ; kc knows it (atom / quote literal)
+   ; cst: re-read the shared `kconst` (const? . value, prel) as (const? . falsy?) -- the constant's truth
+   ; is exactly nil? of its value, so a folded test prunes its dead branch. One recognizer (kconst) across
+   ; scopes that can't otherwise share (feels' cval was the same logic; cprop's propk? is the const? bit).
+   (cst t) (: c (kconst t)
+              (? (cap c) (link 1 (nil? (cup c)))       ; kconst knows it (atom / quote literal)
                  (&& (atom? (cup t)) (atom? (cap t)) (nil? (nom? (cap t)))) (link 1 (nil? (cap t)))  ; PLUS (c) == c: a folded monadic (opfix wraps (! e) -> ((nil? e)), so a folded test lands wrapped)
                  0))
    (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (cflip bs))
@@ -228,7 +217,7 @@
    ; OFFLINE partial evaluator, doc/proto/mix.l, where static DATA folds too. cprop runs before wx
    ; (pre-boxfix, pre-expansion); only an already-constant RHS propagates (a forward ref / cell read
    ; never is -- letrec-safe); a non-constant rebind or a lambda param KILLS the name.
-   (propk? v) (cap (kc v))   ; a constant FORM? -- the const? bit of the block's kc recognizer (cf. cst, the falsy projection)
+   (propk? v) (cap (kconst v))   ; a constant FORM? -- the const? bit of the shared kconst recognizer (prel; cf. cst, the falsy projection)
    (assq k se) (? (atom? se) 0 (id? k (caap se)) (cap se) (assq k (cup se)))
    (rmq k se) (? (atom? se) () (id? k (caap se)) (rmq k (cup se)) (link (cap se) (rmq k (cup se))))
    (strip ps se) (? (atom? ps) se (strip (cup ps) (rmq (cap ps) se)))                 ; kill all params
