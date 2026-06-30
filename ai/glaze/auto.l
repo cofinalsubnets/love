@@ -18,8 +18,7 @@
 ; rebind; njit-loop/njit-loop-n call the captured base-ev -> no jit<->ev re-entry. Load AFTER
 ; ai/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 (: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)
-(: _ (? (peep book 'autogroup 0) (scare 'glaze-already-loaded 'reload-unsupported) 0)   ; REFUSE a re-load: the glaze isn't re-loadable -- compiling its own source through the already-baked glaze corrupts a thread under autospec (a fixnum-1 lands in a continuation slot -> the VM jumps to garbage). `autogroup` already in the book => loaded; scare GRACEFULLY (the : aborts at this first binding, before any glaze name is redefined, so the baked glaze stays intact) instead of segfaulting. Probe the binary, not this comment.
-   base-ev (peep book 'base-ev ev)   ; the PURE interpreter, captured ONCE: first load -> ev (interpreter); a RE-LOAD (glaze cat'd on the baked glaze) has ev=auto-ev already, so KEEP the interpreter already in the book (else base-ev becomes the glaze and autospec's static fold re-enters it)
+(: base-ev (peep book 'base-ev ev)   ; the PURE interpreter, captured ONCE: first load -> ev (interpreter); a RE-LOAD (glaze cat'd on the baked glaze) has ev=auto-ev already, so KEEP the interpreter already in the book (else base-ev becomes the glaze and autospec's static fold re-enters it)
    arch (intern ai-arch)                ; the host CPU as the assembler target ('x64 / 'arm64); glaze loads only on these
    x86? (id? arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v: var | int | arith | cmp | (? t a b)
