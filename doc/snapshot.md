@@ -170,6 +170,4 @@ Departures from the original plan above, worth noting:
      addresses). Options: dump from the KERNEL binary (unexec — boot in qemu, serialize, emit the bytes
      over serial, `objcopy` into the kernel, RELINK with image.o placed LAST so .text/.rodata addresses
      don't shift — the kernel is non-PIE so absolute pointers stay valid only if nothing moves); or a
-     layout-stable shared TU. An AI_NOGEN kernel could alternatively load into the MAIN pool (gcg) instead
-     of the major — a `ai_image_load` variant — sidestepping knot 1 but not knot 2. Resolves cold start on
-     the MCU too.
+     layout-stable shared TU. Resolves cold start on the MCU too.

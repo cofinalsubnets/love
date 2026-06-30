@@ -217,9 +217,11 @@ the minor.
    (d) GRADUATE the minor out of AI_STAT *(done)*: gen is now the DEFAULT runtime, not a dev-only build.
    AI_STAT defaults on (a no-op gate naming the counters); all gen allocation routes through `g->alloc`
    (freestanding -- no raw malloc), so the collector ACTIVATES wherever the frontend's allocator supplies
-   the major pool. The **host and wasm** (emscripten) run generational and pass the whole corpus; a fixed-
-   arena embedded target falls back to gcg; `-DAI_NOGEN` forces gcg (the kernel build sets it -- kship must
-   bound gen with `g->budget` = its RAM before flipping it on, else two growing pools exhaust kmallocw).
+   the major pool. The **host and wasm** (emscripten) run generational and pass the whole corpus; the
+   kernel/kship run it too, bounded by `g->budget` = its RAM (else two growing pools exhaust kmallocw).
+   (Gen is now the ONLY collector -- the non-generational `gcg` and the `-DAI_NOGEN` escape hatch were
+   removed once they proved broken + unused; a frontend whose allocator can't supply the major pool no
+   longer runs. The "today's gcg" baseline this doc compares against is therefore historical.)
    Running the FULL corpus on gen for the first time (it never had been -- only the diff oracle) exposed a
    latent **print-path** bug, here since stage 3: `fn_src`/`ttag` assumed a single pool, so `show` of a
    TENURED closure could not find its source `value[-1]` in the major pool (the closure itself was always
