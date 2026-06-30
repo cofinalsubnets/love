@@ -406,6 +406,9 @@
     (: dch '(: (f i) (2 (+ i) i)                                                          ; (2 (+ i) i) = (+ i (+ i i)) = 3i
                ((: (go k a) (? (< k 100) (go (+ k 1) (+ a (f k))) a)) 0 0))
        (&& !(id? (autogroup dch) dch) (14850 = (ev dch)) (= (base-ev dch) (ev dch))))     ; Σ 3k for k<100 = 3·4950
+    (: dchk '(: (f i) ((2 (+ i)) i)                                                       ; CURRIED surface form ((2 (+ i)) i) -- same value as (2 (+ i) i), must compile the same
+                ((: (go k a) (? (< k 100) (go (+ k 1) (+ a (f k))) a)) 0 0))
+       (&& !(id? (autogroup dchk) dchk) (14850 = (ev dchk)) (= (base-ev dchk) (ev dchk))))
     (: dchl '(: (f i) (2 (\ a (* a a)) i)                                                 ; (2 sqr i) = (sqr (sqr i)) = i^4
                 ((: (go k a) (? (< k 10) (go (+ k 1) (+ a (f k))) a)) 0 0))
        (&& !(id? (autogroup dchl) dchl) (15333 = (ev dchl)) (= (base-ev dchl) (ev dchl))))  ; Σ k^4 for k<10

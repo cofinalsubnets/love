@@ -543,7 +543,9 @@
     (? (atom? e) e  (dquote? e) e
        (: y (map dechurch e)                                                                           ; bottom-up: lower nested church first
           (? (&& (= 3 (tally y)) (whole? (cap y)) (<= 0 (cap y)) (< (cap y) 64) (dch-fn? (cap (cup y))))
-             (dch-nest (cap (cup y)) (cap y) (cap (cup (cup y))))                                       ; (N f x) -> f^N(x)
+             (dch-nest (cap (cup y)) (cap y) (cap (cup (cup y))))                                       ; (N f x) -> f^N(x), the FLAT surface form
+             (&& (= 2 (tally y)) (two? (cap y)) (= 2 (tally (cap y))) (whole? (caap y)) (<= 0 (caap y)) (< (caap y) 64) (dch-fn? (caup (cap y))))
+             (dch-nest (caup (cap y)) (caap y) (caup y))                                                ; ((N f) x) -> f^N(x), the CURRIED surface form -- ((2 (+ i)) i) and (2 (+ i) i) are the same value, so compile the same
              y)))
    ; --- LOCAL LET (delet): inline a PURE value-let -- (: n1 v1 .. result), every binding a plain symbol
    ;     (no local fn -> that is norm-let/lift's job), names distinct -- into ONE fragment expression by
