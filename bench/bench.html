@@ -78,32 +78,32 @@ solver pulls away from an interpreted one &mdash; the honest other side of the l
 table above.</p>
 <div class="wrap">
 <table><thead><tr><th>instance</th><th>cadical</th><th>kissat</th><th>picosat</th><th>minisat</th><th>glucose</th><th class='ai'>ai</th></tr></thead><tbody>
-<tr><th>php5</th><td class=''>4.576</td><td class=''>3.664</td><td class='fast '>2.762</td><td class=''>3.979</td><td class=''>4.351</td><td class='ai '>15.000</td></tr>
-<tr><th>php6</th><td class=''>5.591</td><td class=''>5.566</td><td class='fast '>5.202</td><td class=''>7.570</td><td class=''>5.943</td><td class='ai '>216.0</td></tr>
-<tr><th>php7</th><td class='fast '>8.237</td><td class=''>18.569</td><td class=''>27.057</td><td class=''>39.878</td><td class=''>42.668</td><td class='ai '>6928.0</td></tr>
-<tr><th>php8</th><td class='fast '>12.122</td><td class=''>75.018</td><td class=''>234.3</td><td class=''>282.6</td><td class=''>928.3</td><td class='ai to'>timeout</td></tr>
-<tr class='netrow'><th>net</th><td class='net'>30.526</td><td class='net'>102.8</td><td class='net'>269.4</td><td class='net'>334.0</td><td class='net'>981.2</td><td class='net ai'>dnf</td></tr></tbody></table>
+<tr><th>php5</th><td class=''>4.315</td><td class=''>3.745</td><td class='fast '>2.696</td><td class=''>3.670</td><td class=''>4.148</td><td class='ai '>15.000</td></tr>
+<tr><th>php6</th><td class=''>5.591</td><td class=''>5.819</td><td class='fast '>4.651</td><td class=''>7.485</td><td class=''>5.859</td><td class='ai '>213.0</td></tr>
+<tr><th>php7</th><td class='fast '>8.229</td><td class=''>17.393</td><td class=''>26.396</td><td class=''>39.800</td><td class=''>40.838</td><td class='ai '>6641.0</td></tr>
+<tr><th>php8</th><td class='fast '>12.982</td><td class=''>74.897</td><td class=''>231.3</td><td class=''>278.2</td><td class=''>911.3</td><td class='ai to'>timeout</td></tr>
+<tr class='netrow'><th>net</th><td class='net'>31.117</td><td class='net'>101.9</td><td class='net'>265.0</td><td class='net'>329.2</td><td class='net'>962.1</td><td class='net ai'>dnf</td></tr></tbody></table>
 </div>
 <script>
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","deforest","primes","bell","strcat","strscan","hash","sort","tree","bintrees","mandelbrot","closure","cdcl","setup"];
 const PER={};
-PER["fib"]={"ai":4.4844,"go":3.9564,"rust":2.0985,"java":2.7369,"julia":4.7822,"luajit":8.0189,"pypy":8.6007,"node":7.8703,"elixir":7.5353,"chez":6.2812,"sbcl":5.7505};
-PER["tak"]={"ai":0.5195,"go":0.4787,"rust":0.3519,"java":0.3417,"julia":0.6986,"luajit":1.4140,"pypy":2.4590,"node":1.0242,"elixir":0.8913,"chez":0.6426,"sbcl":4.2191};
-PER["sum"]={"ai":0.2480,"go":0.1104,"rust":0.0519,"java":0.2105,"julia":0.0853,"luajit":0.0733,"pypy":0.2740,"node":0.8146,"elixir":0.5058,"chez":0.5273,"sbcl":0.7325};
-PER["deforest"]={"ai":0.0579,"go":0.0451,"rust":0.0121,"java":0.0143,"julia":0.0190,"luajit":0.0628,"pypy":0.1562,"node":1.2826,"elixir":0.4691,"chez":0.2480,"sbcl":0.2510};
-PER["primes"]={"ai":1.3125,"go":0.9185,"rust":0.8209,"java":0.8180,"julia":0.9206,"luajit":0.8466,"pypy":1.3980,"node":0.8416,"elixir":2.5643,"chez":1.8047,"sbcl":5.1255};
-PER["bell"]={"ai":70.7500,"go":25.4053,"java":36.6500,"julia":77.7782,"pypy":26.9811,"node":30.0166,"elixir":34.5003,"chez":71.5000,"sbcl":54.2548};
-PER["strcat"]={"ai":0.0295,"go":0.9031,"rust":0.0179,"java":1.8311,"julia":1.5907,"luajit":1.5083,"pypy":0.1689,"node":0.1159,"elixir":0.0448,"chez":1.4180,"sbcl":4.3442};
-PER["strscan"]={"ai":0.0842,"go":0.0657,"rust":0.0658,"java":0.0663,"julia":0.0661,"luajit":0.1327,"pypy":0.0663,"node":0.4016,"elixir":0.1042,"chez":0.1377,"sbcl":0.1826};
-PER["hash"]={"ai":1.0430,"go":0.5646,"rust":0.7862,"java":0.2986,"julia":0.5036,"luajit":1.0642,"pypy":0.4581,"node":0.7721,"chez":0.8086,"sbcl":0.9766};
-PER["sort"]={"ai":0.6465,"go":0.3719,"rust":0.0684,"java":0.1717,"julia":0.0623,"luajit":1.2431,"pypy":0.3810,"node":1.0819,"elixir":0.8091,"chez":0.4414,"sbcl":0.6231};
-PER["tree"]={"ai":0.8359,"go":1.6843,"rust":5.0335,"java":0.4148,"julia":3.2913,"luajit":3.7120,"pypy":1.9750,"node":1.4347,"elixir":0.9707,"chez":0.6133,"sbcl":1.5470};
-PER["bintrees"]={"ai":21.4375,"go":38.8905,"rust":85.1967,"java":14.7086,"julia":26.5801,"luajit":88.0572,"pypy":30.9419,"node":29.5221,"elixir":22.3798,"chez":15.9375,"sbcl":26.3773};
-PER["mandelbrot"]={"ai":0.5801,"go":0.9807,"rust":0.9534,"java":0.9350,"julia":0.9334,"luajit":1.0540,"pypy":1.4827,"node":0.9479,"elixir":22.7433,"chez":15.0625,"sbcl":1.0352};
-PER["closure"]={"ai":0.0874,"go":0.0245,"rust":0.0262,"java":0.0324,"julia":0.0102,"luajit":14.1379,"pypy":0.0799,"node":0.8322,"elixir":2.1434,"chez":1.0273,"sbcl":2.1017};
-PER["cdcl"]={"ai":44.0000};
-PER["setup"]={"ai":11.4630,"go":29.0880,"rust":63.6680,"java":338.7410,"julia":149.3460,"luajit":2.1400,"pypy":49.7340,"node":27.3420,"elixir":209.8500,"chez":54.2040,"sbcl":5.1190};
+PER["fib"]={"ai":4.4375,"go":3.9430,"rust":2.0872,"java":2.7937,"julia":4.7925,"luajit":8.0282,"pypy":8.3508,"node":7.7565,"elixir":7.5558,"chez":6.4062,"sbcl":5.7036};
+PER["tak"]={"ai":0.5098,"go":0.4799,"rust":0.3616,"java":0.3355,"julia":0.7347,"luajit":1.4256,"pypy":2.3271,"node":0.9864,"elixir":0.8842,"chez":0.6211,"sbcl":4.2347};
+PER["sum"]={"ai":0.2217,"go":0.1103,"rust":0.0532,"java":0.2123,"julia":0.0838,"luajit":0.0729,"pypy":0.2688,"node":0.7963,"elixir":0.5003,"chez":0.5195,"sbcl":0.7266};
+PER["deforest"]={"ai":0.0569,"go":0.0470,"rust":0.0122,"java":0.0144,"julia":0.0190,"luajit":0.0624,"pypy":0.1535,"node":1.2447,"elixir":0.4752,"chez":0.2461,"sbcl":0.2461};
+PER["primes"]={"ai":1.3008,"go":0.9142,"rust":0.8189,"java":0.8337,"julia":0.9192,"luajit":0.8361,"pypy":1.3566,"node":0.8165,"elixir":2.3932,"chez":1.7812,"sbcl":5.0942};
+PER["bell"]={"ai":67.0000,"go":25.3491,"java":37.2077,"julia":78.3515,"pypy":26.1593,"node":29.3820,"elixir":34.8789,"chez":70.7500,"sbcl":53.7545};
+PER["strcat"]={"ai":0.0297,"go":0.9461,"rust":0.0178,"java":1.8363,"julia":1.5957,"luajit":1.4895,"pypy":0.1686,"node":0.1121,"elixir":0.0462,"chez":1.4375,"sbcl":4.4691};
+PER["strscan"]={"ai":0.0842,"go":0.0658,"rust":0.0659,"java":0.0665,"julia":0.0661,"luajit":0.1327,"pypy":0.0656,"node":0.3958,"elixir":0.1064,"chez":0.1367,"sbcl":0.1802};
+PER["hash"]={"ai":1.0625,"go":0.5722,"rust":0.7895,"java":0.3096,"julia":0.5067,"luajit":1.0531,"pypy":0.4529,"node":0.7440,"chez":0.8008,"sbcl":0.9688};
+PER["sort"]={"ai":0.6406,"go":0.3769,"rust":0.0691,"java":0.1750,"julia":0.0617,"luajit":1.2253,"pypy":0.3737,"node":1.0488,"elixir":0.7962,"chez":0.4258,"sbcl":0.6075};
+PER["tree"]={"ai":0.8203,"go":1.6085,"rust":5.0329,"java":0.8044,"julia":3.2917,"luajit":3.5790,"pypy":1.9538,"node":1.4573,"elixir":0.9954,"chez":0.6504,"sbcl":1.5392};
+PER["bintrees"]={"ai":20.8750,"go":39.2521,"rust":86.4740,"java":15.1328,"julia":25.7176,"luajit":83.2018,"pypy":30.6464,"node":29.6486,"elixir":22.4897,"chez":15.8125,"sbcl":25.8773};
+PER["mandelbrot"]={"ai":0.5684,"go":0.9719,"rust":0.9583,"java":0.9364,"julia":0.9283,"luajit":1.0447,"pypy":1.4492,"node":0.9560,"elixir":22.5584,"chez":14.9375,"sbcl":1.0196};
+PER["closure"]={"ai":0.0857,"go":0.0243,"rust":0.0261,"java":0.0334,"julia":0.0111,"luajit":13.8424,"pypy":0.0779,"node":0.8398,"elixir":2.1766,"chez":1.0469,"sbcl":2.0471};
+PER["cdcl"]={"ai":43.8750};
+PER["setup"]={"ai":11.8280,"go":28.4060,"rust":62.4000,"java":337.6200,"julia":151.0960,"luajit":2.2340,"pypy":51.1650,"node":29.0500,"elixir":208.3090,"chez":54.2450,"sbcl":4.9420};
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
