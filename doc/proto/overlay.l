@@ -299,7 +299,7 @@
    (ov2-inst dom sig args)                                                                           ; sig = (PARAM-DIES RESULT-DIE)
     (: params (cap sig) result (caup sig)
        vm (map (\ nm (link nm (var nm))) (ov2-vars dom (link params result) ()))                     ; one fresh logic var per sig variable
-       s  (ov2-uall (map (\ p (ov2-term vm p)) params) (map (\ a (ov2-term vm a)) args) '(()))        ; unify params vs args
+       s  (ov2-uall (map (\ p (ov2-term vm p)) params) args '(()))        ; unify param patterns (fresh vars) vs arg dies AS-IS (a caller's rigid symbol is a constant -- no capture)
        (? (ufail? s) 'clash ((dom 'norm) (subst s (ov2-term vm result)))))                           ; reify + normalize (dependent index)
    ; a VEC domain: type-level Peano `add` normalizer -> a length-indexed (dependent) vector die
    (vadd x y)  (? (id? x 'z) y (&& (two? x) (id? (cap x) 's)) (L 's (vadd (caup x) y)) (L 'add x y))
