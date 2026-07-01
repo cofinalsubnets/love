@@ -14,9 +14,10 @@
 ; probe ladder to judge, and a closure would fossilize a not-yet-loaded `judge`
 ; to the zero point):
 ;   make host && cp out/host/ai out/host/dock
-;   out/host/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -e "(dock 7620)"
+;   out/host/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock 7620)"
 ; (a plain `out/host/ai ... -e "(dock N)"` works too, but then `adopt` can't
-; rebuild -- it would be rebuilding its own running exe. drive.l is optional.)
+; rebuild -- it would be rebuilding its own running exe. drive.l + patch.l are
+; optional -- the self-modify loop; the dock serves fine without them.)
 ; Then drive it (another shell):
 ;   out/host/ai tools/ain.l 127.0.0.1 7620
 ;   > (brief ())            ; the served steering prompt -- read this first
@@ -162,7 +163,8 @@
    ; by this file's load -- see above.)
    (dock port)
      (: _ (pin relaunch-slot 0 (L dock-bin "-l" "port/inle/judge.l" "-l" "port/inle/serve.l"
-                                  "-l" "port/inle/drive.l" "-e" (+ "(dock " (+ (show port) ")"))))
+                                  "-l" "port/inle/drive.l" "-l" "port/inle/patch.l"
+                                  "-e" (+ "(dock " (+ (show port) ")"))))
         l (listen port)
         (? l (: _ (note (+ "dock: moored on :" (show port)))
                 _ (note "dock: (brief ()) is the steering prompt")
