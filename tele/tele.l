@@ -86,6 +86,24 @@
       (gem-tray (link c (link r ()))
            (tl-cat (map (\ j (map (\ i (peep m (link i (link j ())) 0)) (jot r))) (jot c)))))
 
+   ;; -- the device seam -- tele's heavy array ops (matmul, elementwise, reduce,
+   ;; transpose) route through a SWAPPABLE backend record { gemm ew reduce transp }.
+   ;; the default `tl-cpu` IS ai's native constellation algebra, so tele stands
+   ;; alone (teletest.l loads only this file). load tele/device.l for the SIM +
+   ;; roofline meter, or tele/cuda.l for the GPU -- then (tl-use that-backend) and
+   ;; every mm/add/mul/sub/sum/mean below reroutes with NO change to tele's source.
+   ;; `ew` takes the elementwise op as its first argument ((+)/(*)/(-)) so one
+   ;; kernel slot covers all three lanes.
+   tl-cpu  (hash 'name "cpu" 'gemm (\ a b (inner a b)) 'ew (\ op a b (op a b))
+                 'reduce (\ a (net a)) 'transp (\ m (transp2 m)))
+   tl-dev  (tablet 0)
+   (tl-use bk) (pin tl-dev 0 bk)
+   (tl-k key)  (peep (peep tl-dev 0 tl-cpu) key 0)      ; the active kernel for `key`
+   (tl-gemm a b)  ((tl-k 'gemm) a b)
+   (tl-ew op a b) ((tl-k 'ew) op a b)
+   (tl-reduce a)  ((tl-k 'reduce) a)
+   (tl-tr m)      ((tl-k 'transp) m)
+
    ;; -- the lens ops -- each returns its forward value and an adjoint that
    ;; scatters cotangents into its parents (accumulating). `s` is the op node
    ;; itself; (peep s 'grad 0) is the cotangent that has landed on this op.
@@ -93,22 +111,22 @@
    ;; (`a (node a)`) would, by the one-scope law, read `a` BEFORE its pin -> the
    ;; missing condition -> the zero point, silently coercing () instead of a.
    (add a b) (: na (node a) nb (node b)
-      (tl-op (+ (tl-val na) (tl-val nb))
+      (tl-op (tl-ew (+) (tl-val na) (tl-val nb))
              (\ s (: g (peep s 'grad 0)
                     _ (tl-accum na (tl-sumto g (tl-cshape (tl-val na))))
                       (tl-accum nb (tl-sumto g (tl-cshape (tl-val nb))))))))
    (mul a b) (: na (node a) nb (node b)             ; elementwise (Hadamard)
-      (tl-op (* (tl-val na) (tl-val nb))
+      (tl-op (tl-ew (*) (tl-val na) (tl-val nb))
              (\ s (: g (peep s 'grad 0)
-                    _ (tl-accum na (tl-sumto (* g (tl-val nb)) (tl-cshape (tl-val na))))
-                      (tl-accum nb (tl-sumto (* g (tl-val na)) (tl-cshape (tl-val nb))))))))
-   (mm a b) (: na (node a) nb (node b)              ; matmul (rides inner = +.x)
-      (tl-op (inner (tl-val na) (tl-val nb))
+                    _ (tl-accum na (tl-sumto (tl-ew (*) g (tl-val nb)) (tl-cshape (tl-val na))))
+                      (tl-accum nb (tl-sumto (tl-ew (*) g (tl-val na)) (tl-cshape (tl-val nb))))))))
+   (mm a b) (: na (node a) nb (node b)              ; matmul (rides the gemm kernel)
+      (tl-op (tl-gemm (tl-val na) (tl-val nb))
              (\ s (: g (peep s 'grad 0)
-                    _ (tl-accum na (inner g (transp2 (tl-val nb))))     ; dA = G @ B^T
-                      (tl-accum nb (inner (transp2 (tl-val na)) g))))))  ; dB = A^T @ G
+                    _ (tl-accum na (tl-gemm g (tl-tr (tl-val nb))))     ; dA = G @ B^T
+                      (tl-accum nb (tl-gemm (tl-tr (tl-val na)) g))))))  ; dB = A^T @ G
    (sum x) (: nx (node x)                            ; reduce-all to a scalar
-      (tl-op (net (tl-val nx))
+      (tl-op (tl-reduce (tl-val nx))
              (\ s (tl-accum nx (+ (* (tl-val nx) 0) (peep s 'grad 0))))))  ; broadcast g to x's shape
 
    ;; ---- Stage 2: activations + loss ----
@@ -117,13 +135,13 @@
    (tl-exp z) (z e)
 
    (sub a b) (: na (node a) nb (node b)             ; a - b (broadcasting)
-      (tl-op (- (tl-val na) (tl-val nb))
+      (tl-op (tl-ew (-) (tl-val na) (tl-val nb))
              (\ s (: g (peep s 'grad 0)
                     _ (tl-accum na (tl-sumto g (tl-cshape (tl-val na))))
                       (tl-accum nb (tl-sumto (* -1 g) (tl-cshape (tl-val nb))))))))
 
    (mean x) (: nx (node x) xv (tl-val nx) n (tl-ncells xv)   ; sum / count
-      (tl-op (/ (net xv) n)
+      (tl-op (/ (tl-reduce xv) n)
              (\ s (tl-accum nx (+ (* xv 0) (/ (peep s 'grad 0) n))))))
 
    ;; relu IS the color law, differentiated: it passes the positive (blue) and
