@@ -16,10 +16,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
+// Every socket fd is CLOSE-ON-EXEC. A run/exec/spawn child must never inherit
+// these -- and the dock (port/inle/serve.l) RE-EXECS itself on adopt: without
+// CLOEXEC the old listener stays bound across the exec and the fresh dock's
+// bind fails (SO_REUSEADDR does not permit two live listeners), so it can't
+// re-moor. CLOEXEC releases the port at exec so the new generation binds clean.
+#define cloexec(fd) do { if ((fd) >= 0) fcntl((fd), F_SETFD, FD_CLOEXEC); } while (0)
 
 // inle's UDP wire (port/inle/x86_64/net.c) caps a datagram at one ethernet MTU.
 #define DG_MAX 1472
@@ -53,6 +61,7 @@ ai_noinline static int call_connect(struct ai_str *hv, int port) {
   close(fd);
   fd = -1; }
  freeaddrinfo(res);
+ cloexec(fd);
  return fd; }
 
 static lvm(lvm_connect) {
@@ -89,6 +98,7 @@ ai_noinline static int call_listen(int port) {
  if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, 1)) {
   close(fd);
   return -1; }
+ cloexec(fd);
  return fd; }
 
 static lvm(lvm_listen) {
@@ -118,6 +128,7 @@ static lvm(lvm_accept) {
  if (lfd < 0) goto fail;
  int fd = accept(lfd, NULL, NULL);
  if (fd < 0) goto fail;
+ cloexec(fd);
  Pack(g);
  struct ai *r = ai_io_alloc(g, fd);
  if (!ai_ok(r)) { close(fd); goto fail; }
@@ -168,6 +179,7 @@ ai_noinline static int call_udpbind(int port) {
  a.sin_addr.s_addr = htonl(INADDR_ANY);
  a.sin_port = htons((uint16_t) port);
  if (bind(fd, (struct sockaddr*) &a, sizeof a)) { close(fd); return -1; }
+ cloexec(fd);
  return fd; }
 
 static lvm(lvm_udpbind) {
