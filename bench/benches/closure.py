@@ -1,14 +1,12 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 from bench import bench
-# closures escape into a list, then applied through it (non-inlinable). checksum = sum 3i.
 twice = lambda f: lambda x: f(f(x))
 adder = lambda i: lambda x: x + i
-N = 100000
+N, M = 100000, 1000000007
 def work():
-    fns = [twice(adder(i)) for i in range(N)]
-    s = 0
+    acc = 0
     for i in range(N):
-        s += fns[i](i)
-    return s
+        acc = (acc * 31 + twice(adder(i))(i)) % M
+    return acc
 bench("closure", work)

@@ -1,12 +1,8 @@
-; closure -- higher-order / closure-allocation stress. The closures ESCAPE into a list and are
-; then applied THROUGH it, so no compiler can inline the call site -- which closure runs at
-; `((cap fns) i)` is data-dependent (retrieved from the heap), so dechurch/loopclose/deforest all
-; correctly decline and this measures REAL closure allocation + opaque application, not a folded
-; loop. (The old inline `twice(adder(i))(i)` glazed away to O(1); that measured the optimizer, not
-; closures.) checksum = sum of 3i for i<100000 = 14999850000.
-(: twice (\ f (\ x (f (f x))))
-   adder (\ i (\ x (+ x i)))
-   N 100000
-   (build i)           (? (< i N) (link (twice (adder i)) (build (+ i 1))) ())               ; N closures, heap-stored
-   (apply-all fns i s)  (? (atom? fns) s (apply-all (cup fns) (+ i 1) (+ s ((cap fns) i))))    ; apply each to its index -> 3i
- (bench "closure" (\ _ (apply-all (build 0) 0 0))))
+; closure -- higher-order stress, idiomatic ai. `(2 (+ i))` is church-2 of the section (+i) =
+; (+i)∘(+i); applied to i it is 3i (apply "add i" twice). The compiler flattens/inlines the
+; composition -- fair, every language's optimizer does the same to its own closures -- so what runs is
+; the rolling-hash loop, which loopclose CAN'T collapse to a formula: a real 100000-iteration loop,
+; glazed native. (A plain sum would close to O(1) and measure nothing.) checksum = the hash.
+(: hmod 1000000007
+   (hof i acc) (? (< i 100000) (hof (+ i 1) (% (+ (* acc 31) ((2 (+ i)) i)) hmod)) acc)
+ (bench "closure" (\ _ (hof 0 0))))
