@@ -60,38 +60,43 @@
    (probe prog)      (probe-for "out/host/ai" prog 5)
    (probe-for bin prog secs) (runl (L "timeout" (show secs) bin "-e" prog))
 
-   ; --- rebuild-capable: build a fresh binary, then GATE it. The gate is
-   ; `make test` -- host + ai0 exactly twice; the exit status is the honest
-   ; signal (0 = the zz-fin summary printed on both passes). -> (status . out).
-   ; These OVERWRITE the running binary's target in place (Linux keeps the live
-   ; inode, so the dock survives); the two-generation side-build + `adopt`
-   ; re-exec is the next rung (needs a side-path make target + an exec nif). --
-   (build _) (runl (L "make" "host"))               ; the binary only (bare `make` is all: host+kernel+wasm)
-   (gate _)  (runl (L "make" "test"))               ; the gate: host + ai0 twice
-   (rebuild _) (: b (build ()) (? (= (cap b) 0) (gate ()) b))   ; build, then gate iff it built
+   ; --- rebuild + gate, IN PLACE. `build` overwrites out/host/ai (fine only when
+   ; nothing is executing it -- else the .img bake ETXTBSYs; that is what the
+   ; candidate flow below is for). `gate` is `make test` (host + ai0, twice; 0 =
+   ; the zz-fin summary on both passes). handy for a quick check; `adopt` uses the
+   ; safe candidate flow instead. -> (status output). --
+   (build _) (runl (L "make" "host"))
+   (gate _)  (runl (L "make" "test"))
+   (rebuild _) (: b (build ()) (? (= (cap b) 0) (gate ()) b))
 
-   ; --- adopt: the two-generation re-exec, the copying-GC / egg move at process
-   ; scale. the dock runs from a STABLE COPY `out/host/dock` so the canonical
-   ; `out/host/ai` is free to rebuild (rebuilding your own running exe fails:
-   ; the .img bake objcopies it in place -> ETXTBSY -- the whole reason a
-   ; side-path is required, not optional). adopt: rebuild + gate `out/host/ai`;
-   ; only on a GREEN gate install it as the fresh `out/host/dock` (a rename ->
-   ; a NEW inode, so the running dock keeps its old inode and survives the swap)
-   ; and re-exec onto it. the old generation stays LIVE and serving until the
-   ; new one is proven; a RED gate leaves the running dock untouched. exec drops
-   ; open sessions; the dock re-moors on the same port (SO_REUSEADDR), so a
-   ; client just reconnects. -> on red, (status output) of the failure; on green
-   ; it does not return (the image is replaced). --
-   dock-bin "out/host/dock"                         ; the stable copy the dock runs from
-   relaunch-slot (tablet 0)                          ; dock stashes its re-exec argv here
+   ; --- adopt: the two-generation build + promote + re-exec -- the copying-GC /
+   ; egg move at process AND filesystem scale. build the NEXT generation at a
+   ; SIDE PATH `out/host/ai.cand` (`make candidate`): nothing executes that name,
+   ; so its in-place .img bake can never ETXTBSY, no matter who runs `ai` (a repl,
+   ; a test, even the dock's own client). gate the candidate (`make test
+   ; m=.../ai.cand`). ONLY on green PROMOTE by atomic RENAME -- ai.cand -> ai and
+   ; its image, then refresh the dock's stable copy -- a rename gives a NEW inode,
+   ; so every process still executing the old binary keeps it, unbroken. then
+   ; re-exec onto the fresh copy. a RED gate leaves the canonical binary UNTOUCHED
+   ; (the candidate dies at the side path, a to-space that never flips). exec
+   ; drops open sessions; the dock re-moors on the same port (SO_REUSEADDR). ->
+   ; on failure (status output); on green it does not return (image replaced). --
+   dock-bin "out/host/dock"                          ; the stable copy the dock runs from
+   relaunch-slot (tablet 0)                           ; dock stashes its re-exec argv here
+   (promote _)                                        ; atomic swaps: candidate -> canonical -> dock copy
+     (: _ (sh (L "mv" "-f" "out/host/ai.cand" "out/host/ai"))
+        _ (sh (L "mv" "-f" "out/host/ai.cand.img" "out/host/ai.img"))
+        _ (sh (L "cp" "out/host/ai" (+ dock-bin ".new")))
+        (sh (L "mv" "-f" (+ dock-bin ".new") dock-bin)))
    (adopt _)
-     (: r (rebuild ())                               ; build + gate the canonical out/host/ai
-        (? (= (cap r) 0)
-           (: _ (note "dock: gate GREEN -- installing the fresh binary + adopting")
-              _ (sh (L "cp" "out/host/ai" (+ dock-bin ".new")))
-              _ (sh (L "mv" "-f" (+ dock-bin ".new") dock-bin))  ; atomic swap, new inode
-              (exec (peep relaunch-slot 0 (L dock-bin))))        ; returns only on exec failure
-           (: _ (note "dock: gate RED -- staying on the current image") r)))
+     (: b (sh (L "make" "candidate"))                 ; build the next gen at the side path
+        (? (! (= (cap b) 0)) (: _ (note "dock: candidate build FAILED -- staying") b)
+           (: g (sh (L "make" "test" "m=out/host/ai.cand"))   ; gate the candidate binary
+              (? (= (cap g) 0)
+                 (: _ (note "dock: gate GREEN -- promoting the candidate + adopting")
+                    _ (promote ())
+                    (exec (peep relaunch-slot 0 (L dock-bin))))   ; returns only on exec failure
+                 (: _ (note "dock: gate RED -- discarding the candidate, staying") g)))))
 
    ; --- the served steering prompt: a tree file, so the system can rewrite its
    ; own brief under the same gate. `(brief ())` is the first verb a stranger
@@ -107,13 +112,15 @@
      (+ "  (verbs ())            this list\n"
      (+ "  (look \"path\")         read a tree file -> its bytes\n"
      (+ "  (lay \"path\" body)     write a tree file (careful) -> 1|0\n"
-     (+ "  (sh (L \"git\" ...))    shell out -> (status . output)\n"
-     (+ "  (probe \"PROG\")        run PROG against the binary, isolated -> (status . stdout)\n"
+     (+ "  (sh (L \"git\" ...))    shell out -> (status output)\n"
+     (+ "  (probe \"PROG\")        run PROG against the binary, isolated -> (status stdout)\n"
      (+ "  (judge \"PROG\")        the full ladder: parse/run/host-vs-ai0/reward/bug (judge.l)\n"
-     (+ "  (build ())            make (build+test in place) -> (status . out)\n"
-     (+ "  (gate ())             make test (the gate, twice) -> (status . out)\n"
+     (+ "  (build ())            make host (build in place) -> (status output)\n"
+     (+ "  (gate ())             make test (the gate, twice) -> (status output)\n"
      (+ "  (rebuild ())          build, then gate iff it built\n"
-         "  any global is a verb; (names ()) is the whole surface.\n")))))))))))
+     (+ "  (adopt ())            build+gate the NEXT gen at a side path, promote on green, re-exec\n"
+     (+ "  (improve TASK PATH)   ask a model for a patch, then run one guarded loop iteration (patch.l)\n"
+         "  any global is a verb; (names ()) is the whole surface.\n")))))))))))))
 
    ; --- the session: read one form off the socket, eval it in the book (so
    ; every global is a verb), `show` the value back, flush. Loop to disconnect.

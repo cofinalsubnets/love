@@ -437,13 +437,27 @@ dock: host
 # image-load is an OPTIMIZATION -- main.c falls back to a normal egg boot if the image is missing or
 # stale, so an out-of-date .img is never fatal, only slower. (~1.5 s to dump: the glaze self-tests
 # native-compile; that cost is paid once per ai rebuild, not per run.)
-$(ho)/ai.img: $(ho)/ai
+# a static pattern so the CANDIDATE bakes by the same recipe at its side path
+# ($< is the binary being dumped + baked -- never a name a bystander executes
+# when it is the .cand).
+$(ho)/ai.img $(ho)/ai.cand.img: %.img: %
 	@echo IMG	$@
-	@$(ho)/ai --dump-image $@
-	@echo BAKE	$(ho)/ai
-	@secsz=$$(objdump -h $(ho)/ai | awk '/\.image/{print strtonum("0x"$$3)}'); \
+	@$< --dump-image $@
+	@echo BAKE	$<
+	@secsz=$$(objdump -h $< | awk '/\.image/{print strtonum("0x"$$3)}'); \
 	 sz=$$(stat -c%s $@); test $$sz -le $$secsz || { echo "image $$sz > .image reserve $$secsz -- bump RESERVE_WORDS in host/image_baked.c"; exit 1; }; \
-	 cp $@ $@.pad && truncate -s $$secsz $@.pad && objcopy --update-section .image=$@.pad $(ho)/ai && rm -f $@.pad
+	 cp $@ $@.pad && truncate -s $$secsz $@.pad && objcopy --update-section .image=$@.pad $< && rm -f $@.pad
+
+# candidate: build + bake the NEXT GENERATION at the side path out/host/ai.cand.
+# nothing executes that name, so the in-place bake can never hit ETXTBSY -- a
+# rebuild succeeds no matter who is running `ai` (a repl, a test, the dock's own
+# client). gate it with `make test m=$(ho)/ai.cand` (m routes the whole corpus;
+# ai0 is independent), then promote on green with an ATOMIC RENAME (a new inode:
+# executing processes keep the old one) -- the dock's `adopt` does exactly this.
+# on a red gate the canonical binary is UNTOUCHED; the failed candidate dies at
+# the side path like a to-space that never flips.
+.PHONY: candidate
+candidate: $(ho)/ai.cand.img
 
 # cook/Cookfile: this Makefile transpiled into a resolved cook recipe by
 # `cook --emit` (cook/cook.l). cook reads this Makefile directly too, but the
@@ -514,7 +528,10 @@ $(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/l
 # host/main.c (auto-globbed into $(host_o)) carries main() + the egg, assembled
 # inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c
 # glob now; the recompile-on-header-change dep is the line just above.
-$(ho)/ai: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h) $(glaze_h)
+# one link rule, two names: `ai` (canonical) and `ai.cand` (the CANDIDATE -- the next
+# generation built at a side path nothing executes, so its in-place .img bake can never
+# hit ETXTBSY no matter who is running `ai`; see the candidate target below).
+$(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm $(host_ldflags)
