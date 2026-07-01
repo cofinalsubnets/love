@@ -66,12 +66,13 @@
        (ov-zip ps ds)     (? (atom? ps) 0 (link (link (cap ps) (cap ds)) (ov-zip (cup ps) (cup ds))))
        (ov-clash dom sigs env e) (? (atom? e) 0 (: d (ov-kindof dom sigs env e) sub (catmap (\ s (ov-clash dom sigs env s)) (cup e)) (? (id? d 'clash) (link e sub) sub)))
        (ov-pairs bs)      (? (atom? bs) 0 (atom? (cup bs)) 0 (link (link (cap bs) (cap (cup bs))) (ov-pairs (cup (cup bs)))))
+       (ov2-okr dom bd decl) (: f (dom 'okr) (? (lit? f) (f bd decl) (= ((dom 'join) bd decl) decl)))   ; result acceptable? domain `okr` (dependent = up to conv/norm), else structural join
        (ov-check1 dom sigs prog)
           (catmap (\ p (: nm (caap p) ps (cuap p) body (cup p) sg (ov-sigof sigs nm)
                          (? (! (two? sg)) 0
                             (: env (ov-zip ps (caup sg)) cl (ov-clash dom sigs env body)
                                bd (ov-kindof dom sigs env body) decl (ov-nthl sg 2)
-                               (? (&& (atom? cl) (= ((dom 'join) bd decl) decl)) 0 (L (link nm (? (atom? cl) (L 'result bd decl) cl))))))))   ; = : structural (structured dies)
+                               (? (&& (atom? cl) (ov2-okr dom bd decl)) 0 (L (link nm (? (atom? cl) (L 'result bd decl) cl))))))))
                   (filter (\ p (! (atom? (cap p)))) (ov-pairs (cup prog))))
        (ov-run dom sigs form) (? (&& (two? form) (id? (cap form) ':))
                                  (: r (ov-check1 dom sigs form) (? (two? r) (: _ (puts ";; overlay: type clash in ") _ (puts (show (map cap r))) (putc 10)) 0))
