@@ -141,9 +141,9 @@
     (atom? x) x
     (: h (cap x) (?
      (id? h '\) (? (atom? (cuup x)) x                          ; quote
-                (: fx (flatsrc x) r (lp fx)                     ; fully-flatten curried lambdas; src == compiled so clo_eq/show/beta-bridge stay consistent
+                (: r (lp x)                                     ; opfix (op-flat-ol) already flattened nested lambdas at the source, shared with c0
                    lam (link '\ (cat (cap r) (list (wx (cup r) (cat (cap r) bnd)))))
-                   _ (push c 'src (link (cup lam) fx))         ; stash the flattened source (matches the flat closure)
+                   _ (push c 'src (link (cup lam) x))         ; tagged-body -> surface src for ala
                    lam))
      (id? h ':) (? (atom? (cup x)) ':                      ; (:) = the head read -- (f)==f at zero operands, a missing name (c0 agrees)
                  (atom? (cuup x)) (link ': (list (wx (caup x) bnd)))
@@ -159,19 +159,6 @@
     (atom? (cup bs)) (list (wx (cap bs) bnd))
     (: nd (dsug (cap bs) (caup bs))               ; desugar (f a..) so wx's \ adds params to bnd
      (link (cap nd) (link (wx (cup nd) bnd) (wxb (cuup bs) bnd)))))
-   ; flatsrc: collapse a directly-nested lambda `(\ a (\ b .. BODY))` into the multi-param `(\ a b .. BODY)`.
-   ; currying makes these THE SAME function, but a nested body evaluates the inner `\`-expr on every partial
-   ; application -- an extra closure; the flat form partial-applies with no body entry. Returns the fully-
-   ; flattened SOURCE (used for BOTH the compiled arity and the stashed src, so clo_eq/nf_hash/show/beta-bridge
-   ; all see the same shape -- a nested src over a flat capture had broken the beta bridge). SHADOWING stays
-   ; nested (`nodup?`): flattening `(\ x (\ x x))` to `(\ x x x)` makes a duplicate-param form whose body binds
-   ; ambiguously (show and = would disagree). Names (not de Bruijn) so param order is free.
-   (nodup? ps qs) (? (atom? qs) 1 (member? (cap qs) ps) 0 (nodup? ps (cup qs)))
-   (flatsrc x) (: r (lp x) b (cup r)
-    (? (&& (two? b) (id? (cap b) '\) (! (atom? (cuup b))))
-       (: fb (flatsrc b) rb (lp fb)
-          (? (nodup? (cap r) (cap rb)) (link '\ (cat (cap r) (cat (cap rb) (list (cup rb))))) (link '\ (cat (cap r) (list fb)))))
-       x))
    ; cflip: the nil?-flip peephole on a cond clause list. since the cond tests g_false == nil?,
    ; (? (nil? e) c [el]) and (? e [el] c) are equal -- flipping the branches drops the nil? wrapper
    ; (and lets cst then fold a now-bare constant test). fires ONLY on an EXACT (nil? e) test in a

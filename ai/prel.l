@@ -470,6 +470,21 @@
    (op-lam fs)
     (? (atom? (cup fs)) (link (op-core (cap fs)) ())        ; the last operand is the body
        (link (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
+   ; op-flat-ol: flatten a directly-nested lambda body into a multi-param lambda at the SOURCE level (shared
+   ; by BOTH compilers through opfix, so neither c0 nor feel builds the extra inner closure a curried HOF
+   ; would): (\ a (\ b B)) -> (\ a b B). SHADOWING stays nested (op-disjoint?): (\ x (\ x x)) must NOT become
+   ; the ambiguous (\ x x x) (its body would bind two same-named params -- show and = disagree). Walks the
+   ; operand list (params.. body), accumulating params for the shadow check; factors the final body via op-core.
+   (op-mem? y l)      (? (atom? l) 0 (id? y (cap l)) 1 (op-mem? y (cup l)))
+   (op-disjoint? a b) (? (atom? b) 1 (op-mem? (cap b) a) 0 (op-disjoint? a (cup b)))
+   (op-params ol)     (? (atom? (cup ol)) () (link (cap ol) (op-params (cup ol))))
+   (op-flat-ol ol seen)                                      ; -> the flattened operand list, body left RAW (op-lam factors it after; no op-core ref here, so c0 compiles it clean)
+    (? (atom? (cup ol))
+       (: b (cap ol)
+          (? (&& (two? b) (id? (cap b) '\) (two? (cuup b)) (op-disjoint? seen (op-params (cup b))))   ; (two? (cuup b)) = a real lambda, not quote (avoids the `!` sigil, unbound this early in prel)
+             (op-flat-ol (cup b) seen)                       ; disjoint inner lambda -> merge its operands up
+             ol))                                             ; else the body stays raw
+       (link (cap ol) (op-flat-ol (cup ol) (link (cap ol) seen))))   ; a param: keep + accumulate for the shadow check
    ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
    ; quoted list keeps its operators as plain symbols); the binding forms keep
    ; their binders (op-colon/op-lam); everything else walks. idempotent: factored
@@ -478,7 +493,7 @@
     (? (atom? x) x
        (: h (cap x)
           (? (&& (id? h '\) (atom? (cuup x))) x              ; (\) / (\ x): quote, verbatim
-             (id? h '\) (link '\ (op-lam (cup x)))           ; (\ a.. body): only the body factors
+             (id? h '\) (link '\ (op-lam (op-flat-ol (cup x) ())))   ; (\ a.. body): flatten nested lambdas, then factor the body
              (id? h ':) (link ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run
              ; monadically around the (recursively opfixed) datum; an
