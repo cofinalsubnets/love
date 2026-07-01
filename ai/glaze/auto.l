@@ -832,11 +832,48 @@
                       (id? pat 'even) (lcemit z (\ j (Fc (* 2 j))) (L '// (L '+ N 1) 2))      ; k=2j,   M=(N+1)//2
                       ()))))))
    (lcquote? x) (&& (two? x) (id? (cap x) '\) (= 2 (tally x)))
+   (lc:form? x) (&& (two? x) (id? (cap x) ':) (! (atom? (cup x))))                            ; a (: ..) with bindings
+   (lcocc? v e) (? (id? e v) 1 (atom? e) 0 (lcquote? e) 0 (any (\ s (lcocc? v s)) (cup e)))   ; v occurs in e
+   ; --- NAMED-LET ACCUMULATOR: a self-recursive `:` binding `(NM i a) (? (< i N) (NM (+ i 1) (+ a B)) a)`
+   ;     with B a pure polynomial in i and N loop-invariant -> the CLOSED sum, O(1). Same finite-diff
+   ;     engine as the fold lane (lcsum/lcdeg/lclead), just reached through a `:` binding instead of a
+   ;     foldl combinator -- so a hand-written counting accumulator closes like `(foldl (+) 0 (map ..))`.
+   ;     g(j)=B over j; Σ_{i<=j<N} g(j) = G[N]-G[i] (G the antidifference), GUARDED by the original test so
+   ;     the function stays faithful for i>=N (loop returns acc, sum 0). Restricted: step (+ i 1), test `<`,
+   ;     op `+` (the additive accumulator); anything else falls through unchanged. B's purity is lcpoly?
+   ;     (only i, + - *, int consts), which also rejects any reference to acc or an outer var.
+   (lcacc? name val)
+    (&& (two? name) (= 3 (tally name)) (name? (cap name)) (name? (caup name)) (name? (cap (cuup name)))
+        (! (id? (caup name) (cap (cuup name))))                                               ; (NM i a), i /= a
+        (two? val) (id? (cap val) '?) (= 4 (tally val))                                        ; (? T THEN ELS)
+        (: NM (cap name) I (caup name) A (cap (cuup name))
+           T (opd val 0) THEN (opd val 1) ELS (opd val 2)
+           (&& (two? T) (id? (cap T) '<) (= 3 (tally T)) (id? (opd T 0) I)                     ; T = (< i N)
+               (! (lcocc? I (opd T 1))) (! (lcocc? A (opd T 1)))                               ; N loop-invariant in i,a
+               (id? ELS A)                                                                      ; base case -> acc
+               (two? THEN) (id? (cap THEN) NM) (= 3 (tally THEN))                               ; THEN = (NM STEP ACC)
+               (: STEP (opd THEN 0) ACC (opd THEN 1)
+                  (&& (two? STEP) (id? (cap STEP) '+) (= 3 (tally STEP)) (id? (opd STEP 0) I) (= (opd STEP 1) 1)  ; (+ i 1)
+                      (two? ACC) (id? (cap ACC) '+) (= 3 (tally ACC)) (id? (opd ACC 0) A)       ; (+ a B)
+                      (lcpoly? I (opd ACC 1)))))))                                              ; B a pure polynomial in i
+   (lcaccsum gfn N i)                                                                          ; G[N]-G[i] source, wrapped ; () declines
+    (: d (lcdeg gfn 8) (? (< d 0) () (: cks (lclead (lcsamp gfn d)) (L (L '- (lcsum cks N) (lcsum cks i))))))
+   (lcaccrw name val)                                                                          ; the accumulator binding -> its closed value
+    (: I (caup name) A (cap (cuup name)) T (opd val 0)
+       N (opd T 1) B (opd (opd (opd val 1) 1) 1)                                               ; THEN=(NM (+ i 1) (+ a B)) -> ACC=(+ a B) -> B
+       cs (lcaccsum (base-ev (L '\ I B)) N I)
+       (? (atom? cs) val (L '+ A (L '? T (cap cs) 0))))                                         ; (+ a (? (< i N) (G[N]-G[i]) 0))
+   (lc-bs bl) (? (atom? bl) bl  (atom? (cup bl)) (L (lcwalk (cap bl)))                          ; trailing body
+                 (link (cap bl) (link (? (lcacc? (cap bl) (caup bl)) (lcaccrw (cap bl) (caup bl)) (lcwalk (caup bl))) (lc-bs (cuup bl)))))
    (lcwalk x) (? (atom? x) x (lcquote? x) x
+                 (lc:form? x) (link ': (lc-bs (cup x)))                                         ; walk `:` bindings (accumulators + recurse)
                  (: c (? (lcfold? x) (lcclose1 x) ())
                     (? (atom? c) (link (cap x) (map lcwalk (cup x))) (cap c))))               ; () decline -> recurse; (src) -> the residual
+   (lc-bs-has? bl) (? (atom? bl) 0  (atom? (cup bl)) (lc-has-acc? (cap bl))
+                      (|| (lcacc? (cap bl) (caup bl)) (|| (lc-has-acc? (caup bl)) (lc-bs-has? (cuup bl)))))
+   (lc-has-acc? x) (? (atom? x) 0 (lcquote? x) 0 (lc:form? x) (lc-bs-has? (cup x)) (any lc-has-acc? (cup x)))
    (lc-has-fold? x) (? (atom? x) 0 (lcquote? x) 0 (lcfold? x) 1 (any lc-has-fold? (cup x)))
-   (loopclose form) (? (lc-has-fold? form) (lcwalk form) form)                                ; byte-identical when no closeable fold
+   (loopclose form) (? (|| (lc-has-fold? form) (lc-has-acc? form)) (lcwalk form) form)          ; byte-identical when nothing closeable
    (clook2 nm al) (? (atom? al) -1 (id? nm (caap al)) (caup (cap al)) (clook2 nm (cup al)))   ; (name arity) alist -> arity (-1 absent)
    (cmlook nm cm) (? (atom? cm) () (id? nm (caap cm)) (cuap cm) (cmlook nm (cup cm)))          ; (name . chain-param-INDEX-list) -> indices (() absent)
    ; cok? -- e is CHAIN-valued (a raw chain word, NOT an untagged int): a chain param (in cps) or cap/cup

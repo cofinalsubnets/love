@@ -346,6 +346,18 @@
     ; DECLINE 2: a piecewise body quals but is NOT polynomial -> the difference table never dies -> declines
     (: lcnp '(: (f n) (foldl (+) 0 (map (\ x (? (< x 5) (* x x) 0)) (jot n))) (f 12))
        (= (base-ev lcnp) (ev lcnp)))                                                          ; 0+1+4+9+16 = 30, defoliated/interpreted
+    ; NAMED-LET ACCUMULATOR (loopclose, generalized 2026-06-30): a HAND-WRITTEN counting accumulator
+    ; `(NM i a) (? (< i N) (NM (+ i 1) (+ a B)) a)` with B a pure polynomial in i closes to the CLOSED sum
+    ; (O(1)) -- like the foldl form, but reached through a `:` binding, so a raw recursive loop collapses,
+    ; not just a combinator pipeline. "did it fire" is STRUCTURAL (!(= (show ..)) -- the self-call is gone).
+    (: lcacc '(: (hof i acc) (? (< i 100) (hof (+ i 1) (+ acc (+ i (+ i i)))) acc) (hof 0 0))
+       (&& !(= (show (autogroup lcacc)) (show lcacc)) (14850 = (ev lcacc)) (= (base-ev lcacc) (ev lcacc))))   ; Σ 3k for k<100 = 3·4950
+    ; the GUARD keeps the rewritten function faithful at a NON-ZERO start (i=50, i>=N) -- reused at two starts
+    (: lcacc2 '(: (hof i acc) (? (< i 100) (hof (+ i 1) (+ acc (+ i (+ i i)))) acc) (+ (hof 0 0) (* 7 (hof 50 1000))))
+       (= (base-ev lcacc2) (ev lcacc2)))                                                       ; (hof 0 0) + 7*(hof 50 1000), closed form reused
+    ; DECLINE: a non-polynomial accumulator body (%) -> difference table never dies -> stays a loop, value kept
+    (: lcaccd '(: (g i acc) (? (< i 50) (g (+ i 1) (+ acc (% (* i i) 7))) acc) (g 0 0))
+       (= (base-ev lcaccd) (ev lcaccd)))
     ; CASK BUILDER (castbuild): a string-accumulator loop -- (: (go i s) (? COND (go .. (+ s X)) s) (go 0 "")) --
     ; rewrites to a threaded `jug` (O(1)-amortized append + one drain), == interp. "did it fire" is STRUCTURAL
     ; (!(= ..)) -- castbuild rebuilds via map, so id? never holds even on a no-op.
