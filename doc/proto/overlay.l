@@ -209,7 +209,7 @@
 
    ; --- self-check: reproduce kinds.l's four inferences through the generic engine ---
    fails (tablet 0)
-   (chk lbl exp act) (? (id? exp act) (: _ (puts "  ok   ") _ (puts lbl) (putc 10))
+   (chk lbl exp act) (? (= exp act) (: _ (puts "  ok   ") _ (puts lbl) (putc 10))    ; = : value equality (structural, for structured dies)
                         (: _ (pin fails 0 (+ 1 (peep fails 0 0))) _ (puts "  FAIL ") _ (puts lbl)
                            _ (puts ": exp ") _ (puts (show exp)) _ (puts " got ") _ (puts (show act)) (putc 10)))
    _ (: e (infer kdom () '(x 5 y (+ x 1) z (* y y)))                    ; A. linear chain -> charm, whole(overflow), whole
@@ -284,6 +284,34 @@
         _ (chk "checked-ev good =12"    12 (checked-ev udom '((room-area (meters meters) area)) good))
         _ (chk "checked-ev bad  =7"      7 (checked-ev udom '((bad (meters seconds) area)) bad)) 0)
 
+   ; --- Phase 2: STRUCTURED + DEPENDENT dies via prel `unify` + a domain normalizer (the uu-shaped rung).
+   ;     A die is now a TERM (symbol | (ctor arg..)); a sig VARIABLE is a symbol that is neither concrete
+   ;     (`dice`) nor a constructor (`ctors`). Caller instantiation = fresh-var the sig, UNIFY the param
+   ;     patterns against the arg dies (prel `unify` -- the compiler-grade, mu-safe unifier), reify the
+   ;     result (`subst`), then NORMALIZE via the domain's `norm` slot -- which EVALUATES type-level terms,
+   ;     i.e. dependent indices. The flat Phase-1 matcher is the degenerate (no-ctor) case of this.
+   (ov2-var? dom d)     (&& (nom? d) (! (member? d (dom 'dice))) (! (member? d (dom 'ctors))))
+   (ov2-vars dom d acc) (? (atom? d) (? (&& (ov2-var? dom d) (! (member? d acc))) (link d acc) acc)
+                           (foldl (\ a s (ov2-vars dom s a)) acc d))
+   (ov2-lk vm d)        (? (atom? vm) d (id? d (cap (cap vm))) (cup (cap vm)) (ov2-lk (cup vm) d))   ; d unchanged if not a var
+   (ov2-term vm d)      (? (atom? d) (ov2-lk vm d) (map (\ s (ov2-term vm s)) d))                    ; die term -> unify term
+   (ov2-uall ps as s)   (? (atom? ps) s (: s1 (unify s (cap ps) (cap as)) (? (ufail? s1) ufail (ov2-uall (cup ps) (cup as) s1))))
+   (ov2-inst dom sig args)                                                                           ; sig = (PARAM-DIES RESULT-DIE)
+    (: params (cap sig) result (caup sig)
+       vm (map (\ nm (link nm (var nm))) (ov2-vars dom (link params result) ()))                     ; one fresh logic var per sig variable
+       s  (ov2-uall (map (\ p (ov2-term vm p)) params) (map (\ a (ov2-term vm a)) args) '(()))        ; unify params vs args
+       (? (ufail? s) 'clash ((dom 'norm) (subst s (ov2-term vm result)))))                           ; reify + normalize (dependent index)
+   ; a VEC domain: type-level Peano `add` normalizer -> a length-indexed (dependent) vector die
+   (vadd x y)  (? (id? x 'z) y (&& (two? x) (id? (cap x) 's)) (L 's (vadd (caup x) y)) (L 'add x y))
+   (vnorm d)   (? (atom? d) d (&& (id? (cap d) 'add) (= 3 (tally d))) (vadd (vnorm (caup d)) (vnorm (cap (cup (cup d))))) (map vnorm d))
+   vdom #('dice '(meters seconds) 'ctors '(pair vec s z add) 'norm vnorm)
+   _ (: _ (puts ";; P2 structured unify -- swap : (pair a b) -> (pair b a)\n")
+        _ (chk "swap (pair meters seconds) -> (pair seconds meters)" '(pair seconds meters)
+               (ov2-inst vdom '(((pair a b)) (pair b a)) '((pair meters seconds)))) 0)
+   _ (: _ (puts ";; P2 DEPENDENT index -- vconcat : (vec a m)(vec a n) -> (vec a (add m n)); 2+1 normalizes to 3\n")
+        _ (chk "vconcat len 2+1 -> (s (s (s z)))" '(vec meters (s (s (s z))))
+               (ov2-inst vdom '(((vec a m) (vec a n)) (vec a (add m n))) '((vec meters (s (s z))) (vec meters (s z))))) 0)
+
    n (peep fails 0 0)
-   _ (: _ (putc 10) _ (puts (? (= n 0) ";; PHASE 0+1 PASS -- pluggable domain: polymorphic check, instantiate, erase\n" (+ ";; FAIL: " (+ (show n) " mismatches\n")))))
+   _ (: _ (putc 10) _ (puts (? (= n 0) ";; PHASE 0+1+2 PASS -- structured/dependent dies via unify, checked + instantiated + erased\n" (+ ";; FAIL: " (+ (show n) " mismatches\n")))))
    0)
