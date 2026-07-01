@@ -141,7 +141,7 @@
     (atom? x) x
     (: h (cap x) (?
      (id? h '\) (? (atom? (cuup x)) x                          ; quote
-                (: r (lp x)
+                (: r (flatl x)                                  ; flatten (\ a (\ b ..)) -> multi-param: no extra inner closure
                    lam (link '\ (cat (cap r) (list (wx (cup r) (cat (cap r) bnd)))))
                    _ (push c 'src (link (cup lam) x))         ; tagged-body -> surface src for ala
                    lam))
@@ -159,6 +159,13 @@
     (atom? (cup bs)) (list (wx (cap bs) bnd))
     (: nd (dsug (cap bs) (caup bs))               ; desugar (f a..) so wx's \ adds params to bnd
      (link (cap nd) (link (wx (cup nd) bnd) (wxb (cuup bs) bnd)))))
+   ; flatl: collapse a directly-nested lambda `(\ a (\ b .. BODY))` into the multi-param `((a b ..) . BODY)`.
+   ; currying makes these THE SAME function, but a nested body evaluates the inner `\`-expr on every partial
+   ; application -- an extra closure; the flat form partial-applies with no body entry. SOUND: surface src is
+   ; stashed unchanged (show/ala unaffected), and `(adder i)` = `(\ x ..)` is already beta-bridged, so the
+   ; partial-app result stays =/show-equal to the explicit inner closure. Names (not indices) so order is free.
+   (flatl x) (: r (lp x) b (cup r)
+              (? (&& (two? b) (id? (cap b) '\) (! (atom? (cuup b)))) (: r2 (flatl b) (link (cat (cap r) (cap r2)) (cup r2))) r))
    ; cflip: the nil?-flip peephole on a cond clause list. since the cond tests g_false == nil?,
    ; (? (nil? e) c [el]) and (? e [el] c) are equal -- flipping the branches drops the nil? wrapper
    ; (and lets cst then fold a now-bare constant test). fires ONLY on an EXACT (nil? e) test in a
