@@ -92,17 +92,24 @@ HEAD
 # position, a timeout ranking it last. Skipped if no file. --
 if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
-<h2>SAT solvers &mdash; pigeonhole UNSAT, milliseconds to solve</h2>
+<h2>SAT solvers &mdash; milliseconds to solve</h2>
 <p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/flat.l</code>:
 flat cask-resident state driven by three native kernels &mdash; propagation, the whole
 conflict handler, and the decision &mdash; each assembled through <code>asm/</code> at
-solver-build time, specialized to the instance size) against reference C solvers on
-PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT and resolution-hard,
-so CDCL is <b>exponential</b> here. ai is timed by its own solve clock (interpreter warmup
-and the one-time kernel assembly excluded); the C solvers by process wall-clock (their
-startup is ~ms). <code>timeout</code> = exceeded the cutoff. The engine now runs with the
-C field &mdash; the remaining spread (cadical) is solver <i>research</i>:
-inprocessing and clause-management refinements, not execution speed.</p>
+solver-build time, specialized to the instance size) against reference C solvers.
+Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
+and resolution-hard, where clause learning alone is <b>exponential</b> and ai&rsquo;s
+<code>fbva</code> factoring pass (extended resolution) earns its keep &mdash; and
+rnd<i>n</i>, random 3-SAT at the threshold (<i>m</i> = 4.26<i>n</i>, five fixed-seed
+instances summed; the verdict column is the per-instance SAT/UNSAT signature, identical
+across every solver): raw search with no factorable structure, the guard against
+pigeonhole specialization. ai is timed by its own solve clock (interpreter warmup and
+the one-time kernel assembly excluded); the C solvers by process wall-clock (their
+startup is ~ms). <code>timeout</code> = exceeded the cutoff. The two families pull
+opposite ways: the big inprocessing solvers (cadical, kissat) own PHP but their
+machinery costs them the small random instances, where the light classics (picosat,
+minisat) lead &mdash; ai places second on PHP and mid-field on random, the most even
+spread in the table.</p>
 <div class="wrap">
 SAT
 awk '

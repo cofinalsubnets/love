@@ -68,45 +68,54 @@ source &rarr; trivial result, so compiled languages pay their compile).</p>
   </span>
 </div>
 <div class="wrap"><div id="t"></div></div>
-<h2>SAT solvers &mdash; pigeonhole UNSAT, milliseconds to solve</h2>
+<h2>SAT solvers &mdash; milliseconds to solve</h2>
 <p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/flat.l</code>:
 flat cask-resident state driven by three native kernels &mdash; propagation, the whole
 conflict handler, and the decision &mdash; each assembled through <code>asm/</code> at
-solver-build time, specialized to the instance size) against reference C solvers on
-PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT and resolution-hard,
-so CDCL is <b>exponential</b> here. ai is timed by its own solve clock (interpreter warmup
-and the one-time kernel assembly excluded); the C solvers by process wall-clock (their
-startup is ~ms). <code>timeout</code> = exceeded the cutoff. The engine now runs with the
-C field &mdash; the remaining spread (cadical) is solver <i>research</i>:
-inprocessing and clause-management refinements, not execution speed.</p>
+solver-build time, specialized to the instance size) against reference C solvers.
+Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
+and resolution-hard, where clause learning alone is <b>exponential</b> and ai&rsquo;s
+<code>fbva</code> factoring pass (extended resolution) earns its keep &mdash; and
+rnd<i>n</i>, random 3-SAT at the threshold (<i>m</i> = 4.26<i>n</i>, five fixed-seed
+instances summed; the verdict column is the per-instance SAT/UNSAT signature, identical
+across every solver): raw search with no factorable structure, the guard against
+pigeonhole specialization. ai is timed by its own solve clock (interpreter warmup and
+the one-time kernel assembly excluded); the C solvers by process wall-clock (their
+startup is ~ms). <code>timeout</code> = exceeded the cutoff. The two families pull
+opposite ways: the big inprocessing solvers (cadical, kissat) own PHP but their
+machinery costs them the small random instances, where the light classics (picosat,
+minisat) lead &mdash; ai places second on PHP and mid-field on random, the most even
+spread in the table.</p>
 <div class="wrap">
-<table><thead><tr><th>instance</th><th>cadical</th><th class='ai'>ai</th><th>kissat</th><th>picosat</th><th>minisat</th><th>glucose</th></tr></thead><tbody>
-<tr><th>php5</th><td class=''>4.589</td><td class='ai fast '>1.000</td><td class=''>3.726</td><td class=''>2.760</td><td class=''>4.007</td><td class=''>4.428</td></tr>
-<tr><th>php6</th><td class=''>5.472</td><td class='ai fast '>3.000</td><td class=''>5.739</td><td class=''>4.684</td><td class=''>7.420</td><td class=''>5.988</td></tr>
-<tr><th>php7</th><td class='fast '>8.649</td><td class='ai '>11.000</td><td class=''>18.208</td><td class=''>26.026</td><td class=''>40.113</td><td class=''>42.767</td></tr>
-<tr><th>php8</th><td class='fast '>11.956</td><td class='ai '>54.000</td><td class=''>75.208</td><td class=''>232.5</td><td class=''>280.5</td><td class=''>921.1</td></tr>
-<tr class='netrow'><th>net</th><td class='net'>30.666</td><td class='net ai'>69.000</td><td class='net'>102.9</td><td class='net'>266.0</td><td class='net'>332.1</td><td class='net'>974.3</td></tr></tbody></table>
+<table><thead><tr><th>instance</th><th class='ai'>ai</th><th>cadical</th><th>picosat</th><th>kissat</th><th>minisat</th><th>glucose</th></tr></thead><tbody>
+<tr><th>php5</th><td class='ai fast '>1.000</td><td class=''>5.002</td><td class=''>3.484</td><td class=''>3.900</td><td class=''>4.000</td><td class=''>5.095</td></tr>
+<tr><th>php6</th><td class='ai fast '>3.000</td><td class=''>7.166</td><td class=''>5.971</td><td class=''>7.046</td><td class=''>8.904</td><td class=''>7.240</td></tr>
+<tr><th>php7</th><td class='ai '>12.000</td><td class='fast '>10.502</td><td class=''>31.438</td><td class=''>20.238</td><td class=''>43.042</td><td class=''>45.999</td></tr>
+<tr><th>php8</th><td class='ai '>58.000</td><td class='fast '>14.776</td><td class=''>255.8</td><td class=''>81.552</td><td class=''>299.3</td><td class=''>1017.8</td></tr>
+<tr><th>rnd100</th><td class='ai '>31.000</td><td class=''>57.145</td><td class='fast '>20.322</td><td class=''>95.843</td><td class=''>31.149</td><td class=''>32.906</td></tr>
+<tr><th>rnd150</th><td class='ai '>94.000</td><td class=''>138.4</td><td class='fast '>52.325</td><td class=''>217.8</td><td class=''>58.326</td><td class=''>78.023</td></tr>
+<tr class='netrow'><th>net</th><td class='net ai'>199.0</td><td class='net'>233.0</td><td class='net'>369.4</td><td class='net'>426.4</td><td class='net'>444.8</td><td class='net'>1187.0</td></tr></tbody></table>
 </div>
 <script>
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","deforest","primes","bell","strcat","strscan","hash","sort","tree","bintrees","mandelbrot","closure","cdcl","setup"];
 const PER={};
-PER["fib"]={"ai":4.5312,"go":3.7757,"rust":2.0035,"java":2.5862,"julia":4.3915,"luajit":8.0084,"pypy":8.4805,"node":7.4832,"elixir":7.2788,"chez":5.7031,"sbcl":5.4692};
-PER["tak"]={"ai":0.5215,"go":0.4617,"rust":0.3469,"java":0.3068,"julia":0.6971,"luajit":1.3912,"pypy":2.3089,"node":0.9596,"elixir":0.8647,"chez":0.5879,"sbcl":4.0004};
-PER["sum"]={"ai":0.2148,"go":0.1135,"rust":0.0525,"java":0.1931,"julia":0.0845,"luajit":0.0706,"pypy":0.2648,"node":0.7753,"elixir":0.4834,"chez":0.4961,"sbcl":0.7032};
-PER["deforest"]={"ai":0.0586,"go":0.0477,"rust":0.0116,"java":0.0133,"julia":0.0179,"luajit":0.0615,"pypy":0.1494,"node":1.1929,"elixir":0.4456,"chez":0.2256,"sbcl":0.2393};
-PER["primes"]={"ai":1.3125,"go":0.9055,"rust":0.7830,"java":0.7683,"julia":0.8978,"luajit":0.8039,"pypy":1.3169,"node":0.7768,"elixir":2.2569,"chez":1.7188,"sbcl":4.8598};
-PER["bell"]={"ai":69.7500,"go":25.0746,"java":35.2355,"julia":75.5032,"pypy":25.4803,"node":28.5706,"elixir":32.9479,"chez":67.7500,"sbcl":52.5048};
-PER["strcat"]={"ai":0.0282,"go":0.9570,"rust":0.0173,"java":1.6791,"julia":1.5363,"luajit":1.4280,"pypy":0.1664,"node":0.1107,"elixir":0.0436,"chez":1.3594,"sbcl":4.4223};
-PER["strscan"]={"ai":0.0852,"go":0.0654,"rust":0.0643,"java":0.0642,"julia":0.0644,"luajit":0.1323,"pypy":0.0639,"node":0.3858,"elixir":0.0998,"chez":0.1318,"sbcl":0.1738};
-PER["hash"]={"ai":1.0938,"go":0.5525,"rust":0.7451,"java":0.3071,"julia":0.4913,"luajit":1.0549,"pypy":0.4312,"node":0.7219,"chez":0.7812,"sbcl":0.9493};
-PER["sort"]={"ai":0.6582,"go":0.3616,"rust":0.0641,"java":0.1670,"julia":0.0624,"luajit":1.2097,"pypy":0.3688,"node":1.0044,"elixir":0.5282,"chez":0.4121,"sbcl":0.5938};
-PER["tree"]={"ai":0.7969,"go":1.5803,"rust":4.6771,"java":0.7843,"julia":3.2282,"luajit":3.6110,"pypy":1.9203,"node":1.4019,"elixir":0.9502,"chez":0.6191,"sbcl":1.4806};
-PER["bintrees"]={"ai":20.4375,"go":37.6426,"rust":79.9248,"java":14.3102,"julia":25.5175,"luajit":84.1388,"pypy":29.8670,"node":28.2846,"elixir":21.4866,"chez":15.3750,"sbcl":25.3774};
-PER["mandelbrot"]={"ai":0.5723,"go":0.9563,"rust":0.9256,"java":0.9067,"julia":0.9135,"luajit":1.0293,"pypy":1.3881,"node":0.9203,"elixir":21.3083,"chez":14.9375,"sbcl":1.0079};
-PER["closure"]={"ai":0.3945,"go":0.3225,"rust":0.2965,"java":0.3579,"julia":0.3500,"luajit":14.2956,"pypy":0.3681,"node":2.0509,"elixir":2.6340,"chez":1.4688,"sbcl":2.5158};
-PER["cdcl"]={"ai":46.3750};
-PER["setup"]={"ai":14.2110,"go":28.2410,"rust":63.6600,"java":329.5130,"julia":146.7880,"luajit":2.1540,"pypy":49.2090,"node":27.5020,"elixir":209.8560,"chez":53.8630,"sbcl":5.0960};
+PER["fib"]={"ai":4.7188,"go":3.7757,"rust":2.0035,"java":2.5862,"julia":4.3915,"luajit":8.0084,"pypy":8.4805,"node":7.4832,"elixir":7.2788,"chez":5.7031,"sbcl":5.4692};
+PER["tak"]={"ai":0.5469,"go":0.4617,"rust":0.3469,"java":0.3068,"julia":0.6971,"luajit":1.3912,"pypy":2.3089,"node":0.9596,"elixir":0.8647,"chez":0.5879,"sbcl":4.0004};
+PER["sum"]={"ai":0.2676,"go":0.1135,"rust":0.0525,"java":0.1931,"julia":0.0845,"luajit":0.0706,"pypy":0.2648,"node":0.7753,"elixir":0.4834,"chez":0.4961,"sbcl":0.7032};
+PER["deforest"]={"ai":0.0615,"go":0.0477,"rust":0.0116,"java":0.0133,"julia":0.0179,"luajit":0.0615,"pypy":0.1494,"node":1.1929,"elixir":0.4456,"chez":0.2256,"sbcl":0.2393};
+PER["primes"]={"ai":1.3789,"go":0.9055,"rust":0.7830,"java":0.7683,"julia":0.8978,"luajit":0.8039,"pypy":1.3169,"node":0.7768,"elixir":2.2569,"chez":1.7188,"sbcl":4.8598};
+PER["bell"]={"ai":77.2500,"go":25.0746,"java":35.2355,"julia":75.5032,"pypy":25.4803,"node":28.5706,"elixir":32.9479,"chez":67.7500,"sbcl":52.5048};
+PER["strcat"]={"ai":0.0299,"go":0.9570,"rust":0.0173,"java":1.6791,"julia":1.5363,"luajit":1.4280,"pypy":0.1664,"node":0.1107,"elixir":0.0436,"chez":1.3594,"sbcl":4.4223};
+PER["strscan"]={"ai":0.0886,"go":0.0654,"rust":0.0643,"java":0.0642,"julia":0.0644,"luajit":0.1323,"pypy":0.0639,"node":0.3858,"elixir":0.0998,"chez":0.1318,"sbcl":0.1738};
+PER["hash"]={"ai":1.6797,"go":0.5525,"rust":0.7451,"java":0.3071,"julia":0.4913,"luajit":1.0549,"pypy":0.4312,"node":0.7219,"chez":0.7812,"sbcl":0.9493};
+PER["sort"]={"ai":0.8125,"go":0.3616,"rust":0.0641,"java":0.1670,"julia":0.0624,"luajit":1.2097,"pypy":0.3688,"node":1.0044,"elixir":0.5282,"chez":0.4121,"sbcl":0.5938};
+PER["tree"]={"ai":0.9375,"go":1.5803,"rust":4.6771,"java":0.7843,"julia":3.2282,"luajit":3.6110,"pypy":1.9203,"node":1.4019,"elixir":0.9502,"chez":0.6191,"sbcl":1.4806};
+PER["bintrees"]={"ai":26.6250,"go":37.6426,"rust":79.9248,"java":14.3102,"julia":25.5175,"luajit":84.1388,"pypy":29.8670,"node":28.2846,"elixir":21.4866,"chez":15.3750,"sbcl":25.3774};
+PER["mandelbrot"]={"ai":0.6172,"go":0.9563,"rust":0.9256,"java":0.9067,"julia":0.9135,"luajit":1.0293,"pypy":1.3881,"node":0.9203,"elixir":21.3083,"chez":14.9375,"sbcl":1.0079};
+PER["closure"]={"ai":0.4141,"go":0.3225,"rust":0.2965,"java":0.3579,"julia":0.3500,"luajit":14.2956,"pypy":0.3681,"node":2.0509,"elixir":2.6340,"chez":1.4688,"sbcl":2.5158};
+PER["cdcl"]={"ai":51.2500};
+PER["setup"]={"ai":14.7820,"go":31.2820,"rust":81.9970,"java":452.3950,"julia":187.1650,"luajit":2.8520,"pypy":78.8200,"node":34.9040,"elixir":326.2460,"chez":82.2630,"sbcl":8.7360};
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 

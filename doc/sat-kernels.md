@@ -91,6 +91,25 @@ clock-delta split of the driver loop (bcp / conf / cold path / dec) found every 
 and an instrumented twin counting visit categories (satisfied-skip / slide / unit /
 binary) sized this last one.
 
+## the random rows (rnd100 / rnd150), and what they guard
+
+`satrace.sh` also races random 3-SAT at the threshold (m = 4.26n, five fixed-seed
+instances summed per row) — raw search with NO factorable structure, the standing guard
+against tuning the solver into a pigeonhole specialist. The instances come from ai's own
+explicit-state RNG (`seed`/`random`, reproducible), and ONE generator text feeds both the
+DIMACS dump and ai's in-process lane, so every solver provably sees identical instances;
+the verdict column carries the per-instance SAT/UNSAT signature, which matches across all
+six solvers on every run — a free differential check against five references. The two
+families pull opposite ways: cadical and kissat own PHP but their inprocessing machinery
+costs them the small random instances (dead last there), where the light classics
+(picosat 19/42ms, minisat 22/47) lead; ai places second on PHP and mid-field on random
+(30/78), the most even spread in the table. NB the in-tree `gen-formula` (sat.l's fuzz
+generator) is NOT a threshold generator: its LCG draws the literal sign from the low bit,
+which strictly alternates, so its instances are structurally easy and satisfiable far past
+the classic ratio — fine as a differential-fuzz driver (DPLL referees), useless for
+difficulty calibration. The bench generator draws each (var, sign) independently from
+xoshiro.
+
 ## the watcher-vector experiment (built, measured, kept out)
 
 The full minisat watcher architecture — per-literal contiguous vector segments, blocking
