@@ -16,6 +16,7 @@
 ; path: restarts, learnt-DB reduction, activity decay/rescale.
 ; Run AFTER sat.l (it reuses the leaked oracle + instances):
 ;   cat sat/sat.l sat/flat.l | ai
+; the story, the kernel contract, and the measured results: doc/sat-kernels.md.
 ;
 ; a literal is ENCODED: +v -> 2v, -v -> 2v+1 (neg = xor 1, var = >>1). val[v] holds
 ; the TRUE encoded literal itself (0 = free) so lit-val is a load + a compare. VSIDS
