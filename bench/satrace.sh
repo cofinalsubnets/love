@@ -3,10 +3,11 @@
 # lines (the analogue of run.sh's per-language stream) for the SECOND table on
 # bench.html. Rows are pigeonhole instances PHP(5..8) -- UNSAT and resolution-hard,
 # so they exercise conflict learning; CDCL is exponential on them, which is the
-# point: it spreads the field from ai's interpreted solver up to the tuned C ones.
+# point: it spreads the field from ai's solver up to the tuned C ones.
 #
-# ai's `cdcl` (sat/sat.l) is timed by its OWN clock around the solve call, so the
-# interpreter warmup + sat.l's self-test (which would otherwise dominate) are
+# ai's `fcdcl` (sat/flat.l: flat-arena CDCL + the asm/-emitted native BCP kernel)
+# is timed by its OWN clock around the solve call, so the interpreter warmup + the
+# self-tests (which would otherwise dominate) are
 # excluded -- the honest "solve time". External solvers are timed by process
 # wall-clock (their startup is ~ms). A solver not on $PATH is skipped (a dotted
 # cell); one that exceeds $TIMEOUT is reported `timeout`.
@@ -16,9 +17,9 @@
 # 20=UNSAT), and `timeout` exits 124, all of which are normal control flow here.
 R=..
 GL=$R/out/host/ai
-export AI_NO_IMAGE=1   # run ai's solver INTERPRETED -- like run.sh, and it is the faster way: the
-                       # glaze compiles sat.l soundly (the old miscompile is gone; self-test green
-                       # glazed) but its guards pessimize the map-heavy solve loop ~45% on PHP(6).
+export AI_NO_IMAGE=1   # REQUIRED for the flat solver's native BCP kernel: sat/flat.l installs it
+                       # through the `nif` seam, which the glazed image mops from the book (the
+                       # no-image book keeps it). the old glaze<->sat.l miscompile is gone.
 TIMEOUT=${1:-30}
 INSTANCES="5 6 7 8"
 SOLVERS="minisat cadical kissat glucose picosat"   # external; ai is special-cased
@@ -59,8 +60,8 @@ wall() {
 
 for h in $INSTANCES; do
   # ai: its own solve clock (warmup + self-test excluded), under a process timeout.
-  out=$(printf '(: t0 (clock 0) r (cdcl (php %s) (php-vars %s)) ms (- (clock 0) t0) _ (puts (+ "RESULT " (+ (show ms) (+ " " (show r))))))' "$h" "$h" \
-        | cat "$R/sat/sat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+  out=$(printf '(: t0 (clock 0) r (fcdcl (php %s) (php-vars %s)) ms (- (clock 0) t0) _ (puts (+ "RESULT " (+ (show ms) (+ " " (show r))))))' "$h" "$h" \
+        | cat "$R/sat/sat.l" "$R/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
     echo "php$h ai $(echo "$out" | awk '{print $2, $3}')"
   else
