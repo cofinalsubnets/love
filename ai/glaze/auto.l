@@ -297,7 +297,7 @@
    ;     hoist past the interpreted fills it interleaves with); self-recursive, no sibling call (v1). ==
    ;     interp: the lifted fn gets the SAME captures BY VALUE. The lifted `(g .. h ..)` then needs the MAP
    ;     lane (groupok?/jitgroupir) to glaze; until that lands plift is STANDALONE -- OFF the autogroup chain.
-   roalloc '(pin pull link tablet hash cask say pour jug tap puts putc putn putx dot get sip slurp sound read reads rand randf spin)   ; allocating/mutating/IO heads -- a `_`-bound one is an EFFECT that must NOT be dropped or hoisted
+   roalloc '(pin pull link tablet hash cask say pour jug tap put puts putc putn putx flush dot get sip slurp sound read reads rand randf spin catch scare ev)   ; allocating/mutating/IO heads -- a `_`-bound one is an EFFECT that must NOT be dropped or hoisted
    (uses-head? hs e) (? (two? e) (|| (member? (cap e) hs) (foldl (\ a x (|| a (uses-head? hs x))) 0 (cup e))) 0)
    (fnpair? pr) (: nf (cap pr) (&& (two? nf) (name? (cap nf)) (< 1 (tally nf)) (all name? (cup nf)) (distinctp (cup nf))))  ; (g q..) define-sugar
    (roloop? pr sibs) (: g (caap pr) body (cup pr)                                                 ; a hoistable READ-ONLY self-loop
@@ -550,10 +550,11 @@
    ; --- LOCAL LET (delet): inline a PURE value-let -- (: n1 v1 .. result), every binding a plain symbol
    ;     (no local fn -> that is norm-let/lift's job), names distinct -- into ONE fragment expression by
    ;     ordered substitution, so a fn that names its intermediates joins the group. The fragment is pure
-   ;     (arithmetic + pure sibling calls), so substitution is value-preserving (== the interpreter's
-   ;     once-evaluated shared binding); the ONLY divergence is recomputation, so a binding holding a CALL
-   ;     may inline only when used <=1 time -- a call-free (dup-cheap) value inlines freely, a multi-use
-   ;     call BAILS to the unchanged `:` (which groupok? rejects -> interp, sound, no perf cliff).
+   ;     only when dup-cheap (dcheap?: arithmetic/cmp/peep/tally, NO call): substitution then preserves
+   ;     value AND order. A binding holding a CALL never inlines -- a dup recomputes, a 0-use drop loses
+   ;     an effect, and even a single-use move breaks the sequence law when the call effects (a user fn
+   ;     hides its effects from any head scan) -- it BAILS to the unchanged `:` (groupok? rejects -> interp,
+   ;     sound, no perf cliff).
    ;     delet-body walks the WHOLE body BOTTOM-UP, so a value-let inlines wherever it sits -- at the body
    ;     root OR nested in a sub-expression (e.g. the accumulator arg of a tail call, `(g i (: x v (+ x x)))`,
    ;     the natural "bind an intermediate" idiom). Without this the emitter hits a raw `:` in arg position
@@ -568,7 +569,7 @@
     (? (atom? pairs) result
        (: pr (cap pairs) nm (cap pr) val (cup pr) rest (cup pairs)
           uses (foldl (\ a e (+ a (dcount nm e))) 0 (cat (map cup rest) (L result)))         ; uses in subsequent values + body
-          (? (&& (! (dcheap? val)) (< 1 uses)) orig                                          ; would duplicate a call -> bail to interp
+          (? (! (dcheap? val)) orig                                                          ; a CALL never inlines: a dup (>1 use) recomputes, a 0-use drop loses an effect, and even a 1-use move breaks the sequence law when the call has effects (a user fn hides them from uses-head?) -> bail to interp
              (delet-go (map (\ p (link (cap p) (subst-sym nm val (cup p)))) rest) (subst-sym nm val result) orig))))
    (delet-body e)                                                                             ; inline value-lets ANYWHERE in a fn body (root OR nested), bottom-up
     (? (atom? e) e

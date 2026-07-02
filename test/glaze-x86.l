@@ -576,4 +576,24 @@
                   (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))))) 'bytes 0))))
    (say err "ai/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
 
+; --- delet soundness (auto.l): a value-let inlines only dup-cheap values. Two real miscompiles
+;     shipped from the same line (found by the x11 wire-codec spike, doc/proto/x11.l): a `_`-bound
+;     (put ..) DROPPED when a pure-integer leaf sibling made the group recognizer walk the form,
+;     and two single-use effectful call-bindings INLINED into arg positions, breaking the sequence
+;     law (a 32-bit read came back word-swapped). A user-fn call hides its effects from any head
+;     scan, so a non-dcheap binding must always bail, never inline.
+(: j (jug 0)
+   (dsw v) (: _ (put j (& 255 v)) (put j (& 255 (>> v 8))))                                        ; the x11 spike's w16
+   (dsleaf n) (% (- 4 (% n 4)) 4)                                                                  ; the pure leaf that triggers the walk
+   _ (dsw 513)                                                                                     ; bytes 1 then 2
+   t (tap (L 1 2 3 4))
+   (dsr2 u) (: a (get t) b (get t) (| a (<< b 8)))
+   (dsr4 u) (: a (dsr2 ()) b (dsr2 ()) (| a (<< b 16)))                                            ; the x11 spike's r32
+   v (dsr4 ())
+   _ (assert
+      (0 = (dsleaf 20))
+      (= (slurp j) (+ (+ "" 1) 2))                                                                 ; both bytes, in order: the _-bound put kept
+      (67305985 = v))                                                                              ; 0x04030201: the two dsr2 calls read in source order
+   (say err "ai/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
+
 (say err "test/glaze-x86: emit + auto + ir native codegen ok\n")
