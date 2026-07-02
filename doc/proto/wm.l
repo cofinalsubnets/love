@@ -38,7 +38,9 @@
    _ (r32 ()) idbase (r32 ()) idmask (r32 ()) _ (r32 ())
    vlen (r16 ()) _ (r16 ())
    nscr (r8 ()) nfmt (r8 ())
-   _ (skip 10)
+   _ (skip 4)                                       ; image/bitmap orders, scanline unit/pad
+   minkc (r8 ()) maxkc (r8 ())
+   _ (skip 4)
    _ (skip (+ vlen (pad4 vlen)))
    _ (skip (* 8 nfmt))
    root (r32 ()) _ (r32 ()) _ (r32 ()) _ (r32 ()) _ (r32 ())
@@ -67,9 +69,43 @@
            (nap 1)))
    _ (line (+ "wm: managing root " (+ (show root) (+ " (" (+ (show wpx) (+ "x" (+ (show hpx) ")")))))))
 
+   ; --- the keyboard: GetKeyboardMapping -> keycodes for the bindings, then
+   ;     GrabKey mod1+j / mod1+k / mod1+Return on the root. A grab means the
+   ;     server routes those chords to US no matter who has input focus.
+   nkc (+ 1 (- maxkc minkc))
+   _ (w8 101) _ (w8 0) _ (w16 2) _ (w8 minkc) _ (w8 nkc) _ (w16 0)
+   _ (flush s)
+   _ (r8 ()) kpc (r8 ())                            ; reply, keysyms-per-keycode
+   _ (r16 ()) _ (r32 ()) _ (skip 24)
+   km (tablet 8)                                    ; keysym -> its first keycode
+   _ (: (go i) (? (< i (* nkc kpc))
+                  (: sym (r32 ())
+                     _ (? (&& (|| (= sym 106) (|| (= sym 107) (= sym 65293)))
+                             (! (peep km sym 0)))
+                          (pin km sym (+ minkc (// i kpc))) 0)
+                     (go (+ i 1)))
+                  0)
+        (go 0))
+   kj (peep km 106 0) kk (peep km 107 0) kret (peep km 65293 0)
+   (grab kc) (? (< kc 1) 0                          ; GrabKey: mod1, async/async
+                (: _ (w8 33) _ (w8 1) _ (w16 4) _ (w32 root)
+                   _ (w16 8) _ (w8 kc) _ (w8 1) _ (w8 1)
+                   _ (w8 0) _ (w8 0) (w8 0)))
+   _ (grab kj) _ (grab kk) _ (grab kret)
+   _ (flush s)
+   _ (line (+ "wm: grabbed mod1+j/k/ret, keycodes " (+ (show kj) (+ " " (+ (show kk) (+ " " (show kret)))))))
+
    ; --- the pure core: the stack zipper (test/wm.l, spike-local copy) ---
    (stk f up dn) (L f up dn)
    (whole zs) (? (two? zs) (cat (rev (caup zs)) (link (cap zs) (caup (cup zs)))) ())
+   (srev zs) (? (two? zs) (stk (cap zs) (caup (cup zs)) (caup zs)) ())
+   (fup zs) (? (! (two? zs)) ()
+               (: up (caup zs)
+                  (? (two? up) (stk (cap up) (cup up) (link (cap zs) (caup (cup zs))))
+                     (: all (rev (link (cap zs) (caup (cup zs))))
+                        (stk (cap all) (cup all) ())))))
+   (fdn zs) (srev (fup (srev zs)))
+   (wmaster zs) (? (! (two? zs)) () (stk (cap zs) () (cat (rev (caup zs)) (caup (cup zs)))))
    (sput w zs) (? (two? zs) (stk w (caup zs) (link (cap zs) (caup (cup zs)))) (stk w () ()))
    (snub w l) (filter (\ x (! (= x w))) l)
    (srm w zs) (? (! (two? zs)) ()
@@ -79,6 +115,8 @@
                        (two? up) (stk (cap up) (cup up) ())
                        ())))
    (has? zs w) (any (\ x (= x w)) (whole zs))
+   (focusw win) (: _ (w8 42) _ (w8 1) _ (w16 3) _ (w32 win) (w32 0))   ; SetInputFocus, revert PointerRoot
+   (refocus zs) (? (two? zs) (: _ (focusw (cap zs)) (flush s)) 0)
 
    ; --- Tall: the row (master first) -> ((win x y w h) ..) ---
    (nth l i) (? (< i 1) (cap l) (nth (cup l) (- i 1)))
@@ -117,11 +155,32 @@
                    _ (mapwin win) _ (flush s)
                    _ (line (+ "wm: + " (+ (show win) (+ " row " (show (whole zs2))))))
                    (loop zs2 1))
+                (= code 19)                          ; MapNotify: NOW it is viewable -- focus it
+                (: _ (r8 ()) _ (r16 ()) _ (r32 ()) win (r32 ()) _ (skip 20)
+                   _ (? (&& (two? zs) (= win (cap zs))) (refocus zs) 0)
+                   (loop zs live))
+                (= code 2)                           ; KeyPress: the grabbed chords drive the zipper
+                (: kc (r8 ()) _ (skip 30)
+                   (? (! (two? zs)) (loop zs live)
+                      (= kc kj)                      ; mod1+j: focus down
+                      (: zs2 (fdn zs) _ (refocus zs2)
+                         _ (line (+ "wm: focus -> " (show (cap zs2))))
+                         (loop zs2 live))
+                      (= kc kk)                      ; mod1+k: focus up
+                      (: zs2 (fup zs) _ (refocus zs2)
+                         _ (line (+ "wm: focus -> " (show (cap zs2))))
+                         (loop zs2 live))
+                      (= kc kret)                    ; mod1+Return: the focused window becomes master
+                      (: zs2 (wmaster zs) _ (retile zs2) _ (refocus zs2)
+                         _ (line (+ "wm: master -> " (+ (show (cap zs2)) (+ " row " (show (whole zs2))))))
+                         (loop zs2 live))
+                      (loop zs live)))
                 (= code 17)                          ; DestroyNotify: unmanage + tile
                 (: _ (r8 ()) _ (r16 ()) _ (r32 ()) win (r32 ()) _ (skip 20)
                    (? (! (has? zs win)) (loop zs live)
                       (: zs2 (srm win zs)
                          _ (retile zs2)
+                         _ (refocus zs2)
                          _ (line (+ "wm: - " (+ (show win) (+ " row " (show (whole zs2))))))
                          (? (&& live (! (two? zs2))) (line "wm: empty -- down")
                             (loop zs2 live)))))
