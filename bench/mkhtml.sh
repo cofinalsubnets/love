@@ -103,13 +103,16 @@ and resolution-hard, where clause learning alone is <b>exponential</b> and ai&rs
 rnd<i>n</i>, random 3-SAT at the threshold (<i>m</i> = 4.26<i>n</i>, five fixed-seed
 instances summed; the verdict column is the per-instance SAT/UNSAT signature, identical
 across every solver): raw search with no factorable structure, the guard against
-pigeonhole specialization. ai is timed by its own solve clock (interpreter warmup and
+pigeonhole specialization &mdash; and REAL instances from SATLIB, the classic
+competition-era benchmark library (uf/uuf = uniform random at the transition,
+satisfiable and proven-UNSATISFIABLE sets; flat = graph 3-coloring), byte-identical
+files raced by every solver. ai is timed by its own solve clock (interpreter warmup and
 the one-time kernel assembly excluded); the C solvers by process wall-clock (their
-startup is ~ms). <code>timeout</code> = exceeded the cutoff. The two families pull
-opposite ways: the big inprocessing solvers (cadical, kissat) are built for structure
-but their machinery costs them the small random instances, where the light classics
-(picosat, minisat) lead &mdash; ai leads the PHP net outright (ahead of cadical on
-PHP(5&ndash;7)) and sits mid-field on random, the most even spread in the table.</p>
+startup is ~ms). <code>timeout</code> = exceeded the cutoff. The families pull opposite
+ways: the big inprocessing solvers (cadical, kissat) are built for structure but their
+machinery costs them the small random instances, where the light classics (picosat,
+minisat) lead &mdash; ai leads the whole-table net, ahead of cadical on PHP(5&ndash;7)
+and mid-field on the pure random rows.</p>
 <div class="wrap">
 SAT
 awk '

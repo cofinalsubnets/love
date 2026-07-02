@@ -528,6 +528,7 @@
    fkers (tablet 0)                                         ; nv -> (bcp conf dec), one assemble per nvars
    fknob #0                                                 ; pin 1 to force the interpreted twins (the differential switch)
    fmaxl0 #2000                                             ; the initial learnt-DB cap (the gate lowers it to force reductions)
+   frp0 #4                                                  ; rephase-wheel cadence in restarts (pin 0 = off)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep (assemble 'x64 ir) 'bytes 0)
        c (cask (tally bs))
@@ -553,7 +554,7 @@
        _ (pin s 'lvo (lvo-of nv)) _ (pin s 'rso (rso-of nv)) _ (pin s 'who (who-of nv)) _ (pin s 'vao (vao-of nv))
        _ (pin s 'ar (cask 4096)) _ (pin s 'wn (cask 4096))  ; words 0-1 of each reserved: 0 stays "none"
        _ (pin s 'bad 0)
-       _ (pin s 'nconf 0) _ (pin s 'rnum 1) _ (pin s 'climit 400)
+       _ (pin s 'nconf 0) _ (pin s 'rnum 1) _ (pin s 'climit 400) _ (pin s 'rew 0)
        _ (pin s 'learnts ()) _ (pin s 'nl 0) _ (pin s 'maxl (peep fmaxl0 0 2000))
        ks (fbcpk nv)
        use (&& (two? ks) (= 0 (peep fknob 0 0)))
@@ -583,6 +584,15 @@
              (putw fx 6 (>> vi 8)))
           (putw fx 6 vi)))
    (fnext-restart s) (: rn (+ 1 (peep s 'rnum 1)) _ (pin s 'rnum rn) _ (pin s 'nconf 0) _ (pin s 'climit (* (luby rn) 400)) 0)
+   (frephase s st)                                          ; randomize every saved phase; -> st'
+    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
+       ((: (go v st) (? (> v nv) st
+             (: p (random st 2) _ (putw fx (+ pho v) (+ 1 (cap p))) (go (+ v 1) (cup p)))))
+        1 st))
+   (finvert s)                                              ; flip every saved phase
+    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
+       ((: (go v) (? (> v nv) 0
+             (: p (getw fx (+ pho v)) _ (putw fx (+ pho v) (? (= p 1) 2 1)) (go (+ v 1))))) 1))
    ; learnt-DB REDUCTION at a level-0 restart, by TOMBSTONE: the worst-glue half
    ; (glue <= 3 immortal) gets its arena SIZE word zeroed, and both kernels' bcp walk
    ; unlinks a dead clause's watch nodes lazily on the next visit -- no arena
@@ -608,7 +618,7 @@
    ; --- the search loop: three kernel calls + lisp bookkeeping --------------------
    (fsearch s)                                              ; -> 'sat or 'unsat (s holds the model on SAT)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0)
-       ((: (loop _)
+       ((: (loop st)                                                ; st threads the rephase RNG (seeded: reproducible)
            (: confl ((peep s 'bcp ()) fx (peep s 'ar ()) (peep s 'wn ()))
               (? (> confl -1)
                  (: _ (fens s 'ar (* 8 (+ (getw fx 4) (+ nv 3))))   ; room for the learnt clause
@@ -620,15 +630,27 @@
                                (: _ (pin s 'learnts (link (link cid glue) (peep s 'learnts ())))
                                   (pin s 'nl (+ 1 (peep s 'nl 0)))) 0)
                           _ (fdecay s) _ (pin s 'nconf (+ 1 (peep s 'nconf 0)))
-                          (loop ()))))
+                          (loop st))))
                  (&& (> (getw fx 2) 0)                              ; a full DB also forces the restart:
                      (|| (>= (peep s 'nconf 0) (peep s 'climit 0))  ; reduction is only sound at level 0
                          (> (peep s 'nl 0) (peep s 'maxl 2000))))
                     (: _ (fbackjump s 0) _ (fnext-restart s)
                        _ (? (> (peep s 'nl 0) (peep s 'maxl 2000)) (freduce s) 0)
-                       (loop ()))
+                       ; REPHASE WHEEL every frp0 restarts, policies cycling random ->
+                       ; invert -> keep: a SAT instance stuck in a bad polarity basin
+                       ; escapes (uf250 ~35% net), the keep spoke preserves a good basin,
+                       ; and UNSAT/php runs are measurably untouched. always-random
+                       ; instead reshuffles luck (one uf250 went 1.2s -> 12s).
+                       rp (peep frp0 0 0)
+                       st2 (? (&& (> rp 0) (= 0 (% (peep s 'rnum 1) rp)))
+                              (: w (peep s 'rew 0) _ (pin s 'rew (+ w 1))
+                                 (? (= 0 (% w 3)) (frephase s st)
+                                    (= 1 (% w 3)) (: _ (finvert s) st)
+                                    st))
+                              st)
+                       (loop st2))
                  (: v ((peep s 'dec ()) fx)
-                    (? (= v 0) 'sat (loop ())))))) ()))
+                    (? (= v 0) 'sat (loop st)))))) (seed 42)))
    (fextract s nvars) (: fx (peep s 'fx ()) vao (peep s 'vao 0)
                          (map (\ v (link v (? (= 0 (& (getw fx (+ vao v)) 1)) 1 -1))) (rng 1 (+ nvars 1))))
    ; --- BVA: bounded variable ADDITION (clause factoring), the preprocessing pass ---
@@ -657,14 +679,13 @@
        addc (\ c0                                           ; canon + dedupe + index; drops tautologies
         (: c (sort (dedup-lits c0))
            (? (= 1 (taut? c)) 0
-              (: k (show c)
-                 (? (whole? (peep ckey k ())) 0
-                    (: cid (peep ncid 0 0) _ (pin ncid 0 (+ cid 1))
-                       _ (pin cls cid c) _ (pin ckey k cid)
-                       _ (foldl (\ _ m (: _ (pin occ m (link cid (peep occ m ()))) 0)) 0 c)
-                       1))))))
+              (? (whole? (peep ckey c ())) 0                ; the sorted clause ITSELF is the key (chains key by value)
+                 (: cid (peep ncid 0 0) _ (pin ncid 0 (+ cid 1))
+                    _ (pin cls cid c) _ (pin ckey c cid)
+                    _ (foldl (\ _ m (: _ (pin occ m (link cid (peep occ m ()))) 0)) 0 c)
+                    1)))))
        delc (\ cid (: c (peep cls cid ())
-                      (? (! (two? c)) 0 (: _ (pull cls cid 0) _ (pull ckey (show c) 0) 1))))
+                      (? (! (two? c)) 0 (: _ (pull cls cid 0) _ (pull ckey c 0) 1))))
        livec (\ l (filter (\ cid (< 1 (tally (peep cls cid ())))) (peep occ l ())))
        orig (\ m (<= (>> (abs m) 0) nvars))                 ; an ORIGINAL-variable literal
        ofree (\ c (all orig c))                             ; ... clause of only those
@@ -708,7 +729,7 @@
                     (: x (+ 1 (peep nv 0 0)) _ (pin nv 0 x)
                        rs (map (\ cid (rem-lit l (peep cls cid ()))) mcls)
                        _ (foldl (\ _ m (: _ (foldl (\ _ r
-                              (: k (show (sort (link m r))) did (peep ckey k ())
+                              (: k (sort (link m r)) did (peep ckey k ())
                                  (? (whole? did) (delc did) (scare 'bva-miss k))))
                             0 rs) 0)) 0 mlit)
                        _ (foldl (\ _ r (: _ (addc (link x r)) 0)) 0 rs)
@@ -718,23 +739,28 @@
                                                                      ; resolution), so x propagates instead of
                                                                      ; wandering: without it CDCL decides x freely
        _ (foldl (\ _ c (: _ (addc c) 0)) 0 formula)
-       _ ((: (round r)                                       ; sweep most-occurring literals first; stop on a quiet round
-             (: ls (sortby (\ a b (? (= (cap a) (cap b)) (<= (cup a) (cup b)) (> (cap a) (cap b))))
-                           (filter (\ p (>= (cap p) 4)) (map (\ m (link (tally (livec m)) m)) (keys occ))))
-                ch (foldl (\ a p (+ a (try (cup p)))) 0 ls)
-                (? (&& (> ch 0) (&& (< r (peep fbvar0 0 8)) (< (peep nv 0 0) (+ (* 4 nvars) 64)))) (round (+ r 1)) 0)))
+       _ ((: (round r)                                       ; sweep most-occurring literals first; stop on a quiet
+             (: ls (sortby (\ a b (? (= (cap a) (cap b)) (<= (cup a) (cup b)) (> (cap a) (cap b))))   ; round OR when the
+                           (filter (\ p (>= (cap p) 4)) (map (\ m (link (tally (livec m)) m)) (keys occ))))   ; cumulative find
+                ch (foldl (\ a p (+ a (try (cup p)))) 0 ls)                                           ; is a handful (a sweep
+                (? (&& (> ch 0)                                                                       ; costs a full pass; an
+                       (&& (> (* 16 (- (peep nv 0 0) nvars)) nvars)                                   ; incidental 6-of-300 is
+                           (&& (< r (peep fbvar0 0 8)) (< (peep nv 0 0) (+ (* 4 nvars) 64)))))        ; not worth another)
+                   (round (+ r 1)) 0)))
            0)
        (link (map (\ cid (peep cls cid ())) (keys cls)) (peep nv 0 0)))
    (fcdcl formula nvars)
     ; the fbva LADDER: re-run the pass on its own output with the baseline lifted (level-1
-    ; aux become "original" for level 2) while it keeps factoring -- level 2 deepens the
+    ; aux become "original" for level 2) while it keeps factoring SUBSTANTIALLY (> nvars/16
+    ; fresh vars -- an incidental handful, e.g. flat graph coloring's 6-of-300, is not a
+    ; commander hierarchy and another pass is pure intake cost) -- level 2 deepens the
     ; commander tree (php8 ~1550 -> ~1400 conflicts under the reason-side bump; WITHOUT
     ; that bump a deeper tree actively hurts, so the ladder rides the bump). an instance
     ; with nothing factorable exits after one pass (randoms: no ladder cost). models
     ; still project by the ORIGINAL nvars.
     (: p (? (= 0 (peep fbva0 0 1)) (link formula nvars)
             ((: (go p k) (: p2 (fbva (cap p) (cup p))
-                            (? (|| (= (cup p2) (cup p)) (>= k 3)) p2 (go p2 (+ k 1)))))
+                            (? (|| (<= (* 16 (- (cup p2) (cup p))) (cup p)) (>= k 3)) p2 (go p2 (+ k 1)))))
              (link formula nvars) 1))
        s (fmk (cap p) (cup p))
        (? (= 1 (peep s 'bad 0)) 'unsat

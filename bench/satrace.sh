@@ -1,16 +1,22 @@
 #!/bin/sh
 # satrace.sh -- the SAT-solver shootout. Emits raw "<instance> <solver> <ms> <verdict>"
 # lines (the analogue of run.sh's per-language stream) for the SECOND table on
-# bench.html. Two row families:
+# bench.html. Three row families:
 #   php5..php8 -- pigeonhole, UNSAT and resolution-hard: exercises conflict learning
 #     and the fbva factoring pass (CDCL alone is exponential here, re-encoding isn't).
 #   rnd100/rnd150 -- random 3-SAT at the threshold (m = 4.26n, 5 fixed-seed instances
 #     summed): raw search with NO factorable structure, the guard against tuning the
 #     solver into a pigeonhole specialist. The verdict field is the per-instance
 #     signature ("uusus"), so solver agreement is visible in the raw stream.
+#   uf100/uuf100/uuf150/uf250/flat100 -- REAL benchmark-library instances (SATLIB,
+#     the classic competition-era suite): uniform random 3-SAT at the phase
+#     transition, SATISFIABLE (uf) and PROVEN-UNSATISFIABLE (uuf) sets, plus flat
+#     graph 3-coloring; a fixed file prefix per row, summed, signature verdicts.
+#     Downloaded once into out/bench/satlib/ (rows silently skip if offline).
 # The rnd instances are drawn from ai's own xoshiro (seed/random, reproducible), and
 # the SAME generator text feeds both the DIMACS dump and ai's in-process lane, so
-# every solver sees identical instances by construction.
+# every solver sees identical instances by construction; the SATLIB rows feed ai the
+# byte-identical files, converted to a formula literal by awk.
 #
 # ai's `fcdcl` (sat/flat.l: flat-arena CDCL + the asm/-emitted native BCP kernel)
 # is timed by its OWN clock around the solve call, so the interpreter warmup + the
@@ -162,3 +168,74 @@ for n in $RNDN; do
     if [ "$to" = 1 ]; then echo "rnd$n $s timeout dnf"; else echo "rnd$n $s $tot $sig"; fi
   done
 done
+
+# -- the SATLIB rows: real benchmark-library instances, downloaded once and cached.
+#    Each row = a fixed set of files summed; verdict = the per-file signature.
+SLIB=$R/out/bench/satlib
+SATLIB_URL="https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT"
+# fetch <tarball-subpath> <glob-of-wanted-files> -- extract matching files FLAT into $SLIB
+fetch() {
+  tb=$(basename "$1")
+  mkdir -p "$SLIB/tmp.$$" 2>/dev/null
+  [ -f "$SLIB/$tb" ] || curl -s --max-time 120 -o "$SLIB/$tb" "$SATLIB_URL/$1" || { rm -f "$SLIB/$tb"; return 1; }
+  tar xzf "$SLIB/$tb" -C "$SLIB/tmp.$$" 2>/dev/null || return 1
+  # strip the SATLIB "%"-footer in transit: minisat/cadical REJECT it as a parse
+  # error (exit 1/3 in ~3ms -- a fake "solve"; the signature column catches it).
+  find "$SLIB/tmp.$$" -name "$2" | while read -r f; do
+    awk '/^%/{exit} {print}' "$f" > "$SLIB/$(basename "$f")"
+  done
+  rm -rf "$SLIB/tmp.$$"
+}
+# row spec: <row> <tarball-subpath> <file-prefix> <count>. SATLIB names files
+# "<prefix>-0<i>.cnf" (a literal 0 separator: -01, -09, -010, -0999); the GCP sets
+# use plain "<prefix>-<i>.cnf" -- enumerate both.
+slibrow() {
+  row=$1; tbp=$2; pre=$3; cnt=$4
+  files=""
+  i=1; while [ "$i" -le "$cnt" ]; do
+    f2="$pre-0$i.cnf"; f1="$pre-$i.cnf"
+    if   [ -f "$SLIB/$f2" ]; then files="$files $SLIB/$f2"
+    elif [ -f "$SLIB/$f1" ]; then files="$files $SLIB/$f1"
+    else fetch "$tbp" "$pre-*.cnf" >/dev/null 2>&1
+         if   [ -f "$SLIB/$f2" ]; then files="$files $SLIB/$f2"
+         elif [ -f "$SLIB/$f1" ]; then files="$files $SLIB/$f1"
+         else return 0; fi   # offline / missing -> skip the whole row silently
+    fi
+    i=$((i+1))
+  done
+  # ai: embed each file as a formula literal (awk; the % footer ends the body),
+  # one process for the row -- warm on the first file, then clock each solve. all
+  # forms are BODY-LESS top-level `:` (the leaking idiom); state rides the boxes.
+  drv=$(for f in $files; do
+    n=$(awk '/^p/{print $3; exit}' "$f")
+    lst=$(awk '$1=="%"{exit} /^[cp]/{next} {for(j=1;j<=NF;j++){ if($j=="0"){printf ") "; o=0} else {if(!o){printf "("; o=1}; printf "%s ", $j}}}' "$f")
+    printf '(: f (\\ (%s)) _ (? (peep W 0 0) 0 (fcdcl f %s)) t0 (clock 0) r (fcdcl f %s) _ (pin MS 0 (+ (peep MS 0 0) (- (clock 0) t0))) _ (pin SG 0 (+ (peep SG 0 "") (? (id? r (\\ unsat)) "u" "s"))) _ (pin W 0 1))\n' "$lst" "$n" "$n"
+  done)
+  out=$({ printf '(: MS #0 SG #(0 "") W #0)\n'
+          printf '%s\n' "$drv"
+          printf '(: _ (puts (+ "RESULT " (+ (show (peep MS 0 0)) (+ " " (+ (peep SG 0 "") "\n"))))))\n'; } \
+        | cat "$R/sat/sat.l" "$R/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+  if [ -n "$out" ]; then
+    echo "$row ai $(echo "$out" | awk '{print $2, $3}')"
+  else
+    echo "$row ai timeout dnf"
+  fi
+  # external solvers: per-file wall clock, summed; signature from the 10/20 exits.
+  for s in $SOLVERS; do
+    command -v "$s" >/dev/null 2>&1 || continue
+    tot=0; sig=""; to=0
+    for f in $files; do
+      res=$(wall "$s" "$f"); ms=$(echo "$res" | cut -d' ' -f1); ex=$(echo "$res" | cut -d' ' -f2)
+      if [ "$ex" = 124 ]; then to=1; break; fi
+      tot=$(awk -v a="$tot" -v b="$ms" 'BEGIN{printf "%.3f", a+b}')
+      case "$ex" in 10) sig="${sig}s";; 20) sig="${sig}u";; *) sig="${sig}?";; esac
+    done
+    if [ "$to" = 1 ]; then echo "$row $s timeout dnf"; else echo "$row $s $tot $sig"; fi
+  done
+}
+mkdir -p "$SLIB"
+slibrow uf100   "RND3SAT/uf100-430.tar.gz"   uf100   10
+slibrow uuf100  "RND3SAT/uuf100-430.tar.gz"  uuf100  10
+slibrow uuf150  "RND3SAT/uuf150-645.tar.gz"  uuf150  5
+slibrow uf250   "RND3SAT/uf250-1065.tar.gz"  uf250   3
+slibrow flat100 "GCP/flat100-239.tar.gz"     flat100 3

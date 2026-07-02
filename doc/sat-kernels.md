@@ -5,10 +5,12 @@ compiler* — not a general codegen pass, but one app compiling its own hot loop
 CDCL SAT solver's three hot loops are hand-written in asm/ neutral IR, assembled **at
 solver-build time, specialized to the instance** (section displacements baked as immediates,
 one kernel set per `nvars`, cached), and installed through the `nif` seam — plus `fbva`,
-the extended-resolution factoring ladder and reason-side VSIDS bumping (below). The result
-is FIRST in the reference-solver field by net time: faster than cadical outright on
-PHP(5–7) (1.5ms behind on PHP(8)), faster than kissat everywhere, mid-field on threshold
-random 3-SAT (`bench/bench.html`, second table; `bench/satrace.sh` reproduces it).
+the extended-resolution factoring ladder, reason-side VSIDS bumping, and the rephase
+wheel (below). The result is FIRST in the reference-solver field by net time across all
+eleven rows — pigeonhole, threshold random 3-SAT, and real SATLIB instances including
+the proven-UNSAT sets (ai 1618, picosat 2047, cadical 2216, kissat 3975): faster than
+cadical outright on PHP(5–7), mid-field on the pure random rows (`bench/bench.html`,
+second table; `bench/satrace.sh` reproduces it).
 
 the lineage: `sat/sat.l` is the readable tablet-based solver and stays the oracle —
 `sat/flat.l` runs AFTER it (`cat sat/sat.l sat/flat.l | ai`) and gates differentially
@@ -191,12 +193,41 @@ BVA's varying variable counts (phantom vars are sound: never watched, decided de
 popped clean). Cost on unstructured instances: ~8µs/clause of intake, the floor of an
 interpreted pass.
 
+## the SATLIB rows — real instances, and what they taught
+
+`satrace.sh` also races five rows of REAL benchmark-library instances (SATLIB, the
+classic competition-era suite; downloaded once into `out/bench/satlib/`, rows skip
+silently offline): uf100/uuf100 (uniform random 3-SAT at the transition, 10 satisfiable
+/ 10 proven-unsatisfiable), uuf150 (5 UNSAT), uf250 (3 SAT), flat100 (3 graph
+3-colorings). Two traps en route: SATLIB files end in a `%` footer that minisat and
+cadical REJECT — the exit-code "solves" at 3ms were parse errors, and the signature
+column (`?????`) is what caught it (strip the footer at fetch); and the file naming is
+a literal `-0` separator (`uf100-010.cnf`, not `uf100-10.cnf`).
+
+The rows immediately found two whales. flat100 ran 12–20× off the field — all of it
+fbva intake: the solver finishes coloring instances in ~3ms with ~0 conflicts, while
+the factoring pass paid two full sweeps (and a ladder pass) to find 6 incidental
+variables in 300. Both loops now gate on SUBSTANTIAL growth (> nvars/16 fresh vars, one
+sweep otherwise): flat100 167 → 45ms, php untouched. And uf250 (SAT instances) ran
+seconds with wild per-instance variance — polarity luck, the classic case for
+**rephasing**. Always-random rephasing just reshuffles the luck (one instance went
+1.2s → 12s); the landed version is cadical's idea in miniature, a **policy wheel** —
+random → invert → keep, every 4th restart, phases drawn from a seeded reproducible
+stream — which keeps the escapes and dampens the reshuffle: uf250 4.2s → 1.1s, UNSAT
+rows and php measurably untouched.
+
+**shrink stayed out.** The all-UIP learnt-shrinking phase (cadical's biggest single
+ablation, +61%) was built as a twin phase and measured: −7% conflicts on uuf150, −10%
+on uuf100, +15% (worse) on factored php8. Inside cadical's ensemble it's the top
+feature; on top of OUR reason-side bump it's a single-digit trade — not worth a kernel
+phase. The spike survives with its verdict in `doc/proto/sat-shrink.l` (the stronger
+recursive variant is the open follow-up).
+
 ## what the remaining distance is
 
-on pigeonhole, essentially none — ai leads cadical on PHP(5–7) and trails by 1.5ms on
-PHP(8). the open rungs are now on the random rows (picosat/minisat lead there; our
-per-conflict engine cost and restart policy on unstructured instances) and the two
-unimplemented cadical search features the ablation named: shrink (trail-based all-UIP
-learnt shrinking, +61% conflicts when cadical loses it) and stable/focused mode
-alternation (+32%) — plus the last ~20% of factoring-group quality. all lisp cold-path
-or kernel-phase work; the architecture doesn't move.
+with the eleven-row net led outright (ai 1618, picosat 2047, cadical 2216, kissat
+3975), the remaining per-row gaps: picosat/minisat still lead the small random rows
+(raw per-conflict engine cost), uuf250-class instances hit a locality cliff (~70s — the
+tombstone arena leak spreading the working set on 100k+-conflict runs; a rare real
+compaction is the known fix), and cadical keeps php8 by 1.5ms. all lisp cold-path or
+kernel-phase work; the architecture doesn't move.
