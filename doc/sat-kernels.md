@@ -223,11 +223,37 @@ feature; on top of OUR reason-side bump it's a single-digit trade — not worth 
 phase. The spike survives with its verdict in `doc/proto/sat-shrink.l` (the stronger
 recursive variant is the open follow-up).
 
+## long runs: linear cap growth + the real compaction
+
+uuf250-class instances (100k+-conflict runs) exposed two long-run diseases. The learnt
+cap grew ×3/2 PER REDUCTION — geometric, so after thirty reductions the cap is
+effectively infinite, the DB balloons, and bcp relives the pre-tombstone watch-list
+disease: per-conflict cost degraded 9µs → ~78µs across one run. The cap now grows
+LINEARLY (+500 per reduction): uuf250-01 101s → 31s. And the tombstone reducer leaks
+dead slabs forever, so `fcompact` — the resurrected compacting reducer — now runs when
+the arena top passes `fcmp0` words (1M default): live clauses into a fresh cask,
+watches rebuilt (the wn arena's dead nodes leak too), learnt cids remapped, level-0
+reasons zeroed. The tombstone write stashes the slab's true length at cid+1 (nothing
+reads a dead clause's literals) so the compactor can walk the arena. 31s → 21s.
+
+Two soundness lessons, both now permanently gated (a forced-fcmp0 differential battery
+in the corpus, mirroring the forced-reduction one): the old "all-false cannot arise
+(propagation was drained)" invariant is FALSE inside the compaction walk itself — a
+fact it enqueues can falsify a later clause before bcp ever runs, and that is a
+level-0 conflict, i.e. an UNSAT verdict (`s 'bad`), not a scare. And the first shipped
+fcompact returned a bogus SAT on uuf250 through a chain worth remembering: a
+misplaced closing paren restructured the `res` binding, the one-scope law made every
+`res` read the missing condition (`;; missing res`, the always-on warn was the clue),
+`(cap ())` flowed into `putw fx 4` as garbage, and the solver searched an empty arena
+to a cheerful model. The differential gate at small scale passed throughout — the
+compaction only fires past 1M words, hence the forced-threshold gate.
+
 ## what the remaining distance is
 
-with the eleven-row net led outright (ai 1618, picosat 2047, cadical 2216, kissat
-3975), the remaining per-row gaps: picosat/minisat still lead the small random rows
-(raw per-conflict engine cost), uuf250-class instances hit a locality cliff (~70s — the
-tombstone arena leak spreading the working set on 100k+-conflict runs; a rare real
-compaction is the known fix), and cadical keeps php8 by 1.5ms. all lisp cold-path or
+with the eleven-row net led outright (ai ~1700±100 by uf250's rephase luck, picosat
+~2030, cadical ~2230, kissat ~4000), the remaining per-row gaps: picosat/minisat still
+lead the small random rows (raw per-conflict engine cost), uuf250-class UNSAT randoms
+run ~21s against cadical's ~0.2s (conflict-count class: search quality on long
+unstructured refutations — stable/focused alternation and stronger minimization are
+the known levers), and cadical keeps php8 by ~1.5ms. all lisp cold-path or
 kernel-phase work; the architecture doesn't move.

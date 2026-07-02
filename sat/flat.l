@@ -529,6 +529,7 @@
    fknob #0                                                 ; pin 1 to force the interpreted twins (the differential switch)
    fmaxl0 #2000                                             ; the initial learnt-DB cap (the gate lowers it to force reductions)
    frp0 #4                                                  ; rephase-wheel cadence in restarts (pin 0 = off)
+   fcmp0 #1048576                                           ; arena-words threshold for the real compaction
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep (assemble 'x64 ir) 'bytes 0)
        c (cask (tally bs))
@@ -611,10 +612,70 @@
        _ (foldl (\ i p (: _ (? (>= i nk) (pin dead (cap p) 1) 0) (+ i 1))) 0 srt)
        _ ((: (zr t) (? (>= t (getw fx 0)) 0
               (: v (>> (getw fx (+ 8 t)) 1) _ (putw fx (+ rso v) 0) (zr (+ t 1))))) 0)
-       _ (foldl (\ _ cid (: _ (putw ar cid 0) 0)) 0 (keys dead))
+       ; the tombstone stashes the slab's true length at cid+1 (nothing reads a dead
+       ; clause's lits -- the size-0 check precedes every access), so fcompact can walk
+       ; the arena without it.
+       _ (foldl (\ _ cid (: n (getw ar cid) _ (putw ar cid 0) _ (putw ar (+ cid 1) n) 0)) 0 (keys dead))
        nl (filter (\ p (= 0 (peep dead (cap p) 0))) ls)
        _ (pin s 'learnts nl) _ (pin s 'nl (tally nl))
-       (pin s 'maxl (// (* (peep s 'maxl 2000) 3) 2)))
+       ; the cap grows LINEARLY: geometric (x3/2 per reduce) compounds to an unbounded
+       ; DB on 100k-conflict runs -- watch lists balloon and bcp relives the pre-tombstone
+       ; disease (uuf250: 101s geometric vs 31s linear).
+       (pin s 'maxl (+ (peep s 'maxl 2000) 500)))
+   ; RARE REAL COMPACTION (fcompact): the tombstone reducer leaks dead slabs -- on a
+   ; 100k+-conflict run the arena spreads over tens of MB and bcp's working set dies.
+   ; when the arena top passes fcmp0 words (at a level-0 restart, after freduce), the
+   ; LIVE clauses compact into a fresh cask, watches rebuild from scratch (wn resets:
+   ; its dead nodes leak too), learnt cids remap. same level-0 discipline as freduce:
+   ; level-0 reasons zeroed, a level-0-satisfied clause drops, a single-nonfalse one
+   ; enqueues as a fact, all-false cannot arise (propagation was drained).
+   (fswap c i j) (? (= i j) 0 (: a (getw c i) b (getw c j) _ (putw c i b) (putw c j a)))
+   (fcompact s)
+    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) who (peep s 'who 0) rso (peep s 'rso 0) ar (peep s 'ar ())
+       ls (peep s 'learnts ())
+       lt (tablet 0) _ (foldl (\ _ p (pin lt (cap p) (cup p))) 0 ls)
+       _ ((: (zw i) (? (> i (+ 1 (* 2 nv))) 0 (: _ (putw fx (+ who i) 0) (zw (+ i 1))))) 0)
+       _ (putw fx 5 2)
+       ; ZERO the level-0 reasons: every cid MOVES here, so a stale reason would
+       ; dereference garbage in the new arena (absorb skips level-0 vars, but the
+       ; discipline is load-bearing -- omitting this produced a bogus SAT on uuf250).
+       _ ((: (zr t) (? (>= t (getw fx 0)) 0
+              (: v (>> (getw fx (+ 8 t)) 1) _ (putw fx (+ rso v) 0) (zr (+ t 1))))) 0)
+       end (getw fx 4)
+       lw ((: (cw cid acc)                                  ; live words (dead slabs skip via the stash)
+              (? (>= cid end) acc
+                 (: n (getw ar cid)
+                    (? (= n 0) (cw (+ cid (+ (getw ar (+ cid 1)) 1)) acc)
+                       (cw (+ cid (+ n 1)) (+ acc (+ n 1))))))) 2 2)
+       na (cask (* 8 (+ lw (+ nv 8)))) _ (pin s 'ar na)
+       res ((: (walk cid nu nls)
+               (? (>= cid end) (link nu nls)
+                  (: n (getw ar cid)
+                     (? (= n 0) (walk (+ cid (+ (getw ar (+ cid 1)) 1)) nu nls)
+                        (: nxt (+ cid (+ n 1))
+                           lits ((: (go j acc) (? (< j (+ cid 1)) acc (go (- j 1) (link (getw ar j) acc)))) (+ cid n) ())
+                           (? (< n 2) (walk nxt nu nls)
+                              (any (\ el (= 1 (flv s el))) lits) (walk nxt nu nls)
+                              (: nf (filter (\ el (! (= -1 (flv s el)))) lits)
+                                 ; all-false CAN arise here: a fact fenq'd earlier in
+                                 ; THIS walk is still queued, so a later clause may be
+                                 ; falsified before bcp ever sees it -- that is a
+                                 ; level-0 conflict: the formula is UNSAT (s 'bad, read
+                                 ; by the driver after the compaction).
+                                 (? (atom? nf) (: _ (pin s 'bad 1) (walk nxt nu nls))
+                                    (atom? (cup nf)) (: _ (fenq s (cap nf) 0) (walk nxt nu nls))
+                                    (: _ (pour na (* 8 nu) ar (* 8 cid) (* 8 (+ n 1)))
+                                       l1 (cap nf) l2 (caup nf)
+                                       p1 ((: (fnd j) (? (= (getw na j) l1) j (fnd (+ j 1)))) (+ nu 1))
+                                       _ (fswap na (+ nu 1) p1)
+                                       p2 ((: (fnd j) (? (= (getw na j) l2) j (fnd (+ j 1)))) (+ nu 2))
+                                       _ (fswap na (+ nu 2) p2)
+                                       _ (fwatch s nu (getw na (+ nu 1))) _ (fwatch s nu (getw na (+ nu 2)))
+                                       g (peep lt cid ())
+                                       (walk nxt (+ nu (+ n 1))
+                                             (? (whole? g) (link (link nu g) nls) nls)))))))))))
+            2 2 ())
+       _ (putw fx 4 (cap res)) _ (pin s 'learnts (cup res)) (pin s 'nl (tally (cup res))))
    ; --- the search loop: three kernel calls + lisp bookkeeping --------------------
    (fsearch s)                                              ; -> 'sat or 'unsat (s holds the model on SAT)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0)
@@ -636,6 +697,7 @@
                          (> (peep s 'nl 0) (peep s 'maxl 2000))))
                     (: _ (fbackjump s 0) _ (fnext-restart s)
                        _ (? (> (peep s 'nl 0) (peep s 'maxl 2000)) (freduce s) 0)
+                       _ (? (> (getw fx 4) (peep fcmp0 0 1048576)) (fcompact s) 0)
                        ; REPHASE WHEEL every frp0 restarts, policies cycling random ->
                        ; invert -> keep: a SAT instance stuck in a bad polarity basin
                        ; escapes (uf250 ~35% net), the keep spoke preserves a good basin,
@@ -648,7 +710,7 @@
                                     (= 1 (% w 3)) (: _ (finvert s) st)
                                     st))
                               st)
-                       (loop st2))
+                       (? (= 0 (peep s 'bad 0)) (loop st2) 'unsat))   ; a compaction can prove UNSAT (all-false at level 0)
                  (: v ((peep s 'dec ()) fx)
                     (? (= v 0) 'sat (loop st)))))) (seed 42)))
    (fextract s nvars) (: fx (peep s 'fx ()) vao (peep s 'vao 0)
@@ -798,11 +860,18 @@
     (fboth (php 5) (php-vars 5))
     ; pigeonhole PHP(5): UNSAT + resolution-hard (learning, restarts, arena growth end to end)
     (id? (fcdcl (php 5) (php-vars 5)) 'unsat)
-    ; force the learnt-DB REDUCTION path hard (a tiny cap -> compaction every few restarts)
+    ; force the learnt-DB REDUCTION path hard (a tiny cap -> reduction every few restarts)
     ; and re-run the differential battery through it, both engines
     (: keep (peep fmaxl0 0 0) _ (pin fmaxl0 0 24)
        ok (&& (id? (fcdcl (php 5) (php-vars 5)) 'unsat)
               (&& (ffuzz 30 12 50) (fboth (php 4) (php-vars 4))))
-       _ (pin fmaxl0 0 keep) ok))
+       _ (pin fmaxl0 0 keep) ok)
+    ; force the REAL COMPACTION path the same way (a tiny arena threshold -> fcompact at
+    ; every level-0 restart; its all-false-at-level-0 UNSAT verdict and cid remapping are
+    ; only reachable here -- an untested fcompact once shipped a bogus SAT on uuf250)
+    (: keep (peep fcmp0 0 0) _ (pin fcmp0 0 64)
+       ok (&& (id? (fcdcl (php 5) (php-vars 5)) 'unsat)
+              (&& (ffuzz 30 12 50) (= (count-fcdcl (cyclic 10) 10) (lucas 10))))
+       _ (pin fcmp0 0 keep) ok))
  _ (say err (+ "sat/flat: ok -- flat-arena CDCL == DPLL on 150 fuzzed + PHP(5) + #SAT==Lucas"
                (? (two? (fbcpk 8)) " (native bcp+conf+dec kernels live)\n" " (interpreted twins)\n"))))
