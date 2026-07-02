@@ -93,13 +93,16 @@ HEAD
 if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
 <h2>SAT solvers &mdash; pigeonhole UNSAT, milliseconds to solve</h2>
-<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/sat.l</code>)
-against reference C solvers on PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i>
-holes, UNSAT and resolution-hard, so CDCL is <b>exponential</b> here. ai is timed by its
-own solve clock (interpreter warmup excluded); the C solvers by process wall-clock (their
-startup is ~ms). <code>timeout</code> = exceeded the cutoff. This is where a tuned C
-solver pulls away from an interpreted one &mdash; the honest other side of the language
-table above.</p>
+<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/flat.l</code>:
+flat cask-resident state driven by three native kernels &mdash; propagation, the whole
+conflict handler, and the decision &mdash; each assembled through <code>asm/</code> at
+solver-build time, specialized to the instance size) against reference C solvers on
+PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT and resolution-hard,
+so CDCL is <b>exponential</b> here. ai is timed by its own solve clock (interpreter warmup
+and the one-time kernel assembly excluded); the C solvers by process wall-clock (their
+startup is ~ms). <code>timeout</code> = exceeded the cutoff. The engine now runs with the
+C field &mdash; the remaining spread (kissat, cadical) is solver <i>research</i>:
+inprocessing and clause-management refinements, not execution speed.</p>
 <div class="wrap">
 SAT
 awk '

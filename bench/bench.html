@@ -69,41 +69,44 @@ source &rarr; trivial result, so compiled languages pay their compile).</p>
 </div>
 <div class="wrap"><div id="t"></div></div>
 <h2>SAT solvers &mdash; pigeonhole UNSAT, milliseconds to solve</h2>
-<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/sat.l</code>)
-against reference C solvers on PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i>
-holes, UNSAT and resolution-hard, so CDCL is <b>exponential</b> here. ai is timed by its
-own solve clock (interpreter warmup excluded); the C solvers by process wall-clock (their
-startup is ~ms). <code>timeout</code> = exceeded the cutoff. This is where a tuned C
-solver pulls away from an interpreted one &mdash; the honest other side of the language
-table above.</p>
+<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>sat/flat.l</code>:
+flat cask-resident state driven by three native kernels &mdash; propagation, the whole
+conflict handler, and the decision &mdash; each assembled through <code>asm/</code> at
+solver-build time, specialized to the instance size) against reference C solvers on
+PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT and resolution-hard,
+so CDCL is <b>exponential</b> here. ai is timed by its own solve clock (interpreter warmup
+and the one-time kernel assembly excluded); the C solvers by process wall-clock (their
+startup is ~ms). <code>timeout</code> = exceeded the cutoff. The engine now runs with the
+C field &mdash; the remaining spread (kissat, cadical) is solver <i>research</i>:
+inprocessing and clause-management refinements, not execution speed.</p>
 <div class="wrap">
-<table><thead><tr><th>instance</th><th>cadical</th><th>kissat</th><th>picosat</th><th>minisat</th><th>glucose</th><th class='ai'>ai</th></tr></thead><tbody>
-<tr><th>php5</th><td class=''>4.675</td><td class=''>3.453</td><td class='fast '>2.720</td><td class=''>4.036</td><td class=''>4.196</td><td class='ai '>15.000</td></tr>
-<tr><th>php6</th><td class=''>5.466</td><td class=''>5.704</td><td class='fast '>4.761</td><td class=''>7.518</td><td class=''>5.616</td><td class='ai '>202.0</td></tr>
-<tr><th>php7</th><td class='fast '>8.130</td><td class=''>16.991</td><td class=''>26.329</td><td class=''>39.165</td><td class=''>40.249</td><td class='ai '>6883.0</td></tr>
-<tr><th>php8</th><td class='fast '>12.933</td><td class=''>72.358</td><td class=''>225.7</td><td class=''>271.7</td><td class=''>884.9</td><td class='ai to'>timeout</td></tr>
-<tr class='netrow'><th>net</th><td class='net'>31.204</td><td class='net'>98.506</td><td class='net'>259.6</td><td class='net'>322.4</td><td class='net'>935.0</td><td class='net ai'>dnf</td></tr></tbody></table>
+<table><thead><tr><th>instance</th><th>cadical</th><th>kissat</th><th>picosat</th><th>minisat</th><th class='ai'>ai</th><th>glucose</th></tr></thead><tbody>
+<tr><th>php5</th><td class=''>5.083</td><td class=''>3.764</td><td class=''>2.789</td><td class=''>4.436</td><td class='ai fast '>1.000</td><td class=''>4.245</td></tr>
+<tr><th>php6</th><td class=''>5.631</td><td class=''>6.701</td><td class=''>5.325</td><td class=''>7.971</td><td class='ai fast '>4.000</td><td class=''>6.629</td></tr>
+<tr><th>php7</th><td class='fast '>8.937</td><td class=''>19.018</td><td class=''>28.108</td><td class=''>41.604</td><td class='ai '>56.000</td><td class=''>43.253</td></tr>
+<tr><th>php8</th><td class='fast '>13.317</td><td class=''>75.815</td><td class=''>234.4</td><td class=''>283.3</td><td class='ai '>888.0</td><td class=''>927.7</td></tr>
+<tr class='netrow'><th>net</th><td class='net'>32.968</td><td class='net'>105.3</td><td class='net'>270.6</td><td class='net'>337.3</td><td class='net ai'>949.0</td><td class='net'>981.8</td></tr></tbody></table>
 </div>
 <script>
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","deforest","primes","bell","strcat","strscan","hash","sort","tree","bintrees","mandelbrot","closure","cdcl","setup"];
 const PER={};
-PER["fib"]={"ai":4.2031,"go":3.7757,"rust":2.0035,"java":2.5862,"julia":4.3915,"luajit":8.0084,"pypy":8.4805,"node":7.4832,"elixir":7.2788,"chez":5.7031,"sbcl":5.4692};
-PER["tak"]={"ai":0.4844,"go":0.4617,"rust":0.3469,"java":0.3068,"julia":0.6971,"luajit":1.3912,"pypy":2.3089,"node":0.9596,"elixir":0.8647,"chez":0.5879,"sbcl":4.0004};
-PER["sum"]={"ai":0.2188,"go":0.1135,"rust":0.0525,"java":0.1931,"julia":0.0845,"luajit":0.0706,"pypy":0.2648,"node":0.7753,"elixir":0.4834,"chez":0.4961,"sbcl":0.7032};
-PER["deforest"]={"ai":0.0537,"go":0.0477,"rust":0.0116,"java":0.0133,"julia":0.0179,"luajit":0.0615,"pypy":0.1494,"node":1.1929,"elixir":0.4456,"chez":0.2256,"sbcl":0.2393};
-PER["primes"]={"ai":1.2461,"go":0.9055,"rust":0.7830,"java":0.7683,"julia":0.8978,"luajit":0.8039,"pypy":1.3169,"node":0.7768,"elixir":2.2569,"chez":1.7188,"sbcl":4.8598};
-PER["bell"]={"ai":66.0000,"go":25.0746,"java":35.2355,"julia":75.5032,"pypy":25.4803,"node":28.5706,"elixir":32.9479,"chez":67.7500,"sbcl":52.5048};
-PER["strcat"]={"ai":0.0265,"go":0.9570,"rust":0.0173,"java":1.6791,"julia":1.5363,"luajit":1.4280,"pypy":0.1664,"node":0.1107,"elixir":0.0436,"chez":1.3594,"sbcl":4.4223};
-PER["strscan"]={"ai":0.0796,"go":0.0654,"rust":0.0643,"java":0.0642,"julia":0.0644,"luajit":0.1323,"pypy":0.0639,"node":0.3858,"elixir":0.0998,"chez":0.1318,"sbcl":0.1738};
-PER["hash"]={"ai":1.0234,"go":0.5525,"rust":0.7451,"java":0.3071,"julia":0.4913,"luajit":1.0549,"pypy":0.4312,"node":0.7219,"chez":0.7812,"sbcl":0.9493};
-PER["sort"]={"ai":0.6250,"go":0.3616,"rust":0.0641,"java":0.1670,"julia":0.0624,"luajit":1.2097,"pypy":0.3688,"node":1.0044,"elixir":0.5282,"chez":0.4121,"sbcl":0.5938};
-PER["tree"]={"ai":0.8770,"go":1.5803,"rust":4.6771,"java":0.7843,"julia":3.2282,"luajit":3.6110,"pypy":1.9203,"node":1.4019,"elixir":0.9502,"chez":0.6191,"sbcl":1.4806};
-PER["bintrees"]={"ai":19.8750,"go":37.6426,"rust":79.9248,"java":14.3102,"julia":25.5175,"luajit":84.1388,"pypy":29.8670,"node":28.2846,"elixir":21.4866,"chez":15.3750,"sbcl":25.3774};
-PER["mandelbrot"]={"ai":0.5625,"go":0.9563,"rust":0.9256,"java":0.9067,"julia":0.9135,"luajit":1.0293,"pypy":1.3881,"node":0.9203,"elixir":21.3083,"chez":14.9375,"sbcl":1.0079};
-PER["closure"]={"ai":0.3711,"go":0.3225,"rust":0.2965,"java":0.3579,"julia":0.3500,"luajit":14.2956,"pypy":0.3681,"node":2.0509,"elixir":2.6340,"chez":1.4688,"sbcl":2.5158};
-PER["cdcl"]={"ai":43.8750};
-PER["setup"]={"ai":11.8930,"go":28.5610,"rust":62.3190,"java":327.6020,"julia":147.8960,"luajit":2.2360,"pypy":48.0370,"node":27.6170,"elixir":203.1190,"chez":53.8430,"sbcl":5.3100};
+PER["fib"]={"ai":4.5938,"go":3.7757,"rust":2.0035,"java":2.5862,"julia":4.3915,"luajit":8.0084,"pypy":8.4805,"node":7.4832,"elixir":7.2788,"chez":5.7031,"sbcl":5.4692};
+PER["tak"]={"ai":0.5293,"go":0.4617,"rust":0.3469,"java":0.3068,"julia":0.6971,"luajit":1.3912,"pypy":2.3089,"node":0.9596,"elixir":0.8647,"chez":0.5879,"sbcl":4.0004};
+PER["sum"]={"ai":0.2217,"go":0.1135,"rust":0.0525,"java":0.1931,"julia":0.0845,"luajit":0.0706,"pypy":0.2648,"node":0.7753,"elixir":0.4834,"chez":0.4961,"sbcl":0.7032};
+PER["deforest"]={"ai":0.0588,"go":0.0477,"rust":0.0116,"java":0.0133,"julia":0.0179,"luajit":0.0615,"pypy":0.1494,"node":1.1929,"elixir":0.4456,"chez":0.2256,"sbcl":0.2393};
+PER["primes"]={"ai":1.3242,"go":0.9055,"rust":0.7830,"java":0.7683,"julia":0.8978,"luajit":0.8039,"pypy":1.3169,"node":0.7768,"elixir":2.2569,"chez":1.7188,"sbcl":4.8598};
+PER["bell"]={"ai":69.7500,"go":25.0746,"java":35.2355,"julia":75.5032,"pypy":25.4803,"node":28.5706,"elixir":32.9479,"chez":67.7500,"sbcl":52.5048};
+PER["strcat"]={"ai":0.0287,"go":0.9570,"rust":0.0173,"java":1.6791,"julia":1.5363,"luajit":1.4280,"pypy":0.1664,"node":0.1107,"elixir":0.0436,"chez":1.3594,"sbcl":4.4223};
+PER["strscan"]={"ai":0.0867,"go":0.0654,"rust":0.0643,"java":0.0642,"julia":0.0644,"luajit":0.1323,"pypy":0.0639,"node":0.3858,"elixir":0.0998,"chez":0.1318,"sbcl":0.1738};
+PER["hash"]={"ai":1.1328,"go":0.5525,"rust":0.7451,"java":0.3071,"julia":0.4913,"luajit":1.0549,"pypy":0.4312,"node":0.7219,"chez":0.7812,"sbcl":0.9493};
+PER["sort"]={"ai":0.7031,"go":0.3616,"rust":0.0641,"java":0.1670,"julia":0.0624,"luajit":1.2097,"pypy":0.3688,"node":1.0044,"elixir":0.5282,"chez":0.4121,"sbcl":0.5938};
+PER["tree"]={"ai":0.8242,"go":1.5803,"rust":4.6771,"java":0.7843,"julia":3.2282,"luajit":3.6110,"pypy":1.9203,"node":1.4019,"elixir":0.9502,"chez":0.6191,"sbcl":1.4806};
+PER["bintrees"]={"ai":25.2500,"go":37.6426,"rust":79.9248,"java":14.3102,"julia":25.5175,"luajit":84.1388,"pypy":29.8670,"node":28.2846,"elixir":21.4866,"chez":15.3750,"sbcl":25.3774};
+PER["mandelbrot"]={"ai":0.6191,"go":0.9563,"rust":0.9256,"java":0.9067,"julia":0.9135,"luajit":1.0293,"pypy":1.3881,"node":0.9203,"elixir":21.3083,"chez":14.9375,"sbcl":1.0079};
+PER["closure"]={"ai":0.4082,"go":0.3225,"rust":0.2965,"java":0.3579,"julia":0.3500,"luajit":14.2956,"pypy":0.3681,"node":2.0509,"elixir":2.6340,"chez":1.4688,"sbcl":2.5158};
+PER["cdcl"]={"ai":47.2500};
+PER["setup"]={"ai":12.9810,"go":29.7150,"rust":65.1940,"java":346.9980,"julia":154.0610,"luajit":2.4500,"pypy":51.5970,"node":29.5000,"elixir":218.3810,"chez":56.8960,"sbcl":6.3610};
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
