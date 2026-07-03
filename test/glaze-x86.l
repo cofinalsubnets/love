@@ -15,10 +15,22 @@
 ; run STANDALONE, base-ev/jitgroupir/.. are unbound -> ()=zero point -> (base-ev '(..))=const-1=1 SILENTLY
 ; skips every block, yet the final top-level "ok" still prints (a false pass -- the const-1 trap). assert
 ; the harness names are bound so a wrong invocation SCARES `;; assert (lit? base-ev)` instead.
-; the assembler lives in the `asm` MODULE book now (asm/export.l): bind what this stream calls --
-; assemble through the book, and bcat (the byte-piece concat the baked glaze keeps private).
+; the assembler and the glaze live in MODULE books now (asm/export.l, ai/glaze/export.l):
+; this stream cat-loads post-boot, so nothing folded for it -- bind every internal it
+; drives through the books, bare-global reads both (bcat stands in for the glaze's
+; byte-concat helper, whose leaked name the asm module pin shadowed).
 (: assemble (asm 'assemble)
-   bcat (\ ps (foldl (\ a b (+ a b)) () ps)))
+   bcat (\ ps (foldl (\ a b (+ a b)) () ps))
+   G glaze
+   anat-defs (G 'anat-defs)  autogroup (G 'autogroup)  autonat (G 'autonat)  autospec (G 'autospec)
+   base-ev (G 'base-ev)  castbuild (G 'castbuild)  cggir (G 'cggir)  cggvir (G 'cggvir)
+   consir (G 'consir)  coreir (G 'coreir)  delet (G 'delet)  deoptir (G 'deoptir)
+   emit (G 'emit)  fbits (G 'fbits)  fr (G 'fr)  grok (G 'grok)
+   jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
+   jitgroupir (G 'jitgroupir)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
+   jitnir (G 'jitnir)  jitsum (G 'jitsum)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
+   loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
+   occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow))
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
 
 (base-ev '(: ev base-ev

@@ -472,6 +472,9 @@ static char const glaze_emit[] =
 static char const glaze_auto[] =
 #include "auto.h"
  ;
+static char const glaze_export[] =              // ai/glaze/export.l: sweep the span into the `glaze` book
+#include "gexport.h"
+ ;
 #endif
 // the post-warm dispatch (shared by boot() and the --load-image path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
@@ -497,6 +500,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #if defined(__x86_64__) || defined(__aarch64__)
   g = ai_evals_(g, glaze_emit);                          // load the native JIT post-egg -> ev = auto-ev, glaze always-on
   g = ai_evals_(g, glaze_auto);                          // (no fragile stale image; base-ev captures the hatched ev).
+  g = ai_evals_(g, glaze_export);                        // the glaze module boundary: its names sweep into the `glaze` book
 #endif                                                   // ~680ms from-scratch; the image snapshots past it. arm64: integer lanes native, x86-only lanes (float/loops) fall to interp -- see auto.l's `x86?` gate.
   g = ai_evals_(g,                                       // the asm module boundary (asm/export.l): the assembler's names
 #include "export.h"                                      //   sweep into the ONE public `asm` book and off the global book.
@@ -507,7 +511,7 @@ static struct ai *boot(struct ai *g, bool argp) {
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
     // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
     // with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
-    g = ai_evals_(g, "(map (\\ k (pull cache k 0)) (keys cache))");
+    g = ai_evals_(g, "(: c ((peep book 'glaze 0) 'cache) (map (\\ k (pull c k 0)) (keys c)))");
 #endif
     // HIDE the raw machine-code-execution seam from USERS (who boot this image): the glaze folded
     // `nif` into its closures, so pulling it off the book is safe. eat/toast/nif off, then seal `book`.

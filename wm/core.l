@@ -9,6 +9,11 @@
 ; shadow NO nif (the single-`:` rung-6 trap: a local `put` shadowed the put nif);
 ; the WM vocabulary is `z*` (the zipper) and `ws*`/admit/evict/shiftto (the sheaf).
 (:
+   ; --- the app's own list utilities (an app owns its helpers -- these USED to ride the
+   ;     glaze's leaked globals, gone since the glaze swept into its module book) ---
+   (nthl l i) (? (= i 0) (cap l) (nthl (cup l) (- i 1)))            ; 0-based nth of a list
+   (afind pred l) (? (atom? l) () (pred (cap l)) (cap l) (afind pred (cup l)))   ; first element satisfying pred, else ()
+
    ; --- the zipper: a workspace's tiled stack. () or (focus up down), up REVERSED
    ;     (nearest-first), so focus motion is O(1) at either end. ---
    (zmk f up dn) (L f up dn)

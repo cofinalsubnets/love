@@ -54,6 +54,14 @@
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); ai.c/ai.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable
 ;   ones install on PATH via `make install`.
+; * MODULE BOOKS: a baked service sweeps its leaked names into ONE public book -- asm/export.l and
+;   ai/glaze/export.l diff (names ()) across the load span (<name>-mark opens, <name>-load closes:
+;   MEASURED, never a keep-up-to-date list) and pull the span off the global book. a book is a
+;   lookup function, so the surface is (asm 'assemble) and every internal stays a probe away
+;   ((glaze 'loopinfo)); baked consumers FOLDED their direct refs before the sweep (the capture
+;   law links them), while post-boot STREAMS (a cat'd test/app file) fold nothing -- they bind
+;   what they call through the books at their head, bare-global reads ((names ()) fell 820 -> 322
+;   when asm + glaze swept; an app never leans on another module's leaks -- wm learned this).
 
 ; --- vocabulary & house style --- the words here are a VOCABULARY -- never "terminology" or
 ; "nomenclature"; a vocabulary is living and chosen, warm not clinical. the style is COZY:

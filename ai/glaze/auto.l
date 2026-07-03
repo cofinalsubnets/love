@@ -18,8 +18,8 @@
 ; rebind; njit-loop/njit-loop-n call the captured base-ev -> no jit<->ev re-entry. Load AFTER
 ; ai/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 (: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)
-(: glaze-loaded? (peep book 'autogroup 0)   ; RE-LOAD detector, read BEFORE this load defglob's anything: `autogroup` already in the book => the glaze is installed (the file is being cat'd on top of the baked glaze). Used at the `ev` rebind below to make a re-load IDEMPOTENT -- keep the baked glaze, don't reinstall -- so `cat auto.l prog | ai` just runs prog. (Loading the compiler's own source through itself otherwise recompiles its helpers wrong; tracked separately.)
-   base-ev (peep book 'base-ev ev)   ; the PURE interpreter, captured ONCE: first load -> ev (interpreter); a RE-LOAD (glaze cat'd on the baked glaze) has ev=auto-ev already, so KEEP the interpreter already in the book (else base-ev becomes the glaze and autospec's static fold re-enters it)
+(: glaze-loaded? (lit? (peep book 'glaze 0))   ; RE-LOAD detector, read BEFORE this load defglob's anything: the `glaze` MODULE book on the book => the glaze is installed (the file is being cat'd on top of the baked glaze; export.l pinned the book). Used at the `ev` rebind below to make a re-load IDEMPOTENT -- keep the baked glaze, don't reinstall -- so `cat auto.l prog | ai` just runs prog. (Loading the compiler's own source through itself otherwise recompiles its helpers wrong; tracked separately.)
+   base-ev (: G (peep book 'glaze 0) (? (lit? G) (G 'base-ev) ev))   ; the PURE interpreter, captured ONCE: first load -> ev (interpreter); a RE-LOAD (glaze cat'd on the baked glaze) has ev=auto-ev already, so take the interpreter out of the MODULE book (else base-ev becomes the glaze and autospec's static fold re-enters it)
    arch (intern ai-arch)                ; the host CPU as the assembler target ('x64 / 'arm64); glaze loads only on these
    x86? (id? arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v: var | int | arith | cmp | (? t a b)
@@ -1130,3 +1130,7 @@
                               (base-ev (autogroup (autonat (twolow (castbuild e))))))))))    ; fall-through: cask-build a string-accumulator loop (the jug threads as a loop param -> survives autogroup's pure passes), LOWER a complex(twin) grid to real-pairs (twolow), then glaze a float-grid nest / mutually-recursive arith group if either fits, else interpret
    ev (? glaze-loaded? ev auto-ev)                             ; rebind the global: ev is now auto-native. On a RE-LOAD (glaze-loaded?) KEEP the baked auto-ev -- it captured the correct baked helpers, so the user's program runs through the working glaze; double-loading is a no-op, not a crash.
 )
+
+; the module span closes here (opened by glaze-mark in emit.l): the names bound since
+; the mark are the glaze; ai/glaze/export.l sweeps them into the `glaze` book.
+(: glaze-load (names ()))

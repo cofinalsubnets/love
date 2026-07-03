@@ -15,9 +15,11 @@
 ;  * no double-compile -- the deopt target is `e` itself (the bytecode closure ala built),
 ;    passed as nat/natn's `interp`; no separate (ev lam) pass.
 ; Loops are NOT caught here (their body isn't leaf-grammar) -- they stay bytecode, or use
-; ai/glaze/auto.l's counted-loop path. Load AFTER ai/glaze/emit.l (uses cgn/emit/nat/natn/epilogue/
-; epilogue-mn). x86-64 only.
-(: assemble (asm 'assemble)                                                 ; through the module book (asm/export.l)
+; ai/glaze/auto.l's counted-loop path. Rides the BAKED glaze through the module books
+; (the binds just below). x86-64 only.
+(: assemble (asm 'assemble)                                                 ; through the module books (asm/export.l,
+   emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   ai/glaze/export.l) -- this stream cat-loads
+                                                                            ;   post-boot, so nothing folded for it
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op (cap e)
                                (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
