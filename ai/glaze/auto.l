@@ -539,12 +539,23 @@
    (dch-fn? f) (|| (ho-lamb? f) (&& (two? f) (= 2 (tally f)) (member? (cap f) '(+ - * // % & | ^))))   ; a lambda, or a dyadic-op partial like (+ i)
    (dch-ap f x) (? (ho-lamb? f) (dsimp (L f x)) (cat f (L x)))                                          ; apply f to x: beta a lambda, extend an op-partial
    (dch-nest f n x) (? (= n 0) x (dch-ap f (dch-nest f (- n 1) x)))                                     ; f^n(x), built innermost-out
+   (dch-occs v e) (? (id? e v) 1  (atom? e) 0  (dquote? e) 0                                            ; occurrences of the param in the body (shadow/quote overcount = safe)
+                     (foldl (\ s t (+ s (dch-occs v t))) 0 e))
+   ; the FAT GATE: beta splices the accumulated x at EVERY param occurrence, so a body using its
+   ; param k>=2 times residualizes ~k^N nodes -- exponential when the seed does not fold (a captured
+   ; outer var blocks every fold). unroll only while k^N stays small; a fat one rides num-ap
+   ; (sound, interpreted) exactly like a variable count. op-partials and multi-param lambdas
+   ; never duplicate (dsimp betas unary only), so only the unary lambda is measured.
+   (dch-fat? f n) (&& (ho-lamb? f) (= 3 (tally f))
+                      (: k (dch-occs (caup f) (cap (cuup f))) (&& (< 1 k) (< 256 (n k)))))
    (dechurch e)
     (? (atom? e) e  (dquote? e) e
        (: y (map dechurch e)                                                                           ; bottom-up: lower nested church first
-          (? (&& (= 3 (tally y)) (whole? (cap y)) (<= 0 (cap y)) (< (cap y) 64) (dch-fn? (cap (cup y))))
+          (? (&& (= 3 (tally y)) (whole? (cap y)) (<= 0 (cap y)) (< (cap y) 64) (dch-fn? (cap (cup y)))
+                 (! (dch-fat? (cap (cup y)) (cap y))))
              (dch-nest (cap (cup y)) (cap y) (cap (cup (cup y))))                                       ; (N f x) -> f^N(x), the FLAT surface form
-             (&& (= 2 (tally y)) (two? (cap y)) (= 2 (tally (cap y))) (whole? (caap y)) (<= 0 (caap y)) (< (caap y) 64) (dch-fn? (caup (cap y))))
+             (&& (= 2 (tally y)) (two? (cap y)) (= 2 (tally (cap y))) (whole? (caap y)) (<= 0 (caap y)) (< (caap y) 64) (dch-fn? (caup (cap y)))
+                 (! (dch-fat? (caup (cap y)) (caap y))))
              (dch-nest (caup (cap y)) (caap y) (caup y))                                                ; ((N f) x) -> f^N(x), the CURRIED surface form -- ((2 (+ i)) i) and (2 (+ i) i) are the same value, so compile the same
              y)))
    ; --- LOCAL LET (delet): inline a PURE value-let -- (: n1 v1 .. result), every binding a plain symbol
