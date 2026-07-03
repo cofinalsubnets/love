@@ -135,41 +135,18 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 .crew dd { margin: 0 0 0 1.4em; color: #737aa2; font-size: .92em; }
 .crew dt + dd { color: #73daca; }
 
-/* --- glossary: terms of art (dotted; hover for the gloss, click to jump) --- */
-.term { color: #c0caf5; font-weight: 600;
-        border-bottom: 1px dotted #545c7e; cursor: pointer; position: relative; }
-.term:hover { border-bottom-color: #7aa2f7; }
-.term .tip {
-  position: absolute; left: 0; bottom: 100%; z-index: 6;
-  width: max-content; max-width: 24em; margin-bottom: .4em;
-  background: #1f2335; border: 1px solid #3b4261; border-radius: 4px;
-  color: #a9b1d6; font-weight: normal; font-size: .8em; line-height: 1.45;
-  padding: .45em .65em; text-align: left; white-space: normal; hyphens: none;
-  text-shadow: none; /* don't inherit the color word's hover glow */
-  cursor: pointer; opacity: 0; visibility: hidden; transition: opacity .1s; }
-/* a transparent bridge over the gap so the card stays hoverable / clickable */
-.term .tip::before { content: ""; position: absolute; left: 0; right: 0;
-                     top: 100%; height: .5em; }
-.term:hover .tip { opacity: 1; visibility: visible; }
+/* --- glossary --- */
 .glossary dt { color: #c0caf5; font-weight: 600; margin-top: .85em; }
 .glossary dt code { font-weight: normal; }
 .glossary dd { margin: .1em 0 0 1.4em; color: #737aa2; font-size: .94em;
                text-align: justify; hyphens: auto; }
 .glossary dd code { background: none; border: none; padding: 0; }
-/* a term wears its color: the color words in their hue, nothing/() the deep
-   slate blue-grey of the floor. attribute/compound selectors out-specify .term. */
-.term[data-g="green"] { color: #34ff9e; }
-.term[data-g="red"]   { color: #ff3b6b; }
-.term[data-g="blue"]  { color: #3a9dff; }
-.term.nul             { color: #565f89; }
+/* a word wears its color: the color words in their hue, nothing/() the deep
+   slate blue-grey of the floor. */
 .hi.red { color: #ff3b6b; }
 .hi.green { color: #34ff9e; }
 .hi.blue { color: #3a9dff; }
 .hi.gray { color: #565f89; }
-/* the color stars glow, just barely, on hover */
-.term[data-g="green"]:hover { text-shadow: 0 0 6px #34ff9e; }
-.term[data-g="red"]:hover   { text-shadow: 0 0 6px #ff3b6b; }
-.term[data-g="blue"]:hover  { text-shadow: 0 0 6px #3a9dff; }
 /* the color words' glossary entries wear their color too */
 #g-green { color: #34ff9e; } #g-red { color: #ff3b6b; } #g-blue { color: #3a9dff; }
 h1::before { content: "🌑 "; }
@@ -178,12 +155,11 @@ h1::before { content: "🌑 "; }
    the 16px native cell: still a crisp 1x bitmap (2-3x on a HiDPI phone), and the
    em-based sizes (terminal, headings, chips) scale down with it. plus the usual
    small-screen hygiene: left-align the justified prose (rivers read badly when
-   narrow), break long tokens, keep wide tables and tooltips inside the viewport. */
+   narrow), break long tokens, keep wide tables inside the viewport. */
 @media (max-width: 768px) {
   body { font-size: 16px; padding: 1.4em .8em 4em; overflow-x: clip; }
   #term { font-size: 16px; }
   p, li, .law, .glossary dd { text-align: left; }
   code { overflow-wrap: anywhere; }
   td { word-break: break-word; }
-  .term .tip { max-width: 90vw; }
 }

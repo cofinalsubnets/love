@@ -4793,8 +4793,10 @@ lvm(lvm_nif) {
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);     // reload codebuf: a GC in Have may have moved it
  if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
   return munmap(base, maplen), Sp[3] = nil, Sp += 3, Ip++, Continue();
+#ifndef __wasm__                               // wasm has no clear_cache intrinsic (and no native code: mprotect PROT_EXEC fails above, answering nil)
  __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is NOT coherent with the freshly
-#else                                          // written D-cache -- flush or it runs stale bytes (no-op on x86)
+#endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
+#else
  Have(str_type_width + b2w(n) + 9);           // freestanding: HHDM is RWX, a heap copy runs
  struct ai_str *s = ini_str((struct ai_str*) Hp, n); Hp += str_type_width + b2w(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
@@ -5204,12 +5206,23 @@ lvm(lvm_link) {
   if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(av c_op bv); \
    return *++Sp = _res, Ip++, Continue(); } } \
  return Ap(lvm_bdiv_start, g, vop); }   /* big // and % run yieldable (resumable long division) */
+// A bare mint -- the zero point () too -- RIDES THROUGH every dyadic arithmetic
+// lane, either side: the unit is the DO-NOTHING operand (the same law as
+// lvm_add/lvm_mul's identity lanes), so x - () = () - x = x, and likewise
+// / // % & | ^ << >>. Not the number 0 -- no face projection, the op just never
+// happens -- so an undefined op's () vanishes when chained through ANY of these,
+// exactly as it does through + and *. Comparisons and `=` stay strict: () keeps
+// its floor seat in the total order.
+#define avm_unit(a, b) \
+ if (mintp(a)) return *++Sp = b, Ip++, Continue(); \
+ if (mintp(b)) return *++Sp = a, Ip++, Continue()
 #define avm_ovf(op, builtin) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
  if (charmp(a) && charmp(b)) { intptr_t t; \
   if (!builtin((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t) && \
       t >= fix_min && t <= fix_max) \
    return *++Sp = putcharm(t), Ip++, Continue(); } \
+ avm_unit(a, b); \
  return Ap(lvm_##op##n, g); }
 #define avm_div(op, c_op) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
@@ -5219,6 +5232,7 @@ lvm(lvm_link) {
    intptr_t t = av c_op bv; \
    if (t >= fix_min && t <= fix_max) \
     return *++Sp = putcharm(t), Ip++, Continue(); } } \
+ avm_unit(a, b); \
  return Ap(lvm_##op##n, g); }
 // the ordered comparisons (< <= > >=) and their total order over all values are
 // defined after vcmp_int/vcmp_flo (the per-op helpers they reuse), by lvm_vbin.
@@ -5640,6 +5654,7 @@ lvm(lvm_quot) {
   if (bv != 0 && !(av == INTPTR_MIN && bv == -1) && av % bv == 0) {
    intptr_t t = av / bv;
    if (t >= fix_min && t <= fix_max) return *++Sp = putcharm(t), Ip++, Continue(); } }
+ avm_unit(a, b);
  return Ap(lvm_quotn, g); }
 
 // The ordered comparisons (lvm_lt/le/gt/ge) and their total order are defined
@@ -5652,12 +5667,15 @@ lvm(lvm_quot) {
 bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a & b) | 1, Ip++, Continue();
+ avm_unit(a, b);
  return Ap(lvm_band_slow, g); }
 lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a | b) | 1, Ip++, Continue();
+ avm_unit(a, b);
  return Ap(lvm_bor_slow, g); }
 lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a ^ b) | 1, Ip++, Continue();
+ avm_unit(a, b);
  return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `nilp`.)
 
@@ -5671,12 +5689,14 @@ static lvm(lvm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
 lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b))
   return *++Sp = putcharm(getcharm(a) >> getcharm(b)), Ip++, Continue();
+ avm_unit(a, b);
  return Ap(lvm_bsr_slow, g); }
 
 // << : can overflow the tag, so it always runs through the box/demote path
 // (emit_int still demotes small results — only genuinely wide values
 // allocate). Shift done in uintptr_t for well-defined overflow.
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
+ avm_unit(a, b);
  if (!(charmp(a) || widep(a)) || !charmp(b)) return *++Sp = ZeroPoint, Ip++, Continue();
  Have(box_req);
  emit_int((intptr_t)((uintptr_t) toint(a) << getcharm(b)));
@@ -6064,25 +6084,6 @@ static bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scrat
  if (ca->nr != cb->nr) return false;                                   // different residual arity
  struct arib rA = { ca->rem, ca->rem, ca->nr, ca->nr, 0 }, rB = { cb->rem, cb->rem, cb->nr, cb->nr, 0 };
  return nf_walk(g, ca->body, &rA, ca, cb->body, &rB, cb, scratch); }
-// The numeral<->lambda `=` bridges: 1 is the identity numeral ((1 z) = z) and
-// 0 is const-1 ((0 z) = 1), so a one-binder lambda whose body is that binder
-// equals 1, and one whose body is the literal 1 equals 0. All a-variants count;
-// idp stays false (distinct objects). Closures / multi-binder never match.
-static word lam_src1(struct ai *c, word v) {           // 1-binder lambda -> (binder body), else 0
- if (!lamp(v) || datp(v)) return 0;
- if (!in_heap(c, v)) return 0;                                  // in-heap only (main OR major pool): k[-1]/k valid
- union u *k = cell(v);
- if (fn_partialp(k)) return 0;
- word s = fn_src(c, k, v);                            // s = (\ b.. body)
- if (!s || !lam_isp(c, s)) return 0;
- word ops = B(s);                                     // (binder body ..)
- return !chainp(B(B(ops))) && nomp(A(ops)) ? ops : 0; } // exactly one binder
-static bool id_lam(struct ai *c, word v) {             // (\ x x): body IS the binder
- word ops = lam_src1(c, v);
- return ops && A(ops) == A(B(ops)); }
-static bool k1_lam(struct ai *c, word v) {             // (\ _ 1): body is the literal 1
- word ops = lam_src1(c, v);
- return ops && A(B(ops)) == putcharm(1); }
 // `base` is where THIS frame's worklist starts. The public eqv passes off_pool; a re-entrant call
 // from the beta bridge (clo_eq -> nf_walk) passes the CALLER's live worklist top, so the nested
 // comparison's scratch sits ABOVE the pending pairs instead of clobbering them. `top` stays the one
@@ -6123,9 +6124,10 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
      for (int i = 0; i < na; i++) *w++ = fn_arg(ka, i, na), *w++ = fn_arg(kb, i, nb);
      a = (word) ba, b = (word) bb; continue; }
     return false; }
-   // The numerals 1 and 0 bridge to their lambdas extensionally: (\ x x), (\ _ 1).
-   if ((a == putcharm(1) && id_lam(c, b)) || (b == putcharm(1) && id_lam(c, a))) { a = b; continue; }
-   if ((a == putcharm(0) && k1_lam(c, b)) || (b == putcharm(0) && k1_lam(c, a))) { a = b; continue; }
+   // A number never equals a closure: representation-crossing edges stay false.
+   // (Numerals ACT as their church lambdas under apply -- (1 z) = z, (0 z) = 1 --
+   // but `=` doesn't say so: bridging 0/1 breaks congruence (2 * id /= 2), the
+   // order (a lambda seats in the top band), and tower transitivity.)
    if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return false;
    switch (typ(a)) {
     default: return false;
@@ -6169,8 +6171,8 @@ ai_noinline bool eqv(struct ai *g, word a, word b) { return eqv_at(g, a, b, off_
 // still rejects mixed-type chains (so table keys 3 and 3.0 stay distinct).
 lvm(lvm_eq) {
  word a = Sp[0], b = Sp[1];
- // Two fixnums: `=` iff identical (no numeral<->lambda bridge -- that needs a heap
- // lambda -- and no tower widening). The common case (loop guards, table-key tests),
+ // Two fixnums: `=` iff identical (no tower widening needed).
+ // The common case (loop guards, table-key tests),
  // so skip the arr/complex/float dispatch below, and fuse a following `?` directly
  // (see the cmp_lt cond-fusion note: then -> Ip+3, else -> Ip[2].m).
  if (__builtin_expect(charmp(a) && charmp(b), 1)) {

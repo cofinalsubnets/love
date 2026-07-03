@@ -96,7 +96,8 @@
  (@(5) = 5))                                          ; a one-cell array still demotes to its scalar
 
 ; --- comparing functions --- `=` on functions is alpha + structural (binders by position,
-; free vars by name, captures pairwise); eta/beta not bridged; 1 = (\ x x), 0 = (\ _ 1).
+; free vars by name, captures pairwise); eta/beta not bridged; a number NEVER equals a
+; closure -- numerals ACT as their lambdas under apply ((1 x) = x), `=` doesn't say so.
 ; (\ y z) below holds a FREE var z; welp answers its read with the zero point so the closure
 ; builds with no warning surfaced -- it stays distinct from (\ x x) (free body /= bound body).
 (: help welp)
@@ -107,9 +108,9 @@
  (: g (\ a (\ b (+ a b))) (&& ((g 1) = (g 1)) !((g 1) = (g 2))))   ; closures: equal iff captures match
  ((+ 1) = (+ 1)) !((\ x x) < (\ y y)) !((\ x (cap x)) = cap)           ; partial apps too; eta not bridged
  ((+ 1.5) = (+ 1.5)) !((+ 1.5) = (+ 2.5)) ('(1.5) = '(1.5)) !('(1.5) = '(2.5))  ; nested float boxes compare by value (eqv KFlo)
- (1 = (\ x x)) ((\ y y) = 1) !(id? 1 (\ x x))                      ; 1 = identity, either side
- (0 = (\ _ 1)) ((\ q 1) = 0) !(0 = (\ _ 2)) !(0 = (\ _ _))        ; 0 = const-1 (and only that)
- !!(\ _ 1) (1 = $(\ _ 1)))     ; the bridge crosses the measure: =-equal to 0, yet present (a top nets 1)
+ !(1 = (\ x x)) !((\ y y) = 1) !(id? 1 (\ x x))                    ; NO numeral bridge: a number never equals a closure
+ !(0 = (\ _ 1)) !((\ q 1) = 0) (42 = ((\ x x) 42)) (1 = ((\ _ 1) 9)) ; ... they ACT alike under apply; = stays representation-strict
+ !!(\ _ 1) (1 = $(\ _ 1)))     ; a top is present and nets 1
 (: help 0)
 
 ; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it REDUCES. these are the
@@ -141,7 +142,19 @@
  ('(1 2) = '(1 2) * (mint 0)) (() = () * ()) ("@(1 2 3)" = show (() * @(1 2 3)))   ; identity FACE (1) of the unit,
  ("" = "ab" * 0) ((\ x x) = () * (\ x x)))                  ; mirroring its + face (0); 0 stays the number; () * hot = hot too
 
-; --- list * list is the CARTESIAN PRODUCT --- the semiring product whose `+` is cat: each
+; --- the unit rides through EVERY dyadic arithmetic lane --- () is the DO-NOTHING operand,
+; either side, for - / // % & | ^ << >> just as for + and *: the op never happens. NOT the
+; number 0 -- no face projection (() - 5 is 5, not -5) -- so an undefined op's () vanishes
+; when chained through any arithmetic lane. comparisons and `=` stay strict: () keeps its
+; floor seat in the total order.
+(assert
+ (5 = 5 - ()) (5 = () - 5) (2.5 = () - 2.5) ((64 2) = (64 2) - ())     ; - : both sides, every width
+ (5 = 5 / ()) (5 = () / 5) (5 = (// 5 ())) (5 = 5 % ()) (5 = (% () 5)) ; / // %
+ (5 = 5 | ()) (5 = () & 5) (5 = (^ 5 ())) (5 = (<< 5 ())) (5 = (>> () 5))  ; the bitwise lanes
+ (~(1 2) = ~(1 2) - ()) ("@(1 2 3)" = show (@(1 2 3) - ()))            ; complex + array pass through
+ (2 = (5 - ()) - 3) (5 = ((- 5) ()))                    ; chains heal; a partial fired with the unit yields its held operand
+ !('ef - 3) !("a" - "b") (5 = ('a - 'b) - 5)            ; undefined still answers (): it now vanishes through - too
+ !(5 = ()) (() < 5))                                    ; = and < stay strict: () keeps the floor the semiring product whose `+` is cat: each
 ; pair a proper 2-list (ai bj), so `tally` is the homomorphism (tally(a*b)=ta*tb). infix `*`
 ; is right-associative, so a*b*c nests right. RIGHT-distributivity ((a+b)*c=a*c+b*c) holds on
 ; the nose (the outer loop ranges the LEFT operand); LEFT-distributivity holds only up to a

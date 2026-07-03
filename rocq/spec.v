@@ -366,8 +366,11 @@ Theorem unit_lt_zero : forall z, lt (Osym z) (Onum 0).  Proof. intros. left. cbn
 
 (* `=` on functions is alpha-equivalence of their source. With de Bruijn
    indices alpha-equivalence IS syntactic equality (the names are gone), so it
-   is DECIDABLE and structural -- exactly the spec's claim. The numerals
-   bridge: 1 = (\ x x) is the identity, 0 = (\ _ 1) is const-1 (and ONLY that).
+   is DECIDABLE and structural -- exactly the spec's claim. A number NEVER
+   equals a closure: numerals ACT as their lambdas under apply ((1 z) = z,
+   (0 z) = 1 -- the reduction section below), but `=` stays representation-
+   strict (bridging 0/1 would break congruence (2 * id <> 2), the total
+   order (a lambda seats in the top band), and tower transitivity).
 
    Where the line sits, precisely (it is NOT "never reduce"): `=` cannot chase
    GENERAL beta -- beta-equality of lambda terms is undecidable (a common reduct
@@ -407,7 +410,9 @@ Proof. reflexivity. Qed.
 Theorem free_neq_bound : tm_one <> Lam (Var 1).
 Proof. discriminate. Qed.
 
-(* 0 = (\ _ 1), and 0 is ONLY const-1: !(0 = (\ _ 2)) *)
+(* const-1's body IS the identity term: (\ _ 1) and (\ _ (\ x x)) share one
+   de Bruijn skeleton -- a fact about the term model (the runtime `=` never
+   bridges a numeral to a lambda). *)
 Theorem zero_is_const_one : tm_zero = Lam tm_one.
 Proof. reflexivity. Qed.
 Theorem zero_ne_const_two : tm_zero <> Lam (Lam (Lam (Var 0))).
@@ -424,8 +429,8 @@ Proof. discriminate. Qed.
 (* ============================================================ *)
 (* `=` is alpha+structural and deliberately stops there (above). The runtime's
    evaluator `ev` goes further -- it REDUCES. This models that operational layer
-   with de Bruijn beta+eta, so the numeral laws (1 = id, 0 = const-1, the Church
-   tower) hold not just as an encoding but as actual reductions, and the
+   with de Bruijn beta+eta, so the numeral laws (1 acts as id, 0 as const-1, the
+   Church tower) hold not just as an encoding but as actual reductions, and the
    distinctions `=` keeps survive reduction too. Each theorem here has a twin
    assertion against the real binary in test/spec.l (e.g. ((\ x x) 5) ; 5): the
    Rocq side says "valid by the calculus", the corpus side says "the binary

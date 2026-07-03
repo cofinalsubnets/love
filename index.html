@@ -130,13 +130,13 @@
 <p>ai is a dynamically typed lisp superset with curried evaluation, fast generics,
 and optional infix/prefix notation. other facts include</p>
 <ul>
-  <li>every value is a theoretically a one argument total function of the global type</li>
+  <li>every value is theoretically a one argument total function of the global type</li>
   <li>barring conditions such as out of memory or infinite loop, pretty much every expression has a value</li>
   <li>most functions are defined generically, the goal is fully generic everywhere</li>
   <li>alpha-equivalent lambdas compare equally: <code>(\ x x) = (\ y y)</code></li>
-  <li>integers are considered equivalent to their church numerals: <code>1 = (\ x x)</code></li>
+  <li>integers act as their church numerals: <code>(1 x) = x</code>, <code>(3 2) = 8</code></li>
   <li>infix/prefix notation (desugars to lisp)</li>
-  <li>integer, float and complex types plus shaped numeric arrays with broadcasting</li>
+  <li>integer, float and complex types plus shaped numeric arrays with numpy-like broadcasting</li>
   <li>mandatory co-op scheduling</li>
   <li>macros, call/cc, optional static dependent type checking (in early development)</li>
   <li>repl with native line editing</li>
@@ -154,7 +154,7 @@ and optional infix/prefix notation. other facts include</p>
   <dt id="g-application">application</dt>
   <dd>the main vm operation: <code>(f x)</code> applies <code>f</code> to <code>x</code>. the numeric case is exponentiation.</dd>
   <dt id="g-band">band / the true-blue order</dt>
-    <dd>the cross-kind total order: <code>() &lt; mint &lt; name &lt; string &lt; number &lt; tray &lt; chain &lt; book &lt; hot</code> -- numbers folded into one band by net.</dd>
+    <dd>the cross-kind total order: <code>() &lt; mint &lt; name &lt; string &lt; number &lt; tray &lt; chain &lt; book &lt; top</code> (fns and hots share the top band) -- numbers folded into one band by net.</dd>
   <dt id="g-blue">blue</dt>
   <dd>net exactly 0: (<code>0</code>, <code>()</code>, <code>""</code>, <code>'(1 2 3 -6)</code>).</dd>
   <dt id="g-book">book / tablet</dt>
@@ -196,7 +196,7 @@ and optional infix/prefix notation. other facts include</p>
   <dt id="g-red">red</dt>
     <dd>net &lt; 0 -- what <code>$</code> clamps to nothing.</dd>
   <dt id="g-sat">saturate (<code>$</code>)</dt>
-    <dd>retraction of the net measure onto <span class="hi green">green</span> charms: <code>$x = (max 0 (min max-charm (net x)))</code>. the truth value of <code>x</code> is <code>!!$x</code>.</dd>
+    <dd>retraction of the net measure onto <span class="hi green">green</span> charms: <code>$x = (max 0 (min max-charm (ceil (net x))))</code>. the truth value of <code>x</code> is <code>!!$x</code>.</dd>
   <dt id="g-star">star</dt>
     <dd>a self-netting scalar: a number that is its own net.</dd>
   <dt id="g-string">string</dt>
@@ -208,7 +208,7 @@ and optional infix/prefix notation. other facts include</p>
   <dt id="g-twin">twin</dt>
     <dd>a complex: two gems <code>(re, im)</code>, built and conjugated by <code>~</code>.</dd>
   <dt id="g-unit">unit / zero point</dt>
-    <dd>the global <span class="hi gray">empty</span> element: <code>() + x = () * x = x</code>. canonically a mint, therefore false. the face of absence a missing read returns.</dd>
+    <dd>the global <span class="hi gray">empty</span> element: <code>() + x = () * x = x</code>, and it rides through every other arithmetic operator the same way (<code>5 - () = () - 5 = 5</code> -- the do-nothing operand). canonically a mint, therefore false. the face of absence a missing read returns.</dd>
 </dl>
 
 <hr>
@@ -236,28 +236,6 @@ and optional infix/prefix notation. other facts include</p>
   <dt>🦇 thomas ◦ the SAT engine</dt>
     <dd>cave bat friend of holo. they often discuss their inner lives</dd>
 </dl>
-<script>
-/* glossary: the <dl> is the single source of truth. copy each gloss onto the
-   .term spans (for the hover card) and make them jump to their entry; warn in
-   the console for any term whose data-g has no matching <dt id="g-..."> . */
-(function () {
-  const defs = {};
-  document.querySelectorAll('.glossary dt[id^="g-"]').forEach(dt => {
-    const dd = dt.nextElementSibling;
-    if (dd && dd.tagName === 'DD')
-      defs[dt.id.slice(2)] = dd.textContent.replace(/\s+/g, ' ').trim();
-  });
-  document.querySelectorAll('.term').forEach(t => {
-    const key = t.dataset.g, def = defs[key];
-    if (def == null) { console.warn('glossary: no entry for term', JSON.stringify(key)); return; }
-    const tip = document.createElement('span');
-    tip.className = 'tip'; tip.textContent = def;
-    t.appendChild(tip);
-    // a click on the term OR its card (bubbling) jumps to the glossary entry
-    t.addEventListener('click', () => { location.hash = 'g-' + key; });
-  });
-})();
-</script>
 <footer>for ()
   <span class="note">&middot; set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V TWN16 + re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
 </footer>

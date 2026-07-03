@@ -13,7 +13,7 @@ interprets sigils (all-punctuation symbols) as infix or
 prefix operators according to placement. the two forms mix
 freely: infix operators take the lisp meaning in function
 position, and infix can be converted to left-associative by
-wrapping the sigil in parens, eg.  `3 = (+) 1 2`.
+wrapping the sigil in parens, eg.  `3 = ((+) 1 2)`.
 
 in terms of implementation, `lisp : software :: C : hardware`.
 C gives random memory access via pointer arithmetic and direct
@@ -29,7 +29,7 @@ features
 - numeric tower with shaped array broadcasting
 - lambdas, macros, closures, multitasking
 - freestanding bare metal kernel build
-- public domain portable C with zero dependencies
+- free portable C with zero dependencies
 - self-hosting compiler written in ai
 
 ai has three special forms plus "operators". the forms are
@@ -68,7 +68,7 @@ source read as ever (`(+ 1 2)`, `(1 +)`).
 - a glued sigil binds tightest: `$"ab" + 2` is `(+ ($ "ab") 2)`, i.e. 197
 the numerals still carry the power family (`-1 x = 1 / x`, `(1 / 2) x =
 sqrt x`, `n x = x ** n`); words cover the rest (`abs int gcd // << >> ^
-sine cosine log pow`), and general folds stay words: `(foldl f z l)`.
+sine cosine log`), and general folds stay words: `(foldl f z l)`.
 
 pure lisp is the lassoc subset: `?` is still the cond form at the head of a
 list, bare punct symbols escape in parens -- `(+)` is `+` as a value -- and
@@ -80,7 +80,7 @@ are true too:
 - `'(2 3 4) = (map (+ 1) '(1 2 3))`
 - `'(0 1 2) = (jot 3)`
 - `10 = +(jot 5)`
-- `5 = () + 5` and `5 = () * 5` -- `()` is the **unit**, the shared identity of `+` and `*` in every lane; `0` and `1` are its two faces (the additive identity it shows in `+`, the multiplicative in `*`)
+- `5 = () + 5` and `5 = () * 5` -- `()` is the **unit**, the shared identity of `+` and `*` in every lane; `0` and `1` are its two faces (the additive identity it shows in `+`, the multiplicative in `*`). it rides through every other arithmetic operator the same way, either side: `5 = 5 - ()` and `5 = () - 5` (the do-nothing operand -- the op never happens)
 - `'(0 0 1 3 6 10 15 21) = ((flip compose jot (map (compose sat jot))) 8)`
 
 that last is the triangular numbers, point-free: `jot` lays out `0 .. n-1`,
@@ -119,8 +119,8 @@ in the corpus, so every claim stays green.
 - `echo .ev | ai` print the compiler
 
 that last one is not a joke. `.` prints, `ev` is the self-hosted evaluator,
-and what comes out is the lambda the compiler compiled itself into -- a couple
-kilobytes of the whole back end.
+and what comes out is the lambda the compiler compiled itself into -- about
+eight kilobytes of the whole back end.
 
 the shell survives its mistakes: with no help of your own installed it
 provides one, so any condition prints `;; a b` -- `;; missing undefined-name`,
@@ -175,7 +175,7 @@ cook is one of the **inle crew** -- a small crew of real programs that ride on
 tiny ai layer over a handful of host nifs; on a hosted system they `make install`
 onto PATH beside `ai`.
 
-- **ain** -- a netcat clone in ~50 lines: `ain host
+- **ain** -- a netcat clone in ~70 lines: `ain host
   port` is a TCP client, `ain -l port` a server, bytes pumping both ways at
   once. it is the "real apps day one" demo, and the shape the cooperative scheduler
   was built for: two spawned pump loops, each parked in a port read on a different
@@ -219,8 +219,10 @@ onto PATH beside `ai`.
   log is exact (`(log -1) = i * pi`, since atan2(0,-1) is pi by IEEE fiat),
   and sqrt factors its angle through sinpi/cospi, so `(1 / 2) -1 = i` on the
   nose.
-- functions compare by alpha-equivalence of their source, and the numerals
-  bridge: `1 = (\ x x)`, `0 = (\ _ 1)`.
+- functions compare by alpha-equivalence of their source, and a partial
+  application equals its literal lambda: `(adder 5) = (\ x (+ x 5))`. numbers
+  never equal closures -- numerals *act* as their lambdas (`(1 x) = x`), but
+  `=` stays representation-strict.
 
 ### credits
 
