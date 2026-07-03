@@ -127,24 +127,20 @@
 
 <hr>
 
-<p>ai is a lisp-like surface over a tiny C core. differences from other lisp:</p>
+<p>ai is a dynamically typed lisp superset with curried evaluation, fast generics,
+and optional infix/prefix notation. other facts include</p>
 <ul>
-  <li><em>every value is a function.</em> even numbers, strings and lists</li>
-  <li><em>every function is curried.</em> partial application just works. nullary "calls" are identity, <code>(x) = x</code></li>
-  <li><em>every operation is generic.</em> <code>+</code> cats strings, <code>*</code> composes functions</li>
-  <li><em>infix notation.</em> all-punct symbols act as flat r2l infix operators, wrap in parens to escape. you can still use polish (lisp) notation normally</li>
-  <li><em>prefix notation.</em> some chars (eg. <code>$</code>, <code>*</code>, <code>+</code>, <code>-</code>) act as prefix operators when glued to another token</li>
-  <li><em>truth is color.</em> every value has a color based on the sign of its <code>net</code>, a structural summation of its parts. <span class="term" data-g="green">green</span> (pos) is true, <span class="term" data-g="red">red</span> (neg) and <span class="term" data-g="blue">blue</span> (0) are false.</li>
-</ul>
-
-<p>other cool features:</p>
-<ul>
-  <li>apl/numpy-like numeric arrays with broadcasting</li>
-  <li>first-class complex numbers</li>
-  <li>mandatory co-op multitasking</li>
-  <li>public domain, zero dependencies, boots bare metal</li>
-  <li>builds for MCUs (missing some features atm but under development)</li>
-  <li>pretty fast template JIT (currently amd64/arm64 only)</li>
+  <li>every value is a theoretically a one argument total function of the global type</li>
+  <li>barring conditions such as out of memory or infinite loop, pretty much every expression has a value</li>
+  <li>most functions are defined generically, the goal is fully generic everywhere</li>
+  <li>alpha-equivalent lambdas compare equally: <code>(\ x x) = (\ y y)</code></li>
+  <li>integers are considered equivalent to their church numerals: <code>1 = (\ x x)</code></li>
+  <li>infix/prefix notation (desugars to lisp)</li>
+  <li>integer, float and complex types plus shaped numeric arrays with broadcasting</li>
+  <li>mandatory co-op scheduling</li>
+  <li>macros, call/cc, optional static dependent type checking (in early development)</li>
+  <li>repl with native line editing</li>
+  <li>self-hosting threaded code interpreter with template JIT compiler (amd64/arm64 only)</li>
 </ul>
 
 <hr>
@@ -219,22 +215,26 @@
 <h2 id="crew"><a href="#crew">the crew</a></h2>
 <p>the <em>black rabbit of inle</em> and crew travel through namespace searching for the legendary island of svalbard.</p>
 <dl class="crew">
-  <dt>🌑 inle</dt>
-    <dd>autonomous freestanding network kernel</dd>
-  <dt>🔭 tele</dt>
-    <dd>pytorch clone</dd>
-  <dt>🐇 bellberry</dt>
-    <dd>the navigator</dd>
-  <dt>🕊 gwen</dt>
-    <dd>the synthesist</dd>
-  <dt>🐈 ain</dt>
-    <dd>netcat clone</dd>
-  <dt>🐕 bao</dt>
-    <dd>rlwrap clone</dd>
-  <dt>🐀 cook</dt>
-    <dd>make clone</dd>
-  <dt>🐐 mow</dt>
-    <dd>garbage collector</dd>
+  <dt>🌑 inle ◦ the vessel</dt>
+    <dd>wherein our tale unfolds</dd>
+  <dt>🔭 tele ◦ the observer</dt>
+    <dd>big telescope. pilot face of inle</dd>
+  <dt>🐇 bellberry ◦ the navigator</dt>
+    <dd>light brown rabbit with silver stripes</dd>
+  <dt>🕊 gwen ◦ the synthesist</dt>
+    <dd>mourning dove friend of bellberry and tele</dd>
+  <dt>🐈 ain ◦ the netcat</dt>
+    <dd>white cat. somewhat misanthropic</dd>
+  <dt>🐕 bao ◦ the shell</dt>
+    <dd>tan dog. very eager to please</dd>
+  <dt>🐀 cook ◦ the build system</dt>
+    <dd>an uncertain number of gray rats</dd>
+  <dt>🐐 mow ◦ the grass chewer (garbage collector)</dt>
+    <dd>wise goat. formerly gregarious, now solitary</dd>
+  <dt>🕷️ holo ◦ the assembler</dt>
+    <dd>cave spider. short for holophrasm</dd>
+  <dt>🦇 thomas ◦ the SAT engine</dt>
+    <dd>cave bat friend of holo. they often discuss their inner lives</dd>
 </dl>
 <script>
 /* glossary: the <dl> is the single source of truth. copy each gloss onto the
