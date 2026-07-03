@@ -530,6 +530,8 @@
    fmaxl0 #2000                                             ; the initial learnt-DB cap (the gate lowers it to force reductions)
    frp0 #4                                                  ; rephase-wheel cadence in restarts (pin 0 = off)
    fcmp0 #1048576                                           ; arena-words threshold for the real compaction
+   fru0 #400                                                ; the luby restart unit (conflicts per luby-1 block)
+   fst0 #10000                                              ; the stable/focused mode budget in conflicts (x3/2 per switch)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep (assemble 'x64 ir) 'bytes 0)
        c (cask (tally bs))
@@ -555,7 +557,9 @@
        _ (pin s 'lvo (lvo-of nv)) _ (pin s 'rso (rso-of nv)) _ (pin s 'who (who-of nv)) _ (pin s 'vao (vao-of nv))
        _ (pin s 'ar (cask 4096)) _ (pin s 'wn (cask 4096))  ; words 0-1 of each reserved: 0 stays "none"
        _ (pin s 'bad 0)
-       _ (pin s 'nconf 0) _ (pin s 'rnum 1) _ (pin s 'climit 400) _ (pin s 'rew 0)
+       _ (pin s 'nconf 0) _ (pin s 'rnum 1) _ (pin s 'climit (peep fru0 0 400)) _ (pin s 'rew 0)
+       _ (pin s 'mode 0) _ (pin s 'mconf 0) _ (pin s 'mbudget (peep fst0 0 10000)) _ (pin s 'sclimit 2000)
+       _ (pin s 'btop 0) _ (pin s 'bph (cask (* 8 (+ nv 1))))
        _ (pin s 'learnts ()) _ (pin s 'nl 0) _ (pin s 'maxl (peep fmaxl0 0 2000))
        ks (fbcpk nv)
        use (&& (two? ks) (= 0 (peep fknob 0 0)))
@@ -584,12 +588,22 @@
              _ ((: (go v) (? (> v nv) 0 (: _ (putw fx (+ aco v) (>> (getw fx (+ aco v)) 8)) (go (+ v 1))))) 1)
              (putw fx 6 (>> vi 8)))
           (putw fx 6 vi)))
-   (fnext-restart s) (: rn (+ 1 (peep s 'rnum 1)) _ (pin s 'rnum rn) _ (pin s 'nconf 0) _ (pin s 'climit (* (luby rn) 400)) 0)
+   (fnext-restart s) (: rn (+ 1 (peep s 'rnum 1)) _ (pin s 'rnum rn) _ (pin s 'nconf 0) _ (pin s 'climit (* (luby rn) (peep fru0 0 400))) 0)
    (frephase s st)                                          ; randomize every saved phase; -> st'
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
        ((: (go v st) (? (> v nv) st
              (: p (random st 2) _ (putw fx (+ pho v) (+ 1 (cap p))) (go (+ v 1) (cup p)))))
         1 st))
+   (fbest s)                                                ; restore the BEST-TRAIL phases (the deepest basin seen)
+    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv) b (peep s 'bph ())
+       ((: (go v) (? (> v nv) 0
+             (: p (getw b v) _ (? (= p 0) 0 (putw fx (+ pho v) p)) (go (+ v 1))))) 1))
+   (fsnap s)                                                ; snapshot the ASSIGNMENT's polarities at a new deepest trail
+    (: fx (peep s 'fx ()) nv (peep s 'nvars 0) vao (vao-of nv) b (peep s 'bph ())
+       ((: (go v) (? (> v nv) 0
+             (: el (getw fx (+ vao v))
+                _ (putw b v (? (= el 0) 0 (= 0 (& el 1)) 1 2))
+                (go (+ v 1))))) 1))
    (finvert s)                                              ; flip every saved phase
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
        ((: (go v) (? (> v nv) 0
@@ -682,7 +696,10 @@
        ((: (loop st)                                                ; st threads the rephase RNG (seeded: reproducible)
            (: confl ((peep s 'bcp ()) fx (peep s 'ar ()) (peep s 'wn ()))
               (? (> confl -1)
-                 (: _ (fens s 'ar (* 8 (+ (getw fx 4) (+ nv 3))))   ; room for the learnt clause
+                 (: _ (? (> (getw fx 0) (peep s 'btop 0))           ; a new deepest trail: snapshot its
+                         (: _ (pin s 'btop (getw fx 0)) (fsnap s))  ; polarities (the wheel's best spoke)
+                         0)
+                    _ (fens s 'ar (* 8 (+ (getw fx 4) (+ nv 3))))   ; room for the learnt clause
                     _ (fens s 'wn (* 8 (+ (getw fx 5) 4)))          ; ... and its two watch nodes
                     r ((peep s 'conf ()) fx (peep s 'ar ()) (peep s 'wn ()) confl)
                     (? (= r -1) 'unsat
@@ -691,6 +708,7 @@
                                (: _ (pin s 'learnts (link (link cid glue) (peep s 'learnts ())))
                                   (pin s 'nl (+ 1 (peep s 'nl 0)))) 0)
                           _ (fdecay s) _ (pin s 'nconf (+ 1 (peep s 'nconf 0)))
+                          _ (pin s 'mconf (+ 1 (peep s 'mconf 0)))
                           (loop st))))
                  (&& (> (getw fx 2) 0)                              ; a full DB also forces the restart:
                      (|| (>= (peep s 'nconf 0) (peep s 'climit 0))  ; reduction is only sound at level 0
@@ -698,18 +716,40 @@
                     (: _ (fbackjump s 0) _ (fnext-restart s)
                        _ (? (> (peep s 'nl 0) (peep s 'maxl 2000)) (freduce s) 0)
                        _ (? (> (getw fx 4) (peep fcmp0 0 1048576)) (fcompact s) 0)
-                       ; REPHASE WHEEL every frp0 restarts, policies cycling random ->
-                       ; invert -> keep: a SAT instance stuck in a bad polarity basin
-                       ; escapes (uf250 ~35% net), the keep spoke preserves a good basin,
-                       ; and UNSAT/php runs are measurably untouched. always-random
-                       ; instead reshuffles luck (one uf250 went 1.2s -> 12s).
-                       rp (peep frp0 0 0)
-                       st2 (? (&& (> rp 0) (= 0 (% (peep s 'rnum 1) rp)))
-                              (: w (peep s 'rew 0) _ (pin s 'rew (+ w 1))
-                                 (? (= 0 (% w 3)) (frephase s st)
-                                    (= 1 (% w 3)) (: _ (finvert s) st)
+                       ; STABLE/FOCUSED alternation on a growing conflict budget (fst0,
+                       ; x3/2 per switch): focused = the luby schedule; stable = rare
+                       ; GEOMETRIC restarts (climit 2000 x6/5 within the phase) with
+                       ; sticky phases. the REPHASE WHEEL (random -> invert -> keep)
+                       ; fires only on ENTERING stable: early enough to spring a SAT
+                       ; instance from a bad polarity basin (uf250 keeps its ~35% win),
+                       ; rare enough that a long UNSAT refutation keeps its phase-saving
+                       ; locality (uuf250 panel 65s -> 42s; the old every-4-restarts
+                       ; wheel fired ~440 times over 700k conflicts and DOUBLED the
+                       ; conflict count). frp0 pins the wheel off.
+                       st2 (? (> (peep s 'mconf 0) (peep s 'mbudget 0))
+                              (: m (peep s 'mode 0) _ (pin s 'mode (- 1 m)) _ (pin s 'mconf 0)
+                                 _ (pin s 'mbudget (// (* (peep s 'mbudget 0) 3) 2))
+                                 (? (&& (= m 0) (> (peep frp0 0 0) 0))
+                                    (: _ (pin s 'sclimit 2000)
+                                       w (peep s 'rew 0) _ (pin s 'rew (+ w 1))
+                                       ; random FIRST: at the first entry bph ~= the current
+                                       ; phases, so leading with best would waste the one
+                                       ; early escape that wins the SAT instances. over a
+                                       ; 14-instance panel the orderings tie on net (85s vs
+                                       ; 88s) with opposite trades (best-first -21% UNSAT,
+                                       ; random-first -5x SAT tail risk); random-first has
+                                       ; the lower variance and protects the raced rows.
+                                       (? (= 0 (% w 4)) (frephase s st)
+                                          (= 1 (% w 4)) (: _ (fbest s) st)
+                                          (= 2 (% w 4)) (: _ (finvert s) st)
+                                          (: _ (fbest s) st)))
                                     st))
                               st)
+                       _ (? (= 1 (peep s 'mode 0))
+                            (: sc (peep s 'sclimit 2000)
+                               _ (pin s 'sclimit (// (* sc 6) 5))
+                               (pin s 'climit sc))
+                            0)
                        (? (= 0 (peep s 'bad 0)) (loop st2) 'unsat))   ; a compaction can prove UNSAT (all-false at level 0)
                  (: v ((peep s 'dec ()) fx)
                     (? (= v 0) 'sat (loop st)))))) (seed 42)))

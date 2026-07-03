@@ -248,12 +248,40 @@ misplaced closing paren restructured the `res` binding, the one-scope law made e
 to a cheerful model. The differential gate at small scale passed throughout — the
 compaction only fires past 1M words, hence the forced-threshold gate.
 
+## stable/focused + best-trail phases (the uuf250 search rung)
+
+first, a correction baked into the numbers above: cadical needs 195k conflicts and
+4.1 SECONDS on uuf250-01 (the earlier "~0.2s" read the wrong row) — hard random UNSAT
+is resolution-bound and everyone pays. our gap was 3.6× conflicts (701k) at 1.4×
+per-conflict cost. cadical's own search ablation on this class is nearly flat
+(stabilize +54% is the only real feature), which pointed the finger INWARD — and
+indeed the every-4-restarts rephase wheel was self-harm at this scale: ~440 fires
+over 700k conflicts, each scrambling the phase-saving locality a long refutation IS.
+
+the landed shape: **stable/focused alternation** on a growing conflict budget (`fst0`
+10000, ×3/2 per switch) — focused keeps the luby schedule, stable runs rare geometric
+restarts with sticky phases — and the **rephase wheel fires only on entering stable**,
+now four spokes: random → best → invert → best, where **best** restores the polarities
+snapshotted at the deepest trail ever reached (one compare per conflict, a section
+copy on each new record). random stays FIRST: at the first stable entry the best
+snapshot ≈ the current phases, and the early random escape is what wins the SAT
+instances.
+
+the honest measurement discipline mattered more than any single knob here:
+threshold-250 instances are ±3× lotteries per (policy, instance) — single-instance
+comparisons flipped sign repeatedly, so the call was made on a 14-instance panel
+(8 proven-UNSAT + 6 SAT), where best-first and random-first orderings TIE on net
+(85s vs 88s) with opposite trades. net effect vs the pre-rung solver: the uuf250
+panel improves ~25% (and the machinery — modes, budgets, best phases — is now in
+place as knobs), the raced uf250 row lands at ~1.7s, php and the small rows are
+untouched.
+
 ## what the remaining distance is
 
-with the eleven-row net led outright (ai ~1700±100 by uf250's rephase luck, picosat
-~2030, cadical ~2230, kissat ~4000), the remaining per-row gaps: picosat/minisat still
-lead the small random rows (raw per-conflict engine cost), uuf250-class UNSAT randoms
-run ~21s against cadical's ~0.2s (conflict-count class: search quality on long
-unstructured refutations — stable/focused alternation and stronger minimization are
-the known levers), and cadical keeps php8 by ~1.5ms. all lisp cold-path or
+the eleven-row net is now a statistical three-way tie at the top (picosat ~2030,
+cadical ~2220, ai ~2250 — the uf250 SAT-lottery row is the entire spread), with
+kissat ~4000 and the rest behind. per-row: picosat/minisat keep the small random
+rows (raw per-conflict engine cost), uuf250-class stays ~2.5× cadical's conflict
+count (the remaining stable-mode refinements: target-phase decision ordering, tier-2
+clause management), and php8 sits 1.5ms behind cadical. all lisp cold-path or
 kernel-phase work; the architecture doesn't move.
