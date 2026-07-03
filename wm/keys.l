@@ -51,7 +51,7 @@
      (kb supm xk-ret (L 'spawn (L "xfce4-terminal")))                            ; sup+return  term
      (kb supm 96 (L 'spawn (L "rofi" "-show" "drun")))                           ; sup+`       menu
      (kb supm 32 '(msg next-layout))                                             ; sup+space
-     (kb supm 98 '(msg toggle-struts))                                           ; sup+b       (a rung-7 message; () until then)
+     (kb supm 98 '(toggle-struts))                                               ; sup+b       ToggleStruts (ewmh.l's avoid flag)
      (kb supm 109 '(msg mirror))                                                 ; sup+m       Toggle MIRROR
      (kb supm 102 '(msg toggle-layout))                                          ; sup+f       toggleLayouts Full
      (kb supm 112 (L 'spawn (L "xfce4-screenshooter")))                          ; sup+p

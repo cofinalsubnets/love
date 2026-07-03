@@ -199,5 +199,41 @@
       (= (nm-pick '(10 20) 10 '(99 20 10) 1) 20)                                 ; other-workspace history is ignored
       (! (nm-pick '(10) 10 '(10) 1))))                                           ; nowhere to go
 
-(say err "wm/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap laws ok
+; --- EWMH + docks (wm/ewmh.l rung 7): strut arithmetic + wire encodings ---
+(: (assert
+      ; _NET_WM_STRUT_PARTIAL's 12 values: the strut is the first 4; short = none
+      (= (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800)) '(0 0 30 0))
+      (! (strut-parse '(1 2)))
+      ; struts clamp the rect off each edge; a swallowed axis floors at 0
+      (= (strut-shrink (rct 0 0 800 600) '(0 0 30 0) 800 600) '(0 30 800 570))   ; a top-30 panel
+      (= (strut-shrink (rct 0 0 800 600) '(0 50 0 20) 800 600) '(0 0 750 580))   ; right + bottom
+      (= (nthl (strut-shrink (rct 0 0 100 100) '(700 0 0 0) 800 600) 2) 0)))
+
+(: _ (pin ewst 'struts (L (L 77 '(0 0 30 0)) (L 88 '(40 0 0 0)))) _ (pin ewst 'avoid 1)
+   r1 (ewmh-rect (rct 0 0 800 600) 800 600)
+   _ (ewmh-toggle ()) r2 (ewmh-rect (rct 0 0 800 600) 800 600)                   ; ToggleStruts: the full screen again
+   _ (ewmh-toggle ()) _ (ewmh-untrack 88) r3 (ewmh-rect (rct 0 0 800 600) 800 600)
+   _ (pin ewst 'struts ())                                                       ; leave the tablet clean
+   (assert (= r1 '(40 30 760 570)) (= r2 '(0 0 800 600)) (= r3 '(0 30 800 570))))
+
+; --- the property/window encodings, byte-exact into a jug ---
+(: j (jug 0) _ (x-chprop32 j 5 6 7 '(9 10)) b (slurp j)
+   (assert (= (tally b) 32) (= (b 0) 18) (= (b 2) 8)                             ; opcode, len 6+2
+           (= (b 4) 5) (= (b 8) 6) (= (b 12) 7)                                  ; window, property, type
+           (= (b 16) 32) (= (b 20) 2) (= (b 24) 9) (= (b 28) 10)))               ; format, count, the two values
+
+(: j (jug 0) _ (x-chprop8 j 5 6 7 "AB") b (slurp j)
+   (assert (= (tally b) 28) (= (b 0) 18) (= (b 2) 7)                             ; len 6 + 1 (2 chars + pad)
+           (= (b 16) 8) (= (b 20) 2) (= (b 24) 65) (= (b 25) 66) (= (b 26) 0)))  ; format 8, n=2, "AB\0\0"
+
+(: j (jug 0) _ (x-mkwin j 42 7) b (slurp j)
+   (assert (= (tally b) 32) (= (b 0) 1) (= (b 4) 42) (= (b 8) 7)                 ; CreateWindow, wid, parent
+           (= (b 12) 255) (= (b 13) 255) (= (b 16) 1) (= (b 22) 2)))             ; x=-1, w=1, class InputOnly
+
+; --- ClientMessage field reads (win@4 type@8 data@12,16,20) ---
+(: pk (cat '(33 32 0 0 9 0 0 0 5 0 0 0 2 0 0 0 7 0 0 0 8 0 0 0) '(0 0 0 0 0 0 0 0))
+   (assert (= (ewmh-cm-win pk) 9) (= (ewmh-cm-type pk) 5)
+           (= (ewmh-cm-d0 pk) 2) (= (ewmh-cm-d1 pk) 7) (= (ewmh-cm-d2 pk) 8)))
+
+(say err "wm/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh laws ok
 ")

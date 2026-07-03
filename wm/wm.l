@@ -16,6 +16,7 @@
    root (scr-root sc) wpx (scr-w sc) hpx (scr-h sc)
    _ (? (x-redirect s root) 0 (: _ (say err "wm: another WM owns :7\n") (nap 1)))
    _ (line (+ "wm: managing " (+ (show root) (+ " " (+ (show wpx) (+ "x" (show hpx)))))))
+   _ (ewmh-init s root (scr-idbase sc) 9)                                        ; the support window + _NET_* root properties
 
    ; --- keyboard: resolve the-keys' keysyms to keycodes, grab every chord ---
    km (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms the-keys))
@@ -29,9 +30,10 @@
    (nth l i) (? (< i 1) (cap l) (nth (cup l) (- i 1)))
    defb 3                                                                        ; the config's border-width; a layout may override per-window (a 6th field)
    scrn (L 0 0 wpx hpx)
+   (trect u) (ewmh-rect scrn wpx hpx)                                            ; the tiling rect: screen minus dock struts (sup+b flips)
    (render sh lay)                                                               ; ask the layout for placements, configure them, unmap the dropped
     (: z (wsget sh (wscur sh))
-       pls (cap (lay-tile lay scrn z)) placed (map cap pls)
+       pls (cap (lay-tile lay (trect ()) z)) placed (map cap pls)
        _ (map (\ t (: _ (x-border s (nth t 0) (? (< (tally t) 6) defb (nth t 5)))   ; smartBorders sets 0 on a singleton/fullscreen
                        (x-configure s (nth t 0) (nth t 1) (nth t 2) (nth t 3) (nth t 4)))) pls)
        _ (map (\ w (? (any (\ p (= p w)) placed) 0 (x-unmap s w))) (wsrow sh))   ; windows the layout dropped (Full/minimize): hide them
@@ -75,6 +77,7 @@
           (= k 'restart) (: _ (line "wm: restart -- rung 9 (dock adopt)") (loop sh lay live hist ffoc))
           (= k 'refresh) (relay sh lay ffoc)
           (= k 'reset-layout) (relay sh lay0 ffoc)
+          (= k 'toggle-struts) (: _ (ewmh-toggle ()) _ (line "wm: toggle struts") (relay sh lay ffoc))
           (= k 'sink) (? (wsfloating? sh fw) (relay (wssink sh fw) lay ()) (loop sh lay live hist ffoc))
           (= k 'float-toggle)
           (? (! fw) (loop sh lay live hist ffoc)
@@ -89,7 +92,7 @@
              r2 (? (= k 'go) (L (+ (nth r 0) dx) (+ (nth r 1) dy) (nth r 2) (nth r 3))
                    (L (nth r 0) (nth r 1) (mx2 20 (+ (nth r 2) dx)) (mx2 20 (+ (nth r 3) dy))))
              (relay (wsdofloat sh fw r2) lay ffoc))
-          (: dir (caup a) pls (cap (lay-tile lay scrn z)) tgt (nav-target pls (wsfoc sh) dir)
+          (: dir (caup a) pls (cap (lay-tile lay (trect ()) z)) tgt (nav-target pls (wsfoc sh) dir)
              (? (= k 'go) (? tgt (relay (wsmap sh (zfocto tgt)) lay ()) (loop sh lay live hist ffoc))
                 (= k 'swapd) (? tgt (relay (wsmap sh (zswapw (wsfoc sh) tgt)) lay ffoc) (loop sh lay live hist ffoc))
                 (relay sh (msg-or lay (lay-msg lay (? (|| (= dir 'left) (= dir 'down)) 'shrink 'expand) z)) ffoc)))))
@@ -99,12 +102,14 @@
     (: f (wsfoc sh)
        hist (? (&& f (! (= f (? (two? hist) (cap hist) ())))) (link f (znub f hist)) hist)
        _ (reap 0)                                                                ; harvest one spawned zombie, if any
+       _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
        (? (! e) (line "wm: display gone")
           (= (ev-code e) 0) (: _ (line (+ "wm: X error " (show (ev-detail e)))) (loop sh lay live hist ffoc))
           (: code (ev-code e) win (ev-window e)
              (? (= code 20)                                                      ; MapRequest: admit tiled, run the manageHook, then place
-                (: sh1 (admit sh win)
+                (: _ (? (ewmh-track s win) (line (+ "wm: strut " (show win))) 0) ; a dock's strut shrinks the tiling rect
+                   sh1 (admit sh win)
                    c (mg-ctx s win scrn (x-getgeom s win))
                    sh2 (manage-window manage-default c sh1)
                    ffoc2 (? (wsfloating? sh2 win) win ffoc)                      ; a hook-floated window takes the float focus
@@ -115,7 +120,8 @@
                          _ (line (+ "wm: ignore " (show win))) (loop sh2 lay live hist ffoc))))
                 (= code 19) (: _ (? (= win (wsfoc sh)) (: _ (x-focus s win) (x-flush s)) 0) (loop sh lay live hist ffoc))   ; MapNotify: focus if it's the top
                 (= code 17)                                                      ; DestroyNotify: unmanage + tile
-                (: (? (! (wsknownw? sh win)) (loop sh lay live hist ffoc)
+                (: _ (ewmh-untrack win)
+                   (? (! (wsknownw? sh win)) (loop sh lay live hist ffoc)
                       (: sh2 (evict sh win) _ (render sh2 lay)
                          ffoc2 (? (= win ffoc) () ffoc)
                          _ (line (+ "wm: - " (+ (show win) (+ " " (show (wsrow sh2))))))
@@ -133,6 +139,29 @@
                       gw (? (& mask 4) (u16 pkt 20) (nth g 2))                   ; keep their current geometry
                       gh (? (& mask 8) (u16 pkt 22) (nth g 3))
                       _ (x-configure s win gx gy gw gh) _ (x-flush s)
+                      (loop sh lay live hist ffoc)))
+                (= code 33)                                                      ; ClientMessage: EWMH requests ride SendEvent to the root
+                (: pkt (ev-raw e) cw (ewmh-cm-win pkt) ty (ewmh-cm-type pkt)
+                   (? (&& (= ty (ewmh-atom "_NET_WM_STATE"))                     ; _NET_WM_STATE add/remove/toggle FULLSCREEN (ewmhFullscreen)
+                          (&& (wsknownw? sh cw)
+                              (|| (= (ewmh-cm-d1 pkt) (ewmh-atom "_NET_WM_STATE_FULLSCREEN"))
+                                  (= (ewmh-cm-d2 pkt) (ewmh-atom "_NET_WM_STATE_FULLSCREEN")))))
+                      (: act (ewmh-cm-d0 pkt) on (wsfloating? sh cw)
+                         want (? (= act 1) 1 (= act 0) 0 (? on 0 1))             ; 0 remove / 1 add / 2 toggle
+                         (? (= want (? on 1 0)) (loop sh lay live hist ffoc)
+                            want (: sh2 (wsdofloat sh cw scrn)                   ; fullscreen floats at the FULL screen rect (over any strut)
+                                    _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 (L (ewmh-atom "_NET_WM_STATE_FULLSCREEN")))
+                                    _ (render sh2 lay) _ (line (+ "wm: fullscreen " (show cw))) (loop sh2 lay live hist cw))
+                            (: sh2 (wssink sh cw)
+                               _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 ())
+                               _ (render sh2 lay) _ (line (+ "wm: unfullscreen " (show cw))) (loop sh2 lay live hist ()))))
+                      (= ty (ewmh-atom "_NET_CURRENT_DESKTOP"))                  ; a pager switches the desktop
+                      (loop (switch sh lay (+ (ewmh-cm-d0 pkt) 1)) lay live hist ffoc)
+                      (= ty (ewmh-atom "_NET_ACTIVE_WINDOW"))                    ; a pager activates a window: view its tag, focus it
+                      (: t (wstagof sh cw)
+                         (? (! t) (loop sh lay live hist ffoc)
+                            (: sh2 (wsmap (switch sh lay t) (zfocto cw))
+                               _ (render sh2 lay) _ (refocus sh2) (loop sh2 lay live hist ()))))
                       (loop sh lay live hist ffoc)))
                 (loop sh lay live hist ffoc)))))
 

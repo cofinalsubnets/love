@@ -1,0 +1,93 @@
+; wm/ewmh.l -- EWMH + docks: the protocol tax that separates "manages my windows"
+; from "my taskbar, pager, and fullscreen video work". Three pieces:
+;   * a SUPPORT WINDOW advertising _NET_SUPPORTING_WM_CHECK + _NET_WM_NAME
+;     ("LG3D (XMonad)" -- the Java hack, setWMName);
+;   * root properties a pager reads (_NET_SUPPORTED/_NET_CLIENT_LIST/
+;     _NET_ACTIVE_WINDOW/_NET_CURRENT_DESKTOP/_NET_WM_DESKTOP), re-published by
+;     ewmh-sync whenever the sheaf changes (a change-guard skips the no-ops);
+;   * STRUTS: a dock's _NET_WM_STRUT_PARTIAL shrinks the tiling rect
+;     (avoidStruts); ewmh-toggle flips it live (ToggleStruts, sup+b).
+; The strut arithmetic and the property encodings are PURE (jug-testable), so
+; wm/law.l asserts them; the ewst tablet is the module's one mutable cell (the
+; evq pattern). Loads after wm/{layout,wire}.l. A body-LESS `:` -- leaks all.
+(:
+   ; --- pure: strut arithmetic. A strut is (left right top bottom), root-
+   ;     relative reserved widths; shrinking clamps the rect off each edge. ---
+   (strut-parse vals) (? (< (tally vals) 4) () (take 4 vals))                    ; _PARTIAL's 12 values: the first 4 are the strut
+   (strut-shrink r st swp shp)
+    (: x1 (mx2 (rx r) (nthl st 0)) y1 (mx2 (ry r) (nthl st 2))
+       x2 (mn2 (+ (rx r) (rw r)) (- swp (nthl st 1)))
+       y2 (mn2 (+ (ry r) (rh r)) (- shp (nthl st 3)))
+       (rct x1 y1 (mx2 0 (- x2 x1)) (mx2 0 (- y2 y1))))
+
+   ; --- the EWMH state: one tablet (the evq pattern) ---
+   ewst (tablet 4)
+   _ (pin ewst 'avoid 1) _ (pin ewst 'struts ()) _ (pin ewst 'last ())
+   (ewmh-atom nm) (peep (peep ewst 'atoms (tablet 1)) nm 0)
+   (ewmh-rect scrn swp shp)                                                      ; the tiling rect: screen minus struts (when avoiding)
+    (? (! (peep ewst 'avoid 0)) scrn
+       (foldl (\ r p (strut-shrink r (caup p) swp shp)) scrn (peep ewst 'struts ())))
+   (ewmh-toggle u) (pin ewst 'avoid (? (peep ewst 'avoid 0) 0 1))
+   (ewmh-track s win)                                                            ; read the window's strut; () if it has none
+    (: vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT_PARTIAL"))
+       vals (? (two? vals) vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
+       st (strut-parse vals)
+       (? st (: _ (pin ewst 'struts (link (L win st) (filter (\ p (! (= (cap p) win))) (peep ewst 'struts ())))) st) ()))
+   (ewmh-untrack win) (pin ewst 'struts (filter (\ p (! (= (cap p) win))) (peep ewst 'struts ())))
+
+   ; --- CreateWindow (opcode 1): the 1x1 InputOnly support window at (-1,-1) ---
+   (x-mkwin s wid parent)
+    (: _ (x-w8 s 1) _ (x-w8 s 0) _ (x-w16 s 8) _ (x-w32 s wid) _ (x-w32 s parent)
+       _ (x-w16 s 65535) _ (x-w16 s 65535) _ (x-w16 s 1) _ (x-w16 s 1)
+       _ (x-w16 s 0) _ (x-w16 s 2) _ (x-w32 s 0) (x-w32 s 0))                    ; border 0, class InputOnly, visual/values CopyFromParent
+
+   ; --- ChangeProperty (opcode 18, mode Replace), format 32 and 8 ---
+   (x-chprop32 s win prop type vals)
+    (: n (tally vals)
+       _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s (+ 6 n)) _ (x-w32 s win) _ (x-w32 s prop)
+       _ (x-w32 s type) _ (x-w8 s 32) _ (x-w8 s 0) _ (x-w16 s 0) _ (x-w32 s n)
+       (: (go m) (? (two? m) (: _ (x-w32 s (cap m)) (go (cup m))) 0) (go vals))) ; an ORDERED loop: map's effects run tail-first
+   (x-chprop8 s win prop type txt)
+    (: n (tally txt)
+       _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s (+ 6 (/ (+ n (x-pad4 n)) 4))) _ (x-w32 s win) _ (x-w32 s prop)
+       _ (x-w32 s type) _ (x-w8 s 8) _ (x-w8 s 0) _ (x-w16 s 0) _ (x-w32 s n)
+       _ (x-wname s txt)
+       (: (go i) (? (< i (x-pad4 n)) (: _ (put s 0) (go (+ i 1))) 0) (go 0)))
+
+   ; --- init: intern the vocabulary, hoist the support window, write the root ---
+   ewmh-atoms (L "_NET_SUPPORTED" "_NET_SUPPORTING_WM_CHECK" "_NET_WM_NAME" "_NET_CLIENT_LIST"
+                 "_NET_ACTIVE_WINDOW" "_NET_CURRENT_DESKTOP" "_NET_NUMBER_OF_DESKTOPS" "_NET_WM_DESKTOP"
+                 "_NET_WM_STATE" "_NET_WM_STATE_FULLSCREEN" "_NET_WM_STATE_MODAL"
+                 "_NET_WM_STRUT" "_NET_WM_STRUT_PARTIAL" "_NET_WM_WINDOW_TYPE"
+                 "_NET_WM_WINDOW_TYPE_DOCK" "_NET_WM_WINDOW_TYPE_DIALOG" "_NET_WM_WINDOW_TYPE_NOTIFICATION")
+   (ewmh-init s root idbase ndesk)
+    (: at (tablet 8)
+       _ (map (\ nm (pin at nm (x-intern s nm))) ewmh-atoms)
+       utf8 (x-intern s "UTF8_STRING")
+       _ (pin ewst 'atoms at) _ (pin ewst 'root root) _ (pin ewst 'sup idbase)
+       (a nm) (peep at nm 0)
+       _ (x-mkwin s idbase root)
+       _ (x-chprop32 s root (a "_NET_SUPPORTED") 4 (map (\ nm (peep at nm 0)) ewmh-atoms))   ; type ATOM(4)
+       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 (L idbase))                    ; type WINDOW(33)
+       _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 (L idbase))
+       _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setWMName: the Java hack
+       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 (L ndesk))                       ; type CARDINAL(6)
+       (x-flush s))
+
+   ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
+   (ewmh-sync s sh)
+    (: wins (wswins sh) cur (- (wscur sh) 1) foc (? (wsfoc sh) (wsfoc sh) 0)
+       key (L cur foc wins)
+       (? (= key (peep ewst 'last ())) 0
+          (: _ (pin ewst 'last key) root (peep ewst 'root 0)
+             _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
+             _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 (L cur))
+             _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 (L foc))
+             _ (map (\ p (: t (- (cap p) 1)                                      ; tiled windows wear their workspace...
+                            (map (\ w (x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 (L t))) (zrow (caup p))))) (wsboard sh))
+             _ (map (\ p (x-chprop32 s (cap p) (ewmh-atom "_NET_WM_DESKTOP") 6 (L 4294967295))) (wsfloat sh))   ; ...floats are STICKY (0xFFFFFFFF)
+             (x-flush s))))
+
+   ; --- ClientMessage (event 33) field reads, off the raw bytes ---
+   (ewmh-cm-win pkt) (u32 pkt 4)  (ewmh-cm-type pkt) (u32 pkt 8)
+   (ewmh-cm-d0 pkt) (u32 pkt 12)  (ewmh-cm-d1 pkt) (u32 pkt 16)  (ewmh-cm-d2 pkt) (u32 pkt 20))

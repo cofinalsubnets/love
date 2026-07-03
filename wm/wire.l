@@ -131,7 +131,7 @@
    (x-keymap s mink maxk syms)                                                   ; syms = the keysyms we want located
     (: nkc (+ 1 (- maxk mink))
        _ (x-w8 s 101) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w8 s mink) _ (x-w8 s nkc) _ (x-w16 s 0) _ (x-flush s)
-       _ (x-r8 s) kpc (x-r8 s) _ (x-r16 s) _ (x-r32 s) _ (x-skip s 24)
+       hdr (x-reply s) kpc (nthl hdr 1)                                          ; via the demux -- an event mid-wait must not desync us
        km (tablet 8)
        _ (: (go i) (? (< i (* nkc kpc))
                       (: sym (x-r32 s)
