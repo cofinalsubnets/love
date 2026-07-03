@@ -68,5 +68,41 @@
    sF (fz 200 (seed 7) (sheaf '(1 2 3)))
    (assert (wssane? sF) (all (\ w (|| (wsfloating? sF w) (wsknown? sF (wstagof sF w)))) (wswins sF))))
 
-(say err "wm/law: StackSet zipper + sheaf + floating laws ok
+; --- the layout engine (wm/layout.l): geometry is a partition ---
+(: (area p) (* (nthl p 3) (nthl p 4))                                            ; a placement's w*h
+   (sumarea ps) (foldl (\ a p (+ a (area p))) 0 ps)
+   r (rct 0 0 800 600) full-area 480000
+   z1 (zfrom '(10)) z3 (zfrom '(10 20 30))                                       ; z3 focuses the master (10)
+   L1 (resizable-tall 1 0.02 0.5)
+   t1 (cap (lay-tile L1 r z1)) t3 (cap (lay-tile L1 r z3))
+   (assert
+      ; ResizableTall partitions the rect exactly, master-left / slaves-right
+      (= (tally t3) 3) (= (sumarea t3) full-area)
+      (= (cap t3) '(10 0 0 400 600))                                             ; master owns the left half
+      (= (caup t3) '(20 400 0 400 300)) (= (nthl t3 2) '(30 400 300 400 300))    ; two slaves stack in the right half
+      (= (tally t1) 1) (= (cap t1) '(10 0 0 800 600))                            ; a lone window fills the screen
+      ; Shrink / Expand nudge the master ratio by delta (master width, was 400)
+      (: mw- (nthl (cap (cap (lay-tile (lay-msg L1 'shrink z3) r z3))) 3)
+         mw+ (nthl (cap (cap (lay-tile (lay-msg L1 'expand z3) r z3))) 3)
+         (&& (< mw- 400) (> mw- 380) (> mw+ 400) (< mw+ 420)))
+      (= (nthl (lay-msg (lay-msg L1 'expand z3) 'shrink z3) 2) 0.5)             ; expand then shrink is a round trip
+      ; IncMasterN grows the master column (2 masters left, 1 slave right)
+      (: L2 (lay-msg L1 'inc-master z3) p (cap (lay-tile L2 r z3))
+         (&& (= (nthl (cap p) 1) 0) (= (nthl (caup p) 1) 0) (= (nthl (nthl p 2) 1) 400)))   ; two masters at x=0, slave at x=400
+      (= (nthl (lay-msg (lay-msg L1 'inc-master z3) 'dec-master z3) 1) 1)        ; dec undoes inc; floored at 1
+      (= (nthl (lay-msg L1 'dec-master z3) 1) 1)
+      ; Full places only the focus, whole rect
+      (: f (cap (lay-tile full r z3)) (&& (= (tally f) 1) (= (cap f) '(10 0 0 800 600))))
+      ; MirrorShrink shrinks the FOCUSED slave (focus 20, the first slave)
+      (: zs (zfocdn z3) M (lay-msg L1 'mirror-shrink zs) h20 (nthl (caup (cap (lay-tile M r zs))) 4)
+         (&& (< h20 300) (> h20 250)))
+      ; ||| holds the layouts; NextLayout cycles the index (tall -> full -> tall)
+      (: C (choice (L L1 full))
+         (&& (= (tally (cap (ch-tile C r z3))) 3)                               ; index 0 = ResizableTall
+             (= (tally (cap (ch-tile (lay-msg C 'next-layout z3) r z3))) 1)     ; index 1 = Full
+             (= (nthl (lay-msg (lay-msg C 'next-layout z3) 'next-layout z3) 1) 0)))   ; wraps back to 0
+      ; a message ||| doesn't know (shrink) delegates to the active sublayout
+      (= (nthl (ch-cur (lay-msg (choice (L L1 full)) 'shrink z3)) 2) 0.48)))
+
+(say err "wm/law: StackSet zipper + sheaf + floating + layout laws ok
 ")
