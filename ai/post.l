@@ -13,6 +13,10 @@
 ; collides with egg globals" worry -- now only `sat`/$ actually collide, and none of these do); it and
 ; sat/dimacs.l now share THIS copy. `parse` requires the whole input consumed; `runp` is the lenient
 ; twin (keeps the payload, ignores trailing slack).
+; the module span opens here: the trailer at the bottom sweeps the combinators into
+; the `parse` book and the overlay internals into `overlay` (measured, never listed).
+(: post-mark (names ()))
+
 (: eps (\ s y n (y s 0))
    (lit l) (\ s y n
       (? (&& (<= (tally l) (tally s)) (= l (snip s 0 (tally l))))
@@ -43,7 +47,8 @@
 ;     inside `ov-eng`; only ov-*/overlay-*/the ev rebind leak. See overlay.l for the domain shape (a map
 ;     #('join J 'tr T 'litdie L 'dice D)) and sigs ((name (param-dies..) result-die)..).
 (: ov-eng
-    (: (ov-nthl l n)     (? (= n 0) (cap l) (ov-nthl (cup l) (- n 1)))   ; nth (nthl is glaze-layer, absent in post.l)
+    (: subst (kanren 'subst)                          ; through the kanren module book (unify/ufail?/var stay global)
+       (ov-nthl l n)     (? (= n 0) (cap l) (ov-nthl (cup l) (- n 1)))   ; nth (nthl is glaze-layer, absent in post.l)
        (ov-sigof sigs nm) (? (atom? sigs) () (id? nm (caap sigs)) (cap sigs) (ov-sigof (cup sigs) nm))
        (ov-look env x)    (? (atom? env) 'bot (: p (cap env) (? (id? x (cap p)) (cup p) (ov-look (cup env) x))))
        (ov2-var? dom d)   (&& (nom? d) (! (member? d (dom 'dice))) (! (member? d (dom 'ctors))))   ; a sig variable: not concrete, not a constructor
@@ -88,5 +93,29 @@
    ov-slot     (tablet 0)                          ; install slot: peep 0 -> (DOM SIGS) or ()
    overlay-set (\ dom sigs (pin ov-slot 0 (L dom sigs)))
    overlay-off (\ _ (pin ov-slot 0 ()))
-   ov-ev0      ev                                  ; the baked (glaze) ev, captured before the rebind
-   ev (\ e (: v (peep ov-slot 0 ()) (? (two? v) (: _ (ov-eng (cap v) (caup v) e) (ov-ev0 e)) (ov-ev0 e)))))
+   ; e0 = the ev captured before the rebind, CLOSURE-PRIVATE (an inner body-having :) --
+   ; it never touches the book. (it was a global `ov-ev0` once; sweeping that nom off the
+   ; book broke the LOADED image -- parked in sigsuspend -- an undiagnosed snapshot-codec
+   ; edge, sidestepped by not having the name at all.)
+   ev (: e0 ev                                     ; the sequence law: reads the PREVIOUS ev (the baked glaze chain)
+         (\ e (: v (peep ov-slot 0 ()) (? (two? v) (: _ (ov-eng (cap v) (caup v) e) (e0 e)) (e0 e))))))
+
+; the MODULE BOUNDARY (the asm/glaze pattern): the span since post-mark sweeps into two
+; books -- the ov-* internals under `overlay`, the combinators under `parse` -- while
+; overlay-set/overlay-off stay the public entry points (and `ev` is a REBIND of a
+; pre-mark name: rebinding is not a new name, so it stays global).
+(: seen (: t (tablet 0) _ (each post-mark (\ k (pin t k 1))) t)
+   pm (tablet 0)
+   ovm (tablet 0)
+   (pre? s p) (&& (<= (tally p) (tally s)) (= p (snip s 0 (tally p))))
+   _ (each (names ())
+      (\ k (? (peep seen k 0) 0
+              (: s (string k)
+                 (? (pre? s "overlay-") 0                       ; the public entry points stay
+                    (: v (peep book k 0) _ (pull book k 0)
+                       _ (? (pre? s "ov-") (pin ovm k v) (pin pm k v)) 0))))))
+   _ (pull book 'post-mark 0)
+   _ (pull pm 'post-mark 0)
+   _ (pin book 'parse pm)
+   _ (pin book 'overlay ovm)
+   0)

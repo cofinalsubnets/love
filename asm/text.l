@@ -13,6 +13,13 @@
 ; load AFTER asm.l + x64.l (it needs the combinators from the baked post layer):
 ;   out/host/ai -l asm/asm.l -l asm/x64.l -l asm/text.l ...
 
+; the combinators live in the `parse` MODULE book (ai/post.l): bind the set this
+; front-end drives -- `parse` itself rebound LAST (the sequence law).
+(: P parse
+   eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
+   seq (P 'seq)  seqs (P 'seqs)  opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
+   many (P 'many)  runp (P 'runp)  parse (P 'parse))
+
 (: ;; -- byte-class predicates (the combinator leaves feed a parser one byte at a time). --
    (txws?  c) (|| (= c 32) (= c 9))                             ; space / tab
    (txsep? c) (|| (txws? c) (= c 44))                           ; ... or a comma, between operands

@@ -42,6 +42,13 @@
 ; Cookfile, or a -f FILE) is ai source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
 
+; the combinators live in the `parse` MODULE book (ai/post.l): bind the shared set --
+; `parse` itself rebound LAST, so the earlier reads get the book (the sequence law).
+(: P parse
+   eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
+   seq (P 'seq)  seqs (P 'seqs)  opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
+   many (P 'many)  runp (P 'runp)  parse (P 'parse))
+
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them

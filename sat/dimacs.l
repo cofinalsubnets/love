@@ -6,6 +6,13 @@
 ; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
 ; Standalone (parse self-tests below); when loaded AFTER sat/sat.l it also self-tests parse->solve via
 ; `cdcl`. Run: out/host/ai sat/dimacs.l   (or: cat sat/sat.l sat/dimacs.l | out/host/ai).
+; the combinators live in the `parse` MODULE book (ai/post.l): bind the shared set --
+; `parse` itself rebound LAST, so the earlier reads get the book (the sequence law).
+(: P parse
+   eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
+   seq (P 'seq)  seqs (P 'seqs)  opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
+   many (P 'many)  runp (P 'runp)  parse (P 'parse))
+
 (:
    ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
    ;    the POST-EGG layer ai/post.l, baked once after the egg -- shared with cook, not re-derived here.

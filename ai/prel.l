@@ -657,6 +657,9 @@
 ; tree, and `walk_star` mu-marks a back-edge to reify it without looping. a goal
 ; is (\ s stream); est/=== unify, + interleaves (disjunction), * binds
 ; (conjunction) -- so a relation is a polynomial in unifications (see the ring).
+; the module span opens here: the trailer below (names ()) sweeps everything this
+; section leaks into the `kanren` book, keeping the public few on the global book.
+(: kanren-mark (names ()))
 (: (dict_has d k) (: (loop k ks vs) (? ks (? (= k (cap ks)) vs (loop k (cup ks) (cup vs)))) (loop k (cap d) (cup d)))
    (dict_set d k v) (link (link k (cap d)) (link v (cup d)))
    empty_dict '(())
@@ -710,6 +713,23 @@
 (:: '\\ (\ a (link (link '\ a) (map (\ a `(var `('\ a))) (init a)))))                             ; lambda w/ fresh logic vars
 (: === (\ u v (rel (est u v))))                       ; the relation's infix unify
 (pin operators '=== 2)
+; the kanren MODULE BOUNDARY (the asm/glaze pattern, in-prel so it holds on every
+; target): the span since kanren-mark sweeps into the `kanren` book -- (kanren 'query),
+; (kanren 'walk) .. -- except the PUBLIC keepers: `unify` (the compiler-grade core)
+; with its ufail/ufail? contract, and the names the goal macros + the === operator
+; EMIT into user code (var, s_plus, s_star, ===) -- the emit law, the same reason the
+; egg keeps spread/link/mono. re-evals (the egg warm) rebuild the book: idempotent.
+(: seen (: t (tablet 0) _ (each kanren-mark (\ k (pin t k 1))) t)
+   m (tablet 0)
+   keep '(unify ufail ufail? === var s_plus s_star)
+   _ (each (names ())
+      (\ k (? (peep seen k 0) 0
+              (member? k keep) 0
+              (: _ (pin m k (peep book k 0)) _ (pull book k 0) 0))))
+   _ (pull book 'kanren-mark 0)
+   _ (pull m 'kanren-mark 0)
+   _ (pin book 'kanren m)
+   0)
 
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
 ; ONE SCOPE: every name bound in a `:` resolves locally over the whole form.

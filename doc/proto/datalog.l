@@ -12,6 +12,9 @@
 ; back-edge) or it loops. that is the same "reach a fixpoint, don't forbid the
 ; cycle" stance as the seminaive saturation itself.
 
+; the kanren machinery rides the `kanren` MODULE book now (ai/prel.l)
+(: walk (kanren 'walk)  var? (kanren 'var?))
+
 (:
  ; ---- terms: a var is (v . name); consts are syms/nums; atoms are lists ----
  (vr n) (L 'v n)

@@ -1,10 +1,16 @@
-; kanren -- the machinery now lives in ai/prel.l (unify/walk/est/query/streams,
-; the goal-ring rel/+/*, ===, and the macros zz/et/vel/\\). this file is the
-; assert suite + the relational-algebra demo. `unord_eq` is the only local: an
-; unordered list equality (search order is not specified).
-(: (unord_eq a b) (&& (= (sat a) (sat b)) (all (flip member? a) b)))
+; kanren -- the machinery lives in ai/prel.l, swept into the `kanren` MODULE book
+; (unify + its ufail/ufail? contract and the macro-emitted var/s_plus/s_star/===
+; stay global; walk/est/query/streams/rel ride the book). this file is the assert
+; suite + the relational-algebra demo. ONE body-having `:` -- the book binds and
+; `unord_eq` (an unordered list equality; search order is not specified) stay LOCAL,
+; per the corpus law: a leak here would poison ai0's pass-2 re-sweep mark (the
+; egg warm re-runs the prel sweep; a session global shadows a module name in it).
+(: K kanren
+   est (K 'est)  query (K 'query)  rel (K 'rel)  sX (K 'sX)  slist (K 'slist)
+   smap (K 'smap)  sno (K 'sno)  stake (K 'stake)  walk (K 'walk)
+   (unord_eq a b) (&& (= (sat a) (sat b)) (all (flip member? a) b))
 
-(assert
+ _ (assert
  (unord_eq '(1 2 3) '(2 1 3))
  (unord_eq '(2 1 3) (stake 3 (sX 1 (sX 2 (sX 3 sno)))))
  (unord_eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
@@ -36,10 +42,10 @@
  (= '(prod elem (mu A))
     (caup (cap (query 0 '(A) (\\ A (est A (L 'prod 'elem A))))))))
 
-; --- DEMO: relations read as algebra. `===` (in prel, infix at two) unifies; +
-; is OR, * is AND. so a relation is a polynomial in unifications -- facts SUM,
-; sub-relations MULTIPLY; a CNF formula is literally a product of sums. ---
-(: ; a plant cladogram -- `diverges` is a SUM of (a===ancestor * b===clade) facts:
+ ; --- DEMO: relations read as algebra. `===` (in prel, infix at two) unifies; +
+ ; is OR, * is AND. so a relation is a polynomial in unifications -- facts SUM,
+ ; sub-relations MULTIPLY; a CNF formula is literally a product of sums. ---
+ _ (: ; a plant cladogram -- `diverges` is a SUM of (a===ancestor * b===clade) facts:
    (diverges a b) (((a === 'spermatophytes) * (b === 'angiosperms))   ; seed plants -> flowering plants
                  + ((a === 'angiosperms)    * (b === 'monocots))      ; angiosperms split into
                  + ((a === 'angiosperms)    * (b === 'eudicots)))     ;   monocots | eudicots
@@ -55,3 +61,4 @@
                 * ((x === 0) + (z === 1))))))
        _ (member? '(x 0 y 1 z 1) sat)        ; a model
        (nil? (member? '(x 0 y 0 z 1) sat)))))  ; x=0,y=0 violates (x|y) -> not a model
+ 0)  ; the closing 0 = the outer form's body: nothing leaks

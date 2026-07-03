@@ -178,6 +178,10 @@
 ; the lift is behaviour-preserving. `dom` is a map (a lookup fn): (dom 'join) etc.
 ; Run: out/host/ai doc/proto/overlay.l  (prints ok/FAIL per binding + a summary).
 ; ============================================================================
+; the kanren machinery rides the `kanren` MODULE book now (ai/prel.l), and the
+; glaze helpers this spike leaned on ride the `glaze` book
+(: subst (kanren 'subst)  nthl (glaze 'nthl)  base-ev (glaze 'base-ev))
+
 (: ; --- the KINDS domain, as a value (reproduces kinds.l) ---
    (rank k)  (? (id? k 'bot) 0 (id? k 'charm) 1 (id? k 'whole) 2 (id? k 'real) 3 (id? k 'cplx) 4 (id? k 'top) 5 -1)
    (num? k)  (: r (rank k) (&& (< 0 r) (< r 5)))                 ; charm..cplx = the numeric lane
