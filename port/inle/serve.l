@@ -61,7 +61,7 @@
    (probe-for bin prog secs) (runl (L "timeout" (show secs) bin "-e" prog))
 
    ; --- rebuild + gate, IN PLACE. `build` overwrites out/host/ai (fine only when
-   ; nothing is executing it -- else the .img bake ETXTBSYs; that is what the
+   ; nothing is executing it -- else the relink ETXTBSYs; that is what the
    ; candidate flow below is for). `gate` is `make test` (host + ai0, twice; 0 =
    ; the zz-fin summary on both passes). handy for a quick check; `adopt` uses the
    ; safe candidate flow instead. -> (status output). --
@@ -72,10 +72,11 @@
    ; --- adopt: the two-generation build + promote + re-exec -- the copying-GC /
    ; egg move at process AND filesystem scale. build the NEXT generation at a
    ; SIDE PATH `out/host/ai.cand` (`make candidate`): nothing executes that name,
-   ; so its in-place .img bake can never ETXTBSY, no matter who runs `ai` (a repl,
-   ; a test, even the dock's own client). gate the candidate (`make test
-   ; m=.../ai.cand`). ONLY on green PROMOTE by atomic RENAME -- ai.cand -> ai and
-   ; its image, then refresh the dock's stable copy -- a rename gives a NEW inode,
+   ; so the relink can never ETXTBSY, no matter who runs `ai` (a repl, a test,
+   ; even the dock's own client; the --bake itself is rename-safe). gate the
+   ; candidate (`make test m=.../ai.cand`). ONLY on green PROMOTE by atomic
+   ; RENAME -- ai.cand -> ai (the image travels INSIDE the binary) plus its bake
+   ; stamp, then refresh the dock's stable copy -- a rename gives a NEW inode,
    ; so every process still executing the old binary keeps it, unbroken. then
    ; re-exec onto the fresh copy. a RED gate leaves the canonical binary UNTOUCHED
    ; (the candidate dies at the side path, a to-space that never flips). exec
@@ -85,7 +86,7 @@
    relaunch-slot (tablet 0)                           ; dock stashes its re-exec argv here
    (promote _)                                        ; atomic swaps: candidate -> canonical -> dock copy
      (: _ (sh (L "mv" "-f" "out/host/ai.cand" "out/host/ai"))
-        _ (sh (L "mv" "-f" "out/host/ai.cand.img" "out/host/ai.img"))
+        _ (sh (L "mv" "-f" "out/host/ai.cand.baked" "out/host/ai.baked"))
         _ (sh (L "cp" "out/host/ai" (+ dock-bin ".new")))
         (sh (L "mv" "-f" (+ dock-bin ".new") dock-bin)))
    (adopt _)

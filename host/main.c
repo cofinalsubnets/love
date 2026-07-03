@@ -449,18 +449,23 @@ static char const baolaunch[] = "(bao 0)";   // bao.l is define-only -> the fron
 // asum/aprod/amax/amin. The scalar/array kernels themselves were a net loss or
 // unused, so only eat (the curried eat1/eat2 nifs) + toast remain. See ai/glaze/README.md.
 
-// --dump-image / --load-image: the heap-image snapshot (doc/snapshot.md). Boot from a serialized
-// image instead of eval'ing the egg (~233 ms). Opt-in flags; a normal run is the same code path.
+// --bake [PATH] / --wake PATH: the heap-image snapshot (doc/snapshot.md). `--bake` boots fully,
+// then lays the post-warm image back into the binary's OWN .image section (host/image.c's
+// copy + patch + atomic-rename -- no objcopy, ETXTBSY-proof) and exits; `--bake PATH` writes a
+// plain image file instead (the debug/inspection lane). `--wake PATH` boots from an image file
+// (any mismatch falls back to a normal egg boot). Opt-in flags; a normal run is the same code path.
 extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around ai.c's codec)
+extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
 extern struct ai *image_load(char const*);
 static char const *image_dump_path = NULL;
-// The baked post-boot image: a reserve in its own .image section (host/image_baked.c), patched in
-// post-link by the Makefile (the binary dumps itself, then objcopy bakes the bytes back in). Loaded
-// at startup when its magic validates; else a normal egg boot. The <exe>.img sidecar is the fallback.
+static bool image_bake_p = false;                        // --bake with no PATH: patch the binary itself
+// The baked post-boot image: a reserve in its own .image section (host/image_baked.c), filled by
+// `ai --bake` (the binary boots, snapshots itself, and lays the result back into its own body).
+// Loaded at startup when its magic validates; else a normal egg boot.
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
 // the glaze (native JIT, ai/glaze/{emit,auto}.l), x86-64 only. Baked but evaled ONLY
-// before a --dump-image -- so a normal boot never pays the ~810 ms native-compile of
+// before a --bake -- so a normal boot never pays the ~810 ms native-compile of
 // its self-tests, while the dumped snapshot carries the JIT always-on at zero startup
 // (Phase 4, doc/snapshot.md). The asserts compile transient native closures; the
 // gen_major inside image_dump drops them, so the serialized heap is pure closures
@@ -476,7 +481,7 @@ static char const glaze_export[] =              // ai/glaze/export.l: sweep the 
 #include "gexport.h"
  ;
 #endif
-// the post-warm dispatch (shared by boot() and the --load-image path, which skips the warm).
+// the post-warm dispatch (shared by boot() and the --wake path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   if (argp) return ai_evals_(g, cli);
   if (!replp) return ai_evals_(g, rel);
@@ -506,7 +511,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "export.h"                                      //   sweep into the ONE public `asm` book and off the global book.
   );                                                     //   AFTER the glaze, whose direct references folded at its compile.
 
-  if (image_dump_path) {                                 // --dump-image: snapshot the post-warm heap, then exit
+  if (image_dump_path || image_bake_p) {                 // --bake: snapshot the post-warm heap, then exit
 #if defined(__x86_64__)
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
     // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
@@ -517,8 +522,8 @@ static struct ai *boot(struct ai *g, bool argp) {
     // `nif` into its closures, so pulling it off the book is safe. eat/toast/nif off, then seal `book`.
     // The no-image dev/test binary keeps them (egg.l defers book-removal) as the test knob.
     g = ai_evals_(g, "(: _ (pull book 'eat 0) _ (pull book 'toast 0) _ (pull book 'nif 0) (pull book 'book 0))");
-    int rc = image_dump(g, image_dump_path);
-    if (rc) fprintf(stderr, "ai: image-dump failed (rc=%d)\n", rc);
+    int rc = image_dump_path ? image_dump(g, image_dump_path) : image_bake(g);
+    if (rc) fprintf(stderr, "ai: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
   return run_program(g, argp, replp); }
 #endif
@@ -526,23 +531,20 @@ static struct ai *boot(struct ai *g, bool argp) {
 int main(int argc, char const **argv) {
   struct ai *g = NULL;
 #ifndef GL_BOOTSTRAP
-  // --dump-image PATH / --load-image PATH must lead the args; strip them (keep argv[0]).
+  // --bake [PATH] / --wake PATH must lead the args; strip them (keep argv[0]).
   char const *image_load_path = NULL;
-  if (argc >= 3 && !strcmp(argv[1], "--dump-image")) { image_dump_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
-  else if (argc >= 3 && !strcmp(argv[1], "--load-image")) { image_load_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
+  if (argc >= 2 && !strcmp(argv[1], "--bake")) {
+    if (argc >= 3) { image_dump_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
+    else           { image_bake_p = true; argv[1] = argv[0], argv += 1, argc -= 1; } }
+  else if (argc >= 3 && !strcmp(argv[1], "--wake")) { image_load_path = argv[2]; argv[2] = argv[0], argv += 2, argc -= 2; }
   if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
-  // AUTO-LOAD: with no image flag, try the default image baked next to the binary (<exe>.img), so a
+  // AUTO-LOAD: with no image flag, wake the image baked into the binary's own .image section, so a
   // plain `ai` is glazed-by-default at ~4 ms cold start instead of the ~230 ms egg eval. Opt out with
-  // AI_NO_IMAGE (the bench does, to control glazed-vs-interp itself). Any problem -- missing, stale,
-  // truncated -- makes image_load return NULL, so we fall through to the normal egg boot. Never wrong.
-  static char autopath[4096];
-  if (!g && !image_dump_path && !getenv("AI_NO_IMAGE")) {
+  // AI_NO_IMAGE (the bench does, to control glazed-vs-interp itself). Any problem -- unbaked, stale,
+  // truncated -- makes the load return NULL, so we fall through to the normal egg boot. Never wrong.
+  if (!g && !image_dump_path && !image_bake_p && !getenv("AI_NO_IMAGE")) {
     if (ai_baked_image_len && (g = ai_image_load(ai_baked_image, ai_baked_image_len)))
-      image_load_path = "<baked>";                                       // a loaded image is the booted state: skip the egg warm
-    if (!g) {                                                              // else the <exe>.img sidecar
-      ssize_t n = readlink("/proc/self/exe", autopath, sizeof autopath - 5);
-      if (n > 0) { memcpy(autopath + n, ".img", 5);                        // ".img\0" past the exe path
-        if ((g = image_load(autopath))) image_load_path = autopath; } } }
+      image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
 #endif
   if (!g) g = ai_ini();
   bool argp = argc > 1;
@@ -560,7 +562,7 @@ int main(int argc, char const **argv) {
     struct ai_def d[] = {{"argv", full_argv}, {"cmdline", full_argv}};
     g = ai_defn(g, d, countof(d));      // re-pins the host nifs (live addresses) into the loaded book too
 #ifndef GL_BOOTSTRAP
-    if (image_load_path) {              // --load-image: skip the egg warm, dispatch straight to the program
+    if (image_load_path) {              // --wake: skip the egg warm, dispatch straight to the program
       bool replp = !argp && isatty(STDIN_FILENO);
       if (replp) raw_mode();
       g = run_program(g, argp, replp);

@@ -57,7 +57,7 @@ run test/spec.l against a loaded image == against a booted one (2693 pass).
 out-of-pool region the collector skips (extend `gcp`'s out-of-pool check). · GATE: a full GC after
 load leaves the image intact (the image is never copied); spec green; valgrind clean (`make valg`).
 
-**Phase 3 — Build integration.** Build step: `ai --dump-image out/lib/image.bin` (boot fully, dump).
+**Phase 3 — Build integration.** Build step: `ai --bake` (boot fully, lay the image into the binary's own .image section; `ai --bake PATH` writes a plain file instead).
 Embed via `objcopy`/a linked C array → `image.o`. `boot()`: if the image stamp matches this binary,
 `image-load` it; else FALL BACK to eval'ing the egg (so a stale/missing image is never fatal). Image
 is arch+build-specific → a Makefile dep on prel/ev/post/asm + the binary. · GATE: `out/host/ai`
@@ -95,7 +95,7 @@ Relates: the egg (ai/egg.l, the double-sat), [[glaze-float]] (the bake this unlo
 
 ## Status — landed (Phases 0–4 + cross-arch + the host/core split)
 
-The snapshot ships. A plain `ai` auto-loads `<exe>.img` (built by `make host`, beside the binary; found
+The snapshot ships. A plain `ai` wakes the image baked into its own .image section (laid by `make host`'s `--bake` step; found
 via `/proc/self/exe`) and boots a **glaze-baked** runtime in **~4–12 ms** instead of the ~230 ms egg eval
 — the native JIT is always-on, no flags. Opt out with `AI_NO_IMAGE` (the Makefile exports it for all
 recipes so the gate tests the fresh egg and the bench controls glaze itself). A bad/stale/cross-arch image
@@ -114,7 +114,7 @@ Departures from the original plan above, worth noting:
 - **Core/host split (stdio out of ai.c).** The core owns the stdio-free buffer codec `ai_image_save` /
   `ai_image_load` (ai.h); file I/O lives in `host/image.c`. The Phase-0 `image-check` and Phase-1
   `image-rt` spikes are retired.
-- **The glaze bake is the corpus eval, not a split assert-free lib.** `--dump-image` evals the glaze
+- **The glaze bake is the corpus eval, not a split assert-free lib.** `--bake` evals the glaze
   (emit.l+auto.l, x86-gated) before dumping; the asserts' transient natives die in `gen_major`. emit.l's
   self-test fixtures were wrapped local (they'd leaked as globals); auto.l's `memo` cache is cleared
   pre-dump. (Dump-time chain hash-cons was BUILT then BACKED OUT — unsound with the glaze, see follow-up 2.)

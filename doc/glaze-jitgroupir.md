@@ -186,4 +186,4 @@ porting a lane just re-routes its asserts from `jitgroup` to `jitgroupir` with n
   catch a wrong context.)
 - x64 only in practice (`auto.l` calls `jitgroupir … 'x64`); the IR is kept neutral where free, but
   arm64 group codegen is unverified (no harness) — don't chase it here.
-- Discriminator for image-vs-egg divergence: `AI_NO_IMAGE=1` / `rm out/host/ai.img`.
+- Discriminator for image-vs-egg divergence: `AI_NO_IMAGE=1`.

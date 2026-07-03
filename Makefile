@@ -19,7 +19,7 @@ ai0 = out/host/ai0
 
 # every ai run UNDER make boots deterministically: the test gate must exercise the freshly-built egg
 # (not a stale baked image), and the bench controls glazed-vs-interp itself. So suppress the startup
-# image auto-load for all recipes. The USER's binary (run outside make) still auto-loads <exe>.img.
+# image auto-load for all recipes. The USER's binary (run outside make) still wakes its baked image.
 export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
@@ -28,7 +28,7 @@ export AI_NO_IMAGE := 1
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `ai`
 # from-source under AI_NO_IMAGE, and ai0 -- c0 + the self-hosted ev, twice). It does
-# NOT build the image (the --dump-image step), nor run coqc/lean/glaze/gc/tools, which
+# NOT build the image (the --bake step), nor run coqc/lean/glaze/gc/tools, which
 # are slow and/or need extra toolchains -- those live in `make test_all` (and the
 # individual test_* targets). Serial by design: ~3s, no -j races, ctrl-C responsive.
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -69,7 +69,7 @@ test_host: $m
 # test/00-init.l assert harness (which exits 1 on the first failure), so the gate
 # checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
 # Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
-hostnif_tests = boot/pty.l boot/net.l boot/wm.l boot/baoedit.l boot/baotest.l boot/init.l
+hostnif_tests = boot/pty.l boot/net.l boot/wm.l boot/baoedit.l boot/baotest.l boot/init.l boot/cb.l
 test_hostnif: host
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
@@ -297,10 +297,10 @@ lib_h = $(patsubst ai/%.l,out/lib/%.h,$(wildcard ai/*.l))
 asm_h  = out/lib/asm.h  out/lib/x64.h  out/lib/arm64.h  out/lib/export.h
 asm0_h = out/lib/asm0.h out/lib/x640.h out/lib/arm640.h out/lib/export0.h
 # the glaze (native JIT, ai/glaze/{emit,auto}.l): baked to raw-text headers (sed_lit,
-# like asm0 -- no lcat reader round-trip). Evaled ONLY before a --dump-image (x86-gated
-# in main.c), so a normal boot never pays the ~810 ms; the dumped snapshot then carries
+# like asm0 -- no lcat reader round-trip). Evaled ONLY before a --bake (x86-gated
+# in main.c), so a normal boot never pays the ~810 ms; the baked snapshot then carries
 # an always-on JIT at zero startup (Phase 4, doc/snapshot.md). Their self-test asserts
-# native-compile transient closures -- image_dump's gen_major drops them before serializing.
+# native-compile transient closures -- the bake's gen_major drops them before serializing.
 glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h
 # ai0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
 # interpreter -- the l reader strips the ; comments at read time), since ai0
@@ -448,12 +448,12 @@ host_ldflags = -static
 # makes it fatal. Silence that one (harmless; gcc ignores unknown -Wno-*).
 ai_cflags += -Wno-unused-command-line-argument
 endif
-host: $(ho)/ai $(ho)/ai.img $(if $(STATIC),,$(ho)/libai.so) $(ho)/ai.1
+host: $(ho)/ai $(ho)/ai.baked $(if $(STATIC),,$(ho)/libai.so) $(ho)/ai.1
 ai0: $(ai0)
 
 # dock: launch the steering dock (port/inle/serve.l) from a stable COPY out/host/dock,
-# so `adopt` can rebuild the canonical out/host/ai in place without ETXTBSY (rebuilding
-# your own running exe fails at the .img bake). loads the full crew -- the probe ladder
+# so `adopt` can rebuild the canonical out/host/ai in place without ETXTBSY (the RELINK
+# writes the exe file in place; the bake itself is rename-safe). loads the full crew -- the probe ladder
 # (judge), the server (serve), and the self-modify loop (drive + the model proposer patch).
 # PORT overrides the mooring; bind loopback and firewall/tunnel it -- it evals what it reads.
 .PHONY: dock
@@ -461,22 +461,20 @@ DOCK_PORT ?= 7620
 dock: host
 	@cp $(ho)/ai $(ho)/dock
 	exec $(ho)/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock $(DOCK_PORT))"
-# the default BOOT IMAGE: dump the post-warm heap (the glaze baked in, x86-64) next to the binary as
-# <exe>.img, so a plain `ai` auto-loads it at ~4 ms cold start (glazed by default) instead of eval'ing
-# the egg (~230 ms). Rebuilt whenever the binary changes (which itself deps on ai.c/prel/ev/glaze).
-# image-load is an OPTIMIZATION -- main.c falls back to a normal egg boot if the image is missing or
-# stale, so an out-of-date .img is never fatal, only slower. (~1.5 s to dump: the glaze self-tests
-# native-compile; that cost is paid once per ai rebuild, not per run.)
-# a static pattern so the CANDIDATE bakes by the same recipe at its side path
-# ($< is the binary being dumped + baked -- never a name a bystander executes
-# when it is the .cand).
-$(ho)/ai.img $(ho)/ai.cand.img: %.img: %
-	@echo IMG	$@
-	@$< --dump-image $@
+# the default BOOT IMAGE: `$< --bake` boots the freshly-linked binary, snapshots the post-warm
+# heap (the glaze baked in, x86-64), and lays it back into the binary's OWN .image section --
+# host/image.c copies the exe, pwrites the blob at the section's file offset, and atomically
+# renames over the original (no objcopy/objdump, ETXTBSY-proof: a new inode, so anyone still
+# executing keeps the old one). A plain `ai` then wakes it at ~4 ms cold start (glazed by
+# default) instead of eval'ing the egg (~230 ms). The load is an OPTIMIZATION -- main.c falls
+# back to a normal egg boot on any mismatch, so a stale bake is never fatal, only slower.
+# (~1.5 s to bake: the glaze self-tests native-compile; paid once per ai rebuild, not per run.)
+# The .baked STAMP carries the dependency (the bake mutates the binary itself); a static
+# pattern so the CANDIDATE bakes by the same recipe at its side path.
+$(ho)/ai.baked $(ho)/ai.cand.baked: %.baked: %
 	@echo BAKE	$<
-	@secsz=$$(objdump -h $< | awk '/\.image/{print strtonum("0x"$$3)}'); \
-	 sz=$$(stat -c%s $@); test $$sz -le $$secsz || { echo "image $$sz > .image reserve $$secsz -- bump RESERVE_WORDS in host/image_baked.c"; exit 1; }; \
-	 cp $@ $@.pad && truncate -s $$secsz $@.pad && objcopy --update-section .image=$@.pad $< && rm -f $@.pad
+	@$< --bake
+	@touch $@
 
 # candidate: build + bake the NEXT GENERATION at the side path out/host/ai.cand.
 # nothing executes that name, so the in-place bake can never hit ETXTBSY -- a
@@ -487,7 +485,7 @@ $(ho)/ai.img $(ho)/ai.cand.img: %.img: %
 # on a red gate the canonical binary is UNTOUCHED; the failed candidate dies at
 # the side path like a to-space that never flips.
 .PHONY: candidate
-candidate: $(ho)/ai.cand.img
+candidate: $(ho)/ai.cand.baked
 
 # apps/cook/Cookfile: this Makefile transpiled into a resolved cook recipe by
 # `cook --emit` (apps/cook/cook.l). cook reads this Makefile directly too, but the
@@ -559,8 +557,8 @@ $(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/l
 # inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c
 # glob now; the recompile-on-header-change dep is the line just above.
 # one link rule, two names: `ai` (canonical) and `ai.cand` (the CANDIDATE -- the next
-# generation built at a side path nothing executes, so its in-place .img bake can never
-# hit ETXTBSY no matter who is running `ai`; see the candidate target below).
+# generation built at a side path nothing executes, so the RELINK can never hit
+# ETXTBSY no matter who is running `ai`; see the candidate target below).
 $(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
@@ -961,7 +959,6 @@ d = $(DESTDIR)/$(PREFIX)
 v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/ai \
-  $d/bin/ai.img \
   $d/bin/cook \
   $d/bin/ain \
   $d/bin/wm \
@@ -998,15 +995,13 @@ $d/lib/libai.so: out/host/libai.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/bin/ai: out/host/ai
+$d/bin/ai: out/host/ai out/host/ai.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
-# the boot image, installed beside the binary so the installed `ai` auto-loads it. The binary is
-# installed STRIPPED, but strip removes only the symbol table -- .text/.rodata vaddrs are unchanged,
-# so the image's lvm-table indices and base-delta still resolve. (A bad match just falls back to boot.)
-$d/bin/ai.img: out/host/ai.img
-	@echo CP	$(abspath $@)
-	@install -D -m 644 $< $@
+# the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, so the
+# stripped install keeps it; strip removes only the symbol table -- .text/.rodata vaddrs are
+# unchanged, so the image's lvm-table indices and base-delta still resolve, and a bad match
+# just falls back to a normal egg boot).
 
 # cook: the build tool (apps/cook/cook.l) installed as an executable `cook` on PATH.
 # Its `#!/usr/bin/env -S ai -l` shebang re-execs the installed `ai` to load it,

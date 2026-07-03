@@ -1,20 +1,86 @@
 // host/image.c -- file I/O around the core's stdio-free image codec (ai_image_save /
 // ai_image_load, ai.c). The CORE owns the heap serialization (compact + range-encode a
 // {header, blob} buffer, and its inverse); the HOST owns stdio -- so ai.c stays
-// freestanding-clean. main.c calls image_dump (--dump-image) and image_load (--load-image
-// / the <exe>.img auto-load). Conventions: dump 0 ok / <0 error; load NULL on any problem
-// so the caller falls back to a normal egg boot.
+// freestanding-clean. main.c calls image_bake (--bake: lay the image back into the
+// binary's own .image section), image_dump (--bake PATH: write a plain image file), and
+// image_load (--wake PATH). Conventions: bake/dump 0 ok / <0 error; load NULL on any
+// problem so the caller falls back to a normal egg boot.
+#define _GNU_SOURCE
 #include "ai.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <link.h>
 
 int image_dump(struct ai *g, char const *path) {
   uintptr_t len = 0;
-  void *buf = ai_image_save(g, &len);             // g->alloc'd; --dump-image exits right after, so we don't free it
+  void *buf = ai_image_save(g, &len);             // g->alloc'd; --bake exits right after, so we don't free it
   if (!buf) return -2;
   FILE *f = fopen(path, "wb");
   int rc = !f ? -4 : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
   if (f) fclose(f);
+  return rc;
+}
+
+// image_bake -- the SELF-bake: lay the post-warm image into the running binary's own
+// .image section on disk (what the Makefile's objdump/truncate/objcopy pipeline did).
+// The reserve's file offset comes from the program headers (dl_iterate_phdr: the first
+// entry is the main program; the reserve is PROGBITS, so it sits inside a PT_LOAD's
+// filesz). ETXTBSY-proof by the adopt pattern (port/inle/serve.l): you cannot write your
+// own executing file, so copy it, pwrite the blob at the offset (zero-padding the rest of
+// the reserve, like the old truncate pad), fsync, and atomically RENAME over the original
+// -- a new inode, so anything still executing keeps the old one. Same build = same
+// layout, so the codec's anchor/refsym guards hold by construction.
+extern uint64_t ai_baked_image[];
+extern uintptr_t ai_baked_image_len;
+struct bake_at { uintptr_t addr, off; int found; };
+static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
+  struct bake_at *b = d;
+  for (int i = 0; i < in->dlpi_phnum; i++) {
+    const ElfW(Phdr) *p = &in->dlpi_phdr[i];
+    uintptr_t lo = in->dlpi_addr + p->p_vaddr;
+    if (p->p_type == PT_LOAD && b->addr >= lo && b->addr < lo + p->p_filesz)
+      b->off = p->p_offset + (b->addr - lo), b->found = 1; }
+  return 1;                                       // stop after the first object: the main program
+}
+int image_bake(struct ai *g) {
+  uintptr_t len = 0;
+  void *buf = ai_image_save(g, &len);
+  if (!buf) return -2;
+  if (len > ai_baked_image_len) {
+    fprintf(stderr, "ai: image %lu > .image reserve %lu -- bump RESERVE_WORDS in host/image_baked.c\n",
+            (unsigned long) len, (unsigned long) ai_baked_image_len);
+    return -3; }
+  struct bake_at b = { (uintptr_t) ai_baked_image, 0, 0 };
+  dl_iterate_phdr(bake_phdr, &b);
+  if (!b.found) return -5;
+  char exe[4096], tmp[4104];
+  ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+  if (n <= 0) return -6;
+  exe[n] = 0;
+  snprintf(tmp, sizeof tmp, "%s.bake", exe);
+  struct stat st;
+  int src = open(exe, O_RDONLY);
+  if (src < 0 || fstat(src, &st)) { if (src >= 0) close(src); return -6; }
+  int dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700);
+  if (dst < 0) return close(src), -6;
+  static char cbuf[1 << 20];                      // copy the whole exe; the running inode stays untouched
+  for (ssize_t r; (r = read(src, cbuf, sizeof cbuf)) > 0;)
+    if (write(dst, cbuf, (size_t) r) != r) return close(src), close(dst), unlink(tmp), -6;
+  close(src);
+  int rc = pwrite(dst, buf, len, (off_t) b.off) == (ssize_t) len ? 0 : -6;
+  for (uintptr_t z = len; !rc && z < ai_baked_image_len; ) {          // zero the rest of the reserve
+    size_t w = ai_baked_image_len - z < sizeof cbuf ? (size_t)(ai_baked_image_len - z) : sizeof cbuf;
+    memset(cbuf, 0, w);
+    if (pwrite(dst, cbuf, w, (off_t)(b.off + z)) != (ssize_t) w) rc = -6;
+    z += w; }
+  if (!rc && (fchmod(dst, st.st_mode & 07777) || fsync(dst))) rc = -6;
+  if (close(dst)) rc = -6;
+  if (!rc && rename(tmp, exe)) rc = -6;           // the adopt: atomic, a new inode
+  if (rc) unlink(tmp);
   return rc;
 }
 
