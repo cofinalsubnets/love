@@ -64,13 +64,6 @@
 #define Pack(g) ((void)0)
 #define Unpack(g) ((void)0)
 #endif
-// The Pack'd-runner trailer: sync the register file out, run an allocating
-// body (which returns g with ip advanced), route a bad status to the help,
-// resync and continue.
-#define Packed(call) do { \
- Pack(g); g = (call); \
- if (!ai_ok(g)) return ghelp(g); \
- return Unpack(g), Continue(); } while (0)
 #define lvm(...) ai_noinline ai_noicf _lvm(__VA_ARGS__)
 
 // ok thanks

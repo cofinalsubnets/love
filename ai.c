@@ -1034,7 +1034,10 @@ struct ai *gxr(struct ai *g) {
 // ============================================================================
 // gc
 // ============================================================================
-lvm(lvm_gc, uintptr_t n) { Packed(ai_please(g, n)); }
+lvm(lvm_gc, uintptr_t n) {
+ Pack(g);
+ if (!ai_ok(g = ai_please(g, n))) return ghelp(g);
+ return Unpack(g), Continue(); }
 
 static word gcp(struct ai*, word, word const *, word const *);
 
@@ -5185,7 +5188,9 @@ lvm(lvm_link) {
   if (!ovf(av, bv, &t)) { word _res; Have(box_req); emit_int(t); \
    return *++Sp = _res, Ip++, Continue(); } } \
  if ((vop) == vop_mul) return Ap(lvm_bmul_start, g); /* O(n^2): run yieldable */ \
- Packed(ai_big_binop(g, vop)); }
+ Pack(g); g = ai_big_binop(g, vop); \
+ if (!ai_ok(g)) return ghelp(g); \
+ return Unpack(g), Continue(); }
 #define avm_slowdiv(op, vop, c_op, fexpr) static lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
  if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop); \
@@ -5255,7 +5260,9 @@ static lvm(lvm_quotn) {
    word _res; Have(box_req);                                        // inexact -> promote to float
    emit_flo((ai_flo_t) av / (ai_flo_t) bv);
    return *++Sp = _res, Ip++, Continue(); } }
- Packed(ai_big_quot_true(g)); }
+ Pack(g); g = ai_big_quot_true(g);
+ if (!ai_ok(g)) return ghelp(g);
+ return Unpack(g), Continue(); }
 
 avm_ovf(sub, __builtin_sub_overflow)
 // lvm_mul + its kind matrix live after the `+` string lane (they reuse add_name /
@@ -6728,10 +6735,17 @@ lvm(lvm_bmul_start) {
  // bound as na <= chunk/nb keeps na*nb from overflowing int on a 32-bit port.)
  word a = Sp[0], b = Sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
- if (na <= bmul_chunk / nb) Packed(ai_big_binop(g, vop_mul));
- if (bigp(a) && bigp(b) && na == nb)             // equal-length large: subquadratic Karatsuba
-  Packed(ai_kmul_setup(g));
- Packed(ai_bmul_setup(g)); }                     // unequal-length large: chunked schoolbook
+ if (na <= bmul_chunk / nb) {
+  Pack(g); g = ai_big_binop(g, vop_mul);
+  if (!ai_ok(g)) return ghelp(g);
+  return Unpack(g), Continue(); }
+ if (bigp(a) && bigp(b) && na == nb) {           // equal-length large: subquadratic Karatsuba
+  Pack(g); g = ai_kmul_setup(g);
+  if (!ai_ok(g)) return ghelp(g);
+  return Unpack(g), Continue(); }
+ Pack(g); g = ai_bmul_setup(g);                  // unequal-length large: chunked schoolbook
+ if (!ai_ok(g)) return ghelp(g);
+ return Unpack(g), Continue(); }
 
 lvm(lvm_bmul) {
  int i = (int) getcharm(Sp[0]);
@@ -6806,9 +6820,13 @@ lvm(lvm_bdiv_start, int vop) {
  word a = Sp[0], b = Sp[1];
  int m = bigp(a) ? big_nlimbs(a) : wlimbs, n = bigp(b) ? big_nlimbs(b) : wlimbs;
  // one-shot the cheap cases: |a|<|b| (q=0), single-limb divisor, or a short quotient.
- if (m < n || n < 2 || m - n < (int) (bdiv_chunk / (uintptr_t) n))
-  Packed(ai_big_binop(g, vop));
- Packed(ai_bdiv_setup(g, vop == vop_rem)); }
+ if (m < n || n < 2 || m - n < (int) (bdiv_chunk / (uintptr_t) n)) {
+  Pack(g); g = ai_big_binop(g, vop);
+  if (!ai_ok(g)) return ghelp(g);
+  return Unpack(g), Continue(); }
+ Pack(g); g = ai_bdiv_setup(g, vop == vop_rem);
+ if (!ai_ok(g)) return ghelp(g);
+ return Unpack(g), Continue(); }
 
 lvm(lvm_bdiv) {
  ai_limb *ws = (ai_limb*) txt(buf_str(Sp[1]));
@@ -7023,7 +7041,10 @@ static struct ai *ored(struct ai *g, int kind);   // kind: 0 sum, 1 prod, 2 max,
 lvm(lvm_asum) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
- if (vec(x)->type == ai_O) Packed(ored(g, 0));
+ if (vec(x)->type == ai_O) {
+  Pack(g); g = ored(g, 0);
+  if (!ai_ok(g)) return ghelp(g);
+  return Unpack(g), Continue(); }
  if (vec(x)->type == ai_C) {                   // complex sum -> a complex box
   struct ai_vec *v = vec(x); uintptr_t n = vec_nelem(v);  // K=4 accumulators (see aprod)
   ai_flo_t *fp = vec_data(v);                   // read all parts before Have (no alloc here)
@@ -7055,7 +7076,10 @@ lvm(lvm_asum) {
 lvm(lvm_aprod) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- if (vec(x)->type == ai_O) Packed(ored(g, 1));
+ if (vec(x)->type == ai_O) {
+  Pack(g); g = ored(g, 1);
+  if (!ai_ok(g)) return ghelp(g);
+  return Unpack(g), Continue(); }
  if (vec(x)->type == ai_C) {                   // complex product -> a complex box
   // K=4 INDEPENDENT accumulators break the multiply latency chain (acc_n depends
   // on acc_n-1); reassociation is sound -- * is a commutative monoid, so the
@@ -7096,7 +7120,10 @@ lvm(lvm_aprod) {
 static lvm(lvm_aextreme, int kind) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- if (vec(x)->type == ai_O) Packed(ored(g, kind));
+ if (vec(x)->type == ai_O) {
+  Pack(g); g = ored(g, kind);
+  if (!ai_ok(g)) return ghelp(g);
+  return Unpack(g), Continue(); }
  if (vec(x)->type == ai_C) return Sp[0] = ZeroPoint, Ip++, Continue();   // complex: unordered
  struct ai_vec *v = vec(x);
  uintptr_t n = vec_nelem(v);
@@ -7862,7 +7889,11 @@ static struct ai *obin_run(struct ai *g, int op) {
  g->sp += 2, g->sp[0] = result, g->ip = (union u*) g->ip + 1;
  return g; }
 
-lvm(lvm_obin, int op) { Packed(obin_run(g, op)); }
+lvm(lvm_obin, int op) {
+ Pack(g);
+ g = obin_run(g, op);
+ if (!ai_ok(g)) return ghelp(g);
+ return Unpack(g), Continue(); }
 
 // ai_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
 static struct ai *ored(struct ai *g, int kind) {
