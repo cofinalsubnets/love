@@ -130,85 +130,101 @@
 <p>ai is a dynamically typed lisp superset with curried evaluation, fast generics,
 and optional infix/prefix notation. other facts include</p>
 <ul>
-  <li>every value is theoretically a one argument total function of the global type</li>
-  <li>barring conditions such as out of memory or infinite loop, pretty much every expression has a value</li>
-  <li>most functions are defined generically, the goal is fully generic everywhere</li>
+  <li>every value is theoretically a one argument total function of global type</li>
   <li>alpha-equivalent lambdas compare equally: <code>(\ x x) = (\ y y)</code></li>
-  <li>integers act as their church numerals: <code>(1 x) = x</code>, <code>(3 2) = 8</code></li>
+  <li>integers act as their church numerals: <code>(1 x) = x</code>, <code>8 = 3 2 (+ 1) 0</code></li>
   <li>infix/prefix notation (desugars to lisp)</li>
-  <li>integer, float and complex types plus shaped numeric arrays with numpy-like broadcasting</li>
+  <li>integer, float and complex types plus shaped numeric arrays</li>
   <li>mandatory co-op scheduling</li>
-  <li>macros, call/cc, optional static dependent type checking (in early development)</li>
+  <li>the usual lisp stuff: lists, symbols, lambda, quote, macros, call/cc, etc. </li>
+  <li>strictly optional static dependent type system (in early development)</li>
   <li>repl with native line editing</li>
   <li>self-hosting threaded code interpreter with template JIT compiler (amd64/arm64 only)</li>
 </ul>
 
 <hr>
 
-<p class="toc"><a href="https://github.com/cofinalsubnets/ai">README</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="test/spec.l"><code>test/spec.l</code></a> &nbsp;&middot;&nbsp; <a href="rocq/spec.v"><code>rocq/spec.v</code></a></p>
+<p class="toc"><a href="https://github.com/cofinalsubnets/ai">README</a> &nbsp;&middot;&nbsp; <a href="#vocabulary">vocabulary</a> &nbsp;&middot;&nbsp; <a href="test/spec.l"><code>test/spec.l</code></a> &nbsp;&middot;&nbsp; <a href="rocq/spec.v"><code>rocq/spec.v</code></a></p>
 
 <hr>
-<h2 id="glossary"><a href="#glossary">glossary</a></h2>
-<p class="dim">i made up my own words for some things</p>
+<h2 id="vocabulary"><a href="#vocabulary">vocabulary</a></h2>
+<p>ai makes up many new names to some things, sorry not sorry :)
+any overlap with outside terminology or definitions is coincidental.
+</p>
+<ul>
+  <li>numerics are called constellations and astronomy/mineralogy-themed</li>
+  <li>fixnums are called charms because they're chars and nice to have</li>
+  <li>pairs are called chains and cons/car/cdr are called link/cap/cup</li>
+  <li>the generic get/set/delete functions are called peep/pin/pull</li>
+  <li>hash tables are called books or tablets (synonyms)</li>
+  <li>every value has a color (this is a new concept, not just a new name)</li>
+</ul>
+
 <dl class="glossary">
-  <dt id="g-application">application</dt>
-  <dd>the main vm operation: <code>(f x)</code> applies <code>f</code> to <code>x</code>. the numeric case is exponentiation.</dd>
-  <dt id="g-band">band / the true-blue order</dt>
-    <dd>the cross-kind total order: <code>() &lt; mint &lt; name &lt; string &lt; number &lt; tray &lt; chain &lt; book &lt; top</code> (fns and hots share the top band) -- numbers folded into one band by net.</dd>
-  <dt id="g-blue">blue</dt>
-  <dd>net exactly 0: (<code>0</code>, <code>()</code>, <code>""</code>, <code>'(1 2 3 -6)</code>).</dd>
-  <dt id="g-book">book / tablet</dt>
+  <dt id="g-application">📋 application</dt>
+    <dd>see: <a href="#g-roll">roll</a>.</dd>
+  <dt id="g-blue">🔵 blue</dt>
+    <dd><a href="#g-color">color</a> of a value whose net is 0: (<code>0</code>, <code>()</code>, <code>""</code>, <code>'(1 2 -3)</code>). boolean false.</dd>
+  <dt id="g-book">📒 book</dt>
     <dd>a mutable hash that is its own lookup function. <em>the book</em> refers to the global scope.</dd>
-  <dt id="g-chain">chain</dt>
+  <dt id="g-chain">🔗 chain</dt>
     <dd>the product kind (cons/pair). cap is car/hd, cup is cdr/tl, with the usual abbreviations. (btw i know pairs are not string diagrams, i just like the words :)</dd>
-  <dt id="g-charm">charm</dt>
+  <dt id="g-charm">💖 charm</dt>
     <dd>a register-allocated fixed-width integer (fixnum)</dd>
-  <dt id="g-color">color</dt>
+  <dt id="g-coin">🪙 coin</dt>
+    <dd>a user-kind value struck from a <em>die</em> over a payload; rides <code>+</code>/<code>*</code> through the die, nets and shows by its payload.</dd>
+  <dt id="g-color">🌈 color</dt>
     <dd>the order-sign of a value's net: green, red, or blue.</dd>
-  <dt id="g-constellation">constellation</dt>
+  <dt id="g-constellation">✨ constellation</dt>
     <dd>any number -- a star or a galaxy.</dd>
-  <dt id="g-currying">currying</dt>
-    <dd><code>(f x y) = ((f x) y)</code>, <code>(f) = f</code> -- a multi-arg call is just application, left to right.</dd>
-  <dt id="g-galaxy">galaxy</dt>
+  <dt id="g-currying">🍛 currying</dt>
+    <dd><code>(f x y) = ((f x) y)</code>, <code>(f) = f</code> -- a multi-arg call is one <em>roll</em> after another, left to right.</dd>
+  <dt id="g-die">🎲 die</dt>
+    <dd>a user type descriptor -- a monoid or ring as a little book of methods. a die strikes <em>coins</em>; <code>()</code> stays their identity for free.</dd>
+  <dt id="g-galaxy">🌌 galaxy</dt>
     <dd>a tray of stars (numeric array); folds into the number band by its net.</dd>
-  <dt id="g-gem">gem</dt>
-    <dd>a float -- the smooth kind between the charms.</dd>
-  <dt id="g-lattice">the kind lattice</dt>
+  <dt id="g-gem">💎 gem</dt>
+    <dd>a floating point number</dd>
+  <dt id="g-lattice">🔷 the lattice</dt>
     <dd>the runtime-reflective type lattice that indexes the dispatch tables, extending the generic ops to every kind.</dd>
-  <dt id="g-green">green</dt>
-    <dd>net &#8805; 0 -- what <code>$</code> keeps; the naturals.</dd>
-  <dt id="g-hot">hot</dt>
+  <dt id="g-green">🟢 green</dt>
+  <dd><a href="#g-color">color</a> of a value whose net is positive: <code>1 "hi" '(2 3 -1) (\ x x)</code>. boolean true.</dd>
+  <dt id="g-hot">🔥 hot</dt>
     <dd>an opaque external reference; applies as a constant.</dd>
-  <dt id="g-kind">kind</dt>
+  <dt id="g-kind">🔡 kind</dt>
     <dd>a value's type tag; the kinds form the dispatch lattice.</dd>
-  <dt id="g-mint">mint</dt>
+  <dt id="g-mint">🍬 mint</dt>
     <dd>a fresh nameless point: an identity and nothing else, materially empty.</dd>
-  <dt id="g-net">net (<code>+</code>)</dt>
+  <dt id="g-name">🪪 name</dt>
+    <dd>a named point (spelling + serial): <code>'x</code> is the one canonical interned name per spelling, <code>(nom ..)</code> strikes a fresh one.</dd>
+  <dt id="g-net">🥅 net (<code>+</code>)</dt>
     <dd>a value's content measure, a complex number; truth is its sign. a list nets its spine, text its charms.</dd>
-  <dt id="g-nom">nom / name</dt>
-    <dd>a named point (spelling + serial). a <em>name</em> is interned by the environment and pinned to one canonical object.</dd>
-  <dt id="g-numeral">numeral</dt>
-    <dd>a charm as a Church numeral: <code>(n x)</code> iterates <code>x</code> <code>n</code> times. <code>1</code> is identity, <code>0</code> const-1.</dd>
-  <dt id="g-operator">operator</dt>
-    <dd>the global type: every value is a one-argument total function, so application is always defined.</dd>
-  <dt id="g-point">point</dt>
-    <dd>a mint or a nom; the points floor the total order, below string.</dd>
-  <dt id="g-red">red</dt>
-    <dd>net &lt; 0 -- what <code>$</code> clamps to nothing.</dd>
-  <dt id="g-sat">saturate (<code>$</code>)</dt>
+  <dt id="g-nothing"><span class="hi gray">Ø nothing</span></dt>
+    <dd>the global <span class="hi gray">empty</span> element <code>()</code>: the identity of <code>+</code> and <code>*</code>, riding through every other arithmetic operator the same way. canonically a mint, therefore false; the face of absence.</dd>
+  <dt id="g-point">• point</dt>
+    <dd>a mint or a name; the points floor the total order, below string.</dd>
+  <dt id="g-red">🔴 red</dt>
+    <dd><a href="#g-color">color</a> of a value whos net is negative: <code>-1 '(1 2 3 -99999)</code>. boolean false.</dd>
+  <dt id="g-roll">🎳 roll</dt>
+    <dd>the main vm operation: <code>(f x)</code> rolls <code>x</code> into <code>f</code>; a call rolls its operands in left to right. the numeric case is exponentiation.</dd>
+  <dt id="g-sat">🌊 saturate (<code>$</code>)</dt>
     <dd>retraction of the net measure onto <span class="hi green">green</span> charms: <code>$x = (max 0 (min max-charm (ceil (net x))))</code>. the truth value of <code>x</code> is <code>!!$x</code>.</dd>
-  <dt id="g-star">star</dt>
+  <dt id="g-star">⭐ star</dt>
     <dd>a self-netting scalar: a number that is its own net.</dd>
-  <dt id="g-string">string</dt>
+  <dt id="g-string">🧵 string</dt>
     <dd>a byte vector: indexes its bytes, nets its charm-sum.</dd>
-  <dt id="g-tally">tally</dt>
+  <dt id="g-tablet">📱 tablet</dt>
+    <dd>see: <a href="#g-book">book</a>.</dd>
+  <dt id="g-tally">🧮 tally</dt>
     <dd>the count -- how many cells, charms, or keys -- versus the net's how-much.</dd>
-  <dt id="g-tray">tray</dt>
-    <dd>a shaped array, cells of any <em>kind</em> -- seated just above <em>chain</em> in the band. a shape lists its axis sizes, the rank counts them; indexing is row-major and out of bounds reads the default. typed per numeric tier (star/gem/twin) or holding objects; a numeric tray is a <em>galaxy</em> and nets its cells' sum. one cell demotes to the bare scalar, so a tray exists only at <code>tally &#8805; 2</code> -- save the empties, which stay to carry the reduction units.</dd>
-  <dt id="g-twin">twin</dt>
+  <dt id="g-tray">📥 tray</dt>
+    <dd>a shaped array, cells of any <em>kind</em>; row-major, out of bounds reads the default. a numeric tray is a <em>galaxy</em>. one cell demotes to the bare scalar -- a tray exists only at <code>tally &#8805; 2</code>, save the empties, which carry the reduction units.</dd>
+  <dt id="g-twin">👯 twin</dt>
     <dd>a complex: two gems <code>(re, im)</code>, built and conjugated by <code>~</code>.</dd>
-  <dt id="g-unit">unit / zero point</dt>
-    <dd>the global <span class="hi gray">empty</span> element: <code>() + x = () * x = x</code>, and it rides through every other arithmetic operator the same way (<code>5 - () = () - 5 = 5</code> -- the do-nothing operand). canonically a mint, therefore false. the face of absence a missing read returns.</dd>
+  <dt id="g-unit">1️⃣ unit</dt>
+    <dd>see: <a href="#g-nothing">nothing</a>.</dd>
+  <dt id="g-zero-point">0️⃣ zero point</dt>
+    <dd>see: <a href="#g-nothing">nothing</a>.</dd>
 </dl>
 
 <hr>
@@ -216,25 +232,27 @@ and optional infix/prefix notation. other facts include</p>
 <p>the <em>black rabbit of inle</em> and crew travel through namespace searching for the legendary island of svalbard.</p>
 <dl class="crew">
   <dt>🌑 inle ◦ the vessel</dt>
-    <dd>wherein our tale unfolds</dd>
-  <dt>🔭 tele ◦ the observer</dt>
-    <dd>big telescope. pilot face of inle</dd>
+    <dd>wherein the tale unfolds</dd>
+  <dt>🔭 tele ◦ the viewer</dt>
+    <dd>big telescope. pilot face of inle. pytorch clone</dd>
   <dt>🐇 bellberry ◦ the navigator</dt>
     <dd>light brown rabbit with silver stripes</dd>
   <dt>🕊 gwen ◦ the synthesist</dt>
     <dd>mourning dove friend of bellberry and tele</dd>
   <dt>🐈 ain ◦ the netcat</dt>
-    <dd>white cat. somewhat misanthropic</dd>
+    <dd>white cat. ambivalently misanthropic. openbsd netcat clone</dd>
   <dt>🐕 bao ◦ the shell</dt>
-    <dd>tan dog. very eager to please</dd>
+    <dd>shiba inu. very eager to please. rlwrap clone</dd>
   <dt>🐀 cook ◦ the build system</dt>
-    <dd>an uncertain number of gray rats</dd>
+    <dd>a colony of gray rats. gnu make clone</dd>
   <dt>🐐 mow ◦ the grass chewer (garbage collector)</dt>
-    <dd>wise goat. formerly gregarious, now solitary</dd>
+    <dd>goat. formerly gregarious, now solitary. two-gen two-space copying</dd>
   <dt>🕷️ holo ◦ the assembler</dt>
-    <dd>cave spider. short for holophrasm</dd>
+    <dd>cave spider. short for holophrasm. currently amd64/arm64 only</dd>
   <dt>🦇 thomas ◦ the SAT engine</dt>
     <dd>cave bat friend of holo. they often discuss their inner lives</dd>
+  <dt>🦐 phos ◦ the window manager</dt>
+    <dd>mantis shrimp. frequents a brine pool in holo's cave. xmonad clone</dd>
 </dl>
 <footer>for ()
   <span class="note">&middot; set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V TWN16 + re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
