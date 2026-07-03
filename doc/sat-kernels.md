@@ -280,8 +280,24 @@ untouched.
 
 the eleven-row net is now a statistical three-way tie at the top (picosat ~2030,
 cadical ~2220, ai ~2250 — the uf250 SAT-lottery row is the entire spread), with
-kissat ~4000 and the rest behind. per-row: picosat/minisat keep the small random
-rows (raw per-conflict engine cost), uuf250-class stays ~2.5× cadical's conflict
-count (the remaining stable-mode refinements: target-phase decision ordering, tier-2
-clause management), and php8 sits 1.5ms behind cadical. all lisp cold-path or
-kernel-phase work; the architecture doesn't move.
+kissat ~4000 and the rest behind. the per-row composition, MEASURED (uuf150-01):
+
+* **the engine is no longer behind anything in the field.** per-conflict cost is at
+  parity with picosat — ~6.5µs ours vs ~5.5µs its, on the same instance. the native
+  kernels have fully closed execution speed against tuned C at this scale.
+* **the uuf rows are conflict count**: picosat needs 2,344 conflicts to our 5,365
+  (2.3×) — decision quality, not speed. concretely: picosat seeds scores by literal
+  occurrence (Jeroslow–Wang-style) where our activities start at zero (the first
+  ~thousand decisions are effectively random), and its inner/outer geometric restart
+  scheme took 2 restarts where we take dozens of luby blocks. uuf250-class likewise
+  stays ~2.5× cadical's conflict count (target-phase decision ordering, tier-2
+  clause management are the stable-mode refinements left).
+* **the flat row is our own preprocessing floor, not search**: flat100-1 splits as
+  bva=12ms / load=2ms / search=0–1ms — the solve is instant and ~85% of the row is
+  the interpreted fbva sweep (~10µs/clause over 1,117 clauses); the same tax is ~5ms
+  of every uuf instance. the fix is a native lane for the fbva intake (a fourth nif
+  kernel — the occ-index and match-count loops are exactly the flat-arena shape the
+  other three use), or a cheaper structural pre-filter.
+* php8 sits 1.5ms behind cadical.
+
+all lisp cold-path or kernel-phase work; the architecture doesn't move.
