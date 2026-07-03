@@ -199,19 +199,27 @@ static lvm(lvm_udpbind) {
  Sp[0] = ai_nil; Ip += 1;
  return Continue(); }
 
+// recvfrom + peer marshaling; the &-taken sockaddr lives here so the lvm
+// wrapper stays TCO-clean. Returns by value (16 bytes -> registers).
+struct dgram { ssize_t n; uintptr_t peerfix; };
+ai_noinline static struct dgram call_udprecv(int fd, char *buf, size_t cap) {
+ struct sockaddr_in peer; memset(&peer, 0, sizeof peer);
+ socklen_t plen = sizeof peer;
+ ssize_t n;
+ do n = recvfrom(fd, buf, cap, 0, (struct sockaddr*) &peer, &plen);
+ while (n < 0 && errno == EINTR);
+ return (struct dgram) { n, ((uintptr_t) ntohl(peer.sin_addr.s_addr) << 16)
+                          | (uintptr_t) ntohs(peer.sin_port) }; }
+
 static lvm(lvm_udprecv) {
  if (!portp(Sp[0])) goto fail;
  int fd = port_fd(Sp[0]);
  if (fd < 0) goto fail;
  static char buf[DG_MAX];
- struct sockaddr_in peer; memset(&peer, 0, sizeof peer);
- socklen_t plen = sizeof peer;
- ssize_t n;
- do n = recvfrom(fd, buf, sizeof buf, 0, (struct sockaddr*) &peer, &plen);
- while (n < 0 && errno == EINTR);
+ struct dgram d = call_udprecv(fd, buf, sizeof buf);
+ ssize_t n = d.n;
  if (n < 0) goto fail;
- uintptr_t peerfix = ((uintptr_t) ntohl(peer.sin_addr.s_addr) << 16)
-                   | (uintptr_t) ntohs(peer.sin_port);
+ uintptr_t peerfix = d.peerfix;
  Pack(g);                                            // bytes + chain allocate -> Pack
  if (n > 0) {                                        // datagram -> a fresh ai string
   g = str0(g, (uintptr_t) n);
@@ -235,19 +243,24 @@ static lvm(lvm_udprecv) {
  Sp[0] = ai_nil; Ip += 1;
  return Continue(); }
 
-static lvm(lvm_udpsend) {
- if (!portp(Sp[0]) || !oddp(Sp[1]) || !ai_strp(Sp[2])) goto fail;
- int fd = port_fd(Sp[0]);
- if (fd < 0) goto fail;
- uintptr_t peerfix = getcharm(Sp[1]);
+// sendto with the peer unmarshaled from its fixnum; the &-taken sockaddr
+// lives here so the lvm wrapper stays TCO-clean.
+ai_noinline static ssize_t call_udpsend(int fd, uintptr_t peerfix, void const *p, size_t n) {
  struct sockaddr_in a; memset(&a, 0, sizeof a);
  a.sin_family = AF_INET;
  a.sin_addr.s_addr = htonl((uint32_t) (peerfix >> 16));
  a.sin_port = htons((uint16_t) (peerfix & 0xffff));
- struct ai_str *s = str(Sp[2]);
  ssize_t w;
- do w = sendto(fd, txt(s), len(s), 0, (struct sockaddr*) &a, sizeof a);
+ do w = sendto(fd, p, n, 0, (struct sockaddr*) &a, sizeof a);
  while (w < 0 && errno == EINTR);
+ return w; }
+
+static lvm(lvm_udpsend) {
+ if (!portp(Sp[0]) || !oddp(Sp[1]) || !ai_strp(Sp[2])) goto fail;
+ int fd = port_fd(Sp[0]);
+ if (fd < 0) goto fail;
+ struct ai_str *s = str(Sp[2]);
+ ssize_t w = call_udpsend(fd, getcharm(Sp[1]), txt(s), len(s));
  if (w < 0) goto fail;
  // stack: [p, peerfix, bytes, ...] -> [p, ...]
  Sp[2] = Sp[0];
