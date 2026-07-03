@@ -400,6 +400,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "asm0.h"                                     //   baked into the bootstrap so the corpus can test it under c0
 #include "x640.h"                                     //   AND the self-hosted ev. Globals persist across the egg warm
 #include "arm640.h"                                   //   below, so one eval here serves both corpus passes.
+#include "export0.h"                                  // the module boundary: the span sweeps into the ONE `asm` book
   );
   g = ai_evals_(g, s2cldef);
   g = ai_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
@@ -497,6 +498,9 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_evals_(g, glaze_emit);                          // load the native JIT post-egg -> ev = auto-ev, glaze always-on
   g = ai_evals_(g, glaze_auto);                          // (no fragile stale image; base-ev captures the hatched ev).
 #endif                                                   // ~680ms from-scratch; the image snapshots past it. arm64: integer lanes native, x86-only lanes (float/loops) fall to interp -- see auto.l's `x86?` gate.
+  g = ai_evals_(g,                                       // the asm module boundary (asm/export.l): the assembler's names
+#include "export.h"                                      //   sweep into the ONE public `asm` book and off the global book.
+  );                                                     //   AFTER the glaze, whose direct references folded at its compile.
 
   if (image_dump_path) {                                 // --dump-image: snapshot the post-warm heap, then exit
 #if defined(__x86_64__)

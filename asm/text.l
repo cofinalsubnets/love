@@ -60,4 +60,4 @@
 
    ;; -- assemble straight from text. --
    (asm-text-hex target src) (asm-hex target (asm-text src))
-   (asm-text-bytes target src) (asm target (asm-text src)))
+   (asm-text-bytes target src) (asm-bytes target (asm-text src)))

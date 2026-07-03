@@ -127,7 +127,7 @@
    ;; with a help that delegates everything else (incl the reader's own eof/more) back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
    _ (: help (\ s a b (? (= a 'alias-dst) (: _ (pin caught 0 1) ()) (welp s a b))))
-   _ (asm 'x64 '((sub r0 r3 r0)))
+   _ (asm-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
    ;; -- the text front-end (asm/text.l) parses to the same IR, so it assembles byte-identically. --
@@ -144,7 +144,7 @@
    _ (chk-eq "elf.magic"   127     (at elfimg 0))        ; \x7f E L F
    _ (chk-eq "elf.machine" 62      (at elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
-   _ (chk-eq "elf.size"    (+ 120 (+ (tally (asm 'x64 elfprog)) 3)) (tally elfimg))
+   _ (chk-eq "elf.size"    (+ 120 (+ (tally (asm-bytes 'x64 elfprog)) 3)) (tally elfimg))
    _ (chk-eq "elf.arm64-machine" 183 (at (peep (elf64 'arm64 (\ a elfprog) ()) 'bytes 0) 18))
 
    ;; -- the aarch64 backend (asm/arm64.l): the SAME neutral IR, a second target. fixed 32-bit

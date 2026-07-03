@@ -17,7 +17,8 @@
 ; Loops are NOT caught here (their body isn't leaf-grammar) -- they stay bytecode, or use
 ; ai/glaze/auto.l's counted-loop path. Load AFTER ai/glaze/emit.l (uses cgn/emit/nat/natn/epilogue/
 ; epilogue-mn). x86-64 only.
-(: (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
+(: assemble (asm 'assemble)                                                 ; through the module book (asm/export.l)
+   (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op (cap e)
                                (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
                                   (= op '?) (&& (two? (cup (cup (cup e)))) !(two? (cup (cup (cup (cup e)))))

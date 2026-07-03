@@ -41,6 +41,11 @@
 ; ALU ops take a register or an immediate in the same slot with no syntax. the abstract register
 ; file is what makes the IR neutral: each backend maps r0..r14/sp onto its own encoding.
 
+; the module span opens here: asm/export.l diffs (names ()) against this mark and sweeps
+; every name asm/{asm,x64,arm64}.l leak into the ONE public `asm` book -- measured, never
+; listed. (in the test_asm cat-stream, where export.l never loads, the mark is inert.)
+(: asm-mark (names ()))
+
 (: ;; -- a 0-based list accessor (prel has none; `nth` is not bound -- it absorbs as the zero
    ;; point). instruction forms read their operands through this. --
    (at l k) (? (= k 0) (cap l) (at (cup l) (- k 1)))
@@ -103,8 +108,8 @@
                   (cat bs (resolve (cup items) labels be (+ addr (fix-w x)))))
                (link x (resolve (cup items) labels be (+ addr 1))))))
 
-   ;; -- assemble PROG for TARGET. returns a tablet { 'bytes 'labels }; `asm` is the byte-list
-   ;; shortcut, `asm-str` packs them into a machine-code string, `asm-hex` shows them. --
+   ;; -- assemble PROG for TARGET. returns a tablet { 'bytes 'labels }; `asm-bytes` is the
+   ;; byte-list shortcut, `asm-str` packs them into a machine-code string, `asm-hex` shows them. --
    ;; -- assemble-at: like assemble, but `lbls` is a PRE-BOUND label tablet (name -> address). A
    ;; client that emits a blob into a larger buffer seeds the EXTERNAL targets it jumps to -- e.g.
    ;; the glaze seeds its deopt handler as `deopt -> (OVF - blob-start)`, so a `(jmp deopt)` inside
@@ -119,12 +124,12 @@
          _ (pin res 'labels (cup p))
          res)
    (assemble target prog) (assemble-at target prog (tablet 0))
-   (asm target prog)     (peep (assemble target prog) 'bytes 0)
-   (asm-str target prog) (string (asm target prog))
+   (asm-bytes target prog) (peep (assemble target prog) 'bytes 0)   ; (the module book owns the bare name `asm`)
+   (asm-str target prog) (string (asm-bytes target prog))
    (label-at res name)   (peep (peep res 'labels 0) name ())
 
    ;; -- hex, for goldens and disassembly. --
    (hex1 d)  (snip "0123456789abcdef" d (+ d 1))
    (hex2 b)  (+ (hex1 (>> b 4)) (hex1 (& b 15)))
    (hexs bs) (foldl (\ a b (+ a (hex2 b))) "" bs)
-   (asm-hex target prog) (hexs (asm target prog)))
+   (asm-hex target prog) (hexs (asm-bytes target prog)))

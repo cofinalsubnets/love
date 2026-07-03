@@ -264,3 +264,7 @@
    _ (pin arm64 'patch arm64-patch)
    _ (defbackend 'arm64 arm64)
    _ (defbackend 'aarch64 arm64))
+
+; the module span closes here (opened by asm-mark in asm/asm.l): the names bound since
+; the mark are the assembler; asm/export.l sweeps them into the `asm` book.
+(: asm-load (names ()))

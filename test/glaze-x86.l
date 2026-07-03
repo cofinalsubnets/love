@@ -15,6 +15,10 @@
 ; run STANDALONE, base-ev/jitgroupir/.. are unbound -> ()=zero point -> (base-ev '(..))=const-1=1 SILENTLY
 ; skips every block, yet the final top-level "ok" still prints (a false pass -- the const-1 trap). assert
 ; the harness names are bound so a wrong invocation SCARES `;; assert (lit? base-ev)` instead.
+; the assembler lives in the `asm` MODULE book now (asm/export.l): bind what this stream calls --
+; assemble through the book, and bcat (the byte-piece concat the baked glaze keeps private).
+(: assemble (asm 'assemble)
+   bcat (\ ps (foldl (\ a b (+ a b)) () ps)))
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
 
 (base-ev '(: ev base-ev
@@ -572,7 +576,7 @@
       (1000000 = ((jitgroupir (L (link '(loop i) '(? (< i 1000000) (loop (+ i 1)) i))) 'loop 'x64) 0))               ; single-arg counted loop
       (499999500000 = ((jitgroupir (L (link '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))) 'sm 'x64) 0 0))    ; multi-arg tail accumulator (sum 0..1M-1)
       ; arm64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
-      (< 0 (tally (peep (assemble 'arm64 (asm (L (mkouterir 'arm64 1 'fib 1 0 () () () ())
+      (< 0 (tally (peep (assemble 'arm64 (bcat (L (mkouterir 'arm64 1 'fib 1 0 () () () ())
                   (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))))) 'bytes 0))))
    (say err "ai/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
 
