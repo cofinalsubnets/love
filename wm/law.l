@@ -139,5 +139,29 @@
       (= (tally (cap (lay-tile (lay-msg stk 'next-layout z3) r z3))) 3)          ; next-layout reaches the ||| at the bottom
       (: q (cap (lay-tile (lay-msg stk 'toggle-layout z3) r z3)) (&& (= (tally q) 1) (= (nthl (cap q) 5) 0)))))   ; toggle-full through the stack -> fullscreen, borderless
 
-(say err "wm/law: StackSet zipper + sheaf + floating + layout + modifier laws ok
+; --- the manageHook DSL (wm/manage.l rung 5): combinators + float actions ---
+(: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
+   c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
+   yes (\ c 1) no (\ c 0)                                                        ; mock predicates
+   tag (\ nm (\ c sh (link nm sh)))                                             ; mock action: cons a tag onto the sheaf (marks it ran)
+   (assert
+      ; float actions move the (tiled) window into the floating half at the right rect
+      (: f (do-full-float c s0) (&& (wsfloating? f 20) (= (wsrect f 20) '(0 0 800 600)) (! (any (\ x (= x 20)) (wstiled f)))))
+      (: f (do-float c s0) (= (wsrect f 20) '(100 100 300 200)))                ; do-float keeps the window's own geometry
+      (: f (do-center-float c s0) (= (wsrect f 20) '(250 200 300 200)))         ; centered: (800-300)/2=250, (600-200)/2=200
+      (= (do-ignore c s0) (evict s0 20))                                        ; ignore un-manages entirely
+      ; <||> is predicate OR
+      ((<||> yes no) c) (! ((<||> no no) c)) ((<||> no yes) c)
+      ; -?> fires the action iff the predicate matches (a 1-list = matched, () = not)
+      (= ((-?> yes (tag 'a)) c s0) (L (link 'a s0)))
+      (! ((-?> no (tag 'a)) c s0))
+      ; compose-one takes the FIRST matching rule; none -> the sheaf unchanged
+      (= ((compose-one (L (-?> no (tag 'a)) (-?> yes (tag 'b)) (-?> yes (tag 'c)))) c s0) (link 'b s0))
+      (= ((compose-one (L (-?> no (tag 'a)) (-?> no (tag 'b)))) c s0) s0)
+      ; compose-all threads every hook (a plain hook, so wrap or use identity)
+      (= ((compose-all (L (\ c sh (link 'x sh)) (\ c sh (link 'y sh)))) c s0) (link 'y (link 'x s0)))
+      ; manage-default is the assembled config hook -- a runnable closure (X-driven; not called here)
+      (lit? manage-default)))
+
+(say err "wm/law: StackSet zipper + sheaf + floating + layout + modifier + manage laws ok
 ")

@@ -21,6 +21,19 @@
    (x-rstr s n) (: (go i acc) (? (< i n) (go (+ i 1) (+ acc (get s))) acc) (go 0 ""))
    (x-pad4 n) (% (- 4 (% n 4)) 4)
    (x-wname s t) (: (go i) (? (< i (tally t)) (: _ (put s (t i)) (go (+ i 1))) 0) (go 0))
+   (x-rbytes s n) (: (go i acc) (? (< i n) (go (+ i 1) (link (get s) acc)) (rev acc)) (go 0 ()))   ; n raw bytes -> a list
+   (u16 l off) (| (nthl l off) (<< (nthl l (+ off 1)) 8))                        ; little-endian reads out of a byte list
+   (u32 l off) (| (u16 l off) (<< (u16 l (+ off 2)) 16))
+
+   ; --- the reply/event demux. With SubstructureNotify selected, a request's
+   ;     reply arrives INTERLEAVED with events on the one socket -- byte0 marks
+   ;     which: 0 error, 1 reply, >=2 event. x-reply stashes events (in evq, a
+   ;     FIFO) while it waits for a reply; x-next drains evq before the socket. ---
+   evq (tablet 1)
+   _ (pin evq 0 ())
+   (x-reply s) (: pkt (x-rbytes s 32)                                            ; the next 32-byte REPLY header, events stashed
+                  (? (= (cap pkt) 1) pkt
+                     (: _ (pin evq 0 (cat (peep evq 0 ()) (L pkt))) (x-reply s))))
 
    ; --- connect + the setup handshake -> the screen record | () ---
    (x-connect path) (connectu path)
@@ -64,9 +77,48 @@
        _ (x-w16 s n) _ (x-w16 s 0) _ (x-wname s nm)
        _ (: (go i) (? (< i (x-pad4 n)) (: _ (put s 0) (go (+ i 1))) 0) (go 0))
        _ (x-flush s)
-       b0 (x-r8 s)
-       (? (! (= b0 1)) (: _ (x-skip s 31) ())
-          (: _ (x-r8 s) _ (x-r16 s) _ (x-r32 s) atom (x-r32 s) _ (x-skip s 20) atom)))
+       hdr (x-reply s) (u32 hdr 8))                                             ; the atom (onlyIfExists=0, so it never errors)
+
+   ; --- GetProperty (opcode 20) -> (format nitems bytes); decoders on top ---
+   (x-getprop s win prop)
+    (: _ (x-w8 s 20) _ (x-w8 s 0) _ (x-w16 s 6) _ (x-w32 s win) _ (x-w32 s prop)
+       _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 1024) _ (x-flush s)
+       hdr (x-reply s) rlen (u32 hdr 4)
+       bytes (x-rbytes s (* rlen 4))
+       (L (nthl hdr 1) (u32 hdr 12) bytes))
+   (x-atoms-of bytes) (? (< (tally bytes) 4) ()                                  ; group 4 LE bytes -> a 32-bit atom/window list
+                         (link (u32 bytes 0) (x-atoms-of (drop 4 bytes))))
+   (x-getprop-atoms s win prop) (x-atoms-of (nthl (x-getprop s win prop) 2))
+   (x-has-atom s win propnm valnm) (: at (x-getprop-atoms s win (x-intern s propnm)) va (x-intern s valnm)   ; isInProperty
+                                      (any (\ a (= a va)) at))
+   (x-getclass s win)                                                            ; WM_CLASS (atom 67) = "instance\0class\0"; the class is the 2nd
+    (: bytes (nthl (x-getprop s win 67) 2)
+       (: (go l seen acc) (? (! (two? l)) acc                                    ; walk past the first NUL, then collect to the next
+                             (= (cap l) 0) (? seen acc (go (cup l) 1 acc))
+                             (go (cup l) seen (? seen (+ acc (cap l)) acc)))
+          (go bytes 0 "")))
+   (x-transient s win) (: a (x-getprop-atoms s win 68) (? (two? a) (cap a) ()))  ; WM_TRANSIENT_FOR (atom 68) -> the parent window | ()
+
+   ; --- GetGeometry (opcode 14) -> the window's (x y w h) ---
+   (x-getgeom s win)
+    (: _ (x-w8 s 14) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s win) _ (x-flush s)
+       hdr (x-reply s)
+       (L (u16 hdr 12) (u16 hdr 14) (u16 hdr 16) (u16 hdr 18)))
+   (x-raise s win) (: _ (x-w8 s 12) _ (x-w8 s 0) _ (x-w16 s 4) _ (x-w32 s win)   ; ConfigureWindow CWStackMode=Above
+                      _ (x-w16 s 64) _ (x-w16 s 0) (x-w32 s 0))
+
+   ; --- QueryTree (opcode 15) + GetWindowAttributes (opcode 3): at startup we
+   ;     ADOPT the windows that mapped before the redirect took hold (closing the
+   ;     race) and any survivors of a restart-in-place. ---
+   (x-querytree s win)
+    (: _ (x-w8 s 15) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s win) _ (x-flush s)
+       hdr (x-reply s) n (u16 hdr 16) bytes (x-rbytes s (* (u32 hdr 4) 4))
+       (take n (x-atoms-of bytes)))
+   (x-attrs s win)                                                               ; -> (map-state override-redirect); map-state 2 = IsViewable
+    (: _ (x-w8 s 3) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s win) _ (x-flush s)
+       hdr (x-reply s) _ (x-rbytes s (* (u32 hdr 4) 4))                          ; drain the trailing reply data
+       (L (nthl hdr 26) (nthl hdr 27)))
+   (x-manageable? s win) (: a (x-attrs s win) (&& (= (cap a) 2) (= (caup a) 0))) ; viewable and not override-redirect
 
    ; --- become the WM: SubstructureRedirect|Notify on the root, synced by an
    ;     intern round-trip. 1 = we hold it, 0 = another WM (Access error). ---
@@ -94,10 +146,9 @@
    ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
    ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,
    ;     detail (keycode) at byte 1 -- enough for every event the WM handles. ---
-   (x-next s)
-    (: b0 (x-r8 s)
-       (? (= b0 -1) ()
-          (: detail (x-r8 s) _ (x-skip s 6) window (x-r32 s)
-             _ (x-skip s 16) state (x-r16 s) _ (x-skip s 2)
-             (L (& 127 b0) detail window state))))
+   (x-decode pkt) (L (& 127 (cap pkt)) (nthl pkt 1) (u32 pkt 8) (u16 pkt 28))    ; code, detail(keycode), window@8, state@28
+   (x-next s)                                                                    ; a stashed event first, else the socket
+    (: q (peep evq 0 ())
+       (? (two? q) (: _ (pin evq 0 (cup q)) (x-decode (cap q)))
+          (: b0 (get s) (? (= b0 -1) () (x-decode (link b0 (x-rbytes s 31)))))))
    (ev-code e) (cap e)  (ev-detail e) (caup e)  (ev-window e) (nthl e 2)  (ev-state e) (nthl e 3))

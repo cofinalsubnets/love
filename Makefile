@@ -120,8 +120,8 @@ test_sat: host
 # sentinel AND exit 0 (a reader-stop or strict-assert scare both miss it).
 .PHONY: test_wm
 test_wm: host
-	@echo "WM wm/core.l + wm/layout.l + wm/law.l"; \
-	  cat test/00-init.l wm/core.l wm/layout.l wm/law.l | $m > out/host/.test_wm.out 2>&1; r=$$?; \
+	@echo "WM wm/core.l + wm/layout.l + wm/wire.l + wm/manage.l + wm/law.l"; \
+	  cat test/00-init.l wm/core.l wm/layout.l wm/wire.l wm/manage.l wm/law.l | $m > out/host/.test_wm.out 2>&1; r=$$?; \
 	  cat out/host/.test_wm.out; \
 	  { [ $$r -eq 0 ] && grep -q "wm/law: StackSet" out/host/.test_wm.out; } \
 	    || { echo "FAIL wm (exit $$r)"; exit 1; }
