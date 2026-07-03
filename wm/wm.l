@@ -63,6 +63,11 @@
           _ (line (+ "wm: view " (+ (show t) (+ " " (show (wsrow sh2))))))
           sh2))
    (msg-or old new) (? new new old)                                              ; keep the old layout when a message is unhandled (())
+   (wm-self u)                                                                   ; our script path, either argv shape: plain `ai wm`
+    (: (go m) (? (! (two? m)) (cap argv)                                         ; gives (script ..); the -l shebang gives the RAW OS
+                 (= (cap m) "-l") (? (two? (cup m)) (caup m) (cap argv))         ; argv (ai -l script ..) -- take the -l operand
+                 (go (cup m)))
+       (go argv))
 
    ; --- do-act: interpret one keys.l action. Returns by looping. ---
    (do-act a sh lay hist ffoc)
@@ -85,7 +90,10 @@
           (= k 'kill) (: _ (? fw (: _ (x-kill s fw) (x-flush s)) 0)              ; DestroyNotify does the eviction
                          _ (line (+ "wm: kill " (show fw))) (loop sh lay hist ffoc))
           (= k 'quit) (line "wm: quit")                                          ; fall out of the loop
-          (= k 'restart) (: _ (line "wm: restart -- rung 9 (dock adopt)") (loop sh lay hist ffoc))
+          (= k 'restart)                                                         ; restart-in-place: exec ourselves (the CLOEXEC'd socket
+          (: _ (line (+ "wm: restart -- exec, pid " (show (getpid 0))))          ; drops, the server releases the redirect, the new
+             _ (exec (L "/proc/self/exe" (wm-self ())))                          ; generation ADOPTS the surviving windows at startup)
+             _ (line "wm: restart failed") (loop sh lay hist ffoc))
           (= k 'refresh) (relay sh lay ffoc)
           (= k 'reset-layout) (relay sh wm-layout ffoc)
           (= k 'toggle-struts) (: _ (ewmh-toggle ()) _ (line "wm: toggle struts") (relay sh lay ffoc))

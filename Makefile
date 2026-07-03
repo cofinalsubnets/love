@@ -113,6 +113,14 @@ test_sat: host
 	  cat out/host/.test_sat.out; \
 	  { [ $$r -eq 0 ] && grep -q "sat: Stages 1-3 ok" out/host/.test_sat.out && grep -q "sat/dimacs: ok" out/host/.test_sat.out && grep -q "sat/flat: ok" out/host/.test_sat.out; } \
 	    || { echo "FAIL sat (exit $$r)"; exit 1; }
+# The DRAT lane's EXTERNAL check: flat.l's emitted refutations (fdrat0) verified by
+# drat-trim, the SAT competition's independent checker (fetched + built into out/drat
+# on first use; skips gracefully offline). The in-gate twin (fd-check, no external
+# dependency) runs inside test_sat; this aims the third-party eye at php5-8 + a
+# raw-RUP row. Not in test_all (network on first run); run after touching the emitter.
+.PHONY: test_drat
+test_drat: host
+	@cd sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
 # The wm app's pure core (wm/core.l): xmonad's StackSet -- the focus zipper, the
 # workspace sheaf, the floating half -- with xmonad's QuickCheck laws + a seeded
 # fuzz (wm/law.l). Pure ai (no nif), so it self-tests portably; the X layers
@@ -946,6 +954,7 @@ installs = \
   $d/bin/ai.img \
   $d/bin/cook \
   $d/bin/ain \
+  $d/bin/wm \
   $d/bin/bao \
   $d/share/man/man1/ai.1 \
   $d/lib/ai/prel.l \
@@ -1003,6 +1012,16 @@ $d/bin/cook: cook/cook.l
 $d/bin/ain: tools/ain.l
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
+
+# wm: the window manager (wm/*.l), the seven modules catted into one shebang
+# script. DISPLAY picks the socket, ~/.Xauthority the cookie (wm/config.l);
+# mod+q restarts in place by exec'ing this same script.
+wmfiles = wm/core.l wm/layout.l wm/wire.l wm/ewmh.l wm/manage.l wm/keys.l wm/config.l wm/wm.l
+$d/bin/wm: $(wmfiles)
+	@echo AI	$(abspath $@)
+	@install -d $(dir $@)
+	@{ echo '#!/usr/bin/env -S ai -l'; cat $(wmfiles); } > $@
+	@chmod 755 $@
 
 # bao: the interactive shell. Unlike cook/ain, ai/bao.l is DEFINE-ONLY (the
 # launch `(bao 0)` is normally fired by main.c on a tty), so the bin is a tiny

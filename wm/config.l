@@ -30,8 +30,13 @@
    ;   (setWMName "LG3D (XMonad)" rides ewmh-init; the cursor is x-cursor)
    wm-startup (L (L "setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))
 
-   ; the display: Xephyr's socket for the test harness; a real server wants the
-   ;   ~/.Xauthority MIT-MAGIC-COOKIE (wm-auth-for reads it; () on -ac servers)
-   wm-display "/tmp/.X11-unix/X7"
-   (wm-auth-for disp) (xauth-cookie "/home/gwen/.Xauthority" disp)
-   wm-auth ())
+   ; the display: DISPLAY (":0" / ":7.0" -> the unix socket), the cookie from
+   ;   ~/.Xauthority when the server wants one (an -ac Xephyr has no entry -> ())
+   (wm-dispnum u) (: d (getenv "DISPLAY")
+                     (? (< (tally d) 2) "7"                                      ; unset: the Xephyr harness habit
+                        (: b (snip d 1 (tally d))
+                           (: (go i) (? (|| (= i (tally b)) (= (b i) 46)) (snip b 0 i) (go (+ i 1)))
+                              (go 0)))))
+   (wm-auth-for disp) (xauth-cookie (+ (getenv "HOME") "/.Xauthority") disp)
+   wm-display (+ "/tmp/.X11-unix/X" (wm-dispnum ()))
+   wm-auth (wm-auth-for (wm-dispnum ())))
