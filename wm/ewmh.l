@@ -59,7 +59,8 @@
                  "_NET_ACTIVE_WINDOW" "_NET_CURRENT_DESKTOP" "_NET_NUMBER_OF_DESKTOPS" "_NET_WM_DESKTOP"
                  "_NET_WM_STATE" "_NET_WM_STATE_FULLSCREEN" "_NET_WM_STATE_MODAL"
                  "_NET_WM_STRUT" "_NET_WM_STRUT_PARTIAL" "_NET_WM_WINDOW_TYPE"
-                 "_NET_WM_WINDOW_TYPE_DOCK" "_NET_WM_WINDOW_TYPE_DIALOG" "_NET_WM_WINDOW_TYPE_NOTIFICATION")
+                 "_NET_WM_WINDOW_TYPE_DOCK" "_NET_WM_WINDOW_TYPE_DIALOG" "_NET_WM_WINDOW_TYPE_NOTIFICATION"
+                 "WM_CHANGE_STATE")                                              ; ICCCM iconify (minimizeEventHook); interned, NOT advertised as _NET_
    (ewmh-init s root idbase ndesk)
     (: at (tablet 8)
        _ (map (\ nm (pin at nm (x-intern s nm))) ewmh-atoms)
@@ -67,7 +68,8 @@
        _ (pin ewst 'atoms at) _ (pin ewst 'root root) _ (pin ewst 'sup idbase)
        (a nm) (peep at nm 0)
        _ (x-mkwin s idbase root)
-       _ (x-chprop32 s root (a "_NET_SUPPORTED") 4 (map (\ nm (peep at nm 0)) ewmh-atoms))   ; type ATOM(4)
+       _ (x-chprop32 s root (a "_NET_SUPPORTED") 4                                           ; type ATOM(4); only the _NET_ vocabulary
+                     (map (\ nm (peep at nm 0)) (filter (\ nm (= (snip nm 0 5) "_NET_")) ewmh-atoms)))
        _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 (L idbase))                    ; type WINDOW(33)
        _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 (L idbase))
        _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setWMName: the Java hack

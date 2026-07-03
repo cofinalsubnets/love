@@ -235,5 +235,46 @@
    (assert (= (ewmh-cm-win pk) 9) (= (ewmh-cm-type pk) 5)
            (= (ewmh-cm-d0 pk) 2) (= (ewmh-cm-d1 pk) 7) (= (ewmh-cm-d2 pk) 8)))
 
-(say err "wm/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh laws ok
+; --- the config (wm/config.l rung 8): the transliteration's shape ---
+(: sm (nthl wm-layout 2) tf (nthl sm 1) mir (nthl tf 2) ch (nthl mir 2)          ; peel minimize/smart/toggle/mirror down to the |||
+   subs (nthl ch 2) rt (cap subs) dw (caup subs)
+   (assert
+      (= wm-border 3) (= (tally wm-tags) 9) (= (cap wm-tags) 1)
+      (= (cap wm-layout) 'minimize) (= (cap sm) 'smart) (= (cap tf) 'toggle-lay)
+      (= (cap mir) 'mirror) (= (cap ch) 'choice)
+      (= (cap rt) 'rtall) (= (nthl rt 1) 1) (= (nthl rt 2) 0.5)                  ; ResizableTall 1 (2/100) (1/2)
+      (= (cap dw) 'dwindle)
+      (: phi (nthl dw 1) (&& (< 1.61803 phi) (< phi 1.61804)))                   ; fib 32 / fib 31, the golden ratio
+      (= (tally wm-keymap) 70) (lit? wm-manage)
+      (= (cap (cap wm-startup)) "setxkbmap")))
+
+; --- ~/.Xauthority parsing (wm/wire.l rung 8), on mock bytes ---
+(: (be16 n) (+ (+ "" (>> n 8)) (& 255 n))                                        ; big-endian u16 as two appended bytes
+   (fld t) (+ (be16 (tally t)) t)
+   (entry num data) (+ (+ (+ (+ (be16 256) (fld "bee")) (fld num)) (fld "MIT-MAGIC-COOKIE-1")) (fld data))
+   b (+ (entry "0" "aaaabbbbccccdddd") (entry "7" "0123456789abcdef"))
+   (assert
+      (= (xauth-parse b "7") '("MIT-MAGIC-COOKIE-1" "0123456789abcdef"))         ; finds the display's cookie
+      (= (caup (xauth-parse b "0")) "aaaabbbbccccdddd")                          ; ... whichever display
+      (! (xauth-parse b "9"))                                                    ; no entry -> ()
+      (! (xauth-parse "" "0"))))
+
+; --- the rung-8 wire encodings, byte-exact into a jug ---
+(: j (jug 0) _ (x-borderpix j 5 77) b (slurp j)                                  ; CWA CWBorderPixel
+   (assert (= (tally b) 16) (= (b 0) 2) (= (b 4) 5) (= (b 8) 8) (= (b 12) 77)))
+(: j (jug 0) _ (x-cursor j 9 41 42) b (slurp j)                                  ; OpenFont + CreateGlyphCursor + CloseFont + CWA CWCursor
+   (assert (= (tally b) 76)
+           (= (b 0) 45) (= (b 2) 5) (= (b 4) 41) (= (b 12) 99)                   ; OpenFont len 5, fid, "cursor"[0]='c'
+           (= (b 20) 94) (= (b 24) 42) (= (b 36) 68)                             ; CreateGlyphCursor, cid, glyph 68
+           (= (b 52) 46) (= (b 60) 2) (= (b 68) 0) (= (b 69) 64) (= (b 72) 42))) ; CloseFont; CWA mask 0x4000, value cid
+
+; --- minimize's targeted restore (a taskbar activate; wm/layout.l rung 8) ---
+(: z3 (zfrom '(10 20 30)) r (rct 0 0 800 600)
+   M (lay-msg (minimize (resizable-tall 1 0.02 0.5)) (L 'minimize-window 20) z3)
+   (assert
+      (= (tally (cap (lay-tile M r z3))) 2)                                      ; 20 hidden
+      (= (tally (cap (lay-tile (lay-msg M (L 'restore-window 20) z3) r z3))) 3)  ; named restore brings it back
+      (! (lay-msg M (L 'restore-window 30) z3))))                                ; not minimized -> unhandled ()
+
+(say err "wm/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
 ")

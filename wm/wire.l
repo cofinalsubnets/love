@@ -35,11 +35,18 @@
                   (? (= (cap pkt) 1) pkt
                      (: _ (pin evq 0 (cat (peep evq 0 ()) (L pkt))) (x-reply s))))
 
-   ; --- connect + the setup handshake -> the screen record | () ---
+   ; --- connect + the setup handshake -> the screen record | (). auth is ()
+   ;     (an -ac server) or (name data) -- the MIT-MAGIC-COOKIE-1 pair a real
+   ;     server demands; xauth-cookie reads it out of ~/.Xauthority. ---
    (x-connect path) (connectu path)
-   (x-setup s)
-    (: _ (x-w8 s 108) _ (x-w8 s 0) _ (x-w16 s 11) _ (x-w16 s 0)
-       _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 0) _ (x-flush s)
+   (x-wpad s t) (: _ (x-wname s t)                                               ; a string + its 4-byte padding
+                   (: (go i) (? (< i (x-pad4 (tally t))) (: _ (put s 0) (go (+ i 1))) 0) (go 0)))
+   (x-setup s auth)
+    (: an (? auth (tally (cap auth)) 0) ad (? auth (tally (caup auth)) 0)
+       _ (x-w8 s 108) _ (x-w8 s 0) _ (x-w16 s 11) _ (x-w16 s 0)
+       _ (x-w16 s an) _ (x-w16 s ad) _ (x-w16 s 0)
+       _ (? auth (: _ (x-wpad s (cap auth)) (x-wpad s (caup auth))) 0)
+       _ (x-flush s)
        st (x-r8 s)
        (? (! (= st 1)) ()                                                       ; refused
           (: _ (x-r8 s) _ (x-r16 s) _ (x-r16 s)
@@ -52,12 +59,13 @@
              _ (x-skip s 4)
              _ (x-skip s (+ vlen (x-pad4 vlen)))
              _ (x-skip s (* 8 nfmt))
-             root (x-r32 s) _ (x-r32 s) _ (x-r32 s) _ (x-r32 s) _ (x-r32 s)
+             root (x-r32 s) cmap (x-r32 s) _ (x-r32 s) _ (x-r32 s) _ (x-r32 s)
              wpx (x-r16 s) hpx (x-r16 s)
              _ (x-skip s (- (* 4 alen) (+ 32 (+ (+ vlen (x-pad4 vlen)) (+ (* 8 nfmt) 24)))))
-             (L root wpx hpx minkc maxkc idbase))))
+             (L root wpx hpx minkc maxkc idbase cmap))))
    (scr-root sc) (cap sc)  (scr-w sc) (caup sc)  (scr-h sc) (caup (cup sc))
    (scr-mink sc) (nthl sc 3)  (scr-maxk sc) (nthl sc 4)  (scr-idbase sc) (nthl sc 5)
+   (scr-cmap sc) (nthl sc 6)
 
    ; --- requests ---
    (x-cwa-events s win mask)                                                     ; ChangeWindowAttributes: CWEventMask
@@ -122,10 +130,12 @@
    (x-manageable? s win) (: a (x-attrs s win) (&& (= (cap a) 2) (= (caup a) 0))) ; viewable and not override-redirect
 
    ; --- become the WM: SubstructureRedirect|Notify on the root, synced by an
-   ;     intern round-trip. 1 = we hold it, 0 = another WM (Access error). ---
+   ;     intern round-trip. 1 = we hold it, 0 = another WM -- the Access error
+   ;     arrives BEFORE the intern reply, so the demux STASHES it: refusal is
+   ;     an error packet sitting in evq, not a failed intern. ---
    (x-redirect s root)
-    (: _ (x-cwa-events s root 1572864) at (x-intern s "WM_STATE")
-       (? at 1 0))
+    (: _ (x-cwa-events s root 1572864) _ (x-intern s "WM_STATE")
+       (? (any (\ p (= (& 127 (cap p)) 0)) (peep evq 0 ())) 0 1))
 
    ; --- keyboard: GetKeyboardMapping -> a keysym->keycode map; GrabKey ---
    (x-keymap s mink maxk syms)                                                   ; syms = the keysyms we want located
@@ -143,6 +153,42 @@
                               (: _ (x-w8 s 33) _ (x-w8 s 1) _ (x-w16 s 4) _ (x-w32 s root)
                                  _ (x-w16 s mods) _ (x-w8 s kc) _ (x-w8 s 1) _ (x-w8 s 1)
                                  _ (x-w8 s 0) _ (x-w8 s 0) (x-w8 s 0)))
+
+   ; --- AllocNamedColor (85): a color NAME -> a pixel (the config's border colors) ---
+   (x-color s cmap nm)
+    (: n (tally nm)
+       _ (x-w8 s 85) _ (x-w8 s 0) _ (x-w16 s (+ 3 (/ (+ n (x-pad4 n)) 4)))
+       _ (x-w32 s cmap) _ (x-w16 s n) _ (x-w16 s 0) _ (x-wpad s nm) _ (x-flush s)
+       hdr (x-reply s) (u32 hdr 8))
+   (x-borderpix s win px)                                                        ; ChangeWindowAttributes CWBorderPixel
+    (: _ (x-w8 s 2) _ (x-w8 s 0) _ (x-w16 s 4) _ (x-w32 s win) _ (x-w32 s 8) (x-w32 s px))
+
+   ; --- the root cursor (setDefaultCursor xC_left_ptr): OpenFont "cursor" (45),
+   ;     CreateGlyphCursor (94, glyph 68/69, black on white), CWA CWCursor ---
+   (x-cursor s root fid cid)
+    (: _ (x-w8 s 45) _ (x-w8 s 0) _ (x-w16 s 5) _ (x-w32 s fid)
+       _ (x-w16 s 6) _ (x-w16 s 0) _ (x-wpad s "cursor")
+       _ (x-w8 s 94) _ (x-w8 s 0) _ (x-w16 s 8) _ (x-w32 s cid) _ (x-w32 s fid) _ (x-w32 s fid)
+       _ (x-w16 s 68) _ (x-w16 s 69)
+       _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 0)
+       _ (x-w16 s 65535) _ (x-w16 s 65535) _ (x-w16 s 65535)
+       _ (x-w8 s 46) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s fid)                  ; CloseFont: the cursor keeps its glyphs
+       _ (x-w8 s 2) _ (x-w8 s 0) _ (x-w16 s 4) _ (x-w32 s root) _ (x-w32 s 16384) (x-w32 s cid))
+
+   ; --- ~/.Xauthority: big-endian length-prefixed records; find the display's
+   ;     MIT-MAGIC-COOKIE-1 -> (name data), or (). The parser is PURE (bytes in
+   ;     a string); xauth-cookie is the host loader over open/slurp. ---
+   (xauth-parse b disp)
+    (: n (tally b)
+       (fld i) (: ln (| (<< (b i) 8) (b (+ i 1))) e (+ (+ i 2) ln) (L (snip b (+ i 2) e) e))
+       (go i) (? (< (- n i) 10) ()                                               ; too short for another record
+                 (: ad (fld (+ i 2)) nu (fld (caup ad)) nm (fld (caup nu)) da (fld (caup nm))
+                    (? (&& (= (cap nu) disp) (= (cap nm) "MIT-MAGIC-COOKIE-1")) (L (cap nm) (cap da))
+                       (go (caup da)))))
+       (go 0))
+   (xauth-cookie path disp)
+    (: p (open path "r")
+       (? p (: b (slurp p) _ (close p) (xauth-parse b disp)) ()))
 
    ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
    ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,

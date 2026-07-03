@@ -141,6 +141,9 @@
    (mn-msg lay msg z)
     (: mins (nthl lay 1) inner (nthl lay 2)
        (? (&& (two? msg) (= (cap msg) 'minimize-window)) (L 'minimize (link (caup msg) mins) inner)
+          (&& (two? msg) (= (cap msg) 'restore-window))                           ; un-hide a NAMED window (a taskbar activate)
+          (? (any (\ w (= w (caup msg))) mins)
+             (L 'minimize (filter (\ w (! (= w (caup msg)))) mins) inner) ())
           (= msg 'restore) (L 'minimize (? (two? mins) (cup mins) ()) inner)      ; un-hide the most recent
           (: r (lay-msg inner msg z) (? r (L 'minimize mins r) ()))))
 
