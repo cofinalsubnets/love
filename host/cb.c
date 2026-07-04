@@ -41,6 +41,7 @@ static struct cb *scr_ok(ai_word x) {
   if (c->esc > 6) c->esc = 0;
   if (c->pn > 8) c->pn = 8;
   if (c->on > cb_outn) c->on = 0;
+  if (c->un > 3) c->un = 0;
   return c; }
 
 // (screen b rows cols): open a screen over cask b. A non-cask b answers the
@@ -108,6 +109,14 @@ static lvm(lvm_gaze) {
   Sp[1] = out;
   Sp += 1; Ip += 1; return Continue(); }
 
+// (unfold g): a cp437 glyph byte's unicode codepoint, 0 when it has none --
+// the outward half of the utf-8 fold, for a painter re-emitting the grid
+// to a utf-8 terminal (berth caches these per glyph).
+static lvm(lvm_unfold) {
+  intptr_t g_ = (Sp[0] & 1) ? getcharm(Sp[0]) : -1;
+  Sp[0] = (g_ >= 0 && g_ < 256) ? putcharm(cb_unfold((uint8_t) g_)) : ZeroPoint;
+  Ip += 1; return Continue(); }
+
 // Workhorse for (reply scr), called with g Packed and the screen at sp[0].
 // Drains the queue into a stack buffer FIRST (ai_have may move the cask),
 // then builds the byte list tail-first. Returns a not-ok g only on OOM.
@@ -139,9 +148,11 @@ static union u const
   nif_scribe[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_scribe}, {lvm_ret0}},
   nif_glass[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_glass},  {lvm_ret0}},
   nif_gaze[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gaze},   {lvm_ret0}},
-  nif_reply[]  = {{lvm_reply}, {lvm_ret0}};
+  nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
+  nif_unfold[] = {{lvm_unfold}, {lvm_ret0}};
 AI_NIF("screen", nif_screen);
 AI_NIF("scribe", nif_scribe);
 AI_NIF("glass", nif_glass);
 AI_NIF("gaze", nif_gaze);
 AI_NIF("reply", nif_reply);
+AI_NIF("unfold", nif_unfold);

@@ -46,6 +46,7 @@ struct cb {
   uint8_t def_fg, def_bg, spen[3];  // the reset pen; the saved pen (DECSC)
   uint16_t top, bot;  // the scroll region, inclusive rows
   uint8_t out[cb_outn], on;  // the reply queue (DSR/DA answers ride home here)
+  uint32_t ucp; uint8_t un;  // utf-8 in flight: the codepoint, continuations to come
   uint32_t cb[]; };
 
 void
@@ -61,6 +62,7 @@ int
   cb_ungetc(struct cb*, int),
   cb_eof(struct cb*),
   cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
+uint32_t cb_unfold(uint8_t);       // a glyph byte's codepoint (0 = none)
 
 struct font { uint8_t const *glyphs, w, h; };
 extern uint8_t const cga_8x8[256][8], moderndos_8x16[256][16];

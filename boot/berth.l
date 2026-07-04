@@ -66,4 +66,21 @@
  _ (waitfor (cap md))
  (close (cup md)))
 
+; --- the utf-8 round trip, all the way through the painter: a guest says
+; ─ and é; the grid folds them to cp437; full berth (painter and all, on
+; its own pty) says them back OUT as the same utf-8 ---
+(: (find h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
+                  (? (= n (snip h i (+ i (tally n)))) 1 (find h n (+ i 1)))
+                  0)
+ ; (the octal escapes ride through TWO ai readers before sh: hence \\\\)
+ md (mind `("out/host/ai" "-l" "apps/quay/berth.l"
+            "-e" "(berth (L \"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"))"))
+ outb (slurp (cup md))
+ st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
+ _ (assert
+    (two? st)
+    (find outb "x\xe2\x94\x80y" 0)       ; the ─ came back out as utf-8
+    (find outb "\xc3\xa9z" 0))           ; ... and the é
+ (close (cup md)))
+
 (puts "berth: ok")

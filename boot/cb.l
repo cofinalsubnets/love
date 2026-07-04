@@ -287,6 +287,30 @@
     (= 0 (gaze s 4)) (= 2 (gaze s 5))            ; region reopened
     (= 0 (cur s))))
 
+; --- 17b. utf-8 folds onto the cp437 the fonts carry ---
+(: s (mkscr 4 20)
+ _ (scribe s "\xc3\xa9")                          ; é
+ _ (assert (= 130 (chat s 0)))                    ; -> cp437 0x82
+ _ (scribe s "\xe2\x94\x80\xe2\x94\x82\xe2\x94\x8c\xe2\x95\x90\xe2\x95\x94")   ; ─ │ ┌ ═ ╔
+ _ (assert (= 196 (chat s 1)) (= 179 (chat s 2)) (= 218 (chat s 3))
+           (= 205 (chat s 4)) (= 201 (chat s 5)))
+ _ (scribe s "\xe2\x95\xad")                      ; ╭ rounded aliases the ┌
+ _ (assert (= 218 (chat s 6)))
+ _ (scribe s "\xe2\x96\x91\xe2\x96\x88")          ; ░ █
+ _ (assert (= 176 (chat s 7)) (= 219 (chat s 8)))
+ _ (scribe s "\xce\xb1\xe2\x88\x9e\xc2\xb0")      ; α ∞ °
+ _ (assert (= 224 (chat s 9)) (= 236 (chat s 10)) (= 248 (chat s 11)))
+ _ (scribe s "\xf0\x9f\x98\x80")                  ; an emoji: one ■, one cell
+ _ (assert (= 254 (chat s 12)) (= 13 (cur s)))
+ _ (scribe s 226) _ (scribe s 148)                ; a sequence split across feeds
+ _ (scribe s 144)                                 ; ... still one ┐
+ _ (assert (= 191 (chat s 13)))
+ _ (scribe s "\x80")                              ; a stray continuation: the ■
+ _ (assert (= 254 (chat s 14)))
+ _ (scribe s "\xc3\e[Dx")                         ; torn mid-sequence: a ■ lands,
+ _ (assert (= 120 (chat s 15))                    ; the ESC rides on -- CUB steps
+           (= 16 (cur s))))                       ; back and x overwrites the ■
+
 ; --- 18. RIS: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")

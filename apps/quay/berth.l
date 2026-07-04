@@ -27,12 +27,26 @@
              (+ (? (& 4 fa) ";7" "")
               (+ ";38;5;" (+ (show fg) (+ ";48;5;" (+ (show bg) "m")))))))))
 
+ ; glyph bytes go OUT as utf-8: the grid holds cp437 (the fold), the outer
+ ; terminal speaks unicode (the unfold), each face rendered once and cached
+ glyphs #()
+ (utf8 cp) (? (< cp 128) ("" + cp)
+              (< cp 2048) (+ ("" + (| 192 (>> cp 6))) ("" + (| 128 (& 63 cp))))
+              (+ ("" + (| 224 (>> cp 12)))
+                 (+ ("" + (| 128 (& 63 (>> cp 6)))) ("" + (| 128 (& 63 cp))))))
+ (gl b) (: g (peep glyphs b ())
+           (? (string? g) g
+            (: cp (? (&& (<= 32 b) (< b 127)) b (unfold b))
+               s (utf8 (? (&& (charm? cp) (< 0 cp)) cp 63))
+               _ (pin glyphs b s)
+               s)))
+
  ; paint row i cell by cell, threading the pen; a blank cell is a space
  (prow j s c i q p) (? (< q c)
                      (: g (glass s (+ (* i c) q))
                         p2 (>> g 8)
                         _ (? (= p p2) 0 (say j (sgr p2)))
-                        _ (put j (: ch (& 255 g) (? (= 0 ch) 32 ch)))
+                        _ (say j (gl (: ch (& 255 g) (? (= 0 ch) 32 ch))))
                         (prow j s c i (+ q 1) p2))
                      p)
  (prows j s r c i p) (? (< i r)
@@ -90,9 +104,9 @@
  (waitfor pid) (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
 
  ; --- berth: tie argv up. returns the child's status pair, or mind's errno ---
- (berth argv) (: ws (winsize 0)
-                 r (? (two? ws) (cap ws) 24)
-                 c (? (two? ws) (cup ws) 80)
+ (berth argv) (: ws (winsize 0)                  ; a fresh pty says 0x0: fall back
+                 r (? (&& (two? ws) (< 5 (cap ws))) (cap ws) 24)
+                 c (? (&& (two? ws) (< 19 (cup ws))) (cup ws) 80)
                  md (mind argv)
                  (? (! (two? md)) md
                   (: pid (cap md) m (cup md)
