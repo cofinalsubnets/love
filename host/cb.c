@@ -20,7 +20,8 @@
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 #include "ai.h"
-#include <unistd.h>   // write (gush)
+#include <unistd.h>   // write (gush), read (swig)
+#include <fcntl.h>    // O_NONBLOCK (swig)
 #include <errno.h>
 #include "../port/quay/quay.c"
 #include "../port/quay/moderndos_8x16.c"   // the blit's glyphs (host links no font objects)
@@ -231,6 +232,29 @@ static lvm(lvm_gush) {
   Sp[1] = out;
   Sp += 1; Ip += 1; return Continue(); }
 
+// (swig port b): gush's read twin -- drink whatever the fd has waiting into
+// cask b, WITHOUT blocking (the caller parks on `get` for the first byte;
+// swig drains the rest of the gulp). n bytes read; 0 = nothing waiting or
+// eof (the next get tells those apart); a negative charm = -errno / misuse.
+static lvm(lvm_swig) {
+  ai_word p = Sp[0], x = Sp[1];
+  ai_word out = putcharm(-1);
+  if (!(p & 1) && ((union u*) p)->ap == lvm_port_io
+      && !(x & 1) && ((union u*) x)->ap == lvm_buf) {
+    intptr_t fd = getcharm(((struct ai_io*) p)->fd);
+    struct ai_str *s = ((struct ai_buf*) x)->str;
+    if (fd >= 0 && s->len) {
+      int fl = fcntl((int) fd, F_GETFL);
+      fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
+      ssize_t k = read((int) fd, s->bytes, s->len);
+      fcntl((int) fd, F_SETFL, fl);
+      out = k > 0 ? putcharm(k)
+          : k == 0 ? putcharm(0)
+          : (errno == EAGAIN || errno == EWOULDBLOCK) ? putcharm(0)
+          : putcharm(-errno); } }
+  Sp[1] = out;
+  Sp += 1; Ip += 1; return Continue(); }
+
 // (unfold g): a cp437 glyph byte's unicode codepoint, 0 when it has none --
 // the outward half of the utf-8 fold, for a painter re-emitting the grid
 // to a utf-8 terminal (berth caches these per glyph).
@@ -275,7 +299,8 @@ static union u const
   nif_blit[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_blit}, {lvm_ret0}},
   nif_blitrow[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_blitrow}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
-  nif_gush[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gush}, {lvm_ret0}};
+  nif_gush[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gush}, {lvm_ret0}},
+  nif_swig[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}};
 AI_NIF("screen", nif_screen);
 AI_NIF("scribe", nif_scribe);
 AI_NIF("glass", nif_glass);
@@ -286,3 +311,4 @@ AI_NIF("blit", nif_blit);
 AI_NIF("blitrow", nif_blitrow);
 AI_NIF("damage", nif_damage);
 AI_NIF("gush", nif_gush);
+AI_NIF("swig", nif_swig);

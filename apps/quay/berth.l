@@ -66,10 +66,19 @@
  ; --- the moor: pump the master through the screen until the child hangs up.
  ; the screen lives in box bx (a resize swaps it); replies pour straight back;
  ; a dirty box (when given) cues the painter
+ ; park on the first byte, then SWIG the rest of the gulp -- per-byte gets
+ ; cap out near a megabyte a second, and a full-screen guest pours six
  (moor bx m dirty) (: ch (get m)
                     (? (= ch -1) ()
                      (: s (bx -> 0 0)
                         _ (scribe s ch)
+                        b (cask 8192)
+                        _ (: (drain x) (: n (swig m b)
+                                          (? (< 0 n)
+                                             (: _ (scribe s (snip (string b) 0 n))
+                                                (drain ()))
+                                             0))
+                           (drain ()))
                         rep (reply s)
                         _ (? rep (: _ (map (put m) rep) (flush m)) 0)
                         _ (? dirty (pin dirty 0 1) 0)

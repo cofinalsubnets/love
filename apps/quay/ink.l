@@ -49,10 +49,13 @@
                 _ (rows j k 0)
                 (slurp j))
 
-   ; the swim: paint, rest a beat, listen for a cue from shore
+   ; the swim: paint, rest a beat, listen for a cue from shore. the frame
+   ; goes out the bulk lane (say pays a per-byte toll a big window notices)
    (swim tick) (? (cue? 0) ()
-                  (: _ (say out (frame (* tick 0.06)))
+                  (: f (frame (* tick 0.06))
                      _ (flush out)
+                     w (gush out f)
+                     _ (? (charm? w) (: _ (say out f) (flush out)) 0)
                      _ (rest 33)
                      (swim (+ tick 1))))
 
