@@ -59,7 +59,7 @@
     const dec = new TextDecoder();
     function drain() {
       const p = oPtr(), n = oLen();
-      const bytes = M.HEAPU8.subarray(p, p + n);
+      const bytes = M.HEAPU8.slice(p, p + n);  // slice, not subarray: firefox's TextDecoder refuses a resizable-memory view
       const text = dec.decode(bytes);
       oRst();
       return text;

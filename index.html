@@ -39,7 +39,9 @@
   const optr = M.cwrap('ai_out_ptr', 'number', []);
   const olen = M.cwrap('ai_out_len', 'number', []);
   const dec = new TextDecoder();
-  const drain = () => dec.decode(M.HEAPU8.subarray(optr(), optr() + olen()));
+  // slice, not subarray: firefox's TextDecoder refuses a view over the wasm
+  // module's resizable memory; a fresh copy decodes everywhere
+  const drain = () => dec.decode(M.HEAPU8.slice(optr(), optr() + olen()));
 
   if (init() !== 0) { status.textContent = 'the image failed to boot.'; return; }
   // the shell's default help: a condition prints ";; a b" and answers (), so
