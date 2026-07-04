@@ -1,0 +1,115 @@
+; berth -- quay's terminal emulator: where a program ties up.
+;
+; a child rides a pty (mind); its bytes pour through quay's cb screen -- the
+; same VT parser the kernel console runs, hosted in a cask by host/cb.c --
+; and the grid repaints the OUTER terminal as painted cells: tmux for one.
+; keys pour down the other way; DSR/DA answers ride home off the screen's
+; reply queue; the outer size is polled each second-ish and mirrored onto
+; the pty (the kernel raises SIGWINCH on the child for us). a resize opens
+; a fresh grid -- the full-screen guest repaints on its SIGWINCH, which is
+; the one-buffer bargain throughout.
+;
+; run: out/host/ai -l apps/quay/berth.l -e '(berth (L "sh"))'
+;      out/host/ai -l apps/quay/berth.l -e '(berth (L "vim" "README.md"))'
+;
+; host-only (screen/scribe + mind/gather + raw/winsize ride host/*.c), so
+; berth never joins the corpus; the moor core needs no tty and is smoke-
+; tested end to end over a real pty by boot/berth.l.
+
+(:
+ ; --- the painter: one frame of the grid, said into a jug as escape codes ---
+ ; a pen is a cell's high bytes ((>> cell 8): fg, bg, font+faces); one SGR per
+ ; pen CHANGE, respecified from zero each time -- cheap, and never stale
+ (sgr p) (: fg (& 255 p) bg (& 255 (>> p 8)) fa (& 15 (>> p 20))
+          (+ "\e[0"
+           (+ (? (& 1 fa) ";1" "")
+            (+ (? (& 2 fa) ";4" "")
+             (+ (? (& 4 fa) ";7" "")
+              (+ ";38;5;" (+ (show fg) (+ ";48;5;" (+ (show bg) "m")))))))))
+
+ ; paint row i cell by cell, threading the pen; a blank cell is a space
+ (prow j s c i q p) (? (< q c)
+                     (: g (glass s (+ (* i c) q))
+                        p2 (>> g 8)
+                        _ (? (= p p2) 0 (say j (sgr p2)))
+                        _ (put j (: ch (& 255 g) (? (= 0 ch) 32 ch)))
+                        (prow j s c i (+ q 1) p2))
+                     p)
+ (prows j s r c i p) (? (< i r)
+                      (: p2 (prow j s c i 0 p)
+                         _ (? (< (+ i 1) r) (say j "\r\n") 0)
+                         (prows j s r c (+ i 1) p2))
+                      p)
+ (frame s) (: r (gaze s 1) c (gaze s 2) w (gaze s 0) f (gaze s 3)
+              j (jug 0)
+              _ (say j "\e[?25l\e[H")
+              _ (prows j s r c 0 -1)             ; pen -1: the first cell respecs
+              _ (say j (+ "\e[" (+ (show (+ 1 (// w c)))
+                         (+ ";" (+ (show (+ 1 (% w c))) "H")))))
+              _ (? (& 1 f) (say j "\e[?25h") 0)  ; the guest's cursor wish
+              (slurp j))
+
+ ; --- the moor: pump the master through the screen until the child hangs up.
+ ; the screen lives in box bx (a resize swaps it); replies pour straight back;
+ ; a dirty box (when given) cues the painter
+ (moor bx m dirty) (: ch (get m)
+                    (? (= ch -1) ()
+                     (: s (bx -> 0 0)
+                        _ (scribe s ch)
+                        rep (reply s)
+                        _ (? rep (: _ (map (put m) rep) (flush m)) 0)
+                        _ (? dirty (pin dirty 0 1) 0)
+                        (moor bx m dirty))))
+
+ ; --- keys: raw stdin pours onto the master; VEOF follows the user's own eof ---
+ (keys m) (: ch (get in)
+            (? (= ch -1) (: _ (put m 4) (flush m))
+             (: _ (put m ch) _ (flush m) (keys m))))
+
+ ; --- the tide: mirror the outer terminal's size onto the pty. a change
+ ; opens a fresh grid (content is the guest's to repaint on its SIGWINCH)
+ (tide bx m dirty) (: ws (winsize 0)
+                     (? (! (two? ws)) ()
+                      (: r (cap ws) c (cup ws) s (bx -> 0 0)
+                         (? (&& (= r (gaze s 1)) (= c (gaze s 2))) ()
+                          (: _ (bx <- 0 (screen (cask (screen () r c)) r c))
+                             _ (setwinsize m r c)
+                             _ (pin dirty 0 1)
+                             ())))))
+
+ ; --- the swim: repaint on dirt at ~30fps, feel the tide every half second ---
+ (swim bx m dirty tick) (: _ (? (dirty -> 0 0)
+                              (: _ (pin dirty 0 0)
+                                 _ (say out (frame (bx -> 0 0)))
+                                 (flush out))
+                              0)
+                           _ (? (= 0 (% tick 16)) (tide bx m dirty) 0)
+                           _ (rest 33)
+                           (swim bx m dirty (+ tick 1)))
+
+ (waitfor pid) (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
+
+ ; --- berth: tie argv up. returns the child's status pair, or mind's errno ---
+ (berth argv) (: ws (winsize 0)
+                 r (? (two? ws) (cap ws) 24)
+                 c (? (two? ws) (cup ws) 80)
+                 md (mind argv)
+                 (? (! (two? md)) md
+                  (: pid (cap md) m (cup md)
+                     s0 (screen (cask (screen () r c)) r c)
+                     bx #s0                         ; the screen, boxed: a resize swaps it
+                     dirty #1                       ; born dirty: paint frame one
+                     _ (setwinsize m r c)
+                     _ (raw 1)
+                     _ (say out "\e[?1049h\e[2J")
+                     _ (flush out)
+                     up (spin (\ _ (keys m)) 0)
+                     sw (spin (\ _ (swim bx m dirty 1)) 0)
+                     _ (moor bx m dirty)            ; ... until the child hangs up
+                     _ (freeze sw)
+                     _ (? (back? up) (catch up) (freeze up))
+                     _ (say out "\e[0m\e[?25h\e[?1049l")
+                     _ (flush out)
+                     _ (raw 0)
+                     _ (close m)
+                     (waitfor pid)))))
