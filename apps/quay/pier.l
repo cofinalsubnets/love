@@ -44,13 +44,16 @@
      _ (x-w8 s 0) _ (x-w16 s 0) _ (x-w32 s 1) _ (x-w32 s del)
      del)
 
- ; PutImage, chunked: the request length is 16 bits of 4-byte words, so a
- ; frame ships in bands of rows (60 rows of 640px is ~150K, well under)
+ ; PutImage, chunked: the request length is 16 bits of 4-byte WORDS, so a
+ ; band must fit 262112 data bytes NO MATTER THE WIDTH -- a wm retiling us
+ ; to a wide monitor makes rows fat, and one over-long request corrupts the
+ ; whole stream (the server reads pixels as opcodes: garble, then silence)
  (px-putimg s win gc depth fb wpix hpix)
   (: img (string fb)
      rowb (* wpix 4)
+     band (: v (// 262112 rowb) (? (< v 1) 1 (px-min 60 v)))
      (go y) (? (< y hpix)
-               (: n (px-min 60 (- hpix y))
+               (: n (px-min band (- hpix y))
                   bytes (* n rowb)
                   _ (x-w8 s 72) _ (x-w8 s 2) _ (x-w16 s (+ 6 (/ bytes 4)))
                   _ (x-w32 s win) _ (x-w32 s gc)

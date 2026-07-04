@@ -14,7 +14,7 @@
 (reads (open "apps/quay/pier.l" "r"))
 
 (: dpy "/tmp/.X11-unix/X77"
-   xv (mind `("Xvfb" ":77" "-screen" "0" "800x600x24" "-nolisten" "tcp"))
+   xv (mind `("Xvfb" ":77" "-screen" "0" "2560x1200x24" "-nolisten" "tcp"))
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    (waitsock t) (? (< t 1) ()
                   (: p (connectu dpy)
@@ -35,9 +35,10 @@
  (lit-in px) (foldl (\ a b (+ a (? (= 192 b) 1 0))) 0 px)
 
  ; the pier under test, on its own pty with a real child
+ ; the child prints steadily, so a resize's FRESH grid refills on its own
  md (mind `("out/host/ai" "-l" "apps/wm/core.l" "-l" "apps/wm/wire.l" "-l" "apps/quay/berth.l"
             "-l" "apps/quay/pier.l"
-            "-e" "(pier (L \"sh\" \"-c\" \"printf HHHH; sleep 30\") \"/tmp/.X11-unix/X77\" ())"))
+            "-e" "(pier (L \"sh\" \"-c\" \"while true; do printf H; sleep 0.3; done\") \"/tmp/.X11-unix/X77\" ())"))
  _ (assert (two? md))
 
  ; our own eyes: a second connection; poll QueryTree until the window docks
@@ -61,7 +62,17 @@
                 (: n (lit-in (px-getimg s win 0 0 8 16))
                    (? (< 30 n) n (: _ (rest 100) (waitlit (- t 1))))))
  _ (assert (< 30 (waitlit 100)))
- _ (assert (= 0 (lit-in (px-getimg s win 40 0 8 16))))   ; the sixth cell: still sea
+ _ (assert (= 0 (lit-in (px-getimg s win 0 160 8 16))))  ; row ten: still sea
+
+ ; the wm's move: retile us WIDE. fat rows must still ship in legal PutImage
+ ; bands -- one over-long request would corrupt pier's whole stream (the bug
+ ; a real desktop found: prompt painted, then garble and silence)
+ _ (x-configure s win 0 0 2560 1184)
+ _ (x-flush s)
+ (waitlit2 t) (? (< t 1) 0
+                (: n (lit-in (px-getimg s win 0 0 8 16))
+                   (? (< 30 n) n (: _ (rest 100) (waitlit2 (- t 1))))))
+ _ (assert (< 30 (waitlit2 100)))                        ; the wide frame shipped
 
  ; step away: the child dies, the pier follows
  pid (cap md)
