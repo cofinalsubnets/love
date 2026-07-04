@@ -274,7 +274,7 @@ static ai_inline bool formp(word _) { return chainp(_); }
 // kinds that need one. The bytes live in an ordinary ai_str we mutate in place
 // (cf. the `to` output port). Earned by the build tools that back-patch a
 // binary image in place. Recognized by ap, like iop() for ports.
-struct ai_buf { lvm_t *ap; struct ai_str *str; };
+// (struct ai_buf -- the 2-word wrapper -- now lives in ai.h, the buf's public face.)
 static ai_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == lvm_buf; }
 // a TOAST: an opaque executable handle (toasted native code). A hot like a buf, but a
 // DISTINCT ap so it is not bufp -- no peep/pin/blit/tally as data; only `call` runs it.
@@ -3347,6 +3347,7 @@ static ai_inline struct ai*ioput_str(struct ai*g, word _) {
   else if (c == '\n') g = ioputc(g, '\\'), c = 'n';
   else if (c == '\t') g = ioputc(g, '\\'), c = 't';
   else if (c == '\r') g = ioputc(g, '\\'), c = 'r';
+  else if (c == 27)   g = ioputc(g, '\\'), c = 'e';
   else if (c == '\0') g = ioputc(g, '\\'), c = '0';
   else if ((unsigned char) c < 32)
    g = ioputc(ioputc(ioputc(g, '\\'), 'x'), ai_digits[(c >> 4) & 0xf]),
@@ -4094,6 +4095,7 @@ static ai_inline struct ai *ioread1str(struct ai*g) {
     else if (c == 'n') c = '\n';
     else if (c == 't') c = '\t';
     else if (c == 'r') c = '\r';
+    else if (c == 'e') c = 27;                    // \e: ESC, the terminal's own letter
     else if (c == '0') c = '\0';
     else if (c == 'x') {                          // \xHH: two hex digits
      if (!ai_ok(g = zgetc(g))) return g;

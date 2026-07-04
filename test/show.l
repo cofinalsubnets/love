@@ -13,6 +13,8 @@
   (= "\"hi\""         (show "hi"))
   (= "\"a\\nb\""      (show "a\nb"))
   (= "\"a\\tb\""      (show "a\tb"))
+  (= "\"a\\eb\""      (show "a\eb"))   ; \e is ESC, the terminal's own letter
+  (= "\e" "\x1b")                      ; ... and just byte 27
   (= "\"\\\\\""       (show "\\"))
   (= "\"\\\"\""       (show "\""))
 

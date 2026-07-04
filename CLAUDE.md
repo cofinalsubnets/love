@@ -391,7 +391,7 @@ i                    ; ~(0.0 1.0)   i = ~(0 1)
 ; applying it is const-1; intern and string are the bridge for the raw spelling. a string indexes
 ; its bytes ("abc" 0 -> 97); $ of a string is its CHARM SUM (so $ and abs diverge: (abs -5) = 5 but
 ; $-5 = 0). the count is tally. snip takes a half-open snip; + concatenates ("" the identity); string
-; makes text of any value; \n escapes.
+; makes text of any value; \n \t \r \e \0 \xHH escape (\e is ESC, the terminal's letter).
 ; demo:
 ()                   ; ()          the zero point, distinct from 0; (intern "") ; ()  (the +/* unit)
 (intern "asdf")      ; asdf
