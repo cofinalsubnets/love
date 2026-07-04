@@ -485,6 +485,19 @@
              (op-flat-ol (cup b) seen)                       ; disjoint inner lambda -> merge its operands up
              ol))                                             ; else the body stays raw
        (link (cap ol) (op-flat-ol (cup ol) (link (cap ol) seen))))   ; a param: keep + accumulate for the shadow check
+   ; the comma layer -- the loosest grouping, ABOVE infix: a list's datums split
+   ; into clauses at top-level commas, each clause a list of its own ((f) == f
+   ; makes a one-datum clause free), and the whole becomes the `,` sequencing
+   ; macro call: (a, b c) -> (, (a) (b c)) -> (: _ a (b c)). empty clauses drop,
+   ; so a doubled interior comma composes to one, a leading or trailing comma to
+   ; nothing; one clause left means the commas composed away entirely. quote
+   ; interiors stay data (op-core checks quote first); a binder spine splits
+   ; like any list (the comma outranks even `:` -- parenthesize the form).
+   (op-cm? l)   (? (atom? l) 0 (id? (cap l) ',) 1 (op-cm? (cup l)))
+   (op-take l)  (? (atom? l) () (id? (cap l) ',) () (link (cap l) (op-take (cup l))))
+   (op-drop l)  (? (atom? l) () (id? (cap l) ',) (cup l) (op-drop (cup l)))
+   (op-split l) (: c (op-take l) r (? (op-cm? l) (op-split (op-drop l)) ())
+                   (? (two? c) (link c r) r))
    ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
    ; quoted list keeps its operators as plain symbols); the binding forms keep
    ; their binders (op-colon/op-lam); everything else walks. idempotent: factored
@@ -493,6 +506,11 @@
     (? (atom? x) x
        (: h (cap x)
           (? (&& (id? h '\) (atom? (cuup x))) x              ; (\) / (\ x): quote, verbatim
+             (op-cm? (cup x))                                ; the comma layer (helpers above)
+              (: cs (op-split x)
+                 (? (atom? cs) ()                            ; commas alone: nothing
+                    (atom? (cup cs)) (op-core (cap cs))      ; one clause: the commas composed away
+                    (link ', (map op-core cs))))
              (id? h '\) (link '\ (op-lam (op-flat-ol (cup x) ())))   ; (\ a.. body): flatten nested lambdas, then factor the body
              (id? h ':) (link ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run
@@ -540,7 +558,7 @@
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;
 ; if/cond -> the `?` conditional.
 (: seqx (\ l (link ': (foldr (\ l r (link '_ (link l r))) (list (last l)) (init l)))))
-(:: 'do seqx) (:: 'begin seqx) (:: 'progn seqx)
+(:: ', seqx) (:: 'do seqx) (:: 'begin seqx) (:: 'progn seqx)
 (:: 'let (\ a (link ': a)))
 (:: 'if (\ a (link '? a)))
 (:: 'cond (\ a (link '? a)))

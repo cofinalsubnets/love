@@ -460,6 +460,16 @@ $(cask 4)             ; 0       a zeroed cask is nothing
 ; turned inward), * prod (* turned inward, the *-fold: *5 = 5 vacuous like +5, a list/array its product), | abs,
 ; - negate, / reciprocal, % fraction, ? bit (the Iverson bracket); $ ! . ride the same lane ($ is
 ; saturate -- `$` factors to the `saturate` nif, `sat` its short alias). \ never fuses (form space).
+; the COMMA is the loosest layer of all, above infix: the reader delivers `,` as a lone one-char
+; datum (never fused, either side -- a separator has one valence), and op-core splits a list's
+; datums into CLAUSES at top-level commas BEFORE factoring. each clause factors as a list of its
+; own ((f) == f makes a one-datum clause free) and the whole becomes the `,` sequencing macro --
+; (a, b c) -> (, (a) (b c)) -> (: _ a (b c)): effects in source order, the last clause answers, so
+; full phrases sequence WITHOUT per-sequent parens ((f x), (g y) or even f x, g y). empty clauses
+; drop (an interior ,, composes to one comma, a leading or trailing comma to nothing); head
+; position is the macro itself ((, a b), do/begin/progn its word aliases); quote interiors keep
+; the comma a plain symbol. in a FILE the chain needs its outer parens (forms read one at a time,
+; like all infix); a repl line is one expression, so bare `f x, g y` sequences there.
 ; demo:
 1 + 2 * 3            ; 7       infix, right-associative
 $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
@@ -467,6 +477,8 @@ $"ab" + 2            ; 197     a sigil at one binds tightest: (+ ($ "ab") 2)
 <>'(1 2 3)           ; 2       glued runs are MONADIC: (cap (cup x))
 +'(1 2 3)            ; 6       +/ the net, unclamped
 (monadics '<)        ; cap
+(+ 1 2, + 3 4)       ; 7       the comma: clauses in sequence, the last answers
+(1 ,, 3, )           ; 3       empties compose away; (, a b) is the macro spelled out
 
 ; --- macros --- a macro maps an argument list to code; install with `::`. quasiquote is GONE: the `
 ; list ctor evaluates every element, so QUOTE the literal positions instead of unquoting the computed

@@ -3967,6 +3967,9 @@ static struct ai *ioparse(struct ai *g, bool multi) {
    case '`': g = push_wrap(g, "list"); continue;            // `(a b c) -> (list a b c), each evaluated
    case '#': g = push_wrap(g, "hash"); continue;       // (#! comments die in ai_z_getc)
    case '@': g = push_wrap(g, "tuple"); continue;
+   case ',':                                           // the comma: a lone one-char datum, never
+    g = intern(ai_strof(g, ","));                      // fusing either side (a separator has one
+    break;                                             // valence) -- the clause layer, prel op-core
    case ')': case ']': case '}':
     if (nilp(g->sp[0])) return encode(ai_core_of(g), ai_status_eof);   // stray ) / read1
     if (nomp(A(g->sp[0]))) return encode(ai_core_of(g), ai_status_more); // wrap wants its operand

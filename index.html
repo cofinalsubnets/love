@@ -115,8 +115,7 @@
     ch.addEventListener('click', () => { run(ch.dataset.run); cmd.focus(); }));
 })();
 </script>
-<span class="chip" data-run='."hello world\n"'>hello world</span>
-<span class="chip" data-run='(100 (\ n (: f (? (n % 3) "" "fizz") b (? (n % 5) "" "buzz") _ .(? ($f | $b) (f + b) n) _ ."\n" (n + 1))) 1)'>fizzbuzz</span>
+<span class="chip" data-run='."hello world\n", (15 (\ n (: f (? (n % 3) "" "fizz") b (? (n % 5) "" "buzz") (.(? ($f | $b) (f + b) n), ."\n", n + 1))) 1)'>hello world, fizzbuzz</span>
 <span class="chip" data-run=': tri ((map (net * jot * (+ 2))) * jot) (tri 67)'>: tri ((map (net * jot * (+ 2))) * jot) (tri 67)</span>
 <span class="chip" data-run="0 2">0 2</span>
 <span class="chip" data-run="2 3 4">2 3 4</span>
