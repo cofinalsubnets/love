@@ -69,7 +69,7 @@ test_host: $m
 # test/00-init.l assert harness (which exits 1 on the first failure), so the gate
 # checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
 # Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
-hostnif_tests = boot/pty.l boot/net.l boot/wm.l boot/baoedit.l boot/baotest.l boot/init.l boot/cb.l boot/berth.l
+hostnif_tests = boot/pty.l boot/net.l boot/wm.l boot/baoedit.l boot/baotest.l boot/init.l boot/cb.l boot/berth.l boot/manifest.l
 test_hostnif: host
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
