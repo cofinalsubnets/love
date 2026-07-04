@@ -26,7 +26,8 @@
 #include <errno.h>
 #include <signal.h>     // sigprocmask, SIGCHLD/SIGTERM (sigfd)
 #include <fcntl.h>      // open, O_* (openfd, for shell redirects)
-#include <sys/stat.h>   // mkdir
+#include <sys/stat.h>   // mkdir, stat
+#include <dirent.h>     // opendir/readdir/closedir
 #if defined(__linux__)
 #include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo (Linux only)
 #include <sys/mount.h>      // mount(2)
@@ -322,6 +323,85 @@ static lvm(lvm_mount) { Sp[2] = putcharm(ENOSYS); Sp += 2; return Ip++, Continue
 static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); return Ip++, Continue(); }
 #endif
 
+// --- the general POSIX fs surface (the posix_ symbol namespace; doc/posix.md L0,
+// staging step 1) -- these serve any program, not just the supervisor, so their C
+// symbols wear the posix_ prefix; the ai names stay the plain POSIX words.
+// (stat path)    -> (size mtime mode) | () -- absence (or unreadability) is nothing.
+//                   size in bytes, mtime in MILLISECONDS (the (clock t) scale), mode
+//                   the raw st_mode charm: kind reads off the S_IFMT bits in ai
+//                   ((& mode 61440): 32768 file, 16384 dir, 40960 link) and the
+//                   permission bits ride along.
+// (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
+//                   on failure. NO order promised (readdir order, prepended) -- sort in ai.
+// (unlink path)  -> () ok | a POSITIVE errno | EINVAL misuse (the mkdir convention:
+//                   an effect op nets truthy exactly when something went wrong).
+// (lseek fd off whence) -> the new offset | -errno | -1 misuse (the value-op
+//                   convention: negative = failure, like spawn/wait). RAW fds, the
+//                   openfd lane -- NOT ports (a port's read buffer would desync
+//                   under a seek). whence: 0 SET, 1 CUR, 2 END.
+ai_noinline static struct ai *host_posix_stat(struct ai *g) {
+ char p[4096];
+ struct stat st;
+ if (!str_cbuf(g->sp[0], p, sizeof p) || stat(p, &st))
+  return g->sp[0] = ZeroPoint, g;                             // absent -> the real ()
+#if defined(__APPLE__)
+ intptr_t ms = (intptr_t) st.st_mtimespec.tv_sec * 1000 + st.st_mtimespec.tv_nsec / 1000000;
+#else
+ intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000;
+#endif
+ if (!ai_ok(g = ai_have(g, 3 * Width(struct ai_chain)))) return g;
+ struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                putcharm((intptr_t) st.st_mode), ZeroPoint);
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)), putcharm(ms), word(c));
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+               putcharm((intptr_t) st.st_size), word(c));
+ g->sp[0] = word(c);
+ return g; }
+static lvm(lvm_posix_stat) {
+ Pack(g); g = host_posix_stat(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ return Ip++, Continue(); }
+
+ai_noinline static struct ai *host_posix_readdir(struct ai *g) {
+ char p[4096];
+ if (!str_cbuf(g->sp[0], p, sizeof p)) return g->sp[0] = ZeroPoint, g;
+ DIR *d = opendir(p);
+ if (!d) return g->sp[0] = ZeroPoint, g;
+ g->sp[0] = ZeroPoint;                                        // the accumulator, over the path
+ for (struct dirent *e; (e = readdir(d));) {
+  if (e->d_name[0] == '.' && (!e->d_name[1] || (e->d_name[1] == '.' && !e->d_name[2])))
+   continue;                                                  // "." and ".."
+  if (!ai_ok(g = ai_strof(g, e->d_name))) return closedir(d), g;   // pushes: name over acc
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return closedir(d), g;
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 g->sp[0], g->sp[1]);         // (name . acc), slots re-read post-GC
+  g->sp[1] = word(w);
+  g->sp += 1; }                                               // pop the name
+ closedir(d);
+ return g; }
+static lvm(lvm_posix_readdir) {
+ Pack(g); g = host_posix_readdir(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_unlink(ai_word arg) {
+ char p[4096];
+ if (!str_cbuf(arg, p, sizeof p)) return putcharm(EINVAL);
+ return unlink(p) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_unlink) { Sp[0] = host_posix_unlink(Sp[0]); return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_lseek(ai_word fdw, ai_word offw, ai_word whw) {
+ if (!(fdw & 1) || !(offw & 1)) return putcharm(-1);
+ int wh = (whw & 1) ? (int) getcharm(whw) : 0;
+ wh = wh == 1 ? SEEK_CUR : wh == 2 ? SEEK_END : SEEK_SET;
+ off_t r = lseek((int) getcharm(fdw), (off_t) getcharm(offw), wh);
+ return r < 0 ? putcharm(-errno) : putcharm((intptr_t) r); }
+static lvm(lvm_posix_lseek) {
+ Sp[2] = host_posix_lseek(Sp[0], Sp[1], Sp[2]);
+ Sp += 2; return Ip++, Continue(); }
+
 static union u const
   nif_spawn[]   = {{lvm_spawn}, {lvm_ret0}},
   nif_reapany[] = {{lvm_reapany}, {lvm_ret0}},
@@ -336,7 +416,11 @@ static union u const
   nif_shutfd[]  = {{lvm_shutfd}, {lvm_ret0}},
   nif_mkdir[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mkdir}, {lvm_ret0}},
   nif_mount[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mount}, {lvm_ret0}},
-  nif_newns[]   = {{lvm_newns}, {lvm_ret0}};
+  nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
+  nif_posix_stat[]    = {{lvm_posix_stat}, {lvm_ret0}},
+  nif_posix_readdir[] = {{lvm_posix_readdir}, {lvm_ret0}},
+  nif_posix_unlink[]  = {{lvm_posix_unlink}, {lvm_ret0}},
+  nif_posix_lseek[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lseek}, {lvm_ret0}};
 AI_NIF("spawn", nif_spawn);
 AI_NIF("reap",  nif_reapany);
 AI_NIF("sigfd", nif_sigfd);
@@ -351,3 +435,7 @@ AI_NIF("shutfd", nif_shutfd);
 AI_NIF("mkdir", nif_mkdir);
 AI_NIF("mount", nif_mount);
 AI_NIF("newns", nif_newns);
+AI_NIF("stat",    nif_posix_stat);
+AI_NIF("readdir", nif_posix_readdir);
+AI_NIF("unlink",  nif_posix_unlink);
+AI_NIF("lseek",   nif_posix_lseek);

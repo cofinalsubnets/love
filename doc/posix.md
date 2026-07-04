@@ -29,10 +29,13 @@ backends swap underneath.
 ai-the-host-process already calls `read`/`write`/`malloc`. L0 widens that to the
 POSIX surface as nifs, exactly like ain's `connect`/`listen`/`accept`:
 
-> every host nif is `call_X` (an `ai_noinline` syscall worker) + `lvm_X` (the VM
-> tail wrapper) + `nif_X[]` thread + a `{"name", nif_X}` row in `d[]` (main.c). The
-> fd→port path is free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close
-> finalizer, and read/write then come free via getc/putc.
+> every host nif is `host_X` (an `ai_noinline` syscall worker) + `lvm_X` (the VM
+> tail wrapper) + a `nif_X[]` thread registered via `AI_NIF` in a `host/*.c` file
+> (auto-globbed — no ai.c/ai.h/main.c edit; main.c is core). The fd→port path is
+> free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
+> read/write then come free via getc/putc. The general-POSIX nifs wear the
+> `posix_` C-symbol prefix (host/init.c: `lvm_posix_stat` &c); the ai names stay
+> the plain POSIX words.
 
 The payoff: **the ai shell becomes a real shell whose external commands are the
 host's programs.** `(exec "ls" '("-l"))`, a `(pipe)` between two `(fork)`ed children,
@@ -91,8 +94,10 @@ Two mappings are the elegant ones, and both are *already built*:
 
 ## Staging (L0)
 
-1. **fs nifs** — `stat`/`mkdir`/`unlink`/`readdir`/`chdir`/`getcwd` + `lseek`. Smallest,
-   immediately useful (cook wants `stat`). The `open`/read/write/close path exists.
+1. **fs nifs** — DONE: `stat`/`readdir`/`unlink`/`lseek` (the `posix_` lane in
+   host/init.c, gated in boot/init.l) joined `mkdir`/`chdir`/`cwd`; the
+   `open`/read/write/close path predates them. `stat` answers `(size mtime-ms mode)`
+   or `()` for absence; `lseek` rides the raw-fd `openfd` lane (ports buffer).
 2. **process nifs** — `fork`/`exec`/`waitpid`/`_exit`/`pipe`/`dup2`/`kill`. The core of
    "use the host as a shell."
 3. **the shell uses it** — extend the ai shell (#8 cli.l → shell.l, #10) to run external

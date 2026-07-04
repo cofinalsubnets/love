@@ -33,4 +33,33 @@
        (id? (getenv "AI_NO_SUCH_ENV_VAR_XYZZY") ())             ; getenv absent -> the real ()
        !(charm? (getenv "AI_NO_SUCH_ENV_VAR_XYZZY"))))
 
+
+; --- the fs nifs: stat readdir unlink lseek (the posix_ lane in host/init.c) -----
+(: d "out/.fs-nif-probe" f (+ d "/x")
+   _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
+   _ (unlink f)                                     ; a clean slate, tolerated if absent
+   ; write 5 bytes through the port lane, then measure with stat
+   _ (: p (open f "w") _ (say p "hello") _ (flush p) (close p))
+   st (stat f)
+   (assert
+    ; stat: (size mtime mode) -- 5 bytes, an mtime on the (clock t) ms scale, a FILE mode
+    (two? st) (= 5 (cap st))
+    (< 1600000000000 (caup st))                     ; ms, not seconds (a 2020s stamp)
+    (= 32768 (& 61440 (cauup st)))                  ; S_IFMT bits say regular file
+    ; a directory wears the dir bits; a missing path is NOTHING, the real ()
+    (= 16384 (& 61440 (cauup (stat d))))
+    (id? (stat (+ f "-absent")) ()) !(charm? (stat (+ f "-absent")))
+    ; readdir: our one entry, as a string; a missing dir is ()
+    (: l (readdir d) (&& (two? l) (= "x" (cap l)) !(two? (cup l))))
+    (id? (readdir (+ d "-absent")) ())
+    ; lseek rides the raw openfd lane: END is the size, SET returns the offset
+    (: fd (openfd f 0)
+       (&& (= 5 (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
+           (id? (shutfd fd) ())))
+    (< (lseek -1 0 0) 0)                            ; a bad fd is a negative charm
+    ; unlink: () ok, then the file really is gone, and a re-unlink says so (ENOENT, POSITIVE)
+    (id? (unlink f) ())
+    (id? (stat f) ()) (id? (readdir d) ())
+    (: e (unlink f) (&& (charm? e) (< 0 e)))))
+
 (puts "init: ok") (putc 10)
