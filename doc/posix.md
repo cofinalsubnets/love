@@ -112,7 +112,16 @@ Two mappings are the elegant ones, and both are *already built*:
    jobs/fg/bg/&. (The pgrp lesson: a stop signal to an ORPHANED group is discarded,
    so in-shell-pgrp children can never ^Z under a nested session.) Task-level
    `chill`/thaw stays separate — tasks are not processes.
-5. **env + std-stream polish** — `getenv`/`setenv`/`environ`, exit-code conventions (#10).
+5. **env + status polish** — DONE: `(setenv name val)` (a non-string val unsets — the
+   absence lane), `(environ _)` (raw "K=V" strings), and the shell expands `$NAME`/`$?`
+   in unquoted words and inside `".."` (literal in `'..'`; an unset var is the unit and
+   concatenates away, so a bare unset word drops — bash's empty-removal for free). `$?`
+   is the last stage's status, a stop folded to 128+sig; `cd` sets it; `export N=V` and
+   `exit [n]` (over the `nap` nif) round out the builtins. Gated in boot/sh.l.
+
+**L0 staging complete** (2026-07-04). What remains of L0 is widening, not scaffolding:
+`dup2`-as-nif if a program (not the shell) wants it, `rmdir`/`rename` when something
+asks, and the shell's own deferred niceties (glued operator lexing, PATH hashing).
 
 Sockets are already covered by ain; fold them in as the network slice.
 

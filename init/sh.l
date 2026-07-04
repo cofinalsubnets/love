@@ -26,6 +26,11 @@
 ; backgrounds the line, and finished background jobs report at the next prompt
 ; (reap-drain). ^C at the PROMPT abandons the line (edln's -12). gated headless in
 ; boot/sh.l; the pty story (stop/fg/interrupt) probed live under script(1).
+;
+; step 5 (env + status): the tokenizer expands $NAME and $? in unquoted words and
+; inside ".." ('..' stays literal; an unset var is the unit, so its word drops away);
+; $? is the last foreground status (a stop folds to 128+sig); export NAME=VAL rides
+; the setenv nif, exit [n] the nap nif, and cd sets $?. L0's staging is complete.
 
 (: (sh-rev l) (foldl (\ a x (link x a)) () l)
    (sh-nth l i) (? (= i 0) (cap l) (sh-nth (cup l) (- i 1)))
@@ -47,6 +52,31 @@
    ; nested session). the cooked/non-tty lane keeps the legacy in-shell pgrp (-1).
    (sh-pgm _) (? (sh-tty 0) 0 (0 - 1))
    (sh-fgm _) (? (sh-tty 0) 1 0)
+
+   ; --- step 5: $ expansion + $? -- the tokenizer expands $NAME (alnum/_ run) and
+   ; $? in UNQUOTED words and inside "..."; '...' stays literal. an unset var is the
+   ; unit, so it concatenates away, and a bare unset word never starts (bash's
+   ; empty-removal for free). $? is the last foreground status: the last stage's
+   ; exit, a stop folded to 128+sig (the shell convention).
+   sh-status #0
+   (sh-name? b) (? (&& (<= 48 b) (< b 58)) 1
+                   (&& (<= 65 b) (< b 91)) 1
+                   (&& (<= 97 b) (< b 123)) 1
+                   (= b 95))
+   (sh-vname s i n cur)                                ; the $NAME run -> (name . i')
+     (? (= i n) (link cur i)
+        (: b (s i) (? (sh-name? b) (sh-vname s (+ i 1) n (+ cur b)) (link cur i))))
+   (sh-dollar s i n cur started q acc)                 ; just past the $; resume mode q (0 | 34)
+     (? (&& (< i n) (= (s i) 63))
+        (sh-resume s (+ i 1) n (+ cur (show (sh-status 0))) 1 q acc)
+        (: nm (sh-vname s i n "") name (cap nm) i2 (cup nm)
+           (? !(tally name)
+              (sh-resume s i2 n (+ cur "$") 1 q acc)   ; a lone $ is literal
+              (: v (getenv name)
+                 (sh-resume s i2 n (+ cur v) (? started 1 (!! (tally v))) q acc)))))
+   (sh-resume s i n cur started q acc)
+     (? (= q 34) (sh-quoted s i n cur 34 acc)
+        (sh-sc s i n cur started acc))
    (sh-unwords ws) (foldl (\ a w (? (tally a) (+ (+ a " ") w) w)) "" ws)
    (sh-addjob pids state cmd)
      (: n (+ 1 (sh-njob 0)) _ (pin sh-njob 0 n) _ (pin sh-jobs n (L pids state cmd)) n)
@@ -57,6 +87,8 @@
    (sh-waitfg pids cmd)
      (: sts (map (\ p (wait p)) pids)
         _   (? (sh-tty 0) (ttyfg 0) 0)                ; the shell takes the terminal back
+        _   (pin sh-status 0                          ; $?: the last stage; a stop folds to 128+sig
+             (: st (last sts) (? (&& (charm? st) (< 255 st)) (- st 128) st)))
         (? (sh-stopped? sts)
            (: n (sh-addjob pids 'stopped cmd)
               _ (puts (sh-jobline n (sh-jobs n))) 0)
@@ -80,6 +112,12 @@
    (sh-intl s i a) (? (= i (tally s)) a (sh-intl s (+ i 1) (+ (* a 10) (- (s i) 48))))
    (sh-lastjob _) (foldl (\ a k (? (< a k) k a)) 0 (keys sh-jobs))
    (sh-jobn argv) (? (cup argv) (sh-int (caup argv)) (sh-lastjob 0))
+   ; export NAME=VAL -> setenv; a word without '=' is a quiet no-op (we have no
+   ; local-vs-env split to promote from)
+   (sh-eqpos s i) (? (= i (tally s)) () (? (= (s i) 61) i (sh-eqpos s (+ i 1))))
+   (sh-export w)
+     (: p (sh-eqpos w 0)
+        (? (nil? p) 0 (setenv (snip w 0 p) (snip w (+ p 1) (tally w)))))
    (sh-fg n)
      (: j (sh-jobs n)
         (? !j (: _ (puts "fg: no such job\n") 0)
@@ -113,10 +151,12 @@
            (? (sh-ws? b) (sh-sc s (+ i 1) n "" 0 (? started (link cur acc) acc))
               (= b 34)   (sh-quoted s (+ i 1) n cur 34 acc)        ; "
               (= b 39)   (sh-quoted s (+ i 1) n cur 39 acc)        ; '
+              (= b 36)   (sh-dollar s (+ i 1) n cur started 0 acc) ; $ expands
               (sh-sc s (+ i 1) n (+ cur b) 1 acc))))
    (sh-quoted s i n cur q acc)                                     ; literal until the matching quote
      (? (= i n) (sh-rev (link cur acc))
         (: b (s i) (? (= b q) (sh-sc s (+ i 1) n cur 1 acc)
+                      (&& (= b 36) (= q 34)) (sh-dollar s (+ i 1) n cur 1 34 acc)   ; $ expands in "..", not '..
                       (sh-quoted s (+ i 1) n (+ cur b) q acc))))
 
    ; --- parse: split words on "|" into stages; pull < > >> + their files from each.
@@ -161,8 +201,10 @@
      (: rd (sh-redirs stage) argv (sh-nth rd 0) inf (sh-nth rd 1) outf (sh-nth rd 2) app (sh-nth rd 3)
         (? !argv 0
            (: cmd (cap argv)
-              (? (= cmd "exit") 'done
-                 (= cmd "cd")   (: _ (chdir (? (cup argv) (caup argv) (getenv "HOME"))) 0)
+              (? (= cmd "exit") (? (cup argv) (nap (sh-int (caup argv))) 'done)
+                 (= cmd "cd")   (: r (chdir (? (cup argv) (caup argv) (getenv "HOME")))
+                                   _ (pin sh-status 0 (? (nil? r) 0 1)) 0)
+                 (= cmd "export") (: _ (each (cup argv) sh-export) 0)
                  (= cmd "pwd")  (: _ (puts (+ (cwd 0) "\n")) 0)
                  (= cmd "jobs") (: _ (each (sort (keys sh-jobs))
                                            (\ n (puts (sh-jobline n (sh-jobs n))))) 0)

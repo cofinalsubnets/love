@@ -22,6 +22,7 @@
 #include "proc.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid
 #include <stdio.h>      // fflush
+#include <stdlib.h>     // setenv/unsetenv (the env nifs)
 #include <string.h>     // memcpy
 #include <errno.h>
 #include <signal.h>     // sigprocmask, SIGCHLD/SIGTERM (sigfd)
@@ -452,6 +453,37 @@ ai_noinline static ai_word host_posix_unlink(ai_word arg) {
  return unlink(p) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_unlink) { Sp[0] = host_posix_unlink(Sp[0]); return Ip++, Continue(); }
 
+// (setenv name val) -> () | positive errno | EINVAL misuse; a NON-STRING val UNSETS
+// (the absence lane: (setenv n ()) clears n from the environment).
+// (environ _)       -> the environment as a list of "NAME=value" strings (the raw
+//                      POSIX shape -- split at the first '=' in ai; no order promised).
+ai_noinline static ai_word host_posix_setenv(ai_word nw, ai_word vw) {
+ char n[1024], v[4096];
+ if (!str_cbuf(nw, n, sizeof n)) return putcharm(EINVAL);
+ if (!ai_strp(vw)) return unsetenv(n) ? putcharm(errno) : ZeroPoint;
+ if (!str_cbuf(vw, v, sizeof v)) return putcharm(EINVAL);
+ return setenv(n, v, 1) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_setenv) {
+ Sp[1] = host_posix_setenv(Sp[0], Sp[1]);
+ Sp += 1; return Ip++, Continue(); }
+
+extern char **environ;
+ai_noinline static struct ai *host_posix_environ(struct ai *g) {
+ g->sp[0] = ZeroPoint;                                        // the accumulator, over the dummy arg
+ for (char **e = environ; e && *e; e++) {
+  if (!ai_ok(g = ai_strof(g, *e))) return g;                  // pushes: entry over acc
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 g->sp[0], g->sp[1]);
+  g->sp[1] = word(w);
+  g->sp += 1; }
+ return g; }
+static lvm(lvm_posix_environ) {
+ Pack(g); g = host_posix_environ(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ return Ip++, Continue(); }
+
 ai_noinline static ai_word host_posix_lseek(ai_word fdw, ai_word offw, ai_word whw) {
  if (!(fdw & 1) || !(offw & 1)) return putcharm(-1);
  int wh = (whw & 1) ? (int) getcharm(whw) : 0;
@@ -482,7 +514,9 @@ static union u const
   nif_posix_unlink[]  = {{lvm_posix_unlink}, {lvm_ret0}},
   nif_posix_lseek[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lseek}, {lvm_ret0}},
   nif_posix_signal[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_signal}, {lvm_ret0}},
-  nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}};
+  nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
+  nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
+  nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
 AI_NIF("spawn", nif_spawn);
 AI_NIF("reap",  nif_reapany);
 AI_NIF("sigfd", nif_sigfd);
@@ -503,3 +537,5 @@ AI_NIF("unlink",  nif_posix_unlink);
 AI_NIF("lseek",   nif_posix_lseek);
 AI_NIF("signal",  nif_posix_signal);
 AI_NIF("ttyfg",   nif_posix_ttyfg);
+AI_NIF("setenv",  nif_posix_setenv);
+AI_NIF("environ", nif_posix_environ);
