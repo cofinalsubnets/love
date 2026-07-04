@@ -126,6 +126,7 @@
 
 <hr>
 
+<h2 id="intro"><a href="#intro">ai intro</a></h2>
 <p>ai is a dynamically typed lisp superset with curried evaluation, fast generics,
 and optional infix/prefix notation. other facts include</p>
 <ul>
@@ -142,13 +143,8 @@ and optional infix/prefix notation. other facts include</p>
 </ul>
 
 <hr>
-
-<p class="toc"><a href="https://github.com/cofinalsubnets/ai">README</a> &nbsp;&middot;&nbsp; <a href="#vocabulary">vocabulary</a> &nbsp;&middot;&nbsp; <a href="test/spec.l"><code>test/spec.l</code></a> &nbsp;&middot;&nbsp; <a href="proof/rocq/spec.v"><code>proof/rocq/spec.v</code></a></p>
-
-<hr>
-<h2 id="vocabulary"><a href="#vocabulary">vocabulary</a></h2>
-<p>ai makes up many new names to some things, sorry not sorry :)
-any overlap with outside terminology or definitions is coincidental.
+<h2 id="vocabulary"><a href="#vocabulary">vocabulary note</a></h2>
+<p>ai uses its own names for many things. any overlap with outside terminology or definitions is coincidental.
 </p>
 <ul>
   <li>numerics are called constellations and astronomy/mineralogy-themed</li>
@@ -159,6 +155,8 @@ any overlap with outside terminology or definitions is coincidental.
   <li>every value has a color (this is a new concept, not just a new name)</li>
 </ul>
 
+<hr>
+<h2 id="glossary"><a href="#glossary">glossary</a></h2>
 <dl class="glossary">
   <dt id="g-application">🍛 application</dt>
     <dd>see: <a href="#g-roll">roll</a></dd>
@@ -192,10 +190,7 @@ any overlap with outside terminology or definitions is coincidental.
     <dd>the runtime-reflective partial order over all values that guides generic dispatch</dd>
   <dt id="g-mint">🍬 mint</dt>
     <dd>a traditional lisp gensym. nets zero and algebraically neutral.</dd>
-  <dt id="g-name">🪪 name</dt>
-    <dd>a traditional lisp symbol. considered a newtype over (string * mint). inherits algebra from strings.</dd>
-  <dt id="g-net">🥅 net (<code>+</code>)</dt>
-    <dd>a value's content measure, a complex number; truth is its sign. a list nets its spine, text its charms.</dd>
+  <dt id="g-name">🪪 name</dt> <dd>a traditional lisp symbol. considered a newtype over (string * mint). inherits algebra from strings.</dd> <dt id="g-net">🥅 net (<code>+</code>)</dt> <dd>a value's content measure, a complex number; truth is its sign. a list nets its spine, text its charms.</dd>
   <dt id="g-nil"><span class="hi gray">🈚 nil</span></dt>
     <dd>the designated serial zero <a href="#g-mint">mint</a>, acting as a global <span class="hi gray">empty</span> element <code>()</code>. algebraically neutral. conceptually the lowest inhabited point of the <a href="#g-lattice">lattice</a></dd>
   <dt id="g-red">🔴 red</dt>
@@ -243,14 +238,18 @@ any overlap with outside terminology or definitions is coincidental.
   <dt>🐐 mow ◦ the grass chewer (garbage collector)</dt>
     <dd>goat. formerly gregarious, now solitary. two-gen two-space copying</dd>
   <dt>🕷️ holo ◦ the assembler</dt>
-    <dd>cave spider. short for holophrasm. currently amd64/arm64 only</dd>
+    <dd>cave spider. short for holophrasm. currently amd64/arm64</dd>
   <dt>🦇 tom ◦ the SAT engine</dt>
     <dd>cave bat friend of holo. they often discuss their inner lives</dd>
   <dt>🦐 phos ◦ the window manager</dt>
     <dd>mantis shrimp. frequents a brine pool in holo's cave. xmonad clone</dd>
-  <dt>🦑 quay ◦ the terminal driver</dt>
-    <dd>cuttlefish. 256 color skin.</dd>
+  <dt>🦑 quay ◦ the terminal emulator</dt>
+    <dd>cuttlefish. 256 color skin. likes writing screensavers</dd>
 </dl>
+<hr>
+
+<p class="toc"><a href="https://github.com/cofinalsubnets/ai">README</a> &nbsp;&middot;&nbsp; <a href="test/spec.l"><code>test/spec.l</code></a> &nbsp;&middot;&nbsp; <a href="proof/rocq/spec.v"><code>proof/rocq/spec.v</code></a></p>
+
 <footer>for ()
   <span class="note">&middot; set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V TWN16 + re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
 </footer>
