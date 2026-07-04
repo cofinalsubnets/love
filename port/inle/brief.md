@@ -15,9 +15,10 @@ a lisp-surfaced, fully-curried language over a tiny generic C core: a portable
 runtime (`ai.c` + `ai.h`) plus a self-hosting compiler written in ai itself (the
 `ai/{prel,ev,bao}.l` layers). every value is a total one-argument function;
 integers are church numerals; `+`/`*` are generic; truth is the sign of a
-value's `net`. the narrative spec is `CLAUDE.md` -- read it: `(look "CLAUDE.md")`.
-the executable spec is `test/spec.l` (every claim assert-backed, green on every
-target). settle any doubt by probing the binary, never by trusting a prior.
+value's `net`. the spec is `test/spec.l` -- the reference and the test in one, each law
+stated in its section comment and assert-backed below it, green on every
+target: `(look "test/spec.l")`. the narrative -- how to work, the traps -- is
+`CLAUDE.md`. settle any doubt by probing the binary, never by trusting a prior.
 
 ## the prime law
 

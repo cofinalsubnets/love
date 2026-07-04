@@ -1,9 +1,10 @@
-; ai spec -- the executable semantic spec: every claim assert-backed, on every target.
-; the prose narrative, working notes, and runnable demonstrations live in CLAUDE.md; this
-; is the TEST half. it runs in the corpus SECOND (common.mk, right after test/00-init.l sets
-; up the assert harness), so keep it green -- `make test` (host + ai0, which must print the
-; zz-fin summary twice). when in doubt, PROBE THE BINARY: never trust a prior over a one-line
-; experiment. the section order and headers mirror CLAUDE.md, where each law is explained.
+; ai spec -- the executable semantic spec AND the language reference: each section states its
+; laws in the comment and proves them in the asserts below, on every target. the workflow
+; narrative -- how to work here, the traps, the vocabulary, the architecture -- lives in
+; CLAUDE.md; deeper rationale in doc/ (doc/measures.md the net/tally design). it runs in the
+; corpus SECOND (common.mk, right after test/00-init.l sets up the assert harness), so keep it
+; green -- `make test` (host + ai0, which must print the zz-fin summary twice). when in doubt,
+; PROBE THE BINARY: never trust a prior over a one-line experiment.
 
 ; --- everything is a function --- (f x y) == ((f x) y), (f) == f; numbers are church
 ; numerals; data self-applies. asserts read INFIX, folding right-associatively (sound by (f) == f).
@@ -30,8 +31,12 @@
  (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
-; numbers their value, text its charm sum, lists the sum of element nets). `!` (nil?) reads
+; numbers their value, text its charm sum, lists the sum of element nets, SPINE only). `!` (nil?) reads
 ; the net's sign in the total order; `$` (sat) is one saturating clamp, max(0, ceil); !x == (0 = $x).
+; `$` is the SOLE clamp (a clamped fold is mere composition); the COUNT -- how many, not how much --
+; is `tally` (text/cask charms, list spine, array cells, map keys: what "length" always was, $ never
+; was). every value wears a COLOR by its net-sign: GREEN nonnegative (what $ keeps), RED negative,
+; BLUE the zero floor -- true iff POSITIVE green. the two-measure design: doc/measures.md.
 (assert
  !0 !"" !(tablet 0) !@0 !() !0.0 !~(0 0)         ; zero / empty -> false
  !-5 !-3.9 !~(-3 4) !~(0 -1)                     ; <= 0 in the total order -> false (complex by re then im)
@@ -46,17 +51,17 @@
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
  (star? 5) (star? -3.5) (star? ~(2 3)) (star? (62 2))         ; a STAR is a self-netting SCALAR: charm, float, complex, wide
- !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a SET is NOT a star -- it nets DOWN to a scalar star (net is a fresh sum)
+ !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a TRAY is NOT a star -- it nets DOWN to a scalar star (net is a fresh sum)
  !(star? "x") !(star? 'a) !(star? '(1 2))                    ; text/symbol/list are not stars -- they net to something else
  (? (charm? 5) (star? 5) 1)                                  ; a CHARM is a star, by spec (net = self)
  (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (star? 5) 1)   ; a CHARM (charm?) is the word-sized star: a fixnum, and every charm is a star
- (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a SET is an array of ANY element kind (numbers or objects)
- (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a GALAXY is a NUMERIC set (a set of stars); a set of strings is not
- (galaxy? (array '(2) (200 2) (200 2)))                    ; a set of BIGS is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
- !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a set
+ (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
+ (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a GALAXY is a NUMERIC tray (a tray of stars); a tray of strings is not
+ (galaxy? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
+ !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a tray
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: charm? big? full? gem? twin? set? string? nom? name? two? book?;
+; --- types & predicates --- storage: charm? big? full? gem? twin? tray? string? nom? name? two? book?;
 ; derived constellation? whole? atom?; lit? = a top-region reference (map/fn/hot, ai_kind>=KMap); hot? the opaque cask/port subset.
 (assert
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (book? #(1 2))
@@ -82,8 +87,14 @@
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
-; --- order & equality --- < <= > >= total over all values (across kinds by the lattice,
-; within by value/lex order); `=` bridges the numeric tower; `id?` is identity; `!=` is gone.
+; --- order & equality --- < <= > >= total over all values, the TRUE-BLUE bands: POINTS at the
+; floor (() < bare mints < named noms -- mints by serial, names by name-lex then serial), then
+; string, then ALL constellations as ONE band ordered by net (stars and galaxies INTERLEAVE, a
+; star below a galaxy on a tie), then tray (object array) < chain < map < top, each band ordered
+; within itself (text/chains lexicographically, maps and lambdas by an alpha-invariant hash).
+; the tier spine inside the number band: N green charms < Z < R < C, nesting as usual. an array
+; operand BROADCASTS < to a mask, so the scalar order is observed through sort and map keys.
+; `=` bridges the numeric tower; `id?` is identity; for "not equal" write !(a = b).
 (assert
  (3 = 3.0) !(3 = 4) (1 < 1.5) (3.0 >= 3) (id? 'a 'a) !(id? '(1) '(1))
  ('x < "a") ("a" < 1) (1 < '(0)) !(1 < "a")          ; true-blue order: mint < string < number < chain
@@ -154,7 +165,9 @@
  (~(1 2) = ~(1 2) - ()) ("@(1 2 3)" = show (@(1 2 3) - ()))            ; complex + array pass through
  (2 = (5 - ()) - 3) (5 = ((- 5) ()))                    ; chains heal; a partial fired with the unit yields its held operand
  !('ef - 3) !("a" - "b") (5 = ('a - 'b) - 5)            ; undefined still answers (): it now vanishes through - too
- !(5 = ()) (() < 5))                                    ; = and < stay strict: () keeps the floor the semiring product whose `+` is cat: each
+ !(5 = ()) (() < 5))                                    ; = and < stay strict: () keeps the floor
+
+; --- list*list is the cartesian product --- the semiring product whose `+` is cat: each
 ; pair a proper 2-list (ai bj), so `tally` is the homomorphism (tally(a*b)=ta*tb). infix `*`
 ; is right-associative, so a*b*c nests right. RIGHT-distributivity ((a+b)*c=a*c+b*c) holds on
 ; the nose (the outer loop ranges the LEFT operand); LEFT-distributivity holds only up to a
@@ -172,9 +185,12 @@
  (('(1 2) * ()) = '(1 2)) (() * '(3 4) = '(3 4))                ; () is the * UNIT (identity), not the annihilator
  !("ab" * '(1 2)) !('(1 2) * "ab"))                            ; only chain*chain -- string*chain stays nil
 
-; --- numeric functions --- abs int (type-aware); constants e pi i; gcd modpow; the only
-; transcendental nifs are power sine cosine log; power/sqrt/exp/nth-root/tan/atan derived from
-; numerals + complex (sqrt is total: ((/ 1 2) -1) = i).
+; --- numeric functions --- abs int (type-aware); constants e pi i; gcd modpow; the irreducible
+; transcendental nifs are sine cosine log (bignums widen, arrays map elementwise; log climbs
+; tiers -- a negative/complex gives the principal value). everything else is DERIVED, no nif --
+; power IS application: (k b) = b**k, sqrt ((/ 1 2) x), exp (x e), nth root ((/ 1 n) x), tan
+; sine/cosine, atan (arg ~(1 x)), atan2 (arg ~(x y)); a negative base to a non-integer power
+; goes principal (the angle pi*e factored exactly), so the derived sqrt is total: ((/ 1 2) -1) = i.
 (assert
  (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs ~(3 4))) (2 = (int 2.9))
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
@@ -210,7 +226,10 @@
  (8 = $(array 2 ~(3 4) ~(-3 4))) (8 = $`(~(3 4) ~(-3 4))))
 
 ; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
-; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. + - * // < = broadcast numpy-style;
+; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. a ONE-CELL array DEMOTES to its lone
+; scalar (@(5) = 5, (iota 1) = 0): an array exists only at tally >= 2, there is NO rank-0 kind
+; (rank/tally/shape read nil on a scalar); EMPTIES stay arrays, carrying the reduction units.
+; + - * // < = broadcast numpy-style (`/` promotes the whole result to r on one inexact cell);
 ; reduce net/prod/max/min/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
 (assert
  (6 = (tally (star-tray '(2 3) 0))) (2 = (rank (star-tray '(2 3) 0))) ('(2 3) = (shape (star-tray '(2 3) 0)))
@@ -272,7 +291,10 @@
 
 ; --- hashes --- #(k v ..)/(hash ..) build, (tablet 0) the empty hash; #() = the EMPTY
 ; MAP (the reader emits (tablet 0); () is the zero-point, distinct from 0); #x boxes a datum;
-; accessors collection-first peep/pin/pull; (t k) == (peep t k 0); `missing` the conditioned read.
+; accessors collection-first peep/pin/pull (peep and pull share the default-if-absent; only pull
+; mutates the key away). THREE ABSENCE LANES, one miss machinery: peep (the caller names absence),
+; apply ((t k) == (peep t k ()) -- a map is a lookup function, absence the zero point), and
+; (missing t k) -- a present k answers, a miss is the missing condition (k the payload).
 (assert
  (: b #0 (&& (book? b) (1 = $b) (0 = (peep b 0 9)) (: _ (pin b 0 7) (7 = (b 0)))))
  (book? #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
@@ -305,9 +327,26 @@
  (: b (cask 1) _ (pin b 0 257) (1 = (peep b 0 0))) (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (68 = (peep b 3 0)))
  !((cask 2) = (cask 2)))
 
-; --- reader operators --- structural, environment-free reading; sigils factored at COMPILE
-; time by opfix against the `operators` table. the VALENCE LAW: glued is monadic, spaced is
-; dyadic; head position never fuses. the FACTORIZATION/CURRY laws (see CLAUDE.md) govern the rest.
+; --- reader operators --- reading is STRUCTURAL and environment-free: the reader knows tokens,
+; parens, strings, and the value surface (' quote = one-operand \, ` list, # hash, @ tup, ~ twin)
+; -- NO operator tables, so the same reader serves data and code. the LEXER LAW splits by leading
+; char: a name token (alnum/_) keeps - ? ! and the prime inside (kebab law; a LEADING ' is still
+; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
+; when spaced, fused to its datum as (mono (run datum)) when GLUED mid-list. code then factors
+; sigils at COMPILE time via `opfix` against the ONE `operators` table (symbol -> arity, or
+; (name . arity) an alias; extended with a plain pin, live for the next form). the FACTORIZATION
+; LAW: greedy longest-prefix, no backtracking; every factor but the last is arity ONE; the last
+; takes the positional valence -- with a left operand it captures it, nesting RIGHT-associatively;
+; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work, and a token that doesn't
+; factor stays atomic (&& >>= :- ?-). a sigil at one binds TIGHTEST; the CURRY LAW folds operands
+; missing at the end of a list to the partial application. the VALENCE LAW: glued is monadic,
+; spaced is dyadic; HEAD POSITION and \ never fuse; + and - fuse only to ( ' " @ ~ # (-3 a number,
+; -x a name, -(f x) negate). the monadic words: < cap, > cup (<< >> <> >< the compounds), + net,
+; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, . dot. the COMMA is the
+; loosest layer, above infix: a lone one-char datum (never fused), the list split into CLAUSES at
+; top-level commas BEFORE factoring, the whole the `,` sequencing macro (do its word alias) --
+; effects in source order, the last clause answers, empty clauses drop; in a FILE the chain needs
+; its outer parens, a repl line is one expression. in anger: test/operator.l, test/infixop.l.
 (assert
  ('(1 (\ x) 3) = `(1 ''x 3)) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
@@ -324,6 +363,7 @@
  (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; head position never fuses: call and section
  ('(mono (< x)) = (caup (sound (tap '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
  ('cap = (monadics '<)) ('net = (monadics '+))
+ (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
  (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5)))
  (: t operators
@@ -331,7 +371,9 @@
         ((link 'saturate 1) = (t '$)) ((link 'nil? 1) = (t '!))
         ((link 'pin 3) = (t '<-)) ((link 'peep 3) = (t '->)))))
 
-; --- macros --- a macro maps an arg list to code; install with `::`. the prel ships
+; --- macros --- a macro maps an arg list to code; install with `::`. quasiquote is GONE: the
+; ` list ctor EVALUATES every element, so QUOTE the literal positions instead of unquoting the
+; computed ones -- the convention inverts (numbers self-eval, so bare). the prel ships
 ; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, :- and ?-, >>= <=<.
 (:: 'unless (\ a `('? (cap a) 0 (caup a))))
 (assert
@@ -339,9 +381,18 @@
  (2 = (|| 0 2 3)) ('(1 2 3) = `(1 2 3)) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4)))
 
-; --- control --- ev compiles+runs; call-cc a one-shot escape; tasks hatch/wait/yield/sleep/done?;
-; the RNG is xoshiro256++; a global `help` takes every raise (scare/more bits); a missing name
-; raises (scare 'missing nom); numeral counts are CAPPED by the `apcap` box.
+; --- control --- ev compiles+runs; call-cc a one-shot escape; tasks spin/catch/rest/freeze/
+; back?/cue? ((spin f x) forks to an id, (catch p) blocks for the result, (rest 0) yields --
+; always catch an orphan). the RNG is xoshiro256++, two layers: FUNCTIONAL seed/random
+; (explicit-state, reproducible) and GLOBAL rand/randf (a hidden clock-seeded stream; (rng-set
+; (seed n)) pins it). a global `help` takes every raise as (help s a b) -- s the status word,
+; scare (1) and more (2) bits; `welp` is the FLOOR HANDLER: keeps the read protocol, answers the
+; zero point on a bare scare (the shell's default help is welp with a face). a missing name
+; raises (scare 'missing nom) -- ONE LAW AT EVERY DEPTH: a `:` binding read before its pin,
+; (missing t k) on a tablet miss, all the same condition; a closure captures its free globals at
+; CREATION, so a lambda's missing read fires at the define, not the call. numeral counts are
+; CAPPED by the `apcap` box ((pin apcap 0 n) retunes). in anger: test/help.l, test/missing.l,
+; test/apcap.l.
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (spin (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
@@ -354,9 +405,13 @@
 (assert (id? (:) not-in-the-book) !not-in-the-book)   ; a nom not in the book
 (: help 0)
 
-; --- i/o & ports --- in/out are the default ports; getc + putc/puts/putn/putx, per-port
-; get/put/.../read, open/close/sip/pad/slurp; `read` is port-first, one datum per call;
-; `dot` (the `.` operator, .x) prints x to out and returns it.
+; --- i/o & ports --- in/out/err are the default ports; getc + putc/puts/putn/putx, per-port
+; get/put/... , open/close/pad. the vessels: (tap cl) an input SOURCE over a colist, (jug 0) an
+; output PORT with a growable buffer that pours both ways (a PORT, not a cask -- a cask is the
+; mutable byte ARRAY); (sip o) draws ONE unit, (slurp o) drains ALL to a value. the datum reader
+; is `sound`, and the whole read protocol IS its return value: the datum, the PORT back on an
+; unfinished shape, or the eof sentinel -- no help needed. `read` rides it (ONE form, EVALED);
+; `reads` drinks a port form by form; `dot` (the `.` operator, .x) prints x to out and returns it.
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
  (1 = (sound (tap '(49)) 99)) ('eof = (sound (tap 0) 'eof)) (: p (tap '(40)) (p = (sound p 99))))

@@ -87,9 +87,10 @@ that last is the triangular numbers, point-free: `jot` lays out `0 .. n-1`,
 `sat` sums each prefix to its charm, and `flip compose` feeds the one into the
 other (the nth is the net of `0 .. n-1`, so it opens on the floor twice).
 
-the full spec is [CLAUDE.md](CLAUDE.md) -- the prose narrative with runnable
-demonstrations. the executable spec is [test/spec.l](test/spec.l), a real test
-in the corpus, so every claim stays green.
+the spec is [test/spec.l](test/spec.l) -- the reference and the test in one,
+each section stating its laws in a comment over the asserts that prove them, a
+real test in the corpus, so every claim stays green. the narrative -- how to
+work here, the traps, the architecture -- is [CLAUDE.md](CLAUDE.md).
 
 
 ### hello world

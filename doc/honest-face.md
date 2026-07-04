@@ -27,4 +27,4 @@ double-prelude load raised a bare *data* scare, handing the face two mute number
 a word. The form is honest; the payload is silent. A self-load guard could raise a legible
 condition ("prelude already loaded") so the honest face has something to say.)
 
-Relates: [[faces]] (the hourglass / one core), the zero point + `welp` in CLAUDE.md's control section.
+Relates: [[faces]] (the hourglass / one core), the zero point + `welp` in test/spec.l's control section.
