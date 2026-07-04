@@ -266,6 +266,22 @@
  _ (scribe s "\e[5n")
  _ (assert (= (L 27 91 48 110) (reply s))))      ; "\e[0n": all well
 
+; --- 15b. the asks a line editor waits on: colour queries, secondary DA ---
+; (silence here cost a real second of buffered keystrokes at zsh startup)
+(: s (mkscr 4 20)
+ _ (scribe s "\e]11;?\x07")
+ _ (assert (= (L 27 93 49 49 59 114 103 98 58 48 48 48 48 47 48 48 48 48 47 48 48 48 48 7)
+              (reply s)))                        ; bg: rgb:0000/0000/0000, BEL-terminated
+ _ (scribe s "\e]10;?\e\\")                      ; ST-terminated ask, same answer lane
+ _ (assert (= (L 27 93 49 48 59 114 103 98 58 99 48 99 48 47 99 48 99 48 47 99 48 99 48 7)
+              (reply s)))                        ; fg: rgb:c0c0/c0c0/c0c0
+ _ (scribe s "\e]0;just a title\x07")
+ _ (assert (! (reply s)))                        ; a title is not a question
+ _ (scribe s "\e[>c")
+ _ (assert (= (L 27 91 62 48 59 48 59 48 99) (reply s)))   ; secondary DA
+ _ (scribe s "\e[c")
+ _ (assert (= (L 27 91 63 54 99) (reply s))))    ; primary DA unchanged
+
 ; --- 16. what must be swallowed whole ---
 (: s (mkscr 2 10)
  _ (scribe s "\e]0;a title\x07x")                ; OSC to BEL (\x07 -- \a is no reader escape)

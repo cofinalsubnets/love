@@ -40,7 +40,7 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols) {
   c->rows = rows, c->cols = cols;
   c->flag = cb_show | cb_wrap;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0;
-  c->ucp = 0, c->un = 0;
+  c->ucp = 0, c->un = 0, c->ol = 0;
   for (int k = 0; k < 8; k++) c->dmg[k] = 0;
   c->cur_fg = c->def_fg = c->spen[0] = 7;
   c->cur_bg = c->def_bg = c->spen[1] = 0;
@@ -116,6 +116,15 @@ int cb_reply(struct cb *c, uint8_t *buf) {
   for (int i = 0; i < n; i++) buf[i] = c->out[i];
   return c->on = 0, n; }
 
+// the OSC asks worth answering: colour queries (ESC]10;? fg, ESC]11;? bg)
+// -- zsh and friends probe the background at line-editor startup and WAIT;
+// silence costs the user a second of buffered keystrokes. the answers are
+// the default pen's truth on every renderer: c0c0c0 on black.
+static void cb_oscq(struct cb *c) {
+  if (c->ol == 4 && c->ob[0] == '1' && c->ob[2] == ';' && c->ob[3] == '?') {
+    if (c->ob[1] == '0') cb_say(c, "\033]10;rgb:c0c0/c0c0/c0c0\a");
+    else if (c->ob[1] == '1') cb_say(c, "\033]11;rgb:0000/0000/0000\a"); } }
+
 // C0 controls, live in ground state and mid-CSI alike. \n implies \r
 // only under LNM (the kernel console's discipline); a raw feed keeps
 // the column, which is what a pty's ONLCR-translated stream expects.
@@ -157,7 +166,7 @@ static void cb_ris(struct cb *c) {
   c->top = 0, c->bot = c->rows - 1u;
   c->flag = (uint16_t) (cb_show | cb_wrap | lnm);
   c->rpos = c->wpos = c->spos = 0;
-  c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0;
+  c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0;
   cb_clear(c); }
 
 static void cb_save(struct cb *c) {  // DECSC: cursor + pen
@@ -221,8 +230,8 @@ static void cb_csi(struct cb *c, uint8_t i) {
   uint32_t n = c->pv[0] ? c->pv[0] : 1, m = c->pn > 1 && c->pv[1] ? c->pv[1] : 1;
   uint32_t cs = c->cols, r = c->wpos / cs, col = c->wpos % cs;
   uint32_t rb = r * cs, re = rb + cs;  // this row's span
-  int priv = c->flag & cb_priv;
-  c->flag &= (uint16_t) ~cb_priv;
+  int priv = c->flag & cb_priv, gt = c->flag & cb_gt;
+  c->flag &= (uint16_t) ~(cb_priv | cb_gt);
   switch (i) {
    case 'A': { uint32_t lo = r >= c->top ? c->top : 0;
     cb_cur(c, r > lo + n ? r - n : lo, col), c->flag &= (uint16_t) ~cb_pend; return; }
@@ -285,7 +294,8 @@ static void cb_csi(struct cb *c, uint8_t i) {
                        cb_sayn(c, col + 1u), cb_say(c, "R");
     else if (c->pv[0] == 5) cb_say(c, "\033[0n");
     return;
-   case 'c': return cb_say(c, "\033[?6c");  // DA: a VT102, honestly
+   case 'c':                                // DA: a VT102, honestly; >c the secondary ask
+    return cb_say(c, gt ? "\033[>0;0;0c" : "\033[?6c");
    case 's': return cb_save(c);
    case 'u': return cb_restore(c);
    default: return; } }  // anything else: politely nothing
@@ -303,8 +313,9 @@ static void cb_put1(struct cb *c, uint8_t i) {
     c->esc = 0;
     switch (i) {
      case '[': c->esc = 2, c->arg = 0, c->pn = 0;
-      c->flag &= (uint16_t) ~(cb_priv | cb_junk); return;
-     case ']': case 'P': case '^': case '_': c->esc = 3; return;  // OSC/DCS/PM/APC: swallow
+      c->flag &= (uint16_t) ~(cb_priv | cb_junk | cb_gt); return;
+     case ']': c->esc = 7, c->ol = 0; return;       // OSC: capture the head (colour asks answer)
+     case 'P': case '^': case '_': c->esc = 3; return;  // DCS/PM/APC: swallow
      case '(': case ')': case '*': case '+': c->esc = 4; return;  // charset designator
      case '#': c->esc = 6; return;
      case '7': return cb_save(c);           // DECSC
@@ -326,17 +337,27 @@ static void cb_put1(struct cb *c, uint8_t i) {
       if (c->pn < 8) c->pv[c->pn++] = c->arg;
       c->arg = 0;
       return; }
-    if (i == '?' || i == '>' || i == '=' || i == '<') { c->flag |= cb_priv; return; }
+    if (i == '>') { c->flag |= cb_gt; return; }     // the secondary-DA marker
+    if (i == '?' || i == '=' || i == '<') { c->flag |= cb_priv; return; }
     if (i <= '/') { c->flag |= cb_junk; return; }  // intermediates we don't speak
     if (c->pn < 8) c->pv[c->pn++] = c->arg;        // the final parameter
     c->esc = 0;
-    if (c->flag & cb_junk) { c->flag &= (uint16_t) ~(cb_junk | cb_priv); return; }
+    if (c->flag & cb_junk) { c->flag &= (uint16_t) ~(cb_junk | cb_priv | cb_gt); return; }
     return cb_csi(c, i);
-   case 3:                                  // an OSC/DCS body on its way to ST
+   case 3:                                  // a DCS/PM/APC body on its way to ST
     if (i == 7) c->esc = 0;
     else if (i == 27) c->esc = 5;
     return;
    case 5: c->esc = 0; return;              // the byte after ESC ends it (ST's backslash)
+   case 7:                                  // an OSC body: head captured for the colour asks
+    if (i == 7) { c->esc = 0; return cb_oscq(c); }
+    if (i == 27) { c->esc = 8; return; }
+    if (c->ol < 5) c->ob[c->ol++] = i; else c->ol = 6;
+    return;
+   case 8:                                  // OSC's ST tail
+    c->esc = 0;
+    if (i == '\\') return cb_oscq(c);
+    return;
    case 4: c->esc = 0; return;              // the designated charset: discarded
    case 6:                                  // ESC # ...
     if (i == '8') {                         // DECALN: the E screen, region home

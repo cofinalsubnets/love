@@ -20,6 +20,8 @@
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
 #include "ai.h"
+#include <unistd.h>   // write (gush)
+#include <errno.h>
 #include "../port/quay/quay.c"
 #include "../port/quay/moderndos_8x16.c"   // the blit's glyphs (host links no font objects)
 
@@ -39,10 +41,11 @@ static struct cb *scr_ok(ai_word x) {
   if (c->spos >= n) c->spos = 0;
   if (c->bot >= c->rows) c->bot = (uint16_t) (c->rows - 1u);
   if (c->top > c->bot) c->top = 0;
-  if (c->esc > 6) c->esc = 0;
+  if (c->esc > 8) c->esc = 0;
   if (c->pn > 8) c->pn = 8;
   if (c->on > cb_outn) c->on = 0;
   if (c->un > 3) c->un = 0;
+  if (c->ol > 6) c->ol = 6;
   return c; }
 
 // (screen b rows cols): open a screen over cask b. A non-cask b answers the
@@ -204,6 +207,30 @@ static lvm(lvm_damage) {
   Sp[1] = out;
   Sp += 1; Ip += 1; return Continue(); }
 
+// (gush port bytes): the bulk lane `say` never had -- write(2) a whole
+// string/cask straight at an fd port. say's zputc loop costs a SECOND per
+// megabyte; a frame must not. the CALLER flushes the port first (gush goes
+// past the buffer). () ok | errno charm | -1 for a portless port (a jug) --
+// the caller falls back to say, so memory ports keep working.
+static lvm(lvm_gush) {
+  ai_word p = Sp[0], x = Sp[1], out = putcharm(-1);
+  if (!(p & 1) && ((union u*) p)->ap == lvm_port_io
+      && (ai_strp(x) || (!(x & 1) && ((union u*) x)->ap == lvm_buf))) {
+    intptr_t fd = getcharm(((struct ai_io*) p)->fd);
+    struct ai_str *s = ai_strp(x) ? (struct ai_str*) x : ((struct ai_buf*) x)->str;
+    if (fd >= 0) {
+      uintptr_t i = 0;
+      out = ZeroPoint;
+      while (i < s->len) {
+        ssize_t k = write((int) fd, s->bytes + i, s->len - i);
+        if (k < 0) {
+          if (errno == EINTR) continue;
+          out = putcharm(errno);
+          break; }
+        i += (uintptr_t) k; } } }
+  Sp[1] = out;
+  Sp += 1; Ip += 1; return Continue(); }
+
 // (unfold g): a cp437 glyph byte's unicode codepoint, 0 when it has none --
 // the outward half of the utf-8 fold, for a painter re-emitting the grid
 // to a utf-8 terminal (berth caches these per glyph).
@@ -247,7 +274,8 @@ static union u const
   nif_unfold[] = {{lvm_unfold}, {lvm_ret0}},
   nif_blit[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_blit}, {lvm_ret0}},
   nif_blitrow[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_blitrow}, {lvm_ret0}},
-  nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}};
+  nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
+  nif_gush[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gush}, {lvm_ret0}};
 AI_NIF("screen", nif_screen);
 AI_NIF("scribe", nif_scribe);
 AI_NIF("glass", nif_glass);
@@ -257,3 +285,4 @@ AI_NIF("unfold", nif_unfold);
 AI_NIF("blit", nif_blit);
 AI_NIF("blitrow", nif_blitrow);
 AI_NIF("damage", nif_damage);
+AI_NIF("gush", nif_gush);

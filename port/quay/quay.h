@@ -33,10 +33,11 @@ enum {              // flag bits: the console's modes
   cb_lnm    = 4,    // LNM (20): \n implies \r -- the kernel console's discipline
   cb_origin = 8,    // DECOM (?6): rows address relative to the scroll region
   cb_pend   = 16,   // wrap pending: a glyph landed on the last column
-  cb_priv   = 32,   // parser transient: the CSI had a DEC '?' marker
-  cb_junk   = 64 }; // parser transient: the CSI had intermediates we don't speak
+  cb_priv   = 32,   // parser transient: the CSI had a DEC '?'/'='/'<' marker
+  cb_junk   = 64,   // parser transient: the CSI had intermediates we don't speak
+  cb_gt     = 128 };// parser transient: the CSI had the '>' marker (secondary DA)
 
-enum { cb_outn = 24 };  // the reply queue's capacity (cb_reply's buffer size)
+enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
 
 struct cb {
   uint32_t rpos, wpos, spos;  // read cursor (the input ring), write cursor, saved cursor
@@ -47,6 +48,7 @@ struct cb {
   uint16_t top, bot;  // the scroll region, inclusive rows
   uint8_t out[cb_outn], on;  // the reply queue (DSR/DA answers ride home here)
   uint32_t ucp; uint8_t un;  // utf-8 in flight: the codepoint, continuations to come
+  uint8_t ob[6], ol;  // an OSC body's head: enough to recognize the colour asks
   uint32_t dmg[8];  // dirty rows, one bit each (row 255 stands for 255-and-past);
                     // every grid write marks, a renderer reads-and-clears --
                     // repainting only what moved is what keeps a wide window quick

@@ -67,7 +67,9 @@
                   _ (x-w16 s wpix) _ (x-w16 s n)
                   _ (x-w16 s 0) _ (x-w16 s y)
                   _ (x-w8 s 0) _ (x-w8 s depth) _ (x-w16 s 0)
-                  _ (say s (string t))
+                  _ (x-flush s)                  ; the header leaves first;
+                  w2 (gush s t)                  ; the payload goes the bulk lane
+                  _ (? (charm? w2) (say s (string t)) 0)   ; (a jug says instead)
                   (go (+ y n) (- left n)))
                (x-flush s))
      (go py0 pyn)))
