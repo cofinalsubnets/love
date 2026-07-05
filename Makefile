@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm test_wm nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm test_wm test_utils nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -133,6 +133,17 @@ test_wm: host
 	  cat out/host/.test_wm.out; \
 	  { [ $$r -eq 0 ] && grep -q "apps/wm/law: StackSet" out/host/.test_wm.out; } \
 	    || { echo "FAIL wm (exit $$r)"; exit 1; }
+# aiutils (apps/utils/): myers diff, the shortest-edit-script core the coming `diff`
+# tool and the vcs ride. Pure ai (no nif), portable like the wm core. The law file
+# holds the script to its two projections (spells both sides), to an O(nm) LCS
+# oracle (minimality), and to a seeded fuzz. Gate = the sentinel AND exit 0.
+.PHONY: test_utils
+test_utils: host
+	@echo "UTILS apps/utils/diff.l + apps/utils/law.l"; \
+	  cat test/00-init.l apps/utils/diff.l apps/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
+	  cat out/host/.test_utils.out; \
+	  { [ $$r -eq 0 ] && grep -q "apps/utils/law: myers" out/host/.test_utils.out; } \
+	    || { echo "FAIL utils (exit $$r)"; exit 1; }
 # The neutral assembler (apps/asm/) + its x86-64 backend: every encoder golden is
 # objdump-checked (apps/asm/asmtest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
