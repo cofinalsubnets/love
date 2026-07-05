@@ -128,5 +128,23 @@
       (= (udir "/a/b") "/a") (= (udir "a") ".") (= (udir "/") "/")
       (= (udir "a/") ".") (= (udir "/a/b/") "/a")))
 
+; --- the field-tool floor: usplit keeps every piece (cut's face, where lines drops
+; the empty tail), uspec/upick read cut's LIST, uset expands tr's ranges + escapes,
+; urev walks a text backwards ---
+(: (assert
+      (= (usplit 58 "a:b:c") '("a" "b" "c"))
+      (= (usplit 58 "a:") '("a" ""))                               ; the kept empty tail
+      (= (usplit 58 "") '(""))
+      (= (ujoinc 58 '("a" "" "c")) "a::c")
+      (= (ujoinc 58 '("a" "b")) (+ "a" (+ ":" "b")))
+      (= (uspec "1,3-5,7-,-2") '((1 1) (3 5) (7 536870911) (1 2)))
+      (upick '((2 4)) 3) (upick '((2 4)) 2) (upick '((2 4)) 4)
+      (! (upick '((2 4)) 5)) (! (upick '((2 4)) 1)) (! (upick () 1))
+      (= (uset "a-c") '(97 98 99))
+      (= (uset "abc") '(97 98 99))
+      (= (uset "x-") '(120 45)) (= (uset "-x") '(45 120))          ; an edge dash stays literal
+      (= (uset "\\n\\t") '(10 9))                                  ; the escapes
+      (= (urev "abc") "cba") (! (urev ""))))
+
 (say err "crew/utils/law: myers + patience + lines/unlines + unified hunks + the u-floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz ok
 ")

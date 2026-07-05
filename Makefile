@@ -70,7 +70,22 @@ test_host: $m
 # checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
 # Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
 hostnif_tests = boot/pty.l boot/net.l boot/phos.l boot/baoedit.l boot/baotest.l boot/init.l boot/sh.l boot/cb.l boot/berth.l boot/manifest.l boot/pier.l boot/font.l boot/haven.l boot/overlay.l
-test_hostnif: host
+# haven's real-client smoke binary: libwayland-client + the generated
+# xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
+# of haven's wire. built only where wayland-scanner + libwayland live;
+# boot/haven.l skips its smoke act when the binary is absent. pinned to the
+# canonical out/host like ai0 (parse-time prereqs; it never links ai).
+smoke = out/host/haven-smoke
+xdgxml = $(shell pkg-config --variable=pkgdatadir wayland-protocols 2>/dev/null)/stable/xdg-shell/xdg-shell.xml
+$(smoke): crew/haven/smoke.c
+	@mkdir -p out/host
+	@if command -v wayland-scanner >/dev/null 2>&1 && pkg-config --exists wayland-client 2>/dev/null && [ -f "$(xdgxml)" ]; then \
+	  echo "CC $@"; \
+	  wayland-scanner client-header "$(xdgxml)" out/host/xdg-shell-client-protocol.h; \
+	  wayland-scanner private-code "$(xdgxml)" out/host/xdg-shell-protocol.c; \
+	  $(CC) -O1 -Wall -Wextra -o $@ crew/haven/smoke.c out/host/xdg-shell-protocol.c -Iout/host `pkg-config --cflags --libs wayland-client`; \
+	else echo "SKIP $@ (no libwayland here)"; fi
+test_hostnif: host $(smoke)
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
 	  cat out/host/.test_hostnif.out; \
@@ -202,6 +217,28 @@ test_utils: host out/host$(hsuf)/au
 	  printf 'q\nq\nr\n' | tee $(ho)/.cu-g2 > $(ho)/.cu-g; printf 'q\nq\nr\n' | $m $(ho)/au tee $(ho)/.cu-o2 > $(ho)/.cu-o; \
 	  { cmp -s $(ho)/.cu-g $(ho)/.cu-o && cmp -s $(ho)/.cu-g2 $(ho)/.cu-o2; } || { echo "FAIL au tee vs GNU"; exit 1; }; \
 	  echo "au: line tools (sort/uniq/head/tail/wc/cat/seq/echo/basename/tee GNU-identical) ok"
+	@printf 'a:b:c\nnodelim\nx:y\n' > $(ho)/.fu1; \
+	  cut -d: -f1,3 $(ho)/.fu1 > $(ho)/.fu-g; $m $(ho)/au cut -d: -f1,3 $(ho)/.fu1 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au cut -f vs GNU"; exit 1; }; \
+	  cut -d: -f1,3 -s $(ho)/.fu1 > $(ho)/.fu-g; $m $(ho)/au cut -d: -f1,3 -s $(ho)/.fu1 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au cut -s vs GNU"; exit 1; }; \
+	  cut -d: -f2- $(ho)/.fu1 > $(ho)/.fu-g; $m $(ho)/au cut -d: -f2- $(ho)/.fu1 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au cut -f2- vs GNU"; exit 1; }; \
+	  printf 'hello\nhi\n' | cut -c2-4 > $(ho)/.fu-g; printf 'hello\nhi\n' | $m $(ho)/au cut -c2-4 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au cut -c vs GNU"; exit 1; }; \
+	  printf 'hi there\n' | tr a-z A-Z > $(ho)/.fu-g; printf 'hi there\n' | $m $(ho)/au tr a-z A-Z > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au tr vs GNU"; exit 1; }; \
+	  printf 'abcd\n' | tr abcd xy > $(ho)/.fu-g; printf 'abcd\n' | $m $(ho)/au tr abcd xy > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au tr pad vs GNU"; exit 1; }; \
+	  printf 'hello world\n' | tr -d aeiou > $(ho)/.fu-g; printf 'hello world\n' | $m $(ho)/au tr -d aeiou > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au tr -d vs GNU"; exit 1; }; \
+	  printf 'aa  bb   cc\n' | tr -s ' ' > $(ho)/.fu-g; printf 'aa  bb   cc\n' | $m $(ho)/au tr -s ' ' > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au tr -s vs GNU"; exit 1; }; \
+	  printf 'a\n\nb\n' | nl > $(ho)/.fu-g; printf 'a\n\nb\n' | $m $(ho)/au nl > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au nl vs GNU"; exit 1; }; \
+	  printf 'abc\nde\n' | rev > $(ho)/.fu-g; printf 'abc\nde\n' | $m $(ho)/au rev > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au rev vs GNU"; exit 1; }; \
+	  echo "au: field tools (cut/tr/nl/rev GNU-identical) ok"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

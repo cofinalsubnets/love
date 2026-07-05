@@ -7,7 +7,7 @@
 ;   au make [F] [T..]  the build tool (crew/cook/cook.l)
 ;   au as TGT IN OUT   assemble IR forms from IN (x64|arm64) into an ELF at OUT
 ;   au cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
-;                      the line tools + trivia (crew/utils/core.l)
+;   au cut|tr|nl|rev   the line + field tools + trivia (crew/utils/core.l)
 ;
 ; loads LAST in the au cat, when every tool main is already defined; the tool files'
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
@@ -61,6 +61,8 @@
               _ (pin t 'seq seq-main) _ (pin t 'yes yes-main)
               _ (pin t 'true true-main) _ (pin t 'false false-main)
               _ (pin t 'basename basename-main) _ (pin t 'dirname dirname-main)
+              _ (pin t 'cut cut-main) _ (pin t 'tr tr-main)
+              _ (pin t 'nl nl-main) _ (pin t 'rev rev-main)
               t)
    (usage _) (: _ (say err "au -- the ai multi-call toolbox
 usage: au TOOL ARGS..     (or symlink a tool's name to au)
@@ -69,6 +71,7 @@ usage: au TOOL ARGS..     (or symlink a tool's name to au)
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
   as TGT IN OUT      assemble IR forms from IN (x64|arm64) into ELF OUT
   cat head tail wc sort uniq tee          the line tools (crew/utils/core.l)
+  cut tr nl rev                           the field tools
   echo seq yes true false basename dirname     ... and the trivia
 ")
                 (nap 2))
