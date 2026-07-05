@@ -24,7 +24,7 @@ export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_gc test_hostnif test_glaze test_sat test_asm test_wm test_extract test_arm64
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_glaze test_sat test_asm test_wm test_extract test_arm64
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `ai`
 # from-source under AI_NO_IMAGE, and ai0 -- c0 + the self-hosted ev, twice). It does
@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm test_wm test_utils nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_glaze test_sat test_asm test_wm test_utils nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -133,17 +133,47 @@ test_wm: host
 	  cat out/host/.test_wm.out; \
 	  { [ $$r -eq 0 ] && grep -q "apps/wm/law: StackSet" out/host/.test_wm.out; } \
 	    || { echo "FAIL wm (exit $$r)"; exit 1; }
-# aiutils (apps/utils/): myers diff, the shortest-edit-script core the coming `diff`
-# tool and the vcs ride. Pure ai (no nif), portable like the wm core. The law file
-# holds the script to its two projections (spells both sides), to an O(nm) LCS
-# oracle (minimality), and to a seeded fuzz. Gate = the sentinel AND exit 0.
+# aiutils (apps/utils/): the myers + patience diff engines, the text/tool surface,
+# and `au`, the multi-call toolbox (busybox's trick -- one binary, the util picked
+# off the command line or an argv[0] symlink; apps/utils/au.l is the dispatcher).
+# The law file holds the engines to their projections, to an O(nm) LCS oracle
+# (minimality), and to seeded fuzzes; the au smokes then drive the BUILT artifact:
+# diff byte-identical to GNU diff -u (headers off), the exit triple, argv[0]
+# dispatch through a `diff` symlink, usage at 2, and (x86_64) `au as` assembling
+# an exit(7) ELF that RUNS. Gate = the law sentinel AND exit 0 AND the smokes.
+aufiles = apps/utils/text.l apps/utils/diff.l tools/ain.l apps/cook/cook.l apps/utils/asbook.l apps/asm/elf.l apps/utils/au.l
+# (`ho` is defined further down, after this rule is READ -- target/prereq names
+# expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
+out/host$(hsuf)/au: $(aufiles)
+	@echo AI	$(abspath $@)
+	@{ echo '#!/usr/bin/env -S ai'; cat $(aufiles); } > $@
+	@chmod 755 $@
 .PHONY: test_utils
-test_utils: host
+test_utils: host out/host$(hsuf)/au
 	@echo "UTILS apps/utils/text.l + apps/utils/diff.l + apps/utils/law.l"; \
 	  cat test/00-init.l apps/utils/text.l apps/utils/diff.l apps/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
 	  cat out/host/.test_utils.out; \
 	  { [ $$r -eq 0 ] && grep -q "apps/utils/law: myers" out/host/.test_utils.out; } \
 	    || { echo "FAIL utils (exit $$r)"; exit 1; }
+	@printf 'a\nb\nc\n' > $(ho)/.au1; printf 'a\nX\nc\n' > $(ho)/.au2; \
+	  $m $(ho)/au diff $(ho)/.au1 $(ho)/.au1 > $(ho)/.au-same.out 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ ! -s $(ho)/.au-same.out ]; } || { echo "FAIL au diff same (exit $$r)"; exit 1; }; \
+	  $m $(ho)/au diff $(ho)/.au1 $(ho)/.au2 > $(ho)/.au-diff.out 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL au diff differ (exit $$r)"; exit 1; }; \
+	  diff -u $(ho)/.au1 $(ho)/.au2 | tail -n +3 > $(ho)/.au-gnu.out; tail -n +3 $(ho)/.au-diff.out > $(ho)/.au-ours.out; \
+	  cmp -s $(ho)/.au-gnu.out $(ho)/.au-ours.out || { echo "FAIL au diff vs GNU"; exit 1; }; \
+	  ln -sf au $(ho)/diff; \
+	  $m $(ho)/diff $(ho)/.au1 $(ho)/.au2 > $(ho)/.au-sym.out 2>&1; r=$$?; \
+	  { [ $$r -eq 1 ] && cmp -s $(ho)/.au-diff.out $(ho)/.au-sym.out; } || { echo "FAIL au argv0 symlink (exit $$r)"; exit 1; }; \
+	  $m $(ho)/au bogus > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 2 ] || { echo "FAIL au usage (exit $$r)"; exit 1; }; \
+	  if [ "$$(uname -m)" = x86_64 ]; then \
+	    printf '(li r0 60) (li r6 7) (sys)\n' > $(ho)/.au-as.l; \
+	    $m $(ho)/au as x64 $(ho)/.au-as.l $(ho)/.au-as.elf > /dev/null 2>&1 || { echo "FAIL au as"; exit 1; }; \
+	    chmod +x $(ho)/.au-as.elf; $(ho)/.au-as.elf; r=$$?; \
+	    [ $$r -eq 7 ] || { echo "FAIL au as run (exit $$r)"; exit 1; }; \
+	  fi; \
+	  echo "au: diff (GNU-identical) + argv0 symlink + usage + as ok"
 # The neutral assembler (apps/asm/) + its x86-64 backend: every encoder golden is
 # objdump-checked (apps/asm/asmtest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
@@ -354,6 +384,20 @@ out/lib/uukern.l: test/uu.l
 	@{ echo "(: uu-mark (names ()))"; sed '/^; --- UniMath/q' test/uu.l; } > $@
 out/lib/uu.h: out/lib/uukern.l tools/lcat.l
 	$(lcat_h)
+# test/uuwm.l is a COMMITTED GENERATED artifact: the wm's zipper ops compiled
+# from apps/wm/core.l into uu terms (tools/uuwmgen.l over tools/wm2uu.l, kind-
+# directed by apps/wm/sigs.l), so test/uuwmlaw.l proves its theorems OF THE
+# IMPLEMENTATION at corpus time. `make uuwm` refreshes it after a core.l edit;
+# test_uuwm (in test_all) regenerates and diffs, failing loudly on drift.
+uuwm: host
+	@echo AI	test/uuwm.l "(tools/uuwmgen.l on $m)"
+	@$m tools/uuwmgen.l > test/uuwm.l
+test_uuwm: host
+	@echo TEST test/uuwm.l "(regenerate + diff)"
+	@$m tools/uuwmgen.l > out/host/.uuwm.l.tmp
+	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
+	  || { echo "FAIL: test/uuwm.l is stale (apps/wm/core.l moved?) -- run: make uuwm"; exit 1; }
+	@rm -f out/host/.uuwm.l.tmp
 # ai0's sed-wrapped raw source of the same three (no interpreter -- the l reader
 # strips ; comments at read time), baked into the bootstrap so the corpus can test
 # the assembler under BOTH compilers (c0 + the self-hosted ev), like prel/ev/bao.
@@ -1000,6 +1044,7 @@ d = $(DESTDIR)/$(PREFIX)
 v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/ai \
+  $d/bin/au \
   $d/bin/cook \
   $d/bin/ain \
   $d/bin/wm \
@@ -1064,10 +1109,23 @@ $d/bin/cook: apps/cook/cook.l
 	@ln -sf $(abspath $<) $@
 
 # ain: the netcat clone (tools/ain.l). Same shebang-script mechanism as cook
-# (`#!/usr/bin/env -S ai -l` re-execs the installed `ai` to load it).
+# (`#!/usr/bin/env -S ai -l` re-execs the installed `ai` to load it); the SEAT
+# form inside the file finds its own name on the command line and fires.
 $d/bin/ain: tools/ain.l
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
+
+# au: the multi-call toolbox -- ONE catted script (busybox's trick), the util
+# picked off the command line (`au diff A B`, `au nc H P`, `au make`, `au as ..`)
+# or off argv[0] through a tool-named symlink. Shadows nothing on the host: only
+# `au` lands on PATH; the distro symlinks the tool names when shadowing is the
+# point. The tool files' SEATs stay quiet inside the cat (no file of theirs sits
+# in the program seat), so apps/utils/au.l's dispatcher is the one thing firing.
+$d/bin/au: $(aufiles)
+	@echo AI	$(abspath $@)
+	@install -d $(dir $@)
+	@{ echo '#!/usr/bin/env -S ai'; cat $(aufiles); } > $@
+	@chmod 755 $@
 
 # wm: the window manager (apps/wm/*.l), the seven modules catted into one shebang
 # script. DISPLAY picks the socket, ~/.Xauthority the cookie (apps/wm/config.l);

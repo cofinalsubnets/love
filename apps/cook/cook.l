@@ -230,9 +230,12 @@
 ;
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
 ; names leak to the global scope. The form reads outer globals (the post.l
-; combinators, recipe, cook, ticket, the prel) freely; its body is the dispatch at
-; the bottom.
-(:
+; combinators, recipe, cook, ticket, the prel) freely; its body ANSWERS cook-main
+; (args -> the whole job, exiting via nap). The outer `_`-holder form (cli.l's own
+; trick) leaks cook-main as the ONE public -- the multi-call `au` (apps/utils/au.l)
+; calls it as `make` -- and the SEAT at the bottom fires it only when this very
+; file was invoked (the installed `cook` symlink, a -l preload, or positional).
+(: _ (:
    ; --emit mode: a 1-cell box (0 = off). when set, expand-steps emits a
    ; serializable ("sh" "-c" cmd) argv step instead of a sh-line thunk, so the
    ; resolved cards can be SHOWN back as a Cookfile (see emit-cookfile below).
@@ -674,11 +677,8 @@
    (makefilep p) (: b (mk-base p)
       (|| (= b "Makefile") (|| (= b "makefile") (|| (= b "GNUmakefile") (mk-ends p ".mk")))))
 
-   ; the build file may be named explicitly (the first original-argv word that is
-   ; not the program head or a -l chain) or DISCOVERED in the cwd. We cannot call
-   ; cli.l's strip-l to find the explicit one -- it would re-load this file.
-   (mk-args a) ((: (g x) (? (! (two? x)) 0
-                  (? (= (cap x) "-l") (g (cup (cup x))) (link (cap x) (g (cup x)))))) (cup a))
+   ; the build file may be named explicitly (the first arg word) or DISCOVERED in
+   ; the cwd; the SEAT at the bottom already stripped the program head + -l chain.
    (exists? p) (: q (open p "r") (? q 1 0))     ; a one-shot probe (the fd dies with the process)
    ; discovery precedence: an ai-native recipe file wins over a Makefile -- a
    ; legacy Cards.l first, then a Cookfile, then a Makefile. Only a Makefile-named
@@ -742,13 +742,14 @@
              (: _ (pin opt 'pos (cat (peep opt 'pos ()) `(w))) (loop r opt))))))
     ws (tablet 0))
 
-   ; -- the dispatch (this form's body) --
-   ; cook is loaded with -l, then the host CLI driver loads the recipe file. We do
-   ; the whole job HERE and exit first, so the driver never tries to read a Makefile
-   ; (or re-read the chosen file) as love source. A Makefile is imported and its
-   ; recipes cooked; a Cookfile is read and evaluated -- it drives cook itself, the
-   ; ticket read live by (ticket 0) from the tickets box this dispatch fills.
-   (: opt (parse-args (mk-args argv))
+   ; -- cook-main (this form's body ANSWERS it) --
+   ; the whole job from the args: parse flags, find the build file, cook, and exit
+   ; first (nap), so when fired from a -l preload the CLI driver never tries to
+   ; read a Makefile (or re-read the chosen file) as l source. A Makefile is
+   ; imported and its recipes cooked; a Cookfile is read and evaluated -- it drives
+   ; cook itself, the ticket read live by (ticket 0) from the tickets box.
+   (cook-main as)
+   (: opt (parse-args as)
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)
       emit? (peep opt 'emit 0)
@@ -773,4 +774,27 @@
             (nap 0))
          (two? pos)
          (: _ (say err "cook: no Cards.l, Cookfile or Makefile found") _ (put err 10) (nap 1))
-         0)))
+         0))
+
+   cook-main)
+
+   cook-main _
+
+   ; the SEAT (tools/ain.l's shape): fire cook-main iff this very file -- or the
+   ; installed `cook` symlink -- sits in the program seat of the real command line
+   ; (positional program or a -l preload), taking the args AFTER the seat. cmdline
+   ; is the full C argv, never rebound, so the read is the same in both load
+   ; orders; inside the multi-call `au` nothing matches and au's dispatcher calls
+   ; cook-main itself. body-having: the seat machinery leaks nothing.
+   _ (: (bn p) (: n (tally p)
+                  (go k r) (? (< k n) (go (+ k 1) (? (= (p k) 47) (+ k 1) r)) (snip p r n))
+                  (go 0 0))
+        (me? w) (: b (bn w) (|| (= b "cook") (= b "cook.l")))
+        (seat a) (? (! (two? a)) ()
+                    (= (cap a) "-l") (? (two? (cup a))
+                                        (? (me? (caup a)) (link 1 (cuup a)) (seat (cuup a)))
+                                        ())
+                    (me? (cap a)) (link 1 (cup a))
+                    ())
+        s (seat (cup cmdline))
+        (? (two? s) (cook-main (cup s)) ())))

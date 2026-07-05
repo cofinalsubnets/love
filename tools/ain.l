@@ -11,18 +11,20 @@
 ; its fd is not ready -- see host/net.c / ai.c). So the whole program is just two
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
-; Run (until the egg bakes ain into a multi-call binary). prel is ALREADY in
-; the egg -- do NOT `-l ai/prel.l` (the egg mops book/tray/etc after it hatches, so
-; re-feeding prel.l to the live ev raises `missing book`/`missing tray`):
+; Run it straight (prel is ALREADY in the egg -- do NOT `-l ai/prel.l`; the egg mops
+; book/tray/etc after it hatches, so re-feeding prel.l raises `missing book`):
 ;   out/host/ai tools/ain.l HOST PORT
 ;   out/host/ai tools/ain.l -l PORT
-; The socket nifs (connect/listen/accept/seal) live in host/net.c; prel stays
-; socket-free so the kernel/wasm frontends are unaffected.
+; or as the `nc` applet of the multi-call `au` (apps/utils/au.l -- the header's old
+; "until the egg bakes ain into a multi-call binary" note, landed). The socket nifs
+; (connect/listen/accept/seal) live in host/net.c; prel stays socket-free so the
+; kernel/wasm frontends are unaffected.
 
-; A top-level body-having `:` runs directly (and leaks no bindings). NOT wrapped
-; in a nullary (ain-main) -- a bare (f) is `f` itself (the (f) == f law), so a
-; zero-arg call would never fire; the program body just IS this form.
-(: as (cup argv)                                   ; (cup argv) = the program's args
+; The whole tool is ONE define: a body-less top-level `:` leaks `ain-main` (args ->
+; conversation) and nothing else; the SEAT form at the bottom fires it only when the
+; file itself was invoked (positional or -l), so a multi-call cat stays quiet.
+(: (ain-main as)
+ (:
     ; parse a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48).
     (atoi s) (: (go i acc) (? (< i (tally s)) (go (+ 1 i) (+ (* 10 acc) (- (s i) 48))) acc)
                 (go 0 0))
@@ -32,7 +34,7 @@
     ; hits EOF (get -> -1). flush after each byte makes stdout prompt (it is a
     ; no-op on a socket port -- fd_flush only flushes the real stdout fd), so one
     ; pump serves both directions. Returns nil at EOF; the caller owns teardown.
-    (pump src dst) (: ch (get src)
+    (pump src dst) (: ch (see src)
                       (? (= ch -1) 0
                          (: _ (put dst ch) _ (flush dst) (pump src dst))))
 
@@ -70,4 +72,22 @@
     (? (= (cap as) "-l") (? (two? (cup as)) (serve (atoi (caup as)))
                             (die "usage: ain -l PORT"))
        (two? (cup as)) (dial (cap as) (atoi (caup as)))
-       (die "usage: ain HOST PORT  |  ain -l PORT")))
+       (die "usage: ain HOST PORT  |  ain -l PORT"))))
+
+; the SEAT: fire ain-main iff this very file sits in the program seat of the real
+; command line -- the positional program, or a `-l` preload (the installed shebang) --
+; taking the args AFTER the seat. `cmdline` is the full C argv, never rebound, so the
+; test reads the same in both load orders; a multi-call cat (au) never matches and the
+; dispatcher there calls ain-main itself. body-having: nothing leaks.
+(: (bn p) (: n (tally p)
+             (go k r) (? (< k n) (go (+ k 1) (? (= (p k) 47) (+ k 1) r)) (snip p r n))
+             (go 0 0))
+   (me? w) (: b (bn w) (|| (= b "ain") (= b "ain.l")))
+   (seat a) (? (! (two? a)) ()
+               (= (cap a) "-l") (? (two? (cup a))
+                                   (? (me? (caup a)) (link 1 (cuup a)) (seat (cuup a)))
+                                   ())
+               (me? (cap a)) (link 1 (cup a))
+               ())
+   s (seat (cup cmdline))
+   (? (two? s) (ain-main (cup s)) ()))
