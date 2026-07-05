@@ -60,8 +60,15 @@
    (decl v) (: (go vv acc) (? (two? vv) (go (nthl vv 2) (link (nthl vv 1) acc)) (rev acc))
               (go (nthl v 2) ()))
  z0 (zmk 5 (L 2) (L 7 9))
+ z1 (zmk 5 () (L 7 9))
  _ (assert
     (= (zrow z0) (decl (vof 0 (L 'zrow (encz z0)))))
     (= (zrow (zins 4 z0)) (decl (vof 0 (L 'zrow (L 'zins 4 (encz z0))))))
-    (= (tally (zrow (zins 4 z0))) (vof 0 (L 'zcount (L 'zins 4 (encz z0))))))
+    (= (tally (zrow (zins 4 z0))) (vof 0 (L 'zcount (L 'zins 4 (encz z0)))))
+    ; focus motion, both faces: the plain step and the wrap
+    (= (cap (zfocup z0)) (vof 0 (L 'zfoc (L 'zfocup (encz z0)))))
+    (= (zrow (zfocup z0)) (decl (vof 0 (L 'zrow (L 'zfocup (encz z0))))))
+    (= (cap (zfocup z1)) (vof 0 (L 'zfoc (L 'zfocup (encz z1)))))
+    (= (cap (zfocdn z0)) (vof 0 (L 'zfoc (L 'zfocdn (encz z0)))))
+    (= (zrow (zmaster z0)) (decl (vof 0 (L 'zrow (L 'zmaster (encz z0)))))))
  (puts "overlay: ok"))

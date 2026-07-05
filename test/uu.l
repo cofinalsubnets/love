@@ -2591,6 +2591,159 @@
         (succ (add (nlen (zup z)) (nlen (zdn z))))
         (natplusnsm (nlen (zup z)) (nlen (zdn z))))))))
 
+; --- more of the stack's moves: rev is a pairing (and zrevrev is sigma-eta,
+; --- a theorem by idpath); focus motion cases on the up row's length, with
+; --- hd0/tl0 the defaulting projections (the wrap case rows through lrev) ---
+(assert
+ (defn 'hd0 '(pi l nlist nat)
+   '(lam l ((nat_rect (lam q (pi v (nvec q) nat))
+              (lam v 0)
+              (lam k (lam IH (lam v (pr1 v))))
+              (pr1 l))
+            (pr2 l))))
+ (defn 'tl0 '(pi l nlist nlist)
+   '(lam l ((nat_rect (lam q (pi v (nvec q) nlist))
+              (lam v nnil)
+              (lam k (lam IH (lam v (tpair k (pr2 v)))))
+              (pr1 l))
+            (pr2 l))))
+ (defn 'zrev '(pi z stk stk) '(lam z (zmk (zfoc z) (zdn z) (zup z))))
+ (defn 'zfocup '(pi z stk stk)
+   '(lam z (nat_rect (lam q stk)
+             (let a (lrev (ncons (zfoc z) (zdn z)))
+               (zmk (hd0 a) (tl0 a) nnil))
+             (lam k (lam r (zmk (hd0 (zup z)) (tl0 (zup z)) (ncons (zfoc z) (zdn z)))))
+             (pr1 (zup z)))))
+ (defn 'zfocdn '(pi z stk stk) '(lam z (zrev (zfocup (zrev z)))))
+ (defn 'zmaster '(pi z stk stk)
+   '(lam z (zmk (zfoc z) nnil (lapp (lrev (zup z)) (zdn z)))))
+ (defn 'zrevrev '(pi z stk (paths stk (zrev (zrev z)) z))
+   '(lam z (idpath z)))
+ ; focus motion never loses a window: the row is a fixed carousel
+ ((vof 0 '(zrow (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))
+  = (vof 0 '(zrow (zfocup (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))))
+ (2 = (vof 0 '(zfoc (zfocup (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))))
+ (9 = (vof 0 '(zfoc (zfocup (zmk 5 nnil (ncons 7 (ncons 9 nnil)))))))   ; the wrap
+ (7 = (vof 0 '(zfoc (zfocdn (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))))
+ ; zmaster reorders by design: the focus takes the head of the row
+ ((vof 0 '(ncons 5 (ncons 2 (ncons 7 nnil))))
+  = (vof 0 '(zrow (zmaster (zmk 5 (ncons 2 nnil) (ncons 7 nnil)))))))
+
+; --- the boolean observation lemmas: what an orb/andb/negb verdict tells
+; --- you about its operands (each by bool_rect on the scrutinee; the true
+; --- branch of orbfalsel IS its hypothesis, by conversion) ---
+(assert
+ (defq 'orbfalsel '(pi a bool (pi b bool (pi h (paths bool (orb a b) false) (paths bool a false))))
+   '(lam a (bool_rect (lam a2 (pi b bool (pi h (paths bool (orb a2 b) false) (paths bool a2 false))))
+       (lam b (lam h h))
+       (lam b (lam h (idpath false)))
+       a)))
+ (defq 'orbfalser '(pi a bool (pi b bool (pi h (paths bool (orb a b) false) (paths bool b false))))
+   '(lam a (bool_rect (lam a2 (pi b bool (pi h (paths bool (orb a2 b) false) (paths bool b false))))
+       (lam b (lam h (fromempty (paths bool b false) (nopathstruetofalse h))))
+       (lam b (lam h h))
+       a)))
+ (defq 'andbtruel '(pi a bool (pi b bool (pi h (paths bool (andb a b) true) (paths bool a true))))
+   '(lam a (bool_rect (lam a2 (pi b bool (pi h (paths bool (andb a2 b) true) (paths bool a2 true))))
+       (lam b (lam h (idpath true)))
+       (lam b (lam h (fromempty (paths bool false true) (nopathstruetofalse (pathsinv0 bool false true h)))))
+       a)))
+ (defq 'andbtruer '(pi a bool (pi b bool (pi h (paths bool (andb a b) true) (paths bool b true))))
+   '(lam a (bool_rect (lam a2 (pi b bool (pi h (paths bool (andb a2 b) true) (paths bool b true))))
+       (lam b (lam h h))
+       (lam b (lam h (fromempty (paths bool b true) (nopathstruetofalse (pathsinv0 bool false true h)))))
+       a)))
+ (defq 'negbtrue '(pi t bool (pi h (paths bool (negb t) true) (paths bool t false)))
+   '(lam t (bool_rect (lam t2 (pi h (paths bool (negb t2) true) (paths bool t2 false)))
+       (lam h (fromempty (paths bool true false) (nopathstruetofalse (pathsinv0 bool false true h))))
+       (lam h (idpath false))
+       t)))
+ (defq 'nateqbsymm '(pi n nat (pi m nat (paths bool (nateqb n m) (nateqb m n))))
+   '(lam n (nat_rect
+      (lam q (pi m nat (paths bool (nateqb q m) (nateqb m q))))
+      (lam m (nat_rect (lam j (paths bool (nateqb 0 j) (nateqb j 0)))
+               (idpath true)
+               (lam j (lam r (idpath false)))
+               m))
+      (lam k (lam IH (lam m (nat_rect (lam j (paths bool (nateqb (succ k) j) (nateqb j (succ k))))
+               (idpath false)
+               (lam j (lam r (IH j)))
+               m))))
+      n))))
+
+; --- the middle-insert lemmas, by induction on the front list a. lapp
+; --- (tpair (succ k) v) b unfolds through the head even on a neutral tail,
+; --- and sigma-eta closes (tpair (pr1 b) (pr2 b)) = b -- so every step is
+; --- a conversion, and the path algebra only carries the verdicts around ---
+(assert
+ (defq 'membmid
+   '(pi u nat (pi w nat (pi b nlist (pi hu (paths bool (nateqb u w) false)
+      (pi a nlist (pi hm (paths bool (memb u (lapp a b)) false)
+       (paths bool (memb u (lapp a (ncons w b))) false)))))))
+   '(lam u (lam w (lam b (lam hu (lam a ((nat_rect
+      (lam q (pi v (nvec q) (pi hm (paths bool (memb u (lapp (tpair q v) b)) false)
+               (paths bool (memb u (lapp (tpair q v) (ncons w b))) false))))
+      (lam v (lam hm (pathscomp0 bool
+        (memb u (ncons w b)) (memb u b) false
+        (maponpaths bool bool (lam t (orb t (memb u b))) (nateqb u w) false hu)
+        hm)))
+      (lam k (lam IH (lam v (lam hm
+        (pathscomp0 bool
+          (orb (nateqb u (pr1 v)) (memb u (lapp (tpair k (pr2 v)) (ncons w b))))
+          (memb u (lapp (tpair k (pr2 v)) (ncons w b)))
+          false
+          (maponpaths bool bool
+            (lam t (orb t (memb u (lapp (tpair k (pr2 v)) (ncons w b)))))
+            (nateqb u (pr1 v)) false
+            (orbfalsel (nateqb u (pr1 v)) (memb u (lapp (tpair k (pr2 v)) b)) hm))
+          (IH (pr2 v)
+            (orbfalser (nateqb u (pr1 v)) (memb u (lapp (tpair k (pr2 v)) b)) hm)))))))
+      (pr1 a)) (pr2 a))))))))
+ (defq 'nodupmid
+   '(pi w nat (pi b nlist (pi a nlist (pi hm (paths bool (memb w (lapp a b)) false)
+      (pi hs (paths bool (nodupb (lapp a b)) true)
+       (paths bool (nodupb (lapp a (ncons w b))) true))))))
+   '(lam w (lam b (lam a ((nat_rect
+      (lam q (pi v (nvec q) (pi hm (paths bool (memb w (lapp (tpair q v) b)) false)
+               (pi hs (paths bool (nodupb (lapp (tpair q v) b)) true)
+                (paths bool (nodupb (lapp (tpair q v) (ncons w b))) true)))))
+      (lam v (lam hm (lam hs (pathscomp0 bool
+        (nodupb (ncons w b)) (nodupb b) true
+        (maponpaths bool bool (lam t (andb (negb t) (nodupb b))) (memb w b) false hm)
+        hs))))
+      (lam k (lam IH (lam v (lam hm (lam hs
+        (pathscomp0 bool
+          (nodupb (lapp (tpair (succ k) v) (ncons w b)))
+          (nodupb (lapp (tpair k (pr2 v)) (ncons w b)))
+          true
+          (maponpaths bool bool
+            (lam t (andb (negb t) (nodupb (lapp (tpair k (pr2 v)) (ncons w b)))))
+            (memb (pr1 v) (lapp (tpair k (pr2 v)) (ncons w b))) false
+            (membmid (pr1 v) w b
+              (pathscomp0 bool (nateqb (pr1 v) w) (nateqb w (pr1 v)) false
+                (nateqbsymm (pr1 v) w)
+                (orbfalsel (nateqb w (pr1 v)) (memb w (lapp (tpair k (pr2 v)) b)) hm))
+              (tpair k (pr2 v))
+              (negbtrue (memb (pr1 v) (lapp (tpair k (pr2 v)) b))
+                (andbtruel (negb (memb (pr1 v) (lapp (tpair k (pr2 v)) b)))
+                           (nodupb (lapp (tpair k (pr2 v)) b)) hs))))
+          (IH (pr2 v)
+            (orbfalser (nateqb w (pr1 v)) (memb w (lapp (tpair k (pr2 v)) b)) hm)
+            (andbtruer (negb (memb (pr1 v) (lapp (tpair k (pr2 v)) b)))
+                       (nodupb (lapp (tpair k (pr2 v)) b)) hs))))))))
+      (pr1 a)) (pr2 a)))))))
+
+; --- THE PRIZE (Swierstra's insert invariant): a fresh window into a sane
+; --- stack leaves it sane. zrow (zins w z) IS lapp (lrev up) (ncons w
+; --- (ncons f dn)) by computation, so the whole theorem is nodupmid
+; --- instantiated at the row's split ---
+(assert
+ (defq 'zinsane
+   '(pi w nat (pi z stk (pi hm (paths bool (memb w (zrow z)) false)
+      (pi hs (paths bool (zsane z) true)
+       (paths bool (zsane (zins w z)) true)))))
+   '(lam w (lam z (nodupmid w (ncons (zfoc z) (zdn z)) (lrev (zup z)))))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e

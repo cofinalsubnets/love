@@ -56,11 +56,14 @@
    ; explicit skips: the type-in-type detonations (sound MLTT can't host them, and
    ; lean's universe check rightly rejects them -- the filter, working as intended)
    bl (tablet 0)
-   _ (map (\ n (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref
-                              zrow zsane))   ; zrow/zsane: lapp/lrev carry a body-only universe
-                                             ; (the nat_rect motive's nvec) that auto-bound
-                                             ; `Type _` strands on a metavariable at the use
-                                             ; site; Rocq exports them fine, Lean skips them
+   _ (map (\ n (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
+
+   ; UU pinned to CONCRETE `Type` for these: a type-level nat_rect both declares
+   ; and computes `Type _`, so the level is underdetermined, Lean generalizes it,
+   ; and the universe strands at every downstream use (uu_zrow found it). ground
+   ; the StackSet model's types at Type 0 and the whole tower's universes solve.
+   mono (tablet 0)
+   _ (map (\ n (pin mono n 1)) '(nvec nlist stk))
 
    ; transparent type-former/identity combinators: Lean checks a paths.rec minor premise
    ; at REDUCIBLE transparency and won't unfold a plain `def`, so an equivalence proof
@@ -157,8 +160,11 @@
 
    ; --- emit, in source order ---
    (emit e) (: nm (e2 e) mb (peep manual nm 0)
-     ((? (peep red nm 0) "@[reducible] " "") + "def " + (leann nm) + " : " + (u2l (e3 e)) + " :="
-      + nl + (? mb mb ("  " + (u2l (e4 e)))) + nl))
+     _ (pin bases 'UU (? (peep mono nm 0) "Type" "(Type _)"))
+     out ((? (peep red nm 0) "@[reducible] " "") + "def " + (leann nm) + " : " + (u2l (e3 e)) + " :="
+      + nl + (? mb mb ("  " + (u2l (e4 e)))) + nl)
+     _ (pin bases 'UU "(Type _)")
+     out)
    exports (foldl (\ a e (? (peep keep (e2 e) 0) (link e a) a)) () ents)   ; foldl reverses -> source order
 
    _ (. (lines `(
@@ -196,6 +202,7 @@
        "   global context), the same property Rocq's `Print Assumptions` reports. -/"
        "#print axioms uu_natpluscomm"
 "#print axioms uu_zcountins"
+"#print axioms uu_zinsane"
        "#print axioms uu_natplusassoc"
        "#print axioms uu_natmultcomm"
        "#print axioms uu_total2_paths_f"
