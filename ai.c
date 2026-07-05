@@ -1131,7 +1131,8 @@ static bool gen_remembered(struct ai *g, word obj) {
 static void gen_remember(struct ai *g, word obj) {
  if (g->rem_n && g->rem[g->rem_n - 1] == obj) return;          // hot path: same map as last pin
  if (gen_remembered(g, obj)) return;                           // deduped: the set stays small (book + a few)
- if (g->rem_n < g->rem_cap) g->rem[g->rem_n++] = obj;          // overflow drops -> surfaces as an audit miss
+ if (g->rem_n < g->rem_cap) g->rem[g->rem_n++] = obj;          // full: dirty forces a MAJOR (roots-only trace, no rem set), so a dropped entry can't orphan a young edge
+ else g->rem_miss++, g->dirty = 1;
  if (g->rem_n > g->rem_hi) g->rem_hi = g->rem_n; }
 // the write barrier: an old `src` gains a young key/value/backing/tail `p` -> remember
 // src so a minor rescans it. Old maps (a pin) and reader spines (set-tail) are the
@@ -2666,6 +2667,10 @@ lvm(lvm_yield_sw) {
  memcpy(N + 5, Sp, my_height * sizeof(word));
  prev->m = tagthread(N, 5 + my_height);
 #ifdef AI_STAT
+ // Pack FIRST: ai_young reads g->hp, and the live Hp runs ahead of the last Pack --
+ // against a stale g->hp the fresh node reads as OLD, the barrier drops the edge, and
+ // the next minor eats the ring (berth+ink froze in seconds on exactly this).
+ Pack(g);
  gen_wb(g, (word) prev, (word) prev->m);   // task ring: an old node now links to the fresh (young) yield snapshot
 #endif
  g->yield_ctr = 0;
@@ -2693,6 +2698,7 @@ lvm(lvm_spawn) {
  N[6].x = fn;
  g->tasks->m = tagthread(N, 7);
 #ifdef AI_STAT
+ Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
  gen_wb(g, (word) g->tasks, (word) g->tasks->m);   // task ring: an old node now links to the fresh (young) spawned task
 #endif
  return Sp++, Ip++, Continue(); }
@@ -2709,6 +2715,7 @@ lvm(lvm_wait) {
    while (prev->m != node) prev = prev->m;
    prev->m = node->m;
 #ifdef AI_STAT
+   Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
    gen_wb(g, (word) prev, (word) prev->m);   // task ring: unsplicing relinks an old node to a (maybe young) successor
 #endif
    break; }
@@ -2741,6 +2748,7 @@ lvm(lvm_hush) {
   if (getcharm(node[2].x) == target) {
    prev->m = node->m;
 #ifdef AI_STAT
+   Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
    gen_wb(g, (word) prev, (word) prev->m);   // unsplice relinks an old node to a (maybe young) successor
 #endif
    result = putcharm(1);
