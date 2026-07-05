@@ -59,6 +59,7 @@
    (encz z) (L 'zmk (cap z) (encl (caup z)) (encl (caup (cup z))))
    (decl v) (: (go vv acc) (? (two? vv) (go (nthl vv 2) (link (nthl vv 1) acc)) (rev acc))
               (go (nthl v 2) ()))
+   (decz v) (zmk (nthl v 1) (decl (nthl (nthl v 2) 1)) (decl (nthl (nthl v 2) 2)))
  z0 (zmk 5 (L 2) (L 7 9))
  z1 (zmk 5 () (L 7 9))
  _ (assert
@@ -70,5 +71,50 @@
     (= (zrow (zfocup z0)) (decl (vof 0 (L 'zrow (L 'zfocup (encz z0))))))
     (= (cap (zfocup z1)) (vof 0 (L 'zfoc (L 'zfocup (encz z1)))))
     (= (cap (zfocdn z0)) (vof 0 (L 'zfoc (L 'zfocdn (encz z0)))))
-    (= (zrow (zmaster z0)) (decl (vof 0 (L 'zrow (L 'zmaster (encz z0)))))))
+    (= (zrow (zmaster z0)) (decl (vof 0 (L 'zrow (L 'zmaster (encz z0))))))
+    ; delete, through the model's Maybe (ii2 carries the survivor)
+    (= (zdel 5 z0) (decz (nthl (vof 0 (L 'zdel 5 (encz z0))) 1)))
+    (= (zswapup z0) (decz (vof 0 (L 'zswapup (encz z0)))))))
+
+; leg 5: the seeded fuzz -- the whole op vocabulary, random walks through
+; BOTH worlds, the zippers compared after EVERY step, and the PROVED
+; invariant watched live: fresh ids keep the row duplicate-free, so the
+; model's zsane must answer true at every tenth stack. one op per step
+; runs on the MODEL side too (the previous CORE state encodes, the model
+; moves, the result decodes) -- so a divergence names its op and its step.
+(: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
+   (encl l) (? (two? l) (L 'ncons (cap l) (encl (cup l))) 'nnil)
+   (encz z) (L 'zmk (cap z) (encl (caup z)) (encl (caup (cup z))))
+   (decl v) (: (go vv acc) (? (two? vv) (go (nthl vv 2) (link (nthl vv 1) acc)) (rev acc))
+              (go (nthl v 2) ()))
+   (decz v) (zmk (nthl v 1) (decl (nthl (nthl v 2) 1)) (decl (nthl (nthl v 2) 2)))
+   (mstep r w t) (? (= r 0) (vof 0 (L 'zins w t))
+                    (= r 1) (vof 0 (L 'zfocup t))
+                    (= r 2) (vof 0 (L 'zfocdn t))
+                    (= r 3) (vof 0 (L 'zswapup t))
+                    (= r 4) (vof 0 (L 'zswapdn t))
+                    (= r 5) (vof 0 (L 'zmaster t))
+                    (nthl (vof 0 (L 'zdel w t)) 1))
+   (cstep r w z) (? (= r 0) (zins w z)
+                    (= r 1) (zfocup z)
+                    (= r 2) (zfocdn z)
+                    (= r 3) (zswapup z)
+                    (= r 4) (zswapdn z)
+                    (= r 5) (zmaster z)
+                    (zdel w z))
+   (fuzz i s z nid)
+    (? (< i 1) 1
+       (: row (zrow z)
+          r (: r0 (% s 7) (? (? (= r0 6) (< (tally row) 2) 0) 1 r0))   ; no deletes below 2
+          s2 (rnd s)
+          w (? (= r 0) nid (= r 6) (nthl row (% s2 (tally row))) 0)
+          zc (cstep r w z)
+          zm (decz (mstep r w (encz z)))
+          (? (! (= zc zm)) (: _ (. (L (\ fuzz-diverged) i r w zc zm)) 0)
+             (: _ (? (= 0 (% i 10))
+                     (? (= (vof 0 'true) (vof 0 (L 'zsane (encz zc)))) 0
+                        (. (L (\ fuzz-insane) i zc)))
+                     0)
+                (fuzz (- i 1) (rnd s2) zc (? (= r 0) (+ nid 1) nid))))))
+ _ (assert (fuzz 150 20260705 (zmk 0 () ()) 1))
  (puts "overlay: ok"))

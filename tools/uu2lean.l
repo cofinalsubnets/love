@@ -63,7 +63,7 @@
    ; and the universe strands at every downstream use (uu_zrow found it). ground
    ; the StackSet model's types at Type 0 and the whole tower's universes solve.
    mono (tablet 0)
-   _ (map (\ n (pin mono n 1)) '(nvec nlist stk))
+   _ (map (\ n (pin mono n 1)) '(nvec nlist stk mstk))
 
    ; transparent type-former/identity combinators: Lean checks a paths.rec minor premise
    ; at REDUCIBLE transparency and won't unfold a plain `def`, so an equivalence proof

@@ -2529,10 +2529,17 @@
    '(lam a (lam b (bool_rect (lam x bool) true b a))))
  (defn 'andb '(pi a bool (pi b bool bool))
    '(lam a (lam b (bool_rect (lam x bool) b false a))))
+ (defn 'npred '(pi m nat nat) '(lam m (nat_rect (lam q nat) 0 (lam j (lam r j)) m)))
+ (defn 'niszero '(pi m nat bool) '(lam m (nat_rect (lam q bool) true (lam j (lam r false)) m)))
+ ; ONE recursive call per level, through the linear npred/niszero cases: an
+ ; inner nat_rect whose fold VALUE rides the outer IH would call it at every
+ ; level below m -- binomial blowup under the eager NbE (nateqb 19 19 took
+ ; seconds; this shape is quadratic). the definitional equations are the
+ ; same, so nateqbsymm's proof reads through unchanged.
  (defn 'nateqb '(pi n nat (pi m nat bool))
    '(lam n ((nat_rect (lam q (pi m nat bool))
-              (lam m (nat_rect (lam q bool) true (lam k (lam r false)) m))
-              (lam k (lam IH (lam m (nat_rect (lam q bool) false (lam j (lam r (IH j))) m))))
+              (lam m (niszero m))
+              (lam k (lam IH (lam m (bool_rect (lam x bool) false (IH (npred m)) (niszero m)))))
               n))))
  (defn 'memb '(pi w nat (pi l nlist bool))
    '(lam w (lam l ((nat_rect (lam q (pi v (nvec q) bool))
@@ -2743,6 +2750,55 @@
       (pi hs (paths bool (zsane z) true)
        (paths bool (zsane (zins w z)) true)))))
    '(lam w (lam z (nodupmid w (ncons (zfoc z) (zdn z)) (lrev (zup z)))))))
+
+; --- the rest of the moves: swap (its wrap rotates the row's tail through
+; --- lrev), and delete -- which may empty the stack, so it answers
+; --- Swierstra's Maybe Stack (coprod unit stk): ii1 the empty harbor,
+; --- ii2 the survivor. nfilt is znub, the every-copy filter ---
+(assert
+ (defn 'zswapup '(pi z stk stk)
+   '(lam z (nat_rect (lam q stk)
+             (zmk (zfoc z) (lrev (zdn z)) nnil)
+             (lam k (lam r (zmk (zfoc z) (tl0 (zup z)) (ncons (hd0 (zup z)) (zdn z)))))
+             (pr1 (zup z)))))
+ (defn 'zswapdn '(pi z stk stk) '(lam z (zrev (zswapup (zrev z)))))
+ (defn 'nfilt '(pi w nat (pi l nlist nlist))
+   '(lam w (lam l ((nat_rect (lam q (pi v (nvec q) nlist))
+             (lam v nnil)
+             (lam k (lam IH (lam v (bool_rect (lam x nlist)
+                      (IH (pr2 v))
+                      (ncons (pr1 v) (IH (pr2 v)))
+                      (nateqb w (pr1 v))))))
+             (pr1 l)) (pr2 l)))))
+ (defn 'mstk 'UU '(coprod unit stk))
+ (defn 'zdel '(pi w nat (pi z stk mstk))
+   '(lam w (lam z
+      (let u (nfilt w (zup z))
+       (let d (nfilt w (zdn z))
+        (bool_rect (lam x mstk)
+          (nat_rect (lam q mstk)
+            (nat_rect (lam q2 mstk)
+              (ii1 tt)
+              (lam k2 (lam r2 (ii2 (zmk (hd0 u) (tl0 u) nnil))))
+              (pr1 u))
+            (lam k (lam r (ii2 (zmk (hd0 d) u (tl0 d)))))
+            (pr1 d))
+          (ii2 (zmk (zfoc z) u d))
+          (nateqb (zfoc z) w)))))))
+ ; the delete faces: a bystander, the focus (dn heir, then up heir), the last one out
+ ((vof 0 '(zdel 7 (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))
+  = (vof 0 '(ii2 (zmk 5 (ncons 2 nnil) (ncons 9 nnil)))))
+ ((vof 0 '(zdel 5 (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))
+  = (vof 0 '(ii2 (zmk 7 (ncons 2 nnil) (ncons 9 nnil)))))
+ ((vof 0 '(zdel 5 (zmk 5 (ncons 2 nnil) nnil)))
+  = (vof 0 '(ii2 (zmk 2 nnil nnil))))
+ ((vof 0 '(zdel 5 (zmk 5 nnil nnil))) = (vof 0 '(ii1 tt)))
+ ; the swaps: the focused window trades places, or rotates to the bottom
+ ((vof 0 '(zrow (zswapup (zmk 5 (ncons 2 nnil) (ncons 7 nnil)))))
+  = (vof 0 '(ncons 5 (ncons 2 (ncons 7 nnil)))))
+ ((vof 0 '(zrow (zswapup (zmk 5 nnil (ncons 7 nnil)))))
+  = (vof 0 '(ncons 7 (ncons 5 nnil))))
+ ((vof 0 '(zfoc (zswapdn (zmk 5 (ncons 2 nnil) (ncons 7 nnil))))) = 5))
 
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)

@@ -444,8 +444,12 @@ Definition uu_orb : (forall a : bool, (forall b : bool, bool)) :=
   (fun a => (fun b => (bool_rect (fun x => bool) true b a))).
 Definition uu_andb : (forall a : bool, (forall b : bool, bool)) :=
   (fun a => (fun b => (bool_rect (fun x => bool) b false a))).
+Definition uu_npred : (forall m : nat, nat) :=
+  (fun m => (nat_rect (fun q => nat) 0 (fun j => (fun r => j)) m)).
+Definition uu_niszero : (forall m : nat, bool) :=
+  (fun m => (nat_rect (fun q => bool) true (fun j => (fun r => false)) m)).
 Definition uu_nateqb : (forall n : nat, (forall m : nat, bool)) :=
-  (fun n => ((nat_rect (fun q => (forall m : nat, bool)) (fun m => (nat_rect (fun q => bool) true (fun k => (fun r => false)) m)) (fun k => (fun IH => (fun m => (nat_rect (fun q => bool) false (fun j => (fun r => (IH j))) m)))) n))).
+  (fun n => ((nat_rect (fun q => (forall m : nat, bool)) (fun m => (uu_niszero m)) (fun k => (fun IH => (fun m => (bool_rect (fun x => bool) false (IH (uu_npred m)) (uu_niszero m))))) n))).
 Definition uu_memb : (forall w : nat, (forall l : uu_nlist, bool)) :=
   (fun w => (fun l => ((nat_rect (fun q => (forall v : (uu_nvec q), bool)) (fun v => false) (fun k => (fun IH => (fun v => (uu_orb (uu_nateqb w (pr1 v)) (IH (pr2 v)))))) (pr1 l)) (pr2 l)))).
 Definition uu_nodupb : (forall l : uu_nlist, bool) :=
@@ -504,6 +508,16 @@ Definition uu_nodupmid : (forall w : nat, (forall b : uu_nlist, (forall a : uu_n
   (fun w => (fun b => (fun a => ((nat_rect (fun q => (forall v : (uu_nvec q), (forall hm : (@paths bool (uu_memb w (uu_lapp (tpair q v) b)) false), (forall hs : (@paths bool (uu_nodupb (uu_lapp (tpair q v) b)) true), (@paths bool (uu_nodupb (uu_lapp (tpair q v) (uu_ncons w b))) true))))) (fun v => (fun hm => (fun hs => (uu_pathscomp0 bool (uu_nodupb (uu_ncons w b)) (uu_nodupb b) true (uu_maponpaths bool bool (fun t => (uu_andb (uu_negb t) (uu_nodupb b))) (uu_memb w b) false hm) hs)))) (fun k => (fun IH => (fun v => (fun hm => (fun hs => (uu_pathscomp0 bool (uu_nodupb (uu_lapp (tpair (S k) v) (uu_ncons w b))) (uu_nodupb (uu_lapp (tpair k (pr2 v)) (uu_ncons w b))) true (uu_maponpaths bool bool (fun t => (uu_andb (uu_negb t) (uu_nodupb (uu_lapp (tpair k (pr2 v)) (uu_ncons w b))))) (uu_memb (pr1 v) (uu_lapp (tpair k (pr2 v)) (uu_ncons w b))) false (uu_membmid (pr1 v) w b (uu_pathscomp0 bool (uu_nateqb (pr1 v) w) (uu_nateqb w (pr1 v)) false (uu_nateqbsymm (pr1 v) w) (uu_orbfalsel (uu_nateqb w (pr1 v)) (uu_memb w (uu_lapp (tpair k (pr2 v)) b)) hm)) (tpair k (pr2 v)) (uu_negbtrue (uu_memb (pr1 v) (uu_lapp (tpair k (pr2 v)) b)) (uu_andbtruel (uu_negb (uu_memb (pr1 v) (uu_lapp (tpair k (pr2 v)) b))) (uu_nodupb (uu_lapp (tpair k (pr2 v)) b)) hs)))) (IH (pr2 v) (uu_orbfalser (uu_nateqb w (pr1 v)) (uu_memb w (uu_lapp (tpair k (pr2 v)) b)) hm) (uu_andbtruer (uu_negb (uu_memb (pr1 v) (uu_lapp (tpair k (pr2 v)) b))) (uu_nodupb (uu_lapp (tpair k (pr2 v)) b)) hs)))))))) (pr1 a)) (pr2 a))))).
 Definition uu_zinsane : (forall w : nat, (forall z : uu_stk, (forall hm : (@paths bool (uu_memb w (uu_zrow z)) false), (forall hs : (@paths bool (uu_zsane z) true), (@paths bool (uu_zsane (uu_zins w z)) true))))) :=
   (fun w => (fun z => (uu_nodupmid w (uu_ncons (uu_zfoc z) (uu_zdn z)) (uu_lrev (uu_zup z))))).
+Definition uu_zswapup : (forall z : uu_stk, uu_stk) :=
+  (fun z => (nat_rect (fun q => uu_stk) (uu_zmk (uu_zfoc z) (uu_lrev (uu_zdn z)) uu_nnil) (fun k => (fun r => (uu_zmk (uu_zfoc z) (uu_tl0 (uu_zup z)) (uu_ncons (uu_hd0 (uu_zup z)) (uu_zdn z))))) (pr1 (uu_zup z)))).
+Definition uu_zswapdn : (forall z : uu_stk, uu_stk) :=
+  (fun z => (uu_zrev (uu_zswapup (uu_zrev z)))).
+Definition uu_nfilt : (forall w : nat, (forall l : uu_nlist, uu_nlist)) :=
+  (fun w => (fun l => ((nat_rect (fun q => (forall v : (uu_nvec q), uu_nlist)) (fun v => uu_nnil) (fun k => (fun IH => (fun v => (bool_rect (fun x => uu_nlist) (IH (pr2 v)) (uu_ncons (pr1 v) (IH (pr2 v))) (uu_nateqb w (pr1 v)))))) (pr1 l)) (pr2 l)))).
+Definition uu_mstk : Type :=
+  (sum unit uu_stk).
+Definition uu_zdel : (forall w : nat, (forall z : uu_stk, uu_mstk)) :=
+  (fun w => (fun z => (let u := (uu_nfilt w (uu_zup z)) in (let d := (uu_nfilt w (uu_zdn z)) in (bool_rect (fun x => uu_mstk) (nat_rect (fun q => uu_mstk) (nat_rect (fun q2 => uu_mstk) (inl tt) (fun k2 => (fun r2 => (inr (uu_zmk (uu_hd0 u) (uu_tl0 u) uu_nnil)))) (pr1 u)) (fun k => (fun r => (inr (uu_zmk (uu_hd0 d) u (uu_tl0 d))))) (pr1 d)) (inr (uu_zmk (uu_zfoc z) u d)) (uu_nateqb (uu_zfoc z) w)))))).
 
 (* === bridge: uu's nat ops ARE Coq's standard ones, so the laws above land on
    Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std
@@ -532,5 +546,5 @@ Print Assumptions add_comm_std.
 Print Assumptions add_assoc_std.
 Print Assumptions mul_comm_std.
 
-(* 239 exported / 289 corpus entries swept;
+(* 246 exported / 296 corpus entries swept;
    3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)
