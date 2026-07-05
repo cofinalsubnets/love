@@ -16,7 +16,9 @@
 ;      worlds, compared after every step, the proved invariant watched live.
 ;   6. the TRANSLATOR (tools/wm2uu.l, stage 3): core.l's ops read as data,
 ;      kind-directed into uu terms, kernel-certified, and fuzzed against the
-;      implementation they were translated from.
+;      implementation they were translated from -- then (stage 4) tied to the
+;      hand-proved model by idpath BRIDGES: compiled-from-source == proved,
+;      certified by conversion, so every model theorem transfers for free.
 ;
 ;   cat test/00-init.l boot/overlay.l | out/host/ai
 
@@ -133,10 +135,32 @@
 (reads (open "tools/wm2uu.l" "r"))
 (: (forms path) (: q (open path "r") e (mint 0)
                    ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
-   gens (wm2uu (forms "apps/wm/core.l") wm-sigs)
+   cforms (forms "apps/wm/core.l")
+   gens (wm2uu cforms wm-sigs)
  _ (assert (= 12 (tally gens)))
  _ (map (\ g (defn (cap g) (nthl g 1) (nthl g 2))) (rev gens))   ; the kernel certifies each
- (puts "overlay leg 6: translated + certified"))
+ _ (puts "overlay leg 6: translated + certified ")
+
+ ; stage 4: the idpath bridges. for every op, the theorem
+ ;   paths RES (gen-op args..) (op args..)
+ ; proved by (idpath (op args..)) -- which CHECKS if and only if the
+ ; translator's output is CONVERTIBLE with the hand-proved model. the kernel
+ ; itself certifies compiled-from-source == proved, and every theorem about
+ ; the model transfers to the generated terms for free.
+ amap '((zmk agree-zmk) (zfoc agree-zfoc) (zrow agree-zrow) (zrev agree-zrev)
+        (zfocup agree-zfocup) (zfocdn agree-zfocdn) (zswapup agree-zswapup)
+        (zswapdn agree-zswapdn) (zmaster agree-zmaster) (zins agree-zins)
+        (znub agree-znub) (zdel agree-zdel))
+ (mname nm) (? (id? nm 'znub) 'nfilt nm)                 ; znub's proved twin is nfilt
+ _ (map (\ nm (: sg (w2-sigof wm-sigs nm)
+                 ps (cup (cap (w2-find nm cforms)))
+                 ks (cap (cup sg))
+                 res (w2-mty (w2-rk nm (w2-nthl sg 2)))
+                 (defn (caup (assoc nm amap))
+                   (w2-pi ps ks (L 'paths res (link (w2-gen nm) ps) (link (mname nm) ps)))
+                   (w2-lams ps (L 'idpath (link (mname nm) ps))))))
+        w2-want)
+ (puts "overlay stage 4: 12 idpath bridges -- the compiled ops ARE the proved model"))
 
 ; the same seeded walk, the model side now stepping through the TRANSLATED ops
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
