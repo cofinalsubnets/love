@@ -49,5 +49,43 @@
    r (fz 100 (seed 7))
    (assert (= r 'ok)))
 
-(say err "apps/utils/law: myers diff -- projections + minimality (lcs oracle) + seeded fuzz ok
+; --- patience: the same script contract, anchored -- the projections hold verbatim,
+; minimality is traded (never below myers), and the unique-in-both lines land as keeps ---
+(: (keeps s) (map caup (filter (\ o (= (cap o) 'keep)) s))
+   A '(a b c a b b a) B '(c b a b a c)
+   s (patience A B)                                             ; no unique-both line here ...
+   mv (patience '(h1 b1 b2 h2 c1 c2) '(h2 c1 c2 h1 b1 b2))      ; a moved block, all lines unique
+   x (patience '(u1 u2) '(u2 u1))                               ; crossing anchors: LIS keeps one
+   st (patience '("a" "b" "c") '("b" "c" "d"))                  ; string lines census structurally
+   tr (patience '((1 2) (3 4)) '((3 4) (5 6)))                  ; ... and whole trees do too
+   eq (patience '(1 2 3) '(1 2 3))
+   (assert
+      (= (dold s) A) (= (dnew s) B) (= (dcost s) 5)             ; ... so patience = the myers floor
+      (= (dold mv) '(h1 b1 b2 h2 c1 c2)) (= (dnew mv) '(h2 c1 c2 h1 b1 b2))
+      (= (tally (keeps mv)) 3) (= (dcost mv) 6)                 ; one block anchors whole, the other moves
+      (= (dcost x) 2) (= (dold x) '(u1 u2)) (= (dnew x) '(u2 u1))
+      (= (dold st) '("a" "b" "c")) (= (dnew st) '("b" "c" "d")) (= (dcost st) 2)
+      (= (keeps tr) '((3 4))) (= (dcost tr) 2)
+      (= (dcost eq) 0) (= (keeps eq) '(1 2 3))
+      (! (patience () ())) (= (dnew (patience () '(1 2))) '(1 2))
+      (= (dold (patience '(1 2) ())) '(1 2))))
+
+; --- the patience fuzz: a wider alphabet (so anchors actually occur), projections per
+; draw, and the trade law dcost(patience) >= dcost(myers) held against the myers core ---
+(: (rlist2 i st acc) (? (< i 1) (L acc st)
+                        (: r (random st 12) (rlist2 (- i 1) (cup r) (link (+ 1 (cap r)) acc))))
+   (fzp i st)
+    (? (< i 1) 'ok
+       (: r1 (random st 11) r2 (random (cup r1) 11)
+          la (rlist2 (cap r1) (cup r2) ())
+          lb (rlist2 (cap r2) (caup la) ())
+          a (cap la) b (cap lb)
+          sp (patience a b)
+          ok (&& (= (dold sp) a) (= (dnew sp) b)
+                 (! (< (dcost sp) (dcost (myers a b)))))
+          (? ok (fzp (- i 1) (caup lb)) (L 'broke a b))))
+   r (fzp 100 (seed 11))
+   (assert (= r 'ok)))
+
+(say err "apps/utils/law: myers + patience -- projections + minimality (lcs oracle) + anchors + seeded fuzz ok
 ")

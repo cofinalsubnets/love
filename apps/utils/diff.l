@@ -68,3 +68,74 @@
    (dold s) (map caup (filter (\ o (! (= (cap o) 'add))) s))
    (dnew s) (map caup (filter (\ o (! (= (cap o) 'del))) s))
    (dcost s) (tally (filter (\ o (! (= (cap o) 'keep))) s)))
+
+; --- patience: the anchoring layer over myers (Bram Cohen). same script shape, so the
+; projection laws carry over verbatim -- what changes is the SHAPE of the hunks: anchor
+; on the lines a human would (unique in both sides), recurse between anchors, and let
+; myers fill the gaps, trading minimality (dcost patience >= dcost myers) for hunks
+; that align on landmarks instead of boilerplate. the pass: peel the common prefix and
+; suffix (keeps for free, and they shrink the D the O(ND) core sees), census both sides
+; (tablets key elements STRUCTURALLY, so string lines and whole trees census alike),
+; pair the unique-in-both positions, keep the longest increasing subsequence of them
+; (the patience-sorting step, an O(k^2) DP -- k is tiny), and split at the survivors.
+(:
+   ; occurrence census: element -> how many times it appears
+   (dcensus l) (: t (tablet 0)
+                  (go m) (? (two? m) (: _ (pin t (cap m) (+ 1 (peep t (cap m) 0))) (go (cup m))) t)
+                  (go l))
+   ; the unique-in-both candidates as (i j e) pairs, i ascending
+   (danchors a b)
+    (: ca (dcensus a) cb (dcensus b)
+       bj (tablet 0)
+       (gob m j) (? (two? m)
+                    (: e (cap m)
+                       _ (? (&& (= (ca e) 1) (= (cb e) 1)) (pin bj e j) ())
+                       (gob (cup m) (+ j 1)))
+                    ())
+       _ (gob b 0)
+       (goa m i acc) (? (two? m)
+                        (: e (cap m) j (peep bj e -1)            ; -1 the absence face: j = 0 is a real seat
+                           (? (< j 0) (goa (cup m) (+ i 1) acc)
+                              (goa (cup m) (+ i 1) (link (L i j e) acc))))
+                        (rev acc))
+       (goa a 0 ()))
+   ; the longest increasing subsequence of the j's (the i's already ascend): O(k^2) DP
+   (dlis ps)
+    (: n (tally ps) pt (dindex ps)
+       (jof t) (caup (pt t))
+       ln (tablet 0) pv (tablet 0)
+       (gos t s bl bp)                                            ; best chain ending at t
+        (? (<= t s) (: _ (pin ln t bl) _ (pin pv t bp) ())
+           (: c (? (< (jof s) (jof t)) (+ 1 (peep ln s 0)) 0)
+              (? (< bl c) (gos t (+ s 1) c s) (gos t (+ s 1) bl bp))))
+       (got t) (? (<= n t) () (: _ (gos t 0 1 -1) (got (+ t 1))))
+       _ (got 0)
+       (gom t best bt) (? (<= n t) bt                             ; the longest chain's tail
+                          (: c (peep ln t 0)
+                             (? (< best c) (gom (+ t 1) c t) (gom (+ t 1) best bt))))
+       (gob t acc) (? (< t 0) acc (gob (peep pv t -1) (link (pt t) acc)))
+       (gob (gom 0 0 -1) ()))
+   ; peel the common prefix; answers (a' b' keeps), the keeps REVERSED
+   (dpre a b ks)
+    (? (&& (two? a) (two? b) (= (cap a) (cap b)))
+       (dpre (cup a) (cup b) (link (L 'keep (cap a)) ks))
+       (L a b ks))
+   ; split at the anchors: each between-segment recurses (uniqueness reappears locally
+   ; once the outer context is cut away), each anchor lands as a keep
+   (dsplit a b ai bi ps)
+    (? (! (two? ps)) (patience a b)
+       (: h (cap ps) i (cap h) j (caup h) e (caup (cup h))
+          na (- i ai) nb (- j bi)
+          (cat (patience (take na a) (take nb b))
+               (link (L 'keep e)
+                     (dsplit (drop (+ na 1) a) (drop (+ nb 1) b) (+ i 1) (+ j 1) (cup ps))))))
+   ; the trimmed middle: anchor + split, or myers when nothing anchors
+   (dmid a b) (: ps (danchors a b)
+                 (? (two? ps) (dsplit a b 0 0 (dlis ps)) (myers a b)))
+   ; the entry: patience diff, same script contract as myers
+   (patience a b)
+    (: p (dpre a b ())
+       a1 (cap p) b1 (caup p) pre (rev (caup (cup p)))
+       s (dpre (rev a1) (rev b1) ())                              ; the suffix is the reversed prefix
+       a2 (rev (cap s)) b2 (rev (caup s)) suf (caup (cup s))      ; ... and its keeps come back forward
+       (cat pre (cat (dmid a2 b2) suf))))
