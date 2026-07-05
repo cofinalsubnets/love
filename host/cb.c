@@ -23,6 +23,7 @@
 #include <unistd.h>   // write (gush), read (swig)
 #include <fcntl.h>    // O_NONBLOCK (swig)
 #include <errno.h>
+#include <string.h>   // memcpy (swig's rbuf drain)
 #include "../port/quay/quay.c"
 #include "../port/quay/moderndos_8x16.c"   // the builtin glyphs (host links no font objects)
 #include "../port/quay/cga_8x8.c"
@@ -297,8 +298,19 @@ static lvm(lvm_swig) {
   ai_word out = putcharm(-1);
   if (!(p & 1) && ((union u*) p)->ap == lvm_port_io
       && !(x & 1) && ((union u*) x)->ap == lvm_buf) {
-    intptr_t fd = getcharm(((struct ai_io*) p)->fd);
+    struct ai_io *io = (struct ai_io*) p;
+    intptr_t fd = getcharm(io->fd);
     struct ai_str *s = ((struct ai_buf*) x)->str;
+    // the port's OWN pending run comes first: a buffered see may have gulped
+    // ahead of us, and reading the fd past it would scramble the byte order
+    if (io->rbuf && !(io->rbuf & 1) && s->len) {
+      uintptr_t rp = (uintptr_t) getcharm(io->rpos), rl = (uintptr_t) getcharm(io->rlen);
+      if (rp < rl) {
+        uintptr_t k = rl - rp < s->len ? rl - rp : s->len;
+        memcpy(s->bytes, ((struct ai_str*) io->rbuf)->bytes + rp, k);
+        io->rpos = putcharm((intptr_t)(rp + k));
+        Sp[1] = putcharm((intptr_t) k);
+        Sp += 1; Ip += 1; return Continue(); } }
     if (fd >= 0 && s->len) {
       int fl = fcntl((int) fd, F_GETFL);
       fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);

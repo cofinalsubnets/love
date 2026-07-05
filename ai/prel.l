@@ -228,12 +228,12 @@
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(())))
 (: (tap cl)
- (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (twirl 5))))))
+ (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke -1 0 (poke -1 0 (poke -1 0 (poke 7 cl (twirl 8)))))))))   ; [ap fd unget eof rbuf rpos rlen head] -- ai.h struct ai_io + ci, offsets live in BOTH places
  (jug _)                                          ; the output dual of `tap`: a memory-backed output PORT -- say INTO it, slurp it back OUT (you pour both ways, like a jug). NOT a cask (a cask is a byte ARRAY)
-  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (twirl 6)))))))
+  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 0 (poke -1 0 (poke -1 0 (poke -1 "  " (poke 8 0 (twirl 9))))))))))   ; [.. rbuf rpos rlen buf i] -- struct to's shape
  (sip o) (see o)                                  ; draw ONE unit (pairs with slurp = all)
  ; slurp drains a vessel to a value: an output jug reads its backing buffer; a tap drains via see.
- (slurp o) (? (string? (peek 4 o)) (snip (peek 4 o) 0 (peek 5 o))
+ (slurp o) (? (string? (peek 7 o)) (snip (peek 7 o) 0 (peek 8 o))
               (: (rl i) (: c (see i) (? (= c -1) () (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; help status readers. a global `help` function is called as (help s a b):

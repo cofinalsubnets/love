@@ -2151,7 +2151,7 @@ lvm(lvm_eval) { return Ip++, Pack(g),
 
 ai_noinline struct ai *ai_evals_(struct ai*g, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
- struct ti i = {{lvm_port_io, putcharm(-1), putcharm(EOF), putcharm(false)}, t, 0};
+ struct ti i = {{lvm_port_io, putcharm(-1), putcharm(EOF), putcharm(false), 0, putcharm(0), putcharm(0)}, t, 0};
  g = push0(pushq(push0(ai_eval(ai_reads(g, (void*) &i)))));
  i.t = s, i.i = 0, i.io.ungetc_buf = putcharm(EOF), i.io.eof_seen = putcharm(false);
  return ai_pop(ai_eval(gxr(gxl(gxr(gxl(ai_reads(g, (void*) &i)))))), 1); }
@@ -3013,11 +3013,64 @@ static ai_inline bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io
 static ai_inline struct ai_port_vt const *port_vt(word fd_tagged) {
  intptr_t fd = getcharm(fd_tagged);
  return fd >= 0 ? &ai_fd_port_vt : &synth[-(fd + 1)]; }
-static ai_inline struct ai *zgetc(struct ai*g)          { return ai_ok(g) ? port_vt(g->io->fd)->getc(g) : g; }
+
+// --- the read buffer (generic, above the vt) --------------------------------
+// zgetc serves ungetc_buf, then the pending rbuf run, then refills: one readn
+// gulp into the port's backing (dressed lazily on the FIRST buffered read --
+// heap ports only, a static is untraced so a heap backing would dangle). A dry
+// readn deep-waits the fd and retries: the same VM-blocking fd_getc's read(2)
+// had, so cooperative parking stays the caller's job (lvm_fgetc's park test
+// consults the buffer FIRST -- a task must never park on a quiet fd while
+// buffered bytes wait). eof answers false while a run is pending.
+static ai_inline bool io_rb_pending(struct ai_io *i) {
+ word rb = i->rbuf;
+ return rb && !(rb & 1) && getcharm(i->rpos) < getcharm(i->rlen); }
+static struct ai *io_refill(struct ai *g) {
+ struct ai *fc = ai_core_of(g);
+ struct ai_io *i = fc->io;
+ struct ai_port_vt const *vt = port_vt(i->fd);
+ if (!vt->readn || !in_live_pool(fc, (word const*) i))
+  return vt->getc(g);                            // no bulk lane / a static port: per-byte
+ if (!i->rbuf || (i->rbuf & 1)) {                // first buffered read: dress the backing
+  if (!ai_ok(g = str0(g, ai_iobuf))) return g;
+  fc = ai_core_of(g), i = fc->io;                // the GC may have moved the port
+  i->rbuf = fc->sp[0];
+  i->rpos = i->rlen = putcharm(0);
+#ifdef AI_STAT
+  gen_wb(fc, (word) i, i->rbuf);                 // a tenured port takes a young backing
+#endif
+  fc->sp += 1; }
+ for (;;) {
+  struct ai_str *b = (struct ai_str*) i->rbuf;
+  intptr_t k = vt->readn(g, (unsigned char*) txt(b), b->len);
+  if (k > 0) {
+   i->rlen = putcharm(k), i->rpos = putcharm(1);
+   fc->b = (unsigned char) txt(b)[0];
+   return g; }
+  if (k < 0) { i->eof_seen = putcharm(true); fc->b = EOF; return g; }
+  ai_wait_fd((int) getcharm(i->fd), 1, 0); } }
+static ai_inline struct ai *zgetc(struct ai*g) {
+ if (!ai_ok(g)) return g;
+ struct ai *fc = ai_core_of(g);
+ struct ai_io *i = fc->io;
+ if (getcharm(i->ungetc_buf) != EOF) {
+  fc->b = getcharm(i->ungetc_buf);
+  i->ungetc_buf = putcharm(EOF);
+  return g; }
+ if (io_rb_pending(i)) {
+  uintptr_t p = getcharm(i->rpos);
+  fc->b = (unsigned char) txt((struct ai_str*) i->rbuf)[p];
+  i->rpos = putcharm(p + 1);
+  return g; }
+ return io_refill(g); }
 static ai_inline struct ai *zungetc(struct ai*g, int c) { return ai_ok(g) ? port_vt(g->io->fd)->ungetc(g, c) : g; }
 static ai_inline struct ai *zputc(struct ai*g, int c)   { return port_vt(g->io->fd)->putc(g, c); }
 static ai_inline struct ai *zflush(struct ai*g)         { return port_vt(g->io->fd)->flush(g); }
-static ai_inline struct ai *zeof(struct ai*g)           { return ai_ok(g) ? port_vt(g->io->fd)->eof(g) : g; }
+static ai_inline struct ai *zeof(struct ai*g) {
+ if (!ai_ok(g)) return g;
+ struct ai *fc = ai_core_of(g);
+ if (io_rb_pending(fc->io)) return fc->b = false, g;
+ return port_vt(fc->io->fd)->eof(g); }
 struct ci { struct ai_io io; ai_word head; }; // charlist input
 struct to { struct ai_io io; struct ai_str *buf; ai_word i; }; // lisp string output
 static struct ai *ai_dtoa2(struct ai*, ai_flo_t);
@@ -3718,7 +3771,11 @@ lvm(lvm_feof) {
 lvm(lvm_fgetc) {
  if (iop(Sp[0])) {
   struct ai_io *i = (struct ai_io*) Sp[0];
-  if (!ai_ready(getcharm(i->fd))) {
+  // the park law: consult the port's OWN bytes first -- a pushed-back byte or
+  // a pending rbuf run makes the port readable however quiet the fd is; a
+  // task parked on the bare fd over a full buffer would sleep forever.
+  if (getcharm(i->ungetc_buf) == EOF && !io_rb_pending(i)
+      && !ai_ready(getcharm(i->fd))) {
    g->next_wait_fd = getcharm(i->fd);
    return Ap(lvm_yield_sw, g); }
   Pack(g);
@@ -3777,6 +3834,8 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
   io->fd = putcharm(fd);
   io->ungetc_buf = putcharm(EOF);
   io->eof_seen = putcharm(false);
+  io->rbuf = 0;                                // never buffered yet (io_refill dresses one lazily)
+  io->rpos = io->rlen = putcharm(0);
   *--g->sp = (word) tagthread(k, n);            // stack slot reserved by the +1 in have()
   struct ai_fz *z = bump(g, Width(struct ai_fz));
   z->p = k, z->fn = io_close, z->next = g->fz, g->fz = z; }

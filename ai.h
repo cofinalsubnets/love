@@ -48,6 +48,12 @@
 #define AI_STAT
 #endif
 
+// port read-buffer size in bytes (the one buffered-io knob; a small device
+// shrinks it like ai_major0)
+#ifndef ai_iobuf
+#define ai_iobuf 4096
+#endif
+
 #if ai_tco
 #define _lvm(n, ...) struct ai *n(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp, ##__VA_ARGS__)
 #define Ap(fn, g, ...) fn(g, Ip, Hp, Sp, ##__VA_ARGS__)
@@ -218,6 +224,14 @@ struct ai {
     ai_word fd;
     ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
     ai_word eof_seen;
+    // the READ BUFFER (host-side; dressed lazily by the generic zgetc on a
+    // HEAP port whose vt has readn). rbuf = an ai_str backing, else 0 or the
+    // 0-charm (statics zero-init raw; prel pokes the charm -- both read as
+    // "never buffered", and GC walks either word harmlessly); rpos/rlen charms
+    // bound the pending run [rpos, rlen). A static port never dresses one --
+    // nothing traces a static, so a heap backing would dangle. ⚠ prel's
+    // tap/jug BUILD ports by raw poke: these offsets live in BOTH places.
+    ai_word rbuf, rpos, rlen;
    } *io; }; }; };
  intptr_t end[]; };
 
