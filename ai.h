@@ -244,12 +244,22 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 
 // Port vtable. One shape covers both directions; unused slots in a given
 // port get noop_* stubs (defined in g.c) so dispatch needs no NULL guards.
+// The BULK lanes may be NULL: dispatch falls back to per-byte putc/getc loops,
+// so a frontend adopts them at its own pace. Neither may allocate or block the
+// scheduler, and neither touches ungetc_buf (the generic layer above owns it).
+//   writen: land up to n bytes from src in one motion; returns how many landed
+//     (0 = no room without an alloc -- the caller makes one byte of progress
+//     through putc, which may grow/GC, then retries the bulk lane).
+//   readn: drink up to n waiting bytes into dst WITHOUT blocking;
+//     >0 = bytes, 0 = nothing waiting right now, -1 = end of stream.
 struct ai_port_vt {
  struct ai*(*getc)(struct ai*),
          *(*ungetc)(struct ai*, int),
          *(*eof)(struct ai*),
          *(*putc)(struct ai*, int),
-         *(*flush)(struct ai*); };
+         *(*flush)(struct ai*);
+ intptr_t (*writen)(struct ai*, unsigned char const*, uintptr_t),
+          (*readn)(struct ai*, unsigned char*, uintptr_t); };
 
 // only 2 tag bits on 32 bit so we can only have four of these
 enum ai_status ai_fin(struct ai*);

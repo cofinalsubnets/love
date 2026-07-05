@@ -75,7 +75,7 @@ struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = p
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 // No separate error stream; route err to the console too.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
+struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, NULL, NULL };  // no bulk lanes: per-byte fallback
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.

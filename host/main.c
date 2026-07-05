@@ -83,7 +83,32 @@ static struct ai *fd_flush(struct ai *g) {
  if (g->io->fd == putcharm(STDOUT_FILENO)) fflush(stdout);
  return g; }
 
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
+// the bulk lanes (contract in ai.h). writen drains stdio first when the fd is
+// stdout -- per-byte puts ride stdio there, and the direct write(2) must land
+// AFTER them or the stream interleaves. readn is one nonblocking gulp: the
+// O_NONBLOCK toggle is per-call because fd flags ride the open file description,
+// which a pty child shares.
+static intptr_t fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+ intptr_t fd = getcharm(g->io->fd);
+ if (fd == STDOUT_FILENO) fflush(stdout);
+ uintptr_t i = 0;
+ while (i < n) {
+  ssize_t k = write((int) fd, src + i, n - i);
+  if (k < 0) { if (errno == EINTR) continue; break; }
+  i += (uintptr_t) k; }
+ return (intptr_t) i; }
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+ intptr_t fd = getcharm(g->io->fd);
+ int fl = fcntl((int) fd, F_GETFL);
+ fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
+ ssize_t k = read((int) fd, dst, n);
+ fcntl((int) fd, F_SETFL, fl);
+ return k > 0 ? (intptr_t) k
+      : k == 0 ? -1
+      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
+
+struct ai_port_vt const ai_fd_port_vt =
+ { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, fd_writen, fd_readn };
 
 struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF), putcharm(false) };
 struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF), putcharm(false) };

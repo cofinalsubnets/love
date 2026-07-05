@@ -227,7 +227,7 @@ struct ai_io ai_stderr = { .ap = lvm_port_io,
 static struct ai_io ai_nic = { .ap = lvm_port_io,
                          .fd = putcharm(2), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
+struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, NULL, NULL };  // bulk lanes: the promised P3b, when ramfs/files need them
 
 // Override the weak g.c default; route close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.

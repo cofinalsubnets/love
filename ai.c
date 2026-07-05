@@ -3081,16 +3081,35 @@ static struct ai *to_putc(struct ai *g, int c) {
  return g; }
 static struct ai *to_flush(struct ai *g) { return g; }
 
+// the bulk lanes (ai_port_vt's writen/readn contract lives in ai.h): a sink
+// lands what fits in the CURRENT backing and answers 0 when full (the caller
+// putc's one byte -- to_putc grows, maybe GCs -- then retries); a C-string
+// source hands over the run it has, -1 when it's spent.
+static intptr_t to_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+ struct to *o = (struct to*) g->io;
+ uintptr_t i = getcharm(o->i), cap = len(o->buf);
+ if (i >= cap) return 0;
+ uintptr_t k = cap - i < n ? cap - i : n;
+ memcpy(txt(o->buf) + i, src, k);
+ o->i = putcharm(i + k);
+ return (intptr_t) k; }
+static intptr_t ti_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+ struct ti *i = (struct ti*) g->io;
+ uintptr_t k = 0;
+ while (k < n && i->t[i->i]) dst[k++] = (unsigned char) i->t[i->i], i->i += 1;
+ if (!i->t[i->i] && !k) return -1;
+ return (intptr_t) k; }
+
 struct ai_port_vt const synth[] = {
  /* fd = -1, ti: read-only string source */
- { ti_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush },
+ { ti_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush, NULL,      ti_readn },
  /* fd = -2, to: write-only vec sink   */
- { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush   },
+ { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush,   to_writen, NULL     },
  /* fd = -3, closed port (post-close)  */
- { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush },
+ { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush, NULL,      NULL     },
  /* fd = -4, ci: read-only charlist source -- ungetc/eof read only the ai_io
     fields, so ti_ungetc/ti_eof work unchanged here. */
- { ci_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush }, };
+ { ci_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush, NULL,      NULL     }, };
 
 // (fputc port byte) — write byte to port; return byte.
 lvm(lvm_fputc) {
@@ -3119,8 +3138,16 @@ lvm(lvm_fputs) {
  if (iop(Sp[0]) && (strp(Sp[1]) || bufp(Sp[1]))) {
   g->io = (struct ai_io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
+  // the bulk lane when the port has one (writen: fd ports write(2) the run,
+  // sinks memcpy what fits); a 0 makes one byte of progress through zputc --
+  // the alloc lane, which may grow a sink and GC -- then retries the bulk.
+  // src re-derives from g->sp[1] every pass, so a GC-forwarded string is safe.
+  intptr_t (*wn)(struct ai*, unsigned char const*, uintptr_t) = port_vt(g->io->fd)->writen;
   Pack(g);
-  while (ai_ok(g) && i < l) g = zputc(g, txt(bytes_of(g->sp[1]))[i++]);
+  while (ai_ok(g) && i < l) {
+   intptr_t k = wn ? wn(g, (unsigned char const*) txt(bytes_of(g->sp[1])) + i, l - i) : 0;
+   if (k > 0) i += (uintptr_t) k;
+   else g = zputc(g, txt(bytes_of(g->sp[1]))[i++]); }
   if (!ai_ok(g = zflush(g))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
