@@ -69,7 +69,7 @@ test_host: $m
 # test/00-init.l assert harness (which exits 1 on the first failure), so the gate
 # checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
 # Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
-hostnif_tests = boot/pty.l boot/net.l boot/wm.l boot/baoedit.l boot/baotest.l boot/init.l boot/sh.l boot/cb.l boot/berth.l boot/manifest.l boot/pier.l
+hostnif_tests = boot/pty.l boot/net.l boot/wm.l boot/baoedit.l boot/baotest.l boot/init.l boot/sh.l boot/cb.l boot/berth.l boot/manifest.l boot/pier.l boot/font.l
 test_hostnif: host
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
@@ -397,12 +397,14 @@ out/lib/ai_version.h: force_version
 # ====================================================================
 # host (POSIX CLI) build -- outputs under out/host. Was host/Makefile.
 # ====================================================================
-# STATIC builds get their OWN object tree (out/host-musl) so a musl build never
-# overwrites the clang objects -- musl's bare `sigsetjmp` vs glibc's `__sigsetjmp`
-# macro would otherwise poison a later glibc relink. The bootstrap (ai0) + the
-# generated out/lib/*.h headers stay PINNED to the canonical out/host below, so a
-# static build REUSES the clang ai0 (never building a musl ai0).
-hsuf = $(if $(STATIC),-musl)
+# The DEFAULT flavor owns out/host; the other flavor builds in its own hsuf'd
+# tree (common.mk: out/host-glibc when musl is the default, out/host-musl when
+# it isn't), so a musl build never overwrites glibc objects -- musl's bare
+# `sigsetjmp` vs glibc's `__sigsetjmp` macro would otherwise poison a cross-libc
+# relink. The .hostcc stamp below catches the IN-PLACE flips (musl-clang
+# appearing/vanishing changes what out/host means). The bootstrap (ai0) + the
+# generated out/lib/*.h headers stay PINNED to canonical out/host paths and
+# plain $(CC): ai0 never goes musl.
 ho = out/host$(hsuf)
 h_o = $(ai_c:$(R)/%.c=$(ho)/%.o)
 # host/*.c: per-app host-nif files (auto-globbed, auto-registered via AI_NIF).
@@ -412,7 +414,10 @@ host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
 # the host runs $(tco) (common.mk; default 1 = tail-threaded, vmret-checked);
 # ai0 below stays pinned 0, the deliberate trampoline-coverage lane.
 # (-I$(ho) -Iout/lib for the generated egg/cli headers.)
-hcc = $(CC) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
+# host_cc: STATIC picks musl-clang unless CC was set explicitly (the musl-gcc
+# fallback below); ai0 and the lib tools stay on plain $(CC) either way.
+host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
+hcc = $(host_cc) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # whole-archive flag differs by linker (ld64 vs GNU ld); ai_typ is now a plain
 # compare in ai.h, so there is no data.ld / generated data.h on any platform.
 ifeq ($(shell uname -s),Darwin)
@@ -425,29 +430,42 @@ so_undef = -Wl,-undefined,dynamic_lookup
 else
 so_archive = -Wl,--whole-archive $(ho)/libai.a -Wl,--no-whole-archive
 endif
-# STATIC=1 links a fully static `ai` (and skips libai.so, which a static build
-# can't use). Pair with a musl-targeting CC so the binary runs on ANY Linux distro
-# regardless of glibc version AND still does DNS -- static *glibc* can't resolve
-# hostnames (getaddrinfo needs NSS via dlopen, impossible when static), but musl
-# resolves itself, so ain's `connect host port` works:
-#   make STATIC=1 CC=musl-clang
+# STATIC links a fully static `ai` against musl (and skips libai.so, which a
+# static build can't produce) -- THE DEFAULT on Linux when musl-clang is present
+# (common.mk static_default): the binary runs on ANY Linux distro regardless of
+# glibc version AND still does DNS -- static *glibc* can't resolve hostnames
+# (getaddrinfo needs NSS via dlopen, impossible when static), but musl resolves
+# itself, so ain's `connect host port` works. Costs +1% size (~55K of text, the
+# whole libc; the ~4M baked image dwarfs it) at the same test-corpus speed.
 # musl-clang is clang (matches our clang default) + the musl libc -- the clean
-# path. VALIDATED: fully static, `ldd` = not-a-dynamic-executable, runs, getaddrinfo
-# baked in. The output lands in out/host-musl (hsuf), so the clang out/host tree is
-# untouched -- no need to clean between builds.
+# path. VALIDATED: fully static, `ldd` = not-a-dynamic-executable, runs,
+# getaddrinfo baked in, full corpus green. `make STATIC=0` builds the dynamic
+# glibc `ai` (plus libai.so) in its own out/host-glibc tree -- no need to clean
+# between flavors.
 # musl is Linux-only -- this is the Linux portable-binary artifact, NOT the mac
-# build (mac = a native Apple-clang build).
-# FALLBACK: `CC=musl-gcc` works too but is a gcc wrapper; on Arch its spec injects
-# a phantom `-latomic_asneeded` (we use no real atomics -- only volatile
-# sig_atomic_t flags), so it needs an empty stub on the link path:
+# build (mac = a native Apple-clang build; STATIC never defaults on there).
+# FALLBACK: `STATIC=1 CC=musl-gcc` works too but is a gcc wrapper; on Arch its
+# spec injects a phantom `-latomic_asneeded` (we use no real atomics -- only
+# volatile sig_atomic_t flags), so it needs an empty stub on the link path:
 #   ar rcs /tmp/libatomic_asneeded.a; make STATIC=1 CC=musl-gcc EXTRA_CFLAGS=-L/tmp
-ifdef STATIC
+ifneq ($(STATIC),)
 host_ldflags = -static
 # the musl-clang wrapper injects LINK flags (-fuse-ld, -L…) into every clang call,
 # incl. -c compiles, where clang warns "unused during compilation" -> our -Werror
 # makes it fatal. Silence that one (harmless; gcc ignores unknown -Wno-*).
 ai_cflags += -Wno-unused-command-line-argument
 endif
+# .hostcc -- the tree's compiler+link identity, content-stamped (cmp keeps the
+# mtime when nothing changed). Every host object and the link depend on it, so
+# an in-place flavor flip (musl-clang installed/removed flips what out/host
+# means; an explicit CC=) rebuilds the tree instead of relinking mixed-libc
+# objects (the sigsetjmp poison above -- a loud link error at best).
+.PHONY: force_hostcc
+force_hostcc: ;
+$(ho)/.hostcc: force_hostcc
+	@mkdir -p $(ho)
+	@printf '%s\n' '$(host_cc) $(host_ldflags)' > $@.tmp
+	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
 host: $(ho)/ai $(ho)/ai.baked $(if $(STATIC),,$(ho)/libai.so) $(ho)/ai.1
 ai0: $(ai0)
 
@@ -540,7 +558,7 @@ $(ai0): $(ai0_o)
 	@$(CC) $(ai_cflags) -o $@ $(ai0_o) -lm
 
 # ai.c -> out/host/*.o
-$(ho)/%.o: $(R)/%.c $(ai_h)
+$(ho)/%.o: $(R)/%.c $(ai_h) $(ho)/.hostcc
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
@@ -561,7 +579,7 @@ $(ho)/host/cb.o: port/quay/quay.c port/quay/quay.h
 # one link rule, two names: `ai` (canonical) and `ai.cand` (the CANDIDATE -- the next
 # generation built at a side path nothing executes, so the RELINK can never hit
 # ETXTBSY no matter who is running `ai`; see the candidate target below).
-$(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h) $(glaze_h)
+$(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h $(asm_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm $(host_ldflags)
@@ -989,15 +1007,25 @@ $d/lib/ai/%.l: ai/%.l
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/libai.a: out/host/libai.a
+# the embeddable libs install GLIBC always: a musl-compiled archive poisons a
+# glibc link (the sigsetjmp note in the host block), and a musl .so is useless
+# to a dynamic (glibc) consumer. When the default flavor is musl, that tree is
+# out/host-glibc and a sub-make builds it on demand.
+glibc_ho = out/host$(if $(static_default),-glibc)
+ifneq ($(glibc_ho),$(ho))
+$(glibc_ho)/libai.a $(glibc_ho)/libai.so: force_hostcc
+	@$(MAKE) --no-print-directory STATIC=0 $@
+endif
+
+$d/lib/libai.a: $(glibc_ho)/libai.a
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/libai.so: out/host/libai.so
+$d/lib/libai.so: $(glibc_ho)/libai.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/bin/ai: out/host/ai out/host/ai.baked
+$d/bin/ai: $(ho)/ai $(ho)/ai.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, so the
@@ -1041,7 +1069,7 @@ $d/bin/bao: Makefile
 	   echo 'exec "$$h/ai" -l "$$h/../lib/ai/bao.l" -e "(bao 0)" "$$@"'; } > $@
 	@chmod 755 $@
 
-$d/share/man/man1/ai.1: out/host/ai.1
+$d/share/man/man1/ai.1: $(ho)/ai.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

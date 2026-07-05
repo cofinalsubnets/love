@@ -10,7 +10,10 @@
 ; from the socket up.
 ;
 ; run: out/host/ai -l apps/wm/core.l -l apps/wm/wire.l -l apps/quay/berth.l -l apps/quay/pier.l \
-;        -e '(pier (L "sh") "/tmp/.X11-unix/X0" (xauth-cookie "/home/gwen/.Xauthority" "0"))'
+;        -e '(pier (L "sh") "/tmp/.X11-unix/X0" (xauth-cookie "/home/gwen/.Xauthority" "0") ())'
+;      the fourth arg is a font atlas: () sails with the builtin moderndos
+;      8x16; load apps/quay/psf.l and pass (psf-gz "/usr/share/kbd/console-
+;      fonts/ter-132n.psf.gz") to berth terminus 16x32 (any PSF fits).
 ;      (auth () suits an -ac or Xvfb server.)
 ;
 ; wants: wire.l (the codec), berth.l (moor/waitfor), host/cb.c (screen/blit).
@@ -127,9 +130,10 @@
      ds (go 0 ())
      (? all (jot r) ds)))
 
-(: (px-paint s win gc depth bx fx all lc) (: sc (bx -> 0 0) fb (fx -> 0 0)
+(: (px-paint s win gc depth bx fx rig all lc) (: sc (bx -> 0 0) fb (fx -> 0 0)
      r (gaze sc 1) c (gaze sc 2) w (gaze sc 0) f (gaze sc 3)
-     wpix (* c 8)
+     gw (caup rig) gh (caup (cup rig))
+     wpix (* c gw)
      cur (? (& 1 f) w -1)
      seen (tablet 8)
      _ (map (\ x (? (< x r) (pin seen x 1) 0)) (px-dirty sc all))
@@ -139,37 +143,38 @@
           0)
      ds (sort (keys seen))
      _ (? (two? ds)
-          (: _ (map (\ row (blitrow fb wpix sc row cur)) ds)
+          (: _ (map (\ row (blitrow fb wpix sc row cur (cap rig))) ds)
              ; ship each contiguous run of rows as one band
              (run a b rest) (? (two? rest)
                               (: x (cap rest)
                                  (? (= x (+ b 1)) (run a x (cup rest))
                                     (: _ (px-ship s win gc depth fb wpix
-                                                  (* a 16) (* (+ (- b a) 1) 16))
+                                                  (* a gh) (* (+ (- b a) 1) gh))
                                        (run x x (cup rest)))))
                               (px-ship s win gc depth fb wpix
-                                       (* a 16) (* (+ (- b a) 1) 16)))
+                                       (* a gh) (* (+ (- b a) 1) gh)))
              (run (cap ds) (cap ds) (cup ds)))
           0)
      cur))
 
-(: (px-paintloop s win gc depth bx fx dirty lc) (: d (dirty -> 0 0)
+(: (px-paintloop s win gc depth bx fx rig dirty lc) (: d (dirty -> 0 0)
      lc2 (? d (: _ (pin dirty 0 0)
-                 (px-paint s win gc depth bx fx (= d 2) lc))
+                 (px-paint s win gc depth bx fx rig (= d 2) lc))
              lc)
      _ (rest 8)                       ; a keystroke's echo shows within ~10ms
-     (px-paintloop s win gc depth bx fx dirty lc2)))
+     (px-paintloop s win gc depth bx fx rig dirty lc2)))
 
 
  ; --- resize: the wm retiled us. a fresh grid and framebuffer to fit,
  ; and the pty learns its new size (SIGWINCH is the kernel's errand) ---
 
-(: (px-resize bx fx m dirty wp hp) (: r (: v (// hp 16) (? (< 1 v) v 1))
-     c (: v (// wp 8) (? (< 1 v) v 2))
+(: (px-resize bx fx m dirty rig wp hp) (: gw (caup rig) gh (caup (cup rig))
+     r (: v (// hp gh) (? (< 1 v) v 1))
+     c (: v (// wp gw) (? (< 1 v) v 2))
      sc (bx -> 0 0)
      (? (&& (= r (gaze sc 1)) (= c (gaze sc 2))) ()
       (: _ (bx <- 0 (screen (cask (screen () r c)) r c))
-         _ (fx <- 0 (cask (* (* c 8) (* (* r 16) 4))))
+         _ (fx <- 0 (cask (* (* c gw) (* (* r gh) 4))))
          _ (setwinsize m r c)
          _ (pin dirty 0 1)
          ()))))
@@ -179,35 +184,38 @@
  ; child in another and SEALS the socket read when the child hangs up, so
  ; x-next wakes with () and the watch steps away ---
 
-(: (px-watch s m km del bx fx dirty) (: e (x-next s)
+(: (px-watch s m km del bx fx rig dirty) (: e (x-next s)
      (? (! (two? e)) ()
       (: code (ev-code e)
          (? (= code 2)
             (: b (px-keybytes km (ev-detail e) (ev-state e))
                _ (? (tally b) (: _ (say m b) (flush m)) 0)
-               (px-watch s m km del bx fx dirty))
+               (px-watch s m km del bx fx rig dirty))
             (= code 12)
-            (: _ (pin dirty 0 2) (px-watch s m km del bx fx dirty))   ; expose: repaint ALL
+            (: _ (pin dirty 0 2) (px-watch s m km del bx fx rig dirty))   ; expose: repaint ALL
             (= code 22)
             (: raw (ev-raw e)
-               _ (px-resize bx fx m dirty (u16 raw 20) (u16 raw 22))
-               (px-watch s m km del bx fx dirty))
+               _ (px-resize bx fx m dirty rig (u16 raw 20) (u16 raw 22))
+               (px-watch s m km del bx fx rig dirty))
             (= code 33)
-            (? (= del (u32 (ev-raw e) 12)) () (px-watch s m km del bx fx dirty))
-            (px-watch s m km del bx fx dirty))))))
+            (? (= del (u32 (ev-raw e) 12)) () (px-watch s m km del bx fx rig dirty))
+            (px-watch s m km del bx fx rig dirty))))))
 
 
  ; --- pier: tie argv up at the shore. returns the child's status pair,
  ; or a nom naming what refused ---
 
-(: (pier argv dpy auth) (: s (x-connect dpy)
+(: (pier argv dpy auth ft) (: s (x-connect dpy)
      (? (! (lit? s)) 'no-socket
       (: sc (x-setup s auth)
          (? (! (two? sc)) (: _ (close s) 'refused)
           (: win (scr-idbase sc) gc (+ 1 (scr-idbase sc))
              depth (scr-depth sc)
+             ft2 (? ft ft (font (cask (font () 0)) 0))   ; () sails with moderndos
+             gw (peep ft2 0 8) gh (peep ft2 1 16)
+             rig (L ft2 gw gh)
              r 24 c 80
-             _ (px-mkwin s win (scr-root sc) 0 0 (* c 8) (* r 16))
+             _ (px-mkwin s win (scr-root sc) 0 0 (* c gw) (* r gh))
              _ (px-gc s gc win)
              _ (px-title s win "berth")
              del (px-protocols s win)
@@ -220,13 +228,13 @@
               (: pid (cap md) m (cup md)
                  s0 (screen (cask (screen () r c)) r c)
                  bx #s0
-                 f0 (cask (* (* c 8) (* (* r 16) 4)))
+                 f0 (cask (* (* c gw) (* (* r gh) 4)))
                  fx #f0
                  dirty #1
                  _ (setwinsize m r c)
                  up (spin (\ _ (: _ (moor bx m dirty) (seal s 0))) 0)
-                 pnt (spin (\ _ (px-paintloop s win gc depth bx fx dirty -1)) 0)
-                 _ (px-watch s m km del bx fx dirty)
+                 pnt (spin (\ _ (px-paintloop s win gc depth bx fx rig dirty -1)) 0)
+                 _ (px-watch s m km del bx fx rig dirty)
                  _ (freeze pnt)
                  _ (? (back? up) (catch up) (: _ (still pid 15) (freeze up)))
                  _ (close s)

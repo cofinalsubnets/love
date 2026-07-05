@@ -24,7 +24,8 @@
 #include <fcntl.h>    // O_NONBLOCK (swig)
 #include <errno.h>
 #include "../port/quay/quay.c"
-#include "../port/quay/moderndos_8x16.c"   // the blit's glyphs (host links no font objects)
+#include "../port/quay/moderndos_8x16.c"   // the builtin glyphs (host links no font objects)
+#include "../port/quay/cga_8x8.c"
 
 // Re-derive the struct cb from a cask arg, or 0 if it isn't one / doesn't
 // hold a sane screen. The cask is OPEN DATA -- the ai side can pin any byte
@@ -133,24 +134,75 @@ static void xpal_ini(void) {
     uint32_t v = 8 + 10u * i;
     xpal[232 + i] = v << 16 | v << 8 | v; } }
 
-// the pixel core: one 8x16 cell into a 32bpp little-endian framebuffer,
-// glyphs from moderndos, faces rendered like the kernel's fbdraw (bright
-// bold, swapped reverse, underline on the last scanline). caller bounds.
-static void cb_px1(uint8_t *base, intptr_t w, uint32_t cell, intptr_t x, intptr_t y) {
+// a FONT ATLAS: a cask of [w u8][h u8][0 u16] then 256 glyphs, h scanlines
+// each, ceil(w/8) bytes per scanline, MSB the leftmost pixel -- the PSF
+// discipline, so console fonts pour straight in. the builtins bake into
+// the same shape via (font b k). glyphs up to 16x32.
+struct cb_atlas { uint8_t const *g; intptr_t w, h, bpr; };
+static int atlas_ok(ai_word x, struct cb_atlas *a) {
+  if (x & 1 || ((union u*) x)->ap != lvm_buf) return 0;
+  struct ai_str *s = ((struct ai_buf*) x)->str;
+  if (s->len < 4) return 0;
+  intptr_t w = (uint8_t) s->bytes[0], h = (uint8_t) s->bytes[1];
+  intptr_t bpr = (w + 7) / 8;
+  if (w < 1 || w > 16 || h < 1 || h > 32) return 0;
+  if (s->len < 4 + (uintptr_t) (256 * h * bpr)) return 0;
+  a->g = (uint8_t const*) s->bytes + 4, a->w = w, a->h = h, a->bpr = bpr;
+  return 1; }
+
+// the pixel core: one cell into a 32bpp little-endian framebuffer through
+// an atlas, faces rendered like the kernel's fbdraw (bright bold, swapped
+// reverse, underline on the last scanline). caller bounds.
+static void cb_px1(uint8_t *base, intptr_t w, uint32_t cell, intptr_t x, intptr_t y,
+                   struct cb_atlas const *a) {
   uint8_t g_ = cb_ch(cell), face = cb_face(cell), fgx = cb_fg(cell);
   if (face & cb_bold && fgx < 8) fgx = (uint8_t) (fgx + 8);
   uint32_t fg = xpal[fgx], bg = xpal[cb_bg(cell)];
   if (face & cb_rev) { uint32_t t_ = fg; fg = bg, bg = t_; }
-  uint8_t const *bmp = moderndos_8x16[g_];
-  for (int r = 0; r < 16; r++) {
-    int ul = face & cb_under && r == 15;
+  uint8_t const *bmp = a->g + (intptr_t) g_ * a->h * a->bpr;
+  for (intptr_t r = 0; r < a->h; r++) {
+    int ul = face & cb_under && r == a->h - 1;
     uint8_t *row = base + ((uintptr_t) (y + r) * (uintptr_t) w + (uintptr_t) x) * 4;
-    for (uint8_t o = bmp[r], k = 8; k--; o >>= 1) {
-      uint32_t px = ul || o & 1 ? fg : bg;
+    uint32_t o = bmp[r * a->bpr];
+    if (a->bpr > 1) o = o << 8 | bmp[r * a->bpr + 1];
+    for (intptr_t k = a->w; k--;) {
+      uint32_t px = ul || o >> (a->bpr * 8 - 1 - k) & 1 ? fg : bg;
       row[k * 4] = (uint8_t) px;
       row[k * 4 + 1] = (uint8_t) (px >> 8);
       row[k * 4 + 2] = (uint8_t) (px >> 16);
       row[k * 4 + 3] = 0; } } }
+
+// the builtin faces as a static atlas each, laid on first use
+static uint8_t cb_bi0[4 + 256 * 16], cb_bi1[4 + 256 * 8];
+static void cb_bi_ini(void) {
+  if (cb_bi0[0]) return;
+  cb_bi0[0] = 8, cb_bi0[1] = 16;
+  for (int i = 0; i < 256 * 16; i++) cb_bi0[4 + i] = moderndos_8x16[i / 16][i % 16];
+  cb_bi1[0] = 8, cb_bi1[1] = 8;
+  for (int i = 0; i < 256 * 8; i++) cb_bi1[4 + i] = cga_8x8[i / 8][i % 8]; }
+// resolve a font arg: a valid atlas cask, or anything else -> builtin 0
+static void atlas_of(ai_word x, struct cb_atlas *a) {
+  if (atlas_ok(x, a)) return;
+  cb_bi_ini();
+  a->g = cb_bi0 + 4, a->w = 8, a->h = 16, a->bpr = 1; }
+
+// (font b k): bake builtin k (0 moderndos 8x16, 1 cga 8x8) into cask b as
+// an atlas; a non-cask b answers the byte count -- the screen size protocol.
+static lvm(lvm_font) {
+  ai_word b = Sp[0], out = ZeroPoint;
+  intptr_t k = (Sp[1] & 1) ? getcharm(Sp[1]) : -1;
+  if (k == 0 || k == 1) {
+    uintptr_t need = k == 0 ? sizeof cb_bi0 : sizeof cb_bi1;
+    if ((b & 1) || ((union u*) b)->ap != lvm_buf) out = putcharm(need);
+    else {
+      struct ai_str *s = ((struct ai_buf*) b)->str;
+      if (s->len >= need) {
+        cb_bi_ini();
+        uint8_t const *src = k == 0 ? cb_bi0 : cb_bi1;
+        for (uintptr_t i = 0; i < need; i++) s->bytes[i] = (char) src[i];
+        out = b; } } }
+  Sp[1] = out;
+  Sp += 1; Ip += 1; return Continue(); }
 
 // (blit fb wpx cell x y): one cell, bounds-checked; misuse is nothing.
 static lvm(lvm_blit) {
@@ -164,7 +216,9 @@ static lvm(lvm_blit) {
     struct ai_str *s = ((struct ai_buf*) fb)->str;
     if ((uintptr_t) (y + 16) * (uintptr_t) w * 4 <= s->len) {
       if (!xpal[255]) xpal_ini();
-      cb_px1((uint8_t*) s->bytes, w, (uint32_t) cl, x, y);
+      struct cb_atlas a;
+      atlas_of(0, &a);
+      cb_px1((uint8_t*) s->bytes, w, (uint32_t) cl, x, y, &a);
       out = fb; } }
   Sp[4] = out;
   Sp += 4; Ip += 1; return Continue(); }
@@ -179,21 +233,23 @@ static lvm(lvm_blitrow) {
            row = (Sp[3] & 1) ? getcharm(Sp[3]) : -1,
            cur = (Sp[4] & 1) ? getcharm(Sp[4]) : -1;
   struct cb *c = scr_ok(Sp[2]);
+  struct cb_atlas a;
+  atlas_of(Sp[5], &a);
   if (c && !(fb & 1) && ((union u*) fb)->ap == lvm_buf
       && w > 0 && row >= 0 && row < (intptr_t) c->rows) {
     struct ai_str *s = ((struct ai_buf*) fb)->str;
     intptr_t cols = c->cols;
-    if (cols * 8 > w) cols = w / 8;
-    if ((uintptr_t) (row * 16 + 16) * (uintptr_t) w * 4 <= s->len) {
+    if (cols * a.w > w) cols = w / a.w;
+    if ((uintptr_t) ((row + 1) * a.h) * (uintptr_t) w * 4 <= s->len) {
       if (!xpal[255]) xpal_ini();
       for (intptr_t q = 0; q < cols; q++) {
         uint32_t cell = c->cb[(uintptr_t) row * c->cols + (uintptr_t) q];
         if ((intptr_t) ((uintptr_t) row * c->cols + (uintptr_t) q) == cur)
           cell ^= (uint32_t) cb_rev << 28;
-        cb_px1((uint8_t*) s->bytes, w, cell, q * 8, row * 16); }
+        cb_px1((uint8_t*) s->bytes, w, cell, q * a.w, row * a.h, &a); }
       out = fb; } }
-  Sp[4] = out;
-  Sp += 4; Ip += 1; return Continue(); }
+  Sp[5] = out;
+  Sp += 5; Ip += 1; return Continue(); }
 
 // (damage scr k): dirty-row bits for rows 32k..32k+31, read-and-cleared --
 // the renderer's shopping list. bit 255 stands for row 255 and past.
@@ -297,7 +353,8 @@ static union u const
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
   nif_unfold[] = {{lvm_unfold}, {lvm_ret0}},
   nif_blit[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_blit}, {lvm_ret0}},
-  nif_blitrow[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_blitrow}, {lvm_ret0}},
+  nif_blitrow[] = {{lvm_cur}, {.x = putcharm(6)}, {lvm_blitrow}, {lvm_ret0}},
+  nif_font[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_font}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
   nif_gush[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gush}, {lvm_ret0}},
   nif_swig[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}};
@@ -309,6 +366,7 @@ AI_NIF("reply", nif_reply);
 AI_NIF("unfold", nif_unfold);
 AI_NIF("blit", nif_blit);
 AI_NIF("blitrow", nif_blitrow);
+AI_NIF("font", nif_font);
 AI_NIF("damage", nif_damage);
 AI_NIF("gush", nif_gush);
 AI_NIF("swig", nif_swig);

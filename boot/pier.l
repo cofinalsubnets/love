@@ -38,7 +38,7 @@
  ; the child prints steadily, so a resize's FRESH grid refills on its own
  md (mind `("out/host/ai" "-l" "apps/wm/core.l" "-l" "apps/wm/wire.l" "-l" "apps/quay/berth.l"
             "-l" "apps/quay/pier.l"
-            "-e" "(pier (L \"sh\" \"-c\" \"while true; do printf H; sleep 0.3; done\") \"/tmp/.X11-unix/X77\" ())"))
+            "-e" "(pier (L \"sh\" \"-c\" \"while true; do printf H; sleep 0.3; done\") \"/tmp/.X11-unix/X77\" () ())"))
  _ (assert (two? md))
 
  ; our own eyes: a second connection; poll QueryTree until the window docks
