@@ -424,16 +424,59 @@ def uu_natlehandminusl : (forall n : Nat, (forall m : Nat, (forall k : Nat, (for
   (fun n => (@Nat.rec (fun q => (forall m : Nat, (forall k : Nat, (forall h : (@paths Bool (uu_natgtb q m) false), (@paths Bool (uu_natgtb (uu_natminus q k) (uu_natminus m k)) false))))) (fun m => (fun k => (fun h => (@paths.idpath _ false)))) (fun n' => (fun IHn => (fun m => (@Nat.rec (fun mr => (forall k : Nat, (forall h : (@paths Bool (uu_natgtb (Nat.succ n') mr) false), (@paths Bool (uu_natgtb (uu_natminus (Nat.succ n') k) (uu_natminus mr k)) false)))) (fun k => (fun h => (uu_fromempty (@paths Bool (uu_natgtb (uu_natminus (Nat.succ n') k) (uu_natminus 0 k)) false) (uu_nopathstruetofalse h)))) (fun m' => (fun um => (fun k => (@Nat.rec (fun kr => (forall h : (@paths Bool (uu_natgtb (Nat.succ n') (Nat.succ m')) false), (@paths Bool (uu_natgtb (uu_natminus (Nat.succ n') kr) (uu_natminus (Nat.succ m') kr)) false))) (fun h => h) (fun k' => (fun uk => (fun h => (IHn m' k' h)))) k)))) m)))) n))
 def uu_natlehandminusr : (forall n : Nat, (forall m : Nat, (forall k : Nat, (forall h : (@paths Bool (uu_natgtb k m) false), (@paths Bool (uu_natgtb (uu_natminus n m) (uu_natminus n k)) false))))) :=
   (fun n => (@Nat.rec (fun q => (forall m : Nat, (forall k : Nat, (forall h : (@paths Bool (uu_natgtb k m) false), (@paths Bool (uu_natgtb (uu_natminus q m) (uu_natminus q k)) false))))) (fun m => (fun k => (fun h => (@paths.idpath _ false)))) (fun n' => (fun IHn => (fun m => (@Nat.rec (fun mr => (forall k : Nat, (forall h : (@paths Bool (uu_natgtb k mr) false), (@paths Bool (uu_natgtb (uu_natminus (Nat.succ n') mr) (uu_natminus (Nat.succ n') k)) false)))) (fun k => (@Nat.rec (fun kr => (forall h : (@paths Bool (uu_natgtb kr 0) false), (@paths Bool (uu_natgtb (uu_natminus (Nat.succ n') 0) (uu_natminus (Nat.succ n') kr)) false))) (fun h => (uu_isreflnatleh n')) (fun k' => (fun uk => (fun h => (uu_fromempty (@paths Bool (uu_natgtb (uu_natminus (Nat.succ n') 0) (uu_natminus (Nat.succ n') (Nat.succ k'))) false) (uu_nopathstruetofalse h))))) k)) (fun m' => (fun um => (fun k => (@Nat.rec (fun kr => (forall h : (@paths Bool (uu_natgtb kr (Nat.succ m')) false), (@paths Bool (uu_natgtb (uu_natminus (Nat.succ n') (Nat.succ m')) (uu_natminus (Nat.succ n') kr)) false))) (fun h => (uu_natlehsucc (uu_natminus n' m') n' (uu_natminusleh n' m'))) (fun k' => (fun uk => (fun h => (IHn m' k' h)))) k)))) m)))) n))
+def uu_nvec : (forall n : Nat, (Type _)) :=
+  (fun n => (@Nat.rec (fun q => (Type _)) PUnit (fun k => (fun r => (total2 (fun h : Nat => r)))) n))
+def uu_nlist : (Type _) :=
+  (total2 (fun n : Nat => (uu_nvec n)))
+def uu_nnil : uu_nlist :=
+  (total2.tpair 0 PUnit.unit)
+def uu_ncons : (forall x : Nat, (forall l : uu_nlist, uu_nlist)) :=
+  (fun x => (fun l => (total2.tpair (Nat.succ (total2.pr1 l)) (total2.tpair x (total2.pr2 l)))))
+def uu_nlen : (forall l : uu_nlist, Nat) :=
+  (fun l => (total2.pr1 l))
+def uu_lapp : (forall a : uu_nlist, (forall b : uu_nlist, uu_nlist)) :=
+  (fun a => (fun b => ((@Nat.rec (fun q => (forall v : (uu_nvec q), uu_nlist)) (fun v => b) (fun k => (fun IH => (fun v => (uu_ncons (total2.pr1 v) (IH (total2.pr2 v)))))) (total2.pr1 a)) (total2.pr2 a))))
+def uu_lrev : (forall a : uu_nlist, uu_nlist) :=
+  (fun a => ((@Nat.rec (fun q => (forall v : (uu_nvec q), uu_nlist)) (fun v => uu_nnil) (fun k => (fun IH => (fun v => (uu_lapp (IH (total2.pr2 v)) (uu_ncons (total2.pr1 v) uu_nnil))))) (total2.pr1 a)) (total2.pr2 a)))
+def uu_orb : (forall a : Bool, (forall b : Bool, Bool)) :=
+  (fun a => (fun b => (@Bool.rec (fun x => Bool) b true a)))
+def uu_andb : (forall a : Bool, (forall b : Bool, Bool)) :=
+  (fun a => (fun b => (@Bool.rec (fun x => Bool) false b a)))
+def uu_nateqb : (forall n : Nat, (forall m : Nat, Bool)) :=
+  (fun n => ((@Nat.rec (fun q => (forall m : Nat, Bool)) (fun m => (@Nat.rec (fun q => Bool) true (fun k => (fun r => false)) m)) (fun k => (fun IH => (fun m => (@Nat.rec (fun q => Bool) false (fun j => (fun r => (IH j))) m)))) n)))
+def uu_memb : (forall w : Nat, (forall l : uu_nlist, Bool)) :=
+  (fun w => (fun l => ((@Nat.rec (fun q => (forall v : (uu_nvec q), Bool)) (fun v => false) (fun k => (fun IH => (fun v => (uu_orb (uu_nateqb w (total2.pr1 v)) (IH (total2.pr2 v)))))) (total2.pr1 l)) (total2.pr2 l))))
+def uu_nodupb : (forall l : uu_nlist, Bool) :=
+  (fun l => ((@Nat.rec (fun q => (forall v : (uu_nvec q), Bool)) (fun v => true) (fun k => (fun IH => (fun v => (uu_andb (uu_negb (uu_memb (total2.pr1 v) (total2.tpair k (total2.pr2 v)))) (IH (total2.pr2 v)))))) (total2.pr1 l)) (total2.pr2 l)))
+def uu_stk : (Type _) :=
+  (total2 (fun f : Nat => (total2 (fun u : uu_nlist => uu_nlist))))
+def uu_zmk : (forall f : Nat, (forall u : uu_nlist, (forall d : uu_nlist, uu_stk))) :=
+  (fun f => (fun u => (fun d => (total2.tpair f (total2.tpair u d)))))
+def uu_zfoc : (forall z : uu_stk, Nat) :=
+  (fun z => (total2.pr1 z))
+def uu_zup : (forall z : uu_stk, uu_nlist) :=
+  (fun z => (total2.pr1 (total2.pr2 z)))
+def uu_zdn : (forall z : uu_stk, uu_nlist) :=
+  (fun z => (total2.pr2 (total2.pr2 z)))
+def uu_zins : (forall w : Nat, (forall z : uu_stk, uu_stk)) :=
+  (fun w => (fun z => (uu_zmk w (uu_zup z) (uu_ncons (uu_zfoc z) (uu_zdn z)))))
+def uu_zcount : (forall z : uu_stk, Nat) :=
+  (fun z => (Nat.succ (uu_add (uu_nlen (uu_zup z)) (uu_nlen (uu_zdn z)))))
+def uu_zfocins : (forall w : Nat, (forall z : uu_stk, (@paths Nat (uu_zfoc (uu_zins w z)) w))) :=
+  (fun w => (fun z => (@paths.idpath _ w)))
+def uu_zcountins : (forall w : Nat, (forall z : uu_stk, (@paths Nat (uu_zcount (uu_zins w z)) (Nat.succ (uu_zcount z))))) :=
+  (fun w => (fun z => (uu_maponpaths Nat Nat (fun q => (Nat.succ q)) (uu_add (uu_nlen (uu_zup z)) (Nat.succ (uu_nlen (uu_zdn z)))) (Nat.succ (uu_add (uu_nlen (uu_zup z)) (uu_nlen (uu_zdn z)))) (uu_natplusnsm (uu_nlen (uu_zup z)) (uu_nlen (uu_zdn z))))))
 
 end
 /- the de Bruijn witness: Lean agrees these carry NO axioms (closed under the
    global context), the same property Rocq's `Print Assumptions` reports. -/
 #print axioms uu_natpluscomm
+#print axioms uu_zcountins
 #print axioms uu_natplusassoc
 #print axioms uu_natmultcomm
 #print axioms uu_total2_paths_f
 #print axioms uu_idisweq
 #print axioms uu_iscontrcoconustot
 
-/- 200 exported / 250 corpus entries swept;
+/- 221 exported / 273 corpus entries swept;
    re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/
