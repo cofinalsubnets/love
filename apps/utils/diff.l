@@ -139,3 +139,67 @@
        s (dpre (rev a1) (rev b1) ())                              ; the suffix is the reversed prefix
        a2 (rev (cap s)) b2 (rev (caup s)) suf (caup (cup s))      ; ... and its keeps come back forward
        (cat pre (cat (dmid a2 b2) suf))))
+
+; --- the unified surface (diff -u): the script rendered as unified hunks, over jugs so
+; big files stay linear. every entry tags as (op x i j) -- i/j the 1-based old/new seats
+; it sits at -- then hunks gather with c lines of context, splitting where a keep run
+; tops 2c (the coalescing law patch(1) expects); a side with no lines names the seat
+; BEFORE it (the -0,0 convention). `udiff` is the tool's engine: two texts and their
+; names -> the whole unified text, nothing when they agree.
+(:
+   (utag s)                                                       ; seat every entry: (op x) -> (op x i j)
+    (: (go m i j acc)
+        (? (two? m)
+           (: op (cap (cap m))
+              (? (= op 'keep) (go (cup m) (+ i 1) (+ j 1) (link (cat (cap m) (L i j)) acc))
+                 (= op 'del) (go (cup m) (+ i 1) j (link (cat (cap m) (L i j)) acc))
+                 (go (cup m) i (+ j 1) (link (cat (cap m) (L i j)) acc))))
+           (rev acc))
+       (go s 1 1 ()))
+   (eop e) (cap e) (eln e) (caup e)                               ; the tagged entry's four seats
+   (eoi e) (caup (cup e)) (enj e) (caup (cuup e))
+   (dspan p m acc) (? (&& (two? m) (p (cap m)))                   ; the maximal p-prefix; answers (span rest)
+                      (dspan p (cup m) (link (cap m) acc))
+                      (L (rev acc) m))
+   (lastn c l) (? (< c (tally l)) (drop (- (tally l) c) l) l)
+   (uhunks s c)
+    (: es (utag s)
+       o (jug 0)
+       keep? (\ e (= (cap e) 'keep))
+       change? (\ e (! (= (cap e) 'keep)))
+       (rng l n) (? (= n 1) (show l) (+ (show l) (+ "," (show n))))   ; ",1" stays silent, the GNU face
+       (emit h)                                                   ; one hunk: the @@ header, then the lines
+        (: no (tally (filter (\ e (! (= (eop e) 'add))) h))
+           nn (tally (filter (\ e (! (= (eop e) 'del))) h))
+           e0 (cap h)
+           ol (? (= no 0) (- (eoi e0) 1) (eoi e0))
+           nl (? (= nn 0) (- (enj e0) 1) (enj e0))
+           _ (say o "@@ -") _ (say o (rng ol no))
+           _ (say o " +") _ (say o (rng nl nn)) _ (say o " @@") _ (put o 10)
+           (go m) (? (two? m)
+                     (: e (cap m)
+                        _ (put o (? (= (eop e) 'keep) 32 (= (eop e) 'del) 45 43))
+                        _ (say o (eln e)) _ (put o 10)
+                        (go (cup m)))
+                     ())
+           (go h))
+       (grab m cur)                                               ; m opens on a change; cur the gathered context
+        (: cs (dspan change? m ())
+           cur2 (cat cur (cap cs))
+           ks (dspan keep? (caup cs) ())
+           krun (cap ks) rest (caup ks)
+           (? (! (two? rest)) (emit (cat cur2 (take c krun)))     ; the tail: close with c keeps
+              (< (* 2 c) (tally krun)) (: _ (emit (cat cur2 (take c krun)))   ; a wide gap: close, reopen
+                                          (grab rest (lastn c krun)))
+              (grab rest (cat cur2 krun))))                       ; a narrow gap rides inside
+       ks0 (dspan keep? es ())
+       _ (? (two? (caup ks0)) (grab (caup ks0) (lastn c (cap ks0))) ())
+       (slurp o))
+   (udiff an bn at bt)
+    (: h (uhunks (patience (lines at) (lines bt)) 3)
+       (? (nil? h) ()
+          (: o (jug 0)
+             _ (say o "--- ") _ (say o an) _ (put o 10)
+             _ (say o "+++ ") _ (say o bn) _ (put o 10)
+             _ (say o h)
+             (slurp o)))))

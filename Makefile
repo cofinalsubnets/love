@@ -139,8 +139,8 @@ test_wm: host
 # oracle (minimality), and to a seeded fuzz. Gate = the sentinel AND exit 0.
 .PHONY: test_utils
 test_utils: host
-	@echo "UTILS apps/utils/diff.l + apps/utils/law.l"; \
-	  cat test/00-init.l apps/utils/diff.l apps/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
+	@echo "UTILS apps/utils/text.l + apps/utils/diff.l + apps/utils/law.l"; \
+	  cat test/00-init.l apps/utils/text.l apps/utils/diff.l apps/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
 	  cat out/host/.test_utils.out; \
 	  { [ $$r -eq 0 ] && grep -q "apps/utils/law: myers" out/host/.test_utils.out; } \
 	    || { echo "FAIL utils (exit $$r)"; exit 1; }

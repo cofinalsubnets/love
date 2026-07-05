@@ -87,5 +87,29 @@
    r (fzp 100 (seed 11))
    (assert (= r 'ok)))
 
-(say err "apps/utils/law: myers + patience -- projections + minimality (lcs oracle) + anchors + seeded fuzz ok
+; --- lines/unlines: the text bridge -- split at 10, terminate every line, the round
+; trip exact on newline-terminated texts (an unterminated tail gains its newline) ---
+(: t "a\nb\n" u "a\n\nb\n"
+   (assert
+      (= (lines t) '("a" "b")) (= (unlines '("a" "b")) t)
+      (= (unlines (lines t)) t) (= (unlines (lines u)) u)         ; round trips, empty line included
+      (! (lines "")) (! (unlines ()))                             ; nothing bridges to nothing
+      (= (tally (lines "\n")) 1) (= (unlines (lines "\n")) "\n")  ; one empty line, kept
+      (= (tally (lines u)) 3)
+      (= (lines "a\nb") '("a" "b")) (= (unlines (lines "a\nb")) t)))   ; the one normalization
+
+; --- the unified surface: worked hunks, exact to the byte -- context merges through a
+; narrow gap, splits at a wide one, and the empty side wears the -0,0 face ---
+(: at "a\nb\nc\nd\ne\nf\ng\nh\ni\n"
+   d1 (udiff "old" "new" at "a\nb\nC\nd\ne\nf\ng\nH\ni\n")       ; two changes, gap 4 <= 2*3: ONE hunk
+   x1 "--- old\n+++ new\n@@ -1,9 +1,9 @@\n a\n b\n-c\n+C\n d\n e\n f\n g\n-h\n+H\n i\n"
+   s2 (uhunks (patience (lines at) (lines "a\nb\nC\nd\ne\nf\nG\nh\ni\n")) 1)   ; gap 3 > 2*1: TWO hunks
+   x2 "@@ -2,3 +2,3 @@\n b\n-c\n+C\n d\n@@ -6,3 +6,3 @@\n f\n-g\n+G\n h\n"
+   (assert
+      (= d1 x1) (= s2 x2)
+      (! (udiff "a" "b" at at))                                   ; agreement is nothing
+      (= (udiff "a" "b" "" "x\n") "--- a\n+++ b\n@@ -0,0 +1 @@\n+x\n")
+      (= (udiff "a" "b" "x\n" "") "--- a\n+++ b\n@@ -1 +0,0 @@\n-x\n")))
+
+(say err "apps/utils/law: myers + patience + lines/unlines + unified hunks -- projections + minimality (lcs oracle) + anchors + seeded fuzz ok
 ")
