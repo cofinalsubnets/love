@@ -303,14 +303,10 @@ static lvm(lvm_swig) {
     struct ai_str *s = ((struct ai_buf*) x)->str;
     // the port's OWN pending run comes first: a buffered see may have gulped
     // ahead of us, and reading the fd past it would scramble the byte order
-    if (io->rbuf && !(io->rbuf & 1) && s->len) {
-      uintptr_t rp = (uintptr_t) getcharm(io->rpos), rl = (uintptr_t) getcharm(io->rlen);
-      if (rp < rl) {
-        uintptr_t k = rl - rp < s->len ? rl - rp : s->len;
-        memcpy(s->bytes, ((struct ai_str*) io->rbuf)->bytes + rp, k);
-        io->rpos = putcharm((intptr_t)(rp + k));
-        Sp[1] = putcharm((intptr_t) k);
-        Sp += 1; Ip += 1; return Continue(); } }
+    if (s->len && ai_io_pending(g, io)) {
+      uintptr_t k = ai_io_read_drain(g, io, (unsigned char*) s->bytes, s->len);
+      Sp[1] = putcharm((intptr_t) k);
+      Sp += 1; Ip += 1; return Continue(); }
     if (fd >= 0 && s->len) {
       int fl = fcntl((int) fd, F_GETFL);
       fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);

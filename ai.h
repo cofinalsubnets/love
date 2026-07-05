@@ -224,14 +224,6 @@ struct ai {
     ai_word fd;
     ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
     ai_word eof_seen;
-    // the READ BUFFER (host-side; dressed lazily by the generic zgetc on a
-    // HEAP port whose vt has readn). rbuf = an ai_str backing, else 0 or the
-    // 0-charm (statics zero-init raw; prel pokes the charm -- both read as
-    // "never buffered", and GC walks either word harmlessly); rpos/rlen charms
-    // bound the pending run [rpos, rlen). A static port never dresses one --
-    // nothing traces a static, so a heap backing would dangle. ⚠ prel's
-    // tap/jug BUILD ports by raw poke: these offsets live in BOTH places.
-    ai_word rbuf, rpos, rlen;
    } *io; }; }; };
  intptr_t end[]; };
 
@@ -295,11 +287,31 @@ extern struct ai_port_vt const ai_fd_port_vt;
 // installs, so it runs when a heap port becomes unreachable.
 void ai_fd_close(int fd);
 
-// Heap-allocate a port for the given OS fd. Bumps Width(struct ai_io) +
-// ttag, fills ap/fd/ungetc_buf/eof_seen, pushes the port pointer on Sp[0],
-// and registers a finalizer that calls ai_fd_close(fd) when the port is
-// collected. fd is stored as a plain integer at the C layer and tagged on
-// the way in.
+// THE BUFFERED PORT: a heap fd port is really an ai_bio -- the plain ai_io
+// head plus both buffer lanes, PRIVATE to the generic dispatch (prel's
+// tap/jug poke the bare ai_io shape and never learn these words exist; the
+// static ports stay bare too -- nothing traces a static, so a heap backing
+// would dangle). rbuf/wbuf hold an ai_str backing or 0 (never dressed);
+// rpos/rlen charms bound the pending read run [rpos, rlen); wlen charms the
+// filled write prefix. Only bio_of-guarded code (heap + fd >= 0) reads past
+// the head. GC walks the extension words as ordinary thread words.
+struct ai_bio { struct ai_io io; ai_word rbuf, rpos, rlen, wbuf, wlen; };
+// the two faces host nifs need (guards inside; both 0/no-op on a bare port):
+// pending = bytes waiting in the read buffer; drain pops up to n of them into
+// dst (swig's first course -- a buffered see may have gulped ahead of the fd).
+uintptr_t ai_io_pending(struct ai*, struct ai_io*);
+uintptr_t ai_io_read_drain(struct ai*, struct ai_io*, unsigned char*, uintptr_t);
+struct ai *ai_io_wflush(struct ai*, struct ai_io*);   // push the write run out (close/seal call it first)
+// frontend hook: raw bytes at an fd with NO g machinery -- the GC-context
+// finalizer drains a dying port's write buffer through it. Weak no-op default;
+// the host overrides with write(2).
+void ai_fd_drain(int fd, void const*, uintptr_t);
+
+// Heap-allocate a port for the given OS fd. Bumps Width(struct ai_bio) +
+// ttag, fills the head + zeroed buffer lanes, pushes the port pointer on
+// Sp[0], and registers a finalizer that drains + closes the fd when the
+// port is collected. fd is stored as a plain integer at the C layer and
+// tagged on the way in.
 struct ai *ai_io_alloc(struct ai *g, int fd);
 
 uintptr_t ai_clock(void); // used by garbage collector

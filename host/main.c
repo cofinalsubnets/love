@@ -110,16 +110,23 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 struct ai_port_vt const ai_fd_port_vt =
  { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, fd_writen, fd_readn };
 
-// statics carry no read buffer (rbuf 0 = never buffered): nothing traces a
-// static port, so a heap backing would dangle -- io_refill knows the law.
-struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF), putcharm(false), 0, putcharm(0), putcharm(0) };
-struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF), putcharm(false), 0, putcharm(0), putcharm(0) };
-struct ai_io ai_stderr = { lvm_port_io, putcharm(STDERR_FILENO), putcharm(EOF), putcharm(false), 0, putcharm(0), putcharm(0) };
+struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF), putcharm(false) };
+struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF), putcharm(false) };
+struct ai_io ai_stderr = { lvm_port_io, putcharm(STDERR_FILENO), putcharm(EOF), putcharm(false) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that ai_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live
 // outside the l heap and the GC never visits them.
 void ai_fd_close(int fd) { close(fd); }
+// the GC-context drain (a collected port's unflushed write run): raw write(2),
+// no g machinery -- safe inside run_finalizers.
+void ai_fd_drain(int fd, void const *p, uintptr_t n) {
+ unsigned char const *src = p;
+ uintptr_t i = 0;
+ while (i < n) {
+  ssize_t k = write(fd, src + i, n - i);
+  if (k < 0) { if (errno == EINTR) continue; break; }
+  i += (uintptr_t) k; } }
 
 // (open path mode) — open a file with mode "r"/"w"/"a"; returns a heap port
 // (closed on GC) or nil on error or misuse. mode is a l string; only the
@@ -175,6 +182,10 @@ static lvm(lvm_close) {
     struct ai_io *io = (struct ai_io*) Sp[0];
     intptr_t fd = getcharm(io->fd);
     if (fd >= 0) {
+      g->io = io;
+      Pack(g);
+      g = ai_io_wflush(g, io);   // buffered bytes land before the fd dies
+      Unpack(g);
       close(fd);
       io->fd = putcharm(-3); } }
   Sp[0] = ZeroPoint;
