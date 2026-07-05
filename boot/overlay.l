@@ -12,6 +12,11 @@
 ;   4. the MODEL vs the IMPLEMENTATION: test/uu.l's verified StackSet mirror
 ;      (its zins/zrow/zcount) computes the SAME answers as apps/wm/core.l's,
 ;      on the same stacks, through an encode -> vof -> decode round trip.
+;   5. the seeded fuzz: the whole op vocabulary walked at random through both
+;      worlds, compared after every step, the proved invariant watched live.
+;   6. the TRANSLATOR (tools/wm2uu.l, stage 3): core.l's ops read as data,
+;      kind-directed into uu terms, kernel-certified, and fuzzed against the
+;      implementation they were translated from.
 ;
 ;   cat test/00-init.l boot/overlay.l | out/host/ai
 
@@ -117,4 +122,58 @@
                      0)
                 (fuzz (- i 1) (rnd s2) zc (? (= r 0) (+ nid 1) nid))))))
  _ (assert (fuzz 150 20260705 (zmk 0 () ()) 1))
+ (puts "overlay leg 5: ok"))
+
+; leg 6 (stage 3 of the translator ladder): tools/wm2uu.l reads core.l's ops
+; AS DATA, kind-directed by the sig table, and emits uu terms -- which the
+; kernel then defn-CERTIFIES right here (dependency order: gens answers
+; reversed, so rev it), and which must answer the fuzz exactly as core.l
+; does. the translated terms live in the model's vocabulary, so stage 4's
+; idpath bridges can tie gen-* to the proved ops.
+(reads (open "tools/wm2uu.l" "r"))
+(: (forms path) (: q (open path "r") e (mint 0)
+                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
+   gens (wm2uu (forms "apps/wm/core.l") wm-sigs)
+ _ (assert (= 12 (tally gens)))
+ _ (map (\ g (defn (cap g) (nthl g 1) (nthl g 2))) (rev gens))   ; the kernel certifies each
+ (puts "overlay leg 6: translated + certified"))
+
+; the same seeded walk, the model side now stepping through the TRANSLATED ops
+(: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
+   (encl l) (? (two? l) (L 'ncons (cap l) (encl (cup l))) 'nnil)
+   (encz z) (L 'zmk (cap z) (encl (caup z)) (encl (caup (cup z))))
+   (decl v) (: (go vv acc) (? (two? vv) (go (nthl vv 2) (link (nthl vv 1) acc)) (rev acc))
+              (go (nthl v 2) ()))
+   (decz v) (zmk (nthl v 1) (decl (nthl (nthl v 2) 1)) (decl (nthl (nthl v 2) 2)))
+   (mstep r w t) (? (= r 0) (vof 0 (L 'gen-zins w t))
+                    (= r 1) (vof 0 (L 'gen-zfocup t))
+                    (= r 2) (vof 0 (L 'gen-zfocdn t))
+                    (= r 3) (vof 0 (L 'gen-zswapup t))
+                    (= r 4) (vof 0 (L 'gen-zswapdn t))
+                    (= r 5) (vof 0 (L 'gen-zmaster t))
+                    (nthl (vof 0 (L 'gen-zdel w t)) 1))
+   (cstep r w z) (? (= r 0) (zins w z)
+                    (= r 1) (zfocup z)
+                    (= r 2) (zfocdn z)
+                    (= r 3) (zswapup z)
+                    (= r 4) (zswapdn z)
+                    (= r 5) (zmaster z)
+                    (zdel w z))
+   (fuzz i s z nid)
+    (? (< i 1) 1
+       (: row (zrow z)
+          r (: r0 (% s 7) (? (? (= r0 6) (< (tally row) 2) 0) 1 r0))
+          s2 (rnd s)
+          w (? (= r 0) nid (= r 6) (nthl row (% s2 (tally row))) 0)
+          zc (cstep r w z)
+          zm (decz (mstep r w (encz z)))
+          (? (! (= zc zm)) (: _ (. (L (\ genfuzz-diverged) i r w zc zm)) 0)
+             (fuzz (- i 1) (rnd s2) zc (? (= r 0) (+ nid 1) nid)))))
+ _ (assert (fuzz 100 424242 (zmk 0 () ()) 1))
+ ; and the accessors/row through the translated lane, spot-checked
+ z0 (zmk 5 (L 2) (L 7 9))
+ _ (assert
+    (= (zrow z0) (decl (vof 0 (L 'gen-zrow (encz z0)))))
+    (= (cap z0) (vof 0 (L 'gen-zfoc (encz z0))))
+    (= (znub 7 (zrow z0)) (decl (vof 0 (L 'gen-znub 7 (L 'gen-zrow (encz z0)))))))
  (puts "overlay: ok"))
