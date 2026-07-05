@@ -2494,6 +2494,103 @@
              m))))
         n))))
 
+; --- the StackSet model: apps/wm/core.l's zipper, mirrored in uu. lists are
+; --- UniMath Combinatorics style (a vec by nat-recursion, a list = (Σ n, vec n),
+; --- so length is literally pr1) but MONOMORPHIC at nat -- windows are nats,
+; --- and a universe variable living only in a definition's body would strand
+; --- the Lean export on an unsolvable metavariable. a stack ALWAYS has a
+; --- focus (Swierstra's Stack -- core.l's () empty case lives outside the
+; --- model). the ops wear core.l's names; boot/overlay.l runs the model
+; --- AGAINST the implementation, and the theorems export via uu2coq/uu2lean.
+(assert
+ (defn 'nvec '(pi n nat UU)
+   '(lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h nat r))) n)))
+ (defn 'nlist 'UU '(total2 n nat (nvec n)))
+ (defn 'nnil 'nlist '(tpair 0 tt))
+ (defn 'ncons '(pi x nat (pi l nlist nlist))
+   '(lam x (lam l (tpair (succ (pr1 l)) (tpair x (pr2 l))))))
+ (defn 'nlen '(pi l nlist nat) '(lam l (pr1 l)))
+ (defn 'lapp '(pi a nlist (pi b nlist nlist))
+   '(lam a (lam b ((nat_rect (lam q (pi v (nvec q) nlist))
+                     (lam v b)
+                     (lam k (lam IH (lam v (ncons (pr1 v) (IH (pr2 v))))))
+                     (pr1 a))
+                   (pr2 a)))))
+ (defn 'lrev '(pi a nlist nlist)
+   '(lam a ((nat_rect (lam q (pi v (nvec q) nlist))
+              (lam v nnil)
+              (lam k (lam IH (lam v (lapp (IH (pr2 v)) (ncons (pr1 v) nnil)))))
+              (pr1 a))
+            (pr2 a)))))
+
+; --- decidable equality and the duplicate hunt, all booleans ---
+(assert
+ (defn 'orb '(pi a bool (pi b bool bool))
+   '(lam a (lam b (bool_rect (lam x bool) true b a))))
+ (defn 'andb '(pi a bool (pi b bool bool))
+   '(lam a (lam b (bool_rect (lam x bool) b false a))))
+ (defn 'nateqb '(pi n nat (pi m nat bool))
+   '(lam n ((nat_rect (lam q (pi m nat bool))
+              (lam m (nat_rect (lam q bool) true (lam k (lam r false)) m))
+              (lam k (lam IH (lam m (nat_rect (lam q bool) false (lam j (lam r (IH j))) m))))
+              n))))
+ (defn 'memb '(pi w nat (pi l nlist bool))
+   '(lam w (lam l ((nat_rect (lam q (pi v (nvec q) bool))
+                     (lam v false)
+                     (lam k (lam IH (lam v (orb (nateqb w (pr1 v)) (IH (pr2 v))))))
+                     (pr1 l))
+                   (pr2 l)))))
+ (defn 'nodupb '(pi l nlist bool)
+   '(lam l ((nat_rect (lam q (pi v (nvec q) bool))
+              (lam v true)
+              (lam k (lam IH (lam v (andb (negb (memb (pr1 v) (tpair k (pr2 v)))) (IH (pr2 v))))))
+              (pr1 l))
+            (pr2 l))))
+ ((vof 0 'true)  = (vof 0 '(nateqb 3 3)))
+ ((vof 0 'false) = (vof 0 '(nateqb 3 4)))
+ ((vof 0 'true)  = (vof 0 '(memb 9 (ncons 7 (ncons 9 nnil)))))
+ ((vof 0 'false) = (vof 0 '(memb 8 (ncons 7 (ncons 9 nnil))))))
+
+; --- the stack: focus x up x down, core.l's zipper with the focus law
+; --- BY CONSTRUCTION (a stk cannot be empty) ---
+(assert
+ (defn 'stk 'UU '(total2 f nat (total2 u nlist nlist)))
+ (defn 'zmk '(pi f nat (pi u nlist (pi d nlist stk)))
+   '(lam f (lam u (lam d (tpair f (tpair u d))))))
+ (defn 'zfoc '(pi z stk nat) '(lam z (pr1 z)))
+ (defn 'zup  '(pi z stk nlist) '(lam z (pr1 (pr2 z))))
+ (defn 'zdn  '(pi z stk nlist) '(lam z (pr2 (pr2 z))))
+ (defn 'zins '(pi w nat (pi z stk stk))
+   '(lam w (lam z (zmk w (zup z) (ncons (zfoc z) (zdn z))))))
+ (defn 'zrow '(pi z stk nlist)
+   '(lam z (lapp (lrev (zup z)) (ncons (zfoc z) (zdn z)))))
+ (defn 'zcount '(pi z stk nat)
+   '(lam z (succ (add (nlen (zup z)) (nlen (zdn z))))))
+ (defn 'zsane '(pi z stk bool) '(lam z (nodupb (zrow z))))
+ ; the model COMPUTES: a concrete stack rows out in order, counts, and the
+ ; sanity bit reads true -- and a planted duplicate reads false
+ (4 = (vof 0 '(zcount (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil))))))
+ (5 = (vof 0 '(zcount (zins 4 (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))))
+ ((vof 0 'true)  = (vof 0 '(zsane (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil))))))
+ ((vof 0 'false) = (vof 0 '(zsane (zmk 5 (ncons 2 nnil) (ncons 5 nnil)))))
+ ((vof 0 'true)  = (vof 0 '(memb 2 (zrow (zmk 5 (ncons 2 nnil) (ncons 7 nnil)))))))
+
+; --- the theorems: focus-of-insert holds by COMPUTATION (idpath). the size
+; --- law needs real induction -- natplusnsm (proved above) states add n
+; --- (succ m) = add (succ n) m, whose right side unfolds to succ (add n m)
+; --- even on a NEUTRAL n (the scrutinee's head constructor is known), so
+; --- the size law is exactly that lemma riding maponpaths ---
+(assert
+ (defn 'zfocins '(pi w nat (pi z stk (paths nat (zfoc (zins w z)) w)))
+   '(lam w (lam z (idpath w))))
+ (defq 'zcountins
+   '(pi w nat (pi z stk (paths nat (zcount (zins w z)) (succ (zcount z)))))
+   '(lam w (lam z
+      (maponpaths nat nat (lam q (succ q))
+        (add (nlen (zup z)) (succ (nlen (zdn z))))
+        (succ (add (nlen (zup z)) (nlen (zdn z))))
+        (natplusnsm (nlen (zup z)) (nlen (zdn z))))))))
+
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law -- more/eof keep the read protocol.)
 (: (help s p e) (? (more? s) p (eof? s) e

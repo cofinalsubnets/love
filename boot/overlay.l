@@ -9,10 +9,14 @@
 ;      application reads open, not clashing (the curried language's law).
 ;   3. the uu book is baked and COMPUTES: (uu 'defn) type-checks a nat_rect
 ;      adder, (uu 'vof) normalizes 2+1=3 -- no concat, a bare binary.
+;   4. the MODEL vs the IMPLEMENTATION: test/uu.l's verified StackSet mirror
+;      (its zins/zrow/zcount) computes the SAME answers as apps/wm/core.l's,
+;      on the same stacks, through an encode -> vof -> decode round trip.
 ;
 ;   cat test/00-init.l boot/overlay.l | out/host/ai
 
 (reads (open "apps/wm/sigs.l" "r"))
+(reads (open "apps/wm/core.l" "r"))
 
 (: (forms path) (: q (open path "r") e (mint 0)
                    ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
@@ -46,4 +50,18 @@
                    (: h (peep (uu 'HELPC) () 0) (? h (h s p e) 0))))
 (assert (id? 'rejected ((uu 'rejects) (\ z ((uu 'defn) 'boot-bad 'nat '(lam x x))))))
 (: help 0)
-(puts "overlay: ok")
+
+; leg 4: load the whole uu corpus (kernel + the StackSet model + its theorems,
+; every defn re-certified right here), then run the MODEL against core.l's
+; implementation on concrete stacks -- encode, vof, decode, compare
+(reads (open "test/uu.l" "r"))
+(: (encl l) (? (two? l) (L 'ncons (cap l) (encl (cup l))) 'nnil)
+   (encz z) (L 'zmk (cap z) (encl (caup z)) (encl (caup (cup z))))
+   (decl v) (: (go vv acc) (? (two? vv) (go (nthl vv 2) (link (nthl vv 1) acc)) (rev acc))
+              (go (nthl v 2) ()))
+ z0 (zmk 5 (L 2) (L 7 9))
+ _ (assert
+    (= (zrow z0) (decl (vof 0 (L 'zrow (encz z0)))))
+    (= (zrow (zins 4 z0)) (decl (vof 0 (L 'zrow (L 'zins 4 (encz z0))))))
+    (= (tally (zrow (zins 4 z0))) (vof 0 (L 'zcount (L 'zins 4 (encz z0))))))
+ (puts "overlay: ok"))

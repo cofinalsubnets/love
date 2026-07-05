@@ -56,7 +56,11 @@
    ; explicit skips: the type-in-type detonations (sound MLTT can't host them, and
    ; lean's universe check rightly rejects them -- the filter, working as intended)
    bl (tablet 0)
-   _ (map (\ n (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
+   _ (map (\ n (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref
+                              zrow zsane))   ; zrow/zsane: lapp/lrev carry a body-only universe
+                                             ; (the nat_rect motive's nvec) that auto-bound
+                                             ; `Type _` strands on a metavariable at the use
+                                             ; site; Rocq exports them fine, Lean skips them
 
    ; transparent type-former/identity combinators: Lean checks a paths.rec minor premise
    ; at REDUCIBLE transparency and won't unfold a plain `def`, so an equivalence proof
@@ -191,6 +195,7 @@
        "/- the de Bruijn witness: Lean agrees these carry NO axioms (closed under the"
        "   global context), the same property Rocq's `Print Assumptions` reports. -/"
        "#print axioms uu_natpluscomm"
+"#print axioms uu_zcountins"
        "#print axioms uu_natplusassoc"
        "#print axioms uu_natmultcomm"
        "#print axioms uu_total2_paths_f"

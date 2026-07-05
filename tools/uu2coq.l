@@ -184,6 +184,7 @@
        "Theorem mul_comm_std : forall n m, Nat.mul n m = Nat.mul m n." (string 10)
        "Proof. intros n m; rewrite <- (uu_mul_std n m), <- (uu_mul_std m n); apply paths_to_eq, uu_natmultcomm. Qed." (string 10))))
    _ (. (cat (L (string 10) "Print Assumptions uu_natplusr0." (string 10)
+"Print Assumptions uu_zcountins." (string 10)
                 "Print Assumptions add_comm_std." (string 10)
                 "Print Assumptions add_assoc_std." (string 10)
                 "Print Assumptions mul_comm_std." (string 10) (string 10)
