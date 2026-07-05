@@ -40,7 +40,9 @@
    ; --- xmonad's transience' and manageDocks as plain hooks (VALUES, not nullary
    ;     helpers -- (f) == f would hand back the wrapper unrun) ---
    transience (\ c sh (? (x-transient (mg-sock c) (mg-win c)) (do-center-float c sh) sh))   ; a dialog floats centered on its parent
-   manage-docks (\ c sh (? ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK") c) (do-ignore c sh) sh))
+   manage-docks (\ c sh (? ((<||> (prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK")            ; checkDock: a dock OR a desktop --
+                                  (prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP")) c)     ; the file manager's wallpaper window
+                           (do-ignore c sh) sh))                                                       ; is a client only by accident
 
    ; --- run a hook against a freshly-admitted window ---
    (manage-window hook c sh) (hook c sh)

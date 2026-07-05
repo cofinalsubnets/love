@@ -56,7 +56,7 @@
 
    ; --- init: intern the vocabulary, hoist the support window, write the root ---
    ewmh-atoms (L "_NET_SUPPORTED" "_NET_SUPPORTING_WM_CHECK" "_NET_WM_NAME" "_NET_CLIENT_LIST"
-                 "_NET_ACTIVE_WINDOW" "_NET_CURRENT_DESKTOP" "_NET_NUMBER_OF_DESKTOPS" "_NET_WM_DESKTOP"
+                 "_NET_CLIENT_LIST_STACKING" "_NET_ACTIVE_WINDOW" "_NET_CURRENT_DESKTOP" "_NET_NUMBER_OF_DESKTOPS" "_NET_WM_DESKTOP"
                  "_NET_WM_STATE" "_NET_WM_STATE_FULLSCREEN" "_NET_WM_STATE_MODAL"
                  "_NET_WM_STRUT" "_NET_WM_STRUT_PARTIAL" "_NET_WM_WINDOW_TYPE"
                  "_NET_WM_WINDOW_TYPE_DOCK" "_NET_WM_WINDOW_TYPE_DIALOG" "_NET_WM_WINDOW_TYPE_NOTIFICATION"
@@ -83,6 +83,8 @@
        (? (= key (peep ewst 'last ())) 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
+             _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins)   ; libwnck CREATES its windows off THIS list (no stacking =
+                                                                                     ; an empty taskbar); wswins is tiles-then-floats = bottom to top
              _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 (L cur))
              _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 (L foc))
              _ (map (\ p (: t (- (cap p) 1)                                      ; tiled windows wear their workspace...
