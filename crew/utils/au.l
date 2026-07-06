@@ -11,6 +11,7 @@
 ;   au ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/utils/fs.l)
 ;   au grep [-nvcl] PATTERN [F..]   the BRE matcher (crew/utils/re.l)
 ;   au sed [-n] SCRIPT [F..]        the stream editor (crew/utils/sed.l)
+;   au env|sleep|kill|xargs        the process tools (crew/utils/proc.l)
 ;
 ; loads LAST in the au cat, when every tool main is already defined; the tool files'
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
@@ -71,6 +72,8 @@
               _ (pin t 'ln ln-main) _ (pin t 'touch touch-main)
               _ (pin t 'pwd pwd-main) _ (pin t 'chmod chmod-main)
               _ (pin t 'grep grep-main) _ (pin t 'sed sed-main)
+              _ (pin t 'env env-main) _ (pin t 'sleep sleep-main)
+              _ (pin t 'kill kill-main) _ (pin t 'xargs xargs-main)
               t)
    (usage _) (: _ (say err "au -- the ai multi-call toolbox
 usage: au TOOL ARGS..     (or symlink a tool's name to au)
@@ -82,6 +85,7 @@ usage: au TOOL ARGS..     (or symlink a tool's name to au)
   cut tr nl rev                           the field tools
   grep [-nvcl] PAT [F..]                  the BRE matcher (crew/utils/re.l)
   sed [-n] SCRIPT [F..]                   the stream editor (s///gp, d, p, q, addresses)
+  env sleep kill xargs                    the process tools (crew/utils/proc.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/utils/fs.l)
   echo seq yes true false basename dirname     ... and the trivia
 ")

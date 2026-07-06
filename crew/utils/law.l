@@ -272,5 +272,17 @@
       (! (sparse "2,3q")) (! (sparse "x")) (! (sparse "s/a/b/x"))   ; q takes one address; unknown verb/flag
       (! (sparse "s/a\\{/b/"))))                                 ; the regex dialect refuses through
 
+; --- the process floor (crew/utils/proc.l): durations to milliseconds, and
+; the quote-blind word split under xargs ---
+(: (assert
+      (= (udur "2") 2000) (= (udur "0") 0) (= (udur "1s") 1000)
+      (= (udur "1.5") 1500) (= (udur ".5") 500) (= (udur "1.") 1000)
+      (= (udur "2m") 120000) (= (udur "1h") 3600000) (= (udur "1d") 86400000)
+      (= (udur "1.5m") 90000)
+      (! (udur "")) (! (udur "x")) (! (udur "5x")) (! (udur "1.2.3")) (! (udur "."))
+      (= (uwords " a  bb\tc\n") '("a" "bb" "c"))
+      (= (uwords "x") '("x"))
+      (! (uwords "  \n")) (! (uwords ""))))
+
 (say err "crew/utils/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

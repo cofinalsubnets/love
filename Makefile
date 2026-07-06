@@ -158,7 +158,7 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -168,7 +168,7 @@ out/host$(hsuf)/au: $(aufiles)
 .PHONY: test_utils
 test_utils: host out/host$(hsuf)/au
 	@echo "UTILS crew/utils/{text,core,fs,re,sed,diff,law}.l"; \
-	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
+	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
 	  cat out/host/.test_utils.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/utils/law: myers" out/host/.test_utils.out; } \
 	    || { echo "FAIL utils (exit $$r)"; exit 1; }
@@ -309,6 +309,25 @@ test_utils: host out/host$(hsuf)/au
 	  { cmp -s $(ho)/.sd-g $(ho)/.sd-o && [ $$a -eq 2 ] && [ $$b -eq 2 ]; } \
 	    || { echo "FAIL au sed missing file vs GNU"; exit 1; }; \
 	  echo "au: sed (s///gp + d/p/q + number/\$$/regex/range addresses GNU-identical, exits 1/2) ok"
+	@printf 'a b\nc\n' | xargs > $(ho)/.pc-g; printf 'a b\nc\n' | $m $(ho)/au xargs > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL au xargs vs GNU"; exit 1; }; \
+	  printf '1\n2\n3\n4\n5\n' | xargs -n 2 echo > $(ho)/.pc-g; printf '1\n2\n3\n4\n5\n' | $m $(ho)/au xargs -n 2 echo > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL au xargs -n 2 vs GNU"; exit 1; }; \
+	  printf '' | xargs echo > $(ho)/.pc-g; printf '' | $m $(ho)/au xargs echo > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL au xargs empty vs GNU"; exit 1; }; \
+	  printf 'x\n' | $m $(ho)/au xargs false; r=$$?; [ $$r -eq 123 ] || { echo "FAIL au xargs fail exit (rc $$r)"; exit 1; }; \
+	  printf 'x\n' | $m $(ho)/au xargs /no/such/cmd 2>/dev/null; r=$$?; [ $$r -eq 127 ] || { echo "FAIL au xargs 127 (rc $$r)"; exit 1; }; \
+	  env AUP=44 sh -c 'printf %s "$$AUP"' > $(ho)/.pc-g; $m $(ho)/au env AUP=44 sh -c 'printf %s "$$AUP"' > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL au env assign vs GNU"; exit 1; }; \
+	  env | grep -v '^_=' | LC_ALL=C sort > $(ho)/.pc-g; $m $(ho)/au env | grep -v '^_=' | LC_ALL=C sort > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL au env print vs GNU"; exit 1; }; \
+	  $m $(ho)/au env sh -c 'exit 3'; r=$$?; [ $$r -eq 3 ] || { echo "FAIL au env child exit (rc $$r)"; exit 1; }; \
+	  $m $(ho)/au sleep 0.1 || { echo "FAIL au sleep"; exit 1; }; \
+	  $m $(ho)/au sleep xx 2>/dev/null; r=$$?; [ $$r -eq 1 ] || { echo "FAIL au sleep bad exit (rc $$r)"; exit 1; }; \
+	  sleep 3 & sp=$$!; $m $(ho)/au kill -9 $$sp || { echo "FAIL au kill send"; exit 1; }; \
+	  wait $$sp; r=$$?; [ $$r -eq 137 ] || { echo "FAIL au kill effect (rc $$r)"; exit 1; }; \
+	  $m $(ho)/au kill -0 999999 2>/dev/null; r=$$?; [ $$r -eq 1 ] || { echo "FAIL au kill dead pid (rc $$r)"; exit 1; }; \
+	  echo "au: process tools (env/sleep/kill/xargs -- GNU-identical output, the exit faces) ok"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

@@ -19,7 +19,7 @@ files, busybox's multi-call trick natively.
 
 ONE catted script (`out/host/au`, `bin/au` installs): the Makefile cats
 
-    text.l core.l fs.l diff.l ain.l cook.l asbook.l elf.l au.l   (aufiles)
+    text.l core.l fs.l re.l sed.l proc.l diff.l ain.l cook.l asbook.l elf.l au.l   (aufiles)
 
 behind a `#!/usr/bin/env -S ai` shebang. au.l loads LAST and dispatches off the
 program seat of `cmdline` -- `au TOOL ARGS..`, or symlink a tool's name to au
@@ -35,7 +35,7 @@ the file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat -- au is its door.
 
-## the inventory (32 tools, 34 names)
+## the inventory (38 tools, 40 names)
 
 | where | tools |
 | --- | --- |
@@ -48,6 +48,7 @@ the file discipline, two shapes:
 | fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod |
 | re.l, the matcher | grep (-n -v -c -l) over the lawed BRE engine |
 | sed.l, the editor | sed (-n; s///gp, d, p, q; number/$/regex/range addresses) |
+| proc.l, the processes | env sleep kill xargs |
 
 ## the discipline (why this stays trustworthy)
 
@@ -60,7 +61,8 @@ the file discipline, two shapes:
   and then verifying with the shell.
 * **the u-floor.** the shared helpers leak u-prefixed from core.l and are lawed
   pure in law.l: uatoi uread udie upad ujoin uhdr uhead/utail ucount ubase/udir
-  usplit ujoinc uspec/upick uset urev ueach, and fs.l's uoct/udirp/udest/ucopy.
+  usplit ujoinc uspec/upick uset urev ueach, fs.l's uoct/udirp/udest/ucopy, and
+  proc.l's udur/uwords.
   `ueach` is the cat walk every whole-input tool rides (files or stdin, `-`
   reads stdin, a miss complains on err and the exit code remembers).
 * **the nif lane.** fs effects ride host/init.c + host/fs.c (app-glob AI_NIF,
@@ -82,10 +84,12 @@ the file discipline, two shapes:
 * lines/unlines normalize an unterminated final line (the tool layer's ONE
   normalization); cat copies verbatim, head/tail/sort/uniq normalize like GNU
   sort does (GNU head does not -- known, harmless, unsmoked).
-* ⚠ **open compiler bug** (doc/bug-nested-go-shadow.md, core-thread work): a
-  nested define named like a sibling pin, beside unfolded computed pins, makes
-  the enclosing recursion silently no-op. until fixed, give nested loops
-  DISTINCT noms in tool code (fs.l's zap walks `ent`, never `go`).
+* the nested-loop nom miscompile this rung surfaced was root-caused and FIXED
+  in both compilers (ev.l avb's shadow guard + ai.c's fars set, lawed in
+  test/closure.l); nested loops may share noms freely again.
+* a value that can legitimately net 0 -- an end index, a (0 0) span -- reads
+  BLUE (falsy): give it uread's (1 ..) success shape. and never name a local
+  `err` or `out`; they are the PORTS, and the shadow says into a charm.
 
 ## the regex engine (crew/utils/re.l)
 
@@ -93,7 +97,7 @@ landed. a POSIX-BRE dialect -- literals, `.`, `*`, head-`^`/tail-`$`, [..]
 classes with ranges/negation (first-] and edge-- literal), \-escapes, \( \)
 groups, GNU's \+ \? -- with GNU's leniency (a repeat with no atom is ink) and
 GNU's refusals mirrored as parse errors (backrefs, intervals, alternation).
-(rebre p) answers (1 nodes) | (); (rehas nodes s) the boolean; (refind nodes
+(rebre p) answers (1 nodes ngroups) | (); (rehas nodes s) the boolean; (refind nodes
 s i) the leftmost greedy span as (1 start end) -- the (1 ..) shapes because a
 match ending at 0 is blue by measure. the matcher is greedy backtracking in
 continuation style; the laws (law.l) hold the dialect by hand AND by a seeded
@@ -118,11 +122,20 @@ smoked byte-identical vs GNU (a 12-script battery + -n + stdin + the error
 faces). out of dialect, documented: GNU's empty-pattern reuse, \n in
 replacements, hold space.
 
+## the process tools (crew/utils/proc.l)
+
+landed, no new nifs -- environ/getenv/setenv, spawn (pid | negative errno; a
+child that cannot exec _exit(127)s) + wait, still (pty.c's kill), rest (core
+sleep, ms). env prints the world or assigns K=V.. and runs the command with
+the child's exit; sleep sums decimal durations with s/m/h/d suffixes (udur,
+lawed); kill sends -N or -NAME (default TERM) per pid, exit 0/1; xargs
+whitespace-splits stdin (quote-blind, documented) onto the command's tail
+(echo by default), -n N a batch at a time, exits 0 / 123 (a run failed) /
+127 (could not exec), running once even on empty input, all like GNU.
+
 ## remaining work, in order
 
-1. **the process tools** -- env, sleep, kill, xargs. no new nifs: environ/
-   setenv/getenv, `rest`, bao's `still`, spawn/wait.
-2. **polish, as need arises** -- ls -l (stat already carries size/mtime/mode),
+1. **polish, as need arises** -- ls -l (stat already carries size/mtime/mode),
    cp -r, multi-source cp/mv into a directory, sort -n/-k, uniq -d/-u, cut -b,
    tr [:class:] and -ds, echo -e, seq over gems, grep -i/-o/-E, sed -i/y/N.
    none block the distro; add them when a real script wants them.
