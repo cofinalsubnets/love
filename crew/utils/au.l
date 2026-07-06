@@ -8,6 +8,7 @@
 ;   au as TGT IN OUT   assemble IR forms from IN (x64|arm64) into an ELF at OUT
 ;   au cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   au cut|tr|nl|rev   the line + field tools + trivia (crew/utils/core.l)
+;   au ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/utils/fs.l)
 ;
 ; loads LAST in the au cat, when every tool main is already defined; the tool files'
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
@@ -63,6 +64,10 @@
               _ (pin t 'basename basename-main) _ (pin t 'dirname dirname-main)
               _ (pin t 'cut cut-main) _ (pin t 'tr tr-main)
               _ (pin t 'nl nl-main) _ (pin t 'rev rev-main)
+              _ (pin t 'ls ls-main) _ (pin t 'cp cp-main) _ (pin t 'mv mv-main)
+              _ (pin t 'rm rm-main) _ (pin t 'mkdir mkdir-main) _ (pin t 'rmdir rmdir-main)
+              _ (pin t 'ln ln-main) _ (pin t 'touch touch-main)
+              _ (pin t 'pwd pwd-main) _ (pin t 'chmod chmod-main)
               t)
    (usage _) (: _ (say err "au -- the ai multi-call toolbox
 usage: au TOOL ARGS..     (or symlink a tool's name to au)
@@ -72,6 +77,7 @@ usage: au TOOL ARGS..     (or symlink a tool's name to au)
   as TGT IN OUT      assemble IR forms from IN (x64|arm64) into ELF OUT
   cat head tail wc sort uniq tee          the line tools (crew/utils/core.l)
   cut tr nl rev                           the field tools
+  ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/utils/fs.l)
   echo seq yes true false basename dirname     ... and the trivia
 ")
                 (nap 2))

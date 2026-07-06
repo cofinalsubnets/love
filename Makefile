@@ -158,7 +158,7 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -167,8 +167,8 @@ out/host$(hsuf)/au: $(aufiles)
 	@chmod 755 $@
 .PHONY: test_utils
 test_utils: host out/host$(hsuf)/au
-	@echo "UTILS crew/utils/text.l + crew/utils/core.l + crew/utils/diff.l + crew/utils/law.l"; \
-	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
+	@echo "UTILS crew/utils/{text,core,fs,diff,law}.l"; \
+	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
 	  cat out/host/.test_utils.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/utils/law: myers" out/host/.test_utils.out; } \
 	    || { echo "FAIL utils (exit $$r)"; exit 1; }
@@ -239,6 +239,27 @@ test_utils: host out/host$(hsuf)/au
 	  printf 'abc\nde\n' | rev > $(ho)/.fu-g; printf 'abc\nde\n' | $m $(ho)/au rev > $(ho)/.fu-o; \
 	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL au rev vs GNU"; exit 1; }; \
 	  echo "au: field tools (cut/tr/nl/rev GNU-identical) ok"
+	@P=$(ho)/.fsplay; rm -rf $$P; mkdir $$P; \
+	  $m $(ho)/au mkdir -p $$P/a/b/c && [ -d $$P/a/b/c ] || { echo "FAIL au mkdir -p"; exit 1; }; \
+	  printf 'hi there\n' > $$P/f1; \
+	  $m $(ho)/au cp $$P/f1 $$P/f2 && cmp -s $$P/f1 $$P/f2 || { echo "FAIL au cp"; exit 1; }; \
+	  $m $(ho)/au cp $$P/f1 $$P/a && cmp -s $$P/f1 $$P/a/f1 || { echo "FAIL au cp into dir"; exit 1; }; \
+	  $m $(ho)/au mv $$P/f2 $$P/f3 && [ ! -e $$P/f2 ] && cmp -s $$P/f1 $$P/f3 || { echo "FAIL au mv"; exit 1; }; \
+	  $m $(ho)/au ln -s f1 $$P/l1 && [ "$$(readlink $$P/l1)" = f1 ] || { echo "FAIL au ln -s"; exit 1; }; \
+	  $m $(ho)/au ln $$P/f1 $$P/h1 && [ $$P/h1 -ef $$P/f1 ] || { echo "FAIL au ln"; exit 1; }; \
+	  $m $(ho)/au touch $$P/new $$P/.hidden && [ -f $$P/new ] && [ -f $$P/.hidden ] || { echo "FAIL au touch"; exit 1; }; \
+	  $m $(ho)/au chmod 600 $$P/f1 && [ "$$(stat -c %a $$P/f1)" = 600 ] || { echo "FAIL au chmod"; exit 1; }; \
+	  LC_ALL=C ls -1 $$P > $(ho)/.fs-g; $m $(ho)/au ls $$P > $(ho)/.fs-o; \
+	  cmp -s $(ho)/.fs-g $(ho)/.fs-o || { echo "FAIL au ls vs GNU"; exit 1; }; \
+	  LC_ALL=C ls -A -1 $$P > $(ho)/.fs-g; $m $(ho)/au ls -a $$P > $(ho)/.fs-o; \
+	  cmp -s $(ho)/.fs-g $(ho)/.fs-o || { echo "FAIL au ls -a vs GNU -A"; exit 1; }; \
+	  [ "$$($m $(ho)/au pwd)" = "$$(pwd)" ] || { echo "FAIL au pwd"; exit 1; }; \
+	  $m $(ho)/au rm $$P/f3 && [ ! -e $$P/f3 ] || { echo "FAIL au rm"; exit 1; }; \
+	  $m $(ho)/au rm -r $$P/a && [ ! -e $$P/a ] || { echo "FAIL au rm -r"; exit 1; }; \
+	  $m $(ho)/au mkdir $$P/empty && $m $(ho)/au rmdir $$P/empty && [ ! -e $$P/empty ] || { echo "FAIL au rmdir"; exit 1; }; \
+	  $m $(ho)/au rm $$P/nope > /dev/null 2>&1; r=$$?; [ $$r -eq 1 ] || { echo "FAIL au rm miss exit"; exit 1; }; \
+	  $m $(ho)/au rm -f $$P/nope > /dev/null 2>&1; r=$$?; [ $$r -eq 0 ] || { echo "FAIL au rm -f quiet"; exit 1; }; \
+	  echo "au: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir) ok"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

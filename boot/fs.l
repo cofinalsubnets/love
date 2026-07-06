@@ -50,5 +50,26 @@
    _ (: m0 (umask 18)
         (assert (charm? m0) (= 18 (umask m0)) (= m0 (umask m0))))
 
+   ; rmdir: the empty-directory unlink -- full is a live errno, empty goes
+   _ (: e (+ d "/sub")
+        _ (mkdir e 493)
+        (assert
+          (< 0 (rmdir d))                           ; d holds b and l still: not empty
+          (id? (rmdir e) ())
+          (id? (stat e) ())
+          (< 0 (rmdir e))                           ; already gone: a live errno
+          (= 22 (rmdir 7))))
+
+   ; hardlink: two names, one file -- content shows through both, and the
+   ; survivor keeps it when the first name unlinks
+   _ (: h (+ d "/h")
+        _ (unlink h)
+        (assert
+          (id? (hardlink b h) ())
+          (= 5 (cap (stat h)))
+          (< 0 (hardlink b h))                      ; the name is taken: EEXIST
+          (: _ (unlink b) (= 5 (cap (stat h))))
+          (id? (unlink h) ())))
+
    _ (unlink l) _ (unlink b)
    _ (say out "fs: ok") (put out 10))

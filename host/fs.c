@@ -13,6 +13,10 @@
 //   (utime path ms)       -> () | errno | EINVAL   (mtime AND atime on the stat
 //                            scale, MILLISECONDS; a non-charm ms reads "now")
 //   (umask mask)          -> the PREVIOUS mask | -1 misuse (always succeeds)
+//   (rmdir path)          -> () | errno | EINVAL   (the empty-directory unlink)
+//   (hardlink old new)    -> () | errno | EINVAL   (link(2); `link` the word is
+//                            the chain ctor, the most spoken name in the prel,
+//                            so the nif wears the long form)
 #include "ai.h"
 #include <unistd.h>     // symlink readlink chown
 #include <string.h>     // memcpy
@@ -93,6 +97,20 @@ static lvm(lvm_posix_utime) {
  Sp[1] = host_posix_utime(Sp[0], Sp[1]);
  Sp += 1; return Ip++, Continue(); }
 
+ai_noinline static ai_word host_posix_rmdir(ai_word pw) {
+ char p[4096];
+ if (!str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
+ return rmdir(p) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
+ char o[4096], n[4096];
+ if (!str_cbuf(ow, o, sizeof o) || !str_cbuf(nw, n, sizeof n)) return putcharm(EINVAL);
+ return link(o, n) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_hardlink) {
+ Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
+ Sp += 1; return Ip++, Continue(); }
+
 static lvm(lvm_posix_umask) {
  Sp[0] = (Sp[0] & 1) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
                      : putcharm(-1);
@@ -105,7 +123,9 @@ static union u const
   nif_posix_chmod[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_chmod}, {lvm_ret0}},
   nif_posix_chown[]    = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_chown}, {lvm_ret0}},
   nif_posix_utime[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_utime}, {lvm_ret0}},
-  nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}};
+  nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
+  nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
+  nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}};
 AI_NIF("rename",   nif_posix_rename);
 AI_NIF("symlink",  nif_posix_symlink);
 AI_NIF("readlink", nif_posix_readlink);
@@ -113,3 +133,5 @@ AI_NIF("chmod",    nif_posix_chmod);
 AI_NIF("chown",    nif_posix_chown);
 AI_NIF("utime",    nif_posix_utime);
 AI_NIF("umask",    nif_posix_umask);
+AI_NIF("rmdir",    nif_posix_rmdir);
+AI_NIF("hardlink", nif_posix_hardlink);

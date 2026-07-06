@@ -146,5 +146,9 @@
       (= (uset "\\n\\t") '(10 9))                                  ; the escapes
       (= (urev "abc") "cba") (! (urev ""))))
 
+; --- the fs-tool floor (crew/utils/fs.l): uoct reads chmod's octal ---
+(: (assert
+      (= (uoct "755") 493) (= (uoct "644") 420) (= (uoct "0") 0) (= (uoct "7") 7)))
+
 (say err "crew/utils/law: myers + patience + lines/unlines + unified hunks + the u-floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz ok
 ")
