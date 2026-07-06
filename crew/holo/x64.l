@@ -314,9 +314,13 @@
             (two? (peep x64-alu op ())) (emit-alu op (at ins 1) (at ins 2) (at ins 3))
             (scare 'bad-op op)))
 
-   ;; the only relocation kind: a 32-bit pc-relative field, measured from the END of the field.
+   ;; two relocation kinds: rel32, a 32-bit pc-relative field measured from the END of the field
+   ;; (branches, la); and abs64, an 8-byte ABSOLUTE address of the label (a pointer baked into data --
+   ;; needs the assembly ORG set to the load vaddr, which elf64 does).
    (x64-patch kind target site width aux)
-      (? (= kind 'rel32) (le32 (- target (+ site width))) (scare 'badfix kind))
+      (? (= kind 'rel32) (le32 (- target (+ site width)))
+         (= kind 'abs64) (le64 target)
+         (scare 'badfix kind))
 
    ;; -- register the backend under its target names. --
    x64 (tablet 0)

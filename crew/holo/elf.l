@@ -36,9 +36,12 @@
    (elf64-at base target mkprog data)
       (: machine (peep elf-machines target 0)
          _ (? (= machine 0) (scare 'no-elf-machine target) 0)
-         probe-len (tally (holo-bytes target (mkprog (+ base 65536))))  ; measure the code (length stable)
+         org (+ base elf-hdr)                                          ; the vaddr of the first code byte
+         probe-len (tally (holo-bytes-at target (mkprog (+ base 65536)) org))  ; measure the code (length stable)
          dataddr (+ base (+ elf-hdr probe-len))
-         code (holo-bytes target (mkprog dataddr))
+         ;; assemble at ORG so labels carry absolute load addresses -- pc-relative fixups are
+         ;; unchanged; an abs64 data pointer (cc's static char*/fn-ptr tables) resolves outright.
+         code (holo-bytes-at target (mkprog dataddr) org)
          filesz (+ elf-hdr (+ (tally code) (tally data)))
          entry (+ base elf-hdr)
          img (catall (L (elf64-hdr base entry filesz machine) code data))

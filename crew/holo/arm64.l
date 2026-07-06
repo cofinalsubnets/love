@@ -301,6 +301,7 @@
             (= kind 'b19) (le32 (| aux (<< (& rel 524287) 5)))        ; 19-bit field, bits[23:5]
             (= kind 'adr21) (le32 (| aux (| (<< (& rb 3) 29)          ; adr: BYTE offset, immlo[30:29]
                                             (<< (& (>> rb 2) 524287) 5))))   ; immhi[23:5]
+            (= kind 'abs64) (le64 target)                            ; an 8-byte ABSOLUTE address (data pointer)
             (scare 'badfix kind)))
 
    arm64 (tablet 0)

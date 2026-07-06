@@ -15,11 +15,12 @@
 ; is a word-then-byte block copy (bcopy). stage 4c: brace and designated
 ; initializers -- locals zero the slot then fill (cgfill, runtime values ok,
 ; nesting for arrays of structs), globals bake a constant byte image
-; (cgimage; string-into-char-array and [] size inference included). fenced
-; and refused, not fudged: ptr+ptr, deref of a non-pointer, assigning to an
-; array, struct params or returns by value, and a GLOBAL initializer whose
-; value is a LABEL -- char *s = "hi", a static function-pointer table,
-; &global in static data (needs a data relocation; stage 4d).
+; (cgimage; string-into-char-array and [] size inference included). stage 4d:
+; a GLOBAL initializer whose value is a LABEL bakes an abs64 fixup ('fix 8
+; abs64 label 0), the label's absolute load address -- char *s = "hi" (a
+; rodata string), a static (name, fn-ptr) table (ai.c's nifs), &global,
+; a decayed array. fenced and refused, not fudged: ptr+ptr, deref of a
+; non-pointer, assigning to an array, struct params or returns by value.
 (:
    ; the gen state g (a tablet): 'n the label counter, 'off the frame's
    ; high-water offset, 'brk/'cnt the loop label stacks, 'glob the global
@@ -305,13 +306,6 @@
                           (go fields 0))
    (nthfield fields i) (: (go l k) (? (! (two? l)) 'bad (< k 1) (cap l) (go (cup l) (- k 1)))
                            (go fields i))
-   (splice img at bytes)                            ; overwrite img[at..) with bytes (image build)
-    (: (go i src rem acc)
-        (? (! (two? src)) (rev acc)
-           (< i at) (go (+ i 1) (cup src) rem (link (cap src) acc))
-           (two? rem) (go (+ i 1) (cup src) (cup rem) (link (cap rem) acc))
-           (go (+ i 1) (cup src) rem (link (cap src) acc)))
-       (go 0 img bytes ()))
 
    ; -- LOCAL init (codegen): zero the slot, then fill (values may be runtime) --
    (cgzero off span)                                ; zero [r4+off .. +span)
@@ -358,45 +352,75 @@
            (fill (caup ini) 0 ()))
        'bad)
 
-   ; -- GLOBAL init (a constant byte image; a label value refuses -> 4d) --
+   ; -- GLOBAL init (a constant byte image, where a scalar is little-endian
+   ; bytes, an aggregate a placement flatten, and a POINTER an abs64 fixup --
+   ; ('fix 8 abs64 label 0), the label's absolute address, laid by holo/elf.
+   ; a fixup is ONE list item but eight bytes, so lengths go through imbytelen. --
+   (fixit? x) (&& (two? x) (= (cap x) 'fix))
+   (imbytelen l) (foldl (\ a x (+ a (? (fixit? x) (caup x) 1))) 0 l)
    (imnum g ty val) (: n (tsz g ty) (go i acc) (? (<= n i) (rev acc)
                                                    (go (+ i 1) (link (& (>> val (* 8 i)) 255) acc)))
                        (go 0 ()))
-   (imgbytes g ty ini)                              ; bytes of length tsz(ty) | 'bad
+   (iminsert x l) (? (! (two? l)) (L x)                 ; insert (off items) keeping offsets ascending
+                     (< (cap x) (cap (cap l))) (link x l)
+                     (link (cap l) (iminsert x (cup l))))
+   (imsort ps) (: (go l acc) (? (! (two? l)) acc (go (cup l) (iminsert (cap l) acc))) (go ps ()))
+   (imflat ps total)                                ; sorted (off items).. -> total bytes, gaps zeroed
+    (: (go l pos acc)
+        (? (! (two? l)) (cat acc (zeros (- total pos)))
+           (: p (cap l) off (cap p) items (caup p)
+              (go (cup l) (+ off (imbytelen items)) (cat acc (cat (zeros (- off pos)) items)))))
+       (go ps 0 ()))
+   ; the label a pointer initializer points at (abs64) | () -- a string, a
+   ; function name, a decayed global array/var, or &global (all file-scope)
+   (imlabel g ini)
+    (? (= (cap ini) 'str)
+        (: l (nlab g ".S") _ (pin g 'strs (link (L l (caup ini)) (g 'strs))) l)
+       (&& (= (cap ini) 'var) (peep (g 'fns) (caup ini) ())) (intern (caup ini))
+       (&& (= (cap ini) 'var) (two? (peep (g 'glob) (caup ini) 0))) (cap (peep (g 'glob) (caup ini) 0))
+       (&& (&& (= (cap ini) 'addr) (two? (caup ini))) (&& (= (cap (caup ini)) 'var)
+           (two? (peep (g 'glob) (caup (caup ini)) 0)))) (cap (peep (g 'glob) (caup (caup ini)) 0))
+       ())
+   (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (? (! (two? ini)) (zeros (tsz g ty))
        (= (cap ini) 'num) (? (aggish? ty) 'bad (imnum g ty (caup ini)))
        (&& (= (cap ini) 'str) (arr? ty))
         (: t (caup ini) n (tsz g ty)
            (bs i acc) (? (<= n i) (rev acc) (bs (+ i 1) (link (? (< i (tally t)) (t i) 0) acc)))
            (bs 0 ()))
+       (ptr? ty) (: lbl (imlabel g ini) (? lbl (L (L 'fix 8 'abs64 lbl 0)) 'bad))   ; a data pointer -> abs64
        (= (cap ini) 'init)
         (? (arr? ty)
             (: elt (caup ty) esz (tsz g elt)
-               (place l idx img)
-                (? (! (two? l)) img
+               (place l idx acc)                     ; -> ((off items)..) | 'bad
+                (? (! (two? l)) acc
                    (: it (cap l)
                       ci (? (= (cap it) 'didx) (caup it) idx)
-                      eb (imgbytes g elt (elval it))
-                      (? (bad? eb) 'bad (place (cup l) (+ ci 1) (splice img (* ci esz) eb)))))
-               (place (caup ini) 0 (zeros (* (cauup ty) esz))))
+                      eb (imgpad g elt esz (elval it))
+                      (? (bad? eb) 'bad (place (cup l) (+ ci 1) (link (L (* ci esz) eb) acc)))))
+               ps (place (caup ini) 0 ())
+               (? (bad? ps) 'bad (imflat (imsort ps) (* (cauup ty) esz))))
            (stru? ty)
             (: e (peep (g 'stag) (caup ty) 0)
                fields (cap e) size (caup e)
-               (place l cur img)
-                (? (! (two? l)) img
+               (place l cur acc)
+                (? (! (two? l)) acc
                    (: it (cap l)
                       ci (? (= (cap it) 'dfield) (fidx fields (caup it)) cur)
                       fe (nthfield fields ci)
                       (? (bad? fe) 'bad
-                         (: fb (imgbytes g (cauup fe) (elval it))
-                            (? (bad? fb) 'bad (place (cup l) (+ ci 1) (splice img (caup fe) fb)))))))
-               (place (caup ini) 0 (zeros size)))
+                         (: fb (imgpad g (cauup fe) (tsz g (cauup fe)) (elval it))
+                            (? (bad? fb) 'bad (place (cup l) (+ ci 1) (link (L (caup fe) fb) acc)))))))
+               ps (place (caup ini) 0 ())
+               (? (bad? ps) 'bad (imflat (imsort ps) size)))
            'bad)
-       'bad)                                         ; a label/var/addr value -> not a constant image
+       'bad)
+   (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
+    (: b (imgbytes g ty val) (? (bad? b) 'bad (cat b (zeros (- w (imbytelen b))))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
     (: span (& (+ (tsz g ty) 7) -8)
        raw (imgbytes g ty ini)
-       (? (bad? raw) 'bad (cat raw (zeros (- span (tally raw))))))
+       (? (bad? raw) 'bad (cat raw (zeros (- span (imbytelen raw))))))
 
    ; a declaration list ((name ty init)..): slots by SIZE (rounded to 8),
    ; extends env -> (forms env) | 'bad. aggregate + string locals zero the

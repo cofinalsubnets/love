@@ -6,4 +6,4 @@
 ; au's cat order: .. asbook.l, crew/holo/elf.l, crew/utils/au.l.
 (: catall (holo 'catall)
    le16 (holo 'le16) le32 (holo 'le32) le64 (holo 'le64)
-   holo-bytes (holo 'holo-bytes))
+   holo-bytes (holo 'holo-bytes) holo-bytes-at (holo 'holo-bytes-at))

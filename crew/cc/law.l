@@ -93,7 +93,7 @@
       (= (cast "long g = 5; int main() { return 0; }")
          '(prog ((gdecl (("g" long (num 5))))
                  (fn "main" () (blk ((ret (num 0))))))))
-      (! (cparse (caup (clex "int main() { int *a[3]; return 0; }"))))   ; star-array mix: this stage refuses
+      (two? (cparse (caup (clex "int main() { int *a[3]; return 0; }"))))   ; an array of pointers parses (4d)
       (= (cast "int main() { int x=1; if (x) return 2; return 3; }")
          '(prog ((fn "main" () (blk ((decl (("x" int (num 1))))
                                      (if (var "x") (ret (num 2)) ())
@@ -137,7 +137,7 @@
       (! (cgn "int main() { int x; return *x; }"))                     ; deref wants a pointer
       (! (cgn "int main() { int a[3]; int b[3]; a = b; return 0; }"))  ; arrays are not assignable
       (! (cgn "int g = 1+2; int main() { return g; }"))                ; a global init is a folded constant, not an expression
-      (! (cgn "char *s = \"hi\"; int main() { return 0; }"))          ; a label-valued global image: 4d
+      (two? (cgn "char *s = \"hi\"; int main() { return 0; }"))       ; a label-valued global: abs64 (4d)
       (! (cgn "int main() { int a[2] = 5; return 0; }"))))          ; a scalar cannot initialize an array
 
 ; --- stage 4a: aggregates -- layout to the C rules, members, the new statements ---
@@ -187,7 +187,16 @@
       (two? (cgn "char b[8] = \"hi\"; int main() { return b[0]; }"))               ; a global char array from a string
       (two? (cgn "int t[3] = {1,2,3}; int main() { return t[2]; }"))               ; a global array constant image
       (two? (cgn "int main() { char s[4] = \"ab\"; return s[0]; }"))               ; a local char array from a string
-      (! (cgn "char *s = \"hi\"; int main() { return 0; }"))))                     ; a label-valued global image still refuses (4d)
+      ; --- stage 4d: label-valued global images through the abs64 data relocation ---
+      (two? (cgn "char *s = \"hi\"; int main() { return 0; }"))                    ; char* -> a rodata string's address
+      (two? (cgn "int q = 5; int *p = &q; int main() { return *p; }"))             ; &global
+      (two? (cgn "int a[2] = {1,2}; int *p = a; int main() { return p[1]; }"))     ; an array decays to its address
+      (two? (cgn "char *m[3] = {\"a\",\"bb\",\"ccc\"}; int main() { return m[0][0]; }"))   ; an array of string pointers
+      (two? (cgn "char *m[] = {\"x\",\"y\"}; int main() { return 0; }"))           ; ... with [] size inference
+      ; THE ai.c pattern: a static table of (name, function-pointer) records
+      (two? (cgn "struct N { char *nm; int (*fn)(int); }; int f(int x){return x;} struct N t[1] = {{\"f\", f}}; int main() { return t[0].fn(9); }"))
+      ; a bare TOP-LEVEL function-pointer array still refuses (ptop lays its own declarators; 4e)
+      (! (cgn "int a(int x){return x;} int (*t[1])(int) = {a}; int main() { return t[0](3); }"))))
 
 (say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) ok")
 (put err 10)

@@ -81,9 +81,11 @@ gate per stage. the pipeline, each its own file:
   still open: double->int cvt, unsigned div/compare lanes,
   rip-relative/global addressing for the .o world, and the arm64 float lane
   for parity. each lands with holotest.l's objdump goldens.
-* **elf.l**: today it lays runnable ELFs; cc needs RELOCATABLE .o -- symbol
-  table, .text/.data/.rodata/.bss, RELA relocations (PC32/PLT32/64/GOTPCREL
-  minimum). a well-fenced extension with its own laws (readelf as oracle).
+* **elf.l**: today it lays runnable ELFs, now assembling at ORG = the load
+  vaddr so an abs64 data pointer resolves (cc stage 4d -- static char*/fn-ptr
+  tables). the STILL-open .o world needs RELOCATABLE output -- symbol table,
+  .text/.data/.rodata/.bss, RELA relocations (PC32/PLT32/64/GOTPCREL minimum);
+  a well-fenced extension with its own laws (readelf as oracle).
 * **ai.h**: an `__aicc__` branch making ai_inline/ai_noinline/attributes
   plain no-ops. a core edit -- small, coordinated.
 * **headers**: our own include/ for the freestanding subset (stdint stddef
@@ -220,13 +222,27 @@ two ideas to keep warm as the stages climb, neither committed yet:
    runtime values allowed), a GLOBAL bakes a constant byte image (cgimage +
    imgbytes, string-into-char-array and the flexible-array member []); [] size
    is inferred from the initializer (string bytes+NUL, or the highest brace
-   index). still fenced for 4d: struct params/returns BY VALUE (assignment
-   walks), a GLOBAL initializer whose value is a LABEL -- char *s = "hi", a
-   static function-pointer table, &global in static data (needs a data
-   relocation: an abs64 fixup in holo/elf; LOCAL such tables already work as
-   runtime stores); local typedefs; case-label expressions; sizeof of an
-   EXPRESSION (only sizeof(TYPE) today); TOP-LEVEL fn-pointer globals (ptop
-   lays its own declarators, doesn't route through pdtor). battery at 52.
+   index). battery at 52.
+   LABEL-VALUED GLOBALS (4d) LANDED 2026-07-06: a global initializer whose
+   value is a LABEL bakes an abs64 fixup ('fix 8 abs64 label 0) -- the label's
+   ABSOLUTE load address -- so char *s = "hi" (a rodata string), &global, a
+   decayed array, and THE ai.c PATTERN, a static (name, fn-ptr) table like
+   struct Nif tab[] = {{"inc", inc}, ..}, all bake correctly. the mechanism:
+   holo gained an abs64 relocation kind (x64 + arm64, both le64 of the target),
+   and elf64 now assembles at ORG = the load vaddr (base + header) so labels
+   carry absolute addresses -- pc-relative fixups are unchanged (the org
+   cancels in target-site), so as/kernel/arm64 output is byte-identical; only
+   abs64 reads the absolute address. gen's imgbytes emits the fixup for a
+   pointer global (imlabel resolves the string/function/global/&global label),
+   and the byte image mixes bytes and fixups so lengths go through imbytelen +
+   a placement-flatten (imflat/imsort) instead of byte-indexed splice. the
+   star-array fence lifted too: char *m[n] is now an array of pointers, so a
+   string table char *m[] = {..} parses and bakes. holotest 179. still fenced
+   for 4e: struct params/returns BY VALUE (assignment walks); local typedefs;
+   case-label expressions; sizeof of an EXPRESSION (only sizeof(TYPE) today);
+   a bare TOP-LEVEL fn-pointer array int (*t[n])(..) = {..} (ptop lays its own
+   declarators, doesn't route through pdtor -- the struct-wrapped table works,
+   which is what ai.c uses). battery at 56.
    ENV TRAP paid: `au` is `#!/usr/bin/env -S ai` + the cat, so bare `au cc`
    runs on the PATH `ai` -- a STALE install mis-runs current au (missing baked
    core like holo callr) and the heap grows unboundedly; the make gate is safe

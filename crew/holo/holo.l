@@ -129,7 +129,19 @@
          _ (pin res 'labels (cup p))
          res)
    (assemble target prog) (assemble-at target prog (tablet 0))
+   ;; -- assemble-org: like assemble, but lay/resolve start at ORG, so labels carry their ABSOLUTE
+   ;; load address. pc-relative fixups are unchanged (the org cancels in target-site); an abs64 fixup
+   ;; writes the address outright. elf64 sets ORG to the load vaddr so a data pointer resolves. --
+   (assemble-org target prog org)
+      (: be (peep backends target ())
+         _ (? (book? be) 0 (scare 'no-backend target))
+         p (lay prog be org () (tablet 0))
+         res (tablet 0)
+         _ (pin res 'bytes  (resolve (cap p) (cup p) be org))
+         _ (pin res 'labels (cup p))
+         res)
    (holo-bytes target prog) (peep (assemble target prog) 'bytes 0)   ; (the module book owns the bare name `holo`)
+   (holo-bytes-at target prog org) (peep (assemble-org target prog org) 'bytes 0)
    (holo-str target prog) (string (holo-bytes target prog))
    (label-at res name)   (peep (peep res 'labels 0) name ())
 

@@ -64,6 +64,10 @@
       ;; la: rip-relative lea onto a data label laid with (label)+(raw ..)
       (L "la.data"     "488d05070000004c8d050000000041424300"
                        '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))  ; lea rax/r8, [rip -> x]
+      ;; abs64: an 8-byte ABSOLUTE address of a label baked into data (a static pointer). at org 0,
+      ;; tgt sits at offset 8 (just past the fixup), so the word reads 8, then ret.
+      (L "abs64.data"  "0800000000000000c3"
+                       '((raw ((fix 8 abs64 tgt 0))) (label tgt) (ret)))
       (L "st.sib"      "4889442410"            '((st sp 16 r0)))    ; rsp base needs a SIB byte
       (L "st.disp32"   "48899c2400010000"      '((st sp 256 r3)))
       (L "lea.disp8"   "488d4710"              '((lea r0 r6 16)))
@@ -203,6 +207,8 @@
       ;; (set NZCV); set is CSET; mulo is the SMULH+CMP-vs-ASR#63 overflow idiom (no flag-setting mul).
       (L "a64.jmpr"   "00001fd6"          '((jmpr r0)))                 ; br x0
       (L "a64.callr"  "00003fd6"          '((callr r0)))                ; blr x0  (through a fn pointer)
+      (L "a64.abs64"  "0800000000000000c0035fd6"                        ; an 8-byte absolute label address, then ret
+                      '((raw ((fix 8 abs64 tgt 0))) (label tgt) (ret)))
       (L "a64.set.eq" "e0179f9a"          '((set eq r0)))               ; cset x0, eq
       (L "a64.set.vs" "e0779f9a"          '((set vs r0)))               ; cset x0, vs  (overflow -> 0/1)
       (L "a64.adds"   "000007ab"          '((adds r0 r0 r7)))           ; adds x0,x0,x7
