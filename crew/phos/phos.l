@@ -75,7 +75,9 @@
    ; --- do-act: interpret one keys.l action. Returns by looping. ---
    (do-act a sh lay hist ffoc)
     (: k (cap a) z (wsget sh (wscur sh)) fw (? ffoc ffoc (wsfoc sh))
-       (relay sh2 lay2 f2) (: _ (render sh2 lay2) _ (refocus sh2) (loop sh2 lay2 hist f2))
+       (relay sh2 lay2 f2) (: _ (render sh2 lay2)                                ; a float focus takes the keyboard directly; else the tiled top
+                              _ (? (&& f2 (wsfloating? sh2 f2)) (: _ (x-focus s f2) (x-flush s)) (refocus sh2))
+                              (loop sh2 lay2 hist f2))
        (? (= k 'msg) (relay sh (msg-or lay (lay-msg lay (caup a) z)) ffoc)
           (= k 'focus-dn) (relay (wsmap sh zfocdn) lay ())
           (= k 'focus-up) (relay (wsmap sh zfocup) lay ())
@@ -123,10 +125,33 @@
                 (= k 'swapd) (? tgt (relay (wsmap sh (zswapw (wsfoc sh) tgt)) lay ffoc) (loop sh lay hist ffoc))
                 (relay sh (msg-or lay (lay-msg lay (? (|| (= dir 'left) (= dir 'down)) 'shrink 'expand) z)) ffoc)))))
 
+   ; --- pointer drag (xmonad's mouseBindings): the window follows the pointer
+   ;     ('move) or its far corner does ('resize). g0 is the start rect, (rx0 ry0)
+   ;     the start pointer; a release/motion carries the live pointer at bytes
+   ;     20/22. The FINAL rect is recomputed from the release position, so no
+   ;     rect need thread through the loop. Other events are dropped for the
+   ;     drag's duration -- the pointer is grabbed, the user is not spawning. ---
+   (drag-rect mode g0 rx0 ry0 rx ry)
+    (: dx (- rx rx0) dy (- ry ry0)
+       (? (= mode 'move) (L (+ (nth g0 0) dx) (+ (nth g0 1) dy) (nth g0 2) (nth g0 3))
+          (L (nth g0 0) (nth g0 1) (mx2 40 (+ (nth g0 2) dx)) (mx2 40 (+ (nth g0 3) dy)))))
+   (drag mode w g0 rx0 ry0)
+    (: e (x-next s)
+       (? (! e) g0                                                              ; display gone: keep the start rect
+          (= (ev-code e) 6) (: pkt (ev-raw e)                                   ; MotionNotify: reconfigure live
+                                g1 (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22))
+                                _ (x-configure s w (nth g1 0) (nth g1 1) (nth g1 2) (nth g1 3)) _ (x-flush s)
+                                (drag mode w g0 rx0 ry0))
+          (= (ev-code e) 5) (: pkt (ev-raw e) (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22)))   ; ButtonRelease: settle
+          (drag mode w g0 rx0 ry0)))                                            ; anything else mid-drag: ignore
+
    ; --- the event loop: (sheaf, layout, focus-history, focused-float) ---
    (loop sh lay hist ffoc)
     (: f (wsfoc sh)
        hist (? (&& f (! (= f (? (two? hist) (cap hist) ())))) (link f (znub f hist)) hist)
+       (relay sh2 lay2 f2) (: _ (render sh2 lay2)                                ; render, focus the float or the tiled top, loop (do-act has its own)
+                              _ (? (&& f2 (wsfloating? sh2 f2)) (: _ (x-focus s f2) (x-flush s)) (refocus sh2))
+                              (loop sh2 lay2 hist f2))
        _ (reap 0)                                                                ; harvest one spawned zombie, if any
        _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
@@ -145,7 +170,9 @@
                    (? (wsknownw? sh2 win)                                        ; managed (tiled or floated) -> place it
                       (: _ (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))   ; the ICCCM stamp: a restart finds us even hidden
                          _ (watch win)
-                         _ (render sh2 lay) _ (x-map s win) _ (x-flush s)
+                         _ (render sh2 lay) _ (x-map s win)
+                         _ (? (wsfloating? sh2 win) (x-focus s win) 0)          ; a freshly-mapped float (a dialog) takes the keyboard at once
+                         _ (x-flush s)
                          _ (line (+ "phos: + " (+ (show win) (+ " " (show (wsrow sh2)))))) (loop sh2 lay hist ffoc2))
                       (: _ (x-map s win)                                         ; ignored: map raw -- a desktop UNDER everything, a dock/notification on top
                          _ (? (x-has-atom s win "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP")
@@ -176,12 +203,24 @@
                       (loop sh lay hist ffoc)                                    ; unmanaged, or already the EFFECTIVE focus: still
                       (wsfloating? sh w) (: _ (x-focus s w) _ (x-flush s) (loop sh lay hist w))
                       (: sh2 (wsmap sh (zfocto w)) _ (render sh2 lay) _ (refocus sh2) (loop sh2 lay hist ()))))
-                (= code 4)                                                      ; ButtonPress (the sync grab): REPLAY the frozen click into
-                (: pkt (ev-raw e) w (u32 pkt 12)                                 ; the app first -- ALWAYS -- then focus what was clicked
-                   _ (x-replay s) _ (x-flush s)
-                   (? (|| (! (wsknownw? sh w)) (= w (? ffoc ffoc (wsfoc sh)))) (loop sh lay hist ffoc)
-                      (wsfloating? sh w) (: _ (x-focus s w) _ (x-raise s w) _ (x-flush s) (loop sh lay hist w))
-                      (: sh2 (wsmap sh (zfocto w)) _ (render sh2 lay) _ (refocus sh2) (loop sh2 lay hist ()))))
+                (= code 4)                                                      ; ButtonPress via the sync grab: super+drag moves/resizes a
+                (: pkt (ev-raw e) w (u32 pkt 12) btn (ev-detail e) st (ev-state e)   ; float (xmonad mouseBindings); a plain click focuses
+                   (? (&& (& st supm) (&& (wsknownw? sh w) (|| (= btn 1) (= btn 3))))   ; sup+btn1 move, sup+btn3 resize -- float first, then drag
+                      (: sh2 (? (wsfloating? sh w) sh (wsdofloat sh w (x-getgeom s w)))
+                         g0 (x-getgeom s w) rx0 (u16 pkt 20) ry0 (u16 pkt 22)
+                         _ (x-focus s w) _ (x-raise s w)
+                         _ (x-grabptr s w) _ (x-allow-async s) _ (x-flush s)     ; capture motion, thaw the sync freeze WITHOUT replaying
+                         gf (drag (? (= btn 1) 'move 'resize) w g0 rx0 ry0)
+                         _ (x-ungrabptr s) _ (x-flush s)
+                         _ (line (+ (? (= btn 1) "phos: moved " "phos: resized ") (show w)))
+                         (relay (wsdofloat sh2 w gf) lay w))
+                      (&& (& st supm) (&& (wsknownw? sh w) (= btn 2)))           ; sup+btn2: promote the clicked window to master (shiftMaster)
+                      (: _ (x-allow-async s) _ (x-flush s)
+                         (relay (wsmap sh (\ zz (zmaster (zfocto w zz)))) lay ffoc))
+                      (: _ (x-replay s) _ (x-flush s)                           ; a plain click: hand it to the app, then click-to-focus
+                         (? (|| (! (wsknownw? sh w)) (= w (? ffoc ffoc (wsfoc sh)))) (loop sh lay hist ffoc)
+                            (wsfloating? sh w) (: _ (x-focus s w) _ (x-raise s w) _ (x-flush s) (loop sh lay hist w))
+                            (: sh2 (wsmap sh (zfocto w)) _ (render sh2 lay) _ (refocus sh2) (loop sh2 lay hist ()))))))
                 (= code 2)                                                       ; KeyPress: the table answers
                 (: kc (ev-detail e) stm (& (ev-state e) kmodmask)
                    hit (afind (\ r (&& (= (cap r) stm) (= (caup r) kc))) ktab)
@@ -201,22 +240,32 @@
                       (loop sh2 lay hist ffoc)))                                 ; sheaf's rect follows it (xmonad: grant + re-float)
                 (= code 33)                                                      ; ClientMessage: EWMH requests ride SendEvent to the root
                 (: pkt (ev-raw e) cw (ewmh-cm-win pkt) ty (ewmh-cm-type pkt)
+                   (fs? d) (= d (ewmh-atom "_NET_WM_STATE_FULLSCREEN"))
+                   (mx? d) (|| (= d (ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT"))   ; either maximize axis reads as "maximize"
+                              (= d (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")))
+                   (state-toggle rect atoms word)                               ; _NET_WM_STATE add/remove/toggle -> float at rect / sink
+                     (: act (ewmh-cm-d0 pkt) on (wsfloating? sh cw)
+                        want (? (= act 1) 1 (= act 0) 0 (? on 0 1))             ; 0 remove / 1 add / 2 toggle
+                        (? (= want (? on 1 0)) (loop sh lay hist ffoc)
+                           want (: sh2 (wsdofloat sh cw rect)
+                                   _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 atoms)
+                                   _ (render sh2 lay) _ (x-focus s cw) _ (x-flush s)
+                                   _ (line (+ "phos: " (+ word (+ " " (show cw))))) (loop sh2 lay hist cw))
+                           (: sh2 (wssink sh cw)
+                              _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 ())
+                              _ (render sh2 lay) _ (line (+ "phos: un" (+ word (+ " " (show cw))))) (loop sh2 lay hist ()))))
                    (? (&& (= ty (ewmh-atom "_NET_WM_STATE"))                     ; _NET_WM_STATE add/remove/toggle FULLSCREEN (ewmhFullscreen)
-                          (&& (wsknownw? sh cw)
-                              (|| (= (ewmh-cm-d1 pkt) (ewmh-atom "_NET_WM_STATE_FULLSCREEN"))
-                                  (= (ewmh-cm-d2 pkt) (ewmh-atom "_NET_WM_STATE_FULLSCREEN")))))
-                      (: act (ewmh-cm-d0 pkt) on (wsfloating? sh cw)
-                         want (? (= act 1) 1 (= act 0) 0 (? on 0 1))             ; 0 remove / 1 add / 2 toggle
-                         (? (= want (? on 1 0)) (loop sh lay hist ffoc)
-                            want (: sh2 (wsdofloat sh cw scrn)                   ; fullscreen floats at the FULL screen rect (over any strut)
-                                    _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 (L (ewmh-atom "_NET_WM_STATE_FULLSCREEN")))
-                                    _ (render sh2 lay) _ (line (+ "phos: fullscreen " (show cw))) (loop sh2 lay hist cw))
-                            (: sh2 (wssink sh cw)
-                               _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 ())
-                               _ (render sh2 lay) _ (line (+ "phos: unfullscreen " (show cw))) (loop sh2 lay hist ()))))
+                          (&& (wsknownw? sh cw) (|| (fs? (ewmh-cm-d1 pkt)) (fs? (ewmh-cm-d2 pkt)))))
+                      (state-toggle scrn (L (ewmh-atom "_NET_WM_STATE_FULLSCREEN")) "fullscreen")   ; over the whole screen, struts and all
+                      (&& (= ty (ewmh-atom "_NET_WM_STATE"))                     ; MAXIMIZED_VERT/HORZ -> float over the tiling rect (panel kept)
+                          (&& (wsknownw? sh cw) (|| (mx? (ewmh-cm-d1 pkt)) (mx? (ewmh-cm-d2 pkt)))))
+                      (state-toggle (trect ()) (L (ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")) "maximize")
                       (&& (= ty (ewmh-atom "WM_CHANGE_STATE")) (= (ewmh-cm-d0 pkt) 3))   ; ICCCM iconify -> minimize (minimizeEventHook)
                       (: lay2 (msg-or lay (lay-msg lay (L 'minimize-window cw) (wsget sh (wscur sh))))
                          _ (render sh lay2) _ (line (+ "phos: minimize " (show cw))) (loop sh lay2 hist ffoc))
+                      (&& (= ty (ewmh-atom "_NET_CLOSE_WINDOW")) (wsknownw? sh cw))   ; a panel/pager closes a window -- gracefully if it can
+                      (: _ (? (x-has-atom s cw "WM_PROTOCOLS" "WM_DELETE_WINDOW") (x-wmdel s cw) (x-kill s cw))
+                         _ (x-flush s) _ (line (+ "phos: close " (show cw))) (loop sh lay hist ffoc))
                       (= ty (ewmh-atom "_NET_CURRENT_DESKTOP"))                  ; a pager switches the desktop
                       (loop (switch sh lay (+ (ewmh-cm-d0 pkt) 1)) lay hist ffoc)
                       (= ty (ewmh-atom "_NET_ACTIVE_WINDOW"))                    ; a pager activates: restore if minimized, view its tag, focus

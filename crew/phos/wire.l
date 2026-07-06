@@ -145,6 +145,12 @@
                   _ (x-w32 s 0) _ (x-w8 s b) _ (x-w8 s 0) (x-w16 s 32768))       ; UNGRABBED -- scroll never rides through the WM
        _ (one 1) _ (one 2) (one 3))
    (x-replay s) (: _ (x-w8 s 35) _ (x-w8 s 2) _ (x-w16 s 2) (x-w32 s 0))         ; AllowEvents ReplayPointer, CurrentTime
+   (x-allow-async s) (: _ (x-w8 s 35) _ (x-w8 s 1) _ (x-w16 s 2) (x-w32 s 0))    ; AllowEvents AsyncPointer: thaw a sync grab WITHOUT replaying
+   (x-grabptr s win)                                                             ; GrabPointer, async, ButtonRelease(8)|PointerMotion(64) -- the drag catch
+    (: _ (x-w8 s 26) _ (x-w8 s 0) _ (x-w16 s 6) _ (x-w32 s win)
+       _ (x-w16 s 72) _ (x-w8 s 1) _ (x-w8 s 1) _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 0) _ (x-flush s)
+       (x-reply s))                                                              ; a reply (the grab status) -- read it to keep the demux synced
+   (x-ungrabptr s) (: _ (x-w8 s 27) _ (x-w8 s 0) _ (x-w16 s 2) (x-w32 s 0))      ; UngrabPointer, CurrentTime
 
    ; --- QueryTree (opcode 15) + GetWindowAttributes (opcode 3): at startup we
    ;     ADOPT the windows that mapped before the redirect took hold (closing the
