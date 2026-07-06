@@ -62,8 +62,8 @@ gate per stage. the pipeline, each its own file:
   types out if it swells). C's declarator grammar is the dragon; chibicc's
   incremental grammar is the map. AST as tagged lists, house-style.
 * **gen.l** -- AST -> holo IR forms (pure). stack-machine codegen, chibicc
-  style: every expression computes into r0, locals at [rbp-k] -- wait, sp
-  here; holo's frame idiom. correct and dumb; the glaze is the fast path.
+  style: every expression computes into r0, locals at frame offsets off
+  holo's sp idiom. correct and dumb; the glaze is the fast path.
 * **cc.l** -- the driver: files -> cpp -> parse -> gen -> holo assemble ->
   elf .o; then the system linker (`cc -c` first; `cc` calling ld is a
   convenience wrapper). registered in au (`au cc`).
@@ -110,8 +110,8 @@ gate per stage. the pipeline, each its own file:
    ai.c itself (the real headers, our include/).
 6. **the long tail ai.c names**: varargs (the SysV register-save dance --
    the hairiest single item in the plan), doubles through the xmm ABI,
-   _Static_assert, anonymous members, compound literals if the census
-   confirms. gate: every host/*.c compiles; ai.c compiles.
+   _Static_assert, anonymous members, the one compound literal. gate:
+   every host/*.c compiles; ai.c compiles.
 7. **THE GATE**: cc-built ai.c (+ host/*.c, system ld, ai_tco=0) boots the
    egg and runs `make test` green -- the corpus under a cc-built binary.
    this is the rung's aiutils-feature-complete moment.
