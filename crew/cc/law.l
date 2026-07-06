@@ -41,11 +41,19 @@
 ; --- the parser: precedence, associativity, desugarings, statement shapes ---
 (: (cast src) (caup (cparse (caup (clex src))))
    (cexp src) (: ast (cast (+ "int main() { return " (+ src "; }")))
-                 items (caup (cauup (cap (caup ast))))
+                 fn (cap (caup ast))
+                 items (caup (caup (cuup fn)))
                  (caup (cap items)))
    (assert
       (= (cast "int main() { return 42; }")
-         '(prog ((fn "main" (blk ((ret (num 42))))))))
+         '(prog ((fn "main" () (blk ((ret (num 42))))))))
+      (= (cast "int add(int a, int b) { return a+b; }")
+         '(prog ((fn "add" ("a" "b") (blk ((ret (bin + (var "a") (var "b")))))))))
+      (= (cast "int f(void); int main() { return 0; }")
+         '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))
+      (= (cexp "f(1, 2+3)") '(call "f" ((num 1) (bin + (num 2) (num 3)))))
+      (= (cexp "f()") '(call "f" ()))
+      (= (cexp "f(g(1))") '(call "f" ((call "g" ((num 1))))))
       (= (cexp "2+3*4") '(bin + (num 2) (bin * (num 3) (num 4))))
       (= (cexp "10-3-2") '(bin - (bin - (num 10) (num 3)) (num 2)))
       (= (cexp "(2+3)*4") '(bin * (bin + (num 2) (num 3)) (num 4)))
@@ -61,11 +69,11 @@
       (= (cexp "1,2") '(comma (num 1) (num 2)))
       (= (cexp "a&&b||c") '(lor (land (var "a") (var "b")) (var "c")))
       (= (cast "int main() { int x=1; if (x) return 2; return 3; }")
-         '(prog ((fn "main" (blk ((decl (("x" (num 1))))
-                                  (if (var "x") (ret (num 2)) ())
-                                  (ret (num 3))))))))
+         '(prog ((fn "main" () (blk ((decl (("x" (num 1))))
+                                     (if (var "x") (ret (num 2)) ())
+                                     (ret (num 3))))))))
       (= (cast "int main() { while (1) break; return 0; }")
-         '(prog ((fn "main" (blk ((while (num 1) (brk)) (ret (num 0))))))))
+         '(prog ((fn "main" () (blk ((while (num 1) (brk)) (ret (num 0))))))))
       (! (cparse (caup (clex "int main() { return (1+2; }"))))       ; the lost )
       (! (cparse (caup (clex "int main() { if 1 return 2; }"))))     ; if wants parens
       (! (cparse (caup (clex "int main() { return 42 }"))))
@@ -76,15 +84,18 @@
    ir (caup (cgen (cast "int main() { return 42; }")))
    (assert
       (= ir '((call main) (mov r6 r0) (li r0 60) (sys)
-              (label main) (push r5) (mov r5 sp) (sub sp sp 0)
-              (li r0 42) (mov sp r5) (pop r5) (ret)
-              (li r0 0) (mov sp r5) (pop r5) (ret)))
+              (label main) (push r4) (mov r4 sp) (sub sp sp 0)
+              (li r0 42) (mov sp r4) (pop r4) (ret)
+              (li r0 0) (mov sp r4) (pop r4) (ret)))
       (two? (cgen (cast "int main() { int x=1; while (x<5) x++; return x; }")))
       (! (cgen (cast "int f() { return 1; }")))                      ; no main, no program
       (! (cgen (cast "int main() { return y; }")))                   ; undeclared name
       (! (cgen (cast "int main() { return 5=3; }")))                 ; not an lvalue
       (! (cgen (cast "int main() { break; }")))                      ; no loop to leave
-      (! (cgen (cast "int main() { int a=1; int b=2; return a<<b; }")))))  ; variable shift: the stage-2 holo seam
+      (! (cgen (cast "int main() { int a=1; int b=2; return a<<b; }")))   ; variable shift: the holo seam
+      (two? (cgen (cast "int f(int a) { return a; } int main() { return f(1); }")))
+      (! (cgen (cast "int main() { return f(1,2,3,4,5,6,7); }")))          ; the six-register fence ...
+      (! (cgen (cast "int f(int a,int b,int c,int d,int e,int x,int y) { return 1; } int main() { return 1; }")))))  ; ... both sides of it
 
 (say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + the guarded seams) ok")
 (put err 10)

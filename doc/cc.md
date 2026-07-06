@@ -115,8 +115,20 @@ gate per stage. the pipeline, each its own file:
    wrinkle found and dodged: a value binding woven after a lambda that
    transitively forward-references its consumer draws a load-time book read
    (a benign ;; missing scare) -- op tables sit above the lambdas now.
-2. **functions**: calls/prototypes/recursion, the SysV ABI (6 int regs +
-   stack), then char/short/long + casts + sign extension. fibonacci runs.
+2. **functions** -- the call half LANDED 2026-07-06: definitions with
+   parameters (spilled off the SysV registers rdi rsi rdx rcx r8 r9 = holo
+   r6 r5 r2 r1 r7 r8 into frame slots), calls with args evaluated left to
+   right / pushed / popped reversed into the registers, recursion and
+   mutual recursion through prototypes (parsed, recorded, skipped by gen --
+   holo's two-pass labels do the real linking), the frame register moved to
+   r4/rbp (r5 is rsi, ARG 2 -- the map bites the unwary). fenced and lawed:
+   at most six arguments AND six parameters (the stack tail is later seam
+   work); stack alignment at calls is ours alone until libc (stage 6).
+   fibonacci runs -- fib(10) through real recursion, in the battery. the
+   battery lesson worth keeping: differential programs must be UB-FREE --
+   pick(++i,++i,++i) is unsequenced, and gcc legitimately disagrees.
+   still open in stage 2: char/short/long + casts + sign extension, which
+   want holo's sized loads/stores first (the seam list below).
 3. **pointers, arrays, strings, globals**: &/* /[], pointer arithmetic,
    string literals in .rodata, initializers, sizeof. relocations get real.
 4. **aggregates**: struct/union/enum/typedef, member access, nested layout

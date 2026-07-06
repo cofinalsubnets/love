@@ -1,8 +1,13 @@
 ; crew/cc/gen.l -- the code generator (rung 3 stage 1). AST -> (1 ir-forms) |
 ; (). holo's neutral IR, chibicc-plain: every expression computes into r0;
 ; binaries push the left, evaluate the right, pop into r1, combine 3-address.
-; locals live at negative offsets off r5 (the frame register -- rsi on x64,
-; ours alone since nothing ABI-shaped runs above the exit syscall yet);
+; locals live at negative offsets off r4 (the frame register -- rbp, callee-
+; saved, its disp quirk handled in holo); arguments ride the SysV integer
+; registers rdi rsi rdx rcx r8 r9 = holo r6 r5 r2 r1 r7 r8, at most six a
+; call (the stack tail is later seam work); params spill to frame slots at
+; the prologue. call args evaluate left to right, push as they go, and pop
+; into the registers reversed. stack alignment at calls is OURS alone until
+; libc arrives (noted for stage 6).
 ; offsets never re-used across sibling scopes, the frame is the high-water
 ; mark, sized after the body generates (forms are data) and rounded to 16.
 ; ints are 8 BYTES this stage -- 32-bit truncation arrives with stage 2's
@@ -15,6 +20,8 @@
    ; the gen state g (a tablet): 'n the label counter, 'off the frame's
    ; high-water offset, 'brk/'cnt the loop label stacks. env: ((name . off)..)
    (nlab g pfx) (: k (peep g 'n 0) _ (pin g 'n (+ k 1)) (intern (+ pfx (show k))))
+   argregs '(r6 r5 r2 r1 r7 r8)
+   (nthr l i) (? (< i 1) (cap l) (nthr (cup l) (- i 1)))
    (voff env name) (: e (assoc name env) (? (two? e) (caup e) 'bad))
    (bad? x) (id? x 'bad)
 
@@ -23,22 +30,22 @@
     (: k (cap e)
        (? (= k 'num) (L (L 'li 'r0 (caup e)))
           (= k 'var) (: o (voff env (caup e))
-                        (? (bad? o) 'bad (L (L 'ld 'r0 'r5 o))))
+                        (? (bad? o) 'bad (L (L 'ld 'r0 'r4 o))))
           (= k 'asn)
            (: lv (caup e)
               (? (! (= (cap lv) 'var)) 'bad
                  (: o (voff env (caup lv))
                     r (cgexpr g env (cauup e))
                     (? (|| (bad? o) (bad? r)) 'bad
-                       (cat r (L (L 'st 'r5 o 'r0)))))))
+                       (cat r (L (L 'st 'r4 o 'r0)))))))
           (= k 'post)
            (: lv (caup e)
               (? (! (= (cap lv) 'var)) 'bad
                  (: o (voff env (caup lv))
                     (? (bad? o) 'bad
-                       (L (L 'ld 'r0 'r5 o)
+                       (L (L 'ld 'r0 'r4 o)
                           (L 'add 'r1 'r0 (cauup e))
-                          (L 'st 'r5 o 'r1))))))
+                          (L 'st 'r4 o 'r1))))))
           (= k 'un)
            (: r (cgexpr g env (cauup e))
               (? (bad? r) 'bad
@@ -73,6 +80,22 @@
                  (cat c (cat (L (L 'cmp 'r0 0) (L 'br 'eq le))
                         (cat t (cat (L (L 'jmp ld) (L 'label le))
                                (cat el (L (L 'label ld)))))))))
+          (= k 'call)
+           (: args (cauup e)
+              n (tally args)
+              (? (< 6 n) 'bad
+                 (: (pushes as acc)
+                     (? (! (two? as)) acc
+                        (: r (cgexpr g env (cap as))
+                           (? (bad? r) 'bad
+                              (: r2 (pushes (cup as) (cat acc (cat r (L (L 'push 'r0)))))
+                                 (? (bad? r2) 'bad r2)))))
+                    up (pushes args ())
+                    (pops i acc) (? (< i 0) acc
+                                    (pops (- i 1) (cat acc (L (L 'pop (nthr argregs i))))))
+                    (? (bad? up) 'bad
+                       (cat up (cat (pops (- n 1) ())
+                                    (L (L 'call (intern (caup e))))))))))
           (= k 'bin) (cgbin g env e)
           'bad))
    (cgbin g env e)
@@ -103,7 +126,7 @@
                      'bad)
              (? (bad? tail) 'bad (cat mid tail)))))
 
-   epi (L (L 'mov 'sp 'r5) (L 'pop 'r5) (L 'ret))
+   epi (L (L 'mov 'sp 'r4) (L 'pop 'r4) (L 'ret))
 
    ; a declaration list: allocates offsets, extends env -> (forms env) | 'bad
    (cgdecl g env pairs)
@@ -116,7 +139,7 @@
               (? (two? (caup p))
                  (: r (cgexpr g env3 (caup p))
                     (? (bad? r) 'bad
-                       (one (cup ps) env3 (cat acc (cat r (L (L 'st 'r5 off 'r0)))))))
+                       (one (cup ps) env3 (cat acc (cat r (L (L 'st 'r4 off 'r0)))))))
                  (one (cup ps) env3 acc))))
        (one pairs env ()))
 
@@ -191,14 +214,25 @@
                 (? (bad? r) 'bad
                    (cgitems g env (cup items) (cat acc r)))))))
 
-   (cgfn g f)                                       ; ('fn name ('blk items)) -> forms | 'bad
-    (: _ (pin g 'off 0)
-       body (cgitems g () (caup (cauup f)) ())
-       (? (bad? body) 'bad
-          (: frame (& (+ (peep g 'off 0) 15) -16)
-             (cat (L (L 'label (intern (caup f)))
-                     (L 'push 'r5) (L 'mov 'r5 'sp) (L 'sub 'sp 'sp frame))
-              (cat body (cat (L (L 'li 'r0 0)) epi))))))
+   (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
+    (: params (cauup f)
+       (? (< 6 (tally params)) 'bad
+          (: _ (pin g 'off 0)
+             (spill ps i env acc)                   ; params into frame slots off the arg regs
+              (? (! (two? ps)) (L acc env)
+                 (: off (- 0 (+ (peep g 'off 0) 8))
+                    _ (pin g 'off (+ (peep g 'off 0) 8))
+                    (spill (cup ps) (+ i 1)
+                           (link (L (cap ps) off) env)
+                           (cat acc (L (L 'st 'r4 off (nthr argregs i)))))))
+             sp0 (spill params 0 () ())
+             body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
+             (? (bad? body) 'bad
+                (: frame (& (+ (peep g 'off 0) 15) -16)
+                   (cat (L (L 'label (intern (caup f)))
+                           (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame))
+                    (cat (cap sp0)
+                     (cat body (cat (L (L 'li 'r0 0)) epi)))))))))
    (cgen ast)                                       ; ('prog fns) -> (1 forms) | ()
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ()) t)
        crt0 (L (L 'call 'main) (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys))
@@ -206,7 +240,9 @@
         (? (! (two? fs))
            (? saw (L 1 (cat crt0 acc)) ())          ; no main, no program
            (: f (cap fs)
-              r (cgfn g f)
-              (? (bad? r) ()
-                 (gfns (cup fs) (cat acc r) (|| saw (= (caup f) "main"))))))
+              (? (= (cap f) 'proto) (gfns (cup fs) acc saw)
+                 (: r (cgfn g f)
+                    (? (bad? r) ()
+                       (gfns (cup fs) (cat acc r)
+                             (|| saw (= (caup f) "main"))))))))
        (gfns (caup ast) () ())))

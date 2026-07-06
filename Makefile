@@ -385,8 +385,8 @@ test_cc: host out/host$(hsuf)/au
 	  printf 'int main() { return 42 }\n' > $(ho)/.cc3.c; \
 	  $m $(ho)/au cc $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
 	  [ $$r -eq 1 ] || { echo "FAIL au cc parse-error exit (rc $$r)"; exit 1; }; \
-	  echo "au: cc stage 1 (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery) ok"; \
-	else echo "au: cc stage 1 (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
+	  echo "au: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery) ok"; \
+	else echo "au: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
