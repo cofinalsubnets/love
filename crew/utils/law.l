@@ -1,7 +1,8 @@
-; crew/utils/law.l -- the myers laws, held by assertion: the two projections (the script
-; spells both sides), MINIMALITY against an O(nm) LCS oracle (dcost = n + m - 2*lcs), and
-; a seeded fuzz over both. reads the leaked globals from crew/utils/diff.l (concatenate:
-; `cat test/00-init.l crew/utils/diff.l crew/utils/law.l | ai`, the `make test_utils` gate).
+; crew/utils/law.l -- the aiutils laws, held by assertion: the myers/patience projections
+; (the script spells both sides), MINIMALITY against an O(nm) LCS oracle, the u-floor and
+; field/fs floors to their GNU faces, the regex floor (hand BRE laws + a seeded fuzz
+; against an independent Brzozowski-derivative oracle), and a seeded fuzz over the diffs.
+; reads the leaked globals from the crew/utils/ toolboxes (the `make test_utils` cat).
 
 ; --- the classic: Myers' own worked example, D = 5 ---
 (: A '(a b c a b b a) B '(c b a b a c) s (myers A B)
@@ -150,5 +151,95 @@
 (: (assert
       (= (uoct "755") 493) (= (uoct "644") 420) (= (uoct "0") 0) (= (uoct "7") 7)))
 
-(say err "crew/utils/law: myers + patience + lines/unlines + unified hunks + the u-floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz ok
+; --- the regex floor (crew/utils/re.l): the BRE faces, held by hand ---
+(: (ok p s) (: r (rebre p) (&& (two? r) (rehas (caup r) s)))
+   (no p s) (: r (rebre p) (&& (two? r) (! (rehas (caup r) s))))
+   (bad p) (! (two? (rebre p)))
+   (assert
+      (ok "" "anything") (ok "" "")                            ; the empty pattern matches every line
+      (ok "a" "bab") (no "a" "xyz")
+      (ok "b.c" "abzcd") (no "b.c" "bc")                       ; . wants one charm
+      (ok "^ab" "abc") (no "^b" "abc")                         ; ^ anchors the head ...
+      (ok "c$" "abc") (no "b$" "abc")                          ; ... $ the tail
+      (ok "^abc$" "abc") (no "^abc$" "abcd") (ok "a^b" "a^b")  ; elsewhere they are ink
+      (ok "ab*c" "ac") (ok "ab*c" "abbbc") (no "ab*c" "adc")
+      (ok "ab\\+c" "abc") (no "ab\\+c" "ac")                   ; the GNU \+ and \?
+      (ok "ab\\?c" "ac") (ok "ab\\?c" "abc") (no "ab\\?c" "abbc")
+      (ok "[abc]x" "acx") (no "[abc]" "xyz")
+      (ok "[^abc]" "ab ") (ok "[a-c]" "b") (no "[a-c]" "d")
+      (ok "[]a]" "]") (ok "[^]]" "a") (no "[^]]" "]")          ; a first ] is literal
+      (ok "[a-]" "-") (ok "[-a]" "-")                          ; an edge - is literal
+      (ok "*x" "*x") (ok "^*" "*a") (no "^*" "a*")             ; a repeat with no atom is ink
+      (ok "\\+" "a+b") (no "\\+" "ab")
+      (ok "a\\.b" "a.b") (no "a\\.b" "axb") (ok "a\\\\b" "a\\b")
+      (ok "\\(ab\\)*c" "ababc") (ok "\\(ab\\)*c" "c") (no "x\\(ab\\)c" "xac")
+      (ok "\\(a\\(b\\)*\\)*x" "abbax") (ok "\\(\\)*x" "ax")    ; nesting; an empty repeat rests
+      (bad "\\(ab") (bad "ab\\)") (bad "[ab") (bad "a\\")      ; malformed answers ()
+      (bad "a\\1") (bad "a\\{2\\}") (bad "a\\|b")              ; out-of-dialect refused
+      (= (refind (caup (rebre "b*")) "abbc" 0) '(1 0 0))       ; leftmost, before longest
+      (= (refind (caup (rebre "bb")) "abbc" 0) '(1 1 3))
+      (= (refind (caup (rebre "b*")) "abbc" 1) '(1 1 3))       ; greedy at its own start
+      (! (refind (caup (rebre "zz")) "abbc" 0))))
+
+; --- the regex fuzz: an independent Brzozowski-derivative oracle (alternative
+; SETS of node lists, no backtracking anywhere) against the engine's greedy
+; backtracker, over seeded random patterns and subjects. anchors sit out (a
+; derivative has no position); the hand laws above hold them instead ---
+(: (dnul nd) (: t (cap nd)
+                (? (= t 'grp) (dnulq (caup nd))
+                   (= t 'rep) (|| (< (cap (cuup nd)) 1) (dnul (caup nd)))
+                   ()))
+   (dnulq ns) (? (two? ns) (&& (dnul (cap ns)) (dnulq (cup ns))) 1)
+   (dhit nd c) (: h (any (\ r (&& (<= (cap r) c) (<= c (caup r)))) (cauup nd))
+                  (? (caup nd) (! h) h))
+   ; one node's derivative by charm c -> a list of alternative node lists
+   (dn nd c) (: t (cap nd)
+                (? (= t 'chr) (? (= c (caup nd)) '(()) ())
+                   (= t 'any) '(())
+                   (= t 'cls) (? (dhit nd c) '(()) ())
+                   (= t 'grp) (dl (caup nd) c)
+                   (: a (caup nd) lo (cap (cuup nd)) hi (caup (cuup nd))
+                      (? (&& hi (< hi 1)) ()
+                         (: lo2 (? (< 0 lo) (- lo 1) 0) hi2 (? hi (- hi 1) ())
+                            (map (\ u (cat u (L (L 'rep a lo2 hi2)))) (dn a c)))))))
+   ; a node LIST's derivative: the head's, and past a nullable head the tail's
+   (dl ns c) (? (! (two? ns)) ()
+                (: d1 (map (\ u (cat u (cup ns))) (dn (cap ns) c))
+                   (? (dnul (cap ns)) (cat d1 (dl (cup ns) c)) d1)))
+   (dstep alts c) (: (dd xs acc) (? (! (two? xs)) acc
+                                    (member? (cap xs) acc) (dd (cup xs) acc)
+                                    (dd (cup xs) (link (cap xs) acc)))
+                     (dd (catmap (\ u (dl u c)) alts) ()))
+   ; contains-match by derivatives: from every start, hit as soon as some
+   ; alternative goes nullable (the prefix face rehas wears)
+   (dhas ns s)
+    (: n (tally s)
+       (walk alts j) (? (any dnulq alts) 1
+                        (<= n j) ()
+                        (: a2 (dstep alts (s j))
+                           (? (two? a2) (walk a2 (+ j 1)) ())))
+       (from i) (? (walk (L ns) i) 1 (< i n) (from (+ i 1)) ())
+       (from 0))
+   ; the draws: 1..4 tokens make a pattern, 0..6 charms of abc a subject
+   toks '("a" "b" "c" "." "a*" ".*" "[ab]" "[^a]" "[a-c]" "b\\+" "c\\?" "\\(ab\\)*" "\\(a\\|b\\)")
+   ntok 12                                                     ; \(a\|b\) is bait: parses to () and the draw skips it
+   (rpat k st acc) (? (< k 1) (L acc st)
+                      (: r (random st ntok) (rpat (- k 1) (cup r) (+ acc ((toks) (cap r))))))
+   (rsub k st acc) (? (< k 1) (L acc st)
+                      (: r (random st 3) (rsub (- k 1) (cup r) (+ acc ((L "a" "b" "c") (cap r))))))
+   (fzr i st)
+    (? (< i 1) 'ok
+       (: r1 (random st 4) r2 (random (cup r1) 7)
+          pp (rpat (+ 1 (cap r1)) (cup r2) "")
+          ss (rsub (cap r2) (caup pp) "")
+          r (rebre (cap pp))
+          (? (! (two? r)) (fzr i (caup ss))                    ; an out-of-dialect draw redraws
+             (: e (? (rehas (caup r) (cap ss)) 1 0)
+                o (? (dhas (caup r) (cap ss)) 1 0)
+                (? (= e o) (fzr (- i 1) (caup ss))
+                   (L 'broke (cap pp) (cap ss)))))))
+   r (fzr 200 (seed 13))
+   (assert (= r 'ok)))
+
+(say err "crew/utils/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

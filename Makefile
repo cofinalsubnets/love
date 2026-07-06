@@ -158,7 +158,7 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -167,8 +167,8 @@ out/host$(hsuf)/au: $(aufiles)
 	@chmod 755 $@
 .PHONY: test_utils
 test_utils: host out/host$(hsuf)/au
-	@echo "UTILS crew/utils/{text,core,fs,diff,law}.l"; \
-	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
+	@echo "UTILS crew/utils/{text,core,fs,re,diff,law}.l"; \
+	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
 	  cat out/host/.test_utils.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/utils/law: myers" out/host/.test_utils.out; } \
 	    || { echo "FAIL utils (exit $$r)"; exit 1; }
@@ -260,6 +260,34 @@ test_utils: host out/host$(hsuf)/au
 	  $m $(ho)/au rm $$P/nope > /dev/null 2>&1; r=$$?; [ $$r -eq 1 ] || { echo "FAIL au rm miss exit"; exit 1; }; \
 	  $m $(ho)/au rm -f $$P/nope > /dev/null 2>&1; r=$$?; [ $$r -eq 0 ] || { echo "FAIL au rm -f quiet"; exit 1; }; \
 	  echo "au: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir) ok"
+	@printf 'abc\nxbz\nzzz\n+q\n*r\n' > $(ho)/.gr1; printf 'nope\nbc here\n' > $(ho)/.gr2; \
+	  grep b $(ho)/.gr1 > $(ho)/.gr-g; $m $(ho)/au grep b $(ho)/.gr1 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL au grep vs GNU"; exit 1; }; \
+	  grep -n b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-g; $m $(ho)/au grep -n b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL au grep -n multi vs GNU"; exit 1; }; \
+	  grep -c b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-g; $m $(ho)/au grep -c b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL au grep -c vs GNU"; exit 1; }; \
+	  grep -v b $(ho)/.gr1 > $(ho)/.gr-g; $m $(ho)/au grep -v b $(ho)/.gr1 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL au grep -v vs GNU"; exit 1; }; \
+	  grep -l b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-g; $m $(ho)/au grep -l b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL au grep -l vs GNU"; exit 1; }; \
+	  printf 'q\n' | grep -l q > $(ho)/.gr-g; printf 'q\n' | $m $(ho)/au grep -l q > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL au grep -l stdin vs GNU"; exit 1; }; \
+	  grep '' $(ho)/.gr1 > $(ho)/.gr-g; $m $(ho)/au grep '' $(ho)/.gr1 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL au grep empty pattern vs GNU"; exit 1; }; \
+	  for p in 'ab*c' '^x' 'z$$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' '^*r' 'x[b-z]z'; do \
+	    grep -c "$$p" $(ho)/.gr1 > $(ho)/.gr-g 2>/dev/null; a=$$?; \
+	    $m $(ho)/au grep -c "$$p" $(ho)/.gr1 > $(ho)/.gr-o; b=$$?; \
+	    { cmp -s $(ho)/.gr-g $(ho)/.gr-o && [ $$a -eq $$b ]; } \
+	      || { echo "FAIL au grep BRE '$$p' vs GNU"; exit 1; }; \
+	  done; \
+	  $m $(ho)/au grep b $(ho)/.gr1 > /dev/null; r=$$?; [ $$r -eq 0 ] || { echo "FAIL au grep hit exit"; exit 1; }; \
+	  $m $(ho)/au grep qqq $(ho)/.gr1 > /dev/null; r=$$?; [ $$r -eq 1 ] || { echo "FAIL au grep miss exit"; exit 1; }; \
+	  grep b $(ho)/.gr-nope 2> $(ho)/.gr-g; a=$$?; $m $(ho)/au grep b $(ho)/.gr-nope 2> $(ho)/.gr-o; b=$$?; \
+	  { cmp -s $(ho)/.gr-g $(ho)/.gr-o && [ $$a -eq 2 ] && [ $$b -eq 2 ]; } || { echo "FAIL au grep missing file vs GNU"; exit 1; }; \
+	  $m $(ho)/au grep b $(ho)/.gr1 $(ho)/.gr-nope > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 2 ] || { echo "FAIL au grep err beats match exit"; exit 1; }; \
+	  echo "au: grep (plain/-n/-c/-v/-l + BRE battery GNU-identical, the exit triple) ok"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
