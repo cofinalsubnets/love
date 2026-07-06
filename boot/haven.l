@@ -125,6 +125,43 @@
  _ (pull camp 'skb 0)                        ; reaped: a second wfx would spin on the dead pid
  _ (must 'red-spreads (waithue 76 120 0 0 192 100))     ; red owns the left again
 
+ ; the third act, where the binary exists (see the Makefile's $(smoke) rule):
+ ; a REAL client -- libwayland + xdg-shell, the reference implementation and
+ ; strict about ids -- joins red. green masters the left, red re-dresses into
+ ; the slave; a yellow skiff squeezes it (the resize dance, both directions);
+ ; the smoke lives 300 frames on its 10ms clock, strikes its own court
+ ; (buffers, toplevel, surface -- every destructor answered by delete_id)
+ ; and exits 0 BY ITSELF; red spreads back. no binary, no act.
+ smokebin "out/host/haven-smoke"
+ smokep (open smokebin "r")
+ _ (? (lit? smokep)
+      (: _ (close smokep)
+         smk (mind (L smokebin sock "00c000" "300"))
+         _ (must 'smoke-up (two? smk))
+         _ (enlist 'smk (cap smk))
+         _ (must 'smoke-masters (waithue 76 120 0 192 0 100))   ; green in the master column
+         _ (must 'red-reslave (waithue 240 120 0 0 192 100))    ; red re-dressed right
+         ; a yellow skiff barges in: three tiles -- the smoke hears a SMALLER
+         ; size and does the honest resize: buffers struck (delete_id), a
+         ; fresh pool dressed, the retired ids REUSED by libwayland. a
+         ; bookkeeping slip is a protocol error and a nonzero exit below.
+         sky (mind `("out/host/ai" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+                     "-e" (+ "(skiff \"" (+ sock "\" 320 240 12632064)"))))
+         _ (must 'yellow-up (two? sky))
+         _ (enlist 'sky (cap sky))
+         _ (must 'yellow-masters (waithue 76 120 0 192 192 100))  ; yellow takes the master
+         _ (must 'smoke-reslave (waithue 240 60 0 192 0 100))     ; green re-dressed smaller, upper slave
+         ; yellow steps away: the smoke grows back -- a second fresh pool
+         _ (still (cap sky) 15) _ (wfx (cap sky)) _ (close (cup sky))
+         _ (pull camp 'sky 0)
+         _ (must 'smoke-remasters (waithue 76 120 0 192 0 100))
+         g (wfx (cap smk))
+         _ (close (cup smk))
+         _ (pull camp 'smk 0)
+         _ (must 'smoke-clean (= 0 (cap g)))                    ; its OWN exit, status 0
+         (must 'red-respreads (waithue 76 120 0 0 192 100)))
+      0)
+
  ; strike the camp (the same teardown the failure path takes)
  _ (close s)
  _ (strike ())
