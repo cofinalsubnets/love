@@ -20,7 +20,8 @@
 (:
    ; --- the registry: (name interface version kind), what get_registry sings ---
    hv-globals '((1 "wl_shm" 1 shm) (2 "wl_compositor" 4 compositor)
-                (3 "xdg_wm_base" 2 wmbase) (4 "wl_output" 2 output))
+                (3 "xdg_wm_base" 2 wmbase) (4 "wl_output" 2 output)
+                (5 "wl_seat" 1 seat))
    (hv-kind nm) (: (go l) (? (two? l)
                              (? (= nm (cap (cap l))) (nthl (cap l) 3) (go (cup l)))
                              ())
@@ -52,6 +53,129 @@
    ;     hears delete_id, so the id is truly free to REUSE ---
    (hv-bye c ob obj) (: _ (pin ob obj ()) (wl-ship c 1 1 (L obj) ()))
 
+   ; --- the seat's bookkeeping. hb grows input slots: 6 the keyboard roster
+   ;     ((client kbdid)..), 7 the pointer roster, 8 the keyboard-entered key,
+   ;     9 the pointer-entered key, 10 the chord keycodes (j k), 11 the xkb
+   ;     keymap text. a serial per notable event, off the shared counter ---
+   (hv-srl hb) (: n (peep hb 4 1) _ (pin hb 4 (+ n 1)) n)
+   (hv-roster hb slot c f) (map (\ p (? (id? (cap p) c) (f (caup p)) 0)) (peep hb slot ()))
+   (hv-unroster hb slot c id)
+     (pin hb slot (filter (\ p (! (? (id? (cap p) c) (= (caup p) id) 0))) (peep hb slot ())))
+
+   ; --- the keymap, shipped as libxkbcommon's own text over a memfd: format 1
+   ;     when the compiled text rode in (out/lib/haven-keymap.xkb -- xkbcli's
+   ;     output, the Makefile bakes it), format 0 when the harbor has none ---
+   (hv-loadkeymap u)
+     (: p (: e (getenv "HAVEN_KEYMAP") (? (< 1 (tally e)) e "out/lib/haven-keymap.xkb"))
+        q (open p "r")
+        (? (lit? q) (: t (slurp q) _ (close q) t) ""))
+   (hv-keymap hb c kid)
+     (: t (peep hb 11 "") n (tally t)
+        size (+ n 1)
+        fd (memfd size) m (mapfd fd size)
+        (? (? (< fd 0) 1 (< m 1)) 0
+           (: b (cask size)                               ; text + the NUL (a cask wakes zeroed)
+              (go i) (? (< i n) (: _ (pin b i (t i)) (go (+ i 1))) 0)
+              _ (go 0)
+              _ (mapout m 0 b 0 size)
+              _ (wl-ship c kid 0 (L (? (< 0 n) 1 0) size) (L fd))
+              _ (unmap m size)
+              (fdclose fd))))
+
+   ; --- keyboard focus follows the zipper: leave the old key's client, enter
+   ;     the new one's (empty keys array -- nothing held across the crossing) ---
+   (hv-refocus hb tl)
+     (: old (peep hb 8 ()) z (peep hb 0 ())
+        new (? (two? z) (zfoc z) ())
+        (? (= old new) 0
+           (: _ (? old (: e (peep tl old ())
+                          (? (two? e)
+                             (hv-roster hb 6 (cap e)
+                               (\ kid (wl-ship (cap e) kid 2 (L (hv-srl hb) (nthl e 3)) ())))
+                             0))
+                    0)
+              _ (? new (: e (peep tl new ())
+                          (? (two? e)
+                             (hv-roster hb 6 (cap e)
+                               (\ kid (wl-ship (cap e) kid 1 (L (hv-srl hb) (nthl e 3) 0) ())))
+                             0))
+                    0)
+              (pin hb 8 new))))
+
+   ; --- a key from the glass: sup+j / sup+k walk the zipper (the chord is
+   ;     haven's, swallowed); everything else pours to the focused client's
+   ;     keyboards -- modifiers first (X's state bits ARE xkb's real mods for
+   ;     the standard map), then the key, X keycode folded to evdev (-8) ---
+   (hv-keyev hb tl time kc press state)
+     (: ch (peep hb 10 ())
+        (? (? (= 64 (& state 64)) (? (two? ch) (|| (= kc (cap ch)) (= kc (caup ch))) 0) 0)
+           (? press
+              (: z (peep hb 0 ())
+                 (? (two? z)
+                    (: _ (pin hb 0 (? (= kc (cap ch)) (zfocdn z) (zfocup z)))
+                       (hv-refocus hb tl))
+                    0))
+              0)
+           (: fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
+              (? (two? e)
+                 (hv-roster hb 6 (cap e)
+                   (\ kid (: _ (wl-ship (cap e) kid 4 (L (hv-srl hb) (& 255 state) 0 0 0) ())
+                             (wl-ship (cap e) kid 3 (L (hv-srl hb) time (- kc 8) press) ()))))
+                 0))))
+
+   ; --- the pointer: whichever tile holds it hears enters/leaves/motion in
+   ;     surface-local 24.8 fixed; a press focuses its tile (click-to-focus) ---
+   (hv-atxy hb tl px py)
+     (: (go row) (? (two? row)
+                    (: e (peep tl (cap row) ()) r (? (two? e) (nthl e 4) ())
+                       (? (? (two? r)
+                             (? (! (< px (rx r))) (? (< px (+ (rx r) (rw r)))
+                                (? (! (< py (ry r))) (< py (+ (ry r) (rh r))) 0) 0) 0)
+                             0)
+                          (cap row) (go (cup row))))
+                    ())
+        z (peep hb 0 ())
+        (go (? (two? z) (zrow z) ())))
+   (hv-ptrmove hb tl time px py)
+     (: cur (hv-atxy hb tl px py) old (peep hb 9 ())
+        _ (? (= cur old) 0
+             (: _ (? old (: e (peep tl old ())
+                            (? (two? e)
+                               (hv-roster hb 7 (cap e)
+                                 (\ pid (wl-ship (cap e) pid 1 (L (hv-srl hb) (nthl e 3)) ())))
+                               0))
+                      0)
+                _ (? cur (: e (peep tl cur ()) r (? (two? e) (nthl e 4) ())
+                            (? (two? e)
+                               (hv-roster hb 7 (cap e)
+                                 (\ pid (wl-ship (cap e) pid 0
+                                          (L (hv-srl hb) (nthl e 3)
+                                             (<< (- px (rx r)) 8) (<< (- py (ry r)) 8)) ())))
+                               0))
+                      0)
+                (pin hb 9 cur)))
+        (? cur (: e (peep tl cur ()) r (? (two? e) (nthl e 4) ())
+                  (? (two? e)
+                     (hv-roster hb 7 (cap e)
+                       (\ pid (wl-ship (cap e) pid 2
+                                (L time (<< (- px (rx r)) 8) (<< (- py (ry r)) 8)) ())))
+                     0))
+           0))
+   (hv-ptrbtn hb tl time btn press)
+     (: cur (peep hb 9 ())
+        code (? (= btn 1) 272 (= btn 2) 274 (= btn 3) 273 (+ 272 btn))
+        _ (? (? press cur 0)
+             (: z (peep hb 0 ())
+                _ (? (two? z) (pin hb 0 (zfocto cur z)) 0)
+                (hv-refocus hb tl))
+             0)
+        (? cur (: e (peep tl cur ())
+                  (? (two? e)
+                     (hv-roster hb 7 (cap e)
+                       (\ pid (wl-ship (cap e) pid 3 (L (hv-srl hb) time code press) ())))
+                     0))
+           0))
+
    ; --- a pool slips its moorings: unmapped, fd closed, exactly once. rc is
    ;     the pool's shared cell -- 0 live buffers, 1 parting, 2 ptr, 3 size,
    ;     4 fd -- so buffers outlive the pool OBJECT (simple-shm's habit) and
@@ -72,21 +196,27 @@
         (wipe y) (? (< y (nthl x 5)) (: _ (pour fb (* y rowb) zr 0 rowb) (wipe (+ y 1))) 0)
         _ (wipe 0)
         _ (pin hb 5 1)                                   ; the painter ships it
-        (map (\ p (: key (cap p) e (peep tl key ())
-                     (? (! (two? e)) 0
-                        (: c (cap e)
-                           _ (pin tl key (L c (nthl e 1) (nthl e 2) (nthl e 3) (cup p)))
-                           _ (wl-ship c (nthl e 1) 0 (L (nthl p 3) (nthl p 4) 0) ())
-                           srl (peep hb 4 1)
-                           _ (pin hb 4 (+ srl 1))
-                           (wl-ship c (nthl e 2) 0 (L srl) ())))))
-             pls))
+        _ (map (\ p (: key (cap p) e (peep tl key ())
+                       (? (! (two? e)) 0
+                          (: c (cap e)
+                             _ (pin tl key (L c (nthl e 1) (nthl e 2) (nthl e 3) (cup p)))
+                             _ (wl-ship c (nthl e 1) 0 (L (nthl p 3) (nthl p 4) 0) ())
+                             srl (peep hb 4 1)
+                             _ (pin hb 4 (+ srl 1))
+                             (wl-ship c (nthl e 2) 0 (L srl) ())))))
+               pls)
+        (hv-refocus hb tl))                              ; the zipper may have turned: keyboards follow
 
-   ; --- a parting client: its toplevels leave the row, the rest re-place ---
+   ; --- a parting client: its toplevels leave the row, its seat objects the
+   ;     rosters, the rest re-place ---
    (hv-farewell c hb tl x fb)
      (: mine (filter (\ key (: e (peep tl key ()) (? (two? e) (= c (cap e)) 0)))
                      (zrow (peep hb 0 ())))
         _ (map (\ key (: _ (pin hb 0 (zdel key (peep hb 0 ()))) (pin tl key ()))) mine)
+        _ (pin hb 6 (filter (\ p (! (id? (cap p) c))) (peep hb 6 ())))
+        _ (pin hb 7 (filter (\ p (! (id? (cap p) c))) (peep hb 7 ())))
+        _ (? (any (\ key (= key (peep hb 9 ()))) mine) (pin hb 9 ()) 0)
+        _ (? (any (\ key (= key (peep hb 8 ()))) mine) (pin hb 8 ()) 0)
         (? (two? mine) (hv-retile hb tl x fb) 0))
 
    ; --- one request. ob keeps the client's objects (id -> (kind ..)); st the
@@ -122,7 +252,30 @@
                         (? (< vs 2) 0                     ; scale + done arrived at v2
                            (: _ (wl-ship c nid 3 (L 1) ())
                               (wl-ship c nid 2 () ()))))
+                   (= kd 'seat)                           ; capabilities: pointer | keyboard
+                     (wl-ship c nid 0 (L 3) ())
                    0))
+           (= kind 'seat)                                 ; get_pointer / get_keyboard / get_touch
+             (? (= op 0) (: nid (wl-u32 k off)
+                            _ (pin ob nid (L 'pointer))
+                            (pin hb 7 (link (L c nid) (peep hb 7 ()))))
+                (= op 1) (: nid (wl-u32 k off)
+                            _ (pin ob nid (L 'keyboard))
+                            _ (pin hb 6 (link (L c nid) (peep hb 6 ())))
+                            _ (hv-keymap hb c nid)
+                            (: fk (peep hb 8 ())          ; already focused here? hear enter now
+                               e (? fk (peep tl fk ()) ())
+                               (? (? (two? e) (id? (cap e) c) 0)
+                                  (wl-ship c nid 1 (L (hv-srl hb) (nthl e 3) 0) ())
+                                  0)))
+                (= op 2) (pin ob (wl-u32 k off) (L 'touch))
+                0)
+           (= kind 'keyboard)                             ; release (v3 -- defensively honored)
+             (? (= op 0) (: _ (hv-unroster hb 6 c obj) (hv-bye c ob obj)) 0)
+           (= kind 'pointer)                              ; set_cursor is a courtesy we skip
+             (? (= op 1) (: _ (hv-unroster hb 7 c obj) (hv-bye c ob obj)) 0)
+           (= kind 'touch)
+             (? (= op 0) (hv-bye c ob obj) 0)
            (= kind 'compositor)                           ; create_surface / create_region
              (? (= op 0) (pin ob (wl-u32 k off) (L 'surface 0 0 ()))
                 (= op 1) (pin ob (wl-u32 k off) (L 'region))
@@ -237,15 +390,20 @@
             (? (! (two? sc)) (: _ (close s) 'refused)
              (: win (scr-idbase sc) gc (+ 1 (scr-idbase sc)) depth (scr-depth sc)
                 _ (px-mkwin s win (scr-root sc) 0 0 wpx hpx)
+                _ (x-cwa-events s win 163919)             ; + KeyRelease, buttons, motion (the seat's senses)
                 _ (px-gc s gc win)
                 _ (px-title s win "haven")
                 _ (x-map s win)
                 _ (x-flush s)
+                km (x-keymap s (scr-mink sc) (scr-maxk sc) (L 106 107))   ; j k: the focus chords
                 fb (cask (* wpx (* hpx 4)))
                 x (L s win gc depth wpx hpx)
-                hb (tablet 8)
+                hb (tablet 16)
                 _ (pin hb 0 ()) _ (pin hb 1 (tall 1)) _ (pin hb 2 1)
                 _ (pin hb 3 (cask (* wpx 4))) _ (pin hb 4 1) _ (pin hb 5 0)
+                _ (pin hb 6 ()) _ (pin hb 7 ()) _ (pin hb 8 ()) _ (pin hb 9 ())
+                _ (pin hb 10 (L (peep km 106 0) (peep km 107 0)))
+                _ (pin hb 11 (hv-loadkeymap ()))
                 tl (tablet 64)
                 lp (shore path)
                 (? (! (lit? lp)) (: _ (close s) 'no-shore)
@@ -260,6 +418,22 @@
                                  _ (rest 8)
                                  (paint ()))
                     _ (spin paint 0)
+                    ; the listener: the OTHER pump on the X socket (ain's two-
+                    ; pump law -- the painter writes, this only reads). every
+                    ; key/button/motion on the glass becomes seat traffic;
+                    ; an expose just asks the painter to ship again
+                    (readx _) (: e (x-next s)
+                                 (? (! e) 0
+                                    (: code (ev-code e) pkt (ev-raw e)
+                                       _ (? (= code 12) (pin hb 5 1)
+                                            (= code 2) (hv-keyev hb tl (u32 pkt 4) (ev-detail e) 1 (u16 pkt 28))
+                                            (= code 3) (hv-keyev hb tl (u32 pkt 4) (ev-detail e) 0 (u16 pkt 28))
+                                            (= code 6) (hv-ptrmove hb tl (u32 pkt 4) (u16 pkt 24) (u16 pkt 26))
+                                            (= code 4) (hv-ptrbtn hb tl (u32 pkt 4) (ev-detail e) 1)
+                                            (= code 5) (hv-ptrbtn hb tl (u32 pkt 4) (ev-detail e) 0)
+                                            0)
+                                       (readx ()))))
+                    _ (spin readx 0)
                     (knock _) (: _ (await lp)
                                  c (accept lp)
                                  _ (? (lit? c) (spin (\ _ (hv-serve c x fb hb tl)) 0) 0)

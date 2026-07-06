@@ -128,19 +128,38 @@
  ; the third act, where the binary exists (see the Makefile's $(smoke) rule):
  ; a REAL client -- libwayland + xdg-shell, the reference implementation and
  ; strict about ids -- joins red. green masters the left, red re-dresses into
- ; the slave; a yellow skiff squeezes it (the resize dance, both directions);
- ; the smoke lives 300 frames on its 10ms clock, strikes its own court
- ; (buffers, toplevel, surface -- every destructor answered by delete_id)
- ; and exits 0 BY ITSELF; red spreads back. no binary, no act.
+ ; the slave; the SEAT speaks (a fake key through haven's glass must reach
+ ; the smoke as wl_keyboard traffic, keymap and enter and all -- the smoke's
+ ; 4th arg arms the expectation and its exit 0 is the proof); a yellow skiff
+ ; squeezes it (the resize dance, both directions); the smoke lives 300
+ ; frames on its 10ms clock, strikes its own court (buffers, toplevel,
+ ; surface -- every destructor answered by delete_id) and exits 0 BY
+ ; ITSELF; red spreads back. no binary, no act.
+ (fake qx ty dt) (: _ (x-w8 s qx) _ (x-w8 s 2) _ (x-w16 s 9)
+                    _ (x-w8 s ty) _ (x-w8 s dt) _ (x-w16 s 0)
+                    _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 0)
+                    _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w32 s 0) _ (x-w16 s 0) _ (x-w8 s 0) _ (x-w8 s 0)
+                    (x-flush s))
  smokebin "out/host/haven-smoke"
  smokep (open smokebin "r")
  _ (? (lit? smokep)
       (: _ (close smokep)
-         smk (mind (L smokebin sock "00c000" "300"))
+         smk (mind (L smokebin sock "00c000" "300" "30"))       ; expect evdev 30 (X keycode 38)
          _ (must 'smoke-up (two? smk))
          _ (enlist 'smk (cap smk))
          _ (must 'smoke-masters (waithue 76 120 0 192 0 100))   ; green in the master column
          _ (must 'red-reslave (waithue 240 120 0 0 192 100))    ; red re-dressed right
+         ; the seat act: XTEST a key at haven's focused glass
+         qx (: n (tally "XTEST")
+               _ (x-w8 s 98) _ (x-w8 s 0) _ (x-w16 s (+ 2 (/ (+ n (x-pad4 n)) 4)))
+               _ (x-w16 s n) _ (x-w16 s 0) _ (x-wpad s "XTEST") _ (x-flush s)
+               hdr (x-reply s)
+               (nthl hdr 9))
+         _ (must 'xtest (< 0 qx))
+         _ (x-focus s win) _ (x-flush s)
+         _ (rest 150)
+         _ (fake qx 2 38) _ (rest 80)                           ; KeyPress 38 ('a')
+         _ (fake qx 3 38) _ (rest 80)                           ; KeyRelease
          ; a yellow skiff barges in: three tiles -- the smoke hears a SMALLER
          ; size and does the honest resize: buffers struck (delete_id), a
          ; fresh pool dressed, the retired ids REUSED by libwayland. a

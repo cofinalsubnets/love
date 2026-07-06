@@ -7,7 +7,11 @@
 // ids retire through delete_id and libwayland REUSES them -- then strikes
 // everything in protocol order. exit 0 = every roundtrip clean.
 //
-//   haven-smoke <socket-path> <rrggbb> <frames>
+//   haven-smoke <socket-path> <rrggbb> <frames> [expect-key]
+//
+// with a 4th arg: bind wl_seat too, verify the keymap fd (format 1 must map
+// and read as xkb text), and exit 0 only if wl_keyboard.key delivered that
+// evdev keycode before the frames ran out -- the seat rung's other side.
 //
 // built by the Makefile only where wayland-scanner + libwayland live; haven
 // itself stays zero-dep -- this binary exists to be the OTHER side.
@@ -28,6 +32,8 @@ struct smoke {
   struct wl_shm *shm;
   struct xdg_wm_base *wm;
   struct wl_output *out;
+  struct wl_seat *seat;
+  struct wl_keyboard *kbd;
   struct wl_surface *surf;
   struct xdg_surface *xsurf;
   struct xdg_toplevel *top;
@@ -38,6 +44,7 @@ struct smoke {
   int cw, ch;                  // configured size (0 = our choice)
   uint32_t rgb;
   int frames, configured, xrgb, outdone, flying;
+  int want_key, got_key, km_ok, entered;
 };
 
 static void fail(const char *m) { fprintf(stderr, "smoke: FAIL %s\n", m); exit(1); }
@@ -62,6 +69,43 @@ static void out_scale(void *d, struct wl_output *o, int32_t f) {
 static const struct wl_output_listener out_l =
   { .geometry = out_geom, .mode = out_mode, .done = out_done, .scale = out_scale };
 
+static void kb_keymap(void *d, struct wl_keyboard *k, uint32_t fmt, int32_t fd,
+                      uint32_t size) {
+  struct smoke *s = d; (void)k;
+  if (fmt == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
+    char *m = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (m != MAP_FAILED) {
+      if (size > 10 && !strncmp(m, "xkb_keymap", 10)) s->km_ok = 1;
+      munmap(m, size);
+    }
+  } else s->km_ok = 1;                             // format 0: a bare harbor, tolerated
+  close(fd); }
+static void kb_enter(void *d, struct wl_keyboard *k, uint32_t serial,
+                     struct wl_surface *surf, struct wl_array *keys) {
+  (void)k; (void)serial; (void)surf; (void)keys;
+  ((struct smoke*)d)->entered = 1; }
+static void kb_leave(void *d, struct wl_keyboard *k, uint32_t serial,
+                     struct wl_surface *surf) {
+  (void)d; (void)k; (void)serial; (void)surf; }
+static void kb_key(void *d, struct wl_keyboard *k, uint32_t serial, uint32_t t,
+                   uint32_t key, uint32_t state) {
+  struct smoke *s = d; (void)k; (void)serial; (void)t;
+  if (state && (int)key == s->want_key) s->got_key = 1; }
+static void kb_mods(void *d, struct wl_keyboard *k, uint32_t serial, uint32_t dep,
+                    uint32_t lat, uint32_t lock, uint32_t grp) {
+  (void)d; (void)k; (void)serial; (void)dep; (void)lat; (void)lock; (void)grp; }
+static const struct wl_keyboard_listener kb_l =
+  { .keymap = kb_keymap, .enter = kb_enter, .leave = kb_leave,
+    .key = kb_key, .modifiers = kb_mods };
+
+static void seat_caps(void *d, struct wl_seat *seat, uint32_t caps) {
+  struct smoke *s = d;
+  if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && !s->kbd) {
+    s->kbd = wl_seat_get_keyboard(seat);
+    wl_keyboard_add_listener(s->kbd, &kb_l, s);
+  } }
+static const struct wl_seat_listener seat_l = { .capabilities = seat_caps };
+
 static void wm_ping(void *d, struct xdg_wm_base *wm, uint32_t serial) {
   (void)d; xdg_wm_base_pong(wm, serial); }
 static const struct xdg_wm_base_listener wm_l = { wm_ping };
@@ -80,6 +124,9 @@ static void reg_global(void *d, struct wl_registry *r, uint32_t name,
   } else if (!strcmp(iface, "wl_output")) {
     s->out = wl_registry_bind(r, name, &wl_output_interface, ver < 2 ? ver : 2);
     wl_output_add_listener(s->out, &out_l, s);
+  } else if (s->want_key && !strcmp(iface, "wl_seat")) {
+    s->seat = wl_registry_bind(r, name, &wl_seat_interface, 1);
+    wl_seat_add_listener(s->seat, &seat_l, s);
   } }
 static void reg_gone(void *d, struct wl_registry *r, uint32_t name) {
   (void)d; (void)r; (void)name; }
@@ -157,10 +204,12 @@ static void sail(struct smoke *s) {
   s->frames--; }
 
 int main(int argc, char **argv) {
-  if (argc != 4) fail("usage: haven-smoke <socket> <rrggbb> <frames>");
+  if (argc != 4 && argc != 5)
+    fail("usage: haven-smoke <socket> <rrggbb> <frames> [expect-key]");
   struct smoke s = {0};
   s.rgb = (uint32_t)strtoul(argv[2], NULL, 16);
   s.frames = atoi(argv[3]);
+  s.want_key = argc == 5 ? atoi(argv[4]) : 0;
   s.dpy = wl_display_connect(argv[1]);
   if (!s.dpy) fail("connect");
   struct wl_registry *reg = wl_display_get_registry(s.dpy);
@@ -186,8 +235,17 @@ int main(int argc, char **argv) {
   while (s.frames > 0 || s.flying)
     if (wl_display_dispatch(s.dpy) < 0) fail("dispatch");
 
+  if (s.want_key) {                              // the seat's half of the bargain
+    if (!s.seat) fail("no wl_seat");
+    if (!s.km_ok) fail("keymap");
+    if (!s.entered) fail("no keyboard enter");
+    if (!s.got_key) fail("key never arrived");
+  }
+
   // strike in protocol order: every destructor must be answered by delete_id
   undress(&s);
+  if (s.kbd) wl_keyboard_destroy(s.kbd);
+  if (s.seat) wl_seat_destroy(s.seat);
   xdg_toplevel_destroy(s.top);
   xdg_surface_destroy(s.xsurf);
   wl_surface_destroy(s.surf);
