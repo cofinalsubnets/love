@@ -158,7 +158,7 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -167,8 +167,8 @@ out/host$(hsuf)/au: $(aufiles)
 	@chmod 755 $@
 .PHONY: test_utils
 test_utils: host out/host$(hsuf)/au
-	@echo "UTILS crew/utils/{text,core,fs,re,diff,law}.l"; \
-	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
+	@echo "UTILS crew/utils/{text,core,fs,re,sed,diff,law}.l"; \
+	  cat test/00-init.l crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/diff.l crew/utils/law.l | $m > out/host/.test_utils.out 2>&1; r=$$?; \
 	  cat out/host/.test_utils.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/utils/law: myers" out/host/.test_utils.out; } \
 	    || { echo "FAIL utils (exit $$r)"; exit 1; }
@@ -288,6 +288,27 @@ test_utils: host out/host$(hsuf)/au
 	  $m $(ho)/au grep b $(ho)/.gr1 $(ho)/.gr-nope > /dev/null 2>&1; r=$$?; \
 	  [ $$r -eq 2 ] || { echo "FAIL au grep err beats match exit"; exit 1; }; \
 	  echo "au: grep (plain/-n/-c/-v/-l + BRE battery GNU-identical, the exit triple) ok"
+	@printf 'abc\nxbz\nzzz\nq4\nw5\n' > $(ho)/.sd1; \
+	  for sc in 's/b/X/' 's/z/Q/g' '2d' '/x/,/q/d' '$$d' '2q' 's/x*/-/g' 's/\(b*\)z/[\1]/' 's/b/[&]/' 's|z|_|g' 's/a/1/; s/b/2/' 's/q\(.\)/<\1>/'; do \
+	    sed "$$sc" $(ho)/.sd1 > $(ho)/.sd-g; a=$$?; \
+	    $m $(ho)/au sed "$$sc" $(ho)/.sd1 > $(ho)/.sd-o; b=$$?; \
+	    { cmp -s $(ho)/.sd-g $(ho)/.sd-o && [ $$a -eq $$b ]; } \
+	      || { echo "FAIL au sed '$$sc' vs GNU"; exit 1; }; \
+	  done; \
+	  for sc in '2,4p' '/z/p' 's/b/X/p' '/x/,/q/p'; do \
+	    sed -n "$$sc" $(ho)/.sd1 > $(ho)/.sd-g; \
+	    $m $(ho)/au sed -n "$$sc" $(ho)/.sd1 > $(ho)/.sd-o; \
+	    cmp -s $(ho)/.sd-g $(ho)/.sd-o || { echo "FAIL au sed -n '$$sc' vs GNU"; exit 1; }; \
+	  done; \
+	  printf 'ab\n' | sed 's/a/1/' > $(ho)/.sd-g; printf 'ab\n' | $m $(ho)/au sed 's/a/1/' > $(ho)/.sd-o; \
+	  cmp -s $(ho)/.sd-g $(ho)/.sd-o || { echo "FAIL au sed stdin vs GNU"; exit 1; }; \
+	  printf 'a\n' | sed 's/a' > /dev/null 2>&1; a=$$?; printf 'a\n' | $m $(ho)/au sed 's/a' > /dev/null 2>&1; b=$$?; \
+	  { [ $$a -eq 1 ] && [ $$b -eq 1 ]; } || { echo "FAIL au sed bad-script exit (gnu $$a ours $$b)"; exit 1; }; \
+	  sed p $(ho)/.sd-nope $(ho)/.sd1 > $(ho)/.sd-g 2>&1; a=$$?; \
+	  $m $(ho)/au sed p $(ho)/.sd-nope $(ho)/.sd1 > $(ho)/.sd-o 2>&1; b=$$?; \
+	  { cmp -s $(ho)/.sd-g $(ho)/.sd-o && [ $$a -eq 2 ] && [ $$b -eq 2 ]; } \
+	    || { echo "FAIL au sed missing file vs GNU"; exit 1; }; \
+	  echo "au: sed (s///gp + d/p/q + number/\$$/regex/range addresses GNU-identical, exits 1/2) ok"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

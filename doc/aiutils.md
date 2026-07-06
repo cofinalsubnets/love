@@ -47,6 +47,7 @@ the file discipline, two shapes:
 | core.l, the trivia | seq yes true false basename dirname |
 | fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod |
 | re.l, the matcher | grep (-n -v -c -l) over the lawed BRE engine |
+| sed.l, the editor | sed (-n; s///gp, d, p, q; number/$/regex/range addresses) |
 
 ## the discipline (why this stays trustworthy)
 
@@ -98,19 +99,33 @@ match ending at 0 is blue by measure. the matcher is greedy backtracking in
 continuation style; the laws (law.l) hold the dialect by hand AND by a seeded
 differential fuzz against an independent Brzozowski-derivative oracle. grep
 rides it: -n -v -c -l, GNU-byte-identical smokes + the 0/1/2 exit triple
-(an unreadable file beats a match). sed's substitution will ride refind;
-group SPANS (for \1 in replacements) are the one engine extension it needs.
+(an unreadable file beats a match). refind carries group SPANS (numbered in
+\( order, a repeated group reading as its LAST iteration, GNU's \1) -- sed's
+food.
+
+## sed-lite (crew/utils/sed.l)
+
+landed, over re.l. `sed [-n] SCRIPT [FILE..]`: ;/newline-separated commands,
+each [ADDR[,ADDR]] VERB; addresses number/$/(BRE)/re/, ranges open-at-first
+close-at-later (numeric end at-or-before start = one line, like GNU); verbs
+p, d, q (one address), and s/RE/REPL/[g][p] with any delimiter -- & and
+\1..\9 in the replacement, the POSIX empty-match rules exact (step after an
+empty replacement, DISCARD an empty match where the last one ended:
+`s/x*/-/g` on "xbz" is "-b-z-"). input is the concatenated stream ($ = its
+last line); unreadable files complain-and-flow, exit 2; a bad script exits 1
+(GNU's split). the pure floor (sparse, usub) is lawed; the whole face is
+smoked byte-identical vs GNU (a 12-script battery + -n + stdin + the error
+faces). out of dialect, documented: GNU's empty-pattern reuse, \n in
+replacements, hold space.
 
 ## remaining work, in order
 
-1. **sed-lite** -- s/re/repl/[g], d, p, -n, line/range addresses; rides re.l
-   (refind + a group-span extension for \1).
-2. **the process tools** -- env, sleep, kill, xargs. no new nifs: environ/
+1. **the process tools** -- env, sleep, kill, xargs. no new nifs: environ/
    setenv/getenv, `rest`, bao's `still`, spawn/wait.
-3. **polish, as need arises** -- ls -l (stat already carries size/mtime/mode),
+2. **polish, as need arises** -- ls -l (stat already carries size/mtime/mode),
    cp -r, multi-source cp/mv into a directory, sort -n/-k, uniq -d/-u, cut -b,
-   tr [:class:] and -ds, echo -e, seq over gems, grep -i/-o/-E. none block the
-   distro; add them when a real script wants them.
+   tr [:class:] and -ds, echo -e, seq over gems, grep -i/-o/-E, sed -i/y/N.
+   none block the distro; add them when a real script wants them.
 
 after aiutils: the vim clone (rung 2), then the C compiler (rung 3) -- see the
 ai-distro arc. the multi-call `au` is already the shape the distro boots with.

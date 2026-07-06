@@ -176,17 +176,24 @@
       (ok "\\(a\\(b\\)*\\)*x" "abbax") (ok "\\(\\)*x" "ax")    ; nesting; an empty repeat rests
       (bad "\\(ab") (bad "ab\\)") (bad "[ab") (bad "a\\")      ; malformed answers ()
       (bad "a\\1") (bad "a\\{2\\}") (bad "a\\|b")              ; out-of-dialect refused
-      (= (refind (caup (rebre "b*")) "abbc" 0) '(1 0 0))       ; leftmost, before longest
-      (= (refind (caup (rebre "bb")) "abbc" 0) '(1 1 3))
-      (= (refind (caup (rebre "b*")) "abbc" 1) '(1 1 3))       ; greedy at its own start
-      (! (refind (caup (rebre "zz")) "abbc" 0))))
+      (= (refind (caup (rebre "b*")) "abbc" 0) '(1 0 0 ()))    ; leftmost, before longest
+      (= (refind (caup (rebre "bb")) "abbc" 0) '(1 1 3 ()))
+      (= (refind (caup (rebre "b*")) "abbc" 1) '(1 1 3 ()))    ; greedy at its own start
+      (! (refind (caup (rebre "zz")) "abbc" 0))
+      ; the group spans (\1's food): numbered in \( order, newest pin first,
+      ; so a repeated group reads as its LAST iteration -- GNU's \1
+      (= (refind (caup (rebre "\\(b*\\)c")) "abbc" 0) '(1 1 4 ((1 1 3))))
+      (= (refind (caup (rebre "\\(a\\(b\\)\\)")) "ab" 0) '(1 0 2 ((1 0 2) (2 1 2))))
+      (= (refind (caup (rebre "\\(ab\\)*x")) "ababx" 0) '(1 0 5 ((1 2 4) (1 0 2))))
+      (= (cauup (rebre "\\(a\\)\\(b\\)")) 2)                   ; rebre counts its groups
+      (= (cauup (rebre "ab")) 0)))
 
 ; --- the regex fuzz: an independent Brzozowski-derivative oracle (alternative
 ; SETS of node lists, no backtracking anywhere) against the engine's greedy
 ; backtracker, over seeded random patterns and subjects. anchors sit out (a
 ; derivative has no position); the hand laws above hold them instead ---
 (: (dnul nd) (: t (cap nd)
-                (? (= t 'grp) (dnulq (caup nd))
+                (? (= t 'grp) (dnulq (cauup nd))
                    (= t 'rep) (|| (< (cap (cuup nd)) 1) (dnul (caup nd)))
                    ()))
    (dnulq ns) (? (two? ns) (&& (dnul (cap ns)) (dnulq (cup ns))) 1)
@@ -197,7 +204,7 @@
                 (? (= t 'chr) (? (= c (caup nd)) '(()) ())
                    (= t 'any) '(())
                    (= t 'cls) (? (dhit nd c) '(()) ())
-                   (= t 'grp) (dl (caup nd) c)
+                   (= t 'grp) (dl (cauup nd) c)
                    (: a (caup nd) lo (cap (cuup nd)) hi (caup (cuup nd))
                       (? (&& hi (< hi 1)) ()
                          (: lo2 (? (< 0 lo) (- lo 1) 0) hi2 (? hi (- hi 1) ())
@@ -240,6 +247,30 @@
                    (L 'broke (cap pp) (cap ss)))))))
    r (fzr 200 (seed 13))
    (assert (= r 'ok)))
+
+; --- the sed floor (crew/utils/sed.l): the substitution walk to its GNU face,
+; and the script parser's shapes -- what parses, what refuses ---
+(: (sub p r s g?) (: b (rebre p) (caup (usub (caup b) r s g?)))
+   (assert
+      (= (sub "b" "X" "abc" ()) "aXc") (= (sub "z" "X" "abc" ()) "abc")
+      (cap (usub (caup (rebre "b")) "X" "abc" ()))               ; the changed bit ...
+      (! (cap (usub (caup (rebre "z")) "X" "abc" ())))           ; ... and its absence
+      (= (sub "b" "X" "abab" 1) "aXaX")                          ; g takes every match
+      (= (sub "b" "X" "abab" ()) "aXab")                         ; bare s takes the first
+      (= (sub "x*" "-" "abc" 1) "-a-b-c-")                       ; the empty-match step rule
+      (= (sub "x*" "-" "xbz" 1) "-b-z-")                         ; ... and the discard after a real match
+      (= (sub "x*" "-" "xx" 1) "-")
+      (= (sub "b" "[&]" "abc" ()) "a[b]c")                       ; & is the whole match
+      (= (sub "\\(b*\\)c" "[\\1]" "xbbc" ()) "x[bb]")            ; \1 reads the group span
+      (= (sub "a\\(b\\)\\?c" "<\\1>" "ac" ()) "<>")              ; an unmatched group is ""
+      (= (sub "b" "\\&\\\\" "abc" ()) "a&\\c")                   ; \& and \\ stay ink
+      (= (sub "^a" "X" "aaa" 1) "Xaa")                           ; the anchor can't re-fire
+      (two? (sparse "p")) (two? (sparse "2,4d")) (two? (sparse "/x/,$d"))
+      (two? (sparse "s/a/b/g; 3p")) (two? (sparse "2 p")) (two? (sparse "s|/|_|"))
+      (= (tally (caup (sparse "p;p;p"))) 3)
+      (! (sparse "s/a")) (! (sparse ","))                        ; unterminated s; a legless ,
+      (! (sparse "2,3q")) (! (sparse "x")) (! (sparse "s/a/b/x"))   ; q takes one address; unknown verb/flag
+      (! (sparse "s/a\\{/b/"))))                                 ; the regex dialect refuses through
 
 (say err "crew/utils/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")
