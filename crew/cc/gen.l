@@ -12,10 +12,14 @@
 ; at most six; call args evaluate left to right. stage 4b: a bare function
 ; name is its address (la); a call HEAD that is a function-pointer value goes
 ; through holo's (callr) after parking the callee in r3; a whole-struct assign
-; is a word-then-byte block copy (bcopy). fenced and refused, not fudged:
-; ptr+ptr, deref of a non-pointer, assigning to an array, struct params or
-; returns by value, global initializers past a constant, string-initialized
-; globals, brace/designated initializers (stage 4c).
+; is a word-then-byte block copy (bcopy). stage 4c: brace and designated
+; initializers -- locals zero the slot then fill (cgfill, runtime values ok,
+; nesting for arrays of structs), globals bake a constant byte image
+; (cgimage; string-into-char-array and [] size inference included). fenced
+; and refused, not fudged: ptr+ptr, deref of a non-pointer, assigning to an
+; array, struct params or returns by value, and a GLOBAL initializer whose
+; value is a LABEL -- char *s = "hi", a static function-pointer table,
+; &global in static data (needs a data relocation; stage 4d).
 (:
    ; the gen state g (a tablet): 'n the label counter, 'off the frame's
    ; high-water offset, 'brk/'cnt the loop label stacks, 'glob the global
@@ -293,21 +297,129 @@
 
    epi (L (L 'mov 'sp 'r4) (L 'pop 'r4) (L 'ret))
 
+   ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
+   ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
+   (aggish? ty) (|| (arr? ty) (stru? ty))
+   (elval it) (? (member? (cap it) '(dfield didx)) (caup (cup it)) it)   ; the value of an item
+   (fidx fields name) (: (go l i) (? (! (two? l)) 0 (= (cap (cap l)) name) i (go (cup l) (+ i 1)))
+                          (go fields 0))
+   (nthfield fields i) (: (go l k) (? (! (two? l)) 'bad (< k 1) (cap l) (go (cup l) (- k 1)))
+                           (go fields i))
+   (splice img at bytes)                            ; overwrite img[at..) with bytes (image build)
+    (: (go i src rem acc)
+        (? (! (two? src)) (rev acc)
+           (< i at) (go (+ i 1) (cup src) rem (link (cap src) acc))
+           (two? rem) (go (+ i 1) (cup src) (cup rem) (link (cap rem) acc))
+           (go (+ i 1) (cup src) rem (link (cap src) acc)))
+       (go 0 img bytes ()))
+
+   ; -- LOCAL init (codegen): zero the slot, then fill (values may be runtime) --
+   (cgzero off span)                                ; zero [r4+off .. +span)
+    (: (go o rem acc)
+        (? (<= 8 rem) (go (+ o 8) (- rem 8) (cat acc (L (L 'st 'r4 o 'r0))))
+           (< 0 rem) (go (+ o 1) (- rem 1) (cat acc (L (L 'st1 'r4 o 'r0))))
+           acc)
+       (cat (L (L 'li 'r0 0)) (go off span ())))
+   (cgstr off text)                                 ; a char array from a string: byte stores (NUL from the zero)
+    (: (go i acc) (? (< i 0) acc (go (- i 1) (cat (L (L 'li 'r0 (text i)) (L 'st1 'r4 (+ off i) 'r0)) acc)))
+       (go (- (tally text) 1) ()))
+   (cgstore g env off ty val)                       ; store a scalar value expr into [r4+off]
+    (: r (cgexpr g env val)
+       (? (bad? r) 'bad
+          (cat (caup r) (cat (cvt ty 'r0) (L (L (stop ty) 'r4 off 'r0))))))
+   (cgfill g env off ty ini)                        ; fill an aggregate at frame offset off (no zero)
+    (? (= (cap ini) 'str) (? (arr? ty) (cgstr off (caup ini)) 'bad)
+       (! (= (cap ini) 'init)) 'bad
+       (arr? ty)
+        (: elt (caup ty) esz (tsz g elt)
+           (fill l idx acc)
+            (? (! (two? l)) acc
+               (: it (cap l)
+                  ci (? (= (cap it) 'didx) (caup it) idx)
+                  val (elval it)
+                  eoff (+ off (* ci esz))
+                  r (? (&& (aggish? elt) (= (cap val) 'init)) (cgfill g env eoff elt val)
+                       (cgstore g env eoff elt val))
+                  (? (bad? r) 'bad (fill (cup l) (+ ci 1) (cat acc r)))))
+           (fill (caup ini) 0 ()))
+       (stru? ty)
+        (: fields (cap (peep (g 'stag) (caup ty) 0))
+           (fill l cur acc)
+            (? (! (two? l)) acc
+               (: it (cap l)
+                  ci (? (= (cap it) 'dfield) (fidx fields (caup it)) cur)
+                  val (elval it)
+                  fe (nthfield fields ci)
+                  (? (bad? fe) 'bad
+                     (: foff (+ off (caup fe)) fty (cauup fe)
+                        r (? (&& (aggish? fty) (= (cap val) 'init)) (cgfill g env foff fty val)
+                             (cgstore g env foff fty val))
+                        (? (bad? r) 'bad (fill (cup l) (+ ci 1) (cat acc r)))))))
+           (fill (caup ini) 0 ()))
+       'bad)
+
+   ; -- GLOBAL init (a constant byte image; a label value refuses -> 4d) --
+   (imnum g ty val) (: n (tsz g ty) (go i acc) (? (<= n i) (rev acc)
+                                                   (go (+ i 1) (link (& (>> val (* 8 i)) 255) acc)))
+                       (go 0 ()))
+   (imgbytes g ty ini)                              ; bytes of length tsz(ty) | 'bad
+    (? (! (two? ini)) (zeros (tsz g ty))
+       (= (cap ini) 'num) (? (aggish? ty) 'bad (imnum g ty (caup ini)))
+       (&& (= (cap ini) 'str) (arr? ty))
+        (: t (caup ini) n (tsz g ty)
+           (bs i acc) (? (<= n i) (rev acc) (bs (+ i 1) (link (? (< i (tally t)) (t i) 0) acc)))
+           (bs 0 ()))
+       (= (cap ini) 'init)
+        (? (arr? ty)
+            (: elt (caup ty) esz (tsz g elt)
+               (place l idx img)
+                (? (! (two? l)) img
+                   (: it (cap l)
+                      ci (? (= (cap it) 'didx) (caup it) idx)
+                      eb (imgbytes g elt (elval it))
+                      (? (bad? eb) 'bad (place (cup l) (+ ci 1) (splice img (* ci esz) eb)))))
+               (place (caup ini) 0 (zeros (* (cauup ty) esz))))
+           (stru? ty)
+            (: e (peep (g 'stag) (caup ty) 0)
+               fields (cap e) size (caup e)
+               (place l cur img)
+                (? (! (two? l)) img
+                   (: it (cap l)
+                      ci (? (= (cap it) 'dfield) (fidx fields (caup it)) cur)
+                      fe (nthfield fields ci)
+                      (? (bad? fe) 'bad
+                         (: fb (imgbytes g (cauup fe) (elval it))
+                            (? (bad? fb) 'bad (place (cup l) (+ ci 1) (splice img (caup fe) fb)))))))
+               (place (caup ini) 0 (zeros size)))
+           'bad)
+       'bad)                                         ; a label/var/addr value -> not a constant image
+   (cgimage g ty ini)                               ; the full span-padded image | 'bad
+    (: span (& (+ (tsz g ty) 7) -8)
+       raw (imgbytes g ty ini)
+       (? (bad? raw) 'bad (cat raw (zeros (- span (tally raw))))))
+
    ; a declaration list ((name ty init)..): slots by SIZE (rounded to 8),
-   ; extends env -> (forms env) | 'bad. array locals take their whole span
-   ; and refuse initializers this stage.
+   ; extends env -> (forms env) | 'bad. aggregate + string locals zero the
+   ; slot then fill; a scalar takes its value; only a label-valued global image
+   ; refuses (4d).
    (cgdecl g env pairs)
     (: (one ps env2 acc)
         (? (! (two? ps)) (L acc env2)
            (: p (cap ps)
               ty (caup p)
+              init (cauup p)
               span (& (+ (tsz g ty) 7) -8)
               off (- 0 (+ (peep g 'off 0) span))
               _ (pin g 'off (+ (peep g 'off 0) span))
               env3 (link (L (cap p) off ty) env2)
-              (? (! (two? (cauup p))) (one (cup ps) env3 acc)
-                 (arr? ty) 'bad
-                 (: r (cgexpr g env3 (cauup p))
+              (? (! (two? init)) (one (cup ps) env3 acc)
+                 (|| (= (cap init) 'init) (&& (= (cap init) 'str) (arr? ty)))
+                  (? (&& (= (cap init) 'init) (! (aggish? ty))) 'bad   ; a brace for a scalar
+                     (: f (cgfill g env3 off ty init)
+                        (? (bad? f) 'bad
+                           (one (cup ps) env3 (cat acc (cat (cgzero off span) f))))))
+                 (arr? ty) 'bad                          ; a bare-expr init of an array
+                 (: r (cgexpr g env3 init)               ; a scalar (a pointer = string rides cgexpr -> la)
                     (? (bad? r) 'bad
                        (one (cup ps) env3
                             (cat acc (cat (caup r)
@@ -476,9 +588,9 @@
         (? (! (two? gs)) acc
            (: ge (peep (g 'glob) (cap gs) 0)
               lbl (cap ge) ty (caup ge) init (cauup ge)
-              span (& (+ (tsz g ty) 7) -8)
-              bytes (? (two? init) (le8s (caup init)) (zeros span))
-              (globs (cup gs) (cat acc (L (L 'label lbl) (L 'raw bytes))))))
+              bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
+              (? (bad? bytes) 'bad
+                 (globs (cup gs) (cat acc (L (L 'label lbl) (L 'raw bytes)))))))
        (strs ss acc)
         (? (! (two? ss)) acc
            (: p (cap ss)
@@ -486,7 +598,8 @@
               t (caup p)
               (strs (cup ss) (cat acc (L (L 'label (cap p))
                                          (L 'raw (cat (bts t (- (tally t) 1) ()) (L 0))))))))
-       (cat (globs (rev (g 'globs)) ()) (strs (g 'strs) ())))
+       (: gb (globs (rev (g 'globs)) ())
+          (? (bad? gb) 'bad (cat gb (strs (g 'strs) ())))))
 
    (cgen ast stbl)                                  ; ('prog items) + the stag -> (1 forms) | ()
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ())
@@ -499,7 +612,9 @@
                          _ (? (member? (cap f) '(fn proto)) (pin (g 'fns) (caup f) 1) ())
                          (recfns (cup fs))))
        _ (recfns (caup ast))
-       ; pass 1: record the globals (constant or absent initializers only)
+       ; pass 1: record every global (name -> (label ty init)); cgimage
+       ; validates the initializer at data-emission time (a label-valued image
+       ; refuses the whole compile -- 4d)
        (rec fs)
         (? (! (two? fs)) 1
            (: f (cap fs)
@@ -507,16 +622,14 @@
                  (: (one ps)
                      (? (! (two? ps)) (rec (cup fs))
                         (: p (cap ps)
-                           init (cauup p)
-                           (? (&& (two? init) (! (= (cap init) 'num))) ()
-                              (: _ (pin (g 'glob) (cap p) (L (intern (cap p)) (caup p) init))
-                                 _ (pin g 'globs (link (cap p) (g 'globs)))
-                                 (one (cup ps))))))
+                           _ (pin (g 'glob) (cap p) (L (intern (cap p)) (caup p) (cauup p)))
+                           _ (pin g 'globs (link (cap p) (g 'globs)))
+                           (one (cup ps))))
                     (one (caup f))))))
        ok (rec (caup ast))
        (gfns fs acc saw)
         (? (! (two? fs))
-           (? saw (L 1 (cat crt0 (cat acc (cgdata g)))) ())
+           (? saw (: dat (cgdata g) (? (bad? dat) () (L 1 (cat crt0 (cat acc dat))))) ())
            (: f (cap fs)
               (? (member? (cap f) '(proto gdecl tdef)) (gfns (cup fs) acc saw)
                  (: r (cgfn g f)

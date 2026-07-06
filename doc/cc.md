@@ -212,12 +212,26 @@ two ideas to keep warm as the stages climb, neither committed yet:
    llvm-mc frozen (holotest 177) -- after parking the pointer in callee-saved
    r3; and WHOLE-STRUCT ASSIGNMENT as a word-then-byte block copy (bcopy),
    so a = b and *p = *q copy structs. THE ai.c dispatch tables now compile.
-   still fenced for 4c: struct params/returns BY VALUE (assignment walks),
-   brace/designated initializers + flexible arrays (gen has no brace-init
-   yet), local typedefs, case-label expressions, and TOP-LEVEL fn-pointer
-   globals (ptop lays its own declarators, doesn't route through pdtor).
    battery at 46 (fn-pointer call, dispatch table, struct copy by value and
-   through pointers, fn-pointer parameter); the torture-set vendoring is 5.
+   through pointers, fn-pointer parameter).
+   INITIALIZERS (4c) LANDED 2026-07-06: brace and designated initializers
+   ('init (item..), item plain | ('dfield name val) | ('didx n val)),
+   nesting for arrays of structs; a LOCAL zeroes the slot then fills (cgfill,
+   runtime values allowed), a GLOBAL bakes a constant byte image (cgimage +
+   imgbytes, string-into-char-array and the flexible-array member []); [] size
+   is inferred from the initializer (string bytes+NUL, or the highest brace
+   index). still fenced for 4d: struct params/returns BY VALUE (assignment
+   walks), a GLOBAL initializer whose value is a LABEL -- char *s = "hi", a
+   static function-pointer table, &global in static data (needs a data
+   relocation: an abs64 fixup in holo/elf; LOCAL such tables already work as
+   runtime stores); local typedefs; case-label expressions; sizeof of an
+   EXPRESSION (only sizeof(TYPE) today); TOP-LEVEL fn-pointer globals (ptop
+   lays its own declarators, doesn't route through pdtor). battery at 52.
+   ENV TRAP paid: `au` is `#!/usr/bin/env -S ai` + the cat, so bare `au cc`
+   runs on the PATH `ai` -- a STALE install mis-runs current au (missing baked
+   core like holo callr) and the heap grows unboundedly; the make gate is safe
+   (m defaults to ./out/host/ai). probe cc with `./out/host/ai <au-cat> cc`,
+   never a bare `au`, until `make install` refreshes the PATH binary.
 5. **the preprocessor**: cpp.l complete (##, variadics, #if trees,
    includes). gate: gcc -E vs cc -E token streams on the torture set AND on
    ai.c itself (the real headers, our include/).

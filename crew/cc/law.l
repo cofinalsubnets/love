@@ -136,9 +136,9 @@
       (! (cgn "int main() { int *p; int *q; return (long)(p+q); }"))   ; ptr+ptr refused
       (! (cgn "int main() { int x; return *x; }"))                     ; deref wants a pointer
       (! (cgn "int main() { int a[3]; int b[3]; a = b; return 0; }"))  ; arrays are not assignable
-      (! (cgn "int g = 1+2; int main() { return g; }"))                ; global inits are constants
-      (! (cgn "char *s = \"hi\"; int main() { return 0; }"))          ; ... and never strings (yet)
-      (! (cgn "int main() { int a[2] = 5; return 0; }"))))          ; array locals take no initializer
+      (! (cgn "int g = 1+2; int main() { return g; }"))                ; a global init is a folded constant, not an expression
+      (! (cgn "char *s = \"hi\"; int main() { return 0; }"))          ; a label-valued global image: 4d
+      (! (cgn "int main() { int a[2] = 5; return 0; }"))))          ; a scalar cannot initialize an array
 
 ; --- stage 4a: aggregates -- layout to the C rules, members, the new statements ---
 (: (cast src) (caup (cparse (caup (clex src))))
@@ -173,7 +173,21 @@
       (two? (cgn "int inc(int x) { return x + 1; } int main() { int (*fp)(int); fp = inc; return fp(41); }"))
       (two? (cgn "int inc(int x) { return x+1; } int main() { int (*fp)(int) = 0; fp = inc; return (*fp)(41); }"))
       ; a dispatch table -- an array of function pointers, THE ai.c pattern
-      (two? (cgn "int a(int x){return x+1;} int b(int x){return x*2;} int main(){ int (*t[2])(int); t[0]=a; t[1]=b; return t[0](10)+t[1](10); }"))))
+      (two? (cgn "int a(int x){return x+1;} int b(int x){return x*2;} int main(){ int (*t[2])(int); t[0]=a; t[1]=b; return t[0](10)+t[1](10); }"))
+      ; --- stage 4c: brace/designated initializers, string inits, [] inference, flexible arrays ---
+      (= (cast "int main() { int a[3] = {1,2,3}; return a[0]; }")
+         '(prog ((fn "main" () (blk ((decl (("a" (arr int 3) (init ((num 1) (num 2) (num 3)))))) (ret (deref (bin + (var "a") (num 0))))))))))
+      (= (cast "struct S { int x; int y; }; int main() { struct S s = {.y=5,.x=2}; return s.x; }")
+         '(prog ((tdef) (fn "main" () (blk ((decl (("s" (struct "S") (init ((dfield "y" (num 5)) (dfield "x" (num 2))))))) (ret (dot (var "s") "x"))))))))
+      (= (cast "int g[] = {10,20,30}; int main() { return 0; }")   ; [] size inferred from the brace list
+         '(prog ((gdecl (("g" (arr int 3) (init ((num 10) (num 20) (num 30)))))) (fn "main" () (blk ((ret (num 0))))))))
+      (two? (cparse (caup (clex "struct T { int n; char d[]; }; int main() { return sizeof(struct T); }"))))   ; a flexible array member parses
+      (two? (cgn "int main() { int a[4] = {5}; return a[0] + a[3]; }"))            ; partial init zero-fills the rest
+      (two? (cgn "struct P { int a; int b; }; int main() { struct P t[2] = {{1,2},{3,4}}; return t[1].a; }"))  ; nested array-of-struct
+      (two? (cgn "char b[8] = \"hi\"; int main() { return b[0]; }"))               ; a global char array from a string
+      (two? (cgn "int t[3] = {1,2,3}; int main() { return t[2]; }"))               ; a global array constant image
+      (two? (cgn "int main() { char s[4] = \"ab\"; return s[0]; }"))               ; a local char array from a string
+      (! (cgn "char *s = \"hi\"; int main() { return 0; }"))))                     ; a label-valued global image still refuses (4d)
 
 (say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) ok")
 (put err 10)

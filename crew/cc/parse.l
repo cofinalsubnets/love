@@ -14,10 +14,13 @@
 ; ('dflt) markers inline (fallthrough is the flat list), ('do body cond),
 ; ('goto name) ('lbl name), ('tdef) (a typedef, gen skips it). stage 4b adds
 ; the function-pointer declarator ('ptr ('fn), a table ('arr ('ptr ('fn)) n))
-; and generalizes a call HEAD to any postfix expr ('call headexpr args). still
-; fenced: unsigned, struct params/returns BY VALUE (struct ASSIGNMENT walks),
-; brace/designated initializers and flexible arrays (stage 4c), case labels
-; past constants and enum names, local typedefs.
+; and generalizes a call HEAD to any postfix expr ('call headexpr args).
+; stage 4c adds brace/designated initializers ('init (item..), item plain |
+; ('dfield name val) | ('didx n val), nesting), the flexible array member
+; ('arr t 0 from []), and [] size inference from the initializer (a string's
+; bytes+NUL, or the highest brace index). still fenced: unsigned, struct
+; params/returns BY VALUE (struct ASSIGNMENT walks), case labels past
+; constants and enum names, local typedefs.
 (:
    ; token readers: t = (kind val line)
    (tkk t) (cap t) (tkv t) (caup t)
@@ -102,7 +105,8 @@
              (? (! (peekp ts3 "[")) (L (L name ty) ts3)
                 (! (= ty base)) ()                   ; *a[n]: refused this stage
                 (: t2 (cup ts3)
-                   (? (! (&& (two? t2) (= (tkk (cap t2)) 'num))) ()
+                   (? (peekp t2 "]") (L (L name (L 'arr base 0)) (cup t2))   ; a flexible array member: []
+                      (! (&& (two? t2) (= (tkk (cap t2)) 'num))) ()
                       (: rest (want (cup t2) "]")
                          (? (two? rest)
                             (L (L name (L 'arr base (tkv (cap t2)))) rest)
@@ -357,6 +361,56 @@
                              (L l ts2))
              (more (cap r) (caup r)))))
 
+   ; an initializer is an assignment-expr OR a brace list. a brace list is
+   ; ('init (item..)); an item is a plain initializer, ('dfield name init),
+   ; or ('didx n init) -- designators are single (.field / [const]), and an
+   ; initializer nests (array of struct, struct of array). trailing comma ok.
+   (pinit ps ts)
+    (? (peekp ts "{")
+        (: (items ts2 acc)
+            (? (peekp ts2 "}") (L (L 'init (rev acc)) (cup ts2))
+               (: it (pinititem ps ts2)
+                  (? (! (two? it)) ()
+                     (: elem (cap it) ts3 (caup it)
+                        (? (peekp ts3 ",") (items (cup ts3) (link elem acc))
+                           (peekp ts3 "}") (L (L 'init (rev (link elem acc))) (cup ts3))
+                           ())))))
+           (items (cup ts) ()))
+       (pasn ps ts))
+   ; how many array elements an initializer implies (for [] size inference):
+   ; a string is its bytes + NUL; a brace list is the highest index reached
+   ; (designated [k] sets the cursor to k). () if it implies nothing.
+   (initcount ini)
+    (? (&& (two? ini) (= (cap ini) 'str)) (+ (tally (caup ini)) 1)
+       (&& (two? ini) (= (cap ini) 'init))
+        (: (go l i mx)
+            (? (! (two? l)) mx
+               (: it (cap l)
+                  ci (? (= (cap it) 'didx) (caup it) i)
+                  (go (cup l) (+ ci 1) (? (< mx (+ ci 1)) (+ ci 1) mx))))
+           (go (caup ini) 0 0))
+       ())
+   (pinititem ps ts)
+    (? (peekp ts ".")
+        (: t2 (cup ts)
+           (? (! (&& (two? t2) (= (tkk (cap t2)) 'id))) ()
+              (: name (tkv (cap t2))
+                 r (want (cup t2) "=")
+                 (? (! (two? r)) ()
+                    (: v (pinit ps r)
+                       (? (two? v) (L (L 'dfield name (cap v)) (caup v)) ()))))))
+       (peekp ts "[")
+        (: t2 (cup ts)
+           (? (! (&& (two? t2) (= (tkk (cap t2)) 'num))) ()
+              (: n (tkv (cap t2))
+                 r1 (want (cup t2) "]")
+                 r2 (? (two? r1) (want r1 "=") ())
+                 (? (! (two? r2)) ()
+                    (: v (pinit ps r2)
+                       (? (two? v) (L (L 'didx n (cap v)) (caup v)) ()))))))
+       (: v (pinit ps ts)
+          (? (two? v) (L (cap v) (caup v)) ())))
+
    ; decl := TYPE [dtor [= asn] (, dtor [= asn])*] ;
    (pdecl ps ts)
     (: br (pbty ps ts)
@@ -369,8 +423,12 @@
                           (: name (cap (cap dr)) ty (caup (cap dr))
                              ts3 (caup dr)
                              (? (peekp ts3 "=")
-                                (: r (pasn ps (cup ts3))
-                                   (? (two? r) (L (L name ty (cap r)) (caup r)) ()))
+                                (: r (pinit ps (cup ts3))
+                                   (? (! (two? r)) ()
+                                      (: ini (cap r)
+                                         ty2 (? (&& (arr? ty) (&& (= (cauup ty) 0) (charm? (initcount ini))))
+                                                (L 'arr (caup ty) (initcount ini)) ty)   ; [] local: infer size
+                                         (L (L name ty2 ini) (caup r)))))
                                 (L (L name ty ()) ts3)))))
                    (more ts2 acc)
                     (: r (one ts2)
@@ -546,13 +604,25 @@
                                    (? (peekp ts3 "[")
                                       (? (! (= t2 base)) ()
                                          (: t4 (cup ts3)
-                                            (? (! (&& (two? t4) (= (tkk (cap t4)) 'num))) ()
-                                               (: rest (want (cup t4) "]")
-                                                  (? (two? rest)
-                                                     (L (L nm (L 'arr base (tkv (cap t4))) ()) rest)
-                                                     ())))))
+                                            (? (peekp t4 "]")            ; T a[] = init -- size inferred
+                                               (: r1 (want t4 "]")
+                                                  (? (! (&& (two? r1) (peekp r1 "="))) ()
+                                                     (: ir (pinit ps (cup r1))
+                                                        (? (! (two? ir)) ()
+                                                           (: n (initcount (cap ir))
+                                                              (? (charm? n)
+                                                                 (L (L nm (L 'arr base n) (cap ir)) (caup ir))
+                                                                 ()))))))
+                                               (! (&& (two? t4) (= (tkk (cap t4)) 'num))) ()
+                                               (: n (tkv (cap t4))
+                                                  rest (want (cup t4) "]")
+                                                  (? (! (two? rest)) ()
+                                                     (peekp rest "=")     ; T a[n] = init
+                                                      (: ir (pinit ps (cup rest))
+                                                         (? (two? ir) (L (L nm (L 'arr base n) (cap ir)) (caup ir)) ()))
+                                                     (L (L nm (L 'arr base n) ()) rest))))))
                                       (peekp ts3 "=")
-                                       (: r (pasn ps (cup ts3))
+                                       (: r (pinit ps (cup ts3))
                                           (? (two? r) (L (L nm t2 (cap r)) (caup r)) ()))
                                       (L (L nm t2 ()) ts3))
                                   first (one ts2 name rty)
