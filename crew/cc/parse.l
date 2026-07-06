@@ -1,0 +1,53 @@
+; crew/cc/parse.l -- the C parser (rung 3 stage 0). tokens -> (1 ast) | ().
+; recursive descent, the cursor a token list threaded through every helper as
+; (value rest) answers -- () anywhere is the parse error riding up. the stage-0
+; grammar, exactly: program = fn+ ; fn = `int` id `(` `)` block ;
+; block = `{` stmt* `}` ; stmt = `return` expr `;` ; expr = number.
+; the AST (tagged lists): ('prog fns) ('fn name-text body-stmts)
+; ('ret expr) ('num v). chibicc's incremental grammar is the map from here --
+; expressions grow at stage 1, declarators at stage 4.
+(:
+   ; token readers: t = (kind val line)
+   (tkk t) (cap t) (tkv t) (caup t)
+   (tp? t s) (&& (two? t) (&& (= (tkk t) 'p) (= (tkv t) s)))
+   (tkw? t k) (&& (two? t) (&& (= (tkk t) 'kw) (= (tkv t) k)))
+   ; expect a punctuator: -> rest | ()
+   (want ts s) (? (&& (two? ts) (tp? (cap ts) s)) (cup ts) ())
+
+   ; expr = number -> (expr rest) | ()
+   (pexpr ts)
+    (? (&& (two? ts) (= (tkk (cap ts)) 'num))
+       (L (L 'num (tkv (cap ts))) (cup ts))
+       ())
+   ; stmt = `return` expr `;` -> (stmt rest) | ()
+   (pstmt ts)
+    (? (&& (two? ts) (tkw? (cap ts) 'return))
+       (: r (pexpr (cup ts))
+          (? (! (two? r)) ()
+             (: rest (want (caup r) ";")
+                (? (two? rest) (L (L 'ret (cap r)) rest) ()))))
+       ())
+   ; block body: stmt* up to `}` -> (stmts rest-past-brace) | ()
+   (pstmts ts acc)
+    (? (! (two? ts)) ()
+       (tp? (cap ts) "}") (L (rev acc) (cup ts))
+       (: r (pstmt ts)
+          (? (two? r) (pstmts (caup r) (link (cap r) acc)) ())))
+   ; fn = `int` id `(` `)` `{` stmts -> (fn rest) | ()
+   (pfn ts)
+    (? (! (&& (two? ts) (tkw? (cap ts) 'int))) ()
+       (: ts2 (cup ts)
+          (? (! (&& (two? ts2) (= (tkk (cap ts2)) 'id))) ()
+             (: name (tkv (cap ts2))
+                r1 (want (cup ts2) "(")
+                r2 (? (two? r1) (want r1 ")") ())
+                r3 (? (two? r2) (want r2 "{") ())
+                (? (! (two? r3)) ()
+                   (: b (pstmts r3 ())
+                      (? (two? b) (L (L 'fn name (cap b)) (caup b)) ())))))))
+   (cparse ts)
+    (: (fns ts2 acc)
+        (? (! (two? ts2)) (? (two? acc) (L 1 (L 'prog (rev acc))) ())
+           (: r (pfn ts2)
+              (? (two? r) (fns (caup r) (link (cap r) acc)) ())))
+       (fns ts ())))

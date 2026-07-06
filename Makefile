@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_glaze test_sat test_holo test_phos test_utils test_vi nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_glaze test_sat test_holo test_phos test_utils test_vi test_cc nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -158,7 +158,7 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/cc/lex.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l crew/utils/au.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -352,6 +352,35 @@ test_vi: host out/host$(hsuf)/au
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL au vi undo (exit $$r)"; exit 1; }; \
 	  echo "au: vi (laws + piped create/dd/q!/undo end-to-end) ok"
+# The C compiler (crew/cc/, rung 3 -- doc/cc.md): the pure pipeline's laws
+# (lexer/parser/gen goldens), then the stage-0 end to end through the real
+# `au cc`: compile, run, exit 42 -- and the gcc -O0 differential is born
+# (same source, both compilers, same exit). x86-64 only until arm64 parity.
+.PHONY: test_cc
+test_cc: host out/host$(hsuf)/au
+	@echo "CC crew/cc/{lex,parse,gen,law}.l"; \
+	  cat test/00-init.l crew/cc/lex.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | $m > out/host/.test_cc.out 2>&1; r=$$?; \
+	  cat out/host/.test_cc.out; \
+	  { [ $$r -eq 0 ] && grep -q "crew/cc/law:" out/host/.test_cc.out; } \
+	    || { echo "FAIL cc laws (exit $$r)"; exit 1; }
+	@if [ "$$(uname -m)" = x86_64 ]; then \
+	  printf 'int main() { return 42; }\n' > $(ho)/.cc1.c; \
+	  $m $(ho)/au cc $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL au cc compile"; exit 1; }; \
+	  $(ho)/.cc1; a=$$?; \
+	  cc_g=$$(command -v gcc || command -v cc); \
+	  $$cc_g -O0 -o $(ho)/.cc1g $(ho)/.cc1.c && $(ho)/.cc1g; b=$$?; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL au cc vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  printf '// c\nint f() { return 1; }\nint main() { return 7; }\n' > $(ho)/.cc2.c; \
+	  $m $(ho)/au cc $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
+	  $$cc_g -O0 -o $(ho)/.cc2g $(ho)/.cc2.c && $(ho)/.cc2g; b=$$?; \
+	  [ $$a -eq $$b ] || { echo "FAIL au cc two-fn vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  $m $(ho)/au cc $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL au cc missing input exit (rc $$r)"; exit 1; }; \
+	  printf 'int main() { return 42 }\n' > $(ho)/.cc3.c; \
+	  $m $(ho)/au cc $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL au cc parse-error exit (rc $$r)"; exit 1; }; \
+	  echo "au: cc stage 0 (laws + return-42 + the gcc differential born) ok"; \
+	else echo "au: cc stage 0 (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

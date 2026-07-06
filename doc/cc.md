@@ -1,8 +1,9 @@
 # cc -- rung 3 of the distro, the C compiler: THE PLAN
 
-not code yet: the plan of record for the chibicc-class C compiler, written in
-ai, emitting through the holo books. drafted 2026-07-06, to be trued up as
-stages land. the reader it orients is the session that starts stage 0.
+the plan of record for the chibicc-class C compiler, written in ai, emitting
+through the holo books. drafted 2026-07-06; stage 0 LANDED the same day
+(crew/cc/{lex,parse,gen,cc}.l + law.l, `au cc`, `make test_cc` -- the gcc
+differential is born). trued up as stages land.
 
 ## the goal, and the fence
 
@@ -90,9 +91,14 @@ gate per stage. the pipeline, each its own file:
 
 ## the ladder (each stage lands green and useful on its own)
 
-0. **the spike**: `int main(){return 42;}` -> tokens -> AST -> holo -> .o ->
-   ld -> runs, exit 42. proves every seam end to end while everything is
-   tiny. gate: `make test_cc` is born.
+0. **the spike** -- LANDED 2026-07-06: `int main(){return 42;}` -> tokens ->
+   AST -> holo -> elf64 -> runs, exit 42, matching gcc's exit. one true-up
+   against the draft: stage 0 lays a RUNNABLE static ELF straight through
+   the existing elf64 (the crt0 stub -- call main, r0 to the exit syscall --
+   emitted inline), no .o and no system ld touched; the relocatable-.o seam
+   moves wholly into stage 3 where globals make it real. the lexer landed
+   fuller than the stage needs (all keywords, maximal-munch punctuators,
+   both comments, line numbers): stage 1 eats it as-is.
 1. **integer expressions + statements**: all arithmetic/logic/compare ops,
    locals, if/while/for/blocks, int only. differential gate vs gcc -O0 is
    born here: same .c, both compilers, same stdout+exit, a battery that
