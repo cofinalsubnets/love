@@ -27,8 +27,10 @@
    phos-keymap the-keys
 
    ; startupHook = spawn "setxkbmap -option ctrl:nocaps -option compose:rctrl"
-   ;   (setWMName "LG3D (XMonad)" rides ewmh-init; the cursor is x-cursor)
-   phos-startup (L (L "setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))
+   ;   (setWMName "LG3D (XMonad)" rides ewmh-init; the cursor is x-cursor).
+   ;   PHOS_NOSTARTUP skips the spawns -- a headless harness wants no keyboard
+   ;   churn on its bare Xvfb
+   phos-startup (? (getenv "PHOS_NOSTARTUP") () (L (L "setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl")))
 
    ; the display: DISPLAY (":0" / ":7.0" -> the unix socket), the cookie from
    ;   ~/.Xauthority when the server wants one (an -ac Xephyr has no entry -> ())

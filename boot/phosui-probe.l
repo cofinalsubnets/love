@@ -108,17 +108,67 @@
                                            (= (nthl g 3) (+ (nthl g1 3) 30))))) 50)
       _ (waitp "float-focused" (\ u (= w1 (getfocus ()))) 50)
 
-      ; --- 5. a second client (its own connection) tiles while the float
-      ;     rides; _NET_CLOSE_WINDOW fells it -- no WM_DELETE_WINDOW
-      ;     advertised, so phos takes the KillClient fallback ---
+      ; --- 5. a second client (its own connection) tiles alongside;
+      ;     _NET_CLOSE_WINDOW fells it -- no WM_DELETE_WINDOW advertised, so
+      ;     phos takes the KillClient fallback, verified through
+      ;     FRESH eyes (the reply stream of a client whose window died
+      ;     mid-poll echoes stale replies) ---
       s2 (connectu dpy)
       sc2 (x-setup s2 ())
       w2 (scr-idbase sc2)
       _ (mkwin s2 w2 root)
-      _ (waitp "w2-tiled" (\ u (< 600 (nthl (x-getgeom s w2) 2))) 100)
+      _ (waitp "w2-tiled" (\ u (< 300 (nthl (x-getgeom s w2) 2))) 100)           ; w1 floats, so w2 owns the tiling alone
       _ (cmsg w2 a-cl 0 0 0)
-      _ (waitp "w2-felled" (\ u (! (any (\ k (= k w2)) (x-querytree s root)))) 100)
+      s3 (connectu dpy)
+      sc3 (x-setup s3 ())
+      _ (waitp "w2-felled" (\ u (! (any (\ k (= k w2)) (x-querytree s3 root)))) 100)
 
-      _ (close s)
-      _ (line "probe: manage + maximize + move + resize + focus + close, all exact")
+      ; --- 6. LAST, the moor: the live repl evals, survives a scare, CHANGES state
+      ;     (msg! 'next-layout flips the ||| index -- read back through the
+      ;     SNAPSHOT over the moor socket, so the assert leans on no window
+      ;     and no X read), and REFUSES garbage ((phos! 0): (0 st) is 1, not
+      ;     a sane 4-list). A queued change drains at phos's next X event; we
+      ;     nudge with a no-op ClientMessage from a FRESH connection each time
+      ;     (kept open: this Xvfb spuriously CloseDownClient's one client
+      ;     ~10s in -- gdb'd to ospoll_wait -> CloseDownClient with the
+      ;     victim's socket provably untouched -- so nothing here may lean on
+      ;     s staying alive, and closing spares fds would re-arm it) ---
+      rsock (: rd (getenv "XDG_RUNTIME_DIR")
+               base (? (< 1 (tally rd)) rd "/tmp")
+               (+ base (+ "/phos-" (+ (snip dpy 16 (tally dpy)) ".sock"))))
+      rc (: (try t) (? (< t 1) ()
+                       (: p (connectu rsock)
+                          (? (lit? p) p (: _ (rest 100) (try (- t 1))))))
+            (try 100))
+      _ (must "moor-up" (lit? rc))
+      (rdline u) (: (go acc) (: ch (see rc)
+                                (? (|| (= ch -1) (= ch 10)) acc (go (+ acc (+ "" ch)))))
+                    (go ""))
+      (ask q) (: _ (say rc q) _ (say rc "\n") _ (flush rc) (rdline ()))
+      _ (must "moor-evals" (= "3" (ask "(+ 1 2)")))
+      _ (ask "(boom-unbound)")                                                   ; a scare answers a value; the session lives
+      _ (must "moor-survives" (= "7" (ask "(+ 3 4)")))
+      (nudge u) (: nf (connectu dpy) sf (x-setup nf ())
+                   _ (x-w8 nf 25) _ (x-w8 nf 0) _ (x-w16 nf 11)
+                   _ (x-w32 nf root) _ (x-w32 nf 1572864)
+                   _ (x-w8 nf 33) _ (x-w8 nf 32) _ (x-w16 nf 0) _ (x-w32 nf root) _ (x-w32 nf 1)
+                   _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0)
+                   _ (x-flush nf) (rest 100))
+      ; the ||| index rides at minimize>smart>toggle>mirror>choice (config.l's stack)
+      chidx "(nthl (nthl (nthl (nthl (nthl (caup (phos-st ())) 2) 1) 2) 2) 1)"
+      i0 (ask chidx)
+      _ (ask "(msg! 'next-layout)")
+      _ (nudge ())
+      _ (waitp "moor-changes" (\ u (! (= i0 (ask chidx)))) 50)
+      _ (ask "(msg! 'next-layout)")                                              ; flip back (the ||| holds two layouts)
+      _ (nudge ())
+      _ (waitp "moor-cycles" (\ u (= i0 (ask chidx))) 50)
+      _ (ask "(phos! 0)")                                                        ; garbage: refused, the wm stands
+      _ (nudge ())
+      _ (must "moor-refuses" (= "11" (ask "(+ 5 6)")))
+      _ (must "moor-standing" (= i0 (ask chidx)))
+      _ (close rc)
+
+      _ (close s3) _ (close s)
+      _ (line "probe: manage + maximize + move + resize + focus + moor + close, all exact")
       (nap 0)))

@@ -151,6 +151,24 @@
       (= (tally (cap (lay-tile (lay-msg stk 'next-layout z3) r z3))) 3)          ; next-layout reaches the ||| at the bottom
       (: q (cap (lay-tile (lay-msg stk 'toggle-layout z3) r z3)) (&& (= (tally q) 1) (= (nthl (cap q) 5) 0)))))   ; toggle-full through the stack -> fullscreen, borderless
 
+; --- the OPEN dispatch lane: a layout whose head is a CLOSURE answers the
+; --- 'tile/'msg protocol itself -- user layouts enter as plain data, no table
+; --- edit (the phos repl's live-layout hook), and modifiers wrap them like
+; --- any builtin ---
+(: (q op lay a b) (? (= op 'tile) (: f (zfoc b)                                  ; focus in a fixed corner box; state = (nthl lay 1)
+                                     (L (? f (L (link f (rct 0 0 100 (nthl lay 1)))) ()) lay))
+                     (= op 'msg) (? (= a 'grow) (L (cap lay) (+ (nthl lay 1) 10)) ())
+                     ())
+   Q (L q 50) r (rct 0 0 800 600) z3 (zfrom '(10 20 30))
+   (assert
+      (= (cap (lay-tile Q r z3)) '((10 0 0 100 50)))                             ; the closure places
+      (= (caup (lay-tile Q r z3)) Q)                                             ; ... and hands its record back
+      (= (nthl (lay-msg Q 'grow z3) 1) 60)                                       ; a message it takes rewrites its state
+      (! (lay-msg Q 'shrink z3))                                                 ; one it doesn't reads () -- modifiers fall through
+      (: p (cap (lay-tile (smart-borders Q) r z3))                               ; a modifier wraps the closure like any builtin
+         (&& (= (tally p) 1) (= (tally (cap p)) 6)))
+      (= (nthl (nthl (lay-msg (smart-borders Q) 'grow z3) 1) 1) 60)))            ; ... and a delegated message threads the closure's new state
+
 ; --- the manageHook DSL (crew/phos/manage.l rung 5): combinators + float actions ---
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom

@@ -10,6 +10,73 @@
 ; resizes the float, a tile-focused one messages the layout / navigates. ffoc
 ; tracks the focused FLOAT (the zipper only holds tiles); hist is nextMatch's
 ; MRU focus ring.
+
+; --- the phos repl: a unix-socket moor into the RUNNING wm (the dock's shape,
+; crew-side; `ain <sock>` is the client). Forms eval in the book, so every
+; global is a verb; the LIVE (sh lay hist ffoc) state rides phos-cell -- reads
+; take the snapshot ((phos-st ())), changes queue a state function through
+; (phos! f), and the driver's loop drains the queue at its next X event,
+; GUARDED: a change must answer a 4-list whose sheaf is wssane? -- the proved
+; invariant, standing as a live seatbelt -- or it is refused and the old
+; state kept. ONE HAND ON THE WIRE: the repl never touches any X socket (the
+; haven painter's law, absolute); with layout.l's open dispatch lane,
+; (lay! (L my-closure state..)) swaps in a layout written at the prompt.
+; The socket is an EVAL SERVER -- $XDG_RUNTIME_DIR (0700) when set, /tmp
+; otherwise (a socket refuses connect without write permission).
+(: phos-cell #()
+   (phos-st u) (peep phos-cell 'st ())
+   ; a change QUEUES; the driver's loop drains at its next X event. On a live
+   ; desktop that is imminent (any motion, focus or property tick); a headless
+   ; harness nudges with any event of its own (boot/phosui-probe.l sends a
+   ; no-op ClientMessage). Deliberately NO wake wire from phos's side: a poke
+   ; connection made Xvfb close-down an INNOCENT client whose id range rode a
+   ; recycled slot (gdb: ospoll_wait -> CloseDownClient -> FreeClientResources
+   ; with the victim's socket provably open) -- one hand on the wire, and the
+   ; wire is the driver's alone.
+   (phos! f) (: _ (pin phos-cell 'q (link f (peep phos-cell 'q ())))             ; (a peep+pin pair -- a concurrent drain in the gap can lose
+                'queued)                                                         ;  a change; prompt-scale odds, and wssane? guards either way)
+   ; the command sugar -- each a (phos! ..) over the snapshot shape (sh lay hist ffoc)
+   (lay! l)  (phos! (\ st (L (cap st) l (nthl st 2) (nthl st 3))))
+   (msg! m)  (phos! (\ st (: lay2 (lay-msg (caup st) m (wsget (cap st) (wscur (cap st))))
+                             (L (cap st) (? lay2 lay2 (caup st)) (nthl st 2) (nthl st 3)))))
+   (sink! w) (phos! (\ st (L (wssink (cap st) w) (caup st) (nthl st 2)
+                             (: f (nthl st 3) (? (= f w) () f)))))
+   (float! w r) (phos! (\ st (L (wsdofloat (cap st) w r) (caup st) (nthl st 2) w)))
+   (row u) (wsrow (cap (phos-st ())))
+
+   ; the moor: shore the socket, spin a session per client -- read one form
+   ; (sound keeps the read protocol), eval through the self-hosted ev, show
+   ; the value back. deliberate orphans, like the dock's: phos runs forever.
+   (phos-sock u) (: rd (getenv "XDG_RUNTIME_DIR")
+                    base (? (< 1 (tally rd)) rd "/tmp")
+                    (+ base (+ "/phos-" (+ (phos-dispnum ()) ".sock"))))
+   (phos-session c)
+    (: e (nom 0)
+       (go _) (: r (sound c e)
+                  (? (id? r e) 0
+                     (id? r c) 0
+                     (: v (ev 'ev r)
+                        _ (say c (+ (show v) "\n"))
+                        _ (flush c)
+                        (go ()))))
+       (go ()))
+   (phos-moor path)
+    (: lp (shore path)
+       (? (! (lit? lp)) (: _ (say out (+ "phos: no moor at " (+ path "\n"))) (flush out))
+          (: _ (say out (+ "phos: moored at " (+ path "\n")))
+             _ (flush out)
+             (knock _) (: _ (await lp)
+                          c (accept lp)
+                          _ (? (lit? c) (spin (\ _ (: _ (phos-session c) (close c))) 0) 0)
+                          (knock ()))
+             (knock ())))))
+
+; a welp-face help so a scare returns a visible value (to the repl client, or
+; at a driver raise site) instead of dropping the wm -- the dock's shape: keep
+; the read protocol, answer ('scare a b) on a bare scare. a leaked top-level
+; global, since the book is mopped post-egg.
+(: (help s a b) (? (eof? s) b (more? s) a `('scare a b)))
+
 (: s (x-connect phos-display)
    _ (? s 0 (: _ (say err "phos: no display -- Xephyr up?\n") (nap 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))
@@ -145,10 +212,34 @@
           (= (ev-code e) 5) (: pkt (ev-raw e) (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22)))   ; ButtonRelease: settle
           (drag mode w g0 rx0 ry0)))                                            ; anything else mid-drag: ignore
 
-   ; --- the event loop: (sheaf, layout, focus-history, focused-float) ---
+   ; --- the repl gate: every pass through the loop publishes the snapshot and
+   ;     drains (phos!) changes, each GUARDED -- a change must answer a 4-list
+   ;     whose sheaf is wssane? (the proved invariant, live) or it is refused
+   ;     and the old state kept. a scare inside a change answers ('scare a b)
+   ;     through the help above -- not a 4-list, so it refuses the same way. ---
    (loop sh lay hist ffoc)
+    (: q (pull phos-cell 'q ())
+       (? (! (two? q)) (: _ (pin phos-cell 'st (L sh lay hist ffoc))
+                          (loop2 sh lay hist ffoc))
+          (: st (foldl (\ acc f (: r (f acc)
+                                   (? (&& (two? r) (&& (= 4 (tally r)) (wssane? (cap r)))) r
+                                      (: _ (line "phos: change refused") acc))))
+                       (L sh lay hist ffoc) (rev q))
+             _ (pin phos-cell 'st st)                                            ; the snapshot rides POST-drain, so a moor read sees the change
+             sh2 (cap st) lay2 (caup st) f2 (nthl st 3)
+             _ (render sh2 lay2)
+             _ (? (&& f2 (wsfloating? sh2 f2)) (: _ (x-focus s f2) (x-flush s)) (refocus sh2))
+             _ (line (+ "phos: changed x" (show (tally q))))
+             (loop2 sh2 lay2 (nthl st 2) f2))))
+
+   ; --- the event loop: (sheaf, layout, focus-history, focused-float).
+   ;     the MRU param is hist0, the fresh ring hist: a `:` binding SHADOWS a
+   ;     same-named parameter over the WHOLE form (one scope, no escape), so
+   ;     `hist (?  .. hist ..)` read the zero point every pass -- the ring
+   ;     never accumulated. name the parameter apart and the ring lives. ---
+   (loop2 sh lay hist0 ffoc)
     (: f (wsfoc sh)
-       hist (? (&& f (! (= f (? (two? hist) (cap hist) ())))) (link f (znub f hist)) hist)
+       hist (? (&& f (! (= f (? (two? hist0) (cap hist0) ())))) (link f (znub f hist0)) hist0)
        (relay sh2 lay2 f2) (: _ (render sh2 lay2)                                ; render, focus the float or the tiled top, loop (do-act has its own)
                               _ (? (&& f2 (wsfloating? sh2 f2)) (: _ (x-focus s f2) (x-flush s)) (refocus sh2))
                               (loop sh2 lay2 hist f2))
@@ -295,6 +386,7 @@
                        _ (map (\ w (? (any (\ x (= x w)) (wsrow sh0)) 0 (x-unmap s w))) (wstiled sh0))   ; adopted onto a HIDDEN tag: hide it
                        _ (x-flush s)                                             ; now, or it lingers painted over workspace 1 (the WM_STATE
                        _ (refocus sh0) (line (+ "phos: adopted " (show kids)))) 0)   ; stamp keeps it adoptable through the NEXT restart)
+   _ (spin (\ u (phos-moor (phos-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
    _ (loop sh0 phos-layout () ())
    _ (close s)
    (line "phos: done"))

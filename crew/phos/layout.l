@@ -176,7 +176,12 @@
    ; map over two lists in lockstep (prel has none) ---
    (map2 f a b) (? (&& (two? a) (two? b)) (link (f (cap a) (cap b)) (map2 f (cup a) (cup b))) ())
 
-   ; --- the dispatch: case on the record tag ---
+   ; --- the dispatch: case on the record tag. The tag can also be a CLOSURE --
+   ;     the OPEN lane: (cap lay) a function answering ('tile lay rect z) ->
+   ;     (placements lay') and ('msg lay msg z) -> lay' | (), so a layout
+   ;     defined at the phos repl (or anywhere) enters the dispatch as plain
+   ;     DATA, no table edit -- the stumpwm move. Modifiers wrap it like any
+   ;     builtin (their delegation only calls lay-tile/lay-msg). ---
    (lay-tile lay rect z) (: k (cap lay) (? (= k 'rtall) (rt-tile lay rect z)
                                             (= k 'full)  (full-tile lay rect z)
                                             (= k 'dwindle) (dw-tile lay rect z)
@@ -184,7 +189,8 @@
                                             (= k 'mirror) (mir-tile lay rect z)
                                             (= k 'toggle-lay) (tf-tile lay rect z)
                                             (= k 'minimize) (mn-tile lay rect z)
-                                            (= k 'choice) (ch-tile lay rect z) (L () lay)))
+                                            (= k 'choice) (ch-tile lay rect z)
+                                            (lit? k) (k 'tile lay rect z) (L () lay)))
    (lay-msg lay msg z) (: k (cap lay) (? (= k 'rtall) (rt-msg lay msg z)
                                           (= k 'full)  ()
                                           (= k 'dwindle) (dw-msg lay msg z)
@@ -192,4 +198,5 @@
                                           (= k 'mirror) (mir-msg lay msg z)
                                           (= k 'toggle-lay) (tf-msg lay msg z)
                                           (= k 'minimize) (mn-msg lay msg z)
-                                          (= k 'choice) (ch-msg lay msg z) ())))
+                                          (= k 'choice) (ch-msg lay msg z)
+                                          (lit? k) (k 'msg lay msg z) ())))
