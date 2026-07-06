@@ -1,76 +1,109 @@
-# open bug: nested define shadowing a sibling nom miscompiles under unfolded pins
+# bug: nested define shadowing a sibling nom miscompiles the recursion (ROOT-CAUSED)
 
-found 2026-07-06 building `au rm -r` (crew/utils/fs.l). CORE territory (boxfix /
-frame layout / clause machinery) -- the aiutils thread worked around it (distinct
-noms) and left this repro for the core thread. delete this file when fixed
-(lessons to memory, per the house rule).
+found 2026-07-06 building `au rm -r` (crew/utils/fs.l); root-caused 2026-07-06 in
+ev.l's `ale` (the let analyzer). CORE territory. delete this file when the fix
+lands (lessons to memory, per the house rule).
 
-## the shape
+## the symptom
 
-a body-having `:` that pins, in order: a COMPUTED (non-literal) flag read off a
-parsed list, a self-recursive helper (`zap`) whose body opens a nested `:` with a
-loop named `go`, a second helper reading the flag, and a SIBLING pin also named
-`go`. the inner walk then silently no-ops: `zap`'s recursion inside the nested
-`:` answers truthy WITHOUT running zap's body (no effect, no scare), so the
-directory never empties and `rmdir` answers ENOTEMPTY.
+a self-recursive lambda (`zap`) whose body opens a nested `:` with a loop named
+like a LATER sibling (`go`/`go`) compiles so that every recursive `(zap x)`
+INSIDE its own body answers a truthy under-saturated PARTIAL without running the
+body -- no effect, no scare. outer callers of zap work; only the self-sites are
+short. in rm -r: the tree walk silently skips every child, rmdir answers
+ENOTEMPTY.
 
-## the discriminators (all probed on out/host/ai, 2026-07-06)
-
-* flags folded to literals (`r? 1 f? 0`)          -> CORRECT. the pin must stay a
-  runtime read (`r? (cap p)` or `f? (caup p)`) to trigger; `fs (caup (cup p))`
-  alone (read after the helpers) does NOT trigger.
-* inner loop renamed `go` -> `gz`                 -> CORRECT. the sibling-nom
-  collision is load-bearing.
-* `fl` defined AND called but result unread       -> CORRECT.
-* AI_NO_IMAGE=1                                   -> still WRONG (not the image).
-* a pure transliteration (charms for paths, no fs nifs) -> CORRECT, so the repro
-  below keeps the fs effects; the trigger has more preconditions than the shape
-  alone.
-
-## the repro
-
-run: `mkdir t2; printf x > t2/f;` then feed this file to `out/host/ai`.
-expect: t2 gone, "answer 1". observed: "rm: cannot remove t2", the inner walk
-visits both list states (probed) but the recursive `zap` call between them never
-runs zap's body -- k lands truthy without the unlink.
+## the minimal repro (pure -- no fs, no nifs; 12 lines)
 
 ```lisp
-(: (udie c m) (: _ (say err m) _ (put err 10) (nap c))
-   (udirp q) (: st (stat q) (&& (two? st) (= 16384 (& 61440 (cauup st)))))
-   (rm-main as)
-    (: (fl a r f) (? (! (two? a)) (L r f a)
-                     (= (cap a) "-r") (fl (cup a) 1 f)
-                     (= (cap a) "-f") (fl (cup a) r 1)
-                     (L r f a))
-       p (fl as 0 0)
-       r? (cap p) f? (caup p) fs (caup (cup p))
-       (zap q)
-        (? (udirp q)
-           (: (go m ok) (? (! (two? m)) ok
-                           (: k (zap (+ q (+ "/" (cap m))))
-                              (go (cup m) (? k ok 0))))
-              ok (go (readdir q) 1)
-              e (rmdir q)
-              (&& ok (! e)))
-           (! (unlink q)))
-       (one q ok)
-        (: hit (? r? (zap q) (! (unlink q)))
-           (? hit ok
-              f? ok
-              (: _ (say err (+ "rm: cannot remove " q)) _ (put err 10) 0)))
-       (go a ok) (? (two? a) (go (cup a) (one (cap a) ok)) (nap (? ok 0 1)))
-       (? (two? fs) (go fs 1)
-          f? (nap 0)
-          (udie 2 "usage")))
-   (rm-main (L "-r" "t2")))
+(: r? (cap (L 1))
+   (zap q)
+    (? (two? q)
+       (: (go m) (? (! (two? m)) 1
+                    (: k (zap (cap m))
+                       _ (say err (? k "BUG" "ok")) _ (put err 10)
+                       (go (cup m))))
+          (go q))
+       ())
+   (go a) (? r? (zap a) 0)
+   (go (L 5)))
 ```
 
-## where to look
+prints BUG (k is a truthy closure; zap's body never ran). rename either `go` ->
+ok. make `r?` a literal -> ok (cprop folds the read away, the sibling carries no
+import). the fs effects in the original report were a red herring -- the old
+"pure transliteration passes" discriminator had dropped the inner loop's
+self-recursion, which is load-bearing.
 
-boxfix claims immunity to shadowing (CLAUDE.md), but the failing read is the
-recursive `zap` from INSIDE the nested `:` whose own loop nom collides with a
-sibling pin, and only when the earlier flag pins survive folding -- so suspect
-the interplay of the cell tablet keying (by nom), the frame slot layout when
-kconst folds pins away, and the 3-clause `?` in `one` (the flip pass keeps a
-longer clause tail unflipped). the pure transliteration passing says an effect
-op (or the nif value shape) is also in the mix.
+## the necessary ingredients (each probed)
+
+1. `zap` recurses on itself from inside a nested `:` (an inner loop).
+2. the inner loop's nom collides with a SIBLING lambda of the enclosing `:`.
+3. that sibling carries >= 1 import zap doesn't (a computed pin it reads, an
+   enclosing lambda's param -- anything; a folded literal carries none).
+4. the inner loop SELF-RECURSES (drop `(go (cup m))` and it heals).
+
+the operand shortfall EQUALS the sibling's import count: with one flag import,
+`(k x)` fires zap's body; with two (`(? r? (? f? (zap a) 0) 0)`), `(k x y)`
+fires -- probed both ways, exact.
+
+## the mechanism (ev.l, `ale`)
+
+`ale` compiles a `:` in three phases (collect / closures / wire). the letrec
+lambdas live in cells; a reference to one compiles via `lz`: quote the entry (or
+a backpatch site) then APPLY IT TO ITS IMPORTS, read from the cell at the ref
+site (`(apl2r c (cup (cof lfd)))`). the import sets are fixpointed by `fixcaps`
+(pour: "k2 references k1 -> pour k1's imports into k2", detected by k1's NOM in
+k2's first-build import list), then `wire`/`weave` re-analyzes each lambda with
+its final imports and cputs the rebuilt closure.
+
+the chain, step by step:
+
+1. **the self-ref escapes its scope.** the inner `:`'s own 'lam map is pinned by
+   its WIRE phase, so during its CLOSURES phase the inner loop's self-reference
+   walks the scope chain unshadowed.
+2. **first build: the evidence is eaten.** at outer-split time the outer 'lam is
+   also unpinned, so the escape lands at book-miss -> a spurious self-nom import
+   on the inner closure -- which the inner fixcaps' `dropj` deletes (it matches
+   an inner lam name). net: zap's first-build import list never mentions `go`,
+   so the outer `pass1` never learns "zap references sibling go" and never
+   pre-pours go's imports into zap. (this is why fixcaps -- which exists to
+   pre-seed exactly these imports -- misses.)
+3. **weave: the poison arrives late.** the outer wire pins the outer 'lam FIRST,
+   then weave re-analyzes zap. now the inner closures phase's escaping self-ref
+   FINDS the outer sibling `go` in 'lam -> `lz` applies go's imports (`r?`) at
+   the site -> resolving those names climbs them into zap's OWN import list,
+   mid-analysis.
+4. **the self-sites are already short.** zap's recursive self-references inside
+   the body compiled via `lz` against zap's cell import list -- still the
+   pre-growth `()` -- so they apply zero imports. `ala` then stamps the entry
+   with arity = params + GROWN imports, and weave cputs the grown list.
+5. runtime: outer sites (woven after the cput) apply the full import row and
+   saturate; every self-site feeds the arity-(1+n) entry one operand -> a
+   partial -- truthy, effect-free, silent.
+
+corollaries, all probed: the final code's inner self-call targets the INNER go
+correctly (the leak injects imports, never miswires the jump); a value alias
+pinned after zap (`tz zap`) reads the post-cput cell and works -- routing the
+recursion through it is a second workaround beside distinct noms.
+
+## the two candidate seams for a fix
+
+* **(A) shadow the inner 'lam during closures** -- the trigger. the inner let's
+  binding names are known at collect time; the closures-phase scope walk should
+  treat them as shadowing (e.g. pin 'lam early with the empty cells, or carry a
+  shadow set), so an inner-bound nom can never resolve to an enclosing sibling.
+  kills this bug at the source and fixes the scope violation itself.
+* **(B) close the import-growth seam** -- the hardening. weave assumes ala with
+  a given import set won't grow it; `lz` reads `cup (cof cell)` before growth.
+  either re-run weave to an import fixpoint when the list grew, or make lz's
+  import application read through the cell at BACKPATCH time (sites already
+  defer the entry; the import row could defer the same way).
+
+(A) is the true fix; (B) is worth considering because ANY future mid-analysis
+import growth would bite the same way.
+
+## until fixed
+
+give nested loops distinct noms in tool code (fs.l's zap walks `ent`, never
+`go`).
