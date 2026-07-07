@@ -144,7 +144,7 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 .ref dd { margin: .1em 0 0 1.4em; color: #737aa2; font-size: .94em; }
 .ref dd code { background: none; border: none; padding: 0; }
 .ref .chip { margin: .15em .1em; }
-.ans { color: #565f89; }   /* the "; answer" beside a chip */
+.ref .ans { color: #565f89; }   /* the "; answer" beside a cheat-sheet chip (scoped: the terminal's .ans stays green) */
 
 /* --- glossary --- */
 .glossary dt { color: #c0caf5; font-weight: 600; margin-top: .85em; }
