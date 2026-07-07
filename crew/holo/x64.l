@@ -244,6 +244,8 @@
       (catall (L (L 102) (xrex 0 gn xn) (L 15 80 (modrm 3 gn xn)))))
    (emit-cvtsi2sd x g) (: xn (xrn x) gn (rn g)                                           ; F2 REX.W 0F 2A /r  xmm(reg) <- gp(rm)
       (catall (L (L 242) (L (rex 1 (hi xn) 0 (hi gn))) (L 15 42 (modrm 3 xn gn)))))
+   (emit-cvttsd2si g x) (: gn (rn g) xn (xrn x)                                          ; F2 REX.W 0F 2C /r  gp(reg) <- xmm(rm) (truncate toward zero)
+      (catall (L (L 242) (L (rex 1 (hi gn) 0 (hi xn))) (L 15 44 (modrm 3 gn xn)))))
    (emit-movqxr x g) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 6E /r  xmm(reg) <- gp(rm)
       (catall (L (L 102) (L (rex 1 (hi xn) 0 (hi gn))) (L 15 110 (modrm 3 xn gn)))))
    (emit-movqrx g x) (: xn (xrn x) gn (rn g)                                             ; 66 REX.W 0F 7E /r  gp(rm) <- xmm(reg)
@@ -307,6 +309,7 @@
             (= op 'cmppd)    (emit-cmppd    (at ins 1) (at ins 2) (at ins 3))
             (= op 'movmskpd) (emit-movmskpd (at ins 1) (at ins 2))                        ; (movmskpd gp xmm)
             (= op 'cvtsi2sd) (emit-cvtsi2sd (at ins 1) (at ins 2))                        ; (cvtsi2sd xmm gp)
+            (= op 'cvttsd2si) (emit-cvttsd2si (at ins 1) (at ins 2))                      ; (cvttsd2si gp xmm)  gp <- (int)xmm
             (= op 'movqxr)   (emit-movqxr   (at ins 1) (at ins 2))                        ; (movqxr xmm gp)  xmm <- gp
             (= op 'movqrx)   (emit-movqrx   (at ins 1) (at ins 2))                        ; (movqrx gp xmm)  gp <- xmm
             (= op 'stsd)     (emit-stsd     (at ins 1) (at ins 2) (at ins 3))             ; (stsd base disp xmm)  [base+disp] <- xmm

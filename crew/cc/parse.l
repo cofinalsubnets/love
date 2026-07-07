@@ -33,7 +33,7 @@
    (peekp ts s) (&& (two? ts) (tp? (cap ts) s))
    asnops (L (L "=" ()) (L "+=" '+) (L "-=" '-) (L "*=" '*) (L "/=" '/) (L "%=" '%)
              (L "&=" '&) (L "|=" '|) (L "^=" '^) (L "<<=" 'shl) (L ">>=" 'shr))
-   scalars '(char short int long void)
+   scalars '(char short int long void double)
    (passoc s tbl) (? (! (two? tbl)) ()
                      (= (cap (cap tbl)) s) (cap tbl)
                      (passoc s (cup tbl)))
@@ -48,7 +48,7 @@
    ; does a type begin here?
    (tkbty? ps t)
     (? (! (two? t)) ()
-       (= (tkk t) 'kw) (member? (tkv t) '(char short int long void struct union enum))
+       (= (tkk t) 'kw) (member? (tkv t) '(char short int long void double struct union enum))
        (= (tkk t) 'id) (? (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
@@ -226,6 +226,7 @@
     (? (! (two? ts)) ()
        (: t (cap ts)
           (? (= (tkk t) 'num) (L (L 'num (tkv t)) (cup ts))
+             (= (tkk t) 'flo) (L (L 'flo (tkv t)) (cup ts))
              (= (tkk t) 'str) (L (L 'str (tkv t)) (cup ts))
              (= (tkk t) 'id)
               (: ev (peep (ps 'enums) (tkv t) ())

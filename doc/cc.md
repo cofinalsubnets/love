@@ -274,8 +274,28 @@ two ideas to keep warm as the stages climb, neither committed yet:
    headers + our include/.
 6. **the long tail ai.c names**: varargs (the SysV register-save dance --
    the hairiest single item in the plan), doubles through the xmm ABI,
-   _Static_assert, anonymous members, the one compound literal. gate:
-   every host/*.c compiles; ai.c compiles.
+   _Static_assert, anonymous members (LANDED 4a), the one compound literal.
+   gate: every host/*.c compiles; ai.c compiles.
+   THE GEM LANE (6a) LANDED 2026-07-06: the `double` type as a first-class
+   scalar riding the xmm register file. float literals lex (12.5, .5, 2., 1e9,
+   3.14e-2, an f/F/l/L suffix consumed) into a 'flo token carrying an ai gem;
+   the value lives in f0 (its TYPE is the flag -- 'double vs the integer lane's
+   r0), materialized by fbits, the compile-time IEEE-754 encoder ported from the
+   glaze (the 52-bit mantissa makes frac*2^52 exact). the whole value path:
+   double locals + globals (an 8-byte image via fbits), + - * / (f1=left/f0=
+   right through the gp stack, the scalar-double ops), the six comparisons
+   (ucomisd + the UNSIGNED setcc -- lt->below, gt->above, le->be, ge->ae),
+   unary minus (0.0 - d) and !d (d == 0.0), int<->double conversion (explicit
+   casts AND implicit in mixed arithmetic / assignment / init -- asflo/asint
+   bridge the lanes), doubles in arrays and structs (ldsd/stsd at the element),
+   ternary and pointer walks. holo grew ONE op -- cvttsd2si (x64 F2 REX.W 0F 2C,
+   arm64 fcvtzs toward zero), both llvm-mc-verified (holotest 181). fenced for
+   6b (they need the xmm CALLING convention): a double PARAMETER, a double
+   RETURN (a bare `return <double>` refuses -- write `return (int)d`), a double
+   CALL ARGUMENT; also `float` (4-byte, needs movss/cvtss) and ~ on a double.
+   battery 59->63 (arithmetic, the six compares, a loop accumulator + negate +
+   ternary, doubles in arrays/structs/globals with pointer walks); law.l gains
+   the float-literal/type/value-path/fence goldens. all match gcc -O0.
 7. **THE GATE**: cc-built ai.c (+ host/*.c, system ld, ai_tco=0) boots the
    egg and runs `make test` green -- the corpus under a cc-built binary.
    this is the rung's aiutils-feature-complete moment.

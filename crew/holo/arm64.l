@@ -228,6 +228,7 @@
    (arm64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (| 0x1E604000 (| (<< sn 5) dn))))           ; FMOV Dd, Ds
    (arm64-fcmp  a b) (: an (frn a) bn (frn b) (le32 (| 0x1E602000 (| (<< bn 16) (<< an 5)))))   ; FCMP Da, Db (sets NZCV; unordered -> VS)
    (arm64-scvtf d g) (: dn (frn d) gn (rn g) (le32 (| 0x9E620000 (| (<< gn 5) dn))))            ; SCVTF Dd, Xg  (signed int -> double)
+   (arm64-fcvtzs g d) (: gn (rn g) dn (frn d) (le32 (| 0x9E780000 (| (<< dn 5) gn))))           ; FCVTZS Xg, Dd  (double -> signed int, toward zero)
    (arm64-fmovxr d g) (: dn (frn d) gn (rn g) (le32 (| 0x9E670000 (| (<< gn 5) dn))))           ; FMOV Dd, Xg   (gpr bits -> fpr)  == movqxr
    (arm64-fmovrx g d) (: gn (rn g) dn (frn d) (le32 (| 0x9E660000 (| (<< dn 5) gn))))           ; FMOV Xg, Dd   (fpr -> gpr bits)  == movqrx
    (arm64-fst base disp s) (: tn (frn s) bn (rn base) (le32 (| 0xFD000000 (| (<< (// disp 8) 10) (| (<< bn 5) tn)))))   ; STR Ds, [base, #disp]  (disp a multiple of 8)
@@ -281,6 +282,7 @@
             (member? op '(addsd subsd mulsd divsd)) (arm64-fp3op op (at ins 1) (at ins 2))
             (= op 'ucomisd)  (arm64-fcmp   (at ins 1) (at ins 2))
             (= op 'cvtsi2sd) (arm64-scvtf  (at ins 1) (at ins 2))
+            (= op 'cvttsd2si) (arm64-fcvtzs (at ins 1) (at ins 2))
             (= op 'movqxr)   (arm64-fmovxr (at ins 1) (at ins 2))
             (= op 'movqrx)   (arm64-fmovrx (at ins 1) (at ins 2))
             (= op 'stsd)     (arm64-fst    (at ins 1) (at ins 2) (at ins 3))      ; (stsd base disp f)

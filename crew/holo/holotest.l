@@ -134,6 +134,7 @@
       (L "addsd"       "f20f58c1"               '((addsd f0 f1)))         ; addsd xmm0,xmm1
       (L "mulsd"       "f20f59c1"               '((mulsd f0 f1)))         ; mulsd xmm0,xmm1
       (L "cvtsi2sd"    "f2480f2ac0"             '((cvtsi2sd f0 r0)))      ; cvtsi2sd xmm0,rax
+      (L "cvttsd2si"   "f2480f2cc0"             '((cvttsd2si r0 f0)))     ; cvttsd2si rax,xmm0 (truncate)
       (L "movqxr"      "66480f6ec0"             '((movqxr f0 r0)))        ; movq xmm0,rax
       (L "ucomisd"     "660f2ec8"               '((ucomisd f1 f0)))       ; ucomisd xmm1,xmm0 (sets flags)
       (L "stsd.disp"   "f20f114208"             '((stsd r2 8 f0)))        ; movsd [rdx+8],xmm0   (box store)
@@ -252,6 +253,7 @@
            (label deopt) (ld r5 r1 8) (mov r1 r5) (ld r5 r1 0) (jmpr r5)))
       ;; scalar-double FP (the float glaze lane): f0..f15 -> d0..d15. SSE-named IR, two-address, mapped to
       ;; the arm64 scalar-double form. each golden checked vs llvm-objdump (mnemonics in the trailing comment).
+      (L "a64.cvttsd2si" "0400789e"        '((cvttsd2si r4 f0)))          ; fcvtzs x4, d0 (toward zero)
       (L "a64.cvtsi2sd" "8000629e"          '((cvtsi2sd f0 r4)))          ; scvtf d0, x4
       (L "a64.movqxr"   "8100679e"          '((movqxr f1 r4)))            ; fmov  d1, x4  (gpr bits -> fpr)
       (L "a64.movqrx"   "0400669e"          '((movqrx r4 f0)))            ; fmov  x4, d0  (fpr -> gpr bits)

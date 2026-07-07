@@ -198,6 +198,43 @@
       ; a bare TOP-LEVEL function-pointer array still refuses (ptop lays its own declarators; 4e)
       (! (cgn "int a(int x){return x;} int (*t[1])(int) = {a}; int main() { return t[0](3); }"))))
 
+; --- the double lane (stage 6a, the gem): float literals lex, `double` types,
+; the xmm value path, int<->double conversions, and the 6b fences refuse. ---
+(: (cast src) (caup (cparse (caup (clex src))))
+   (cgn src) (: r (cparse (caup (clex src)))
+                (? (two? r) (cgen (caup r) (cauup r)) ()))
+   (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))
+   irbits (caup (cgn "int main() { double d = 1.0; return (int)d; }"))
+   (has op forms) (: (go l) (? (! (two? l)) () (&& (two? (cap l)) (= (cap (cap l)) op)) 1 (go (cup l))) (go forms))
+   (assert
+      ; the lexer: a float literal is a 'flo token carrying a gem
+      (= (tn (caup (clex "3.5")) 0) (L 'flo 3.5 1))
+      (= (tn (caup (clex ".25")) 0) (L 'flo 0.25 1))
+      (= (tn (caup (clex "1e3")) 0) (L 'flo 1000.0 1))
+      (= (tn (caup (clex "2.")) 0) (L 'flo 2.0 1))
+      (= (tn (caup (clex "42")) 0) (L 'num 42 1))          ; an integer stays 'num
+      ; the parser: a double type and a 'flo primary
+      (= (cast "int main() { double d = 1.5; return 0; }")
+         '(prog ((fn "main" () (blk ((decl (("d" double (flo 1.5)))) (ret (num 0))))))))
+      ; the 1.0 constant loads its IEEE-754 bits then movqxr into f0
+      (has 'movqxr irbits)
+      (has 'li irbits)
+      ; the value path compiles: locals, arithmetic, mixed int/double, compare, cast
+      (two? (cgn "int main() { double a = 1.5; double b = 2.5; return (int)(a + b); }"))
+      (two? (cgn "int main() { double a = 3.0; int n = 2; return (int)(a * n); }"))     ; mixed -> double
+      (two? (cgn "int main() { double a = 1.0; double b = 2.0; return a < b; }"))       ; compare -> int
+      (two? (cgn "int main() { double a = 5.5; return (int)(-a); }"))                   ; unary minus
+      (two? (cgn "int main() { double a = 0.0; return !a; }"))                          ; logical not on a double
+      (two? (cgn "double g = 2.5; int main() { return (int)g; }"))                      ; a double global image
+      (two? (cgn "int main() { double a[2] = {1.5, 2.5}; return (int)(a[0] + a[1]); }")); a double array + element load
+      (two? (cgn "struct P { double x; int n; }; int main() { struct P p = {1.5, 2}; return (int)p.x + p.n; }"))
+      ; the 6b fences refuse (double params/returns/args need the xmm ABI)
+      (! (cgn "int f(double x) { return 1; } int main() { return 0; }"))               ; a double parameter
+      (! (cgn "double f() { return 1.5; } int main() { return 0; }"))                  ; a double return
+      (! (cgn "int f(int x) { return x; } int main() { return f(2.5); }"))             ; a double call argument
+      (! (cgn "int main() { double d = 3.5; return d; }"))                             ; a bare double return (needs (int))
+      (! (cgn "int main() { double a = 1.0; return ~a; }"))))                          ; ~ on a double is invalid
+
 ; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
 ; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.
 ; pps runs cpp (no includes) and joins the output tokens' spellings to a string. --
@@ -229,5 +266,5 @@
       (! (cpp (caup (clex "#if 1\nx")) ()))                            ; unterminated #if refuses
       (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) ok")
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/6b fences) ok")
 (put err 10)

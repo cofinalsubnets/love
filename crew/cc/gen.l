@@ -51,6 +51,21 @@
    (stop ty) (? (= ty 'char) 'st1 (= ty 'short) 'st2 (= ty 'int) 'st4 'st)
    (cvt ty r) (? (= ty 'char) (L (L 'sx1 r)) (= ty 'short) (L (L 'sx2 r))
                  (= ty 'int) (L (L 'sx4 r)) ())
+   ; -- the double lane (stage 6a, the gem): a 'double value lives in f0, not r0.
+   ; its type is the flag; fbits is the compile-time IEEE-754 encoder; asflo/asint
+   ; move a cgexpr result between the lanes (int<->double conversion); fcc maps a
+   ; comparison to the UNSIGNED setcc ucomisd's flags want. --
+   (flo? ty) (= ty 'double)
+   (fbits x)                                        ; finite double -> its IEEE-754 u64 bits (ported from the glaze)
+    (? (= x 0.0) 0
+       (: s (? (< x 0.0) 1 0) ax (? (< x 0.0) (- 0.0 x) x)
+          eu ((: (go e) (? (<= ((+ e 1) 2.0) ax) (go (+ e 1)) e)) (int (/ (log ax) (log 2.0))))
+          e  ((: (go e) (? (< ax (e 2.0)) (go (- e 1)) e)) eu)
+          (+ (* s 9223372036854775808) (+ (* (+ e 1023) 4503599627370496)
+             (int (* (- (/ ax (e 2.0)) 1.0) 4503599627370496.0))))))
+   (asflo r) (? (flo? (cap r)) (caup r) (cat (caup r) (L (L 'cvtsi2sd 'f0 'r0))))   ; result -> f0 as a double
+   (asint r) (? (flo? (cap r)) (cat (caup r) (L (L 'cvttsd2si 'r0 'f0))) (caup r))  ; result -> r0 as an int
+   (fcc op) (? (= op 'lt) 'below (= op 'le) 'be (= op 'gt) 'above (= op 'ge) 'ae op)
    ; 8 little-endian bytes of a constant (the global initializer image)
    (le8s v) (: (go i acc) (? (< 7 i) (rev acc)
                              (go (+ i 1) (link (& (>> v (* 8 i)) 255) acc)))
@@ -99,6 +114,7 @@
    (cgexpr g env e)
     (: k (cap e)
        (? (= k 'num) (L 'long (L (L 'li 'r0 (caup e))))
+          (= k 'flo) (L 'double (L (L 'li 'r0 (fbits (caup e))) (L 'movqxr 'f0 'r0)))
           (= k 'str)
            (: lbl (nlab g ".S")
               _ (pin g 'strs (link (L lbl (caup e)) (g 'strs)))
@@ -110,6 +126,7 @@
                     (? (arr? ty) (L (L 'ptr (caup ty)) (caup r))
                        (fn? ty) (L (L 'ptr ty) (caup r))     ; a fn-pointer member is its address
                        (stru? ty) 'bad               ; no struct VALUES in registers
+                       (flo? ty) (L 'double (cat (caup r) (L (L 'ldsd 'f0 'r0 0))))
                        (L ty (cat (caup r) (L (L (ldop ty) 'r0 'r0 0))))))))
           (= k 'var)
            (: en (vent g env (caup e))
@@ -122,6 +139,10 @@
                         (? (= (cap en) 'loc)
                            (L (L 'ptr (caup ty)) (L (L 'lea 'r0 'r4 (caup en))))
                            (L (L 'ptr (caup ty)) (L (L 'la 'r0 (caup en)))))
+                       (flo? ty)                     ; a double loads into f0 (ldsd)
+                        (? (= (cap en) 'loc)
+                           (L 'double (L (L 'ldsd 'f0 'r4 (caup en))))
+                           (L 'double (L (L 'la 'r1 (caup en)) (L 'ldsd 'f0 'r1 0))))
                        (? (= (cap en) 'loc)
                           (L ty (L (L (ldop ty) 'r0 'r4 (caup en))))
                           (L ty (L (L 'la 'r1 (caup en)) (L (ldop ty) 'r0 'r1 0))))))))
@@ -135,6 +156,7 @@
                     (? (arr? ty) (L (L 'ptr (caup ty)) (caup r))   ; pointee array: decay again
                        (fn? ty) (L (L 'ptr ty) (caup r))           ; *fp -- a function is its address
                        (stru? ty) 'bad                             ; no struct values
+                       (flo? ty) (L 'double (cat (caup r) (L (L 'ldsd 'f0 'r0 0))))
                        (L ty (cat (caup r) (L (L (ldop ty) 'r0 'r0 0))))))))
           (= k 'asn)
            (: lv (clval g env (caup e))
@@ -148,6 +170,11 @@
                            (cat (caup lv) (cat (L (L 'push 'r0))
                             (cat (caup rv) (cat (L (L 'pop 'r1))
                              (bcopy 0 (tsz g (cap lv)) ()))))))))
+                 (flo? (cap lv))                     ; a double store (addr in r1, value in f0)
+                  (: r (cgexpr g env (cauup e))
+                     (? (bad? r) 'bad
+                        (L 'double (cat (caup lv) (cat (L (L 'push 'r0))
+                         (cat (asflo r) (L (L 'pop 'r1) (L 'stsd 'r1 0 'f0))))))))
                  (: r (cgexpr g env (cauup e))
                     (? (bad? r) 'bad
                        (: ty (cap lv)
@@ -169,12 +196,24 @@
                                  (L 'add 'r1 'r0 (* stp (cauup e)))
                                  (L (stop ty) 'r2 0 'r1))))))))
           (= k 'cast)
-           (: r (cgexpr g env (cauup e))
+           (: r (cgexpr g env (cauup e)) tgt (caup e)
               (? (bad? r) 'bad
-                 (L (caup e) (cat (caup r) (cvt (caup e) 'r0)))))
+                 (&& (flo? tgt) (! (flo? (cap r)))) (L 'double (asflo r))       ; int -> double
+                 (&& (! (flo? tgt)) (flo? (cap r)))                              ; double -> int, then narrow
+                  (L tgt (cat (asint r) (cvt tgt 'r0)))
+                 (flo? tgt) (L 'double (caup r))                                 ; double -> double
+                 (L tgt (cat (caup r) (cvt tgt 'r0)))))                          ; int -> int
           (= k 'un)
            (: r (cgexpr g env (cauup e))
               (? (bad? r) 'bad
+                 (flo? (cap r))                        ; unary on a double
+                  (? (= (caup e) 'neg)                 ; -d = 0.0 - d
+                      (L 'double (cat (caup r) (L (L 'li 'r0 0) (L 'movqxr 'f1 'r0)
+                                                  (L 'subsd 'f1 'f0) (L 'movsd 'f0 'f1))))
+                     (= (caup e) 'not)                 ; !d = (d == 0.0)
+                      (L 'long (cat (caup r) (L (L 'li 'r0 0) (L 'movqxr 'f1 'r0)
+                                                (L 'ucomisd 'f0 'f1) (L 'set 'eq 'r0))))
+                     'bad)                             ; ~ on a double is invalid
                  (L 'long
                     (cat (caup r)
                          (? (= (caup e) 'neg) (L (L 'neg 'r0))
@@ -221,6 +260,7 @@
                      (? (! (two? as)) acc
                         (: r (cgexpr g env (cap as))
                            (? (bad? r) 'bad
+                              (flo? (cap r)) 'bad          ; double call args deferred to 6b (the xmm ABI)
                               (: r2 (pushes (cup as) (cat acc (cat (caup r) (L (L 'push 'r0)))))
                                  (? (bad? r2) 'bad r2)))))
                     up (pushes args ())
@@ -256,6 +296,18 @@
                         (cat (L (L 'push 'r0))
                          (cat (caup b) (L (L 'mov 'r1 'r0) (L 'pop 'r0)
                                           (L (? (= op 'shl) 'shlv 'sarv) 'r0 'r1)))))))
+          ; the double lane: either operand double -> both to double (f1=left,
+          ; f0=right through the gp stack), then the scalar-double op or ucomisd.
+          (|| (flo? (cap a)) (flo? (cap b)))
+           (: mid (cat (asflo a) (cat (L (L 'movqrx 'r0 'f0) (L 'push 'r0))
+                       (cat (asflo b) (L (L 'pop 'r1) (L 'movqxr 'f1 'r1)))))
+              (? (= op '+) (L 'double (cat mid (L (L 'addsd 'f0 'f1))))
+                 (= op '*) (L 'double (cat mid (L (L 'mulsd 'f0 'f1))))
+                 (= op '-) (L 'double (cat mid (L (L 'subsd 'f1 'f0) (L 'movsd 'f0 'f1))))
+                 (= op '/) (L 'double (cat mid (L (L 'divsd 'f1 'f0) (L 'movsd 'f0 'f1))))
+                 (member? op '(eq ne lt le gt ge))
+                  (L 'long (cat mid (L (L 'ucomisd 'f1 'f0) (L 'set (fcc op) 'r0))))
+                 'bad))
           (: ta (cap a) tb (cap b)
              pa (ptr? ta) pb (ptr? tb)
              ; left lands in r1, right in r0; scale the int side of ptr math
@@ -320,6 +372,7 @@
    (cgstore g env off ty val)                       ; store a scalar value expr into [r4+off]
     (: r (cgexpr g env val)
        (? (bad? r) 'bad
+          (flo? ty) (cat (asflo r) (L (L 'stsd 'r4 off 'f0)))
           (cat (caup r) (cat (cvt ty 'r0) (L (L (stop ty) 'r4 off 'r0))))))
    (cgfill g env off ty ini)                        ; fill an aggregate at frame offset off (no zero)
     (? (= (cap ini) 'str) (? (arr? ty) (cgstr off (caup ini)) 'bad)
@@ -383,7 +436,8 @@
        ())
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (? (! (two? ini)) (zeros (tsz g ty))
-       (= (cap ini) 'num) (? (aggish? ty) 'bad (imnum g ty (caup ini)))
+       (= (cap ini) 'flo) (? (flo? ty) (le8s (fbits (caup ini))) 'bad)     ; a double literal -> 8 IEEE bytes
+       (= (cap ini) 'num) (? (aggish? ty) 'bad (flo? ty) (le8s (fbits (+ 0.0 (caup ini)))) (imnum g ty (caup ini)))
        (&& (= (cap ini) 'str) (arr? ty))
         (: t (caup ini) n (tsz g ty)
            (bs i acc) (? (<= n i) (rev acc) (bs (+ i 1) (link (? (< i (tally t)) (t i) 0) acc)))
@@ -445,6 +499,7 @@
                  (arr? ty) 'bad                          ; a bare-expr init of an array
                  (: r (cgexpr g env3 init)               ; a scalar (a pointer = string rides cgexpr -> la)
                     (? (bad? r) 'bad
+                       (flo? ty) (one (cup ps) env3 (cat acc (cat (asflo r) (L (L 'stsd 'r4 off 'f0)))))
                        (one (cup ps) env3
                             (cat acc (cat (caup r)
                                      (cat (cvt ty 'r0)
@@ -455,7 +510,9 @@
    (cgstmt g env s)
     (: k (cap s)
        (? (= k 'ret) (: r (cgexpr g env (caup s))
-                        (? (bad? r) 'bad (cat (caup r) epi)))
+                        (? (bad? r) 'bad
+                           (flo? (cap r)) 'bad           ; a double return needs an explicit (int) cast (6b: the xmm ABI)
+                           (cat (caup r) epi)))
           (= k 'expr) (: r (cgexpr g env (caup s))
                          (? (bad? r) 'bad (caup r)))
           (= k 'nop) ()
@@ -588,6 +645,7 @@
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     (: params (cauup f)
        (? (< 6 (tally params)) 'bad
+          (foldl (\ a p (|| a (flo? (caup p)))) () params) 'bad   ; double params deferred to 6b (the xmm ABI)
           (: _ (pin g 'off 0)
              _ (pin g 'fn (caup f))
              (spill ps i env acc)
