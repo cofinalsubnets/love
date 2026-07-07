@@ -425,10 +425,34 @@ two ideas to keep warm as the stages climb, neither committed yet:
    rung). float at the ABI boundary stays cc's double-in-xmm (self-consistent,
    matches gcc for representable values); real single-precision is deferred -- it is
    off the 64-bit critical path (ai_flo_t is `double`; the `float` typedef is the
-   32-bit variant). STILL AHEAD: 7c compile ai.c itself against freestanding headers
-   (math.h/signal.h/setjmp.h/sys/mman.h/unistd.h -- ai.c is 8449 lines and pulls the
-   system headers today) + the >6-arg overflow it will need; 7d link cc-built ai.o +
-   gcc-built host/*.o + libc and boot the egg green.
+   32-bit variant).
+   7c-i THE FREESTANDING HEADERS + IGNORABLE QUALIFIER/ATTRIBUTE SURFACE LANDED
+   2026-07-07: crew/cc/include/ now carries stdint stddef stdbool math signal
+   setjmp sys/mman unistd (they WIN over /usr/include for <> includes -- incload's
+   sys? path), each minimal and freestanding so ai.c never reaches into a glibc
+   header. cc keeps NO linkage/qualifier state, so the parser gained `pquals`: a
+   run of storage/qualifier keywords (const volatile restrict register auto inline
+   extern static) and __attribute__((..)) / _Alignas(..) / _Noreturn / __inline
+   (their parens balance-skipped) is SKIPPED wherever a type may begin (pbty) or a
+   declarator carry it -- at each `*` in the star loops (so `void const *` keeps its
+   pointer), before the name (attrs like the AI_NIF `__attribute__((section))`),
+   before the tkbty? decl-vs-stmt gate in blocks (so `register int x;` reads as a
+   declaration), and in pparams (so `volatile int b` is a parameter). unnamed
+   prototype parameters now parse as ABSTRACT declarators (`int f(int, long);` --
+   the form every system-header proto uses). the headers ride cc's SIGNED integer
+   model for now: the uintN_t names typedef to signed bases of the right WIDTH (no
+   `unsigned` keyword yet), and `signed`/hex/suffix literals stay out -- correct for
+   this cc, refined in 7c-ii. gate: 72-quals.c (the qualifier + header-parse
+   program, gcc=cc=37) folds into the auto-globbed battery; law.l proves the
+   ignored-qualifier equivalences + the abstract-declarator proto. ai.c itself still
+   stops at a LEX error (hex/unsigned/inline-asm -- the later sub-rungs).
+   STILL AHEAD: 7c-ii real `unsigned` (types, unsigned compares/shifts/div) + hex &
+   integer-suffix lexing -- ai.c leans on unsigned tag arithmetic; 7c-iii the C-
+   feature tail ai.c needs (compact multi-function-declarator protos like `void
+   *malloc(size_t), free(void*)`, the `__asm__("divq")` 128-bit-divide fallback,
+   __attribute__((weak))/((section)) -> the linker, unions by value) + the >6-arg
+   overflow (both fixed and variadic, avoiding the boxfix trap); 7d link cc-built
+   ai.o + gcc-built host/*.o + libc and boot the egg green.
 8. **the fixpoint + the flat stack**: (a) determinism -- cc(cc(ai)) builds
    byte-identical objects to cc(ai); (b) guaranteed sibcalls for the lvm
    shape, ai_tco=1, `make vmret` honest, benches vs gcc recorded.

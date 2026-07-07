@@ -367,5 +367,26 @@
       (! (cpp (caup (clex "#if 1\nx")) ()))                            ; unterminated #if refuses
       (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) ok")
+; -- 7c-i: freestanding-header surface. cc keeps no linkage/qualifier state, so
+; storage/qualifier keywords (static const volatile restrict register inline) and
+; __attribute__((..)) are SKIPPED wherever a type may begin or a declarator carry
+; them -- the AST equals the unqualified source. an unnamed prototype parameter
+; parses as an abstract declarator (the form the system headers' protos use).
+(: (cast src) (caup (cparse (caup (clex src))))
+   (assert
+      (= (cast "static const int x = 5;")  (cast "int x = 5;"))
+      (= (cast "int f(int const a, volatile int b){return a;}")
+         (cast "int f(int a, int b){return a;}"))
+      (= (cast "int g(char * restrict p){return *p;}")
+         (cast "int g(char *p){return *p;}"))
+      (= (cast "__attribute__((unused)) static int h(void){return 1;}")
+         (cast "int h(void){return 1;}"))
+      (= (cast "int main(void){register int a=3; const int b=4; return a+b;}")
+         (cast "int main(void){int a=3; int b=4; return a+b;}"))
+      (= (cast "int f(void const *p){return 0;}")             ; a qual between type and star keeps the pointer
+         (cast "int f(void *p){return 0;}"))
+      (= (cast "int f(int, long); int main(void){return 0;}") ; unnamed proto params -> abstract declarators
+         '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))))
+
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) ok")
 (put err 10)
