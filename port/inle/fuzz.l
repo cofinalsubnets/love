@@ -6,7 +6,7 @@
 ;   out/host/ai -l port/inle/judge.l -l port/inle/fuzz.l -e "(fuzz 40 1)"
 ;
 ; the generator emits a DETERMINISTIC subset -- arithmetic, application, church
-; numerals, lists -- NEVER clock/rand/spin, so a host-vs-ai0 disagreement is a REAL
+; numerals, lists -- NEVER clock/rand/twirl, so a host-vs-ai0 disagreement is a REAL
 ; bug, never nondeterminism. each candidate E is wrapped `(puts (show E))` so its
 ; VALUE is the observable the judge diffs across targets. apcap + the judge's
 ; `timeout` fence the church-exponent towers (a blow-up lands as scare/hung, caught).

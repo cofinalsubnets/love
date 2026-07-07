@@ -759,7 +759,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define s5(i) {{lvm_cur},{.x=putcharm(5)},{i}, {lvm_ret0}}
 // HARNESS (compile-gated, -DG_FAULT_TEST): __fault deliberately derefs null to
 // raise a hardware fault inside eval -- the one in-eval fault a user can trigger to
-// probe the ai_eval fault barrier (the raw fault nifs twirl/peek/poke/seek are pulled
+// probe the ai_eval fault barrier (the raw fault nifs spin/peek/poke/seek are pulled
 // from the image at birth, so nothing else reaches it). NEVER in a shipping or kernel
 // build (the kernel has no signal recovery -- it would crash qemu).
 #ifdef G_FAULT_TEST
@@ -785,7 +785,7 @@ lvm_t lvm_fault;
  _(nif_string, "string", s1(lvm_string))\
  _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
- _(nif_twirl, "twirl", s1(lvm_twirl))\
+ _(nif_twirl, "spin", s1(lvm_twirl))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
  _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "saturate", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
  _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull))\
@@ -816,7 +816,7 @@ lvm_t lvm_fault;
  _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
  _(nif_missing, "missing", s2(lvm_missing)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
- _(nif_spawn, "spin", s2(lvm_spawn)) _(nif_wait, "catch", s1(lvm_wait)) \
+ _(nif_spawn, "twirl", s2(lvm_spawn)) _(nif_wait, "catch", s1(lvm_wait)) \
  _(nif_sleep, "rest", s1(lvm_sleep)) _(nif_donep, "back?", s1(lvm_donep)) \
  _(nif_hush, "freeze", s1(lvm_hush)) \
  _(nif_key, "cue?", s1(lvm_key)) \
@@ -1749,7 +1749,7 @@ static struct ai *ai_eval(struct ai *g) {
  // the poll then carries on, ^C and cooperative scheduling intact. With no runnable peer
  // (file mode, the lone task) the stack resets to the eval boundary and the fault
  // re-raises as a catchable (scare 'fault sig) through `help` -- transparent, up through
- // object-array ops, spin, and (ev ..). Nested evals run inside this one barrier
+ // object-array ops, twirl, and (ev ..). Nested evals run inside this one barrier
  // (ai_eval_armed); compilation (c0, above) is outside it.
  if (!ai_ok(g)) return g;
  if (ai_eval_armed) return g->ip->ap(g, g->ip, g->hp, g->sp);
@@ -4890,7 +4890,7 @@ lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putcharm(0), Ip
 // love's OWN code still crashes for real. The native body never touches love state
 // (the call contract), so recovery is clean -- no heap-consistency question here.
 // (The broad version -- a barrier at ai_eval turning faults in object-array ops,
-// twirl, etc. into scares -- reuses this same handler; that's the next step.)
+// spin, etc. into scares -- reuses this same handler; that's the next step.)
 #if __STDC_HOSTED__
 static ai_noinline ai_word eat_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {
  ai_fault_arm();                                          // shared barrier (defined before ai_eval)

@@ -75,7 +75,7 @@
    (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
      src (link '\ (link 'x (link (nfnest f n 'x) ())))  ; alloc before spin; printer source
-     th (twirl (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
+     th (spin (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
      _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past spin: th can't move
      _ (poke (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
      _ (nfa th 0 n)
@@ -114,7 +114,7 @@
    ; ceils, a complex its modulus when it sorts positive, an array its element
    ; sum -- the saturated net. k=0 -> 1 (const 1); k=1 -> x directly -- the snappy basics.
    ; cached compose-combinators: cmpk = (\ f (\ x f^k(x))) -- applying a numeral k to a FUNCTION f is just
-   ; (cmpk f), a normal closure CAPTURE of f, no per-call thread assembly (numfn's twirl/poke). Built ONCE,
+   ; (cmpk f), a normal closure CAPTURE of f, no per-call thread assembly (numfn's spin/poke). Built ONCE,
    ; compiled like any lambda; k past the cache falls back to numfn. The hot case (2/3) hits hand-written
    ; `twice`/`thrice` speed. They + num-ap sit in this nested (body-HAVING) `:`, so they are LOCAL -- num-ap
    ; captures them as siblings, they never reach the book, no mop entry. pre-operators: prefix only.
@@ -228,9 +228,9 @@
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(())))
 (: (tap cl)
- (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (twirl 5))))))
+ (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (spin 5))))))
  (jug _)                                          ; the output dual of `tap`: a memory-backed output PORT -- say INTO it, slurp it back OUT (you pour both ways, like a jug). NOT a cask (a cask is a byte ARRAY)
-  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (twirl 6)))))))
+  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (spin 6)))))))
  (sip o) (see o)                                  ; draw ONE unit (pairs with slurp = all)
  ; slurp drains a vessel to a value: an output jug reads its backing buffer; a tap drains via see.
  (slurp o) (? (= -2 (peek 1 o)) (snip (peek 4 o) 0 (peek 5 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 4 is a string too (its read backing), so the old string? probe lies

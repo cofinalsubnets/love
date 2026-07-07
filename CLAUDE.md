@@ -48,7 +48,7 @@
 ; * quasiquote is GONE: the ` list ctor EVALUATES every element, so QUOTE the literal positions
 ;   instead of unquoting the computed ones (numbers self-eval, so bare). a lisp-primed hand
 ;   writes the inverse convention on reflex -- check every ` twice.
-; * a corpus test that spins a task must (catch p) it: an orphan stalls the kernel runner.
+; * a corpus test that twirls a task must (catch p) it: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the interactive
 ;   shell installs a default help (ai/bao.l shell-help): a scare prints `;; a b` and answers the zero
 ;   point, so the session survives every raise and a missing nom or apcap is VISIBLE; the more bits
@@ -180,8 +180,8 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- then the
 ; hatchling installs as `ev` in the image at C compile time, no allocation; `born` records the hatch
 ; time (unbound pre-egg, an unbound nom reading the zero point). just before birth the egg MOPS UP
-; every runtime-internal nom: the raw cell nifs (peek poke seek twirl -- (twirl 2 3) is a segfault, big
-; scare; twirl stays, it's ultimate), the compiler's machinery (boxfix, wev, the num-ap and
+; every runtime-internal nom: the raw cell nifs (peek poke seek spin -- (spin 2 3) is a segfault, big
+; scare; spin stays, it's ultimate), the compiler's machinery (boxfix, wev, the num-ap and
 ; array-ctor helpers, the macro expanders -- the macro TABLE lives on inside the compiler's closures),
 ; every hot lvm_* pointer, and finally the `book` itself. compiled references were folded, so only the
 ; noms die; noms the printer/reader/expanders EMIT (spread link pin tablet mono list ..) stay, as do

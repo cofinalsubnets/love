@@ -128,8 +128,8 @@
                      _ (raw 1)
                      _ (say out "\e[?1049h\e[2J")
                      _ (flush out)
-                     up (spin (\ _ (oars m)) 0)
-                     sw (spin (\ _ (swim bx m dirty 1)) 0)
+                     up (twirl (\ _ (oars m)) 0)
+                     sw (twirl (\ _ (swim bx m dirty 1)) 0)
                      _ (moor bx m dirty)            ; ... until the child hangs up
                      _ (freeze sw)
                      _ (? (back? up) (catch up) (freeze up))

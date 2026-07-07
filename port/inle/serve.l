@@ -163,7 +163,7 @@
    (accept-loop l)
      (: _ (await l)                                 ; park until a client is pending
         c (accept l)                                ; now ready -- does not block
-        _ (? c (spin (\ _ (: _ (note "dock: client moored") _ (session c)
+        _ (? c (twirl (\ _ (: _ (note "dock: client moored") _ (session c)
                              _ (close c) (note "dock: client cast off"))) ())
              0)
         (accept-loop l))

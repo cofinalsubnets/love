@@ -1,5 +1,5 @@
 ; tests for cooperative multitasking: hatch / yield / wait / sleep / done?.
-; (spin fn x)  -> pid (positive integer); starts a new task running (fn x).
+; (twirl fn x)  -> pid (positive integer); starts a new task running (fn x).
 ;                  the main task has reserved pid 0.
 ; (rest 0)     -> nil; cooperatively suspends so other ready tasks can run.
 ;                  (yield) is just `yield` since (x)=x in l — call with an arg.
@@ -14,16 +14,16 @@
 
 (assert
  ; hatch-wait round trip: fn is applied to x; the result flows back through wait.
- (= 42 (: p (spin (\ x x) 42) (catch p)))
- (= 43 (: p (spin (\ x (+ x 1)) 42) (catch p)))
- (= 49 (: p (spin (\ x (* x x)) 7) (catch p)))
+ (= 42 (: p (twirl (\ x x) 42) (catch p)))
+ (= 43 (: p (twirl (\ x (+ x 1)) 42) (catch p)))
+ (= 49 (: p (twirl (\ x (* x x)) 7) (catch p)))
 
  ; hatch returns a positive integer pid (main reserves pid 0).
- (: p (spin (\ _ 0) 0) _ (catch p) (&& (charm? p) (> p 0)))
+ (: p (twirl (\ _ 0) 0) _ (catch p) (&& (charm? p) (> p 0)))
 
  ; pids are monotonically increasing within a VM.
- (: a (spin (\ x x) 0)
-    b (spin (\ x x) 0)
+ (: a (twirl (\ x x) 0)
+    b (twirl (\ x x) 0)
     _ (catch a) _ (catch b)
     (> b a))
 
@@ -35,28 +35,28 @@
  (= 0 (catch 0))
 
  ; collecting a dormant task removes it: a second wait on the same pid sees 0.
- (: p (spin (\ x x) 99)
+ (: p (twirl (\ x x) 99)
     (&& (= 99 (catch p)) (= 0 (catch p))))
 
  ; many tasks can be reaped in any order.
- (: a (spin (\ x (* x 10)) 3)
-    b (spin (\ x (* x 10)) 4)
-    c (spin (\ x (* x 10)) 5)
+ (: a (twirl (\ x (* x 10)) 3)
+    b (twirl (\ x (* x 10)) 4)
+    c (twirl (\ x (* x 10)) 5)
     (&& (= 50 (catch c))
         (= 30 (catch a))
         (= 40 (catch b))))
 
  ; a task may yield mid-execution and still return its value through wait.
- (: p (spin (\ x (do (rest 0) (rest 0) (rest 0) (+ x 1))) 41)
+ (: p (twirl (\ x (do (rest 0) (rest 0) (rest 0) (+ x 1))) 41)
     (= 42 (catch p)))
 
  ; nested hatch: a worker can hatch and wait on its own subtask.
- (: p (spin (\ _ (: q (spin (\ x (+ x 1)) 10) (catch q))) 0)
+ (: p (twirl (\ _ (: q (twirl (\ x (+ x 1)) 10) (catch q))) 0)
     (= 11 (catch p)))
 
  ; tasks share the heap: a captured hash sees writes from the worker.
  (: t (tablet 0)
-    p (spin (\ k (pin t k 'done)) 'key)
+    p (twirl (\ k (pin t k 'done)) 'key)
     _ (catch p)
     (= 'done (peep t 'key 0)))
 
@@ -65,7 +65,7 @@
  ; alongside it and eventually returns the result.
  (: t (tablet 0)
     _ (pin t 'n 0)
-    p (spin (\ _ (: (loop _) (? (< (peep t 'n 0) 3)
+    p (twirl (\ _ (: (loop _) (? (< (peep t 'n 0) 3)
                                 (do (pin t 'n (+ 1 (peep t 'n 0)))
                                    (rest 0)
                                    (loop 0))
@@ -84,13 +84,13 @@
  (= 1 (back? 0))
 
  ; done? on a freshly spawned task is false: the task hasn't completed.
- (: p (spin (\ _ 42) 0) r (back? p) _ (catch p) (nil? r))
+ (: p (twirl (\ _ 42) 0) r (back? p) _ (catch p) (nil? r))
 
  ; after yielding, the worker completes and done? becomes true.
- (: p (spin (\ _ 42) 0) _ (rest 0) r (back? p) _ (catch p) (= 1 r))
+ (: p (twirl (\ _ 42) 0) _ (rest 0) r (back? p) _ (catch p) (= 1 r))
 
  ; after wait collects the task, done? is again true (pid is gone).
- (: p (spin (\ _ 42) 0) _ (catch p) (= 1 (back? p)))
+ (: p (twirl (\ _ 42) 0) _ (catch p) (= 1 (back? p)))
 
  ; --- sleep ---
 
@@ -108,8 +108,8 @@
 
  ; sleeping tasks run concurrently: two parallel 30ms sleeps finish in well under 60ms.
  (: t0 (clock 0)
-    a (spin (\ _ (rest 30)) 0)
-    b (spin (\ _ (rest 30)) 0)
+    a (twirl (\ _ (rest 30)) 0)
+    b (twirl (\ _ (rest 30)) 0)
     _ (catch a) _ (catch b)
     elapsed (clock t0)
     (&& (>= elapsed 30) (< elapsed 60)))
@@ -119,7 +119,7 @@
  ; so main's yield_sw enters the deadline-coalesce wait with peer's 30 as min_wake.
  ; When peer wakes at ~30, main's pending wake_at must be preserved across the snapshot.
  (: t0 (clock 0)
-    p (spin (\ _ (rest 30)) 0)
+    p (twirl (\ _ (rest 30)) 0)
     _ (rest 0)
     _ (rest 80)
     _ (catch p)
@@ -129,8 +129,8 @@
  ; sleep cooperates: while one task sleeps, another finishes its work.
  (: t (tablet 0)
     _ (pin t 'flag 0)
-    a (spin (\ _ (rest 30)) 0)
-    b (spin (\ _ (pin t 'flag 1)) 0)
+    a (twirl (\ _ (rest 30)) 0)
+    b (twirl (\ _ (pin t 'flag 1)) 0)
     _ (catch a) _ (catch b)
     (= 1 (peep t 'flag 0)))
 
@@ -147,24 +147,24 @@
  ; wait on its pid returns 0 (unknown).
  (: t (tablet 0)
     _ (pin t 'flag 0)
-    p (spin (\ _ (: (loop _) (do (rest 0) (pin t 'flag 1) (loop 0)) (loop 0))) 0)
+    p (twirl (\ _ (: (loop _) (do (rest 0) (pin t 'flag 1) (loop 0)) (loop 0))) 0)
     r (freeze p)
     (&& (= 1 r) (= 0 (catch p))))
 
  ; chill a dormant task (already finished): also returns 1, then wait sees 0.
- (: p (spin (\ _ 42) 0)
+ (: p (twirl (\ _ 42) 0)
     _ (rest 0)
     ; p is dormant now (back? would be 1).
     (&& (= 1 (freeze p)) (= 0 (catch p))))
 
  ; double-chill: second chill is a no-op since the pid is gone from the ring.
- (: p (spin (\ _ (: (loop _) (do (rest 0) (loop 0)) (loop 0))) 0)
+ (: p (twirl (\ _ (: (loop _) (do (rest 0) (loop 0)) (loop 0))) 0)
     (&& (= 1 (freeze p)) (= 0 (freeze p))))
 
  ; killing one of several tasks leaves the others intact.
  (: t (tablet 0)
-    a (spin (\ _ (: (loop _) (do (rest 0) (loop 0)) (loop 0))) 0)
-    b (spin (\ x (* x 10)) 7)
+    a (twirl (\ _ (: (loop _) (do (rest 0) (loop 0)) (loop 0))) 0)
+    b (twirl (\ x (* x 10)) 7)
     _ (freeze a)
     rb (catch b)
     (&& (= 0 (catch a)) (= 70 rb)))
@@ -181,8 +181,8 @@
  ; (capped so it can't wrap the 1-byte cask) never ran -- now it runs many times.
  (: big (200000 2)
     ticks (cask 1)
-    w (spin (\ _ (* big big)) 0)
-    t (spin (\ _ (: (go _) (? (back? w) 0
+    w (twirl (\ _ (* big big)) 0)
+    t (twirl (\ _ (: (go _) (? (back? w) 0
                                (: c (peep ticks 0 0)
                                   _ (? (< c 250) (pin ticks 0 (+ c 1)) 0)
                                   _ (rest 0) (go 0)))
@@ -192,7 +192,7 @@
 
  ; a peer can chill a task while it is mid-multiply, not only once it finishes:
  ; the worker parks at a yield inside the product, so chill finds it runnable.
- (: w (spin (\ _ (* (200000 2) (200000 2))) 0)
+ (: w (twirl (\ _ (* (200000 2) (200000 2))) 0)
     _ (rest 0)
     (&& (= 1 (freeze w)) (= 0 (catch w))))
 
@@ -201,15 +201,15 @@
  ; wait on a sleeping task: main has to sleep deeply alongside it, then
  ; collect the result. Elapsed should be ~30ms, not 0 or much more.
  (: t0 (clock 0)
-    p (spin (\ _ (do (rest 30) 'done)) 0)
+    p (twirl (\ _ (do (rest 30) 'done)) 0)
     r (catch p)
     elapsed (clock t0)
     (&& (= 'done r) (>= elapsed 30) (< elapsed 80)))
 
  ; tasks with different sleep durations wake in order: shorter sleep
  ; finishes first, longer still sleeping when we check, then completes.
- (: a (spin (\ _ (do (rest 10) 1)) 0)
-    b (spin (\ _ (do (rest 80) 2)) 0)
+ (: a (twirl (\ _ (do (rest 10) 1)) 0)
+    b (twirl (\ _ (do (rest 80) 2)) 0)
     ra (catch a)               ; ~10ms; b still sleeping
     db (back? b)              ; b should still be running
     rb (catch b)               ; ~70ms more
@@ -217,7 +217,7 @@
 
  ; chill a sleeping task: scheduler skips it via wake_at, but chill walks the
  ; ring directly and finds it regardless of state.
- (: p (spin (\ _ (do (rest 10000) 'never)) 0)
+ (: p (twirl (\ _ (do (rest 10000) 'never)) 0)
     r (freeze p)
     (&& (= 1 r) (= 0 (catch p))))
 
@@ -225,8 +225,8 @@
  ; gets time while another sleeps.
  (: t (tablet 0)
     _ (pin t 'n 0)
-    a (spin (\ _ (rest 30)) 0)
-    b (spin (\ _ (: (loop _) (? (< (peep t 'n 0) 5)
+    a (twirl (\ _ (rest 30)) 0)
+    b (twirl (\ _ (: (loop _) (? (< (peep t 'n 0) 5)
                                 (do (pin t 'n (+ 1 (peep t 'n 0)))
                                    (rest 0)
                                    (loop 0))

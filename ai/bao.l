@@ -343,7 +343,7 @@
    ; `help` function gets control at the scare (condition data on struct g)
    ; BEFORE the task dies; either way done?/key? is where the repl resumes.
    (do_eval v)
-     (: pid (spin ev v)
+     (: pid (twirl ev v)
         (poll _)
           (? (back? pid) (: r (catch pid) _ (putx r) -1)   ; the answer
              (cue? 0)    (: c (getc 0)
@@ -448,7 +448,7 @@
      (: r ((ev 'mind) argv)
         (? (two? r)
            (: pid (cap r) m (cup r)
-              up (spin (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF
+              up (twirl (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF
               _ (pump m out)                                      ; child -> stdout; ends when the child dies
               _ (? (back? up) (catch up) (freeze up))                ; join the input pump through the one death
               _ (flush out)

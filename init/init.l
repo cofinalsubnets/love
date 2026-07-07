@@ -50,14 +50,14 @@
    ; once it is up (a service running) or done (a oneshot that completed).
    (up? reg name) (: s (peep reg name 'down) (? (id? s 'up) 1 (id? s 'done)))
 
-   ; --- the watchdog: supervise one SERVICE (Restart=) --- spin the thunk (the modeled
+   ; --- the watchdog: supervise one SERVICE (Restart=) --- twirl the thunk (the modeled
    ; process); if it faults, the `help` below welps the task to (), so `catch` comes back
    ; falsey and we RESTART per policy, counting attempts in `cnt`. clean exit (a truthy
    ; return) -> up. give up after `tries-cap`. on metal: fork+exec, and THIS loop is the
    ; SIGCHLD handler re-spawning the pid per its Restart= -- identical control flow.
    tries-cap 3
    (supervise name thunk policy cnt)
-     (: p (spin thunk 0)
+     (: p (twirl thunk 0)
         r (catch p)
         (? r 1                                        ; clean -> running
            (: n (+ 1 (peep cnt name 0)) _ (pin cnt name n)
@@ -190,7 +190,7 @@
               units (L (unit 'slow 'service (L "sh" "-c" "sleep 0.15; exit 0") 'on-fail ())
                        (unit 'flap 'service (L "sh" "-c" "exit 1")             'on-fail ()))
               _ (note "-- PERCEIVE: park on a signalfd; a heartbeat task ticks alongside (the merge) --")
-              hb (spin (\ _ (heart 5 40)) 0)             ; heartbeat TASK: parks on the clock
+              hb (twirl (\ _ (heart 5 40)) 0)             ; heartbeat TASK: parks on the clock
               _ (each units (\ u (rstart pids u)))
               _ (watch sig units pids tries (tally units))
               _ (catch hb)                               ; join the heartbeat (the orphan law)

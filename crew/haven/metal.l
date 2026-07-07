@@ -131,7 +131,7 @@
                                                     (close p2)))
                                      (scan i) (? (< 15 i) 0
                                                  (: p2 (open (+ "/dev/input/event" (show i)) "r")
-                                                    _ (? (lit? p2) (spin (\ u (reader p2)) 0) 0)
+                                                    _ (? (lit? p2) (twirl (\ u (reader p2)) 0) 0)
                                                     (scan (+ i 1))))
                                      (scan 0))
                                 _ (metal-mode 1)                           ; fbcon lets go of the glass

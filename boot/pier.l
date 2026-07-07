@@ -97,7 +97,7 @@
  pid (cap md)
  _ (still pid 15)
  st (wfx pid)
- _ (pull camp 'md 0)                         ; reaped: a second wfx would spin
+ _ (pull camp 'md 0)                         ; reaped: a second wfx would twirl
  _ (must 'pier-reaped (two? st))
  _ (close s)
  _ (strike ())                               ; the same teardown the failure path takes

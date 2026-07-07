@@ -231,8 +231,8 @@
                  fx #f0
                  dirty #1
                  _ (setwinsize m r c)
-                 up (spin (\ _ (: _ (moor bx m dirty) (seal s 0))) 0)
-                 pnt (spin (\ _ (px-paintloop s win gc depth bx fx rig dirty -1)) 0)
+                 up (twirl (\ _ (: _ (moor bx m dirty) (seal s 0))) 0)
+                 pnt (twirl (\ _ (px-paintloop s win gc depth bx fx rig dirty -1)) 0)
                  _ (px-watch s m km del bx fx rig dirty)
                  _ (freeze pnt)
                  _ (? (back? up) (catch up) (: _ (still pid 15) (freeze up)))

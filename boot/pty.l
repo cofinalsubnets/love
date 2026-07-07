@@ -11,7 +11,7 @@
 
 ; gather is non-blocking (WNOHANG): a child can EOF its master a hair before it
 ; becomes a zombie, so a poll right then reads 0 "still running". That gap is
-; exactly why gather returns a PAIR -- poll, don't spin. waitfor blocks for it.
+; exactly why gather returns a PAIR -- poll, don't twirl. waitfor blocks for it.
 ; The exited pair is told from still-running STRUCTURALLY (two?), never by net:
 ; the status pair (0) nets blue (a chain of nothings is nothing), so it can't be
 ; distinguished from 0 by ! / nil? -- only by being a chain.

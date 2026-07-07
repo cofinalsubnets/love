@@ -49,7 +49,7 @@
     ;     scheduler (each parked in a port read on its own fd).
     ; Teardown joins through one path: send all of stdin, half-close, then WAIT
     ; for the inbound pump to drain to the peer's EOF before the final close.
-    (talk s) (: down (spin (\ _ (pump s out)) 0)   ; socket -> stdout, in a task
+    (talk s) (: down (twirl (\ _ (pump s out)) 0)   ; socket -> stdout, in a task
                 _ (pump in s)                        ; stdin -> socket (drains fully here)
                 _ (seal s 1)                     ; half-close write: peer sees stdin EOF
                 _ (catch down)                        ; let the inbound pump drain to socket EOF

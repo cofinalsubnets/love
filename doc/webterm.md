@@ -47,7 +47,7 @@ different ways**:
 - the **line editor** (`edln`/`edraw`/`edev`/`edesc`, `bao.l:219-233`) **blocks**
   on `getc 0` — it expects a byte to be there;
 - **evaluation** (`do_eval`, `bao.l:345-353`) **polls** — `cue? 0` for
-  readiness, `getc 0` to read, `rest 0` to yield, with `spin ev` running the work
+  readiness, `getc 0` to read, `rest 0` to yield, with `twirl ev` running the work
   as a task so a scare can't kill the repl.
 
 The kernel satisfies the blocking `getc 0` by busy-waiting on a hardware halt
@@ -62,7 +62,7 @@ the only real design choice.
 
 > **The better path is the scheduler redesign — see [`doc/sched.md`](sched.md).**
 > bao already parks correctly via `see`/`lvm_fgetc`; the blocking is really in the
-> *core scheduler's* host-wait (`ai_wait_fds`), which on wasm is a no-op spin. If
+> *core scheduler's* host-wait (`ai_wait_fds`), which on wasm is a no-op twirl. If
 > that wait is made **declinable** — native blocks, wasm returns the yield status
 > up the existing trampoline (`ai.c:1823-1827`) and an `ai_resume(g)` re-enters —
 > then this page just runs `(shell 0)` and loops "resume; on a park, wait on the

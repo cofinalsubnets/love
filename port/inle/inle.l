@@ -4,7 +4,7 @@
 ; perceive->decide->act fold, the watchdog, the checkpoint -- so the shape can be
 ; run and probed on the host before any C is written. like boot/tag.l, it is a
 ; sketch -- but milestone 1 (the heartbeat loop) is REAL on both frontends: it
-; rides `rest`/`clock`/`spin`/`catch`, which are core nifs, so the same code runs
+; rides `rest`/`clock`/`twirl`/`catch`, which are core nifs, so the same code runs
 ; on the host and, unchanged, in the kernel. the `; value` comments are the
 ; printed intent; run `out/host/ai -l port/inle/inle.l -e "(demos 0)"` to see them
 ; (the file only DEFINES demos now -- a plain load prints nothing; -l preloads it into
@@ -169,7 +169,7 @@
 ; corpus law honored, not reached. `period` is in kernel ticks (PIT 100 Hz -> 10 ms).
    (drive st port period)
      (: c (cell (replies st) (beats st))
-        p (spin (\ _ (pulse c period -1)) 0)            ; the heartbeat, unbounded (negative n)
+        p (twirl (\ _ (pulse c period -1)) 0)            ; the heartbeat, unbounded (negative n)
         _ (react c port)                                 ; the reactor (this task), unbounded
         (catch p))                                        ; unreachable on metal; orphan law kept
 
@@ -218,9 +218,9 @@
 ; task over a checkpoint string; re-checkpoint its result. a healthy round returns a
 ; state list (advance the checkpoint); a dead task returns a non-list (hold the SAME
 ; checkpoint -- no progress lost, none double-counted). on metal the timer tick polls
-; back? and respawns the agent task; here spin/catch + a shape check stand in.
+; back? and respawns the agent task; here twirl/catch + a shape check stand in.
    (supervise ckpt n period)
-     (: p (spin (\ s (run-beats (restore s) n period)) ckpt)
+     (: p (twirl (\ s (run-beats (restore s) n period)) ckpt)
         st' (catch p)
         (? (two? st') (save st') ckpt))
 
@@ -269,7 +269,7 @@
            _ (. " equal? ")        _ (. (= a back)) (. "\n")) ; true
       _ (note "-- milestone 4: a heartbeat TASK + scripted reactor steps share one cell --")
       _ (: c (cell 0 0)
-           p (spin (\ _ (pulse c 2 3)) 0)                 ; a concurrent heartbeat: 3 real beats
+           p (twirl (\ _ (pulse c 2 3)) 0)                 ; a concurrent heartbeat: 3 real beats
            _ (each `("ping" "stat")                       ; the reactor side, scripted (no host nic)
                    (\ d (: out (policy (snap c) (link 'net d))
                            (? (two? out)

@@ -25,7 +25,7 @@
     (lit? l)                              ; the listener is a heap port
     (hot? l))                             ; ... an opaque hot, like any fd port
  ; server task: accept one client, echo its line back, half-close, close.
- srv (spin (\ _ (: c (accept l)
+ srv (twirl (\ _ (: c (accept l)
                     ln (rdline c)
                     _ (say c (ln + "\n"))
                     _ (seal c 1)

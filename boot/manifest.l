@@ -93,7 +93,7 @@
  ; HANDSHAKE: keys sent before the child's raw-mode first frame would land
  ; in a COOKED pty (ICRNL eats the \r commit) -- wait for proof, then type
  buf #""
- rd (spin (\ _ (: (pump x) (: ch (see m)
+ rd (twirl (\ _ (: (pump x) (: ch (see m)
                               (? (= ch -1) ()
                                (: _ (pin buf 0 (+ (buf -> 0 "") ("" + ch)))
                                   (pump ()))))

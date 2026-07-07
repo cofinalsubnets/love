@@ -297,7 +297,7 @@
    ;     hoist past the interpreted fills it interleaves with); self-recursive, no sibling call (v1). ==
    ;     interp: the lifted fn gets the SAME captures BY VALUE. The lifted `(g .. h ..)` then needs the MAP
    ;     lane (groupok?/jitgroupir) to glaze; until that lands plift is STANDALONE -- OFF the autogroup chain.
-   roalloc '(pin pull link tablet hash cask say pour jug tap put puts putc putn putx flush dot see sip slurp sound read reads rand randf spin catch scare ev)   ; allocating/mutating/IO heads -- a `_`-bound one is an EFFECT that must NOT be dropped or hoisted
+   roalloc '(pin pull link tablet hash cask say pour jug tap put puts putc putn putx flush dot see sip slurp sound read reads rand randf twirl catch scare ev)   ; allocating/mutating/IO heads -- a `_`-bound one is an EFFECT that must NOT be dropped or hoisted
    (uses-head? hs e) (? (two? e) (|| (member? (cap e) hs) (foldl (\ a x (|| a (uses-head? hs x))) 0 (cup e))) 0)
    (fnpair? pr) (: nf (cap pr) (&& (two? nf) (name? (cap nf)) (< 1 (tally nf)) (all name? (cup nf)) (distinctp (cup nf))))  ; (g q..) define-sugar
    (roloop? pr sibs) (: g (caap pr) body (cup pr)                                                 ; a hoistable READ-ONLY self-loop

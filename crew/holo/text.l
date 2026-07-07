@@ -34,7 +34,7 @@
    (txint s)   (foldl (\ a i (+ (* a 10) (- (s i) 48))) 0 (jot (tally s)))
    (txnum p)   (? (= (cap p) "-") (- 0 (txint (txjoin (cup p)))) (txint (txjoin p)))
 
-   ;; -- the line grammar. a token is at least one char (so `many` can't spin on the empty match). --
+   ;; -- the line grammar. a token is at least one char (so `many` can't twirl on the empty match). --
    txtsym (pmap (\ x (L (intern (txjoin x)))) (seq (one txidc?) (span txidc?)))
    txtnum (pmap (\ x (L (txnum x))) (seq (opt (lit "-")) (seq (one txdig?) (span txdig?))))
    txop   (alt txtnum txtsym)                                   ; an operand: number first, else symbol

@@ -159,7 +159,7 @@
  _ (ask "(kill! ())")
  gb (wfx (cap skb))
  _ (close (cup skb))
- _ (pull camp 'skb 0)                        ; reaped: a second wfx would spin on the dead pid
+ _ (pull camp 'skb 0)                        ; reaped: a second wfx would twirl on the dead pid
  _ (must 'blue-clean (= 0 (cap gb)))                    ; blue's OWN exit, status 0
  _ (must 'red-spreads (waithue 76 120 0 0 192 100))     ; red owns the left again
  _ (close mc)

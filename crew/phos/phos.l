@@ -44,7 +44,7 @@
    (float! w r) (phos! (\ st (L (wsdofloat (cap st) w r) (caup st) (nthl st 2) w)))
    (row u) (wsrow (cap (phos-st ())))
 
-   ; the moor: shore the socket, spin a session per client -- read one form
+   ; the moor: shore the socket, twirl a session per client -- read one form
    ; (sound keeps the read protocol), eval through the self-hosted ev, show
    ; the value back. deliberate orphans, like the dock's: phos runs forever.
    (phos-sock u) (: rd (getenv "XDG_RUNTIME_DIR")
@@ -82,7 +82,7 @@
              _ (flush out)
              (knock _) (: _ (await lp)
                           c (accept lp)
-                          _ (? (lit? c) (spin (\ _ (: _ (phos-session c) (close c))) 0) 0)
+                          _ (? (lit? c) (twirl (\ _ (: _ (phos-session c) (close c))) 0) 0)
                           (knock ()))
              (knock ())))))
 
@@ -401,7 +401,7 @@
                        _ (map (\ w (? (any (\ x (= x w)) (wsrow sh0)) 0 (x-unmap s w))) (wstiled sh0))   ; adopted onto a HIDDEN tag: hide it
                        _ (x-flush s)                                             ; now, or it lingers painted over workspace 1 (the WM_STATE
                        _ (refocus sh0) (line (+ "phos: adopted " (show kids)))) 0)   ; stamp keeps it adoptable through the NEXT restart)
-   _ (spin (\ u (phos-moor (phos-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
+   _ (twirl (\ u (phos-moor (phos-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
    _ (loop sh0 phos-layout () ())
    _ (close s)
    (line "phos: done"))

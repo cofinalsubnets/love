@@ -78,7 +78,7 @@ ordinary ai condition:
   never touches ai state, so this recovery is unconditional.
 - **`g_eval`** carries the same barrier over the whole VM run, so *any* in-eval
   hardware fault becomes a catchable `(scare 'fault <signal>)` delivered through
-  `help` — transparent, up through object-array ops, `spin`, and `(ev …)`. In file
+  `help` — transparent, up through object-array ops, `twirl`, and `(ev …)`. In file
   mode that is a clean terminal scare instead of a core dump; interactively the
   fault recovers **per task** — the faulting ("burnt") task is unlinked from the
   scheduler ring and a live peer resumes, so a faulting repl line just fails and the
