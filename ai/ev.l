@@ -14,6 +14,16 @@
 ; as a free import). A global resolves identically in every bootstrap generation.
 (: gone (nom 'gone))
 
+; gv: the LAYERED global read -- (books ()) is the live chain of books (the abyss;
+; one link today, orth), walked head-first with `gone` as the per-layer miss
+; sentinel (a stored () SHADOWS, never falls through), answering d on total miss.
+; Every book read in this file routes here, so a later layer can shadow orth
+; without touching the compiler again. The C twin is ai.c's bookget; keep in step.
+(: (gv k d) ((: (go c) (? (atom? c) d
+                          (: v (peep (cap c) k gone)
+                             (? (id? v gone) (go (cup c)) v))))
+             (books ())))
+
 ; feels: value->ap memo for global fns, built once by scanning every global. A ap
 ; folds an application to a value when its args are constant (pure fns only), else emits an
 ; (iop op . args) node iap inlines (any nif of matching arity), else leaves it. A nif is found
@@ -33,7 +43,7 @@
             snip string
             re im conj arg gem twin
             sine cosine log power))
-   (foldl (\ t s (: v (book s) (? v (pin t v 1) t))) (tablet 0) names)))
+   (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) (tablet 0) names)))
 (: feels (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
@@ -55,7 +65,7 @@
     (go v as))
    ; the operator symbols are quoted one by one -- bare mid-list they would
    ; capture their left neighbor when this file compiles (the opfix pass).
-   (add t s) (: v (book s)
+   (add t s) (: v (gv s ())
     (? (charm? v) t
      (: o (opof v) p (pureset v)
       (? (|| o p)
@@ -63,7 +73,7 @@
           ar (? o (cup o) (id? lvm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (\ x (hgen v op ar p x))))
        t))))
-   (foldl add (tablet 0) (keys book))))
+   (foldl add (tablet 0) (catmap keys (books ())))))
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
@@ -196,7 +206,7 @@
    (fold x bnd) (: h (cap x)
     (? (atom? (cup x)) x                          ; (f) single element -> ana's (atom? b) handles
        (|| (nil? (nom? h)) (member? h bnd)) (link apx (link 0 x))   ; local/computed head
-       (: v (book h) hd (feels v)
+       (: v (gv h ()) hd (feels v)
         (? hd (hd x)
            (napof v (cup x)) (link apx (link 1 x))
            (link apx (link 0 x))))))
@@ -239,7 +249,7 @@
    ; only when CONSUMED (op=1, an enclosing application's head); at a VALUE position (op=0) we
    ; REVERT to the un-inlined source, preserving the capturing closure. ((twice (adder i)) i)
    ; collapses to 3i (a value -> fine); ((\ n ..) 5) stays a capturing closure (it escapes).
-   (pure-head? h) (! (! (peep pureset (book h) 0)))                                    ; h's global value is a KNOWN PURE fn (the lifted ~50-fn set)
+   (pure-head? h) (! (! (peep pureset (gv h ()) 0)))                                    ; h's global value is a KNOWN PURE fn (the lifted ~50-fn set)
    (allp as se) (? (cnul? as) 1 (? (purep (cap as) se) (allp (cup as) se) 0))          ; all args effect-free?
    (purep a se) (?                                                                     ; effect-free -> duplicable/droppable
     (atom? a) 1                                                                         ; nom / number / string
@@ -259,7 +269,7 @@
     (atom? x) ()
     (id? (cap x) '\) (? (atom? (cuup x)) () (: r (lp x) (fvs (last x) (cat (cap r) bs))))
     (foldl (\ a e (cat a (fvs e bs))) () x))
-   (closedl? lam) (all (\ v (! (! (book v)))) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
+   (closedl? lam) (all (\ v (! (! (gv v ())))) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
    (pbody? x bnd) (?                                                                   ; body is PURE: every call head a pure fn or a param
     (atom? x) 1
     (id? (cap x) '?) (all (\ e (pbody? e bnd)) (cup x))
@@ -421,7 +431,7 @@
 
   (avb c d x)
    (? (nil? d) ; outside all lexical scopes?
-       (: y (peep book x gone) ; check global scope
+       (: y (gv x gone) ; check global scope (the layered walk)
         (? !(id? y gone) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
           (em2 lvm_index x))))
@@ -469,7 +479,7 @@
    ; native-backed entry that DEOPTS into e on overflow. transparent (value[-1]=s kept),
    ; id?-distinct (fresh per ala call), macro-safe (s is the surface, pre-tag). dormant
    ; -> peep gives 0 -> e unchanged, so the egg/bootstrap is untouched.
-   hk (peep book 'natjit 0)
+   hk (gv 'natjit 0)
    (link (? hk (hk e s a) e) (d 'imp)))
 
   ; --- let analyzer (the hard one) -- letrec* over (: name def .. body). three phases:

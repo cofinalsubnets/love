@@ -167,7 +167,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); each tail-jumps to its apply handler
- lvm_putn, lvm_gauge,    lvm_clock, lvm_apof, lvm_seal,
+ lvm_putn, lvm_gauge,    lvm_clock, lvm_apof, lvm_seal, lvm_books,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_eat1, lvm_eat2, lvm_toast, lvm_toasted,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -301,6 +301,8 @@ static ai_inline word *map_slots(word m) { return &cell(map_back(m))[3].x; }
 static ai_inline uintptr_t map_len(word m) { return getcharm(cell(map_back(m))[1].x); }
 static ai_inline uintptr_t map_cap(word m) { return getcharm(cell(map_back(m))[2].x); }
 word ai_mapget(struct ai*, word, word, word);
+static word bookget(struct ai*, word, word);   // the layered global read: walks g->book (a CHAIN of books) head-first
+static word macroget(struct ai*, word);        // the layered macro read: each layer's table rides its [nil] slot
 static struct ai *ai_mapput(struct ai*), *map_new(struct ai*);
 static ai_inline struct ai_str *buf_str(word x) { return ((struct ai_buf*) x)->str; }
 // the byte ops read from a string or a buf; both resolve to a ai_str of bytes.
@@ -768,7 +770,7 @@ lvm_t lvm_fault;
 #endif
 #define nifs(_) \
  _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
- _(nif_seal, "seal-hooks", s1(lvm_seal))\
+ _(nif_seal, "seal-hooks", s1(lvm_seal)) _(nif_books, "books", s1(lvm_books))\
  _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
  _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
  _(nif_lt, "<", s2(lvm_lt))  _(nif_le, "<=", s2(lvm_le)) _(nif_eq, "=", s2(lvm_eq))\
@@ -849,7 +851,7 @@ enum ai_status ai_fin(struct ai *g) {
  return s; }
 
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- for (g = ai_push(g, 1, ai_core_of(g)->book); n--;
+ for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
   g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
  ai_core_of(g)->sp++;
  return g; }
@@ -940,6 +942,13 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = ai_push(g, 1, nil);
   g = ai_mapput(g);                     // -> sp[0] = book
   g->book = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
+  // the ABYSS: g->book holds a CHAIN of books, walked head-first (bookget) --
+  // one link today (orth, the boot book); a later layer prepends and shadows.
+  // The l-level `book` global stays the orth MAP (def0 pins A(g->book)).
+  if (ai_ok(g = ai_have(g, Width(struct ai_chain)))) {
+   struct ai_chain *ly = (void*) bump(g, Width(struct ai_chain));
+   ini_chain(ly, g->sp[0], ZeroPoint);
+   g->book = (word) ly; }
   g = ai_pop(g, 1);
   // the WEAK intern map (string -> the canonical atom), created before the
   // first intern (the def tables just below). it lives OUTSIDE the traced
@@ -947,7 +956,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = map_new(g);
   if (ai_ok(g)) g->symbols = ai_pop1(g);
   struct ai_def def0[] = {
-   {"book", g->book},
+   {"book", A(g->book)},   // the l-level book = the orth MAP (the chain stays C-side; `books` reads it)
    {"in", (word) &ai_stdin},
    {"out", (word) &ai_stdout},
    {"err", (word) &ai_stderr},
@@ -1592,7 +1601,7 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
     word of = ai_core_of(g)->hot_opfix;          // sealed: a book rebind can't reach this lane
     if (!lamp(of)) {                             // pre-seal (mid-prel bootstrap): probe by nom
      struct ai_mint *os = sym_probe(ai_core_of(g), "opfix", 5);
-     of = os ? ai_mapget(ai_core_of(g), 0, word(os), ai_core_of(g)->book) : 0; }
+     of = os ? bookget(ai_core_of(g), 0, word(os)) : 0; }
     if (of && lamp(of)) {
      g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, nil, nil, of)))))));
      if (!ai_ok(g)) return g;
@@ -1794,7 +1803,7 @@ static Ana(ana_v) {
  if (!ai_ok(g)) return g;
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) {
-   if ((y = ai_mapget(g, 0, x, g->book))) return ana_q(g, c, y);
+   if ((y = bookget(g, 0, x))) return ana_q(g, c, y);
    // undefined global: resolved by lvm_index via the book at run time.
    // Only record it as a captured free variable when this scope is nested
    // (cf. ev.l avb: `(? (get 0 'par c) (push 'imp x))`). At top level there
@@ -2005,7 +2014,7 @@ static ai_inline word rev(word l) {
 static word ldels(struct ai *g, word lam, word l);
 
 static ai_inline Ana(ana_2, word a, word b) {
- if ((x = ai_mapget(g, 0, a, ai_mapget(g, nil, nil, ai_core_of(g)->book))))   // macro table = book[nil]
+ if ((x = macroget(ai_core_of(g), a)))   // macro table = each layer's [nil] slot, walked
   return g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, nil, nil, x))))))),
          analyze(g, c, ai_ok(g) ? pop1(g) : 0);
  return avec(g, b, g = analyze(g, c, a)),
@@ -2036,7 +2045,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // (ev.l) runs the same pass in feel, so both lanes share one boxfix. exp is
  // rooted across the alloc.
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
-  word bf = ai_mapget(g, 0, pop1(g), g->book);
+  word bf = bookget(g, 0, pop1(g));
   if (bf && lamp(bf)) {
    g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, nil, nil, bf)))))));
    if (ai_ok(g)) exp = pop1(g); } }
@@ -2168,7 +2177,7 @@ lvm(lvm_defglob) {
  Have(3);
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
- return Sp[0] = k, Sp[1] = v, Sp[2] = g->book, Pack(g),
+ return Sp[0] = k, Sp[1] = v, Sp[2] = A(g->book), Pack(g),   // a pin lands in the HEAD layer
   !ai_ok(g = ai_mapput(g)) ? ghelp(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
 
 // lvm_index (the late-bound global read) is defined below lvm_scare: its
@@ -2270,7 +2279,7 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
  if (s == ai_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
  if (c->book) {
   struct ai_mint *ts = sym_probe(c, "help", 4);
-  word h = ts ? ai_mapget(c, nil, word(ts), c->book) : nil;
+  word h = ts ? bookget(c, nil, word(ts)) : nil;
   if (!ai_nilp(c, h) && avail(c) >= 5) {
    word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
    sp[0] = putcharm(s), sp[1] = h;
@@ -2358,14 +2367,14 @@ static ai_inline struct ai *zflush(struct ai*);
 // is seen, a rebind is honoured) and the name is NOT a frame import.
 lvm(lvm_index) {
  Have1();                          // room for the push first (may GC; no live local held yet)
- word v = ai_mapget(g, word(no_entry), Ip[1].x, g->book);
+ word v = bookget(g, word(no_entry), Ip[1].x);
  if (v != word(no_entry)) return
   *--Sp = v,                       // present: push the live value, no quote patch
   Ip += 2,
   Continue();
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
+ word h = ts ? bookget(g, nil, word(ts)) : nil;
  if (ai_nilp(g, h)) {
 #if __STDC_HOSTED__
   // helpless (file mode): the zero point is otherwise SILENT, so an unbound name reads
@@ -2403,7 +2412,7 @@ lvm(lvm_missing) {
   Continue();
  Have(8);                          // [resume a b] + ai_raise's 5 words
  struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? ai_mapget(g, nil, word(ts), g->book) : nil;
+ word h = ts ? bookget(g, nil, word(ts)) : nil;
  if (ai_nilp(g, h)) return
   Sp[1] = ZeroPoint,
   Sp++,
@@ -2446,7 +2455,7 @@ lvm(lvm_seal) {
  ai_word *const slot[] = {&g->hot_numap, &g->hot_add, &g->hot_mul, &g->hot_opfix};
  for (int i = 0; i < 4; i++) {
   struct ai_mint *y = sym_probe(g, nm[i], ln[i]);
-  ai_word cur = y ? ai_mapget(g, nil, word(y), g->book) : nil;
+  ai_word cur = y ? bookget(g, nil, word(y)) : nil;
   if (!lamp(cur)) {
    if (i < 3) __builtin_trap();   // the church trio is a prel-ordering contract
    continue; }                    // opfix: absent at the FIRST seal (defined later in the prel; the second seal fills it)
@@ -4479,6 +4488,30 @@ word ai_mapget(struct ai *g, word zero, word k, word m) {
  bool found; uintptr_t i = map_probe(g, m, k, &found);
  return found ? map_slots(m)[2 * i + 1] : zero; }
 
+// the layered global read: g->book is a CHAIN of books (the abyss -- one link
+// today, orth), walked head-first so an upper layer shadows a lower; zero is
+// the total-miss answer. A per-layer miss needs its own sentinel (a stored ()
+// must SHADOW, never fall through) -- the private static's address can be no
+// value. The l twin is ev.l's gv; keep them in step.
+static word bookget(struct ai *g, word zero, word k) {
+ static union u const miss[1];
+ for (word c = g->book; chainp(c); c = B(c)) {
+  word v = ai_mapget(g, word(miss), k, A(c));
+  if (v != word(miss)) return v; }
+ return zero; }
+
+// the layered macro read: each layer's macro table rides its [nil] slot (orth's
+// is made at boot; a layer without one is skipped). Miss answers 0, the macro
+// hook's no-macro convention.
+static word macroget(struct ai *g, word k) {
+ static union u const miss[1];
+ for (word c = g->book; chainp(c); c = B(c)) {
+  word mt = ai_mapget(g, word(miss), nil, A(c));
+  if (mt == word(miss)) continue;
+  word v = ai_mapget(g, word(miss), k, mt);
+  if (v != word(miss)) return v; }
+ return 0; }
+
 // fill an empty cap-slot backing at b (cap a power of two); caller reserves it.
 static ai_inline union u *map_fill_back(union u *b, uintptr_t cap) {
  b[0].ap = lvm_map_data, b[1].x = putcharm(0), b[2].x = putcharm(cap);
@@ -5391,6 +5424,7 @@ op11(lvm_intf, flop(Sp[0]) ? putcharm((intptr_t) flo_get(Sp[0])) : Sp[0])
 // ============================================================================
 op11(lvm_cap, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the const () (ZeroPoint), NOT the moving core (which had serial g->ip, not 0)
+op11(lvm_books, g->book)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
 op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : nil)  // the SURFACE chainp = a real compound list (formp): a named symbol is (name . mint) but counts as an atom
 lvm(lvm_link) {
  Have(Width(struct ai_chain));
