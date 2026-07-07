@@ -217,6 +217,10 @@ struct ai {
                   // directly on the hot apply paths (lvm_numap/numtap/addh/mulh,
                   // data_num_apply) -- no per-call sym_probe + book lookup. GC-traced
                   // (v0..end). Unsealed = nil -> hot_hook traps, never a wild read.
+   ai_word hot_opfix; // the operator factor pass, sealed the same way (the prel's
+                  // SECOND (seal-hooks) call, after opfix exists) -- ai_eval reads
+                  // the field, so a book rebind can't reach the C compile lane;
+                  // pre-seal (mid-prel bootstrap) it falls back to the book probe.
   union {
    ai_word x;
    struct ai_io {

@@ -915,7 +915,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
  g->len = len0, g->pool = (void*) g, g->alloc = al;
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_numap = g->hot_add = g->hot_mul = nil;   // unsealed: hot_hook traps until (seal-hooks) fills them
+ g->hot_numap = g->hot_add = g->hot_mul = g->hot_opfix = nil;   // unsealed: hot_hook traps until (seal-hooks) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
  g->minor = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
  // generational setup: a remembered set (old objects holding a young pointer) + the MAJOR pool (a
@@ -1589,8 +1589,10 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  // skipped, which also terminates the recursion through ai_eval.
  { word x0 = g->sp[0];
    if (chainp(x0) && (!lamp(A(x0)) || datp(A(x0)))) {
-    struct ai_mint *os = sym_probe(ai_core_of(g), "opfix", 5);
-    word of = os ? ai_mapget(ai_core_of(g), 0, word(os), ai_core_of(g)->book) : 0;
+    word of = ai_core_of(g)->hot_opfix;          // sealed: a book rebind can't reach this lane
+    if (!lamp(of)) {                             // pre-seal (mid-prel bootstrap): probe by nom
+     struct ai_mint *os = sym_probe(ai_core_of(g), "opfix", 5);
+     of = os ? ai_mapget(ai_core_of(g), 0, word(os), ai_core_of(g)->book) : 0; }
     if (of && lamp(of)) {
      g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, nil, nil, of)))))));
      if (!ai_ok(g)) return g;
@@ -2433,18 +2435,21 @@ static lvm(lvm_numtap) {
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
-// (seal-hooks _): resolve the church hooks (num-ap/add/mul) from book into g->hot_* ONCE. The prel
-// calls this immediately after pinning them, so every later church op reads the slot directly. Probe
-// + mapget are reads (no Have). Trap if a hook is missing -- a prel-ordering contract violation. The
+// (seal-hooks _): resolve the church hooks (num-ap/add/mul) + opfix from book into g->hot_* ONCE.
+// The prel calls this immediately after pinning the trio (opfix leniently absent there), and AGAIN
+// after opfix's definition, so every later church op / C compile reads the slot directly. Probe
+// + mapget are reads (no Have). Trap if a church hook is missing -- a prel-ordering contract violation. The
 // prel runs in every warm (and the result rides the egg image), so every runtime ends up sealed.
 lvm(lvm_seal) {
- static char const *const nm[] = {"num-ap", "add", "mul"};
- static uintptr_t const ln[] = {6, 3, 3};
- ai_word *const slot[] = {&g->hot_numap, &g->hot_add, &g->hot_mul};
- for (int i = 0; i < 3; i++) {
+ static char const *const nm[] = {"num-ap", "add", "mul", "opfix"};
+ static uintptr_t const ln[] = {6, 3, 3, 5};
+ ai_word *const slot[] = {&g->hot_numap, &g->hot_add, &g->hot_mul, &g->hot_opfix};
+ for (int i = 0; i < 4; i++) {
   struct ai_mint *y = sym_probe(g, nm[i], ln[i]);
   ai_word cur = y ? ai_mapget(g, nil, word(y), g->book) : nil;
-  if (!lamp(cur)) __builtin_trap();
+  if (!lamp(cur)) {
+   if (i < 3) __builtin_trap();   // the church trio is a prel-ordering contract
+   continue; }                    // opfix: absent at the FIRST seal (defined later in the prel; the second seal fills it)
   *slot[i] = cur; }
  Sp[0] = nil, Ip += 1;
  return Continue(); }

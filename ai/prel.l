@@ -528,6 +528,10 @@
 ; its one real win, reduction reassociation, lives in the C builtins now, and the
 ; trampoline finding in ai/glaze/probe.l + the eat/toast nifs.)
 (: (opfix x) (op-core x))
+; the SECOND seal: opfix exists now, so it joins num-ap/add/mul in the g->hot_*
+; fields (idempotent for the trio) -- the C eval lane reads the field henceforth,
+; so no later rebind of the nom can reach it.
+(seal-hooks ())
 ; eat -- run a toast's native code. the ARITY is the first operand and currying
 ; selects the eater: (eat 1 t x) passes one machine word, (eat 2 t x y) two. eat1/
 ; eat2 (the raw 1-/2-arg ABI nifs) are mopped post-egg and fold in here; only a
