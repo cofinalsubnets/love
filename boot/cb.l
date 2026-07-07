@@ -339,20 +339,20 @@
  _ (scribe s "w")
  _ (assert (= 7 (cfg s 0)) (= 0 (cface s 0))))
 
-; --- 19. damage: every write names its rows; a read clears the ledger ---
+; --- 19. wet: every write names its rows; a read clears the ledger ---
 (: s (mkscr 4 10)
- _ (assert (= 15 (& 15 (damage s 0))))       ; fresh: every row dirty
- _ (assert (= 0 (damage s 0)))               ; read-and-cleared
+ _ (assert (= 15 (& 15 (wet s 0))))       ; fresh: every row dirty
+ _ (assert (= 0 (wet s 0)))               ; read-and-cleared
  _ (scribe s "\e[3;1Hx")
- _ (assert (= 4 (damage s 0)))               ; row 2 alone
+ _ (assert (= 4 (wet s 0)))               ; row 2 alone
  _ (scribe s "hi\nyo")
- _ (assert (= 12 (damage s 0)))              ; rows 2 and 3 (\n keeps the column)
+ _ (assert (= 12 (wet s 0)))              ; rows 2 and 3 (\n keeps the column)
  _ (scribe s "\e[2J")
- _ (assert (= 15 (damage s 0)))              ; erase display: everything
+ _ (assert (= 15 (wet s 0)))              ; erase display: everything
  _ (scribe s "\e[1;5r\e[4;1H\n")             ; a region scroll dirties the region
- _ (damage s 0)
+ _ (wet s 0)
  _ (scribe s "\e[2;1H\e[L")
- _ (assert (= 14 (& 14 (damage s 0)))))      ; IL at row 1: rows 1..3
+ _ (assert (= 14 (& 14 (wet s 0)))))      ; IL at row 1: rows 1..3
 
 ; --- 20. blitrow: a grid row to pixels in one call, cursor in reverse ---
 (: s (mkscr 2 4)

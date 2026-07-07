@@ -3,7 +3,7 @@
 ; LIVE and the command owns the terminal (not captured like `run`). this is the shell
 ; init execs on the console: the pid1 story end to end (init -> sh -> real programs).
 ; it rides the host/init.c job-control nifs (spawn/wait/chdir/cwd) + getenv, plus the
-; v2 plumbing (pipe/openfd/spawnio/shutfd) for | < > >>. run:
+; v2 plumbing (pipe/openfd/spawnio/fdclose) for | < > >>. run:
 ;   out/host/ai -l init/sh.l -e "(sh 0)"
 ; line editing on a real tty is bao's own editor (`edln`, the baked shell core):
 ; in-line editing + up/down command history. `-l/-e` pass argv so main.c skips raw
@@ -24,7 +24,7 @@
 ; (ttyfg). a ^Z stop comes back from `wait` as 256+sig and parks in the job table;
 ; jobs / fg [n] / bg [n] are builtins (SIGCONT rides bao's `still`), a trailing &
 ; backgrounds the line, and finished background jobs report at the next prompt
-; (reap-drain). ^C at the PROMPT abandons the line (edln's -12). gated headless in
+; (hear-drain). ^C at the PROMPT abandons the line (edln's -12). gated headless in
 ; boot/sh.l; the pty story (stop/fg/interrupt) probed live under script(1).
 ;
 ; step 5 (env + status): the tokenizer expands $NAME and $? in unquoted words and
@@ -93,7 +93,7 @@
            (: n (sh-addjob pids 'stopped cmd)
               _ (puts (sh-jobline n (sh-jobs n))) 0)
            0))
-   ; background bookkeeping: drain reap at each prompt; a reaped pid leaves its job,
+   ; background bookkeeping: drain hear at each prompt; a reaped pid leaves its job,
    ; an emptied job prints done and goes
    (sh-unpid l p) (? !l () (? (= (cap l) p) (cup l) (link (cap l) (sh-unpid (cup l) p))))
    (sh-bgnote pid)
@@ -106,7 +106,7 @@
                                (pull sh-jobs n 0))
                         (pin sh-jobs n (L ps (sh-nth j 1) (sh-nth j 2)))))))))
    (sh-reapbg _)
-     (: r (reap 0) (? (two? r) (: _ (sh-bgnote (cap r)) (sh-reapbg 0)) 0))
+     (: r (hear 0) (? (two? r) (: _ (sh-bgnote (cap r)) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
    (sh-int s) (sh-intl s 0 0)
    (sh-intl s i a) (? (= i (tally s)) a (sh-intl s (+ i 1) (+ (* a 10) (- (s i) 48))))
@@ -188,7 +188,7 @@
         ifd  (? inf  (openfd inf 0)            pin)
         ofd  (? outf (openfd outf (? app 2 1)) pout)
         pid  (spawnio argv ifd ofd (0 - 1) allfds pg fg)
-        _    (? inf  (shutfd ifd) 0)  _ (? outf (shutfd ofd) 0)    ; parent drops the file fds
+        _    (? inf  (fdclose ifd) 0)  _ (? outf (fdclose ofd) 0)    ; parent drops the file fds
         pid)
    (sh-stages stages pipes allfds i last pg fg)
      (? !stages ()
@@ -213,7 +213,7 @@
                  (: ifd (? inf  (openfd inf 0)            (0 - 1))
                     ofd (? outf (openfd outf (? app 2 1)) (0 - 1))
                     pid (spawnio argv ifd ofd (0 - 1) () (sh-pgm 0) (sh-fgm 0))
-                    _   (? inf  (shutfd ifd) 0)  _ (? outf (shutfd ofd) 0)
+                    _   (? inf  (fdclose ifd) 0)  _ (? outf (fdclose ofd) 0)
                     _   (sh-waitfg (L pid) (sh-unwords argv))
                     0)))))
 
@@ -225,7 +225,7 @@
         pipes  (sh-makepipes n)
         allfds (sh-flat pipes)
         pids   (sh-stages stages pipes allfds 0 n (sh-pgm 0) 0)
-        _      (each allfds (\ fd (shutfd fd)))
+        _      (each allfds (\ fd (fdclose fd)))
         jn     (sh-addjob pids 'running (+ (sh-unwords words) " &"))
         _      (puts (+ "[" (+ (show jn) (+ "] " (+ (sh-unwords (map show pids)) "\n")))))
         0)
@@ -236,7 +236,7 @@
               pipes  (sh-makepipes n)
               allfds (sh-flat pipes)
               pids   (sh-stages stages pipes allfds 0 n (sh-pgm 0) (sh-fgm 0))
-              _      (each allfds (\ fd (shutfd fd)))             ; parent closes every pipe fd
+              _      (each allfds (\ fd (fdclose fd)))             ; parent closes every pipe fd
               _      (sh-waitfg pids (sh-unwords words))          ; the whole pipeline, ^Z-aware
               0)))
 

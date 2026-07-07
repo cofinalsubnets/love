@@ -149,14 +149,14 @@
  _ (must 'moor-restores (waithue 76 120 192 0 0 100))  ; the columns come back
 
  ; the control plane: swap trades the tiles (blue focused, swapped under red),
- ; then swaps back; kill! asks the focused toplevel to close and blue PARTS ON
+ ; then swaps back; part! asks the focused toplevel to close and blue PARTS ON
  ; ITS OWN -- exit 0 is the proof -- and red spreads
  _ (ask "(swapup! ())")
  _ (must 'swap-red-masters (waithue 76 120 0 0 192 100))   ; red takes the master column
  _ (must 'swap-blue-slaves (waithue 240 120 192 0 0 100))
  _ (ask "(swapdn! ())")
  _ (must 'swap-back (waithue 76 120 192 0 0 100))          ; blue masters again
- _ (ask "(kill! ())")
+ _ (ask "(part! ())")
  gb (wfx (cap skb))
  _ (close (cup skb))
  _ (pull camp 'skb 0)                        ; reaped: a second wfx would twirl on the dead pid

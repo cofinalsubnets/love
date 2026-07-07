@@ -42,7 +42,7 @@
  _ (assert
     (lit? (seal c 1))                     ; returns the port
     (= 5 (seal 5 1)))                     ; misuse: returns the arg unchanged
- _ (catch srv)                             ; reap the server task -- no orphan
+ _ (catch srv)                             ; catch the server task -- no orphan
  _ (close c)
  _ (close l))
 

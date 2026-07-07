@@ -16,7 +16,7 @@
 //   (unmap ptr n)         -> ()
 //   (mapin  dst doff ptr soff n) -> dst : mapping -> cask (compositing)
 //   (mapout ptr doff src soff n) -> () : cask/string -> mapping (a brush)
-//   (fdclose fd)          -> ()
+//   (fdclose fd)          -> () | -errno  (host/init.c owns the nif now)
 //
 // the mapping pointer is a bare charm: peek/poke-class honesty -- the app
 // keeps its sizes straight, the cask side is bounds-clamped.
@@ -203,12 +203,6 @@ static lvm(lvm_mapout) {
   Sp[4] = ZeroPoint;
   Sp += 4; Ip += 1; return Continue(); }
 
-static lvm(lvm_fdclose) {
-  intptr_t fd = (Sp[0] & 1) ? getcharm(Sp[0]) : -1;
-  if (fd >= 0) close((int) fd);
-  Sp[0] = ZeroPoint;
-  Ip += 1; return Continue(); }
-
 static union u const
   nif_shore[]   = {{lvm_shore}, {lvm_ret0}},
   nif_wlrecv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wlrecv}, {lvm_ret0}},
@@ -217,8 +211,7 @@ static union u const
   nif_mapfd[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mapfd}, {lvm_ret0}},
   nif_unmap[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_unmap}, {lvm_ret0}},
   nif_mapin[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mapin}, {lvm_ret0}},
-  nif_mapout[]  = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mapout}, {lvm_ret0}},
-  nif_fdclose[] = {{lvm_fdclose}, {lvm_ret0}};
+  nif_mapout[]  = {{lvm_cur}, {.x = putcharm(5)}, {lvm_mapout}, {lvm_ret0}};
 AI_NIF("shore", nif_shore);
 AI_NIF("wl-recv", nif_wlrecv);
 AI_NIF("wl-send", nif_wlsend);
@@ -227,4 +220,3 @@ AI_NIF("mapfd", nif_mapfd);
 AI_NIF("unmap", nif_unmap);
 AI_NIF("mapin", nif_mapin);
 AI_NIF("mapout", nif_mapout);
-AI_NIF("fdclose", nif_fdclose);

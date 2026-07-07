@@ -14,7 +14,7 @@
 ;     with no OS processes. (the oneshot lane here is already real via the `run` nif.)
 ;   (real 0) -- the REAL supervisor: services are OS processes. host/init.c adds the
 ;     two missing primitives -- (spawn argv) forks+execs and returns a pid to track,
-;     (reap _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
+;     (hear _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
 ;     same supervisor shape, now over real children. (demos 0) ends by calling it.
 ; run either:
 ;   out/host/ai -l init/init.l -e "(demos 0)"      ; or "(real 0)"
@@ -23,7 +23,7 @@
 ;
 ; what an ACTUAL pid1 still needs is small and core-clean (host/init.c via the AI_NIF
 ; glob, no ai.c/ai.h edit -- the same discipline as ain/bao). DONE: fork/execve +
-; the non-blocking waitpid reaper (spawn/reap). REMAINING: signalfd (SIGCHLD/SIGTERM
+; the non-blocking waitpid reaper (spawn/hear). REMAINING: signalfd (SIGCHLD/SIGTERM
 ; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
 ; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything BELOW that
 ; is this file -- the dependency graph, the restart policy, the checkpoint -- already ai.
@@ -109,9 +109,9 @@
 ; log the fault to the journal here). mirrors inle.l / repl.l's shell-help, quieter.
 (: help (\ s a b (? (more? s) (welp s a b) (welp s a b))))
 
-; --- the REAL supervisor (needs host/init.c: spawn + reap; kill via bao's `still`) ---
+; --- the REAL supervisor (needs host/init.c: spawn + hear; kill via bao's `still`) ---
 ; the same supervisor, now over OS PROCESSES. spawn each unit (a pid to track), then
-; poll `reap` -- the SIGCHLD core -- mapping each dead pid back to its unit and
+; poll `hear` -- the SIGCHLD core -- mapping each dead pid back to its unit and
 ; restarting on a NONZERO exit per policy. on metal this poll is driven by signalfd
 ; through ai_wait_fds (perceive), exactly as {nic, clock} is in inle; here a rest-paced
 ; loop stands in. a real service's `cmd` is its argv (run by spawn); `pids` maps
@@ -122,12 +122,12 @@
         _   (pin pids pid (u-name u))
         _   (note (+ "  spawn " (+ (show (u-name u)) (+ " pid=" (show pid)))))
         pid)
-   ; the reap loop: poll until every service has SETTLED (live hits 0) or steps run
+   ; the hear loop: poll until every service has SETTLED (live hits 0) or steps run
    ; out. each reaped (pid . status): a 0 exit (or a give-up) settles the unit; a
    ; nonzero exit under Restart=on-fail, within the cap, respawns it (live unchanged).
    (rloop units pids tries live steps)
      (? (? (< live 1) 1 (< steps 1)) 0                ; done: all settled / out of steps
-        (: ev (reap 0)
+        (: ev (hear 0)
            (? (two? ev)                               ; a child died: (pid . status)
                 (: nm (peep pids (cap ev) 0)  st (cup ev)
                    u  (find units nm)
@@ -144,7 +144,7 @@
         units (L
           (unit 'worker 'service (L "sh" "-c" "exit 0") 'on-fail ())    ; exits 0 -> settles
           (unit 'flaky  'service (L "sh" "-c" "exit 1") 'on-fail ()))   ; exits 1 -> restart, then give up
-        _ (note "-- REAL processes: spawn each, then poll reap (the SIGCHLD core) --")
+        _ (note "-- REAL processes: spawn each, then poll hear (the SIGCHLD core) --")
         _ (each units (\ u (rstart pids u)))
         _ (rloop units pids tries (tally units) 500)
         (note "-- all real children reaped --")))
@@ -154,21 +154,21 @@
 ; (await sig) cooperatively yields until a signal lands; the scheduler folds the
 ; parked sigfd and a heartbeat TASK's timer into ONE ai_wait_fds -- the {nic, clock}
 ; merge, now {signals, clock}, so the heartbeat TICKS WHILE the supervisor sleeps on
-; the fd. on SIGCHLD we drain reap (it COALESCES, so loop) and restart per policy; a
+; the fd. on SIGCHLD we drain hear (it COALESCES, so loop) and restart per policy; a
 ; SIGTERM (blocked -> queued to the fd: a graceful EVENT, not a kill) ends the loop.
 ; Linux signal numbers: SIGCHLD 17, SIGTERM 15. run: out/host/ai -l init/init.l -e "(perceive 0)"
 (: sig-chld 17  sig-term 15
    (heart n ms) (? (< n 1) 0 (: _ (rest ms) _ (note "  . beat") (heart (- n 1) ms)))
 
    ; drain every dead child after a SIGCHLD wake, restarting each per policy; return
-   ; the new live count. SIGCHLD coalesces, so loop reap until it drains.
+   ; the new live count. SIGCHLD coalesces, so loop hear until it drains.
    (harvest units pids tries live)
-     (: ev (reap 0)
+     (: ev (hear 0)
         (? !(two? ev) live
            (: nm (peep pids (cap ev) 0)  st (cup ev)
               u  (find units nm)
               n  (+ 1 (peep tries nm 0))  _ (pin tries nm n)
-              _  (note (+ "  reap " (+ (show nm) (+ " status=" (show st)))))
+              _  (note (+ "  hear " (+ (show nm) (+ " status=" (show st)))))
               (? (? (= st 0) 0 (? (id? (u-restart u) 'on-fail) (< n tries-cap) 0))
                    (: _ (note (+ "    restart " (show nm))) _ (rstart pids u)
                       (harvest units pids tries live))
@@ -233,7 +233,7 @@
 ;     EPERM in boot-system was the no-pid-ns case; here every mount is `ok`).
 ;   * ai REAPS REPARENTED ORPHANS -- pid 1's defining duty. when a process's parent
 ;     dies the kernel reparents its children to pid 1, which must waitpid them or
-;     they leak as zombies forever. (reap _) is waitpid(-1), so ai harvests a pid it
+;     they leak as zombies forever. (hear _) is waitpid(-1), so ai harvests a pid it
 ;     NEVER SPAWNED. run NOT as pid 1, the orphan reparents elsewhere and never shows.
 ; (pid1 0) is the deterministic proof tour; (perceive 0) is the live supervisor
 ; (park on the signalfd, restart per policy, SIGTERM -> graceful shutdown).
@@ -241,20 +241,20 @@
      (: _ (mkdir tgt 493) r (mount src tgt typ)          ; () success, +errno failure
         (note (+ "  mount " (+ typ (+ " on " (+ tgt (? r (+ " -> errno " (show r)) " -> ok")))))))
 
-   ; drain reap until `target` children are collected (or steps run out). classify
+   ; drain hear until `target` children are collected (or steps run out). classify
    ; each dead pid by `pids`: present -> a child WE started; absent -> a REPARENTED
-   ; ORPHAN (only pid 1 sees those). a non-pair reap -- () none pending (now the real
+   ; ORPHAN (only pid 1 sees those). a non-pair hear -- () none pending (now the real
    ; zero point) or -ECHILD none left -- just paces the loop.
-   (reap-tour pids got target steps)
+   (hear-tour pids got target steps)
      (? (? (< steps 1) 1 (>= got target)) got
-        (: ev (reap 0)
+        (: ev (hear 0)
            (? (two? ev)
                 (: pid (cap ev) st (cup ev) nm (peep pids pid ())
-                   _ (note (+ (? nm (+ "  reap " (+ (show nm) " (a service we started)"))
-                                     "  reap an ORPHAN (reparented to us -- pid 1's duty)")
+                   _ (note (+ (? nm (+ "  hear " (+ (show nm) " (a service we started)"))
+                                     "  hear an ORPHAN (reparented to us -- pid 1's duty)")
                               (+ " pid=" (+ (show pid) (+ " status=" (show st))))))
-                   (reap-tour pids (+ got 1) target (- steps 1)))
-              (: _ (rest 5) (reap-tour pids got target (- steps 1))))))
+                   (hear-tour pids (+ got 1) target (- steps 1)))
+              (: _ (rest 5) (hear-tour pids got target (- steps 1))))))
 
    (pid1 _)
      (: me (getpid 0)
@@ -264,10 +264,10 @@
         _ (mount1 "tmpfs" "/tmp/ai-run"  "tmpfs")
         _ (mount1 "proc"  "/tmp/ai-proc" "proc")
         pids (tablet 0)
-        _ (note "-- spawn a child that orphans a grandchild, then reap (pid 1's duty) --")
+        _ (note "-- spawn a child that orphans a grandchild, then hear (pid 1's duty) --")
         p (spawn (L "sh" "-c" "(sleep 0.2; exit 7) & exit 0"))    ; parent exits 0; grandchild orphaned
         _ (pin pids p 'orphan-parent)
-        n (reap-tour pids 0 2 800)                                ; parent settles fast; the orphan after its sleep
+        n (hear-tour pids 0 2 800)                                ; parent settles fast; the orphan after its sleep
         _ (note (+ "-- reaped " (+ (show n) " children, one a reparented orphan -- ai supervised pid 1 --")))
         0))
 

@@ -124,7 +124,7 @@ unless something forces it.
 
 st at `/home/gwen/src/st` (MIT/X license, st.c ~2700 lines) surveyed against cb
 2026-07-05. cb already matches or beats it on: deferred autowrap, DECSTBM +
-origin mode, BCE, the erase/edit/scroll CSI set, DSR/DA replies, per-row damage.
+origin mode, BCE, the erase/edit/scroll CSI set, DSR/DA replies, per-row wet.
 The gaps, ranked; the first group is one sitting, all gate-able in boot/cb.l:
 
 - **`?1` DECCKM app cursor keys** — cb parses it away; pier always sends

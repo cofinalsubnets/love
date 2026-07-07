@@ -112,8 +112,8 @@
             "")))))
 
 
- ; --- the painter, damage-driven: the screen names its dirty rows (the cb
- ; marks every write; damage reads-and-clears), the cursor's row and its
+ ; --- the painter, wet-driven: the screen names its dirty rows (the cb
+ ; marks every write; wet reads-and-clears), the cursor's row and its
  ; last berth join them, blitrow renders each in one C call, and each
  ; contiguous run ships as its own PutImage band. a keystroke repaints one
  ; row of pixels, not a monitor's worth -- that is the whole speed story.
@@ -125,7 +125,7 @@
                             (bits d base (+ i 1)
                                   (? (& 1 (>> d i)) (link (+ base i) acc) acc))
                             acc)
-     (go k acc) (? (< k 8) (go (+ k 1) (bits (damage sc k) (* 32 k) 0 acc)) acc)
+     (go k acc) (? (< k 8) (go (+ k 1) (bits (wet sc k) (* 32 k) 0 acc)) acc)
      ds (go 0 ())
      (? all (jot r) ds)))
 

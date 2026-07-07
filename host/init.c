@@ -5,11 +5,11 @@
 // existing nifs miss: run/exec/mind all BLOCK or REPLACE, and pty.c's `gather`
 // reaps a KNOWN pid (handing back only the status). init/init.l drives REAL
 // processes with these plus bao's generic `still` (kill): spawn returns a pid to
-// track, reap is the SIGCHLD core (poll it, map the pid back to a unit, restart
-// per policy). On a real pid1 reap also collects reparented orphans (waitpid(-1)).
+// track, hear is the SIGCHLD core (poll it, map the pid back to a unit, restart
+// per policy). On a real pid1 hear also collects reparented orphans (waitpid(-1)).
 //
 //   (spawn argv)  -> child pid (a fixnum) | a NEGATIVE fixnum (-errno / -1 misuse)
-//   (reap _)      -> (pid . status) of one reaped child
+//   (hear _)      -> (pid . status) of one reaped child
 //                  | ()                 none pending
 //                  | a NEGATIVE fixnum  (-errno, e.g. -ECHILD: no children left)
 //
@@ -50,7 +50,7 @@ static void sig_dfl_job(void) {
 // a pid (positive) from a failure (negative) without a second value). fork +
 // execvp; the parent returns immediately -- NON-BLOCKING, unlike run (waits +
 // captures) and exec (replaces in place). The child inherits init's stdio (a real
-// pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next reap.
+// pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next hear.
 ai_noinline static struct ai *host_spawn(struct ai *g, ai_word argv) {
   intptr_t argc = 0;
   uintptr_t total = 0;
@@ -85,11 +85,11 @@ static lvm(lvm_spawn) {
   Sp += 1; Ip += 1;
   return Continue(); }
 
-// (reap _) -> (pid . status) of one reaped child, () if none are pending, or a
+// (hear _) -> (pid . status) of one reaped child, () if none are pending, or a
 // negated errno (e.g. -ECHILD when no children remain). The pid is the CAR so the
 // supervisor maps it back to a unit; status is proc_status (exit code / 128+sig).
 // waitpid(-1, WNOHANG) reaps ANY child -- incl. reparented orphans on a real pid1.
-// The arg is a dummy (ignored), so a bare (reap) curries; call it (reap 0).
+// The arg is a dummy (ignored), so a bare (hear) curries; call it (hear 0).
 ai_noinline static struct ai *host_reapany(struct ai *g) {
   int st;
   pid_t r = waitpid(-1, &st, WNOHANG);
@@ -119,7 +119,7 @@ static lvm(lvm_reapany) {
 // The supervisor PARKS with the core `(await sig)` (cooperative -- the scheduler
 // merges the sigfd with a heartbeat task's timer in one ai_wait_fds, the {nic, clock}
 // story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
-// 'chld wake still loops `reap` to harvest every zombie.
+// 'chld wake still loops `hear` to harvest every zombie.
 #if defined(__linux__)
 // the arg may be a LIST of signal numbers to watch; anything else (the dummy-0
 // convention) keeps the supervisor's classic pair, SIGCHLD + SIGTERM.
@@ -249,11 +249,11 @@ static lvm(lvm_cwd) {
 //                   0/1/2, close every fd in the list `closes` (the pipe ends the
 //                   child must not leak, so a downstream reader sees EOF), reset the
 //                   job signals, execvp. The parent keeps its fds and closes the
-//                   pipe ends itself with shutfd. -errno on a fork/marshal failure.
+//                   pipe ends itself with fdclose. -errno on a fork/marshal failure.
 // (ttyfg pg)     -> give the terminal (fd 0) to process group pg; pg <= 0 takes it
 //                   BACK to the caller's own group (the shell reclaiming the tty
 //                   after a foreground job ends or stops). () | positive errno.
-// (shutfd fd)    -> close a raw fd (the parent's pipe ends). () ok | -errno.
+// (fdclose fd)    -> close a raw fd (the parent's pipe ends). () ok | -errno.
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2];
  if (pipe(fds)) return g->sp[0] = putcharm(-errno), g;
@@ -518,7 +518,7 @@ static union u const
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
 AI_NIF("spawn", nif_spawn);
-AI_NIF("reap",  nif_reapany);
+AI_NIF("hear",  nif_reapany);
 AI_NIF("sigfd", nif_sigfd);
 AI_NIF("sigtake", nif_sigtake);
 AI_NIF("wait",  nif_waitpid);
@@ -527,7 +527,7 @@ AI_NIF("cwd",   nif_cwd);
 AI_NIF("pipe",  nif_pipe);
 AI_NIF("openfd", nif_openfd);
 AI_NIF("spawnio", nif_spawnio);
-AI_NIF("shutfd", nif_shutfd);
+AI_NIF("fdclose", nif_shutfd);
 AI_NIF("mkdir", nif_mkdir);
 AI_NIF("mount", nif_mount);
 AI_NIF("newns", nif_newns);

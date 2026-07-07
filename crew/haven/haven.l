@@ -308,7 +308,7 @@
    ; --- the CONTROL PLANE verbs: one vocabulary drives haven from the keys
    ;     AND the moor -- a chord's action IS one of these closures, so every
    ;     key is rebindable live over the socket ((bind! ..), the stumpwm
-   ;     move). the pure ones queue through the guard; kill!/spawn are one
+   ;     move). the pure ones queue through the guard; part!/spawn are one
    ;     atomic effect each (a single wl-ship / a mind), safe from any task ---
    (up! u)     (haven! (\ z lay (L (zfocup z) lay)))
    (dn! u)     (haven! (\ z lay (L (zfocdn z) lay)))
@@ -317,7 +317,7 @@
    (grow! u)   (msg! 'grow)
    (shrink! u) (msg! 'shrink)
    (next! u)   (msg! 'next-layout)
-   (kill! u)   (: st (haven-st ())                       ; ask the focused toplevel to close --
+   (part! u)   (: st (haven-st ())                       ; ask the focused toplevel to close --
                   (? (! (two? st)) 0                     ; the client parts on its own and the
                      (: hb (cap st) tl (nthl st 1)       ; normal farewell/retile path follows
                         fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
@@ -673,7 +673,7 @@
         (cat (bd 64 106 dn!)     (cat (bd 64 107 up!)
         (cat (bd 65 106 swapdn!) (cat (bd 65 107 swapup!)
         (cat (bd 64 104 shrink!) (cat (bd 64 108 grow!)
-        (cat (bd 64 32 next!)    (cat (bd 65 113 kill!)
+        (cat (bd 64 32 next!)    (cat (bd 65 113 part!)
         (bd 64 65293 (\ u (: t (getenv "HAVEN_TERM")
                              (? (< 0 (tally t)) (spawn t) 0)))))))))))))
 

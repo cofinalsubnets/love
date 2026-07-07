@@ -252,7 +252,7 @@ static lvm(lvm_blitrow) {
   Sp[5] = out;
   Sp += 5; Ip += 1; return Continue(); }
 
-// (damage scr k): dirty-row bits for rows 32k..32k+31, read-and-cleared --
+// (wet scr k): dirty-row bits for rows 32k..32k+31, read-and-cleared --
 // the renderer's shopping list. bit 255 stands for row 255 and past.
 static lvm(lvm_damage) {
   struct cb *c = scr_ok(Sp[0]);
@@ -354,5 +354,5 @@ AI_NIF("unfold", nif_unfold);
 AI_NIF("blit", nif_blit);
 AI_NIF("blitrow", nif_blitrow);
 AI_NIF("font", nif_font);
-AI_NIF("damage", nif_damage);
+AI_NIF("wet", nif_damage);
 AI_NIF("swig", nif_swig);

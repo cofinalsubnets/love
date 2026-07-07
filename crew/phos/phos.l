@@ -258,7 +258,7 @@
        (relay sh2 lay2 f2) (: _ (render sh2 lay2)                                ; render, focus the float or the tiled top, loop (do-act has its own)
                               _ (? (&& f2 (wsfloating? sh2 f2)) (: _ (x-focus s f2) (x-flush s)) (refocus sh2))
                               (loop sh2 lay2 hist f2))
-       _ (reap 0)                                                                ; harvest one spawned zombie, if any
+       _ (hear 0)                                                                ; hear one spawned zombie home, if any
        _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
        (? (! e) (line "phos: display gone")
