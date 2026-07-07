@@ -119,6 +119,153 @@ through it.</p>
     (amd64/arm64) &mdash; see the <a href="bench/bench.html">benchmarks</a></li>
 </ul>
 
+
+<h2 id="reference"><a href="#reference">cheat sheet</a></h2>
+<h3 id="r-forms"><a href="#r-forms">special forms</a></h3>
+<dl class="ref">
+  <dt id="r-colon"><code>:</code> labels</dt>
+    <dd>letrec* + sequence: binds in source order, the last form is the result; <code>(f x)</code> on the left is define-sugar.
+      <span class="chip" data-run="(: a 1 b 2 (a + b))">(: a 1 b 2 (a + b))</span> <span class="ans">; 3</span>
+      <span class="chip" data-run="(: (twice f x) (f (f x)) (twice (+ 1) 10))">(: (twice f x) (f (f x)) (twice (+ 1) 10))</span> <span class="ans">; 12</span></dd>
+  <dt id="r-cond"><code>?</code> if</dt>
+    <dd>test/result pairs, then a final else.
+      <span class="chip" data-run="(? 0 'no (1 &lt; 2) 'yes 'else)">(? 0 'no (1 &lt; 2) 'yes 'else)</span> <span class="ans">; yes</span></dd>
+  <dt id="r-lambda"><code>\</code> lambda</dt>
+    <dd>args then body, auto-<a href="#g-curry">curried</a>; at one operand it is quote, so <code>'x</code> is <code>(\ x)</code>.
+      <span class="chip" data-run="((\ x y (x + y)) 3 4)">((\ x y (x + y)) 3 4)</span> <span class="ans">; 7</span>
+      <span class="chip" data-run="'(1 2 3)">'(1 2 3)</span> <span class="ans">; (1 2 3)</span></dd>
+</dl>
+
+<h3 id="r-truth"><a href="#r-truth">functions</a></h3>
+<dl class="ref">
+  <dt id="r-bang"><code>nil?</code></dt>
+    <dd>1 on every nothing (<a href="#g-net">net</a> &le; 0), 0 otherwise.
+      <span class="chip" data-run="!0">!0</span> <span class="ans">; 1</span>
+      <span class="chip" data-run="!5">!5</span> <span class="ans">; 0</span></dd>
+  <dt id="r-net"><code>net</code> <a href="#g-net">net</a></dt>
+    <dd>the content measure: a number is its own net, text sums its bytes, a list or array sums its elements.
+      <span class="chip" data-run='(net "abc")'>(net "abc")</span> <span class="ans">; 294</span></dd>
+  <dt id="r-sat"><code>sat</code> <a href="#g-sat">saturate</a></dt>
+    <dd>the net clamped onto the <span class="hi green"><a href="#g-green">green</a></span> <a href="#g-charm">charms</a>; the truth value of <code>x</code> is <code>!!$x</code>.
+      <span class="chip" data-run="($ '(1 2 3))">($ '(1 2 3))</span> <span class="ans">; 6</span>
+      <span class="chip" data-run="($ -7)">($ -7)</span> <span class="ans">; 0</span></dd>
+  <dt id="r-tally"><code>tally</code></dt>
+    <dd>the count &mdash; how many, not how much.
+      <span class="chip" data-run='(tally "hello")'>(tally "hello")</span> <span class="ans">; 5</span></dd>
+  <dt id="r-arith"><code>+ - * / // %</code></dt>
+    <dd>dyadic arithmetic, infix or prefix.
+      <span class="chip" data-run="7 % 3">7 % 3</span> <span class="ans">; 1</span>
+      <span class="chip" data-run="1 / 2">1 / 2</span> <span class="ans">; 0.5</span></dd>
+  <dt id="r-pow">exponentiation</dt>
+    <dd>a number applied is exponentiation: <code>(n x)</code> is x&#8319; (the <a href="#g-church">church numeral</a> at work); results grow into <a href="#g-big">bigs</a> freely.
+      <span class="chip" data-run="3 2">3 2</span> <span class="ans">; 8</span>
+      <span class="chip" data-run="100 2">100 2</span> <span class="ans">; 1267650600228229401496703205376</span></dd>
+  <dt id="r-roots">fractional exponents</dt>
+    <dd><span class="chip" data-run="(1 / 2) 9">(1 / 2) 9</span> <span class="ans">; 3.0</span>
+      <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span> <span class="ans">; ~(0.0 1.0)</span></dd>
+  <dt id="r-numfns"><code>abs gcd min max</code></dt>
+    <dd>min/max reduce a <a href="#g-galaxy">galaxy</a>.
+      <span class="chip" data-run="(abs -5)">(abs -5)</span> <span class="ans">; 5</span>
+      <span class="chip" data-run="(gcd 12 18)">(gcd 12 18)</span> <span class="ans">; 6</span>
+      <span class="chip" data-run="(max @(3 1 2))">(max @(3 1 2))</span> <span class="ans">; 3</span></dd>
+  <dt id="r-trans"><code>sine cosine log</code> ◦ <code>pi e i</code></dt>
+    <dd>the only transcendental nifs &mdash; power is application.
+      <span class="chip" data-run="sine (pi / 2)">sine (pi / 2)</span> <span class="ans">; 1.0</span>
+      <span class="chip" data-run="log e">log e</span> <span class="ans">; 1.0</span></dd>
+  <dt id="r-complex"><code>twin re im</code></dt>
+    <dd>the <a href="#g-twin">twins</a>: complex numbers, <code>~(re im)</code>.
+      <span class="chip" data-run="i * i">i * i</span> <span class="ans">; ~(-1.0 0.0)</span>
+      <span class="chip" data-run="(re (twin 3 4))">(re (twin 3 4))</span> <span class="ans">; 3.0</span></dd>
+  <dt id="r-link"><code>link cap cup</code></dt>
+    <dd>build a <a href="#g-chain">chain</a>; take the above and underneath parts.
+      <span class="chip" data-run="(link 1 '(2 3))">(link 1 '(2 3))</span> <span class="ans">; (1 2 3)</span>
+      <span class="chip" data-run="(cap '(1 2 3))">(cap '(1 2 3))</span> <span class="ans">; 1</span>
+      <span class="chip" data-run="(cup '(1 2 3))">(cup '(1 2 3))</span> <span class="ans">; (2 3)</span></dd>
+  <dt id="r-map"><code>map filter</code></dt>
+    <dd><span class="chip" data-run="map (+ 1) '(1 2 3)">map (+ 1) '(1 2 3)</span> <span class="ans">; (2 3 4)</span>
+      <span class="chip" data-run="filter (&lt; 1) '(0 1 2 3)">filter (&lt; 1) '(0 1 2 3)</span> <span class="ans">; (2 3)</span></dd>
+  <dt id="r-fold"><code>foldl foldr</code></dt>
+    <dd>a bare <code>+</code> mid-list reads as infix &mdash; <code>(+)</code> passes it as a value.
+      <span class="chip" data-run="foldl (+) 0 '(1 2 3)">foldl (+) 0 '(1 2 3)</span> <span class="ans">; 6</span></dd>
+  <dt id="r-jot"><code>jot</code></dt>
+    <dd>0 up to n, as a list; <code>iota</code> is its <a href="#g-galaxy">galaxy</a> sibling.
+      <span class="chip" data-run="jot 5">jot 5</span> <span class="ans">; (0 1 2 3 4)</span></dd>
+  <dt id="r-revtake"><code>rev take drop sort</code></dt>
+    <dd><span class="chip" data-run="(rev '(1 2 3))">(rev '(1 2 3))</span> <span class="ans">; (3 2 1)</span>
+      <span class="chip" data-run="(take 2 '(1 2 3 4))">(take 2 '(1 2 3 4))</span> <span class="ans">; (1 2)</span>
+      <span class="chip" data-run="(drop 2 '(1 2 3 4))">(drop 2 '(1 2 3 4))</span> <span class="ans">; (3 4)</span>
+      <span class="chip" data-run="(sort '(3 1 2))">(sort '(3 1 2))</span> <span class="ans">; (1 2 3)</span></dd>
+  <dt id="r-cat"><code>cat catmap</code></dt>
+    <dd><span class="chip" data-run="(cat '(1 2) '(3 4))">(cat '(1 2) '(3 4))</span> <span class="ans">; (1 2 3 4)</span></dd>
+  <dt id="r-assoc"><code>assoc member? any all</code></dt>
+    <dd>absence reads the <span class="hi gray"><a href="#g-zero-point">zero point</a></span>.
+      <span class="chip" data-run="(assoc 'b '((a 1) (b 2)))">(assoc 'b '((a 1) (b 2)))</span> <span class="ans">; (b 2)</span>
+      <span class="chip" data-run="(member? 2 '(1 2 3))">(member? 2 '(1 2 3))</span> <span class="ans">; 1</span></dd>
+  <dt id="r-listalg">list algebra</dt>
+    <dd><code>+</code> appends, <code>*</code> is the cartesian product.
+      <span class="chip" data-run="'(1 2) + '(3 4)">'(1 2) + '(3 4)</span> <span class="ans">; (1 2 3 4)</span>
+      <span class="chip" data-run="'(1 2) * '(10 20)">'(1 2) * '(10 20)</span> <span class="ans">; ((1 10) (1 20) (2 10) (2 20))</span></dd>
+  <dt id="r-stralg">string algebra</dt>
+    <dd>the free monoid: <code>+</code> concatenates, <code>*</code> by a number repeats.
+      <span class="chip" data-run='"abc" + "def"'>"abc" + "def"</span> <span class="ans">; "abcdef"</span>
+      <span class="chip" data-run='"ab" * 3'>"ab" * 3</span> <span class="ans">; "ababab"</span></dd>
+  <dt id="r-strindex">a string indexes its bytes</dt>
+    <dd><span class="chip" data-run='"hello" 1'>"hello" 1</span> <span class="ans">; 101</span></dd>
+  <dt id="r-string"><code>string</code></dt>
+    <dd>bytes back to text.
+      <span class="chip" data-run="(string '(104 105))">(string '(104 105))</span> <span class="ans">; "hi"</span></dd>
+  <dt id="r-show"><code>show</code></dt>
+    <dd>a value as its reparsable printed form.
+      <span class="chip" data-run="(show 42)">(show 42)</span> <span class="ans">; "42"</span></dd>
+  <dt id="r-names"><a href="#g-name">names</a> inherit string algebra</dt>
+    <dd><span class="chip" data-run="'ab + 'cd">'ab + 'cd</span> <span class="ans">; abcd</span></dd>
+  <dt id="r-traylit"><code>@(..)</code> ◦ <code>iota</code></dt>
+    <dd>the rank-1 <a href="#g-tray">tray</a> literal; <code>iota</code> is the counting <a href="#g-galaxy">galaxy</a>.
+      <span class="chip" data-run="iota 3">iota 3</span> <span class="ans">; @(0 1 2)</span></dd>
+  <dt id="r-broadcast">arithmetic broadcasts</dt>
+    <dd><span class="chip" data-run="@(1 2 3) + @(10 20 30)">@(1 2 3) + @(10 20 30)</span> <span class="ans">; @(11 22 33)</span>
+      <span class="chip" data-run="@(1 2 3) * 2">@(1 2 3) * 2</span> <span class="ans">; @(2 4 6)</span></dd>
+  <dt id="r-traypeep"><code>peep</code></dt>
+    <dd>index with a miss default.
+      <span class="chip" data-run="(peep @(10 20 30) 1 -1)">(peep @(10 20 30) 1 -1)</span> <span class="ans">; 20</span></dd>
+  <dt id="r-reduce"><code>net prod max min</code> reduce</dt>
+    <dd><span class="chip" data-run="(net @(1 2 3))">(net @(1 2 3))</span> <span class="ans">; 6</span></dd>
+  <dt id="r-inner"><code>inner</code></dt>
+    <dd>the contraction: dot product, matmul at rank 2.
+      <span class="chip" data-run="(inner @(1 2 3) @(4 5 6))">(inner @(1 2 3) @(4 5 6))</span> <span class="ans">; 32</span></dd>
+  <dt id="r-booklit"><code>#(..)</code> ◦ a <a href="#g-book">book</a> is its own lookup</dt>
+    <dd>a miss reads the <span class="hi gray"><a href="#g-zero-point">zero point</a></span>.
+      <span class="chip" data-run="(#('a 1 'b 2) 'b)">(#('a 1 'b 2) 'b)</span> <span class="ans">; 2</span>
+      <span class="chip" data-run="(#('a 1) 'z)">(#('a 1) 'z)</span> <span class="ans">; ()</span></dd>
+  <dt id="r-pin"><code>tablet pin</code></dt>
+    <dd><code>(tablet ())</code> opens an empty book; <code>pin</code> writes.
+      <span class="chip" data-run="(: b (tablet ()) _ (pin b 'x 1) (b 'x))">(: b (tablet ()) _ (pin b 'x 1) (b 'x))</span> <span class="ans">; 1</span></dd>
+  <dt id="r-pull"><code>pull</code></dt>
+    <dd>delete, answering the miss value.
+      <span class="chip" data-run="(: b #('x 1) _ (pull b 'x ()) (b 'x))">(: b #('x 1) _ (pull b 'x ()) (b 'x))</span> <span class="ans">; ()</span></dd>
+  <dt id="r-keys"><code>keys tally</code></dt>
+    <dd><span class="chip" data-run="(keys #('a 1 'b 2))">(keys #('a 1 'b 2))</span> <span class="ans">; (b a)</span></dd>
+  <dt id="r-zeroone"><code>0</code> and <code>1</code></dt>
+    <dd>const-1 and the identity &mdash; the numerals do double duty.
+      <span class="chip" data-run="0 5">0 5</span> <span class="ans">; 1</span>
+      <span class="chip" data-run="1 5">1 5</span> <span class="ans">; 5</span></dd>
+  <dt id="r-compose"><code>*</code> composes</dt>
+    <dd>so numerals multiply for free.
+      <span class="chip" data-run="((+ 1) * (2 *)) 5">((+ 1) * (2 *)) 5</span> <span class="ans">; 11</span></dd>
+  <dt id="r-flip"><code>flip</code></dt>
+    <dd><span class="chip" data-run="(flip (-) 1 10)">(flip (-) 1 10)</span> <span class="ans">; 9</span></dd>
+  <dt id="r-callcc"><code>call-cc</code></dt>
+    <dd>a one-shot escape.
+      <span class="chip" data-run="(call-cc (\ k (+ 1 (k 41))))">(call-cc (\ k (+ 1 (k 41))))</span> <span class="ans">; 41</span></dd>
+  <dt id="r-ev"><code>ev</code></dt>
+    <dd>compile and run a quoted form &mdash; the self-hosted compiler, in the image.
+      <span class="chip" data-run="(ev '((+) 1 2))">(ev '((+) 1 2))</span> <span class="ans">; 3</span></dd>
+  <dt id="r-puts"><code>puts putc putn</code></dt>
+    <dd>text, a byte, a number; each answers what it printed.
+      <span class="chip" data-run='(puts "hello")'>(puts "hello")</span> <span class="ans">; prints hello, answers "hello"</span>
+      <span class="chip" data-run="(putc 104)">(putc 104)</span> <span class="ans">; prints h, answers 104</span></dd>
+</dl>
+
 <hr>
 <nav><a href="test/spec.l"><code>test/spec.l</code></a> &nbsp;&middot;&nbsp; <a href="proof/rocq/spec.v"><code>proof/rocq/spec.v</code></a> &nbsp;&middot;&nbsp; <a href="https://github.com/cofinalsubnets/ai">README</a></nav>
 
