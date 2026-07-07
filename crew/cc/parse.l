@@ -36,6 +36,20 @@
    asnops (L (L "=" ()) (L "+=" '+) (L "-=" '-) (L "*=" '*) (L "/=" '/) (L "%=" '%)
              (L "&=" '&) (L "|=" '|) (L "^=" '^) (L "<<=" 'shl) (L ">>=" 'shr))
    scalars '(char short int long void double float)
+   ; a type-specifier RUN (char short int long void double float signed unsigned)
+   ; canonicalizes to one type symbol -- `unsigned long` -> 'ulong, `signed char`
+   ; -> 'char, `long long` -> 'long. the unsigned scalars are 'uchar 'ushort 'uint
+   ; 'ulong (gen gives them zero-extend loads + unsigned >> / compare / divide).
+   tyspec '(char short int long void double float signed unsigned)
+   (canon specs)
+    (? (member? 'void specs) 'void
+       (member? 'double specs) 'double
+       (member? 'float specs) 'float
+       (: uns (member? 'unsigned specs)
+          base (? (member? 'char specs) 'char (member? 'short specs) 'short
+                  (member? 'long specs) 'long 'int)
+          (? (! uns) base
+             (= base 'char) 'uchar (= base 'short) 'ushort (= base 'long) 'ulong 'uint)))
    ; ignorable specifiers: storage/qualifier keywords + gcc attribute ids. cc
    ; keeps no linkage/qualifier state, so these are SKIPPED wherever a type may
    ; begin or a declarator may carry them -- __attribute__((..)) / _Alignas(..)
@@ -65,7 +79,7 @@
    ; does a type begin here?
    (tkbty? ps t)
     (? (! (two? t)) ()
-       (= (tkk t) 'kw) (member? (tkv t) '(char short int long void double float struct union enum))
+       (= (tkk t) 'kw) (member? (tkv t) '(char short int long void double float signed unsigned struct union enum))
        (= (tkk t) 'id) (? (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
@@ -76,7 +90,8 @@
    (tsz ps ty) (? (ptr? ty) 8
                   (arr? ty) (* (cauup ty) (tsz ps (caup ty)))
                   (stru? ty) (caup (peep (ps 'stag) (caup ty) 0))
-                  (= ty 'char) 1 (= ty 'short) 2 (|| (= ty 'int) (= ty 'float)) 4 8)
+                  (|| (= ty 'char) (= ty 'uchar)) 1 (|| (= ty 'short) (= ty 'ushort)) 2
+                  (|| (= ty 'int) (|| (= ty 'uint) (= ty 'float))) 4 8)
    (talign ps ty) (? (ptr? ty) 8
                      (arr? ty) (talign ps (caup ty))
                      (stru? ty) (cauup (peep (ps 'stag) (caup ty) 0))
@@ -180,7 +195,11 @@
     (: ts (pquals ts0)
      (? (! (two? ts)) ()
        (: t (cap ts)
-          (? (&& (= (tkk t) 'kw) (member? (tkv t) scalars)) (L (tkv t) (cup ts))
+          (? (&& (= (tkk t) 'kw) (member? (tkv t) tyspec))     ; a run of type specifiers -> one canonical type
+              (: (grab l acc) (? (&& (two? l) (&& (= (tkk (cap l)) 'kw) (member? (tkv (cap l)) tyspec)))
+                                 (grab (cup l) (link (tkv (cap l)) acc)) (L (rev acc) l))
+                 r (grab ts ())
+                 (L (canon (cap r)) (caup r)))
              (|| (tkw? t 'struct) (tkw? t 'union))
               (: uni (tkw? t 'union)
                  ts2 (cup ts)

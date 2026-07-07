@@ -18,6 +18,13 @@
        p1 "()[]{};,.:?~!+-*/%<>=&|^#"
        (ws? c) (|| (= c 32) (|| (= c 9) (= c 13)))
        (dig? c) (&& (<= 48 c) (<= c 57))
+       (hexd? c) (|| (dig? c) (|| (&& (<= 97 c) (<= c 102)) (&& (<= 65 c) (<= c 70))))   ; 0-9 a-f A-F
+       (hexv c) (? (dig? c) (- c 48) (&& (<= 97 c) (<= c 102)) (- c 87) (- c 55))         ; a=10 A=10
+       (suf? c) (|| (= c 117) (|| (= c 85) (|| (= c 108) (= c 76))))                      ; u U l L
+       (skipsuf j) (? (&& (< j n) (suf? (src j))) (skipsuf (+ j 1)) j)                    ; eat an int-literal suffix run
+       (escv d) (? (= d 110) 10 (= d 116) 9 (= d 114) 13 (= d 97) 7 (= d 98) 8            ; \n \t \r \a \b
+                   (= d 102) 12 (= d 118) 11 (= d 48) 0 (= d 92) 92                       ; \f \v \0 backslash
+                   (= d 34) 34 (= d 39) 39 (= d 63) 63 (= d 101) 27 ())                   ; \" \' \? \e
        (idh? c) (|| (&& (<= 97 c) (<= c 122)) (|| (&& (<= 65 c) (<= c 90)) (= c 95)))
        (idc? c) (|| (idh? c) (dig? c))
        (at? i pat) (: m (tally pat)                 ; does pat sit at i?
@@ -82,25 +89,27 @@
                                        (= c2 10) ()
                                        (&& (= c2 92) (< (+ j 1) n))
                                         (: d (src (+ j 1))
-                                           v (? (= d 110) 10 (= d 116) 9 (= d 114) 13
-                                                (= d 48) 0 (= d 92) 92 (= d 34) 34 (= d 39) 39 ())
+                                           v (escv d)
                                            (? (charm? v) (eat (+ j 2) (+ acc2 (string v))) ()))
                                        (eat (+ j 1) (+ acc2 (string c2))))))
                              r (eat (+ i 1) "")
                              (? (two? r) (go (caup r) line (link (L 'str (cap r) line) acc)) ()))
                  (= c 39) (: esc (&& (< (+ i 2) n) (= (src (+ i 1)) 92))
-                             v (? esc (: d (src (+ i 2))
-                                         (? (= d 110) 10 (= d 116) 9 (= d 114) 13
-                                            (= d 48) 0 (= d 92) 92 (= d 39) 39 ()))
+                             v (? esc (escv (src (+ i 2)))
                                   (< (+ i 1) n) (src (+ i 1))
                                   ())
                              j (+ i (? esc 4 3))
                              (? (&& (charm? v) (&& (<= j n) (= (src (- j 1)) 39)))
                                 (go j line (link (L 'num v line) acc))
                                 ()))
+                 (&& (= c 48) (&& (< (+ i 1) n) (|| (= (src (+ i 1)) 120) (= (src (+ i 1)) 88))))  ; 0x / 0X hex
+                  (: (hx j v) (? (&& (< j n) (hexd? (src j))) (hx (+ j 1) (+ (* 16 v) (hexv (src j)))) (L j v))
+                     r (hx (+ i 2) 0)
+                     (go (skipsuf (cap r)) line (link (L 'num (caup r) line) acc)))
                  (|| (dig? c) (&& (= c 46) (&& (< (+ i 1) n) (dig? (src (+ i 1))))))
                   (: r (flolit i)                        ; a digit run, or .digit -- integer or float
-                     (go (cap r) line (link (L (? (caup r) 'flo 'num) (cauup r) line) acc)))
+                     j2 (? (caup r) (cap r) (skipsuf (cap r)))    ; an integer eats its u/U/l/L suffix
+                     (go j2 line (link (L (? (caup r) 'flo 'num) (cauup r) line) acc)))
                  (idh? c) (: (idr j) (? (&& (< j n) (idc? (src j))) (idr (+ j 1)) j)
                              j (idr i)
                              t (snip src i j)

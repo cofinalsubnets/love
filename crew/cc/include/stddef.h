@@ -1,6 +1,6 @@
 #ifndef _AI_STDDEF_H
 #define _AI_STDDEF_H
-typedef long size_t;
+typedef unsigned long size_t;
 typedef long ssize_t;
 typedef long ptrdiff_t;
 typedef int  wchar_t;

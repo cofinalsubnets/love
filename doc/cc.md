@@ -446,12 +446,28 @@ two ideas to keep warm as the stages climb, neither committed yet:
    program, gcc=cc=37) folds into the auto-globbed battery; law.l proves the
    ignored-qualifier equivalences + the abstract-declarator proto. ai.c itself still
    stops at a LEX error (hex/unsigned/inline-asm -- the later sub-rungs).
-   STILL AHEAD: 7c-ii real `unsigned` (types, unsigned compares/shifts/div) + hex &
-   integer-suffix lexing -- ai.c leans on unsigned tag arithmetic; 7c-iii the C-
-   feature tail ai.c needs (compact multi-function-declarator protos like `void
-   *malloc(size_t), free(void*)`, the `__asm__("divq")` 128-bit-divide fallback,
-   __attribute__((weak))/((section)) -> the linker, unions by value) + the >6-arg
-   overflow (both fixed and variadic, avoiding the boxfix trap); 7d link cc-built
+   7c-ii UNSIGNED + HEX LANDED 2026-07-07: the lexer gained hex literals (0x..),
+   integer suffixes (u/U/l/L, consumed), and the missing char/string escapes (\a \b
+   \f \v \? \e, via a shared `escv`) -- ai.c now lexes end to end. the parser reads a
+   type-specifier RUN and canonicalizes it (`unsigned long` -> 'ulong, `signed char`
+   -> 'char, `long long` -> 'long, `unsigned` -> 'uint) into the new unsigned scalars
+   'uchar 'ushort 'uint 'ulong. gen treats them by WIDTH like their signed twins but
+   with unsigned semantics: a narrow load ZERO-extends (ldu1/ldu2/ldu4 + zx1/zx2/zx4
+   in holo), `>>` on an unsigned left operand is LOGICAL (shr/shrv, not sar/sarv), a
+   compare with either operand unsigned uses the below/above/be/ae condition codes,
+   and `/`/`%` go unsigned (udiv/urem = xor rdx + F7 /6 div, added beside the signed
+   cqo+idiv). a binary op is unsigned if EITHER operand is (simplified usual
+   conversions), so the signedness threads through chains. holo grew ldu1/2/4, zx1/2/4,
+   udiv/urem (x64 + a mirror on arm64: ldrb/ldrh zero-extend, ubfx, udiv+msub), all
+   objdump/llvm-mc-checked (holotest 189 -> 205). the headers now typedef the uintN_t names to REAL
+   `unsigned` bases. gate: 73-unsigned.c (a FNV-style unsigned hash + logical shifts +
+   unsigned compare/div/mod + zero-extend, gcc = cc = 177) in the battery; law.l goldens
+   the hex/suffix/escape lexing and the specifier-soup canonicalizer. ai.c now advances
+   PAST lexing to a parse error (7c-iii).
+   STILL AHEAD: 7c-iii the C-feature tail ai.c needs (compact multi-function-declarator
+   protos like `void *malloc(size_t), free(void*)`, the `__asm__("divq")` 128-bit-divide
+   fallback, __attribute__((weak))/((section)) -> the linker, unions by value) + the
+   >6-arg overflow (both fixed and variadic, avoiding the boxfix trap); 7d link cc-built
    ai.o + gcc-built host/*.o + libc and boot the egg green.
 8. **the fixpoint + the flat stack**: (a) determinism -- cc(cc(ai)) builds
    byte-identical objects to cc(ai); (b) guaranteed sibcalls for the lvm

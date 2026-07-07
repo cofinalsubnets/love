@@ -149,6 +149,13 @@
       (: dn (rn d) bn (rn base) (cat (L (rex 1 (hi dn) 0 (hi bn)) 15 191) (mem dn base off)))
    (emit-ld4 d base off)                                            ; 63 movsxd r64, DWORD [base+off]
       (: dn (rn d) bn (rn base) (cat (L (rex 1 (hi dn) 0 (hi bn)) 99) (mem dn base off)))
+   ;; the ZERO-extending sized loads (C's unsigned char/short/int). ldu4 is a plain 32-bit mov (REX.W=0), which zeroes the top.
+   (emit-ldu1 d base off)                                           ; 0F B6 movzx r64, BYTE [base+off]
+      (: dn (rn d) bn (rn base) (cat (L (rex 1 (hi dn) 0 (hi bn)) 15 182) (mem dn base off)))
+   (emit-ldu2 d base off)                                           ; 0F B7 movzx r64, WORD [base+off]
+      (: dn (rn d) bn (rn base) (cat (L (rex 1 (hi dn) 0 (hi bn)) 15 183) (mem dn base off)))
+   (emit-ldu4 d base off)                                           ; 8B mov r32, DWORD [base+off] (zero-extends)
+      (: dn (rn d) bn (rn base) (cat (L (rex 0 (hi dn) 0 (hi bn)) 139) (mem dn base off)))
    (emit-st1 base off s)                                            ; 88 mov BYTE [base+off], s8 (REX present: spl/sil, never ah/ch)
       (: sn (rn s) bn (rn base) (cat (L (rex 0 (hi sn) 0 (hi bn)) 136) (mem sn base off)))
    (emit-st2 base off s)                                            ; 66 89 mov WORD [base+off], s16
@@ -160,6 +167,12 @@
       (: dn (rn d)
          opc (? (= w 1) (L 15 190) (= w 2) (L 15 191) (L 99))
          (cat (L (rex 1 (hi dn) 0 (hi dn))) (cat opc (L (modrm 3 (lo dn) (lo dn))))))
+   ;; in-register ZERO extension: movzx r64,r8/r16 (0F B6 / 0F B7); w=4 is mov r32,r32 (REX.W=0 zeroes the top).
+   (emit-zx w d)
+      (: dn (rn d)
+         (? (= w 1) (cat (L (rex 1 (hi dn) 0 (hi dn)) 15 182) (L (modrm 3 (lo dn) (lo dn))))
+            (= w 2) (cat (L (rex 1 (hi dn) 0 (hi dn)) 15 183) (L (modrm 3 (lo dn) (lo dn))))
+            (cat (L (rex 0 (hi dn) 0 (hi dn)) 139) (L (modrm 3 (lo dn) (lo dn))))))
    ;; shifts by a REGISTER count: D3 /ext, the count in CL -- so the IR contract
    ;; pins the count register to r1 (rcx) on every backend; d must differ.
    (emit-shiftv op d c)
@@ -208,12 +221,12 @@
    ;; commonly live (the glaze keeps Hp there), so the sequence SAVES rdx itself: push rdx; push the
    ;; divisor to memory; mov rax,a; cqo (sign-extend); idiv [rsp]; result -> rax (rem: from rdx);
    ;; add rsp,8; pop rdx; mov d,rax. clobbers rax; `d` must not be r2 (rdx). caller guards b != 0.
-   (emit-div remf d a b)
+   (emit-div remf sgn d a b)
       (catall (L (L 82)                                     ; push rdx
                  (emit-push b)                              ; push the divisor
                  (? (reg-eq a 'r0) () (emit-mov 'r0 a))     ; rax <- a (dividend)
-                 (L 72 153)                                 ; cqo
-                 (L 72 247 60 36)                           ; idiv qword [rsp]
+                 (? sgn (L 72 153) (L 49 210))              ; signed: cqo ; unsigned: xor edx,edx
+                 (L 72 247 (? sgn 60 52) 36)                ; idiv (/7) | div (/6) qword [rsp]
                  (? remf (L 72 137 208) ())                 ; rem: mov rax, rdx
                  (L 72 131 196 8)                           ; add rsp, 8
                  (L 90)                                     ; pop rdx
@@ -282,9 +295,15 @@
             (= op 'st1)  (emit-st1  (at ins 1) (at ins 2) (at ins 3))
             (= op 'st2)  (emit-st2  (at ins 1) (at ins 2) (at ins 3))
             (= op 'st4)  (emit-st4  (at ins 1) (at ins 2) (at ins 3))
+            (= op 'ldu1) (emit-ldu1 (at ins 1) (at ins 2) (at ins 3))
+            (= op 'ldu2) (emit-ldu2 (at ins 1) (at ins 2) (at ins 3))
+            (= op 'ldu4) (emit-ldu4 (at ins 1) (at ins 2) (at ins 3))
             (= op 'sx1)  (emit-sx 1 (at ins 1))
             (= op 'sx2)  (emit-sx 2 (at ins 1))
             (= op 'sx4)  (emit-sx 4 (at ins 1))
+            (= op 'zx1)  (emit-zx 1 (at ins 1))
+            (= op 'zx2)  (emit-zx 2 (at ins 1))
+            (= op 'zx4)  (emit-zx 4 (at ins 1))
             (member? op '(shlv shrv sarv)) (emit-shiftv op (at ins 1) (at ins 2))
             (= op 'ldxb) (emit-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldxb d base index scale disp) -- zero-extend byte load
             (= op 'stxb) (emit-stxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (stxb base index scale disp s) -- low-byte store
@@ -302,8 +321,10 @@
             (= op 'callr) (emit-callr (at ins 1))
             (= op 'mulo) (emit-mulo (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (mulo d a b t lbl)
             (= op 'set)  (emit-set  (at ins 1) (at ins 2))
-            (= op 'div)  (emit-div 0 (at ins 1) (at ins 2) (at ins 3))
-            (= op 'rem)  (emit-div 1 (at ins 1) (at ins 2) (at ins 3))                        ; (rem d a b t) -- t ignored on x86 (rdx)
+            (= op 'div)  (emit-div 0 1 (at ins 1) (at ins 2) (at ins 3))
+            (= op 'rem)  (emit-div 1 1 (at ins 1) (at ins 2) (at ins 3))                      ; (rem d a b t) -- t ignored on x86 (rdx)
+            (= op 'udiv) (emit-div 0 0 (at ins 1) (at ins 2) (at ins 3))                      ; unsigned: xor rdx + div (/6)
+            (= op 'urem) (emit-div 1 0 (at ins 1) (at ins 2) (at ins 3))
             (= op 'call) (emit-call (at ins 1))
             (= op 'la)   (emit-la   (at ins 1) (at ins 2))
             (= op 'ret)  (L 195)

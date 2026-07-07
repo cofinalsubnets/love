@@ -43,6 +43,13 @@
       (! (clex "\"open"))                                    ; unterminated string refuses
       (! (clex "int @"))                                     ; not C: the lex error rides up
       (! (clex "a /* open"))                                 ; unterminated comment refused
+      (= (tn (caup (clex "0x1F")) 0) (L 'num 31 1))         ; 7c-ii: hex literals
+      (= (tn (caup (clex "0xFF & 1")) 0) (L 'num 255 1))
+      (= (tn (caup (clex "255L")) 0) (L 'num 255 1))        ; an integer suffix is consumed
+      (= (tn (caup (clex "100UL")) 0) (L 'num 100 1))
+      (= (tn (caup (clex "'\\f'")) 0) (L 'num 12 1))        ; \f form feed, \a bell, \v vtab
+      (= (tn (caup (clex "'\\a'")) 0) (L 'num 7 1))
+      (= (tn (caup (clex "'\\v'")) 0) (L 'num 11 1))
       (= (caup (clex "")) ())))                              ; empty text, empty tokens
 
 ; --- the parser: precedence, associativity, desugarings, statement shapes ---
@@ -388,5 +395,19 @@
       (= (cast "int f(int, long); int main(void){return 0;}") ; unnamed proto params -> abstract declarators
          '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))))
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) ok")
+; -- 7c-ii: a type-specifier RUN canonicalizes to one type symbol. the unsigned
+; scalars are 'uchar 'ushort 'uint 'ulong (gen: zero-extend loads, logical >>,
+; unsigned compare/divide); `signed` folds away, `long long` is 'long.
+(: (cast src) (caup (cparse (caup (clex src))))
+   (ty1 src)  (cap (caup (cap (caup (cap (caup (cast (+ src " int main(void){return 0;}"))))))))
+   (assert
+      (= (ty1 "unsigned long g;") 'ulong)
+      (= (ty1 "unsigned char b;") 'uchar)
+      (= (ty1 "unsigned short h;") 'ushort)
+      (= (ty1 "unsigned u;")      'uint)
+      (= (ty1 "signed char c;")   'char)     ; signed folds away
+      (= (ty1 "long long q;")     'long)     ; long long -> long
+      (= (ty1 "int i;")           'int)))
+
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) ok")
 (put err 10)

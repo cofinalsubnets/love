@@ -41,10 +41,17 @@
    (arr? ty) (&& (two? ty) (= (cap ty) 'arr))
    (stru? ty) (&& (two? ty) (= (cap ty) 'struct))
    (fn? ty) (&& (two? ty) (= (cap ty) 'fn))         ; ('fn) -- a function; decays to its address
+   ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same WIDTH as their signed
+   ; twin, but a load zero-extends, `>>` is logical, compare/divide go unsigned, and
+   ; a binary op is unsigned if EITHER operand is (simplified usual conversions).
+   (usg? ty) (member? ty '(uchar ushort uint ulong))
+   (ubin ta tb) (? (|| (usg? ta) (usg? tb)) 'ulong 'long)
+   (scc op unsg) (? (! unsg) op (= op 'lt) 'below (= op 'gt) 'above (= op 'le) 'be (= op 'ge) 'ae op)
    (tsz g ty) (? (ptr? ty) 8
                  (arr? ty) (* (cauup ty) (tsz g (caup ty)))
                  (stru? ty) (caup (peep (g 'stag) (caup ty) 0))
-                 (= ty 'char) 1 (= ty 'short) 2 (|| (= ty 'int) (= ty 'float)) 4 8)
+                 (|| (= ty 'char) (= ty 'uchar)) 1 (|| (= ty 'short) (= ty 'ushort)) 2
+                 (|| (= ty 'int) (|| (= ty 'uint) (= ty 'float))) 4 8)
    ; a member's (offset ty) off a struct type, | 'bad
    (fmem g ty name)
     (? (! (stru? ty)) 'bad
@@ -53,10 +60,12 @@
              (: f (assoc name (cap e))
                 (? (two? f) (L (caup f) (cauup f)) 'bad)))))
    (lg2 n) (? (= n 1) 0 (= n 2) 1 (= n 4) 2 3)
-   (ldop ty) (? (= ty 'char) 'ld1 (= ty 'short) 'ld2 (= ty 'int) 'ld4 'ld)
-   (stop ty) (? (= ty 'char) 'st1 (= ty 'short) 'st2 (= ty 'int) 'st4 'st)
-   (cvt ty r) (? (= ty 'char) (L (L 'sx1 r)) (= ty 'short) (L (L 'sx2 r))
-                 (= ty 'int) (L (L 'sx4 r)) ())
+   (ldop ty) (? (= ty 'char) 'ld1 (= ty 'short) 'ld2 (= ty 'int) 'ld4
+                (= ty 'uchar) 'ldu1 (= ty 'ushort) 'ldu2 (= ty 'uint) 'ldu4 'ld)
+   (stop ty) (? (|| (= ty 'char) (= ty 'uchar)) 'st1 (|| (= ty 'short) (= ty 'ushort)) 'st2
+                (|| (= ty 'int) (= ty 'uint)) 'st4 'st)
+   (cvt ty r) (? (= ty 'char) (L (L 'sx1 r)) (= ty 'short) (L (L 'sx2 r)) (= ty 'int) (L (L 'sx4 r))
+                 (= ty 'uchar) (L (L 'zx1 r)) (= ty 'ushort) (L (L 'zx2 r)) (= ty 'uint) (L (L 'zx4 r)) ())
    ; -- the double lane (stage 6a, the gem): a 'double value lives in f0, not r0.
    ; its type is the flag; fbits is the compile-time IEEE-754 encoder; asflo/asint
    ; move a cgexpr result between the lanes (int<->double conversion); fcc maps a
@@ -415,12 +424,16 @@
           ; a constant count rides the immediate shift; a variable count
           ; rides shlv/sarv with the count PINNED to r1 (holo's contract)
           (member? op '(shl shr))
-           (? (= (cap rhs) 'num)
-              (L 'long (cat (caup a) (L (L (? (= op 'shl) 'shl 'sar) 'r0 (caup rhs)))))
-              (L 'long (cat (caup a)
+           (: uL (usg? (cap a))                             ; a `>>` on an unsigned left operand is LOGICAL (shr, not sar)
+              rt (? uL 'ulong 'long)                        ; the shift result keeps the left operand's signedness
+              iop (? (= op 'shl) 'shl (? uL 'shr 'sar))
+              vop (? (= op 'shl) 'shlv (? uL 'shrv 'sarv))
+              (? (= (cap rhs) 'num)
+                 (L rt (cat (caup a) (L (L iop 'r0 (caup rhs)))))
+                 (L rt (cat (caup a)
                         (cat (L (L 'push 'r0))
                          (cat (caup b) (L (L 'mov 'r1 'r0) (L 'pop 'r0)
-                                          (L (? (= op 'shl) 'shlv 'sarv) 'r0 'r1)))))))
+                                          (L vop 'r0 'r1))))))))
           ; the double lane: either operand double -> both to double (f1=left,
           ; f0=right through the gp stack), then the scalar-double op or ucomisd.
           (|| (flo? (cap a)) (flo? (cap b)))
@@ -460,17 +473,18 @@
                                       (cat (L (L 'sub 'r1 'r1 'r0)) back))))
                     pb 'bad
                     (L 'long (cat mid (cat (L (L 'sub 'r1 'r1 'r0)) back))))
-                (: tail (? (= op '*) (L (L 'imul 'r1 'r1 'r0))
-                           (= op '/) (L (L 'div 'r1 'r1 'r0))
-                           (= op '%) (L (L 'rem 'r1 'r1 'r0 'r3))
+                (: unsg (|| (usg? ta) (usg? tb))            ; either operand unsigned -> unsigned divide/compare
+                   tail (? (= op '*) (L (L 'imul 'r1 'r1 'r0))
+                           (= op '/) (L (L (? unsg 'udiv 'div) 'r1 'r1 'r0))
+                           (= op '%) (L (L (? unsg 'urem 'rem) 'r1 'r1 'r0 'r3))
                            (= op '&) (L (L 'and 'r1 'r1 'r0))
                            (= op '|) (L (L 'or 'r1 'r1 'r0))
                            (= op '^) (L (L 'xor 'r1 'r1 'r0))
                            'bad)
                    (? (! (bad? tail))
-                      (L 'long (cat mid (cat tail back)))
+                      (L (ubin ta tb) (cat mid (cat tail back)))
                       (member? op '(eq ne lt le gt ge))
-                       (L 'long (cat mid (L (L 'cmp 'r1 'r0) (L 'set op 'r0))))
+                       (L 'long (cat mid (L (L 'cmp 'r1 'r0) (L 'set (scc op unsg) 'r0))))
                       'bad))))))
 
    epi (L (L 'mov 'sp 'r4) (L 'pop 'r4) (L 'ret))

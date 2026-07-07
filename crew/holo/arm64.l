@@ -119,12 +119,19 @@
    (arm64-ld1 d base off) (arm64-mem-sz 0x38800000 0x39800000 1 d base off)   ; ldrsb/ldursb Xt
    (arm64-ld2 d base off) (arm64-mem-sz 0x78800000 0x79800000 2 d base off)   ; ldrsh/ldursh Xt
    (arm64-ld4 d base off) (arm64-mem-sz 0xB8800000 0xB9800000 4 d base off)   ; ldrsw/ldursw Xt
+   (arm64-ldu1 d base off) (arm64-mem-sz 0x38400000 0x39400000 1 d base off)  ; ldrb/ldurb Wt (zero-extends to Xt)
+   (arm64-ldu2 d base off) (arm64-mem-sz 0x78400000 0x79400000 2 d base off)  ; ldrh/ldurh Wt
+   (arm64-ldu4 d base off) (arm64-mem-sz 0xB8400000 0xB9400000 4 d base off)  ; ldr/ldur Wt (32-bit, zero-extends)
    (arm64-st1 base off s) (arm64-mem-sz 0x38000000 0x39000000 1 s base off)   ; strb/sturb Wt
    (arm64-st2 base off s) (arm64-mem-sz 0x78000000 0x79000000 2 s base off)   ; strh/sturh Wt
    (arm64-st4 base off s) (arm64-mem-sz 0xB8000000 0xB9000000 4 s base off)   ; str/stur Wt
    (arm64-sx w d)                                             ; sbfm: sxtb/sxth/sxtw Xd, Wd
       (: dn (rn d)
          base (? (= w 1) 0x93401C00 (= w 2) 0x93403C00 0x93407C00)
+         (le32 (| base (| (<< dn 5) dn))))
+   (arm64-zx w d)                                             ; ubfm: uxtb/uxth Xd, Xd (w=4 clears bits 32..63)
+      (: dn (rn d)
+         base (? (= w 1) 0xD3401C00 (= w 2) 0xD3403C00 0xD3407C00)
          (le32 (| base (| (<< dn 5) dn))))
    (arm64-shiftv op d c)                                      ; lslv/lsrv/asrv Xd, Xd, Xc -- count pinned to r1 (the IR contract)
       (: _ (? (reg-eq c 'r1) 0 (scare 'shiftv-count-not-r1 (L op d c)))
@@ -192,6 +199,11 @@
       (: dn (rn d) an (rn a) bn (rn b) tn (rn t)
          (catall (L (le32 (| 0x9AC00C00 (| (<< bn 16) (| (<< an 5) tn))))                   ; sdiv t, a, b
                     (le32 (| 0x9B008000 (| (<< bn 16) (| (<< an 10) (| (<< tn 5) dn))))))))  ; msub d, t, b, a  ->  a - t*b
+   (arm64-udiv d a b)  (: dn (rn d) an (rn a) bn (rn b) (le32 (| 0x9AC00800 (| (<< bn 16) (| (<< an 5) dn)))))   ; udiv d, a, b
+   (arm64-urem d a b t)
+      (: dn (rn d) an (rn a) bn (rn b) tn (rn t)
+         (catall (L (le32 (| 0x9AC00800 (| (<< bn 16) (| (<< an 5) tn))))                   ; udiv t, a, b
+                    (le32 (| 0x9B008000 (| (<< bn 16) (| (<< an 10) (| (<< tn 5) dn))))))))  ; msub d, t, b, a
    ;; indexed addressing: aarch64 has no [base + ix*scale + disp] single insn, so synthesize. ADD makes
    ;; base + ix*scale (LSL #log2 scale); ldx/leax borrow the dest as the address temp, stx uses x16 (IP0,
    ;; outside the r0..r14 file, so it never clashes with an IR register).
@@ -254,9 +266,15 @@
             (= op 'st1)  (arm64-st1  (at ins 1) (at ins 2) (at ins 3))
             (= op 'st2)  (arm64-st2  (at ins 1) (at ins 2) (at ins 3))
             (= op 'st4)  (arm64-st4  (at ins 1) (at ins 2) (at ins 3))
+            (= op 'ldu1) (arm64-ldu1 (at ins 1) (at ins 2) (at ins 3))
+            (= op 'ldu2) (arm64-ldu2 (at ins 1) (at ins 2) (at ins 3))
+            (= op 'ldu4) (arm64-ldu4 (at ins 1) (at ins 2) (at ins 3))
             (= op 'sx1)  (arm64-sx 1 (at ins 1))
             (= op 'sx2)  (arm64-sx 2 (at ins 1))
             (= op 'sx4)  (arm64-sx 4 (at ins 1))
+            (= op 'zx1)  (arm64-zx 1 (at ins 1))
+            (= op 'zx2)  (arm64-zx 2 (at ins 1))
+            (= op 'zx4)  (arm64-zx 4 (at ins 1))
             (member? op '(shlv shrv sarv)) (arm64-shiftv op (at ins 1) (at ins 2))
             (= op 'lea)  (arm64-lea  (at ins 1) (at ins 2) (at ins 3))
             (= op 'push) (arm64-push (at ins 1))
@@ -275,6 +293,8 @@
             (= op 'test) (arm64-test (at ins 1) (at ins 2))
             (= op 'div)  (arm64-div  (at ins 1) (at ins 2) (at ins 3))
             (= op 'rem)  (arm64-rem  (at ins 1) (at ins 2) (at ins 3) (at ins 4))
+            (= op 'udiv) (arm64-udiv (at ins 1) (at ins 2) (at ins 3))
+            (= op 'urem) (arm64-urem (at ins 1) (at ins 2) (at ins 3) (at ins 4))
             (= op 'ldx)  (arm64-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
             (= op 'stx)  (arm64-stx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
             (= op 'ldxb) (arm64-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldxb d base index scale disp) -- zero-extend byte load

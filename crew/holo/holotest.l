@@ -58,6 +58,14 @@
       (L "sx1"         "480fbec0"              '((sx1 r0)))           ; movsx rax, al
       (L "sx2.hi"      "4d0fbfc0"              '((sx2 r7)))           ; movsx r8, r8w
       (L "sx4"         "4863db"                '((sx4 r3)))           ; movsxd rbx, ebx
+      (L "ldu1.rbp"    "480fb645f8"            '((ldu1 r0 r4 -8)))    ; movzx rax, BYTE [rbp-8]  (unsigned char)
+      (L "ldu2.sp"     "480fb75c2410"          '((ldu2 r3 sp 16)))    ; movzx rbx, WORD [rsp+16] (unsigned short)
+      (L "ldu4.rbp"    "448b459c"              '((ldu4 r7 r4 -100)))  ; mov r8d, DWORD [rbp-100] (unsigned int, zero-extends)
+      (L "zx1"         "480fb6c0"              '((zx1 r0)))           ; movzx rax, al
+      (L "zx2.hi"      "4d0fb7c0"              '((zx2 r7)))           ; movzx r8, r8w
+      (L "zx4"         "408bdb"                '((zx4 r3)))           ; mov ebx, ebx (zero-extends)
+      (L "udiv"        "52564889d831d248f734244883c4085a4889c3"      '((udiv r3 r3 r5)))   ; xor rdx + div (unsigned)
+      (L "urem"        "52564889d831d248f734244889d04883c4085a4889c3" '((urem r3 r3 r5)))  ; unsigned rem (rdx)
       (L "shlv"        "48d3e0"                '((shlv r0 r1)))       ; shl rax, cl
       (L "shrv.hi"     "49d3e8"                '((shrv r7 r1)))       ; shr r8, cl
       (L "sarv"        "48d3fb"                '((sarv r3 r1)))       ; sar rbx, cl
@@ -285,6 +293,14 @@
       (L "a64.sx1"      "001c4093"          '((sx1 r0)))                  ; sxtb x0, w0
       (L "a64.sx2"      "e73c4093"          '((sx2 r7)))                  ; sxth x7, w7
       (L "a64.sx4"      "637c4093"          '((sx4 r3)))                  ; sxtw x3, w3
+      (L "a64.ldu1"     "80204039"          '((ldu1 r0 r4 8)))            ; ldrb w0, [x4, #8] (zero-extends)
+      (L "a64.ldu2"     "83204079"          '((ldu2 r3 r4 16)))           ; ldrh w3, [x4, #16]
+      (L "a64.ldu4"     "870840b9"          '((ldu4 r7 r4 8)))            ; ldr w7, [x4, #8] (zero-extends to x7)
+      (L "a64.zx1"      "001c40d3"          '((zx1 r0)))                  ; ubfx x0, x0, #0, #8  (uxtb)
+      (L "a64.zx2"      "633c40d3"          '((zx2 r3)))                  ; ubfx x3, x3, #0, #16 (uxth)
+      (L "a64.zx4"      "e77c40d3"          '((zx4 r7)))                  ; ubfx x7, x7, #0, #32 (uxtw)
+      (L "a64.udiv"     "6308c59a"          '((udiv r3 r3 r5)))           ; udiv x3, x3, x5
+      (L "a64.urem"     "6208c59a438c059b"  '((urem r3 r3 r5 r2)))        ; udiv x2,x3,x5 ; msub x3,x2,x5,x3
       (L "a64.shlv"     "0020c19a"          '((shlv r0 r1)))              ; lsl x0, x0, x1
       (L "a64.shrv"     "e724c19a"          '((shrv r7 r1)))              ; lsr x7, x7, x1
       (L "a64.sarv"     "6328c19a"          '((sarv r3 r1)))              ; asr x3, x3, x1
