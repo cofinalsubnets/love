@@ -270,8 +270,10 @@
 ; sigils, the cond ?, the aliases -- PLUS the dyadic words a COMPOSITE run
 ; factors against (!= -> ! =, op-long reads them here). a binding form is
 ; exempt: opfix keeps a `:`/`\` binder name verbatim, so a fresh punct
-; operator is define-then-use with no pin. extend with a plain pin (a new
-; arity, an alias); the default needs none. everything above this point is pre-opfix and
+; operator is define-then-use with no pin -- the default needs no table entry.
+; both tables go BOOK-PRIVATE at birth (the egg mops them: a stray pin into a
+; compile table would poison every later compile); a new arity or alias waits
+; for the scope-layer door. everything above this point is pre-opfix and
 ; must stay operator-free (the bootstrap restriction: no unquoted sigil
 ; before its definitions); everything after -- and every later file, the
 ; corpus, the repl -- reads hot.
@@ -346,7 +348,7 @@
         0))
    ; longest prefix of nm[i..n) that has a monadic meaning -> (len . word),
    ; or 0. monadics first, then an operators entry at arity ONE (the legacy
-   ; prefix lane -- $ ! . and live pins alike), so the table stays dynamic.
+   ; prefix lane -- $ ! . ride here).
    (mono-long nm i n)
     ((: (go k) (? (< k 1) 0
                   (: s (intern (snip nm i (+ i k)))

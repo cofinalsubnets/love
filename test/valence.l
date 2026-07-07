@@ -1,6 +1,6 @@
 ; the VALENCE LAW: a glued operator run is MONADIC -- the reader emits
-; (mono (run datum)) and opfix factors the run against book['monadics]
-; (then the operators table at one, so live pins keep the dynamic lane).
+; (mono (run datum)) and opfix factors the run against its own monadic
+; table (then the operators table at one; both book-private since birth).
 ; spaced, a run keeps its dyadic/infix life. HEAD POSITION NEVER FUSES:
 ; a run right after an open delimiter is the form's operator -- the
 ; section/escape law, and what keeps minified source legal. the words
@@ -29,7 +29,7 @@
  ('(f (mono (< x))) = (sound (tap '(40 102 32 60 120 41)) 99))
  ; the words are real, the sigils their spellings
  (-7 = (negate 7)) (0.5 = (reciprocal 2)) (0.25 = (fraction 5.25)) (1 = (bit 9))
- (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))) (id? 'cap (monadics '<)))
+ (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))))
 
 ; COHERENCE: the new words against the old laws, pinned as one system.
 ; $ is the clamp of the net (the word now states the law the sigil lived);

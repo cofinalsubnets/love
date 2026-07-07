@@ -334,7 +334,8 @@
 ; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
 ; when spaced, fused to its datum as (mono (run datum)) when GLUED mid-list. code then factors
 ; sigils at COMPILE time via `opfix` against the ONE `operators` table (symbol -> arity, or
-; (name . arity) an alias; extended with a plain pin, live for the next form). the FACTORIZATION
+; (name . arity) an alias; the DEFAULT is dyadic, so a fresh punct operator needs no entry --
+; the tables themselves are book-private since birth, the egg mops them). the FACTORIZATION
 ; LAW: greedy longest-prefix, no backtracking; every factor but the last is arity ONE; the last
 ; takes the positional valence -- with a left operand it captures it, nesting RIGHT-associatively;
 ; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work, and a token that doesn't
@@ -362,14 +363,12 @@
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
  (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; head position never fuses: call and section
  ('(mono (< x)) = (caup (sound (tap '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
- ('cap = (monadics '<)) ('net = (monadics '+))
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
  (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
- (12 = (foldl (+) 0 '(3 4 5)))
- (: t operators
-    (&& (book? t) (2 = (t '+)) (3 = (t '?)) (2 = (t '%))
-        ((link 'saturate 1) = (t '$)) ((link 'nil? 1) = (t '!))
-        ((link 'pin 3) = (t '<-)) ((link 'peep 3) = (t '->)))))
+ (12 = (foldl (+) 0 '(3 4 5))))
+; the compile tables (operators/monadics/pureset) are OFF the book post-birth --
+; mopped beside macros (a live pin into a compile table would poison every later
+; compile); the guarded asserts live in the bootstrapping section's welp window.
 
 ; --- macros --- a macro maps an arg list to code; install with `::`. quasiquote is GONE: the
 ; ` list ctor EVALUATES every element, so QUOTE the literal positions instead of unquoting the
@@ -424,7 +423,8 @@
 (assert (lit? ev) (? born (charm? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
-        (? born !twirl 1))                       ;  hence the born guards)
+        (? born !twirl 1)                        ;  hence the born guards)
+        (? born !operators 1) (? born !monadics 1) (? born !pureset 1))  ; the compile tables too (2026-07-07)
 (: help 0)
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since

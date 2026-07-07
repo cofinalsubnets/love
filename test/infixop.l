@@ -5,9 +5,8 @@
 ; and (+)-as-a-value all keep working. parenthesized infix double-wraps -- (1 + 2)
 ; factors to ((+ 1 2)) -- and evaluates via (f)==f. the factoring happens at
 ; COMPILE time (opfix); reading is structural.
-(: in-tbl operators)
-(assert (book? in-tbl) (2 = (in-tbl '+)) (2 = (in-tbl '<=)) (3 = (in-tbl '?)))
-
+; (the table itself is book-private since birth -- test/operator.l has the story;
+; every entry's law reads through behavior below.)
 (assert
  ; basics, every seeded operator
  (3 = (1 + 2)) (-1 = (1 - 2)) (6 = (2 * 3)) (2.5 = (5 / 2))
@@ -49,12 +48,10 @@
 (: p (tap '(40 49 32 43)) (assert (p = (sound p 99))))   ; "(1 +" -> the port
 (: p (tap '(49 32 43)) (assert (1 = (sound p 99)) ('+ = (sound p 99))))  ; "1 +" -> 1, +
 
-; extensible with a plain pin; cleaned up after
-(: ** (\ b n (n b)))
-(pin in-tbl '** 2)
-(assert (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2)))  ; right-assoc: 2^(3^2)
-(pull in-tbl '** 0)
-(assert !(in-tbl '**) (nom? '**))
+; a fresh dyadic operator needs no table at all -- define-then-use (the DEFAULT
+; INFIX section below); ** here rides the default, right-associatively
+(: ** (\ b n (n b))
+ (assert (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2))))  ; right-assoc: 2^(3^2)
 
 ; the accessor aliases: <- is (pin . 3), -> is (peep . 3) -- collection-first,
 ; (t <- k v) pins (returns the collection, so it chains), (t -> k d) peeps.
@@ -63,18 +60,15 @@
  (7 = (((tablet 0) <- 'k 7) 'k))                        ; <- returns the collection
  (9 = (#(1 10) -> 2 9))                          ; -> falls back to the default
  (65 = (: b (cask 1) _ (b <- 0 65) (b -> 0 0)))  ; bufs take the same accessors
- ('pin = (cap (peep operators '<- 0)))  ; the table entries are (name . arity) aliases
- (3 = (caup (peep operators '-> 0)))
  (nom? '<-) (30 = ((->) #(3 30) 3 0))            ; escaped, -> is still peep-as-a-value
  (id? pin (<-)) (id? peep (->)) (1 = ((%) 5 2)))  ; every alias is a bound global
 
 ; DEFAULT INFIX: any all-punct symbol acts dyadic (arity two) with NO table pin --
 ; the table holds only the EXCEPTIONS (other arities, the aliases, the arity-one
 ; sigils). a fresh punct symbol, never registered, factors infix all the same.
-(: >< (\ a b (L a b))                            ; a fresh punct op, never pinned
+(: >< (\ a b (L a b))                            ; a fresh punct op, never registered
  (assert
-  !(operators '><)                               ; not in the table ...
-  ('(3 5) = (3 >< 5))                             ; ... yet infix: captures the left operand
+  ('(3 5) = (3 >< 5))                             ; infix: captures the left operand
   ('(7 (3 5)) = (7 >< 3 >< 5))                    ; nests RIGHT-associatively
   ('(9 (3 5)) = `(9 (3 >< 5)))                   ; works inside a list
   (nom? '><) (id? >< (><))                        ; no left operand / escaped: the plain symbol
