@@ -167,7 +167,7 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/cc/lex.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l crew/utils/au.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -367,8 +367,8 @@ test_vi: host out/host$(hsuf)/au
 # (same source, both compilers, same exit). x86-64 only until arm64 parity.
 .PHONY: test_cc
 test_cc: host out/host$(hsuf)/au
-	@echo "CC crew/cc/{lex,parse,gen,law}.l"; \
-	  cat test/00-init.l crew/cc/lex.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | $m > out/host/.test_cc.out 2>&1; r=$$?; \
+	@echo "CC crew/cc/{lex,cpp,parse,gen,law}.l"; \
+	  cat test/00-init.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | $m > out/host/.test_cc.out 2>&1; r=$$?; \
 	  cat out/host/.test_cc.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/cc/law:" out/host/.test_cc.out; } \
 	    || { echo "FAIL cc laws (exit $$r)"; exit 1; }

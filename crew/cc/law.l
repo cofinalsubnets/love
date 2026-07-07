@@ -198,5 +198,36 @@
       ; a bare TOP-LEVEL function-pointer array still refuses (ptop lays its own declarators; 4e)
       (! (cgn "int a(int x){return x;} int (*t[1])(int) = {a}; int main() { return t[0](3); }"))))
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) ok")
+; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
+; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.
+; pps runs cpp (no includes) and joins the output tokens' spellings to a string. --
+(: (spell1 t) (: k (cap t)
+                 (? (= k 'str) (+ "\"" (+ (caup t) "\""))
+                    (|| (= k 'num) (= k 'kw)) (show (caup t))
+                    (caup t)))
+   (pps src) (: r (cpp (caup (clex src)) ())
+                (? (! (two? r)) 'FAIL
+                   (: (go l) (? (! (two? l)) "" (+ (spell1 (cap l)) (+ (? (two? (cup l)) " " "") (go (cup l)))))
+                      (go (caup r)))))
+   (assert
+      (= (pps "#define N 42\nN + 1") "42 + 1")                         ; object macro
+      (= (pps "#define A B\n#define B 7\nA") "7")                      ; rescan to fixpoint
+      (= (pps "#define ADD(a,b) a+b\nADD(1,2)") "1 + 2")               ; function macro
+      (= (pps "#define SQ(x) ((x)*(x))\nSQ(SQ(2))")                    ; nested / re-expansion
+         "( ( ( ( 2 ) * ( 2 ) ) ) * ( ( ( 2 ) * ( 2 ) ) ) )")
+      (= (pps "#define S(x) #x\nS(a b)") "\"a b\"")                    ; # stringize
+      (= (pps "#define C(a,b) a##b\nC(foo,bar)") "foobar")             ; ## paste
+      (= (pps "#define P(...) f(__VA_ARGS__)\nP(1,2,3)") "f ( 1 , 2 , 3 )")   ; variadic
+      (= (pps "#define F F\nF") "F")                                   ; blue paint: self-ref stops
+      (= (pps "#define X\n#ifdef X\ny\n#endif") "y")                   ; #ifdef taken
+      (= (pps "#ifndef Z\nn\n#endif") "n")                             ; #ifndef taken
+      (= (pps "#if 2+3*4 == 14\nok\n#endif") "ok")                     ; const-expr precedence
+      (= (pps "#if 0\na\n#elif 1\nb\n#else\nc\n#endif") "b")           ; #elif chain
+      (= (pps "#if (1 << 4) > 10 && !0\ny\n#endif") "y")               ; shift / logical / unary
+      (= (pps "#define G 1\n#if defined(G)\nd\n#endif") "d")           ; defined() operator
+      (= (pps "#define M(x) x\nno M here") "no M here")                ; a fn macro name not called stays literal
+      (! (cpp (caup (clex "#if 1\nx")) ()))                            ; unterminated #if refuses
+      (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
+
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) ok")
 (put err 10)

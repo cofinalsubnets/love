@@ -248,9 +248,30 @@ two ideas to keep warm as the stages climb, neither committed yet:
    core like holo callr) and the heap grows unboundedly; the make gate is safe
    (m defaults to ./out/host/ai). probe cc with `./out/host/ai <au-cat> cc`,
    never a bare `au`, until `make install` refreshes the PATH binary.
-5. **the preprocessor**: cpp.l complete (##, variadics, #if trees,
-   includes). gate: gcc -E vs cc -E token streams on the torture set AND on
-   ai.c itself (the real headers, our include/).
+5. **the preprocessor** LANDED 2026-07-06: crew/cc/cpp.l, TOKEN-BASED (it sits
+   between clex and cparse, so an identifier inside a string/char literal --
+   already one opaque token -- is never mistaken for a macro). object +
+   function-like macros; rescan to a fixpoint under Prosser's HIDESETS (the
+   blue-paint 4th token element, so FOO->FOO stops); # stringize; ## paste
+   (fold + relex); ... variadics with __VA_ARGS__; #define/#undef;
+   #if/#ifdef/#ifndef/#elif/#else/#endif over a precedence-climbing integer
+   const-expr evaluator (defined X resolved first, undefined ids -> 0);
+   #include through an incf hook (cc.l's incload searches the source dir for
+   "quoted", crew/cc/include + /usr/include for <sys>; guards work because the
+   included file shares the macro tablet); adjacent-string concatenation;
+   __LINE__/__STDC__. #error fails the compile; #pragma/#line ignored. fenced:
+   _Pragma, __COUNTER__, the GNU ,##__VA_ARGS__ comma elision. cc.l now rides
+   lex -> CPP -> parse -> gen. battery 56->59 (macros, conditionals, a guarded
+   #include header). laws: 18 pps/token goldens in law.l.
+   TRAP PAID (the whole stage's hard bug): a lambda PARAMETER named after a
+   sibling :-local gets shadowed by boxfix's "capture by location" shared cell
+   (immune to shadowing -- the :-local owns the pin, the param reads the stale
+   cell), so subst's macro-body arg silently read cppgo's whole define line.
+   also the function NAME `adj##` (a `##` in a nom) fed the confusion. fix:
+   give the param a nom bound NOWHERE else (`mb`) and inline the sibling helper
+   as a closure-local. the tell was `;; missing <nom>` weave-scares at LOAD.
+   NEXT gate to add (stage 6+): gcc -E vs cc -E token streams on ai.c's real
+   headers + our include/.
 6. **the long tail ai.c names**: varargs (the SysV register-save dance --
    the hairiest single item in the plan), doubles through the xmm ABI,
    _Static_assert, anonymous members, the one compound literal. gate:
