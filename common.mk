@@ -21,18 +21,17 @@ else
 cc_user := 1
 endif
 
-# The host binary's FLAVOR. STATIC=1 links `ai` fully static against musl (the
-# STATIC block in the root Makefile has the whole story) -- and that IS the
-# default on Linux when musl-clang is present and CC is untouched: the everyday
-# binary is the portable one (+1% size, same speed, DNS intact). STATIC=0 forces
-# the dynamic glibc build. The default flavor always owns the canonical out/host
-# tree; the OTHER flavor gets its own suffixed tree (out/host-glibc here,
-# out/host-musl on a machine without the musl default) so the two libcs never
-# share objects -- and $m below follows, so tests run the flavor you asked for.
-static_default := $(if $(cc_user),,$(if $(filter Linux,$(shell uname -s)),$(shell command -v musl-clang 2>/dev/null)))
-STATIC ?= $(if $(static_default),1)
+# The host binary's FLAVOR. The default is the dynamic glibc build (plus
+# libai.so, which the crew can share). STATIC=1 links `ai` fully static against
+# musl -- the OPT-IN portable lane (the STATIC block in the root Makefile has
+# the whole story), demoted from Linux default 2026-07-07: valgrind emulates
+# x87 at 64 bits and musl's strtod leans on the full 80, so under memcheck
+# every float literal misparsed ~1e-13 (`make valg` tripped spec.l's exact
+# euler law) -- and a static build can't produce libai.so. A STATIC build gets
+# its own out/host-musl tree so the two libcs never share objects -- and $m
+# below follows, so tests run the flavor you asked for.
 override STATIC := $(filter-out 0,$(STATIC))
-hsuf := $(if $(STATIC),$(if $(static_default),,-musl),$(if $(static_default),-glibc,))
+hsuf := $(if $(STATIC),-musl,)
 
 # ai_tco for the builds that can take it: 1 = the tail-threaded VM (aps tail-jump,
 # never return -- `make vmret` verifies it per binary), 0 = the trampoline loop.

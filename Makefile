@@ -734,20 +734,20 @@ so_undef = -Wl,-undefined,dynamic_lookup
 else
 so_archive = -Wl,--whole-archive $(ho)/libai.a -Wl,--no-whole-archive
 endif
-# STATIC links a fully static `ai` against musl (and skips libai.so, which a
-# static build can't produce) -- THE DEFAULT on Linux when musl-clang is present
-# (common.mk static_default): the binary runs on ANY Linux distro regardless of
+# STATIC=1 links a fully static `ai` against musl (and skips libai.so, which a
+# static build can't produce) -- the OPT-IN portable-binary lane (was briefly
+# the Linux default; demoted 2026-07-07, the why lives in common.mk's flavor
+# block): the binary runs on ANY Linux distro regardless of
 # glibc version AND still does DNS -- static *glibc* can't resolve hostnames
 # (getaddrinfo needs NSS via dlopen, impossible when static), but musl resolves
 # itself, so ain's `connect host port` works. Costs +1% size (~55K of text, the
 # whole libc; the ~4M baked image dwarfs it) at the same test-corpus speed.
 # musl-clang is clang (matches our clang default) + the musl libc -- the clean
 # path. VALIDATED: fully static, `ldd` = not-a-dynamic-executable, runs,
-# getaddrinfo baked in, full corpus green. `make STATIC=0` builds the dynamic
-# glibc `ai` (plus libai.so) in its own out/host-glibc tree -- no need to clean
-# between flavors.
+# getaddrinfo baked in, full corpus green. `make STATIC=1` builds in its own
+# out/host-musl tree -- no need to clean between flavors.
 # musl is Linux-only -- this is the Linux portable-binary artifact, NOT the mac
-# build (mac = a native Apple-clang build; STATIC never defaults on there).
+# build (mac = a native Apple-clang build).
 # FALLBACK: `STATIC=1 CC=musl-gcc` works too but is a gcc wrapper; on Arch its
 # spec injects a phantom `-latomic_asneeded` (we use no real atomics -- only
 # volatile sig_atomic_t flags), so it needs an empty stub on the link path:
@@ -1314,9 +1314,9 @@ $d/lib/ai/%.l: ai/%.l
 
 # the embeddable libs install GLIBC always: a musl-compiled archive poisons a
 # glibc link (the sigsetjmp note in the host block), and a musl .so is useless
-# to a dynamic (glibc) consumer. When the default flavor is musl, that tree is
-# out/host-glibc and a sub-make builds it on demand.
-glibc_ho = out/host$(if $(static_default),-glibc)
+# to a dynamic (glibc) consumer. Under STATIC=1 the canonical out/host (glibc)
+# tree is built on demand by a sub-make.
+glibc_ho = out/host
 ifneq ($(glibc_ho),$(ho))
 $(glibc_ho)/libai.a $(glibc_ho)/libai.so: force_hostcc
 	@$(MAKE) --no-print-directory STATIC=0 $@
