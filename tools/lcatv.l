@@ -14,7 +14,7 @@
                  (put out (+ 48 (% c 8))))
               (put out c))
    p (open (cap (cup argv)) "r")
-   _ (? p 0 (: _ (say err "lcatv: cannot open input") (nap 1)))
+   _ (? p 0 (: _ (say err "lcatv: cannot open input") (quit 1)))
    s (slurp p)
    _ (put out 34)
    _ ((: (g i) (? (< i (tally s)) (: _ (eb (peep s i 0)) (g (+ 1 i))))) 0)

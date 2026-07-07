@@ -156,7 +156,7 @@
                   (: _ (eb c) (g (+ i 1) c (= c 34)))))) 0)) 0 0 0)
        (put out 34))
    p (open (cap (cup argv)) "r")
-   _ (? p 0 (: _ (say err "lcat2: cannot open input") (nap 1)))
+   _ (? p 0 (: _ (say err "lcat2: cannot open input") (quit 1)))
    e (nom 0)
    forms (readforms p e)
    _ (map (\ m (pin cnt m (+ 1 (peep cnt m 0)))) (keys (peep book 0 0)))  ; macro heads bypass scoping

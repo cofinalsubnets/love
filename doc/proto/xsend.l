@@ -5,7 +5,7 @@
 ; Types mod1+j (focus down) then mod1+Return (swap master), then leaves.
 ;   run: out/host/ai doc/proto/xsend.l    (against `Xephyr :7 -ac`, wm running)
 (: s (connectu "/tmp/.X11-unix/X7")
-   _ (? s 0 (: _ (say err "xsend: no display socket -- Xephyr up?\n") (nap 1)))
+   _ (? s 0 (: _ (say err "xsend: no display socket -- Xephyr up?\n") (quit 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))
    (w8 v)   (put s v)
    (w16 v)  (: _ (put s (& 255 v)) (put s (& 255 (>> v 8))))
@@ -20,7 +20,7 @@
    _ (w8 108) _ (w8 0) _ (w16 11) _ (w16 0) _ (w16 0) _ (w16 0) _ (w16 0)
    _ (flush s)
    st (r8 ())
-   _ (? (= st 1) 0 (: _ (say err "xsend: setup refused\n") (nap 1)))
+   _ (? (= st 1) 0 (: _ (say err "xsend: setup refused\n") (quit 1)))
    _ (r8 ()) _ (r16 ()) _ (r16 ())
    alen (r16 ())
    _ (r32 ()) _ (r32 ()) _ (r32 ()) _ (r32 ())
@@ -46,7 +46,7 @@
                   0)
         (go 0))
    kalt (peep km 65513 0) kj (peep km 106 0) kret (peep km 65293 0)
-   _ (? (&& kalt (&& kj kret)) 0 (: _ (say err "xsend: keycodes missing\n") (nap 1)))
+   _ (? (&& kalt (&& kj kret)) 0 (: _ (say err "xsend: keycodes missing\n") (quit 1)))
 
    ; QueryExtension "XTEST" -> the extension's major opcode
    _ (w8 98) _ (w8 0) _ (w16 4) _ (w16 5) _ (w16 0)
@@ -55,7 +55,7 @@
    _ (flush s)
    _ (r8 ()) _ (r8 ()) _ (r16 ()) _ (r32 ())
    here (r8 ()) xop (r8 ()) _ (skip 22)
-   _ (? here 0 (: _ (say err "xsend: no XTEST on this server\n") (nap 1)))
+   _ (? here 0 (: _ (say err "xsend: no XTEST on this server\n") (quit 1)))
 
    ; FakeInput (minor 2): type 2 = KeyPress, 3 = KeyRelease, at the core device
    (fake t kc) (: _ (w8 xop) _ (w8 2) _ (w16 9)

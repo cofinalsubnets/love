@@ -27,7 +27,7 @@
 (: _
  (: (rdev q) ((: (go e q) (: r (sound q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
     (load1 p) (: q (open p "r")
-       (? q (rdev q) (: _ (say err (+ "ai: cannot open " p)) (nap 1))))
+       (? q (rdev q) (: _ (say err (+ "ai: cannot open " p)) (quit 1))))
     (eval1 s) (: q (tap (map s (jot (tally s))))     ; a string is a fn over its bytes -> a charlist port
        e (nom 0) m (nom 0)                           ; fresh noms: eof / unfinished-shape, id?-safe
        (rdl _) (: r (sound q e)                      ; every top-level datum off the string, in order
@@ -35,12 +35,12 @@
              (id? r e) ()
              (: t (rdl ()) (? (id? t m) m (link r t)))))
        ds (rdl ())
-       (? (id? ds m)       (: _ (say err "ai: -e: unfinished form") (nap 2))
+       (? (id? ds m)       (: _ (say err "ai: -e: unfinished form") (quit 2))
           (two? ds)
           (? (two? (cup ds)) (ev 'ev ds)             ; MANY datums: the ONE application -- infix factors, like a repl line
              (ev 'ev (cap ds)))                      ; ONE datum: as-is (a leading monadic stays fused)
           ()))                                       ; no datums: nothing to run
-    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (nap 0))   ; print a line to out, flush, exit 0
+    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))   ; print a line to out, flush, exit 0
     (version _) (bye (+ "ai " ai-version))                       ; _ arg: ai has no nullary calls
     (usage _) (bye (+ "usage: ai [-l FILE] [-e EXPR] [-v] [-h] [--] [FILE ...]\n"
                (+ "  -l, --load FILE   preload FILE (read-eval) before the program\n"
@@ -49,7 +49,7 @@
                (+ "  -h, --help        print this help and exit\n"
                (+ "  --                end of options; the rest are files\n"
                   "with no program (no -e, no FILE), read-eval stdin to EOF.")))))))
-    (need h t) (? (two? t) 0 (: _ (say err (+ "ai: " (+ h " needs an argument"))) (nap 2)))
+    (need h t) (? (two? t) 0 (: _ (say err (+ "ai: " (+ h " needs an argument"))) (quit 2)))
     (pre a) (? (two? a)                              ; -> (kind . rest): 'eval code.args / 'file prog.args / 'stdin
      (: h (cap a) t (cup a) (?
       (| (= h "-l") (= h "--load"))    (: _ (need h t) _ (load1 (cap t)) (pre (cup t)))

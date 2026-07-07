@@ -60,7 +60,7 @@
               (put out c)))
 
 (: p (open (cap (cup argv)) "r")
-   _ (? p 0 (: _ (say err "lcat: cannot open input") (nap 1)))
+   _ (? p 0 (: _ (say err "lcat: cannot open input") (quit 1)))
    ; gather every canonical form into one space-joined string
    acc ((: (g acc e p first)
           (: r (sound p e)

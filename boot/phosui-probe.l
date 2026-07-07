@@ -15,7 +15,7 @@
       sc (x-setup s ())
       root (scr-root sc)
       (line m) (: _ (say out m) _ (say out "\n") (flush out))
-      (fail m) (: _ (line (+ "probe FAIL " m)) (nap 1))
+      (fail m) (: _ (line (+ "probe FAIL " m)) (quit 1))
       (must m v) (? v v (fail m))
       ; a patient waiter: poll th every 100ms until it answers true
       (waitp m th t) (? (< t 1) (fail m)
@@ -171,4 +171,4 @@
 
       _ (close s3) _ (close s)
       _ (line "probe: manage + maximize + move + resize + focus + moor + close, all exact")
-      (nap 0)))
+      (quit 0)))

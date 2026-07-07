@@ -9,7 +9,7 @@
 ; encodings from the protocol appendix. everything is one body-having `:` --
 ; local names, ain-style (tools/ain.l is the socket idiom source).
 (: s (connect "127.0.0.1" 6007)
-   _ (? s 0 (: _ (say err "x11: cannot connect to :7 -- Xephyr up?\n") (nap 1)))
+   _ (? s 0 (: _ (say err "x11: cannot connect to :7 -- Xephyr up?\n") (quit 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))
 
    ; --- little-endian writers / readers over the socket port ---
@@ -33,7 +33,7 @@
    st (r8 ())
    _ (? (= st 1) 0
         (: rlen (r8 ()) _ (skip 6) why (rstr rlen)
-           _ (say err (+ "x11: setup refused: " (+ why "\n"))) (nap 1)))
+           _ (say err (+ "x11: setup refused: " (+ why "\n"))) (quit 1)))
    _ (r8 ())                             ; pad
    maj (r16 ()) mnr (r16 ())
    alen (r16 ())                         ; additional data, 4-byte units
@@ -70,7 +70,7 @@
    b0 (r8 ())
    _ (? (= b0 1) 0
         (: code (r8 ()) _ (skip 30)
-           _ (say err (+ "x11: InternAtom X error, code " (+ (show code) "\n"))) (nap 1)))
+           _ (say err (+ "x11: InternAtom X error, code " (+ (show code) "\n"))) (quit 1)))
    _ (r8 ()) _ (r16 ()) _ (r32 ())       ; pad, sequence, reply length
    atom (r32 ()) _ (skip 20)
    _ (line (+ "InternAtom WM_PROTOCOLS -> atom " (show atom)))
@@ -92,7 +92,7 @@
    (msg u) (: b0 (r8 ())
               (? (= b0 0)
                  (: code (r8 ()) _ (skip 30)
-                    _ (say err (+ "x11: X error, code " (+ (show code) "\n"))) (nap 1))
+                    _ (say err (+ "x11: X error, code " (+ (show code) "\n"))) (quit 1))
                  (: code (& 127 b0)
                     (? (= code 12)
                        (: _ (r8 ()) _ (r16 ())        ; pad, sequence

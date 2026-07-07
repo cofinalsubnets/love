@@ -117,7 +117,7 @@ Two mappings are the elegant ones, and both are *already built*:
    in unquoted words and inside `".."` (literal in `'..'`; an unset var is the unit and
    concatenates away, so a bare unset word drops — bash's empty-removal for free). `$?`
    is the last stage's status, a stop folded to 128+sig; `cd` sets it; `export N=V` and
-   `exit [n]` (over the `nap` nif) round out the builtins. Gated in boot/sh.l.
+   `exit [n]` (over the `quit` nif) round out the builtins. Gated in boot/sh.l.
 
 **L0 staging complete** (2026-07-04). What remains of L0 is widening, not scaffolding:
 `dup2`-as-nif if a program (not the shell) wants it, `rmdir`/`rename` when something

@@ -216,4 +216,4 @@
        "")))
    _ (. ("/- " + (show ($ keep)) + " exported / " + (show (tally ents)) + " corpus entries swept;" + nl
          + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/" + nl))
-   (nap 0))
+   (quit 0))

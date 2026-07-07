@@ -132,7 +132,7 @@
             ; no card: a source leaf. it must already exist on disk.
             (: ta (date item)
                _ (? ta 0 (: _ (say err (+ "cook: no recipe to make " (show item)))
-                            _ (put err 10) (nap 1)))
+                            _ (put err 10) (quit 1)))
                _ (pin done item ta)
                ta))))
 
@@ -157,7 +157,7 @@
    (do-exec argv)
    (: _ (flush out)
        _ (exec argv)
-       _ (say err (+ "cook: cannot exec " (join " " argv))) _ (put err 10) (nap 1))
+       _ (say err (+ "cook: cannot exec " (join " " argv))) _ (put err 10) (quit 1))
 
    ; run one argv: echo it, run it, echo its captured stdout, abort on failure.
    (shell step)
@@ -167,9 +167,9 @@
           (: _ (puts (cup r))
              (? (= 0 (cap r)) 0
                 (: _ (say err (+ "cook: command failed (exit " (+ (show (cap r)) ")")))
-                   _ (put err 10) (nap 1))))
+                   _ (put err 10) (quit 1))))
           (: _ (say err (+ "cook: cannot run " (join " " step)))
-             _ (put err 10) (nap 1))))
+             _ (put err 10) (quit 1))))
 
    ; run one make recipe line (via sh -c), make-style: echo the RAW command
    ; (the expanded line, not the `sh -c` wrapper) unless @ silent, print its
@@ -181,14 +181,14 @@
        ec (? (two? r) (cap r) -1)
        _ (? (two? r) (puts (cup r)) 0)
        (? (= 0 ec) 0
-          (! (two? r)) (: _ (say err (+ "cook: cannot run " cmd)) _ (put err 10) (nap 1))
+          (! (two? r)) (: _ (say err (+ "cook: cannot run " cmd)) _ (put err 10) (quit 1))
           ignore (: _ (say err (+ "cook: " (+ cmd (+ " (exit " (+ (show ec) ", ignored)"))))) (put err 10))
-          (: _ (say err (+ "cook: command failed (exit " (+ (show ec) ")"))) _ (put err 10) (nap 1)))))
+          (: _ (say err (+ "cook: command failed (exit " (+ (show ec) ")"))) _ (put err 10) (quit 1)))))
 
 ; --- the entry points ----------------------------------------------------------
 
 (: (cook item)                                ; prep item up to date and report
-   (? (! item) (: _ (say err "cook: nothing to cook") _ (put err 10) (nap 1))
+   (? (! item) (: _ (say err "cook: nothing to cook") _ (put err 10) (quit 1))
       (: shipped (tablet 0)
          _ (prep item (tablet 0) shipped)
          ; $ of a map is its key count: how many items actually ran a recipe.
@@ -231,7 +231,7 @@
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
 ; names leak to the global scope. The form reads outer globals (the post.l
 ; combinators, recipe, cook, ticket, the prel) freely; its body ANSWERS cook-main
-; (args -> the whole job, exiting via nap). The outer `_`-holder form (cli.l's own
+; (args -> the whole job, exiting via quit). The outer `_`-holder form (cli.l's own
 ; trick) leaks cook-main as the ONE public -- the multi-call `au` (crew/utils/au.l)
 ; calls it as `make` -- and the SEAT at the bottom fires it only when this very
 ; file was invoked (the installed `cook` symlink, a -l preload, or positional).
@@ -569,7 +569,7 @@
     cls 0 0 0)
 
    ; read a file whole (for `include`), then split it into classified lines.
-   (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (say err (+ "cook: cannot read " path)) _ (put err 10) (nap 1))))
+   (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (say err (+ "cook: cannot read " path)) _ (put err 10) (quit 1))))
    (file-lines ip) (map classify (lines (uncont (slurp-of ip))))
 
    ; seed make's builtin defaults (overridable by the Makefile).
@@ -722,7 +722,7 @@
    ; for back-compat with `cook <Makefile> [recipe]`, when no -f is given the first
    ; positional word that names an existing file is taken as the build file and the
    ; rest are recipes; with -f, every positional word is a recipe.
-   (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (nap 0))
+   (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))
    (version _) (bye (+ "cook (ai " (+ ai-version ")")))
    (usage _) (bye (+ "usage: cook [-f FILE] [--emit] [-v] [-h] [RECIPE ...]\n"
               (+ "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
@@ -731,7 +731,7 @@
               (+ "  -h, --help        print this help and exit\n"
               (+ "  RECIPE ...        the items to build (default: the first recipe declared)\n"
                  "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary ai source.")))))))
-   (need-arg h r) (? (two? r) 0 (: _ (say err (+ "cook: " (+ h " needs an argument"))) _ (put err 10) (nap 2)))
+   (need-arg h r) (? (two? r) 0 (: _ (say err (+ "cook: " (+ h " needs an argument"))) _ (put err 10) (quit 2)))
    (parse-args ws)             ; -> a tablet: 'file, 'emit, 'help, 'ver, 'pos (the recipe words, in order)
    ((: (loop ws opt) (? (! (two? ws)) opt
        (: w (cap ws) r (cup ws)
@@ -744,7 +744,7 @@
 
    ; -- cook-main (this form's body ANSWERS it) --
    ; the whole job from the args: parse flags, find the build file, cook, and exit
-   ; first (nap), so when fired from a -l preload the CLI driver never tries to
+   ; first (quit), so when fired from a -l preload the CLI driver never tries to
    ; read a Makefile (or re-read the chosen file) as l source. A Makefile is
    ; imported and its recipes cooked; a Cookfile is read and evaluated -- it drives
    ; cook itself, the ticket read live by (ticket 0) from the tickets box.
@@ -755,25 +755,25 @@
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
-      _ (? (&& xf (! (exists? xf))) (: _ (say err (+ "cook: cannot open " xf)) _ (put err 10) (nap 1)) 0)
+      _ (? (&& xf (! (exists? xf))) (: _ (say err (+ "cook: cannot open " xf)) _ (put err 10) (quit 1)) 0)
       posfile (? (&& (! xf) (&& (two? pos) (exists? (cap pos)))) (cap pos) 0)  ; a positional build file (back-compat)
       file (? xf xf (? posfile posfile (: _ (autoregen 0) (discover 0))))     ; discovery may auto-regen a stale Cookfile from a newer Makefile
       _ (pin tickets 0 (? posfile (cup pos) pos))                 ; the recipe words; the positional file is not a recipe
       (? emit?
-         (: _ (? file 0 (: _ (say err "cook: --emit needs a Makefile") _ (put err 10) (nap 1)))
+         (: _ (? file 0 (: _ (say err "cook: --emit needs a Makefile") _ (put err 10) (quit 1)))
              q (open file "r")
              _ (pin emitp 0 1)
              _ (register-makefile (slurp q))
              _ (emit-cookfile out)
-             (nap 0))
+             (quit 0))
          file
          (: q (open file "r")
             _ (? (makefilep file)
                  (: _ (register-makefile (slurp q)) (cook-all 0))
                  ((: (g e) (: r (sound q e) (? (= e r) 0 (: _ (ev 'ev r) (g e))))) (mint 0)))
-            (nap 0))
+            (quit 0))
          (two? pos)
-         (: _ (say err "cook: no Cards.l, Cookfile or Makefile found") _ (put err 10) (nap 1))
+         (: _ (say err "cook: no Cards.l, Cookfile or Makefile found") _ (put err 10) (quit 1))
          0))
 
    cook-main)

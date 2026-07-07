@@ -57,8 +57,8 @@
        (? (two? rest)
           (: p (spawn rest)
              (? (< p 0) (udie 127 (+ "env: cannot run " (cap rest)))
-                (: w (wait p) _ (flush out) (nap w))))
-          (: (pr e) (? (! (two? e)) (: _ (flush out) (nap 0))
+                (: w (wait p) _ (flush out) (quit w))))
+          (: (pr e) (? (! (two? e)) (: _ (flush out) (quit 0))
                        (: _ (say out (cap e)) _ (put out 10) (pr (cup e))))
              (pr (environ 0)))))
 
@@ -71,7 +71,7 @@
                                (udie 1 (+ "sleep: invalid time interval '" (+ (cap a) "'"))))))
           t (tot as 0)
           _ (rest t)
-          (nap 0)))
+          (quit 0)))
 
    ; -- kill: a signal (default TERM) onto every named pid --
    (kill-main as)
@@ -100,7 +100,7 @@
               (? (! r) ok
                  (: _ (say err (+ "kill: cannot kill " p)) _ (put err 10) 0))))
        (go a ok) (? (two? a) (go (cup a) (one (cap a) ok))
-                    (: _ (flush err) (nap (? ok 0 1))))
+                    (: _ (flush err) (quit (? ok 0 1))))
        (go pids 1))
 
    ; -- xargs: stdin's words onto the command's tail (echo when none), -n N a
@@ -120,7 +120,7 @@
                (L ws))
        (go rs bad)
         (? (! (two? rs))
-           (: _ (flush out) (nap bad))
+           (: _ (flush out) (quit bad))
            (: p (spawn (cat cmd (cap rs)))
               w (? (< p 0) 127 (wait p))
               (go (cup rs) (? (= w 127) 127

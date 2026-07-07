@@ -385,7 +385,7 @@ static union u const
 //   static lvm(lvm_foo) { ... return Sp[0] = <v>, Ip++, Continue(); }
 //   static union u const nif_foo[] = {{lvm_foo}, {lvm_ret0}};  // 1-arg; curry for more
 //   AI_NIF("foo", nif_foo);
-AI_NIF("nap", nif_exit);
+AI_NIF("quit", nif_exit);
 AI_NIF("open", nif_open);
 AI_NIF("close", nif_close);
 AI_NIF("run", nif_run);

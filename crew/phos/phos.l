@@ -93,12 +93,12 @@
 (: (help s a b) (? (eof? s) b (more? s) a `('scare a b)))
 
 (: s (x-connect phos-display)
-   _ (? s 0 (: _ (say err "phos: no display -- Xephyr up?\n") (nap 1)))
+   _ (? s 0 (: _ (say err "phos: no display -- Xephyr up?\n") (quit 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))
    sc (x-setup s phos-auth)
-   _ (? sc 0 (: _ (say err "phos: setup refused (auth?)\n") (nap 1)))
+   _ (? sc 0 (: _ (say err "phos: setup refused (auth?)\n") (quit 1)))
    root (scr-root sc) wpx (scr-w sc) hpx (scr-h sc)
-   _ (? (x-redirect s root) 0 (: _ (say err "phos: another WM owns this display\n") (nap 1)))
+   _ (? (x-redirect s root) 0 (: _ (say err "phos: another WM owns this display\n") (quit 1)))
    _ (line (+ "phos: managing " (+ (show root) (+ " " (+ (show wpx) (+ "x" (show hpx)))))))
    _ (ewmh-init s root (scr-idbase sc) (tally phos-tags))                          ; the support window + _NET_* root properties
 

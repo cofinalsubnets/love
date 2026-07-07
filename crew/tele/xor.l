@@ -42,4 +42,4 @@
    _ (puts (+ "10 -> " (show (cell 2)))) _ (putc 10)
    _ (puts (+ "11 -> " (show (cell 3)))) _ (putc 10)
    _ (puts (? ok "XOR learned: all four correct." "XOR NOT learned.")) _ (putc 10)
-   (? ok 0 (nap 1)))                                         ; gate: nonzero exit on failure
+   (? ok 0 (quit 1)))                                         ; gate: nonzero exit on failure

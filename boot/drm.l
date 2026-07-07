@@ -11,7 +11,7 @@
 (reads (open "crew/phos/core.l" "r"))
 (reads (open "crew/haven/wire.l" "r"))
 (reads (open "crew/haven/drm.l" "r"))
-(: (must tag v) (? v v (: _ (puts "drm: FAIL ") _ (putx tag) _ (putc 10) (nap 1)))
+(: (must tag v) (? v v (: _ (puts "drm: FAIL ") _ (putx tag) _ (putc 10) (quit 1)))
    ; prefer a card that GRANTS master (vkms, a free vt) -- the modeset half
    ; runs there; else the first card that opens (enumeration-only)
    (findcard k best) (? (< 3 k) best
@@ -24,7 +24,7 @@
                               (lit? best) (: _ (close p) (findcard (+ k 1) best))
                               (findcard (+ k 1) p))))
    p (findcard 0 ())
- _ (? (! (lit? p)) (: _ (puts "drm: ok (no card, skipped)") (nap 0)) 0)
+ _ (? (! (lit? p)) (: _ (puts "drm: ok (no card, skipped)") (quit 0)) 0)
  res (drm-res p)
  _ (must 'resources (two? res))
  _ (must 'crtcs (two? (cap res)))

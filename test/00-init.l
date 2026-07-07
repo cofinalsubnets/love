@@ -22,5 +22,5 @@
   (test_set 'count (+ 1 (test_get 'count)))
    (? v (term_text green_dot)
     (do (term_text red_x) (putc 10)
-       (puts "assert failed: ") (putx x) (putc 10) (nap 1))))
+       (puts "assert failed: ") (putx x) (putc 10) (quit 1))))
  (link 'do (map (\ l `(report `('\ l) l)) l)))))

@@ -41,7 +41,7 @@
        res (elf64 'x64 (\ _ (caup ir)) ())
        _ (write-bytes dst (peep res 'bytes 0))
        _ (chmod dst 493)
-       (nap 0))
+       (quit 0))
    ; a relocatable object (`-c`): text/data sections + symbols + relocations, for
    ; the system linker to bind against host/*.o + libc (stage 7a).
    (cc-obj src dst)
@@ -50,7 +50,7 @@
        _ (? (two? ob) () (udie 1 (+ "cc: codegen error in " src)))
        bytes (objelf 'x64 (el ob 1) (el ob 2) (el ob 3) (el ob 4))
        _ (write-bytes dst bytes)
-       (nap 0))
+       (quit 0))
    (cc-main as)
     (? (&& (two? as) (= (cap as) "-c"))
         (: r (cup as) (? (two? (cup r)) (cc-obj (cap r) (caup r)) (udie 2 "usage: cc -c IN OUT")))

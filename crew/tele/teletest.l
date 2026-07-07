@@ -128,4 +128,4 @@
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " tele tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))
    _ (putc 10)
-   (? (< 0 nf) (nap 1) 0))                          ; nap is the exit nif (was `exit`)
+   (? (< 0 nf) (quit 1) 0))                          ; quit is the exit nif (was `exit`)

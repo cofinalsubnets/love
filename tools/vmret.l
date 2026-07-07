@@ -14,8 +14,8 @@
 ;
 ; This needs the host-only `run`/`getenv` nifs (subprocess + environment).
 
-(: (die m)   (: _ (say err "vmret: ") _ (say err m) _ (say err "\n") (nap 2))
-   (usage 0) (: _ (say out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n") (nap 0)))
+(: (die m)   (: _ (say err "vmret: ") _ (say err m) _ (say err "\n") (quit 2))
+   (usage 0) (: _ (say out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n") (quit 0)))
 
 ; --- character classes + cursors over a line (string s) --------------
 ; ws = Python \s within a line (space tab cr ff vtab); hex = [0-9a-fA-F].
@@ -245,7 +245,7 @@
    ; --- the report (byte-for-byte the same shape as vmret.py) ---
    (? (= 0 total)
       (: _ (say err "vmret: no ") _ (say err prefix) _ (say err "* functions found in ")
-         _ (say err base) _ (say err " (stripped binary?)\n") (nap 2))
+         _ (say err base) _ (say err " (stripped binary?)\n") (quit 2))
    (? (two? flagged)
       (: k      (llen flagged)
          width  (maxlen flagged)
@@ -257,6 +257,6 @@
               (: name (cap e) rets (cup e)
                  _ (say out "  ") _ (say out name) _ (say out (spaces (- width (tally name))))
                  _ (say out "  ret @ ") _ (say out (join-rets rets)) _ (put out 10) 0)))
-         (nap 1))
+         (quit 1))
       (: _ (say out base) _ (say out ": all ") _ (putbn out total 10) _ (say out " ")
-         _ (say out prefix) _ (say out "* functions are ret-free\n") (nap 0)))))
+         _ (say out prefix) _ (say out "* functions are ret-free\n") (quit 0)))))

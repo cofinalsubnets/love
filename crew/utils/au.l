@@ -19,9 +19,9 @@
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
 ; dispatcher is the one thing that fires. ONE body-having `:` -- the registry, the
 ; thin mains that live here (diff over the engines, as over the holo book), and the
-; dispatch as the body; nothing leaks, and every path ends in a nap (the exit door).
+; dispatch as the body; nothing leaks, and every path ends in a quit (the exit door).
 (: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) (L 1 t)) ()))   ; (1 text) | ()
-   (die m) (: _ (say err m) _ (put err 10) (nap 2))
+   (die m) (: _ (say err m) _ (put err 10) (quit 2))
 
    ; diff: two files -> unified hunks on out; the classic exit triple
    (diff-main as)
@@ -31,8 +31,8 @@
           _ (? (two? ta) () (die (+ "diff: cannot open " fa)))
           _ (? (two? tb) () (die (+ "diff: cannot open " fb)))
           d (udiff fa fb (caup ta) (caup tb))
-          (? (nil? d) (nap 0)
-             (: _ (puts d) _ (flush out) (nap 1)))))
+          (? (nil? d) (quit 0)
+             (: _ (puts d) _ (flush out) (quit 1)))))
 
    ; as: IR forms -> a runnable ELF (crew/holo/elf.l over the baked holo book)
    (as-main as)
@@ -52,7 +52,7 @@
           res (elf64 tgt (\ _ ir) ())
           _ (write-bytes dst (peep res 'bytes 0))
           _ (say err (+ "as: wrote " dst)) _ (put err 10)
-          (nap 0)))
+          (quit 0)))
 
    ; the registry: name -> main (aliases share)
    applets (: t (tablet 0)
@@ -94,7 +94,7 @@ usage: au TOOL ARGS..     (or symlink a tool's name to au)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/utils/fs.l)
   echo seq yes true false basename dirname     ... and the trivia
 ")
-                (nap 2))
+                (quit 2))
    (bn p) (: n (tally p)
              (go k r) (? (< k n) (go (+ k 1) (? (= (p k) 47) (+ k 1) r)) (snip p r n))
              (go 0 0))
@@ -111,8 +111,8 @@ usage: au TOOL ARGS..     (or symlink a tool's name to au)
    (: s (seat (cup cmdline))
       _ (? (two? s) () (usage ()))
       f0 (applets (intern (bn (cap s))))
-      _ (? f0 (: _ (f0 (cup s)) (nap 0)) ())
+      _ (? f0 (: _ (f0 (cup s)) (quit 0)) ())
       t (cup s)
       f (? (two? t) (applets (intern (cap t))) ())
-      _ (? f (: _ (f (cup t)) (nap 0)) ())
+      _ (? f (: _ (f (cup t)) (quit 0)) ())
       (usage ())))

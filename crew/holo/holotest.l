@@ -311,4 +311,4 @@
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln (+ "crew/holo/holotest: " (+ (show np) (+ " passed, " (+ (show nf) " failed\n")))))
-   _ (? (= 0 nf) 0 (nap 1)))
+   _ (? (= 0 nf) 0 (quit 1)))

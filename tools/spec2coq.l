@@ -217,4 +217,4 @@
    _ (walk (forms "test/spec.l"))
    _ (. (cat `((string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
                 (show (peep ns 0 0)) " asserts seen *)" (string 10))))
-   (nap 0))
+   (quit 0))

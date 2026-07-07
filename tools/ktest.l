@@ -24,4 +24,4 @@
    ok   (&& (has? out "tests pass") (! (has? out "failed:")))
    (? ok (: _ (puts (lineof out "tests pass")) (putc 10))
          (: _ (say err "test_kernel: FAILED") _ (put err 10)
-            _ (say err out) _ (put err 10) (nap 1))))
+            _ (say err out) _ (put err 10) (quit 1))))

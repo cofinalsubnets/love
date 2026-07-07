@@ -12,7 +12,7 @@
 ;   out/host/ai doc/proto/wm.l &  then  DISPLAY=:7 xterm  (and another)
 ; the Access error (code 10) on the redirect means another WM owns the display.
 (: s (connectu "/tmp/.X11-unix/X7")
-   _ (? s 0 (: _ (say err "wm: no display socket /tmp/.X11-unix/X7 -- Xephyr up?\n") (nap 1)))
+   _ (? s 0 (: _ (say err "wm: no display socket /tmp/.X11-unix/X7 -- Xephyr up?\n") (quit 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))
 
    ; --- the codec (x11.l's helpers) ---
@@ -32,7 +32,7 @@
    st (r8 ())
    _ (? (= st 1) 0
         (: rlen (r8 ()) _ (skip 6) why (rstr rlen)
-           _ (say err (+ "wm: setup refused: " (+ why "\n"))) (nap 1)))
+           _ (say err (+ "wm: setup refused: " (+ why "\n"))) (quit 1)))
    _ (r8 ()) _ (r16 ()) _ (r16 ())
    alen (r16 ())
    _ (r32 ()) idbase (r32 ()) idmask (r32 ()) _ (r32 ())
@@ -66,7 +66,7 @@
         (: code (r8 ()) _ (skip 30)
            _ (say err (? (= code 10) "wm: another wm owns this display (Access)\n"
                          (+ "wm: X error at redirect, code " (+ (show code) "\n"))))
-           (nap 1)))
+           (quit 1)))
    _ (line (+ "wm: managing root " (+ (show root) (+ " (" (+ (show wpx) (+ "x" (+ (show hpx) ")")))))))
 
    ; --- the keyboard: GetKeyboardMapping -> keycodes for the bindings, then

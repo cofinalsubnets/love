@@ -30,7 +30,7 @@
 ; step 5 (env + status): the tokenizer expands $NAME and $? in unquoted words and
 ; inside ".." ('..' stays literal; an unset var is the unit, so its word drops away);
 ; $? is the last foreground status (a stop folds to 128+sig); export NAME=VAL rides
-; the setenv nif, exit [n] the nap nif, and cd sets $?. L0's staging is complete.
+; the setenv nif, exit [n] the quit nif, and cd sets $?. L0's staging is complete.
 
 (: (sh-rev l) (foldl (\ a x (link x a)) () l)
    (sh-nth l i) (? (= i 0) (cap l) (sh-nth (cup l) (- i 1)))
@@ -201,7 +201,7 @@
      (: rd (sh-redirs stage) argv (sh-nth rd 0) inf (sh-nth rd 1) outf (sh-nth rd 2) app (sh-nth rd 3)
         (? !argv 0
            (: cmd (cap argv)
-              (? (= cmd "exit") (? (cup argv) (nap (sh-int (caup argv))) 'done)
+              (? (= cmd "exit") (? (cup argv) (quit (sh-int (caup argv))) 'done)
                  (= cmd "cd")   (: r (chdir (? (cup argv) (caup argv) (getenv "HOME")))
                                    _ (pin sh-status 0 (? (nil? r) 0 1)) 0)
                  (= cmd "export") (: _ (each (cup argv) sh-export) 0)

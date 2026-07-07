@@ -28,7 +28,7 @@
        1)
 
    ; -- pwd: where we stand --
-   (pwd-main _) (: _ (say out (cwd ())) _ (put out 10) _ (flush out) (nap 0))
+   (pwd-main _) (: _ (say out (cwd ())) _ (put out 10) _ (flush out) (quit 0))
 
    ; -- ls: a directory's entries, sorted, dotfiles held back (-a shows them);
    ; a file argument answers its own name --
@@ -45,19 +45,19 @@
                            (go (cup m))))
               (go (sort (readdir p)))))
        (go a ok) (? (two? a) (go (cup a) (one (cap a) ok))
-                    (: _ (flush out) (nap (? ok 0 1))))
+                    (: _ (flush out) (quit (? ok 0 1))))
        (go (? (two? fs) fs (L ".")) 1))
 
    ; -- cp and mv: a directory destination pulls the basename in beside --
    (cp-main as)
     (? (! (two? (cup as))) (udie 2 "usage: cp SRC DST")
-       (: _ (ucopy "cp" (cap as) (udest (cap as) (caup as))) (nap 0)))
+       (: _ (ucopy "cp" (cap as) (udest (cap as) (caup as))) (quit 0)))
    (mv-main as)
     (? (! (two? (cup as))) (udie 2 "usage: mv SRC DST")
        (: src (cap as) dst (udest (cap as) (caup as))
           e (rename src dst)
-          (? (! e) (nap 0)
-             (= e 18) (: _ (ucopy "mv" src dst) _ (unlink src) (nap 0))   ; EXDEV: the long way
+          (? (! e) (quit 0)
+             (= e 18) (: _ (ucopy "mv" src dst) _ (unlink src) (quit 0))   ; EXDEV: the long way
              (udie 1 (+ "mv: cannot move " src)))))
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
@@ -83,9 +83,9 @@
            (? hit ok
               f? ok
               (: _ (say err (+ "rm: cannot remove " q)) _ (put err 10) 0)))
-       (go a ok) (? (two? a) (go (cup a) (one (cap a) ok)) (nap (? ok 0 1)))
+       (go a ok) (? (two? a) (go (cup a) (one (cap a) ok)) (quit (? ok 0 1)))
        (? (two? fs) (go fs 1)
-          f? (nap 0)
+          f? (quit 0)
           (udie 2 "usage: rm [-r] [-f] FILE..")))
 
    ; -- mkdir and rmdir: -p lays every prefix on the way down --
@@ -105,7 +105,7 @@
            (: e (mkdir q 493)
               (? (! e) ok
                  (: _ (say err (+ "mkdir: cannot create " q)) _ (put err 10) 0))))
-       (go a ok) (? (two? a) (go (cup a) (one (cap a) ok)) (nap (? ok 0 1)))
+       (go a ok) (? (two? a) (go (cup a) (one (cap a) ok)) (quit (? ok 0 1)))
        (? (two? fs) (go fs 1) (udie 2 "usage: mkdir [-p] DIR..")))
    (rmdir-main as)
     (: (go a ok)
@@ -113,7 +113,7 @@
            (: e (rmdir (cap a))
               (go (cup a)
                   (? (! e) ok (: _ (say err (+ "rmdir: cannot remove " (cap a))) _ (put err 10) 0))))
-           (nap (? ok 0 1)))
+           (quit (? ok 0 1)))
        (? (two? as) (go as 1) (udie 2 "usage: rmdir DIR..")))
 
    ; -- ln: two names for one thing (-s the pointing kind) --
@@ -122,7 +122,7 @@
        rest (? s? (cup as) as)
        _ (? (two? (cup rest)) () (udie 2 "usage: ln [-s] TARGET LINKNAME"))
        e (? s? (symlink (cap rest) (caup rest)) (hardlink (cap rest) (caup rest)))
-       (? (! e) (nap 0) (udie 1 (+ "ln: cannot link " (caup rest)))))
+       (? (! e) (quit 0) (udie 1 (+ "ln: cannot link " (caup rest)))))
 
    ; -- touch: be there, and be now --
    (touch-main as)
@@ -130,7 +130,7 @@
         (: _ (? (two? (stat q)) () (: p (open q "a") (? p (close p) ())))
            e (utime q ())
            (? (! e) ok (: _ (say err (+ "touch: cannot touch " q)) _ (put err 10) 0)))
-       (go a ok) (? (two? a) (go (cup a) (one (cap a) ok)) (nap (? ok 0 1)))
+       (go a ok) (? (two? a) (go (cup a) (one (cap a) ok)) (quit (? ok 0 1)))
        (? (two? as) (go as 1) (udie 2 "usage: touch FILE..")))
 
    ; -- chmod: the octal bits onto every named path --
@@ -142,5 +142,5 @@
               (: e (chmod (cap a) m)
                  (go (cup a)
                      (? (! e) ok (: _ (say err (+ "chmod: cannot chmod " (cap a))) _ (put err 10) 0))))
-              (nap (? ok 0 1)))
+              (quit (? ok 0 1)))
           (go (cup as) 1))))

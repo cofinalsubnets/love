@@ -575,7 +575,7 @@
 ; assert was never a global -- a bare (assert ...) read the missing nom and ABSORBED
 ; its args (a silent always-pass, the leniency that hid a stale claim). now it is real:
 ; each form must net true or assert SCARES ('assert . the-source-form), terminal without
-; a help, so a false claim stops the run loud and CROSS-TARGET -- no `nap` (host-only),
+; a help, so a false claim stops the run loud and CROSS-TARGET -- no `quit` (host-only),
 ; so this fires on the kernel too. each form is checked once; the failing SOURCE prints,
 ; not its (false) value. the big test corpus still pins its own dot-counting `assert`
 ; over this in test/00-init.l (a richer report); everywhere else -- the glaze self-tests,

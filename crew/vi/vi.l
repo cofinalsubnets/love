@@ -47,7 +47,7 @@
                           (L (? (= c3 65) 107 (= c3 66) 106
                                 (= c3 67) 108 (= c3 68) 104 27) -1))
                        (L 27 c2))))))
-       (fin _) (: _ (puts (+ e "[?1049l")) _ (flush out) (nap 0))
+       (fin _) (: _ (puts (+ e "[?1049l")) _ (flush out) (quit 0))
        (go pend)
         (: _ (puts (vframe st)) _ (flush out)
            kr (rd pend)

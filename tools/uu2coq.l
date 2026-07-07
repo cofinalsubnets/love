@@ -196,4 +196,4 @@
                 "Print Assumptions mul_comm_std." (string 10) (string 10)
                 "(* " (show ($ keep)) " exported / " (show (tally ents)) " corpus entries swept;" (string 10)
                 "   3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)" (string 10))))
-   (nap 0))
+   (quit 0))

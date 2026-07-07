@@ -904,7 +904,7 @@ lvm(lvm_absent2) { return Sp[1] = nil, Sp += 1, Ip++, Continue(); }        // 2-
 static union u const nif_absent[]      = {{lvm_absent}, {lvm_ret0}};
 static union u const nif_absent_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_absent2}, {lvm_ret0}};
 static struct ai_def const frontend_defaults[] = {
- {"nap", (word) nif_absent}, {"open", (word) nif_absent_open}, {"close", (word) nif_absent},
+ {"quit", (word) nif_absent}, {"open", (word) nif_absent_open}, {"close", (word) nif_absent},
  {"run", (word) nif_absent},  {"getenv", (word) nif_absent} };
 
 // reverse-lookup a function value against the builtin table -> its source name,
