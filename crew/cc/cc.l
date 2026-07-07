@@ -12,7 +12,7 @@
    ; #include resolver bound to a source dir: search "" relative first (the src
    ; dir, then cwd), <> the system dirs. -> (1 text) | ().
    (incload srcdir name sys?)
-    (: dirs (? sys? (L "/usr/include/" "crew/cc/include/")
+    (: dirs (? sys? (L "crew/cc/include/" "/usr/include/")     ; our own headers (stdarg.h ..) win for <>
                 (L srcdir "" "crew/cc/include/" "/usr/include/"))
        (go ds) (? (! (two? ds)) ()
                   (: r (uread (+ (cap ds) name))

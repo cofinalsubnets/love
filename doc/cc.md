@@ -320,6 +320,32 @@ two ideas to keep warm as the stages climb, neither committed yet:
    variadic functions (va_list/va_start/va_arg -- the register save area),
    calling variadic functions (al = the vector-register count), _Static_assert,
    the one compound literal, and `float` (4-byte).
+   VARARGS + _Static_assert (6c) LANDED 2026-07-07: variadic functions define,
+   call, and walk their extra arguments, and _Static_assert folds at parse.
+   the `...` becomes the signature's third slot -- a variadic BIT (ps 'sigs is
+   now name -> (rettype (paramty..) variadic?)); pparams returns `(params rest
+   1)` when it meets `...` after a named param. cc uses a SIMPLIFIED all-stack
+   variadic ABI, doc'd AS SUCH (not SysV interop -- that waits for linking in the
+   gate): a variadic CALL pushes every argument as an 8-byte stack slot (arg0 at
+   the lowest address, a pad word when the count is odd so the callee sees a
+   16-aligned frame), and pops them after; the variadic CALLEE reads its named
+   params straight from positive frame offsets ([rbp+16+i*8], via `place`, no
+   register spill and no save area), and va_arg walks a plain char* cursor 8
+   bytes at a step. so <stdarg.h> (crew/cc/include/, ours -- gcc uses its own in
+   the differential, both self-consistent) is three one-line macros over the
+   builtins: va_start -> (vastart v) seeds the cursor at the first vararg slot,
+   va_arg -> (vaarg v type) reads the slot and steps, va_end -> (vaend v) is a
+   no-op. _Static_assert(const, "msg") folds its constant through `cfold` at
+   parse: a true one vanishes to a (tdef) no-op marker (block scope handled by a
+   (= k 'tdef) () arm in cgstmt), a false one REFUSES the whole compile. the va
+   builtins are recognized in pprim (__builtin_va_start/_arg/_end); va_arg parses
+   its type argument through pcty. battery 65->68 (int & pointer varargs with the
+   align-pad path, double varargs behind a named double param, a tag-selected
+   int/double mix, file- and block-scope _Static_assert with sizeof folds); law.l
+   gains the signature-bit / va-form / const-fold-or-refuse goldens. STILL
+   deferred (6d, small): the one compound literal and `float` (4-byte). the
+   simplified ABI is a KNOWN gap: it does not interoperate with libc's printf
+   until the gate wires real SysV varargs -- that's stage 7's linking moment.
 7. **THE GATE**: cc-built ai.c (+ host/*.c, system ld, ai_tco=0) boots the
    egg and runs `make test` green -- the corpus under a cc-built binary.
    this is the rung's aiutils-feature-complete moment.

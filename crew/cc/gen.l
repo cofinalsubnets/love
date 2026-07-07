@@ -260,6 +260,23 @@
                     (cat (caup c) (cat (L (L 'cmp 'r0 0) (L 'br 'eq le))
                      (cat (caup t) (cat (L (L 'jmp ld) (L 'label le))
                       (cat (caup el) (L (L 'label ld))))))))))
+          ; -- the varargs builtins (cc's simplified all-stack ABI): a va_list is
+          ; a char* cursor over the caller's pushed argument block. va_start aims
+          ; it past the named params; va_arg reads a slot and steps 8; va_end nops.
+          (= k 'vastart)
+           (: lv (clval g env (caup e))                 ; &ap in r0
+              nc (tally (caup (peep (g 'sigs) (g 'fn) (L () () ()))))   ; the current function's named-param count
+              (? (bad? lv) 'bad
+                 (L 'long (cat (caup lv) (L (L 'lea 'r1 'r4 (+ 16 (* 8 nc))) (L 'st 'r0 0 'r1))))))
+          (= k 'vaarg)
+           (: lv (clval g env (caup e)) ty (cauup e)
+              (? (bad? lv) 'bad
+                 (flo? ty)
+                  (L 'double (cat (caup lv) (L (L 'mov 'r3 'r0) (L 'ld 'r2 'r3 0)
+                                               (L 'ldsd 'f0 'r2 0) (L 'add 'r2 'r2 8) (L 'st 'r3 0 'r2))))
+                 (L ty (cat (caup lv) (L (L 'mov 'r3 'r0) (L 'ld 'r2 'r3 0)
+                                         (L (ldop ty) 'r0 'r2 0) (L 'add 'r2 'r2 8) (L 'st 'r3 0 'r2))))))
+          (= k 'vaend) (L 'long ())
           (= k 'call)
            ; the SysV ABI: integer/pointer args ride r6 r5 r2 r1 r7 r8 (<=6),
            ; double args ride f0..f7 (<=8), SEPARATE counters, placed by the
@@ -272,35 +289,62 @@
               sig (? direct (peep (g 'sigs) (caup head) ()) ())
               ptys (? (two? sig) (caup sig) ())
               rt (? (two? sig) (cap sig) 'long)
-              (ca as i gpc xmmc pf tg)                     ; -> (pushforms targets) | 'bad
-               (? (! (two? as)) (L pf (rev tg))
-                  (: a (cgexpr g env (cap as))
-                     (? (bad? a) 'bad
-                        (: pty (nthty ptys i)
-                           wd (? pty (flo? pty) (flo? (cap a)))   ; classify by the param type if known, else the arg's
-                           (? (&& wd (< 7 xmmc)) 'bad       ; over 8 double args
-                              (&& (! wd) (< 5 gpc)) 'bad     ; over 6 integer args
-                              (: push (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
-                                            (cat (asint a) (L (L 'push 'r0))))
-                                 (ca (cup as) (+ i 1) (? wd gpc (+ gpc 1)) (? wd (+ xmmc 1) xmmc)
-                                     (cat pf push) (link (? wd (L 'x xmmc) (L 'g gpc)) tg))))))))
-              car (ca args 0 0 0 () ())
-              (? (bad? car) 'bad
-                 (: pf (cap car) tg (caup car)
-                    (popr ts acc) (? (! (two? ts)) acc
-                                     (: t (cap ts)
-                                        (popr (cup ts) (cat acc
-                                          (? (= (cap t) 'g) (L (L 'pop (nthr argregs (caup t))))
-                                             (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup t)) 'r0)))))))
-                    pops (popr (rev tg) ())
-                    (? direct
-                        (L rt (cat pf (cat pops (L (L 'call (intern (caup head)))))))
-                       (: hr (cgexpr g env head)          ; a function-pointer value: park in r3, callr
-                          (? (bad? hr) 'bad
-                             (L 'long (cat pf (cat (caup hr) (cat (L (L 'mov 'r3 'r0))
-                                       (cat pops (L (L 'callr 'r3)))))))))))))
+              variadic (? (two? sig) (nthr sig 2) ())
+              ; a VARIADIC callee rides cc's all-stack ABI: every argument (named
+              ; args converted to their param type, varargs as-is) is pushed as an
+              ; 8-byte slot, arg0 landing at [rbp+16], a pad word keeping rsp 16-
+              ; aligned; the caller pops the block after the call.
+              (? (&& direct variadic)
+                  (: n (tally args)
+                     pad (? (= (& n 1) 1) 8 0)
+                     (blocks as i acc)
+                      (? (! (two? as)) (rev acc)
+                         (: a (cgexpr g env (cap as))
+                            (? (bad? a) 'bad
+                               (: pty (nthty ptys i)
+                                  wd (? pty (flo? pty) (flo? (cap a)))
+                                  conv (? wd (asflo a) (asint a))
+                                  blk (? wd (cat conv (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
+                                            (cat conv (L (L 'push 'r0))))
+                                  (blocks (cup as) (+ i 1) (link blk acc))))))
+                     bl (blocks args 0 ())
+                     (? (bad? bl) 'bad
+                        (: pushcode (foldl (\ ac b (cat ac b)) (? (< 0 pad) (L (L 'sub 'sp 'sp 8)) ()) (rev bl))
+                           (L rt (cat pushcode (cat (L (L 'call (intern (caup head))))
+                                                    (L (L 'add 'sp 'sp (+ pad (* 8 n))))))))))
+                 (call-fixed g env head args direct ptys rt)))
           (= k 'bin) (cgbin g env e)
           'bad))
+   ; the fixed-arity call (SysV registers). params named uniquely so no lambda
+   ; parameter shadows a sibling :-local through boxfix's shared cell (stage 5).
+   (call-fixed g env hd ags dir pts ret)
+    (: (ca as i gpc xmmc pf tg)                          ; -> (pushforms targets) | 'bad
+        (? (! (two? as)) (L pf (rev tg))
+           (: a (cgexpr g env (cap as))
+              (? (bad? a) 'bad
+                 (: pty (nthty pts i)
+                    wd (? pty (flo? pty) (flo? (cap a)))   ; classify by the param type if known, else the arg's
+                    (? (&& wd (< 7 xmmc)) 'bad       ; over 8 double args
+                       (&& (! wd) (< 5 gpc)) 'bad     ; over 6 integer args
+                       (: push (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
+                                     (cat (asint a) (L (L 'push 'r0))))
+                          (ca (cup as) (+ i 1) (? wd gpc (+ gpc 1)) (? wd (+ xmmc 1) xmmc)
+                              (cat pf push) (link (? wd (L 'x xmmc) (L 'g gpc)) tg))))))))
+       car (ca ags 0 0 0 () ())
+       (? (bad? car) 'bad
+          (: pf (cap car) tg (caup car)
+             (popr ts acc) (? (! (two? ts)) acc
+                              (: t (cap ts)
+                                 (popr (cup ts) (cat acc
+                                   (? (= (cap t) 'g) (L (L 'pop (nthr argregs (caup t))))
+                                      (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup t)) 'r0)))))))
+             pops (popr (rev tg) ())
+             (? dir
+                 (L ret (cat pf (cat pops (L (L 'call (intern (caup hd)))))))
+                (: hr (cgexpr g env hd)                   ; a function-pointer value: park in r3, callr
+                   (? (bad? hr) 'bad
+                      (L 'long (cat pf (cat (caup hr) (cat (L (L 'mov 'r3 'r0))
+                                (cat pops (L (L 'callr 'r3)))))))))))))
    (cgbin g env e)
     (: op (caup e)
        a (cgexpr g env (cauup e))
@@ -538,6 +582,7 @@
           (= k 'expr) (: r (cgexpr g env (caup s))
                          (? (bad? r) 'bad (caup r)))
           (= k 'nop) ()
+          (= k 'tdef) ()                            ; a block-scope _Static_assert (already checked at parse)
           (= k 'blk) (cgitems g env (caup s) ())
           (= k 'if)
            (: c (ctest g env (caup s))
@@ -668,6 +713,8 @@
     (: params (cauup f)
        _ (pin g 'off 0)
        _ (pin g 'fn (caup f))
+       sig (peep (g 'sigs) (caup f) ())
+       vararg (? (two? sig) (nthr sig 2) ())
        ; spill each param from its SysV register: integers from r6 r5 r2 r1 r7 r8
        ; (<=6), doubles from f0..f7 (<=8), SEPARATE counters.
        (spill ps gpi xmmi env acc)
@@ -681,7 +728,12 @@
                      (spill (cup ps) gpi (+ xmmi 1) env2 (cat acc (L (L 'stsd 'r4 off (xmmreg xmmi))))))
                  (? (< 5 gpi) 'bad
                     (spill (cup ps) (+ gpi 1) xmmi env2 (cat acc (L (L 'st 'r4 off (nthr argregs gpi)))))))))
-       sp0 (spill params 0 0 () ())
+       ; a VARIADIC function reads its NAMED params off the caller's stack
+       ; ([rbp+16+i*8], cc's all-stack ABI) -- no register spill, no save area
+       (place ps i env) (? (! (two? ps)) env
+                           (place (cup ps) (+ i 1)
+                                  (link (L (cap (cap ps)) (+ 16 (* i 8)) (caup (cap ps))) env)))
+       sp0 (? vararg (L () (place params 0 ())) (spill params 0 0 () ()))
        (? (bad? sp0) 'bad
           (: body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
              (? (bad? body) 'bad

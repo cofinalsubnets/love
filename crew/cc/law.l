@@ -241,6 +241,43 @@
       (two? (cgn "int main() { double d = 2.5; return d ? 9 : 4; }"))                  ; a double ternary condition
       (! (cgn "int main() { double a = 1.0; return ~a; }"))))                          ; ~ on a double is still invalid
 
+; --- variadic functions + _Static_assert (stage 6c). the `...` is recorded as
+; the signature's variadic flag (cc's simplified all-stack call ABI -- doc/cc.md);
+; the three __builtin_va_* forms parse to (vastart|vaend v) / (vaarg v type);
+; _Static_assert folds its constant at parse and vanishes to a (tdef) no-op,
+; refusing the whole compile when the constant is false. ---
+(: (cast src) (caup (cparse (caup (clex src))))
+   (csig src name) (: r (cparse (caup (clex src))) (peep (caup (cuup r)) name 'none))
+   (cgn src) (: r (cparse (caup (clex src)))
+                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r))) ()))
+   (assert
+      ; the `...` leaves the fn node clean; the variadic bit lives in the signature
+      (= (cast "int f(int n, ...) { return n; }")
+         '(prog ((fn "f" (("n" int)) (blk ((ret (var "n"))))))))
+      (= (csig "int f(int n, ...) { return n; }" "f") '(int (int) 1))    ; rettype, params, variadic=1
+      (= (csig "int g(int a, int b) { return a; }" "g") '(int (int int) ()))  ; a fixed fn, variadic=()
+      (= (csig "int p(int n, ...);" "p") '(int (int) 1))                 ; a variadic prototype records too
+      ; the three va builtins parse to their marker forms
+      (= (cast "int f(int n, ...) { char *ap; __builtin_va_start(ap, n); int x = __builtin_va_arg(ap, int); __builtin_va_end(ap); return x; }")
+         '(prog ((fn "f" (("n" int)) (blk ((decl (("ap" (ptr char) ())))
+                                           (expr (vastart (var "ap")))
+                                           (decl (("x" int (vaarg (var "ap") int))))
+                                           (expr (vaend (var "ap")))
+                                           (ret (var "x"))))))))
+      ; _Static_assert folds and vanishes to a (tdef) no-op, at file and block scope
+      (= (cast "int main() { _Static_assert(1, \"ok\"); return 0; }")
+         '(prog ((fn "main" () (blk ((tdef) (ret (num 0))))))))
+      (= (cast "_Static_assert(sizeof(int) == 4, \"w\"); int main() { return 0; }")
+         '(prog ((tdef) (fn "main" () (blk ((ret (num 0))))))))
+      ; the generator: a variadic fn and a variadic call both compile
+      (two? (cgn "int f(int n, ...) { return n; } int main() { return f(1); }"))
+      (two? (cgn "int s(int n, ...) { char *ap; __builtin_va_start(ap,n); int t=0; int i=0; while(i<n){ t=t+__builtin_va_arg(ap,int); i++; } __builtin_va_end(ap); return t; } int main() { return s(2, 3, 4); }"))
+      ; a true _Static_assert compiles; a false one refuses the whole program
+      (two? (cgn "int main() { _Static_assert(sizeof(int) == 4, \"w\"); return 0; }"))
+      (two? (cgn "_Static_assert(1 + 2 * 3 == 7, \"folds\"); int main() { return 0; }"))
+      (! (cgn "int main() { _Static_assert(sizeof(int) == 5, \"bad\"); return 0; }"))
+      (! (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))))
+
 ; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
 ; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.
 ; pps runs cpp (no includes) and joins the output tokens' spellings to a string. --
@@ -272,5 +309,5 @@
       (! (cpp (caup (clex "#if 1\nx")) ()))                            ; unterminated #if refuses
       (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) ok")
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / const-fold-or-refuse) ok")
 (put err 10)
