@@ -59,6 +59,11 @@ generics, and optional infix/prefix notation.</p>
   // the shell's default help: a condition prints ";; a b" and answers (), so
   // the session survives every raise -- the same law as the native shell.
   ev("(: help (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \";; \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
+  // webln: bao's line protocol (parseall's law) for a STRING -- read every
+  // top-level datum; ONE datum evaluates as-is (so a leading glued run like
+  // +'(4 5) keeps fusing -- a textual () wrap would put it in HEAD position,
+  // where runs never fuse); MANY become the application (a b c).
+  ev("(: webln (\\ s (: e (nom 0) (chs i acc) (? (< i 0) acc (chs (- i 1) (link (s i) acc))) (go p acc) (: r (sound p e) (? (= r p) () (= r e) (rev acc) (go p (link r acc)))) ds (go (tap (chs (- (tally s) 1) ())) ()) (? !(two? ds) () !(two? (cup ds)) (ev (cap ds)) (ev ds)))))");
   ev("(. ai-version)");
   const ver = drain();
   status.style.display = 'none';
@@ -87,12 +92,27 @@ generics, and optional infix/prefix notation.</p>
     scroll.scrollTop = scroll.scrollHeight;
   }
 
+  // an ai string literal for src: " and \ ride \xHH (the reader's byte escape),
+  // control chars likewise; everything else passes through as utf-8.
+  function aiStr(s) {
+    let r = '"';
+    for (const ch of s) {
+      const o = ch.codePointAt(0);
+      if (ch === '"' || ch === '\\' || o < 32 && ch !== '\n' && ch !== '\t')
+        r += '\\x' + o.toString(16).padStart(2, '0');
+      else if (ch === '\n') r += '\\n';
+      else if (ch === '\t') r += '\\t';
+      else r += ch;
+    }
+    return r + '"';
+  }
+
   function run(src) {
     src = src.replace(/\s+$/, '');
     if (!src) return;
     put(src, 'in');
     hist.push(src); hi = hist.length;
-    const s = ev('(puts (show (\n' + src + '\n)))');
+    const s = ev('(puts (show (webln ' + aiStr(src) + ')))');
     const o = drain();
     for (const ln of o.split('\n')) if (ln.length) put(ln, ln.startsWith('# ') ? 'cnd' : 'ans');
     if (s !== 0) put('# the image stopped (status ' + s + ') -- reload to reboot', 'cnd');
