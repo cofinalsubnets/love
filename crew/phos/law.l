@@ -49,7 +49,13 @@
       (wsknownw? f2 20) (= (wsrect f2 30) ())                                    ; still managed; a tiled window has no rect
       (! (any (\ x (= x 20)) (wstiled f2)))                                      ; float removed 20 from the tiled stack
       (sameset? (wswins f2) (wswins s2))                                         ; float moves it between sets, not out
-      (! (wsfloating? (wssink f2 20) 20)) (sameset? (wswins (wssink f2 20)) (wswins s2))))   ; sink is float's inverse
+      (! (wsfloating? (wssink f2 20) 20)) (sameset? (wswins (wssink f2 20)) (wswins s2))     ; sink is float's inverse
+      ; --- the HOME TAG: a float lives on ONE workspace (xmonad's model) ---
+      (= 1 (wsftag f2 20))                                                       ; floated while viewing tag 1: home is 1
+      (= 1 (wsftag (wsview f2 2) 20))                                            ; viewing elsewhere doesn't move it
+      (two? (wsvisfl f2)) (! (two? (wsvisfl (wsview f2 2))))                     ; visible at home, hidden abroad
+      (= 1 (wstagof f2 20))                                                      ; wstagof answers a float's home
+      (= 1 (wsftag (wsdofloat (wsview f2 2) 20 '(0 0 9 9)) 20))))                ; re-floating abroad (a drag) keeps the home
 
 ; --- the seeded fuzz: the whole op vocabulary, 200 steps, invariant per step ---
 (: r99 '(20 20 200 100)

@@ -90,7 +90,7 @@
              _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 (L foc))
              _ (map (\ p (: t (- (cap p) 1)                                      ; tiled windows wear their workspace...
                             (map (\ w (x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 (L t))) (zrow (caup p))))) (wsboard sh))
-             _ (map (\ p (x-chprop32 s (cap p) (ewmh-atom "_NET_WM_DESKTOP") 6 (L 4294967295))) (wsfloat sh))   ; ...floats are STICKY (0xFFFFFFFF)
+             _ (map (\ p (x-chprop32 s (cap p) (ewmh-atom "_NET_WM_DESKTOP") 6 (L (- (nthl p 2) 1)))) (wsfloat sh))   ; ...floats wear their HOME tag (per-workspace now)
              (x-flush s))))
 
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---

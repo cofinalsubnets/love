@@ -64,12 +64,19 @@
    (wsfoc sh) (zfoc (wsget sh (wscur sh)))                                       ; the focused window of the current ws
    (wsmap sh f) (wsset sh (wscur sh) (f (wsget sh (wscur sh))))                  ; reshape the current zipper
 
-   ; --- floating (xmonad's W.float / W.sink), a pure alist ---
+   ; --- floating (xmonad's W.float / W.sink), a pure alist. An entry is
+   ;     (window rect tag): a float lives ON a workspace (its home tag), shown
+   ;     only there -- xmonad's model, and what keeps a fullscreen float off
+   ;     the other workspaces. ---
    (wsunfl w fl) (filter (\ p (! (= (cap p) w))) fl)                             ; drop w from the floating alist
    (wsfloating? sh w) (any (\ p (= (cap p) w)) (wsfloat sh))                     ; w is floating?
    (wsrect sh w) (: p (assoc w (wsfloat sh)) (? (two? p) (caup p) ()))           ; w's float rect, or ()
+   (wsftag sh w) (: p (assoc w (wsfloat sh)) (? (two? p) (nthl p 2) ()))         ; w's home tag, or ()
+   (wsvisfl sh) (filter (\ p (= (nthl p 2) (wscur sh))) (wsfloat sh))            ; the floats at home on the current tag
    (wsdel-tiled sh w) (map (\ p (L (cap p) (zdel w (caup p)))) (wsboard sh))     ; drop w from every workspace's tiled stack
-   (wsdofloat sh w r) (wsmake (wscur sh) (wsdel-tiled sh w) (link (L w r) (wsunfl w (wsfloat sh))))   ; float: tiled -> floating
+   (wsdofloat sh w r)                                                            ; float: tiled -> floating; the home tag is where it
+    (: t0 (wsftag sh w) t1 (? t0 t0 (wstagof sh w)) t (? t1 t1 (wscur sh))       ; already lives (re-float keeps it; a tiled window's
+       (wsmake (wscur sh) (wsdel-tiled sh w) (link (L w r t) (wsunfl w (wsfloat sh)))))   ; tag; else the current view)
    (wssink sh w) (wsmap (wsmake (wscur sh) (wsboard sh) (wsunfl w (wsfloat sh))) (zins w))   ; sink: floating -> the current tiled stack
 
    ; --- managing windows across the whole sheaf ---
@@ -77,7 +84,7 @@
    (wswins sh) (cat (wstiled sh) (map cap (wsfloat sh)))                         ; every managed window (tiled + floating)
    (wsknownw? sh w) (any (\ x (= x w)) (wswins sh))
    (wstagof sh w) (: r (filter (\ p (any (\ x (= x w)) (zrow (caup p)))) (wsboard sh))
-                     (? (two? r) (cap (cap r)) ()))                              ; the tag holding tiled w, or ()
+                     (? (two? r) (cap (cap r)) (wsftag sh w)))                   ; the tag holding w (tiled, else a float's home), or ()
    (admit sh w) (? (wsknownw? sh w) sh (wsmap sh (zins w)))                      ; manage w into the current ws (a no-op if already managed)
    (evict sh w) (wsmake (wscur sh) (wsdel-tiled sh w) (wsunfl w (wsfloat sh)))   ; unmanage w everywhere (tiled or float)
    (shiftto sh t) (? (! (&& (wsknown? sh t) (! (= t (wscur sh))) (two? (wsget sh (wscur sh))))) sh

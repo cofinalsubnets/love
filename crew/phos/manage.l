@@ -63,6 +63,11 @@
           (-?> (<||> (prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DIALOG")
                      (class-of? '("Xmessage" "Xscreensaver-settings" "feh" "vlc")))
                do-center-float)
+          (-?> (<||> (prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_UTILITY")     ; a panel's calendar popup, toolboxes,
+                     (<||> (prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_TOOLBAR") ; splashes -- self-placed popups float
+                           (<||> (prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_SPLASH")
+                                 (class-of? '("Xfce4-panel")))))                       ; (the panel itself is a DOCK, ignored above)
+               do-float)
           (-?> (<||> (prop? "_NET_WM_STATE" "_NET_WM_STATE_MODAL")
                      (class-of? '("steam" "Gimp" "krita")))
                do-float))))))

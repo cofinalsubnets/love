@@ -131,20 +131,22 @@
                                    (mx2 1 (- (nth t 3) (* 2 bw))) (mx2 1 (- (nth t 4) (* 2 bw)))))) pls)
        _ (map (\ w (? (any (\ p (= p w)) placed) 0 (x-unmap s w))) (wsrow sh))   ; windows the layout dropped (Full/minimize): hide them
        _ (map (\ w (x-map s w)) placed)                                          ; (re)map placed -- a no-op on the already-mapped
-       _ (map (\ fp (: w (cap fp) fr (caup fp)                                   ; floating windows: place at their rect, map, raise above the tiles
-                        _ (x-border s w phos-border) _ (x-borderpix s w npix)
+       _ (map (\ fp (: w (cap fp) fr (caup fp)                                   ; floating windows AT HOME HERE: place, map, raise above the tiles
+                        bw (? (= fr scrn) 0 phos-border)                         ; a fullscreen float (the whole screen is its rect) wears no border
+                        _ (x-border s w bw) _ (x-borderpix s w npix)
                         _ (x-configure s w (nth fr 0) (nth fr 1) (nth fr 2) (nth fr 3))
-                        _ (x-map s w) (x-raise s w))) (wsfloat sh))
+                        _ (x-map s w) (x-raise s w))) (wsvisfl sh))
        (x-flush s))
    (refocus sh) (? (wsfoc sh) (: _ (x-focus s (wsfoc sh)) (x-flush s)) 0)        ; focus the current top -- only when it is mapped/viewable
    (watch w) (: _ (x-cwa-events s w 16) (x-grabbtn s w))                         ; the mouse wires: EnterWindow selected (focus follows the
                                                                                  ; pointer in) + buttons 1-3 sync-grabbed (click-to-focus)
-   (switch sh lay t)                                                             ; view: hide the leaving row, show the arriving
+   (switch sh lay t)                                                             ; view: hide the leaving row + floats, show the arriving
     (? (|| (= t (wscur sh)) (! (wsknown? sh t))) sh
-       (: old (wsrow sh) sh2 (wsview sh t)
+       (: old (wsrow sh) oldf (map cap (wsvisfl sh)) sh2 (wsview sh t)
           _ (map (\ w (x-map s w)) (wsrow sh2))
           _ (render sh2 lay)
-          _ (map (\ w (x-unmap s w)) old) _ (x-flush s)
+          _ (map (\ w (x-unmap s w)) old)
+          _ (map (\ w (x-unmap s w)) oldf) _ (x-flush s)
           _ (line (+ "phos: view " (+ (show t) (+ " " (show (wsrow sh2))))))
           sh2))
    (msg-or old new) (? new new old)                                              ; keep the old layout when a message is unhandled (())
@@ -167,7 +169,8 @@
           (= k 'swap-dn) (relay (wsmap sh zswapdn) lay ffoc)
           (= k 'swap-up) (relay (wsmap sh zswapup) lay ffoc)
           (= k 'swap-master) (relay (wsmap sh zmaster) lay ffoc)
-          (= k 'view) (loop (switch sh lay (caup a)) lay hist ffoc)
+          (= k 'view) (: sh2 (switch sh lay (caup a))                            ; a float focus stays only if its home is the new view
+                         (loop sh2 lay hist (? (&& ffoc (= (wscur sh2) (wstagof sh2 ffoc))) ffoc ())))
           (= k 'shift) (: w (wsfoc sh) sh2 (shiftto sh (caup a)) _ (render sh2 lay)
                           _ (? (&& w (! (any (\ x (= x w)) (wsrow sh2))))        ; the emigrant left this workspace: hide it
                                (: _ (x-unmap s w) (x-flush s)) 0)
@@ -392,8 +395,8 @@
                 (filter (\ w (|| (x-manageable? s w) (ghostly? w))) (x-querytree s root)))
    _ (map (\ w (ewmh-track s w)) (x-querytree s root))                           ; a pre-existing dock's strut still shrinks the rect
    (adopt-tag w) (: d (x-getprop-atoms s w (x-intern s "_NET_WM_DESKTOP"))       ; the last generation wrote each window's tag on the window
-                    t (? (two? d) (+ 1 (cap d)) 1)
-                    (? (&& (< 0 t) (! (< (tally phos-tags) t))) t 1))            ; out of range (a float's sticky marker) -> tag 1
+                    t (? (two? d) (+ 1 (cap d)) 1)                               ; (floats wear their HOME tag too, so they come back to it,
+                    (? (&& (< 0 t) (! (< (tally phos-tags) t))) t 1))            ; tiled; out of range -> tag 1)
    sh0 (foldl (\ ss w (wsview (admit (wsview ss (adopt-tag w)) w) (cap phos-tags))) (sheaf phos-tags) kids)
    _ (map (\ w (x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))) kids)
    _ (map (\ w (watch w)) kids)                                                 ; survivors get the mouse wires too
