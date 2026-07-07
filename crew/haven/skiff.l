@@ -32,6 +32,8 @@
                          (? (= i "wl_shm") (pin got 0 nm)
                             (= i "wl_compositor") (pin got 1 nm)
                             (= i "xdg_wm_base") (pin got 2 nm)
+                            (= i "wl_seat") (pin got 13 nm)
+                            (= i "zwp_text_input_manager_v3") (pin got 14 nm)
                             0))
                       0)
                  (= obj 99) (pin got 3 1)
@@ -41,6 +43,12 @@
                                  (? (* cw ch) (: _ (pin got 6 cw) (pin got 7 ch)) 0))
                               (= op 1) (pin got 12 1)     ; toplevel.close: asked to part
                               0)
+                 (= obj 201) (? (= op 0)                  ; text-input enter: enable + commit
+                                (: _ (wl-ship c 201 1 () ()) (wl-ship c 201 7 () ()))
+                                (= op 3)                  ; commit_string: say what we heard
+                                (: t (wl-rstr k off)
+                                   _ (puts "skiff: heard ") _ (puts t) (putc 10))
+                                0)
                  (< 8 obj) (pin got 5 1)                  ; a buffer let go
                  0)
             (pump _) (: r (wl-pump c k sc st on) (? (< 0 r) (pump ()) r))
@@ -93,6 +101,14 @@
                 dh (? (< 0 (peep got 7 0)) (peep got 7 0) h)
                 (? (! (dress dw dh)) (: _ (close c) 'no-pool)
                  (: _ (until 5)                           ; the release lands
+                    ; a text-input, when the harbor speaks it: seat 202, mgr 200,
+                    ; ti 201 (high ids -- the pool pairs climb from 9). enter
+                    ; (handled above) enables it; committed text prints
+                    _ (? (? (< 0 (peep got 13 0)) (< 0 (peep got 14 0)) 0)
+                         (: _ (wl-ship c 2 0 (link (peep got 13 0) (cat (wl-strw "wl_seat") (L 1 202))) ())
+                            _ (wl-ship c 2 0 (link (peep got 14 0) (cat (wl-strw "zwp_text_input_manager_v3") (L 1 200))) ())
+                            (wl-ship c 200 1 (L 201 202) ()))
+                         0)
                     _ (puts "skiff: shipped")
                     ; hold the line: ack every fresh configure, re-dress on
                     ; a size change -- the compositor retiles, we follow; a

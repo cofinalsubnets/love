@@ -25,19 +25,21 @@
    ; --- the registry: (name interface version kind), what get_registry sings ---
    hv-globals '((1 "wl_shm" 1 shm) (2 "wl_compositor" 4 compositor)
                 (3 "xdg_wm_base" 2 wmbase) (4 "wl_output" 2 output)
-                (5 "wl_seat" 1 seat))
+                (5 "wl_seat" 1 seat)
+                (6 "zwp_text_input_manager_v3" 1 timgr)
+                (7 "zwp_input_method_manager_v2" 1 immgr))
    (hv-kind nm) (: (go l) (? (two? l)
                              (? (= nm (cap (cap l))) (nthl (cap l) 3) (go (cup l)))
                              ())
                    (go hv-globals))
 
-   ; --- the compositor's one move: a committed buffer lands in its TILE,
+   ; --- the compositor's one move: a retained buffer lands in its TILE,
    ;     row by row off the pool's mapping, clipped to the rect. no tile
-   ;     (rect ()) draws nowhere -- a toplevel-less surface holds no glass.
-   ;     NOBODY here touches X: every mapin is one nif (atomic under the
-   ;     vm's fairness yield), and the PAINTER task alone ships the glass
-   ;     -- two tasks streaming px-ship on one socket interleave mid-
-   ;     PutImage and the server reads pixels as opcodes ---
+   ;     (rect ()) draws nowhere, a slipped pool reads ptr 0 and skips.
+   ;     PAINTER-ONLY: the one task that blits is the one that unmaps, so
+   ;     a mapin can never race an unmap -- and it alone ships the glass
+   ;     (two tasks streaming px-ship on one socket interleave mid-
+   ;     PutImage and the server reads pixels as opcodes) ---
    (hv-blit x fb buf rect)
      (: rc (nthl buf 1) ptr (peep rc 2 0)
         (? (? (two? rect) (< 0 ptr) 0)
@@ -87,6 +89,40 @@
               _ (unmap m size)
               (fdclose fd))))
 
+   ; --- the IME seam: text-input v3 + input-method v2. hb 15 the text-input
+   ;     roster ((client tiid enabled serial)..), hb 16 the input method
+   ;     (client imid grabid) -- ONE per harbor, a second hears unavailable;
+   ;     hb 17/18 the im's pending commit/preedit. the ACTIVE text-input is
+   ;     the focused client's enabled one; enable/disable and the focus
+   ;     crossings drive im activate/deactivate, and the im's committed text
+   ;     pours back to the active text-input (each im word done-terminated) ---
+   (hv-tirows hb c) (filter (\ r (id? (cap r) c)) (peep hb 15 ()))
+   (hv-tiedit hb c id f)
+     (pin hb 15 (map (\ r (? (? (id? (cap r) c) (= (caup r) id) 0) (f r) r)) (peep hb 15 ())))
+   (hv-active hb tl)
+     (: fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
+        (? (! (two? e)) ()
+           (afind (\ r (? (id? (cap r) (cap e)) (< 0 (nthl r 2)) 0)) (peep hb 15 ()))))
+   (hv-im hb op ws)
+     (: im (peep hb 16 ())
+        (? (two? im) (: _ (wl-ship (cap im) (caup im) op ws ())
+                        (wl-ship (cap im) (caup im) 5 () ()))
+           0))
+   ; ti leave/enter + im deactivate/activate across a focus crossing
+   (hv-ticross hb tl old new)
+     (: _ (: oe (? old (peep tl old ()) ())
+            (? (two? oe)
+               (: oc (cap oe)
+                  _ (map (\ r (wl-ship oc (caup r) 1 (L (nthl oe 3)) ())) (hv-tirows hb oc))
+                  (? (any (\ r (< 0 (nthl r 2))) (hv-tirows hb oc)) (hv-im hb 1 ()) 0))
+               0))
+        (: ne (? new (peep tl new ()) ())
+           (? (two? ne)
+              (: nc (cap ne)
+                 _ (map (\ r (wl-ship nc (caup r) 0 (L (nthl ne 3)) ())) (hv-tirows hb nc))
+                 (? (any (\ r (< 0 (nthl r 2))) (hv-tirows hb nc)) (hv-im hb 0 ()) 0))
+              0)))
+
    ; --- keyboard focus follows the zipper: leave the old key's client, enter
    ;     the new one's (empty keys array -- nothing held across the crossing) ---
    (hv-refocus hb tl)
@@ -105,6 +141,7 @@
                                (\ kid (wl-ship (cap e) kid 1 (L (hv-srl hb) (nthl e 3) 0) ())))
                              0))
                     0)
+              _ (hv-ticross hb tl old new)
               (pin hb 8 new))))
 
    ; --- a key from the glass: the key TABLE answers first (hb 12, rows
@@ -118,12 +155,16 @@
      (: hit (afind (\ r (? (= (cap r) (& 77 state)) (= (caup r) kc) 0)) (peep hb 12 ()))
         (? (two? hit)
            (? press (: _ ((nthl hit 2) ()) 0) 0)
-           (: fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
-              (? (two? e)
-                 (hv-roster hb 6 (cap e)
-                   (\ kid (: _ (wl-ship (cap e) kid 4 (L (hv-srl hb) (& 255 state) 0 0 0) ())
-                             (wl-ship (cap e) kid 3 (L (hv-srl hb) time (- kc 8) press) ()))))
-                 0))))
+           (: im (peep hb 16 ()) g (? (two? im) (nthl im 2) 0)
+              (? (< 0 g)                                  ; a grab steals the keys for the im
+                 (: _ (wl-ship (cap im) g 2 (L (hv-srl hb) (& 255 state) 0 0 0) ())
+                    (wl-ship (cap im) g 1 (L (hv-srl hb) time (- kc 8) press) ()))
+                 (: fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
+                    (? (two? e)
+                       (hv-roster hb 6 (cap e)
+                         (\ kid (: _ (wl-ship (cap e) kid 4 (L (hv-srl hb) (& 255 state) 0 0 0) ())
+                                   (wl-ship (cap e) kid 3 (L (hv-srl hb) time (- kc 8) press) ()))))
+                       0))))))
 
    ; --- the pointer: whichever tile holds it hears enters/leaves/motion in
    ;     surface-local 24.8 fixed; a press focuses its tile (click-to-focus) ---
@@ -178,36 +219,48 @@
                      0))
            0))
 
-   ; --- a pool slips its moorings: unmapped, fd closed, exactly once. rc is
-   ;     the pool's shared cell -- 0 live buffers, 1 parting, 2 ptr, 3 size,
-   ;     4 fd -- so buffers outlive the pool OBJECT (simple-shm's habit) and
-   ;     a resize remaps in one place ---
-   (hv-slip rc) (: ptr (peep rc 2 0)
-                   _ (? (< 0 ptr)
-                        (: _ (unmap ptr (peep rc 3 0)) (fdclose (peep rc 4 0)))
-                        0)
-                   (pin rc 2 0))
+   ; --- a pool slips its moorings: the cell zeroes NOW (no new reads start)
+   ;     but the unmap DEFERS to the painter's reap list (hb 19) -- the
+   ;     painter is the only blitter, so sequencing the unmaps into its own
+   ;     tick means a mapin can never race an unmap (a client task freeing
+   ;     a pool mid-composite segfaulted exactly here). rc is the pool's
+   ;     shared cell -- 0 live buffers, 1 parting, 2 ptr, 3 size, 4 fd --
+   ;     so buffers outlive the pool OBJECT (simple-shm's habit) and a
+   ;     resize remaps in one place ---
+   (hv-slip hb rc) (: ptr (peep rc 2 0)
+                      _ (? (< 0 ptr)
+                           (pin hb 19 (link (L ptr (peep rc 3 0) (peep rc 4 0)) (peep hb 19 ())))
+                           0)
+                      (pin rc 2 0))
+   (hv-reap hb) (: q (pull hb 19 ())
+                   (map (\ r (: _ (unmap (cap r) (caup r))
+                                (? (< (nthl r 2) 0) 0 (fdclose (nthl r 2)))))
+                        q))
 
    ; --- retile: the layout places the row, every toplevel hears its new
-   ;     size, the glass wipes clean, and each placed toplevel's LAST buffer
-   ;     re-blits into its new rect at once -- a same-size move (a swap)
-   ;     never makes the client recommit, so the compositor must repaint
-   ;     from what it holds (the pool stays mapped; a slipped pool reads
-   ;     ptr 0 and skips). a size change still recommits over it ---
+   ;     size, unplaced toplevels lose their rects (FULL hides the rest --
+   ;     a stale rect would composite a hidden window), the glass wipes,
+   ;     and the painter's next composite repaints every placed tile from
+   ;     its retained buffer -- a same-size move (a swap) never makes the
+   ;     client recommit, so the compositor repaints from what it holds ---
    (hv-retile hb tl x fb)
      (: res (lay-tile (peep hb 1 ()) (rct 0 0 (nthl x 4) (nthl x 5)) (peep hb 0 ()))
         pls (cap res)
         _ (pin hb 1 (caup res))
-        rowb (* (nthl x 4) 4) zr (peep hb 3 ()) bufs (peep hb 14 #())
+        rowb (* (nthl x 4) 4) zr (peep hb 3 ())
         (wipe y) (? (< y (nthl x 5)) (: _ (pour fb (* y rowb) zr 0 rowb) (wipe (+ y 1))) 0)
         _ (wipe 0)
-        _ (pin hb 5 1)                                   ; the painter ships it
+        _ (map (\ key (? (any (\ p (= key (cap p))) pls) 0
+                         (: e (peep tl key ())
+                            (? (two? e)
+                               (pin tl key (L (cap e) (nthl e 1) (nthl e 2) (nthl e 3) ()))
+                               0))))
+               (zrow (peep hb 0 ())))
+        _ (pin hb 5 1)                                   ; the painter composites + ships
         _ (map (\ p (: key (cap p) e (peep tl key ())
                        (? (! (two? e)) 0
                           (: c (cap e)
                              _ (pin tl key (L c (nthl e 1) (nthl e 2) (nthl e 3) (cup p)))
-                             b (peep bufs key ())
-                             _ (? (two? b) (hv-blit x fb b (cup p)) 0)
                              _ (wl-ship c (nthl e 1) 0 (L (nthl p 3) (nthl p 4) 0) ())
                              srl (peep hb 4 1)
                              _ (pin hb 4 (+ srl 1))
@@ -225,6 +278,10 @@
                          (pin tl key ()))) mine)
         _ (pin hb 6 (filter (\ p (! (id? (cap p) c))) (peep hb 6 ())))
         _ (pin hb 7 (filter (\ p (! (id? (cap p) c))) (peep hb 7 ())))
+        _ (pin hb 15 (filter (\ r (! (id? (cap r) c))) (peep hb 15 ())))
+        _ (? (: im (peep hb 16 ()) (? (two? im) (id? (cap im) c) 0))
+             (: _ (pin hb 16 ()) _ (pin hb 17 ()) (pin hb 18 ()))
+             0)
         _ (? (any (\ key (= key (peep hb 9 ()))) mine) (pin hb 9 ()) 0)
         _ (? (any (\ key (= key (peep hb 8 ()))) mine) (pin hb 8 ()) 0)
         (? (two? mine) (hv-retile hb tl x fb) 0))
@@ -381,6 +438,72 @@
              (? (= op 1) (: _ (hv-unroster hb 7 c obj) (hv-bye c ob obj)) 0)
            (= kind 'touch)
              (? (= op 0) (hv-bye c ob obj) 0)
+           (= kind 'timgr)                                ; get_text_input: join the roster
+             (? (= op 0) (hv-bye c ob obj)
+                (= op 1) (: nid (wl-u32 k off)
+                            _ (pin ob nid (L 'ti))
+                            _ (pin hb 15 (link (L c nid 0 0) (peep hb 15 ())))
+                            (: fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
+                               (? (? (two? e) (id? (cap e) c) 0)   ; focused here already? enter now
+                                  (wl-ship c nid 0 (L (nthl e 3)) ())
+                                  0)))
+                0)
+           (= kind 'ti)                                   ; enable/disable drive the im; commit answers done
+             (? (= op 0) (: _ (pin hb 15 (filter (\ r (! (? (id? (cap r) c) (= (caup r) obj) 0)))
+                                                 (peep hb 15 ())))
+                            (hv-bye c ob obj))
+                (= op 1) (: _ (hv-tiedit hb c obj (\ r (L c obj 1 (nthl r 3))))
+                            act (hv-active hb tl)
+                            (? (? (two? act) (= (caup act) obj) 0) (hv-im hb 0 ()) 0))
+                (= op 2) (: was (hv-active hb tl)
+                            _ (hv-tiedit hb c obj (\ r (L c obj 0 (nthl r 3))))
+                            (? (? (two? was) (= (caup was) obj) 0) (hv-im hb 1 ()) 0))
+                (= op 7) (: _ (hv-tiedit hb c obj (\ r (L c obj (nthl r 2) (+ 1 (nthl r 3)))))
+                            r2 (afind (\ r (? (id? (cap r) c) (= (caup r) obj) 0)) (peep hb 15 ()))
+                            (wl-ship c obj 5 (L (nthl r2 3)) ()))
+                0)                                        ; 3..6: surrounding/cause/type/rect -- not held yet
+           (= kind 'immgr)                                ; get_input_method(seat, id): one per harbor
+             (? (= op 0) (: nid (wl-u32 k (+ off 4))
+                            _ (pin ob nid (L 'im))
+                            (? (two? (peep hb 16 ()))
+                               (wl-ship c nid 6 () ())    ; a second input method: unavailable
+                               (: _ (pin hb 16 (L c nid 0))
+                                  (? (two? (hv-active hb tl)) (hv-im hb 0 ()) 0))))
+                (= op 1) (hv-bye c ob obj)
+                0)
+           (= kind 'im)                                   ; the words pend; commit flushes to the active ti
+             (? (= op 0) (pin hb 17 (wl-rstr k off))
+                (= op 1) (pin hb 18 (L (wl-rstr k off)
+                                       (wl-i32 k (wl-rskip k off))
+                                       (wl-i32 k (+ 4 (wl-rskip k off)))))
+                (= op 3) (: act (hv-active hb tl)
+                            _ (? (two? act)
+                                 (: tc (cap act) ti (caup act)
+                                    pp (peep hb 18 ()) pc (peep hb 17 ())
+                                    _ (? (two? pp)
+                                         (wl-ship tc ti 2 (cat (wl-strw (cap pp)) (L (caup pp) (nthl pp 2))) ())
+                                         0)
+                                    _ (? pc (wl-ship tc ti 3 (wl-strw pc) ()) 0)
+                                    (wl-ship tc ti 5 (L (nthl act 3)) ()))
+                                 0)
+                            _ (pin hb 17 ())
+                            (pin hb 18 ()))
+                (= op 5) (: gid (wl-u32 k off)            ; grab_keyboard: the keys leave the clients
+                            _ (pin ob gid (L 'imgrab))
+                            im (peep hb 16 ())
+                            _ (pin hb 16 (L (cap im) (caup im) gid))
+                            _ (hv-keymap hb c gid)        ; keymap: the same op-0 shape as wl_keyboard's
+                            (wl-ship c gid 3 (L 25 400) ()))
+                (= op 6) (: _ (pin hb 16 ()) _ (pin hb 17 ()) _ (pin hb 18 ())
+                            (hv-bye c ob obj))
+                0)
+           (= kind 'imgrab)                               ; release: the keys pour to the clients again
+             (? (= op 0) (: im (peep hb 16 ())
+                            _ (? (? (two? im) (= obj (nthl im 2)) 0)
+                                 (pin hb 16 (L (cap im) (caup im) 0))
+                                 0)
+                            (hv-bye c ob obj))
+                0)
            (= kind 'compositor)                           ; create_surface / create_region
              (? (= op 0) (pin ob (wl-u32 k off) (L 'surface 0 0 ()))
                 (= op 1) (pin ob (wl-u32 k off) (L 'region))
@@ -403,10 +526,13 @@
                                (pin ob (wl-u32 k off)
                                     (L 'buffer rc (wl-i32 k (+ off 4)) (wl-i32 k (+ off 8))
                                        (wl-i32 k (+ off 12)) (wl-i32 k (+ off 16)))))
-                   (= op 1) (: _ (? (< 0 (peep rc 0 0)) (pin rc 1 1) (hv-slip rc))   ; buffers still sail: part later
+                   (= op 1) (: _ (? (< 0 (peep rc 0 0)) (pin rc 1 1) (hv-slip hb rc))   ; buffers still sail: part later
                                (hv-bye c ob obj))
-                   (= op 2) (: ns (wl-i32 k off)          ; resize: remap, the buffers follow the cell
-                               _ (? (< 0 (peep rc 2 0)) (unmap (peep rc 2 0) (peep rc 3 0)) 0)
+                   (= op 2) (: ns (wl-i32 k off)          ; resize: remap -- the OLD mapping reaps in the
+                               ;     painter's tick (fd -1: the pool's fd stays open)
+                               _ (? (< 0 (peep rc 2 0))
+                                    (pin hb 19 (link (L (peep rc 2 0) (peep rc 3 0) -1) (peep hb 19 ())))
+                                    0)
                                _ (pin rc 2 (mapfd (peep rc 4 0) ns))
                                (pin rc 3 ns))
                    0))
@@ -414,7 +540,7 @@
              (? (= op 0) (: rc (nthl rec 1)
                             n (- (peep rc 0 0) 1)
                             _ (pin rc 0 n)
-                            _ (? (? (< n 1) (< 0 (peep rc 1 0)) 0) (hv-slip rc) 0)
+                            _ (? (? (< n 1) (< 0 (peep rc 1 0)) 0) (hv-slip hb rc) 0)
                             (hv-bye c ob obj))
                 0)
            (= kind 'surface)                              ; (surface pending cbid key)
@@ -424,10 +550,8 @@
                 (= op 6) (: pend (nthl rec 1) cb (nthl rec 2) key (nthl rec 3)
                             _ (? (< 0 pend)
                                  (: buf (peep ob pend ())
-                                    e (? key (peep tl key ()) ())
-                                    _ (? (two? buf)
-                                         (: _ (hv-blit x fb buf (? (two? e) (nthl e 4) ()))
-                                            _ (? key (pin (peep hb 14 #()) key buf) 0)   ; the retained buffer: a retile re-blits it
+                                    _ (? (? (two? buf) key 0)
+                                         (: _ (pin (peep hb 14 #()) key buf)     ; retain: the PAINTER composites it
                                             (pin hb 5 1))
                                          0)
                                     (wl-ship c pend 0 () ()))                    ; release
@@ -485,7 +609,7 @@
                     r (drain ())
                     (? (< r 0) (park ())
                        (: _ (hv-farewell c hb tl x fb)
-                          _ (map hv-slip (peep st 2 ()))   ; every pool slips with its client
+                          _ (map (hv-slip hb) (peep st 2 ()))   ; every pool slips with its client
                           (close c))))
         (park ()))
 
@@ -526,22 +650,33 @@
                                                      (? (< 0 (tally t)) (spawn t) 0))))))))))))))
                 _ (pin hb 13 km)
                 _ (pin hb 14 (tablet 16))                 ; the retained buffers: key -> last committed buf
+                _ (pin hb 15 ()) _ (pin hb 16 ())         ; text-inputs; the input method
+                _ (pin hb 17 ()) _ (pin hb 18 ())         ; the im's pending commit / preedit
+                _ (pin hb 19 ())                          ; the reap list: mappings the painter unmaps
                 tl (tablet 64)
                 _ (pin haven-cell 'st (L hb tl x fb))
                 _ (pin haven-cell 'path path)
                 lp (shore path)
                 (? (! (lit? lp)) (: _ (close s) 'no-shore)
-                 (: ; the painter: the ONE task that writes X post-boot. clients
-                    ; mapin + raise the dirty flag; this ships the whole glass on
-                    ; an 8ms clock (pier's paintloop discipline -- a second X
-                    ; writer would interleave mid-PutImage under the vm's yield).
-                    ; the moor's queue drains HERE, first -- the painter is the
-                    ; single application point, and a drained retile dirties the
-                    ; glass in time for this very tick
-                    (paint _) (: q (pull haven-cell 'q ())
+                 (: ; the painter: the ONE task that blits, unmaps, and writes X
+                    ; post-boot. client tasks only retain buffers, queue slips,
+                    ; and raise the dirty flag; this reaps the slipped mappings,
+                    ; drains the moor's queue, composites every placed tile from
+                    ; its retained buffer, and ships the glass on an 8ms clock
+                    ; (pier's paintloop discipline, made total: blit and unmap
+                    ; in ONE hand can never race -- a client task freeing a pool
+                    ; mid-composite was a segfault)
+                    (paint _) (: _ (hv-reap hb)
+                                 q (pull haven-cell 'q ())
                                  _ (? (two? q) (hv-drain q hb tl x fb) 0)
                                  _ (? (peep hb 5 0)
                                       (: _ (pin hb 5 0)
+                                         bufs (peep hb 14 #())
+                                         _ (map (\ key (: e (peep tl key ()) b (peep bufs key ())
+                                                          (? (? (two? e) (two? b) 0)
+                                                             (hv-blit x fb b (nthl e 4))
+                                                             0)))
+                                                (zrow (peep hb 0 ())))
                                          (px-ship s win gc depth fb wpx 0 hpx))
                                       0)
                                  _ (rest 8)

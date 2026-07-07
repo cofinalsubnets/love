@@ -13,6 +13,7 @@
 
 (reads (open "crew/phos/core.l" "r"))
 (reads (open "crew/phos/wire.l" "r"))
+(reads (open "crew/haven/wire.l" "r"))
 
 ; -displayfd: Xvfb PICKS a free display and prints the number when it is ready
 ; to accept -- so no fixed :78 a stray server can poison (a stale server would
@@ -182,7 +183,7 @@
  smokep (open smokebin "r")
  _ (? (lit? smokep)
       (: _ (close smokep)
-         smk (mind (L smokebin sock "00c000" "700" "30"))       ; expect evdev 30 (X keycode 38); frames cover the chord act too
+         smk (mind (L smokebin sock "00c000" "1500" "30"))      ; expect evdev 30 (X keycode 38); frames cover the seat+chord+squeeze acts with slack
          _ (must 'smoke-up (two? smk))
          _ (enlist 'smk (cap smk))
          _ (must 'smoke-masters (waithue 76 120 0 192 0 100))   ; green in the master column
@@ -205,10 +206,11 @@
          ckm (x-keymap s (scr-mink sc) (scr-maxk sc) (L 65515 32))
          supk (peep ckm 65515 0) spck (peep ckm 32 0)
          _ (must 'chord-keys (? (< 0 supk) (< 0 spck) 0))
-         _ (fake qx 2 supk) _ (rest 30)
-         _ (fake qx 2 spck) _ (rest 30) _ (fake qx 3 spck)
+         _ (fake qx 2 supk) _ (rest 50)
+         _ (fake qx 2 spck) _ (rest 50) _ (fake qx 3 spck)
          _ (must 'chord-full (waithue 240 120 0 192 0 100))     ; green owns the right half too
-         _ (fake qx 2 spck) _ (rest 30) _ (fake qx 3 spck)
+         _ (rest 200)                                           ; the full retile settles before the next tap
+         _ (fake qx 2 spck) _ (rest 50) _ (fake qx 3 spck)
          _ (fake qx 3 supk)
          _ (must 'chord-cycles (waithue 240 120 0 0 192 100))   ; red back in the slave
          ; a yellow skiff barges in: three tiles -- the smoke hears a SMALLER
@@ -231,6 +233,81 @@
          _ (must 'smoke-clean (= 0 (cap g)))                    ; its OWN exit, status 0
          (must 'red-respreads (waithue 76 120 0 0 192 100)))
       0)
+
+ ; the IME seam: a grey skiff is the text-input client (it binds ti v3 and
+ ; enables on enter); the GATE ITSELF moors as the input method over the raw
+ ; wire. the im's committed text must pour through haven into the skiff's
+ ; mouth, and a grabbed keyboard steals the glass's keys from the clients
+ skt (mind `("out/host/ai" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+             "-e" (+ "(skiff \"" (+ sock "\" 320 240 8421504)"))))
+ _ (must 'ti-up (two? skt))
+ _ (enlist 'skt (cap skt))
+ _ (must 'ti-masters (waithue 76 120 128 128 128 100))  ; grey takes the master column
+ wc (connectu sock)
+ _ (must 'im-sock (lit? wc))
+ wk (cask 65536) wsc (cask 65536)
+ wst (tablet 4) _ (pin wst 0 0) _ (pin wst 1 ())
+ wgot (tablet 8)
+ (won obj op off sz)
+   (? (= obj 2) (? (= op 0) (: nm (wl-u32 wk off) i (wl-rstr wk (+ off 4))
+                               (? (= i "wl_seat") (pin wgot 0 nm)
+                                  (= i "zwp_input_method_manager_v2") (pin wgot 1 nm)
+                                  0))
+                   0)
+      (= obj 99) (pin wgot 2 1)
+      (= obj 5) (? (= op 0) (pin wgot 3 1)                ; im activate
+                   (= op 6) (pin wgot 7 1)                ; unavailable (the second-im probe)
+                   0)
+      (= obj 6) (? (= op 1) (pin wgot 4 (wl-u32 wk (+ off 8))) 0)   ; grab key: the key arg
+      (= obj 7) (? (= op 6) (pin wgot 5 1) 0)             ; second im: unavailable rides id 7
+      0)
+ (wpump _) (: r (wl-pump wc wk wsc wst won) (? (< 0 r) (wpump ()) r))
+ (wuntil i t) (? (< 0 (peep wgot i 0)) (peep wgot i 0)
+                 (< t 1) 0
+                 (: _ (rest 50) _ (wpump ()) (wuntil i (- t 1))))
+ _ (wl-ship wc 1 1 (L 2) ())                            ; get_registry
+ _ (wl-ship wc 1 0 (L 99) ())                           ; sync
+ _ (must 'im-globals (? (wuntil 2 100) (? (< 0 (peep wgot 0 0)) (< 0 (peep wgot 1 0)) 0) 0))
+ _ (wl-ship wc 2 0 (link (peep wgot 0 0) (cat (wl-strw "wl_seat") (L 1 3))) ())
+ _ (wl-ship wc 2 0 (link (peep wgot 1 0) (cat (wl-strw "zwp_input_method_manager_v2") (L 1 4))) ())
+ _ (wl-ship wc 4 0 (L 3 5) ())                          ; get_input_method(seat, id 5)
+ _ (must 'im-activates (wuntil 3 100))                  ; the skiff's enabled ti greets us
+ _ (wl-ship wc 4 0 (L 3 7) ())                          ; a SECOND input method: refused politely
+ _ (must 'im-second-refused (wuntil 5 100))
+ _ (wl-ship wc 5 0 (wl-strw "nihao") ())                ; commit_string
+ _ (wl-ship wc 5 3 (L 1) ())                            ; commit
+ _ (rest 400)
+ (holds ck n sn) (: m (tally sn)                        ; needle sn in the cask's first n bytes
+                    (go i) (? (< (+ i m) (+ n 1))
+                              (: (eq j) (? (< j m) (? (= (peep ck (+ i j) 0) (sn j)) (eq (+ j 1)) 0) 1)
+                                 (? (eq 0) 1 (go (+ i 1))))
+                              0)
+                    (go 0))
+ tick (cask 4096)
+ tn (swig (cup skt) tick)
+ _ (must 'ti-hears (holds tick tn "heard nihao"))
+ ; the grab: keys leave the clients for the im -- XTEST a key at the glass,
+ ; it must land on OUR grab object as evdev 30; release lets them pour again
+ _ (wl-ship wc 5 5 (L 6) ())                            ; grab_keyboard(id 6)
+ _ (rest 100) _ (wpump ())
+ _ (: fd (wl-popfd wst) (? (< fd 0) 0 (fdclose fd)))    ; the grab keymap's fd, returned politely
+ qx2 (: n (tally "XTEST")
+        _ (x-w8 s 98) _ (x-w8 s 0) _ (x-w16 s (+ 2 (/ (+ n (x-pad4 n)) 4)))
+        _ (x-w16 s n) _ (x-w16 s 0) _ (x-wpad s "XTEST") _ (x-flush s)
+        hdr (x-reply s)
+        (nthl hdr 9))
+ _ (must 'xtest-im (< 0 qx2))
+ _ (x-focus s win) _ (x-flush s) _ (rest 100)
+ _ (fake qx2 2 38) _ (rest 50) _ (fake qx2 3 38)
+ _ (must 'grab-steals (: (w t) (? (< t 1) 0
+                                  (: _ (wpump ())
+                                     (? (= 30 (peep wgot 4 0)) 30
+                                        (: _ (rest 50) (w (- t 1))))))
+                         (w 100)))
+ _ (wl-ship wc 6 0 () ())                               ; release the grab
+ _ (close wc)
+ _ (still (cap skt) 15) _ (wfx (cap skt)) _ (close (cup skt))
+ _ (pull camp 'skt 0)
 
  ; strike the camp (the same teardown the failure path takes)
  _ (close s)
