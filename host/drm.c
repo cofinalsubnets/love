@@ -7,8 +7,9 @@
 // edit -- the same discipline as net.c/pty.c/haven.c.
 //
 //   (ioctl fd req buf)  -> result charm | negative -errno ; fd a charm or an
-//                          open port; buf a cask (the struct, in place) or 0
-//                          for the no-argument kind
+//                          open port; buf a cask (the struct, in place) or a
+//                          charm (an int-argument ioctl -- the console kind;
+//                          0 covers the no-argument kind)
 //   (mapfdo fd n off)   -> ptr charm | negative -errno (mmap RW shared at off)
 #define _GNU_SOURCE
 #include "ai.h"
@@ -31,10 +32,12 @@ static lvm(lvm_ioctl) {
   intptr_t fd = drm_fd(Sp[0]);
   uintptr_t req = (Sp[1] & 1) ? (uintptr_t) getcharm(Sp[1]) : 0;
   struct ai_str *b = drm_bytes(Sp[2]);
+  void *arg = b ? (void*) b->bytes
+                : (Sp[2] & 1) ? (void*) getcharm(Sp[2]) : 0;
   ai_word out;
   if (fd < 0) out = putcharm(-EINVAL);
   else {
-    int r = ioctl((int) fd, (unsigned long) req, b ? (void*) b->bytes : 0);
+    int r = ioctl((int) fd, (unsigned long) req, arg);
     out = putcharm(r < 0 ? -errno : r); }
   Sp[2] = out;
   Sp += 2; Ip += 1; return Continue(); }

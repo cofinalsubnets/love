@@ -613,7 +613,71 @@
                           (close c))))
         (park ()))
 
-   ; --- the harbor: an X window for the glass, a shore for the door ---
+   ; --- the harbor, backend-blind: x carries only the glass size here
+   ;     (slots 4/5 -- the X entry threads its socket through the same
+   ;     record); (ship fb) pours the composited glass to whatever shows
+   ;     it; (attach hb tl) spins the backend's input tasks and pins the
+   ;     key table (hb 12) + the sym->keycode map (hb 13) ---
+   (hv-harbor path x fb ship attach)
+     (: hb (tablet 16)
+        _ (pin hb 0 ()) _ (pin hb 1 (mirror (choice (L (tall 1) full)))) _ (pin hb 2 1)
+        _ (pin hb 3 (cask (* (nthl x 4) 4))) _ (pin hb 4 1) _ (pin hb 5 0)
+        _ (pin hb 6 ()) _ (pin hb 7 ()) _ (pin hb 8 ()) _ (pin hb 9 ())
+        _ (pin hb 11 (hv-loadkeymap ()))
+        _ (pin hb 14 (tablet 16))                 ; the retained buffers: key -> last committed buf
+        _ (pin hb 15 ()) _ (pin hb 16 ())         ; text-inputs; the input method
+        _ (pin hb 17 ()) _ (pin hb 18 ())         ; the im's pending commit / preedit
+        _ (pin hb 19 ())                          ; the reap list: mappings the painter unmaps
+        tl (tablet 64)
+        _ (pin haven-cell 'st (L hb tl x fb))
+        _ (pin haven-cell 'path path)
+        lp (shore path)
+        (? (! (lit? lp)) 'no-shore
+         (: ; the painter: the ONE task that blits, unmaps, and ships the
+            ; glass post-boot. client tasks only retain buffers, queue
+            ; slips, and raise the dirty flag; this reaps the slipped
+            ; mappings, drains the moor's queue, composites every placed
+            ; tile from its retained buffer, and ships on an 8ms clock
+            ; (pier's paintloop discipline, made total: blit and unmap in
+            ; ONE hand can never race -- a client task freeing a pool
+            ; mid-composite was a segfault)
+            (paint _) (: _ (hv-reap hb)
+                         q (pull haven-cell 'q ())
+                         _ (? (two? q) (hv-drain q hb tl x fb) 0)
+                         _ (? (peep hb 5 0)
+                              (: _ (pin hb 5 0)
+                                 bufs (peep hb 14 #())
+                                 _ (map (\ key (: e (peep tl key ()) b (peep bufs key ())
+                                                  (? (? (two? e) (two? b) 0)
+                                                     (hv-blit x fb b (nthl e 4))
+                                                     0)))
+                                        (zrow (peep hb 0 ())))
+                                 (ship fb))
+                              0)
+                         _ (rest 8)
+                         (paint ()))
+            _ (spin paint 0)
+            _ (spin (\ u (hv-moor (+ path ".moor"))) 0)
+            _ (attach hb tl)
+            (knock _) (: _ (await lp)
+                         c (accept lp)
+                         _ (? (lit? c) (spin (\ _ (hv-serve c x fb hb tl)) 0) 0)
+                         (knock ()))
+            (knock ()))))
+
+   ; --- the default chords, every action a control-plane verb (sup=64,
+   ;     sup+shift=65). ks resolves a keysym to a keycode (each backend
+   ;     brings its own resolver); a sym it lacks drops its row ---
+   (hv-ktab ks)
+     (: (bd mods sym f) (: kc (ks sym) (? (< 0 kc) (L (L mods kc f)) ()))
+        (cat (bd 64 106 dn!)     (cat (bd 64 107 up!)
+        (cat (bd 65 106 swapdn!) (cat (bd 65 107 swapup!)
+        (cat (bd 64 104 shrink!) (cat (bd 64 108 grow!)
+        (cat (bd 64 32 next!)    (cat (bd 65 113 kill!)
+        (bd 64 65293 (\ u (: t (getenv "HAVEN_TERM")
+                             (? (< 0 (tally t)) (spawn t) 0)))))))))))))
+
+   ; --- the X entry: an X window for the glass, a shore for the door ---
    (haven path dpy auth wpx hpx)
      (: s (x-connect dpy)
         (? (! (lit? s)) 'no-socket
@@ -633,77 +697,29 @@
                                 (cat (go 97 26 ()) (cat (go 48 10 ()) (L 32 65293)))))
                 fb (cask (* wpx (* hpx 4)))
                 x (L s win gc depth wpx hpx)
-                hb (tablet 16)
-                _ (pin hb 0 ()) _ (pin hb 1 (mirror (choice (L (tall 1) full)))) _ (pin hb 2 1)
-                _ (pin hb 3 (cask (* wpx 4))) _ (pin hb 4 1) _ (pin hb 5 0)
-                _ (pin hb 6 ()) _ (pin hb 7 ()) _ (pin hb 8 ()) _ (pin hb 9 ())
-                _ (pin hb 11 (hv-loadkeymap ()))
-                ; the default chords, every action a control-plane verb (sup=64,
-                ; sup+shift=65); a sym the map lacks drops its row
-                _ (pin hb 12 (: (bd mods sym f) (: kc (peep km sym 0)
-                                                   (? (< 0 kc) (L (L mods kc f)) ()))
-                                (cat (bd 64 106 dn!)     (cat (bd 64 107 up!)
-                                (cat (bd 65 106 swapdn!) (cat (bd 65 107 swapup!)
-                                (cat (bd 64 104 shrink!) (cat (bd 64 108 grow!)
-                                (cat (bd 64 32 next!)    (cat (bd 65 113 kill!)
-                                (bd 64 65293 (\ u (: t (getenv "HAVEN_TERM")
-                                                     (? (< 0 (tally t)) (spawn t) 0))))))))))))))
-                _ (pin hb 13 km)
-                _ (pin hb 14 (tablet 16))                 ; the retained buffers: key -> last committed buf
-                _ (pin hb 15 ()) _ (pin hb 16 ())         ; text-inputs; the input method
-                _ (pin hb 17 ()) _ (pin hb 18 ())         ; the im's pending commit / preedit
-                _ (pin hb 19 ())                          ; the reap list: mappings the painter unmaps
-                tl (tablet 64)
-                _ (pin haven-cell 'st (L hb tl x fb))
-                _ (pin haven-cell 'path path)
-                lp (shore path)
-                (? (! (lit? lp)) (: _ (close s) 'no-shore)
-                 (: ; the painter: the ONE task that blits, unmaps, and writes X
-                    ; post-boot. client tasks only retain buffers, queue slips,
-                    ; and raise the dirty flag; this reaps the slipped mappings,
-                    ; drains the moor's queue, composites every placed tile from
-                    ; its retained buffer, and ships the glass on an 8ms clock
-                    ; (pier's paintloop discipline, made total: blit and unmap
-                    ; in ONE hand can never race -- a client task freeing a pool
-                    ; mid-composite was a segfault)
-                    (paint _) (: _ (hv-reap hb)
-                                 q (pull haven-cell 'q ())
-                                 _ (? (two? q) (hv-drain q hb tl x fb) 0)
-                                 _ (? (peep hb 5 0)
-                                      (: _ (pin hb 5 0)
-                                         bufs (peep hb 14 #())
-                                         _ (map (\ key (: e (peep tl key ()) b (peep bufs key ())
-                                                          (? (? (two? e) (two? b) 0)
-                                                             (hv-blit x fb b (nthl e 4))
-                                                             0)))
-                                                (zrow (peep hb 0 ())))
-                                         (px-ship s win gc depth fb wpx 0 hpx))
-                                      0)
-                                 _ (rest 8)
-                                 (paint ()))
-                    _ (spin paint 0)
-                    _ (spin (\ u (hv-moor (+ path ".moor"))) 0)
-                    ; the listener: the OTHER pump on the X socket (ain's two-
-                    ; pump law -- the painter writes, this only reads). every
-                    ; key/button/motion on the glass becomes seat traffic;
-                    ; an expose just asks the painter to ship again
-                    (readx _) (: e (x-next s)
-                                 (? (! e) 0
-                                    (: code (ev-code e) pkt (ev-raw e)
-                                       _ (? (= code 12) (pin hb 5 1)
-                                            (= code 2) (hv-keyev hb tl (u32 pkt 4) (ev-detail e) 1 (u16 pkt 28))
-                                            (= code 3) (hv-keyev hb tl (u32 pkt 4) (ev-detail e) 0 (u16 pkt 28))
-                                            (= code 6) (hv-ptrmove hb tl (u32 pkt 4) (u16 pkt 24) (u16 pkt 26))
-                                            (= code 4) (hv-ptrbtn hb tl (u32 pkt 4) (ev-detail e) 1)
-                                            (= code 5) (hv-ptrbtn hb tl (u32 pkt 4) (ev-detail e) 0)
-                                            0)
-                                       (readx ()))))
-                    _ (spin readx 0)
-                    (knock _) (: _ (await lp)
-                                 c (accept lp)
-                                 _ (? (lit? c) (spin (\ _ (hv-serve c x fb hb tl)) 0) 0)
-                                 (knock ()))
-                    (knock ())))))))))
+                (ship f) (px-ship s win gc depth f wpx 0 hpx)
+                ; the listener: the OTHER pump on the X socket (ain's two-
+                ; pump law -- the painter writes, this only reads). every
+                ; key/button/motion on the glass becomes seat traffic;
+                ; an expose just asks the painter to ship again
+                (attach hb tl)
+                  (: _ (pin hb 12 (hv-ktab (\ sym (peep km sym 0))))
+                     _ (pin hb 13 km)
+                     (readx _) (: e (x-next s)
+                                  (? (! e) 0
+                                     (: code (ev-code e) pkt (ev-raw e)
+                                        _ (? (= code 12) (pin hb 5 1)
+                                             (= code 2) (hv-keyev hb tl (u32 pkt 4) (ev-detail e) 1 (u16 pkt 28))
+                                             (= code 3) (hv-keyev hb tl (u32 pkt 4) (ev-detail e) 0 (u16 pkt 28))
+                                             (= code 6) (hv-ptrmove hb tl (u32 pkt 4) (u16 pkt 24) (u16 pkt 26))
+                                             (= code 4) (hv-ptrbtn hb tl (u32 pkt 4) (ev-detail e) 1)
+                                             (= code 5) (hv-ptrbtn hb tl (u32 pkt 4) (ev-detail e) 0)
+                                             0)
+                                        (readx ()))))
+                     (spin readx 0))
+                r (hv-harbor path x fb ship attach)
+                _ (close s)
+                r))))))
 
 ; a welp-face help so a scare answers a visible value (to the moor client, or
 ; at a drain/serve raise site) instead of dropping the compositor -- the
