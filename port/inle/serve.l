@@ -123,21 +123,33 @@
      (+ "  (improve TASK PATH)   ask a model for a patch, then run one guarded loop iteration (patch.l)\n"
          "  any global is a verb; (names ()) is the whole surface.\n")))))))))))))
 
-   ; --- the session: read one form off the socket, eval it in the book (so
-   ; every global is a verb), `show` the value back, flush. Loop to disconnect.
-   ; `sound` parks on `see` cooperatively, so it waits for a full form and ends
-   ; only at EOF (client gone) or an unfinished shape at close. A scare during
-   ; eval is caught by the installed dock-help (below): the client sees the
-   ; condition as a value and the session lives on -- the shell law, over TCP. --
+   ; --- the session: read one LINE off the socket (see parks the TASK -- the
+   ; reader's park law), sound it off a tap, eval it in the book (so every
+   ; global is a verb), `show` the value back, flush. Loop to disconnect.
+   ; the tap matters: a memory port keeps the read protocol and cannot block,
+   ; where (sound c ..) on the socket itself stalls the WHOLE vm in the C
+   ; parse the moment the fd runs dry mid-skip -- one idle session would hold
+   ; every peer session hostage. an unfinished shape carries to the next
+   ; line. A scare during eval is caught by the installed dock-help (below):
+   ; the client sees the condition as a value and the session lives on --
+   ; the shell law, over TCP. --
    (session c)
      (: e (nom 0)
-        (go _) (: r (sound c e)
-                   (? (id? r e) 0                          ; EOF -- client disconnected
-                      (id? r c) 0                          ; unfinished shape at close
-                      (: v (ev 'ev r)                      ; eval through the self-hosted ev
-                         _ (say c (+ (show v) "\n"))
-                         _ (flush c)
-                         (go ()))))
+        (rdline acc) (: ch (see c)
+                        (? (= ch -1) ()                    ; EOF -- client disconnected
+                           (= ch 10) (rev (link 10 acc))
+                           (rdline (link ch acc))))
+        (go pend) (: cl (rdline ())
+                     (? (! (two? cl)) 0
+                        (: full (cat pend cl)
+                           p (tap full)
+                           r (sound p e)
+                           (? (id? r e) (go ())            ; a blank line
+                              (id? r p) (go full)          ; unfinished shape -- more lines
+                              (: v (ev 'ev r)              ; eval through the self-hosted ev
+                                 _ (say c (+ (show v) "\n"))
+                                 _ (flush c)
+                                 (go ()))))))
         (go ()))
 
    ; the accept loop: CONCURRENT. `await` parks the loop on the listener fd

@@ -2787,6 +2787,11 @@ lvm(lvm_sleep) {
  word n = Sp[0];
  Sp[0] = nil;
  Ip += 1;
+ // rest waits on the CLOCK alone: a lingering next_wait_fd (the one-shot read
+ // intention -- see YieldCheck) would ride into the park and find_runnable then
+ // gates the timer on that fd firing -- a periodic task ticks only when stray
+ // traffic arrives and sleeps forever on a quiet port (haven's painter did).
+ g->next_wait_fd = -1;
  if (!charmp(n) || getcharm(n) <= 0) { g->next_wake_at = 0; return Ap(lvm_yield_sw, g); }
  g->next_wake_at = (uintptr_t) ai_clock() + getcharm(n);
  return Ap(lvm_yield_sw, g); }
@@ -3983,9 +3988,28 @@ lvm(lvm_real) {
  return Ip++, Continue(); }
 
 lvm(lvm_sound) {
- Ip++;
- if (!iop(Sp[0])) return Sp++, Continue();
+ if (!iop(Sp[0])) return Ip++, Sp++, Continue();
  struct ai_io *i = (struct ai_io*) Sp[0];
+ // the reader's park law (lvm_fgetc's), kept by the parse nif too: a dry port
+ // on a quiet fd parks the TASK, not the vm -- io_refill's dry loop is a
+ // blocking poll deep inside the C parse, so a moored repl session waiting
+ // between forms would hold every peer task hostage (haven's painter froze
+ // mid-wipe on exactly this). the crossover first: our unsent reply sails
+ // before we park on the answer. Ip is unadvanced on the park, so the task
+ // re-enters sound when the fd fires; a torn mid-form refill still waits in
+ // C (brief: the tail of one form).
+ struct ai_bio *bb = bio_of(g, i);
+ if (bio_wpending(bb)) {
+  g->io = i;
+  Pack(g);
+  if (!ai_ok(g = io_wdrain(g, i))) return ghelp(g);
+  Unpack(g);
+  i = (struct ai_io*) Sp[0]; }
+ if (getcharm(i->ungetc_buf) == EOF && !bio_rpending(bio_of(g, i))
+     && !ai_ready(getcharm(i->fd))) {
+  g->next_wait_fd = getcharm(i->fd);
+  return Ap(lvm_yield_sw, g); }
+ Ip++;
  uintptr_t depth = topof(g) - Sp;
  Pack(g);
  if (ai_ok(g = ai_read1(g, i))) g->sp[2] = g->sp[0], g->sp += 2;

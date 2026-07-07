@@ -16,6 +16,10 @@
 ; painter task's cue). tl maps a key to (port toplevel-id xdgsurf-id
 ; surface-id rect) -- the roster.
 ;
+; the MOOR: a second shore at <path>.moor -- the whole language into the
+; running compositor (`ain <path>.moor` is the client). where sway has
+; swaymsg's fixed JSON, haven answers with ev.
+;
 ; a body-LESS `:` -- the helpers leak; none shadows a nif.
 (:
    ; --- the registry: (name interface version kind), what get_registry sings ---
@@ -219,6 +223,75 @@
         _ (? (any (\ key (= key (peep hb 8 ()))) mine) (pin hb 8 ()) 0)
         (? (two? mine) (hv-retile hb tl x fb) 0))
 
+   ; --- the moor: phos's moor, haven-shaped. reads peep the live harbor
+   ;     through (haven-st ()) -- (L hb tl x fb), pinned at boot; a CHANGE is
+   ;     (f z lay) -> (L z2 lay2) over the pure half of the state, queued
+   ;     through (haven!) and drained by the PAINTER on its 8ms tick -- haven
+   ;     is its own server, so a queued change lands within a frame (no wake
+   ;     wire needed), the painter stays the single application point (one
+   ;     hand on the state like one hand on the wire), and the retile rides
+   ;     the existing configure/ack path. the seatbelt: the new row must be
+   ;     duplicate-free and every key a real toplevel -- else refused, the
+   ;     old state kept. with layout.l's open dispatch lane, (lay! (L my-
+   ;     closure state..)) swaps in a layout written at the prompt ---
+   haven-cell #()
+   (haven-st u) (peep haven-cell 'st ())
+   (haven! f) (: _ (pin haven-cell 'q (link f (peep haven-cell 'q ())))          ; (peep+pin -- a drain in the gap can lose a change;
+                 'queued)                                                        ;  prompt-scale odds, and the seatbelt guards either way)
+   (lay! l)   (haven! (\ z lay (L z l)))
+   (msg! m)   (haven! (\ z lay (: l2 (lay-msg lay m z) (L z (? l2 l2 lay)))))
+   (focus! w) (haven! (\ z lay (L (zfocto w z) lay)))
+   (row u)    (: st (haven-st ()) (? (two? st) (zrow (peep (cap st) 0 ())) ()))
+   (hv-sane z tl) (: ks (zrow z)
+                     (? (znodup? ks)
+                        (! (any (\ w (! (two? (peep tl w ())))) ks))
+                        0))
+   (hv-drain q hb tl x fb)
+     (: st (foldl (\ acc f
+                     (: r (f (cap acc) (caup acc))
+                        (? (? (two? r) (? (= 2 (tally r)) (hv-sane (cap r) tl) 0) 0)
+                           r
+                           (: _ (say out "haven: change refused\n") _ (flush out) acc))))
+                  (L (peep hb 0 ()) (peep hb 1 ()))
+                  (rev q))
+        _ (pin hb 0 (cap st))
+        _ (pin hb 1 (caup st))
+        (hv-retile hb tl x fb))
+   ; a session reads LINES (see parks the TASK -- the reader's park law) and
+   ; sounds them off a tap: a memory port keeps the read protocol and cannot
+   ; block, where (sound c ..) on the socket itself stalls the WHOLE vm in the
+   ; C parse the moment the fd runs dry mid-skip (the trailing newline lures it
+   ; in; the painter starves). an unfinished shape carries to the next line;
+   ; anything after the first form on a line is let go.
+   (hv-session c)
+     (: e (nom 0)
+        (rdline acc) (: ch (see c)
+                        (? (= ch -1) ()
+                           (= ch 10) (rev (link 10 acc))
+                           (rdline (link ch acc))))
+        (go pend) (: cl (rdline ())
+                     (? (! (two? cl)) 0
+                        (: full (cat pend cl)
+                           p (tap full)
+                           r (sound p e)
+                           (? (id? r e) (go ())
+                              (id? r p) (go full)
+                              (: v (ev 'ev r)
+                                 _ (say c (+ (show v) "\n"))
+                                 _ (flush c)
+                                 (go ()))))))
+        (go ()))
+   (hv-moor path)
+     (: lp (shore path)
+        (? (! (lit? lp)) (: _ (say out (+ "haven: no moor at " (+ path "\n"))) (flush out))
+           (: _ (say out (+ "haven: moored at " (+ path "\n")))
+              _ (flush out)
+              (knock _) (: _ (await lp)
+                           c (accept lp)
+                           _ (? (lit? c) (spin (\ _ (: _ (hv-session c) (close c))) 0) 0)
+                           (knock ()))
+              (knock ()))))
+
    ; --- one request. ob keeps the client's objects (id -> (kind ..)); st the
    ;     seam (0 carry fill, 1 fd queue, 2 the client's pool cells); k the
    ;     carry the offsets index; hb/tl the shared harbor ---
@@ -405,19 +478,26 @@
                 _ (pin hb 10 (L (peep km 106 0) (peep km 107 0)))
                 _ (pin hb 11 (hv-loadkeymap ()))
                 tl (tablet 64)
+                _ (pin haven-cell 'st (L hb tl x fb))
                 lp (shore path)
                 (? (! (lit? lp)) (: _ (close s) 'no-shore)
                  (: ; the painter: the ONE task that writes X post-boot. clients
                     ; mapin + raise the dirty flag; this ships the whole glass on
                     ; an 8ms clock (pier's paintloop discipline -- a second X
-                    ; writer would interleave mid-PutImage under the vm's yield)
-                    (paint _) (: _ (? (peep hb 5 0)
+                    ; writer would interleave mid-PutImage under the vm's yield).
+                    ; the moor's queue drains HERE, first -- the painter is the
+                    ; single application point, and a drained retile dirties the
+                    ; glass in time for this very tick
+                    (paint _) (: q (pull haven-cell 'q ())
+                                 _ (? (two? q) (hv-drain q hb tl x fb) 0)
+                                 _ (? (peep hb 5 0)
                                       (: _ (pin hb 5 0)
                                          (px-ship s win gc depth fb wpx 0 hpx))
                                       0)
                                  _ (rest 8)
                                  (paint ()))
                     _ (spin paint 0)
+                    _ (spin (\ u (hv-moor (+ path ".moor"))) 0)
                     ; the listener: the OTHER pump on the X socket (ain's two-
                     ; pump law -- the painter writes, this only reads). every
                     ; key/button/motion on the glass becomes seat traffic;
@@ -439,3 +519,8 @@
                                  _ (? (lit? c) (spin (\ _ (hv-serve c x fb hb tl)) 0) 0)
                                  (knock ()))
                     (knock ())))))))))
+
+; a welp-face help so a scare answers a visible value (to the moor client, or
+; at a drain/serve raise site) instead of dropping the compositor -- the
+; dock's shape: keep the read protocol, answer ('scare a b) on a bare scare.
+(: (help s a b) (? (eof? s) b (more? s) a `('scare a b)))

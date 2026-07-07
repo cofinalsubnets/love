@@ -50,15 +50,30 @@
    (phos-sock u) (: rd (getenv "XDG_RUNTIME_DIR")
                     base (? (< 1 (tally rd)) rd "/tmp")
                     (+ base (+ "/phos-" (+ (phos-dispnum ()) ".sock"))))
+   ; the session reads LINES (see parks the TASK -- the reader's park law) and
+   ; sounds them off a tap: a memory port keeps the read protocol and cannot
+   ; block, where (sound c ..) on the socket itself stalls the WHOLE vm in the
+   ; C parse the moment the fd runs dry mid-skip -- an idle attached client
+   ; would freeze the wm between asks (haven's painter starved on exactly
+   ; this). an unfinished shape carries to the next line; anything after the
+   ; first form on a line is let go.
    (phos-session c)
     (: e (nom 0)
-       (go _) (: r (sound c e)
-                  (? (id? r e) 0
-                     (id? r c) 0
-                     (: v (ev 'ev r)
-                        _ (say c (+ (show v) "\n"))
-                        _ (flush c)
-                        (go ()))))
+       (rdline acc) (: ch (see c)
+                       (? (= ch -1) ()
+                          (= ch 10) (rev (link 10 acc))
+                          (rdline (link ch acc))))
+       (go pend) (: cl (rdline ())
+                    (? (! (two? cl)) 0
+                       (: full (cat pend cl)
+                          p (tap full)
+                          r (sound p e)
+                          (? (id? r e) (go ())
+                             (id? r p) (go full)
+                             (: v (ev 'ev r)
+                                _ (say c (+ (show v) "\n"))
+                                _ (flush c)
+                                (go ()))))))
        (go ()))
    (phos-moor path)
     (: lp (shore path)

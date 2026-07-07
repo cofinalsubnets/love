@@ -60,6 +60,7 @@
  dpy (+ "/tmp/.X11-unix/X" (show dn))
  sock (+ "/tmp/haven-boot-" (+ (show dn) ".sock"))
  _ (unlink sock)
+ _ (unlink (+ sock ".moor"))
 
  ; GetImage (opcode 73, ZPixmap): w*h pixels back as a byte list (BGRX)
  (px-getimg s d x y w h)
@@ -119,6 +120,33 @@
  _ (enlist 'skb (cap skb))
  _ (must 'blue-masters (waithue 76 120 192 0 0 100))     ; blue in the master column
  _ (must 'red-slave (waithue 240 120 0 0 192 100))    ; red re-dressed in the slave
+
+ ; the moor: the whole language over a socket into the RUNNING compositor.
+ ; eval, survive a scare, SWAP THE LAYOUT live -- mirror flips the master
+ ; column into the top ROW (blue re-dresses wide up top, red wide below;
+ ; the change rides the painter's tick, the retile the configure/ack path
+ ; both skiffs already dance) -- refuse garbage, restore the columns
+ mc (: (try t) (? (< t 1) ()
+                  (: p (connectu (+ sock ".moor"))
+                     (? (lit? p) p (: _ (rest 100) (try (- t 1))))))
+       (try 100))
+ _ (must 'moor-up (lit? mc))
+ (rdline u) (: (go acc) (: ch (see mc)
+                           (? (|| (= ch -1) (= ch 10)) acc (go (+ acc (+ "" ch)))))
+               (go ""))
+ (ask q) (: _ (say mc q) _ (say mc "\n") _ (flush mc) (rdline ()))
+ _ (must 'moor-evals (= "3" (ask "(+ 1 2)")))
+ _ (ask "(boom-unbound)")                              ; a scare answers a value; the session lives
+ _ (must 'moor-survives (= "7" (ask "(+ 3 4)")))
+ _ (ask "(lay! (mirror (tall 1)))")                    ; the swap lane: a fresh layout (toggle OFF)
+ _ (ask "(msg! 'mirror)")                              ; the message lane: the toggle flips ON
+ _ (must 'moor-mirrors (waithue 240 60 192 0 0 100))   ; blue re-dressed across the TOP band
+ _ (must 'red-below (waithue 240 180 0 0 192 100))     ; red across the bottom
+ _ (ask "(haven! (\\ z lay 7))")                       ; garbage: refused, haven stands
+ _ (must 'moor-refuses (= "11" (ask "(+ 5 6)")))
+ _ (ask "(lay! (tall 1))")
+ _ (must 'moor-restores (waithue 76 120 192 0 0 100))  ; the columns come back
+ _ (close mc)
 
  ; blue steps away: red should spread back over the whole glass
  _ (still (cap skb) 15) _ (wfx (cap skb)) _ (close (cup skb))
@@ -186,4 +214,5 @@
  _ (strike ())
  _ (close (cup skr)) _ (close (cup hv)) _ (close (cup xv))
  _ (unlink sock)
+ _ (unlink (+ sock ".moor"))
  (puts "haven: ok"))
