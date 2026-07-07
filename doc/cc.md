@@ -372,7 +372,35 @@ two ideas to keep warm as the stages climb, neither committed yet:
    FEATURE-COMPLETE for ai.c's C subset; stage 7 (the linker + real SysV) is next.
 7. **THE GATE**: cc-built ai.c (+ host/*.c, system ld, ai_tco=0) boots the
    egg and runs `make test` green -- the corpus under a cc-built binary.
-   this is the rung's aiutils-feature-complete moment.
+   this is the rung's aiutils-feature-complete moment. a multi-part integration
+   gate, landing sub-rung by sub-rung:
+   7a THE RELOCATABLE OBJECT (crew/holo/obj.l) LANDED 2026-07-07: `au cc -c IN OUT`
+   lays an ELF `.o` the SYSTEM linker consumes, so cc code links against gcc-built
+   host/*.o + libc. where elf.l wraps assembled bytes in a static EXECUTABLE (one
+   RWX segment, every label resolved), obj.l emits SEPARATE .text / .data sections,
+   a symbol table (each function a global STT_FUNC, each global var a global
+   STT_OBJECT, each referenced-but-undefined label an UNDEF), and RELA relocations
+   for what the assembler cannot resolve within a section: an la into .data ->
+   R_X86_64_PC32 via the .data section symbol (addend = data offset - 4), a call to
+   an external symbol -> R_X86_64_PLT32, a data pointer to a label -> R_X86_64_64
+   (via the target's section symbol + offset, or an UNDEF). intra-.text branches
+   and calls (and a function-address la within the TU) stay pc-relative and resolve
+   internally -- both ends ride .text and shift together, so the field is invariant.
+   the split comes from cgen-obj: cgen-core now builds TEXT (functions, NO _start)
+   and DATA (globals + strings) separately, and the `main` requirement moved to the
+   EXECUTABLE path (a library TU with no main is a valid object). obj.l reaches the
+   assembler internals through the `holo` book (o-walk reuses (holo 'lay) then
+   patches text-local fixups / records the rest as relocations). x86-64 only for
+   now (the arm64 reloc kinds differ; cc emits x64). GATE: the make .o smoke
+   cc-compiles a lib + a main TU, links them with a gcc-built third TU via the
+   system linker (-no-pie), runs, and matches an all-gcc build; probed live: cc<->
+   gcc interop both directions, cc calling libc (abs/strlen), the ai.c static
+   (name, fn-ptr) table across an R_64 link. STILL AHEAD for the gate: 7b real SysV
+   varargs + single-precision float at the ABI boundary (cc's simplified shapes are
+   self-consistent but not gcc-compatible); 7c compile ai.c itself against
+   freestanding headers (math.h/signal.h/setjmp.h/sys/mman.h/unistd.h -- ai.c is
+   8449 lines and pulls the system headers today); 7d link cc-built ai.o + gcc-built
+   host/*.o + libc and boot the egg green.
 8. **the fixpoint + the flat stack**: (a) determinism -- cc(cc(ai)) builds
    byte-identical objects to cc(ai); (b) guaranteed sibcalls for the lvm
    shape, ai_tco=1, `make vmret` honest, benches vs gcc recorded.

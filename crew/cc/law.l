@@ -312,6 +312,25 @@
       (two? (cgn "int main() { int *p = &(int){42}; return *p; }"))
       (two? (cgn "struct P { int a; int b; }; int main() { return (&(struct P){3, 4})->a; }"))))
 
+; --- the object view (stage 7a): cgen-obj splits the program into TEXT (functions,
+; no _start) and DATA (globals + strings), and names the DEFINED functions and
+; global variables for the symbol table. crew/holo/obj.l turns that into a
+; relocatable .o (the ELF bytes are gated end-to-end by the make .o link/interop
+; smoke, which needs the holo book + the system linker). ---
+(: (cob src) (: r (cparse (caup (clex src)))
+                (? (two? r) (cgen-obj (caup r) (cauup r) (caup (cuup r))) ()))
+   (el l i) (? (< i 1) (cap l) (el (cup l) (- i 1)))
+   ob (cob "int f(int x) { return x; } int g = 5; int main() { return f(g); }")
+   (assert
+      (two? ob)                                             ; (1 text data funcnames globnames)
+      (= (el ob 3) '("f" "main"))                           ; the defined functions -> global FUNC symbols
+      (= (el ob 4) '("g"))                                  ; the global variables -> global OBJECT symbols
+      (member? '(label f) (el ob 1))                        ; a function label lives in TEXT
+      (member? '(label g) (el ob 2))                        ; a global label lives in DATA
+      (! (member? '(call main) (el ob 1)))                  ; NO _start/crt0 in an object (the linker's crt calls main)
+      (two? (cob "int only(int x) { return x + 1; }"))      ; a LIBRARY TU (no main) still emits an object
+      (! (cob "int main() { return nope; }"))))             ; a codegen error still refuses
+
 ; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
 ; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.
 ; pps runs cpp (no includes) and joins the output tokens' spellings to a string. --
@@ -343,5 +362,5 @@
       (! (cpp (caup (clex "#if 1\nx")) ()))                            ; unterminated #if refuses
       (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals ok")
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) ok")
 (put err 10)

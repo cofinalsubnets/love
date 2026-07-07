@@ -167,7 +167,7 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l crew/utils/au.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -394,7 +394,17 @@ test_cc: host out/host$(hsuf)/au
 	  printf 'int main() { return 42 }\n' > $(ho)/.cc3.c; \
 	  $m $(ho)/au cc $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
 	  [ $$r -eq 1 ] || { echo "FAIL au cc parse-error exit (rc $$r)"; exit 1; }; \
-	  echo "au: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery) ok"; \
+	  printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > $(ho)/.olib.c; \
+	  printf 'int pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+pick(2)+ext_add(15,5);}\n' > $(ho)/.omain.c; \
+	  printf 'int ext_add(int a,int b){return a+b;}\n' > $(ho)/.oext.c; \
+	  $m $(ho)/au cc -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL au cc -c lib"; exit 1; }; \
+	  $m $(ho)/au cc -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL au cc -c main"; exit 1; }; \
+	  $$cc_g -O0 -c -o $(ho)/.oext.o $(ho)/.oext.c; \
+	  $$cc_g -no-pie -o $(ho)/.oexe $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext.o > /dev/null 2>&1 || { echo "FAIL ld cc objects"; exit 1; }; \
+	  $(ho)/.oexe; a=$$?; \
+	  $$cc_g -O0 -o $(ho)/.oexeg $(ho)/.omain.c $(ho)/.olib.c $(ho)/.oext.c && $(ho)/.oexeg; b=$$?; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL au cc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
+	  echo "au: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop) ok"; \
 	else echo "au: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the

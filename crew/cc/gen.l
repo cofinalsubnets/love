@@ -821,11 +821,12 @@
        (: gb (globs (rev (g 'globs)) ())
           (? (bad? gb) 'bad (cat gb (strs (g 'strs) ())))))
 
-   (cgen ast stbl sigs)                             ; ('prog items) + the stag + the sig table -> (1 forms) | ()
+   ; the shared core: build the gen state, then TEXT (the functions, no _start)
+   ; and DATA (globals + strings) separately -> (g textforms dataforms) | ().
+   (cgen-core ast stbl sigs)
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ())
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ())
             _ (pin t 'fns (tablet 0)) _ (pin t 'stag stbl) _ (pin t 'sigs sigs) t)
-       crt0 (L (L 'call 'main) (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys))
        ; pass 0: every function name -- so a bare use of one is its address (la)
        (recfns fs) (? (! (two? fs)) 1
                       (: f (cap fs)
@@ -847,13 +848,32 @@
                            (one (cup ps))))
                     (one (caup f))))))
        ok (rec (caup ast))
+       ; always emit text + data (a library TU has no main); `saw` rides out so
+       ; the EXECUTABLE path can insist on one.
        (gfns fs acc saw)
         (? (! (two? fs))
-           (? saw (: dat (cgdata g) (? (bad? dat) () (L 1 (cat crt0 (cat acc dat))))) ())
+           (: dat (cgdata g) (? (bad? dat) () (L g acc dat saw)))
            (: f (cap fs)
               (? (member? (cap f) '(proto gdecl tdef)) (gfns (cup fs) acc saw)
                  (: r (cgfn g f)
                     (? (bad? r) ()
                        (gfns (cup fs) (cat acc r)
                              (|| saw (= (caup f) "main"))))))))
-       (? ok (gfns (caup ast) () ()) ())))
+       (? ok (gfns (caup ast) () ()) ()))
+   (cgen ast stbl sigs)                             ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
+    (: crt0 (L (L 'call 'main) (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys))
+       r (cgen-core ast stbl sigs)
+       (? (! (two? r)) ()
+          (! (nthr r 3)) ()                          ; no main -> no program (the exe has nothing to start)
+          (L 1 (cat crt0 (cat (caup r) (cauup r))))))
+   ; the RELOCATABLE OBJECT view (stage 7a): text and data split, plus the
+   ; DEFINED function names (global FUNC symbols) and global-variable names
+   ; (global OBJECT symbols) -- the .o emitter (crew/holo/obj.l) turns the rest
+   ; (undefined labels, cross-section refs) into a symbol table + relocations.
+   (cgen-obj ast stbl sigs)                         ; -> (1 textforms dataforms funcnames globnames) | ()
+    (: r (cgen-core ast stbl sigs)
+       (? (! (two? r)) ()
+          (: fnames (: (go fs acc) (? (! (two? fs)) (rev acc)
+                                      (: f (cap fs) (go (cup fs) (? (= (cap f) 'fn) (link (caup f) acc) acc))))
+                      (go (caup ast) ()))
+             (L 1 (caup r) (cauup r) fnames (rev ((cap r) 'globs)))))))
