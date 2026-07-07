@@ -59,8 +59,9 @@
 
    ; --- the seat's bookkeeping. hb grows input slots: 6 the keyboard roster
    ;     ((client kbdid)..), 7 the pointer roster, 8 the keyboard-entered key,
-   ;     9 the pointer-entered key, 10 the chord keycodes (j k), 11 the xkb
-   ;     keymap text. a serial per notable event, off the shared counter ---
+   ;     9 the pointer-entered key, 11 the xkb keymap text, 12 the key table
+   ;     ((mods keycode action)..), 13 the boot sym->keycode map. a serial
+   ;     per notable event, off the shared counter ---
    (hv-srl hb) (: n (peep hb 4 1) _ (pin hb 4 (+ n 1)) n)
    (hv-roster hb slot c f) (map (\ p (? (id? (cap p) c) (f (caup p)) 0)) (peep hb slot ()))
    (hv-unroster hb slot c id)
@@ -106,20 +107,17 @@
                     0)
               (pin hb 8 new))))
 
-   ; --- a key from the glass: sup+j / sup+k walk the zipper (the chord is
-   ;     haven's, swallowed); everything else pours to the focused client's
-   ;     keyboards -- modifiers first (X's state bits ARE xkb's real mods for
-   ;     the standard map), then the key, X keycode folded to evdev (-8) ---
+   ; --- a key from the glass: the key TABLE answers first (hb 12, rows
+   ;     (mods keycode action) -- the action is a control-plane closure, run
+   ;     on press, the chord swallowed both ways; state masked to the real
+   ;     chord mods, phos's kmodmask). everything else pours to the focused
+   ;     client's keyboards -- modifiers first (X's state bits ARE xkb's real
+   ;     mods for the standard map), then the key, X keycode folded to evdev
+   ;     (-8) ---
    (hv-keyev hb tl time kc press state)
-     (: ch (peep hb 10 ())
-        (? (? (= 64 (& state 64)) (? (two? ch) (|| (= kc (cap ch)) (= kc (caup ch))) 0) 0)
-           (? press
-              (: z (peep hb 0 ())
-                 (? (two? z)
-                    (: _ (pin hb 0 (? (= kc (cap ch)) (zfocdn z) (zfocup z)))
-                       (hv-refocus hb tl))
-                    0))
-              0)
+     (: hit (afind (\ r (? (= (cap r) (& 77 state)) (= (caup r) kc) 0)) (peep hb 12 ()))
+        (? (two? hit)
+           (? press (: _ ((nthl hit 2) ()) 0) 0)
            (: fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
               (? (two? e)
                  (hv-roster hb 6 (cap e)
@@ -191,12 +189,16 @@
                    (pin rc 2 0))
 
    ; --- retile: the layout places the row, every toplevel hears its new
-   ;     size, the glass wipes clean (each client recommits into its tile) ---
+   ;     size, the glass wipes clean, and each placed toplevel's LAST buffer
+   ;     re-blits into its new rect at once -- a same-size move (a swap)
+   ;     never makes the client recommit, so the compositor must repaint
+   ;     from what it holds (the pool stays mapped; a slipped pool reads
+   ;     ptr 0 and skips). a size change still recommits over it ---
    (hv-retile hb tl x fb)
      (: res (lay-tile (peep hb 1 ()) (rct 0 0 (nthl x 4) (nthl x 5)) (peep hb 0 ()))
         pls (cap res)
         _ (pin hb 1 (caup res))
-        rowb (* (nthl x 4) 4) zr (peep hb 3 ())
+        rowb (* (nthl x 4) 4) zr (peep hb 3 ()) bufs (peep hb 14 #())
         (wipe y) (? (< y (nthl x 5)) (: _ (pour fb (* y rowb) zr 0 rowb) (wipe (+ y 1))) 0)
         _ (wipe 0)
         _ (pin hb 5 1)                                   ; the painter ships it
@@ -204,6 +206,8 @@
                        (? (! (two? e)) 0
                           (: c (cap e)
                              _ (pin tl key (L c (nthl e 1) (nthl e 2) (nthl e 3) (cup p)))
+                             b (peep bufs key ())
+                             _ (? (two? b) (hv-blit x fb b (cup p)) 0)
                              _ (wl-ship c (nthl e 1) 0 (L (nthl p 3) (nthl p 4) 0) ())
                              srl (peep hb 4 1)
                              _ (pin hb 4 (+ srl 1))
@@ -216,7 +220,9 @@
    (hv-farewell c hb tl x fb)
      (: mine (filter (\ key (: e (peep tl key ()) (? (two? e) (= c (cap e)) 0)))
                      (zrow (peep hb 0 ())))
-        _ (map (\ key (: _ (pin hb 0 (zdel key (peep hb 0 ()))) (pin tl key ()))) mine)
+        _ (map (\ key (: _ (pin hb 0 (zdel key (peep hb 0 ())))
+                         _ (pin (peep hb 14 #()) key ())
+                         (pin tl key ()))) mine)
         _ (pin hb 6 (filter (\ p (! (id? (cap p) c))) (peep hb 6 ())))
         _ (pin hb 7 (filter (\ p (! (id? (cap p) c))) (peep hb 7 ())))
         _ (? (any (\ key (= key (peep hb 9 ()))) mine) (pin hb 9 ()) 0)
@@ -242,6 +248,32 @@
    (msg! m)   (haven! (\ z lay (: l2 (lay-msg lay m z) (L z (? l2 l2 lay)))))
    (focus! w) (haven! (\ z lay (L (zfocto w z) lay)))
    (row u)    (: st (haven-st ()) (? (two? st) (zrow (peep (cap st) 0 ())) ()))
+   ; --- the CONTROL PLANE verbs: one vocabulary drives haven from the keys
+   ;     AND the moor -- a chord's action IS one of these closures, so every
+   ;     key is rebindable live over the socket ((bind! ..), the stumpwm
+   ;     move). the pure ones queue through the guard; kill!/spawn are one
+   ;     atomic effect each (a single wl-ship / a mind), safe from any task ---
+   (up! u)     (haven! (\ z lay (L (zfocup z) lay)))
+   (dn! u)     (haven! (\ z lay (L (zfocdn z) lay)))
+   (swapup! u) (haven! (\ z lay (L (zswapup z) lay)))
+   (swapdn! u) (haven! (\ z lay (L (zswapdn z) lay)))
+   (grow! u)   (msg! 'grow)
+   (shrink! u) (msg! 'shrink)
+   (next! u)   (msg! 'next-layout)
+   (kill! u)   (: st (haven-st ())                       ; ask the focused toplevel to close --
+                  (? (! (two? st)) 0                     ; the client parts on its own and the
+                     (: hb (cap st) tl (nthl st 1)       ; normal farewell/retile path follows
+                        fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
+                        (? (two? e) (wl-ship (cap e) (nthl e 1) 1 () ()) 0))))
+   (spawn cmd) (mind (L "sh" "-c" (+ "WAYLAND_DISPLAY=" (+ (peep haven-cell 'path "") (+ " exec " cmd)))))
+   (bind! mods sym f)                                    ; sym an X keysym; keycode off the boot map
+     (: st (haven-st ())
+        (? (! (two? st)) 'no-harbor
+           (: hb (cap st) kc (peep (peep hb 13 #()) sym 0)
+              (? (! (< 0 kc)) 'no-key
+                 (: kt (filter (\ r (! (? (= (cap r) mods) (= (caup r) kc) 0))) (peep hb 12 ()))
+                    _ (pin hb 12 (link (L mods kc f) kt))
+                    'bound)))))
    (hv-sane z tl) (: ks (zrow z)
                      (? (znodup? ks)
                         (! (any (\ w (! (two? (peep tl w ())))) ks))
@@ -395,6 +427,7 @@
                                     e (? key (peep tl key ()) ())
                                     _ (? (two? buf)
                                          (: _ (hv-blit x fb buf (? (two? e) (nthl e 4) ()))
+                                            _ (? key (pin (peep hb 14 #()) key buf) 0)   ; the retained buffer: a retile re-blits it
                                             (pin hb 5 1))
                                          0)
                                     (wl-ship c pend 0 () ()))                    ; release
@@ -434,6 +467,7 @@
                                        (pin ob (nthl e 3) (L 'surface (nthl srec 1) (nthl srec 2) ()))
                                        0)
                                   _ (pin hb 0 (zdel key (peep hb 0 ())))
+                                  _ (pin (peep hb 14 #()) key ())
                                   _ (pin tl key ())
                                   (hv-retile hb tl x fb))
                                0))
@@ -468,17 +502,33 @@
                 _ (px-title s win "haven")
                 _ (x-map s win)
                 _ (x-flush s)
-                km (x-keymap s (scr-mink sc) (scr-maxk sc) (L 106 107))   ; j k: the focus chords
+                ; the boot keymap: letters + digits + space/return, sym -> keycode
+                ; (hb 13 -- bind! resolves live rebinds off it)
+                km (: (go a n acc) (? (< n 1) acc (go (+ a 1) (- n 1) (link a acc)))
+                      (x-keymap s (scr-mink sc) (scr-maxk sc)
+                                (cat (go 97 26 ()) (cat (go 48 10 ()) (L 32 65293)))))
                 fb (cask (* wpx (* hpx 4)))
                 x (L s win gc depth wpx hpx)
                 hb (tablet 16)
-                _ (pin hb 0 ()) _ (pin hb 1 (tall 1)) _ (pin hb 2 1)
+                _ (pin hb 0 ()) _ (pin hb 1 (mirror (choice (L (tall 1) full)))) _ (pin hb 2 1)
                 _ (pin hb 3 (cask (* wpx 4))) _ (pin hb 4 1) _ (pin hb 5 0)
                 _ (pin hb 6 ()) _ (pin hb 7 ()) _ (pin hb 8 ()) _ (pin hb 9 ())
-                _ (pin hb 10 (L (peep km 106 0) (peep km 107 0)))
                 _ (pin hb 11 (hv-loadkeymap ()))
+                ; the default chords, every action a control-plane verb (sup=64,
+                ; sup+shift=65); a sym the map lacks drops its row
+                _ (pin hb 12 (: (bd mods sym f) (: kc (peep km sym 0)
+                                                   (? (< 0 kc) (L (L mods kc f)) ()))
+                                (cat (bd 64 106 dn!)     (cat (bd 64 107 up!)
+                                (cat (bd 65 106 swapdn!) (cat (bd 65 107 swapup!)
+                                (cat (bd 64 104 shrink!) (cat (bd 64 108 grow!)
+                                (cat (bd 64 32 next!)    (cat (bd 65 113 kill!)
+                                (bd 64 65293 (\ u (: t (getenv "HAVEN_TERM")
+                                                     (? (< 0 (tally t)) (spawn t) 0))))))))))))))
+                _ (pin hb 13 km)
+                _ (pin hb 14 (tablet 16))                 ; the retained buffers: key -> last committed buf
                 tl (tablet 64)
                 _ (pin haven-cell 'st (L hb tl x fb))
+                _ (pin haven-cell 'path path)
                 lp (shore path)
                 (? (! (lit? lp)) (: _ (close s) 'no-shore)
                  (: ; the painter: the ONE task that writes X post-boot. clients

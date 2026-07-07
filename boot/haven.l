@@ -144,14 +144,24 @@
  _ (must 'red-below (waithue 240 180 0 0 192 100))     ; red across the bottom
  _ (ask "(haven! (\\ z lay 7))")                       ; garbage: refused, haven stands
  _ (must 'moor-refuses (= "11" (ask "(+ 5 6)")))
- _ (ask "(lay! (tall 1))")
+ _ (ask "(lay! (mirror (choice (L (tall 1) full))))")  ; back to the boot ring (columns at idx 0)
  _ (must 'moor-restores (waithue 76 120 192 0 0 100))  ; the columns come back
- _ (close mc)
 
- ; blue steps away: red should spread back over the whole glass
- _ (still (cap skb) 15) _ (wfx (cap skb)) _ (close (cup skb))
+ ; the control plane: swap trades the tiles (blue focused, swapped under red),
+ ; then swaps back; kill! asks the focused toplevel to close and blue PARTS ON
+ ; ITS OWN -- exit 0 is the proof -- and red spreads
+ _ (ask "(swapup! ())")
+ _ (must 'swap-red-masters (waithue 76 120 0 0 192 100))   ; red takes the master column
+ _ (must 'swap-blue-slaves (waithue 240 120 192 0 0 100))
+ _ (ask "(swapdn! ())")
+ _ (must 'swap-back (waithue 76 120 192 0 0 100))          ; blue masters again
+ _ (ask "(kill! ())")
+ gb (wfx (cap skb))
+ _ (close (cup skb))
  _ (pull camp 'skb 0)                        ; reaped: a second wfx would spin on the dead pid
+ _ (must 'blue-clean (= 0 (cap gb)))                    ; blue's OWN exit, status 0
  _ (must 'red-spreads (waithue 76 120 0 0 192 100))     ; red owns the left again
+ _ (close mc)
 
  ; the third act, where the binary exists (see the Makefile's $(smoke) rule):
  ; a REAL client -- libwayland + xdg-shell, the reference implementation and
@@ -172,7 +182,7 @@
  smokep (open smokebin "r")
  _ (? (lit? smokep)
       (: _ (close smokep)
-         smk (mind (L smokebin sock "00c000" "300" "30"))       ; expect evdev 30 (X keycode 38)
+         smk (mind (L smokebin sock "00c000" "700" "30"))       ; expect evdev 30 (X keycode 38); frames cover the chord act too
          _ (must 'smoke-up (two? smk))
          _ (enlist 'smk (cap smk))
          _ (must 'smoke-masters (waithue 76 120 0 192 0 100))   ; green in the master column
@@ -188,6 +198,19 @@
          _ (rest 150)
          _ (fake qx 2 38) _ (rest 80)                           ; KeyPress 38 ('a')
          _ (fake qx 3 38) _ (rest 80)                           ; KeyRelease
+         ; the chord through the glass: sup+space walks the layout ring --
+         ; FULL (the focused smoke owns the whole glass), then back to the
+         ; columns. XTEST holds super and taps space twice; the key table
+         ; answers, the queue drains on the painter's tick
+         ckm (x-keymap s (scr-mink sc) (scr-maxk sc) (L 65515 32))
+         supk (peep ckm 65515 0) spck (peep ckm 32 0)
+         _ (must 'chord-keys (? (< 0 supk) (< 0 spck) 0))
+         _ (fake qx 2 supk) _ (rest 30)
+         _ (fake qx 2 spck) _ (rest 30) _ (fake qx 3 spck)
+         _ (must 'chord-full (waithue 240 120 0 192 0 100))     ; green owns the right half too
+         _ (fake qx 2 spck) _ (rest 30) _ (fake qx 3 spck)
+         _ (fake qx 3 supk)
+         _ (must 'chord-cycles (waithue 240 120 0 0 192 100))   ; red back in the slave
          ; a yellow skiff barges in: three tiles -- the smoke hears a SMALLER
          ; size and does the honest resize: buffers struck (delete_id), a
          ; fresh pool dressed, the retired ids REUSED by libwayland. a

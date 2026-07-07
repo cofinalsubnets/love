@@ -39,6 +39,7 @@
                  (= obj 8) (? (= op 0)                    ; toplevel.configure: a size
                               (: cw (wl-i32 k off) ch (wl-i32 k (+ off 4))
                                  (? (* cw ch) (: _ (pin got 6 cw) (pin got 7 ch)) 0))
+                              (= op 1) (pin got 12 1)     ; toplevel.close: asked to part
                               0)
                  (< 8 obj) (pin got 5 1)                  ; a buffer let go
                  0)
@@ -94,10 +95,13 @@
                  (: _ (until 5)                           ; the release lands
                     _ (puts "skiff: shipped")
                     ; hold the line: ack every fresh configure, re-dress on
-                    ; a size change -- the compositor retiles, we follow
+                    ; a size change -- the compositor retiles, we follow; a
+                    ; close asks us to part, and we go honestly (exit 0)
                     (hold _)
                       (: _ (await c) r (pump ())
-                         (? (< r 0)
+                         (? (< 0 (peep got 12 0))
+                            (: _ (puts "skiff: closed") (close c))
+                            (< r 0)
                             (: s2 (peep got 4 0)
                                _ (? (= s2 (peep got 8 0)) 0
                                     (: _ (pin got 8 s2)
