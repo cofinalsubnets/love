@@ -178,7 +178,7 @@ generics, and optional infix/prefix notation.</p>
   <dt id="g-color"><a href="#g-color">🌈 color</a></dt>
     <dd>the order-sign of a value's <a href="#g-net">net</a>: <span class="hi red"><a href="#g-red">red</a></span>, <span class="hi green"><a href="#g-green">green</a></span> or <span class="hi blue"><a href="#g-blue">blue</a></span></dd>
   <dt id="g-constellation"><a href="#g-constellation">✨ constellation</a></dt>
-    <dd>any number -- a star or a galaxy.</dd>
+  <dd>any numeric type. a <a href="#g-star">star</a> or <a href="#g-galaxy">galaxy</a></dd>
   <dt id="g-cup"><a href="#g-cup">🧋 cup</a></dt>
     <dd>contents of the underneath part of the product. aka <code>cdr</code>/<code>snd</code>/<code>tl</code>. see also: <a href="#g-chain">chain</a></dd>
   <dt id="g-curry"><a href="#g-curry">🍛 curry</a></dt>
@@ -205,14 +205,14 @@ generics, and optional infix/prefix notation.</p>
     <a href="#g-lattice">lattice</a>.</dd>
   <dt id="g-name"><a href="#g-name">🪪 name</a></dt>
     <dd>aka a lisp symbol or erlang atom.
-    formally considered as a die over a chain of string and mint.
+      formally considered as a <a href="#g-die">die</a> over a <a href="#g-chain">chain</a> of <a href="#g-string">string</a> and <a href="#g-mint">mint</a>.
     inherits algebra from strings.</dd>
   <dt id="g-net"><a href="#g-net">🌐 net (<code>+</code>)</a></dt>
     <dd>a value's content measure, a <a href="#g-star">star</a></dd>
   <dt id="g-nothing"><span class="hi gray"><a href="#g-nothing">🈚 nothing</a></span></dt>
     <dd>the designated serial zero <a href="#g-mint">mint</a>, acting as a global <span class="hi gray">empty</span> element <code>()</code>. algebraically neutral. conceptually the lowest inhabited point of the <a href="#g-lattice">lattice</a></dd>
   <dt id="g-red"><a href="#g-red">🔴 red</a></dt>
-    <dd><a href="#g-color">color</a> of a value whos net is negative: <code>-1 '(1 2 3 -99999)</code>. boolean false.</dd>
+    <dd><a href="#g-color">color</a> of a value whose net is negative: <code>-1 '(1 2 3 -99999)</code>. boolean false.</dd>
   <dt id="g-sat"><a href="#g-sat">🌊 saturate (<code>$</code>)</a></dt>
   <dd>retraction of a value's <a href="#g-net">net</a> (a <a href="#g-star">star</a>-typed value) onto the <span class="hi green"><a href="#g-green">green</a></span> <a href="#g-charm">charms</a>, ie. an integer in the interval [0, max-charm].
     overflow or underflow goes to the limit (saturation).
