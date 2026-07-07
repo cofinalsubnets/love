@@ -6,7 +6,7 @@
 ;   cat test/00-init.l crew/cc/lex.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | out/host/ai
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
-; smoke through the real `au cc`.
+; smoke through the real `aicc`.
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
 (: (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))   ; lists don't index by application
@@ -432,5 +432,21 @@
       (= (cast "extern int v[]; int main(void){return 0;}")                         ; an incomplete array (no size, no init)
          '(prog ((gdecl (("v" (arr int 0) ()))) (fn "main" () (blk ((ret (num 0))))))))))
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE, bare void return, folded case labels, function-pointer cast types, incomplete arrays) ok")
+; -- 7c-iii part 2: multidimensional arrays. [3][4] of T reads as a RUN of bracket
+; suffixes folded outer..inner into (arr (arr T 4) 3); a[i][j] desugars to the plain
+; *(*(a+i)+j) -- gen does the type-directed work (the stride on a+i is the ROW size,
+; and a deref whose type is still an array keeps the address). a global 2D table takes
+; a nested-brace initializer. only the OUTERMOST dim may be [] (size from init).
+(: (cast src) (caup (cparse (caup (clex src))))
+   (dty src)  (: ast (cast (+ src " int main(void){return 0;}"))    ; the first global decl's type
+                 (caup (cap (caup (cap (caup ast))))))
+   (assert
+      (= (dty "int a[3][4];") '(arr (arr int 4) 3))                 ; row-major nesting, outer dim first
+      (= (dty "char m[2][3][4];") '(arr (arr (arr char 4) 3) 2))    ; three dims fold right
+      (= (dty "int a[5];") '(arr int 5))                            ; a lone dim is unchanged
+      (= (dty "int g[][3] = {{1,2,3},{4,5,6}};") '(arr (arr int 3) 2))   ; outer [] inferred from the init count
+      (= (cast "enum q { A, B, KN }; int m[KN][KN]; int main(void){return 0;}")   ; an ENUM CONSTANT dim folds (KN = 2)
+         '(prog ((tdef) (gdecl (("m" (arr (arr int 2) 2) ()))) (fn "main" () (blk ((ret (num 0))))))))))
+
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE, bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with enum-constant dims) ok")
 (put err 10)

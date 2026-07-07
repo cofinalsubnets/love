@@ -10,7 +10,7 @@
 ; and move together). x86-64 only for now (cc emits x64; the arm64 reloc kinds
 ; differ). loads after crew/holo/elf.l in the au cat -- reads elf-machines /
 ; write-bytes / catall / le* bare, and the assembler internals through the `holo`
-; book. cc.l drives it: `au cc -c foo.c foo.o`.
+; book. cc.l drives it: `aicc -c foo.c foo.o`.
 (:
    ; the ELF relocation TYPES we emit (x86-64)
    r-64    1                                        ; R_X86_64_64     S + A   (an abs64 data pointer)

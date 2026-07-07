@@ -167,12 +167,21 @@ test_phos: host
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `au as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l crew/utils/au.l
+aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l crew/utils/sed.l crew/utils/proc.l crew/vi/core.l crew/vi/vi.l crew/utils/diff.l tools/ain.l crew/cook/cook.l crew/utils/asbook.l crew/holo/elf.l crew/holo/obj.l crew/utils/au.l
+# aicc: the C compiler is its OWN app, NOT baked into the au cat -- a cc edit rebuilds
+# only aicc (never au), so an au rebuild in another session can't tear the compiler.
+# Its own catted `#!/usr/bin/env -S ai -l` script: the u-floor (text+core), the assembler
+# book + elf/obj writers, then crew/cc/{lex,cpp,parse,gen,cc}.l whose tail SEAT fires.
+aiccfiles = crew/utils/text.l crew/utils/core.l crew/utils/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
 	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S ai'; cat $(aufiles); } > $@
+	@chmod 755 $@
+out/host$(hsuf)/aicc: $(aiccfiles)
+	@echo AI	$(abspath $@)
+	@{ echo '#!/usr/bin/env -S ai -l'; cat $(aiccfiles); } > $@
 	@chmod 755 $@
 .PHONY: test_utils
 test_utils: host out/host$(hsuf)/au
@@ -363,10 +372,10 @@ test_vi: host out/host$(hsuf)/au
 	  echo "au: vi (laws + piped create/dd/q!/undo end-to-end) ok"
 # The C compiler (crew/cc/, rung 3 -- doc/cc.md): the pure pipeline's laws
 # (lexer/parser/gen goldens), then the stage-0 end to end through the real
-# `au cc`: compile, run, exit 42 -- and the gcc -O0 differential is born
+# `aicc`: compile, run, exit 42 -- and the gcc -O0 differential is born
 # (same source, both compilers, same exit). x86-64 only until arm64 parity.
 .PHONY: test_cc
-test_cc: host out/host$(hsuf)/au
+test_cc: host out/host$(hsuf)/aicc
 	@echo "CC crew/cc/{lex,cpp,parse,gen,law}.l"; \
 	  cat test/00-init.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | $m > out/host/.test_cc.out 2>&1; r=$$?; \
 	  cat out/host/.test_cc.out; \
@@ -374,45 +383,45 @@ test_cc: host out/host$(hsuf)/au
 	    || { echo "FAIL cc laws (exit $$r)"; exit 1; }
 	@if [ "$$(uname -m)" = x86_64 ]; then \
 	  printf 'int main() { return 42; }\n' > $(ho)/.cc1.c; \
-	  $m $(ho)/au cc $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL au cc compile"; exit 1; }; \
+	  $m $(ho)/aicc $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL aicc compile"; exit 1; }; \
 	  $(ho)/.cc1; a=$$?; \
 	  cc_g=$$(command -v gcc || command -v cc); \
 	  $$cc_g -O0 -o $(ho)/.cc1g $(ho)/.cc1.c && $(ho)/.cc1g; b=$$?; \
-	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL au cc vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc vs gcc (ours $$a gcc $$b)"; exit 1; }; \
 	  printf '// c\nint f() { return 1; }\nint main() { return 7; }\n' > $(ho)/.cc2.c; \
-	  $m $(ho)/au cc $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
+	  $m $(ho)/aicc $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
 	  $$cc_g -O0 -o $(ho)/.cc2g $(ho)/.cc2.c && $(ho)/.cc2g; b=$$?; \
-	  [ $$a -eq $$b ] || { echo "FAIL au cc two-fn vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  [ $$a -eq $$b ] || { echo "FAIL aicc two-fn vs gcc (ours $$a gcc $$b)"; exit 1; }; \
 	  for f in test/cc/*.c; do \
-	    $m $(ho)/au cc $$f $(ho)/.ccb > /dev/null 2>&1 || { echo "FAIL au cc compile $$f"; exit 1; }; \
+	    $m $(ho)/aicc $$f $(ho)/.ccb > /dev/null 2>&1 || { echo "FAIL aicc compile $$f"; exit 1; }; \
 	    $(ho)/.ccb; a=$$?; \
 	    $$cc_g -O0 -o $(ho)/.ccbg $$f && $(ho)/.ccbg; b=$$?; \
-	    [ $$a -eq $$b ] || { echo "FAIL au cc battery $$f (ours $$a gcc $$b)"; exit 1; }; \
+	    [ $$a -eq $$b ] || { echo "FAIL aicc battery $$f (ours $$a gcc $$b)"; exit 1; }; \
 	  done; \
-	  $m $(ho)/au cc $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
-	  [ $$r -eq 1 ] || { echo "FAIL au cc missing input exit (rc $$r)"; exit 1; }; \
+	  $m $(ho)/aicc $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL aicc missing input exit (rc $$r)"; exit 1; }; \
 	  printf 'int main() { return 42 }\n' > $(ho)/.cc3.c; \
-	  $m $(ho)/au cc $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
-	  [ $$r -eq 1 ] || { echo "FAIL au cc parse-error exit (rc $$r)"; exit 1; }; \
+	  $m $(ho)/aicc $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL aicc parse-error exit (rc $$r)"; exit 1; }; \
 	  printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > $(ho)/.olib.c; \
 	  printf 'int pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+pick(2)+ext_add(15,5);}\n' > $(ho)/.omain.c; \
 	  printf 'int ext_add(int a,int b){return a+b;}\n' > $(ho)/.oext.c; \
-	  $m $(ho)/au cc -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL au cc -c lib"; exit 1; }; \
-	  $m $(ho)/au cc -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL au cc -c main"; exit 1; }; \
+	  $m $(ho)/aicc -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL aicc -c lib"; exit 1; }; \
+	  $m $(ho)/aicc -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL aicc -c main"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.oext.o $(ho)/.oext.c; \
 	  $$cc_g -no-pie -o $(ho)/.oexe $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext.o > /dev/null 2>&1 || { echo "FAIL ld cc objects"; exit 1; }; \
 	  $(ho)/.oexe; a=$$?; \
 	  $$cc_g -O0 -o $(ho)/.oexeg $(ho)/.omain.c $(ho)/.olib.c $(ho)/.oext.c && $(ho)/.oexeg; b=$$?; \
-	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL au cc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
 	  printf '#include <stdarg.h>\nint isum(int n,...){va_list ap;va_start(ap,n);long s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}\n' > $(ho)/.valib.c; \
 	  printf 'int isum(int n,...);\nint main(){return isum(4,10,11,12,9);}\n' > $(ho)/.vamain.c; \
-	  $m $(ho)/au cc -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL au cc -c variadic"; exit 1; }; \
+	  $m $(ho)/aicc -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL aicc -c variadic"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.vamain.o $(ho)/.vamain.c; \
 	  $$cc_g -no-pie -o $(ho)/.vaexe $(ho)/.vamain.o $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL ld cc-variadic + gcc-main"; exit 1; }; \
 	  $(ho)/.vaexe; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL cc-variadic <- gcc-caller (SysV va ABI, got $$a want 42)"; exit 1; }; \
-	  echo "au: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + SysV varargs cross-toolchain) ok"; \
-	else echo "au: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
+	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + SysV varargs cross-toolchain) ok"; \
+	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
@@ -1284,6 +1293,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/ai \
   $d/bin/au \
+  $d/bin/aicc \
   $d/bin/cook \
   $d/bin/ain \
   $d/bin/phos \
@@ -1364,6 +1374,16 @@ $d/bin/au: $(aufiles)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S ai'; cat $(aufiles); } > $@
+	@chmod 755 $@
+
+# aicc: the C compiler, ITS OWN app (doc/cc.md) -- a catted `#!/usr/bin/env -S ai -l`
+# script (the `-l` re-execs the installed ai to load it; the tail SEAT in cc.l finds
+# `aicc` on the command line and fires). Kept OUT of the au cat so a cc edit never
+# forces an au rebuild and vice versa.
+$d/bin/aicc: $(aiccfiles)
+	@echo AI	$(abspath $@)
+	@install -d $(dir $@)
+	@{ echo '#!/usr/bin/env -S ai -l'; cat $(aiccfiles); } > $@
 	@chmod 755 $@
 
 # phos: the window manager (crew/phos/*.l), the seven modules catted into one shebang

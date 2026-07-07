@@ -107,7 +107,22 @@
                     (peekp s "(") (skipbal (cup s) (+ d 1))
                     (peekp s ")") (skipbal (cup s) (- d 1))
                     (skipbal (cup s) d))
-   (pdtor ts base)                                  ; -> ((name ty) rest) | ()
+   ; an array dimension token -> its charm value: a numeric literal, or an ENUM
+   ; CONSTANT (folded through `en`, the ps 'enums tablet -- `int m[KN][KN]`). () = not a dim.
+   (dimval en t) (? (= (tkk t) 'num) (tkv t)
+                    (= (tkk t) 'id) (peep en (tkv t) ())
+                    ())
+   ; a RUN of [n] / [] suffixes -> (dims rest) | (); only the first (outer) dim may be [] (size 0)
+   (adims en ts2 acc) (? (! (peekp ts2 "[")) (L (rev acc) ts2)
+                         (: t2 (cup ts2)
+                            (? (peekp t2 "]") (adims en (cup t2) (link 0 acc))
+                               (: dv (? (two? t2) (dimval en (cap t2)) ())
+                                  (? (! (charm? dv)) ()
+                                     (: rest (want (cup t2) "]")
+                                        (? (two? rest) (adims en rest (link dv acc)) ())))))))
+   ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3)
+   (mkarr ety dims) (? (! (two? dims)) ety (L 'arr (mkarr ety (cup dims)) (cap dims)))
+   (pdtor en ts base)                               ; en = ps 'enums (for enum-constant array dims); -> ((name ty) rest) | ()
     (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars (cup s) (L 'ptr ty)) (L ty s)))
        sr (stars ts base)
        ty (cap sr) ts2 (pquals (caup sr))           ; attrs may sit before the name
@@ -142,13 +157,9 @@
                  (: t2 (skipbal (cup ts3) 1)
                     (? (two? t2) (L (L name (L 'fn)) t2) ()))
                 (! (peekp ts3 "[")) (L (L name ty) ts3)
-                (: t2 (cup ts3)                       ; the element type is ty (stars included: char *m[n])
-                   (? (peekp t2 "]") (L (L name (L 'arr ty 0)) (cup t2))   ; a flexible / [] array of ty
-                      (! (&& (two? t2) (= (tkk (cap t2)) 'num))) ()
-                      (: rest (want (cup t2) "]")
-                         (? (two? rest)
-                            (L (L name (L 'arr ty (tkv (cap t2)))) rest)
-                            ()))))))))
+                (: dr (adims en ts3 ())               ; one or more [n]/[] suffixes -> a nested arr of ty
+                   (? (! (two? dr)) ()
+                      (L (L name (mkarr ty (cap dr))) (caup dr))))))))
 
    ; -- base types: scalars, struct/union (with bodies), enum, typedef names --
    ; struct bodies REGISTER into ps 'stag; answers (ty rest) | ()
@@ -161,7 +172,7 @@
                 (? (peekp ts2 ";")                   ; an anonymous struct/union member
                    (? (stru? bty) (pmembers ps (cup ts2) (link (L () bty) acc)) ())
                    (: (dts ts3 acc2)                 ; dtor (, dtor)* ;
-                       (: dr (pdtor ts3 bty)
+                       (: dr (pdtor (ps 'enums) ts3 bty)
                           (? (! (two? dr)) ()
                              (peekp (caup dr) ",") (dts (cup (caup dr)) (link (cap dr) acc2))
                              (: rest (want (caup dr) ";")
@@ -247,7 +258,7 @@
    (pcty ps ts)
     (: br (pbty ps ts)
        (? (! (two? br)) ()
-          (: dr (pdtor (caup br) (cap br))
+          (: dr (pdtor (ps 'enums) (caup br) (cap br))
              (? (two? dr) (L (caup (cap dr)) (caup dr)) ()))))
 
    ; one left-associative binary level
@@ -528,7 +539,7 @@
           (: base (cap br) ts0 (caup br)
              (? (peekp ts0 ";") (L (L 'decl ()) (cup ts0))   ; a bare definition (struct S {..};)
                 (: (one ts2)
-                    (: dr (pdtor ts2 base)
+                    (: dr (pdtor (ps 'enums) ts2 base)
                        (? (! (two? dr)) ()
                           (: name (cap (cap dr)) ty (caup (cap dr))
                              ts3 (caup dr)
@@ -672,7 +683,7 @@
        (! (tkbty? ps (cap (pquals ts)))) ()
        (: br (pbty ps ts)
           (? (! (two? br)) ()
-             (: dr (pdtor (caup br) (cap br))
+             (: dr (pdtor (ps 'enums) (caup br) (cap br))
                 (? (! (two? dr)) ()
                    ; a parameter of ARRAY type decays to a pointer (the C rule) --
                    ; so `int a[]`, and a va_list (an array typedef), ride as pointers
@@ -707,7 +718,7 @@
    ; a comma-list of typedef declarators sharing one base type (`typedef T a, b;`);
    ; pins each name -> its declared type. answers ('tdef) rest | ().
    (tdeflist ps base ts)
-    (: dr (pdtor ts base)
+    (: dr (pdtor (ps 'enums) ts base)
        (? (! (two? dr)) ()
           (: _ (pin (ps 'types) (cap (cap dr)) (caup (cap dr)))
              af (caup dr)
@@ -747,25 +758,26 @@
                                ; a global declaration; the first declarator's stars came off `sr`
                                (: (one ts3 nm t2)                        ; t2 is the element type (stars included)
                                    (? (peekp ts3 "[")
-                                      (: t4 (cup ts3)
-                                         (? (peekp t4 "]")            ; T a[] -- size from init, or 0 (extern/incomplete array)
-                                            (: r1 (want t4 "]")
-                                               (? (! (two? r1)) ()
-                                                  (! (peekp r1 "=")) (L (L nm (L 'arr t2 0) ()) r1)   ; no init: incomplete, size 0
-                                                  (: ir (pinit ps (cup r1))
-                                                     (? (! (two? ir)) ()
-                                                        (: n (initcount (cap ir))
-                                                           (? (charm? n)
-                                                              (L (L nm (L 'arr t2 n) (cap ir)) (caup ir))
-                                                              ()))))))
-                                            (! (&& (two? t4) (= (tkk (cap t4)) 'num))) ()
-                                            (: n (tkv (cap t4))
-                                               rest (want (cup t4) "]")
-                                               (? (! (two? rest)) ()
-                                                  (peekp rest "=")     ; T a[n] = init
-                                                   (: ir (pinit ps (cup rest))
-                                                      (? (two? ir) (L (L nm (L 'arr t2 n) (cap ir)) (caup ir)) ()))
-                                                  (L (L nm (L 'arr t2 n) ()) rest)))))
+                                      (: dr (adims (ps 'enums) ts3 ())  ; one or more [n]/[] dims (enum consts fold)
+                                         (? (! (two? dr)) ()
+                                            (: dims (cap dr) rest0 (caup dr)
+                                               (? (&& (! (two? (cup dims))) (= (cap dims) 0))   ; a LONE [] -- size from init, or 0 (extern)
+                                                   (? (! (peekp rest0 "=")) (L (L nm (L 'arr t2 0) ()) rest0)   ; no init: incomplete, size 0
+                                                      (: ir (pinit ps (cup rest0))
+                                                         (? (! (two? ir)) ()
+                                                            (: n (initcount (cap ir))
+                                                               (? (charm? n)
+                                                                  (L (L nm (L 'arr t2 n) (cap ir)) (caup ir))
+                                                                  ())))))
+                                                  ; multi-dim (or a single sized dim): nested arr, optional init.
+                                                  ; an outer [] ([][3]) infers its count from the init's top level.
+                                                  (: aty0 (mkarr t2 dims)
+                                                     (? (peekp rest0 "=")     ; T a[n].. = init
+                                                         (: ir (pinit ps (cup rest0))
+                                                            (? (! (two? ir)) ()
+                                                               (: aty (? (= (cauup aty0) 0) (L 'arr (caup aty0) (initcount (cap ir))) aty0)
+                                                                  (L (L nm aty (cap ir)) (caup ir)))))
+                                                        (L (L nm aty0 ()) rest0)))))))
                                       (peekp ts3 "=")
                                        (: r (pinit ps (cup ts3))
                                           (? (two? r) (L (L nm t2 (cap r)) (caup r)) ()))
@@ -774,7 +786,7 @@
                                   (? (! (two? first)) ()
                                      (: (more ts3 acc)
                                          (? (peekp ts3 ",")
-                                            (: dr (pdtor (cup ts3) base)
+                                            (: dr (pdtor (ps 'enums) (cup ts3) base)
                                                (? (! (two? dr)) ()
                                                   (: r (one (caup dr) (cap (cap dr)) (caup (cap dr)))
                                                      (? (two? r) (more (caup r) (link (cap r) acc)) ()))))

@@ -2,8 +2,11 @@
 
 the plan of record for the chibicc-class C compiler, written in ai, emitting
 through the holo books. drafted 2026-07-06; stage 0 LANDED the same day
-(crew/cc/{lex,parse,gen,cc}.l + law.l, `au cc`, `make test_cc` -- the gcc
-differential is born). trued up as stages land.
+(crew/cc/{lex,parse,gen,cc}.l + law.l, `make test_cc` -- the gcc
+differential is born). trued up as stages land. cc is its OWN app `aicc`
+(a catted `#!/usr/bin/env -S ai -l` script, NOT baked into the au cat -- so a
+cc edit rebuilds only aicc, never au, and no au rebuild in another session can
+tear the compiler mid-run); it was `au cc` through 7c-iii part 1.
 
 ## the goal, and the fence
 
@@ -66,8 +69,10 @@ gate per stage. the pipeline, each its own file:
   style: every expression computes into r0, locals at frame offsets off
   holo's sp idiom. correct and dumb; the glaze is the fast path.
 * **cc.l** -- the driver: files -> cpp -> parse -> gen -> holo assemble ->
-  elf .o; then the system linker (`cc -c` first; `cc` calling ld is a
-  convenience wrapper). registered in au (`au cc`).
+  elf .o; then the system linker (`aicc -c` first; `aicc` calling ld is a
+  convenience wrapper). its tail SEAT fires cc-main when `aicc` is the program
+  on the command line (the same trick as ain/cook), so aicc stands alone as its
+  own catted script -- it does NOT ride the au multi-call dispatcher.
 
 ### the seams to grow (owned by their threads)
 
@@ -243,11 +248,11 @@ two ideas to keep warm as the stages climb, neither committed yet:
    a bare TOP-LEVEL fn-pointer array int (*t[n])(..) = {..} (ptop lays its own
    declarators, doesn't route through pdtor -- the struct-wrapped table works,
    which is what ai.c uses). battery at 56.
-   ENV TRAP paid: `au` is `#!/usr/bin/env -S ai` + the cat, so bare `au cc`
-   runs on the PATH `ai` -- a STALE install mis-runs current au (missing baked
+   ENV TRAP paid: a catted app is `#!/usr/bin/env -S ai` + the cat, so bare
+   `aicc` runs on the PATH `ai` -- a STALE install mis-runs it (missing baked
    core like holo callr) and the heap grows unboundedly; the make gate is safe
-   (m defaults to ./out/host/ai). probe cc with `./out/host/ai <au-cat> cc`,
-   never a bare `au`, until `make install` refreshes the PATH binary.
+   (m defaults to ./out/host/ai). probe cc with `./out/host/ai out/host/aicc`,
+   never a bare `aicc`, until `make install` refreshes the PATH binary.
 5. **the preprocessor** LANDED 2026-07-06: crew/cc/cpp.l, TOKEN-BASED (it sits
    between clex and cparse, so an identifier inside a string/char literal --
    already one opaque token -- is never mistaken for a macro). object +
@@ -374,7 +379,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    egg and runs `make test` green -- the corpus under a cc-built binary.
    this is the rung's aiutils-feature-complete moment. a multi-part integration
    gate, landing sub-rung by sub-rung:
-   7a THE RELOCATABLE OBJECT (crew/holo/obj.l) LANDED 2026-07-07: `au cc -c IN OUT`
+   7a THE RELOCATABLE OBJECT (crew/holo/obj.l) LANDED 2026-07-07: `aicc -c IN OUT`
    lays an ELF `.o` the SYSTEM linker consumes, so cc code links against gcc-built
    host/*.o + libc. where elf.l wraps assembled bytes in a static EXECUTABLE (one
    RWX segment, every label resolved), obj.l emits SEPARATE .text / .data sections,
@@ -484,8 +489,29 @@ two ideas to keep warm as the stages climb, neither committed yet:
    void return, folded case, fn-ptr cast, function-type + multi-decl typedef, object-vs-
    function macro, gcc = cc = 50) in the battery; law.l goldens each. ai.c now parses
    through ~5000 lines and stops at the first 2D array (`lvm_t *const tbl[KN][KN]`).
-   STILL AHEAD (7c-iii part 2+): multidimensional arrays (nested `(arr (arr T m) n)` in
-   parser + gen layout/index/init), the `__asm__("divq")` 128-bit-divide fallback,
+   7c-iii PART 2 (MULTIDIMENSIONAL ARRAYS + THE aicc BREAKOUT) LANDED 2026-07-07:
+   the declarator now reads a RUN of `[n]`/`[]` bracket suffixes (a top-level `adims`
+   helper) and folds them outer..inner into a nested arr type -- `int a[3][4]` is
+   `(arr (arr int 4) 3)` (`mkarr`, a top-level sibling both pdtor and the global-decl
+   `one` share). indexing needs NO new gen: `a[i][j]` desugars to the plain
+   `*(*(a+i)+j)`, and gen's type-directed pointer arithmetic already scales `a+i` by
+   the ROW size while a deref whose result type is still an array preserves the address
+   -- so the layout and the access fall out of the existing generic machinery. a global
+   2D table takes a nested-brace initializer; only the OUTERMOST dim may be `[]`, its
+   count inferred from the init's top level (`int g[][3] = {{..},{..}}`). an array
+   dimension may be an ENUM CONSTANT (`int m[KN][KN]`), folded through ps 'enums (the
+   `dimval` helper threaded into `adims`/`pdtor` -- ai.h's kind matrices are `[KN][KN]`).
+   gate: 75-arr2d.c (row-major layout, `[i][j]` access, nested-brace + `[]`-inferred
+   globals, gcc = cc = 18); law.l goldens the nested + enum-dim types. AND cc SPLIT OUT OF au INTO ITS OWN
+   APP `aicc`: a catted `#!/usr/bin/env -S ai -l` script (u-floor + asbook + elf/obj +
+   crew/cc/{lex,cpp,parse,gen,cc}.l) whose tail SEAT in cc.l fires cc-main -- so a cc
+   edit rebuilds only aicc, never the whole au cat, and a parallel au rebuild can no
+   longer tear the compiler mid-run. `make test_cc` and `make install` both target aicc.
+   ai.c now parses up to the add/mul kind matrices (`ai_add_mx[KN][KN]`); the next
+   blocker is their DESIGNATED INITIALIZERS (`[KMint]=ADD_MINT, [KNom]=..`, nested two
+   deep with enum-constant indices) -- a fresh initializer-syntax + sparse-zero-fill
+   feature, localized via a ptop-loop driver over the preprocessed token stream.
+   STILL AHEAD (7c-iii part 3+): designated array initializers, the `__asm__("divq")` 128-bit-divide fallback,
    __attribute__((weak))/((section)) -> the linker, unions by value, and the >6-arg
    overflow (both fixed and variadic, avoiding the boxfix trap); 7d link cc-built
    ai.o + gcc-built host/*.o + libc and boot the egg green.
@@ -522,6 +548,6 @@ already a lawed calculator-to-ELF; stage 4 compiles real single-file C).
 
 ## naming
 
-crew/cc/ and `au cc` as working names; the crossing-layers name is gwen's
+crew/cc/ and `aicc` as working names; the crossing-layers name is gwen's
 call when the thing first compiles something real (the naming-lore memory
 holds the sources).

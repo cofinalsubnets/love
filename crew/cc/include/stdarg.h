@@ -1,4 +1,4 @@
-/* stdarg.h -- crew/cc's own, for `au cc`. cc implements the three __builtin_va_*
+/* stdarg.h -- crew/cc's own, for `aicc`. cc implements the three __builtin_va_*
  * forms directly, over the System V AMD64 va_list: a 24-byte struct that cc's
  * variadic prologue feeds from a register save area. it is an array of one so it
  * DECAYS to a pointer when passed to another function (the C `va_list` habit --
