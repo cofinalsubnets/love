@@ -50,8 +50,8 @@
    ; the terminal (fg 1) -- a job in its OWN group is what makes ^Z real (a stop to
    ; an orphaned group is discarded, and the shell's group is orphaned under a
    ; nested session). the cooked/non-tty lane keeps the legacy in-shell pgrp (-1).
-   (sh-pgm _) (? (sh-tty 0) 0 (0 - 1))
-   (sh-fgm _) (? (sh-tty 0) 1 0)
+   (sh-pgm _) (? (sh-tty ()) 0 (0 - 1))
+   (sh-fgm _) (? (sh-tty ()) 1 0)
 
    ; --- step 5: $ expansion + $? -- the tokenizer expands $NAME (alnum/_ run) and
    ; $? in UNQUOTED words and inside "..."; '...' stays literal. an unset var is the
@@ -68,7 +68,7 @@
         (: b (s i) (? (sh-name? b) (sh-vname s (+ i 1) n (+ cur b)) (link cur i))))
    (sh-dollar s i n cur started q acc)                 ; just past the $; resume mode q (0 | 34)
      (? (&& (< i n) (= (s i) 63))
-        (sh-resume s (+ i 1) n (+ cur (show (sh-status 0))) 1 q acc)
+        (sh-resume s (+ i 1) n (+ cur (show (sh-status ()))) 1 q acc)
         (: nm (sh-vname s i n "") name (cap nm) i2 (cup nm)
            (? !(tally name)
               (sh-resume s i2 n (+ cur "$") 1 q acc)   ; a lone $ is literal
@@ -79,15 +79,15 @@
         (sh-sc s i n cur started acc))
    (sh-unwords ws) (foldl (\ a w (? (tally a) (+ (+ a " ") w) w)) "" ws)
    (sh-addjob pids state cmd)
-     (: n (+ 1 (sh-njob 0)) _ (pin sh-njob 0 n) _ (pin sh-jobs n (L pids state cmd)) n)
+     (: n (+ 1 (sh-njob ())) _ (pin sh-njob () n) _ (pin sh-jobs n (L pids state cmd)) n)
    (sh-jobline n j)
      (+ "[" (+ (show n) (+ "] " (+ (show (sh-nth j 1)) (+ "  " (+ (sh-nth j 2) "\n"))))))
    (sh-stopped? sts) (foldl (\ a x (? a a (< 255 x))) 0 sts)
    ; wait a foreground job; a stop registers + reports it instead of hanging the prompt
    (sh-waitfg pids cmd)
      (: sts (map (\ p (wait p)) pids)
-        _   (? (sh-tty 0) (ttyfg 0) 0)                ; the shell takes the terminal back
-        _   (pin sh-status 0                          ; $?: the last stage; a stop folds to 128+sig
+        _   (? (sh-tty ()) (ttyfg 0) 0)                ; the shell takes the terminal back
+        _   (pin sh-status ()                          ; $?: the last stage; a stop folds to 128+sig
              (: st (last sts) (? (&& (charm? st) (< 255 st)) (- st 128) st)))
         (? (sh-stopped? sts)
            (: n (sh-addjob pids 'stopped cmd)
@@ -123,7 +123,7 @@
         (? !j (: _ (puts "fg: no such job\n") 0)
            (: pids (sh-nth j 0) cmd (sh-nth j 2)
               _ (pull sh-jobs n 0)
-              _ (? (sh-tty 0) (ttyfg (cap pids)) 0)   ; the job's group gets the terminal first
+              _ (? (sh-tty ()) (ttyfg (cap pids)) 0)   ; the job's group gets the terminal first
               _ (each pids (\ p (still p sig-cont)))
               (sh-waitfg pids cmd))))
    (sh-bg n)
@@ -203,7 +203,7 @@
            (: cmd (cap argv)
               (? (= cmd "exit") (? (cup argv) (quit (sh-int (caup argv))) 'done)
                  (= cmd "cd")   (: r (chdir (? (cup argv) (caup argv) (getenv "HOME")))
-                                   _ (pin sh-status 0 (? (nil? r) 0 1)) 0)
+                                   _ (pin sh-status () (? (nil? r) 0 1)) 0)
                  (= cmd "export") (: _ (each (cup argv) sh-export) 0)
                  (= cmd "pwd")  (: _ (puts (+ (cwd 0) "\n")) 0)
                  (= cmd "jobs") (: _ (each (sort (keys sh-jobs))
@@ -269,4 +269,4 @@
    (sh _) (: _ (signal sig-int 1) _ (signal sig-quit 1) _ (signal sig-tstp 1)
              _ (signal sig-ttou 1) _ (signal sig-ttin 1)
              ok (raw 1)
-             (? (nil? ok) (: _ (pin sh-tty 0 1) (sh-loop ())) (sh-cooked 0))))
+             (? (nil? ok) (: _ (pin sh-tty () 1) (sh-loop ())) (sh-cooked 0))))

@@ -34,13 +34,13 @@
    (natjit e s a)
     (: ps (init (cup s))  body (last (cup s))
        (? (&& (two? s) (two? (cup (cup s))) (exprn ps body))         ; >=1 param, a body, leaf grammar
-          (: _ (pin fires 0 (+ 1 (peep fires 0 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
+          (: _ (pin fires () (+ 1 (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
              (nif (emit (peep (assemble 'x64 (coreir 'x64 ps body (deoptir 'x64 (? (= a 1) 0 1)))) 'bytes 0)) e s a))
           e))
-   (fired? n) (< n (peep fires 0 0))                 ; did the hook fire since count n?
+   (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
  _ (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
-    (: n (peep fires 0 0)
+    (: n (peep fires () 0)
        (&& (31 = (ev '(: f (\ x (+ (* x 3) 1)) (f 10))))            ; leaf in a let body
            (fired? n)))                                             ; ... the hook fired on it
     (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum

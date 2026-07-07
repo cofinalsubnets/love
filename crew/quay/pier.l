@@ -129,7 +129,7 @@
      ds (go 0 ())
      (? all (jot r) ds)))
 
-(: (px-paint s win gc depth bx fx rig all lc) (: sc (bx -> 0 0) fb (fx -> 0 0)
+(: (px-paint s win gc depth bx fx rig all lc) (: sc (bx -> () 0) fb (fx -> () 0)
      r (gaze sc 1) c (gaze sc 2) w (gaze sc 0) f (gaze sc 3)
      gw (caup rig) gh (caup (cup rig))
      wpix (* c gw)
@@ -156,8 +156,8 @@
           0)
      cur))
 
-(: (px-paintloop s win gc depth bx fx rig dirty lc) (: d (dirty -> 0 0)
-     lc2 (? d (: _ (pin dirty 0 0)
+(: (px-paintloop s win gc depth bx fx rig dirty lc) (: d (dirty -> () 0)
+     lc2 (? d (: _ (pin dirty () 0)
                  (px-paint s win gc depth bx fx rig (= d 2) lc))
              lc)
      _ (rest 8)                       ; a keystroke's echo shows within ~10ms
@@ -170,12 +170,12 @@
 (: (px-resize bx fx m dirty rig wp hp) (: gw (caup rig) gh (caup (cup rig))
      r (: v (// hp gh) (? (< 1 v) v 1))
      c (: v (// wp gw) (? (< 1 v) v 2))
-     sc (bx -> 0 0)
+     sc (bx -> () 0)
      (? (&& (= r (gaze sc 1)) (= c (gaze sc 2))) ()
       (: _ (bx <- 0 (screen (cask (screen () r c)) r c))
          _ (fx <- 0 (cask (* (* c gw) (* (* r gh) 4))))
          _ (setwinsize m r c)
-         _ (pin dirty 0 1)
+         _ (pin dirty () 1)
          ()))))
 
 
@@ -191,7 +191,7 @@
                _ (? (tally b) (: _ (say m b) (flush m)) 0)
                (px-watch s m km del bx fx rig dirty))
             (= code 12)
-            (: _ (pin dirty 0 2) (px-watch s m km del bx fx rig dirty))   ; expose: repaint ALL
+            (: _ (pin dirty () 2) (px-watch s m km del bx fx rig dirty))   ; expose: repaint ALL
             (= code 22)
             (: raw (ev-raw e)
                _ (px-resize bx fx m dirty rig (u16 raw 20) (u16 raw 22))

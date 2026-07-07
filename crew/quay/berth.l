@@ -70,7 +70,7 @@
  ; cap out near a megabyte a second, and a full-screen guest pours six
  (moor bx m dirty) (: ch (see m)
                     (? (= ch -1) ()
-                     (: s (bx -> 0 0)
+                     (: s (bx -> () 0)
                         _ (scribe s ch)
                         b (cask 8192)
                         _ (: (drain x) (: n (swig m b)
@@ -81,7 +81,7 @@
                            (drain ()))
                         rep (reply s)
                         _ (? rep (: _ (map (put m) rep) (flush m)) 0)
-                        _ (? dirty (pin dirty 0 1) 0)
+                        _ (? dirty (pin dirty () 1) 0)
                         (moor bx m dirty))))
 
  ; --- keys: raw stdin pours onto the master; VEOF follows the user's own eof ---
@@ -93,17 +93,17 @@
  ; opens a fresh grid (content is the guest's to repaint on its SIGWINCH)
  (tide bx m dirty) (: ws (winsize 0)
                      (? (! (two? ws)) ()
-                      (: r (cap ws) c (cup ws) s (bx -> 0 0)
+                      (: r (cap ws) c (cup ws) s (bx -> () 0)
                          (? (&& (= r (gaze s 1)) (= c (gaze s 2))) ()
                           (: _ (bx <- 0 (screen (cask (screen () r c)) r c))
                              _ (setwinsize m r c)
-                             _ (pin dirty 0 1)
+                             _ (pin dirty () 1)
                              ())))))
 
  ; --- the swim: repaint on dirt at ~30fps, feel the tide every half second ---
- (swim bx m dirty tick) (: _ (? (dirty -> 0 0)
-                              (: _ (pin dirty 0 0)
-                                 f2 (frame (bx -> 0 0))
+ (swim bx m dirty tick) (: _ (? (dirty -> () 0)
+                              (: _ (pin dirty () 0)
+                                 f2 (frame (bx -> () 0))
                                  _ (say out f2)            ; say IS the bulk lane (and flushes)
                                  0)
                               0)
