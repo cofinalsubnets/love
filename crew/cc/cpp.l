@@ -336,6 +336,12 @@
     (: macs (: t (tablet 0)
                _ (pin t "__STDC__" (L 'obj (L (tok 'num 1 0))))
                _ (pin t "__STDC_HOSTED__" (L 'obj (L (tok 'num 0 0))))
+               ; cc emits x86-64, so say so (ai.c's AI_ARCH/IMAGE_ARCH read it --
+               ; a build without it believed its arch was "other" and the glaze
+               ; handed holo an unknown target). __SIZEOF_INT128__ stays UNDEFINED,
+               ; so the bignum limbs stay the portable 32-bit branch and the lone
+               ; `divq` __asm__ (guarded && limb_bits == 64) stays out of reach.
+               _ (pin t "__x86_64__" (L 'obj (L (tok 'num 1 0))))
                t)
        r (cppgo toks macs () () () incf)
        (? (|| (id? r 'unbalanced) (! (two? r))) () (L 1 (strcat-pass r)))))

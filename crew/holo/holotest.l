@@ -125,6 +125,8 @@
       (L "callr.r8"    "41ffd0"                '((callr r7)))            ; call r8
       (L "set.eq"      "0f94c0480fb6c0"        '((set eq r0)))           ; sete al ; movzx rax,al
       (L "set.lt"      "0f9cc0480fb6c0"        '((set lt r0)))           ; setl al ; movzx rax,al
+      (L "set.p"       "0f9ac0480fb6c0"        '((set p r0)))            ; setp al ; movzx rax,al (ucomisd unordered)
+      (L "set.np"      "0f9bc1480fb6c9"        '((set np r1)))           ; setnp cl ; movzx rcx,cl
       (L "adds"        "4c01c0"                '((adds r0 r0 r7)))       ; add rax,r8  (sets OF -> br vs)
       (L "subs"        "4c29c0"                '((subs r0 r0 r7)))       ; sub rax,r8  (sets OF)
       (L "mulo.prog"   "490fafc00f8005000000e902000000ffe6c3"           ; imul rax,r8 ; jo ovf ; jmp done ; jmp rsi ; ret

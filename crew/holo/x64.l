@@ -39,7 +39,8 @@
         (L (link 'eq 132) (link 'ne 133) (link 'lt 140) (link 'ge 141)
            (link 'le 142) (link 'gt 143) (link 'below 130) (link 'ae 131)
            (link 'be 134) (link 'above 135) (link 's 136) (link 'ns 137)
-           (link 'vs 128) (link 'vc 129)))                      ; jo / jno (overflow set / clear)
+           (link 'vs 128) (link 'vc 129)                        ; jo / jno (overflow set / clear)
+           (link 'p 138) (link 'np 139)))                       ; jp / jnp (parity: ucomisd's UNORDERED bit -- NaN-honest ==/!=)
 
    ;; -- the encoding bytes: REX.WRXB, ModRM(mod,reg,rm), SIB(scale,index,base). --
    (rex w r x b) (| 64 (| (<< w 3) (| (<< r 2) (| (<< x 1) b))))    ; 0x40 | wrxb

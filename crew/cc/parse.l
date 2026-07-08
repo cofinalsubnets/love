@@ -481,8 +481,12 @@
        ; values image as constants (globals demand it; a local loses nothing)
        (: r (pasn ps ts)
           (? (! (two? r)) ()
-             (: v (cfold (cap r))
-                (? (charm? v) (L (L 'num v) (caup r)) r)))))
+             (: e (cap r) v (cfold e)
+                (? (cint? v) (L (L 'num v) (caup r))            ; cint?: a sun-sized fold (max-charm's image) is still a number
+                   (&& (= (cap e) 'un)
+                       (&& (= (caup e) 'neg) (= (cap (cauup e)) 'flo)))
+                    (L (L 'flo (- 0.0 (caup (cauup e)))) (caup r))   ; -1.0 in a global image: fold the neg into the literal
+                   r)))))   ; cint?: a sun-sized fold (max-charm's image) is still a number
    ; how many array elements an initializer implies (for [] size inference):
    ; a string is its bytes + NUL; a brace list is the highest index reached
    ; (designated [k] sets the cursor to k). () if it implies nothing.
@@ -519,28 +523,52 @@
 
    ; a constant-expression folder (for _Static_assert): an integer | () if the
    ; expression is not a compile-time constant. sizeof/enum already folded to num.
+   ; values are 64-bit machine PATTERNS (ai's shifts and bitops wrap at the word,
+   ; so charms/suns fold like the hardware); a NARROW cast masks to its width
+   ; (sign-extending the signed ones), and >> under an unsigned LEFT goes LOGICAL
+   ; via mask -- (uintptr_t)-1 >> 2 is max-charm, not -1 (the arithmetic-shift
+   ; fold pinned max-charm -1 and flipped spec.l's `word`). uext? is the
+   ; parse-level unsignedness read: an unsigned cast, or a bin riding one on its
+   ; left -- an approximation, honest for the putcharm-style word math images use.
+   (cint? x) (|| (charm? x) (|| (sun? x) (big? x)))
+   (uext? e) (? (! (two? e)) ()
+                (= (cap e) 'cast) (member? (caup e) '(uchar ushort uint ulong))
+                (= (cap e) 'bin) (uext? (cauup e))
+                ())
    (cfold e)
     (? (! (two? e)) ()
        (= (cap e) 'num) (caup e)
        (= (cap e) 'bin)
         (: op (caup e) a (cfold (cauup e)) b (cfold (caup (cuup e)))
-           (? (|| (! (charm? a)) (! (charm? b))) ()
+           (? (|| (! (cint? a)) (! (cint? b))) ()
               (= op '+) (+ a b) (= op '-) (- a b) (= op '*) (* a b)
               (= op '/) (? (= b 0) () (// a b)) (= op '%) (? (= b 0) () (- a (* (// a b) b)))
               (= op 'eq) (? (= a b) 1 0) (= op 'ne) (? (= a b) 0 1)
               (= op 'lt) (? (< a b) 1 0) (= op 'le) (? (<= a b) 1 0)
               (= op 'gt) (? (< b a) 1 0) (= op 'ge) (? (<= b a) 1 0)
               (= op '&) (& a b) (= op '|) (| a b) (= op '^) (^ a b)
-              (= op 'shl) (<< a b) (= op 'shr) (>> a b) ()))
+              (= op 'shl) (<< a b)
+              (= op 'shr) (? (uext? (cauup e)) (& (>> a b) (- (<< 1 (- 64 b)) 1)) (>> a b))
+              ()))
        (= (cap e) 'un)
         (: v (cfold (cauup e))
-           (? (! (charm? v)) () (= (caup e) 'neg) (- 0 v)
+           (? (! (cint? v)) () (= (caup e) 'neg) (- 0 v)
               (= (caup e) 'not) (? (= v 0) 1 0) (= (caup e) 'bnot) (- (- 0 v) 1) ()))
-       (= (cap e) 'cast) (cfold (cauup e))          ; value-preserving (integer/pointer): NULL, putcharm-style word math
+       (= (cap e) 'cast)
+        (: v (cfold (cauup e)) ty (caup e)
+           (? (! (cint? v)) v                       ; non-integer / non-const: fold through
+              (= ty 'uchar) (& v 255)
+              (= ty 'ushort) (& v 65535)
+              (= ty 'uint) (& v 4294967295)
+              (member? ty '(char short int))
+               (: w (? (= ty 'char) 8 (= ty 'short) 16 32)
+                  r (& v (- (<< 1 w) 1))
+                  (? (< r (<< 1 (- w 1))) r (- r (<< 1 w))))
+              v))                                   ; word-sized: the pattern is the value
        (= (cap e) 'land) (: a (cfold (cauup e)) b (cfold (caup (cuup e)))
-                            (? (|| (! (charm? a)) (! (charm? b))) () (? (&& (< 0 a) (< 0 b)) 1 0)))
+                            (? (|| (! (cint? a)) (! (cint? b))) () (? (&& (< 0 a) (< 0 b)) 1 0)))
        (= (cap e) 'lor) (: a (cfold (cauup e)) b (cfold (caup (cuup e)))
-                           (? (|| (! (charm? a)) (! (charm? b))) () (? (|| (< 0 a) (< 0 b)) 1 0)))
+                           (? (|| (! (cint? a)) (! (cint? b))) () (? (|| (< 0 a) (< 0 b)) 1 0)))
        ())
    ; _Static_assert ( const-expr , "message" ) ;  -> (('tdef) rest) | () -- an
    ; assertion that FOLDS to false fails the compile; a non-constant one is let by.

@@ -126,10 +126,12 @@
                 (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r))) ()))
    ir (caup (cgn "int main() { return 42; }"))
    (assert
+      ; slot -8 keeps r3 (rbx, SysV callee-saved): stored by the prologue,
+      ; reloaded by every epilogue -- an -O2 caller parks live locals there
       (= ir '((call main) (mov r6 r0) (li r0 60) (sys)
-              (label main) (push r4) (mov r4 sp) (sub sp sp 0)
-              (li r0 42) (mov sp r4) (pop r4) (ret)
-              (li r0 0) (mov sp r4) (pop r4) (ret)))
+              (label main) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+              (li r0 42) (ld r3 r4 -8) (mov sp r4) (pop r4) (ret)
+              (li r0 0) (ld r3 r4 -8) (mov sp r4) (pop r4) (ret)))
       (two? (cgn "int main() { int x=1; while (x<5) x++; return x; }"))
       (! (cgn "int f() { return 1; }"))                      ; no main, no program
       (! (cgn "int main() { return y; }"))                   ; undeclared name
@@ -277,6 +279,20 @@
          '(prog ((fn "main" () (blk ((tdef) (ret (num 0))))))))
       (= (cast "_Static_assert(sizeof(int) == 4, \"w\"); int main() { return 0; }")
          '(prog ((tdef) (fn "main" () (blk ((ret (num 0))))))))
+      ; cfold folds 64-bit machine PATTERNS: >> under an unsigned LEFT is LOGICAL
+      ; ((uintptr_t)-1 >> 2 is max-charm, not -1 -- the arithmetic fold pinned
+      ; max-charm -1 and flipped spec.l's `word` on the cc-built ai); a signed >>
+      ; stays arithmetic; a NARROW cast masks to width, sign-extending the signed
+      (= (cast "long mx = (long)((unsigned long)-1 >> 2); int main() { return 0; }")
+         '(prog ((gdecl (("mx" long (num 4611686018427387903)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "long mc = (long)(((unsigned long)(long)((long)((unsigned long)-1 >> 2))<<1)|1); int main() { return 0; }")
+         '(prog ((gdecl (("mc" long (num 9223372036854775807)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "long a = -8 >> 2; int main() { return 0; }")
+         '(prog ((gdecl (("a" long (num -2)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "unsigned int u = (unsigned int)-1; int main() { return 0; }")
+         '(prog ((gdecl (("u" uint (num 4294967295)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "int s = (short)100000; int main() { return 0; }")
+         '(prog ((gdecl (("s" int (num -31072)))) (fn "main" () (blk ((ret (num 0))))))))
       ; the generator: a variadic fn and a variadic call both compile
       (two? (cgn "int f(int n, ...) { return n; } int main() { return f(1); }"))
       (two? (cgn "int s(int n, ...) { char *ap; __builtin_va_start(ap,n); int t=0; int i=0; while(i<n){ t=t+__builtin_va_arg(ap,int); i++; } __builtin_va_end(ap); return t; } int main() { return s(2, 3, 4); }"))

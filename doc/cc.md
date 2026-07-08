@@ -565,13 +565,37 @@ two ideas to keep warm as the stages climb, neither committed yet:
    (`lvm_t lvm_ret0, lvm_cur;` registers sigs, lays NO storage -- it laid duplicate
    .data symbols, the 7d link's first wall). gates: 78-enumshadow 79-tables
    80-manyargs 81-builtins 82-znvalue (gcc = cc = 42 each) + laws.
-   STILL AHEAD (7d proper): link cc-built ai.o + gcc-built host/*.o + libc
-   (`gcc -o ai-cc ai.o out/host/host/*.o -lm`) and boot the egg green --
-   __attribute__((weak))/((section)) semantics (pquals still swallows them), any
-   remaining symbol clashes, then silent-miscompile forensics under the corpus.
-   the `__asm__("divq")` path stays AVOIDED (cc predefines neither `__x86_64__` nor
-   `__SIZEOF_INT128__`, so ai.c takes the portable 32-bit-limb branch); unions by
-   value stay refused.
+   **7d LANDED (2026-07-08): the cc-built ai BOOTS the egg and passes the WHOLE
+   CORPUS -- 2831 tests green.** the recipe: `aicc -c ai.c ai.o` (with
+   `#define ai_tco 0` prepended -- cc emits no sibcalls, so the VM takes the
+   trampoline dispatch, the same lane ai0 exercises every gate) + gcc host
+   objects built `-Dai_tco=0` + libc. the corpus was the differential oracle
+   that named every remaining miscompile, each now a law + battery program:
+   CALLEE-SAVED rbx (holo r3; the callr park / overflow builtins / va_arg walk
+   clobbered it, and gcc -O2's main kept its argv-fold BOUND in ebx -- the boot
+   spun forever, popped past the stack top, and wore an oom face; every fn now
+   owns frame slot -8 for it, and the gate links a cc callee against an -O2
+   caller holding its loop bound live across the call); cfold folds 64-bit
+   MACHINE PATTERNS (an unsigned cast masks to width, >> under an unsigned left
+   is LOGICAL -- the arithmetic fold pinned max-charm -1 and flipped spec.l's
+   `word`); the conditional CONVERTS its arms (one flo arm makes the result flo;
+   the int arm rode into ucomisd unconverted -- the eq lane's charm×twin face);
+   NaN-HONEST float compares (unordered answers false everywhere but !=; < and
+   <= compare swapped onto above/ae, ==/!= carry the parity bit -- holo grew
+   set p/np); negative float literals image (the neg folds into the literal;
+   fbits answers the SIGNED i64 pattern so the sign bit doesn't big); and cc now
+   PREDEFINES `__x86_64__` (ai-arch read the fallback "other" and the glaze
+   handed holo an unknown target) while `__SIZEOF_INT128__` stays undefined --
+   the bignum limbs keep the portable 32-bit branch, the lone `divq` asm stays
+   out of reach. found on the way, in the CORE: a tco=0 host with the glaze
+   baked segfaulted on its first hot loop (glazed code Continues by tail-jump --
+   threaded-VM only); ai.c now pins `ai-tco` and auto.l keeps the pure
+   interpreter on a trampoline build. and the house speed-law paid off:
+   `aicc -c ai.c` took ~13 MINUTES -- holo's lay appended each lowered chunk to
+   the tail of the item stream, a re-copy per instruction -- accumulating
+   reversed made it linear: **4.3 seconds**. gates: 83-ternflo 84-nan + the
+   rbx interop check. unions by value stay refused; running the cc build at
+   ai_tco=1 (`make vmret`-honest sibcalls) is stage 8's flat-stack rung.
 8. **the fixpoint + the flat stack**: (a) determinism -- cc(cc(ai)) builds
    byte-identical objects to cc(ai); (b) guaranteed sibcalls for the lvm
    shape, ai_tco=1, `make vmret` honest, benches vs gcc recorded.

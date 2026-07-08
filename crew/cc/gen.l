@@ -83,20 +83,21 @@
                  (= ty 'uchar) (L (L 'zx1 r)) (= ty 'ushort) (L (L 'zx2 r)) (= ty 'uint) (L (L 'zx4 r)) ())
    ; -- the double lane (stage 6a, the gem): a 'double value lives in f0, not r0.
    ; its type is the flag; fbits is the compile-time IEEE-754 encoder; asflo/asint
-   ; move a cgexpr result between the lanes (int<->double conversion); fcc maps a
-   ; comparison to the UNSIGNED setcc ucomisd's flags want. --
+   ; move a cgexpr result between the lanes (int<->double conversion); compares
+   ; ride ucomisd's UNSIGNED flags, NaN-honest (the binop lane). --
    ; a float and a double share the register lane: a value in an xmm register is
    ; ALWAYS a 64-bit double; only MEMORY differs -- a `float` slot is 4 bytes, so
    ; a load widens (ldss + cvtss2sd) and a store narrows (cvtsd2ss + stss). fldf/
    ; fstf pick the lane by the DECLARED type; every loaded float types 'double.
    (flo? ty) (|| (= ty 'double) (= ty 'float))
-   (fbits x)                                        ; finite double -> its IEEE-754 u64 bits (ported from the glaze)
-    (? (= x 0.0) 0
+   (fbits x)                                        ; finite double -> its IEEE-754 bits as the SIGNED i64 pattern
+    (? (= x 0.0) 0                                  ; (the sign bit would make a BIG, and le8s/imnum walk i64 patterns)
        (: s (? (< x 0.0) 1 0) ax (? (< x 0.0) (- 0.0 x) x)
           eu ((: (go e) (? (<= ((+ e 1) 2.0) ax) (go (+ e 1)) e)) (int (/ (log ax) (log 2.0))))
           e  ((: (go e) (? (< ax (e 2.0)) (go (- e 1)) e)) eu)
-          (+ (* s 9223372036854775808) (+ (* (+ e 1023) 4503599627370496)
-             (int (* (- (/ ax (e 2.0)) 1.0) 4503599627370496.0))))))
+          m (+ (* (+ e 1023) 4503599627370496)
+               (int (* (- (/ ax (e 2.0)) 1.0) 4503599627370496.0)))
+          (? (< 0 s) (- m 9223372036854775808) m)))
    (fbits32 x)                                      ; finite double -> its IEEE-754 SINGLE (u32) bits (a `float` image)
     (? (= x 0.0) 0
        (: s (? (< x 0.0) 1 0) ax (? (< x 0.0) (- 0.0 x) x)
@@ -112,13 +113,13 @@
        (L (L 'stsd base off val)))
    (asflo r) (? (flo? (cap r)) (caup r) (cat (caup r) (L (L 'cvtsi2sd 'f0 'r0))))   ; result -> f0 as a double
    (asint r) (? (flo? (cap r)) (cat (caup r) (L (L 'cvttsd2si 'r0 'f0))) (caup r))  ; result -> r0 as an int
-   (fcc op) (? (= op 'lt) 'below (= op 'le) 'be (= op 'gt) 'above (= op 'ge) 'ae op)
    ; a truth value in r0 that `cmp r0 0` can test: a double folds to d != 0.0
    (ctest g env e)
     (: r (cgexpr g env e)
        (? (bad? r) 'bad
-          (flo? (cap r))
-           (L 'long (cat (caup r) (L (L 'li 'r1 0) (L 'movqxr 'f1 'r1) (L 'ucomisd 'f0 'f1) (L 'set 'ne 'r0))))
+          (flo? (cap r))                             ; d != 0.0, NaN-honest: unordered is NONZERO (true), so `or` in the parity bit
+           (L 'long (cat (caup r) (L (L 'li 'r1 0) (L 'movqxr 'f1 'r1) (L 'ucomisd 'f0 'f1)
+                                     (L 'set 'ne 'r0) (L 'set 'p 'r1) (L 'or 'r0 'r0 'r1))))
           r))
    ; 8 little-endian bytes of a constant (the global initializer image)
    (le8s v) (: (go i acc) (? (< 7 i) (rev acc)
@@ -310,9 +311,10 @@
                   (? (= (caup e) 'neg)                 ; -d = 0.0 - d
                       (L 'double (cat (caup r) (L (L 'li 'r0 0) (L 'movqxr 'f1 'r0)
                                                   (L 'subsd 'f1 'f0) (L 'movsd 'f0 'f1))))
-                     (= (caup e) 'not)                 ; !d = (d == 0.0)
+                     (= (caup e) 'not)                 ; !d = (d == 0.0), NaN-honest: !NaN is false (eq AND ordered)
                       (L 'long (cat (caup r) (L (L 'li 'r0 0) (L 'movqxr 'f1 'r0)
-                                                (L 'ucomisd 'f0 'f1) (L 'set 'eq 'r0))))
+                                                (L 'ucomisd 'f0 'f1) (L 'set 'eq 'r0)
+                                                (L 'set 'np 'r1) (L 'and 'r0 'r0 'r1))))
                      'bad)                             ; ~ on a double is invalid
                  (L 'long
                     (cat (caup r)
@@ -347,10 +349,18 @@
               el (cgexpr g env (caup (cuup e)))
               le (nlab g ".e") ld (nlab g ".d")
               (? (|| (bad? c) (|| (bad? t) (bad? el))) 'bad
-                 (L (cap t)
-                    (cat (caup c) (cat (L (L 'cmp 'r0 0) (L 'br 'eq le))
-                     (cat (caup t) (cat (L (L 'jmp ld) (L 'label le))
-                      (cat (caup el) (L (L 'label ld))))))))))
+                 ; C's conditional CONVERTS its arms: one flo arm makes the whole
+                 ; result flo, so the INTEGER arm rides asflo at its edge -- typing
+                 ; by the then-arm alone left `(Cp(a) ? im(a) : 0)`'s int 0 in r0
+                 ; while the reader took f0 (the eq lane's charm×twin face).
+                 (: fl (|| (flo? (cap t)) (flo? (cap el)))
+                    tf (? fl (asflo t) (caup t))
+                    ef (? fl (asflo el) (caup el))
+                    rt (? (flo? (cap t)) (cap t) (? fl (cap el) (cap t)))
+                    (L rt
+                       (cat (caup c) (cat (L (L 'cmp 'r0 0) (L 'br 'eq le))
+                        (cat tf (cat (L (L 'jmp ld) (L 'label le))
+                         (cat ef (L (L 'label ld)))))))))))
           ; -- the varargs builtins (the SysV ABI). a va_list is the 24-byte struct
           ; { int gp_offset; int fp_offset; void *overflow_arg_area; void
           ; *reg_save_area; } (crew/cc/include/stdarg.h). va_start seeds it past the
@@ -549,8 +559,22 @@
                  (= op '*) (L 'double (cat mid (L (L 'mulsd 'f0 'f1))))
                  (= op '-) (L 'double (cat mid (L (L 'subsd 'f1 'f0) (L 'movsd 'f0 'f1))))
                  (= op '/) (L 'double (cat mid (L (L 'divsd 'f1 'f0) (L 'movsd 'f0 'f1))))
-                 (member? op '(eq ne lt le gt ge))
-                  (L 'long (cat mid (L (L 'ucomisd 'f1 'f0) (L 'set (fcc op) 'r0))))
+                 ; IEEE compare: UNORDERED (a NaN operand) must answer false for
+                 ; every relation and true only for !=. above/ae read CF=0, which
+                 ; unordered sets, so < and <= COMPARE SWAPPED and ride above/ae;
+                 ; == and != carry the parity bit (unordered -> PF=1) explicitly.
+                 (member? op '(lt le))
+                  (L 'long (cat mid (L (L 'ucomisd 'f0 'f1)
+                                       (L 'set (? (= op 'lt) 'above 'ae) 'r0))))
+                 (member? op '(gt ge))
+                  (L 'long (cat mid (L (L 'ucomisd 'f1 'f0)
+                                       (L 'set (? (= op 'gt) 'above 'ae) 'r0))))
+                 (= op 'eq)
+                  (L 'long (cat mid (L (L 'ucomisd 'f1 'f0) (L 'set 'eq 'r0)
+                                       (L 'set 'np 'r1) (L 'and 'r0 'r0 'r1))))
+                 (= op 'ne)
+                  (L 'long (cat mid (L (L 'ucomisd 'f1 'f0) (L 'set 'ne 'r0)
+                                       (L 'set 'p 'r1) (L 'or 'r0 'r0 'r1))))
                  'bad))
           (: ta (cap a) tb (cap b)
              pa (ptr? ta) pb (ptr? tb)
@@ -593,7 +617,12 @@
                        (L 'long (cat mid (L (L 'cmp 'r1 'r0) (L 'set (scc op unsg) 'r0))))
                       'bad))))))
 
-   epi (L (L 'mov 'sp 'r4) (L 'pop 'r4) (L 'ret))
+   ; r3 (rbx) is CALLEE-SAVED under SysV and gen leans on it (callr park, the
+   ; overflow builtins, va_arg's walk) -- an optimized gcc caller keeps LIVE
+   ; LOCALS in rbx across our calls (the ai boot died in main's argv fold: its
+   ; loop bound rode ebx straight through gxr). every fn owns frame slot -8 for
+   ; it: the prologue stores, this shared epilogue reloads.
+   epi (L (L 'ld 'r3 'r4 -8) (L 'mov 'sp 'r4) (L 'pop 'r4) (L 'ret))
 
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
@@ -915,7 +944,7 @@
 
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     (: params (cauup f)
-       _ (pin g 'off 0)
+       _ (pin g 'off 8)                              ; slot -8 = saved r3 (see epi)
        _ (pin g 'fn (caup f))
        sig (peep (g 'sigs) (caup f) ())
        vararg (? (two? sig) (nthr sig 2) ())
@@ -971,7 +1000,8 @@
              (? (bad? body) 'bad
                 (: frame (& (+ (peep g 'off 0) 15) -16)
                    (cat (L (L 'label (intern (caup f)))
-                           (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame))
+                           (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame)
+                           (L 'st 'r4 -8 'r3))
                     (cat (cap sp0)
                      (cat body (cat (L (L 'li 'r0 0)) epi)))))))))
 

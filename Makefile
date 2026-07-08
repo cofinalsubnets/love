@@ -428,7 +428,14 @@ test_cc: host out/host$(hsuf)/aicc
 	  $$cc_g -O0 -c -o $(ho)/.wkstr.o $(ho)/.wkstr.c; \
 	  $$cc_g -no-pie -o $(ho)/.wkovr $(ho)/.wklib.o $(ho)/.wkstr.o > /dev/null 2>&1 && $(ho)/.wkovr; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL weak override (got $$a want 42)"; exit 1; }; \
-	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + SysV varargs cross-toolchain + weak override) ok"; \
+	  printf 'long bump(long x){long r;__builtin_add_overflow(x,1,&r);return r;}\n' > $(ho)/.rblib.c; \
+	  printf 'long bump(long);\nint main(void){volatile long a=0;long s=a;for(int i=42;i--;)s=bump(s);return (int)s;}\n' > $(ho)/.rbmain.c; \
+	  $m $(ho)/aicc -c $(ho)/.rblib.c $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL aicc -c rbx-callee"; exit 1; }; \
+	  $$cc_g -O2 -c -o $(ho)/.rbmain.o $(ho)/.rbmain.c; \
+	  $$cc_g -no-pie -o $(ho)/.rbexe $(ho)/.rbmain.o $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL ld rbx interop"; exit 1; }; \
+	  $(ho)/.rbexe; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL callee-saved rbx across cc call (-O2 caller loop bound, got $$a want 42)"; exit 1; }; \
+	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + SysV varargs cross-toolchain + weak override + callee-saved rbx) ok"; \
 	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
