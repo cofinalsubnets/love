@@ -93,14 +93,17 @@
    (patch-with be k t s w aux) ((peep be 'patch 0) k t s w aux)
 
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels. returns
-   ;; (items . labels): the flat byte/fixup stream and a name->address tablet. --
+   ;; (items . labels): the flat byte/fixup stream and a name->address tablet. items accumulate
+   ;; REVERSED (each chunk prepended, one rev at the end) so a whole-program lay stays linear --
+   ;; appending to the tail re-copied the stream per instruction, and `aicc -c ai.c` paid it as
+   ;; 15 of its 16 minutes. --
    (lay prog be addr items labels)
-      (? (! (two? prog)) (link items labels)
+      (? (! (two? prog)) (link (rev items) labels)
          (: ins (cap prog)
             (? (= (cap ins) 'label)
                (: _ (pin labels (at ins 1) addr) (lay (cup prog) be addr items labels))
                (: chunk (lower-with be ins)
-                  (lay (cup prog) be (+ addr (chunk-len chunk)) (cat items chunk) labels)))))
+                  (lay (cup prog) be (+ addr (chunk-len chunk)) (cat (rev chunk) items) labels)))))
 
    ;; -- pass two: stream the items out, resolving each fixup against the now-known labels. --
    (resolve items labels be addr)
