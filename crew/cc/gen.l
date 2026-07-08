@@ -43,6 +43,17 @@
    (fn? ty) (&& (two? ty) (= (cap ty) 'fn))         ; ('fn ret?) -- a function; decays to its address
    (fnty g nm) (: sig (peep (g 'sigs) nm ())        ; a named function's type, return riding when sig'd
                   (? (two? sig) (L 'fn (cap sig)) (L 'fn)))
+   ; the one by-value struct shape cc carries (SysV: two SSE eightbytes -- an
+   ; xmm pair): exactly two double fields, 16 bytes. ai.c's struct ai_zn. a
+   ; struct VALUE in cgexpr is its ADDRESS in r0; params/args/returns/copies
+   ; read the pair through it. every other by-value struct stays refused.
+   (sse2? g ty) (? (! (stru? ty)) ()
+                   (: se (peep (g 'stag) (caup ty) 0)
+                      (? (! (two? se)) ()
+                         (: fs (cap se)
+                            (&& (= (caup se) 16)
+                                (&& (= (tally fs) 2)
+                                    (&& (flo? (cauup (cap fs))) (flo? (cauup (caup fs))))))))))
    (fnret ty) (? (! (&& (two? ty) (= (cap ty) 'ptr))) 'long   ; an indirect callee's result type: ('ptr ('fn ret)) | 'long
                  (: ft (caup ty) (? (&& (fn? ft) (two? (cup ft))) (caup ft) 'long)))
    ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same WIDTH as their signed
@@ -206,7 +217,7 @@
                  (: ty (cap r)
                     (? (arr? ty) (L (L 'ptr (caup ty)) (caup r))
                        (fn? ty) (L (L 'ptr ty) (caup r))     ; a fn-pointer member is its address
-                       (stru? ty) 'bad               ; no struct VALUES in registers
+                       (stru? ty) (L ty (caup r))    ; a struct member's value is its address (the sse2 rep)
                        (flo? ty) (L 'double (cat (caup r) (fldf ty 'f0 'r0 0)))
                        (L ty (cat (caup r) (L (L (ldop ty) 'r0 'r0 0))))))))
           (= k 'var)
@@ -215,7 +226,10 @@
                   (? (peep (g 'fns) (caup e) ())     ; a function name is its address
                      (L (L 'ptr (fnty g (caup e))) (L (L 'la 'r0 (intern (caup e))))) 'bad)
                  (: ty (cauup en)
-                    (? (stru? ty) 'bad               ; a struct name is only an lvalue base
+                    (? (stru? ty)                    ; a struct value is its ADDRESS (the sse2 rep)
+                        (? (= (cap en) 'loc)
+                           (L ty (L (L 'lea 'r0 'r4 (caup en))))
+                           (L ty (L (L 'la 'r0 (caup en)))))
                        (arr? ty)                     ; arrays decay to their address
                         (? (= (cap en) 'loc)
                            (L (L 'ptr (caup ty)) (L (L 'lea 'r0 'r4 (caup en))))
@@ -240,7 +254,7 @@
                  (: ty (cap r)
                     (? (arr? ty) (L (L 'ptr (caup ty)) (caup r))   ; pointee array: decay again
                        (fn? ty) (L (L 'ptr ty) (caup r))           ; *fp -- a function is its address
-                       (stru? ty) 'bad                             ; no struct values
+                       (stru? ty) (L ty (caup r))                  ; *p as a struct value: the address rides
                        (flo? ty) (L 'double (cat (caup r) (fldf ty 'f0 'r0 0)))
                        (L ty (cat (caup r) (L (L (ldop ty) 'r0 'r0 0))))))))
           (= k 'asn)
@@ -248,7 +262,8 @@
               (? (bad? lv) 'bad
                  (arr? (cap lv)) 'bad                ; an array is not assignable
                  (stru? (cap lv))                    ; a whole-struct copy (dest r1, src r0)
-                  (: rv (clval g env (cauup e))
+                  (: rl (clval g env (cauup e))      ; an rvalue struct (a call's temp) is its address too
+                     rv (? (bad? rl) (cgexpr g env (cauup e)) rl)
                      (? (bad? rv) 'bad
                         (! (stru? (cap rv))) 'bad
                         (L (cap lv)
@@ -424,7 +439,17 @@
                     variadic (? (two? sig) (nthr sig 2) ())
                     ; every call rides the SysV registers (call-fixed); a variadic one
                     ; additionally sets al = #xmm args for its callee's register save area.
-                    (call-fixed g env head args direct ptys rt variadic))))
+                    cr (call-fixed g env head args direct ptys rt variadic)
+                    (? (bad? cr) 'bad
+                       (! (stru? (cap cr))) cr
+                       (sse2? g (cap cr))              ; a two-double struct result: park the xmm pair in a fresh slot, answer its address
+                        (: toff (- 0 (+ (peep g 'off 0) 16))
+                           _ (pin g 'off (+ (peep g 'off 0) 16))
+                           (L (cap cr) (cat (caup cr)
+                                        (cat (fstf 'double 'r4 toff (xmmreg 0))
+                                         (cat (fstf 'double 'r4 (+ toff 8) (xmmreg 1))
+                                              (L (L 'lea 'r0 'r4 toff)))))))
+                       'bad))))
           (= k 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
               (? (bad? lv) 'bad (loadval (cap lv) (caup lv))))
@@ -446,12 +471,20 @@
            (: a (cgexpr g env (cap as))
               (? (bad? a) 'bad
                  (: pty (nthty pts i)
-                    wd (? pty (flo? pty) (flo? (cap a)))   ; classify by the param type if known, else the arg's
-                    apush (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
-                             (cat (asint a) (L (L 'push 'r0))))
-                    (? (&& wd (< xmmc 8)) (kls (cup as) (+ i 1) gpc (+ xmmc 1) ovc (link (L (L 'x xmmc) apush) acc))
-                       (&& (! wd) (< gpc 6)) (kls (cup as) (+ i 1) (+ gpc 1) xmmc ovc (link (L (L 'g gpc) apush) acc))
-                       (kls (cup as) (+ i 1) gpc xmmc (+ ovc 1) (link (L (L 'ov ovc) apush) acc)))))))
+                    aty (? pty pty (cap a))                ; classify by the param type if known, else the arg's
+                    wd (flo? aty)
+                    (? (sse2? g aty)                       ; a two-double struct arg: push its pair (re on top), an xmm PAIR target
+                        (? (< 6 xmmc) 'bad
+                           (kls (cup as) (+ i 1) gpc (+ xmmc 2) ovc
+                                (link (L (L 'x2 xmmc)
+                                         (cat (caup a) (L (L 'ld 'r1 'r0 8) (L 'push 'r1) (L 'ld 'r1 'r0 0) (L 'push 'r1))))
+                                      acc)))
+                       (stru? aty) 'bad                    ; any other by-value struct stays ahead
+                       (: apush (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
+                                   (cat (asint a) (L (L 'push 'r0))))
+                          (? (&& wd (< xmmc 8)) (kls (cup as) (+ i 1) gpc (+ xmmc 1) ovc (link (L (L 'x xmmc) apush) acc))
+                             (&& (! wd) (< gpc 6)) (kls (cup as) (+ i 1) (+ gpc 1) xmmc ovc (link (L (L 'g gpc) apush) acc))
+                             (kls (cup as) (+ i 1) gpc xmmc (+ ovc 1) (link (L (L 'ov ovc) apush) acc)))))))))
        kr (kls ags 0 0 0 0 ())
        (? (bad? kr) 'bad
           (: ov? (\ kent (= (cap (cap kent)) 'ov))
@@ -467,9 +500,15 @@
                          (: kc (cap (cap l4))
                             (go4 (cup l4) (? (= (cap kc) 'ov) acc4
                                              (cat acc4 (? (= (cap kc) 'g) (L (L 'pop (nthr argregs (caup kc))))
+                                                          (= (cap kc) 'x2)   ; the struct pair: re then im
+                                                           (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup kc)) 'r0)
+                                                              (L 'pop 'r0) (L 'movqxr (xmmreg (+ (caup kc) 1)) 'r0))
                                                           (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup kc)) 'r0))))))))
                      (go4 kr ()))
-             nxmm (: (go5 l5 n5) (? (! (two? l5)) n5 (go5 (cup l5) (? (= (cap (cap (cap l5))) 'x) (+ n5 1) n5))) (go5 kr 0))
+             nxmm (: (go5 l5 n5) (? (! (two? l5)) n5
+                                    (go5 (cup l5) (: kk (cap (cap (cap l5)))
+                                                     (? (= kk 'x) (+ n5 1) (= kk 'x2) (+ n5 2) n5))))
+                     (go5 kr 0))
              nov (tally ovr)
              padn (? (= (& nov 1) 1) 8 0)                 ; keep sp 16-aligned across the overflow block
              pad (? (< 0 padn) (L (L 'sub 'sp 'sp padn)) ())
@@ -713,6 +752,14 @@
                         (? (bad? f) 'bad
                            (one (cup ps) env3 (cat acc (cat (cgzero off span) f))))))
                  (arr? ty) 'bad                          ; a bare-expr init of an array
+                 (stru? ty)                              ; a struct local from a struct VALUE (an address): 16-byte copy
+                  (? (! (sse2? g ty)) 'bad
+                     (: r (cgexpr g env3 init)
+                        (? (bad? r) 'bad
+                           (one (cup ps) env3
+                                (cat acc (cat (caup r)
+                                 (L (L 'ld 'r1 'r0 0) (L 'st 'r4 off 'r1)
+                                    (L 'ld 'r1 'r0 8) (L 'st 'r4 (+ off 8) 'r1))))))))
                  (: r (cgexpr g env3 init)               ; a scalar (a pointer = string rides cgexpr -> la)
                     (? (bad? r) 'bad
                        (flo? ty) (one (cup ps) env3 (cat acc (cat (asflo r) (fstf ty 'r4 off 'f0))))
@@ -730,6 +777,10 @@
                         rt (cap (peep (g 'sigs) (g 'fn) (L 'long ())))   ; the current function's return type
                         (? (bad? r) 'bad
                            (flo? rt) (cat (asflo r) epi)                 ; a double return leaves f0 (xmm0)
+                           (sse2? g rt)                                  ; a two-double struct returns as the xmm PAIR
+                            (cat (caup r) (cat (fldf 'double (xmmreg 0) 'r0 0)
+                                          (cat (fldf 'double (xmmreg 1) 'r0 8) epi)))
+                           (|| (stru? rt) (stru? (cap r))) 'bad          ; any other struct return, or a struct where a scalar is due
                            (flo? (cap r)) (cat (asint r) epi)            ; a double value, an int return -> truncate to r0
                            (cat (caup r) epi))))                         ; int -> int, as before
           (= k 'expr) (: r (cgexpr g env (caup s))
@@ -874,7 +925,15 @@
        (spill ps gpi xmmi ovi env acc)
         (? (! (two? ps)) (L acc env)
            (: p (cap ps) pty (caup p)
-              (? (&& (flo? pty) (< xmmi 8))
+              (? (sse2? g pty)                       ; a two-double struct param: an xmm PAIR into a 16-byte slot
+                  (? (< 6 xmmi) 'bad
+                     (: off (- 0 (+ (peep g 'off 0) 16))
+                        _ (pin g 'off (+ (peep g 'off 0) 16))
+                        (spill (cup ps) gpi (+ xmmi 2) ovi (link (L (cap p) off pty) env)
+                               (cat acc (cat (fstf 'double 'r4 off (xmmreg xmmi))
+                                             (fstf 'double 'r4 (+ off 8) (xmmreg (+ xmmi 1))))))))
+                 (stru? pty) 'bad                    ; any other by-value struct stays ahead
+                 (&& (flo? pty) (< xmmi 8))
                   (: off (- 0 (+ (peep g 'off 0) 8))
                      _ (pin g 'off (+ (peep g 'off 0) 8))
                      (spill (cup ps) gpi (+ xmmi 1) ovi (link (L (cap p) off pty) env)

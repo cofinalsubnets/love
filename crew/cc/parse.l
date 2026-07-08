@@ -177,7 +177,10 @@
                              (: rest (want (caup dr) ";")
                                 (? (two? rest) (L (link (cap dr) acc2) rest) ()))))
                       r (dts ts2 ())
-                      (? (two? r) (pmembers ps (caup r) (cat (rev (cap r)) acc)) ())))))))
+                      ; (cap r) is REVERSED (dts links) -- and acc accumulates reversed
+                      ; too (pmembers revs at "}"), so prepend it AS IS: a second rev
+                      ; here laid `double re, im;` as im-then-re (an ABI break vs gcc)
+                      (? (two? r) (pmembers ps (caup r) (cat (cap r) acc)) ())))))))
    ; lay a member list out; a union flattens every offset to 0
    (playout ps ms uni)                              ; -> (fields size align)
     (: (go l off mx acc)
