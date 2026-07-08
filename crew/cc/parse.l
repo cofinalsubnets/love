@@ -458,7 +458,12 @@
                            (peekp ts3 "}") (L (L 'init (rev (link elem acc))) (cup ts3))
                            ())))))
            (items (cup ts) ()))
-       (pasn ps ts))
+       ; a scalar initializer that FOLDS is its number -- `(Bits>>3)`-style macro
+       ; values image as constants (globals demand it; a local loses nothing)
+       (: r (pasn ps ts)
+          (? (! (two? r)) ()
+             (: v (cfold (cap r))
+                (? (charm? v) (L (L 'num v) (caup r)) r)))))
    ; how many array elements an initializer implies (for [] size inference):
    ; a string is its bytes + NUL; a brace list is the highest index reached
    ; (designated [k] sets the cursor to k). () if it implies nothing.
@@ -512,6 +517,7 @@
         (: v (cfold (cauup e))
            (? (! (charm? v)) () (= (caup e) 'neg) (- 0 v)
               (= (caup e) 'not) (? (= v 0) 1 0) (= (caup e) 'bnot) (- (- 0 v) 1) ()))
+       (= (cap e) 'cast) (cfold (cauup e))          ; value-preserving (integer/pointer): NULL, putcharm-style word math
        (= (cap e) 'land) (: a (cfold (cauup e)) b (cfold (caup (cuup e)))
                             (? (|| (! (charm? a)) (! (charm? b))) () (? (&& (< 0 a) (< 0 b)) 1 0)))
        (= (cap e) 'lor) (: a (cfold (cauup e)) b (cfold (caup (cuup e)))
@@ -665,19 +671,26 @@
                 (? (! (two? r)) ()
                    (: rest (want (caup r) ";")
                       (? (two? rest) (L (L 'expr (cap r)) rest) ())))))))
-   ; block-scoped typedef shadowing (C scope): a local variable whose NAME is a
-   ; typedef HIDES that typedef for the rest of the block, so a later `name op name`
-   ; reads as an expression, not a cast `(type)..`. record (name oldty), pin the name
-   ; to 0 (not-a-type), restore on block exit. ai.h makes `num`/`word` typedefs, and
-   ; ai.c freely uses them as local variable names.
+   ; block-scoped shadowing (C scope): a local variable whose NAME is a typedef or
+   ; an ENUM CONSTANT hides it for the rest of the block -- so a later `name op name`
+   ; reads as an expression (not a cast), and a read of the local stays a var (not a
+   ; folded number, which would also refuse as an lvalue). record (table name old);
+   ; a typedef pins to 0 (not-a-type), an enum constant is PULLED (the fold site
+   ; tests charm?, and 0 is a charm); restore on block exit. ai.h makes `num`/`word`
+   ; typedefs and ai.c reuses `N` as a local over `enum { N = 13 }`.
    (declnames form) (? (&& (two? form) (= (cap form) 'decl)) (map cap (caup form)) ())
-   (shadow1 ps nm shadows) (: old (peep (ps 'types) nm 'none)
-                              (? (= old 'none) shadows
-                                 (: _ (pin (ps 'types) nm 0) (link (L nm old) shadows))))
+   (shadow1 ps nm shadows)
+    (: s1 (: old (peep (ps 'types) nm 'none)
+             (? (= old 'none) shadows
+                (: _ (pin (ps 'types) nm 0) (link (L 'types nm old) shadows))))
+       olde (peep (ps 'enums) nm 'none)
+       (? (= olde 'none) s1
+          (: _ (pull (ps 'enums) nm 0) (link (L 'enums nm olde) s1))))
    (shadowdecl ps names shadows) (? (! (two? names)) shadows
                                      (shadowdecl ps (cup names) (shadow1 ps (cap names) shadows)))
    (unshadow ps shadows) (? (! (two? shadows)) ()
-                            (: _ (pin (ps 'types) (cap (cap shadows)) (caup (cap shadows)))
+                            (: e (cap shadows)
+                               _ (pin (ps (cap e)) (caup e) (cauup e))
                                (unshadow ps (cup shadows))))
    (pblock ps ts)
     (: ts0 (want ts "{")
@@ -743,6 +756,17 @@
    (ptop ps ts)
     (? (peekp ts ";") (L (L 'tdef) (cup ts))          ; a stray top-level `;` -- an empty declaration
        (static? ts) (pstatic ps ts)
+       ; `extern` data DECLARES, never defines: an init-less gdecl under a leading
+       ; extern becomes ('xdecl pairs) -- addressable, no storage laid (the linker
+       ; binds the defining object's symbol). protos/typedefs pass through untouched.
+       (tkw? (cap ts) 'extern)
+        (: r (ptop ps (cup ts))
+           (? (! (two? r)) ()
+              (! (= (cap (cap r)) 'gdecl)) r
+              (: (initless? ps2) (? (! (two? ps2)) 1
+                                    (two? (cauup (cap ps2))) ()
+                                    (initless? (cup ps2)))
+                 (? (initless? (caup (cap r))) (L (L 'xdecl (caup (cap r))) (caup r)) r))))
        (tkw? (cap ts) 'typedef)
         (: br (pbty ps (cup ts))
            (? (! (two? br)) () (tdeflist ps (cap br) (caup br))))

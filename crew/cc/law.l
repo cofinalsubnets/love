@@ -143,7 +143,8 @@
       (! (cgn "int main() { int *p; int *q; return (long)(p+q); }"))   ; ptr+ptr refused
       (! (cgn "int main() { int x; return *x; }"))                     ; deref wants a pointer
       (! (cgn "int main() { int a[3]; int b[3]; a = b; return 0; }"))  ; arrays are not assignable
-      (! (cgn "int g = 1+2; int main() { return g; }"))                ; a global init is a folded constant, not an expression
+      (two? (cgn "int g = 1+2; int main() { return g; }"))             ; a global init FOLDS to its constant
+      (! (cgn "int x; int g = x; int main() { return g; }"))           ; ... but stays refused when genuinely non-constant
       (two? (cgn "char *s = \"hi\"; int main() { return 0; }"))       ; a label-valued global: abs64 (4d)
       (! (cgn "int main() { int a[2] = 5; return 0; }"))))          ; a scalar cannot initialize an array
 
@@ -429,8 +430,8 @@
       (= (cast "typedef long a, b; int main(void){ b x; return x; }")                ; a multi-declarator typedef binds BOTH names as `long`
          '(prog ((tdef) (fn "main" () (blk ((decl (("x" long ()))) (ret (var "x"))))))))
       (= (cast "typedef int F(int); int main(void){return 0;}") '(prog ((tdef) (fn "main" () (blk ((ret (num 0))))))))
-      (= (cast "extern int v[]; int main(void){return 0;}")                         ; an incomplete array (no size, no init)
-         '(prog ((gdecl (("v" (arr int 0) ()))) (fn "main" () (blk ((ret (num 0))))))))))
+      (= (cast "extern int v[]; int main(void){return 0;}")                         ; an incomplete array: extern DECLARES, no storage
+         '(prog ((xdecl (("v" (arr int 0) ()))) (fn "main" () (blk ((ret (num 0))))))))))
 
 ; -- 7c-iii part 2: multidimensional arrays. [3][4] of T reads as a RUN of bracket
 ; suffixes folded outer..inner into (arr (arr T 4) 3); a[i][j] desugars to the plain
@@ -467,6 +468,20 @@
          '(prog ((tdef) (gdecl (("t" (arr int 3) (init ((didx 0 (num 10)) (didx 2 (num 30))))))) (fn "main" () (blk ((ret (num 0))))))))
       (= (cast "typedef long num; int main(void){ long num = 1; return (int)(num + num); }")   ; a local shadows the `num` typedef
          '(prog ((tdef) (fn "main" () (blk ((decl (("num" long (num 1)))) (ret (cast int (bin + (var "num") (var "num"))))))))))))
+
+; -- block-scoped ENUM-CONSTANT shadowing, the typedef shadow's sibling: a local
+; named after an enum constant is a VARIABLE for the rest of the block (not a
+; folded number -- which read wrong and refused as an lvalue), and the constant
+; comes back at block exit.
+(: (cast src) (caup (cparse (caup (clex src))))
+   (assert
+      (= (cast "enum { K = 5 }; int main(void){ int K = 1; K *= 2; return K; }")
+         '(prog ((tdef) (fn "main" () (blk ((decl (("K" int (num 1))))
+                                            (expr (asn (var "K") (bin * (var "K") (num 2))))
+                                            (ret (var "K"))))))))
+      (= (cast "enum { K = 5 }; int f(void){ { int K = 1; } return K; }")   ; restored at `}`
+         '(prog ((tdef) (fn "f" () (blk ((blk ((decl (("K" int (num 1))))))
+                                         (ret (num 5))))))))))
 
 ; -- the gen tail: every name a comma-list prototype registers is callable (the
 ; sig sweep pins mproto siblings, which have no proto form of their own), and &f

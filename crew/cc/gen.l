@@ -579,7 +579,8 @@
    ; the label a pointer initializer points at (abs64) | () -- a string, a
    ; function name, a decayed global array/var, or &global (all file-scope)
    (imlabel g ini)
-    (? (= (cap ini) 'str)
+    (? (= (cap ini) 'cast) (imlabel g (cauup ini))   ; a cast keeps the label ((word)&x, (op)f)
+       (= (cap ini) 'str)
         (: l (nlab g ".S") _ (pin g 'strs (link (L l (caup ini)) (g 'strs))) l)
        (&& (= (cap ini) 'var) (peep (g 'fns) (caup ini) ())) (intern (caup ini))
        (&& (= (cap ini) 'var) (two? (peep (g 'glob) (caup ini) 0))) (cap (peep (g 'glob) (caup ini) 0))
@@ -599,6 +600,11 @@
            (bs i acc) (? (<= n i) (rev acc) (bs (+ i 1) (link (? (< i (tally t)) (t i) 0) acc)))
            (bs 0 ()))
        (ptr? ty) (: lbl (imlabel g ini) (? lbl (L (L 'fix 8 'abs64 lbl 0)) 'bad))   ; a data pointer -> abs64
+       ; a label cast to a WORD-SIZED integer ((word)nif_absent, (intptr_t)f) is
+       ; still the label's address; a non-label cast folds through to its value
+       (&& (= (cap ini) 'cast) (&& (! (aggish? ty)) (&& (! (flo? ty)) (= (tsz g ty) 8))))
+        (: lbl (imlabel g ini)
+           (? lbl (L (L 'fix 8 'abs64 lbl 0)) (imgbytes g ty (cauup ini))))
        (= (cap ini) 'init)
         (? (arr? ty)
             (: elt (caup ty) esz (tsz g elt)
@@ -893,12 +899,13 @@
        (rec fs)
         (? (! (two? fs)) 1
            (: f (cap fs)
-              (? (! (= (cap f) 'gdecl)) (rec (cup fs))
-                 (: (one ps)
+              (? (! (member? (cap f) '(gdecl xdecl))) (rec (cup fs))
+                 (: xd (= (cap f) 'xdecl)              ; extern: addressable, NO storage laid
+                    (one ps)
                      (? (! (two? ps)) (rec (cup fs))
                         (: p (cap ps)
                            _ (pin (g 'glob) (cap p) (L (intern (cap p)) (caup p) (cauup p)))
-                           _ (pin g 'globs (link (cap p) (g 'globs)))
+                           _ (? xd () (pin g 'globs (link (cap p) (g 'globs))))
                            (one (cup ps))))
                     (one (caup f))))))
        ok (rec (caup ast))
@@ -908,7 +915,7 @@
         (? (! (two? fs))
            (: dat (cgdata g) (? (bad? dat) () (L g acc dat saw)))
            (: f (cap fs)
-              (? (member? (cap f) '(proto gdecl tdef)) (gfns (cup fs) acc saw)
+              (? (member? (cap f) '(proto gdecl xdecl tdef)) (gfns (cup fs) acc saw)
                  (: r (cgfn g f)
                     (? (bad? r) ()
                        (gfns (cup fs) (cat acc r)
