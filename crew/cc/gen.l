@@ -40,7 +40,11 @@
    (ptr? ty) (&& (two? ty) (= (cap ty) 'ptr))
    (arr? ty) (&& (two? ty) (= (cap ty) 'arr))
    (stru? ty) (&& (two? ty) (= (cap ty) 'struct))
-   (fn? ty) (&& (two? ty) (= (cap ty) 'fn))         ; ('fn) -- a function; decays to its address
+   (fn? ty) (&& (two? ty) (= (cap ty) 'fn))         ; ('fn ret?) -- a function; decays to its address
+   (fnty g nm) (: sig (peep (g 'sigs) nm ())        ; a named function's type, return riding when sig'd
+                  (? (two? sig) (L 'fn (cap sig)) (L 'fn)))
+   (fnret ty) (? (! (&& (two? ty) (= (cap ty) 'ptr))) 'long   ; an indirect callee's result type: ('ptr ('fn ret)) | 'long
+                 (: ft (caup ty) (? (&& (fn? ft) (two? (cup ft))) (caup ft) 'long)))
    ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same WIDTH as their signed
    ; twin, but a load zero-extends, `>>` is logical, compare/divide go unsigned, and
    ; a binary op is unsigned if EITHER operand is (simplified usual conversions).
@@ -209,7 +213,7 @@
            (: en (vent g env (caup e))
               (? (bad? en)
                   (? (peep (g 'fns) (caup e) ())     ; a function name is its address
-                     (L (L 'ptr (L 'fn)) (L (L 'la 'r0 (intern (caup e))))) 'bad)
+                     (L (L 'ptr (fnty g (caup e))) (L (L 'la 'r0 (intern (caup e))))) 'bad)
                  (: ty (cauup en)
                     (? (stru? ty) 'bad               ; a struct name is only an lvalue base
                        (arr? ty)                     ; arrays decay to their address
@@ -225,7 +229,11 @@
                           (L ty (L (L 'la 'r1 (caup en)) (L (ldop ty) 'r0 'r1 0))))))))
           (= k 'addr)
            (: r (clval g env (caup e))
-              (? (bad? r) 'bad (L (L 'ptr (cap r)) (caup r))))
+              (? (! (bad? r)) (L (L 'ptr (cap r)) (caup r))
+                 ; &f on a function name: same address as the bare use (no lvalue)
+                 (&& (= (cap (caup e)) 'var) (peep (g 'fns) (caup (caup e)) ()))
+                  (L (L 'ptr (fnty g (caup (caup e)))) (L (L 'la 'r0 (intern (caup (caup e))))))
+                 'bad))
           (= k 'deref)
            (: r (clval g env e)                     ; clval already walked the pointer
               (? (bad? r) 'bad
@@ -418,7 +426,7 @@
                  (L ret (cat pf (cat pops (cat setal (L (L 'call (intern (caup hd))))))))
                 (: hr (cgexpr g env hd)                   ; a function-pointer value: park in r3, callr
                    (? (bad? hr) 'bad
-                      (L 'long (cat pf (cat (caup hr) (cat (L (L 'mov 'r3 'r0))
+                      (L (fnret (cap hr)) (cat pf (cat (caup hr) (cat (L (L 'mov 'r3 'r0))
                                 (cat pops (cat setal (L (L 'callr 'r3))))))))))))))
    (cgbin g env e)
     (: op (caup e)
@@ -575,6 +583,8 @@
         (: l (nlab g ".S") _ (pin g 'strs (link (L l (caup ini)) (g 'strs))) l)
        (&& (= (cap ini) 'var) (peep (g 'fns) (caup ini) ())) (intern (caup ini))
        (&& (= (cap ini) 'var) (two? (peep (g 'glob) (caup ini) 0))) (cap (peep (g 'glob) (caup ini) 0))
+       (&& (&& (= (cap ini) 'addr) (two? (caup ini))) (&& (= (cap (caup ini)) 'var)
+           (peep (g 'fns) (caup (caup ini)) ()))) (intern (caup (caup ini)))
        (&& (&& (= (cap ini) 'addr) (two? (caup ini))) (&& (= (cap (caup ini)) 'var)
            (two? (peep (g 'glob) (caup (caup ini)) 0)))) (cap (peep (g 'glob) (caup (caup ini)) 0))
        ())
@@ -867,12 +877,16 @@
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ())
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ())
             _ (pin t 'fns (tablet 0)) _ (pin t 'stag stbl) _ (pin t 'sigs sigs) t)
-       ; pass 0: every function name -- so a bare use of one is its address (la)
+       ; pass 0: every function name -- so a bare use of one is its address (la).
+       ; the sig table too: an mproto sibling (`double sin(..), cos(..);`) has a
+       ; sig but no proto form of its own
        (recfns fs) (? (! (two? fs)) 1
                       (: f (cap fs)
                          _ (? (member? (cap f) '(fn proto)) (pin (g 'fns) (caup f) 1) ())
                          (recfns (cup fs))))
        _ (recfns (caup ast))
+       _ (: (go ns) (? (! (two? ns)) 1 (: _ (pin (g 'fns) (cap ns) 1) (go (cup ns))))
+            (go (keys sigs)))
        ; pass 1: record every global (name -> (label ty init)); cgimage
        ; validates the initializer at data-emission time (a label-valued image
        ; refuses the whole compile -- 4d)

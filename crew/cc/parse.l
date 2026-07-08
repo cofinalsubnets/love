@@ -13,7 +13,7 @@
 ; (e->x desugars to (dot (deref e) x)), ('switch e items) with ('case v) and
 ; ('dflt) markers inline (fallthrough is the flat list), ('do body cond),
 ; ('goto name) ('lbl name), ('tdef) (a typedef, gen skips it). stage 4b adds
-; the function-pointer declarator ('ptr ('fn), a table ('arr ('ptr ('fn)) n))
+; the function-pointer declarator ('ptr ('fn ret), a table ('arr ('ptr ('fn ret)) n))
 ; and generalizes a call HEAD to any postfix expr ('call headexpr args).
 ; stage 4c adds brace/designated initializers ('init (item..), item plain |
 ; ('dfield name val) | ('didx n val), nesting), the flexible array member
@@ -100,8 +100,9 @@
 
    ; -- declarators: stars XOR one array suffix, PLUS the function-pointer
    ; dragon -- T (*name)(..) and the dispatch-table T (*name[n])(..). the
-   ; parameter list is BALANCE-SKIPPED (gen calls untyped); a function pointer
-   ; is ('ptr ('fn)), a table of them ('arr ('ptr ('fn)) n).
+   ; parameter list is BALANCE-SKIPPED (args classify by their own type); a
+   ; function pointer is ('ptr ('fn ret)) -- ret so an indirect call knows a
+   ; double result -- a table of them ('arr ('ptr ('fn ret)) n).
    (skipbal s d) (? (< d 1) s
                     (! (two? s)) ()
                     (peekp s "(") (skipbal (cup s) (+ d 1))
@@ -144,7 +145,7 @@
                                    (! (peekp r7 "(")) ()
                                    (: t8 (skipbal (cup r7) 1)
                                       (? (! (two? t8)) ()
-                                         (: fty (L 'ptr (L 'fn))
+                                         (: fty (L 'ptr (L 'fn ty))   ; the base type rides along: the pointee's RETURN type
                                             finalty (? (charm? arn) (L 'arr fty arn) fty)
                                             (L (L name finalty) t8))))))))))))
           (! (&& (two? ts2) (= (tkk (cap ts2)) 'id)))    ; no name: an ABSTRACT declarator (unnamed proto param)
@@ -153,7 +154,7 @@
              ts3 (cup ts2)
              (? (peekp ts3 "(")                       ; name(params) -- a function declarator; type ('fn), the params balance-skipped (cc calls untyped)
                  (: t2 (skipbal (cup ts3) 1)
-                    (? (two? t2) (L (L name (L 'fn)) t2) ()))
+                    (? (two? t2) (L (L name (L 'fn ty)) t2) ()))
                 (! (peekp ts3 "[")) (L (L name ty) ts3)
                 (: dr (adims ps ts3 ())               ; one or more [n]/[] suffixes -> a nested arr of ty
                    (? (! (two? dr)) ()

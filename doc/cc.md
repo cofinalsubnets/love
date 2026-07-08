@@ -524,11 +524,34 @@ two ideas to keep warm as the stages climb, neither committed yet:
    76-ctail3.c (hex float, const-expr dim, nested enum-indexed designated init, a shadowed
    local, gcc = cc = 41); law.l goldens each. the next wall is CODEGEN (`aicc -c ai.c`
    parses, then errors in gen) -- 7d territory.
-   STILL AHEAD (codegen + 7d): whatever gen chokes on across ai.c's 925 forms, then the
-   `__asm__("divq")` path (AVOIDED for now -- cc predefines neither `__x86_64__` nor
-   `__SIZEOF_INT128__`, so ai.c takes the portable 32-bit-limb branch, no asm/no __int128),
-   __attribute__((weak))/((section)) -> the linker, unions by value, the >6-arg overflow;
-   7d link cc-built ai.o + gcc-built host/*.o + libc and boot the egg green.
+   THE GEN CHOKE LIST (measured 2026-07-07 by a full-corpus instrumented run --
+   log-and-continue wrappers on cgfn/cgexpr/cgstmt/cgdecl/cgimage): 15 of ai.c's 611
+   functions refused, plus the data tail. THE GEN TAIL, FIRST CUT (landed 2026-07-08,
+   15 -> 10): (a) mproto SIBLINGS -- `double sin(double), cos(double), ..;` registered
+   cos only in the sig table, so a fn-as-VALUE use (`Ap(.., ai_cos)`) refused; gen's
+   pass 0 now sweeps the sig keys into the fns table. (b) &f -- address-of a function
+   is the bare use's address, in code (the addr lane falls back to the fns table;
+   locals still win) and in a global image (imlabel takes `&f`). (c) INDIRECT DOUBLE
+   CALLS -- a call through a fn pointer typed its result 'long, so a double result
+   read r0 not f0 (a SILENT miscompile, exactly ai.c's lvm_math1 shape); the
+   declarator dragon now carries the base type as the pointee's return --
+   ('ptr ('fn ret)) through params/locals/typedefs/members/casts -- fn-name values
+   get ret from the sig, and callr's result types by it. gate: 77-protoaddr.c
+   (fn-ptr table image, &f/bare-f agreement, double through a pointer, gcc = cc = 42)
+   + law goldens.
+   STILL AHEAD (codegen + 7d), the measured remainder: struct BY VALUE (struct ai_zn,
+   two doubles returned/passed by value -- zn/ai_net/ai_pin refuse, and a by-value
+   struct PARAM spills as one 8-byte slot silently: needs the SysV two-eightbyte
+   classification); the >6-arg overflow (nf_walk/big_addsub/mag_divmod + their three
+   callers, stack args both sides); ENUM-CONSTANT SHADOWING (a local named `N` folds
+   to the enum's value in expressions -- refuses as an asn LHS, MISCOMPILES as a read;
+   the typedef shadow landed, the enum sibling didn't); data images with const-expr
+   values (`ai_T[] = { [ai_Z] = Bytes, .. }` -- cgdata stops at the first bad global,
+   so re-probe after). then the `__asm__("divq")` path (AVOIDED for now -- cc
+   predefines neither `__x86_64__` nor `__SIZEOF_INT128__`, so ai.c takes the portable
+   32-bit-limb branch, no asm/no __int128), __attribute__((weak))/((section)) -> the
+   linker, unions by value; 7d link cc-built ai.o + gcc-built host/*.o + libc and boot
+   the egg green.
 8. **the fixpoint + the flat stack**: (a) determinism -- cc(cc(ai)) builds
    byte-identical objects to cc(ai); (b) guaranteed sibcalls for the lvm
    shape, ai_tco=1, `make vmret` honest, benches vs gcc recorded.

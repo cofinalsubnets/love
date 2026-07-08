@@ -424,7 +424,7 @@
    (assert
       (= (cast "void f(void){return;}") '(prog ((fn "f" () (blk ((ret ())))))))   ; bare void return
       (= (cexp "sizeof x") '(szof (var "x")))                                       ; sizeof EXPR -> a node (not folded)
-      (= (cexp "(int (*)(int)) p") '(cast (ptr (fn)) (var "p")))                    ; a function-pointer cast type
+      (= (cexp "(int (*)(int)) p") '(cast (ptr (fn int)) (var "p")))                ; a function-pointer cast type (return rides)
       (= (cexp "sizeof(int)") '(num 4))                                             ; sizeof TYPE folds to a num literal
       (= (cast "typedef long a, b; int main(void){ b x; return x; }")                ; a multi-declarator typedef binds BOTH names as `long`
          '(prog ((tdef) (fn "main" () (blk ((decl (("x" long ()))) (ret (var "x"))))))))
@@ -468,5 +468,18 @@
       (= (cast "typedef long num; int main(void){ long num = 1; return (int)(num + num); }")   ; a local shadows the `num` typedef
          '(prog ((tdef) (fn "main" () (blk ((decl (("num" long (num 1)))) (ret (cast int (bin + (var "num") (var "num"))))))))))))
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE, bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) ok")
+; -- the gen tail: every name a comma-list prototype registers is callable (the
+; sig sweep pins mproto siblings, which have no proto form of their own), and &f
+; is a function's address exactly like the bare use -- as a value in code and as
+; a label in a global image. an undeclared &name still refuses.
+(: (cgn src) (: r (cparse (caup (clex src)))
+                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r))) ()))
+   (assert
+      (two? (cgn "int one(int), two(int); int one(int x){return x+1;} int two(int x){return x+2;} int main(){return one(1)+two(2);}"))
+      (two? (cgn "int one(int), two(int); int one(int x){return x+1;} int main(){ int (*p)(int) = two; return p != 0; }"))
+      (two? (cgn "int f(int x){return x;} int main(){ int (*p)(int) = &f; return p(1); }"))
+      (two? (cgn "int f(int x){return x;} typedef int (*fp)(int); fp t[1] = { &f }; int main(){ return t[0](1); }"))
+      (! (cgn "int main(){ return (long)&nope; }"))))
+
+(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE, bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) ok")
 (put err 10)
