@@ -137,8 +137,8 @@
       (! (cgn "int main() { break; }"))                      ; no loop to leave
       (two? (cgn "int main() { int a=1; int b=2; return a<<b; }"))  ; variable shifts ride shlv now
       (two? (cgn "int f(int a) { return a; } int main() { return f(1); }"))
-      (! (cgn "int main() { return f(1,2,3,4,5,6,7); }"))          ; the six-register fence ...
-      (! (cgn "int f(int a,int b,int c,int d,int e,int x,int y) { return 1; } int main() { return 1; }"))   ; ... both sides of it
+      (! (cgn "int main() { return f(1,2,3,4,5,6,7); }"))          ; an unknown callee still refuses (f undeclared) ...
+      (two? (cgn "int f(int a,int b,int c,int d,int e,int x,int y) { return y; } int main() { return f(1,2,3,4,5,6,7); }"))   ; ... but args 7+ ride the caller stack now, both sides
       (two? (cgn "int g; int main() { int *p = &g; *p = 3; return g; }"))
       (! (cgn "int main() { int *p; int *q; return (long)(p+q); }"))   ; ptr+ptr refused
       (! (cgn "int main() { int x; return *x; }"))                     ; deref wants a pointer

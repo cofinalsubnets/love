@@ -380,54 +380,108 @@
            ; a double-returning callee, r0 otherwise. args evaluate left to right,
            ; each pushed to the machine stack, then popped reversed into place.
            (: head (caup e) args (cauup e)
-              direct (&& (= (cap head) 'var) (bad? (vent g env (caup head))))
-              sig (? direct (peep (g 'sigs) (caup head) ()) ())
-              ptys (? (two? sig) (caup sig) ())
-              rt (? (two? sig) (cap sig) 'long)
-              variadic (? (two? sig) (nthr sig 2) ())
-              ; every call rides the SysV registers (call-fixed); a variadic one
-              ; additionally sets al = #xmm args for its callee's register save area.
-              (call-fixed g env head args direct ptys rt variadic))
+              bi (? (= (cap head) 'var) (caup head) ())
+              (? ; the gcc builtins ai.c reaches, each a short raw-x64 splice:
+                 ; trap = ud2; inf/nanf = IEEE constants into f0; expect = its value
+                 ; (the hint drops); clear_cache = nothing (x86 I-cache is coherent);
+                 ; clzll = bsr then xor 63 (63-x == 63^x on 0..63; 0 is the caller's
+                 ; UB, as in gcc); isinf = bits<<1 == inf<<1; the overflow trio = the
+                 ; op + seto, result stored through arg3, the flag the value.
+                 (= bi "__builtin_trap") (L 'long (L (L 'raw (L 15 11))))
+                 (= bi "__builtin_inf")  (L 'double (L (L 'li 'r0 9218868437227405312) (L 'movqxr 'f0 'r0)))
+                 (= bi "__builtin_nanf") (L 'double (L (L 'li 'r0 9221120237041090560) (L 'movqxr 'f0 'r0)))
+                 (= bi "__builtin_expect") (cgexpr g env (cap args))
+                 (= bi "__builtin___clear_cache") (L 'long ())
+                 (= bi "__builtin_clzll")
+                  (: e1 (cgexpr g env (cap args))
+                     (? (bad? e1) 'bad
+                        (L 'long (cat (asint e1) (L (L 'raw (L 72 15 189 192 72 131 240 63)))))))   ; bsr rax,rax; xor rax,63
+                 (= bi "__builtin_isinf")
+                  (: e1 (cgexpr g env (cap args))
+                     (? (bad? e1) 'bad
+                        (L 'long (cat (asflo e1)
+                                  (cat (L (L 'movqrx 'r0 'f0) (L 'raw (L 72 209 224)) (L 'li 'r1 18437736874454810624))   ; shl rax,1; rcx = inf<<1
+                                       (L (L 'raw (L 72 57 200 15 148 192 72 15 182 192))))))))     ; cmp; sete al; movzx rax,al
+                 (member? bi '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
+                  (: e1 (cgexpr g env (cap args))
+                     e2 (cgexpr g env (caup args))
+                     e3 (cgexpr g env (cauup args))
+                     opb (? (= bi "__builtin_add_overflow") (L 72 1 200)      ; add rax,rcx
+                            (= bi "__builtin_sub_overflow") (L 72 41 200)     ; sub rax,rcx
+                            (L 72 15 175 193))                                ; imul rax,rcx
+                     (? (|| (bad? e1) (|| (bad? e2) (bad? e3))) 'bad
+                        (L 'long (cat (asint e1) (cat (L (L 'push 'r0))
+                                  (cat (asint e2) (cat (L (L 'push 'r0))
+                                   (cat (caup e3) (cat (L (L 'mov 'r3 'r0) (L 'pop 'r1) (L 'pop 'r0))
+                                    (cat (L (L 'raw (cat opb (L 15 144 193 72 15 182 201))))          ; seto cl; movzx rcx,cl
+                                         (L (L 'st 'r3 0 'r0) (L 'mov 'r0 'r1))))))))))))
+                 (: direct (&& (= (cap head) 'var)
+                               (&& (bad? (vent g env (caup head)))                ; not a local/global variable...
+                                   (peep (g 'fns) (caup head) ())))               ; ...and a KNOWN function (typos refuse)
+                    sig (? direct (peep (g 'sigs) (caup head) ()) ())
+                    ptys (? (two? sig) (caup sig) ())
+                    rt (? (two? sig) (cap sig) 'long)
+                    variadic (? (two? sig) (nthr sig 2) ())
+                    ; every call rides the SysV registers (call-fixed); a variadic one
+                    ; additionally sets al = #xmm args for its callee's register save area.
+                    (call-fixed g env head args direct ptys rt variadic))))
           (= k 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
               (? (bad? lv) 'bad (loadval (cap lv) (caup lv))))
           (= k 'bin) (cgbin g env e)
           'bad))
-   ; the SysV register call. va? marks a call to a VARIADIC function -- the only
-   ; difference is that `al` (rax's low byte) must carry the number of vector
-   ; (xmm) arguments, which its variadic callee's prologue reads to decide whether
-   ; to spill the xmm registers. params named uniquely so no lambda parameter
-   ; shadows a sibling :-local through boxfix's shared cell (stage 5).
+   ; the SysV register call, stack overflow included: args 1..6 gp / 1..8 xmm ride
+   ; registers, the REST ride the caller stack (arg7 shallowest). evaluation order is
+   ; free in C, so the overflow group emits FIRST, then the register group, both
+   ; right-to-left -- the register pops then run forward and the overflow block is
+   ; left sitting at [sp] for the callee; the caller cleans it after the call (an odd
+   ; count takes an 8-byte pad UNDER it). va? marks a call to a VARIADIC function --
+   ; additionally `al` (rax's low byte) carries the number of vector (xmm) arguments,
+   ; which its variadic callee's prologue reads to decide whether to spill the xmm
+   ; registers. params named uniquely so no lambda parameter shadows a sibling
+   ; :-local through boxfix's shared cell (stage 5).
    (call-fixed g env hd ags dir pts ret va?)
-    (: (ca as i gpc xmmc pf tg)                          ; -> (pushforms targets) | 'bad
-        (? (! (two? as)) (L pf (rev tg))
+    (: (kls as i gpc xmmc ovc acc)                       ; classify + evaluate, L->R -> (((class idx) pushforms)..) | 'bad
+        (? (! (two? as)) (rev acc)
            (: a (cgexpr g env (cap as))
               (? (bad? a) 'bad
                  (: pty (nthty pts i)
                     wd (? pty (flo? pty) (flo? (cap a)))   ; classify by the param type if known, else the arg's
-                    (? (&& wd (< 7 xmmc)) 'bad       ; over 8 double args (stack overflow: a later rung)
-                       (&& (! wd) (< 5 gpc)) 'bad     ; over 6 integer args
-                       (: push (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
-                                     (cat (asint a) (L (L 'push 'r0))))
-                          (ca (cup as) (+ i 1) (? wd gpc (+ gpc 1)) (? wd (+ xmmc 1) xmmc)
-                              (cat pf push) (link (? wd (L 'x xmmc) (L 'g gpc)) tg))))))))
-       car (ca ags 0 0 0 () ())
-       (? (bad? car) 'bad
-          (: pf (cap car) tg (caup car)
-             nxmm (foldl (\ a t (? (= (cap t) 'x) (+ a 1) a)) 0 tg)   ; the vector-arg count (al)
-             (popr ts acc) (? (! (two? ts)) acc
-                              (: t (cap ts)
-                                 (popr (cup ts) (cat acc
-                                   (? (= (cap t) 'g) (L (L 'pop (nthr argregs (caup t))))
-                                      (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup t)) 'r0)))))))
-             pops (popr (rev tg) ())
+                    apush (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
+                             (cat (asint a) (L (L 'push 'r0))))
+                    (? (&& wd (< xmmc 8)) (kls (cup as) (+ i 1) gpc (+ xmmc 1) ovc (link (L (L 'x xmmc) apush) acc))
+                       (&& (! wd) (< gpc 6)) (kls (cup as) (+ i 1) (+ gpc 1) xmmc ovc (link (L (L 'g gpc) apush) acc))
+                       (kls (cup as) (+ i 1) gpc xmmc (+ ovc 1) (link (L (L 'ov ovc) apush) acc)))))))
+       kr (kls ags 0 0 0 0 ())
+       (? (bad? kr) 'bad
+          (: ov? (\ kent (= (cap (cap kent)) 'ov))
+             ovr (: (go1 l1 acc1) (? (! (two? l1)) acc1
+                                     (go1 (cup l1) (? (ov? (cap l1)) (link (cap l1) acc1) acc1)))
+                    (go1 kr ()))                          ; overflow entries, REVERSED (deepest pushes first)
+             rgr (: (go2 l2 acc2) (? (! (two? l2)) acc2
+                                     (go2 (cup l2) (? (ov? (cap l2)) acc2 (link (cap l2) acc2))))
+                    (go2 kr ()))                          ; register entries, reversed (pops run forward)
+             (pushcat l3 acc3) (? (! (two? l3)) acc3 (pushcat (cup l3) (cat acc3 (caup (cap l3)))))
+             pops (: (go4 l4 acc4)
+                      (? (! (two? l4)) acc4
+                         (: kc (cap (cap l4))
+                            (go4 (cup l4) (? (= (cap kc) 'ov) acc4
+                                             (cat acc4 (? (= (cap kc) 'g) (L (L 'pop (nthr argregs (caup kc))))
+                                                          (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup kc)) 'r0))))))))
+                     (go4 kr ()))
+             nxmm (: (go5 l5 n5) (? (! (two? l5)) n5 (go5 (cup l5) (? (= (cap (cap (cap l5))) 'x) (+ n5 1) n5))) (go5 kr 0))
+             nov (tally ovr)
+             padn (? (= (& nov 1) 1) 8 0)                 ; keep sp 16-aligned across the overflow block
+             pad (? (< 0 padn) (L (L 'sub 'sp 'sp padn)) ())
+             clean (? (< 0 (+ (* 8 nov) padn)) (L (L 'add 'sp 'sp (+ (* 8 nov) padn))) ())
+             pf (cat pad (cat (pushcat ovr ()) (pushcat rgr ())))
              setal (? va? (L (L 'li 'r0 nxmm)) ())        ; al = #xmm, set AFTER pops (r0 is no arg register)
              (? dir
-                 (L ret (cat pf (cat pops (cat setal (L (L 'call (intern (caup hd))))))))
+                 (L ret (cat pf (cat pops (cat setal (cat (L (L 'call (intern (caup hd)))) clean)))))
                 (: hr (cgexpr g env hd)                   ; a function-pointer value: park in r3, callr
                    (? (bad? hr) 'bad
                       (L (fnret (cap hr)) (cat pf (cat (caup hr) (cat (L (L 'mov 'r3 'r0))
-                                (cat pops (cat setal (L (L 'callr 'r3))))))))))))))
+                                (cat pops (cat setal (cat (L (L 'callr 'r3)) clean)))))))))))))
    (cgbin g env e)
     (: op (caup e)
        a (cgexpr g env (cauup e))
@@ -815,18 +869,22 @@
        sig (peep (g 'sigs) (caup f) ())
        vararg (? (two? sig) (nthr sig 2) ())
        ; spill each param from its SysV register: integers from r6 r5 r2 r1 r7 r8
-       ; (<=6), doubles from f0..f7 (<=8), SEPARATE counters.
-       (spill ps gpi xmmi env acc)
+       ; (<=6), doubles from f0..f7 (<=8), SEPARATE counters. an OVERFLOW param
+       ; already sits on the caller stack -- addressed at rbp+16+8k, no store.
+       (spill ps gpi xmmi ovi env acc)
         (? (! (two? ps)) (L acc env)
            (: p (cap ps) pty (caup p)
-              off (- 0 (+ (peep g 'off 0) 8))
-              _ (pin g 'off (+ (peep g 'off 0) 8))
-              env2 (link (L (cap p) off pty) env)
-              (? (flo? pty)
-                  (? (< 7 xmmi) 'bad
-                     (spill (cup ps) gpi (+ xmmi 1) env2 (cat acc (fstf pty 'r4 off (xmmreg xmmi)))))
-                 (? (< 5 gpi) 'bad
-                    (spill (cup ps) (+ gpi 1) xmmi env2 (cat acc (L (L 'st 'r4 off (nthr argregs gpi)))))))))
+              (? (&& (flo? pty) (< xmmi 8))
+                  (: off (- 0 (+ (peep g 'off 0) 8))
+                     _ (pin g 'off (+ (peep g 'off 0) 8))
+                     (spill (cup ps) gpi (+ xmmi 1) ovi (link (L (cap p) off pty) env)
+                            (cat acc (fstf pty 'r4 off (xmmreg xmmi)))))
+                 (&& (! (flo? pty)) (< gpi 6))
+                  (: off (- 0 (+ (peep g 'off 0) 8))
+                     _ (pin g 'off (+ (peep g 'off 0) 8))
+                     (spill (cup ps) (+ gpi 1) xmmi ovi (link (L (cap p) off pty) env)
+                            (cat acc (L (L 'st 'r4 off (nthr argregs gpi))))))
+                 (spill (cup ps) gpi xmmi (+ ovi 1) (link (L (cap p) (+ 16 (* 8 ovi)) pty) env) acc))))
        ; a VARIADIC function (SysV): a 176-byte register SAVE AREA holds the 6 gp
        ; arg registers (@ +0, step 8) and 8 xmm registers (@ +48, step 16, low 8
        ; bytes each). named register-passed params are addressed INSIDE the area;
@@ -848,7 +906,7 @@
                      (? (< 5 gpi) (cls (cup qs) gpi xmmi (+ ov 8) (link (L (cap p) (+ 16 ov) pty) env))
                         (cls (cup qs) (+ gpi 1) xmmi ov (link (L (cap p) (+ rsa (* 8 gpi)) pty) env))))))
            (cls ps 0 0 0 ()))
-       sp0 (? vararg (vaspill params) (spill params 0 0 () ()))
+       sp0 (? vararg (vaspill params) (spill params 0 0 0 () ()))
        (? (bad? sp0) 'bad
           (: body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
              (? (bad? body) 'bad
