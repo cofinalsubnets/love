@@ -539,19 +539,39 @@ two ideas to keep warm as the stages climb, neither committed yet:
    get ret from the sig, and callr's result types by it. gate: 77-protoaddr.c
    (fn-ptr table image, &f/bare-f agreement, double through a pointer, gcc = cc = 42)
    + law goldens.
-   STILL AHEAD (codegen + 7d), the measured remainder: struct BY VALUE (struct ai_zn,
-   two doubles returned/passed by value -- zn/ai_net/ai_pin refuse, and a by-value
-   struct PARAM spills as one 8-byte slot silently: needs the SysV two-eightbyte
-   classification); the >6-arg overflow (nf_walk/big_addsub/mag_divmod + their three
-   callers, stack args both sides); ENUM-CONSTANT SHADOWING (a local named `N` folds
-   to the enum's value in expressions -- refuses as an asn LHS, MISCOMPILES as a read;
-   the typedef shadow landed, the enum sibling didn't); data images with const-expr
-   values (`ai_T[] = { [ai_Z] = Bytes, .. }` -- cgdata stops at the first bad global,
-   so re-probe after). then the `__asm__("divq")` path (AVOIDED for now -- cc
-   predefines neither `__x86_64__` nor `__SIZEOF_INT128__`, so ai.c takes the portable
-   32-bit-limb branch, no asm/no __int128), __attribute__((weak))/((section)) -> the
-   linker, unions by value; 7d link cc-built ai.o + gcc-built host/*.o + libc and boot
-   the egg green.
+   THE LIST CLEARED (2026-07-08, same day, commit by commit) -- **`aicc -c ai.c`
+   COMPILES END TO END: all 611 functions + the data tail, a ~514KB relocatable
+   ai.o.** the rest of the tail as it fell: ENUM-CONSTANT SHADOWING (a local named
+   `N` was folded to `enum { N = 13 }`'s value -- a silent read miscompile; locals
+   now shadow enum constants like the typedef shadow, the constant PULLED for the
+   block and re-pinned at `}`); FOLDING IMAGES (a scalar initializer that cfolds is
+   its number -- `(Bits>>3)` macro math; cfold learned value-preserving casts, so
+   NULL and putcharm-word-math image; a label under a word-sized integer cast --
+   `(word)nif_absent` -- is an abs64 fixup, so the nif/def tables lay); HONEST
+   EXTERN (extern data is ('xdecl ..): addressable, NO storage, the reference an
+   UNDEF symbol -- probed (word)&ai_stdin resolving to gcc's definition across the
+   seam); >6-ARG CALLS (args 7+ ride the caller stack, arg7 shallowest, caller
+   cleans, odd counts padded for 16-alignment; callee reads rbp+16+8k; probed
+   cross-toolchain both directions); ALL the gcc BUILTINS as raw-x64 splices (the
+   overflow trio via seto, clzll via bsr^63, isinf via bits<<1, inf/nanf constants,
+   expect, trap = ud2, clear_cache a no-op) -- surfaced by tightening `direct` to
+   KNOWN callees, each previously a silent undefined-symbol landmine; STRUCT BY
+   VALUE (struct ai_zn as the SysV two-SSE-eightbyte xmm pair -- the cgexpr rep of
+   a struct value is its ADDRESS in r0; returns load the pair, calls materialize a
+   frame temp, args ride an x2 register-pair class, params spill 16 bytes; any
+   other by-value struct still refuses) -- which surfaced the MEMBER-ORDER ABI BUG:
+   `double re, im;` laid im-then-re (a double rev; only multi-declarator member
+   lines bit, 4a's battery had none); and FUNCTION-TYPE TYPEDEF DECLARATIONS
+   (`lvm_t lvm_ret0, lvm_cur;` registers sigs, lays NO storage -- it laid duplicate
+   .data symbols, the 7d link's first wall). gates: 78-enumshadow 79-tables
+   80-manyargs 81-builtins 82-znvalue (gcc = cc = 42 each) + laws.
+   STILL AHEAD (7d proper): link cc-built ai.o + gcc-built host/*.o + libc
+   (`gcc -o ai-cc ai.o out/host/host/*.o -lm`) and boot the egg green --
+   __attribute__((weak))/((section)) semantics (pquals still swallows them), any
+   remaining symbol clashes, then silent-miscompile forensics under the corpus.
+   the `__asm__("divq")` path stays AVOIDED (cc predefines neither `__x86_64__` nor
+   `__SIZEOF_INT128__`, so ai.c takes the portable 32-bit-limb branch); unions by
+   value stay refused.
 8. **the fixpoint + the flat stack**: (a) determinism -- cc(cc(ai)) builds
    byte-identical objects to cc(ai); (b) guaranteed sibcalls for the lvm
    shape, ai_tco=1, `make vmret` honest, benches vs gcc recorded.
