@@ -146,9 +146,11 @@
    (spop r)  (L (L 'ld r 'sp 0) (L 'add 'sp 'sp 16))
 
    ; -- the environments: locals shadow globals --
-   (vent g env name)                                ; -> ('loc off ty) | ('glo lbl ty) | 'bad
+   (vent g env name)                                ; -> ('regv rN ty) | ('loc off ty) | ('glo lbl ty) | 'bad
     (: e (assoc name env)
-       (? (two? e) (L 'loc (caup e) (cauup e))
+       (? (two? e)
+           (: h (caup e)                             ; a homed param's "off" slot is a (reg rN) list
+              (? (&& (two? h) (= (cap h) 'reg)) (L 'regv (caup h) (cauup e)) (L 'loc h (cauup e))))
           (: ge (peep (g 'glob) name 0)
              (? (two? ge) (L 'glo (cap ge) (caup ge)) 'bad))))
 
@@ -182,6 +184,7 @@
        (? (= k 'var)
            (: en (vent g env (caup e))
               (? (bad? en) 'bad
+                 (= (cap en) 'regv) 'bad             ; a register home has no address (& is gated out per-fn)
                  ; lean, not lea: an lvalue's address is CONSUMED by its own
                  ; load/store -- the sibcall escape gate must not see it. the
                  ; & lane flips it back to lea (there it really escapes).
@@ -236,6 +239,7 @@
               (? (bad? en)
                   (? (peep (g 'fns) (caup e) ())     ; a function name is its address
                      (L (L 'ptr (fnty g (caup e))) (L (L 'la 'r0 (intern (caup e))))) 'bad)
+                 (= (cap en) 'regv) (L (cauup en) (L (L 'mov 'r0 (caup en))))   ; a register-homed scalar param
                  (: ty (cauup en)
                     ap? (peep g 'argpos ())
                     _ (? (|| (stru? ty) (arr? ty)) (pin g 'argpos ()) ())
@@ -274,7 +278,12 @@
                        (flo? ty) (L 'double (cat (caup r) (fldf ty 'f0 'r0 0)))
                        (L ty (cat (caup r) (L (L (ldop ty) 'r0 'r0 0))))))))
           (= k 'asn)
-           (: lv (clval g env (caup e))
+           (: rv (? (= (cap (caup e)) 'var) (vent g env (caup (caup e))) 'bad)
+              (? (&& (two? rv) (= (cap rv) 'regv))   ; store into a register-homed scalar param
+                  (: r (cgexpr g env (cauup e))
+                     (? (bad? r) 'bad
+                        (L (cauup rv) (cat (asint r) (L (L 'mov (caup rv) 'r0))))))
+                 (: lv (clval g env (caup e))
               (? (bad? lv) 'bad
                  (arr? (cap lv)) 'bad                ; an array is not assignable
                  (stru? (cap lv))                    ; a whole-struct copy (dest r1, src r0)
@@ -299,9 +308,14 @@
                                   (cat (asint r)
                                    (cat (spop 'r1)
                                     (cat (cvt ty 'r0)
-                                         (L (L (stop ty) 'r1 0 'r0)))))))))))))
+                                         (L (L (stop ty) 'r1 0 'r0)))))))))))))))
           (= k 'post)
-           (: lv (clval g env (caup e))
+           (: rv (? (= (cap (caup e)) 'var) (vent g env (caup (caup e))) 'bad)
+              (? (&& (two? rv) (= (cap rv) 'regv))   ; p++ on a register-homed scalar: old in r0, home += step
+                  (: ty (cauup rv) stp (? (ptr? ty) (tsz g (caup ty)) 1)
+                     (L ty (L (L 'mov 'r0 (caup rv))
+                              (L 'add (caup rv) 'r0 (* stp (cauup e))))))
+                 (: lv (clval g env (caup e))
               (? (bad? lv) 'bad
                  (: ty (cap lv)
                     stp (? (ptr? ty) (tsz g (caup ty)) 1)
@@ -310,7 +324,7 @@
                               (L (L 'mov 'r2 'r0)
                                  (L (ldop ty) 'r0 'r2 0)
                                  (L 'add 'r1 'r0 (* stp (cauup e)))
-                                 (L (stop ty) 'r2 0 'r1))))))))
+                                 (L (stop ty) 'r2 0 'r1))))))))))
           (= k 'cast)
            (: r (cgexpr g env (cauup e)) tgt (caup e)
               (? (bad? r) 'bad
@@ -1097,17 +1111,78 @@
                      (? (< 5 gpi) (cls (cup qs) gpi xmmi (+ ov 8) (link (L (cap p) (+ 16 ov) pty) env))
                         (cls (cup qs) (+ gpi 1) xmmi ov (link (L (cap p) (+ rsa (* 8 gpi)) pty) env))))))
            (cls ps 0 0 0 ()))
-       sp0 (? vararg (vaspill params) (spill params 0 0 0 () ()))
-       (? (bad? sp0) 'bad
-          (: body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
-             (? (bad? body) 'bad
-                (: frame (& (+ (peep g 'off 0) 15) -16)
-                   (sibcall g
-                    (cat (L (L 'label (intern (caup f)))
-                            (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame)
-                            (L 'st 'r4 -8 'r3))
-                     (cat (cap sp0)
-                      (cat body (cat (L (L 'li 'r0 0)) epi))))))))))
+       ; -- register-homed params (the leaf lane). a gp param that is an 8-byte
+       ; scalar (long/ulong/pointer) whose address never escapes can live in a
+       ; CALLER-SAVED, non-scratch register for the whole function instead of a
+       ; frame slot -- gcc's win on the hot dispatch ops (lvm_arg0 &c keep Sp/Hp/
+       ; Ip in registers). the home pool (r6 r5 r9 r10 r7 r8), indexed by gp
+       ; position, is disjoint from the codegen's scratch set (r0-r3) and from the
+       ; overflow/xmm registers -- so Hp (incoming r2) and Sp (incoming r1) MOVE
+       ; out of scratch at the prologue. it is applied ONLY when the function turns
+       ; out to be a LEAF: after the sibcall pass no `call`/`callr` remains (every
+       ; call tail-jumped, so no callee -- and no GLAZED callee -- ever clobbers a
+       ; home), fesc is unset (no frame address escaped, so no param's address was
+       ; taken), there is no raw `sys` (rcx/r11 are syscall-clobbered), and it is
+       ; not variadic. decided by GENERATING first, then regenerating with the
+       ; register env if the gate holds. --
+       (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))
+       (homereg gpi) (nthr '(r6 r5 r9 r10 r7 r8) gpi)
+       (spillr ps gpi xmmi ovi env acc)             ; like spill, but home eligible gp params in registers
+        (? (! (two? ps)) (L acc env)
+           (: p (cap ps) pty (caup p)
+              (? (sse2? g pty)
+                  (? (< 6 xmmi) 'bad
+                     (: off (- 0 (+ (peep g 'off 0) 16))
+                        _ (pin g 'off (+ (peep g 'off 0) 16))
+                        (spillr (cup ps) gpi (+ xmmi 2) ovi (link (L (cap p) off pty) env)
+                               (cat acc (cat (fstf 'double 'r4 off (xmmreg xmmi))
+                                             (fstf 'double 'r4 (+ off 8) (xmmreg (+ xmmi 1))))))))
+                 (stru? pty) 'bad
+                 (&& (flo? pty) (< xmmi 8))
+                  (: off (- 0 (+ (peep g 'off 0) 8))
+                     _ (pin g 'off (+ (peep g 'off 0) 8))
+                     (spillr (cup ps) gpi (+ xmmi 1) ovi (link (L (cap p) off pty) env)
+                            (cat acc (fstf pty 'r4 off (xmmreg xmmi)))))
+                 (&& (! (flo? pty)) (< gpi 6))
+                  (? (homable? pty)                  ; home in a register: move from the incoming arg reg if it differs
+                      (: home (homereg gpi) inc (nthr argregs gpi)
+                         mv (? (= home inc) () (L (L 'mov home inc)))
+                         (spillr (cup ps) (+ gpi 1) xmmi ovi (link (L (cap p) (L 'reg home) pty) env)
+                                (cat acc mv)))
+                     (: off (- 0 (+ (peep g 'off 0) 8))
+                        _ (pin g 'off (+ (peep g 'off 0) 8))
+                        (spillr (cup ps) (+ gpi 1) xmmi ovi (link (L (cap p) off pty) env)
+                               (cat acc (L (L 'st 'r4 off (nthr argregs gpi)))))))
+                 (spillr (cup ps) gpi xmmi (+ ovi 1) (link (L (cap p) (+ 16 (* 8 ovi)) pty) env) acc))))
+       (homes? ps gpi)                              ; does any gp param qualify for a register home?
+        (? (! (two? ps)) ()
+           (: pty (caup (cap ps))
+              (? (|| (flo? pty) (sse2? g pty)) (homes? (cup ps) gpi)
+                 (< 5 gpi) ()
+                 (homable? pty) 1
+                 (homes? (cup ps) (+ gpi 1)))))
+       (anyop? fs op) (? (! (two? fs)) () (: f (cap fs) (? (&& (two? f) (= (cap f) op)) 1 (anyop? (cup fs) op))))
+       (hascall? fs) (|| (anyop? fs 'call) (anyop? fs 'callr))
+       (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
+        (? (bad? sp0) 'bad
+           (: body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
+              (? (bad? body) 'bad
+                 (: frame (& (+ (peep g 'off 0) 15) -16)
+                    (sibcall g
+                     (cat (L (L 'label (intern (caup f)))
+                             (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame)
+                             (L 'st 'r4 -8 'r3))
+                      (cat (cap sp0)
+                       (cat body (cat (L (L 'li 'r0 0)) epi)))))))))
+       n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
+       ir1 (build (? vararg (vaspill params) (spill params 0 0 0 () ())))
+       (? (bad? ir1) 'bad
+          (&& (! vararg) (&& (! (peep g 'fesc ()))
+              (&& (! (hascall? ir1)) (&& (! (anyop? ir1 'sys)) (homes? params 0)))))
+           (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
+              ir2 (build (spillr params 0 0 0 () ()))
+              (? (bad? ir2) ir1 ir2))
+          ir1))
 
    ; the data tail: globals in declaration order, then the string table
    (cgdata g)
