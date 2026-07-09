@@ -439,7 +439,12 @@ test_cc: host out/host$(hsuf)/aicc
 	  $m $(ho)/aicc $(ho)/.sib.c $(ho)/.sibx > /dev/null 2>&1 || { echo "FAIL aicc sibcall"; exit 1; }; \
 	  $(ho)/.sibx; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL sibcall flat recursion (50M-deep self + mutual + fn-ptr, got $$a want 42 -- a non-tail call would stack-overflow to 139)"; exit 1; }; \
-	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls) ok"; \
+	  printf 'long fork(void);long waitpid(long,int*,long);void _exit(long);long g;long id(long a){return a;}int main(void){g=id(fork());if(g==0)_exit(42);int st;waitpid(-1,&st,0);return ((st&127)==0&&((st>>8)&255)==42)?42:1;}\n' > $(ho)/.aln.c; \
+	  $m $(ho)/aicc -c $(ho)/.aln.c $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL aicc -c stack-align"; exit 1; }; \
+	  $$cc_g -no-pie -o $(ho)/.alnx $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL ld stack-align"; exit 1; }; \
+	  $(ho)/.alnx; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL 16-byte stack alignment ('g=id(fork())' holds a temp across the call; a bare-push spill leaves rsp at 8 mod 16 and glibc fork's child movaps #GPs -- got $$a want 42)"; exit 1; }; \
+	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment) ok"; \
 	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the

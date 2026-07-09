@@ -137,6 +137,13 @@
        (< 0 sz) (bcopy (+ off 1) (- sz 1)
                   (cat acc (L (L 'ld1 'r2 'r0 off) (L 'st1 'r1 off 'r2))))
        acc)
+   ; a spill that HOLDS a value across a nested sub-eval (which may itself contain
+   ; a call). a bare `push` is 8 bytes and would leave rsp at 8 mod 16 while the
+   ; inner call runs -- a SysV alignment violation that glibc's fork child path
+   ; (movaps on rbp-relative slots) turns into a #GP. reserve a whole 16-byte cell
+   ; so rsp stays 16-aligned through the sub-eval; the callee cleans it as a pair.
+   (spush r) (L (L 'sub 'sp 'sp 16) (L 'st 'sp 0 r))
+   (spop r)  (L (L 'ld r 'sp 0) (L 'add 'sp 'sp 16))
 
    ; -- the environments: locals shadow globals --
    (vent g env name)                                ; -> ('loc off ty) | ('glo lbl ty) | 'bad
@@ -276,21 +283,21 @@
                      (? (bad? rv) 'bad
                         (! (stru? (cap rv))) 'bad
                         (L (cap lv)
-                           (cat (caup lv) (cat (L (L 'push 'r0))
-                            (cat (caup rv) (cat (L (L 'pop 'r1))
+                           (cat (caup lv) (cat (spush 'r0)
+                            (cat (caup rv) (cat (spop 'r1)
                              (bcopy 0 (tsz g (cap lv)) ()))))))))
                  (flo? (cap lv))                     ; a float/double store (addr in r1, value in f0; narrow if float)
                   (: r (cgexpr g env (cauup e))
                      (? (bad? r) 'bad
-                        (L 'double (cat (caup lv) (cat (L (L 'push 'r0))
-                         (cat (asflo r) (cat (L (L 'pop 'r1)) (fstf (cap lv) 'r1 0 'f0))))))))
+                        (L 'double (cat (caup lv) (cat (spush 'r0)
+                         (cat (asflo r) (cat (spop 'r1) (fstf (cap lv) 'r1 0 'f0))))))))
                  (: r (cgexpr g env (cauup e))
                     (? (bad? r) 'bad
                        (: ty (cap lv)
                           (L ty (cat (caup lv)
-                                 (cat (L (L 'push 'r0))
+                                 (cat (spush 'r0)
                                   (cat (asint r)
-                                   (cat (L (L 'pop 'r1))
+                                   (cat (spop 'r1)
                                     (cat (cvt ty 'r0)
                                          (L (L (stop ty) 'r1 0 'r0)))))))))))))
           (= k 'post)
@@ -448,9 +455,9 @@
                             (= bi "__builtin_sub_overflow") (L 72 41 200)     ; sub rax,rcx
                             (L 72 15 175 193))                                ; imul rax,rcx
                      (? (|| (bad? e1) (|| (bad? e2) (bad? e3))) 'bad
-                        (L 'long (cat (asint e1) (cat (L (L 'push 'r0))
-                                  (cat (asint e2) (cat (L (L 'push 'r0))
-                                   (cat (caup e3) (cat (L (L 'mov 'r3 'r0) (L 'pop 'r1) (L 'pop 'r0))
+                        (L 'long (cat (asint e1) (cat (spush 'r0)
+                                  (cat (asint e2) (cat (spush 'r0)
+                                   (cat (caup e3) (cat (cat (L (L 'mov 'r3 'r0)) (cat (spop 'r1) (spop 'r0)))
                                     (cat (L (L 'raw (cat opb (L 15 144 193 72 15 182 201))))          ; seto cl; movzx rcx,cl
                                          (L (L 'st 'r3 0 'r0) (L 'mov 'r0 'r1))))))))))))
                  (: direct (&& (= (cap head) 'var)
@@ -509,11 +516,18 @@
                                          (cat (caup a) (L (L 'ld 'r1 'r0 8) (L 'push 'r1) (L 'ld 'r1 'r0 0) (L 'push 'r1))))
                                       acc)))
                        (stru? aty) 'bad                    ; any other by-value struct stays ahead
-                       (: apush (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0) (L 'push 'r0)))
-                                   (cat (asint a) (L (L 'push 'r0))))
-                          (? (&& wd (< xmmc 8)) (kls (cup as) (+ i 1) gpc (+ xmmc 1) ovc (link (L (L 'x xmmc) apush) acc))
-                             (&& (! wd) (< gpc 6)) (kls (cup as) (+ i 1) (+ gpc 1) xmmc ovc (link (L (L 'g gpc) apush) acc))
-                             (kls (cup as) (+ i 1) gpc xmmc (+ ovc 1) (link (L (L 'ov ovc) apush) acc)))))))))
+                       (: aval (? wd (cat (asflo a) (L (L 'movqrx 'r0 'f0))) (asint a))
+                          ; a register arg rides a 16-byte cell: rsp stays 16-aligned
+                          ; while the REMAINING args evaluate (a later arg may hold a
+                          ; nested call, and the SysV ABI wants rsp%16==0 at it). an
+                          ; overflow arg keeps its 8-byte push -- the callee reads the
+                          ; overflow block packed, and its target is ai-internal (never
+                          ; a libc movaps-on-rbp path), so a stray eval-time skew is moot.
+                          rpush (cat aval (spush 'r0))
+                          opush (cat aval (L (L 'push 'r0)))
+                          (? (&& wd (< xmmc 8)) (kls (cup as) (+ i 1) gpc (+ xmmc 1) ovc (link (L (L 'x xmmc) rpush) acc))
+                             (&& (! wd) (< gpc 6)) (kls (cup as) (+ i 1) (+ gpc 1) xmmc ovc (link (L (L 'g gpc) rpush) acc))
+                             (kls (cup as) (+ i 1) gpc xmmc (+ ovc 1) (link (L (L 'ov ovc) opush) acc)))))))))
        kr (kls ags 0 0 0 0 ())
        (? (bad? kr) 'bad
           (: ov? (\ kent (= (cap (cap kent)) 'ov))
@@ -528,11 +542,11 @@
                       (? (! (two? l4)) acc4
                          (: kc (cap (cap l4))
                             (go4 (cup l4) (? (= (cap kc) 'ov) acc4
-                                             (cat acc4 (? (= (cap kc) 'g) (L (L 'pop (nthr argregs (caup kc))))
-                                                          (= (cap kc) 'x2)   ; the struct pair: re then im
+                                             (cat acc4 (? (= (cap kc) 'g) (spop (nthr argregs (caup kc)))
+                                                          (= (cap kc) 'x2)   ; the struct pair: re then im (a natural 16-byte cell)
                                                            (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup kc)) 'r0)
                                                               (L 'pop 'r0) (L 'movqxr (xmmreg (+ (caup kc) 1)) 'r0))
-                                                          (L (L 'pop 'r0) (L 'movqxr (xmmreg (caup kc)) 'r0))))))))
+                                                          (cat (spop 'r0) (L (L 'movqxr (xmmreg (caup kc)) 'r0)))))))))
                      (go4 kr ()))
              nxmm (: (go5 l5 n5) (? (! (two? l5)) n5
                                     (go5 (cup l5) (: kk (cap (cap (cap l5)))
@@ -566,14 +580,14 @@
               (? (= (cap rhs) 'num)
                  (L rt (cat (caup a) (L (L iop 'r0 (caup rhs)))))
                  (L rt (cat (caup a)
-                        (cat (L (L 'push 'r0))
-                         (cat (caup b) (L (L 'mov 'r1 'r0) (L 'pop 'r0)
-                                          (L vop 'r0 'r1))))))))
+                        (cat (spush 'r0)
+                         (cat (caup b) (cat (L (L 'mov 'r1 'r0)) (cat (spop 'r0)
+                                          (L (L vop 'r0 'r1))))))))))
           ; the double lane: either operand double -> both to double (f1=left,
           ; f0=right through the gp stack), then the scalar-double op or ucomisd.
           (|| (flo? (cap a)) (flo? (cap b)))
-           (: mid (cat (asflo a) (cat (L (L 'movqrx 'r0 'f0) (L 'push 'r0))
-                       (cat (asflo b) (L (L 'pop 'r1) (L 'movqxr 'f1 'r1)))))
+           (: mid (cat (asflo a) (cat (cat (L (L 'movqrx 'r0 'f0)) (spush 'r0))
+                       (cat (asflo b) (cat (spop 'r1) (L (L 'movqxr 'f1 'r1))))))
               (? (= op '+) (L 'double (cat mid (L (L 'addsd 'f0 'f1))))
                  (= op '*) (L 'double (cat mid (L (L 'mulsd 'f0 'f1))))
                  (= op '-) (L 'double (cat mid (L (L 'subsd 'f1 'f0) (L 'movsd 'f0 'f1))))
@@ -598,7 +612,7 @@
           (: ta (cap a) tb (cap b)
              pa (ptr? ta) pb (ptr? tb)
              ; left lands in r1, right in r0; scale the int side of ptr math
-             mid (cat (caup a) (cat (L (L 'push 'r0)) (cat (caup b) (L (L 'pop 'r1)))))
+             mid (cat (caup a) (cat (spush 'r0) (cat (caup b) (spop 'r1))))
              back (L (L 'mov 'r0 'r1))
              (? (= op '+)
                  (? (&& pa pb) 'bad

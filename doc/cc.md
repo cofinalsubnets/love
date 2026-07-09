@@ -631,18 +631,30 @@ two ideas to keep warm as the stages climb, neither committed yet:
    (`(loop ...)` = 4999950000), and the 5 glaze-heavy corpus files that
    crashed now pass. the whole tco=0 corpus MISSED this because the glaze is
    the only executable-arena user and it's gated off on trampoline builds.
-   STILL AHEAD: one SEPARATE tco=1 crash remains -- the fault barrier
-   (`#if __STDC_HOSTED__ && ai_tco`: sigsetjmp/siglongjmp over hardware
-   faults) with `fork` (the `run` subprocess nif). `(run (list "true"))`:
-   host = 0, cc-tco1 = the child SIGSEGVs (SI_KERNEL, si_addr NULL, a
-   non-canonical jump) after glibc's fork child-cleanup, BEFORE execvp --
-   siglongjmp restoring a corrupt saved context in the child. PROVEN
-   independent of both hosted-lane correctness (tco=0+hosted=1 runs `run`
-   fine -- the barrier is off there) and the sibcall pass (crashes with it
-   disabled). tracing-resistant: it vanishes under gdb follow-fork and
-   strace slows it but shows the child dies right after `rt_sigprocmask`.
-   the lead: cc's compilation of the `sigsetjmp(ai_fault_jb, 1)` call site /
-   ai_eval barrier frame. that + benches vs gcc are the flat-stack tail.
+   (d) 16-BYTE STACK ALIGNMENT. `(run (list "true"))` crashed the FORKED
+   child (SIGSEGV, SI_KERNEL, si_addr NULL -- a non-canonical control
+   transfer) after glibc's fork child-cleanup, BEFORE execvp. NOT the fault
+   barrier and NOT the `run` nif: the child faults INSIDE `__libc_fork`, on
+   `movaps %xmm1,-0x140(%rbp)` in glibc's child-ONLY path (the parent
+   branches away). `movaps` #GPs on a misaligned operand, so the ABI's
+   16-byte stack alignment was violated -- and it was OURS. cc spilled an
+   8-byte temporary with a bare `push` and HELD it across a nested call:
+   the assignment target `&g` across `g = <rhs-with-calls>` (ai_evals_),
+   binop operands, argument marshalling. rsp sat at 8 mod 16 for the inner
+   call, so glibc's fork (the first callee that stores aligned SSE to
+   rbp-relative slots) crashed. INVISIBLE to ai.c's own code (it never
+   movaps'es a frame slot) and to the -O0 gcc differential (both align
+   correctly), so the whole corpus rode a skewed stack that only libc's
+   fork child ever tripped. the fix (`gen.l`): a spill that outlives a
+   nested call reserves a 16-byte cell (`spush`/`spop` = sub/st .. ld/add
+   16), not an 8-byte push -- rsp stays 16-aligned at every call. register
+   call-args ride 16-byte cells too (a later arg may hold a call);
+   overflow args keep their 8-byte packing (the callee reads them packed,
+   and their targets are ai-internal, never a libc movaps path). WITH IT:
+   the cc-built ai runs `run`/`fork`, and the whole 2831-test corpus passes
+   at ai_tco=1 with the glaze live. `test_cc` guards it with a
+   `g=id(fork())` program whose child dies iff the stack is skewed. benches
+   vs gcc are the flat-stack tail.
 9. **stretch, as appetite allows**: arm64 parity through the same holo
    seam (the IR is neutral; gen.l shouldn't care), our own static linker
    (elf.l already lays executables -- close the last binutils door), -g
