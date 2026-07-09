@@ -618,11 +618,31 @@ two ideas to keep warm as the stages climb, neither committed yet:
    1). battery: the flat-recursion gate (self + mutual + fn-ptr) + gen laws
    (a self-recursive tail is `jmp rec` not `call rec`; a frame-escaping fn
    keeps its call).
-   STILL AHEAD: running the cc build ITSELF at ai_tco=1 with the glaze LIVE.
-   the tco=1 object links and boots and passes spec.l, but a glazed hot loop
-   crashes -- a SEPARATE cc-at-tco=1 miscompile (PROVEN sibcall-independent:
-   it crashes with the sibcall pass disabled too) where Sp threads wrong into
-   glazed-native entry. that + benches vs gcc are the flat-stack tail.
+   (c) THE GLAZE RUNS AT ai_tco=1. the cc build's first crash was NOT Sp
+   threading at all -- cc predefined `__STDC_HOSTED__` = 0, so ai.c compiled
+   its FREESTANDING lanes: `toast`/`nif` copied native code into the plain
+   heap (NX) instead of the hosted W^X mmap+mprotect arena, and a glazed
+   native body jmped into non-executable heap and faulted (rip in the heap,
+   the cell's value[0]/value[4] a heap addr not the W^X code). a cc-built
+   object links against libc into a HOSTED program, so cc now predefines
+   `__STDC_HOSTED__` = 1. with it: the glaze self-test passes under the
+   cc-built binary (`test/glaze-x86.l` -- cc-compiled code running the
+   glaze's OWN x86 native codegen), hot loops native-compile correctly
+   (`(loop ...)` = 4999950000), and the 5 glaze-heavy corpus files that
+   crashed now pass. the whole tco=0 corpus MISSED this because the glaze is
+   the only executable-arena user and it's gated off on trampoline builds.
+   STILL AHEAD: one SEPARATE tco=1 crash remains -- the fault barrier
+   (`#if __STDC_HOSTED__ && ai_tco`: sigsetjmp/siglongjmp over hardware
+   faults) with `fork` (the `run` subprocess nif). `(run (list "true"))`:
+   host = 0, cc-tco1 = the child SIGSEGVs (SI_KERNEL, si_addr NULL, a
+   non-canonical jump) after glibc's fork child-cleanup, BEFORE execvp --
+   siglongjmp restoring a corrupt saved context in the child. PROVEN
+   independent of both hosted-lane correctness (tco=0+hosted=1 runs `run`
+   fine -- the barrier is off there) and the sibcall pass (crashes with it
+   disabled). tracing-resistant: it vanishes under gdb follow-fork and
+   strace slows it but shows the child dies right after `rt_sigprocmask`.
+   the lead: cc's compilation of the `sigsetjmp(ai_fault_jb, 1)` call site /
+   ai_eval barrier frame. that + benches vs gcc are the flat-stack tail.
 9. **stretch, as appetite allows**: arm64 parity through the same holo
    seam (the IR is neutral; gen.l shouldn't care), our own static linker
    (elf.l already lays executables -- close the last binutils door), -g

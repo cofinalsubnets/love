@@ -335,7 +335,13 @@
    (cpp toks incf)                                    ; -> (1 out) | ()
     (: macs (: t (tablet 0)
                _ (pin t "__STDC__" (L 'obj (L (tok 'num 1 0))))
-               _ (pin t "__STDC_HOSTED__" (L 'obj (L (tok 'num 0 0))))
+               ; HOSTED: a cc-built object links against libc into a hosted program,
+               ; so ai.c must take its hosted lanes -- the W^X mmap+mprotect code
+               ; arena (toast/nif), NOT the freestanding heap copy (which is NX, so
+               ; a glazed native body jumped into non-executable heap and faulted).
+               ; the whole tco=0 corpus missed it: the glaze is the only arena user
+               ; and it's gated off on trampoline builds.
+               _ (pin t "__STDC_HOSTED__" (L 'obj (L (tok 'num 1 0))))
                ; cc emits x86-64, so say so (ai.c's AI_ARCH/IMAGE_ARCH read it --
                ; a build without it believed its arch was "other" and the glaze
                ; handed holo an unknown target). __SIZEOF_INT128__ stays UNDEFINED,
