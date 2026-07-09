@@ -650,7 +650,8 @@
                                       (cat (L (L 'sub 'r1 'r1 'r0)) back))))
                     pb 'bad
                     (L 'long (cat mid (cat (L (L 'sub 'r1 'r1 'r0)) back))))
-                (: unsg (|| (usg? ta) (usg? tb))            ; either operand unsigned -> unsigned divide/compare
+                (: unsg (|| (usg? ta) (usg? tb))            ; either operand unsigned -> unsigned divide
+                   cunsg (|| unsg (|| pa pb))               ; a POINTER relational compares UNSIGNED too (C: addresses are unsigned; matters where a pointer sets bit 63)
                    tail (? (= op '*) (L (L 'imul 'r1 'r1 'r0))
                            (= op '/) (L (L (? unsg 'udiv 'div) 'r1 'r1 'r0))
                            (= op '%) (L (L (? unsg 'urem 'rem) 'r1 'r1 'r0 'r3))
@@ -661,7 +662,7 @@
                    (? (! (bad? tail))
                       (L (ubin ta tb) (cat mid (cat tail back)))
                       (member? op '(eq ne lt le gt ge))
-                       (L 'long (cat mid (L (L 'cmp 'r1 'r0) (L 'set (scc op unsg) 'r0))))
+                       (L 'long (cat mid (L (L 'cmp 'r1 'r0) (L 'set (scc op cunsg) 'r0))))
                       'bad))))))
 
    ; r3 (rbx) is CALLEE-SAVED under SysV and gen leans on it (callr park, the
