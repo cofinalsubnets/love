@@ -33,10 +33,10 @@ body {
 }
 
 h1 { font-size: 2.2em; font-weight: normal; letter-spacing: .04em; }
-h1::after { content: " 🔭"; }   /* the telescope */
 h2 { font-size: 1.15em; font-weight: normal; color: #737aa2;
      margin: 2.4em 0 .6em; border-bottom: 1px solid #3b4261; padding-bottom: .3em; }
 h3 { font-size: 1em; font-weight: normal; color: #9aa5ce; margin: 1.6em 0 .5em; }
+h4 { font-size: 1em; font-weight: normal; color: #737aa2; margin: 1.2em 0 .3em; }
 h2 a, h3 a { color: inherit; }
 h2 a:hover, h3 a:hover { text-decoration: none; }
 h2 a:hover::after, h3 a:hover::after { content: " #"; color: #545c7e; }
@@ -169,7 +169,6 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 .hi.gray a { color: #565f89; }
 /* the color words' glossary entries wear their color too */
 #g-green { color: #34ff9e; } #g-red { color: #ff3b6b; } #g-blue { color: #3a9dff; }
-h1::before { content: "🌑 "; }
 
 /* --- mobile --- the 2x desktop size (32px) overflows a phone, so drop back to
    the 16px native cell: still a crisp 1x bitmap (2-3x on a HiDPI phone), and the

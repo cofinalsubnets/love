@@ -8,13 +8,12 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<nav class="topnav"><span class="here">ai</span> &nbsp;&middot;&nbsp; <a href="language.html">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="crew/index.html">crew</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
-<h1><a href="https://github.com/cofinalsubnets/ai">ai</a></h1>
+<nav class="topnav"><span class="here">ai</span> &nbsp;&middot;&nbsp; <a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="#lore">lore</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
+<h1>🌑 <a href="https://github.com/cofinalsubnets/ai">ai</a> 🔭</h1>
 
 <!-- the live bao shell: status, terminal, runnable chips, and the wasm driver.
      raw HTML/JS, since the terminal + the data-run chips are markup, not prose. -->
-     <p class="lead">ai is a dynamically typed <a href="language.html">lisp superset</a> with curried evaluation, fast
-generics, and optional infix/prefix notation.</p>
+ <p class="lead">ai is a dynamically typed <a href="#language">lisp superset</a> where every value is a one-argument function.</p>
 
 <p id="status">loading the image...</p>
 
@@ -151,8 +150,61 @@ generics, and optional infix/prefix notation.</p>
 </script>
 
 <hr>
+<h2 id="language"><a href="#language">🎨 language</a></h2>
+<p>
+ai is a dynamically typed lisp superset where every value is a one-argument function.
+all functions are curried with eager evaluation like in ocaml, and apl-like infix and
+prefix notation is built in (it's optional and desugars to lisp). since every value is a
+function and every function is curried, apply reduces to a left fold by the identity
+function. pretty much every expression evaluates to something, as long as the parens
+balance...  unless, you infinite loop.... 😨</p>
+<p>the api is currently 🫨 unstable.
+type <code>names ()</code> at the repl to see a full list of the namespace.</p>
+<h3>big main headline features</h3>
+<h4>🎯 global function type</h4>
+<p>everything is literally a function, even numbers (church numerals),
+  lists/maps/strings/arrays (accessors), and literally everything else.
+  you can apply pretty much anything to anything and get back something.</p>
+<h4>🍛 currying</h4>
+<p>all functions are theoretically curried with eager evaluation and unspecified
+  evaluation order roughly kind of like ocaml i think; also similar to ocaml,
+  sequencing is done through the let expression (or through <code>,</code>, see below).</p>
+<h4>🔣 extended lisp syntax</h4>
+<p>ai code is written using a relaxed and simplified form of s-expressions.
+  it has three basic special forms, <code>: ? \</code>, plus macros. however,
+ai also has extended infix and prefix notation as syntactic sugar.</p>
+<p>an all-punct symbol acts as an infix operator when it occurs in non-leading position
+in a list. this can be escaped by wrapping the symbol in parentheses. infix operators are
+right-associative with flat precedence, a convention borrowed from APL. the exception is
+the weak binding <code>,</code> operator, which in infix position performs left-associative</p>
+<p>prefix operators are single characters, also called monadic operators or sigils,
+implemented as syntactic sugar by the reader when a punctuation sequence is glued directly
+to the next token (no whitespace between them).</p>
+<h4>🌌 constellations (aka numerics)</h4>
+<p>stars aka scalars: charm (fixnum) sun (pointer size int) gem (pointer size float) twin (complex gem) big (big int)</p>
+<p>galaxies aka trays of stars aka shaped numeric arrays with APL/NumPy-like extended math operations.</p>
+<h3>some differences from other languages</h3>
+<h4>no thunks</h4>
+<p>since every function takes one argument, ai has no zero-argument functions or thunks.
+the equivalent situation is just ignoring the argument, so if you want to write a thunk
+then just do that.</p>
+<h4>no varargs</h4>
+<p>kind of a dual situation, except there are actually several ways to implement vararg
+functions, in addition to simulating them with macros. however, they don't automatically
+assemble extra args into a list for you, you have to write the logic manually. if you
+really want an automatic syntax, you could probably write a macro to do that.</p>
+<h4>church numerals</h4>
+<p>natural numbers act transparently as church numerals in ai, which is a way of reproducing
+natural number algebra in the form of iterators, or notationally, function exponents.
+in fact, the iterating action of numbers on functions corresponds in ai to exponentiation
+by the function numeral, which means a list of stars evaluates to an exponential tower.
+this extends to gem, twin, etc., and allows roots to be written numerically as fractional
+exponents. in the outward direction, extending the church algebra definitions to functions
+generally identifies exponentiation with application, multiplication with composition,
+and addition with a secret second kind of composition.</p>
+
+<hr>
 <h2 id="glossary"><a href="#glossary">glossary</a></h2>
-<p class="lead">ai has its own names for things. overlap with outside terminology or definitions is coincidental.</p>
 <dl class="glossary">
   <dt id="g-apply"><a href="#g-apply">📋 apply</a></dt>
     <dd>(verb) the binary operation of calling a function with an argument. corresponds to exponentiation in <a href="#g-church">church arithmetic</a>. written <code>(f x)</code> meaning apply <code>f</code> to <code>x</code>. see also: <a href="#g-curry">curry</a></dd>
@@ -244,6 +296,55 @@ generics, and optional infix/prefix notation.</p>
   <dt id="g-zero-point"><span class="hi gray"><a href="#g-zero-point">0️⃣ zero point</a></span></dt>
     <dd>see: <a href="#g-nothing">nothing</a></dd>
 </dl>
+
+<hr>
+<h2 id="crew"><a href="#crew">the crew</a></h2>
+<dl class="crew">
+  <dt>🌑 inle ◦ the vessel</dt>
+    <dd>a self-assembling hybrid of human engineering and salvaged alien technology</dd>
+  <dt>🔭 tele ◦ the pilot</dt>
+    <dd>big telescope. pilot face of inle. pytorch clone</dd>
+  <dt>🐇 bellberry ◦ the navigator</dt>
+    <dd>brown rabbit with dark eyes and light stripes</dd>
+  <dt>🕊 gwen ◦ the synthesist</dt>
+    <dd>mourning dove friend of bellberry and tele</dd>
+  <dt>🐈 ain ◦ the netcat</dt>
+    <dd>white cat. ambivalently misanthropic. openbsd netcat clone</dd>
+  <dt>🐕 bao ◦ the shell</dt>
+    <dd>corgi shiba inu mix. very eager to please. rlwrap clone</dd>
+  <dt>🐀 cook ◦ the build system</dt>
+    <dd>a colony of gray rats. gnu make clone</dd>
+  <dt>🐐 mow ◦ the grass chewer (garbage collector)</dt>
+    <dd>goat. formerly gregarious, now solitary. two-gen two-space copying</dd>
+  <dt>🕷️ <a href="crew/holo.html">holo</a> ◦ the assembler</dt>
+    <dd>cave spider. short for holophrasm. currently amd64/arm64</dd>
+  <dt>🦇 <a href="crew/thom.html">thom</a> ◦ the SAT bat</dt>
+    <dd>cave bat friend of holo. they often discuss their inner lives</dd>
+  <dt>🦐 <a href="crew/phos.html">phos</a> ◦ the window manager</dt>
+    <dd>mantis shrimp. frequents a brine pool in holo's cave. xmonad clone</dd>
+  <dt>🦑 quay ◦ the terminal emulator</dt>
+    <dd>cuttlefish. 256 color skin. likes writing screensavers</dd>
+  <dt>🪸 pulchritude ◦ the editor</dt>
+    <dd>coral colony. vi clone</dd>
+</dl>
+
+<hr>
+<h2 id="lore"><a href="#lore">🧙 lore</a></h2>
+<h3>📜 origins</h3>
+<p>the language currently known as ai originated in 2016/2017 as an attempt to synthesize a
+scheme-like lisp dialect with forth and K. the original version was much more forth-like and
+a few syntactic vestiges remain, notably the <code>:</code> form and <code>.</code> operator.
+by 2020 the language was recognizable and using the modern set of forms, although at this
+point <code>,</code> and <code>`</code> were separate sequencing and quotation primitives, not
+yet folded into <code>:</code> and <code>\</code>. more substantially, currying was not a
+central component of the design at this point. the type ontology was less structured, though
+reasonably small, based on tagged pointers. by mid 2021 the bootstrap and self-hosted thread
+compilers were similar to their current design. by 2023 the runtime and compilers had been
+revised to support currying as a fundamental feature. the language, now called gwen lisp,
+was developed and improved in various ways through the next several years. at this time
+<code>()</code> was fused with 0, the color principle was not yet present, and the function
+action of all data was to act as its own constant function.</p>
+<p>👷<em>this section is under construction</em></p>
 
 <footer>for ()
   <span class="note">&middot; set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V TWN16 + re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
