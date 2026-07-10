@@ -4943,11 +4943,8 @@ lvm(lvm_eat2) {
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
-static ai_inline size_t ai_pagesize(void) {
- static size_t p; if (!p) { long q = sysconf(_SC_PAGESIZE); p = q > 0 ? (size_t) q : 4096; }
- return p; }
-static ai_inline size_t code_maplen(size_t codelen) {
- size_t ps = ai_pagesize(), need = sizeof(struct ai_str) + codelen;
+static ai_inline size_t code_maplen(size_t codelen) {   // round the arena up to a page; glibc's sysconf is a cached auxv load, not a syscall
+ long q = sysconf(_SC_PAGESIZE); size_t ps = q > 0 ? (size_t) q : 4096, need = sizeof(struct ai_str) + codelen;
  return (need + ps - 1) & ~(ps - 1); }
 // Finalizer (runs inside GC, fz->p is the from-space buf wrapper, still
 // readable): recover the arena base from ->str and unmap it. ->str is an
