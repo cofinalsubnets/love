@@ -24,7 +24,12 @@
     <div id="row"><textarea id="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
   </div>
 </div>
-<span class="chip" data-run='."hello world\n", 15 (\ n (: f (? !(n % 3) "fizz") b (? !(n % 5) "buzz") (.(? ($f | $b) (f + b) n), ."\n", n + 1))) 1'>hello world, fizzbuzz</span>
+<span class="chip"
+data-run=
+'."hello world :3\n",
+15
+(\ n (: f (? !(n % 3) "fizz") b (? !(n % 5) "buzz") (.(? ($f | $b) (f + b) n), ."\n", n + 1)))
+1'>hello world demo</span>
 <span class="chip" data-run="2 3 4">2 3 4</span>
 <span class="chip" data-run="map (+ 1) '(1 2 3)">map (+ 1) '(1 2 3)</span>
 <span class="chip" data-run="map (net * jot * (+ 2)) (jot (3 3))">map (net * jot * (+ 2)) (jot (3 3))</span>
