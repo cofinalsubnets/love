@@ -37,7 +37,7 @@
    ; a standalone static executable (the default): _start + text + data, chmod +x
    (cc-exe src dst)
     (: ps (cc-parse src)
-       ir (cgen (caup ps) (cauup ps) (caup (cuup ps)))
+       ir (cgen (caup ps) (cauup ps) (caup (cuup ps)) (el ps 4))
        _ (? (two? ir) () (udie 1 (+ "cc: codegen error in " src)))
        res (elf64 'x64 (\ _ (caup ir)) ())
        _ (write-bytes dst (peep res 'bytes 0))
@@ -47,7 +47,7 @@
    ; the system linker to bind against host/*.o + libc (stage 7a).
    (cc-obj src dst)
     (: ps (cc-parse src)
-       ob (cgen-obj (caup ps) (cauup ps) (caup (cuup ps)))
+       ob (cgen-obj (caup ps) (cauup ps) (caup (cuup ps)) (el ps 4))
        _ (? (two? ob) () (udie 1 (+ "cc: codegen error in " src)))
        bytes (objelf 'x64 (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4))
        _ (write-bytes dst bytes)

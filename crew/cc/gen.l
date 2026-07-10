@@ -62,6 +62,9 @@
    (usg? ty) (member? ty '(uchar ushort uint ulong))
    (ubin ta tb) (? (|| (usg? ta) (usg? tb)) 'ulong 'long)
    (scc op unsg) (? (! unsg) op (= op 'lt) 'below (= op 'gt) 'above (= op 'le) 'be (= op 'ge) 'ae op)
+   (rflip op) (? (= op 'lt) 'gt (= op 'gt) 'lt (= op 'le) 'ge (= op 'ge) 'le op)      ; MIRRORED (n < x reads x > n): constant-on-the-left
+   (negrel op) (? (= op 'eq) 'ne (= op 'ne) 'eq (= op 'lt) 'ge (= op 'ge) 'lt (= op 'le) 'gt 'le)   ; NEGATED: branch-if-false
+   (fits32? v) (&& (<= -2147483648 v) (<= v 2147483647))    ; holo's ALU/cmp/imul immediates ride le32
    (tsz g ty) (? (ptr? ty) 8
                  (arr? ty) (* (cauup ty) (tsz g (caup ty)))
                  (stru? ty) (caup (peep (g 'stag) (caup ty) 0))
@@ -75,6 +78,34 @@
              (: f (assoc name (cap e))
                 (? (two? f) (L (caup f) (cauup f)) 'bad)))))
    (lg2 n) (? (= n 1) 0 (= n 2) 1 (= n 4) 2 3)
+   ; -- the immediate lane: the left value already in r0, a compile-time constant
+   ; on the right -> ONE imm-form op (holo's add/sub/imul/and/or/xor/cmp take a
+   ; signed-32 immediate), no operand-stack shuttle -- 6 insns and a memory
+   ; round-trip fold to 1. a pointer +/- scales the constant at compile time; an
+   ; UNSIGNED / or % by a power of two strength-reduces to shr/and (the b2w
+   ; shape; signed stays a real div -- C rounds toward zero, sar toward -inf).
+   ; answers (ty forms) | 'no (the caller falls back to the shuttle). --
+   (pow2? n) (&& (< 0 n) (= 0 (& n (- n 1))))
+   (lg2v n) (: (go k v) (? (<= v 1) k (go (+ k 1) (>> v 1))) (go 0 n))
+   (immop g op af aty n)
+    (? (member? op '(eq ne lt le gt ge))
+        (? (fits32? n)
+           (L 'long (cat af (L (L 'cmp 'r0 n) (L 'set (scc op (|| (usg? aty) (ptr? aty))) 'r0))))
+           'no)
+       (member? op '(/ %))
+        (? (! (&& (usg? aty) (pow2? n))) 'no
+           (= op '/) (? (= n 1) (L 'ulong af)
+                        (L 'ulong (cat af (L (L 'shr 'r0 (lg2v n))))))
+           (= n 1) (L 'ulong (cat af (L (L 'li 'r0 0))))
+           (L 'ulong (cat af (L (L 'and 'r0 'r0 (- n 1))))))
+       (: sn (? (&& (ptr? aty) (member? op '(+ -))) (* n (tsz g (caup aty))) n)
+          iop (? (= op '+) 'add (= op '-) 'sub (= op '*) 'imul
+                 (= op '&) 'and (= op '|) 'or (= op '^) 'xor 'no)
+          (? (id? iop 'no) 'no
+             (! (fits32? sn)) 'no
+             (: rt (? (ptr? aty) aty (ubin aty 'long))
+                (? (&& (= sn 0) (member? op '(+ -))) (L rt af)
+                   (L rt (cat af (L (L iop 'r0 'r0 sn)))))))))
    (ldop ty) (? (= ty 'char) 'ld1 (= ty 'short) 'ld2 (= ty 'int) 'ld4
                 (= ty 'uchar) 'ldu1 (= ty 'ushort) 'ldu2 (= ty 'uint) 'ldu4 'ld)
    (stop ty) (? (|| (= ty 'char) (= ty 'uchar)) 'st1 (|| (= ty 'short) (= ty 'ushort)) 'st2
@@ -121,6 +152,53 @@
            (L 'long (cat (caup r) (L (L 'li 'r1 0) (L 'movqxr 'f1 'r1) (L 'ucomisd 'f0 'f1)
                                      (L 'set 'ne 'r0) (L 'set 'p 'r1) (L 'or 'r0 'r0 'r1))))
           r))
+   ; -- branch on a condition WITHOUT materializing its truth value: forms that
+   ; jump to lbl when the condition is FALSE (cc 'eq) or TRUE (cc 'ne), the same
+   ; sense as the fallback `(cmp r0 0) (br cc lbl)` over a ctest value. a
+   ; comparison fuses to cmp + br<relation> (the cmp/set/movzx/cmp/br chain
+   ; folds to cmp/br on EVERY if/while/for), !e flips the sense, && and ||
+   ; short-circuit straight into the branch structure. the double lane stays
+   ; materialized (ucomisd's NaN parity rides the set ops). forms | 'bad. --
+   (cbranch g env e cc lbl)
+    (? (&& (= (cap e) 'un) (= (caup e) 'not))
+        (cbranch g env (cauup e) (? (= cc 'eq) 'ne 'eq) lbl)
+       (= (cap e) 'land)
+        (? (= cc 'eq)
+           (: f1 (cbranch g env (caup e) 'eq lbl)
+              f2 (cbranch g env (cauup e) 'eq lbl)
+              (? (|| (bad? f1) (bad? f2)) 'bad (cat f1 f2)))
+           (: lf (nlab g ".f")
+              f1 (cbranch g env (caup e) 'eq lf)
+              f2 (cbranch g env (cauup e) 'ne lbl)
+              (? (|| (bad? f1) (bad? f2)) 'bad (cat f1 (cat f2 (L (L 'label lf)))))))
+       (= (cap e) 'lor)
+        (? (= cc 'ne)
+           (: f1 (cbranch g env (caup e) 'ne lbl)
+              f2 (cbranch g env (cauup e) 'ne lbl)
+              (? (|| (bad? f1) (bad? f2)) 'bad (cat f1 f2)))
+           (: lt (nlab g ".t")
+              f1 (cbranch g env (caup e) 'ne lt)
+              f2 (cbranch g env (cauup e) 'eq lbl)
+              (? (|| (bad? f1) (bad? f2)) 'bad (cat f1 (cat f2 (L (L 'label lt)))))))
+       (&& (= (cap e) 'bin) (member? (caup e) '(eq ne lt le gt ge)))
+        (: op (caup e)
+           a (cgexpr g env (cauup e))
+           b (cgexpr g env (caup (cuup e)))
+           lhs (cauup e) rhs (caup (cuup e))
+           (? (|| (bad? a) (bad? b)) 'bad
+              (|| (flo? (cap a)) (flo? (cap b)))
+               (: c (ctest g env e)
+                  (? (bad? c) 'bad (cat (caup c) (L (L 'cmp 'r0 0) (L 'br cc lbl)))))
+              (: cunsg (|| (|| (usg? (cap a)) (usg? (cap b))) (|| (ptr? (cap a)) (ptr? (cap b))))
+                 (bcc o) (scc (? (= cc 'ne) o (negrel o)) cunsg)
+                 (? (&& (= (cap rhs) 'num) (fits32? (caup rhs)))
+                     (cat (caup a) (L (L 'cmp 'r0 (caup rhs)) (L 'br (bcc op) lbl)))
+                    (&& (= (cap lhs) 'num) (fits32? (caup lhs)))
+                     (cat (caup b) (L (L 'cmp 'r0 (caup lhs)) (L 'br (bcc (rflip op)) lbl)))
+                    (cat (caup a) (cat (spush 'r0) (cat (caup b)
+                     (cat (spop 'r1) (L (L 'cmp 'r1 'r0) (L 'br (bcc op) lbl))))))))))
+       (: c (ctest g env e)
+          (? (bad? c) 'bad (cat (caup c) (L (L 'cmp 'r0 0) (L 'br cc lbl))))))
    ; 8 little-endian bytes of a constant (the global initializer image)
    (le8s v) (: (go i acc) (? (< 7 i) (rev acc)
                              (go (+ i 1) (link (& (>> v (* 8 i)) 255) acc)))
@@ -266,8 +344,12 @@
               _ (pin g 'argpos ())
               (? (! (bad? r))                        ; under & the lvalue's address ESCAPES: flip its leans to leas
                  (: v (L (L 'ptr (cap r)) (unlean (caup r))) (? ap? v (escan g v)))
-                 ; &f on a function name: same address as the bare use (no lvalue)
-                 (&& (= (cap (caup e)) 'var) (peep (g 'fns) (caup (caup e)) ()))
+                 ; &f on a function name: same address as the bare use (no lvalue).
+                 ; a VARIABLE of the same name shadows it -- a homed param's regv
+                 ; lands here as 'bad and must DEOPT, not read &libm-exp (vent!)
+                 (&& (= (cap (caup e)) 'var)
+                     (&& (bad? (vent g env (caup (caup e))))
+                         (peep (g 'fns) (caup (caup e)) ())))
                   (L (L 'ptr (fnty g (caup (caup e)))) (L (L 'la 'r0 (intern (caup (caup e))))))
                  'bad))
           (= k 'deref)
@@ -356,29 +438,23 @@
            (: a (cgexpr g env (caup e)) b (cgexpr g env (cauup e))
               (? (|| (bad? a) (bad? b)) 'bad
                  (L (cap b) (cat (caup a) (caup b)))))
-          (= k 'land)
-           (: a (ctest g env (caup e)) b (ctest g env (cauup e))
-              lf (nlab g ".f") ld (nlab g ".d")
-              (? (|| (bad? a) (bad? b)) 'bad
-                 (L 'long
-                    (cat (caup a) (cat (L (L 'cmp 'r0 0) (L 'br 'eq lf))
-                     (cat (caup b) (L (L 'cmp 'r0 0) (L 'br 'eq lf)
-                                      (L 'li 'r0 1) (L 'jmp ld)
-                                      (L 'label lf) (L 'li 'r0 0) (L 'label ld))))))))
+          (= k 'land)                                ; as a VALUE: cbranch the short-circuit, then settle the bit
+           (: lf (nlab g ".f") ld (nlab g ".d")
+              f (cbranch g env e 'eq lf)
+              (? (bad? f) 'bad
+                 (L 'long (cat f (L (L 'li 'r0 1) (L 'jmp ld)
+                                    (L 'label lf) (L 'li 'r0 0) (L 'label ld))))))
           (= k 'lor)
-           (: a (ctest g env (caup e)) b (ctest g env (cauup e))
-              lt (nlab g ".t") ld (nlab g ".d")
-              (? (|| (bad? a) (bad? b)) 'bad
-                 (L 'long
-                    (cat (caup a) (cat (L (L 'cmp 'r0 0) (L 'br 'ne lt))
-                     (cat (caup b) (L (L 'cmp 'r0 0) (L 'br 'ne lt)
-                                      (L 'li 'r0 0) (L 'jmp ld)
-                                      (L 'label lt) (L 'li 'r0 1) (L 'label ld))))))))
+           (: lt (nlab g ".t") ld (nlab g ".d")
+              f (cbranch g env e 'ne lt)
+              (? (bad? f) 'bad
+                 (L 'long (cat f (L (L 'li 'r0 0) (L 'jmp ld)
+                                    (L 'label lt) (L 'li 'r0 1) (L 'label ld))))))
           (= k 'cond)
-           (: c (ctest g env (caup e))
+           (: le (nlab g ".e") ld (nlab g ".d")
+              c (cbranch g env (caup e) 'eq le)
               t (cgexpr g env (cauup e))
               el (cgexpr g env (caup (cuup e)))
-              le (nlab g ".e") ld (nlab g ".d")
               (? (|| (bad? c) (|| (bad? t) (bad? el))) 'bad
                  ; C's conditional CONVERTS its arms: one flo arm makes the whole
                  ; result flo, so the INTEGER arm rides asflo at its edge -- typing
@@ -389,9 +465,9 @@
                     ef (? fl (asflo el) (caup el))
                     rt (? (flo? (cap t)) (cap t) (? fl (cap el) (cap t)))
                     (L rt
-                       (cat (caup c) (cat (L (L 'cmp 'r0 0) (L 'br 'eq le))
+                       (cat c
                         (cat tf (cat (L (L 'jmp ld) (L 'label le))
-                         (cat ef (L (L 'label ld)))))))))))
+                         (cat ef (L (L 'label ld))))))))))
           ; -- the varargs builtins (the SysV ABI). a va_list is the 24-byte struct
           ; { int gp_offset; int fp_offset; void *overflow_arg_area; void
           ; *reg_save_area; } (crew/cc/include/stdarg.h). va_start seeds it past the
@@ -476,6 +552,12 @@
                                    (cat (caup e3) (cat (cat (L (L 'mov 'r3 'r0)) (cat (spop 'r1) (spop 'r0)))
                                     (cat (L (L 'raw (cat opb (L 15 144 193 72 15 182 201))))          ; seto cl; movzx rcx,cl
                                          (L (L 'st 'r3 0 'r0) (L 'mov 'r0 'r1))))))))))))
+                 (: inlf (? (peep g 'inlining ()) ()
+                            (! (= (cap head) 'var)) ()
+                            (! (bad? (vent g env (caup head)))) ()   ; a local/global shadows the name
+                            (peep (g 'inl) (caup head) ()))
+                    (? (&& (two? inlf) (= (tally args) (tally (cauup inlf))))
+                       (cginl g env inlf args)
                  (: direct (&& (= (cap head) 'var)
                                (&& (bad? (vent g env (caup head)))                ; not a local/global variable...
                                    (peep (g 'fns) (caup head) ())))               ; ...and a KNOWN function (typos refuse)
@@ -495,7 +577,7 @@
                                         (cat (fstf 'double 'r4 toff (xmmreg 0))
                                          (cat (fstf 'double 'r4 (+ toff 8) (xmmreg 1))
                                               (L (L 'lea 'r0 'r4 toff)))))))
-                       'bad))))
+                       'bad))))))
           (= k 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
               (? (bad? lv) 'bad (loadval (cap lv) (caup lv))))
@@ -574,12 +656,21 @@
              clean (? (< 0 (+ (* 8 nov) padn)) (L (L 'add 'sp 'sp (+ (* 8 nov) padn))) ())
              pf (cat pad (cat (pushcat ovr ()) (pushcat rgr ())))
              setal (? va? (L (L 'li 'r0 nxmm)) ())        ; al = #xmm, set AFTER pops (r0 is no arg register)
+             ; NON-LEAF register homes (g 'homes, ((reg slot)..)): a home rides a
+             ; caller-saved register, so it spills to its frame slot just before
+             ; the pops (the args' own evaluation -- and any assignment inside it
+             ; -- has already run, so the register holds the latest value) and
+             ; reloads right after the clean. a ret-position call's reloads are
+             ; DEAD -- the sibcall pass skips them and tail-jumps (skiprel).
+             hs (peep g 'homes ())
+             spills (foldl (\ a2 p2 (cat a2 (L (L 'st 'r4 (caup p2) (cap p2))))) () hs)
+             relods (foldl (\ a2 p2 (cat a2 (L (L 'ld (cap p2) 'r4 (caup p2))))) () hs)
              (? dir
-                 (L ret (cat pf (cat pops (cat setal (cat (L (L 'call (intern (caup hd)))) clean)))))
+                 (L ret (cat pf (cat spills (cat pops (cat setal (cat (L (L 'call (intern (caup hd)))) (cat clean relods)))))))
                 (: hr (cgexpr g env hd)                   ; a function-pointer value: park in r3, callr
                    (? (bad? hr) 'bad
                       (L (fnret (cap hr)) (cat pf (cat (caup hr) (cat (L (L 'mov 'r3 'r0))
-                                (cat pops (cat setal (cat (L (L 'callr 'r3)) clean)))))))))))))
+                                (cat spills (cat pops (cat setal (cat (L (L 'callr 'r3)) (cat clean relods)))))))))))))))
    (cgbin g env e)
     (: op (caup e)
        a (cgexpr g env (cauup e))
@@ -627,10 +718,19 @@
                  'bad))
           (: ta (cap a) tb (cap b)
              pa (ptr? ta) pb (ptr? tb)
+             lhs (cauup e)
+             ; a constant operand rides the immediate lane; on the LEFT it swaps
+             ; over (commutative ops) or mirrors (relations, rflip)
+             imr (? (= (cap rhs) 'num) (immop g op (caup a) ta (caup rhs)) 'no)
+             iml (? (&& (id? imr 'no) (&& (= (cap lhs) 'num)
+                        (member? op '(+ * & | ^ eq ne lt le gt ge))))
+                    (immop g (rflip op) (caup b) tb (caup lhs)) 'no)
              ; left lands in r1, right in r0; scale the int side of ptr math
              mid (cat (caup a) (cat (spush 'r0) (cat (caup b) (spop 'r1))))
              back (L (L 'mov 'r0 'r1))
-             (? (= op '+)
+             (? (! (id? imr 'no)) imr
+                (! (id? iml 'no)) iml
+                (= op '+)
                  (? (&& pa pb) 'bad
                     pa (L ta (cat mid (cat (? (< 1 (tsz g (caup ta)))
                                              (L (L 'imul 'r0 'r0 (tsz g (caup ta)))) ())
@@ -728,20 +828,223 @@
    (sibjmp f) (? (= (cap f) 'call)
                  (L (L 'ld 'r3 'r4 -8) (L 'mov 'sp 'r4) (L 'pop 'r4) (L 'jmp (caup f)))
                  (L (L 'mov 'r10 'r3) (L 'ld 'r3 'r4 -8) (L 'mov 'sp 'r4) (L 'pop 'r4) (L 'jmpr 'r10)))
-   (sibs fs lw el)
+   ; a home reload run ((ld rH r4 slot)..) after a ret-position call is DEAD --
+   ; the tail-jump hands the frame back first. skiprel peels exactly those.
+   (skiprel fs hs)
+    (? (! (two? fs)) fs
+       (: f (cap fs)
+          (? (&& (two? f) (&& (= (cap f) 'ld) (= (cauup f) 'r4)))
+              (: h (assoc (caup f) hs)
+                 (? (&& (two? h) (= (caup h) (caup (cuup f)))) (skiprel (cup fs) hs) fs))
+             fs)))
+   (sibs fs lw el hs)
     (? (! (two? fs)) ()
        (: f (cap fs) r (cup fs)
           lw2 (? (&& (two? f) (&& (= (cap f) 'lea) (= (cauup f) 'r4))) 1 lw)
           cand (&& (! lw2) (&& (two? f) (|| (&& (= (cap f) 'call) (two? (cup f)))
                                             (= f '(callr r3)))))
-          (? (&& cand (epi4? r))
-              (cat (sibjmp f) (sibs (cup (cup (cup (cup r)))) () el))
-             (&& cand (lbl-epi? r))
-              (cat (sibjmp f) (sibs r () el))
-             (&& cand (: nx (cap r) (&& (two? nx) (&& (= (cap nx) 'jmp) (peep el (caup nx) ())))))
-              (cat (sibjmp f) (sibs (cup r) () el))
-             (link f (sibs r (? (&& (two? f) (member? (cap f) '(call callr raw))) () lw2) el)))))   ; raw: a builtin splice consumes its address like a call
-   (sibcall g fs) (? (peep g 'fesc ()) fs (sibs fs () (elabs fs (tablet 0))))
+          rr (? cand (skiprel r hs) r)
+          (? (&& cand (epi4? rr))
+              (cat (sibjmp f) (sibs (cup (cup (cup (cup rr)))) () el hs))
+             (&& cand (lbl-epi? rr))
+              (cat (sibjmp f) (sibs rr () el hs))
+             (&& cand (: nx (cap rr) (&& (two? nx) (&& (= (cap nx) 'jmp) (peep el (caup nx) ())))))
+              (cat (sibjmp f) (sibs (cup rr) () el hs))
+             (link f (sibs r (? (&& (two? f) (member? (cap f) '(call callr raw))) () lw2) el hs)))))   ; raw: a builtin splice consumes its address like a call
+   (sibcall g fs) (? (peep g 'fesc ()) fs (sibs fs () (elabs fs (tablet 0)) (peep g 'homes ())))
+
+   ; -- IR constant propagation (cfoldir): a straight-line abstract pass over a
+   ; function's final forms. it tracks known small constants in registers, frame
+   ; slots, and machine-stack cells, folds ALU ops on them back to li's, turns
+   ; reg-reg ALU with a known source into the imm form, folds loads of known
+   ; slots, and evaluates known cmp+br / cmp+set pairs (a constant ternary
+   ; drops its dead arm). the payoff: sizeof/Width/Have arithmetic -- constant
+   ; subgraphs the inliner exposes -- collapses the way a real compiler folds
+   ; them. knowns stay in [0, 2^30] (compare signedness and shifts agree there);
+   ; labels and calls invalidate values (joins/effects); anything unrecognized
+   ; invalidates EVERYTHING (new ops stay safe by default). --
+   kmax 1073741824
+   (kok? v) (&& (<= 0 v) (< v kmax))
+   (cfoldir fs0)
+    (: (fresh z9) (tablet 0)                        ; reg/slot/cell -> (1 K) | ()
+       (rv t k) (peep t k ())
+       (rset t k v) (pin t k v)
+       (alu op a b) (? (= op 'add) (+ a b) (= op 'sub) (- a b) (= op 'imul) (* a b)
+                       (= op 'and) (& a b) (| a b))  ; xor stays unfolded (imm-converted only)
+       (ccev cc a b) (? (= cc 'eq) (= a b) (= cc 'ne) (! (= a b))
+                        (|| (= cc 'lt) (= cc 'below)) (< a b)
+                        (|| (= cc 'le) (= cc 'be)) (<= a b)
+                        (|| (= cc 'gt) (= cc 'above)) (< b a)
+                        (<= b a))                    ; ge / ae
+       ; after an unconditional transfer, everything to the next label is DEAD
+       ; (a jump can only land on a label) -- a folded ternary drops its arm
+       (swallow fs) (? (! (two? fs)) ()
+                       (: f (cap fs) (? (&& (two? f) (= (cap f) 'label)) fs (swallow (cup fs)))))
+       (atlab? fs l) (&& (two? fs) (: f (cap fs) (&& (two? f) (&& (= (cap f) 'label) (= (caup f) l)))))
+       (go fs cur rg sl ce acc)
+        (? (! (two? fs)) (rev acc)
+           (: f (cap fs) r (cup fs)
+              op (? (two? f) (cap f) ())
+              (? (= op 'label) (go r cur (fresh 0) (fresh 0) (fresh 0) (link f acc))
+                 (member? op '(call callr raw sys))
+                  (go r cur (fresh 0) (fresh 0) (fresh 0) (link f acc))
+                 (= op 'jmp)                         ; drop the dead tail; a jmp to the very next label falls through
+                  (: r2 (swallow r)
+                     (? (atlab? r2 (caup f)) (go r2 cur rg sl ce acc)
+                        (go r2 cur rg sl ce (link f acc))))
+                 (member? op '(jmpr ret)) (go (swallow r) cur rg sl ce (link f acc))
+                 (= op 'li)
+                  (: nx (? (two? r) (cap r) ())
+                     (? (&& (two? nx) (&& (member? (cap nx) '(li mov)) (= (caup nx) (caup f))))
+                        (go r cur rg sl ce acc)      ; the very next form rewrites this register: dead li
+                        (: k (caup (cup f))
+                           _ (rset rg (caup f) (? (kok? k) (L 1 k) ()))
+                           (go r cur rg sl ce (link f acc)))))
+                 (= op 'mov)
+                  (: _ (rset rg (caup f) (rv rg (cauup f)))
+                     (go r cur rg sl ce (link f acc)))
+                 (member? op '(add sub and or xor imul))
+                  (? (= (caup f) 'sp)                ; sp arithmetic: the cell cursor moves
+                      (: n (caup (cuup f))
+                         (go r (? (= op 'add) (- cur n) (+ cur n)) rg sl ce (link f acc)))
+                     (: d (caup f) a (cauup f) b (caup (cuup f))
+                        ; b is a register SYMBOL or a charm immediate -- never confuse
+                        ; the two (a symbol in arithmetic church-explodes)
+                        bk (? (charm? b) (? (kok? b) (L 1 b) ()) (rv rg b))
+                        ak (rv rg a)
+                        (? (&& (! (= op 'xor)) (&& (two? ak) (two? bk)))  ; both known: the op folds to a li
+                            (: k (alu op (caup ak) (caup bk))
+                               (? (kok? k)
+                                  (: _ (rset rg d (L 1 k))
+                                     (go r cur rg sl ce (link (L 'li d k) acc)))
+                                  (: _ (rset rg d ())
+                                     (go r cur rg sl ce (link f acc)))))
+                           (&& (! (charm? b)) (two? bk))   ; known reg source -> the imm form
+                            (: _ (rset rg d ())
+                               (go r cur rg sl ce (link (L op d a (caup bk)) acc)))
+                           (: _ (rset rg d ())
+                              (go r cur rg sl ce (link f acc))))))
+                 (member? op '(shl shr sar))         ; the 2-operand immediate shifts
+                  (: d (caup f) k (cauup f) dk (rv rg d)
+                     (? (&& (two? dk) (charm? k))
+                         (: v (? (= op 'shl) (* (caup dk) (k 2)) (>> (caup dk) k))
+                            (? (kok? v)
+                               (: _ (rset rg d (L 1 v))
+                                  (go r cur rg sl ce (link (L 'li d v) acc)))
+                               (: _ (rset rg d ())
+                                  (go r cur rg sl ce (link f acc)))))
+                        (: _ (rset rg d ())
+                           (go r cur rg sl ce (link f acc)))))
+                 (= op 'st)
+                  (? (= (caup f) 'r4)
+                      (: _ (rset sl (cauup f) (rv rg (caup (cuup f))))
+                         (go r cur rg sl ce (link f acc)))
+                     (= (caup f) 'sp)
+                      (: _ (rset ce cur (rv rg (caup (cuup f))))
+                         (go r cur rg sl ce (link f acc)))
+                     (go r cur rg (fresh 0) ce (link f acc)))   ; a pointer store may alias the frame
+                 (= op 'ld)
+                  (: d (caup f) b (cauup f) off (caup (cuup f))
+                     kv (? (= b 'r4) (rv sl off) (&& (= b 'sp) (= off 0)) (rv ce cur) ())
+                     (? (two? kv)
+                        (: _ (rset rg d kv)
+                           (go r cur rg sl ce (link (L 'li d (caup kv)) acc)))
+                        (: _ (rset rg d ())
+                           (go r cur rg sl ce (link f acc)))))
+                 (= op 'push)
+                  (: cur2 (+ cur 8)
+                     _ (rset ce cur2 (rv rg (caup f)))
+                     (go r cur2 rg sl ce (link f acc)))
+                 (= op 'pop)
+                  (: _ (rset rg (caup f) (rv ce cur))
+                     (go r (- cur 8) rg sl ce (link f acc)))
+                 (member? op '(st1 st2 st4 stsd stss))
+                  (? (member? (caup f) '(r4 sp))
+                      (: _ (? (= (caup f) 'r4) (rset sl (cauup f) ()) (rset ce cur ()))
+                         (go r cur rg sl ce (link f acc)))
+                     (go r cur rg (fresh 0) ce (link f acc)))
+                 (member? op '(ld1 ld2 ld4 ldu1 ldu2 ldu4))
+                  (: _ (rset rg (caup f) ())
+                     (go r cur rg sl ce (link f acc)))
+                 (member? op '(lea lean la movqrx cvttsd2si set))
+                  (: _ (rset rg (? (= op 'set) (cauup f) (caup f)) ())
+                     (go r cur rg sl ce (link f acc)))
+                 (member? op '(div rem udiv urem shlv shrv sarv neg not sx1 sx2 sx4 zx1 zx2 zx4))
+                  (: _ (rset rg 'r0 ()) _ (rset rg 'r1 ()) _ (rset rg 'r2 ()) _ (rset rg 'r3 ())
+                     (go r cur rg sl ce (link f acc)))
+                 (= op 'cmp)                         ; paired with its br/set consumer
+                  (: a (rv rg (caup f))
+                     b (? (charm? (cauup f)) (? (kok? (cauup f)) (L 1 (cauup f)) ())
+                          (rv rg (cauup f)))
+                     nx (? (two? r) (cap r) ())
+                     (? (&& (two? a) (&& (two? b) (&& (two? nx) (member? (cap nx) '(br set)))))
+                         (: tv (ccev (caup nx) (caup a) (caup b))
+                            (? (= (cap nx) 'br)
+                               (? tv (: r2 (swallow (cup r))
+                                        (? (atlab? r2 (caup (cup nx))) (go r2 cur rg sl ce acc)
+                                           (go r2 cur rg sl ce (link (L 'jmp (caup (cup nx))) acc))))
+                                     (go (cup r) cur rg sl ce acc))
+                               (: d (caup (cup nx)) k (? tv 1 0)
+                                  _ (rset rg d (L 1 k))
+                                  (go (cup r) cur rg sl ce (link (L 'li d k) acc)))))
+                        (go r cur rg sl ce (link f acc))))
+                 (member? op '(br movqxr ucomisd ldsd ldss cvtsi2sd cvtss2sd cvtsd2ss addsd subsd mulsd divsd movsd))
+                  (go r cur rg sl ce (link f acc))   ; leaves gp state alone (br: fall-through keeps it)
+                 ; anything else: assume nothing survives
+                 (go r cur (fresh 0) (fresh 0) (fresh 0) (link f acc)))))
+       (go fs0 0 (fresh 0) (fresh 0) (fresh 0) ()))
+
+   ; dead frame stores: after the constant folds, a slot the function never
+   ; loads back is write-only -- its stores drop (the b2w-shape arg temps whose
+   ; every read folded to a li). SAFE only when NO frame address is taken at
+   ; all (any lea/lean of r4 skips the pass: an lea marks one offset but hands
+   ; out a RANGE -- a va save area, an aggregate fill -- so per-offset liveness
+   ; would lie). a store's newly-dead feeding li sweeps in the same pass.
+   (deadst fs)
+    (: used (tablet 0) esc (tablet 0)
+       (scan l) (? (! (two? l)) 1
+                   (: f (cap l)
+                      _ (? (! (two? f)) ()
+                           (member? (cap f) '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4))
+                            (? (= (cauup f) 'r4) (pin used (caup (cuup f)) 1) ())
+                           (member? (cap f) '(ldsd ldss))
+                            (? (= (cauup f) 'r4) (pin used (caup (cuup f)) 1) ())
+                           (member? (cap f) '(lea lean))
+                            (? (= (cauup f) 'r4) (pin esc 'y 1) ())
+                           ())
+                      (scan (cup l))))
+       _ (scan fs)
+       (drop l) (? (! (two? l)) ()
+                   (: f (cap l)
+                      (? (&& (two? f) (&& (member? (cap f) '(st st1 st2 st4 stsd stss))
+                             (&& (= (caup f) 'r4) (! (peep used (cauup f) ())))))
+                         (drop (cup l))
+                         (link f (drop (cup l))))))
+       (lisweep l) (? (! (two? l)) ()
+                      (: f (cap l) nx (? (two? (cup l)) (cap (cup l)) ())
+                         (? (&& (two? f) (&& (= (cap f) 'li)
+                               (&& (two? nx) (&& (member? (cap nx) '(li mov)) (= (caup nx) (caup f))))))
+                            (lisweep (cup l))
+                            (link f (lisweep (cup l))))))
+       (? (peep esc 'y ()) fs (lisweep (drop fs))))
+
+   ; store-forward: a full-word frame store followed by ITS OWN reload reads the
+   ; register instead -- (st r4 o rX) (ld rY r4 o) keeps the store and turns the
+   ; reload into a mov (the same-register form drops it). the narrow loads
+   ; (ld4 ..) keep their memory round-trip: they re-extend, a different value.
+   (stld fs)
+    (? (! (two? fs)) ()
+       (: f (cap fs) r (cup fs)
+          (? (! (&& (two? r) (&& (two? f) (&& (= (cap f) 'st) (= (caup f) 'r4)))))
+             (link f (stld r))
+             (: nx (cap r)
+                rX (caup (cuup f))
+                (? (! (&& (two? nx) (&& (= (cap nx) 'ld)
+                          (&& (= (cauup nx) 'r4) (= (caup (cuup nx)) (cauup f))))))
+                   (link f (stld r))
+                   (: rY (caup nx)
+                      (? (= rY rX) (link f (stld (cup r)))
+                         (link f (link (L 'mov rY rX) (stld (cup r)))))))))))
 
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
@@ -936,6 +1239,60 @@
               (one (cup ps) (link (L name (L 'glob lbl) ty) env2))))
        (one pairs env))
 
+   ; -- the inline lane (the b2w problem): a SMALL function whose body is just
+   ; decls + a single `return expr;` splices at the call site -- each arg value
+   ; lands in a fresh 8-byte frame temp (exactly a callee frame's param slot, so
+   ; the semantics are the out-of-line call's: full-word stores, (ldop pty)
+   ; reads), the decls become caller temps, and the return expression computes
+   ; into r0 in place. no call is emitted, so a hot caller can turn LEAF and its
+   ; params take register homes -- the gcc win on the dispatch ops twice over:
+   ; no call overhead AND no frame reloads. depth 1: a body being inlined
+   ; compiles its own calls out-of-line (the g 'inlining flag). --
+   (inlbody f)                                      ; ('fn name params ('blk items)) -> (decls retexpr) | 'bad
+    (: (go l ds) (? (! (two? l)) 'bad
+                    (: it (cap l)
+                       (? (= (cap it) 'decl) (go (cup l) (link it ds))
+                          (&& (= (cap it) 'ret) (&& (two? (caup it)) (! (two? (cup l)))))
+                           (L (rev ds) (caup it))
+                          'bad)))
+       (go (caup (caup (cuup f))) ()))
+   (inlok? f sig)
+    (: rt (? (two? sig) (cap sig) 'long)
+       (pok ps n) (? (! (two? ps)) (<= n 6)
+                     (: pty (caup (cap ps))
+                        (? (|| (flo? pty) (|| (stru? pty) (arr? pty))) ()
+                           (pok (cup ps) (+ n 1)))))
+       (? (! (two? sig)) ()
+          (|| (flo? rt) (stru? rt)) ()
+          (nthr sig 2) ()                            ; variadic stays a real call
+          (! (pok (cauup f) 0)) ()
+          (< 600 (tally (show (caup (cuup f))))) ()  ; small bodies only
+          (! (bad? (inlbody f)))))
+   (cginl g env f args)                              ; splice f's body at the site -> (ty forms) | 'bad
+    (: _ (pin g 'inlining 1)
+       db (inlbody f)
+       rt (cap (peep (g 'sigs) (caup f) (L 'long ())))
+       (bind ps as benv acc)                         ; arg values -> fresh full-word slots, left to right
+        (? (! (two? ps)) (L benv acc)
+           (: r (cgexpr g env (cap as))
+              (? (bad? r) 'bad
+                 (: off (ntmp g 'long)
+                    (bind (cup ps) (cup as)
+                          (link (L (cap (cap ps)) off (caup (cap ps))) benv)
+                          (cat acc (cat (asint r) (L (L 'st 'r4 off 'r0)))))))))
+       (decls ds benv acc)                           ; the body's own locals
+        (? (! (two? ds)) (L benv acc)
+           (: r (cgdecl g benv (caup (cap ds)))
+              (? (bad? r) 'bad
+                 (decls (cup ds) (caup r) (cat acc (cap r))))))
+       br (bind (cauup f) args () ())
+       dr (? (bad? br) 'bad (decls (cap db) (cap br) (caup br)))
+       r (? (bad? dr) 'bad (cgexpr g (cap dr) (caup db)))
+       _ (pin g 'inlining ())
+       (? (bad? r) 'bad
+          (flo? (cap r)) (L rt (cat (caup dr) (asint r)))
+          (L rt (cat (caup dr) (caup r)))))
+
    ; stmt -> forms | 'bad
    (cgstmt g env s)
     (: k (cap s)
@@ -956,21 +1313,21 @@
           (= k 'tdef) ()                            ; a block-scope _Static_assert (already checked at parse)
           (= k 'blk) (cgitems g env (caup s) ())
           (= k 'if)
-           (: c (ctest g env (caup s))
+           (: le (nlab g ".e")
+              c (cbranch g env (caup s) 'eq le)
               t (cgstmt g env (cauup s))
-              le (nlab g ".e")
               (? (|| (bad? c) (bad? t)) 'bad
                  (! (two? (caup (cuup s))))
-                  (cat (caup c) (cat (L (L 'cmp 'r0 0) (L 'br 'eq le)) (cat t (L (L 'label le)))))
+                  (cat c (cat t (L (L 'label le))))
                  (: el (cgstmt g env (caup (cuup s)))
                     ld (nlab g ".d")
                     (? (bad? el) 'bad
-                       (cat (caup c) (cat (L (L 'cmp 'r0 0) (L 'br 'eq le))
+                       (cat c
                         (cat t (cat (L (L 'jmp ld) (L 'label le))
-                         (cat el (L (L 'label ld)))))))))))
+                         (cat el (L (L 'label ld))))))))))
           (= k 'while)
            (: lc (nlab g ".c") ld (nlab g ".d")
-              c (ctest g env (caup s))
+              c (cbranch g env (caup s) 'eq ld)
               _ (pin g 'brk (link ld (g 'brk)))
               _ (pin g 'cnt (link lc (g 'cnt)))
               b (cgstmt g env (cauup s))
@@ -978,8 +1335,8 @@
               _ (pin g 'cnt (cup (g 'cnt)))
               (? (|| (bad? c) (bad? b)) 'bad
                  (cat (L (L 'label lc))
-                  (cat (caup c) (cat (L (L 'cmp 'r0 0) (L 'br 'eq ld))
-                   (cat b (L (L 'jmp lc) (L 'label ld))))))))
+                  (cat c
+                   (cat b (L (L 'jmp lc) (L 'label ld)))))))
           (= k 'for)
            (: init (caup s) cnd (cauup s) stp (caup (cuup s)) body (cauup (cuup s))
               lc (nlab g ".c") ls (nlab g ".s") ld (nlab g ".d")
@@ -990,7 +1347,7 @@
                        (? (bad? r) 'bad (L (caup r) env))))
               (? (bad? ir) 'bad
                  (: env2 (caup ir)
-                    c (? (two? cnd) (ctest g env2 cnd) ())
+                    c (? (two? cnd) (cbranch g env2 cnd 'eq ld) ())
                     _ (pin g 'brk (link ld (g 'brk)))
                     _ (pin g 'cnt (link ls (g 'cnt)))
                     b (cgstmt g env2 body)
@@ -1000,7 +1357,7 @@
                     (? (|| (bad? c) (|| (bad? b) (bad? st2))) 'bad
                        (cat (cap ir)
                         (cat (L (L 'label lc))
-                         (cat (? (two? cnd) (cat (caup c) (L (L 'cmp 'r0 0) (L 'br 'eq ld))) ())
+                         (cat (? (two? cnd) c ())
                           (cat b
                            (cat (L (L 'label ls))
                             (cat (? (two? st2) (caup st2) ())
@@ -1014,12 +1371,12 @@
               b (cgstmt g env (caup s))
               _ (pin g 'brk (cup (g 'brk)))
               _ (pin g 'cnt (cup (g 'cnt)))
-              c (ctest g env (cauup s))
+              c (cbranch g env (cauup s) 'ne lt)
               (? (|| (bad? b) (bad? c)) 'bad
                  (cat (L (L 'label lt))
                   (cat b
                    (cat (L (L 'label lc))
-                    (cat (caup c) (L (L 'cmp 'r0 0) (L 'br 'ne lt) (L 'label ld))))))))
+                    (cat c (L (L 'label ld))))))))
           (= k 'goto) (L (L 'jmp (intern (+ (g 'fn) (+ "." (caup s))))))
           (= k 'lbl) (L (L 'label (intern (+ (g 'fn) (+ "." (caup s))))))
           (= k 'switch)
@@ -1093,6 +1450,8 @@
     (: params (cauup f)
        _ (pin g 'off 8)                              ; slot -8 = saved r3 (see epi)
        _ (pin g 'fesc ())                            ; fresh escape flag (the sibcall gate reads it)
+       _ (pin g 'inlining ())                        ; fresh inline-depth flag
+       _ (pin g 'homes ())                           ; fresh non-leaf home set (call-fixed + sibs read it)
        _ (pin g 'fn (caup f))
        sig (peep (g 'sigs) (caup f) ())
        vararg (? (two? sig) (nthr sig 2) ())
@@ -1192,27 +1551,100 @@
                  (< 5 gpi) ()
                  (homable? pty) 1
                  (homes? (cup ps) (+ gpi 1)))))
+       ; -- the NON-LEAF lane: like spillr, but each home ALSO takes a frame slot
+       ; (its spill shadow) recorded in g 'homes -- call-fixed spills the homes
+       ; there just before every remaining call's pops and reloads after, so a
+       ; callee (glazed or not) only ever sees its own ABI registers. a &param
+       ; deopts the whole regen (clval on a regv answers 'bad) back to ir1. --
+       (spillr2 ps gpi xmmi ovi env acc)
+        (? (! (two? ps)) (L acc env)
+           (: p (cap ps) pty (caup p)
+              (? (sse2? g pty)
+                  (? (< 6 xmmi) 'bad
+                     (: off (- 0 (+ (peep g 'off 0) 16))
+                        _ (pin g 'off (+ (peep g 'off 0) 16))
+                        (spillr2 (cup ps) gpi (+ xmmi 2) ovi (link (L (cap p) off pty) env)
+                               (cat acc (cat (fstf 'double 'r4 off (xmmreg xmmi))
+                                             (fstf 'double 'r4 (+ off 8) (xmmreg (+ xmmi 1))))))))
+                 (stru? pty) 'bad
+                 (&& (flo? pty) (< xmmi 8))
+                  (: off (- 0 (+ (peep g 'off 0) 8))
+                     _ (pin g 'off (+ (peep g 'off 0) 8))
+                     (spillr2 (cup ps) gpi (+ xmmi 1) ovi (link (L (cap p) off pty) env)
+                            (cat acc (fstf pty 'r4 off (xmmreg xmmi)))))
+                 (&& (! (flo? pty)) (< gpi 6))
+                  (? (homable? pty)
+                      (: home (homereg gpi) inc (nthr argregs gpi)
+                         off (- 0 (+ (peep g 'off 0) 8))
+                         _ (pin g 'off (+ (peep g 'off 0) 8))
+                         _ (pin g 'homes (link (L home off) (peep g 'homes ())))
+                         mv (? (= home inc) () (L (L 'mov home inc)))
+                         (spillr2 (cup ps) (+ gpi 1) xmmi ovi (link (L (cap p) (L 'reg home) pty) env)
+                                (cat acc mv)))
+                     (: off (- 0 (+ (peep g 'off 0) 8))
+                        _ (pin g 'off (+ (peep g 'off 0) 8))
+                        (spillr2 (cup ps) (+ gpi 1) xmmi ovi (link (L (cap p) off pty) env)
+                               (cat acc (L (L 'st 'r4 off (nthr argregs gpi)))))))
+                 (spillr2 (cup ps) gpi xmmi (+ ovi 1) (link (L (cap p) (+ 16 (* 8 ovi)) pty) env) acc))))
        (anyop? fs op) (? (! (two? fs)) () (: f (cap fs) (? (&& (two? f) (= (cap f) op)) 1 (anyop? (cup fs) op))))
        (hascall? fs) (|| (anyop? fs 'call) (anyop? fs 'callr))
+       ; the non-leaf PAYOFF gate: homing saves one frame load per param READ but
+       ; costs a spill+reload PER HOME around every remaining call -- worth it
+       ; only where reads dominate (the hot dispatch shape: many reads, a call
+       ; or two). counted on the post-sibcall ir1: tail calls already cost nothing.
+       (nhomable ps gpi n)
+        (? (! (two? ps)) n
+           (: pty (caup (cap ps))
+              (? (|| (flo? pty) (sse2? g pty)) (nhomable (cup ps) gpi n)
+                 (< 5 gpi) n
+                 (homable? pty) (nhomable (cup ps) (+ gpi 1) (+ n 1))
+                 (nhomable (cup ps) (+ gpi 1) n))))
+       (ncalls fs n) (? (! (two? fs)) n
+                        (: f (cap fs)
+                           (ncalls (cup fs) (? (&& (two? f) (member? (cap f) '(call callr))) (+ n 1) n))))
+       (pslots env acc)                             ; the homable params' PASS-1 frame slots
+        (? (! (two? env)) acc
+           (: e2 (cap env)
+              (pslots (cup env) (? (&& (! (two? (caup e2))) (&& (< (caup e2) 0) (homable? (cauup e2))))
+                                   (link (caup e2) acc) acc))))
+       (nreads fs offs n)                           ; frame touches of those slots in ir1
+        (? (! (two? fs)) n
+           (: f (cap fs)
+              hit (? (! (two? f)) ()
+                     (member? (cap f) '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (&& (= (cauup f) 'r4) (member? (caup (cuup f)) offs))
+                     (member? (cap f) '(st st1 st2 st4)) (&& (= (caup f) 'r4) (member? (cauup f) offs))
+                     ())
+              (nreads (cup fs) offs (? hit (+ n 1) n))))
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
         (? (bad? sp0) 'bad
            (: body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
               (? (bad? body) 'bad
                  (: frame (& (+ (peep g 'off 0) 15) -16)
-                    (sibcall g
-                     (cat (L (L 'label (intern (caup f)))
-                             (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame)
-                             (L 'st 'r4 -8 'r3))
-                      (cat (cap sp0)
-                       (cat body (cat (L (L 'li 'r0 0)) epi)))))))))
+                    (deadst
+                     (stld
+                     (cfoldir
+                      (sibcall g
+                       (cat (L (L 'label (intern (caup f)))
+                               (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame)
+                               (L 'st 'r4 -8 'r3))
+                        (cat (cap sp0)
+                         (cat body (cat (L (L 'li 'r0 0)) epi))))))))))))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
-       ir1 (build (? vararg (vaspill params) (spill params 0 0 0 () ())))
+       sp1 (? vararg (vaspill params) (spill params 0 0 0 () ()))
+       ir1 (build sp1)
+       n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
+       hm (&& (! vararg) (&& (! (anyop? ir1 'sys)) (homes? params 0)))
        (? (bad? ir1) 'bad
-          (&& (! vararg) (&& (! (peep g 'fesc ()))
-              (&& (! (hascall? ir1)) (&& (! (anyop? ir1 'sys)) (homes? params 0)))))
+          (&& hm (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
            (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
               ir2 (build (spillr params 0 0 0 () ()))
-              (? (bad? ir2) ir1 ir2))
+              (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
+          (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)   ; calls remain: home + spill
+                    (< (* 2 (* nc nh)) (nreads ir1 (pslots (caup sp1) ()) 0))))   ; ... only where reads beat the wraps
+           (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
+              ir2 (build (spillr2 params 0 0 0 () ()))
+              _ (pin g 'homes ())                   ; the wrap set dies with this fn
+              (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
           ir1))
 
    ; the data tail: globals in declaration order, then the string table
@@ -1237,16 +1669,24 @@
 
    ; the shared core: build the gen state, then TEXT (the functions, no _start)
    ; and DATA (globals + strings) separately -> (g textforms dataforms) | ().
-   (cgen-core ast stbl sigs)
+   ; weaks: the __attribute__((weak)) names -- NEVER inlined (an inlined body
+   ; would bake past the strong override the linker owes them).
+   (cgen-core ast stbl sigs weaks)
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ())
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ()) _ (pin t 'statics ())
-            _ (pin t 'fns (tablet 0)) _ (pin t 'stag stbl) _ (pin t 'sigs sigs) t)
+            _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0))
+            _ (pin t 'stag stbl) _ (pin t 'sigs sigs) t)
        ; pass 0: every function name -- so a bare use of one is its address (la).
        ; the sig table too: an mproto sibling (`double sin(..), cos(..);`) has a
-       ; sig but no proto form of its own
+       ; sig but no proto form of its own. a small single-return definition also
+       ; lands in the INLINE table (order-independent: recorded before any body).
        (recfns fs) (? (! (two? fs)) 1
                       (: f (cap fs)
                          _ (? (member? (cap f) '(fn proto)) (pin (g 'fns) (caup f) 1) ())
+                         _ (? (&& (= (cap f) 'fn)
+                                  (&& (! (member? (caup f) weaks))
+                                      (inlok? f (peep sigs (caup f) ()))))
+                              (pin (g 'inl) (caup f) f) ())
                          (recfns (cup fs))))
        _ (recfns (caup ast))
        _ (: (go ns) (? (! (two? ns)) 1 (: _ (pin (g 'fns) (cap ns) 1) (go (cup ns))))
@@ -1279,9 +1719,9 @@
                        (gfns (cup fs) (cat acc r)
                              (|| saw (= (caup f) "main"))))))))
        (? ok (gfns (caup ast) () ()) ()))
-   (cgen ast stbl sigs)                             ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
+   (cgen ast stbl sigs weaks)                       ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
     (: crt0 (L (L 'call 'main) (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys))
-       r (cgen-core ast stbl sigs)
+       r (cgen-core ast stbl sigs weaks)
        (? (! (two? r)) ()
           (! (nthr r 3)) ()                          ; no main -> no program (the exe has nothing to start)
           (L 1 (cat crt0 (cat (caup r) (cauup r))))))
@@ -1289,8 +1729,8 @@
    ; DEFINED function names (global FUNC symbols) and global-variable names
    ; (global OBJECT symbols) -- the .o emitter (crew/holo/obj.l) turns the rest
    ; (undefined labels, cross-section refs) into a symbol table + relocations.
-   (cgen-obj ast stbl sigs)                         ; -> (1 textforms dataforms funcnames globnames) | ()
-    (: r (cgen-core ast stbl sigs)
+   (cgen-obj ast stbl sigs weaks)                   ; -> (1 textforms dataforms funcnames globnames) | ()
+    (: r (cgen-core ast stbl sigs weaks)
        (? (! (two? r)) ()
           (: fnames (: (go fs acc) (? (! (two? fs)) (rev acc)
                                       (: f (cap fs) (go (cup fs) (? (= (cap f) 'fn) (link (caup f) acc) acc))))
