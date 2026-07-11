@@ -556,8 +556,9 @@
                             (! (= (cap head) 'var)) ()
                             (! (bad? (vent g env (caup head)))) ()   ; a local/global shadows the name
                             (peep (g 'inl) (caup head) ()))
-                    (? (&& (two? inlf) (= (tally args) (tally (cauup inlf))))
-                       (cginl g env inlf args)
+                    ir9 (? (&& (two? inlf) (= (tally args) (tally (cauup inlf))))
+                           (cginl g env inlf args) 'no)              ; 'no: splice declined (fesc or shape) -> the real call
+                    (? (! (id? ir9 'no)) ir9
                  (: direct (&& (= (cap head) 'var)
                                (&& (bad? (vent g env (caup head)))                ; not a local/global variable...
                                    (peep (g 'fns) (caup head) ())))               ; ...and a KNOWN function (typos refuse)
@@ -869,6 +870,19 @@
     (: (fresh z9) (tablet 0)                        ; reg/slot/cell -> (1 K) | ()
        (rv t k) (peep t k ())
        (rset t k v) (pin t k v)
+       (copyt t) (: t2 (tablet 0)
+                    (go1 ks) (? (! (two? ks)) t2
+                                (: _ (pin t2 (cap ks) (peep t (cap ks) ())) (go1 (cup ks))))
+                    (go1 (keys t)))
+       ; the JOIN of two abstract states: a key survives only where both sides
+       ; know it and agree (the meet over the flat lattice) -- a fresh tablet
+       (joint ta tb) (: t2 (tablet 0)
+                        (go1 ks) (? (! (two? ks)) t2
+                                    (: k1 (cap ks) va (peep ta k1 ()) vb (peep tb k1 ())
+                                       _ (? (&& (two? va) (&& (two? vb) (= (caup va) (caup vb))))
+                                            (pin t2 k1 va) ())
+                                       (go1 (cup ks))))
+                        (go1 (keys ta)))
        (alu op a b) (? (= op 'add) (+ a b) (= op 'sub) (- a b) (= op 'imul) (* a b)
                        (= op 'and) (& a b) (| a b))  ; xor stays unfolded (imm-converted only)
        (ccev cc a b) (? (= cc 'eq) (= a b) (= cc 'ne) (! (= a b))
@@ -881,32 +895,70 @@
        (swallow fs) (? (! (two? fs)) ()
                        (: f (cap fs) (? (&& (two? f) (= (cap f) 'label)) fs (swallow (cup fs)))))
        (atlab? fs l) (&& (two? fs) (: f (cap fs) (&& (two? f) (&& (= (cap f) 'label) (= (caup f) l)))))
-       (go fs cur rg sl ce acc)
+       ; back-edge labels (a jmp/br sitting BELOW its target): a loop head joins
+       ; an edge this one linear pass never computes -- assume nothing there
+       backs (: seen (tablet 0) bt (tablet 0)
+                (bscan l) (? (! (two? l)) bt
+                             (: f (cap l)
+                                _ (? (! (two? f)) ()
+                                     (= (cap f) 'label) (pin seen (caup f) 1)
+                                     (= (cap f) 'jmp) (? (peep seen (caup f) ()) (pin bt (caup f) 1) ())
+                                     (= (cap f) 'br) (? (peep seen (cauup f) ()) (pin bt (cauup f) 1) ())
+                                     ())
+                                (bscan (cup l))))
+                (bscan fs0))
+       ; the pending in-states: every FORWARD jmp/br to L joins its state into
+       ; pend[L]; L's label reads it back and joins the fall-through -- so a
+       ; known value CROSSES a label (the spush around a folded ternary reaches
+       ; its spop). the sp cursor must agree or the cells drop.
+       pend (tablet 0)
+       (pmerge l cur rg sl ce)
+        (: old (peep pend l ())
+           (? (! (two? old)) (pin pend l (L cur (copyt rg) (copyt sl) (copyt ce)))
+              (: nce (? (= (cap old) cur) (joint (caup (cuup old)) ce) (fresh 0))
+                 (pin pend l (L (cap old) (joint (caup old) rg) (joint (cauup old) sl) nce)))))
+       ; lv: linearly LIVE -- () right after an unconditional transfer (the
+       ; label then reads only its jump-in state, never the stale linear one)
+       (go fs lv cur rg sl ce acc)
         (? (! (two? fs)) (rev acc)
            (: f (cap fs) r (cup fs)
               op (? (two? f) (cap f) ())
-              (? (= op 'label) (go r cur (fresh 0) (fresh 0) (fresh 0) (link f acc))
+              (? (= op 'label)
+                  (: l1 (caup f) acc2 (link f acc)
+                     (? (peep backs l1 ()) (go r 1 cur (fresh 0) (fresh 0) (fresh 0) acc2)
+                        (: pd (peep pend l1 ())
+                           (? (! (two? pd))
+                               (? lv (go r 1 cur rg sl ce acc2)
+                                  (go r 1 cur (fresh 0) (fresh 0) (fresh 0) acc2))
+                              (! lv) (go r 1 (cap pd) (caup pd) (cauup pd) (caup (cuup pd)) acc2)
+                              (go r 1 (cap pd) (joint (caup pd) rg) (joint (cauup pd) sl)
+                                  (? (= (cap pd) cur) (joint (caup (cuup pd)) ce) (fresh 0))
+                                  acc2)))))
                  (member? op '(call callr raw sys))
-                  (go r cur (fresh 0) (fresh 0) (fresh 0) (link f acc))
+                  (go r 1 cur (fresh 0) (fresh 0) (fresh 0) (link f acc))
                  (= op 'jmp)                         ; drop the dead tail; a jmp to the very next label falls through
                   (: r2 (swallow r)
-                     (? (atlab? r2 (caup f)) (go r2 cur rg sl ce acc)
-                        (go r2 cur rg sl ce (link f acc))))
-                 (member? op '(jmpr ret)) (go (swallow r) cur rg sl ce (link f acc))
+                     (? (atlab? r2 (caup f)) (go r2 1 cur rg sl ce acc)
+                        (: _ (pmerge (caup f) cur rg sl ce)
+                           (go r2 () cur rg sl ce (link f acc)))))
+                 (= op 'br)                          ; the taken edge records; the fall-through rides on
+                  (: _ (pmerge (cauup f) cur rg sl ce)
+                     (go r 1 cur rg sl ce (link f acc)))
+                 (member? op '(jmpr ret)) (go (swallow r) () cur rg sl ce (link f acc))
                  (= op 'li)
                   (: nx (? (two? r) (cap r) ())
                      (? (&& (two? nx) (&& (member? (cap nx) '(li mov)) (= (caup nx) (caup f))))
-                        (go r cur rg sl ce acc)      ; the very next form rewrites this register: dead li
+                        (go r 1 cur rg sl ce acc)    ; the very next form rewrites this register: dead li
                         (: k (caup (cup f))
                            _ (rset rg (caup f) (? (kok? k) (L 1 k) ()))
-                           (go r cur rg sl ce (link f acc)))))
+                           (go r 1 cur rg sl ce (link f acc)))))
                  (= op 'mov)
                   (: _ (rset rg (caup f) (rv rg (cauup f)))
-                     (go r cur rg sl ce (link f acc)))
+                     (go r 1 cur rg sl ce (link f acc)))
                  (member? op '(add sub and or xor imul))
                   (? (= (caup f) 'sp)                ; sp arithmetic: the cell cursor moves
                       (: n (caup (cuup f))
-                         (go r (? (= op 'add) (- cur n) (+ cur n)) rg sl ce (link f acc)))
+                         (go r 1 (? (= op 'add) (- cur n) (+ cur n)) rg sl ce (link f acc)))
                      (: d (caup f) a (cauup f) b (caup (cuup f))
                         ; b is a register SYMBOL or a charm immediate -- never confuse
                         ; the two (a symbol in arithmetic church-explodes)
@@ -916,62 +968,62 @@
                             (: k (alu op (caup ak) (caup bk))
                                (? (kok? k)
                                   (: _ (rset rg d (L 1 k))
-                                     (go r cur rg sl ce (link (L 'li d k) acc)))
+                                     (go r 1 cur rg sl ce (link (L 'li d k) acc)))
                                   (: _ (rset rg d ())
-                                     (go r cur rg sl ce (link f acc)))))
+                                     (go r 1 cur rg sl ce (link f acc)))))
                            (&& (! (charm? b)) (two? bk))   ; known reg source -> the imm form
                             (: _ (rset rg d ())
-                               (go r cur rg sl ce (link (L op d a (caup bk)) acc)))
+                               (go r 1 cur rg sl ce (link (L op d a (caup bk)) acc)))
                            (: _ (rset rg d ())
-                              (go r cur rg sl ce (link f acc))))))
+                              (go r 1 cur rg sl ce (link f acc))))))
                  (member? op '(shl shr sar))         ; the 2-operand immediate shifts
                   (: d (caup f) k (cauup f) dk (rv rg d)
                      (? (&& (two? dk) (charm? k))
                          (: v (? (= op 'shl) (* (caup dk) (k 2)) (>> (caup dk) k))
                             (? (kok? v)
                                (: _ (rset rg d (L 1 v))
-                                  (go r cur rg sl ce (link (L 'li d v) acc)))
+                                  (go r 1 cur rg sl ce (link (L 'li d v) acc)))
                                (: _ (rset rg d ())
-                                  (go r cur rg sl ce (link f acc)))))
+                                  (go r 1 cur rg sl ce (link f acc)))))
                         (: _ (rset rg d ())
-                           (go r cur rg sl ce (link f acc)))))
+                           (go r 1 cur rg sl ce (link f acc)))))
                  (= op 'st)
                   (? (= (caup f) 'r4)
                       (: _ (rset sl (cauup f) (rv rg (caup (cuup f))))
-                         (go r cur rg sl ce (link f acc)))
+                         (go r 1 cur rg sl ce (link f acc)))
                      (= (caup f) 'sp)
                       (: _ (rset ce cur (rv rg (caup (cuup f))))
-                         (go r cur rg sl ce (link f acc)))
-                     (go r cur rg (fresh 0) ce (link f acc)))   ; a pointer store may alias the frame
+                         (go r 1 cur rg sl ce (link f acc)))
+                     (go r 1 cur rg (fresh 0) ce (link f acc)))   ; a pointer store may alias the frame
                  (= op 'ld)
                   (: d (caup f) b (cauup f) off (caup (cuup f))
                      kv (? (= b 'r4) (rv sl off) (&& (= b 'sp) (= off 0)) (rv ce cur) ())
                      (? (two? kv)
                         (: _ (rset rg d kv)
-                           (go r cur rg sl ce (link (L 'li d (caup kv)) acc)))
+                           (go r 1 cur rg sl ce (link (L 'li d (caup kv)) acc)))
                         (: _ (rset rg d ())
-                           (go r cur rg sl ce (link f acc)))))
+                           (go r 1 cur rg sl ce (link f acc)))))
                  (= op 'push)
                   (: cur2 (+ cur 8)
                      _ (rset ce cur2 (rv rg (caup f)))
-                     (go r cur2 rg sl ce (link f acc)))
+                     (go r 1 cur2 rg sl ce (link f acc)))
                  (= op 'pop)
                   (: _ (rset rg (caup f) (rv ce cur))
-                     (go r (- cur 8) rg sl ce (link f acc)))
+                     (go r 1 (- cur 8) rg sl ce (link f acc)))
                  (member? op '(st1 st2 st4 stsd stss))
                   (? (member? (caup f) '(r4 sp))
                       (: _ (? (= (caup f) 'r4) (rset sl (cauup f) ()) (rset ce cur ()))
-                         (go r cur rg sl ce (link f acc)))
-                     (go r cur rg (fresh 0) ce (link f acc)))
+                         (go r 1 cur rg sl ce (link f acc)))
+                     (go r 1 cur rg (fresh 0) ce (link f acc)))
                  (member? op '(ld1 ld2 ld4 ldu1 ldu2 ldu4))
                   (: _ (rset rg (caup f) ())
-                     (go r cur rg sl ce (link f acc)))
+                     (go r 1 cur rg sl ce (link f acc)))
                  (member? op '(lea lean la movqrx cvttsd2si set))
                   (: _ (rset rg (? (= op 'set) (cauup f) (caup f)) ())
-                     (go r cur rg sl ce (link f acc)))
+                     (go r 1 cur rg sl ce (link f acc)))
                  (member? op '(div rem udiv urem shlv shrv sarv neg not sx1 sx2 sx4 zx1 zx2 zx4))
                   (: _ (rset rg 'r0 ()) _ (rset rg 'r1 ()) _ (rset rg 'r2 ()) _ (rset rg 'r3 ())
-                     (go r cur rg sl ce (link f acc)))
+                     (go r 1 cur rg sl ce (link f acc)))
                  (= op 'cmp)                         ; paired with its br/set consumer
                   (: a (rv rg (caup f))
                      b (? (charm? (cauup f)) (? (kok? (cauup f)) (L 1 (cauup f)) ())
@@ -981,18 +1033,19 @@
                          (: tv (ccev (caup nx) (caup a) (caup b))
                             (? (= (cap nx) 'br)
                                (? tv (: r2 (swallow (cup r))
-                                        (? (atlab? r2 (caup (cup nx))) (go r2 cur rg sl ce acc)
-                                           (go r2 cur rg sl ce (link (L 'jmp (caup (cup nx))) acc))))
-                                     (go (cup r) cur rg sl ce acc))
+                                        (? (atlab? r2 (caup (cup nx))) (go r2 1 cur rg sl ce acc)
+                                           (: _ (pmerge (caup (cup nx)) cur rg sl ce)
+                                              (go r2 () cur rg sl ce (link (L 'jmp (caup (cup nx))) acc)))))
+                                     (go (cup r) 1 cur rg sl ce acc))
                                (: d (caup (cup nx)) k (? tv 1 0)
                                   _ (rset rg d (L 1 k))
-                                  (go (cup r) cur rg sl ce (link (L 'li d k) acc)))))
-                        (go r cur rg sl ce (link f acc))))
-                 (member? op '(br movqxr ucomisd ldsd ldss cvtsi2sd cvtss2sd cvtsd2ss addsd subsd mulsd divsd movsd))
-                  (go r cur rg sl ce (link f acc))   ; leaves gp state alone (br: fall-through keeps it)
+                                  (go (cup r) 1 cur rg sl ce (link (L 'li d k) acc)))))
+                        (go r 1 cur rg sl ce (link f acc))))
+                 (member? op '(movqxr ucomisd ldsd ldss cvtsi2sd cvtss2sd cvtsd2ss addsd subsd mulsd divsd movsd))
+                  (go r 1 cur rg sl ce (link f acc)) ; the xmm lane leaves gp state alone
                  ; anything else: assume nothing survives
-                 (go r cur (fresh 0) (fresh 0) (fresh 0) (link f acc)))))
-       (go fs0 0 (fresh 0) (fresh 0) (fresh 0) ()))
+                 (go r 1 cur (fresh 0) (fresh 0) (fresh 0) (link f acc)))))
+       (go fs0 1 0 (fresh 0) (fresh 0) (fresh 0) ()))
 
    ; dead frame stores: after the constant folds, a slot the function never
    ; loads back is write-only -- its stores drop (the b2w-shape arg temps whose
@@ -1185,7 +1238,10 @@
    ; a declaration list ((name ty init)..): slots by SIZE (rounded to 8),
    ; extends env -> (forms env) | 'bad. aggregate + string locals zero the
    ; slot then fill; a scalar takes its value; only a label-valued global image
-   ; refuses (4d).
+   ; refuses (4d). (LOCALS never take register homes: measured a consistent net
+   ; loss both wrapped-around-calls and leaf-only -- the r0-shuttle makes frame
+   ; slots effectively free (store-forwarding) while register homes serialize
+   ; the dependency chain. the exp-1 lesson again; see the memory.)
    (cgdecl g env pairs)
     (: (one ps env2 acc)
         (? (! (two? ps)) (L acc env2)
@@ -1239,74 +1295,23 @@
               (one (cup ps) (link (L name (L 'glob lbl) ty) env2))))
        (one pairs env))
 
-   ; -- the inline lane (the b2w problem): a SMALL function whose body is just
-   ; decls + a single `return expr;` splices at the call site -- each arg value
-   ; lands in a fresh 8-byte frame temp (exactly a callee frame's param slot, so
-   ; the semantics are the out-of-line call's: full-word stores, (ldop pty)
-   ; reads), the decls become caller temps, and the return expression computes
-   ; into r0 in place. no call is emitted, so a hot caller can turn LEAF and its
-   ; params take register homes -- the gcc win on the dispatch ops twice over:
-   ; no call overhead AND no frame reloads. depth 1: a body being inlined
-   ; compiles its own calls out-of-line (the g 'inlining flag). --
-   (inlbody f)                                      ; ('fn name params ('blk items)) -> (decls retexpr) | 'bad
-    (: (go l ds) (? (! (two? l)) 'bad
-                    (: it (cap l)
-                       (? (= (cap it) 'decl) (go (cup l) (link it ds))
-                          (&& (= (cap it) 'ret) (&& (two? (caup it)) (! (two? (cup l)))))
-                           (L (rev ds) (caup it))
-                          'bad)))
-       (go (caup (caup (cuup f))) ()))
-   (inlok? f sig)
-    (: rt (? (two? sig) (cap sig) 'long)
-       (pok ps n) (? (! (two? ps)) (<= n 6)
-                     (: pty (caup (cap ps))
-                        (? (|| (flo? pty) (|| (stru? pty) (arr? pty))) ()
-                           (pok (cup ps) (+ n 1)))))
-       (? (! (two? sig)) ()
-          (|| (flo? rt) (stru? rt)) ()
-          (nthr sig 2) ()                            ; variadic stays a real call
-          (! (pok (cauup f) 0)) ()
-          (< 600 (tally (show (caup (cuup f))))) ()  ; small bodies only
-          (! (bad? (inlbody f)))))
-   (cginl g env f args)                              ; splice f's body at the site -> (ty forms) | 'bad
-    (: _ (pin g 'inlining 1)
-       db (inlbody f)
-       rt (cap (peep (g 'sigs) (caup f) (L 'long ())))
-       (bind ps as benv acc)                         ; arg values -> fresh full-word slots, left to right
-        (? (! (two? ps)) (L benv acc)
-           (: r (cgexpr g env (cap as))
-              (? (bad? r) 'bad
-                 (: off (ntmp g 'long)
-                    (bind (cup ps) (cup as)
-                          (link (L (cap (cap ps)) off (caup (cap ps))) benv)
-                          (cat acc (cat (asint r) (L (L 'st 'r4 off 'r0)))))))))
-       (decls ds benv acc)                           ; the body's own locals
-        (? (! (two? ds)) (L benv acc)
-           (: r (cgdecl g benv (caup (cap ds)))
-              (? (bad? r) 'bad
-                 (decls (cup ds) (caup r) (cat acc (cap r))))))
-       br (bind (cauup f) args () ())
-       dr (? (bad? br) 'bad (decls (cap db) (cap br) (caup br)))
-       r (? (bad? dr) 'bad (cgexpr g (cap dr) (caup db)))
-       _ (pin g 'inlining ())
-       (? (bad? r) 'bad
-          (flo? (cap r)) (L rt (cat (caup dr) (asint r)))
-          (L rt (cat (caup dr) (caup r)))))
-
    ; stmt -> forms | 'bad
    (cgstmt g env s)
     (: k (cap s)
-       (? (= k 'ret) (? (! (two? (caup s))) epi                          ; bare `return;` -- just the epilogue
-                      (: r (cgexpr g env (caup s))
-                        rt (cap (peep (g 'sigs) (g 'fn) (L 'long ())))   ; the current function's return type
-                        (? (bad? r) 'bad
-                           (flo? rt) (cat (asflo r) epi)                 ; a double return leaves f0 (xmm0)
-                           (sse2? g rt)                                  ; a two-double struct returns as the xmm PAIR
-                            (cat (caup r) (cat (fldf 'double (xmmreg 0) 'r0 0)
-                                          (cat (fldf 'double (xmmreg 1) 'r0 8) epi)))
-                           (|| (stru? rt) (stru? (cap r))) 'bad          ; any other struct return, or a struct where a scalar is due
-                           (flo? (cap r)) (cat (asint r) epi)            ; a double value, an int return -> truncate to r0
-                           (cat (caup r) epi))))                         ; int -> int, as before
+       (? (= k 'ret)                                                     ; inside an inline splice a return JUMPS to the
+          (: il (peep g 'inlret ())                                      ; splice's end label instead of the epilogue
+             (? (! (two? (caup s))) (? il (L (L 'jmp il)) epi)           ; bare `return;` -- just the epilogue
+                (: r (cgexpr g env (caup s))
+                   rt (? il (peep g 'inlrt 'long)                        ; the INLINED function's return type
+                         (cap (peep (g 'sigs) (g 'fn) (L 'long ()))))    ; else the current function's
+                   (? (bad? r) 'bad
+                      (flo? rt) (cat (asflo r) epi)                      ; a double return leaves f0 (xmm0; never inline -- gated)
+                      (sse2? g rt)                                       ; a two-double struct returns as the xmm PAIR
+                       (cat (caup r) (cat (fldf 'double (xmmreg 0) 'r0 0)
+                                     (cat (fldf 'double (xmmreg 1) 'r0 8) epi)))
+                      (|| (stru? rt) (stru? (cap r))) 'bad               ; any other struct return, or a struct where a scalar is due
+                      (flo? (cap r)) (cat (asint r) (? il (L (L 'jmp il)) epi))   ; a double value, an int return -> truncate to r0
+                      (cat (caup r) (? il (L (L 'jmp il)) epi))))))      ; int -> int, as before
           (= k 'expr) (: r (cgexpr g env (caup s))
                          (? (bad? r) 'bad (caup r)))
           (= k 'nop) ()
@@ -1446,11 +1451,74 @@
                 (? (bad? r) 'bad
                    (cgitems g env (cup items) (cat acc r)))))))
 
+   ; -- the inline lane (the b2w problem): a SMALL function splices its whole
+   ; body at the call site -- each arg value lands in a fresh 8-byte frame temp
+   ; (exactly a callee frame's param slot, so the semantics are the out-of-line
+   ; call's: full-word stores, (ldop pty) reads), the body's statements compile
+   ; in place (decls become caller temps), and every `return` computes its value
+   ; into r0 then JUMPS to the splice's end label (cgstmt's inlret door -- so
+   ; the ai_nilp if-chain shape inlines, not just a single-return body). no call
+   ; is emitted, so a hot caller can turn LEAF and its params take register
+   ; homes -- the gcc win on the dispatch ops twice over: no call overhead AND
+   ; no frame reloads. depth 1: a body being inlined compiles its own calls
+   ; out-of-line (the g 'inlining flag). gated out: goto/labels (two splices of
+   ; one body in one caller would collide), block statics (each splice would
+   ; mint a SEPARATE instance -- C owes one), va_start. --
+   (noinl? x) (? (member? x '(sdecl goto lbl vastart)) 1
+                 (! (two? x)) ()
+                 (|| (noinl? (cap x)) (noinl? (cup x))))
+   (oneret? items)                                  ; decls* + one trailing `return expr` (the b2w shape)
+    (? (! (two? items)) ()
+       (: it (cap items)
+          (? (= (cap it) 'decl) (oneret? (cup items))
+             (&& (= (cap it) 'ret) (&& (two? (caup it)) (! (two? (cup items))))))))
+   (inlok? f sig)
+    (: rt (? (two? sig) (cap sig) 'long)
+       items (caup (caup (cuup f)))
+       (pok ps n) (? (! (two? ps)) (<= n 6)
+                     (: pty (caup (cap ps))
+                        (? (|| (flo? pty) (|| (stru? pty) (arr? pty))) ()
+                           (pok (cup ps) (+ n 1)))))
+       (? (! (two? sig)) ()
+          (|| (flo? rt) (stru? rt)) ()
+          (nthr sig 2) ()                            ; variadic stays a real call
+          (! (pok (cauup f) 0)) ()
+          ; a straight-line single-return body pays broadly (600); a branchy one
+          ; only while TINY (250, the guard shape) -- big if-chains bloat icache
+          (< (? (oneret? items) 600 250) (tally (show (caup (cuup f))))) ()
+          (! (noinl? (caup (cuup f))))))
+   (cginl g env f args)                              ; splice f's body at the site -> (ty forms) | 'no (declined)
+    (: fe0 (peep g 'fesc ())                          ; a splice that pins a CLEAR fesc would cost the CALLER
+       strs0 (g 'strs)                                ; every sibcall (the lvm_peep stack blowup) -- decline it
+       _ (pin g 'inlining 1)
+       rt (cap (peep (g 'sigs) (caup f) (L 'long ())))
+       ilb9 (nlab g ".il")
+       (bind ps as benv acc)                         ; arg values -> fresh full-word slots, left to right
+        (? (! (two? ps)) (L benv acc)
+           (: r (cgexpr g env (cap as))
+              (? (bad? r) 'bad
+                 (: off (ntmp g 'long)
+                    (bind (cup ps) (cup as)
+                          (link (L (cap (cap ps)) off (caup (cap ps))) benv)
+                          (cat acc (cat (asint r) (L (L 'st 'r4 off 'r0)))))))))
+       br (bind (cauup f) args () ())
+       _ (pin g 'inlret ilb9)
+       _ (pin g 'inlrt rt)
+       ibd (? (bad? br) 'bad ((g 'cgitems) g (cap br) (caup (caup (cuup f))) ()))
+       _ (pin g 'inlret ())
+       _ (pin g 'inlining ())
+       (? (|| (bad? br) (bad? ibd))                   ; a shape the splice can't take: the real call still can
+           (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
+          (&& (! fe0) (peep g 'fesc ()))              ; the body took a frame address: keep the caller lean
+           (: _ (pin g 'fesc ()) _ (pin g 'strs strs0) 'no)
+          (L rt (cat (caup br) (cat ibd (L (L 'label ilb9)))))))
+
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     (: params (cauup f)
        _ (pin g 'off 8)                              ; slot -8 = saved r3 (see epi)
        _ (pin g 'fesc ())                            ; fresh escape flag (the sibcall gate reads it)
        _ (pin g 'inlining ())                        ; fresh inline-depth flag
+       _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
        _ (pin g 'homes ())                           ; fresh non-leaf home set (call-fixed + sibs read it)
        _ (pin g 'fn (caup f))
        sig (peep (g 'sigs) (caup f) ())
@@ -1674,7 +1742,7 @@
    (cgen-core ast stbl sigs weaks)
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ())
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ()) _ (pin t 'statics ())
-            _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0))
+            _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0)) _ (pin t 'cgitems cgitems)
             _ (pin t 'stag stbl) _ (pin t 'sigs sigs) t)
        ; pass 0: every function name -- so a bare use of one is its address (la).
        ; the sig table too: an mproto sibling (`double sin(..), cos(..);`) has a
