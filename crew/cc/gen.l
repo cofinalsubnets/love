@@ -125,11 +125,11 @@
    ; answers (ty forms) | 'no (the caller falls back to the shuttle). --
    (pow2? n) (&& (< 0 n) (= 0 (& n (- n 1))))
    (lg2v n) (: (go k v) (? (<= v 1) k (go (+ k 1) (>> v 1))) (go 0 n))
-   (immop g op av aty n)                            ; av the LEFT value tuple: the op lands on ITS register
+   (immop g op av aty n wnt)                        ; av the LEFT value tuple; wnt the advisory destination
     (: rA (vreg av)
        (? (member? op '(eq ne lt le gt ge))
            (? (fits32? n)
-              (: rd (rdst g rA)
+              (: rd (? wnt wnt (rdst g rA))
                  fs (cat (vfs av) (L (L 'cmp rA n) (L 'set (scc op (|| (usg? aty) (ptr? aty))) rd)))
                  _ (? (id? rd rA) () (rfree g rA))
                  (mkv 'long rd fs))
@@ -139,10 +139,10 @@
               (= op '/) (? (= n 1) (mkv 'ulong rA (vfs av))
                            (? (wr? g rA)
                               (mkv 'ulong rA (cat (vfs av) (L (L 'shr rA (lg2v n)))))
-                              (: rd (rdst g rA)   ; a borrowed home shifts a COPY (no 3-address shr)
+                              (: rd (? wnt wnt (rdst g rA))   ; a borrowed home shifts a COPY (no 3-address shr)
                                  (mkv 'ulong rd (cat (vfs av) (L (L 'mov rd rA) (L 'shr rd (lg2v n))))))))
               (= n 1) (mkv 'ulong 'r0 (cat (vdrop g av) (L (L 'li 'r0 0))))
-              (: rd (rdst g rA)
+              (: rd (? wnt wnt (rdst g rA))
                  fs (cat (vfs av) (L (L 'and rd rA (- n 1))))
                  _ (? (id? rd rA) () (rfree g rA))
                  (mkv 'ulong rd fs)))
@@ -153,7 +153,7 @@
                 (! (fits32? sn)) 'no
                 (: rt (? (ptr? aty) aty (ubin aty 'long))
                    (? (&& (= sn 0) (member? op '(+ -))) (mkv rt rA (vfs av))
-                      (: rd (rdst g rA)
+                      (: rd (? wnt wnt (rdst g rA))
                          fs (cat (vfs av) (L (L iop rd rA sn)))
                          _ (? (id? rd rA) () (rfree g rA))
                          (mkv rt rd fs))))))))
@@ -394,15 +394,21 @@
                  (mkv ty 'r0 (cat fill (L (L 'lea 'r0 'r4 off))))))   ; a real lea: the temp's address is the value (& pins via the addr lane, a call blocks via the window)
           'bad))
 
-   ; -- expressions: answers (type forms) | 'bad, the value in r0 --
+   ; -- expressions: answers a value tuple | 'bad. g 'want is the DESTINATION
+   ; HINT: pinned by a consumer that knows where the value must land (an asn
+   ; into a home, a ret's r0), consumed by the TOP node only (cleared here, so
+   ; subexpressions never inherit it), and always ADVISORY -- a lane that
+   ; ignores it answers its usual register and the consumer bridges. --
    (cgexpr g env e)
-    (: k (cap e)
+    (: wnt (peep g 'want ())
+       _ (pin g 'want ())
+       k (cap e)
        (? (= k 'szof)                                   ; sizeof EXPR: the UNDECAYED type (clval keeps arrays), size a constant
            (: e2 (caup e)
               lv (clval g env e2)
               ty (? (bad? lv) (: r (cgexpr g env e2) (? (bad? r) 'bad (: _ (rfree g (vreg r)) (vty r)))) (vty lv))
               (? (bad? ty) 'bad (mkv 'ulong 'r0 (L (L 'li 'r0 (tsz g ty))))))
-          (= k 'num) (mkv 'long 'r0 (L (L 'li 'r0 (caup e))))
+          (= k 'num) (: W (? wnt wnt 'r0) (mkv 'long W (L (L 'li W (caup e)))))
           (= k 'flo) (mkv 'double 'r0 (L (L 'li 'r0 (fbits (caup e))) (L 'movqxr 'f0 'r0)))
           (= k 'str)
            (: lbl (nlab g ".S")
@@ -439,7 +445,8 @@
                            (mkv 'double 'r0 (fldf ty 'f0 'r4 (caup en)))
                            (mkv 'double 'r0 (cat (L (L 'la 'r1 (caup en))) (fldf ty 'f0 'r1 0))))
                        (? (= (cap en) 'loc)
-                          (mkv ty 'r0 (L (L (ldop ty) 'r0 'r4 (caup en))))
+                          (: W (? wnt wnt 'r0)
+                             (mkv ty W (L (L (ldop ty) W 'r4 (caup en)))))
                           (mkv ty 'r0 (L (L 'la 'r1 (caup en)) (L (ldop ty) 'r0 'r1 0))))))))
           (= k 'addr)
            (: r (clval g env (caup e))
@@ -467,12 +474,31 @@
           (= k 'asn)
            (: rv (? (= (cap (caup e)) 'var) (vent g env (caup (caup e))) 'bad)
               (? (&& (two? rv) (= (cap rv) 'regv))   ; store into a register-homed scalar (param or local)
-                  (: r (cgexpr g env (cauup e))
+                  (: _ (pin g 'want (caup rv))         ; hint the rhs straight at the home
+                     r (cgexpr g env (cauup e))
                      (? (bad? r) 'bad
                         (flo? (vty r)) (mkv (cauup rv) 'r0 (cat (asint g r) (L (L 'mov (caup rv) 'r0))))
+                        (id? (vreg r) (caup rv)) (mkv (cauup rv) (caup rv) (vfs r))   ; landed in the home already
                         (: fs (cat (vfs r) (L (L 'mov (caup rv) (vreg r))))   ; straight from the value's register
                            _ (rfree g (vreg r))
                            (mkv (cauup rv) (caup rv) fs))))
+                 ; STORE-DIRECT: a plain variable target's address is STATIC (a
+                 ; frame offset or a label) -- the value stores from wherever it
+                 ; sits, no lean/spush/spop shuttle around it
+                 (&& (two? rv) (&& (member? (cap rv) '(loc glo))
+                     (: ty9 (cauup rv) (! (|| (stru? ty9) (|| (arr? ty9) (flo? ty9)))))))
+                  (: ty (cauup rv)
+                     r (cgexpr g env (cauup e))
+                     (? (bad? r) 'bad
+                        (two? (cvt ty 'r0))              ; a narrow target converts on the protocol
+                         (mkv ty 'r0 (cat (tor0 g r)
+                                      (cat (cvt ty 'r0)
+                                           (? (= (cap rv) 'loc)
+                                              (L (L (stop ty) 'r4 (caup rv) 'r0))
+                                              (L (L 'la 'r1 (caup rv)) (L (stop ty) 'r1 0 'r0))))))
+                        (= (cap rv) 'loc)
+                         (mkv ty (vreg r) (cat (vfs r) (L (L 'st 'r4 (caup rv) (vreg r)))))
+                        (mkv ty (vreg r) (cat (vfs r) (L (L 'la 'r1 (caup rv)) (L 'st 'r1 0 (vreg r)))))))
                  (: lv (clval g env (caup e))
               (? (bad? lv) 'bad
                  (arr? (vty lv)) 'bad                ; an array is not assignable
@@ -516,7 +542,9 @@
                                  (L 'add 'r1 'r0 (* stp (cauup e)))
                                  (L (stop ty) 'r2 0 'r1))))))))))
           (= k 'cast)
-           (: r (cgexpr g env (cauup e)) tgt (caup e)
+           (: tgt (caup e)
+              _ (? (&& (! (flo? tgt)) (! (two? (cvt tgt 'r0)))) (pin g 'want wnt) ())
+              r (cgexpr g env (cauup e))
               (? (bad? r) 'bad
                  (&& (flo? tgt) (! (flo? (vty r)))) (mkv 'double 'r0 (asflo g r))  ; int -> double
                  (&& (! (flo? tgt)) (flo? (vty r)))                              ; double -> int, then narrow
@@ -542,7 +570,9 @@
                             (= (caup e) 'bnot) (L (L 'not 'r0))
                             (L (L 'cmp 'r0 0) (L 'set 'eq 'r0)))))))
           (= k 'comma)
-           (: a (cgexpr g env (caup e)) b (cgexpr g env (cauup e))
+           (: a (cgexpr g env (caup e))
+              _ (pin g 'want wnt)
+              b (cgexpr g env (cauup e))
               (? (|| (bad? a) (bad? b)) 'bad
                  (mkv (vty b) (vreg b) (cat (vdrop g a) (vfs b)))))
           (= k 'land)                                ; as a VALUE: cbranch the short-circuit, then settle the bit
@@ -689,7 +719,7 @@
           (= k 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
               (? (bad? lv) 'bad (loadval (vty lv) (vfs lv))))
-          (= k 'bin) (cgbin g env e)
+          (= k 'bin) (cgbin g env e wnt)
           'bad))
    ; the SysV register call, stack overflow included: args 1..6 gp / 1..8 xmm ride
    ; registers, the REST ride the caller stack (arg7 shallowest). evaluation order is
@@ -779,7 +809,7 @@
                    (? (bad? hr) 'bad
                       (mkv (fnret (vty hr)) 'r0 (cat pf (cat (tor0 g hr) (cat (L (L 'mov 'r3 'r0))
                                 (cat spills (cat pops (cat setal (cat (L (L 'callr 'r3)) (cat clean relods)))))))))))))))
-   (cgbin g env e)
+   (cgbin g env e wnt)
     (: op (caup e)
        lhs (cauup e) rhs (caup (cuup e))
        ; LAZY left-then-right, like cbranch: the left PARKS (allocates) before
@@ -799,7 +829,7 @@
               (? (= (cap rhs) 'num)
                   (? (wr? g (vreg a))
                      (mkv rt (vreg a) (cat (vfs a) (L (L iop (vreg a) (caup rhs)))))
-                     (: rd (rdst g (vreg a))                ; a borrowed home shifts a COPY (no 3-address shift)
+                     (: rd (? wnt wnt (rdst g (vreg a)))    ; a borrowed home shifts a COPY (no 3-address shift)
                         (mkv rt rd (cat (vfs a) (L (L 'mov rd (vreg a)) (L iop rd (caup rhs)))))))
                  (: b (cgexpr g env rhs)
                     (? (bad? b) 'bad
@@ -810,7 +840,7 @@
           (: ta (vty a)
              ; a constant right rides the immediate lane; a constant LEFT swaps
              ; over (commutative ops) or mirrors (relations, rflip) onto the right
-             imr (? (&& (! (flo? ta)) (= (cap rhs) 'num)) (immop g op a ta (caup rhs)) 'no)
+             imr (? (&& (! (flo? ta)) (= (cap rhs) 'num)) (immop g op a ta (caup rhs) wnt) 'no)
              (? (! (id? imr 'no)) imr
                 (: iml? (&& (! (flo? ta)) (&& (= (cap lhs) 'num)
                             (member? op '(+ * & | ^ eq ne lt le gt ge))))
@@ -860,7 +890,7 @@
                                       (member? op '(eq ne lt le gt ge))
                                        (mkv 'long 'r0 (cat mid (L (L 'cmp 'r1 'r0) (L 'set (scc op cunsg) 'r0))))
                                       'bad))))
-                         iml (? (&& iml? (! (flo? tb))) (immop g (rflip op) b tb (caup lhs)) 'no)
+                         iml (? (&& iml? (! (flo? tb))) (immop g (rflip op) b tb (caup lhs) wnt) 'no)
                          (? (! (id? iml 'no)) iml
                             (|| (flo? ta) (flo? tb))
                              ; the double lane: either operand double -> both to double (f1=left,
@@ -895,17 +925,20 @@
                                      cunsg (|| (|| (usg? ta) (usg? tb)) (|| pa pb))
                                      pre (cat (vfs ah) (vfs b))
                                      (? (member? op '(eq ne lt le gt ge))
-                                         (: rd (rdst g rA)
+                                         (: rd (? wnt wnt (rdst g rA))   ; set runs after the cmp: rd may alias rB
                                             fs (cat pre (L (L 'cmp rA rB) (L 'set (scc op cunsg) rd)))
                                             _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
                                             (mkv 'long rd fs))
                                         (member? op '(+ - * & | ^))
                                          (: iop2 (? (= op '+) 'add (= op '-) 'sub (= op '*) 'imul
                                                     (= op '&) 'and (= op '|) 'or 'xor)
-                                            rd (rdst g rA)
-                                            fs (cat pre (L (L iop2 rd rA rB)))
-                                            _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
-                                            (mkv (ubin ta tb) rd fs))
+                                            rd (? (&& wnt (! (id? wnt rB))) wnt (rdst g rA))
+                                            ; holo reorders a commutative rd==rb; sub CANNOT (alias-dst) --
+                                            ; a borrowed left + dry pool can land rd on rB's r0
+                                            (? (&& (= op '-) (id? rd rB)) (shut ())
+                                               (: fs (cat pre (L (L iop2 rd rA rB)))
+                                                  _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
+                                                  (mkv (ubin ta tb) rd fs))))
                                         (shut ())))))))))))))
 
    ; r3 (rbx) is CALLEE-SAVED under SysV and gen leans on it (callr park, the
@@ -1459,7 +1492,8 @@
        (? (= k 'ret)                                                     ; inside an inline splice a return JUMPS to the
           (: il (peep g 'inlret ())                                      ; splice's end label instead of the epilogue
              (? (! (two? (caup s))) (? il (L (L 'jmp il)) epi)           ; bare `return;` -- just the epilogue
-                (: r (cgexpr g env (caup s))
+                (: _ (pin g 'want 'r0)                                   ; the return value's one true home
+                   r (cgexpr g env (caup s))
                    rt (? il (peep g 'inlrt 'long)                        ; the INLINED function's return type
                          (cap (peep (g 'sigs) (g 'fn) (L 'long ()))))    ; else the current function's
                    (? (bad? r) 'bad
