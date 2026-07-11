@@ -115,6 +115,7 @@
              (: f (assoc name (cap e))
                 (? (two? f) (L (caup f) (cauup f)) 'bad)))))
    (lg2 n) (? (= n 1) 0 (= n 2) 1 (= n 4) 2 3)
+   (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))   ; an 8-byte gp scalar: what a register home can carry
    ; -- the immediate lane: the left value already in r0, a compile-time constant
    ; on the right -> ONE imm-form op (holo's add/sub/imul/and/or/xor/cmp take a
    ; signed-32 immediate), no operand-stack shuttle -- 6 insns and a memory
@@ -465,10 +466,13 @@
                        (mkv ty 'r0 (cat (vfs r) (L (L (ldop ty) 'r0 'r0 0))))))))
           (= k 'asn)
            (: rv (? (= (cap (caup e)) 'var) (vent g env (caup (caup e))) 'bad)
-              (? (&& (two? rv) (= (cap rv) 'regv))   ; store into a register-homed scalar param
+              (? (&& (two? rv) (= (cap rv) 'regv))   ; store into a register-homed scalar (param or local)
                   (: r (cgexpr g env (cauup e))
                      (? (bad? r) 'bad
-                        (mkv (cauup rv) 'r0 (cat (asint g r) (L (L 'mov (caup rv) 'r0))))))
+                        (flo? (vty r)) (mkv (cauup rv) 'r0 (cat (asint g r) (L (L 'mov (caup rv) 'r0))))
+                        (: fs (cat (vfs r) (L (L 'mov (caup rv) (vreg r))))   ; straight from the value's register
+                           _ (rfree g (vreg r))
+                           (mkv (cauup rv) (caup rv) fs))))
                  (: lv (clval g env (caup e))
               (? (bad? lv) 'bad
                  (arr? (vty lv)) 'bad                ; an array is not assignable
@@ -1374,10 +1378,17 @@
    ; a declaration list ((name ty init)..): slots by SIZE (rounded to 8),
    ; extends env -> (forms env) | 'bad. aggregate + string locals zero the
    ; slot then fill; a scalar takes its value; only a label-valued global image
-   ; refuses (4d). (LOCALS never take register homes: measured a consistent net
-   ; loss both wrapped-around-calls and leaf-only -- the r0-shuttle makes frame
-   ; slots effectively free (store-forwarding) while register homes serialize
-   ; the dependency chain. the exp-1 lesson again; see the memory.)
+   ; refuses (4d).
+   ; -- the locals-homing hook: every homable scalar local (outside an inline
+   ; splice) ticks a decl SEQUENCE number, records (seq off ty) in g 'lrec
+   ; (pass 1 reads it back to rank candidates), and asks g 'lhome (seq ->
+   ; register, pinned only for a REGEN) for a home. a homed local keeps its
+   ; slot as the spill shadow (g 'homes wraps it around calls, exactly a
+   ; homed param), binds (reg rN) in the env -- so a READ is a zero-form
+   ; borrow on the phase-1 contract, which is why this pays now where the
+   ; r0-shuttle version lost -- and its init lands with a mov. the seq is
+   ; deterministic across pass 1 and the regen (same walk; splices don't
+   ; tick, and a mis-target only ever deopts through &-local's 'bad). --
    (cgdecl g env pairs)
     (: (one ps env2 acc)
         (? (! (two? ps)) (L acc env2)
@@ -1388,7 +1399,14 @@
               span (& (+ (tsz g ty) 7) -8)
               off (- 0 (+ (peep g 'off 0) span))
               _ (pin g 'off (+ (peep g 'off 0) span))
-              env3 (link (L (cap p) off ty) env2)
+              hreg (? (|| (peep g 'inlining ()) (! (homable? ty))) ()
+                      (: sq (+ 1 (peep g 'dseq 0))
+                         _ (pin g 'dseq sq)
+                         _ (pin g 'lrec (link (L sq off ty) (peep g 'lrec ())))
+                         lht (peep g 'lhome ())
+                         (? lht (peep lht sq ()) ())))
+              env3 (link (L (cap p) (? hreg (L 'reg hreg) off) ty) env2)
+              _ (? hreg (pin g 'homes (link (L hreg off) (peep g 'homes ()))) ())
               (? (! (two? init)) (one (cup ps) env3 acc)
                  (|| (= (cap init) 'init) (&& (= (cap init) 'str) (arr? ty)))
                   (? (&& (= (cap init) 'init) (! (aggish? ty))) 'bad   ; a brace for a scalar
@@ -1407,6 +1425,8 @@
                  (: r (cgexpr g env3 init)               ; a scalar (a pointer = string rides cgexpr -> la)
                     (? (bad? r) 'bad
                        (flo? ty) (one (cup ps) env3 (cat acc (cat (asflo g r) (fstf ty 'r4 off 'f0))))
+                       hreg (one (cup ps) env3           ; a homed local's init is a register move
+                                 (cat acc (cat (asint g r) (L (L 'mov hreg 'r0)))))
                        (one (cup ps) env3
                             (cat acc (cat (asint g r)
                                      (cat (cvt ty 'r0)
@@ -1450,8 +1470,15 @@
                       (|| (stru? rt) (stru? (vty r))) 'bad               ; any other struct return, or a struct where a scalar is due
                       (flo? (vty r)) (cat (asint g r) (? il (L (L 'jmp il)) epi))   ; a double value, an int return -> truncate to r0
                       (cat (tor0 g r) (? il (L (L 'jmp il)) epi))))))    ; int -> int, as before
-          (= k 'expr) (: r (cgexpr g env (caup s))
-                         (? (bad? r) 'bad (vdrop g r)))
+          (= k 'expr)
+           (: pe (caup s)
+              rv (? (&& (= (cap pe) 'post) (= (cap (caup pe)) 'var))
+                    (vent g env (caup (caup pe))) 'bad)
+              (? (&& (two? rv) (= (cap rv) 'regv))   ; a statement-position x++ on a home: the old value is dead
+                  (: ty (cauup rv) stp (? (ptr? ty) (tsz g (caup ty)) 1)
+                     (L (L 'add (caup rv) (caup rv) (* stp (cauup pe)))))
+                 (: r (cgexpr g env pe)
+                    (? (bad? r) 'bad (vdrop g r)))))
           (= k 'nop) ()
           (= k 'tdef) ()                            ; a block-scope _Static_assert (already checked at parse)
           (= k 'blk) (cgitems g env (caup s) ())
@@ -1660,6 +1687,7 @@
        _ (pin g 'inlining ())                        ; fresh inline-depth flag
        _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
        _ (pin g 'homes ())                           ; fresh non-leaf home set (call-fixed + sibs read it)
+       _ (pin g 'lhome ())                           ; fresh locals-homing map (cgdecl's hook reads it)
        _ (pin g 'fn (caup f))
        sig (peep (g 'sigs) (caup f) ())
        vararg (? (two? sig) (nthr sig 2) ())
@@ -1723,8 +1751,7 @@
        ; taken), there is no raw `sys` (rcx/r11 are syscall-clobbered), and it is
        ; not variadic. decided by GENERATING first, then regenerating with the
        ; register env if the gate holds. --
-       (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))
-       (homereg gpi) (nthr '(r6 r5 r9 r10 r7 r8) gpi)
+       (homereg gpi) (nthr opool gpi)
        (spillr ps gpi xmmi ovi env acc)             ; like spill, but home eligible gp params in registers
         (? (! (two? ps)) (L acc env)
            (: p (cap ps) pty (caup p)
@@ -1825,7 +1852,9 @@
               (nreads (cup fs) offs (? hit (+ n 1) n))))
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
         (? (bad? sp0) 'bad
-           (: body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
+           (: _ (pin g 'dseq 0)                     ; the locals-homing decl sequence, fresh per build
+              _ (pin g 'lrec ())
+              body (cgitems g (caup sp0) (caup (caup (cuup f))) ())
               (? (bad? body) 'bad
                  (: frame (& (+ (peep g 'off 0) 15) -16)
                     (deadst
@@ -1847,26 +1876,77 @@
                  (uhomes (cup ps) (+ gpi 1) acc))))
        hpool (: uh (uhomes params 0 ())
                 (filter (\ r9 (! (member? r9 uh))) opool))
+       ; -- the LOCALS picker: rank the homable locals ir1 recorded (cgdecl's
+       ; hook) by residual frame touches, drop any whose slot is lea/lean'd
+       ; (address taken), gate each on touches beating the per-call wrap, and
+       ; hand the hottest the FRONT of hpool -- the operand pool keeps the
+       ; rest (two reserved, so expressions never go dry outright). answers
+       ; (L lhome-tablet remaining-pool) | (). --
+       (ntouch fs off n)
+        (? (! (two? fs)) n
+           (: f2 (cap fs)
+              hit (? (! (two? f2)) ()
+                     (member? (cap f2) '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (&& (= (cauup f2) 'r4) (= (caup (cuup f2)) off))
+                     (member? (cap f2) '(st st1 st2 st4)) (&& (= (caup f2) 'r4) (= (cauup f2) off))
+                     ())
+              (ntouch (cup fs) off (? hit (+ n 1) n))))
+       (leaoffs fs t) (? (! (two? fs)) t
+                         (: f2 (cap fs)
+                            _ (? (&& (two? f2) (&& (member? (cap f2) '(lea lean)) (= (cauup f2) 'r4)))
+                                 (pin t (caup (cuup f2)) 1) ())
+                            (leaoffs (cup fs) t)))
+       (lastn l n) (: d (- (tally l) n)
+                      (go2 l2 k) (? (< k 1) l2 (go2 (cup l2) (- k 1)))
+                      (? (< d 1) l (go2 l d)))
+       (dropn l n) (? (|| (< n 1) (! (two? l))) l (dropn (cup l) (- n 1)))
+       (lpick ir1x)
+        (: nc (ncalls ir1x 0)
+           ; call-free fns only (post-sibcall: tail calls cost nothing): the
+           ; static spill+reload wrap around real calls measured a net loss
+           ; even with zero-cost reads -- a call inside a loop pays the wrap
+           ; per iteration while the touch count stays static
+           floor9 (? (= nc 0) 1 kmax)
+           lt (leaoffs ir1x (tablet 0))
+           navl (- (tally hpool) 2)
+           (walk rs acc)
+            (? (! (two? rs)) acc
+               (: e2 (cap rs) sq (cap e2) off (caup e2)
+                  (? (peep lt off ()) (walk (cup rs) acc)
+                     (: tc (ntouch ir1x off 0)
+                        (? (<= tc floor9) (walk (cup rs) acc)
+                           (walk (cup rs) (link (L tc sq) acc)))))))
+           cs (? (< navl 1) () (lastn (imsort (walk (peep g 'lrec ()) ())) navl))
+           (mk l hp t) (? (|| (! (two? l)) (! (two? hp))) t
+                          (: _ (pin t (caup (cap l)) (cap hp))
+                             (mk (cup l) (cup hp) t)))
+           (? (two? cs) (L (mk cs hpool (tablet 0)) (dropn hpool (tally cs))) ()))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
        _ (pin g 'pool0 opool) _ (pin g 'pool opool)
        sp1 (? vararg (vaspill params) (spill params 0 0 0 () ()))
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
        hm (&& (! vararg) (&& (! (anyop? ir1 'sys)) (homes? params 0)))
+       lr (? (|| vararg (|| (bad? ir1) (anyop? ir1 'sys))) () (lpick ir1))
+       lh (? (two? lr) (cap lr) ())
+       lp0 (? (two? lr) (caup lr) hpool)
        (? (bad? ir1) 'bad
-          (&& hm (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
+          (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
            (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
-              _ (pin g 'pool0 hpool) _ (pin g 'pool hpool)
+              _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
+              _ (pin g 'homes ()) _ (pin g 'lhome lh)
               ir2 (build (spillr params 0 0 0 () ()))
+              _ (pin g 'lhome ()) _ (pin g 'homes ())
               (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
-          (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)   ; calls remain: home + spill
-                    (< (* 2 (* nc nh)) (nreads ir1 (pslots (caup sp1) ()) 0))))   ; ... only where reads beat the wraps
-           (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
-              _ (pin g 'pool0 hpool) _ (pin g 'pool hpool)
-              ir2 (build (spillr2 params 0 0 0 () ()))
-              _ (pin g 'homes ())                   ; the wrap set dies with this fn
-              (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
-          ir1))
+          (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)   ; calls remain: home + spill
+                          (< (* 2 (* nc nh)) (nreads ir1 (pslots (caup sp1) ()) 0))))   ; ... only where reads beat the wraps
+             (? (|| pp lh)
+                (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
+                   _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
+                   _ (pin g 'homes ()) _ (pin g 'lhome lh)
+                   ir2 (build (? pp (spillr2 params 0 0 0 () ()) (spill params 0 0 0 () ())))
+                   _ (pin g 'lhome ()) _ (pin g 'homes ())   ; the wrap set dies with this fn
+                   (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
+                ir1))))
 
    ; the data tail: globals in declaration order, then the string table
    (cgdata g)
