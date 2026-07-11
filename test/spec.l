@@ -304,6 +304,8 @@
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
  ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (book? (tablet 0)) !(book? 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
+ (: t (tablet 0) r (pins t 1 10 2 20) (&& (id? r t) (10 = (t 1)) (20 = (t 2)) (2 = $t)))  ; pins: multi-pin onto a LIVE tablet, returns it (the mutable twin of #(..))
+ (: t (pins (tablet 0) 1 10 2) (&& (10 = (t 1)) (1 = $t)))    ; an odd trailing key is dropped
  (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
 
 ; --- the EMPTY SPELLINGS (the nothing surface) --- each kind's empty by its sigil: () the

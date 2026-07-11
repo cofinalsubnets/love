@@ -623,6 +623,12 @@
                  (atom? (cup a)) (list 'pin (hashtx 0) () (cap a))
                  (list 'pin (hashtx (cuup a)) (cap a) (caup a))))
 (:: 'hash (\ a (hashtx a)))
+; (pins t k v ..): pin each key/val pair onto an EXISTING tablet t, nested left
+; to right -- (pins t 'a 1 'b 2) = (pin (pin t 'a 1) 'b 2). the mutable-
+; accumulator twin of #(..) (which mints a FRESH tablet); pin hands its map
+; back, so the pins chain. an odd trailing operand is dropped (no lone key).
+(:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list 'pin t (cap r) (caup r)) (cuup r)) t)
+                  (go (cap l) (cup l)))))
 
 
 ; (array shape elem…): the ergonomic N-D array constructor. `shape` is either a
