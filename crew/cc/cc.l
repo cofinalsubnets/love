@@ -1,62 +1,109 @@
-; crew/cc/cc.l -- the C compiler's driver (rung 3): `aicc [-c] IN OUT`
+; crew/cc/cc.l -- the C compiler's driver (rung 3):
+;   aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c [in2.c ..]
 ; reads C, rides lex -> cpp -> parse -> gen -> the holo book. WITHOUT -c it lays
-; a runnable static ELF at OUT (chmod 755, _start + text + data one segment);
-; WITH -c it lays a relocatable ELF object (crew/holo/obj.l -- separate sections,
-; a symbol table, and relocations) the system linker binds against host/*.o +
-; libc (stage 7a). errors speak on err and exit 1; usage exits 2. LAST in the aicc
-; cat (its own app, doc/cc.md), after crew/holo/{elf,obj}.l and crew/cc/{lex,cpp,parse,
-; gen}.l; rides the u-floor (uread udie). its tail SEAT fires cc-main when aicc is the
-; program on the command line.
+; a runnable static ELF (chmod 755, _start + text + data one segment); WITH -c it
+; lays relocatable ELF objects (crew/holo/obj.l -- separate sections, a symbol
+; table, and relocations) the system linker binds against host/*.o + libc (stage
+; 7a). several .c inputs need -c and land each in the cwd as x.o (gcc-shaped);
+; the old positional pair `aicc [-c] IN OUT` still reads (two bare args, the
+; second no .c). -I dirs search before the system pair on both include forms; a
+; -D rides in as a synthesized #define line, so token bodies and function-like
+; -DF(x)=.. take the one macro path. errors speak on err and exit 1; usage exits
+; 2. LAST in the aicc cat (its own app, doc/cc.md), after crew/holo/{elf,obj}.l
+; and crew/cc/{lex,cpp,parse,gen}.l; rides the u-floor (uread udie). its tail
+; SEAT fires cc-main when aicc is the program on the command line.
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
    (cdir path) (: n (tally path)
                   (go i last) (? (<= n i) last (= (path i) 47) (go (+ i 1) (+ i 1)) (go (+ i 1) last))
                   d (go 0 0)
                   (? (< 0 d) (snip path 0 d) ""))
-   ; #include resolver bound to a source dir: search "" relative first (the src
-   ; dir, then cwd), <> the system dirs. -> (1 text) | ().
-   (incload srcdir name sys?)
-    (: dirs (? sys? (L "crew/cc/include/" "/usr/include/")     ; our own headers (stdarg.h ..) win for <>
-                (L srcdir "" "crew/cc/include/" "/usr/include/"))
+   ; #include resolver bound to a source dir + the -I list: "" searches relative
+   ; first (the src dir, then cwd) then the -I dirs; <> the -I dirs straight off;
+   ; both fall to the system pair, our own headers before /usr. -> (1 text) | ().
+   (incload is srcdir name sys?)
+    (: dirs (? sys? (cat is (L "crew/cc/include/" "/usr/include/"))   ; our headers (stdarg.h ..) win for <>
+                (cat (L srcdir "") (cat is (L "crew/cc/include/" "/usr/include/"))))
        (go ds) (? (! (two? ds)) ()
                   (: r (uread (+ (cap ds) name))
                      (? (two? r) r (go (cup ds)))))
        (go dirs))
    (el l i) (? (< i 1) (cap l) (el (cup l) (- i 1)))
-   ; the shared front end: source path -> (1 ast stag sigs) | a fatal exit
-   (cc-parse src)
+   ; a -D definition as #define text: the first = becomes the space, so
+   ; -DX -> "X" (defined 1 below), -DX=v -> "X v", -DF(x)=x -> "F(x) x"
+   ; (the glued ( survives the lex, so it stays function-like).
+   (eqsp d) (: n (tally d)
+               (go i) (? (<= n i) (+ d " 1")
+                         (= (d i) 61) (+ (snip d 0 i) (+ " " (snip d (+ i 1) n)))
+                         (go (+ i 1)))
+               (go 0))
+   (deftext ds) (foldl (\ a d (+ a (+ "#define " (+ (eqsp d) "\n")))) "" ds)
+   ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag
+   ; sigs ..) | a fatal exit. the -D lines PREPEND to the source text before the
+   ; one lex, so the line numbering stays whole (tokens carry lines and a define
+   ; body runs to its line's end -- a separately-lexed stream would restart at 1
+   ; and the last -D would swallow the file's first line); diagnostics under -D
+   ; skew by the define count, the price of the shared stream.
+   (cc-parse src is ds)
     (: r (uread src)
        _ (? (two? r) () (udie 1 (+ "cc: cannot open " src)))
-       lx (clex (caup r))
+       lx (clex (+ (deftext ds) (caup r)))
        _ (? (two? lx) () (udie 1 (+ "cc: lex error in " src)))
-       pp (cpp (caup lx) (\ name sys? (incload (cdir src) name sys?)))
+       pp (cpp (caup lx) (\ name sys? (incload is (cdir src) name sys?)))
        _ (? (two? pp) () (udie 1 (+ "cc: preprocessor error in " src)))
        ps (cparse (caup pp))
        _ (? (two? ps) () (udie 1 (+ "cc: parse error in " src)))
        ps)
    ; a standalone static executable (the default): _start + text + data, chmod +x
-   (cc-exe src dst)
-    (: ps (cc-parse src)
+   (cc-exe src dst is ds)
+    (: ps (cc-parse src is ds)
        ir (cgen (caup ps) (cauup ps) (caup (cuup ps)) (el ps 4))
        _ (? (two? ir) () (udie 1 (+ "cc: codegen error in " src)))
        res (elf64 'x64 (\ _ (caup ir)) ())
        _ (write-bytes dst (peep res 'bytes 0))
-       _ (chmod dst 493)
-       (quit 0))
+       (chmod dst 493))
    ; a relocatable object (`-c`): text/data sections + symbols + relocations, for
    ; the system linker to bind against host/*.o + libc (stage 7a).
-   (cc-obj src dst)
-    (: ps (cc-parse src)
+   (cc-obj src dst is ds)
+    (: ps (cc-parse src is ds)
        ob (cgen-obj (caup ps) (cauup ps) (caup (cuup ps)) (el ps 4))
        _ (? (two? ob) () (udie 1 (+ "cc: codegen error in " src)))
        bytes (objelf 'x64 (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4))
-       _ (write-bytes dst bytes)
-       (quit 0))
+       (write-bytes dst bytes))
+   usage "usage: aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c [in2.c ..]"
+   ; the flag scan: -c, -I dir / -Idir, -D def / -Ddef, -o out; every other
+   ; bare arg is an input, any other dash arg refuses. -> (c idirs defs out ins).
+   (glu? a ch) (&& (< 2 (tally a)) (&& (= (a 0) 45) (= (a 1) ch)))
+   (dirn d) (: n (tally d) (? (= n 0) d (= (d (- n 1)) 47) d (+ d "/")))
+   (dotc? p) (: n (tally p) (&& (< 2 n) (&& (= (p (- n 2)) 46) (= (p (- n 1)) 99))))
+   (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
+                (go k r) (? (< k n) (go (+ k 1) (? (= (p k) 47) (+ k 1) r)) (snip p r (- n 1)))
+                (+ (go 0 0) "o"))
+   (flags as c is ds o ins)
+    (? (! (two? as)) (L c (rev is) (rev ds) o (rev ins))
+       (: a (cap as) r (cup as)
+          (? (= a "-c") (flags r 1 is ds o ins)
+             (= a "-I") (? (two? r) (flags (cup r) c (link (cap r) is) ds o ins) (udie 2 usage))
+             (= a "-D") (? (two? r) (flags (cup r) c is (link (cap r) ds) o ins) (udie 2 usage))
+             (= a "-o") (? (two? r) (flags (cup r) c is ds (cap r) ins) (udie 2 usage))
+             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins)
+             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins)
+             (&& (< 0 (tally a)) (= (a 0) 45)) (udie 2 usage)
+             (flags r c is ds o (link a ins)))))
    (cc-main as)
-    (? (&& (two? as) (= (cap as) "-c"))
-        (: r (cup as) (? (two? (cup r)) (cc-obj (cap r) (caup r)) (udie 2 "usage: aicc -c IN OUT")))
-       (! (two? (cup as))) (udie 2 "usage: aicc [-c] IN OUT")
-       (cc-exe (cap as) (caup as))))
+    (: f (flags as () () () () ())
+       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4)
+       (? (! (two? ins)) (udie 2 usage)
+          o (? (two? (cup ins)) (udie 2 "cc: -o takes one input")
+               (: _ (? c (cc-obj (cap ins) o is ds) (cc-exe (cap ins) o is ds)) (quit 0)))
+          ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
+          (&& (two? (cup ins)) (&& (! (two? (cuup ins))) (! (dotc? (caup ins)))))
+           (: _ (? c (cc-obj (cap ins) (caup ins) is ds) (cc-exe (cap ins) (caup ins) is ds)) (quit 0))
+          c (: (go l) (? (! (two? l)) (quit 0)
+                         (! (dotc? (cap l))) (udie 2 (+ "cc: not a .c input: " (cap l)))
+                         (: _ (cc-obj (cap l) (obase (cap l)) is ds) (go (cup l))))
+               (go ins))
+          (udie 2 usage))))
 
 ; the SEAT: fire cc-main iff aicc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the

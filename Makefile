@@ -413,6 +413,17 @@ test_cc: host out/host$(hsuf)/aicc
 	  $(ho)/.oexe; a=$$?; \
 	  $$cc_g -O0 -o $(ho)/.oexeg $(ho)/.omain.c $(ho)/.olib.c $(ho)/.oext.c && $(ho)/.oexeg; b=$$?; \
 	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
+	  printf '#include <ans.h>\nint main() { return ANS + BONUS; }\n' > $(ho)/.flg.c; \
+	  mkdir -p $(ho)/.flginc && printf '#define ANS 30\n' > $(ho)/.flginc/ans.h; \
+	  $m $(ho)/aicc -I $(ho)/.flginc -D BONUS=12 -o $(ho)/.flg $(ho)/.flg.c > /dev/null 2>&1 || { echo "FAIL aicc -I/-D/-o"; exit 1; }; \
+	  $(ho)/.flg; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc -I/-D/-o run (got $$a want 42)"; exit 1; }; \
+	  printf 'int f();\nint main() { return f() + 2; }\n' > $(ho)/.mi1.c; \
+	  printf 'int f() { return 40; }\n' > $(ho)/.mi2.c; \
+	  mabs="$$PWD/$(ho)"; (cd $(ho) && $$mabs/ai $$mabs/aicc -c .mi1.c .mi2.c) > /dev/null 2>&1 || { echo "FAIL aicc multi-input -c"; exit 1; }; \
+	  $$cc_g -no-pie -o $(ho)/.mi $(ho)/.mi1.o $(ho)/.mi2.o > /dev/null 2>&1 || { echo "FAIL ld multi-input objects"; exit 1; }; \
+	  $(ho)/.mi; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-input run (got $$a want 42)"; exit 1; }; \
 	  printf '#include <stdarg.h>\nint isum(int n,...){va_list ap;va_start(ap,n);long s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}\n' > $(ho)/.valib.c; \
 	  printf 'int isum(int n,...);\nint main(){return isum(4,10,11,12,9);}\n' > $(ho)/.vamain.c; \
 	  $m $(ho)/aicc -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL aicc -c variadic"; exit 1; }; \
@@ -444,7 +455,7 @@ test_cc: host out/host$(hsuf)/aicc
 	  $$cc_g -no-pie -o $(ho)/.alnx $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL ld stack-align"; exit 1; }; \
 	  $(ho)/.alnx; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL 16-byte stack alignment ('g=id(fork())' holds a temp across the call; a bare-push spill leaves rsp at 8 mod 16 and glibc fork's child movaps #GPs -- got $$a want 42)"; exit 1; }; \
-	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment) ok"; \
+	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment) ok"; \
 	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the

@@ -70,9 +70,17 @@ gate per stage. the pipeline, each its own file:
   holo's sp idiom. correct and dumb; the glaze is the fast path.
 * **cc.l** -- the driver: files -> cpp -> parse -> gen -> holo assemble ->
   elf .o; then the system linker (`aicc -c` first; `aicc` calling ld is a
-  convenience wrapper). its tail SEAT fires cc-main when `aicc` is the program
-  on the command line (the same trick as ain/cook), so aicc stands alone as its
-  own catted script -- it does NOT ride the au multi-call dispatcher.
+  convenience wrapper). the surface is
+  `aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c [in2.c ..]` -- several
+  inputs need -c and land each in the cwd as x.o (gcc-shaped); the old
+  positional pair `aicc [-c] IN OUT` still reads (two bare args, the second
+  no .c); -I dirs search before the system pair on both include forms; a -D
+  prepends a `#define` line to the source text before the one lex (so
+  function-like -DF(x)=.. rides the normal macro path, and diagnostics under
+  -D skew by the define count). its tail SEAT fires cc-main when `aicc` is the
+  program on the command line (the same trick as ain/cook), so aicc stands
+  alone as its own catted script -- it does NOT ride the au multi-call
+  dispatcher.
 
 ### the seams to grow (owned by their threads)
 
