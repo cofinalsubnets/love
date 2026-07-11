@@ -1040,9 +1040,20 @@
    kmax 1073741824
    (kok? v) (&& (<= 0 v) (< v kmax))
    (cfoldir fs0)
-    (: (fresh z9) (tablet 0)                        ; reg/slot/cell -> (1 K) | ()
+    (: (fresh z9) (tablet 0)                        ; reg/slot/cell -> (1 K) const | (2 rX) copy-of-register | ()
        (rv t k) (peep t k ())
        (rset t k v) (pin t k v)
+       (kn? v) (&& (two? v) (= (cap v) 1))          ; a known CONSTANT (never let a copy reach arithmetic)
+       ; resolve a source register to its deepest value: a const rides, a copy
+       ; chases to its ROOT register (valid until that register is written)
+       (rsv rg s) (: v (rv rg s) (? (two? v) v (L 2 s)))
+       ; a WRITE to d invalidates every copy-of-d anywhere (regs, slots, cells)
+       (kilc t d) (: (go1 ks) (? (! (two? ks)) t
+                                 (: k1 (cap ks) v (peep t k1 ())
+                                    _ (? (&& (two? v) (&& (= (cap v) 2) (= (caup v) d))) (pin t k1 ()) ())
+                                    (go1 (cup ks))))
+                     (go1 (keys t)))
+       (defr rg sl ce d) (: _ (rset rg d ()) _ (kilc rg d) _ (kilc sl d) (kilc ce d))
        (copyt t) (: t2 (tablet 0)
                     (go1 ks) (? (! (two? ks)) t2
                                 (: _ (pin t2 (cap ks) (peep t (cap ks) ())) (go1 (cup ks))))
@@ -1052,7 +1063,8 @@
        (joint ta tb) (: t2 (tablet 0)
                         (go1 ks) (? (! (two? ks)) t2
                                     (: k1 (cap ks) va (peep ta k1 ()) vb (peep tb k1 ())
-                                       _ (? (&& (two? va) (&& (two? vb) (= (caup va) (caup vb))))
+                                       _ (? (&& (two? va) (&& (two? vb)
+                                                (&& (= (cap va) (cap vb)) (= (caup va) (caup vb)))))
                                             (pin t2 k1 va) ())
                                        (go1 (cup ks))))
                         (go1 (keys ta)))
@@ -1123,11 +1135,22 @@
                      (? (&& (two? nx) (&& (member? (cap nx) '(li mov)) (= (caup nx) (caup f))))
                         (go r 1 cur rg sl ce acc)    ; the very next form rewrites this register: dead li
                         (: k (caup (cup f))
-                           _ (rset rg (caup f) (? (kok? k) (L 1 k) ()))
-                           (go r 1 cur rg sl ce (link f acc)))))
+                           old (rv rg (caup f))
+                           (? (&& (kn? old) (= (caup old) k))
+                              (go r 1 cur rg sl ce acc)   ; the register already holds this value
+                              (: _ (defr rg sl ce (caup f))
+                                 _ (rset rg (caup f) (? (kok? k) (L 1 k) ()))
+                                 (go r 1 cur rg sl ce (link f acc)))))))
                  (= op 'mov)
-                  (: _ (rset rg (caup f) (rv rg (cauup f)))
-                     (go r 1 cur rg sl ce (link f acc)))
+                  (? (id? (caup f) (cauup f)) (go r 1 cur rg sl ce acc)   ; a self-mov says nothing
+                     (: v (rsv rg (cauup f))
+                        old (rv rg (caup f))
+                        (? (&& (two? old) (&& (two? v)
+                              (&& (= (cap old) (cap v)) (= (caup old) (caup v)))))
+                           (go r 1 cur rg sl ce acc)     ; the dest already holds this value
+                           (: _ (defr rg sl ce (caup f))
+                              _ (rset rg (caup f) v)
+                              (go r 1 cur rg sl ce (link f acc))))))
                  (member? op '(add sub and or xor imul))
                   (? (= (caup f) 'sp)                ; sp arithmetic: the cell cursor moves
                       (: n (caup (cuup f))
@@ -1137,51 +1160,59 @@
                         ; the two (a symbol in arithmetic church-explodes)
                         bk (? (charm? b) (? (kok? b) (L 1 b) ()) (rv rg b))
                         ak (rv rg a)
-                        (? (&& (! (= op 'xor)) (&& (two? ak) (two? bk)))  ; both known: the op folds to a li
+                        (? (&& (! (= op 'xor)) (&& (kn? ak) (kn? bk)))  ; both known: the op folds to a li
                             (: k (alu op (caup ak) (caup bk))
+                               _ (defr rg sl ce d)
                                (? (kok? k)
                                   (: _ (rset rg d (L 1 k))
                                      (go r 1 cur rg sl ce (link (L 'li d k) acc)))
-                                  (: _ (rset rg d ())
-                                     (go r 1 cur rg sl ce (link f acc)))))
-                           (&& (! (charm? b)) (two? bk))   ; known reg source -> the imm form
-                            (: _ (rset rg d ())
+                                  (go r 1 cur rg sl ce (link f acc))))
+                           (&& (! (charm? b)) (kn? bk))   ; known reg source -> the imm form
+                            (: _ (defr rg sl ce d)
                                (go r 1 cur rg sl ce (link (L op d a (caup bk)) acc)))
-                           (: _ (rset rg d ())
+                           (: _ (defr rg sl ce d)
                               (go r 1 cur rg sl ce (link f acc))))))
                  (member? op '(shl shr sar))         ; the 2-operand immediate shifts
                   (: d (caup f) k (cauup f) dk (rv rg d)
-                     (? (&& (two? dk) (charm? k))
+                     _ (defr rg sl ce d)
+                     (? (&& (kn? dk) (charm? k))
                          (: v (? (= op 'shl) (* (caup dk) (k 2)) (>> (caup dk) k))
                             (? (kok? v)
                                (: _ (rset rg d (L 1 v))
                                   (go r 1 cur rg sl ce (link (L 'li d v) acc)))
-                               (: _ (rset rg d ())
-                                  (go r 1 cur rg sl ce (link f acc)))))
-                        (: _ (rset rg d ())
-                           (go r 1 cur rg sl ce (link f acc)))))
+                               (go r 1 cur rg sl ce (link f acc))))
+                        (go r 1 cur rg sl ce (link f acc))))
                  (= op 'st)
                   (? (= (caup f) 'r4)
-                      (: _ (rset sl (cauup f) (rv rg (caup (cuup f))))
+                      (: _ (rset sl (cauup f) (rsv rg (caup (cuup f))))
                          (go r 1 cur rg sl ce (link f acc)))
                      (= (caup f) 'sp)
-                      (: _ (rset ce cur (rv rg (caup (cuup f))))
+                      (: _ (rset ce cur (rsv rg (caup (cuup f))))
                          (go r 1 cur rg sl ce (link f acc)))
                      (go r 1 cur rg (fresh 0) ce (link f acc)))   ; a pointer store may alias the frame
                  (= op 'ld)
                   (: d (caup f) b (cauup f) off (caup (cuup f))
                      kv (? (= b 'r4) (rv sl off) (&& (= b 'sp) (= off 0)) (rv ce cur) ())
-                     (? (two? kv)
-                        (: _ (rset rg d kv)
+                     (? (kn? kv)
+                        (: _ (defr rg sl ce d)
+                           _ (rset rg d kv)
                            (go r 1 cur rg sl ce (link (L 'li d (caup kv)) acc)))
-                        (: _ (rset rg d ())
+                        (&& (two? kv) (= (cap kv) 2))   ; the memory holds a live COPY: read the register
+                         (? (id? (caup kv) d)
+                            (go r 1 cur rg sl ce acc)   ; ... and it IS this register: the load says nothing
+                            (: _ (defr rg sl ce d)
+                               _ (rset rg d kv)
+                               (go r 1 cur rg sl ce (link (L 'mov d (caup kv)) acc))))
+                        (: _ (defr rg sl ce d)
                            (go r 1 cur rg sl ce (link f acc)))))
                  (= op 'push)
                   (: cur2 (+ cur 8)
-                     _ (rset ce cur2 (rv rg (caup f)))
+                     _ (rset ce cur2 (rsv rg (caup f)))
                      (go r 1 cur2 rg sl ce (link f acc)))
                  (= op 'pop)
-                  (: _ (rset rg (caup f) (rv ce cur))
+                  (: v (rv ce cur)
+                     _ (defr rg sl ce (caup f))
+                     _ (rset rg (caup f) v)
                      (go r 1 (- cur 8) rg sl ce (link f acc)))
                  (member? op '(st1 st2 st4 stsd stss))
                   (? (member? (caup f) '(r4 sp))
@@ -1189,20 +1220,20 @@
                          (go r 1 cur rg sl ce (link f acc)))
                      (go r 1 cur rg (fresh 0) ce (link f acc)))
                  (member? op '(ld1 ld2 ld4 ldu1 ldu2 ldu4))
-                  (: _ (rset rg (caup f) ())
+                  (: _ (defr rg sl ce (caup f))
                      (go r 1 cur rg sl ce (link f acc)))
                  (member? op '(lea lean la movqrx cvttsd2si set))
-                  (: _ (rset rg (? (= op 'set) (cauup f) (caup f)) ())
+                  (: _ (defr rg sl ce (? (= op 'set) (cauup f) (caup f)))
                      (go r 1 cur rg sl ce (link f acc)))
                  (member? op '(div rem udiv urem shlv shrv sarv neg not sx1 sx2 sx4 zx1 zx2 zx4))
-                  (: _ (rset rg 'r0 ()) _ (rset rg 'r1 ()) _ (rset rg 'r2 ()) _ (rset rg 'r3 ())
+                  (: _ (defr rg sl ce 'r0) _ (defr rg sl ce 'r1) _ (defr rg sl ce 'r2) _ (defr rg sl ce 'r3)
                      (go r 1 cur rg sl ce (link f acc)))
                  (= op 'cmp)                         ; paired with its br/set consumer
                   (: a (rv rg (caup f))
                      b (? (charm? (cauup f)) (? (kok? (cauup f)) (L 1 (cauup f)) ())
                           (rv rg (cauup f)))
                      nx (? (two? r) (cap r) ())
-                     (? (&& (two? a) (&& (two? b) (&& (two? nx) (member? (cap nx) '(br set)))))
+                     (? (&& (kn? a) (&& (kn? b) (&& (two? nx) (member? (cap nx) '(br set)))))
                          (: tv (ccev (caup nx) (caup a) (caup b))
                             (? (= (cap nx) 'br)
                                (? tv (: r2 (swallow (cup r))
@@ -1211,6 +1242,7 @@
                                               (go r2 () cur rg sl ce (link (L 'jmp (caup (cup nx))) acc)))))
                                      (go (cup r) 1 cur rg sl ce acc))
                                (: d (caup (cup nx)) k (? tv 1 0)
+                                  _ (defr rg sl ce d)
                                   _ (rset rg d (L 1 k))
                                   (go (cup r) 1 cur rg sl ce (link (L 'li d k) acc)))))
                         (go r 1 cur rg sl ce (link f acc))))
@@ -1219,6 +1251,127 @@
                  ; anything else: assume nothing survives
                  (go r 1 cur (fresh 0) (fresh 0) (fresh 0) (link f acc)))))
        (go fs0 1 0 (fresh 0) (fresh 0) (fresh 0) ()))
+
+   ; dead CELLS: after the copy folds a spush cell whose load folded away is
+   ; write-only -- its store drops (the sub/add sp pair stays; spmerge cancels
+   ; what becomes adjacent). a record STACK mirrors the sp motion exactly --
+   ; 16-byte cells (sub+st adjacent, the spush shape), 8-byte pushes, pads,
+   ; multi-slot cleans -- and ANY shape outside the model bails the whole fn.
+   ; a (mov sp r4) epilogue is a PATH exit, not sp motion on the linear walk.
+   (deadcell fs)
+    (: cand (tablet 0)                               ; st-index -> 1 while still droppable
+       (scan l i stk)
+        (? (! (two? l)) 1
+           (: f (cap l) r (cup l)
+              (? (! (two? f)) (scan r (+ i 1) stk)
+                 (&& (= (cap f) 'sub) (&& (= (caup f) 'sp) (charm? (caup (cuup f)))))
+                  (: k (caup (cuup f))
+                     nx (? (two? r) (cap r) ())
+                     (? (&& (= k 16) (&& (two? nx) (&& (= (cap nx) 'st)
+                            (&& (= (caup nx) 'sp) (= (cauup nx) 0)))))
+                        (: _ (pin cand (+ i 1) 1)
+                           (scan (cup r) (+ i 2) (link (L (+ i 1) 16) stk)))
+                        (scan r (+ i 1) (link (L () k) stk))))
+                 (&& (= (cap f) 'add) (&& (= (caup f) 'sp) (charm? (caup (cuup f)))))
+                  (: (unwind st2 k)
+                      (? (= k 0) st2
+                         (! (two? st2)) 'no
+                         (: sz (caup (cap st2))
+                            (? (< k sz) 'no (unwind (cup st2) (- k sz)))))
+                     st3 (unwind stk (caup (cuup f)))
+                     (? (id? st3 'no) 'no (scan r (+ i 1) st3)))
+                 (= (cap f) 'push) (scan r (+ i 1) (link (L () 8) stk))
+                 (= (cap f) 'pop)
+                  (? (&& (two? stk) (&& (! (cap (cap stk))) (= (caup (cap stk)) 8)))
+                     (scan r (+ i 1) (cup stk))
+                     (= (caup f) 'r4) (scan r (+ i 1) stk)   ; the epilogue's frame pop: path exit
+                     'no)
+                 (&& (member? (cap f) '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (= (cauup f) 'sp))
+                  (? (&& (two? stk) (&& (cap (cap stk)) (= (caup (cuup f)) 0)))
+                     (: _ (pin cand (cap (cap stk)) ())     ; loaded: the store lives
+                        (scan r (+ i 1) stk))
+                     'no)
+                 (&& (member? (cap f) '(st st1 st2 st4 stsd stss)) (= (caup f) 'sp)) 'no
+                 (&& (member? (cap f) '(ldsd ldss)) (= (cauup f) 'sp)) 'no
+                 (scan r (+ i 1) stk))))
+       ok (scan fs 0 ())
+       (? (id? ok 'no) fs
+          (: (drop2 l i) (? (! (two? l)) ()
+                            (? (peep cand i ()) (drop2 (cup l) (+ i 1))
+                               (link (cap l) (drop2 (cup l) (+ i 1)))))
+             (drop2 fs 0))))
+
+   ; dead DEFS: within a basic block, a PURE definition whose register is
+   ; re-defined before any read is dead -- the copy folds strand whole li/mov
+   ; chains this way. one backward walk; every control edge (label, transfer,
+   ; call, raw, sys) resets the dead set (everything assumed live across it);
+   ; an op outside the tables does the same. dead_before = (dead + defs) - reads.
+   (deaddef fs)
+    (: (rdsp f)                                      ; -> (L reads defs pure?) | 'bar
+        (: op (cap f)
+           (rg1 x) (? (charm? x) () (L x))
+           (? (= op 'li) (L () (L (caup f)) 1)
+              (= op 'mov) (L (L (cauup f)) (L (caup f)) 1)
+              (member? op '(add sub and or xor imul))
+               (? (= (caup f) 'sp) (L () () ())      ; sp motion touches no gp register
+                  (L (cat (rg1 (cauup f)) (rg1 (caup (cuup f)))) (L (caup f)) 1))
+              (= op 'push) (L (L (caup f)) () ())
+              (= op 'pop) (L () (L (caup f)) ())
+              (member? op '(shl shr sar rol ror)) (L (L (caup f)) (L (caup f)) 1)
+              (member? op '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (L (L (cauup f)) (L (caup f)) 1)
+              (member? op '(st st1 st2 st4)) (L (L (caup f) (caup (cuup f))) () ())
+              (member? op '(lea lean)) (L (L (cauup f)) (L (caup f)) 1)
+              (= op 'la) (L () (L (caup f)) 1)
+              (= op 'set) (L () (L (cauup f)) 1)
+              (member? op '(cmp test)) (L (cat (rg1 (caup f)) (rg1 (cauup f))) () ())
+              (member? op '(neg not)) (L (L (caup f)) (L (caup f)) 1)
+              (member? op '(sx1 sx2 sx4 zx1 zx2 zx4)) (L (L (caup f)) (L (caup f)) 1)
+              (= op 'movqxr) (L (L (cauup f)) () ())
+              (= op 'movqrx) (L () (L (caup f)) 1)
+              (= op 'cvtsi2sd) (L (L (cauup f)) () ())
+              (= op 'cvttsd2si) (L () (L (caup f)) ())
+              (member? op '(ldsd ldss)) (L (L (cauup f)) () ())
+              (member? op '(stsd stss)) (L (L (caup f)) () ())
+              (member? op '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)) (L () () ())
+              (member? op '(div rem udiv urem))
+               (L (cat (rg1 (cauup f)) (rg1 (caup (cuup f)))) (L 'r0 'r1 'r2 'r3) ())
+              (member? op '(shlv shrv sarv)) (L (L (caup f) (cauup f)) (L (caup f) 'r1) ())
+              'bar))
+       (go l dead acc)                               ; l already REVERSED; acc rebuilds forward
+        (? (! (two? l)) acc
+           (: f (cap l) r (cup l)
+              (? (! (two? f)) (go r dead (link f acc))
+                 (: rd (rdsp f)
+                    (? (id? rd 'bar) (go r (tablet 0) (link f acc))
+                       (: reads (cap rd) defs (caup rd) pure (cauup rd)
+                          (dd? ds) (? (! (two? ds)) 1
+                                      (? (peep dead (cap ds) ()) (dd? (cup ds)) ()))
+                          (? (&& pure (&& (two? defs) (dd? defs)))
+                             (go r dead acc)                     ; every def overwritten unread: drop
+                             (: _ ((: (ad ds) (? (! (two? ds)) 1
+                                                 (: _ (? (id? (cap ds) 'sp) () (pin dead (cap ds) 1))
+                                                    (ad (cup ds)))) ad) defs)
+                                _ ((: (rm rs) (? (! (two? rs)) 1
+                                                 (: _ (pin dead (cap rs) ()) (rm (cup rs)))) rm) reads)
+                                (go r dead (link f acc))))))))))
+       (go (rev fs) (tablet 0) ()))
+
+   ; adjacent sp adjustments MERGE (nothing observes the point between two
+   ; touching adds); a cancelled pair vanishes -- the husk a dead cell leaves
+   (spadj? f) (&& (two? f) (&& (member? (cap f) '(add sub))
+                (&& (= (caup f) 'sp) (&& (= (cauup f) 'sp) (charm? (caup (cuup f)))))))
+   (spmerge fs)
+    (? (! (two? fs)) ()
+       (: f (cap fs) r (cup fs)
+          nx (? (two? r) (cap r) ())
+          (? (&& (spadj? f) (spadj? nx))
+             (: n1 (? (= (cap f) 'add) (caup (cuup f)) (- 0 (caup (cuup f))))
+                n2 (? (= (cap nx) 'add) (caup (cuup nx)) (- 0 (caup (cuup nx))))
+                net (+ n1 n2)
+                (? (= net 0) (spmerge (cup r))
+                   (< net 0) (spmerge (link (L 'sub 'sp 'sp (- 0 net)) (cup r)))
+                   (spmerge (link (L 'add 'sp 'sp net) (cup r)))))
+             (link f (spmerge r)))))
 
    ; dead frame stores: after the constant folds, a slot the function never
    ; loads back is write-only -- its stores drop (the b2w-shape arg temps whose
@@ -1893,13 +2046,16 @@
                  (: frame (& (+ (peep g 'off 0) 15) -16)
                     (deadst
                      (stld
+                     (spmerge
+                     (deaddef
+                     (deadcell
                      (cfoldir
                       (sibcall g
                        (cat (L (L 'label (intern (caup f)))
                                (L 'push 'r4) (L 'mov 'r4 'sp) (L 'sub 'sp 'sp frame)
                                (L 'st 'r4 -8 'r3))
                         (cat (cap sp0)
-                         (cat body (cat (L (L 'li 'r0 0)) epi))))))))))))
+                         (cat body (cat (L (L 'li 'r0 0)) epi)))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
        (uhomes ps gpi acc)

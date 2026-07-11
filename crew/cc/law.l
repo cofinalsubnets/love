@@ -126,13 +126,13 @@
                 (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r))) ()))
    ir (caup (cgn "int main() { return 42; }"))
    (assert
-      ; slot -8 keeps r3 (rbx, SysV callee-saved): stored by the prologue,
-      ; reloaded by every epilogue -- an -O2 caller parks live locals there.
-      ; the default `return 0` tail is DEAD after the explicit return and the
-      ; constant-fold pass sweeps it (dead code ends at the next label).
+      ; slot -8 keeps r3 (rbx, SysV callee-saved) in any fn that TOUCHES r3;
+      ; here nothing does, so the copy fold proves the epilogue reload a
+      ; self-load and the save/restore pair sweeps away entirely. the default
+      ; `return 0` tail is DEAD after the explicit return and sweeps too.
       (= ir '((call main) (mov r6 r0) (li r0 60) (sys)
-              (label main) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
-              (li r0 42) (ld r3 r4 -8) (mov sp r4) (pop r4) (ret)))
+              (label main) (push r4) (mov r4 sp) (sub sp sp 16)
+              (li r0 42) (mov sp r4) (pop r4) (ret)))
       (two? (cgn "int main() { int x=1; while (x<5) x++; return x; }"))
       ; a RET-POSITION call tail-JUMPS (stage 8): the epilogue then (jmp F), no
       ; (call F) -- so deep tail recursion runs flat and the lvm shape Continues
