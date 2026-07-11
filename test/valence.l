@@ -1,10 +1,12 @@
 ; the VALENCE LAW: a glued operator run is MONADIC -- the reader emits
 ; (mono (run datum)) and opfix factors the run against its own monadic
 ; table (then the operators table at one; both book-private since birth).
-; spaced, a run keeps its dyadic/infix life. HEAD POSITION NEVER FUSES:
-; a run right after an open delimiter is the form's operator -- the
-; section/escape law, and what keeps minified source legal. the words
-; behind the sigils: < cap, > cup (<< >> <> >< the compounds), + net,
+; spaced, a run keeps its dyadic/infix life. this holds EVERYWHERE, head
+; position included: (<x = y) reads (= (cap x) y). the ONE exception is the
+; special forms : and ? at head (\ too) -- they consume the whole list, so
+; fusion (which swallows only the next datum) is suppressed, and minified
+; (:(co ..) stays (: (co ..)). the words behind the sigils: < cap, > cup
+; (<< >> <> >< the compounds), + net,
 ; * prod, | abs, - negate, / reciprocal, % fraction, ? bit; $ ! . ride the same lane.
 (assert
  ; cap and cup, and the compounds by greedy monadic factorization
@@ -23,7 +25,13 @@
  ; glued monadics compose with infix; spaced runs keep their dyadic life
  (15 = (5 + <'(10 20))) (197 = ($"ab" + 2))
  (3 = (1 + 2)) (2 = (5 - 3)) (8 = (5 - -3))
- ; head position: the call, the section, the curry law -- never fused
+ ; head fusion holds too: a glued run at head is monadic, so it can be an
+ ; infix left operand -- (<l = x) is (= (cap l) x), not (< l (= x))
+ (1 = (: l '(1 2 3) (<l = 1))) (0 = (: l '(1 2 3) (<l = 2)))
+ (1 = (<'(7 8) = 7)) (1 = (: l '((a) 2) (<>l = 2)))
+ ; but : and ? at head take the whole list (minified special forms stay legal)
+ (3 = (:(+ 1 2))) (5 = (?(< 1 2) 5 9)) (9 = (?(< 2 1) 5 9))
+ ; spaced heads stay prefix; the section and curry law are unchanged
  (3 = (+ 1 2)) (3 = ((1 +) 2)) (1 = ((< 5) 9)) (6 = (foldl (+) 0 '(1 2 3)))
  ; the data lane: a glued run READS as the mono node, and round-trips
  ('(f (mono (< x))) = (sound (tap '(40 102 32 60 120 41)) 99))

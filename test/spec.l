@@ -341,7 +341,8 @@
 ; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work, and a token that doesn't
 ; factor stays atomic (&& >>= :- ?-). a sigil at one binds TIGHTEST; the CURRY LAW folds operands
 ; missing at the end of a list to the partial application. the VALENCE LAW: glued is monadic,
-; spaced is dyadic; HEAD POSITION and \ never fuse; + and - fuse only to ( ' " @ ~ # (-3 a number,
+; spaced is dyadic -- everywhere, HEAD INCLUDED ((<x = y) is (= (cap x) y)); only : ? \ stay the
+; form's operator at head (they take the whole list); + and - fuse only to ( ' " @ ~ # (-3 a number,
 ; -x a name, -(f x) negate). the monadic words: < cap, > cup (<< >> <> >< the compounds), + net,
 ; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, . dot. the COMMA is the
 ; loosest layer, above infix: a lone one-char datum (never fused), the list split into CLAUSES at
@@ -361,7 +362,8 @@
  (1 = <'(1 2 3)) (2 = <>'(1 2 3)) ('(3) = >>'(1 2 3))   ; glued runs are MONADIC
  (6 = +'(1 2 3)) (-1 = +'(-2 1)) (24 = *'(1 2 3 4))     ; +/ and */ -- the net, unclamped
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
- (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; head position never fuses: call and section
+ (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; spaced head = prefix call; the section
+ (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(+ 1 2)))   ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : still whole-list
  ('(mono (< x)) = (caup (sound (tap '(40 102 32 60 120 41)) 99)))  ; the emission, data-lane
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
  (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))

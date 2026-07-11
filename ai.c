@@ -4213,14 +4213,19 @@ static struct ai *ioparse(struct ai *g, bool multi) {
       if (!ai_ok(g = zgetc(g))) return g;
       c3 = g->b;
       if (c3 != EOF && !ai_ok(g = zungetc(g, c3))) return g; }
-     // HEAD POSITION NEVER FUSES: a run right after an open delimiter is
-     // the form's operator -- the section/escape law, and what keeps
-     // minified source ((:(co ..) like (: (co ..)) legal. head = the top
-     // frame's head is still nil; a pending wrap (quote etc) is a symbol on
-     // the ctx, not a frame, and does not suppress fusion.
+     // HEAD FUSES TOO -- the valence law holds everywhere: a run GLUED to its
+     // datum is monadic even right after an open delimiter, so (<x = y) reads
+     // (= (cap x) y), not (< x (= y)). the ONE exception is the special forms
+     // : and ? at head: they consume the WHOLE list, but fusion swallows only
+     // the next datum -- so a glued (:(co ..) would strand its bindings. keep
+     // those two suppressed (\ already breaks above), which also preserves the
+     // minified (:(co ..) == (: (co ..)) shorthand. head = the top frame's head
+     // is still nil; a pending wrap (quote etc) is a symbol on the ctx, not a
+     // frame, and does not suppress fusion.
      word rctx = g->sp[1];
      bool headp = chainp(rctx) && chainp(A(rctx)) && nilp(A(A(rctx)));
-     if (!headp &&
+     bool form_head = headp && (lead == ':' || lead == '?');
+     if (!form_head &&
          (pending || !(c3 == ' ' || c3 == '\n' || c3 == '\t' || c3 == '\r' ||
                        c3 == '\f' || c3 == ';' || c3 == ')' || c3 == ']' ||
                        c3 == '}' || c3 == 0 || c3 == EOF))) {

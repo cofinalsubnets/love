@@ -64,9 +64,8 @@ data-run=
   // the session survives every raise -- the same law as the native shell.
   ev("(: help (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \";; \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
   // webln: bao's line protocol (parseall's law) for a STRING -- read every
-  // top-level datum; ONE datum evaluates as-is (so a leading glued run like
-  // +'(4 5) keeps fusing -- a textual () wrap would put it in HEAD position,
-  // where runs never fuse); MANY become the application (a b c).
+  // top-level datum; ONE datum evaluates as-is, MANY become the application
+  // (a b c).
   ev("(: webln (\\ s (: e (nom 0) (chs i acc) (? (< i 0) acc (chs (- i 1) (link (s i) acc))) (go p acc) (: r (sound p e) (? (= r p) () (= r e) (rev acc) (go p (link r acc)))) ds (go (tap (chs (- (tally s) 1) ())) ()) (? !(two? ds) () !(two? (cup ds)) (ev (cap ds)) (ev ds)))))");
   ev("(. ai-version)");
   const ver = drain();

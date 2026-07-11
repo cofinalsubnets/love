@@ -58,8 +58,10 @@ compiles with it):
   double-negates, and a token that doesn't factor stays one symbol (`&&`, `>>=`)
 
 and the valence law: every operator is two operators -- GLUED IS MONADIC,
-SPACED IS DYADIC. head position never fuses, so calls, sections and minified
-source read as ever (`(+ 1 2)`, `(1 +)`).
+SPACED IS DYADIC -- and this holds everywhere, head position included, so
+`(<x = y)` reads `(= (cap x) y)`. spaced heads stay prefix calls and sections
+(`(+ 1 2)`, `(1 +)`); only the special forms `:` `?` `\` keep the whole list at
+head, so minified `(:(co ..)` still reads `(: (co ..))`.
 - `<x >x` cap and cup; `<>x ><x <<x >>x` the compounds, by factorization
 - `+l` the net -- the true sum, APL's `+/` -- and `*l` the product
 - `|x` abs, `-x` neg (`+` and `-` fuse only to `( ' " @ ~ #`, so `-3` stays a
