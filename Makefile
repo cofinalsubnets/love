@@ -544,6 +544,9 @@ test_proof:
 	@echo TEST proof/rocq/spec.v "(coqc)"
 	@$(COQC) -q proof/rocq/spec.v
 	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux
+	@echo TEST proof/rocq/patch.v "(coqc)"
+	@$(COQC) -q proof/rocq/patch.v
+	@rm -f proof/rocq/patch.vo proof/rocq/patch.vok proof/rocq/patch.vos proof/rocq/patch.glob proof/rocq/.patch.aux
 endif
 # Machine-check proof/rocq/gc.v -- the generational MINOR is SOUND: under a complete
 # write barrier (rem_complete) the nursery scan reaches every live young object,

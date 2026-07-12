@@ -66,17 +66,29 @@
 ; (independent, useful today), but make a version's identity a PATCH-SET HASH from
 ; day one -- even if the first VCS is a stub that only does linear apply. then the
 ; patch layer slots UNDER the store later instead of replacing it. the two forks
-; for gwen's call: (a) patch GRAIN -- textual hunks first (ships fast) vs form-tree
-; first (the ai-native thing); (b) theory BASE -- classic darcs vs sound
-; pijul/inverse-semigroup (proof-friendly). i lean form-tree + sound.
+; are DECIDED (gwen, 2026-07-12): FORM-TREE + SOUND. (a) patch GRAIN: a patch is a
+; rewrite over the form tree, commutation answered by machinery we own (wev /
+; boxfix / the unifier); textual hunks are at most a later compatibility skin,
+; never the model. (b) theory BASE: the sound substrate -- the inverse-semigroup
+; reading (partial composition, invert, commute the partial swap) is the working
+; formalization since it fits uu's MLTT (decidable eqb, list induction, no
+; funext); pijul's pushout stays the cross-check reading, classic darcs 1.x a
+; cautionary tale only.
 ;
-; --- the runnable toy below --- a named-slot tree, a chg patch carrying its own
-; context (old->new), and the four primitives: apon / invert / commute / frontier.
-; it DEMONSTRATES: independent patches commute and are order-free; a same-slot
-; patch DEPENDS (commute answers ()); inverse round-trips; and two distribution
-; COMPONENTS install to the same frontier regardless of pull order. it deliberately
-; OMITS: positional shift (q' == q here), conflictors (a real merge records one),
-; and content hashing (the frontier identity). those are the next rungs.
+; --- the runnable toy below --- two layers. first the NAMED-SLOT model: a tree, a
+; chg patch carrying its own context (old->new), and the four primitives: apon /
+; invert / commute / frontier. it DEMONSTRATES: independent patches commute and
+; are order-free; a same-slot patch DEPENDS (commute answers ()); inverse
+; round-trips; and two distribution COMPONENTS install to the same frontier
+; regardless of pull order. then the POSITIONAL layer (demo E, the rung opened
+; 2026-07-12): hunks over a sequence of forms, where commute genuinely RE-AIMS --
+; the swapped hunk's index slides by the other's length delta, and TOUCHING hunks
+; refuse (strict: a seam has no canonical order once inserts land on it; classic
+; darcs's ambiguity corner, closed by fiat). the laws for BOTH layers live in
+; test/patch.l, the source of truth. still deliberately OMITTED: conflictors (a
+; real merge records one), content hashing (the frontier identity), and the TREE
+; lift (a path per hunk -- the sequence law applied at every level, where the
+; unifier earns its keep). those are the next rungs.
 
 (:
  ; --- the patch: a groupoid element. (chg slot old new) carries its context
@@ -141,4 +153,28 @@
       _ (puts ";; D. two distribution COMPONENTS install to the same frontier\n")
       _ (line "     pull holo;glaze -> " (link (tget fa 'holo) (link (tget fa 'glaze) 0)))
       (line "     pull glaze;holo -> " (link (tget fb 'holo) (link (tget fb 'glaze) 0))))
+
+ ; ---- demo E: the positional layer -- a self-contained hunk model, where the
+ ;      swapped q is a genuine RE-AIM (its index slides by p's length delta) ----
+ _ (: (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+      (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
+      (splice s i c news) (cat2 (htake s i) (cat2 news (hdrop s (+ i c))))
+      (hunk i o n) (link 'hunk (link i (link o (link n ())))) ; at i, segment o -> n
+      (hi p) (cap (cup p)) (ho p) (cap (cup (cup p))) (hn p) (cap (cup (cup (cup p))))
+      (hpon s p) (splice s (hi p) (tally (ho p)) (hn p))
+      (hcom p q)                                            ; p;q -> q';p', or () on a seam
+        (: i (hi p) o1 (tally (ho p)) n1 (tally (hn p))
+           j (hi q) o2 (tally (ho q)) n2 (tally (hn q))
+           (? (> j (+ i n1)) (link (hunk (- (+ j o1) n1) (ho q) (hn q)) (link p ()))
+              (< (+ j o2) i) (link q (link (hunk (- (+ i n2) o2) (ho p) (hn p)) ()))
+              ()))
+      s0 '(a b c d e)
+      p (hunk 1 '(b) '(x y))                                ; grows the file by one
+      q (hunk 4 '(d) '(z))                                  ; aimed in post-p coordinates
+      c (hcom p q)
+      _ (puts ";; E. positional hunks -- commute RE-AIMS: q slides 4 -> 3 past p's growth\n")
+      _ (line "     commute(p,q) = " c)
+      _ (line "     order p;q   -> " (hpon (hpon s0 p) q))
+      _ (line "     order q';p' -> " (hpon (hpon s0 (cap c)) (cap (cup c))))
+      (line "     the seam refuses: " (hcom p (hunk 3 '(c) '(w)))))
  0)
