@@ -80,29 +80,51 @@
    (fn? ty) (&& (two? ty) (= (cap ty) 'fn))         ; ('fn ret?) -- a function; decays to its address
    (fnty g nm) (: sig (peep (g 'sigs) nm ())        ; a named function's type, return riding when sig'd
                   (? (two? sig) (L 'fn (cap sig)) (L 'fn)))
-   ; the one by-value struct shape cc carries (SysV: two SSE eightbytes -- an
-   ; xmm pair): exactly two double fields, 16 bytes. ai.c's struct ai_zn. a
-   ; struct VALUE in cgexpr is its ADDRESS in r0; params/args/returns/copies
-   ; read the pair through it. every other by-value struct stays refused.
-   (sse2? g ty) (? (! (stru? ty)) ()
-                   (: se (peep (g 'stag) (caup ty) 0)
-                      (? (! (two? se)) ()
-                         (: fs (cap se)
-                            (&& (= (caup se) 16)
-                                (&& (= (tally fs) 2)
-                                    (&& (flo? (cauup (cap fs))) (flo? (cauup (caup fs))))))))))
-   ; the sse2 pair's INTEGER twin: a 16-byte struct of scalar int/pointer
-   ; members returns in rax:rdx (SysV's two INTEGER eightbytes). members stay
-   ; flat scalars -- a nested aggregate or a float punts to the refusal.
-   (ipair? g ty) (? (! (stru? ty)) ()
-                    (: se (peep (g 'stag) (caup ty) 0)
-                       (? (! (two? se)) ()
-                          (! (= (caup se) 16)) ()
-                          (: (ints? fs) (? (! (two? fs)) 1
-                                           (: mty (cauup (cap fs))
-                                              (? (|| (flo? mty) (|| (stru? mty) (arr? mty))) ()
-                                                 (ints? (cup fs)))))
-                             (ints? (cap se))))))
+   ; by-value aggregates (structs AND unions): a struct VALUE in cgexpr is its
+   ; ADDRESS in r0; params/args/returns/results read the eightbytes through it.
+   ; carried classes: one eightbyte ('int in a gp reg / 'sse in an xmm) and the
+   ; two uniform 16-byte pairs -- '(sse sse) the xmm pair (ai.c's struct ai_zn,
+   ; full lanes) and '(int int) rax:rdx (return/result lanes; int-pair args and
+   ; params stay refused). MIXED 16-byte pairs and >16 bytes (MEMORY) refuse.
+   ; the SysV eightbyte CLASSES of a small aggregate -- '(int) / '(sse) at <=8
+   ; bytes, a two-symbol list at 9..16 -- or () (a scalar, an unsized tag, or
+   ; >16 bytes: MEMORY class, still refused). an eightbyte is SSE only when
+   ; every member overlapping it is float/double; any integer/pointer member
+   ; wins it for INT. unions flatten to offset-0 fields (parse.l), so the same
+   ; overlap walk classifies them -- a union of long and double is INT, like
+   ; the ABI says. eightbyte moves ride full 8-byte loads/stores (a 1..7-byte
+   ; tail reads its padding; frame temps and section interiors both hold it).
+   (aclass g ty)
+    (? (! (stru? ty)) ()
+       (: se (peep (g 'stag) (caup ty) 0)
+          (? (! (two? se)) ()
+             (< 16 (caup se)) ()
+             (: cls (tablet 0)
+                (mark o c) (: i (>> o 3) old (peep cls i ())
+                              (pin cls i (? (|| (id? old 'int) (id? c 'int)) 'int 'sse)))
+                (walk o mty)
+                 (? (flo? mty) (mark o 'sse)
+                    (arr? mty)
+                     (: esz (tsz g (caup mty))
+                        (go i) (? (<= (cauup mty) i) 1
+                                  (: _ (walk (+ o (* i esz)) (caup mty)) (go (+ i 1))))
+                        (go 0))
+                    (stru? mty)
+                     (: e2 (peep (g 'stag) (caup mty) 0)
+                        (? (! (two? e2)) 1 (fields o (cap e2))))
+                    (mark o 'int))
+                (fields o fs)
+                 (? (! (two? fs)) 1
+                    (: f (cap fs) _ (walk (+ o (caup f)) (cauup f)) (fields o (cup fs))))
+                _ (fields 0 (cap se))
+                (? (<= (caup se) 8) (L (peep cls 0 'int))
+                   (L (peep cls 0 'int) (peep cls 1 'int)))))))
+   (acls2 g ty ca cb) (: c (aclass g ty)
+                         (&& (two? c) (&& (two? (cup c))
+                             (&& (id? (cap c) ca) (id? (caup c) cb)))))
+   (sse2? g ty) (acls2 g ty 'sse 'sse)       ; both eightbytes SSE: the xmm0:xmm1 pair
+   (ipair? g ty) (acls2 g ty 'int 'int)      ; both INT: rax:rdx (return/result lanes)
+   (aone g ty) (: c (aclass g ty) (? (&& (two? c) (! (two? (cup c)))) (cap c) ()))
    (fnret ty) (? (! (&& (two? ty) (= (cap ty) 'ptr))) 'long   ; an indirect callee's result type: ('ptr ('fn ret)) | 'long
                  (: ft (caup ty) (? (&& (fn? ft) (two? (cup ft))) (caup ft) 'long)))
    ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same WIDTH as their signed
@@ -391,7 +413,12 @@
                  (! (ptr? (vty r))) 'bad
                  (mkv (caup (vty r)) 'r0 (tor0 g r))))
           (= k 'dot)
-           (: r (clval g env (caup e))
+           (: r (: lv (clval g env (caup e))
+                   ; an rvalue struct base (a call's parked temp: `mk(x).a`) is
+                   ; its address too -- same license the asn lane rides
+                   (? (! (bad? lv)) lv
+                      (: rv (cgexpr g env (caup e))
+                         (? (bad? rv) 'bad (! (stru? (vty rv))) 'bad rv))))
               (? (bad? r) 'bad
                  (: fm (fmem g (vty r) (cauup e))
                     (? (bad? fm) 'bad
@@ -733,6 +760,17 @@
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         (L (L 'st 'r4 toff 'r0) (L 'st 'r4 (+ toff 8) 'r2)
                                            (L 'lea 'r0 'r4 toff)))))
+                       (id? (aone g (vty cr)) 'sse)    ; a small SSE aggregate result: park xmm0
+                        (: toff (- 0 (+ (peep g 'off 0) 16))
+                           _ (pin g 'off (+ (peep g 'off 0) 16))
+                           (mkv (vty cr) 'r0 (cat (vfs cr)
+                                        (cat (fstf 'double 'r4 toff (xmmreg 0))
+                                             (L (L 'lea 'r0 'r4 toff))))))
+                       (id? (aone g (vty cr)) 'int)    ; a small INT aggregate result: park rax
+                        (: toff (- 0 (+ (peep g 'off 0) 16))
+                           _ (pin g 'off (+ (peep g 'off 0) 16))
+                           (mkv (vty cr) 'r0 (cat (vfs cr)
+                                        (L (L 'st 'r4 toff 'r0) (L 'lea 'r0 'r4 toff)))))
                        'bad))))))
           (= k 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
@@ -816,8 +854,15 @@
                                 (link (L (L 'x2 xmmc)
                                          (cat (tor0 g a) (L (L 'ld 'r1 'r0 8) (L 'push 'r1) (L 'ld 'r1 'r0 0) (L 'push 'r1))))
                                       acc)))
-                       (stru? aty) 'bad                    ; any other by-value struct stays ahead
-                       (: aval (? wd (cat (asflo g a) (L (L 'movqrx 'r0 'f0))) (asint g a))
+                       (&& (stru? aty) (! (aone g aty))) 'bad   ; a MIXED/>16B by-value struct stays ahead
+                       ; a one-eightbyte aggregate rides the scalar path: its
+                       ; 8 content bytes load into r0 (the value IS an address)
+                       ; and class by its eightbyte -- INT a gp arg, SSE an xmm
+                       (: one (? (stru? aty) (aone g aty) ())
+                          wd2 (|| wd (id? one 'sse))
+                          aval (? one (cat (tor0 g a) (L (L 'ld 'r0 'r0 0)))
+                                  wd (cat (asflo g a) (L (L 'movqrx 'r0 'f0)))
+                                  (asint g a))
                           ; a register arg rides a 16-byte cell: rsp stays 16-aligned
                           ; while the REMAINING args evaluate (a later arg may hold a
                           ; nested call, and the SysV ABI wants rsp%16==0 at it). an
@@ -826,8 +871,8 @@
                           ; a libc movaps-on-rbp path), so a stray eval-time skew is moot.
                           rpush (cat aval (spush 'r0))
                           opush (cat aval (L (L 'push 'r0)))
-                          (? (&& wd (< xmmc 8)) (kls (cup as) (+ i 1) gpc (+ xmmc 1) ovc (link (L (L 'x xmmc) rpush) acc))
-                             (&& (! wd) (< gpc 6)) (kls (cup as) (+ i 1) (+ gpc 1) xmmc ovc (link (L (L 'g gpc) rpush) acc))
+                          (? (&& wd2 (< xmmc 8)) (kls (cup as) (+ i 1) gpc (+ xmmc 1) ovc (link (L (L 'x xmmc) rpush) acc))
+                             (&& (! wd2) (< gpc 6)) (kls (cup as) (+ i 1) (+ gpc 1) xmmc ovc (link (L (L 'g gpc) rpush) acc))
                              (kls (cup as) (+ i 1) gpc xmmc (+ ovc 1) (link (L (L 'ov ovc) opush) acc)))))))))))
        kr (kls ags 0 0 0 0 ())
        (? (bad? kr) 'bad
@@ -1750,7 +1795,11 @@
                                        (cat (fldf 'double (xmmreg 1) 'r0 8) epi)))
                       (ipair? g rt)                                      ; a two-int struct returns as rax:rdx (r0:r2)
                        (cat (tor0 g r) (cat (L (L 'ld 'r2 'r0 8) (L 'ld 'r0 'r0 0)) epi))
-                      (|| (stru? rt) (stru? (vty r))) 'bad               ; any other struct return, or a struct where a scalar is due
+                      (id? (aone g rt) 'sse)                             ; a small SSE aggregate: its eightbyte in xmm0
+                       (cat (tor0 g r) (cat (fldf 'double (xmmreg 0) 'r0 0) epi))
+                      (id? (aone g rt) 'int)                             ; a small INT aggregate (a union rides here): rax
+                       (cat (tor0 g r) (cat (L (L 'ld 'r0 'r0 0)) epi))
+                      (|| (stru? rt) (stru? (vty r))) 'bad               ; a MIXED 16-byte pair or >16 bytes (MEMORY): still refused
                       (flo? (vty r)) (cat (asint g r) (? il (L (L 'jmp il)) epi))   ; a double value, an int return -> truncate to r0
                       (cat (tor0 g r) (? il (L (L 'jmp il)) epi))))))    ; int -> int, as before
           (= k 'expr)
@@ -1987,7 +2036,14 @@
                         (spill (cup ps) gpi (+ xmmi 2) ovi (link (L (cap p) off pty) env)
                                (cat acc (cat (fstf 'double 'r4 off (xmmreg xmmi))
                                              (fstf 'double 'r4 (+ off 8) (xmmreg (+ xmmi 1))))))))
-                 (stru? pty) 'bad                    ; any other by-value struct stays ahead
+                 (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
+                  (? (< xmmi 8)
+                     (: off (- 0 (+ (peep g 'off 0) 8))
+                        _ (pin g 'off (+ (peep g 'off 0) 8))
+                        (spill (cup ps) gpi (+ xmmi 1) ovi (link (L (cap p) off pty) env)
+                               (cat acc (fstf 'double 'r4 off (xmmreg xmmi)))))
+                     (spill (cup ps) gpi xmmi (+ ovi 1) (link (L (cap p) (+ 16 (* 8 ovi)) pty) env) acc))
+                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair / >16B stays ahead; a small INT one rides the gp lane
                  (&& (flo? pty) (< xmmi 8))
                   (: off (- 0 (+ (peep g 'off 0) 8))
                      _ (pin g 'off (+ (peep g 'off 0) 8))
@@ -2045,7 +2101,14 @@
                         (spillr (cup ps) gpi (+ xmmi 2) ovi (link (L (cap p) off pty) env)
                                (cat acc (cat (fstf 'double 'r4 off (xmmreg xmmi))
                                              (fstf 'double 'r4 (+ off 8) (xmmreg (+ xmmi 1))))))))
-                 (stru? pty) 'bad
+                 (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
+                  (? (< xmmi 8)
+                     (: off (- 0 (+ (peep g 'off 0) 8))
+                        _ (pin g 'off (+ (peep g 'off 0) 8))
+                        (spillr (cup ps) gpi (+ xmmi 1) ovi (link (L (cap p) off pty) env)
+                               (cat acc (fstf 'double 'r4 off (xmmreg xmmi)))))
+                     (spillr (cup ps) gpi xmmi (+ ovi 1) (link (L (cap p) (+ 16 (* 8 ovi)) pty) env) acc))
+                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED / >16B ahead; small INT rides the gp lane (never homable)
                  (&& (flo? pty) (< xmmi 8))
                   (: off (- 0 (+ (peep g 'off 0) 8))
                      _ (pin g 'off (+ (peep g 'off 0) 8))
@@ -2065,7 +2128,7 @@
        (homes? ps gpi)                              ; does any gp param qualify for a register home?
         (? (! (two? ps)) ()
            (: pty (caup (cap ps))
-              (? (|| (flo? pty) (sse2? g pty)) (homes? (cup ps) gpi)
+              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (homes? (cup ps) gpi)
                  (< 5 gpi) ()
                  (homable? pty) 1
                  (homes? (cup ps) (+ gpi 1)))))
@@ -2084,7 +2147,14 @@
                         (spillr2 (cup ps) gpi (+ xmmi 2) ovi (link (L (cap p) off pty) env)
                                (cat acc (cat (fstf 'double 'r4 off (xmmreg xmmi))
                                              (fstf 'double 'r4 (+ off 8) (xmmreg (+ xmmi 1))))))))
-                 (stru? pty) 'bad
+                 (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
+                  (? (< xmmi 8)
+                     (: off (- 0 (+ (peep g 'off 0) 8))
+                        _ (pin g 'off (+ (peep g 'off 0) 8))
+                        (spillr2 (cup ps) gpi (+ xmmi 1) ovi (link (L (cap p) off pty) env)
+                               (cat acc (fstf 'double 'r4 off (xmmreg xmmi)))))
+                     (spillr2 (cup ps) gpi xmmi (+ ovi 1) (link (L (cap p) (+ 16 (* 8 ovi)) pty) env) acc))
+                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED / >16B ahead; small INT rides the gp lane (never homable)
                  (&& (flo? pty) (< xmmi 8))
                   (: off (- 0 (+ (peep g 'off 0) 8))
                      _ (pin g 'off (+ (peep g 'off 0) 8))
@@ -2113,7 +2183,7 @@
        (nhomable ps gpi n)
         (? (! (two? ps)) n
            (: pty (caup (cap ps))
-              (? (|| (flo? pty) (sse2? g pty)) (nhomable (cup ps) gpi n)
+              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (nhomable (cup ps) gpi n)
                  (< 5 gpi) n
                  (homable? pty) (nhomable (cup ps) (+ gpi 1) (+ n 1))
                  (nhomable (cup ps) (+ gpi 1) n))))
@@ -2157,7 +2227,7 @@
        (uhomes ps gpi acc)
         (? (|| (! (two? ps)) (< 5 gpi)) acc
            (: pty (caup (cap ps))
-              (? (|| (flo? pty) (sse2? g pty)) (uhomes (cup ps) gpi acc)
+              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (uhomes (cup ps) gpi acc)
                  (homable? pty) (uhomes (cup ps) (+ gpi 1) (link (homereg gpi) acc))
                  (uhomes (cup ps) (+ gpi 1) acc))))
        hpool (: uh (uhomes params 0 ())
