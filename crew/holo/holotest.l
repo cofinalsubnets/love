@@ -19,7 +19,9 @@
    ;; -- the golden table: (name  expected-hex  IR-program). --
    tests (L
       ;; immediates
-      (L "li.small"    "48c7c03c000000"        '((li r0 60)))
+      (L "li.small"    "b83c000000"            '((li r0 60)))            ; mov eax,60 (zero-extends)
+      (L "li.hireg"    "41b83c000000"          '((li r7 60)))            ; mov r8d,60 (REX.B alone)
+      (L "li.u32"      "b800000090"            '((li r0 2415919104)))    ; mov eax,0x90000000 -- zero-extend, no movabs
       (L "li.neg1"     "48c7c0ffffffff"        '((li r0 -1)))
       (L "li.movabs"   "48b84c9c8cdac1fc0300"  '((li r0 1122334455667788)))
       ;; register moves (low + REX-extended)
@@ -138,7 +140,7 @@
                        '((rem r0 r0 r7 r4)))
       ;; a whole program: write(1, buf, 13); exit(0)  -- r0=rax carries the syscall number
       (L "syscall.prog"
-         "48c7c00100000048c7c70100000048c7c60010000048c7c20d0000000f0548c7c03c00000048c7c7000000000f05"
+         "b801000000bf01000000be00100000ba0d0000000f05b83c000000bf000000000f05"
          '((li r0 1) (li r6 1) (li r5 4096) (li r2 13) (sys) (li r0 60) (li r6 0) (sys)))
       ;; SSE2 / double lane (the float glaze). reg-reg binops, gp<->xmm moves, and the xmm<->[mem]
       ;; spill/box ops + ucomisd that the glaze's float-result lane uses. objdump-verified (-M intel).

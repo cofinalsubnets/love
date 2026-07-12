@@ -65,10 +65,16 @@
    (emit-mov d s) (alu-rr 137 d s)                                  ; 0x89 mov r/m64, r64
    (emit-cmp a b) (alu-step 57 7 a b)                               ; 0x39 cmp / 0x81 /7
 
-   ;; (li d imm): C7 /0 id for a signed-32 immediate, else a 10-byte movabs (B8+rd io).
+   ;; (li d imm): B8+rd id for an unsigned-32 immediate -- the 5-byte mov-r32
+   ;; form, which ZERO-extends across the full register (REX.B alone lifts the
+   ;; high regs to 6); C7 /0 id sign-extends a negative signed-32 (7 bytes);
+   ;; else the 10-byte movabs (B8+rd io). li density is high (every constant
+   ;; and every call-staged argument), so the short form is a real text lever.
    (emit-li d imm)
       (: dn (rn d)
-         (? (fits32 imm)
+         (? (&& (<= 0 imm) (<= imm 4294967295))
+            (cat (? (= (hi dn) 0) () (L (rex 0 0 0 1))) (link (| 184 (lo dn)) (le32 imm)))
+            (fits32 imm)
             (cat (L (rex 1 0 0 (hi dn)) 199 (modrm 3 0 dn)) (le32 imm))
             (cat (L (rex 1 0 0 (hi dn)) (| 184 (lo dn))) (le64 imm))))
 
