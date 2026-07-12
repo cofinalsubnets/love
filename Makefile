@@ -457,6 +457,29 @@ test_cc: host out/host$(hsuf)/aicc
 	  [ $$a -eq 42 ] || { echo "FAIL 16-byte stack alignment ('g=id(fork())' holds a temp across the call; a bare-push spill leaves rsp at 8 mod 16 and glibc fork's child movaps #GPs -- got $$a want 42)"; exit 1; }; \
 	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment) ok"; \
 	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
+# The rung-2 self-host gate ([[ai-distro]]): compile ai.c AND every host/*.c with
+# aicc (gcc/clang only LINKS), then run the whole corpus through the all-aicc
+# binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in
+# test_all -- it rebuilds ~14 objects + links + runs the corpus, and needs the
+# system static linker + libm. x86-64 only (aicc emits x64). The binary carries
+# no baked image, so AI_NO_IMAGE forces the fresh-egg boot.
+.PHONY: test_selfhost
+test_selfhost: host out/host$(hsuf)/aicc
+	@echo SELFHOST $(ho)/ai-selfhost
+	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
+	  d=$(ho)/selfhost; mkdir -p $$d; \
+	  $m $(ho)/aicc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL aicc -c ai.c"; exit 1; }; \
+	  for f in host/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
+	  $(host_cc) -static -o $(ho)/ai-selfhost $$d/*.o -lm $(host_ldflags) \
+	    || { echo "FAIL link all-aicc binary"; exit 1; }; \
+	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_selfhost.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
+	    || { echo "FAIL all-aicc corpus (exit $$s)"; exit 1; }; \
+	  echo "test_selfhost: ai.c + all `ls host/*.c | wc -l` host/*.c built by aicc, corpus passes"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
