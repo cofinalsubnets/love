@@ -172,7 +172,7 @@ aufiles = crew/utils/text.l crew/utils/core.l crew/utils/fs.l crew/utils/re.l cr
 # only aicc (never au), so an au rebuild in another session can't tear the compiler.
 # Its own catted `#!/usr/bin/env -S ai -l` script: the u-floor (text+core), the assembler
 # book + elf/obj writers, then crew/cc/{lex,cpp,parse,gen,cc}.l whose tail SEAT fires.
-aiccfiles = crew/utils/text.l crew/utils/core.l crew/utils/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l
+aiccfiles = crew/utils/text.l crew/utils/core.l crew/utils/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/cc.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these two lines spell out/host$(hsuf) themselves.)
 out/host$(hsuf)/au: $(aufiles)
@@ -404,7 +404,7 @@ test_cc: host out/host$(hsuf)/aicc
 	  $m $(ho)/aicc $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
 	  [ $$r -eq 1 ] || { echo "FAIL aicc parse-error exit (rc $$r)"; exit 1; }; \
 	  printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > $(ho)/.olib.c; \
-	  printf 'int pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+pick(2)+ext_add(15,5);}\n' > $(ho)/.omain.c; \
+	  printf 'extern int vals[];\nint pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+vals[2]+ext_add(15,5);}\n' > $(ho)/.omain.c; \
 	  printf 'int ext_add(int a,int b){return a+b;}\n' > $(ho)/.oext.c; \
 	  $m $(ho)/aicc -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL aicc -c lib"; exit 1; }; \
 	  $m $(ho)/aicc -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL aicc -c main"; exit 1; }; \
@@ -455,7 +455,24 @@ test_cc: host out/host$(hsuf)/aicc
 	  $$cc_g -no-pie -o $(ho)/.alnx $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL ld stack-align"; exit 1; }; \
 	  $(ho)/.alnx; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL 16-byte stack alignment ('g=id(fork())' holds a temp across the call; a bare-push spill leaves rsp at 8 mod 16 and glibc fork's child movaps #GPs -- got $$a want 42)"; exit 1; }; \
-	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment) ok"; \
+	  $m $(ho)/aicc -c $(ho)/.oext.c $(ho)/.oext2.o > /dev/null 2>&1 || { echo "FAIL aicc -c ext"; exit 1; }; \
+	  $m $(ho)/aicc $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext2.o -o $(ho)/.lnk1 > /dev/null 2>&1 || { echo "FAIL aicc link .o"; exit 1; }; \
+	  $(ho)/.lnk1; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc-linked exe (own static linker, got $$a want 42)"; exit 1; }; \
+	  $m $(ho)/aicc $(ho)/.mi1.c $(ho)/.mi2.c -o $(ho)/.lnk2 > /dev/null 2>&1 || { echo "FAIL aicc link multi-.c"; exit 1; }; \
+	  $(ho)/.lnk2; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-.c link (got $$a want 42)"; exit 1; }; \
+	  $m $(ho)/aicc -c $(ho)/.wkstr.c $(ho)/.wkstr2.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak-strong"; exit 1; }; \
+	  $m $(ho)/aicc $(ho)/.wklib.o -o $(ho)/.lnk3 > /dev/null 2>&1 && $(ho)/.lnk3; a=$$?; \
+	  [ $$a -eq 37 ] || { echo "FAIL aicc-link weak default (got $$a want 37)"; exit 1; }; \
+	  $m $(ho)/aicc $(ho)/.wklib.o $(ho)/.wkstr2.o -o $(ho)/.lnk4 > /dev/null 2>&1 && $(ho)/.lnk4; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc-link weak override (got $$a want 42)"; exit 1; }; \
+	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e1 = { "a", 30 };\n' > $(ho)/.nf1.c; \
+	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e2 = { "b", 12 };\nextern ent __start_ai_nifs[];\nextern ent __stop_ai_nifs[];\nint main(){ long s=0; for (ent *p=__start_ai_nifs; p<__stop_ai_nifs; p++) s+=p->v; return (int)s; }\n' > $(ho)/.nf2.c; \
+	  $m $(ho)/aicc $(ho)/.nf2.c $(ho)/.nf1.c -o $(ho)/.lnk5 > /dev/null 2>&1 || { echo "FAIL aicc link ai_nifs"; exit 1; }; \
+	  $(ho)/.lnk5; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $$a want 42)"; exit 1; }; \
+	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets) ok"; \
 	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The rung-2 self-host gate ([[ai-distro]]): compile ai.c AND every host/*.c with
 # aicc (gcc/clang only LINKS), then run the whole corpus through the all-aicc

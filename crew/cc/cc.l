@@ -1,17 +1,19 @@
-; crew/cc/cc.l -- the C compiler's driver (rung 3):
-;   aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c [in2.c ..]
-; reads C, rides lex -> cpp -> parse -> gen -> the holo book. WITHOUT -c it lays
-; a runnable static ELF (chmod 755, _start + text + data one segment); WITH -c it
-; lays relocatable ELF objects (crew/holo/obj.l -- separate sections, a symbol
-; table, and relocations) the system linker binds against host/*.o + libc (stage
-; 7a). several .c inputs need -c and land each in the cwd as x.o (gcc-shaped);
-; the old positional pair `aicc [-c] IN OUT` still reads (two bare args, the
-; second no .c). -I dirs search before the system pair on both include forms; a
-; -D rides in as a synthesized #define line, so token bodies and function-like
-; -DF(x)=.. take the one macro path. errors speak on err and exit 1; usage exits
-; 2. LAST in the aicc cat (its own app, doc/cc.md), after crew/holo/{elf,obj}.l
-; and crew/cc/{lex,cpp,parse,gen}.l; rides the u-floor (uread udie). its tail
-; SEAT fires cc-main when aicc is the program on the command line.
+; crew/cc/cc.l -- the C compiler's driver:
+;   aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
+; reads C, rides lex -> cpp -> parse -> gen -> the holo book. one .c WITHOUT -c
+; lays a runnable static ELF directly (chmod 755, _start + text + data one
+; segment); WITH -c it lays relocatable ELF objects (crew/holo/obj.l --
+; separate sections, a symbol table, and relocations), several .c inputs each
+; landing in the cwd as x.o (gcc-shaped); a .o input or SEVERAL inputs without
+; -c is a LINK -- our own static linker (crew/holo/link.l, rung 3) binds them
+; (compiling any .c on the way) into -o's exe, `a.out` bare. the old positional
+; pair `aicc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
+; no .o). -I dirs search before the system pair on both include forms; a -D
+; rides in as a synthesized #define line, so token bodies and function-like
+; -DF(x)=.. take the one macro path. errors speak on err and exit 1; usage
+; exits 2. LAST in the aicc cat (its own app, doc/cc.md), after
+; crew/holo/{elf,obj,link}.l and crew/cc/{lex,cpp,parse,gen}.l; rides the
+; u-floor (uread udie). its tail SEAT fires cc-main when aicc is the program.
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
    (cdir path) (: n (tally path)
@@ -69,20 +71,38 @@
        res (elf64 'x64 (\ _ (caup ir)) ())
        _ (write-bytes dst (peep res 'bytes 0))
        (chmod dst 493))
-   ; a relocatable object (`-c`): text/data/ai_nifs sections + symbols +
-   ; relocations, for the system linker to bind against host/*.o + libc (7a).
-   (cc-obj src dst is ds)
+   ; a relocatable object: text/data/ai_nifs sections + symbols + relocations
+   ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
+   (cc-objbytes src is ds)
     (: ps (cc-parse src is ds)
        ob (cgen-obj (caup ps) (cauup ps) (caup (cuup ps)) (el ps 4) (pxtra ps))
        _ (? (two? ob) () (udie 1 (+ "cc: codegen error in " src)))
-       bytes (objelf 'x64 (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5))
-       (write-bytes dst bytes))
-   usage "usage: aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c [in2.c ..]"
+       (objelf 'x64 (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5)))
+   (cc-obj src dst is ds) (write-bytes dst (cc-objbytes src is ds))
+   ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
+   ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
+   ; text is the entry: call main, exit with its answer -- gen.l's cgen lays
+   ; the same forms), and ldlink binds the static exe -- no system linker.
+   crt0 (L (L 'call 'main) (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys))
+   (cc-link ins dst is ds)
+    (: srcs (map (\ f (? (dotc? f) (L f (string (cc-objbytes f is ds)))
+                         (doto? f) (: r (uread f)
+                                      (? (two? r) (L f (caup r))
+                                         (udie 1 (+ "cc: cannot open " f))))
+                         (udie 2 (+ "cc: not a .c/.o input: " f))))
+                 ins)
+       ps (ldlink 'x64 (link (L "crt0" (string (objelf 'x64 crt0 () () () () ()))) srcs))
+       _ (ld-write dst ps)
+       (chmod dst 493))
+   usage "usage: aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
    ; the flag scan: -c, -I dir / -Idir, -D def / -Ddef, -o out; every other
    ; bare arg is an input, any other dash arg refuses. -> (c idirs defs out ins).
    (glu? a ch) (&& (< 2 (tally a)) (&& (= (a 0) 45) (= (a 1) ch)))
    (dirn d) (: n (tally d) (? (= n 0) d (= (d (- n 1)) 47) d (+ d "/")))
    (dotc? p) (: n (tally p) (&& (< 2 n) (&& (= (p (- n 2)) 46) (= (p (- n 1)) 99))))
+   (doto? p) (: n (tally p) (&& (< 2 n) (&& (= (p (- n 2)) 46) (= (p (- n 1)) 111))))
+   ; a LINK-shaped input list: any .o in it, or several inputs at once
+   (lnky? ins) (|| (two? (cup ins)) (foldl (\ a x (|| a (doto? x))) () ins))
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (< k n) (go (+ k 1) (? (= (p k) 47) (+ k 1) r)) (snip p r (- n 1)))
                 (+ (go 0 0) "o"))
@@ -101,15 +121,22 @@
     (: f (flags as () () () () ())
        c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4)
        (? (! (two? ins)) (udie 2 usage)
-          o (? (two? (cup ins)) (udie 2 "cc: -o takes one input")
-               (: _ (? c (cc-obj (cap ins) o is ds) (cc-exe (cap ins) o is ds)) (quit 0)))
+          o (? c (? (two? (cup ins)) (udie 2 "cc: -o takes one input")
+                    (: _ (cc-obj (cap ins) o is ds) (quit 0)))
+               (lnky? ins) (: _ (cc-link ins o is ds) (quit 0))
+               (: _ (cc-exe (cap ins) o is ds) (quit 0)))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
-          (&& (two? (cup ins)) (&& (! (two? (cuup ins))) (! (dotc? (caup ins)))))
+          ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT)
+          (&& (two? (cup ins))
+              (&& (! (two? (cuup ins)))
+                  (&& (! (dotc? (caup ins)))
+                      (|| c (&& (! (doto? (cap ins))) (! (doto? (caup ins))))))))
            (: _ (? c (cc-obj (cap ins) (caup ins) is ds) (cc-exe (cap ins) (caup ins) is ds)) (quit 0))
           c (: (go l) (? (! (two? l)) (quit 0)
                          (! (dotc? (cap l))) (udie 2 (+ "cc: not a .c input: " (cap l)))
                          (: _ (cc-obj (cap l) (obase (cap l)) is ds) (go (cup l))))
                (go ins))
+          (lnky? ins) (: _ (cc-link ins "a.out" is ds) (quit 0))
           (udie 2 usage))))
 
 ; the SEAT: fire cc-main iff aicc sits in the program seat of the real command line

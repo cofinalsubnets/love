@@ -34,8 +34,29 @@ FULL byte width (was a bogus 16-byte SSE-only copy), an integer-pair struct
 returns/receives in rax:rdx (the SSE2 pair's twin), and -- the boot-blocker
 -- pointer subtraction over a struct now divides by the real pointee size
 (`lg2` was capped at 3, so every >8-byte struct-pointer difference divided by
-8; non-power-of-two sizes take a real idiv). NEXT (rung 3): our own static
-linker over obj.l's relocations, so `ld` goes too.
+8; non-power-of-two sizes take a real idiv).
+
+**LADDER RUNG 3 LANDED 2026-07-12: our own static linker.** crew/holo/link.l
+(~200 lines, in the aicc cat after obj.l) reads the relocatable objects obj.l
+lays -- .text/.data/ai_nifs + symtab + RELA, name-driven off the section
+headers -- resolves every symbol across the set (strong over weak, two strongs
+scare 'link-dup, `__start_/__stop_ai_nifs` synthesized over the nif region:
+16-aligned once and packed tight across objects, so the drain reads ONE
+array), lays the sections at the classic ET_EXEC base, applies the
+relocations (R_64 = S+A; PC32/PLT32 both = S+A-P once the link is static,
+range-checked), and wraps elf.l's one-segment executable header. crt0 rides
+in as a synthetic FIRST object built by objelf itself (call main; exit), so
+`main` resolves through the same reloc path as everything else. the driver:
+a .o input or several inputs without -c is a LINK -- `aicc a.o b.c -o prog`,
+`a.out` bare; one .c stays the direct cc-exe path, -c and the legacy pair
+unchanged. a foreign .o (gcc's .comment/.eh_frame zoo) scares off honestly
+('link-section) -- our own objects only, by design: linking glibc's .a is the
+ifunc/TLS tarpit and stays OFF the ladder. the whole 84-program battery
+passes linked through it (compile -c, link, run, gcc differential), weak
+default/override and the nif bracket walk are gated in test_cc, and the full
+14-object selfhost set (585KB ai.o included) links in under a second --
+refusing at `sqrt`, the first libm undef, which is exactly rung 4's seam:
+the raw-syscall host + in-tree sin/cos/log, and gcc is gone entirely.
 
 the one firm fence: NOT C++, ever.
 
