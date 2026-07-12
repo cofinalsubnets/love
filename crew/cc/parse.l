@@ -340,6 +340,10 @@
     (? (! (two? ts)) ()
        (: t (cap ts)
           (? (= (tkk t) 'num) (L (L 'num (tkv t)) (cup ts))
+             (= (tkk t) 'unum)                        ; a u-suffixed literal wears its unsignedness (neg/div/shift go unsigned):
+              (L (L 'cast 'uint (L 'num (tkv t))) (cup ts))     ; 1u an unsigned INT (-1u wraps at 32 bits),
+             (= (tkk t) 'ulnum)                                 ; 1UL/1ULL an unsigned LONG
+              (L (L 'cast 'ulong (L 'num (tkv t))) (cup ts))
              (= (tkk t) 'flo) (L (L 'flo (tkv t)) (cup ts))
              (= (tkk t) 'str) (L (L 'str (tkv t)) (cup ts))
              ; the varargs builtins (my stdarg.h maps va_* onto these): va_arg's
@@ -694,7 +698,7 @@
              (tkw? t 'for)
               (: r1 (want (cup ts) "(")
                  (? (! (two? r1)) ()
-                    (: ri (? (tkbty? ps (cap r1)) (pdecl ps r1)
+                    (: ri (? (tkbty? ps (cap (pquals r1))) (pdecl ps r1)   ; the decl gate skips quals, like a block's (`for (const char *x; ..`)
                              (peekp r1 ";") (L () (cup r1))
                              (: r (pexpr ps r1)
                                 (? (two? r)

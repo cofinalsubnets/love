@@ -603,11 +603,19 @@
                                                      (L 'ucomisd 'f0 'f1) (L 'set 'eq 'r0)
                                                      (L 'set 'np 'r1) (L 'and 'r0 'r0 'r1))))
                      'bad)                             ; ~ on a double is invalid
-                 (mkv 'long 'r0
-                    (cat (tor0 g r)
-                         (? (= (caup e) 'neg) (L (L 'neg 'r0))
-                            (= (caup e) 'bnot) (L (L 'not 'r0))
-                            (L (L 'cmp 'r0 0) (L 'set 'eq 'r0)))))))
+                 ; -1ULL stays unsigned; a SUB-64 unsigned re-narrows after
+                 ; neg/~ (the model keeps unsigned intermediates canonically
+                 ; zero-extended: -1u must wrap at 32 bits, not ride 64)
+                 (: uty (&& (member? (caup e) '(neg bnot)) (usg? (vty r)))
+                    renar (? (! uty) () (= (vty r) 'uchar) (L (L 'zx1 'r0))
+                             (= (vty r) 'ushort) (L (L 'zx2 'r0))
+                             (= (vty r) 'uint) (L (L 'zx4 'r0)) ())
+                    (mkv (? uty (vty r) 'long) 'r0
+                       (cat (tor0 g r)
+                            (cat (? (= (caup e) 'neg) (L (L 'neg 'r0))
+                                    (= (caup e) 'bnot) (L (L 'not 'r0))
+                                    (L (L 'cmp 'r0 0) (L 'set 'eq 'r0)))
+                                 renar))))))
           (= k 'comma)
            (: a (cgexpr g env (caup e))
               _ (pin g 'want wnt)
@@ -698,7 +706,8 @@
                  ; op + seto, result stored through arg3, the flag the value.
                  (= bi "__builtin_trap") (mkv 'long 'r0 (L (L 'raw (L 15 11))))
                  (= bi "__builtin_inf")  (mkv 'double 'r0 (L (L 'li 'r0 9218868437227405312) (L 'movqxr 'f0 'r0)))
-                 (= bi "__builtin_nanf") (mkv 'double 'r0 (L (L 'li 'r0 9221120237041090560) (L 'movqxr 'f0 'r0)))
+                 (|| (= bi "__builtin_nanf") (= bi "__builtin_nan"))   ; both take a (ignored) tag string; one quiet-NaN pattern
+                  (mkv 'double 'r0 (L (L 'li 'r0 9221120237041090560) (L 'movqxr 'f0 'r0)))
                  (= bi "__builtin_expect") (cgexpr g env (cap args))
                  (= bi "__builtin___clear_cache") (mkv 'long 'r0 ())
                  (= bi "__builtin_clzll")
@@ -1647,12 +1656,34 @@
        (&& (&& (= (cap ini) 'addr) (two? (caup ini))) (&& (= (cap (caup ini)) 'var)
            (two? (peep (g 'glob) (caup (caup ini)) 0)))) (cap (peep (g 'glob) (caup (caup ini)) 0))
        ())
+   ; a const FLOAT expression at image time -> its gem | 'bad. the int cfold
+   ; lives at parse (array dims); floats fold here where the image lays them
+   ; (`static const double toint = 1/DBL_EPSILON;` -- fdlibm's opener).
+   ; same IEEE doubles as the target, so the fold is the runtime value.
+   (ffold e)
+    (? (! (two? e)) 'bad
+       (= (cap e) 'flo) (caup e)
+       (= (cap e) 'num) (+ 0.0 (caup e))
+       (= (cap e) 'cast) (? (flo? (caup e)) (ffold (cauup e)) 'bad)
+       (= (cap e) 'un)
+        (: v (ffold (cauup e))
+           (? (bad? v) 'bad (= (caup e) 'neg) (- 0.0 v) 'bad))
+       (= (cap e) 'bin)
+        (: op (caup e) a (ffold (cauup e)) b (ffold (caup (cuup e)))
+           (? (|| (bad? a) (bad? b)) 'bad
+              (= op '+) (+ a b) (= op '-) (- a b) (= op '*) (* a b)
+              (= op '/) (? (= b 0.0) 'bad (/ a b))
+              'bad))
+       'bad)
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (? (! (two? ini)) (zeros (tsz g ty))
        (= (cap ini) 'flo) (? (= ty 'float) (le4s (fbits32 (caup ini)))    ; a float literal -> 4 IEEE single bytes
                              (flo? ty) (le8s (fbits (caup ini))) 'bad)     ; a double literal -> 8 IEEE bytes
        (= (cap ini) 'num) (? (aggish? ty) 'bad (= ty 'float) (le4s (fbits32 (+ 0.0 (caup ini))))
                              (flo? ty) (le8s (fbits (+ 0.0 (caup ini)))) (imnum g ty (caup ini)))
+       (&& (flo? ty) (member? (cap ini) '(bin un cast)))   ; a const float expression: fold, then image
+        (: v (ffold ini)
+           (? (bad? v) 'bad (= ty 'float) (le4s (fbits32 v)) (le8s (fbits v))))
        (&& (= (cap ini) 'str) (arr? ty))
         (: t (caup ini) n (tsz g ty)
            (bs i acc) (? (<= n i) (rev acc) (bs (+ i 1) (link (? (< i (tally t)) (t i) 0) acc)))

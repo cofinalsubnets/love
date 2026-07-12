@@ -94,26 +94,59 @@ double sin(double x) {
 double cos(double x) { return sin(x + m_pi_2); }
 double tan(double x) { return sin(x) / cos(x); }
 
-// atan: range-reduce |x| > 1 via identity, then halve-angle until |x|
-// is small enough for fast Taylor (~0.2). Two halve-angle iterations
-// suffice; the inner Taylor degree 11 then gives ~10^-13.
-static double atan_k(double x) {
- // |x| <= ~0.196 after two halve-angle reductions.
- double x2 = x * x;
- return x * (1 + x2 * (-1.0/3 + x2 * (1.0/5 + x2 * (-1.0/7 + x2 * (1.0/9
-          + x2 * (-1.0/11 + x2 * (1.0/13)))))));
-}
+// atan: the fdlibm reduction (via musl, MIT) -- four bands picked off the
+// high word, each folding |x| toward [0, 7/16] against an exact table
+// angle (hi + lo split), then an 11-term minimax polynomial in odd/even
+// halves. ~1 ulp; the old two-halve-angle Taylor sat at ~1e-13 and failed
+// the corpus's 1e-12 atan(tan x) round trip.
+static double const atanhi[] = {
+  4.63647609000806093515e-01,   // atan(0.5)hi
+  7.85398163397448278999e-01,   // atan(1.0)hi
+  9.82793723247329054082e-01,   // atan(1.5)hi
+  1.57079632679489655800e+00,   // atan(inf)hi
+};
+static double const atanlo[] = {
+  2.26987774529616870924e-17,   // atan(0.5)lo
+  3.06161699786838301793e-17,   // atan(1.0)lo
+  1.39033110312309984516e-17,   // atan(1.5)lo
+  6.12323399573676603587e-17,   // atan(inf)lo
+};
+static double const aT[] = {
+  3.33333333333329318027e-01, -1.99999999998764832476e-01,
+  1.42857142725034663711e-01, -1.11111104054623557880e-01,
+  9.09088713343650656196e-02, -7.69187620504482999495e-02,
+  6.66107313738753120669e-02, -5.83357013379057348645e-02,
+  4.97687799461593236017e-02, -3.65315727442169155270e-02,
+  1.62858201153657823623e-02,
+};
 
 double atan(double x) {
  if (x != x) return x;
- int neg = x < 0; if (neg) x = -x;
- int inv = x > 1;  if (inv) x = 1 / x;
- // halve-angle twice: atan(x) = 2 * atan(x/(1 + sqrt(1+x*x)))
- double y = x / (1 + sqrt(1 + x * x));
- y       = y / (1 + sqrt(1 + y * y));
- double r = 4 * atan_k(y);
- if (inv) r = m_pi_2 - r;
- return neg ? -r : r; }
+ union { double d; uint64_t u; } ux = { .d = x };
+ uint32_t ix = (uint32_t)(ux.u >> 32);
+ int sign = ix >> 31;
+ int id;
+ ix &= 0x7fffffff;
+ if (ix >= 0x44100000) {                       // |x| >= 2^66: the limit angle
+  double z = atanhi[3] + 1e-30;
+  return sign ? -z : z; }
+ if (ix < 0x3fdc0000) {                        // |x| < 0.4375
+  if (ix < 0x3e400000) return x;               // |x| < 2^-27: atan x = x to 53 bits
+  id = -1; }
+ else {
+  if (x < 0) x = -x;
+  if (ix < 0x3ff30000) {                       // |x| < 1.1875
+   if (ix < 0x3fe60000) { id = 0; x = (2.0 * x - 1.0) / (2.0 + x); }
+   else                 { id = 1; x = (x - 1.0) / (x + 1.0); } }
+  else {
+   if (ix < 0x40038000) { id = 2; x = (x - 1.5) / (1.0 + 1.5 * x); }
+   else                 { id = 3; x = -1.0 / x; } } }
+ double z = x * x, w = z * z;
+ double s1 = z * (aT[0] + w * (aT[2] + w * (aT[4] + w * (aT[6] + w * (aT[8] + w * aT[10])))));
+ double s2 = w * (aT[1] + w * (aT[3] + w * (aT[5] + w * (aT[7] + w * aT[9]))));
+ if (id < 0) return x - x * (s1 + s2);
+ double r = atanhi[id] - ((x * (s1 + s2) - atanlo[id]) - x);
+ return sign ? -r : r; }
 
 double atan2(double y, double x) {
  if (x > 0) return atan(y / x);

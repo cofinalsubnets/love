@@ -45,8 +45,10 @@
       (! (clex "a /* open"))                                 ; unterminated comment refused
       (= (tn (caup (clex "0x1F")) 0) (L 'num 31 1))         ; 7c-ii: hex literals
       (= (tn (caup (clex "0xFF & 1")) 0) (L 'num 255 1))
-      (= (tn (caup (clex "255L")) 0) (L 'num 255 1))        ; an integer suffix is consumed
-      (= (tn (caup (clex "100UL")) 0) (L 'num 100 1))
+      (= (tn (caup (clex "255L")) 0) (L 'num 255 1))        ; an l/L suffix is consumed outright
+      (= (tn (caup (clex "100U")) 0) (L 'unum 100 1))       ; a u/U marks the token UNSIGNED (neg/div/shift go unsigned):
+      (= (tn (caup (clex "100UL")) 0) (L 'ulnum 100 1))     ; bare u an unsigned INT, u+l/L (or a >32-bit value) an unsigned LONG
+      (= (tn (caup (clex "0x8ULL")) 0) (L 'ulnum 8 1))
       (= (tn (caup (clex "'\\f'")) 0) (L 'num 12 1))        ; \f form feed, \a bell, \v vtab
       (= (tn (caup (clex "'\\a'")) 0) (L 'num 7 1))
       (= (tn (caup (clex "'\\v'")) 0) (L 'num 11 1))

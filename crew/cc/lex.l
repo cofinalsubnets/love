@@ -22,6 +22,15 @@
        (hexv c) (? (dig? c) (- c 48) (&& (<= 97 c) (<= c 102)) (- c 87) (- c 55))         ; a=10 A=10
        (suf? c) (|| (= c 117) (|| (= c 85) (|| (= c 108) (= c 76))))                      ; u U l L
        (skipsuf j) (? (&& (< j n) (suf? (src j))) (skipsuf (+ j 1)) j)                    ; eat an int-literal suffix run
+       ; does the literal spanning [i, j) carry a u/U? an l/L? (neither is a hex
+       ; digit, so the whole-span scan is safe for decimal and hex integers alike)
+       (hasu? i j) (: (go k) (? (<= j k) () (|| (= (src k) 117) (= (src k) 85)) 1 (go (+ k 1))) (go i))
+       (hasl? i j) (: (go k) (? (<= j k) () (|| (= (src k) 108) (= (src k) 76)) 1 (go (+ k 1))) (go i))
+       ; the token kind of an integer literal: u alone reads unsigned INT (-1u
+       ; wraps at 32 bits), u with l/L -- or a value past 32 bits -- unsigned LONG
+       (ukind i j v) (? (! (hasu? i j)) 'num
+                        (|| (hasl? i j) (<= 4294967296 v)) 'ulnum
+                        'unum)
        (escv d) (? (= d 110) 10 (= d 116) 9 (= d 114) 13 (= d 97) 7 (= d 98) 8            ; \n \t \r \a \b
                    (= d 102) 12 (= d 118) 11 (= d 48) 0 (= d 92) 92                       ; \f \v \0 backslash
                    (= d 34) 34 (= d 39) 39 (= d 63) 63 (= d 101) 27 ())                   ; \" \' \? \e
@@ -125,11 +134,13 @@
                                 ()))
                  (&& (= c 48) (&& (< (+ i 1) n) (|| (= (src (+ i 1)) 120) (= (src (+ i 1)) 88))))  ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
-                     (go (cap r) line (link (L (? (caup r) 'flo 'num) (cauup r) line) acc)))
+                     k (? (caup r) 'flo (ukind i (cap r) (cauup r)))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
+                     (go (cap r) line (link (L k (cauup r) line) acc)))
                  (|| (dig? c) (&& (= c 46) (&& (< (+ i 1) n) (dig? (src (+ i 1))))))
                   (: r (flolit i)                        ; a digit run, or .digit -- integer or float
                      j2 (? (caup r) (cap r) (skipsuf (cap r)))    ; an integer eats its u/U/l/L suffix
-                     (go j2 line (link (L (? (caup r) 'flo 'num) (cauup r) line) acc)))
+                     k (? (caup r) 'flo (ukind i j2 (cauup r)))
+                     (go j2 line (link (L k (cauup r) line) acc)))
                  (idh? c) (: (idr j) (? (&& (< j n) (idc? (src j))) (idr (+ j 1)) j)
                              j (idr i)
                              t (snip src i j)
