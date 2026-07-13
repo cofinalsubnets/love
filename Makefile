@@ -69,7 +69,7 @@ test_host: $m
 # test/00-init.l assert harness (which exits 1 on the first failure), so the gate
 # checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
 # Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
-hostnif_tests = boot/pty.l boot/net.l boot/phos.l boot/phosui.l boot/baoedit.l boot/baotest.l boot/init.l boot/fs.l boot/sh.l boot/cb.l boot/berth.l boot/manifest.l boot/pier.l boot/font.l boot/haven.l boot/drm.l boot/overlay.l
+hostnif_tests = boot/pty.l boot/net.l boot/phos.l boot/phosui.l boot/baoedit.l boot/baotest.l boot/init.l boot/fs.l boot/sh.l boot/cb.l boot/berth.l boot/manifest.l boot/pier.l boot/font.l boot/haven.l boot/drm.l boot/overlay.l boot/bake.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;

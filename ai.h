@@ -332,6 +332,7 @@ struct ai
 // normally). The host wraps these with file I/O (host/image.c). Buffer-based so a
 // freestanding frontend can load a baked image with no filesystem.
 void *ai_image_save(struct ai*, uintptr_t *outlen);
+void *ai_image_save_(struct ai*, uintptr_t *outlen);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
 
 // the terminal scare face: print ";; a b\n" (show forms) to the err port from

@@ -84,6 +84,38 @@ int image_bake(struct ai *g) {
   return rc;
 }
 
+// (bake path) -- snapshot the LIVE session to an image file, mid-eval: the running
+// stack's objects ride into the blob as wake-unreachable ballast and the load side
+// resets sp/ip, so `ai --wake path prog.l ..` boots a session carrying every global
+// this one had pinned (an app baked warm: the aicc image erases its per-run load).
+// natives cannot serialize -- the post.l wrapper empties the glaze compile cache
+// first (they re-JIT lazily in the woken session); any OTHER live native closure at
+// bake time is on the caller. answers 1 | ().
+static lvm(lvm_bake) {
+ if (!ai_strp(Sp[0])) goto fail;
+ struct ai_str *s = (struct ai_str*) Sp[0];
+ char path[4096];
+ if (s->len >= sizeof path) goto fail;
+ memcpy(path, s->bytes, s->len);                 // copy OUT first: the dump's gen_major moves the string
+ path[s->len] = 0;
+ Pack(g);
+ uintptr_t len = 0;
+ void *buf = ai_image_save_(g, &len);
+ Unpack(g);
+ if (!buf) goto fail;
+ FILE *f = fopen(path, "wb");
+ int rc = !f ? -1 : (fwrite(buf, 1, len, f) == len) ? 0 : -1;
+ if (f) fclose(f);
+ g->alloc(g, buf, 0);                            // a session lives on after a bake: no leak
+ if (rc) goto fail;
+ Sp[0] = putcharm(1); Ip += 1;
+ return Continue();
+ fail:
+ Sp[0] = ai_nil; Ip += 1;
+ return Continue(); }
+static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
+AI_NIF("bake", nif_bake);
+
 struct ai *image_load(char const *path) {
   FILE *f = fopen(path, "rb");
   if (!f) return NULL;

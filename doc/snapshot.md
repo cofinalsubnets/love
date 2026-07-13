@@ -119,6 +119,35 @@ Departures from the original plan above, worth noting:
   self-test fixtures were wrapped local (they'd leaked as globals); auto.l's `memo` cache is cleared
   pre-dump. (Dump-time chain hash-cons was BUILT then BACKED OUT — unsound with the glaze, see follow-up 2.)
 
+## The live bake — (bake path), a nif (landed 2026-07-13)
+
+`(bake "x.image")` snapshots the RUNNING session to an image file, mid-eval — no quiescent
+point required — and answers 1 | (); the session rides on. Wake it with `ai --wake x.image
+prog.l args..`: the woken book carries every global pinned before the bake, so an app loaded
+warm (`ai -l app -e '(bake "app.image")'`) never pays its load again — the aicc image took
+`aicc -c ai.c` from ~3.7 s to ~2.4 s, the whole per-run load tax. Three seams make mid-eval
+dumping honest where the boot bake could assume purity:
+
+- **The stack is ballast, not state.** The running continuation's objects get traced (they're
+  live) and ride into the blob; the load side resets `sp` and re-establishes `ip` regardless,
+  so they're wake-unreachable garbage swept at the woken session's first major. `ai_image_save_`
+  (the unguarded worker) does the dump; `ai_image_save` keeps the empty-stack guard for the
+  boot path, where a non-quiescent dump is a bug.
+- **Live finalizer nodes forge into dead chains.** An open port's close (or a nat's unmap) is a
+  raw three-word `ai_fz` in the heap — no object header, so the blind walks (save's encode and
+  load's decode) can't stride it. The save walk recognizes the `g->fz` chain and overwrites each
+  node's BLOB copy with a `(() . ())` chain of the same width; `fz` lives outside the serialized
+  v0..end root window, so the woken session starts with no finalizables (the dump-time fds meant
+  nothing in the new process anyway).
+- **NULL is an immortal.** A live bio port carries undressed `rbuf`/`wbuf` zero words; a raw
+  zero is even and below the index bound, so it needed its own slot in `image_immortals`.
+
+The `bake` global is a post.l wrapper over the host nif (host/image.c, the AI_NIF glob): it
+empties the glaze compile cache first (a native closure cannot serialize; entries re-JIT lazily
+in the woken session). Any OTHER live native at bake time is on the caller — same contract as
+the boot bake. Smoke: boot/bake.l (test_hostnif) round-trips a pinned marker through bake +
+`--wake` in a child process.
+
 ## Three follow-ups (open, in rough priority)
 
 1. **A per-arch aarch64 glaze emitter — make the aarch64 image GLAZED too** ("even on an MCU, try"). The

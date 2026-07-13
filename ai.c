@@ -5110,8 +5110,11 @@ static intptr_t image_ap_resolve(intptr_t idx) {
    ? (intptr_t) image_extra_aps[idx]
    : def1[idx - countof(image_extra_aps)].x; }
 // the out-of-pool IMMORTALS (a small symbolic table like the lvm_* one, for cross-process):
-// ZeroPoint (()), EmptyString (""), and the three std ports. Serialize -> index, load -> re-resolve.
-static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr };
+// ZeroPoint (()), EmptyString (""), the three std ports -- and NULL, which a MID-EVAL dump
+// (the bake nif) meets in a live bio port's undressed rbuf/wbuf; a raw zero is even and
+// below the index bound, so without its own slot it read as unencodable.
+// Serialize -> index, load -> re-resolve.
+static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0 };
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
  return -1; }
@@ -5186,9 +5189,12 @@ static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta)
 // {header, blob}: the blob is the compacted heap with every pointer-bearing word range-encoded in
 // place (img_encode), so the load re-derives the relocation by re-walking -- NO stored reloc tables.
 // serialize g -> a fresh g->alloc'd {header, blob} buffer; *outlen = its byte length; NULL on failure.
-void *ai_image_save(struct ai *g, uintptr_t *outlen) {
+// the worker dumps WHEREVER it's called: a mid-eval dump (the bake nif) traces the live
+// stack, so the running continuation's objects ride into the blob as wake-unreachable
+// ballast -- harmless, the load side resets sp and re-establishes ip regardless. the
+// guarded entry below keeps the boot path honest (a non-quiescent boot dump is a bug).
+void *ai_image_save_(struct ai *g, uintptr_t *outlen) {
  if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
- if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty AI stack at the dump point
  if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word), hb = bytes, total = sizeof(struct image_hdr) + bytes;
@@ -5198,7 +5204,22 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen) {
  memcpy(blob, base, bytes);
  int fail = 0;
  for (union u *p = (union u*) base; (word*) p < hp; ) {   // walk the LIVE heap (ttag works on it), encode into blob
-  uintptr_t off = (uintptr_t)((word*) p - base), sz = image_objsize(g, p);
+  uintptr_t off = (uintptr_t)((word*) p - base);
+  // a LIVE finalizer node (an open port's close, a nat's unmap) sits RAW in the
+  // heap -- three words, no object header -- so neither this walk nor the load's
+  // blind re-walk can stride it. forge its blob copy into a dead chain (the same
+  // width): wake-unreachable ballast, and the fz head lives OUTSIDE the v0..end
+  // root window, so a woken session starts with no finalizables -- the dump-time
+  // fds meant nothing in the new process anyway. (a boot-path dump has no live
+  // fz: ports are closed and gen_major just consumed the dead ones.)
+  struct ai_fz *z = g->fz;
+  while (z && (union u*) z != p) z = z->next;
+  if (z) {
+   blob[off] = img_encode((intptr_t) lvm_chain, base, hp, hb, &fail);
+   blob[off + 1] = blob[off + 2] = img_encode((intptr_t) ZeroPoint, base, hp, hb, &fail);
+   p = (union u*) ((word*) p + Width(struct ai_fz));
+   continue; }
+  uintptr_t sz = image_objsize(g, p);
   blob[off] = img_encode(((word*) p)[0], base, hp, hb, &fail);                                    // word0: the ap
   if (in_data(p->ap)) switch (ai_typ(p)) {
    case KChain: blob[off + 1] = img_encode(((struct ai_chain*) p)->a, base, hp, hb, &fail);
@@ -5223,6 +5244,9 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen) {
  H.nroot = nr;
  memcpy(buf, &H, sizeof H);
  return *outlen = total, buf; }
+void *ai_image_save(struct ai *g, uintptr_t *outlen) {
+ if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty AI stack at the dump point
+ return ai_image_save_(g, outlen); }
 // reconstruct a fresh g from a SAVE buffer ({header, blob} of byte length len); NULL on any problem.
 struct ai *ai_image_load(void const *buf, uintptr_t len) {
  struct image_hdr H;

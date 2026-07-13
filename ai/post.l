@@ -132,3 +132,14 @@
 ; reversed-accumulator pattern (a cat per step re-copies the whole
 ; accumulation; link + one revcat keeps it linear). cpp/gen ride it.
 (: (revcat l acc) (? (! (two? l)) acc (revcat (cup l) (link (cap l) acc))))
+
+; bake -- snapshot the LIVE session to an image file: (bake "x.image") -> 1 | ().
+; wake it with `ai --wake x.image prog.l args..`: the woken session carries every
+; global pinned before the bake (an app loaded warm -- its per-run load vanishes).
+; a native (glazed) closure cannot serialize, so the glaze compile cache empties
+; first (its entries re-JIT lazily in the woken session); the host nif (a rebind
+; here: b0) dumps mid-eval, the running stack riding along as harmless ballast.
+(: bake (: b0 bake
+           (\ p (: gl (peep book 'glaze 0)
+                   _ (? (lit? gl) (: c (gl 'cache) (map (\ k (pull c k 0)) (keys c))) 0)
+                   (b0 p)))))
