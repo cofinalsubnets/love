@@ -2113,6 +2113,13 @@
        br (bind <>>f args () ())
        _ (pin g 'inlret ilb9)
        _ (pin g 'inlrt rt)
+       ; cgitems rides the g tablet, not a direct call: the direct edge closes the
+       ; cgexpr->cginl->cgitems->cgstmt->cgexpr cycle and the loader's analysis
+       ; re-weaves the scope -- 7 `epi` reads compile as book reads before the pin
+       ; (`;; missing epi` per load; output stays right, the reads soft-fail to
+       ; runtime lookups). deterministic, not a layout artifact -- retested under
+       ; content-hashed noms, same 7 -- so the indirection stays until the core
+       ; analysis owns cycles in big body-less letrecs.
        ibd (? (bad? br) 'bad ((g 'cgitems) g <br (caup (caup (cuup f))) ()))
        _ (pin g 'inlret ())
        _ (pin g 'inlining ())
