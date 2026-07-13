@@ -94,10 +94,18 @@
 ; IDENTITY layer (demo G, same day): a version IS its patch set, hashed
 ; canonically -- per-patch content hashes folded through the SAME cins set, so
 ; the identity quotients by exactly what the semantics proved dead (order, M4;
-; multiplicity, M2) and nothing more. the laws for ALL layers live in
-; test/patch.l, the source of truth. still deliberately OMITTED: the TREE lift
-; (a path per hunk + clash SEGMENTS in the positional model -- where the
-; unifier earns its keep). that is the next rung.
+; multiplicity, M2) and nothing more. and the TREE lift (demo H, 2026-07-13):
+; a hunk gets a POSTCODE -- the path to the sequence it splices -- and the
+; shift algebra climbs the levels: a deep patch never changes an ANCESTOR's
+; length, so only same-sequence patches shift INDICES, while a shallow splice
+; moves whole SUBTREES and re-aims a deeper patch's path COMPONENT at the
+; crossing (four commute lanes: same / q-deeper / p-deeper / apart --
+; test/patch.l's fifth form). the laws for ALL layers live in test/patch.l,
+; the source of truth. still deliberately OMITTED: clash SEGMENTS (the
+; conflictor cell lifted to sequences -- pijul's graggle corner), and the
+; content-rewrite commute (a shallow patch that SWALLOWS a deep edit's subtree
+; refuses today; commuting it means rewriting its context -- where
+; wev/boxfix/kanren earn their keep).
 
 (:
  ; --- the patch: a groupoid element. (chg slot old new) carries its context
@@ -226,4 +234,24 @@
       _ (line "     ident (q p)   = " (ident (link q (link p 0))))
       _ (line "     ident (p p q) = " (ident (link p (link p (link q 0)))))
       (line "     ident (q)     = " (ident (link q 0))))
+
+ ; ---- demo H: the TREE lift -- a hunk gets a postcode, and a root insert
+ ;      re-aims a deep edit's PATH on the way past (3 -> 2). the four-lane
+ ;      commute lives in test/patch.l; here the two orders shown agreeing ----
+ _ (: (htk s n) (? (< n 1) () (link (cap s) (htk (cup s) (- n 1))))
+      (hdr s n) (? (< n 1) s (hdr (cup s) (- n 1)))
+      (hct a b) (? (atom? a) b (link (cap a) (hct (cup a) b)))
+      (spl s i c news) (hct (htk s i) (hct news (hdr s (+ i c))))
+      (nth s j) (cap (hdr s j))
+      (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
+      (tlay t path s2)
+        (? (atom? path) s2
+           (spl t (cap path) 1 (link (tlay (nth t (cap path)) (cup path) s2) ())))
+      (hap t path i o n) (tlay t path (spl (tnav t path) i (tally o) n))
+      t0 ((\ x x) '((: a 1) (: b 2) (main (f x))))       ; warmed: doc/bug-const-letrec-hang.md
+      _ (puts ";; H. the tree lift -- a root insert re-aims a deep edit's path 3 -> 2\n")
+      _ (line "     order insert;edit-at-(3) -> "
+              (hap (hap t0 () 0 () '((use m))) '(3) 1 '((f x)) '((g y))))
+      (line "     order edit-at-(2);insert -> "
+            (hap (hap t0 '(2) 1 '((f x)) '((g y))) () 0 () '((use m)))))
  0)

@@ -53,9 +53,17 @@
    semantics proved dead and nothing more:
      (H1) fid_swap  order-free   (the aponl_swap / pull_fold_swap face)
      (H2) fid_dup   multiplicity-free  (the pull_idem face)
-   Still deliberately out (the next rung): the TREE lift -- a path per hunk
-   plus clash SEGMENTS in the positional model, where the rewrite/unifier
-   machinery (wev, boxfix, kanren) earns its keep.
+   The FIFTH slice (the tree lift, 2026-07-13): a hunk gets a PATH, and the
+   shift algebra climbs the levels -- four commute lanes by path relation,
+   with a genuine PATH re-aim at the crossing:
+     (L1) tcommute_involutive  (the algebra half; the tree APPLY laws are
+          asserted in the .l -- their crossing-level core IS splice_after/
+          before_comm with singleton hunks -- and join the uu-term rung)
+   Still deliberately out (the next rungs): clash SEGMENTS in the positional
+   model (pijul's graggle corner), and the content-rewrite commute -- a
+   shallow patch that swallows a deep edit's subtree refuses today; commuting
+   it means rewriting its context, where the rewrite/unifier machinery (wev,
+   boxfix, kanren) earns its keep.
 
    Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
    classical / funext escape hatch. Trees are functions, so equality of trees is
@@ -815,6 +823,227 @@ Proof.
   f_equal. apply cins_absorb.
 Qed.
 
+(* ============================================================ *)
+(* the TREE-LIFT slice: a hunk gets a PATH -- the postcode      *)
+(* ============================================================ *)
+
+(* Mirror of test/patch.l's fifth form, the algebra half. A patch is a hunk
+   plus a PATH to the sequence it splices; the load-bearing fact is that a
+   deep patch never changes an ancestor's length, so only same-sequence
+   patches shift INDICES while a shallow splice re-aims a deeper patch's path
+   COMPONENT at the crossing. tcommute has four lanes by path relation. The
+   elements stay abstract (Section variable): L1 is pure path/index algebra.
+
+   The tree APPLY laws (L2/L3 at tree grain) are asserted in the .l; their
+   crossing-level semantic core is ALREADY the proven splice_after_comm /
+   splice_before_comm with singleton hunks (editing inside element j IS
+   splice s j 1 [x]), and the remaining rose-tree plumbing joins the uu-term
+   encoding rung rather than growing this scaffold. *)
+
+Section TreeLift.
+Variable A : Type.
+
+Record tpatch := mkt
+  { tpath : list nat ; ti : nat ; tho : list A ; thn : list A }.
+
+Fixpoint setidx (p : list nat) (d v : nat) : list nat :=
+  match p, d with
+  | _ :: rest, 0 => v :: rest
+  | h :: rest, S d' => h :: setidx rest d' v
+  | [], _ => []
+  end.
+
+(* how two paths sit: same sequence / q deeper (crossing at child j, depth d)
+   / p deeper / diverged. d accumulates the shared-prefix length, so it is the
+   ABSOLUTE index of the crossing component -- what setidx re-aims. *)
+Inductive prel := Same | InQ (j d : nat) | InP (j d : nat) | Apart.
+
+Fixpoint rel (P Q : list nat) (d : nat) : prel :=
+  match P, Q with
+  | [], [] => Same
+  | [], j :: _ => InQ j d
+  | j :: _, [] => InP j d
+  | a :: P', b :: Q' => if a =? b then rel P' Q' (S d) else Apart
+  end.
+
+Definition tcommute (p q : tpatch) : option (tpatch * tpatch) :=
+  let ip := ti p in let o1 := length (tho p) in let n1 := length (thn p) in
+  let iq := ti q in let o2 := length (tho q) in let n2 := length (thn q) in
+  match rel (tpath p) (tpath q) 0 with
+  | Same =>
+      if ip + n1 <? iq
+      then Some (mkt (tpath q) (iq + o1 - n1) (tho q) (thn q), p)
+      else if iq + o2 <? ip
+      then Some (q, mkt (tpath p) (ip + n2 - o2) (tho p) (thn p))
+      else None
+  | InQ j d =>
+      if j <? ip then Some (q, p)
+      else if ip + n1 <=? j
+      then Some (mkt (setidx (tpath q) d (j + o1 - n1)) iq (tho q) (thn q), p)
+      else None
+  | InP j d =>
+      if j <? iq then Some (q, p)
+      else if iq + o2 <=? j
+      then Some (q, mkt (setidx (tpath p) d (j + n2 - o2)) ip (tho p) (thn p))
+      else None
+  | Apart => Some (q, p)
+  end.
+
+(* --- the rel/setidx lemma kit --- *)
+
+Lemma rel_same_eq : forall P Q d, rel P Q d = Same -> P = Q.
+Proof.
+  induction P as [|a P IH]; destruct Q as [|b Q]; simpl; intros d H;
+    try discriminate; auto.
+  destruct (Nat.eqb_spec a b); [subst; f_equal; eauto | discriminate].
+Qed.
+
+Lemma rel_refl : forall P d, rel P P d = Same.
+Proof.
+  induction P; simpl; intros; [reflexivity|]. now rewrite Nat.eqb_refl.
+Qed.
+
+Lemma rel_apart_sym : forall P Q d, rel P Q d = Apart -> rel Q P d = Apart.
+Proof.
+  induction P as [|a P IH]; destruct Q as [|b Q]; simpl; intros d H;
+    try discriminate.
+  destruct (Nat.eqb_spec a b); destruct (Nat.eqb_spec b a);
+    subst; try congruence; eauto.
+Qed.
+
+Lemma rel_inq_flip : forall P Q d0 j d,
+  rel P Q d0 = InQ j d -> rel Q P d0 = InP j d.
+Proof.
+  induction P as [|a P IH]; destruct Q as [|b Q]; simpl; intros d0 j d H;
+    try discriminate.
+  - now injection H as <- <-.
+  - destruct (Nat.eqb_spec a b); destruct (Nat.eqb_spec b a);
+      subst; try congruence; eauto.
+Qed.
+
+Lemma rel_inp_flip : forall P Q d0 j d,
+  rel P Q d0 = InP j d -> rel Q P d0 = InQ j d.
+Proof.
+  induction P as [|a P IH]; destruct Q as [|b Q]; simpl; intros d0 j d H;
+    try discriminate.
+  - now injection H as <- <-.
+  - destruct (Nat.eqb_spec a b); destruct (Nat.eqb_spec b a);
+      subst; try congruence; eauto.
+Qed.
+
+Lemma rel_inq_ge : forall P Q d0 j d, rel P Q d0 = InQ j d -> d0 <= d.
+Proof.
+  induction P as [|a P IH]; destruct Q as [|b Q]; simpl; intros d0 j d H;
+    try discriminate.
+  - injection H as <- <-. lia.
+  - destruct (Nat.eqb_spec a b); [|discriminate].
+    specialize (IH _ _ _ _ H). lia.
+Qed.
+
+(* re-aiming the crossing component keeps the relation, with the new j... *)
+Lemma rel_inq_setidx : forall P Q d0 j d v,
+  rel P Q d0 = InQ j d -> rel (setidx Q (d - d0) v) P d0 = InP v d.
+Proof.
+  induction P as [|a P IH]; destruct Q as [|b Q]; simpl; intros d0 j d v H;
+    try discriminate.
+  - injection H as <- <-. rewrite Nat.sub_diag. reflexivity.
+  - destruct (Nat.eqb_spec a b); [subst|discriminate].
+    pose proof (rel_inq_ge _ _ _ _ _ H).
+    replace (d - d0) with (S (d - S d0)) by lia. simpl.
+    rewrite Nat.eqb_refl. eauto.
+Qed.
+
+(* ...and putting the ORIGINAL component back is the identity. *)
+Lemma setidx_self : forall P Q d0 j d,
+  rel P Q d0 = InQ j d -> setidx Q (d - d0) j = Q.
+Proof.
+  induction P as [|a P IH]; destruct Q as [|b Q]; simpl; intros d0 j d H;
+    try discriminate.
+  - injection H as <- <-. rewrite Nat.sub_diag. reflexivity.
+  - destruct (Nat.eqb_spec a b); [subst|discriminate].
+    pose proof (rel_inq_ge _ _ _ _ _ H).
+    replace (d - d0) with (S (d - S d0)) by lia. simpl.
+    f_equal. eauto.
+Qed.
+
+Lemma setidx_setidx : forall Q d v w,
+  setidx (setidx Q d v) d w = setidx Q d w.
+Proof.
+  induction Q as [|b Q IH]; destruct d; simpl; intros; try reflexivity.
+  now rewrite IH.
+Qed.
+
+(* (L1) tcommute is involutive -- the four lanes swap home, including the
+   PATH re-aim (the crossing component slides back exactly). *)
+Theorem tcommute_involutive : forall p q q' p',
+  tcommute p q = Some (q', p') -> tcommute q' p' = Some (p, q).
+Proof.
+  intros [P ip o1 n1] [Q iq o2 n2] q' p' H.
+  unfold tcommute in *; simpl in *.
+  destruct (rel P Q 0) eqn:R.
+  - (* Same: rung 2's arithmetic, paths riding *)
+    pose proof (rel_same_eq _ _ _ R) as ->.
+    destruct (ip + length n1 <? iq) eqn:E1.
+    + injection H as <- <-; simpl. apply Nat.ltb_lt in E1.
+      rewrite rel_refl.
+      destruct (iq + length o1 - length n1 + length n2 <? ip) eqn:F1.
+      * apply Nat.ltb_lt in F1. lia.
+      * destruct (ip + length o1 <? iq + length o1 - length n1) eqn:F2.
+        -- replace (iq + length o1 - length n1 + length n1 - length o1)
+             with iq by lia. reflexivity.
+        -- apply Nat.ltb_ge in F2. lia.
+    + destruct (iq + length o2 <? ip) eqn:E2; [|discriminate].
+      injection H as <- <-; simpl. apply Nat.ltb_lt in E2.
+      rewrite rel_refl.
+      destruct (iq + length n2 <? ip + length n2 - length o2) eqn:F1.
+      * replace (ip + length n2 - length o2 + length o2 - length n2)
+          with ip by lia. reflexivity.
+      * apply Nat.ltb_ge in F1. lia.
+  - (* InQ: q is deeper; either untouched or its path component slid back *)
+    destruct (j <? ip) eqn:E1.
+    + injection H as <- <-; simpl.
+      rewrite (rel_inq_flip _ _ _ _ _ R), E1. reflexivity.
+    + destruct (ip + length n1 <=? j) eqn:E2; [|discriminate].
+      injection H as <- <-; simpl.
+      apply Nat.ltb_ge in E1. apply Nat.leb_le in E2.
+      pose proof (rel_inq_setidx _ _ _ _ _ (j + length o1 - length n1) R) as RS.
+      pose proof (setidx_self _ _ _ _ _ R) as SS.
+      rewrite Nat.sub_0_r in RS, SS. rewrite RS.
+      destruct (j + length o1 - length n1 <? ip) eqn:F1.
+      * apply Nat.ltb_lt in F1. lia.
+      * destruct (ip + length o1 <=? j + length o1 - length n1) eqn:F2.
+        -- rewrite setidx_setidx.
+           replace (j + length o1 - length n1 + length n1 - length o1)
+             with j by lia.
+           rewrite SS. reflexivity.
+        -- apply Nat.leb_gt in F2. lia.
+  - (* InP: p is deeper; mirror *)
+    destruct (j <? iq) eqn:E1.
+    + injection H as <- <-; simpl.
+      rewrite (rel_inp_flip _ _ _ _ _ R), E1. reflexivity.
+    + destruct (iq + length o2 <=? j) eqn:E2; [|discriminate].
+      injection H as <- <-; simpl.
+      apply Nat.ltb_ge in E1. apply Nat.leb_le in E2.
+      pose proof (rel_inp_flip _ _ _ _ _ R) as RQ.
+      pose proof (rel_inq_setidx _ _ _ _ _ (j + length n2 - length o2) RQ) as RS.
+      pose proof (setidx_self _ _ _ _ _ RQ) as SS.
+      rewrite Nat.sub_0_r in RS, SS.
+      apply rel_inp_flip in RS. rewrite RS.
+      destruct (j + length n2 - length o2 <? iq) eqn:F1.
+      * apply Nat.ltb_lt in F1. lia.
+      * destruct (iq + length n2 <=? j + length n2 - length o2) eqn:F2.
+        -- rewrite setidx_setidx.
+           replace (j + length n2 - length o2 + length o2 - length n2)
+             with j by lia.
+           rewrite SS. reflexivity.
+        -- apply Nat.leb_gt in F2. lia.
+  - (* Apart: disjoint subtrees ride untouched *)
+    injection H as <- <-; simpl.
+    rewrite (rel_apart_sym _ _ _ R). reflexivity.
+Qed.
+
+End TreeLift.
+
 (* the axiom audit: every law closed under the global context -- no Axiom, no
    Admitted, no classical/funext escape hatch, in EITHER slice. *)
 Print Assumptions commute_involutive.  (* L1, named slots *)
@@ -832,3 +1061,4 @@ Print Assumptions pull_fold_swap.      (* M4, clash -- pull order is dead *)
 Print Assumptions resolve_roundtrip.   (* M5, clash -- resolution unpulls *)
 Print Assumptions fid_swap.            (* H1, identity -- order-free *)
 Print Assumptions fid_dup.             (* H2, identity -- multiplicity-free *)
+Print Assumptions tcommute_involutive. (* L1, tree -- four lanes, path re-aim *)

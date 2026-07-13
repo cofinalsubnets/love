@@ -3,9 +3,10 @@
 ; the drift anchor for the whole patch stack: doc/proto/patch.l is the design (the
 ; argument that a distribution / namespace / repo-state are ONE algebra of
 ; selectable sets, with COMMUTE the primitive underneath); proof/rocq/patch.v
-; machine-checks all four slices axiom-free (named slots, the positional hunks,
-; the conflictor merge, and the frontier identity below, under `make
-; test_proof`). the laws asserted HERE are what those
+; machine-checks the slices axiom-free under `make test_proof` (named slots,
+; positional hunks, the conflictor merge, and the frontier identity in full;
+; the tree lift's commute ALGEBRA -- L1 with the path re-aim -- with its apply
+; laws asserted here and queued for the uu-term rung). the laws asserted HERE are what those
 ; are gated to agree with -- the .v today, and the next rung (L1..L3b as uu proof
 ; TERMS emitted to rocq + lean by tools/uu2coq.l + tools/uu2lean.l) tomorrow; a
 ; hand .v drifts (the wm2uu lesson), so this file is the truth it regenerates off.
@@ -336,4 +337,168 @@
     (! (= (ident (link p ())) (ident (link q ()))))
     (! (= (ident (link p (link q ()))) (ident (link p (link w ())))))
     (! (= (ident (link p ())) (ident (link (chg 'x 2 1) ())))))
+ 0)
+
+; --- the TREE LIFT rung: a hunk gets a PATH, and the shift climbs the levels ---
+;
+; the form-tree grain made whole: a file is a TREE of forms (nested sequences),
+; a patch a hunk with a POSTCODE -- the path to the sequence it splices. the
+; load-bearing fact: a deep patch never changes the length of any ANCESTOR
+; sequence, so only same-sequence patches shift each other's INDICES -- but a
+; shallow splice moves whole SUBTREES, so it re-aims a deeper patch's path
+; COMPONENT at the crossing level. commute gets four lanes by path relation:
+;   same    the two hunks share a sequence -- rung 2 verbatim, paths ride
+;   inq     q is deeper, crossing p's sequence at child j: j past p's news
+;           slides BACK by p's delta (a genuine PATH re-aim); j inside p's
+;           news is a dependency (q edits content p just wrote)
+;   inp     p is deeper, crossing q's sequence at child j: j past q's olds
+;           slides FORWARD by q's delta; j inside q's olds is a dependency --
+;           q SWALLOWS p's subtree, and commuting would need to rewrite q's
+;           context (undo p inside it): THE DOOR THE UNIFIER OPENS LATER
+;   apart   the paths diverge: disjoint subtrees, both ride untouched
+; strictness at the crossing differs from rung 2's seam ON PURPOSE: a path
+; component >= the splice's far edge names a SURVIVOR (an element that moved),
+; not a seam position -- there is no insert-order ambiguity to refuse, so >=
+; is sound where the seam needed >.
+
+(:
+ ; --- the sequence kit (rung 2, local) ---
+ (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
+ (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (seg s i n) (htake (hdrop s i) n)
+ (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
+ (nth s j) (cap (hdrop s j))
+ (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+              (|| (atom? a) (atom? b)) 0
+              (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
+
+ ; --- the tree kit: navigate to a path's sequence, lay a new one back ---
+ (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
+ (tlay t path s2)
+   (? (atom? path) s2
+      (splice t (cap path) 1
+              (link (tlay (nth t (cap path)) (cup path) s2) ())))
+
+ ; --- patches: (tp path i olds news) -- a hunk with a postcode ---
+ (tp path i o n) (link 'tp (link path (link i (link o (link n ())))))
+ (pp p) (cap (cup p))            (pi p) (cap (cup (cup p)))
+ (po p) (cap (cup (cup (cup p)))) (pn p) (cap (cup (cup (cup (cup p)))))
+ (apon t p) (tlay t (pp p) (splice (tnav t (pp p)) (pi p) (tally (po p)) (pn p)))
+ (applall t ps) (foldl apon t ps)
+ (invert p) (tp (pp p) (pi p) (pn p) (po p))
+ (pathok t path) (? (atom? path) 1
+                    (: j (cap path)
+                       (&& (< j (tally t))
+                           (: e (nth t j)
+                              (&& (! (atom? e)) (pathok e (cup path)))))))
+ (valid t p) (&& (pathok t (pp p))
+                 (: s (tnav t (pp p))
+                    (&& (<= (+ (pi p) (tally (po p))) (tally s))
+                        (heq (seg s (pi p) (tally (po p))) (po p)))))
+
+ ; --- path surgery + the path relation ---
+ (setidx path d v) (? (= d 0) (link v (cup path))
+                      (link (cap path) (setidx (cup path) (- d 1) v)))
+ (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
+                (atom? P) (link 'inq (link (cap Q) (link d ())))
+                (atom? Q) (link 'inp (link (cap P) (link d ())))
+                (id? (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
+                '(apart))
+
+ ; --- commute: four lanes, two kinds of re-aim (index at 'same, PATH at the
+ ;     crossings), () a dependency ---
+ (commute p q)
+   (: P (pp p) ip (pi p) o1 (tally (po p)) n1 (tally (pn p)) dp (- n1 o1)
+      Q (pp q) iq (pi q) o2 (tally (po q)) n2 (tally (pn q)) dq (- n2 o2)
+      r (rel P Q 0) tag (cap r)
+      (? (id? tag 'same)
+           (? (> iq (+ ip n1)) (link (tp Q (- (+ iq o1) n1) (po q) (pn q)) (link p ()))
+              (< (+ iq o2) ip) (link q (link (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
+              ())
+         (id? tag 'inq)
+           (: j (cap (cup r)) d (cap (cup (cup r)))
+              (? (< j ip) (link q (link p ()))
+                 (>= j (+ ip n1))
+                   (link (tp (setidx Q d (- j dp)) iq (po q) (pn q)) (link p ()))
+                 ()))
+         (id? tag 'inp)
+           (: j (cap (cup r)) d (cap (cup (cup r)))
+              (? (< j iq) (link q (link p ()))
+                 (>= j (+ iq o2))
+                   (link q (link (tp (setidx P d (+ j dq)) ip (po p) (pn p)) ()))
+                 ()))
+         (link q (link p ()))))
+
+ ; --- witnesses: a little program -- three top forms, one nested. every
+ ;     witness rides through `warm` (a live identity): a CONSTANT list binding
+ ;     fed straight to a recursive local trips a compiler hang -- the shape,
+ ;     the probes, and the sweep-off note live in doc/bug-const-letrec-hang.md ---
+ (warm x) ((\ y y) x)
+ t0 (warm '((: a 1) (: b 2) (main (f x))))
+ pr (warm (tp () 0 () '((use m))))                         ; root insert at 0 (dp +1)
+ qd (warm (tp '(3) 1 '((f x)) '((g y))))                   ; deep edit, aimed POST-pr
+
+ ; (L1) commute is INVOLUTIVE, and the re-aim is a PATH re-aim: qd's postcode
+ ;      slides 3 -> 2 (its pre-pr seat), and swapping back is home.
+ _ (: c (commute pr qd) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq (pp qd) '(3)) (heq (pp cq) '(2))               ; the path moved
+       (heq cp pr)
+       (: c2 (commute cq cp)
+          (&& (heq (cap c2) pr) (heq (cap (cup c2)) qd)))))
+
+ ; dependencies: a deep edit inside freshly-written news, and the swallow
+ ;      (q replaces the subtree p edited -- the unifier's door, shut for now)
+ _ (assert
+    (! (commute pr (tp '(0) 0 '(use) '(want))))            ; inside pr's news
+    (! (commute (tp '(1) 2 '(1) '(7)) (tp () 1 '((: a 7)) ()))))  ; swallowed
+
+ ; (L2) inverse round-trips at depth
+ _ (: pd (warm (tp '(2) 1 '((f x)) '((g y) (h z))))
+      (assert
+       (valid t0 pd)
+       (heq (apon (apon t0 pd) (invert pd)) t0)
+       (valid t0 (tp '(2 1) 0 () '(u)))                    ; (f x) IS a sequence: descend
+       (! (valid t0 (tp '(9) 0 () '(u))))                  ; no such child
+       (! (valid t0 (tp '(2 0) 0 () '(u))))))              ; main is a LEAF: no descent
+
+ ; (L3a) commute is SOUND across levels: root insert then deep edit == re-aimed
+ ;       deep edit then root insert -- and the un-shifted qd has no home on t0.
+ _ (: c (commute pr qd) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq (apon (apon t0 pr) qd) (apon (apon t0 cq) cp))
+       (heq (apon (apon t0 pr) qd)
+            '((use m) (: a 1) (: b 2) (main (g y))))
+       (! (valid t0 qd))))
+
+ ; the INP lane: a deep edit rides a root shrink the other way (path 2 -> 1)
+ _ (: pd (warm (tp '(2) 1 '((f x)) '((g y)))) qr (warm (tp () 0 '((: a 1)) ()))
+      c (commute pd qr) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq cq qr) (heq (pp cp) '(1))                      ; p slides down
+       (heq (apon (apon t0 pd) qr) (apon (apon t0 cq) cp))
+       (heq (apon (apon t0 pd) qr) '((: b 2) (main (g y))))))
+
+ ; APART: sibling subtrees ride untouched, both orders agree
+ _ (: pa (warm (tp '(0) 2 '(1) '(9))) qa (warm (tp '(2) 1 '((f x)) '((g y))))
+      c (commute pa qa)
+      (assert
+       (heq (cap c) qa) (heq (cap (cup c)) pa)
+       (heq (apon (apon t0 pa) qa) (apon (apon t0 qa) pa))))
+
+ ; SAME sequence at depth: rung 2's shift verbatim, riding a postcode
+ _ (: ts (warm '((a b c d e)))
+      p1 (warm (tp '(0) 1 '(b) '(x y))) q1 (warm (tp '(0) 4 '(d) '(z)))
+      c (commute p1 q1) cq (cap c)
+      (assert
+       (= 3 (pi cq)) (heq (pp cq) '(0))                    ; index shifts, path rides
+       (heq (apon (apon ts p1) q1) (apon (apon ts cq) (cap (cup c))))
+       (heq (apon (apon ts p1) q1) '((a x y c z e)))))
+
+ ; (L3b) a FRONTIER is stable under the adjacent independent swap, mixed grains
+ _ (: c (commute pr qd)
+      f1 (applall t0 (link pr (link qd ())))
+      f2 (applall t0 c)
+      (assert (heq f1 f2)))
  0)
