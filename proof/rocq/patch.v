@@ -67,10 +67,19 @@
    j, a becomes b"; the rose-tree unit walk stays in the .l):
      (L1) swal_involutive  (through the groupoid inverse -- exactly the .l's
           mirror lane wiring, so involution is the algebra, not a re-check)
-   Still deliberately out (the next rungs): clash SEGMENTS in the positional
-   model (pijul's graggle corner), and metavariable patterns in the rewrite
-   lane -- matching ground survivors is one-sided unification; when patches
-   carry variables the full kanren unifier takes the seat.
+   The SEVENTH slice (the clash-segments rung, same day): the conflictor
+   cell lifted to sequences -- pijul's graggle corner. Overlapping / touching
+   / same-seam rivals collapse the union hull of their base spans to ONE
+   clash element, the BUBBLE; rivals are segments, cins-canonical by content
+   hash. Proven at hash grain:
+     (M1) scell_comm   the bubble forgets arrival order (min/max + cins_comm)
+     (--)  bubble_len  one seat, rival sizes nowhere in the merged length --
+           downstream seats determinate before anyone resolves
+   Still deliberately out (the next rungs): cell WIDENING (a rival extending
+   past a landed bubble re-derives over the wider hull), and metavariable
+   patterns in the rewrite lane -- matching ground survivors is one-sided
+   unification; when patches carry variables the full kanren unifier takes
+   the seat.
 
    Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
    classical / funext escape hatch. Trees are functions, so equality of trees is
@@ -1236,6 +1245,70 @@ Qed.
 
 End Swallow.
 
+(* ============================================================ *)
+(* the CLASH-SEGMENTS slice: the bubble at hash grain           *)
+(* ============================================================ *)
+
+(* Mirror of test/patch.l's seventh form, the cell algebra: two co-valid
+   hunks whose spans overlap (or touch, or share a seam) collapse the UNION
+   HULL of their base spans to one clash cell -- the hull segment plus each
+   rival rendered as the hull with its hunk laid inside, the rival set
+   cins-canonical by content hash (the .l's hval; the identity slice already
+   rides the same move). Symmetry is min/max algebra plus cins_comm; the
+   join/absorb faces of pull's lane ARE cins_comm/cins_absorb, audited above.
+   The state-level M laws stay asserted in the .l (a cell is a first-class
+   ELEMENT there; here sequences are bare nat lists), queued for the uu rung. *)
+
+Section ClashSeg.
+Variable hash : list nat -> nat.
+
+Definition sseg (s : list nat) (i n : nat) : list nat := firstn n (skipn i s).
+Definition ulo (p q : hunk) : nat := Nat.min (hpos p) (hpos q).
+Definition uhi (p q : hunk) : nat :=
+  Nat.max (hpos p + length (hold p)) (hpos q + length (hold q)).
+
+(* render a rival: the hull with the hunk laid inside *)
+Definition rend (s0 : list nat) (lo hi : nat) (r : hunk) : list nat :=
+  splice (sseg s0 lo (hi - lo)) (hpos r - lo) (length (hold r)) (hnew r).
+
+(* the cell content: hull base + the rival set *)
+Definition scell (s0 : list nat) (p q : hunk) : list nat * list nat :=
+  (sseg s0 (ulo p q) (uhi p q - ulo p q),
+   cins (hash (rend s0 (ulo p q) (uhi p q) p))
+        (cins (hash (rend s0 (ulo p q) (uhi p q) q)) [])).
+
+(* (M1 at cell grain) creation is SYMMETRIC: the hull forgets which span
+   came first, the rival set forgets which rival did. *)
+Theorem scell_comm : forall s0 p q, scell s0 p q = scell s0 q p.
+Proof.
+  intros s0 p q. unfold scell, ulo, uhi.
+  rewrite (Nat.min_comm (hpos p) (hpos q)).
+  rewrite (Nat.max_comm (hpos p + length (hold p))
+                        (hpos q + length (hold q))).
+  f_equal. apply cins_comm.
+Qed.
+
+(* the BUBBLE law: the conflicted hull contracts to ONE seat, so the merged
+   length reads off the hull alone -- no rival size anywhere in the formula:
+   every downstream seat is determinate before anyone resolves. *)
+Theorem bubble_len : forall s0 p q x,
+  uhi p q <= length s0 ->
+  length (splice s0 (ulo p q) (uhi p q - ulo p q) [x])
+    = S (length s0 - (uhi p q - ulo p q)).
+Proof.
+  intros s0 p q x H.
+  assert (LOHI : ulo p q <= uhi p q).
+  { unfold ulo, uhi.
+    pose proof (Nat.le_min_l (hpos p) (hpos q)).
+    pose proof (Nat.le_max_l (hpos p + length (hold p))
+                             (hpos q + length (hold q))).
+    lia. }
+  unfold splice.
+  rewrite !app_length, firstn_length, skipn_length. simpl. lia.
+Qed.
+
+End ClashSeg.
+
 (* the axiom audit: every law closed under the global context -- no Axiom, no
    Admitted, no classical/funext escape hatch, in EITHER slice. *)
 Print Assumptions commute_involutive.  (* L1, named slots *)
@@ -1255,4 +1328,8 @@ Print Assumptions fid_swap.            (* H1, identity -- order-free *)
 Print Assumptions fid_dup.             (* H2, identity -- multiplicity-free *)
 Print Assumptions swal_involutive.     (* L1, content-rewrite -- the swallow
                                           swaps home through the inverse *)
+Print Assumptions scell_comm.          (* M1, clash segments -- the bubble
+                                          forgets arrival order *)
+Print Assumptions bubble_len.          (* the bubble law -- one seat, rival
+                                          sizes nowhere in the length *)
 Print Assumptions tcommute_involutive. (* L1, tree -- four lanes, path re-aim *)

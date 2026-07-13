@@ -5,9 +5,10 @@
 ; selectable sets, with COMMUTE the primitive underneath); proof/rocq/patch.v
 ; machine-checks the slices axiom-free under `make test_proof` (named slots,
 ; positional hunks, the conflictor merge, and the frontier identity in full;
-; the tree lift's commute ALGEBRA -- L1 with the path re-aim -- and the
-; content-rewrite lane's L1 at element grain, with the rose-tree apply laws
-; asserted here and queued for the uu-term rung). the laws asserted HERE are what those
+; the tree lift's commute ALGEBRA -- L1 with the path re-aim -- the
+; content-rewrite lane's L1 at element grain, and the clash-segments bubble
+; at hash grain (creation symmetric, the length law), with the rose-tree
+; apply laws asserted here and queued for the uu-term rung). the laws asserted HERE are what those
 ; are gated to agree with -- the .v today, and the next rung (L1..L3b as uu proof
 ; TERMS emitted to rocq + lean by tools/uu2coq.l + tools/uu2lean.l) tomorrow; a
 ; hand .v drifts (the wm2uu lesson), so this file is the truth it regenerates off.
@@ -207,8 +208,8 @@
 ; trusts the co-valid discipline (every pulled patch reads the shared base or a
 ; rival of it -- what two branches of one repo guarantee); `valid` stays the gate
 ; for a lone patch. rivals here are charms, so < is the canon; a general value
-; order is the tree lift's business. named-slot model (the clean case first,
-; as ever); clash SEGMENTS in the hunk model ride a later rung.
+; order arrives with the clash-segments rung (form seven: content-hash canon).
+; named-slot model (the clean case first, as ever); the segments ride there too.
 
 (:
  ; --- the model: rung 1's trees and patches, plus the clash cell ---
@@ -715,4 +716,176 @@
       f1 (applall t0 (link w (link pd (link qm ()))))
       f2 (applall t0 (link w c))
       (assert (heq f1 f2) (heq f1 '((: a 7) (main (f x)) (: b 9)))))
+ 0)
+
+; --- the CLASH-SEGMENTS rung: the conflictor cell lifted to sequences ---
+;
+; rung 3 recorded rivals at named slots; here they rival over SPANS -- pijul's
+; graggle corner, taken through our habit. the load-bearing fact this rung
+; must respect: state alone cannot DELIMIT a first rival's footprint (a landed
+; hunk left news of unknown length -- the EXTENT problem, the reason pijul
+; carries provenance). so the machinery splits honestly in two:
+;   merge2   the pushout of two co-valid hunks off the SHARED BASE -- both
+;            patches in hand, so every footprint is known. independent hunks
+;            ride commute (the darcs ride: invert one, commute the other
+;            past it); a refusal -- overlap, touch, or the classic two
+;            inserts on one seam -- collapses the UNION HULL of the two base
+;            spans to ONE element, the BUBBLE: a clash cell holding the hull
+;            segment and each rival as the hull with its hunk laid inside.
+;   pull     state-only, for what state CAN answer: the plain lane (rung 2
+;            verbatim), the settled lane (the news already in, gated to
+;            non-empty news -- an empty segment is vacuously "present"), the
+;            JOIN lane (a landed cell absorbs a same-span rival), and the
+;            breach backstop (no-op rather than invent a story).
+; the bubble FIXES the length: rivals of any sizes occupy one seat, so every
+; downstream seat is determinate before anyone resolves -- the graggle's
+; bubble, collapsed to one first-class element. rivals are SEGMENTS now,
+; ordered by content hash (hval, the canon rung 3 deferred to "a general
+; value order"; collision is engineering, as with the frontier identity).
+; a resolution is an ordinary hunk whose olds is the one-element cell
+; segment -- invertible, unpull returns the clash. the seam refusal that
+; rung 2 closed by fiat is ANSWERED here: recorded as a cell with an EMPTY
+; base. deliberately left: cell WIDENING (a rival extending past a landed
+; bubble re-derives over the wider hull) rides the same geometry, later.
+
+(:
+ ; --- the sequence kit (rung 2, local) ---
+ (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
+ (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (seg s i n) (htake (hdrop s i) n)
+ (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
+ (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+              (|| (atom? a) (atom? b)) 0
+              (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
+ (hunk i o n) (link 'hunk (link i (link o (link n ()))))
+ (hi p) (cap (cup p)) (ho p) (cap (cup (cup p))) (hn p) (cap (cup (cup (cup p))))
+ (valid s p) (&& (<= (+ (hi p) (tally (ho p))) (tally s))
+                 (heq (seg s (hi p) (tally (ho p))) (ho p)))
+ (apon s p) (splice s (hi p) (tally (ho p)) (hn p))
+ (invert p) (hunk (hi p) (hn p) (ho p))
+ (commute p q)
+   (: i (hi p) o1 (tally (ho p)) n1 (tally (hn p))
+      j (hi q) o2 (tally (ho q)) n2 (tally (hn q))
+      (? (> j (+ i n1)) (link (hunk (- (+ j o1) n1) (ho q) (hn q)) (link p ()))
+         (< (+ j o2) i) (link q (link (hunk (- (+ i n2) o2) (ho p) (hn p)) ()))
+         ()))
+
+ ; --- the cell: hull base + rivals, canonically ordered by content hash ---
+ (hstr h s i n) (? (= i n) h (hstr (% (+ (* h 33) (s i)) 4294967296) s (+ i 1) n))
+ (hval v) (: s (show v) (hstr 5381 s 0 (tally s)))
+ (clash b rs) (link 'clash (link b (link rs ())))
+ (clash? v) (? (atom? v) 0 (id? (cap v) 'clash))
+ (cbase c) (cap (cup c))
+ (rivals c) (cap (cup (cup c)))
+ (sins x rs) (? (atom? rs) (link x ())                      ; canonical insert --
+                (: h (cap rs)                               ; dedup by CONTENT,
+                   (? (heq x h) rs                          ; order by its hash
+                      (< (hval x) (hval h)) (link x rs)
+                      (link h (sins x (cup rs))))))
+ (has rs x) (? (atom? rs) 0 (|| (heq (cap rs) x) (has (cup rs) x)))
+
+ ; --- merge2: the pushout off the shared base. equal edits settle; commute
+ ;     re-aims an independent q past p; a refusal makes the BUBBLE ---
+ (merge2 s0 p q)
+   (? (heq p q) (apon s0 p)
+      (: c (commute (invert p) q)
+         (? (! (atom? c)) (apon (apon s0 p) (cap c))
+            (: lo (? (< (hi q) (hi p)) (hi q) (hi p))       ; the union hull
+               e1 (+ (hi p) (tally (ho p))) e2 (+ (hi q) (tally (ho q)))
+               hu (? (< e1 e2) e2 e1)
+               base (seg s0 lo (- hu lo))
+               rp (splice base (- (hi p) lo) (tally (ho p)) (hn p))
+               rq (splice base (- (hi q) lo) (tally (ho q)) (hn q))
+               (splice s0 lo (- hu lo)
+                       (link (clash base (sins rp (sins rq ()))) ()))))))
+
+ ; --- pull: plain / settled / join / breach -- what state CAN answer ---
+ (pull s q)
+   (: i (hi q) n (hn q)
+      (? (valid s q) (apon s q)                             ; plain: rung 2
+         (&& (< 0 (tally n)) (heq (seg s i (tally n)) n)) s ; settled (non-empty)
+         (: e (cap (hdrop s i))
+            (? (&& (clash? e) (heq (cbase e) (ho q)))       ; join the rivals
+               (splice s i 1 (link (clash (ho q) (sins n (rivals e))) ()))
+               s))))                                        ; breach: no-op
+
+ ; --- witnesses: one disputed span, rivals of three different SIZES (the
+ ;     segment teeth), and an independent bystander ---
+ s0 '(a b c d e)
+ p (hunk 2 '(c) '(p1 p2)) q (hunk 2 '(c) '(q1)) r (hunk 2 '(c) '(r1 r2 r3))
+ w (hunk 4 '(e) '(e9))
+
+ ; (M1) merge is TOTAL and SYMMETRIC: rivals or bystanders, either order --
+ ;      the independent lane riding commute, the rival lane riding the set.
+ _ (assert
+    (heq (merge2 s0 p q) (merge2 s0 q p))
+    (heq (merge2 s0 p w) (merge2 s0 w p))
+    (heq (merge2 s0 p w) '(a b p1 p2 d e9)))
+
+ ; (M2) the same edit settles: merged with itself is a plain apply, pulled
+ ;      again it is already in, and a rival re-arriving is absorbed.
+ _ (assert
+    (heq (merge2 s0 p p) (apon s0 p))
+    (heq (pull (apon s0 p) p) (apon s0 p))
+    (: m (merge2 s0 p q) (heq (pull m p) m)))
+
+ ; (M3) the conflict is HONEST, and the bubble FIXES the length: rivals of
+ ;      sizes 2 and 1 over a span of 1, and the sequence stays 5 long --
+ ;      every downstream seat determinate before anyone resolves.
+ _ (: m (merge2 s0 p q) e (cap (hdrop m 2))
+      (assert
+       (= 5 (tally m)) (clash? e)
+       (heq (cbase e) '(c)) (= 2 (tally (rivals e)))
+       (has (rivals e) '(p1 p2)) (has (rivals e) '(q1))
+       (heq (hdrop m 3) '(d e))))
+
+ ; (M4) three rivals, any order: one cell, one set -- pull's join lane
+ ;      absorbing whichever arrives last.
+ _ (: m1 (pull (merge2 s0 p q) r)
+      m2 (pull (merge2 s0 q r) p)
+      m3 (pull (merge2 s0 r p) q)
+      (assert (heq m1 m2) (heq m2 m3)
+              (= 3 (tally (rivals (cap (hdrop m1 2)))))))
+
+ ; (M5) RESOLUTION is just a hunk: olds = the one-element cell segment --
+ ;      the plain lane applies it, invert unpulls it and the clash returns.
+ _ (: m (merge2 s0 p q) cell (cap (hdrop m 2))
+      res (hunk 2 (link cell ()) '(z9))
+      m2 (pull m res)
+      (assert
+       (heq m2 '(a b z9 d e)) (! (clash? (cap (hdrop m2 2))))
+       (heq (pull m2 (invert res)) m)))
+
+ ; the SEAM answered: two inserts on one seam -- rung 2 refused by fiat;
+ ;      here the ambiguity is RECORDED, a cell with an EMPTY base.
+ _ (: sp (hunk 1 () '(u)) sq (hunk 1 () '(v))
+      m (merge2 s0 sp sq) e (cap (hdrop m 1))
+      (assert
+       (heq m (merge2 s0 sq sp))
+       (= 6 (tally m)) (clash? e) (heq (cbase e) ())
+       (has (rivals e) '(u)) (has (rivals e) '(v))
+       (heq (hdrop m 2) '(b c d e))))
+
+ ; OVERLAPPING spans: the union hull is the base, each rival the hull with
+ ;      its hunk laid inside -- and downstream rides at a determinate seat.
+ _ (: op (hunk 1 '(b c) '(x)) oq (hunk 2 '(c d) '(y z))
+      m (merge2 s0 op oq) e (cap (hdrop m 1))
+      (assert
+       (heq m (merge2 s0 oq op))
+       (= 3 (tally m)) (clash? e)
+       (heq (cbase e) '(b c d))
+       (has (rivals e) '(x d)) (has (rivals e) '(b y z))
+       (heq (hdrop m 2) '(e))))
+
+ ; the boundary, honest: a first rival arriving by pull NO-OPS (state cannot
+ ;      delimit its footprint -- the extent problem; the first clash needs
+ ;      merge2, both patches in hand), a deletion arriving twice rests in the
+ ;      breach lane, and a mismatch that is neither settled nor a join rides
+ ;      through untouched.
+ _ (: dl (hunk 3 '(d) ()) s1 (apon s0 dl)
+      (assert
+       (heq (pull (apon s0 p) q) (apon s0 p))
+       (heq (pull s1 dl) s1)
+       (: m (merge2 s0 p q) (heq (pull m (hunk 0 '(zz) '(ww))) m))))
  0)

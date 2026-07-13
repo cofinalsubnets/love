@@ -109,9 +109,22 @@
 ; (the spec's sixth form; a wrap/unwrap commutes too -- the unit walk finds
 ; the survivor at any depth). matching ground survivors is one-sided
 ; unification -- this is where the rewrite machinery starts earning its keep.
-; the laws for ALL layers live in test/patch.l, the source of truth. still
-; deliberately OMITTED: clash SEGMENTS (the conflictor cell lifted to
-; sequences -- pijul's graggle corner), and METAVARIABLE patterns in the
+; and the CLASH-SEGMENTS layer (demo J, same day): the conflictor cell lifted
+; to sequences -- pijul's graggle corner. two hunks whose spans overlap,
+; touch, or share a seam collapse the UNION HULL of their base spans to ONE
+; element, the BUBBLE: a clash cell holding the hull segment plus each rival
+; as the hull with its hunk laid inside (rivals canonically ordered by
+; content hash -- the general value order rung 3 deferred). the bubble FIXES
+; the length: rivals of any sizes occupy one seat, so downstream seats are
+; determinate before anyone resolves; the seam refusal rung 2 closed by fiat
+; is recorded as a cell with an EMPTY base; resolution stays an ordinary
+; invertible hunk off the cell. the honest split the extent problem forces:
+; the FIRST clash needs both patches in hand (merge2, the pushout -- state
+; alone cannot delimit a landed rival's footprint), while a landed cell
+; absorbs same-span rivals state-only (pull's join lane; the spec's seventh
+; form). the laws for ALL layers live in test/patch.l, the source of truth.
+; still deliberately OMITTED: cell WIDENING (a rival extending past a landed
+; bubble re-derives over the wider hull), and METAVARIABLE patterns in the
 ; rewrite lane (patches over schematic content -- where the full kanren
 ; unifier takes the seat ground matching holds today).
 
@@ -287,4 +300,32 @@
       (line "     order move-rewritten ; edit-at-(2) -> "
             (hap (hap t0 () 1 '((: b 2) (main (f x))) '((main (f x)) (: b 2)))
                  '(2) 2 '(2) '(9))))
+
+ ; ---- demo J: CLASH SEGMENTS -- two rivals over one span become the BUBBLE:
+ ;      one cell element holding the base and both rivals (canonically ordered
+ ;      by content hash), so the length is FIXED before anyone resolves, and
+ ;      resolving is an ordinary splice off the cell. the merge machinery
+ ;      (merge2 the pushout, pull's join lane) lives in test/patch.l's
+ ;      seventh form; here the bubble laid by hand ----
+ _ (: (htk s n) (? (< n 1) () (link (cap s) (htk (cup s) (- n 1))))
+      (hdr s n) (? (< n 1) s (hdr (cup s) (- n 1)))
+      (hct a b) (? (atom? a) b (link (cap a) (hct (cup a) b)))
+      (spl s i c news) (hct (htk s i) (hct news (hdr s (+ i c))))
+      (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+                   (|| (atom? a) (atom? b)) 0
+                   (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
+      (hstr h s i n) (? (= i n) h (hstr (% (+ (* h 33) (s i)) 4294967296) s (+ i 1) n))
+      (hval v) (: s (show v) (hstr 5381 s 0 (tally s)))
+      (sins x rs) (? (atom? rs) (link x ())
+                     (: h (cap rs)
+                        (? (heq x h) rs
+                           (< (hval x) (hval h)) (link x rs)
+                           (link h (sins x (cup rs))))))
+      s0 '(a b c d e)
+      cell (link 'clash (link '(c) (link (sins '(p1 p2) (sins '(q1) ())) ())))
+      m (spl s0 2 1 (link cell ()))
+      _ (puts ";; J. clash segments -- rivals of sizes 2 and 1, ONE seat: the bubble\n")
+      _ (line "     merged (either order) -> " m)
+      _ (line "     tally stays " (tally m))
+      (line "     resolve (a splice off the cell) -> " (spl m 2 1 '(z9))))
  0)
