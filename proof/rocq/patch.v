@@ -79,9 +79,20 @@
            so mixed-span arrival order is dead too
      (--)  bubble_len  one seat, rival sizes nowhere in the merged length --
            downstream seats determinate before anyone resolves
-   Still deliberately out (the next rung): metavariable patterns in the
-   rewrite lane -- matching ground survivors is one-sided unification; when
-   patches carry variables the full kanren unifier takes the seat.
+   The EIGHTH slice (the metavariable rung, same day): patches grow
+   variables and become rewrite RULES -- the unifier takes the application
+   seat (valid matches, apon instantiates), and the schematic swallow
+   commutes with the rule UNCHANGED: the variable abstracts the content, so
+   form six's rewrite-through vanishes into address algebra. Proven in the
+   lane's two halves:
+     (--)  mtch_sound        matching is SOUND: a pattern instantiated with
+           its own bindings reproduces the ground term (non-linear patterns
+           bind consistently -- the kanren move, on cap/cup cells)
+     (L1)  reaim_involutive  the deep patch's seat re-aim (olds seat -> news
+           seat, prefix surgery) swaps home
+   Still deliberately out (the next rung): schematic-vs-schematic commute --
+   two overlapping REWRITE RULES are critical-pair confluence territory, a
+   different theorem set.
 
    Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
    classical / funext escape hatch. Trees are functions, so equality of trees is
@@ -1335,6 +1346,140 @@ Qed.
 
 End ClashSeg.
 
+(* ============================================================ *)
+(* the METAVARIABLE slice: matching sound, the re-aim swaps home *)
+(* ============================================================ *)
+
+(* Mirror of test/patch.l's eighth form, in its two genuinely new halves.
+   Terms are cons-cells with atoms and metavariables -- exactly the .l's
+   grain (mtch walks cap/cup). The unifier half: one-sided matching threads
+   a substitution, a non-linear pattern binds consistently or fails, and
+   MATCHING IS SOUND -- a pattern instantiated with its own bindings
+   reproduces the ground term (what valid/apon lean on). The commute half:
+   the schematic swallow re-aims a deep patch from the variable's olds seat
+   to its news seat by prefix surgery, the rule itself riding unchanged --
+   involutive at address grain. The rose-tree bind/mvat plumbing stays
+   asserted in the .l, queued with the rest for the uu-term rung. *)
+
+Section MetaVar.
+
+Inductive term : Type :=
+  | Atom (n : nat)
+  | MV (x : nat)
+  | Cell (a b : term).
+
+Definition sub := list (nat * term).
+
+Fixpoint teq (a b : term) : bool :=
+  match a, b with
+  | Atom n, Atom m => n =? m
+  | MV x, MV y => x =? y
+  | Cell a1 b1, Cell a2 b2 => andb (teq a1 a2) (teq b1 b2)
+  | _, _ => false
+  end.
+
+Fixpoint sasq (v : nat) (s : sub) : option term :=
+  match s with
+  | [] => None
+  | (k, t) :: r => if k =? v then Some t else sasq v r
+  end.
+
+Fixpoint mtch (p g : term) (s : sub) : option sub :=
+  match p with
+  | MV x => match sasq x s with
+            | Some t => if teq t g then Some s else None
+            | None => Some ((x, g) :: s)
+            end
+  | Atom n => match g with
+              | Atom m => if n =? m then Some s else None
+              | _ => None
+              end
+  | Cell a b => match g with
+                | Cell ga gb => match mtch a ga s with
+                                | Some s2 => mtch b gb s2
+                                | None => None
+                                end
+                | _ => None
+                end
+  end.
+
+Fixpoint inst (p : term) (s : sub) : term :=
+  match p with
+  | MV x => match sasq x s with Some t => t | None => MV x end
+  | Atom n => Atom n
+  | Cell a b => Cell (inst a s) (inst b s)
+  end.
+
+Lemma teq_eq : forall a b, teq a b = true -> a = b.
+Proof.
+  induction a; destruct b; simpl; intros H; try discriminate.
+  - apply Nat.eqb_eq in H. now subst.
+  - apply Nat.eqb_eq in H. now subst.
+  - destruct (teq a1 b1) eqn:E1; [|discriminate]. simpl in H.
+    now rewrite (IHa1 _ E1), (IHa2 _ H).
+Qed.
+
+(* bindings only GROW: what a match step bound stays bound, unchanged *)
+Lemma mtch_mono : forall p g s s', mtch p g s = Some s' ->
+  forall v t, sasq v s = Some t -> sasq v s' = Some t.
+Proof.
+  induction p; intros g s s' H v t A; simpl in H.
+  - destruct g; try discriminate. destruct (n =? n0); [|discriminate].
+    now injection H as <-.
+  - destruct (sasq x s) eqn:E.
+    + destruct (teq t0 g); [|discriminate]. now injection H as <-.
+    + injection H as <-. simpl. destruct (x =? v) eqn:F; [|assumption].
+      apply Nat.eqb_eq in F. subst. congruence.
+  - destruct g; try discriminate.
+    destruct (mtch p1 g1 s) eqn:E; [|discriminate].
+    eapply IHp2; [eassumption|]. eapply IHp1; eassumption.
+Qed.
+
+(* MATCHING IS SOUND, under any extension of the bindings it produced --
+   the strengthening that lets the Cell case ride mtch_mono. *)
+Lemma mtch_sound_ext : forall p g s s' s2,
+  mtch p g s = Some s' ->
+  (forall v t, sasq v s' = Some t -> sasq v s2 = Some t) ->
+  inst p s2 = g.
+Proof.
+  induction p; intros g s s' s2 H X; simpl in *.
+  - destruct g; try discriminate.
+    destruct (n =? n0) eqn:E; [|discriminate].
+    apply Nat.eqb_eq in E. now subst.
+  - destruct (sasq x s) eqn:E.
+    + destruct (teq t g) eqn:T; [|discriminate].
+      injection H as <-. apply teq_eq in T. subst.
+      now rewrite (X x g E).
+    + injection H as <-.
+      assert (A : sasq x ((x, g) :: s) = Some g)
+        by (simpl; now rewrite Nat.eqb_refl).
+      now rewrite (X x g A).
+  - destruct g; try discriminate.
+    destruct (mtch p1 g1 s) eqn:E; [|discriminate].
+    f_equal.
+    + eapply IHp1; [exact E|]. intros v t A. apply X.
+      eapply mtch_mono; eauto.
+    + eapply IHp2; [exact H|]. exact X.
+Qed.
+
+Theorem mtch_sound : forall p g s',
+  mtch p g [] = Some s' -> inst p s' = g.
+Proof. intros p g s' H. eapply mtch_sound_ext; eauto. Qed.
+
+(* the RE-AIM at address grain: the schematic swallow moves a deep patch's
+   path from the variable's olds seat to its news seat -- prefix surgery,
+   the rule itself riding unchanged. Swapping the seats back is home: the
+   .l's L1 for the metavariable lane. *)
+Definition reaim (a b p : list nat) : list nat := b ++ skipn (length a) p.
+
+Theorem reaim_involutive : forall a b rest,
+  reaim b a (reaim a b (a ++ rest)) = a ++ rest.
+Proof.
+  intros. unfold reaim. now rewrite !skipn_len_app.
+Qed.
+
+End MetaVar.
+
 (* the axiom audit: every law closed under the global context -- no Axiom, no
    Admitted, no classical/funext escape hatch, in EITHER slice. *)
 Print Assumptions commute_involutive.  (* L1, named slots *)
@@ -1360,4 +1505,9 @@ Print Assumptions bubble_len.          (* the bubble law -- one seat, rival
                                           sizes nowhere in the length *)
 Print Assumptions splice_pad.          (* the widening law -- padding commutes
                                           with rendering *)
+Print Assumptions mtch_sound.          (* the unifier law -- a pattern
+                                          instantiated with its own bindings
+                                          reproduces the ground term *)
+Print Assumptions reaim_involutive.    (* L1, metavariables -- the seat
+                                          re-aim swaps home *)
 Print Assumptions tcommute_involutive. (* L1, tree -- four lanes, path re-aim *)

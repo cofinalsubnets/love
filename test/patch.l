@@ -6,9 +6,10 @@
 ; machine-checks the slices axiom-free under `make test_proof` (named slots,
 ; positional hunks, the conflictor merge, and the frontier identity in full;
 ; the tree lift's commute ALGEBRA -- L1 with the path re-aim -- the
-; content-rewrite lane's L1 at element grain, and the clash-segments bubble
+; content-rewrite lane's L1 at element grain, the clash-segments bubble
 ; at hash grain (creation symmetric, the length law, padding commutes with
-; rendering -- the widening certificate), with the rose-tree
+; rendering -- the widening certificate), and the metavariable lane's two
+; halves (matching sound, the seat re-aim involutive), with the rose-tree
 ; apply laws asserted here and queued for the uu-term rung). the laws asserted HERE are what those
 ; are gated to agree with -- the .v today, and the next rung (L1..L3b as uu proof
 ; TERMS emitted to rocq + lean by tools/uu2coq.l + tools/uu2lean.l) tomorrow; a
@@ -519,7 +520,8 @@
 ; would be erased), a duplicate has no single home, and a news already carrying
 ; the pre state could not tell undo from content. matching ground terms is
 ; one-sided unification; when patches grow METAVARIABLES the full unifier takes
-; this seat (the door stays framed, wider now). the mirror lane rides the
+; this seat (form eight -- the variable abstracts the content there, and the
+; rewrite vanishes into address algebra). the mirror lane rides the
 ; groupoid itself: p;q = (q^-1;p^-1)^-1 and q^-1;p^-1 is deep-first, so ONE
 ; rewrite core (swal) serves both directions, inverted in and out -- involution
 ; comes from the algebra, not from a second implementation. patch.v proves the
@@ -951,4 +953,241 @@
       (assert
        (heq (pull m res) '(a z9))
        (heq (pull (pull m res) (invert res)) m)))
+ 0)
+
+; --- the METAVARIABLE rung: patches grow variables, the unifier takes the seat ---
+;
+; the door the content-rewrite rung framed, opened: a patch's segments may
+; carry METAVARIABLES ((mv v) cells), so a patch is now a rewrite RULE. the
+; unifier enters at APPLICATION: valid MATCHES olds against the tree (one-
+; sided unification -- a substitution threads through, and a NON-LINEAR
+; pattern binds consistently or not at all, the kanren move), apon lays the
+; news INSTANTIATED. a ground patch is the variable-free special case (match
+; degenerates to heq, instantiate to the identity), so this model subsumes
+; the tree lift's whole.
+;
+; and the swallow commute TRANSFORMS: a schematic shallow patch is BLIND to
+; the content its variable binds, so a deep ground edit inside the binding
+; commutes with the rule UNCHANGED -- form six rewrote the context through
+; the content; the variable ABSTRACTED the content away, and what remains is
+; pure address algebra. `bind` descends the rule's olds pattern along the
+; deep path: entering the variable's seat names the binder (the edit rides
+; inside the binding); landing beside it with a one-for-one swap replaces
+; the binding whole; hitting the RIGID part refuses -- the rule's context
+; genuinely mentions that content. the deep patch re-aims from the
+; variable's olds seat to its news seat (mvat), and form six's occurrence
+; guards become STRUCTURAL: the variable exactly once on each side, read
+; off the rule itself -- a duplicating rule would need the edit twice, an
+; erasing rule would lose it, both honest dependencies. the mirror rides
+; the groupoid inverse as ever, one core. patch.v proves the two halves at
+; their grains: matching is SOUND (a pattern instantiated with its own
+; bindings reproduces the ground term -- mtch_sound) and the seat re-aim is
+; involutive (reaim_involutive). deliberately out: schematic-vs-schematic
+; commute -- two overlapping RULES are critical-pair confluence territory,
+; a different theorem set.
+
+(:
+ ; --- the tree kit (rung 5, local) ---
+ (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
+ (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (seg s i n) (htake (hdrop s i) n)
+ (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
+ (nth s j) (cap (hdrop s j))
+ (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+              (|| (atom? a) (atom? b)) 0
+              (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
+ (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
+ (tlay t path s2)
+   (? (atom? path) s2
+      (splice t (cap path) 1
+              (link (tlay (nth t (cap path)) (cup path) s2) ())))
+ (tp path i o n) (link 'tp (link path (link i (link o (link n ())))))
+ (pp p) (cap (cup p))            (pi p) (cap (cup (cup p)))
+ (po p) (cap (cup (cup (cup p)))) (pn p) (cap (cup (cup (cup (cup p)))))
+ (invert p) (tp (pp p) (pi p) (pn p) (po p))
+ (pathok t path) (? (atom? path) 1
+                    (: j (cap path)
+                       (&& (< j (tally t))
+                           (: e (nth t j)
+                              (&& (! (atom? e)) (pathok e (cup path)))))))
+ (setidx path d v) (? (= d 0) (link v (cup path))
+                      (link (cap path) (setidx (cup path) (- d 1) v)))
+ (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
+                (atom? P) (link 'inq (link (cap Q) (link d ())))
+                (atom? Q) (link 'inp (link (cap P) (link d ())))
+                (id? (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
+                '(apart))
+
+ ; --- the pattern kit: metavariables, match, instantiate. a (mv v) cell is
+ ;     a variable (data by discipline: ground content never spells one) ---
+ (mv? x) (? (atom? x) 0 (id? (cap x) 'mv))
+ (mvname x) (cap (cup x))
+ (asq k s) (? (atom? s) () (: c (cap s) (? (id? k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+ (mtch p g s)                                              ; one-sided unification:
+   (? (id? s 'no) 'no                                      ; pattern vs ground, the
+      (mv? p) (: r (asq (mvname p) s)                      ; substitution threading --
+                 (? (atom? r) (link (link (mvname p) g) s) ; a rebound variable must
+                    (? (heq (cap r) g) s 'no)))            ; AGREE (the kanren move)
+      (&& (atom? p) (atom? g)) (? (id? p g) s 'no)
+      (|| (atom? p) (atom? g)) 'no
+      (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
+ (inst p s) (? (mv? p) (: r (asq (mvname p) s) (? (atom? r) p (cap r)))
+               (atom? p) p
+               (link (inst (cap p) s) (inst (cup p) s)))
+
+ ; --- apply: match the olds, lay the news instantiated ---
+ (valid t q) (&& (pathok t (pp q))
+                 (: s (tnav t (pp q))
+                    (&& (<= (+ (pi q) (tally (po q))) (tally s))
+                        (! (id? (mtch (po q) (seg s (pi q) (tally (po q))) ()) 'no)))))
+ (apon t q) (: sq (tnav t (pp q))
+               sg (mtch (po q) (seg sq (pi q) (tally (po q))) ())
+               (tlay t (pp q) (splice sq (pi q) (tally (po q)) (inst (pn q) sg))))
+ (applall t ps) (foldl apon t ps)
+
+ ; --- the variable's seats: count and address in a pattern segment ---
+ (mvn f v) (? (atom? f) 0
+               (: h (cap f)
+                  (+ (? (atom? h) 0 (&& (mv? h) (id? (mvname h) v)) 1 (mvn h v))
+                     (mvn (cup f) v))))
+ (mvat f v) (? (atom? f) ()
+                (: h (cap f)
+                   (? (&& (! (atom? h)) (&& (mv? h) (id? (mvname h) v))) '(0)
+                      (: r (? (atom? h) () (mvat h v))
+                         (? (! (atom? r)) (link 0 r)
+                            (: d (mvat (cup f) v)
+                               (? (atom? d) ()
+                                  (link (+ (cap d) 1) (cup d)))))))))
+ (alast a) (? (atom? (cup a)) (cap a) (alast (cup a)))
+ (abut a) (? (atom? (cup a)) () (link (cap a) (abut (cup a))))
+
+ ; --- bind: descend the rule's olds along the deep path. answers ('in mv
+ ;     rest) -- the edit rides INSIDE the binding, rest below the seat;
+ ;     ('at pat) -- the path landed on a pattern sequence (the whole-binding
+ ;     swap checks there); 'no -- fell off the rigid structure ---
+ (bind e R)
+   (? (mv? e) (link 'in (link e (link R ())))
+      (atom? R) (link 'at (link e ()))
+      (: j (cap R)
+         (? (|| (atom? e) (<= (tally e) j)) 'no
+            (bind (nth e j) (cup R)))))
+
+ ; --- mvswal: the schematic swallow. the rule rides UNCHANGED (its variable
+ ;     abstracts the content); the deep patch re-aims from the variable's
+ ;     olds seat to its news seat. linearity is the guard: the variable
+ ;     exactly once on each side, or the dependency is real. ---
+ (mvswal dp sp j d)
+   (: S (pp sp) is (pi sp) O (po sp) N (pn sp)
+      R (hdrop (pp dp) (+ d 1)) off (- j is)
+      b (bind (nth O off) R)
+      (? (atom? b) ()
+         (id? (cap b) 'in)
+           (: v (mvname (cap (cup b))) rest (cap (cup (cup b)))
+              (? (! (&& (= 1 (mvn O v)) (= 1 (mvn N v)))) ()
+                 (: an (mvat N v)
+                    (link sp (link (tp (hcat S (link (+ is (cap an)) (hcat (cup an) rest)))
+                                       (pi dp) (po dp) (pn dp)) ())))))
+         (: pat (cap (cup b)) im (pi dp)                   ; the whole-binding swap:
+            (? (! (&& (= 1 (tally (po dp))) (= 1 (tally (pn dp))))) ()   ; one for one,
+               (<= (tally pat) im) ()                      ; exactly at the seat
+               (: m (nth pat im)
+                  (? (|| (atom? m) (! (mv? m))) ()         ; rigid part: a real dependency
+                     (: v (mvname m)
+                        (? (! (&& (= 1 (mvn O v)) (= 1 (mvn N v)))) ()
+                           (: an (mvat N v)
+                              (? (atom? (cup an))
+                                 (link sp (link (tp S (+ is (cap an)) (po dp) (pn dp)) ()))
+                                 (link sp (link (tp (hcat S (link (+ is (cap an)) (abut (cup an))))
+                                                    (alast (cup an)) (po dp) (pn dp)) ()))))))))))))
+
+ ; --- commute: the tree lift's lanes, the swallow arms schematic; a ground
+ ;     swallow refuses HERE (form six owns the ground rewrite; a real vcs
+ ;     composes both) ---
+ (commute p q)
+   (: P (pp p) ip (pi p) o1 (tally (po p)) n1 (tally (pn p))
+      Q (pp q) iq (pi q) o2 (tally (po q)) n2 (tally (pn q))
+      r (rel P Q 0) tag (cap r)
+      (? (id? tag 'same)
+           (? (> iq (+ ip n1)) (link (tp Q (- (+ iq o1) n1) (po q) (pn q)) (link p ()))
+              (< (+ iq o2) ip) (link q (link (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
+              ())
+         (id? tag 'inq)
+           (: j (cap (cup r)) d (cap (cup (cup r)))
+              (? (< j ip) (link q (link p ()))
+                 (>= j (+ ip n1))
+                   (link (tp (setidx Q d (- (+ j o1) n1)) iq (po q) (pn q)) (link p ()))
+                 (: c (mvswal (invert q) (invert p) j d)
+                    (? (atom? c) ()
+                       (link (invert (cap (cup c))) (link (invert (cap c)) ()))))))
+         (id? tag 'inp)
+           (: j (cap (cup r)) d (cap (cup (cup r)))
+              (? (< j iq) (link q (link p ()))
+                 (>= j (+ iq o2))
+                   (link q (link (tp (setidx P d (- (+ j n2) o2)) ip (po p) (pn p)) ()))
+                 (mvswal p q j d)))
+         (link q (link p ()))))
+
+ ; --- witnesses: the rule renames main -> run and MOVES the body (the
+ ;     variable's seat slides from child 1 to child 2); the deep edit rides ---
+ t0 '((: a 1) (: b 2) (main (f x)))
+ q8 (tp () 2 '((main (mv v))) '((run () (mv v))))
+ p8 (tp '(2 1) 0 '(f) '(g))
+
+ ; (L1 + L3a) the edit rides INSIDE the binding: the rule commutes UNCHANGED,
+ ;      the deep path follows the seat (2 1 -> 2 2), both orders land the
+ ;      same tree, and swapping back is home.
+ _ (: c (commute p8 q8) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq cq q8)                                         ; the rule is BLIND: q' = q
+       (heq (pp cp) '(2 2))                                ; the seat re-aim
+       (heq (apon (apon t0 p8) q8) (apon (apon t0 cq) cp))
+       (heq (apon (apon t0 p8) q8) '((: a 1) (: b 2) (run () (g x))))
+       (: c2 (commute cq cp)
+          (&& (heq (cap c2) p8) (heq (cap (cup c2)) q8)))))
+
+ ; the WHOLE-BINDING swap: a one-for-one replacement at the variable's seat
+ ;      re-seats the same way (path 2 index 1 -> path 2 index 2).
+ _ (: p9 (tp '(2) 1 '((f x)) '((h y)))
+      c (commute p9 q8) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq cq q8)
+       (heq (pp cp) '(2)) (= 2 (pi cp))
+       (heq (apon (apon t0 p9) q8) (apon (apon t0 cq) cp))
+       (heq (apon (apon t0 p9) q8) '((: a 1) (: b 2) (run () (h y))))
+       (: c2 (commute cq cp)
+          (&& (heq (cap c2) p9) (heq (cap (cup c2)) q8)))))
+
+ ; the refusals read off the RULE: a rigid-part edit (the rule's context
+ ;      mentions it), a duplicating rule (the edit would be needed twice),
+ ;      an erasing rule (the edit would vanish), a span covering rigid
+ ;      structure beside the binding.
+ _ (assert
+    (! (commute (tp '(2) 0 '(main) '(go)) q8))
+    (! (commute p8 (tp () 2 '((main (mv v))) '((run (mv v) (mv v))))))
+    (! (commute p8 (tp () 2 '((main (mv v))) '((halt)))))
+    (! (commute (tp '(2) 0 '(main (f x)) '(go)) q8)))
+
+ ; the unifier face: a NON-LINEAR pattern binds consistently or not at all,
+ ;      and instantiation reads the bindings back out.
+ _ (: t1 '((pair 5 5) (pair 5 6))
+      qc (tp () 0 '((pair (mv w) (mv w))) '((mv w)))
+      (assert
+       (valid t1 qc)
+       (! (valid t1 (tp () 1 '((pair (mv w) (mv w))) '((mv w)))))
+       (heq (apon t1 qc) '(5 (pair 5 6)))))
+
+ ; (L2) a variable-preserving rule round-trips through its inverse: the news
+ ;      pattern matches what it laid, and the olds pattern restores.
+ _ (: t2 (apon t0 q8)
+      (assert
+       (valid t0 q8) (valid t2 (invert q8))
+       (heq (apon t2 (invert q8)) t0)))
+
+ ; (L3b) a frontier is stable under the schematic swallow swap.
+ _ (: w (tp '(0) 2 '(1) '(7))
+      c (commute p8 q8)
+      f1 (applall t0 (link w (link p8 (link q8 ()))))
+      f2 (applall t0 (link w c))
+      (assert (heq f1 f2) (heq f1 '((: a 7) (: b 2) (run () (g x))))))
  0)

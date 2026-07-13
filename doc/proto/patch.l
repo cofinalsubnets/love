@@ -125,10 +125,23 @@
 ; and the join WIDENS: a rival extending past a landed bubble re-derives the
 ; cell over the union hull, the pads riding in from beside the seat; padding
 ; commutes with rendering (patch.v splice_pad), so mixed-span rivals land
-; one bubble in any arrival order. the laws for ALL layers live in
-; test/patch.l, the source of truth. still deliberately OMITTED: METAVARIABLE
-; patterns in the rewrite lane (patches over schematic content -- where the
-; full kanren unifier takes the seat ground matching holds today).
+; one bubble in any arrival order. and the METAVARIABLE layer (demo K, same
+; day): patches grow variables ((mv v) cells) and become rewrite RULES --
+; the unifier takes the application seat (valid MATCHES the olds pattern,
+; one-sided unification with a substitution threading; a non-linear pattern
+; binds consistently or not at all; apon lays the news INSTANTIATED), and
+; the swallow commute transforms: a schematic rule is BLIND to the content
+; its variable binds, so a deep edit inside the binding commutes with the
+; rule UNCHANGED -- form six's rewrite-through vanishes into address
+; algebra, the deep patch re-aiming from the variable's olds seat to its
+; news seat, with form six's occurrence guards now STRUCTURAL (the variable
+; exactly once on each side, read off the rule; the spec's eighth form).
+; this is where wev/boxfix-grade rewrites become PATCHES: a rename-and-
+; restructure rule commutes past every edit that stays inside its bindings.
+; the laws for ALL layers live in test/patch.l, the source of truth. still
+; deliberately OMITTED: schematic-vs-schematic commute (two overlapping
+; REWRITE RULES are critical-pair confluence territory -- Knuth-Bendix's
+; question, a different theorem set).
 
 (:
  ; --- the patch: a groupoid element. (chg slot old new) carries its context
@@ -330,4 +343,34 @@
       _ (line "     merged (either order) -> " m)
       _ (line "     tally stays " (tally m))
       (line "     resolve (a splice off the cell) -> " (spl m 2 1 '(z9))))
+
+ ; ---- demo K: METAVARIABLES -- a patch is a rewrite RULE: match the olds
+ ;      pattern (the unifier's seat), lay the news instantiated. the rule is
+ ;      blind to what ?v binds, so deep edits inside the binding commute with
+ ;      it unchanged (the commute lives in test/patch.l's eighth form) ----
+ _ (: (htk s n) (? (< n 1) () (link (cap s) (htk (cup s) (- n 1))))
+      (hdr s n) (? (< n 1) s (hdr (cup s) (- n 1)))
+      (hct a b) (? (atom? a) b (link (cap a) (hct (cup a) b)))
+      (spl s i c news) (hct (htk s i) (hct news (hdr s (+ i c))))
+      (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+                   (|| (atom? a) (atom? b)) 0
+                   (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
+      (mv? x) (? (atom? x) 0 (id? (cap x) 'mv))
+      (asq k s) (? (atom? s) () (: c (cap s) (? (id? k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+      (mtch p g s)
+        (? (id? s 'no) 'no
+           (mv? p) (: r (asq (cap (cup p)) s)
+                      (? (atom? r) (link (link (cap (cup p)) g) s)
+                         (? (heq (cap r) g) s 'no)))
+           (&& (atom? p) (atom? g)) (? (id? p g) s 'no)
+           (|| (atom? p) (atom? g)) 'no
+           (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
+      (inst p s) (? (mv? p) (: r (asq (cap (cup p)) s) (? (atom? r) p (cap r)))
+                    (atom? p) p
+                    (link (inst (cap p) s) (inst (cup p) s)))
+      t0 '((: a 1) (: b 2) (main (f x)))
+      sg (mtch '((main (mv v))) (spl t0 0 2 ()) ())
+      _ (puts ";; K. metavariables -- the rule (main ?v) -> (run () ?v), the unifier's seat\n")
+      _ (line "     the match binds  -> " sg)
+      (line "     rewritten        -> " (spl t0 2 1 (inst '((run () (mv v))) sg))))
  0)
