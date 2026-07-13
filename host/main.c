@@ -550,6 +550,12 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_evals_(g,                                       // the holo module boundary (crew/holo/export.l): the assembler's names
 #include "export.h"                                      //   sweep into the ONE public `holo` book and off the global book.
   );                                                     //   AFTER the glaze, whose direct references folded at its compile.
+#if defined(__x86_64__) || defined(__aarch64__)
+  // AI_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the
+  // glaze module book) and the natjit creation hook cleared. The forensics twin
+  // of AI_NO_IMAGE: it isolates glaze-lane decisions from interpreter behavior.
+  if (getenv("AI_NO_GLAZE")) g = ai_evals_(g, "(: ev (glaze 'base-ev) natjit ())");
+#endif
 
   if (image_dump_path || image_bake_p) {                 // --bake: snapshot the post-warm heap, then exit
 #if defined(__x86_64__)
@@ -605,6 +611,11 @@ int main(int argc, char const **argv) {
     if (image_load_path) {              // --wake: skip the egg warm, dispatch straight to the program
       bool replp = !argp && isatty(STDIN_FILENO);
       if (replp) raw_mode();
+#if defined(__x86_64__) || defined(__aarch64__)
+      // the AI_NO_GLAZE knob on the image path: the book nom is sealed away in an
+      // image, but a body-less top-level : still pins -- no book access needed.
+      if (getenv("AI_NO_GLAZE")) g = ai_evals_(g, "(: ev (glaze 'base-ev) natjit ())");
+#endif
       g = run_program(g, argp, replp);
     } else
 #endif
