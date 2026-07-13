@@ -1,20 +1,20 @@
-; --- boot/phosui.l: phos end to end under a headless X ---
+; --- test/host/phosui.l: phos end to end under a headless X ---
 ; NOT in the test/*.l corpus (connectu/mind are host/*.c). Spawns an Xvfb,
 ; sails the REAL phos driver (the same seven modules `make install` cats into
-; bin/phos) as one child, then a PROBE (boot/phosui-probe.l) as another: the
+; bin/phos) as one child, then a PROBE (test/host/phosui-probe.l) as another: the
 ; probe drives synthetic input -- XTEST FakeInput for the super+drags, SendEvent
 ; ClientMessages for the EWMH requests -- and asserts every effect off
 ; GetGeometry/GetProperty/GetInputFocus, exiting 0 iff all held. TWO processes
 ; on purpose: phos's stream and the probe's never share a socket, so neither
 ; can desync the other (the one-process attempt kept mis-reading geometry;
-; the boot/haven.l shape is the cure).
+; the test/host/haven.l shape is the cure).
 ;
-;   cat test/00-init.l boot/phosui.l | out/host/ai
+;   cat test/00-init.l test/host/phosui.l | out/host/ai
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
 ; the display number off Xvfb's -displayfd stdout: take the first line that is
-; ENTIRELY digits (server chatter shares the pty -- boot/haven.l's lesson).
+; ENTIRELY digits (server chatter shares the pty -- test/host/haven.l's lesson).
 (: xv (mind `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    camp #()
@@ -54,7 +54,7 @@
  ; (_NET_SUPPORTED on the root), drives, asserts, and exits 0 or names its
  ; failure. Its pty is echoed either way -- a red run tells its story here.
  pr (mind `("out/host/ai" "-l" "crew/phos/core.l" "-l" "crew/phos/layout.l"
-            "-l" "crew/phos/wire.l" "-l" "boot/phosui-probe.l"
+            "-l" "crew/phos/wire.l" "-l" "test/host/phosui-probe.l"
             "-e" (+ "(probe \"" (+ dpy "\")"))))
  _ (must 'probe-up (two? pr))
  _ (enlist 'pr (cap pr))

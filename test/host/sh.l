@@ -1,8 +1,8 @@
-; --- boot/sh.l: the shell's gate -- the lexer/parser pure functions + the job-
+; --- test/host/sh.l: the shell's gate -- the lexer/parser pure functions + the job-
 ; control nifs (signal / wait's stop lane / sigfd's signal list: doc/posix.md
 ; step 4, signals arriving as conditions). the interactive loop needs a pty
 ; (probed live, the berth pattern); everything beneath it gates headless here.
-; run: cat test/00-init.l boot/sh.l | out/host/ai
+; run: cat test/00-init.l test/host/sh.l | out/host/ai
 (reads (open "init/sh.l" "r"))
 
 ; the lexer: whitespace split, quotes glue, operators are ordinary words

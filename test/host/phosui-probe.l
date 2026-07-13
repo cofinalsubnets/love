@@ -1,5 +1,5 @@
-; boot/phosui-probe.l -- the phos UI probe: a SEPARATE process with its own
-; clean X streams (the one-process gate desynced -- see boot/phosui.l), driven
+; test/host/phosui-probe.l -- the phos UI probe: a SEPARATE process with its own
+; clean X streams (the one-process gate desynced -- see test/host/phosui.l), driven
 ; by (probe dpy). It creates its own InputOutput toplevels (xterm needs fonts
 ; a bare Xvfb lacks), drives phos with SYNTHETIC input -- XTEST FakeInput for
 ; super+drag move/resize, SendEvent ClientMessages for the EWMH requests --
@@ -9,7 +9,7 @@
 ;   focus, a second client tiles while the float rides, _NET_CLOSE_WINDOW
 ;   kills it (no WM_DELETE_WINDOW advertised -> the KillClient fallback).
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
-; Load order: core -> layout -> wire, then this file; boot/phosui.l spawns it.
+; Load order: core -> layout -> wire, then this file; test/host/phosui.l spawns it.
 (: (probe dpy)
    (: s (connectu dpy)
       sc (x-setup s ())

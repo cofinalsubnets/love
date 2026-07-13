@@ -1,4 +1,4 @@
-; --- boot/baotest.l: the editor + repl + parseall unit battery, bao-loaded ---
+; --- test/host/baotest.l: the editor + repl + parseall unit battery, bao-loaded ---
 ; the multi-line line editor (ed*), the history zipper (uphist/downhist/mkframe/
 ; detach), joinln/flatten/splitat, and parseall used to be USER-VISIBLE book
 ; globals only because the corpus (the old test/repl.l + test/replio.l) tested
@@ -11,7 +11,7 @@
 ; core (in the host egg) and `bao` is public, so this file gates the battery
 ; through the real test harness with no -l -- and no selftest name leaks to the book:
 ;
-;   cat test/00-init.l boot/baotest.l | out/host/ai
+;   cat test/00-init.l test/host/baotest.l | out/host/ai
 ;
 ; (wired into `make test_hostnif`.) green dots = pass.
 

@@ -1,4 +1,4 @@
-; --- boot/baoedit.l: a smoke test for bao's raw-line editor (ai/bao.l `edraw`) ---
+; --- test/host/baoedit.l: a smoke test for bao's raw-line editor (ai/bao.l `edraw`) ---
 ; edraw lives in ai/bao.l, now the BAKED shell core (in the host egg), so edraw is
 ; a book global -- but it reads ai forms (it's the editor), so it can't be a corpus
 ; test (ai0 bakes the corpus and would run edraw on the test stream). edraw reads
@@ -6,7 +6,7 @@
 ; the piped forms read-eval off stdin (a pipe is the bare filter) while each edraw
 ; consumes its own sip. Run (assert comes from test/00-init.l):
 ;
-;   cat test/00-init.l boot/baoedit.l | out/host/ai
+;   cat test/00-init.l test/host/baoedit.l | out/host/ai
 ;
 ; green dots = pass; the shell's banner/prompts + edraw's ANSI redraws are noise
 ; around them. Full interactive editing (real keystrokes, real tty) stays manual.

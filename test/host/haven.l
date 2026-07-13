@@ -1,4 +1,4 @@
-; --- boot/haven.l: haven + two skiffs, end to end under a headless X ---
+; --- test/host/haven.l: haven + two skiffs, end to end under a headless X ---
 ; NOT in the test/*.l corpus (shore/wl-send/memfd/connectu/mind are host/*.c).
 ; spawns an Xvfb, sails haven (the wayland compositor) as one child and two
 ; skiffs (red, then blue) as two more, then reads haven's X WINDOW back with
@@ -7,7 +7,7 @@
 ; and both colors must sit in their tiles. the whole loop: wayland socket ->
 ; SCM_RIGHTS fd -> shm pool -> commit -> layout -> mapin -> px-ship -> X.
 ;
-;   cat test/00-init.l boot/haven.l | out/host/ai
+;   cat test/00-init.l test/host/haven.l | out/host/ai
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 

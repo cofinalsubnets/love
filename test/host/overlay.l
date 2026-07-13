@@ -1,4 +1,4 @@
-; --- boot/overlay.l: the phos type overlay + the baked uu book, end to end ---
+; --- test/host/overlay.l: the phos type overlay + the baked uu book, end to end ---
 ; NOT in the test/*.l corpus (the overlay + uu ride the HOST binary's post-egg
 ; layer; ai0/kernel/wasm have no post.l). Three legs:
 ;   1. crew/phos/sigs.l checks CLEAN over the real core.l + layout.l sources
@@ -20,7 +20,7 @@
 ;      hand-proved model by idpath BRIDGES: compiled-from-source == proved,
 ;      certified by conversion, so every model theorem transfers for free.
 ;
-;   cat test/00-init.l boot/overlay.l | out/host/ai
+;   cat test/00-init.l test/host/overlay.l | out/host/ai
 
 (reads (open "crew/phos/sigs.l" "r"))
 (reads (open "crew/phos/core.l" "r"))

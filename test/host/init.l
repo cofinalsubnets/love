@@ -1,8 +1,8 @@
-; --- boot/init.l: smoke test for the init (pid1 supervisor) nifs (host/init.c) ---
+; --- test/host/init.l: smoke test for the init (pid1 supervisor) nifs (host/init.c) ---
 ; spawn/hear/wait/still link into `ai` but NOT ai0 (which bakes the corpus), so this
-; runs standalone against the built binary, like boot/pty.l -- not in test/*.l. Run
+; runs standalone against the built binary, like test/host/pty.l -- not in test/*.l. Run
 ; (assert comes from test/00-init.l):
-;   cat test/00-init.l boot/init.l | out/host/ai
+;   cat test/00-init.l test/host/init.l | out/host/ai
 ; the FULL pid-1 story -- mounting proc, reaping a REPARENTED orphan -- needs ai to
 ; actually BE pid 1: `make init-container` (a pid+user+mount namespace). Here we
 ; cover the hear nif's three distinct returns and the spawn/wait pair.

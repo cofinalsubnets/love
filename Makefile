@@ -63,17 +63,20 @@ test_host: $m
 	@cat $t | $m > out/host/.test_host.out; s=$$?; cat out/host/.test_host.out; \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
 # Host-nif smoke tests: nifs defined in host/*.c link into `ai` but NOT ai0
-# (which bakes the corpus), so they cannot live in test/*.l -- ai0 would read the
-# names as missing and fail its self-test. Run them standalone against the built
-# binary instead. Each script prints a "<name>: ok" sentinel and uses the
-# test/00-init.l assert harness (which exits 1 on the first failure), so the gate
-# checks BOTH exit 0 AND the sentinel -- a silent reader-stop exits 0 without it.
-# Add a thread's smoke script to hostnif_tests (ain: boot/net.l, &c).
-hostnif_tests = boot/pty.l boot/net.l boot/phos.l boot/phosui.l boot/baoedit.l boot/baotest.l boot/init.l boot/fs.l boot/sh.l boot/cb.l boot/berth.l boot/manifest.l boot/pier.l boot/font.l boot/haven.l boot/drm.l boot/overlay.l boot/bake.l
+# (which bakes the test/*.l corpus), so they cannot sit DIRECTLY in test/ -- ai0
+# would bake them, read the nif names as missing, and fail its self-test. They
+# live under test/host/ instead: the corpus glob ($t in common.mk) is a
+# NON-RECURSIVE test/*.l wildcard, so a subfolder is invisible to the bake. Run
+# them standalone against the built binary. Each script prints a "<name>: ok"
+# sentinel and uses the test/00-init.l assert harness (which exits 1 on the first
+# failure), so the gate checks BOTH exit 0 AND the sentinel -- a silent
+# reader-stop exits 0 without it.
+# Add a thread's smoke script to hostnif_tests (ain: test/host/net.l, &c).
+hostnif_tests = test/host/pty.l test/host/net.l test/host/phos.l test/host/phosui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/haven.l test/host/drm.l test/host/overlay.l test/host/bake.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
-# boot/haven.l skips its smoke act when the binary is absent. pinned to the
+# test/host/haven.l skips its smoke act when the binary is absent. pinned to the
 # canonical out/host like ai0 (parse-time prereqs; it never links ai).
 smoke = out/host/haven-smoke
 xdgxml = $(shell pkg-config --variable=pkgdatadir wayland-protocols 2>/dev/null)/stable/xdg-shell/xdg-shell.xml
@@ -547,7 +550,7 @@ test_holo: host
 # socket nifs in host/net.c + the pump loops in tools/ain.l). In `test_all`
 # (the thorough gate) but NOT the fast `test` -- it needs two live processes and
 # a free loopback port. It is the ONLY net gate that drives the real
-# `ai tools/ain.l` cli path: the in-process `boot/net.l` smoke (in
+# `ai tools/ain.l` cli path: the in-process `test/host/net.l` smoke (in
 # test_hostnif) pipes straight into the binary, so it covers the nifs portably
 # but can't catch an invocation regression (e.g. a stale -l preload). Override
 # the port with `make nettest PORT=NNNN`.

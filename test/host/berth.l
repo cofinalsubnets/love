@@ -1,9 +1,9 @@
-; --- boot/berth.l: the berth emulator's moor, end to end over a real pty ---
+; --- test/host/berth.l: the berth emulator's moor, end to end over a real pty ---
 ; NOT in the test/*.l corpus (screen/scribe/mind live in host/*.c; ai0 links
 ; none of them). loads the berth library off disk with reads, berths real
 ; children, and reads the grid back through the glass:
 ;
-;   cat test/00-init.l boot/berth.l | out/host/ai
+;   cat test/00-init.l test/host/berth.l | out/host/ai
 ;
 ; interactive berthing (raw tty, keys, repaint) stays a live probe -- this
 ; verifies the moor: pty -> parser -> grid, replies riding home, exit status.

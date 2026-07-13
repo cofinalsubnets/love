@@ -1,8 +1,8 @@
-; --- boot/fs.l: smoke test for the fs nifs (host/fs.c) ---
+; --- test/host/fs.l: smoke test for the fs nifs (host/fs.c) ---
 ; rename/symlink/readlink/chmod/chown/utime/umask link into `ai` but NOT ai0
 ; (which bakes the corpus), so this runs standalone against the built binary,
-; like boot/init.l -- not in test/*.l. Run (assert comes from test/00-init.l):
-;   cat test/00-init.l boot/fs.l | out/host/ai
+; like test/host/init.l -- not in test/*.l. Run (assert comes from test/00-init.l):
+;   cat test/00-init.l test/host/fs.l | out/host/ai
 ; the conventions under test are init.c's posix_ lane: an effect op answers ()
 ; ok | a POSITIVE errno | EINVAL misuse; a value op answers the value | ().
 

@@ -1,11 +1,11 @@
-; --- boot/bake.l: smoke test for the bake nif (host/image.c + ai_image_save_) ---
+; --- test/host/bake.l: smoke test for the bake nif (host/image.c + ai_image_save_) ---
 ; (bake path) snapshots the LIVE session to an image file MID-EVAL -- the running
 ; stack rides along as wake-unreachable ballast, live finalizer nodes forge into
 ; dead chains, and a NULL bio-buffer word encodes as an immortal -- and `ai --wake
 ; PATH prog.l` boots a session carrying every global pinned before the bake.
 ; host-only (the nif + run + --wake), so it runs standalone against the built
-; binary like boot/fs.l:
-;   cat test/00-init.l boot/bake.l | out/host/ai
+; binary like test/host/fs.l:
+;   cat test/00-init.l test/host/bake.l | out/host/ai
 (: img "out/.bake-nif-smoke.image"
    drv "out/.bake-nif-drive.l"
    _ (unlink img) _ (unlink drv)                    ; a clean slate, tolerated if absent

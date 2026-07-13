@@ -1,9 +1,9 @@
-; --- boot/font.l: the font atlas, the builtins, and the PSF loader ---
+; --- test/host/font.l: the font atlas, the builtins, and the PSF loader ---
 ; NOT in the test/*.l corpus (font/blitrow/pour/unfold are host/*.c). the
 ; atlas discipline and the builtin bake are gated directly; the PSF lane
 ; is gated against a font SYNTHESIZED right here (no system fonts assumed):
 ;
-;   cat test/00-init.l boot/font.l | out/host/ai
+;   cat test/00-init.l test/host/font.l | out/host/ai
 
 (reads (open "crew/quay/psf.l" "r"))
 

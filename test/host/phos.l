@@ -1,8 +1,8 @@
-; --- boot/phos.l: a runnable smoke test for phos's socket nif (host/phos.c) ---
-; Standalone against the built binary, like boot/net.l and for the same reason
+; --- test/host/phos.l: a runnable smoke test for phos's socket nif (host/phos.c) ---
+; Standalone against the built binary, like test/host/net.l and for the same reason
 ; (host/*.c links the final `ai` only; ai0 bakes the corpus without it):
 ;
-;   cat test/00-init.l boot/phos.l | out/host/ai
+;   cat test/00-init.l test/host/phos.l | out/host/ai
 ;
 ; (connectu path) opens a unix-domain stream socket. A REAL round trip needs a
 ; unix listener on the other end -- that is an X display socket in practice, so
@@ -14,4 +14,4 @@
 (assert !(connectu ""))                            ; empty path -> nil
 (assert !(connectu "/tmp"))                        ; a directory, not a socket -> nil
 (assert !(connectu 7))                             ; not a string -> nil
-(say err "boot/phos: ok\n")
+(say err "test/host/phos: ok\n")

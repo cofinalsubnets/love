@@ -1,10 +1,10 @@
-; --- boot/pier.l: the X window frontend, end to end against a headless server ---
+; --- test/host/pier.l: the X window frontend, end to end against a headless server ---
 ; NOT in the test/*.l corpus (connectu/mind/screen/blit are host/*.c). spawns its
 ; own Xvfb, sails a pier with a real child, finds the window with QueryTree, and
 ; reads the PAINTED PIXELS back through the server with GetImage -- the whole loop:
 ; pty -> parser -> grid -> blit -> PutImage -> X -> GetImage.
 ;
-;   cat test/00-init.l boot/pier.l | out/host/ai
+;   cat test/00-init.l test/host/pier.l | out/host/ai
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
@@ -13,7 +13,7 @@
 (reads (open "crew/quay/berth.l" "r"))
 (reads (open "crew/quay/pier.l" "r"))
 
-; -displayfd + the camp, boot/haven.l's discipline (see its header for the whole
+; -displayfd + the camp, test/host/haven.l's discipline (see its header for the whole
 ; story): a fresh display every run so no stray server can become the test
 ; target, the number-on-its-own-line read, and every child struck on any
 ; failed claim so a failure leaves no debris to poison the next run.

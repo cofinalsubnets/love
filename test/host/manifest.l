@@ -1,11 +1,11 @@
-; --- boot/manifest.l: the spreadsheet, engine and tui, end to end ---
+; --- test/host/manifest.l: the spreadsheet, engine and tui, end to end ---
 ; NOT in the test/*.l corpus (the tui rides raw/winsize; the pty harness
 ; rides mind -- all host/*.c). the engine itself is pure core, probed here
 ; against the loaded app; the tui is driven over a REAL pty and its painted
 ; screen read back through the cb glass -- the emulator built for berth is
 ; the spreadsheet's witness:
 ;
-;   cat test/00-init.l boot/manifest.l | out/host/ai
+;   cat test/00-init.l test/host/manifest.l | out/host/ai
 
 (reads (open "crew/manifest/manifest.l" "r"))
 

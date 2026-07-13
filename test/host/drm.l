@@ -1,4 +1,4 @@
-; --- boot/drm.l: the metal enumerated -- DRM/KMS over the ioctl nif ---
+; --- test/host/drm.l: the metal enumerated -- DRM/KMS over the ioctl nif ---
 ; opens the first live card and holds the SHAPES: a two-call GETRESOURCES
 ; agrees with itself, every connector answers a known connection state, a
 ; connected one carries sane modes (real width/height, the raw 68 bytes
@@ -7,7 +7,7 @@
 ; live display server it answers -EACCES and the gate says so politely.
 ; no card at all -> a polite skip (the sentinel still prints).
 ;
-;   cat test/00-init.l boot/drm.l | out/host/ai
+;   cat test/00-init.l test/host/drm.l | out/host/ai
 (reads (open "crew/phos/core.l" "r"))
 (reads (open "crew/haven/wire.l" "r"))
 (reads (open "crew/haven/drm.l" "r"))
