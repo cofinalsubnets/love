@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_glaze test_sat test_holo test_phos test_utils test_vi test_cc nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_glaze test_sat test_holo test_phos test_utils test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -503,7 +503,9 @@ test_selfhost: host out/host$(hsuf)/aicc
 # syscall trampoline + our sigsetjmp/longjmp, laid by crew/cc/lib/mksys.l) -- then
 # OUR OWN static linker (crew/holo/link.l via `aicc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is ai. Corpus green over the fresh egg.
-# OPT-IN (heavier than test_selfhost). x86-64 only. mksys/nolibc/math are x64.
+# In test_all (the gcc-free fixpoint is a headline invariant); skips off x86-64.
+# mksys/nolibc/math are x64. Supersedes test_selfhost's coverage (which stays
+# opt-in as the lighter gcc-links-only check).
 .PHONY: test_raw
 test_raw: host out/host$(hsuf)/aicc
 	@echo RAW $(ho)/ai-raw
