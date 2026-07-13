@@ -90,11 +90,14 @@
 ; conflicted slot holds a CLASH cell, the shared base + a canonically-ordered SET
 ; of rivals, making merge total, symmetric, and associative by construction; and
 ; since a cell is a first-class VALUE, resolution is an ordinary chg (old = the
-; cell) -- invertible, so unpulling a resolution returns the clash. the laws for
-; ALL layers live in test/patch.l, the source of truth. still deliberately
-; OMITTED: content hashing (the frontier identity), and the TREE lift (a path per
-; hunk + clash SEGMENTS in the positional model -- where the unifier earns its
-; keep). those are the next rungs.
+; cell) -- invertible, so unpulling a resolution returns the clash. and the
+; IDENTITY layer (demo G, same day): a version IS its patch set, hashed
+; canonically -- per-patch content hashes folded through the SAME cins set, so
+; the identity quotients by exactly what the semantics proved dead (order, M4;
+; multiplicity, M2) and nothing more. the laws for ALL layers live in
+; test/patch.l, the source of truth. still deliberately OMITTED: the TREE lift
+; (a path per hunk + clash SEGMENTS in the positional model -- where the
+; unifier earns its keep). that is the next rung.
 
 (:
  ; --- the patch: a groupoid element. (chg slot old new) carries its context
@@ -205,4 +208,22 @@
       _ (line "     pull q;p -> x = " (tget (pull (pull (tset 0 'x 1) mq) mp) 'x))
       (line "     resolve (a plain chg off the cell) -> x = "
             (tget (pull m (chg 'x (tget m 'x) 5)) 'x)))
+
+ ; ---- demo G: the frontier IDENTITY -- a version IS its patch set: hash each
+ ;      patch's printed form, fold through the canonical set, name the result.
+ ;      order and repetition vanish (exactly what M4/M2 proved dead); content
+ ;      moves the name ----
+ _ (: (hstr h s i n) (? (= i n) h (hstr (% (+ (* h 33) (s i)) 4294967296) s (+ i 1) n))
+      (hval v) (: s (show v) (hstr 5381 s 0 (tally s)))
+      (cins x rs) (? (atom? rs) (link x ())
+                     (: h (cap rs) (? (= x h) rs (< x h) (link x rs)
+                                      (link h (cins x (cup rs))))))
+      (fid ps) (foldl (\ acc p (cins (hval p) acc)) () ps)
+      (ident ps) (hval (fid ps))
+      p (chg 'x 1 2) q (chg 'x 1 3)
+      _ (puts ";; G. the frontier identity -- order and repetition dead, content alive\n")
+      _ (line "     ident (p q)   = " (ident (link p (link q 0))))
+      _ (line "     ident (q p)   = " (ident (link q (link p 0))))
+      _ (line "     ident (p p q) = " (ident (link p (link p (link q 0)))))
+      (line "     ident (q)     = " (ident (link q 0))))
  0)

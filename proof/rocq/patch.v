@@ -47,10 +47,15 @@
                             independent OR conflicting: pull order is dead
      (M5) resolve_roundtrip a resolution is an ordinary patch off the cell,
                             and unpulling it returns the clash
-   Still deliberately out (the next rungs): content hashing (the frontier
-   identity), and the TREE lift -- a path per hunk plus clash SEGMENTS in the
-   positional model, where the rewrite/unifier machinery (wev, boxfix, kanren)
-   earns its keep.
+   The FOURTH slice (the identity rung, same day): a version IS its patch set.
+   Per-patch content hashes fold through cins -- the same canonical set that
+   carries a clash's rivals -- so the identity quotients by exactly what the
+   semantics proved dead and nothing more:
+     (H1) fid_swap  order-free   (the aponl_swap / pull_fold_swap face)
+     (H2) fid_dup   multiplicity-free  (the pull_idem face)
+   Still deliberately out (the next rung): the TREE lift -- a path per hunk
+   plus clash SEGMENTS in the positional model, where the rewrite/unifier
+   machinery (wev, boxfix, kanren) earns its keep.
 
    Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
    classical / funext escape hatch. Trees are functions, so equality of trees is
@@ -778,6 +783,38 @@ Proof.
     + now apply pull_indep_comm.
 Qed.
 
+(* ============================================================ *)
+(* the IDENTITY slice: a version IS its patch set               *)
+(* ============================================================ *)
+
+(* Mirror of test/patch.l's fourth form, on the lawful part. The .l hashes
+   each patch's printed form (engineering -- djb2 today, a real digest when
+   the store lands) and folds the hashes through cins, the same canonical set
+   that carries a clash's rivals; the scalar name is one more hash on top.
+   The LAWS live on the canonical list: the identity forgets exactly what the
+   semantics proved dead -- order (aponl_swap / pull_fold_swap) and repetition
+   (pull_idem) -- and nothing more (fid IS the set; distinct sets stay
+   distinct up to the engineering hash). *)
+
+Definition fid (hs : list nat) : list nat :=
+  fold_left (fun acc h => cins h acc) hs [].
+
+(* (H1) order-free: any adjacent swap, one canonical set. *)
+Theorem fid_swap : forall pre a b post,
+  fid (pre ++ a :: b :: post) = fid (pre ++ b :: a :: post).
+Proof.
+  intros. unfold fid. rewrite !fold_left_app. cbn [fold_left].
+  f_equal. apply cins_comm.
+Qed.
+
+(* (H2) multiplicity-free: a repeated patch names the same version. *)
+Theorem fid_dup : forall pre a post,
+  fid (pre ++ a :: a :: post) = fid (pre ++ a :: post).
+Proof.
+  intros. unfold fid. rewrite !fold_left_app. cbn [fold_left].
+  f_equal. apply cins_absorb.
+Qed.
+
 (* the axiom audit: every law closed under the global context -- no Axiom, no
    Admitted, no classical/funext escape hatch, in EITHER slice. *)
 Print Assumptions commute_involutive.  (* L1, named slots *)
@@ -793,3 +830,5 @@ Print Assumptions pull_idem.           (* M2, clash -- pulling settles *)
 Print Assumptions pull_records.        (* M3, clash -- base + both rivals kept *)
 Print Assumptions pull_fold_swap.      (* M4, clash -- pull order is dead *)
 Print Assumptions resolve_roundtrip.   (* M5, clash -- resolution unpulls *)
+Print Assumptions fid_swap.            (* H1, identity -- order-free *)
+Print Assumptions fid_dup.             (* H2, identity -- multiplicity-free *)

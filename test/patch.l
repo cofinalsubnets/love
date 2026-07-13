@@ -3,8 +3,9 @@
 ; the drift anchor for the whole patch stack: doc/proto/patch.l is the design (the
 ; argument that a distribution / namespace / repo-state are ONE algebra of
 ; selectable sets, with COMMUTE the primitive underneath); proof/rocq/patch.v
-; machine-checks all three slices axiom-free (named slots, the positional hunks,
-; and the conflictor merge below, under `make test_proof`). the laws asserted HERE are what those
+; machine-checks all four slices axiom-free (named slots, the positional hunks,
+; the conflictor merge, and the frontier identity below, under `make
+; test_proof`). the laws asserted HERE are what those
 ; are gated to agree with -- the .v today, and the next rung (L1..L3b as uu proof
 ; TERMS emitted to rocq + lean by tools/uu2coq.l + tools/uu2lean.l) tomorrow; a
 ; hand .v drifts (the wm2uu lesson), so this file is the truth it regenerates off.
@@ -288,4 +289,51 @@
       fa (applall 0 (cat2 holo glaze))
       fb (applall 0 (cat2 glaze holo))
       (assert (teq fa fb '(font)) (clash? (tget fa 'font))))
+ 0)
+
+; --- the IDENTITY rung: a version IS its patch set, hashed canonically ---
+;
+; the reproducibility handle the laws already point at. L3b/M4 proved a
+; frontier's MEANING is order-free, M2 that multiplicity is dead -- so an
+; identity that quotients by exactly order and repetition is SOUND: it forgets
+; nothing the semantics keeps. (dependent patches carry their ORDER in their
+; contexts -- a frontier is a downward-closed SET, replay order is derived, not
+; stored -- so the set identity is the right grain even when patches chain.)
+; the shape: hash each patch's printed form (show is the canonical
+; serialization), fold the hashes through cins -- the SAME canonical set that
+; carries a clash's rivals, so order-freedom IS cins-commutativity and
+; dup-freedom IS cins-absorption (both proven in patch.v) -- then hash the
+; canonical list once for the scalar name. collision-freedom is engineering
+; (djb2 here, a real digest when the store lands); the LAWS live on the
+; canonical list.
+
+(:
+ (hstr h s i n) (? (= i n) h (hstr (% (+ (* h 33) (s i)) 4294967296) s (+ i 1) n))
+ (hval v) (: s (show v) (hstr 5381 s 0 (tally s)))         ; djb2 over the printed form
+ (cins x rs) (? (atom? rs) (link x ())
+                (: h (cap rs) (? (= x h) rs (< x h) (link x rs)
+                                 (link h (cins x (cup rs))))))
+ (fid ps) (foldl (\ acc p (cins (hval p) acc)) () ps)      ; the canonical hash set
+ (ident ps) (hval (fid ps))                                 ; one scalar to name it
+ (chg k a b) (link 'chg (link k (link a (link b ()))))
+
+ ; --- witnesses ---
+ p (chg 'x 1 2) q (chg 'x 1 3) w (chg 'y 0 9)
+
+ ; (H1) ORDER-FREE: any pull order, one identity -- the M4 face, on the name.
+ _ (assert
+    (= (ident (link p (link q (link w ()))))
+       (ident (link w (link q (link p ())))))
+    (= (ident (link p (link w ()))) (ident (link w (link p ())))))
+
+ ; (H2) MULTIPLICITY-FREE: pulling twice settles (M2), and the name agrees.
+ _ (assert (= (ident (link p (link p (link q ()))))
+              (ident (link p (link q ())))))
+
+ ; (H3) CONTENT-SENSITIVE: touch any patch and the name moves -- including
+ ;      direction (a patch and its inverse are different content).
+ _ (assert
+    (! (= (ident (link p ())) (ident (link q ()))))
+    (! (= (ident (link p (link q ()))) (ident (link p (link w ())))))
+    (! (= (ident (link p ())) (ident (link (chg 'x 2 1) ())))))
  0)
