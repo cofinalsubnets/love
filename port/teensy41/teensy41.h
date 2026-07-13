@@ -68,9 +68,23 @@
 #define IOMUXC_SW_MUX_GPIO_AD_B0_02 (IOMUXC_BASE + 0x0C4u)  // pin1 TX1 -> LPUART6_TX (ALT2)
 #define IOMUXC_SW_MUX_GPIO_AD_B0_03 (IOMUXC_BASE + 0x0C8u)  // pin0 RX1 -> LPUART6_RX (ALT2)
 #define IOMUXC_SW_MUX_GPIO_B0_03    (IOMUXC_BASE + 0x148u)  // pin13 LED -> GPIO2_IO03 (ALT5)
-#define IOMUXC_LPUART6_RX_SELECT    (IOMUXC_BASE + 0x520u)  // RX daisy chain -> GPIO_AD_B0_03
+// RX daisy chain (SELECT_INPUT) -> GPIO_AD_B0_03. The SELECT_INPUT registers live
+// in the SECOND IOMUXC block (base + 0x400); LPUART6_RX is that block's offset
+// 0x150, so IOMUXC_BASE + 0x400 + 0x150 = +0x550 (per PJRC imxrt.h:
+// IOMUXC_LPUART6_RX_SELECT_INPUT = IMXRT_IOMUXC_b.offset150). Silicon-verified
+// 2026-07-12 -- the earlier +0x520 wrote a neighbouring register, leaving the
+// receiver's pad-select at reset default so RX heard nothing while TX (which
+// drives its pad directly) worked fine.
+#define IOMUXC_LPUART6_RX_SELECT    (IOMUXC_BASE + 0x550u)
 #define MUX_ALT(n) (n)
 #define MUX_SION (1u << 4)
+// pad CONTROL (drive strength / speed / keeper) -- the SW_PAD_CTL register sits a
+// uniform 0x1F0 (124 pads x4) past its matching SW_MUX_CTL. The mux routes the
+// LPUART TX signal to the pad, but a pad at its reset-default driver won't drive
+// the line -- serial_init MUST set these (see the note there).
+#define IOMUXC_SW_PAD_GPIO_AD_B0_02 (IOMUXC_BASE + 0x2B4u)  // pin1 TX pad ctl
+#define IOMUXC_SW_PAD_GPIO_AD_B0_03 (IOMUXC_BASE + 0x2B8u)  // pin0 RX pad ctl
+#define PAD_CTL_UART 0x10B0u   // DSE6 + SPEED2 + keeper -- PJRC's UART pad config
 
 // --- GPT1 (free-running microsecond timer) -------------------------------
 #define GPT1_CR  (GPT1_BASE + 0x00u)

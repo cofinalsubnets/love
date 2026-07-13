@@ -39,14 +39,32 @@ dedicated 512 KB **OCRAM2** at `0x20200000`, which is mapped at reset
 independent of the FlexRAM split, so the scaffold needs no FlexRAM
 reconfiguration to have working memory.
 
-## Status: scaffold, not silicon-verified
+## Status: boots + serial console verified on hardware (2026-07-12)
 
-Structurally complete and written against the current `ai.h` contract
-(`lvm_port_io`, the `g_*` frontend hooks, `.l` lcat headers), but **not yet run
-on hardware**. The register offsets, the FlexSPI config block, the IVT, and the
-QSPI read LUT are lifted from the i.MX RT1060 Reference Manual (Serial NOR boot)
-and cross-checked against PJRC's `cores/teensy4`; treat them as the verify-first
-surface. Known TODOs:
+First silicon ride: the board **boots XIP from flash and runs to `main`** (the
+FlexSPI config block / IVT / boot-data / crt0 / clocks path is proven), and the
+**LPUART6 console works both directions** at 115200 over an RPi Debug Probe UART
+bridge. Two register bugs surfaced and were fixed against PJRC's `cores/teensy4`
+as the authority (treat every offset here as verify-first -- these are lifted
+from the i.MX RT1060 RM):
+
+- **TX pad drive** -- `serial_init` set the pin *mux* but never the pad *control*
+  (drive strength). The mux routes the LPUART TX signal to the pad, but a pad at
+  its reset-default driver never drove the line: TDRE asserted and bytes clocked
+  out with the wire idle. Fixed by writing `SW_PAD_CTL` = `0x10B0` for both pads.
+- **RX daisy** -- `IOMUXC_LPUART6_RX_SELECT_INPUT` was at `+0x520`; the real
+  register is the SECOND IOMUXC block (`base+0x400`) offset `0x150`, i.e.
+  `+0x550`. With the wrong offset the receiver's pad-select stayed at reset
+  default, so RX heard nothing while TX (which drives its pad directly) worked.
+
+**Still open -- the egg double-bake does not complete on hardware.** The board
+boots and prints the `baking the egg` banner, but the self-hosting double-bake
+never reaches the new `; egg hatched -- shell up` marker (>14 min, solid LED, no
+scare face). Prime suspects, in order: the ROM-default core clock (see the clock
+TODO below), the tight GC budget (`main.c` sets `budget = pool/4` over the 384 KB
+OCRAM2 arena -- a live set past the pool likely faults inside the collector,
+matching the solid-LED silence), or egg size. Getting to a live REPL means
+attacking one of these next. Remaining verify-first surface + TODOs:
 
 - **FlexSPI config block / read LUT** -- verify the exact bytes against the
   on-board QSPI part (Teensy 4.1 ships a Winbond/ISSI 8 MB NOR) before trusting

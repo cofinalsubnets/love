@@ -218,7 +218,10 @@ int main(void) {
     // The LED is the status channel while the console has no adapter: solid on
     // = still baking the egg, OFF = the egg hatched and the shell is at its
     // prompt, fast blink (below) = fatal. 3 is LED_BIT (GPIO2_IO03 = pin 13).
-    "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0) (shell 0))");
+    // this tail runs AFTER the egg double-bake, so its `puts` marks the exact
+    // moment the bake completes (baking-vs-hung is otherwise invisible).
+    "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)"
+    "    _ (putc 10) _ (puts \"; egg hatched -- shell up\") _ (putc 10) (shell 0))");
   // The shell only returns on a fatal error: honest face, then blink it out.
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r);

@@ -194,6 +194,14 @@ void serial_init(void) {
   REG(IOMUXC_SW_MUX_GPIO_AD_B0_02) = MUX_ALT(2);
   REG(IOMUXC_SW_MUX_GPIO_AD_B0_03) = MUX_ALT(2);
   REG(IOMUXC_LPUART6_RX_SELECT) = 1u;            // select GPIO_AD_B0_03
+  // the pad's OUTPUT DRIVER. The mux alone routes the LPUART TX signal to the
+  // pad, but a pad left at its reset-default drive strength does not drive the
+  // line -- first silicon (2026-07-12) had TDRE asserting and bytes clocking out
+  // with the wire dead idle until these were set. DSE6 + medium speed + keeper
+  // (PJRC's UART pad config) gives TX a real driver; the RX pad takes the keeper
+  // so a disconnected input does not float.
+  REG(IOMUXC_SW_PAD_GPIO_AD_B0_02) = PAD_CTL_UART;   // TX drive
+  REG(IOMUXC_SW_PAD_GPIO_AD_B0_03) = PAD_CTL_UART;   // RX keeper
 
   // 115200 8N1 from the 24 MHz UART clock: OSR=16, SBR=13 -> 115384 (+0.16%).
   REG(LPUART_CTRL) = 0;                           // disable while configuring
