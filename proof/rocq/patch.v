@@ -71,15 +71,17 @@
    cell lifted to sequences -- pijul's graggle corner. Overlapping / touching
    / same-seam rivals collapse the union hull of their base spans to ONE
    clash element, the BUBBLE; rivals are segments, cins-canonical by content
-   hash. Proven at hash grain:
+   hash; a rival extending past a landed bubble WIDENS it over the union
+   hull (the same day's second half). Proven at hash grain:
      (M1) scell_comm   the bubble forgets arrival order (min/max + cins_comm)
+     (--)  splice_pad  padding commutes with rendering -- a rival padded up
+           when the bubble widens IS the rival rendered over the wide hull,
+           so mixed-span arrival order is dead too
      (--)  bubble_len  one seat, rival sizes nowhere in the merged length --
            downstream seats determinate before anyone resolves
-   Still deliberately out (the next rungs): cell WIDENING (a rival extending
-   past a landed bubble re-derives over the wider hull), and metavariable
-   patterns in the rewrite lane -- matching ground survivors is one-sided
-   unification; when patches carry variables the full kanren unifier takes
-   the seat.
+   Still deliberately out (the next rung): metavariable patterns in the
+   rewrite lane -- matching ground survivors is one-sided unification; when
+   patches carry variables the full kanren unifier takes the seat.
 
    Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
    classical / funext escape hatch. Trees are functions, so equality of trees is
@@ -1288,6 +1290,30 @@ Proof.
   f_equal. apply cins_comm.
 Qed.
 
+(* the WIDENING law: padding COMMUTES with rendering. a rival is a splice
+   into its hull; pad the hull on both sides and the same splice lands one
+   pad further in -- so a rival rendered over a narrow hull, padded up when
+   the bubble widens, IS the rival rendered over the wide hull directly.
+   this is what makes mixed-span arrival order dead: whichever pair bubbles
+   first, the third widens to the same cell (the .l's pull join lane). *)
+Theorem splice_pad : forall (pl pr b n : list nat) i c,
+  i + c <= length b ->
+  pl ++ splice b i c n ++ pr = splice (pl ++ b ++ pr) (length pl + i) c n.
+Proof.
+  intros pl pr b n i c H. unfold splice.
+  rewrite firstn_app, skipn_app.
+  assert (FP : firstn (length pl + i) pl = pl) by (apply firstn_all2; lia).
+  assert (SP : skipn (length pl + i + c) pl = []) by (apply skipn_all2; lia).
+  rewrite FP, SP.
+  replace (length pl + i - length pl) with i by lia.
+  replace (length pl + i + c - length pl) with (i + c) by lia.
+  rewrite firstn_app, skipn_app.
+  replace (i - length b) with 0 by lia.
+  replace (i + c - length b) with 0 by lia.
+  simpl. rewrite app_nil_r.
+  now rewrite <- !app_assoc.
+Qed.
+
 (* the BUBBLE law: the conflicted hull contracts to ONE seat, so the merged
    length reads off the hull alone -- no rival size anywhere in the formula:
    every downstream seat is determinate before anyone resolves. *)
@@ -1304,7 +1330,7 @@ Proof.
                              (hpos q + length (hold q))).
     lia. }
   unfold splice.
-  rewrite !app_length, firstn_length, skipn_length. simpl. lia.
+  rewrite !length_app, length_firstn, length_skipn. simpl. lia.
 Qed.
 
 End ClashSeg.
@@ -1332,4 +1358,6 @@ Print Assumptions scell_comm.          (* M1, clash segments -- the bubble
                                           forgets arrival order *)
 Print Assumptions bubble_len.          (* the bubble law -- one seat, rival
                                           sizes nowhere in the length *)
+Print Assumptions splice_pad.          (* the widening law -- padding commutes
+                                          with rendering *)
 Print Assumptions tcommute_involutive. (* L1, tree -- four lanes, path re-aim *)

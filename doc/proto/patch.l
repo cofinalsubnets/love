@@ -121,12 +121,14 @@
 ; invertible hunk off the cell. the honest split the extent problem forces:
 ; the FIRST clash needs both patches in hand (merge2, the pushout -- state
 ; alone cannot delimit a landed rival's footprint), while a landed cell
-; absorbs same-span rivals state-only (pull's join lane; the spec's seventh
-; form). the laws for ALL layers live in test/patch.l, the source of truth.
-; still deliberately OMITTED: cell WIDENING (a rival extending past a landed
-; bubble re-derives over the wider hull), and METAVARIABLE patterns in the
-; rewrite lane (patches over schematic content -- where the full kanren
-; unifier takes the seat ground matching holds today).
+; absorbs rivals state-only (pull's join lane; the spec's seventh form) --
+; and the join WIDENS: a rival extending past a landed bubble re-derives the
+; cell over the union hull, the pads riding in from beside the seat; padding
+; commutes with rendering (patch.v splice_pad), so mixed-span rivals land
+; one bubble in any arrival order. the laws for ALL layers live in
+; test/patch.l, the source of truth. still deliberately OMITTED: METAVARIABLE
+; patterns in the rewrite lane (patches over schematic content -- where the
+; full kanren unifier takes the seat ground matching holds today).
 
 (:
  ; --- the patch: a groupoid element. (chg slot old new) carries its context

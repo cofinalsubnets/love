@@ -7,7 +7,8 @@
 ; positional hunks, the conflictor merge, and the frontier identity in full;
 ; the tree lift's commute ALGEBRA -- L1 with the path re-aim -- the
 ; content-rewrite lane's L1 at element grain, and the clash-segments bubble
-; at hash grain (creation symmetric, the length law), with the rose-tree
+; at hash grain (creation symmetric, the length law, padding commutes with
+; rendering -- the widening certificate), with the rose-tree
 ; apply laws asserted here and queued for the uu-term rung). the laws asserted HERE are what those
 ; are gated to agree with -- the .v today, and the next rung (L1..L3b as uu proof
 ; TERMS emitted to rocq + lean by tools/uu2coq.l + tools/uu2lean.l) tomorrow; a
@@ -745,8 +746,10 @@
 ; a resolution is an ordinary hunk whose olds is the one-element cell
 ; segment -- invertible, unpull returns the clash. the seam refusal that
 ; rung 2 closed by fiat is ANSWERED here: recorded as a cell with an EMPTY
-; base. deliberately left: cell WIDENING (a rival extending past a landed
-; bubble re-derives over the wider hull) rides the same geometry, later.
+; base. and the join lane WIDENS: a rival extending past a landed bubble
+; re-derives the cell over the union hull, the pads riding in from beside
+; the seat -- padding commutes with rendering, so mixed-span rivals land
+; the same bubble in any arrival order.
 
 (:
  ; --- the sequence kit (rung 2, local) ---
@@ -800,15 +803,42 @@
                (splice s0 lo (- hu lo)
                        (link (clash base (sins rp (sins rq ()))) ()))))))
 
- ; --- pull: plain / settled / join / breach -- what state CAN answer ---
+ ; --- pull: plain / settled / the WIDENING join / breach -- what state CAN
+ ;     answer. the join lane is general: any rival whose base span overlaps
+ ;     (or touches -- the seam law is strict everywhere) a landed cell's hull
+ ;     joins it. a same-span rival rides as before, a CONTAINED one lays into
+ ;     the hull, an EXTENDING one WIDENS the bubble: the hull grows to the
+ ;     union, the pads (base content beside the cell -- seats 1:1 by the
+ ;     co-valid discipline) re-render every rival over the wider hull.
+ ;     padding COMMUTES with rendering (patch.v splice_pad), so a rival
+ ;     padded up equals the rival rendered over the wide hull directly --
+ ;     arrival order stays dead at mixed spans. the honest guard reads the
+ ;     rebuilt hull; any mismatch no-ops. ---
+ (findc s q k)                                              ; first cell whose
+   (? (<= (tally s) k) ()                                   ; hull meets q's span
+      (: e (cap (hdrop s k))
+         (? (&& (clash? e)
+                (&& (<= (hi q) (+ k (tally (cbase e))))
+                    (<= k (+ (hi q) (tally (ho q)))))) (link k ())
+            (findc s q (+ k 1)))))
  (pull s q)
-   (: i (hi q) n (hn q)
+   (: i (hi q) o (ho q) n (hn q)
       (? (valid s q) (apon s q)                             ; plain: rung 2
          (&& (< 0 (tally n)) (heq (seg s i (tally n)) n)) s ; settled (non-empty)
-         (: e (cap (hdrop s i))
-            (? (&& (clash? e) (heq (cbase e) (ho q)))       ; join the rivals
-               (splice s i 1 (link (clash (ho q) (sins n (rivals e))) ()))
-               s))))                                        ; breach: no-op
+         (: f (findc s q 0)
+            (? (atom? f) s                                  ; no cell: breach, no-op
+               (: k (cap f) e (cap (hdrop s k)) b (cbase e)
+                  lo (? (< i k) i k)                        ; the union hull
+                  eo (+ k (tally b)) eq (+ i (tally o))
+                  hu (? (< eo eq) eq eo)
+                  pl (seg s lo (- k lo))                    ; the pads, off the state
+                  pr (seg s (+ k 1) (- hu eo))
+                  hull (hcat pl (hcat b pr))
+                  (? (! (heq (seg hull (- i lo) (tally o)) o)) s   ; dishonest: no-op
+                     (: rs (foldl (\ a x (sins (hcat pl (hcat x pr)) a)) () (rivals e))
+                        rv (splice hull (- i lo) (tally o) n)
+                        (splice s (- k (tally pl)) (+ (tally pl) (+ 1 (tally pr)))
+                                (link (clash hull (sins rv rs)) ())))))))))
 
  ; --- witnesses: one disputed span, rivals of three different SIZES (the
  ;     segment teeth), and an independent bystander ---
@@ -888,4 +918,37 @@
        (heq (pull (apon s0 p) q) (apon s0 p))
        (heq (pull s1 dl) s1)
        (: m (merge2 s0 p q) (heq (pull m (hunk 0 '(zz) '(ww))) m))))
+
+ ; the WIDENING: three rivals over three DIFFERENT overlapping spans (the
+ ;      middle one bridging, the outer two merely touching) -- whichever pair
+ ;      bubbles first, the third widens the cell to the union hull and every
+ ;      rival re-renders over it: one bubble, one set, any arrival order.
+ _ (: p2 (hunk 1 '(b c) '(x)) q2 (hunk 2 '(c d) '(y z)) r2 (hunk 3 '(d e) '(w))
+      m1 (pull (merge2 s0 p2 q2) r2)
+      m2 (pull (merge2 s0 q2 r2) p2)
+      m3 (pull (merge2 s0 r2 p2) q2)
+      e (cap (hdrop m1 1))
+      (assert
+       (heq m1 m2) (heq m2 m3)
+       (= 2 (tally m1)) (clash? e)                          ; (a BUBBLE) -- length fixed
+       (heq (cbase e) '(b c d e))
+       (= 3 (tally (rivals e)))
+       (has (rivals e) '(x d e)) (has (rivals e) '(b y z e)) (has (rivals e) '(b c w))))
+
+ ; a CONTAINED rival lays into the landed hull -- same lane, pads empty.
+ _ (: op (hunk 1 '(b c) '(x)) oq (hunk 2 '(c d) '(y z))
+      m (pull (merge2 s0 op oq) (hunk 2 '(c) '(k1)))
+      e (cap (hdrop m 1))
+      (assert
+       (= 3 (tally (rivals e)))
+       (has (rivals e) '(b k1 d))))
+
+ ; resolution off the WIDENED bubble stays ordinary -- and unpull returns it.
+ _ (: p2 (hunk 1 '(b c) '(x)) q2 (hunk 2 '(c d) '(y z)) r2 (hunk 3 '(d e) '(w))
+      m (pull (merge2 s0 p2 q2) r2)
+      cell (cap (hdrop m 1))
+      res (hunk 1 (link cell ()) '(z9))
+      (assert
+       (heq (pull m res) '(a z9))
+       (heq (pull (pull m res) (invert res)) m)))
  0)
