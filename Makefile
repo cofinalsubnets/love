@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_phos test_utils test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_phos test_utils test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -777,6 +777,19 @@ test_uuwm: host
 	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
 	  || { echo "FAIL: test/uuwm.l is stale (crew/phos/core.l moved?) -- run: make uuwm"; exit 1; }
 	@rm -f out/host/.uuwm.l.tmp
+# test/uukind.l is a COMMITTED GENERATED artifact: doc/proto/kinds.l's abstract
+# kinds-lattice JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l
+# proves the semilattice laws OF THE ANALYSIS at corpus time. `make uukind` refreshes
+# it after a kinds.l edit; test_uukind (in test_all) regenerates and diffs.
+uukind: host
+	@echo AI	test/uukind.l "(tools/kinds2uu.l on $m)"
+	@$m tools/kinds2uu.l > test/uukind.l
+test_uukind: host
+	@echo TEST test/uukind.l "(regenerate + diff)"
+	@$m tools/kinds2uu.l > out/host/.uukind.l.tmp
+	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
+	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
+	@rm -f out/host/.uukind.l.tmp
 # ai0's sed-wrapped raw source of the same three (no interpreter -- the l reader
 # strips ; comments at read time), baked into the bootstrap so the corpus can test
 # the assembler under BOTH compilers (c0 + the self-hosted ev), like prel/ev/bao.

@@ -7596,7 +7596,8 @@ static ai_inline int cmp_rank(word x) {
  if (k == KArrZ || k == KArrR || k == KArrC) return 2;  // a GALAXY folds into the number band, ordered by its net
  if (k == KArrO) return 3;                         // object tray: above the numbers, BELOW chain
  if (k == KChain) return 4;                        // chain: the grammar substrate -- HIGH, just under book (only book's mutability seats it above)
- return (int) k; }                                 // KMap, KHot -- above chain, relative order kept
+ if (k == KMap) return 5;                          // map: above chain
+ return 6; }                                       // KHot -- thread/function, the ceiling (the only kind left)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
