@@ -4509,3 +4509,1418 @@
                             (andb (nateqb (occ (eb p) (hn s)) 1) (nateqb (occ (ea p) (hn s)) 0))))))))
                 h))))))))
 
+
+; ============================================================================
+; the CLASH-SEGMENTS slice: patch.v's seventh form at uu -- two co-valid
+; hunks collapse the union HULL of their spans to ONE element, the BUBBLE:
+; the hull segment plus each rival rendered as the hull with its hunk laid
+; inside, the rival set cins-canonical by content hash. the three laws:
+; creation forgets arrival order (M1 at cell grain), padding commutes with
+; rendering (the widening law), and the merged length reads off the hull
+; alone (the bubble law -- downstream seats determinate before anyone
+; resolves). hash stays a pi-bound function; the demos ride lcode.
+; ============================================================================
+; --- the order tail: asymmetry, gtb-to-noteq, trichotomy, and the mixed
+; --- transitivity the head ordering needs -- each a convoy or one triple
+; --- rect on the existing istransnatgth/isantisymmnatleh floor ---
+(assert
+ (defq 'natgthtoneg
+   '(pi a nat (pi b nat (pi g (paths bool (natgtb a b) true) (paths bool (natgtb b a) false))))
+   '(lam a
+      (lam b
+        (lam g
+          ((bool_rect
+             (lam c (pi hc (paths bool (natgtb b a) c) (paths bool (natgtb b a) false)))
+             (lam hc
+               (fromempty (paths bool (natgtb b a) false)
+                 (nopathstruetofalse
+                   (pathscomp0 bool true (natgtb a a) false
+                     (pathsinv0 bool (natgtb a a) true (istransnatgth a b a g hc))
+                     (isreflnatleh a)))))
+             (lam hc hc)
+             (natgtb b a))
+            (idpath (natgtb b a)))))))
+ (defq 'natgthtoneq
+   '(pi a nat (pi b nat (pi g (paths bool (natgtb a b) true) (paths bool (nateqb a b) false))))
+   '(lam a
+      (lam b
+        (lam g
+          ((bool_rect
+             (lam c (pi hc (paths bool (nateqb a b) c) (paths bool (nateqb a b) false)))
+             (lam hc
+               (fromempty (paths bool (nateqb a b) false)
+                 (nopathstruetofalse
+                   (pathscomp0 bool true (natgtb a b) false (pathsinv0 bool (natgtb a b) true g)
+                     (transportf nat (lam z (paths bool (natgtb a z) false)) a b
+                       (nateqbtopaths a b hc)
+                       (isreflnatleh a))))))
+             (lam hc hc)
+             (nateqb a b))
+            (idpath (nateqb a b)))))))
+ (defq 'nattrichot
+   '(pi x nat
+      (pi y nat
+        (pi hne (paths bool (nateqb x y) false)
+          (pi hg (paths bool (natgtb y x) false) (paths bool (natgtb x y) true)))))
+   '(lam x
+      (lam y
+        (lam hne
+          (lam hg
+            ((bool_rect
+               (lam c (pi hc (paths bool (natgtb x y) c) (paths bool (natgtb x y) true)))
+               (lam hc hc)
+               (lam hc
+                 (fromempty (paths bool (natgtb x y) true)
+                   (nopathstruetofalse
+                     (pathscomp0 bool true (nateqb x y) false
+                       (pathscomp0 bool true (nateqb x x) (nateqb x y)
+                         (pathsinv0 bool (nateqb x x) true (nateqbrefl x))
+                         (maponpaths nat bool (lam z (nateqb x z)) x y
+                           (isantisymmnatleh x y hc hg)))
+                       hne))))
+               (natgtb x y))
+              (idpath (natgtb x y))))))))
+ (defq 'natlehgthtrans
+   '(pi h nat
+      (pi x nat
+        (pi y nat
+          (pi h1 (paths bool (natgtb h x) false)
+            (pi h2 (paths bool (natgtb h y) true) (paths bool (natgtb x y) true))))))
+   '(lam h
+      (nat_rect
+        (lam q
+          (pi x nat
+            (pi y nat
+              (pi h1 (paths bool (natgtb q x) false)
+                (pi h2 (paths bool (natgtb q y) true) (paths bool (natgtb x y) true))))))
+        (lam x
+          (lam y (lam h1 (lam h2 (fromempty (paths bool (natgtb x y) true) (negnatgth0n y h2))))))
+        (lam k
+          (lam IH
+            (lam x
+              (nat_rect
+                (lam r
+                  (pi y nat
+                    (pi h1 (paths bool (natgtb (succ k) r) false)
+                      (pi h2 (paths bool (natgtb (succ k) y) true)
+                        (paths bool (natgtb r y) true)))))
+                (lam y
+                  (lam h1
+                    (lam h2 (fromempty (paths bool (natgtb 0 y) true) (nopathstruetofalse h1)))))
+                (lam x2
+                  (lam xIH
+                    (lam y
+                      (nat_rect
+                        (lam s
+                          (pi h1 (paths bool (natgtb (succ k) (succ x2)) false)
+                            (pi h2 (paths bool (natgtb (succ k) s) true)
+                              (paths bool (natgtb (succ x2) s) true))))
+                        (lam h1 (lam h2 (natgthsn0 x2)))
+                        (lam y2 (lam yIH (lam h1 (lam h2 (IH x2 y2 h1 h2)))))
+                        y))))
+                x))))
+        h))))
+
+; --- min and max, recursive (succ-succ definitional), with comm and the
+; --- two bounds the hull arithmetic reads; natminusswap re-associates a
+; --- double truncated-minus through the two cancellations ---
+(assert
+ (defn 'natmin
+   '(pi a nat (pi b nat nat))
+   '(lam a
+      (nat_rect (lam q (pi b nat nat)) (lam b 0)
+        (lam k (lam IH (lam b (bool_rect (lam c nat) 0 (succ (IH (npred b))) (niszero b)))))
+        a)))
+ (defn 'natmax
+   '(pi a nat (pi b nat nat))
+   '(lam a
+      (nat_rect (lam q (pi b nat nat)) (lam b b)
+        (lam k
+          (lam IH (lam b (bool_rect (lam c nat) (succ k) (succ (IH (npred b))) (niszero b)))))
+        a)))
+ (defq 'natmincomm
+   '(pi a nat (pi b nat (paths nat (natmin a b) (natmin b a))))
+   '(lam a
+      (nat_rect (lam q (pi b nat (paths nat (natmin q b) (natmin b q))))
+        (lam b
+          (nat_rect (lam r (paths nat (natmin 0 r) (natmin r 0))) (idpath 0)
+            (lam j (lam r (idpath 0)))
+            b))
+        (lam k
+          (lam IH
+            (lam b
+              (nat_rect (lam r (paths nat (natmin (succ k) r) (natmin r (succ k)))) (idpath 0)
+                (lam j
+                  (lam r (maponpaths nat nat (lam z (succ z)) (natmin k j) (natmin j k) (IH j))))
+                b))))
+        a)))
+ (defq 'natmaxcomm
+   '(pi a nat (pi b nat (paths nat (natmax a b) (natmax b a))))
+   '(lam a
+      (nat_rect (lam q (pi b nat (paths nat (natmax q b) (natmax b q))))
+        (lam b
+          (nat_rect (lam r (paths nat (natmax 0 r) (natmax r 0))) (idpath 0)
+            (lam j (lam r (idpath (succ j))))
+            b))
+        (lam k
+          (lam IH
+            (lam b
+              (nat_rect (lam r (paths nat (natmax (succ k) r) (natmax r (succ k))))
+                (idpath (succ k))
+                (lam j
+                  (lam r (maponpaths nat nat (lam z (succ z)) (natmax k j) (natmax j k) (IH j))))
+                b))))
+        a)))
+ (defq 'natminlel
+   '(pi a nat (pi b nat (paths bool (natgtb (natmin a b) a) false)))
+   '(lam a
+      (nat_rect (lam q (pi b nat (paths bool (natgtb (natmin q b) q) false)))
+        (lam b
+          (nat_rect (lam r (paths bool (natgtb (natmin 0 r) 0) false)) (idpath false)
+            (lam j (lam r (idpath false)))
+            b))
+        (lam k
+          (lam IH
+            (lam b
+              (nat_rect (lam r (paths bool (natgtb (natmin (succ k) r) (succ k)) false))
+                (idpath false)
+                (lam j (lam r (IH j)))
+                b))))
+        a)))
+ (defq 'natmaxgel
+   '(pi a nat (pi b nat (paths bool (natgtb a (natmax a b)) false)))
+   '(lam a
+      (nat_rect (lam q (pi b nat (paths bool (natgtb q (natmax q b)) false)))
+        (lam b
+          (nat_rect (lam r (paths bool (natgtb 0 (natmax 0 r)) false)) (idpath false)
+            (lam j (lam r (idpath false)))
+            b))
+        (lam k
+          (lam IH
+            (lam b
+              (nat_rect (lam r (paths bool (natgtb (succ k) (natmax (succ k) r)) false))
+                (isreflnatleh (succ k))
+                (lam j (lam r (IH j)))
+                b))))
+        a)))
+ (defq 'natminusswap
+   '(pi l nat
+      (pi u nat
+        (pi m nat
+          (pi h1 (paths bool (natgtb l u) false)
+            (pi h2 (paths bool (natgtb u m) false)
+              (paths nat (add l (natminus m u)) (natminus m (natminus u l))))))))
+   '(lam l
+      (lam u
+        (lam m
+          (lam h1
+            (lam h2
+              (pathsinv0 nat (natminus m (natminus u l)) (add l (natminus m u))
+                (pathscomp0 nat (natminus m (natminus u l))
+                  (natminus (add u (natminus m u)) (natminus u l))
+                  (add l (natminus m u))
+                  (maponpaths nat nat (lam z (natminus z (natminus u l))) m
+                    (add u (natminus m u))
+                    (pathsinv0 nat (add u (natminus m u)) m (natlehplusminus u m h2)))
+                  (pathscomp0 nat (natminus (add u (natminus m u)) (natminus u l))
+                    (natminus (add (add l (natminus u l)) (natminus m u)) (natminus u l))
+                    (add l (natminus m u))
+                    (maponpaths nat nat (lam z (natminus (add z (natminus m u)) (natminus u l)))
+                      u
+                      (add l (natminus u l))
+                      (pathsinv0 nat (add l (natminus u l)) u (natlehplusminus l u h1)))
+                    (pathscomp0 nat
+                      (natminus (add (add l (natminus u l)) (natminus m u)) (natminus u l))
+                      (natminus (add (add l (natminus m u)) (natminus u l)) (natminus u l))
+                      (add l (natminus m u))
+                      (maponpaths nat nat (lam z (natminus z (natminus u l)))
+                        (add (add l (natminus u l)) (natminus m u))
+                        (add (add l (natminus m u)) (natminus u l))
+                        (natplusswap l (natminus u l) (natminus m u)))
+                      (natpluscancelminus (add l (natminus m u)) (natminus u l)))))))))))))
+
+; --- the canonical rival set: sorted insert with dedup. the three sealed
+; --- reduction rungs (dedup / new head / skip) make every comm/absorb leaf
+; --- a short chain; comm's case tree rides the order tail exactly where
+; --- patch.v's destructs rode lia ---
+(assert
+ (defn 'cins
+   '(pi x nat (pi l nlist nlist))
+   '(lam x
+      (lam l
+        ((nat_rect (lam q (pi v (nvec q) nlist)) (lam v (ncons x nnil))
+           (lam m
+             (lam IH
+               (lam v
+                 (bool_rect (lam c nlist) (tpair (succ m) v)
+                   (bool_rect (lam c nlist) (ncons x (tpair (succ m) v))
+                     (ncons (pr1 v) (IH (pr2 v)))
+                     (natgtb (pr1 v) x))
+                   (nateqb x (pr1 v))))))
+           (pr1 l))
+          (pr2 l)))))
+ (defq 'cinsdedup
+   '(pi x nat
+      (pi h nat
+        (pi t nlist
+          (pi e (paths bool (nateqb x h) true) (paths nlist (cins x (ncons h t)) (ncons h t))))))
+   '(lam x
+      (lam h
+        (lam t
+          (lam e
+            (maponpaths bool nlist
+              (lam c
+                (bool_rect (lam c2 nlist) (ncons h t)
+                  (bool_rect (lam c3 nlist) (ncons x (ncons h t)) (ncons h (cins x t))
+                    (natgtb h x))
+                  c))
+              (nateqb x h)
+              true
+              e))))))
+ (defq 'cinshead
+   '(pi x nat
+      (pi h nat
+        (pi t nlist
+          (pi e1 (paths bool (nateqb x h) false)
+            (pi e2 (paths bool (natgtb h x) true)
+              (paths nlist (cins x (ncons h t)) (ncons x (ncons h t))))))))
+   '(lam x
+      (lam h
+        (lam t
+          (lam e1
+            (lam e2
+              (pathscomp0 nlist (cins x (ncons h t))
+                (bool_rect (lam c3 nlist) (ncons x (ncons h t)) (ncons h (cins x t))
+                  (natgtb h x))
+                (ncons x (ncons h t))
+                (maponpaths bool nlist
+                  (lam c
+                    (bool_rect (lam c2 nlist) (ncons h t)
+                      (bool_rect (lam c3 nlist) (ncons x (ncons h t)) (ncons h (cins x t))
+                        (natgtb h x))
+                      c))
+                  (nateqb x h)
+                  false
+                  e1)
+                (maponpaths bool nlist
+                  (lam c (bool_rect (lam c3 nlist) (ncons x (ncons h t)) (ncons h (cins x t)) c))
+                  (natgtb h x)
+                  true
+                  e2))))))))
+ (defq 'cinsskip
+   '(pi x nat
+      (pi h nat
+        (pi t nlist
+          (pi e1 (paths bool (nateqb x h) false)
+            (pi e2 (paths bool (natgtb h x) false)
+              (paths nlist (cins x (ncons h t)) (ncons h (cins x t))))))))
+   '(lam x
+      (lam h
+        (lam t
+          (lam e1
+            (lam e2
+              (pathscomp0 nlist (cins x (ncons h t))
+                (bool_rect (lam c3 nlist) (ncons x (ncons h t)) (ncons h (cins x t))
+                  (natgtb h x))
+                (ncons h (cins x t))
+                (maponpaths bool nlist
+                  (lam c
+                    (bool_rect (lam c2 nlist) (ncons h t)
+                      (bool_rect (lam c3 nlist) (ncons x (ncons h t)) (ncons h (cins x t))
+                        (natgtb h x))
+                      c))
+                  (nateqb x h)
+                  false
+                  e1)
+                (maponpaths bool nlist
+                  (lam c (bool_rect (lam c3 nlist) (ncons x (ncons h t)) (ncons h (cins x t)) c))
+                  (natgtb h x)
+                  false
+                  e2))))))))
+ (defq 'cinsabsorb
+   '(pi x nat (pi l nlist (paths nlist (cins x (cins x l)) (cins x l))))
+   '(lam x
+      (lam l
+        ((nat_rect
+           (lam q
+             (pi v (nvec q) (paths nlist (cins x (cins x (tpair q v))) (cins x (tpair q v)))))
+           (lam v (cinsdedup x x nnil (nateqbrefl x)))
+           (lam m
+             (lam IH
+               (lam v
+                 ((bool_rect
+                    (lam c
+                      (pi he (paths bool (nateqb x (pr1 v)) c)
+                        (paths nlist (cins x (cins x (tpair (succ m) v)))
+                          (cins x (tpair (succ m) v)))))
+                    (lam he
+                      (maponpaths nlist nlist (lam z (cins x z))
+                        (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                        (ncons (pr1 v) (tpair m (pr2 v)))
+                        (cinsdedup x (pr1 v) (tpair m (pr2 v)) he)))
+                    (lam he
+                      ((bool_rect
+                         (lam c
+                           (pi hg (paths bool (natgtb (pr1 v) x) c)
+                             (paths nlist (cins x (cins x (tpair (succ m) v)))
+                               (cins x (tpair (succ m) v)))))
+                         (lam hg
+                           (pathscomp0 nlist (cins x (cins x (tpair (succ m) v)))
+                             (cins x (ncons x (tpair (succ m) v)))
+                             (cins x (tpair (succ m) v))
+                             (maponpaths nlist nlist (lam z (cins x z))
+                               (cins x (tpair (succ m) v))
+                               (ncons x (tpair (succ m) v))
+                               (cinshead x (pr1 v) (tpair m (pr2 v)) he hg))
+                             (pathscomp0 nlist (cins x (ncons x (tpair (succ m) v)))
+                               (ncons x (tpair (succ m) v))
+                               (cins x (tpair (succ m) v))
+                               (cinsdedup x x (tpair (succ m) v) (nateqbrefl x))
+                               (pathsinv0 nlist (cins x (tpair (succ m) v))
+                                 (ncons x (tpair (succ m) v))
+                                 (cinshead x (pr1 v) (tpair m (pr2 v)) he hg)))))
+                         (lam hg
+                           (pathscomp0 nlist (cins x (cins x (tpair (succ m) v)))
+                             (cins x (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                             (cins x (tpair (succ m) v))
+                             (maponpaths nlist nlist (lam z (cins x z))
+                               (cins x (tpair (succ m) v))
+                               (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                               (cinsskip x (pr1 v) (tpair m (pr2 v)) he hg))
+                             (pathscomp0 nlist
+                               (cins x (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                               (ncons (pr1 v) (cins x (cins x (tpair m (pr2 v)))))
+                               (cins x (tpair (succ m) v))
+                               (cinsskip x (pr1 v) (cins x (tpair m (pr2 v))) he hg)
+                               (pathscomp0 nlist
+                                 (ncons (pr1 v) (cins x (cins x (tpair m (pr2 v)))))
+                                 (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                 (cins x (tpair (succ m) v))
+                                 (maponpaths nlist nlist (lam z (ncons (pr1 v) z))
+                                   (cins x (cins x (tpair m (pr2 v))))
+                                   (cins x (tpair m (pr2 v)))
+                                   (IH (pr2 v)))
+                                 (pathsinv0 nlist (cins x (tpair (succ m) v))
+                                   (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                   (cinsskip x (pr1 v) (tpair m (pr2 v)) he hg))))))
+                         (natgtb (pr1 v) x))
+                        (idpath (natgtb (pr1 v) x))))
+                    (nateqb x (pr1 v)))
+                   (idpath (nateqb x (pr1 v)))))))
+           (pr1 l))
+          (pr2 l)))))
+ (defq 'cinscomm
+   '(pi x nat (pi y nat (pi l nlist (paths nlist (cins x (cins y l)) (cins y (cins x l))))))
+   '(lam x
+      (lam y
+        (lam l
+          ((nat_rect
+             (lam q
+               (pi v (nvec q)
+                 (paths nlist (cins x (cins y (tpair q v))) (cins y (cins x (tpair q v))))))
+             (lam v
+               ((bool_rect
+                  (lam c
+                    (pi hxy (paths bool (nateqb x y) c)
+                      (paths nlist (cins x (cins y (tpair 0 v))) (cins y (cins x (tpair 0 v))))))
+                  (lam hxy
+                    (transportf nat
+                      (lam z
+                        (paths nlist (cins x (cins z (tpair 0 v))) (cins z (cins x (tpair 0 v)))))
+                      x
+                      y
+                      (nateqbtopaths x y hxy)
+                      (idpath (cins x (cins x (tpair 0 v))))))
+                  (lam hxy
+                    ((bool_rect
+                       (lam c
+                         (pi hyx (paths bool (natgtb y x) c)
+                           (paths nlist (cins x (cins y (tpair 0 v)))
+                             (cins y (cins x (tpair 0 v))))))
+                       (lam hyx
+                         (pathscomp0 nlist (cins x (cins y (tpair 0 v)))
+                           (ncons x (ncons y nnil))
+                           (cins y (cins x (tpair 0 v)))
+                           (cinshead x y nnil hxy hyx)
+                           (pathsinv0 nlist (cins y (ncons x nnil)) (ncons x (cins y nnil))
+                             (cinsskip y x nnil
+                               (pathscomp0 bool (nateqb y x) (nateqb x y) false (nateqbsymm y x)
+                                 hxy)
+                               (natgthtoneg y x hyx)))))
+                       (lam hyx
+                         (pathscomp0 nlist (cins x (cins y (tpair 0 v))) (ncons y (cins x nnil))
+                           (cins y (cins x (tpair 0 v)))
+                           (cinsskip x y nnil hxy hyx)
+                           (pathsinv0 nlist (cins y (ncons x nnil)) (ncons y (ncons x nnil))
+                             (cinshead y x nnil
+                               (pathscomp0 bool (nateqb y x) (nateqb x y) false (nateqbsymm y x)
+                                 hxy)
+                               (nattrichot x y hxy hyx)))))
+                       (natgtb y x))
+                      (idpath (natgtb y x))))
+                  (nateqb x y))
+                 (idpath (nateqb x y))))
+             (lam m
+               (lam IH
+                 (lam v
+                   ((bool_rect
+                      (lam c
+                        (pi hyh (paths bool (nateqb y (pr1 v)) c)
+                          (paths nlist (cins x (cins y (tpair (succ m) v)))
+                            (cins y (cins x (tpair (succ m) v))))))
+                      (lam hyh
+                        (transportf nat
+                          (lam z
+                            (paths nlist (cins x (cins z (tpair (succ m) v)))
+                              (cins z (cins x (tpair (succ m) v)))))
+                          (pr1 v)
+                          y
+                          (pathsinv0 nat y (pr1 v) (nateqbtopaths y (pr1 v) hyh))
+                          ((bool_rect
+                             (lam c
+                               (pi hxh (paths bool (nateqb x (pr1 v)) c)
+                                 (paths nlist (cins x (cins (pr1 v) (tpair (succ m) v)))
+                                   (cins (pr1 v) (cins x (tpair (succ m) v))))))
+                             (lam hxh
+                               (transportf nat
+                                 (lam w
+                                   (paths nlist (cins w (cins (pr1 v) (tpair (succ m) v)))
+                                     (cins (pr1 v) (cins w (tpair (succ m) v)))))
+                                 (pr1 v)
+                                 x
+                                 (pathsinv0 nat x (pr1 v) (nateqbtopaths x (pr1 v) hxh))
+                                 (idpath (cins (pr1 v) (cins (pr1 v) (tpair (succ m) v))))))
+                             (lam hxh
+                               ((bool_rect
+                                  (lam c
+                                    (pi hhx (paths bool (natgtb (pr1 v) x) c)
+                                      (paths nlist (cins x (cins (pr1 v) (tpair (succ m) v)))
+                                        (cins (pr1 v) (cins x (tpair (succ m) v))))))
+                                  (lam hhx
+                                    (pathscomp0 nlist (cins x (cins (pr1 v) (tpair (succ m) v)))
+                                      (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                                      (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                      (maponpaths nlist nlist (lam z (cins x z))
+                                        (cins (pr1 v) (tpair (succ m) v))
+                                        (ncons (pr1 v) (tpair m (pr2 v)))
+                                        (cinsdedup (pr1 v) (pr1 v) (tpair m (pr2 v))
+                                          (nateqbrefl (pr1 v))))
+                                      (pathscomp0 nlist
+                                        (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                                        (ncons x (ncons (pr1 v) (tpair m (pr2 v))))
+                                        (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                        (cinshead x (pr1 v) (tpair m (pr2 v)) hxh hhx)
+                                        (pathscomp0 nlist
+                                          (ncons x (ncons (pr1 v) (tpair m (pr2 v))))
+                                          (ncons x
+                                            (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v)))))
+                                          (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                          (pathsinv0 nlist
+                                            (ncons x
+                                              (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v)))))
+                                            (ncons x (ncons (pr1 v) (tpair m (pr2 v))))
+                                            (maponpaths nlist nlist (lam z (ncons x z))
+                                              (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v))))
+                                              (ncons (pr1 v) (tpair m (pr2 v)))
+                                              (cinsdedup (pr1 v) (pr1 v) (tpair m (pr2 v))
+                                                (nateqbrefl (pr1 v)))))
+                                          (pathscomp0 nlist
+                                            (ncons x
+                                              (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v)))))
+                                            (cins (pr1 v)
+                                              (ncons x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                            (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                            (pathsinv0 nlist
+                                              (cins (pr1 v)
+                                                (ncons x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                              (ncons x
+                                                (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v)))))
+                                              (cinsskip (pr1 v) x
+                                                (ncons (pr1 v) (tpair m (pr2 v)))
+                                                (pathscomp0 bool (nateqb (pr1 v) x)
+                                                  (nateqb x (pr1 v))
+                                                  false
+                                                  (nateqbsymm (pr1 v) x)
+                                                  hxh)
+                                                (natgthtoneg (pr1 v) x hhx)))
+                                            (pathsinv0 nlist
+                                              (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                              (cins (pr1 v)
+                                                (ncons x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                              (maponpaths nlist nlist (lam z (cins (pr1 v) z))
+                                                (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                                                (ncons x (ncons (pr1 v) (tpair m (pr2 v))))
+                                                (cinshead x (pr1 v) (tpair m (pr2 v)) hxh hhx))))))))
+                                  (lam hhx
+                                    (pathscomp0 nlist (cins x (cins (pr1 v) (tpair (succ m) v)))
+                                      (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                                      (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                      (maponpaths nlist nlist (lam z (cins x z))
+                                        (cins (pr1 v) (tpair (succ m) v))
+                                        (ncons (pr1 v) (tpair m (pr2 v)))
+                                        (cinsdedup (pr1 v) (pr1 v) (tpair m (pr2 v))
+                                          (nateqbrefl (pr1 v))))
+                                      (pathscomp0 nlist
+                                        (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                                        (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                        (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                        (cinsskip x (pr1 v) (tpair m (pr2 v)) hxh hhx)
+                                        (pathscomp0 nlist
+                                          (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                          (cins (pr1 v)
+                                            (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                          (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                          (pathsinv0 nlist
+                                            (cins (pr1 v)
+                                              (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                            (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                            (cinsdedup (pr1 v) (pr1 v)
+                                              (cins x (tpair m (pr2 v)))
+                                              (nateqbrefl (pr1 v))))
+                                          (pathsinv0 nlist
+                                            (cins (pr1 v) (cins x (tpair (succ m) v)))
+                                            (cins (pr1 v)
+                                              (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                            (maponpaths nlist nlist (lam z (cins (pr1 v) z))
+                                              (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                                              (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                              (cinsskip x (pr1 v) (tpair m (pr2 v)) hxh hhx)))))))
+                                  (natgtb (pr1 v) x))
+                                 (idpath (natgtb (pr1 v) x))))
+                             (nateqb x (pr1 v)))
+                            (idpath (nateqb x (pr1 v))))))
+                      (lam hyh
+                        ((bool_rect
+                           (lam c
+                             (pi hxh (paths bool (nateqb x (pr1 v)) c)
+                               (paths nlist (cins x (cins y (tpair (succ m) v)))
+                                 (cins y (cins x (tpair (succ m) v))))))
+                           (lam hxh
+                             (transportf nat
+                               (lam w
+                                 (paths nlist (cins w (cins y (tpair (succ m) v)))
+                                   (cins y (cins w (tpair (succ m) v)))))
+                               (pr1 v)
+                               x
+                               (pathsinv0 nat x (pr1 v) (nateqbtopaths x (pr1 v) hxh))
+                               ((bool_rect
+                                  (lam c
+                                    (pi hhy (paths bool (natgtb (pr1 v) y) c)
+                                      (paths nlist (cins (pr1 v) (cins y (tpair (succ m) v)))
+                                        (cins y (cins (pr1 v) (tpair (succ m) v))))))
+                                  (lam hhy
+                                    (pathscomp0 nlist (cins (pr1 v) (cins y (tpair (succ m) v)))
+                                      (cins (pr1 v) (ncons y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                      (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                      (maponpaths nlist nlist (lam z (cins (pr1 v) z))
+                                        (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                        (ncons y (ncons (pr1 v) (tpair m (pr2 v))))
+                                        (cinshead y (pr1 v) (tpair m (pr2 v)) hyh hhy))
+                                      (pathscomp0 nlist
+                                        (cins (pr1 v)
+                                          (ncons y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                        (ncons y
+                                          (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v)))))
+                                        (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                        (cinsskip (pr1 v) y (ncons (pr1 v) (tpair m (pr2 v)))
+                                          (pathscomp0 bool (nateqb (pr1 v) y) (nateqb y (pr1 v))
+                                            false
+                                            (nateqbsymm (pr1 v) y)
+                                            hyh)
+                                          (natgthtoneg (pr1 v) y hhy))
+                                        (pathscomp0 nlist
+                                          (ncons y
+                                            (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v)))))
+                                          (ncons y (ncons (pr1 v) (tpair m (pr2 v))))
+                                          (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                          (maponpaths nlist nlist (lam z (ncons y z))
+                                            (cins (pr1 v) (ncons (pr1 v) (tpair m (pr2 v))))
+                                            (ncons (pr1 v) (tpair m (pr2 v)))
+                                            (cinsdedup (pr1 v) (pr1 v) (tpair m (pr2 v))
+                                              (nateqbrefl (pr1 v))))
+                                          (pathscomp0 nlist
+                                            (ncons y (ncons (pr1 v) (tpair m (pr2 v))))
+                                            (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                            (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                            (pathsinv0 nlist
+                                              (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                              (ncons y (ncons (pr1 v) (tpair m (pr2 v))))
+                                              (cinshead y (pr1 v) (tpair m (pr2 v)) hyh hhy))
+                                            (pathsinv0 nlist
+                                              (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                              (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                              (maponpaths nlist nlist (lam z (cins y z))
+                                                (cins (pr1 v) (tpair (succ m) v))
+                                                (ncons (pr1 v) (tpair m (pr2 v)))
+                                                (cinsdedup (pr1 v) (pr1 v) (tpair m (pr2 v))
+                                                  (nateqbrefl (pr1 v))))))))))
+                                  (lam hhy
+                                    (pathscomp0 nlist (cins (pr1 v) (cins y (tpair (succ m) v)))
+                                      (cins (pr1 v) (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                      (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                      (maponpaths nlist nlist (lam z (cins (pr1 v) z))
+                                        (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                        (ncons (pr1 v) (cins y (tpair m (pr2 v))))
+                                        (cinsskip y (pr1 v) (tpair m (pr2 v)) hyh hhy))
+                                      (pathscomp0 nlist
+                                        (cins (pr1 v) (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                        (ncons (pr1 v) (cins y (tpair m (pr2 v))))
+                                        (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                        (cinsdedup (pr1 v) (pr1 v) (cins y (tpair m (pr2 v)))
+                                          (nateqbrefl (pr1 v)))
+                                        (pathscomp0 nlist
+                                          (ncons (pr1 v) (cins y (tpair m (pr2 v))))
+                                          (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                          (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                          (pathsinv0 nlist
+                                            (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                            (ncons (pr1 v) (cins y (tpair m (pr2 v))))
+                                            (cinsskip y (pr1 v) (tpair m (pr2 v)) hyh hhy))
+                                          (pathsinv0 nlist
+                                            (cins y (cins (pr1 v) (tpair (succ m) v)))
+                                            (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                            (maponpaths nlist nlist (lam z (cins y z))
+                                              (cins (pr1 v) (tpair (succ m) v))
+                                              (ncons (pr1 v) (tpair m (pr2 v)))
+                                              (cinsdedup (pr1 v) (pr1 v) (tpair m (pr2 v))
+                                                (nateqbrefl (pr1 v)))))))))
+                                  (natgtb (pr1 v) y))
+                                 (idpath (natgtb (pr1 v) y)))))
+                           (lam hxh
+                             ((bool_rect
+                                (lam c
+                                  (pi hhy (paths bool (natgtb (pr1 v) y) c)
+                                    (paths nlist (cins x (cins y (tpair (succ m) v)))
+                                      (cins y (cins x (tpair (succ m) v))))))
+                                (lam hhy
+                                  ((bool_rect
+                                     (lam c
+                                       (pi hhx (paths bool (natgtb (pr1 v) x) c)
+                                         (paths nlist (cins x (cins y (tpair (succ m) v)))
+                                           (cins y (cins x (tpair (succ m) v))))))
+                                     (lam hhx
+                                       ((bool_rect
+                                          (lam c
+                                            (pi hxy (paths bool (nateqb x y) c)
+                                              (paths nlist (cins x (cins y (tpair (succ m) v)))
+                                                (cins y (cins x (tpair (succ m) v))))))
+                                          (lam hxy
+                                            (transportf nat
+                                              (lam w
+                                                (paths nlist
+                                                  (cins w (cins y (tpair (succ m) v)))
+                                                  (cins y (cins w (tpair (succ m) v)))))
+                                              y
+                                              x
+                                              (pathsinv0 nat x y (nateqbtopaths x y hxy))
+                                              (idpath (cins y (cins y (tpair (succ m) v))))))
+                                          (lam hxy
+                                            ((bool_rect
+                                               (lam c
+                                                 (pi hyx (paths bool (natgtb y x) c)
+                                                   (paths nlist
+                                                     (cins x (cins y (tpair (succ m) v)))
+                                                     (cins y (cins x (tpair (succ m) v))))))
+                                               (lam hyx
+                                                 (pathscomp0 nlist
+                                                   (cins x (cins y (tpair (succ m) v)))
+                                                   (cins x
+                                                     (ncons y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                   (cins y (cins x (tpair (succ m) v)))
+                                                   (maponpaths nlist nlist (lam z (cins x z))
+                                                     (cins y (tpair (succ m) v))
+                                                     (ncons y (ncons (pr1 v) (tpair m (pr2 v))))
+                                                     (cinshead y (pr1 v) (tpair m (pr2 v)) hyh
+                                                       hhy))
+                                                   (pathscomp0 nlist
+                                                     (cins x
+                                                       (ncons y
+                                                         (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                     (ncons x
+                                                       (ncons y
+                                                         (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                     (cins y (cins x (tpair (succ m) v)))
+                                                     (cinshead x y
+                                                       (ncons (pr1 v) (tpair m (pr2 v)))
+                                                       hxy
+                                                       hyx)
+                                                     (pathscomp0 nlist
+                                                       (ncons x
+                                                         (ncons y
+                                                           (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                       (ncons x
+                                                         (cins y
+                                                           (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                       (cins y (cins x (tpair (succ m) v)))
+                                                       (pathsinv0 nlist
+                                                         (ncons x
+                                                           (cins y
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                         (ncons x
+                                                           (ncons y
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                         (maponpaths nlist nlist
+                                                           (lam z (ncons x z))
+                                                           (cins y
+                                                             (ncons (pr1 v) (tpair m (pr2 v))))
+                                                           (ncons y
+                                                             (ncons (pr1 v) (tpair m (pr2 v))))
+                                                           (cinshead y (pr1 v) (tpair m (pr2 v))
+                                                             hyh
+                                                             hhy)))
+                                                       (pathscomp0 nlist
+                                                         (ncons x
+                                                           (cins y
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                         (cins y
+                                                           (ncons x
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                         (cins y (cins x (tpair (succ m) v)))
+                                                         (pathsinv0 nlist
+                                                           (cins y
+                                                             (ncons x
+                                                               (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                           (ncons x
+                                                             (cins y
+                                                               (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                           (cinsskip y x
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))
+                                                             (pathscomp0 bool (nateqb y x)
+                                                               (nateqb x y)
+                                                               false
+                                                               (nateqbsymm y x)
+                                                               hxy)
+                                                             (natgthtoneg y x hyx)))
+                                                         (pathsinv0 nlist
+                                                           (cins y (cins x (tpair (succ m) v)))
+                                                           (cins y
+                                                             (ncons x
+                                                               (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                           (maponpaths nlist nlist
+                                                             (lam z (cins y z))
+                                                             (cins x (tpair (succ m) v))
+                                                             (ncons x
+                                                               (ncons (pr1 v) (tpair m (pr2 v))))
+                                                             (cinshead x (pr1 v)
+                                                               (tpair m (pr2 v))
+                                                               hxh
+                                                               hhx))))))))
+                                               (lam hyx
+                                                 (pathscomp0 nlist
+                                                   (cins x (cins y (tpair (succ m) v)))
+                                                   (cins x
+                                                     (ncons y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                   (cins y (cins x (tpair (succ m) v)))
+                                                   (maponpaths nlist nlist (lam z (cins x z))
+                                                     (cins y (tpair (succ m) v))
+                                                     (ncons y (ncons (pr1 v) (tpair m (pr2 v))))
+                                                     (cinshead y (pr1 v) (tpair m (pr2 v)) hyh
+                                                       hhy))
+                                                   (pathscomp0 nlist
+                                                     (cins x
+                                                       (ncons y
+                                                         (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                     (ncons y
+                                                       (cins x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                     (cins y (cins x (tpair (succ m) v)))
+                                                     (cinsskip x y
+                                                       (ncons (pr1 v) (tpair m (pr2 v)))
+                                                       hxy
+                                                       hyx)
+                                                     (pathscomp0 nlist
+                                                       (ncons y
+                                                         (cins x
+                                                           (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                       (ncons y
+                                                         (ncons x
+                                                           (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                       (cins y (cins x (tpair (succ m) v)))
+                                                       (maponpaths nlist nlist
+                                                         (lam z (ncons y z))
+                                                         (cins x
+                                                           (ncons (pr1 v) (tpair m (pr2 v))))
+                                                         (ncons x
+                                                           (ncons (pr1 v) (tpair m (pr2 v))))
+                                                         (cinshead x (pr1 v) (tpair m (pr2 v))
+                                                           hxh
+                                                           hhx))
+                                                       (pathscomp0 nlist
+                                                         (ncons y
+                                                           (ncons x
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                         (cins y
+                                                           (ncons x
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                         (cins y (cins x (tpair (succ m) v)))
+                                                         (pathsinv0 nlist
+                                                           (cins y
+                                                             (ncons x
+                                                               (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                           (ncons y
+                                                             (ncons x
+                                                               (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                           (cinshead y x
+                                                             (ncons (pr1 v) (tpair m (pr2 v)))
+                                                             (pathscomp0 bool (nateqb y x)
+                                                               (nateqb x y)
+                                                               false
+                                                               (nateqbsymm y x)
+                                                               hxy)
+                                                             (nattrichot x y hxy hyx)))
+                                                         (pathsinv0 nlist
+                                                           (cins y (cins x (tpair (succ m) v)))
+                                                           (cins y
+                                                             (ncons x
+                                                               (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                           (maponpaths nlist nlist
+                                                             (lam z (cins y z))
+                                                             (cins x (tpair (succ m) v))
+                                                             (ncons x
+                                                               (ncons (pr1 v) (tpair m (pr2 v))))
+                                                             (cinshead x (pr1 v)
+                                                               (tpair m (pr2 v))
+                                                               hxh
+                                                               hhx))))))))
+                                               (natgtb y x))
+                                              (idpath (natgtb y x))))
+                                          (nateqb x y))
+                                         (idpath (nateqb x y))))
+                                     (lam hhx
+                                       (pathscomp0 nlist (cins x (cins y (tpair (succ m) v)))
+                                         (cins x (ncons y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                         (cins y (cins x (tpair (succ m) v)))
+                                         (maponpaths nlist nlist (lam z (cins x z))
+                                           (cins y (tpair (succ m) v))
+                                           (ncons y (ncons (pr1 v) (tpair m (pr2 v))))
+                                           (cinshead y (pr1 v) (tpair m (pr2 v)) hyh hhy))
+                                         (pathscomp0 nlist
+                                           (cins x (ncons y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                           (ncons y (cins x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                           (cins y (cins x (tpair (succ m) v)))
+                                           (cinsskip x y (ncons (pr1 v) (tpair m (pr2 v)))
+                                             (natgthtoneq x y
+                                               (natlehgthtrans (pr1 v) x y hhx hhy))
+                                             (natgthtoneg x y
+                                               (natlehgthtrans (pr1 v) x y hhx hhy)))
+                                           (pathscomp0 nlist
+                                             (ncons y (cins x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                             (ncons y (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                             (cins y (cins x (tpair (succ m) v)))
+                                             (maponpaths nlist nlist (lam z (ncons y z))
+                                               (cins x (ncons (pr1 v) (tpair m (pr2 v))))
+                                               (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                               (cinsskip x (pr1 v) (tpair m (pr2 v)) hxh hhx))
+                                             (pathscomp0 nlist
+                                               (ncons y
+                                                 (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                               (cins y
+                                                 (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                               (cins y (cins x (tpair (succ m) v)))
+                                               (pathsinv0 nlist
+                                                 (cins y
+                                                   (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                                 (ncons y
+                                                   (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                                 (cinshead y (pr1 v) (cins x (tpair m (pr2 v)))
+                                                   hyh
+                                                   hhy))
+                                               (pathsinv0 nlist
+                                                 (cins y (cins x (tpair (succ m) v)))
+                                                 (cins y
+                                                   (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                                 (maponpaths nlist nlist (lam z (cins y z))
+                                                   (cins x (tpair (succ m) v))
+                                                   (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                                   (cinsskip x (pr1 v) (tpair m (pr2 v)) hxh hhx))))))))
+                                     (natgtb (pr1 v) x))
+                                    (idpath (natgtb (pr1 v) x))))
+                                (lam hhy
+                                  ((bool_rect
+                                     (lam c
+                                       (pi hhx (paths bool (natgtb (pr1 v) x) c)
+                                         (paths nlist (cins x (cins y (tpair (succ m) v)))
+                                           (cins y (cins x (tpair (succ m) v))))))
+                                     (lam hhx
+                                       (pathscomp0 nlist (cins x (cins y (tpair (succ m) v)))
+                                         (cins x (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                         (cins y (cins x (tpair (succ m) v)))
+                                         (maponpaths nlist nlist (lam z (cins x z))
+                                           (cins y (tpair (succ m) v))
+                                           (ncons (pr1 v) (cins y (tpair m (pr2 v))))
+                                           (cinsskip y (pr1 v) (tpair m (pr2 v)) hyh hhy))
+                                         (pathscomp0 nlist
+                                           (cins x (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                           (ncons x (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                           (cins y (cins x (tpair (succ m) v)))
+                                           (cinshead x (pr1 v) (cins y (tpair m (pr2 v))) hxh
+                                             hhx)
+                                           (pathscomp0 nlist
+                                             (ncons x (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                             (ncons x (cins y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                             (cins y (cins x (tpair (succ m) v)))
+                                             (pathsinv0 nlist
+                                               (ncons x
+                                                 (cins y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                               (ncons x
+                                                 (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                               (maponpaths nlist nlist (lam z (ncons x z))
+                                                 (cins y (ncons (pr1 v) (tpair m (pr2 v))))
+                                                 (ncons (pr1 v) (cins y (tpair m (pr2 v))))
+                                                 (cinsskip y (pr1 v) (tpair m (pr2 v)) hyh hhy)))
+                                             (pathscomp0 nlist
+                                               (ncons x
+                                                 (cins y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                               (cins y
+                                                 (ncons x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                               (cins y (cins x (tpair (succ m) v)))
+                                               (pathsinv0 nlist
+                                                 (cins y
+                                                   (ncons x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                 (ncons x
+                                                   (cins y (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                 (cinsskip y x (ncons (pr1 v) (tpair m (pr2 v)))
+                                                   (natgthtoneq y x
+                                                     (natlehgthtrans (pr1 v) y x hhy hhx))
+                                                   (natgthtoneg y x
+                                                     (natlehgthtrans (pr1 v) y x hhy hhx))))
+                                               (pathsinv0 nlist
+                                                 (cins y (cins x (tpair (succ m) v)))
+                                                 (cins y
+                                                   (ncons x (ncons (pr1 v) (tpair m (pr2 v)))))
+                                                 (maponpaths nlist nlist (lam z (cins y z))
+                                                   (cins x (tpair (succ m) v))
+                                                   (ncons x (ncons (pr1 v) (tpair m (pr2 v))))
+                                                   (cinshead x (pr1 v) (tpair m (pr2 v)) hxh hhx))))))))
+                                     (lam hhx
+                                       (pathscomp0 nlist (cins x (cins y (tpair (succ m) v)))
+                                         (cins x (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                         (cins y (cins x (tpair (succ m) v)))
+                                         (maponpaths nlist nlist (lam z (cins x z))
+                                           (cins y (tpair (succ m) v))
+                                           (ncons (pr1 v) (cins y (tpair m (pr2 v))))
+                                           (cinsskip y (pr1 v) (tpair m (pr2 v)) hyh hhy))
+                                         (pathscomp0 nlist
+                                           (cins x (ncons (pr1 v) (cins y (tpair m (pr2 v)))))
+                                           (ncons (pr1 v) (cins x (cins y (tpair m (pr2 v)))))
+                                           (cins y (cins x (tpair (succ m) v)))
+                                           (cinsskip x (pr1 v) (cins y (tpair m (pr2 v))) hxh
+                                             hhx)
+                                           (pathscomp0 nlist
+                                             (ncons (pr1 v) (cins x (cins y (tpair m (pr2 v)))))
+                                             (ncons (pr1 v) (cins y (cins x (tpair m (pr2 v)))))
+                                             (cins y (cins x (tpair (succ m) v)))
+                                             (maponpaths nlist nlist (lam z (ncons (pr1 v) z))
+                                               (cins x (cins y (tpair m (pr2 v))))
+                                               (cins y (cins x (tpair m (pr2 v))))
+                                               (IH (pr2 v)))
+                                             (pathscomp0 nlist
+                                               (ncons (pr1 v)
+                                                 (cins y (cins x (tpair m (pr2 v)))))
+                                               (cins y
+                                                 (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                               (cins y (cins x (tpair (succ m) v)))
+                                               (pathsinv0 nlist
+                                                 (cins y
+                                                   (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                                 (ncons (pr1 v)
+                                                   (cins y (cins x (tpair m (pr2 v)))))
+                                                 (cinsskip y (pr1 v) (cins x (tpair m (pr2 v)))
+                                                   hyh
+                                                   hhy))
+                                               (pathsinv0 nlist
+                                                 (cins y (cins x (tpair (succ m) v)))
+                                                 (cins y
+                                                   (ncons (pr1 v) (cins x (tpair m (pr2 v)))))
+                                                 (maponpaths nlist nlist (lam z (cins y z))
+                                                   (cins x (tpair (succ m) v))
+                                                   (ncons (pr1 v) (cins x (tpair m (pr2 v))))
+                                                   (cinsskip x (pr1 v) (tpair m (pr2 v)) hxh hhx))))))))
+                                     (natgtb (pr1 v) x))
+                                    (idpath (natgtb (pr1 v) x))))
+                                (natgtb (pr1 v) y))
+                               (idpath (natgtb (pr1 v) y))))
+                           (nateqb x (pr1 v)))
+                          (idpath (nateqb x (pr1 v)))))
+                      (nateqb y (pr1 v)))
+                     (idpath (nateqb y (pr1 v)))))))
+             (pr1 l))
+            (pr2 l))))))
+ ; the canonical set computes: sorted, deduped, order-free
+ ((vof 0 '(ncons 2 (ncons 5 (ncons 9 nnil)))) = (vof 0 '(cins 5 (ncons 2 (ncons 9 nnil)))))
+ ((vof 0 '(cins 5 (cins 9 nnil))) = (vof 0 '(cins 9 (cins 5 nnil))))
+ ((vof 0 '(cins 5 (cins 5 (ncons 2 nnil)))) = (vof 0 '(cins 5 (ncons 2 nnil)))))
+
+; --- the bubble model: sseg cuts the hull, rend lays a rival inside it,
+; --- scell packs hull base + the cins-canonical rival set. hash rides as
+; --- a pi-bound function -- lcode instantiates it in the demos ---
+(assert
+ (defn 'sseg
+   '(pi s nlist (pi i nat (pi n nat nlist)))
+   '(lam s (lam i (lam n (ltake n (ldrop i s))))))
+ (defn 'ulo
+   '(pi p hunk (pi q hunk nat))
+   '(lam p (lam q (natmin (hi p) (hi q)))))
+ (defn 'uhi
+   '(pi p hunk (pi q hunk nat))
+   '(lam p (lam q (natmax (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))))
+ (defn 'rend
+   '(pi s nlist (pi lo nat (pi hh nat (pi r hunk nlist))))
+   '(lam s
+      (lam lo
+        (lam hh
+          (lam r (splice (sseg s lo (natminus hh lo)) (natminus (hi r) lo) (nlen (ho r)) (hn r)))))))
+ (defn 'cell
+   'UU
+   '(total2 x nlist nlist))
+ (defn 'scell
+   '(pi hash (pi l nlist nat) (pi s nlist (pi p hunk (pi q hunk cell))))
+   '(lam hash
+      (lam s
+        (lam p
+          (lam q
+            (tpair (sseg s (ulo p q) (natminus (uhi p q) (ulo p q)))
+              (cins (hash (rend s (ulo p q) (uhi p q) p))
+                (cins (hash (rend s (ulo p q) (uhi p q) q)) nnil))))))))
+ (defq 'scell-lo
+   '(pi hash (pi l nlist nat)
+      (pi s nlist
+        (pi p hunk
+          (pi q hunk
+            (paths cell
+              (tpair (sseg s (ulo p q) (natminus (uhi p q) (ulo p q)))
+                (cins (hash (rend s (ulo p q) (uhi p q) p))
+                  (cins (hash (rend s (ulo p q) (uhi p q) q)) nnil)))
+              (tpair (sseg s (ulo q p) (natminus (uhi p q) (ulo q p)))
+                (cins (hash (rend s (ulo q p) (uhi p q) p))
+                  (cins (hash (rend s (ulo q p) (uhi p q) q)) nnil))))))))
+   '(lam hash
+      (lam s
+        (lam p
+          (lam q
+            (maponpaths nat cell
+              (lam z
+                (tpair (sseg s z (natminus (uhi p q) z))
+                  (cins (hash (rend s z (uhi p q) p)) (cins (hash (rend s z (uhi p q) q)) nnil))))
+              (ulo p q)
+              (ulo q p)
+              (natmincomm (hi p) (hi q))))))))
+ (defq 'scell-hi
+   '(pi hash (pi l nlist nat)
+      (pi s nlist
+        (pi p hunk
+          (pi q hunk
+            (paths cell
+              (tpair (sseg s (ulo q p) (natminus (uhi p q) (ulo q p)))
+                (cins (hash (rend s (ulo q p) (uhi p q) p))
+                  (cins (hash (rend s (ulo q p) (uhi p q) q)) nnil)))
+              (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
+                (cins (hash (rend s (ulo q p) (uhi q p) p))
+                  (cins (hash (rend s (ulo q p) (uhi q p) q)) nnil))))))))
+   '(lam hash
+      (lam s
+        (lam p
+          (lam q
+            (maponpaths nat cell
+              (lam z
+                (tpair (sseg s (ulo q p) (natminus z (ulo q p)))
+                  (cins (hash (rend s (ulo q p) z p)) (cins (hash (rend s (ulo q p) z q)) nnil))))
+              (uhi p q)
+              (uhi q p)
+              (natmaxcomm (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q))))))))))
+ (defq 'scell-riv
+   '(pi hash (pi l nlist nat)
+      (pi s nlist
+        (pi p hunk
+          (pi q hunk
+            (paths cell
+              (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
+                (cins (hash (rend s (ulo q p) (uhi q p) p))
+                  (cins (hash (rend s (ulo q p) (uhi q p) q)) nnil)))
+              (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
+                (cins (hash (rend s (ulo q p) (uhi q p) q))
+                  (cins (hash (rend s (ulo q p) (uhi q p) p)) nnil))))))))
+   '(lam hash
+      (lam s
+        (lam p
+          (lam q
+            (maponpaths nlist cell
+              (lam z (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p))) z))
+              (cins (hash (rend s (ulo q p) (uhi q p) p))
+                (cins (hash (rend s (ulo q p) (uhi q p) q)) nnil))
+              (cins (hash (rend s (ulo q p) (uhi q p) q))
+                (cins (hash (rend s (ulo q p) (uhi q p) p)) nnil))
+              (cinscomm (hash (rend s (ulo q p) (uhi q p) p))
+                (hash (rend s (ulo q p) (uhi q p) q))
+                nnil)))))))
+ (defq 'scell-comm
+   '(pi hash (pi l nlist nat)
+      (pi s nlist (pi p hunk (pi q hunk (paths cell (scell hash s p q) (scell hash s q p))))))
+   '(lam hash
+      (lam s
+        (lam p
+          (lam q
+            (pathscomp0 cell
+              (tpair (sseg s (ulo p q) (natminus (uhi p q) (ulo p q)))
+                (cins (hash (rend s (ulo p q) (uhi p q) p))
+                  (cins (hash (rend s (ulo p q) (uhi p q) q)) nnil)))
+              (tpair (sseg s (ulo q p) (natminus (uhi p q) (ulo q p)))
+                (cins (hash (rend s (ulo q p) (uhi p q) p))
+                  (cins (hash (rend s (ulo q p) (uhi p q) q)) nnil)))
+              (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
+                (cins (hash (rend s (ulo q p) (uhi q p) q))
+                  (cins (hash (rend s (ulo q p) (uhi q p) p)) nnil)))
+              (scell-lo hash s p q)
+              (pathscomp0 cell
+                (tpair (sseg s (ulo q p) (natminus (uhi p q) (ulo q p)))
+                  (cins (hash (rend s (ulo q p) (uhi p q) p))
+                    (cins (hash (rend s (ulo q p) (uhi p q) q)) nnil)))
+                (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
+                  (cins (hash (rend s (ulo q p) (uhi q p) p))
+                    (cins (hash (rend s (ulo q p) (uhi q p) q)) nnil)))
+                (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
+                  (cins (hash (rend s (ulo q p) (uhi q p) q))
+                    (cins (hash (rend s (ulo q p) (uhi q p) p)) nnil)))
+                (scell-hi hash s p q)
+                (scell-riv hash s p q))))))))
+ ; the bubble forgets arrival order, computed at lcode hash (tiny values:
+ ; a unary lcode tower grows QUADRATICALLY in the rendered content)
+ ((vof 0 '(scell lcode (ncons 1 (ncons 2 nnil)) (mkh 0 (ncons 1 nnil) (ncons 2 nnil)) (mkh 1 (ncons 2 nnil) nnil)))
+  = (vof 0 '(scell lcode (ncons 1 (ncons 2 nnil)) (mkh 1 (ncons 2 nnil) nnil) (mkh 0 (ncons 1 nnil) (ncons 2 nnil))))))
+
+; --- the WIDENING law: padding commutes with rendering (a rival over a
+; --- narrow hull, padded up when the bubble widens, IS the rival over the
+; --- wide hull) -- pure take/drop/append fusion. the BUBBLE law: the
+; --- conflicted hull contracts to ONE seat, so the merged length reads
+; --- off the hull alone -- every downstream seat determinate before
+; --- anyone resolves ---
+(assert
+ (defq 'splice-pad
+   '(pi pl nlist
+      (pi pr nlist
+        (pi b nlist
+          (pi n nlist
+            (pi ii nat
+              (pi c nat
+                (pi h (paths bool (natgtb (add ii c) (nlen b)) false)
+                  (paths nlist (lapp pl (lapp (splice b ii c n) pr))
+                    (splice (lapp pl (lapp b pr)) (add (nlen pl) ii) c n)))))))))
+   '(lam pl
+      (lam pr
+        (lam b
+          (lam n
+            (lam ii
+              (lam c
+                (lam h
+                  (pathscomp0 nlist (lapp pl (lapp (splice b ii c n) pr))
+                    (lapp pl (lapp (ltake ii b) (lapp (lapp n (ldrop (add ii c) b)) pr)))
+                    (lapp (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                      (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                    (maponpaths nlist nlist (lam z (lapp pl z)) (lapp (splice b ii c n) pr)
+                      (lapp (ltake ii b) (lapp (lapp n (ldrop (add ii c) b)) pr))
+                      (lappassoc (ltake ii b) (lapp n (ldrop (add ii c) b)) pr))
+                    (pathscomp0 nlist
+                      (lapp pl (lapp (ltake ii b) (lapp (lapp n (ldrop (add ii c) b)) pr)))
+                      (lapp pl (lapp (ltake ii b) (lapp n (lapp (ldrop (add ii c) b) pr))))
+                      (lapp (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                        (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                      (maponpaths nlist nlist (lam z (lapp pl (lapp (ltake ii b) z)))
+                        (lapp (lapp n (ldrop (add ii c) b)) pr)
+                        (lapp n (lapp (ldrop (add ii c) b) pr))
+                        (lappassoc n (ldrop (add ii c) b) pr))
+                      (pathscomp0 nlist
+                        (lapp pl (lapp (ltake ii b) (lapp n (lapp (ldrop (add ii c) b) pr))))
+                        (lapp (lapp pl (ltake ii b)) (lapp n (lapp (ldrop (add ii c) b) pr)))
+                        (lapp (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                          (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                        (pathsinv0 nlist
+                          (lapp (lapp pl (ltake ii b)) (lapp n (lapp (ldrop (add ii c) b) pr)))
+                          (lapp pl (lapp (ltake ii b) (lapp n (lapp (ldrop (add ii c) b) pr))))
+                          (lappassoc pl (ltake ii b) (lapp n (lapp (ldrop (add ii c) b) pr))))
+                        (pathscomp0 nlist
+                          (lapp (lapp pl (ltake ii b)) (lapp n (lapp (ldrop (add ii c) b) pr)))
+                          (lapp (lapp pl (ltake ii b)) (lapp n (ldrop (add ii c) (lapp b pr))))
+                          (lapp (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                            (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                          (pathsinv0 nlist
+                            (lapp (lapp pl (ltake ii b)) (lapp n (ldrop (add ii c) (lapp b pr))))
+                            (lapp (lapp pl (ltake ii b)) (lapp n (lapp (ldrop (add ii c) b) pr)))
+                            (maponpaths nlist nlist
+                              (lam z (lapp (lapp pl (ltake ii b)) (lapp n z)))
+                              (ldrop (add ii c) (lapp b pr))
+                              (lapp (ldrop (add ii c) b) pr)
+                              (ldropprefix (add ii c) b pr h)))
+                          (pathscomp0 nlist
+                            (lapp (lapp pl (ltake ii b)) (lapp n (ldrop (add ii c) (lapp b pr))))
+                            (lapp (lapp pl (ltake ii b))
+                              (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                            (lapp (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                              (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                            (pathsinv0 nlist
+                              (lapp (lapp pl (ltake ii b))
+                                (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                              (lapp (lapp pl (ltake ii b))
+                                (lapp n (ldrop (add ii c) (lapp b pr))))
+                              (pathscomp0 nlist
+                                (lapp (lapp pl (ltake ii b))
+                                  (lapp n
+                                    (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                                (lapp (lapp pl (ltake ii b))
+                                  (lapp n
+                                    (ldrop (add (nlen pl) (add ii c)) (lapp pl (lapp b pr)))))
+                                (lapp (lapp pl (ltake ii b))
+                                  (lapp n (ldrop (add ii c) (lapp b pr))))
+                                (maponpaths nat nlist
+                                  (lam z
+                                    (lapp (lapp pl (ltake ii b))
+                                      (lapp n (ldrop z (lapp pl (lapp b pr))))))
+                                  (add (add (nlen pl) ii) c)
+                                  (add (nlen pl) (add ii c))
+                                  (natplusassoc (nlen pl) ii c))
+                                (maponpaths nlist nlist
+                                  (lam z (lapp (lapp pl (ltake ii b)) (lapp n z)))
+                                  (ldrop (add (nlen pl) (add ii c)) (lapp pl (lapp b pr)))
+                                  (ldrop (add ii c) (lapp b pr))
+                                  (ldropplusapp pl (add ii c) (lapp b pr)))))
+                            (pathscomp0 nlist
+                              (lapp (lapp pl (ltake ii b))
+                                (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                              (lapp (lapp pl (ltake ii (lapp b pr)))
+                                (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                              (lapp (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                                (lapp n (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                              (pathsinv0 nlist
+                                (lapp (lapp pl (ltake ii (lapp b pr)))
+                                  (lapp n
+                                    (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                                (lapp (lapp pl (ltake ii b))
+                                  (lapp n
+                                    (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                                (maponpaths nlist nlist
+                                  (lam z
+                                    (lapp (lapp pl z)
+                                      (lapp n
+                                        (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr))))))
+                                  (ltake ii (lapp b pr))
+                                  (ltake ii b)
+                                  (ltakeprefix ii b pr
+                                    (istransnatleh ii (add ii c) (nlen b) (natlehnplusnm ii c) h))))
+                              (pathsinv0 nlist
+                                (lapp (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                                  (lapp n
+                                    (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                                (lapp (lapp pl (ltake ii (lapp b pr)))
+                                  (lapp n
+                                    (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr)))))
+                                (maponpaths nlist nlist
+                                  (lam z
+                                    (lapp z
+                                      (lapp n
+                                        (ldrop (add (add (nlen pl) ii) c) (lapp pl (lapp b pr))))))
+                                  (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
+                                  (lapp pl (ltake ii (lapp b pr)))
+                                  (ltakeplusapp pl ii (lapp b pr))))))))))))))))))
+ (defq 'bubble-len
+   '(pi s nlist
+      (pi p hunk
+        (pi q hunk
+          (pi x nat
+            (pi h (paths bool (natgtb (uhi p q) (nlen s)) false)
+              (paths nat
+                (nlen (splice s (ulo p q) (natminus (uhi p q) (ulo p q)) (ncons x nnil)))
+                (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))))))))
+   '(lam s
+      (lam p
+        (lam q
+          (lam x
+            (lam h
+              (pathscomp0 nat
+                (nlen (splice s (ulo p q) (natminus (uhi p q) (ulo p q)) (ncons x nnil)))
+                (add (nlen (ltake (ulo p q) s))
+                  (nlen
+                    (lapp (ncons x nnil)
+                      (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s))))
+                (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))
+                (lapplen (ltake (ulo p q) s)
+                  (lapp (ncons x nnil) (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s)))
+                (pathscomp0 nat
+                  (add (nlen (ltake (ulo p q) s))
+                    (nlen
+                      (lapp (ncons x nnil)
+                        (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s))))
+                  (add (ulo p q)
+                    (nlen
+                      (lapp (ncons x nnil)
+                        (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s))))
+                  (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))
+                  (maponpaths nat nat
+                    (lam z
+                      (add z
+                        (nlen
+                          (lapp (ncons x nnil)
+                            (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s)))))
+                    (nlen (ltake (ulo p q) s))
+                    (ulo p q)
+                    (ltakelen (ulo p q) s
+                      (istransnatleh (ulo p q) (uhi p q) (nlen s)
+                        (istransnatleh (ulo p q) (add (hi p) (nlen (ho p))) (uhi p q)
+                          (istransnatleh (ulo p q) (hi p) (add (hi p) (nlen (ho p)))
+                            (natminlel (hi p) (hi q))
+                            (natlehnplusnm (hi p) (nlen (ho p))))
+                          (natmaxgel (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))
+                        h)))
+                  (pathscomp0 nat
+                    (add (ulo p q)
+                      (nlen
+                        (lapp (ncons x nnil)
+                          (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s))))
+                    (add (ulo p q)
+                      (succ (nlen (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s))))
+                    (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))
+                    (maponpaths nat nat (lam z (add (ulo p q) z))
+                      (nlen
+                        (lapp (ncons x nnil)
+                          (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s)))
+                      (succ (nlen (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s)))
+                      (lapplen (ncons x nnil)
+                        (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s)))
+                    (pathscomp0 nat
+                      (add (ulo p q)
+                        (succ (nlen (ldrop (add (ulo p q) (natminus (uhi p q) (ulo p q))) s))))
+                      (add (ulo p q) (succ (nlen (ldrop (uhi p q) s))))
+                      (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))
+                      (maponpaths nat nat (lam z (add (ulo p q) (succ (nlen (ldrop z s)))))
+                        (add (ulo p q) (natminus (uhi p q) (ulo p q)))
+                        (uhi p q)
+                        (natlehplusminus (ulo p q) (uhi p q)
+                          (istransnatleh (ulo p q) (add (hi p) (nlen (ho p))) (uhi p q)
+                            (istransnatleh (ulo p q) (hi p) (add (hi p) (nlen (ho p)))
+                              (natminlel (hi p) (hi q))
+                              (natlehnplusnm (hi p) (nlen (ho p))))
+                            (natmaxgel (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))))
+                      (pathscomp0 nat (add (ulo p q) (succ (nlen (ldrop (uhi p q) s))))
+                        (add (ulo p q) (succ (natminus (nlen s) (uhi p q))))
+                        (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))
+                        (maponpaths nat nat (lam z (add (ulo p q) (succ z)))
+                          (nlen (ldrop (uhi p q) s))
+                          (natminus (nlen s) (uhi p q))
+                          (ldroplen (uhi p q) s))
+                        (pathscomp0 nat (add (ulo p q) (succ (natminus (nlen s) (uhi p q))))
+                          (succ (add (ulo p q) (natminus (nlen s) (uhi p q))))
+                          (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))
+                          (natplusnsm (ulo p q) (natminus (nlen s) (uhi p q)))
+                          (maponpaths nat nat (lam z (succ z))
+                            (add (ulo p q) (natminus (nlen s) (uhi p q)))
+                            (natminus (nlen s) (natminus (uhi p q) (ulo p q)))
+                            (natminusswap (ulo p q) (uhi p q) (nlen s)
+                              (istransnatleh (ulo p q) (add (hi p) (nlen (ho p))) (uhi p q)
+                                (istransnatleh (ulo p q) (hi p) (add (hi p) (nlen (ho p)))
+                                  (natminlel (hi p) (hi q))
+                                  (natlehnplusnm (hi p) (nlen (ho p))))
+                                (natmaxgel (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))
+                              h))))))))))))))
+ ; the bubble contracts the hull to one seat: length off the hull alone
+ (id? (vof 0 '2) (vof 0 '(nlen (splice (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil)))) 0 3 (ncons 9 nnil)))))
+ ; and padding commutes with rendering
+ ((vof 0 '(lapp (ncons 7 nnil) (lapp (splice (ncons 1 (ncons 2 (ncons 3 nnil))) 1 1 (ncons 5 nnil)) (ncons 8 nnil))))
+  = (vof 0 '(splice (lapp (ncons 7 nnil) (lapp (ncons 1 (ncons 2 (ncons 3 nnil))) (ncons 8 nnil))) 2 1 (ncons 5 nnil)))))
+
