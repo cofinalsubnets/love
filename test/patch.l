@@ -5,8 +5,9 @@
 ; selectable sets, with COMMUTE the primitive underneath); proof/rocq/patch.v
 ; machine-checks the slices axiom-free under `make test_proof` (named slots,
 ; positional hunks, the conflictor merge, and the frontier identity in full;
-; the tree lift's commute ALGEBRA -- L1 with the path re-aim -- with its apply
-; laws asserted here and queued for the uu-term rung). the laws asserted HERE are what those
+; the tree lift's commute ALGEBRA -- L1 with the path re-aim -- and the
+; content-rewrite lane's L1 at element grain, with the rose-tree apply laws
+; asserted here and queued for the uu-term rung). the laws asserted HERE are what those
 ; are gated to agree with -- the .v today, and the next rung (L1..L3b as uu proof
 ; TERMS emitted to rocq + lean by tools/uu2coq.l + tools/uu2lean.l) tomorrow; a
 ; hand .v drifts (the wm2uu lesson), so this file is the truth it regenerates off.
@@ -354,7 +355,7 @@
 ;   inp     p is deeper, crossing q's sequence at child j: j past q's olds
 ;           slides FORWARD by q's delta; j inside q's olds is a dependency --
 ;           q SWALLOWS p's subtree, and commuting would need to rewrite q's
-;           context (undo p inside it): THE DOOR THE UNIFIER OPENS LATER
+;           context (undo p inside it): THE DOOR THE NEXT RUNG OPENS (form six)
 ;   apart   the paths diverge: disjoint subtrees, both ride untouched
 ; strictness at the crossing differs from rung 2's seam ON PURPOSE: a path
 ; component >= the splice's far edge names a SURVIVOR (an element that moved),
@@ -445,7 +446,7 @@
           (&& (heq (cap c2) pr) (heq (cap (cup c2)) qd)))))
 
  ; dependencies: a deep edit inside freshly-written news, and the swallow
- ;      (q replaces the subtree p edited -- the unifier's door, shut for now)
+ ;      (q replaces the subtree p edited -- shut HERE; form six opens it)
  _ (assert
     (! (commute pr (tp '(0) 0 '(use) '(want))))            ; inside pr's news
     (! (commute (tp '(1) 2 '(1) '(7)) (tp () 1 '((: a 7)) ()))))  ; swallowed
@@ -497,4 +498,221 @@
       f1 (applall t0 (link pr (link qd ())))
       f2 (applall t0 c)
       (assert (heq f1 f2)))
+ 0)
+
+; --- the CONTENT-REWRITE rung: the swallow commutes -- context rewrites THROUGH ---
+;
+; the door the tree lift shut by fiat: a shallow patch whose olds SWALLOW the
+; subtree a deep patch edited (and the mirror: a deep patch aimed inside content
+; a shallow patch just laid). the dependency was never real when the shallow
+; patch MOVES the content: undo the deep edit inside the shallow context -- BOTH
+; sides, olds and news, carry it -- and re-aim the deep patch at the content's
+; new seat. the machinery is MATCHING: find where the edited subtree SURVIVES
+; on the far side. the unit walk descends the deep path until a subtree of the
+; swallowed element occurs over there (so a wrap or an unwrap commutes too --
+; the survivor is found at any depth, and the re-aimed path grows or sheds a
+; component), and four occurrence guards keep the match CANONICAL: the unit
+; exactly once on each side in its post state, never in its pre state.
+; ambiguity REFUSES -- a deleted subtree is a REAL dependency (the deep edit
+; would be erased), a duplicate has no single home, and a news already carrying
+; the pre state could not tell undo from content. matching ground terms is
+; one-sided unification; when patches grow METAVARIABLES the full unifier takes
+; this seat (the door stays framed, wider now). the mirror lane rides the
+; groupoid itself: p;q = (q^-1;p^-1)^-1 and q^-1;p^-1 is deep-first, so ONE
+; rewrite core (swal) serves both directions, inverted in and out -- involution
+; comes from the algebra, not from a second implementation. patch.v proves the
+; swal involution at element grain (the occurrence/replace algebra); the full
+; rose-tree laws are asserted here and queued for the uu-term rung.
+
+(:
+ ; --- the tree kit (rung 5, local) ---
+ (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
+ (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (seg s i n) (htake (hdrop s i) n)
+ (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
+ (nth s j) (cap (hdrop s j))
+ (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+              (|| (atom? a) (atom? b)) 0
+              (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
+ (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
+ (tlay t path s2)
+   (? (atom? path) s2
+      (splice t (cap path) 1
+              (link (tlay (nth t (cap path)) (cup path) s2) ())))
+ (tp path i o n) (link 'tp (link path (link i (link o (link n ())))))
+ (pp p) (cap (cup p))            (pi p) (cap (cup (cup p)))
+ (po p) (cap (cup (cup (cup p)))) (pn p) (cap (cup (cup (cup (cup p)))))
+ (apon t p) (tlay t (pp p) (splice (tnav t (pp p)) (pi p) (tally (po p)) (pn p)))
+ (applall t ps) (foldl apon t ps)
+ (invert p) (tp (pp p) (pi p) (pn p) (po p))
+ (pathok t path) (? (atom? path) 1
+                    (: j (cap path)
+                       (&& (< j (tally t))
+                           (: e (nth t j)
+                              (&& (! (atom? e)) (pathok e (cup path)))))))
+ (valid t p) (&& (pathok t (pp p))
+                 (: s (tnav t (pp p))
+                    (&& (<= (+ (pi p) (tally (po p))) (tally s))
+                        (heq (seg s (pi p) (tally (po p))) (po p)))))
+ (setidx path d v) (? (= d 0) (link v (cup path))
+                      (link (cap path) (setidx (cup path) (- d 1) v)))
+ (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
+                (atom? P) (link 'inq (link (cap Q) (link d ())))
+                (atom? Q) (link 'inp (link (cap P) (link d ())))
+                (id? (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
+                '(apart))
+
+ ; --- the matching kit: a subtree's occurrences, counted and found at every
+ ;     depth (occs and ffind descend the same way -- their agreement is what
+ ;     makes the ==1 guard name ffind's answer) ---
+ (occs f x) (? (atom? f) 0
+                (: h (cap f)
+                   (+ (? (heq h x) 1 (atom? h) 0 (occs h x))
+                      (occs (cup f) x))))
+ (ffind f x) (? (atom? f) ()
+                (: h (cap f)
+                   (? (heq h x) '(0)
+                      (: r (? (atom? h) () (ffind h x))
+                         (? (! (atom? r)) (link 0 r)
+                            (: d (ffind (cup f) x)
+                               (? (atom? d) ()
+                                  (link (+ (cap d) 1) (cup d)))))))))
+ ; the unit walk: the SHALLOWEST prefix of the deep path whose subtree of the
+ ; swallowed element survives into the far side -- (k), or () when nothing
+ ; survives (erasure: the honest dependency)
+ (sunit el R n2 k)
+   (? (! (pathok el (htake R k))) ()
+      (< 0 (occs n2 (tnav el (htake R k)))) (link k ())
+      (<= (tally R) k) ()
+      (sunit el R n2 (+ k 1)))
+
+ ; --- swal: the deep-first swallow commute. dp ran first, so sp's olds carry
+ ;     its effect (element off, unit at Rk below); undo dp inside the unit
+ ;     (bak, dp's inverse below the crossing -- valid keeps the context
+ ;     honest), lay the pre state into BOTH of sp's sides, and re-aim dp at
+ ;     the survivor's seat in the news. the guards make the match canonical;
+ ;     any miss answers () -- declining is always sound. ---
+ (swal dp sp j d)
+   (: S (pp sp) is (pi sp) O (po sp) N (pn sp)
+      R (hdrop (pp dp) (+ d 1)) off (- j is) el (nth O off)
+      (? (atom? el) ()
+         (: u (sunit el R N 0)
+            (? (atom? u) ()
+               (: k (cap u) Rk (htake R k) Rrem (hdrop R k)
+                  ep (tnav el Rk)
+                  bak (tp Rrem (pi dp) (pn dp) (po dp))
+                  (? (! (valid ep bak)) ()
+                     (: e (apon ep bak)
+                        (? (! (&& (= 1 (occs O ep))
+                                  (&& (= 0 (occs O e))
+                                      (&& (= 1 (occs N ep)) (= 0 (occs N e)))))) ()
+                           (: fd (ffind N ep)
+                              (link (tp S is (tlay O (link off Rk) e) (tlay N fd e))
+                                    (link (tp (hcat S (hcat (setidx fd 0 (+ is (cap fd))) Rrem))
+                                              (pi dp) (po dp) (pn dp))
+                                          ())))))))))))
+
+ ; --- commute: rung 5's four lanes, the two swallow refusals now doors --
+ ;     inp calls swal straight (p IS deep-first), inq flips through the
+ ;     groupoid inverse and back ---
+ (commute p q)
+   (: P (pp p) ip (pi p) o1 (tally (po p)) n1 (tally (pn p))
+      Q (pp q) iq (pi q) o2 (tally (po q)) n2 (tally (pn q))
+      r (rel P Q 0) tag (cap r)
+      (? (id? tag 'same)
+           (? (> iq (+ ip n1)) (link (tp Q (- (+ iq o1) n1) (po q) (pn q)) (link p ()))
+              (< (+ iq o2) ip) (link q (link (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
+              ())
+         (id? tag 'inq)
+           (: j (cap (cup r)) d (cap (cup (cup r)))
+              (? (< j ip) (link q (link p ()))
+                 (>= j (+ ip n1))
+                   (link (tp (setidx Q d (- (+ j o1) n1)) iq (po q) (pn q)) (link p ()))
+                 (: c (swal (invert q) (invert p) j d)
+                    (? (atom? c) ()
+                       (link (invert (cap (cup c))) (link (invert (cap c)) ()))))))
+         (id? tag 'inp)
+           (: j (cap (cup r)) d (cap (cup (cup r)))
+              (? (< j iq) (link q (link p ()))
+                 (>= j (+ iq o2))
+                   (link q (link (tp (setidx P d (- (+ j n2) o2)) ip (po p) (pn p)) ()))
+                 (swal p q j d)))
+         (link q (link p ()))))
+
+ ; --- witnesses: the same little program; pd edits deep, qm MOVES the edited
+ ;     form (its context aimed post-pd, as a second branch would record it) ---
+ t0 '((: a 1) (: b 2) (main (f x)))
+ pd (tp '(1) 2 '(2) '(9))                                  ; deep: (: b 2) -> (: b 9)
+ qm (tp () 1 '((: b 9) (main (f x))) '((main (f x)) (: b 9)))
+
+ ; (L1) the swallow commutes: qm's context rewrites THROUGH (both sides read
+ ;      (: b 2) now -- the pre state), the deep edit re-aims to the moved
+ ;      seat (path 1 -> 2), and swapping back is home.
+ _ (: c (commute pd qm) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq (pp cp) '(2))                                  ; the survivor's new seat
+       (heq (po cq) '((: b 2) (main (f x))))               ; undo laid into olds
+       (heq (pn cq) '((main (f x)) (: b 2)))               ; ...and into news
+       (: c2 (commute cq cp)
+          (&& (heq (cap c2) pd) (heq (cap (cup c2)) qm)))))
+
+ ; (L3a) sound across the rewrite: both orders land the same tree -- while the
+ ;       un-rewritten qm has no home on t0 (its olds still carry the edit).
+ _ (: c (commute pd qm) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq (apon (apon t0 pd) qm) (apon (apon t0 cq) cp))
+       (heq (apon (apon t0 pd) qm) '((: a 1) (main (f x)) (: b 9)))
+       (! (valid t0 qm))))
+
+ ; the WRAP: the survivor sits at DEPTH in the news (the unit walk descends),
+ ;      so the re-aimed path GROWS a component (1 -> 1 1) -- and back is home,
+ ;      the unwrap direction shedding it again.
+ _ (: qw (tp () 1 '((: b 9)) '((guard (: b 9))))
+      c (commute pd qw) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq (pp cp) '(1 1))
+       (heq (pn cq) '((guard (: b 2))))
+       (heq (apon (apon t0 pd) qw) (apon (apon t0 cq) cp))
+       (: c2 (commute cq cp)
+          (&& (heq (cap c2) pd) (heq (cap (cup c2)) qw)))))
+
+ ; the MIRROR lane (the groupoid ride): the move lands FIRST, the deep edit
+ ;      aims into its news -- commute re-aims the edit to the pre-move seat
+ ;      (path 2 -> 1) and advances the move's both sides to the edited content.
+ _ (: pm (tp () 1 '((: b 2) (main (f x))) '((main (f x)) (: b 2)))
+      qd (tp '(2) 2 '(2) '(9))
+      c (commute pm qd) cq (cap c) cp (cap (cup c))
+      (assert
+       (heq (pp cq) '(1))
+       (heq (po cp) '((: b 9) (main (f x))))
+       (heq (apon (apon t0 pm) qd) (apon (apon t0 cq) cp))
+       (heq (apon (apon t0 pm) qd) '((: a 1) (main (f x)) (: b 9)))
+       (: c2 (commute cq cp)
+          (&& (heq (cap c2) pm) (heq (cap (cup c2)) qd)))))
+
+ ; the refusals keep the door honest: erasure is a REAL dependency, a
+ ;      duplicate has no single home, a news already carrying the PRE state
+ ;      cannot tell undo from content, and content the shallow patch wrote
+ ;      FRESH was never anywhere else to move from.
+ _ (assert
+    (! (commute pd (tp () 1 '((: b 9)) ())))                       ; deleted: erased edit
+    (! (commute pd (tp () 1 '((: b 9)) '((: b 9) (: b 9)))))       ; duplicated
+    (! (commute pd (tp () 1 '((: b 9) (main (f x))) '((: b 2) (: b 9)))))  ; pre state in news
+    (! (commute (tp () 1 '((: b 2)) '((let x))) (tp '(1) 1 '(x) '(y)))))   ; fresh content
+
+ ; (L2) the rewritten pair are honest patches: each round-trips in context.
+ _ (: c (commute pd qm) cq (cap c) cp (cap (cup c))
+      t1 (apon t0 cq)
+      (assert
+       (valid t0 cq) (valid t1 cp)
+       (heq (apon t1 (invert cq)) t0)
+       (heq (apon (apon t1 cp) (invert cp)) t1)))
+
+ ; (L3b) a frontier is stable under the swallow swap, a bystander riding along.
+ _ (: w (tp '(0) 2 '(1) '(7))
+      c (commute pd qm)
+      f1 (applall t0 (link w (link pd (link qm ()))))
+      f2 (applall t0 (link w c))
+      (assert (heq f1 f2) (heq f1 '((: a 7) (main (f x)) (: b 9)))))
  0)

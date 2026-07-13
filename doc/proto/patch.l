@@ -100,12 +100,20 @@
 ; length, so only same-sequence patches shift INDICES, while a shallow splice
 ; moves whole SUBTREES and re-aims a deeper patch's path COMPONENT at the
 ; crossing (four commute lanes: same / q-deeper / p-deeper / apart --
-; test/patch.l's fifth form). the laws for ALL layers live in test/patch.l,
-; the source of truth. still deliberately OMITTED: clash SEGMENTS (the
-; conflictor cell lifted to sequences -- pijul's graggle corner), and the
-; content-rewrite commute (a shallow patch that SWALLOWS a deep edit's subtree
-; refuses today; commuting it means rewriting its context -- where
-; wev/boxfix/kanren earn their keep).
+; test/patch.l's fifth form). and the CONTENT-REWRITE commute (demo I,
+; 2026-07-13): the tree lift's swallow refusal opens -- a shallow patch that
+; MOVES the subtree a deep patch edited commutes after all, by rewriting its
+; context THROUGH the content: undo the deep edit inside both of its sides
+; (olds AND news carry the moved subtree), re-aim the deep patch at the
+; survivor's new seat, with occurrence guards keeping the match canonical
+; (the spec's sixth form; a wrap/unwrap commutes too -- the unit walk finds
+; the survivor at any depth). matching ground survivors is one-sided
+; unification -- this is where the rewrite machinery starts earning its keep.
+; the laws for ALL layers live in test/patch.l, the source of truth. still
+; deliberately OMITTED: clash SEGMENTS (the conflictor cell lifted to
+; sequences -- pijul's graggle corner), and METAVARIABLE patterns in the
+; rewrite lane (patches over schematic content -- where the full kanren
+; unifier takes the seat ground matching holds today).
 
 (:
  ; --- the patch: a groupoid element. (chg slot old new) carries its context
@@ -254,4 +262,29 @@
               (hap (hap t0 () 0 () '((use m))) '(3) 1 '((f x)) '((g y))))
       (line "     order edit-at-(2);insert -> "
             (hap (hap t0 '(2) 1 '((f x)) '((g y))) () 0 () '((use m)))))
+
+ ; ---- demo I: the CONTENT-REWRITE commute -- the swallow opens: a move that
+ ;      swallowed a deep edit commutes by rewriting its context THROUGH the
+ ;      content (undo the edit in olds AND news) and re-aiming the edit at the
+ ;      moved seat (path 1 -> 2). the rewrite core (swal: the unit walk + the
+ ;      occurrence guards) lives in test/patch.l's sixth form; here the two
+ ;      orders agreeing, the commuted pair laid by hand ----
+ _ (: (htk s n) (? (< n 1) () (link (cap s) (htk (cup s) (- n 1))))
+      (hdr s n) (? (< n 1) s (hdr (cup s) (- n 1)))
+      (hct a b) (? (atom? a) b (link (cap a) (hct (cup a) b)))
+      (spl s i c news) (hct (htk s i) (hct news (hdr s (+ i c))))
+      (nth s j) (cap (hdr s j))
+      (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
+      (tlay t path s2)
+        (? (atom? path) s2
+           (spl t (cap path) 1 (link (tlay (nth t (cap path)) (cup path) s2) ())))
+      (hap t path i o n) (tlay t path (spl (tnav t path) i (tally o) n))
+      t0 '((: a 1) (: b 2) (main (f x)))
+      _ (puts ";; I. the content-rewrite commute -- the swallowed edit rides the move\n")
+      _ (line "     order edit-at-(1) ; move          -> "
+              (hap (hap t0 '(1) 2 '(2) '(9))
+                   () 1 '((: b 9) (main (f x))) '((main (f x)) (: b 9))))
+      (line "     order move-rewritten ; edit-at-(2) -> "
+            (hap (hap t0 () 1 '((: b 2) (main (f x))) '((main (f x)) (: b 2)))
+                 '(2) 2 '(2) '(9))))
  0)

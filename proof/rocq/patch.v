@@ -59,11 +59,18 @@
      (L1) tcommute_involutive  (the algebra half; the tree APPLY laws are
           asserted in the .l -- their crossing-level core IS splice_after/
           before_comm with singleton hunks -- and join the uu-term rung)
+   The SIXTH slice (the content-rewrite rung, same day): the swallow refusal
+   opens -- a shallow patch that MOVES the subtree a deep patch edited
+   commutes by rewriting its context THROUGH the content (undo the deep edit
+   in both sides, re-aim at the survivor's seat, occurrence guards keeping
+   the match canonical). Proven at ELEMENT grain (the deep edit as "at seat
+   j, a becomes b"; the rose-tree unit walk stays in the .l):
+     (L1) swal_involutive  (through the groupoid inverse -- exactly the .l's
+          mirror lane wiring, so involution is the algebra, not a re-check)
    Still deliberately out (the next rungs): clash SEGMENTS in the positional
-   model (pijul's graggle corner), and the content-rewrite commute -- a
-   shallow patch that swallows a deep edit's subtree refuses today; commuting
-   it means rewriting its context, where the rewrite/unifier machinery (wev,
-   boxfix, kanren) earns its keep.
+   model (pijul's graggle corner), and metavariable patterns in the rewrite
+   lane -- matching ground survivors is one-sided unification; when patches
+   carry variables the full kanren unifier takes the seat.
 
    Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
    classical / funext escape hatch. Trees are functions, so equality of trees is
@@ -1044,6 +1051,191 @@ Qed.
 
 End TreeLift.
 
+(* ============================================================ *)
+(* the CONTENT-REWRITE slice: the swallow commutes              *)
+(* ============================================================ *)
+
+(* Mirror of test/patch.l's sixth form, the L1 core at ELEMENT grain: the deep
+   edit collapsed to "at seat j, element a becomes b" (the unit walk's
+   rose-tree descent and the apply laws stay asserted in the .l and join the
+   uu-term rung). What is genuinely NEW in this lane -- the four occurrence
+   guards that make the context rewrite canonical BOTH ways -- is pure
+   occurrence/replace algebra over one sequence, proven here: swal composed
+   with itself through the groupoid inverse is the identity, which is exactly
+   how the .l rides it (the inq mirror inverts in and out, so ONE core serves
+   both directions and L1 falls out of the algebra). *)
+
+Section Swallow.
+Variable A : Type.
+Hypothesis Aeq : forall x y : A, {x = y} + {x <> y}.
+
+(* the shallow patch: a hunk over a sequence of elements *)
+Record wpatch := mkw { wi : nat ; wo : list A ; wn : list A }.
+(* the deep patch at element grain: at seat j, element a becomes b *)
+Record epatch := mke { ej : nat ; ea : A ; eb : A }.
+
+Definition winv (p : wpatch) : wpatch := mkw (wi p) (wn p) (wo p).
+Definition einv (p : epatch) : epatch := mke (ej p) (eb p) (ea p).
+
+Fixpoint occ (x : A) (l : list A) : nat :=
+  match l with
+  | [] => 0
+  | h :: t => (if Aeq h x then 1 else 0) + occ x t
+  end.
+
+(* first occurrence -- the guards pin occ to 1, so "first" is "the" *)
+Fixpoint ffind (x : A) (l : list A) : nat :=
+  match l with
+  | [] => 0
+  | h :: t => if Aeq h x then 0 else S (ffind x t)
+  end.
+
+(* lay value v at seat k (the .l's tlay, element grain) *)
+Fixpoint lay (l : list A) (k : nat) (v : A) : list A :=
+  match l, k with
+  | [], _ => []
+  | _ :: t, 0 => v :: t
+  | h :: t, S k' => h :: lay t k' v
+  end.
+
+(* the deep-first swallow commute: dp ran first, so sp's olds carry its
+   effect (element b at seat ej); undo it in BOTH of sp's sides, re-aim dp
+   at the survivor's seat in the news. the guards, as in the .l: context
+   matches, the post state exactly once on each side, the pre state on
+   neither. *)
+Definition swal (dp : epatch) (sp : wpatch) : option (wpatch * epatch) :=
+  let off := ej dp - wi sp in
+  let O := wo sp in let N := wn sp in
+  if wi sp <=? ej dp then if ej dp <? wi sp + length O then
+    match nth_error O off with
+    | Some el =>
+        if Aeq el (eb dp) then
+          if occ (eb dp) O =? 1 then if occ (ea dp) O =? 0 then
+          if occ (eb dp) N =? 1 then if occ (ea dp) N =? 0
+          then let m := ffind (eb dp) N in
+               Some (mkw (wi sp) (lay O off (ea dp)) (lay N m (ea dp)),
+                     mke (wi sp + m) (ea dp) (eb dp))
+          else None else None else None else None
+        else None
+    | None => None
+    end
+  else None else None.
+
+(* --- the occurrence/replace lemma kit --- *)
+
+Lemma lay_length : forall l k v, length (lay l k v) = length l.
+Proof. induction l; destruct k; simpl; auto. Qed.
+
+Lemma occ_pos_ffind_lt : forall x l, 0 < occ x l -> ffind x l < length l.
+Proof.
+  intros x; induction l as [|h t IH]; simpl; intros H; [lia|].
+  destruct (Aeq h x); [lia|]. simpl in H. specialize (IH H). lia.
+Qed.
+
+Lemma nth_ffind : forall x l, 0 < occ x l -> nth_error l (ffind x l) = Some x.
+Proof.
+  intros x; induction l as [|h t IH]; simpl; intros H; [lia|].
+  destruct (Aeq h x); simpl; [now subst | apply IH; lia].
+Qed.
+
+Lemma nth_lay : forall l k v, k < length l -> nth_error (lay l k v) k = Some v.
+Proof.
+  induction l as [|h t IH]; destruct k; simpl; intros v H; try lia; auto.
+  apply IH; lia.
+Qed.
+
+Lemma lay_lay : forall l k v w, lay (lay l k v) k w = lay l k w.
+Proof.
+  induction l as [|h t IH]; destruct k; simpl; intros; auto. now rewrite IH.
+Qed.
+
+Lemma lay_id : forall l k v, nth_error l k = Some v -> lay l k v = l.
+Proof.
+  induction l as [|h t IH]; destruct k; simpl; intros v H; try discriminate.
+  - now injection H as ->.
+  - now rewrite IH.
+Qed.
+
+(* laying x over a non-x seat gains exactly one occurrence of x... *)
+Lemma occ_lay_in : forall l k x u, nth_error l k = Some u -> u <> x ->
+  occ x (lay l k x) = S (occ x l).
+Proof.
+  induction l as [|h t IH]; destruct k; simpl; intros x u H NE; try discriminate.
+  - injection H as ->. destruct (Aeq x x); [|congruence].
+    destruct (Aeq u x); [congruence|]. reflexivity.
+  - destruct (Aeq h x); simpl; now rewrite (IH _ _ _ H NE).
+Qed.
+
+(* ...and laying non-x over an x seat loses exactly one. *)
+Lemma occ_lay_out : forall l k x v, nth_error l k = Some x -> v <> x ->
+  occ x l = S (occ x (lay l k v)).
+Proof.
+  induction l as [|h t IH]; destruct k; simpl; intros x v H NE; try discriminate.
+  - injection H as ->. destruct (Aeq x x); [|congruence].
+    destruct (Aeq v x); [congruence|]. reflexivity.
+  - destruct (Aeq h x); simpl; now rewrite <- (IH _ _ _ H NE).
+Qed.
+
+(* where x occurs NOWHERE, laying it in pins ffind to the seat. *)
+Lemma ffind_lay : forall l k x, occ x l = 0 -> k < length l ->
+  ffind x (lay l k x) = k.
+Proof.
+  induction l as [|h t IH]; destruct k; simpl; intros x H L; try lia.
+  - destruct (Aeq x x); [auto|congruence].
+  - destruct (Aeq h x) in H; [lia|].
+    destruct (Aeq h x); [congruence|]. rewrite IH; lia.
+Qed.
+
+(* (L1) the swallow commute is involutive THROUGH THE GROUPOID INVERSE --
+   invert both patches, swal again, and the originals come home (inverted:
+   un-inverting them is the .l's mirror wrap-up). *)
+Theorem swal_involutive : forall dp sp sp' dp',
+  swal dp sp = Some (sp', dp') ->
+  swal (einv dp') (winv sp') = Some (winv sp, einv dp).
+Proof.
+  intros [j a b] [i O N] sp' dp' H.
+  unfold swal in H; simpl in H.
+  destruct (i <=? j) eqn:LE; [|discriminate].
+  destruct (j <? i + length O) eqn:LT; [|discriminate].
+  apply Nat.leb_le in LE. apply Nat.ltb_lt in LT.
+  destruct (nth_error O (j - i)) as [el|] eqn:EL; [|discriminate].
+  destruct (Aeq el b) as [->|]; [|discriminate].
+  destruct (occ b O =? 1) eqn:G1; [|discriminate].
+  destruct (occ a O =? 0) eqn:G2; [|discriminate].
+  destruct (occ b N =? 1) eqn:G3; [|discriminate].
+  destruct (occ a N =? 0) eqn:G4; [|discriminate].
+  apply Nat.eqb_eq in G1, G2, G3, G4.
+  injection H as <- <-.
+  assert (NEab : a <> b) by (intros ->; lia).
+  assert (NEba : b <> a) by (intros ->; lia).
+  assert (Fm : ffind b N < length N) by (apply occ_pos_ffind_lt; lia).
+  assert (Nm : nth_error N (ffind b N) = Some b) by (apply nth_ffind; lia).
+  assert (Hji : j - i < length O) by lia.
+  unfold swal, winv, einv; simpl.
+  rewrite lay_length.
+  replace (i <=? i + ffind b N) with true by (symmetry; apply Nat.leb_le; lia).
+  replace (i + ffind b N <? i + length N) with true
+    by (symmetry; apply Nat.ltb_lt; lia).
+  simpl. replace (i + ffind b N - i) with (ffind b N) by lia.
+  rewrite (nth_lay N (ffind b N) a Fm).
+  destruct (Aeq a a); [|congruence].
+  assert (OA1 : occ a (lay N (ffind b N) a) = 1)
+    by (rewrite (occ_lay_in _ _ _ _ Nm NEba); lia).
+  assert (OB0 : occ b (lay N (ffind b N) a) = 0)
+    by (pose proof (occ_lay_out _ _ _ _ Nm NEab); lia).
+  assert (OA1' : occ a (lay O (j - i) a) = 1)
+    by (rewrite (occ_lay_in _ _ _ _ EL NEba); lia).
+  assert (OB0' : occ b (lay O (j - i) a) = 0)
+    by (pose proof (occ_lay_out _ _ _ _ EL NEab); lia).
+  rewrite OA1, OB0, OA1', OB0'. simpl.
+  rewrite (ffind_lay O (j - i) a G2 Hji).
+  rewrite lay_lay, (lay_id N _ b Nm), lay_lay, (lay_id O _ b EL).
+  replace (i + (j - i)) with j by lia.
+  reflexivity.
+Qed.
+
+End Swallow.
+
 (* the axiom audit: every law closed under the global context -- no Axiom, no
    Admitted, no classical/funext escape hatch, in EITHER slice. *)
 Print Assumptions commute_involutive.  (* L1, named slots *)
@@ -1061,4 +1253,6 @@ Print Assumptions pull_fold_swap.      (* M4, clash -- pull order is dead *)
 Print Assumptions resolve_roundtrip.   (* M5, clash -- resolution unpulls *)
 Print Assumptions fid_swap.            (* H1, identity -- order-free *)
 Print Assumptions fid_dup.             (* H2, identity -- multiplicity-free *)
+Print Assumptions swal_involutive.     (* L1, content-rewrite -- the swallow
+                                          swaps home through the inverse *)
 Print Assumptions tcommute_involutive. (* L1, tree -- four lanes, path re-aim *)
