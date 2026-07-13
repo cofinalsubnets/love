@@ -110,13 +110,17 @@ struct ai_mint {
  uintptr_t code; };
 // a NOM: a NAMED point -- its OWN kind (KNom), not the (name . mint) chain the
 // KSym->KMint collapse made it. `name` is the spelling string (GC-forwarded);
-// `code` is the serial (order key on a name tie + the hash). No inner mint object:
-// a nom is a flat 3-word leaf, distinct from the bare KMint above. `nomp` = the
-// union (a bare mint OR a named nom); a chain is now ALWAYS a real compound.
+// `code` is the serial (the order key on a name tie); `dig` caches the SPELLING
+// hash, computed once at creation -- content, not the serial, so a tablet's
+// bucket order never depends on intern history (the reproducible-build law).
+// No inner mint object: a nom is a flat 4-word leaf, distinct from the bare
+// KMint above. `nomp` = the union (a bare mint OR a named nom); a chain is now
+// ALWAYS a real compound.
 struct ai_nom {
  lvm_t *ap;
  uintptr_t name;
- uintptr_t code; };
+ uintptr_t code;
+ uintptr_t dig; };
 
 struct ai {
  // (the core no longer masquerades as (): () is the const ZeroPoint (ai_mint_zero),

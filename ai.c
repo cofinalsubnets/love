@@ -660,8 +660,16 @@ static ai_inline union u *clip(struct ai *g, union u *k) {
 static ai_inline struct ai_mint *ini_missing(struct ai_mint *y, uintptr_t code) {
  return y->ap = lvm_sym, y->code = code, y; }
 
-static ai_inline struct ai_nom *ini_nom(struct ai_nom *y, uintptr_t name, uintptr_t code) {
- return y->ap = lvm_nom, y->name = name, y->code = code, y; }
+// the spelling hash a fresh nom caches in its `dig` slot (same fnv walk as the
+// KString lane in hash(), so a nom and its name string hash alike)
+static ai_inline uintptr_t nom_dig(uintptr_t name) {
+ uintptr_t n = len(name), h = mix;
+ char const *bs = txt(name);
+ while (n--) h ^= (uint8_t) *bs++, h *= mix;
+ return h; }
+
+static ai_inline struct ai_nom *ini_nom(struct ai_nom *y, uintptr_t name, uintptr_t code, uintptr_t dig) {
+ return y->ap = lvm_nom, y->name = name, y->code = code, y->dig = dig, y; }
 
 static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
  return s->ap = lvm_str, s->len = len, s; }
@@ -1089,7 +1097,7 @@ static ai_inline void evac_sym(struct ai*g, word const*const p0, word const*cons
 
 static ai_inline void evac_nom(struct ai*g, word const*const p0, word const*const t0) {
  struct ai_nom *w = (struct ai_nom*) g->cp;
- g->cp += Width(struct ai_nom);                 // 3 words; forward the name string (the serial is a scalar)
+ g->cp += Width(struct ai_nom);                 // 4 words; forward the name string (serial + dig are scalars)
  w->name = gcp(g, w->name, p0, t0); }
 
 static ai_inline void evac_thread(struct ai *g, word const *const p0, word const*const t0) {
@@ -1458,7 +1466,7 @@ static ai_inline word copy_sym(struct ai*g, struct ai_mint *src, word const *con
 static ai_inline word copy_nom(struct ai*g, struct ai_nom *src, word const *const p0, word const*const t0) {
  struct ai_nom *dst = bump(g, Width(struct ai_nom));
  (void) p0, (void) t0;                            // shallow: evac_nom forwards the name later (Cheney)
- ini_nom(dst, src->name, src->code);              // name copied raw, serial rides
+ ini_nom(dst, src->name, src->code, src->dig);    // name copied raw, serial + dig ride
  return word(src->ap = (lvm_t*) dst); }
 
 static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0, word const *const t0) {
@@ -4735,7 +4743,13 @@ uintptr_t hash(struct ai *g, intptr_t x) {
    default: __builtin_trap();
    case KChain: return hash_two(g, x);
    case KMint: return sym(x)->code;
-   case KNom: return nom(x)->code;                 // a named point: its serial (GC-stable, distinct per atom)
+   case KNom: return nom(x)->dig;                  // the cached SPELLING hash -- content, like every
+                                                   // other data kind. a serial would be cheaper to mint
+                                                   // but is a session-history key: it orders every
+                                                   // tablet's buckets by INTERN ORDER, so an unrelated
+                                                   // load reshuffles every keys walk (a reproducible-
+                                                   // build leak). same-spelled DISTINCT noms collide;
+                                                   // the bucket probe's `=` separates them.
    case KVec: {
     uintptr_t len = ai_vec_bytes(vec(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
@@ -5339,7 +5353,7 @@ lvm(lvm_nomctor) {
  struct ai_str *nm = strp(n) ? str(n) : add_name(g, n);   // a string is the name; a sym lends its spelling
  if (!nm) return Ap(lvm_mint, g);               // no name -> a bare mint
  struct ai_nom *y = (struct ai_nom*) Hp; Hp += Width(struct ai_nom);
- ini_nom(y, word(nm), ++g->next_serial);
+ ini_nom(y, word(nm), ++g->next_serial, nom_dig(word(nm)));
  return Sp[0] = word(y), Ip += 1, Continue(); }
 
 struct ai *intern(struct ai*g) {
@@ -5380,7 +5394,7 @@ ai_noinline word intern_checked(struct ai *g, struct ai_str *b) {
   nb[1].x = putcharm(nlen);
   cell(m)[1].x = (word) nb;                              // swap backing; header identity stable
   i = map_probe(g, m, word(b), &found); }
- struct ai_nom *y = ini_nom(bump(g, Width(struct ai_nom)), word(b), ++g->next_serial);  // the canonical KNom: name + serial
+ struct ai_nom *y = ini_nom(bump(g, Width(struct ai_nom)), word(b), ++g->next_serial, nom_dig(word(b)));  // the canonical KNom: name + serial + cached spelling hash
  word *slots = map_slots(m);
  slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
  cell(map_back(m))[1].x = putcharm(map_len(m) + 1);
