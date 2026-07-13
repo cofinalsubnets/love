@@ -2146,3 +2146,467 @@
     ((vof 0 (L 'hap (L 'hap s0 p0) q0)) = (vof 0 (L 'hap (L 'hap s0 q0p) p0)))
     ((vof 0 (L 'hcommute p0 q0)) = (vof 0 (L 'ii1 (L 'tpair q0p p0)))))
  0)
+
+; ============================================================================
+; the ELEMENT TREE: every nat IS a rose tree. labels are nats and kid lists
+; are finite, so trees are counted by the cantor pairing -- a node is
+; (npair label kids-code), a kid list codes by folding npair under succ, and
+; the ZERO-labelled leaf is 0 itself. etree = nat buys the whole nat kit at
+; tree grain for free (isdeceq, isaset, natgtb order for canonical forms),
+; kids come back as a plain nlist (the list kit rides), and the swal/clash/
+; metavariable slices get their element grain. the door: doc/proto/patch.l's
+; rose-tree walks, queued behind this type.
+; ============================================================================
+; --- the cantor pairing. npair climbs the triangle; unpair WALKS the
+; --- diagonal (a duo-valued nat_rect: at (0 b) jump to (succ b, 0), else
+; --- step (npred a, succ b) -- una/unb the two step components, niszero/
+; --- npred the case machinery, so every branch is definitional). ---
+(assert
+ (defn 'tri
+   '(pi n nat nat)
+   '(lam n (nat_rect (lam q nat) 0 (lam k (lam r (add (succ k) r))) n)))
+ (defn 'npair
+   '(pi a nat (pi b nat nat))
+   '(lam a (lam b (add (tri (add a b)) b))))
+ (defn 'duo
+   'UU
+   '(total2 a nat nat))
+ (defn 'una
+   '(pi x nat (pi y nat nat))
+   '(lam x (lam y (bool_rect (lam c nat) (succ y) (npred x) (niszero x)))))
+ (defn 'unb
+   '(pi x nat (pi y nat nat))
+   '(lam x (lam y (bool_rect (lam c nat) 0 (succ y) (niszero x)))))
+ (defn 'unpair
+   '(pi n nat duo)
+   '(lam n
+      (nat_rect (lam q duo) (tpair 0 0)
+        (lam k (lam u (tpair (una (pr1 u) (pr2 u)) (unb (pr1 u) (pr2 u)))))
+        n)))
+ (defn 'upa
+   '(pi n nat nat)
+   '(lam n (pr1 (unpair n))))
+ (defn 'upb
+   '(pi n nat nat)
+   '(lam n (pr2 (unpair n))))
+ ; the pairing computes: the diagonal walk inverts the triangle climb
+ (id? (vof 0 '0) (vof 0 '(npair 0 0)))
+ (id? (vof 0 '1) (vof 0 '(npair 1 0)))
+ (id? (vof 0 '2) (vof 0 '(npair 0 1)))
+ (id? (vof 0 '4) (vof 0 '(upa (npair 4 2))))
+ (id? (vof 0 '2) (vof 0 '(upb (npair 4 2)))))
+
+; --- the walk inverts the climb, one diagonal step at a time. npairhead:
+; --- the (0 b) corner jumps to the next diagonal's head. npairdiag: an
+; --- interior step slides down it. npairstep fuses them through una/unb
+; --- (each branch definitional), npairunpair closes by one induction. ---
+(assert
+ (defq 'npairhead
+   '(pi b nat (paths nat (npair (succ b) 0) (succ (npair 0 b))))
+   '(lam b
+      (maponpaths nat nat (lam w (succ w)) (add (add (add b 0) (tri (add b 0))) 0)
+        (add (tri b) b)
+        (pathscomp0 nat (add (add (add b 0) (tri (add b 0))) 0) (add (add b 0) (tri (add b 0)))
+          (add (tri b) b)
+          (natplusr0 (add (add b 0) (tri (add b 0))))
+          (pathscomp0 nat (add (add b 0) (tri (add b 0))) (add b (tri b)) (add (tri b) b)
+            (maponpaths nat nat (lam w (add w (tri w))) (add b 0) b (natplusr0 b))
+            (natpluscomm b (tri b)))))))
+ (defq 'npairdiag
+   '(pi a nat (pi b nat (paths nat (npair a (succ b)) (succ (npair (succ a) b)))))
+   '(lam a
+      (lam b
+        (pathscomp0 nat (npair a (succ b)) (add (tri (add (succ a) b)) (succ b))
+          (succ (npair (succ a) b))
+          (maponpaths nat nat (lam w (add (tri w) (succ b))) (add a (succ b)) (add (succ a) b)
+            (natplusnsm a b))
+          (maponpaths nat nat (lam w (succ w)) (add (add (add a b) (tri (add a b))) (succ b))
+            (add (succ (add (add a b) (tri (add a b)))) b)
+            (natplusnsm (add (add a b) (tri (add a b))) b))))))
+ (defq 'npairstep
+   '(pi x nat (pi y nat (paths nat (npair (una x y) (unb x y)) (succ (npair x y)))))
+   '(lam x
+      (lam y
+        (nat_rect (lam q (paths nat (npair (una q y) (unb q y)) (succ (npair q y))))
+          (npairhead y)
+          (lam k (lam IH (npairdiag k y)))
+          x))))
+ (defq 'npairunpair
+   '(pi n nat (paths nat (npair (upa n) (upb n)) n))
+   '(lam n
+      (nat_rect (lam q (paths nat (npair (upa q) (upb q)) q)) (idpath 0)
+        (lam k
+          (lam IH
+            (pathscomp0 nat (npair (una (upa k) (upb k)) (unb (upa k) (upb k)))
+              (succ (npair (upa k) (upb k)))
+              (succ k)
+              (npairstep (upa k) (upb k))
+              (maponpaths nat nat (lam w (succ w)) (npair (upa k) (upb k)) k IH))))
+        n)))
+ ; the round trip computes both ways on closed nats
+ (id? (vof 0 '9) (vof 0 '(npair (upa 9) (upb 9)))))
+
+; --- the beta ladder: unpair undoes npair. the head/diag steps re-read the
+; --- walk one rung down through the una/unb components (each close is
+; --- definitional -- una 0 y is succ y, una (succ a) y is a); unpairbeta
+; --- rides the double induction (diagonal d outside, the walk down it
+; --- inside), the equation convoys carrying a+b = d exactly like
+; --- isdeceqnat's; both projections travel together in one total2. ---
+(assert
+ (defq 'unpbheadu
+   '(pi d nat
+      (pi ha (paths nat (upa (npair 0 d)) 0)
+        (pi hb (paths nat (upb (npair 0 d)) d) (paths nat (upa (npair (succ d) 0)) (succ d)))))
+   '(lam d
+      (lam ha
+        (lam hb
+          (pathscomp0 nat (upa (npair (succ d) 0)) (upa (succ (npair 0 d))) (succ d)
+            (maponpaths nat nat (lam w (upa w)) (npair (succ d) 0) (succ (npair 0 d))
+              (npairhead d))
+            (pathscomp0 nat (una (upa (npair 0 d)) (upb (npair 0 d))) (una 0 (upb (npair 0 d)))
+              (succ d)
+              (maponpaths nat nat (lam w (una w (upb (npair 0 d)))) (upa (npair 0 d)) 0 ha)
+              (maponpaths nat nat (lam w (una 0 w)) (upb (npair 0 d)) d hb)))))))
+ (defq 'unpbheadb
+   '(pi d nat (pi ha (paths nat (upa (npair 0 d)) 0) (paths nat (upb (npair (succ d) 0)) 0)))
+   '(lam d
+      (lam ha
+        (pathscomp0 nat (upb (npair (succ d) 0)) (upb (succ (npair 0 d))) 0
+          (maponpaths nat nat (lam w (upb w)) (npair (succ d) 0) (succ (npair 0 d))
+            (npairhead d))
+          (maponpaths nat nat (lam w (unb w (upb (npair 0 d)))) (upa (npair 0 d)) 0 ha)))))
+ (defq 'unpbdiagu
+   '(pi a nat
+      (pi b nat
+        (pi ha (paths nat (upa (npair (succ a) b)) (succ a))
+          (paths nat (upa (npair a (succ b))) a))))
+   '(lam a
+      (lam b
+        (lam ha
+          (pathscomp0 nat (upa (npair a (succ b))) (upa (succ (npair (succ a) b))) a
+            (maponpaths nat nat (lam w (upa w)) (npair a (succ b)) (succ (npair (succ a) b))
+              (npairdiag a b))
+            (maponpaths nat nat (lam w (una w (upb (npair (succ a) b))))
+              (upa (npair (succ a) b))
+              (succ a)
+              ha))))))
+ (defq 'unpbdiagb
+   '(pi a nat
+      (pi b nat
+        (pi ha (paths nat (upa (npair (succ a) b)) (succ a))
+          (pi hb (paths nat (upb (npair (succ a) b)) b)
+            (paths nat (upb (npair a (succ b))) (succ b))))))
+   '(lam a
+      (lam b
+        (lam ha
+          (lam hb
+            (pathscomp0 nat (upb (npair a (succ b))) (upb (succ (npair (succ a) b))) (succ b)
+              (maponpaths nat nat (lam w (upb w)) (npair a (succ b)) (succ (npair (succ a) b))
+                (npairdiag a b))
+              (pathscomp0 nat (unb (upa (npair (succ a) b)) (upb (npair (succ a) b)))
+                (succ (upb (npair (succ a) b)))
+                (succ b)
+                (maponpaths nat nat (lam w (unb w (upb (npair (succ a) b))))
+                  (upa (npair (succ a) b))
+                  (succ a)
+                  ha)
+                (maponpaths nat nat (lam w (succ w)) (upb (npair (succ a) b)) b hb))))))))
+ (defq 'unpairbeta
+   '(pi d nat
+      (pi a nat
+        (pi b nat
+          (pi e (paths nat (add a b) d)
+            (total2 zz (paths nat (upa (npair a b)) a) (paths nat (upb (npair a b)) b))))))
+   '(lam d
+      (nat_rect
+        (lam dq
+          (pi a nat
+            (pi b nat
+              (pi e (paths nat (add a b) dq)
+                (total2 zz (paths nat (upa (npair a b)) a) (paths nat (upb (npair a b)) b))))))
+        (lam a
+          (nat_rect
+            (lam aq
+              (pi b nat
+                (pi e (paths nat (add aq b) 0)
+                  (total2 zz (paths nat (upa (npair aq b)) aq) (paths nat (upb (npair aq b)) b)))))
+            (lam b
+              (lam e
+                (transportf nat
+                  (lam w
+                    (total2 zz (paths nat (upa (npair 0 w)) 0) (paths nat (upb (npair 0 w)) w)))
+                  0
+                  b
+                  (pathsinv0 nat b 0 e)
+                  (tpair (idpath 0) (idpath 0)))))
+            (lam k
+              (lam IH
+                (lam b
+                  (lam e
+                    (fromempty
+                      (total2 zz (paths nat (upa (npair (succ k) b)) (succ k))
+                        (paths nat (upb (npair (succ k) b)) b))
+                      (negpathssx0 (add k b) e))))))
+            a))
+        (lam d2
+          (lam IHd
+            (lam a
+              (lam b
+                (lam e
+                  ((nat_rect
+                     (lam bq
+                       (pi a2 nat
+                         (pi e2 (paths nat (add a2 bq) (succ d2))
+                           (total2 zz (paths nat (upa (npair a2 bq)) a2)
+                             (paths nat (upb (npair a2 bq)) bq)))))
+                     (lam a2
+                       (lam e2
+                         (transportf nat
+                           (lam w
+                             (total2 zz (paths nat (upa (npair w 0)) w)
+                               (paths nat (upb (npair w 0)) 0)))
+                           (succ d2)
+                           a2
+                           (pathsinv0 nat a2 (succ d2)
+                             (pathscomp0 nat a2 (add a2 0) (succ d2)
+                               (pathsinv0 nat (add a2 0) a2 (natplusr0 a2))
+                               e2))
+                           (tpair
+                             (unpbheadu d2 (pr1 (IHd 0 d2 (idpath d2)))
+                               (pr2 (IHd 0 d2 (idpath d2))))
+                             (unpbheadb d2 (pr1 (IHd 0 d2 (idpath d2))))))))
+                     (lam b2
+                       (lam IHW
+                         (lam a2
+                           (lam e2
+                             (tpair
+                               (unpbdiagu a2 b2
+                                 (pr1
+                                   (IHW (succ a2)
+                                     (pathscomp0 nat (add (succ a2) b2) (add a2 (succ b2))
+                                       (succ d2)
+                                       (pathsinv0 nat (add a2 (succ b2)) (add (succ a2) b2)
+                                         (natplusnsm a2 b2))
+                                       e2))))
+                               (unpbdiagb a2 b2
+                                 (pr1
+                                   (IHW (succ a2)
+                                     (pathscomp0 nat (add (succ a2) b2) (add a2 (succ b2))
+                                       (succ d2)
+                                       (pathsinv0 nat (add a2 (succ b2)) (add (succ a2) b2)
+                                         (natplusnsm a2 b2))
+                                       e2)))
+                                 (pr2
+                                   (IHW (succ a2)
+                                     (pathscomp0 nat (add (succ a2) b2) (add a2 (succ b2))
+                                       (succ d2)
+                                       (pathsinv0 nat (add a2 (succ b2)) (add (succ a2) b2)
+                                         (natplusnsm a2 b2))
+                                       e2)))))))))
+                     b)
+                    a
+                    e))))))
+        d)))
+ (defq 'upabeta
+   '(pi a nat (pi b nat (paths nat (upa (npair a b)) a)))
+   '(lam a (lam b (pr1 (unpairbeta (add a b) a b (idpath (add a b)))))))
+ (defq 'upbbeta
+   '(pi a nat (pi b nat (paths nat (upb (npair a b)) b)))
+   '(lam a (lam b (pr2 (unpairbeta (add a b) a b (idpath (add a b)))))))
+ (defq 'npairgeb
+   '(pi a nat (pi b nat (paths bool (natgtb b (npair a b)) false)))
+   '(lam a (lam b (natlehmplusnm b (tri (add a b))))))
+ (defq 'upble
+   '(pi n nat (paths bool (natgtb (upb n) n) false))
+   '(lam n
+      (transportf nat (lam w (paths bool (natgtb (upb n) w) false)) (npair (upa n) (upb n)) n
+        (npairunpair n)
+        (npairgeb (upa n) (upb n))))))
+
+; --- a kid list as one nat: nil is 0, cons is succ of the pair, and ldec
+; --- walks it back on FUEL -- the code bounds its own decode (a kid's code
+; --- rides inside the pair, so upb never grows: upble + istransnatleh feed
+; --- the guard convoys), the house fuel pattern at nateqb's one-call-per-
+; --- level shape. round trips sealed both ways. ---
+(assert
+ (defn 'lcode
+   '(pi l nlist nat)
+   '(lam l
+      ((nat_rect (lam q (pi v (nvec q) nat)) (lam v 0)
+         (lam k (lam IH (lam v (succ (npair (pr1 v) (IH (pr2 v)))))))
+         (pr1 l))
+        (pr2 l))))
+ (defn 'ldec
+   '(pi f nat (pi m nat nlist))
+   '(lam f
+      (nat_rect (lam q (pi m nat nlist)) (lam m nnil)
+        (lam f2
+          (lam IH
+            (lam m
+              (bool_rect (lam c nlist) nnil (ncons (upa (npred m)) (IH (upb (npred m))))
+                (niszero m)))))
+        f)))
+ (defq 'ldeccode
+   '(pi l nlist
+      (pi f nat
+        (pi h (paths bool (natgtb (lcode l) f) false) (paths nlist (ldec f (lcode l)) l))))
+   '(lam l
+      ((nat_rect
+         (lam q
+           (pi v (nvec q)
+             (pi f nat
+               (pi h (paths bool (natgtb (lcode (tpair q v)) f) false)
+                 (paths nlist (ldec f (lcode (tpair q v))) (tpair q v))))))
+         (lam v
+           (lam f
+             (nat_rect
+               (lam fq
+                 (pi h (paths bool (natgtb (lcode (tpair 0 v)) fq) false)
+                   (paths nlist (ldec fq (lcode (tpair 0 v))) (tpair 0 v))))
+               (lam h (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
+               (lam f2 (lam IHf (lam h (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))))
+               f)))
+         (lam k
+           (lam IH
+             (lam v
+               (lam f
+                 (nat_rect
+                   (lam fq
+                     (pi h (paths bool (natgtb (lcode (tpair (succ k) v)) fq) false)
+                       (paths nlist (ldec fq (lcode (tpair (succ k) v))) (tpair (succ k) v))))
+                   (lam h
+                     (fromempty
+                       (paths nlist (ldec 0 (lcode (tpair (succ k) v))) (tpair (succ k) v))
+                       (nopathstruetofalse h)))
+                   (lam f2
+                     (lam IHf
+                       (lam h
+                         (pathscomp0 nlist
+                           (ncons (upa (npair (pr1 v) (lcode (tpair k (pr2 v)))))
+                             (ldec f2 (upb (npair (pr1 v) (lcode (tpair k (pr2 v)))))))
+                           (ncons (pr1 v)
+                             (ldec f2 (upb (npair (pr1 v) (lcode (tpair k (pr2 v)))))))
+                           (tpair (succ k) v)
+                           (maponpaths nat nlist
+                             (lam w
+                               (ncons w
+                                 (ldec f2 (upb (npair (pr1 v) (lcode (tpair k (pr2 v))))))))
+                             (upa (npair (pr1 v) (lcode (tpair k (pr2 v)))))
+                             (pr1 v)
+                             (upabeta (pr1 v) (lcode (tpair k (pr2 v)))))
+                           (pathscomp0 nlist
+                             (ncons (pr1 v)
+                               (ldec f2 (upb (npair (pr1 v) (lcode (tpair k (pr2 v)))))))
+                             (ncons (pr1 v) (ldec f2 (lcode (tpair k (pr2 v)))))
+                             (tpair (succ k) v)
+                             (maponpaths nat nlist (lam w (ncons (pr1 v) (ldec f2 w)))
+                               (upb (npair (pr1 v) (lcode (tpair k (pr2 v)))))
+                               (lcode (tpair k (pr2 v)))
+                               (upbbeta (pr1 v) (lcode (tpair k (pr2 v)))))
+                             (maponpaths nlist nlist (lam w (ncons (pr1 v) w))
+                               (ldec f2 (lcode (tpair k (pr2 v))))
+                               (tpair k (pr2 v))
+                               (IH (pr2 v) f2
+                                 (istransnatleh (lcode (tpair k (pr2 v)))
+                                   (npair (pr1 v) (lcode (tpair k (pr2 v))))
+                                   f2
+                                   (npairgeb (pr1 v) (lcode (tpair k (pr2 v))))
+                                   h))))))))
+                   f)))))
+         (pr1 l))
+        (pr2 l))))
+ (defq 'lcodedec
+   '(pi f nat (pi m nat (pi h (paths bool (natgtb m f) false) (paths nat (lcode (ldec f m)) m))))
+   '(lam f
+      (nat_rect
+        (lam fq
+          (pi m nat (pi h (paths bool (natgtb m fq) false) (paths nat (lcode (ldec fq m)) m))))
+        (lam m
+          (nat_rect
+            (lam mq (pi h (paths bool (natgtb mq 0) false) (paths nat (lcode (ldec 0 mq)) mq)))
+            (lam h (idpath 0))
+            (lam m2
+              (lam IHm
+                (lam h
+                  (fromempty (paths nat (lcode (ldec 0 (succ m2))) (succ m2))
+                    (nopathstruetofalse h)))))
+            m))
+        (lam f2
+          (lam IHf
+            (lam m
+              (nat_rect
+                (lam mq
+                  (pi h (paths bool (natgtb mq (succ f2)) false)
+                    (paths nat (lcode (ldec (succ f2) mq)) mq)))
+                (lam h (idpath 0))
+                (lam m2
+                  (lam IHm
+                    (lam h
+                      (maponpaths nat nat (lam w (succ w))
+                        (npair (upa m2) (lcode (ldec f2 (upb m2))))
+                        m2
+                        (pathscomp0 nat (npair (upa m2) (lcode (ldec f2 (upb m2))))
+                          (npair (upa m2) (upb m2))
+                          m2
+                          (maponpaths nat nat (lam w (npair (upa m2) w))
+                            (lcode (ldec f2 (upb m2)))
+                            (upb m2)
+                            (IHf (upb m2) (istransnatleh (upb m2) m2 f2 (upble m2) h)))
+                          (npairunpair m2))))))
+                m))))
+        f)))
+ ; the code and its walk agree on a closed list
+ (id? (vof 0 '(lcode (ncons 1 (ncons 2 nnil)))) (vof 0 '20))
+ ((vof 0 '(ncons 1 (ncons 2 nnil))) = (vof 0 '(ldec 20 20))))
+
+; --- the tree itself. enode pairs a label with its kids' code; elabel and
+; --- ekids read a node back (ekids fuelled by the code it decodes). beta
+; --- both ways and eta close from the two round trips, and nat's decidable
+; --- equality IS the tree's -- the swal guards' Aeq, for free. ---
+(assert
+ (defn 'etree
+   'UU
+   'nat)
+ (defn 'enode
+   '(pi l nat (pi ks nlist etree))
+   '(lam l (lam ks (npair l (lcode ks)))))
+ (defn 'elabel
+   '(pi t etree nat)
+   '(lam t (upa t)))
+ (defn 'ekids
+   '(pi t etree nlist)
+   '(lam t (ldec (upb t) (upb t))))
+ (defq 'elabelbeta
+   '(pi l nat (pi ks nlist (paths nat (elabel (enode l ks)) l)))
+   '(lam l (lam ks (upabeta l (lcode ks)))))
+ (defq 'ekidsbeta
+   '(pi l nat (pi ks nlist (paths nlist (ekids (enode l ks)) ks)))
+   '(lam l
+      (lam ks
+        (pathscomp0 nlist (ldec (upb (npair l (lcode ks))) (upb (npair l (lcode ks))))
+          (ldec (lcode ks) (lcode ks))
+          ks
+          (maponpaths nat nlist (lam w (ldec w w)) (upb (npair l (lcode ks))) (lcode ks)
+            (upbbeta l (lcode ks)))
+          (ldeccode ks (lcode ks) (isreflnatleh (lcode ks)))))))
+ (defq 'etreeeta
+   '(pi t etree (paths etree (enode (elabel t) (ekids t)) t))
+   '(lam t
+      (pathscomp0 nat (npair (upa t) (lcode (ldec (upb t) (upb t)))) (npair (upa t) (upb t)) t
+        (maponpaths nat nat (lam w (npair (upa t) w)) (lcode (ldec (upb t) (upb t))) (upb t)
+          (lcodedec (upb t) (upb t) (isreflnatleh (upb t))))
+        (npairunpair t))))
+ (defn 'isdeceqetree
+   '(pi x etree (pi y etree (coprod (paths etree x y) (pi e (paths etree x y) empty))))
+   'isdeceqnat)
+ ; the tree computes: a leaf is its label's triangle, the zero leaf IS 0,
+ ; and eta reads ANY nat as a node -- 5 is (enode 0 (ncons 1 nnil))
+ (id? (vof 0 '28) (vof 0 '(enode 7 nnil)))
+ (id? (vof 0 '0) (vof 0 '(enode 0 nnil)))
+ (id? (vof 0 '2) (vof 0 '(enode 0 (ncons (enode 0 nnil) nnil))))
+ (id? (vof 0 '5) (vof 0 '(elabel (enode 5 (ncons 1 (ncons 2 nnil))))))
+ ((vof 0 '(ncons 1 (ncons 2 nnil))) = (vof 0 '(ekids (enode 5 (ncons 1 (ncons 2 nnil))))))
+ (id? (vof 0 '0) (vof 0 '(elabel 5)))
+ ((vof 0 '(ncons 1 nnil)) = (vof 0 '(ekids 5)))
+ (id? (vof 0 '5) (vof 0 '(enode (elabel 5) (ekids 5)))))
+

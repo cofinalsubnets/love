@@ -21,7 +21,9 @@
    _ (reads (open "test/uulay.l" "r"))
    _ (reads (open "test/uupatch.l" "r"))
    _ (reads (open "test/uuwm.l" "r"))
-   _ (reads (open "test/uuwmlaw.l" "r"))          ; load + CERTIFY uu's corpus (populates GLOB)
+   _ (reads (open "test/uuwmlaw.l" "r"))
+   _ (reads (open "test/uukind.l" "r"))
+   _ (reads (open "test/uukindlaw.l" "r"))          ; load + CERTIFY uu's corpus (populates GLOB)
    bs (intern "\\")
    (unq x) (? (&& (two? x) (id? (cap x) bs)) (cap (cup x)) x)   ; strip one ' (reads shows quote as (\ ..))
    (cat l) (foldl (+) "" l)
@@ -48,7 +50,7 @@
                            (| (deq? F) (axq? F)) (link (entry F) acc) acc)))
                       (rev acc))
    (app2 a b) (? (two? a) (link (cap a) (app2 (cup a) b)) b)   ; NOT `cat` -- the local cat is the STRING fold
-   ents (gather (app2 (forms "test/uu.l") (app2 (forms "test/uulay.l") (app2 (forms "test/uupatch.l") (app2 (forms "test/uuwm.l") (forms "test/uuwmlaw.l"))))) ())
+   ents (gather (app2 (forms "test/uu.l") (app2 (forms "test/uulay.l") (app2 (forms "test/uupatch.l") (app2 (forms "test/uuwm.l") (app2 (forms "test/uuwmlaw.l") (app2 (forms "test/uukind.l") (forms "test/uukindlaw.l"))))))) ())
 
    ; the SILENT-NO-OP gate (defense in depth behind uu.l's arity-door macros):
    ; a def gathered off the file must be WHOLE -- three operands; a paren slip
@@ -211,6 +213,8 @@
 "Print Assumptions uu_hinv_roundtrip." (string 10)
 "Print Assumptions uu_hcommute_sound." (string 10)
 "Print Assumptions uu_hfold_swap." (string 10)
+"Print Assumptions uu_etreeeta." (string 10)
+"Print Assumptions uu_ekidsbeta." (string 10)
                 "Print Assumptions add_comm_std." (string 10)
                 "Print Assumptions add_assoc_std." (string 10)
                 "Print Assumptions mul_comm_std." (string 10) (string 10)
