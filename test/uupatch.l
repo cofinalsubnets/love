@@ -5924,3 +5924,826 @@
  ((vof 0 '(lapp (ncons 7 nnil) (lapp (splice (ncons 1 (ncons 2 (ncons 3 nnil))) 1 1 (ncons 5 nnil)) (ncons 8 nnil))))
   = (vof 0 '(splice (lapp (ncons 7 nnil) (lapp (ncons 1 (ncons 2 (ncons 3 nnil))) (ncons 8 nnil))) 2 1 (ncons 5 nnil)))))
 
+
+; ============================================================================
+; the METAVARIABLE slice: matching is sound, the re-aim swaps home --
+; patch.v's eighth form, its two genuinely new halves. a PATTERN is a
+; depth-indexed family (tm d): atoms and metavariables at the leaves, cells
+; one rung down, so nat_rect on the depth IS structural induction. a GROUND
+; term rides at CODE grain -- one nat under the cantor coding (the etree
+; currency: tag 0 atom, 1 metavariable, 2 cell), so a ground is an ELEMENT:
+; it can sit in a state, be hashed, be laid. the substitution is a duo-list
+; threaded through a coprod option; teq collapses to nateqb at code grain,
+; so patch.v's teq_eq IS nateqbtopaths, already home. matching binds a
+; fresh metavariable, checks a bound one (a non-linear pattern binds
+; consistently or refuses), and MATCHING IS SOUND: a pattern instantiated
+; with its own bindings SPELLS the ground code (what valid/apon lean on).
+; the commute half: the schematic swallow re-aims a deep patch from the
+; variable's olds seat to its news seat by prefix surgery -- involutive at
+; address grain, two ldroplenapp reads.
+; ============================================================================
+; --- the pattern family and its coding: leaves live at EVERY depth (the
+; --- left summand), cells one rung down, so any two patterns share a depth;
+; --- tcode lays a pattern onto the element grain the states speak ---
+(assert
+ (defn 'tmleaf
+   'UU
+   '(coprod nat nat))
+ (defn 'tm
+   '(pi d nat UU)
+   '(lam d (nat_rect (lam q UU) tmleaf (lam k (lam r (coprod tmleaf (total2 h r r)))) d)))
+ (defn 'latom
+   '(pi n nat tmleaf)
+   '(lam n (ii1 n)))
+ (defn 'lmv
+   '(pi x nat tmleaf)
+   '(lam x (ii2 x)))
+ (defn 'matom
+   '(pi d nat (pi n nat (tm (succ d))))
+   '(lam d (lam n (ii1 (ii1 n)))))
+ (defn 'mmv
+   '(pi d nat (pi x nat (tm (succ d))))
+   '(lam d (lam x (ii1 (ii2 x)))))
+ (defn 'mcell
+   '(pi d nat (pi a (tm d) (pi b (tm d) (tm (succ d)))))
+   '(lam d (lam a (lam b (ii2 (tpair a b))))))
+ (defn 'tcode
+   '(pi d nat (pi p (tm d) nat))
+   '(lam d
+      (nat_rect (lam q (pi p (tm q) nat))
+        (lam p (coprod_rect (lam c nat) (lam n (npair 0 n)) (lam x (npair 1 x)) p))
+        (lam k
+          (lam IH
+            (lam p
+              (coprod_rect (lam c nat)
+                (lam w (coprod_rect (lam c nat) (lam n (npair 0 n)) (lam x (npair 1 x)) w))
+                (lam w (npair 2 (npair (IH (pr1 w)) (IH (pr2 w)))))
+                p))))
+        d)))
+ ; the coding computes, and a leaf codes the same at every depth
+ (id? (vof 0 '2) (vof 0 '(tcode 0 (latom 1))))
+ (id? (vof 0 '1) (vof 0 '(tcode 0 (lmv 0))))
+ (id? (vof 0 '(tcode 0 (latom 1))) (vof 0 '(tcode 1 (matom 0 1))))
+ (id? (vof 0 '(tcode 0 (lmv 3))) (vof 0 '(tcode 1 (mmv 0 3))))
+ (id? (vof 0 '52) (vof 0 '(tcode 1 (mcell 0 (latom 1) (lmv 0))))))
+
+; --- the substitution: a duo-list (key, code), first hit wins -- the walk
+; --- is occ's shape at duo grain; sqside is the option's no-confusion
+; --- family (a miss is never a hit) ---
+(assert
+ (defn 'svec
+   '(pi n nat UU)
+   '(lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h duo r))) n)))
+ (defn 'slist
+   'UU
+   '(total2 n nat (svec n)))
+ (defn 'snil
+   'slist
+   '(tpair 0 tt))
+ (defn 'scons
+   '(pi e duo (pi s slist slist))
+   '(lam e (lam s (tpair (succ (pr1 s)) (tpair e (pr2 s))))))
+ (defn 'sasq
+   '(pi v nat (pi s slist (coprod nat unit)))
+   '(lam v
+      (lam s
+        ((nat_rect (lam q (pi w (svec q) (coprod nat unit))) (lam w (ii2 tt))
+           (lam k
+             (lam IH
+               (lam w
+                 (bool_rect (lam c (coprod nat unit)) (ii1 (pr2 (pr1 w))) (IH (pr2 w))
+                   (nateqb (pr1 (pr1 w)) v)))))
+           (pr1 s))
+          (pr2 s)))))
+ (defn 'sqside
+   '(pi c (coprod nat unit) UU)
+   '(lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
+ ; the lookup computes: a hit, a miss, and the shadowing head
+ ((vof 0 '(ii1 7)) = (vof 0 '(sasq 1 (scons (tpair 1 7) snil))))
+ ((vof 0 '(ii2 tt)) = (vof 0 '(sasq 3 (scons (tpair 1 7) snil))))
+ ((vof 0 '(ii1 5)) = (vof 0 '(sasq 1 (scons (tpair 1 5) (scons (tpair 1 7) snil))))))
+
+; --- matching and instantiation: the leaf lane is shared by every depth
+; --- (an atom compares codes, a bound metavariable CHECKS, a fresh one
+; --- BINDS), the cell lane is guarded by the ground's tag -- upa/upb read
+; --- the ground's kids, and npairunpair will reassemble them; mvside is
+; --- the result option's no-confusion family ---
+(assert
+ (defn 'mleaf
+   '(pi p tmleaf (pi g nat (pi s slist (coprod slist unit))))
+   '(lam p
+      (lam g
+        (lam s
+          (coprod_rect (lam c (coprod slist unit))
+            (lam n
+              (bool_rect (lam c2 (coprod slist unit)) (ii1 s) (ii2 tt) (nateqb (npair 0 n) g)))
+            (lam x
+              (coprod_rect (lam c2 (coprod slist unit))
+                (lam t (bool_rect (lam c3 (coprod slist unit)) (ii1 s) (ii2 tt) (nateqb t g)))
+                (lam u (ii1 (scons (tpair x g) s)))
+                (sasq x s)))
+            p)))))
+ (defn 'mvside
+   '(pi c (coprod slist unit) UU)
+   '(lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
+ (defn 'mtch
+   '(pi d nat (pi p (tm d) (pi g nat (pi s slist (coprod slist unit)))))
+   '(lam d
+      (nat_rect (lam q (pi p (tm q) (pi g nat (pi s slist (coprod slist unit)))))
+        (lam p (lam g (lam s (mleaf p g s))))
+        (lam k
+          (lam IH
+            (lam p
+              (lam g
+                (lam s
+                  (coprod_rect (lam c (coprod slist unit)) (lam w (mleaf w g s))
+                    (lam w
+                      (bool_rect (lam c2 (coprod slist unit))
+                        (coprod_rect (lam c3 (coprod slist unit))
+                          (lam so (IH (pr2 w) (upb (upb g)) so))
+                          (lam u (ii2 tt))
+                          (IH (pr1 w) (upa (upb g)) s))
+                        (ii2 tt)
+                        (nateqb (upa g) 2)))
+                    p))))))
+        d)))
+ (defn 'ileaf
+   '(pi p tmleaf (pi s slist nat))
+   '(lam p
+      (lam s
+        (coprod_rect (lam c nat) (lam n (npair 0 n))
+          (lam x (coprod_rect (lam c2 nat) (lam t t) (lam u (npair 1 x)) (sasq x s)))
+          p))))
+ (defn 'inst
+   '(pi d nat (pi p (tm d) (pi s slist nat)))
+   '(lam d
+      (nat_rect (lam q (pi p (tm q) (pi s slist nat))) (lam p (lam s (ileaf p s)))
+        (lam k
+          (lam IH
+            (lam p
+              (lam s
+                (coprod_rect (lam c nat) (lam w (ileaf w s))
+                  (lam w (npair 2 (npair (IH (pr1 w) s) (IH (pr2 w) s))))
+                  p)))))
+        d)))
+ ; matching computes: a bind + an atom check, the non-linear pattern
+ ; consistent then breached, and a wrong-shape ground refused
+ ((vof 0 '(mtch 1 (mcell 0 (lmv 0) (latom 0)) (tcode 1 (mcell 0 (latom 1) (latom 0))) snil))
+  = (vof 0 '(ii1 (scons (tpair 0 (tcode 0 (latom 1))) snil))))
+ ((vof 0 '(mtch 1 (mcell 0 (lmv 0) (lmv 0)) (tcode 1 (mcell 0 (latom 1) (latom 1))) snil))
+  = (vof 0 '(ii1 (scons (tpair 0 (tcode 0 (latom 1))) snil))))
+ ((vof 0 '(mtch 1 (mcell 0 (lmv 0) (lmv 0)) (tcode 1 (mcell 0 (latom 1) (latom 0))) snil))
+  = (vof 0 '(ii2 tt)))
+ ((vof 0 '(mtch 1 (mcell 0 (lmv 0) (latom 0)) (tcode 0 (latom 1)) snil)) = (vof 0 '(ii2 tt)))
+ ; instantiation computes: soundness by eye, and a free metavariable rides
+ (id? (vof 0 '(inst 1 (mcell 0 (lmv 0) (lmv 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
+      (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 1)))))
+ (id? (vof 0 '(tcode 0 (lmv 4))) (vof 0 '(inst 0 (lmv 4) snil))))
+
+; --- bindings only GROW: what a match step bound stays bound, unchanged
+; --- (patch.v's mtch_mono). the leaf rung carries the verdict convoys --
+; --- an atom or a checked metavariable hands the substitution through
+; --- untouched, and a fresh bind's shadowing cons reads through nateqb's
+; --- decision (agreeing keys land in sqside's empty lane); the cell rung
+; --- threads the two IHs through the remembered intermediate ---
+(assert
+ (defq 'mleaf-mono
+   '(pi p tmleaf
+      (pi g nat
+        (pi s slist
+          (pi sf slist
+            (pi e (paths (coprod slist unit) (mleaf p g s) (ii1 sf))
+              (pi v nat
+                (pi t nat
+                  (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                    (paths (coprod nat unit) (sasq v sf) (ii1 t))))))))))
+   '(lam p
+      (lam g
+        (lam s
+          (lam sf
+            (coprod_rect
+              (lam c
+                (pi e (paths (coprod slist unit) (mleaf c g s) (ii1 sf))
+                  (pi v nat
+                    (pi t nat
+                      (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                        (paths (coprod nat unit) (sasq v sf) (ii1 t)))))))
+              (lam n
+                ((bool_rect
+                   (lam cb
+                     (pi hv (paths bool (nateqb (npair 0 n) g) cb)
+                       (pi e
+                         (paths (coprod slist unit)
+                           (bool_rect (lam c3 (coprod slist unit)) (ii1 s) (ii2 tt) cb)
+                           (ii1 sf))
+                         (pi v nat
+                           (pi t nat
+                             (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                               (paths (coprod nat unit) (sasq v sf) (ii1 t))))))))
+                   (lam hv
+                     (lam e
+                       (lam v
+                         (lam t
+                           (lam ha
+                             (transportf slist
+                               (lam y (paths (coprod nat unit) (sasq v y) (ii1 t)))
+                               s
+                               sf
+                               (maponpaths (coprod slist unit) slist
+                                 (lam c9 (coprod_rect (lam c8 slist) (lam y9 y9) (lam u9 s) c9))
+                                 (ii1 s)
+                                 (ii1 sf)
+                                 e)
+                               ha))))))
+                   (lam hv
+                     (lam e
+                       (lam v
+                         (lam t
+                           (lam ha
+                             (fromempty (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                               (transportf (coprod slist unit) mvside (ii2 tt) (ii1 sf) e tt)))))))
+                   (nateqb (npair 0 n) g))
+                  (idpath (nateqb (npair 0 n) g))))
+              (lam x
+                ((coprod_rect
+                   (lam cc
+                     (pi hc (paths (coprod nat unit) (sasq x s) cc)
+                       (pi e
+                         (paths (coprod slist unit)
+                           (coprod_rect (lam c3 (coprod slist unit))
+                             (lam ti
+                               (bool_rect (lam c4 (coprod slist unit)) (ii1 s) (ii2 tt)
+                                 (nateqb ti g)))
+                             (lam ui (ii1 (scons (tpair x g) s)))
+                             cc)
+                           (ii1 sf))
+                         (pi v nat
+                           (pi t nat
+                             (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                               (paths (coprod nat unit) (sasq v sf) (ii1 t))))))))
+                   (lam t0
+                     (lam hc
+                       ((bool_rect
+                          (lam cb
+                            (pi hv (paths bool (nateqb t0 g) cb)
+                              (pi e
+                                (paths (coprod slist unit)
+                                  (bool_rect (lam c3 (coprod slist unit)) (ii1 s) (ii2 tt) cb)
+                                  (ii1 sf))
+                                (pi v nat
+                                  (pi t nat
+                                    (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                                      (paths (coprod nat unit) (sasq v sf) (ii1 t))))))))
+                          (lam hv
+                            (lam e
+                              (lam v
+                                (lam t
+                                  (lam ha
+                                    (transportf slist
+                                      (lam y (paths (coprod nat unit) (sasq v y) (ii1 t)))
+                                      s
+                                      sf
+                                      (maponpaths (coprod slist unit) slist
+                                        (lam c9
+                                          (coprod_rect (lam c8 slist) (lam y9 y9) (lam u9 s) c9))
+                                        (ii1 s)
+                                        (ii1 sf)
+                                        e)
+                                      ha))))))
+                          (lam hv
+                            (lam e
+                              (lam v
+                                (lam t
+                                  (lam ha
+                                    (fromempty (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                      (transportf (coprod slist unit) mvside (ii2 tt) (ii1 sf) e
+                                        tt)))))))
+                          (nateqb t0 g))
+                         (idpath (nateqb t0 g)))))
+                   (lam u
+                     (lam hc
+                       (lam e
+                         (lam v
+                           (lam t
+                             (lam ha
+                               (transportf slist
+                                 (lam y (paths (coprod nat unit) (sasq v y) (ii1 t)))
+                                 (scons (tpair x g) s)
+                                 sf
+                                 (maponpaths (coprod slist unit) slist
+                                   (lam c9
+                                     (coprod_rect (lam c8 slist) (lam y9 y9)
+                                       (lam u9 (scons (tpair x g) s))
+                                       c9))
+                                   (ii1 (scons (tpair x g) s))
+                                   (ii1 sf)
+                                   e)
+                                 ((bool_rect
+                                    (lam cb
+                                      (pi hv (paths bool (nateqb x v) cb)
+                                        (paths (coprod nat unit)
+                                          (bool_rect (lam c4 (coprod nat unit)) (ii1 g)
+                                            (sasq v s)
+                                            cb)
+                                          (ii1 t))))
+                                    (lam hv
+                                      (fromempty (paths (coprod nat unit) (ii1 g) (ii1 t))
+                                        (transportf (coprod nat unit) sqside (ii2 u) (ii1 t)
+                                          (pathscomp0 (coprod nat unit) (ii2 u) (sasq x s)
+                                            (ii1 t)
+                                            (pathsinv0 (coprod nat unit) (sasq x s) (ii2 u) hc)
+                                            (transportf nat
+                                              (lam y
+                                                (paths (coprod nat unit) (sasq y s) (ii1 t)))
+                                              v
+                                              x
+                                              (pathsinv0 nat x v (nateqbtopaths x v hv))
+                                              ha))
+                                          u)))
+                                    (lam hv ha)
+                                    (nateqb x v))
+                                   (idpath (nateqb x v))))))))))
+                   (sasq x s))
+                  (idpath (sasq x s))))
+              p))))))
+ (defq 'mtch-mono
+   '(pi d nat
+      (pi p (tm d)
+        (pi g nat
+          (pi s slist
+            (pi sf slist
+              (pi e (paths (coprod slist unit) (mtch d p g s) (ii1 sf))
+                (pi v nat
+                  (pi t nat
+                    (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                      (paths (coprod nat unit) (sasq v sf) (ii1 t)))))))))))
+   '(lam d
+      (nat_rect
+        (lam q
+          (pi p (tm q)
+            (pi g nat
+              (pi s slist
+                (pi sf slist
+                  (pi e (paths (coprod slist unit) (mtch q p g s) (ii1 sf))
+                    (pi v nat
+                      (pi t nat
+                        (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                          (paths (coprod nat unit) (sasq v sf) (ii1 t)))))))))))
+        (lam p
+          (lam g
+            (lam s (lam sf (lam e (lam v (lam t (lam ha (mleaf-mono p g s sf e v t ha)))))))))
+        (lam k
+          (lam IH
+            (lam p
+              (lam g
+                (lam s
+                  (lam sf
+                    (coprod_rect
+                      (lam c
+                        (pi e (paths (coprod slist unit) (mtch (succ k) c g s) (ii1 sf))
+                          (pi v nat
+                            (pi t nat
+                              (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                                (paths (coprod nat unit) (sasq v sf) (ii1 t)))))))
+                      (lam w (lam e (lam v (lam t (lam ha (mleaf-mono w g s sf e v t ha))))))
+                      (lam w
+                        ((bool_rect
+                           (lam cb
+                             (pi hg (paths bool (nateqb (upa g) 2) cb)
+                               (pi e
+                                 (paths (coprod slist unit)
+                                   (bool_rect (lam c2 (coprod slist unit))
+                                     (coprod_rect (lam c3 (coprod slist unit))
+                                       (lam so (mtch k (pr2 w) (upb (upb g)) so))
+                                       (lam u (ii2 tt))
+                                       (mtch k (pr1 w) (upa (upb g)) s))
+                                     (ii2 tt)
+                                     cb)
+                                   (ii1 sf))
+                                 (pi v nat
+                                   (pi t nat
+                                     (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                                       (paths (coprod nat unit) (sasq v sf) (ii1 t))))))))
+                           (lam hg
+                             ((coprod_rect
+                                (lam cc
+                                  (pi hc
+                                    (paths (coprod slist unit) (mtch k (pr1 w) (upa (upb g)) s)
+                                      cc)
+                                    (pi e
+                                      (paths (coprod slist unit)
+                                        (coprod_rect (lam c3 (coprod slist unit))
+                                          (lam so (mtch k (pr2 w) (upb (upb g)) so))
+                                          (lam u (ii2 tt))
+                                          cc)
+                                        (ii1 sf))
+                                      (pi v nat
+                                        (pi t nat
+                                          (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
+                                            (paths (coprod nat unit) (sasq v sf) (ii1 t))))))))
+                                (lam so
+                                  (lam hc
+                                    (lam e
+                                      (lam v
+                                        (lam t
+                                          (lam ha
+                                            (IH (pr2 w) (upb (upb g)) so sf e v t
+                                              (IH (pr1 w) (upa (upb g)) s so hc v t ha))))))))
+                                (lam u
+                                  (lam hc
+                                    (lam e
+                                      (lam v
+                                        (lam t
+                                          (lam ha
+                                            (fromempty
+                                              (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                              (transportf (coprod slist unit) mvside (ii2 tt)
+                                                (ii1 sf)
+                                                e
+                                                tt))))))))
+                                (mtch k (pr1 w) (upa (upb g)) s))
+                               (idpath (mtch k (pr1 w) (upa (upb g)) s))))
+                           (lam hg
+                             (lam e
+                               (lam v
+                                 (lam t
+                                   (lam ha
+                                     (fromempty (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                       (transportf (coprod slist unit) mvside (ii2 tt) (ii1 sf)
+                                         e
+                                         tt)))))))
+                           (nateqb (upa g) 2))
+                          (idpath (nateqb (upa g) 2))))
+                      p)))))))
+        d))))
+
+; --- MATCHING IS SOUND, under any extension of the bindings it produced
+; --- (patch.v's mtch_sound_ext -- the strengthening that lets the cell
+; --- case ride mtch-mono). the leaf rung: an atom's verdict IS the goal,
+; --- a checked metavariable reads its binding through the extension, a
+; --- fresh bind reads its own cons head (nateqbrefl fires the decision);
+; --- the cell rung reassembles the ground from its kids -- the two IHs,
+; --- npairunpair twice, and the tag verdict slid home. then the headline
+; --- at the empty substitution ---
+(assert
+ (defq 'mleaf-sound
+   '(pi p tmleaf
+      (pi g nat
+        (pi s slist
+          (pi sf slist
+            (pi e (paths (coprod slist unit) (mleaf p g s) (ii1 sf))
+              (pi s2 slist
+                (pi X
+                  (pi v nat
+                    (pi t nat
+                      (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                        (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                  (paths nat (ileaf p s2) g))))))))
+   '(lam p
+      (lam g
+        (lam s
+          (lam sf
+            (coprod_rect
+              (lam c
+                (pi e (paths (coprod slist unit) (mleaf c g s) (ii1 sf))
+                  (pi s2 slist
+                    (pi X
+                      (pi v nat
+                        (pi t nat
+                          (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                            (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                      (paths nat (ileaf c s2) g)))))
+              (lam n
+                ((bool_rect
+                   (lam cb
+                     (pi hv (paths bool (nateqb (npair 0 n) g) cb)
+                       (pi e
+                         (paths (coprod slist unit)
+                           (bool_rect (lam c3 (coprod slist unit)) (ii1 s) (ii2 tt) cb)
+                           (ii1 sf))
+                         (pi s2 slist
+                           (pi X
+                             (pi v nat
+                               (pi t nat
+                                 (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                   (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                             (paths nat (ileaf (ii1 n) s2) g))))))
+                   (lam hv (lam e (lam s2 (lam X (nateqbtopaths (npair 0 n) g hv)))))
+                   (lam hv
+                     (lam e
+                       (lam s2
+                         (lam X
+                           (fromempty (paths nat (ileaf (ii1 n) s2) g)
+                             (transportf (coprod slist unit) mvside (ii2 tt) (ii1 sf) e tt))))))
+                   (nateqb (npair 0 n) g))
+                  (idpath (nateqb (npair 0 n) g))))
+              (lam x
+                ((coprod_rect
+                   (lam cc
+                     (pi hc (paths (coprod nat unit) (sasq x s) cc)
+                       (pi e
+                         (paths (coprod slist unit)
+                           (coprod_rect (lam c3 (coprod slist unit))
+                             (lam ti
+                               (bool_rect (lam c4 (coprod slist unit)) (ii1 s) (ii2 tt)
+                                 (nateqb ti g)))
+                             (lam ui (ii1 (scons (tpair x g) s)))
+                             cc)
+                           (ii1 sf))
+                         (pi s2 slist
+                           (pi X
+                             (pi v nat
+                               (pi t nat
+                                 (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                   (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                             (paths nat (ileaf (ii2 x) s2) g))))))
+                   (lam t0
+                     (lam hc
+                       ((bool_rect
+                          (lam cb
+                            (pi hv (paths bool (nateqb t0 g) cb)
+                              (pi e
+                                (paths (coprod slist unit)
+                                  (bool_rect (lam c3 (coprod slist unit)) (ii1 s) (ii2 tt) cb)
+                                  (ii1 sf))
+                                (pi s2 slist
+                                  (pi X
+                                    (pi v nat
+                                      (pi t nat
+                                        (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                          (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                                    (paths nat (ileaf (ii2 x) s2) g))))))
+                          (lam hv
+                            (lam e
+                              (lam s2
+                                (lam X
+                                  (pathscomp0 nat (ileaf (ii2 x) s2) t0 g
+                                    (maponpaths (coprod nat unit) nat
+                                      (lam c9
+                                        (coprod_rect (lam c8 nat) (lam ti ti)
+                                          (lam ui (npair 1 x))
+                                          c9))
+                                      (sasq x s2)
+                                      (ii1 t0)
+                                      (X x t0
+                                        (transportf slist
+                                          (lam y (paths (coprod nat unit) (sasq x y) (ii1 t0)))
+                                          s
+                                          sf
+                                          (maponpaths (coprod slist unit) slist
+                                            (lam c9
+                                              (coprod_rect (lam c8 slist) (lam y9 y9) (lam u9 s)
+                                                c9))
+                                            (ii1 s)
+                                            (ii1 sf)
+                                            e)
+                                          hc)))
+                                    (nateqbtopaths t0 g hv))))))
+                          (lam hv
+                            (lam e
+                              (lam s2
+                                (lam X
+                                  (fromempty (paths nat (ileaf (ii2 x) s2) g)
+                                    (transportf (coprod slist unit) mvside (ii2 tt) (ii1 sf) e
+                                      tt))))))
+                          (nateqb t0 g))
+                         (idpath (nateqb t0 g)))))
+                   (lam u
+                     (lam hc
+                       (lam e
+                         (lam s2
+                           (lam X
+                             (maponpaths (coprod nat unit) nat
+                               (lam c9
+                                 (coprod_rect (lam c8 nat) (lam ti ti) (lam ui (npair 1 x)) c9))
+                               (sasq x s2)
+                               (ii1 g)
+                               (X x g
+                                 (transportf slist
+                                   (lam y (paths (coprod nat unit) (sasq x y) (ii1 g)))
+                                   (scons (tpair x g) s)
+                                   sf
+                                   (maponpaths (coprod slist unit) slist
+                                     (lam c9
+                                       (coprod_rect (lam c8 slist) (lam y9 y9)
+                                         (lam u9 (scons (tpair x g) s))
+                                         c9))
+                                     (ii1 (scons (tpair x g) s))
+                                     (ii1 sf)
+                                     e)
+                                   (maponpaths bool (coprod nat unit)
+                                     (lam c9
+                                       (bool_rect (lam c8 (coprod nat unit)) (ii1 g) (sasq x s)
+                                         c9))
+                                     (nateqb x x)
+                                     true
+                                     (nateqbrefl x))))))))))
+                   (sasq x s))
+                  (idpath (sasq x s))))
+              p))))))
+ (defq 'mtch-sound-ext
+   '(pi d nat
+      (pi p (tm d)
+        (pi g nat
+          (pi s slist
+            (pi sf slist
+              (pi e (paths (coprod slist unit) (mtch d p g s) (ii1 sf))
+                (pi s2 slist
+                  (pi X
+                    (pi v nat
+                      (pi t nat
+                        (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                          (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                    (paths nat (inst d p s2) g)))))))))
+   '(lam d
+      (nat_rect
+        (lam q
+          (pi p (tm q)
+            (pi g nat
+              (pi s slist
+                (pi sf slist
+                  (pi e (paths (coprod slist unit) (mtch q p g s) (ii1 sf))
+                    (pi s2 slist
+                      (pi X
+                        (pi v nat
+                          (pi t nat
+                            (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                              (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                        (paths nat (inst q p s2) g)))))))))
+        (lam p (lam g (lam s (lam sf (lam e (lam s2 (lam X (mleaf-sound p g s sf e s2 X))))))))
+        (lam k
+          (lam IH
+            (lam p
+              (lam g
+                (lam s
+                  (lam sf
+                    (coprod_rect
+                      (lam c
+                        (pi e (paths (coprod slist unit) (mtch (succ k) c g s) (ii1 sf))
+                          (pi s2 slist
+                            (pi X
+                              (pi v nat
+                                (pi t nat
+                                  (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                    (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                              (paths nat (inst (succ k) c s2) g)))))
+                      (lam w (lam e (lam s2 (lam X (mleaf-sound w g s sf e s2 X)))))
+                      (lam w
+                        ((bool_rect
+                           (lam cb
+                             (pi hg (paths bool (nateqb (upa g) 2) cb)
+                               (pi e
+                                 (paths (coprod slist unit)
+                                   (bool_rect (lam c2 (coprod slist unit))
+                                     (coprod_rect (lam c3 (coprod slist unit))
+                                       (lam so (mtch k (pr2 w) (upb (upb g)) so))
+                                       (lam u (ii2 tt))
+                                       (mtch k (pr1 w) (upa (upb g)) s))
+                                     (ii2 tt)
+                                     cb)
+                                   (ii1 sf))
+                                 (pi s2 slist
+                                   (pi X
+                                     (pi v nat
+                                       (pi t nat
+                                         (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                           (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                                     (paths nat (inst (succ k) (ii2 w) s2) g))))))
+                           (lam hg
+                             ((coprod_rect
+                                (lam cc
+                                  (pi hc
+                                    (paths (coprod slist unit) (mtch k (pr1 w) (upa (upb g)) s)
+                                      cc)
+                                    (pi e
+                                      (paths (coprod slist unit)
+                                        (coprod_rect (lam c3 (coprod slist unit))
+                                          (lam so (mtch k (pr2 w) (upb (upb g)) so))
+                                          (lam u (ii2 tt))
+                                          cc)
+                                        (ii1 sf))
+                                      (pi s2 slist
+                                        (pi X
+                                          (pi v nat
+                                            (pi t nat
+                                              (pi h3
+                                                (paths (coprod nat unit) (sasq v sf) (ii1 t))
+                                                (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
+                                          (paths nat (inst (succ k) (ii2 w) s2) g))))))
+                                (lam so
+                                  (lam hc
+                                    (lam e
+                                      (lam s2
+                                        (lam X
+                                          (pathscomp0 nat
+                                            (npair 2
+                                              (npair (inst k (pr1 w) s2) (inst k (pr2 w) s2)))
+                                            (npair 2 (npair (upa (upb g)) (inst k (pr2 w) s2)))
+                                            g
+                                            (maponpaths nat nat
+                                              (lam y (npair 2 (npair y (inst k (pr2 w) s2))))
+                                              (inst k (pr1 w) s2)
+                                              (upa (upb g))
+                                              (IH (pr1 w) (upa (upb g)) s so hc s2
+                                                (lam v
+                                                  (lam t
+                                                    (lam h3
+                                                      (X v t
+                                                        (mtch-mono k (pr2 w) (upb (upb g)) so sf
+                                                          e
+                                                          v
+                                                          t
+                                                          h3)))))))
+                                            (pathscomp0 nat
+                                              (npair 2 (npair (upa (upb g)) (inst k (pr2 w) s2)))
+                                              (npair 2 (npair (upa (upb g)) (upb (upb g))))
+                                              g
+                                              (maponpaths nat nat
+                                                (lam y (npair 2 (npair (upa (upb g)) y)))
+                                                (inst k (pr2 w) s2)
+                                                (upb (upb g))
+                                                (IH (pr2 w) (upb (upb g)) so sf e s2 X))
+                                              (pathscomp0 nat
+                                                (npair 2 (npair (upa (upb g)) (upb (upb g))))
+                                                (npair 2 (upb g))
+                                                g
+                                                (maponpaths nat nat (lam y (npair 2 y))
+                                                  (npair (upa (upb g)) (upb (upb g)))
+                                                  (upb g)
+                                                  (npairunpair (upb g)))
+                                                (pathscomp0 nat (npair 2 (upb g))
+                                                  (npair (upa g) (upb g))
+                                                  g
+                                                  (maponpaths nat nat (lam y (npair y (upb g)))
+                                                    2
+                                                    (upa g)
+                                                    (pathsinv0 nat (upa g) 2
+                                                      (nateqbtopaths (upa g) 2 hg)))
+                                                  (npairunpair g))))))))))
+                                (lam u
+                                  (lam hc
+                                    (lam e
+                                      (lam s2
+                                        (lam X
+                                          (fromempty (paths nat (inst (succ k) (ii2 w) s2) g)
+                                            (transportf (coprod slist unit) mvside (ii2 tt)
+                                              (ii1 sf)
+                                              e
+                                              tt)))))))
+                                (mtch k (pr1 w) (upa (upb g)) s))
+                               (idpath (mtch k (pr1 w) (upa (upb g)) s))))
+                           (lam hg
+                             (lam e
+                               (lam s2
+                                 (lam X
+                                   (fromempty (paths nat (inst (succ k) (ii2 w) s2) g)
+                                     (transportf (coprod slist unit) mvside (ii2 tt) (ii1 sf) e
+                                       tt))))))
+                           (nateqb (upa g) 2))
+                          (idpath (nateqb (upa g) 2))))
+                      p)))))))
+        d)))
+ (defq 'mtch-sound
+   '(pi d nat
+      (pi p (tm d)
+        (pi g nat
+          (pi sf slist
+            (pi e (paths (coprod slist unit) (mtch d p g snil) (ii1 sf))
+              (paths nat (inst d p sf) g))))))
+   '(lam d
+      (lam p
+        (lam g (lam sf (lam e (mtch-sound-ext d p g snil sf e sf (lam v (lam t (lam h3 h3))))))))))
+ ; the headline in the small: match, instantiate, come home
+ (id? (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
+      (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 0))))))
+
+; --- the re-aim at address grain: the schematic swallow moves a deep
+; --- patch's path from the variable's olds seat to its news seat by
+; --- prefix surgery, the rule riding unchanged; swapping the seats back
+; --- is home -- L1 for the metavariable lane, two ldroplenapp reads ---
+(assert
+ (defn 'reaim
+   '(pi a nlist (pi b nlist (pi p nlist nlist)))
+   '(lam a (lam b (lam p (lapp b (ldrop (nlen a) p))))))
+ (defq 'reaim-involutive
+   '(pi a nlist
+      (pi b nlist (pi w nlist (paths nlist (reaim b a (reaim a b (lapp a w))) (lapp a w)))))
+   '(lam a
+      (lam b
+        (lam w
+          (pathscomp0 nlist (lapp a (ldrop (nlen b) (lapp b (ldrop (nlen a) (lapp a w)))))
+            (lapp a (ldrop (nlen b) (lapp b w)))
+            (lapp a w)
+            (maponpaths nlist nlist (lam y (lapp a (ldrop (nlen b) (lapp b y))))
+              (ldrop (nlen a) (lapp a w))
+              w
+              (ldroplenapp a w))
+            (maponpaths nlist nlist (lam y (lapp a y)) (ldrop (nlen b) (lapp b w)) w
+              (ldroplenapp b w)))))))
+ ; the re-aim computes both ways: out through the olds seat, home again
+ ((vof 0 '(reaim (ncons 1 nnil) (ncons 5 (ncons 6 nnil)) (ncons 1 (ncons 9 nnil))))
+  = (vof 0 '(ncons 5 (ncons 6 (ncons 9 nnil)))))
+ ((vof 0 '(reaim (ncons 5 (ncons 6 nnil)) (ncons 1 nnil)
+            (reaim (ncons 1 nnil) (ncons 5 (ncons 6 nnil)) (ncons 1 (ncons 9 nnil)))))
+  = (vof 0 '(ncons 1 (ncons 9 nnil)))))
+

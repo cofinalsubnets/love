@@ -81,7 +81,7 @@
    ; and the universe strands at every downstream use (uu_zrow found it). ground
    ; the StackSet model's types at Type 0 and the whole tower's universes solve.
    mono (tablet 0)
-   _ (map (\ n (pin mono n 1)) '(nvec nlist stk mstk patch tree ppair pvec plist cmside hunk hpair hvec hlist hcmside duo etree epatch spair scmside cell))
+   _ (map (\ n (pin mono n 1)) '(nvec nlist stk mstk patch tree ppair pvec plist cmside hunk hpair hvec hlist hcmside duo etree epatch spair scmside cell tmleaf tm svec slist sqside mvside))
 
    ; transparent type-former/identity combinators: Lean checks a paths.rec minor premise
    ; at REDUCIBLE transparency and won't unfold a plain `def`, so an equivalence proof
@@ -237,6 +237,8 @@
 "#print axioms uu_scell_comm"
 "#print axioms uu_splice_pad"
 "#print axioms uu_bubble_len"
+"#print axioms uu_mtch_sound"
+"#print axioms uu_reaim_involutive"
        "#print axioms uu_natplusassoc"
        "#print axioms uu_natmultcomm"
        "#print axioms uu_total2_paths_f"

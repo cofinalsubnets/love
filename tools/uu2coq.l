@@ -220,6 +220,8 @@
 "Print Assumptions uu_scell_comm." (string 10)
 "Print Assumptions uu_splice_pad." (string 10)
 "Print Assumptions uu_bubble_len." (string 10)
+"Print Assumptions uu_mtch_sound." (string 10)
+"Print Assumptions uu_reaim_involutive." (string 10)
                 "Print Assumptions add_comm_std." (string 10)
                 "Print Assumptions add_assoc_std." (string 10)
                 "Print Assumptions mul_comm_std." (string 10) (string 10)
