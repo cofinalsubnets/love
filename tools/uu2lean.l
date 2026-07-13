@@ -232,6 +232,7 @@
 "#print axioms uu_hfold_swap"
 "#print axioms uu_etreeeta"
 "#print axioms uu_ekidsbeta"
+"#print axioms uu_ffindlay"
        "#print axioms uu_natplusassoc"
        "#print axioms uu_natmultcomm"
        "#print axioms uu_total2_paths_f"

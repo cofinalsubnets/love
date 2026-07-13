@@ -2610,3 +2610,545 @@
  ((vof 0 '(ncons 1 nnil)) = (vof 0 '(ekids 5)))
  (id? (vof 0 '5) (vof 0 '(enode (elabel 5) (ekids 5)))))
 
+
+; ============================================================================
+; the OCCURRENCE/REPLACE kit: patch.v's swallow primitives at element grain
+; (elements are nats, so etree codes ride). occ counts, ffind aims at the
+; first hit, lay replaces one seat, lget reads one back -- all TOTAL (out of
+; range lay is the list, lget the zero point), so the option lanes flatten
+; to natgtb guards. the decision is nateqb; every lemma is one walk down
+; the list with the seat case inside, the decision split by uulay's
+; dependent bool_rect (lgetffind convoys the decision's own idpath in, so
+; the true branch REMEMBERS what it decided). the swal migration's floor.
+; ============================================================================
+; --- nateqb closes its own diagonal, and a true verdict is an identification
+; --- (the corpus had symm; refl + soundness complete the little theory) ---
+(assert
+ (defq 'nateqbrefl
+   '(pi x nat (paths bool (nateqb x x) true))
+   '(lam x (nat_rect (lam q (paths bool (nateqb q q) true)) (idpath true) (lam k (lam IH IH)) x)))
+ (defq 'nateqbtopaths
+   '(pi x nat (pi y nat (pi e (paths bool (nateqb x y) true) (paths nat x y))))
+   '(lam x
+      (nat_rect (lam q (pi y nat (pi e (paths bool (nateqb q y) true) (paths nat q y))))
+        (lam y
+          (nat_rect (lam j (pi e (paths bool (nateqb 0 j) true) (paths nat 0 j)))
+            (lam e (idpath 0))
+            (lam j (lam r (lam e (fromempty (paths nat 0 (succ j)) (nopathsfalsetotrue e)))))
+            y))
+        (lam k
+          (lam IH
+            (lam y
+              (nat_rect
+                (lam j (pi e (paths bool (nateqb (succ k) j) true) (paths nat (succ k) j)))
+                (lam e (fromempty (paths nat (succ k) 0) (nopathsfalsetotrue e)))
+                (lam j (lam r (lam e (maponpaths nat nat (lam w (succ w)) k j (IH j e)))))
+                y))))
+        x))))
+
+; --- the four primitives: the occ head contribution rides OUTSIDE the fold
+; --- (one recursive call per level, nateqb's eager-NbE shape); lay and lget
+; --- carry the seat as a pi so it decrements alongside the walk ---
+(assert
+ (defn 'occ
+   '(pi x nat (pi l nlist nat))
+   '(lam x
+      (lam l
+        ((nat_rect (lam q (pi v (nvec q) nat)) (lam v 0)
+           (lam m
+             (lam IH (lam v (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x)) (IH (pr2 v))))))
+           (pr1 l))
+          (pr2 l)))))
+ (defn 'ffind
+   '(pi x nat (pi l nlist nat))
+   '(lam x
+      (lam l
+        ((nat_rect (lam q (pi v (nvec q) nat)) (lam v 0)
+           (lam m
+             (lam IH (lam v (bool_rect (lam c nat) 0 (succ (IH (pr2 v))) (nateqb (pr1 v) x)))))
+           (pr1 l))
+          (pr2 l)))))
+ (defn 'lay
+   '(pi l nlist (pi k nat (pi w nat nlist)))
+   '(lam l
+      (lam k
+        (lam w
+          ((nat_rect (lam q (pi v (nvec q) (pi k2 nat nlist))) (lam v (lam k2 nnil))
+             (lam m
+               (lam IH
+                 (lam v
+                   (lam k2
+                     (bool_rect (lam c nlist) (ncons w (tpair m (pr2 v)))
+                       (ncons (pr1 v) (IH (pr2 v) (npred k2)))
+                       (niszero k2))))))
+             (pr1 l))
+            (pr2 l)
+            k)))))
+ (defn 'lget
+   '(pi k nat (pi l nlist nat))
+   '(lam k
+      (lam l
+        ((nat_rect (lam q (pi v (nvec q) (pi k2 nat nat))) (lam v (lam k2 0))
+           (lam m
+             (lam IH
+               (lam v
+                 (lam k2 (bool_rect (lam c nat) (pr1 v) (IH (pr2 v) (npred k2)) (niszero k2))))))
+           (pr1 l))
+          (pr2 l)
+          k))))
+ ; the primitives compute, edges included (an out-of-range lay rides through)
+ (id? (vof 0 '2) (vof 0 '(occ 7 (ncons 7 (ncons 3 (ncons 7 nnil))))))
+ (id? (vof 0 '1) (vof 0 '(ffind 3 (ncons 7 (ncons 3 (ncons 7 nnil))))))
+ ((vof 0 '(ncons 7 (ncons 9 (ncons 5 nnil)))) = (vof 0 '(lay (ncons 7 (ncons 3 (ncons 5 nnil))) 1 9)))
+ ((vof 0 '(ncons 7 nnil)) = (vof 0 '(lay (ncons 7 nnil) 5 9)))
+ (id? (vof 0 '5) (vof 0 '(lget 2 (ncons 7 (ncons 3 (ncons 5 nnil))))))
+ ; at tree grain: count a subtree among a node's kids
+ (id? (vof 0 '1) (vof 0 '(occ (enode 0 nnil) (ekids (enode 1 (ncons (enode 0 nnil) nnil)))))))
+
+; --- the lemma kit, patch.v's seven mirrored. laylen and laylay are pure
+; --- walks; layget subsumes lay_id with NO hypothesis (out of range both
+; --- sides are the list, sigma-eta closes the cons); the occ movers carry
+; --- the seat guard + the nateqb verdicts patch.v's Aeq destructs carried ---
+(assert
+ (defq 'laylen
+   '(pi l nlist (pi k nat (pi w nat (paths nat (nlen (lay l k w)) (nlen l)))))
+   '(lam l
+      (lam k
+        (lam w
+          ((nat_rect
+             (lam q (pi v (nvec q) (pi k2 nat (paths nat (nlen (lay (tpair q v) k2 w)) q))))
+             (lam v (lam k2 (idpath 0)))
+             (lam m
+               (lam IH
+                 (lam v
+                   (lam k2
+                     (nat_rect
+                       (lam kq (paths nat (nlen (lay (tpair (succ m) v) kq w)) (succ m)))
+                       (idpath (succ m))
+                       (lam k3
+                         (lam r
+                           (maponpaths nat nat (lam z (succ z))
+                             (nlen (lay (tpair m (pr2 v)) k3 w))
+                             m
+                             (IH (pr2 v) k3))))
+                       k2)))))
+             (pr1 l))
+            (pr2 l)
+            k)))))
+ (defq 'occffind
+   '(pi x nat
+      (pi l nlist
+        (pi h (paths bool (niszero (occ x l)) false)
+          (paths bool (natgtb (nlen l) (ffind x l)) true))))
+   '(lam x
+      (lam l
+        ((nat_rect
+           (lam q
+             (pi v (nvec q)
+               (pi h (paths bool (niszero (occ x (tpair q v))) false)
+                 (paths bool (natgtb q (ffind x (tpair q v))) true))))
+           (lam v
+             (lam h
+               (fromempty (paths bool (natgtb 0 (ffind x (tpair 0 v))) true)
+                 (nopathstruetofalse h))))
+           (lam m
+             (lam IH
+               (lam v
+                 (bool_rect
+                   (lam c
+                     (pi h
+                       (paths bool
+                         (niszero (add (bool_rect (lam c2 nat) 1 0 c) (occ x (tpair m (pr2 v)))))
+                         false)
+                       (paths bool
+                         (natgtb (succ m)
+                           (bool_rect (lam c2 nat) 0 (succ (ffind x (tpair m (pr2 v)))) c))
+                         true)))
+                   (lam h (idpath true))
+                   (lam h (IH (pr2 v) h))
+                   (nateqb (pr1 v) x)))))
+           (pr1 l))
+          (pr2 l)))))
+ (defq 'lgetffind
+   '(pi x nat
+      (pi l nlist
+        (pi h (paths bool (niszero (occ x l)) false) (paths nat (lget (ffind x l) l) x))))
+   '(lam x
+      (lam l
+        ((nat_rect
+           (lam q
+             (pi v (nvec q)
+               (pi h (paths bool (niszero (occ x (tpair q v))) false)
+                 (paths nat (lget (ffind x (tpair q v)) (tpair q v)) x))))
+           (lam v
+             (lam h
+               (fromempty (paths nat (lget (ffind x (tpair 0 v)) (tpair 0 v)) x)
+                 (nopathstruetofalse h))))
+           (lam m
+             (lam IH
+               (lam v
+                 ((bool_rect
+                    (lam c
+                      (pi hc (paths bool (nateqb (pr1 v) x) c)
+                        (pi h
+                          (paths bool
+                            (niszero
+                              (add (bool_rect (lam c2 nat) 1 0 c) (occ x (tpair m (pr2 v)))))
+                            false)
+                          (paths nat
+                            (lget
+                              (bool_rect (lam c2 nat) 0 (succ (ffind x (tpair m (pr2 v)))) c)
+                              (tpair (succ m) v))
+                            x))))
+                    (lam hc (lam h (nateqbtopaths (pr1 v) x hc)))
+                    (lam hc (lam h (IH (pr2 v) h)))
+                    (nateqb (pr1 v) x))
+                   (idpath (nateqb (pr1 v) x))))))
+           (pr1 l))
+          (pr2 l)))))
+ (defq 'lgetlay
+   '(pi l nlist
+      (pi k nat
+        (pi w nat
+          (pi h (paths bool (natgtb (nlen l) k) true) (paths nat (lget k (lay l k w)) w)))))
+   '(lam l
+      (lam k
+        (lam w
+          ((nat_rect
+             (lam q
+               (pi v (nvec q)
+                 (pi k2 nat
+                   (pi h (paths bool (natgtb q k2) true)
+                     (paths nat (lget k2 (lay (tpair q v) k2 w)) w)))))
+             (lam v
+               (lam k2
+                 (lam h
+                   (fromempty (paths nat (lget k2 (lay (tpair 0 v) k2 w)) w)
+                     (nopathsfalsetotrue h)))))
+             (lam m
+               (lam IH
+                 (lam v
+                   (lam k2
+                     (nat_rect
+                       (lam kq
+                         (pi h (paths bool (natgtb (succ m) kq) true)
+                           (paths nat (lget kq (lay (tpair (succ m) v) kq w)) w)))
+                       (lam h (idpath w))
+                       (lam k3 (lam r (lam h (IH (pr2 v) k3 h))))
+                       k2)))))
+             (pr1 l))
+            (pr2 l)
+            k)))))
+ (defq 'laylay
+   '(pi l nlist (pi k nat (pi u nat (pi w nat (paths nlist (lay (lay l k u) k w) (lay l k w))))))
+   '(lam l
+      (lam k
+        (lam u
+          (lam w
+            ((nat_rect
+               (lam q
+                 (pi v (nvec q)
+                   (pi k2 nat
+                     (paths nlist (lay (lay (tpair q v) k2 u) k2 w) (lay (tpair q v) k2 w)))))
+               (lam v (lam k2 (idpath nnil)))
+               (lam m
+                 (lam IH
+                   (lam v
+                     (lam k2
+                       (nat_rect
+                         (lam kq
+                           (paths nlist (lay (lay (tpair (succ m) v) kq u) kq w)
+                             (lay (tpair (succ m) v) kq w)))
+                         (idpath (ncons w (tpair m (pr2 v))))
+                         (lam k3
+                           (lam r
+                             (maponpaths nlist nlist (lam z (ncons (pr1 v) z))
+                               (lay (lay (tpair m (pr2 v)) k3 u) k3 w)
+                               (lay (tpair m (pr2 v)) k3 w)
+                               (IH (pr2 v) k3))))
+                         k2)))))
+               (pr1 l))
+              (pr2 l)
+              k))))))
+ (defq 'layget
+   '(pi l nlist (pi k nat (paths nlist (lay l k (lget k l)) l)))
+   '(lam l
+      (lam k
+        ((nat_rect
+           (lam q
+             (pi v (nvec q)
+               (pi k2 nat (paths nlist (lay (tpair q v) k2 (lget k2 (tpair q v))) (tpair q v)))))
+           (lam v (lam k2 (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v))))
+           (lam m
+             (lam IH
+               (lam v
+                 (lam k2
+                   (nat_rect
+                     (lam kq
+                       (paths nlist (lay (tpair (succ m) v) kq (lget kq (tpair (succ m) v)))
+                         (tpair (succ m) v)))
+                     (idpath (tpair (succ m) v))
+                     (lam k3
+                       (lam r
+                         (maponpaths nlist nlist (lam z (ncons (pr1 v) z))
+                           (lay (tpair m (pr2 v)) k3 (lget k3 (tpair m (pr2 v))))
+                           (tpair m (pr2 v))
+                           (IH (pr2 v) k3))))
+                     k2)))))
+           (pr1 l))
+          (pr2 l)
+          k))))
+ (defq 'occlayin
+   '(pi l nlist
+      (pi k nat
+        (pi x nat
+          (pi h (paths bool (natgtb (nlen l) k) true)
+            (pi hne (paths bool (nateqb (lget k l) x) false)
+              (paths nat (occ x (lay l k x)) (succ (occ x l))))))))
+   '(lam l
+      (lam k
+        (lam x
+          ((nat_rect
+             (lam q
+               (pi v (nvec q)
+                 (pi k2 nat
+                   (pi h (paths bool (natgtb q k2) true)
+                     (pi hne (paths bool (nateqb (lget k2 (tpair q v)) x) false)
+                       (paths nat (occ x (lay (tpair q v) k2 x)) (succ (occ x (tpair q v)))))))))
+             (lam v
+               (lam k2
+                 (lam h
+                   (lam hne
+                     (fromempty
+                       (paths nat (occ x (lay (tpair 0 v) k2 x)) (succ (occ x (tpair 0 v))))
+                       (nopathsfalsetotrue h))))))
+             (lam m
+               (lam IH
+                 (lam v
+                   (lam k2
+                     (nat_rect
+                       (lam kq
+                         (pi h (paths bool (natgtb (succ m) kq) true)
+                           (pi hne (paths bool (nateqb (lget kq (tpair (succ m) v)) x) false)
+                             (paths nat (occ x (lay (tpair (succ m) v) kq x))
+                               (succ (occ x (tpair (succ m) v)))))))
+                       (lam h
+                         (lam hne
+                           (pathscomp0 nat (occ x (ncons x (tpair m (pr2 v))))
+                             (succ (occ x (tpair m (pr2 v))))
+                             (succ (occ x (tpair (succ m) v)))
+                             (maponpaths bool nat
+                               (lam c
+                                 (add (bool_rect (lam c2 nat) 1 0 c) (occ x (tpair m (pr2 v)))))
+                               (nateqb x x)
+                               true
+                               (nateqbrefl x))
+                             (pathsinv0 nat (succ (occ x (tpair (succ m) v)))
+                               (succ (occ x (tpair m (pr2 v))))
+                               (maponpaths bool nat
+                                 (lam c
+                                   (succ
+                                     (add (bool_rect (lam c2 nat) 1 0 c)
+                                       (occ x (tpair m (pr2 v))))))
+                                 (nateqb (pr1 v) x)
+                                 false
+                                 hne)))))
+                       (lam k3
+                         (lam r
+                           (lam h
+                             (lam hne
+                               (pathscomp0 nat
+                                 (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                   (occ x (lay (tpair m (pr2 v)) k3 x)))
+                                 (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                   (succ (occ x (tpair m (pr2 v)))))
+                                 (succ
+                                   (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                     (occ x (tpair m (pr2 v)))))
+                                 (maponpaths nat nat
+                                   (lam z
+                                     (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x)) z))
+                                   (occ x (lay (tpair m (pr2 v)) k3 x))
+                                   (succ (occ x (tpair m (pr2 v))))
+                                   (IH (pr2 v) k3 h hne))
+                                 (natplusnsm (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                   (occ x (tpair m (pr2 v)))))))))
+                       k2)))))
+             (pr1 l))
+            (pr2 l)
+            k)))))
+ (defq 'occlayout
+   '(pi l nlist
+      (pi k nat
+        (pi x nat
+          (pi w nat
+            (pi h (paths bool (natgtb (nlen l) k) true)
+              (pi he (paths nat (lget k l) x)
+                (pi hne (paths bool (nateqb w x) false)
+                  (paths nat (occ x l) (succ (occ x (lay l k w)))))))))))
+   '(lam l
+      (lam k
+        (lam x
+          (lam w
+            ((nat_rect
+               (lam q
+                 (pi v (nvec q)
+                   (pi k2 nat
+                     (pi h (paths bool (natgtb q k2) true)
+                       (pi he (paths nat (lget k2 (tpair q v)) x)
+                         (pi hne (paths bool (nateqb w x) false)
+                           (paths nat (occ x (tpair q v)) (succ (occ x (lay (tpair q v) k2 w))))))))))
+               (lam v
+                 (lam k2
+                   (lam h
+                     (lam he
+                       (lam hne
+                         (fromempty
+                           (paths nat (occ x (tpair 0 v)) (succ (occ x (lay (tpair 0 v) k2 w))))
+                           (nopathsfalsetotrue h)))))))
+               (lam m
+                 (lam IH
+                   (lam v
+                     (lam k2
+                       (nat_rect
+                         (lam kq
+                           (pi h (paths bool (natgtb (succ m) kq) true)
+                             (pi he (paths nat (lget kq (tpair (succ m) v)) x)
+                               (pi hne (paths bool (nateqb w x) false)
+                                 (paths nat (occ x (tpair (succ m) v))
+                                   (succ (occ x (lay (tpair (succ m) v) kq w))))))))
+                         (lam h
+                           (lam he
+                             (lam hne
+                               (pathscomp0 nat (occ x (tpair (succ m) v))
+                                 (add (bool_rect (lam c2 nat) 1 0 (nateqb x x))
+                                   (occ x (tpair m (pr2 v))))
+                                 (succ (occ x (ncons w (tpair m (pr2 v)))))
+                                 (maponpaths nat nat
+                                   (lam z
+                                     (add (bool_rect (lam c2 nat) 1 0 (nateqb z x))
+                                       (occ x (tpair m (pr2 v)))))
+                                   (pr1 v)
+                                   x
+                                   he)
+                                 (pathscomp0 nat
+                                   (add (bool_rect (lam c2 nat) 1 0 (nateqb x x))
+                                     (occ x (tpair m (pr2 v))))
+                                   (succ (occ x (tpair m (pr2 v))))
+                                   (succ (occ x (ncons w (tpair m (pr2 v)))))
+                                   (maponpaths bool nat
+                                     (lam c
+                                       (add (bool_rect (lam c2 nat) 1 0 c)
+                                         (occ x (tpair m (pr2 v)))))
+                                     (nateqb x x)
+                                     true
+                                     (nateqbrefl x))
+                                   (pathsinv0 nat (succ (occ x (ncons w (tpair m (pr2 v)))))
+                                     (succ (occ x (tpair m (pr2 v))))
+                                     (maponpaths bool nat
+                                       (lam c
+                                         (succ
+                                           (add (bool_rect (lam c2 nat) 1 0 c)
+                                             (occ x (tpair m (pr2 v))))))
+                                       (nateqb w x)
+                                       false
+                                       hne)))))))
+                         (lam k3
+                           (lam r
+                             (lam h
+                               (lam he
+                                 (lam hne
+                                   (pathscomp0 nat
+                                     (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                       (occ x (tpair m (pr2 v))))
+                                     (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                       (succ (occ x (lay (tpair m (pr2 v)) k3 w))))
+                                     (succ
+                                       (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                         (occ x (lay (tpair m (pr2 v)) k3 w))))
+                                     (maponpaths nat nat
+                                       (lam z
+                                         (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x)) z))
+                                       (occ x (tpair m (pr2 v)))
+                                       (succ (occ x (lay (tpair m (pr2 v)) k3 w)))
+                                       (IH (pr2 v) k3 h he hne))
+                                     (natplusnsm (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x))
+                                       (occ x (lay (tpair m (pr2 v)) k3 w)))))))))
+                         k2)))))
+               (pr1 l))
+              (pr2 l)
+              k))))))
+ (defq 'ffindlay
+   '(pi l nlist
+      (pi k nat
+        (pi x nat
+          (pi h0 (paths nat (occ x l) 0)
+            (pi h (paths bool (natgtb (nlen l) k) true) (paths nat (ffind x (lay l k x)) k))))))
+   '(lam l
+      (lam k
+        (lam x
+          ((nat_rect
+             (lam q
+               (pi v (nvec q)
+                 (pi k2 nat
+                   (pi h0 (paths nat (occ x (tpair q v)) 0)
+                     (pi h (paths bool (natgtb q k2) true)
+                       (paths nat (ffind x (lay (tpair q v) k2 x)) k2))))))
+             (lam v
+               (lam k2
+                 (lam h0
+                   (lam h
+                     (fromempty (paths nat (ffind x (lay (tpair 0 v) k2 x)) k2)
+                       (nopathsfalsetotrue h))))))
+             (lam m
+               (lam IH
+                 (lam v
+                   (lam k2
+                     (nat_rect
+                       (lam kq
+                         (pi h0 (paths nat (occ x (tpair (succ m) v)) 0)
+                           (pi h (paths bool (natgtb (succ m) kq) true)
+                             (paths nat (ffind x (lay (tpair (succ m) v) kq x)) kq))))
+                       (lam h0
+                         (lam h
+                           (maponpaths bool nat
+                             (lam c
+                               (bool_rect (lam c2 nat) 0 (succ (ffind x (tpair m (pr2 v)))) c))
+                             (nateqb x x)
+                             true
+                             (nateqbrefl x))))
+                       (lam k3
+                         (lam r
+                           (lam h0
+                             (lam h
+                               ((bool_rect
+                                  (lam c
+                                    (pi h0
+                                      (paths nat
+                                        (add (bool_rect (lam c2 nat) 1 0 c)
+                                          (occ x (tpair m (pr2 v))))
+                                        0)
+                                      (paths nat
+                                        (bool_rect (lam c2 nat) 0
+                                          (succ (ffind x (lay (tpair m (pr2 v)) k3 x)))
+                                          c)
+                                        (succ k3))))
+                                  (lam h0
+                                    (fromempty (paths nat 0 (succ k3))
+                                      (negpathssx0 (occ x (tpair m (pr2 v))) h0)))
+                                  (lam h0
+                                    (maponpaths nat nat (lam z (succ z))
+                                      (ffind x (lay (tpair m (pr2 v)) k3 x))
+                                      k3
+                                      (IH (pr2 v) k3 h0 h)))
+                                  (nateqb (pr1 v) x))
+                                 h0)))))
+                       k2)))))
+             (pr1 l))
+            (pr2 l)
+            k)))))
+ ; the kit computes end to end: an absent element laid in is found at its seat
+ (id? (vof 0 '1) (vof 0 '(ffind 9 (lay (ncons 7 (ncons 3 nnil)) 1 9))))
+ (id? (vof 0 '1) (vof 0 '(occ 9 (lay (ncons 7 (ncons 3 nnil)) 1 9))))
+ ((vof 0 '(ncons 7 (ncons 3 nnil))) = (vof 0 '(lay (lay (ncons 7 (ncons 3 nnil)) 1 9) 1 3))))
+
