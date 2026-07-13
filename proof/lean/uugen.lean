@@ -720,18 +720,6 @@ def uu_zcountins : (forall w : Nat, (forall z : uu_stk, (@paths Nat (uu_zcount (
   (fun w => (fun z => (uu_maponpaths Nat Nat (fun q => (Nat.succ q)) (uu_add (uu_nlen (uu_zup z)) (Nat.succ (uu_nlen (uu_zdn z)))) (Nat.succ (uu_add (uu_nlen (uu_zup z)) (uu_nlen (uu_zdn z)))) (uu_natplusnsm (uu_nlen (uu_zup z)) (uu_nlen (uu_zdn z))))))
 def uu_zinsane : (forall w : Nat, (forall z : uu_stk, (forall hm : (@paths Bool (uu_memb w (uu_zrow z)) false), (forall hs : (@paths Bool (uu_zsane z) true), (@paths Bool (uu_zsane (uu_zins w z)) true))))) :=
   (fun w => (fun z => (uu_nodupmid w (uu_ncons (uu_zfoc z) (uu_zdn z)) (uu_lrev (uu_zup z)))))
-def uu_numq : (forall k : Nat, Bool) :=
-  (fun k => (let r := k; (uu_andb (uu_natgtb r 0) (uu_natgtb 5 r))))
-def uu_kjoin : (forall a : Nat, (forall b : Nat, Nat)) :=
-  (fun a => (fun b => (@Bool.rec (fun gx => Nat) (@Bool.rec (fun gx => Nat) (@Bool.rec (fun gx => Nat) (@Bool.rec (fun gx => Nat) 5 (@Bool.rec (fun gx => Nat) a b (uu_natgtb b a)) (uu_andb (uu_numq a) (uu_numq b))) a (uu_nateqb a b)) a (uu_nateqb b 0)) b (uu_nateqb a 0))))
-def uu_kjoin_tier_wins : (@paths Nat (uu_kjoin 1 4) 4) :=
-  (@paths.idpath _ 4)
-def uu_kjoin_bot_unit : (@paths Nat (uu_kjoin 0 3) 3) :=
-  (@paths.idpath _ 3)
-def uu_kjoin_top_cap : (@paths Nat (uu_kjoin 4 5) 5) :=
-  (@paths.idpath _ 5)
-def uu_kjoin_str_widens : (@paths Nat (uu_kjoin 6 1) 5) :=
-  (@paths.idpath _ 5)
 
 end
 /- the de Bruijn witness: Lean agrees these carry NO axioms (closed under the
@@ -754,5 +742,5 @@ end
 #print axioms uu_idisweq
 #print axioms uu_iscontrcoconustot
 
-/- 354 exported / 404 corpus entries swept;
+/- 348 exported / 398 corpus entries swept;
    re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/

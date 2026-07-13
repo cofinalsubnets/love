@@ -722,18 +722,6 @@ Definition uu_zcountins : (forall w : nat, (forall z : uu_stk, (@paths nat (uu_z
   (fun w => (fun z => (uu_maponpaths nat nat (fun q => (S q)) (uu_add (uu_nlen (uu_zup z)) (S (uu_nlen (uu_zdn z)))) (S (uu_add (uu_nlen (uu_zup z)) (uu_nlen (uu_zdn z)))) (uu_natplusnsm (uu_nlen (uu_zup z)) (uu_nlen (uu_zdn z)))))).
 Definition uu_zinsane : (forall w : nat, (forall z : uu_stk, (forall hm : (@paths bool (uu_memb w (uu_zrow z)) false), (forall hs : (@paths bool (uu_zsane z) true), (@paths bool (uu_zsane (uu_zins w z)) true))))) :=
   (fun w => (fun z => (uu_nodupmid w (uu_ncons (uu_zfoc z) (uu_zdn z)) (uu_lrev (uu_zup z))))).
-Definition uu_numq : (forall k : nat, bool) :=
-  (fun k => (let r := k in (uu_andb (uu_natgtb r 0) (uu_natgtb 5 r)))).
-Definition uu_kjoin : (forall a : nat, (forall b : nat, nat)) :=
-  (fun a => (fun b => (bool_rect (fun gx => nat) b (bool_rect (fun gx => nat) a (bool_rect (fun gx => nat) a (bool_rect (fun gx => nat) (bool_rect (fun gx => nat) b a (uu_natgtb b a)) 5 (uu_andb (uu_numq a) (uu_numq b))) (uu_nateqb a b)) (uu_nateqb b 0)) (uu_nateqb a 0)))).
-Definition uu_kjoin_tier_wins : (@paths nat (uu_kjoin 1 4) 4) :=
-  (idpath 4).
-Definition uu_kjoin_bot_unit : (@paths nat (uu_kjoin 0 3) 3) :=
-  (idpath 3).
-Definition uu_kjoin_top_cap : (@paths nat (uu_kjoin 4 5) 5) :=
-  (idpath 5).
-Definition uu_kjoin_str_widens : (@paths nat (uu_kjoin 6 1) 5) :=
-  (idpath 5).
 
 (* === bridge: uu's nat ops ARE Coq's standard ones, so the laws above land on
    Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std
@@ -771,5 +759,5 @@ Print Assumptions add_comm_std.
 Print Assumptions add_assoc_std.
 Print Assumptions mul_comm_std.
 
-(* 354 exported / 404 corpus entries swept;
+(* 348 exported / 398 corpus entries swept;
    3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)

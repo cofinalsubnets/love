@@ -21,9 +21,7 @@
    _ (reads (open "test/uulay.l" "r"))
    _ (reads (open "test/uupatch.l" "r"))
    _ (reads (open "test/uuwm.l" "r"))
-   _ (reads (open "test/uuwmlaw.l" "r"))
-   _ (reads (open "test/uukind.l" "r"))
-   _ (reads (open "test/uukindlaw.l" "r"))          ; load + CERTIFY uu's corpus (populates GLOB)
+   _ (reads (open "test/uuwmlaw.l" "r"))          ; load + CERTIFY uu's corpus (populates GLOB)
    bs (intern "\\")
    (unq x) (? (&& (two? x) (id? (cap x) bs)) (cap (cup x)) x)   ; strip one ' (reads shows quote as (\ ..))
    (cat l) (foldl (+) "" l)
@@ -50,7 +48,18 @@
                            (| (deq? F) (axq? F)) (link (entry F) acc) acc)))
                       (rev acc))
    (app2 a b) (? (two? a) (link (cap a) (app2 (cup a) b)) b)   ; NOT `cat` -- the local cat is the STRING fold
-   ents (gather (app2 (forms "test/uu.l") (app2 (forms "test/uulay.l") (app2 (forms "test/uupatch.l") (app2 (forms "test/uuwm.l") (app2 (forms "test/uuwmlaw.l") (app2 (forms "test/uukind.l") (forms "test/uukindlaw.l"))))))) ())
+   ents (gather (app2 (forms "test/uu.l") (app2 (forms "test/uulay.l") (app2 (forms "test/uupatch.l") (app2 (forms "test/uuwm.l") (forms "test/uuwmlaw.l"))))) ())
+
+   ; the SILENT-NO-OP gate (defense in depth behind uu.l's arity-door macros):
+   ; a def gathered off the file must be WHOLE -- three operands; a paren slip
+   ; that merges the type into the term reads () in the term seat -- and
+   ; PINNED, since a partially applied defn/defq is a truthy closure that pins
+   ; nothing and paints its assert dot green. redden here instead.
+   _ (map (\ e (? (| (&& (id? (cap e) 'def) (! (e4 e)))
+                     (! (peep GLOB (e2 e) 0)))
+                  (: _ (puts "MALFORMED-OR-UNPINNED-DEF ") _ (puts (string (e2 e))) (quit 1))
+                  0))
+        ents)
 
    ; names that exist (corpus-wide) -- for telling a global reference from a bound var
    nt (tablet 0) _ (map (\ e (pin nt (e2 e) 1)) ents)

@@ -289,6 +289,20 @@
       _ (pin HELPC () 0)
       r))
 
+; --- the arity door. defn/defq/axm are fully curried, so a paren slip that
+; --- hands one too few operands is not an error -- it is a truthy CLOSURE one
+; --- curry away from running, an assert paints it green, and NOTHING pins
+; --- (the (f)==f trap at proof grain; too many operands feed the returned nom
+; --- and vanish the same way). the macros guard CALL position: exactly the
+; --- right operand count, or the form scares carrying itself. the expansion
+; --- heads (1 defn) -- the identity's head is no macro, so no re-expansion --
+; --- and the functions keep their names, so the baked book still serves them
+; --- ((uu 'defn) is boot/overlay.l's door, and book calls bypass the macro).
+(: _ (:: 'defn (\ l (? (= 3 (tally l)) (link '(1 defn) l) `('scare `('\ 'uu-defn-arity) `('\ l)))))
+   _ (:: 'defq (\ l (? (= 3 (tally l)) (link '(1 defq) l) `('scare `('\ 'uu-defq-arity) `('\ l)))))
+   _ (:: 'axm  (\ l (? (= 2 (tally l)) (link '(1 axm)  l) `('scare `('\ 'uu-axm-arity)  `('\ l)))))
+   0)
+
 ; --- UniMath Foundations PartA, the core snip: every name is the original.
 ; --- The definitions and theorem statements from here down are ported from
 ; --- UniMath (https://github.com/UniMath/UniMath, Foundations/PartA.v et al),
