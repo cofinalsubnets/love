@@ -24,7 +24,7 @@ export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_glaze test_sat test_holo test_phos test_extract test_arm64
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_phos test_extract test_arm64
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `ai`
 # from-source under AI_NO_IMAGE, and ai0 -- c0 + the self-hosted ev, twice). It does
@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_glaze test_sat test_holo test_phos test_utils test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_phos test_utils test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -102,6 +102,20 @@ test_hostnif: host $(smoke) $(havenkm)
 	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
 	  cat out/host/.test_hostnif.out; \
 	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_hostnif.out; } \
+	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
+	done
+# Runnable design companions in doc/ -- pure-ai models that pin the shape a C
+# design takes (doc/stream.l ~ doc/stream.md). Zero-dep (no host nifs), so unlike
+# hostnif_tests they COULD ride the corpus -- but they leak generic helper names
+# into the one global scope, so they run standalone instead. Gated only to keep
+# them from rotting (this file's drain-floor bug slipped in while ungated). Same
+# contract: exit 0 AND a "<name>: ok" sentinel. (tag.l is a sketch, no asserts.)
+doc_tests = doc/stream.l
+test_doc: host
+	@for s in $(doc_tests); do echo "DOC $$s"; \
+	  cat test/00-init.l $$s | $m > out/host/.test_doc.out 2>&1; r=$$?; \
+	  cat out/host/.test_doc.out; \
+	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_doc.out; } \
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
 	done
 # Native-codegen self-tests (the ai/glaze/ x86-64 jit): emit (the SSE emitter) +
