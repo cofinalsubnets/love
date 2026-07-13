@@ -430,14 +430,10 @@
                  ()))
          (link q (link p ()))))
 
- ; --- witnesses: a little program -- three top forms, one nested. every
- ;     witness rides through `warm` (a live identity): a CONSTANT list binding
- ;     fed straight to a recursive local trips a compiler hang -- the shape,
- ;     the probes, and the sweep-off note live in doc/bug-const-letrec-hang.md ---
- (warm x) ((\ y y) x)
- t0 (warm '((: a 1) (: b 2) (main (f x))))
- pr (warm (tp () 0 () '((use m))))                         ; root insert at 0 (dp +1)
- qd (warm (tp '(3) 1 '((f x)) '((g y))))                   ; deep edit, aimed POST-pr
+ ; --- witnesses: a little program -- three top forms, one nested ---
+ t0 '((: a 1) (: b 2) (main (f x)))
+ pr (tp () 0 () '((use m)))                                ; root insert at 0 (dp +1)
+ qd (tp '(3) 1 '((f x)) '((g y)))                          ; deep edit, aimed POST-pr
 
  ; (L1) commute is INVOLUTIVE, and the re-aim is a PATH re-aim: qd's postcode
  ;      slides 3 -> 2 (its pre-pr seat), and swapping back is home.
@@ -455,7 +451,7 @@
     (! (commute (tp '(1) 2 '(1) '(7)) (tp () 1 '((: a 7)) ()))))  ; swallowed
 
  ; (L2) inverse round-trips at depth
- _ (: pd (warm (tp '(2) 1 '((f x)) '((g y) (h z))))
+ _ (: pd (tp '(2) 1 '((f x)) '((g y) (h z)))
       (assert
        (valid t0 pd)
        (heq (apon (apon t0 pd) (invert pd)) t0)
@@ -473,7 +469,7 @@
        (! (valid t0 qd))))
 
  ; the INP lane: a deep edit rides a root shrink the other way (path 2 -> 1)
- _ (: pd (warm (tp '(2) 1 '((f x)) '((g y)))) qr (warm (tp () 0 '((: a 1)) ()))
+ _ (: pd (tp '(2) 1 '((f x)) '((g y))) qr (tp () 0 '((: a 1)) ())
       c (commute pd qr) cq (cap c) cp (cap (cup c))
       (assert
        (heq cq qr) (heq (pp cp) '(1))                      ; p slides down
@@ -481,15 +477,15 @@
        (heq (apon (apon t0 pd) qr) '((: b 2) (main (g y))))))
 
  ; APART: sibling subtrees ride untouched, both orders agree
- _ (: pa (warm (tp '(0) 2 '(1) '(9))) qa (warm (tp '(2) 1 '((f x)) '((g y))))
+ _ (: pa (tp '(0) 2 '(1) '(9)) qa (tp '(2) 1 '((f x)) '((g y)))
       c (commute pa qa)
       (assert
        (heq (cap c) qa) (heq (cap (cup c)) pa)
        (heq (apon (apon t0 pa) qa) (apon (apon t0 qa) pa))))
 
  ; SAME sequence at depth: rung 2's shift verbatim, riding a postcode
- _ (: ts (warm '((a b c d e)))
-      p1 (warm (tp '(0) 1 '(b) '(x y))) q1 (warm (tp '(0) 4 '(d) '(z)))
+ _ (: ts '((a b c d e))
+      p1 (tp '(0) 1 '(b) '(x y)) q1 (tp '(0) 4 '(d) '(z))
       c (commute p1 q1) cq (cap c)
       (assert
        (= 3 (pi cq)) (heq (pp cq) '(0))                    ; index shifts, path rides

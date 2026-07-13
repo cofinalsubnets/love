@@ -625,18 +625,17 @@
    ;     lift/autogroup then native -- so an interpreter-over-static-data loop runs as COMPILED code,
    ;     capturing the interpretation-overhead prize (interp-spec.l measured ~6.5x) the in-compiler
    ;     unfold missed. `spe` is the proto engine with `defs` (the form's fn defs) threaded as a param,
-   ;     not a hardcoded table; a STATIC-driven recursion unrolls (the seen-set bounds re-entry of the
-   ;     same signature, sfuel bounds a runaway), a DYNAMIC-driven one residualizes clean. autospec is a
+   ;     not a hardcoded table; a STATIC-driven recursion unrolls (the DESCENT guard in specall bounds
+   ;     re-entry, sfuel bounds a runaway), a DYNAMIC-driven one residualizes clean. autospec is a
    ;     NO-OP (id-identical) on any form with no defined-fn call over a static-data binding.
    (sstat v) (L 's v)  (sdyn c) (L 'r c)  (sstat? p) (id? (cap p) 's)  (spval p) (caup p)
    (sqv v) (L '\ v)                                                                ; quote a static datum -> seen as DATA
    (sreify p) (: v (caup p) (? (&& (sstat? p) (! (constellation? v))) (sqv v) v))  ; non-number static -> quoted
    (sstatval? p v) (&& (sstat? p) (= v (spval p)))
-   (ssig apv) (map (\ p (? (sstat? p) (spval p) '_)) apv)                          ; static signature (dyn slots -> _)
    (szipenv ps apv) (? (atom? ps) () (link (L (cap ps) (cap apv)) (szipenv (cup ps) (cup apv))))
    (slook env k) (? (atom? env) (sdyn k) (id? k (caap env)) (caup (cap env)) (slook (cup env) k))  ; unbound -> dynamic
    (sdeflook nm defs) (? (atom? defs) () (id? nm (caap defs)) (cap defs) (sdeflook nm (cup defs)))
-   (sprim? h) (member? h '(* - + ! cap cup caap caup cuap cuup id?))               ; arith + static AST navigation
+   (sprim? h) (member? h '(* - + ! < <= > >= = cap cup caap caup cuap cuup id?))   ; arith + comparisons + static AST navigation
    (ssimp1 h a b)
     (? (&& (id? h '*) (sstatval? a 1)) b   (&& (id? h '*) (sstatval? b 1)) a       ; drop the * and + units on a residual
        (&& (id? h '+) (sstatval? a 0)) b   (&& (id? h '+) (sstatval? b 0)) a
@@ -659,11 +658,22 @@
           (? (! (sstat? cv)) (sresidcl cv (caup cs) (cuup cs) env seen defs)
              (! (spval cv)) (sresidtl (cuup cs) env seen defs)
              (L (sreify (spe (caup cs) env seen defs))))))
-   (specall def apv seen defs)                                                    ; unfold a defined-fn call, unless in progress / out of fuel
-    (: nm (cap def) ps (caup def) bd (caup (cup def)) key (link nm (ssig apv)) n (peep sfuel 'n 0)
-       (? (member? key seen) (sdyn (link nm (map sreify apv)))                    ; signature in progress -> residual call
+   ; the DESCENT guard: an unfold re-entering a fn along the chain must strictly SHRINK its
+   ; static weight (total leaf count of the static args) -- the structural-recursion certificate.
+   ; an AST walk (the Futamura prize) shrinks its static datum every level, so it unfolds to the
+   ; bottom; a non-descending re-entry residualizes as a plain call (still correct). the old
+   ; same-SIGNATURE seen-set couldn't see a CHANGING static ((- n 1) never repeats): a recursion
+   ; whose test doesn't fold speculatively unrolled to the fuel floor -- a 100k-deep residual,
+   ; a hung compile. `seen` threads the in-progress chain as (nm . weight) pairs.
+   (ssz v) (? (two? v) (+ (ssz (cap v)) (ssz (cup v))) 1)                          ; total leaf count of a static datum
+   (sw apv) (foldl (\ a p (? (sstat? p) (+ a (ssz (spval p))) a)) 0 apv)           ; the call's static weight
+   (sanc nm seen) (? (atom? seen) -1 (id? nm (caap seen)) (cuap seen) (sanc nm (cup seen)))   ; nearest in-progress weight for nm (-1 = none)
+   (specall def apv seen defs)                                                    ; unfold a defined-fn call, unless non-descending / out of fuel
+    (: nm (cap def) ps (caup def) bd (caup (cup def)) sz (sw apv)
+       w (sanc nm seen) n (peep sfuel 'n 0)
+       (? (&& (<= 0 w) (<= w sz)) (sdyn (link nm (map sreify apv)))               ; no strict descent -> residual call
           (! n) (sdyn (link nm (map sreify apv)))                                 ; fuel out -> bail to a residual call (still correct)
-          (: _ (pin sfuel 'n (- n 1)) (spe bd (szipenv ps apv) (link key seen) defs))))
+          (: _ (pin sfuel 'n (- n 1)) (spe bd (szipenv ps apv) (link (link nm sz) seen) defs))))
    (spe x env seen defs)                                                          ; the partial evaluator
     (? (constellation? x) (sstat x)
        (nom? x) (slook env x)
@@ -675,7 +685,14 @@
              (: d (sdeflook h defs)
                 (? d (specall d (map (\ e (spe e env seen defs)) a) seen defs)
                      (sdyn (link h (map sreify (map (\ e (spe e env seen defs)) a)))))))))
-   (smix call statenv defs) (: _ (pin sfuel 'n 100000) (sreify (spe call statenv () defs)))   ; specialize one call -> residual source
+   ; the residual-SIZE gate: spe substitutes a param's residual at EVERY occurrence, so nested
+   ; unfolds can share one small DAG whose TREE reading is exponential -- every downstream walker
+   ; (the passes, the printer, the compiler) reads trees, so an over-budget residual is a hang,
+   ; not a win. stsz walks with a step budget (0 = blown); an over-budget residual DECLINES to
+   ; the original call (autospec is a recognizer: bailing is always sound).
+   (stsz e n) (? (< n 1) 0 (atom? e) (- n 1) (: m (stsz (cap e) (- n 1)) (? (! m) 0 (stsz (cup e) m))))
+   (smix call statenv defs) (: _ (pin sfuel 'n 100000) r (sreify (spe call statenv () defs))
+                               (? (stsz r 20000) r call))   ; specialize one call -> residual source (small ones only)
    ; autospec proper: build defs (fn bindings) + statenv (names bound to a quoted datum), then replace
    ; every call to a defined fn that mentions a static name with its specialized residual (in place).
    (sconst? v) (&& (two? v) (id? (cap v) '\) (= 2 (tally v)))                      ; a quoted-constant binding value (\ datum)

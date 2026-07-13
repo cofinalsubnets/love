@@ -248,7 +248,7 @@
         (? (atom? path) s2
            (spl t (cap path) 1 (link (tlay (nth t (cap path)) (cup path) s2) ())))
       (hap t path i o n) (tlay t path (spl (tnav t path) i (tally o) n))
-      t0 ((\ x x) '((: a 1) (: b 2) (main (f x))))       ; warmed: doc/bug-const-letrec-hang.md
+      t0 '((: a 1) (: b 2) (main (f x)))
       _ (puts ";; H. the tree lift -- a root insert re-aims a deep edit's path 3 -> 2\n")
       _ (line "     order insert;edit-at-(3) -> "
               (hap (hap t0 () 0 () '((use m))) '(3) 1 '((f x)) '((g y))))

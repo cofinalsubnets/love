@@ -428,6 +428,17 @@
     ; autospec is a NO-OP without BOTH a defined fn and a static-data binding -> a plain fib group is byte-unchanged
     (: nf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 10))
        (id? (autospec nf) nf))
+    ; the DESCENT guard: a static-list recursion driven by a numeric counter. the comparison test
+    ; folds static (< is a prim now) and the unfold shrinks its static weight every level, so the
+    ; call specializes to its plain answer. the old same-SIGNATURE seen-set never caught this shape
+    ; ((- n 1) never repeats a signature): it speculatively unrolled to the 100k-fuel floor and the
+    ; compile hung -- a CONSTANT list bound beside a recursive local + one call was enough.
+    (: sd '(: (f s n) (? (< n 1) s (f (cup s) (- n 1))) zz '(aa bb cc dd) (f zz 1))
+       (&& ('(bb cc dd) = (ev sd)) (= (base-ev sd) (ev sd))))
+    ; a test the specializer can't fold (%) -> the recursive arm is speculative; descent still
+    ; bounds it (the list shrinks, then a non-descending re-entry residualizes) -- value exact.
+    (: sr '(: (g s k) (? (= 1 (% k 2)) s (g (cup s) (+ k 1))) ww '(a b c) (g ww 0))
+       (&& ('(b c) = (ev sr)) (= (base-ev sr) (ev sr))))
     ; CHURCH LOWERING (dechurch): a literal (N f x) with a FUNCTION operand is f^N(x) -- lowered to the
     ; nested application so the group lane glazes (church is otherwise opaque -> num-ap -> interp). An
     ; op-partial gives pure arithmetic; a lambda operand is beta-collapsed by dsimp. == interp, value exact.
