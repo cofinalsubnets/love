@@ -81,9 +81,20 @@
    (cc-obj src dst is ds) (write-bytes dst (cc-objbytes src is ds))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
-   ; text is the entry: call main, exit with its answer -- gen.l's cgen lays
-   ; the same forms), and ldlink binds the static exe -- no system linker.
-   crt0 (L (L 'call 'main) (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys))
+   ; text is the entry), and ldlink binds the static exe -- no system linker.
+   ; the entry hands the OS stack pointer (argc sits at [rsp]) to __ai_start
+   ; and exits with its answer if it ever returns. __ai_start is defined here
+   ; WEAK -- the bare call-main tail every small link gets (the push 16-aligns
+   ; the call) -- so a libc object (crew/cc/lib/nolibc.c, rung 4) can override
+   ; it strong and unpack argv/envp/auxv before main. no conditional anywhere:
+   ; the weak machinery is the whole switch.
+   crt0 (L (L 'mov 'r6 'sp)
+           (L 'call '__ai_start)
+           (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys)
+           (L 'label '__ai_start)
+           (L 'push 'r6)
+           (L 'call 'main)
+           (L 'mov 'r6 'r0) (L 'li 'r0 60) (L 'sys))
    (cc-link ins dst is ds)
     (: srcs (map (\ f (? (dotc? f) (L f (string (cc-objbytes f is ds)))
                          (doto? f) (: r (uread f)
@@ -91,7 +102,7 @@
                                          (udie 1 (+ "cc: cannot open " f))))
                          (udie 2 (+ "cc: not a .c/.o input: " f))))
                  ins)
-       ps (ldlink 'x64 (link (L "crt0" (string (objelf 'x64 crt0 () () () () ()))) srcs))
+       ps (ldlink 'x64 (link (L "crt0" (string (objelf 'x64 crt0 () (L "__ai_start") () (L "__ai_start") ()))) srcs))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."

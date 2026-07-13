@@ -497,6 +497,38 @@ test_selfhost: host out/host$(hsuf)/aicc
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-aicc corpus (exit $$s)"; exit 1; }; \
 	  echo "test_selfhost: ai.c + all `ls host/*.c | wc -l` host/*.c built by aicc, corpus passes"
+# The rung-4 gate ([[ai-distro]]): the GCC-FREE fixpoint. Everything test_selfhost
+# builds, PLUS our own raw libc -- crew/cc/lib/nolibc.c (raw-syscall wrappers, mini
+# stdio, mmap malloc), the vendored fdlibm crew/cc/lib/math/*.c, and sys.o (the
+# syscall trampoline + our sigsetjmp/longjmp, laid by crew/cc/lib/mksys.l) -- then
+# OUR OWN static linker (crew/holo/link.l via `aicc a.o..`) binds them. No gcc, no
+# glibc, no ld anywhere: the whole chain is ai. Corpus green over the fresh egg.
+# OPT-IN (heavier than test_selfhost). x86-64 only. mksys/nolibc/math are x64.
+.PHONY: test_raw
+test_raw: host out/host$(hsuf)/aicc
+	@echo RAW $(ho)/ai-raw
+	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
+	  d=$(ho)/raw; mkdir -p $$d; \
+	  $m $(ho)/aicc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL aicc -c ai.c"; exit 1; }; \
+	  for f in host/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
+	  $m $(ho)/aicc -Icrew/cc/include -c crew/cc/lib/nolibc.c $$d/nolibc.o \
+	    || { echo "FAIL aicc -c nolibc.c"; exit 1; }; \
+	  for f in crew/cc/lib/math/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -Icrew/cc/lib/math -Icrew/cc/include -c $$f $$d/m_$$b.o \
+	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
+	  { cat crew/utils/text.l crew/utils/core.l crew/utils/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lib/mksys.l; \
+	    echo "(mksys \"$$d/sys.o\")"; } | $m \
+	    || { echo "FAIL mksys sys.o"; exit 1; }; \
+	  $m $(ho)/aicc $$d/*.o -o $(ho)/ai-raw \
+	    || { echo "FAIL our-linker bind ai-raw"; exit 1; }; \
+	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_raw.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
+	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
+	  echo "test_raw: ai.c + host/*.c + nolibc + fdlibm + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

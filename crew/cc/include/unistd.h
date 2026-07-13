@@ -6,7 +6,7 @@ long read(int, void*, long);
 long write(int, void const*, long);
 int close(int);
 long lseek(int, long, int);
-int open(char const*, int, int);
+int open(char const*, int, ...);   /* fcntl.h's shape, repeated for the lone-include habit */
 long sysconf(int);
 #define _SC_PAGESIZE 30
 #define STDIN_FILENO  0
