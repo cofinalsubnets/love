@@ -78,7 +78,7 @@ three new pieces under crew/cc/lib/:
     rt_sigprocmask -- ai.c's fault barrier is `sigsetjmp(env,1)`, so the mask
     is load-bearing), and `__ai_sigret` (the SA_RESTORER tail). every encoding
     objdump-checked, the holo house rule.
-  * `math/` -- the vendored fdlibm set (rung 4's -lm endgame, already landed).
+  * `math/` -- am.c, OUR transcendentals (fdlibm retired 2026-07-13: one 400-line file, sqrt exact / the seven <= a few ulp, `make ulp` is the differential gate; -lm is gone from every link).
 the crt0 switch is one weak symbol: `__ai_start` is defined WEAK in the crt0
 object (the bare call-main tail every small link gets), and nolibc overrides
 it STRONG to unpack argv/envp/auxv before main -- no link-time flag anywhere,

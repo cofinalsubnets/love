@@ -495,7 +495,7 @@ test_cc: host out/host$(hsuf)/aicc
 # aicc (gcc/clang only LINKS), then run the whole corpus through the all-aicc
 # binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in
 # test_all -- it rebuilds ~14 objects + links + runs the corpus, and needs the
-# system static linker + libm. x86-64 only (aicc emits x64). The binary carries
+# system static linker. x86-64 only (aicc emits x64). The binary carries
 # no baked image, so AI_NO_IMAGE forces the fresh-egg boot.
 .PHONY: test_selfhost
 test_selfhost: host out/host$(hsuf)/aicc
@@ -507,7 +507,9 @@ test_selfhost: host out/host$(hsuf)/aicc
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $m $(ho)/aicc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
-	  $(host_cc) -static -o $(ho)/ai-selfhost $$d/*.o -lm $(host_ldflags) \
+	  $m $(ho)/aicc -Icrew/cc/include -c crew/cc/lib/math/am.c $$d/am.o \
+	    || { echo "FAIL aicc -c am.c"; exit 1; }; \
+	  $(host_cc) -static -o $(ho)/ai-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-aicc binary"; exit 1; }; \
 	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_selfhost.out; \
@@ -516,7 +518,7 @@ test_selfhost: host out/host$(hsuf)/aicc
 	  echo "test_selfhost: ai.c + all `ls host/*.c | wc -l` host/*.c built by aicc, corpus passes"
 # The rung-4 gate ([[ai-distro]]): the GCC-FREE fixpoint. Everything test_selfhost
 # builds, PLUS our own raw libc -- crew/cc/lib/nolibc.c (raw-syscall wrappers, mini
-# stdio, mmap malloc), the vendored fdlibm crew/cc/lib/math/*.c, and sys.o (the
+# stdio, mmap malloc), the math floor crew/cc/lib/math/am.c (ours), and sys.o (the
 # syscall trampoline + our sigsetjmp/longjmp, laid by crew/cc/lib/mksys.l) -- then
 # OUR OWN static linker (crew/holo/link.l via `aicc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is ai. Corpus green over the fresh egg.
@@ -547,7 +549,7 @@ test_raw: host out/host$(hsuf)/aicc
 	  tail -1 $(ho)/.test_raw.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
-	  echo "test_raw: ai.c + host/*.c + nolibc + fdlibm + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
+	  echo "test_raw: ai.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
@@ -976,7 +978,7 @@ $(ho)/libai.a: $(h_o)
 $(ho)/libai.so: $(ho)/libai.a
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -shared -o $@ $(so_archive) $(so_undef) -lm
+	@$(hcc) -shared -o $@ $(so_archive) $(so_undef)
 
 # Bootstrap interpreter, compiled against the fallback top-level data.h (no
 # -I$(ho)) + -DGL_BOOTSTRAP -Dai_tco=0 (also exercises the non-threaded trampoline
@@ -997,7 +999,7 @@ out/host/0/%.o: $(R)/%.c $(ai_h)
 $(ai0): $(ai0_o)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(CC) $(ai_cflags) -o $@ $(ai0_o) -lm
+	@$(CC) $(ai_cflags) -o $@ $(ai0_o)
 
 # ai.c -> out/host/*.o
 $(ho)/%.o: $(R)/%.c $(ai_h) $(ho)/.hostcc
@@ -1024,7 +1026,7 @@ $(ho)/host/cb.o: port/quay/quay.c port/quay/quay.h
 $(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h out/lib/uuexport.h $(holo_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ $(host_o) $(ho)/libai.a -lm $(host_ldflags)
+	@$(hcc) -o $@ $(host_o) $(ho)/libai.a $(host_ldflags)
 
 $(ho)/ai.1: doc/ai.1 out/lib/ai_version.h
 	@echo SED	$@
@@ -1306,10 +1308,10 @@ init-container: host
 # the host. x86_64 only (qemu + isa-debug-exit); a no-op on other hosts.
 #
 # Drop from the kernel corpus: io.l (host file open) and run.l (subprocess/getenv)
-# need host-OS nifs the kernel lacks; math.l pins transcendental results to glibc
-# precision (1e-12/1e-15) that the freestanding libc/math.c series can't meet;
-# bell.l's Bell-number bignums are too heavy for the emulated kernel.
-kt = $(filter-out %/io.l %/run.l %/math.l %/bell.l,$t)
+# need host-OS nifs the kernel lacks; bell.l's Bell-number bignums are too heavy
+# for the emulated kernel. (math.l REJOINED when the math floor became am.c --
+# the same <= 2 ulp seven everywhere, so the glibc-precision bands hold.)
+kt = $(filter-out %/io.l %/run.l %/bell.l,$t)
 out/lib/ktests.l: $(kt) $(R)/Makefile
 	@mkdir -p out/lib
 	@cat $(kt) > $@
@@ -1388,6 +1390,13 @@ distclean: clean
 
 valg: host
 	cat $t | valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m
+# the math floor's differential gate: am.c vs the host libm, max-ulp per fn
+# (opt-in like valg: needs a hosted oracle). tools/ulp.c documents the targets.
+.PHONY: ulp
+ulp:
+	@mkdir -p out/host
+	@$(CC) -O2 -o out/host/ulp $R/tools/ulp.c $R/crew/cc/lib/math/am.c -lm
+	@out/host/ulp
 out/host/perf.data: host
 	cat $t | perf record -o $@ $m
 perf: out/host/perf.data

@@ -9,7 +9,7 @@ emcc = $(CCACHE) $(EMCC)
 o = ../out/wasm
 
 # g.c was split into per-concern translation units (kernel/*.c); build them all.
-g_c = ../ai.c
+g_c = ../ai.c ../crew/cc/lib/math/am.c
 g_h = $(wildcard ../*.h)
 
 # One object per source so an edit recompiles just that TU (and so ccache

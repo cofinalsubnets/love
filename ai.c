@@ -13,26 +13,33 @@
 // kernel-internal declarations (private; merged from former i.h)
 // ============================================================================
 
+// the math floor is OURS on every frontend: crew/cc/lib/math/am.c (the seven
+// transcendentals; fdlibm and -lm both retired). the 32-bit lane computes in
+// binary64 and narrows -- correct within a float ulp for free.
+double am_sin(double), am_cos(double), am_atan2(double, double),
+       am_sqrt(double), am_exp(double), am_log(double), am_pow(double, double);
 #if UINTPTR_MAX == UINT64_MAX
 #define Bits 64
 typedef double ai_flo_t;
-#define ai_sin   sin
-#define ai_cos   cos
-#define ai_atan2 atan2
-#define ai_sqrt  sqrt
-#define ai_exp   exp
-#define ai_log   log
-#define ai_pow   pow
+#define ai_sin   am_sin
+#define ai_cos   am_cos
+#define ai_atan2 am_atan2
+#define ai_sqrt  am_sqrt
+#define ai_exp   am_exp
+#define ai_log   am_log
+#define ai_pow   am_pow
 #elif UINTPTR_MAX == UINT32_MAX
 #define Bits 32
 typedef float ai_flo_t;
-#define ai_sin   sinf
-#define ai_cos   cosf
-#define ai_atan2 atan2f
-#define ai_sqrt  sqrtf
-#define ai_exp   expf
-#define ai_log   logf
-#define ai_pow   powf
+float am_sinf(float), am_cosf(float), am_atan2f(float, float), am_sqrtf(float),
+      am_expf(float), am_logf(float), am_powf(float, float);
+#define ai_sin   am_sinf
+#define ai_cos   am_cosf
+#define ai_atan2 am_atan2f
+#define ai_sqrt  am_sqrtf
+#define ai_exp   am_expf
+#define ai_log   am_logf
+#define ai_pow   am_powf
 #endif
 
 // Bignum limbs are native-word-width where a double-width integer is available for
@@ -61,14 +68,6 @@ typedef int64_t ai_sdlimb;
 // count by chunk+1 (a limb prints in < that many digits). 30103 = round(1e5 log10 2).
 #define limb_dec_chunk  (limb_bits * 30103 / 100000)
 #define limb_dec_digits (limb_dec_chunk + 1)
-
-#if __STDC_HOSTED__
-#include <math.h>
-#else
-ai_flo_t ai_sin(ai_flo_t), ai_cos(ai_flo_t),
-        ai_atan2(ai_flo_t, ai_flo_t), ai_sqrt(ai_flo_t), ai_exp(ai_flo_t),
-        ai_log(ai_flo_t), ai_pow(ai_flo_t, ai_flo_t);
-#endif
 
 #define Bytes (Bits>>3)
 _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");

@@ -2,7 +2,7 @@
  * Everything the host objects ask of glibc, answered straight off the Linux
  * x86-64 syscall table through __ai_sys (crew/cc/lib/mksys.l lays that leaf,
  * with __sigsetjmp/siglongjmp/__ai_sigret/sqrt beside it; crew/cc/lib/math/
- * carries the fdlibm set). One file, aicc-compiled, our own linker binds it:
+ * carries the math floor, crew/cc/lib/math/am.c -- ours). One file, aicc-compiled, our own linker binds it:
  *   aicc ai.o (host objects) nolibc.o (math objects) sys.o -o ai
  * The shapes here MATCH crew/cc/include/ (which mirrors glibc's x86-64 ABI,
  * which mirrors the kernel's where it can): struct stat and dirent are the

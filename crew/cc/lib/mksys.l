@@ -7,7 +7,7 @@
 ;                            [8] the signal mask (rt_sigprocmask saves/restores it --
 ;                            ai.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
 ;   __ai_sigret              the SA_RESTORER tail (rt_sigreturn) nolibc's sigaction installs
-; (sqrt stays in C -- crew/cc/lib/math/sqrt.c, the corpus-proven fdlibm body; a thing
+; (sqrt stays in C -- crew/cc/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
 ; C CAN say has no place here.) x64 only, like the linker. runs after crew/holo/{elf,obj}.l in a cat (the aicc prefix
 ; layers; the assembler itself rides the baked holo book):
 ;   { cat crew/utils/{text,core,asbook}.l crew/holo/{elf,obj}.l crew/cc/lib/mksys.l;
