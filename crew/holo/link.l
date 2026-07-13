@@ -13,17 +13,17 @@
 ; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). cc.l drives it:
 ; `aicc a.o b.c -o prog`.
 (:
-   (ld-at l i) (? (< i 1) (cap l) (ld-at (cup l) (- i 1)))
+   (ld-at l i) (? (i < 1) <l (ld-at >l (i - 1)))
    ; little-endian reads off a byte-indexable text; a u64 field can carry a
    ; signed value (a RELA addend), so sg64 folds the high half back down
-   (rle16 s i) (+ (s i) (* 256 (s (+ i 1))))
-   (rle32 s i) (+ (rle16 s i) (* 65536 (rle16 s (+ i 2))))
-   (rle64 s i) (+ (rle32 s i) (* 4294967296 (rle32 s (+ i 4))))
-   (sg64 v) (? (< v 9223372036854775808) v (- v 18446744073709551616))
-   (ld-cstr s i) (: (go j) (? (= (s j) 0) (snip s i j) (go (+ j 1))) (go i))
-   (ld-zeros n) (? (< n 1) () (link 0 (ld-zeros (- n 1))))
-   (ld-align a v) (? (< a 2) v (: r (% v a) (? (= r 0) v (+ v (- a r)))))
-   (ld-fits32 v) (&& (<= -2147483648 v) (<= v 2147483647))
+   (rle16 s i) ((s i) + (* 256 (s (i + 1))))
+   (rle32 s i) ((rle16 s i) + (* 65536 (rle16 s (i + 2))))
+   (rle64 s i) ((rle32 s i) + (* 4294967296 (rle32 s (i + 4))))
+   (sg64 v) (? (v < 9223372036854775808) v (v - 18446744073709551616))
+   (ld-cstr s i) (: (go j) (? ((s j) = 0) (snip s i j) (go (j + 1))) (go i))
+   (ld-zeros n) (? (n < 1) () (link 0 (ld-zeros (n - 1))))
+   (ld-align a v) (? (a < 2) v (: r (% v a) (? (r = 0) v (v + (a - r)))))
+   (ld-fits32 v) (&& (-2147483648 <= v) (v <= 2147483647))
    ; a section tag's base key on the object record
    (ld-key tag) (? (id? tag 'text) 'tbase (id? tag 'data) 'dbase 'nbase)
 
@@ -35,62 +35,62 @@
    ;   'relas              ((tag (off kind symidx addend)..) ..)
    ; layout pins 'tbase/'dbase/'nbase (the load addresses) on it later.
    (ld-read id s)
-    (: _ (? (&& (= (s 0) 127) (&& (= (s 1) 69) (&& (= (s 2) 76) (= (s 3) 70)))) 0
+    (: _ (? (&& ((s 0) = 127) (&& ((s 1) = 69) (&& ((s 2) = 76) ((s 3) = 70)))) 0
             (scare 'link-not-elf id))
-       _ (? (&& (= (rle16 s 16) 1) (= (rle16 s 18) 62)) 0 (scare 'link-not-x64-rel id))
-       _ (? (= (rle16 s 58) 64) 0 (scare 'link-shentsize id))
+       _ (? (&& ((rle16 s 16) = 1) ((rle16 s 18) = 62)) 0 (scare 'link-not-x64-rel id))
+       _ (? ((rle16 s 58) = 64) 0 (scare 'link-shentsize id))
        shoff (rle64 s 40) shnum (rle16 s 60) shstrx (rle16 s 62)
-       (sh i) (+ shoff (* i 64))                       ; the i-th section header
-       shstro (rle64 s (+ (sh shstrx) 24))
-       (sname i) (ld-cstr s (+ shstro (rle32 s (sh i))))
+       (sh i) (shoff + (* i 64))                       ; the i-th section header
+       shstro (rle64 s ((sh shstrx) + 24))
+       (sname i) (ld-cstr s (shstro + (rle32 s (sh i))))
        ob (tablet 0) _ (pin ob 'id id) _ (pin ob 'src s)
        secmap (tablet 0) _ (pin ob 'secmap secmap)
        sects (tablet 0) _ (pin ob 'sects sects)
        ; classify: our three PROGBITS by name, symtab/rela by type; anything
        ; else with bytes is a foreign object -- refuse, never drop
        (class i symt rls)
-        (? (<= shnum i) (link symt rls)
-           (: h (sh i) ty (rle32 s (+ h 4))
-              off (rle64 s (+ h 24)) sz (rle64 s (+ h 32))
-              (? (= ty 1)
+        (? (shnum <= i) (link symt rls)
+           (: h (sh i) ty (rle32 s (h + 4))
+              off (rle64 s (h + 24)) sz (rle64 s (h + 32))
+              (? (ty = 1)
                   (: nm (sname i)
-                     tag (? (= nm ".text") 'text (= nm ".data") 'data
-                            (= nm "ai_nifs") 'nifs ())
-                     (? (! tag) (? (< 0 sz) (scare 'link-section nm) (class (+ i 1) symt rls))
+                     tag (? (nm = ".text") 'text (nm = ".data") 'data
+                            (nm = "ai_nifs") 'nifs ())
+                     (? (! tag) (? (0 < sz) (scare 'link-section nm) (class (i + 1) symt rls))
                         (: _ (pin secmap i tag)
-                           _ (pin sects tag (L off sz (rle64 s (+ h 48))))
-                           (class (+ i 1) symt rls))))
-                 (= ty 2) (class (+ i 1) (L off sz (rle32 s (+ h 40))) rls)
-                 (= ty 4) (class (+ i 1) symt (link (L (rle32 s (+ h 44)) off sz) rls))
-                 (member? ty '(0 3)) (class (+ i 1) symt rls)
-                 (< 0 sz) (scare 'link-section (sname i))
-                 (class (+ i 1) symt rls))))
+                           _ (pin sects tag `(off sz (rle64 s (h + 48))))
+                           (class (i + 1) symt rls))))
+                 (ty = 2) (class (i + 1) `(off sz (rle32 s (h + 40))) rls)
+                 (ty = 4) (class (i + 1) symt (link `((rle32 s (h + 44)) off sz) rls))
+                 (member? ty '(0 3)) (class (i + 1) symt rls)
+                 (0 < sz) (scare 'link-section (sname i))
+                 (class (i + 1) symt rls))))
        cl (class 1 () ())
-       symt (cap cl)
+       symt <cl
        _ (? (two? symt) 0 (scare 'link-no-symtab id))
-       stro (rle64 s (+ (sh (ld-at symt 2)) 24))       ; .strtab offset, via symtab's link
+       stro (rle64 s ((sh (ld-at symt 2)) + 24))       ; .strtab offset, via symtab's link
        syms (tablet 0) _ (pin ob 'syms syms)
        nsym (// (ld-at symt 1) 24)
        _ (pin ob 'nsym nsym)
-       _ (: (go i) (? (<= nsym i) 0
-                      (: e (+ (ld-at symt 0) (* i 24))
-                         info (s (+ e 4))
-                         _ (pin syms i (L (ld-cstr s (+ stro (rle32 s e)))
+       _ (: (go i) (? (nsym <= i) 0
+                      (: e ((ld-at symt 0) + (* i 24))
+                         info (s (e + 4))
+                         _ (pin syms i `((ld-cstr s (stro + (rle32 s e)))
                                           (>> info 4) (& info 15)
-                                          (rle16 s (+ e 6)) (rle64 s (+ e 8))))
-                         (go (+ i 1))))
+                                          (rle16 s (e + 6)) (rle64 s (e + 8))))
+                         (go (i + 1))))
             (go 0))
-       relas (map (\ r (: tag (peep secmap (cap r) ())
+       relas (map (\ r (: tag (peep secmap <r ())
                           _ (? tag 0 (scare 'link-rela-target id))
                           n (// (ld-at r 2) 24)
-                          (es i acc) (? (< i 0) acc
-                                        (: e (+ (ld-at r 1) (* i 24))
-                                           (es (- i 1)
-                                               (link (L (rle64 s e) (rle32 s (+ e 8))
-                                                        (rle32 s (+ e 12)) (sg64 (rle64 s (+ e 16))))
+                          (es i acc) (? (i < 0) acc
+                                        (: e ((ld-at r 1) + (* i 24))
+                                           (es (i - 1)
+                                               (link `((rle64 s e) (rle32 s (e + 8))
+                                                        (rle32 s (e + 12)) (sg64 (rle64 s (e + 16))))
                                                      acc))))
-                          (link tag (es (- n 1) ()))))
-                  (cup cl))
+                          (link tag (es (n - 1) ()))))
+                  >cl)
        _ (pin ob 'relas relas)
        ob)
 
@@ -101,15 +101,15 @@
    (ldlay objs base)
     (: (one tag cur os)
         (? (! (two? os)) cur
-           (: ob (cap os) se (peep (peep ob 'sects 0) tag ())
-              (? (! (two? se)) (one tag cur (cup os))
+           (: ob <os se (peep (peep ob 'sects 0) tag ())
+              (? (! (two? se)) (one tag cur >os)
                  (: a (ld-align (ld-at se 2) cur)
                     _ (pin ob (ld-key tag) a)
-                    (one tag (+ a (ld-at se 1)) (cup os))))))
-       t1 (one 'text (+ base 120) objs)
+                    (one tag (a + (ld-at se 1)) >os)))))
+       t1 (one 'text (base + 120) objs)
        d1 (one 'data t1 objs)
        n0 (ld-align 16 d1)
-       (L (one 'nifs n0 objs) n0))
+       `((one 'nifs n0 objs) n0))
 
    ; the one symbol book: name -> (addr weak?), every defined global/weak
    ; across the set. a strong def beats any weak; two strongs scare; the
@@ -117,31 +117,31 @@
    (ldsyms objs)
     (: glo (tablet 0)
        (one ob i)
-        (? (<= (peep ob 'nsym 0) i) 0
+        (? ((peep ob 'nsym 0) <= i) 0
            (: sy (peep (peep ob 'syms 0) i ())
               bind (ld-at sy 1) shx (ld-at sy 3)
-              (? (|| (= shx 0) (! (member? bind '(1 2)))) (one ob (+ i 1))
-                 (: nm (cap sy)
+              (? (|| (shx = 0) (! (member? bind '(1 2)))) (one ob (i + 1))
+                 (: nm <sy
                     tag (peep (peep ob 'secmap 0) shx ())
                     _ (? tag 0 (scare 'link-sym-section nm))
-                    a (+ (peep ob (ld-key tag) 0) (ld-at sy 4))
-                    w (= bind 2)
+                    a ((peep ob (ld-key tag) 0) + (ld-at sy 4))
+                    w (bind = 2)
                     old (peep glo nm ())
-                    _ (? (! (two? old)) (pin glo nm (L a w))
+                    _ (? (! (two? old)) (pin glo nm `(a w))
                          w 0                                   ; incoming weak: the standing def keeps
-                         (ld-at old 1) (pin glo nm (L a w))    ; strong replaces weak
+                         (ld-at old 1) (pin glo nm `(a w))    ; strong replaces weak
                          (scare 'link-dup nm))
-                    (one ob (+ i 1))))))
-       _ (: (each os) (? (! (two? os)) 0 (: _ (one (cap os) 1) (each (cup os))))
+                    (one ob (i + 1))))))
+       _ (: (each os) (? (! (two? os)) 0 (: _ (one <os 1) (each >os)))
             (each objs))
        glo)
 
    ; resolve a name: the symbol book, or the synthesized nif brackets
    (ldres glo n0 n1 nm)
     (: r (peep glo nm ())
-       (? (two? r) (cap r)
-          (= nm "__start_ai_nifs") n0
-          (= nm "__stop_ai_nifs") n1
+       (? (two? r) <r
+          (nm = "__start_ai_nifs") n0
+          (nm = "__stop_ai_nifs") n1
           (scare 'link-undef nm)))
 
    ; patch one object's one section: stream its bytes, splicing each
@@ -154,26 +154,26 @@
        off0 (ld-at se 0) sz (ld-at se 1)
        (ent es) (? (! (two? es)) ()
                    (id? (cap (cap es)) tag) (cup (cap es))
-                   (ent (cup es)))
+                   (ent >es))
        (go pos es acc)
-        (? (! (two? es)) (rev (link (snip s pos (+ off0 sz)) acc))
-           (: e (cap es) ro (cap e) kind (ld-at e 1) ad (ld-at e 3)
-              _ (? (<= (- pos off0) ro) 0 (scare 'link-unsorted (peep ob 'id 0)))
+        (? (! (two? es)) (rev (link (snip s pos (off0 + sz)) acc))
+           (: e <es ro <e kind (ld-at e 1) ad (ld-at e 3)
+              _ (? ((pos - off0) <= ro) 0 (scare 'link-unsorted (peep ob 'id 0)))
               sy (peep (peep ob 'syms 0) (ld-at e 2) ())
-              sv (? (= (ld-at sy 2) 3)                 ; STT_SECTION: the section's base
+              sv (? ((ld-at sy 2) = 3)                 ; STT_SECTION: the section's base
                     (: stag (peep (peep ob 'secmap 0) (ld-at sy 3) ())
                        _ (? stag 0 (scare 'link-sym-section (peep ob 'id 0)))
                        (peep ob (ld-key stag) 0))
-                    (ldres glo n0 n1 (cap sy)))
-              w (? (= kind 1) 8 4)
+                    (ldres glo n0 n1 <sy))
+              w (? (kind = 1) 8 4)
               _ (? (member? kind '(1 2 4)) 0 (scare 'link-reloc kind))
-              _ (? (<= (+ ro w) sz) 0 (scare 'link-oob (peep ob 'id 0)))
-              bs (? (= kind 1) (le64 (+ sv ad))
-                    (: v (- (+ sv ad) (+ base ro))     ; PC32/PLT32: S + A - P
-                       _ (? (ld-fits32 v) 0 (scare 'link-range (cap sy)))
+              _ (? ((ro + w) <= sz) 0 (scare 'link-oob (peep ob 'id 0)))
+              bs (? (kind = 1) (le64 (sv + ad))
+                    (: v ((sv + ad) - (base + ro))     ; PC32/PLT32: S + A - P
+                       _ (? (ld-fits32 v) 0 (scare 'link-range <sy))
                        (le32 v)))
-              (go (+ off0 (+ ro w)) (cup es)
-                  (link bs (link (snip s pos (+ off0 ro)) acc)))))
+              (go (off0 + ro + w) >es
+                  (link bs (link (snip s pos (off0 + ro)) acc)))))
        (go off0 (ent (peep ob 'relas ())) ()))
 
    ; link a set of objects -- ((id bytes-text)..) -- into a static-exe PIECE
@@ -181,32 +181,32 @@
    ; object's text. one R+X+W segment maps the whole file, elf.l's shape.
    (ldlink target srcs)
     (: _ (? (id? target 'x64) 0 (scare 'link-x64-only target))
-       objs (map (\ p (ld-read (cap p) (caup p))) srcs)
+       objs (map (\ p (ld-read <p <>p)) srcs)
        lay (ldlay objs elf-base)
-       end (cap lay) n0 (caup lay)
+       end <lay n0 <>lay
        glo (ldsyms objs)
        ; emit in layout order, zero-padding up to each section's base
        (emit tag cur os acc)
         (? (! (two? os)) (link cur acc)
-           (: ob (cap os) se (peep (peep ob 'sects 0) tag ())
-              (? (! (two? se)) (emit tag cur (cup os) acc)
+           (: ob <os se (peep (peep ob 'sects 0) tag ())
+              (? (! (two? se)) (emit tag cur >os acc)
                  (: b (peep ob (ld-key tag) 0)
-                    pad (? (< cur b) (L (ld-zeros (- b cur))) ())
-                    (emit tag (+ b (ld-at se 1)) (cup os)
-                          (cat acc (cat pad (ldpatch ob tag b glo n0 end))))))))
-       et (emit 'text (+ elf-base 120) objs ())
-       ed (emit 'data (cap et) objs (cup et))
-       en (emit 'nifs (cap ed) objs (cup ed))
-       tail (? (< (cap en) end) (L (ld-zeros (- end (cap en)))) ())
-       hdr (elf64-hdr elf-base (peep (cap objs) 'tbase 0) (- end elf-base)
+                    pad (? (cur < b) `((ld-zeros (b - cur))) ())
+                    (emit tag (b + (ld-at se 1)) >os
+                          (acc + pad + (ldpatch ob tag b glo n0 end)))))))
+       et (emit 'text (elf-base + 120) objs ())
+       ed (emit 'data <et objs >et)
+       en (emit 'nifs <ed objs >ed)
+       tail (? (<en < end) `((ld-zeros (end - <en))) ())
+       hdr (elf64-hdr elf-base (peep <objs 'tbase 0) (end - elf-base)
                       (peep elf-machines target 0))
-       (link hdr (cat (cup en) tail)))
+       (link hdr (>en + tail)))
 
    ; write a piece list to a file, raw (texts pass through; byte lists pack).
    ; an explicit left walk: map runs its effects right-to-left.
    (ld-write path ps)
     (: q (open path "w")
        (go l) (? (! (two? l)) (close q)
-                 (: _ (say q (: p (cap l) (? (string? p) p (string p))))
-                    (go (cup l))))
+                 (: _ (say q (: p <l (? (string? p) p (string p))))
+                    (go >l)))
        (go ps)))

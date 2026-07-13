@@ -14,13 +14,13 @@
 (: elf-base 4194304                                            ; 0x400000, the classic ET_EXEC base
    elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr (catall is in holo.l)
    elf-machines (tablet 0)
-   _ (foldl (\ _ p (pin elf-machines (cap p) (cup p))) 0
-        (L (link 'x64 62) (link 'amd64 62) (link 'arm64 183) (link 'aarch64 183)))
+   _ (foldl (\ _ p (pin elf-machines <p >p)) 0
+        `((link 'x64 62) (link 'amd64 62) (link 'arm64 183) (link 'aarch64 183)))
 
    ;; the 120-byte header for a single R+X load segment at `base` covering the whole file.
    (elf64-hdr base entry filesz machine)
-      (catall (L
-         (L 127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
+      (catall `(
+         `(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
          (le16 2) (le16 machine) (le32 1)                      ; ET_EXEC, e_machine, version 1
          (le64 entry) (le64 64) (le64 0)                       ; e_entry, e_phoff=64, e_shoff=0
          (le32 0) (le16 64) (le16 56)                          ; e_flags, e_ehsize=64, e_phentsize=56
@@ -35,16 +35,16 @@
    ;; wants 0x40000000, the start of that board's RAM.)
    (elf64-at base target mkprog data)
       (: machine (peep elf-machines target 0)
-         _ (? (= machine 0) (scare 'no-elf-machine target) 0)
-         org (+ base elf-hdr)                                          ; the vaddr of the first code byte
-         probe-len (tally (holo-bytes-at target (mkprog (+ base 65536)) org))  ; measure the code (length stable)
-         dataddr (+ base (+ elf-hdr probe-len))
+         _ (? (machine = 0) (scare 'no-elf-machine target) 0)
+         org (base + elf-hdr)                                          ; the vaddr of the first code byte
+         probe-len (tally (holo-bytes-at target (mkprog (base + 65536)) org))  ; measure the code (length stable)
+         dataddr (base + elf-hdr + probe-len)
          ;; assemble at ORG so labels carry absolute load addresses -- pc-relative fixups are
          ;; unchanged; an abs64 data pointer (cc's static char*/fn-ptr tables) resolves outright.
          code (holo-bytes-at target (mkprog dataddr) org)
-         filesz (+ elf-hdr (+ (tally code) (tally data)))
-         entry (+ base elf-hdr)
-         img (catall (L (elf64-hdr base entry filesz machine) code data))
+         filesz (elf-hdr + (tally code) + (tally data))
+         entry (base + elf-hdr)
+         img (catall `((elf64-hdr base entry filesz machine) code data))
          res (tablet 0)
          _ (pin res 'bytes img) _ (pin res 'entry entry) _ (pin res 'dataddr dataddr)
          res)
