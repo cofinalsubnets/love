@@ -1,4 +1,4 @@
-# cc -- rung 3 of the distro, the C compiler: THE PLAN
+# cc -- rungs 3-4 of the distro, the C compiler + gcc-free seam: THE PLAN
 
 the plan of record for the chibicc-class C compiler, written in ai, emitting
 through the holo books. drafted 2026-07-06; stage 0 LANDED the same day
@@ -57,6 +57,38 @@ default/override and the nif bracket walk are gated in test_cc, and the full
 14-object selfhost set (585KB ai.o included) links in under a second --
 refusing at `sqrt`, the first libm undef, which is exactly rung 4's seam:
 the raw-syscall host + in-tree sin/cos/log, and gcc is gone entirely.
+
+**LADDER RUNG 4 LANDED 2026-07-12: THE GCC-FREE ai.** the standalone chain is
+now entirely ours -- aicc compiles ai.c + host/*.c + our own libc, mksys lays
+the machine tail, and crew/holo/link.l binds them: no gcc, no glibc, no ld.
+three new pieces under crew/cc/lib/:
+  * `nolibc.c` -- the raw libc. ~90 wrappers straight off the x86-64 syscall
+    table (through the one `__ai_sys` trampoline), a mini stdio (a FILE is a
+    fd plus a flush buffer; stdout line-buffers 8KB, the one formatter speaks
+    %s/%d/%u/%x/%c/%p with the l/z widths -- no floats, ai prints its own),
+    a K&R first-fit malloc over 1MB mmap arenas, dirent over getdents64 (the
+    kernel record IS `struct dirent`), the glibc-152B-to-kernel-32B sigaction
+    fold with our own restorer, a numeric getaddrinfo (localhost + dotted
+    quad), env/exec/termios/pty. single-threaded like ai: errno is one int,
+    no locks. strtol/strtod keep libc/str.c's bodies (the rung-4 differential
+    measured them corpus-green against glibc's).
+  * `mksys.l` -- lays sys.o, the four things C cannot say: the 7-slot syscall
+    trampoline, `__sigsetjmp`/`siglongjmp` over our own layout INSIDE the
+    glibc-sized 25-long buffer (the signal mask in buf[8], saved/restored by
+    rt_sigprocmask -- ai.c's fault barrier is `sigsetjmp(env,1)`, so the mask
+    is load-bearing), and `__ai_sigret` (the SA_RESTORER tail). every encoding
+    objdump-checked, the holo house rule.
+  * `math/` -- the vendored fdlibm set (rung 4's -lm endgame, already landed).
+the crt0 switch is one weak symbol: `__ai_start` is defined WEAK in the crt0
+object (the bare call-main tail every small link gets), and nolibc overrides
+it STRONG to unpack argv/envp/auxv before main -- no link-time flag anywhere,
+the weak machinery IS the switch. `make test_raw` (opt-in, x86-64) runs the
+whole corpus over the fresh egg: 2899 tests green. two cc gaps surfaced and
+were closed on the way: cpp now predefines `__linux__` (host/init.c's signalfd
+source was silently compiling OUT of the selfhost binary, a latent rung-2
+wart), and `open()` is variadic in unistd.h (it clashed with fcntl.h's shape).
+one gap noted, not closed (nothing needs it yet): an image-time `&arr[i]`
+global initializer still refuses -- dodge it with separate globals.
 
 the one firm fence: NOT C++, ever.
 
