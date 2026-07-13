@@ -215,6 +215,17 @@
       (two? (cgn "char *m[] = {\"x\",\"y\"}; int main() { return 0; }"))           ; ... with [] size inference
       ; THE ai.c pattern: a static table of (name, function-pointer) records
       (two? (cgn "struct N { char *nm; int (*fn)(int); }; int f(int x){return x;} struct N t[1] = {{\"f\", f}}; int main() { return t[0].fn(9); }"))
+      ; a static initializer is any CONSTANT ADDRESS: label + a compile-time byte
+      ; offset (the offset rides the abs64 addend). &arr[i], decayed pointer
+      ; arithmetic, a const-expr index, &struct.member, &arr[i].member (nested).
+      (two? (cgn "int a[4]; int *p = &a[2]; int main() { return 0; }"))                 ; &arr[i]
+      (two? (cgn "int a[4]; int *p = a + 3; int main() { return 0; }"))                 ; decay + const (scaled)
+      (two? (cgn "enum{K=2}; int a[8]; int *p = &a[K+1]; int main() { return 0; }"))    ; a const-expr subscript
+      (two? (cgn "struct P{int x,y;}; struct P s; int *p = &s.y; int main() { return 0; }"))      ; &member
+      (two? (cgn "struct P{int x,y,z;}; struct P a[3]; int *p = &a[1].z; int main() { return 0; }")) ; &arr[i].member
+      (two? (cgn "char *p = \"ok\" + 1; int main() { return 0; }"))                     ; a string label + offset
+      ; a NON-constant address still refuses (gcc: initializer not constant)
+      (! (cgn "int a[4]; int i; int *p = &a[i]; int main() { return 0; }"))
       ; a bare TOP-LEVEL function-pointer array still refuses (ptop lays its own declarators; 4e)
       (! (cgn "int a(int x){return x;} int (*t[1])(int) = {a}; int main() { return t[0](3); }"))))
 

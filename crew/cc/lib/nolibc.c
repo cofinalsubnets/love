@@ -291,8 +291,8 @@ struct _IO_FILE {
   unsigned char *buf;
 };
 static unsigned char __obuf[8192];
-static FILE __f_in, __f_out, __f_err;   /* separate, so each pointer is &global (image-safe), not &arr[i] */
-FILE *stdin = &__f_in, *stdout = &__f_out, *stderr = &__f_err;
+static FILE __stdf[3];
+FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
 
 static long __wall(int fd, unsigned char const *p, long n) {
   long i = 0;

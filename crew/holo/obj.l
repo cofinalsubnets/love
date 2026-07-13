@@ -23,8 +23,11 @@
 
    ; walk an assembled section's items (bytes + fixups) -> (bytes relocs). a fixup
    ; is resolved in place when the section may (text-internal, pc-relative to a
-   ; label defined here); otherwise it becomes a relocation record (off kind label)
-   ; and W zero bytes hold its place (RELA overwrites the field outright).
+   ; label defined here); otherwise it becomes a relocation record (off kind label
+   ; addend) and W zero bytes hold its place (RELA overwrites the field outright).
+   ; the addend is the fixup's aux -- a data pointer to &arr[i]/&s.field bakes the
+   ; constant byte offset there, and the RELA carries it (added to the section-sym
+   ; addend below), so the linker's S+A lands on the element, not the base.
    (o-walk be items labels wkset internal? off bacc racc)
     (? (! (two? items)) (L (rev bacc) (rev racc))
        (: x (cap items)
@@ -37,7 +40,7 @@
                         (o-walk be (cup items) labels wkset internal? (+ off w)
                                 (cat (rev bs) bacc) racc))
                     (o-walk be (cup items) labels wkset internal? (+ off w)
-                            (cat (o-zeros w) bacc) (link (L off k lbl) racc))))
+                            (cat (o-zeros w) bacc) (link (L off k lbl ((holo 'fix-a) x)) racc))))
              (o-walk be (cup items) labels wkset internal? (+ off 1) (link x bacc) racc))))
    (o-zeros n) (? (< n 1) () (link 0 (o-zeros (- n 1))))
 
@@ -151,16 +154,16 @@
        (reldat1 rs)
         (: (go rs2 acc)
             (? (! (two? rs2)) acc
-               (: r (cap rs2) off (cap r) lbl (caup (cup r))
+               (: r (cap rs2) off (cap r) lbl (caup (cup r)) ad (caup (cuup r))   ; ad = the constant byte offset (&arr[i])
                   (? (o-has? wkset lbl)               ; a weak fn's address in data: via its symbol too
-                      (go (cup rs2) (cat acc (o-rela off (peep fnidx lbl 0) r-64 0)))
+                      (go (cup rs2) (cat acc (o-rela off (peep fnidx lbl 0) r-64 ad)))
                      (o-has? tlabels lbl)
-                      (go (cup rs2) (cat acc (o-rela off 1 r-64 (peep tlabels lbl 0))))
+                      (go (cup rs2) (cat acc (o-rela off 1 r-64 (+ (peep tlabels lbl 0) ad))))
                      (o-has? dlabels lbl)
-                      (go (cup rs2) (cat acc (o-rela off 2 r-64 (peep dlabels lbl 0))))
+                      (go (cup rs2) (cat acc (o-rela off 2 r-64 (+ (peep dlabels lbl 0) ad))))
                      (o-has? nlabels lbl)
-                      (go (cup rs2) (cat acc (o-rela off 3 r-64 (peep nlabels lbl 0))))
-                     (go (cup rs2) (cat acc (o-rela off (peep extidx lbl 0) r-64 0))))))
+                      (go (cup rs2) (cat acc (o-rela off 3 r-64 (+ (peep nlabels lbl 0) ad))))
+                     (go (cup rs2) (cat acc (o-rela off (peep extidx lbl 0) r-64 ad))))))
            (go rs ()))
        reldata (reldat1 drel)
        relnif  (reldat1 nrel)

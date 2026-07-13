@@ -359,7 +359,7 @@
    ;; needs the assembly ORG set to the load vaddr, which elf64 does).
    (x64-patch kind target site width aux)
       (? (= kind 'rel32) (le32 (- target (+ site width)))
-         (= kind 'abs64) (le64 target)
+         (= kind 'abs64) (le64 (+ target aux))     ; aux = a byte ADDEND (&arr[i]/&s.field: label + constant offset)
          (scare 'badfix kind))
 
    ;; -- register the backend under its target names. --

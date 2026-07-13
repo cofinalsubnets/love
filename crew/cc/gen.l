@@ -1643,19 +1643,74 @@
            (: p (cap l) off (cap p) items (caup p)
               (go (cup l) (+ off (imbytelen items)) (cat acc (cat (zeros (- off pos)) items)))))
        (go ps 0 ()))
-   ; the label a pointer initializer points at (abs64) | () -- a string, a
-   ; function name, a decayed global array/var, or &global (all file-scope)
-   (imlabel g ini)
-    (? (= (cap ini) 'cast) (imlabel g (cauup ini))   ; a cast keeps the label ((word)&x, (op)f)
-       (= (cap ini) 'str)
-        (: l (nlab g ".S") _ (pin g 'strs (link (L l (caup ini)) (g 'strs))) l)
-       (&& (= (cap ini) 'var) (peep (g 'fns) (caup ini) ())) (intern (caup ini))
-       (&& (= (cap ini) 'var) (two? (peep (g 'glob) (caup ini) 0))) (cap (peep (g 'glob) (caup ini) 0))
-       (&& (&& (= (cap ini) 'addr) (two? (caup ini))) (&& (= (cap (caup ini)) 'var)
-           (peep (g 'fns) (caup (caup ini)) ()))) (intern (caup (caup ini)))
-       (&& (&& (= (cap ini) 'addr) (two? (caup ini))) (&& (= (cap (caup ini)) 'var)
-           (two? (peep (g 'glob) (caup (caup ini)) 0)))) (cap (peep (g 'glob) (caup (caup ini)) 0))
-       ())
+   ; a CONSTANT integer expression at image time -> its value | 'no. C's static
+   ; initializers permit any int const-expr in an array subscript / pointer
+   ; offset (`&a[2*K+1]`), so fold the arithmetic here. `//` truncates toward
+   ; zero (C's `/`); the machine ops (<<, &..) wrap at the word, as cc's do.
+   (icfold e)
+    (? (! (two? e)) 'no
+       (= (cap e) 'num) (caup e)
+       (= (cap e) 'cast) (: v (icfold (cauup e)) (? (id? v 'no) 'no (flo? (caup e)) 'no v))
+       (= (cap e) 'un)
+        (: v (icfold (cauup e))
+           (? (id? v 'no) 'no (= (caup e) 'neg) (- 0 v) (= (caup e) 'bnot) (- (- 0 v) 1) 'no))
+       (= (cap e) 'bin)
+        (: op (caup e) a (icfold (cauup e)) b (icfold (caup (cuup e)))
+           (? (|| (id? a 'no) (id? b 'no)) 'no
+              (= op '+) (+ a b) (= op '-) (- a b) (= op '*) (* a b)
+              (= op '/) (? (= b 0) 'no (// a b)) (= op '%) (? (= b 0) 'no (- a (* (// a b) b)))
+              (= op 'shl) (<< a b) (= op 'shr) (>> a b)
+              (= op '&) (& a b) (= op '|) (| a b) (= op '^) (^ a b)
+              'no))
+       'no)
+   ; a CONSTANT LVALUE at image time -> (label byteoffset type) | 'no: a
+   ; file-scope global, a *(const pointer) (an array subscript desugars here --
+   ; a[i] is *(a+i)), or a .member off either. the type threads so pointer
+   ; arithmetic and the next .member scale/offset correctly.
+   (imlval g e)
+    (? (= (cap e) 'var)
+        (? (peep (g 'fns) (caup e) ()) (L (intern (caup e)) 0 (fnty g (caup e)))   ; a function IS its address
+           (: en (peep (g 'glob) (caup e) 0)                                       ; glob = (label type init)
+              (? (two? en) (L (cap en) 0 (caup en)) 'no)))
+       (= (cap e) 'deref)
+        (: p (imaddr g (caup e)) (? (id? p 'no) 'no (L (cap p) (caup p) (caup (cauup p)))))
+       (= (cap e) 'dot)
+        (: b (imlval g (caup e))
+           (? (id? b 'no) 'no
+              (: fm (fmem g (cauup b) (cauup e)) (? (bad? fm) 'no (L (cap b) (+ (caup b) (cap fm)) (caup fm))))))
+       'no)
+   ; a CONSTANT ADDRESS expression at image time -> (label byteoffset ptrtype) |
+   ; 'no: a string / function / decayed-array global (offset 0), &lvalue (the
+   ; lvalue's address), or pointer +/- an int constant (scaled by the pointee).
+   ; a cast retypes (so a later + scales by the new pointee). subsumes what a
+   ; pointer initializer used to take and adds every label+constant-offset form.
+   (imaddr g e)
+    (? (= (cap e) 'cast)
+        (: r (imaddr g (cauup e))                        ; a cast RETYPES the address (its type is the cast's) --
+           (? (id? r 'no) 'no (L (cap r) (caup r) (caup e))))   ; so a later + scales (or doesn't) by the cast type
+       (= (cap e) 'str)
+        (: l (nlab g ".S") _ (pin g 'strs (link (L l (caup e)) (g 'strs))) (L l 0 (L 'ptr 'char)))
+       (= (cap e) 'var)
+        (? (peep (g 'fns) (caup e) ()) (L (intern (caup e)) 0 (L 'ptr (fnty g (caup e))))
+           (: en (peep (g 'glob) (caup e) 0)
+              (? (! (two? en)) 'no
+                 (: ty (caup en) (? (arr? ty) (L (cap en) 0 (L 'ptr (caup ty))) (L (cap en) 0 (L 'ptr ty)))))))
+       (= (cap e) 'addr)
+        (: lv (imlval g (caup e)) (? (id? lv 'no) 'no (L (cap lv) (caup lv) (L 'ptr (cauup lv)))))
+       (&& (= (cap e) 'bin) (member? (caup e) '(+ -)))
+        ; label +/- an int constant. a POINTER type scales the constant by the
+        ; pointee (C pointer arithmetic); an integer-typed label ((word)&x + 8)
+        ; adds the raw bytes -- so scale by the pointee ONLY when it's a pointer.
+        (: op (caup e)
+           (imscale ty) (? (ptr? ty) (tsz g (caup ty)) 1)
+           pa (imaddr g (cauup e)) kb (icfold (caup (cuup e)))
+           (? (&& (! (id? pa 'no)) (! (id? kb 'no)))
+               (L (cap pa) (+ (caup pa) (* (? (= op '-) (- 0 kb) kb) (imscale (cauup pa)))) (cauup pa))
+              (: pb (imaddr g (caup (cuup e))) ka (icfold (cauup e))
+                 (? (&& (&& (= op '+) (! (id? pb 'no))) (! (id? ka 'no)))
+                     (L (cap pb) (+ (caup pb) (* ka (imscale (cauup pb)))) (cauup pb))
+                    'no))))
+       'no)
    ; a const FLOAT expression at image time -> its gem | 'bad. the int cfold
    ; lives at parse (array dims); floats fold here where the image lays them
    ; (`static const double toint = 1/DBL_EPSILON;` -- fdlibm's opener).
@@ -1688,12 +1743,14 @@
         (: t (caup ini) n (tsz g ty)
            (bs i acc) (? (<= n i) (rev acc) (bs (+ i 1) (link (? (< i (tally t)) (t i) 0) acc)))
            (bs 0 ()))
-       (ptr? ty) (: lbl (imlabel g ini) (? lbl (L (L 'fix 8 'abs64 lbl 0)) 'bad))   ; a data pointer -> abs64
+       (ptr? ty) (: r (imaddr g ini)                    ; a data pointer: a constant ADDRESS (abs64 label+offset),
+                     (? (! (id? r 'no)) (L (L 'fix 8 'abs64 (cap r) (caup r)))   ; or a constant INTEGER ((int*)0x1000, a null)
+                        (: v (icfold ini) (? (id? v 'no) 'bad (imnum g ty v)))))
        ; a label cast to a WORD-SIZED integer ((word)nif_absent, (intptr_t)f) is
        ; still the label's address; a non-label cast folds through to its value
        (&& (= (cap ini) 'cast) (&& (! (aggish? ty)) (&& (! (flo? ty)) (= (tsz g ty) 8))))
-        (: lbl (imlabel g ini)
-           (? lbl (L (L 'fix 8 'abs64 lbl 0)) (imgbytes g ty (cauup ini))))
+        (: r (imaddr g ini)
+           (? (! (id? r 'no)) (L (L 'fix 8 'abs64 (cap r) (caup r))) (imgbytes g ty (cauup ini))))
        (= (cap ini) 'init)
         (? (arr? ty)
             (: elt (caup ty) esz (tsz g elt)
