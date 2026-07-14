@@ -39,7 +39,8 @@ all: ai.js
 ../out/lib/egg.h: ../ai/egg.l
 ../out/lib/prel.h: ../ai/prel.l
 ../out/lib/ev.h: ../ai/ev.l
-../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/ai_version.h:
+../out/lib/uu.h: ../ai/uu.l
+../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/ai_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
 # ai.o bakes the version string (ai_version.h, via ai.c's __has_include), so
@@ -66,7 +67,7 @@ $(o)/ai.o: ../ai.c $(g_h) $(o)/ai_version.h
 ai.js: $(objs)
 	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
-$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h $(g_h)
+$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h $(g_h)
 	@mkdir -p $(dir $@)
 	$(emcc) $(CFLAGS) -c $< -o $@
 

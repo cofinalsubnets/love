@@ -912,23 +912,33 @@
    (cok? cm cands cps ps e) (? (member? e cps) 1
                                (&& (two? e) (member? (cap e) '(cap cup)) (= 2 (tally e))) (cok? cm cands cps ps (caup e))
                                0)
-   (gargok? cm cands cps ps as i callee) (? (atom? as) 1                                       ; call args: slot i a chain param (per callee's cmap) -> cok?, else int (groupok?)
-      (&& (? (member? i (cmlook callee cm)) (cok? cm cands cps ps (cap as)) (groupok? cm cands cps ps (cap as)))
-          (gargok? cm cands cps ps (cup as) (+ i 1) callee)))
-   (groupok? cm cands cps ps e)                                                               ; INT-valued e over cands; cps = the current fn's chain-param NAMES
+   ; pwcar? -- w is a raw chain-CAR word: (cap CE)/(cup CE) over a chain-valued operand. The one
+   ; place such a word may reach a compare: the POINT-= production below (raw word identity).
+   (pwcar? cm cands cps ps w) (&& (two? w) (member? (cap w) '(cap cup)) (= 2 (tally w)) (cok? cm cands cps ps (caup w)))
+   (gargok? cm pm cands cps pps ps as i callee) (? (atom? as) 1                                ; call args: slot i chain (per callee's cmap) -> cok?; point (per pm) -> a point param; else int
+      (&& (? (member? i (cmlook callee cm)) (cok? cm cands cps ps (cap as))
+             (member? i (cmlook callee pm)) (member? (cap as) pps)                             ; a point slot takes a point param, nothing else (the guard is at the ENTRY only)
+             (groupok? cm pm cands cps pps ps (cap as)))
+          (gargok? cm pm cands cps pps ps (cup as) (+ i 1) callee)))
+   (groupok? cm pm cands cps pps ps e)                                                        ; INT-valued e over cands; cps/pps = the current fn's chain-/point-param NAMES
     (? (member? e cps) 0                                                                       ; a chain param is NOT int-valued (only valid via cok?)
+       (member? e pps) 0                                                                       ; a point param neither (raw word: only the point-= and point slots)
        (member? e ps) 1  (whole? e) 1
        (two? e) (: op (cap e) ar (clook2 op cands)
-          (? (< -1 ar)                                  (&& (= (tally (cup e)) ar) (gargok? cm cands cps ps (cup e) 0 op))   ; group call: arity ok, each arg ok for its slot's kind
-             (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (= 3 (tally e)) (groupok? cm cands cps ps (caup e)) (groupok? cm cands cps ps (caup (cup e))))
-             (id? op '?)                                  (&& (= 4 (tally e)) (groupok? cm cands cps ps (caup e)) (groupok? cm cands cps ps (caup (cup e))) (groupok? cm cands cps ps (caup (cup (cup e)))))
+          (? (< -1 ar)                                  (&& (= (tally (cup e)) ar) (gargok? cm pm cands cps pps ps (cup e) 0 op))   ; group call: arity ok, each arg ok for its slot's kind
+             (&& (id? op '=) (&& (= 3 (tally e))                                              ; POINT-=: (= P (cap ..))/(= (cap ..) P) -- word identity, int 0/1.
+                 (: x1 (caup e) y1 (caup (cup e))                                             ;   TOTAL because P is entry-guarded nom|mint and a point equals only
+                    (|| (&& (member? x1 pps) (pwcar? cm cands cps ps y1))                     ;   itself, whatever kind the car is (charm keys deopt at the entry --
+                        (&& (member? y1 pps) (pwcar? cm cands cps ps x1)))))) 1               ;   only interp knows the numeric bridges, (= 2 2.0))
+             (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (= 3 (tally e)) (groupok? cm pm cands cps pps ps (caup e)) (groupok? cm pm cands cps pps ps (caup (cup e))))
+             (id? op '?)                                  (&& (= 4 (tally e)) (groupok? cm pm cands cps pps ps (caup e)) (groupok? cm pm cands cps pps ps (caup (cup e))) (groupok? cm pm cands cps pps ps (caup (cup (cup e)))))
              (id? op 'tally)                              (&& (= 2 (tally e)) (member? (caup e) ps))                                          ; (tally STR): STR a param (string lane)
-             (id? op 'peep)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (peep STR i d): STR param, i ok, d const
-             (id? op 'mpeep)                              (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (mpeep MAP k d): MAP param, key ok, d const (the map lane -- mapfix rewrote a map-valued peep here)
-             (id? op 'mpin)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (groupok? cm cands cps ps (caup (cup (cup e)))))   ; (mpin MAP k v): MAP param, key ok, v ok -- UPDATE-in-place; produces the MAP (threaded into a call's map slot, or a discarded result)
-             (id? op 'pin)                                (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm cands cps ps (caup (cup e))) (groupok? cm cands cps ps (caup (cup (cup e)))))   ; (pin BUF i V): BUF a raw-buf param, i ok, V ok
+             (id? op 'peep)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm pm cands cps pps ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (peep STR i d): STR param, i ok, d const
+             (id? op 'mpeep)                              (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm pm cands cps pps ps (caup (cup e))) (whole? (caup (cup (cup e)))))   ; (mpeep MAP k d): MAP param, key ok, d const (the map lane -- mapfix rewrote a map-valued peep here)
+             (id? op 'mpin)                               (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm pm cands cps pps ps (caup (cup e))) (groupok? cm pm cands cps pps ps (caup (cup (cup e)))))   ; (mpin MAP k v): MAP param, key ok, v ok -- UPDATE-in-place; produces the MAP (threaded into a call's map slot, or a discarded result)
+             (id? op 'pin)                                (&& (= 4 (tally e)) (member? (caup e) ps) (groupok? cm pm cands cps pps ps (caup (cup e))) (groupok? cm pm cands cps pps ps (caup (cup (cup e)))))   ; (pin BUF i V): BUF a raw-buf param, i ok, V ok
              (id? op 'two?)                               (&& (= 2 (tally e)) (cok? cm cands cps ps (caup e)))               ; (two? CE): CE chain-valued; result int 0/1 (TOTAL -- a non-chain reads false)
-             0))                                                                               ; bare cap/cup are CHAIN-valued -> not admitted in an int position (cok? carries them)
+             0))                                                                               ; bare cap/cup are CHAIN-valued -> not admitted in an int position (cok? and the point-= carry them)
        0)
    ; --- STAGE D: vok? -- the VALUE grammar (a heap-allocating fn's body, e.g. tree's `mk`). An expr is
    ;     VALUE-valued if it is: an int const (-> the tagged value) | a param (cggvir re-tags it) | (link V V)
@@ -937,32 +947,36 @@
    ;     CROSS-CALL SOUNDNESS by candidate-set SEPARATION: vok?'s calls resolve only in `vcands`,
    ;     groupok?'s only in `icands` -- so an int fn can't call a value fn (not in its set) and vice
    ;     versa, with NO change to groupok?. The value fns glaze via cggvir + the value-epilogue (emit.l).
-   (vok? cm icands vcands cps ps e)
+   (vok? cm pm icands vcands cps pps ps e)
     (? (whole? e) 1
+       (member? e cps) 0  (member? e pps) 0                                                   ; raw-word params (chain/point) are NOT values: cggvir would re-tag them
        (member? e ps) 1
        (two? e) (: op (cap e) ar (clook2 op vcands)
-          (? (< -1 ar)         (&& (= (tally (cup e)) ar) (gargok? cm icands cps ps (cup e) 0 op))   ; a VALUE-group call (target in vcands)
-             (id? op 'link)    (&& (= 3 (tally e)) (vok? cm icands vcands cps ps (caup e)) (vok? cm icands vcands cps ps (caup (cup e))))
-             (id? op '?)       (&& (= 4 (tally e)) (groupok? cm icands cps ps (caup e)) (vok? cm icands vcands cps ps (caup (cup e))) (vok? cm icands vcands cps ps (caup (cup (cup e)))))
+          (? (< -1 ar)         (&& (= (tally (cup e)) ar) (gargok? cm pm icands cps pps ps (cup e) 0 op))   ; a VALUE-group call (target in vcands)
+             (id? op 'link)    (&& (= 3 (tally e)) (vok? cm pm icands vcands cps pps ps (caup e)) (vok? cm pm icands vcands cps pps ps (caup (cup e))))
+             (id? op '?)       (&& (= 4 (tally e)) (groupok? cm pm icands cps pps ps (caup e)) (vok? cm pm icands vcands cps pps ps (caup (cup e))) (vok? cm pm icands vcands cps pps ps (caup (cup (cup e)))))
              0))
        0)
    (chps body ps) (filter (\ k (cuse? body (nthl ps k))) (rangeL 0 (tally ps)))                ; chain-param INDICES: params used in cap/cup/two? (cuse? from emit.l)
-   (grpok-1 fns cm icands vcands vnames c) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns)
+   (grpok-1 fns cm pm icands vcands vnames c) (: p (afind (\ q (id? (cap (cap q)) (cap c))) fns)
                                 cps (map (\ k (nthl (cup (cap p)) k)) (cmlook (cap c) cm))      ; this fn's chain-param NAMES (its index list -> names)
-                                (? (member? (cap c) vnames) (vok? cm icands vcands cps (cup (cap p)) (cup p))   ; a VALUE fn -> value grammar
-                                   (groupok? cm icands cps (cup (cap p)) (cup p))))             ; an INT fn -> int grammar (over INT candidates only)
+                                pps (map (\ k (nthl (cup (cap p)) k)) (cmlook (cap c) pm))      ; ... and its point-param NAMES (same alist shape)
+                                (? (member? (cap c) vnames) (vok? cm pm icands vcands cps pps (cup (cap p)) (cup p))   ; a VALUE fn -> value grammar
+                                   (groupok? cm pm icands cps pps (cup (cap p)) (cup p))))      ; an INT fn -> int grammar (over INT candidates only)
    ; the group-membership fixpoint as a DESCENDING projection of the shared `monofix` (prel): each step
    ; drops candidates that fail the int/value grammar, recomputing the int/value split from the surviving
    ; set; tally (shrinking) is the measure. Converges when a pass drops nothing -- the closed glazeable subset.
-   (gfix fns cm vnames cands)
+   (gfix fns cm pm vnames cands)
     (monofix cands
        (\ st (: icands (filter (\ c (! (member? (cap c) vnames))) st)
                 vcands (filter (\ c (member? (cap c) vnames)) st)
-                (filter (\ c (grpok-1 fns cm icands vcands vnames c)) st)))
+                (filter (\ c (grpok-1 fns cm pm icands vcands vnames c)) st)))
        tally)
    (grpfix fns cands) (: cm (map (\ f (link (cap (cap f)) (chps (cup f) (cup (cap f))))) fns)   ; (name . chain-param-index-list) for every candidate fn
+                         pm (map (\ f (: fps (cup (cap f)) cix (chps (cup f) fps)              ; (name . point-param-index-list): point-compared ((= P (cap ..))), never chain-used
+                                         (link (cap (cap f)) (filter (\ k (&& (nuse? (cup f) (nthl fps k)) (! (member? k cix)))) (rangeL 0 (tally fps)))))) fns)
                          vnames (map (\ f (cap (cap f))) (filter (\ f (hasl (cup f))) fns))    ; the VALUE-typed candidate names (body conses)
-                         (gfix fns cm vnames cands))
+                         (gfix fns cm pm vnames cands))
    (rewrite-bindings bl gnames gdefs) (? (atom? (cup bl)) bl                                  ; the trailing body form -> keep
       (: nf (cap bl) val (caup bl)  hit (&& (two? nf) (member? (cap nf) gnames))
          (link (? hit (cap nf) nf)                                                            ; drop the (name p..) define-sugar -> a PLAIN binding
@@ -1161,14 +1175,20 @@
          ev)                                                   ; a TRAMPOLINE build (ai-tco 0): glazed code Continues by tail-jump, which only the threaded VM honors -- stay the pure interpreter (the glaze book still installs for probes)
 )
 
-; --- pin the member? kernel (emit.l natmemb) over the prel walker: post-boot streams
-; (the aicc cat, the corpus) fold the NATIVE into their calls; egg-baked consumers keep
+; --- re-declare member? through the glazed compiler: the recognizer's POINT-= grammar
+; ((= P (cap ..)) over an entry-guarded nom|mint key) closes the singleton group, so the
+; prel walker (egg-baked pre-glaze, interp) is re-stated here and autogroup hands back
+; the native -- aicc walks 4.27M calls / 17.5M elements through it per ai.c compile.
+; Post-boot streams (the aicc cat, the corpus) fold the native; egg-baked consumers keep
 ; the interp closure they already folded. Mirrors the ev rebind's gates: a re-load keeps
-; the baked native (its deopt chain already ends at interp -- no double-wrap), and a
-; trampoline (tco=0) build stays interp. Two forms: memb0 must read the GLOBAL member?
-; (one scope would read the rebind before its pin -- the missing condition).
+; the bake, a trampoline (tco=0) build stays interp. Charm keys deopt at the entry guard
+; (only interp knows the numeric bridges, (= 2 2.0)); string keys likewise (structural =).
+; Two forms: memb0 must read the GLOBAL member? (one scope would read the rebind before
+; its pin -- the missing condition).
 (: memb0 member?)
-(: member? (? glaze-loaded? memb0 (< 0 ai-tco) (natmemb arch) memb0))
+(: member? (? glaze-loaded? memb0 (< 0 ai-tco)
+              (ev '(: (member? x l) (? (two? l) (? (= x (cap l)) 1 (member? x (cup l))) 0) member?))
+              memb0))
 
 ; the module span closes here (opened by glaze-mark in emit.l): the names bound since
 ; the mark are the glaze; ai/glaze/export.l sweeps them into the `glaze` book.

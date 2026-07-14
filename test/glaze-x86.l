@@ -599,7 +599,7 @@
       (1000000 = ((jitgroupir (L (link '(loop i) '(? (< i 1000000) (loop (+ i 1)) i))) 'loop 'x64) 0))               ; single-arg counted loop
       (499999500000 = ((jitgroupir (L (link '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))) 'sm 'x64) 0 0))    ; multi-arg tail accumulator (sum 0..1M-1)
       ; arm64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
-      (< 0 (tally (peep (assemble 'arm64 (bcat (L (mkouterir 'arm64 1 'fib 1 0 () () () ())
+      (< 0 (tally (peep (assemble 'arm64 (bcat (L (mkouterir 'arm64 1 'fib 1 0 () () () () ())
                   (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))))) 'bytes 0))))
    (say err "ai/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
 
@@ -623,16 +623,22 @@
       (67305985 = v))                                                                              ; 0x04030201: the two dsr2 calls read in source order
    (say err "ai/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
 
-; --- the member? kernel (natmemb): the baked global member? IS the native (the auto.l
-;     tail pinned it), so these ride the kernel's own lanes -- word-compare hits, the
-;     end-of-chain miss, the entry deopt (a string key: structural =), the mid-walk
-;     deopt (a charm key beside a bridgeable car: (= 2 2.0) is TRUE and only interp
-;     knows), and a point key walking heap cars natively (a point equals only itself).
+; --- the POINT-= grammar + the re-declared member?: the recognizer admits a point-guarded
+;     key compared to a raw chain car ((= P (cap ..))), so the auto.l tail's member? is a
+;     GROUP NATIVE -- the baked global rides it. Lanes: word-compare hits over any car kind
+;     (a point equals only itself), the end-of-chain miss, and the entry deopts (a charm or
+;     string key: only interp knows the numeric bridges (= 2 2.0) / structural string =).
 (: mm (nom 0)
+   ; ADMISSION (the drift gate): autogroup must REWRITE the member?-shaped group -- a
+   ; declined form keeps the quoted body LIST in the binding slot; an admitted one splices
+   ; the native closure (not two?). If this fires, the point-= grammar regressed and the
+   ; baked member? silently fell back to interp.
+   adm ((glaze 'autogroup) '(: (pm1 x l) (? (two? l) (? (= x (cap l)) 1 (pm1 x (cup l))) 0) (pm1 'b '(a b))))
    _ (assert
+      (! (two? (caup (cup adm)))) (1 = (ev adm))                                  ; admitted: native spliced, and it answers
       (1 = (member? 'b '(a b c))) (0 = (member? 'z '(a b c)))                     ; nom key, native walk
-      (1 = (member? 2 '(1 2 3))) (0 = (member? 9 '(1 2 3)))                      ; charm key over charms
-      (1 = (member? 2 '(2.0 4))) (1 = (member? 2 '(4 2.0 2)))                    ; the numeric bridge -> deopt -> interp says true
+      (1 = (member? 2 '(1 2 3))) (0 = (member? 9 '(1 2 3)))                      ; charm key -> entry deopt (bridges), interp stays right
+      (1 = (member? 2 '(2.0 4))) (1 = (member? 2 '(4 2.0 2)))                    ; the numeric bridge, through the fallback
       (0 = (member? 5 '(6.0 7.0)))                                              ; deopt lane, false stays false
       (1 = (member? "ab" '(1 "ab"))) (0 = (member? "zz" '("ab")))                ; string key -> entry deopt, structural =
       (1 = (member? 'z '(1 "s" (x y) 2.5 z)))                                    ; nom key walks EVERY car kind natively
@@ -641,7 +647,10 @@
       (0 = (member? () '(1 2))) (1 = (member? () (link () ())))                  ; the zero point is a mint
       (0 = (member? 'x ())) (0 = (member? 'x 5))                                 ; no chain -> the walk never starts
       (200000 = ((: (go i a) (? (< i 200000) (go (+ i 1) (+ a (member? 'q '(a b q)))) a)) 0 0))
-      (< 0 (tally (peep (assemble 'arm64 ((glaze 'membir) 'arm64)) 'bytes 0))))        ; arm64: the BAKED kernel assembles (through the book -- re-loaded internals misbind); scratch regs sit off the r9 anchor there
-   (say err "ai/glaze/emit: the member? kernel -- hits, misses, both deopt lanes ok\n"))
+      (: pg (jitgroupir (L (link '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))) 'pm2 'x64)   ; the group lane direct: exec x64 ...
+         (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
+      (< 0 (tally (peep (assemble 'arm64 (bcat (L (mkouterir 'arm64 2 'pm3 2 0 () () () () '(0))   ; ... and the point-guarded outer assembles on arm64
+                  (mkhir 'arm64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))))) 'bytes 0))))
+   (say err "ai/glaze/emit: the point-= grammar -- member? group-native, admission + both deopt lanes ok\n"))
 
 (say err "test/glaze-x86: emit + auto + ir native codegen ok\n")

@@ -596,7 +596,8 @@ void kmain(void) {
  " "
 #include "ev.h"
  ai_egg_post
-#include "bao.h"
+#include "uu.h"                                        // the uu kernel (ai/uu.l, sweep at its tail): the corpus's uu files
+#include "bao.h"                                       //   drive it through the `uu` book on this target too
 #ifdef K_TEST
  // test build: drink the baked `tests` string (string -> charlist -> tap port)
  // through reads (ai/bao.l) -- the same stream shell as the host's stdin runner.

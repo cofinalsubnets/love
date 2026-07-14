@@ -44,6 +44,8 @@
    (gfind p l) (? (atom? l) () (p (cap l)) (cap l) (gfind p (cup l)))     ; first elt matching p
    chainkind (apof (link 0 0))                                                      ; lvm_chain's ap sentinel, for the inline two?/cap/cup kind test (cf. (apof "") for the string lane)
    mapkind (apof (tablet 0))                                                        ; lvm_map_lookup's sentinel, for the map-param entry guard + the (mpeep ..) probe
+   nomkind (apof 'nomk)                                                             ; lvm_nom's sentinel, for the point-param entry guard
+   mintkind (apof (nom 0))                                                          ; lvm_sym's (a mint's) sentinel, ditto -- () is a mint too
    mapmix 11400714819323198485                                                      ; the hash multiplier 0x9e3779b97f4a7c15 (= ai.c's map hash mult), for the inline probe
    ; -- the map probe, via the crew/holo/ assembler SERVICE (baked into the post-egg layer; the glaze is its
    ;    client). crew/holo/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
@@ -76,6 +78,11 @@
    (buse? e P) (? (two? e) (? (&& (id? (cap e) 'pin) (id? (caup e) P)) 1 (foldl (\ a x (|| a (buse? x P))) 0 (cup e))) 0)   ; P used as a CASK -- (pin P..) -- so its guard wants the buf kind, not str
    (cuse? e P) (? (two? e) (? (&& (member? (cap e) '(cap cup two?)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (cuse? x P))) 0 (cup e))) 0)   ; P used as a CHAIN -- (cap P)/(cup P)/(two? P) -- raw pointer, NO entry guard (two? is total: a non-chain reads false)
    (muse? e P) (? (two? e) (? (&& (|| (id? (cap e) 'mpeep) (id? (cap e) 'mpin)) (id? (caup e) P)) 1 (foldl (\ a x (|| a (muse? x P))) 0 (cup e))) 0)   ; P used as a MAP -- (mpeep P k d) READ or (mpin P k v) UPDATE -- raw pointer, guarded as a map
+   (nuse? e P) (? (two? e) (? (&& (id? (cap e) '=) (= 3 (tally e))
+                                  (: x1 (caup e) y1 (caup (cup e))
+                                     (|| (&& (id? x1 P) (two? y1) (member? (cap y1) '(cap cup)))
+                                         (&& (id? y1 P) (two? x1) (member? (cap x1) '(cap cup))))))
+                               1 (foldl (\ a x (|| a (nuse? x P))) 0 (cup e))) 0)   ; P a POINT key -- (= P (cap ..))/(= (cap ..) P): raw word identity, entry-guarded nom|mint (a point equals only itself; a charm could bridge (= 2 2.0) so charms deopt to interp)
    ; INTERPROCEDURAL string-param inference: a param is a string if used in peep/tally OR passed as the arg
    ; to a sibling's string param. (strhash's `s` is a string because it flows into strhash_go's peep.) A
    ; deduped fixpoint over the group's (name . smask) map -- smasks only grow, so the size stabilizes.
@@ -487,50 +494,6 @@
    (jitir lam tgt)  (jitcore tgt (L (caup lam)) (caup (cup lam)) (deoptir tgt 0) 1 lam)
    (jitnir lam tgt) (: ps (init (cup lam)) body (last (cup lam)) (jitcore tgt ps body (deoptir tgt 1) (tally ps) lam))
 
-   ; --- the member? kernel (natmemb): the one prel walker hot enough to earn a hand lane
-   ; (aicc -c ai.c walks 4.27M calls / 17.5M elements through it; 91% nom keys). member?
-   ; answers 1/0 (any's green floor), so the kernel is INT-typed: walk the chain, word-
-   ; compare each car against the key. SOUND because the key is entry-guarded charm|nom|
-   ; mint: a POINT key equals only itself (word compare is total, any car kind), and a
-   ; CHARM key word-matches charm cars while a point car walks on -- any OTHER heap car
-   ; could bridge numerically ((= 2 2.0) is true) so it DEOPTS. String keys (structural =)
-   ; deopt at entry. Leaf ABI + two per-target scratches picked off the anchor (x64
-   ; anchor r8, arm64 anchor r9); the deopt block is deoptir's, so a mid-walk deopt
-   ; re-runs the whole call on the interp fallback (member? is pure).
-   (membir tgt)
-    (: A (greg tgt 'acc) T (greg tgt 'tmp) S (greg tgt 'sp) AN (greg tgt 'anchor) IP (greg tgt 'ip)
-       XR (? (id? tgt 'x64) 'r9 'r10) KR (? (id? tgt 'x64) 'r10 'r11)
-       nomk (apof 'x) mintk (apof (nom 0))
-       xok (mint 0) lp (mint 0) nx (mint 0) ht (mint 0) ms (mint 0) en (mint 0)
-       (holo
-        (L
-        (L (L 'lea AN 'sp 0)                                        ; anchor (the deopt unwind)
-           (L 'ld XR S 0) (L 'test XR 1) (L 'br 'ne xok)            ; the key: a charm rides
-           (L 'ld T XR 0)
-           (L 'li KR nomk) (L 'cmp T KR) (L 'br 'eq xok)            ; a nom rides
-           (L 'li KR mintk) (L 'cmp T KR) (L 'br 'ne 'deopt)        ; a mint rides; anything else -> interp
-           (L 'label xok) (L 'ld A S 8))                            ; acc walks l
-        (L (L 'label lp)
-           (L 'test A 1) (L 'br 'ne ms)                             ; an odd tail is no chain -> the walk ends
-           (L 'ld T A 0) (L 'li KR chainkind) (L 'cmp T KR) (L 'br 'ne ms)
-           (L 'ld T A 8)                                            ; the car
-           (L 'cmp XR T) (L 'br 'eq ht)                             ; word-equal -> hit
-           (L 'test T 1) (L 'br 'ne nx)                             ; a charm car != key -> walk on
-           (L 'ld T T 0)                                            ; a heap car: its kind
-           (L 'li KR nomk) (L 'cmp T KR) (L 'br 'eq nx)             ; a point car equals only itself -> walk on
-           (L 'li KR mintk) (L 'cmp T KR) (L 'br 'eq nx)
-           (L 'test XR 1) (L 'br 'ne 'deopt)                        ; charm key vs a bridgeable car -> interp
-           (L 'label nx) (L 'ld A A 16) (L 'jmp lp))                ; cup, walk on
-        (L (L 'label ht) (L 'li A 1) (L 'jmp en)
-           (L 'label ms) (L 'li A 0)
-           (L 'label en) (L 'leax A A A 1 1)                        ; putfix (0/1 never overflows)
-           (L 'st S 0 A) (L 'add IP IP 16) (L 'ld T IP 0) (L 'jmpr T))
-        (deoptir tgt 1))))
-   ; the deopt target must be a BYTECODE 2-arg closure (deoptir jumps to value[1]+16, its
-   ; body) -- the prel's member? is a compose partial-app with no such body, so build the
-   ; equivalent lambda fresh; any and = are stable prel globals.
-   (natmemb tgt) (: msrc '(\ x l (any (= x) l))
-      (nif (emit (peep (assemble tgt (membir tgt)) 'bytes 0)) (ev msrc) msrc 2))
 
    ; --- the LOOP-BODY neutral IR (cgvir): the same arith grammar as cgir, but for the loop lanes, whose
    ; state (n/counter/acc) fills r9/r10/r11 leaving NO free reg for an anchor. So the overflow/div-by-0
@@ -713,14 +676,19 @@
                (restargsir tgt k) (hrest tgt) (L '(ret)))))
    ; mkouterir: the entry's OUTER -- save anchor+arg regs; anchor=sp; fixnum-guard+push the args; call
    ; H_entry; pop args; restore; putfix + Continue; OVF (mov sp,anchor -> abandon frames; restore) -> DEOPT.
-   (mkouterir tgt k entry arity valt smask mmask bufmask cmask)                    ; valt: VALUE-typed entry (heap ptr / tagged scalar) -> store acc AS-IS, no putfix. the masks
-    (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) OVFR (govf tgt) ss (slotsz tgt)   ; partition the entry's EXTERNAL args: int (sar) / string|map|cask (kind-guard, raw) / chain (raw, no guard)
+   (mkouterir tgt k entry arity valt smask mmask bufmask cmask pmask)              ; valt: VALUE-typed entry (heap ptr / tagged scalar) -> store acc AS-IS, no putfix. the masks
+    (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) OVFR (govf tgt) ss (slotsz tgt)   ; partition the entry's EXTERNAL args: int (sar) / string|map|cask (kind-guard, raw) / chain (raw, no guard) / point (nom|mint-guard, raw)
        strk (apof "") mapk mapkind bufk (apof (cask 1))                            ; the kind sentinels the raw-param guards check against
        (pusharg1 i) (: o (* 8 i)                                                   ; one external arg: load Sp[i] -> acc, guard by type, push
           (? (member? i cmask) `(`('ld A S o) `('push A))                          ; chain: raw, NO guard (two? total; cap/cup deopt a non-chain inline)
              (|| (member? i smask) (|| (member? i mmask) (member? i bufmask)))     ; string/map/cask: a fixnum can't be a heap obj (-> OVF), and [arg]'s kind must match (-> OVF); push RAW
                (: kind (? (member? i mmask) mapk (member? i bufmask) bufk strk)
                   `(`('ld A S o) `('test A 1) '(br ne OVF) `('ld T A 0) `('li 'r8 kind) `('cmp T 'r8) '(br ne OVF) `('push A)))   ; a FIXNUM (odd, br ne) deopts; then the kind word must match (br ne)
+             (member? i pmask)                                                     ; point key: nom OR mint, pushed RAW -- word identity IS its whole equality;
+               (: pok (mint 0)                                                     ;   a charm deopts (only interp knows the numeric bridges, (= 2 2.0))
+                  `(`('ld A S o) `('test A 1) '(br ne OVF)
+                    `('ld T A 0) `('li 'r8 nomkind) `('cmp T 'r8) `('br 'eq pok)
+                    `('li 'r8 mintkind) `('cmp T 'r8) '(br ne OVF) `('label pok) `('push A)))
              `(`('ld A S o) `('test A 1) '(br eq OVF) `('sar A 1) `('push A))))    ; int: fixnum-guard (non-fixnum -> OVF), untag (sar), push
        pushargs (foldl (\ a i (holo `(a (pusharg1 i)))) () (rangeL 0 k))
        epi (? valt `(`('st S 0 A) `('add IP IP 16) `('ld T IP 0) `('jmpr T))                                  ; VALUE: store acc as-is; Continue (no putfix)
@@ -755,7 +723,8 @@
        mmask (filter (\ j (muse? eb (nthl eps j))) (rangeL 0 k))                         ; entry MAP params (mpeep/mpin)
        bufmask (filter (\ j (buse? eb (nthl eps j))) (rangeL 0 k))                       ; entry CASK params (pin)
        cmask (filter (\ j (cuse? eb (nthl eps j))) (rangeL 0 k))                         ; entry CHAIN params (cap/cup/two?) -> raw, no guard
-       outer (mkouterir tgt k entry k valt smask mmask bufmask cmask)
+       pmask (filter (\ j (&& (nuse? eb (nthl eps j)) (! (member? j cmask)))) (rangeL 0 k))   ; entry POINT keys ((= P (cap ..))) -> raw, nom|mint-guarded; a chain-used param is never a point
+       outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (holo (L a (mkhir tgt syms (cap f) (nthl f 1) (nthl f 2))))) () ord)
        lrf (\ ds (? (atom? ds) (L entry) (: d (cap ds) (link (cap d) (link (cup d) (lrf (cup ds)))))))
        fb (ev (link ': (link '(mpeep mc mk md) (link '(peep mc mk md) (link '(mpin mc mk mv) (link '(pin mc mk mv) (lrf defs)))))))   ; the WHOLE group re-evaluated as the deopt fallback. Post-rebind `ev` is the glaze, so this RE-GLAZES the group (harmless: a never-deopting native re-build) -- which is why the mpeep/mpin->peep/pin byte-lane aliases (ldxb/stxb) MUST assemble on EVERY target (arm64 included). mpeep/mpin are GLAZE-internal (not real fns), aliased to the core peep/pin (the body reads the PREVIOUS=global binding by the sequence law -- not recursion); harmless for non-map lanes (peep/pin stay the core accessors)

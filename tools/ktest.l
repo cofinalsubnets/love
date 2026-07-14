@@ -15,7 +15,12 @@
 (: a    (cup argv)
    iso  (cap a)
    ovmf (cap (cup a))
-   r    (run `("timeout" "90" "qemu-system-x86_64" "-m" "256M" "-M" "q35"
+   ; 512M + 420s: the corpus outgrew the old 256M/90s budgets. under 256M the
+   ; kernel died SILENTLY mid-corpus at a deterministic dot, no fault text, the
+   ; crash point MOVING with unrelated image growth (a budget wall's face, not
+   ; a logic bug); and a full green run is ~3min wall under TCG (the kernel's
+   ; own summary clock reads ~17s -- don't trust it for the timeout).
+   r    (run `("timeout" "420" "qemu-system-x86_64" "-m" "512M" "-M" "q35"
                 "-serial" "stdio" "-display" "none" "-no-reboot"
                 "-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))
                 "-cdrom" iso

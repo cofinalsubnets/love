@@ -729,7 +729,7 @@ glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h
 # are baked in so ai0 self-tests both compilers in one run (see main.c). The final
 # l uses the canonicalized lcat headers from the rule below instead.
 sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/tests0.h $(asm0_h)
+gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/tests0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 # lcat a .l source into its C-string header, ATOMICALLY: generate to a temp, require it
@@ -753,16 +753,11 @@ out/lib/arm64.h: crew/holo/arm64.l tools/lcat.l
 	$(lcat_h)
 out/lib/export.h: crew/holo/export.l tools/lcat.l
 	$(lcat_h)
-# uu's NbE kernel bakes post.l-style so an overlay can reach (uu 'vof) in a bare
-# host binary -- EXTRACTED from test/uu.l (the corpus file stays the one source of
-# truth; the span is everything above its UniMath section), a names-mark ahead so
-# ai/uuexport.l (lib_h pattern rule) can sweep the span into the `uu` book.
-out/lib/uukern.l: test/uu.l
-	@mkdir -p out/lib
-	@echo AI	$@
-	@{ echo "(: uu-mark (names ()))"; sed '/^; --- UniMath/q' test/uu.l; } > $@
-out/lib/uu.h: out/lib/uukern.l tools/lcat.l
-	$(lcat_h)
+# uu's NbE kernel lives at ai/uu.l (mark + kernel + the sweep into the `uu`
+# book at its tail) and bakes post.l-style through the lib_h/%0.h pattern
+# rules -- into the host, ai0, the inle kernel and wasm, so the corpus's uu
+# files (test/uu*.l, binding the book surface at test/uu.l's head) run on
+# every target, and an overlay can reach (uu 'vof) in a bare binary.
 # test/uuwm.l is a COMMITTED GENERATED artifact: phos's zipper ops compiled
 # from crew/phos/core.l into uu terms (tools/uuwmgen.l over tools/wm2uu.l, kind-
 # directed by crew/phos/sigs.l), so test/uuwmlaw.l proves its theorems OF THE
@@ -1026,7 +1021,7 @@ $(ho)/ai.o $(ho)/0/ai.o: out/lib/ai_version.h
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
 # main.c` did), recompile it when any baked header changes.
-$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h out/lib/uuexport.h $(holo_h) $(glaze_h)
+$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 # host/cb.c rides port/quay/quay.c by unity include -- recompile when the engine moves.
 $(ho)/host/cb.o: port/quay/quay.c port/quay/quay.h
 
@@ -1036,7 +1031,7 @@ $(ho)/host/cb.o: port/quay/quay.c port/quay/quay.h
 # one link rule, two names: `ai` (canonical) and `ai.cand` (the CANDIDATE -- the next
 # generation built at a side path nothing executes, so the RELINK can never hit
 # ETXTBSY no matter who is running `ai`; see the candidate target below).
-$(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h out/lib/uuexport.h $(holo_h) $(glaze_h)
+$(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/libai.a $(host_ldflags)
@@ -1174,7 +1169,7 @@ $(ko)/ai-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
 # Shared C sources (ai.c, port/quay/, c/) + per-arch port//.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h; under INLE
 # the baked agent out/lib/inle.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h) $(if $(INLE)$(NETAGENT)$(NETBRAIN),out/lib/inle.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h) $(if $(INLE)$(NETAGENT)$(NETBRAIN),out/lib/inle.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

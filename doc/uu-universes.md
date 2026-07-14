@@ -1,6 +1,6 @@
 # Scoping: a universe hierarchy for uu (retire type-in-type)
 
-**Goal.** Replace uu's type-in-type (`test/uu.l`) with a predicative cumulative universe
+**Goal.** Replace uu's type-in-type (the kernel, now `ai/uu.l`; the universe layer + corpus ride `test/uu.l`) with a predicative cumulative universe
 hierarchy, so uu's *own* kernel is consistent — the soundness keystone. Today uu relies on the
 Rocq export (`tools/uu2coq.l`) to filter out unsound proofs; after this, uu means something on
 its own, and `but_seriously_the_world_explodes : empty` (uu.l:~1370) flips from provable to
@@ -74,7 +74,7 @@ the `chk` fallback (uu.l:158-159) when the expected `T = ('U j)` and inferred `T
 accept `i ≤ j` instead of exact `conv`. Sound, and removes the need for manual lifts. Can be
 deferred — exact levels are still sound, just less convenient.
 
-## Change sites (all in test/uu.l)
+## Change sites (kernel functions -- since the promotion, in ai/uu.l; the Stage 1/2 universe layer stays in test/uu.l)
 - `vof`: add `UU`/`(UU i)` → `('U i)` (the one evaluator touch).
 - `inf-sym` (113-114): `UU`→`('U 1)`, `(UU i)`→`('U (i+1))`, base inductives→`('U 0)`.
 - `inf` formers (166-200): `pi`/`total2`/`coprod`/`paths`/`the` → infer component sorts, return

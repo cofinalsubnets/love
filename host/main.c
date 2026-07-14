@@ -440,6 +440,9 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "arm640.h"                                   //   below, so one eval here serves both corpus passes.
 #include "export0.h"                                  // the module boundary: the span sweeps into the ONE `holo` book
   );
+  g = ai_evals_(g,                                    // the uu kernel (ai/uu.l, sweep at its tail): the corpus's uu
+#include "uu0.h"                                       //   files drive it through the `uu` book under c0 AND the self-hosted ev
+  );
   g = ai_evals_(g, s2cldef);
   g = ai_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
   g = ai_evals_(g, "("                                // bootstrap: install the self-hosted ev
@@ -535,8 +538,8 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "ev.h"
     "))"
 #include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
-#include "uu.h"                                          // uu's NbE kernel (test/uu.l's span, extracted at build) -- so an overlay
-#include "uuexport.h"                                    //   can reach (uu 'vof) bare; swept into the `uu` book, one global name
+#include "uu.h"                                          // uu's NbE kernel (ai/uu.l, sweep at its tail) -- one global name, the
+                                                         //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
 #include "holo.h"                                         // the neutral assembler core (crew/holo/holo.l) -- a post-egg language SERVICE
 #include "x64.h"                                         // + BOTH backends: they produce machine-code bytes as DATA (never
 #include "arm64.h"                                       //   execute), so every target is arch-neutral. the glaze (x86 client) executes x64
