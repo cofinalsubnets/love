@@ -173,25 +173,34 @@ curated cross-cutting verbs (`test clean valg vmret bench install`).
 
 ### the crew
 
-cook is one of the **inle crew** -- a small crew of real programs that ride on
-**inle**, the freestanding ai kernel ([a ship in port](port/inle/)). each is a
-tiny ai layer over a handful of host nifs; on a hosted system they `make install`
-onto PATH beside `ai`.
+the **inle crew** is the cast of programs and pieces that make up ai. each runnable
+member is a tiny ai layer over a handful of host nifs; on a hosted system they
+`make install` onto PATH beside `ai`. the full roster (the creatures they wear live
+on the front page):
 
-- **ain** -- a netcat clone in ~70 lines: `ain host
-  port` is a TCP client, `ain -l port` a server, bytes pumping both ways at
-  once. it is the "real apps day one" demo, and the shape the cooperative scheduler
-  was built for: two spawned pump loops, each parked in a port read on a different
-  fd, interleave with no select loop. socket nifs in [host/net.c](host/net.c), the
-  program in [tools/ain.l](tools/ain.l).
-- **bao** -- the interactive shell as a loadable lib (`ai -l bao`, or the installed
-  `bao`): raw `ai` shrinks to a bare read/eval/write filter, and bao is the editor +
-  history + fault-face on top, doubling as a pty wrapper (one editor, the condition
-  system). [ai/bao.l](ai/bao.l) + [host/pty.c](host/pty.c).
-- **inle** -- the ship itself: the freestanding kernel grown a NIC and a
-  self-driving agent loop, booting on bare metal with no OS, perceiving the network,
-  running the language over UDP -- a bare-metal network REPL. `make kernel INLE=1`
-  builds the bootable image. [port/inle/](port/inle/).
+- 🌑 **inle** -- the vessel: the freestanding kernel, grown a NIC and a self-driving
+  agent loop, booting on bare metal with no OS -- a network REPL over UDP. `make
+  kernel INLE=1` builds the image. [port/inle/](port/inle/)
+- 🔭 **tele** -- the pilot: a pytorch clone, autograd over the celestial numerics.
+  [crew/tele/](crew/tele/)
+- 🐇 **bellberry** -- the navigator: the evaluator. [ai/ev.l](ai/ev.l)
+- 🕊 **gwen** -- the synthesist.
+- 🐈 **ain** -- the netcat: an openbsd netcat clone in ~70 lines -- `ain host port` a
+  TCP client, `ain -l port` a server, bytes pumping both ways with no select loop.
+  [tools/ain.l](tools/ain.l) + [host/net.c](host/net.c)
+- 🐕 **bao** -- the shell: an rlwrap clone. raw `ai` shrinks to a read/eval/write
+  filter and bao is the editor + history + fault-face on top, doubling as a pty
+  wrapper. [ai/bao.l](ai/bao.l) + [host/pty.c](host/pty.c)
+- 🐀 **salt** -- the build system: cook, a gnu make clone that reads a real Makefile.
+  [crew/cook/](crew/cook/)
+- 🐐 **mow** -- the grass chewer: the two-gen, two-space copying garbage collector.
+- 🕷️ **holo** -- the assembler: an amd64/arm64 assembler (short for holophrasm), the
+  glaze's back end. [crew/holo/](crew/holo/)
+- 🦇 **thom** -- the SAT bat: a CDCL solver. [crew/sat/](crew/sat/)
+- 🦐 **lux** -- the window manager: an xmonad clone. [crew/lux/](crew/lux/)
+- 🦑 **quay** -- the terminal emulator: a cuttlefish with 256-color skin that likes
+  writing screensavers. [crew/quay/](crew/quay/)
+- 🐛 **pulchritude** -- the editor: a vi clone. [crew/vi/](crew/vi/)
 
 ### under the hood
 - one word per value: a fixnum is a tagged odd word, anything else is a heap
