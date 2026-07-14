@@ -1,7 +1,7 @@
-; test/host/phosui-probe.l -- the phos UI probe: a SEPARATE process with its own
-; clean X streams (the one-process gate desynced -- see test/host/phosui.l), driven
+; test/host/luxui-probe.l -- the lux UI probe: a SEPARATE process with its own
+; clean X streams (the one-process gate desynced -- see test/host/luxui.l), driven
 ; by (probe dpy). It creates its own InputOutput toplevels (xterm needs fonts
-; a bare Xvfb lacks), drives phos with SYNTHETIC input -- XTEST FakeInput for
+; a bare Xvfb lacks), drives lux with SYNTHETIC input -- XTEST FakeInput for
 ; super+drag move/resize, SendEvent ClientMessages for the EWMH requests --
 ; and asserts every effect off GetGeometry/GetProperty/GetInputFocus:
 ;   manage -> tile, maximize add/remove (the _NET_WM_STATE stamp both ways),
@@ -9,7 +9,7 @@
 ;   focus, a second client tiles while the float rides, _NET_CLOSE_WINDOW
 ;   kills it (no WM_DELETE_WINDOW advertised -> the KillClient fallback).
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
-; Load order: core -> layout -> wire, then this file; test/host/phosui.l spawns it.
+; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
 (: (probe dpy)
    (: s (connectu dpy)
       sc (x-setup s ())
@@ -21,7 +21,7 @@
       (waitp m th t) (? (< t 1) (fail m)
                         (? (th ()) 1 (: _ (rest 100) (waitp m th (- t 1)))))
 
-      ; --- phos is up when ewmh-init has stamped the root ---
+      ; --- lux is up when ewmh-init has stamped the root ---
       _ (waitp "wm-up" (\ u (two? (x-getprop-atoms s root (x-intern s "_NET_SUPPORTED")))) 100)
 
       ; --- XTEST: the extension's major opcode, then the super keycode
@@ -64,7 +64,7 @@
       a-mh (x-intern s "_NET_WM_STATE_MAXIMIZED_HORZ")
       a-cl (x-intern s "_NET_CLOSE_WINDOW")
 
-      ; --- 1. manage: map -> phos tiles the lone window over the screen ---
+      ; --- 1. manage: map -> lux tiles the lone window over the screen ---
       w1 (scr-idbase sc)
       _ (mkwin s w1 root)
       _ (waitp "w1-tiled" (\ u (< 600 (nthl (x-getgeom s w1) 2))) 100)
@@ -110,7 +110,7 @@
 
       ; --- 5. a second client (its own connection) tiles alongside;
       ;     _NET_CLOSE_WINDOW fells it -- no WM_DELETE_WINDOW advertised, so
-      ;     phos takes the KillClient fallback, verified through
+      ;     lux takes the KillClient fallback, verified through
       ;     FRESH eyes (the reply stream of a client whose window died
       ;     mid-poll echoes stale replies) ---
       s2 (connectu dpy)
@@ -126,8 +126,8 @@
       ; --- 6. LAST, the moor: the live repl evals, survives a scare, CHANGES state
       ;     (msg! 'next-layout flips the ||| index -- read back through the
       ;     SNAPSHOT over the moor socket, so the assert leans on no window
-      ;     and no X read), and REFUSES garbage ((phos! 0): (0 st) is 1, not
-      ;     a sane 4-list). A queued change drains at phos's next X event; we
+      ;     and no X read), and REFUSES garbage ((lux! 0): (0 st) is 1, not
+      ;     a sane 4-list). A queued change drains at lux's next X event; we
       ;     nudge with a no-op ClientMessage from a FRESH connection each time
       ;     (kept open: this Xvfb spuriously CloseDownClient's one client
       ;     ~10s in -- gdb'd to ospoll_wait -> CloseDownClient with the
@@ -135,7 +135,7 @@
       ;     s staying alive, and closing spares fds would re-arm it) ---
       rsock (: rd (getenv "XDG_RUNTIME_DIR")
                base (? (< 1 (tally rd)) rd "/tmp")
-               (+ base (+ "/phos-" (+ (snip dpy 16 (tally dpy)) ".sock"))))
+               (+ base (+ "/lux-" (+ (snip dpy 16 (tally dpy)) ".sock"))))
       rc (: (try t) (? (< t 1) ()
                        (: p (connectu rsock)
                           (? (lit? p) p (: _ (rest 100) (try (- t 1))))))
@@ -155,7 +155,7 @@
                    _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0) _ (x-w32 nf 0)
                    _ (x-flush nf) (rest 100))
       ; the ||| index rides at minimize>smart>toggle>mirror>choice (config.l's stack)
-      chidx "(nthl (nthl (nthl (nthl (nthl (caup (phos-st ())) 2) 1) 2) 2) 1)"
+      chidx "(nthl (nthl (nthl (nthl (nthl (caup (lux-st ())) 2) 1) 2) 2) 1)"
       i0 (ask chidx)
       _ (ask "(msg! 'next-layout)")
       _ (nudge ())
@@ -163,7 +163,7 @@
       _ (ask "(msg! 'next-layout)")                                              ; flip back (the ||| holds two layouts)
       _ (nudge ())
       _ (waitp "moor-cycles" (\ u (= i0 (ask chidx))) 50)
-      _ (ask "(phos! 0)")                                                        ; garbage: refused, the wm stands
+      _ (ask "(lux! 0)")                                                        ; garbage: refused, the wm stands
       _ (nudge ())
       _ (must "moor-refuses" (= "11" (ask "(+ 5 6)")))
       _ (must "moor-standing" (= i0 (ask chidx)))

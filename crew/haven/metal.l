@@ -3,7 +3,7 @@
 ; entry carries everything else -- protocols, layouts, moor, painter. run
 ; from a tty of one's own (the card must grant master):
 ;
-;   ai -l crew/phos/core.l -l crew/phos/layout.l -l crew/haven/wire.l \
+;   ai -l crew/lux/core.l -l crew/lux/layout.l -l crew/haven/wire.l \
 ;      -l crew/haven/drm.l -l crew/haven/haven.l -l crew/haven/metal.l \
 ;      -e '(metal "/run/user/1000/haven-0" 1)'
 ;

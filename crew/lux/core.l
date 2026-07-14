@@ -1,11 +1,11 @@
-; crew/phos/core.l -- the pure StackSet: the window model, no X and no sockets. This is
+; crew/lux/core.l -- the pure StackSet: the window model, no X and no sockets. This is
 ; xmonad's StackSet.hs, single-screen: a focus ZIPPER per workspace, a SHEAF of
 ; workspaces with one current, and a FLOATING map (window -> rect) beside the
-; tiled stacks. Pure -- so it rides the corpus on every target (crew/phos/law.l asserts
-; the invariants), and the driver (crew/phos/phos.l) + the X layers build on it.
+; tiled stacks. Pure -- so it rides the corpus on every target (crew/lux/law.l asserts
+; the invariants), and the driver (crew/lux/lux.l) + the X layers build on it.
 ;
 ; A body-LESS top-level `:` -- every binding LEAKS to the global scope, so the
-; other crew/phos/ files see this vocabulary once concatenated. Names are chosen to
+; other crew/lux/ files see this vocabulary once concatenated. Names are chosen to
 ; shadow NO nif (the single-`:` rung-6 trap: a local `put` shadowed the put nif);
 ; the WM vocabulary is `z*` (the zipper) and `ws*`/admit/evict/shiftto (the sheaf).
 (:

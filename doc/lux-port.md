@@ -3,10 +3,10 @@
 Goal: an **ai window manager with the same features** as `/home/gwen/.xmonad/xmonad.hs` —
 not the Haskell config kept alive, but a fresh, idiomatic **ai config** that does everything
 yours does. The DSL borrows xmonad's *vocabulary* (layouts, messages, manageHook rules,
-a keymap) because those names are good and you know them — but `crew/phos/config.l` is genuine ai,
+a keymap) because those names are good and you know them — but `crew/lux/config.l` is genuine ai,
 read and edited as ai, not a transliteration of Haskell. **Single monitor** throughout (no
 Xinerama) — the model is simpler for it. The X mechanics already work
-(the `doc/proto/{x11,phos,xsend}.l` spike ladder, rungs 1–5): raw X11 wire protocol, the
+(the `doc/proto/{x11,lux,xsend}.l` spike ladder, rungs 1–5): raw X11 wire protocol, the
 substructure redirect, MapRequest/DestroyNotify, focus + `SetInputFocus`, Tall tiling,
 and grabbed-key dispatch (XTEST-verified). What remains is surface area: the float half
 of `StackSet`, a library of layout combinators, `GetProperty`/atoms + EWMH, and the
@@ -17,18 +17,18 @@ manageHook rule, and keybinding in `xmonad.hs` is accounted for below.
 
 ---
 
-## 1. Architecture: the `crew/phos/` app
+## 1. Architecture: the `crew/lux/` app
 
 The spike lives in one giant body-having `:`, which shares ONE flat scope with every nif
 and all of prel. That is a collision minefield — rung 6 died because a sheaf helper named
 `put` shadowed the `put` nif the wire codec depends on. A whole window manager cannot live
-in one `:`. So the port graduates into a proper **`crew/phos/` app** beside ain/bao/cook, each
+in one `:`. So the port graduates into a proper **`crew/lux/` app** beside ain/bao/cook, each
 file its own scope, helpers local, only entry points leaking:
 
 ```
-crew/phos/
+crew/lux/
   core.l      the pure StackSet: zipper + sheaf + FLOATING map. No X, no sockets.
-              (test/phos.l's core, extended with floats. Corpus-testable, all targets.)
+              (test/lux.l's core, extended with floats. Corpus-testable, all targets.)
   wire.l      the X11 codec: connect, setup, request writers, event decoder, atoms.
               (host-only: needs connectu. The doc/proto/x11.l lineage, modularized.)
   layout.l    layouts as CLOSURES + messages as SYMBOLS: Tall/ResizableTall/Dwindle/
@@ -36,21 +36,21 @@ crew/phos/
   manage.l    the manageHook DSL: property predicates -> placement actions.
   keys.l      the keymap DSL + xmonad's DEFAULT keymap (the config unions onto it).
   ewmh.l      the _NET_* property protocol + the support window.
-  phos.l        the driver: wire the config's hooks into the event loop.
+  lux.l        the driver: wire the config's hooks into the event loop.
   config.l    THE PORTED xmonad.hs, in the DSL. This is what the user edits.
-  host/phos.c   the connectu nif (already landed).
+  host/lux.c   the connectu nif (already landed).
 ```
 
 `core.l` needs no nifs, so it rides the corpus on every target (host + ai0 + kernel + wasm)
 with xmonad's QuickCheck laws as asserts — the invariants stay machine-checked. The rest is
-host-only (it speaks sockets), smoke-tested the `boot/phos.l` way (in `test_hostnif`) plus the
+host-only (it speaks sockets), smoke-tested the `boot/lux.l` way (in `test_hostnif`) plus the
 Xephyr integration runs.
 
 ---
 
 ## 2. The DSL: how the config reads
 
-The target — `crew/phos/config.l`, an ai config with your config's features. Same vocabulary, ai
+The target — `crew/lux/config.l`, an ai config with your config's features. Same vocabulary, ai
 shape: `mod4` is `sup`, layouts are constructors returning closures, `|||` is a choice
 combinator, messages are symbols. Idioms that were Haskell (the inline `fib` for Dwindle's
 ratio, the `M.union . M.fromList` comprehension) are just written in ai — a constant or a
@@ -65,7 +65,7 @@ ratio, the `M.union . M.fromList` comprehension) are just written in ai — a co
      mod-mask           sup
      workspaces         (map show (jot-from 1 9))
      startup-hook       (>> (spawn "setxkbmap -option ctrl:nocaps")
-                            (set-phos-name "LG3D (XMonad)")
+                            (set-lux-name "LG3D (XMonad)")
                             (set-cursor 'left-ptr))
      layout-hook        (: l1 (ResizableTall 1 1/50 1/2 ())
                             l2 (Dwindle 'R 'CW phi 1.1)
@@ -103,16 +103,16 @@ that builds the directional keys becomes a `map`/`for` over the same `(dir keys 
 | `normal/focusedBorderColor` | `normal/focused-border "name"` | 1 | needs X color-name → pixel (AllocNamedColor) |
 | `modMask = mod4Mask` | `mod-mask sup` | ✓ | already the spike's grab mod |
 | `workspaces = 1..9` | `workspaces (...)` | ✓ | sheaf is N-tag already |
-| `startupHook` | `startup-hook (>> ...)` | 1 | spawn + set-phos-name + set-cursor |
+| `startupHook` | `startup-hook (>> ...)` | 1 | spawn + set-lux-name + set-cursor |
 | `layoutHook` | `layout-hook ...` | 2 | §4 — the biggest piece |
 | `handleEventHook` | `handle-event-hook` | 2 | minimize event hook |
 | `manageHook` | `manage-hook ...` | 2 | §5 |
 | `keys` | `keys ...` | 2 | §6 |
 
-### Contrib modules → crew/phos/ modules
+### Contrib modules → crew/lux/ modules
 | import | provides (used here) | ai home | tier |
 |---|---|---|---|
-| `XMonad` core | the WM, `def`, `spawn`, `kill`, `windows`, `sendMessage` | phos.l/core.l | ✓ done |
+| `XMonad` core | the WM, `def`, `spawn`, `kill`, `windows`, `sendMessage` | lux.l/core.l | ✓ done |
 | `StackSet as W` | `W.sink` `W.floating` `W.member` | core.l (float half) | 2 |
 | `Layout.ResizableTile` | `ResizableTall` + `MirrorShrink/Expand` | layout.l | 2 |
 | `Layout.Dwindle` | `Dwindle R CW phi` (spiral) | layout.l | 2 |
@@ -235,7 +235,7 @@ separates "manages my windows" from "my taskbar and fullscreen video work."
 
 ## 8. Rung order (each Xephyr-testable, like rungs 1–5)
 
-1. **crew/phos/ scaffold** — split rungs 1–5 into core.l/wire.l/phos.l, kill the single-`:` collision
+1. **crew/lux/ scaffold** — split rungs 1–5 into core.l/wire.l/lux.l, kill the single-`:` collision
    trap. Rung 6 (workspaces 1–9) lands here, clean. *Unblocks everything.*
 2. **Float half of StackSet** (core.l) — `floating` map, `W.sink`, `f_t`; corpus laws for it.
 3. **Layout engine** (layout.l) — the closure/message protocol + Tall/ResizableTall/Full/
@@ -245,7 +245,7 @@ separates "manages my windows" from "my taskbar and fullscreen video work."
 6. **keymap DSL + default map** (keys.l) — the full `keys def ∪ custom` table wired live.
 7. **EWMH + docks** (ewmh.l) — support window, `_NET_*`, struts, fullscreen.
 8. **config.l** — transliterate `xmonad.hs`, run it against Xephyr, then real X.
-9. **Graduate** — `make install` a `phos` binary; restart-in-place (`sup+shift+o`-style) via the
+9. **Graduate** — `make install` a `lux` binary; restart-in-place (`sup+shift+o`-style) via the
    dock's adopt re-exec ([[the-dock]] memory).
 
 ---

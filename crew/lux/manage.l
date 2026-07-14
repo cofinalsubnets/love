@@ -1,12 +1,12 @@
-; crew/phos/manage.l -- the manageHook DSL: a new window's properties decide where it
+; crew/lux/manage.l -- the manageHook DSL: a new window's properties decide where it
 ; lands. A HOOK is (ctx sh -> sh): given the manage context and the sheaf (the
 ; window already admitted TILED by the driver), it may re-place the window --
 ; float it, center it, ignore it (evict) -- or pass the sheaf through unchanged.
 ; This mirrors xmonad: the core manages/tiles every window first, then the
-; manageHook transforms. The COMBINATORS + float ACTIONS are pure (crew/phos/law.l
+; manageHook transforms. The COMBINATORS + float ACTIONS are pure (crew/lux/law.l
 ; asserts them with mock predicates); the PREDICATES query X (prop?/class-of?/
 ; transient) so they, do-raise, and the assembled default are host-only -- they
-; call crew/phos/wire.l's GetProperty. A body-LESS `:` -- it all leaks to the driver.
+; call crew/lux/wire.l's GetProperty. A body-LESS `:` -- it all leaks to the driver.
 ;
 ; ctx = (socket window screen-rect win-geom): the socket for property queries,
 ; the new window, the screen rect (0 0 W H), and the window's current geometry.
@@ -48,7 +48,7 @@
    (manage-window hook c sh) (hook c sh)
 
    ; --- the config's manageHook, assembled (host-only: it CALLS prop? at load,
-   ;     which captures crew/phos/wire.l's X ops). composeAll [ def, transience',
+   ;     which captures crew/lux/wire.l's X ops). composeAll [ def, transience',
    ;     manageDocks, composeOne [ notification/dock, fullscreen, dialog, modal ] ]. ---
    manage-default
     (compose-all (L

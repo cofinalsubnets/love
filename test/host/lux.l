@@ -1,12 +1,12 @@
-; --- test/host/phos.l: a runnable smoke test for phos's socket nif (host/phos.c) ---
+; --- test/host/lux.l: a runnable smoke test for lux's socket nif (host/lux.c) ---
 ; Standalone against the built binary, like test/host/net.l and for the same reason
 ; (host/*.c links the final `ai` only; ai0 bakes the corpus without it):
 ;
-;   cat test/00-init.l test/host/phos.l | out/host/ai
+;   cat test/00-init.l test/host/lux.l | out/host/ai
 ;
 ; (connectu path) opens a unix-domain stream socket. A REAL round trip needs a
 ; unix listener on the other end -- that is an X display socket in practice, so
-; the integration proof lives in the phos spikes (doc/proto/phos.l against Xephyr),
+; the integration proof lives in the lux spikes (doc/proto/lux.l against Xephyr),
 ; not the gate. Here: the nif is present and every refusal lane answers nil,
 ; not a scare -- absence is nothing.
 (assert (lit? connectu))
@@ -14,4 +14,4 @@
 (assert !(connectu ""))                            ; empty path -> nil
 (assert !(connectu "/tmp"))                        ; a directory, not a socket -> nil
 (assert !(connectu 7))                             ; not a string -> nil
-(say err "test/host/phos: ok\n")
+(say err "test/host/lux: ok\n")

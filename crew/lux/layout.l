@@ -1,12 +1,12 @@
-; crew/phos/layout.l -- layouts as DATA records, messages as SYMBOLS. A layout answers
+; crew/lux/layout.l -- layouts as DATA records, messages as SYMBOLS. A layout answers
 ; two questions, both PURE (no X, no sockets -- so this rides the corpus on every
-; target, crew/phos/law.l asserts the geometry):
+; target, crew/lux/law.l asserts the geometry):
 ;
 ;   (lay-tile lay rect z) -> (placements lay')   ; place the zipper's row in the rect
 ;   (lay-msg  lay msg  z) -> lay' | ()            ; () = "I don't take this message"
 ;
-; rect is (x y w h); a placement is (win x y w h) -- the shape crew/phos/phos.l's render
-; already configures. `z` is the focus zipper (crew/phos/core.l), so a layout sees BOTH
+; rect is (x y w h); a placement is (win x y w h) -- the shape crew/lux/lux.l's render
+; already configures. `z` is the focus zipper (crew/lux/core.l), so a layout sees BOTH
 ; the ordered row (zrow) and the focus (zfoc). Messages ride sendMessage: () back
 ; means unhandled, so a modifier stack (rung 4) falls through cleanly. This rung
 ; ships xmonad's ResizableTall (nmaster/ratio/per-slave heights), Full, and the
@@ -179,7 +179,7 @@
    ; --- the dispatch: case on the record tag. The tag can also be a CLOSURE --
    ;     the OPEN lane: (cap lay) a function answering ('tile lay rect z) ->
    ;     (placements lay') and ('msg lay msg z) -> lay' | (), so a layout
-   ;     defined at the phos repl (or anywhere) enters the dispatch as plain
+   ;     defined at the lux repl (or anywhere) enters the dispatch as plain
    ;     DATA, no table edit -- the stumpwm move. Modifiers wrap it like any
    ;     builtin (their delegation only calls lay-tile/lay-msg). ---
    (lay-tile lay rect z) (: k (cap lay) (? (= k 'rtall) (rt-tile lay rect z)

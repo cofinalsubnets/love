@@ -3,13 +3,13 @@
 ; the same moor as berth (a child on a pty, bytes through quay's cb screen),
 ; but the painter blits the grid into a 32bpp cask framebuffer -- 8x16
 ; moderndos glyphs, faces and 256 colours, one C blit per cell -- and ships
-; it to the server with chunked PutImage over phos's own wire codec.
+; it to the server with chunked PutImage over lux's own wire codec.
 ; keys come back as KeyPress events, translated keysym -> terminal bytes;
-; a ConfigureNotify (phos retiling us) opens a fresh grid and tells the
+; a ConfigureNotify (lux retiling us) opens a fresh grid and tells the
 ; pty; WM_DELETE or the child's exit steps away cleanly. an xterm, ai-native
 ; from the socket up.
 ;
-; run: out/host/ai -l crew/phos/core.l -l crew/phos/wire.l -l crew/quay/berth.l -l crew/quay/pier.l \
+; run: out/host/ai -l crew/lux/core.l -l crew/lux/wire.l -l crew/quay/berth.l -l crew/quay/pier.l \
 ;        -e '(pier (L "sh") "/tmp/.X11-unix/X0" (xauth-cookie "/home/gwen/.Xauthority" "0") ())'
 ;      the fourth arg is a font atlas: () sails with the builtin moderndos
 ;      8x16; load crew/quay/psf.l and pass (psf-gz "/usr/share/kbd/console-
@@ -52,7 +52,7 @@
 
 
  ; PutImage, chunked: the request length is 16 bits of 4-byte WORDS, so a
- ; band must fit 262112 data bytes NO MATTER THE WIDTH -- a phos retiling us
+ ; band must fit 262112 data bytes NO MATTER THE WIDTH -- a lux retiling us
  ; to a wide monitor makes rows fat, and one over-long request corrupts the
  ; whole stream (the server reads pixels as opcodes: garble, then silence)
  ; ships pyn PIXEL rows starting at py0; each band pours into a scratch
@@ -164,7 +164,7 @@
      (px-paintloop s win gc depth bx fx rig dirty lc2)))
 
 
- ; --- resize: phos retiled us. a fresh grid and framebuffer to fit,
+ ; --- resize: lux retiled us. a fresh grid and framebuffer to fit,
  ; and the pty learns its new size (SIGWINCH is the kernel's errand) ---
 
 (: (px-resize bx fx m dirty rig wp hp) (: gw (caup rig) gh (caup (cup rig))

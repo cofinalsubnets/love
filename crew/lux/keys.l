@@ -1,7 +1,7 @@
-; crew/phos/keys.l -- the keymap DSL + xmonad's DEFAULT keymap + the config's custom
+; crew/lux/keys.l -- the keymap DSL + xmonad's DEFAULT keymap + the config's custom
 ; table. PURE DATA: a binding is (mods keysym action), an action a tagged list
-; the driver (crew/phos/phos.l) interprets -- so the whole table rides the corpus and
-; crew/phos/law.l asserts its shape, the union law, and the directional generator.
+; the driver (crew/lux/lux.l) interprets -- so the whole table rides the corpus and
+; crew/lux/law.l asserts its shape, the union law, and the directional generator.
 ; The config is xmonad's `(. keys def) . M.union . M.fromList $ [custom]`:
 ; custom bindings UNION over the stock table, custom winning on (mods keysym).
 ;
@@ -56,7 +56,7 @@
      (kb supm 102 '(msg toggle-layout))                                          ; sup+f       toggleLayouts Full
      (kb supm 112 (L 'spawn (L "xfce4-screenshooter")))                          ; sup+p
      (kb supm 119 '(float-toggle))                                               ; sup+w       f_t sink float
-     (kb (| supm shiftm) 101 (L 'spawn (L "gvim" "/home/gwen/g/phos")))            ; sup+shift+e edit config
+     (kb (| supm shiftm) 101 (L 'spawn (L "gvim" "/home/gwen/g/lux")))            ; sup+shift+e edit config
      (kb supm 101 (L 'spawn (L "rofimoji")))                                     ; sup+e
      (kb supm 122 (L 'spawn (L "xscreensaver-command" "-activate")))             ; sup+z
      (kb (| supm shiftm) 111 (L 'exec (L "openbox" "--replace")))                ; sup+shift+o abdicate

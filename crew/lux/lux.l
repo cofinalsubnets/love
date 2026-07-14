@@ -1,9 +1,9 @@
-; crew/phos/phos.l -- the driver: wire the pure core (crew/phos/core.l), the layout engine
-; (crew/phos/layout.l), the manageHook (crew/phos/manage.l), the keymap (crew/phos/keys.l), and EWMH
-; (crew/phos/ewmh.l) over the X protocol (crew/phos/wire.l), configured by crew/phos/config.l.
+; crew/lux/lux.l -- the driver: wire the pure core (crew/lux/core.l), the layout engine
+; (crew/lux/layout.l), the manageHook (crew/lux/manage.l), the keymap (crew/lux/keys.l), and EWMH
+; (crew/lux/ewmh.l) over the X protocol (crew/lux/wire.l), configured by crew/lux/config.l.
 ; Concatenate them:
-;   cat crew/phos/{core,layout,wire,ewmh,manage,keys,config,phos}.l | ai
-; (against `Xephyr :7 -ac`, or a real server with phos-auth set). Rung 8: the
+;   cat crew/lux/{core,layout,wire,ewmh,manage,keys,config,lux}.l | ai
+; (against `Xephyr :7 -ac`, or a real server with lux-auth set). Rung 8: the
 ; driver reads the CONFIG -- border width and colors (focused/normal pixels),
 ; workspaces, the layout stack, hooks, keymap, startup spawns -- and runs until
 ; the display dies or (quit). The f_t hinge: a float-focused chord moves/
@@ -11,11 +11,11 @@
 ; tracks the focused FLOAT (the zipper only holds tiles); hist is nextMatch's
 ; MRU focus ring.
 
-; --- the phos repl: a unix-socket moor into the RUNNING wm (the dock's shape,
+; --- the lux repl: a unix-socket moor into the RUNNING wm (the dock's shape,
 ; crew-side; `ain <sock>` is the client). Forms eval in the book, so every
-; global is a verb; the LIVE (sh lay hist ffoc) state rides phos-cell -- reads
-; take the snapshot ((phos-st ())), changes queue a state function through
-; (phos! f), and the driver's loop drains the queue at its next X event,
+; global is a verb; the LIVE (sh lay hist ffoc) state rides lux-cell -- reads
+; take the snapshot ((lux-st ())), changes queue a state function through
+; (lux! f), and the driver's loop drains the queue at its next X event,
 ; GUARDED: a change must answer a 4-list whose sheaf is wssane? -- the proved
 ; invariant, standing as a live seatbelt -- or it is refused and the old
 ; state kept. ONE HAND ON THE WIRE: the repl never touches any X socket (the
@@ -23,33 +23,33 @@
 ; (lay! (L my-closure state..)) swaps in a layout written at the prompt.
 ; The socket is an EVAL SERVER -- $XDG_RUNTIME_DIR (0700) when set, /tmp
 ; otherwise (a socket refuses connect without write permission).
-(: phos-cell #()
-   (phos-st u) (peep phos-cell 'st ())
+(: lux-cell #()
+   (lux-st u) (peep lux-cell 'st ())
    ; a change QUEUES; the driver's loop drains at its next X event. On a live
    ; desktop that is imminent (any motion, focus or property tick); a headless
-   ; harness nudges with any event of its own (boot/phosui-probe.l sends a
-   ; no-op ClientMessage). Deliberately NO wake wire from phos's side: a poke
+   ; harness nudges with any event of its own (boot/luxui-probe.l sends a
+   ; no-op ClientMessage). Deliberately NO wake wire from lux's side: a poke
    ; connection made Xvfb close-down an INNOCENT client whose id range rode a
    ; recycled slot (gdb: ospoll_wait -> CloseDownClient -> FreeClientResources
    ; with the victim's socket provably open) -- one hand on the wire, and the
    ; wire is the driver's alone.
-   (phos! f) (: _ (pin phos-cell 'q (link f (peep phos-cell 'q ())))             ; (a peep+pin pair -- a concurrent drain in the gap can lose
+   (lux! f) (: _ (pin lux-cell 'q (link f (peep lux-cell 'q ())))             ; (a peep+pin pair -- a concurrent drain in the gap can lose
                 'queued)                                                         ;  a change; prompt-scale odds, and wssane? guards either way)
-   ; the command sugar -- each a (phos! ..) over the snapshot shape (sh lay hist ffoc)
-   (lay! l)  (phos! (\ st (L (cap st) l (nthl st 2) (nthl st 3))))
-   (msg! m)  (phos! (\ st (: lay2 (lay-msg (caup st) m (wsget (cap st) (wscur (cap st))))
+   ; the command sugar -- each a (lux! ..) over the snapshot shape (sh lay hist ffoc)
+   (lay! l)  (lux! (\ st (L (cap st) l (nthl st 2) (nthl st 3))))
+   (msg! m)  (lux! (\ st (: lay2 (lay-msg (caup st) m (wsget (cap st) (wscur (cap st))))
                              (L (cap st) (? lay2 lay2 (caup st)) (nthl st 2) (nthl st 3)))))
-   (sink! w) (phos! (\ st (L (wssink (cap st) w) (caup st) (nthl st 2)
+   (sink! w) (lux! (\ st (L (wssink (cap st) w) (caup st) (nthl st 2)
                              (: f (nthl st 3) (? (= f w) () f)))))
-   (float! w r) (phos! (\ st (L (wsdofloat (cap st) w r) (caup st) (nthl st 2) w)))
-   (row u) (wsrow (cap (phos-st ())))
+   (float! w r) (lux! (\ st (L (wsdofloat (cap st) w r) (caup st) (nthl st 2) w)))
+   (row u) (wsrow (cap (lux-st ())))
 
    ; the moor: shore the socket, twirl a session per client -- read one form
    ; (sound keeps the read protocol), eval through the self-hosted ev, show
-   ; the value back. deliberate orphans, like the dock's: phos runs forever.
-   (phos-sock u) (: rd (getenv "XDG_RUNTIME_DIR")
+   ; the value back. deliberate orphans, like the dock's: lux runs forever.
+   (lux-sock u) (: rd (getenv "XDG_RUNTIME_DIR")
                     base (? (< 1 (tally rd)) rd "/tmp")
-                    (+ base (+ "/phos-" (+ (phos-dispnum ()) ".sock"))))
+                    (+ base (+ "/lux-" (+ (lux-dispnum ()) ".sock"))))
    ; the session reads LINES (see parks the TASK -- the reader's park law) and
    ; sounds them off a tap: a memory port keeps the read protocol and cannot
    ; block, where (sound c ..) on the socket itself stalls the WHOLE vm in the
@@ -57,7 +57,7 @@
    ; would freeze the wm between asks (haven's painter starved on exactly
    ; this). an unfinished shape carries to the next line; anything after the
    ; first form on a line is let go.
-   (phos-session c)
+   (lux-session c)
     (: e (nom 0)
        (rdline acc) (: ch (see c)
                        (? (= ch -1) ()
@@ -75,14 +75,14 @@
                                 _ (flush c)
                                 (go ()))))))
        (go ()))
-   (phos-moor path)
+   (lux-moor path)
     (: lp (shore path)
-       (? (! (lit? lp)) (: _ (say out (+ "phos: no moor at " (+ path "\n"))) (flush out))
-          (: _ (say out (+ "phos: moored at " (+ path "\n")))
+       (? (! (lit? lp)) (: _ (say out (+ "lux: no moor at " (+ path "\n"))) (flush out))
+          (: _ (say out (+ "lux: moored at " (+ path "\n")))
              _ (flush out)
              (knock _) (: _ (await lp)
                           c (accept lp)
-                          _ (? (lit? c) (twirl (\ _ (: _ (phos-session c) (close c))) 0) 0)
+                          _ (? (lit? c) (twirl (\ _ (: _ (lux-session c) (close c))) 0) 0)
                           (knock ()))
              (knock ())))))
 
@@ -92,30 +92,30 @@
 ; global, since the book is mopped post-egg.
 (: (help s a b) (? (eof? s) b (more? s) a `('scare a b)))
 
-(: s (x-connect phos-display)
-   _ (? s 0 (: _ (say err "phos: no display -- Xephyr up?\n") (quit 1)))
+(: s (x-connect lux-display)
+   _ (? s 0 (: _ (say err "lux: no display -- Xephyr up?\n") (quit 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))
-   sc (x-setup s phos-auth)
-   _ (? sc 0 (: _ (say err "phos: setup refused (auth?)\n") (quit 1)))
+   sc (x-setup s lux-auth)
+   _ (? sc 0 (: _ (say err "lux: setup refused (auth?)\n") (quit 1)))
    root (scr-root sc) wpx (scr-w sc) hpx (scr-h sc)
-   _ (? (x-redirect s root) 0 (: _ (say err "phos: another WM owns this display\n") (quit 1)))
-   _ (line (+ "phos: managing " (+ (show root) (+ " " (+ (show wpx) (+ "x" (show hpx)))))))
-   _ (ewmh-init s root (scr-idbase sc) (tally phos-tags))                          ; the support window + _NET_* root properties
+   _ (? (x-redirect s root) 0 (: _ (say err "lux: another WM owns this display\n") (quit 1)))
+   _ (line (+ "lux: managing " (+ (show root) (+ " " (+ (show wpx) (+ "x" (show hpx)))))))
+   _ (ewmh-init s root (scr-idbase sc) (tally lux-tags))                          ; the support window + _NET_* root properties
 
    ; --- the config's face: border pixels, the root cursor, the startup spawns ---
-   npix (x-color s (scr-cmap sc) phos-normal-color)
-   fpix (x-color s (scr-cmap sc) phos-focused-color)
-   _ (line (+ "phos: colors " (+ (show npix) (+ " " (show fpix)))))
+   npix (x-color s (scr-cmap sc) lux-normal-color)
+   fpix (x-color s (scr-cmap sc) lux-focused-color)
+   _ (line (+ "lux: colors " (+ (show npix) (+ " " (show fpix)))))
    _ (x-cursor s root (+ (scr-idbase sc) 1) (+ (scr-idbase sc) 2))               ; setDefaultCursor xC_left_ptr
-   _ (map (\ cmd (spawn cmd)) phos-startup)
+   _ (map (\ cmd (spawn cmd)) lux-startup)
 
    ; --- keyboard: resolve the keymap's keysyms to keycodes, grab every chord ---
-   km (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms phos-keymap))
+   km (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms lux-keymap))
    ktab (filter (\ r (> (caup r) 0))                                             ; rows (mods keycode action); keysym absent -> dropped
-                (map (\ r (L (kb-mods r) (peep km (kb-sym r) 0) (kb-act r))) phos-keymap))
+                (map (\ r (L (kb-mods r) (peep km (kb-sym r) 0) (kb-act r))) lux-keymap))
    _ (map (\ r (x-grab s root (cap r) (caup r))) ktab)
    _ (x-flush s)
-   _ (line (+ "phos: grabbed " (+ (show (tally ktab)) " chords")))
+   _ (line (+ "lux: grabbed " (+ (show (tally ktab)) " chords")))
 
    ; --- rendering (the layout engine answers, X obeys) ---
    (nth l i) (? (< i 1) (cap l) (nth (cup l) (- i 1)))
@@ -124,7 +124,7 @@
    (render sh lay)                                                               ; ask the layout for placements, configure them, unmap the dropped
     (: z (wsget sh (wscur sh)) f (zfoc z)
        pls (cap (lay-tile lay (trect ()) z)) placed (map cap pls)
-       _ (map (\ t (: w (nth t 0) bw (? (< (tally t) 6) phos-border (nth t 5))   ; smartBorders sets 0 on a singleton/fullscreen
+       _ (map (\ t (: w (nth t 0) bw (? (< (tally t) 6) lux-border (nth t 5))   ; smartBorders sets 0 on a singleton/fullscreen
                       _ (x-border s w bw)
                       _ (x-borderpix s w (? (= w f) fpix npix))                  ; focusedBorderColor / normalBorderColor
                       (x-configure s w (nth t 1) (nth t 2)                       ; the border sits OUTSIDE the frame: shave it off
@@ -132,7 +132,7 @@
        _ (map (\ w (? (any (\ p (= p w)) placed) 0 (x-unmap s w))) (wsrow sh))   ; windows the layout dropped (Full/minimize): hide them
        _ (map (\ w (x-map s w)) placed)                                          ; (re)map placed -- a no-op on the already-mapped
        _ (map (\ fp (: w (cap fp) fr (caup fp)                                   ; floating windows AT HOME HERE: place, map, raise above the tiles
-                        bw (? (= fr scrn) 0 phos-border)                         ; a fullscreen float (the whole screen is its rect) wears no border
+                        bw (? (= fr scrn) 0 lux-border)                         ; a fullscreen float (the whole screen is its rect) wears no border
                         _ (x-border s w bw) _ (x-borderpix s w npix)
                         _ (x-configure s w (nth fr 0) (nth fr 1) (nth fr 2) (nth fr 3))
                         _ (x-map s w) (x-raise s w))) (wsvisfl sh))
@@ -147,10 +147,10 @@
           _ (render sh2 lay)
           _ (map (\ w (x-unmap s w)) old)
           _ (map (\ w (x-unmap s w)) oldf) _ (x-flush s)
-          _ (line (+ "phos: view " (+ (show t) (+ " " (show (wsrow sh2))))))
+          _ (line (+ "lux: view " (+ (show t) (+ " " (show (wsrow sh2))))))
           sh2))
    (msg-or old new) (? new new old)                                              ; keep the old layout when a message is unhandled (())
-   (phos-self u)                                                                   ; our script path, either argv shape: plain `ai phos`
+   (lux-self u)                                                                   ; our script path, either argv shape: plain `ai lux`
     (: (go m) (? (! (two? m)) (cap argv)                                         ; gives (script ..); the -l shebang gives the RAW OS
                  (= (cap m) "-l") (? (two? (cup m)) (caup m) (cap argv))         ; argv (ai -l script ..) -- take the -l operand
                  (go (cup m)))
@@ -174,28 +174,28 @@
           (= k 'shift) (: w (wsfoc sh) sh2 (shiftto sh (caup a)) _ (render sh2 lay)
                           _ (? (&& w (! (any (\ x (= x w)) (wsrow sh2))))        ; the emigrant left this workspace: hide it
                                (: _ (x-unmap s w) (x-flush s)) 0)
-                          _ (line (+ "phos: sent -> " (show (caup a)))) (loop sh2 lay hist ffoc))
-          (= k 'spawn) (: p (spawn (caup a)) _ (line (+ "phos: spawn " (+ (cap (caup a)) (+ " " (show p)))))
+                          _ (line (+ "lux: sent -> " (show (caup a)))) (loop sh2 lay hist ffoc))
+          (= k 'spawn) (: p (spawn (caup a)) _ (line (+ "lux: spawn " (+ (cap (caup a)) (+ " " (show p)))))
                           (loop sh lay hist ffoc))
-          (= k 'exec) (: _ (line "phos: exec -- abdicating") _ (exec (caup a))     ; returns only on failure
+          (= k 'exec) (: _ (line "lux: exec -- abdicating") _ (exec (caup a))     ; returns only on failure
                          (loop sh lay hist ffoc))
           (= k 'kill) (: _ (? fw (: _ (? (x-has-atom s fw "WM_PROTOCOLS" "WM_DELETE_WINDOW")   ; ask first (killWindow): KillClient
                                          (x-wmdel s fw) (x-kill s fw))           ; takes the whole CLIENT, every window it owns
                                      (x-flush s)) 0)                             ; DestroyNotify does the eviction
-                         _ (line (+ "phos: kill " (show fw))) (loop sh lay hist ffoc))
-          (= k 'quit) (line "phos: quit")                                          ; fall out of the loop
+                         _ (line (+ "lux: kill " (show fw))) (loop sh lay hist ffoc))
+          (= k 'quit) (line "lux: quit")                                          ; fall out of the loop
           (= k 'restart)                                                         ; restart-in-place: exec ourselves (the CLOEXEC'd socket
-          (: _ (line (+ "phos: restart -- exec, pid " (show (getpid 0))))          ; drops, the server releases the redirect, the new
-             _ (exec (L "/proc/self/exe" (phos-self ())))                          ; generation ADOPTS the surviving windows at startup)
-             _ (line "phos: restart failed") (loop sh lay hist ffoc))
+          (: _ (line (+ "lux: restart -- exec, pid " (show (getpid 0))))          ; drops, the server releases the redirect, the new
+             _ (exec (L "/proc/self/exe" (lux-self ())))                          ; generation ADOPTS the surviving windows at startup)
+             _ (line "lux: restart failed") (loop sh lay hist ffoc))
           (= k 'refresh) (relay sh lay ffoc)
-          (= k 'reset-layout) (relay sh phos-layout ffoc)
-          (= k 'toggle-struts) (: _ (ewmh-toggle ()) _ (line "phos: toggle struts") (relay sh lay ffoc))
+          (= k 'reset-layout) (relay sh lux-layout ffoc)
+          (= k 'toggle-struts) (: _ (ewmh-toggle ()) _ (line "lux: toggle struts") (relay sh lay ffoc))
           (= k 'sink) (? (wsfloating? sh fw) (relay (wssink sh fw) lay ()) (loop sh lay hist ffoc))
           (= k 'float-toggle)
           (? (! fw) (loop sh lay hist ffoc)
              (wsfloating? sh fw) (relay (wssink sh fw) lay ())
-             (: _ (line (+ "phos: float " (show fw))) (relay (wsdofloat sh fw (x-getgeom s fw)) lay fw)))
+             (: _ (line (+ "lux: float " (show fw))) (relay (wsdofloat sh fw (x-getgeom s fw)) lay fw)))
           (= k 'next-match)
           (: t (nm-pick (wsrow sh) (wsfoc sh) hist (caup a))
              (? t (relay (wsmap sh (zfocto t)) lay ()) (loop sh lay hist ffoc)))
@@ -231,23 +231,23 @@
           (drag mode w g0 rx0 ry0)))                                            ; anything else mid-drag: ignore
 
    ; --- the repl gate: every pass through the loop publishes the snapshot and
-   ;     drains (phos!) changes, each GUARDED -- a change must answer a 4-list
+   ;     drains (lux!) changes, each GUARDED -- a change must answer a 4-list
    ;     whose sheaf is wssane? (the proved invariant, live) or it is refused
    ;     and the old state kept. a scare inside a change answers ('scare a b)
    ;     through the help above -- not a 4-list, so it refuses the same way. ---
    (loop sh lay hist ffoc)
-    (: q (pull phos-cell 'q ())
-       (? (! (two? q)) (: _ (pin phos-cell 'st (L sh lay hist ffoc))
+    (: q (pull lux-cell 'q ())
+       (? (! (two? q)) (: _ (pin lux-cell 'st (L sh lay hist ffoc))
                           (loop2 sh lay hist ffoc))
           (: st (foldl (\ acc f (: r (f acc)
                                    (? (&& (two? r) (&& (= 4 (tally r)) (wssane? (cap r)))) r
-                                      (: _ (line "phos: change refused") acc))))
+                                      (: _ (line "lux: change refused") acc))))
                        (L sh lay hist ffoc) (rev q))
-             _ (pin phos-cell 'st st)                                            ; the snapshot rides POST-drain, so a moor read sees the change
+             _ (pin lux-cell 'st st)                                            ; the snapshot rides POST-drain, so a moor read sees the change
              sh2 (cap st) lay2 (caup st) f2 (nthl st 3)
              _ (render sh2 lay2)
              _ (? (&& f2 (wsfloating? sh2 f2)) (: _ (x-focus s f2) (x-flush s)) (refocus sh2))
-             _ (line (+ "phos: changed x" (show (tally q))))
+             _ (line (+ "lux: changed x" (show (tally q))))
              (loop2 sh2 lay2 (nthl st 2) f2))))
 
    ; --- the event loop: (sheaf, layout, focus-history, focused-float).
@@ -264,17 +264,17 @@
        _ (hear 0)                                                                ; hear one spawned zombie home, if any
        _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
-       (? (! e) (line "phos: display gone")
-          (= (ev-code e) 0) (: _ (line (+ "phos: X error " (show (ev-detail e)))) (loop sh lay hist ffoc))
+       (? (! e) (line "lux: display gone")
+          (= (ev-code e) 0) (: _ (line (+ "lux: X error " (show (ev-detail e)))) (loop sh lay hist ffoc))
           (: code (ev-code e) win (ev-window e)
              (? (&& (= code 20) (wsknownw? sh win))                              ; MapRequest from a window we already manage: IGNORE it
-                (: _ (line (+ "phos: remap " (show win))) (loop sh lay hist ffoc))   ; (mapping it here would paint it OVER a workspace it
+                (: _ (line (+ "lux: remap " (show win))) (loop sh lay hist ffoc))   ; (mapping it here would paint it OVER a workspace it
                 (= code 20)                                                      ; isn't on -- the "one window on two workspaces" bug)
                                                                                  ; MapRequest: admit tiled, run the manageHook, then place
-                (: _ (? (ewmh-track s win) (line (+ "phos: strut " (show win))) 0) ; a dock's strut shrinks the tiling rect
+                (: _ (? (ewmh-track s win) (line (+ "lux: strut " (show win))) 0) ; a dock's strut shrinks the tiling rect
                    sh1 (admit sh win)
                    c (mg-ctx s win scrn (x-getgeom s win))
-                   sh2 (manage-window phos-manage c sh1)
+                   sh2 (manage-window lux-manage c sh1)
                    ffoc2 (? (wsfloating? sh2 win) win ffoc)                      ; a hook-floated window takes the float focus
                    (? (wsknownw? sh2 win)                                        ; managed (tiled or floated) -> place it
                       (: _ (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))   ; the ICCCM stamp: a restart finds us even hidden
@@ -282,19 +282,19 @@
                          _ (render sh2 lay) _ (x-map s win)
                          _ (? (wsfloating? sh2 win) (x-focus s win) 0)          ; a freshly-mapped float (a dialog) takes the keyboard at once
                          _ (x-flush s)
-                         _ (line (+ "phos: + " (+ (show win) (+ " " (show (wsrow sh2)))))) (loop sh2 lay hist ffoc2))
+                         _ (line (+ "lux: + " (+ (show win) (+ " " (show (wsrow sh2)))))) (loop sh2 lay hist ffoc2))
                       (: _ (x-map s win)                                         ; ignored: map raw -- a desktop UNDER everything, a dock/notification on top
                          _ (? (x-has-atom s win "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP")
                               (x-lower s win) (x-raise s win))
                          _ (x-flush s)
-                         _ (line (+ "phos: ignore " (show win))) (loop sh2 lay hist ffoc))))
+                         _ (line (+ "lux: ignore " (show win))) (loop sh2 lay hist ffoc))))
                 (= code 19) (: _ (? (= win (wsfoc sh)) (: _ (x-focus s win) (x-flush s)) 0) (loop sh lay hist ffoc))   ; MapNotify: focus if it's the top
                 (= code 17)                                                      ; DestroyNotify: unmanage + tile
                 (: _ (ewmh-untrack win)
                    (? (! (wsknownw? sh win)) (loop sh lay hist ffoc)
                       (: sh2 (evict sh win) _ (render sh2 lay)
                          ffoc2 (? (= win ffoc) () ffoc)
-                         _ (line (+ "phos: - " (+ (show win) (+ " " (show (wsrow sh2))))))
+                         _ (line (+ "lux: - " (+ (show win) (+ " " (show (wsrow sh2))))))
                          (loop sh2 lay hist ffoc2))))
                 (= code 18)                                                     ; UnmapNotify: only a SYNTHETIC one (the send-event bit on the
                 (? (|| (< (cap (ev-raw e)) 128) (! (wsknownw? sh win)))          ; raw byte -- x-decode strips it) is a client WITHDRAWING
@@ -302,7 +302,7 @@
                    (: _ (ewmh-untrack win)
                       _ (x-delprop s win (x-intern s "WM_STATE"))                ; unstamp: a restart must NOT re-adopt the withdrawn (the
                       sh2 (evict sh win) _ (render sh2 lay) _ (x-flush s)        ; tray ghost); a re-map arrives as a fresh MapRequest
-                      _ (line (+ "phos: withdraw " (show win)))
+                      _ (line (+ "lux: withdraw " (show win)))
                       (loop sh2 lay hist (? (= win ffoc) () ffoc))))
                 (= code 7)                                                      ; EnterNotify: focus follows the pointer (normal crossings
                 (: pkt (ev-raw e) w (u32 pkt 12)                                 ; only -- the window is the EVENT field, byte 12)
@@ -321,7 +321,7 @@
                          _ (x-grabptr s w) _ (x-allow-async s) _ (x-flush s)     ; capture motion, thaw the sync freeze WITHOUT replaying
                          gf (drag (? (= btn 1) 'move 'resize) w g0 rx0 ry0)
                          _ (x-ungrabptr s) _ (x-flush s)
-                         _ (line (+ (? (= btn 1) "phos: moved " "phos: resized ") (show w)))
+                         _ (line (+ (? (= btn 1) "lux: moved " "lux: resized ") (show w)))
                          (relay (wsdofloat sh2 w gf) lay w))
                       (&& (& st supm) (&& (wsknownw? sh w) (= btn 2)))           ; sup+btn2: promote the clicked window to master (shiftMaster)
                       (: _ (x-allow-async s) _ (x-flush s)
@@ -359,10 +359,10 @@
                            want (: sh2 (wsdofloat sh cw rect)
                                    _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 atoms)
                                    _ (render sh2 lay) _ (x-focus s cw) _ (x-flush s)
-                                   _ (line (+ "phos: " (+ word (+ " " (show cw))))) (loop sh2 lay hist cw))
+                                   _ (line (+ "lux: " (+ word (+ " " (show cw))))) (loop sh2 lay hist cw))
                            (: sh2 (wssink sh cw)
                               _ (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 ())
-                              _ (render sh2 lay) _ (line (+ "phos: un" (+ word (+ " " (show cw))))) (loop sh2 lay hist ()))))
+                              _ (render sh2 lay) _ (line (+ "lux: un" (+ word (+ " " (show cw))))) (loop sh2 lay hist ()))))
                    (? (&& (= ty (ewmh-atom "_NET_WM_STATE"))                     ; _NET_WM_STATE add/remove/toggle FULLSCREEN (ewmhFullscreen)
                           (&& (wsknownw? sh cw) (|| (fs? (ewmh-cm-d1 pkt)) (fs? (ewmh-cm-d2 pkt)))))
                       (state-toggle scrn (L (ewmh-atom "_NET_WM_STATE_FULLSCREEN")) "fullscreen")   ; over the whole screen, struts and all
@@ -371,10 +371,10 @@
                       (state-toggle (trect ()) (L (ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")) "maximize")
                       (&& (= ty (ewmh-atom "WM_CHANGE_STATE")) (= (ewmh-cm-d0 pkt) 3))   ; ICCCM iconify -> minimize (minimizeEventHook)
                       (: lay2 (msg-or lay (lay-msg lay (L 'minimize-window cw) (wsget sh (wscur sh))))
-                         _ (render sh lay2) _ (line (+ "phos: minimize " (show cw))) (loop sh lay2 hist ffoc))
+                         _ (render sh lay2) _ (line (+ "lux: minimize " (show cw))) (loop sh lay2 hist ffoc))
                       (&& (= ty (ewmh-atom "_NET_CLOSE_WINDOW")) (wsknownw? sh cw))   ; a panel/pager closes a window -- gracefully if it can
                       (: _ (? (x-has-atom s cw "WM_PROTOCOLS" "WM_DELETE_WINDOW") (x-wmdel s cw) (x-kill s cw))
-                         _ (x-flush s) _ (line (+ "phos: close " (show cw))) (loop sh lay hist ffoc))
+                         _ (x-flush s) _ (line (+ "lux: close " (show cw))) (loop sh lay hist ffoc))
                       (= ty (ewmh-atom "_NET_CURRENT_DESKTOP"))                  ; a pager switches the desktop
                       (loop (switch sh lay (+ (ewmh-cm-d0 pkt) 1)) lay hist ffoc)
                       (= ty (ewmh-atom "_NET_ACTIVE_WINDOW"))                    ; a pager activates: restore if minimized, view its tag, focus
@@ -396,15 +396,15 @@
    _ (map (\ w (ewmh-track s w)) (x-querytree s root))                           ; a pre-existing dock's strut still shrinks the rect
    (adopt-tag w) (: d (x-getprop-atoms s w (x-intern s "_NET_WM_DESKTOP"))       ; the last generation wrote each window's tag on the window
                     t (? (two? d) (+ 1 (cap d)) 1)                               ; (floats wear their HOME tag too, so they come back to it,
-                    (? (&& (< 0 t) (! (< (tally phos-tags) t))) t 1))            ; tiled; out of range -> tag 1)
-   sh0 (foldl (\ ss w (wsview (admit (wsview ss (adopt-tag w)) w) (cap phos-tags))) (sheaf phos-tags) kids)
+                    (? (&& (< 0 t) (! (< (tally lux-tags) t))) t 1))            ; tiled; out of range -> tag 1)
+   sh0 (foldl (\ ss w (wsview (admit (wsview ss (adopt-tag w)) w) (cap lux-tags))) (sheaf lux-tags) kids)
    _ (map (\ w (x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))) kids)
    _ (map (\ w (watch w)) kids)                                                 ; survivors get the mouse wires too
-   _ (? (two? kids) (: _ (render sh0 phos-layout)
+   _ (? (two? kids) (: _ (render sh0 lux-layout)
                        _ (map (\ w (? (any (\ x (= x w)) (wsrow sh0)) 0 (x-unmap s w))) (wstiled sh0))   ; adopted onto a HIDDEN tag: hide it
                        _ (x-flush s)                                             ; now, or it lingers painted over workspace 1 (the WM_STATE
-                       _ (refocus sh0) (line (+ "phos: adopted " (show kids)))) 0)   ; stamp keeps it adoptable through the NEXT restart)
-   _ (twirl (\ u (phos-moor (phos-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
-   _ (loop sh0 phos-layout () ())
+                       _ (refocus sh0) (line (+ "lux: adopted " (show kids)))) 0)   ; stamp keeps it adoptable through the NEXT restart)
+   _ (twirl (\ u (lux-moor (lux-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
+   _ (loop sh0 lux-layout () ())
    _ (close s)
-   (line "phos: done"))
+   (line "lux: done"))

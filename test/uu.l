@@ -2231,7 +2231,7 @@
              m))))
         n))))
 
-; --- the StackSet model: crew/phos/core.l's zipper, mirrored in uu. lists are
+; --- the StackSet model: crew/lux/core.l's zipper, mirrored in uu. lists are
 ; --- UniMath Combinatorics style (a vec by nat-recursion, a list = (Σ n, vec n),
 ; --- so length is literally pr1) but MONOMORPHIC at nat -- windows are nats,
 ; --- and a universe variable living only in a definition's body would strand
@@ -2298,7 +2298,7 @@
 ; --- the stack SUBSTRATE: focus x up x down, a stk nonempty BY CONSTRUCTION;
 ; --- the representation vocabulary the translator targets (zmk/zfoc/zup/zdn,
 ; --- hd0/tl0, mstk). the MOVES themselves live in test/uuwm.l -- GENERATED
-; --- from crew/phos/core.l by tools/wm2uu.l -- and their laws + computed
+; --- from crew/lux/core.l by tools/wm2uu.l -- and their laws + computed
 ; --- claims in test/uuwmlaw.l (the two load after this file by sort order) ---
 (assert
  (defn 'stk 'UU '(total2 f nat (total2 u nlist nlist)))

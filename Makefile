@@ -24,7 +24,7 @@ export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_phos test_extract test_arm64
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_lux test_extract test_arm64
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `ai`
 # from-source under AI_NO_IMAGE, and ai0 -- c0 + the self-hosted ev, twice). It does
@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_phos test_utils test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_lux test_utils test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -72,7 +72,7 @@ test_host: $m
 # failure), so the gate checks BOTH exit 0 AND the sentinel -- a silent
 # reader-stop exits 0 without it.
 # Add a thread's smoke script to hostnif_tests (ain: test/host/net.l, &c).
-hostnif_tests = test/host/pty.l test/host/net.l test/host/phos.l test/host/phosui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/haven.l test/host/drm.l test/host/overlay.l test/host/bake.l
+hostnif_tests = test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/haven.l test/host/drm.l test/host/overlay.l test/host/bake.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
@@ -162,18 +162,18 @@ test_sat: host
 .PHONY: test_drat
 test_drat: host
 	@cd crew/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
-# The phos app's pure core (crew/phos/core.l): xmonad's StackSet -- the focus zipper, the
+# The lux app's pure core (crew/lux/core.l): xmonad's StackSet -- the focus zipper, the
 # workspace sheaf, the floating half -- with xmonad's QuickCheck laws + a seeded
-# fuzz (crew/phos/law.l). Pure ai (no nif), so it self-tests portably; the X layers
-# (wire.l/phos.l) need connectu and are proven against Xephyr, not here. Gate = the
+# fuzz (crew/lux/law.l). Pure ai (no nif), so it self-tests portably; the X layers
+# (wire.l/lux.l) need connectu and are proven against Xephyr, not here. Gate = the
 # sentinel AND exit 0 (a reader-stop or strict-assert scare both miss it).
-.PHONY: test_phos
-test_phos: host
-	@echo "PHOS crew/phos/core.l ... crew/phos/config.l + crew/phos/law.l (the whole app, host)"; \
-	  cat test/00-init.l crew/phos/core.l crew/phos/layout.l crew/phos/wire.l crew/phos/ewmh.l crew/phos/manage.l crew/phos/keys.l crew/phos/config.l crew/phos/law.l | $m > out/host/.test_phos.out 2>&1; r=$$?; \
-	  cat out/host/.test_phos.out; \
-	  { [ $$r -eq 0 ] && grep -q "crew/phos/law: StackSet" out/host/.test_phos.out; } \
-	    || { echo "FAIL phos (exit $$r)"; exit 1; }
+.PHONY: test_lux
+test_lux: host
+	@echo "LUX crew/lux/core.l ... crew/lux/config.l + crew/lux/law.l (the whole app, host)"; \
+	  cat test/00-init.l crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l | $m > out/host/.test_lux.out 2>&1; r=$$?; \
+	  cat out/host/.test_lux.out; \
+	  { [ $$r -eq 0 ] && grep -q "crew/lux/law: StackSet" out/host/.test_lux.out; } \
+	    || { echo "FAIL lux (exit $$r)"; exit 1; }
 # aiutils (crew/utils/): the myers + patience diff engines, the text/tool surface,
 # the line tools (crew/utils/core.l: cat head tail wc sort uniq tee + the trivia),
 # and `au`, the multi-call toolbox (busybox's trick -- one binary, the util picked
@@ -758,9 +758,9 @@ out/lib/export.h: crew/holo/export.l tools/lcat.l
 # rules -- into the host, ai0, the inle kernel and wasm, so the corpus's uu
 # files (test/uu*.l, binding the book surface at test/uu.l's head) run on
 # every target, and an overlay can reach (uu 'vof) in a bare binary.
-# test/uuwm.l is a COMMITTED GENERATED artifact: phos's zipper ops compiled
-# from crew/phos/core.l into uu terms (tools/uuwmgen.l over tools/wm2uu.l, kind-
-# directed by crew/phos/sigs.l), so test/uuwmlaw.l proves its theorems OF THE
+# test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled
+# from crew/lux/core.l into uu terms (tools/uuwmgen.l over tools/wm2uu.l, kind-
+# directed by crew/lux/sigs.l), so test/uuwmlaw.l proves its theorems OF THE
 # IMPLEMENTATION at corpus time. `make uuwm` refreshes it after a core.l edit;
 # test_uuwm (in test_all) regenerates and diffs, failing loudly on drift.
 uuwm: host
@@ -770,7 +770,7 @@ test_uuwm: host
 	@echo TEST test/uuwm.l "(regenerate + diff)"
 	@$m tools/uuwmgen.l > out/host/.uuwm.l.tmp
 	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
-	  || { echo "FAIL: test/uuwm.l is stale (crew/phos/core.l moved?) -- run: make uuwm"; exit 1; }
+	  || { echo "FAIL: test/uuwm.l is stale (crew/lux/core.l moved?) -- run: make uuwm"; exit 1; }
 	@rm -f out/host/.uuwm.l.tmp
 # test/uukind.l is a COMMITTED GENERATED artifact: doc/proto/kinds.l's abstract
 # kinds-lattice JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l
@@ -1442,7 +1442,7 @@ installs = \
   $d/bin/aicc \
   $d/bin/cook \
   $d/bin/ain \
-  $d/bin/phos \
+  $d/bin/lux \
   $d/bin/bao \
   $d/share/man/man1/ai.1 \
   $d/lib/ai/prel.l \
@@ -1550,14 +1550,14 @@ $d/lib/ai/aicc.image: $(ho)/aicc.image
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-# phos: the window manager (crew/phos/*.l), the seven modules catted into one shebang
-# script. DISPLAY picks the socket, ~/.Xauthority the cookie (crew/phos/config.l);
+# lux: the window manager (crew/lux/*.l), the seven modules catted into one shebang
+# script. DISPLAY picks the socket, ~/.Xauthority the cookie (crew/lux/config.l);
 # mod+q restarts in place by exec'ing this same script.
-phosfiles = crew/phos/core.l crew/phos/layout.l crew/phos/wire.l crew/phos/ewmh.l crew/phos/manage.l crew/phos/keys.l crew/phos/config.l crew/phos/phos.l
-$d/bin/phos: $(phosfiles)
+luxfiles = crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/lux.l
+$d/bin/lux: $(luxfiles)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
-	@{ echo '#!/usr/bin/env -S ai -l'; cat $(phosfiles); } > $@
+	@{ echo '#!/usr/bin/env -S ai -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
 
 # bao: the interactive shell. Unlike crew/cook/ain, ai/bao.l is DEFINE-ONLY (the

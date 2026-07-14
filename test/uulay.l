@@ -1,9 +1,9 @@
-; test/uulay.l -- the LAYOUT LEDGER: crew/phos/layout.l's rt-tile, mirrored in
+; test/uulay.l -- the LAYOUT LEDGER: crew/lux/layout.l's rt-tile, mirrored in
 ; uu at the window level, and THE TILING THEOREM proved of it -- rt-tile places
 ; every window in the row EXACTLY ONCE, in row order (xmonad's prop_tiling).
 ; Geometry is erased to an opaque rect token (the nat-only model can't carry
 ; floats or pixel arithmetic -- the exact pixel partition stays natively
-; asserted in crew/phos/law.l); what survives erasure is the LEDGER: which
+; asserted in crew/lux/law.l); what survives erasure is the LEDGER: which
 ; windows get placed, how many strips each split yields, how take/drop/zip
 ; move the row. Substrate: test/uu.l (this file loads after it by sort order).
 

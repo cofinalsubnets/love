@@ -8,8 +8,8 @@
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
-(reads (open "crew/phos/core.l" "r"))
-(reads (open "crew/phos/wire.l" "r"))
+(reads (open "crew/lux/core.l" "r"))
+(reads (open "crew/lux/wire.l" "r"))
 (reads (open "crew/quay/berth.l" "r"))
 (reads (open "crew/quay/pier.l" "r"))
 
@@ -54,7 +54,7 @@
 
  ; the pier under test, on its own pty with a real child
  ; the child prints steadily, so a resize's FRESH grid refills on its own
- md (mind `("out/host/ai" "-l" "crew/phos/core.l" "-l" "crew/phos/wire.l" "-l" "crew/quay/berth.l"
+ md (mind `("out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l" "-l" "crew/quay/berth.l"
             "-l" "crew/quay/pier.l"
             "-e" (+ "(pier (L \"sh\" \"-c\" \"while true; do printf H; sleep 0.3; done\") \"" (+ dpy "\" () ())"))))
  _ (must 'pier-up (two? md))
@@ -83,7 +83,7 @@
  _ (must 'h-painted (< 30 (waitlit 100)))
  _ (must 'sea-dark (= 0 (lit-in (px-getimg s win 0 160 8 16))))  ; row ten: still sea
 
- ; phos's move: retile us WIDE. fat rows must still ship in legal PutImage
+ ; lux's move: retile us WIDE. fat rows must still ship in legal PutImage
  ; bands -- one over-long request would corrupt pier's whole stream (the bug
  ; a real desktop found: prompt painted, then garble and silence)
  _ (x-configure s win 0 0 2560 1184)

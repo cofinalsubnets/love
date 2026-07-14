@@ -1,13 +1,13 @@
 ; crew/haven/haven.l -- haven, the wayland compositor: a shore the clients
 ; moor at. speaks wl_shm / wl_compositor / xdg_wm_base / wl_output, TILES
-; its toplevels with phos's pure layout math (crew/phos/layout.l over the
+; its toplevels with lux's pure layout math (crew/lux/layout.l over the
 ; focus zipper -- new toplevel takes the master column, xmonad's way), and
 ; composites every committed buffer into its tile in haven's own X window
-; (the pier's blit lane: px-ship over crew/phos/wire.l). a wayland client
-; draws, the layout places, and X shows it. loads after crew/phos/{core,
+; (the pier's blit lane: px-ship over crew/lux/wire.l). a wayland client
+; draws, the layout places, and X shows it. loads after crew/lux/{core,
 ; wire,layout}.l + crew/quay/pier.l + crew/haven/wire.l:
 ;
-;   ai -l crew/phos/core.l -l crew/phos/wire.l -l crew/phos/layout.l \
+;   ai -l crew/lux/core.l -l crew/lux/wire.l -l crew/lux/layout.l \
 ;      -l crew/quay/pier.l -l crew/haven/wire.l -l crew/haven/haven.l \
 ;      -e '(haven "/run/user/1000/haven-0" () () 800 600)'
 ;
@@ -147,7 +147,7 @@
    ; --- a key from the glass: the key TABLE answers first (hb 12, rows
    ;     (mods keycode action) -- the action is a control-plane closure, run
    ;     on press, the chord swallowed both ways; state masked to the real
-   ;     chord mods, phos's kmodmask). everything else pours to the focused
+   ;     chord mods, lux's kmodmask). everything else pours to the focused
    ;     client's keyboards -- modifiers first (X's state bits ARE xkb's real
    ;     mods for the standard map), then the key, X keycode folded to evdev
    ;     (-8) ---
@@ -286,7 +286,7 @@
         _ (? (any (\ key (= key (peep hb 8 ()))) mine) (pin hb 8 ()) 0)
         (? (two? mine) (hv-retile hb tl x fb) 0))
 
-   ; --- the moor: phos's moor, haven-shaped. reads peep the live harbor
+   ; --- the moor: lux's moor, haven-shaped. reads peep the live harbor
    ;     through (haven-st ()) -- (L hb tl x fb), pinned at boot; a CHANGE is
    ;     (f z lay) -> (L z2 lay2) over the pure half of the state, queued
    ;     through (haven!) and drained by the PAINTER on its 8ms tick -- haven

@@ -1,5 +1,5 @@
 ; tools/uuwmgen.l -- EMIT test/uuwm.l: the window-manager moves, compiled from
-; crew/phos/core.l by tools/wm2uu.l (kind-directed by crew/phos/sigs.l) and printed
+; crew/lux/core.l by tools/wm2uu.l (kind-directed by crew/lux/sigs.l) and printed
 ; as corpus source under the model's own names. Run on the host binary:
 ;
 ;   ai tools/uuwmgen.l > test/uuwm.l        (or: make uuwm)
@@ -7,14 +7,14 @@
 ; test/uuwm.l is a COMMITTED artifact -- `make test_uuwm` regenerates and
 ; diffs, failing loudly if core.l moved without a refresh; test/uuwmlaw.l
 ; then proves the theorems OF THESE TERMS at corpus time on every target.
-(: _ (reads (open "crew/phos/sigs.l" "r"))
+(: _ (reads (open "crew/lux/sigs.l" "r"))
    _ (reads (open "tools/wm2uu.l" "r"))
    (forms path) (: q (open path "r") e (mint 0)
                    ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
-   gens (rev (wm2uu-as (forms "crew/phos/core.l") phos-sigs ()))
-   _ (puts "; test/uuwm.l -- GENERATED from crew/phos/core.l by tools/uuwmgen.l. Do not")
+   gens (rev (wm2uu-as (forms "crew/lux/core.l") lux-sigs ()))
+   _ (puts "; test/uuwm.l -- GENERATED from crew/lux/core.l by tools/uuwmgen.l. Do not")
    _ (puts (+ (string 10) "; edit; refresh with `make uuwm`. The window-manager moves, compiled from"))
-   _ (puts (+ (string 10) "; the SOURCE the phos runs (kind-directed by crew/phos/sigs.l) -- so the laws"))
+   _ (puts (+ (string 10) "; the SOURCE the lux runs (kind-directed by crew/lux/sigs.l) -- so the laws"))
    _ (puts (+ (string 10) "; in test/uuwmlaw.l are proved of the implementation itself; an invariant-"))
    _ (puts (+ (string 10) "; breaking core.l edit fails a PROOF at `make test`. Substrate: test/uu.l."))
    _ (puts (+ (string 10) "(assert"))

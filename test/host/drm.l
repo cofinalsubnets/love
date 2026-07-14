@@ -8,7 +8,7 @@
 ; no card at all -> a polite skip (the sentinel still prints).
 ;
 ;   cat test/00-init.l test/host/drm.l | out/host/ai
-(reads (open "crew/phos/core.l" "r"))
+(reads (open "crew/lux/core.l" "r"))
 (reads (open "crew/haven/wire.l" "r"))
 (reads (open "crew/haven/drm.l" "r"))
 (: (must tag v) (? v v (: _ (puts "drm: FAIL ") _ (putx tag) _ (putc 10) (quit 1)))

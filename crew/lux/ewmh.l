@@ -1,4 +1,4 @@
-; crew/phos/ewmh.l -- EWMH + docks: the protocol tax that separates "manages my windows"
+; crew/lux/ewmh.l -- EWMH + docks: the protocol tax that separates "manages my windows"
 ; from "my taskbar, pager, and fullscreen video work". Three pieces:
 ;   * a SUPPORT WINDOW advertising _NET_SUPPORTING_WM_CHECK + _NET_WM_NAME
 ;     ("LG3D (XMonad)" -- the Java hack, setWMName);
@@ -8,8 +8,8 @@
 ;   * STRUTS: a dock's _NET_WM_STRUT_PARTIAL shrinks the tiling rect
 ;     (avoidStruts); ewmh-toggle flips it live (ToggleStruts, sup+b).
 ; The strut arithmetic and the property encodings are PURE (jug-testable), so
-; crew/phos/law.l asserts them; the ewst tablet is the module's one mutable cell (the
-; evq pattern). Loads after crew/phos/{layout,wire}.l. A body-LESS `:` -- leaks all.
+; crew/lux/law.l asserts them; the ewst tablet is the module's one mutable cell (the
+; evq pattern). Loads after crew/lux/{layout,wire}.l. A body-LESS `:` -- leaks all.
 (:
    ; --- pure: strut arithmetic. A strut is (left right top bottom), root-
    ;     relative reserved widths; shrinking clamps the rect off each edge. ---

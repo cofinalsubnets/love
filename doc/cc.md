@@ -18,7 +18,7 @@ one imported artifact.
 
 **RUNG 2 LANDED 2026-07-12: EVERY out/host object compiles under aicc.** ai.c
 plus all thirteen host/*.c (cb/cuda/drm/fs/haven/image/image_baked/init/main/
-net/phos/pty) go through `aicc -c`, and clang links the bag -- gcc appears
+net/lux/pty) go through `aicc -c`, and clang links the bag -- gcc appears
 ONLY as the linker. The all-aicc binary boots and passes the whole 2831-test
 corpus. Delivered: our own POSIX headers under crew/cc/include (errno, string,
 stdio, stdlib, fcntl, time, poll, termios, dirent, link, sys/{types,stat,wait,

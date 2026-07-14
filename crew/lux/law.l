@@ -1,6 +1,6 @@
-; crew/phos/law.l -- xmonad's QuickCheck properties for crew/phos/core.l, in exact arithmetic,
-; plus a seeded fuzz. Reads the LEAKED globals from crew/phos/core.l (concatenate them:
-; `cat test/00-init.l crew/phos/core.l crew/phos/law.l | ai`, the `make test_phos` gate). Split
+; crew/lux/law.l -- xmonad's QuickCheck properties for crew/lux/core.l, in exact arithmetic,
+; plus a seeded fuzz. Reads the LEAKED globals from crew/lux/core.l (concatenate them:
+; `cat test/00-init.l crew/lux/core.l crew/lux/law.l | ai`, the `make test_lux` gate). Split
 ; into small independent top-level `:` forms -- each self-contained, nothing new
 ; leaks, and no single form grows big enough to stress the whole-form compiler.
 
@@ -74,7 +74,7 @@
    sF (fz 200 (seed 7) (sheaf '(1 2 3)))
    (assert (wssane? sF) (all (\ w (|| (wsfloating? sF w) (wsknown? sF (wstagof sF w)))) (wswins sF))))
 
-; --- the layout engine (crew/phos/layout.l): geometry is a partition ---
+; --- the layout engine (crew/lux/layout.l): geometry is a partition ---
 (: (area p) (* (nthl p 3) (nthl p 4))                                            ; a placement's w*h
    (sumarea ps) (foldl (\ a p (+ a (area p))) 0 ps)
    r (rct 0 0 800 600) full-area 480000
@@ -122,7 +122,7 @@
       (= (wincol (cap (lay-tile (tall 9) r z))) ws)
       (! (wincol (cap (lay-tile (tall 2) r (zfrom ())))))))
 
-; --- the layout modifiers (crew/phos/layout.l rung 4): each wraps a layout ---
+; --- the layout modifiers (crew/lux/layout.l rung 4): each wraps a layout ---
 (: (area p) (* (nthl p 3) (nthl p 4))
    (sumarea ps) (foldl (\ a p (+ a (area p))) 0 ps)
    r (rct 0 0 800 600) z3 (zfrom '(10 20 30)) z1 (zfrom '(10))
@@ -159,7 +159,7 @@
 
 ; --- the OPEN dispatch lane: a layout whose head is a CLOSURE answers the
 ; --- 'tile/'msg protocol itself -- user layouts enter as plain data, no table
-; --- edit (the phos repl's live-layout hook), and modifiers wrap them like
+; --- edit (the lux repl's live-layout hook), and modifiers wrap them like
 ; --- any builtin ---
 (: (q op lay a b) (? (= op 'tile) (: f (zfoc b)                                  ; focus in a fixed corner box; state = (nthl lay 1)
                                      (L (? f (L (link f (rct 0 0 100 (nthl lay 1)))) ()) lay))
@@ -175,7 +175,7 @@
          (&& (= (tally p) 1) (= (tally (cap p)) 6)))
       (= (nthl (nthl (lay-msg (smart-borders Q) 'grow z3) 1) 1) 60)))            ; ... and a delegated message threads the closure's new state
 
-; --- the manageHook DSL (crew/phos/manage.l rung 5): combinators + float actions ---
+; --- the manageHook DSL (crew/lux/manage.l rung 5): combinators + float actions ---
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
    yes (\ c 1) no (\ c 0)                                                        ; mock predicates
@@ -199,7 +199,7 @@
       ; manage-default is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default)))
 
-; --- the Go/Swap zipper halves (crew/phos/core.l rung 6): focus/swap by NAME ---
+; --- the Go/Swap zipper halves (crew/lux/core.l rung 6): focus/swap by NAME ---
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
    (assert
       (= (zfoc (zfocto 3 z3)) 3) (= (zrow (zfocto 3 z3)) '(1 2 3))               ; zfocto moves ONLY the focus
@@ -209,7 +209,7 @@
       (= (zswapw 1 3 (zswapw 1 3 z3)) z3)                                        ; an involution
       (= (zswapw 1 9 z3) z3)))                                                   ; a missing party: no-op
 
-; --- the keymap (crew/phos/keys.l rung 6): the table's shape, the union law, nextMatch ---
+; --- the keymap (crew/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
 (: (assert
       ; every binding is (mods keysym action), the action a tagged list
       (all (\ r (&& (= (tally r) 3) (two? (kb-act r)) (name? (cap (kb-act r))))) the-keys)
@@ -235,7 +235,7 @@
       (= (nm-pick '(10 20) 10 '(99 20 10) 1) 20)                                 ; other-workspace history is ignored
       (! (nm-pick '(10) 10 '(10) 1))))                                           ; nowhere to go
 
-; --- EWMH + docks (crew/phos/ewmh.l rung 7): strut arithmetic + wire encodings ---
+; --- EWMH + docks (crew/lux/ewmh.l rung 7): strut arithmetic + wire encodings ---
 (: (assert
       ; _NET_WM_STRUT_PARTIAL's 12 values: the strut is the first 4; short = none
       (= (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800)) '(0 0 30 0))
@@ -271,20 +271,20 @@
    (assert (= (ewmh-cm-win pk) 9) (= (ewmh-cm-type pk) 5)
            (= (ewmh-cm-d0 pk) 2) (= (ewmh-cm-d1 pk) 7) (= (ewmh-cm-d2 pk) 8)))
 
-; --- the config (crew/phos/config.l rung 8): the transliteration's shape ---
-(: sm (nthl phos-layout 2) tf (nthl sm 1) mir (nthl tf 2) ch (nthl mir 2)          ; peel minimize/smart/toggle/mirror down to the |||
+; --- the config (crew/lux/config.l rung 8): the transliteration's shape ---
+(: sm (nthl lux-layout 2) tf (nthl sm 1) mir (nthl tf 2) ch (nthl mir 2)          ; peel minimize/smart/toggle/mirror down to the |||
    subs (nthl ch 2) rt (cap subs) dw (caup subs)
    (assert
-      (= phos-border 3) (= (tally phos-tags) 9) (= (cap phos-tags) 1)
-      (= (cap phos-layout) 'minimize) (= (cap sm) 'smart) (= (cap tf) 'toggle-lay)
+      (= lux-border 3) (= (tally lux-tags) 9) (= (cap lux-tags) 1)
+      (= (cap lux-layout) 'minimize) (= (cap sm) 'smart) (= (cap tf) 'toggle-lay)
       (= (cap mir) 'mirror) (= (cap ch) 'choice)
       (= (cap rt) 'rtall) (= (nthl rt 1) 1) (= (nthl rt 2) 0.5)                  ; ResizableTall 1 (2/100) (1/2)
       (= (cap dw) 'dwindle)
       (: phi (nthl dw 1) (&& (< 1.61803 phi) (< phi 1.61804)))                   ; fib 32 / fib 31, the golden ratio
-      (= (tally phos-keymap) 70) (lit? phos-manage)
-      (= (cap (cap phos-startup)) "setxkbmap")))
+      (= (tally lux-keymap) 70) (lit? lux-manage)
+      (= (cap (cap lux-startup)) "setxkbmap")))
 
-; --- ~/.Xauthority parsing (crew/phos/wire.l rung 8), on mock bytes ---
+; --- ~/.Xauthority parsing (crew/lux/wire.l rung 8), on mock bytes ---
 (: (be16 n) (+ (+ "" (>> n 8)) (& 255 n))                                        ; big-endian u16 as two appended bytes
    (fld t) (+ (be16 (tally t)) t)
    (entry num data) (+ (+ (+ (+ (be16 256) (fld "bee")) (fld num)) (fld "MIT-MAGIC-COOKIE-1")) (fld data))
@@ -304,7 +304,7 @@
            (= (b 20) 94) (= (b 24) 42) (= (b 36) 68)                             ; CreateGlyphCursor, cid, glyph 68
            (= (b 52) 46) (= (b 60) 2) (= (b 68) 0) (= (b 69) 64) (= (b 72) 42))) ; CloseFont; CWA mask 0x4000, value cid
 
-; --- minimize's targeted restore (a taskbar activate; crew/phos/layout.l rung 8) ---
+; --- minimize's targeted restore (a taskbar activate; crew/lux/layout.l rung 8) ---
 (: z3 (zfrom '(10 20 30)) r (rct 0 0 800 600)
    M (lay-msg (minimize (resizable-tall 1 0.02 0.5)) (L 'minimize-window 20) z3)
    (assert
@@ -312,5 +312,5 @@
       (= (tally (cap (lay-tile (lay-msg M (L 'restore-window 20) z3) r z3))) 3)  ; named restore brings it back
       (! (lay-msg M (L 'restore-window 30) z3))))                                ; not minimized -> unhandled ()
 
-(say err "crew/phos/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
+(say err "crew/lux/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
 ")

@@ -11,8 +11,8 @@
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
-(reads (open "crew/phos/core.l" "r"))
-(reads (open "crew/phos/wire.l" "r"))
+(reads (open "crew/lux/core.l" "r"))
+(reads (open "crew/lux/wire.l" "r"))
 (reads (open "crew/haven/wire.l" "r"))
 
 ; -displayfd: Xvfb PICKS a free display and prints the number when it is ready
@@ -79,8 +79,8 @@
                       (go px 0))
 
  ; haven on its own X window + shore
- hv (mind `("out/host/ai" "-l" "crew/phos/core.l" "-l" "crew/phos/wire.l"
-            "-l" "crew/phos/layout.l" "-l" "crew/quay/pier.l"
+ hv (mind `("out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l"
+            "-l" "crew/lux/layout.l" "-l" "crew/quay/pier.l"
             "-l" "crew/haven/wire.l" "-l" "crew/haven/haven.l"
             "-e" (+ "(haven \"" (+ sock (+ "\" \"" (+ dpy "\" () 320 240)"))))))
  _ (must 'haven-up (two? hv))

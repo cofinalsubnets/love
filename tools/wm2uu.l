@@ -1,6 +1,6 @@
-; tools/wm2uu.l -- stage 3 of the verified-phos ladder: the .l -> uu translator.
-; Reads crew/phos/core.l's zipper ops AS DATA and emits uu terms in the model's
-; vocabulary, KIND-DIRECTED by crew/phos/sigs.l (the overlay's boundary table is
+; tools/wm2uu.l -- stage 3 of the verified-lux ladder: the .l -> uu translator.
+; Reads crew/lux/core.l's zipper ops AS DATA and emits uu terms in the model's
+; vocabulary, KIND-DIRECTED by crew/lux/sigs.l (the overlay's boundary table is
 ; the type oracle): a cap on a zipper is zfoc, on a row hd0; caup is zup,
 ; caup-of-cup is zdn; link/cat/rev are ncons/lapp/lrev; a two? test cases on a
 ; row's length (nat_rect) or WITNESSES a zipper nonempty (the model's stk IS

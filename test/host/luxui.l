@@ -1,15 +1,15 @@
-; --- test/host/phosui.l: phos end to end under a headless X ---
+; --- test/host/luxui.l: lux end to end under a headless X ---
 ; NOT in the test/*.l corpus (connectu/mind are host/*.c). Spawns an Xvfb,
-; sails the REAL phos driver (the same seven modules `make install` cats into
-; bin/phos) as one child, then a PROBE (test/host/phosui-probe.l) as another: the
+; sails the REAL lux driver (the same seven modules `make install` cats into
+; bin/lux) as one child, then a PROBE (test/host/luxui-probe.l) as another: the
 ; probe drives synthetic input -- XTEST FakeInput for the super+drags, SendEvent
 ; ClientMessages for the EWMH requests -- and asserts every effect off
 ; GetGeometry/GetProperty/GetInputFocus, exiting 0 iff all held. TWO processes
-; on purpose: phos's stream and the probe's never share a socket, so neither
+; on purpose: lux's stream and the probe's never share a socket, so neither
 ; can desync the other (the one-process attempt kept mis-reading geometry;
 ; the test/host/haven.l shape is the cure).
 ;
-;   cat test/00-init.l test/host/phosui.l | out/host/ai
+;   cat test/00-init.l test/host/luxui.l | out/host/ai
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
@@ -23,10 +23,10 @@
                            _ (? (charm? p) (: _ (still p 15) (wfx p)) 0) 0))
                    (keys camp))
    (must tag v) (? v v (: _ (strike ())
-                           _ (puts "phosui: FAIL ") _ (putx tag) _ (putc 10)
+                           _ (puts "luxui: FAIL ") _ (putx tag) _ (putc 10)
                            (quit 1)))
  _ (? (! (two? xv))
-      (: _ (puts "phosui: ok (no Xvfb, skipped)") (quit 0))
+      (: _ (puts "luxui: ok (no Xvfb, skipped)") (quit 0))
       0)
  _ (enlist 'xv (cap xv))
  (rdnum p) ((: (go n st) (: c (see p)
@@ -41,20 +41,20 @@
  _ (must 'display (&& (charm? dn) (! (two? (gather (cap xv))))))
  dpy (+ "/tmp/.X11-unix/X" (show dn))
 
- ; the real driver, the same module set bin/phos ships (DISPLAY rides env)
+ ; the real driver, the same module set bin/lux ships (DISPLAY rides env)
  ph (mind `("env" (+ "DISPLAY=:" (show dn))
-            "out/host/ai" "-l" "crew/phos/core.l" "-l" "crew/phos/layout.l"
-            "-l" "crew/phos/wire.l" "-l" "crew/phos/ewmh.l"
-            "-l" "crew/phos/manage.l" "-l" "crew/phos/keys.l"
-            "-l" "crew/phos/config.l" "-l" "crew/phos/phos.l"))
- _ (must 'phos-up (two? ph))
+            "out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
+            "-l" "crew/lux/wire.l" "-l" "crew/lux/ewmh.l"
+            "-l" "crew/lux/manage.l" "-l" "crew/lux/keys.l"
+            "-l" "crew/lux/config.l" "-l" "crew/lux/lux.l"))
+ _ (must 'lux-up (two? ph))
  _ (enlist 'ph (cap ph))
 
- ; the probe: its own process, its own streams; it waits for phos itself
+ ; the probe: its own process, its own streams; it waits for lux itself
  ; (_NET_SUPPORTED on the root), drives, asserts, and exits 0 or names its
  ; failure. Its pty is echoed either way -- a red run tells its story here.
- pr (mind `("out/host/ai" "-l" "crew/phos/core.l" "-l" "crew/phos/layout.l"
-            "-l" "crew/phos/wire.l" "-l" "test/host/phosui-probe.l"
+ pr (mind `("out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
+            "-l" "crew/lux/wire.l" "-l" "test/host/luxui-probe.l"
             "-e" (+ "(probe \"" (+ dpy "\")"))))
  _ (must 'probe-up (two? pr))
  _ (enlist 'pr (cap pr))
@@ -67,4 +67,4 @@
 
  _ (strike ())
  _ (close (cup ph)) _ (close (cup xv))
- (puts "phosui: ok"))
+ (puts "luxui: ok"))
