@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<nav class="topnav"><span class="here">ai</span> &nbsp;&middot;&nbsp; <a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="#lore">lore</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
 <h1>🌑 <a href="https://github.com/cofinalsubnets/ai">ai</a> 🔭</h1>
 
 <!-- the live bao shell: status, terminal, runnable chips, and the wasm driver.
@@ -37,6 +36,9 @@ data-run=
 <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
 <span class="chip" data-run="(i * pi) e">(i * pi) e</span>
 <span class="chip" data-run="'ab + 'cd">'ab + 'cd</span>
+
+<hr>
+<nav class="topnav"><span class="here">ai</span> &nbsp;&middot;&nbsp; <a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
 
 <script src="wasm/ai.js"></script>
 <script>
@@ -153,7 +155,6 @@ data-run=
 })();
 </script>
 
-<hr>
 <h2 id="language"><a href="#language">🎨 language</a></h2>
 <p>
 ai is a dynamically typed lisp superset where every value is a one-argument function.
@@ -207,7 +208,6 @@ exponents. in the outward direction, extending the church algebra definitions to
 generally identifies exponentiation with application, multiplication with composition,
 and addition with a secret second kind of composition.</p>
 
-<hr>
 <h2 id="glossary"><a href="#glossary">glossary</a></h2>
 <dl class="glossary">
   <dt id="g-apply"><a href="#g-apply">📋 apply</a></dt>
@@ -301,7 +301,6 @@ and addition with a secret second kind of composition.</p>
     <dd>see: <a href="#g-nothing">nothing</a></dd>
 </dl>
 
-<hr>
 <h2 id="crew"><a href="#crew">the crew</a></h2>
 <dl class="crew">
   <dt>🌑 inle ◦ the vessel</dt>
@@ -316,39 +315,21 @@ and addition with a secret second kind of composition.</p>
     <dd>white cat. ambivalently misanthropic. openbsd netcat clone</dd>
   <dt>🐕 bao ◦ the shell</dt>
     <dd>corgi shiba inu mix. very eager to please. rlwrap clone</dd>
-  <dt>🐀 cook ◦ the build system</dt>
-    <dd>a colony of gray rats. gnu make clone</dd>
+  <dt>🐀 salt ◦ the build system</dt>
+    <dd>large albino rat. gnu make clone</dd>
   <dt>🐐 mow ◦ the grass chewer (garbage collector)</dt>
     <dd>goat. formerly gregarious, now solitary. two-gen two-space copying</dd>
-  <dt>🕷️ <a href="crew/holo.html">holo</a> ◦ the assembler</dt>
+  <dt>🕷️ holo ◦ the assembler</dt>
     <dd>cave spider. short for holophrasm. currently amd64/arm64</dd>
-  <dt>🦇 <a href="crew/thom.html">thom</a> ◦ the SAT bat</dt>
+  <dt>🦇 thom ◦ the SAT bat</dt>
     <dd>cave bat friend of holo. they often discuss their inner lives</dd>
-  <dt>🦐 <a href="crew/phos.html">phos</a> ◦ the window manager</dt>
+  <dt>🦐 lux ◦ the window manager</dt>
     <dd>mantis shrimp. frequents a brine pool in holo's cave. xmonad clone</dd>
   <dt>🦑 quay ◦ the terminal emulator</dt>
     <dd>cuttlefish. 256 color skin. likes writing screensavers</dd>
-  <dt>🪸 pulchritude ◦ the editor</dt>
-    <dd>coral colony. vi clone</dd>
+  <dt>🐛 pulchritude ◦ the editor</dt>
+    <dd>brightly banded centipede. vi clone</dd>
 </dl>
-
-<hr>
-<h2 id="lore"><a href="#lore">🧙 lore</a></h2>
-<h3>📜 origins</h3>
-<p>the language currently known as ai originated in 2016/2017 as an attempt to synthesize a
-scheme-like lisp dialect with forth and K. the original version was much more forth-like and
-a few syntactic vestiges remain, notably the <code>:</code> form and <code>.</code> operator.
-by 2020 the language was recognizable and using the modern set of forms, although at this
-point <code>,</code> and <code>`</code> were separate sequencing and quotation primitives, not
-yet folded into <code>:</code> and <code>\</code>. more substantially, currying was not a
-central component of the design at this point. the type ontology was less structured, though
-reasonably small, based on tagged pointers. by mid 2021 the bootstrap and self-hosted thread
-compilers were similar to their current design. by 2023 the runtime and compilers had been
-revised to support currying as a fundamental feature. the language, now called gwen lisp,
-was developed and improved in various ways through the next several years. at this time
-<code>()</code> was fused with 0, the color principle was not yet present, and the function
-action of all data was to act as its own constant function.</p>
-<p>👷<em>this section is under construction</em></p>
 
 <footer>for ()
   <span class="note">&middot; set in <a href="https://int10h.org/oldschool-pc-fonts/">DOS/V TWN16 + re. PRC16</a> by VileR, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></span>
