@@ -24,7 +24,7 @@ export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_lux test_extract test_arm64
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_lux test_extract test_arm64 test_wake
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `ai`
 # from-source under AI_NO_IMAGE, and ai0 -- c0 + the self-hosted ev, twice). It does
@@ -945,6 +945,21 @@ $(ho)/ai.baked $(ho)/ai.cand.baked: %.baked: %
 	@echo BAKE	$<
 	@$< --bake
 	@touch $@
+
+# test_wake: the WOKEN-IMAGE lane -- the one lane no other gate runs (AI_NO_IMAGE
+# is exported for every recipe above, so every gate exercises the fresh egg; only
+# a user's direct run wakes the image). Bakes a CANDIDATE COPY (ai.wake -- the
+# canonical binary untouched, ETXTBSY-proof) and runs test/uu.l through the woken
+# image under a budget the wake storm cannot meet (fresh lane ~1s, the storm >90s
+# -- doc/wake-storm.md). Deliberately NOT in test_all yet: it is RED today,
+# pinning the open storm bug; wire it in when the fix lands.
+test_wake: $(ho)/ai
+	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
+	@cp $(ho)/ai $(ho)/ai.wake && $(ho)/ai.wake --bake
+	@cat test/00-init.l test/uu.l > $(ho)/wake-corpus.l
+	@if env -u AI_NO_IMAGE timeout 60 $(ho)/ai.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
+	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/ai.wake $(ho)/wake-corpus.l; \
+	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/ai.wake $(ho)/wake-corpus.l; exit 1; fi
 
 # candidate: build + bake the NEXT GENERATION at the side path out/host/ai.cand.
 # nothing executes that name, so the in-place bake can never hit ETXTBSY -- a
