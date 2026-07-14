@@ -309,6 +309,18 @@
       (L "a64.shlv"     "0020c19a"          '((shlv r0 r1)))              ; lsl x0, x0, x1
       (L "a64.shrv"     "e724c19a"          '((shrv r7 r1)))              ; lsr x7, x7, x1
       (L "a64.sarv"     "6328c19a"          '((sarv r3 r1)))              ; asr x3, x3, x1
+      ;; the cc-rung lanes (aicc -t arm64): lean; the 24-bit add/sub split; the FAR memory
+      ;; lane (movz x16 + add/sub off the base); fp LDUR/STUR + far (frame slots run negative);
+      ;; f16+ registers; cmp's cmn flip; p/np as vs/vc (FCMP parks unordered in V). llvm-mc-verified.
+      (L "a64.lean"     "808000d1"          '((lean r0 r4 -32)))          ; sub x0, x4, #32 (lea's alias)
+      (L "a64.addi.24"  "2040409100100091"  '((add r0 r1 65540)))         ; add x0,x1,#16,lsl#12 ; add x0,x0,#4
+      (L "a64.far.ld"   "902580d2300010cb000240f9" '((ld r0 r1 -300)))    ; movz x16,#300 ; sub x16,x1,x16 ; ldr x0,[x16]
+      (L "a64.stur.d"   "40801ffc"          '((stsd r2 -8 f0)))           ; stur d0, [x2, #-8]
+      (L "a64.ldur.d"   "83005ffc"          '((ldsd f3 r4 -16)))          ; ldur d3, [x4, #-16]
+      (L "a64.far.fld"  "902580d2300010cb000240fd" '((ldsd f0 r1 -300)))  ; movz x16,#300 ; sub x16,x1,x16 ; ldr d0,[x16]
+      (L "a64.freg.hi"  "500400fd"          '((stsd r2 8 f16)))           ; str d16, [x2, #8] (the narrow scratch)
+      (L "a64.cmn"      "1f1c00b1"          '((cmp r0 -7)))               ; cmn x0, #7 (negative imm flips)
+      (L "a64.set.np"   "e0679f9a"          '((set np r0)))               ; cset x0, vc (np aliases vc)
       (L "a64.la"       "400000102700001041424300"
                         '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0)))))  ; adr x0/x7, x
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
