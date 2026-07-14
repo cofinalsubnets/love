@@ -685,39 +685,62 @@
                        (cat c
                         (cat tf (cat `(`('jmp ld) `('label le))
                          (ef + `(`('label ld))))))))))
-          ; -- the varargs builtins (the SysV ABI). a va_list is the 24-byte struct
-          ; { int gp_offset; int fp_offset; void *overflow_arg_area; void
-          ; *reg_save_area; } (crew/cc/include/stdarg.h). va_start seeds it past the
-          ; named params; va_arg fetches from the register save area until its
-          ; offset passes the reg limit, then from the overflow (stack) area,
-          ; stepping the offset; va_end nops. --
+          ; -- the varargs builtins, per target (crew/cc/include/stdarg.h). SysV: the
+          ; 24-byte { int gp_offset; int fp_offset; void *overflow_arg_area; void
+          ; *reg_save_area; } -- va_arg fetches from the save area until the offset
+          ; passes the reg limit, then from the overflow area. AAPCS64: the 32-byte
+          ; { void *__stack; void *__gr_top; void *__vr_top; int __gr_offs; int
+          ; __vr_offs; } -- the offs fields are NEGATIVE, counted back from each
+          ; area's top, rising by the stride toward 0; at >= 0 the arg is on the
+          ; caller stack at __stack. va_start seeds either past the named params;
+          ; va_end nops. --
           (k = 'vastart)
            ; cgexpr (not clval) gives the struct pointer uniformly: a va_list LOCAL
            ; (array) decays to its address, a va_list PARAM (a decayed pointer)
            ; loads its value -- both land the struct address in r0.
            (: lv (cgexpr g env <>e)                 ; the va_list struct pointer in r0
               rsa (peep g 'rsa 0) ngp (peep g 'vagp 0) nxmm (peep g 'vaxmm 0)
+              nov (peep g 'vaov 0)                  ; named params that overflowed (slots)
               (? (bad? lv) 'bad
                  (: _ (pin g 'fesc 1)                                       ; the va_list HOLDS frame addresses: no sibcalls here
                     (mkv 'long 'r0 (cat (tor0 g lv)
-                      `(`('li 'r1 (* 8 ngp))         `('st4 'r0 0 'r1)   ; gp_offset = 8*named-gp
-                         `('li 'r1 (48 + (* 16 nxmm))) `('st4 'r0 4 'r1)  ; fp_offset = 48 + 16*named-xmm
-                         `('lea 'r1 'r4 16)  `('st 'r0 8 'r1)             ; overflow_arg_area = rbp+16
-                         `('lea 'r1 'r4 rsa) `('st 'r0 16 'r1)))))))       ; reg_save_area = rbp+rsa
+                      (? (a64? g)
+                         `(`('lea 'r1 'r4 ((ovb g) + (* 8 nov))) `('st 'r0 0 'r1)   ; __stack = fp+32 + named overflow
+                            `('lea 'r1 'r4 (rsa + 64))  `('st 'r0 8 'r1)            ; __gr_top (past x0..x7)
+                            `('lea 'r1 'r4 (rsa + 192)) `('st 'r0 16 'r1)           ; __vr_top (past q0..q7)
+                            `('li 'r1 (0 - (* 8 (8 - ngp))))  `('st4 'r0 24 'r1)    ; __gr_offs = -(unnamed gp)*8
+                            `('li 'r1 (0 - (* 16 (8 - nxmm)))) `('st4 'r0 28 'r1))  ; __vr_offs = -(unnamed vr)*16
+                         `(`('li 'r1 (* 8 ngp))         `('st4 'r0 0 'r1)   ; gp_offset = 8*named-gp
+                            `('li 'r1 (48 + (* 16 nxmm))) `('st4 'r0 4 'r1)  ; fp_offset = 48 + 16*named-xmm
+                            `('lea 'r1 'r4 16)  `('st 'r0 8 'r1)             ; overflow_arg_area = rbp+16
+                            `('lea 'r1 'r4 rsa) `('st 'r0 16 'r1))))))))      ; reg_save_area = rbp+rsa
           (k = 'vaarg)
            (: lv (cgexpr g env <>e) ty <>>e    ; the va_list struct pointer in r0
               lov (nlab g ".vo") ld (nlab g ".vd")
-              foff (? (flo? ty) 4 0)                      ; the offset field: fp_offset (4) vs gp_offset (0)
-              lim (? (flo? ty) 176 48)                    ; the register-area limit
-              step (? (flo? ty) 16 8)                     ; the offset stride
-              ; r1 = the relevant offset; if it is below the limit, p = reg_save_area
-              ; + offset and the offset advances; else p = overflow, which advances 8.
-              walk `(`('ld4 'r1 'r0 foff) `('cmp 'r1 lim) `('br 'ge lov)
-                      `('ld 'r2 'r0 16) `('add 'r2 'r2 'r1)            ; p = reg_save_area + offset
-                      `('add 'r1 'r1 step) `('st4 'r0 foff 'r1)         ; advance the offset
-                      `('jmp ld) `('label lov)
-                      `('ld 'r2 'r0 8) `('mov 'r3 'r2) `('add 'r3 'r3 8) `('st 'r0 8 'r3)   ; p = overflow; overflow += 8
-                      `('label ld))
+              ; r1 = the relevant offset; r2 = the fetch address. SysV: offset below
+              ; the limit reads reg_save_area + offset and advances; else overflow,
+              ; which advances 8. AAPCS64: a NEGATIVE offs reads top + offs (ld4
+              ; sign-extends) and advances toward 0; at >= 0 the arg rides __stack,
+              ; which advances 8 (every AAPCS stack slot is one 8-byte cell).
+              walk (? (a64? g)
+                      (: foff (? (flo? ty) 28 24)               ; __vr_offs / __gr_offs
+                         toff (? (flo? ty) 16 8)                ; __vr_top / __gr_top
+                         step (? (flo? ty) 16 8)                ; a vr slot is one q (16)
+                         `(`('ld4 'r1 'r0 foff) `('cmp 'r1 0) `('br 'ge lov)
+                            `('ld 'r2 'r0 toff) `('add 'r2 'r2 'r1)           ; p = top + offs
+                            `('add 'r1 'r1 step) `('st4 'r0 foff 'r1)          ; advance the offs
+                            `('jmp ld) `('label lov)
+                            `('ld 'r2 'r0 0) `('mov 'r3 'r2) `('add 'r3 'r3 8) `('st 'r0 0 'r3)   ; p = __stack; __stack += 8
+                            `('label ld)))
+                      (: foff (? (flo? ty) 4 0)                 ; fp_offset (4) vs gp_offset (0)
+                         lim (? (flo? ty) 176 48)               ; the register-area limit
+                         step (? (flo? ty) 16 8)                ; the offset stride
+                         `(`('ld4 'r1 'r0 foff) `('cmp 'r1 lim) `('br 'ge lov)
+                            `('ld 'r2 'r0 16) `('add 'r2 'r2 'r1)            ; p = reg_save_area + offset
+                            `('add 'r1 'r1 step) `('st4 'r0 foff 'r1)         ; advance the offset
+                            `('jmp ld) `('label lov)
+                            `('ld 'r2 'r0 8) `('mov 'r3 'r2) `('add 'r3 'r3 8) `('st 'r0 8 'r3)   ; p = overflow; overflow += 8
+                            `('label ld))))
               (? (bad? lv) 'bad
                  (flo? ty) (mkv 'double 'r0 ((tor0 g lv) + walk + (fldf ty 'f0 'r2 0)))
                  (mkv ty 'r0 ((tor0 g lv) + walk + `(`((ldop ty) 'r0 'r2 0))))))
@@ -1225,10 +1248,9 @@
                   (: f <fs
                      (link (? (&& (two? f) (<f = 'lean)) (link 'lea >f) f)
                            (unlean >fs))))
-   (epi4? fs) (&& (two? fs) (&& (<fs = '(ld r3 r4 -8))
-              (: f2 >fs (&& (two? f2) (&& (<f2 = '(mov sp r4))
-              (: f3 >f2 (&& (two? f3) (&& (<f3 = '(pop r4))
-              (: f4 >f3 (&& (two? f4) (<f4 = '(ret))))))))))))
+   (epim? fs es) (? (! (two? es)) 1                  ; the next forms are EXACTLY es (the target's epilogue)
+                    (! (two? fs)) ()
+                    (&& (<fs = <es) (epim? >fs >es)))
    ; lw = the WINDOW rule: a frame lea seen since the last call boundary means
    ; the candidate's OWN staging may hand the callee a frame address (`return
    ; f(&x)`, `return f(buf)`) -- that call stays a call; the boundary resets
@@ -1236,23 +1258,25 @@
    ; a ternary's JOIN LABEL may sit between the call and the epilogue (lvm_eval's
    ; Continue): the jump sequence lands BEFORE the labels and the labels + epi
    ; stay -- the other arm still flows through them.
-   (lbl-epi? fs) (? (! (two? fs)) ()
-                    (&& (two? <fs) ((cap (cap fs)) = 'label))
-                     (? (epi4? >fs) 1 (lbl-epi? >fs))
-                    ())
+   (lbl-epi? fs ej) (? (! (two? fs)) ()
+                       (&& (two? <fs) ((cap (cap fs)) = 'label))
+                        (? (epim? >fs ej) 1 (lbl-epi? >fs ej))
+                       ())
    ; a nested-ternary return leaves each arm as (call F)(jmp JOIN) with JOIN
    ; leading to the epilogue: elabs collects those epilogue labels first, and
    ; a candidate followed by (jmp X), X collected, rewrites too (the dead jmp
    ; drops -- nothing lands mid-instruction).
-   (elabs fs t) (? (! (two? fs)) t
-                   (: f <fs
-                      _ (? (&& (two? f) (&& (<f = 'label)
-                                            (|| (epi4? >fs) (lbl-epi? >fs))))
-                           (pin t <>f 1) ())
-                      (elabs >fs t)))
-   (sibjmp f) (? (<f = 'call)
-                 `(`('ld 'r3 'r4 -8) `('mov 'sp 'r4) `('pop 'r4) `('jmp <>f))
-                 `(`('mov 'r10 'r3) `('ld 'r3 'r4 -8) `('mov 'sp 'r4) `('pop 'r4) `('jmpr 'r10)))
+   (elabs fs t ej) (? (! (two? fs)) t
+                      (: f <fs
+                         _ (? (&& (two? f) (&& (<f = 'label)
+                                               (|| (epim? >fs ej) (lbl-epi? >fs ej))))
+                              (pin t <>f 1) ())
+                         (elabs >fs t ej)))
+   (butret es) (? (! (two? >es)) () (link <es (butret >es)))   ; the epilogue's restore forms (the ret drops)
+   (sibjmp g f)
+    (? (<f = 'call) ((butret (peep g 'epi epi)) + `(`('jmp <>f)))
+       (a64? g) ((butret epi-a64) + `(`('jmpr 'r15)))          ; the arm64 epilogue never touches the x15 park
+       (`(`('mov 'r10 'r3)) + (butret epi) + `(`('jmpr 'r10))))   ; park first: the x64 epilogue reloads r3
    ; a home reload run ((ld rH r4 slot)..) after a ret-position call is DEAD --
    ; the tail-jump hands the frame back first. skiprel peels exactly those.
    (skiprel fs hs)
@@ -1262,21 +1286,24 @@
               (: h (assoc <>f hs)
                  (? (&& (two? h) (<>h = <>>>f)) (skiprel >fs hs) fs))
              fs)))
-   (sibs fs lw el hs)
+   (dropf l n) (? (n < 1) l (dropf >l (n - 1)))
+   (sibs g fs lw el hs ej crf)
     (? (! (two? fs)) ()
        (: f <fs r >fs
           lw2 (? (&& (two? f) (&& (<f = 'lea) (<>>f = 'r4))) 1 lw)
           cand (&& (! lw2) (&& (two? f) (|| (&& (<f = 'call) (two? >f))
-                                            (f = '(callr r3)))))
+                                            (f = crf))))
           rr (? cand (skiprel r hs) r)
-          (? (&& cand (epi4? rr))
-              ((sibjmp f) + (sibs (cup (cup (cup (cup rr)))) () el hs))
-             (&& cand (lbl-epi? rr))
-              ((sibjmp f) + (sibs rr () el hs))
+          (? (&& cand (epim? rr ej))
+              ((sibjmp g f) + (sibs g (dropf rr (tally ej)) () el hs ej crf))
+             (&& cand (lbl-epi? rr ej))
+              ((sibjmp g f) + (sibs g rr () el hs ej crf))
              (&& cand (: nx <rr (&& (two? nx) (&& (<nx = 'jmp) (peep el <>nx ())))))
-              ((sibjmp f) + (sibs >rr () el hs))
-             (link f (sibs r (? (&& (two? f) (member? <f '(call callr raw))) () lw2) el hs)))))   ; raw: a builtin splice consumes its address like a call
-   (sibcall g fs) (? (peep g 'fesc ()) fs (sibs fs () (elabs fs (tablet 0)) (peep g 'homes ())))
+              ((sibjmp g f) + (sibs g >rr () el hs ej crf))
+             (link f (sibs g r (? (&& (two? f) (member? <f '(call callr raw))) () lw2) el hs ej crf)))))   ; raw: a builtin splice consumes its address like a call
+   (sibcall g fs) (? (peep g 'fesc ()) fs
+                     (: ej (peep g 'epi epi)
+                        (sibs g fs () (elabs fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
 
    ; -- IR constant propagation (cfoldir): a straight-line abstract pass over a
    ; function's final forms. it tracks known small constants in registers, frame
@@ -2302,6 +2329,26 @@
                      (? (5 < gpi) (cls >qs gpi xmmi (ov + 8) (link `(<p (16 + ov) pty) env))
                         (cls >qs (gpi + 1) xmmi ov (link `(<p (rsa + (* 8 gpi)) pty) env))))))
            (cls ps 0 0 0 ()))
+       ; a VARIADIC function (AAPCS64): a 192-byte save area -- x0..x7 (@ +0,
+       ; step 8) then q0..q7 (@ +64, step 16; the low 8 bytes carry the double,
+       ; the rest is don't-care -- cc has no vector types). named register
+       ; params are addressed INSIDE the area; named overflow params ride the
+       ; caller stack ((ovb g)+). va_start reads back rsa / vagp / vaxmm / vaov.
+       (vaspill-a64 ps)
+        (: rsa (0 - ((peep g 'off 0) + 192))
+           _ (pin g 'off ((peep g 'off 0) + 192))
+           _ (pin g 'rsa rsa)
+           savegp (: (go i acc) (? (7 < i) acc (go (i + 1) (acc + `(`('st 'r4 (rsa + (* 8 i)) (nthr argregs-a64 i)))))) (go 0 ()))
+           savevr (: (go i acc) (? (7 < i) acc (go (i + 1) (acc + (fstf g 'double 'r4 (rsa + 64 + (* 16 i)) (xmmreg i))))) (go 0 ()))
+           (cls qs gpi vri ov env)
+            (? (! (two? qs)) (: _ (pin g 'vagp gpi) _ (pin g 'vaxmm vri) _ (pin g 'vaov ov) `((savegp + savevr) env))
+               (: p <qs pty <>p
+                  (? (flo? pty)
+                      (? (7 < vri) (cls >qs gpi vri (ov + 1) (link `(<p ((ovb g) + (* 8 ov)) pty) env))
+                         (cls >qs gpi (vri + 1) ov (link `(<p (rsa + 64 + (* 16 vri)) pty) env)))
+                     (? (7 < gpi) (cls >qs gpi vri (ov + 1) (link `(<p ((ovb g) + (* 8 ov)) pty) env))
+                        (cls >qs (gpi + 1) vri ov (link `(<p (rsa + (* 8 gpi)) pty) env))))))
+           (cls ps 0 0 0 ()))
        ; -- register-homed params (the leaf lane). a gp param that is an 8-byte
        ; scalar (long/ulong/pointer) whose address never escapes can live in a
        ; CALLER-SAVED, non-scratch register for the whole function instead of a
@@ -2437,17 +2484,20 @@
               (? (bad? body) 'bad
                  (: frame (& ((peep g 'off 0) + 15) -16)
                     (? (a64? g)
-                       ; correctness first on the second target: the sibcall
-                       ; rewrite and the IR sweeps model x64 shapes (8-byte
-                       ; pushes, the r4 frame roles) -- arm64 rides the raw
-                       ; forms, retargeted r4 -> fp; the levers return rung by
-                       ; rung. lr rides its own push cell (bl clobbers it);
-                       ; no r3 slot -- x3 is caller-saved under AAPCS64.
+                       ; the sibcall pass rides both targets (epim?/sibjmp read
+                       ; the epilogue off g 'epi); the IR sweeps still model x64
+                       ; shapes (8-byte pushes, the r4 frame roles) -- arm64
+                       ; rides the raw forms, retargeted r4 -> fp AFTER the
+                       ; sibcall rewrite (its patterns speak r4; the epilogue
+                       ; forms already say fp/sp/lr and pass through a4ize
+                       ; untouched). lr rides its own push cell (bl clobbers
+                       ; it); no r3 slot -- x3 is caller-saved under AAPCS64.
                        (a4ize
-                        (cat `(`('label (intern <>f))
-                                `('push 'lr) `('push 'fp) `('lea 'fp 'sp 0) `('sub 'sp 'sp frame))
-                         (cat <sp0
-                          (body + `(`('li 'r0 0)) + epi-a64))))
+                        (sibcall g
+                         (cat `(`('label (intern <>f))
+                                 `('push 'lr) `('push 'fp) `('lea 'fp 'sp 0) `('sub 'sp 'sp frame))
+                          (cat <sp0
+                           (body + `(`('li 'r0 0)) + epi-a64)))))
                        (deadst
                         (stld
                         (spmerge
@@ -2516,10 +2566,8 @@
            (? (two? cs) `((mk cs hpool (tablet 0)) (dropn hpool (tally cs))) ()))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
        _ (pin g 'pool0 opool) _ (pin g 'pool opool)
-       ; arm64: a variadic DEFINITION refuses for now (the AAPCS64 va_list is
-       ; its own 32-byte shape -- the next rung); variadic CALLS already ride.
-       ; the homing regens stay x64 until their pools re-tune (rung B).
-       sp1 (? (&& vararg (a64? g)) 'bad
+       ; the homing regens stay x64 until their pools re-tune (rung B's tail).
+       sp1 (? (&& vararg (a64? g)) (vaspill-a64 params)
               vararg (vaspill params) (spill params 0 0 0 () ()))
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these

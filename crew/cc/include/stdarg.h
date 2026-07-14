@@ -1,20 +1,34 @@
 /* stdarg.h -- crew/cc's own, for `aicc`. cc implements the three __builtin_va_*
- * forms directly, over the System V AMD64 va_list: a 24-byte struct that cc's
- * variadic prologue feeds from a register save area. it is an array of one so it
- * DECAYS to a pointer when passed to another function (the C `va_list` habit --
- * ai.c's gvzprintf/ai_pushr take one), and va_arg mutates the shared state. the
- * offset fields are `int` (cc has no `unsigned` yet; the values are 0..176).
- * this MATCHES gcc's ABI, so a cc-compiled variadic function (ai_push) is callable
- * from the gcc-built host objects and vice versa. */
+ * forms directly, over the target's real va_list -- the System V AMD64 24-byte
+ * struct or the AAPCS64 32-byte one -- fed by cc's variadic prologue from a
+ * register save area. both are an array of one so a va_list DECAYS to a pointer
+ * when passed to another function (the C `va_list` habit -- ai.c's gvzprintf/
+ * ai_pushr take one), and va_arg mutates the shared state. the field LAYOUT
+ * matches gcc's on each target, so a cc-compiled variadic function (ai_push) is
+ * callable from gcc-built objects and vice versa. (on aarch64 gcc's va_list is
+ * a bare struct passed by reference -- a composite > 16 bytes -- which is the
+ * same wire as the array's decay: one pointer at the 32-byte struct.) the
+ * offset fields are `int`: SysV's run 0..176, AAPCS64's are NEGATIVE -- counted
+ * back from the top of each save area, rising toward 0. */
 #ifndef _CC_STDARG_H
 #define _CC_STDARG_H
 
+#ifdef __aarch64__
+typedef struct {
+  void *__stack;                 /* the next anonymous arg on the caller stack */
+  void *__gr_top;                /* one past the x0..x7 save area */
+  void *__vr_top;                /* one past the q0..q7 save area */
+  int __gr_offs;                 /* -(unnamed gp slots)*8, rising by 8 to 0 */
+  int __vr_offs;                 /* -(unnamed vr slots)*16, rising by 16 to 0 */
+} __va_list_tag;
+#else
 typedef struct {
   int gp_offset;
   int fp_offset;
   void *overflow_arg_area;
   void *reg_save_area;
 } __va_list_tag;
+#endif
 
 typedef __va_list_tag va_list[1];
 
