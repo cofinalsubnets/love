@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_lux test_kore test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm test_wake
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_lux test_kore test_reef test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm test_wake
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -200,6 +200,21 @@ out/host$(hsuf)/aicc: $(aiccfiles)
 	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S ai -l'; cat $(aiccfiles); } > $@
 	@chmod 755 $@
+# reef: the patch-set vcs (crew/reef/reef.l over the kore text+diff floor;
+# doc/reef.md). its own catted shebang script, the aicc precedent.
+reeffiles = crew/kore/text.l crew/kore/diff.l crew/reef/reef.l
+out/host$(hsuf)/reef: $(reeffiles)
+	@echo AI	$(abspath $@)
+	@{ echo '#!/usr/bin/env -S ai'; cat $(reeffiles); } > $@
+	@chmod 755 $@
+.PHONY: test_reef
+test_reef: host out/host$(hsuf)/reef
+	@echo "REEF crew/reef/{reef,reeftest}.l"; \
+	  rm -rf out/host/.reeftest; \
+	  cat test/00-init.l $(reeffiles) crew/reef/reeftest.l | $m > out/host/.test_reef.out 2>&1; r=$$?; \
+	  cat out/host/.test_reef.out; \
+	  { [ $$r -eq 0 ] && grep -q "reef: ok" out/host/.test_reef.out; } \
+	    || { echo "FAIL reef (exit $$r)"; exit 1; }
 .PHONY: test_kore
 test_kore: host out/host$(hsuf)/kore
 	@echo "UTILS crew/kore/{text,core,fs,re,sed,diff,law}.l"; \
