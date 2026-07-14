@@ -34,7 +34,8 @@
    (caaap x) (cap (cap (cap x))) (caaup x) (cap (cap (cup x)))
    (cauap x) (cap (cup (cap x))) (cauup x) (cap (cup (cup x)))
    (cuaap x) (cup (cap (cap x))) (cuaup x) (cup (cap (cup x)))
-   (cuuap x) (cup (cup (cap x))) (cuuup x) (cup (cup (cup x))))
+   (cuuap x) (cup (cup (cap x))) (cuuup x) (cup (cup (cup x)))
+   >< link)                                         ; the infix cons: (a >< b) IS (link a b); glued ><x stays the cup-cap accessor (valence)
 ; the four element tiers (enum g_vec_type, one word per element): z integers, r reals,
 ; c packed complex, o objects -- surfaced by the star-/gem-/twin-/top-tray ctors + `tier`.
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
