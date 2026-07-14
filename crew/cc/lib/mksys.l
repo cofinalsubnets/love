@@ -8,7 +8,8 @@
 ;                            ai.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
 ;   __ai_sigret              the SA_RESTORER tail (rt_sigreturn) nolibc's sigaction installs
 ; (sqrt stays in C -- crew/cc/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
-; C CAN say has no place here.) x64 only, like the linker. runs after crew/holo/{elf,obj}.l in a cat (the aicc prefix
+; C CAN say has no place here.) two targets: (mksys dst) lays x64, (mksys-arm64 dst)
+; aarch64. runs after crew/holo/{elf,obj}.l in a cat (the aicc prefix
 ; layers; the assembler itself rides the baked holo book):
 ;   { cat crew/kore/{text,core,asbook}.l crew/holo/{elf,obj}.l crew/cc/lib/mksys.l;
 ;     echo '(mksys "out/.../sys.o")'; } | out/host/ai
@@ -86,3 +87,109 @@
          (L 'sys))
        fns (L "__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret")
        (write-bytes dst (objelf 'x64 ir () fns () () ()))))
+
+; the aarch64 lane: same four leaves on the asm-generic table. registers are
+; holo's arm64 file, rN = xN one-to-one (plus fp/lr/sp by name). the jmp_buf
+; inside the same 25-long buffer: [0..9] x19..x28, [10] fp, [11] sp, [12] lr
+; (the return pc -- BL parked it there, so it IS the return seam), [13..20]
+; d8..d15 (AAPCS saves the LOW HALVES only -- str dN is exactly that),
+; [21] the signal mask. rt_sigprocmask is 135; the kernel preserves every
+; register but x0 across svc, so buf/val stage in x9/x10 and ride through.
+; __ai_sigret stays laid (rt_sigreturn 139) though aarch64's sigaction never
+; points at it -- the kernel supplies its own vdso trampoline (nolibc gates
+; SA_RESTORER off); the symbol keeps the two sys.o surfaces identical.
+(: (mksys-arm64 dst)
+    (: ir (L
+         ; -- __ai_sys: args x0..x6 (n,a..f) -> the kernel's x8=nr, x0..x5.
+         ;    x8 drains first, then each mov reads the slot ahead of it.
+         (L 'label '__ai_sys)
+         (L 'mov 'r8 'r0)                 ; x8 <- n
+         (L 'mov 'r0 'r1)                 ; x0 <- a
+         (L 'mov 'r1 'r2)                 ; x1 <- b
+         (L 'mov 'r2 'r3)                 ; x2 <- c
+         (L 'mov 'r3 'r4)                 ; x3 <- d
+         (L 'mov 'r4 'r5)                 ; x4 <- e
+         (L 'mov 'r5 'r6)                 ; x5 <- f
+         (L 'sys)
+         (L 'ret)                         ; x0 rides out (-errno included; C wraps it)
+
+         ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam,
+         ;    then the current mask into buf[21] (rt_sigprocmask how=0 set=NULL).
+         (L 'label '__sigsetjmp)
+         (L 'st 'r0 0   'r19)
+         (L 'st 'r0 8   'r20)
+         (L 'st 'r0 16  'r21)
+         (L 'st 'r0 24  'r22)
+         (L 'st 'r0 32  'r23)
+         (L 'st 'r0 40  'r24)
+         (L 'st 'r0 48  'r25)
+         (L 'st 'r0 56  'r26)
+         (L 'st 'r0 64  'r27)
+         (L 'st 'r0 72  'r28)
+         (L 'st 'r0 80  'fp)
+         (L 'lea 'r9 'sp 0)               ; sp reads through an add
+         (L 'st 'r0 88  'r9)
+         (L 'st 'r0 96  'lr)
+         (L 'stsd 'r0 104 'f8)
+         (L 'stsd 'r0 112 'f9)
+         (L 'stsd 'r0 120 'f10)
+         (L 'stsd 'r0 128 'f11)
+         (L 'stsd 'r0 136 'f12)
+         (L 'stsd 'r0 144 'f13)
+         (L 'stsd 'r0 152 'f14)
+         (L 'stsd 'r0 160 'f15)
+         (L 'lea 'r2 'r0 168)             ; x2 = &buf[21] (oldset)
+         (L 'li 'r1 0)                    ; x1 = NULL (read only)
+         (L 'li 'r0 0)                    ; x0 = SIG_BLOCK
+         (L 'li 'r3 8)                    ; x3 = sigsetsize
+         (L 'li 'r8 135)                  ; rt_sigprocmask
+         (L 'sys)
+         (L 'li 'r0 0)                    ; the first arrival answers 0
+         (L 'ret)
+
+         ; -- siglongjmp(buf, val): the mask FIRST (the fault barrier jumps out
+         ;    of a signal handler), then the file, then ret through the saved lr.
+         (L 'label 'siglongjmp)
+         (L 'mov 'r9 'r0)                 ; x9  <- buf
+         (L 'mov 'r10 'r1)                ; x10 <- val
+         (L 'lea 'r1 'r9 168)             ; x1 = &buf[21] (the saved mask)
+         (L 'li 'r0 2)                    ; x0 = SIG_SETMASK
+         (L 'li 'r2 0)                    ; x2 = NULL
+         (L 'li 'r3 8)                    ; x3 = sigsetsize
+         (L 'li 'r8 135)                  ; rt_sigprocmask
+         (L 'sys)
+         (L 'ld 'r19 'r9 0)
+         (L 'ld 'r20 'r9 8)
+         (L 'ld 'r21 'r9 16)
+         (L 'ld 'r22 'r9 24)
+         (L 'ld 'r23 'r9 32)
+         (L 'ld 'r24 'r9 40)
+         (L 'ld 'r25 'r9 48)
+         (L 'ld 'r26 'r9 56)
+         (L 'ld 'r27 'r9 64)
+         (L 'ld 'r28 'r9 72)
+         (L 'ld 'fp  'r9 80)
+         (L 'ldsd 'f8  'r9 104)
+         (L 'ldsd 'f9  'r9 112)
+         (L 'ldsd 'f10 'r9 120)
+         (L 'ldsd 'f11 'r9 128)
+         (L 'ldsd 'f12 'r9 136)
+         (L 'ldsd 'f13 'r9 144)
+         (L 'ldsd 'f14 'r9 152)
+         (L 'ldsd 'f15 'r9 160)
+         (L 'mov 'r0 'r10)                ; x0 <- val, 0 lifted to 1 (the setjmp law)
+         (L 'cmp 'r0 0)
+         (L 'br 'ne 'lj-live)
+         (L 'li 'r0 1)
+         (L 'label 'lj-live)
+         (L 'ld 'r11 'r9 88)
+         (L 'lea 'sp 'r11 0)              ; sp <- the saved sp
+         (L 'ld 'lr 'r9 96)
+         (L 'ret)                         ; ret x30 = the saved return pc
+
+         ; -- __ai_sigret: rt_sigreturn, laid for surface parity (see above).
+         (L 'label '__ai_sigret)
+         (L 'li 'r8 139)                  ; rt_sigreturn
+         (L 'sys))
+       fns (L "__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret")
+       (write-bytes dst (objelf 'arm64 ir () fns () () ()))))

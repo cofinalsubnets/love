@@ -1,14 +1,18 @@
 /* crew/cc/lib/nolibc.c -- the raw-syscall libc under the gcc-free ai (rung 4).
  * Everything the host objects ask of glibc, answered straight off the Linux
- * x86-64 syscall table through __ai_sys (crew/cc/lib/mksys.l lays that leaf,
- * with __sigsetjmp/siglongjmp/__ai_sigret/sqrt beside it; crew/cc/lib/math/
+ * syscall table through __ai_sys (crew/cc/lib/mksys.l lays that leaf,
+ * with __sigsetjmp/siglongjmp/__ai_sigret beside it; crew/cc/lib/math/
  * carries the math floor, crew/cc/lib/math/am.c -- ours). One file, aicc-compiled, our own linker binds it:
  *   aicc ai.o (host objects) nolibc.o (math objects) sys.o -o ai
- * The shapes here MATCH crew/cc/include/ (which mirrors glibc's x86-64 ABI,
- * which mirrors the kernel's where it can): struct stat and dirent are the
- * kernel layouts verbatim, termios rides TCGETS raw the way musl does, and
- * only sigaction needs a real translation (glibc's 152-byte struct to the
- * kernel's 32-byte one, restorer supplied). Single-threaded by design, like
+ * Two arches, one body: every call below speaks the modern forms BOTH tables
+ * carry (openat / newfstatat / ppoll / pipe2 / dup3 / clone / the *at file
+ * ops) -- aarch64's asm-generic table dropped the legacy names outright, so
+ * the NR block under this comment is the only thing that gates. The shapes
+ * MATCH crew/cc/include/: struct stat and dirent are the kernel layouts
+ * verbatim (stat.h arch-gates the struct), termios rides TCGETS raw the way
+ * musl does, and only sigaction needs a real translation (glibc's 152-byte
+ * struct to the kernel's -- x86-64 supplies a restorer, aarch64's kernel
+ * lays its own vdso return trampoline). Single-threaded by design, like
  * ai itself: errno is one int, no locks anywhere. */
 #include <stddef.h>
 #include <stdarg.h>
@@ -39,6 +43,133 @@
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 extern void __ai_sigret(void);
 extern int main(int, char**);
+
+/* ---- the syscall numbers, the one arch gate ---- */
+#ifdef __aarch64__
+#define NR_getcwd          17
+#define NR_dup3            24
+#define NR_fcntl           25
+#define NR_ioctl           29
+#define NR_mkdirat         34
+#define NR_unlinkat        35
+#define NR_symlinkat       36
+#define NR_linkat          37
+#define NR_renameat        38
+#define NR_mount           40
+#define NR_ftruncate       46
+#define NR_chdir           49
+#define NR_fchmod          52
+#define NR_fchmodat        53
+#define NR_fchownat        54
+#define NR_openat          56
+#define NR_close           57
+#define NR_pipe2           59
+#define NR_getdents64      61
+#define NR_lseek           62
+#define NR_read            63
+#define NR_write           64
+#define NR_pwrite64        68
+#define NR_ppoll           73
+#define NR_signalfd4       74
+#define NR_readlinkat      78
+#define NR_newfstatat      79
+#define NR_fstat           80
+#define NR_fsync           82
+#define NR_utimensat       88
+#define NR_exit_group      94
+#define NR_unshare         97
+#define NR_clock_gettime  113
+#define NR_kill           129
+#define NR_rt_sigaction   134
+#define NR_rt_sigprocmask 135
+#define NR_setpgid        154
+#define NR_getpgid        155
+#define NR_setsid         157
+#define NR_umask          166
+#define NR_getpid         172
+#define NR_getuid         174
+#define NR_getgid         176
+#define NR_socket         198
+#define NR_bind           200
+#define NR_listen         201
+#define NR_accept         202
+#define NR_connect        203
+#define NR_sendto         206
+#define NR_recvfrom       207
+#define NR_setsockopt     208
+#define NR_shutdown       210
+#define NR_sendmsg        211
+#define NR_recvmsg        212
+#define NR_munmap         215
+#define NR_clone          220
+#define NR_execve         221
+#define NR_mmap           222
+#define NR_mprotect       226
+#define NR_wait4          260
+#define NR_memfd_create   279
+#else
+#define NR_read             0
+#define NR_write            1
+#define NR_close            3
+#define NR_fstat            5
+#define NR_lseek            8
+#define NR_mmap             9
+#define NR_mprotect        10
+#define NR_munmap          11
+#define NR_rt_sigaction    13
+#define NR_rt_sigprocmask  14
+#define NR_ioctl           16
+#define NR_pwrite64        18
+#define NR_getpid          39
+#define NR_socket          41
+#define NR_connect         42
+#define NR_accept          43
+#define NR_sendto          44
+#define NR_recvfrom        45
+#define NR_sendmsg         46
+#define NR_recvmsg         47
+#define NR_shutdown        48
+#define NR_bind            49
+#define NR_listen          50
+#define NR_setsockopt      54
+#define NR_clone           56
+#define NR_execve          59
+#define NR_wait4           61
+#define NR_kill            62
+#define NR_fcntl           72
+#define NR_fsync           74
+#define NR_ftruncate       77
+#define NR_getcwd          79
+#define NR_chdir           80
+#define NR_fchmod          91
+#define NR_umask           95
+#define NR_getuid         102
+#define NR_getgid         104
+#define NR_setpgid        109
+#define NR_setsid         112
+#define NR_getpgid        121
+#define NR_mount          165
+#define NR_getdents64     217
+#define NR_clock_gettime  228
+#define NR_exit_group     231
+#define NR_openat         257
+#define NR_mkdirat        258
+#define NR_fchownat       260
+#define NR_newfstatat     262
+#define NR_unlinkat       263
+#define NR_renameat       264
+#define NR_linkat         265
+#define NR_symlinkat      266
+#define NR_readlinkat     267
+#define NR_fchmodat       268
+#define NR_ppoll          271
+#define NR_unshare        272
+#define NR_utimensat      280
+#define NR_signalfd4      289
+#define NR_dup3           292
+#define NR_pipe2          293
+#define NR_memfd_create   319
+#endif
 
 char **environ;
 static long *__auxv;
@@ -91,73 +222,79 @@ int strcmp(char const *a, char const *b) {
   return (int) (unsigned char) *a - (int) (unsigned char) *b; }
 
 /* ---- the plain syscall tail: one line each ---- */
-long read(int fd, void *b, long n) { return er(sc3(0, fd, (long) b, n)); }
-long write(int fd, void const *b, long n) { return er(sc3(1, fd, (long) b, n)); }
-int close(int fd) { return (int) er(sc1(3, fd)); }
-long lseek(int fd, long off, int wh) { return er(sc3(8, fd, off, wh)); }
+long read(int fd, void *b, long n) { return er(sc3(NR_read, fd, (long) b, n)); }
+long write(int fd, void const *b, long n) { return er(sc3(NR_write, fd, (long) b, n)); }
+int close(int fd) { return (int) er(sc1(NR_close, fd)); }
+long lseek(int fd, long off, int wh) { return er(sc3(NR_lseek, fd, off, wh)); }
 int open(char const *p, int fl, ...) {
   va_list ap; va_start(ap, fl);
   int mode = va_arg(ap, int);
   va_end(ap);
-  return (int) er(sc3(2, (long) p, fl, mode)); }
+  return (int) er(sc4(NR_openat, AT_FDCWD, (long) p, fl, mode)); }
 int fcntl(int fd, int cmd, ...) {
   va_list ap; va_start(ap, cmd);
   long arg = va_arg(ap, long);
   va_end(ap);
-  return (int) er(sc3(72, fd, cmd, arg)); }
+  return (int) er(sc3(NR_fcntl, fd, cmd, arg)); }
 int ioctl(int fd, unsigned long req, ...) {
   va_list ap; va_start(ap, req);
   long arg = va_arg(ap, long);
   va_end(ap);
-  return (int) er(sc3(16, fd, (long) req, arg)); }
-int stat(char const *p, struct stat *st) { return (int) er(sc2(4, (long) p, (long) st)); }
-int fstat(int fd, struct stat *st) { return (int) er(sc2(5, fd, (long) st)); }
-int lstat(char const *p, struct stat *st) { return (int) er(sc2(6, (long) p, (long) st)); }
-int poll(struct pollfd *fds, nfds_t n, int ms) { return (int) er(sc3(7, (long) fds, (long) n, ms)); }
-int pipe(int *fds) { return (int) er(sc1(22, (long) fds)); }
-int dup2(int a, int b) { return (int) er(sc2(33, a, b)); }
-int getpid(void) { return (int) sc0(39); }
-unsigned int getuid(void) { return (unsigned int) sc0(102); }
-unsigned int getgid(void) { return (unsigned int) sc0(104); }
-int fork(void) { return (int) er(sc0(57)); }
-int waitpid(int pid, int *st, int opt) { return (int) er(sc4(61, pid, (long) st, opt, 0)); }
-int kill(pid_t pid, int sig) { return (int) er(sc2(62, pid, sig)); }
+  return (int) er(sc3(NR_ioctl, fd, (long) req, arg)); }
+int stat(char const *p, struct stat *st) { return (int) er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) st, 0)); }
+int fstat(int fd, struct stat *st) { return (int) er(sc2(NR_fstat, fd, (long) st)); }
+int lstat(char const *p, struct stat *st) { return (int) er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) st, 256)); }   /* AT_SYMLINK_NOFOLLOW */
+int poll(struct pollfd *fds, nfds_t n, int ms) {
+  struct timespec ts;
+  ts.tv_sec = ms / 1000;
+  ts.tv_nsec = (long) (ms % 1000) * 1000000;
+  return (int) er(sc5(NR_ppoll, (long) fds, (long) n, ms < 0 ? 0 : (long) &ts, 0, 8)); }
+int pipe(int *fds) { return (int) er(sc2(NR_pipe2, (long) fds, 0)); }
+int dup2(int a, int b) {
+  if (a == b) return fcntl(a, F_GETFD, 0) < 0 ? -1 : b;   /* dup3 refuses a==b; dup2 answers b if a lives */
+  return (int) er(sc3(NR_dup3, a, b, 0)); }
+int getpid(void) { return (int) sc0(NR_getpid); }
+unsigned int getuid(void) { return (unsigned int) sc0(NR_getuid); }
+unsigned int getgid(void) { return (unsigned int) sc0(NR_getgid); }
+int fork(void) { return (int) er(sc5(NR_clone, 17, 0, 0, 0, 0)); }   /* clone(SIGCHLD): the fork nobody dropped */
+int waitpid(int pid, int *st, int opt) { return (int) er(sc4(NR_wait4, pid, (long) st, opt, 0)); }
+int kill(pid_t pid, int sig) { return (int) er(sc2(NR_kill, pid, sig)); }
 int raise(int sig) { return kill(getpid(), sig); }
-int fsync(int fd) { return (int) er(sc1(74, fd)); }
-int ftruncate(int fd, long n) { return (int) er(sc2(77, fd, n)); }
+int fsync(int fd) { return (int) er(sc1(NR_fsync, fd)); }
+int ftruncate(int fd, long n) { return (int) er(sc2(NR_ftruncate, fd, n)); }
 char *getcwd(char *b, unsigned long n) {
-  long r = sc2(79, (long) b, (long) n);
+  long r = sc2(NR_getcwd, (long) b, (long) n);
   if (r < 0) { __errno_v = (int) -r; return 0; }
   return b; }
-int chdir(char const *p) { return (int) er(sc1(80, (long) p)); }
-int rename(char const *a, char const *b) { return (int) er(sc2(82, (long) a, (long) b)); }
-int mkdir(char const *p, unsigned int m) { return (int) er(sc2(83, (long) p, m)); }
-int rmdir(char const *p) { return (int) er(sc1(84, (long) p)); }
-int link(char const *a, char const *b) { return (int) er(sc2(86, (long) a, (long) b)); }
-int unlink(char const *p) { return (int) er(sc1(87, (long) p)); }
-int symlink(char const *a, char const *b) { return (int) er(sc2(88, (long) a, (long) b)); }
-long readlink(char const *p, char *b, unsigned long n) { return er(sc3(89, (long) p, (long) b, (long) n)); }
-int chmod(char const *p, unsigned int m) { return (int) er(sc2(90, (long) p, m)); }
-int fchmod(int fd, unsigned int m) { return (int) er(sc2(91, fd, m)); }
-int chown(char const *p, unsigned int u, unsigned int g) { return (int) er(sc3(92, (long) p, u, g)); }
-unsigned int umask(unsigned int m) { return (unsigned int) sc1(95, m); }
-int setpgid(pid_t p, pid_t g) { return (int) er(sc2(109, p, g)); }
-int getpgrp(void) { return (int) sc0(111); }
-int setsid(void) { return (int) er(sc0(112)); }
+int chdir(char const *p) { return (int) er(sc1(NR_chdir, (long) p)); }
+int rename(char const *a, char const *b) { return (int) er(sc4(NR_renameat, AT_FDCWD, (long) a, AT_FDCWD, (long) b)); }
+int mkdir(char const *p, unsigned int m) { return (int) er(sc3(NR_mkdirat, AT_FDCWD, (long) p, m)); }
+int rmdir(char const *p) { return (int) er(sc3(NR_unlinkat, AT_FDCWD, (long) p, 512)); }   /* AT_REMOVEDIR */
+int link(char const *a, char const *b) { return (int) er(sc5(NR_linkat, AT_FDCWD, (long) a, AT_FDCWD, (long) b, 0)); }
+int unlink(char const *p) { return (int) er(sc3(NR_unlinkat, AT_FDCWD, (long) p, 0)); }
+int symlink(char const *a, char const *b) { return (int) er(sc3(NR_symlinkat, (long) a, AT_FDCWD, (long) b)); }
+long readlink(char const *p, char *b, unsigned long n) { return er(sc4(NR_readlinkat, AT_FDCWD, (long) p, (long) b, (long) n)); }
+int chmod(char const *p, unsigned int m) { return (int) er(sc4(NR_fchmodat, AT_FDCWD, (long) p, m, 0)); }
+int fchmod(int fd, unsigned int m) { return (int) er(sc2(NR_fchmod, fd, m)); }
+int chown(char const *p, unsigned int u, unsigned int g) { return (int) er(sc5(NR_fchownat, AT_FDCWD, (long) p, u, g, 0)); }
+unsigned int umask(unsigned int m) { return (unsigned int) sc1(NR_umask, m); }
+int setpgid(pid_t p, pid_t g) { return (int) er(sc2(NR_setpgid, p, g)); }
+int getpgrp(void) { return (int) sc1(NR_getpgid, 0); }
+int setsid(void) { return (int) er(sc0(NR_setsid)); }
 int mount(char const *src, char const *tgt, char const *ty, unsigned long fl, void const *d) {
-  return (int) er(sc5(165, (long) src, (long) tgt, (long) ty, (long) fl, (long) d)); }
-int unshare(int fl) { return (int) er(sc1(272, fl)); }
-int clock_gettime(int ck, struct timespec *ts) { return (int) er(sc2(228, ck, (long) ts)); }
-long pwrite(int fd, void const *b, unsigned long n, long off) { return er(sc4(18, fd, (long) b, (long) n, off)); }
-int memfd_create(char const *name, unsigned int fl) { return (int) er(sc2(319, (long) name, fl)); }
+  return (int) er(sc5(NR_mount, (long) src, (long) tgt, (long) ty, (long) fl, (long) d)); }
+int unshare(int fl) { return (int) er(sc1(NR_unshare, fl)); }
+int clock_gettime(int ck, struct timespec *ts) { return (int) er(sc2(NR_clock_gettime, ck, (long) ts)); }
+long pwrite(int fd, void const *b, unsigned long n, long off) { return er(sc4(NR_pwrite64, fd, (long) b, (long) n, off)); }
+int memfd_create(char const *name, unsigned int fl) { return (int) er(sc2(NR_memfd_create, (long) name, fl)); }
 int utimensat(int dfd, char const *p, struct timespec const *ts, int fl) {
-  return (int) er(sc4(280, dfd, (long) p, (long) ts, fl)); }
+  return (int) er(sc4(NR_utimensat, dfd, (long) p, (long) ts, fl)); }
 void *mmap(void *a, long n, int prot, int fl, int fd, long off) {
-  long r = sc6(9, (long) a, n, prot, fl, fd, off);
+  long r = sc6(NR_mmap, (long) a, n, prot, fl, fd, off);
   if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return (void *) -1; }
   return (void *) r; }
-int munmap(void *a, long n) { return (int) er(sc2(11, (long) a, n)); }
-int mprotect(void *a, long n, int prot) { return (int) er(sc3(10, (long) a, n, prot)); }
+int munmap(void *a, long n) { return (int) er(sc2(NR_munmap, (long) a, n)); }
+int mprotect(void *a, long n, int prot) { return (int) er(sc3(NR_mprotect, (long) a, n, prot)); }
 long sysconf(int name) {
   if (name == _SC_PAGESIZE) return 4096;
   __errno_v = EINVAL; return -1; }
@@ -170,7 +307,7 @@ int atexit(void (*f)(void)) {
   if (__natex >= 32) return -1;
   __atex[__natex++] = f;
   return 0; }
-void _exit(int c) { for (;;) sc1(231, c); }
+void _exit(int c) { for (;;) sc1(NR_exit_group, c); }
 void exit(int c) {
   while (__natex > 0) __atex[--__natex]();
   fflush(0);
@@ -178,7 +315,7 @@ void exit(int c) {
 
 /* ---- execvp: execve + the PATH walk ---- */
 int execv(char const *p, char *const *av) {
-  return (int) er(sc3(59, (long) p, (long) av, (long) environ)); }
+  return (int) er(sc3(NR_execve, (long) p, (long) av, (long) environ)); }
 int execvp(char const *f, char *const *av) {
   char const *s = f;
   while (*s) { if (*s == '/') return execv(f, av); s++; }
@@ -424,7 +561,10 @@ int snprintf(char *p, size_t n, char const *fmt, ...) {
   return (int) s.at; }
 
 /* ---- signals: glibc's 152-byte sigaction folded onto the kernel's 32-byte
- * rt_sigaction, our own restorer riding SA_RESTORER (sys.o's __ai_sigret). ---- */
+ * one. BOTH arches carry the restorer slot (aarch64 is the odd asm-generic
+ * arch that kept SA_RESTORER in its uapi) -- but only x86-64 needs it filled
+ * (sys.o's __ai_sigret); aarch64 leaves flag+slot zero and the kernel lays
+ * its vdso return trampoline. ---- */
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask; };
 int sigemptyset(sigset_t *s) { memset(s, 0, sizeof *s); return 0; }
 int sigaddset(sigset_t *s, int n) {
@@ -435,10 +575,15 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
   memset(&ko, 0, sizeof ko);
   if (a) {
     ka.h = (void *) a->sa_handler;
+#ifdef __aarch64__
+    ka.flags = (unsigned long) (unsigned int) a->sa_flags;
+    ka.restorer = 0;
+#else
     ka.flags = (unsigned long) (unsigned int) a->sa_flags | 67108864UL;   /* SA_RESTORER */
     ka.restorer = (void *) __ai_sigret;
+#endif
     ka.mask = (unsigned long) a->sa_mask.__v[0]; }
-  long r = sc4(13, sig, a ? (long) &ka : 0, old ? (long) &ko : 0, 8);
+  long r = sc4(NR_rt_sigaction, sig, a ? (long) &ka : 0, old ? (long) &ko : 0, 8);
   if (r < 0) { __errno_v = (int) -r; return -1; }
   if (old) {
     memset(old, 0, sizeof *old);
@@ -455,13 +600,13 @@ void *signal(int sig, void *h) {
   return (void *) old.sa_handler; }
 int sigprocmask(int how, sigset_t const *s, sigset_t *o) {
   unsigned long ks = s ? (unsigned long) s->__v[0] : 0, ko = 0;
-  long r = sc4(14, how, s ? (long) &ks : 0, o ? (long) &ko : 0, 8);
+  long r = sc4(NR_rt_sigprocmask, how, s ? (long) &ks : 0, o ? (long) &ko : 0, 8);
   if (r < 0) { __errno_v = (int) -r; return -1; }
   if (o) { memset(o, 0, sizeof *o); o->__v[0] = (long) ko; }
   return 0; }
 int signalfd(int fd, sigset_t const *m, int fl) {
   unsigned long km = (unsigned long) m->__v[0];
-  return (int) er(sc4(289, fd, (long) &km, 8, fl)); }
+  return (int) er(sc4(NR_signalfd4, fd, (long) &km, 8, fl)); }
 
 /* ---- the terminal ---- */
 int tcgetattr(int fd, struct termios *t) { return ioctl(fd, 21505, t); }            /* TCGETS */
@@ -495,7 +640,7 @@ DIR *opendir(char const *p) {
   return d; }
 struct dirent *readdir(DIR *d) {
   if (d->pos >= d->len) {
-    long n = sc3(217, d->fd, (long) d->buf, sizeof d->buf);
+    long n = sc3(NR_getdents64, d->fd, (long) d->buf, sizeof d->buf);
     if (n <= 0) { if (n < 0) __errno_v = (int) -n; return 0; }
     d->len = (int) n; d->pos = 0; }
   struct dirent *e = (struct dirent *) (d->buf + d->pos);
@@ -556,20 +701,20 @@ int getaddrinfo(char const *host, char const *serv, struct addrinfo const *hints
 void freeaddrinfo(struct addrinfo *r) { free(r); }
 
 /* ---- sockets ---- */
-int socket(int d, int t, int p) { return (int) er(sc3(41, d, t, p)); }
-int connect(int fd, struct sockaddr const *a, socklen_t n) { return (int) er(sc3(42, fd, (long) a, n)); }
-int accept(int fd, struct sockaddr *a, socklen_t *n) { return (int) er(sc3(43, fd, (long) a, (long) n)); }
+int socket(int d, int t, int p) { return (int) er(sc3(NR_socket, d, t, p)); }
+int connect(int fd, struct sockaddr const *a, socklen_t n) { return (int) er(sc3(NR_connect, fd, (long) a, n)); }
+int accept(int fd, struct sockaddr *a, socklen_t *n) { return (int) er(sc3(NR_accept, fd, (long) a, (long) n)); }
 long sendto(int fd, void const *b, unsigned long n, int fl, struct sockaddr const *a, socklen_t an) {
-  return er(sc6(44, fd, (long) b, (long) n, fl, (long) a, an)); }
+  return er(sc6(NR_sendto, fd, (long) b, (long) n, fl, (long) a, an)); }
 long recvfrom(int fd, void *b, unsigned long n, int fl, struct sockaddr *a, socklen_t *an) {
-  return er(sc6(45, fd, (long) b, (long) n, fl, (long) a, (long) an)); }
-long sendmsg(int fd, struct msghdr const *m, int fl) { return er(sc3(46, fd, (long) m, fl)); }
-long recvmsg(int fd, struct msghdr *m, int fl) { return er(sc3(47, fd, (long) m, fl)); }
-int shutdown(int fd, int how) { return (int) er(sc2(48, fd, how)); }
-int bind(int fd, struct sockaddr const *a, socklen_t n) { return (int) er(sc3(49, fd, (long) a, n)); }
-int listen(int fd, int bl) { return (int) er(sc2(50, fd, bl)); }
+  return er(sc6(NR_recvfrom, fd, (long) b, (long) n, fl, (long) a, (long) an)); }
+long sendmsg(int fd, struct msghdr const *m, int fl) { return er(sc3(NR_sendmsg, fd, (long) m, fl)); }
+long recvmsg(int fd, struct msghdr *m, int fl) { return er(sc3(NR_recvmsg, fd, (long) m, fl)); }
+int shutdown(int fd, int how) { return (int) er(sc2(NR_shutdown, fd, how)); }
+int bind(int fd, struct sockaddr const *a, socklen_t n) { return (int) er(sc3(NR_bind, fd, (long) a, n)); }
+int listen(int fd, int bl) { return (int) er(sc2(NR_listen, fd, bl)); }
 int setsockopt(int fd, int lv, int op, void const *v, socklen_t n) {
-  return (int) er(sc5(54, fd, lv, op, (long) v, n)); }
+  return (int) er(sc5(NR_setsockopt, fd, lv, op, (long) v, n)); }
 
 /* ---- strtol / strtod: the reader's number path. the bodies keep libc/str.c's
  * exact semantics (the kernel corpus runs them; the naive strtod measured

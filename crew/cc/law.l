@@ -226,8 +226,11 @@
       (two? (cgn "char *p = \"ok\" + 1; int main() { return 0; }"))                     ; a string label + offset
       ; a NON-constant address still refuses (gcc: initializer not constant)
       (! (cgn "int a[4]; int i; int *p = &a[i]; int main() { return 0; }"))
-      ; a bare TOP-LEVEL function-pointer array still refuses (ptop lays its own declarators; 4e)
-      (! (cgn "int a(int x){return x;} int (*t[1])(int) = {a}; int main() { return t[0](3); }"))))
+      ; the TOP-LEVEL fn-pointer fence FELL (rung D): ptop's first declarator
+      ; routes through pdtor now -- `T (*name)(args)` (ai.c's ai_image_absguard)
+      ; AND the array form both parse, and gen's &f-in-images lane lays them
+      (two? (cgn "int a(int x){return x;} int (*t[1])(int) = {a}; int main() { return t[0](3); }"))
+      (two? (cgn "long (*gp)(long) = 0; int main() { return gp ? 1 : 0; }"))))
 
 ; --- the double lane (stage 6a, the gem): float literals lex, `double` types,
 ; the xmm value path, int<->double conversions, and the calling convention. ---

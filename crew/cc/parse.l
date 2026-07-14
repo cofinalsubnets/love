@@ -894,10 +894,23 @@
                    (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s `('ptr ty)) `(ty s)))
                       sr (stars ts0 base)
                       rty <sr ts1 (pquals <>sr)
-                      (? (! (&& (two? ts1) ((tkk <ts1) = 'id))) ()
-                         (: name (tkv <ts1)
-                            ts2 >ts1
-                            (? (peekp ts2 "(")                ; a function (the return type rides the sig table)
+                      ; the first declarator: a plain name, or a paren fn-pointer
+                      ; `(*name)(params)` (ai.c's ai_image_absguard) -- routed
+                      ; through pdtor like the comma declarators below; the
+                      ; leading stars already rode into rty. -> (name rest ty),
+                      ; ty () on the plain path (the declarator's type is rty)
+                      fdr (? (&& (two? ts1) ((tkk <ts1) = 'id)) `((tkv <ts1) >ts1 ())
+                             (peekp ts1 "(")
+                              (: dr (pdtor ps ts1 rty)
+                                 (? (! (two? dr)) ()
+                                    (! (cap (cap dr))) ()             ; abstract at top level: refuse
+                                    `((cap (cap dr)) <>dr (caup (cap dr)))))
+                             ())
+                      (? (! (two? fdr)) ()
+                         (: name <fdr
+                            ts2 <>fdr
+                            fpty (cauup fdr)
+                            (? (&& (! (two? fpty)) (peekp ts2 "("))   ; a function (the return type rides the sig table)
                                (: rp (pparams ps >ts2 ())
                                   (? (! (two? rp)) ()
                                      (: _ (pin (ps 'sigs) name `(rty (map caup <rp) <>>rp))
@@ -937,7 +950,7 @@
                                        (: r (pinit ps >ts3)
                                           (? (two? r) `(`(nm t2 <r) <>r) ()))
                                       `(`(nm t2 ()) ts3))
-                                  first (one ts2 name rty)
+                                  first (one ts2 name (? (two? fpty) fpty rty))
                                   (? (! (two? first)) ()
                                      (: (more ts3 acc)
                                          (? (peekp ts3 ",")

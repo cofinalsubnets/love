@@ -10,7 +10,11 @@
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
-#define O_DIRECTORY  65536
+#ifdef __aarch64__
+#define O_DIRECTORY  16384   /* asm-generic 040000 */
+#else
+#define O_DIRECTORY  65536   /* x86 0200000 */
+#endif
 #define O_CLOEXEC   524288
 #define AT_FDCWD      (-100)
 #define F_GETFD          1

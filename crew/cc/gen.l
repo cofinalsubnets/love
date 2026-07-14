@@ -769,7 +769,55 @@
                  (|| (bi = "__builtin_nanf") (bi = "__builtin_nan"))   ; both take a (ignored) tag string; one quiet-NaN pattern
                   (mkv 'double 'r0 `(`('li 'r0 9221120237041090560) `('movqxr 'f0 'r0)))
                  (bi = "__builtin_expect") (cgexpr g env <args)
-                 (bi = "__builtin___clear_cache") (mkv 'long 'r0 ())
+                 (bi = "__builtin___clear_cache")
+                  ; x86 keeps I-cache coherent with D-cache: nothing to do. arm64
+                  ; does NOT (qemu-user is coherent, metal is not): the architectural
+                  ; sequence -- dc cvau each D-line, dsb, ic ivau each I-line, dsb+isb,
+                  ; strides read off CTR_EL0 (DminLine[19:16] / IminLine[3:0], log2
+                  ; words). the system insns ride raw words (llvm-mc-checked), and the
+                  ; variable stride shift too (IR shlv wants its count in r1 -- r1
+                  ; holds `end` here).
+                  ; r9-r11 scratch: a call site, pool regs dead by callish?.
+                  (? (! (a64? g)) (mkv 'long 'r0 ())
+                     (: e1 (cgexpr g env <args)
+                        e2 (cgexpr g env <>args)
+                        lb (nlab g ".ccd") db (nlab g ".ccdd")
+                        li9 (nlab g ".cci") di (nlab g ".ccid")
+                        (? (|| (bad? e1) (bad? e2)) 'bad
+                           (mkv 'long 'r0
+                             (cat (asint g e1) (cat (spush 'r0)
+                              (cat (asint g e2) (cat (`(`('mov 'r1 'r0)) + (spop 'r0))
+                               `(`('raw `(34 0 59 213))          ; mrs x2, ctr_el0
+                                  `('li 'r9 15)
+                                  `('and 'r10 'r2 'r9)
+                                  `('li 'r11 4)
+                                  `('raw `(106 33 202 154))      ; lsl x10, x11, x10 -- isize
+                                  `('shr 'r2 16)
+                                  `('and 'r2 'r2 'r9)
+                                  `('raw `(98 33 194 154))       ; lsl x2, x11, x2 -- dsize
+                                  `('sub 'r3 'r2 1)
+                                  `('not 'r3)
+                                  `('and 'r9 'r0 'r3)            ; begin & ~(dsize-1)
+                                  `('label lb)
+                                  `('cmp 'r9 'r1)
+                                  `('br 'ae db)
+                                  `('raw `(41 123 11 213))       ; dc cvau, x9
+                                  `('add 'r9 'r9 'r2)
+                                  `('jmp lb)
+                                  `('label db)
+                                  `('raw `(159 59 3 213))        ; dsb ish
+                                  `('sub 'r3 'r10 1)
+                                  `('not 'r3)
+                                  `('and 'r9 'r0 'r3)            ; begin & ~(isize-1)
+                                  `('label li9)
+                                  `('cmp 'r9 'r1)
+                                  `('br 'ae di)
+                                  `('raw `(41 117 11 213))       ; ic ivau, x9
+                                  `('add 'r9 'r9 'r10)
+                                  `('jmp li9)
+                                  `('label di)
+                                  `('raw `(159 59 3 213))        ; dsb ish
+                                  `('raw `(223 63 3 213)))))))))))   ; isb
                  (bi = "__builtin_clzll")
                   (: e1 (cgexpr g env <args)
                      (? (bad? e1) 'bad
@@ -804,10 +852,18 @@
                             (: lo (nlab g ".vo") l2 (nlab g ".vd")
                                `(`('mulo 'r0 'r0 'r1 'r2 lo) `('li 'r1 0) `('jmp l2)
                                   `('label lo) `('li 'r1 1) `('label l2))))
+                     ; &t's frame lea must not open the sibs WINDOW: the x64 raw
+                     ; splice resets it as a call boundary, but arm64's neutral IR
+                     ; is no boundary -- the open window reached every lvm ap's
+                     ; Continue and silently declined its tail (74k C frames at
+                     ; boot, the raw-arm64 stack gone). the address is consumed
+                     ; by the splice's own store, so it reads lean here; x64 IR
+                     ; stays untouched (byte-identity).
+                     e3f (? (a64? g) (relean (tor0 g e3)) (tor0 g e3))
                      (? (|| (bad? e1) (|| (bad? e2) (bad? e3))) 'bad
                         (mkv 'long 'r0 (cat (asint g e1) (cat (spush 'r0)
                                   (cat (asint g e2) (cat (spush 'r0)
-                                   (cat (tor0 g e3) (cat (`(`('mov 'r3 'r0)) + (spop 'r1) + (spop 'r0))
+                                   (cat e3f (cat (`(`('mov 'r3 'r0)) + (spop 'r1) + (spop 'r0))
                                     (cat ovf
                                          `(`('st 'r3 0 'r0) `('mov 'r0 'r1))))))))))))
                  (: inlf (? (peep g 'inlining ()) ()
@@ -1248,6 +1304,10 @@
                   (: f <fs
                      (link (? (&& (two? f) (<f = 'lean)) (link 'lea >f) f)
                            (unlean >fs))))
+   (relean fs) (? (! (two? fs)) ()                   ; the inverse, for a splice that consumes the address ITSELF (the overflow trio's &t)
+                  (: f <fs
+                     (link (? (&& (two? f) (<f = 'lea)) (link 'lean >f) f)
+                           (relean >fs))))
    (epim? fs es) (? (! (two? es)) 1                  ; the next forms are EXACTLY es (the target's epilogue)
                     (! (two? fs)) ()
                     (&& (<fs = <es) (epim? >fs >es)))

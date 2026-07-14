@@ -550,6 +550,38 @@ test_raw: host out/host$(hsuf)/aicc
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
 	  echo "test_raw: ai.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
+# test_raw's aarch64 twin (rung D): aicc -t arm64 lays every object, mksys-arm64
+# the syscall leaf, OUR linker binds, qemu-user runs the corpus over the fresh
+# egg. test/uukind{,law}.l sit out: uk-jj fails under qemu-arm64 at the
+# GCC-built reference too (pre-existing, its own session); the raw binary and
+# that reference agree file-for-file -- tools/arm64check.sh is the differential.
+# Opt-in (not in test_all): the qemu corpus costs minutes. Skips without qemu.
+.PHONY: test_raw_arm64
+test_raw_arm64: host out/host$(hsuf)/aicc
+	@echo RAW-ARM64 $(ho)/ai-raw-a64
+	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
+	  d=$(ho)/raw-a64; mkdir -p $$d; \
+	  $m $(ho)/aicc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL aicc -t arm64 -c ai.c"; exit 1; }; \
+	  for f in host/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL aicc -t arm64 -c $$f"; exit 1; }; done; \
+	  $m $(ho)/aicc -t arm64 -Icrew/cc/include -c crew/cc/lib/nolibc.c $$d/nolibc.o \
+	    || { echo "FAIL aicc -t arm64 -c nolibc.c"; exit 1; }; \
+	  for f in crew/cc/lib/math/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -t arm64 -Icrew/cc/lib/math -Icrew/cc/include -c $$f $$d/m_$$b.o \
+	      || { echo "FAIL aicc -t arm64 -c $$f"; exit 1; }; done; \
+	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lib/mksys.l; \
+	    echo "(mksys-arm64 \"$$d/sys.o\")"; } | $m \
+	    || { echo "FAIL mksys-arm64 sys.o"; exit 1; }; \
+	  $m $(ho)/aicc -t arm64 $$d/*.o -o $(ho)/ai-raw-a64 \
+	    || { echo "FAIL our-linker bind ai-raw-a64"; exit 1; }; \
+	  cat test/00-init.l test/spec.l `ls test/*.l | grep -vE '00-init|spec\.l|glaze-x86|uukind'` \
+	    | AI_NO_IMAGE=1 qemu-aarch64 $(ho)/ai-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_raw_a64.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_a64.out; } \
+	    || { echo "FAIL raw-arm64 corpus (exit $$s)"; exit 1; }; \
+	  echo "test_raw_arm64: the gcc-free aarch64 ai -- aicc objects, mksys-arm64, our linker, corpus under qemu"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

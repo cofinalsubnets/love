@@ -1,6 +1,29 @@
 #ifndef _AI_SYS_STAT_H
 #define _AI_SYS_STAT_H
 #include <time.h>   /* struct timespec */
+#ifdef __aarch64__
+/* the asm-generic kernel struct stat (aarch64): 128 bytes, st_mode before
+ * st_nlink and both 32-bit -- what newfstatat fills verbatim */
+struct stat {
+  unsigned long st_dev;
+  unsigned long st_ino;
+  unsigned int  st_mode;
+  unsigned int  st_nlink;
+  unsigned int  st_uid;
+  unsigned int  st_gid;
+  unsigned long st_rdev;
+  unsigned long __pad1;
+  long          st_size;
+  int           st_blksize;
+  int           __pad2;
+  long          st_blocks;
+  struct timespec st_atim;
+  struct timespec st_mtim;
+  struct timespec st_ctim;
+  unsigned int __unused4;
+  unsigned int __unused5;
+};
+#else
 /* glibc x86-64 struct stat: 144 bytes, st_nlink BEFORE st_mode (the classic) */
 struct stat {
   unsigned long st_dev;
@@ -19,6 +42,7 @@ struct stat {
   struct timespec st_ctim;
   long __reserved[3];
 };
+#endif
 #define S_IFMT   61440
 #define S_IFSOCK 49152
 #define S_IFLNK  40960
