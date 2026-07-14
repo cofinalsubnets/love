@@ -58,7 +58,8 @@
 ;   parallel: ain (netcat, tools/ain.l + host/net.c), bao (shell/rlwrap/debugger, ai/bao.l +
 ;   host/pty.c), cook (make-in-ai, crew/cook/cook.l), lux (the X11 window manager, crew/lux/), sat (the CDCL
 ;   solver, crew/sat/), inle (freestanding agent-kernel, port/inle/), quay (the terminal
-;   driver, port/quay/ + crew/quay/ink.l the screensaver -- host-only, probe under a pty). apps
+;   driver, port/quay/ + crew/quay/ink.l the screensaver -- host-only, probe under a pty), reef
+;   (the patch-set vcs, crew/reef/ + host/hash.c -- doc/reef.md, `make test_reef`). apps
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); ai.c/ai.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable
 ;   ones install on PATH via `make install`.
