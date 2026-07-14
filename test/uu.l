@@ -14,7 +14,8 @@
 (: GLOB (uu 'GLOB) HELPC (uu 'HELPC) vof (uu 'vof) tagv (uu 'tagv)
    e2 (uu 'e2) e3 (uu 'e3) e4 (uu 'e4) e5 (uu 'e5)
    capp (uu 'capp) conv (uu 'conv)
-   defn (uu 'defn) defq (uu 'defq) axm (uu 'axm) rejects (uu 'rejects))
+   defn (uu 'defn) defq (uu 'defq) axm (uu 'axm) rejects (uu 'rejects)
+   lof (uu 'lof) bridge (uu 'bridge))
 
 ; the book must ANSWER, not ride the zero point: with `uu` missing (a broken
 ; boot bake -- e.g. a mid-edit prel.l snapshot stranding the layers behind it)
@@ -2294,6 +2295,36 @@
  ((vof 0 'false) = (vof 0 '(nateqb 3 4)))
  ((vof 0 'true)  = (vof 0 '(memb 9 (ncons 7 (ncons 9 nnil)))))
  ((vof 0 'false) = (vof 0 '(memb 8 (ncons 7 (ncons 9 nnil))))))
+
+; --- the uu2l bridges: the arithmetic floor runs NATIVE through the lof lane
+; --- (add is +, the eager-NbE O(n) niszero is one compare). a bridge is
+; --- UNTRUSTED like the translator, so every pin rides the differential
+; --- battery right here: vof the kernel's lane, lof the compiled one, and a
+; --- wrong bridge (or a uu2l bug) reddens the gate -- never a theorem.
+(: _ (bridge 'add (\ n m (n + m)))
+   _ (bridge 'niszero (\ m (? (= m 0) 'true 'false)))
+   _ (bridge 'npred (\ m (? (= m 0) 0 (m - 1))))
+   _ (bridge 'nateqb (\ n m (? (= n m) 'true 'false)))
+   0)
+(assert
+ ; the bridged names, both lanes, edges included
+ ((vof 0 '(add 2 3)) = (lof '(add 2 3)))
+ ((vof 0 '(add 0 7)) = (lof '(add 0 7)))
+ ((vof 0 '(niszero 3)) = (lof '(niszero 3)))
+ ((vof 0 '(niszero 0)) = (lof '(niszero 0)))
+ ((vof 0 '(npred 4)) = (lof '(npred 4)))
+ ((vof 0 '(npred 0)) = (lof '(npred 0)))
+ ((vof 0 '(nateqb 3 3)) = (lof '(nateqb 3 3)))
+ ((vof 0 '(nateqb 3 4)) = (lof '(nateqb 3 4)))
+ ; the generic lane: constructors, eliminators, an unbridged global (negb),
+ ; currying, and a defq name riding as its sealed neutral
+ ((vof 0 '(tpair (add 1 1) tt)) = (lof '(tpair (add 1 1) tt)))
+ ((vof 0 '(ii1 (add 2 2))) = (lof '(ii1 (add 2 2))))
+ ((vof 0 '(negb (negb false))) = (lof '(negb (negb false))))
+ ((vof 0 '(uu-fromsum (ii2 true))) = (lof '(uu-fromsum (ii2 true))))
+ ((vof 0 '(memb 9 (ncons 7 (ncons 9 nnil)))) = (lof '(memb 9 (ncons 7 (ncons 9 nnil)))))
+ ((vof 0 '(lrev (ncons 1 (ncons 2 nnil)))) = (lof '(lrev (ncons 1 (ncons 2 nnil)))))
+ ((vof 0 '(idpath (add 1 2))) = (lof '(idpath (add 1 2)))))
 
 ; --- the stack SUBSTRATE: focus x up x down, a stk nonempty BY CONSTRUCTION;
 ; --- the representation vocabulary the translator targets (zmk/zfoc/zup/zdn,

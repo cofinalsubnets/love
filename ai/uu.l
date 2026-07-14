@@ -16,13 +16,14 @@
 ;
 ; BAKED post.l-style on every corpus target (host + ai0 + the inle kernel +
 ; wasm), and swept at the tail into the ONE `uu` book (the holo/glaze module
-; pattern) -- the surface is (uu 'vof), (uu 'defn), (uu 'chk), and every
+; pattern) -- the surface is (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every
 ; internal stays a probe away. the UniMath theorem corpus rides in test/uu.l
 ; (and the test/uu*.l ladder over it), binding this surface at its head.
 (: uu-mark (names ()))
 
 ; --- the kernel: values, evaluation, conversion, checking ---
 (: GLOB (tablet 0) HELPC (tablet 0)
+   SRC (tablet 0) CMEM (tablet 0) BRIDGE (tablet 0)
 
    (tagv v) (? (two? v) (cap v) v)
    (e2 l) (cap (cup l))
@@ -275,6 +276,7 @@
       Tv (vof 0 T)
       _ (chk 0 0 0 t Tv)
       _ (pin GLOB nm `(Tv (vof 0 t)))
+      _ (pin SRC nm (link t ()))
       nm)
    (axm nm T)
    (: _ (chk 0 0 0 T 'UU)
@@ -297,6 +299,85 @@
       _ (pin HELPC () 0)
       r))
 
+; --- uu2l: the uu-to-l leg. uu2coq and uu2lean re-CERTIFY the corpus in two
+; --- foreign kernels; uu2l runs it HOME -- a CLOSED term compiles to an ai
+; --- form whose value IS vof's answer (charms for nats, ('chain a b) for
+; --- pairs), at compiled-ai speed; lof (l-of, vof's fast twin) evaluates one.
+; --- UNTRUSTED by design: chk/conv never touch it, so a uu2l bug can miss a
+; --- demo, never fake a theorem -- and the corpus asserts (vof t = lof t)
+; --- differentially wherever both lanes are tractable. generated code has NO
+; --- free names: the runtime kit and every global embed as live literals
+; --- under the quote sigil, so nothing a uu binder spells can capture.
+; --- BRIDGE maps standard names to native ai (add is +, the eager-NbE O(n)
+; --- niszero is (= m 0)) -- each bridge rides the SAME differential gate.
+; --- defn feeds SRC; a defq/axm name compiles to its own neutral, exactly
+; --- the sealed book value.
+(: Q (cap '(\ x))
+   C (cap '(: x 1 2))
+   (qlit v) (link Q (link v ()))
+
+   (kchain a b) `('chain a b)
+   (kp1 v) (? (two? v) (? (id? (cap v) 'chain) (e2 v) `('np1 v)) `('np1 v))
+   (kp2 v) (? (two? v) (? (id? (cap v) 'chain) (e3 v) `('np2 v)) `('np2 v))
+   (ksucc v) (v + 1)
+   (ki1 a) `('i1 a)
+   (ki2 a) `('i2 a)
+   (krefl a) `('refl a)
+   (knrec s z n) (: (go k acc) (? (k = n) acc (go (k + 1) (s k acc))) (go 0 z))
+   (kbrec x y b) (? (id? b 'true) x y)
+   (kcrec f g v) (? (id? (cap v) 'i1) (f (e2 v)) (g (e2 v)))
+   (kseq e r) r
+
+   (bound? x bs) (? !(two? bs) 0 (? (id? x (cap bs)) 1 (bound? x (cup bs))))
+
+   (uglo nm)
+   (: c (peep CMEM nm 0)
+      (? c (e2 c)
+         (: b (peep BRIDGE nm 0)
+            (? b (e2 b)
+               (: sc (peep SRC nm 0)
+                  (? sc (: v (ev (u2 (cap sc) ()))
+                           _ (pin CMEM nm `('hit v))
+                           v)
+                     `('nv nm)))))))
+
+   (u2app t bs)
+   (: (walk as) (? !(two? as) () (link (u2 (cap as) bs) (walk (cup as))))
+      (link (u2 (cap t) bs) (walk (cup t))))
+
+   (u2 t bs)
+   (? (charm? t) t
+      (nom? t)
+      (? (id? t 'zero) 0
+         (member? t '(UU nat bool unit empty tt true false)) (qlit t)
+         (bound? t bs) t
+         (qlit (uglo t)))
+      (: h (cap t)
+         (? (two? h) (u2app t bs)
+            (id? h 'lam) (link Q (link (e2 t) (link (u2 (e3 t) (link (e2 t) bs)) ())))
+            (id? h 'let) (link C (link (e2 t) (link (u2 (e3 t) bs)
+                           (link (u2 (e4 t) (link (e2 t) bs)) ()))))
+            (id? h 'the) (u2 (e3 t) bs)
+            (member? h '(pi total2 coprod paths)) (qlit `('ty h))
+            (id? h 'tpair) `((qlit kchain) (u2 (e2 t) bs) (u2 (e3 t) bs))
+            (id? h 'pr1)   `((qlit kp1) (u2 (e2 t) bs))
+            (id? h 'pr2)   `((qlit kp2) (u2 (e2 t) bs))
+            (id? h 'succ)  `((qlit ksucc) (u2 (e2 t) bs))
+            (id? h 'ii1)   `((qlit ki1) (u2 (e2 t) bs))
+            (id? h 'ii2)   `((qlit ki2) (u2 (e2 t) bs))
+            (id? h 'idpath) `((qlit krefl) (u2 (e2 t) bs))
+            (id? h 'nat_rect)    `((qlit knrec) (u2 (e4 t) bs) (u2 (e3 t) bs) (u2 (e5 t) bs))
+            (id? h 'bool_rect)   `((qlit kbrec) (u2 (e3 t) bs) (u2 (e4 t) bs) (u2 (e5 t) bs))
+            (id? h 'unit_rect)   `((qlit kseq) (u2 (e4 t) bs) (u2 (e3 t) bs))
+            (id? h 'coprod_rect) `((qlit kcrec) (u2 (e3 t) bs) (u2 (e4 t) bs) (u2 (e5 t) bs))
+            (id? h 'paths_rect)  `((qlit kseq) (u2 (e4 t) bs) (u2 (e3 t) bs))
+            (id? h 'empty_rect)  `((qlit kseq) (u2 (e3 t) bs) (qlit 'ner))
+            (u2app t bs))))
+
+   (uu2l t) (u2 t ())
+   (lof t) (ev (u2 t ()))
+   (bridge nm f) (: _ (pin BRIDGE nm `('hit f)) nm))
+
 ; --- the arity door. defn/defq/axm are fully curried, so a paren slip that
 ; --- hands one too few operands is not an error -- it is a truthy CLOSURE one
 ; --- curry away from running, an assert paints it green, and NOTHING pins
@@ -313,7 +394,7 @@
 
 ; --- the module boundary: every name the span above leaked since `uu-mark`
 ; --- sweeps off the global book into ONE book pinned under `uu`. The span
-; --- defines only NEW names (probed: 31, zero rebinds of pre-existing
+; --- defines only NEW names (probed: 55, zero rebinds of pre-existing
 ; --- globals), so the book grows by exactly one name: `uu`.
 (: seen (: t (tablet 0) _ (each uu-mark (\ k (pin t k 1))) t)
    uum (tablet 0)
