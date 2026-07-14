@@ -29,7 +29,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 | aicc (arm64) | rungs A–C landed (static exes + .o + our-linker, varargs + sibcalls, 88/88 battery 3 ways) | rung D (nolibc/mksys, the gcc-free arm64 path) about to land — **best-effort in, does NOT block** |
 | reef/vcs | design (hatch.md model + reef.md verbs) | the whole implementation — biggest lift |
 | precedence | design only (precedence.md) | implement in prel.l opfix + re-validate the corpus |
-| namespaces | phases 1+3 landed — `(names ())` 820 → 327 | make the module books non-pinnable (lookup closure over a private tablet — the phase-3 tail); the abyss/scoped-layers arc stays deferred |
+| namespaces | phases 1+3 landed — `(names ())` 820 → 327; **phase-3 tail landed 2026-07-14** — all six module books are lookup-only closures, poison-proof, with a `'keys` probe | done (optional `~327 → 323` curation trim aside); the abyss/scoped-layers arc stays deferred |
 
 ---
 
@@ -100,13 +100,16 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - **NO "sealed tablet" language feature** (decided 2026-07-14). The same way users can't reassign the
   top-level `book` — it's *mopped* out of the image, so `pin`/`pull` on it no-op — the module books just
   stop exposing their raw backing tablet. Regular tablets throughout; only the *access* is limited.
-- [ ] make each module book a **lookup-only closure over a private tablet**: the export trailers
-      (`crew/holo/export.l`, `ai/glaze/export.l`, + the kanren/uu/overlay/parse equivalents) today `(pin book
-      'holo m)` the raw tablet `m` — so `(pin holo (\ x) 42)` reaches it (probed 2026-07-14: returns the
-      garbage). Bind `(\ k (peep m k 0))` instead: `(holo 'assemble)` still looks up, `m` stays closure-private
-      and unreachable, `pin` has no tablet to grab.
-- [ ] verify main.c's image-dump reach-through still works (it queries *through* the glaze book — a lookup,
-      which the closure supports) + that no consumer leans on a book being a tablet (map ops / key iteration)
+- [x] make each module book a **lookup-only closure over a private tablet** — LANDED 2026-07-14. All six
+      trailers (`crew/holo/export.l`, `ai/glaze/export.l`, `ai/prel.l` kanren, `ai/uu.l`, `ai/post.l`
+      parse+overlay) now bind `(\ k (? (id? k 'keys) (keys m) (peep m k 0)))` instead of the raw tablet `m`.
+      `(holo 'assemble)` still looks up, `m` is closure-private, and `(pin holo ..)` has no tablet to poison
+      (probed before/after: `(pin holo 'PWNED 666)` read back **666** → now **999**/default for all six). Bonus
+      per gwen: `(book 'keys)` introspects the surface (holo 194 · glaze 360 · kanren 21 · uu 55 · parse 13 · overlay 4)
+- [x] verified main.c's image-dump reach-through (`(peep book 'glaze 0) 'cache` → the closure returns the memo
+      cache, `(keys c)` iterates the cache itself) — `--bake` writes a clean 3.6M image and `--wake` boots it
+      (glaze/`ev` live). Grep found **zero** consumers that lean on a book being a tablet (the one `gfind … parse`
+      in emit.l is a *local* `parse`, shadowing the book). `make test` green ×3 (host + ai0 ×2, 3416 tests)
 - [ ] (optional, gwen's word) a curation pass to trim the ~327 back toward 323 — new crew apps drip a few leaks
       each (post.l combinators, kanren internals, overlay `ov-*`, tele's `cuda-*`); or accept the drift
 - [ ] **NOT this cut:** phase 2 "the abyss" (descending scope layers, the chain in `g->book`, per-layer macro
@@ -126,17 +129,17 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
       still churns the `crew/cc/` + `crew/holo/{obj,arm64,link}.l` seams, so the token sweep waits to avoid the
       same collision that holds the `as` integration. Land it in the arm64 batch, not this cut.
 - [x] **reef** = 🪸 coral — the vcs/distro persona (the coral colony = the patch DAG). Chosen 2026-07-14 (was `tree`; dropped for the `tree(1)` collision + reef fits the rootless, accretion-only model better — see reef.md §why-reef). Command name still open, and like everything, revisable.
-- [ ] **pulchritude** persona coral → 🦂 giant centipede (brightly-colored *Scolopendra*); keep the name (it carries its own layers). One-line change in `index.html`
+- [x] **pulchritude** persona coral → giant centipede (brightly-colored *Scolopendra*); keep the name (it carries its own layers). Done in the `5b3f84bf` roster refresh — `index.html` reads `🐛 pulchritude ◦ the editor / brightly banded centipede`. Emoji is 🐛 (gwen 2026-07-14, keeps over the earlier 🦂 shorthand)
 - [x] **au → kore** 🦨 (skunk) — LANDED (`15f46d45`), all-the-way-down: crew/kore/, kore.l, bin/kore, test_kore, doc/kore.md. Follow-ups: a kore roster line in index.html; kore-as-`cc` execs mooncc (needs moon)
 - [x] **phos → lux** — DECIDED. The WM; mantis shrimp stays as the creature. Own pass — plan in §appendix
 - [ ] name sweep for any rename — grep `.l` `.c` `.h` `.md` `.html` `Makefile` `.mk` + `index.html` crew list + C-embedded lisp (the naming-lore rule)
 
 ### C. docs & the public face
 
-- [ ] `index.html` crew list: add aicc + reef, move pulchritude's creature (probe examples against `out/host/ai`, don't write from memory)
-- [ ] `crew/README.md` roster updated (currently empty/stale — regenerate)
+- [ ] `index.html` crew list: add aicc + reef (pulchritude's creature already moved — `5b3f84bf`). Probe examples against `out/host/ai`, don't write from memory. Keep README's roster in sync when these land
+- [x] ~~`crew/README.md` roster~~ — DROPPED (gwen 2026-07-14). The file was deliberately deleted in `c21a0de0` (site consolidation → one static `index.html`); the roster lives in `index.html` now, not a per-crew README
 - [ ] blue paper (`tools/blue.l` → blue.md/html) — mention the toolchain + vcs if in scope
-- [ ] `README.md` one-liners for the new crew members
+- [x] `README.md` full crew roster — expanded the curated ain/bao/inle sample to the full 13-member roster mirroring `index.html` (gwen chose full roster over aicc+reef-only, 2026-07-14). aicc/moon + reef join both README + `index.html` together at the crew-list refresh above
 - [ ] **bench.html** — restyle to match the rest of the site (style.css / index.html look-and-feel)
 - [ ] **regen the bench tables** — re-run the benches, refresh the numbers baked into bench.html
 - [ ] **regen wasm** — rebuild `wasm/ai.js` against the release binary (currently dirty in the tree)

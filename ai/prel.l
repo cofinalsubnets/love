@@ -764,8 +764,8 @@
               (: _ (pin m k (peep book k 0)) _ (pull book k 0) 0))))
    _ (pull book 'kanren-mark 0)
    _ (pull m 'kanren-mark 0)
-   _ (pin book 'kanren m)
-   0)
+   _ (pin book 'kanren (\ k (? (id? k 'keys) (keys m) (peep m k 0))))  ; lookup-only closure: m private,
+   0)                                                                  ;   unpoisonable; (kanren 'keys) introspects
 
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
 ; ONE SCOPE: every name bound in a `:` resolves locally over the whole form.

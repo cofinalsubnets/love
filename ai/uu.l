@@ -406,5 +406,5 @@
               (: v (peep book k 0) _ (pull book k 0) (pin uum k v)))))
    _ (pull book 'uu-mark 0)
    _ (pull uum 'uu-mark 0)
-   _ (pin book 'uu uum)
-   0)
+   _ (pin book 'uu (\ k (? (id? k 'keys) (keys uum) (peep uum k 0))))  ; lookup-only closure: uum private,
+   0)                                                                  ;   unpoisonable; (uu 'keys) introspects

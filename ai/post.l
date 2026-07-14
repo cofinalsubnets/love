@@ -123,8 +123,8 @@
                        _ (? (pre? s "ov-") (pin ovm k v) (pin pm k v)) 0))))))
    _ (pull book 'post-mark 0)
    _ (pull pm 'post-mark 0)
-   _ (pin book 'parse pm)
-   _ (pin book 'overlay ovm)
+   _ (pin book 'parse (\ k (? (id? k 'keys) (keys pm) (peep pm k 0))))      ; lookup-only closures: pm/ovm
+   _ (pin book 'overlay (\ k (? (id? k 'keys) (keys ovm) (peep ovm k 0))))  ;   stay private + unpoisonable; ('keys) introspects
    0)
 
 ; --- shared list utils, AFTER the sweep so they stay bare globals ---
