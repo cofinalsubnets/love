@@ -41,7 +41,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_lux test_kore test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_lux test_kore test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm test_wake
 # ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -950,9 +950,9 @@ $(ho)/ai.baked $(ho)/ai.cand.baked: %.baked: %
 # is exported for every recipe above, so every gate exercises the fresh egg; only
 # a user's direct run wakes the image). Bakes a CANDIDATE COPY (ai.wake -- the
 # canonical binary untouched, ETXTBSY-proof) and runs test/uu.l through the woken
-# image under a budget the wake storm cannot meet (fresh lane ~1s, the storm >90s
-# -- doc/wake-storm.md). Deliberately NOT in test_all yet: it is RED today,
-# pinning the open storm bug; wire it in when the fix lands.
+# image under a budget the wake storm cannot meet (fresh lane ~1s, the storm was
+# >90s -- doc/wake-storm.md). GREEN since the dump's dead-native revert landed
+# (img_nif_interp: references re-aim at the bytecode twin); in test_all.
 test_wake: $(ho)/ai
 	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
 	@cp $(ho)/ai $(ho)/ai.wake && $(ho)/ai.wake --bake

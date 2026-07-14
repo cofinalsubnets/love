@@ -5159,12 +5159,51 @@ struct image_hdr {
                                                 same words the GC traces, so a new v0 field rides along
                                                 with no codec change. nroot = how many were written. */
 };
+// the ABSOLUTE-POINTER GUARD (doc/wake-storm.md): a kept-absolute word is only wakeable
+// if it aims INSIDE the binary's own load segments (.text/.rodata shift by one base
+// delta) -- a JIT/W^X pointer dies with the bake process and every use post-wake is a
+// hardware fault the barrier eats PER CALL (the storm). The core cannot tell the two
+// apart (no phdr here); the host installs the bounds check. NULL guard = audit off.
+// A bad absolute fails the dump (a refused bake beats a storming binary) and the first
+// few offenders land in ai_image_bad[] (heap word offset, value) for the host to name.
+uintptr_t (*ai_image_absguard)(uintptr_t) = 0;
+uintptr_t ai_image_bad[8];                       // quads: obj-off, val, obj-word0, rsv -- first 2 offenders
+uintptr_t ai_image_nbad = 0;
+// a native (nif) cell CANNOT wake -- its entry aims into this process's W^X mmap -- but
+// it carries its own bytecode twin (interp, the deopt fallback), so the DUMP reverts it:
+// every reference to the cell encodes as a reference to interp instead, and the husk
+// (now wake-unreachable) rides as inert ballast with the guard suppressed. Anything
+// wx-bad WITHOUT the nif signature stays a refusal: better no bake than a storm.
+static int img_wxp(word v, word *base, word *hp) {   // an un-wakeable absolute? (every legit lane excluded FIRST:
+ if (!v || oddp(v)) return 0;                        //  a heap pointer is outside the binary's segments too)
+ if ((word*) v >= base && (word*) v < hp) return 0;  // in-pool: a value, not code
+ if (image_ap_index((intptr_t) v) >= 0) return 0;    // lvm table
+ if (image_imm_index(v) >= 0) return 0;              // immortal
+ return ai_image_absguard && !ai_image_absguard((uintptr_t) v); }
+uintptr_t ai_image_redir[8];                     // pairs: cell, twin -- the redirects this dump made
+uintptr_t ai_image_nredir = 0;
+static word img_nif_interp(word v, word *base, word *hp) {   // v -> a cell VALUE; its bytecode twin | 0
+ word *c = (word*) v; word e = 0;
+ // the FULL cell shapes (lvm_nif): arity-1 value = [code, interp, lvm_ret, n(odd)];
+ // arity>=2 value = [lvm_cur, ar(odd), code, interp, lvm_ret, n(odd)] -- match every
+ // fixed word, so no innocent closure (every curried one heads lvm_cur) can alias.
+ if (c + 4 <= hp && img_wxp(c[0], base, hp)
+     && c[2] == (word) lvm_ret && oddp(c[3])) e = c[1];
+ else if (c + 6 <= hp && c[0] == (word) lvm_cur && oddp(c[1])
+     && img_wxp(c[2], base, hp) && c[4] == (word) lvm_ret && oddp(c[5])) e = c[3];
+ if (e && ai_image_nredir < countof(ai_image_redir) / 2)
+  ai_image_redir[2 * ai_image_nredir] = v, ai_image_redir[2 * ai_image_nredir + 1] = e, ai_image_nredir++;
+ return e; }
+static int img_suppress = 0;                     // inside a reverted husk: absolutes are inert ballast
 // encode a live value (post-compaction) -> portable (tag,payload):
 //  0 FIX raw | 1 PTR word-offset into the blob | 2 LVM table index | 3 IMM immortal index
 static void image_root_enc(word v, word *base, word *hp, uint64_t *tag, uint64_t *val) {
  if (oddp(v)) { *tag = 0, *val = (uint64_t) v; return; }
  intptr_t li = image_ap_index((intptr_t) v); if (li >= 0) { *tag = 2, *val = (uint64_t) li; return; }
- if ((word*) v >= base && (word*) v < hp) { *tag = 1, *val = (uint64_t)((word*) v - base); return; }
+ if ((word*) v >= base && (word*) v < hp) {
+  word e = img_nif_interp(v, base, hp);          // a root holding a dead-native cell: its twin rides instead
+  if (e) v = e;
+  *tag = 1, *val = (uint64_t)((word*) v - base); return; }
  intptr_t ii = image_imm_index(v); if (ii >= 0) { *tag = 3, *val = (uint64_t) ii; return; }
  *tag = 0, *val = (uint64_t) v; }            // out-of-pool non-immortal root (unexpected): keep absolute
 static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
@@ -5182,15 +5221,28 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 // pointer/fixnum discriminator). A binary pointer below TBOUND would alias an index -> dump refuses.
 #define IMAGE_NLVM ((uintptr_t)(countof(image_extra_aps) + countof(def1)))
 #define IMAGE_NIMM ((uintptr_t) countof(image_immortals))
-static intptr_t img_encode(intptr_t v, word *base, word *hp, uintptr_t hb, int *fail) {
+static intptr_t img_encode_(intptr_t v, word *base, word *hp, uintptr_t hb, int *fail) {
  if (oddp(v)) return v;                                                          // fixnum
  intptr_t idx = image_ap_index(v);
  if (idx >= 0) return (intptr_t)(hb + 2 * (uintptr_t) idx);                      // lvm_* ap
- if (v >= (intptr_t) base && v < (intptr_t) hp) return v - (intptr_t) base;      // in-pool heap pointer -> byte offset
+ if (v >= (intptr_t) base && v < (intptr_t) hp) {                                // in-pool heap pointer -> byte offset
+  word e = img_nif_interp((word) v, base, hp);                                   //   ... unless it aims at a dead-native cell:
+  if (e) return img_encode_((intptr_t) e, base, hp, hb, fail);                   //   redirect to its bytecode twin (interp)
+  return v - (intptr_t) base; }
  intptr_t ii = image_imm_index((word) v);
  if (ii >= 0) return (intptr_t)(hb + 2 * IMAGE_NLVM + 2 * (uintptr_t) ii);       // out-of-pool immortal
  if ((uintptr_t) v < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)) *fail = 1;              // a binary ptr in the index range: unencodable
+ if (!img_suppress && img_wxp((word) v, base, hp)) *fail = 2;                    // un-wakeable absolute (JIT/W^X/mmap)
  return v; }                                                                     // binary (host nif/.rodata): absolute, +delta on load
+static uintptr_t img_cur_off, img_cur_ap;        // the object being encoded: offset + its word0 (the hot)
+static intptr_t img_encode(intptr_t v, word *base, word *hp, uintptr_t hb, int *fail) {
+ int f0 = *fail; *fail = 0;
+ intptr_t r = img_encode_(v, base, hp, hb, fail);
+ if (*fail == 2 && ai_image_nbad < countof(ai_image_bad) / 4)
+  ai_image_bad[4 * ai_image_nbad] = img_cur_off, ai_image_bad[4 * ai_image_nbad + 1] = (uintptr_t) v,
+  ai_image_bad[4 * ai_image_nbad + 2] = img_cur_ap, ai_image_bad[4 * ai_image_nbad + 3] = 0, ai_image_nbad++;
+ if (f0) *fail = f0 > *fail ? f0 : *fail;
+ return r; }
 static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta) {
  if (oddp(v)) return v;
  uintptr_t uv = (uintptr_t) v;
@@ -5233,6 +5285,14 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen) {
    p = (union u*) ((word*) p + Width(struct ai_fz));
    continue; }
   uintptr_t sz = image_objsize(g, p);
+  img_cur_off = off, img_cur_ap = ((word*) p)[0];
+  // a native cell's allocation head: header duplicates the code (arity-1) or fronts an
+  // lvm_cur curry cell (arity>=2). references were REDIRECTED to interp, so the husk is
+  // wake-unreachable ballast -- suppress the guard across it. (p+2 is the cell VALUE.)
+  img_suppress = ((word*) p + 6 <= hp)
+    && img_wxp(((word*) p)[0], base, hp)
+    && ((((word*) p)[2] == ((word*) p)[0] && ((word*) p)[4] == (word) lvm_ret)
+        || (((word*) p)[2] == (word) lvm_cur && (word*) p + 8 <= hp && ((word*) p)[6] == (word) lvm_ret));
   blob[off] = img_encode(((word*) p)[0], base, hp, hb, &fail);                                    // word0: the ap
   if (in_data(p->ap)) switch (ai_typ(p)) {
    case KChain: blob[off + 1] = img_encode(((struct ai_chain*) p)->a, base, hp, hb, &fail);
@@ -5244,6 +5304,7 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen) {
                 break;
    default: break; }                                     // KMint/KStr/KBig/KFlo/KWide/KCplx: flat leaves
   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(((word*) p)[i], base, hp, hb, &fail);   // thread interior + terminator
+  img_suppress = 0;
   p = (union u*) ((word*) p + sz); }
  if (fail) { g->alloc(g, buf, 0); return NULL; }         // a binary pointer landed in the index range -> refuse (caller boots normally)
  struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, (uint64_t)(word) &ai_image_save, 0, 0, (uint64_t)(word) image_immortals, g->next_serial, {0}, {0} };

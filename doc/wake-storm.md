@@ -1,8 +1,19 @@
 # the wake storm — the woken image runs uu ~100× slow, one fault per call
 
-Status: **OPEN — core/glaze seam.** Forensics complete through the mechanism's
-door; the last mile (which cell, and making recovery stick) needs the glaze
-lane. Filed 2026-07-14; the `test_wake` gate below pins it red until fixed.
+Status: **FIXED at the bake (same day).** The dump now REVERTS dead-native
+cells: the absolute-pointer guard names any un-wakeable pointer (a refused
+bake beats a storming binary), and `img_nif_interp` re-aims every reference
+to a native (nif) cell at its bytecode twin — the interp deopt fallback the
+cell already carries — so the husk rides as unreachable ballast and the
+woken image runs the honest closure. One survivor existed (a natjit-backed
+leaf pinned during the post-glaze boot evals); the revert is CLASS-wide, so
+future survivors are handled or loudly refused, never storming. test/uu.l
+through the woken image: >90s before, 0.49s after (faster than the fresh
+egg, as the image intends); fib/member?/natjit-leaf lanes all healthy at
+wake. `make test_wake` is GREEN and wired into test_all. Still open, now
+optional hardening: making eat_run's fault recovery stick at RUNTIME (a
+storm can in principle still arise from natives created and dangled by
+other means; the bake lane is closed).
 
 ## the symptom
 
@@ -53,7 +64,7 @@ Why uu is the loudest victim: checking is a per-call workload over tiny
 steps (conv/vof/chk), so a per-call fault tax multiplies by millions.
 Whatever the stale cell backs sits on the checker's hot path.
 
-## fix shapes (the glaze/core lane picks)
+## fix shapes (history -- the bake-side revert below landed)
 
 1. **Make recovery STICK** (small, ai.c / the nif deopt seam): when
    `eat_run` reports a fault, re-point the faulting cell at its deopt

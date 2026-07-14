@@ -15,10 +15,58 @@
 #include <sys/stat.h>
 #include <link.h>
 
+// the wake-safety guard (doc/wake-storm.md): a kept-absolute pointer only survives a
+// wake if it aims inside the MAIN PROGRAM's load segments (one ASLR base delta shifts
+// them all). Anything else -- a JIT W^X page, an mmap, a shared library -- dies with
+// the bake process, and every post-wake use is a hardware fault the barrier eats per
+// call: the storm. Collect the segments once, install the predicate before any dump,
+// and on a refused bake print the offenders so the survivor names itself.
+extern uintptr_t (*ai_image_absguard)(uintptr_t);
+extern uintptr_t ai_image_bad[8];
+extern uintptr_t ai_image_nbad;
+static struct { uintptr_t lo, hi; } image_segs[16];
+static int image_nsegs = 0;
+static int image_seg_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
+  for (int i = 0; i < in->dlpi_phnum && image_nsegs < 16; i++) {
+    const ElfW(Phdr) *p = &in->dlpi_phdr[i];
+    if (p->p_type == PT_LOAD) {
+      image_segs[image_nsegs].lo = in->dlpi_addr + p->p_vaddr;
+      image_segs[image_nsegs].hi = in->dlpi_addr + p->p_vaddr + p->p_memsz;
+      image_nsegs++; } }
+  return 1;                                       // first object only: the main program
+}
+static uintptr_t image_abs_ok(uintptr_t v) {
+  for (int i = 0; i < image_nsegs; i++)
+    if (v >= image_segs[i].lo && v < image_segs[i].hi) return 1;
+  return 0;
+}
+static void image_guard_arm(void) {
+  if (!image_nsegs) dl_iterate_phdr(image_seg_phdr, NULL);
+  ai_image_nbad = 0;
+  ai_image_absguard = image_abs_ok;
+}
+extern uintptr_t ai_image_redir[8];
+extern uintptr_t ai_image_nredir;
+static void image_redir_report(void) {
+  for (uintptr_t i = 0; i < ai_image_nredir && i < 4; i++)
+    fprintf(stderr, "ai: bake reverted a dead-native cell %p -> its bytecode twin %p (doc/wake-storm.md)\n",
+            (void*) ai_image_redir[2 * i], (void*) ai_image_redir[2 * i + 1]);
+}
+static void image_guard_report(void) {
+  if (!ai_image_nbad) return;
+  fprintf(stderr, "ai: bake refused -- %lu un-wakeable absolute pointer(s) in the live heap\n",
+          (unsigned long) ai_image_nbad);
+  for (uintptr_t i = 0; i < ai_image_nbad && i < 2; i++)
+    fprintf(stderr, "ai:   offender %lu: value %p in object at heap word %lu (object hot %p) -- JIT/W^X/mmap; see doc/wake-storm.md\n",
+            (unsigned long) i, (void*) ai_image_bad[4 * i + 1],
+            (unsigned long) ai_image_bad[4 * i], (void*) ai_image_bad[4 * i + 2]);
+}
+
 int image_dump(struct ai *g, char const *path) {
+  image_guard_arm();
   uintptr_t len = 0;
   void *buf = ai_image_save(g, &len);             // g->alloc'd; --bake exits right after, so we don't free it
-  if (!buf) return -2;
+  if (!buf) { image_guard_report(); return -2; }
   FILE *f = fopen(path, "wb");
   int rc = !f ? -4 : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
   if (f) fclose(f);
@@ -47,9 +95,11 @@ static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
   return 1;                                       // stop after the first object: the main program
 }
 int image_bake(struct ai *g) {
+  image_guard_arm();
   uintptr_t len = 0;
   void *buf = ai_image_save(g, &len);
-  if (!buf) return -2;
+  image_redir_report();
+  if (!buf) { image_guard_report(); return -2; }
   if (len > ai_baked_image_len) {
     fprintf(stderr, "ai: image %lu > .image reserve %lu -- bump RESERVE_WORDS in host/image_baked.c\n",
             (unsigned long) len, (unsigned long) ai_baked_image_len);
@@ -99,10 +149,11 @@ static lvm(lvm_bake) {
  memcpy(path, s->bytes, s->len);                 // copy OUT first: the dump's gen_major moves the string
  path[s->len] = 0;
  Pack(g);
+ image_guard_arm();
  uintptr_t len = 0;
  void *buf = ai_image_save_(g, &len);
  Unpack(g);
- if (!buf) goto fail;
+ if (!buf) { image_guard_report(); goto fail; }
  FILE *f = fopen(path, "wb");
  int rc = !f ? -1 : (fwrite(buf, 1, len, f) == len) ? 0 : -1;
  if (f) fclose(f);
