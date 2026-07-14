@@ -6973,3 +6973,16 @@
  ((vof 0 '(sget (sput repo0 (skey (ncons 2 (ncons 1 nnil))) 7) (ncons 3 nnil)))
   = (vof 0 '(ii2 tt))))
 
+; ============================================================================
+; the CRITICAL-PAIRS slice (patch.v's ninth) STAYS AT THE SCAFFOLD TIER for
+; now: rw_comm_div / cp_earned are hand-proven + axiom-free in proof/rocq/
+; patch.v, the runnable toy is test/patch.l's ninth form. the uu-term
+; migration is DEFERRED on a measured NbE cost law: a cell code
+; (npair 2 (npair a b)) at OPEN args costs ~exponential-in-the-tag to check
+; (tag 0 free, tag 1 ~0.6s, tag 2 ~12s PER SYNTACTIC OCCURRENCE) -- the
+; charm tag rides add/tri into a succ-headed value that DUPLICATES the stuck
+; core at every level, a dag conv then walks as a tree. the slice's kid-
+; surgery lemmas need dozens of such occurrences, so the migration waits on
+; NbE sharing (or a stuck-tag cell coding); the arithmetic floor above kept
+; its demo values tiny for exactly this reason, now quantified.
+; ============================================================================

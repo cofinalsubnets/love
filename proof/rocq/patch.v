@@ -87,9 +87,24 @@
            bind consistently -- the kanren move, on cap/cup cells)
      (L1)  reaim_involutive  the deep patch's seat re-aim (olds seat -> news
            seat, prefix surgery) swaps home
-   Still deliberately out (the next rung): schematic-vs-schematic commute --
-   two overlapping REWRITE RULES are critical-pair confluence territory, a
-   different theorem set.
+   The NINTH slice (the critical-pairs rung, 2026-07-14): schematic-vs-
+   schematic -- two REWRITE RULES meet on one tree, and the seat relation
+   decides. DIVERGING seats commute with NO re-aim (tree addresses do not
+   shift under a disjoint rewrite -- the sequence slices' index slide
+   vanishes at tree grain), and any overlap is REFUSED with the refusal
+   EARNED: a concrete pair of rules on one ground where both orders succeed
+   and disagree, so no total commute exists at rule grain:
+     (L3a) rw_comm_div  diverging-seat rewrites are order-free (the match
+           verdicts on the shared ground carry across the other rule's put;
+           gput_comm_div closes) -- the semantic heart at rule grain
+     (--)  cp_earned    the critical pair: same seat, two rules, both
+           orders green, DIFFERENT trees -- overlap refusal is forced,
+           not conservative
+   Still deliberately out (the next refinements): the variable-overlap lane
+   (a redex nested under a METAVARIABLE of the other rule's lhs commutes for
+   LINEAR rules by sliding to the variable's rhs seat -- mvswal's rule-rule
+   face) and joinability of critical pairs (Knuth-Bendix territory: WHICH
+   overlaps are harmless is a completion question, not a commute question).
 
    Method note, matching gc.v / spec.v house rule: NO Axiom, NO Admitted, NO
    classical / funext escape hatch. Trees are functions, so equality of trees is
@@ -1141,6 +1156,109 @@ Qed.
 
 End MetaVar.
 
+(* ============================================================ *)
+(* the CRITICAL-PAIRS slice: two rules meet on one tree          *)
+(* ============================================================ *)
+
+(* Mirror of test/patch.l's ninth form. Terms and the matcher are the
+   MetaVar slice's; a rule application is mtch at a SEAT (a path of kid
+   choices), then gput of the instantiated rhs. kid reads are total --
+   junk on non-cells -- and the honest region is pinned by the match
+   verdicts, exactly splice/validity's arrangement. *)
+
+Section RuleCommute.
+
+Definition kida (t : term) : term := match t with Cell a _ => a | _ => t end.
+Definition kidb (t : term) : term := match t with Cell _ b => b | _ => t end.
+
+Fixpoint gsub (p : list bool) (g : term) : term :=
+  match p with
+  | [] => g
+  | d :: r => gsub r (if d then kida g else kidb g)
+  end.
+
+Fixpoint gput (p : list bool) (g h : term) : term :=
+  match p with
+  | [] => h
+  | d :: r => if d then Cell (gput r (kida g) h) (kidb g)
+              else Cell (kida g) (gput r (kidb g) h)
+  end.
+
+(* get-put: the write lands where the read looks *)
+Lemma gsub_put : forall p g h, gsub p (gput p g h) = h.
+Proof.
+  induction p as [|d r IH]; intros; simpl; [reflexivity|].
+  destruct d; simpl; apply IH.
+Qed.
+
+(* the two disturbance mirrors: a put on one side of the diverging seat
+   leaves the other side's read alone *)
+Lemma gsub_put_ab : forall w ra rb g h,
+  gsub (w ++ false :: rb) (gput (w ++ true :: ra) g h)
+  = gsub (w ++ false :: rb) g.
+Proof.
+  induction w as [|d w IH]; intros; simpl; [reflexivity|].
+  destruct d; simpl; auto.
+Qed.
+
+Lemma gsub_put_ba : forall w ra rb g h,
+  gsub (w ++ true :: ra) (gput (w ++ false :: rb) g h)
+  = gsub (w ++ true :: ra) g.
+Proof.
+  induction w as [|d w IH]; intros; simpl; [reflexivity|].
+  destruct d; simpl; auto.
+Qed.
+
+(* diverging puts commute -- and with NO index re-aim: tree addresses
+   don't shift, the sequence slices' slide is gone at this grain *)
+Lemma gput_comm_div : forall w ra rb g x y,
+  gput (w ++ false :: rb) (gput (w ++ true :: ra) g x) y
+  = gput (w ++ true :: ra) (gput (w ++ false :: rb) g y) x.
+Proof.
+  induction w as [|d w IH]; intros; simpl; [reflexivity|].
+  destruct d; simpl; now rewrite IH.
+Qed.
+
+(* a rule applies at a seat: match the lhs there, lay the rhs instantiated *)
+Definition rw (l r : term) (p : list bool) (g : term) : option term :=
+  match mtch l (gsub p g) [] with
+  | Some s => Some (gput p g (inst r s))
+  | None => None
+  end.
+
+Definition rw2 (l1 r1 : term) (p1 : list bool)
+               (l2 r2 : term) (p2 : list bool) (g : term) : option term :=
+  match rw l1 r1 p1 g with
+  | Some g' => rw l2 r2 p2 g'
+  | None => None
+  end.
+
+(* (L3a at rule grain) diverging-seat rewrites are ORDER-FREE: each rule's
+   match verdict on the shared ground survives the other's put (the
+   disturbance mirrors), so both sequenced orders land, and they land on
+   the SAME tree (the puts commute). *)
+Theorem rw_comm_div : forall w ra rb l1 r1 l2 r2 g s1 s2,
+  mtch l1 (gsub (w ++ true :: ra) g) [] = Some s1 ->
+  mtch l2 (gsub (w ++ false :: rb) g) [] = Some s2 ->
+  rw2 l1 r1 (w ++ true :: ra) l2 r2 (w ++ false :: rb) g
+  = rw2 l2 r2 (w ++ false :: rb) l1 r1 (w ++ true :: ra) g.
+Proof.
+  intros w ra rb l1 r1 l2 r2 g s1 s2 H1 H2.
+  unfold rw2, rw.
+  rewrite H1, H2, gsub_put_ab, gsub_put_ba, H1, H2, gput_comm_div.
+  reflexivity.
+Qed.
+
+(* the critical pair EARNED: one shared seat, two rules, both orders
+   SUCCEED -- and disagree. No total commute exists at rule grain, so an
+   overlap refusal is honest necessity, not caution. *)
+Theorem cp_earned :
+  rw2 (MV 0) (Atom 1) [] (MV 0) (Atom 2) [] (Atom 0)
+  <> rw2 (MV 0) (Atom 2) [] (MV 0) (Atom 1) [] (Atom 0).
+Proof. discriminate. Qed.
+
+End RuleCommute.
+
 (* the axiom audit: every law closed under the global context -- no Axiom, no
    Admitted, no classical/funext escape hatch, in ANY slice. *)
 Print Assumptions pull_merge_comm.     (* M1, clash -- rivals land one cell *)
@@ -1164,3 +1282,7 @@ Print Assumptions mtch_sound.          (* the unifier law -- a pattern
 Print Assumptions reaim_involutive.    (* L1, metavariables -- the seat
                                           re-aim swaps home *)
 Print Assumptions tcommute_involutive. (* L1, tree -- four lanes, path re-aim *)
+Print Assumptions rw_comm_div.         (* L3a, critical pairs -- diverging
+                                          rules are order-free *)
+Print Assumptions cp_earned.           (* the critical pair -- overlap orders
+                                          genuinely disagree *)

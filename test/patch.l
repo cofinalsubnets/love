@@ -993,9 +993,8 @@
 ; the groupoid inverse as ever, one core. patch.v proves the two halves at
 ; their grains: matching is SOUND (a pattern instantiated with its own
 ; bindings reproduces the ground term -- mtch_sound) and the seat re-aim is
-; involutive (reaim_involutive). deliberately out: schematic-vs-schematic
-; commute -- two overlapping RULES are critical-pair confluence territory,
-; a different theorem set.
+; involutive (reaim_involutive). the schematic-vs-schematic door opens in
+; form NINE below -- the critical-pairs rung.
 
 (:
  ; --- the tree kit (rung 5, local) ---
@@ -1201,4 +1200,94 @@
       f1 (applall t0 (link w (link p8 (link q8 ()))))
       f2 (applall t0 (link w c))
       (assert (heq f1 f2) (heq f1 '((: a 7) (: b 2) (run () (g x))))))
+ 0)
+
+; --- the CRITICAL-PAIRS rung: two rules meet on one tree ---
+;
+; the ninth form, the door form eight left shut: schematic-vs-schematic. a
+; rule here is (olds news) applied at a SEAT -- match olds against the
+; subtree, lay news instantiated over it -- so this is the rule grain with
+; the sequence machinery stripped away (patch.v's ninth slice mirrors it
+; term for term). the seat relation decides everything: DIVERGING seats
+; are order-free, and with NO re-aim -- a tree address doesn't shift under
+; a disjoint rewrite, so the sequence forms' index slide vanishes at this
+; grain (rw_comm_div) -- while ANY overlap is critical-pair territory: two
+; rules at one seat can both land, in either order, and DISAGREE, so no
+; total commute exists at rule grain and a refusal is EARNED, never
+; cautious (cp_earned). the uu-term leg re-proves both at code grain
+; (test/uupatch.l), its deep demos on the lof lane. deliberately out,
+; named in patch.v's header: the variable-overlap lane (a redex under the
+; other rule's METAVARIABLE slides to its rhs seat for linear rules --
+; mvswal's rule-rule face) and joinability of critical pairs (which
+; overlaps are harmless is Knuth-Bendix completion territory, not a
+; commute question).
+
+(:
+ ; --- the tree + pattern kit (form 8's, trimmed local) ---
+ (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
+ (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
+ (nth s j) (cap (hdrop s j))
+ (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+              (|| (atom? a) (atom? b)) 0
+              (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
+ (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
+ (tlay t path s2)
+   (? (atom? path) s2
+      (splice t (cap path) 1
+              (link (tlay (nth t (cap path)) (cup path) s2) ())))
+ (mv? x) (? (atom? x) 0 (id? (cap x) 'mv))
+ (mvname x) (cap (cup x))
+ (asq k s) (? (atom? s) () (: c (cap s) (? (id? k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+ (mtch p g s)
+   (? (id? s 'no) 'no
+      (mv? p) (: r (asq (mvname p) s)
+                 (? (atom? r) (link (link (mvname p) g) s)
+                    (? (heq (cap r) g) s 'no)))
+      (&& (atom? p) (atom? g)) (? (id? p g) s 'no)
+      (|| (atom? p) (atom? g)) 'no
+      (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
+ (inst p s) (? (mv? p) (: r (asq (mvname p) s) (? (atom? r) p (cap r)))
+               (atom? p) p
+               (link (inst (cap p) s) (inst (cup p) s)))
+
+ ; --- a rule at a seat: match olds against the subtree, lay news
+ ;     instantiated; rw answers (tree) or (), rw2 sequences two ---
+ (rw R path t)
+   (: sub (tnav t path)
+      sg (mtch (cap R) sub ())
+      (? (id? sg 'no) ()
+         (link (tlay t path (inst (cap (cup R)) sg)) ())))
+ (rw2 Ra pa Rb pb t) (: r (rw Ra pa t) (? (atom? r) () (rw Rb pb (cap r))))
+
+ t0 '((f 1) ((g 2) (h 3)))
+ Ra '((f (mv x)) (f ((mv x) (mv x))))     ; duplicate under f
+ Rb '((h (mv y)) (k (mv y)))
+
+ ; (L3a at rule grain) DIVERGING seats are order-free, the addresses
+ ;     unshifted -- both orders, one tree; deeper shared prefixes too
+ _ (: c1 (rw2 Ra '(0) Rb '(1 1) t0) c2 (rw2 Rb '(1 1) Ra '(0) t0)
+      (assert
+       (! (atom? c1)) (heq (cap c1) (cap c2))
+       (heq (cap c1) '((f (1 1)) ((g 2) (k 3))))))
+ _ (: p9 '((g (mv u)) (g ((mv u)))) q9 '((h (mv v)) (h))
+      c1 (rw2 p9 '(1 0) q9 '(1 1) t0) c2 (rw2 q9 '(1 1) p9 '(1 0) t0)
+      (assert (! (atom? c1)) (heq (cap c1) (cap c2))))
+
+ ; the CRITICAL PAIR, earned: one seat, two rules, both orders green --
+ ;     and they disagree, so no total commute exists at rule grain
+ _ (: R1 '((mv z) (a)) R2 '((mv z) (b))
+      c1 (rw2 R1 () R2 () t0) c2 (rw2 R2 () R1 () t0)
+      (assert
+       (! (atom? c1)) (! (atom? c2))
+       (! (heq (cap c1) (cap c2)))
+       (heq (cap c1) '(b)) (heq (cap c2) '(a))))
+
+ ; the destroyed redex, the overlap's other face: nested seats, and the
+ ;     ORDER decides which rule survives at all
+ _ (: Rc '((g (mv u)) (k 5)) Rd '((g (mv w)) (g 9))
+      (assert
+       (! (atom? (rw2 Rd '(1 0) Rc '(1 0) t0)))   ; d then c: c still sees a g
+       (atom? (rw2 Rc '(1 0) Rd '(1 0) t0))))     ; c then d: the g is GONE
  0)
