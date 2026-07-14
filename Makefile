@@ -406,8 +406,11 @@ test_vi: host out/host$(hsuf)/kore
 # (lexer/parser/gen goldens), then the stage-0 end to end through the real
 # `aicc`: compile, run, exit 42 -- and the gcc -O0 differential is born
 # (same source, both compilers, same exit). x86-64 only until arm64 parity.
+# the battery drives the WARM-baked image (what `make install` ships and users
+# run), not the cold source script -- ~0.68s -> ~0.02s per compile, 88 of them.
+aiccrun = $m --wake $(ho)/aicc.image -e '(cc-main (cuup (cup cmdline)))'
 .PHONY: test_cc
-test_cc: host out/host$(hsuf)/aicc
+test_cc: host out/host$(hsuf)/aicc out/host$(hsuf)/aicc.image
 	@echo "CC crew/cc/{lex,cpp,parse,gen,law}.l"; \
 	  cat test/00-init.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | $m > out/host/.test_cc.out 2>&1; r=$$?; \
 	  cat out/host/.test_cc.out; \
@@ -415,31 +418,31 @@ test_cc: host out/host$(hsuf)/aicc
 	    || { echo "FAIL cc laws (exit $$r)"; exit 1; }
 	@if [ "$$(uname -m)" = x86_64 ]; then \
 	  printf 'int main() { return 42; }\n' > $(ho)/.cc1.c; \
-	  $m $(ho)/aicc $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL aicc compile"; exit 1; }; \
+	  $(aiccrun) $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL aicc compile"; exit 1; }; \
 	  $(ho)/.cc1; a=$$?; \
 	  cc_g=$$(command -v gcc || command -v cc); \
 	  $$cc_g -O0 -o $(ho)/.cc1g $(ho)/.cc1.c && $(ho)/.cc1g; b=$$?; \
 	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc vs gcc (ours $$a gcc $$b)"; exit 1; }; \
 	  printf '// c\nint f() { return 1; }\nint main() { return 7; }\n' > $(ho)/.cc2.c; \
-	  $m $(ho)/aicc $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
+	  $(aiccrun) $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
 	  $$cc_g -O0 -o $(ho)/.cc2g $(ho)/.cc2.c && $(ho)/.cc2g; b=$$?; \
 	  [ $$a -eq $$b ] || { echo "FAIL aicc two-fn vs gcc (ours $$a gcc $$b)"; exit 1; }; \
 	  for f in test/cc/*.c; do \
-	    $m $(ho)/aicc $$f $(ho)/.ccb > /dev/null 2>&1 || { echo "FAIL aicc compile $$f"; exit 1; }; \
+	    $(aiccrun) $$f $(ho)/.ccb > /dev/null 2>&1 || { echo "FAIL aicc compile $$f"; exit 1; }; \
 	    $(ho)/.ccb; a=$$?; \
 	    $$cc_g -O0 -o $(ho)/.ccbg $$f && $(ho)/.ccbg; b=$$?; \
 	    [ $$a -eq $$b ] || { echo "FAIL aicc battery $$f (ours $$a gcc $$b)"; exit 1; }; \
 	  done; \
-	  $m $(ho)/aicc $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  $(aiccrun) $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
 	  [ $$r -eq 1 ] || { echo "FAIL aicc missing input exit (rc $$r)"; exit 1; }; \
 	  printf 'int main() { return 42 }\n' > $(ho)/.cc3.c; \
-	  $m $(ho)/aicc $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  $(aiccrun) $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
 	  [ $$r -eq 1 ] || { echo "FAIL aicc parse-error exit (rc $$r)"; exit 1; }; \
 	  printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > $(ho)/.olib.c; \
 	  printf 'extern int vals[];\nint pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+vals[2]+ext_add(15,5);}\n' > $(ho)/.omain.c; \
 	  printf 'int ext_add(int a,int b){return a+b;}\n' > $(ho)/.oext.c; \
-	  $m $(ho)/aicc -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL aicc -c lib"; exit 1; }; \
-	  $m $(ho)/aicc -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL aicc -c main"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL aicc -c lib"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL aicc -c main"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.oext.o $(ho)/.oext.c; \
 	  $$cc_g -no-pie -o $(ho)/.oexe $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext.o > /dev/null 2>&1 || { echo "FAIL ld cc objects"; exit 1; }; \
 	  $(ho)/.oexe; a=$$?; \
@@ -447,25 +450,25 @@ test_cc: host out/host$(hsuf)/aicc
 	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
 	  printf '#include <ans.h>\nint main() { return ANS + BONUS; }\n' > $(ho)/.flg.c; \
 	  mkdir -p $(ho)/.flginc && printf '#define ANS 30\n' > $(ho)/.flginc/ans.h; \
-	  $m $(ho)/aicc -I $(ho)/.flginc -D BONUS=12 -o $(ho)/.flg $(ho)/.flg.c > /dev/null 2>&1 || { echo "FAIL aicc -I/-D/-o"; exit 1; }; \
+	  $(aiccrun) -I $(ho)/.flginc -D BONUS=12 -o $(ho)/.flg $(ho)/.flg.c > /dev/null 2>&1 || { echo "FAIL aicc -I/-D/-o"; exit 1; }; \
 	  $(ho)/.flg; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL aicc -I/-D/-o run (got $$a want 42)"; exit 1; }; \
 	  printf 'int f();\nint main() { return f() + 2; }\n' > $(ho)/.mi1.c; \
 	  printf 'int f() { return 40; }\n' > $(ho)/.mi2.c; \
-	  mabs="$$PWD/$(ho)"; (cd $(ho) && $$mabs/ai $$mabs/aicc -c .mi1.c .mi2.c) > /dev/null 2>&1 || { echo "FAIL aicc multi-input -c"; exit 1; }; \
+	  mabs="$$PWD/$(ho)"; (cd $(ho) && $$mabs/ai --wake $$mabs/aicc.image -e '(cc-main (cuup (cup cmdline)))' -c .mi1.c .mi2.c) > /dev/null 2>&1 || { echo "FAIL aicc multi-input -c"; exit 1; }; \
 	  $$cc_g -no-pie -o $(ho)/.mi $(ho)/.mi1.o $(ho)/.mi2.o > /dev/null 2>&1 || { echo "FAIL ld multi-input objects"; exit 1; }; \
 	  $(ho)/.mi; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-input run (got $$a want 42)"; exit 1; }; \
 	  printf '#include <stdarg.h>\nint isum(int n,...){va_list ap;va_start(ap,n);long s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}\n' > $(ho)/.valib.c; \
 	  printf 'int isum(int n,...);\nint main(){return isum(4,10,11,12,9);}\n' > $(ho)/.vamain.c; \
-	  $m $(ho)/aicc -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL aicc -c variadic"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL aicc -c variadic"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.vamain.o $(ho)/.vamain.c; \
 	  $$cc_g -no-pie -o $(ho)/.vaexe $(ho)/.vamain.o $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL ld cc-variadic + gcc-main"; exit 1; }; \
 	  $(ho)/.vaexe; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL cc-variadic <- gcc-caller (SysV va ABI, got $$a want 42)"; exit 1; }; \
 	  printf '__attribute__((weak)) int wpick(void){return 7;}\nint main(){return wpick() + 30;}\n' > $(ho)/.wklib.c; \
 	  printf 'int wpick(void){return 12;}\n' > $(ho)/.wkstr.c; \
-	  $m $(ho)/aicc -c $(ho)/.wklib.c $(ho)/.wklib.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.wklib.c $(ho)/.wklib.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak"; exit 1; }; \
 	  $$cc_g -no-pie -o $(ho)/.wkdef $(ho)/.wklib.o > /dev/null 2>&1 && $(ho)/.wkdef; a=$$?; \
 	  [ $$a -eq 37 ] || { echo "FAIL weak default (got $$a want 37)"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.wkstr.o $(ho)/.wkstr.c; \
@@ -473,35 +476,35 @@ test_cc: host out/host$(hsuf)/aicc
 	  [ $$a -eq 42 ] || { echo "FAIL weak override (got $$a want 42)"; exit 1; }; \
 	  printf 'long bump(long x){long r;__builtin_add_overflow(x,1,&r);return r;}\n' > $(ho)/.rblib.c; \
 	  printf 'long bump(long);\nint main(void){volatile long a=0;long s=a;for(int i=42;i--;)s=bump(s);return (int)s;}\n' > $(ho)/.rbmain.c; \
-	  $m $(ho)/aicc -c $(ho)/.rblib.c $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL aicc -c rbx-callee"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.rblib.c $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL aicc -c rbx-callee"; exit 1; }; \
 	  $$cc_g -O2 -c -o $(ho)/.rbmain.o $(ho)/.rbmain.c; \
 	  $$cc_g -no-pie -o $(ho)/.rbexe $(ho)/.rbmain.o $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL ld rbx interop"; exit 1; }; \
 	  $(ho)/.rbexe; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL callee-saved rbx across cc call (-O2 caller loop bound, got $$a want 42)"; exit 1; }; \
 	  printf 'static long cd(long n,long a){if(n==0)return a;return cd(n-1,a+1);}\nstatic long tb(long n);\nstatic long ta(long n){if(n==0)return 21;return tb(n-1);}\nstatic long tb(long n){if(n==0)return 22;return ta(n-1);}\nstatic long dp(long(*f)(long,long),long n){return f(n,0);}\nint main(void){long a=cd(50000000,0)/2500000;long b=ta(30000000);long c=dp(cd,1000000)/1000000;return (int)(a+b+c);}\n' > $(ho)/.sib.c; \
-	  $m $(ho)/aicc $(ho)/.sib.c $(ho)/.sibx > /dev/null 2>&1 || { echo "FAIL aicc sibcall"; exit 1; }; \
+	  $(aiccrun) $(ho)/.sib.c $(ho)/.sibx > /dev/null 2>&1 || { echo "FAIL aicc sibcall"; exit 1; }; \
 	  $(ho)/.sibx; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL sibcall flat recursion (50M-deep self + mutual + fn-ptr, got $$a want 42 -- a non-tail call would stack-overflow to 139)"; exit 1; }; \
 	  printf 'long fork(void);long waitpid(long,int*,long);void _exit(long);long g;long id(long a){return a;}int main(void){g=id(fork());if(g==0)_exit(42);int st;waitpid(-1,&st,0);return ((st&127)==0&&((st>>8)&255)==42)?42:1;}\n' > $(ho)/.aln.c; \
-	  $m $(ho)/aicc -c $(ho)/.aln.c $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL aicc -c stack-align"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.aln.c $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL aicc -c stack-align"; exit 1; }; \
 	  $$cc_g -no-pie -o $(ho)/.alnx $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL ld stack-align"; exit 1; }; \
 	  $(ho)/.alnx; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL 16-byte stack alignment ('g=id(fork())' holds a temp across the call; a bare-push spill leaves rsp at 8 mod 16 and glibc fork's child movaps #GPs -- got $$a want 42)"; exit 1; }; \
-	  $m $(ho)/aicc -c $(ho)/.oext.c $(ho)/.oext2.o > /dev/null 2>&1 || { echo "FAIL aicc -c ext"; exit 1; }; \
-	  $m $(ho)/aicc $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext2.o -o $(ho)/.lnk1 > /dev/null 2>&1 || { echo "FAIL aicc link .o"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.oext.c $(ho)/.oext2.o > /dev/null 2>&1 || { echo "FAIL aicc -c ext"; exit 1; }; \
+	  $(aiccrun) $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext2.o -o $(ho)/.lnk1 > /dev/null 2>&1 || { echo "FAIL aicc link .o"; exit 1; }; \
 	  $(ho)/.lnk1; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL aicc-linked exe (own static linker, got $$a want 42)"; exit 1; }; \
-	  $m $(ho)/aicc $(ho)/.mi1.c $(ho)/.mi2.c -o $(ho)/.lnk2 > /dev/null 2>&1 || { echo "FAIL aicc link multi-.c"; exit 1; }; \
+	  $(aiccrun) $(ho)/.mi1.c $(ho)/.mi2.c -o $(ho)/.lnk2 > /dev/null 2>&1 || { echo "FAIL aicc link multi-.c"; exit 1; }; \
 	  $(ho)/.lnk2; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-.c link (got $$a want 42)"; exit 1; }; \
-	  $m $(ho)/aicc -c $(ho)/.wkstr.c $(ho)/.wkstr2.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak-strong"; exit 1; }; \
-	  $m $(ho)/aicc $(ho)/.wklib.o -o $(ho)/.lnk3 > /dev/null 2>&1 && $(ho)/.lnk3; a=$$?; \
+	  $(aiccrun) -c $(ho)/.wkstr.c $(ho)/.wkstr2.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak-strong"; exit 1; }; \
+	  $(aiccrun) $(ho)/.wklib.o -o $(ho)/.lnk3 > /dev/null 2>&1 && $(ho)/.lnk3; a=$$?; \
 	  [ $$a -eq 37 ] || { echo "FAIL aicc-link weak default (got $$a want 37)"; exit 1; }; \
-	  $m $(ho)/aicc $(ho)/.wklib.o $(ho)/.wkstr2.o -o $(ho)/.lnk4 > /dev/null 2>&1 && $(ho)/.lnk4; a=$$?; \
+	  $(aiccrun) $(ho)/.wklib.o $(ho)/.wkstr2.o -o $(ho)/.lnk4 > /dev/null 2>&1 && $(ho)/.lnk4; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL aicc-link weak override (got $$a want 42)"; exit 1; }; \
 	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e1 = { "a", 30 };\n' > $(ho)/.nf1.c; \
 	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e2 = { "b", 12 };\nextern ent __start_ai_nifs[];\nextern ent __stop_ai_nifs[];\nint main(){ long s=0; for (ent *p=__start_ai_nifs; p<__stop_ai_nifs; p++) s+=p->v; return (int)s; }\n' > $(ho)/.nf2.c; \
-	  $m $(ho)/aicc $(ho)/.nf2.c $(ho)/.nf1.c -o $(ho)/.lnk5 > /dev/null 2>&1 || { echo "FAIL aicc link ai_nifs"; exit 1; }; \
+	  $(aiccrun) $(ho)/.nf2.c $(ho)/.nf1.c -o $(ho)/.lnk5 > /dev/null 2>&1 || { echo "FAIL aicc link ai_nifs"; exit 1; }; \
 	  $(ho)/.lnk5; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $$a want 42)"; exit 1; }; \
 	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets) ok"; \
