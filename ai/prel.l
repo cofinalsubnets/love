@@ -10,6 +10,7 @@
 ; │    x))`. Using `*` for caap..cuuup here cores the egg (host loops on every eval). ┐
 (: id 1
    (const x _) x
+   <- pin -> peep
    (co f x y) (f y x)                ; co: the argument-transpose (so `co compose` reads as reverse-compose)
    flip co                           ; flip stays an alias for co (minimize the blast)
    sat saturate)                     ; `saturate` is the canonical name now (the `$` sigil factors to it); `sat` is the short alias
@@ -28,8 +29,12 @@
    (atom? x) (nil? (two? x))
    (compose f g) (\ x (f (g x)))
    (names _ ) (keys book)
-   caap (compose cap cap) caup (compose cap cup) ;; FIXME emit pure code -- combine like operations and metaprogram a concrete thread for each definition
-   cuap (compose cup cap) cuup (compose cup cup))
+   (caap x) (cap (cap x)) (caup x) (cap (cup x))
+   (cuap x) (cup (cap x)) (cuup x) (cup (cup x))
+   (caaap x) (cap (cap (cap x))) (caaup x) (cap (cap (cup x)))
+   (cauap x) (cap (cup (cap x))) (cauup x) (cap (cup (cup x)))
+   (cuaap x) (cup (cap (cap x))) (cuaup x) (cup (cap (cup x)))
+   (cuuap x) (cup (cup (cap x))) (cuuup x) (cup (cup (cup x))))
 ; the four element tiers (enum g_vec_type, one word per element): z integers, r reals,
 ; c packed complex, o objects -- surfaced by the star-/gem-/twin-/top-tray ctors + `tier`.
 ; the imaginary unit: complex values are written e.g. (+ 2 (* 3 i))
@@ -44,10 +49,8 @@
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
    (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (% (* h h) m)
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
-(: caaap (compose cap caap) caaup (compose cap caup) ;; FIXME group above
-   cauap (compose cap cuap) cauup (compose cap cuup)
-   cuaap (compose cup caap) cuaup (compose cup caup)
-   cuuap (compose cup cuap) cuuup (compose cup cuup))
+(:
+   )
 ; X link; cap/cup -- the chain's two projections, the matched pair the string diagrams bend
 ; (lineage: cap/cup <- cap/cbp <- car/cdr) -- and the caap..cuuup compounds above are the
 ; primitives; the older names are gone.
@@ -59,7 +62,6 @@
    (getc _) (see in)) ;; FIXME rm f prefix
 ; the accessor aliases are plain globals too, so escaping works like (+)/'+ --
 ; ((->) t k d) peeps.
-(: <- pin -> peep)
 ; fixnum-as-function application, pinned on book for the VM's apply path: applying a
 ; fixnum n to x is Church-numeral application -- numeric x exponentiates (x ** n), a
 ; function x composes ($ n) times. n<1 -> 1 (itself the identity numeral: (1 x) == x
