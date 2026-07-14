@@ -6974,15 +6974,485 @@
   = (vof 0 '(ii2 tt))))
 
 ; ============================================================================
-; the CRITICAL-PAIRS slice (patch.v's ninth) STAYS AT THE SCAFFOLD TIER for
-; now: rw_comm_div / cp_earned are hand-proven + axiom-free in proof/rocq/
-; patch.v, the runnable toy is test/patch.l's ninth form. the uu-term
-; migration is DEFERRED on a measured NbE cost law: a cell code
-; (npair 2 (npair a b)) at OPEN args costs ~exponential-in-the-tag to check
-; (tag 0 free, tag 1 ~0.6s, tag 2 ~12s PER SYNTACTIC OCCURRENCE) -- the
-; charm tag rides add/tri into a succ-headed value that DUPLICATES the stuck
-; core at every level, a dag conv then walks as a tree. the slice's kid-
-; surgery lemmas need dozens of such occurrences, so the migration waits on
-; NbE sharing (or a stuck-tag cell coding); the arithmetic floor above kept
-; its demo values tiny for exactly this reason, now quantified.
+; the CRITICAL-PAIRS slice (patch.v's ninth), the uu leg: kid surgery at code
+; grain. a cell is a cantor code (gcell a b), gka/gkb read the kids back, and
+; gsub/gput read/write a tree ADDRESS (an nlist of directions, 0 the a-kid).
+; the four laws mirror patch.v's RuleCommute kernel: get-put (gsubput), the
+; two disturbance mirrors (gsubputab/gsubputba: a put on one side of the
+; diverging seat leaves the other side's read alone), and the commute
+; (gputcomm: diverging puts land the same tree, NO index re-aim). rw/rw2 and
+; cp_earned stay Rocq-tier: option/mtch bookkeeping over these four.
+; ladder style: each induction is a nat_rect over the address length whose
+; step rungs are SEALED defqs taking the IH as a hypothesis; the commute's
+; cell-swap rungs are ABSTRACT over the payloads (P Q A B ride as pis, so
+; the towers appear once at the instantiation site, not in every statement).
+; closed demos ride lof -- vof pays the unary grind on cell codes, lof does
+; not (24ms vs 5s), and test/uu.l's differential battery ties the two.
 ; ============================================================================
+(assert
+ ; the cell code carries its tag in the SECOND seat -- (npair pair 2), not
+ ; (npair 2 pair) -- so the charm never meets add/tri's unfolding loop and a
+ ; cell at OPEN args stays one small stuck node instead of a succ tower that
+ ; duplicates the core (the difference is ~10x on this whole slice's check)
+ (defn 'gka '(pi g nat nat) '(lam g (upa (upa g))))
+ (defn 'gkb '(pi g nat nat) '(lam g (upb (upa g))))
+ (defn 'gcell '(pi a nat (pi b nat nat)) '(lam a (lam b (npair (npair a b) 2))))
+ (defq 'gkabeta
+   '(pi a nat (pi b nat (paths nat (gka (gcell a b)) a)))
+   '(lam a
+      (lam b
+        (pathscomp0 nat (upa (upa (npair (npair a b) 2))) (upa (npair a b)) a
+          (maponpaths nat nat (lam w (upa w)) (upa (npair (npair a b) 2)) (npair a b)
+            (upabeta (npair a b) 2))
+          (upabeta a b)))))
+ (defq 'gkbbeta
+   '(pi a nat (pi b nat (paths nat (gkb (gcell a b)) b)))
+   '(lam a
+      (lam b
+        (pathscomp0 nat (upb (upa (npair (npair a b) 2))) (upb (npair a b)) b
+          (maponpaths nat nat (lam w (upb w)) (upa (npair (npair a b) 2)) (npair a b)
+            (upabeta (npair a b) 2))
+          (upbbeta a b)))))
+ (id? (vof 0 '3) (vof 0 '(gka (gcell 3 1))))
+ (id? (vof 0 '1) (vof 0 '(gkb (gcell 3 1)))))
+
+(assert
+ (defn 'gsub
+   '(pi p nlist (pi g nat nat))
+   '(lam p
+      (lam g
+        ((nat_rect (lam q (pi v (nvec q) (pi g2 nat nat)))
+           (lam v (lam g2 g2))
+           (lam k
+             (lam IH
+               (lam v
+                 (lam g2
+                   (IH (pr2 v)
+                     (bool_rect (lam c nat) (gka g2) (gkb g2) (niszero (pr1 v))))))))
+           (pr1 p))
+          (pr2 p)
+          g))))
+ (defn 'gput
+   '(pi p nlist (pi g nat (pi h nat nat)))
+   '(lam p
+      (lam g
+        (lam h
+          ((nat_rect (lam q (pi v (nvec q) (pi g2 nat nat)))
+             (lam v (lam g2 h))
+             (lam k
+               (lam IH
+                 (lam v
+                   (lam g2
+                     (bool_rect (lam c nat)
+                       (gcell (IH (pr2 v) (gka g2)) (gkb g2))
+                       (gcell (gka g2) (IH (pr2 v) (gkb g2)))
+                       (niszero (pr1 v)))))))
+             (pr1 p))
+            (pr2 p)
+            g)))))
+ 1)
+
+(assert
+ (defq 'gsubput-stepa
+   '(pi k nat
+      (pi vv (nvec k)
+        (pi g nat
+          (pi h nat
+            (pi IH (paths nat (gsub (tpair k vv) (gput (tpair k vv) (gka g) h)) h)
+              (paths nat
+                (gsub (tpair k vv) (gka (gcell (gput (tpair k vv) (gka g) h) (gkb g))))
+                h))))))
+   '(lam k
+      (lam vv
+        (lam g
+          (lam h
+            (lam IH
+              (pathscomp0 nat
+                (gsub (tpair k vv) (gka (gcell (gput (tpair k vv) (gka g) h) (gkb g))))
+                (gsub (tpair k vv) (gput (tpair k vv) (gka g) h))
+                h
+                (maponpaths nat nat (lam z (gsub (tpair k vv) z))
+                  (gka (gcell (gput (tpair k vv) (gka g) h) (gkb g)))
+                  (gput (tpair k vv) (gka g) h)
+                  (gkabeta (gput (tpair k vv) (gka g) h) (gkb g)))
+                IH)))))))
+ (defq 'gsubput-stepb
+   '(pi k nat
+      (pi vv (nvec k)
+        (pi g nat
+          (pi h nat
+            (pi IH (paths nat (gsub (tpair k vv) (gput (tpair k vv) (gkb g) h)) h)
+              (paths nat
+                (gsub (tpair k vv) (gkb (gcell (gka g) (gput (tpair k vv) (gkb g) h))))
+                h))))))
+   '(lam k
+      (lam vv
+        (lam g
+          (lam h
+            (lam IH
+              (pathscomp0 nat
+                (gsub (tpair k vv) (gkb (gcell (gka g) (gput (tpair k vv) (gkb g) h))))
+                (gsub (tpair k vv) (gput (tpair k vv) (gkb g) h))
+                h
+                (maponpaths nat nat (lam z (gsub (tpair k vv) z))
+                  (gkb (gcell (gka g) (gput (tpair k vv) (gkb g) h)))
+                  (gput (tpair k vv) (gkb g) h)
+                  (gkbbeta (gka g) (gput (tpair k vv) (gkb g) h)))
+                IH)))))))
+ (defq 'gsubput
+   '(pi p nlist (pi g nat (pi h nat (paths nat (gsub p (gput p g h)) h))))
+   '(lam p
+      ((nat_rect
+         (lam q
+           (pi v (nvec q)
+             (pi g nat
+               (pi h nat (paths nat (gsub (tpair q v) (gput (tpair q v) g h)) h)))))
+         (lam v (lam g (lam h (idpath h))))
+         (lam k
+           (lam IH
+             (lam v
+               (lam g
+                 (lam h
+                   (bool_rect
+                     (lam cb
+                       (paths nat
+                         (gsub (tpair k (pr2 v))
+                           (bool_rect (lam c nat)
+                             (gka
+                               (bool_rect (lam c nat)
+                                 (gcell (gput (tpair k (pr2 v)) (gka g) h) (gkb g))
+                                 (gcell (gka g) (gput (tpair k (pr2 v)) (gkb g) h))
+                                 cb))
+                             (gkb
+                               (bool_rect (lam c nat)
+                                 (gcell (gput (tpair k (pr2 v)) (gka g) h) (gkb g))
+                                 (gcell (gka g) (gput (tpair k (pr2 v)) (gkb g) h))
+                                 cb))
+                             cb))
+                         h))
+                     (gsubput-stepa k (pr2 v) g h (IH (pr2 v) (gka g) h))
+                     (gsubput-stepb k (pr2 v) g h (IH (pr2 v) (gkb g) h))
+                     (niszero (pr1 v))))))))
+         (pr1 p))
+        (pr2 p))))
+ 1)
+
+(assert
+ (defq 'gsubputab-stepa
+   '(pi k nat
+      (pi vv (nvec k)
+        (pi ra nlist
+          (pi rb nlist
+            (pi g nat
+              (pi h nat
+                (pi IH (paths nat
+                         (gsub (lapp (tpair k vv) (ncons 1 rb))
+                           (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h))
+                         (gsub (lapp (tpair k vv) (ncons 1 rb)) (gka g)))
+                  (paths nat
+                    (gsub (lapp (tpair k vv) (ncons 1 rb))
+                      (gka (gcell (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h) (gkb g))))
+                    (gsub (lapp (tpair k vv) (ncons 1 rb)) (gka g))))))))))
+   '(lam k
+      (lam vv
+        (lam ra
+          (lam rb
+            (lam g
+              (lam h
+                (lam IH
+                  (pathscomp0 nat
+                    (gsub (lapp (tpair k vv) (ncons 1 rb))
+                      (gka (gcell (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h) (gkb g))))
+                    (gsub (lapp (tpair k vv) (ncons 1 rb))
+                      (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h))
+                    (gsub (lapp (tpair k vv) (ncons 1 rb)) (gka g))
+                    (maponpaths nat nat
+                      (lam z (gsub (lapp (tpair k vv) (ncons 1 rb)) z))
+                      (gka (gcell (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h) (gkb g)))
+                      (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h)
+                      (gkabeta (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h) (gkb g)))
+                    IH)))))))))
+ (defq 'gsubputab-stepb
+   '(pi k nat
+      (pi vv (nvec k)
+        (pi ra nlist
+          (pi rb nlist
+            (pi g nat
+              (pi h nat
+                (pi IH (paths nat
+                         (gsub (lapp (tpair k vv) (ncons 1 rb))
+                           (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h))
+                         (gsub (lapp (tpair k vv) (ncons 1 rb)) (gkb g)))
+                  (paths nat
+                    (gsub (lapp (tpair k vv) (ncons 1 rb))
+                      (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h))))
+                    (gsub (lapp (tpair k vv) (ncons 1 rb)) (gkb g))))))))))
+   '(lam k
+      (lam vv
+        (lam ra
+          (lam rb
+            (lam g
+              (lam h
+                (lam IH
+                  (pathscomp0 nat
+                    (gsub (lapp (tpair k vv) (ncons 1 rb))
+                      (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h))))
+                    (gsub (lapp (tpair k vv) (ncons 1 rb))
+                      (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h))
+                    (gsub (lapp (tpair k vv) (ncons 1 rb)) (gkb g))
+                    (maponpaths nat nat
+                      (lam z (gsub (lapp (tpair k vv) (ncons 1 rb)) z))
+                      (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h)))
+                      (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h)
+                      (gkbbeta (gka g) (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h)))
+                    IH)))))))))
+ (defq 'gsubputab
+   '(pi w nlist
+      (pi ra nlist
+        (pi rb nlist
+          (pi g nat
+            (pi h nat
+              (paths nat
+                (gsub (lapp w (ncons 1 rb)) (gput (lapp w (ncons 0 ra)) g h))
+                (gsub (lapp w (ncons 1 rb)) g)))))))
+   '(lam w
+      (lam ra
+        (lam rb
+          ((nat_rect
+             (lam q
+               (pi v (nvec q)
+                 (pi g nat
+                   (pi h nat
+                     (paths nat
+                       (gsub (lapp (tpair q v) (ncons 1 rb))
+                         (gput (lapp (tpair q v) (ncons 0 ra)) g h))
+                       (gsub (lapp (tpair q v) (ncons 1 rb)) g))))))
+             (lam v
+               (lam g
+                 (lam h
+                   (maponpaths nat nat (lam z (gsub rb z))
+                     (gkb (gcell (gput ra (gka g) h) (gkb g)))
+                     (gkb g)
+                     (gkbbeta (gput ra (gka g) h) (gkb g))))))
+             (lam k
+               (lam IH
+                 (lam v
+                   (lam g
+                     (lam h
+                       (bool_rect
+                         (lam cb
+                           (paths nat
+                             (gsub (lapp (tpair k (pr2 v)) (ncons 1 rb))
+                               (bool_rect (lam c nat)
+                                 (gka
+                                   (bool_rect (lam c nat)
+                                     (gcell (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka g) h) (gkb g))
+                                     (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb g) h))
+                                     cb))
+                                 (gkb
+                                   (bool_rect (lam c nat)
+                                     (gcell (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka g) h) (gkb g))
+                                     (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb g) h))
+                                     cb))
+                                 cb))
+                             (gsub (lapp (tpair k (pr2 v)) (ncons 1 rb))
+                               (bool_rect (lam c nat) (gka g) (gkb g) cb))))
+                         (gsubputab-stepa k (pr2 v) ra rb g h (IH (pr2 v) (gka g) h))
+                         (gsubputab-stepb k (pr2 v) ra rb g h (IH (pr2 v) (gkb g) h))
+                         (niszero (pr1 v))))))))
+             (pr1 w))
+            (pr2 w))))))
+ 1)
+
+(assert
+ (defq 'gsubputba-stepa
+   '(pi k nat
+      (pi vv (nvec k)
+        (pi ra nlist
+          (pi rb nlist
+            (pi g nat
+              (pi h nat
+                (pi IH (paths nat
+                         (gsub (lapp (tpair k vv) (ncons 0 ra))
+                           (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h))
+                         (gsub (lapp (tpair k vv) (ncons 0 ra)) (gka g)))
+                  (paths nat
+                    (gsub (lapp (tpair k vv) (ncons 0 ra))
+                      (gka (gcell (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h) (gkb g))))
+                    (gsub (lapp (tpair k vv) (ncons 0 ra)) (gka g))))))))))
+   '(lam k
+      (lam vv
+        (lam ra
+          (lam rb
+            (lam g
+              (lam h
+                (lam IH
+                  (pathscomp0 nat
+                    (gsub (lapp (tpair k vv) (ncons 0 ra))
+                      (gka (gcell (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h) (gkb g))))
+                    (gsub (lapp (tpair k vv) (ncons 0 ra))
+                      (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h))
+                    (gsub (lapp (tpair k vv) (ncons 0 ra)) (gka g))
+                    (maponpaths nat nat
+                      (lam z (gsub (lapp (tpair k vv) (ncons 0 ra)) z))
+                      (gka (gcell (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h) (gkb g)))
+                      (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h)
+                      (gkabeta (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h) (gkb g)))
+                    IH)))))))))
+ (defq 'gsubputba-stepb
+   '(pi k nat
+      (pi vv (nvec k)
+        (pi ra nlist
+          (pi rb nlist
+            (pi g nat
+              (pi h nat
+                (pi IH (paths nat
+                         (gsub (lapp (tpair k vv) (ncons 0 ra))
+                           (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h))
+                         (gsub (lapp (tpair k vv) (ncons 0 ra)) (gkb g)))
+                  (paths nat
+                    (gsub (lapp (tpair k vv) (ncons 0 ra))
+                      (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h))))
+                    (gsub (lapp (tpair k vv) (ncons 0 ra)) (gkb g))))))))))
+   '(lam k
+      (lam vv
+        (lam ra
+          (lam rb
+            (lam g
+              (lam h
+                (lam IH
+                  (pathscomp0 nat
+                    (gsub (lapp (tpair k vv) (ncons 0 ra))
+                      (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h))))
+                    (gsub (lapp (tpair k vv) (ncons 0 ra))
+                      (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h))
+                    (gsub (lapp (tpair k vv) (ncons 0 ra)) (gkb g))
+                    (maponpaths nat nat
+                      (lam z (gsub (lapp (tpair k vv) (ncons 0 ra)) z))
+                      (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h)))
+                      (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h)
+                      (gkbbeta (gka g) (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h)))
+                    IH)))))))))
+ (defq 'gsubputba
+   '(pi w nlist
+      (pi ra nlist
+        (pi rb nlist
+          (pi g nat
+            (pi h nat
+              (paths nat
+                (gsub (lapp w (ncons 0 ra)) (gput (lapp w (ncons 1 rb)) g h))
+                (gsub (lapp w (ncons 0 ra)) g)))))))
+   '(lam w
+      (lam ra
+        (lam rb
+          ((nat_rect
+             (lam q
+               (pi v (nvec q)
+                 (pi g nat
+                   (pi h nat
+                     (paths nat
+                       (gsub (lapp (tpair q v) (ncons 0 ra))
+                         (gput (lapp (tpair q v) (ncons 1 rb)) g h))
+                       (gsub (lapp (tpair q v) (ncons 0 ra)) g))))))
+             (lam v
+               (lam g
+                 (lam h
+                   (maponpaths nat nat (lam z (gsub ra z))
+                     (gka (gcell (gka g) (gput rb (gkb g) h)))
+                     (gka g)
+                     (gkabeta (gka g) (gput rb (gkb g) h))))))
+             (lam k
+               (lam IH
+                 (lam v
+                   (lam g
+                     (lam h
+                       (bool_rect
+                         (lam cb
+                           (paths nat
+                             (gsub (lapp (tpair k (pr2 v)) (ncons 0 ra))
+                               (bool_rect (lam c nat)
+                                 (gka
+                                   (bool_rect (lam c nat)
+                                     (gcell (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka g) h) (gkb g))
+                                     (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb g) h))
+                                     cb))
+                                 (gkb
+                                   (bool_rect (lam c nat)
+                                     (gcell (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka g) h) (gkb g))
+                                     (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb g) h))
+                                     cb))
+                                 cb))
+                             (gsub (lapp (tpair k (pr2 v)) (ncons 0 ra))
+                               (bool_rect (lam c nat) (gka g) (gkb g) cb))))
+                         (gsubputba-stepa k (pr2 v) ra rb g h (IH (pr2 v) (gka g) h))
+                         (gsubputba-stepb k (pr2 v) ra rb g h (IH (pr2 v) (gkb g) h))
+                         (niszero (pr1 v))))))))
+             (pr1 w))
+            (pr2 w))))))
+ 1)
+
+(assert
+ (defq 'gputcomm-cellz
+   '(pi A nat (pi B nat (pi ra nlist (pi rb nlist (pi x nat (pi y nat
+      (paths nat (gcell (gka (gcell (gput ra A x) B)) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y)))))))))))
+   '(lam A (lam B (lam ra (lam rb (lam x (lam y
+      (pathscomp0 nat (gcell (gka (gcell (gput ra A x) B)) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra A x) (gput rb B y)) (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y))))
+        (pathscomp0 nat (gcell (gka (gcell (gput ra A x) B)) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra A x) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra A x) (gput rb B y)) (maponpaths nat nat (lam z (gcell z (gput rb (gkb (gcell (gput ra A x) B)) y))) (gka (gcell (gput ra A x) B)) (gput ra A x) (gkabeta (gput ra A x) B)) (maponpaths nat nat (lam z (gcell (gput ra A x) (gput rb z y))) (gkb (gcell (gput ra A x) B)) B (gkbbeta (gput ra A x) B)))
+        (pathsinv0 nat (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y)))) (gcell (gput ra A x) (gput rb B y)) (pathscomp0 nat (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y)))) (gcell (gput ra A x) (gkb (gcell A (gput rb B y)))) (gcell (gput ra A x) (gput rb B y)) (maponpaths nat nat (lam z (gcell (gput ra z x) (gkb (gcell A (gput rb B y))))) (gka (gcell A (gput rb B y))) A (gkabeta A (gput rb B y))) (maponpaths nat nat (lam z (gcell (gput ra A x) z)) (gkb (gcell A (gput rb B y))) (gput rb B y) (gkbbeta A (gput rb B y)))))))))))))
+ (defq 'gputcomm-cella
+   '(pi P nat (pi Q nat (pi B nat (pi la nlist (pi lb nlist (pi x nat (pi y nat
+      (pi IH (paths nat (gput lb P y) (gput la Q x))
+        (paths nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B))))))))))))
+   '(lam P (lam Q (lam B (lam la (lam lb (lam x (lam y (lam IH
+      (pathscomp0 nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput la Q x) B) (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B)))
+        (pathscomp0 nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput lb P y) B) (gcell (gput la Q x) B)
+          (pathscomp0 nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput lb P y) (gkb (gcell P B))) (gcell (gput lb P y) B) (maponpaths nat nat (lam z (gcell (gput lb z y) (gkb (gcell P B)))) (gka (gcell P B)) P (gkabeta P B)) (maponpaths nat nat (lam z (gcell (gput lb P y) z)) (gkb (gcell P B)) B (gkbbeta P B)))
+          (maponpaths nat nat (lam z (gcell z B)) (gput lb P y) (gput la Q x) IH))
+        (pathsinv0 nat (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B))) (gcell (gput la Q x) B) (pathscomp0 nat (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B))) (gcell (gput la Q x) (gkb (gcell Q B))) (gcell (gput la Q x) B) (maponpaths nat nat (lam z (gcell (gput la z x) (gkb (gcell Q B)))) (gka (gcell Q B)) Q (gkabeta Q B)) (maponpaths nat nat (lam z (gcell (gput la Q x) z)) (gkb (gcell Q B)) B (gkbbeta Q B))))))))))))))
+ (defq 'gputcomm-cellb
+   '(pi A nat (pi P nat (pi Q nat (pi la nlist (pi lb nlist (pi x nat (pi y nat
+      (pi IH (paths nat (gput lb P y) (gput la Q x))
+        (paths nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x)))))))))))
+   '(lam A (lam P (lam Q (lam la (lam lb (lam x (lam y (lam IH
+      (pathscomp0 nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell A (gput la Q x)) (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x))
+        (pathscomp0 nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell A (gput lb P y)) (gcell A (gput la Q x))
+          (pathscomp0 nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell A (gput lb (gkb (gcell A P)) y)) (gcell A (gput lb P y)) (maponpaths nat nat (lam z (gcell z (gput lb (gkb (gcell A P)) y))) (gka (gcell A P)) A (gkabeta A P)) (maponpaths nat nat (lam z (gcell A (gput lb z y))) (gkb (gcell A P)) P (gkbbeta A P)))
+          (maponpaths nat nat (lam z (gcell A z)) (gput lb P y) (gput la Q x) IH))
+        (pathsinv0 nat (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x)) (gcell A (gput la Q x)) (pathscomp0 nat (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x)) (gcell A (gput la (gkb (gcell A Q)) x)) (gcell A (gput la Q x)) (maponpaths nat nat (lam z (gcell z (gput la (gkb (gcell A Q)) x))) (gka (gcell A Q)) A (gkabeta A Q)) (maponpaths nat nat (lam z (gcell A (gput la z x))) (gkb (gcell A Q)) Q (gkbbeta A Q))))))))))))))
+ (defq 'gputcomm
+   '(pi w nlist (pi ra nlist (pi rb nlist (pi g nat (pi x nat (pi y nat
+      (paths nat (gput (lapp w (ncons 1 rb)) (gput (lapp w (ncons 0 ra)) g x) y)
+                 (gput (lapp w (ncons 0 ra)) (gput (lapp w (ncons 1 rb)) g y) x))))))))
+   '(lam w (lam ra (lam rb
+      ((nat_rect
+         (lam q (pi v (nvec q) (pi g nat (pi x nat (pi y nat
+           (paths nat (gput (lapp (tpair q v) (ncons 1 rb)) (gput (lapp (tpair q v) (ncons 0 ra)) g x) y)
+                      (gput (lapp (tpair q v) (ncons 0 ra)) (gput (lapp (tpair q v) (ncons 1 rb)) g y) x)))))))
+         (lam v (lam g (lam x (lam y (gputcomm-cellz (gka g) (gkb g) ra rb x y)))))
+         (lam k (lam IH (lam v (lam g (lam x (lam y
+           (bool_rect
+             (lam cb (paths nat
+  (bool_rect (lam c nat)
+    (gcell (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka g) x) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb g) x)) cb)) y) (gkb (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka g) x) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb g) x)) cb)))
+    (gcell (gka (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka g) x) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb g) x)) cb)) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka g) x) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb g) x)) cb)) y))
+    cb)
+  (bool_rect (lam c nat)
+    (gcell (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka g) y) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb g) y)) cb)) x) (gkb (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka g) y) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb g) y)) cb)))
+    (gcell (gka (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka g) y) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb g) y)) cb)) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb (bool_rect (lam c nat) (gcell (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka g) y) (gkb g)) (gcell (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb g) y)) cb)) x))
+    cb)))
+             (gputcomm-cella (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gka g) x) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gka g) y) (gkb g)
+               (lapp (tpair k (pr2 v)) (ncons 0 ra)) (lapp (tpair k (pr2 v)) (ncons 1 rb)) x y (IH (pr2 v) (gka g) x y))
+             (gputcomm-cellb (gka g) (gput (lapp (tpair k (pr2 v)) (ncons 0 ra)) (gkb g) x) (gput (lapp (tpair k (pr2 v)) (ncons 1 rb)) (gkb g) y)
+               (lapp (tpair k (pr2 v)) (ncons 0 ra)) (lapp (tpair k (pr2 v)) (ncons 1 rb)) x y (IH (pr2 v) (gkb g) x y))
+             (niszero (pr1 v)))))))))
+         (pr1 w))
+        (pr2 w))))))
+ 1)
+
+(assert
+ ; the slice in the small, at lof speed: the write lands where the read
+ ; looks, the diverging orders land one tree, the other side's read rides
+ ((lof '(gsub (ncons 1 (ncons 0 nnil)) (gput (ncons 1 (ncons 0 nnil)) (gcell 0 (gcell 1 0)) 2))) = 2)
+ ((lof '(gput (ncons 1 nnil) (gput (ncons 0 nnil) (gcell 3 4) 8) 9))
+  = (lof '(gput (ncons 0 nnil) (gput (ncons 1 nnil) (gcell 3 4) 9) 8)))
+ ((lof '(gsub (ncons 1 nnil) (gput (ncons 0 nnil) (gcell 3 4) 8))) = 4))
