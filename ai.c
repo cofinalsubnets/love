@@ -6429,7 +6429,14 @@ lvm(lvm_eq) {
  // The common case (loop guards, table-key tests),
  // so skip the arr/complex/float dispatch below, and fuse a following `?` directly
  // (see the cmp_lt cond-fusion note: then -> Ip+3, else -> Ip[2].m).
- if (__builtin_expect(charmp(a) && charmp(b), 1)) {
+ // Identity settles two charms, and a point (mint/nom) against ANYTHING (a
+ // point equals only itself: no numeric bridge, and eqv has no KMint/KNom
+ // arm) -- symbol-dispatch chains compare noms by the thousand while
+ // compiling, so both shapes skip the arr/complex/float dispatch below and
+ // fuse a following `?`. `=` answers a boolean everywhere the elementwise
+ // mask doesn't apply, so a point beside an array reads 0 here (and the
+ // engine's undefined eq faces below agree).
+ if (__builtin_expect((charmp(a) && charmp(b)) || pointp(a) || pointp(b), 1)) {
   bool r = a == b;
   if (Ip[1].ap == lvm_cond) return Sp += 2, Ip = r ? Ip + 3 : Ip[2].m, Continue();
   return Sp[1] = r ? putcharm(1) : nil, Sp++, Ip++, Continue(); }
@@ -7960,7 +7967,7 @@ lvm(lvm_vbin, int op) {
      && !(aarr && vec(a)->type == ai_O) && !(barr && vec(b)->type == ai_O))
   return Ap(lvm_cbin, g, op);
  if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
-  return *++Sp = ZeroPoint, Ip++, Continue();
+  return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // `=` is boolean: undefined face -> 0, not ()
  if ((aarr && vec(a)->type == ai_O) || (barr && vec(b)->type == ai_O))
   return Ap(lvm_obin, g, op);                     // object array -> promoting lane
  uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
@@ -7972,7 +7979,7 @@ lvm(lvm_vbin, int op) {
  int ct = ta > tb ? ta : tb;
  bool fdom = ct >= ai_R, cmp = op >= vop_lt;
  uintptr_t n = bshape_n(a, b);                     // conformance + result size
- if (n == (uintptr_t) -1) return *++Sp = ZeroPoint, Ip++, Continue();
+ if (n == (uintptr_t) -1) return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // non-conformant `=` -> 0
  // `/` over an all-integer broadcast promotes the whole result to f64 the moment
  // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
  // integer. Sound only after conformance is known good (offsets are then in range).
@@ -8262,11 +8269,11 @@ lvm(lvm_cbin, int op) {
  // undefined on complex; only `=` survives among the comparisons (-> a mask).
  if (!(aarr || Cp(a) || isnum(a)) || !(barr || Cp(b) || isnum(b))
      || op == vop_rem || op == vop_fquot || (op >= vop_lt && op != vop_eq))
-  return *++Sp = ZeroPoint, Ip++, Continue();
+  return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // `=` is boolean: undefined face -> 0, not ()
  bool cmp = op == vop_eq;
  uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b);
- if (n == (uintptr_t) -1) return *++Sp = ZeroPoint, Ip++, Continue();
+ if (n == (uintptr_t) -1) return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // non-conformant `=` -> 0
  enum ai_vec_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
  uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));

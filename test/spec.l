@@ -231,6 +231,8 @@
 ; (rank/tally/shape read nil on a scalar); EMPTIES stay arrays, carrying the reduction units.
 ; + - * // < = broadcast numpy-style (`/` promotes the whole result to r on one inexact cell);
 ; reduce net/prod/max/min/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
+; = stays boolean off the mask: a non-numeric operand beside an array, or non-conformant
+; shapes, read 0 -- never the arithmetic ()-face (a point/text equals only itself).
 (assert
  (6 = (tally (star-tray '(2 3) 0))) (2 = (rank (star-tray '(2 3) 0))) ('(2 3) = (shape (star-tray '(2 3) 0)))
  (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
@@ -241,6 +243,7 @@
  (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = (// @(7 11) 2))
  (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
+ (0 = (@(1 2 3) = @(1 2))) (0 = ('sym = @(1 2 3))) (0 = ("ab" = @(1 2)))   ; = boolean off the mask
  (0 = (net (star-tray '(0) 0))) (1 = (prod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
  ("@()" = (show (star-tray '(0) 0))) (0 = (tally ((star-tray '(0) 0) + 1)))
  (32 = (inner @(1 2 3) @(4 5 6))) (star-tray = (tier (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
