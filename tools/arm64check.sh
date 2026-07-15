@@ -43,9 +43,13 @@ for f in ai.c host/*.c crew/cc/lib/math/am.c; do
 done
 $GCC -static -o $O/ai $O/*.o 2>/dev/null || $GCC -static -o $O/ai $O/*.o
 
-# the corpus (or the files named on the command line), under qemu.
+# the corpus (or the files named on the command line), under qemu. Mirror common.mk's
+# $t EXACTLY: 00-init, spec, then uu.l HOISTED to 3rd (uu's test files uukind/uukindlaw
+# assume uu is set up early), then the C-sorted rest with those filtered out. A bare
+# `ls` (locale-sorted, uu.l NOT hoisted) loads ~40 files before uu.l -> uukindlaw.l's
+# `(member? 'vof (names ()))` fails with `missing defn`. $t is the source of truth.
 if [ $# -gt 0 ]; then set -- "$@"; else
-  set -- test/00-init.l test/spec.l $(ls test/*.l | grep -vE '00-init|spec\.l|glaze-x86')
+  set -- test/00-init.l test/spec.l test/uu.l $(ls test/*.l | LC_ALL=C sort | grep -vE '00-init|spec\.l|glaze-x86|uu\.l')
 fi
 echo "AARCH64 qemu run ($(echo "$@" | wc -w) files)"
 cat "$@" | AI_NO_IMAGE=1 "$QEMU" $O/ai > $O/.out 2>&1; r=$?
