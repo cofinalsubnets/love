@@ -108,9 +108,9 @@ test_glaze: host
 	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
 	  echo "GLAZE ai/glaze/hook.l"; \
-	  cat ai/glaze/hook.l | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	  { cat ai/glaze/hook.l; printf '\n(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
-	  { [ $$r -eq 0 ] && grep -q "ai/glaze/hook:" out/host/.test_glaze.out; } \
+	  { [ $$r -eq 0 ] && grep -q "glaze-hook-ran" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze/hook (exit $$r)"; exit 1; }
 else
 test_glaze:

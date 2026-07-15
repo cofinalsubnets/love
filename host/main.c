@@ -370,6 +370,24 @@ static lvm(lvm_getenv) {
 // pure host-glob nif. net.c (ain) / pty.c (bao) are the live not-in-ai0 ones.
 static lvm(lvm_getpid) { return Sp[0] = putcharm(getpid()), Ip++, Continue(); }
 
+// --- PARTIAL-GLAZE PROTOTYPE (flag-gated; see ai/glaze/emit.l cgir bridge) -----------
+// pg_dyad: a stable-address, allocation-free fixnum dyadic op, called DIRECTLY from
+// emitted native code (SysV: rdi=op, rsi=a, rdx=b; untagged machine ints in and out).
+// It stands in for "the VM op's C body" that partial glazing splices in when the glaze
+// grammar has no recognizer for an op. op: 0=shl 1=shr(arith) 2=min 3=max. No g/heap
+// access, so the bridge needs no GC Pack/reload -- only the caller-saved register spill.
+// The address is a link-time constant (never GC-moved), handed to the emitter by pgaddr.
+ai_noinline intptr_t ai_pg_dyad(intptr_t op, intptr_t a, intptr_t b) {
+ switch (op) {
+  case 0:  return a << b;
+  case 1:  return a >> b;
+  case 2:  return a < b ? a : b;
+  default: return a > b ? a : b; } }
+// (pgaddr x) -> the address of ai_pg_dyad as a fixnum (x ignored). The emitter reads it
+// once and embeds it as the callr target. Fixnum-safe: code addresses are < 2^62.
+static lvm(lvm_pgaddr) { return Sp[0] = putcharm((intptr_t) ai_pg_dyad), Ip++, Continue(); }
+static union u const nif_pgaddr[] = {{lvm_pgaddr}, {lvm_ret0}};
+
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
@@ -392,6 +410,7 @@ AI_NIF("run", nif_run);
 AI_NIF("exec", nif_exec);
 AI_NIF("getenv", nif_getenv);
 AI_NIF("getpid", nif_getpid);
+AI_NIF("pgaddr", nif_pgaddr);
 
 // --- the boot script ---------------------------------------------------
 // Everything the two builds disagree about lives in this ONE conditional
@@ -522,6 +541,11 @@ static char const glaze_export[] =              // ai/glaze/export.l: sweep the 
 #include "gexport.h"
  ;
 #endif
+#if defined(__x86_64__)
+static char const glaze_hook[] =                // ai/glaze/hook.l: install book['natjit] -- the ala
+#include "hook.h"                               //   creation hook (glaze EVERY embedded closure, not just (ev '(\..))); x86-64 only
+ ;
+#endif
 // the post-warm dispatch (shared by boot() and the --wake path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   if (argp) return ai_evals_(g, cli);
@@ -553,6 +577,9 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_evals_(g,                                       // the holo module boundary (crew/holo/export.l): the assembler's names
 #include "export.h"                                      //   sweep into the ONE public `holo` book and off the global book.
   );                                                     //   AFTER the glaze, whose direct references folded at its compile.
+#if defined(__x86_64__)
+  g = ai_evals_(g, glaze_hook);                          // install natjit: glaze embedded closures at creation, not just (ev '(\..))
+#endif
 #if defined(__x86_64__) || defined(__aarch64__)
   // AI_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the
   // glaze module book) and the natjit creation hook cleared. The forensics twin

@@ -22,7 +22,7 @@ asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h out/lib/export0.h
 # in main.c), so a normal boot never pays the ~810 ms; the baked snapshot then carries
 # an always-on JIT at zero startup (Phase 4, doc/snapshot.md). Their self-test asserts
 # native-compile transient closures -- the bake's gen_major drops them before serializing.
-glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h
+glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h out/lib/hook.h
 # ai0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
 # interpreter -- the l reader strips the ; comments at read time), since ai0
 # can't lcat the very sources it is assembled from (chicken/egg). cli.l doubles as
@@ -88,6 +88,10 @@ out/lib/auto.h: ai/glaze/auto.l
 	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/gexport.h: ai/glaze/export.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(sed_lit) $< > $@
+out/lib/hook.h: ai/glaze/hook.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@

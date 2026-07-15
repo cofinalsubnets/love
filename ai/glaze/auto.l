@@ -26,7 +26,7 @@
    (exprp e v) (? (= e v)   1
                   (whole? e)  1
                   (two? e)  (: op (cap e)
-                               (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprp (caup e) v) (exprp (caup (cup e)) v))
+                               (? (member? op (cat '(+ - * // % & | ^ < <= > >= =) (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprp (caup e) v) (exprp (caup (cup e)) v))   ; PARTIAL GLAZE: << >> bridge (flag-gated)
                                   (= op '?) (&& (two? (cup (cup (cup e)))) !(two? (cup (cup (cup (cup e)))))   ; exactly 3 operands
                                                (exprp (caup e) v) (exprp (caup (cup e)) v) (exprp (caup (cup (cup e))) v))
                                   0))
@@ -37,7 +37,7 @@
    ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1
                    (two? e) (: op (cap e)
-                               (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
+                               (? (member? op (cat '(+ - * // % & | ^ < <= > >= =) (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))   ; PARTIAL GLAZE: << >> bridge (flag-gated)
                                   (= op '?) (&& (two? (cup (cup (cup e)))) !(two? (cup (cup (cup (cup e)))))
                                                (exprn ps (caup e)) (exprn ps (caup (cup e))) (exprn ps (caup (cup (cup e)))))
                                   0))
@@ -68,7 +68,7 @@
               (two? ACC) (member? op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
               (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
        (? ok `(B I op cmp) 0))
-   (njit-loop lam B cv op cmp) (nif (emit (loopcode B cv op cmp arch)) (base-ev lam) lam 1)
+   (njit-loop lam B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp lam 1)
    ; --- general N-VARIABLE loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)),
    ; up to 3 loop vars + arbitrary update exprs -- this is the shape iterative fib/tak
    ; take (i,a,b with updates b and a+b), not just the fold skeleton above.
@@ -1157,7 +1157,7 @@
                                (qualc e) (memo e (\ l (jitnir (flatc l) arch)))
                                (qualfr e) (memo e (\ l (jitfr l arch)))      ; float-RESULT leaf -> heap-boxed gem
                                (: li (loopinfo e)                            ; counted loops (arch-aware loopcode)
-                                  (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
+                                  (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))) (base-ev l))))
                                      (: ln (loopinfo-n e)
                                         (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
                                            (base-ev (autogroup (autonat (twolow e)))))))))   ; float-GRID nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
@@ -1166,7 +1166,7 @@
                   (qualc e) (memo e (\ l (jitnir (flatc l) arch)))
                   (qualfr e) (memo e (\ l (jitfr l arch)))         ; float-RESULT leaf -> heap-boxed gem (sound: param floated at first use)
                   (: li (loopinfo e)
-                     (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))))))
+                     (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))) (base-ev l))))
                         (: ln (loopinfo-n e)
                            (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
                               (base-ev (autogroup (autonat (twolow (castbuild e))))))))))    ; fall-through: cask-build a string-accumulator loop (the jug threads as a loop param -> survives autogroup's pure passes), LOWER a complex(twin) grid to real-pairs (twolow), then glaze a float-grid nest / mutually-recursive arith group if either fits, else interpret

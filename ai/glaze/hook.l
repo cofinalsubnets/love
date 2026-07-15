@@ -19,10 +19,11 @@
 ; (the binds just below). x86-64 only.
 (: assemble (holo 'assemble)                                                 ; through the module books (crew/holo/export.l,
    emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   ai/glaze/export.l) -- this stream cat-loads
-                                                                            ;   post-boot, so nothing folded for it
+   loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
+                                                                            ;   (unify with auto-ev): owning the back-edge natively
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op (cap e)
-                               (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
+                               (? (member? op (cat '(+ - * // % & | ^ < <= > >= =) (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
                                   (= op '?) (&& (two? (cup (cup (cup e)))) !(two? (cup (cup (cup (cup e)))))
                                                (exprn ps (caup e)) (exprn ps (caup (cup e))) (exprn ps (caup (cup (cup e)))))
                                   0))
@@ -36,7 +37,13 @@
        (? (&& (two? s) (two? (cup (cup s))) (exprn ps body))         ; >=1 param, a body, leaf grammar
           (: _ (pin fires () (+ 1 (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
              (nif (emit (peep (assemble 'x64 (coreir 'x64 ps body (deoptir 'x64 (? (= a 1) 0 1)))) 'bytes 0)) e s a))
-          e))
+          ; NOT a leaf -- try the counted-loop lane (auto-ev's njit-loop, but deopting to `e`, the
+          ; bytecode ala already built, NOT (base-ev s): re-interpreting s here would re-enter ala ->
+          ; natjit -> ... So natjit passes e; owning the loop's back-edge is the big win over the leaf.
+          (: li (loopinfo s)
+             (? li (: _ (pin fires () (+ 1 (peep fires () 0)))
+                      (njit-loop s (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))) e))
+                e))))
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
  _ (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
@@ -54,5 +61,4 @@
     ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
     (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner CAPTURES z -> a fresh native cell per call
        (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)) !(id? f g))) ; computes right, = the interp instance, yet distinct
-   )
- _ (puts "ai/glaze/hook: ev.l ala native-backs every qualifying closure (embedded too), transparent") _ (putc 10))
+   ))  ; NOTE: baked as a boot module now -> SILENT on load (no puts banner; it polluted tool stdout, e.g. spec2coq -> gen.v). asserts stay (silent unless they fail).
