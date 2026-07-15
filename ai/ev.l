@@ -92,8 +92,20 @@
 ; entry, no names() growth. dechurch/dsimp/dehof + the ho-* bundle are the pre-egg twin of ai/glaze/auto.l's
 ; (auto.l keeps its own for the autospec pipeline) -- keep them in step (ai's fixed church + HOF semantics).
 (: welow (:
-   (dsub old new B) (? (id? B old) new (two? B) (link (dsub old new (cap B)) (dsub old new (cup B))) B)   ; substitute old->new in B
    (dquote? x) (&& (two? x) (id? (cap x) '\) (= 2 (tally x)))                                             ; (\ datum) -> a quote, never descend
+   (drm ks env) (filter (\ p (! (member? (cap p) ks))) env)                                              ; drop the shadowed substitutions
+   (dcolnms bs) (? (atom? (cup bs)) () (: n (cap bs) (? (nom? n) (link n (dcolnms (cuup bs))) (dcolnms (cuup bs)))))   ; a : binding list's binder noms
+   (dsubx env x)                                                                                         ; capture-avoiding multi-substitution (mirrors the core bsub): α-rename BOTH \ and : binders
+    (? (nom? x) (: p (assoc x env) (? (two? p) (cup p) x))
+       (atom? x) x
+       (dquote? x) x
+       (id? (cap x) '\) (? (atom? (cuup x)) x
+          (: ps (init (cup x)) ren (map (\ p (link p (nom 0))) ps)                                       ; rename the \ params fresh
+             (link '\ (cat (map cup ren) (L (dsubx (cat ren (drm ps env)) (last x)))))))
+       (id? (cap x) ':) (: nms (dcolnms (cup x)) ren (map (\ p (link p (nom 0))) nms)                    ; a : is a letrec scope -- rename its binders fresh too
+          (map (\ e (dsubx (cat ren (drm nms env)) e)) x))
+       (map (\ e (dsubx env e)) x))
+   (dsub old new B) (dsubx (L (link old new)) B)                                                         ; substitute old->new in B, capture-avoiding
    (dspecial? h) (|| (id? h '?) (|| (id? h '\) (id? h ':)))
    (dsimp x)                                                                                              ; reduce to first-order: beta unary lambdas, flatten curried heads
     (? (atom? x) x  (dquote? x) x

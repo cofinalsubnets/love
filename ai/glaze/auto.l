@@ -725,8 +725,20 @@
    ;     step|->(? (p elem) step skip). `dsimp` then beta-inlines the unary stage lambdas + flattens
    ;     curried operator heads to a FIRST-ORDER step. Step binders are fresh gensym noms (hygienic).
    ;     `defoliate` is a NO-OP (id-identical) on any form with no pipeline -- so non-pipeline forms are byte-unchanged.
-   (dsub old new B) (? (id? B old) new (two? B) (link (dsub old new (cap B)) (dsub old new (cup B))) B)
    (dquote? x) (&& (two? x) (id? (cap x) '\) (= 2 (tally x)))                  ; (\ datum) -> a quote, never descend
+   (drm ks env) (filter (\ p (! (member? (cap p) ks))) env)                    ; drop the shadowed substitutions
+   (dcolnms bs) (? (atom? (cup bs)) () (: n (cap bs) (? (nom? n) (link n (dcolnms (cuup bs))) (dcolnms (cuup bs)))))   ; a : binding list's binder noms
+   (dsubx env x)                                                              ; capture-avoiding multi-substitution (twin of ev.l's): α-rename BOTH \ and : binders
+    (? (nom? x) (: p (assoc x env) (? (two? p) (cup p) x))
+       (atom? x) x
+       (dquote? x) x
+       (id? (cap x) '\) (? (atom? (cuup x)) x
+          (: ps (init (cup x)) ren (map (\ p (link p (nom 0))) ps)
+             (link '\ (cat (map cup ren) (L (dsubx (cat ren (drm ps env)) (last x)))))))
+       (id? (cap x) ':) (: nms (dcolnms (cup x)) ren (map (\ p (link p (nom 0))) nms)
+          (map (\ e (dsubx (cat ren (drm nms env)) e)) x))
+       (map (\ e (dsubx env e)) x))
+   (dsub old new B) (dsubx (L (link old new)) B)                              ; substitute old->new in B, capture-avoiding
    (dmap? P)   (&& (two? P) (id? (cap P) 'map))
    (dfilt? P)  (&& (two? P) (id? (cap P) 'filter))
    (dprod? P)  (|| (dmap? P) (dfilt? P))
