@@ -51,8 +51,11 @@
                         (o-walk be >items labels wkset internal? rset (off + w)
                                 ((rev bs) + bacc) racc))
                     (: fill (? (member? k '(b26 b19 adrp21 addlo12)) (le32 ((holo 'fix-a) x)) (o-zeros w))
+                       ; carry the byte just BEFORE the field (bacc's head, reversed) -- the
+                       ; x64 opcode: E8/E9 (call/jmp) vs a lea's modrm, so reltext can tell a
+                       ; control transfer (PLT32) from an address-of (PC32) for an external ref.
                        (o-walk be >items labels wkset internal? rset (off + w)
-                               ((rev fill) + bacc) (>< `(off k lbl ((holo 'fix-a) x)) racc)))))
+                               ((rev fill) + bacc) (>< `(off k lbl ((holo 'fix-a) x) (? (two? bacc) (cap bacc) 0)) racc)))))
              (o-walk be >items labels wkset internal? rset (off + 1) (>< x bacc) racc))))
    (o-zeros n) (? (n < 1) () (>< 0 (o-zeros (n - 1))))
 
@@ -161,14 +164,18 @@
         (? (! a64)
            (: (go rs acc)
                (? (! (two? rs)) (catall (rev acc))
-                  (: r <rs off <r lbl <>>r
+                  (: r <rs off <r lbl <>>r pv <>>>>r
                      (? (o-has? wkset lbl)               ; a weak-defined fn: bind its OWN symbol (overridable)
                          (go >rs (>< (o-rela off (peep fnidx lbl 0) r-plt32 -4) acc))
                         (o-has? dlabels lbl)
                          (go >rs (>< (o-rela off 2 r-pc32 ((peep dlabels lbl 0) - 4)) acc))
                         (o-has? nlabels lbl)
                          (go >rs (>< (o-rela off 3 r-pc32 ((peep nlabels lbl 0) - 4)) acc))
-                        (go >rs (>< (o-rela off (peep extidx lbl 0) r-plt32 -4) acc)))))
+                        ; an external ref: a call/jmp (E8/E9 precedes the disp field) -> PLT32;
+                        ; an la/lea address-of (its modrm precedes) -> PC32 -- external DATA
+                        ; like `stdout` needs the data reloc, not a PLT stub (the -c crash).
+                        (go >rs (>< (o-rela off (peep extidx lbl 0)
+                                             (? (member? pv '(232 233)) r-plt32 r-pc32) -4) acc)))))
               (go trel ()))
            (: (go rs acc)
                (? (! (two? rs)) (catall (rev acc))

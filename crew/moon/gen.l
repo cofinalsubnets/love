@@ -2186,55 +2186,40 @@
                     (c + `(`('label ld))))))))
           (k = 'goto) `(`('jmp (intern ((g 'fn) + "." + <>s))))
           (k = 'lbl) `(`('label (intern ((g 'fn) + "." + <>s))))
+          ; a case/default label -- anywhere in the body, tied to the nearest enclosing
+          ; switch by VALUE. the switch's pre-scan (below) pinned value->label into the
+          ; tablet at the top of the g 'cases stack; here we just emit that label. a
+          ; case/default with no enclosing switch (empty stack) or an unscanned value
+          ; refuses rather than mislabel.
+          (k = 'case)
+           (? (! (two? (g 'cases))) 'bad
+              (: lab (peep (cap (g 'cases)) <>s 'no) (? (lab = 'no) 'bad `(`('label lab)))))
+          (k = 'dflt)
+           (? (! (two? (g 'cases))) 'bad
+              (: lab (peep (cap (g 'cases)) 'dflt 'no) (? (lab = 'no) 'bad `(`('label lab)))))
           (k = 'switch)
            (: c (cgexpr g env <>s)
               (? (bad? c) 'bad
                  (: items <>>s
                     cr9 (vreg c)
                     lend (nlab g ".d")
-                    labs (: (mk is acc)
-                             (? (! (two? is)) (rev acc)
-                                (: it <is
-                                   (? (<it = 'case)
-                                      (mk >is (link `('case <>it (nlab g ".k")) acc))
-                                      (<it = 'dflt)
-                                      (mk >is (link `('dflt 0 (nlab g ".k")) acc))
-                                      (mk >is acc))))
-                            (mk items ()))
-                    dflt (: (fd l) (? (! (two? l)) lend
-                                      ((cap (cap l)) = 'dflt) (cauup (cap l))
-                                      (fd >l))
-                            (fd labs))
+                    tab (tablet 0)               ; this switch's value->label map (and 'dflt->label)
+                    cases (rev (scasel-l g items tab ()))   ; pre-scan the body (a stmt LIST) at ANY depth -> (value label) dispatch pairs
+                    dflt (peep tab 'dflt lend)
                     disp (: (go l acc)
                              (? (! (two? l)) acc
-                                (: e2 <l
-                                   (? (<e2 = 'case)
-                                      (go >l (cat acc (? (immok g 'cmp <>e2)
-                                                         `(`('cmp cr9 <>e2) `('br 'eq <>>e2))
-                                                         `(`('li 'r1 <>e2) `('cmp cr9 'r1) `('br 'eq <>>e2)))))
-                                      (go >l acc))))
-                            (go labs ()))
+                                (: e2 <l  v (cap e2)  lab (caup e2)
+                                   ins (? (immok g 'cmp v)
+                                          `(`('cmp cr9 v) `('br 'eq lab))
+                                          `(`('li 'r1 v) `('cmp cr9 'r1) `('br 'eq lab)))
+                                   (go >l (cat acc ins))))
+                            (go cases ()))
                     _ (rfree g cr9)
                     _ (pin g 'brk (link lend (g 'brk)))
-                    body (: (go is ls env2 acc)
-                             (? (! (two? is)) acc
-                                (: it <is
-                                   (? (member? <it '(case dflt))
-                                      (go >is >ls env2
-                                          (acc + `(`('label (cauup (cap ls))))))
-                                      (<it = 'decl)
-                                       (: r (cgdecl g env2 <>it)
-                                          (? (bad? r) 'bad
-                                             (go >is ls <>r (acc + <r))))
-                                      (<it = 'sdecl)
-                                       (: r (cgsdecl g env2 <>it)
-                                          (? (bad? r) 'bad
-                                             (go >is ls <>r (acc + <r))))
-                                      (: r (cgstmt g env2 it)
-                                         (? (bad? r) 'bad
-                                            (go >is ls env2 (acc + r)))))))
-                            (go items labs env ()))
+                    _ (pin g 'cases (link tab (g 'cases)))   ; PUSH -- cgstmt emits each case/dflt label from here
+                    body (cgitems g env items ())            ; decls thread env; case/dflt labels emit via g 'cases
                     _ (pin g 'brk (cup (g 'brk)))
+                    _ (pin g 'cases (cup (g 'cases)))         ; POP
                     (? (bad? body) 'bad
                        (cat (vfs c)
                         (cat disp
@@ -2255,6 +2240,24 @@
              (: r (cgstmt g env it)
                 (? (bad? r) 'bad
                    (cgitems g env >items (acc + r)))))))
+
+   ; scan a switch body for its case/default labels at ANY depth, pinning value->label
+   ; (and 'dflt->label) into `tab` and returning the (value label) pairs for the
+   ; dispatch. recurses through blocks / if / loops but STOPS at a nested switch (whose
+   ; cases belong to IT) -- so a case ties to its NEAREST enclosing switch, per C. the
+   ; container shapes mirror cgstmt's, so scasel finds exactly the labels cgstmt emits.
+   (scasel g it tab acc)
+    (? (! (two? it)) acc
+       (: k <it
+          (? (k = 'case)  (: lab (nlab g ".k") _ (pin tab <>it lab) (link (L <>it lab) acc))
+             (k = 'dflt)  (: lab (nlab g ".k") _ (pin tab 'dflt lab) acc)
+             (k = 'blk)   (scasel-l g <>it tab acc)               ; ('blk items)
+             (k = 'if)    (scasel g <>>>it tab (scasel g <>>it tab acc))  ; then + else
+             (k = 'while) (scasel g <>>it tab acc)                ; ('while cond body)
+             (k = 'do)    (scasel g <>it tab acc)                 ; ('do body cond)
+             (k = 'for)   (scasel g (cauup (cuup it)) tab acc)    ; ('for init cnd stp body)
+             acc)))                                                ; a nested switch / any leaf: not ours
+   (scasel-l g l tab acc) (? (! (two? l)) acc (scasel-l g >l tab (scasel g <l tab acc)))
 
    ; -- the inline lane (the b2w problem): a SMALL function splices its whole
    ; body at the call site -- each arg value lands in a fresh 8-byte frame temp
@@ -2691,7 +2694,7 @@
    ; xtra: the parser's (sfns svars sects) tablets -- static fns, static
    ; globals, name -> section. () reads as three empties (the law harness).
    (cgen-core ast stbl sigs weaks xtra tgt)
-    (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ())
+    (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ()) _ (pin t 'cases ())
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ()) _ (pin t 'statics ())
             _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0)) _ (pin t 'cgitems cgitems)
             _ (pin t 'stag stbl) _ (pin t 'sigs sigs)

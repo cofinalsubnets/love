@@ -59,6 +59,26 @@ struct stat {
 #define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
 #define UTIME_NOW  1073741823
 #define UTIME_OMIT 1073741822
+/* permission bits (decimal for the octal values, matching this file's style) */
+#define S_ISUID 2048
+#define S_ISGID 1024
+#define S_ISVTX 512
+#define S_IRWXU 448
+#define S_IRUSR 256
+#define S_IWUSR 128
+#define S_IXUSR 64
+#define S_IRWXG 56
+#define S_IRGRP 32
+#define S_IWGRP 16
+#define S_IXGRP 8
+#define S_IRWXO 7
+#define S_IROTH 4
+#define S_IWOTH 2
+#define S_IXOTH 1
+/* the st_Xtime compatibility aliases glibc supplies (third-party C reads these) */
+#define st_atime st_atim.tv_sec
+#define st_mtime st_mtim.tv_sec
+#define st_ctime st_ctim.tv_sec
 int stat(char const*, struct stat*);
 int fstat(int, struct stat*);
 int lstat(char const*, struct stat*);

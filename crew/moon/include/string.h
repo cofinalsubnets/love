@@ -1,5 +1,8 @@
 #ifndef _AI_STRING_H
 #define _AI_STRING_H
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
 typedef unsigned long size_t;
 void *memcpy(void*, void const*, size_t);
 void *memmove(void*, void const*, size_t);

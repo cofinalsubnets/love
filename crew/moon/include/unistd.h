@@ -19,6 +19,7 @@ int  link(char const*, char const*);
 int  symlink(char const*, char const*);
 long readlink(char const*, char*, unsigned long);
 int  chown(char const*, unsigned int, unsigned int);
+int  fchown(int, unsigned int, unsigned int);
 int  chdir(char const*);
 char *getcwd(char*, unsigned long);
 int  access(char const*, int);

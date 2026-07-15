@@ -756,6 +756,20 @@
               (: rest (want >ts ";") (? (two? rest) `(`('brk) rest) ()))
              (tkw? t 'continue)
               (: rest (want >ts ";") (? (two? rest) `(`('cont) rest) ()))
+             ; case/default are LABELS -- legal at any statement depth, not just as a
+             ; direct child of the switch body (the switch handler above catches the
+             ; top-level ones; these catch the nested coroutine-style ones -- bzip2's
+             ; GET_BITS drops `case lll:` inside a while, Duff's-device style). gen ties
+             ; each back to its nearest enclosing switch by case VALUE (g 'cases).
+             (tkw? t 'case)
+              (: rv (pexpr ps >ts)
+                 (? (! (two? rv)) ()
+                    (: v (cfold <rv)
+                       (? (! (charm? v)) ()
+                          (: rest (want <>rv ":")
+                             (? (two? rest) `(`('case v) rest) ()))))))
+             (tkw? t 'default)
+              (: rest (want >ts ":") (? (two? rest) `(`('dflt) rest) ()))
              (tp? t "{") (pblock ps ts)
              (tp? t ";") `(`('nop) >ts)
              ; a label: id ':' (a ternary's id is followed by '?', never ':')

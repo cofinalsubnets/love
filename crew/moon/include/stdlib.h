@@ -1,5 +1,8 @@
 #ifndef _AI_STDLIB_H
 #define _AI_STDLIB_H
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
 typedef unsigned long size_t;
 void *malloc(size_t);
 void *calloc(size_t, size_t);

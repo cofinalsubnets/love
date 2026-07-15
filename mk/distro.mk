@@ -1,0 +1,69 @@
+# mk/distro.mk -- the ai-native Linux distro: an initramfs where ai is /init.
+#
+# Fragment of the root Makefile (see the include list). The LFS "toolchain" phase
+# is already solved differently -- rung 4 is a gcc-free, glibc-free static `ai`
+# (out/host/ai-raw, `make test_raw`). So a bootable system is just PACKAGING what is
+# already green: ai as pid 1 (init/boot.l), kore as the busybox-style userland
+# (crew/kore, the $(korefiles) cat), and init/sh.l as the console shell.
+#
+#   make distro-initramfs   -> out/distro/initramfs.cpio.gz
+#   make distro-run         -> boot it under qemu on a gcc-built stock kernel
+#
+# The kernel stays the one imported artifact (BZIMAGE, default the host's) -- see
+# doc/moon-kernel.md for the mooncc-builds-the-kernel ladder.
+
+distro_dir   = out/distro
+distro_root  = $(distro_dir)/root
+distro_img   = $(distro_dir)/initramfs.cpio.gz
+# the base ai binary: MUST be static (a bare initramfs has no ld.so/glibc). Prefer
+# the gcc-free ai-raw (the true ai base); fall back to a static-musl host ai.
+distro_ai    = $(firstword $(wildcard out/host/ai-raw out/host-musl/ai))
+# kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
+distro_applets = ls cat head tail wc sort uniq grep sed cut tr nl rev cp mv rm \
+                 mkdir rmdir ln touch pwd chmod basename dirname seq yes true \
+                 false env sleep kill xargs diff
+
+# The host kernel is the default imported artifact; override with `make BZIMAGE=...`.
+BZIMAGE ?= /boot/vmlinuz-linux
+
+.PHONY: distro-initramfs distro-run distro-smoke
+distro-initramfs: $(distro_img)
+$(distro_img): init/boot.l init/sh.l $(korefiles) $(distro_ai)
+	@test -n "$(distro_ai)" || { echo "distro: need a STATIC ai -- run 'make test_raw' (ai-raw) or 'make STATIC=1'"; exit 1; }
+	@echo DISTRO	$(abspath $@)  '(base: $(distro_ai))'
+	@rm -rf $(distro_root)
+	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp
+	@cp init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
+	@cp $(distro_ai) $(distro_root)/bin/ai && chmod 755 $(distro_root)/bin/ai
+	@cp init/sh.l $(distro_root)/lib/sh.l
+	@{ echo '#!/bin/ai'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
+	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
+	@( cd $(distro_root) && find . | cpio --quiet -o -H newc ) | gzip -9 > $@
+	@echo "  packed $$(gzip -l $@ | awk 'NR==2{print $$2}') bytes -> $@"
+
+# Direct kernel boot: no bootloader/OVMF needed. -append rdinit=/init makes ai pid 1.
+# KVM when the host offers it (TCG is too slow to reach the console in a smoke window).
+distro_accel = $(shell test -e /dev/kvm && echo -enable-kvm -cpu host)
+# 2G: ai reserves a two-space GC heap at startup, so pid1 ai PLUS a forked+execve'd
+# child ai each need one -- 512M overflows (execve -> ENOMEM=12). Override with QMEM=.
+QMEM ?= 2048
+distro_qemu = qemu-system-x86_64 -m $(QMEM) $(distro_accel) -kernel $(BZIMAGE) -initrd $(distro_img) \
+              -append "console=ttyS0 earlyprintk=serial,ttyS0 rdinit=/init panic=-1" \
+              -serial stdio -display none -no-reboot
+distro-run: $(distro_img)
+	@test -r "$(BZIMAGE)" || { echo "distro-run: no kernel at $(BZIMAGE) -- set BZIMAGE=..."; exit 1; }
+	exec $(distro_qemu)
+
+# Non-interactive smoke: boot, feed `ls /proc` to the console, prove ai came up as
+# pid 1 with /proc mounted AND that the kore userland runs, then kill qemu. Holding
+# stdin open (the trailing sleep) keeps the shell from EOF-respawn-looping.
+distro-smoke: $(distro_img)
+	@test -r "$(BZIMAGE)" || { echo "distro-smoke: no kernel at $(BZIMAGE)"; exit 1; }
+	@echo "-- booting (10s capture) --"
+	@( printf 'ls /proc\n'; sleep 8 ) | timeout 10 $(distro_qemu) 2>/dev/null | tee $(distro_dir)/boot.log || true
+	@echo "-- checks --"
+	@grep -q "ai as PID 1" $(distro_dir)/boot.log && echo "  OK ai is pid 1" || { echo "  FAIL not pid 1"; exit 1; }
+	@grep -q "mount proc on /proc -> ok" $(distro_dir)/boot.log && echo "  OK /proc mounted" || { echo "  FAIL /proc"; exit 1; }
+	@grep -q "start the console shell" $(distro_dir)/boot.log && echo "  OK reached shell handoff" || { echo "  FAIL no shell"; exit 1; }
+	@grep -qE "kore ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
+	@echo "-- distro smoke passed --"
