@@ -61,7 +61,7 @@ natjit covers two lanes today:
 | leaf + n-ary    | qual→jitir, qualn→jitnir | ✅ via `coreir`/`assemble`, deopt→`e` |
 | captured leaf   | qualc→jitnir(flatc)| ✅ (compiles over the frame `ps = (init (cup s))`, imps included) |
 | counted loop    | loopinfo→njit-loop | ✅ njit-loop with `e` as deopt   |
-| float leaf      | qualfr→jitfr       | ❌ pending                        |
+| float leaf      | qualfr→jitfr       | ✅ qualfr gate → jitfrx with `e` as deopt |
 | n-var loop      | loopinfo-n→njit-loop-n | ❌ pending                    |
 | group/grid/cask | autogroup(autonat(twolow(castbuild))) | ❌ pending          |
 
@@ -75,13 +75,17 @@ bodies) rather than a lane to port, but it lives in the same emitter.
 
 Each is a port of an auto-ev lane onto the hook, respecting invariant 4.
 
-### 1. float leaf (`qualfr` → `jitfr`)
+### 1. float leaf (`qualfr` → `jitfr`) — LANDED (`8a88dfb9`)
 
 A `(\ x <fexpr>)` whose RESULT is a heap-boxed gem, over cgf's `+ - * /`. Sound
 ONLY when the param is floated at first use (jitfr's precondition). On the hook:
-gate the body with `qualfr`'s grammar, compile via `jitfr`, deopt to `e`.
-arch-parameterized — live on both x86 and arm64 in auto-ev, so the port is
-arch-neutral. Smallest next step; no new re-entry subtlety (a leaf, not a loop).
+`qualfr` gates the lane (between the integer leaf and the counted loop), compile
+via `jitfr`, deopt to `e`. jitfr was split into a 2-arg public wrapper (bakes
+`(ev lam)` — auto-ev + the glaze-x86 tests unchanged) over a deopt-parameterized
+core `jitfrx` (the `njit-loop` precedent); natjit calls `jitfrx s 'x64 e`. One
+param only (qualfr's shape) so a captured float leaf falls through to bytecode
+for now. Only natjit's path is new (x86-host-only); auto-ev's float lane, incl.
+arm64, rides the unchanged 2-arg jitfr.
 
 ### 2. n-var loop (`loopinfo-n` → `njit-loop-n`)
 
@@ -146,7 +150,7 @@ cache is the only thing it blocks.** So the cache step is:
 
 ## sequence
 
-1. **float leaf** — smallest, arch-neutral, no re-entry subtlety.
+1. ~~**float leaf**~~ — LANDED (`8a88dfb9`).
 2. **n-var loop** — thread `e` through cf-deopt, then port (mirrors counted loop).
 3. **measure the cache** — number first; add + relax spec only if it pays.
 4. **groups/grids/casks** — ship option (a) (leave to auto-ev) as the design;
