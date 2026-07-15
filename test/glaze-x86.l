@@ -27,7 +27,7 @@
    consir (G 'consir)  coreir (G 'coreir)  delet (G 'delet)  deoptir (G 'deoptir)
    emit (G 'emit)  fbits (G 'fbits)  fr (G 'fr)  grok (G 'grok)
    jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
-   jitgroupir (G 'jitgroupir)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
+   jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
    jitnir (G 'jitnir)  jitsum (G 'jitsum)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
    loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow))
@@ -569,6 +569,12 @@
          (&& (1 = ((jitgroupir eo 'evn 'x64) 10)) (0 = ((jitgroupir eo 'evn 'x64) 7)) (1 = ((jitgroupir eo 'odn 'x64) 7))))   ; MUTUAL recursion (either entry)
       (= (jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64)
          (jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64))               ; two natives, same source -> = (transparent)
+      ; jitgroupirx stamps the SUPPLIED outer src (=/show) -- the hook passes `s` so a group-glazed closure
+      ; is transparent against its bytecode twin; the elam entry-lambda is only the FALLBACK (jitgroupir).
+      (: dfs (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))))  dopt (jitgroupir dfs 'fib 'x64)
+         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) 10))                                          ; runs correct
+             (= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))))  ; same supplied src -> =
+             !(= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupir dfs 'fib 'x64))))                     ; supplied src differs from the elam default
       ; STRING lane (peep/tally): s a string param (kind-guarded, passed RAW); peep reads byte [s+16], tally the len [s+8]
       (: data (string (L 72 105 90 33 65))                                                                       ; "HiZ!A": byte-sum 365, len 5
          sbn (jitgroupir (L (link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))) 'sb 'x64)            ; recursive byte-sum

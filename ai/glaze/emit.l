@@ -744,12 +744,12 @@
    ; fns), aliased to the core peep/pin (the body reads the PREVIOUS=global binding by the sequence law --
    ; not recursion); harmless for non-map lanes (peep/pin stay the core accessors).
    (jitgroupir defs entry tgt)
-    (jitgroupirx defs entry tgt (ev (link ': (link '(mpeep mc mk md) (link '(peep mc mk md) (link '(mpin mc mk mv) (link '(pin mc mk mv) (jgir-lrf entry defs))))))))
+    (jitgroupirx defs entry tgt (ev (link ': (link '(mpeep mc mk md) (link '(peep mc mk md) (link '(mpin mc mk mv) (link '(pin mc mk mv) (jgir-lrf entry defs))))))) ())
    ; (jitgroupirx defs entry tgt deopt) -- like jitgroupir but the caller supplies the DEOPT target directly
    ; (the njit-loop/jitfrx precedent). The natjit hook passes `e` (the bytecode twin) so a group-bearing
    ; closure native-backs WITHOUT re-entering the evaluator mid-ala (jitgroupir's (ev ..) fallback would).
    ; PURE otherwise -- holo/emit/assemble only, no ev.
-   (jitgroupirx defs entry tgt deopt)
+   (jitgroupirx defs entry tgt deopt src)
     (: parse (map (\ d (: nf (cap d) (L (cap nf) (cup nf) (cup d)))) defs)            ; (name params body) per fn
        syms (map cap parse)                                                            ; the fn names (call targets)
        efn (gfind (\ f (id? (cap f) entry)) parse)  k (tally (nthl efn 1))  eps (nthl efn 1) eb (nthl efn 2)
@@ -764,6 +764,6 @@
        pmask (filter (\ j (&& (nuse? eb (nthl eps j)) (! (member? j cmask)))) (rangeL 0 k))   ; entry POINT keys ((= P (cap ..))) -> raw, nom|mint-guarded; a chain-used param is never a point
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (holo (L a (mkhir tgt syms (cap f) (nthl f 1) (nthl f 2))))) () ord)
-       elam (link '\ (cat (nthl efn 1) (L (nthl efn 2))))                              ; the entry's source lambda (=/show)
-       (nif (emit (peep (assemble tgt (holo (L outer Hs))) 'bytes 0)) deopt elam k))
+       elam (link '\ (cat (nthl efn 1) (L (nthl efn 2))))                              ; the entry's source lambda -- the =/show src FALLBACK
+       (nif (emit (peep (assemble tgt (holo (L outer Hs))) 'bytes 0)) deopt (? (two? src) src elam) k))   ; src (the OUTER surface) if given -- transparent vs the bytecode twin; else elam
 )

@@ -84,9 +84,9 @@
                          flat? (&& okshape (member? (cap tail) gnames) (= (cup tail) ps))       ; tail IS (entry frame..)
                          osym '__outer  agdefs (? okshape (cat gdefs (L (link (link osym ps) tail))) ())   ; group + synthetic ((__outer . frame) . tail)
                          (? (&& flat? (jgir-ok? gdefs))                                          ; FLAT: entry direct, zero indirection
-                            (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) 'x64 e))
+                            (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) 'x64 e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
                             (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs))   ; GENERAL tail via the synthetic entry
-                            (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym 'x64 e))
+                            (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym 'x64 e s))
                             e))))))))
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
  _ (assert
