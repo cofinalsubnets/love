@@ -120,6 +120,77 @@ validates the ladder: build a `crew/moon/include` that is self-contained + compl
 for third-party code (with `-nostdinc`), then walk the LFS order — each package adds a few
 header decls and, occasionally, one real parse/gen rung, exactly the ai.c grind.
 
+## second rung, MEASURED: gzip 1.13
+
+gzip-1.13 is a **different animal from bzip2** — it is a gnulib+autotools package, not
+plain C89. The 12 core compression files (bits/trees/deflate/inflate/zip/unzip/util/...)
+are ordinary C; the 118 `lib/*.c` are gnulib portability glue (the "hard far end"). We ran
+`mooncc -c` per core file against a gcc-`./configure`-generated `config.h` (the shell/autotools
+bootstrap we lean on first). Probed 2026-07-15:
+
+```
+  7 of 8 core files compile: bits trees zip inflate unzip deflate util  ->  .o each
+  gzip.c (the CLI) blocked on timespec.h  ->  a 16-byte struct-by-value ABI rung (below)
+```
+
+Getting there surfaced **five real mooncc capability rungs** (all general, all gated green on
+`make test_moon` + `make test_raw`), plus header-completeness:
+
+- **rung E — octal/hex string+char escapes — LANDED** (`crew/moon/lex.l`). `escv` handled only
+  named escapes + `\0`; a `\ooo` with a nonzero lead digit (`\120`) **refused**, and `\0NN`
+  **silently mis-parsed** (`"\037"` → NUL + literal `'3''7'`, a latent miscompile — confirmed
+  vs gcc). bzip2's magic was ASCII (`"BZh"`) so it never hit this; gzip's binary magic
+  (`"\037\213"`, PKZIP `"\120\113\003\004"`) hits it head-on. Fix: a real `escseq` parsing
+  `\ooo` (1–3 octal digits) and `\xHH` (hex), returning `(value nextpos)` so the variable
+  length threads through both the string and char lexers. Byte-identical to gcc on octal, hex,
+  and named escapes.
+
+- **rung F — `bool`/`true`/`false` builtin — LANDED** (`crew/moon/cpp.l`, `include/stdbool.h`).
+  Modern C (gnulib, gzip) uses `bool` **bare, without `<stdbool.h>`** (C23 makes them keywords).
+  cc required the include. Fix: predefine them in cpp (an implicit stdbool) — `bool` → cc's
+  `int` (the old stdbool.h choice, zero layout churn), `true`/`false` → 1/0; stdbool.h neutered
+  to a no-op so an explicit include stays harmless. This alone unblocked inflate.c, unzip.c,
+  and gnulib's dirname.h.
+
+- **header completeness** (`include/{string,stdlib,stdio}.h`): `strspn`/`strcspn`/`strpbrk`/
+  `strtok`/`strncat`, `strtoul`, `putc`. Same family as bzip2's ctype/ferror rungs — cc refuses
+  an undeclared call rather than guess the ABI (util.c's `add_envopt`/`fprint_off` refused on
+  `strspn`/`putc`). The durable lesson holds: growing a complete `crew/moon/include` is most of
+  the work.
+
+- **rung G — `__STDC_VERSION__` predefined (C11) — LANDED** (`crew/moon/cpp.l`). cc has
+  `_Static_assert`; advertising `201112` makes gnulib's `verify.h` take its `_Static_assert`
+  lane instead of a fallback struct-array trick. Unblocked deflate.c.
+
+- **rung H — enum constant const-expression initializers — LANDED** (`crew/moon/parse.l`). The
+  enum parser accepted only `= <literal>` (a single numeric token); `enum { A=5, B=A }` or
+  `B = A+1` (an enumerator referencing a prior constant, or any const-expr) **refused** —
+  timespec.h's `enum { TIMESPEC_RESOLUTION = TIMESPEC_HZ }`. Fix: parse the initializer with
+  `pasn` (assignment-expr, stops at the `,`) and `cfold` it, exactly like array dims and case
+  labels already do — enum constants resolve through `ps 'enums`. Values byte-match gcc.
+
+### the two remaining walls (gzip.c → a working binary)
+
+1. **16-byte struct-by-value PARAMETERS (SysV ABI) — NOT DONE.** timespec.h's inline helpers
+   (`timespec_cmp`/`timespec_sign`/`timespectod`) take `struct timespec` (tv_sec+tv_nsec = 16
+   bytes) **by value**. cc passes a ≤8-byte struct in one register (fine) but **refuses** a
+   >8-byte struct param — it doesn't implement the SysV two-eightbyte register classification
+   (INTEGER/SSE per eightbyte → rdi/rsi or xmm). ai.c never passes a >8-byte struct by value, so
+   it hid. cc *refuses rather than miscompiles* (correct), but this is the real codegen rung
+   blocking gzip.c, and a general one (every modern struct-by-value API needs it).
+
+2. **the gnulib `lib/*.c` link tree — NOT DONE.** Even with every core `.o`, LINKING a working
+   gzip needs gnulib's implementations — `xmalloc`/`xstrdup` (xalloc), `dir_name` (dirname),
+   `getopt_long`, `savedir`, `yesno`, `fcntl`-safer, quotearg, … — ~100 `lib/*.c`, each its own
+   potential rung. This is the "gnulib-heavy" far end the ladder always flagged; gzip-1.13
+   reaches it where bzip2 (plain C89, no gnulib) never did.
+
+**Takeaway:** a *working gzip-1.13 binary* is a materially larger arc than bzip2 — it is a
+gnulib userland port plus one real ABI codegen feature, not a header-shim day. The five rungs
+above are pure profit regardless (general modern-C coverage). A faster path to a *runnable* gzip
+is a pre-gnulib release (gzip-1.2.4, plain K&R/C89) which sidesteps both walls — the same shape
+as bzip2.
+
 ## suggested order (LFS-shaped, easiest real C first)
 
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.

@@ -36,6 +36,21 @@
        (escv d) (? (d = 110) 10 (d = 116) 9 (d = 114) 13 (d = 97) 7 (d = 98) 8            ; \n \t \r \a \b
                    (d = 102) 12 (d = 118) 11 (d = 48) 0 (d = 92) 92                       ; \f \v \0 backslash
                    (d = 34) 34 (d = 39) 39 (d = 63) 63 (d = 101) 27 ())                   ; \" \' \? \e
+       (oct? c) (&& (48 <= c) (c <= 55))                                                 ; an octal digit 0-7
+       (escseq k) (: d (src k)                     ; k = index of the char AFTER the backslash -> (value nextpos) or ()
+                     (? (oct? d)                                                          ; \ooo -- 1..3 octal digits
+                         (: (oc m v cnt) (? (&& (cnt < 3) (&& (m < n) (oct? (src m))))
+                                            (oc (m + 1) (+ (* v 8) ((src m) - 48)) (cnt + 1))
+                                            `(v m))
+                            (oc k 0 0))
+                        (d = 120)                                                         ; \xHH -- 1+ hex digits
+                         (? (&& ((k + 1) < n) (hexd? (src (k + 1))))
+                            (: (hx m v) (? (&& (m < n) (hexd? (src m)))
+                                           (hx (m + 1) (+ (* v 16) (hexv (src m))))
+                                           `(v m))
+                               (hx (k + 1) 0))
+                            ())
+                        (: v (escv d) (? (charm? v) `(v (k + 1)) ()))))
        (idh? c) (|| (&& (97 <= c) (c <= 122)) (|| (&& (65 <= c) (c <= 90)) (c = 95)))
        (idc? c) (|| (idh? c) (dig? c))
        (at? i pat) (: m (tally pat)                 ; does pat sit at i?
@@ -124,17 +139,17 @@
                                     (? (c2 = 34) `(acc2 (j + 1))
                                        (c2 = 10) ()
                                        (&& (c2 = 92) ((j + 1) < n))
-                                        (: d (src (j + 1))
-                                           v (escv d)
-                                           (? (charm? v) (eat (j + 2) (acc2 + (string v))) ()))
+                                        (: r (escseq (j + 1))
+                                           (? (two? r) (eat <>r (acc2 + (string <r))) ()))
                                        (eat (j + 1) (acc2 + (string c2))))))
                              r (eat (i + 1) "")
                              (? (two? r) (go <>r line (link `('str <r line) acc)) ()))
                  (c = 39) (: esc (&& ((i + 2) < n) ((src (i + 1)) = 92))
-                             v (? esc (escv (src (i + 2)))
+                             r (? esc (escseq (i + 2)) ())
+                             v (? esc (? (two? r) <r ())
                                   ((i + 1) < n) (src (i + 1))
                                   ())
-                             j (i + (? esc 4 3))
+                             j (? esc (? (two? r) (+ <>r 1) 0) (i + 3))
                              (? (&& (charm? v) (&& (j <= n) ((src (j - 1)) = 39)))
                                 (go j line (link `('num v line) acc))
                                 ()))

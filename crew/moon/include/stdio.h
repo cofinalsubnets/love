@@ -20,6 +20,7 @@ int    puts(char const*);
 int    fputs(char const*, FILE*);
 int    putchar(int);
 int    fputc(int, FILE*);
+int    putc(int, FILE*);
 int    fgetc(FILE*);
 int    ungetc(int, FILE*);
 int    getc(FILE*);

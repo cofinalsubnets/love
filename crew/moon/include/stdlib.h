@@ -16,6 +16,7 @@ int   setenv(char const*, char const*, int);
 int   unsetenv(char const*);
 int   atoi(char const*);
 long  strtol(char const*, char**, int);
+unsigned long strtoul(char const*, char**, int);
 /* the pty quartet lives here in glibc (stdlib.h, not pty.h) */
 int   posix_openpt(int);
 int   grantpt(int);

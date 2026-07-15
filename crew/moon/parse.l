@@ -297,10 +297,10 @@
                            (: name (tkv <ts4)
                               ts5 >ts4
                               vr (? (peekp ts5 "=")
-                                    (: t2 >ts5
-                                       (? (&& (two? t2) ((tkk <t2) = 'num))
-                                          `((tkv <t2) >t2)
-                                          ()))
+                                    (: er (pasn ps >ts5)              ; = CONST-EXPR: fold it (enum consts, 1<<n, A+1) -- not just a literal
+                                       (? (! (two? er)) ()
+                                          (: cv (cfold <er)
+                                             (? (charm? cv) `(cv <>er) ()))))
                                     `(v ts5))
                               (? (! (two? vr)) ()
                                  (: _ (pin (ps 'enums) name <vr)

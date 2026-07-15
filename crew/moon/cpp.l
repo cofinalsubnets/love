@@ -341,6 +341,9 @@
    (cpp toks incf)                                    ; -> (1 out) | ()
     (: macs (: t (tablet 0)
                _ (pin t "__STDC__" `('obj `((tok 'num 1 0))))
+               ; C11: cc has _Static_assert (+ _Alignas/varargs). advertising 201112
+               ; lets gnulib take its _Static_assert lane (verify.h) not a fallback trick.
+               _ (pin t "__STDC_VERSION__" `('obj `((tok 'num 201112 0))))
                ; HOSTED: a cc-built object links against libc into a hosted program,
                ; so ai.c must take its hosted lanes -- the W^X mmap+mprotect code
                ; arena (toast/nif), NOT the freestanding heap copy (which is NX, so
@@ -362,6 +365,12 @@
                ; gcc's limit predefines, the ones the host seam reads
                _ (pin t "__INT_MAX__" `('obj `((tok 'num 2147483647 0))))
                _ (pin t "__LONG_MAX__" `('obj `((tok 'num 9223372036854775807 0))))
+               ; bool/true/false BUILTIN (C23-style, no <stdbool.h> needed): modern C
+               ; (gnulib, gzip) uses them bare. bool stays cc's int (the old stdbool.h
+               ; choice) -- an int keyword token; true/false the 1/0 constants.
+               _ (pin t "bool"  `('obj `((tok 'kw 'int 0))))
+               _ (pin t "true"  `('obj `((tok 'num 1 0))))
+               _ (pin t "false" `('obj `((tok 'num 0 0))))
                t)
        r (cppgo toks macs () () () incf)
        (? (|| (id? r 'unbalanced) (! (two? r))) () `(1 (strcat-pass r)))))
