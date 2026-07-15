@@ -133,115 +133,113 @@ Theorem gen_46 : (nomp Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
 Theorem gen_47 : (nomp Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (-2 = (^ 1 -1)) *)
 Theorem gen_48 : (Z.eqb (-2) (Z.lxor 1 (-1))) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (15 = 8 | 4 | 2 | 1) *)
-Theorem gen_49 : (Z.eqb 15 (Z.lor 8 (Z.lor 4 (Z.lor 2 1)))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ('x < "a") *)
-Theorem gen_50 : (Z.ltb (vband Vsym) (vband Vstr)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_49 : (Z.ltb (vband Vsym) (vband Vstr)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ("a" < 1) *)
-Theorem gen_51 : (Z.ltb (vband Vstr) (vband Vz)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_50 : (Z.ltb (vband Vstr) (vband Vz)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (1 < '(0)) *)
-Theorem gen_52 : (Z.ltb (vband Vz) (vband Vpair)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_51 : (Z.ltb (vband Vz) (vband Vpair)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ('(0) < (hash 1 10)) *)
-Theorem gen_53 : (Z.ltb (vband Vpair) (vband Vmap)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_52 : (Z.ltb (vband Vpair) (vband Vmap)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ("abcd" = "ab" + "cd") *)
-Theorem gen_54 : (leqb [97;98;99;100] ([97;98] ++ [99;100])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_53 : (leqb [97;98;99;100] ([97;98] ++ [99;100])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ('(1 2 3 4) = '(1 2) + '(3 4)) *)
-Theorem gen_55 : (leqb [1;2;3;4] ([1;2] ++ [3;4])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_54 : (leqb [1;2;3;4] ([1;2] ++ [3;4])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ('(5 1 2) = 5 + '(1 2)) *)
-Theorem gen_56 : (leqb [5;1;2] (5 :: [1;2])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_55 : (leqb [5;1;2] (5 :: [1;2])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ("ababab" = "ab" * 3) *)
-Theorem gen_57 : (leqb [97;98;97;98;97;98] (srep (Z.to_nat 3) [97;98])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_56 : (leqb [97;98;97;98;97;98] (srep (Z.to_nat 3) [97;98])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ('(1 2 1 2) = '(1 2) * 2) *)
-Theorem gen_58 : (leqb [1;2;1;2] (srep (Z.to_nat 2) [1;2])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_57 : (leqb [1;2;1;2] (srep (Z.to_nat 2) [1;2])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ("" = "ab" * 0) *)
-Theorem gen_59 : (leqb [] (srep (Z.to_nat 0) [97;98])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_58 : (leqb [] (srep (Z.to_nat 0) [97;98])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (5 = (abs -5)) *)
-Theorem gen_60 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_59 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (charm? (abs -5)) *)
-Theorem gen_61 : (fixp Vz) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_60 : (fixp Vz) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (1024 = (10 2)) *)
-Theorem gen_62 : (Z.eqb 1024 (appZ 10 2)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_61 : (Z.eqb 1024 (appZ 10 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (21 = (gcd 1071 462)) *)
-Theorem gen_63 : (Z.eqb 21 (Z.gcd 1071 462)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_62 : (Z.eqb 21 (Z.gcd 1071 462)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (1024 = (10 2)) *)
-Theorem gen_64 : (Z.eqb 1024 (appZ 10 2)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_63 : (Z.eqb 1024 (appZ 10 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (27 = (3 3)) *)
-Theorem gen_65 : (Z.eqb 27 (appZ 3 3)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_64 : (Z.eqb 27 (appZ 3 3)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (7625597484987 = (3 3 3)) *)
-Theorem gen_66 : (Z.eqb 7625597484987 (appZ (appZ 3 3) 3)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_65 : (Z.eqb 7625597484987 (appZ (appZ 3 3) 3)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (16 = (2 2 2)) *)
-Theorem gen_67 : (Z.eqb 16 (appZ (appZ 2 2) 2)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_66 : (Z.eqb 16 (appZ (appZ 2 2) 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (65536 = (2 2 2 2)) *)
-Theorem gen_68 : (Z.eqb 65536 (appZ (appZ (appZ 2 2) 2) 2)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_67 : (Z.eqb 65536 (appZ (appZ (appZ 2 2) 2) 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (-8 = (3 -2)) *)
-Theorem gen_69 : (Z.eqb (-8) (appZ 3 (-2))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_68 : (Z.eqb (-8) (appZ 3 (-2))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !(twin? 5) *)
-Theorem gen_70 : (negb (comp Vz)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_69 : (negb (comp Vz)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (20 = (peep (tuple 10 20 30) 1 -1)) *)
-Theorem gen_71 : (Z.eqb 20 (nth (Z.to_nat 1) [10;20;30] (-1))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_70 : (Z.eqb 20 (nth (Z.to_nat 1) [10;20;30] (-1))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (-1 = (peep (tuple 10 20 30) 9 -1)) *)
-Theorem gen_72 : (Z.eqb (-1) (nth (Z.to_nat 9) [10;20;30] (-1))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_71 : (Z.eqb (-1) (nth (Z.to_nat 9) [10;20;30] (-1))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ((tuple 11 22 33) = (tuple 1 2 3) + (tuple 10 20 30)) *)
-Theorem gen_73 : (leqb [11;22;33] (vaddt [1;2;3] [10;20;30])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_72 : (leqb [11;22;33] (vaddt [1;2;3] [10;20;30])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ((tuple 2 4 6) = (tuple 1 2 3) * 2) *)
-Theorem gen_74 : (leqb [2;4;6] (vscale 2 [1;2;3])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_73 : (leqb [2;4;6] (vscale 2 [1;2;3])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (60 = (net (tuple 10 20 30))) *)
-Theorem gen_75 : (Z.eqb 60 (asum [10;20;30])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_74 : (Z.eqb 60 (asum [10;20;30])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (30 = (max (tuple 10 30 20))) *)
-Theorem gen_76 : (Z.eqb 30 (amax [10;30;20])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_75 : (Z.eqb 30 (amax [10;30;20])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ((tuple 0 1 2) = (iota 3)) *)
-Theorem gen_77 : (leqb [0;1;2] (iotaZ 3)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_76 : (leqb [0;1;2] (iotaZ 3)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !(iota 0) *)
-Theorem gen_78 : (Z.leb (asum (iotaZ 0)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_77 : (Z.leb (asum (iotaZ 0)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !(iota -1) *)
-Theorem gen_79 : (Z.leb (asum (iotaZ (-1))) 0) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_78 : (Z.leb (asum (iotaZ (-1))) 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (4950 = (net (iota 100))) *)
-Theorem gen_80 : (Z.eqb 4950 (asum (iotaZ 100))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_79 : (Z.eqb 4950 (asum (iotaZ 100))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ((tuple 3 5) = (// (tuple 7 11) 2)) *)
-Theorem gen_81 : (leqb [3;5] (vquot 2 [7;11])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_80 : (leqb [3;5] (vquot 2 [7;11])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !(two? 'x) *)
-Theorem gen_82 : (negb (chainp Vsym)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_81 : (negb (chainp Vsym)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (name? 'x) *)
-Theorem gen_83 : (namep Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_82 : (namep Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (3 = (tally "abc")) *)
-Theorem gen_84 : (Z.eqb 3 (Z.of_nat (length [97;98;99]))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_83 : (Z.eqb 3 (Z.of_nat (length [97;98;99]))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (5 = (abs -5)) *)
-Theorem gen_85 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_84 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ("abcd" = (+ "ab" "cd")) *)
-Theorem gen_86 : (leqb [97;98;99;100] ([97;98] ++ [99;100])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_85 : (leqb [97;98;99;100] ([97;98] ++ [99;100])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !(book? 5) *)
-Theorem gen_87 : (negb (tabp Vz)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_86 : (negb (tabp Vz)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !0 *)
-Theorem gen_88 : (Z.leb 0 0) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_87 : (Z.leb 0 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !"" *)
-Theorem gen_89 : (Z.leb (asum []) 0) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_88 : (Z.leb (asum []) 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !(iota 0) *)
-Theorem gen_90 : (Z.leb (asum (iotaZ 0)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_89 : (Z.leb (asum (iotaZ 0)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (nil? 0) *)
-Theorem gen_91 : (Z.leb 0 0) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_90 : (Z.leb 0 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (0 = (tally (iota 0))) *)
-Theorem gen_92 : (Z.eqb 0 (Z.of_nat (length (iotaZ 0)))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_91 : (Z.eqb 0 (Z.of_nat (length (iotaZ 0)))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (book? (hash 0)) *)
-Theorem gen_93 : (tabp Vmap) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_92 : (tabp Vmap) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (5 = (tally "hello")) *)
-Theorem gen_94 : (Z.eqb 5 (Z.of_nat (length [104;101;108;108;111]))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_93 : (Z.eqb 5 (Z.of_nat (length [104;101;108;108;111]))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !!5 *)
-Theorem gen_95 : (negb (Z.leb 5 0)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_94 : (negb (Z.leb 5 0)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (nom? 'ab') *)
-Theorem gen_96 : (nomp Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_95 : (nomp Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (3 = 1 + 2) *)
-Theorem gen_97 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_96 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (7 = 1 + 2 * 3) *)
-Theorem gen_98 : (Z.eqb 7 (Z.add 1 (Z.mul 2 3))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_97 : (Z.eqb 7 (Z.add 1 (Z.mul 2 3))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (6 = +'(1 2 3)) *)
-Theorem gen_99 : (Z.eqb 6 (asum [1;2;3])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_98 : (Z.eqb 6 (asum [1;2;3])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (-1 = +'(-2 1)) *)
-Theorem gen_100 : (Z.eqb (-1) (asum [(-2);1])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_99 : (Z.eqb (-1) (asum [(-2);1])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (24 = *'(1 2 3 4)) *)
-Theorem gen_101 : (Z.eqb 24 (aprod [1;2;3;4])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_100 : (Z.eqb 24 (aprod [1;2;3;4])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (5 = |-5) *)
-Theorem gen_102 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_101 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (3 = (+ 1 2)) *)
-Theorem gen_103 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_102 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 
-(* 103 theorems generated from 610 asserts seen *)
+(* 102 theorems generated from 610 asserts seen *)

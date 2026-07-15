@@ -15,7 +15,8 @@ Three features carry this release:
    installer (hatch). Model in [`doc/hatch.md`](hatch.md), verb set in [`doc/reef.md`](reef.md);
    needs to get practically working.
 3. **precedence — infix that binds like schoolbook math.** `*` tighter than `+` tighter than
-   `=`. prel-only, no C. Design in [`doc/precedence.md`](precedence.md).
+   `=`. prel-only, no C. LANDED 2026-07-14 — shipped in [`doc/precedence.md`](precedence.md),
+   gated by [`test/precedence.l`](../test/precedence.l).
 
 Riding along: the long-deferred **namespaces** cleanup closes its phase-3 tail — the module
 books (`holo`/`glaze`/`kanren`/`uu`/`overlay`/`parse`) stop handing out their raw backing
@@ -28,7 +29,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 | aicc (x64) | landed — gcc-free ai boots + passes the corpus | polish + docs; command becomes `mooncc` (rename deferred, see below) |
 | aicc (arm64) | rungs A–C landed (static exes + .o + our-linker, varargs + sibcalls, 88/88 battery 3 ways) | rung D (nolibc/mksys, the gcc-free arm64 path) about to land — **best-effort in, does NOT block** |
 | reef/vcs | design (hatch.md model + reef.md verbs) | the whole implementation — biggest lift |
-| precedence | design only (precedence.md) | implement in prel.l opfix + re-validate the corpus |
+| precedence | **landed 2026-07-14** — grip bands in prel.l opfix, corpus re-validated (3 asserts shifted, all `\|`/`&`-with-`=`), `test/precedence.l` gates it | done (the `grip` name + house=27 ship as working defaults, gwen's to bless) |
 | namespaces | phases 1+3 landed — `(names ())` 820 → 327; **phase-3 tail landed 2026-07-14** — all six module books are lookup-only closures, poison-proof, with a `'keys` probe | done (optional `~327 → 323` curation trim aside); the abyss/scoped-layers arc stays deferred |
 
 ---
@@ -100,12 +101,14 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - [ ] decide how much of hatch (install = clone + hatch) rides in this cut vs. lands later
 - [x] `doc/reef.md` — first draft (verb set + composition story + MVP)
 
-**precedence (grip)**
-- [ ] implement grips in the reader-operators block of `ai/prel.l` (op-ent / op-fr / the steal-point)
-- [ ] assign the grip bands (multiplicative 60 / additive 50 / comparison 40 / logical 30 — see precedence.md)
-- [ ] `make test` ×3 green — audit every infix regroup across the corpus; touch up any spec.l asserts that shift
-- [ ] settle the `grip` working name (per precedence.md §Naming)
-- [ ] promote `doc/precedence.md` from design to shipped
+**precedence (grip)** — LANDED 2026-07-14
+- [x] implement grips in the reader-operators block of `ai/prel.l` (op-ent normalizes to the triple `(name arity . grip)`, op-fr carries a grip slot + `op-frgrip`, op-steal gained the climb: fold when the frame grips tighter than the incomer, steal otherwise)
+- [x] assign the grip bands (multiplicative 60 / additive 50 / comparison 40 / logical 30 / house 27 / cons 25 / assignment 20 / cond 10)
+- [x] `make test` ×3 green (3416 → 3439, +23 from `test/precedence.l`) + `test_all` (glaze / holo / as / every crew app / wasm / x86 kernel / wake all green; the sole red is the pre-existing qemu-arm64 `uk-jj`, host-uukind passes, precedence.l passes on arm64)
+- [x] the corpus audit: only THREE asserts shifted, all `|`/`&`-mixed-with-`=` (the doc's flagged risk the audit had cleared for `&&`/`||` but not single `|`/`&`) — `test/spec.l:88`,`:164` parenthesized (bitwise below `=`, grip 30 < 40, gwen blessed the C-style band), `test/infixop.l:27` updated to the C-ternary read (`1 < 2 ? 'big 'small` → `(? (< 1 2) 'big 'small)`)
+- [x] `test/precedence.l` — tree asserts (via the live `opfix`, op-core being book-private) + value asserts + short-circuit + idempotence; non-vacuous
+- [x] promote `doc/precedence.md` from design to shipped
+- ( ) `grip` the name and house = 27 shipped as working defaults (internal, not in `(names ())`, mechanically swappable) — still gwen's to bless/rename per precedence.md §Naming ([[decisions-never-locked]])
 
 **namespaces** — close the phase-3 tail (phases 1 + 3 landed: `(names ())` 820 → 327; see [[namespace-modules]])
 - **NO "sealed tablet" language feature** (decided 2026-07-14). The same way users can't reassign the

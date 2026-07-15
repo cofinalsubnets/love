@@ -24,7 +24,7 @@
  ; ? at three -- the cond form, infix
  ('a = (1 ? 'a 'b)) ('b = (0 ? 'a 'b))
  ('big = ((1 < 2) ? 'big 'small))
- (0 = (1 < 2 ? 'big 'small))                    ; right-assoc: ? takes 2 first -> (< 1 'big); a symbol sorts BELOW 1 (true-blue), so 0
+ ('big = (1 < 2 ? 'big 'small))                 ; ? (grip 10) is loosest, so (1 < 2) binds first -> (? (< 1 2) 'big 'small) -> 'big (the C-ternary read)
 
  ; chain termination: a non-operator datum folds the pending chain
  ('(3 3) = `(1 + 2 3))                         ; `((+ 1 2) 3)

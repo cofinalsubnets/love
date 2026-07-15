@@ -85,7 +85,7 @@
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
- (-2 = (^ 1 -1)) (15 = 8 | 4 | 2 | 1) (16 = (>> 64 2)) (16 = (<< 2 3)))
+ (-2 = (^ 1 -1)) (15 = (8 | 4 | 2 | 1)) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
 ; --- order & equality --- < <= > >= total over all values, the TRUE-BLUE bands: POINTS at the
 ; floor (() < bare mints < named noms -- mints by serial, names by name-lex then serial), then
@@ -161,7 +161,7 @@
 (assert
  (5 = 5 - ()) (5 = () - 5) (2.5 = () - 2.5) ((64 2) = (64 2) - ())     ; - : both sides, every width
  (5 = 5 / ()) (5 = () / 5) (5 = (// 5 ())) (5 = 5 % ()) (5 = (% () 5)) ; / // %
- (5 = 5 | ()) (5 = () & 5) (5 = (^ 5 ())) (5 = (<< 5 ())) (5 = (>> () 5))  ; the bitwise lanes
+ (5 = (5 | ())) (5 = (() & 5)) (5 = (^ 5 ())) (5 = (<< 5 ())) (5 = (>> () 5))  ; the bitwise lanes -- | & (grip 30) sit BELOW =, so parenthesize
  (~(1 2) = ~(1 2) - ()) ("@(1 2 3)" = show (@(1 2 3) - ()))            ; complex + array pass through
  (2 = (5 - ()) - 3) (5 = ((- 5) ()))                    ; chains heal; a partial fired with the unit yields its held operand
  !('ef - 3) !("a" - "b") (5 = ('a - 'b) - 5)            ; undefined still answers (): it now vanishes through - too

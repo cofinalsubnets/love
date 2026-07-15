@@ -1,10 +1,15 @@
 # precedence — right-to-left as far as it goes, then let grip decide
 
-Status: **design resolved / not started.** Pick-up doc from the 2026-07-14
-session; the frame-grip, entry-shape, grip-band, and `&&`/`||`-infix questions
-are closed (see §resolved), leaving two calls for gwen (§Open). Touches only
-[`ai/prel.l`](../ai/prel.l)'s reader-operators block (opfix); no C.
-`grip` is a **working name** for a precedence level — see §Naming.
+Status: **SHIPPED 2026-07-14.** Grips live in [`ai/prel.l`](../ai/prel.l)'s
+reader-operators block (opfix); no C, both compilers inherit it.
+[`test/precedence.l`](../test/precedence.l) gates the tree + value + short-circuit
++ idempotence; `make test` is green ×3 (3439) and `test_all` is green bar the
+pre-existing qemu-arm64 `uk-jj`. The corpus audit shifted exactly THREE asserts,
+all single `|`/`&` mixed with `=` (grip 30 below comparison 40): `test/spec.l:88`
+and `:164` parenthesized, `test/infixop.l:27` moved to the C-ternary read.
+Two calls remain gwen's (§Open): the `grip` **name** and house = 27 — both shipped
+as working defaults (internal, absent from `(names ())`, mechanically swappable).
+The design below is the as-built record.
 
 ## the ask
 

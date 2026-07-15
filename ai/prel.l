@@ -287,13 +287,24 @@
 ; FOLD `pin` over the (key value) pairs (pin gives back its map). Open-coded as a fold, NOT the
 ; #(..)/map macro: this is the PRE-OPFIX zone, compiled by the C bootstrap c0, which doesn't run the
 ; self-hosted maps pass -- but foldl/L are already defined above and are operator-free.
+; a value carries arity AND a GRIP (its precedence -- higher binds tighter, op-ent normalizes to the
+; triple (name arity . grip)): a bare charm is arity at the house grip; (arity . grip) self-names with
+; an explicit grip; (name . arity) aliases at house; (name arity . grip) aliases with an explicit grip.
+; the bands, coarse with gaps to slot more (doc/precedence.md): multiplicative 60, additive 50,
+; comparison 40, logical 30, house 27 (the coined-operator default, set at op-w's fresh-punct
+; fallback), cons builder 25, assignment 20, cond 10. an incoming operator STEALS a pending filled
+; operand iff its grip >= the frame's grip (op-steal), so equal grips stay right-associative (the
+; conservative-extension case, today's flat read) and a tighter operator climbs in.
 (: operators
    (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
-      (L (L '$ (link 'saturate 1)) (L '! (link 'nil? 1)) (L '. (link 'dot 1))
-         (L '+ 2) (L '- 2) (L '* 2) (L '/ 2) (L '% 2)
-         (L '= 2) (L '< 2) (L '<= 2) (L '> 2) (L '>= 2)
-         (L '| 2) (L '& 2) (L '? 3)
-         (L '<- (link 'pin 3)) (L '-> (link 'peep 3)))))
+      (L (L '$ (link 'saturate 1)) (L '! (link 'nil? 1)) (L '. (link 'dot 1))     ; arity-1 sigils: grip inert (prefix folds on fill)
+         (L '* (link 2 60)) (L '/ (link 2 60)) (L '% (link 2 60))                 ; multiplicative
+         (L '+ (link 2 50)) (L '- (link 2 50))                                    ; additive
+         (L '= (link 2 40)) (L '< (link 2 40)) (L '<= (link 2 40)) (L '> (link 2 40)) (L '>= (link 2 40)) ; comparison
+         (L '| (link 2 30)) (L '& (link 2 30)) (L '&& (link 2 30)) (L '|| (link 2 30))                    ; logical (&& || also macros; the row pins the grip below comparison)
+         (L '>< (link 2 25))                                                      ; cons -- the loosest builder
+         (L '<- (link 'pin (link 3 20))) (L '-> (link 'peep (link 3 20)))         ; assignment aliases
+         (L '? (link 3 10)))))                                                    ; cond -- loosest
 ; the VALENCE LAW's table: a glued operator run is MONADIC (the reader emits
 ; (mono (run datum))); spaced, the run keeps its dyadic/infix life. each entry
 ; maps a run-piece to its monadic word; a run factors greedily (longest
@@ -327,10 +338,18 @@
                    0))
              0))
        0)
-   ; normalize a table entry for key k -> (name . arity), or 0
+   ; normalize a table entry for key k -> the triple (name arity . grip), or 0. four value shapes:
+   ; a bare charm (arity, self-named, house grip 27); (arity . grip) (self-named, explicit grip);
+   ; (name . arity) (alias, house grip); (name arity . grip) (alias, explicit grip). the (arity . grip)
+   ; vs (name . arity) fork is by (cap v)'s kind (a charm arity vs a nom name).
    (op-ent k) (: v (operators k)
-                 (? (charm? v) (? (&& (< 0 v) (< v 8)) (link k v) 0)
-                    (two? v) (? (&& (nom? (cap v)) (charm? (caup v)) (< 0 (caup v)) (< (caup v) 8)) v 0)
+                 (? (charm? v) (? (&& (< 0 v) (< v 8)) (link k (link v 27)) 0)
+                    (two? v)
+                     (? (charm? (cap v))                                     ; (arity . grip): self-named
+                          (? (&& (< 0 (cap v)) (< (cap v) 8) (charm? (cup v))) (link k v) 0)
+                        (charm? (cup v))                                     ; (name . arity): alias, house grip
+                          (? (&& (nom? (cap v)) (< 0 (cup v)) (< (cup v) 8)) (link (cap v) (link (cup v) 27)) 0)
+                        (? (&& (nom? (cap v)) (charm? (caup v)) (< 0 (caup v)) (< (caup v) 8) (charm? (cuup v))) v 0)) ; (name arity . grip)
                     0))
    ; longest prefix of nm[i..n) that is a table key -> (len . entry), or 0
    (op-long nm i n)
@@ -377,16 +396,18 @@
                     0))
               0))
         0)))
-; the walk. a pending-operator frame is (orig chain name need . got): orig =
+; the walk. a pending-operator frame is (orig chain name need grip . got): orig =
 ; the source symbol (delivered back verbatim when no operand ever arrives --
 ; a bare sigil is a plain symbol), chain = the arity-one wrapper names
 ; (outermost first), need = operands still wanted (0 = FILLED, fold deferred
 ; so a following infix operator can steal the last operand -- that deferral
-; IS right-associativity), got = operands so far, reversed. out/pend thread
-; as one (out . pend) chain through the helpers.
-(: (op-fr o ch nm nd gt) (link o (link ch (link nm (link nd gt))))
+; IS right-associativity), grip = the operator's precedence (captured from the
+; factor entry, so an alias `<-` or composite `!=` carries the operative level
+; neither of its two symbols alone recovers), got = operands so far, reversed.
+; out/pend thread as one (out . pend) chain through the helpers.
+(: (op-fr o ch nm nd g gt) (link o (link ch (link nm (link nd (link g gt)))))
    (op-fro f) (cap f) (op-frc f) (caup f) (op-frn f) (cauup f)
-   (op-frd f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
+   (op-frd f) (cap (cuuup f)) (op-frgrip f) (cap (cup (cuuup f))) (op-frg f) (cup (cup (cuuup f)))
    ; wrap the chain of arity-one names around a folded form
    (op-fin ch x) (? (two? ch) (link (cap ch) (link (op-fin (cup ch) x) ())) x)
    ; fold a frame with whatever it has: nothing collected -> the plain
@@ -410,24 +431,28 @@
        (: f (cap pend)
           (? (< 0 (op-frd f))
              (: f2 (op-fr (op-fro f) (op-frc f) (op-frn f)
-                          (- (op-frd f) 1) (link d (op-frg f)))
+                          (- (op-frd f) 1) (op-frgrip f) (link d (op-frg f)))
                 ; (nil? ..), not !: this block is pre-opfix (the bootstrap restriction)
                 (? (&& (= 0 (op-frd f2)) (nil? (nom? (op-frn f2))))
                    (op-del (op-fold f2) out (cup pend))
                    (link out (link f2 (cup pend)))))
              (: r (op-del (op-fold f) out (cup pend))
                 (op-del d (cap r) (cup r))))))
-   ; take a left operand if one is available -> `(. (out' . pend')), or 0.
-   ; a FILLED top frame re-arms (need 1) and yields its last operand -- the
-   ; C reader's A(F)=1 move; at top level the last finished datum is taken.
-   (op-steal out pend)
+   ; take a left operand for an incoming operator of grip g -> `(. (out' . pend')), or 0.
+   ; a FILLED top frame: g >= its grip re-arms (need 1) and yields its last operand (the C reader's
+   ; A(F)=1 move -- today's steal; equal grip steals, so same-level stays right-associative); g < its
+   ; grip means the frame binds tighter, so FOLD it and retry beneath (the precedence climb, reusing
+   ; op-del/op-fold, no new folding machinery). at top level the last finished datum is taken.
+   (op-steal g out pend)
     (? (two? pend)
        (: f (cap pend)
           (? (= 0 (op-frd f))
-             (link (cap (op-frg f))
-                   (link out (link (op-fr (op-fro f) (op-frc f) (op-frn f)
-                                          1 (cup (op-frg f)))
-                                   (cup pend))))
+             (? (< g (op-frgrip f))
+                (: r (op-del (op-fold f) out (cup pend)) (op-steal g (cap r) (cup r)))
+                (link (cap (op-frg f))
+                      (link out (link (op-fr (op-fro f) (op-frc f) (op-frn f)
+                                             1 (op-frgrip f) (cup (op-frg f)))
+                                      (cup pend)))))
              0))
        (two? out) (link (cap out) (link (cup out) pend))
        0)
@@ -446,17 +471,17 @@
              ; =/= 2, the aliases, the arity-one sigils). with no left operand the
              ; infix frame still folds to the plain symbol (op-fold's bare case).
              (: fs0 (opfactor e)
-                fs (? (two? fs0) fs0 (link (link e 2) ()))
+                fs (? (two? fs0) fs0 (link (link e (link 2 27)) ()))   ; fresh punct: the (e 2 . house) triple
                 ch (map cap (init fs)) en (last fs) nm (cap en) n (caup en)
                 (? (= n 1)                       ; arity one (or a one-chain): prefix --
-                   ; nil name, the op rides the chain: marks the frame to fold on fill
-                   (op-w (cup l) out (link (op-fr e (cat ch (link nm ())) 0 1 ()) pend))
-                   (: st (op-steal out pend)     ; infix: capture if a left operand exists
+                   ; nil name, the op rides the chain: marks the frame to fold on fill (grip inert)
+                   (op-w (cup l) out (link (op-fr e (cat ch (link nm ())) 0 1 27 ()) pend))
+                   (: st (op-steal (cuup en) out pend)  ; infix: capture if a left operand exists (of grip (cuup en))
                       (? (two? st) (op-w (cup l) (cap (cup st))
-                                  (link (op-fr e ch nm (- n 1) (link (cap st) ()))
+                                  (link (op-fr e ch nm (- n 1) (cuup en) (link (cap st) ()))
                                         (cup (cup st))))
                          (two? ch)               ; composite with no left: prefix
-                         (op-w (cup l) out (link (op-fr e ch nm 1 ()) pend))
+                         (op-w (cup l) out (link (op-fr e ch nm 1 (cuup en) ()) pend))
                          (: r (op-del e out pend) ; bare operator: the plain symbol
                             (op-w (cup l) (cap r) (cup r)))))))
              (: r (op-del (op-core e) out pend)
