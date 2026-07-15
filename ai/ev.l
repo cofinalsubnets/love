@@ -75,10 +75,53 @@
        t))))
    (foldl add (tablet 0) (catmap keys (books ())))))
 
+; welow -- the pre-analysis LOWERING hook (book['welow]), read by `:-` below before opfix. Baked PRE-EGG
+; so the bootstrap self-compile lowers too: a literal church application (N f x) -- N a small whole
+; numeral, f a function -- is f applied to x N times, lowered to the nested arithmetic (2 (+ i) i) ->
+; (+ i (+ i i)) that the group lane native-backs (church is otherwise OPAQUE to the glaze -- every
+; application rides the lisp num-ap closure, so it stays interpreted). EXACT: this IS ai's church
+; semantics ((0 f x)=x, (1 f x)=(f x), dch-nest builds f^N innermost-out); disambiguated from POWER by
+; "the operand is a function" (dch-fn?), so (2 5)/(2 3 4) stay exponentiation. FLAG-GATED (AI_GROUP_GLAZE):
+; unset (the default, every normal build) -> identity -> the egg is byte-identical. The helpers live
+; INSIDE welow's closure (captured, never on the book), so only `welow` leaks -- no mop-list entry, no
+; names() growth. The full church+HOF hook (dehof-deep . dechurch) is a POST-EGG shadow (ai/glaze/hook.l):
+; HOF-inlining needs the heavy ho-* fixpoint + anat-defs/unpair/subst-sym, and it is a pure optimization,
+; where church is the semantic identity. This church closure is the pre-egg twin of ai/glaze/auto.l's
+; dechurch/dsimp -- keep the two in step (both are ai's fixed church semantics, so they should not drift).
+(: welow (:
+   (dsub old new B) (? (id? B old) new (two? B) (link (dsub old new (cap B)) (dsub old new (cup B))) B)   ; substitute old->new in B
+   (dquote? x) (&& (two? x) (id? (cap x) '\) (= 2 (tally x)))                                             ; (\ datum) -> a quote, never descend
+   (dspecial? h) (|| (id? h '?) (|| (id? h '\) (id? h ':)))
+   (dsimp x)                                                                                              ; reduce to first-order: beta unary lambdas, flatten curried heads
+    (? (atom? x) x  (dquote? x) x
+       (: y (link (dsimp (cap x)) (map dsimp (cup x))) h (cap y) as (cup y)
+          (? (atom? h) y
+             (&& (id? (cap h) '\) (&& (= 3 (tally h)) (= 1 (tally as)))) (dsimp (dsub (caup h) (cap as) (cap (cuup h))))
+             (&& (atom? (cap h)) (! (dspecial? (cap h))))                 (dsimp (link (cap h) (cat (cup h) as)))
+             y)))
+   (ho-lamb? v) (&& (two? v) (id? (cap v) '\) (< 2 (tally v)))
+   (dch-fn? f) (|| (ho-lamb? f) (&& (two? f) (= 2 (tally f)) (member? (cap f) '(+ - * // % & | ^))))       ; a lambda, or a dyadic-op partial like (+ i)
+   (dch-ap f x) (? (ho-lamb? f) (dsimp (L f x)) (cat f (L x)))                                            ; apply f to x: beta a lambda, extend an op-partial
+   (dch-nest f n x) (? (= n 0) x (dch-ap f (dch-nest f (- n 1) x)))                                       ; f^n(x), innermost-out
+   (dch-occs v e) (? (id? e v) 1  (atom? e) 0  (dquote? e) 0 (foldl (\ s t (+ s (dch-occs v t))) 0 e))    ; occurrences of the param (shadow/quote overcount = safe)
+   (dch-fat? f n) (&& (ho-lamb? f) (= 3 (tally f))                                                        ; a body using its param k>=2 times residualizes ~k^N nodes -- decline the fat ones
+                      (: k (dch-occs (caup f) (cap (cuup f))) (&& (< 1 k) (< 256 (n k)))))
+   (dechurch e)
+    (? (atom? e) e  (dquote? e) e
+       (: y (map dechurch e)                                                                              ; bottom-up: lower nested church first
+          (? (&& (= 3 (tally y)) (whole? (cap y)) (<= 0 (cap y)) (< (cap y) 64) (dch-fn? (cap (cup y)))
+                 (! (dch-fat? (cap (cup y)) (cap y))))
+             (dch-nest (cap (cup y)) (cap y) (cap (cup (cup y))))                                          ; (N f x) -> f^N(x), the FLAT surface form
+             (&& (= 2 (tally y)) (two? (cap y)) (= 2 (tally (cap y))) (whole? (caap y)) (<= 0 (caap y)) (< (caap y) 64) (dch-fn? (caup (cap y)))
+                 (! (dch-fat? (caup (cap y)) (caap y))))
+             (dch-nest (caup (cap y)) (caap y) (caup y))                                                  ; ((N f) x) -> f^N(x), the CURRIED surface form
+             y)))
+   (\ x (? (getenv "AI_GROUP_GLAZE") (dechurch x) x))))                                                  ; flag-gated; default = identity -> egg byte-identical
+
 (:- (\ x (:
  c (sco 0 (list 0) 0)
- wl (gv 'welow 0)        ; the pre-analysis lowering hook (book['welow], dormant unless installed post-egg -- so the
-                         ; egg self-compile is UNTOUCHED; the glaze installs it to church/HOF-lower user code before ala)
+ wl (gv 'welow 0)        ; the pre-analysis lowering hook (book['welow]): church-lower pre-egg (above), church+HOF post-egg
+                         ; (ai/glaze/hook.l shadows). flag-gated -- unset AI_GROUP_GLAZE -> welow is identity -> untouched.
  y (feel c (opfix (? wl (wl x) x)))    ; lower (if hooked), opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
  (ana c y (k0 c) 0 0)))
   lvm_cur (peek 0 (+))
