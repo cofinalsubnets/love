@@ -208,10 +208,11 @@ What the prototype does NOT yet do (the increments to a full port):
   lifting), `loopclose`, `autospec` are not. A group nested deeper than a lambda-body `:`, or one
   needing a static fold, still falls to bytecode (sound). `autospec`/`loopclose` call `base-ev`, so
   they can't ride even the `feel` hook without a pure re-parameterization.
-* **Transparency partial** — the native cell's src is the entry lambda (`(\ n …)` flat, or the
-  synthetic `(\ frame.. TAIL)` general), not the whole outer `(\ m (: … ))`; two group-glazed
-  instances are mutually `=`, but `=` against a bytecode outer may differ. A full port keeps the
-  outer `s` as the native src.
+* **Transparency — FIXED 2026-07-15 (`144880f6`)** — the native cell used to stamp the entry lambda
+  (`(\ n …)` flat, or the synthetic `(\ frame.. TAIL)` general) as its src, not the whole outer
+  `(\ m (: … ))`, so `=`/`show` against a bytecode outer could differ. `jitgroupirx` now takes a `src`
+  param and the hook passes its outer `s` (the same src the leaf lane stamps); `(show group-closure)`
+  == `(show bytecode-twin)`. Standalone `jitgroupir` keeps the entry-lambda fallback.
 * **Capture-safety — FIXED 2026-07-15** — welow's `dsimp` used to beta via a naive `dsub`, which
   CAPTURED on a shadowing HOF form: `(\ q (: adder (\ i (\ q (+ i q))) ((adder q) 5)))` evaled 8 (interp)
   but 10 (welow-lowered). Since welow feeds the bytecode too (no deopt catches it), that was a hard
@@ -225,8 +226,8 @@ What the prototype does NOT yet do (the increments to a full port):
 
 natjit owns the leaf, captured-leaf, counted-loop, float-leaf and n-var-loop lanes
 outright; the group lane is in as a flag-gated prototype covering flat AND general tails. Capture-safety
-is now settled (fixed above), so the remaining increments to enabling it by default are front-half
-coverage + full transparency, then deleting the `AI_GROUP_GLAZE` gate.
+and transparency are now settled (both fixed above), so the remaining increment to enabling it by
+default is front-half coverage, then deleting the `AI_GROUP_GLAZE` gate.
 
 ## the cache — MEASURED, decided NO (`fires`-probe, host x86, baked image)
 
