@@ -1,0 +1,734 @@
+# test/test.mk -- the test_* gates (and the uuwm/uukind corpus generators)
+#
+# Fragment of the root Makefile (split out 2026-07-15). Included by ./Makefile,
+# which is invoked from the project root; paths resolve from there. Shared vars
+# live in common.mk. Every recipe here is unchanged from the single-file Makefile.
+
+# ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
+# BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
+# through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
+# so this also exercises the non-tail-threaded trampoline dispatch path.
+# stdin is /dev/null: the corpus reads from the baked string, not stdin, but
+# test/io.l exercises the real `in` port (a bare fgetc), which would otherwise
+# block on a tty (the old `cat $t | ai0` fed the test stream in on stdin).
+# Both gates require the zz-fin summary line, not just exit 0: a reader stop
+# (e.g. a stray `)` mid-corpus) silently drops the rest of the stream and
+# exits 0 without ever reaching zz-fin -- exit code alone green-lights a run
+# that only executed a prefix of the corpus. ai0 must print TWO summaries
+# (the corpus runs under both c0 and the self-hosted ev).
+test_ai0: $(ai0)
+	@echo TEST $(ai0)
+	@$(ai0) </dev/null > out/host/.test_ai0.out; s=$$?; cat out/host/.test_ai0.out; \
+	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_ai0.out` -eq 2 ]
+test_host: $m
+	@echo TEST $m
+	@cat $t | $m > out/host/.test_host.out; s=$$?; cat out/host/.test_host.out; \
+	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
+# Host-nif smoke tests: nifs defined in host/*.c link into `ai` but NOT ai0
+# (which bakes the test/*.l corpus), so they cannot sit DIRECTLY in test/ -- ai0
+# would bake them, read the nif names as missing, and fail its self-test. They
+# live under test/host/ instead: the corpus glob ($t in common.mk) is a
+# NON-RECURSIVE test/*.l wildcard, so a subfolder is invisible to the bake. Run
+# them standalone against the built binary. Each script prints a "<name>: ok"
+# sentinel and uses the test/00-init.l assert harness (which exits 1 on the first
+# failure), so the gate checks BOTH exit 0 AND the sentinel -- a silent
+# reader-stop exits 0 without it.
+# Add a thread's smoke script to hostnif_tests (ain: test/host/net.l, &c).
+hostnif_tests = test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/haven.l test/host/drm.l test/host/overlay.l test/host/bake.l
+# haven's real-client smoke binary: libwayland-client + the generated
+# xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
+# of haven's wire. built only where wayland-scanner + libwayland live;
+# test/host/haven.l skips its smoke act when the binary is absent. pinned to the
+# canonical out/host like ai0 (parse-time prereqs; it never links ai).
+smoke = out/host/haven-smoke
+xdgxml = $(shell pkg-config --variable=pkgdatadir wayland-protocols 2>/dev/null)/stable/xdg-shell/xdg-shell.xml
+$(smoke): crew/haven/smoke.c
+	@mkdir -p out/host
+	@if command -v wayland-scanner >/dev/null 2>&1 && pkg-config --exists wayland-client 2>/dev/null && [ -f "$(xdgxml)" ]; then \
+	  echo "CC $@"; \
+	  wayland-scanner client-header "$(xdgxml)" out/host/xdg-shell-client-protocol.h; \
+	  wayland-scanner private-code "$(xdgxml)" out/host/xdg-shell-protocol.c; \
+	  $(CC) -O1 -Wall -Wextra -o $@ crew/haven/smoke.c out/host/xdg-shell-protocol.c -Iout/host `pkg-config --cflags --libs wayland-client`; \
+	else echo "SKIP $@ (no libwayland here)"; fi
+# haven's keyboard map: the REAL compiled xkb text (what every wayland
+# compositor ships its clients), emitted by libxkbcommon's own tool where it
+# lives. absent -> an empty file, and haven ships keymap format 0 instead.
+havenkm = out/lib/haven-keymap.xkb
+$(havenkm):
+	@mkdir -p out/lib
+	@if command -v xkbcli >/dev/null 2>&1; then \
+	  echo "KM $@"; xkbcli compile-keymap > $@; \
+	else echo "SKIP $@ (no xkbcli here)"; : > $@; fi
+test_hostnif: host $(smoke) $(havenkm)
+	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
+	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
+	  cat out/host/.test_hostnif.out; \
+	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_hostnif.out; } \
+	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
+	done
+# Runnable design companions in doc/ -- pure-ai models that pin the shape a C
+# design takes (doc/stream.l ~ doc/stream.md). Zero-dep (no host nifs), so unlike
+# hostnif_tests they COULD ride the corpus -- but they leak generic helper names
+# into the one global scope, so they run standalone instead. Gated only to keep
+# them from rotting (this file's drain-floor bug slipped in while ungated). Same
+# contract: exit 0 AND a "<name>: ok" sentinel. (tag.l is a sketch, no asserts.)
+doc_tests = doc/stream.l
+test_doc: host
+	@for s in $(doc_tests); do echo "DOC $$s"; \
+	  cat test/00-init.l $$s | $m > out/host/.test_doc.out 2>&1; r=$$?; \
+	  cat out/host/.test_doc.out; \
+	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_doc.out; } \
+	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
+	done
+# Native-codegen self-tests (the ai/glaze/ x86-64 jit): emit (the SSE emitter) +
+# auto (ev's source-recognizer: counted loops, float grids, recursive arith
+# groups) are exercised by test/glaze-x86.l (the asserts moved out of emit.l/
+# auto.l so they no longer run at every glaze load/bake); it cats emit.l + auto.l
+# ahead of itself, then runs each block through base-ev (the loader's global ev is
+# now auto-ev, which mis-opfixes some pathological self-test forms). hook (ev.l's
+# ala creation-hook) keeps its inline self-test, run with emit.l prepended. Each
+# needs the built binary (the `nat` host nif) and prel's strict `assert` (SCARES
+# on a false claim, terminal exit 1). x86-64 ONLY (real machine code); skipped
+# elsewhere. Gate = exit 0 AND the sentinel (a reader-stop exits 0 without it).
+.PHONY: test_glaze
+ifeq ($a,x86_64)
+test_glaze: host
+	@echo "GLAZE test/glaze-x86.l (emit + auto)"; \
+	  cat test/glaze-x86.l | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	  cat out/host/.test_glaze.out; \
+	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
+	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
+	  echo "GLAZE ai/glaze/hook.l"; \
+	  cat ai/glaze/hook.l | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	  cat out/host/.test_glaze.out; \
+	  { [ $$r -eq 0 ] && grep -q "ai/glaze/hook:" out/host/.test_glaze.out; } \
+	    || { echo "FAIL glaze/hook (exit $$r)"; exit 1; }
+else
+test_glaze:
+	@echo "test_glaze: skipped (host arch $a is not x86_64)"
+endif
+# crew/sat/ -- the CDCL SAT solver app. Portable ai (no glaze), so it runs on every arch.
+# Gate = exit 0 AND the sentinel (a reader-stop or a strict-assert scare both miss it).
+.PHONY: test_sat
+test_sat: host
+	@echo "SAT crew/sat/sat.l + crew/sat/dimacs.l + crew/sat/flat.l"; \
+	  cat crew/sat/sat.l crew/sat/dimacs.l crew/sat/flat.l | $m > out/host/.test_sat.out 2>&1; r=$$?; \
+	  cat out/host/.test_sat.out; \
+	  { [ $$r -eq 0 ] && grep -q "sat: Stages 1-3 ok" out/host/.test_sat.out && grep -q "crew/sat/dimacs: ok" out/host/.test_sat.out && grep -q "crew/sat/flat: ok" out/host/.test_sat.out; } \
+	    || { echo "FAIL sat (exit $$r)"; exit 1; }
+# The DRAT lane's EXTERNAL check: flat.l's emitted refutations (fdrat0) verified by
+# drat-trim, the SAT competition's independent checker (fetched + built into out/drat
+# on first use; skips gracefully offline). The in-gate twin (fd-check, no external
+# dependency) runs inside test_sat; this aims the third-party eye at php5-8 + a
+# raw-RUP row. Not in test_all (network on first run); run after touching the emitter.
+.PHONY: test_drat
+test_drat: host
+	@cd crew/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
+# The lux app's pure core (crew/lux/core.l): xmonad's StackSet -- the focus zipper, the
+# workspace sheaf, the floating half -- with xmonad's QuickCheck laws + a seeded
+# fuzz (crew/lux/law.l). Pure ai (no nif), so it self-tests portably; the X layers
+# (wire.l/lux.l) need connectu and are proven against Xephyr, not here. Gate = the
+# sentinel AND exit 0 (a reader-stop or strict-assert scare both miss it).
+.PHONY: test_lux
+test_lux: host
+	@echo "LUX crew/lux/core.l ... crew/lux/config.l + crew/lux/law.l (the whole app, host)"; \
+	  cat test/00-init.l crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l | $m > out/host/.test_lux.out 2>&1; r=$$?; \
+	  cat out/host/.test_lux.out; \
+	  { [ $$r -eq 0 ] && grep -q "crew/lux/law: StackSet" out/host/.test_lux.out; } \
+	    || { echo "FAIL lux (exit $$r)"; exit 1; }
+.PHONY: test_reef
+test_reef: host out/host$(hsuf)/reef
+	@echo "REEF crew/reef/{reef,reeftest}.l"; \
+	  rm -rf out/host/.reeftest; \
+	  cat test/00-init.l $(reeffiles) crew/reef/reeftest.l | $m > out/host/.test_reef.out 2>&1; r=$$?; \
+	  cat out/host/.test_reef.out; \
+	  { [ $$r -eq 0 ] && grep -q "reef: ok" out/host/.test_reef.out; } \
+	    || { echo "FAIL reef (exit $$r)"; exit 1; }
+.PHONY: test_kore
+test_kore: host out/host$(hsuf)/kore
+	@echo "UTILS crew/kore/{text,core,fs,re,sed,diff,law}.l"; \
+	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/law.l | $m > out/host/.test_kore.out 2>&1; r=$$?; \
+	  cat out/host/.test_kore.out; \
+	  { [ $$r -eq 0 ] && grep -q "crew/kore/law: myers" out/host/.test_kore.out; } \
+	    || { echo "FAIL utils (exit $$r)"; exit 1; }
+	@printf 'a\nb\nc\n' > $(ho)/.au1; printf 'a\nX\nc\n' > $(ho)/.au2; \
+	  $m $(ho)/kore diff $(ho)/.au1 $(ho)/.au1 > $(ho)/.kore-same.out 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ ! -s $(ho)/.kore-same.out ]; } || { echo "FAIL kore diff same (exit $$r)"; exit 1; }; \
+	  $m $(ho)/kore diff $(ho)/.au1 $(ho)/.au2 > $(ho)/.kore-diff.out 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL kore diff differ (exit $$r)"; exit 1; }; \
+	  diff -u $(ho)/.au1 $(ho)/.au2 | tail -n +3 > $(ho)/.kore-gnu.out; tail -n +3 $(ho)/.kore-diff.out > $(ho)/.kore-ours.out; \
+	  cmp -s $(ho)/.kore-gnu.out $(ho)/.kore-ours.out || { echo "FAIL kore diff vs GNU"; exit 1; }; \
+	  ln -sf kore $(ho)/diff; \
+	  $m $(ho)/diff $(ho)/.au1 $(ho)/.au2 > $(ho)/.kore-sym.out 2>&1; r=$$?; \
+	  { [ $$r -eq 1 ] && cmp -s $(ho)/.kore-diff.out $(ho)/.kore-sym.out; } || { echo "FAIL kore argv0 symlink (exit $$r)"; exit 1; }; \
+	  $m $(ho)/kore bogus > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 2 ] || { echo "FAIL kore usage (exit $$r)"; exit 1; }; \
+	  if [ "$$(uname -m)" = x86_64 ]; then \
+	    printf '(li r0 60) (li r6 7) (sys)\n' > $(ho)/.kore-as.l; \
+	    $m $(ho)/kore as x64 $(ho)/.kore-as.l $(ho)/.kore-as.elf > /dev/null 2>&1 || { echo "FAIL kore as"; exit 1; }; \
+	    chmod +x $(ho)/.kore-as.elf; $(ho)/.kore-as.elf; r=$$?; \
+	    [ $$r -eq 7 ] || { echo "FAIL kore as run (exit $$r)"; exit 1; }; \
+	  fi; \
+	  echo "kore: diff (GNU-identical) + argv0 symlink + usage + as ok"
+	@printf 'b\na\nc\nb\n' > $(ho)/.cu1; printf 'x y\nz\n' > $(ho)/.cu2; \
+	  LC_ALL=C sort $(ho)/.cu1 > $(ho)/.cu-g; $m $(ho)/kore sort $(ho)/.cu1 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore sort vs GNU"; exit 1; }; \
+	  LC_ALL=C sort -u $(ho)/.cu1 > $(ho)/.cu-g; $m $(ho)/kore sort -u $(ho)/.cu1 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore sort -u vs GNU"; exit 1; }; \
+	  LC_ALL=C sort $(ho)/.cu1 | uniq -c > $(ho)/.cu-g; $m $(ho)/kore sort $(ho)/.cu1 | $m $(ho)/kore uniq -c > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore uniq -c vs GNU"; exit 1; }; \
+	  head -n 2 $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-g; $m $(ho)/kore head -n 2 $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore head vs GNU"; exit 1; }; \
+	  tail -n 2 $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-g; $m $(ho)/kore tail -n 2 $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore tail vs GNU"; exit 1; }; \
+	  wc $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-g; $m $(ho)/kore wc $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore wc vs GNU"; exit 1; }; \
+	  wc -l < $(ho)/.cu1 > $(ho)/.cu-g; $m $(ho)/kore wc -l < $(ho)/.cu1 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore wc -l stdin vs GNU"; exit 1; }; \
+	  cat $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-g; $m $(ho)/kore cat $(ho)/.cu1 $(ho)/.cu2 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore cat vs GNU"; exit 1; }; \
+	  seq 5 > $(ho)/.cu-g; $m $(ho)/kore seq 5 > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore seq vs GNU"; exit 1; }; \
+	  echo hi there > $(ho)/.cu-g; $m $(ho)/kore echo hi there > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore echo vs GNU"; exit 1; }; \
+	  basename /a/b.txt .txt > $(ho)/.cu-g; $m $(ho)/kore basename /a/b.txt .txt > $(ho)/.cu-o; \
+	  cmp -s $(ho)/.cu-g $(ho)/.cu-o || { echo "FAIL kore basename vs GNU"; exit 1; }; \
+	  printf 'q\nq\nr\n' | tee $(ho)/.cu-g2 > $(ho)/.cu-g; printf 'q\nq\nr\n' | $m $(ho)/kore tee $(ho)/.cu-o2 > $(ho)/.cu-o; \
+	  { cmp -s $(ho)/.cu-g $(ho)/.cu-o && cmp -s $(ho)/.cu-g2 $(ho)/.cu-o2; } || { echo "FAIL kore tee vs GNU"; exit 1; }; \
+	  echo "kore: line tools (sort/uniq/head/tail/wc/cat/seq/echo/basename/tee GNU-identical) ok"
+	@printf 'a:b:c\nnodelim\nx:y\n' > $(ho)/.fu1; \
+	  cut -d: -f1,3 $(ho)/.fu1 > $(ho)/.fu-g; $m $(ho)/kore cut -d: -f1,3 $(ho)/.fu1 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore cut -f vs GNU"; exit 1; }; \
+	  cut -d: -f1,3 -s $(ho)/.fu1 > $(ho)/.fu-g; $m $(ho)/kore cut -d: -f1,3 -s $(ho)/.fu1 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore cut -s vs GNU"; exit 1; }; \
+	  cut -d: -f2- $(ho)/.fu1 > $(ho)/.fu-g; $m $(ho)/kore cut -d: -f2- $(ho)/.fu1 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore cut -f2- vs GNU"; exit 1; }; \
+	  printf 'hello\nhi\n' | cut -c2-4 > $(ho)/.fu-g; printf 'hello\nhi\n' | $m $(ho)/kore cut -c2-4 > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore cut -c vs GNU"; exit 1; }; \
+	  printf 'hi there\n' | tr a-z A-Z > $(ho)/.fu-g; printf 'hi there\n' | $m $(ho)/kore tr a-z A-Z > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore tr vs GNU"; exit 1; }; \
+	  printf 'abcd\n' | tr abcd xy > $(ho)/.fu-g; printf 'abcd\n' | $m $(ho)/kore tr abcd xy > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore tr pad vs GNU"; exit 1; }; \
+	  printf 'hello world\n' | tr -d aeiou > $(ho)/.fu-g; printf 'hello world\n' | $m $(ho)/kore tr -d aeiou > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore tr -d vs GNU"; exit 1; }; \
+	  printf 'aa  bb   cc\n' | tr -s ' ' > $(ho)/.fu-g; printf 'aa  bb   cc\n' | $m $(ho)/kore tr -s ' ' > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore tr -s vs GNU"; exit 1; }; \
+	  printf 'a\n\nb\n' | nl > $(ho)/.fu-g; printf 'a\n\nb\n' | $m $(ho)/kore nl > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore nl vs GNU"; exit 1; }; \
+	  printf 'abc\nde\n' | rev > $(ho)/.fu-g; printf 'abc\nde\n' | $m $(ho)/kore rev > $(ho)/.fu-o; \
+	  cmp -s $(ho)/.fu-g $(ho)/.fu-o || { echo "FAIL kore rev vs GNU"; exit 1; }; \
+	  echo "kore: field tools (cut/tr/nl/rev GNU-identical) ok"
+	@P=$(ho)/.fsplay; rm -rf $$P; mkdir $$P; \
+	  $m $(ho)/kore mkdir -p $$P/a/b/c && [ -d $$P/a/b/c ] || { echo "FAIL kore mkdir -p"; exit 1; }; \
+	  printf 'hi there\n' > $$P/f1; \
+	  $m $(ho)/kore cp $$P/f1 $$P/f2 && cmp -s $$P/f1 $$P/f2 || { echo "FAIL kore cp"; exit 1; }; \
+	  $m $(ho)/kore cp $$P/f1 $$P/a && cmp -s $$P/f1 $$P/a/f1 || { echo "FAIL kore cp into dir"; exit 1; }; \
+	  $m $(ho)/kore mv $$P/f2 $$P/f3 && [ ! -e $$P/f2 ] && cmp -s $$P/f1 $$P/f3 || { echo "FAIL kore mv"; exit 1; }; \
+	  $m $(ho)/kore ln -s f1 $$P/l1 && [ "$$(readlink $$P/l1)" = f1 ] || { echo "FAIL kore ln -s"; exit 1; }; \
+	  $m $(ho)/kore ln $$P/f1 $$P/h1 && [ $$P/h1 -ef $$P/f1 ] || { echo "FAIL kore ln"; exit 1; }; \
+	  $m $(ho)/kore touch $$P/new $$P/.hidden && [ -f $$P/new ] && [ -f $$P/.hidden ] || { echo "FAIL kore touch"; exit 1; }; \
+	  $m $(ho)/kore chmod 600 $$P/f1 && [ "$$(stat -c %a $$P/f1)" = 600 ] || { echo "FAIL kore chmod"; exit 1; }; \
+	  LC_ALL=C ls -1 $$P > $(ho)/.fs-g; $m $(ho)/kore ls $$P > $(ho)/.fs-o; \
+	  cmp -s $(ho)/.fs-g $(ho)/.fs-o || { echo "FAIL kore ls vs GNU"; exit 1; }; \
+	  LC_ALL=C ls -A -1 $$P > $(ho)/.fs-g; $m $(ho)/kore ls -a $$P > $(ho)/.fs-o; \
+	  cmp -s $(ho)/.fs-g $(ho)/.fs-o || { echo "FAIL kore ls -a vs GNU -A"; exit 1; }; \
+	  [ "$$($m $(ho)/kore pwd)" = "$$(pwd)" ] || { echo "FAIL kore pwd"; exit 1; }; \
+	  $m $(ho)/kore rm $$P/f3 && [ ! -e $$P/f3 ] || { echo "FAIL kore rm"; exit 1; }; \
+	  $m $(ho)/kore rm -r $$P/a && [ ! -e $$P/a ] || { echo "FAIL kore rm -r"; exit 1; }; \
+	  $m $(ho)/kore mkdir $$P/empty && $m $(ho)/kore rmdir $$P/empty && [ ! -e $$P/empty ] || { echo "FAIL kore rmdir"; exit 1; }; \
+	  $m $(ho)/kore rm $$P/nope > /dev/null 2>&1; r=$$?; [ $$r -eq 1 ] || { echo "FAIL kore rm miss exit"; exit 1; }; \
+	  $m $(ho)/kore rm -f $$P/nope > /dev/null 2>&1; r=$$?; [ $$r -eq 0 ] || { echo "FAIL kore rm -f quiet"; exit 1; }; \
+	  echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir) ok"
+	@printf 'abc\nxbz\nzzz\n+q\n*r\n' > $(ho)/.gr1; printf 'nope\nbc here\n' > $(ho)/.gr2; \
+	  grep b $(ho)/.gr1 > $(ho)/.gr-g; $m $(ho)/kore grep b $(ho)/.gr1 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL kore grep vs GNU"; exit 1; }; \
+	  grep -n b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-g; $m $(ho)/kore grep -n b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL kore grep -n multi vs GNU"; exit 1; }; \
+	  grep -c b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-g; $m $(ho)/kore grep -c b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL kore grep -c vs GNU"; exit 1; }; \
+	  grep -v b $(ho)/.gr1 > $(ho)/.gr-g; $m $(ho)/kore grep -v b $(ho)/.gr1 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL kore grep -v vs GNU"; exit 1; }; \
+	  grep -l b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-g; $m $(ho)/kore grep -l b $(ho)/.gr1 $(ho)/.gr2 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL kore grep -l vs GNU"; exit 1; }; \
+	  printf 'q\n' | grep -l q > $(ho)/.gr-g; printf 'q\n' | $m $(ho)/kore grep -l q > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL kore grep -l stdin vs GNU"; exit 1; }; \
+	  grep '' $(ho)/.gr1 > $(ho)/.gr-g; $m $(ho)/kore grep '' $(ho)/.gr1 > $(ho)/.gr-o; \
+	  cmp -s $(ho)/.gr-g $(ho)/.gr-o || { echo "FAIL kore grep empty pattern vs GNU"; exit 1; }; \
+	  for p in 'ab*c' '^x' 'z$$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' '^*r' 'x[b-z]z'; do \
+	    grep -c "$$p" $(ho)/.gr1 > $(ho)/.gr-g 2>/dev/null; a=$$?; \
+	    $m $(ho)/kore grep -c "$$p" $(ho)/.gr1 > $(ho)/.gr-o; b=$$?; \
+	    { cmp -s $(ho)/.gr-g $(ho)/.gr-o && [ $$a -eq $$b ]; } \
+	      || { echo "FAIL kore grep BRE '$$p' vs GNU"; exit 1; }; \
+	  done; \
+	  $m $(ho)/kore grep b $(ho)/.gr1 > /dev/null; r=$$?; [ $$r -eq 0 ] || { echo "FAIL kore grep hit exit"; exit 1; }; \
+	  $m $(ho)/kore grep qqq $(ho)/.gr1 > /dev/null; r=$$?; [ $$r -eq 1 ] || { echo "FAIL kore grep miss exit"; exit 1; }; \
+	  grep b $(ho)/.gr-nope 2> $(ho)/.gr-g; a=$$?; $m $(ho)/kore grep b $(ho)/.gr-nope 2> $(ho)/.gr-o; b=$$?; \
+	  { cmp -s $(ho)/.gr-g $(ho)/.gr-o && [ $$a -eq 2 ] && [ $$b -eq 2 ]; } || { echo "FAIL kore grep missing file vs GNU"; exit 1; }; \
+	  $m $(ho)/kore grep b $(ho)/.gr1 $(ho)/.gr-nope > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 2 ] || { echo "FAIL kore grep err beats match exit"; exit 1; }; \
+	  echo "kore: grep (plain/-n/-c/-v/-l + BRE battery GNU-identical, the exit triple) ok"
+	@printf 'abc\nxbz\nzzz\nq4\nw5\n' > $(ho)/.sd1; \
+	  for sc in 's/b/X/' 's/z/Q/g' '2d' '/x/,/q/d' '$$d' '2q' 's/x*/-/g' 's/\(b*\)z/[\1]/' 's/b/[&]/' 's|z|_|g' 's/a/1/; s/b/2/' 's/q\(.\)/<\1>/'; do \
+	    sed "$$sc" $(ho)/.sd1 > $(ho)/.sd-g; a=$$?; \
+	    $m $(ho)/kore sed "$$sc" $(ho)/.sd1 > $(ho)/.sd-o; b=$$?; \
+	    { cmp -s $(ho)/.sd-g $(ho)/.sd-o && [ $$a -eq $$b ]; } \
+	      || { echo "FAIL kore sed '$$sc' vs GNU"; exit 1; }; \
+	  done; \
+	  for sc in '2,4p' '/z/p' 's/b/X/p' '/x/,/q/p'; do \
+	    sed -n "$$sc" $(ho)/.sd1 > $(ho)/.sd-g; \
+	    $m $(ho)/kore sed -n "$$sc" $(ho)/.sd1 > $(ho)/.sd-o; \
+	    cmp -s $(ho)/.sd-g $(ho)/.sd-o || { echo "FAIL kore sed -n '$$sc' vs GNU"; exit 1; }; \
+	  done; \
+	  printf 'ab\n' | sed 's/a/1/' > $(ho)/.sd-g; printf 'ab\n' | $m $(ho)/kore sed 's/a/1/' > $(ho)/.sd-o; \
+	  cmp -s $(ho)/.sd-g $(ho)/.sd-o || { echo "FAIL kore sed stdin vs GNU"; exit 1; }; \
+	  printf 'a\n' | sed 's/a' > /dev/null 2>&1; a=$$?; printf 'a\n' | $m $(ho)/kore sed 's/a' > /dev/null 2>&1; b=$$?; \
+	  { [ $$a -eq 1 ] && [ $$b -eq 1 ]; } || { echo "FAIL kore sed bad-script exit (gnu $$a ours $$b)"; exit 1; }; \
+	  sed p $(ho)/.sd-nope $(ho)/.sd1 > $(ho)/.sd-g 2>&1; a=$$?; \
+	  $m $(ho)/kore sed p $(ho)/.sd-nope $(ho)/.sd1 > $(ho)/.sd-o 2>&1; b=$$?; \
+	  { cmp -s $(ho)/.sd-g $(ho)/.sd-o && [ $$a -eq 2 ] && [ $$b -eq 2 ]; } \
+	    || { echo "FAIL kore sed missing file vs GNU"; exit 1; }; \
+	  echo "kore: sed (s///gp + d/p/q + number/\$$/regex/range addresses GNU-identical, exits 1/2) ok"
+	@printf 'a b\nc\n' | xargs > $(ho)/.pc-g; printf 'a b\nc\n' | $m $(ho)/kore xargs > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL kore xargs vs GNU"; exit 1; }; \
+	  printf '1\n2\n3\n4\n5\n' | xargs -n 2 echo > $(ho)/.pc-g; printf '1\n2\n3\n4\n5\n' | $m $(ho)/kore xargs -n 2 echo > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL kore xargs -n 2 vs GNU"; exit 1; }; \
+	  printf '' | xargs echo > $(ho)/.pc-g; printf '' | $m $(ho)/kore xargs echo > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL kore xargs empty vs GNU"; exit 1; }; \
+	  printf 'x\n' | $m $(ho)/kore xargs false; r=$$?; [ $$r -eq 123 ] || { echo "FAIL kore xargs fail exit (rc $$r)"; exit 1; }; \
+	  printf 'x\n' | $m $(ho)/kore xargs /no/such/cmd 2>/dev/null; r=$$?; [ $$r -eq 127 ] || { echo "FAIL kore xargs 127 (rc $$r)"; exit 1; }; \
+	  env AUP=44 sh -c 'printf %s "$$AUP"' > $(ho)/.pc-g; $m $(ho)/kore env AUP=44 sh -c 'printf %s "$$AUP"' > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL kore env assign vs GNU"; exit 1; }; \
+	  env | grep -v '^_=' | LC_ALL=C sort > $(ho)/.pc-g; $m $(ho)/kore env | grep -v '^_=' | LC_ALL=C sort > $(ho)/.pc-o; \
+	  cmp -s $(ho)/.pc-g $(ho)/.pc-o || { echo "FAIL kore env print vs GNU"; exit 1; }; \
+	  $m $(ho)/kore env sh -c 'exit 3'; r=$$?; [ $$r -eq 3 ] || { echo "FAIL kore env child exit (rc $$r)"; exit 1; }; \
+	  $m $(ho)/kore sleep 0.1 || { echo "FAIL kore sleep"; exit 1; }; \
+	  $m $(ho)/kore sleep xx 2>/dev/null; r=$$?; [ $$r -eq 1 ] || { echo "FAIL kore sleep bad exit (rc $$r)"; exit 1; }; \
+	  sleep 3 & sp=$$!; $m $(ho)/kore kill -9 $$sp || { echo "FAIL kore kill send"; exit 1; }; \
+	  wait $$sp; r=$$?; [ $$r -eq 137 ] || { echo "FAIL kore kill effect (rc $$r)"; exit 1; }; \
+	  $m $(ho)/kore kill -0 999999 2>/dev/null; r=$$?; [ $$r -eq 1 ] || { echo "FAIL kore kill dead pid (rc $$r)"; exit 1; }; \
+	  echo "kore: process tools (env/sleep/kill/xargs -- GNU-identical output, the exit faces) ok"
+# The editor (crew/vi/): the pure modal engine's laws (no tty -- vstep driven
+# byte by byte), then one scripted end-to-end pass through the real `kore vi`
+# face over a pipe (keys off stdin, frames onto a captured stdout, :wq writes).
+.PHONY: test_vi
+test_vi: host out/host$(hsuf)/kore
+	@echo "VI crew/vi/{core,law}.l"; \
+	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/core.l crew/vi/law.l | $m > out/host/.test_vi.out 2>&1; r=$$?; \
+	  cat out/host/.test_vi.out; \
+	  { [ $$r -eq 0 ] && grep -q "crew/vi/law:" out/host/.test_vi.out; } \
+	    || { echo "FAIL vi laws (exit $$r)"; exit 1; }
+	@rm -f $(ho)/.vi1; \
+	  printf 'ihello world\033:wq\n' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \
+	    || { echo "FAIL kore vi create+write (exit $$r)"; exit 1; }; \
+	  printf 'ddZZ' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
+	    || { echo "FAIL kore vi dd+ZZ (exit $$r)"; exit 1; }; \
+	  printf 'ix\033:q!\n' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
+	    || { echo "FAIL kore vi q! holds fire (exit $$r)"; exit 1; }; \
+	  printf 'AX\033u:wq\n' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
+	    || { echo "FAIL kore vi undo (exit $$r)"; exit 1; }; \
+	  echo "kore: vi (laws + piped create/dd/q!/undo end-to-end) ok"
+# The C compiler (crew/cc/, rung 3 -- doc/cc.md): the pure pipeline's laws
+# (lexer/parser/gen goldens), then the stage-0 end to end through the real
+# `aicc`: compile, run, exit 42 -- and the gcc -O0 differential is born
+# (same source, both compilers, same exit). x86-64 only until arm64 parity.
+# the battery drives the WARM-baked image (what `make install` ships and users
+# run), not the cold source script -- ~0.68s -> ~0.02s per compile, 88 of them.
+aiccrun = $m --wake $(ho)/aicc.image -e '(cc-main (cuup (cup cmdline)))'
+.PHONY: test_cc
+test_cc: host out/host$(hsuf)/aicc out/host$(hsuf)/aicc.image
+	@echo "CC crew/cc/{lex,cpp,parse,gen,law}.l"; \
+	  cat test/00-init.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | $m > out/host/.test_cc.out 2>&1; r=$$?; \
+	  cat out/host/.test_cc.out; \
+	  { [ $$r -eq 0 ] && grep -q "crew/cc/law:" out/host/.test_cc.out; } \
+	    || { echo "FAIL cc laws (exit $$r)"; exit 1; }
+	@if [ "$$(uname -m)" = x86_64 ]; then \
+	  printf 'int main() { return 42; }\n' > $(ho)/.cc1.c; \
+	  $(aiccrun) $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL aicc compile"; exit 1; }; \
+	  $(ho)/.cc1; a=$$?; \
+	  cc_g=$$(command -v gcc || command -v cc); \
+	  $$cc_g -O0 -o $(ho)/.cc1g $(ho)/.cc1.c && $(ho)/.cc1g; b=$$?; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  printf '// c\nint f() { return 1; }\nint main() { return 7; }\n' > $(ho)/.cc2.c; \
+	  $(aiccrun) $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
+	  $$cc_g -O0 -o $(ho)/.cc2g $(ho)/.cc2.c && $(ho)/.cc2g; b=$$?; \
+	  [ $$a -eq $$b ] || { echo "FAIL aicc two-fn vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  for f in test/cc/*.c; do \
+	    $(aiccrun) $$f $(ho)/.ccb > /dev/null 2>&1 || { echo "FAIL aicc compile $$f"; exit 1; }; \
+	    $(ho)/.ccb; a=$$?; \
+	    $$cc_g -O0 -o $(ho)/.ccbg $$f && $(ho)/.ccbg; b=$$?; \
+	    [ $$a -eq $$b ] || { echo "FAIL aicc battery $$f (ours $$a gcc $$b)"; exit 1; }; \
+	  done; \
+	  $(aiccrun) $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL aicc missing input exit (rc $$r)"; exit 1; }; \
+	  printf 'int main() { return 42 }\n' > $(ho)/.cc3.c; \
+	  $(aiccrun) $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL aicc parse-error exit (rc $$r)"; exit 1; }; \
+	  printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > $(ho)/.olib.c; \
+	  printf 'extern int vals[];\nint pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+vals[2]+ext_add(15,5);}\n' > $(ho)/.omain.c; \
+	  printf 'int ext_add(int a,int b){return a+b;}\n' > $(ho)/.oext.c; \
+	  $(aiccrun) -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL aicc -c lib"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL aicc -c main"; exit 1; }; \
+	  $$cc_g -O0 -c -o $(ho)/.oext.o $(ho)/.oext.c; \
+	  $$cc_g -no-pie -o $(ho)/.oexe $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext.o > /dev/null 2>&1 || { echo "FAIL ld cc objects"; exit 1; }; \
+	  $(ho)/.oexe; a=$$?; \
+	  $$cc_g -O0 -o $(ho)/.oexeg $(ho)/.omain.c $(ho)/.olib.c $(ho)/.oext.c && $(ho)/.oexeg; b=$$?; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
+	  printf '#include <ans.h>\nint main() { return ANS + BONUS; }\n' > $(ho)/.flg.c; \
+	  mkdir -p $(ho)/.flginc && printf '#define ANS 30\n' > $(ho)/.flginc/ans.h; \
+	  $(aiccrun) -I $(ho)/.flginc -D BONUS=12 -o $(ho)/.flg $(ho)/.flg.c > /dev/null 2>&1 || { echo "FAIL aicc -I/-D/-o"; exit 1; }; \
+	  $(ho)/.flg; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc -I/-D/-o run (got $$a want 42)"; exit 1; }; \
+	  printf 'int f();\nint main() { return f() + 2; }\n' > $(ho)/.mi1.c; \
+	  printf 'int f() { return 40; }\n' > $(ho)/.mi2.c; \
+	  mabs="$$PWD/$(ho)"; (cd $(ho) && $$mabs/ai --wake $$mabs/aicc.image -e '(cc-main (cuup (cup cmdline)))' -c .mi1.c .mi2.c) > /dev/null 2>&1 || { echo "FAIL aicc multi-input -c"; exit 1; }; \
+	  $$cc_g -no-pie -o $(ho)/.mi $(ho)/.mi1.o $(ho)/.mi2.o > /dev/null 2>&1 || { echo "FAIL ld multi-input objects"; exit 1; }; \
+	  $(ho)/.mi; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-input run (got $$a want 42)"; exit 1; }; \
+	  printf '#include <stdarg.h>\nint isum(int n,...){va_list ap;va_start(ap,n);long s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}\n' > $(ho)/.valib.c; \
+	  printf 'int isum(int n,...);\nint main(){return isum(4,10,11,12,9);}\n' > $(ho)/.vamain.c; \
+	  $(aiccrun) -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL aicc -c variadic"; exit 1; }; \
+	  $$cc_g -O0 -c -o $(ho)/.vamain.o $(ho)/.vamain.c; \
+	  $$cc_g -no-pie -o $(ho)/.vaexe $(ho)/.vamain.o $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL ld cc-variadic + gcc-main"; exit 1; }; \
+	  $(ho)/.vaexe; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL cc-variadic <- gcc-caller (SysV va ABI, got $$a want 42)"; exit 1; }; \
+	  printf '__attribute__((weak)) int wpick(void){return 7;}\nint main(){return wpick() + 30;}\n' > $(ho)/.wklib.c; \
+	  printf 'int wpick(void){return 12;}\n' > $(ho)/.wkstr.c; \
+	  $(aiccrun) -c $(ho)/.wklib.c $(ho)/.wklib.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak"; exit 1; }; \
+	  $$cc_g -no-pie -o $(ho)/.wkdef $(ho)/.wklib.o > /dev/null 2>&1 && $(ho)/.wkdef; a=$$?; \
+	  [ $$a -eq 37 ] || { echo "FAIL weak default (got $$a want 37)"; exit 1; }; \
+	  $$cc_g -O0 -c -o $(ho)/.wkstr.o $(ho)/.wkstr.c; \
+	  $$cc_g -no-pie -o $(ho)/.wkovr $(ho)/.wklib.o $(ho)/.wkstr.o > /dev/null 2>&1 && $(ho)/.wkovr; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL weak override (got $$a want 42)"; exit 1; }; \
+	  printf 'long bump(long x){long r;__builtin_add_overflow(x,1,&r);return r;}\n' > $(ho)/.rblib.c; \
+	  printf 'long bump(long);\nint main(void){volatile long a=0;long s=a;for(int i=42;i--;)s=bump(s);return (int)s;}\n' > $(ho)/.rbmain.c; \
+	  $(aiccrun) -c $(ho)/.rblib.c $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL aicc -c rbx-callee"; exit 1; }; \
+	  $$cc_g -O2 -c -o $(ho)/.rbmain.o $(ho)/.rbmain.c; \
+	  $$cc_g -no-pie -o $(ho)/.rbexe $(ho)/.rbmain.o $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL ld rbx interop"; exit 1; }; \
+	  $(ho)/.rbexe; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL callee-saved rbx across cc call (-O2 caller loop bound, got $$a want 42)"; exit 1; }; \
+	  printf 'static long cd(long n,long a){if(n==0)return a;return cd(n-1,a+1);}\nstatic long tb(long n);\nstatic long ta(long n){if(n==0)return 21;return tb(n-1);}\nstatic long tb(long n){if(n==0)return 22;return ta(n-1);}\nstatic long dp(long(*f)(long,long),long n){return f(n,0);}\nint main(void){long a=cd(50000000,0)/2500000;long b=ta(30000000);long c=dp(cd,1000000)/1000000;return (int)(a+b+c);}\n' > $(ho)/.sib.c; \
+	  $(aiccrun) $(ho)/.sib.c $(ho)/.sibx > /dev/null 2>&1 || { echo "FAIL aicc sibcall"; exit 1; }; \
+	  $(ho)/.sibx; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL sibcall flat recursion (50M-deep self + mutual + fn-ptr, got $$a want 42 -- a non-tail call would stack-overflow to 139)"; exit 1; }; \
+	  printf 'long fork(void);long waitpid(long,int*,long);void _exit(long);long g;long id(long a){return a;}int main(void){g=id(fork());if(g==0)_exit(42);int st;waitpid(-1,&st,0);return ((st&127)==0&&((st>>8)&255)==42)?42:1;}\n' > $(ho)/.aln.c; \
+	  $(aiccrun) -c $(ho)/.aln.c $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL aicc -c stack-align"; exit 1; }; \
+	  $$cc_g -no-pie -o $(ho)/.alnx $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL ld stack-align"; exit 1; }; \
+	  $(ho)/.alnx; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL 16-byte stack alignment ('g=id(fork())' holds a temp across the call; a bare-push spill leaves rsp at 8 mod 16 and glibc fork's child movaps #GPs -- got $$a want 42)"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.oext.c $(ho)/.oext2.o > /dev/null 2>&1 || { echo "FAIL aicc -c ext"; exit 1; }; \
+	  $(aiccrun) $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext2.o -o $(ho)/.lnk1 > /dev/null 2>&1 || { echo "FAIL aicc link .o"; exit 1; }; \
+	  $(ho)/.lnk1; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc-linked exe (own static linker, got $$a want 42)"; exit 1; }; \
+	  $(aiccrun) $(ho)/.mi1.c $(ho)/.mi2.c -o $(ho)/.lnk2 > /dev/null 2>&1 || { echo "FAIL aicc link multi-.c"; exit 1; }; \
+	  $(ho)/.lnk2; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-.c link (got $$a want 42)"; exit 1; }; \
+	  $(aiccrun) -c $(ho)/.wkstr.c $(ho)/.wkstr2.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak-strong"; exit 1; }; \
+	  $(aiccrun) $(ho)/.wklib.o -o $(ho)/.lnk3 > /dev/null 2>&1 && $(ho)/.lnk3; a=$$?; \
+	  [ $$a -eq 37 ] || { echo "FAIL aicc-link weak default (got $$a want 37)"; exit 1; }; \
+	  $(aiccrun) $(ho)/.wklib.o $(ho)/.wkstr2.o -o $(ho)/.lnk4 > /dev/null 2>&1 && $(ho)/.lnk4; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL aicc-link weak override (got $$a want 42)"; exit 1; }; \
+	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e1 = { "a", 30 };\n' > $(ho)/.nf1.c; \
+	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e2 = { "b", 12 };\nextern ent __start_ai_nifs[];\nextern ent __stop_ai_nifs[];\nint main(){ long s=0; for (ent *p=__start_ai_nifs; p<__stop_ai_nifs; p++) s+=p->v; return (int)s; }\n' > $(ho)/.nf2.c; \
+	  $(aiccrun) $(ho)/.nf2.c $(ho)/.nf1.c -o $(ho)/.lnk5 > /dev/null 2>&1 || { echo "FAIL aicc link ai_nifs"; exit 1; }; \
+	  $(ho)/.lnk5; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $$a want 42)"; exit 1; }; \
+	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets) ok"; \
+	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
+# The rung-2 self-host gate ([[ai-distro]]): compile ai.c AND every host/*.c with
+# aicc (gcc/clang only LINKS), then run the whole corpus through the all-aicc
+# binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in
+# test_all -- it rebuilds ~14 objects + links + runs the corpus, and needs the
+# system static linker. x86-64 only (aicc emits x64). The binary carries
+# no baked image, so AI_NO_IMAGE forces the fresh-egg boot.
+.PHONY: test_selfhost
+test_selfhost: host out/host$(hsuf)/aicc
+	@echo SELFHOST $(ho)/ai-selfhost
+	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
+	  d=$(ho)/selfhost; mkdir -p $$d; \
+	  $m $(ho)/aicc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL aicc -c ai.c"; exit 1; }; \
+	  for f in host/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
+	  $m $(ho)/aicc -Icrew/cc/include -c crew/cc/lib/math/am.c $$d/am.o \
+	    || { echo "FAIL aicc -c am.c"; exit 1; }; \
+	  $(host_cc) -static -o $(ho)/ai-selfhost $$d/*.o $(host_ldflags) \
+	    || { echo "FAIL link all-aicc binary"; exit 1; }; \
+	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_selfhost.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
+	    || { echo "FAIL all-aicc corpus (exit $$s)"; exit 1; }; \
+	  echo "test_selfhost: ai.c + all `ls host/*.c | wc -l` host/*.c built by aicc, corpus passes"
+# The rung-4 gate ([[ai-distro]]): the GCC-FREE fixpoint. Everything test_selfhost
+# builds, PLUS our own raw libc -- crew/cc/lib/nolibc.c (raw-syscall wrappers, mini
+# stdio, mmap malloc), the math floor crew/cc/lib/math/am.c (ours), and sys.o (the
+# syscall trampoline + our sigsetjmp/longjmp, laid by crew/cc/lib/mksys.l) -- then
+# OUR OWN static linker (crew/holo/link.l via `aicc a.o..`) binds them. No gcc, no
+# glibc, no ld anywhere: the whole chain is ai. Corpus green over the fresh egg.
+# In test_all (the gcc-free fixpoint is a headline invariant); skips off x86-64.
+# mksys/nolibc/math are x64. Supersedes test_selfhost's coverage (which stays
+# opt-in as the lighter gcc-links-only check).
+.PHONY: test_raw
+test_raw: host out/host$(hsuf)/aicc
+	@echo RAW $(ho)/ai-raw
+	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
+	  d=$(ho)/raw; mkdir -p $$d; \
+	  $m $(ho)/aicc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL aicc -c ai.c"; exit 1; }; \
+	  for f in host/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
+	  $m $(ho)/aicc -Icrew/cc/include -c crew/cc/lib/nolibc.c $$d/nolibc.o \
+	    || { echo "FAIL aicc -c nolibc.c"; exit 1; }; \
+	  for f in crew/cc/lib/math/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -Icrew/cc/lib/math -Icrew/cc/include -c $$f $$d/m_$$b.o \
+	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
+	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lib/mksys.l; \
+	    echo "(mksys \"$$d/sys.o\")"; } | $m \
+	    || { echo "FAIL mksys sys.o"; exit 1; }; \
+	  $m $(ho)/aicc $$d/*.o -o $(ho)/ai-raw \
+	    || { echo "FAIL our-linker bind ai-raw"; exit 1; }; \
+	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_raw.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
+	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
+	  echo "test_raw: ai.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
+# test_raw's aarch64 twin (rung D): aicc -t arm64 lays every object, mksys-arm64
+# the syscall leaf, OUR linker binds, qemu-user runs the corpus over the fresh
+# egg. Runs the WHOLE C-sorted $t (uukind{,law}.l included): the raw binary and
+# the GCC-built reference agree file-for-file -- tools/arm64check.sh is the
+# differential. ($t is C/byte order, so test/uu.l loads before test/uukindlaw.l,
+# which calls the kernel it defines; a locale `ls` sorts uukind* first and the
+# uk-jj assert runs before uu.l -- an ordering trap, never a GC/arm64 bug.)
+# Opt-in (not in test_all): the qemu corpus costs minutes. Skips without qemu.
+.PHONY: test_raw_arm64
+test_raw_arm64: host out/host$(hsuf)/aicc
+	@echo RAW-ARM64 $(ho)/ai-raw-a64
+	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
+	  d=$(ho)/raw-a64; mkdir -p $$d; \
+	  $m $(ho)/aicc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL aicc -t arm64 -c ai.c"; exit 1; }; \
+	  for f in host/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL aicc -t arm64 -c $$f"; exit 1; }; done; \
+	  $m $(ho)/aicc -t arm64 -Icrew/cc/include -c crew/cc/lib/nolibc.c $$d/nolibc.o \
+	    || { echo "FAIL aicc -t arm64 -c nolibc.c"; exit 1; }; \
+	  for f in crew/cc/lib/math/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/aicc -t arm64 -Icrew/cc/lib/math -Icrew/cc/include -c $$f $$d/m_$$b.o \
+	      || { echo "FAIL aicc -t arm64 -c $$f"; exit 1; }; done; \
+	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lib/mksys.l; \
+	    echo "(mksys-arm64 \"$$d/sys.o\")"; } | $m \
+	    || { echo "FAIL mksys-arm64 sys.o"; exit 1; }; \
+	  $m $(ho)/aicc -t arm64 $$d/*.o -o $(ho)/ai-raw-a64 \
+	    || { echo "FAIL our-linker bind ai-raw-a64"; exit 1; }; \
+	  cat $t \
+	    | AI_NO_IMAGE=1 qemu-aarch64 $(ho)/ai-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_raw_a64.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_a64.out; } \
+	    || { echo "FAIL raw-arm64 corpus (exit $$s)"; exit 1; }; \
+	  echo "test_raw_arm64: the gcc-free aarch64 ai -- aicc objects, mksys-arm64, our linker, corpus under qemu"
+# The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
+# objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
+# core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
+# the "N passed, 0 failed" sentinel AND exit 0 (a silent reader-stop exits 0).
+.PHONY: test_holo
+test_holo: host
+	@echo "HOLO crew/holo/holotest.l"; \
+	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/text.l crew/holo/elf.l crew/holo/holotest.l | $m > out/host/.test_holo.out 2>&1; r=$$?; \
+	  cat out/host/.test_holo.out; \
+	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_holo.out; } \
+	    || { echo "FAIL holo (exit $$r)"; exit 1; }
+# as.l -- the real AT&T x86-64 front over holo. astest.l's goldens are byte-identical to
+# /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
+.PHONY: test_as
+test_as: host
+	@echo "AS crew/holo/astest.l"; \
+	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l crew/holo/astest.l | $m > out/host/.test_as.out 2>&1; r=$$?; \
+	  cat out/host/.test_as.out; \
+	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_as.out; } \
+	    || { echo "FAIL as (exit $$r)"; exit 1; }
+# ain's two-process loopback gate: a server and a client over real TCP on
+# 127.0.0.1, full-duplex, asserting each side received what the other sent (the
+# socket nifs in host/net.c + the pump loops in tools/ain.l). In `test_all`
+# (the thorough gate) but NOT the fast `test` -- it needs two live processes and
+# a free loopback port. It is the ONLY net gate that drives the real
+# `ai tools/ain.l` cli path: the in-process `test/host/net.l` smoke (in
+# test_hostnif) pipes straight into the binary, so it covers the nifs portably
+# but can't catch an invocation regression (e.g. a stale -l preload). Override
+# the port with `make nettest PORT=NNNN`.
+PORT ?= 7390
+nettest: host
+	@echo NETTEST $m "(127.0.0.1:$(PORT))"
+	@sh $R/test/net/loopback.sh $m $(PORT)
+# Validate the l tool rewrites against their frozen Python references in
+# tools/py/ (gen_data / vmret). See tools/Makefile + tools/py/README.md.
+test_tools: host
+	@$(MAKE) -C tools
+# Machine-check proof/rocq/spec.v -- ai's headline laws (the numeral / function /
+# absence core of test/spec.l) as Rocq theorems, axiom-free (every proof
+# "Closed under the global context"). This is what upgrades the executable
+# spec from DEMONSTRATED on every target to PROVED in a consistent metatheory
+# -- the README's "verified specification ... up to explosion of world" made
+# load-bearing (the caveat is uu.l's type-in-type detonation; this file runs
+# universe-checked, so it does not explode). coqc writes artifacts next to the
+# source; clean them on success. No-op when coqc is missing, so the gate stays
+# green without a Rocq install (like test_kernel / test_wasm).
+COQC ?= $(shell command -v coqc 2>/dev/null)
+LEAN ?= $(shell command -v lean 2>/dev/null)
+ifeq ($(COQC),)
+test_proof:
+	@echo "test_proof: skipped (needs rocq/coqc)"
+else
+test_proof:
+	@echo TEST proof/rocq/spec.v "(coqc)"
+	@$(COQC) -q proof/rocq/spec.v
+	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux
+	@echo TEST proof/rocq/patch.v "(coqc)"
+	@$(COQC) -q proof/rocq/patch.v
+	@rm -f proof/rocq/patch.vo proof/rocq/patch.vok proof/rocq/patch.vos proof/rocq/patch.glob proof/rocq/.patch.aux
+endif
+# Machine-check proof/rocq/gc.v -- the generational MINOR is SOUND: under a complete
+# write barrier (rem_complete) the nursery scan reaches every live young object,
+# so no live young is lost (barrier_sound) -- the Coq proof of doc/proto/gengc.l's
+# load-bearing self-check (3b, the barrier is necessary). Axiom-free like spec.v;
+# the C stays connected by the differential oracle + gen_audit. No-op without coqc.
+ifeq ($(COQC),)
+test_gc:
+	@echo "test_gc: skipped (needs rocq/coqc)"
+else
+test_gc:
+	@echo TEST proof/rocq/gc.v "(coqc)"
+	@$(COQC) -q proof/rocq/gc.v
+	@rm -f proof/rocq/gc.vo proof/rocq/gc.vok proof/rocq/gc.vos proof/rocq/gc.glob proof/rocq/.gc.aux
+endif
+# The .l -> .v pipeline: tools/spec2coq.l (run on the host binary $m) reads
+# test/spec.l and EMITS proof/rocq/gen.v -- the spec generating Coq theorems for its
+# own pure-numeral corpus facts, each closed by computation (over Z, since nat
+# is unary and 3^27 would blow up vm_compute). coqc then checks them. Drift-proof:
+# the asserts and their proofs cannot diverge -- regenerated every run from .l.
+# Needs the host binary AND coqc; no-ops without coqc, like test_proof.
+ifeq ($(COQC),)
+test_gen:
+	@echo "test_gen: skipped (needs rocq/coqc)"
+else
+test_gen: host
+	@echo AI	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
+	@$m tools/spec2coq.l > proof/rocq/gen.v
+	@echo TEST proof/rocq/gen.v "(coqc, against spec.v's shared model)"
+	@cd proof/rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" gen.v
+	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux \
+	  proof/rocq/gen.vo proof/rocq/gen.vok proof/rocq/gen.vos proof/rocq/gen.glob proof/rocq/.gen.aux
+endif
+# The PROOF half of the .l -> .v pipeline (cf. test_gen, which exports concrete
+# ASSERTS): tools/uu2coq.l loads uu's kernel (test/uu.l), has it TYPE-CHECK a proof
+# term against its theorem, and EMITS proof/rocq/uugen.v -- the same term in Gallina, which
+# coqc re-checks independently. So a LAW (forall x, x^0 = 1 -- spec.v's const_one) is
+# proved in ai's own kernel and certified by Rocq, axiom-free. Drift-proof like gen.v:
+# regenerated every run, so the internal proof and the exported one cannot diverge.
+# The skeleton of the internal-prover bridge. Needs the host binary AND coqc.
+ifeq ($(COQC),)
+test_uugen:
+	@echo "test_uugen: skipped (needs rocq/coqc)"
+else
+test_uugen: host
+	@echo AI	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
+	@$m tools/uu2coq.l > proof/rocq/uugen.v
+	@echo TEST proof/rocq/uugen.v "(coqc)"
+	@$(COQC) -q proof/rocq/uugen.v
+	@rm -f proof/rocq/uugen.vo proof/rocq/uugen.vok proof/rocq/uugen.vos proof/rocq/uugen.glob proof/rocq/.uugen.aux
+endif
+
+# The LEAN leg of the proof bridge (cf. test_uugen, the Rocq leg): tools/uu2lean.l emits
+# the SAME uu corpus to Lean 4, which re-checks it -- a SECOND independent kernel, so each
+# law is agreed by two unrelated implementations (the de Bruijn criterion, diversified).
+# Drift-proof: regenerated every run. Needs the host binary AND lean.
+ifeq ($(LEAN),)
+test_uulean:
+	@echo "test_uulean: skipped (needs lean)"
+else
+test_uulean: host
+	@mkdir -p lean
+	@echo AI	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
+	@$m tools/uu2lean.l > proof/lean/uugen.lean
+	@echo TEST proof/lean/uugen.lean "(lean)"
+	@$(LEAN) proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
+	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
+endif
+
+# test_extract: the differential oracle with a ROCQ-EXTRACTED reference. coqc
+# extracts proof/rocq/extract.v (the n-ary/CBV/weak/saturating normalizer built on
+# spec.v's PROVEN subst/shift) to OCaml; proof/rocq/oracle_drive.ml generates random
+# closed affine terms, normalizes each with the extracted `nf`, and emits an ai
+# program that checks ev EXTENSIONALLY agrees. So the reference the fuzzer runs
+# IS the proven definitions (up to the standard nat->int mapping) -- machine-
+# checked end to end. The hand-transcribed twin (test/oracle.l) stays in the
+# fast `make test`; this heavier, higher-assurance variant needs coqc + ocamlopt,
+# so it lives in test_all and no-ops when either tool is absent (like test_proof).
+OCAMLOPT ?= $(shell command -v ocamlopt 2>/dev/null)
+ifeq ($(and $(COQC),$(OCAMLOPT)),)
+test_extract:
+	@echo "test_extract: skipped (needs coqc + ocamlopt)"
+else
+test_extract: host
+	@echo TEST proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
+	@cd proof/rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" extract.v >/dev/null \
+	  && rm -f normalizer.mli && $(OCAMLOPT) -w -a normalizer.ml oracle_drive.ml -o oracle_drive
+	@proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
+	@$m out/.extract_oracle.l | grep -q "2000 / 2000 PASS" \
+	  || { echo "EXTRACT ORACLE FAILED:"; $m out/.extract_oracle.l; exit 1; }
+	@$m out/.extract_oracle.l
+	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux \
+	  proof/rocq/extract.vo proof/rocq/extract.vok proof/rocq/extract.vos proof/rocq/extract.glob proof/rocq/.extract.aux \
+	  proof/rocq/normalizer.ml proof/rocq/normalizer.mli proof/rocq/oracle_drive proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
+	  out/.extract_oracle.l
+endif
+# uu's NbE kernel lives at ai/uu.l (mark + kernel + the sweep into the `uu`
+# book at its tail) and bakes post.l-style through the lib_h/%0.h pattern
+# rules -- into the host, ai0, the inle kernel and wasm, so the corpus's uu
+# files (test/uu*.l, binding the book surface at test/uu.l's head) run on
+# every target, and an overlay can reach (uu 'vof) in a bare binary.
+# test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled
+# from crew/lux/core.l into uu terms (tools/uuwmgen.l over tools/wm2uu.l, kind-
+# directed by crew/lux/sigs.l), so test/uuwmlaw.l proves its theorems OF THE
+# IMPLEMENTATION at corpus time. `make uuwm` refreshes it after a core.l edit;
+# test_uuwm (in test_all) regenerates and diffs, failing loudly on drift.
+uuwm: host
+	@echo AI	test/uuwm.l "(tools/uuwmgen.l on $m)"
+	@$m tools/uuwmgen.l > test/uuwm.l
+test_uuwm: host
+	@echo TEST test/uuwm.l "(regenerate + diff)"
+	@$m tools/uuwmgen.l > out/host/.uuwm.l.tmp
+	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
+	  || { echo "FAIL: test/uuwm.l is stale (crew/lux/core.l moved?) -- run: make uuwm"; exit 1; }
+	@rm -f out/host/.uuwm.l.tmp
+# test/uukind.l is a COMMITTED GENERATED artifact: doc/proto/kinds.l's abstract
+# kinds-lattice JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l
+# proves the semilattice laws OF THE ANALYSIS at corpus time. `make uukind` refreshes
+# it after a kinds.l edit; test_uukind (in test_all) regenerates and diffs.
+uukind: host
+	@echo AI	test/uukind.l "(tools/kinds2uu.l on $m)"
+	@$m tools/kinds2uu.l > test/uukind.l
+test_uukind: host
+	@echo TEST test/uukind.l "(regenerate + diff)"
+	@$m tools/kinds2uu.l > out/host/.uukind.l.tmp
+	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
+	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
+	@rm -f out/host/.uukind.l.tmp
+# test_wake: the WOKEN-IMAGE lane -- the one lane no other gate runs (AI_NO_IMAGE
+# is exported for every recipe above, so every gate exercises the fresh egg; only
+# a user's direct run wakes the image). Bakes a CANDIDATE COPY (ai.wake -- the
+# canonical binary untouched, ETXTBSY-proof) and runs test/uu.l through the woken
+# image under a budget the wake storm cannot meet (fresh lane ~1s, the storm was
+# >90s -- doc/wake-storm.md). GREEN since the dump's dead-native revert landed
+# (img_nif_interp: references re-aim at the bytecode twin); in test_all.
+test_wake: $(ho)/ai
+	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
+	@cp $(ho)/ai $(ho)/ai.wake && $(ho)/ai.wake --bake
+	@cat test/00-init.l test/uu.l > $(ho)/wake-corpus.l
+	@if env -u AI_NO_IMAGE timeout 60 $(ho)/ai.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
+	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/ai.wake $(ho)/wake-corpus.l; \
+	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/ai.wake $(ho)/wake-corpus.l; exit 1; fi
