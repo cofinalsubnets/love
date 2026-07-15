@@ -141,28 +141,31 @@ int image_bake(struct ai *g) {
 // natives cannot serialize -- the post.l wrapper empties the glaze compile cache
 // first (they re-JIT lazily in the woken session); any OTHER live native closure at
 // bake time is on the caller. answers 1 | ().
-static lvm(lvm_bake) {
- if (!ai_strp(Sp[0])) goto fail;
- struct ai_str *s = (struct ai_str*) Sp[0];
+// the frame-heavy body lives in a plain helper: path[4096] + &len escape (to
+// fopen / ai_image_save_) and pin the frame, which would defeat the lvm_ ap's
+// tail-jump (make vmret). the helper runs after Pack(g), on g->sp; the wrapper
+// stays a thin sibcall. answers the result word (1 | ()).
+static ai_noinline ai_word image_bake_do(struct ai *g) {
+ if (!ai_strp(g->sp[0])) return ai_nil;
+ struct ai_str *s = (struct ai_str*) g->sp[0];
  char path[4096];
- if (s->len >= sizeof path) goto fail;
+ if (s->len >= sizeof path) return ai_nil;
  memcpy(path, s->bytes, s->len);                 // copy OUT first: the dump's gen_major moves the string
  path[s->len] = 0;
- Pack(g);
  image_guard_arm();
  uintptr_t len = 0;
  void *buf = ai_image_save_(g, &len);
- Unpack(g);
- if (!buf) { image_guard_report(); goto fail; }
+ if (!buf) { image_guard_report(); return ai_nil; }
  FILE *f = fopen(path, "wb");
  int rc = !f ? -1 : (fwrite(buf, 1, len, f) == len) ? 0 : -1;
  if (f) fclose(f);
  g->alloc(g, buf, 0);                            // a session lives on after a bake: no leak
- if (rc) goto fail;
- Sp[0] = putcharm(1); Ip += 1;
- return Continue();
- fail:
- Sp[0] = ai_nil; Ip += 1;
+ return rc ? ai_nil : putcharm(1); }
+static lvm(lvm_bake) {
+ Pack(g);
+ ai_word r = image_bake_do(g);
+ Unpack(g);
+ Sp[0] = r; Ip += 1;
  return Continue(); }
 static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
 AI_NIF("bake", nif_bake);

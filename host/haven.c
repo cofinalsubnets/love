@@ -112,7 +112,10 @@ static lvm(lvm_wlrecv) {
 // (wl-send port b n fds): sendmsg of the cask's first n bytes, the fd
 // charms riding as SCM_RIGHTS. Retries partial writes without the fds
 // (they travel with the first byte, per the protocol's custom).
-static lvm(lvm_wlsend) {
+// the msghdr/cmsg scratch (cbuf + fds + &mh -> sendmsg) pins the frame, which
+// would defeat the lvm_ ap's tail-jump (make vmret): the body lives in a plain
+// helper so lvm_wlsend stays a thin sibcall. answers the result word.
+static ai_noinline ai_word hv_wlsend_do(ai_word *Sp) {
   intptr_t fd = hv_port_fd(Sp[0]);
   struct ai_str *b = hv_bytes(Sp[1]);
   intptr_t n = (Sp[2] & 1) ? getcharm(Sp[2]) : -1;
@@ -142,7 +145,9 @@ static lvm(lvm_wlsend) {
       i += (uintptr_t) k;
       iov.iov_base = b->bytes + i, iov.iov_len = (size_t) n - i;
       mh.msg_control = 0, mh.msg_controllen = 0; } }
-  Sp[3] = out;
+  return out; }
+static lvm(lvm_wlsend) {
+  Sp[3] = hv_wlsend_do(Sp);
   Sp += 3; Ip += 1; return Continue(); }
 
 // (memfd n): anonymous shared memory of n bytes, by fd -- what a client
