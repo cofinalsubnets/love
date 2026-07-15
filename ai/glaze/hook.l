@@ -20,8 +20,9 @@
 (: assemble (holo 'assemble)                                                 ; through the module books (crew/holo/export.l,
    emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   ai/glaze/export.l) -- this stream cat-loads
    loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
-   qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   (unify with auto-ev): the back-edge + the
-                                                                            ;   float-RESULT leaf, both owned natively at creation
+   loopinfo-n (glaze 'loopinfo-n)  njit-loop-n (glaze 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges
+   qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
+                                                                            ;   creation, deopting to the bytecode twin `e`.
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op (cap e)
                                (? (member? op (cat '(+ - * // % & | ^ < <= > >= =) (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
@@ -43,13 +44,18 @@
           ; not (ev s): jitfr bakes (ev lam), which under the hook would re-enter ala -> so jitfrx takes e.
           (qualfr s)
             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitfrx s 'x64 e))
-          ; NOT a leaf -- try the counted-loop lane (auto-ev's njit-loop, but deopting to `e`, the
-          ; bytecode ala already built, NOT (base-ev s): re-interpreting s here would re-enter ala ->
-          ; natjit -> ... So natjit passes e; owning the loop's back-edge is the big win over the leaf.
+          ; NOT a leaf -- try the counted-loop lane, then the general N-VAR loop lane (auto-ev's
+          ; njit-loop / njit-loop-n, but deopting to `e`, the bytecode ala already built, NOT
+          ; (base-ev s): re-interpreting s here would re-enter ala -> natjit -> ... So natjit passes
+          ; e; owning the loop's back-edge is the big win over the leaf. The N-VAR lane's post-overflow
+          ; deopt is cf-deopt's matrix-power closure (C-finite) OR e -- both bytecode under the hook.
           (: li (loopinfo s)
              (? li (: _ (pin fires () (+ 1 (peep fires () 0)))
                       (njit-loop s (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))) e))
-                e))))
+                (: ln (loopinfo-n s)
+                   (? ln (: _ (pin fires () (+ 1 (peep fires () 0)))
+                            (njit-loop-n s (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))) e))
+                      e))))))
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
  _ (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
@@ -62,6 +68,11 @@
     (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))   ; f built by ala -> the float lane fires
        (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (fr 4) ((\ x (+ (* x 1.5) 2.0)) 4))   ; boxes a gem, == the interpreter
            (fired? n) (= (fr 'nope) ((\ x (+ (* x 1.5) 2.0)) 'nope))))   ; ... the hook fired, and a non-float arg deopts == interp
+    ; --- an embedded N-VAR loop (iterative fib i,a,b): native back-edge at creation, == interp ---
+    (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
+       (&& (55 = (fib 10)) (fired? n)                                       ; the hook owned the loop; fib(10)=55
+           (= (fib 20) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 20))   ; == the interpreter
+           (= (fib 100) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 100))))  ; ... and past fixnum: cf-deopt's bignum matrix path == interp
     ; --- an embedded CAPTURING closure: native captured closure, transparent ---
     (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)                      ; inner (\ x (+ x y)) is the embedded one
        (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3)))            ; native captured closure, composes

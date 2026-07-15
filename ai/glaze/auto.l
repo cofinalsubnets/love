@@ -142,13 +142,13 @@
         (: c (caup test) i (cf-idx vs c)
            (&& (>= i 0) (= (cf-nth inits i) 0)
                (: u (cf-nth ups i) (&& (two? u) (id? (cap u) '+) (= 3 (tally u)) (id? (caup u) c) (= (caup (cup u)) 1))))))
-   (cf-deopt lam vs ups test result inits)                                                  ; the deopt closure: matrix power if linear+canonical, else base-ev
+   (cf-deopt lam vs ups test result inits interp)                                           ; the deopt closure: matrix power if linear+canonical, else `interp` (the caller's deopt target -- (base-ev l) off the ev-rebind, or the bytecode twin `e` on the natjit hook; NEVER (base-ev lam) here, which under the hook would re-enter ala)
     (: M (cf-mat vs ups) rrow (cf-lin vs result)
        (? (&& (cf-canon? lam vs ups test inits) (! (cf-nul? M)) (! (cf-nul? rrow)))
-          (\ n (cf-dot rrow (cf-mv (cf-mpow M n) (cf-aug inits))))
-          (base-ev lam)))
-   (njit-loop-n lam vars updates test result inits)
-    (nif (emit (loopcode-n (caup lam) vars updates test result inits arch)) (cf-deopt lam vars updates test result inits) lam 1)
+          (\ n (cf-dot rrow (cf-mv (cf-mpow M n) (cf-aug inits))))            ; the matrix-power closure is itself bytecode under the hook -- its body isn't leaf/loop grammar, so no re-entry
+          interp))
+   (njit-loop-n lam vars updates test result inits interp)
+    (nif (emit (loopcode-n (caup lam) vars updates test result inits arch)) (cf-deopt lam vars updates test result inits interp) lam 1)
    ; --- captured-closure CONSTRUCTOR (\ p (\ q E)): a nest of 1-arg lambdas, E over
    ; {p,q}. Compiled as the flat 2-param native (\ p q E); applying it to p yields a
    ; native CAPTURED closure -- fully transparent (= the interpreter's ((2param) p)
@@ -1159,7 +1159,7 @@
                                (: li (loopinfo e)                            ; counted loops (arch-aware loopcode)
                                   (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))) (base-ev l))))
                                      (: ln (loopinfo-n e)
-                                        (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
+                                        (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))) (base-ev l))))
                                            (base-ev (autogroup (autonat (twolow e)))))))))   ; float-GRID nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
                   (qual e)  (memo e (\ l (jitir l arch)))
                   (qualn e) (memo e (\ l (jitnir l arch)))
@@ -1168,7 +1168,7 @@
                   (: li (loopinfo e)
                      (? li (memo e (\ l (njit-loop l (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))) (base-ev l))))
                         (: ln (loopinfo-n e)
-                           (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))))))
+                           (? ln (memo e (\ l (njit-loop-n l (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))) (base-ev l))))
                               (base-ev (autogroup (autonat (twolow (castbuild e))))))))))    ; fall-through: cask-build a string-accumulator loop (the jug threads as a loop param -> survives autogroup's pure passes), LOWER a complex(twin) grid to real-pairs (twolow), then glaze a float-grid nest / mutually-recursive arith group if either fits, else interpret
    ev (? glaze-loaded? ev                                      ; rebind the global: ev is now auto-native. On a RE-LOAD (glaze-loaded?) KEEP the baked auto-ev -- it captured the correct baked helpers, so the user's program runs through the working glaze; double-loading is a no-op, not a crash.
          (< 0 ai-tco) auto-ev
