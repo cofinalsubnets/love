@@ -762,6 +762,18 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define s3(i) {{lvm_cur},{.x=putcharm(3)},{i}, {lvm_ret0}}
 #define s4(i) {{lvm_cur},{.x=putcharm(4)},{i}, {lvm_ret0}}
 #define s5(i) {{lvm_cur},{.x=putcharm(5)},{i}, {lvm_ret0}}
+// The two function combinators `+` and `*` of functions build a partial of (the
+// README's Church arithmetic: (* f g) = compose, (+ f g) = Church add). Both are
+// CLOSURE-FREE, so they are not lisp -- they are the exact threads the compiler
+// would emit, baked as immortal constants (copied verbatim from the compiler's own
+// output, cf. the s2..s5 nif threads). lvm_mulh/lvm_addh point straight at them, so
+// they need no g->hot_* field and no (seal-hooks) resolution. Registered by name (below)
+// only so the printer + egg serializer know the thread -- there is no C entry point.
+//   compose f g x = f (g x)          -- 3-ary, {cur3 arg0 arg2 argap4 tap3}
+//   stack   f g a x = f a (g a x)    -- 4-ary; the extra a-slot threaded into both
+//     operands is what makes `+` agree with addition, not the S combinator's (f x (g x)).
+#define compose_thread {{lvm_cur},{.x=putcharm(3)},{lvm_arg0},{lvm_arg2},{lvm_argap},{.x=putcharm(4)},{lvm_tap},{.x=putcharm(3)}}
+#define stack_thread   {{lvm_cur},{.x=putcharm(4)},{lvm_arg0},{lvm_argap},{.x=putcharm(3)},{lvm_arg2},{lvm_argap},{.x=putcharm(4)},{lvm_argap},{.x=putcharm(5)},{lvm_tap},{.x=putcharm(4)}}
 // HARNESS (compile-gated, -DG_FAULT_TEST): __fault deliberately derefs null to
 // raise a hardware fault inside eval -- the one in-eval fault a user can trigger to
 // probe the ai_eval fault barrier (the raw fault nifs spin/peek/poke/seek are pulled
@@ -777,6 +789,7 @@ lvm_t lvm_fault;
  _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
  _(nif_seal, "seal-hooks", s1(lvm_seal)) _(nif_books, "books", s1(lvm_books))\
  _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
+ _(nif_compose, "compose", compose_thread) _(nif_stack, "stack", stack_thread)\
  _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
  _(nif_lt, "<", s2(lvm_lt))  _(nif_le, "<=", s2(lvm_le)) _(nif_eq, "=", s2(lvm_eq))\
  _(nif_ge, ">=", s2(lvm_ge))  _(nif_gt, ">", s2(lvm_gt)) \
@@ -922,7 +935,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
  g->len = len0, g->pool = (void*) g, g->alloc = al;
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_numap = g->hot_add = g->hot_mul = g->hot_opfix = nil;   // unsealed: hot_hook traps until (seal-hooks) fills them
+ g->hot_numap = g->hot_opfix = nil;   // unsealed: hot_hook traps until (seal-hooks) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
  g->minor = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
  // generational setup: a remembered set (old objects holding a young pointer) + the MAJOR pool (a
@@ -2211,20 +2224,20 @@ static struct ai_mint *sym_probe(struct ai *g, char const *nm, uintptr_t n) {
   if (k == map_gap) return 0;
   if (len(k) == n && !memcmp(txt(k), nm, n)) return sym(s[2 * i + 1]); } }
 
-// The church hooks (num-ap/add/mul) are lisp closures the prel pins on the book at runtime, so the C
-// apply paths must fetch them from there. (seal-hooks) resolves all three into g->hot_* ONCE, right
-// after the prel pins them; the hot paths then read the slot directly -- no per-call sym_probe + book
-// lookup. hot_hook traps if a slot is unsealed (nil) or somehow not a lambda: a clean failure, never
-// a wild read. g->hot_* is GC-traced (v0..end) and rides the egg image, so a loaded image is sealed.
+// num-ap (and opfix) are lisp closures the prel pins on the book at runtime, so the C apply/compile
+// paths must fetch them from there. (seal-hooks) resolves them into g->hot_* ONCE, right after the
+// prel pins them; the hot paths then read the slot directly -- no per-call sym_probe + book lookup.
+// hot_hook traps if a slot is unsealed (nil) or somehow not a lambda: a clean failure, never a wild
+// read. g->hot_* is GC-traced (v0..end) and rides the egg image, so a loaded image is sealed. (`+`/`*`
+// of functions need no hook -- their combinators are the constant threads stack_thread/compose_thread.)
 static ai_inline ai_word hot_hook(ai_word h) { if (!lamp(h)) __builtin_trap(); return h; }
 
-// Thread (function) combinators for `+` and `*`, pinned on book by the prel
-// like num-ap. A thread operand takes precedence over every other type, so
-// `+`/`*` of a function build a new function -- the README's Church arithmetic,
-// agreeing with numerals: `+` is Church add ((+ g g) a x = g a (g a x)), `*` is
-// composition. add is the 4-arg add lambda, mul the 3-arg compose; the C
-// aps reuse numap_drive to compute the partial (add g g) / (mul g g)
-// -- itself the new function -- and leave it as the result, resuming at Ip+1.
+// Thread (function) combinators for `+` and `*`, the immortal constants stack_thread/compose_thread.
+// A thread operand takes precedence over every other type, so `+`/`*` of a function build a new
+// function -- the README's Church arithmetic, agreeing with numerals: `+` is Church add
+// ((+ g g) a x = g a (g a x)), `*` is composition. stack is the 4-arg add combinator, compose the
+// 3-arg; the C aps reuse numap_drive to compute the partial (stack g g) / (compose g g) -- itself
+// the new function -- and leave it as the result, resuming at Ip+1.
 
 // Fixnum-as-function application. A fixnum operator n applied to x is dispatched
 // to the l ap at book['num-ap] as (num-ap n x): numeric x -> x**n, a
@@ -2442,41 +2455,45 @@ static lvm(lvm_numtap) {
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
-// (seal-hooks _): resolve the church hooks (num-ap/add/mul) + opfix from book into g->hot_* ONCE.
-// The prel calls this immediately after pinning the trio (opfix leniently absent there), and AGAIN
-// after opfix's definition, so every later church op / C compile reads the slot directly. Probe
-// + mapget are reads (no Have). Trap if a church hook is missing -- a prel-ordering contract violation. The
-// prel runs in every warm (and the result rides the egg image), so every runtime ends up sealed.
+// (seal-hooks _): resolve num-ap + opfix from book into g->hot_* ONCE. The prel calls this
+// immediately after pinning num-ap (opfix leniently absent there), and AGAIN after opfix's
+// definition, so every later church op / C compile reads the slot directly. (add/mul are no
+// longer hooks -- they are the immortal constant threads stack_thread/compose_thread, wired
+// straight into lvm_addh/lvm_mulh.) Probe + mapget are reads (no Have). Trap if num-ap is
+// missing -- a prel-ordering contract. The prel runs in every warm (and the result rides the
+// egg image), so every runtime ends up sealed.
 lvm(lvm_seal) {
- static char const *const nm[] = {"num-ap", "add", "mul", "opfix"};
- static uintptr_t const ln[] = {6, 3, 3, 5};
- ai_word *const slot[] = {&g->hot_numap, &g->hot_add, &g->hot_mul, &g->hot_opfix};
- for (int i = 0; i < 4; i++) {
+ static char const *const nm[] = {"num-ap", "opfix"};
+ static uintptr_t const ln[] = {6, 5};
+ ai_word *const slot[] = {&g->hot_numap, &g->hot_opfix};
+ for (int i = 0; i < 2; i++) {
   struct ai_mint *y = sym_probe(g, nm[i], ln[i]);
   ai_word cur = y ? bookget(g, nil, word(y)) : nil;
   if (!lamp(cur)) {
-   if (i < 3) __builtin_trap();   // the church trio is a prel-ordering contract
+   if (i < 1) __builtin_trap();   // num-ap is a prel-ordering contract
    continue; }                    // opfix: absent at the FIRST seal (defined later in the prel; the second seal fills it)
   *slot[i] = cur; }
  Sp[0] = nil, Ip += 1;
  return Continue(); }
 
-// `+`/`*` over a lambda operand: build the combinator partial (add/mul g g)
+// `+`/`*` over a lambda operand: build the combinator partial (stack/compose g g)
 // and leave it as the result. Mirrors lvm_numap's frame -- [g, comb, g, ret=Ip+1]
-// run through numap_drive -- but the combinator (4-arg add / 3-arg compose) applied
+// run through numap_drive -- but the combinator (4-arg stack / 3-arg compose) applied
 // to 2 args yields a closure (the new function) instead of a value. Ip is at the +/*
 // opcode (a re-runnable instruction), so a plain Have is safe; operands re-read after.
+// The combinators are immortal constant threads (stack_thread/compose_thread above),
+// so `h` is a compile-time pointer -- no g->hot_* field, no (seal-hooks) resolution.
 static lvm(lvm_addh) {
  if (coinp(Sp[0]) || coinp(Sp[1])) return Ap(lvm_add_coin, g);
  Have(2);
- word h = hot_hook(g->hot_add);
+ word h = (word) nif_stack;
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 static lvm(lvm_mulh) {
  if (coinp(Sp[0]) || coinp(Sp[1])) return Ap(lvm_mul_coin, g);
  Have(2);
- word h = hot_hook(g->hot_mul);
+ word h = (word) nif_compose;
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }

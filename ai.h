@@ -213,11 +213,12 @@ struct ai {
    ai_word scare_a, scare_b; // the last bare scare's condition data, stashed at
                   // the raise so a terminal exit can speak (ai_scare_face_);
                   // nil nil = the bare oom, which has no data. GC-traced here.
-   ai_word hot_numap, hot_add, hot_mul; // the church C->lisp hooks (num-ap/add/mul),
-                  // resolved ONCE by (seal-hooks) after the prel pins them, then read
-                  // directly on the hot apply paths (lvm_numap/numtap/addh/mulh,
-                  // data_num_apply) -- no per-call sym_probe + book lookup. GC-traced
-                  // (v0..end). Unsealed = nil -> hot_hook traps, never a wild read.
+   ai_word hot_numap; // the church C->lisp num-ap hook, resolved ONCE by (seal-hooks)
+                  // after the prel pins it, then read directly on the hot apply paths
+                  // (lvm_numap/numtap, data_num_apply) -- no per-call sym_probe + book
+                  // lookup. GC-traced (v0..end). Unsealed = nil -> hot_hook traps, never
+                  // a wild read. (`+`/`*` of functions need no hook: their combinators are
+                  // the immortal constant threads stack_thread/compose_thread in ai.c.)
    ai_word hot_opfix; // the operator factor pass, sealed the same way (the prel's
                   // SECOND (seal-hooks) call, after opfix exists) -- ai_eval reads
                   // the field, so a book rebind can't reach the C compile lane;

@@ -27,7 +27,6 @@
    zero? nil?                                  ; zero? aliases nil? (the net-to-zero test)
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
-   (compose f g) (\ x (f (g x)))
    (names _ ) (keys book)
    (caap x) (cap (cap x)) (caup x) (cap (cup x))
    (cuap x) (cup (cap x)) (cuup x) (cup (cup x))
@@ -135,20 +134,16 @@
                               (apover k) (scare 'apcap k)
                               (: c (cmp k) (? c (c x) (numfn k x))))))
         (pin book 'num-ap num-ap)))
-; text (function) combinators for + and *, installed like num-ap. a text operand
-; takes precedence over every other type, so +/* of a function build a function. these
-; are the README's Church numeral arithmetic, so +/* on numerals agree with the numbers:
-;   (+ f g) = Church add     ((+ f g) a x) = (f a (g a x))   -- the `add` below
-;   (* f g) = composition    ((* f g) x)   = (f (g x))       -- the `mul` below
-; the C aps (lvm_addh / lvm_mulh) build the 2-arg partial (add f g)
-; / (mul f g); add's extra a-slot (threaded into both operands) is what makes + agree
-; with addition rather than the S combinator's (f x (g x)).
-(: (add f g a x) (f a (g a x))
-   (mul f g x) (f (g x))
-   _ (pin book 'add add) _ (pin book 'mul mul))
-; cache num-ap/add/mul into the VM (g->hot_*) now that all three are pinned, so the hot apply paths
-; (lvm_numap/numtap/addh/mulh, data_num_apply) read them directly instead of interning + book-probing
-; per call. MUST follow the pins above; the prel runs in every warm, so every runtime gets sealed.
+; the function combinators for + and * (README's Church numeral arithmetic, so +/* on
+; numerals agree with the numbers) are `stack` and `compose` -- immortal constant threads
+; in C (a text operand takes precedence over every other type, so +/* of a function build a
+; function, and lvm_addh/lvm_mulh build the 2-arg partial (stack f g) / (compose f g)):
+;   (+ f g) = Church add   ((+ f g) a x) = (f a (g a x))  -- stack; its extra a-slot threaded
+;             into both operands is what makes + agree with addition, not (f x (g x)).
+;   (* f g) = composition  ((* f g) x)   = (f (g x))      -- compose.
+; cache num-ap into the VM (g->hot_numap) now that it is pinned, so the hot apply paths
+; (lvm_numap/numtap, data_num_apply) read it directly instead of interning + book-probing per
+; call. MUST follow num-ap's pin above; the prel runs in every warm, so every runtime gets sealed.
 (seal-hooks ())
 (: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
