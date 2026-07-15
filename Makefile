@@ -49,11 +49,14 @@ include mk/install.mk
 # individual test_* targets). Serial by design: ~3s, no -j races, ctrl-C responsive.
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_ai0
+test_phases = test_host test_ai0 vmret
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
-# test_tools (vmret + cook + tele + xor) is in the fast `test` so an app breaks the
-# gate the moment a rename lands -- the crew apps are part of the contract, not extras.
+# vmret rides the fast `test`: the TCO gate (every lvm_* VM ap must tail-jump, never
+# emit a `ret`) so a sibcall regression breaks the gate the moment it lands. It no-ops
+# with a message when no disassembler (objdump/llvm-objdump) is on PATH, like the
+# proof/kernel/wasm tests. The rest of test_tools (cook/tele/xor) + the crew apps stay
+# in test_all.
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
@@ -115,8 +118,17 @@ disasm: host
 	exec rizin -A $m
 gdb: host
 	exec gdb $m
+# no-op with a message when no disassembler is present, so the fast `test` stays
+# portable (like test_proof/coqc). tools/vmret.l disassembles $m and flags any
+# lvm_* VM ap that emits a `ret` instead of tail-jumping to the next.
+OBJDUMP_ANY := $(shell command -v objdump 2>/dev/null || command -v llvm-objdump 2>/dev/null)
+ifeq ($(OBJDUMP_ANY),)
+vmret: host
+	@echo "vmret: skipped (needs objdump or llvm-objdump)"
+else
 vmret: host
 	@$m tools/vmret.l $m
+endif
 
 bench: host
 	$(MAKE) -C bench bench

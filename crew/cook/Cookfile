@@ -135,7 +135,7 @@
 (recipe 'run-hdd-x86_64 '("out/free/ai-x86_64.hdd" "out/dl/edk2-ovmf/ovmf-code-x86_64.fd") '((exec "sh" "-c" "exec qemu-system-x86_64 -m 256M -M q35 -serial stdio    -drive if=pflash,unit=0,format=raw,file=out/dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on -hda out/free/ai-x86_64.hdd")))
 (recipe 'repl '(host) '((exec "sh" "-c" "exec ./out/host/ai")))
 (recipe 'gdb '(host) '((exec "sh" "-c" "exec gdb ./out/host/ai")))
-(recipe 'test '0 '(("sh" "-c" "make --no-print-directory test_host test_ai0")))
+(recipe 'test '0 '(("sh" "-c" "make --no-print-directory test_host test_ai0 vmret")))
 (recipe 'candidate '("out/host/ai.cand.baked") 0)
 (recipe 'run-headless '("out/free/ai-x86_64.iso" "out/dl/edk2-ovmf/ovmf-code-x86_64.fd") '((exec "sh" "-c" "exec qemu-system-x86_64 -m 256M -M q35 -serial stdio    -drive if=pflash,unit=0,format=raw,file=out/dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on -cdrom out/free/ai-x86_64.iso -display none -no-reboot")))
 (recipe '"out/lib/auto.h" '("ai/glaze/auto.l") '(("sh" "-c" "mkdir -p out/lib") ("sh" "-c" "echo AI\tout/lib/auto.h") ("sh" "-c" "sed -e 's/¸/¸¸/g' -e 's/\"/¸\"/g' -e 's/^/\"/' -e 's/$/¸n\"/' ai/glaze/auto.l > out/lib/auto.h")))
