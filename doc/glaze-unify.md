@@ -64,7 +64,7 @@ lanes today; only the group/grid/cask fall-through remains with auto-ev:
 | counted loop    | loopinfo→njit-loop | ✅ njit-loop with `e` as deopt   |
 | float leaf      | qualfr→jitfr       | ✅ qualfr gate → jitfrx with `e` as deopt |
 | n-var loop      | loopinfo-n→njit-loop-n | ✅ loopinfo-n gate → njit-loop-n with `e` threaded through cf-deopt |
-| group/grid/cask | autogroup(autonat(twolow(castbuild))) | ❌ pending          |
+| group/grid/cask | autogroup(autonat(twolow(castbuild))) | ⏸ stays with auto-ev by design (natjit declines; see §3) |
 
 Flag-gated alongside: the **partial-glaze bridge** (`AI_PARTIAL_GLAZE`) — when
 the grammar has no recognizer for an op, splice an in-convention CALL to its C
@@ -101,28 +101,49 @@ interpreter-over-source. The C-finite matrix-power closure `(\ n (cf-dot …))` 
 itself bytecode under the hook — its body isn't leaf/loop grammar, so it never
 re-enters `ala`, and needs no special handling.
 
-### 3. groups / grids / casks (`autogroup(autonat(twolow(castbuild)))`)
+### 3. groups / grids / casks — DECIDED: option (a), stays with auto-ev
 
 The fall-through lane: mutually-recursive arith GROUP (fib/tak/primes), float
 GRID nest (autonat/jitfgridn, x86-only SSE2), string-builder CASK (castbuild,
 x86-only cask-fill), complex-grid lowering (twolow). This is the hardest port —
 it's a source→source rewrite chain that ENDS in `(base-ev <rewritten>)`, which on
-the hook would re-enter `ala`. Options, cheapest first:
+the hook would re-enter `ala`.
 
-* **(a) leave it to auto-ev.** natjit handles the leaves and loops; the group
-  chain stays behind the ev-rebind. Since group bodies are top-level named-lets
-  (whole-body), they ARE handed to `ev` and auto-ev catches them — the hook's
-  extra reach (embedded closures) rarely lands a whole mutually-recursive group.
-  This may be the right long-run split, not a gap.
-* **(b) port with an `e`-deopt.** Give the group lane the same treatment: after
-  the rewrite, glaze the group but keep `e` as the deopt for the OUTER closure.
-  Needs the rewrite chain to expose a deopt seam that isn't `(base-ev source)`.
-* **(c) arch note:** grids and casks are x86-only regardless; on arm64 this lane
-  already falls to the interpreter (autogroup lowers everything reducible to the
-  integer group, so fib/tak/primes still glaze there).
+**The two architectures don't compete here, and that's the whole reason (a) is
+right, not a compromise.** A group is a top-level `:` named-let form — `(: (fib n)
+(? …) (fib 25))` — binding one-or-more mutually-recursive defs and then calling
+one. auto-ev's recognizers work on exactly that `:` form, and the form reaches
+`ev` at the top-level file/REPL boundary (probed: the glaze-x86.l group tests all
+invoke `(ev '(: (fib n) …))`). natjit, by contrast, fires on `ala` — individual
+CLOSURE builds. Handed a group-shaped closure it DECLINES: its body is a `:`
+(a bind-and-call), not leaf/loop grammar, so the hook falls straight to bytecode
+(probed: building `(\ n (: (f k) … (f n)))` trips natjit 0 times). So groups land
+with auto-ev by construction, and the hook never shadows them.
 
-Recommendation: ship (a) as the stated design, revisit (b) only if profiling
-shows embedded groups are hot.
+The remaining worry — an *embedded* group (a whole mutually-recursive group built
+by `ala` deep inside another closure's body, never handed to `ev`) — is what a
+ported group lane would buy. But that shape barely occurs: a group is a top-level
+program/def structure, not the kind of single `(\ …)` you instantiate inside a hot
+loop. Nothing in the corpus or the microbenches builds a fresh mutually-recursive
+group per iteration. So the hook's extra reach (embedded closures) has nothing to
+add over auto-ev's whole-body reach for the group family specifically.
+
+Rejected alternatives:
+
+* **(b) port with an `e`-deopt.** Give the group lane the hook treatment: after
+  the rewrite, glaze the group but keep `e` as the OUTER closure's deopt. The
+  rewrite chain ends in `(base-ev <rewritten>)`; to ride the hook it would need a
+  deopt seam that isn't `(base-ev source)`. Real work, for a workload (embedded
+  hot groups) that doesn't exist. Revisit ONLY if profiling ever surfaces one.
+* **(c) arch note (informational, not a gap):** grids and casks are x86-only
+  regardless; on arm64 this lane falls to the interpreter, except `autogroup`
+  lowers everything reducible to the integer group, so fib/tak/primes still glaze
+  there.
+
+**Decision (revisable): ship (a).** The group/grid/cask family stays behind the
+ev-rebind (auto-ev); natjit deliberately owns the leaf, captured-leaf, counted-
+loop, float-leaf and n-var-loop lanes and declines the rest to bytecode. This is
+the intended long-run split between the two architectures, not an unfinished port.
 
 ## the cache — MEASURED, decided NO (`fires`-probe, host x86, baked image)
 
@@ -166,12 +187,16 @@ nothing in the current corpus or the microbenches exhibits it.
 2. ~~**n-var loop**~~ — LANDED (`b172c80e`): `e` threaded through cf-deopt, ported.
 3. ~~**measure the cache**~~ — MEASURED, decided NO (nothing to dedupe; hoisting +
    auto-ev memo already cover it; spec.l:117 stays intact). See "the cache" above.
-4. **groups/grids/casks** — ship option (a) (leave to auto-ev) as the design;
-   port (option b) only if embedded groups profile hot.
-5. **retire auto-ev's redundant coverage** — once natjit matches a lane, the
-   ev-rebind no longer needs to carry it. Keep `base-ev` in the module book (the
-   pure interpreter, and the AI_NO_GLAZE fallback); shrink the ev-rebind to
-   whatever natjit deliberately leaves it (the group chain, under option a).
+4. ~~**groups/grids/casks**~~ — DECIDED: ship option (a). The group/grid/cask
+   family stays with auto-ev (whole-body reach); natjit declines it to bytecode.
+   The intended split, not an unfinished port. See section 3 above.
+5. **retire auto-ev's redundant coverage** (the only item left, and optional) —
+   once natjit matches a lane, the ev-rebind no longer NEEDS to carry it. Keep
+   `base-ev` in the module book (the pure interpreter, and the AI_NO_GLAZE
+   fallback) and the group chain (option a); the redundant leaf/loop/float lanes
+   in the ev-rebind could be trimmed, but they're harmless duplication — auto-ev
+   memoizes and natjit declines nothing it should catch, so the two coexist
+   without conflict. Trim only if the maintenance surface starts to bite.
 
 ## files
 
