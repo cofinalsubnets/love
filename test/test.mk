@@ -320,26 +320,27 @@ test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
 	  $(korerun) kill -0 999999 2>/dev/null; r=$$?; [ $$r -eq 1 ] || { echo "FAIL kore kill dead pid (rc $$r)"; exit 1; }; \
 	  echo "kore: process tools (env/sleep/kill/xargs -- GNU-identical output, the exit faces) ok"
 # The editor (crew/vi/): the pure modal engine's laws (no tty -- vstep driven
-# byte by byte), then one scripted end-to-end pass through the real `kore vi`
-# face over a pipe (keys off stdin, frames onto a captured stdout, :wq writes).
+# byte by byte), then scripted end-to-end passes through the `kore vi` face over a
+# pipe (keys off stdin, frames onto a captured stdout, :wq writes) -- driven through
+# the baked kore.image (--wake, like test_kore), not the cold cat.
 .PHONY: test_vi
-test_vi: host out/host$(hsuf)/kore
+test_vi: host out/host$(hsuf)/kore.image
 	@echo "VI crew/vi/{core,law}.l"; \
 	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/core.l crew/vi/law.l | $m > out/host/.test_vi.out 2>&1; r=$$?; \
 	  cat out/host/.test_vi.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/vi/law:" out/host/.test_vi.out; } \
 	    || { echo "FAIL vi laws (exit $$r)"; exit 1; }
 	@rm -f $(ho)/.vi1; \
-	  printf 'ihello world\033:wq\n' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  printf 'ihello world\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \
 	    || { echo "FAIL kore vi create+write (exit $$r)"; exit 1; }; \
-	  printf 'ddZZ' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  printf 'ddZZ' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL kore vi dd+ZZ (exit $$r)"; exit 1; }; \
-	  printf 'ix\033:q!\n' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  printf 'ix\033:q!\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL kore vi q! holds fire (exit $$r)"; exit 1; }; \
-	  printf 'AX\033u:wq\n' | $m $(ho)/kore vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  printf 'AX\033u:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL kore vi undo (exit $$r)"; exit 1; }; \
 	  echo "kore: vi (laws + piped create/dd/q!/undo end-to-end) ok"
