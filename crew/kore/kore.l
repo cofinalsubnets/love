@@ -20,7 +20,7 @@
 ; dispatcher is the one thing that fires. ONE body-having `:` -- the registry, the
 ; thin mains that live here (diff over the engines, as over the holo book), and the
 ; dispatch as the body; nothing leaks, and every path ends in a quit (the exit door).
-(: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
+(: kore-main (: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
    (die m) (: _ (say err m) _ (put err 10) (quit 2))
 
    ; diff: two files -> unified hunks on out; the classic exit triple
@@ -105,11 +105,24 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    (seat a) (? (! (two? a)) ()
                (<a = "-l") (? (two? >a) (seat >>a) ())
                a)
-   (: s (seat >cmdline)
-      _ (? (two? s) () (usage ()))
-      f0 (applets (intern (bn <s)))
-      _ (? f0 (: _ (f0 >s) (quit 0)) ())
-      t >s
-      f (? (two? t) (applets (intern <t)) ())
-      _ (? f (: _ (f >t) (quit 0)) ())
-      (usage ())))
+   ; me?: is this seat word kore itself, or a tool name (the symlink lane)? the
+   ; dispatch fires only when it is -- so a `-l` preload that seats a flag (the bake
+   ; loads the cat as `ai -l .kore-cat.l -e ..`) stays quiet, like cc.l's me?.
+   (me? w) (: b (bn w) (|| (b = "kore") (|| (b = "kore.l") (applets (intern b)))))
+   ; kore-main is the ONE leaked global: the baked kore.image wakes to it
+   ; (--wake kore.image -e '(kore-main (link "kore" (cuup (cup cmdline))))' -- the
+   ; synthetic "kore" argv0 makes an unknown tool usage+quit like the real cli). it
+   ; dispatches a program-relative arg list -- argv0 a tool symlink, or `kore`/a dev
+   ; path then the tool word -- and stays QUIET when kore is not seated (the bake).
+   (\ a (: s (seat a)
+           (? (! (two? s)) ()
+              (! (me? <s)) ()
+              (: f0 (applets (intern (bn <s)))
+                 _ (? f0 (: _ (f0 >s) (quit 0)) ())
+                 t >s
+                 f (? (two? t) (applets (intern <t)) ())
+                 _ (? f (: _ (f >t) (quit 0)) ())
+                 (usage ())))))))
+; the SEAT: file mode (cat | ai) dispatches on the real command line; the -l bake
+; preload seats a flag, not kore, so me? is false and kore-main returns quietly.
+(kore-main >cmdline)

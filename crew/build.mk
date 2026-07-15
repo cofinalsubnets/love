@@ -45,3 +45,11 @@ $(ho)/aicc.image: $(ho)/aicc $m
 	@echo AI	$(abspath $@)
 	@cp $(ho)/aicc $(ho)/.aicc-cat.l
 	@$m -l $(ho)/.aicc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+# the kore image: the multi-call toolbox baked WARM, the aicc.image precedent. the
+# cat loads under a NEUTRAL name so kore.l's SEAT me? is false and stays quiet, then
+# the bake snapshots. test_kore wakes it per tool (`--wake kore.image -e '(kore-main
+# (link "kore" (cuup (cup cmdline))))'`) -- ~0.02s vs ~0.75s cold, across its ~77 spawns.
+$(ho)/kore.image: $(ho)/kore $m
+	@echo AI	$(abspath $@)
+	@cp $(ho)/kore $(ho)/.kore-cat.l
+	@$m -l $(ho)/.kore-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
