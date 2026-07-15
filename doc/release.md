@@ -28,7 +28,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 |---|---|---|
 | aicc (x64) | landed — gcc-free ai boots + passes the corpus | polish + docs; command becomes `mooncc` (rename deferred, see below) |
 | aicc (arm64) | rungs A–C landed (static exes + .o + our-linker, varargs + sibcalls, 88/88 battery 3 ways) | rung D (nolibc/mksys, the gcc-free arm64 path) about to land — **best-effort in, does NOT block** |
-| reef/vcs | design (hatch.md model + reef.md verbs) | the whole implementation — biggest lift |
+| reef/vcs | **landed 2026-07-14** — `record`·`sync`·`log`·`diff` over the content-addressed `.reef/` store (crew/reef/, sha256 in host/hash.c); `sync` unions a peer nest + re-derives the DAG + materializes; `make test_reef` gates it | `hatch` (the native-binary derivation) — the one deferred MVP piece |
 | precedence | **landed 2026-07-14** — grip bands in prel.l opfix, corpus re-validated (3 asserts shifted, all `\|`/`&`-with-`=`), `test/precedence.l` gates it | done (the `grip` name + house=27 ship as working defaults, gwen's to bless) |
 | namespaces | phases 1+3 landed — `(names ())` 820 → 327; **phase-3 tail landed 2026-07-14** — all six module books are lookup-only closures, poison-proof, with a `'keys` probe | done (optional `~327 → 323` curation trim aside); the abyss/scoped-layers arc stays deferred |
 
@@ -93,12 +93,12 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
       in `crew/holo/obj.l`, the arm64-churn collision zone the doc already holds `as` integration behind. So the
       link-and-run half of gwen's bar waits for the arm64 batch (with `objelf-raw` + the as.l bare→`holo`-book migration)
 
-**reef (vcs)** — the design decisions to make first
+**reef (vcs)** — LANDED 2026-07-14 (`record`·`sync`·`log`·`diff`; `hatch` the last MVP piece)
 - [x] pick the minimum viable verb set — `record` · `sync` · `log` · `diff` + `hatch` (per reef.md; `sync` in over `apply` — the near-term job is multi-machine tip-union)
-- [ ] patch/commit object shape + the DAG (pijul-style patches, no privileged trunk — per hatch.md)
-- [ ] where it lives: `crew/reef/` + a book, following holo's all-the-way-down precedent
-- [ ] a real end-to-end run: record a change, sync it, log it, apply it to a fresh checkout
-- [ ] decide how much of hatch (install = clone + hatch) rides in this cut vs. lands later
+- [x] patch/commit object shape + the DAG (pijul-style patches, no privileged trunk — per hatch.md): the content-addressed `.reef/` store, a hunk = the proven named-slot `chg`; `sync` re-derives tips + snap over the whole set (order-free, the DAG is a pure function of its patches)
+- [x] where it lives: `crew/reef/` (over the kore text+diff floor; sha256 in host/hash.c)
+- [x] a real end-to-end run: record a change, `sync` a peer nest in, log it, materialize onto a clean tree — `make test_reef` + the CLI smoke both green; the "fresh checkout" via a native `hatch` is the one deferred step
+- [ ] decide how much of hatch (install = clone + hatch) rides in this cut vs. lands later — deferred: sync is the exchange half, hatch (the derivation) lands next
 - [x] `doc/reef.md` — first draft (verb set + composition story + MVP)
 
 **precedence (grip)** — LANDED 2026-07-14

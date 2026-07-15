@@ -174,7 +174,102 @@
                        ot nt)
               _ (? (! d) () (puts d))
               (pr >m (n + 1))))
-       (pr hunks 0)))
+       (pr hunks 0))
+
+   ; --- sync: union a peer nest's store. blobs + patches are immutable and
+   ;     content-addressed, so the union is just "copy what's missing"; then
+   ;     re-derive tips + snap from the WHOLE patch set (order-free -- the DAG is
+   ;     a pure function of its patches) and materialize the merged snap onto a
+   ;     clean working tree. peer = a directory holding a .reef/ (a peer or a
+   ;     cutting); same-path divergence warns and the topo-latest write wins ---
+   (rf-dirty _) (tally (rf-scan (sort (rf-walk () (rf-igs ()) ())) (rf-snap ()) ()))
+   (rf-sync-dir sub peer)                                        ; copy missing store files, verify the address
+    (: pd (peer + "/.reef/" + sub + "/") ld (".reef/" + sub + "/")
+       (go m n)
+        (? (! (two? m)) n
+           (: h <m
+              (? (! (64 = (tally h))) (go >m n)                  ; only the sha256-named files
+                 (rf-look (ld + h)) (go >m n)                    ; already have it
+                 (: t (rf-look (pd + h))
+                    (? (! (two? t)) (go >m n)
+                       ((sha256 <>t) = h) (: _ (rf-lay (ld + h) <>t) (go >m (n + 1)))
+                       (: _ (say err ("reef: bad address " + h + "\n")) (go >m n)))))))
+       (go (readdir pd) 0))
+   (rf-derive-tips ids)                                          ; the ids nobody depends on
+    (: dep (tablet 0)
+       _ (: (go m) (? (! (two? m)) ()
+               (: f (rf-patch <m)
+                  _ (: (gd d) (? (two? d) (: _ (pin dep <d 1) (gd >d)) ()) (gd (rf-fld f 'deps)))
+                  (go >m)))
+            (go ids))
+       (sort (filter (\ i (! (peep dep i 0))) ids)))
+   (rf-topo ids)                                                 ; deps before dependents, ties by sorted id
+    (: have (tablet 0) idl (sort ids)
+       (ready _)
+        (: (go m a) (? (! (two? m)) (rev a)
+             (: id <m
+                (? (peep have id 0) (go >m a)
+                   (: f (rf-patch id)
+                      ok (: (gd d) (? (! (two? d)) 1 (? (peep have <d 0) (gd >d) 0)) (gd (rf-fld f 'deps)))
+                      (go >m (? ok (link id a) a))))))
+           (go idl ()))
+       (pass acc)
+        (: b (ready ())
+           (? (! (two? b)) acc
+              (: _ (: (mk m) (? (two? m) (: _ (pin have <m 1) (mk >m)) ()) (mk b))
+                 (pass (acc + b)))))
+       (pass ()))
+   (rf-derive-snap ids)                                          ; fold the DAG -> ((path chash pid)..) sorted
+    (: order (rf-topo ids) snap (tablet 0)
+       _ (: (go m) (? (! (two? m)) ()
+               (: pid <m f (rf-patch pid)
+                  _ (: (h1 hs) (? (! (two? hs)) ()
+                          (: h <hs p <h old <>h nw <>>h
+                             cur (peep snap p ()) curh (? (two? cur) <cur ())
+                             _ (? (curh = old) ()                        ; wrote onto the expected base
+                                  (nw = curh) ()                        ; ...or converges to the same content
+                                  (say err ("reef: divergence on " + p + "\n")))
+                             _ (? (! nw) (pull snap p 0) (pin snap p (list nw pid)))
+                             (h1 >hs)))
+                       (h1 (rf-fld f 'hunks)))
+                  (go >m)))
+            (go order))
+       (: (em ps a) (? (! (two? ps)) (rev a)
+            (: p <ps e (peep snap p ()) (em >ps (link (list p <e <>e) a))))
+          (em (sort (keys snap)) ())))
+   (rf-mkparents p)                                              ; mkdir every "/"-prefix of a nested path
+    (: (go i) (? (< i (tally p))
+                 (: _ (? ((p i) = 47) (mkdir (snip p 0 i) 493) ()) (go (i + 1)))
+                 ())
+       (go 0))
+   (rf-mater oldsnap newsnap)                                    ; make the tree match newsnap; #files touched
+    (: np (tablet 0)
+       _ (: (go m) (? (two? m) (: _ (pin np <<m <><m) (go >m)) ()) (go newsnap))
+       w (: (go m n) (? (! (two? m)) n
+              (: e <m p <e ch <>e bl (rf-blob ch)
+                 cur (rf-look p) curh (? (two? cur) (sha256 <>cur) ())
+                 (? (! bl) (: _ (say err ("reef: missing blob " + ch + "\n")) (go >m n))
+                    (curh = ch) (go >m n)
+                    (: _ (rf-mkparents p) _ (rf-lay p bl) (go >m (n + 1))))))
+            (go newsnap 0))
+       d (: (go m n) (? (! (two? m)) n
+              (: p <<m (? (peep np p 0) (go >m n) (: _ (unlink p) (go >m (n + 1))))))
+            (go oldsnap 0))
+       (w + d))
+   (reef-sync peer)
+    (: _ (rf-mk ())
+       (? (0 < (rf-dirty ()))
+          (: _ (say err "reef: working tree has changes; record or revert first\n") 0)
+          (: oldsnap (rf-snap ())
+             nb (rf-sync-dir "blob" peer) np (rf-sync-dir "patch" peer)
+             ids (readdir ".reef/patch")
+             _ (rf-lay ".reef/tips" (show (rf-derive-tips ids)))
+             newsnap (rf-derive-snap ids)
+             _ (rf-lay ".reef/snap" (show newsnap))
+             nc (rf-mater oldsnap newsnap)
+             _ (puts ("reef: synced -- " + (show (tally ids)) + " patches (" + (show np)
+                      + " new), " + (show nb) + " blobs, " + (show nc) + " files updated\n"))
+             (tally ids)))))
 
 ; the SEAT: fire reef-main iff reef sits in the program seat of the real command
 ; line -- the positional program or a -l preload -- taking the args after the
@@ -189,9 +284,11 @@
                               ())
                (me? <a) (link 1 >a)
                ())
-   (usage _) (: _ (say err "reef -- the patch-set vcs (doc/reef.md; sync next)
+   (usage _) (: _ (say err "reef -- the patch-set vcs (doc/reef.md)
 usage: reef VERB ..
   record [NOTE]   working changes -> a patch in the store (.reef/)
+  sync PEER       union a peer nest's store (a dir holding .reef/), then
+                  re-derive tips + snap and materialize onto a clean tree
   log             the patches, newest first (* marks a tip)
   diff            working tree vs the recorded state (unified; exit 1 on change)
 ")
@@ -200,6 +297,7 @@ usage: reef VERB ..
     (? (! (two? as)) (usage ())
        (: v <as
           (? (v = "record") (: _ (reef-record (? (two? >as) <>as "")) (quit 0))
+             (v = "sync") (? (two? >as) (: r (reef-sync <>as) (quit (? r 0 1))) (usage ()))
              (v = "log") (: _ (reef-log ()) (quit 0))
              (v = "diff") (: n (reef-diff ()) (quit (? (0 < n) 1 0)))
              (usage ()))))

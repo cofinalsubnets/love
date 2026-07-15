@@ -17,7 +17,7 @@
    _ (mkdir "junk" 493)
    _ (rf-lay "junk/x" "never\n")
    _ (rf-mk ())
-   _ (rf-lay ".reef/ignore" "junk\n")
+   _ (rf-lay ".reef/ignore" "junk\npr\n")               ; junk/ + the peer we sync from
    p1 (reef-record "first")
    s1 (rf-snap ())
    again (reef-record "again"))
@@ -58,5 +58,34 @@
  (2 = (tally (rf-tips ())))                            ; two maximal patches
  (member? p2 (rf-tips ())) (member? p3 (rf-tips ()))
  (3 = (reef-log ())))                                  ; three patches told
+
+; --- sync: a peer nest (built inside ./pr, ignored) shares d.txt's births and
+;     adds its own, plus edits a.txt on a common base. union it in: the store
+;     gains the peer's patch, tips + snap re-derive over the whole set, and the
+;     working tree materializes to the merged state. content-addressing dedups
+;     the shared blobs, so only the genuinely-new patch/blob copy over ---
+(: _ (mkdir "pr" 493)
+   _ (chdir "pr")
+   _ (rf-lay "d.txt" "free\n")                            ; same births as p3 -> dedups
+   _ (rf-lay "peer.txt" "from the other machine\n")       ; the peer's own file
+   _ (rf-mk ())
+   pp (reef-record "peer work")
+   _ (chdir "..")
+   nbefore (tally (readdir ".reef/patch"))
+   pdirty (rf-dirty ())                                   ; the main tree is clean pre-sync
+   got (reef-sync "pr")
+   nafter (tally (readdir ".reef/patch")))
+
+(assert
+ (0 = pdirty)                                             ; clean, so sync will materialize
+ (< nbefore nafter)                                       ; the peer's patch arrived
+ (two? (rf-patch pp))                                     ; ...as a real, addressable patch object
+ (member? pp (rf-tips ()))                                ; and it opens a fresh tip
+ (3 = (tally (rf-tips ())))                               ; p2 + p3 + pp, all maximal
+ (4 = got)                                                ; p1 p2 p3 + the peer's pp
+ ((<>(rf-look "peer.txt")) = "from the other machine\n")  ; materialized into the working tree
+ ((<>(rf-look "a.txt")) = "one\ntwo point five\nthree\n") ; local edits untouched
+ (0 = (reef-diff ()))                                     ; working tree == the recomputed snap
+ (! (reef-record "noop")))                                ; ...so nothing is left to record
 
 (: _ (puts "reef: ok") _ (putc 10) 0)

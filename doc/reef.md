@@ -1,11 +1,17 @@
 # reef — the vcs and the distro, one verb set
 
-Status: **the local half is live** (2026-07-14, `ad95e3c4`): `record` · `log` ·
-`diff` over the content-addressed store — [`crew/reef/reef.l`](../crew/reef/reef.l),
+Status: **the MVP's exchange half is live** (2026-07-14): `record` · **`sync`** ·
+`log` · `diff` over the content-addressed store — [`crew/reef/reef.l`](../crew/reef/reef.l),
 gated by `make test_reef`; a hunk is test/patch.l's proven `chg` at file grain
-(slot = path, context = old content hash). `sync` / `hatch` / `cut` / `undo` are
-still design. The rest of this doc is the design brief from the 2026-07-14
-session. The **interface** layer over the model in [`doc/hatch.md`](hatch.md)
+(slot = path, context = old content hash). **`sync PEER`** unions a peer nest's
+store (a directory holding a `.reef/`): copy the missing blobs + patches
+(content-addressed, so the union just fills gaps), re-derive tips + snap from the
+*whole* patch set (order-free — the DAG is a pure function of its patches), then
+materialize the merged snap onto a **clean** working tree (a dirty tree refuses,
+exit 1). Same-path divergence warns and the topo-latest write wins; a *convergent*
+write (two nests reach the same content) is silent. `hatch` (the derivation) is
+the MVP's last piece; `cut` / `undo` reserve-the-names. The rest of this doc is
+the design brief from the 2026-07-14 session. The **interface** layer over the model in [`doc/hatch.md`](hatch.md)
 (the patch DAG, the hatch derivation, the nest, refs) and the machinery in
 [`port/inle/{serve,drive,patch}.l`](../port/inle/patch.l) (the dock — adopt +
 two-generation re-exec). hatch.md says *what the objects are*; this says *what
