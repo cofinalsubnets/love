@@ -77,7 +77,9 @@
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
- y (feel c (opfix x))    ; opfix first: ev = the deserialized-data lane, opfix factors its sigil surface
+ wl (gv 'welow 0)        ; the pre-analysis lowering hook (book['welow], dormant unless installed post-egg -- so the
+                         ; egg self-compile is UNTOUCHED; the glaze installs it to church/HOF-lower user code before ala)
+ y (feel c (opfix (? wl (wl x) x)))    ; lower (if hooked), opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
  (ana c y (k0 c) 0 0)))
   lvm_cur (peek 0 (+))
   (sco p a i) (pin (pin (pin (tablet 0) 'arg a) 'imp i) 'par p)

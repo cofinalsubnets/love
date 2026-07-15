@@ -23,7 +23,25 @@
    loopinfo-n (glaze 'loopinfo-n)  njit-loop-n (glaze 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges
    qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the flag-gated GROUP prototype:
-                                                                            ;   parse defs, op-cover, compile PURE (jitgroupirx, e deopt).
+   dechurch (glaze 'dechurch)  dehof (glaze 'dehof)  dquote? (glaze 'dquote?)  ;   parse defs, op-cover, compile PURE (jitgroupirx, e deopt).
+   ; --- welow: the pre-analysis LOWERING hook (book['welow], read by ev.l's `:-` before opfix, dormant
+   ; during the egg self-compile). Church/HOF-lower every user form so a church/HOF-bearing GROUP arrives
+   ; at ala already FIRST-ORDER -> the group lane below native-backs it with no in-hook front-half (which
+   ; would re-enter the evaluator). dechurch (whole-tree) lowers literal church (N f x)->f^N(x); dehof-deep
+   ; inlines non-recursive HOF-const bindings at EVERY nested `:` (dehof itself only walks the top level).
+   ; flag-gated (AI_GROUP_GLAZE) so flag-off is byte-identical; a getenv per form is the tax when on.
+   ; dehof-deep -- inline HOF-const bindings, but ONLY inside a LAMBDA-BODY group `:` (the hook's domain: a
+   ; closure `(\ frame.. (: group.. tail))`). NOT a top-level `:` block -- those hold operator defs (infixop's
+   ; `**`, an all-punct binding opfix must see) and global-leak helpers; inlining `**` pre-opfix erases the
+   ; operator surface. The body must be BODY-HAVING (odd binding+body count); a body-less leak-`:` is skipped
+   ; too (rebuild appends a () body -> leaked globals go unbound, autogroup declines it for the same reason).
+   (grp:? b) (&& (two? b) (id? (cap b) ':) (! (atom? (cup b))) (= 1 (% (tally (cup b)) 2)))   ; a body-having `:` group
+   (dehof-deep e) (? (|| (atom? e) (dquote? e)) e
+                     (&& (id? (cap e) '\) (two? (cup e)))                      ; a real lambda: dehof its body IF a group `:`
+                       (: bod (last e)  dbod (? (grp:? bod) (dehof bod) bod)
+                          (link '\ (cat (init (cup e)) (L (dehof-deep dbod)))))
+                     (map dehof-deep e))                                       ; any other node: just recurse
+   welow (\ x (? (getenv "AI_GROUP_GLAZE") (dehof-deep (dechurch x)) x))     ; church then HOF, whole-tree; leaked as book['welow]
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op (cap e)
                                (? (member? op (cat '(+ - * // % & | ^ < <= > >= =) (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
