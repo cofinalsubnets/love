@@ -204,10 +204,18 @@ global-leak helpers); `dechurch` is whole-tree and universally safe. `lift`/`loo
 
 What the prototype does NOT yet do (the increments to a full port):
 
-* **No lift / static-fold** — `dechurch`/`dehof` are ported (above); `lift`/`plift` (deep named-let
-  lifting), `loopclose`, `autospec` are not. A group nested deeper than a lambda-body `:`, or one
-  needing a static fold, still falls to bytecode (sound). `autospec`/`loopclose` call `base-ev`, so
-  they can't ride even the `feel` hook without a pure re-parameterization.
+* **Coverage gap vs the full autogroup chain (AUDITED 2026-07-15)** — welow bakes `dechurch`+`dehof`;
+  the full `autogroup` (auto.l) also runs `fold-consts`, `debool`, `defoliate`, `delet`, `lift`, `plift`
+  (all pure), plus `autospec` + `loopclose` (both call `base-ev`, so UN-bakeable into welow). The pure
+  ones are portable and would add real coverage — `delet` (a value-`:` in a group body), `defoliate`
+  (map/filter→loop fusion), `debool` (only `min`/`max`/`abs`; `&&`/`||` are macros already lowered to
+  `?`), `fold-consts`. `loopclose` is optimization-only (coverage-neutral — the loop is already native);
+  `autospec` is niche (interp-over-static-data). BUT the measured payoff is small: welow's incremental
+  `fires` on ordinary code is ≈0 (10 varied test files: 96 fires, identical flag-on/off) — the natjit
+  leaf + counted-loop + n-var-loop lanes already own the common hot paths (loops, inline/bound/nested
+  named-lets, so `lift`'s marginal value is small too). welow's real delta is concentrated on
+  church/HOF/first-order-recursive-group micro-shapes. The uncovered shapes fall to bytecode SOUNDLY
+  and at bytecode speed (no slowdown), so this is a not-urgent perf increment, not a default-on blocker.
 * **Transparency — FIXED 2026-07-15 (`144880f6`)** — the native cell used to stamp the entry lambda
   (`(\ n …)` flat, or the synthetic `(\ frame.. TAIL)` general) as its src, not the whole outer
   `(\ m (: … ))`, so `=`/`show` against a bytecode outer could differ. `jitgroupirx` now takes a `src`
@@ -226,8 +234,9 @@ What the prototype does NOT yet do (the increments to a full port):
 
 natjit owns the leaf, captured-leaf, counted-loop, float-leaf and n-var-loop lanes
 outright; the group lane is in as a flag-gated prototype covering flat AND general tails. Capture-safety
-and transparency are now settled (both fixed above), so the remaining increment to enabling it by
-default is front-half coverage, then deleting the `AI_GROUP_GLAZE` gate.
+and transparency are settled (fixed above), and the front-half coverage gap is audited (above) —
+default-on-SAFE, the pure enablers being a not-urgent perf increment. So the last gate before deleting
+the `AI_GROUP_GLAZE` flag is measuring the compile-time tax (welow walks every form twice, always).
 
 ## the cache — MEASURED, decided NO (`fires`-probe, host x86, baked image)
 
