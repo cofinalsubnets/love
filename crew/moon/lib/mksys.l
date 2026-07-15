@@ -1,17 +1,17 @@
-; crew/cc/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail (rung 4):
+; crew/moon/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail (rung 4):
 ; the five functions C cannot say. everything else in the gcc-free link is C compiled
-; by aicc (nolibc.c + math/); these are the register-exact leaves under it:
+; by mooncc (nolibc.c + math/); these are the register-exact leaves under it:
 ;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (nolibc.c calls nothing else)
 ;   __sigsetjmp / siglongjmp our own jmp_buf INSIDE the glibc-sized 25-long buffer:
 ;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip,
 ;                            [8] the signal mask (rt_sigprocmask saves/restores it --
 ;                            ai.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
 ;   __ai_sigret              the SA_RESTORER tail (rt_sigreturn) nolibc's sigaction installs
-; (sqrt stays in C -- crew/cc/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
+; (sqrt stays in C -- crew/moon/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
 ; C CAN say has no place here.) two targets: (mksys dst) lays x64, (mksys-arm64 dst)
-; aarch64. runs after crew/holo/{elf,obj}.l in a cat (the aicc prefix
+; aarch64. runs after crew/holo/{elf,obj}.l in a cat (the mooncc prefix
 ; layers; the assembler itself rides the baked holo book):
-;   { cat crew/kore/{text,core,asbook}.l crew/holo/{elf,obj}.l crew/cc/lib/mksys.l;
+;   { cat crew/kore/{text,core,asbook}.l crew/holo/{elf,obj}.l crew/moon/lib/mksys.l;
 ;     echo '(mksys "out/.../sys.o")'; } | out/host/ai
 ; register vocabulary is holo's: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi
 ; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.

@@ -1,4 +1,4 @@
-; crew/cc/parse.l -- the C parser (rung 3 stage 4a). tokens -> (1 ast stbl) |
+; crew/moon/parse.l -- the C parser (rung 3 stage 4a). tokens -> (1 ast stbl) |
 ; (). recursive descent + a precedence ladder; the cursor a token list
 ; threaded as (value rest) answers, () the parse error riding up. the parser
 ; now carries STATE (ps, a tablet) -- C cannot be parsed without it: typedef

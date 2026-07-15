@@ -1,11 +1,11 @@
-# cc -- rungs 3-4 of the distro, the C compiler + gcc-free seam: THE PLAN
+# moon (mooncc) -- rungs 3-4 of the distro, the C compiler + gcc-free seam: THE PLAN
 
 the plan of record for the chibicc-class C compiler, written in ai, emitting
 through the holo books. drafted 2026-07-06; stage 0 LANDED the same day
-(crew/cc/{lex,parse,gen,cc}.l + law.l, `make test_cc` -- the gcc
-differential is born). trued up as stages land. cc is its OWN app `aicc`
+(crew/moon/{lex,parse,gen,cc}.l + law.l, `make test_moon` -- the gcc
+differential is born). trued up as stages land. cc is its OWN app `mooncc`
 (a catted `#!/usr/bin/env -S ai -l` script, NOT baked into the kore cat -- so a
-cc edit rebuilds only aicc, never kore, and no kore rebuild in another session can
+cc edit rebuilds only mooncc, never kore, and no kore rebuild in another session can
 tear the compiler mid-run); it was `kore cc` through 7c-iii part 1.
 
 ## the goal, and the fence
@@ -16,11 +16,11 @@ first, arm64 by parity. the closure it buys: ai-in-ai compiles the compiler
 that compiles ai.c, so userland is fully self-hosting and the KERNEL is the
 one imported artifact.
 
-**RUNG 2 LANDED 2026-07-12: EVERY out/host object compiles under aicc.** ai.c
+**RUNG 2 LANDED 2026-07-12: EVERY out/host object compiles under mooncc.** ai.c
 plus all thirteen host/*.c (cb/cuda/drm/fs/haven/image/image_baked/init/main/
-net/lux/pty) go through `aicc -c`, and clang links the bag -- gcc appears
-ONLY as the linker. The all-aicc binary boots and passes the whole 2831-test
-corpus. Delivered: our own POSIX headers under crew/cc/include (errno, string,
+net/lux/pty) go through `mooncc -c`, and clang links the bag -- gcc appears
+ONLY as the linker. The all-mooncc binary boots and passes the whole 2831-test
+corpus. Delivered: our own POSIX headers under crew/moon/include (errno, string,
 stdio, stdlib, fcntl, time, poll, termios, dirent, link, sys/{types,stat,wait,
 socket,un,ioctl,mount,signalfd}, netinet/in, arpa/inet, netdb, sched,
 stdnoreturn) -- glibc-x86-64 ABI-faithful, NOT glibc's headers; plus the cc
@@ -37,7 +37,7 @@ returns/receives in rax:rdx (the SSE2 pair's twin), and -- the boot-blocker
 8; non-power-of-two sizes take a real idiv).
 
 **LADDER RUNG 3 LANDED 2026-07-12: our own static linker.** crew/holo/link.l
-(~200 lines, in the aicc cat after obj.l) reads the relocatable objects obj.l
+(~200 lines, in the mooncc cat after obj.l) reads the relocatable objects obj.l
 lays -- .text/.data/ai_nifs + symtab + RELA, name-driven off the section
 headers -- resolves every symbol across the set (strong over weak, two strongs
 scare 'link-dup, `__start_/__stop_ai_nifs` synthesized over the nif region:
@@ -47,21 +47,21 @@ relocations (R_64 = S+A; PC32/PLT32 both = S+A-P once the link is static,
 range-checked), and wraps elf.l's one-segment executable header. crt0 rides
 in as a synthetic FIRST object built by objelf itself (call main; exit), so
 `main` resolves through the same reloc path as everything else. the driver:
-a .o input or several inputs without -c is a LINK -- `aicc a.o b.c -o prog`,
+a .o input or several inputs without -c is a LINK -- `mooncc a.o b.c -o prog`,
 `a.out` bare; one .c stays the direct cc-exe path, -c and the legacy pair
 unchanged. a foreign .o (gcc's .comment/.eh_frame zoo) scares off honestly
 ('link-section) -- our own objects only, by design: linking glibc's .a is the
 ifunc/TLS tarpit and stays OFF the ladder. the whole 84-program battery
 passes linked through it (compile -c, link, run, gcc differential), weak
-default/override and the nif bracket walk are gated in test_cc, and the full
+default/override and the nif bracket walk are gated in test_moon, and the full
 14-object selfhost set (585KB ai.o included) links in under a second --
 refusing at `sqrt`, the first libm undef, which is exactly rung 4's seam:
 the raw-syscall host + in-tree sin/cos/log, and gcc is gone entirely.
 
 **LADDER RUNG 4 LANDED 2026-07-12: THE GCC-FREE ai.** the standalone chain is
-now entirely ours -- aicc compiles ai.c + host/*.c + our own libc, mksys lays
+now entirely ours -- mooncc compiles ai.c + host/*.c + our own libc, mksys lays
 the machine tail, and crew/holo/link.l binds them: no gcc, no glibc, no ld.
-three new pieces under crew/cc/lib/:
+three new pieces under crew/moon/lib/:
   * `nolibc.c` -- the raw libc. ~90 wrappers straight off the x86-64 syscall
     table (through the one `__ai_sys` trampoline), a mini stdio (a FILE is a
     fd plus a flush buffer; stdout line-buffers 8KB, the one formatter speaks
@@ -110,7 +110,7 @@ the subset is not "C11-ish" by taste -- it is measured off the target:
   trees (AI_STAT, ai_tco, arch selection), #include.
 * doubles (the gems: math.h's sin/cos/log/atan2/fmod...), NO long double.
 * _Static_assert x4; __attribute__ x10 but ALL behind ai_ macros (ai_inline,
-  ai_noinline) -- ai.h grows a plain-C branch under `__aicc__` and the
+  ai_noinline) -- ai.h grows a plain-C branch under `__mooncc__` and the
   attributes vanish. NO bitfields, NO VLAs, NO statement expressions.
 * setjmp/sigsetjmp + signal handlers: LIBC's problem, not the compiler's --
   cc only needs the calls and the volatile discipline around them.
@@ -121,7 +121,7 @@ the subset is not "C11-ish" by taste -- it is measured off the target:
   first cc-built ai runs ai_tco=0; a later stage adds guaranteed tail calls
   (direct + indirect, the lvm shape) and flips ai_tco=1.
 
-## the architecture (crew/cc/, every piece pure and lawed)
+## the architecture (crew/moon/, every piece pure and lawed)
 
 the kore/vi discipline: pure engines with law files, thin drivers, one
 gate per stage. the pipeline, each its own file:
@@ -139,17 +139,17 @@ gate per stage. the pipeline, each its own file:
 * **gen.l** -- AST -> holo IR forms (pure). stack-machine codegen, chibicc
   style: every expression computes into r0, locals at frame offsets off
   holo's sp idiom. correct and dumb; the glaze is the fast path.
-* **cc.l** -- the driver: files -> cpp -> parse -> gen -> holo assemble ->
-  elf .o; then the system linker (`aicc -c` first; `aicc` calling ld is a
+* **moon.l** -- the driver: files -> cpp -> parse -> gen -> holo assemble ->
+  elf .o; then the system linker (`mooncc -c` first; `mooncc` calling ld is a
   convenience wrapper). the surface is
-  `aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c [in2.c ..]` -- several
+  `mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c [in2.c ..]` -- several
   inputs need -c and land each in the cwd as x.o (gcc-shaped); the old
-  positional pair `aicc [-c] IN OUT` still reads (two bare args, the second
+  positional pair `mooncc [-c] IN OUT` still reads (two bare args, the second
   no .c); -I dirs search before the system pair on both include forms; a -D
   prepends a `#define` line to the source text before the one lex (so
   function-like -DF(x)=.. rides the normal macro path, and diagnostics under
-  -D skew by the define count). its tail SEAT fires cc-main when `aicc` is the
-  program on the command line (the same trick as ain/cook), so aicc stands
+  -D skew by the define count). its tail SEAT fires moon-main when `mooncc` is the
+  program on the command line (the same trick as ain/cook), so mooncc stands
   alone as its own catted script -- it does NOT ride the kore multi-call
   dispatcher.
 
@@ -170,7 +170,7 @@ gate per stage. the pipeline, each its own file:
   tables). the STILL-open .o world needs RELOCATABLE output -- symbol table,
   .text/.data/.rodata/.bss, RELA relocations (PC32/PLT32/64/GOTPCREL minimum);
   a well-fenced extension with its own laws (readelf as oracle).
-* **ai.h**: an `__aicc__` branch making ai_inline/ai_noinline/attributes
+* **ai.h**: an `__mooncc__` branch making ai_inline/ai_noinline/attributes
   plain no-ops. a core edit -- small, coordinated.
 * **headers**: our own include/ for the freestanding subset (stdint stddef
   stdbool stdarg + declarations for the libc calls ai.c/host make: math,
@@ -191,7 +191,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
   already speaks internally, possibly with its own thin surface syntax --
   useful for runtime shims, the crt0, compiler self-tests, and as the
   honest semantic floor the C dialect desugars onto.
-* **aicc-specific syntactic refinements borrowed from go.** C is almost
+* **mooncc-specific syntactic refinements borrowed from go.** C is almost
   perfect; a few go conveniences might make the dialect nicer to live in
   without leaving C's semantics. candidates to weigh when the grammar is
   fuller (gwen picks): unparenthesized conditions with mandatory braces,
@@ -222,7 +222,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    8 BYTES until stage 2's types; shifts take CONSTANT counts (holo's
    register-count shift is stage-2 seam work) -- both guarded by gen
    refusals in the laws. the battery lives in test/cc/*.c -- 15 programs,
-   compile-run-compare vs gcc -O0 in test_cc, growing every stage. one core
+   compile-run-compare vs gcc -O0 in test_moon, growing every stage. one core
    wrinkle found and dodged: a value binding woven after a lambda that
    transitively forward-references its consumer draws a load-time book read
    (a benign ;; missing scare) -- op tables sit above the lambdas now.
@@ -328,11 +328,11 @@ two ideas to keep warm as the stages climb, neither committed yet:
    declarators, doesn't route through pdtor -- the struct-wrapped table works,
    which is what ai.c uses). battery at 56.
    ENV TRAP paid: a catted app is `#!/usr/bin/env -S ai` + the cat, so bare
-   `aicc` runs on the PATH `ai` -- a STALE install mis-runs it (missing baked
+   `mooncc` runs on the PATH `ai` -- a STALE install mis-runs it (missing baked
    core like holo callr) and the heap grows unboundedly; the make gate is safe
-   (m defaults to ./out/host/ai). probe cc with `./out/host/ai out/host/aicc`,
-   never a bare `aicc`, until `make install` refreshes the PATH binary.
-5. **the preprocessor** LANDED 2026-07-06: crew/cc/cpp.l, TOKEN-BASED (it sits
+   (m defaults to ./out/host/ai). probe cc with `./out/host/ai out/host/mooncc`,
+   never a bare `mooncc`, until `make install` refreshes the PATH binary.
+5. **the preprocessor** LANDED 2026-07-06: crew/moon/cpp.l, TOKEN-BASED (it sits
    between clex and cparse, so an identifier inside a string/char literal --
    already one opaque token -- is never mistaken for a macro). object +
    function-like macros; rescan to a fixpoint under Prosser's HIDESETS (the
@@ -340,11 +340,11 @@ two ideas to keep warm as the stages climb, neither committed yet:
    (fold + relex); ... variadics with __VA_ARGS__; #define/#undef;
    #if/#ifdef/#ifndef/#elif/#else/#endif over a precedence-climbing integer
    const-expr evaluator (defined X resolved first, undefined ids -> 0);
-   #include through an incf hook (cc.l's incload searches the source dir for
-   "quoted", crew/cc/include + /usr/include for <sys>; guards work because the
+   #include through an incf hook (moon.l's incload searches the source dir for
+   "quoted", crew/moon/include + /usr/include for <sys>; guards work because the
    included file shares the macro tablet); adjacent-string concatenation;
    __LINE__/__STDC__. #error fails the compile; #pragma/#line ignored. fenced:
-   _Pragma, __COUNTER__, the GNU ,##__VA_ARGS__ comma elision. cc.l now rides
+   _Pragma, __COUNTER__, the GNU ,##__VA_ARGS__ comma elision. moon.l now rides
    lex -> CPP -> parse -> gen. battery 56->59 (macros, conditionals, a guarded
    #include header). laws: 18 pps/token goldens in law.l.
    TRAP PAID (the whole stage's hard bug): a lambda PARAMETER named after a
@@ -415,7 +415,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    16-aligned frame), and pops them after; the variadic CALLEE reads its named
    params straight from positive frame offsets ([rbp+16+i*8], via `place`, no
    register spill and no save area), and va_arg walks a plain char* cursor 8
-   bytes at a step. so <stdarg.h> (crew/cc/include/, ours -- gcc uses its own in
+   bytes at a step. so <stdarg.h> (crew/moon/include/, ours -- gcc uses its own in
    the differential, both self-consistent) is three one-line macros over the
    builtins: va_start -> (vastart v) seeds the cursor at the first vararg slot,
    va_arg -> (vaarg v type) reads the slot and steps, va_end -> (vaend v) is a
@@ -458,7 +458,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    egg and runs `make test` green -- the corpus under a cc-built binary.
    this is the rung's kore-feature-complete moment. a multi-part integration
    gate, landing sub-rung by sub-rung:
-   7a THE RELOCATABLE OBJECT (crew/holo/obj.l) LANDED 2026-07-07: `aicc -c IN OUT`
+   7a THE RELOCATABLE OBJECT (crew/holo/obj.l) LANDED 2026-07-07: `mooncc -c IN OUT`
    lays an ELF `.o` the SYSTEM linker consumes, so cc code links against gcc-built
    host/*.o + libc. where elf.l wraps assembled bytes in a static EXECUTABLE (one
    RWX segment, every label resolved), obj.l emits SEPARATE .text / .data sections,
@@ -484,7 +484,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    so ai_push (a variadic function DEFINED in ai.c but CALLED from the gcc-built
    host objects -- ai.h declares it) works across the toolchain seam. the va_list
    is the real 24-byte struct { int gp_offset; int fp_offset; void
-   *overflow_arg_area; void *reg_save_area; } (crew/cc/include/stdarg.h), a typedef
+   *overflow_arg_area; void *reg_save_area; } (crew/moon/include/stdarg.h), a typedef
    to __va_list_tag[1] so it DECAYS to a pointer when handed to another function
    (ai.c's gvzprintf/ai_pushr take a va_list). the CALLEE prologue lays a 176-byte
    register save area (6 gp @ +0 step 8, 8 xmm @ +48 step 16) and addresses its
@@ -511,7 +511,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    off the 64-bit critical path (ai_flo_t is `double`; the `float` typedef is the
    32-bit variant).
    7c-i THE FREESTANDING HEADERS + IGNORABLE QUALIFIER/ATTRIBUTE SURFACE LANDED
-   2026-07-07: crew/cc/include/ now carries stdint stddef stdbool math signal
+   2026-07-07: crew/moon/include/ now carries stdint stddef stdbool math signal
    setjmp sys/mman unistd (they WIN over /usr/include for <> includes -- incload's
    sys? path), each minimal and freestanding so ai.c never reaches into a glibc
    header. cc keeps NO linkage/qualifier state, so the parser gained `pquals`: a
@@ -568,7 +568,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    void return, folded case, fn-ptr cast, function-type + multi-decl typedef, object-vs-
    function macro, gcc = cc = 50) in the battery; law.l goldens each. ai.c now parses
    through ~5000 lines and stops at the first 2D array (`lvm_t *const tbl[KN][KN]`).
-   7c-iii PART 2 (MULTIDIMENSIONAL ARRAYS + THE aicc BREAKOUT) LANDED 2026-07-07:
+   7c-iii PART 2 (MULTIDIMENSIONAL ARRAYS + THE mooncc BREAKOUT) LANDED 2026-07-07:
    the declarator now reads a RUN of `[n]`/`[]` bracket suffixes (a top-level `adims`
    helper) and folds them outer..inner into a nested arr type -- `int a[3][4]` is
    `(arr (arr int 4) 3)` (`mkarr`, a top-level sibling both pdtor and the global-decl
@@ -582,10 +582,10 @@ two ideas to keep warm as the stages climb, neither committed yet:
    `dimval` helper threaded into `adims`/`pdtor` -- ai.h's kind matrices are `[KN][KN]`).
    gate: 75-arr2d.c (row-major layout, `[i][j]` access, nested-brace + `[]`-inferred
    globals, gcc = cc = 18); law.l goldens the nested + enum-dim types. AND cc SPLIT OUT OF kore INTO ITS OWN
-   APP `aicc`: a catted `#!/usr/bin/env -S ai -l` script (u-floor + asbook + elf/obj +
-   crew/cc/{lex,cpp,parse,gen,cc}.l) whose tail SEAT in cc.l fires cc-main -- so a cc
-   edit rebuilds only aicc, never the whole kore cat, and a parallel kore rebuild can no
-   longer tear the compiler mid-run. `make test_cc` and `make install` both target aicc.
+   APP `mooncc`: a catted `#!/usr/bin/env -S ai -l` script (u-floor + asbook + elf/obj +
+   crew/moon/{lex,cpp,parse,gen,cc}.l) whose tail SEAT in moon.l fires moon-main -- so a cc
+   edit rebuilds only mooncc, never the whole kore cat, and a parallel kore rebuild can no
+   longer tear the compiler mid-run. `make test_moon` and `make install` both target mooncc.
    7c-iii PART 3 (THE LAST OF THE PARSE TAIL) LANDED 2026-07-07 -- ai.c NOW PARSES END
    TO END (all 925 top-level forms; localized form by form with a ptop-loop driver over
    the preprocessed token stream, since macro-expanded tokens carry the macro-SITE line).
@@ -601,7 +601,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    pins the name to not-a-type on the declaration, restores at `}`), so `num + num` reads
    as an expression, not a cast -- and a sibling function still sees the type. gate:
    76-ctail3.c (hex float, const-expr dim, nested enum-indexed designated init, a shadowed
-   local, gcc = cc = 41); law.l goldens each. the next wall is CODEGEN (`aicc -c ai.c`
+   local, gcc = cc = 41); law.l goldens each. the next wall is CODEGEN (`mooncc -c ai.c`
    parses, then errors in gen) -- 7d territory.
    THE GEN CHOKE LIST (measured 2026-07-07 by a full-corpus instrumented run --
    log-and-continue wrappers on cgfn/cgexpr/cgstmt/cgdecl/cgimage): 15 of ai.c's 611
@@ -618,7 +618,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    get ret from the sig, and callr's result types by it. gate: 77-protoaddr.c
    (fn-ptr table image, &f/bare-f agreement, double through a pointer, gcc = cc = 42)
    + law goldens.
-   THE LIST CLEARED (2026-07-08, same day, commit by commit) -- **`aicc -c ai.c`
+   THE LIST CLEARED (2026-07-08, same day, commit by commit) -- **`mooncc -c ai.c`
    COMPILES END TO END: all 611 functions + the data tail, a ~514KB relocatable
    ai.o.** the rest of the tail as it fell: ENUM-CONSTANT SHADOWING (a local named
    `N` was folded to `enum { N = 13 }`'s value -- a silent read miscompile; locals
@@ -645,7 +645,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    .data symbols, the 7d link's first wall). gates: 78-enumshadow 79-tables
    80-manyargs 81-builtins 82-znvalue (gcc = cc = 42 each) + laws.
    **7d LANDED (2026-07-08): the cc-built ai BOOTS the egg and passes the WHOLE
-   CORPUS -- 2831 tests green.** the recipe: `aicc -c ai.c ai.o` (with
+   CORPUS -- 2831 tests green.** the recipe: `mooncc -c ai.c ai.o` (with
    `#define ai_tco 0` prepended -- cc emits no sibcalls, so the VM takes the
    trampoline dispatch, the same lane ai0 exercises every gate) + gcc host
    objects built `-Dai_tco=0` + libc. the corpus was the differential oracle
@@ -670,15 +670,15 @@ two ideas to keep warm as the stages climb, neither committed yet:
    baked segfaulted on its first hot loop (glazed code Continues by tail-jump --
    threaded-VM only); ai.c now pins `ai-tco` and auto.l keeps the pure
    interpreter on a trampoline build. and the house speed-law paid off:
-   `aicc -c ai.c` took ~13 MINUTES -- holo's lay appended each lowered chunk to
+   `mooncc -c ai.c` took ~13 MINUTES -- holo's lay appended each lowered chunk to
    the tail of the item stream, a re-copy per instruction -- accumulating
    reversed made it linear: **4.3 seconds**. gates: 83-ternflo 84-nan + the
    rbx interop check. unions by value stay refused; running the cc build at
    ai_tco=1 (`make vmret`-honest sibcalls) is stage 8's flat-stack rung.
 8. **the fixpoint + the flat stack** (2026-07-08):
    (a) THE FIXPOINT LANDED -- `cc(cc(ai))` is BYTE-IDENTICAL to `cc(ai)`. the
-   cc-built ai (tco=0), running aicc, compiles ai.c to an object bit-for-bit
-   the same as the host-built aicc does. self-hosting is a closed loop:
+   cc-built ai (tco=0), running mooncc, compiles ai.c to an object bit-for-bit
+   the same as the host-built mooncc does. self-hosting is a closed loop:
    `cmp aiA.o aiB.o` where aiB.o = ai-cc0 compiling ai.c. (the self-hosted
    compile is ~6x slower -- 24s vs 4s -- because the cc build runs the pure
    interpreter, no glaze; correctness, not speed, is the fixpoint's claim.)
@@ -731,7 +731,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    overflow args keep their 8-byte packing (the callee reads them packed,
    and their targets are ai-internal, never a libc movaps path). WITH IT:
    the cc-built ai runs `run`/`fork`, and the whole 2831-test corpus passes
-   at ai_tco=1 with the glaze live. `test_cc` guards it with a
+   at ai_tco=1 with the glaze live. `test_moon` guards it with a
    `g=id(fork())` program whose child dies iff the stack is skewed. benches
    vs gcc are the flat-stack tail.
 9. **stretch, as appetite allows**: arm64 parity through the same holo
@@ -741,7 +741,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
 
 ## testing (the house discipline, restated for C)
 
-* every pure piece lawed in crew/cc/law.l from day 0 (lexer goldens, cpp
+* every pure piece lawed in crew/moon/law.l from day 0 (lexer goldens, cpp
   expansions, parser ASTs printed and compared, layout/alignment tables).
 * the differential oracle is gcc -O0: same source, run both, compare
   stdout + exit code -- the GNU-byte-identical spirit, one binary deeper.
@@ -750,7 +750,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
 * a seeded expression fuzz vs gcc (the Brzozowski precedent): generate
   random well-typed int expressions/statements, both compilers, compare.
   csmith-class whole-program fuzz is a stretch goal.
-* `make test_cc` gates laws + differential battery; stage 7 adds the
+* `make test_moon` gates laws + differential battery; stage 7 adds the
   corpus-under-cc-ai run to test_all.
 
 ## size and pacing
@@ -764,20 +764,22 @@ already a lawed calculator-to-ELF; stage 4 compiles real single-file C).
 
 ## the installed shape (2026-07-13): a wake shim over a baked image
 
-`make install` no longer ships the cat as `bin/aicc`. The compiler bakes WARM
-into `lib/ai/aicc.image` (the live bake nif, doc/snapshot.md) and `bin/aicc`
-is a three-line sh shim: `ai --wake aicc.image -e "(cc-main (cuup (cup
+`make install` no longer ships the cat as `bin/mooncc`. The compiler bakes WARM
+into `lib/ai/mooncc.image` (the live bake nif, doc/snapshot.md) and `bin/mooncc`
+is a three-line sh shim: `ai --wake mooncc.image -e "(moon-main (cuup (cup
 cmdline)))" "$@"`. The whole-cat re-eval that every compile used to pay
-(~1.5 s wall) is paid once, at bake: `aicc -c ai.c` 4.3 → 2.8 s wall, and a
+(~1.5 s wall) is paid once, at bake: `mooncc -c ai.c` 4.3 → 2.8 s wall, and a
 small-file compile drops 0.77 s → 0.02 s -- gcc-class invocation latency.
 The image is binary-specific (anchor-checked) and installs from the same
 build as `bin/ai` (strip keeps vaddrs, so the stripped install wakes it);
-a mismatched pair falls back to a fresh boot with no cc-main, so never mix
-builds by hand. The repo cat `out/host/aicc` is unchanged -- probe with
-`./out/host/ai out/host/aicc`, as ever.
+a mismatched pair falls back to a fresh boot with no moon-main, so never mix
+builds by hand. The repo cat `out/host/mooncc` is unchanged -- probe with
+`./out/host/ai out/host/mooncc`, as ever.
 
 ## naming
 
-crew/cc/ and `aicc` as working names; the crossing-layers name is gwen's
-call when the thing first compiles something real (the naming-lore memory
-holds the sources).
+crew `moon` (🍄 the glowing mycelium on holo's cave walls, a sibling to inle)
+and the binary `mooncc` — chosen 2026-07-15, all-the-way-down from the `aicc` /
+crew/cc/ working names. `mooncc` slots into the cc/gcc/tcc tradition and clears
+the `moon`(MoonBit)/`moonc`(MoonScript) collision (the naming-lore memory holds
+the sources). Like everything here, revisable.

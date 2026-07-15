@@ -13,7 +13,7 @@
 ;   kore sed [-n] SCRIPT [F..]        the stream editor (crew/kore/sed.l)
 ;   kore env|sleep|kill|xargs        the process tools (crew/kore/proc.l)
 ;   kore vi [FILE]                   the editor (crew/vi/)
-; (the C compiler is NO LONGER here -- it split into its own app `aicc`, doc/cc.md.)
+; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/moon.md.)
 ;
 ; loads LAST in the kore cat, when every tool main is already defined; the tool files'
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
@@ -107,7 +107,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
                a)
    ; me?: is this seat word kore itself, or a tool name (the symlink lane)? the
    ; dispatch fires only when it is -- so a `-l` preload that seats a flag (the bake
-   ; loads the cat as `ai -l .kore-cat.l -e ..`) stays quiet, like cc.l's me?.
+   ; loads the cat as `ai -l .kore-cat.l -e ..`) stays quiet, like moon.l's me?.
    (me? w) (: b (bn w) (|| (b = "kore") (|| (b = "kore.l") (applets (intern b)))))
    ; kore-main is the ONE leaked global: the baked kore.image wakes to it
    ; (--wake kore.image -e '(kore-main (link "kore" (cuup (cup cmdline))))' -- the

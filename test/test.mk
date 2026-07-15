@@ -154,7 +154,7 @@ test_reef: host out/host$(hsuf)/reef
 	  { [ $$r -eq 0 ] && grep -q "reef: ok" out/host/.test_reef.out; } \
 	    || { echo "FAIL reef (exit $$r)"; exit 1; }
 # the kore smokes drive the BAKED image (`--wake kore.image`), not the cold cat --
-# ~0.02s vs ~0.75s per spawn across the ~68 tool runs below (the aicc.image precedent).
+# ~0.02s vs ~0.75s per spawn across the ~68 tool runs below (the mooncc.image precedent).
 # the argv0-symlink smoke stays on the real `$(ho)/kore` script (it proves the shebang
 # + argv[0] dispatch the image bypasses). the synthetic "kore" argv0 (link) makes an
 # unknown tool usage+quit exactly like the cli, so the exit faces are unchanged.
@@ -347,73 +347,73 @@ test_vi: host out/host$(hsuf)/kore.image
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL kore vi undo (exit $$r)"; exit 1; }; \
 	  echo "kore: vi (laws + piped create/dd/q!/undo end-to-end) ok"
-# The C compiler (crew/cc/, rung 3 -- doc/cc.md): the pure pipeline's laws
+# The C compiler (crew/moon/, rung 3 -- doc/moon.md): the pure pipeline's laws
 # (lexer/parser/gen goldens), then the stage-0 end to end through the real
-# `aicc`: compile, run, exit 42 -- and the gcc -O0 differential is born
+# `mooncc`: compile, run, exit 42 -- and the gcc -O0 differential is born
 # (same source, both compilers, same exit). x86-64 only until arm64 parity.
 # the battery drives the WARM-baked image (what `make install` ships and users
 # run), not the cold source script -- ~0.68s -> ~0.02s per compile, 88 of them.
-aiccrun = $m --wake $(ho)/aicc.image -e '(cc-main (cuup (cup cmdline)))'
-.PHONY: test_cc
-test_cc: host out/host$(hsuf)/aicc out/host$(hsuf)/aicc.image
-	@echo "CC crew/cc/{lex,cpp,parse,gen,law}.l"; \
-	  cat test/00-init.l crew/cc/lex.l crew/cc/cpp.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | $m > out/host/.test_cc.out 2>&1; r=$$?; \
-	  cat out/host/.test_cc.out; \
-	  { [ $$r -eq 0 ] && grep -q "crew/cc/law:" out/host/.test_cc.out; } \
+moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
+.PHONY: test_moon
+test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@echo "CC crew/moon/{lex,cpp,parse,gen,law}.l"; \
+	  cat test/00-init.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/law.l | $m > out/host/.test_moon.out 2>&1; r=$$?; \
+	  cat out/host/.test_moon.out; \
+	  { [ $$r -eq 0 ] && grep -q "crew/moon/law:" out/host/.test_moon.out; } \
 	    || { echo "FAIL cc laws (exit $$r)"; exit 1; }
 	@if [ "$$(uname -m)" = x86_64 ]; then \
 	  printf 'int main() { return 42; }\n' > $(ho)/.cc1.c; \
-	  $(aiccrun) $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL aicc compile"; exit 1; }; \
+	  $(moonrun) $(ho)/.cc1.c $(ho)/.cc1 > /dev/null 2>&1 || { echo "FAIL mooncc compile"; exit 1; }; \
 	  $(ho)/.cc1; a=$$?; \
 	  cc_g=$$(command -v gcc || command -v cc); \
 	  $$cc_g -O0 -o $(ho)/.cc1g $(ho)/.cc1.c && $(ho)/.cc1g; b=$$?; \
-	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL mooncc vs gcc (ours $$a gcc $$b)"; exit 1; }; \
 	  printf '// c\nint f() { return 1; }\nint main() { return 7; }\n' > $(ho)/.cc2.c; \
-	  $(aiccrun) $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
+	  $(moonrun) $(ho)/.cc2.c $(ho)/.cc2 > /dev/null 2>&1 && $(ho)/.cc2; a=$$?; \
 	  $$cc_g -O0 -o $(ho)/.cc2g $(ho)/.cc2.c && $(ho)/.cc2g; b=$$?; \
-	  [ $$a -eq $$b ] || { echo "FAIL aicc two-fn vs gcc (ours $$a gcc $$b)"; exit 1; }; \
+	  [ $$a -eq $$b ] || { echo "FAIL mooncc two-fn vs gcc (ours $$a gcc $$b)"; exit 1; }; \
 	  for f in test/cc/*.c; do \
-	    $(aiccrun) $$f $(ho)/.ccb > /dev/null 2>&1 || { echo "FAIL aicc compile $$f"; exit 1; }; \
+	    $(moonrun) $$f $(ho)/.ccb > /dev/null 2>&1 || { echo "FAIL mooncc compile $$f"; exit 1; }; \
 	    $(ho)/.ccb; a=$$?; \
 	    $$cc_g -O0 -o $(ho)/.ccbg $$f && $(ho)/.ccbg; b=$$?; \
-	    [ $$a -eq $$b ] || { echo "FAIL aicc battery $$f (ours $$a gcc $$b)"; exit 1; }; \
+	    [ $$a -eq $$b ] || { echo "FAIL mooncc battery $$f (ours $$a gcc $$b)"; exit 1; }; \
 	  done; \
-	  $(aiccrun) $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
-	  [ $$r -eq 1 ] || { echo "FAIL aicc missing input exit (rc $$r)"; exit 1; }; \
+	  $(moonrun) $(ho)/.cc-none.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL mooncc missing input exit (rc $$r)"; exit 1; }; \
 	  printf 'int main() { return 42 }\n' > $(ho)/.cc3.c; \
-	  $(aiccrun) $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
-	  [ $$r -eq 1 ] || { echo "FAIL aicc parse-error exit (rc $$r)"; exit 1; }; \
+	  $(moonrun) $(ho)/.cc3.c $(ho)/.ccx > /dev/null 2>&1; r=$$?; \
+	  [ $$r -eq 1 ] || { echo "FAIL mooncc parse-error exit (rc $$r)"; exit 1; }; \
 	  printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > $(ho)/.olib.c; \
 	  printf 'extern int vals[];\nint pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+vals[2]+ext_add(15,5);}\n' > $(ho)/.omain.c; \
 	  printf 'int ext_add(int a,int b){return a+b;}\n' > $(ho)/.oext.c; \
-	  $(aiccrun) -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL aicc -c lib"; exit 1; }; \
-	  $(aiccrun) -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL aicc -c main"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.olib.c  $(ho)/.olib.o  > /dev/null 2>&1 || { echo "FAIL mooncc -c lib"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.omain.c $(ho)/.omain.o > /dev/null 2>&1 || { echo "FAIL mooncc -c main"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.oext.o $(ho)/.oext.c; \
 	  $$cc_g -no-pie -o $(ho)/.oexe $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext.o > /dev/null 2>&1 || { echo "FAIL ld cc objects"; exit 1; }; \
 	  $(ho)/.oexe; a=$$?; \
 	  $$cc_g -O0 -o $(ho)/.oexeg $(ho)/.omain.c $(ho)/.olib.c $(ho)/.oext.c && $(ho)/.oexeg; b=$$?; \
-	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL aicc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
+	  { [ $$a -eq 42 ] && [ $$a -eq $$b ]; } || { echo "FAIL mooncc -c link+run (ours $$a gcc $$b)"; exit 1; }; \
 	  printf '#include <ans.h>\nint main() { return ANS + BONUS; }\n' > $(ho)/.flg.c; \
 	  mkdir -p $(ho)/.flginc && printf '#define ANS 30\n' > $(ho)/.flginc/ans.h; \
-	  $(aiccrun) -I $(ho)/.flginc -D BONUS=12 -o $(ho)/.flg $(ho)/.flg.c > /dev/null 2>&1 || { echo "FAIL aicc -I/-D/-o"; exit 1; }; \
+	  $(moonrun) -I $(ho)/.flginc -D BONUS=12 -o $(ho)/.flg $(ho)/.flg.c > /dev/null 2>&1 || { echo "FAIL mooncc -I/-D/-o"; exit 1; }; \
 	  $(ho)/.flg; a=$$?; \
-	  [ $$a -eq 42 ] || { echo "FAIL aicc -I/-D/-o run (got $$a want 42)"; exit 1; }; \
+	  [ $$a -eq 42 ] || { echo "FAIL mooncc -I/-D/-o run (got $$a want 42)"; exit 1; }; \
 	  printf 'int f();\nint main() { return f() + 2; }\n' > $(ho)/.mi1.c; \
 	  printf 'int f() { return 40; }\n' > $(ho)/.mi2.c; \
-	  mabs="$$PWD/$(ho)"; (cd $(ho) && $$mabs/ai --wake $$mabs/aicc.image -e '(cc-main (cuup (cup cmdline)))' -c .mi1.c .mi2.c) > /dev/null 2>&1 || { echo "FAIL aicc multi-input -c"; exit 1; }; \
+	  mabs="$$PWD/$(ho)"; (cd $(ho) && $$mabs/ai --wake $$mabs/mooncc.image -e '(moon-main (cuup (cup cmdline)))' -c .mi1.c .mi2.c) > /dev/null 2>&1 || { echo "FAIL mooncc multi-input -c"; exit 1; }; \
 	  $$cc_g -no-pie -o $(ho)/.mi $(ho)/.mi1.o $(ho)/.mi2.o > /dev/null 2>&1 || { echo "FAIL ld multi-input objects"; exit 1; }; \
 	  $(ho)/.mi; a=$$?; \
-	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-input run (got $$a want 42)"; exit 1; }; \
+	  [ $$a -eq 42 ] || { echo "FAIL mooncc multi-input run (got $$a want 42)"; exit 1; }; \
 	  printf '#include <stdarg.h>\nint isum(int n,...){va_list ap;va_start(ap,n);long s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}\n' > $(ho)/.valib.c; \
 	  printf 'int isum(int n,...);\nint main(){return isum(4,10,11,12,9);}\n' > $(ho)/.vamain.c; \
-	  $(aiccrun) -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL aicc -c variadic"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.valib.c $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL mooncc -c variadic"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.vamain.o $(ho)/.vamain.c; \
-	  $$cc_g -no-pie -o $(ho)/.vaexe $(ho)/.vamain.o $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL ld cc-variadic + gcc-main"; exit 1; }; \
+	  $$cc_g -no-pie -o $(ho)/.vaexe $(ho)/.vamain.o $(ho)/.valib.o > /dev/null 2>&1 || { echo "FAIL ld cc-variadic + gmoon-main"; exit 1; }; \
 	  $(ho)/.vaexe; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL cc-variadic <- gcc-caller (SysV va ABI, got $$a want 42)"; exit 1; }; \
 	  printf '__attribute__((weak)) int wpick(void){return 7;}\nint main(){return wpick() + 30;}\n' > $(ho)/.wklib.c; \
 	  printf 'int wpick(void){return 12;}\n' > $(ho)/.wkstr.c; \
-	  $(aiccrun) -c $(ho)/.wklib.c $(ho)/.wklib.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.wklib.c $(ho)/.wklib.o > /dev/null 2>&1 || { echo "FAIL mooncc -c weak"; exit 1; }; \
 	  $$cc_g -no-pie -o $(ho)/.wkdef $(ho)/.wklib.o > /dev/null 2>&1 && $(ho)/.wkdef; a=$$?; \
 	  [ $$a -eq 37 ] || { echo "FAIL weak default (got $$a want 37)"; exit 1; }; \
 	  $$cc_g -O0 -c -o $(ho)/.wkstr.o $(ho)/.wkstr.c; \
@@ -421,99 +421,99 @@ test_cc: host out/host$(hsuf)/aicc out/host$(hsuf)/aicc.image
 	  [ $$a -eq 42 ] || { echo "FAIL weak override (got $$a want 42)"; exit 1; }; \
 	  printf 'long bump(long x){long r;__builtin_add_overflow(x,1,&r);return r;}\n' > $(ho)/.rblib.c; \
 	  printf 'long bump(long);\nint main(void){volatile long a=0;long s=a;for(int i=42;i--;)s=bump(s);return (int)s;}\n' > $(ho)/.rbmain.c; \
-	  $(aiccrun) -c $(ho)/.rblib.c $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL aicc -c rbx-callee"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.rblib.c $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL mooncc -c rbx-callee"; exit 1; }; \
 	  $$cc_g -O2 -c -o $(ho)/.rbmain.o $(ho)/.rbmain.c; \
 	  $$cc_g -no-pie -o $(ho)/.rbexe $(ho)/.rbmain.o $(ho)/.rblib.o > /dev/null 2>&1 || { echo "FAIL ld rbx interop"; exit 1; }; \
 	  $(ho)/.rbexe; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL callee-saved rbx across cc call (-O2 caller loop bound, got $$a want 42)"; exit 1; }; \
 	  printf 'static long cd(long n,long a){if(n==0)return a;return cd(n-1,a+1);}\nstatic long tb(long n);\nstatic long ta(long n){if(n==0)return 21;return tb(n-1);}\nstatic long tb(long n){if(n==0)return 22;return ta(n-1);}\nstatic long dp(long(*f)(long,long),long n){return f(n,0);}\nint main(void){long a=cd(50000000,0)/2500000;long b=ta(30000000);long c=dp(cd,1000000)/1000000;return (int)(a+b+c);}\n' > $(ho)/.sib.c; \
-	  $(aiccrun) $(ho)/.sib.c $(ho)/.sibx > /dev/null 2>&1 || { echo "FAIL aicc sibcall"; exit 1; }; \
+	  $(moonrun) $(ho)/.sib.c $(ho)/.sibx > /dev/null 2>&1 || { echo "FAIL mooncc sibcall"; exit 1; }; \
 	  $(ho)/.sibx; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL sibcall flat recursion (50M-deep self + mutual + fn-ptr, got $$a want 42 -- a non-tail call would stack-overflow to 139)"; exit 1; }; \
 	  printf 'long fork(void);long waitpid(long,int*,long);void _exit(long);long g;long id(long a){return a;}int main(void){g=id(fork());if(g==0)_exit(42);int st;waitpid(-1,&st,0);return ((st&127)==0&&((st>>8)&255)==42)?42:1;}\n' > $(ho)/.aln.c; \
-	  $(aiccrun) -c $(ho)/.aln.c $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL aicc -c stack-align"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.aln.c $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL mooncc -c stack-align"; exit 1; }; \
 	  $$cc_g -no-pie -o $(ho)/.alnx $(ho)/.aln.o > /dev/null 2>&1 || { echo "FAIL ld stack-align"; exit 1; }; \
 	  $(ho)/.alnx; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL 16-byte stack alignment ('g=id(fork())' holds a temp across the call; a bare-push spill leaves rsp at 8 mod 16 and glibc fork's child movaps #GPs -- got $$a want 42)"; exit 1; }; \
-	  $(aiccrun) -c $(ho)/.oext.c $(ho)/.oext2.o > /dev/null 2>&1 || { echo "FAIL aicc -c ext"; exit 1; }; \
-	  $(aiccrun) $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext2.o -o $(ho)/.lnk1 > /dev/null 2>&1 || { echo "FAIL aicc link .o"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.oext.c $(ho)/.oext2.o > /dev/null 2>&1 || { echo "FAIL mooncc -c ext"; exit 1; }; \
+	  $(moonrun) $(ho)/.omain.o $(ho)/.olib.o $(ho)/.oext2.o -o $(ho)/.lnk1 > /dev/null 2>&1 || { echo "FAIL mooncc link .o"; exit 1; }; \
 	  $(ho)/.lnk1; a=$$?; \
-	  [ $$a -eq 42 ] || { echo "FAIL aicc-linked exe (own static linker, got $$a want 42)"; exit 1; }; \
-	  $(aiccrun) $(ho)/.mi1.c $(ho)/.mi2.c -o $(ho)/.lnk2 > /dev/null 2>&1 || { echo "FAIL aicc link multi-.c"; exit 1; }; \
+	  [ $$a -eq 42 ] || { echo "FAIL mooncc-linked exe (own static linker, got $$a want 42)"; exit 1; }; \
+	  $(moonrun) $(ho)/.mi1.c $(ho)/.mi2.c -o $(ho)/.lnk2 > /dev/null 2>&1 || { echo "FAIL mooncc link multi-.c"; exit 1; }; \
 	  $(ho)/.lnk2; a=$$?; \
-	  [ $$a -eq 42 ] || { echo "FAIL aicc multi-.c link (got $$a want 42)"; exit 1; }; \
-	  $(aiccrun) -c $(ho)/.wkstr.c $(ho)/.wkstr2.o > /dev/null 2>&1 || { echo "FAIL aicc -c weak-strong"; exit 1; }; \
-	  $(aiccrun) $(ho)/.wklib.o -o $(ho)/.lnk3 > /dev/null 2>&1 && $(ho)/.lnk3; a=$$?; \
-	  [ $$a -eq 37 ] || { echo "FAIL aicc-link weak default (got $$a want 37)"; exit 1; }; \
-	  $(aiccrun) $(ho)/.wklib.o $(ho)/.wkstr2.o -o $(ho)/.lnk4 > /dev/null 2>&1 && $(ho)/.lnk4; a=$$?; \
-	  [ $$a -eq 42 ] || { echo "FAIL aicc-link weak override (got $$a want 42)"; exit 1; }; \
+	  [ $$a -eq 42 ] || { echo "FAIL mooncc multi-.c link (got $$a want 42)"; exit 1; }; \
+	  $(moonrun) -c $(ho)/.wkstr.c $(ho)/.wkstr2.o > /dev/null 2>&1 || { echo "FAIL mooncc -c weak-strong"; exit 1; }; \
+	  $(moonrun) $(ho)/.wklib.o -o $(ho)/.lnk3 > /dev/null 2>&1 && $(ho)/.lnk3; a=$$?; \
+	  [ $$a -eq 37 ] || { echo "FAIL mooncc-link weak default (got $$a want 37)"; exit 1; }; \
+	  $(moonrun) $(ho)/.wklib.o $(ho)/.wkstr2.o -o $(ho)/.lnk4 > /dev/null 2>&1 && $(ho)/.lnk4; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL mooncc-link weak override (got $$a want 42)"; exit 1; }; \
 	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e1 = { "a", 30 };\n' > $(ho)/.nf1.c; \
 	  printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e2 = { "b", 12 };\nextern ent __start_ai_nifs[];\nextern ent __stop_ai_nifs[];\nint main(){ long s=0; for (ent *p=__start_ai_nifs; p<__stop_ai_nifs; p++) s+=p->v; return (int)s; }\n' > $(ho)/.nf2.c; \
-	  $(aiccrun) $(ho)/.nf2.c $(ho)/.nf1.c -o $(ho)/.lnk5 > /dev/null 2>&1 || { echo "FAIL aicc link ai_nifs"; exit 1; }; \
+	  $(moonrun) $(ho)/.nf2.c $(ho)/.nf1.c -o $(ho)/.lnk5 > /dev/null 2>&1 || { echo "FAIL mooncc link ai_nifs"; exit 1; }; \
 	  $(ho)/.lnk5; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $$a want 42)"; exit 1; }; \
-	  echo "aicc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets) ok"; \
-	else echo "aicc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
+	  echo "mooncc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets) ok"; \
+	else echo "mooncc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The rung-2 self-host gate ([[ai-distro]]): compile ai.c AND every host/*.c with
-# aicc (gcc/clang only LINKS), then run the whole corpus through the all-aicc
+# mooncc (gcc/clang only LINKS), then run the whole corpus through the all-mooncc
 # binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in
 # test_all -- it rebuilds ~14 objects + links + runs the corpus, and needs the
-# system static linker. x86-64 only (aicc emits x64). The binary carries
+# system static linker. x86-64 only (mooncc emits x64). The binary carries
 # no baked image, so AI_NO_IMAGE forces the fresh-egg boot.
 .PHONY: test_selfhost
-test_selfhost: host out/host$(hsuf)/aicc
+test_selfhost: host out/host$(hsuf)/mooncc
 	@echo SELFHOST $(ho)/ai-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; \
-	  $m $(ho)/aicc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
-	    || { echo "FAIL aicc -c ai.c"; exit 1; }; \
+	  $m $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/aicc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
-	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
-	  $m $(ho)/aicc -Icrew/cc/include -c crew/cc/lib/math/am.c $$d/am.o \
-	    || { echo "FAIL aicc -c am.c"; exit 1; }; \
+	    $m $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
+	  $m $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
+	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
 	  $(host_cc) -static -o $(ho)/ai-selfhost $$d/*.o $(host_ldflags) \
-	    || { echo "FAIL link all-aicc binary"; exit 1; }; \
+	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
 	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_selfhost.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
-	    || { echo "FAIL all-aicc corpus (exit $$s)"; exit 1; }; \
-	  echo "test_selfhost: ai.c + all `ls host/*.c | wc -l` host/*.c built by aicc, corpus passes"
+	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
+	  echo "test_selfhost: ai.c + all `ls host/*.c | wc -l` host/*.c built by mooncc, corpus passes"
 # The rung-4 gate ([[ai-distro]]): the GCC-FREE fixpoint. Everything test_selfhost
-# builds, PLUS our own raw libc -- crew/cc/lib/nolibc.c (raw-syscall wrappers, mini
-# stdio, mmap malloc), the math floor crew/cc/lib/math/am.c (ours), and sys.o (the
-# syscall trampoline + our sigsetjmp/longjmp, laid by crew/cc/lib/mksys.l) -- then
-# OUR OWN static linker (crew/holo/link.l via `aicc a.o..`) binds them. No gcc, no
+# builds, PLUS our own raw libc -- crew/moon/lib/nolibc.c (raw-syscall wrappers, mini
+# stdio, mmap malloc), the math floor crew/moon/lib/math/am.c (ours), and sys.o (the
+# syscall trampoline + our sigsetjmp/longjmp, laid by crew/moon/lib/mksys.l) -- then
+# OUR OWN static linker (crew/holo/link.l via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is ai. Corpus green over the fresh egg.
 # In test_all (the gcc-free fixpoint is a headline invariant); skips off x86-64.
 # mksys/nolibc/math are x64. Supersedes test_selfhost's coverage (which stays
 # opt-in as the lighter gcc-links-only check).
 .PHONY: test_raw
-test_raw: host out/host$(hsuf)/aicc
+test_raw: host out/host$(hsuf)/mooncc
 	@echo RAW $(ho)/ai-raw
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/raw; mkdir -p $$d; \
-	  $m $(ho)/aicc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
-	    || { echo "FAIL aicc -c ai.c"; exit 1; }; \
+	  $m $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/aicc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
-	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
-	  $m $(ho)/aicc -Icrew/cc/include -c crew/cc/lib/nolibc.c $$d/nolibc.o \
-	    || { echo "FAIL aicc -c nolibc.c"; exit 1; }; \
-	  for f in crew/cc/lib/math/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/aicc -Icrew/cc/lib/math -Icrew/cc/include -c $$f $$d/m_$$b.o \
-	      || { echo "FAIL aicc -c $$f"; exit 1; }; done; \
-	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lib/mksys.l; \
+	    $m $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
+	  $m $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
+	    || { echo "FAIL mooncc -c nolibc.c"; exit 1; }; \
+	  for f in crew/moon/lib/math/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/mooncc -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
+	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
+	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys sys.o"; exit 1; }; \
-	  $m $(ho)/aicc $$d/*.o -o $(ho)/ai-raw \
+	  $m $(ho)/mooncc $$d/*.o -o $(ho)/ai-raw \
 	    || { echo "FAIL our-linker bind ai-raw"; exit 1; }; \
 	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
 	  echo "test_raw: ai.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
-# test_raw's aarch64 twin (rung D): aicc -t arm64 lays every object, mksys-arm64
+# test_raw's aarch64 twin (rung D): mooncc -t arm64 lays every object, mksys-arm64
 # the syscall leaf, OUR linker binds, qemu-user runs the corpus over the fresh
 # egg. Runs the WHOLE C-sorted $t (uukind{,law}.l included): the raw binary and
 # the GCC-built reference agree file-for-file -- tools/arm64check.sh is the
@@ -522,31 +522,31 @@ test_raw: host out/host$(hsuf)/aicc
 # uk-jj assert runs before uu.l -- an ordering trap, never a GC/arm64 bug.)
 # Opt-in (not in test_all): the qemu corpus costs minutes. Skips without qemu.
 .PHONY: test_raw_arm64
-test_raw_arm64: host out/host$(hsuf)/aicc
+test_raw_arm64: host out/host$(hsuf)/mooncc
 	@echo RAW-ARM64 $(ho)/ai-raw-a64
 	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
 	  d=$(ho)/raw-a64; mkdir -p $$d; \
-	  $m $(ho)/aicc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
-	    || { echo "FAIL aicc -t arm64 -c ai.c"; exit 1; }; \
+	  $m $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	    || { echo "FAIL mooncc -t arm64 -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/aicc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
-	      || { echo "FAIL aicc -t arm64 -c $$f"; exit 1; }; done; \
-	  $m $(ho)/aicc -t arm64 -Icrew/cc/include -c crew/cc/lib/nolibc.c $$d/nolibc.o \
-	    || { echo "FAIL aicc -t arm64 -c nolibc.c"; exit 1; }; \
-	  for f in crew/cc/lib/math/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/aicc -t arm64 -Icrew/cc/lib/math -Icrew/cc/include -c $$f $$d/m_$$b.o \
-	      || { echo "FAIL aicc -t arm64 -c $$f"; exit 1; }; done; \
-	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/cc/lib/mksys.l; \
+	    $m $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL mooncc -t arm64 -c $$f"; exit 1; }; done; \
+	  $m $(ho)/mooncc -t arm64 -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
+	    || { echo "FAIL mooncc -t arm64 -c nolibc.c"; exit 1; }; \
+	  for f in crew/moon/lib/math/*.c; do b=`basename $$f .c`; \
+	    $m $(ho)/mooncc -t arm64 -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
+	      || { echo "FAIL mooncc -t arm64 -c $$f"; exit 1; }; done; \
+	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys-arm64 \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys-arm64 sys.o"; exit 1; }; \
-	  $m $(ho)/aicc -t arm64 $$d/*.o -o $(ho)/ai-raw-a64 \
+	  $m $(ho)/mooncc -t arm64 $$d/*.o -o $(ho)/ai-raw-a64 \
 	    || { echo "FAIL our-linker bind ai-raw-a64"; exit 1; }; \
 	  cat $t \
 	    | AI_NO_IMAGE=1 qemu-aarch64 $(ho)/ai-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw_a64.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_a64.out; } \
 	    || { echo "FAIL raw-arm64 corpus (exit $$s)"; exit 1; }; \
-	  echo "test_raw_arm64: the gcc-free aarch64 ai -- aicc objects, mksys-arm64, our linker, corpus under qemu"
+	  echo "test_raw_arm64: the gcc-free aarch64 ai -- mooncc objects, mksys-arm64, our linker, corpus under qemu"
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps

@@ -1,4 +1,4 @@
-; crew/cc/cpp.l -- the C preprocessor (rung 3 stage 5), TOKEN-BASED: it sits
+; crew/moon/cpp.l -- the C preprocessor (rung 3 stage 5), TOKEN-BASED: it sits
 ; between clex and cparse, so identifiers inside string/char literals are never
 ; mistaken for macros (they lexed as one opaque token). a token is (kind val
 ; line); expansion tacks on a fourth element, a HIDESET (the macros a token may

@@ -1,6 +1,6 @@
-// crew/cc/lib/math/am.c -- the math floor: our own transcendentals, ONE file on
+// crew/moon/lib/math/am.c -- the math floor: our own transcendentals, ONE file on
 // every frontend (host, ai0, kernel, wasm, the gcc-free raw build -- the last
-// vendored math, fdlibm, retired here). binary64, portable C in the aicc subset:
+// vendored math, fdlibm, retired here). binary64, portable C in the mooncc subset:
 // unions for bit access, uint64 arithmetic, no fma/int128/builtins. coefficients
 // are TAYLOR/exact-rational (re-derivable, no minimax magic) at mpmath-verified
 // double roundings; constants carry hi/lo splits where a product must stay exact.
@@ -13,7 +13,7 @@
 // the algebraic exponents (y in {2, 1, -1, 1/2}) EXACT: the spec's power-is-
 // application identities ride am_pow. measured against glibc by the differential
 // ulp harness (2M+ deterministic samples a function, tools/ulp.c); the
-// aicc-compiled object measures IDENTICAL to gcc's.
+// mooncc-compiled object measures IDENTICAL to gcc's.
 #include <stdint.h>
 
 typedef union { double d; uint64_t u; } db;

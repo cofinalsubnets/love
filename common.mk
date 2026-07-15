@@ -50,9 +50,9 @@ tco ?= 1
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
 ai_h = $(wildcard $R/*.h)
-# the core rides with its math floor (crew/cc/lib/math/am.c -- our own
+# the core rides with its math floor (crew/moon/lib/math/am.c -- our own
 # transcendentals; ai.c's ai_* defines resolve there, no libm anywhere)
-ai_c = $R/ai.c $R/crew/cc/lib/math/am.c
+ai_c = $R/ai.c $R/crew/moon/lib/math/am.c
 f_c = $(wildcard $R/port/quay/*.c)
 c_c = $(wildcard $R/libc/*.c)
 

@@ -95,7 +95,7 @@
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels. returns
    ;; (items . labels): the flat byte/fixup stream and a name->address tablet. items accumulate
    ;; REVERSED (each chunk prepended, one rev at the end) so a whole-program lay stays linear --
-   ;; appending to the tail re-copied the stream per instruction, and `aicc -c ai.c` paid it as
+   ;; appending to the tail re-copied the stream per instruction, and `mooncc -c ai.c` paid it as
    ;; 15 of its 16 minutes. --
    (lay prog be addr items labels)
       (? (! (two? prog)) (>< (rev items) labels)

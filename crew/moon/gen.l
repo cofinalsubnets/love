@@ -1,4 +1,4 @@
-; crew/cc/gen.l -- the code generator (rung 3 stage 3). AST -> (1 ir-forms) |
+; crew/moon/gen.l -- the code generator (rung 3 stage 3). AST -> (1 ir-forms) |
 ; (). holo's neutral IR, chibicc-plain: every expression computes into r0 and
 ; now CARRIES ITS TYPE -- cgexpr answers (type forms) so pointer arithmetic
 ; scales, dereferences load by pointee width, and arrays decay to addresses.
@@ -685,7 +685,7 @@
                        (cat c
                         (cat tf (cat `(`('jmp ld) `('label le))
                          (ef + `(`('label ld))))))))))
-          ; -- the varargs builtins, per target (crew/cc/include/stdarg.h). SysV: the
+          ; -- the varargs builtins, per target (crew/moon/include/stdarg.h). SysV: the
           ; 24-byte { int gp_offset; int fp_offset; void *overflow_arg_area; void
           ; *reg_save_area; } -- va_arg fetches from the save area until the offset
           ; passes the reg limit, then from the overflow area. AAPCS64: the 32-byte

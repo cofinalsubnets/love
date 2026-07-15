@@ -11,9 +11,9 @@
 ; zoo) scares off honestly, never drops a section. two targets, like obj.l
 ; (x86-64 field relocs REPLACE their field; aarch64 ones OR bits into the
 ; instruction word the placeholder carries).
-; loads after crew/holo/obj.l in the aicc cat -- reads elf-base / elf-machines /
-; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). cc.l drives it:
-; `aicc a.o b.c -o prog`.
+; loads after crew/holo/obj.l in the mooncc cat -- reads elf-base / elf-machines /
+; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). moon.l drives it:
+; `mooncc a.o b.c -o prog`.
 (:
    (ld-at l i) (? (i < 1) <l (ld-at >l (i - 1)))
    ; little-endian reads off a byte-indexable text; a u64 field can carry a

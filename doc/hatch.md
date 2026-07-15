@@ -9,7 +9,7 @@ adopt + two-generation re-exec machinery) and the bootstrap (the *egg*, [`ai/egg
 
 rustup downloads a prebuilt toolchain and keeps a clean line between *installing ai*
 (for users) and *checking out the source* (for contributors). We don't want that line —
-because ai already rebuilds itself from source with **no external toolchain** (aicc +
+because ai already rebuilds itself from source with **no external toolchain** (mooncc +
 [`crew/holo/link.l`](../crew/holo/link.l) + nolibc; `make test_raw` is gcc/glibc/ld-free).
 
 So for us, **installing *is* cloning-and-hatching a local checkout.** The two acts

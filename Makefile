@@ -57,7 +57,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_lux test_kore test_reef test_vi test_cc test_raw nettest test_arm64 test_kernel test_wasm test_wake
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_lux test_kore test_reef test_vi test_moon test_raw nettest test_arm64 test_kernel test_wasm test_wake
 all: host kernel wasm
 
 # NB: there is NO git pre-commit hook -- committed artifacts (wasm/ai.js, bench/
@@ -94,7 +94,7 @@ valg: host
 .PHONY: ulp
 ulp:
 	@mkdir -p out/host
-	@$(CC) -O2 -o out/host/ulp $R/tools/ulp.c $R/crew/cc/lib/math/am.c -lm
+	@$(CC) -O2 -o out/host/ulp $R/tools/ulp.c $R/crew/moon/lib/math/am.c -lm
 	@out/host/ulp
 out/host/perf.data: host
 	cat $t | perf record -o $@ $m

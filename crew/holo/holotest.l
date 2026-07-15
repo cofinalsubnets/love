@@ -309,7 +309,7 @@
       `("a64.shlv"     "0020c19a"          '((shlv r0 r1)))              ; lsl x0, x0, x1
       `("a64.shrv"     "e724c19a"          '((shrv r7 r1)))              ; lsr x7, x7, x1
       `("a64.sarv"     "6328c19a"          '((sarv r3 r1)))              ; asr x3, x3, x1
-      ;; the cc-rung lanes (aicc -t arm64): lean; the 24-bit add/sub split; the FAR memory
+      ;; the cc-rung lanes (mooncc -t arm64): lean; the 24-bit add/sub split; the FAR memory
       ;; lane (movz x16 + add/sub off the base); fp LDUR/STUR + far (frame slots run negative);
       ;; f16+ registers; cmp's cmn flip; p/np as vs/vc (FCMP parks unordered in V). llvm-mc-verified.
       `("a64.lean"     "808000d1"          '((lean r0 r4 -32)))          ; sub x0, x4, #32 (lea's alias)

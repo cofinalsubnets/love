@@ -1,4 +1,4 @@
-# release — the aicc + reef + precedence cut
+# release — the moon + reef + precedence cut
 
 Status: **checklist / in progress.** Started 2026-07-14. The living checklist for the next
 public cut. Prior release state (Juneteenth 2026-06-19) is archived at
@@ -8,9 +8,9 @@ public cut. Prior release state (Juneteenth 2026-06-19) is archived at
 
 Three features carry this release:
 
-1. **aicc — the self-hosting toolchain.** ai builds itself from source with no external
-   toolchain: `aicc` (the C compiler) + [`crew/holo/link.l`](../crew/holo/link.l) (our linker)
-   + nolibc. `make test_raw` is gcc/glibc/ld-free.
+1. **moon — the self-hosting toolchain.** ai builds itself from source with no external
+   toolchain: `mooncc` (the C compiler, crew `moon`) + [`crew/holo/link.l`](../crew/holo/link.l)
+   (our linker) + nolibc. `make test_raw` is gcc/glibc/ld-free.
 2. **reef — the vcs.** New this cut. A patch-DAG version control folded together with the
    installer (hatch). Model in [`doc/hatch.md`](hatch.md), verb set in [`doc/reef.md`](reef.md);
    needs to get practically working.
@@ -26,8 +26,8 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 
 | feature | state | gap to release |
 |---|---|---|
-| aicc (x64) | landed — gcc-free ai boots + passes the corpus | polish + docs; command becomes `mooncc` (rename deferred, see below) |
-| aicc (arm64) | rungs A–C landed (static exes + .o + our-linker, varargs + sibcalls, 88/88 battery 3 ways) | rung D (nolibc/mksys, the gcc-free arm64 path) about to land — **best-effort in, does NOT block** |
+| moon/mooncc (x64) | landed — gcc-free ai boots + passes the corpus; **rename to `moon`/`mooncc` landed 2026-07-15** (crew/moon/, moon.l, moon-main, test_moon, doc/moon.md) | polish + docs |
+| moon (arm64) | rungs A–C landed (static exes + .o + our-linker, varargs + sibcalls, 88/88 battery 3 ways) | rung D (nolibc/mksys, the gcc-free arm64 path) about to land — **best-effort in, does NOT block** |
 | reef/vcs | **MVP landed 2026-07-14** — `record`·`sync`·`hatch`·`log`·`diff` over the content-addressed `.reef/` store (crew/reef/, sha256 in host/hash.c); `sync` unions a peer nest + re-derives the DAG + materializes; `hatch` builds the recorded source into a seed keyed by patch-set + arch (reproducibility audit); `make test_reef` gates it | the cached-fetch CDN substituter (deferred with public distribution); `cut`/`undo` reserve-the-names |
 | precedence | **landed 2026-07-14** — grip bands in prel.l opfix, corpus re-validated (3 asserts shifted, all `\|`/`&`-with-`=`), `test/precedence.l` gates it | done (the `grip` name + house=27 ship as working defaults, gwen's to bless) |
 | namespaces | phases 1+3 landed — `(names ())` 820 → 327; **phase-3 tail landed 2026-07-14** — all six module books are lookup-only closures, poison-proof, with a `'keys` probe | done (optional `~327 → 323` curation trim aside); the abyss/scoped-layers arc stays deferred |
@@ -38,10 +38,11 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 
 ### A. features
 
-**aicc**
-- [x] decide arm64 scope — **does NOT block the release.** Rungs A–C landed; rung D (nolibc/mksys, currently
-      dirty in `crew/cc/lib/`) is about to land and we'll try to fold it in, but the cut ships either way (see [[aicc-arm64]])
-- [ ] `doc/cc.md` reads as a release doc, not a build log — a user can compile a hello-world and know the flags
+**moon / mooncc**
+- [x] decide arm64 scope — **does NOT block the release.** Rungs A–C landed; rung D (nolibc/mksys, dirty in the
+      arm64 worktree's `crew/moon/lib/` — the `crew/cc/`→`crew/moon/` rename landed here first, so that worktree
+      reconciles the path on merge) is about to land and we'll try to fold it in, but the cut ships either way (see [[aicc-arm64]])
+- [ ] `doc/moon.md` reads as a release doc, not a build log — a user can compile a hello-world and know the flags
 - [ ] a headline one-liner ("a self-hosting C toolchain in ~N lines of ai; no gcc, no glibc, no ld")
 
 **as** — a real assembler, the front tooth of the gcc-free chain (pairs with link.l's `ld`)
@@ -54,8 +55,8 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - Scope: **x64 this cut** (arm64 assembler folds into the arm64 parity arc, not now).
 - Bar (gwen 2026-07-14): **THIS cut = battery + link-and-run** — hand-written `.s` snippets byte-identical
   to `/usr/bin/as`, then linked via link.l into binaries that run; the instruction tail grows one snippet
-  at a time. **NEXT cut = `aicc -S` round-trip** (teach aicc an asm-text emitter, prove `aicc -S | as` ==
-  `aicc -c` byte-for-byte). North star (later): assemble real `gcc -S ai.c` → boot (needs link.l foreign-obj
+  at a time. **NEXT cut = `mooncc -S` round-trip** (teach mooncc an asm-text emitter, prove `mooncc -S | as` ==
+  `mooncc -c` byte-for-byte). North star (later): assemble real `gcc -S ai.c` → boot (needs link.l foreign-obj
   features — .eh_frame/.bss/comdat it skips today).
 - Milestones: M1 ~15 core instrs → `.o` → link → runs (`.text` byte-diffed vs system as) · M2 width
   variants + memory operands + `.data`/relocs + **branch relaxation** (short/near) · M3 SSE + the long
@@ -77,7 +78,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
   so it takes pre-laid `(items·labels)` sections, not IR forms) + as.l migrated bare→`holo`-book refs
   (to live in the kore cat beside obj.l/link.l, cf. `asbook.l`) + `as-main` reading AT&T + emit `.o`
   through obj.l + link via link.l. All touches `crew/holo/` + the kore cat — hold until the arm64 work
-  in crew/holo/{obj,arm64,link}.l + crew/cc/ commits, to avoid the collision.
+  in crew/holo/{obj,arm64,link}.l + crew/moon/ commits, to avoid the collision.
 - **kore-as-`as` dispatch (gwen 2026-07-14):** kore invoked as `as` execs the holo assembler binary —
   same execvp pattern as kore-as-`cc`→mooncc (binary name a small open item, cf. mooncc).
 - [x] **`test_as` byte-diff gate LANDED 2026-07-14** — `crew/holo/astest.l` (33-instr straight-line battery)
@@ -138,19 +139,25 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 
 - [x] **aicc → moon** (crew name) / **mooncc** (the binary) — DECIDED. Creature = the glowing mycelium 🍄 on holo's cave walls; moon is a sibling to inle (the kernel). `mooncc` slots into the cc/gcc/tcc tradition and clears the `moon`(MoonBit)/`moonc`(MoonScript) collision
 - [ ] **kore-as-`cc`** — moon left the au/kore cat, so kore invoked as `cc` execs `mooncc`. No new PATH-walker needed: the `exec` nif IS `execvp` (host/main.c:334), which searches $PATH itself. kore's `cc` case builds argv `("mooncc" . args)` and `(exec …)`; on success it never returns, on absence it returns an errno fixnum (ENOENT) → fall back to `cc: mooncc not found` + quit 127
-- [x] decide the command name — **`aicc` → `mooncc`** (with `kore` invoked as `cc` execing `mooncc`). The
-      rename-all-the-way-down + the kore-as-`cc` dispatch are **DEFERRED with the arm64 work**: arm64 parity
-      still churns the `crew/cc/` + `crew/holo/{obj,arm64,link}.l` seams, so the token sweep waits to avoid the
-      same collision that holds the `as` integration. Land it in the arm64 batch, not this cut.
+- [x] **rename-all-the-way-down LANDED 2026-07-15** — `crew/cc/` → `crew/moon/`, `cc.l` → `moon.l`,
+      `doc/cc.md` → `doc/moon.md`, the binary `aicc` → `mooncc` (+ `mooncc.image`, `bin/mooncc`), `cc-main`
+      → `moon-main`, `test_cc` → `test_moon`, `__aicc__` → `__mooncc__` (doc-only, the macro isn't in `ai.h`
+      yet). The math floor moved with it (`crew/moon/lib/math/am.c`, tracked through `common.mk`/`wasm`/`ulp`/
+      `arm64check`). `make test` ×3 + `test_moon` green; `Cookfile` regenerated clean. Done ahead of the arm64
+      batch (gwen's call — accepting the `crew/moon/` + `crew/holo/` merge friction with the in-flight arm64 work).
+- [ ] **kore-as-`cc` dispatch** — still pending (a feature, not the rename): kore invoked as `cc` execs `mooncc`
+      via the `exec`/`execvp` nif. kore.l has no `cc` case yet. See item above and §B[2].
 - [x] **reef** = 🪸 coral — the vcs/distro persona (the coral colony = the patch DAG). Chosen 2026-07-14 (was `tree`; dropped for the `tree(1)` collision + reef fits the rootless, accretion-only model better — see reef.md §why-reef). Command name still open, and like everything, revisable.
 - [x] **pulchritude** persona coral → giant centipede (brightly-colored *Scolopendra*); keep the name (it carries its own layers). Done in the `5b3f84bf` roster refresh — `index.html` reads `🐛 pulchritude ◦ the editor / brightly banded centipede`. Emoji is 🐛 (gwen 2026-07-14, keeps over the earlier 🦂 shorthand)
 - [x] **au → kore** 🦨 (skunk) — LANDED (`15f46d45`), all-the-way-down: crew/kore/, kore.l, bin/kore, test_kore, doc/kore.md. Follow-ups: a kore roster line in index.html; kore-as-`cc` execs mooncc (needs moon)
 - [x] **phos → lux** — DECIDED. The WM; mantis shrimp stays as the creature. Own pass — plan in §appendix
-- [ ] name sweep for any rename — grep `.l` `.c` `.h` `.md` `.html` `Makefile` `.mk` + `index.html` crew list + C-embedded lisp (the naming-lore rule)
+- [x] name sweep for the `aicc`→`mooncc` / `crew/cc`→`crew/moon` rename — swept `.l` `.c` `.h` `.md` `.mk`
+      `Makefile` + regenerated `Cookfile`; `index.html`/`README` had no `aicc` refs yet (crew list add is item C).
+      Any FUTURE rename re-runs this (the naming-lore rule)
 
 ### C. docs & the public face
 
-- [ ] `index.html` crew list: add aicc + reef (pulchritude's creature already moved — `5b3f84bf`). Probe examples against `out/host/ai`, don't write from memory. Keep README's roster in sync when these land
+- [ ] `index.html` crew list: add moon/mooncc + reef (pulchritude's creature already moved — `5b3f84bf`). Probe examples against `out/host/ai`, don't write from memory. Keep README's roster in sync when these land
 - [x] ~~`crew/README.md` roster~~ — DROPPED (gwen 2026-07-14). The file was deliberately deleted in `c21a0de0` (site consolidation → one static `index.html`); the roster lives in `index.html` now, not a per-crew README
 - [ ] blue paper (`tools/blue.l` → blue.md/html) — mention the toolchain + vcs if in scope
 - [x] `README.md` full crew roster — expanded the curated ain/bao/inle sample to the full 13-member roster mirroring `index.html` (gwen chose full roster over aicc+reef-only, 2026-07-14). aicc/moon + reef join both README + `index.html` together at the crew-list refresh above
@@ -216,7 +223,7 @@ one-line `<dd>` — creature + role, no prose).
 1. **arm64 scope** — DECIDED: does NOT block. Rung D (nolibc/mksys) best-effort into this cut, ships either way
 2. **reef's minimum viable surface** — TENTATIVE: the `record · sync · log · diff + hatch` verb set (gwen
    2026-07-14); to be CONFIRMED with the patch thread once it finishes its current heavy proof work
-3. **the names** — aicc's persona (open), reef/coral chosen (was tree), pulchritude→centipede, kore for au, phos→lux — all standing, none frozen.
+3. **the names** — moon/mooncc landed (was aicc), reef/coral chosen (was tree), pulchritude→centipede, kore for au, phos→lux — all standing, none frozen.
 4. **precedence in-scope** — DECIDED: YES (gwen 2026-07-14; prel-only, conservative extension, no C)
 5. **namespaces scope** — DECIDED: no sealed-tablet feature; module books become lookup-only closures over
    private tablets (closes phase 3's named tail), abyss/scoped-layers held. names() curation trim optional

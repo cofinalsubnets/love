@@ -13,7 +13,7 @@
 // kernel-internal declarations (private; merged from former i.h)
 // ============================================================================
 
-// the math floor is OURS on every frontend: crew/cc/lib/math/am.c (the seven
+// the math floor is OURS on every frontend: crew/moon/lib/math/am.c (the seven
 // transcendentals; fdlibm and -lm both retired). the 32-bit lane computes in
 // binary64 and narrows -- correct within a float ulp for free.
 double am_sin(double), am_cos(double), am_atan2(double, double),

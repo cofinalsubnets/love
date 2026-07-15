@@ -36,8 +36,8 @@ O=out/arm64; mkdir -p $O
 # the sibling-call optimization the threaded loop relies on.
 CF="-std=gnu2x -O2 -Dai_tco=1 -I. -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
 echo "AARCH64 cross-build ($GCC)"
-# crew/cc/lib/math/am.c is the math floor (fdlibm/-lm retired) -- link it like the host does.
-for f in ai.c host/*.c crew/cc/lib/math/am.c; do
+# crew/moon/lib/math/am.c is the math floor (fdlibm/-lm retired) -- link it like the host does.
+for f in ai.c host/*.c crew/moon/lib/math/am.c; do
   o=$O/$(basename "$f" .c).o
   $GCC $CF -c "$f" -o "$o"
 done

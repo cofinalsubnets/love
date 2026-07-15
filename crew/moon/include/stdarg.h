@@ -1,4 +1,4 @@
-/* stdarg.h -- crew/cc's own, for `aicc`. cc implements the three __builtin_va_*
+/* stdarg.h -- crew/moon's own, for `mooncc`. cc implements the three __builtin_va_*
  * forms directly, over the target's real va_list -- the System V AMD64 24-byte
  * struct or the AAPCS64 32-byte one -- fed by cc's variadic prologue from a
  * register save area. both are an array of one so a va_list DECAYS to a pointer

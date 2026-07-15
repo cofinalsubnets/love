@@ -137,7 +137,7 @@ int image_bake(struct ai *g) {
 // (bake path) -- snapshot the LIVE session to an image file, mid-eval: the running
 // stack's objects ride into the blob as wake-unreachable ballast and the load side
 // resets sp/ip, so `ai --wake path prog.l ..` boots a session carrying every global
-// this one had pinned (an app baked warm: the aicc image erases its per-run load).
+// this one had pinned (an app baked warm: the mooncc image erases its per-run load).
 // natives cannot serialize -- the post.l wrapper empties the glaze compile cache
 // first (they re-JIT lazily in the woken session); any OTHER live native closure at
 // bake time is on the caller. answers 1 | ().

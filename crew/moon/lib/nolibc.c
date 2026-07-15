@@ -1,14 +1,14 @@
-/* crew/cc/lib/nolibc.c -- the raw-syscall libc under the gcc-free ai (rung 4).
+/* crew/moon/lib/nolibc.c -- the raw-syscall libc under the gcc-free ai (rung 4).
  * Everything the host objects ask of glibc, answered straight off the Linux
- * syscall table through __ai_sys (crew/cc/lib/mksys.l lays that leaf,
- * with __sigsetjmp/siglongjmp/__ai_sigret beside it; crew/cc/lib/math/
- * carries the math floor, crew/cc/lib/math/am.c -- ours). One file, aicc-compiled, our own linker binds it:
- *   aicc ai.o (host objects) nolibc.o (math objects) sys.o -o ai
+ * syscall table through __ai_sys (crew/moon/lib/mksys.l lays that leaf,
+ * with __sigsetjmp/siglongjmp/__ai_sigret beside it; crew/moon/lib/math/
+ * carries the math floor, crew/moon/lib/math/am.c -- ours). One file, mooncc-compiled, our own linker binds it:
+ *   mooncc ai.o (host objects) nolibc.o (math objects) sys.o -o ai
  * Two arches, one body: every call below speaks the modern forms BOTH tables
  * carry (openat / newfstatat / ppoll / pipe2 / dup3 / clone / the *at file
  * ops) -- aarch64's asm-generic table dropped the legacy names outright, so
  * the NR block under this comment is the only thing that gates. The shapes
- * MATCH crew/cc/include/: struct stat and dirent are the kernel layouts
+ * MATCH crew/moon/include/: struct stat and dirent are the kernel layouts
  * verbatim (stat.h arch-gates the struct), termios rides TCGETS raw the way
  * musl does, and only sigaction needs a real translation (glibc's 152-byte
  * struct to the kernel's -- x86-64 supplies a restorer, aarch64's kernel

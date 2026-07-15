@@ -13,7 +13,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 installs = \
   $d/bin/ai \
   $d/bin/kore \
-  $d/bin/aicc \
+  $d/bin/mooncc \
   $d/bin/cook \
   $d/bin/ain \
   $d/bin/lux \
@@ -23,7 +23,7 @@ installs = \
   $d/lib/ai/prel.l \
   $d/lib/ai/ev.l \
   $d/lib/ai/bao.l \
-  $d/lib/ai/aicc.image \
+  $d/lib/ai/mooncc.image \
   $d/lib/libai.a \
   $d/lib/libai.so \
   $d/include/ai.h \
@@ -98,22 +98,22 @@ $d/bin/kore: $(korefiles)
 	@{ echo '#!/usr/bin/env -S ai'; cat $(korefiles); } > $@
 	@chmod 755 $@
 
-# aicc: the C compiler, ITS OWN app (doc/cc.md). The installed bin is a WAKE SHIM:
-# it boots the baked aicc IMAGE next door (--wake, ~ms) and fires cc-main on the
+# mooncc: the C compiler, ITS OWN app (doc/moon.md). The installed bin is a WAKE SHIM:
+# it boots the baked mooncc IMAGE next door (--wake, ~ms) and fires moon-main on the
 # args -- the whole-cat re-eval (~1.3 s at every compile) is paid ONCE, at bake.
 # The image is baked by the build binary against the build cat (below); strip
 # keeps .text/.rodata vaddrs, so the stripped installed ai wakes it fine -- but
 # it IS binary-specific (anchor-checked), so image and binary always install
 # from the same build. Kept OUT of the kore cat so a cc edit never forces an kore
 # rebuild and vice versa.
-$d/bin/aicc: $(MAKEFILE_LIST)
+$d/bin/mooncc: $(MAKEFILE_LIST)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/ai" --wake "$$h/../lib/ai/aicc.image" -e "(cc-main (cuup (cup cmdline)))" "$$@"'; } > $@
+	   echo 'exec "$$h/ai" --wake "$$h/../lib/ai/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
 	@chmod 755 $@
-$d/lib/ai/aicc.image: $(ho)/aicc.image
+$d/lib/ai/mooncc.image: $(ho)/mooncc.image
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

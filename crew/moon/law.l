@@ -1,12 +1,12 @@
-; crew/cc/law.l -- the compiler's laws (stage 0), held by assertion over the
+; crew/moon/law.l -- the compiler's laws (stage 0), held by assertion over the
 ; pure pipeline: lexer goldens (kinds, values, lines, maximal munch), parser
 ; AST goldens, and the WHOLE IR for return-42 compared form by form. the cat
-; (`make test_cc`):
+; (`make test_moon`):
 ;
-;   cat test/00-init.l crew/cc/lex.l crew/cc/parse.l crew/cc/gen.l crew/cc/law.l | out/host/ai
+;   cat test/00-init.l crew/moon/lex.l crew/moon/parse.l crew/moon/gen.l crew/moon/law.l | out/host/ai
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
-; smoke through the real `aicc`.
+; smoke through the real `mooncc`.
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
 (: (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))   ; lists don't index by application
@@ -278,7 +278,7 @@
       (! (cgn "int main() { double a = 1.0; return ~a; }"))))                          ; ~ on a double is still invalid
 
 ; --- variadic functions + _Static_assert (stage 6c). the `...` is recorded as
-; the signature's variadic flag (cc's simplified all-stack call ABI -- doc/cc.md);
+; the signature's variadic flag (cc's simplified all-stack call ABI -- doc/moon.md);
 ; the three __builtin_va_* forms parse to (vastart|vaend v) / (vaarg v type);
 ; _Static_assert folds its constant at parse and vanishes to a (tdef) no-op,
 ; refusing the whole compile when the constant is false. ---
@@ -554,5 +554,5 @@
       (two? (cgn "int f(int x){return x;} typedef int (*fp)(int); fp t[1] = { &f }; int main(){ return t[0](1); }"))
       (! (cgn "int main(){ return (long)&nope; }"))))
 
-(say err "crew/cc/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE, bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) ok")
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE, bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) ok")
 (put err 10)

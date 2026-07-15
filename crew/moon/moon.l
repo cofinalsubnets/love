@@ -1,5 +1,5 @@
-; crew/cc/cc.l -- the C compiler's driver:
-;   aicc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
+; crew/moon/moon.l -- the C compiler's driver:
+;   mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
 ; reads C, rides lex -> cpp -> parse -> gen -> the holo book. one .c WITHOUT -c
 ; lays a runnable static ELF directly (chmod 755, _start + text + data one
 ; segment); WITH -c it lays relocatable ELF objects (crew/holo/obj.l --
@@ -7,13 +7,13 @@
 ; landing in the cwd as x.o (gcc-shaped); a .o input or SEVERAL inputs without
 ; -c is a LINK -- our own static linker (crew/holo/link.l, rung 3) binds them
 ; (compiling any .c on the way) into -o's exe, `a.out` bare. the old positional
-; pair `aicc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
+; pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
 ; no .o). -I dirs search before the system pair on both include forms; a -D
 ; rides in as a synthesized #define line, so token bodies and function-like
 ; -DF(x)=.. take the one macro path. errors speak on err and exit 1; usage
-; exits 2. LAST in the aicc cat (its own app, doc/cc.md), after
-; crew/holo/{elf,obj,link}.l and crew/cc/{lex,cpp,parse,gen}.l; rides the
-; u-floor (uread udie). its tail SEAT fires cc-main when aicc is the program.
+; exits 2. LAST in the mooncc cat (its own app, doc/moon.md), after
+; crew/holo/{elf,obj,link}.l and crew/moon/{lex,cpp,parse,gen}.l; rides the
+; u-floor (uread udie). its tail SEAT fires moon-main when mooncc is the program.
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
    (cdir path) (: n (tally path)
@@ -26,8 +26,8 @@
    ; (1 text child) -- the child hook resolves the hit file's OWN quote
    ; includes beside it (gcc's rule; cpp.l threads it). -> that | ().
    (incload is srcdir name sys?)
-    (: dirs (? sys? (is + `("crew/cc/include/" "/usr/include/"))   ; our headers (stdarg.h ..) win for <>
-                (`(srcdir "") + is + `("crew/cc/include/" "/usr/include/")))
+    (: dirs (? sys? (is + `("crew/moon/include/" "/usr/include/"))   ; our headers (stdarg.h ..) win for <>
+                (`(srcdir "") + is + `("crew/moon/include/" "/usr/include/")))
        (go ds) (? (! (two? ds)) ()
                   (: r (uread (<ds + name))
                      (? (two? r)
@@ -93,7 +93,7 @@
    ; the entry hands the OS stack pointer (argc sits at [rsp]) to __ai_start
    ; and exits with its answer if it ever returns. __ai_start is defined here
    ; WEAK -- the bare call-main tail every small link gets (the push 16-aligns
-   ; the call) -- so a libc object (crew/cc/lib/nolibc.c, rung 4) can override
+   ; the call) -- so a libc object (crew/moon/lib/nolibc.c, rung 4) can override
    ; it strong and unpack argv/envp/auxv before main. no conditional anywhere:
    ; the weak machinery is the whole switch.
    crt0 `(`('mov 'r6 'sp)
@@ -125,7 +125,7 @@
        ps (ldlink tgt (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") ()))) srcs))
        _ (ld-write dst ps)
        (chmod dst 493))
-   usage "usage: aicc [-c] [-t x64|arm64] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
+   usage "usage: mooncc [-c] [-t x64|arm64] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
    ; the flag scan: -c, -t tgt / -ttgt, -I dir / -Idir, -D def / -Ddef, -o out;
    ; every other bare arg is an input, any other dash arg refuses.
    ; -> (c idirs defs out ins tgt).
@@ -151,7 +151,7 @@
              (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))))
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)
              (flags r c is ds o (link a ins) t9))))
-   (cc-main as)
+   (moon-main as)
     (: f (flags as () () () () () 'x64)
        c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5)
        (? (! (two? ins)) (udie 2 usage)
@@ -173,16 +173,16 @@
           (lnky? ins) (: _ (cc-link ins "a.out" is ds tgt) (quit 0))
           (udie 2 usage))))
 
-; the SEAT: fire cc-main iff aicc sits in the program seat of the real command line
+; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the
 ; args AFTER the seat. `cmdline` is the full C argv, read the same in both load orders.
-; aicc is its OWN app (its own catted shebang script, doc/cc.md): it does NOT ride the
-; au multi-call cat, so a cc edit rebuilds only aicc, never au. matching aicc/cc.l here
+; mooncc is its OWN app (its own catted shebang script, doc/moon.md): it does NOT ride the
+; au multi-call cat, so a cc edit rebuilds only mooncc, never au. matching mooncc/moon.l here
 ; keeps the seat quiet under any other program name.
 (: (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   (me? w) (: b (bn w) (|| (b = "aicc") (|| (b = "aicc.l") (b = "cc.l"))))
+   (me? w) (: b (bn w) (|| (b = "mooncc") (|| (b = "mooncc.l") (b = "moon.l"))))
    (seat a) (? (! (two? a)) ()
                (<a = "-l") (? (two? >a)
                                    (? (me? <>a) (link 1 >>a) (seat >>a))
@@ -190,4 +190,4 @@
                (me? <a) (link 1 >a)
                ())
    s (seat >cmdline)
-   (? (two? s) (cc-main >s) ()))
+   (? (two? s) (moon-main >s) ()))

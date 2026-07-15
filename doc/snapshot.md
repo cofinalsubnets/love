@@ -124,8 +124,8 @@ Departures from the original plan above, worth noting:
 `(bake "x.image")` snapshots the RUNNING session to an image file, mid-eval — no quiescent
 point required — and answers 1 | (); the session rides on. Wake it with `ai --wake x.image
 prog.l args..`: the woken book carries every global pinned before the bake, so an app loaded
-warm (`ai -l app -e '(bake "app.image")'`) never pays its load again — the aicc image took
-`aicc -c ai.c` from ~3.7 s to ~2.4 s, the whole per-run load tax. Three seams make mid-eval
+warm (`ai -l app -e '(bake "app.image")'`) never pays its load again — the mooncc image took
+`mooncc -c ai.c` from ~3.7 s to ~2.4 s, the whole per-run load tax. Three seams make mid-eval
 dumping honest where the boot bake could assume purity:
 
 - **The stack is ballast, not state.** The running continuation's objects get traced (they're
