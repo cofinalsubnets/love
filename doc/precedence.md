@@ -90,6 +90,7 @@ bands, coarse and few:
 
 ```
 ; higher grip binds tighter. leave gaps so a level can slot between later.
+;   **             grip 70   (apply — flip-apply (a ** b = (b a)), tightest infix)
 ;   * / %          grip 60   (multiplicative)
 ;   + -            grip 50   (additive)
 ;   < <= > >= =    grip 40   (comparison)   <- the assert-relation band
@@ -97,8 +98,19 @@ bands, coarse and few:
 ;   (house)        grip 27   (coined operators — the default, fresh punct, no row)
 ;   ><             grip 25   (cons — the loosest builder)
 ;   <- ->          grip 20   (assignment aliases)
-;   ?              grip 10   (cond — loosest)
+;   ?              grip 10   (cond)
+;   $              grip 5    (weak apply — a $ b = (a b), the haskell $, loosest)
 ```
+
+`**` and `$` are the two **apply** operators, both self-named (the reader emits
+`(** a b)` / `($ a b)`, backed by the prel globals `(: (** a b) (b a))` and
+`(: $ 1)` — `$` *is* the identity, so `($ a b) = (a b)`). They bracket the
+range: `**` flip-applies at the tightest grip (a pipe-like reverse apply that
+binds before arithmetic), `$` weak-applies at the loosest (everything to its
+right groups first, then applies — `f $ a + b` is `f (a + b)`, and `f $ g $ x`
+folds right to `f (g x)`, exactly haskell's `$`). The glued monadic `$x` is
+untouched — it factors through the `monadics` table to `saturate`, a separate
+valence the spaced dyadic never sees.
 
 The house default is **27**, a hair tighter than `><` (25): cons builds its pair
 *last*, after everything computes, so it is deliberately the floor of the coined

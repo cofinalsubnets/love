@@ -285,21 +285,24 @@
 ; a value carries arity AND a GRIP (its precedence -- higher binds tighter, op-ent normalizes to the
 ; triple (name arity . grip)): a bare charm is arity at the house grip; (arity . grip) self-names with
 ; an explicit grip; (name . arity) aliases at house; (name arity . grip) aliases with an explicit grip.
-; the bands, coarse with gaps to slot more (doc/precedence.md): multiplicative 60, additive 50,
-; comparison 40, logical 30, house 27 (the coined-operator default, set at op-w's fresh-punct
-; fallback), cons builder 25, assignment 20, cond 10. an incoming operator STEALS a pending filled
+; the bands, coarse with gaps to slot more (doc/precedence.md): apply 70 (** flip-apply, tightest),
+; multiplicative 60, additive 50, comparison 40, logical 30, house 27 (the coined-operator default,
+; set at op-w's fresh-punct fallback), cons builder 25, assignment 20, cond 10, weak-apply 5 ($ the
+; haskell-like weak application, loosest). an incoming operator STEALS a pending filled
 ; operand iff its grip >= the frame's grip (op-steal), so equal grips stay right-associative (the
 ; conservative-extension case, today's flat read) and a tighter operator climbs in.
 (: operators
    (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
-      (L (L '$ (link 'saturate 1)) (L '! (link 'nil? 1)) (L '. (link 'dot 1))     ; arity-1 sigils: grip inert (prefix folds on fill)
+      (L (L '! (link 'nil? 1)) (L '. (link 'dot 1))                               ; arity-1 sigils: grip inert (prefix folds on fill)
+         (L '** (link 2 70))                                                      ; apply -- flip-apply, tightest infix (a ** b = (b a)); glued a**b unaffected (not in monadics)
          (L '* (link 2 60)) (L '/ (link 2 60)) (L '% (link 2 60))                 ; multiplicative
          (L '+ (link 2 50)) (L '- (link 2 50))                                    ; additive
          (L '= (link 2 40)) (L '< (link 2 40)) (L '<= (link 2 40)) (L '> (link 2 40)) (L '>= (link 2 40)) ; comparison
          (L '| (link 2 30)) (L '& (link 2 30)) (L '&& (link 2 30)) (L '|| (link 2 30))                    ; logical (&& || also macros; the row pins the grip below comparison)
          (L '>< (link 2 25))                                                      ; cons -- the loosest builder
          (L '<- (link 'pin (link 3 20))) (L '-> (link 'peep (link 3 20)))         ; assignment aliases
-         (L '? (link 3 10)))))                                                    ; cond -- loosest
+         (L '? (link 3 10))                                                       ; cond
+         (L '$ (link 2 5)))))                                                     ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
 ; the VALENCE LAW's table: a glued operator run is MONADIC (the reader emits
 ; (mono (run datum))); spaced, the run keeps its dyadic/infix life. each entry
 ; maps a run-piece to its monadic word; a run factors greedily (longest
@@ -558,6 +561,11 @@
 ; fields (idempotent for the trio) -- the C eval lane reads the field henceforth,
 ; so no later rebind of the nom can reach it.
 (seal-hooks ())
+; the two words behind the self-named apply operators (opfix is live now, so their punct binder
+; names ride verbatim): ** flips (a ** b = (b a), tightest grip), $ is the identity so a $ b = (a b)
+; -- haskell-like weak-binding application (loosest grip). glued $x stays saturate, a different valence.
+(: (** a b) (b a))
+(: $ 1)
 ; eat -- run a toast's native code. the ARITY is the first operand and currying
 ; selects the eater: (eat 1 t x) passes one machine word, (eat 2 t x y) two. eat1/
 ; eat2 (the raw 1-/2-arg ABI nifs) are mopped post-egg and fold in here; only a

@@ -139,7 +139,7 @@
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
    (allin? l ex) (? (two? l) (&& (peep ex (cap l) 0) (allin? (cup l) ex)) 1)
    (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (: _ (pin a (e2 e) 1) a) a)) (tablet 0) cs)
-   (fix ex) (: ex2 (pass cands ex) (? (= ($ ex2) ($ ex)) ex2 (fix ex2)))
+   (fix ex) (: ex2 (pass cands ex) (? (= $ex2 $ex) ex2 (fix ex2)))
    ex0 (foldl (\ a e (: _ (pin a (e2 e) 1) a) a) (tablet 0) cands)   ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
@@ -228,6 +228,6 @@
                 "Print Assumptions add_comm_std." (string 10)
                 "Print Assumptions add_assoc_std." (string 10)
                 "Print Assumptions mul_comm_std." (string 10) (string 10)
-                "(* " (show ($ keep)) " exported / " (show (tally ents)) " corpus entries swept;" (string 10)
+                "(* " (show $keep) " exported / " (show (tally ents)) " corpus entries swept;" (string 10)
                 "   3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)" (string 10))))
    (quit 0))

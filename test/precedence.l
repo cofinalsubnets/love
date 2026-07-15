@@ -23,6 +23,14 @@
  ((opfix '(a :+ b >< c)) = '((>< (:+ a b) c)))        ; a coined op (house 27) beats >< (25)
  ((opfix '(a :+ b + c)) = '((:+ a (+ b c))))          ; arithmetic (50) beats a coined op (27)
 
+ ; --- the two apply operators: ** flip-applies (a ** b = (b a)) at the TIGHTEST grip (70), $ weak-
+ ; applies (a $ b = (a b), the haskell $) at the LOOSEST (5). glued $x is saturate, a separate valence. ---
+ ((opfix '(a ** b * c)) = '((* (** a b) c)))          ; ** (70) tighter than * (60): folds before the multiply steals
+ ((opfix '(a * b ** c)) = '((* a (** b c))))          ; on the right too
+ ((opfix '(f $ a + b)) = '(($ f (+ a b))))            ; $ (5) below arithmetic: the sum groups, then weak-applies
+ ((opfix '(f $ g $ x)) = '(($ f ($ g x))))            ; equal grip -> right-assoc, exactly haskell's $
+ ((opfix '(a ** b $ c)) = '(($ (** a b) c)))          ; ** binds, $ is the loose outer apply
+
  ; --- idempotence: factored output carries operators only in head position, so re-running is a no-op ---
  ((opfix (opfix '(a * b + c))) = (opfix '(a * b + c)))
 
@@ -34,6 +42,11 @@
  (1 = (3 = 1 + 2))                                    ; the assert relation itself, unparenthesized
  (1 = (0 < 5 && 5 < 10))                              ; (&& (< 0 5) (< 5 10)) -- both true
  ('big = (1 < 2 ? 'big 'small))                       ; the C-ternary value
+ (4 = (3 ** (+ 1)))                                   ; ** flip-applies: ((+ 1) 3) = 4
+ (8 = (2 * 3 ** (+ 1)))                               ; ** tighter than *: (* 2 ((+ 1) 3)) = (* 2 4)
+ (6 = ((+ 1) $ 2 + 3))                                ; $ loosest: ((+ 1) (+ 2 3)) = ((+ 1) 5)
+ (13 = ((+ 1) $ (+ 2) $ 10))                          ; right-assoc: ((+ 1) ((+ 2) 10)) = ((+ 1) 12)
+ (0 = $-5) (3 = $2.9)                                 ; glued $x is UNCHANGED -- saturate, not weak-apply
 
  ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.
  ; a mutable tablet witnesses the non-evaluation (kept LOCAL in a body-having `:`). ---

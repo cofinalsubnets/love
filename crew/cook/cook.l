@@ -192,7 +192,7 @@
       (: shipped (tablet 0)
          _ (prep item (tablet 0) shipped)
          ; $ of a map is its key count: how many items actually ran a recipe.
-         (? (0 < ($ shipped))
+         (? (0 < $shipped)
             (: _ (puts ("cook: cooked " + (show item))) (putc 10))
             (: _ (puts ("cook: " + (show item) + " is already up to date")) (putc 10)))))
 
