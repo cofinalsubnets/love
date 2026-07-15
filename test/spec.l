@@ -132,6 +132,8 @@
  (5 = ((\ x x) 5))                               ; beta_id: (\ x x) a ~> a
  (1 = ((\ _ 1) 9))                               ; beta_const: (\ _ 1) a ~> 1 (drops its arg)
  (5 = ((\ x x) ((\ x x) 5)))                     ; beta_nested: (\ x x) ((\ x x) a) ~>* a
+ (10 = ((\ q ((\ i (: q 7 (+ i q))) q)) 3))      ; capture-avoiding: a : binder shadowing the arg does NOT capture it (i stays 3, local q 7)
+ (8  = ((\ q ((\ i (: i 5 (+ i q))) q)) 3))      ; a : REBINDING the lambda param shadows it -- the subst drops, not lands on the binder
  !((\ x (cap x)) = cap))                         ; eta_redex_shifts' twin: eta stays unbridged
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` numeric

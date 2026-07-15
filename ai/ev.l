@@ -381,12 +381,16 @@
     (all (\ e (pbody? e bnd)) x))
    (inlinable? nm lam) (&& (lambp lam) (smpl? lam) (closedl? lam) (pbody? lam ()) (! (w nm lam 0 0 0)))
    (rmkeys ps env) (filter (\ p (! (member? (cap p) ps))) env)                         ; drop shadowed substitutions
+   (colnms bs) (? (atom? (cup bs)) ()                                                  ; the : letrec's binder NOMS (sugar already lowered to \ by cpbinds)
+                  (: n (cap bs) (? (nom? n) (link n (colnms (cuup bs))) (colnms (cuup bs)))))
    (bsub env x) (?                                                                     ; capture-avoiding substitution
     (nom? x) (: p (assoc x env) (? (two? p) (cup p) x))
     (atom? x) x
     (id? (cap x) '\) (? (atom? (cuup x)) x
        (: r (lp x) ps (cap r) ren (map (\ p (link p (nom 0))) ps)                      ; rename binders to fresh -> no capture
           (link '\ (cat (map cup ren) (list (bsub (cat ren (rmkeys ps env)) (last x)))))))
+    (id? (cap x) ':) (: nms (colnms (cup x)) ren (map (\ p (link p (nom 0))) nms)       ; a : is a letrec scope too -- rename its binders fresh so a subst can't be captured
+       (map (\ e (bsub (cat ren (rmkeys nms env)) e)) x))
     (map (\ e (bsub env e)) x))
    (beta lam as) (: r (lp lam) ps (cap r) np (tally ps)                               ; apply a lambda to args (curried)
     (? (< (tally as) np) (link lam as)                                                 ; under-saturated -> leave a partial
