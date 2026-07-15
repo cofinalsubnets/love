@@ -124,38 +124,48 @@ the hook would re-enter `ala`. Options, cheapest first:
 Recommendation: ship (a) as the stated design, revisit (b) only if profiling
 shows embedded groups are hot.
 
-## the cache
+## the cache — MEASURED, decided NO (`fires`-probe, host x86, baked image)
 
-auto-ev memoizes: `(memo e (\ l ...))` keys the compile by the source form, so
-re-eval of the same lambda SITE reuses the compiled code. natjit does NOT memo —
-it compiles fresh per `ala` call, i.e. per closure INSTANTIATION. Many
-intermediate closures are built at runtime; a fresh compile each time is the
-cost.
+auto-ev memoizes: `(memo e (\ l ...))` keys the compile by the source form. natjit
+does NOT memo. The plan was measurement-first: **measure the impact of not caching
+before adding one.** Measured (the `fires` counter = natjit compiles):
 
-The question is measurement-first (per the plan): **measure the impact of not
-caching before adding a cache.** A leaf compile is cheap; if the hot closures are
-built once, the cache buys little. If a closure site is instantiated in a loop,
-the cache is the win.
+| workload                                   | closure builds | natjit compiles |
+|--------------------------------------------|----------------|-----------------|
+| full boot (egg+prel+ev+bao+hook asserts)   | whole corpus   | **14** total    |
+| 2000 **distinct** closed leaves via `ev`   | 2000           | 2000 (~0.16 ms) |
+| **same** source × 2000 via `ev`            | 2000           | **1** (memo)    |
+| same closed leaf × 2000 as a bare literal  | 2000           | **0** (hoisted) |
+| capturing `(\ x (+ x i))` × 100000 in loop | 100000         | **0** (see below) |
+| re-instantiating `(mk 5)` / `(id 9)`       | N              | **0** additional |
 
-The blocker if we DO cache the native VALUE: spec.l:117,
-`!(id? (\ x (+ x 1)) (\ x (+ x 1)))` — two evaluations of the same lambda are
-distinct objects. A cache that returns the SAME native cell for the same source
-would make them `id?`-equal, violating the law. The decision already taken: **it
-is not a strict correctness need for distinct evaluations of one lambda
-expression to be distinct objects — leave id?-distinctness unspecified if the
-cache is the only thing it blocks.** So the cache step is:
+The redundant-recompile count a source-keyed cache would eliminate is **zero**.
+An identical source never recompiles, because two mechanisms already prevent it:
+(1) **closed-leaf constant-hoisting** — a closed qualifying leaf is built once as a
+shared constant, reused on every eval; (2) **auto-ev's memo** on the `ev` path. The
+only workload that drives many compiles is *distinct* sources (runtime metaprogramming
+via `ev`), and those are all cache MISSES — a source-keyed cache can't help them.
 
-1. measure not-caching (get the number first).
-2. if it pays, add a compile cache keyed by source form (share the code bytes; a
-   cache that shares the whole cell is fine under the relaxation).
-3. relax spec.l:117 to drop the `!(id? …)` half for glazed leaves — keep the `=`
-   half (they stay structurally equal), document the carve-out.
+And a capturing leaf like `(\ x (+ x i))` (with `i` a free var resolved through the
+environment, not a frame slot) does not qualify for natjit's leaf grammar at all, so
+it never fires — 100k iterations, 0 compiles. natjit only fires on closures whose
+referenced vars are all frame slots, and those are built at their definition site,
+once. Total compiles are **site-bounded, not iteration-bounded**.
+
+**Decision (revisable): do not add the cache.** There is nothing to dedupe. A
+consequence worth keeping: spec.l:117's `!(id? (\ x (+ x 1)) (\ x (+ x 1)))` stays
+INTACT — no shared native cells, so id?-distinctness remains a real property, not a
+carve-out. The earlier plan (relax spec.l:117 for a shared-cell cache) is moot. If a
+future workload ever shows natjit compiles growing with iteration count (a hot site
+rebuilt under a differing frame that still qualifies), re-measure and revisit — but
+nothing in the current corpus or the microbenches exhibits it.
 
 ## sequence
 
 1. ~~**float leaf**~~ — LANDED (`8a88dfb9`).
 2. ~~**n-var loop**~~ — LANDED (`b172c80e`): `e` threaded through cf-deopt, ported.
-3. **measure the cache** — number first; add + relax spec only if it pays.
+3. ~~**measure the cache**~~ — MEASURED, decided NO (nothing to dedupe; hoisting +
+   auto-ev memo already cover it; spec.l:117 stays intact). See "the cache" above.
 4. **groups/grids/casks** — ship option (a) (leave to auto-ev) as the design;
    port (option b) only if embedded groups profile hot.
 5. **retire auto-ev's redundant coverage** — once natjit matches a lane, the
