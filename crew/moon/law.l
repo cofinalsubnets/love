@@ -528,8 +528,9 @@
 ; -- struct layout: a multi-declarator member line lays its names IN ORDER
 ; (`double re, im;` is re at 0, im at 8 -- a double rev once flipped it, an ABI
 ; break against gcc that only bit multi-declarator lines). and the by-value
-; struct rep: a two-double struct (SysV: two SSE eightbytes) rides calls as an
-; xmm pair -- returned, passed, copied; any OTHER by-value struct still refuses.
+; struct rep: a <=16-byte struct rides calls by its SysV eightbyte classes -- one
+; eightbyte in a gp/xmm reg, two eightbytes (int/sse in any mix) in a register
+; pair; returned, passed, copied. a >16-byte (MEMORY) struct still refuses.
 (: (cgn src) (: r (cparse (caup (clex src)))
                 (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (stg src) (: r (cparse (caup (clex src))) (peep (cauup r) "S" ()))
@@ -539,7 +540,8 @@
       (= (stg "struct S { char a, b; int c, d; }; int main(){return 0;}")
          '((("a" 0 char) ("b" 1 char) ("c" 4 int) ("d" 8 int)) 12 4))
       (two? (cgn "struct S { double re, im; }; static struct S mk(double a, double b){ struct S z = {a,b}; return z; } static double re(struct S z){ return z.re; } int main(){ return (int)re(mk(41.0, 1.0)) + 1; }"))
-      (! (cgn "struct T { int x, y, z; } t; struct T id(struct T a); int main(){ return id(t).x; }"))))   ; a non-sse2 by-value struct still refuses
+      (two? (cgn "struct T { int x, y, z; } t; struct T id(struct T a); int main(){ return id(t).x; }"))   ; a 9..16B two-eightbyte struct (int:int) now rides calls
+      (! (cgn "struct B { long a, b, c; } b; long f(struct B x); int main(){ return (int)f(b); }"))))       ; a >16B (MEMORY) by-value struct still refuses
 
 ; -- the gen tail: every name a comma-list prototype registers is callable (the
 ; sig sweep pins mproto siblings, which have no proto form of their own), and &f

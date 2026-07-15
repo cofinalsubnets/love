@@ -169,17 +169,27 @@ Getting there surfaced **five real mooncc capability rungs** (all general, all g
   `pasn` (assignment-expr, stops at the `,`) and `cfold` it, exactly like array dims and case
   labels already do — enum constants resolve through `ps 'enums`. Values byte-match gcc.
 
-### the two remaining walls (gzip.c → a working binary)
+### rung I — 16-byte struct-by-value parameters (SysV/AAPCS64) — LANDED 2026-07-15
 
-1. **16-byte struct-by-value PARAMETERS (SysV ABI) — NOT DONE.** timespec.h's inline helpers
-   (`timespec_cmp`/`timespec_sign`/`timespectod`) take `struct timespec` (tv_sec+tv_nsec = 16
-   bytes) **by value**. cc passes a ≤8-byte struct in one register (fine) but **refuses** a
-   >8-byte struct param — it doesn't implement the SysV two-eightbyte register classification
-   (INTEGER/SSE per eightbyte → rdi/rsi or xmm). ai.c never passes a >8-byte struct by value, so
-   it hid. cc *refuses rather than miscompiles* (correct), but this is the real codegen rung
-   blocking gzip.c, and a general one (every modern struct-by-value API needs it).
+`crew/moon/gen.l`. timespec.h's inline helpers take `struct timespec` (tv_sec+tv_nsec = 16 bytes)
+**by value**. cc passed a ≤8-byte struct in one register but **refused** anything bigger — it
+didn't wire the two-eightbyte register classification (only `sse:sse` and one-eightbyte lanes
+existed; the classifier `aclass` already computed both eightbytes, but arg/param lanes refused
+the rest). Now a 9..16-byte struct rides both the **param** (`spill`) and **call** (`kls`) lanes
+by its eightbyte classes — each eightbyte into a gp (`int`) or xmm (`sse`) register, all four
+combos (int:int, int:sse, sse:int, sse:sse). Arch-correct: x64 splits per eightbyte-class; arm64
+(AAPCS64) sends a non-HFA composite wholly in X regs, only an all-float HFA in V regs. Verified
+**byte-identical to gcc on both x86-64 and aarch64** (run under qemu) — call, return, and structs
+interleaved with scalar args. ai.c never passed a >8-byte struct by value, so it had hidden. A
+register-exhausted arg or a >16-byte (MEMORY) struct still refuses (`crew/moon/law.l` asserts both
+directions). This is a general rung (every modern struct-by-value API needs it); it un-refuses
+timespec.h's helpers, though gzip.c itself has a *separate* parse blocker still open (below).
 
-2. **the gnulib `lib/*.c` link tree — NOT DONE.** Even with every core `.o`, LINKING a working
+### the remaining wall (gzip.c → a working binary)
+
+1. **gzip.c's own parse blocker + the gnulib `lib/*.c` link tree — NOT DONE.** gzip.c (the CLI)
+   still parse-errors on a construct independent of the struct ABI (its headers + timespec.h now
+   all parse). And even with every core `.o`, LINKING a working
    gzip needs gnulib's implementations — `xmalloc`/`xstrdup` (xalloc), `dir_name` (dirname),
    `getopt_long`, `savedir`, `yesno`, `fcntl`-safer, quotearg, … — ~100 `lib/*.c`, each its own
    potential rung. This is the "gnulib-heavy" far end the ladder always flagged; gzip-1.13

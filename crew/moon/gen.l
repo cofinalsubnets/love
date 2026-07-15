@@ -148,6 +148,7 @@
    (sse2? g ty) (acls2 g ty 'sse 'sse)       ; both eightbytes SSE: the xmm0:xmm1 pair
    (ipair? g ty) (acls2 g ty 'int 'int)      ; both INT: rax:rdx (return/result lanes)
    (aone g ty) (: c (aclass g ty) (? (&& (two? c) (! (two? >c))) <c ()))
+   (aeb2 g ty) (: c (aclass g ty) (? (&& (two? c) (two? >c)) c ()))   ; a 9..16B aggregate's TWO eightbyte classes (c0 c1), else ()
    (fnret ty) (? (! (&& (two? ty) (<ty = 'ptr))) 'long   ; an indirect callee's result type: ('ptr ('fn ret)) | 'long
                  (: ft <>ty (? (&& (fn? ft) (two? >ft)) <>ft 'long)))
    ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same WIDTH as their signed
@@ -995,6 +996,25 @@
                                              `(`('sub 'sp 'sp 16) `('ld 'r1 'r0 8) `('st 'sp 8 'r1) `('ld 'r1 'r0 0) `('st 'sp 0 'r1))
                                              `(`('ld 'r1 'r0 8) `('push 'r1) `('ld 'r1 'r0 0) `('push 'r1)))))
                                       acc)))
+                       (&& (stru? aty) (two? (aeb2 g aty)))   ; a 9..16B struct arg (not sse:sse): eb0/eb1 each into a gp or xmm reg, mirrors the param side's file rule
+                        (: cls (aeb2 g aty) c0 <cls c1 <>cls
+                           hfa (&& (id? c0 'sse) (id? c1 'sse))
+                           f0 (? (a64? g) (? hfa 'x 'g) (? (id? c0 'sse) 'x 'g))
+                           f1 (? (a64? g) (? hfa 'x 'g) (? (id? c1 'sse) 'x 'g))
+                           gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
+                           xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
+                           (? (|| ((ngp g) < (gpc + gpn)) (8 < (xmmc + xmn))) 'bad   ; register-exhausted 16B struct arg: refuse (the memory-arg lane is unimplemented; rare -- needs 5+ prior int args)
+                              (: i0 (? (id? f0 'g) gpc xmmc)
+                                 gpc1 (? (id? f0 'g) (gpc + 1) gpc)
+                                 xmc1 (? (id? f0 'x) (xmmc + 1) xmmc)
+                                 i1 (? (id? f1 'g) gpc1 xmc1)
+                                 (kls >as (i + 1) (gpc + gpn) (xmmc + xmn) ovc
+                                      (link `(`('p2 f0 i0 f1 i1)
+                                               ((tor0 g a) +
+                                                (? (a64? g)
+                                                   `(`('sub 'sp 'sp 16) `('ld 'r1 'r0 8) `('st 'sp 8 'r1) `('ld 'r1 'r0 0) `('st 'sp 0 'r1))
+                                                   `(`('ld 'r1 'r0 8) `('push 'r1) `('ld 'r1 'r0 0) `('push 'r1)))))
+                                            acc)))))
                        (&& (stru? aty) (! (aone g aty))) 'bad   ; a MIXED/>16B by-value struct stays ahead
                        ; a one-eightbyte aggregate rides the scalar path: its
                        ; 8 content bytes load into r0 (the value IS an address)
@@ -1026,7 +1046,7 @@
                                      (go1 >l1 (? (ov? <l1) (link <l1 acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, REVERSED (deepest pushes first)
              rgr (: (go2 l2 acc2) (? (! (two? l2)) acc2
-                                     (go2 >l2 (? (member? (cap (cap (cap l2))) '(g x x2))
+                                     (go2 >l2 (? (member? (cap (cap (cap l2))) '(g x x2 p2))
                                                       (link <l2 acc2) acc2)))
                     (go2 kr ()))                          ; PUSHING register entries, reversed (pops run forward)
              (pushcat l3 acc3) (? (! (two? l3)) acc3 (pushcat >l3 (acc3 + (caup (cap l3)))))
@@ -1046,11 +1066,20 @@
                                                                  `('add 'sp 'sp 16))
                                                               `(`('pop 'r0) `('movqxr (xmmreg <>kc) 'r0)
                                                                  `('pop 'r0) `('movqxr (xmmreg (<>kc + 1)) 'r0)))
+                                                          (<kc = 'p2)   ; a general two-eightbyte struct: eb0 (top) then eb1, each into its gp/xmm target
+                                                           (? (a64? g)
+                                                              ((? (id? <>kc 'g) `(`('ld (nthr (argr g) <>>kc) 'sp 0)) `(`('ld px 'sp 0) `('movqxr (xmmreg <>>kc) px)))
+                                                               + (? (id? <>>>kc 'g) `(`('ld (nthr (argr g) <>>>>kc) 'sp 8)) `(`('ld px 'sp 8) `('movqxr (xmmreg <>>>>kc) px)))
+                                                               + `(`('add 'sp 'sp 16)))
+                                                              ((? (id? <>kc 'g) `(`('pop (nthr (argr g) <>>kc))) `(`('pop 'r0) `('movqxr (xmmreg <>>kc) 'r0)))
+                                                               + (? (id? <>>>kc 'g) `(`('pop (nthr (argr g) <>>>>kc))) `(`('pop 'r0) `('movqxr (xmmreg <>>>>kc) 'r0)))))
                                                           ((spop px) + `(`('movqxr (xmmreg <>kc) px)))))))))
                      (go4 kr ()))
              nxmm (: (go5 l5 n5) (? (! (two? l5)) n5
-                                    (go5 >l5 (: kk (cap (cap (cap l5)))
-                                                     (? (kk = 'x) (n5 + 1) (kk = 'x2) (n5 + 2) n5))))
+                                    (go5 >l5 (: ce (cap (cap l5)) kk <ce
+                                                     (? (kk = 'x) (n5 + 1) (kk = 'x2) (n5 + 2)
+                                                        (kk = 'p2) (+ n5 (+ (? (id? (nthr ce 1) 'x) 1 0) (? (id? (nthr ce 3) 'x) 1 0)))
+                                                        n5))))
                      (go5 kr 0))
              nov (tally ovr)
              padn (? ((& nov 1) = 1) 8 0)                 ; keep sp 16-aligned across the overflow block
@@ -2345,13 +2374,27 @@
        (spill ps gpi xmmi ovi env acc)
         (? (! (two? ps)) `(acc env)
            (: p <ps pty <>p
-              (? (sse2? g pty)                       ; a two-double struct param: an xmm PAIR into a 16-byte slot
-                  (? (6 < xmmi) 'bad
-                     (: off (0 - ((peep g 'off 0) + 16))
-                        _ (pin g 'off ((peep g 'off 0) + 16))
-                        (spill >ps gpi (xmmi + 2) ovi (link `(<p off pty) env)
-                               (cat acc (cat (fstf g 'double 'r4 off (xmmreg xmmi))
-                                             (fstf g 'double 'r4 (off + 8) (xmmreg (xmmi + 1))))))))
+              (? (&& (stru? pty) (two? (aeb2 g pty)))   ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
+                  (: cls (aeb2 g pty) c0 <cls c1 <>cls
+                     ; the register FILE per eightbyte -- 'g gp / 'x xmm. SysV (x64) picks
+                     ; by the eightbyte's class; AAPCS64 (arm64) sends a non-HFA composite
+                     ; wholly in X regs, only an all-float HFA in V regs.
+                     hfa (&& (id? c0 'sse) (id? c1 'sse))
+                     f0 (? (a64? g) (? hfa 'x 'g) (? (id? c0 'sse) 'x 'g))
+                     f1 (? (a64? g) (? hfa 'x 'g) (? (id? c1 'sse) 'x 'g))
+                     gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
+                     xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
+                     (? (|| ((ngp g) < (gpi + gpn)) (8 < (xmmi + xmn)))   ; not enough regs -> the WHOLE aggregate goes to memory (2 stack eightbytes)
+                         (spill >ps gpi xmmi (ovi + 2) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc)
+                         (: off (0 - ((peep g 'off 0) + 16))
+                            _ (pin g 'off ((peep g 'off 0) + 16))
+                            st0 (? (id? f0 'g) `(`('st 'r4 off (nthr (argr g) gpi))) (fstf g 'double 'r4 off (xmmreg xmmi)))
+                            gp1 (? (id? f0 'g) (gpi + 1) gpi)
+                            xm1 (? (id? f0 'x) (xmmi + 1) xmmi)
+                            st1 (? (id? f1 'g) `(`('st 'r4 (off + 8) (nthr (argr g) gp1))) (fstf g 'double 'r4 (off + 8) (xmmreg xm1)))
+                            gp2 (? (id? f1 'g) (gp1 + 1) gp1)
+                            xm2 (? (id? f1 'x) (xm1 + 1) xm1)
+                            (spill >ps gp2 xm2 ovi (link `(<p off pty) env) (cat acc (cat st0 st1))))))
                  (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
                   (? (xmmi < 8)
                      (: off (0 - ((peep g 'off 0) + 8))
