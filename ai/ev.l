@@ -76,18 +76,21 @@
    (foldl add (tablet 0) (catmap keys (books ())))))
 
 ; welow -- the pre-analysis LOWERING hook (book['welow]), read by `:-` below before opfix. Baked PRE-EGG
-; so the bootstrap self-compile lowers too: a literal church application (N f x) -- N a small whole
-; numeral, f a function -- is f applied to x N times, lowered to the nested arithmetic (2 (+ i) i) ->
-; (+ i (+ i i)) that the group lane native-backs (church is otherwise OPAQUE to the glaze -- every
-; application rides the lisp num-ap closure, so it stays interpreted). EXACT: this IS ai's church
-; semantics ((0 f x)=x, (1 f x)=(f x), dch-nest builds f^N innermost-out); disambiguated from POWER by
-; "the operand is a function" (dch-fn?), so (2 5)/(2 3 4) stay exponentiation. FLAG-GATED (AI_GROUP_GLAZE):
-; unset (the default, every normal build) -> identity -> the egg is byte-identical. The helpers live
-; INSIDE welow's closure (captured, never on the book), so only `welow` leaks -- no mop-list entry, no
-; names() growth. The full church+HOF hook (dehof-deep . dechurch) is a POST-EGG shadow (ai/glaze/hook.l):
-; HOF-inlining needs the heavy ho-* fixpoint + anat-defs/unpair/subst-sym, and it is a pure optimization,
-; where church is the semantic identity. This church closure is the pre-egg twin of ai/glaze/auto.l's
-; dechurch/dsimp -- keep the two in step (both are ai's fixed church semantics, so they should not drift).
+; so the bootstrap self-compile lowers too (church AND HOF), and it is the SOLE welow -- no post-egg shadow.
+; Two passes, composed as (dehof-deep (dechurch x)):
+;  * dechurch -- a literal church application (N f x), N a small whole numeral, f a function, is f applied
+;    to x N times, lowered to the nested arithmetic (2 (+ i) i) -> (+ i (+ i i)) the group lane native-backs
+;    (church is otherwise OPAQUE to the glaze -- every application rides the lisp num-ap closure, interpreted).
+;    EXACT: this IS ai's church semantics ((0 f x)=x, (1 f x)=(f x), dch-nest builds f^N innermost-out);
+;    disambiguated from POWER by "the operand is a function" (dch-fn?), so (2 5)/(2 3 4) stay exponentiation.
+;  * dehof-deep -- inline non-recursive HOF-const bindings (the closure bench's twice/adder) inside every
+;    LAMBDA-BODY group `:`, then dsimp beta-collapses, so a higher-order recurrence ((twice (adder i)) i)
+;    reduces to first-order arithmetic. NOT a top-level `:` (those hold operator defs opfix must still see).
+;    Needs the ho-* higher-order fixpoint + anat-defs/subst-sym/unpair/dehead/dcount, all below.
+; FLAG-GATED (AI_GROUP_GLAZE): unset (the default, every normal build) -> identity -> the egg is byte-identical.
+; The helpers live INSIDE welow's closure (captured, never on the book), so only `welow` leaks -- no mop-list
+; entry, no names() growth. dechurch/dsimp/dehof + the ho-* bundle are the pre-egg twin of ai/glaze/auto.l's
+; (auto.l keeps its own for the autospec pipeline) -- keep them in step (ai's fixed church + HOF semantics).
 (: welow (:
    (dsub old new B) (? (id? B old) new (two? B) (link (dsub old new (cap B)) (dsub old new (cup B))) B)   ; substitute old->new in B
    (dquote? x) (&& (two? x) (id? (cap x) '\) (= 2 (tally x)))                                             ; (\ datum) -> a quote, never descend
@@ -116,12 +119,67 @@
                  (! (dch-fat? (caup (cap y)) (caap y))))
              (dch-nest (caup (cap y)) (caap y) (caup y))                                                  ; ((N f) x) -> f^N(x), the CURRIED surface form
              y)))
-   (\ x (? (getenv "AI_GROUP_GLAZE") (dechurch x) x))))                                                  ; flag-gated; default = identity -> egg byte-identical
+   ; --- HOF inlining (dehof-deep): inline non-recursive lambda-CONST bindings to first-order, then dsimp
+   ;     beta-collapses. Only inside a LAMBDA-BODY group `:` (a top-level `:` holds operator defs opfix must
+   ;     see + global-leak helpers). The ho-* fixpoint marks a binding HIGHER-ORDER (returns OR takes a
+   ;     function); dehof inlines exactly those. Ported from ai/glaze/auto.l (its autospec pipeline keeps its
+   ;     own copy) -- prel-only (monofix is the shared harness), so it bakes pre-egg cleanly.
+   (anat-defs bs) (? (atom? (cup bs)) (L () (cap bs))                                                     ; a : binding list -> (pairs body)
+                     (: r (anat-defs (cuup bs))
+                        (L (link (link (cap bs) (caup bs)) (cap r)) (caup r))))
+   (subst-sym nm val e) (? (id? e nm) val (two? e) (map (\ x (subst-sym nm val x)) e) e)                  ; symbol nm -> val in e
+   (unpair ps body) (? (atom? ps) (L body) (: pr (cap ps) (link (cap pr) (link (cup pr) (unpair (cup ps) body)))))   ; pairs + body -> a : binding list
+   (dehead pr) (: h (cap pr) (? (atom? h) pr (link (cap h) (link '\ (cat (cup h) (L (cup pr)))))))        ; (f a..) body -> (f . (\ a.. body))
+   (dcount s e) (? (id? e s) 1 (two? e) (foldl (\ a x (+ a (dcount s x))) 0 e) 0)                         ; syntactic occurrences of s in e
+   (ho-initl l) (? (atom? (cup l)) () (link (cap l) (ho-initl (cup l))))                                  ; all but the last
+   (ho-any p l) (foldl (\ a x (|| a (p x))) 0 l)
+   (ho-memb x l) (? (atom? l) 0 (id? (cap l) x) 1 (ho-memb x (cup l)))
+   (ho-posn x l i) (? (atom? l) -1 (id? (cap l) x) i (ho-posn x (cup l) (+ i 1)))
+   (ho-dedup l) (? (atom? l) () (ho-memb (cap l) (cup l)) (ho-dedup (cup l)) (link (cap l) (ho-dedup (cup l))))
+   (ho-assq k l) (? (atom? l) () (id? (cap (cap l)) k) (cap l) (ho-assq k (cup l)))                       ; entry (k . rest) by car
+   (ho-nth l i) (? (= i 0) (cap l) (ho-nth (cup l) (+ -1 i)))
+   (ho-fpm nm hm) (: e (ho-assq nm hm) (? (two? e) (cuup e) ()))                                          ; nm's func-param mask
+   (ho-rf nm hm) (: e (ho-assq nm hm) (? (two? e) (caup e) 0))                                            ; nm returns a function?
+   (ho-ar nm info) (: e (ho-assq nm info) (? (two? e) (tally (caup e)) -1))                               ; nm's arity, -1 if not a group fn
+   (ho-walkfp fp body hm)                                                                                 ; func-param mask of fp in body
+    (ho-dedup ((: (walk e acc) (? (! (two? e)) acc
+                  (: hd (cap e) a0 (? (ho-memb hd fp) (link (ho-posn hd fp 0) acc) acc)                   ; (p ..) -> p applied as a fn
+                     gm (ho-fpm hd hm)
+                     a1 (? (atom? gm) a0 (foldl (\ ac j (: arg (ho-nth (cup e) j) (? (ho-memb arg fp) (link (ho-posn arg fp 0) ac) ac))) a0 gm))   ; OUR param at a callee's func-pos
+                     (foldl (\ ac x (walk x ac)) a1 (cup e))))) body ()))
+   (ho-ret? e fp fpm info hm)                                                                             ; does e yield a function?
+    (? (atom? e) (&& (ho-memb e fp) (ho-memb (ho-posn e fp 0) fpm))                                       ; a func-typed param
+       (id? (cap e) '\) (ho-lamb? e)                                                                      ; a lambda literal
+       (id? (cap e) '?) (ho-any (\ b (ho-ret? b fp fpm info hm)) (cup e))                                 ; a ?-branch that does
+       (: hd (cap e) ar (ho-ar hd info) (? (< ar 0) 0 (< (tally (cup e)) ar) 1 (ho-rf hd hm))))           ; non-group->0; PARTIAL->fn; full->g's result
+   (ho-fn fp body info hm) (: fpm (ho-walkfp fp body hm) (link (? (ho-ret? body fp fpm info hm) 1 0) fpm))
+   (ho-sz hm) (foldl (\ a e (+ a (+ (caup e) (tally (cuup e))))) 0 hm)                                    ; monotone measure (rflags + |fpmask|)
+   (ho-fix info hm) (monofix hm (\ st (map (\ f (link (cap f) (ho-fn (ho-nth f 1) (ho-nth f 2) info st))) info)) ho-sz)   ; HO lattice over the SHARED harness (prel monofix)
+   (dehof form)
+    (? (! (&& (two? form) (id? (cap form) ':) (! (atom? (cup form))))) form
+       (: parsed (anat-defs (cup form)) pairs (cap parsed) body (caup parsed)
+          fns (filter (\ p (ho-lamb? (cup p))) (map dehead pairs))                                        ; lambda-valued (desugared) bindings = the group fns
+          info (map (\ p (L (cap p) (ho-initl (cup (cup p))) (last (cup p)))) fns)                         ; (name params body)
+          hm (ho-fix info (map (\ f (link (cap f) (link 0 ()))) info))                                     ; the higher-order fixpoint
+          ho? (\ nm (: e (ho-assq nm hm) (&& (two? e) (|| (caup e) (two? (cuup e))))))                     ; returns-fn OR takes-fn -> inline it
+          lamc? (\ pr (: nd (dehead pr) (&& (ho-lamb? (cup nd)) (! (dcount (cap nd) (cup nd))) (ho? (cap nd)))))   ; a NON-RECURSIVE higher-order const
+          lamcs (map dehead (filter lamc? pairs))
+          (? (atom? lamcs) form                                                                           ; no HOF const -> leave the form for the other lanes
+             (: sub (\ e (dsimp (foldl (\ b pr (subst-sym (cap pr) (cup pr) b)) e lamcs)))                 ; inline each HOF lamc, then beta-collapse
+                keep (filter (\ pr (! (lamc? pr))) pairs)                                                  ; non-HOF bindings keep their RAW form
+                (link ': (unpair (map (\ pr (link (cap pr) (sub (cup pr)))) keep) (sub body)))))))
+   (grp:? b) (&& (two? b) (id? (cap b) ':) (! (atom? (cup b))) (= 1 (% (tally (cup b)) 2)))               ; a body-having `:` group
+   (dehof-deep e) (? (|| (atom? e) (dquote? e)) e                                                         ; inline HOF-const bindings, but only inside a LAMBDA-BODY `:`
+                     (&& (id? (cap e) '\) (two? (cup e)))                                                 ; a real lambda: dehof its body IF a group `:`
+                       (: bod (last e)  dbod (? (grp:? bod) (dehof bod) bod)
+                          (link '\ (cat (init (cup e)) (L (dehof-deep dbod)))))
+                     (map dehof-deep e))                                                                  ; any other node: just recurse
+   (\ x (? (getenv "AI_GROUP_GLAZE") (dehof-deep (dechurch x)) x))))                                      ; flag-gated; default = identity -> egg byte-identical
 
 (:- (\ x (:
  c (sco 0 (list 0) 0)
- wl (gv 'welow 0)        ; the pre-analysis lowering hook (book['welow]): church-lower pre-egg (above), church+HOF post-egg
-                         ; (ai/glaze/hook.l shadows). flag-gated -- unset AI_GROUP_GLAZE -> welow is identity -> untouched.
+ wl (gv 'welow 0)        ; the pre-analysis lowering hook (book['welow]): church + HOF lowering, baked pre-egg (above),
+                         ; the sole welow. flag-gated -- unset AI_GROUP_GLAZE -> welow is identity -> the form is untouched.
  y (feel c (opfix (? wl (wl x) x)))    ; lower (if hooked), opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
  (ana c y (k0 c) 0 0)))
   lvm_cur (peek 0 (+))
