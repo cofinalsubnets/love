@@ -587,7 +587,7 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_evals_(g, glaze_emit);                          // load the native JIT post-egg -> ev = auto-ev, glaze always-on
   g = ai_evals_(g, glaze_auto);                          // (no fragile stale image; base-ev captures the hatched ev).
   g = ai_evals_(g, glaze_export);                        // the glaze module boundary: its names sweep into the `glaze` book
-#endif                                                   // ~680ms from-scratch; the image snapshots past it. arm64: integer lanes native, x86-only lanes (float/loops) fall to interp -- see auto.l's `x86?` gate.
+#endif                                                   // ~680ms from-scratch; the image snapshots past it. arm64: auto-ev's integer + scalar-float lanes (leaf, counted/n-var loops, group) are native; only the float-GRID lane + castbuild fall to interp (auto.l's `x86?` gate), and the natjit creation hook (embedded closures incl. call-outs) is x86-only.
   g = ai_evals_(g,                                       // the holo module boundary (crew/holo/export.l): the assembler's names
 #include "export.h"                                      //   sweep into the ONE public `holo` book and off the global book.
   );                                                     //   AFTER the glaze, whose direct references folded at its compile.

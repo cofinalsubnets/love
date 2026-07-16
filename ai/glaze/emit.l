@@ -133,7 +133,8 @@
    ; {lvm_ap, lvm_ret0}, address via `calloutdrive`): the blob builds a [arg, clos, retB] frame on Sp,
    ; points Ip at the drive, and TAIL-jumps; lvm_ap applies clos to the tagged counter, lvm_ret0
    ; delivers the result to retB -- the blob's own resume label `bb`, whose address is materialized
-   ; position-independently by `la` (survives an image reload; no baked W^X pointer) into a Sp slot the
+   ; position-independently by `lar` (near pc-rel: rip-lea on x86, ADR on arm64 -- translation-invariant in
+   ; the word-aligned mmap blob, where la's page-relative ADRP would mis-page; survives an image reload) into a Sp slot the
    ; callee cannot reach. So the callee runs entirely on the VM stack: a deep or re-entrant callee
    ; grows Sp, NEVER the C stack (the whole point -- the retired re-entrant ai_call1 pinned a C frame
    ; per nesting level). The loop state lives in 5 reserved Sp slots (a GC root, so a callee GC
@@ -167,8 +168,8 @@
           `('ld U T 8)  `('st SP 24 U)                         ; Sclos = car(pair) = clos               -> R[3]
           `('ld U T 16) `('st SP 40 U)                         ; Stwin = cdr(pair) = twin (interp)       -> R[5]
           `('ld T SP 48) `('sar T 1) `('st SP 16 T)            ; SN = untag(arg @ R[6])                  -> R[2]
-          `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0                         -> R[0] R[1]
-          `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb  (position-independent)      -> R[4]
+          `('li T 1) `('st SP 0 T) `('li T 0) `('st SP 8 T)   ; SA = tag(0)=1 (kept TAGGED so gate 2 checks the fixnum boundary) ; SC = 0   -> R[0] R[1]
+          `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb  (lar = near pc-rel; ADR on arm64, translation-invariant in the mmap blob)  -> R[4]
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; i >= n -> end
         + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(i)
@@ -179,12 +180,12 @@
         + `('(label bb)
            `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8)
            `('test A 1) `('br 'eq 'codeopt)                     ; GATE 1: non-fixnum (even) result -> deopt
-           `('sar A 1)                                          ; untag
-           `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)  ; GATE 2: SA += result ; overflow -> deopt
+           `('sub A A 1)                                        ; A = result-1 = 2r (drop the tag bit; SA stays tagged)
+           `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)  ; GATE 2: SA(tagged) += 2r = tag(s+r) ; TAG-range overflow -> deopt (the fixnum boundary, not 2^63)
            `('ld T SP 16) `('add T T 1) `('st SP 16 T)          ; SC += 1
            `('add SP SP 8) `('jmp 'top))                        ; Sp = R ; next iteration
         + `('(label end)
-           `('ld A SP 0) `('leax A A A 1 1)                     ; acc = tag(SA)
+           `('ld A SP 0)                                        ; acc = SA (already tagged)
            `('add SP SP 48) `('st SP 0 A)                       ; Sp = entry ; result into arg slot
            `('ld IP SP 8) `('st SP 8 A) `('add SP SP 8)         ; inline ret0: Ip=caller-cont; Sp[1]=result; Sp++
            `('ld T IP 0) `('jmpr T))                            ; Continue -> caller
@@ -216,8 +217,8 @@
            `('ld T IP 8)                                        ; T = e (deopt twin = value[1], IP+8 at body entry)
            `('sub SP SP 48)                                     ; reserve 6 slots; Sp = R
            `('st SP 24 U) `('st SP 16 A) `('st SP 40 T)         ; SF = F ; SN = N ; Se = e
-           `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0
-           `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb
+           `('li T 1) `('st SP 0 T) `('li T 0) `('st SP 8 T)   ; SA = tag(0)=1 (kept TAGGED so gate 2 checks the fixnum boundary) ; SC = 0
+           `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb (lar = near pc-rel, ADR on arm64)
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; SC >= SN -> end
         + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(SC)
@@ -226,12 +227,12 @@
            `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
            `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> ret0 -> bb
         + `('(label bb)
-           `('ld A SP 0) `('test A 1) `('br 'eq 'codeopt) `('sar A 1)   ; GATE 1: non-fixnum result -> deopt
-           `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)   ; GATE 2: SA += result ; overflow -> deopt
+           `('ld A SP 0) `('test A 1) `('br 'eq 'codeopt) `('sub A A 1)   ; GATE 1: non-fixnum result -> deopt ; A = result-1 = 2r (SA stays tagged)
+           `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)   ; GATE 2: SA(tagged) += 2r = tag(s+r) ; TAG-range overflow -> deopt
            `('ld T SP 16) `('add T T 1) `('st SP 16 T)          ; SC += 1
            `('add SP SP 8) `('jmp 'top))                        ; Sp = R ; next iteration
         + `('(label end)
-           `('ld A SP 0) `('leax A A A 1 1)                     ; acc = tag(SA)
+           `('ld A SP 0)                                        ; acc = SA (already tagged)
            `('add SP SP 48) `('st SP 0 A)                       ; Sp = E (frame) ; result into Sp[0]
            `('ld IP SP (* 8 a)) `('st SP (* 8 a) A) `('add SP SP (* 8 a))   ; hand-rolled lvm_ret(n=a): cont@Sp[a] ; deliver ; pop a
            `('ld T IP 0) `('jmpr T))                            ; Continue -> caller

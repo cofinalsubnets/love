@@ -48,11 +48,17 @@ $GCC -static -o $O/ai $O/*.o 2>/dev/null || $GCC -static -o $O/ai $O/*.o
 # assume uu is set up early), then the C-sorted rest with those filtered out. A bare
 # `ls` (locale-sorted, uu.l NOT hoisted) loads ~40 files before uu.l -> uukindlaw.l's
 # `(member? 'vof (names ()))` fails with `missing defn`. $t is the source of truth.
-if [ $# -gt 0 ]; then set -- "$@"; else
-  set -- test/00-init.l test/spec.l test/uu.l $(ls test/*.l | LC_ALL=C sort | grep -vE '00-init|spec\.l|glaze-x86|uu\.l')
+if [ $# -gt 0 ]; then set -- "$@"; DEFAULT_CORPUS=; else DEFAULT_CORPUS=1
+  # test/arm64/*.l (a subfolder, invisible to the non-recursive test/*.l corpus glob) holds aarch64-ONLY
+  # execution tests -- they build `... 'arm64` nifs whose code is aarch64 bytes and RUN them, which would
+  # fault on the x86 corpus. Appended here so only qemu-aarch64 ever runs them; the gate requires each one's
+  # sentinel below so a silent reader-stop can't skip them.
+  set -- test/00-init.l test/spec.l test/uu.l $(ls test/*.l | LC_ALL=C sort | grep -vE '00-init|spec\.l|glaze-x86|uu\.l') test/arm64/callout.l
 fi
 echo "AARCH64 qemu run ($(echo "$@" | wc -w) files)"
 cat "$@" | AI_NO_IMAGE=1 "$QEMU" $O/ai > $O/.out 2>&1; r=$?
 tail -1 $O/.out
-{ [ $r -eq 0 ] && grep -q "tests pass" $O/.out; } || { echo "FAIL arm64 (exit $r)"; tail -20 $O/.out; exit 1; }
+# the default corpus must print "tests pass" AND each test/arm64/*.l sentinel (explicit-args runs skip the sentinel check)
+if [ -n "$DEFAULT_CORPUS" ]; then sent='test/arm64/callout:'; else sent=''; fi
+{ [ $r -eq 0 ] && grep -q "tests pass" $O/.out && { [ -z "$sent" ] || grep -q "$sent" $O/.out; }; } || { echo "FAIL arm64 (exit $r)"; tail -20 $O/.out; exit 1; }
 echo "test_arm64: ok"

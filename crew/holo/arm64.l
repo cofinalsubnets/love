@@ -181,6 +181,11 @@
    (arm64-la d label)    (: dn (rn d)
                             `((fix 4 'adrp21 label (| 0x90000000 dn))
                                (fix 4 'addlo12 label (| 0x91000000 (| (<< dn 5) dn)))))
+   ;; lar: ADR -- a BYTE pc-relative address (+-1MB), one fixup, TRANSLATION-INVARIANT (imm = target-site,
+   ;; unlike la's page-relative ADRP which is only correct at a page-aligned load). the near-label choice for
+   ;; a code address inside a runtime-mmap'd W^X blob (the glaze's call-out resume point) -- a cask offset is
+   ;; word- not page-aligned, so ADRP+ADD would compute the wrong page. x86's la (rip-rel lea) is already this.
+   (arm64-lar d label)   (: dn (rn d) `((fix 4 'adr21 label (| 0x10000000 dn))))
    (arm64-br cond label) (: cc (peep arm64-cc cond -1) _ (? (< cc 0) (scare 'badcc cond) 0)
                             `((fix 4 'b19 label (| 0x54000000 cc))))
    ;; jmpr: BR Xn -- branch to the address held in a register (the glaze's Continue / deopt tail).
@@ -340,6 +345,7 @@
             (= op 'leax) (arm64-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
             (= op 'call) (arm64-call (at ins 1))
             (= op 'la)   (arm64-la   (at ins 1) (at ins 2))
+            (= op 'lar)  (arm64-lar  (at ins 1) (at ins 2))
             (= op 'raw)  (at ins 1)                                   ; splice pre-encoded bytes verbatim (no fixups)
             (= op 'movsd)    (arm64-fmov   (at ins 1) (at ins 2))                 ; -- scalar-double FP --
             (member? op '(addsd subsd mulsd divsd)) (arm64-fp3op op (at ins 1) (at ins 2))
@@ -371,6 +377,8 @@
             (= kind 'adrp21) (: pg (- (// target 4096) (// site 4096))   ; ADRP: PAGE delta, immlo[30:29] immhi[23:5]
                                 (le32 (| aux (| (<< (& pg 3) 29) (<< (& (>> pg 2) 524287) 5)))))
             (= kind 'addlo12) (le32 (| aux (<< (% target 4096) 10)))  ; ADD #imm12: the target's low 12 (site-free)
+            (= kind 'adr21) (: rb (& (- target site) 2097151)            ; ADR: BYTE pc-rel, low 21 bits (two's comp); immlo[30:29] immhi[23:5]
+                               (le32 (| aux (| (<< (& rb 3) 29) (<< (>> rb 2) 5)))))
             (= kind 'abs64) (le64 (+ target aux))                    ; an 8-byte ABSOLUTE address; aux = the byte ADDEND (&arr[i] = label + offset)
             (scare 'badfix kind)))
 

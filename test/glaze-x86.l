@@ -173,7 +173,8 @@
 (: bref ((: (go i a) (? (< i 100) (go (+ i 1) (+ a (rc-big i)))  a)) 0 0))
 (: _ (assert (lit? rc-ssum) (285 = (rc-ssum 10)) ((rc-ssum 30) = sref)             ; fixnum fast path == interp
         (95.0 = (rc-fsum 20)) ((rc-fsum 20) = fref)                                ; GATE 1: float call-out -> gem, == interp
-        (100000000000000000000 = (rc-bsum 100)) ((rc-bsum 100) = bref))            ; GATE 2: sum overflows fixnum -> bignum, == interp
+        (100000000000000000000 = (rc-bsum 100)) ((rc-bsum 100) = bref)             ; GATE 2: sum overflows fixnum -> bignum, == interp
+        (8999995500000500000 = (rc-ssum 3000000)))                                 ; GATE 2 BOUNDARY: sum in [2^62,2^63) overflows the fixnum TAG (not 2^63) -> bignum (tagged-accumulator gate)
    (say err "test/glaze-x86: call-out recognizer -- a global-target sum glazes (fast path + gate1 float + gate2 overflow) ok\n"))
 
 ; CAPTURED / multi-arg CALL-OUT (calloutinfo-frame + njit-calloutframe): F read from the [imps args]
@@ -185,6 +186,7 @@
    _ (assert (lit? cs) (285 = (cs 10)) ((cs 30) = sref)                                    ; captured fixnum fast path == interp
         (95.0 = (cf 20)) ((cf 20) = fref)                                                  ; GATE 1 (captured float)
         (100000000000000000000 = (cb 100)) ((cb 100) = bref)                              ; GATE 2 (captured overflow -> bignum)
+        (8999995500000500000 = (cs 3000000))                                             ; GATE 2 BOUNDARY (captured): sum in [2^62,2^63) -> bignum (tagged accumulator)
         (285 = (rc-hosum rc-sq 10)) ((rc-hosum rc-sq 30) = sref)                          ; multi-arg HO sum == interp
         (95.0 = (rc-hosum rc-half 20)))
    (say err "test/glaze-x86: call-out recognizer -- captured + multi-arg (frame-read F, hand-rolled ret) glaze ok\n"))

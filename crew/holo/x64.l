@@ -335,6 +335,7 @@
             (= op 'urem) (emit-div 1 0 (at ins 1) (at ins 2) (at ins 3))
             (= op 'call) (emit-call (at ins 1))
             (= op 'la)   (emit-la   (at ins 1) (at ins 2))
+            (= op 'lar)  (emit-la   (at ins 1) (at ins 2))   ; near pc-rel address == la on x86 (rip-rel lea, already translation-invariant); arm64 differs (ADR vs ADRP)
             (= op 'ret)  `(195)
             (= op 'sys)  `(15 5)
             (= op 'nop)  `(144)
