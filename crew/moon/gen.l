@@ -2449,7 +2449,12 @@
                            (caup (caup e9)) ())
                      r (erd e9 () 0)
                      in (sun (? kv (sdel out kv) out) <r)
-                     sq (tick ()) _ (rec sq (sun in out) (* <>r w9))
+                     ; the KILL rides the record too: a name born in a call-bearing
+                     ; statement is invisible to in/out yet lives across the
+                     ; statement's OWN calls (m = llen(a), n = llen(b) -- m crosses
+                     ; the second call inside one tick). statement-grain cannot
+                     ; order intra-statement events, so the kill joins the set.
+                     sq (tick ()) _ (rec sq (sun (sun in out) (? kv `(kv) ())) (* <>r w9))
                      in)
                  (k = 'ret)
                   (: r (? (two? <>s) (erd <>s () 0) '(() 0))
@@ -2457,7 +2462,11 @@
                      <r)
                  (k = 'decl)
                   (: pr (dpairs (rev <>s) out 0)
-                     sq (tick ()) _ (rec sq (sun <pr out) (* <>pr w9))
+                     ks (: (go ps) (? (! (two? ps)) ()   ; the declared names: kills, in the record (see expr)
+                                      (: nm (cap (cap ps))
+                                         (? (member? nm univ) (link nm (go >ps)) (go >ps))))
+                           (go <>s))
+                     sq (tick ()) _ (rec sq (sun (sun <pr out) ks) (* <>pr w9))
                      <pr)
                  (k = 'sdecl) (: _ (tick ()) out)   ; statics: no runtime init, no kill
                  (k = 'if)
@@ -2493,15 +2502,18 @@
                             (? (two? stp) (caup (erd stp () 0)) 0))
                      ri (? (&& (two? ini) (! (member? <ini '(decl sdecl))))
                            (erd (caup ini) () 0) '(() 0))
+                     kv8 (? (&& (two? ini) (! (member? <ini '(decl sdecl))))
+                            (: e8 (caup ini)
+                               (? (&& ((cap e8) = 'asn)
+                                     (&& ((cap (caup e8)) = 'var)
+                                         (member? (caup (caup e8)) univ)))
+                                  (caup (caup e8)) ()))
+                            ())
                      in (? (! (two? ini)) seed
                            (member? <ini '(decl sdecl)) (lst ini seed () () w9)   ; ticks (cgdecl does); kill applies; runs ONCE
-                           (: kv (: e8 (caup ini)
-                                    (? (&& ((cap e8) = 'asn)
-                                          (&& ((cap (caup e8)) = 'var)
-                                              (member? (caup (caup e8)) univ)))
-                                       (caup (caup e8)) ()))
-                              (sun (? kv (sdel seed kv) seed) <ri)))
-                     sq (tick ()) _ (rec sq (sun seed <ri) (+ (* nc9 w8) (* <>ri w9)))
+                           (sun (? kv8 (sdel seed kv8) seed) <ri))
+                     ; kv8 joins the record: the init's kill (see the expr lane)
+                     sq (tick ()) _ (rec sq (sun (sun seed <ri) (? kv8 `(kv8) ())) (+ (* nc9 w8) (* <>ri w9)))
                      in)
                  (k = 'switch)
                   (: r (erd <>s () 0)
