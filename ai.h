@@ -446,6 +446,7 @@ bool ai_ready(int fd), ai_strp(ai_word);
 struct ai
  *ai_please(struct ai*, uintptr_t),
  *ai_push(struct ai*, uintptr_t, ...),
+ *ai_call1(struct ai*, ai_word, ai_word),   // re-entrant call-out: apply a unary closure, return the value on sp[0]
  *ai_strof(struct ai*, const char*),
  *gxl(struct ai*),
  *gxr(struct ai*),

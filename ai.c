@@ -2256,6 +2256,32 @@ static lvm(numap_swap) {
  return Ap(lvm_ap, g); }
 union u const numap_drive[] = { {lvm_ap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
 
+// --- ai_call1: the RE-ENTRANT call-out bridge (step 2 of the glaze call-out arc) ------------------
+// Apply a UNARY closure `clos` to `arg`, run the sub-computation to completion, and RETURN the value
+// -- the piece the tail-threaded VM lacks (ordinary application never returns to C mid-flight; deopt
+// only TAIL-jumps to the twin). Mirrors numap_drive: a [arg, clos, RET] frame under a {ap, ret0}
+// drive applies clos to arg and returns to RET; RET is call1_end, which Packs g and returns g,
+// unwinding the tail-chain back here. NESTS inside the outermost eval's fault barrier (ai_eval_armed
+// is already set on any path that reaches native glaze code), so it does NOT re-arm -- a fault below
+// still unwinds to the one barrier. The caller passes clos/arg by value; ai_push roots them across
+// its own room-guard GC, and every live NATIVE value must already be a root (spilled to Sp) since the
+// callee may collect. On return, g->sp[0] = the result (the caller reloads Sp/Hp from g).
+static lvm(lvm_call1end) { Pack(g); return encode(g, ai_status_yield); }   // stop the nested run (mirrors _lvm_yieldk: yield=ok under tco, =eof otherwise)
+static union u const call1_end[]   = { {lvm_call1end} };
+static union u const call1_drive[] = { {lvm_ap}, {.ap = lvm_ret0} };
+struct ai *ai_call1(struct ai *g, word clos, word arg) {
+ if (!ai_ok(g)) return g;
+ g = ai_push(g, 3, arg, clos, word(call1_end));   // sp[0]=arg, sp[1]=clos, sp[2]=RET
+ if (!ai_ok(g)) return g;
+ g->ip = (union u*) call1_drive;
+#if ai_tco
+ return ai_core_of(g->ip->ap(g, g->ip, g->hp, g->sp));   // tail-call chain; call1_end unwinds here, sp[0]=result
+#else
+ while (ai_ok(g)) g = g->ip->ap(g);                       // trampoline: call1_end encodes eof to stop
+ return ai_core_of(g);
+#endif
+}
+
 // ============================================================================
 // the lisp help calling convention
 // ============================================================================

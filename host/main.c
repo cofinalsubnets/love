@@ -388,6 +388,18 @@ ai_noinline intptr_t ai_pg_dyad(intptr_t op, intptr_t a, intptr_t b) {
 static lvm(lvm_pgaddr) { return Sp[0] = putcharm((intptr_t) ai_pg_dyad), Ip++, Continue(); }
 static union u const nif_pgaddr[] = {{lvm_pgaddr}, {lvm_ret0}};
 
+// (callout1 f x) = (f x), but ROUTED THROUGH ai_call1 -- the re-entrant call-out driver a native
+// lane would use to call interp. A test/POC nif (step 2 phase 1): validates the driver in isolation
+// (native==interp, GC-safe re-entrancy) before it is wired into the glaze. 2-arg: Sp[0]=f, Sp[1]=x.
+static lvm(lvm_callout1) {
+ ai_word f = Sp[0], x = Sp[1];      // curried 2-arg nif: Sp[0]=first arg (f), Sp[1]=second (x)
+ Pack(g);
+ g = ai_call1(g, f, x);              // runs the sub-computation; result on g->sp[0]
+ Sp = g->sp, Hp = g->hp;            // reload Sp/Hp (the callee GC'd + moved them); KEEP our own Ip
+ Sp[2] = Sp[0];                      // 2->1: result into the deeper arg slot
+ return Sp += 2, Ip++, Continue(); }
+static union u const nif_callout1[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_callout1}, {lvm_ret0}};
+
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
@@ -411,6 +423,7 @@ AI_NIF("exec", nif_exec);
 AI_NIF("getenv", nif_getenv);
 AI_NIF("getpid", nif_getpid);
 AI_NIF("pgaddr", nif_pgaddr);
+AI_NIF("callout1", nif_callout1);
 
 // --- the boot script ---------------------------------------------------
 // Everything the two builds disagree about lives in this ONE conditional
