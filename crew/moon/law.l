@@ -446,6 +446,7 @@
       (= (pps "__LINE__") "1")                                         ; __LINE__ predefined -> the line number
       (= (pps "a\nb\n__LINE__") "a b 3")                               ; ... tracked down the file
       (= (pps "__FILE__") "\"<law>\"")                                 ; __FILE__ predefined -> the TU path, a string
+      (= (pps "#define M a /* one \\\n   two */ b\nM") "a b")          ; a \<nl> INSIDE a comment splices (phase 2 before 3): the directive holds together (m4 regex.c)
       (! (cpp (caup (clex "#if 1\nx")) () "<law>"))                    ; unterminated #if refuses
       (two? (cpp (caup (clex "#ifdef NOPE\nx\n#endif")) () "<law>"))   ; a fully-skipped file is a VALID empty TU (crypt.c), not a failure
       (! (cpp (caup (clex "#error boom")) () "<law>"))                 ; #error is FATAL

@@ -132,9 +132,15 @@
                   (: (eat j) (? (|| (n <= j) ((src j) = 10)) j (eat (j + 1)))
                      (go (eat i) line acc))
                  (&& (c = 47) (at? i "/*"))
-                  (: (eat j l2) (? (n <= (j + 1)) `(() l2)   ; unterminated
+                  (: ; a \<nl> INSIDE a comment is a splice (C phase 2 runs before
+                     ; comments), so it stays on the logical line -- a #define whose
+                     ; body carries a spliced multi-line comment keeps its grouping
+                     ; (m4-1.4 regex.c PUSH_FAILURE_POINT)
+                     (spliced? j) (&& (0 < j) (|| ((src (j - 1)) = 92)
+                                                  (&& (1 < j) (&& ((src (j - 1)) = 13) ((src (j - 2)) = 92)))))
+                     (eat j l2) (? (n <= (j + 1)) `(() l2)   ; unterminated
                                               (at? j "*/") `((j + 2) l2)
-                                              (eat (j + 1) (? ((src j) = 10) (l2 + 1) l2)))
+                                              (eat (j + 1) (? (&& ((src j) = 10) (! (spliced? j))) (l2 + 1) l2)))
                                 r (eat (i + 2) line)
                                 (? (charm? <r) (go <r <>r acc) ()))
                  (c = 34) (: (eat j acc2)                     ; a string literal
