@@ -77,8 +77,14 @@
                     ; RESOLVABLE GLOBAL closure F -- glazed as the STACKLESS callout bridge (emit.l jitcalloutx),
                     ; F's value baked into value[1] as (F . twin), the two soundness gates guarding the result.
                     ; F is resolved via `gv` (ala's folded resolver; the hook can't reach the book). Single-param
-                    ; (no imps) => F is free => a global; a captured / multi-arg callout is future (needs a frame-
-                    ; based callee reading F from the [imps args] frame). Redefinition-stale like any baked global.
+                    ; (no imps) => F is free => a global (the captured / multi-arg sibling is the frame lane below).
+                    ; Redefinition-stale like any baked global.
+                    ; COST MODEL (why unconditional, no trip-count gate): glazing happens at ala/compile time, so
+                    ; the trip count n is unknown -- a predictive gate is impossible. And it's unneeded: measured
+                    ; ~1.5 ns/iter callout vs ~45 ns/iter interp (20-40x, F's cost cancels), so any real use wins.
+                    ; The ~167us compile is one-time PER SOURCE SITE (creation reuses the blob, ~60 ns) -> amortized
+                    ; after ~4k cumulative iters. Callout also beats falling to group-swallow here (~1.5 vs ~1.8
+                    ; ns/iter, measured), so the recognizer order (callout before group) is already the cheap one.
                     (: ci (calloutinfo s)  fv (? ci (gv ci 0) 0)
                        (? (&& ci (lit? fv))
                           (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s 'x64))
