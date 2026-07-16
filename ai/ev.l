@@ -595,12 +595,14 @@
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
    ; native-creation hook (dormant unless book['natjit] is installed -- opt-in, x86-64):
    ; given the bytecode entry e, its source \-expr s (= (\ imps.. args.. body), so the
-   ; frame [imps args] and surface body are right there) and arity a, it may return a
-   ; native-backed entry that DEOPTS into e on overflow. transparent (value[-1]=s kept),
-   ; id?-distinct (fresh per ala call), macro-safe (s is the surface, pre-tag). dormant
-   ; -> peep gives 0 -> e unchanged, so the egg/bootstrap is untouched.
+   ; frame [imps args] and surface body are right there), arity a, and `gv` (the global
+   ; resolver -- the hook is POST-egg, where `book`/`gv` are mopped, so ala hands its own
+   ; folded gv down for a lane that must resolve a free global's value, e.g. a call-out
+   ; target), it may return a native-backed entry that DEOPTS into e on overflow. transparent
+   ; (value[-1]=s kept), id?-distinct (fresh per ala call), macro-safe (s is the surface,
+   ; pre-tag). dormant -> peep gives 0 -> e unchanged, so the egg/bootstrap is untouched.
    hk (gv 'natjit 0)
-   (link (? hk (hk e s a) e) (d 'imp)))
+   (link (? hk (hk e s a gv) e) (d 'imp)))
 
   ; --- let analyzer (the hard one) -- letrec* over (: name def .. body). three phases:
   ;   collect  -- the bindings into source-order (name . def) chains, and the body form

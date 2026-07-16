@@ -68,6 +68,31 @@
               (two? ACC) (member? op '(+ *)) (= (caup ACC) A) (exprp B I)       ; (op a B), op in {+,*}, B over i
               (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
        (? ok `(B I op cmp) 0))
+   ; --- CALL-OUT loop: loopinfo's shape B, but the per-step term is a CALL to a resolvable global closure
+   ; F (a "call-out") rather than arithmetic over i: B = (F i), op '+ (jitcalloutx is +-only). Returns F (the
+   ; callout symbol) for the caller to resolve+bake into the stackless callout bridge (emit.l jitcalloutx).
+   ; The leaf/group grammar rejects (F i) (F isn't an op / a group name), so this is the only lane that owns
+   ; it. SINGLE param (no imps) => F is guaranteed free => a global; the captured / multi-arg case is future
+   ; (it needs a frame-based callee that reads F from the [imps args] frame -- see the callout-bridge memory).
+   (calloutinfo lam)
+    (: M    (caup (cup lam))  S (cap M) z1 (caup M) z2 (caup (cup M))
+       G    (caup S)  IF (caup (cup S))
+       GO   (cap G)   I (caup G) A (caup (cup G))
+       T    (caup IF) THEN (caup (cup IF)) ELS (caup (cup (cup IF)))
+       STEP (caup THEN) ACC (caup (cup THEN))
+       B    (caup (cup ACC))  op (? (two? ACC) (cap ACC) 0) cmp (? (two? T) (cap T) 0)
+       F    (? (two? B) (cap B) 0)                                            ; the callout head
+       ok (&& (two? lam) (= (cap lam) '\) (name? (caup lam))
+              (two? (cup (cup lam))) !(two? (cup (cup (cup lam))))            ; exactly one param (no imps)
+              (two? M) (= z1 0) (= z2 0) !(two? (cup (cup (cup M))))          ; (S 0 0)
+              (two? S) (= (cap S) ':) (name? GO) (name? I) (name? A) !(= I A)
+              (two? IF) (= (cap IF) '?) (= ELS A)
+              (two? T) (member? cmp '(< <= > >= =)) (= (caup T) I) (= (caup (cup T)) (caup lam))   ; (cmp i n)
+              (= (cap THEN) GO)
+              (two? STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)   ; (+ i 1)
+              (two? ACC) (id? op '+) (= (caup ACC) A)                         ; (+ a B) -- + fold only
+              (two? B) (= 2 (tally B)) (name? F) (= (caup B) I) !(= F I) !(= F A) !(= F (caup lam)))   ; B = (F i), F free
+       (? ok F 0))
    (njit-loop lam B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp lam 1)
    ; --- general N-VARIABLE loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)),
    ; up to 3 loop vars + arbitrary update exprs -- this is the shape iterative fib/tak

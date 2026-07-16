@@ -153,7 +153,11 @@
    ; shared `codeopt` restores Sp to entry (Sp[0]=the original tagged n) and Continues into the twin,
    ; which recomputes the whole sum correctly (the native partial SA is discarded, as any loop deopt).
    ; A chain ref points at its ap-word, so car is +8, cdr is +16. x64-only (the drive design is arch-neutral).
-   (jitcalloutsum clos)
+   ; jitcalloutx stamps the caller's `src` at value[-1] (=/show transparency -- post-egg has no `poke`); the
+   ; recognizer (hook.l calloutinfo) passes the closure's real surface \-expr. jitcalloutsum is the 1-arg
+   ; test-helper alias with a placeholder src.
+   (jitcalloutsum clos) (jitcalloutx clos `('\ 'n 0))
+   (jitcalloutx clos src)
     (: A (greg 'x64 'acc)  IP (greg 'x64 'ip)  SP (greg 'x64 'sp)  T (greg 'x64 'tmp)  U (greg 'x64 'scratch)
        twin (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clos i))) a)) 0 0))   ; the faithful interp fallback; captures clos
        code (asmt 'x64
@@ -187,7 +191,7 @@
              `('ld A SP 48)                                       ; A = Stwin (R[5] @ Sp+48) -- BEFORE restoring Sp
              `('add SP SP 56)                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
              `('mov IP A) `('ld A IP 0) `('jmpr A))))             ; Continue into twin, applied to Sp[0] = n
-       (nif (emit code) (link clos twin) `('\ 'n 0) 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt)
+       (nif (emit code) (link clos twin) src 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt); value[-1]=src (=/show)
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if

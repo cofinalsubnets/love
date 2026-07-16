@@ -157,6 +157,24 @@
     (say err "ai/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
 ))
 
+; CALL-OUT RECOGNIZER (natjit calloutinfo, hook.l): a counted sum whose per-step term calls a resolvable
+; GLOBAL closure glazes AUTOMATICALLY as the stackless bridge (emit.l jitcalloutx), F resolved via ala's
+; gv. The targets are top-level body-less defines -> real globals, so gv finds them at the summing
+; closure's creation. == interp across the fast path + both soundness gates.
+(: (rc-sq i) (* i i))
+(: (rc-half i) (* i 0.5))
+(: (rc-big i) 1000000000000000000)
+(: (rc-ssum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-sq i))) a)) 0 0))
+(: (rc-fsum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-half i))) a)) 0 0))
+(: (rc-bsum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-big i))) a)) 0 0))
+(: sref ((: (go i a) (? (< i 30)  (go (+ i 1) (+ a (rc-sq i)))   a)) 0 0)          ; pure-interp references (inline -- not a closure, so natjit never fires on them)
+   fref ((: (go i a) (? (< i 20)  (go (+ i 1) (+ a (rc-half i))) a)) 0 0)
+   bref ((: (go i a) (? (< i 100) (go (+ i 1) (+ a (rc-big i)))  a)) 0 0)
+   _ (assert (lit? rc-ssum) (285 = (rc-ssum 10)) ((rc-ssum 30) = sref)             ; fixnum fast path == interp
+        (95.0 = (rc-fsum 20)) ((rc-fsum 20) = fref)                                ; GATE 1: float call-out -> gem, == interp
+        (100000000000000000000 = (rc-bsum 100)) ((rc-bsum 100) = bref))            ; GATE 2: sum overflows fixnum -> bignum, == interp
+   (say err "test/glaze-x86: call-out recognizer -- a global-target sum glazes (fast path + gate1 float + gate2 overflow) ok\n"))
+
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
 ; so the LOADER auto-ev's them and srcrec records their source (a body-less `:` define -- inside a
 ; base-ev block they'd be local + un-recorded). swq is a leaf callee; swsum has a named-let loop,

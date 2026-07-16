@@ -21,6 +21,7 @@
    emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   ai/glaze/export.l) -- this stream cat-loads
    loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
    loopinfo-n (glaze 'loopinfo-n)  njit-loop-n (glaze 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges
+   calloutinfo (glaze 'calloutinfo)  jitcalloutx (glaze 'jitcalloutx)       ;   + the CALL-OUT loop: a counted sum whose body calls a global closure (the stackless bridge)
    qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
    ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt). The pre-analysis
@@ -45,10 +46,12 @@
    ; miscompiles. gd = ((name p..) . body): (cup (cap gd)) = the def's frame params, (cup gd) = its body.
    (gdefs-ok? gds) (all (\ gd (opnd-ok? (cup (cap gd)) (cup gd))) gds)
    fires #0                                          ; a probe: how many closures the hook native-backed
-   ; natjit e s a -- e = the bytecode entry (deopt target), s = (\ frame.. body) the
-   ; surface src, a = arity. ps = (init (cup s)) = the frame [imps args]; body = the
-   ; surface body. compile body over ps; deopt -> e. non-qualifying -> e unchanged.
-   (natjit e s a)
+   ; natjit e s a gv -- e = the bytecode entry (deopt target), s = (\ frame.. body) the
+   ; surface src, a = arity, gv = ala's global resolver (this hook is post-egg; `book`/`gv`
+   ; are mopped here, so ala hands its folded gv down for the call-out lane to resolve a free
+   ; global). ps = (init (cup s)) = the frame [imps args]; body = the surface body. compile
+   ; body over ps; deopt -> e. non-qualifying -> e unchanged.
+   (natjit e s a gv)
     (: ps (init (cup s))  body (last (cup s))
        (? (&& (two? s) (two? (cup (cup s))) (exprn ps body))         ; >=1 param, a body, leaf grammar
           (: _ (pin fires () (+ 1 (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
@@ -69,6 +72,15 @@
                 (: ln (loopinfo-n s)
                    (? ln (: _ (pin fires () (+ 1 (peep fires () 0)))
                             (njit-loop-n s (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))) e))
+                    ; CALL-OUT loop lane: a counted sum `(\ n (sum_{i<n} (F i)))` whose per-step term calls a
+                    ; RESOLVABLE GLOBAL closure F -- glazed as the STACKLESS callout bridge (emit.l jitcalloutx),
+                    ; F's value baked into value[1] as (F . twin), the two soundness gates guarding the result.
+                    ; F is resolved via `gv` (ala's folded resolver; the hook can't reach the book). Single-param
+                    ; (no imps) => F is free => a global; a captured / multi-arg callout is future (needs a frame-
+                    ; based callee reading F from the [imps args] frame). Redefinition-stale like any baked global.
+                    (: ci (calloutinfo s)  fv (? ci (gv ci 0) 0)
+                       (? (&& ci (lit? fv))
+                          (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s))
                       ; GROUP lane (always-on) -- a reusable closure
                       ; (\ frame.. <first-order mutually-recursive arith group>) whose tail calls the group.
                       ; auto-ev can't reach this (never gets the closure body as a callable-later unit); natjit
@@ -94,7 +106,7 @@
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) 'x64 e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
                             (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym 'x64 e s))
-                            e))))))))
+                            e))))))))))
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
  _ (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
