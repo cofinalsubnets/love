@@ -2090,7 +2090,7 @@
               hreg (? (|| (peep g 'inlining ()) (! (homable? ty))) ()
                       (: sq (1 + (peep g 'dseq 0))
                          _ (pin g 'dseq sq)
-                         _ (pin g 'lrec (link `(sq off ty) (peep g 'lrec ())))
+                         _ (pin g 'lrec (link `(sq off ty <p) (peep g 'lrec ())))
                          lht (peep g 'lhome ())
                          (? lht (peep lht sq ()) ())))
               env3 (link `(<p (? hreg `('reg hreg) off) ty) env2)
@@ -3079,21 +3079,25 @@
                       (go2 l2 k) (? (k < 1) l2 (go2 >l2 (k - 1)))
                       (? (d < 1) l (go2 l d)))
        (dropn l n) (? (|| (n < 1) (! (two? l))) l (dropn >l (n - 1)))
-       (lpick ir1x)
+       (lpick ir1x crs uv)
         (: nc (ncalls ir1x 0)
-           ; call-free fns only (post-sibcall: tail calls cost nothing): the
-           ; static spill+reload wrap around real calls measured a net loss
-           ; even with zero-cost reads -- a call inside a loop pays the wrap
-           ; per iteration while the touch count stays static
-           floor9 (? (nc = 0) 1 kmax)
+           ; a call-free fn homes by touches alone (post-sibcall: tail calls
+           ; cost nothing). with calls REMAINING, only a ZERO-CROSSING local
+           ; may home -- the alive pass's cross says it is never live across
+           ; any call, so it takes no wraps at all and free reads are pure
+           ; win. the static-wrap variant measured a net loss and stays
+           ; reverted; a crossing local waits for the per-var reads-beat-
+           ; wraps gate (stage B2).
+           (free? nm) (&& (member? nm uv) ((peep crs nm 0) = 0))
            lt (leaoffs ir1x (tablet 0))
            navl ((tally hpool) - 2)
            (walk rs acc)
             (? (! (two? rs)) acc
                (: e2 <rs sq <e2 off <>e2
                   (? (peep lt off ()) (walk >rs acc)
+                     (&& (0 < nc) (! (free? <>>>e2))) (walk >rs acc)
                      (: tc (ntouch ir1x off 0)
-                        (? (tc <= floor9) (walk >rs acc)
+                        (? (tc <= 1) (walk >rs acc)
                            (walk >rs (link `(tc sq) acc)))))))
            cs (? (navl < 1) () (lastn (imsort (walk (peep g 'lrec ()) ())) navl))
            (mk l hp t) (? (|| (! (two? l)) (! (two? hp))) t
@@ -3109,7 +3113,11 @@
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
        hm (&& (! (a64? g)) (&& (! vararg) (&& (! (peep g 'hasasm ())) (&& (! (anyop? ir1 'sys)) (homes? params 0)))))
-       lr (? (|| (a64? g) (|| vararg (|| (bad? ir1) (|| (peep g 'hasasm ()) (anyop? ir1 'sys))))) () (lpick ir1))
+       ; the alive pass runs once per homing-eligible fn: lpick reads cross/
+       ; univ (a zero-crossing local homes through calls), the regens pin its
+       ; livtab so call-fixed wraps only what a call actually needs
+       av (? (|| (a64? g) (|| vararg (|| (bad? ir1) (|| (peep g 'hasasm ()) (anyop? ir1 'sys))))) () (alive g f))
+       lr (? av (lpick ir1 (caup av) (cauup av)) ())
        lh (? (two? lr) <lr ())
        lp0 (? (two? lr) <>lr hpool)
        (? (bad? ir1) 'bad
@@ -3117,7 +3125,9 @@
            (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
               _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
               _ (pin g 'homes ()) _ (pin g 'lhome lh)
+              _ (pin g 'livtab (cap av))             ; tail calls still stage through call-fixed
               ir2 (build (spillr params 0 0 0 () ()))
+              _ (pin g 'livtab ())
               _ (pin g 'lhome ()) _ (pin g 'homes ())
               (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
           (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)   ; calls remain: home + spill
@@ -3126,7 +3136,7 @@
                 (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
                    _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
                    _ (pin g 'homes ()) _ (pin g 'lhome lh)
-                   _ (pin g 'livtab (? pp (cap (alive g f)) ()))   ; per-call wrap sets for the homes
+                   _ (pin g 'livtab (cap av))        ; per-call wrap sets for the homes
                    ir2 (build (? pp (spillr2 params 0 0 0 () ()) (spill params 0 0 0 () ())))
                    _ (pin g 'livtab ())
                    _ (pin g 'lhome ()) _ (pin g 'homes ())   ; the wrap set dies with this fn
