@@ -17,7 +17,15 @@
 ; Loops are NOT caught here (their body isn't leaf-grammar) -- they stay bytecode, or use
 ; ai/glaze/auto.l's counted-loop path. Rides the BAKED glaze through the module books
 ; (the binds just below). x86-64 only.
-(: assemble (holo 'assemble)                                                 ; through the module books (crew/holo/export.l,
+; natjit is the ONLY glaze name ala needs global (it reads the hook via (gv 'natjit), ev.l) -- plus its
+; probe counter `fires` and `fired?`, all hook-owned. A post-egg stream installs a global ONLY by leaking
+; a body-less `:` (book is mopped -> no (pin book ..)). So keep the ~20 glaze aliases (loopinfo/emit/
+; calloutinfo/coreir/..) PRIVATE in an inner body-having `:` (one scope, returns natjit); the outer
+; body-less `:` leaks just fires/natjit/fired?. fires/natjit/fired? are all bound before the `_ (assert)`
+; self-test, so natjit is installed (global, via the leak) by the time the assert exercises the hook.
+(: fires #0                                                                  ; probe counter: how many closures the hook native-backed (natjit writes, fired? reads)
+   natjit
+    (: assemble (holo 'assemble)                                             ; through the module books (crew/holo/export.l,
    arch (intern ai-arch)                                                    ;   the runtime CPU target ('x64 / 'arm64), evaluated at boot on the actual binary -- so the SAME baked hook.h emits x64 on the x86 host and aarch64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
    emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   ai/glaze/export.l) -- this stream cat-loads
    loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
@@ -47,7 +55,6 @@
    ; slot (n=0 -> -3). Guard every def body too -> a free-reading body DEOPTS to bytecode (sound), never
    ; miscompiles. gd = ((name p..) . body): (cup (cap gd)) = the def's frame params, (cup gd) = its body.
    (gdefs-ok? gds) (all (\ gd (opnd-ok? (cup (cap gd)) (cup gd))) gds)
-   fires #0                                          ; a probe: how many closures the hook native-backed
    ; natjit e s a gv -- e = the bytecode entry (deopt target), s = (\ frame.. body) the
    ; surface src, a = arity, gv = ala's global resolver (this hook is post-egg; `book`/`gv`
    ; are mopped here, so ala hands its folded gv down for the call-out lane to resolve a free
@@ -120,7 +127,8 @@
                             (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
                             e))))))))))))
-   (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
+      natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
+   (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
  _ (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
     (: n (peep fires () 0)
