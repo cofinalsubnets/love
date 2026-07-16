@@ -344,7 +344,9 @@
 ; (name . arity) an alias; the DEFAULT is dyadic, so a fresh punct operator needs no entry --
 ; the tables themselves are book-private since birth, the egg mops them). the FACTORIZATION
 ; LAW: greedy longest-prefix, no backtracking; every factor but the last is arity ONE; the last
-; takes the positional valence -- with a left operand it captures it, nesting RIGHT-associatively;
+; takes the positional valence -- with a left operand it captures the whole APPLICATION SPAN on
+; that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
+; (= (a b) (c d)), (5 = abs -3) is (= 5 (abs -3))), nesting RIGHT-associatively by grip;
 ; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work, and a token that doesn't
 ; factor stays atomic (&& >>= :- ?-). a sigil at one binds TIGHTEST; the CURRY LAW folds operands
 ; missing at the end of a list to the partial application. the VALENCE LAW: glued is monadic,
@@ -363,6 +365,7 @@
  ("((dot x))" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; opfix factors (cmp via show: opfix's internal forms stay 0-tailed); quotes stay data
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
+ (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
  (3 = ((1 +) 2))                                 ; the curry law: (1 +) folds to (+ 1)

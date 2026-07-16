@@ -408,6 +408,10 @@
    (op-frd f) (cap (cuuup f)) (op-frgrip f) (cap (cup (cuuup f))) (op-frg f) (cup (cup (cuuup f)))
    ; wrap the chain of arity-one names around a folded form
    (op-fin ch x) (? (two? ch) (link (cap ch) (link (op-fin (cup ch) x) ())) x)
+   ; fold a collected span (out, reversed) into ONE operand: a lone datum stays
+   ; itself, two-or-more become the application (juxtaposition binds tighter than
+   ; any infix operator, so a whole run to an operator's side is one operand).
+   (op-span out) (? (two? (cup out)) (rev out) (cap out))
    ; fold a frame with whatever it has: nothing collected -> the plain
    ; symbol; a shortfall folds to the partial application (curry law). a
    ; frame at arity ONE (nil name: the whole op lives in the chain) wraps its
@@ -419,11 +423,14 @@
                   (nom? (op-frn f)) (op-fin (op-frc f) (link (op-frn f) (rev (op-frg f))))
                   (op-fin (op-frc f) (cap (op-frg f))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a FILLED
-   ; frame folds into its parent first (cascading), then d delivers. a
-   ; frame at one that fills folds AT ONCE -- ones bind tightest ($"ab" + 2
-   ; is (+ ($ "ab") 2)); only infix frames sit FILLED, deferring
-   ; their fold so a following operator can steal the last operand (that
-   ; deferral IS right-associativity).
+   ; infix frame EXTENDS its right operand into an application span, because
+   ; juxtaposition binds tighter than any infix operator: (a = b c) is
+   ; (= a (b c)), not ((= a b) c). the span state rides `need` -- 0 = the last
+   ; operand is still a lone datum (the first extra datum wraps it into a
+   ; 2-application), -1 = already a growing span (append). a frame at one that
+   ; fills folds AT ONCE -- ones bind tightest ($"ab" + 2 is (+ ($ "ab") 2));
+   ; only infix frames sit FILLED, deferring their fold so a following operator
+   ; can steal the last operand (that deferral IS right-associativity).
    (op-del d out pend)
     (? (atom? pend) (link (link d out) pend)
        (: f (cap pend)
@@ -434,17 +441,23 @@
                 (? (&& (= 0 (op-frd f2)) (nil? (nom? (op-frn f2))))
                    (op-del (op-fold f2) out (cup pend))
                    (link out (link f2 (cup pend)))))
-             (: r (op-del (op-fold f) out (cup pend))
-                (op-del d (cap r) (cup r))))))
+             (: op (cap (op-frg f))                          ; the frame's last (right) operand
+                nx (? (= 0 (op-frd f)) (link op (link d ())) ; lone -> wrap into (op d)
+                      (cat op (link d ())))                  ; span -> append d
+                f2 (op-fr (op-fro f) (op-frc f) (op-frn f)
+                          -1 (op-frgrip f) (link nx (cup (op-frg f))))
+                (link out (link f2 (cup pend)))))))
    ; take a left operand for an incoming operator of grip g -> `(. (out' . pend')), or 0.
    ; a FILLED top frame: g >= its grip re-arms (need 1) and yields its last operand (the C reader's
    ; A(F)=1 move -- today's steal; equal grip steals, so same-level stays right-associative); g < its
    ; grip means the frame binds tighter, so FOLD it and retry beneath (the precedence climb, reusing
-   ; op-del/op-fold, no new folding machinery). at top level the last finished datum is taken.
+   ; op-del/op-fold, no new folding machinery). at top level the WHOLE leading span is taken (op-span):
+   ; application binds tighter than infix, so (a b = c) captures (a b), not just b. a filled frame is
+   ; need <= 0 (0 = lone operand, -1 = a span the right operand grew into) -- either can be stolen.
    (op-steal g out pend)
     (? (two? pend)
        (: f (cap pend)
-          (? (= 0 (op-frd f))
+          (? (< (op-frd f) 1)
              (? (< g (op-frgrip f))
                 (: r (op-del (op-fold f) out (cup pend)) (op-steal g (cap r) (cup r)))
                 (link (cap (op-frg f))
@@ -452,7 +465,7 @@
                                              1 (op-frgrip f) (cup (op-frg f)))
                                       (cup pend)))))
              0))
-       (two? out) (link (cap out) (link (cup out) pend))
+       (two? out) (link (op-span out) (link () pend))
        0)
    ; drain at end of list: fold every pending frame innermost-out
    (op-drain out pend)

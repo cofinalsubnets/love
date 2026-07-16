@@ -26,9 +26,13 @@
  ('big = ((1 < 2) ? 'big 'small))
  ('big = (1 < 2 ? 'big 'small))                 ; ? (grip 10) is loosest, so (1 < 2) binds first -> (? (< 1 2) 'big 'small) -> 'big (the C-ternary read)
 
- ; chain termination: a non-operator datum folds the pending chain
- ('(3 3) = `(1 + 2 3))                         ; `((+ 1 2) 3)
+ ; application binds tighter than infix: a run on either side of an operator is
+ ; ONE operand (juxtaposition first), so parenthesize to seat a folded infix form
+ ; as a list element. (1 + 2 3) is (+ 1 (2 3)), NOT ((+ 1 2) 3).
+ ('(3 3) = `((1 + 2) 3))                        ; two elements: (+ 1 2) and 3
  ('(3 9) = `((1 + 2) (4 + 5)))
+ ("((+ 1 (2 3)))" = (show (opfix '(1 + 2 3))))  ; 2 3 is one operand, the whole to the right of +
+ ("((= (a b) (c d)))" = (show (opfix '(a b = c d))))
 
  ; operators as values and quoted operators are untouched
  (12 = (foldl (+) 0 '(3 4 5)))

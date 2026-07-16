@@ -16,7 +16,7 @@
  ; the content measure and its product twin, + and * turned inward
  (6 = +'(1 2 3)) (294 = +"abc") (0 = +"") (7 = +@(3 4))
  (-1 = +'(-2 1))                                ; the net, UNCLAMPED: $ would read 0
- (~(0 8) = +`(~(3 4) ~(-3 4)))                 ; phases sum as vectors
+ (~(0 8) = (net `(~(3 4) ~(-3 4))))            ; phases sum as vectors (net = + turned inward; `+` does not glue to `` ` ``, so name it)
  (24 = *'(1 2 3 4)) (7 = *7) (6 = *@(1 2 3))   ; * is prod inward: a star vacuously itself (like +5), a list/array its product
  ; the dyadics turned inward
  (5 = |-5) (5.0 = |~(3 4)) (-3 = -(1 + 2)) (0.25 = /4) (0.5 = %2.5)
