@@ -1129,7 +1129,11 @@
              ; -- has already run, so the register holds the latest value) and
              ; reloads right after the clean. a ret-position call's reloads are
              ; DEAD -- the sibcall pass skips them and tail-jumps (skiprel).
-             hs (peep g 'homes ())
+             ; ...filtered to this statement's wrapset (g 'stwrap, the alive
+             ; pass): a home DEAD across this call keeps its register -- no
+             ; spill, no reload. 'all (no liveness ran) wraps every home.
+             hs (: h9 (peep g 'homes ()) w9 (peep g 'stwrap 'all)
+                   (? (id? w9 'all) h9 (filter (\ h2 (member? <>>h2 w9)) h9)))
              spills (foldl (\ a2 p2 (a2 + `(`('st 'r4 <>p2 <p2)))) () hs)
              relods (foldl (\ a2 p2 (a2 + `(`('ld <p2 'r4 <>p2)))) () hs)
              ; the targeted emissions, after the spills and before the pops: an
@@ -2090,7 +2094,7 @@
                          lht (peep g 'lhome ())
                          (? lht (peep lht sq ()) ())))
               env3 (link `(<p (? hreg `('reg hreg) off) ty) env2)
-              _ (? hreg (pin g 'homes (link `(hreg off) (peep g 'homes ()))) ())
+              _ (? hreg (pin g 'homes (link `(hreg off <p) (peep g 'homes ()))) ())
               (? (! (two? init)) (one >ps env3 acc)
                  (|| (<init = 'init) (&& (<init = 'str) (arr? ty)))
                   (? (&& (<init = 'init) (! (aggish? ty))) 'bad   ; a brace for a scalar
@@ -2119,6 +2123,7 @@
                             (cat acc (cat (asint g r)
                                      (cat (cvt ty 'r0)
                                           `(`((stop ty) 'r4 off 'r0)))))))))))
+       _ (stq g)                                     ; one statement tick for the whole decl
        (one pairs env ()))
 
    ; block-scope `static` ((name ty init)..): each name gets a UNIQUE global
@@ -2138,6 +2143,7 @@
               _ (pin (g 'glob) lbl `(lbl ty init))   ; a LOCAL data label (internal linkage): g 'statics,
               _ (pin g 'statics (link lbl (g 'statics)))  ; NOT g 'globs -- a static is never an exported symbol
               (one >ps (link `(name `('glob lbl) ty) env2))))
+       _ (stq g)                                     ; the statement tick (alive numbers sdecls too)
        (one pairs env))
 
    ; stmt -> forms | 'bad
@@ -2275,8 +2281,261 @@
                                      (? (bad? osf) 'bad
                                         (lf + (pops ops9 asgn ()) + body + (opush ops9 asgn ()) + osf)))))))))))))
 
+   ; -- alive: which homable names still matter across each call (the homing
+   ; regens' liveness). one backward statement-grain walk over the fn body,
+   ; sets tiny name lists over a universe fixed up front: homable params +
+   ; homable locals, minus any address-taken or multiply-declared name (two
+   ; vars sharing a name must not conflate -- both keep the blanket wrap).
+   ; a statement whose own expressions call records wrapset = livein u liveout
+   ; under a statement counter that ticks EXACTLY as the regen's cgstmt/cgdecl/
+   ; cgsdecl entries do (stq below, the dseq protocol: a splice never ticks,
+   ; reset per build); the walk numbers DOWN from the prepass total, so the
+   ; child-reversed backward order lands forward pre-order numbers, and a
+   ; livtab miss reads 'all (the blanket wrap): any desync degrades, never
+   ; miscompiles. loops seed with everything the loop reads (the back edge,
+   ; no fixpoint -- a post-back-edge read is textually in the loop; a goto
+   ; ESCAPES the loop, so as a loop use it reads the whole universe); a label
+   ; is a backward no-op (what's live there is what's read after it).
+   ; answers (livtab cross univ): livtab sq -> wrapset, cross name -> static
+   ; call crossings (a universe member at cross 0 rides every call for free),
+   ; univ the analyzed names -- a gate must never trust cross for an outsider.
+   (alive g f)
+    (: params <>>f
+       items (caup (caup (cuup f)))
+       dcl (tablet 0) tak (tablet 0) n9 (tablet 0)
+       liv (tablet 0) crs (tablet 0)
+       ; -- prepass: &-taken names, one generic sweep (sizeof's unevaluated
+       ; &v over-records -- harmless, the name just keeps the blanket) --
+       (pex e) (? (! (two? e)) ()
+                  (: _ (? (&& (<e = 'addr) (&& (two? <>e) ((cap (caup e)) = 'var)))
+                          (pin tak (caup (caup e)) 1) ())
+                     (pexl >e)))
+       (pexl l) (? (! (two? l)) () (: _ (pex <l) (pexl >l)))
+       ; -- prepass: the tick total, declaration counts, homable locals
+       ; (ticks mirror lst's below, statement for statement) --
+       (pre s)
+        (? (! (two? s)) ()
+           (: k <s
+              _ (pin n9 'n (1 + (peep n9 'n 0)))
+              (? (member? k '(decl sdecl))
+                  (: (go ps) (? (! (two? ps)) ()
+                                (: p <ps
+                                   _ (pin dcl <p (1 + (peep dcl <p 0)))
+                                   _ (? (&& (k = 'decl) (homable? <>p))
+                                        (pin n9 'loc (link <p (peep n9 'loc ()))) ())
+                                   (go >ps)))
+                     (go <>s))
+                 (k = 'blk) (prel <>s)
+                 (k = 'if) (: _ (pre <>>s) (? (two? <>>>s) (pre <>>>s) ()))
+                 (k = 'while) (pre <>>s)
+                 (k = 'do) (pre <>s)
+                 (k = 'for) (: ini <>s
+                               _ (? (&& (two? ini) (member? <ini '(decl sdecl))) (pre ini) ())
+                               (pre (cauup (cuup s))))
+                 (k = 'switch) (prel <>>s)
+                 ())))
+       (prel l) (? (! (two? l)) () (: _ (pre <l) (prel >l)))
+       (pdcl ps) (? (! (two? ps)) ()
+                    (: _ (pin dcl (cap (cap ps)) (1 + (peep dcl (cap (cap ps)) 0)))
+                       (pdcl >ps)))
+       ; -- the universe: nhomable's gp walk for the param NAMES, plus the locals --
+       (pgo ps gpi acc)
+        (? (! (two? ps)) acc
+           (: pty (caup (cap ps))
+              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (pgo >ps gpi acc)
+                 (5 < gpi) acc
+                 (homable? pty) (pgo >ps (gpi + 1) (link (cap (cap ps)) acc))
+                 (pgo >ps (gpi + 1) acc))))
+       _ (pdcl params)
+       _ (prel items)
+       _ (pexl items)
+       univ (filter (\ nm (&& ((peep dcl nm 0) = 1) (! (peep tak nm ()))))
+                    ((pgo params 0 ()) + (peep n9 'loc ())))
+       ; a homable param OUTSIDE the universe (shadowed, or a sizeof-& over-
+       ; record) still HOMES -- it must ride EVERY wrapset (its blanket), or
+       ; the filter would strip its one true spill
+       pales (filter (\ nm (! (member? nm univ))) (pgo params 0 ()))
+       ; -- the set kit (names are strings; member? compares content) --
+       (sadd s2 nm) (? (member? nm s2) s2 (link nm s2))
+       (sun s2 b) (? (! (two? b)) s2 (sun (sadd s2 <b) >b))
+       (sdel s2 nm) (? (! (two? s2)) ()
+                       (<s2 = nm) >s2
+                       (link <s2 (sdel >s2 nm)))
+       (tick u) (: q (peep n9 'q 0) _ (pin n9 'q (q - 1)) q)
+       (rec sq w ncl)                               ; a call-bearing statement's record
+        (? (ncl < 1) ()
+           (: _ (pin liv sq (sun w pales))          ; the outside-universe homes ride every wrap
+              (bump l) (? (! (two? l)) ()
+                          (: _ (pin crs <l (ncl + (peep crs <l 0))) (bump >l)))
+              (bump w)))
+       ; -- reads of an expression, restricted to the universe -> (set ncalls).
+       ; a var WRITE is not a read (asn to a var recurses the rhs alone; the
+       ; home register takes the value directly, the slot is only ever read by
+       ; wrap-emitted reloads); sizeof's operand never evaluates; an unknown
+       ; head reads EVERYTHING and counts a call (future grammar fails safe) --
+       (erd e s2 nc)
+        (? (! (two? e)) `(s2 nc)
+           (: k <e
+              (? (k = 'var) `((? (member? <>e univ) (sadd s2 <>e) s2) nc)
+                 (member? k '(num flo str szof)) `(s2 nc)
+                 (member? k '(dot deref addr post vastart vaend vaarg)) (erd <>e s2 nc)
+                 (member? k '(un cast)) (erd <>>e s2 nc)
+                 (k = 'asn) (: r (erd <>>e s2 nc)
+                               (? ((cap (caup e)) = 'var) r (erd <>e <r <>r)))
+                 (k = 'bin) (: r (erd <>>e s2 nc) (erd <>>>e <r <>r))
+                 (member? k '(land lor comma)) (: r (erd <>e s2 nc) (erd <>>e <r <>r))
+                 (k = 'cond) (: r (erd <>e s2 nc) r2 (erd <>>e <r <>r) (erd <>>>e <r2 <>r2))
+                 (k = 'call) (: r (erd <>e s2 (nc + 1)) (erdl <>>e <r <>r))
+                 (k = 'clit) (erdi <>>e s2 nc)
+                 (k = 'init) (erdi <>e s2 nc)
+                 `((sun s2 univ) (nc + 1)))))
+       (erdl l s2 nc) (? (! (two? l)) `(s2 nc) (: r (erd <l s2 nc) (erdl >l <r <>r)))
+       (erdi l s2 nc)                               ; init items: dfield/didx wrap their values
+        (? (! (two? l)) `(s2 nc)
+           (: it <l
+              v (? (&& (two? it) (member? <it '(dfield didx))) <>>it it)
+              r (erd v s2 nc)
+              (erdi >l <r <>r)))
+       ; -- a loop's uses: every name its cond/step/body read, kills ignored
+       ; (the back-edge seed); a goto inside escapes -> the whole universe --
+       (ust s acc)
+        (? (! (two? s)) acc
+           (: k <s
+              (? (k = 'blk) (ustl <>s acc)
+                 (k = 'expr) (cap (erd <>s acc 0))
+                 (k = 'ret) (? (two? <>s) (cap (erd <>s acc 0)) acc)
+                 (member? k '(decl sdecl)) (ustp <>s acc)
+                 (k = 'if) (: a1 (cap (erd <>s acc 0))
+                              a2 (ust <>>s a1)
+                              (? (two? <>>>s) (ust <>>>s a2) a2))
+                 (k = 'while) (ust <>>s (cap (erd <>s acc 0)))
+                 (k = 'do) (ust <>s (cap (erd <>>s acc 0)))
+                 (k = 'for) (: ini <>s
+                               a1 (? (! (two? ini)) acc
+                                     (member? <ini '(decl sdecl)) (ustp <>ini acc)
+                                     (cap (erd (caup ini) acc 0)))
+                               a2 (? (two? <>>s) (cap (erd <>>s a1 0)) a1)
+                               a3 (? (two? <>>>s) (cap (erd <>>>s a2 0)) a2)
+                               (ust (cauup (cuup s)) a3))
+                 (k = 'switch) (ustl <>>s (cap (erd <>s acc 0)))
+                 (member? k '(goto asm)) (sun acc univ)
+                 acc)))
+       (ustl l acc) (? (! (two? l)) acc (ustl >l (ust <l acc)))
+       (ustp ps acc) (? (! (two? ps)) acc (ustp >ps (cap (erd (cauup (cap ps)) acc 0))))
+       ; -- the backward walk: statements in reverse, children before their
+       ; parent's tick (counting down = forward pre-order numbers) --
+       (litems l out brk cnt)
+        (: (go l2 o) (? (! (two? l2)) o (go >l2 (lst <l2 o brk cnt)))
+           (go (rev l) out))
+       (dpairs ps o nc)                             ; reversed decl pairs -> (in ncalls)
+        (? (! (two? ps)) `(o nc)
+           (: p <ps
+              r (erd (cauup p) () 0)
+              o2 (sun (? (member? <p univ) (sdel o <p) o) <r)
+              (dpairs >ps o2 (nc + <>r))))
+       (lst s out brk cnt)
+        (? (! (two? s)) out
+           (: k <s
+              (? (k = 'blk) (: in (litems <>s out brk cnt) _ (tick ()) in)
+                 (k = 'expr)
+                  (: e9 <>s
+                     kv (? (&& ((cap e9) = 'asn)
+                             (&& ((cap (caup e9)) = 'var)
+                                 (member? (caup (caup e9)) univ)))
+                           (caup (caup e9)) ())
+                     r (erd e9 () 0)
+                     in (sun (? kv (sdel out kv) out) <r)
+                     sq (tick ()) _ (rec sq (sun in out) <>r)
+                     in)
+                 (k = 'ret)
+                  (: r (? (two? <>s) (erd <>s () 0) '(() 0))
+                     sq (tick ()) _ (rec sq <r <>r)
+                     <r)
+                 (k = 'decl)
+                  (: pr (dpairs (rev <>s) out 0)
+                     sq (tick ()) _ (rec sq (sun <pr out) <>pr)
+                     <pr)
+                 (k = 'sdecl) (: _ (tick ()) out)   ; statics: no runtime init, no kill
+                 (k = 'if)
+                  (: inE (? (two? <>>>s) (lst <>>>s out brk cnt) out)   ; else FIRST (reverse order)
+                     inT (lst <>>s out brk cnt)
+                     r (erd <>s () 0)
+                     in (sun (sun inT inE) <r)
+                     sq (tick ()) _ (rec sq (sun in out) <>r)
+                     in)
+                 (k = 'while)
+                  (: seed (sun out (ust <>>s (cap (erd <>s () 0))))
+                     _ (lst <>>s seed out seed)
+                     r (erd <>s () 0)
+                     sq (tick ()) _ (rec sq seed <>r)
+                     seed)
+                 (k = 'do)
+                  (: seed (sun out (ust <>s (cap (erd <>>s () 0))))
+                     r (erd <>>s () 0)
+                     _ (lst <>s seed out seed)
+                     sq (tick ()) _ (rec sq seed <>r)
+                     seed)
+                 (k = 'for)
+                  (: ini <>s cnd <>>s stp <>>>s body (cauup (cuup s))
+                     useb (: u1 (? (two? cnd) (cap (erd cnd () 0)) ())
+                             u2 (? (two? stp) (cap (erd stp u1 0)) u1)
+                             (ust body u2))
+                     seed (sun out useb)
+                     _ (lst body seed out seed)
+                     nc9 (+ (? (two? cnd) (caup (erd cnd () 0)) 0)
+                            (? (two? stp) (caup (erd stp () 0)) 0))
+                     ri (? (&& (two? ini) (! (member? <ini '(decl sdecl))))
+                           (erd (caup ini) () 0) '(() 0))
+                     in (? (! (two? ini)) seed
+                           (member? <ini '(decl sdecl)) (lst ini seed () ())   ; ticks (cgdecl does); kill applies
+                           (: kv (: e8 (caup ini)
+                                    (? (&& ((cap e8) = 'asn)
+                                          (&& ((cap (caup e8)) = 'var)
+                                              (member? (caup (caup e8)) univ)))
+                                       (caup (caup e8)) ()))
+                              (sun (? kv (sdel seed kv) seed) <ri)))
+                     sq (tick ()) _ (rec sq (sun seed <ri) (+ nc9 <>ri))
+                     in)
+                 (k = 'switch)
+                  (: r (erd <>s () 0)
+                     _ (pin n9 'sw (link () (peep n9 'sw ())))   ; push this switch's marker set
+                     _ (litems <>>s out out cnt)                 ; brk = out; cont targets the outer loop
+                     macc (cap (peep n9 'sw ()))
+                     _ (pin n9 'sw (cup (peep n9 'sw ())))       ; pop
+                     in (sun (sun <r macc) out)
+                     sq (tick ()) _ (rec sq in <>r)
+                     in)
+                 (member? k '(case dflt))
+                  (: sw (peep n9 'sw ())
+                     _ (? (two? sw) (pin n9 'sw (link (sun <sw out) >sw)) ())
+                     _ (tick ()) out)
+                 (k = 'brk) (: _ (tick ()) brk)
+                 (k = 'cont) (: _ (tick ()) cnt)
+                 (k = 'goto) (: _ (tick ()) univ)   ; any target: everything
+                 (k = 'lbl) (: _ (tick ()) out)
+                 (k = 'asm) (: sq (tick ()) _ (rec sq univ 1) univ)   ; homing is off anyway (hasasm)
+                 (: _ (tick ()) out))))             ; nop tdef
+       ; -- run: liveout at the fn end is empty; the counter descends from the
+       ; prepass total so lst's numbers land forward pre-order --
+       _ (pin n9 'q (peep n9 'n 0))
+       _ (litems items () () ())
+       `(liv crs univ))
+   ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this
+   ; counter and pin the statement's wrapset (g 'stwrap) off g 'livtab -- a
+   ; miss (or no livtab at all) pins 'all, the blanket wrap. an inline splice
+   ; neither ticks nor re-pins: it compiles under its statement's set.
+   (stq g)
+    (? (peep g 'inlining ()) (peep g 'stwrap 'all)
+       (: q (1 + (peep g 'lsq 0))
+          _ (pin g 'lsq q)
+          lt (peep g 'livtab ())
+          w (? lt (peep lt q 'all) 'all)
+          _ (pin g 'stwrap w)
+          w))
+
    (cgstmt g env s)
     (: _ (pin g 'pool (peep g 'pool0 ()))            ; a statement never carries a live operand in
+       myw (stq g)                                   ; this statement's wrapset (alive's forward twin)
        k <s
        (? (k = 'ret)                                                     ; inside an inline splice a return JUMPS to the
           (: il (peep g 'inlret ())                                      ; splice's end label instead of the epilogue
@@ -2347,12 +2606,14 @@
                        (? (bad? r) 'bad `((vdrop g r) env))))
               (? (bad? ir) 'bad
                  (: env2 <>ir
+                    _ (pin g 'stwrap myw)            ; a decl init re-pinned; the cond is OURS
                     c (? (two? cnd) (cbranch g env2 cnd 'eq ld) ())
                     _ (pin g 'brk (link ld (g 'brk)))
                     _ (pin g 'cnt (link ls (g 'cnt)))
                     b (cgstmt g env2 body)
                     _ (pin g 'brk (cup (g 'brk)))
                     _ (pin g 'cnt (cup (g 'cnt)))
+                    _ (pin g 'stwrap myw)            ; the body re-pinned as it went; the step is OURS
                     st2 (? (two? stp) (cgexpr g env2 stp) ())
                     (? (|| (bad? c) (|| (bad? b) (bad? st2))) 'bad
                        (cat <ir
@@ -2371,6 +2632,7 @@
               b (cgstmt g env <>s)
               _ (pin g 'brk (cup (g 'brk)))
               _ (pin g 'cnt (cup (g 'cnt)))
+              _ (pin g 'stwrap myw)                  ; the body re-pinned as it went; the cond is OURS
               c (cbranch g env <>>s 'ne lt)
               (? (|| (bad? b) (bad? c)) 'bad
                  (cat `(`('label lt))
@@ -2530,6 +2792,7 @@
        _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
        _ (pin g 'homes ())                           ; fresh non-leaf home set (call-fixed + sibs read it)
        _ (pin g 'lhome ())                           ; fresh locals-homing map (cgdecl's hook reads it)
+       _ (pin g 'livtab ())                          ; fresh liveness (set only for a wrap-bearing regen)
        _ (pin g 'fn <>f)
        sig (peep (g 'sigs) <>f ())
        vararg (? (two? sig) (nthr sig 2) ())
@@ -2709,7 +2972,7 @@
                       (: home (homereg gpi) inc (nthr argregs gpi)
                          off (0 - ((peep g 'off 0) + 8))
                          _ (pin g 'off ((peep g 'off 0) + 8))
-                         _ (pin g 'homes (link `(home off) (peep g 'homes ())))
+                         _ (pin g 'homes (link `(home off <p) (peep g 'homes ())))
                          mv (? (home = inc) () `(`('mov home inc)))
                          (spillr2 >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
                                 (acc + mv)))
@@ -2751,6 +3014,8 @@
         (? (bad? sp0) 'bad
            (: _ (pin g 'dseq 0)                     ; the locals-homing decl sequence, fresh per build
               _ (pin g 'lrec ())
+              _ (pin g 'lsq 0)                      ; the alive statement counter, fresh per build
+              _ (pin g 'stwrap 'all)
               body (cgitems g <>sp0 (caup (caup (cuup f))) ())
               (? (bad? body) 'bad
                  (: frame (& ((peep g 'off 0) + 15) -16)
@@ -2861,7 +3126,9 @@
                 (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
                    _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
                    _ (pin g 'homes ()) _ (pin g 'lhome lh)
+                   _ (pin g 'livtab (? pp (cap (alive g f)) ()))   ; per-call wrap sets for the homes
                    ir2 (build (? pp (spillr2 params 0 0 0 () ()) (spill params 0 0 0 () ())))
+                   _ (pin g 'livtab ())
                    _ (pin g 'lhome ()) _ (pin g 'homes ())   ; the wrap set dies with this fn
                    (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
                 ir1))))

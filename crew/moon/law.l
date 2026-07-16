@@ -627,5 +627,36 @@
       (! (cgn "int main() { asm(\"sys\" : : \"r4\"(1)); return 0; }"))
       (! (cgn "int main() { double d; asm(\"sys\" : : \"r\"(d)); return 0; }"))))
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) ok")
+; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params
+; spill/reload ONLY around calls they are live across. `wraps` counts stores
+; of home-pool registers to the frame (the spill side): the summed-then-dead
+; pair takes ZERO wraps, the read-after-the-call pair keeps its two; a param
+; SHADOWED by an inner local conflates two vars under one name, so it deopts
+; to the blanket (its spill survives the call it is dead across -- and the
+; unshadowed sibling still drops its own, per-var within ONE call); a goto
+; reads the whole universe (the escape edge), so its fn keeps both.
+(: (cgn src) (: r (cparse (caup (clex src)))
+               (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+   (wraps fs) (: (go l n) (? (! (two? l)) n
+                             (: f2 <l
+                                (go >l (? (&& (two? f2)
+                                          (&& (<f2 = 'st)
+                                          (&& (<>f2 = 'r4)
+                                              (member? <>>>f2 '(r5 r6 r7 r8 r9 r10)))))
+                                          (n + 1) n))))
+                 (go fs 0))
+   pre9 "long g(long x); "
+   irD (cgn (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
+   irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
+   irS (cgn (pre9 + "long q(long a, long b) { long s = a+b+a*b+a-b; g(1); { long a = s; s = a+1; } return s+2; } int main() { return q(20, 22); }"))
+   irG (cgn (pre9 + "long w(long a, long b) { long s = a+b+a*b+a-b; g(1); if (s > 9) goto out; s = s+1; out: return s+1; } int main() { return w(20, 22); }"))
+   (assert
+      (two? irD) (two? irL) (two? irS) (two? irG)
+      (= 0 (wraps (caup irD)))                       ; dead across the call: no spills at all
+      (= 2 (wraps (caup irL)))                       ; live across: both homes keep their wrap
+      (= 1 (wraps (caup irS)))                       ; the shadowed a's blanket; b's own still drops
+      (member? '(st r4 -16 r6) (caup irS))           ; ...and it is a's (r6, the first gp home)
+      (= 2 (wraps (caup irG)))))                     ; a goto fn wraps everything
+
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket) ok")
 (put err 10)
