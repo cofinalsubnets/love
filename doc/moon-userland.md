@@ -185,15 +185,39 @@ register-exhausted arg or a >16-byte (MEMORY) struct still refuses (`crew/moon/l
 directions). This is a general rung (every modern struct-by-value API needs it); it un-refuses
 timespec.h's helpers, though gzip.c itself has a *separate* parse blocker still open (below).
 
-### the remaining wall (gzip.c → a working binary)
+### gzip.c's "parse error" is a RUNTIME HEISENBUG, not a missing feature (diagnosed 2026-07-15)
 
-1. **gzip.c's own parse blocker + the gnulib `lib/*.c` link tree — NOT DONE.** gzip.c (the CLI)
-   still parse-errors on a construct independent of the struct ABI (its headers + timespec.h now
-   all parse). And even with every core `.o`, LINKING a working
-   gzip needs gnulib's implementations — `xmalloc`/`xstrdup` (xalloc), `dir_name` (dirname),
-   `getopt_long`, `savedir`, `yesno`, `fcntl`-safer, quotearg, … — ~100 `lib/*.c`, each its own
-   potential rung. This is the "gnulib-heavy" far end the ladder always flagged; gzip-1.13
-   reaches it where bzip2 (plain C89, no gnulib) never did.
+Chased in depth. gzip.c's failure is **NOT a C construct mooncc can't parse** — it is a
+mooncc **runtime memory/GC heisenbug** surfaced by the large parse. The forensics:
+
+- The parse reliably dies at `typedef ptrdiff_t idx_t;` (gnulib `idx.h`, pulled by `xalloc.h`).
+  But `ptrdiff_t` **is** correctly registered as a type — `tkbty?` returns `long` for it at the
+  exact failing site. So the parser is not rejecting a construct; its state is corrupt.
+- **Size/timing/layout-sensitive**, the signature of memory corruption: the full gzip.c fails
+  12/12; `config+tailor+gzip+xalloc.h` fails 8/8; but drop *either* tailor.h or gzip.h and it
+  passes, and medium inputs are FLAKY (a *separate*, intermittent heisenbug on medium sizes
+  muddied the first bisect — always re-run N× and prefer `AI_NO_GLAZE=1 AI_NO_IMAGE=1` for a
+  deterministic signal). Adding an **unexecuted** debug branch to the parser flips the outcome.
+- **valgrind is clean** — expected for ai's two-space copying/generational collector: the whole
+  heap is one valid mapping, so a missed-root / bad-forward corrupts data invisibly to valgrind.
+- Fails identically under glaze-on, pure-bytecode, and image — so it's in the **core runtime**
+  (ai.c's GC), not the glaze or the snapshot. Same family as memory's `gc-single-barrier`,
+  `image-boot-storm`, `glaze-rewrite-shadow` (the aicc/mooncc "two attractors" heisenbug).
+- 200 dummy typedefs do NOT reproduce it — it's not a type-table size limit; it's allocation/GC
+  timing tied to gzip.c's specific parse. (A `-Dai_gc_ratio` giant-nursery test was inconclusive
+  — the extreme value broke the egg bootstrap; a moderate value + gdb watchpoint is the next step.)
+
+**So gzip.c does not need a new parser/codegen feature — it needs a GC/runtime bug hunt** (gdb
+watchpoint on the corrupted cell across minor collections). That is a deep, separate investigation.
+
+### the other wall: the gnulib `lib/*.c` link tree — NOT DONE
+
+Even with every core `.o`, LINKING a working gzip needs gnulib's implementations —
+`xmalloc`/`xstrdup` (xalloc), `dir_name` (dirname), `getopt_long`, `savedir`, `yesno`,
+`fcntl`-safer, quotearg, … — ~100 `lib/*.c`, each its own potential rung. This is the
+"gnulib-heavy" far end the ladder always flagged; gzip-1.13 reaches it where bzip2 (plain
+C89, no gnulib) never did. **A pre-gnulib gzip (1.2.4, plain C89) sidesteps BOTH this and the
+GC-heisenbug size trigger** — the practical path to a runnable gzip.
 
 **Takeaway:** a *working gzip-1.13 binary* is a materially larger arc than bzip2 — it is a
 gnulib userland port plus one real ABI codegen feature, not a header-shim day. The five rungs
