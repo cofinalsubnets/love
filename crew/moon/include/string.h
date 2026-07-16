@@ -12,6 +12,8 @@ void *memchr(void const*, int, size_t);
 size_t strlen(char const*);
 int   strcmp(char const*, char const*);
 int   strncmp(char const*, char const*, size_t);
+int   strcasecmp(char const*, char const*);
+int   strncasecmp(char const*, char const*, size_t);
 char *strcpy(char*, char const*);
 char *strncpy(char*, char const*, size_t);
 char *strcat(char*, char const*);

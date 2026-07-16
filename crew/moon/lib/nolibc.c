@@ -30,6 +30,8 @@
 #include <dirent.h>
 #include <termios.h>
 #include <netdb.h>
+#include <pwd.h>
+#include <grp.h>
 #include <link.h>
 #include <sched.h>
 #include <sys/types.h>
@@ -52,7 +54,12 @@ extern int main(int, char**);
 #define NR_fcntl           25
 #define NR_ioctl           29
 #define NR_mkdirat         34
+#define NR_mknodat         33
 #define NR_unlinkat        35
+#define NR_nanosleep      101
+#define NR_setgid         144
+#define NR_setuid         146
+#define NR_geteuid        175
 #define NR_symlinkat       36
 #define NR_linkat          37
 #define NR_renameat        38
@@ -62,6 +69,7 @@ extern int main(int, char**);
 #define NR_fchmod          52
 #define NR_fchmodat        53
 #define NR_fchownat        54
+#define NR_faccessat       48
 #define NR_openat          56
 #define NR_close           57
 #define NR_pipe2           59
@@ -114,6 +122,7 @@ extern int main(int, char**);
 #define NR_close            3
 #define NR_fstat            5
 #define NR_lseek            8
+#define NR_nanosleep       35
 #define NR_mmap             9
 #define NR_mprotect        10
 #define NR_munmap          11
@@ -122,6 +131,9 @@ extern int main(int, char**);
 #define NR_ioctl           16
 #define NR_pwrite64        18
 #define NR_getpid          39
+#define NR_setuid         105
+#define NR_setgid         106
+#define NR_geteuid        107
 #define NR_socket          41
 #define NR_connect         42
 #define NR_accept          43
@@ -155,7 +167,9 @@ extern int main(int, char**);
 #define NR_exit_group     231
 #define NR_openat         257
 #define NR_mkdirat        258
+#define NR_mknodat        259
 #define NR_fchownat       260
+#define NR_faccessat      269
 #define NR_newfstatat     262
 #define NR_unlinkat       263
 #define NR_renameat       264
@@ -248,6 +262,18 @@ size_t strcspn(char const *s, char const *set) {
   for (; s[n]; n++) { char const *p = set; while (*p && *p != s[n]) p++; if (*p) break; }
   return n; }
 int isupper(int c) { return c >= 65 && c <= 90; }
+int isalpha(int c) { return (c >= 65 && c <= 90) || (c >= 97 && c <= 122); }
+int isspace(int c) { return c == 32 || (c >= 9 && c <= 13); }
+int isprint(int c) { return c >= 32 && c < 127; }
+int tolower(int c) { return (c >= 65 && c <= 90) ? c + 32 : c; }
+char *strchr(char const *s, int c) { for (;; s++) { if (*s == (char) c) return (char *) s; if (!*s) return 0; } }
+char *strerror(int e) { static char b[24]; snprintf(b, sizeof b, "error %d", e); return b; }
+int strcasecmp(char const *a, char const *b) {
+  while (*a && tolower((unsigned char) *a) == tolower((unsigned char) *b)) { a++; b++; }
+  return tolower((unsigned char) *a) - tolower((unsigned char) *b); }
+int strncasecmp(char const *a, char const *b, size_t n) {
+  while (n && *a && tolower((unsigned char) *a) == tolower((unsigned char) *b)) { a++; b++; n--; }
+  return n ? tolower((unsigned char) *a) - tolower((unsigned char) *b) : 0; }
 
 /* ---- the plain syscall tail: one line each ---- */
 long read(int fd, void *b, long n) { return er(sc3(NR_read, fd, (long) b, n)); }
@@ -259,6 +285,7 @@ int open(char const *p, int fl, ...) {
   int mode = va_arg(ap, int);
   va_end(ap);
   return (int) er(sc4(NR_openat, AT_FDCWD, (long) p, fl, mode)); }
+int creat(char const *p, unsigned int mode) { return open(p, O_WRONLY | O_CREAT | O_TRUNC, (int) mode); }
 int fcntl(int fd, int cmd, ...) {
   va_list ap; va_start(ap, cmd);
   long arg = va_arg(ap, long);
@@ -305,6 +332,25 @@ long readlink(char const *p, char *b, unsigned long n) { return er(sc4(NR_readli
 int chmod(char const *p, unsigned int m) { return (int) er(sc4(NR_fchmodat, AT_FDCWD, (long) p, m, 0)); }
 int fchmod(int fd, unsigned int m) { return (int) er(sc2(NR_fchmod, fd, m)); }
 int chown(char const *p, unsigned int u, unsigned int g) { return (int) er(sc5(NR_fchownat, AT_FDCWD, (long) p, u, g, 0)); }
+int lchown(char const *p, unsigned int u, unsigned int g) { return (int) er(sc5(NR_fchownat, AT_FDCWD, (long) p, u, g, 256)); }   /* AT_SYMLINK_NOFOLLOW */
+int access(char const *p, int m) { return (int) er(sc4(NR_faccessat, AT_FDCWD, (long) p, m, 0)); }
+int dup(int fd) { return (int) er(sc3(NR_fcntl, fd, 0, 0)); }                          /* F_DUPFD */
+unsigned int geteuid(void) { return (unsigned int) sc0(NR_geteuid); }
+int setuid(unsigned int u) { return (int) er(sc1(NR_setuid, u)); }
+int setgid(unsigned int g) { return (int) er(sc1(NR_setgid, g)); }
+int mknod(char const *p, unsigned int mode, unsigned long dev) { return (int) er(sc4(NR_mknodat, AT_FDCWD, (long) p, mode, (long) dev)); }
+int mkfifo(char const *p, unsigned int mode) { return mknod(p, mode | 4096U, 0); }     /* S_IFIFO = 010000 */
+int wait(int *st) { return waitpid(-1, st, 0); }
+int usleep(unsigned int us) {
+  struct timespec ts;
+  ts.tv_sec = us / 1000000;
+  ts.tv_nsec = (long) (us % 1000000) * 1000;
+  return (int) er(sc2(NR_nanosleep, (long) &ts, 0)); }
+time_t time(time_t *t) {
+  struct timespec ts;
+  clock_gettime(0, &ts);                       /* CLOCK_REALTIME */
+  if (t) *t = ts.tv_sec;
+  return ts.tv_sec; }
 unsigned int umask(unsigned int m) { return (unsigned int) sc1(NR_umask, m); }
 int setpgid(pid_t p, pid_t g) { return (int) er(sc2(NR_setpgid, p, g)); }
 int getpgrp(void) { return (int) sc1(NR_getpgid, 0); }
@@ -400,6 +446,7 @@ void exit(int c) {
   while (__natex > 0) __atex[--__natex]();
   fflush(0);
   _exit(c); }
+void abort(void) { raise(SIGABRT); _exit(127); }
 
 /* ---- execvp: execve + the PATH walk ---- */
 int execv(char const *p, char *const *av) {
@@ -467,8 +514,42 @@ void *calloc(size_t n, size_t sz) {
   void *p = malloc(t);
   if (p) memset(p, 0, t);
   return p; }
+void *realloc(void *p, size_t n) {
+  if (!p) return malloc(n);
+  if (n == 0) { free(p); return 0; }
+  size_t old = (((__mhdr *) p - 1)->size - 1) * sizeof(__mhdr);   /* payload bytes */
+  if (old >= n) return p;
+  void *q = malloc(n);
+  if (!q) return 0;
+  memcpy(q, p, old);
+  free(p);
+  return q; }
+/* alloca: no native / __builtin form, so gnulib's C_ALLOCA scheme by hand --
+ * malloc-backed, reclaimed by stack depth. both arches grow DOWN, so a frame
+ * that has returned sits at a HIGHER address than the current probe; on each
+ * call we free every block whose mark sits BELOW `here` (its frame unwound
+ * past). blocks from the same or an ancestor frame (mark >= here) stay.
+ * leak-free without a stack-direction probe. */
+typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
+static __ablk *__ahead;
+void *alloca(size_t n) {
+  char here;
+  while (__ahead && __ahead->mark < &here) { __ablk *d = __ahead; __ahead = d->next; free(d); }
+  if (n == 0) return 0;                         /* alloca(0): reclaim only */
+  __ablk *b = malloc(sizeof(__ablk) + n);
+  if (!b) return 0;
+  b->mark = &here;
+  b->next = __ahead;
+  __ahead = b;
+  return (void *) (b + 1); }
 int atoi(char const *s) {
   int sign = 1, v = 0;
+  while (*s == ' ' || *s == 9) s++;
+  if (*s == '-') { sign = -1; s++; } else if (*s == '+') s++;
+  while (*s >= '0' && *s <= '9') { v = v * 10 + (*s - '0'); s++; }
+  return sign * v; }
+long atol(char const *s) {
+  long sign = 1, v = 0;
   while (*s == ' ' || *s == 9) s++;
   if (*s == '-') { sign = -1; s++; } else if (*s == '+') s++;
   while (*s >= '0' && *s <= '9') { v = v * 10 + (*s - '0'); s++; }
@@ -936,6 +1017,112 @@ double strtod(char const *s, char **end) {
       v = esign > 0 ? v * scale : v / scale; } }
   if (end) *end = (char *) p;
   return sign * v; }
+/* the unsigned twin: strtol's digit walk, no sign, wrapping like glibc's. */
+static unsigned long __strtoux(char const *s, char **endptr, int base) {
+  char const *p = s;
+  int neg = 0;
+  while (*p == 32 || (*p >= 9 && *p <= 13)) p++;
+  if (*p == '-') { neg = 1; p++; } else if (*p == '+') p++;
+  if (*p == '0') {
+    ++p;
+    if ((base == 0 || base == 16) && (*p == 'x' || *p == 'X')) { base = 16; ++p; if (__digval(*p) >= base) p -= 2; }
+    else if (base == 0) { base = 8; --p; }
+    else --p; }
+  else if (!base) base = 10;
+  if (base < 2 || base > 36) return 0;
+  int any = 0;
+  unsigned long rc = 0;
+  for (int d; (d = __digval(*p)) < base; p++) { any = 1; rc = rc * (unsigned) base + (unsigned) d; }
+  if (endptr) *endptr = (char *) (any ? p : s);
+  return neg ? 0UL - rc : rc; }
+unsigned long strtoul(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
+unsigned long strtoull(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
+unsigned long strtoumax(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
+
+/* qsort: shellsort (Ciura-ish 3x gaps would be nicer, but n/2 halving is small
+ * and tar's arrays are short). in-place byte swap of size-sz elements. */
+void qsort(void *base, size_t n, size_t sz, int (*cmp)(void const *, void const *)) {
+  char *a = base;
+  for (size_t gap = n / 2; gap > 0; gap /= 2)
+    for (size_t i = gap; i < n; i++)
+      for (size_t j = i; j >= gap && cmp(a + (j - gap) * sz, a + j * sz) > 0; j -= gap) {
+        char *x = a + (j - gap) * sz, *y = a + j * sz;
+        for (size_t k = 0; k < sz; k++) { char t = x[k]; x[k] = y[k]; y[k] = t; } } }
+
+/* exec's variadic pair: gather (arg0, .., NULL) off the stack, then execv[p]. */
+int execl(char const *p, char const *a0, ...) {
+  char *av[256]; int n = 0;
+  va_list ap; va_start(ap, a0);
+  av[n++] = (char *) a0;
+  while (n < 255 && (av[n] = va_arg(ap, char *))) n++;
+  av[n] = 0;
+  va_end(ap);
+  return execv(p, av); }
+int execlp(char const *f, char const *a0, ...) {
+  char *av[256]; int n = 0;
+  va_list ap; va_start(ap, a0);
+  av[n++] = (char *) a0;
+  while (n < 255 && (av[n] = va_arg(ap, char *))) n++;
+  av[n] = 0;
+  va_end(ap);
+  return execvp(f, av); }
+/* system: fork, /bin/sh -c, wait. no signal juggling (ai is single-threaded). */
+int system(char const *cmd) {
+  if (!cmd) return 1;                          /* a shell is available */
+  int pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    char *av[4]; av[0] = "sh"; av[1] = "-c"; av[2] = (char *) cmd; av[3] = 0;
+    execv("/bin/sh", av);
+    _exit(127); }
+  int st = 0;
+  while (waitpid(pid, &st, 0) < 0) if (__errno_v != EINTR) return -1;
+  return st; }
+/* one fixed "C" locale, so setlocale just answers its name. */
+char *setlocale(int cat, char const *loc) { (void) cat; (void) loc; return (char *) "C"; }
+
+/* getc/fputs/ferror over the unbuffered read streams; fscanf reads char-by-char
+ * (no ungetc, so it consumes the field terminator -- tar's lone use is "%d"). */
+int getc(FILE *f) {
+  unsigned char c;
+  long k = read(f->fd, &c, 1);
+  if (k <= 0) { if (k < 0) f->err = 1; return EOF; }
+  return c; }
+int fputs(char const *s, FILE *f) { size_t n = strlen(s); return fwrite(s, 1, n, f) == n ? 0 : EOF; }
+int ferror(FILE *f) { return f->err; }
+int fscanf(FILE *f, char const *fmt, ...) {
+  va_list ap; va_start(ap, fmt);
+  int got = 0, c;
+  for (; *fmt; fmt++) {
+    if (*fmt == '%') {
+      fmt++;
+      if (*fmt == 'd' || *fmt == 'u' || *fmt == 'x' || *fmt == 's')
+        do { c = getc(f); } while (c == 32 || (c >= 9 && c <= 13));
+      if (*fmt == 'd' || *fmt == 'u' || *fmt == 'x') {
+        int base = *fmt == 'x' ? 16 : 10, sign = 1, any = 0, d;
+        if (*fmt == 'd' && (c == '-' || c == '+')) { if (c == '-') sign = -1; c = getc(f); }
+        long v = 0;
+        while ((d = __digval(c)) < base) { v = v * base + d; any = 1; c = getc(f); }
+        if (!any) break;
+        *va_arg(ap, int *) = (int) (sign * v);
+        got++; }
+      else if (*fmt == 's') {
+        char *out = va_arg(ap, char *); int i = 0;
+        while (c != EOF && !(c == 32 || (c >= 9 && c <= 13))) { out[i++] = (char) c; c = getc(f); }
+        out[i] = 0; got++; }
+      else if (*fmt == 'c') { c = getc(f); if (c == EOF) break; *va_arg(ap, char *) = (char) c; got++; } }
+    else if (*fmt == 32 || (*fmt >= 9 && *fmt <= 13)) ;   /* fmt whitespace: no peek, skip */
+    else { c = getc(f); if (c != (unsigned char) *fmt) break; } }
+  va_end(ap);
+  return got; }
+
+/* no name database yet: every passwd/group lookup misses, so tar prints numeric
+ * owner/group (its own fallback). a real /etc/passwd walk is a later rung. */
+struct passwd *getpwuid(uid_t u) { (void) u; return 0; }
+struct passwd *getpwnam(char const *n) { (void) n; return 0; }
+struct group *getgrgid(gid_t g) { (void) g; return 0; }
+struct group *getgrnam(char const *n) { (void) n; return 0; }
+void setgrent(void) { }
 
 /* ---- dl_iterate_phdr off the auxv (AT_PHDR/AT_PHNUM): our exes are ET_EXEC,
  * so the bias is 0 and one callback covers "the main program" -- all image.c's

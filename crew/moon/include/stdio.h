@@ -51,6 +51,11 @@ int    setvbuf(FILE*, char*, int, size_t);
 int    scanf(char const*, ...);
 int    fscanf(FILE*, char const*, ...);
 int    sscanf(char const*, char const*, ...);
+/* pre-C89 gnulib sources (argmatch.c ..) call exit/abort with no <stdlib.h>,
+   leaning on the implicit int decl mooncc refuses -- surface them here, the
+   same "the ladder leans on cross-header provision" note above covers it. */
+void   exit(int);
+void   abort(void);
 #include <stdarg.h>
 int    vprintf(char const*, va_list);
 int    vfprintf(FILE*, char const*, va_list);
