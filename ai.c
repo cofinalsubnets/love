@@ -2266,8 +2266,8 @@ union u const numap_drive[] = { {lvm_ap}, {.ap = numap_swap}, {.ap = lvm_ret0} }
 // still unwinds to the one barrier. The caller passes clos/arg by value; ai_push roots them across
 // its own room-guard GC, and every live NATIVE value must already be a root (spilled to Sp) since the
 // callee may collect. On return, g->sp[0] = the result (the caller reloads Sp/Hp from g).
-static lvm(lvm_call1end) { Pack(g); return encode(g, ai_status_yield); }   // stop the nested run (mirrors _lvm_yieldk: yield=ok under tco, =eof otherwise)
-static union u const call1_end[]   = { {lvm_call1end} };
+static lvm(_lvm_call1end) { Pack(g); return encode(g, ai_status_yield); }   // stop the nested run (mirrors _lvm_yieldk: yield=ok under tco, =eof otherwise). the `_` prefix is the vmret exemption: like _lvm_yieldk this legitimately returns to C (the drive terminator), it does NOT tail-jump.
+static union u const call1_end[]   = { {_lvm_call1end} };
 static union u const call1_drive[] = { {lvm_ap}, {.ap = lvm_ret0} };
 struct ai *ai_call1(struct ai *g, word clos, word arg) {
  if (!ai_ok(g)) return g;

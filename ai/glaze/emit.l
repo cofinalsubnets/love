@@ -127,6 +127,39 @@
    (jitsum body)
     (: src `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('+ 'a body)) 'a)) 0 0))
        (nif (emit (loopcode body 'i '+ '< 'x64)) (ev src) src 1))
+   ; --- CALL-OUT BRIDGE, native side (step 2 phase 1, x86 POC) -------------------------------------
+   ;     calloutir: a native lane calls ai_call1 to apply the interp closure `clos` to the raw loop
+   ;     counter CV; the fixnum result lands UNTAGGED in acc. Saves the caller-saved regs (g/Ip/Sp +
+   ;     the 3 loop regs) across the C call, PACKS Sp/Hp into g first (ai_call1 reads them), then
+   ;     RELOADS Hp from g (it moved under a callee GC) and RESTORES Sp from the spill (so the loop's
+   ;     Sp never drifts); result read from g->sp[0] (struct ai: ip@0, hp@8, sp@16). GC-safe for an
+   ;     INTEGER loop -- the raw loop regs hold ints, not heap pointers, so only the closure (rooted
+   ;     by ai_call1's own ai_push) needs GC care. x64-only. THIS IS THE TAX-MEASUREMENT lane.
+   ;     The closure to call is value[1] of THIS nif (reached Ip-relative, `(ld IP 8)`, exactly as
+   ;     deoptbody reaches the interp twin) -- NOT a baked immediate: a live heap pointer can't be an
+   ;     immediate, and would go stale the moment the callee's GC moved it. Being a live cell it stays
+   ;     a GC root. clos arg is ignored (kept so the call isn't nullary/unrun).
+   (calloutir _) (: A (greg 'x64 'acc) G (greg 'x64 'g) IP (greg 'x64 'ip) HP (greg 'x64 'hp) SP (greg 'x64 'sp) T (greg 'x64 'tmp)
+                    rs (loopregs 'x64) N (nthl rs 0) CV (nthl rs 1) ACC (nthl rs 2) SV 'r3
+      (L (L 'ld T IP 8)                                                            ; T = value[1] = clos (before IP is spilled)
+         (L 'st G 16 SP) (L 'st G 8 HP)                                             ; Pack Sp/Hp into g
+         (L 'push SV) (L 'mov SV 'sp)                                              ; snapshot machine rsp in rbx
+         (L 'push G) (L 'push IP) (L 'push SP) (L 'push N) (L 'push CV) (L 'push ACC)   ; save 6 caller-saved regs
+         (L 'leax HP CV CV 1 1) (L 'mov IP T)                                       ; rdx=arg=2*CV+1 (tagged) ; rsi=clos ; rdi=g already
+         (L 'and 'sp 'sp -16) (L 'li T (calloutaddr 0)) (L 'callr T)                ; call ai_call1(g, clos, arg)
+         (L 'ld T A 16) (L 'ld T T 0)                                              ; T = [g->sp][0] = result (rax=g on return)
+         (L 'mov 'sp SV) (L 'sub 'sp 'sp 48)                                       ; restore rsp to the 6-reg block
+         (L 'pop ACC) (L 'pop CV) (L 'pop N) (L 'pop SP) (L 'pop IP) (L 'pop G) (L 'pop SV)
+         (L 'ld HP G 8) (L 'mov A T) (L 'sar A 1)))                                ; Hp = g->hp (moved) ; acc = untag(result)
+   ; (jitcalloutsum clos) -- (\ n (sum_{i<n} (clos i))) as a native counted loop whose body CALLS OUT
+   ;     to the interp closure each iteration. Measures the native-side call-out tax vs the pure-interp
+   ;     equivalent. deopt fallback is a stub (the measurement stays in fixnum range, never overflows).
+   (jitcalloutsum clos) (: rs (loopregs 'x64) N (nthl rs 0) CV (nthl rs 1) ACC (nthl rs 2) A (greg 'x64 'acc) S (greg 'x64 'sp)
+       code (asmt 'x64 (`(`('ld N S 0) `('sar N 1) `('li CV 0) `('li ACC 0))
+              + `('(label top) `('cmp CV N) `('br 'ge 'end))
+              + (calloutir clos) + (`(`('adds ACC ACC A)) + (ldeopt 'x64 0))
+              + `(`('inc CV) '(jmp top) '(label end) `('mov A ACC)) + (loopepi 'x64)))
+       (nif (emit code) clos `('\ 'n 0) 1))   ; clos IS value[1] -- calloutir loads it Ip-relative
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if

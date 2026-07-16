@@ -28,7 +28,7 @@
    emit (G 'emit)  fbits (G 'fbits)  fr (G 'fr)  grok (G 'grok)
    jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
    jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
-   jitnir (G 'jitnir)  jitsum (G 'jitsum)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
+   jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
    loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow))
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
@@ -56,6 +56,11 @@
   ((\ x (? (< x 0) (- 0 x) x)) = (jit '(\ x (? (< x 0) (- 0 x) x))))                        ; transparent
   (: cap50 (jitsum '(? (< i 50) i 0)) c50 ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
      (= c50 (cap50 1000)))                                                                  ; loop with a conditional body
+  ; CALL-OUT BRIDGE (native side): a native counted loop whose body CALLS OUT to an interp closure each
+  ; iteration (via ai_call1); clos is value[1], reached Ip-relative. native == interp, sum of squares.
+  (: sq (\ i (* i i))  co (jitcalloutsum sq)
+     (&& (lit? co) (0 = (co 0)) (30 = (co 5)) (285 = (co 10))
+         ((co 8) = ((: (go i a) (? (< i 8) (go (+ i 1) (+ a (sq i))) a)) 0 0))))            ; native loop-with-callout == interp loop
   ; // and %
   (: dv (jit '(\ x (// x 3))) (&& (3 = (dv 10)) (4 = (dv 13)) (-3 = (dv -10))))
   (: md (jit '(\ x (% x 7)))  (&& (1 = (md 8)) (-1 = (md -8)) (0 = (md 14))))
