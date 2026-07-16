@@ -28,7 +28,7 @@
    emit (G 'emit)  fbits (G 'fbits)  fr (G 'fr)  grok (G 'grok)
    jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
    jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
-   jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
+   jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  jitcalloutx (G 'jitcalloutx)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
    loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow))
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
@@ -65,7 +65,18 @@
          (: cf (jitcalloutsum (\ i (* i 0.5))) (&& (7.5 = (cf 6)) ((cf 20) = (isum (\ i (* i 0.5)) 20))))
          ; GATE 2 (sum-overflow): fixnum results whose SUM leaves fixnum range -> the adds guard deopts -> bignum
          (: cb (jitcalloutsum (\ i 1000000000000000000)) (&& ((cb 100) = (isum (\ i 1000000000000000000) 100))
-                                                             (100000000000000000000 = (cb 100)))))) ; == interp bignum
+                                                             (100000000000000000000 = (cb 100)))) ; == interp bignum
+         ; * FOLD (product-over-(F i)): jitcalloutx with op '*, SA kept RAW (mulo accumulator, retag+overflow at end)
+         (: iprod (\ f n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f i))) a)) 0 1))                ; the faithful interp product twin
+            inc (\ i (+ i 1))  pr (jitcalloutx inc '(\ n 0) '* 'x64)                               ; native product of (i+1) = n!
+            (&& (lit? pr) (1 = (pr 0)) (120 = (pr 5)) ((pr 6) = (iprod inc 6))                     ; fast path: 5!=120, empty=1 (product identity)
+                (: pf (jitcalloutx (\ i (+ i 0.5)) '(\ n 0) '* 'x64)                               ; GATE 1: float result -> deopt -> interp product
+                   (1.875 = (pf 3)))
+                (: pb (jitcalloutx inc '(\ n 0) '* 'x64)                                           ; GATE 2: product leaves fixnum range -> deopt -> bignum
+                   (&& (51090942171709440000 = (pb 21)) ((pb 25) = (iprod inc 25))))
+                ; the [2^62, 2^63) TAG-boundary window: 3*2^61 is out of fixnum yet < 2^63 -> the end-retag adds-vc gate must deopt
+                (: p3 (jitcalloutx (\ i (? (= i 0) 3 2)) '(\ n 0) '* 'x64)
+                   (6917529027641081856 = (p3 62))))))) ; == interp
   ; // and %
   (: dv (jit '(\ x (// x 3))) (&& (3 = (dv 10)) (4 = (dv 13)) (-3 = (dv -10))))
   (: md (jit '(\ x (% x 7)))  (&& (1 = (md 8)) (-1 = (md -8)) (0 = (md 14))))
@@ -610,10 +621,12 @@
       !(= (peep (assemble 'x64   (coreir 'x64   '(x) '(+ x 1) (deoptir 'x64 0))) 'bytes 0)
           (peep (assemble 'arm64 (coreir 'arm64 '(x) '(+ x 1) (deoptir 'arm64 0))) 'bytes 0))       ; per-target codegen differs
       ; --- call-out bridge: the SAME drive IR lays for aarch64 (data; exec rides the corpus), and differs from x64
-      (< 0 (tally (peep (assemble 'arm64 (calloutir 'arm64)) 'bytes 0)))                              ; global-F sum-over-(F i)
-      (< 0 (tally (peep (assemble 'arm64 (calloutframeir 'arm64 1 0 2)) 'bytes 0)))                   ; frame F@1 N@0 arity 2
-      !(= (peep (assemble 'x64   (calloutir 'x64)) 'bytes 0)
-          (peep (assemble 'arm64 (calloutir 'arm64)) 'bytes 0))                                       ; per-target callout codegen differs
+      (< 0 (tally (peep (assemble 'arm64 (calloutir 'arm64 '+)) 'bytes 0)))                            ; global-F sum-over-(F i)
+      (< 0 (tally (peep (assemble 'arm64 (calloutframeir 'arm64 1 0 2 '+)) 'bytes 0)))                 ; frame F@1 N@0 arity 2
+      !(= (peep (assemble 'x64   (calloutir 'x64 '+)) 'bytes 0)
+          (peep (assemble 'arm64 (calloutir 'arm64 '+)) 'bytes 0))                                     ; per-target callout codegen differs
+      !(= (peep (assemble 'x64 (calloutir 'x64 '+)) 'bytes 0)
+          (peep (assemble 'x64 (calloutir 'x64 '*)) 'bytes 0))                                         ; the * fold lays differently from + (mulo accumulator)
       ; --- group lane (jitgroupir): mutually-recursive first-order integer fns, native == interp
       (55 = ((jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64) 10))
       (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25)

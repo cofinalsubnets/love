@@ -86,14 +86,14 @@
                     ; The ~167us compile is one-time PER SOURCE SITE (creation reuses the blob, ~60 ns) -> amortized
                     ; after ~4k cumulative iters. Callout also beats falling to group-swallow here (~1.5 vs ~1.8
                     ; ns/iter, measured), so the recognizer order (callout before group) is already the cheap one.
-                    (: ci (calloutinfo s)  fv (? ci (gv ci 0) 0)
+                    (: ci (calloutinfo s)  fv (? ci (gv (cap ci) 0) 0)          ; ci = (F op); resolve F via gv
                        (? (&& ci (lit? fv))
-                          (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s arch))
+                          (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s (caup ci) arch))
                      ; CAPTURED / multi-arg call-out: F (and the bound) are FRAME params -> read from the
                      ; [imps args] frame, no bake; deopt to value[1]=e (the bytecode twin, which captures F).
-                     (: cf (calloutinfo-frame s)
+                     (: cf (calloutinfo-frame s)                                 ; cf = (Fidx Nidx op)
                         (? cf
-                           (: _ (pin fires () (+ 1 (peep fires () 0))) (njit-calloutframe s (cap cf) (caup cf) a e arch))
+                           (: _ (pin fires () (+ 1 (peep fires () 0))) (njit-calloutframe s (cap cf) (caup cf) a e (caup (cup cf)) arch))
                       ; GROUP lane (always-on) -- a reusable closure
                       ; (\ frame.. <first-order mutually-recursive arith group>) whose tail calls the group.
                       ; auto-ev can't reach this (never gets the closure body as a callable-later unit); natjit
