@@ -319,8 +319,9 @@
    ; the reserved slots). a restart re-runs any call-outs already made -- the same bet the fold
    ; lanes' twins take. grammar v1 = the probed families: fixnum/() consts, two? cap cup id? link,
    ; + - * and comparisons (fixnum-guarded), ?, ONE applied named-let (self tail-calls -> a jump,
-   ; both def sugars), calls to frame/loop/global names. quoted data, strings, floats, //%, &|^,
-   ; inner \, effects: DECLINE (bytecode, exactly as before). global callees resolve via gv at
+   ; both def sugars), calls to frame/loop names, QUOTED DATA (any datum: the source node rides a
+   ; nifx extras slot, and (= a 'sym) is raw identity by the point-= law). strings, floats, //%,
+   ; &|^, inner \, effects: DECLINE (bytecode, exactly as before). global callees resolve via gv at
    ; compile (redefinition-stale, the callout bet) and ride value[1] = (link e g..): car = e for
    ; the deopt, cdr = the globals the prologue loads into reserved slots (Ip-relative, no baked
    ; absolute). reserved region: [loopvars.. | Se(twin) | RS(resume) | globals.. | spills..],
@@ -332,12 +333,26 @@
    (aconst? e) (|| (whole? e) (id? e amble-nil))
    (aop2? op) (member? op '(+ - * < <= > >= = id? link))
    (acmp? op) (member? op '(< <= > >= =))
+   (aquote? e) (&& (two? e) (id? (cap e) '\) (= 2 (tally e)))            ; the reader's quote: (\ X) at EXACTLY two -- a datum constant
+   (aqnom? e) (&& (aquote? e) (name? (caup e)))                          ; a quoted NOM: a point, so (= a 'sym) is raw identity
+   (amemq x l) (? !(two? l) 0  (id? x (cap l)) 1  (amemq x (cup l)))     ; id?-membership: two =-equal quote NODES stay DISTINCT slots
+   (aposq x l i) (? (id? x (cap l)) i (aposq x (cup l) (+ i 1)))         ; (interp's quote answers the source node itself, id?-visibly)
+   (aq e acc) (? (aquote? e) (? (amemq e acc) acc (link e acc))          ; collect quote nodes; NEVER walk INTO quoted data
+                 (two? e) (foldl (\ ac x (aq x ac)) acc e)
+                 acc)
+   (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? (the bisect knob's test)
+    (? (aquote? e) 0
+       (two? e) (: op (cap e)
+          (|| (&& (name? op) !(id? op go) !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+              (foldl (\ a x (|| a (ahascall? env go x))) 0 (cup e))))
+       0)
    ; amble-ok?: does e compile? env = visible names (loop vars shadow params), gn = resolvable
    ; global call heads, go/k = the loop name + its arity (0 outside a loop), tl = tail position
    ; ((go ..) is a jump, so it is only sound where its value IS the loop's value).
    (amble-ok? env gn go k tl e)
     (? (name? e) (member? e env)
        (aconst? e) 1
+       (aquote? e) 1
        (two? e)
         (: op (cap e)  as (cup e)  n (tally as)
            (? (id? op '?) (&& (= n 3) (amble-ok? env gn go k 0 (cap as))
@@ -353,12 +368,15 @@
    ; amble-depth: an upper bound on the spill slots e needs (operand nesting rides VM slots).
    (amble-depth go e)
     (? !(two? e) 0
+       (aquote? e) 0
        (: op (cap e)  as (cup e)
           (? (id? op '?) (amax (amble-depth go (cap as)) (amax (amble-depth go (caup as)) (amble-depth go (caup (cup as)))))
              (member? op '(two? cap cup)) (amble-depth go (cap as))
              (aop2? op) (amax (amble-depth go (cap as)) (+ 1 (amble-depth go (caup as))))
              (id? op go) (+ (tally as) (foldl (\ a x (amax a (amble-depth go x))) 0 as))
-             (+ 1 (foldl (\ a x (amax a (amble-depth go x))) 0 as)))))
+             (+ (tally as) (foldl (\ a x (amax a (amble-depth go x))) 0 as)))))     ; a CALL spills a partial PER CURRY STEP: an n-arg call touches
+                                                                                    ; spills d..d+n-2 (+1 was the g4-chain cont-clobber: the 4th arg's
+                                                                                    ; partial landed ON the caller-cont -- Ip=3, the oracle fuzz fault)
    ; amble-loop: match the applied named-let body, BOTH def sugars --
    ;   ((: (go v..) GB) i..)  |  ((: go (\ v.. GB)) i..)   -> (go vars GB inits) | 0
    (amble-loop M)
@@ -377,7 +395,7 @@
    ; binders (no nested \ or : inside a loop body), so there is nothing to capture. used to
    ; alpha-rename a loop var that SHADOWS a frame param (the walker idiom ((: (go l a) ..) l a)):
    ; the inits then read the params, the body the renamed vars, and one flat env serves both.
-   (asub old new e) (? (id? e old) new  (two? e) (map (\ x (asub old new x)) e)  e)
+   (asub old new e) (? (id? e old) new  (aquote? e) e  (two? e) (map (\ x (asub old new x)) e)  e)   ; quoted DATA is inert -- never rename inside it
    (afresh v avoid) (: c (intern ((string v) + "~")) (? (member? c avoid) (afresh c avoid) c))
    ; njit-amble: the hook entry -- compile s (deopt -> e) or answer 0 (decline; the hook keeps e).
    (njit-amble s a e gv tgt)
@@ -397,17 +415,22 @@
                                                             ; class), and gv then resolves the PREVIOUS binding: rc4's bref summed with
                                                             ; dref's stale go. no surface test separates that from a true global, so
                                                             ; amble calls only frame/loop names; a principled global seam is v2.
+       qs   (foldl (\ ac i (aq i ac)) (aq body ()) inits)   ; the quoted-datum constants (id?-deduped source nodes)
+       nq   (tally qs)
        nd   (amax (amble-depth go body) (foldl (\ acd i (amax acd (amble-depth 0 i))) 0 inits))
        lpok (? lp (&& (all name? vars) (adistinct vars) (= k (tally inits))
                       !(member? go vars) !(member? go ps)) 1)
        ok (&& (two? s) (two? (cup s)) (all name? ps) (adistinct ps)
               (= a (tally ps)) (< 0 a) lpok (two? body)
-              (all lit? gvals) (< nd 17) (< (+ k (tally gn)) 12)
+              (? (getenv "AI_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
+              (all lit? gvals) (< nd 48) (< (+ k (+ (tally gn) nq)) 24)             ; slots are cheap once the prologue GUARDS the room (below)
               (all (\ i (amble-ok? ps gn 0 0 0 i)) inits)
               (amble-ok? env gn go k 1 body))
        (? ok
-          (: ng (+ 1 (tally gn))                                ; slot 0 of the extras region = () (the empty MINT, a heap value --
-                                                                ; li 1 would be the charm 0, the 0-fossil; it rides the nifx extras slot)
+          (: _ (? (getenv "AI_AMBLE_TRACE") (puts ("amble: " + (show s) + "\n")) 0)   ; the compile trace (forensics: names every ambled source)
+             ng (+ 1 (+ (tally gn) nq))                         ; extras region = [() | globals | quoted data]: () is the empty MINT
+                                                                ; (li 1 would be the charm 0-fossil) and quoted data are HEAP source
+                                                                ; nodes -- all ride the nifx extras chain into GC-walked slots
              R (+ k (+ 1 (+ ng nd)))                            ; loopvars | Se | () + globals | spills
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
              SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
@@ -454,6 +477,7 @@
               (? (name? e) (L (L 'ld A SP (voff e)))
                  (whole? e) (L (L 'li A (+ (* 2 e) 1)))
                  (id? e amble-nil) (L (L 'ld A SP gbo))
+                 (aquote? e) (L (L 'ld A SP (+ gbo (* 8 (+ 1 (+ (tally gn) (aposq e qs 0)))))))   ; a quoted datum: its extras slot
                  (: op (cap e)  as (cup e)
                     (? (id? op '?) (acq (cap as) (caup as) (caup (cup as)) d)
                        (id? op 'two?) (atwo (cap as) d)
@@ -461,6 +485,8 @@
                        (id? op 'cup) (acap (cap as) d 16)
                        (id? op 'id?) (aid (cap as) (caup as) d)
                        (id? op 'link) (alink (cap as) (caup as) d)
+                       (&& (id? op '=) (|| (aqnom? (cap as)) (aqnom? (caup as))))
+                        (aid (cap as) (caup as) d)                                               ; (= a 'sym): a POINT equals only itself (the point-= law) -> raw identity, total
                        (acmp? op) (acmp2 op (cap as) (caup as) d)
                        (member? op '(+ - *)) (aar op (cap as) (caup as) d)
                        (id? op go) (ago as d)
@@ -478,8 +504,12 @@
              dpt ((L '(label deopt) (L 'ld T SP seo) (L 'add SP SP fro))                                    ; twin from its slot BEFORE the restore
                   + (? (= a 1) (L (L 'mov IP T)) (L (L 'lea IP T 16)))                                      ; a=1: re-apply e; else: enter e's body on the saturated frame
                   + (L (L 'ld T IP 0) (L 'jmpr T)))
-             prog ((L '(label entry0) (L 'sub SP SP fro)) + initR + unpk + bodyir + epi + dpt)             ; entry0 = the resume-offset anchor (any shared label works; the blob's first byte)
-             (nifx (emit (asmt tgt prog)) e s a (link amble-nil gvals)))
+             prog ((L '(label entry0)                                                                       ; entry0 = the resume-offset anchor (any shared label works; the blob's first byte)
+                      (L 'lea X HP (+ 40 (* 8 (+ R 4)))) (L 'cmp SP X) (L 'br 'below 'd0)                   ; ROOM guard: the reservation + a call frame + floor must fit Sp-Hp,
+                      (L 'sub SP SP fro))                                                                   ; else deopt-at-entry (frame untouched -> the twin runs it whole)
+                   + initR + unpk + bodyir + epi + dpt
+                   + ((L '(label d0) (L 'ld T IP 8)) + (? (= a 1) (L (L 'mov IP T)) (L (L 'lea IP T 16))) + (L (L 'ld T IP 0) (L 'jmpr T))))
+             (nifx (emit (asmt tgt prog)) e s a (link amble-nil (cat gvals (map (\ q (caup q)) qs)))))
           0))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in

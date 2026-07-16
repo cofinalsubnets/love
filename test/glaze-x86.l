@@ -248,7 +248,17 @@
           (19800 = (am-dbl 100))                                                   ; nested captured calls via the drive: sum 4i, i<100
           (: deep (base-ev '(: H (\ x ((: (go i a) (? (< i 40) (go (+ i 1) (link i a)) a)) 0 (link x ())))
                              (: (dv d) (? (< d 1) 0 (+ (two? (H d)) (dv (- d 1)))))))
-             (5000 = (deep 5000)))))                                               ; the STORM SHAPE: 5000 pending frames + GC churn, == interp
+             (5000 = (deep 5000)))                                                 ; the STORM SHAPE: 5000 pending frames + GC churn, == interp
+          ; QUOTED-DATUM constants (v3): a nom dispatch walker -- 'r/'R ride nifx extras slots,
+          ; (= a 'sym) is raw identity (the point-= law: a point equals only itself). a quoted
+          ; LIST constant answers the SAME source node interp does (id?-transparent, never folded
+          ; with an =-equal sibling).
+          (: dsp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) (\ r)) (+ a 1) (? ((cap l) = (\ R)) (+ a 10) a))) a)) l a)))
+             (&& (23 = (dsp '(r R r x R r) 0)) (0 = (dsp () 0)) (5 = (dsp '(x y) 5))))
+          (: qz (ev '(\ x (? (id? x (\ k)) (\ (1 2)) ())))
+             (&& ('(1 2) = (qz 'k)) (id? (qz 'k) (qz 'k)) (id? () (qz 'nope))))
+          (: qe (ev '(\ x (? (= x (\ q)) 1 0)))
+             (&& (1 = (qe 'q)) (0 = (qe 'r)) (0 = (qe 5)) (0 = (qe "q")) (0 = (qe '(q)))))))
    (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + nested call-outs, restart deopts) ok\n"))
 
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
