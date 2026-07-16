@@ -137,18 +137,33 @@
    ; callee cannot reach. So the callee runs entirely on the VM stack: a deep or re-entrant callee
    ; grows Sp, NEVER the C stack (the whole point -- the retired re-entrant ai_call1 pinned a C frame
    ; per nesting level). The loop state lives in 5 reserved Sp slots (a GC root, so a callee GC
-   ; relocates the closure for free): R[0]=SA sum, R[1]=SC counter, R[2]=SN bound, R[3]=Sclos closure,
-   ; R[4]=Sret resume addr; the arg n rides at R[5], the caller continuation at R[6]. Prototype scope:
-   ; clos returns fixnums, the sum stays in range -- no result-kind guard or sum-overflow deopt yet
-   ; (the production bridge adds them, cf. loopepi/ldeopt). x64-only.
+   ; relocates it for free): R[0]=SA sum, R[1]=SC counter, R[2]=SN bound, R[3]=Sclos closure,
+   ; R[4]=Sret resume addr, R[5]=Stwin the interp fallback; the arg n rides at R[6], the caller
+   ; continuation at R[7].
+   ; --- SOUNDNESS GATES (the production bridge): the naive prototype assumed a fixnum callee and an
+   ; in-range sum. Two inline guards make it sound, each DEOPTING to a faithful interp twin (below):
+   ;   GATE 1 (result-kind): the resume `sar`s the callout result assuming a tagged fixnum. A heap
+   ;     result (gem/big/list) is EVEN -> `test A 1` -> deopt. So a callee returning a non-fixnum
+   ;     re-runs the whole sum in interp (generic +), never corrupts on the untag.
+   ;   GATE 2 (sum-overflow): `SA += result` is `adds` (flags) + `br vc` -> a fixnum-boundary overflow
+   ;     deopts (cf. loopepi/ldeopt), so an out-of-range sum re-runs in interp -> bignum. EXACT vs interp.
+   ; THE TWIN: value[1] is baked as the PAIR `(clos . twin)` (a chain: car=clos for the native prologue,
+   ; cdr=twin the interp fallback `(\ n (sum_{i<n} (clos i)))` capturing clos). Both are cached in GC-root
+   ; Sp slots (R[3]/R[5]) at the prologue -- read once, IP-relative, before the loop clobbers Ip. The
+   ; shared `codeopt` restores Sp to entry (Sp[0]=the original tagged n) and Continues into the twin,
+   ; which recomputes the whole sum correctly (the native partial SA is discarded, as any loop deopt).
+   ; A chain ref points at its ap-word, so car is +8, cdr is +16. x64-only (the drive design is arch-neutral).
    (jitcalloutsum clos)
     (: A (greg 'x64 'acc)  IP (greg 'x64 'ip)  SP (greg 'x64 'sp)  T (greg 'x64 'tmp)  U (greg 'x64 'scratch)
+       twin (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clos i))) a)) 0 0))   ; the faithful interp fallback; captures clos
        code (asmt 'x64
-         (`(`('sub SP SP 40)                                     ; reserve 5 loop-state slots (Sp = R)
-            `('ld T IP 8)  `('st SP 24 T)                        ; Sclos = value[1] = clos  (IP still &value[0])
-            `('ld T SP 40) `('sar T 1) `('st SP 16 T)            ; SN = untag(arg @ R[5])
-            `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0
-            `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb  (position-independent)
+         (`(`('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
+            `('ld T IP 8)                                        ; T = value[1] = the (clos . twin) pair  (IP still &value[0])
+            `('ld U T 8)  `('st SP 24 U)                         ; Sclos = car(pair) = clos               -> R[3]
+            `('ld U T 16) `('st SP 40 U)                         ; Stwin = cdr(pair) = twin (interp)       -> R[5]
+            `('ld T SP 48) `('sar T 1) `('st SP 16 T)            ; SN = untag(arg @ R[6])                  -> R[2]
+            `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0                         -> R[0] R[1]
+            `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb  (position-independent)      -> R[4]
           + `('(label top)
              `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; i >= n -> end
           + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(i)
@@ -157,16 +172,22 @@
              `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
              `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> ret0 -> bb
           + `('(label bb)
-             `('ld A SP 0) `('sar A 1)                            ; result (Sp[0] on resume) -> untagged acc
-             `('ld T SP 8) `('add T T A) `('st SP 8 T)            ; SA += result
+             `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8)
+             `('test A 1) `('br 'eq 'codeopt)                     ; GATE 1: non-fixnum (even) result -> deopt
+             `('sar A 1)                                          ; untag
+             `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)  ; GATE 2: SA += result ; overflow -> deopt
              `('ld T SP 16) `('add T T 1) `('st SP 16 T)          ; SC += 1
              `('add SP SP 8) `('jmp 'top))                        ; Sp = R ; next iteration
           + `('(label end)
              `('ld A SP 0) `('leax A A A 1 1)                     ; acc = tag(SA)
-             `('add SP SP 40) `('st SP 0 A)                       ; Sp = entry ; result into arg slot
+             `('add SP SP 48) `('st SP 0 A)                       ; Sp = entry ; result into arg slot
              `('ld IP SP 8) `('st SP 8 A) `('add SP SP 8)         ; inline ret0: Ip=caller-cont; Sp[1]=result; Sp++
-             `('ld T IP 0) `('jmpr T))))                          ; Continue -> caller
-       (nif (emit code) clos `('\ 'n 0) 1))   ; clos IS value[1] -- the prologue loads it Ip-relative
+             `('ld T IP 0) `('jmpr T))                            ; Continue -> caller
+          + `('(label codeopt)                                    ; shared deopt (both gates); Sp = R-8 on entry
+             `('ld A SP 48)                                       ; A = Stwin (R[5] @ Sp+48) -- BEFORE restoring Sp
+             `('add SP SP 56)                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
+             `('mov IP A) `('ld A IP 0) `('jmpr A))))             ; Continue into twin, applied to Sp[0] = n
+       (nif (emit code) (link clos twin) `('\ 'n 0) 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt)
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if

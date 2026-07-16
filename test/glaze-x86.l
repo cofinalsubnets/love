@@ -57,10 +57,15 @@
   (: cap50 (jitsum '(? (< i 50) i 0)) c50 ((: (go i a) (? (< i 1000) (go (+ i 1) (+ a (? (< i 50) i 0))) a)) 0 0)
      (= c50 (cap50 1000)))                                                                  ; loop with a conditional body
   ; CALL-OUT BRIDGE (native side): a native counted loop whose body CALLS OUT to an interp closure each
-  ; iteration (via ai_call1); clos is value[1], reached Ip-relative. native == interp, sum of squares.
-  (: sq (\ i (* i i))  co (jitcalloutsum sq)
-     (&& (lit? co) (0 = (co 0)) (30 = (co 5)) (285 = (co 10))
-         ((co 8) = ((: (go i a) (? (< i 8) (go (+ i 1) (+ a (sq i))) a)) 0 0))))            ; native loop-with-callout == interp loop
+  ; iteration (the STACKLESS callout_drive; clos is car(value[1]), reached Ip-relative). native == interp.
+  (: (isum clos n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clos i))) a)) 0 0)              ; the faithful interp twin
+     sq (\ i (* i i))  co (jitcalloutsum sq)
+     (&& (lit? co) (0 = (co 0)) (30 = (co 5)) (285 = (co 10)) ((co 8) = (isum sq 8))         ; fixnum fast path
+         ; GATE 1 (result-kind): a FLOAT-returning callee -> the untag guard deopts -> interp twin (gem sum)
+         (: cf (jitcalloutsum (\ i (* i 0.5))) (&& (7.5 = (cf 6)) ((cf 20) = (isum (\ i (* i 0.5)) 20))))
+         ; GATE 2 (sum-overflow): fixnum results whose SUM leaves fixnum range -> the adds guard deopts -> bignum
+         (: cb (jitcalloutsum (\ i 1000000000000000000)) (&& ((cb 100) = (isum (\ i 1000000000000000000) 100))
+                                                             (100000000000000000000 = (cb 100)))))) ; == interp bignum
   ; // and %
   (: dv (jit '(\ x (// x 3))) (&& (3 = (dv 10)) (4 = (dv 13)) (-3 = (dv -10))))
   (: md (jit '(\ x (% x 7)))  (&& (1 = (md 8)) (-1 = (md -8)) (0 = (md 14))))
