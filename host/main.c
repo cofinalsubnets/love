@@ -395,6 +395,9 @@ static union u const nif_pgaddr[] = {{lvm_pgaddr}, {lvm_ret0}};
 // stack. (The retired re-entrant ai_call1 driver + its callout1 POC nif are gone with it.)
 static lvm(lvm_calloutdrive) { return Sp[0] = putcharm((intptr_t) ai_calloutdrive()), Ip++, Continue(); }
 static union u const nif_calloutdrive[] = {{lvm_calloutdrive}, {lvm_ret0}};
+// (calloutresume x) -> the address of callout_resume (the WALKABLE resume drive, ai.c) as a fixnum.
+static lvm(lvm_calloutresume) { return Sp[0] = putcharm((intptr_t) ai_calloutresume()), Ip++, Continue(); }
+static union u const nif_calloutresume[] = {{lvm_calloutresume}, {lvm_ret0}};
 
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
@@ -420,6 +423,7 @@ AI_NIF("getenv", nif_getenv);
 AI_NIF("getpid", nif_getpid);
 AI_NIF("pgaddr", nif_pgaddr);
 AI_NIF("calloutdrive", nif_calloutdrive);
+AI_NIF("calloutresume", nif_calloutresume);
 
 // --- the boot script ---------------------------------------------------
 // Everything the two builds disagree about lives in this ONE conditional

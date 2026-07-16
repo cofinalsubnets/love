@@ -202,14 +202,14 @@
                               (cat (caargir tgt (caup (cup (cup e))) coff) (L (L 'label en))))))))
                ()))
          ()))
-   ; caarg: leave tag(ARG(counter)) in the frame slot F[0] = Sp[-24]. A BARE counter tags directly (never
+   ; caarg: leave tag(ARG(counter)) in the frame slot F[0] = Sp[-32] (the 4-word walkable frame). A BARE counter tags directly (never
    ; overflows -- a loop index is always a valid fixnum), byte-identical to the pre-extension code. A COMPUTED
    ; ARG anchors the machine sp, runs caargir, then tags with an overflow gate (both -> `deopt`).
    (caarg tgt arg) (: A (greg tgt 'acc) SP (greg tgt 'sp) T (greg tgt 'tmp) AN (greg tgt 'anchor)
-      (? (name? arg) `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T))                                         ; bare counter: F[0] = tag(i)
+      (? (name? arg) `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -32 T))                                         ; bare counter: F[0] = tag(i)
          (`(`('lea AN 'sp 0))                                                                                     ; anchor the machine sp for the arg-expr deopt unwind
           + (caargir tgt arg 8)                                                                                   ; A = ARG(counter) raw ; guards/overflow -> deopt
-          + `(`('adds A A A) `('br 'vs 'deopt) `('or A A 1) `('st SP -24 A)))))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
+          + `(`('adds A A A) `('br 'vs 'deopt) `('or A A 1) `('st SP -32 A)))))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
    ; caargdeopt: the `deopt` label the computed-arg lane branches to -- restore the machine sp from the anchor
    ; (discarding any pending arg-expr pushes), bring VM Sp R -> R-8, and fall into the shared codeopt (-> twin).
    ; Appended to the blob ONLY when the arg is computed (a bare arg never deopts here).
@@ -217,21 +217,24 @@
       `('(label deopt) `('lea 'sp AN 0) `('sub SP SP 8) `('jmp 'codeopt)))
    (calloutir tgt op arg)
     (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
-       (`(`('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
+       (`('(label entry0)                                      ; the resume-offset anchor (lvm_resume jumps base + tag'd offset)
+          `('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
           `('ld U IP 32) `('st SP 24 U)                        ; Sclos = the nifx EXTRAS slot = clos     -> R[3]  (IP still &value[0])
           `('ld U IP 8)  `('st SP 40 U)                         ; Stwin = value[1] = twin (interp)        -> R[5]
           `('ld T SP 48) `('sar T 1) `('st SP 16 T)            ; SN = untag(arg @ R[6])                  -> R[2]
           `('li T 1) `('st SP 0 T) `('li T 0) `('st SP 8 T)   ; SA = tag(0)=1 (kept TAGGED so gate 2 checks the fixnum boundary) ; SC = 0   -> R[0] R[1]
-          `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb  (lar = near pc-rel; ADR on arm64, translation-invariant in the mmap blob)  -> R[4]
+          `('lar T 'entry0) `('st SP 32 T))                     ; Sbase = the blob base (out-of-pool W^X; lar = ADR on arm64)  -> R[4]
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; i >= n -> end
         + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare i, or a computed expr (deopts to `deopt`)
-        + `(`('ld T SP 24) `('st SP -16 T)                      ; F[1] = clos
-           `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
-           `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
-           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> ret0 -> bb
+        + `(`('ld T SP 24) `('st SP -24 T)                      ; F[1] = clos
+           `('lar T 'bb) `('ld U SP 32) `('subs T T U)          ; F[2] = tag(&bb - base): an ODD CHARM, GC-walk-clean
+           `('leax T T T 1 1) `('st SP -16 T)
+           `('st SP -8 U)                                       ; F[3] = base (out-of-pool -- the walk returns it unharmed)
+           `('li IP (calloutresume 0)) `('sub SP SP 32)         ; Ip = callout_resume ; Sp = frame
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> lvm_resume -> bb
         + `('(label bb)
-           `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8)
+           `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8 -- same landing as the retired retB path)
            `('test A 1) `('br 'eq 'codeopt))                    ; GATE 1: non-fixnum (even) result -> deopt
         + (coacc tgt op)                                        ; GATE 2: fold the result into SA @ Sp[8] (op-specific, overflow -> deopt)
         + `(`('ld T SP 16) `('add T T 1) `('st SP 16 T)         ; SC += 1
@@ -262,11 +265,12 @@
    ; is unreachable). DEOPT (either gate, or a non-fixnum N at the prologue) goes to value[1]=e -- the
    ; bytecode twin ala built, which CAPTURES F, so it recomputes correctly. a>=2 here (a=1 no-imps is the
    ; global lane), so e is an lvm_cur cell: enter its BODY at e+16 with the saturated frame on Sp (deoptir's
-   ; bodyp path). Reserved 6 Sp slots (Sp=R): R[0]=SA R[1]=SC R[2]=SN R[3]=SF R[4]=Sret(&bb) R[5]=Se(=e).
+   ; bodyp path). Reserved 6 Sp slots (Sp=R): R[0]=SA R[1]=SC R[2]=SN R[3]=SF R[4]=Sbase R[5]=Se(=e).
    ; The frame rides above R (E=R+48). arm64 lays via (calloutframeir 'arm64 ..); exec rides the corpus.
    (calloutframeir tgt Fidx Nidx a op arg)
     (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
-       (`(`('ld U SP (* 8 Fidx))                               ; U = F (raw closure) from the frame
+       (`('(label entry0)                                      ; the resume-offset anchor
+          `('ld U SP (* 8 Fidx))                               ; U = F (raw closure) from the frame
           `('ld A SP (* 8 Nidx)) `('test A 1) `('br 'ne 'ngood))   ; N a fixnum? -> ngood
         + `(`('ld T IP 8) `('lea IP T 16) `('ld T IP 0) `('jmpr T))   ; N NOT a fixnum -> deopt to e's body (Sp = E, IP valid)
         + `('(label ngood) `('sar A 1)                          ; A = N untagged
@@ -274,14 +278,16 @@
            `('sub SP SP 48)                                     ; reserve 6 slots; Sp = R
            `('st SP 24 U) `('st SP 16 A) `('st SP 40 T)         ; SF = F ; SN = N ; Se = e
            `('li T 1) `('st SP 0 T) `('li T 0) `('st SP 8 T)   ; SA = tag(0)=1 (kept TAGGED so gate 2 checks the fixnum boundary) ; SC = 0
-           `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb (lar = near pc-rel, ADR on arm64)
+           `('lar T 'entry0) `('st SP 32 T))                     ; Sbase = the blob base (out-of-pool W^X)
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; SC >= SN -> end
         + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare SC, or a computed expr (deopts to `deopt`)
-        + `(`('ld T SP 24) `('st SP -16 T)                      ; F[1] = SF (clos)
-           `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
-           `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
-           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> ret0 -> bb
+        + `(`('ld T SP 24) `('st SP -24 T)                      ; F[1] = SF (clos)
+           `('lar T 'bb) `('ld U SP 32) `('subs T T U)          ; F[2] = tag(&bb - base)
+           `('leax T T T 1 1) `('st SP -16 T)
+           `('st SP -8 U)                                       ; F[3] = base
+           `('li IP (calloutresume 0)) `('sub SP SP 32)         ; Ip = callout_resume ; Sp = frame
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> lvm_resume -> bb
         + `('(label bb)
            `('ld A SP 0) `('test A 1) `('br 'eq 'codeopt))      ; GATE 1: non-fixnum result -> deopt
         + (coacc tgt op)                                        ; GATE 2: fold the result into SA @ Sp[8] (op-specific, overflow -> deopt)
@@ -344,16 +350,6 @@
                              (all (\ x (amble-ok? env gn go k 0 x)) as))
               0))
        0)
-   (ahascall? env go e)                                                            ; does e contain a call (any non-op head)?
-    (? (two? e) (: op (cap e)
-          (|| (&& (name? op) !(id? op go) !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
-              (foldl (\ a x (|| a (ahascall? env go x))) 0 (cup e))))
-       0)
-   (ahascall? env go e)                                                            ; does e contain a call (any non-op head)?
-    (? (two? e) (: op (cap e)
-          (|| (&& (name? op) !(id? op go) !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
-              (foldl (\ a x (|| a (ahascall? env go x))) 0 (cup e))))
-       0)
    ; amble-depth: an upper bound on the spill slots e needs (operand nesting rides VM slots).
    (amble-depth go e)
     (? !(two? e) 0
@@ -405,31 +401,17 @@
        lpok (? lp (&& (all name? vars) (adistinct vars) (= k (tally inits))
                       !(member? go vars) !(member? go ps)) 1)
        ok (&& (two? s) (two? (cup s)) (all name? ps) (adistinct ps)
-              !(ahascall? env go body) (all (\ i !(ahascall? ps 0 i)) inits)        ; NO calls in v1: a pending callout_drive frame's retB is a
-                                                                                     ; STACK-INTERIOR pointer -- the GC stack walk (values | out-of-pool
-                                                                                     ; code only) gcp's it and TRAPS (gen_grow + deep uu recursion made
-                                                                                     ; it a 250x sigprocmask storm, silently eaten by the fault barrier;
-                                                                                     ; the fold callout lanes share the latent window). calls return with
-                                                                                     ; a walkable resume -- tag(blob-offset) + raw W^X base + a resume op
-                                                                                     ; -- as the v2 drive; see memory amble.
-              !(ahascall? env go body) (all (\ i !(ahascall? ps 0 i)) inits)        ; NO calls in v1: a pending callout_drive frame's retB is a
-                                                                                     ; STACK-INTERIOR pointer -- the GC stack walk (values | out-of-pool
-                                                                                     ; code only) gcp's it and TRAPS (gen_grow + deep uu recursion made
-                                                                                     ; it a 250x sigprocmask storm, silently eaten by the fault barrier;
-                                                                                     ; the fold callout lanes share the latent window). calls return with
-                                                                                     ; a walkable resume -- tag(blob-offset) + raw W^X base + a resume op
-                                                                                     ; -- as the v2 drive; see memory amble.
               (= a (tally ps)) (< 0 a) lpok (two? body)
               (all lit? gvals) (< nd 17) (< (+ k (tally gn)) 12)
               (all (\ i (amble-ok? ps gn 0 0 0 i)) inits)
               (amble-ok? env gn go k 1 body))
        (? ok
-          (: ng (+ 1 (tally gn))                                ; slot 0 of the pack region = () (the empty MINT, a heap value --
-                                                                ; li 1 would be the charm 0, the 0-fossil; it rides value[1] like the globals)
-             R (+ k (+ 2 (+ ng nd)))                            ; loopvars | Se | () | globals | spills
+          (: ng (+ 1 (tally gn))                                ; slot 0 of the extras region = () (the empty MINT, a heap value --
+                                                                ; li 1 would be the charm 0, the 0-fossil; it rides the nifx extras slot)
+             R (+ k (+ 1 (+ ng nd)))                            ; loopvars | Se | () + globals | spills
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
              SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
-             seo (* 8 k)  rso (* 8 (+ k 1))  gbo (* 8 (+ k 2))  spo (* 8 (+ k (+ 2 ng)))  fro (* 8 R)
+             seo (* 8 k)  gbo (* 8 (+ k 1))  spo (* 8 (+ k (+ 1 ng)))  fro (* 8 R)
              (voff v) (? (member? v vars) (* 8 (posof v vars 0)) (+ fro (* 8 (posof v ps 0))))
              (spill d) (+ spo (* 8 d))
              (fx2 lbl) (L (L 'mov X T) (L 'and X X A) (L 'test X 1) (L 'br 'eq lbl))    ; both T,A fixnum, else lbl
@@ -454,10 +436,11 @@
              (acq st sth sel d) (: le (mint 0)  ln (mint 0)
               ((acg st d) + (L (L 'test A 1) (L 'br 'eq 'deopt) (L 'cmp A 1) (L 'br 'le le))                 ; heap truth -> net -> twin; tag(x)<=1 <=> x<=0
                + (acg sth d) + (L (L 'jmp ln) (L 'label le)) + (acg sel d) + (L (L 'label ln))))
-             (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to the arg in A, via the drive
-              (L (L 'st SP -24 A) (L 'ld T SP cso) (L 'st SP -16 T)
-                 (L 'lar T bb) (L 'st SP rso T) (L 'lea T SP rso) (L 'st SP -8 T)
-                 (L 'li IP (calloutdrive 0)) (L 'sub SP SP 24) (L 'ld T IP 0) (L 'jmpr T)
+             (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to the arg in A, via the WALKABLE resume:
+              (L (L 'st SP -32 A) (L 'ld T SP cso) (L 'st SP -24 T)                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
+                 (L 'lar T bb) (L 'lar X 'entry0) (L 'subs T T X) (L 'leax T T T 1 1)                       ; pool code base, so a GC with the call pending walks it clean (no retB)
+                 (L 'st SP -16 T) (L 'st SP -8 X)
+                 (L 'li IP (calloutresume 0)) (L 'sub SP SP 32) (L 'ld T IP 0) (L 'jmpr T)                  ; -> lvm_ap -> callee -> lvm_resume -> bb
                  (L 'label bb) (L 'ld A SP 0) (L 'add SP SP 8)))                                            ; resume: result at Sp[0], pop it
              (achain as cso d) (? !(two? (cup as))
                                   ((acg (cap as) d) + (adrive cso))
@@ -495,7 +478,7 @@
              dpt ((L '(label deopt) (L 'ld T SP seo) (L 'add SP SP fro))                                    ; twin from its slot BEFORE the restore
                   + (? (= a 1) (L (L 'mov IP T)) (L (L 'lea IP T 16)))                                      ; a=1: re-apply e; else: enter e's body on the saturated frame
                   + (L (L 'ld T IP 0) (L 'jmpr T)))
-             prog ((L (L 'sub SP SP fro)) + initR + unpk + bodyir + epi + dpt)
+             prog ((L '(label entry0) (L 'sub SP SP fro)) + initR + unpk + bodyir + epi + dpt)             ; entry0 = the resume-offset anchor (any shared label works; the blob's first byte)
              (nifx (emit (asmt tgt prog)) e s a (link amble-nil gvals)))
           0))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------

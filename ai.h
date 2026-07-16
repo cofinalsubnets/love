@@ -443,6 +443,7 @@ extern const struct ai_mint ai_mint_zero;
 #define ZeroPoint ((word) &ai_mint_zero)
 void ai_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool ai_ready(int fd), ai_strp(ai_word);
+uintptr_t ai_calloutresume(void);  // address of the WALKABLE call-out resume drive (ai.c callout_resume)
 uintptr_t ai_calloutdrive(void);   // address of the stackless call-out drive (the glaze bakes it as an immediate)
 struct ai
  *ai_please(struct ai*, uintptr_t),

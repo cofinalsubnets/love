@@ -203,6 +203,7 @@ lvm_t lvm_kcall,
  lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_litp, lvm_hotp,
  lvm_nif,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_nifx,        // ... with an EXTRAS word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the PLAIN twin and the image revert (img_nif_interp) never dereferences a pack
+ lvm_resume,      // the WALKABLE call-out resume: jump blob-base + untag(offset) after delivering the result -- the frame carries an odd charm + an out-of-pool code address, so a GC (gen_grow included) with a call-out pending walks it clean (the retB stack-interior pointer is retired)
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
 // plain lvm_t list, which fixes the 4-argument ap signature. lvm_vbin
@@ -2276,6 +2277,18 @@ static union u const callout_drive[] = { {lvm_ap}, {.ap = lvm_ret0} };
 // The address of callout_drive as an integer -- the glaze emitter bakes it as the `li Ip` immediate.
 // A data-segment const, so the address is stable across an image reload (unlike a W^X JIT pointer).
 uintptr_t ai_calloutdrive(void) { return (uintptr_t) callout_drive; }
+// --- callout_resume: the WALKABLE resume (v2 of the bridge) -----------------------------------------
+// callout_drive's RET was the ADDRESS OF A STACK SLOT holding the blob's resume point -- a stack-
+// INTERIOR in-pool pointer, which violates the stack-walk invariant (slots hold values or out-of-pool
+// code addresses only): a collection with a call-out pending (gen_grow under deep recursion) fed it
+// to gcp, which trapped, and eat_run's barrier ATE the trap per call -- a silent syscall storm, every
+// answer still right (uu2lean 3.4s -> 14min). Here the frame is [arg, clos, tag(bb - entry), entry]:
+// the resume rides as an ODD CHARM offset (the walk skips it) plus the blob's raw W^X base (out of
+// every pool bound -- gcp returns it unharmed), and lvm_resume jumps base+offset after delivering the
+// result. NO stack-interior pointers remain, and a stack RELOCATION is equally safe: the offset is a
+// value, the base is immortal. Same stackless shape as callout_drive otherwise.
+static union u const callout_resume[] = { {lvm_ap}, {.ap = lvm_resume} };
+uintptr_t ai_calloutresume(void) { return (uintptr_t) callout_resume; }
 
 // ============================================================================
 // the lisp help calling convention
@@ -2625,6 +2638,16 @@ lvm(lvm_ret0) { return
  Sp[1] = Sp[0],
  Sp += 1,
  Continue(); }
+// the walkable call-out resume (see callout_resume above): Sp[0]=result, Sp[1]=tag(bb - entry),
+// Sp[2]=entry (the blob's W^X base). deliver the result where the blob expects it (Sp[0] on entry,
+// two frame words consumed -- the same landing as the retired retB path) and tail-jump the blob's
+// resume label. Ip is dead across a call-out (the blobs cache their twin in a Sp slot), so it rides
+// through unchanged.
+lvm(lvm_resume) {
+ lvm_t *t = (lvm_t*) (Sp[2] + ((word) Sp[1] >> 1));
+ Sp[2] = Sp[0];
+ Sp += 2;
+ return Ap(t, g); }
 
 // kcall : x = Sp[0], k = Ip[1] -> Ip = k, Sp[0] = x
 lvm(lvm_kcall) {

@@ -223,10 +223,12 @@
 ; call-outs, RESTART deopt (original frame untouched). == interp across the fast path, the arith
 ; overflow deopt (-> bignum via the twin), the non-fixnum entry deopt, and native cons. the ()
 ; literal rides value[1] as the empty MINT (li 1 would be the charm 0 -- the data.l 0-fossil bug).
-; ALL call-bearing bodies DECLINE in v1 (two lessons: a leaked named-let `go` is indistinguishable
-; from a global -- the rc4 stale-sibling; and a pending drive frame's retB is a stack-interior
-; pointer the GC walk traps on -- the uu2lean storm), so am-dbl below is a DECLINE witness: it
-; stays bytecode and stays right.
+; calls ride the WALKABLE resume (callout_resume: the frame carries tag(bb-entry) + the raw blob
+; base -- an odd charm + an out-of-pool code address, so a GC with call-outs pending walks it
+; clean; the retB stack-interior pointer that stormed uu2lean is retired). FREE call heads still
+; DECLINE (a leaked named-let `go` is indistinguishable from a global -- the rc4 stale-sibling),
+; so every callee below is a frame/loop name. am-deep is the STORM SHAPE: deep NON-TAIL call
+; nesting with cons churn per level -- thousands of pending drive frames while the GC runs.
 (: (am-cnt l k a) ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) k) (+ a 1) a)) a)) l a))
 (: (am-rev l acc) ((: (go l a) (? (two? l) (go (cup l) (link (cap l) a)) a)) l acc))
 (: (am-mk i acc) (? (< i 1) acc (am-mk (- i 1) (link (% i 7) acc))))
@@ -243,7 +245,10 @@
           (0 = (wk () 3 0)) (7 = (wk 42 3 7))                                      ; ()/non-chain -> two? false -> a
           ((am-rev (am-rev am-l ()) ()) = am-l)                                    ; native cons round-trips against the interp-built list (()-tailed)
           (id? () (am-rev () ()))                                                  ; the () literal is the MINT, not charm 0
-          (19800 = (am-dbl 100))))                                                 ; call-bearing body: DECLINED to bytecode, still right
+          (19800 = (am-dbl 100))                                                   ; nested captured calls via the drive: sum 4i, i<100
+          (: deep (base-ev '(: H (\ x ((: (go i a) (? (< i 40) (go (+ i 1) (link i a)) a)) 0 (link x ())))
+                             (: (dv d) (? (< d 1) 0 (+ (two? (H d)) (dv (- d 1)))))))
+             (5000 = (deep 5000)))))                                               ; the STORM SHAPE: 5000 pending frames + GC churn, == interp
    (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + nested call-outs, restart deopts) ok\n"))
 
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
