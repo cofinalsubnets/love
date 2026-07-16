@@ -637,12 +637,15 @@
 ; reads the whole universe (the escape edge), so its fn keeps both.
 (: (cgn src) (: r (cparse (caup (clex src)))
                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+   ; counts stores of the PARAM-home registers to the frame (the spill side).
+   ; the set is exactly the two-param homes (r6 r5): the vmap's direct slot
+   ; stores ride the OPERAND pool (r9 r10 r7 r8) and are not spills.
    (wraps fs) (: (go l n) (? (! (two? l)) n
                              (: f2 <l
                                 (go >l (? (&& (two? f2)
                                           (&& (<f2 = 'st)
                                           (&& (<>f2 = 'r4)
-                                              (member? <>>>f2 '(r5 r6 r7 r8 r9 r10)))))
+                                              (member? <>>>f2 '(r5 r6)))))
                                           (n + 1) n))))
                  (go fs 0))
    pre9 "long g(long x); "
@@ -683,12 +686,14 @@
 ; from the ranking).
 (: (cgna src) (: r (cparse (caup (clex src)))
                 (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'arm64) ()))
+   ; the two-param homes only (r10 r11) -- the vmap's direct slot stores ride
+   ; the remaining pool (r12 r13 r14) and are not spills (wraps' twin above)
    (wrapsa fs) (: (go l n) (? (! (two? l)) n
                               (: f2 <l
                                  (go >l (? (&& (two? f2)
                                            (&& (<f2 = 'st)
                                            (&& (<>f2 = 'fp)
-                                               (member? <>>>f2 '(r10 r11 r12 r13 r14)))))
+                                               (member? <>>>f2 '(r10 r11)))))
                                            (n + 1) n))))
                   (go fs 0))
    (ldat fs k) (? (! (two? fs)) ()
