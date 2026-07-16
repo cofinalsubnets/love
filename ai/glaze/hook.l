@@ -81,7 +81,7 @@
                     ; based callee reading F from the [imps args] frame). Redefinition-stale like any baked global.
                     (: ci (calloutinfo s)  fv (? ci (gv ci 0) 0)
                        (? (&& ci (lit? fv))
-                          (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s))
+                          (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s 'x64))
                      ; CAPTURED / multi-arg call-out: F (and the bound) are FRAME params -> read from the
                      ; [imps args] frame, no bake; deopt to value[1]=e (the bytecode twin, which captures F).
                      (: cf (calloutinfo-frame s)

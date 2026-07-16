@@ -28,7 +28,7 @@
    emit (G 'emit)  fbits (G 'fbits)  fr (G 'fr)  grok (G 'grok)
    jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
    jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
-   jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
+   jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
    loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow))
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
@@ -607,6 +607,11 @@
       (< 0 (tally (peep (assemble 'arm64 (coreir 'arm64 '(x y) '(+ (* x x) y) (deoptir 'arm64 1))) 'bytes 0))) ; n-ary (deopt -> interp body)
       !(= (peep (assemble 'x64   (coreir 'x64   '(x) '(+ x 1) (deoptir 'x64 0))) 'bytes 0)
           (peep (assemble 'arm64 (coreir 'arm64 '(x) '(+ x 1) (deoptir 'arm64 0))) 'bytes 0))       ; per-target codegen differs
+      ; --- call-out bridge: the SAME drive IR lays for aarch64 (data; exec rides the corpus), and differs from x64
+      (< 0 (tally (peep (assemble 'arm64 (calloutir 'arm64)) 'bytes 0)))                              ; global-F sum-over-(F i)
+      (< 0 (tally (peep (assemble 'arm64 (calloutframeir 'arm64 1 0 2)) 'bytes 0)))                   ; frame F@1 N@0 arity 2
+      !(= (peep (assemble 'x64   (calloutir 'x64)) 'bytes 0)
+          (peep (assemble 'arm64 (calloutir 'arm64)) 'bytes 0))                                       ; per-target callout codegen differs
       ; --- group lane (jitgroupir): mutually-recursive first-order integer fns, native == interp
       (55 = ((jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64) 10))
       (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25)

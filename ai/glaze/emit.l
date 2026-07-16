@@ -156,42 +156,46 @@
    ; jitcalloutx stamps the caller's `src` at value[-1] (=/show transparency -- post-egg has no `poke`); the
    ; recognizer (hook.l calloutinfo) passes the closure's real surface \-expr. jitcalloutsum is the 1-arg
    ; test-helper alias with a placeholder src.
-   (jitcalloutsum clos) (jitcalloutx clos `('\ 'n 0))
-   (jitcalloutx clos src)
-    (: A (greg 'x64 'acc)  IP (greg 'x64 'ip)  SP (greg 'x64 'sp)  T (greg 'x64 'tmp)  U (greg 'x64 'scratch)
-       twin (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clos i))) a)) 0 0))   ; the faithful interp fallback; captures clos
-       code (asmt 'x64
-         (`(`('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
-            `('ld T IP 8)                                        ; T = value[1] = the (clos . twin) pair  (IP still &value[0])
-            `('ld U T 8)  `('st SP 24 U)                         ; Sclos = car(pair) = clos               -> R[3]
-            `('ld U T 16) `('st SP 40 U)                         ; Stwin = cdr(pair) = twin (interp)       -> R[5]
-            `('ld T SP 48) `('sar T 1) `('st SP 16 T)            ; SN = untag(arg @ R[6])                  -> R[2]
-            `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0                         -> R[0] R[1]
-            `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb  (position-independent)      -> R[4]
-          + `('(label top)
-             `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; i >= n -> end
-          + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(i)
-             `('ld T SP 24) `('st SP -16 T)                       ; F[1] = clos
-             `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
-             `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
-             `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> ret0 -> bb
-          + `('(label bb)
-             `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8)
-             `('test A 1) `('br 'eq 'codeopt)                     ; GATE 1: non-fixnum (even) result -> deopt
-             `('sar A 1)                                          ; untag
-             `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)  ; GATE 2: SA += result ; overflow -> deopt
-             `('ld T SP 16) `('add T T 1) `('st SP 16 T)          ; SC += 1
-             `('add SP SP 8) `('jmp 'top))                        ; Sp = R ; next iteration
-          + `('(label end)
-             `('ld A SP 0) `('leax A A A 1 1)                     ; acc = tag(SA)
-             `('add SP SP 48) `('st SP 0 A)                       ; Sp = entry ; result into arg slot
-             `('ld IP SP 8) `('st SP 8 A) `('add SP SP 8)         ; inline ret0: Ip=caller-cont; Sp[1]=result; Sp++
-             `('ld T IP 0) `('jmpr T))                            ; Continue -> caller
-          + `('(label codeopt)                                    ; shared deopt (both gates); Sp = R-8 on entry
-             `('ld A SP 48)                                       ; A = Stwin (R[5] @ Sp+48) -- BEFORE restoring Sp
-             `('add SP SP 56)                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
-             `('mov IP A) `('ld A IP 0) `('jmpr A))))             ; Continue into twin, applied to Sp[0] = n
-       (nif (emit code) (link clos twin) src 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt); value[-1]=src (=/show)
+   ; calloutir: the drive's IR, parameterized by target (greg tgt). The Sp offsets are VM-WORD (8-byte)
+   ; slots -- the SAME on x64 and arm64 (the machine-stack slotsz only matters for push/pop, which the
+   ; callout never uses). Every op (leax/lea/test/adds/br-vc/la/sub) is already arm64-proven by the loop/
+   ; map lanes, so `(assemble 'arm64 (calloutir 'arm64))` lays real aarch64. arm64 exec rides the corpus.
+   (calloutir tgt)
+    (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
+       (`(`('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
+          `('ld T IP 8)                                        ; T = value[1] = the (clos . twin) pair  (IP still &value[0])
+          `('ld U T 8)  `('st SP 24 U)                         ; Sclos = car(pair) = clos               -> R[3]
+          `('ld U T 16) `('st SP 40 U)                         ; Stwin = cdr(pair) = twin (interp)       -> R[5]
+          `('ld T SP 48) `('sar T 1) `('st SP 16 T)            ; SN = untag(arg @ R[6])                  -> R[2]
+          `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0                         -> R[0] R[1]
+          `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb  (position-independent)      -> R[4]
+        + `('(label top)
+           `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; i >= n -> end
+        + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(i)
+           `('ld T SP 24) `('st SP -16 T)                       ; F[1] = clos
+           `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
+           `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> ret0 -> bb
+        + `('(label bb)
+           `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8)
+           `('test A 1) `('br 'eq 'codeopt)                     ; GATE 1: non-fixnum (even) result -> deopt
+           `('sar A 1)                                          ; untag
+           `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)  ; GATE 2: SA += result ; overflow -> deopt
+           `('ld T SP 16) `('add T T 1) `('st SP 16 T)          ; SC += 1
+           `('add SP SP 8) `('jmp 'top))                        ; Sp = R ; next iteration
+        + `('(label end)
+           `('ld A SP 0) `('leax A A A 1 1)                     ; acc = tag(SA)
+           `('add SP SP 48) `('st SP 0 A)                       ; Sp = entry ; result into arg slot
+           `('ld IP SP 8) `('st SP 8 A) `('add SP SP 8)         ; inline ret0: Ip=caller-cont; Sp[1]=result; Sp++
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> caller
+        + `('(label codeopt)                                    ; shared deopt (both gates); Sp = R-8 on entry
+           `('ld A SP 48)                                       ; A = Stwin (R[5] @ Sp+48) -- BEFORE restoring Sp
+           `('add SP SP 56)                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
+           `('mov IP A) `('ld A IP 0) `('jmpr A))))             ; Continue into twin, applied to Sp[0] = n
+   (jitcalloutsum clos) (jitcalloutx clos `('\ 'n 0) 'x64)
+   (jitcalloutx clos src tgt)
+    (: twin (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clos i))) a)) 0 0))   ; the faithful interp fallback; captures clos
+       (nif (emit (asmt tgt (calloutir tgt))) (link clos twin) src 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt); value[-1]=src (=/show)
    ; --- CAPTURED / multi-arg CALL-OUT: the frame-based bridge (njit-calloutframe) --------------------
    ; (njit-calloutframe src Fidx Nidx a e) -- the same stackless sum-over-(F i), but F and the bound N are
    ; FRAME params (a captured import or a genuine 2nd arg), read from the [imps args] frame at Sp[8*idx]
@@ -202,41 +206,41 @@
    ; bytecode twin ala built, which CAPTURES F, so it recomputes correctly. a>=2 here (a=1 no-imps is the
    ; global lane), so e is an lvm_cur cell: enter its BODY at e+16 with the saturated frame on Sp (deoptir's
    ; bodyp path). Reserved 6 Sp slots (Sp=R): R[0]=SA R[1]=SC R[2]=SN R[3]=SF R[4]=Sret(&bb) R[5]=Se(=e).
-   ; The frame rides above R (E=R+48). x64-only.
+   ; The frame rides above R (E=R+48). arm64 lays via (calloutframeir 'arm64 ..); exec rides the corpus.
+   (calloutframeir tgt Fidx Nidx a)
+    (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
+       (`(`('ld U SP (* 8 Fidx))                               ; U = F (raw closure) from the frame
+          `('ld A SP (* 8 Nidx)) `('test A 1) `('br 'ne 'ngood))   ; N a fixnum? -> ngood
+        + `(`('ld T IP 8) `('lea IP T 16) `('ld T IP 0) `('jmpr T))   ; N NOT a fixnum -> deopt to e's body (Sp = E, IP valid)
+        + `('(label ngood) `('sar A 1)                          ; A = N untagged
+           `('ld T IP 8)                                        ; T = e (deopt twin = value[1], IP+8 at body entry)
+           `('sub SP SP 48)                                     ; reserve 6 slots; Sp = R
+           `('st SP 24 U) `('st SP 16 A) `('st SP 40 T)         ; SF = F ; SN = N ; Se = e
+           `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0
+           `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb
+        + `('(label top)
+           `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; SC >= SN -> end
+        + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(SC)
+           `('ld T SP 24) `('st SP -16 T)                       ; F[1] = SF (clos)
+           `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
+           `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> ret0 -> bb
+        + `('(label bb)
+           `('ld A SP 0) `('test A 1) `('br 'eq 'codeopt) `('sar A 1)   ; GATE 1: non-fixnum result -> deopt
+           `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)   ; GATE 2: SA += result ; overflow -> deopt
+           `('ld T SP 16) `('add T T 1) `('st SP 16 T)          ; SC += 1
+           `('add SP SP 8) `('jmp 'top))                        ; Sp = R ; next iteration
+        + `('(label end)
+           `('ld A SP 0) `('leax A A A 1 1)                     ; acc = tag(SA)
+           `('add SP SP 48) `('st SP 0 A)                       ; Sp = E (frame) ; result into Sp[0]
+           `('ld IP SP (* 8 a)) `('st SP (* 8 a) A) `('add SP SP (* 8 a))   ; hand-rolled lvm_ret(n=a): cont@Sp[a] ; deliver ; pop a
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> caller
+        + `('(label codeopt)                                    ; shared gate deopt; Sp = R-8 on entry
+           `('ld T SP 48)                                       ; T = Se (= e, R[5] @ Sp+48) -- BEFORE restoring Sp
+           `('add SP SP 56)                                     ; Sp = E (frame intact for e's body)
+           `('lea IP T 16) `('ld T IP 0) `('jmpr T))))          ; enter e's body (a>=2: e+16), saturated frame on Sp
    (njit-calloutframe src Fidx Nidx a e)
-    (: A (greg 'x64 'acc)  IP (greg 'x64 'ip)  SP (greg 'x64 'sp)  T (greg 'x64 'tmp)  U (greg 'x64 'scratch)
-       code (asmt 'x64
-         (`(`('ld U SP (* 8 Fidx))                               ; U = F (raw closure) from the frame
-            `('ld A SP (* 8 Nidx)) `('test A 1) `('br 'ne 'ngood))   ; N a fixnum? -> ngood
-          + `(`('ld T IP 8) `('lea IP T 16) `('ld T IP 0) `('jmpr T))   ; N NOT a fixnum -> deopt to e's body (Sp = E, IP valid)
-          + `('(label ngood) `('sar A 1)                          ; A = N untagged
-             `('ld T IP 8)                                        ; T = e (deopt twin = value[1], IP+8 at body entry)
-             `('sub SP SP 48)                                     ; reserve 6 slots; Sp = R
-             `('st SP 24 U) `('st SP 16 A) `('st SP 40 T)         ; SF = F ; SN = N ; Se = e
-             `('li T 0) `('st SP 0 T) `('st SP 8 T)               ; SA = 0 ; SC = 0
-             `('la T 'bb) `('st SP 32 T))                          ; Sret = &bb
-          + `('(label top)
-             `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; SC >= SN -> end
-          + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(SC)
-             `('ld T SP 24) `('st SP -16 T)                       ; F[1] = SF (clos)
-             `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
-             `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
-             `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> ret0 -> bb
-          + `('(label bb)
-             `('ld A SP 0) `('test A 1) `('br 'eq 'codeopt) `('sar A 1)   ; GATE 1: non-fixnum result -> deopt
-             `('ld T SP 8) `('adds T T A) `('br 'vc 'sok) `('jmp 'codeopt) `('label 'sok) `('st SP 8 T)   ; GATE 2: SA += result ; overflow -> deopt
-             `('ld T SP 16) `('add T T 1) `('st SP 16 T)          ; SC += 1
-             `('add SP SP 8) `('jmp 'top))                        ; Sp = R ; next iteration
-          + `('(label end)
-             `('ld A SP 0) `('leax A A A 1 1)                     ; acc = tag(SA)
-             `('add SP SP 48) `('st SP 0 A)                       ; Sp = E (frame) ; result into Sp[0]
-             `('ld IP SP (* 8 a)) `('st SP (* 8 a) A) `('add SP SP (* 8 a))   ; hand-rolled lvm_ret(n=a): cont@Sp[a] ; deliver ; pop a
-             `('ld T IP 0) `('jmpr T))                            ; Continue -> caller
-          + `('(label codeopt)                                    ; shared gate deopt; Sp = R-8 on entry
-             `('ld T SP 48)                                       ; T = Se (= e, R[5] @ Sp+48) -- BEFORE restoring Sp
-             `('add SP SP 56)                                     ; Sp = E (frame intact for e's body)
-             `('lea IP T 16) `('ld T IP 0) `('jmpr T))))          ; enter e's body (a>=2: e+16), saturated frame on Sp
-       (nif (emit code) e src a))   ; value[1] = e (the bytecode twin, deopt target); arity a ; src for =/show
+    (nif (emit (asmt 'x64 (calloutframeir 'x64 Fidx Nidx a))) e src a)   ; value[1] = e (the bytecode twin, deopt target); arity a ; src for =/show
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if
