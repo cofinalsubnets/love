@@ -175,7 +175,46 @@
    (coend tgt op) (: A (greg tgt 'acc) SP (greg tgt 'sp)
       (? (id? op '*) `(`('ld A SP 0) `('adds A A A) `('br 'vc 'etag) `('sub SP SP 8) `('jmp 'codeopt) `('label 'etag) `('or A A 1))  ; SA raw -> tag(SA) ; overflow -> deopt (Sp R -> R-8 first)
          `(`('ld A SP 0))))                                                                                       ; SA already tagged
-   (calloutir tgt op)
+   ; --- COMPUTED CALL-OUT ARG: the per-step term is (F ARG), ARG an exprp over the counter (not just the bare
+   ; counter). caargir compiles ARG -> acc RAW, mirroring cgir's arith grammar but with the counter as the sole
+   ; leaf (raw at VM Sp[coff]; exprp guarantees the ONLY variable is the counter, so a name IS the counter -- no
+   ; fixnum-guard/untag, the counter is always a valid raw fixnum). Guards / overflow deopt to the callout's own
+   ; `deopt` label (caargdeopt), which restores the machine sp (anchored) then routes to codeopt -> the interp
+   ; twin (which recomputes ARG faithfully -> bignum if it overflowed). Nesting rides the MACHINE stack (push/pop),
+   ; independent of VM Sp, so coff stays constant across sub-exprs.
+   (caargir tgt e coff) (: A (greg tgt 'acc) S (greg tgt 'sp) T (greg tgt 'tmp)
+      (? (name? e) (L (L 'ld A S coff))                                                                          ; the counter, raw
+         (whole? e) (L (L 'li A e))
+         (two? e) (: op (cap e) a (caup e) b (caup (cup e))
+            (? (member? op '(+ - *))
+                 (cat (caargir tgt a coff) (cat (L (L 'push A)) (cat (caargir tgt b coff) (cat (L (L 'pop T)) (arithir tgt op)))))
+               (member? op '(// %))
+                 (cat (caargir tgt a coff) (cat (L (L 'push A)) (cat (caargir tgt b coff) (cat (L (L 'test A A) '(br eq deopt) (L 'pop T)) (divir tgt op)))))
+               (member? op '(& | ^))
+                 (cat (caargir tgt a coff) (cat (L (L 'push A)) (cat (caargir tgt b coff) (L (L 'pop T) (L (bitop op) A A T)))))
+               (member? op '(< <= > >= =))
+                 (cat (caargir tgt a coff) (cat (L (L 'push A)) (cat (caargir tgt b coff) (L (L 'pop T) (L 'cmp T A) (L 'set (ccof op) A)))))
+               (id? op '?)
+                 (: el (mint 0) en (mint 0)
+                    (cat (caargir tgt a coff) (cat (L (L 'cmp A 0) (L 'br 'le el))
+                         (cat (caargir tgt b coff) (cat (L (L 'jmp en) (L 'label el))
+                              (cat (caargir tgt (caup (cup (cup e))) coff) (L (L 'label en))))))))
+               ()))
+         ()))
+   ; caarg: leave tag(ARG(counter)) in the frame slot F[0] = Sp[-24]. A BARE counter tags directly (never
+   ; overflows -- a loop index is always a valid fixnum), byte-identical to the pre-extension code. A COMPUTED
+   ; ARG anchors the machine sp, runs caargir, then tags with an overflow gate (both -> `deopt`).
+   (caarg tgt arg) (: A (greg tgt 'acc) SP (greg tgt 'sp) T (greg tgt 'tmp) AN (greg tgt 'anchor)
+      (? (name? arg) `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T))                                         ; bare counter: F[0] = tag(i)
+         (`(`('lea AN 'sp 0))                                                                                     ; anchor the machine sp for the arg-expr deopt unwind
+          + (caargir tgt arg 8)                                                                                   ; A = ARG(counter) raw ; guards/overflow -> deopt
+          + `(`('adds A A A) `('br 'vs 'deopt) `('or A A 1) `('st SP -24 A)))))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
+   ; caargdeopt: the `deopt` label the computed-arg lane branches to -- restore the machine sp from the anchor
+   ; (discarding any pending arg-expr pushes), bring VM Sp R -> R-8, and fall into the shared codeopt (-> twin).
+   ; Appended to the blob ONLY when the arg is computed (a bare arg never deopts here).
+   (caargdeopt tgt) (: SP (greg tgt 'sp) AN (greg tgt 'anchor)
+      `('(label deopt) `('lea 'sp AN 0) `('sub SP SP 8) `('jmp 'codeopt)))
+   (calloutir tgt op arg)
     (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
        (`(`('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
           `('ld T IP 8)                                        ; T = value[1] = the (clos . twin) pair  (IP still &value[0])
@@ -186,8 +225,8 @@
           `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb  (lar = near pc-rel; ADR on arm64, translation-invariant in the mmap blob)  -> R[4]
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; i >= n -> end
-        + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(i)
-           `('ld T SP 24) `('st SP -16 T)                       ; F[1] = clos
+        + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare i, or a computed expr (deopts to `deopt`)
+        + `(`('ld T SP 24) `('st SP -16 T)                      ; F[1] = clos
            `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
            `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
            `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> ret0 -> bb
@@ -205,12 +244,15 @@
         + `('(label codeopt)                                    ; shared deopt (both gates); Sp = R-8 on entry
            `('ld A SP 48)                                       ; A = Stwin (R[5] @ Sp+48) -- BEFORE restoring Sp
            `('add SP SP 56)                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
-           `('mov IP A) `('ld A IP 0) `('jmpr A))))             ; Continue into twin, applied to Sp[0] = n
-   (jitcalloutsum clos) (jitcalloutx clos `('\ 'n 0) '+ 'x64)
-   (jitcalloutx clos src op tgt)
+           `('mov IP A) `('ld A IP 0) `('jmpr A))               ; Continue into twin, applied to Sp[0] = n
+        + (? (name? arg) () (caargdeopt tgt))))                  ; the computed-arg `deopt` label, only when ARG is an expr
+   (jitcalloutsum clos) (jitcalloutx clos `('\ 'n 0) '+ 'i 'i 'x64)
+   (jitcalloutx clos src op iv arg tgt)
     (: fop (? (id? op '*) (*) (+))  a0 (foldinit op)                             ; the fold op as a VALUE (parenthesized: a bare `* +` mid-list mis-factors) + its identity (0 / 1)
-       twin (\ n ((: (go i a) (? (< i n) (go (+ i 1) (fop a (clos i))) a)) 0 a0))   ; the faithful interp fallback; captures clos, fop, a0
-       (nif (emit (asmt tgt (calloutir tgt op))) (link clos twin) src 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt); value[-1]=src (=/show)
+       argfn (? (name? arg) 0 (ev (L '\ iv arg)))                               ; computed ARG -> a closure (\ counter ARG); bare arg needs none
+       twin (? (name? arg) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (fop a (clos i))) a)) 0 a0))            ; bare: clos applied to the counter
+                           (\ n ((: (go i a) (? (< i n) (go (+ i 1) (fop a (clos (argfn i)))) a)) 0 a0)))   ; computed: clos applied to ARG(counter)
+       (nif (emit (asmt tgt (calloutir tgt op arg))) (link clos twin) src 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt); value[-1]=src (=/show)
    ; --- CAPTURED / multi-arg CALL-OUT: the frame-based bridge (njit-calloutframe) --------------------
    ; (njit-calloutframe src Fidx Nidx a e) -- the same stackless sum-over-(F i), but F and the bound N are
    ; FRAME params (a captured import or a genuine 2nd arg), read from the [imps args] frame at Sp[8*idx]
@@ -222,7 +264,7 @@
    ; global lane), so e is an lvm_cur cell: enter its BODY at e+16 with the saturated frame on Sp (deoptir's
    ; bodyp path). Reserved 6 Sp slots (Sp=R): R[0]=SA R[1]=SC R[2]=SN R[3]=SF R[4]=Sret(&bb) R[5]=Se(=e).
    ; The frame rides above R (E=R+48). arm64 lays via (calloutframeir 'arm64 ..); exec rides the corpus.
-   (calloutframeir tgt Fidx Nidx a op)
+   (calloutframeir tgt Fidx Nidx a op arg)
     (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
        (`(`('ld U SP (* 8 Fidx))                               ; U = F (raw closure) from the frame
           `('ld A SP (* 8 Nidx)) `('test A 1) `('br 'ne 'ngood))   ; N a fixnum? -> ngood
@@ -235,8 +277,8 @@
            `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb (lar = near pc-rel, ADR on arm64)
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; SC >= SN -> end
-        + `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T)   ; F[0] = arg = tag(SC)
-           `('ld T SP 24) `('st SP -16 T)                       ; F[1] = SF (clos)
+        + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare SC, or a computed expr (deopts to `deopt`)
+        + `(`('ld T SP 24) `('st SP -16 T)                      ; F[1] = SF (clos)
            `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
            `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
            `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> ret0 -> bb
@@ -253,9 +295,10 @@
         + `('(label codeopt)                                    ; shared gate deopt; Sp = R-8 on entry
            `('ld T SP 48)                                       ; T = Se (= e, R[5] @ Sp+48) -- BEFORE restoring Sp
            `('add SP SP 56)                                     ; Sp = E (frame intact for e's body)
-           `('lea IP T 16) `('ld T IP 0) `('jmpr T))))          ; enter e's body (a>=2: e+16), saturated frame on Sp
-   (njit-calloutframe src Fidx Nidx a e op tgt)
-    (nif (emit (asmt tgt (calloutframeir tgt Fidx Nidx a op))) e src a)   ; value[1] = e (the bytecode twin, deopt target -- source-shaped, so op-correct); arity a ; src for =/show
+           `('lea IP T 16) `('ld T IP 0) `('jmpr T))            ; enter e's body (a>=2: e+16), saturated frame on Sp
+        + (? (name? arg) () (caargdeopt tgt))))                 ; the computed-arg `deopt` label, only when ARG is an expr
+   (njit-calloutframe src Fidx Nidx a e op arg tgt)
+    (nif (emit (asmt tgt (calloutframeir tgt Fidx Nidx a op arg))) e src a)   ; value[1] = e (the bytecode twin, deopt target -- source-shaped, so op- AND arg-correct); arity a ; src for =/show
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if

@@ -69,9 +69,10 @@
               (= z2 (foldinit op)))                                          ; a0 matches the op's identity (0 / 1)
        (? ok `(B I op cmp) 0))
    ; --- CALL-OUT loop: loopinfo's shape B, but the per-step term is a CALL to a resolvable global closure
-   ; F (a "call-out") rather than arithmetic over i: B = (F i), op in {+,*}. Returns (F op) for the caller to
-   ; resolve F + bake into the stackless callout bridge (emit.l jitcalloutx, the op-parameterized fold).
-   ; The leaf/group grammar rejects (F i) (F isn't an op / a group name), so this is the only lane that owns
+   ; F (a "call-out") rather than arithmetic over i: B = (F ARG), op in {+,*}, ARG an exprp over i (the bare
+   ; counter, or a computed expr like (+ i 1) / (* i i)). Returns (F op iv ARG): the caller resolves F, bakes
+   ; the op-parameterized fold, and compiles ARG natively for the callout arg (emit.l jitcalloutx / caarg).
+   ; The leaf/group grammar rejects (F ARG) (F isn't an op / a group name), so this is the only lane that owns
    ; it. SINGLE param (no imps) => F is guaranteed free => a global; the CAPTURED / multi-arg case is
    ; calloutinfo-frame below (F a frame param, read from the [imps args] frame).
    (calloutinfo lam)
@@ -91,13 +92,14 @@
               (= (cap THEN) GO)
               (two? STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)   ; (+ i 1)
               (two? ACC) (member? op '(+ *)) (= (caup ACC) A)                 ; (op a B), op in {+,*}
-              (two? B) (= 2 (tally B)) (name? F) (= (caup B) I) !(= F I) !(= F A) !(= F (caup lam)))   ; B = (F i), F free
-       (? ok (L F op) 0))
+              (two? B) (= 2 (tally B)) (name? F) (exprp (caup B) I) !(= F I) !(= F A) !(= F (caup lam)))   ; B = (F ARG), F free, ARG an expr over i
+       (? ok (L F op I (caup B)) 0))
    ; --- CAPTURED / multi-arg CALL-OUT: the SAME sum-over-(F i) shape, but F (and the bound N) are FRAME
    ; params -- a captured import `(\ n (sum (f i)))` (ala prepends the imp -> `(\ f n ..)`) or a genuine
    ; multi-arg `(\ f n (sum (f i)))`. The native reads F and N from the [imps args] frame (fxir-style,
    ; F raw / N untagged) instead of baking; deopt goes to value[1]=e, the bytecode twin ala built (which
-   ; already captures F). Returns (Fidx Nidx), the frame indices. Needs >=2 params (a=1 is the global lane).
+   ; already captures F). Returns (Fidx Nidx op ARG) -- the frame indices, fold op, and the (computed) arg expr.
+   ; Needs >=2 params (a=1 is the global lane).
    (calloutinfo-frame lam)
     (: ps (init (cup lam))  M (last (cup lam))  S (? (two? M) (cap M) 0) z1 (? (&& (two? M) (two? (cup M))) (caup M) 1) z2 (? (&& (two? M) (two? (cup M)) (two? (cup (cup M)))) (caup (cup M)) 1)
        G    (? (two? S) (caup S) 0)  IF (? (&& (two? S) (two? (cup S))) (caup (cup S)) 0)
@@ -114,8 +116,8 @@
               (= (cap THEN) GO)
               (two? STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)
               (two? ACC) (member? op '(+ *)) (= (caup ACC) A)                                             ; (op a B), op in {+,*}
-              (two? B) (= 2 (tally B)) (name? F) (member? F ps) (= (caup B) I) !(= F I) !(= F A) !(= F N))   ; B = (F i), F a frame param
-       (? ok (L (posof F ps 0) (posof N ps 0) op) 0))
+              (two? B) (= 2 (tally B)) (name? F) (member? F ps) (exprp (caup B) I) !(= F I) !(= F A) !(= F N))   ; B = (F ARG), F a frame param, ARG an expr over i
+       (? ok (L (posof F ps 0) (posof N ps 0) op (caup B)) 0))
    (njit-loop lam B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp lam 1)
    ; --- general N-VARIABLE loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)),
    ; up to 3 loop vars + arbitrary update exprs -- this is the shape iterative fib/tak

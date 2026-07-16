@@ -68,15 +68,30 @@
                                                              (100000000000000000000 = (cb 100)))) ; == interp bignum
          ; * FOLD (product-over-(F i)): jitcalloutx with op '*, SA kept RAW (mulo accumulator, retag+overflow at end)
          (: iprod (\ f n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f i))) a)) 0 1))                ; the faithful interp product twin
-            inc (\ i (+ i 1))  pr (jitcalloutx inc '(\ n 0) '* 'x64)                               ; native product of (i+1) = n!
+            inc (\ i (+ i 1))  pr (jitcalloutx inc '(\ n 0) '* 'i 'i 'x64)                               ; native product of (i+1) = n!
             (&& (lit? pr) (1 = (pr 0)) (120 = (pr 5)) ((pr 6) = (iprod inc 6))                     ; fast path: 5!=120, empty=1 (product identity)
-                (: pf (jitcalloutx (\ i (+ i 0.5)) '(\ n 0) '* 'x64)                               ; GATE 1: float result -> deopt -> interp product
+                (: pf (jitcalloutx (\ i (+ i 0.5)) '(\ n 0) '* 'i 'i 'x64)                               ; GATE 1: float result -> deopt -> interp product
                    (1.875 = (pf 3)))
-                (: pb (jitcalloutx inc '(\ n 0) '* 'x64)                                           ; GATE 2: product leaves fixnum range -> deopt -> bignum
+                (: pb (jitcalloutx inc '(\ n 0) '* 'i 'i 'x64)                                           ; GATE 2: product leaves fixnum range -> deopt -> bignum
                    (&& (51090942171709440000 = (pb 21)) ((pb 25) = (iprod inc 25))))
                 ; the [2^62, 2^63) TAG-boundary window: 3*2^61 is out of fixnum yet < 2^63 -> the end-retag adds-vc gate must deopt
-                (: p3 (jitcalloutx (\ i (? (= i 0) 3 2)) '(\ n 0) '* 'x64)
-                   (6917529027641081856 = (p3 62))))))) ; == interp
+                (: p3 (jitcalloutx (\ i (? (= i 0) 3 2)) '(\ n 0) '* 'i 'i 'x64)
+                   (6917529027641081856 = (p3 62)))))
+         ; NON-(F i) ARG: the per-step term is (F ARG), ARG a computed expr over i (not the bare counter) --
+         ; caarg compiles ARG natively (mirroring cgir), tags it, and an ARG that leaves fixnum range deopts
+         ; (caargdeopt: restore machine sp -> codeopt -> twin, which recomputes ARG as a bignum).
+         (: isumg  (\ f g n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f (g i)))) a)) 0 0))         ; interp: sum f(g(i))
+            iprodg (\ f g n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f (g i)))) a)) 0 1))         ; interp: product f(g(i))
+            sqx (\ x (* x x))  md7 (\ x (% x 7))
+            cae  (jitcalloutx sqx '(\ n 0) '+ 'i '(+ i 1) 'x64)                                    ; sum sq(i+1)
+            cap  (jitcalloutx sqx '(\ n 0) '* 'i '(+ i 1) 'x64)                                    ; product sq(i+1) = (n!)^2
+            caov (jitcalloutx md7 '(\ n 0) '+ 'i '(* (* i i) 1000000000) 'x64)                     ; ARG overflows ~i=68k; bounded clos so ONLY the arg deopts
+            mkq  (\ f (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f (* i i)))) a)) 0 0)))        ; captured f, computed arg (* i i) -> the FRAME lane (hook)
+            cq   (mkq sqx)
+            (&& (lit? cae) (55 = (cae 5)) (0 = (cae 0)) ((cae 6) = (isumg sqx (\ i (+ i 1)) 6))    ; computed arg, native fast path
+                (576 = (cap 4)) ((cap 15) = (iprodg sqx (\ i (+ i 1)) 15))                         ; computed arg + * fold, overflow -> bignum twin
+                (280000 = (caov 70000)) ((caov 100000) = (isumg md7 (\ i (* (* i i) 1000000000)) 100000))   ; ARG overflow -> caargdeopt -> twin
+                ((cq 6) = (isumg sqx (\ i (* i i)) 6)) ((cq 50) = (isumg sqx (\ i (* i i)) 50)))))) ; captured computed arg (frame lane), fast + bignum
   ; // and %
   (: dv (jit '(\ x (// x 3))) (&& (3 = (dv 10)) (4 = (dv 13)) (-3 = (dv -10))))
   (: md (jit '(\ x (% x 7)))  (&& (1 = (md 8)) (-1 = (md -8)) (0 = (md 14))))
@@ -621,12 +636,14 @@
       !(= (peep (assemble 'x64   (coreir 'x64   '(x) '(+ x 1) (deoptir 'x64 0))) 'bytes 0)
           (peep (assemble 'arm64 (coreir 'arm64 '(x) '(+ x 1) (deoptir 'arm64 0))) 'bytes 0))       ; per-target codegen differs
       ; --- call-out bridge: the SAME drive IR lays for aarch64 (data; exec rides the corpus), and differs from x64
-      (< 0 (tally (peep (assemble 'arm64 (calloutir 'arm64 '+)) 'bytes 0)))                            ; global-F sum-over-(F i)
-      (< 0 (tally (peep (assemble 'arm64 (calloutframeir 'arm64 1 0 2 '+)) 'bytes 0)))                 ; frame F@1 N@0 arity 2
-      !(= (peep (assemble 'x64   (calloutir 'x64 '+)) 'bytes 0)
-          (peep (assemble 'arm64 (calloutir 'arm64 '+)) 'bytes 0))                                     ; per-target callout codegen differs
-      !(= (peep (assemble 'x64 (calloutir 'x64 '+)) 'bytes 0)
-          (peep (assemble 'x64 (calloutir 'x64 '*)) 'bytes 0))                                         ; the * fold lays differently from + (mulo accumulator)
+      (< 0 (tally (peep (assemble 'arm64 (calloutir 'arm64 '+ 'i)) 'bytes 0)))                         ; global-F sum-over-(F i)
+      (< 0 (tally (peep (assemble 'arm64 (calloutframeir 'arm64 1 0 2 '+ 'i)) 'bytes 0)))              ; frame F@1 N@0 arity 2
+      !(= (peep (assemble 'x64   (calloutir 'x64 '+ 'i)) 'bytes 0)
+          (peep (assemble 'arm64 (calloutir 'arm64 '+ 'i)) 'bytes 0))                                  ; per-target callout codegen differs
+      !(= (peep (assemble 'x64 (calloutir 'x64 '+ 'i)) 'bytes 0)
+          (peep (assemble 'x64 (calloutir 'x64 '* 'i)) 'bytes 0))                                      ; the * fold lays differently from + (mulo accumulator)
+      !(= (peep (assemble 'x64 (calloutir 'x64 '+ 'i)) 'bytes 0)
+          (peep (assemble 'x64 (calloutir 'x64 '+ '(* i i))) 'bytes 0))                                ; a computed arg (F (* i i)) lays differently from bare (F i)
       ; --- group lane (jitgroupir): mutually-recursive first-order integer fns, native == interp
       (55 = ((jitgroupir (L (link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))) 'fib 'x64) 10))
       (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25)

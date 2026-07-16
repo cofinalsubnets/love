@@ -17,13 +17,17 @@
    (ca-inc i)  (+ i 1)
    (ca-ph i)   (+ i 0.5)                             ; 0.5,1.5,2.5,.. -> a non-trivial float product
    (ca-thr i)  (? (= i 0) 3 2)                       ; 3,2,2,.. -> product 3*2^(n-1)
+   (ca-md7 x)  (% x 7)                               ; bounded 0..6 -> a computed-ARG overflow deopts ONLY on the arg
    ca-src   '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ca-sq i)))   a)) 0 0))
    caf-src  '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ca-half i))) a)) 0 0))
-   nat  (jitcalloutx ca-sq   ca-src  '+ 'arm64)   ; native aarch64 call-out (+ fold)
-   natf (jitcalloutx ca-half caf-src '+ 'arm64)
-   natp (jitcalloutx ca-inc  '(\ n 0) '* 'arm64)  ; * fold: product of (i+1) = n!
-   natpf (jitcalloutx ca-ph  '(\ n 0) '* 'arm64)  ; * fold, float callee -> gate 1
-   natp3 (jitcalloutx ca-thr  '(\ n 0) '* 'arm64) ; * fold, product lands in [2^62,2^63)
+   nat  (jitcalloutx ca-sq   ca-src  '+ 'i 'i 'arm64)   ; native aarch64 call-out (+ fold, bare arg)
+   natf (jitcalloutx ca-half caf-src '+ 'i 'i 'arm64)
+   natp (jitcalloutx ca-inc  '(\ n 0) '* 'i 'i 'arm64)  ; * fold: product of (i+1) = n!
+   natpf (jitcalloutx ca-ph  '(\ n 0) '* 'i 'i 'arm64)  ; * fold, float callee -> gate 1
+   natp3 (jitcalloutx ca-thr  '(\ n 0) '* 'i 'i 'arm64) ; * fold, product lands in [2^62,2^63)
+   natc  (jitcalloutx ca-sq  '(\ n 0) '+ 'i '(+ i 1) 'arm64)                       ; NON-(F i): sum sq(i+1)
+   natco (jitcalloutx ca-sq  '(\ n 0) '+ 'i '(* i i) 'arm64)                       ; NON-(F i): sum sq(i*i) = i^4 (overflows -> bignum twin)
+   natcd (jitcalloutx ca-md7 '(\ n 0) '+ 'i '(* (* i i) 1000000000) 'arm64)        ; NON-(F i): ARG overflows ~i=68k -> caargdeopt -> twin (bounded clos)
    r3m ((: (go i a) (? (< i 3000000) (go (+ i 1) (+ a (ca-sq i))) a)) 0 0)   ; interp reference (inline sum; a closure never glazed -> pure interp) for the boundary case
    ; NB: STRICT PREFIX `(= a b)` throughout -- opfix currently mis-factors compound=compound infix
    ; (((f x) = (g y)) -> (f (= x (g y)))), so prefix sidesteps it entirely (opfix fix is a follow-up).
@@ -40,7 +44,11 @@
        (= 120 (natp 5))                               ; 5! fixnum fast path
        (= 51090942171709440000 (natp 21))            ; 21! -> gate 2 (product overflow) -> bignum
        (= 1.875 (natpf 3))                            ; GATE 1: float product -> deopt -> gem
-       (= 6917529027641081856 (natp3 62))))           ; 3*2^61 in [2^62,2^63): the end-retag adds-vc gate must deopt
+       (= 6917529027641081856 (natp3 62))            ; 3*2^61 in [2^62,2^63): the end-retag adds-vc gate must deopt
+       ; NON-(F i) computed args: caarg compiles ARG natively; an ARG leaving fixnum range deopts (caargdeopt)
+       (= 55 (natc 5)) (= 0 (natc 0)) (= 91 (natc 6))    ; sum sq(i+1) native fast path
+       (= 979 (natco 6)) (= 1950333330 (natco 100))      ; sum i^4: fixnum then overflow -> bignum twin
+       (= 280000 (natcd 70000)) (= 399999 (natcd 100000))))   ; ARG overflow -> caargdeopt -> twin
 
 ; --- auto-glaze: the natjit hook (now installed on aarch64) glazes these at closure creation, no manual
 ; jitcalloutx. ag-sum is a top-level GLOBAL-F sum (hook's calloutinfo -> jitcalloutx arch); ag-summer
@@ -54,7 +62,9 @@
    (ag-prod n) ((: (go i a) (? (< i n) (go (+ i 1) (* a (ag-inc i))) a)) 0 1)         ; global-F product (* fold): hook -> jitcalloutx arch
    (ag-summer f) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0))      ; captured sum: hook -> njit-calloutframe arch
    (ag-multiplier f) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f i))) a)) 0 1))  ; captured product (* fold): hook -> njit-calloutframe arch
-   cs (ag-summer ag-sq)  cf (ag-summer ag-half)  cp (ag-multiplier ag-inc)  cpf (ag-multiplier ag-ph)
+   (ag-cgsum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ag-sq (* i i)))) a)) 0 0)   ; global-F NON-(F i): sum sq(i*i) = i^4, hook -> jitcalloutx arch
+   (ag-capcg f) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f (+ i 1)))) a)) 0 0)) ; captured NON-(F i): sum f(i+1), hook -> njit-calloutframe arch
+   cs (ag-summer ag-sq)  cf (ag-summer ag-half)  cp (ag-multiplier ag-inc)  cpf (ag-multiplier ag-ph)  ccg (ag-capcg ag-sq)
    ag30 (ag-sum 30)                                                                  ; global reference for the captured==global cross-check
    _ (assert
        (= 285 (ag-sum 10)) (= 0 (ag-sum 0))                                          ; global auto-glaze fast path + empty
@@ -68,5 +78,8 @@
        (= 1 (ag-prod 0)) (= 120 (ag-prod 5)) (= 51090942171709440000 (ag-prod 21))   ; global product: empty, 5!, 21!-overflow->bignum
        (= 1 (cp 0)) (= 120 (cp 5)) (= 51090942171709440000 (cp 21))                  ; captured product: same
        (= (cp 5) (ag-prod 5))                                                        ; captured == global
-       (= 1.875 (cpf 3)))                                                            ; captured product gate-1 float
-   (say err "test/arm64/callout: aarch64 call-out execution (direct + auto-glaze, lar/ADR resume + tagged-accumulator gate) ok\n"))
+       (= 1.875 (cpf 3))                                                            ; captured product gate-1 float
+       ; NON-(F i) auto-glaze: global-F sum sq(i*i) + captured sum sq(i+1)
+       (= 979 (ag-cgsum 6)) (= 1950333330 (ag-cgsum 100))                            ; global computed arg: fixnum + overflow -> bignum
+       (= 55 (ccg 5)) (= 0 (ccg 0)) (= 91 (ccg 6)))                                  ; captured computed arg (frame lane)
+   (say err "test/arm64/callout: aarch64 call-out execution (direct + auto-glaze, lar/ADR + fold gates + computed args) ok\n"))
