@@ -72,8 +72,8 @@
    ; F (a "call-out") rather than arithmetic over i: B = (F i), op '+ (jitcalloutx is +-only). Returns F (the
    ; callout symbol) for the caller to resolve+bake into the stackless callout bridge (emit.l jitcalloutx).
    ; The leaf/group grammar rejects (F i) (F isn't an op / a group name), so this is the only lane that owns
-   ; it. SINGLE param (no imps) => F is guaranteed free => a global; the captured / multi-arg case is future
-   ; (it needs a frame-based callee that reads F from the [imps args] frame -- see the callout-bridge memory).
+   ; it. SINGLE param (no imps) => F is guaranteed free => a global; the CAPTURED / multi-arg case is
+   ; calloutinfo-frame below (F a frame param, read from the [imps args] frame).
    (calloutinfo lam)
     (: M    (caup (cup lam))  S (cap M) z1 (caup M) z2 (caup (cup M))
        G    (caup S)  IF (caup (cup S))
@@ -93,6 +93,29 @@
               (two? ACC) (id? op '+) (= (caup ACC) A)                         ; (+ a B) -- + fold only
               (two? B) (= 2 (tally B)) (name? F) (= (caup B) I) !(= F I) !(= F A) !(= F (caup lam)))   ; B = (F i), F free
        (? ok F 0))
+   ; --- CAPTURED / multi-arg CALL-OUT: the SAME sum-over-(F i) shape, but F (and the bound N) are FRAME
+   ; params -- a captured import `(\ n (sum (f i)))` (ala prepends the imp -> `(\ f n ..)`) or a genuine
+   ; multi-arg `(\ f n (sum (f i)))`. The native reads F and N from the [imps args] frame (fxir-style,
+   ; F raw / N untagged) instead of baking; deopt goes to value[1]=e, the bytecode twin ala built (which
+   ; already captures F). Returns (Fidx Nidx), the frame indices. Needs >=2 params (a=1 is the global lane).
+   (calloutinfo-frame lam)
+    (: ps (init (cup lam))  M (last (cup lam))  S (? (two? M) (cap M) 0) z1 (? (&& (two? M) (two? (cup M))) (caup M) 1) z2 (? (&& (two? M) (two? (cup M)) (two? (cup (cup M)))) (caup (cup M)) 1)
+       G    (? (two? S) (caup S) 0)  IF (? (&& (two? S) (two? (cup S))) (caup (cup S)) 0)
+       GO   (? (two? G) (cap G) 0)  I (? (&& (two? G) (two? (cup G))) (caup G) 0) A (? (&& (two? G) (two? (cup G)) (two? (cup (cup G)))) (caup (cup G)) 0)
+       T    (? (two? IF) (caup IF) 0)  THEN (? (&& (two? IF) (two? (cup IF))) (caup (cup IF)) 0) ELS (? (&& (two? IF) (two? (cup IF)) (two? (cup (cup IF)))) (caup (cup (cup IF))) 0)
+       STEP (? (two? THEN) (caup THEN) 0)  ACC (? (&& (two? THEN) (two? (cup THEN))) (caup (cup THEN)) 0)
+       B    (? (&& (two? ACC) (two? (cup ACC))) (caup (cup ACC)) 0)  op (? (two? ACC) (cap ACC) 0) cmp (? (two? T) (cap T) 0)
+       N    (? (two? T) (caup (cup T)) 0)  F (? (two? B) (cap B) 0)
+       ok (&& (two? lam) (= (cap lam) '\) (< 1 (tally ps)) (all name? ps) (distinctp ps)   ; >=2 frame params
+              (two? M) (= z1 0) (= z2 0) !(two? (cup (cup (cup M))))
+              (two? S) (= (cap S) ':) (name? GO) (name? I) (name? A) !(= I A)
+              (two? IF) (= (cap IF) '?) (= ELS A)
+              (two? T) (member? cmp '(< <= > >= =)) (= (caup T) I) (member? N ps) !(= N I) !(= N A)   ; bound is a frame param
+              (= (cap THEN) GO)
+              (two? STEP) (= (cap STEP) '+) (= (caup STEP) I) (= (caup (cup STEP)) 1)
+              (two? ACC) (id? op '+) (= (caup ACC) A)
+              (two? B) (= 2 (tally B)) (name? F) (member? F ps) (= (caup B) I) !(= F I) !(= F A) !(= F N))   ; B = (F i), F a frame param
+       (? ok (L (posof F ps 0) (posof N ps 0)) 0))
    (njit-loop lam B cv op cmp interp) (nif (emit (loopcode B cv op cmp arch)) interp lam 1)
    ; --- general N-VARIABLE loop: (\ n ((: (go v0..vk) (? T (go U..) R)) I0..Ik)),
    ; up to 3 loop vars + arbitrary update exprs -- this is the shape iterative fib/tak

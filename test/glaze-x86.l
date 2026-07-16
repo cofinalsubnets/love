@@ -167,13 +167,27 @@
 (: (rc-ssum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-sq i))) a)) 0 0))
 (: (rc-fsum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-half i))) a)) 0 0))
 (: (rc-bsum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-big i))) a)) 0 0))
-(: sref ((: (go i a) (? (< i 30)  (go (+ i 1) (+ a (rc-sq i)))   a)) 0 0)          ; pure-interp references (inline -- not a closure, so natjit never fires on them)
-   fref ((: (go i a) (? (< i 20)  (go (+ i 1) (+ a (rc-half i))) a)) 0 0)
-   bref ((: (go i a) (? (< i 100) (go (+ i 1) (+ a (rc-big i)))  a)) 0 0)
-   _ (assert (lit? rc-ssum) (285 = (rc-ssum 10)) ((rc-ssum 30) = sref)             ; fixnum fast path == interp
+; pure-interp references (inline sums -- not closures, so natjit never fires on them), shared globals
+(: sref ((: (go i a) (? (< i 30)  (go (+ i 1) (+ a (rc-sq i)))   a)) 0 0))
+(: fref ((: (go i a) (? (< i 20)  (go (+ i 1) (+ a (rc-half i))) a)) 0 0))
+(: bref ((: (go i a) (? (< i 100) (go (+ i 1) (+ a (rc-big i)))  a)) 0 0))
+(: _ (assert (lit? rc-ssum) (285 = (rc-ssum 10)) ((rc-ssum 30) = sref)             ; fixnum fast path == interp
         (95.0 = (rc-fsum 20)) ((rc-fsum 20) = fref)                                ; GATE 1: float call-out -> gem, == interp
         (100000000000000000000 = (rc-bsum 100)) ((rc-bsum 100) = bref))            ; GATE 2: sum overflows fixnum -> bignum, == interp
    (say err "test/glaze-x86: call-out recognizer -- a global-target sum glazes (fast path + gate1 float + gate2 overflow) ok\n"))
+
+; CAPTURED / multi-arg CALL-OUT (calloutinfo-frame + njit-calloutframe): F read from the [imps args]
+; frame, not baked. rc-summer captures f -> `(\ f n ..)`; the frame native reads F/N by index, hand-rolls
+; lvm_ret(n=a), deopts to value[1]=e (which captures F). == interp across the fast path + both gates.
+(: (rc-summer f) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0)))          ; captured: (\ f n ..)
+(: (rc-hosum f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0))               ; multi-arg: f a genuine 2nd frame arg
+(: cs (rc-summer rc-sq)  cf (rc-summer rc-half)  cb (rc-summer rc-big)
+   _ (assert (lit? cs) (285 = (cs 10)) ((cs 30) = sref)                                    ; captured fixnum fast path == interp
+        (95.0 = (cf 20)) ((cf 20) = fref)                                                  ; GATE 1 (captured float)
+        (100000000000000000000 = (cb 100)) ((cb 100) = bref)                              ; GATE 2 (captured overflow -> bignum)
+        (285 = (rc-hosum rc-sq 10)) ((rc-hosum rc-sq 30) = sref)                          ; multi-arg HO sum == interp
+        (95.0 = (rc-hosum rc-half 20)))
+   (say err "test/glaze-x86: call-out recognizer -- captured + multi-arg (frame-read F, hand-rolled ret) glaze ok\n"))
 
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
 ; so the LOADER auto-ev's them and srcrec records their source (a body-less `:` define -- inside a

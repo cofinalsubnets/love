@@ -22,6 +22,7 @@
    loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
    loopinfo-n (glaze 'loopinfo-n)  njit-loop-n (glaze 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges
    calloutinfo (glaze 'calloutinfo)  jitcalloutx (glaze 'jitcalloutx)       ;   + the CALL-OUT loop: a counted sum whose body calls a global closure (the stackless bridge)
+   calloutinfo-frame (glaze 'calloutinfo-frame)  njit-calloutframe (glaze 'njit-calloutframe)   ;   ... and its CAPTURED / multi-arg sibling (F read from the [imps args] frame)
    qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
    ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt). The pre-analysis
@@ -81,6 +82,11 @@
                     (: ci (calloutinfo s)  fv (? ci (gv ci 0) 0)
                        (? (&& ci (lit? fv))
                           (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s))
+                     ; CAPTURED / multi-arg call-out: F (and the bound) are FRAME params -> read from the
+                     ; [imps args] frame, no bake; deopt to value[1]=e (the bytecode twin, which captures F).
+                     (: cf (calloutinfo-frame s)
+                        (? cf
+                           (: _ (pin fires () (+ 1 (peep fires () 0))) (njit-calloutframe s (cap cf) (caup cf) a e))
                       ; GROUP lane (always-on) -- a reusable closure
                       ; (\ frame.. <first-order mutually-recursive arith group>) whose tail calls the group.
                       ; auto-ev can't reach this (never gets the closure body as a callable-later unit); natjit
@@ -106,7 +112,7 @@
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) 'x64 e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
                             (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym 'x64 e s))
-                            e))))))))))
+                            e))))))))))))
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
  _ (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
