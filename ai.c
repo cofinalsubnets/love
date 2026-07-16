@@ -3462,7 +3462,7 @@ static ai_inline struct ai*ioput_chain(struct ai*g, word _, uintptr_t off) {
   g = ioputx(g, AB(g->sp[0]), off); }
  // a `(mono (run datum))` chain is a GLUED MONADIC -> print the source `run`+`datum`
  // (the reverse of opfix's fusion: *5, +(-3), $$0). a reader-built mono always reparses:
- // the reader only fuses where it round-trips (* to a bare datum, +/- to ( ' " @ ~ #).
+ // the reader only fuses where it round-trips (* to a bare datum, +/- to ( ' " @ ~ # `).
  else if ((n = add_name(g, A(g->sp[0]))) && len(n) == 4 && !memcmp(txt(n), "mono", 4)
           && chainp(B(g->sp[0])) && !chainp(BB(g->sp[0]))                                 // (mono X)
           && chainp(AB(g->sp[0])) && chainp(B(AB(g->sp[0]))) && !chainp(BB(AB(g->sp[0])))) {  // X = (run datum)
@@ -4236,10 +4236,10 @@ static struct ai *ioparse(struct ai *g, bool multi) {
     bool opp = c != '-' && c != '+' && !op_break(c);
     if (!opp && (c == '-' || c == '+')) {              // +/- lead numbers and names (kebab), EXCEPT
      if (!ai_ok(g = zgetc(g))) return g;                // glued to a constructor datum -- +'(..),
-     int cpm = g->b;                                   // -(f x), +@(..), +~(..), +"s", +#(..) --
+     int cpm = g->b;                                   // -(f x), +@(..), +~(..), +"s", +#(..), +`(..) --
      if (cpm != EOF && !ai_ok(g = zungetc(g, cpm))) return g;  // where they are monadic runs (net, neg)
      opp = cpm == '(' || cpm == '\'' || cpm == '"' ||
-           cpm == '@' || cpm == '~' || cpm == '#'; }
+           cpm == '@' || cpm == '~' || cpm == '#' || cpm == '`'; }
     if (opp) {
      int lead = c;                                     // the run's first char: '\' never fuses (form space)
      g = ioread1op(g, c, &pending);                    // sigil: a plain symbol, factored by opfix later

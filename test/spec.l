@@ -351,7 +351,7 @@
 ; factor stays atomic (&& >>= :- ?-). a sigil at one binds TIGHTEST; the CURRY LAW folds operands
 ; missing at the end of a list to the partial application. the VALENCE LAW: glued is monadic,
 ; spaced is dyadic -- everywhere, HEAD INCLUDED ((<x = y) is (= (cap x) y)); only : ? \ stay the
-; form's operator at head (they take the whole list); + and - fuse only to ( ' " @ ~ # (-3 a number,
+; form's operator at head (they take the whole list); + and - fuse only to ( ' " @ ~ # ` (-3 a number,
 ; -x a name, -(f x) negate). the monadic words: < cap, > cup (<< >> <> >< the compounds), + net,
 ; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, . dot. the COMMA is the
 ; loosest layer, above infix: a lone one-char datum (never fused), the list split into CLAUSES at
