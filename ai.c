@@ -202,6 +202,7 @@ lvm_t lvm_kcall,
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_litp, lvm_hotp,
  lvm_nif,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
+ lvm_nifx,        // ... with an EXTRAS word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the PLAIN twin and the image revert (img_nif_interp) never dereferences a pack
  lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
 // plain lvm_t list, which fixes the 4-argument ap signature. lvm_vbin
@@ -821,6 +822,7 @@ lvm_t lvm_fault;
  _(nif_tray, "tray", s3(lvm_tray))\
  _(nif_iota, "iota", s1(lvm_iota))\
  _(nif_nif, "nif", s4(lvm_nif))\
+_(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_rank, "rank", s1(lvm_rank))\
  _(nif_alen, "alen", s1(lvm_alen)) _(nif_shape, "shape", s1(lvm_shape))\
  _(nif_atype, "atype", s1(lvm_atype))\
@@ -5094,6 +5096,61 @@ lvm(lvm_nif) {
  z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
 #endif
  return Sp[3] = word(k + 2), Sp += 3, Ip++, Continue(); }
+
+lvm(lvm_nifx) {
+ word codebuf = Sp[0];                        // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity Sp[4]=extras
+ intptr_t ar = oddp(Sp[3]) ? getcharm(Sp[3]) : 0;
+ if (!(strp(codebuf) || bufp(codebuf)) || ar < 1) return Sp[4] = nil, Sp += 4, Ip++, Continue();
+ uintptr_t n = len(bytes_of(codebuf));
+ if (n == 0) return Sp[4] = nil, Sp += 4, Ip++, Continue();
+#if __STDC_HOSTED__
+ Have(11 + Width(struct ai_fz));              // 11 covers both cells (7/9 words) + tag + fz
+ size_t maplen = code_maplen(n);
+ void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+ if (base == MAP_FAILED) return Sp[4] = nil, Sp += 4, Ip++, Continue();
+ struct ai_str *s = ini_str((struct ai_str*) base, n);
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);     // reload codebuf: a GC in Have may have moved it
+ if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
+  return munmap(base, maplen), Sp[4] = nil, Sp += 4, Ip++, Continue();
+#ifndef __wasm__                               // wasm has no clear_cache intrinsic (and no native code: mprotect PROT_EXEC fails above, answering nil)
+ __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is NOT coherent with the freshly
+#endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
+#else
+ Have(str_type_width + b2w(n) + 11);          // freestanding: HHDM is RWX, a heap copy runs
+ struct ai_str *s = ini_str((struct ai_str*) Hp, n); Hp += str_type_width + b2w(n);
+ memcpy(txt(s), txt(bytes_of(Sp[0])), n);
+ __builtin___clear_cache(txt(s), txt(s) + n);  // same I-cache flush on the freestanding (RWX) path
+#endif
+ union u *k = (union u*) Hp;
+ if (ar == 1) {                               // 7-word direct-entry cell: nif + the extras slot
+  Hp += 8;
+  k[0].ap = (lvm_t*) txt(s);                  // header (== code, out-of-pool): finalizer dead-detect
+  k[1].x  = Sp[2];                            // src   (value[-1], for =/show)
+  k[2].ap = (lvm_t*) txt(s);                  // code  (value[0]): the emitted body, the entry
+  k[3].x  = Sp[1];                            // interp(value[1]): deopt fallback
+  k[4].ap = lvm_ret;                          // value[2]: fast-path return
+  k[5].x  = putcharm(0);                      // ret n=1
+  k[6].x  = Sp[4];                            // extras (value[3]+8 = Ip+32): GC-walked, image-encoded
+  tagthread(k, 7);
+ } else {                                     // 9-word lvm_cur cell: natn + the extras slot
+  Hp += 10;
+  k[0].ap = (lvm_t*) txt(s);                  // header (out-of-pool): finalizer dead-detect
+  k[1].x  = Sp[2];                            // src (value[-1])
+  k[2].ap = lvm_cur;                          // value[0]: curry to saturation
+  k[3].x  = putcharm(ar);
+  k[4].ap = (lvm_t*) txt(s);                  // native body (lvm_cur resume Ip+2)
+  k[5].x  = Sp[1];                            // interp: deopt fallback
+  k[6].ap = lvm_ret;
+  k[7].x  = putcharm(ar - 1);                 // ret pops n=arity
+  k[8].x  = Sp[4];                            // extras at Ip+32 from the body entry (same offset as arity-1)
+  tagthread(k, 9);
+ }
+#if __STDC_HOSTED__
+ struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
+ z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
+#endif
+ return Sp[4] = word(k + 2), Sp += 4, Ip++, Continue(); }
+
 
 // (bcopy dst doff src soff n) — copy n bytes from src[soff..] into buf dst at
 // doff. src may be a string or buf; dst must be a buf. Ranges are clamped to

@@ -34,6 +34,7 @@
    calloutinfo-frame (glaze 'calloutinfo-frame)  njit-calloutframe (glaze 'njit-calloutframe)   ;   ... and its CAPTURED / multi-arg sibling (F read from the [imps args] frame)
    qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
+   njit-amble (glaze 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
    ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt). The pre-analysis
    ; LOWERING hook (book['welow], church + HOF) now lives PRE-EGG in ai/ev.l -- the sole welow, no shadow here.
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
@@ -126,7 +127,10 @@
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) arch e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
                             (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
-                            e))))))))))))
+                            ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
+                            ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
+                            (: aj (njit-amble s a e gv arch)
+                               (? aj (: _ (pin fires () (+ 1 (peep fires () 0))) aj) e))))))))))))))
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
  _ (assert
@@ -135,7 +139,7 @@
        (&& (31 = (ev '(: f (\ x (+ (* x 3) 1)) (f 10))))            ; leaf in a let body
            (fired? n)))                                             ; ... the hook fired on it
     (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum
-    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; non-arith body -> stays bytecode, still right
+    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the AMBLE lane owns it now, still right
     ; --- an embedded FLOAT-RESULT leaf: native gem box at creation, == interp, deopts on a non-float arg ---
     (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))   ; f built by ala -> the float lane fires
        (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (fr 4) ((\ x (+ (* x 1.5) 2.0)) 4))   ; boxes a gem, == the interpreter

@@ -217,6 +217,35 @@
         (95.0 = (rc-hosum rc-half 20)))
    (say err "test/glaze-x86: call-out recognizer -- captured + multi-arg (frame-read F, hand-rolled ret) glaze ok\n"))
 
+; AMBLE (njit-amble, hook.l's LAST lane): the universal boring-tier translation. shapes every
+; other lane declines -- a symbolic chain walker, a consing reverse, a loop whose per-step calls
+; nest (no fold shape) -- glaze at creation: tagged values, Sp-slot temporaries (GC roots), drive
+; call-outs, RESTART deopt (original frame untouched). == interp across the fast path, the arith
+; overflow deopt (-> bignum via the twin), the non-fixnum entry deopt, and native cons. the ()
+; literal rides value[1] as the empty MINT (li 1 would be the charm 0 -- the data.l 0-fossil bug).
+; ALL call-bearing bodies DECLINE in v1 (two lessons: a leaked named-let `go` is indistinguishable
+; from a global -- the rc4 stale-sibling; and a pending drive frame's retB is a stack-interior
+; pointer the GC walk traps on -- the uu2lean storm), so am-dbl below is a DECLINE witness: it
+; stays bytecode and stays right.
+(: (am-cnt l k a) ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) k) (+ a 1) a)) a)) l a))
+(: (am-rev l acc) ((: (go l a) (? (two? l) (go (cup l) (link (cap l) a)) a)) l acc))
+(: (am-mk i acc) (? (< i 1) acc (am-mk (- i 1) (link (% i 7) acc))))
+(: am-l (am-mk 200 ()))
+(: am-dbl (: F (\ x (+ x x)) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (F (F i)))) a)) 0 0))))
+(: _ (: n0 (peep fires () 0)
+       wk (ev '(\ l k a ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) k) (+ a 1) a)) a)) l a)))
+       ; references are LITERALS: an in-file "interp twin" is impossible -- the hook fires at
+       ; base-ev's ala too, so any reference closure ambles as well (how bref nearly lied).
+       (assert (fired? n0)                                                          ; the walker ambled at creation
+          (29 = (wk am-l 3 0)) (29 = (am-cnt am-l 3 0))                             ; fast path; i%7==3 for i in 1..200 -> 29
+          (4611686018427387932 = (wk am-l 3 4611686018427387903))                   ; +1 past max fixnum -> restart -> bignum
+          (30.5 = (wk am-l 3 1.5))                                                  ; gem acc -> arith guard deopt -> generic +
+          (0 = (wk () 3 0)) (7 = (wk 42 3 7))                                      ; ()/non-chain -> two? false -> a
+          ((am-rev (am-rev am-l ()) ()) = am-l)                                    ; native cons round-trips against the interp-built list (()-tailed)
+          (id? () (am-rev () ()))                                                  ; the () literal is the MINT, not charm 0
+          (19800 = (am-dbl 100))))                                                 ; call-bearing body: DECLINED to bytecode, still right
+   (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + nested call-outs, restart deopts) ok\n"))
+
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
 ; so the LOADER auto-ev's them and srcrec records their source (a body-less `:` define -- inside a
 ; base-ev block they'd be local + un-recorded). swq is a leaf callee; swsum has a named-let loop,

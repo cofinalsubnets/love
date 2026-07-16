@@ -612,7 +612,7 @@ static struct ai *boot(struct ai *g, bool argp) {
     // HIDE the raw machine-code-execution seam from USERS (who boot this image): the glaze folded
     // `nif` into its closures, so pulling it off the book is safe. eat/toast/nif off, then seal `book`.
     // The no-image dev/test binary keeps them (egg.l defers book-removal) as the test knob.
-    g = ai_evals_(g, "(: _ (pull book 'eat 0) _ (pull book 'toast 0) _ (pull book 'nif 0) (pull book 'book 0))");
+    g = ai_evals_(g, "(: _ (pull book 'eat 0) _ (pull book 'toast 0) _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
     int rc = image_dump_path ? image_dump(g, image_dump_path) : image_bake(g);
     if (rc) fprintf(stderr, "ai: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
