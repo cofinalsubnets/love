@@ -768,8 +768,10 @@ sticks to the neutral surface, and no new assembler exists anywhere.
   callee-saved r11-r14 refuse. clobbers (`"memory"`/`"cc"`/reg names) are
   validated but need no action yet: an asm-containing fn turns register
   HOMING off (gen.l's g 'hasasm, the 'sys-gate precedent), so nothing
-  lives in a register across any statement -- that flag is the seam the
-  coming register allocator must honor (asm = a precolor + clobber node).
+  lives in a register across any statement. the allocator arc (the alive
+  pass: per-call wrap sets + zero-crossing locals homing through calls,
+  landed 2026-07-16) KEEPS this gate -- asm-as-precolor+clobber-node waits
+  for a consumer that needs homes in an asm fn.
 * deferred until a consumer demands them: an AT&T template front-end (the
   Linux floor), "f" float operands, asm goto (Linux x86 requires it),
   named [sym] operands, top-level asm.
