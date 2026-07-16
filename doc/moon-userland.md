@@ -345,11 +345,22 @@ tracking:
 
 Verified `sizeof h->prefix + 1 + sizeof h->name + 1` = 257 (155+1+100+1) native == gcc; laws
 in `law.l` prove both the member-sizeof bound *and* `sizeof buf` reading buf's own local array
-type fold. **16/17 tar src now compile** (only `compare.c` remains).
+type fold. **16/17 tar src now compile** (only `compare.c` remained — landed below).
 
-**The 1 remaining src file is a real front-end gap, not headers:**
-- `compare.c` — a **cpp-level divergence**: the gcc-flattened source parses fine, but mooncc's
-  own preprocessor produces the parse error. Needs bisecting with mooncc's cpp, not gcc's `-E`.
+**`compare.c` — LANDED (`crew/moon/include/linux/fd.h` shim).** NOT a cpp divergence (the earlier
+guess was wrong — bisecting proved it). The real chain: `config.h` sets `HAVE_LINUX_FD_H 1`, so
+`compare.c` does `#include <linux/fd.h>`; mooncc has no such header and falls through to the real
+`/usr/include/linux/fd.h`, whose `struct floppy_fdc_state` carries **bitfield members**
+(`unsigned int rawcmd:2;`) — and mooncc's `pmembers` doesn't parse the `: width` syntax, so the
+parse fails DEEP in a kernel header. compare.c uses only `FDFLUSH` from it (`#ifdef FDFLUSH`
+guards the one `ioctl` call), so a 3-line shim (`#include <sys/ioctl.h>` + `#define FDFLUSH
+_IO(2,0x4b)`) stops the fallthrough. Verified `FDFLUSH` = 587 native == system. **17/17 tar src
+compile.** ⚠ the bisection method: flatten the failing header with `gcc -E -P` (system headers,
+so it resolves), then binary-search brace-BALANCED prefixes with mooncc (`-I` must be ABSOLUTE —
+a relative `-I` breaks the moment the harness `cd`s elsewhere, the false-positive that first
+fingered the wrong struct). **Bitfields stay an unimplemented parser+gen gap** — safe (refused,
+not miscompiled), and no tar TU actually reads a bitfield VALUE; implement when a package needs
+one, not for a header it only declares.
 
 NEXT for a *runnable* tar: the declared-not-yet-implemented libc functions need bodies in
 `nolibc.c` (execlp via execve, creat via open, system, the pwd/grp stubs), then link tar's
