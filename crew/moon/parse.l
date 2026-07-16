@@ -64,6 +64,14 @@
              (&& ((tkk t) = 'id) (member? (tkv t) qualid))
               (: r >ts (? (peekp r "(") (pquals (skipbal >r 1)) (pquals r)))
              ts)))
+   ; skip a TRAILING run of __attribute__((..)) / __asm__(..) -- the decoration
+   ; glibc hangs off a declarator's tail (`int f(void) __attribute__((__nothrow__));`,
+   ; `extern int x __asm__("y");`). balance-skip the parens; the codegen owes nothing.
+   (patt ts)
+    (? (! (two? ts)) ts
+       (&& ((tkk <ts) = 'id) (member? (tkv <ts) `("__attribute__" "__asm__" "__asm")))
+        (: r >ts (? (peekp r "(") (patt (skipbal >r 1)) (patt r)))
+       ts)
    ; does the leading declaration-specifier run carry `static`? scans the front
    ; run of qualifier + type-specifier keywords (and balance-skips attribute ids),
    ; the same tokens pquals drops, and flags the `static` storage class -- so a
@@ -969,14 +977,15 @@
                                (: rp (? (krhead? ps >ts2) (pkr ps >ts2) (pparams ps >ts2 ()))
                                   (? (! (two? rp)) ()
                                      (: _ (pin (ps 'sigs) name `(rty (map caup <rp) <>>rp))
-                                        (? (peekp <>rp ";") `(`('proto name) (cup (caup rp)))
+                                        aft (patt <>rp)                     ; a trailing __attribute__((..)) after the proto/fn declarator
+                                        (? (peekp aft ";") `(`('proto name) (cup aft))
                                            ; more comma-separated declarators SHARING base -- each `* nm (params)`
                                            ; is another prototype (register its sig); ends at `;`. (`void *malloc
                                            ; (size_t), free(void*)` / ai.h's `struct ai *ai_ini(void), *ai_ini_m(..)`)
-                                           (peekp <>rp ",")
-                                            (: rest (mproto ps base (cup (caup rp)))
+                                           (peekp aft ",")
+                                            (: rest (mproto ps base (cup aft))
                                                (? (two? rest) `(`('proto name) <rest) ()))
-                                           (: b (pblock ps <>rp)
+                                           (: b (pblock ps aft)
                                               (? (two? b) `(`('fn name <rp <b) <>b) ()))))))
                                ; a global declaration; the first declarator's stars came off `sr`
                                (: (one ts3 nm t2)                        ; t2 is the element type (stars included)
@@ -1005,13 +1014,13 @@
                                        (: r (pinit ps >ts3)
                                           (? (two? r) `(`(nm t2 <r) <>r) ()))
                                       `(`(nm t2 ()) ts3))
-                                  first (one ts2 name (? (two? fpty) fpty rty))
+                                  first (one (patt ts2) name (? (two? fpty) fpty rty))
                                   (? (! (two? first)) ()
                                      (: (more ts3 acc)
                                          (? (peekp ts3 ",")
                                             (: dr (pdtor ps >ts3 base)
                                                (? (! (two? dr)) ()
-                                                  (: r (one <>dr (cap (cap dr)) (caup (cap dr)))
+                                                  (: r (one (patt <>dr) (cap (cap dr)) (caup (cap dr)))
                                                      (? (two? r) (more <>r (link <r acc)) ()))))
                                             ; a declarator whose type is a FUNCTION type (a function-type
                                             ; typedef: ai.h's `lvm_t lvm_ret0, lvm_cur, ..;`) DECLARES a

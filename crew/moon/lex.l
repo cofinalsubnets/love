@@ -141,6 +141,8 @@
                               (? (n <= j) ()
                                  (: c2 (src j)
                                     (? (c2 = 34) `(acc2 (j + 1))
+                                       (&& (c2 = 92) (&& ((j + 1) < n) ((src (j + 1)) = 10))) (eat (j + 2) acc2)   ; \<nl> splice: the pair vanishes, the string reads on
+                                       (&& (c2 = 92) (&& ((j + 2) < n) (&& ((src (j + 1)) = 13) ((src (j + 2)) = 10)))) (eat (j + 3) acc2)   ; \<cr><nl> splice
                                        (c2 = 10) ()
                                        (&& (c2 = 92) ((j + 1) < n))
                                         (: r (escseq (j + 1))

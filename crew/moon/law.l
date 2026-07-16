@@ -40,6 +40,7 @@
       (! (clex "'ab'")) (! (clex "'"))                       ; malformed literals refuse
       (= (tn (caup (clex "\"hi\"")) 0) (L 'str "hi" 1))
       (= (tn (caup (clex "\"a\\nb\"")) 0) (L 'str "a\nb" 1))
+      (= (tn (caup (clex "\"ab\\\ncd\"")) 0) (L 'str "abcd" 1))   ; \<newline> inside a string SPLICES (the pair vanishes) -- tar's --help strings
       (! (clex "\"open"))                                    ; unterminated string refuses
       (! (clex "int @"))                                     ; not C: the lex error rides up
       (= (tally (caup (clex "abc"))) 3)                   ; form-feed + vertical-tab are WHITESPACE (GNU page breaks); real FF/VT bytes here
@@ -441,6 +442,15 @@
          (cast "int g(char *p){return *p;}"))
       (= (cast "__attribute__((unused)) static int h(void){return 1;}")
          (cast "int h(void){return 1;}"))
+      ; TRAILING __attribute__((..)) / __asm__(..) on a declarator (glibc's prototypes:
+      ; `int f(void) __attribute__((__nothrow__));`) skip the same -- proto, fn def, data, multi
+      (= (cast "int f(int n) __attribute__((__nothrow__ , __leaf__));")
+         (cast "int f(int n);"))
+      (= (cast "int g(void) __attribute__((__nothrow__)){return 0;}")
+         (cast "int g(void){return 0;}"))
+      (= (cast "int v __attribute__((aligned(8)));")  (cast "int v;"))
+      (= (cast "int a __attribute__((unused)), b;")   (cast "int a, b;"))
+      (= (cast "extern int x __asm__(\"realx\");")     (cast "extern int x;"))
       (= (cast "int main(void){register int a=3; const int b=4; return a+b;}")
          (cast "int main(void){int a=3; int b=4; return a+b;}"))
       (= (cast "int f(void const *p){return 0;}")             ; a qual between type and star keeps the pointer
