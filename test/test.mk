@@ -547,6 +547,15 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_a64.out; } \
 	    || { echo "FAIL raw-arm64 corpus (exit $$s)"; exit 1; }; \
 	  echo "test_raw_arm64: the gcc-free aarch64 ai -- mooncc objects, mksys-arm64, our linker, corpus under qemu"
+# moon-tar -- the userland cousin of test_raw: build GNU tar 1.13 (a real third-
+# party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
+# prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar
+# interop. The third moon-userland rung (doc/moon-userland.md). Opt-in (not in
+# test_all): tar's source is imported -- point TARSRC at a ./configure'd tar-1.13
+# tree; SKIPS cleanly without one, like test_raw_arm64 without qemu.
+.PHONY: moon-tar
+moon-tar: host out/host$(hsuf)/mooncc
+	@TARSRC="$(TARSRC)" ./tools/moon-tar.sh
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
