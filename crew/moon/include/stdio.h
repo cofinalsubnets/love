@@ -46,16 +46,24 @@ int    ferror(FILE*);
 int    feof(FILE*);
 void   clearerr(FILE*);
 FILE  *fdopen(int, char const*);
+FILE  *tmpfile(void);
 void   setbuf(FILE*, char*);
 int    setvbuf(FILE*, char*, int, size_t);
 int    scanf(char const*, ...);
 int    fscanf(FILE*, char const*, ...);
 int    sscanf(char const*, char const*, ...);
+FILE  *popen(char const*, char const*);
+int    pclose(FILE*);
 /* pre-C89 gnulib sources (argmatch.c ..) call exit/abort with no <stdlib.h>,
    leaning on the implicit int decl mooncc refuses -- surface them here, the
-   same "the ladder leans on cross-header provision" note above covers it. */
+   same "the ladder leans on cross-header provision" note above covers it.
+   the str trio below is the same story: GNU getopt.c's non-GNU-libc branch
+   includes only stdio.h and calls them implicitly (m4-1.4). */
 void   exit(int);
 void   abort(void);
+size_t strlen(char const*);
+int    strcmp(char const*, char const*);
+int    strncmp(char const*, char const*, size_t);
 #include <stdarg.h>
 int    vprintf(char const*, va_list);
 int    vfprintf(FILE*, char const*, va_list);

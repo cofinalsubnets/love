@@ -262,12 +262,36 @@ size_t strcspn(char const *s, char const *set) {
   for (; s[n]; n++) { char const *p = set; while (*p && *p != s[n]) p++; if (*p) break; }
   return n; }
 int isupper(int c) { return c >= 65 && c <= 90; }
+int islower(int c) { return c >= 97 && c <= 122; }
 int isalpha(int c) { return (c >= 65 && c <= 90) || (c >= 97 && c <= 122); }
+int isdigit(int c) { return c >= 48 && c <= 57; }
+int isalnum(int c) { return isalpha(c) || isdigit(c); }
+int isxdigit(int c) { return isdigit(c) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102); }
 int isspace(int c) { return c == 32 || (c >= 9 && c <= 13); }
 int isprint(int c) { return c >= 32 && c < 127; }
+int iscntrl(int c) { return (c >= 0 && c < 32) || c == 127; }
+int ispunct(int c) { return isprint(c) && c != 32 && !isalnum(c); }
 int tolower(int c) { return (c >= 65 && c <= 90) ? c + 32 : c; }
 char *strchr(char const *s, int c) { for (;; s++) { if (*s == (char) c) return (char *) s; if (!*s) return 0; } }
-char *strerror(int e) { static char b[24]; snprintf(b, sizeof b, "error %d", e); return b; }
+/* the classic table (errno 1..34), the range real packages print; past it the
+ * number speaks for itself. the texts are the canonical POSIX ones -- m4's
+ * check suite string-compares "No such file or directory". */
+static char const *const __errs[] = { 0,
+  "Operation not permitted", "No such file or directory", "No such process",
+  "Interrupted system call", "Input/output error", "No such device or address",
+  "Argument list too long", "Exec format error", "Bad file descriptor",
+  "No child processes", "Resource temporarily unavailable", "Cannot allocate memory",
+  "Permission denied", "Bad address", "Block device required",
+  "Device or resource busy", "File exists", "Invalid cross-device link",
+  "No such device", "Not a directory", "Is a directory",
+  "Invalid argument", "Too many open files in system", "Too many open files",
+  "Inappropriate ioctl for device", "Text file busy", "File too large",
+  "No space left on device", "Illegal seek", "Read-only file system",
+  "Too many links", "Broken pipe", "Numerical argument out of domain",
+  "Numerical result out of range" };
+char *strerror(int e) {
+  if (e > 0 && e <= 34) return (char *) __errs[e];
+  static char b[24]; snprintf(b, sizeof b, "error %d", e); return b; }
 int strcasecmp(char const *a, char const *b) {
   while (*a && tolower((unsigned char) *a) == tolower((unsigned char) *b)) { a++; b++; }
   return tolower((unsigned char) *a) - tolower((unsigned char) *b); }
@@ -605,6 +629,8 @@ struct _IO_FILE {
   int line;                                  /* flush on newline */
   int err;
   int heap;                                  /* buf and FILE both off malloc (fopen) */
+  int pid;                                   /* popen's child, for pclose's wait */
+  int un;                                    /* ungetc's pushback byte + 1 (0 = none) */
   int len, cap;
   unsigned char *buf;
 };
@@ -630,6 +656,10 @@ int fflush(FILE *f) {
     int r = __fdrain(stdout);
     return __fdrain(stderr) || r ? EOF : 0; }
   return __fdrain(f); }
+void setbuf(FILE *f, char *buf) {          /* NULL = unbuffered (m4 -e); else a BUFSIZ block */
+  __fdrain(f);
+  if (buf) { f->buf = (unsigned char *) buf; f->cap = 8192; f->line = 0; }
+  else f->cap = 0; }
 int fputc(int c, FILE *f) {
   unsigned char b = (unsigned char) c;
   if (!f->cap) { if (__wall(f->fd, &b, 1) < 0) { f->err = 1; return EOF; } return b; }
@@ -681,15 +711,18 @@ int fclose(FILE *f) {
   return r; }
 int fseek(FILE *f, long off, int wh) {
   if (__fdrain(f)) return -1;
+  f->un = 0;                                 /* ISO: a seek discards the pushback */
   return lseek(f->fd, off, wh) < 0 ? -1 : 0; }
+void rewind(FILE *f) {
+  if (fseek(f, 0, 0) == 0) f->err = 0; }
 long ftell(FILE *f) {
   if (__fdrain(f)) return -1;
   return lseek(f->fd, 0, SEEK_CUR); }
 int fileno(FILE *f) { return f->fd; }
 
-/* ---- the one formatter under fprintf and snprintf: %s %c %d %u %x with the
- * l/z widths -- the shapes the host actually speaks (no floats anywhere; ai
- * prints its own numbers). sink+ctx so neither caller stages a bound buffer. */
+/* ---- the one formatter under fprintf and snprintf: %s %c %d %u %x %o and
+ * the float lanes, with l/z widths, %[-0]W.P flags. sink+ctx so neither
+ * caller stages a bound buffer. */
 static void __femit(void *ctx, int c) { fputc(c, (FILE *) ctx); }
 struct __sctx { char *p; size_t n, at; };
 static void __semit(void *ctx, int c) {
@@ -710,6 +743,64 @@ static void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long v, unsig
   if (neg) put(ctx, 45);
   if (!left && zero) __pad(put, ctx, pad, 48);
   while (nd) put(ctx, tmp[--nd]);
+  if (left) __pad(put, ctx, pad, 32); }
+/* the float lanes: %f %e %g (+ E/G), classic digit-at-a-time over doubles --
+ * a ~1ulp-per-digit floor, not a shortest-round-trip dtoa; an integer part
+ * past 2^64 rides the %e lane (m4's format builtin, error messages). */
+static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
+                     int prec, int width, int zero, int left) {
+  char buf[64];
+  int n = 0, neg = v < 0;
+  if (neg) v = -v;
+  if (prec < 0) prec = 6; else if (prec > 30) prec = 30;
+  int up = conv == 'E' || conv == 'G';
+  if (up) conv += 32;
+  if (v != v) { buf[0] = 'n'; buf[1] = 'a'; buf[2] = 'n'; n = 3; neg = 0; zero = 0; }
+  else if (v != 0 && v * 0.5 == v) { buf[0] = 'i'; buf[1] = 'n'; buf[2] = 'f'; n = 3; zero = 0; }
+  else {
+    int e = 0, g = conv == 'g';
+    double w = v;
+    if (w) { while (w >= 10) { w /= 10; e++; } while (w < 1) { w *= 10; e--; } }
+    if (g) { if (!prec) prec = 1;
+             conv = (e < -4 || e >= prec) ? 'e' : 'f';
+             prec = conv == 'e' ? prec - 1 : prec - 1 - e;
+             if (prec < 0) prec = 0; }
+    if (conv == 'f' && v >= 18446744073709551615.0) conv = 'e';
+    if (conv == 'e') {
+      double r = 0.5;
+      for (int i = 0; i < prec; i++) r /= 10;
+      w = (v ? w : 0) + r;
+      if (w >= 10) { w /= 10; e++; }
+      int d = (int) w;
+      buf[n++] = (char) (48 + d); w = (w - d) * 10;
+      if (prec) buf[n++] = '.';
+      for (int i = 0; i < prec; i++) { d = (int) w; if (d > 9) d = 9; buf[n++] = (char) (48 + d); w = (w - d) * 10; }
+      if (g) { while (n && buf[n - 1] == '0') n--; if (n && buf[n - 1] == '.') n--; }
+      buf[n++] = up ? 'E' : 'e';
+      buf[n++] = e < 0 ? '-' : '+';
+      int ae = e < 0 ? -e : e;
+      char t[8]; int tn = 0;
+      do { t[tn++] = (char) (48 + ae % 10); ae /= 10; } while (ae);
+      if (tn < 2) t[tn++] = '0';
+      while (tn) buf[n++] = t[--tn]; }
+    else {
+      double r = 0.5;
+      for (int i = 0; i < prec; i++) r /= 10;
+      v += r;
+      unsigned long ip = (unsigned long) v;
+      double fr = v - (double) ip;
+      char t[24]; int tn = 0;
+      do { t[tn++] = (char) (48 + ip % 10); ip /= 10; } while (ip);
+      while (tn) buf[n++] = t[--tn];
+      if (prec) { buf[n++] = '.';
+        for (int i = 0; i < prec; i++) { fr *= 10; int d = (int) fr; if (d > 9) d = 9; buf[n++] = (char) (48 + d); fr -= d; } }
+      if (g && prec) { while (n && buf[n - 1] == '0') n--; if (n && buf[n - 1] == '.') n--; } } }
+  int len = n + (neg ? 1 : 0);
+  int pad = width > len ? width - len : 0;
+  if (!left && !zero) __pad(put, ctx, pad, 32);
+  if (neg) put(ctx, 45);
+  if (!left && zero) __pad(put, ctx, pad, 48);
+  for (int i = 0; i < n; i++) put(ctx, buf[i]);
   if (left) __pad(put, ctx, pad, 32); }
 static void __fmt(void (*put)(void *, int), void *ctx, char const *fmt, va_list ap) {
   for (; *fmt; fmt++) {
@@ -751,6 +842,8 @@ static void __fmt(void (*put)(void *, int), void *ctx, char const *fmt, va_list 
       __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 16, 0, width, zero, left);
     else if (*fmt == 'o')
       __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 8, 0, width, zero, left);
+    else if (*fmt == 'f' || *fmt == 'F' || *fmt == 'e' || *fmt == 'E' || *fmt == 'g' || *fmt == 'G')
+      __fmtflo(put, ctx, va_arg(ap, double), *fmt, prec, width, zero, left);
     else if (*fmt == 'p') { put(ctx, 48); put(ctx, 120); __fmtnum(put, ctx, (unsigned long) va_arg(ap, void *), 16, 0, 0, 0, 0); }
     else if (*fmt == '%') put(ctx, 37);
     else { put(ctx, 37); if (*fmt) put(ctx, *fmt); else fmt--; } }
@@ -990,6 +1083,7 @@ long strtol(char const *s, char **endptr, int base) {
   for (int d; (d = __digval(*p)) < base; p++) { any = 1; rc = rc * base + d; }
   if (endptr) *endptr = (char *) (any ? p : s);
   return any ? sign * rc : 0; }
+double atof(char const *s) { return strtod(s, 0); }
 double strtod(char const *s, char **end) {
   char const *p = s;
   int sign = 1;
@@ -1078,6 +1172,59 @@ int system(char const *cmd) {
   int st = 0;
   while (waitpid(pid, &st, 0) < 0) if (__errno_v != EINTR) return -1;
   return st; }
+/* popen: system's shape with a pipe spliced onto the child's stdout ("r") or
+ * stdin ("w"); the child pid rides the FILE for pclose's wait (m4 esyscmd). */
+FILE *popen(char const *cmd, char const *mode) {
+  int fds[2];
+  int rd = mode[0] == 'r';
+  if (pipe(fds) < 0) return 0;
+  int pid = fork();
+  if (pid < 0) { close(fds[0]); close(fds[1]); return 0; }
+  if (pid == 0) {
+    dup2(rd ? fds[1] : fds[0], rd ? 1 : 0);
+    close(fds[0]); close(fds[1]);
+    char *av[4]; av[0] = "sh"; av[1] = "-c"; av[2] = (char *) cmd; av[3] = 0;
+    execv("/bin/sh", av);
+    _exit(127); }
+  close(rd ? fds[1] : fds[0]);
+  FILE *f = malloc(sizeof(FILE) + 4096);
+  if (!f) { close(rd ? fds[0] : fds[1]); return 0; }
+  memset(f, 0, sizeof(FILE));
+  f->fd = rd ? fds[0] : fds[1];
+  f->wr = !rd;
+  f->heap = 1;
+  f->pid = pid;
+  if (!rd) { f->buf = (unsigned char *) (f + 1); f->cap = 4096; }
+  return f; }
+int pclose(FILE *f) {
+  int pid = f->pid, st = 0;
+  int r = fclose(f);
+  if (r == EOF) return -1;
+  while (waitpid(pid, &st, 0) < 0) if (__errno_v != EINTR) return -1;
+  return st; }
+/* tmpfile: a mktemp'd /tmp file opened w+ and unlinked at once, so it lives
+ * exactly as long as the FILE (m4's diversions write it, rewind, read back). */
+FILE *tmpfile(void) {
+  char buf[16];
+  strcpy(buf, "/tmp/aiXXXXXX");
+  mktemp(buf);
+  if (!buf[0]) return 0;
+  FILE *f = fopen(buf, "w+");
+  if (f) unlink(buf);
+  return f; }
+/* mktemp: fill the trailing XXXXXX from the pid and bump until the name is
+ * free (racy by design -- the caller opens it; m4's diversion files). */
+char *mktemp(char *tmpl) {
+  size_t n = strlen(tmpl);
+  if (n < 6 || strcmp(tmpl + n - 6, "XXXXXX")) { tmpl[0] = 0; return tmpl; }
+  char *x = tmpl + n - 6;
+  unsigned long v = (unsigned long) getpid();
+  for (int k = 0; k < 100; k++, v += 7777) {
+    unsigned long w = v;
+    for (int i = 0; i < 6; i++) { x[i] = 'a' + w % 26; w /= 26; }
+    if (access(tmpl, 0) < 0) return tmpl; }
+  tmpl[0] = 0;
+  return tmpl; }
 /* one fixed "C" locale, so setlocale just answers its name. */
 char *setlocale(int cat, char const *loc) { (void) cat; (void) loc; return (char *) "C"; }
 
@@ -1085,11 +1232,31 @@ char *setlocale(int cat, char const *loc) { (void) cat; (void) loc; return (char
  * (no ungetc, so it consumes the field terminator -- tar's lone use is "%d"). */
 int getc(FILE *f) {
   unsigned char c;
+  if (f->un) { int r = f->un - 1; f->un = 0; return r; }
   long k = read(f->fd, &c, 1);
   if (k <= 0) { if (k < 0) f->err = 1; return EOF; }
   return c; }
+int ungetc(int c, FILE *f) {
+  if (c == EOF || f->un) return EOF;
+  f->un = (c & 255) + 1;
+  return c & 255; }
 int fputs(char const *s, FILE *f) { size_t n = strlen(s); return fwrite(s, 1, n, f) == n ? 0 : EOF; }
 int ferror(FILE *f) { return f->err; }
+/* sscanf, the string twin, %d only (m4 builtin.c's lone use: a divert number). */
+int sscanf(char const *s, char const *fmt, ...) {
+  va_list ap; va_start(ap, fmt);
+  int got = 0;
+  for (; *fmt; fmt++) {
+    if (*fmt == '%' && fmt[1] == 'd') {
+      char *e;
+      long v = strtol(s, &e, 10);
+      if (e == s) break;
+      *va_arg(ap, int *) = (int) v;
+      s = e; fmt++; got++; }
+    else if (*fmt == ' ') { while (*s == ' ' || (*s >= 9 && *s <= 13)) s++; }
+    else { if (*s != *fmt) break; s++; } }
+  va_end(ap);
+  return got; }
 int fscanf(FILE *f, char const *fmt, ...) {
   va_list ap; va_start(ap, fmt);
   int got = 0, c;

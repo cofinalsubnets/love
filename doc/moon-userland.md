@@ -400,6 +400,61 @@ NEXT: package this into a repeatable target (`mk/distro.mk` or the test harness)
 from the pristine upstream tree with `-DSTDC_HEADERS=1`, the 15 src + 21 libtar objects +
 `lib/fnmatch.c` + nolibc/sys/math, and gate a roundtrip against system tar. Then `less` or `m4`
 (next rungs), or the deferred bitfield parser+gen if a package finally reads one.
+(All three happened: `make moon-tar`, bitfields `908ed40c` when m4's obstack.h finally read
+one, and m4 below.)
+
+## m4 1.4 — the fourth rung, fully runnable (2026-07-16)
+
+GNU m4 1.4 builds with mooncc + nolibc + holo into a 330 KB static ELF and passes **its own
+57-check suite** (checks/ — every example lifted from the manual, stdout AND stderr compared).
+`make moon-m4 M4SRC=<a ./configure'd m4-1.4 tree>` is the repeatable target (tools/moon-m4.sh,
+the moon-tar model). m4 is the first *interesting* program up the ladder: diversions exercise
+`tmpfile`/`rewind`, `esyscmd`/`syscmd` fork a shell through `popen`, and `format` drives float
+formatting through `sprintf` — three whole subsystems tar never touched.
+
+Two compiler-level finds, both fixed in mooncc proper:
+
+- **bitfields** (`908ed40c`, the day's prerequisite): obstack.h reads them; parse `:width` +
+  LSB-first bit-cursor packing to the SysV/gcc ABI, 2-shift load, RMW store — byte-identical
+  to gcc. Took m4 src from 0/11 to 9/11 and unblocked everything below.
+- **a `\<nl>` inside a `/* */` comment is a splice** — C phase 2 (splice) runs before phase 3
+  (comments), so it never ends the logical line. mooncc's comment eater counted every newline,
+  so a `#define` whose body carried a spliced multi-line comment (regex.c's PUSH_FAILURE_POINT)
+  lost its tail to top level: cpp's `linesplit` groups a directive by line-number equality, the
+  bumped count cut the macro at the comment, and the leaked body read as a parse error. The fix
+  mirrors the splice rule the lexer already had outside comments; a law in law.l's cpp section
+  pins it. **Forensic note**: the misleading first signal was `cc: lex error` — from the STALE
+  installed `~/.local` mooncc.image (pre-`\f`-fix); probe with the fresh
+  `out/host/mooncc.image` before believing a reproduction.
+
+The rest was the usual two ladders, measured by probe + nm-diff (all library, zero compiler):
+
+- **headers**: our own `alloca.h` (one prototype; without it the `<>` resolver fell through to
+  glibc's and its `<features.h>` machinery — the compare.c lesson again), `popen`/`pclose`/
+  `tmpfile` + the `strlen`/`strcmp`/`strncmp` trio in stdio.h (GNU getopt.c's non-GNU-libc
+  branch includes ONLY stdio.h and calls them implicitly — do NOT `-D__GNU_LIBRARY__`, that
+  compiles the whole file out), `atof`/`mktemp` in stdlib.h.
+- **nolibc**: `setbuf` (m4 -e wants stdout unbuffered), `popen`/`pclose` (system()'s shape with
+  a pipe spliced on; the child pid rides a new FILE field), `sscanf` (%d, strtol-backed),
+  `mktemp`/`tmpfile` (mktemp'd, opened w+, unlinked at once), `ungetc` + a getc pushback byte
+  (cleared on fseek, per ISO), `rewind`, the ctype sextet, `atof`, a real `strerror` table
+  (errno 1–34 — the check suite string-compares "No such file or directory"), and **`__fmt`
+  grew the float lanes**: `%f %e %g` + E/G with width/precision/rounding, classic
+  digit-at-a-time (~1ulp floor, ties half-up where glibc rounds half-even; an integer part
+  past 2^64 rides the %e lane). Differentially verified against glibc printf — identical on
+  the battery except the 2.5-tie.
+- **config corrections, not source patches** (config.h is a GENERATED file describing the
+  target libc, and configure probed glibc): `HAVE_EFGCVT` off (nolibc has no `ecvt`; format.c's
+  `#else` sprintf branch is the better code anyway — note m4-1.4's format has no `%g` case in
+  either branch, faithful vintage behavior), `USE_STACKOVF` off (wants sigaltstack +
+  `sys/resource.h`; a nicety). stackovf.o and alloca.o simply aren't linked — same as their
+  Makefile under this configure answer.
+
+One debug lesson: `cgfn refuses <fn>` names the function, not the node. A temporary probe
+(print the failing expr at cgexpr's return, deepest-first) found `free`/`pclose`/`atof`/`ecvt`
+in seconds — but it CANNOT be left in: recoverable bads are a normal lane (cginl's fesc
+decline falls back to a real call), so the probe spams clean compiles. Re-add for a session,
+revert before committing.
 
 ## suggested order (LFS-shaped, easiest real C first)
 
@@ -425,8 +480,9 @@ mooncc -Icrew/moon/include -I<bzip2> -c <bzip2>/crctable.c out.o   # -> a real .
 The same ladder's cliff, from the mooncc-capability survey (2026-07-15): inline asm with
 constraints/clobbers is **absent** and there's no register allocator to bind its operands
 (stack-machine gen, doc/moon.md:141); `__attribute__` is balance-skipped, not honored (only
-`weak`/`section` act); statement-exprs, `typeof`, computed goto, bitfields, `__int128`,
-VLAs, and hundreds of `__builtin_*` are absent; no `linux/*`/`asm/*` headers, no atomics/
+`weak`/`section` act); statement-exprs, `typeof`, computed goto, `__int128`,
+VLAs, and hundreds of `__builtin_*` are absent (bitfields landed `908ed40c`); no
+`linux/*`/`asm/*` headers, no atomics/
 privileged instructions, the linker refuses foreign `.o` and has no linker-script support.
 Don't start here. Fill the userland first; the extensions the last userland packages force
 (more `__builtin_*`, attribute honesty) are the same ones the kernel needs — arrive there

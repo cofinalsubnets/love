@@ -556,6 +556,13 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 .PHONY: moon-tar
 moon-tar: host out/host$(hsuf)/mooncc
 	@TARSRC="$(TARSRC)" ./tools/moon-tar.sh
+# moon-m4 -- the fourth moon-userland rung: GNU m4 1.4 (macro processor, so it
+# exercises tmpfile/rewind diversions, popen'd esyscmd, float format), built by
+# mooncc + nolibc + holo and gated on m4's OWN 57-check suite. Opt-in like
+# moon-tar: point M4SRC at a ./configure'd m4-1.4 tree; SKIPS cleanly without.
+.PHONY: moon-m4
+moon-m4: host out/host$(hsuf)/mooncc
+	@M4SRC="$(M4SRC)" ./tools/moon-m4.sh
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
