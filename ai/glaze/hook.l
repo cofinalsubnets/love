@@ -37,6 +37,13 @@
    ; operand that isn't a frame var is a FREE capture -> reject (jgir compiles a body over the frame
    ; params only; it has no slot to bind an outer var). the synthetic-__outer tail guard.
    (opnd-ok? ps e) (? (two? e) (all (\ x (opnd-ok? ps x)) (cup e))  (name? e) (member? e ps)  1)
+   ; gdefs-ok? -- the SAME free-capture guard, per group DEF body: jgir binds a def over ITS OWN frame
+   ; params only, so an operand leaf a def reads that isn't one of that def's params is an outer capture
+   ; with no slot. opnd-ok? only ever guarded the TAIL; a trailing-call named-let `(\ n (: (go i a) (- n 3)
+   ; (go 0 0)))` slips a free `n` into go's body, which the group lane then compiled reading go's LAST arg
+   ; slot (n=0 -> -3). Guard every def body too -> a free-reading body DEOPTS to bytecode (sound), never
+   ; miscompiles. gd = ((name p..) . body): (cup (cap gd)) = the def's frame params, (cup gd) = its body.
+   (gdefs-ok? gds) (all (\ gd (opnd-ok? (cup (cap gd)) (cup gd))) gds)
    fires #0                                          ; a probe: how many closures the hook native-backed
    ; natjit e s a -- e = the bytecode entry (deopt target), s = (\ frame.. body) the
    ; surface src, a = arity. ps = (init (cup s)) = the frame [imps args]; body = the
@@ -83,9 +90,9 @@
                          gnames (map (\ d (cap (cap d))) gdefs)
                          flat? (&& okshape (member? (cap tail) gnames) (= (cup tail) ps))       ; tail IS (entry frame..)
                          osym '__outer  agdefs (? okshape (cat gdefs (L (link (link osym ps) tail))) ())   ; group + synthetic ((__outer . frame) . tail)
-                         (? (&& flat? (jgir-ok? gdefs))                                          ; FLAT: entry direct, zero indirection
+                         (? (&& flat? (jgir-ok? gdefs) (gdefs-ok? gdefs))                         ; FLAT: entry direct, zero indirection
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) 'x64 e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
-                            (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs))   ; GENERAL tail via the synthetic entry
+                            (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym 'x64 e s))
                             e))))))))
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n?
