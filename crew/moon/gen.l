@@ -2423,9 +2423,13 @@
        (ustl l acc) (? (! (two? l)) acc (ustl >l (ust <l acc)))
        (ustp ps acc) (? (! (two? ps)) acc (ustp >ps (cap (erd (cauup (cap ps)) acc 0))))
        ; -- the backward walk: statements in reverse, children before their
-       ; parent's tick (counting down = forward pre-order numbers) --
-       (litems l out brk cnt)
-        (: (go l2 o) (? (! (two? l2)) o (go >l2 (lst <l2 o brk cnt)))
+       ; parent's tick (counting down = forward pre-order numbers). w9 is the
+       ; LOOP WEIGHT (x8 per nesting level): a crossing inside a loop pays its
+       ; wrap per iteration while the touch count stays static, so cross
+       ; charges it heavier -- the gate stays honest where the static-wrap
+       ; variant lost. wrapsets (soundness) never depend on w9. --
+       (litems l out brk cnt w9)
+        (: (go l2 o) (? (! (two? l2)) o (go >l2 (lst <l2 o brk cnt w9)))
            (go (rev l) out))
        (dpairs ps o nc)                             ; reversed decl pairs -> (in ncalls)
         (? (! (two? ps)) `(o nc)
@@ -2433,10 +2437,10 @@
               r (erd (cauup p) () 0)
               o2 (sun (? (member? <p univ) (sdel o <p) o) <r)
               (dpairs >ps o2 (nc + <>r))))
-       (lst s out brk cnt)
+       (lst s out brk cnt w9)
         (? (! (two? s)) out
            (: k <s
-              (? (k = 'blk) (: in (litems <>s out brk cnt) _ (tick ()) in)
+              (? (k = 'blk) (: in (litems <>s out brk cnt w9) _ (tick ()) in)
                  (k = 'expr)
                   (: e9 <>s
                      kv (? (&& ((cap e9) = 'asn)
@@ -2445,65 +2449,68 @@
                            (caup (caup e9)) ())
                      r (erd e9 () 0)
                      in (sun (? kv (sdel out kv) out) <r)
-                     sq (tick ()) _ (rec sq (sun in out) <>r)
+                     sq (tick ()) _ (rec sq (sun in out) (* <>r w9))
                      in)
                  (k = 'ret)
                   (: r (? (two? <>s) (erd <>s () 0) '(() 0))
-                     sq (tick ()) _ (rec sq <r <>r)
+                     sq (tick ()) _ (rec sq <r (* <>r w9))
                      <r)
                  (k = 'decl)
                   (: pr (dpairs (rev <>s) out 0)
-                     sq (tick ()) _ (rec sq (sun <pr out) <>pr)
+                     sq (tick ()) _ (rec sq (sun <pr out) (* <>pr w9))
                      <pr)
                  (k = 'sdecl) (: _ (tick ()) out)   ; statics: no runtime init, no kill
                  (k = 'if)
-                  (: inE (? (two? <>>>s) (lst <>>>s out brk cnt) out)   ; else FIRST (reverse order)
-                     inT (lst <>>s out brk cnt)
+                  (: inE (? (two? <>>>s) (lst <>>>s out brk cnt w9) out)   ; else FIRST (reverse order)
+                     inT (lst <>>s out brk cnt w9)
                      r (erd <>s () 0)
                      in (sun (sun inT inE) <r)
-                     sq (tick ()) _ (rec sq (sun in out) <>r)
+                     sq (tick ()) _ (rec sq (sun in out) (* <>r w9))
                      in)
                  (k = 'while)
-                  (: seed (sun out (ust <>>s (cap (erd <>s () 0))))
-                     _ (lst <>>s seed out seed)
+                  (: w8 (* 8 w9)
+                     seed (sun out (ust <>>s (cap (erd <>s () 0))))
+                     _ (lst <>>s seed out seed w8)
                      r (erd <>s () 0)
-                     sq (tick ()) _ (rec sq seed <>r)
+                     sq (tick ()) _ (rec sq seed (* <>r w8))
                      seed)
                  (k = 'do)
-                  (: seed (sun out (ust <>s (cap (erd <>>s () 0))))
+                  (: w8 (* 8 w9)
+                     seed (sun out (ust <>s (cap (erd <>>s () 0))))
                      r (erd <>>s () 0)
-                     _ (lst <>s seed out seed)
-                     sq (tick ()) _ (rec sq seed <>r)
+                     _ (lst <>s seed out seed w8)
+                     sq (tick ()) _ (rec sq seed (* <>r w8))
                      seed)
                  (k = 'for)
-                  (: ini <>s cnd <>>s stp <>>>s body (cauup (cuup s))
+                  (: w8 (* 8 w9)
+                     ini <>s cnd <>>s stp <>>>s body (cauup (cuup s))
                      useb (: u1 (? (two? cnd) (cap (erd cnd () 0)) ())
                              u2 (? (two? stp) (cap (erd stp u1 0)) u1)
                              (ust body u2))
                      seed (sun out useb)
-                     _ (lst body seed out seed)
+                     _ (lst body seed out seed w8)
                      nc9 (+ (? (two? cnd) (caup (erd cnd () 0)) 0)
                             (? (two? stp) (caup (erd stp () 0)) 0))
                      ri (? (&& (two? ini) (! (member? <ini '(decl sdecl))))
                            (erd (caup ini) () 0) '(() 0))
                      in (? (! (two? ini)) seed
-                           (member? <ini '(decl sdecl)) (lst ini seed () ())   ; ticks (cgdecl does); kill applies
+                           (member? <ini '(decl sdecl)) (lst ini seed () () w9)   ; ticks (cgdecl does); kill applies; runs ONCE
                            (: kv (: e8 (caup ini)
                                     (? (&& ((cap e8) = 'asn)
                                           (&& ((cap (caup e8)) = 'var)
                                               (member? (caup (caup e8)) univ)))
                                        (caup (caup e8)) ()))
                               (sun (? kv (sdel seed kv) seed) <ri)))
-                     sq (tick ()) _ (rec sq (sun seed <ri) (+ nc9 <>ri))
+                     sq (tick ()) _ (rec sq (sun seed <ri) (+ (* nc9 w8) (* <>ri w9)))
                      in)
                  (k = 'switch)
                   (: r (erd <>s () 0)
                      _ (pin n9 'sw (link () (peep n9 'sw ())))   ; push this switch's marker set
-                     _ (litems <>>s out out cnt)                 ; brk = out; cont targets the outer loop
+                     _ (litems <>>s out out cnt w9)              ; brk = out; cont targets the outer loop
                      macc (cap (peep n9 'sw ()))
                      _ (pin n9 'sw (cup (peep n9 'sw ())))       ; pop
                      in (sun (sun <r macc) out)
-                     sq (tick ()) _ (rec sq in <>r)
+                     sq (tick ()) _ (rec sq in (* <>r w9))
                      in)
                  (member? k '(case dflt))
                   (: sw (peep n9 'sw ())
@@ -2513,12 +2520,12 @@
                  (k = 'cont) (: _ (tick ()) cnt)
                  (k = 'goto) (: _ (tick ()) univ)   ; any target: everything
                  (k = 'lbl) (: _ (tick ()) out)
-                 (k = 'asm) (: sq (tick ()) _ (rec sq univ 1) univ)   ; homing is off anyway (hasasm)
+                 (k = 'asm) (: sq (tick ()) _ (rec sq univ w9) univ)   ; homing is off anyway (hasasm)
                  (: _ (tick ()) out))))             ; nop tdef
        ; -- run: liveout at the fn end is empty; the counter descends from the
        ; prepass total so lst's numbers land forward pre-order --
        _ (pin n9 'q (peep n9 'n 0))
-       _ (litems items () () ())
+       _ (litems items () () () 1)
        `(liv crs univ))
    ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this
    ; counter and pin the statement's wrapset (g 'stwrap) off g 'livtab -- a
@@ -3085,9 +3092,10 @@
            ; cost nothing). with calls REMAINING, only a ZERO-CROSSING local
            ; may home -- the alive pass's cross says it is never live across
            ; any call, so it takes no wraps at all and free reads are pure
-           ; win. the static-wrap variant measured a net loss and stays
-           ; reverted; a crossing local waits for the per-var reads-beat-
-           ; wraps gate (stage B2).
+           ; win. WRAP-PAYING locals (home iff touches beat 2x loop-weighted
+           ; crossings) were BUILT AND MEASURED 2026-07-16: 8/8 interleaved
+           ; rounds SLOWER than zero-cross-only (~2%) -- static counts do not
+           ; predict the dynamic spill/reload balance. don't retry as written.
            (free? nm) (&& (member? nm uv) ((peep crs nm 0) = 0))
            lt (leaoffs ir1x (tablet 0))
            navl ((tally hpool) - 2)
