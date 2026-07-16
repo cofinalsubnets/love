@@ -3138,8 +3138,17 @@
               _ (pin g 'livtab ())
               _ (pin g 'lhome ()) _ (pin g 'homes ())
               (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
-          (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)   ; calls remain: home + spill
-                          ((* 2 (* nc nh)) < (nreads ir1 (pslots <>sp1 ()) 0))))   ; ... only where reads beat the wraps
+          ; calls remain: home + spill, where reads beat the wraps -- FN-WIDE,
+          ; all homable params or none. per-param verdicts were built and
+          ; measured BOTH ways 2026-07-16 and lost interleaved: pruning a
+          ; "losing" home inside a gated fn is 7/8 slower (its wraps hide
+          ; behind the call that is already there; its register reads were
+          ; pure win), and adding zero-cross homes outside the gate is 8/8
+          ; slower (the regen trades operand-pool registers for the homes;
+          ; returning unhomed regs to the pool then collides with the leaf
+          ; lane's home-them-all spillr). the fn-wide gate stands.
+          (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)
+                          ((* 2 (* nc nh)) < (nreads ir1 (pslots <>sp1 ()) 0))))
              (? (|| pp lh)
                 (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
                    _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
