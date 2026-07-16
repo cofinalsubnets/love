@@ -141,6 +141,7 @@
                 _ (pin t 'sfns (tablet 0))          ; top-level `static` fn names: LOCAL symbols in the .o
                 _ (pin t 'svars (tablet 0))         ; top-level `static` globals: internal linkage, never exported
                 _ (pin t 'sects (tablet 0))         ; global name -> its __attribute__((section "..")) string
+                _ (pin t 'locals (tablet 0))        ; local/param name -> its declared type (for parse-time sizeof folding)
                 t)
    ; does a type begin here?
    (tkbty? ps t)
@@ -163,6 +164,29 @@
                      (stru? ty) (cauup (peep (ps 'stag) <>ty 0))
                      (tsz ps ty))
    (aup n a) (& (n + (a - 1)) (0 - a))              ; round n up to alignment a
+
+   ; -- parse-time expr typer (for sizeof folding) -- the UNDECAYED type of an
+   ; lvalue/pointer expr, | () when unknown (the caller keeps a deferred 'szof
+   ; node then, and gen sizes it). only the forms whose type parse can settle
+   ; from ps 'locals + ps 'stag: a local/param var, a ->/. member, a *deref /
+   ; a[i] element, a cast. arrays stay UNDECAYED (sizeof of an array is its span,
+   ; not a pointer) -- gen's szof lane reads the same undecayed type via clval.
+   (fldty ps sty nm) (: e (peep (ps 'stag) <>sty ())     ; the type of member nm off a struct type
+                        (? (! (two? e)) ()
+                           (: f (assoc nm <e) (? (two? f) <>>f ()))))
+   (ptrarg ps e) (? (! (&& (two? e) (<e = 'bin))) ()     ; the ptr/arr operand of a `bin + ptr idx` (a[i] desugars so)
+                    (: a (ptype ps <>>e) b (ptype ps <>>>e)
+                       (? (|| (ptr? a) (arr? a)) a (|| (ptr? b) (arr? b)) b ())))
+   (ptype ps e)
+    (? (! (two? e)) ()
+       (: k <e
+          (? (k = 'var) (peep (ps 'locals) <>e ())
+             (k = 'dot) (: bt (ptype ps <>e) (? (stru? bt) (fldty ps bt <>>e) ()))
+             (k = 'deref) (: it (ptype ps <>e)
+                             (? (ptr? it) <>it (arr? it) <>it
+                                (: pt (ptrarg ps <>e) (? (ptr? pt) <>pt (arr? pt) <>pt ()))))
+             (k = 'cast) <>e
+             ())))
 
    ; -- declarators: stars XOR one array suffix, PLUS the function-pointer
    ; dragon -- T (*name)(..) and the dispatch-table T (*name[n])(..). the
@@ -445,7 +469,7 @@
                         rest (? (two? tr) (want <>tr ")") ())
                         (? (two? rest) `(`('num (tsz ps <tr)) rest) ()))
                     (: r (punary ps r1)                 ; sizeof unary-expr | sizeof(expr) -- gen sizes from the type
-                       (? (two? r) `(`('szof <r) <>r) ()))))
+                       (? (two? r) (: ty (ptype ps <r) (? ty `(`('num (tsz ps ty)) <>r) `(`('szof <r) <>r))) ()))))
              (tp? t "*") (: r (punary ps >ts)
                             (? (two? r) `(`('deref <r) <>r) ()))
              (tp? t "&") (: r (punary ps >ts)
@@ -810,8 +834,17 @@
                                      (shadowdecl ps >names (shadow1 ps <names shadows)))
    (unshadow ps shadows) (? (! (two? shadows)) ()
                             (: e <shadows
-                               _ (pin (ps <e) <>e <>>e)
+                               _ (? (<>>e = 'none) (pull (ps <e) <>e 0) (pin (ps <e) <>e <>>e))   ; 'none = the name was ABSENT (a fresh local): remove it, don't pin the sentinel
                                (unshadow ps >shadows)))
+   ; record a local/param name -> type into ps 'locals, saving the old binding
+   ; ('none if fresh) on the block's shadow list so unshadow restores C scope.
+   ; ent is (name ty ..) -- a decl entry (name ty ini) or a param (name ty).
+   (bindloc ps ent shadows) (: nm <ent
+                                old (peep (ps 'locals) nm 'none)
+                                _ (pin (ps 'locals) nm <>ent)
+                                (link `('locals nm old) shadows))
+   (bindlocs ps ents shadows) (? (! (two? ents)) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
+   (loctypes form) (? (&& (two? form) (member? <form '(decl sdecl))) <>form ())   ; a block decl's entries, () otherwise
    (pblock ps ts)
     (: ts0 (want ts "{")
        (? (! (two? ts0)) ()
@@ -820,7 +853,7 @@
                  (tp? <ts2 "}") (: _ (unshadow ps sh) `(`('blk (rev acc)) >ts2))
                  (: r (? (tkbty? ps (cap (pquals ts2))) (pdecl ps ts2) (pstmt ps ts2))
                     (? (! (two? r)) (: _ (unshadow ps sh) ())
-                       (items <>r (link <r acc) (shadowdecl ps (declnames <r) sh)))))
+                       (items <>r (link <r acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) sh))))))
              (items ts0 () ()))))
 
    ; params := void | TYPE '*'* id (, ..)* [, ...]   -> (entries rest variadic?)
@@ -985,7 +1018,9 @@
                                            (peekp aft ",")
                                             (: rest (mproto ps base (cup aft))
                                                (? (two? rest) `(`('proto name) <rest) ()))
-                                           (: b (pblock ps aft)
+                                           (: psh (bindlocs ps <rp ())   ; params typed for sizeof folding; restore on fn exit
+                                              b (pblock ps aft)
+                                              _ (unshadow ps psh)
                                               (? (two? b) `(`('fn name <rp <b) <>b) ()))))))
                                ; a global declaration; the first declarator's stars came off `sr`
                                (: (one ts3 nm t2)                        ; t2 is the element type (stars included)

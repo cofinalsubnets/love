@@ -325,12 +325,29 @@ fix. Landed:
 
 Both gates green (`test_moon` 88-program battery, `test_raw` gcc-free).
 
-**The 2 remaining src files are real front-end gaps, not headers:**
-- `list.c` — `char namebuf[sizeof h->prefix + …]`: a **`sizeof EXPR` array bound**. `sizeof(type)`
-  folds at parse time (`tsz`), but `sizeof <lvalue>` becomes a deferred `szof` node gen sizes
-  later, so `cfold` can't produce the constant the array bound needs. The parser tracks local
-  *names* (typedef/enum shadowing) but not their *types* — folding this needs a parse-time
-  expr-typer (the capability gen already has via `clval`).
+**`sizeof EXPR` array bound — LANDED** (`crew/moon/{parse,law}.l`). `list.c`'s
+`char namebuf[sizeof h->prefix + 1 + sizeof h->name + 1]` sizes an array by the sizeof of a
+struct member off a local pointer. `sizeof(type)` already folds at parse (`tsz`), but
+`sizeof <lvalue>` was a deferred `szof` node gen sizes at codegen — too late for an array
+bound (`adims`→`cfold` needs a `charm?` constant). Fix = a parse-time expr-typer + local-type
+tracking:
+- **`ps 'locals`** (name → declared type): block decls register in `pblock`'s items loop and
+  params at the fn body, both threaded onto the block's shadow list so `unshadow` restores C
+  scope (extended to *pull* when the saved old is the `'none` = fresh-name sentinel).
+- **`ptype ps e`** — the UNDECAYED type of an lvalue/pointer expr, or `()` when parse can't
+  settle it: a local/param `var`, a `.`/`->` member (via `ps 'stag`), a `*`/`a[i]` element,
+  a cast. Arrays stay undecayed (sizeof of an array is its span) — matching gen's `szof` lane,
+  which reads the same undecayed type via `clval`.
+- **`punary` sizeof site**: when `ptype` settles the type, emit `('num (tsz ps ty))` — a real
+  constant usable as an array bound; otherwise keep the deferred `('szof …)` so gen sizes it
+  (identical behavior to before for every un-typeable expr). So the fold is a pure *extension*:
+  `test_raw` compiles all of ai.c + host/\*.c (many sizeofs) unchanged.
+
+Verified `sizeof h->prefix + 1 + sizeof h->name + 1` = 257 (155+1+100+1) native == gcc; laws
+in `law.l` prove both the member-sizeof bound *and* `sizeof buf` reading buf's own local array
+type fold. **16/17 tar src now compile** (only `compare.c` remains).
+
+**The 1 remaining src file is a real front-end gap, not headers:**
 - `compare.c` — a **cpp-level divergence**: the gcc-flattened source parses fine, but mooncc's
   own preprocessor produces the parse error. Needs bisecting with mooncc's cpp, not gcc's `-E`.
 

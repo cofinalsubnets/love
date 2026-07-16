@@ -177,6 +177,9 @@
                     fn (last (caup ast))
                     items (caup (caup (cuup fn)))
                     (caup (cap items)))
+   (citems src) (: ast (cast src)                       ; the block items of the LAST top-level fn (a sizeof over a typed local folds)
+                   (last l) (? (two? (cup l)) (last (cup l)) (cap l))
+                   (caup (caup (cuup (last (caup ast))))))
    (assert
       (= (cexpp "struct S { char c; int i; char d; };" "sizeof(struct S)") '(num 12))
       (= (cexpp "struct T { char c; long l; };" "sizeof(struct T)") '(num 16))
@@ -189,6 +192,14 @@
       (= (cexpp "" "s.v") '(dot (var "s") "v"))
       (= (cexpp "" "p->v") '(dot (deref (var "p")) "v"))
       (= (cexpp "" "p->a.b") '(dot (dot (deref (var "p")) "a") "b"))
+      ; sizeof over a TYPED local/member folds to a constant at PARSE (an array
+      ; bound needs it -- gen's szof lane only sizes at codegen). the ptr member
+      ; `h->p` sizes to its undecayed array span (155), and `sizeof buf` reads
+      ; buf's own local type (155) -- both foldable, so the bound + the return fold.
+      (= (citems "struct H { char n[100]; char p[155]; }; int f(struct H *h) { char buf[sizeof h->p]; return sizeof buf; }")
+         '((decl (("buf" (arr char 155) ()))) (ret (num 155))))
+      (= (citems "int f(int a[7]) { char buf[sizeof a[0]]; return sizeof buf; }")   ; a[i] element sizeof (a param decays to a pointer: sizeof *ptr = 4)
+         '((decl (("buf" (arr char 4) ()))) (ret (num 4))))
       (two? (cgn "struct N { long v; struct N *n; }; int main() { struct N a; a.v = 7; a.n = &a; return a.n->v; }"))
       (two? (cgn "int main() { int x = 2; switch (x) { case 1: return 9; default: return 7; } }"))
       (two? (cgn "int main() { int i = 0; do i++; while (i < 3); return i; }"))
@@ -576,5 +587,5 @@
       (two? (cgn "int f(int x){return x;} typedef int (*fp)(int); fp t[1] = { &f }; int main(){ return t[0](1); }"))
       (! (cgn "int main(){ return (long)&nope; }"))))
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE, bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) ok")
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) ok")
 (put err 10)
