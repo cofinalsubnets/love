@@ -107,11 +107,6 @@ test_glaze: host
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
-	  echo "GLAZE test/glaze-x86.l (AI_GROUP_SWALLOW=1 -- exercises the group-swallow codegen)"; \
-	  cat test/glaze-x86.l | AI_GROUP_SWALLOW=1 $m > out/host/.test_glaze.out 2>&1; r=$$?; \
-	  cat out/host/.test_glaze.out; \
-	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
-	    || { echo "FAIL glaze x86 swallow (exit $$r)"; exit 1; }; \
 	  echo "GLAZE ai/glaze/hook.l"; \
 	  { cat ai/glaze/hook.l; printf '\n(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \

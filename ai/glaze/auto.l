@@ -1004,8 +1004,8 @@
        mn (filter (\ p (&& (atom? (cap p)) (two? (cup p)) (member? (cap (cup p)) '(tablet hash)))) ps)   ; names bound to a tablet/hash
        (! (atom? (filter (\ p (&& (two? (cap p))                                                    ; a fn binding whose body ...
           (! (atom? (filter (\ m (&& (occurs? (cap m) (cup p)) (! (member? (cap m) (cup (cap p)))))) mn))))) ps))))   ; ... references a mapname that is NOT its param
-   ; --- GROUP SWALLOW (flag-gated, AI_GROUP_SWALLOW) ---------------------------------------------
-   ;     A group member calling an EXTERNAL global int fn currently REJECTS (the callee isn't a
+   ; --- GROUP SWALLOW (always-on) ---------------------------------------------------------------
+   ;     A group member calling an EXTERNAL global int fn used to REJECT (the callee isn't a
    ;     `:`-local candidate -> the whole group falls to interp). srcrec records every top-level
    ;     GLOBAL fn define's source (a body-less `:` leaks its bindings globally -- that parity is the
    ;     "this is a real global" test, so srcreg only ever holds genuine globals, never a bench's
@@ -1026,7 +1026,7 @@
    ;     (helper + every F_g sub-fn) are recorded and swgather pulls them transitively.
    srcreg (tablet 0)
    (swfnpair? pr) (: nf (cap pr) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))
-   (srcrec form0) (? (&& (getenv "AI_GROUP_SWALLOW") (two? form0) (id? (cap form0) ':) (! (atom? (cup form0)))
+   (srcrec form0) (? (&& (two? form0) (id? (cap form0) ':) (! (atom? (cup form0)))
                        (= 0 (% (tally (cup form0)) 2)))                                   ; body-less `:` only -> a GLOBAL-leaking define
       (: low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; autogroup's FULL lowering: church/HOF/&& + structural (lift/loops/value-lets)
          (foldl (\ _ pr (? (swfnpair? pr) (pin srcreg (caap pr) (link (cup (cap pr)) (cup pr))) ())) () (cap (anat-defs (cup low))))) ())
@@ -1055,7 +1055,7 @@
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
           parsed (anat-defs (cup form)) pairs (cap parsed)
           fns0 (filter (\ p (: nf (cap p) (&& (two? nf) (< 1 (tally nf)) (< (tally nf) 6) (all name? (cup nf)) (distinctp (cup nf))))) pairs)   ; (name p..), 1..4 distinct sym params
-          fns (? (getenv "AI_GROUP_SWALLOW") (swgather fns0) fns0)                          ; swallow: pull called globals' recorded sources in as synthetic members
+          fns (swgather fns0)                                                              ; swallow: pull called globals' recorded sources in as synthetic members
           (? (! (two? fns)) form0                                                            ; no candidate functions -> original
              (: armap (map (\ p (L (cap (cap p)) (- (tally (cap p)) 1))) fns)                 ; (name arity) candidates
                 grp (grpfix fns armap)                                                        ; the closed glazeable subset

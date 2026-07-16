@@ -147,10 +147,10 @@
     (say err "ai/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
 ))
 
-; GROUP SWALLOW helpers (for the flag-gated test in the AUTO block below): genuine top-level
-; globals, so the LOADER auto-ev's them and srcrec records their source under AI_GROUP_SWALLOW
-; (a body-less `:` define -- inside a base-ev block they'd be local + un-recorded). swq is a leaf
-; callee; swsum has a named-let loop, so its swallow exercises the STRUCTURAL lift pass.
+; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
+; so the LOADER auto-ev's them and srcrec records their source (a body-less `:` define -- inside a
+; base-ev block they'd be local + un-recorded). swq is a leaf callee; swsum has a named-let loop,
+; so its swallow exercises the STRUCTURAL lift pass.
 (: (swq n) (+ (* n n) 1))
 (: (swsum n) (: (go i a) (? (< i 1) a (go (- i 1) (+ a i))) (go n 0)))
 
@@ -251,18 +251,13 @@
     ; MULTI-ARG recursion: tak (3 args, nested self-calls -- args survive on the machine stack) == interp
     (: rt '(: (tak x y z) (? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z) (tak 18 12 6))
        (&& !(id? (autogroup rt) rt) (= 7 (ev rt)) (= (base-ev rt) (ev rt))))
-    ; GROUP SWALLOW (flag-gated AI_GROUP_SWALLOW): a group member calling an EXTERNAL global int fn.
-    ; Default (flag off) -> REJECTED (autogroup unchanged), still correct via interp -- the regression
-    ; guard the default gate runs. The gate ALSO re-runs this file with the flag set (test.mk), where
-    ; the callee's recorded source folds in as an in-blob sibling under the group's one OVF/deopt, so
-    ; native == interp. swq (above) is a leaf callee; swsum's named-let lifts -> a STRUCTURAL swallow.
+    ; GROUP SWALLOW (always-on): a group member calling an EXTERNAL global int fn. The callee's
+    ; recorded source folds in as an in-blob sibling under the group's one OVF/deopt, so native ==
+    ; interp. swq (above) is a leaf callee; swsum's named-let lifts -> a STRUCTURAL swallow.
     (: rsw '(: (rsw1 n) (? (< n 1) 0 (+ (swq n) (rsw1 (- n 1)))) (rsw1 5))                    ; sum swq(1..5) = 2+5+10+17+26 = 60
        rst '(: (rst1 n) (? (< n 1) 0 (+ (swsum n) (rst1 (- n 1)))) (rst1 4))                 ; sum swsum(1..4) = 1+3+6+10 = 20
-       (? (getenv "AI_GROUP_SWALLOW")
-          (&& !(id? (autogroup rsw) rsw) (= 60 (ev rsw)) (= (base-ev rsw) (ev rsw))          ; leaf callee swallowed -> native == interp
-              !(id? (autogroup rst) rst) (= 20 (ev rst)) (= (base-ev rst) (ev rst)))         ; named-let callee (lift) swallowed too
-          (&& (id? (autogroup rsw) rsw) (= 60 (base-ev rsw))                                 ; flag off: inert (unchanged), still correct via interp
-              (id? (autogroup rst) rst) (= 20 (base-ev rst)))))
+       (&& !(id? (autogroup rsw) rsw) (= 60 (ev rsw)) (= (base-ev rsw) (ev rsw))             ; leaf callee swallowed -> native == interp
+           !(id? (autogroup rst) rst) (= 20 (ev rst)) (= (base-ev rst) (ev rst))))           ; named-let callee (lift) swallowed too
     ; MUTUAL recursion: evn/odn cross-call -- BOTH bindings glazed, sibling calls native inside one
     ; buffer; the `:` body drives both. The systematic win over the old per-fn autorec: a closed call
     ; GRAPH, not just self-recursion.
