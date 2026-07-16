@@ -78,7 +78,13 @@
             (+ `((rex 1 0 0 (hi dn)) 199 (modrm 3 0 dn)) (le32 imm))
             (+ `((rex 1 0 0 (hi dn)) (| 184 (lo dn))) (le64 imm))))
 
-   ;; the three-address ALU, lowered to two-address (see the header).
+   ;; the three-address ALU, lowered to two-address (see the header). the lea
+   ;; fusion of a fresh-dest plain add/sub (mov+alu -> one lea) was BUILT AND
+   ;; MEASURED 2026-07-16, both reg-reg and imm-only variants: 8/8 interleaved
+   ;; corpus rounds SLOWER (~3-4%) despite -3.3% DYNAMIC instructions -- the
+   ;; dance's mov is rename-eliminated (zero cycles, no port), so the saved
+   ;; insn was free, and at IPC ~3.7 the corpus is frontend/layout-bound, not
+   ;; instruction-starved (exp-1's lesson again). don't retry as written.
    (emit-alu op d a b)
       (: meta (peep x64-alu op 0) rr (at meta 0) ext (at meta 1) comm (at meta 2)
          (? (reg-eq d a)                  (alu-step rr ext d b)

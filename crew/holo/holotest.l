@@ -40,6 +40,8 @@
       ;; three-address -> two-address lowering
       `("alu.movop"   "4889c24829da"          '((sub r2 r0 r3)))   ; mov rdx,rax ; sub rdx,rbx
       `("alu.swap"    "4801d8"                '((add r0 r3 r0)))   ; commutes -> add rax,rbx, no mov
+      `("add.movop"   "4889c24801da"          '((add r2 r0 r3)))   ; mov rdx,rax ; add rdx,rbx (no lea fusion -- the emit-alu note)
+      `("add.movop.i" "4889c14881c105000000"  '((add r1 r0 5)))    ; imm form keeps the dance too
       ;; imul (true 3-operand imm form; rr folds two-address)
       `("imul.rr"     "480fafc3"              '((imul r0 r0 r3)))
       `("imul.imm"    "4869d007000000"        '((imul r2 r0 7)))
