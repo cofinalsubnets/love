@@ -9,9 +9,13 @@ struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon;
             long tm_gmtoff; char const* tm_zone; };
 struct tm* localtime(time_t const*);
 struct tm* gmtime(time_t const*);
+struct tm* localtime_r(time_t const*, struct tm*);
+struct tm* gmtime_r(time_t const*, struct tm*);
 time_t     mktime(struct tm*);
 char*      ctime(time_t const*);
 char*      asctime(struct tm const*);
+double     difftime(time_t, time_t);
+unsigned long strftime(char*, unsigned long, char const*, struct tm const*);
 #define CLOCK_REALTIME  0
 #define CLOCK_MONOTONIC 1
 int clock_gettime(int, struct timespec*);

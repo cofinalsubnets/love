@@ -692,6 +692,22 @@ int printf(char const *fmt, ...) {
   __fmt(__femit, stdout, fmt, ap);
   va_end(ap);
   return 0; }
+/* the v-variants: __fmt already threads a va_list, so these just forward it. */
+int vfprintf(FILE *f, char const *fmt, va_list ap) {
+  __fmt(__femit, f, fmt, ap); return 0; }
+int vprintf(char const *fmt, va_list ap) {
+  __fmt(__femit, stdout, fmt, ap); return 0; }
+int vsnprintf(char *p, size_t n, char const *fmt, va_list ap) {
+  struct __sctx s; s.p = p; s.n = n; s.at = 0;
+  __fmt(__semit, &s, fmt, ap);
+  if (n) p[s.at < n ? s.at : n - 1] = 0;
+  return (int) s.at; }
+int vsprintf(char *p, char const *fmt, va_list ap) {
+  return vsnprintf(p, (size_t) -1, fmt, ap); }
+int sprintf(char *p, char const *fmt, ...) {
+  va_list ap; va_start(ap, fmt);
+  int r = vsprintf(p, fmt, ap);
+  va_end(ap); return r; }
 int putc(int c, FILE *f) { return fputc(c, f); }
 void perror(char const *s) {
   int e = __errno_v;

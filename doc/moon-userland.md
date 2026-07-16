@@ -293,6 +293,52 @@ Link + run blockers:
 Build: lay `sys.o` via `crew/moon/lib/mksys.l`, then one `mooncc -DSTDC_HEADERS -DHAVE_UNISTD_H
 -DDIRENT -I crew/moon/include -I <src> -o gzip <src>/*.c crew/moon/lib/nolibc.c sys.o`.
 
+## tar 1.13 — the header set (15/17 src compile, 2026-07-16)
+
+tar is the third rung, chosen for its breadth (terminal/tape ioctls, locale, gettext,
+`uintmax_t`). The point of this pass was **header completeness**: mooncc's `#include <>`
+resolver falls through to `/usr/include` when it lacks a header, so a half-populated
+`crew/moon/include/` silently pulls glibc's headers (with `__extension__`/`typeof`/statement-
+exprs mooncc can't parse). The gzip model — give mooncc its **own** minimal versions — is the
+fix. Landed:
+
+- **9 new headers**: `limits.h` (+`PATH_MAX`), `inttypes.h` (PRI macros + `strto*max`),
+  `locale.h` (LC_* + `struct lconv`), `libintl.h` (gettext as the identity — NLS on, no
+  runtime), `assert.h`, `pwd.h`, `grp.h`, `sys/param.h`, `sys/sysmacros.h`, `sys/mtio.h`,
+  `sgtty.h`. Plus `_IOC/_IOR/_IOW/_IOWR` in `sys/ioctl.h` (the tape ioctls compute from it),
+  `BUFSIZ`/`FOPEN_MAX`/`FILENAME_MAX` in `stdio.h`, the missing errno constants
+  (`ENXIO`/`EXDEV`/`ESPIPE`/… — an undefined `E*` in an expression is an undeclared identifier,
+  which mooncc *refuses*, so this masqueraded as "cgfn refuses `<enclosing-fn>`"), and ~25
+  prototypes across stdio/stdlib/unistd/fcntl/time (`vfprintf`+the v-family, `sprintf`,
+  `scanf`/`fscanf`/`sscanf`, `execl`/`execlp`/`creat`, `system`, `qsort`, `lchown`, `setuid`,
+  `truncate`, `localtime_r`, `strtoll`/`strtoull`, `getpwnam`/`getgrgid`, …). `nolibc.c` gained
+  the v-printf family + `sprintf` (thin wrappers over the existing `__fmt`, which already
+  threads a `va_list`).
+
+- **`__FILE__` was BROKEN** — `cpp.l:15` advertised it as predefined but only `__LINE__` ever
+  had a handler; any `__FILE__` use hit a codegen refusal (worst inside a void ternary arm, e.g.
+  an `assert` expansion). Fixed by predefining it as an object macro — the TU path is threaded
+  into `cpp` (a third arg; `moon.l`/`law.l` callers updated) and pinned like `__STDC__`.
+  Includes share the macro table, so `__FILE__` reads the top file's name throughout — fine for
+  assert/error diagnostics, which live in the `.c`. Added `__FILE__`/`__LINE__` laws (the gap
+  existed *because* there was no law).
+
+Both gates green (`test_moon` 88-program battery, `test_raw` gcc-free).
+
+**The 2 remaining src files are real front-end gaps, not headers:**
+- `list.c` — `char namebuf[sizeof h->prefix + …]`: a **`sizeof EXPR` array bound**. `sizeof(type)`
+  folds at parse time (`tsz`), but `sizeof <lvalue>` becomes a deferred `szof` node gen sizes
+  later, so `cfold` can't produce the constant the array bound needs. The parser tracks local
+  *names* (typedef/enum shadowing) but not their *types* — folding this needs a parse-time
+  expr-typer (the capability gen already has via `clval`).
+- `compare.c` — a **cpp-level divergence**: the gcc-flattened source parses fine, but mooncc's
+  own preprocessor produces the parse error. Needs bisecting with mooncc's cpp, not gcc's `-E`.
+
+NEXT for a *runnable* tar: the declared-not-yet-implemented libc functions need bodies in
+`nolibc.c` (execlp via execve, creat via open, system, the pwd/grp stubs), then link tar's
+bundled `lib/` (fnmatch, modechange, backupfile, xmalloc, …) — or start from those two
+front-end features so all 17 compile first.
+
 ## suggested order (LFS-shaped, easiest real C first)
 
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.

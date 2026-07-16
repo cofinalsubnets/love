@@ -9,6 +9,9 @@ typedef unsigned long size_t;
 typedef struct _IO_FILE FILE;   /* opaque; glibc owns the layout */
 extern FILE *stdin, *stdout, *stderr;
 #define EOF (-1)
+#define BUFSIZ 8192
+#define FOPEN_MAX 16
+#define FILENAME_MAX 4096
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
@@ -43,4 +46,14 @@ int    ferror(FILE*);
 int    feof(FILE*);
 void   clearerr(FILE*);
 FILE  *fdopen(int, char const*);
+void   setbuf(FILE*, char*);
+int    setvbuf(FILE*, char*, int, size_t);
+int    scanf(char const*, ...);
+int    fscanf(FILE*, char const*, ...);
+int    sscanf(char const*, char const*, ...);
+#include <stdarg.h>
+int    vprintf(char const*, va_list);
+int    vfprintf(FILE*, char const*, va_list);
+int    vsprintf(char*, char const*, va_list);
+int    vsnprintf(char*, size_t, char const*, va_list);
 #endif

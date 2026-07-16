@@ -339,9 +339,14 @@
        (pv? <body "<") (: (go l acc) (? (! (two? l)) () (pv? <l ">") acc (go >l (acc + (spell <l)))) (go >body ""))
        ())
 
-   (cpp toks incf)                                    ; -> (1 out) | ()
+   (cpp toks incf fname)                              ; -> (1 out) | ()
     (: macs (: t (tablet 0)
                _ (pin t "__STDC__" `('obj `((tok 'num 1 0))))
+               ; __FILE__ -> the TU path as a string literal. pinned as an object
+               ; macro (not per-token) so it costs nothing until used; includes
+               ; share this table, so it reads the top file's name throughout --
+               ; fine for assert/error diagnostics, which live in the .c anyway.
+               _ (pin t "__FILE__" `('obj `((tok 'str fname 0))))
                ; C11: cc has _Static_assert (+ _Alignas/varargs). advertising 201112
                ; lets gnulib take its _Static_assert lane (verify.h) not a fallback trick.
                _ (pin t "__STDC_VERSION__" `('obj `((tok 'num 201112 0))))

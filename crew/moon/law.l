@@ -399,7 +399,7 @@
                  (? (= k 'str) (+ "\"" (+ (caup t) "\""))
                     (|| (= k 'num) (= k 'kw)) (show (caup t))
                     (caup t)))
-   (pps src) (: r (cpp (caup (clex src)) ())
+   (pps src) (: r (cpp (caup (clex src)) () "<law>")
                 (? (! (two? r)) 'FAIL
                    (: (go l) (? (! (two? l)) "" (+ (spell1 (cap l)) (+ (? (two? (cup l)) " " "") (go (cup l)))))
                       (go (caup r)))))
@@ -423,9 +423,12 @@
       (= (pps "#if (1 << 4) > 10 && !0\ny\n#endif") "y")               ; shift / logical / unary
       (= (pps "#define G 1\n#if defined(G)\nd\n#endif") "d")           ; defined() operator
       (= (pps "#define M(x) x\nno M here") "no M here")                ; a fn macro name not called stays literal
-      (! (cpp (caup (clex "#if 1\nx")) ()))                            ; unterminated #if refuses
-      (two? (cpp (caup (clex "#ifdef NOPE\nx\n#endif")) ()))           ; a fully-skipped file is a VALID empty TU (crypt.c), not a failure
-      (! (cpp (caup (clex "#error boom")) ()))                         ; #error is FATAL
+      (= (pps "__LINE__") "1")                                         ; __LINE__ predefined -> the line number
+      (= (pps "a\nb\n__LINE__") "a b 3")                               ; ... tracked down the file
+      (= (pps "__FILE__") "\"<law>\"")                                 ; __FILE__ predefined -> the TU path, a string
+      (! (cpp (caup (clex "#if 1\nx")) () "<law>"))                    ; unterminated #if refuses
+      (two? (cpp (caup (clex "#ifdef NOPE\nx\n#endif")) () "<law>"))   ; a fully-skipped file is a VALID empty TU (crypt.c), not a failure
+      (! (cpp (caup (clex "#error boom")) () "<law>"))                 ; #error is FATAL
       (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
 
 ; -- 7c-i: freestanding-header surface. cc keeps no linkage/qualifier state, so

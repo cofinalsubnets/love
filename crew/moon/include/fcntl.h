@@ -29,5 +29,6 @@
 #define FD_CLOEXEC       1
 int open(char const*, int, ...);
 int openat(int, char const*, int, ...);
+int creat(char const*, unsigned int);
 int fcntl(int, int, ...);
 #endif

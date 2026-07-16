@@ -63,7 +63,7 @@
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clex ((deftext ds9) + <>r))
        _ (? (two? lx) () (udie 1 ("cc: lex error in " + src)))
-       pp (cpp <>lx (\ name sys? (incload is (cdir src) name sys?)))
+       pp (cpp <>lx (\ name sys? (incload is (cdir src) name sys?)) src)
        _ (? (two? pp) () (udie 1 ("cc: preprocessor error in " + src)))
        ps (cparse <>pp)
        _ (? (two? ps) () (udie 1 ("cc: parse error in " + src)))
