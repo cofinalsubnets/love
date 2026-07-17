@@ -5324,11 +5324,19 @@ static word img_nif_interp(word v, word *base, word *hp) {   // v -> a cell VALU
  word *c = (word*) v; word e = 0;
  // the FULL cell shapes (lvm_nif): arity-1 value = [code, interp, lvm_ret, n(odd)];
  // arity>=2 value = [lvm_cur, ar(odd), code, interp, lvm_ret, n(odd)] -- match every
- // fixed word, so no innocent closure (every curried one heads lvm_cur) can alias.
- if (c + 4 <= hp && img_wxp(c[0], base, hp)
+ // fixed word AND the word BEFORE the value (the allocation header duplicates the code
+ // for arity-1, fronts lvm_cur for arity>=2), because [code, interp, lvm_ret, n] is ALSO
+ // what value+2 of an arity>=2 cell reads as: a partial-app's terminal unc LINK points
+ // exactly there (fn_base = link-2), and redirecting a LINK to the twin's VALUE shears
+ // the -2 contract -- the woken base lands on the twin's src cell and apply enters two
+ // words early, re-currying forever. c[-2] tells the three apart.
+ if (c + 4 <= hp && c - 2 >= base && c[-2] == c[0] && img_wxp(c[0], base, hp)
      && c[2] == (word) lvm_ret && oddp(c[3])) e = c[1];
  else if (c + 6 <= hp && c[0] == (word) lvm_cur && oddp(c[1])
      && img_wxp(c[2], base, hp) && c[4] == (word) lvm_ret && oddp(c[5])) e = c[3];
+ else if (c + 4 <= hp && c - 2 >= base && c[-2] == (word) lvm_cur && oddp(c[-1])
+     && img_wxp(c[0], base, hp) && c[2] == (word) lvm_ret && oddp(c[3])
+     && c[1]) e = c[1] + 2 * sizeof(word);            // a LINK (value+2): twin's value+2, contract kept
  if (e && ai_image_nredir < countof(ai_image_redir) / 2)
   ai_image_redir[2 * ai_image_nredir] = v, ai_image_redir[2 * ai_image_nredir + 1] = e, ai_image_nredir++;
  return e; }
