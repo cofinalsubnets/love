@@ -598,12 +598,17 @@
    ; frame [imps args] and surface body are right there), arity a, `gv` (the global
    ; resolver -- the hook is POST-egg, where `book`/`gv` are mopped, so ala hands its own
    ; folded gv down for a lane that must resolve a free global's value, e.g. a call-out
-   ; target), and (farq c) (defined beside ala), it may return a native-backed entry that
-   ; DEOPTS into e on overflow. transparent (value[-1]=s kept), id?-distinct (fresh per ala
-   ; call), macro-safe (s is the surface, pre-tag). dormant -> peep gives 0 -> e unchanged,
-   ; so the egg/bootstrap is untouched.
+   ; target), (farq c) (defined beside ala), and the scope's lambda-sibling list (c 'lam)
+   ; VERBATIM -- ((name . cell)..), whose cells hold what lz freezes into a reference site
+   ; ((entry . import-names): lvm_quote entry applied to the import names re-read in the
+   ; referrer's frame), so a hook lane may compile the same application with NO staleness
+   ; bet (entry 0 = not yet woven, lz's backpatch case -- the lane declines it; the list is
+   ; passed as-is, NEVER wrapped in a per-ala closure) -- it may return a native-backed
+   ; entry that DEOPTS into e on overflow. transparent (value[-1]=s kept), id?-distinct
+   ; (fresh per ala call), macro-safe (s is the surface, pre-tag). dormant -> peep gives 0
+   ; -> e unchanged, so the egg/bootstrap is untouched.
    hk (gv 'natjit 0)
-   (link (? hk (hk e s a gv (farq c)) e) (d 'imp)))
+   (link (? hk (hk e s a gv (farq c) (c 'lam)) e) (d 'imp)))
   ; farq: is x a letrec binding name up the scope chain? -- the names wire resolves LOCALLY
   ; (cell/backpatch), which the weave RE-analysis drops from the import row, so they look
   ; FREE in the hook's surface s. a hook lane must never gv-resolve one: a stale leaked

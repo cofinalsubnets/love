@@ -301,8 +301,33 @@
           (: ct (ev '(\ l n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally l))) a)) 0 0)))
              (&& (12 = (ct '(1 2 3) 4)) (8 = (ct "ab" 4))))                       ; chain tally drives; text tally native
           (: ts (ev '(\ tally n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally i))) a)) 0 0)))
-             (10 = (ts (\ x (+ x 1)) 4)))))                                       ; the shadow: the frame binding wins
-   (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + global callees + restart deopts) ok\n"))
+             (10 = (ts (\ x (+ x 1)) 4)))
+          ; SIBLING CALLEES (v6): a letrec lambda sibling is a free head in the weave re-analysis
+          ; surface; ala's lams hands amble the cell (entry . import-names) lz freezes into the
+          ; bytecode site, so the call curries the frozen entry -- NO staleness bet. the digrun
+          ; shape is moon's lexer verbatim (infix singletons + the sugared trigger named-let +
+          ; the backtick's macro-spliced link VALUES as heads -- adesug owns all three).
+          (: n2 (peep fires () 0)
+             lx (ev '(: (dig? c) (? (< c 58) (< 47 c) ())
+                        (digrun s n) (: (go k v) (? (&& (k < n) (dig? (s k))) (go (k + 1) ((* 10 v) + ((s k) - 48))) v) (go 0 0))
+                        digrun))
+             (&& (31415 = (lx "31415x" 6)) (0 = (lx "x" 1)) (fired? n2)))         ; the lexer class AMBLES (fires) and == interp
+          (: mk (ev '(\ b (: (addb x) (+ x b)
+                             (suml l) ((: (go l a) (? (two? l) (go (cup l) (+ a (addb (cap l)))) a)) l 0)
+                             suml)))
+             (306 = ((mk 100) '(1 2 3))))                                         ; a sibling WITH an import: entry curried through the frame
+          (: eo (ev '(: (ev? n) (? (< n 1) 1 (od? (- n 1)))
+                        (od? n) (? (< n 1) 0 (ev? (- n 1)))
+                        (cnt l) ((: (go l a) (? (two? l) (go (cup l) (+ a (od? (cap l)))) a)) l 0)
+                        cnt))
+             (4 = (eo '(1 2 3 4 5 6 7))))                                         ; mutual recursion: the later sibling drives the earlier's entry
+          ; the DEOPT BUDGET: a per-call restarter ((= a b) on heap values, fx2 fails every call)
+          ; spends its budget and RETIRES -- every later call takes d0 straight to the twin, so a
+          ; perma-deopting native heals to bytecode; correct at every point on the way.
+          (: hp (ev '(\ l q ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) q) (+ a 1) a)) a)) l 0)))
+             (: (chk i bad) (? (< i 40) (chk (+ i 1) (? (= 2 (hp '("ab" "cd" "ab" "x") "ab")) bad (+ bad 1))) bad)
+                (0 = (chk 0 0))))))
+   (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + globals + siblings + the deopt budget) ok\n"))
 
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
 ; so the LOADER auto-ev's them and srcrec records their source (a body-less `:` define -- inside a
