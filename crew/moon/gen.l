@@ -365,13 +365,78 @@
            (mkv 'long 'r0 (cat (vfs r) `(`('li 'r1 0) `('movqxr 'f1 'r1) `('ucomisd 'f0 'f1)
                                           `('set 'ne 'r0) `('set 'p 'r1) `('or 'r0 'r0 'r1))))
           r))
+   ; -- the predicate splice: a call to an inline-table fn whose whole body is
+   ; one `return E` with E already a BIT by shape (!/&&/||/relational -- a 0/1,
+   ; so the return-type narrowing keeps its truth) branches THROUGH the body:
+   ; args land in fresh temps (the out-of-line call's exact semantics), then E
+   ; cbranches straight to lbl -- no join label, no 0/1 settle, no retest. the
+   ; ai.c hot conditions are nearly all inline predicates, and the settle+retest
+   ; was the clang differential's largest bucket. depth 1 and the fesc/strs
+   ; decline protocol exactly as cginl. -> forms | 'no (the fallback stands) --
+   (retex f)                                     ; init-free scalar decls* + one `return E` -> (((name ty)..) E) | ()
+    (: (dok ps acc9)
+        (? (! (two? ps)) acc9
+           (: p9 <ps
+              (? (|| (two? <>>p9) (|| (arr? <>p9) (stru? <>p9))) 'bad
+                 (dok >ps (link `(<p9 <>p9) acc9)))))
+       (go items dacc)
+        (? (! (two? items)) ()
+           (: it <items
+              (? (<it = 'decl)
+                  (: ds (dok <>it dacc) (? (bad? ds) () (go >items ds)))
+                 (! (<it = 'ret)) ()
+                 (! (two? <>it)) ()
+                 (two? >items) ()
+                 `(dacc <>it))))
+       (go (caup (caup (cuup f))) ()))
+   (abit? e9) (? (! (two? e9)) ()
+                 (&& (<e9 = 'un) (<>e9 = 'not)) 1
+                 (member? <e9 '(land lor)) 1
+                 (&& (<e9 = 'bin) (member? <>e9 '(eq ne lt le gt ge))))
+   (cbinl g env e cc lbl)
+    (: head <>e args <>>e
+       il0 (peep g 'inlining ())                  ; cbinl NESTS to depth 3 (it emits no
+       d0 (? (! il0) 0 il0)                       ; labels, so cginl's collision reason
+       inlf (? (2 < d0) ()                        ; is moot -- only recursion needs a cap)
+               (! (<head = 'var)) ()
+               (! (bad? (vent g env <>head))) ()  ; a local/global shadows the name
+               (: c9 (peep (g 'inl) <>head ())
+                  (? (! (two? c9)) ()
+                     ((tally args) = (tally <>>c9)) c9
+                     ())))
+       rx (? (two? inlf) (retex inlf) ())
+       e9 (? (two? rx) <>rx ())
+       (? (! (abit? e9)) 'no
+          (: fe0 (peep g 'fesc ())
+             strs0 (g 'strs)
+             _ (pin g 'inlining (d0 + 1))
+             (cbind ps as benv acc)                ; cginl's bind, the same slots
+              (? (! (two? ps)) `(benv acc)
+                 (: r (cgexpr g env <as)
+                    (? (bad? r) 'bad
+                       (: off (ntmp g 'long)
+                          (cbind >ps >as
+                                 (link `((cap (cap ps)) off (caup (cap ps))) benv)
+                                 (acc + (asint g r) + `(`('st 'r4 off 'r0))))))))
+             (dtmp ds benv9)                       ; the body's own decls: fresh temps over the params
+              (? (! (two? ds)) benv9
+                 (: d9 <ds (dtmp >ds (link `(<d9 (ntmp g <>d9) <>d9) benv9))))
+             br (cbind <>>inlf args () ())
+             bf (? (bad? br) 'bad (cbranch g (dtmp <rx <br) e9 cc lbl))
+             _ (pin g 'inlining il0)
+             (? (bad? bf)
+                 (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
+                (&& (! fe0) (peep g 'fesc ()))     ; the body took a frame address: keep the caller lean
+                 (: _ (pin g 'fesc ()) _ (pin g 'strs strs0) 'no)
+                (<>br + bf)))))
    ; -- branch on a condition WITHOUT materializing its truth value: forms that
    ; jump to lbl when the condition is FALSE (cc 'eq) or TRUE (cc 'ne), the same
    ; sense as the fallback `(cmp r0 0) (br cc lbl)` over a ctest value. a
    ; comparison fuses to cmp + br<relation> (the cmp/set/movzx/cmp/br chain
    ; folds to cmp/br on EVERY if/while/for), !e flips the sense, && and ||
-   ; short-circuit straight into the branch structure. the double lane stays
-   ; materialized (ucomisd's NaN parity rides the set ops). forms | 'bad. --
+   ; short-circuit straight into the branch structure, and a predicate CALL
+   ; splices through cbinl. the double lane stays materialized (ucomisd's NaN
+   ; parity rides the set ops). forms | 'bad. --
    (cbranch g env e cc lbl)
     (? (&& (<e = 'un) (<>e = 'not))
         (cbranch g env <>>e (? (cc = 'eq) 'ne 'eq) lbl)
@@ -437,11 +502,13 @@
                                 (: fs ((vfs ah) + (vfs b) + `(`('cmp (vreg ah) (vreg b)) `('br (bcc op (cu2 (vty ah) (vty b))) lbl)))
                                    _ (rfree g (vreg ah)) _ (rfree g (vreg b))
                                    fs)))))))))
-       (: c (ctest g env e)
-          (? (bad? c) 'bad
-             (: fs ((vfs c) + `(`('cmp (vreg c) 0) `('br cc lbl)))
-                _ (rfree g (vreg c))
-                fs))))
+       (: try (? (<e = 'call) (cbinl g env e cc lbl) 'no)
+          (? (! (id? try 'no)) try
+             (: c (ctest g env e)
+                (? (bad? c) 'bad
+                   (: fs ((vfs c) + `(`('cmp (vreg c) 0) `('br cc lbl)))
+                      _ (rfree g (vreg c))
+                      fs))))))
    ; 8 little-endian bytes of a constant (the global initializer image)
    (le8s v) (: (go i acc) (? (7 < i) (rev acc)
                              (go (i + 1) (link (& (>> v (* 8 i)) 255) acc)))
