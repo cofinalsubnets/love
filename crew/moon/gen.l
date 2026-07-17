@@ -1430,13 +1430,19 @@
                              unsg (|| (usg? ta) (usg? tb))            ; either operand unsigned -> unsigned divide
                              cunsg (|| unsg (|| pa pb))               ; a POINTER relational compares UNSIGNED too (C: addresses are unsigned; matters where a pointer sets bit 63)
                              (? (op = '+)
+                                 ; ptr + idx at a machine scale is ONE leax (x64 a SIB lea,
+                                 ; a64 an add-shifted) -- the imul/add pair only for odd sizes
                                  (? (&& pa pb) 'bad
-                                    pa (mkv ta 'r0 (cat mid (cat (? (1 < (tsz g <>ta))
-                                                             (imby g 'r0 (tsz g <>ta)) ())
-                                                      (`(`('add 'r1 'r1 'r0)) + back))))
-                                    pb (mkv tb 'r0 (cat mid (cat (? (1 < (tsz g <>tb))
-                                                             (imby g 'r1 (tsz g <>tb)) ())
-                                                      (`(`('add 'r1 'r1 'r0)) + back))))
+                                    pa (: sz (tsz g <>ta)
+                                          (? (member? sz '(1 2 4 8))
+                                             (mkv ta 'r0 (cat mid `(`('leax 'r0 'r1 'r0 sz 0))))
+                                             (mkv ta 'r0 (cat mid (cat (? (1 < sz) (imby g 'r0 sz) ())
+                                                      (`(`('add 'r1 'r1 'r0)) + back))))))
+                                    pb (: sz (tsz g <>tb)
+                                          (? (member? sz '(1 2 4 8))
+                                             (mkv tb 'r0 (cat mid `(`('leax 'r0 'r0 'r1 sz 0))))
+                                             (mkv tb 'r0 (cat mid (cat (? (1 < sz) (imby g 'r1 sz) ())
+                                                      (`(`('add 'r1 'r1 'r0)) + back))))))
                                     (mkv 'long 'r0 (mid + `(`('add 'r1 'r1 'r0)) + back)))
                                 (op = '-)
                                  (? (&& pa pb)
@@ -1504,7 +1510,21 @@
                                    'bad))
                             ; the REGISTER lane: both values live, 3-address combine
                             (: pa (ptr? ta) pb (ptr? tb)
-                               (? (|| (id? ah 'sh) (|| pa pb)) (shut ())
+                               ; a live ptr + live idx at a machine scale: ONE leax, no
+                               ; shuttle (lea reads both sources before writing -- any alias)
+                               lxsz (? (! (op = '+)) () (&& pa pb) ()
+                                       pa (: s9 (tsz g <>ta) (? (member? s9 '(1 2 4 8)) s9 ()))
+                                       pb (: s9 (tsz g <>tb) (? (member? s9 '(1 2 4 8)) s9 ()))
+                                       ())
+                               (? (id? ah 'sh) (shut ())
+                                  (&& (|| pa pb) (! lxsz)) (shut ())
+                                  lxsz
+                                   (: rA (vreg ah) rB (vreg b)
+                                      rd (? wnt wnt (rdst g rA))
+                                      fs ((vfs ah) + (vfs b)
+                                          + `(`('leax rd (? pa rA rB) (? pa rB rA) lxsz 0)))
+                                      _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
+                                      (mkv (? pa ta tb) rd fs))
                                   (: rA (vreg ah) rB (vreg b)
                                      cunsg (|| (|| (usg? ta) (usg? tb)) (|| pa pb))
                                      pre ((vfs ah) + (vfs b))
@@ -1693,8 +1713,8 @@
        ; all-or-nothing as ever: any residual r3 still bails and the original
        ; forms stand. --
        sv3 (&& (! a64) ((nthr body0 0) = '(st r4 -8 r3)))
-       wina '(mov li lea lean add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4 st st1 st2 st4 cmp test)
-       wind '(mov li lea lean add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
+       wina '(mov li lea lean leax ldx ldxb add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4 st st1 st2 st4 cmp test)
+       wind '(mov li lea lean leax ldx ldxb add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
        (squeeze l)
         (? (! (two? l)) ()
            (: f <l r >l
@@ -1985,6 +2005,9 @@
                  (member? op '(lea lean la movqrx cvttsd2si set))
                   (: _ (defr ci rg sl ce (? (op = 'set) <>>f <>f))
                      (go r 1 cur rg sl ce ci (link f acc)))
+                 (member? op '(leax ldx ldxb))       ; indexed forms: the dest is new, sp/frame state stands
+                  (: _ (defr ci rg sl ce <>f)
+                     (go r 1 cur rg sl ce ci (link f acc)))
                  (member? op '(div rem udiv urem shlv shrv sarv neg not sx1 sx2 sx4 zx1 zx2 zx4))
                   (: _ (defr ci rg sl ce 'r0) _ (defr ci rg sl ce 'r1) _ (defr ci rg sl ce 'r2) _ (defr ci rg sl ce 'r3)
                      (go r 1 cur rg sl ce ci (link f acc)))
@@ -2148,6 +2171,7 @@
               (member? op '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) `(`(<>>f) `(<>f) 1)
               (member? op '(st st1 st2 st4)) `(`(<>f <>>>f) () ())
               (member? op '(lea lean)) `(`(<>>f) `(<>f) 1)
+              (member? op '(leax ldx ldxb)) `(`(<>>f <>>>f) `(<>f) 1)
               (op = 'la) `(() `(<>f) 1)
               (op = 'set) `(() `(<>>f) 1)
               (member? op '(cmp test)) `(((rg1 <>f) + (rg1 <>>f)) () ())
@@ -2246,7 +2270,18 @@
     (? (! (two? fs)) ()
        (: f <fs r >fs
           nx (? (two? r) <r ())
-          hit (? (! (&& (two? f) (&& (two? nx) (member? <nx ldops9)))) ()
+          ; a leax feeding the very next full-word/byte load (same dest-and-base
+          ; overwrite license) IS the indexed load: one SIB insn. the base/index
+          ; may alias the dest -- the fold reads them at the leax's seat, where
+          ; they still hold their pre-leax values.
+          lx (? (! (&& (two? f) (&& (<f = 'leax)
+                        (&& (two? nx) (member? <nx '(ld ldu1)))))) ()
+                (! (&& (id? <>nx <>f) (id? <>>nx <>f))) ()
+                (! (&& (charm? <>>>nx) (charm? (nthr f 5)))) ()
+                `((? (<nx = 'ld) 'ldx 'ldxb) <>f <>>f <>>>f (nthr f 4)
+                  ((nthr f 5) + <>>>nx)))
+          hit (? (two? lx) ()
+                 (! (&& (two? f) (&& (two? nx) (member? <nx ldops9)))) ()
                  (! (&& (id? <>nx <>f) (id? <>>nx <>f))) ()   ; load's dest AND base both = f's dest
                  (! (charm? <>>>nx)) ()
                  (member? <f '(lea lean))
@@ -2256,7 +2291,8 @@
                      `(<>>f (<>>>f + <>>>nx)) ())
                  (<f = 'mov) `(<>>f <>>>nx)
                  ())
-          (? (two? hit)
+          (? (two? lx) (link lx (addrf1 >r))
+             (two? hit)
              (link `(<nx <>f <hit <>hit) (addrf1 >r))
              (link f (addrf1 r)))))
    (addrfold fs) (addrf1 (addrf1 fs))
