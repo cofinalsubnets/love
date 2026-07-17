@@ -886,7 +886,12 @@
                   ; words). the system insns ride raw words (llvm-mc-checked), and the
                   ; variable stride shift too (IR shlv wants its count in r1 -- r1
                   ; holds `end` here).
-                  ; r9-r11 scratch: a call site, pool regs dead by callish?.
+                  ; scratch = r2/r3/r9/r15 ONLY: r9 rides the pool (dead here by
+                  ; callish? parking + vmflush), r15 the callr park (live only at a
+                  ; tail), r2/r3 arg regs past their args. NEVER r10-r14 -- those are
+                  ; the a64 param/local HOMES, resident across the whole fn and only
+                  ; spilled around real calls (this lane clobbering the r10 home was
+                  ; a boot segfault the day lvm_nif first passed the homing gate).
                   (? (! (a64? g)) (mkv 'long 'r0 ())
                      (: e1 (cgexpr g env <args)
                         e2 (cgexpr g env <>args)
@@ -899,12 +904,12 @@
                               (cat (asint g e2) (cat (`(`('mov 'r1 'r0)) + (spop 'r0))
                                `(`('raw `(34 0 59 213))          ; mrs x2, ctr_el0
                                   `('li 'r9 15)
-                                  `('and 'r10 'r2 'r9)
-                                  `('li 'r11 4)
-                                  `('raw `(106 33 202 154))      ; lsl x10, x11, x10 -- isize
+                                  `('and 'r15 'r2 'r9)
+                                  `('li 'r3 4)
+                                  `('raw `(111 32 207 154))      ; lsl x15, x3, x15 -- isize
                                   `('shr 'r2 16)
                                   `('and 'r2 'r2 'r9)
-                                  `('raw `(98 33 194 154))       ; lsl x2, x11, x2 -- dsize
+                                  `('raw `(98 32 194 154))       ; lsl x2, x3, x2 -- dsize
                                   `('sub 'r3 'r2 1)
                                   `('not 'r3)
                                   `('and 'r9 'r0 'r3)            ; begin & ~(dsize-1)
@@ -916,14 +921,14 @@
                                   `('jmp lb)
                                   `('label db)
                                   `('raw `(159 59 3 213))        ; dsb ish
-                                  `('sub 'r3 'r10 1)
+                                  `('sub 'r3 'r15 1)
                                   `('not 'r3)
                                   `('and 'r9 'r0 'r3)            ; begin & ~(isize-1)
                                   `('label li9)
                                   `('cmp 'r9 'r1)
                                   `('br 'ae di)
                                   `('raw `(41 117 11 213))       ; ic ivau, x9
-                                  `('add 'r9 'r9 'r10)
+                                  `('add 'r9 'r9 'r15)
                                   `('jmp li9)
                                   `('label di)
                                   `('raw `(159 59 3 213))        ; dsb ish
