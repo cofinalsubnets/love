@@ -1901,52 +1901,81 @@
        (go fs0 1 0 (fresh 0) (fresh 0) (fresh 0) (fresh 0) ()))
 
    ; dead CELLS: after the copy folds a spush cell whose load folded away is
-   ; write-only -- its store drops (the sub/add sp pair stays; spmerge cancels
-   ; what becomes adjacent). a record STACK mirrors the sp motion exactly --
+   ; write-only -- its store drops, and its sub/add RESERVATION goes with it
+   ; (the orphan sweep). a record STACK mirrors the sp motion exactly --
    ; 16-byte cells (sub+st adjacent, the spush shape), 8-byte pushes, pads,
    ; multi-slot cleans -- and ANY shape outside the model bails the whole fn.
-   ; a (mov sp r4) epilogue is a PATH exit, not sp motion on the linear walk.
+   ; a record born from a sub and unwound by a matching add CANCELS (drop the
+   ; sub, shrink the add) when its cell is unread, its size keeps the
+   ; 16-alignment every call rides, and nothing observed sp while it was open:
+   ; sp-relative addressing is translation-invariant, so nested live cells
+   ; ride through unmoved. an op outside the model that MENTIONS sp (or a raw,
+   ; opaque) dirties every open record instead of bailing -- the (mov sp r4)
+   ; epilogue is a PATH exit on the linear walk, and its sp-mention keeps the
+   ; frame's own record dirty (its sub is also never add-unwound: two belts).
    (deadcell fs)
     (: cand (tablet 0)                               ; st-index -> 1 while still droppable
-       (scan l i stk)
-        (? (! (two? l)) 1
+       dirty (tablet 0)                              ; sub-index -> 1: the span observed sp
+       (dirt st2) (? (! (two? st2)) 1
+                     (: _ (? (charm? (cauup (cap st2))) (pin dirty (cauup (cap st2)) 1) ())
+                        (dirt >st2)))
+       (scan l i stk sw)                             ; -> the swept (sub st k add) entries | 'no
+        (? (! (two? l)) sw
            (: f <l r >l
-              (? (! (two? f)) (scan r (i + 1) stk)
+              (? (! (two? f)) (scan r (i + 1) stk sw)
                  (&& (<f = 'sub) (&& (<>f = 'sp) (charm? <>>>f)))
                   (: k <>>>f
                      nx (? (two? r) <r ())
                      (? (&& (k = 16) (&& (two? nx) (&& (<nx = 'st)
                             (&& (<>nx = 'sp) (<>>nx = 0)))))
                         (: _ (pin cand (i + 1) 1)
-                           (scan >r (i + 2) (link `((i + 1) 16) stk)))
-                        (scan r (i + 1) (link `(() k) stk))))
+                           (scan >r (i + 2) (link `((i + 1) 16 i) stk) sw))
+                        (scan r (i + 1) (link `(() k i) stk) sw)))
                  (&& (<f = 'add) (&& (<>f = 'sp) (charm? <>>>f)))
-                  (: (unwind st2 k)
-                      (? (k = 0) st2
+                  (: (unwind st2 k w)
+                      (? (k = 0) `(st2 w)
                          (! (two? st2)) 'no
-                         (: sz (caup (cap st2))
-                            (? (k < sz) 'no (unwind >st2 (k - sz)))))
-                     st3 (unwind stk <>>>f)
-                     (? (id? st3 'no) 'no (scan r (i + 1) st3)))
-                 (<f = 'push) (scan r (i + 1) (link `(() 8) stk))
+                         (: rc (cap st2) sz (caup rc)
+                            (? (k < sz) 'no
+                               (unwind >st2 (k - sz)
+                                (? (charm? (cauup rc)) (link `((cauup rc) (cap rc) sz i) w) w)))))
+                     r9 (unwind stk <>>>f ())
+                     (? (id? r9 'no) 'no (scan r (i + 1) (cap r9) ((caup r9) + sw))))
+                 (<f = 'push) (scan r (i + 1) (link `(() 8 ()) stk) sw)
                  (<f = 'pop)
                   (? (&& (two? stk) (&& (! (cap (cap stk))) ((caup (cap stk)) = 8)))
-                     (scan r (i + 1) >stk)
-                     (<>f = 'r4) (scan r (i + 1) stk)   ; the epilogue's frame pop: path exit
+                     (scan r (i + 1) >stk sw)
+                     (<>f = 'r4) (scan r (i + 1) stk sw)   ; the epilogue's frame pop: path exit
                      'no)
                  (&& (member? <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (<>>f = 'sp))
                   (? (&& (two? stk) (&& (cap (cap stk)) (<>>>f = 0)))
                      (: _ (pin cand (cap (cap stk)) ())     ; loaded: the store lives
-                        (scan r (i + 1) stk))
+                        (scan r (i + 1) stk sw))
                      'no)
                  (&& (member? <f '(st st1 st2 st4 stsd stss)) (<>f = 'sp)) 'no
                  (&& (member? <f '(ldsd ldss)) (<>>f = 'sp)) 'no
-                 (scan r (i + 1) stk))))
-       ok (scan fs 0 ())
+                 (: _ (? (|| (<f = 'raw) (member? 'sp >f)) (dirt stk) ())
+                    (scan r (i + 1) stk sw)))))
+       ok (scan fs 0 () ())
        (? (id? ok 'no) fs
-          (: (drop2 l i) (? (! (two? l)) ()
+          (: subdrop (tablet 0) addsh (tablet 0)     ; sub-index -> drop; add-index -> shrink bytes
+             (mark w) (? (! (two? w)) 1
+                         (: e <w sub (nthr e 0) st (nthr e 1) k (nthr e 2) ad (nthr e 3)
+                            _ (? (peep dirty sub ()) ()
+                                 (! (0 = (% k 16))) ()
+                                 (&& st (! (peep cand st ()))) ()
+                                 (: _ (pin subdrop sub 1)
+                                    (pin addsh ad ((peep addsh ad 0) + k))))
+                            (mark >w)))
+             _ (mark ok)
+             (drop2 l i) (? (! (two? l)) ()
                             (? (peep cand i ()) (drop2 >l (i + 1))
-                               (link <l (drop2 >l (i + 1)))))
+                               (peep subdrop i ()) (drop2 >l (i + 1))
+                               (: f2 <l s (peep addsh i 0)
+                                  (? (s = 0) (link f2 (drop2 >l (i + 1)))
+                                     (: k2 (<>>>f2 - s)
+                                        (? (k2 = 0) (drop2 >l (i + 1))
+                                           (link `('add 'sp 'sp k2) (drop2 >l (i + 1)))))))))
              (drop2 fs 0))))
 
    ; dead DEFS: within a basic block, a PURE definition whose register is
