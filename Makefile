@@ -26,7 +26,7 @@ export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_lux test_extract test_arm64 test_wake
+.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_extract test_arm64 test_wake
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest
 
 # `make` with no target is `make test` -- pinned EXPLICITLY because the includes
@@ -61,7 +61,7 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_lux test_kore test_reef test_vi test_moon test_raw nettest test_arm64 test_kernel test_wasm test_wake
+test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_kore test_reef test_vi test_moon test_raw nettest test_arm64 test_kernel test_wasm test_wake
 all: host kernel wasm
 
 # NB: there is NO git pre-commit hook -- committed artifacts (wasm/ai.js, bench/
