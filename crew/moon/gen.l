@@ -2237,6 +2237,84 @@
                                 (go r dead (link f acc))))))))))
        (go (rev fs) (tablet 0) ()))
 
+   ; -- the arrival rename (the clang differential's home-shuffle bucket): a
+   ; call-free fn's param homes copy the arg registers up front (mov H A) and
+   ; copy back at every staged tail (mov A H) -- pure shuffle whenever the
+   ; arrival register was never otherwise touched. jr0 first: a park (mov P X)
+   ; riding straight-line to its (jmpr P) retargets to (jmpr X) -- the park's
+   ; fresh def of a home register would otherwise block its pair. then unhome
+   ; discovers each (H A) pair off the leading movs and walks once, bail-happy:
+   ; any OTHER mention of A kills the pair (r1/r2 are the shuttle/div protocol
+   ; -- a fn that needed them keeps its homes), as does a FRESH def of H (a
+   ; second live range would merge onto A while a restored copy still rides to
+   ; the transfer); an H def that READS H (the hp bump, the sp walk) is the
+   ; value evolving and renames sound. a survivor renames H -> A everywhere,
+   ; the entry mov and every restore fall out as self-movs, and the param
+   ; rides its ARRIVAL register end to end. self-tail-calls stay sound: the
+   ; loop-back label sits above the (dropped) entry movs and the value is
+   ; already seated. --
+   (jr0 fs)
+    (? (! (two? fs)) ()
+       (: f <fs
+          (? (! (&& (two? f) (&& (<f = 'mov) (! (charm? <>>f)))))
+              (link f (jr0 >fs))
+             (: P <>f X <>>f
+                (scan w n)                            ; forms to the jmpr -> n | 'no
+                 (? (|| (! (two? w)) (10 < n)) 'no
+                    (: f2 <w
+                       (? (! (two? f2)) 'no
+                          (&& (<f2 = 'jmpr) (id? <>f2 P)) n
+                          (: rd (rdsp f2)
+                             (? (id? rd 'bar) 'no
+                                (member? P >f2) 'no
+                                (member? X <>rd) 'no
+                                (scan >w (n + 1)))))))
+                k (scan >fs 0)
+                (? (id? k 'no) (link f (jr0 >fs))
+                   (: (mend w i) (? (i = k) (link `('jmpr X) (jr0 >w))
+                                    (link <w (mend >w (i + 1))))
+                      (mend >fs 0)))))))
+   (unhome g fs)
+    (: ar (argr g) hr (hregs g)
+       (pears l n acc)                                ; the leading (mov H A) movs -> ((H A)..)
+        (? (|| (! (two? l)) (8 < n)) acc
+           (: f <l
+              (? (&& (two? f) (&& (<f = 'mov)
+                    (&& (member? <>f hr) (member? <>>f ar))))
+                 (pears >l (n + 1) (link `(<>f <>>f) acc))
+                 (pears >l (n + 1) acc))))
+       (callish l) (? (! (two? l)) ()
+                      (: f <l (? (&& (two? f) (member? <f '(call callr raw sys))) 1 (callish >l))))
+       (ok? H A l seen)
+        (? (! (two? l)) 1
+           (: f <l
+              (? (! (two? f)) (ok? H A >l seen)
+                 (&& (! seen) (&& (<f = 'mov) (&& (id? <>f H) (id? <>>f A))))
+                  (ok? H A >l 1)                      ; the entry mov
+                 (&& (<f = 'mov) (&& (id? <>f A) (id? <>>f H)))
+                  (ok? H A >l seen)                   ; a staging restore
+                 (: rd (rdsp f)
+                    (? (id? rd 'bar)
+                        (? (member? <f '(label jmp br ret)) (ok? H A >l seen)
+                           (&& (<f = 'jmpr) (! (id? <>f A))) (ok? H A >l seen)
+                           ())                        ; an op outside the tables: keep the homes
+                       (: reads <rd
+                          (? (|| (member? A reads) (member? A <>rd)) ()
+                             (&& (member? H <>rd) (! (member? H reads))) ()
+                             (ok? H A >l seen))))))))
+       (ren H A l)
+        (? (! (two? l)) ()
+           (: f <l
+              f2 (? (two? f) ((: (sw e) (? (! (two? e)) e (link (? (id? <e H) A <e) (sw >e))) sw) f) f)
+              (? (&& (two? f2) (&& (<f2 = 'mov) (id? <>f2 <>>f2)))
+                 (ren H A >l)                         ; a self-mov husk drops
+                 (link f2 (ren H A >l)))))
+       (go2 ps l)
+        (? (! (two? ps)) l
+           (: p <ps
+              (go2 >ps (? (ok? <p <>p l ()) (ren <p <>p l) l))))
+       (? (callish fs) fs (go2 (pears fs 0 ()) fs)))
+
    ; adjacent sp adjustments MERGE (nothing observes the point between two
    ; touching adds); a cancelled pair vanishes -- the husk a dead cell leaves
    (spadj? f) (&& (two? f) (&& (member? <f '(add sub))
@@ -3720,7 +3798,7 @@
                    _ (pin g 'lhome ()) _ (pin g 'homes ())   ; the wrap set dies with this fn
                    (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
                 ir1)))
-       (? (bad? irf) irf (unframe g irf)))
+       (? (bad? irf) irf (unhome g (jr0 (unframe g irf)))))
 
    ; the data tail: globals in declaration order, then the string table
    ; -> (dataforms nifforms) | 'bad. a global pinned to the `ai_nifs` section
