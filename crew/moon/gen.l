@@ -1615,22 +1615,38 @@
             <>>>sf ())
        body0 (dropf fs (? a64 5 4))
        ; -- the PARK lane (x64): a callr sib parks its target in r3 and unparks
-       ; with (mov r10 r3); when the staging between them folded away the pair
-       ; sits ADJACENT and collapses to one mov -- then the fn never WRITES r3
-       ; at all, so the caller's rbx rides the tail-jump untouched (the
-       ; callee-saved contract made unnecessary, not elided) and the rbx save
-       ; (body head, slot -8 is its alone) and each restore run's leading
-       ; (ld r3 r4 -8) drop with the frame. all-or-nothing as ever: any
-       ; residual r3 still bails and the original forms stand. --
+       ; with (mov r10 r3); when everything between them (folded-away staging,
+       ; or a few surviving arg movs) neither mentions r3 nor rewrites the
+       ; parked SOURCE, the pair collapses to one mov at the unpark's seat --
+       ; then the fn never WRITES r3 at all, so the caller's rbx rides the
+       ; tail-jump untouched (the callee-saved contract made unnecessary, not
+       ; elided) and the rbx save (body head, slot -8 is its alone) and each
+       ; restore run's leading (ld r3 r4 -8) drop with the frame.
+       ; all-or-nothing as ever: any residual r3 still bails and the original
+       ; forms stand. --
        sv3 (&& (! a64) ((nthr body0 0) = '(st r4 -8 r3)))
+       wina '(mov li lea lean add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4 st st1 st2 st4 cmp test)
+       wind '(mov li lea lean add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
        (squeeze l)
         (? (! (two? l)) ()
            (: f <l r >l
-              nx (? (two? r) <r ())
-              (? (&& (two? f) (&& (<f = 'mov) (&& (id? <>f 'r3) (&& (! (id? <>>f 'sp))
-                    (nx = '(mov r10 r3))))))
-                 (link `('mov 'r10 <>>f) (squeeze >r))
-                 (link f (squeeze r)))))
+              (? (! (&& (two? f) (&& (<f = 'mov) (&& (id? <>f 'r3) (! (id? <>>f 'sp))))))
+                 (link f (squeeze r))
+                 (: X <>>f
+                    (win w n)                        ; forms between park and unpark -> count | 'no
+                     (? (|| (! (two? w)) (8 < n)) 'no
+                        (: g2 <w
+                           (? (g2 = '(mov r10 r3)) n
+                              (! (two? g2)) 'no
+                              (member? 'r3 >g2) 'no
+                              (! (member? <g2 wina)) 'no
+                              (&& (member? <g2 wind) (id? <>g2 X)) 'no
+                              (win >w (n + 1)))))
+                    k (win r 0)
+                    (? (id? k 'no) (link f (squeeze r))
+                       (: (take w n) (? (n < 1) (link `('mov 'r10 X) (squeeze (dropf w 1)))
+                                        (link <w (take >w (n - 1))))
+                          (take r k)))))))
        body (: b2 (? sv3 (dropf body0 1) body0) (? a64 b2 (squeeze b2)))
        (epi3? l9)                                    ; l9 opens with a restore run -> its length | ()
         (? a64 (? (&& ((nthr l9 0) = '(lea sp fp 0)) (&& ((nthr l9 1) = '(pop fp)) ((nthr l9 2) = '(pop lr)))) 3 ())
@@ -1932,17 +1948,24 @@
    ; sub, shrink the add) when its cell is unread, its size keeps the
    ; 16-alignment every call rides, and nothing observed sp while it was open:
    ; sp-relative addressing is translation-invariant, so nested live cells
-   ; ride through unmoved. an op outside the model that MENTIONS sp (or a raw,
-   ; opaque) dirties every open record instead of bailing -- the (mov sp r4)
-   ; epilogue is a PATH exit on the linear walk, and its sp-mention keeps the
-   ; frame's own record dirty (its sub is also never add-unwound: two belts).
+   ; ride through unmoved. a LIVE cell under the same guards CONVERTS instead:
+   ; its parked value moves to a fresh frame slot below the frame (the
+   ; prologue sub grows) and the sub/add pair still cancels -- overlapping
+   ; cells sit at distinct record depths and same-depth cells never overlap
+   ; in time, so one slot per depth serves the whole fn; a frame slot rides
+   ; every call, as the cell did. an op outside the model that MENTIONS sp
+   ; (or a raw, opaque) dirties every open record instead of bailing -- the
+   ; (mov sp r4) epilogue is a PATH exit on the linear walk, and its
+   ; sp-mention keeps the frame's own record dirty (its sub is also never
+   ; add-unwound: two belts).
    (deadcell fs)
     (: cand (tablet 0)                               ; st-index -> 1 while still droppable
+       clds (tablet 0)                               ; st-index -> its cell's ld indexes
        dirty (tablet 0)                              ; sub-index -> 1: the span observed sp
        (dirt st2) (? (! (two? st2)) 1
                      (: _ (? (charm? (cauup (cap st2))) (pin dirty (cauup (cap st2)) 1) ())
                         (dirt >st2)))
-       (scan l i stk sw)                             ; -> the swept (sub st k add) entries | 'no
+       (scan l i stk sw)                             ; -> the (sub st k add depth) entries | 'no
         (? (! (two? l)) sw
            (: f <l r >l
               (? (! (two? f)) (scan r (i + 1) stk sw)
@@ -1952,8 +1975,8 @@
                      (? (&& (k = 16) (&& (two? nx) (&& (<nx = 'st)
                             (&& (<>nx = 'sp) (<>>nx = 0)))))
                         (: _ (pin cand (i + 1) 1)
-                           (scan >r (i + 2) (link `((i + 1) 16 i) stk) sw))
-                        (scan r (i + 1) (link `(() k i) stk) sw)))
+                           (scan >r (i + 2) (link `((i + 1) 16 i (tally stk)) stk) sw))
+                        (scan r (i + 1) (link `(() k i (tally stk)) stk) sw)))
                  (&& (<f = 'add) (&& (<>f = 'sp) (charm? <>>>f)))
                   (: (unwind st2 k w)
                       (? (k = 0) `(st2 w)
@@ -1961,10 +1984,10 @@
                          (: rc (cap st2) sz (caup rc)
                             (? (k < sz) 'no
                                (unwind >st2 (k - sz)
-                                (? (charm? (cauup rc)) (link `((cauup rc) (cap rc) sz i) w) w)))))
+                                (? (charm? (cauup rc)) (link `((cauup rc) (cap rc) sz i (nthr rc 3)) w) w)))))
                      r9 (unwind stk <>>>f ())
                      (? (id? r9 'no) 'no (scan r (i + 1) (cap r9) ((caup r9) + sw))))
-                 (<f = 'push) (scan r (i + 1) (link `(() 8 ()) stk) sw)
+                 (<f = 'push) (scan r (i + 1) (link `(() 8 () ()) stk) sw)
                  (<f = 'pop)
                   (? (&& (two? stk) (&& (! (cap (cap stk))) ((caup (cap stk)) = 8)))
                      (scan r (i + 1) >stk sw)
@@ -1972,7 +1995,9 @@
                      'no)
                  (&& (member? <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (<>>f = 'sp))
                   (? (&& (two? stk) (&& (cap (cap stk)) (<>>>f = 0)))
-                     (: _ (pin cand (cap (cap stk)) ())     ; loaded: the store lives
+                     (: stx (cap (cap stk))
+                        _ (pin cand stx ())              ; loaded: the store lives
+                        _ (pin clds stx (link i (peep clds stx ())))
                         (scan r (i + 1) stk sw))
                      'no)
                  (&& (member? <f '(st st1 st2 st4 stsd stss)) (<>f = 'sp)) 'no
@@ -1982,20 +2007,49 @@
        ok (scan fs 0 () ())
        (? (id? ok 'no) fs
           (: subdrop (tablet 0) addsh (tablet 0)     ; sub-index -> drop; add-index -> shrink bytes
-             (mark w) (? (! (two? w)) 1
-                         (: e <w sub (nthr e 0) st (nthr e 1) k (nthr e 2) ad (nthr e 3)
-                            _ (? (peep dirty sub ()) ()
-                                 (! (0 = (% k 16))) ()
-                                 (&& st (! (peep cand st ()))) ()
-                                 (: _ (pin subdrop sub 1)
-                                    (pin addsh ad ((peep addsh ad 0) + k))))
-                            (mark >w)))
-             _ (mark ok)
+             stconv (tablet 0) ldconv (tablet 0)     ; st/ld-index -> the slot's positive offset
+             pf3 (nthr fs 3)                         ; the prologue's frame sub: (sub sp sp F)
+             cvok (&& ((nthr fs 1) = '(push r4)) (&& ((nthr fs 2) = '(mov r4 sp))
+                   (&& (two? pf3) (&& (<pf3 = 'sub) (&& (<>pf3 = 'sp) (&& (<>>pf3 = 'sp) (charm? <>>>pf3)))))))
+             F (? cvok <>>>pf3 0)
+             (mark w cv) (? (! (two? w)) cv
+                            (: e <w sub (nthr e 0) st (nthr e 1) k (nthr e 2) ad (nthr e 3)
+                               (? (peep dirty sub ()) (mark >w cv)
+                                  (! (0 = (% k 16))) (mark >w cv)
+                                  (|| (! st) (peep cand st ()))
+                                   (: _ (pin subdrop sub 1)
+                                      _ (pin addsh ad ((peep addsh ad 0) + k))
+                                      (mark >w cv))
+                                  (&& cvok (k = 16)) (mark >w (link e cv))
+                                  (mark >w cv))))
+             cvl (mark ok ())
+             ds (: (dd l acc) (? (! (two? l)) acc
+                                 (: d (nthr (cap l) 4)
+                                    (dd >l (? (member? d acc) acc (link d acc)))))
+                   (dd cvl ()))
+             (rank d l n) (? (id? <l d) n (rank d >l (n + 1)))
+             _ ((: (cvt l) (? (! (two? l)) 1
+                              (: e (cap l)
+                                 o ((F + 8) + (8 * (rank (nthr e 4) ds 0)))
+                                 _ (pin subdrop (nthr e 0) 1)
+                                 _ (pin addsh (nthr e 3) ((peep addsh (nthr e 3) 0) + 16))
+                                 _ (pin stconv (nthr e 1) o)
+                                 _ ((: (pl ls) (? (! (two? ls)) 1
+                                                  (: _ (pin ldconv <ls o) (pl >ls))) pl)
+                                    (peep clds (nthr e 1) ()))
+                                 (cvt >l))) cvt) cvl)
+             F2 (& ((F + (8 * (tally ds))) + 15) -16)
              (drop2 l i) (? (! (two? l)) ()
                             (? (peep cand i ()) (drop2 >l (i + 1))
                                (peep subdrop i ()) (drop2 >l (i + 1))
-                               (: f2 <l s (peep addsh i 0)
-                                  (? (s = 0) (link f2 (drop2 >l (i + 1)))
+                               (: f2 <l
+                                  o9 (peep stconv i ())
+                                  ol (peep ldconv i ())
+                                  s (peep addsh i 0)
+                                  (? o9 (link `('st 'r4 (0 - o9) <>>>f2) (drop2 >l (i + 1)))
+                                     ol (link `(<f2 <>f2 'r4 (0 - ol)) (drop2 >l (i + 1)))
+                                     (&& (two? cvl) (i = 3)) (link `('sub 'sp 'sp F2) (drop2 >l (i + 1)))
+                                     (s = 0) (link f2 (drop2 >l (i + 1)))
                                      (: k2 (<>>>f2 - s)
                                         (? (k2 = 0) (drop2 >l (i + 1))
                                            (link `('add 'sp 'sp k2) (drop2 >l (i + 1)))))))))
