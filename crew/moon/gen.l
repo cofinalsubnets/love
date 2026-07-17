@@ -3396,6 +3396,13 @@
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
                  (: r (cgfn g f)
                     (? (bad? r) (: _ (puts (+ ";; cgfn refuses " (<>f + "\n"))) ())
+                       ; fn-start ALIGNMENT was built and measured here 2026-07-16
+                       ; (('align 16) at this stitch, nop fill in holo's lay -- the
+                       ; form still exists there): 16 ran 8/8 interleaved corpus
+                       ; rounds SLOWER (~4%), 32 7/8 (~5%), branch-misses +9% --
+                       ; aligning every fn zeroes the low target-address bits and
+                       ; the BTB aliases. dense unaligned packing WINS on this
+                       ; frontend-bound core. don't retry as written.
                        (gfns >fs (revcat r acc)
                              (|| saw (<>f = "main"))))))))
        (? ok (gfns <>ast () ()) ()))
