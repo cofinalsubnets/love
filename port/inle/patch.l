@@ -53,8 +53,8 @@
    patch-max 8192
    model-slot (tablet 0)
    (set-model f) (pin model-slot 0 f)                        ; f : (sys q) -> reply text
-   sys-code (+ "You are editing the ai programming language: a lisp-surfaced, fully-curried "
-            (+ "language over a tiny C core (see CLAUDE.md). I give you a FILE and a TASK. "
+   sys-code (+ "You are editing the ai programming language: a fully-curried "
+            (+ "language with an infix, low-paren surface that factors to a lisp core over a tiny C core (see CLAUDE.md). I give you a FILE and a TASK. "
                "Return ONLY the COMPLETE new contents of that file -- no markdown fence, no commentary. The build + test gate must stay green."))
    (mkbody q)
      (+ "{\"model\":\"claude-opus-4-8\",\"max_tokens\":" (+ (show patch-max)

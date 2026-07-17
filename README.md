@@ -1,29 +1,20 @@
 # 🌑 ai
 
-ai is kind of like `ai = (ml + apl) * (lisp / C)`.
-every value in ai is a total function, and (almost) every
-expression has a value. all recursion is on heap and any
- recursive operator may be iterated by non-negative integers
-(green charms), which is their function action. consequently
-the value of a numeric list under the left-associative lisp
-eval function corresponds to a reversed exponential tower.
-this refinement forms the ML part of `ml + apl`. the APL
-part is a transparent right-associative superset that
-interprets sigils (all-punctuation symbols) as infix or
-prefix operators according to placement. the two forms mix
-freely: infix operators take the lisp meaning in function
-position, and infix can be converted to left-associative by
-wrapping the sigil in parens, eg.  `3 = ((+) 1 2)`.
+ai is a fully-curried language with an infix, low-paren surface that factors down
+to a small parenthesized core. every value is a total one-argument function, and
+(almost) every expression has a value. integers are church numerals, so a numeric
+list read left-associatively is a reversed exponential tower, and any recursive
+operator is iterated by a non-negative integer (a green charm) -- iteration is its
+function action. all recursion lives on the heap.
 
-in terms of implementation, `lisp : software :: C : hardware`.
-C gives random memory access via pointer arithmetic and direct
-access to hardware. `lisp` is the software facing basement,
-which you could factor as `ml * scheme` left-associative
-applicative curried untyped lambda calculus, but applicative order
-may vary in general. this is internally sound because every operator
-is total and every thread cooperatively yields control regardless of
-user program behavior. a uniform global mechanism exists for handling
-conditions such as OOM.
+the surface adds sigils -- all-punctuation symbols -- read as infix or prefix
+operators by placement: a right-associative superset over the parenthesized core,
+and the two mix freely. an infix operator takes its plain meaning in function
+position, and wrapping a sigil in parens converts it back to left-associative:
+`3 = ((+) 1 2)`. the core is applicative, curried, untyped lambda calculus (though
+applicative order may vary). it stays internally sound because every operator is
+total and every thread yields cooperatively regardless of user program behavior;
+one uniform mechanism handles conditions such as OOM.
 
 features
 - numeric tower with shaped array broadcasting
@@ -63,7 +54,7 @@ SPACED IS DYADIC -- and this holds everywhere, head position included, so
 (`(+ 1 2)`, `(1 +)`); only the special forms `:` `?` `\` keep the whole list at
 head, so minified `(:(co ..)` still reads `(: (co ..))`.
 - `<x >x` cap and cup; `<>x ><x <<x >>x` the compounds, by factorization
-- `+l` the net -- the true sum, APL's `+/` -- and `*l` the product
+- `+l` the net -- the true sum -- and `*l` the product
 - `|x` abs, `-x` neg (`+` and `-` fuse only to `( ' " @ ~ #`, so `-3` stays a
   number and `-x` a kebab name), `/x` reciprocal, `%x` frac, `?x` the iverson bracket
 - `$x !x .x` as ever: sat, not, print
@@ -72,18 +63,18 @@ the numerals still carry the power family (`-1 x = 1 / x`, `(1 / 2) x =
 sqrt x`, `n x = x ** n`); words cover the rest (`abs int gcd // << >> ^
 sine cosine log`), and general folds stay words: `(foldl f z l)`.
 
-pure lisp is the lassoc subset: `?` is still the cond form at the head of a
-list, bare punct symbols escape in parens -- `(+)` is `+` as a value -- and
-quote interiors are data (operators under `'` stay plain symbols), so these
+the plain parenthesized subset is the lassoc core: `?` is still the cond form at
+the head of a list, bare punct symbols escape in parens -- `(+)` is `+` as a value
+-- and quote interiors are data (operators under `'` stay plain symbols), so these
 are true too:
-- `12 = (foldl (+) 0 '(3 4 5))`
-- `24 = (foldl (*) 1 '(1 2 3 4))`
-- `'(1 2 3) = (sort '(3 1 2))`
-- `'(2 3 4) = (map (+ 1) '(1 2 3))`
-- `'(0 1 2) = (jot 3)`
+- `12 = foldl (+) 0 '(3 4 5)`
+- `24 = foldl (*) 1 '(1 2 3 4)`
+- `'(1 2 3) = sort '(3 1 2)`
+- `'(2 3 4) = map (+ 1) '(1 2 3)`
+- `'(0 1 2) = jot 3`
 - `10 = +(jot 5)`
 - `5 = () + 5` and `5 = () * 5` -- `()` is the **unit**, the shared identity of `+` and `*` in every lane; `0` and `1` are its two faces (the additive identity it shows in `+`, the multiplicative in `*`). it rides through every other arithmetic operator the same way, either side: `5 = 5 - ()` and `5 = () - 5` (the do-nothing operand -- the op never happens)
-- `'(0 0 1 3 6 10 15 21) = ((flip compose jot (map (compose sat jot))) 8)`
+- `'(0 0 1 3 6 10 15 21) = (flip compose jot (map (compose sat jot))) 8`
 
 that last is the triangular numbers, point-free: `jot` lays out `0 .. n-1`,
 `sat` sums each prefix to its charm, and `flip compose` feeds the one into the
@@ -224,6 +215,12 @@ on the front page):
   which recompiles itself -- and the hatchling bakes into the binary; `born`
   records the hatch time. the same image runs on linux, bare metal
   (x86_64/aarch64 via limine), and wasm.
+- moon is a C compiler, also written in ai: a preprocessor, parser, and an
+  optimizing amd64/arm64 backend through the holo assembler. it compiles ai's own
+  C runtime -- `ai.c` and every `host/*.c` -- and, linked by holo with no
+  gcc/glibc/ld in the loop, the rebuilt `ai` passes the whole corpus (`make
+  test_raw`). it builds real third-party C too (gnu tar, m4) and is closing on
+  clang -O2 on the code it emits. [crew/moon/](crew/moon/)
 - status rides the two pointer tag bits: scare (something is wrong) and more
   (the reader wants more); eof = more|scare. a global `help` function receives
   every raise as `(help s a b)`.

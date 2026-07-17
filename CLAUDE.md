@@ -1,7 +1,9 @@
 ```ai
-; ai -- a lisp-surfaced, fully-curried language over a tiny generic C core: a portable runtime
-; (ai.c + ai.h) plus a self-hosting compiler written in ai (the ai/{prel,ev,bao}.l layers). source
-; is .l; the host binary is `ai`. see README.md.
+; ai -- a fully-curried language with an infix, low-paren surface that factors down to a tiny
+; lisp core: `map (+ 1)` and `(3 = 1 + 2)` desugar through opfix to plain parens (one source of
+; truth, shared by both compilers). that core rides a tiny generic C runtime (ai.c + ai.h) plus a
+; self-hosting compiler written in ai (the ai/{prel,ev,bao}.l layers). source is .l; the host binary
+; is `ai`. see README.md.
 ;
 ; this file is the NARRATIVE -- how to work here, the traps, the vocabulary, the architecture --
 ; and my context file. the LAWS live in test/spec.l: the executable spec AND the reference, each
@@ -55,11 +57,10 @@
 ;   keep the read protocol (port back when incomplete, sentinel at eof). file mode stays helpless.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
-;   parallel: ain (netcat, tools/ain.l + host/net.c), bao (shell/rlwrap/debugger, ai/bao.l +
-;   host/pty.c), cook (make-in-ai, crew/cook/cook.l), lux (the X11 window manager, crew/lux/), sat (the CDCL
-;   solver, crew/sat/), inle (freestanding agent-kernel, port/inle/), quay (the terminal
-;   driver, port/quay/ + crew/quay/ink.l the screensaver -- host-only, probe under a pty), reef
-;   (the patch-set vcs, crew/reef/ + host/hash.c -- doc/reef.md, `make test_reef`). apps
+;   parallel: lux (the X11 window manager, crew/lux/), inle (freestanding agent-kernel, port/inle/),
+;   reef (the patch-set vcs, crew/reef/ + host/hash.c -- doc/reef.md, `make test_reef`), moon (the C
+;   compiler in ai, crew/moon/ -- compiles ai.c + all host/*.c and holo links them, no gcc/glibc/ld:
+;   `make test_raw`). apps
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); ai.c/ai.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable
 ;   ones install on PATH via `make install`.
@@ -157,7 +158,8 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; identities (euler in the exact direction), complex, arrays (a one-cell array demotes to its
 ; scalar; empty reductions answer their monoid units), chains & lists, strings & mints (absence
 ; reads the zero point), hashes (three absence lanes, one miss machinery), casks, reader
-; operators (the lexer / factorization / curry / valence laws and the comma layer), macros,
+; operators (the sigil layer -- a terse, valence-sensitive operator surface, all factoring to lisp:
+; the lexer / factorization / curry / valence laws and the comma layer), macros,
 ; control (help/welp, missing, apcap), i/o & ports (sound's return value IS the read protocol),
 ; bootstrapping. each law lives in its section comment; the asserts below it keep it honest.
 ; the deep dives stay where they live: doc/measures.md (net & tally, the two measures),
