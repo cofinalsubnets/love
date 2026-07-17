@@ -34,14 +34,14 @@
       `("or.rr"       "4809c8"                '((or  r0 r0 r1)))
       `("and.rr"      "4821c8"                '((and r0 r0 r1)))
       ;; ALU, immediate source (0x81 group)
-      `("add.imm"     "4881c005000000"        '((add r0 r0 5)))
-      `("cmp.imm"     "4881f807000000"        '((cmp r0 7)))
+      `("add.imm"     "4883c005"              '((add r0 r0 5)))     ; 0x83 ib: the byte-immediate short form
+      `("cmp.imm"     "4883f807"              '((cmp r0 7)))
       `("cmp.rr"      "4839d8"                '((cmp r0 r3)))
       ;; three-address -> two-address lowering
       `("alu.movop"   "4889c24829da"          '((sub r2 r0 r3)))   ; mov rdx,rax ; sub rdx,rbx
       `("alu.swap"    "4801d8"                '((add r0 r3 r0)))   ; commutes -> add rax,rbx, no mov
       `("add.movop"   "4889c24801da"          '((add r2 r0 r3)))   ; mov rdx,rax ; add rdx,rbx (no lea fusion -- the emit-alu note)
-      `("add.movop.i" "4889c14881c105000000"  '((add r1 r0 5)))    ; imm form keeps the dance too
+      `("add.movop.i" "4889c14883c105"        '((add r1 r0 5)))    ; imm form keeps the dance too
       ;; ('align n) pads to the boundary with the backend's nop unit (lay-level, no lowering)
       `("align.pad"   "c3909090c3"            '((ret) (align 4) (label x) (ret)))
       `("align.zero"  "c3"                    '((align 16) (ret)))  ; already on the boundary: no pad
@@ -118,7 +118,8 @@
       `("sys"         "0f05"                  '((sys)))
       `("nop"         "90"                    '((nop)))
       `("trap"        "cc"                    '((trap)))
-      ;; control flow with label fixups (rel32, measured from end of field)
+      ;; control flow with label fixups (rel32, measured from end of field). plain assemble
+      ;; lays every branch long-form; the relaxing layout is its own entry (laylax, below).
       `("call.fwd"    "e800000000c3"          '((call foo) (label foo) (ret)))
       `("loop"        "4839c80f840800000048ffc8e9efffffffc3"
                        '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
@@ -169,6 +170,27 @@
    loopres (assemble 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
    _ (chk-eq "addr.top"  0  (label-at loopres 'top))
    _ (chk-eq "addr.done" 17 (label-at loopres 'done))
+
+   ;; -- the relaxing layout (laylax): the object writer's entry. in-range jmp/br land as the
+   ;; 2-byte short forms (EB rel8 / 7x rel8); an external or weak-marked target stays rel32.
+   ;; same (items . labels) shape as lay, resolved the same way.
+   rx-be (peep backends 'x64 ())
+   (rx prog longs)
+      (: p (laylax prog rx-be 0 (tablet 0) longs)
+         (hexs (resolve <p >p rx-be 0)))
+   _ (chk-eq "rlx.loop" "4839c8740548ffc8ebf6c3"
+        (rx '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)) (tablet 0)))
+   _ (chk-eq "rlx.jcc.all" "7c0c750a7f087d067e0477027200c3"
+        (rx '((br lt a) (br ne a) (br gt a) (br ge a) (br le a) (br above a) (br below a) (label a) (ret)) (tablet 0)))
+   _ (chk-eq "rlx.mulo" "490fafc00f8002000000eb02ffe6c3"                ; the mulo-inner jo stays rel32; the jmp lands short
+        (rx '((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)) (tablet 0)))
+   _ (chk-eq "rlx.weak-stays-long" "e90b0000004839c80f8402000000ffe6c3" ; both wf-targets held long by the longs set
+        (: lg (tablet 0) _ (pin lg 'wf 1)
+           (rx '((jmp wf) (cmp r0 r1) (br eq wf) (jmpr r5) (label wf) (ret)) lg)))
+   _ (chk-eq "rlx.labels" 10
+        (: p (laylax '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))
+                     rx-be 0 (tablet 0) (tablet 0))
+           (peep >p 'done ())))
 
    ;; -- the encoder REFUSES a three-way alias it cannot honestly encode (d <- a OP d, d != a,
    ;; non-commutative): it raises 'alias-dst rather than emit subtly wrong bytes. we trap the scare

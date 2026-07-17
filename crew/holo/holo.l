@@ -130,6 +130,72 @@
                   (+ bs (resolve >items labels be (+ addr (fix-w x)))))
                (>< x (resolve >items labels be (+ addr 1))))))
 
+   ;; -- branch relaxation, fused with layout: lay's shape (items . labels), but (jmp l) /
+   ;; (br c l) land as the 2-byte short forms (jmp8 / br8) where the target provably fits
+   ;; rel8. ONE pessimistic decision pass is sound: distances measured at the all-long layout
+   ;; only SHRINK as branches shorten, so a fit stays a fit -- provided the span crosses no
+   ;; 'align (a boundary holds downstream addresses still while the branch slides) and the
+   ;; target is a label of THIS prog (an external label seeded by assemble-at holds still the
+   ;; same way, so it never enters `spots` and stays long). the align guard rides an EPOCH
+   ;; pinned beside each label: same count of 'align forms seen == no boundary inside the
+   ;; span. each form lowers exactly ONCE (pass one caches its chunk; pass two splices the
+   ;; cache, re-lowering only the branches it shortens). the LARGE COLD texts ride this --
+   ;; the object writer (crew/holo/obj.l) and the static-image org path below; plain
+   ;; `assemble` stays on lay, so a hot assembling client (the glaze, thousands of tiny
+   ;; blobs per corpus run) pays nothing (measured: the walk alone taxed the corpus ~1%
+   ;; of its instructions). a backend opts in by pinning 'short;
+   ;; a fixed-width arch (aarch64) falls through to plain lay. `longs` is a tablet of label
+   ;; names that must stay long-form -- the object writer passes its weak-defined set, whose
+   ;; fixups must survive as relocations (a linker may redirect them arbitrarily far).
+   ;; (the locals here are spelled to shadow NO caller-side global -- a `scan`/`rw`/`skip`
+   ;; would collide with moon/kore file-scope names in a cat'd stream.)
+   (laylax prog be at0 labels longs)
+      (? (! (peep be 'short 0)) (lay prog be at0 () labels)
+         (: spots (tablet 0) eras (tablet 0)
+            ;; pass one: lower each form once, cache (len . chunk) -- the length rides along
+            ;; so pass two never re-walks a chunk (item-len per byte is the cost that counts
+            ;; for a hot assembling client). labels ride (0 . ()); pessimistic addresses +
+            ;; align epochs pin beside the internal labels.
+            (plumb p addr era acc)
+               (? (! (two? p)) (rev acc)
+                  (: ins <p
+                     (? (= <ins 'label)
+                        (: _ (pin spots (at ins 1) addr) _ (pin eras (at ins 1) era)
+                           (plumb >p addr era (>< (>< 0 ()) acc)))
+                        (= <ins 'align)
+                        (: pad (pad-to be addr (at ins 1))  k (tally pad)
+                           (plumb >p (+ addr k) (+ era 1) (>< (>< k pad) acc)))
+                        (: c (lower-with be ins)  k (chunk-len c)
+                           (plumb >p (+ addr k) era (>< (>< k c) acc))))))
+            chunks (plumb prog at0 0 ())
+            ;; the short branch is 2 bytes, so its rel8 measures from addr+2 -- forward spans
+            ;; shrink toward it, backward spans shrink toward zero, both stay inside [-128,127].
+            (near? l addr era)
+               (: t (peep spots l ())
+                  (? (! (imm? t)) ()
+                     (peep longs l 0) ()
+                     (! (= era (peep eras l -1))) ()
+                     (fits8 (- t (+ addr 2)))))
+            ;; pass two: splice the cached chunks -- pessimistic addresses (pa) drive the
+            ;; shortening decisions, final addresses (fa) pin the labels and re-lay the pads.
+            (stitch p cs pa fa era items)
+               (? (! (two? p)) (>< (rev items) labels)
+                  (: ins <p  k <<cs  c ><cs
+                     (? (= <ins 'label)
+                        (: _ (pin labels (at ins 1) fa) (stitch >p >cs pa fa era items))
+                        (= <ins 'align)
+                        (: pad (pad-to be fa (at ins 1))
+                           (stitch >p >cs (+ pa k) (+ fa (tally pad)) (+ era 1)
+                                   (+ (rev pad) items)))
+                        (&& (= <ins 'jmp) (near? (at ins 1) pa era))
+                        (: sc (lower-with be `('jmp8 (at ins 1)))
+                           (stitch >p >cs (+ pa k) (+ fa 2) era (+ (rev sc) items)))
+                        (&& (= <ins 'br) (near? (at ins 2) pa era))
+                        (: sc (lower-with be `('br8 (at ins 1) (at ins 2)))
+                           (stitch >p >cs (+ pa k) (+ fa 2) era (+ (rev sc) items)))
+                        (stitch >p >cs (+ pa k) (+ fa k) era (+ (rev c) items)))))
+            (stitch prog chunks at0 at0 0 ())))
+
    ;; -- assemble PROG for TARGET. returns a tablet { 'bytes 'labels }; `holo-bytes` is the
    ;; byte-list shortcut, `holo-str` packs them into a machine-code string, `holo-hex` shows them. --
    ;; -- assemble-at: like assemble, but `lbls` is a PRE-BOUND label tablet (name -> address). A
@@ -152,7 +218,7 @@
    (assemble-org target prog org)
       (: be (peep backends target ())
          _ (? (book? be) 0 (scare 'no-backend target))
-         p (lay prog be org () (tablet 0))
+         p (laylax prog be org (tablet 0) (tablet 0))
          res (tablet 0)
          _ (pin res 'bytes  (resolve <p >p be org))
          _ (pin res 'labels >p)

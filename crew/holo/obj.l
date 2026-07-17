@@ -93,18 +93,24 @@
    (objelf target textforms dataforms funcnames globnames wknames nifforms)
     (: a64 (member? target '(arm64 aarch64))
        _ (? (|| (id? target 'x64) a64) 0 (scare 'obj-target target))
-       rset (? a64 '(b26 b19) '(rel32))              ; the in-place-resolvable kinds (translation-invariant)
+       rset (? a64 '(b26 b19) '(rel32 rel8))         ; the in-place-resolvable kinds (translation-invariant)
        machine (peep elf-machines target 0)
        be (peep (holo 'backends) target ())
-       tp ((holo 'lay) textforms be 0 () (tablet 0))  ; assemble each section at org 0
+       ; a WEAK-defined function's callers must go through a RELOCATION -- an
+       ; in-place resolve would pin them to the local body, and the linker could
+       ; never redirect to a strong override. built before lay: the relaxer needs
+       ; it too (a shortened branch could never survive as a relocation).
+       wkset (: t (tablet 0) (go ws) (? (! (two? ws)) t (: _ (pin t (intern <ws) 1) (go >ws)))
+                (go wknames))
+       ; branch-relax the text when THIS runtime's holo book carries the fused pass -- an
+       ; older bake lacks the key (the book answers the zero point) and lays all-long form,
+       ; still correct. obj.l is tree-fresh in the mooncc cat; the book rides the binary's bake.
+       tp (: r (holo 'laylax)
+             (? (lit? r) (r textforms be 0 (tablet 0) wkset)
+                ((holo 'lay) textforms be 0 () (tablet 0))))  ; assemble each section at org 0
        dp ((holo 'lay) dataforms be 0 () (tablet 0))
        np ((holo 'lay) nifforms be 0 () (tablet 0))
        tlabels >tp dlabels >dp nlabels >np
-       ; a WEAK-defined function's callers must go through a RELOCATION -- an
-       ; in-place resolve would pin them to the local body, and the linker could
-       ; never redirect to a strong override
-       wkset (: t (tablet 0) (go ws) (? (! (two? ws)) t (: _ (pin t (intern <ws) 1) (go >ws)))
-                (go wknames))
        tw (o-walk be <tp tlabels wkset 1 rset 0 () ())
        dw (o-walk be <dp dlabels wkset 0 rset 0 () ())
        nw (o-walk be <np nlabels wkset 0 rset 0 () ())
