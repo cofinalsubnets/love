@@ -102,12 +102,13 @@
        ; it too (a shortened branch could never survive as a relocation).
        wkset (: t (tablet 0) (go ws) (? (! (two? ws)) t (: _ (pin t (intern <ws) 1) (go >ws)))
                 (go wknames))
-       ; branch-relax the text when THIS runtime's holo book carries the fused pass -- an
-       ; older bake lacks the key (the book answers the zero point) and lays all-long form,
-       ; still correct. obj.l is tree-fresh in the mooncc cat; the book rides the binary's bake.
+       ; the relaxing layout -- obj.l is tree-fresh in the kore/mooncc cats while the holo
+       ; book rides the running binary's BAKE, and the build pairs them structurally (the
+       ; wake shims exec the sibling ai; crew/build.mk). a bake too old to carry laylax
+       ; means a hand-mixed script/binary combo: scare LOUD, never lay quietly long.
        tp (: r (holo 'laylax)
              (? (lit? r) (r textforms be 0 (tablet 0) wkset)
-                ((holo 'lay) textforms be 0 () (tablet 0))))  ; assemble each section at org 0
+                (scare 'holo-bake-stale 'laylax)))  ; assemble each section at org 0
        dp ((holo 'lay) dataforms be 0 () (tablet 0))
        np ((holo 'lay) nifforms be 0 () (tablet 0))
        tlabels >tp dlabels >dp nlabels >np

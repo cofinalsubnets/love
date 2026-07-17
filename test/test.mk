@@ -155,9 +155,9 @@ test_reef: host out/host$(hsuf)/reef
 	    || { echo "FAIL reef (exit $$r)"; exit 1; }
 # the kore smokes drive the BAKED image (`--wake kore.image`), not the cold cat --
 # ~0.02s vs ~0.75s per spawn across the ~68 tool runs below (the mooncc.image precedent).
-# the argv0-symlink smoke stays on the real `$(ho)/kore` script (it proves the shebang
-# + argv[0] dispatch the image bypasses). the synthetic "kore" argv0 (link) makes an
-# unknown tool usage+quit exactly like the cli, so the exit faces are unchanged.
+# the argv0-symlink smoke execs the real `$(ho)/kore` shim (it proves the shim's
+# basename-$0 dispatch the image wake bypasses). the synthetic "kore" argv0 (link)
+# makes an unknown tool usage+quit exactly like the cli, so the exit faces are unchanged.
 korerun = $m --wake $(ho)/kore.image -e '(kore-main (link "kore" (cuup (cup cmdline))))'
 .PHONY: test_kore
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
@@ -174,7 +174,7 @@ test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
 	  diff -u $(ho)/.au1 $(ho)/.au2 | tail -n +3 > $(ho)/.kore-gnu.out; tail -n +3 $(ho)/.kore-diff.out > $(ho)/.kore-ours.out; \
 	  cmp -s $(ho)/.kore-gnu.out $(ho)/.kore-ours.out || { echo "FAIL kore diff vs GNU"; exit 1; }; \
 	  ln -sf kore $(ho)/diff; \
-	  $m $(ho)/diff $(ho)/.au1 $(ho)/.au2 > $(ho)/.kore-sym.out 2>&1; r=$$?; \
+	  $(ho)/diff $(ho)/.au1 $(ho)/.au2 > $(ho)/.kore-sym.out 2>&1; r=$$?; \
 	  { [ $$r -eq 1 ] && cmp -s $(ho)/.kore-diff.out $(ho)/.kore-sym.out; } || { echo "FAIL kore argv0 symlink (exit $$r)"; exit 1; }; \
 	  $(korerun) bogus > /dev/null 2>&1; r=$$?; \
 	  [ $$r -eq 2 ] || { echo "FAIL kore usage (exit $$r)"; exit 1; }; \
@@ -478,12 +478,12 @@ test_selfhost: host out/host$(hsuf)/mooncc
 	@echo SELFHOST $(ho)/ai-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; \
-	  $m $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
 	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	    $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
-	  $m $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
+	  $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
 	  $(host_cc) -static -o $(ho)/ai-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
@@ -506,20 +506,20 @@ test_raw: host out/host$(hsuf)/mooncc
 	@echo RAW $(ho)/ai-raw
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/raw; mkdir -p $$d; \
-	  $m $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
 	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	    $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
-	  $m $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
+	  $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
 	    || { echo "FAIL mooncc -c nolibc.c"; exit 1; }; \
 	  for f in crew/moon/lib/math/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/mooncc -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
+	    $(ho)/mooncc -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys sys.o"; exit 1; }; \
-	  $m $(ho)/mooncc $$d/*.o -o $(ho)/ai-raw \
+	  $(ho)/mooncc $$d/*.o -o $(ho)/ai-raw \
 	    || { echo "FAIL our-linker bind ai-raw"; exit 1; }; \
 	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw.out; \
@@ -539,20 +539,20 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 	@echo RAW-ARM64 $(ho)/ai-raw-a64
 	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
 	  d=$(ho)/raw-a64; mkdir -p $$d; \
-	  $m $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
+	  $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
 	    || { echo "FAIL mooncc -t arm64 -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	    $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -t arm64 -c $$f"; exit 1; }; done; \
-	  $m $(ho)/mooncc -t arm64 -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
+	  $(ho)/mooncc -t arm64 -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
 	    || { echo "FAIL mooncc -t arm64 -c nolibc.c"; exit 1; }; \
 	  for f in crew/moon/lib/math/*.c; do b=`basename $$f .c`; \
-	    $m $(ho)/mooncc -t arm64 -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
+	    $(ho)/mooncc -t arm64 -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
 	      || { echo "FAIL mooncc -t arm64 -c $$f"; exit 1; }; done; \
 	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys-arm64 \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys-arm64 sys.o"; exit 1; }; \
-	  $m $(ho)/mooncc -t arm64 $$d/*.o -o $(ho)/ai-raw-a64 \
+	  $(ho)/mooncc -t arm64 $$d/*.o -o $(ho)/ai-raw-a64 \
 	    || { echo "FAIL our-linker bind ai-raw-a64"; exit 1; }; \
 	  cat $t \
 	    | AI_NO_IMAGE=1 qemu-aarch64 $(ho)/ai-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
