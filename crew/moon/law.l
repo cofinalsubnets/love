@@ -673,8 +673,8 @@
    irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
    (assert
       (two? irB)
-      (member? '(imul r7 r9 r9) (caup irB))           ; i*i on the home, 3-address (r10 rides n's read pin)
-      (member? '(add r5 r5 r7) (caup irB))            ; s accumulates in its home
+      (member? '(imul r10 r9 r9) (caup irB))          ; i*i on the home, 3-address
+      (member? '(add r5 r5 r10) (caup irB))           ; s accumulates in its home
       (member? '(add r9 r9 1) (caup irB))))           ; i++ is ONE add on the home
 
 ; -- arm64 homing (stage D): the same alive machinery rides AAPCS64. homes come

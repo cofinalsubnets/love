@@ -672,20 +672,7 @@
                        (? (<en = 'loc)
                           (: rM (vmget g <>e)          ; a mapped local reads from its pinned register: ZERO forms
                              (? rM (mkv ty rM ())
-                                ; read-establishment: an unmapped universe local's
-                                ; first read lands in a fresh pool register and pins
-                                ; the vmap, so the block's re-reads are zero forms
-                                ; (vmpin self-gates: universe + pool0 members only).
-                                ; only while the pool keeps slack -- a pin holds its
-                                ; register to the next flush, and a drained pool
-                                ; parks expression temps through memory instead
-                                (: W (? wnt wnt
-                                        (: rF (? (&& (vmon? g) (&& (homable? ty)
-                                                  (&& (member? <>e (peep g 'vuniv ()))
-                                                      (2 < (tally (peep g 'pool ()))))))
-                                                 (ralloc g) ())
-                                           (? rF rF 'r0)))
-                                   _ (vmpin g <>e W)
+                                (: W (? wnt wnt 'r0)
                                    (mkv ty W `(`((ldop ty) W 'r4 <>en))))))
                           (mkv ty 'r0 `(`('la 'r1 <>en) `((ldop ty) 'r0 'r1 0))))))))
           (k = 'addr)
