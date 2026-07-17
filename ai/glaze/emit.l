@@ -42,7 +42,8 @@
    (jitn lam) (jitnir lam 'x64)
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    (gfind p l) (? (atom? l) () (p (cap l)) (cap l) (gfind p (cup l)))     ; first elt matching p
-   chainkind (apof (link 0 0))                                                      ; lvm_chain's ap sentinel, for the inline two?/cap/cup kind test (cf. (apof "") for the string lane)
+   chainkind (apof (link 0 0))                                                      ; lvm_chain's ap sentinel, for the inline two?/cap/cup kind test
+   strkind (apof "")                                                                ; lvm_str's ap sentinel, for amble's string index/tally fast lanes
    mapkind (apof (tablet 0))                                                        ; lvm_map_lookup's sentinel, for the map-param entry guard + the (mpeep ..) probe
    nomkind (apof 'nomk)                                                             ; lvm_nom's sentinel, for the point-param entry guard
    mintkind (apof (nom 0))                                                          ; lvm_sym's (a mint's) sentinel, ditto -- () is a mint too
@@ -148,8 +149,9 @@
    ;     re-runs the whole sum in interp (generic +), never corrupts on the untag.
    ;   GATE 2 (sum-overflow): `SA += result` is `adds` (flags) + `br vc` -> a fixnum-boundary overflow
    ;     deopts (cf. loopepi/ldeopt), so an out-of-range sum re-runs in interp -> bignum. EXACT vs interp.
-   ; THE TWIN: value[1] is baked as the PAIR `(clos . twin)` (a chain: car=clos for the native prologue,
-   ; cdr=twin the interp fallback `(\ n (sum_{i<n} (clos i)))` capturing clos). Both are cached in GC-root
+   ; THE TWIN: value[1] is the PLAIN twin (the image-dump revert reads it as-is -- never a pack:
+   ; a pack chain there made a woken dead native revert to the CHAIN, which data-applies -- the
+   ; kore-diff bug); clos rides the nifx EXTRAS slot (Ip+32). Both are cached in GC-root
    ; Sp slots (R[3]/R[5]) at the prologue -- read once, IP-relative, before the loop clobbers Ip. The
    ; shared `codeopt` restores Sp to entry (Sp[0]=the original tagged n) and Continues into the twin,
    ; which recomputes the whole sum correctly (the native partial SA is discarded, as any loop deopt).
@@ -201,14 +203,14 @@
                               (cat (caargir tgt (caup (cup (cup e))) coff) (L (L 'label en))))))))
                ()))
          ()))
-   ; caarg: leave tag(ARG(counter)) in the frame slot F[0] = Sp[-24]. A BARE counter tags directly (never
+   ; caarg: leave tag(ARG(counter)) in the frame slot F[0] = Sp[-32] (the 4-word walkable frame). A BARE counter tags directly (never
    ; overflows -- a loop index is always a valid fixnum), byte-identical to the pre-extension code. A COMPUTED
    ; ARG anchors the machine sp, runs caargir, then tags with an overflow gate (both -> `deopt`).
    (caarg tgt arg) (: A (greg tgt 'acc) SP (greg tgt 'sp) T (greg tgt 'tmp) AN (greg tgt 'anchor)
-      (? (name? arg) `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -24 T))                                         ; bare counter: F[0] = tag(i)
+      (? (name? arg) `(`('ld T SP 8) `('leax T T T 1 1) `('st SP -32 T))                                         ; bare counter: F[0] = tag(i)
          (`(`('lea AN 'sp 0))                                                                                     ; anchor the machine sp for the arg-expr deopt unwind
           + (caargir tgt arg 8)                                                                                   ; A = ARG(counter) raw ; guards/overflow -> deopt
-          + `(`('adds A A A) `('br 'vs 'deopt) `('or A A 1) `('st SP -24 A)))))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
+          + `(`('adds A A A) `('br 'vs 'deopt) `('or A A 1) `('st SP -32 A)))))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
    ; caargdeopt: the `deopt` label the computed-arg lane branches to -- restore the machine sp from the anchor
    ; (discarding any pending arg-expr pushes), bring VM Sp R -> R-8, and fall into the shared codeopt (-> twin).
    ; Appended to the blob ONLY when the arg is computed (a bare arg never deopts here).
@@ -216,22 +218,24 @@
       `('(label deopt) `('lea 'sp AN 0) `('sub SP SP 8) `('jmp 'codeopt)))
    (calloutir tgt op arg)
     (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
-       (`(`('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
-          `('ld T IP 8)                                        ; T = value[1] = the (clos . twin) pair  (IP still &value[0])
-          `('ld U T 8)  `('st SP 24 U)                         ; Sclos = car(pair) = clos               -> R[3]
-          `('ld U T 16) `('st SP 40 U)                         ; Stwin = cdr(pair) = twin (interp)       -> R[5]
+       (`('(label entry0)                                      ; the resume-offset anchor (lvm_resume jumps base + tag'd offset)
+          `('sub SP SP 48)                                     ; reserve 6 loop-state slots (Sp = R)
+          `('ld U IP 32) `('st SP 24 U)                        ; Sclos = the nifx EXTRAS slot = clos     -> R[3]  (IP still &value[0])
+          `('ld U IP 8)  `('st SP 40 U)                         ; Stwin = value[1] = twin (interp)        -> R[5]
           `('ld T SP 48) `('sar T 1) `('st SP 16 T)            ; SN = untag(arg @ R[6])                  -> R[2]
           `('li T 1) `('st SP 0 T) `('li T 0) `('st SP 8 T)   ; SA = tag(0)=1 (kept TAGGED so gate 2 checks the fixnum boundary) ; SC = 0   -> R[0] R[1]
-          `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb  (lar = near pc-rel; ADR on arm64, translation-invariant in the mmap blob)  -> R[4]
+          `('lar T 'entry0) `('st SP 32 T))                     ; Sbase = the blob base (out-of-pool W^X; lar = ADR on arm64)  -> R[4]
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; i >= n -> end
         + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare i, or a computed expr (deopts to `deopt`)
-        + `(`('ld T SP 24) `('st SP -16 T)                      ; F[1] = clos
-           `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
-           `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
-           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> ret0 -> bb
+        + `(`('ld T SP 24) `('st SP -24 T)                      ; F[1] = clos
+           `('lar T 'bb) `('ld U SP 32) `('subs T T U)          ; F[2] = tag(&bb - base): an ODD CHARM, GC-walk-clean
+           `('leax T T T 1 1) `('st SP -16 T)
+           `('st SP -8 U)                                       ; F[3] = base (out-of-pool -- the walk returns it unharmed)
+           `('li IP (calloutresume 0)) `('sub SP SP 32)         ; Ip = callout_resume ; Sp = frame
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> clos -> lvm_resume -> bb
         + `('(label bb)
-           `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8)
+           `('ld A SP 0)                                        ; A = result (Sp[0] on resume, Sp = R-8 -- same landing as the retired retB path)
            `('test A 1) `('br 'eq 'codeopt))                    ; GATE 1: non-fixnum (even) result -> deopt
         + (coacc tgt op)                                        ; GATE 2: fold the result into SA @ Sp[8] (op-specific, overflow -> deopt)
         + `(`('ld T SP 16) `('add T T 1) `('st SP 16 T)         ; SC += 1
@@ -252,7 +256,7 @@
        argfn (? (name? arg) 0 (ev (L '\ iv arg)))                               ; computed ARG -> a closure (\ counter ARG); bare arg needs none
        twin (? (name? arg) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (fop a (clos i))) a)) 0 a0))            ; bare: clos applied to the counter
                            (\ n ((: (go i a) (? (< i n) (go (+ i 1) (fop a (clos (argfn i)))) a)) 0 a0)))   ; computed: clos applied to ARG(counter)
-       (nif (emit (asmt tgt (calloutir tgt op arg))) (link clos twin) src 1))   ; value[1] = (clos . twin): car=clos (native), cdr=twin (deopt); value[-1]=src (=/show)
+       (nifx (emit (asmt tgt (calloutir tgt op arg))) twin src 1 clos))   ; value[1] = the twin (image-revert-clean); clos = the extras slot; value[-1]=src
    ; --- CAPTURED / multi-arg CALL-OUT: the frame-based bridge (njit-calloutframe) --------------------
    ; (njit-calloutframe src Fidx Nidx a e) -- the same stackless sum-over-(F i), but F and the bound N are
    ; FRAME params (a captured import or a genuine 2nd arg), read from the [imps args] frame at Sp[8*idx]
@@ -262,11 +266,12 @@
    ; is unreachable). DEOPT (either gate, or a non-fixnum N at the prologue) goes to value[1]=e -- the
    ; bytecode twin ala built, which CAPTURES F, so it recomputes correctly. a>=2 here (a=1 no-imps is the
    ; global lane), so e is an lvm_cur cell: enter its BODY at e+16 with the saturated frame on Sp (deoptir's
-   ; bodyp path). Reserved 6 Sp slots (Sp=R): R[0]=SA R[1]=SC R[2]=SN R[3]=SF R[4]=Sret(&bb) R[5]=Se(=e).
+   ; bodyp path). Reserved 6 Sp slots (Sp=R): R[0]=SA R[1]=SC R[2]=SN R[3]=SF R[4]=Sbase R[5]=Se(=e).
    ; The frame rides above R (E=R+48). arm64 lays via (calloutframeir 'arm64 ..); exec rides the corpus.
    (calloutframeir tgt Fidx Nidx a op arg)
     (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
-       (`(`('ld U SP (* 8 Fidx))                               ; U = F (raw closure) from the frame
+       (`('(label entry0)                                      ; the resume-offset anchor
+          `('ld U SP (* 8 Fidx))                               ; U = F (raw closure) from the frame
           `('ld A SP (* 8 Nidx)) `('test A 1) `('br 'ne 'ngood))   ; N a fixnum? -> ngood
         + `(`('ld T IP 8) `('lea IP T 16) `('ld T IP 0) `('jmpr T))   ; N NOT a fixnum -> deopt to e's body (Sp = E, IP valid)
         + `('(label ngood) `('sar A 1)                          ; A = N untagged
@@ -274,14 +279,16 @@
            `('sub SP SP 48)                                     ; reserve 6 slots; Sp = R
            `('st SP 24 U) `('st SP 16 A) `('st SP 40 T)         ; SF = F ; SN = N ; Se = e
            `('li T 1) `('st SP 0 T) `('li T 0) `('st SP 8 T)   ; SA = tag(0)=1 (kept TAGGED so gate 2 checks the fixnum boundary) ; SC = 0
-           `('lar T 'bb) `('st SP 32 T))                         ; Sret = &bb (lar = near pc-rel, ADR on arm64)
+           `('lar T 'entry0) `('st SP 32 T))                     ; Sbase = the blob base (out-of-pool W^X)
         + `('(label top)
            `('ld T SP 8) `('ld U SP 16) `('cmp T U) `('br 'ge 'end))   ; SC >= SN -> end
         + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare SC, or a computed expr (deopts to `deopt`)
-        + `(`('ld T SP 24) `('st SP -16 T)                      ; F[1] = SF (clos)
-           `('lea T SP 32) `('st SP -8 T)                       ; F[2] = retB = &Sret
-           `('li IP (calloutdrive 0)) `('sub SP SP 24)          ; Ip = callout_drive ; Sp = frame
-           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> ret0 -> bb
+        + `(`('ld T SP 24) `('st SP -24 T)                      ; F[1] = SF (clos)
+           `('lar T 'bb) `('ld U SP 32) `('subs T T U)          ; F[2] = tag(&bb - base)
+           `('leax T T T 1 1) `('st SP -16 T)
+           `('st SP -8 U)                                       ; F[3] = base
+           `('li IP (calloutresume 0)) `('sub SP SP 32)         ; Ip = callout_resume ; Sp = frame
+           `('ld T IP 0) `('jmpr T))                            ; Continue -> lvm_ap -> F -> lvm_resume -> bb
         + `('(label bb)
            `('ld A SP 0) `('test A 1) `('br 'eq 'codeopt))      ; GATE 1: non-fixnum result -> deopt
         + (coacc tgt op)                                        ; GATE 2: fold the result into SA @ Sp[8] (op-specific, overflow -> deopt)
@@ -299,6 +306,353 @@
         + (? (name? arg) () (caargdeopt tgt))))                 ; the computed-arg `deopt` label, only when ARG is an expr
    (njit-calloutframe src Fidx Nidx a e op arg tgt)
     (nif (emit (asmt tgt (calloutframeir tgt Fidx Nidx a op arg))) e src a)   ; value[1] = e (the bytecode twin, deopt target -- source-shaped, so op- AND arg-correct); arity a ; src for =/show
+   ; --- AMBLE: the universal boring-tier translator -------------------------------------------------
+   ; the LAST natjit lane: a closure every other lane declined gets a PER-OP native translation.
+   ; values stay TAGGED (heap refs ride whole -- no result gates), every temporary lives in a
+   ; reserved VM-Sp slot (a GC root, so a callee GC relocates mid-expression state for free; the
+   ; machine stack is NEVER used), and threaded dispatch becomes straight-line code. calls leave
+   ; via the stackless callout_drive and resume at a lar label -- any callee value works (lvm_ap
+   ; is total: data self-applies), multi-arg calls chain 1-arg drives (application IS currying).
+   ; every runtime surprise -- a non-fixnum under arith/cmp, a heap value under ?, overflow, a
+   ; full heap under link -- DEOPTS by RESTART: read the twin from its reserved slot (a call
+   ; clobbers Ip, so the epilogue hand-rolls lvm_ret and the deopt never reads Ip-relative),
+   ; restore Sp, enter e on the ORIGINAL frame (arg slots are never mutated; loop state lives in
+   ; the reserved slots). a restart re-runs any call-outs already made -- the same bet the fold
+   ; lanes' twins take. grammar = the probed families: fixnum/() consts, two? cap cup id? link,
+   ; + - * and comparisons (fixnum-guarded), ?, ONE applied named-let (self tail-calls -> a jump,
+   ; both def sugars), calls to frame/loop names AND -- in LOOP bodies only -- to resolvable
+   ; global heads, QUOTED DATA (any datum: the source node rides a nifx extras slot, and
+   ; (= a 'sym) is raw identity by the point-= law). strings, floats, //%, &|^, inner \,
+   ; effects, global reads in OPERAND position: DECLINE (bytecode, exactly as before). a global
+   ; callee resolves via gv at compile (redefinition-stale -- the callout lanes' bet; NEVER a
+   ; farq name, ala's letrec-local predicate) and rides the nifx extras chain into a reserved
+   ; slot beside () and the quotes (GC-walked, reloaded per call -- no baked absolute).
+   ; reserved region: [loopvars.. | Se(twin) | ()+globals+quotes.. | spills..],
+   ; frame above it, cont at frame+8a. known limit: a ? over a HEAP test value (bare (? l ..)
+   ; on a list) deopts EVERY call -- correct, just a small entry tax over pure bytecode.
+   amble-nil (:)
+   (amax a b) (? (< a b) b a)
+   (adistinct l) (? !(two? l) 1  (member? (cap l) (cup l)) 0  (adistinct (cup l)))
+   (aconst? e) (|| (whole? e) (id? e amble-nil))
+   (aop2? op) (member? op '(+ - * < <= > >= = id? link))
+   (acmp? op) (member? op '(< <= > >= =))
+   (aquote? e) (&& (two? e) (id? (cap e) '\) (= 2 (tally e)))            ; the reader's quote: (\ X) at EXACTLY two -- a datum constant
+   (aqnom? e) (&& (aquote? e) (name? (caup e)))                          ; a quoted NOM: a point, so (= a 'sym) is raw identity
+   (amemq x l) (? !(two? l) 0  (id? x (cap l)) 1  (amemq x (cup l)))     ; id?-membership: two =-equal quote NODES stay DISTINCT slots
+   (aposq x l i) (? (id? x (cap l)) i (aposq x (cup l) (+ i 1)))         ; (interp's quote answers the source node itself, id?-visibly)
+   (aq e acc) (? (aquote? e) (? (amemq e acc) acc (link e acc))          ; collect quote nodes; NEVER walk INTO quoted data
+                 (two? e) (foldl (\ ac x (aq x ac)) acc e)
+                 acc)
+   (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? (the bisect knob's test)
+    (? (aquote? e) 0
+       (two? e) (: op (cap e)
+          (|| (&& (name? op) !(id? op go) !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+              (foldl (\ a x (|| a (ahascall? env go x))) 0 (cup e))))
+       0)
+   ; aheads: collect the FREE call heads of e -- the global-callee candidates. within the ACCEPTED
+   ; grammar the only binders are the frame and the ONE named-let, so a head outside env/go IS a
+   ; global; go and the frame/loop names are NEVER candidates -- a named-let binds go over its
+   ; whole body, so a non-tail (go ..) is LOCAL and must decline, never resolve a stale leaked
+   ; namesake (rc4's bug). collection over-approximates (a head under a node the grammar later
+   ; declines is harmless: amble-ok? is the gate, gn merely feeds it); quoted data stays unwalked.
+   (aheads env go e acc)
+    (? (aquote? e) acc
+       (two? e)
+        (: op (cap e)                                                    ; a2, not a rebind of acc: a `:` is ONE SCOPE, so `acc (.. acc ..)`
+           a2 (? (&& (name? op) !(id? op go) !(member? op env) !(member? op acc)
+                     !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+                 (link op acc) acc)                                      ; reads the UNPINNED local -- a silent missing per node (help.l heard 14)
+           (foldl (\ ac x (aheads env go x ac)) a2 (cup e)))
+       acc)
+   ; amble-ok?: does e compile? env = visible names (loop vars shadow params), gn = resolvable
+   ; global call heads, go/k = the loop name + its arity (0 outside a loop), tl = tail position
+   ; ((go ..) is a jump, so it is only sound where its value IS the loop's value).
+   (amble-ok? env gn go k tl e)
+    (? (name? e) (member? e env)
+       (aconst? e) 1
+       (aquote? e) 1
+       (two? e)
+        (: op (cap e)  as (cup e)  n (tally as)
+           (? (id? op '?) (&& (= n 3) (amble-ok? env gn go k 0 (cap as))
+                              (amble-ok? env gn go k tl (caup as))
+                              (amble-ok? env gn go k tl (caup (cup as))))
+              (member? op '(two? cap cup)) (&& (= n 1) (amble-ok? env gn go k 0 (cap as)))
+              (aop2? op) (&& (= n 2) (amble-ok? env gn go k 0 (cap as)) (amble-ok? env gn go k 0 (caup as)))
+              (&& (id? op '||) !(member? op env)) (&& (<= 2 n) (all (\ x (amble-ok? env gn go k 0 x)) as))
+              (id? op go) (&& tl (= n k) (all (\ x (amble-ok? env gn go k 0 x)) as))
+              (name? op) (&& (< 0 n) (|| (member? op env) (member? op gn))
+                             (all (\ x (amble-ok? env gn go k 0 x)) as))
+              0))
+       0)
+   ; amble-depth: an upper bound on the spill slots e needs (operand nesting rides VM slots).
+   ; cx op = the EXTRA curry steps a head carries (a sibling callee's import count -- its chain
+   ; is entry(imports.. args..)); 0 for every other head.
+   (amble-depth go cx e)
+    (? !(two? e) 0
+       (aquote? e) 0
+       (: op (cap e)  as (cup e)
+          (? (id? op '?) (amax (amble-depth go cx (cap as)) (amax (amble-depth go cx (caup as)) (amble-depth go cx (caup (cup as)))))
+             (member? op '(two? cap cup)) (amble-depth go cx (cap as))
+             (id? op '||) (+ (tally as) (foldl (\ a x (amax a (amble-depth go cx x))) 0 as))   ; aor needs no spills, but a SHADOWED || is a call --
+                                                                                              ; the call formula covers both (over-reserve is safe)
+             (aop2? op) (amax (amble-depth go cx (cap as)) (+ 1 (amble-depth go cx (caup as))))
+             (id? op go) (+ (tally as) (foldl (\ a x (amax a (amble-depth go cx x))) 0 as))
+             (+ (+ (cx op) (tally as)) (foldl (\ a x (amax a (amble-depth go cx x))) 0 as)))))   ; a CALL spills a partial PER CURRY STEP: an n-arg call touches
+                                                                                    ; spills d..d+n-2 (+1 was the g4-chain cont-clobber: the 4th arg's
+                                                                                    ; partial landed ON the caller-cont -- Ip=3, the oracle fuzz fault)
+   ; amble-loop: match the named-let body, BOTH def sugars x BOTH spellings --
+   ;   applied:  ((: (go v..) GB) i..)  |  ((: go (\ v.. GB)) i..)
+   ;   trigger:  (: (go v..) GB (go i..))  |  (: go (\ v.. GB) (go i..))    (the body-having
+   ;   let whose result IS the fired loop -- moon's lexer spelling)         -> (go vars GB inits) | 0
+   (amble-let1 S inits)
+    (? (&& (id? (cap S) ':) (= 3 (tally S)))
+       (: D1 (caup S)  D2 (caup (cup S))
+          (? (&& (two? D1) (name? (cap D1)) (all name? (cup D1)) (< 0 (tally (cup D1))))
+               (L (cap D1) (cup D1) D2 inits)
+             (&& (name? D1) (two? D2) (id? (cap D2) '\) (two? (cup D2)) (two? (cup (cup D2))))
+               (L D1 (init (cup D2)) (last (cup D2)) inits)
+             0))
+       0)
+   (amble-loop M)
+    (? !(two? M) 0
+       (two? (cap M)) (amble-let1 (cap M) (cup M))                        ; applied
+       (&& (id? (cap M) ':) (= 4 (tally M)))                              ; trigger: (: DEF GB (go i..))
+        (: r (amble-let1 (L ': (caup M) (caup (cup M))) ())
+           trg (caup (cuup M))
+           (? (&& r (two? trg) (id? (cap trg) (cap r)))                   ; the trigger fires the SAME name; its args are the inits
+              (L (cap r) (caup r) (caup (cup r)) (cup trg))               ; (amble-ok? gates their content -- a (go ..) inside one declines)
+              0))
+       0)
+   ; asub: naive whole-form substitution -- SAFE here because the amble grammar admits no inner
+   ; binders (no nested \ or : inside a loop body), so there is nothing to capture. used to
+   ; alpha-rename a loop var that SHADOWS a frame param (the walker idiom ((: (go l a) ..) l a)):
+   ; the inits then read the params, the body the renamed vars, and one flat env serves both.
+   (asub old new e) (? (id? e old) new  (aquote? e) e  (two? e) (map (\ x (asub old new x)) e)  e)   ; quoted DATA is inert -- never rename inside it
+   (afresh v avoid) (: c (intern ((string v) + "~")) (? (member? c avoid) (afresh c avoid) c))
+   ; adesug: rewrite what amble can own by PURE SOURCE IDENTITY, so the twin/deopt story is
+   ; untouched -- (X) is X ((f) == f at zero operands: an INFIX span reads as the wrapped
+   ; application, (k < n) -> ((< k n)), so every infix-written body wears these singletons),
+   ; (list a..) is nested links, (&& a..) is nested (? a .. ()) (short-circuit included; &&
+   ; answers the last value or the unit -- probed AND spec'd). env-shadowed names stay calls;
+   ; quoted data stays inert. (|| ..) is NOT a rewrite (its value is the first truthy ARG --
+   ; a rewrite would double-eval); aor emits it.
+   ; aopv: macro expansions splice op VALUES, not noms (the list/backtick macro emits the link
+   ; NIF as a head; show prints it as `link`, invisibly -- the forensic dump showed (atom link
+   ; other)). normalize a value head back to its nom -- id?-keyed, and only when the nom is NOT
+   ; env-shadowed (a param named link must win, as it does in bytecode).
+   aopv (L (L (two?) 'two?) (L (cap) 'cap) (L (cup) 'cup) (L (id?) 'id?) (L (link) 'link)
+           (L (tally) 'tally) (L (+) '+) (L (-) '-) (L (*) '*) (L (<) '<) (L (<=) '<=)
+           (L (>) '>) (L (>=) '>=) (L (=) '=))
+   (aopn x l) (? !(two? l) 0  (id? x (caap l)) (caup (cap l))  (aopn x (cup l)))
+   ; adesug: rewrite what amble can own by PURE SOURCE IDENTITY, so the twin/deopt story is
+   ; untouched -- (X) is X ((f) == f at zero operands: an INFIX span reads as the wrapped
+   ; application, (k < n) -> ((< k n)), so every infix-written body wears these singletons),
+   ; a VALUE head is its nom (aopv above), (list a..) is nested links, (&& a..) is nested
+   ; (? a .. ()) (short-circuit included; && answers the last value or the unit -- probed AND
+   ; spec'd). env-shadowed names stay calls; quoted data stays inert. (|| ..) is NOT a rewrite
+   ; (its value is the first truthy ARG -- a rewrite would double-eval); aor emits it.
+   (adesug env e)
+    (? (aquote? e) e
+       !(two? e) e
+       (nil? (cup e)) (adesug env (cap e))
+       (: op0 (cap e)
+          vn (? (|| (name? op0) (two? op0)) 0 (aopn op0 aopv))
+          op (? (&& vn !(member? vn env)) vn op0)
+          as (cup e)
+          (? (&& (id? op 'list) (< 0 (tally as)) !(member? op env))
+               ((: (go l) (? (two? l) (L 'link (adesug env (cap l)) (go (cup l))) ())) as)
+             (&& (id? op '&&) (<= 2 (tally as)) !(member? op env))
+               ((: (go l) (? (two? (cup l)) (L '? (adesug env (cap l)) (go (cup l)) ()) (adesug env (cap l)))) as)
+             (link (? (id? op op0) (adesug env op0) op) (map (\ x (adesug env x)) as)))))
+   ; njit-amble: the hook entry -- compile s (deopt -> e) or answer 0 (decline; the hook keeps e).
+   ; farq = ala's letrec-local predicate (see hook.l): a truthy (farq nom) names a binding that
+   ; is free-LOOKING in a weave re-analysis surface, wire-resolved in truth -- never a gn candidate.
+   ; lams = the scope's lambda-sibling list ((name . cell)..): a cell holds (entry . import-names),
+   ; lz's frozen site.
+   (njit-amble s a e gv farq lams tgt)
+    (: ps (init (cup s))  M (last (cup s))
+       lp (amble-loop M)
+       go   (? lp (cap lp) 0)     vars0 (? lp (caup lp) ())
+       GB0  (? lp (nthl lp 2) 0)  inits (? lp (nthl lp 3) ())
+       shad (filter (\ v (member? v ps)) vars0)
+       ren  (map (\ v (L v (afresh v (link go (cat vars0 ps))))) shad)
+       vars (map (\ v (: r (assoc v ren) (? r (caup r) v))) vars0)
+       GB   (? lp (foldl (\ b pr (asub (cap pr) (caup pr) b)) GB0 ren) 0)
+       k    (tally vars)
+       body (? lp GB M)
+       env  (cat vars ps)
+       body (adesug env body)                                ; own list/&& by definition (nested links / nested ?s)
+       inits (map (\ i (adesug env i)) inits)
+       ; the free-head seams, LOOP BODIES ONLY (the cost gate: a loop amortizes the drive taxes
+       ; over its jump + owned ops; a one-shot call wrapper -- (\ t k (peep t k ())) and kin,
+       ; mooncc's accessor class -- is pure overhead ambled, measured net-NEGATIVE).
+       ; GLOBALS (v4): a free head that is NOT farq resolves via gv at COMPILE and rides an
+       ; extras slot -- redefinition-stale, exactly the callout lanes' bet. a farq name (a
+       ; letrec local the weave RE-analysis dropped from the import row) must never gv-resolve:
+       ; the book holds at best a stale leaked namesake.
+       ; SIBLINGS (v6): a farq name that lamq resolves is a woven lambda sibling of this very
+       ; let -- (entry . import-names), the SAME pair lz freezes into a bytecode reference site
+       ; (lvm_quote entry applied to the import names re-read in the referrer's frame) -- so
+       ; amble compiles the identical application with NO staleness bet: the entry rides an
+       ; extras slot and the call curries entry(imports.. args..). fixcaps' pour guarantees the
+       ; import names sit in this frame; entry 0 (a forward/self ref, lz's backpatch case) or a
+       ; stray import just isn't in cn -> amble-ok? declines that body.
+       cand (? lp (foldl (\ ac i (aheads env go i ac)) (aheads env go body ()) inits) ())
+       csx  (map (\ f (L f (? (farq f)                       ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
+                              (: lfd (assoc f lams)          ; the lam-list assoc. the cell READ mirrors ev.l's cof: box slot 0.
+                                 (? (two? lfd) (peep (cup lfd) 0 0) 0))
+                              0)))
+                 cand)   ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
+                                                             ; the lam-list assoc, so global candidates never pay it (compile cost)
+       cgood (filter (\ p (: cc (caup p)                     ; import names must be FRAME params (ps, where fixcaps pours them) --
+                             (&& (two? cc) (cap cc) (all (\ x (member? x ps)) (cup cc))))) csx)   ; never loop vars (bytecode reads the propagated capture)
+       cn    (map cap cgood)
+       cvals (map (\ p (cap (caup p))) cgood)
+       (cimp f) (cup (caup (assoc f cgood)))
+       gps  (filter (\ p (lit? (caup p)))
+             (map (\ f (L f (gv f 0)))
+              (filter (\ f !(farq f)) (filter (\ f !(member? f cn)) cand))))
+       gn   (map cap gps)
+       gvals (map caup gps)
+       qs   (foldl (\ ac i (aq i ac)) (aq body ()) inits)   ; the quoted-datum constants (id?-deduped source nodes)
+       nq   (tally qs)
+       cx   (\ op (? (member? op cn) (tally (cimp op)) 0))
+       nd   (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits))
+       kn   (cat gn cn)                                     ; every resolvable free head (amble-ok?'s membership test)
+       lpok (? lp (&& (all name? vars) (adistinct vars) (= k (tally inits))
+                      !(member? go vars) !(member? go ps)) 1)
+       ok (&& (two? s) (two? (cup s)) (all name? ps) (adistinct ps)
+              (= a (tally ps)) (< 0 a) lpok (two? body)
+              (? (getenv "AI_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
+              (all lit? gvals) (< nd 48) (< (+ k (+ (tally gn) (+ (tally cn) nq))) 48)   ; slots are cheap once the prologue GUARDS the room (below)
+              (all (\ i (amble-ok? ps kn 0 0 0 i)) inits)
+              (amble-ok? env kn go k 1 body))
+       (? ok
+          (: _ (? (getenv "AI_AMBLE_TRACE") (puts ("amble: " + (show s) + "\n")) 0)   ; the compile trace (forensics: names every ambled source)
+             ng (+ 1 (+ (tally gn) (+ (tally cn) nq)))          ; extras region = [() | globals | sibling entries | quoted data]: () is
+                                                                ; the empty MINT (li 1 would be the charm 0-fossil), entries + quotes
+                                                                ; are HEAP values -- all ride the nifx extras chain into GC-walked slots
+             R (+ k (+ 2 (+ ng nd)))                            ; loopvars | Se | BUDGET | extras | spills
+             A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
+             SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
+             seo (* 8 k)  budo (* 8 (+ k 1))  gbo (* 8 (+ k 2))  spo (* 8 (+ k (+ 2 ng)))  fro (* 8 R)
+             (voff v) (? (member? v vars) (* 8 (posof v vars 0)) (+ fro (* 8 (posof v ps 0))))
+             (spill d) (+ spo (* 8 d))
+             (fx2 lbl) (L (L 'mov X T) (L 'and X X A) (L 'test X 1) (L 'br 'eq lbl))    ; both T,A fixnum, else lbl
+             (abin sa sb d fin) ((acg sa d) + (L (L 'st SP (spill d) A)) + (acg sb (+ d 1)) + (L (L 'ld T SP (spill d))) + fin)   ; T = a, A = b
+             (aar op sa sb d)
+              (abin sa sb d
+               (? (id? op '+) ((fx2 'deopt) + (L (L 'sub A A 1) (L 'adds A A T) (L 'br 'vs 'deopt)))         ; 2y + (2x+1) = tag(x+y)
+                  (id? op '-) ((fx2 'deopt) + (L (L 'subs T T A) (L 'br 'vs 'deopt) (L 'lea A T 1)))         ; 2(x-y) then tag
+                  ((fx2 'deopt) + (L (L 'sar A 1) (L 'sub T T 1) (L 'mulo A A T SC 'deopt) (L 'or A A 1))))) ; y * 2x = 2xy (mulo IS the tag-range gate) then tag
+             (acmp2 op sa sb d) (abin sa sb d ((fx2 'deopt) + (L (L 'cmp T A) (L 'set (ccof op) A) (L 'leax A A A 1 1))))
+             (aid sa sb d) (abin sa sb d (L (L 'cmp T A) (L 'set 'eq A) (L 'leax A A A 1 1)))                ; raw word identity: total, no guard
+             (atwo sx d) (: ln (mint 0)
+              ((acg sx d) + (L (L 'li T 1) (L 'test A 1) (L 'br 'ne ln)
+                              (L 'ld X A 0) (L 'li A chainkind) (L 'cmp X A) (L 'br 'ne ln)
+                              (L 'li T 3) (L 'label ln) (L 'mov A T))))
+             (acap sx d off) ((acg sx d) + (L (L 'test A 1) (L 'br 'ne 'deopt)
+                                             (L 'ld X A 0) (L 'li T chainkind) (L 'cmp X T) (L 'br 'ne 'deopt)
+                                             (L 'ld A A off)))
+             (alink sa sb d) (abin sa sb d (L (L 'lea X HP 88) (L 'cmp SP X) (L 'br 'below 'deopt)          ; room for 3w + floor, else deopt (no GC mid-native)
+                                              (L 'li X chainkind) (L 'st HP 0 X) (L 'st HP 8 T) (L 'st HP 16 A)
+                                              (L 'mov A HP) (L 'add HP HP 24)))
+             (acq st sth sel d) (: le (mint 0)  ln (mint 0)
+              ((acg st d) + (L (L 'test A 1) (L 'br 'eq 'deopt) (L 'cmp A 1) (L 'br 'le le))                 ; heap truth -> net -> twin; tag(x)<=1 <=> x<=0
+               + (acg sth d) + (L (L 'jmp ln) (L 'label le)) + (acg sel d) + (L (L 'label ln))))
+             (aor as d) (: en (mint 0)                                                                      ; (|| a..): the first TRUTHY value, single-eval, short-circuit --
+              (((: (go l) (? !(two? (cup l)) (acg (cap l) d)                                                 ; each arg lands in A; charm truth keeps it (heap truth -> the twin,
+                             ((acg (cap l) d)                                                                ; acq's bet); the last arg IS the value either way
+                              + (L (L 'test A 1) (L 'br 'eq 'deopt) (L 'cmp A 1) (L 'br 'gt en))
+                              + (go (cup l))))) as)
+               + (L (L 'label en))))
+             (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to the arg in A, via the WALKABLE resume:
+              (L (L 'st SP -32 A) (L 'ld T SP cso) (L 'st SP -24 T)                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
+                 (L 'lar T bb) (L 'lar X 'entry0) (L 'subs T T X) (L 'leax T T T 1 1)                       ; pool code base, so a GC with the call pending walks it clean (no retB)
+                 (L 'st SP -16 T) (L 'st SP -8 X)
+                 (L 'li IP (calloutresume 0)) (L 'sub SP SP 32) (L 'ld T IP 0) (L 'jmpr T)                  ; -> lvm_ap -> callee -> lvm_resume -> bb
+                 (L 'label bb) (L 'ld A SP 0) (L 'add SP SP 8)))                                            ; resume: result at Sp[0], pop it
+             (achain as cso d) (? !(two? (cup as))
+                                  ((acg (cap as) d) + (adrive cso))
+                                  ((acg (cap as) d) + (adrive cso) + (L (L 'st SP (spill d) A))
+                                   + (achain (cup as) (spill d) (+ d 1))))                                  ; partial -> spill -> next arg (currying)
+             (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the STRING fast lane at a 1-arg frame-callee site: (s i) with s a
+              ((L (L 'ld T SP cso) (L 'test T 1) (L 'br 'ne ld)                                             ; text and i a charm is a byte index, TOTAL by the spec's unit law --
+                  (L 'ld X T 0) (L 'li SC strkind) (L 'cmp X SC) (L 'br 'ne ld)                             ; in range the unsigned byte, out of range 1 ((1 = ("hi" 9)), the
+                  (L 'test A 1) (L 'br 'eq ld)                                                              ; empty product); any other callee/index falls to the DRIVE (never
+                  (L 'mov X A) (L 'sar X 1) (L 'ld SC T 8)                                                  ; a deopt -- a mixed-type call site keeps its closure speed), so the
+                  (L 'cmp X SC) (L 'br 'below ok)                                                           ; unit-riding and float-index lanes stay C's business. one unsigned
+                  (L 'li A 3) (L 'jmp en)                                                                   ; compare covers the negative index (it wraps huge).
+                  (L 'label ok) (L 'ldxb A T X 1 16) (L 'leax A A A 1 1)
+                  (L 'jmp en) (L 'label ld))
+               + (adrive cso)
+               + (L (L 'label en))))
+             (atally sx d) (: ld (mint 0) en (mint 0)                                                       ; (tally X) with X a text: A = tag(len at [X+8]); anything else
+              ((acg sx d)                                                                                   ; DRIVES the tally global through its gn slot (a chain tally is a
+               + (L (L 'test A 1) (L 'br 'ne ld)                                                            ; walk -- C's, not a deopt storm)
+                    (L 'ld X A 0) (L 'li SC strkind) (L 'cmp X SC) (L 'br 'ne ld)
+                    (L 'ld X A 8) (L 'leax A X X 1 1) (L 'jmp en)
+                    (L 'label ld))
+               + (adrive (+ gbo (* 8 (+ 1 (posof 'tally gn 0)))))
+               + (L (L 'label en))))
+             (acall f as d)
+              (? (member? f cn)                                                                             ; a SIBLING: curry the frozen entry through its import names (all in
+                 (achain (cat (cimp f) as) (+ gbo (* 8 (+ 1 (+ (tally gn) (posof f cn 0))))) d)             ; the frame by fixcaps) then the args -- lz's site, drive-compiled
+                 (: cso (? (|| (member? f vars) (member? f ps)) (voff f) (+ gbo (* 8 (+ 1 (posof f gn 0)))))
+                    (? (&& lp !(two? (cup as)) (|| (member? f vars) (member? f ps)))                        ; a 1-arg frame callee can be a STRING at run time (the lexer class) --
+                       ((acg (cap as) d) + (astr1 cso))                                                     ; LOOP bodies only, the same cost gate as gn: the guard amortizes over
+                       (achain as cso d))))                                                                 ; the loop, but on a one-shot recursion wrapper it taxed EVERY drive
+                                                                                                            ; (~7 insns x ~400M mooncc calls = +19%). a gn or sibling callee is
+                                                                                                            ; never a string (lit?-gated / a woven entry), so those keep the bare drive.
+             (agous us j d) (? (two? us) ((acg (cap us) (+ d j)) + (L (L 'st SP (spill (+ d j)) A)) + (agous (cup us) (+ j 1) d)) ())
+             (agomv j d) (? (< j 0) () ((L (L 'ld A SP (spill (+ d j))) (L 'st SP (* 8 j) A)) + (agomv (- j 1) d)))
+             (ago as d) ((agous as 0 d) + (agomv (- k 1) d) + (L (L 'jmp 'top)))                            ; updates from OLD vars (spilled first), then the back-edge
+             (acg e d)
+              (? (name? e) (L (L 'ld A SP (voff e)))
+                 (whole? e) (L (L 'li A (+ (* 2 e) 1)))
+                 (id? e amble-nil) (L (L 'ld A SP gbo))
+                 (aquote? e) (L (L 'ld A SP (+ gbo (* 8 (+ 1 (+ (tally gn) (+ (tally cn) (aposq e qs 0))))))))   ; a quoted datum: its extras slot (past the globals + sibling entries)
+                 (: op (cap e)  as (cup e)
+                    (? (id? op '?) (acq (cap as) (caup as) (caup (cup as)) d)
+                       (id? op 'two?) (atwo (cap as) d)
+                       (id? op 'cap) (acap (cap as) d 8)
+                       (id? op 'cup) (acap (cap as) d 16)
+                       (id? op 'id?) (aid (cap as) (caup as) d)
+                       (id? op 'link) (alink (cap as) (caup as) d)
+                       (&& (id? op '=) (|| (aqnom? (cap as)) (aqnom? (caup as))))
+                        (aid (cap as) (caup as) d)                                               ; (= a 'sym): a POINT equals only itself (the point-= law) -> raw identity, total
+                       (acmp? op) (acmp2 op (cap as) (caup as) d)
+                       (member? op '(+ - *)) (aar op (cap as) (caup as) d)
+                       (&& (id? op 'tally) !(member? 'tally env) (member? 'tally gn) !(two? (cup as)))
+                        (atally (cap as) d)                                       ; the tally fast lane (env-shadowed or multi-arg falls to the call paths)
+                       (&& (id? op '||) !(member? op env) (two? (cup as))) (aor as d)
+                       (id? op go) (ago as d)
+                       (acall op as d))))
+             initR (: (goi j) (? (< j R) ((L (L 'st SP (* 8 j) T)) + (goi (+ j 1))) ())
+                      ((L (L 'li T 1)) + (goi 0)))                                                          ; every reserved slot a VALID value before any call (GC walks them)
+             unpk ((L (L 'ld T IP 8) (L 'st SP seo T) (L 'ld T IP 32)                                     ; Se = value[1] = e (plain -- image-revert-clean); T = the nifx EXTRAS chain
+                       (L 'st SP budo T) (L 'ld T T 16))                                                    ; link 0 = the budget CELL (saved for the deopt decrement), slots after it
+                   + (: (gou j) (? (< j ng) ((L (L 'ld X T 8) (L 'st SP (+ gbo (* 8 j)) X) (L 'ld T T 16)) + (gou (+ j 1))) ()) (gou 0)))
+             initsir (: (goj is j) (? (two? is) ((acg (cap is) 0) + (L (L 'st SP (* 8 j) A)) + (goj (cup is) (+ j 1))) ())
+                        (goj inits 0))
+             bodyir (? lp (initsir + (L '(label top)) + (acg body 0)) (acg body 0))   ; body = GB|M DESUGARED (adesug) -- never compile the raw forms
+             epi (L (L 'add SP SP fro) (L 'st SP 0 A)                                                       ; hand-rolled lvm_ret (a drive call clobbered Ip)
+                    (L 'ld IP SP (* 8 a)) (L 'st SP (* 8 a) A) (L 'add SP SP (* 8 a))
+                    (L 'ld T IP 0) (L 'jmpr T))
+             dpt ((L '(label deopt)
+                      (L 'ld X SP budo) (L 'ld SC X 8) (L 'sub SC SC 2) (L 'st X 8 SC)                      ; budget -= 1 (tagged: 2k+1 - 2): a RESTART is the profitability signal
+                      (L 'ld T SP seo) (L 'add SP SP fro))                                                  ; (d0 room-guard entries never count); twin from its slot BEFORE the restore
+                  + (? (= a 1) (L (L 'mov IP T)) (L (L 'lea IP T 16)))                                      ; a=1: re-apply e; else: enter e's body on the saturated frame
+                  + (L (L 'ld T IP 0) (L 'jmpr T)))
+             prog ((L '(label entry0)                                                                       ; entry0 = the resume-offset anchor (any shared label works; the blob's first byte)
+                      (L 'lea X HP (+ 40 (* 8 (+ R 4)))) (L 'cmp SP X) (L 'br 'below 'd0)                   ; ROOM guard: the reservation + a call frame + floor must fit Sp-Hp,
+                      (L 'ld T IP 32) (L 'ld X T 8) (L 'cmp X 1) (L 'br 'le 'd0)                            ; the DEOPT BUDGET (extras link 0, a charm): spent -> the native is
+                      (L 'sub SP SP fro))                                                                   ; RETIRED, every call takes d0 straight to the twin (frame untouched
+                                                                                                            ; -> the twin runs it whole; a perma-deopting native heals to bytecode)
+                   + initR + unpk + bodyir + epi + dpt
+                   + ((L '(label d0) (L 'ld T IP 8)) + (? (= a 1) (L (L 'mov IP T)) (L (L 'lea IP T 16))) + (L (L 'ld T IP 0) (L 'jmpr T))))
+             (nifx (emit (asmt tgt prog)) e s a (link 8 (link amble-nil (cat gvals (cat cvals (map (\ q (caup q)) qs)))))))
+          0))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in
    ; r9/r10/r11 (RAW), the param n the tagged Sp[0] (fxv-guarded). each iteration: if

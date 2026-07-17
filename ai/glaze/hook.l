@@ -34,6 +34,7 @@
    calloutinfo-frame (glaze 'calloutinfo-frame)  njit-calloutframe (glaze 'njit-calloutframe)   ;   ... and its CAPTURED / multi-arg sibling (F read from the [imps args] frame)
    qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
+   njit-amble (glaze 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
    ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt). The pre-analysis
    ; LOWERING hook (book['welow], church + HOF) now lives PRE-EGG in ai/ev.l -- the sole welow, no shadow here.
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
@@ -55,12 +56,22 @@
    ; slot (n=0 -> -3). Guard every def body too -> a free-reading body DEOPTS to bytecode (sound), never
    ; miscompiles. gd = ((name p..) . body): (cup (cap gd)) = the def's frame params, (cup gd) = its body.
    (gdefs-ok? gds) (all (\ gd (opnd-ok? (cup (cap gd)) (cup gd))) gds)
-   ; natjit e s a gv -- e = the bytecode entry (deopt target), s = (\ frame.. body) the
-   ; surface src, a = arity, gv = ala's global resolver (this hook is post-egg; `book`/`gv`
-   ; are mopped here, so ala hands its folded gv down for the call-out lane to resolve a free
-   ; global). ps = (init (cup s)) = the frame [imps args]; body = the surface body. compile
+   ; natjit e s a gv farq lamq -- e = the bytecode entry (deopt target), s = (\ frame.. body)
+   ; the surface src, a = arity, gv = ala's global resolver (this hook is post-egg; `book`/`gv`
+   ; are mopped here, so ala hands its folded gv down for the call-out + amble lanes to
+   ; resolve a free global), farq = ala's letrec-local predicate: (farq nom) is truthy iff
+   ; nom is a letrec binding name up the compile scope chain -- such a name can look FREE
+   ; in s (the weave re-analysis drops the let's own names from the import row) yet is
+   ; wire-resolved locally, so NO lane may gv-resolve it: the book holds at best a stale
+   ; leaked namesake (bref summing fref's float loop -- the rc3/rc4 class). lams is the
+   ; compile scope's lambda-sibling list ((name . cell)..), passed VERBATIM (never a per-ala
+   ; closure): a cell's contents (entry . import-names) are what lz freezes into a bytecode
+   ; reference site, so amble compiles the SAME application (entry curried through the
+   ; import names, all in the frame by fixcaps' pour) with no staleness bet; entry 0 (a
+   ; forward ref, pre-weave) declines.
+   ; ps = (init (cup s)) = the frame [imps args]; body = the surface body. compile
    ; body over ps; deopt -> e. non-qualifying -> e unchanged.
-   (natjit e s a gv)
+   (natjit e s a gv farq lams)
     (: ps (init (cup s))  body (last (cup s))
        (? (&& (two? s) (two? (cup (cup s))) (exprn ps body))         ; >=1 param, a body, leaf grammar
           (: _ (pin fires () (+ 1 (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
@@ -93,7 +104,8 @@
                     ; The ~167us compile is one-time PER SOURCE SITE (creation reuses the blob, ~60 ns) -> amortized
                     ; after ~4k cumulative iters. Callout also beats falling to group-swallow here (~1.5 vs ~1.8
                     ; ns/iter, measured), so the recognizer order (callout before group) is already the cheap one.
-                    (: ci (calloutinfo s)  fv (? ci (gv (cap ci) 0) 0)          ; ci = (F op iv ARG); resolve F via gv
+                    (: ci (calloutinfo s)                                        ; ci = (F op iv ARG); resolve F via gv --
+                       fv (? (&& ci !(farq (cap ci))) (gv (cap ci) 0) 0)         ; NEVER for a farq name (a wire-resolved local; the book namesake is stale)
                        (? (&& ci (lit? fv))
                           (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s (caup ci) (caup (cup ci)) (caup (cup (cup ci))) arch))   ; op iv ARG
                      ; CAPTURED / multi-arg call-out: F (and the bound) are FRAME params -> read from the
@@ -126,7 +138,11 @@
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) arch e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
                             (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
-                            e))))))))))))
+                            ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
+                            ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
+                            (: aj (njit-amble s a e gv farq lams arch)
+                               (? aj (: _ (pin fires () (+ 1 (peep fires () 0))) aj)
+                                  (: _ (? (getenv "AI_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
  _ (assert
@@ -135,7 +151,7 @@
        (&& (31 = (ev '(: f (\ x (+ (* x 3) 1)) (f 10))))            ; leaf in a let body
            (fired? n)))                                             ; ... the hook fired on it
     (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum
-    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; non-arith body -> stays bytecode, still right
+    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the AMBLE lane owns it now, still right
     ; --- an embedded FLOAT-RESULT leaf: native gem box at creation, == interp, deopts on a non-float arg ---
     (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))   ; f built by ala -> the float lane fires
        (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (fr 4) ((\ x (+ (* x 1.5) 2.0)) 4))   ; boxes a gem, == the interpreter

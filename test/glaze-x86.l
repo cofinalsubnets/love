@@ -217,6 +217,118 @@
         (95.0 = (rc-hosum rc-half 20)))
    (say err "test/glaze-x86: call-out recognizer -- captured + multi-arg (frame-read F, hand-rolled ret) glaze ok\n"))
 
+; AMBLE (njit-amble, hook.l's LAST lane): the universal boring-tier translation. shapes every
+; other lane declines -- a symbolic chain walker, a consing reverse, a loop whose per-step calls
+; nest (no fold shape) -- glaze at creation: tagged values, Sp-slot temporaries (GC roots), drive
+; call-outs, RESTART deopt (original frame untouched). == interp across the fast path, the arith
+; overflow deopt (-> bignum via the twin), the non-fixnum entry deopt, and native cons. the ()
+; literal rides value[1] as the empty MINT (li 1 would be the charm 0 -- the data.l 0-fossil bug).
+; calls ride the WALKABLE resume (callout_resume: the frame carries tag(bb-entry) + the raw blob
+; base -- an odd charm + an out-of-pool code address, so a GC with call-outs pending walks it
+; clean; the retB stack-interior pointer that stormed uu2lean is retired). FREE call heads in
+; LOOP bodies resolve via gv at compile (v4, the global-callee seam -- redefinition-stale, the
+; callout bet; the loop gate is the cost model: a one-shot call wrapper is net-negative ambled)
+; and ride nifx extras slots; go, the frame/loop names, and ala's farq letrec-locals are NEVER
+; candidates, so a non-tail (go ..) or a weave re-analysis sibling declines rather than bake a
+; stale leaked namesake (the rc4 regression below; bref-summing-fref was the farq find). am-deep
+; is the STORM SHAPE: deep NON-TAIL call nesting with cons churn per level -- thousands of
+; pending drive frames while the GC runs.
+(: (am-cnt l k a) ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) k) (+ a 1) a)) a)) l a))
+(: (am-rev l acc) ((: (go l a) (? (two? l) (go (cup l) (link (cap l) a)) a)) l acc))
+(: (am-mk i acc) (? (< i 1) acc (am-mk (- i 1) (link (% i 7) acc))))
+(: am-l (am-mk 200 ()))
+(: am-dbl (: F (\ x (+ x x)) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (F (F i)))) a)) 0 0))))
+(: (am-sq x) (+ (* x x) 1))                                                          ; the v4 global callees + the rc4 namesake
+(: (am-mul2 x y) (* (+ x 1) y))
+(: (am-seed k) (+ k 3))
+(: (am-gref l a) ((: (go l a) (? (two? l) (go (cup l) (+ a (am-sq (cap l)))) a)) l a))
+(: am-go (\ x (* x 1000000)))
+(: _ (: n0 (peep fires () 0)
+       wk (ev '(\ l k a ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) k) (+ a 1) a)) a)) l a)))
+       ; references are LITERALS: an in-file "interp twin" is impossible -- the hook fires at
+       ; base-ev's ala too, so any reference closure ambles as well (how bref nearly lied).
+       (assert (fired? n0)                                                          ; the walker ambled at creation
+          (29 = (wk am-l 3 0)) (29 = (am-cnt am-l 3 0))                             ; fast path; i%7==3 for i in 1..200 -> 29
+          (4611686018427387932 = (wk am-l 3 4611686018427387903))                   ; +1 past max fixnum -> restart -> bignum
+          (30.5 = (wk am-l 3 1.5))                                                  ; gem acc -> arith guard deopt -> generic +
+          (0 = (wk () 3 0)) (7 = (wk 42 3 7))                                      ; ()/non-chain -> two? false -> a
+          ((am-rev (am-rev am-l ()) ()) = am-l)                                    ; native cons round-trips against the interp-built list (()-tailed)
+          (id? () (am-rev () ()))                                                  ; the () literal is the MINT, not charm 0
+          (19800 = (am-dbl 100))                                                   ; nested captured calls via the drive: sum 4i, i<100
+          (: deep (base-ev '(: H (\ x ((: (go i a) (? (< i 40) (go (+ i 1) (link i a)) a)) 0 (link x ())))
+                             (: (dv d) (? (< d 1) 0 (+ (two? (H d)) (dv (- d 1)))))))
+             (5000 = (deep 5000)))                                                 ; the STORM SHAPE: 5000 pending frames + GC churn, == interp
+          ; QUOTED-DATUM constants (v3): a nom dispatch walker -- 'r/'R ride nifx extras slots,
+          ; (= a 'sym) is raw identity (the point-= law: a point equals only itself). a quoted
+          ; LIST constant answers the SAME source node interp does (id?-transparent, never folded
+          ; with an =-equal sibling).
+          (: dsp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) (\ r)) (+ a 1) (? ((cap l) = (\ R)) (+ a 10) a))) a)) l a)))
+             (&& (23 = (dsp '(r R r x R r) 0)) (0 = (dsp () 0)) (5 = (dsp '(x y) 5))))
+          (: qz (ev '(\ x (? (id? x (\ k)) (\ (1 2)) ())))
+             (&& ('(1 2) = (qz 'k)) (id? (qz 'k) (qz 'k)) (id? () (qz 'nope))))
+          (: qe (ev '(\ x (? (= x (\ q)) 1 0)))
+             (&& (1 = (qe 'q)) (0 = (qe 'r)) (0 = (qe 5)) (0 = (qe "q")) (0 = (qe '(q)))))
+          ; GLOBAL CALLEES (v4): a free head resolves via gv and drive-calls through its extras
+          ; slot -- per-element (am-sq), multi-arg via the curry chain (am-mul2), in an INIT
+          ; (am-seed), and a nif head (%). all == their literal references.
+          (: gw (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (am-sq (cap l)))) a)) l a)))
+             (&& (32 = (gw '(2 3 4) 0)) ((gw am-l 0) = (am-gref am-l 0))))
+          (: gm (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (am-mul2 i 2))) a)) (am-seed 0) 0)))
+             (&& (98 = (gm 10)) (0 = (gm 0))))                                    ; inits ran: (am-seed 0) = 3 -> i starts at 3
+          (: gp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (% (cap l) 3))) a)) l a)))
+             (4 = (gp '(10 11 12 13) 0)))                                         ; 1+2+0+1 -- a nif callee curries through two drives
+          ; the rc4 REGRESSION: a GLOBAL namesake of the loop name exists (am-go, *1000000); a
+          ; NON-TAIL (am-go ..) inside the body is the LOCAL named-let binding -- go is never a
+          ; gn candidate, so amble declines the outer body and the value is the bytecode's
+          ; (a baked global answers 11 here, not 10: rc4's miscompile, bref summing dref's loop).
+          (: r4 (ev '(\ n ((: (am-go i a) (? (< i n) (am-go (+ i 1) (+ a i)) (+ a (tally (am-go n))))) 0 0)))
+             (&& (10 = (r4 5))
+                 ((r4 5) = ((\ n ((: (am-go i a) (? (< i n) (am-go (+ i 1) (+ a i)) (+ a (tally (am-go n))))) 0 0)) 5))))
+          ; the STRING lane: a 1-arg frame-callee call carries a text fast path (kind-guarded,
+          ; falls to the DRIVE -- never a deopt), so (s i) in a loop is a native byte index,
+          ; TOTAL by the unit law (out of range/negative -> 1, the empty product), and (tally s)
+          ; reads the length raw. the same call site takes closures (mx) and strings (drive vs
+          ; byte path chosen at RUN time); a chain tally DRIVES (no storm); a param named tally
+          ; shadows the fast lane.
+          (: dg (ev '(\ s n ((: (go i a) (? (< i n) (go (+ i 1) (+ (* a 10) (- (s i) 48))) a)) 0 0)))
+             (31415926 = (dg "31415926" 8)))
+          (: bs (ev '(\ s ((: (go i a) (? (< i (tally s)) (go (+ i 1) (+ a (s i))) a)) 0 0)))
+             (&& (294 = (bs "abc")) (0 = (bs ""))))
+          (: pk (ev '(\ s n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (s (- i 2)))) a)) 0 0)))
+             (199 = (pk "ab" 6)))                                                 ; 1+1+97+98+1+1: negative AND past-end read the unit
+          (: mx (ev '(\ f n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0)))
+             (&& (90 = (mx (\ x (* x 2)) 10)) (296 = (mx "abc" 5))))              ; one site, both callee kinds
+          (: ct (ev '(\ l n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally l))) a)) 0 0)))
+             (&& (12 = (ct '(1 2 3) 4)) (8 = (ct "ab" 4))))                       ; chain tally drives; text tally native
+          (: ts (ev '(\ tally n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally i))) a)) 0 0)))
+             (10 = (ts (\ x (+ x 1)) 4)))
+          ; SIBLING CALLEES (v6): a letrec lambda sibling is a free head in the weave re-analysis
+          ; surface; ala's lams hands amble the cell (entry . import-names) lz freezes into the
+          ; bytecode site, so the call curries the frozen entry -- NO staleness bet. the digrun
+          ; shape is moon's lexer verbatim (infix singletons + the sugared trigger named-let +
+          ; the backtick's macro-spliced link VALUES as heads -- adesug owns all three).
+          (: n2 (peep fires () 0)
+             lx (ev '(: (dig? c) (? (< c 58) (< 47 c) ())
+                        (digrun s n) (: (go k v) (? (&& (k < n) (dig? (s k))) (go (k + 1) ((* 10 v) + ((s k) - 48))) v) (go 0 0))
+                        digrun))
+             (&& (31415 = (lx "31415x" 6)) (0 = (lx "x" 1)) (fired? n2)))         ; the lexer class AMBLES (fires) and == interp
+          (: mk (ev '(\ b (: (addb x) (+ x b)
+                             (suml l) ((: (go l a) (? (two? l) (go (cup l) (+ a (addb (cap l)))) a)) l 0)
+                             suml)))
+             (306 = ((mk 100) '(1 2 3))))                                         ; a sibling WITH an import: entry curried through the frame
+          (: eo (ev '(: (ev? n) (? (< n 1) 1 (od? (- n 1)))
+                        (od? n) (? (< n 1) 0 (ev? (- n 1)))
+                        (cnt l) ((: (go l a) (? (two? l) (go (cup l) (+ a (od? (cap l)))) a)) l 0)
+                        cnt))
+             (4 = (eo '(1 2 3 4 5 6 7))))                                         ; mutual recursion: the later sibling drives the earlier's entry
+          ; the DEOPT BUDGET: a per-call restarter ((= a b) on heap values, fx2 fails every call)
+          ; spends its budget and RETIRES -- every later call takes d0 straight to the twin, so a
+          ; perma-deopting native heals to bytecode; correct at every point on the way.
+          (: hp (ev '(\ l q ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) q) (+ a 1) a)) a)) l 0)))
+             (: (chk i bad) (? (< i 40) (chk (+ i 1) (? (= 2 (hp '("ab" "cd" "ab" "x") "ab")) bad (+ bad 1))) bad)
+                (0 = (chk 0 0))))))
+   (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + globals + siblings + the deopt budget) ok\n"))
+
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
 ; so the LOADER auto-ev's them and srcrec records their source (a body-less `:` define -- inside a
 ; base-ev block they'd be local + un-recorded). swq is a leaf callee; swsum has a named-let loop,
