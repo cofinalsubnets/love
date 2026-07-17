@@ -44,7 +44,17 @@
  ; --- the book of known names, laid once on first use: a name off this
  ; book and off the sheet is a LABEL and binds to its own spelling ---
  known #()
- (knowns _) (: _ (? (! $known) (map (\ n (pin known n 1)) (names ())) 0) known)
+ (knowns _) (: _ (? (! $known)
+                    (: _ (map (\ n (pin known n 1)) (names ()))
+                       ; the READER-EMITTED noms ride formulas but sit OFF the book (the egg mops
+                       ; them): @(..) reads as (tuple ..), backtick as (list ..), the printer round-
+                       ; trips spread/mono. off `known` they'd be collected as deps and the formula
+                       ; lambda would SHADOW the real constructor -- which only ever worked because
+                       ; feel's fold resolved the head shadow-blind at compile (the glaze compiles
+                       ; the honest lexical surface and applied the dep's spelling instead).
+                       (map (\ n (pin known n 1)) '(tuple list spread mono)))
+                    0)
+                 known)
  (label? n) (&& (name? n) (! (cell? n)) (! (peep (knowns ()) n 0))
                 (: b ((string n) 0) (&& (<= 97 b) (<= b 122))))
 
