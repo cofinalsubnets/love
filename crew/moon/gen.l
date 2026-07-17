@@ -444,8 +444,8 @@
    ; comparison fuses to cmp + br<relation> (the cmp/set/movzx/cmp/br chain
    ; folds to cmp/br on EVERY if/while/for), !e flips the sense, && and ||
    ; short-circuit straight into the branch structure, and a predicate CALL
-   ; splices through cbinl. the double lane stays materialized (ucomisd's NaN
-   ; parity rides the set ops). forms | 'bad. --
+   ; splices through cbinl. a float compare branches straight off ucomisd/
+   ; fcmp, NaN-honest (the fcb lane). forms | 'bad. --
    (cbranch g env e cc lbl)
     (? (&& (<e = 'un) (<>e = 'not))
         (cbranch g env <>>e (? (cc = 'eq) 'ne 'eq) lbl)
@@ -476,13 +476,40 @@
            ; evaluates -- allocation order must match execution order, or the
            ; right's freed inner temps alias the parked left. a flo side falls
            ; back to ctest (both sides re-evaluate whole, the old shape).
-           ; the float fallback DISCARDS the int-flavored emission and re-runs
-           ; through ctest -- any vmap pin born inside the dropped forms would
-           ; survive with its establishing load gone (the lvm_aall stale-index
-           ; fault), so the map flushes before the re-evaluation
-           (fcb z9) (: _ (vmflush g)
-                       c (ctest g env e)
-                       (? (bad? c) 'bad ((vfs c) + `(`('cmp 'r0 0) `('br cc lbl)))))
+           ; the float lane FUSES: discard the int-flavored emission (the map
+           ; flushes first -- a pin born in the dropped forms would survive
+           ; with its establishing load gone, the lvm_aall stale-index fault),
+           ; re-evaluate both sides whole through the double shuttle, then
+           ; branch straight off the compare -- no set dance, no retest.
+           ; UNORDERED (a NaN side) answers false for every relation and true
+           ; only for !=. x64: above/ae read CF=0, which unordered sets, so
+           ; < and <= compare SWAPPED; == and != carry the parity bit in the
+           ; BRANCH STRUCTURE (p||ne is two branches in, np&&eq hops the eq
+           ; branch over). arm64: fcmp's gt/ge/eq/ne are unordered-false
+           ; natively, so every relation is ONE branch and negrel spells the
+           ; false sense.
+           (fcb z9)
+            (: _ (vmflush g)
+               a (cgexpr g env lhs)
+               (? (bad? a) 'bad
+                  (: af (cat (asflo g a) (cat `(`('movqrx 'r0 'f0)) (spush 'r0)))
+                     b (cgexpr g env rhs)
+                     (? (bad? b) 'bad
+                        (: mid (cat af (cat (asflo g b) (cat (spop 'r1) `(`('movqxr 'f1 'r1)))))
+                           swp (member? op '(lt le))
+                           cf `(`('ucomisd (? swp 'f0 'f1) (? swp 'f1 'f0)))
+                           ecc (? (a64? g)
+                                  (: t9 (? (member? op '(lt gt)) 'gt (member? op '(le ge)) 'ge op)
+                                     (? (cc = 'ne) t9 (negrel t9)))
+                                  (member? op '(lt gt)) (? (cc = 'ne) 'above 'be)
+                                  (member? op '(le ge)) (? (cc = 'ne) 'ae 'below)
+                                  ())
+                           (? ecc (cat mid (cat cf `(`('br ecc lbl))))
+                              (? (cc = 'ne) (op = 'ne) (op = 'eq))
+                               (cat mid (cat cf `(`('br 'p lbl) `('br 'ne lbl))))
+                              (: sk (nlab g ".u")
+                                 _ (vmflush g)
+                                 (cat mid (cat cf `(`('br 'p sk) `('br 'eq lbl) `('label sk)))))))))))
            (bcc o u) (scc (? (cc = 'ne) o (negrel o)) u)
            (cu2 ta tb) (|| (|| (usg? ta) (usg? tb)) (|| (ptr? ta) (ptr? tb)))
            (? (&& (<rhs = 'num) (immok g 'cmp <>rhs))
@@ -518,8 +545,19 @@
                                    fs)))))))))
        (: try (? (<e = 'call) (cbinl g env e cc lbl) 'no)
           (? (! (id? try 'no)) try
-             (: c (ctest g env e)
+             (: c (cgexpr g env e)
                 (? (bad? c) 'bad
+                   (flo? (vty c))
+                    ; a bare double condition is d != 0.0, NaN-honest -- the
+                    ; parity dance rides the branch pair (ctest's set/or
+                    ; settle dies); arm64's fcmp ne/eq are honest whole
+                    (: fs (cat (vfs c) `(`('li 'r1 0) `('movqxr 'f1 'r1) `('ucomisd 'f0 'f1)))
+                       _ (rfree g (vreg c))
+                       (? (a64? g) (fs + `(`('br cc lbl)))
+                          (cc = 'ne) (fs + `(`('br 'p lbl) `('br 'ne lbl)))
+                          (: sk (nlab g ".u")
+                             _ (vmflush g)
+                             (fs + `(`('br 'p sk) `('br 'eq lbl) `('label sk))))))
                    (: fs ((vfs c) + `(`('cmp (vreg c) 0) `('br cc lbl)))
                       _ (rfree g (vreg c))
                       fs))))))
