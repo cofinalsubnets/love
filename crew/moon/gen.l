@@ -88,17 +88,7 @@
    ; (g 'vuniv -- the alive pass's univ, pinned only for the regen builds)
    ; already excludes address-taken and multiply-declared names. off while
    ; inlining (an inlinee's names would conflate with the caller's). --
-   ; ...and SEALED while a call's arguments stage: the staging splices args
-   ; right-to-left (evaluation order is free in C) while generation runs
-   ; left-to-right, so a pin born inside one arg would read STALE from a
-   ; later-generated, earlier-spliced sibling -- its establishing load
-   ; splices AFTER the read. under the seal vmget answers nothing and vmpin
-   ; refuses (reads go to the slots, no pins are born), while the standing
-   ; pins KEEP their registers (vpin holds -- a captured tuple must not see
-   ; its register handed out as a sibling's scratch). a depth count, not a
-   ; flag: an argument may hold a nested call.
-   (vmon? g) (&& (two? (peep g 'vuniv ()))
-                 (&& (! (peep g 'inlining ())) (! (0 < (peep g 'argseal 0)))))
+   (vmon? g) (&& (two? (peep g 'vuniv ())) (! (peep g 'inlining ())))
    (vmget g nm)
     (? (! (vmon? g)) ()
        (: e9 (assoc nm (peep g 'vmap ()))
@@ -116,9 +106,18 @@
                                (vregs9 >l (link r9 acc)))))
        _ (pin g 'vmap m2)
        (pin g 'vpin (vregs9 m2 ())))
+   ; no pin is BORN while a call's arguments stage (the argseal depth, set by
+   ; call-fixed): the staging splices args right-to-left (evaluation order is
+   ; free in C) while generation runs left-to-right, so a pin born inside one
+   ; arg would read STALE from a later-generated, earlier-spliced sibling --
+   ; its establishing load splices AFTER the read. pins from BEFORE the call
+   ; stay readable: their loads precede the whole staging in every splice
+   ; order, and no aval can clobber them (wr?/rfree hold the vpin line). a
+   ; depth count, not a flag: an argument may hold a nested call.
    (vmpin g nm r)
-    (? (&& (vmon? g) (&& (member? nm (peep g 'vuniv ()))
-                         (member? r (peep g 'pool0 ()))))
+    (? (&& (vmon? g) (&& (! (0 < (peep g 'argseal 0)))
+           (&& (member? nm (peep g 'vuniv ()))
+               (member? r (peep g 'pool0 ())))))
        (: _ (vmdrop g nm)
           _ (pin g 'vmap (link `(nm r) (peep g 'vmap ())))
           (? (member? r (peep g 'vpin ())) ()
