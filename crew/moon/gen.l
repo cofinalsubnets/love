@@ -69,9 +69,18 @@
                    (|| (callish? <x) (callish? >x)))
    (tor0 g v)                                       ; land a value on the r0 protocol (frees its pool reg)
     (? (id? (vreg v) 'r0) (vfs v)
-       (: fs ((vfs v) + `(`('mov 'r0 (vreg v))))
-          _ (rfree g (vreg v))
-          fs))
+       (: rd (vreg v) rl (rev (vfs v))
+          lf (? (two? rl) <rl ())
+          ; a trailing leax retargets to r0 outright -- lea reads its sources
+          ; before the dest write, so even an r0 index is licensed -- and the
+          ; deref's load then sits same-dest beside it for the addressing fold
+          (? (&& (two? lf) (&& (id? <lf 'leax) (&& (id? <>lf rd) (wr? g rd))))
+             (: fs (rev (link `('leax 'r0 <>>lf <>>>lf (nthr lf 4) (nthr lf 5)) >rl))
+                _ (rfree g rd)
+                fs)
+             (: fs ((vfs v) + `(`('mov 'r0 rd)))
+                _ (rfree g rd)
+                fs))))
    (vdrop g v) (: fs (vfs v) _ (rfree g (vreg v)) fs)   ; the value is DISCARDED: keep the effects, free the reg
    ; the result register for an op consuming rA: reuse a writable operand,
    ; else a fresh pool reg, else the protocol r0
@@ -2156,39 +2165,39 @@
    ; chains this way. one backward walk; every control edge (label, transfer,
    ; call, raw, sys) resets the dead set (everything assumed live across it);
    ; an op outside the tables does the same. dead_before = (dead + defs) - reads.
+   (rdsp f)                                         ; -> (L reads defs pure?) | 'bar
+    (: op <f
+       (rg1 x) (? (charm? x) () `(x))
+       (? (op = 'li) `(() `(<>f) 1)
+          (op = 'mov) `(`(<>>f) `(<>f) 1)
+          (member? op '(add sub and or xor imul))
+           (? (<>f = 'sp) `(() () ())      ; sp motion touches no gp register
+              `(((rg1 <>>f) + (rg1 <>>>f)) `(<>f) 1))
+          (op = 'push) `(`(<>f) () ())
+          (op = 'pop) `(() `(<>f) ())
+          (member? op '(shl shr sar rol ror)) `(`(<>f) `(<>f) 1)
+          (member? op '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) `(`(<>>f) `(<>f) 1)
+          (member? op '(st st1 st2 st4)) `(`(<>f <>>>f) () ())
+          (member? op '(lea lean)) `(`(<>>f) `(<>f) 1)
+          (member? op '(leax ldx ldxb)) `(`(<>>f <>>>f) `(<>f) 1)
+          (op = 'la) `(() `(<>f) 1)
+          (op = 'set) `(() `(<>>f) 1)
+          (member? op '(cmp test)) `(((rg1 <>f) + (rg1 <>>f)) () ())
+          (member? op '(neg not)) `(`(<>f) `(<>f) 1)
+          (member? op '(sx1 sx2 sx4 zx1 zx2 zx4)) `(`(<>f) `(<>f) 1)
+          (op = 'movqxr) `(`(<>>f) () ())
+          (op = 'movqrx) `(() `(<>f) 1)
+          (op = 'cvtsi2sd) `(`(<>>f) () ())
+          (op = 'cvttsd2si) `(() `(<>f) ())
+          (member? op '(ldsd ldss)) `(`(<>>f) () ())
+          (member? op '(stsd stss)) `(`(<>f) () ())
+          (member? op '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)) `(() () ())
+          (member? op '(div rem udiv urem))
+           `(((rg1 <>>f) + (rg1 <>>>f)) `('r0 'r1 'r2 'r3) ())
+          (member? op '(shlv shrv sarv)) `(`(<>f <>>f) `(<>f 'r1) ())
+          'bar))
    (deaddef fs)
-    (: (rdsp f)                                      ; -> (L reads defs pure?) | 'bar
-        (: op <f
-           (rg1 x) (? (charm? x) () `(x))
-           (? (op = 'li) `(() `(<>f) 1)
-              (op = 'mov) `(`(<>>f) `(<>f) 1)
-              (member? op '(add sub and or xor imul))
-               (? (<>f = 'sp) `(() () ())      ; sp motion touches no gp register
-                  `(((rg1 <>>f) + (rg1 <>>>f)) `(<>f) 1))
-              (op = 'push) `(`(<>f) () ())
-              (op = 'pop) `(() `(<>f) ())
-              (member? op '(shl shr sar rol ror)) `(`(<>f) `(<>f) 1)
-              (member? op '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) `(`(<>>f) `(<>f) 1)
-              (member? op '(st st1 st2 st4)) `(`(<>f <>>>f) () ())
-              (member? op '(lea lean)) `(`(<>>f) `(<>f) 1)
-              (member? op '(leax ldx ldxb)) `(`(<>>f <>>>f) `(<>f) 1)
-              (op = 'la) `(() `(<>f) 1)
-              (op = 'set) `(() `(<>>f) 1)
-              (member? op '(cmp test)) `(((rg1 <>f) + (rg1 <>>f)) () ())
-              (member? op '(neg not)) `(`(<>f) `(<>f) 1)
-              (member? op '(sx1 sx2 sx4 zx1 zx2 zx4)) `(`(<>f) `(<>f) 1)
-              (op = 'movqxr) `(`(<>>f) () ())
-              (op = 'movqrx) `(() `(<>f) 1)
-              (op = 'cvtsi2sd) `(`(<>>f) () ())
-              (op = 'cvttsd2si) `(() `(<>f) ())
-              (member? op '(ldsd ldss)) `(`(<>>f) () ())
-              (member? op '(stsd stss)) `(`(<>f) () ())
-              (member? op '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)) `(() () ())
-              (member? op '(div rem udiv urem))
-               `(((rg1 <>>f) + (rg1 <>>>f)) `('r0 'r1 'r2 'r3) ())
-              (member? op '(shlv shrv sarv)) `(`(<>f <>>f) `(<>f 'r1) ())
-              'bar))
-       (go l dead acc)                               ; l already REVERSED; acc rebuilds forward
+    (: (go l dead acc)                               ; l already REVERSED; acc rebuilds forward
         (? (! (two? l)) acc
            (: f <l r >l
               (? (! (two? f)) (go r dead (link f acc))
@@ -2259,30 +2268,41 @@
        (? (peep esc 'y ()) fs (lisweep (drop fs))))
 
    ; the addressing fold: an add/lea/mov whose result is consumed as the VERY
-   ; NEXT load's base -- and overwritten by that load -- folds into the load's
-   ; displacement, so the member-access triple (mov base; add off; ld) lands
-   ; as the one-insn form every real compiler emits. sound by adjacency: the
-   ; folded def's only observer is the load's address, and the load overwrites
-   ; its register. two passes chain the mov through a folded add. x64 only
-   ; (the a64 lane rides raw forms).
+   ; NEXT load's base folds into the load's displacement, so the member-access
+   ; triple (mov base; add off; ld) lands as the one-insn form every real
+   ; compiler emits. sound by adjacency: a dest the load overwrites (or one
+   ; that dies on the straight line) folds outright; a LIVE dest keeps the
+   ; addr insn beside the re-based load -- whichever order leaves every read
+   ; pre-clobber -- for the deaddef rerun to harvest. two passes chain the
+   ; mov through a folded add. x64 only (the a64 lane rides raw forms).
    ldops9 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
+   ; a register DIES on the straight-line suffix when an insn overwrites it
+   ; before any read -- a label/branch/call/unknown op ends the certainty
+   (dies? rd l)
+    (? (! (two? l)) ()
+       (: f <l
+          (? (! (two? f)) ()
+             (: rs (rdsp f)
+                (? (id? rs 'bar) ()
+                   (member? rd <rs) ()
+                   (member? rd <>rs) 1
+                   (dies? rd >l))))))
    (addrf1 fs)
     (? (! (two? fs)) ()
        (: f <fs r >fs
           nx (? (two? r) <r ())
-          ; a leax feeding the very next full-word/byte load (same dest-and-base
-          ; overwrite license) IS the indexed load: one SIB insn. the base/index
-          ; may alias the dest -- the fold reads them at the leax's seat, where
-          ; they still hold their pre-leax values.
+          ; a leax feeding the very next full-word/byte load THROUGH its dest
+          ; IS the indexed load: one SIB insn (base/index read at the leax's
+          ; seat, so they may alias an overwritten or dying dest)
           lx (? (! (&& (two? f) (&& (<f = 'leax)
                         (&& (two? nx) (member? <nx '(ld ldu1)))))) ()
-                (! (&& (id? <>nx <>f) (id? <>>nx <>f))) ()
+                (! (id? <>>nx <>f)) ()
                 (! (&& (charm? <>>>nx) (charm? (nthr f 5)))) ()
-                `((? (<nx = 'ld) 'ldx 'ldxb) <>f <>>f <>>>f (nthr f 4)
+                `((? (<nx = 'ld) 'ldx 'ldxb) <>nx <>>f <>>>f (nthr f 4)
                   ((nthr f 5) + <>>>nx)))
           hit (? (two? lx) ()
                  (! (&& (two? f) (&& (two? nx) (member? <nx ldops9)))) ()
-                 (! (&& (id? <>nx <>f) (id? <>>nx <>f))) ()   ; load's dest AND base both = f's dest
+                 (! (id? <>>nx <>f)) ()               ; the load's base is f's dest
                  (! (charm? <>>>nx)) ()
                  (member? <f '(lea lean))
                   (? (charm? <>>>f) `(<>>f (<>>>f + <>>>nx)) ())
@@ -2291,9 +2311,18 @@
                      `(<>>f (<>>>f + <>>>nx)) ())
                  (<f = 'mov) `(<>>f <>>>nx)
                  ())
-          (? (two? lx) (link lx (addrf1 >r))
+          (? (two? lx)
+              (? (|| (id? <>nx <>f) (dies? <>f >r)) (link lx (addrf1 >r))
+                 (! (|| (id? <>f <>>f) (id? <>f <>>>f)))
+                  (link f (link lx (addrf1 >r)))
+                 (! (|| (id? <>nx <>>f) (id? <>nx <>>>f)))
+                  (link lx (link f (addrf1 >r)))
+                 (link f (addrf1 r)))
              (two? hit)
-             (link `(<nx <>f <hit <>hit) (addrf1 >r))
+              (: nl `(<nx <>nx <hit <>hit)
+                 (? (|| (id? <>nx <>f) (dies? <>f >r)) (link nl (addrf1 >r))
+                    (! (id? <>f <hit)) (link f (link nl (addrf1 >r)))
+                    (link nl (link f (addrf1 >r)))))
              (link f (addrf1 r)))))
    (addrfold fs) (addrf1 (addrf1 fs))
 
@@ -3546,6 +3575,7 @@
                           (cat <sp0
                            (body + `(`('li 'r0 0)) + epi-a64)))))
                        (deadst
+                        (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (addrfold
                         (stld
                         (spmerge
@@ -3557,7 +3587,7 @@
                                   `('push 'r4) `('mov 'r4 'sp) `('sub 'sp 'sp frame)
                                   `('st 'r4 -8 'r3))
                            (cat <sp0
-                            (body + `(`('li 'r0 0)) + epi))))))))))))))))
+                            (body + `(`('li 'r0 0)) + epi)))))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
        (uhomes ps gpi acc)
