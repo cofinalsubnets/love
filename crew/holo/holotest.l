@@ -42,6 +42,9 @@
       `("alu.swap"    "4801d8"                '((add r0 r3 r0)))   ; commutes -> add rax,rbx, no mov
       `("add.movop"   "4889c24801da"          '((add r2 r0 r3)))   ; mov rdx,rax ; add rdx,rbx (no lea fusion -- the emit-alu note)
       `("add.movop.i" "4889c14881c105000000"  '((add r1 r0 5)))    ; imm form keeps the dance too
+      ;; ('align n) pads to the boundary with the backend's nop unit (lay-level, no lowering)
+      `("align.pad"   "c3909090c3"            '((ret) (align 4) (label x) (ret)))
+      `("align.zero"  "c3"                    '((align 16) (ret)))  ; already on the boundary: no pad
       ;; imul (true 3-operand imm form; rr folds two-address)
       `("imul.rr"     "480fafc3"              '((imul r0 r0 r3)))
       `("imul.imm"    "4869d007000000"        '((imul r2 r0 7)))
@@ -221,6 +224,7 @@
       `("a64.ret"    "c0035fd6"          '((ret)))
       `("a64.svc"    "010000d4"          '((sys)))
       `("a64.nop"    "1f2003d5"          '((nop)))
+      `("a64.align"  "c0035fd61f2003d51f2003d51f2003d5c0035fd6" '((ret) (align 16) (label x) (ret)))  ; nop-word fill
       `("a64.brk"    "000020d4"          '((trap)))
       `("a64.loop"   "1f0001eb60000054000400d1fdffff17c0035fd6"
                       '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))

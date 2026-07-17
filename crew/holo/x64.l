@@ -373,5 +373,6 @@
    x64 (tablet 0)
    _ (pin x64 'lower x64-lower)
    _ (pin x64 'patch x64-patch)
+   _ (pin x64 'nop `(144))                     ; the ('align n) filler unit: one-byte nop
    _ (defbackend 'x64 x64)
    _ (defbackend 'amd64 x64))

@@ -97,11 +97,25 @@
    ;; REVERSED (each chunk prepended, one rev at the end) so a whole-program lay stays linear --
    ;; appending to the tail re-copied the stream per instruction, and `mooncc -c ai.c` paid it as
    ;; 15 of its 16 minutes. --
+   ;; ('align n) pads the stream to the next n-boundary with the backend's nop unit
+   ;; (peep be 'nop, a byte-list, cycled to the exact count) -- alignment lives HERE,
+   ;; the only pass that knows the address. the pad is between-function filler, never
+   ;; executed, so a torn unit at an odd grain is harmless.
+   (pad-to be addr n)
+      (: k (% (- n (% addr n)) n)
+         unit (peep be 'nop `(144))
+         (fill j u) (? (< j 1) ()
+                       (! (two? u)) (fill j unit)
+                       (>< <u (fill (- j 1) >u)))
+         (fill k unit))
    (lay prog be addr items labels)
       (? (! (two? prog)) (>< (rev items) labels)
          (: ins <prog
             (? (= <ins 'label)
                (: _ (pin labels (at ins 1) addr) (lay >prog be addr items labels))
+               (= <ins 'align)
+               (: pad (pad-to be addr (at ins 1))
+                  (lay >prog be (+ addr (tally pad)) (+ (rev pad) items) labels))
                (: chunk (lower-with be ins)
                   (lay >prog be (+ addr (chunk-len chunk)) (+ (rev chunk) items) labels)))))
 

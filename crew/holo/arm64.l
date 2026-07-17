@@ -385,6 +385,7 @@
    arm64 (tablet 0)
    _ (pin arm64 'lower arm64-lower)
    _ (pin arm64 'patch arm64-patch)
+   _ (pin arm64 'nop `(31 32 3 213))           ; the ('align n) filler unit: NOP d503201f LE
    _ (defbackend 'arm64 arm64)
    _ (defbackend 'aarch64 arm64))
 
