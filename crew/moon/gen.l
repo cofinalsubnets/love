@@ -1698,22 +1698,28 @@
                         (sibs g fs () (elabs fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
 
    ; -- FRAME ELISION: a fn never needs the frame LINK (the entry push/mov,
-   ; x64's rbx slot, the sp-restore pair at every exit), only its SLOTS. the
-   ; slots re-address off sp: keep (sub sp K9) with K9 = K + the link bytes
-   ; (8 x64, 32 arm64), so every old base+off lands at sp+(off+K) and sp sits
-   ; exactly where the framed body held it; each exit pays one (add sp K9)
-   ; for the restore pair. a slotless CALL-FREE fn (fully homed) drops the
-   ; sub too and its exits are bare; a fn with plain calls keeps the sub
-   ; always -- sp holds still across a call exactly as r4 did, and K9 (8 mod
-   ; 16) hands each callee the alignment push r4 used to. gated WHOLE-FN,
-   ; hard: any body sp motion (a surviving spush cell -- the exit add is only
-   ; sound at zero displacement, where the old (mov sp r4) was a reset from
-   ; anywhere), any raw splice (baked bytes can hide frame addressing), any
-   ; a64 call (bl clobbers lr), and on x64 any r3 touch (rbx is callee-saved
-   ; and its save slot is gone) keep the frame as built -- but the callr PARK
-   ; squeezes out first (the sv3 lane below), so a park-only r3 no longer
-   ; counts as a touch. base slots ride a4base; uoff is each op's
-   ; displacement slot; the frame base anywhere OUTSIDE a base slot bails. --
+   ; the sp-restore pair at every exit), only its SLOTS. the slots re-address
+   ; off sp: keep (sub sp K9) with K9 = K + the link bytes (8 x64, 32 arm64),
+   ; so every old base+off lands at sp+(off+K) and sp sits exactly where the
+   ; framed body held it; each exit pays one (add sp K9) for the restore
+   ; pair. a slotless call-free fn drops the sub too and its exits are bare;
+   ; a fn with plain calls keeps the sub always -- sp holds still across a
+   ; call exactly as r4 did, and K9 (8 mod 16) hands each callee the
+   ; alignment push r4 used to. body sp MOTION rides: scan carries the
+   ; static displacement D through the charm sp add/subs (spush spans,
+   ; overflow-arg staging) and proves it at every label and branch through
+   ; labt -- a dead label assumes 0 and every arrival verifies -- so a slot
+   ; inside a span lands at sp+(off+K+D) and each exit unwinds K9+D. an r3
+   ; user (x64) keeps rbx's save/restore as plain sp slots (the framed slot
+   ; -8 was its alone; the callr PARK still squeezes out first -- the sv3
+   ; lane below -- so a park-only r3 costs nothing). still framed: a raw
+   ; splice (baked bytes can hide frame addressing), a bare push/pop, a
+   ; non-charm sp write (alloca), any a64 call (bl clobbers lr), a call at a
+   ; D off 16, and the frame base anywhere OUTSIDE a base slot (a4base; uoff
+   ; is each op's displacement slot). rbp itself is retired everywhere it
+   ; can be: the glaze ABI rides Ip in rbp, so a framed fn that calls into
+   ; the VM faults on its own slots when the run returns -- and r4 never
+   ; joins any pool (a native clobbers it on every VM-reaching call). --
    uoff (: t (tablet 0)
            _ (foldl (\ _ o (pin t o 3)) 0 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldsd ldss lea lean))
            _ (foldl (\ _ o (pin t o 5)) 0 '(ldx ldxb leax))
@@ -1737,9 +1743,9 @@
        ; then the fn never WRITES r3 at all, so the caller's rbx rides the
        ; tail-jump untouched (the callee-saved contract made unnecessary, not
        ; elided) and the rbx save (body head, slot -8 is its alone) and each
-       ; restore run's leading (ld r3 r4 -8) drop with the frame.
-       ; all-or-nothing as ever: any residual r3 still bails and the original
-       ; forms stand. --
+       ; restore run's leading (ld r3 r4 -8) drop with the frame. a residual
+       ; r3 no longer bails: scan's r3f keeps the save and every restore as
+       ; sp slots instead. --
        sv3 (&& (! a64) ((nthr body0 0) = '(st r4 -8 r3)))
        wina '(mov li lea lean leax ldx ldxb add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4 st st1 st2 st4 cmp test)
        wind '(mov li lea lean leax ldx ldxb add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
@@ -1769,49 +1775,84 @@
            (&& ((nthr l9 0) = '(mov sp r4)) ((nthr l9 1) = '(pop r4))) 2
            (&& ((nthr l9 0) = '(ld r3 r4 -8)) (&& ((nthr l9 1) = '(mov sp r4)) ((nthr l9 2) = '(pop r4)))) 3
            ())
-       (clean? f2 bp)                                ; fb only at its base slot; x64 r3 / a64 lr never
+       (clean? f2 bp)                                ; fb only at its base slot; a64 lr never
         (: (go e i) (? (! (two? e)) 1
                        (: x <e
                           (? (&& (id? x fb) (! (i = bp))) ()
-                             (&& (! a64) (id? x 'r3)) ()
                              (&& a64 (id? x 'lr)) ()
                              (go >e (i + 1)))))
            (go f2 0))
-       (scan l sl)                                   ; -> 'no | needs-sub flag
-        (? (! (two? l)) sl
+       labt (tablet 0)                               ; label -> the D every arrival agrees on
+       (scan l D vs r3f live)                        ; -> 'no | (needs-sub r3-in-use)
+        (? (! (two? l)) `(vs r3f)
            (: n3 (epi3? l)
-              (? n3 (scan (dropf l n3) sl)
+              (? n3 (scan (dropf l n3) 0 vs r3f live)
                  (: f <l
-                    (? (! (two? f)) (scan >l sl)
+                    (? (! (two? f)) (scan >l D vs r3f live)
+                       (<f = 'label)
+                        (: d9 (peep labt <>f 'no9)
+                           (? (! (id? d9 'no9))
+                              (? (&& live (! (D = d9))) 'no (scan >l d9 vs r3f 1))
+                              (: D2 (? live D 0)
+                                 _ (pin labt <>f D2)
+                                 (scan >l D2 vs r3f 1))))
+                       (<f = 'jmp)
+                        (: d9 (peep labt <>f 'no9)
+                           (? (id? d9 'no9) (: _ (pin labt <>f D) (scan >l D vs r3f ()))
+                              (! (D = d9)) 'no
+                              (scan >l D vs r3f ())))
+                       (<f = 'br)
+                        (: d9 (peep labt <>>f 'no9)
+                           (? (id? d9 'no9) (: _ (pin labt <>>f D) (scan >l D vs r3f live))
+                              (! (D = d9)) 'no
+                              (scan >l D vs r3f live)))
+                       (member? <f '(ret jmpr))
+                        (scan >l D vs (|| r3f (&& (! a64) (member? 'r3 >f))) ())
                        (member? <f '(raw push pop)) 'no
-                       (&& a64 (member? <f '(call callr))) 'no    ; bl clobbers lr: the link stays
+                       (member? <f '(call callr))                 ; a plain call RIDES: sp is as
+                        ; call-stable as r4 was, the callee keeps rbx, and the sub (K9 is 8 mod
+                        ; 16) + a 16-multiple D hand the ABI exactly what push r4 did
+                        (? a64 'no                                ; bl clobbers lr: the link stays
+                           (! (0 = (& D 15))) 'no
+                           (scan >l D 1 (|| r3f (member? 'r3 >f)) live))
+                       (&& (spadj? f) (<f = 'sub)) (scan >l (D + <>>>f) vs r3f live)
+                       (&& (spadj? f) (<f = 'add))
+                        (? ((D - <>>>f) < 0) 'no (scan >l (D - <>>>f) vs r3f live))
                        (&& (member? <f '(sub add mov lea lean)) (<>f = 'sp)) 'no
-                       (&& (! a64) (<f = 'call)) (scan >l 1)      ; a plain call RIDES: sp is as
-                       ; call-stable as r4 was, the callee keeps rbx, and the forced sub (K9 is
-                       ; 8 mod 16) hands the ABI exactly what push r4 did. a mid-body callr
-                       ; falls through to clean? -- its r3 park bails it.
                        (: bp (peep a4base <f -1)
                           (? (! (clean? f bp)) 'no
-                             (scan >l (? (&& (0 <= bp) (id? (nthr f bp) fb)) 1 sl)))))))))
-       vs (? (&& pro (charm? K)) (scan body ()) 'no)
-       (? (id? vs 'no) fs
-          (: K9 (? vs (K + (? a64 32 8)) 0)
-             xf (? vs `(`('add 'sp 'sp K9)) ())
-             (radj f2 bp op9)                        ; the base slot -> sp, its displacement -> off+K
+                             (scan >l D
+                                   (? (&& (0 <= bp) (id? (nthr f bp) fb)) 1 vs)
+                                   (|| r3f (&& (! a64) (member? 'r3 >f)))
+                                   live))))))))
+       vr (? (&& pro (charm? K)) (scan body 0 () () 1) 'no)
+       (? (|| (id? vr 'no) (&& (! a64) (&& <>vr (! sv3)))) fs    ; r3 in use with no save to ride
+          (: r3f (&& (! a64) <>vr)
+             vs (|| <vr r3f)                         ; the save is a slot: r3f forces the sub
+             K9 (K + (? a64 32 8))
+             (radj f2 bp op9 D)                      ; the base slot -> sp, its displacement -> off+K+D
               (: (go e i) (? (! (two? e)) ()
-                             (link (? (i = bp) 'sp (i = op9) (<e + K) <e)
+                             (link (? (i = bp) 'sp (i = op9) ((<e + K) + D) <e)
                                    (go >e (i + 1))))
                  (go f2 0))
-             (rw l)
+             (rw l D)
               (? (! (two? l)) ()
                  (: n3 (epi3? l)
-                    (? n3 (xf + (rw (dropf l n3)))
+                    (? n3 ((? r3f `(`('ld 'r3 'sp ((K + D) - 8))) ())
+                           + ((? vs `(`('add 'sp 'sp (K9 + D))) (? (0 < D) `(`('add 'sp 'sp D)) ()))
+                              + (rw (dropf l n3) 0)))
                        (: f <l
-                          bp (? (two? f) (peep a4base <f -1) -1)
-                          (link (? (&& (0 <= bp) (id? (nthr f bp) fb))
-                                   (radj f bp (peep uoff <f -1)) f)
-                                (rw >l))))))
-             (link <fs (? vs (link `('sub 'sp 'sp K9) (rw body)) (rw body))))))
+                          (? (! (two? f)) (link f (rw >l D))
+                             (<f = 'label) (link f (rw >l (peep labt <>f D)))
+                             (&& (spadj? f) (<f = 'sub)) (link f (rw >l (D + <>>>f)))
+                             (&& (spadj? f) (<f = 'add)) (link f (rw >l (D - <>>>f)))
+                             (: bp (peep a4base <f -1)
+                                (link (? (&& (0 <= bp) (id? (nthr f bp) fb))
+                                         (radj f bp (peep uoff <f -1) D)
+                                         f)
+                                      (rw >l D))))))))
+             body2 (? r3f (link `('st 'r4 -8 'r3) body) body)
+             (link <fs (? vs (link `('sub 'sp 'sp K9) (rw body2 0)) (rw body2 0))))))
 
    ; -- IR constant propagation (cfoldir): a straight-line abstract pass over a
    ; function's final forms. it tracks known small constants in registers, frame
