@@ -866,6 +866,17 @@
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
                      (mkv ty 'r0 `(`('mov 'r0 <>rv)
                                     `('add <>rv 'r0 (* stp <>>e)))))
+                 ; STORE-DIRECT (the asn STORE-DIRECT twin): a frame scalar's
+                 ; slot is a STATIC offset -- read/step/write with a direct
+                 ; frame ld+st, no lean-materialize + indirect RMW. leaves no
+                 ; lean, so a loop counter's slot no longer reads as address-
+                 ; taken and the local can home (lpick's leaoffs)
+                 (&& (two? rv) (&& (<rv = 'loc)
+                     (: t9 <>>rv (! (|| (stru? t9) (|| (arr? t9) (|| (flo? t9) (bitf? t9))))))))
+                  (: ty <>>rv off <>rv stp (? (ptr? ty) (tsz g <>ty) 1)
+                     (mkv ty 'r0 `(`((ldop ty) 'r0 'r4 off)
+                                    `('add 'r1 'r0 (* stp <>>e))
+                                    `((stop ty) 'r4 off 'r1))))
                  (: lv (clval g env <>e)
               (? (bad? lv) 'bad
                  (: ty (vty lv)
@@ -3752,9 +3763,14 @@
                      (member? <f2 '(st st1 st2 st4)) (&& (<>f2 = fb9) (<>>f2 = off))
                      ())
               (ntouch >fs off (? hit (n + 1) n))))
+       ; only 'lea marks a slot address-taken (the & lane, a struct/va temp) --
+       ; a 'lean is an lvalue address CONSUMED by its own load/store (an
+       ; ordinary assign, a ++/--) and never escapes, exactly as the sibcall
+       ; gate leas? already reads it. counting lean here needlessly barred a
+       ; loop counter from homing (its RMW leans its own slot).
        (leaoffs fs t) (? (! (two? fs)) t
                          (: f2 <fs
-                            _ (? (&& (two? f2) (&& (member? <f2 '(lea lean)) (<>>f2 = fb9)))
+                            _ (? (&& (two? f2) (&& (id? <f2 'lea) (<>>f2 = fb9)))
                                  (pin t <>>>f2 1) ())
                             (leaoffs >fs t)))
        (lastn l n) (: d ((tally l) - n)
