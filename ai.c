@@ -5096,6 +5096,9 @@ lvm(lvm_nif) {
  if (!(strp(codebuf) || bufp(codebuf)) || ar < 1) return Sp[3] = nil, Sp += 3, Ip++, Continue();
  uintptr_t n = len(bytes_of(codebuf));
  if (n == 0) return Sp[3] = nil, Sp += 3, Ip++, Continue();
+#ifdef __wasm__                                // wasm has NO executable code pages: a jump to a data address traps.
+ return Sp[3] = nil, Sp += 3, Ip++, Continue(); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
+#endif                                         //  is a no-op returning 0, so the mprotect guard below does NOT catch this).
 #if __STDC_HOSTED__
  Have(9 + Width(struct ai_fz));               // 9 covers both cells (6/8 words) + tag + fz
  size_t maplen = code_maplen(n);
@@ -5105,7 +5108,7 @@ lvm(lvm_nif) {
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);     // reload codebuf: a GC in Have may have moved it
  if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
   return munmap(base, maplen), Sp[3] = nil, Sp += 3, Ip++, Continue();
-#ifndef __wasm__                               // wasm has no clear_cache intrinsic (and no native code: mprotect PROT_EXEC fails above, answering nil)
+#ifndef __wasm__                               // guarded: emscripten's clang has no clear_cache intrinsic (dead here anyway -- wasm early-declined above)
  __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is NOT coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
 #else
@@ -5148,6 +5151,9 @@ lvm(lvm_nifx) {
  if (!(strp(codebuf) || bufp(codebuf)) || ar < 1) return Sp[4] = nil, Sp += 4, Ip++, Continue();
  uintptr_t n = len(bytes_of(codebuf));
  if (n == 0) return Sp[4] = nil, Sp += 4, Ip++, Continue();
+#ifdef __wasm__                                // wasm has NO executable code pages: a jump to a data address traps.
+ return Sp[4] = nil, Sp += 4, Ip++, Continue(); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
+#endif                                         //  is a no-op returning 0, so the mprotect guard below does NOT catch this).
 #if __STDC_HOSTED__
  Have(11 + Width(struct ai_fz));              // 11 covers both cells (7/9 words) + tag + fz
  size_t maplen = code_maplen(n);
@@ -5157,7 +5163,7 @@ lvm(lvm_nifx) {
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);     // reload codebuf: a GC in Have may have moved it
  if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
   return munmap(base, maplen), Sp[4] = nil, Sp += 4, Ip++, Continue();
-#ifndef __wasm__                               // wasm has no clear_cache intrinsic (and no native code: mprotect PROT_EXEC fails above, answering nil)
+#ifndef __wasm__                               // guarded: emscripten's clang has no clear_cache intrinsic (dead here anyway -- wasm early-declined above)
  __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is NOT coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
 #else
