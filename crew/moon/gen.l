@@ -1582,21 +1582,22 @@
                      (: ej (peep g 'epi epi)
                         (sibs g fs () (elabs fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
 
-   ; -- LEAF-FRAME ELISION: a fn with no call left -- a true leaf, or every
-   ; call tail-jumped by the sibcall pass -- never needs the frame LINK (the
-   ; entry push/mov, x64's rbx slot, the sp-restore pair at every exit), only
-   ; its SLOTS. the slots re-address off sp: keep (sub sp K9) with K9 = K +
-   ; the link bytes (8 x64, 32 arm64), so every old base+off lands at
-   ; sp+(off+K) and sp sits exactly where the framed body held it; each exit
-   ; pays one (add sp K9) for the restore pair. a slotless fn (fully homed)
-   ; drops the sub too and its exits are bare. gated WHOLE-FN, hard: any body
-   ; sp motion (a surviving spush cell -- the exit add is only sound at zero
-   ; displacement, where the old (mov sp r4) was a reset from anywhere), any
-   ; raw splice (baked bytes can hide frame addressing), any call/callr, and
-   ; on x64 any r3 touch (rbx is callee-saved and its save slot is gone) keep
-   ; the frame as built -- but the callr PARK squeezes out first (the sv3
-   ; lane below), so a park-only r3 no longer counts as a touch. base slots
-   ; ride a4base; uoff is each op's
+   ; -- FRAME ELISION: a fn never needs the frame LINK (the entry push/mov,
+   ; x64's rbx slot, the sp-restore pair at every exit), only its SLOTS. the
+   ; slots re-address off sp: keep (sub sp K9) with K9 = K + the link bytes
+   ; (8 x64, 32 arm64), so every old base+off lands at sp+(off+K) and sp sits
+   ; exactly where the framed body held it; each exit pays one (add sp K9)
+   ; for the restore pair. a slotless CALL-FREE fn (fully homed) drops the
+   ; sub too and its exits are bare; a fn with plain calls keeps the sub
+   ; always -- sp holds still across a call exactly as r4 did, and K9 (8 mod
+   ; 16) hands each callee the alignment push r4 used to. gated WHOLE-FN,
+   ; hard: any body sp motion (a surviving spush cell -- the exit add is only
+   ; sound at zero displacement, where the old (mov sp r4) was a reset from
+   ; anywhere), any raw splice (baked bytes can hide frame addressing), any
+   ; a64 call (bl clobbers lr), and on x64 any r3 touch (rbx is callee-saved
+   ; and its save slot is gone) keep the frame as built -- but the callr PARK
+   ; squeezes out first (the sv3 lane below), so a park-only r3 no longer
+   ; counts as a touch. base slots ride a4base; uoff is each op's
    ; displacement slot; the frame base anywhere OUTSIDE a base slot bails. --
    uoff (: t (tablet 0)
            _ (foldl (\ _ o (pin t o 3)) 0 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldsd ldss lea lean))
@@ -1661,14 +1662,19 @@
                              (&& a64 (id? x 'lr)) ()
                              (go >e (i + 1)))))
            (go f2 0))
-       (scan l sl)                                   ; -> 'no | slots-flag
+       (scan l sl)                                   ; -> 'no | needs-sub flag
         (? (! (two? l)) sl
            (: n3 (epi3? l)
               (? n3 (scan (dropf l n3) sl)
                  (: f <l
                     (? (! (two? f)) (scan >l sl)
-                       (member? <f '(call callr raw push pop)) 'no
+                       (member? <f '(raw push pop)) 'no
+                       (&& a64 (member? <f '(call callr))) 'no    ; bl clobbers lr: the link stays
                        (&& (member? <f '(sub add mov lea lean)) (<>f = 'sp)) 'no
+                       (&& (! a64) (<f = 'call)) (scan >l 1)      ; a plain call RIDES: sp is as
+                       ; call-stable as r4 was, the callee keeps rbx, and the forced sub (K9 is
+                       ; 8 mod 16) hands the ABI exactly what push r4 did. a mid-body callr
+                       ; falls through to clean? -- its r3 park bails it.
                        (: bp (peep a4base <f -1)
                           (? (! (clean? f bp)) 'no
                              (scan >l (? (&& (0 <= bp) (id? (nthr f bp) fb)) 1 sl)))))))))

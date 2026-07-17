@@ -640,12 +640,14 @@
                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    ; counts stores of the PARAM-home registers to the frame (the spill side).
    ; the set is exactly the two-param homes (r6 r5): the vmap's direct slot
-   ; stores ride the OPERAND pool (r9 r10 r7 r8) and are not spills.
+   ; stores ride the OPERAND pool (r9 r10 r7 r8) and are not spills. the base
+   ; is r4 -- or sp, once frame elision (calls ride it now) re-addressed the
+   ; slots; these fns carry no spush cells, so an sp store IS a wrap.
    (wraps fs) (: (go l n) (? (! (two? l)) n
                              (: f2 <l
                                 (go >l (? (&& (two? f2)
                                           (&& (<f2 = 'st)
-                                          (&& (<>f2 = 'r4)
+                                          (&& (member? <>f2 '(r4 sp))
                                               (member? <>>>f2 '(r5 r6)))))
                                           (n + 1) n))))
                  (go fs 0))
@@ -659,7 +661,7 @@
       (= 0 (wraps (caup irD)))                       ; dead across the call: no spills at all
       (= 2 (wraps (caup irL)))                       ; live across: both homes keep their wrap
       (= 1 (wraps (caup irS)))                       ; the shadowed a's blanket; b's own still drops
-      (member? '(st r4 -16 r6) (caup irS))           ; ...and it is a's (r6, the first gp home)
+      (member? '(st sp 32 r6) (caup irS))            ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
       (= 2 (wraps (caup irG)))))                     ; a goto fn wraps everything
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
