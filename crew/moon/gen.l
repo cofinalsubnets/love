@@ -757,15 +757,28 @@
                                + (? (bitoff > 0) `(`('shl 'r3 bitoff)) ())   ; r3 = (v & mask) << bitoff
                                + `(`('or 'r2 'r2 'r3) `((stop uty) 'r1 0 'r2))
                                + (? sgn `(`('shl 'r0 lo) `('sar 'r0 lo)) ()))))))
-                 (: r (cgexpr g env <>>e)
-                    (? (bad? r) 'bad
+                 ; the ADDRESS parks in a pool register past a call-free rhs
+                 ; (the vpark discipline, extended to the store shuttle): no
+                 ; spush/spop, no memory round-trip on the address. a call on
+                 ; the right keeps the shuttle -- it would clobber the park.
+                 (: aR (? (callish? <>>e) () (ralloc g))
+                    r (cgexpr g env <>>e)
+                    (? (bad? r) (: _ (? aR (rfree g aR) ()) 'bad)
                        (: ty (vty lv)
-                          (mkv ty 'r0 (cat (vfs lv)
-                                 (cat (spush 'r0)
-                                  (cat (asint g r)
-                                   (cat (spop 'r1)
-                                    (cat (cvt ty 'r0)
-                                         `(`((stop ty) 'r1 0 'r0)))))))))))))))
+                          (? aR
+                             (: fs (cat (vfs lv)
+                                    (cat `(`('mov aR 'r0))
+                                     (cat (asint g r)
+                                      (cat (cvt ty 'r0)
+                                           `(`((stop ty) aR 0 'r0))))))
+                                _ (rfree g aR)
+                                (mkv ty 'r0 fs))
+                             (mkv ty 'r0 (cat (vfs lv)
+                                    (cat (spush 'r0)
+                                     (cat (asint g r)
+                                      (cat (spop 'r1)
+                                       (cat (cvt ty 'r0)
+                                            `(`((stop ty) 'r1 0 'r0))))))))))))))))
           (k = 'post)
            (: rv (? ((cap (caup e)) = 'var) (vent g env (caup (caup e))) 'bad)
               _ (? ((cap (caup e)) = 'var) (vmdrop g (caup (caup e))) ())   ; the RMW retires any mapping
