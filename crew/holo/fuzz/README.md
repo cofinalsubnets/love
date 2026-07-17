@@ -1,5 +1,9 @@
 # holo encoder fuzz — the fuzz-first rung of the holo verification ladder
 
+> The full ladder (this fuzz rung + the machine-checked prove rung in
+> `proof/rocq/enc*.v`) and the roadmap for further slices live in
+> [`doc/holo-verify.md`](../../../doc/holo-verify.md).
+
 The verification frontier stops at holo today: `crew/holo/` (the x86-64 + aarch64 assembler)
 has no formal proof, only the frozen goldens in `holotest.l`/`astest.l`. Those goldens were
 each validated by hand — "emit the bytes, `objdump -d -M intel`, confirm the mnemonic" — over a
