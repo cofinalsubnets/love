@@ -1363,6 +1363,7 @@ static struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  for (struct ai_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0);              // C roots
  while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_thread)(h, p0, t0);               // heap empty -> ~nothing
  h->minor = h->end;
+ h->n_resize += 1;
  if (h->len > h->max_len) h->max_len = h->len;
  g->alloc(g, g->pool, 0);                    // free the old main pool
  return h; }
@@ -1404,14 +1405,32 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  enum { ratio = ai_gc_ratio };                  // target band: grow above 1/ratio overhead, shrink below 1/(4*ratio)
  g->win_alloc += seen_young, g->win_copied += copied;
  uintptr_t used = g->len - avail(g), req = req0 + used + (used >> 2), len1 = g->len, arena = len1;
+ // resize STICKINESS: one out-of-band window is a hint, not a verdict -- act only when TWO
+ // CONSECUTIVE windows lean the same way (lean tracks the streak; an in-band window ends it).
+ // a resize is the runtime's costliest single act (a fresh pool, a full core+stack copy, every
+ // page refaulted), and the hair-trigger FLAPPED workloads sitting near a band edge between
+ // pool sizes (~150 remaps in one mooncc compile; a few-MB live-set nudge swung the pool 2x
+ // and ~0.5s of soft faults). still deterministic: no wall clock, just one more window.
+ // one out-of-band verdict is a HINT, not a mandate: hold the size, keep the streak (lean),
+ // and KEEP ACCUMULATING -- no window reset on a hint. a transient spike (a major collection's
+ // copied volume landing in the window is the big one) self-corrects: the ratio dilutes back
+ // into band as the window grows and the streak dies. a real ramp stays out of band and
+ // confirms at the very next collection, over a LONGER (smoother) window than the fresh spiky
+ // one a reset would give it. the hair-trigger acted on the first verdict, so one spike window
+ // bought a PERMANENT doubling (in-band at 2x: a one-way ratchet) -- workloads sitting near a
+ // band edge swung a full pool doubling (~0.5s of soft faults) on a few-MB live-set nudge.
+ // (measured out, do not revisit: acting on the first verdict with a fresh-window reset saves
+ // more RSS on ratchet-y workloads but taxes ramp-y ones ~4%; EXCLUDING majors from the window
+ // collapses RSS but the nursery then never amortizes them -- majors storm, +70% wall.)
  if (g->win_copied * ratio > g->win_alloc) {                   // overhead > 1/ratio: nursery too small
-  uintptr_t wa = g->win_alloc | 1;                             // grow until the PROJECTED overhead lands in band (| 1: guarantee progress)
-  while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;     // (doubling the pool ~doubles alloc-between-GCs)
-  g->win_alloc = g->win_copied = 0;
+  if ((g->lean = g->lean > 0 ? g->lean + 1 : 1) >= 2) {        // confirmed: grow
+   uintptr_t wa = g->win_alloc | 1;                            // grow until the PROJECTED overhead lands in band (| 1: guarantee progress)
+   while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;    // (doubling the pool ~doubles alloc-between-GCs)
+   g->lean = 0, g->win_alloc = g->win_copied = 0; }
  } else if (g->win_copied * (ratio * 4) < g->win_alloc) {       // overhead < 1/(4*ratio): oversized
-  arena = len1 >> 1;                                           // shrink ONE step (gentle -- multi-step collapses on a lucky GC)
-  g->win_alloc = g->win_copied = 0;
- } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0;   // in band: cap the window so it stays responsive
+  if ((g->lean = g->lean < 0 ? g->lean - 1 : -1) <= -2)
+   arena = len1 >> 1, g->lean = 0, g->win_alloc = g->win_copied = 0;   // shrink ONE step (gentle -- multi-step collapses on a lucky GC)
+ } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0;   // in band: cap the window; the streak dies
  if (g->budget) {                                              // Appel cap, sized so the MAJOR (which must hold the
   // worst-case promotion = the live tenured set PLUS this whole nursery) also fits the budget. With 2*major +
   // 2*nursery <= budget and major ~ live + nursery, the nursery gets ~(budget - 2*live)/4 -- reserve for the
@@ -4426,11 +4445,13 @@ op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 //  [10] rem_hi    peak remembered-set size (distinct old objects with a young field)
 //  [11] n_minor   MINOR collections so far (majors = n_gc - n_minor)
 //  [12] major_cap the major pool's reserved footprint: 2*major_len words (both halves), 0 if non-gen
+//  [13] n_resize  pool reallocations so far (band resizes + forced grows) -- the pool-cliff tell:
+//                 a bench that prints its delta catches remap flapping cold
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap ; young = heap - core.
 // Indices [3..7],[9..12] are the generational instrumentation ([8] is always live). An array (not a list):
 // every field is a charm, so a flat numeric tray is the natural rep -- compact, net/max apply directly.
 lvm(lvm_gauge) {
- enum { N = 13 };
+ enum { N = 14 };
  uintptr_t const bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + N * ai_T[ai_Z];
  Have(b2w(bytes));
  struct ai_vec *v = (struct ai_vec*) Hp;
@@ -4450,6 +4471,7 @@ lvm(lvm_gauge) {
  vec_put_int(v, 11, (intptr_t) g->n_minor);
  vec_put_int(v, 8, (intptr_t) (g->major_pool ? g->major_hp - g->major_base : g->minor - (word*) g->end));  // major live (gen), else [end,minor)
  vec_put_int(v, 12, (intptr_t) (g->major_pool ? 2 * g->major_len : 0));  // major pool capacity (both halves), words
+ vec_put_int(v, 13, (intptr_t) g->n_resize);
  return Sp[0] = word(v), Ip++, Continue(); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. The string-lane glaze

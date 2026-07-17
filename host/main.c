@@ -425,6 +425,16 @@ AI_NIF("calloutdrive", nif_calloutdrive);
 // Everything the two builds disagree about lives in this ONE conditional
 // region: the baked lisp text plus a `boot` entry that main tail-calls after
 // the universal setup (argv pins + the host nif defs above).
+// AI_BUDGET_MB: cap the whole GC footprint (2*minor + 2*major) at N megabytes -- the runtime
+// face of the ai_budget tunable (the field is set-at-runtime by design). The BENCH use: pin
+// the pool so an A/B compares identical GC schedules -- the resize controller can't wander
+// across a pool boundary between the two sides (the pool-cliff contamination class). Applied
+// to the LIVE g in main, after boot or image wake, so both boot paths honor it.
+static struct ai *env_budget(struct ai *g) {
+  char const *b = getenv("AI_BUDGET_MB");
+  if (g && b && atol(b) > 0) g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word));
+  return g; }
+
 #ifdef GL_BOOTSTRAP
 // ai0: the CLI driver is the sed-wrapped raw text (it can't lcat its own arg
 // ap). Self-test: the whole test corpus, baked in (sed-wrapped), run
@@ -638,6 +648,7 @@ int main(int argc, char const **argv) {
       image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
 #endif
   if (!g) g = ai_ini();
+  g = env_budget(g);                               // the AI_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc > 1;
   // The WHOLE C argv (incl. argv[0]/program name): cli.l drops the head for its own
   // use, while `cmdline` keeps the full list, pinned for user visibility.

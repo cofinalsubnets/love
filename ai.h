@@ -198,6 +198,11 @@ struct ai {
                                           // (the GC's share of the work, in words not clock ticks); grow the nursery while
                                           // it exceeds 1/ratio, shrink when far below. Accumulating smooths the spikes a
                                           // per-collection ratio would chase. Reset on a resize. See gen_please.
+ intptr_t lean;                           // the resize-stickiness streak: consecutive out-of-band window verdicts,
+                                          // +grow/-shrink; a resize needs |lean| >= 2 (one window is a hint -- a resize
+                                          // is a full copy + a total refault, the runtime's costliest single act).
+ uintptr_t n_resize;                      // pool reallocations so far (gen_grow calls: band resizes + forced grows) --
+                                          // gauge[13]; a bench that watches it catches pool-cliff contamination cold.
  uintptr_t budget;                        // total memory CAP in words (2*minor + 2*major, both two-space); 0 = unbounded.
                                           // Appel's rule: the nursery gets the free budget after the major pool. Inited from
                                           // the ai_budget tunable (the Teensy knob) but a field, so it can be set at runtime
