@@ -225,15 +225,24 @@
 ; literal rides value[1] as the empty MINT (li 1 would be the charm 0 -- the data.l 0-fossil bug).
 ; calls ride the WALKABLE resume (callout_resume: the frame carries tag(bb-entry) + the raw blob
 ; base -- an odd charm + an out-of-pool code address, so a GC with call-outs pending walks it
-; clean; the retB stack-interior pointer that stormed uu2lean is retired). FREE call heads still
-; DECLINE (a leaked named-let `go` is indistinguishable from a global -- the rc4 stale-sibling),
-; so every callee below is a frame/loop name. am-deep is the STORM SHAPE: deep NON-TAIL call
-; nesting with cons churn per level -- thousands of pending drive frames while the GC runs.
+; clean; the retB stack-interior pointer that stormed uu2lean is retired). FREE call heads in
+; LOOP bodies resolve via gv at compile (v4, the global-callee seam -- redefinition-stale, the
+; callout bet; the loop gate is the cost model: a one-shot call wrapper is net-negative ambled)
+; and ride nifx extras slots; go, the frame/loop names, and ala's farq letrec-locals are NEVER
+; candidates, so a non-tail (go ..) or a weave re-analysis sibling declines rather than bake a
+; stale leaked namesake (the rc4 regression below; bref-summing-fref was the farq find). am-deep
+; is the STORM SHAPE: deep NON-TAIL call nesting with cons churn per level -- thousands of
+; pending drive frames while the GC runs.
 (: (am-cnt l k a) ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) k) (+ a 1) a)) a)) l a))
 (: (am-rev l acc) ((: (go l a) (? (two? l) (go (cup l) (link (cap l) a)) a)) l acc))
 (: (am-mk i acc) (? (< i 1) acc (am-mk (- i 1) (link (% i 7) acc))))
 (: am-l (am-mk 200 ()))
 (: am-dbl (: F (\ x (+ x x)) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (F (F i)))) a)) 0 0))))
+(: (am-sq x) (+ (* x x) 1))                                                          ; the v4 global callees + the rc4 namesake
+(: (am-mul2 x y) (* (+ x 1) y))
+(: (am-seed k) (+ k 3))
+(: (am-gref l a) ((: (go l a) (? (two? l) (go (cup l) (+ a (am-sq (cap l)))) a)) l a))
+(: am-go (\ x (* x 1000000)))
 (: _ (: n0 (peep fires () 0)
        wk (ev '(\ l k a ((: (go l a) (? (two? l) (go (cup l) (? (id? (cap l) k) (+ a 1) a)) a)) l a)))
        ; references are LITERALS: an in-file "interp twin" is impossible -- the hook fires at
@@ -258,8 +267,24 @@
           (: qz (ev '(\ x (? (id? x (\ k)) (\ (1 2)) ())))
              (&& ('(1 2) = (qz 'k)) (id? (qz 'k) (qz 'k)) (id? () (qz 'nope))))
           (: qe (ev '(\ x (? (= x (\ q)) 1 0)))
-             (&& (1 = (qe 'q)) (0 = (qe 'r)) (0 = (qe 5)) (0 = (qe "q")) (0 = (qe '(q)))))))
-   (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + nested call-outs, restart deopts) ok\n"))
+             (&& (1 = (qe 'q)) (0 = (qe 'r)) (0 = (qe 5)) (0 = (qe "q")) (0 = (qe '(q)))))
+          ; GLOBAL CALLEES (v4): a free head resolves via gv and drive-calls through its extras
+          ; slot -- per-element (am-sq), multi-arg via the curry chain (am-mul2), in an INIT
+          ; (am-seed), and a nif head (%). all == their literal references.
+          (: gw (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (am-sq (cap l)))) a)) l a)))
+             (&& (32 = (gw '(2 3 4) 0)) ((gw am-l 0) = (am-gref am-l 0))))
+          (: gm (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (am-mul2 i 2))) a)) (am-seed 0) 0)))
+             (&& (98 = (gm 10)) (0 = (gm 0))))                                    ; inits ran: (am-seed 0) = 3 -> i starts at 3
+          (: gp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (% (cap l) 3))) a)) l a)))
+             (4 = (gp '(10 11 12 13) 0)))                                         ; 1+2+0+1 -- a nif callee curries through two drives
+          ; the rc4 REGRESSION: a GLOBAL namesake of the loop name exists (am-go, *1000000); a
+          ; NON-TAIL (am-go ..) inside the body is the LOCAL named-let binding -- go is never a
+          ; gn candidate, so amble declines the outer body and the value is the bytecode's
+          ; (a baked global answers 11 here, not 10: rc4's miscompile, bref summing dref's loop).
+          (: r4 (ev '(\ n ((: (am-go i a) (? (< i n) (am-go (+ i 1) (+ a i)) (+ a (tally (am-go n))))) 0 0)))
+             (&& (10 = (r4 5))
+                 ((r4 5) = ((\ n ((: (am-go i a) (? (< i n) (am-go (+ i 1) (+ a i)) (+ a (tally (am-go n))))) 0 0)) 5))))))
+   (say err "test/glaze-x86: amble -- the boring-tier translator (walker + cons + global callees + restart deopts) ok\n"))
 
 ; GROUP SWALLOW helpers (for the swallow test in the AUTO block below): genuine top-level globals,
 ; so the LOADER auto-ev's them and srcrec records their source (a body-less `:` define -- inside a

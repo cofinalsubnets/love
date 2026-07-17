@@ -317,15 +317,17 @@
    ; clobbers Ip, so the epilogue hand-rolls lvm_ret and the deopt never reads Ip-relative),
    ; restore Sp, enter e on the ORIGINAL frame (arg slots are never mutated; loop state lives in
    ; the reserved slots). a restart re-runs any call-outs already made -- the same bet the fold
-   ; lanes' twins take. grammar v1 = the probed families: fixnum/() consts, two? cap cup id? link,
+   ; lanes' twins take. grammar = the probed families: fixnum/() consts, two? cap cup id? link,
    ; + - * and comparisons (fixnum-guarded), ?, ONE applied named-let (self tail-calls -> a jump,
-   ; both def sugars), calls to frame/loop names, QUOTED DATA (any datum: the source node rides a
-   ; nifx extras slot, and (= a 'sym) is raw identity by the point-= law). strings, floats, //%,
-   ; &|^, inner \, effects: DECLINE (bytecode, exactly as before). global callees resolve via gv at
-   ; compile (redefinition-stale, the callout bet) and ride value[1] = (link e g..): car = e for
-   ; the deopt, cdr = the globals the prologue loads into reserved slots (Ip-relative, no baked
-   ; absolute). reserved region: [loopvars.. | Se(twin) | RS(resume) | globals.. | spills..],
-   ; frame above it, cont at frame+8a. known v1 limit: a ? over a HEAP test value (bare (? l ..)
+   ; both def sugars), calls to frame/loop names AND -- in LOOP bodies only -- to resolvable
+   ; global heads, QUOTED DATA (any datum: the source node rides a nifx extras slot, and
+   ; (= a 'sym) is raw identity by the point-= law). strings, floats, //%, &|^, inner \,
+   ; effects, global reads in OPERAND position: DECLINE (bytecode, exactly as before). a global
+   ; callee resolves via gv at compile (redefinition-stale -- the callout lanes' bet; NEVER a
+   ; farq name, ala's letrec-local predicate) and rides the nifx extras chain into a reserved
+   ; slot beside () and the quotes (GC-walked, reloaded per call -- no baked absolute).
+   ; reserved region: [loopvars.. | Se(twin) | ()+globals+quotes.. | spills..],
+   ; frame above it, cont at frame+8a. known limit: a ? over a HEAP test value (bare (? l ..)
    ; on a list) deopts EVERY call -- correct, just a small entry tax over pure bytecode.
    amble-nil (:)
    (amax a b) (? (< a b) b a)
@@ -346,6 +348,21 @@
           (|| (&& (name? op) !(id? op go) !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
               (foldl (\ a x (|| a (ahascall? env go x))) 0 (cup e))))
        0)
+   ; aheads: collect the FREE call heads of e -- the global-callee candidates. within the ACCEPTED
+   ; grammar the only binders are the frame and the ONE named-let, so a head outside env/go IS a
+   ; global; go and the frame/loop names are NEVER candidates -- a named-let binds go over its
+   ; whole body, so a non-tail (go ..) is LOCAL and must decline, never resolve a stale leaked
+   ; namesake (rc4's bug). collection over-approximates (a head under a node the grammar later
+   ; declines is harmless: amble-ok? is the gate, gn merely feeds it); quoted data stays unwalked.
+   (aheads env go e acc)
+    (? (aquote? e) acc
+       (two? e)
+        (: op (cap e)                                                    ; a2, not a rebind of acc: a `:` is ONE SCOPE, so `acc (.. acc ..)`
+           a2 (? (&& (name? op) !(id? op go) !(member? op env) !(member? op acc)
+                     !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+                 (link op acc) acc)                                      ; reads the UNPINNED local -- a silent missing per node (help.l heard 14)
+           (foldl (\ ac x (aheads env go x ac)) a2 (cup e)))
+       acc)
    ; amble-ok?: does e compile? env = visible names (loop vars shadow params), gn = resolvable
    ; global call heads, go/k = the loop name + its arity (0 outside a loop), tl = tail position
    ; ((go ..) is a jump, so it is only sound where its value IS the loop's value).
@@ -398,7 +415,9 @@
    (asub old new e) (? (id? e old) new  (aquote? e) e  (two? e) (map (\ x (asub old new x)) e)  e)   ; quoted DATA is inert -- never rename inside it
    (afresh v avoid) (: c (intern ((string v) + "~")) (? (member? c avoid) (afresh c avoid) c))
    ; njit-amble: the hook entry -- compile s (deopt -> e) or answer 0 (decline; the hook keeps e).
-   (njit-amble s a e gv tgt)
+   ; farq = ala's letrec-local predicate (see hook.l): a truthy (farq nom) names a binding that
+   ; is free-LOOKING in a weave re-analysis surface, wire-resolved in truth -- never a gn candidate.
+   (njit-amble s a e gv farq tgt)
     (: ps (init (cup s))  M (last (cup s))
        lp (amble-loop M)
        go   (? lp (cap lp) 0)     vars0 (? lp (caup lp) ())
@@ -410,11 +429,25 @@
        k    (tally vars)
        body (? lp GB M)
        env  (cat vars ps)
-       gn   ()                                              ; NO global-callee resolution in v1: a surface-free call head can be a
-       gvals ()                                             ; LEAKED letrec sibling (an applied named-let leaks `go` -- the imports-grew
-                                                            ; class), and gv then resolves the PREVIOUS binding: rc4's bref summed with
-                                                            ; dref's stale go. no surface test separates that from a true global, so
-                                                            ; amble calls only frame/loop names; a principled global seam is v2.
+       ; the GLOBAL-CALLEE seam (v4): free heads resolve via gv at COMPILE and ride extras slots.
+       ; the sibling story: a sibling reference is far-IMPORTED by ala (frame is [imps args], imps
+       ; curried in at creation), so it reaches here as a frame name -- EXCEPT in the weave
+       ; RE-analysis, whose surface drops the let's own names from the import row (wire resolves
+       ; them by cell/backpatch): those look free here, and the book holds at best a stale leaked
+       ; namesake -- ala's farq predicate names them, and they are never candidates. what remains
+       ; free in the accepted grammar is a true out-of-form global; baking it is redefinition-
+       ; stale, exactly the callout lanes' bet. a head that is farq, misses the book, or answers
+       ; a non-lit just isn't in gn -> amble-ok? declines that body. LOOP BODIES ONLY (the cost
+       ; gate): a loop amortizes the drive taxes over its jump + owned ops, but a one-shot
+       ; call wrapper -- (\ t k (peep t k ())) and kin, mooncc's accessor class -- is pure
+       ; overhead ambled (prologue + a drive PER CURRIED ARG vs one bytecode n-ary apply;
+       ; measured net-NEGATIVE on mooncc), so a callless-grammar decline keeps it bytecode.
+       gps  (? lp (filter (\ p (lit? (caup p)))
+                   (map (\ f (L f (gv f 0)))
+                    (filter (\ f !(farq f))
+                     (foldl (\ ac i (aheads env go i ac)) (aheads env go body ()) inits)))) ())
+       gn   (map cap gps)
+       gvals (map caup gps)
        qs   (foldl (\ ac i (aq i ac)) (aq body ()) inits)   ; the quoted-datum constants (id?-deduped source nodes)
        nq   (tally qs)
        nd   (amax (amble-depth go body) (foldl (\ acd i (amax acd (amble-depth 0 i))) 0 inits))
@@ -423,7 +456,7 @@
        ok (&& (two? s) (two? (cup s)) (all name? ps) (adistinct ps)
               (= a (tally ps)) (< 0 a) lpok (two? body)
               (? (getenv "AI_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
-              (all lit? gvals) (< nd 48) (< (+ k (+ (tally gn) nq)) 24)             ; slots are cheap once the prologue GUARDS the room (below)
+              (all lit? gvals) (< nd 48) (< (+ k (+ (tally gn) nq)) 48)             ; slots are cheap once the prologue GUARDS the room (below)
               (all (\ i (amble-ok? ps gn 0 0 0 i)) inits)
               (amble-ok? env gn go k 1 body))
        (? ok

@@ -56,12 +56,17 @@
    ; slot (n=0 -> -3). Guard every def body too -> a free-reading body DEOPTS to bytecode (sound), never
    ; miscompiles. gd = ((name p..) . body): (cup (cap gd)) = the def's frame params, (cup gd) = its body.
    (gdefs-ok? gds) (all (\ gd (opnd-ok? (cup (cap gd)) (cup gd))) gds)
-   ; natjit e s a gv -- e = the bytecode entry (deopt target), s = (\ frame.. body) the
+   ; natjit e s a gv farq -- e = the bytecode entry (deopt target), s = (\ frame.. body) the
    ; surface src, a = arity, gv = ala's global resolver (this hook is post-egg; `book`/`gv`
-   ; are mopped here, so ala hands its folded gv down for the call-out lane to resolve a free
-   ; global). ps = (init (cup s)) = the frame [imps args]; body = the surface body. compile
+   ; are mopped here, so ala hands its folded gv down for the call-out + amble lanes to
+   ; resolve a free global), farq = ala's letrec-local predicate: (farq nom) is truthy iff
+   ; nom is a letrec binding name up the compile scope chain -- such a name can look FREE
+   ; in s (the weave re-analysis drops the let's own names from the import row) yet is
+   ; wire-resolved locally, so NO lane may gv-resolve it: the book holds at best a stale
+   ; leaked namesake (bref summing fref's float loop -- the rc3/rc4 class).
+   ; ps = (init (cup s)) = the frame [imps args]; body = the surface body. compile
    ; body over ps; deopt -> e. non-qualifying -> e unchanged.
-   (natjit e s a gv)
+   (natjit e s a gv farq)
     (: ps (init (cup s))  body (last (cup s))
        (? (&& (two? s) (two? (cup (cup s))) (exprn ps body))         ; >=1 param, a body, leaf grammar
           (: _ (pin fires () (+ 1 (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
@@ -94,7 +99,8 @@
                     ; The ~167us compile is one-time PER SOURCE SITE (creation reuses the blob, ~60 ns) -> amortized
                     ; after ~4k cumulative iters. Callout also beats falling to group-swallow here (~1.5 vs ~1.8
                     ; ns/iter, measured), so the recognizer order (callout before group) is already the cheap one.
-                    (: ci (calloutinfo s)  fv (? ci (gv (cap ci) 0) 0)          ; ci = (F op iv ARG); resolve F via gv
+                    (: ci (calloutinfo s)                                        ; ci = (F op iv ARG); resolve F via gv --
+                       fv (? (&& ci !(farq (cap ci))) (gv (cap ci) 0) 0)         ; NEVER for a farq name (a wire-resolved local; the book namesake is stale)
                        (? (&& ci (lit? fv))
                           (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s (caup ci) (caup (cup ci)) (caup (cup (cup ci))) arch))   ; op iv ARG
                      ; CAPTURED / multi-arg call-out: F (and the bound) are FRAME params -> read from the
@@ -129,7 +135,7 @@
                             (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
                             ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
-                            (: aj (njit-amble s a e gv arch)
+                            (: aj (njit-amble s a e gv farq arch)
                                (? aj (: _ (pin fires () (+ 1 (peep fires () 0))) aj) e))))))))))))))
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
    (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
