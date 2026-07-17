@@ -739,31 +739,40 @@ endif
 #   enc.v    -- register-direct core (mov + reg-reg ALU), 16x16 matrix x 7 ops (1792)
 #   encmem.v -- base+disp load/store: ModRM+SIB, the rsp-SIB / rbp-forced-disp
 #               quirks, disp sizing, REX.R/B; 16x16 x offsets x {ld,st} (6144)
+#   encli.v  -- immediate load `li`: the 3-way form choice (b8 imm32 / C7 imm32 /
+#               movabs imm64) by value range; 16 regs x immediates (320)
 # Needs coqc + ocamlopt; no-ops without either, like test_extract.
 ifeq ($(and $(COQC),$(OCAMLOPT)),)
 test_encver:
 	@echo "test_encver: skipped (needs coqc + ocamlopt)"
 else
 test_encver: host
-	@echo TEST proof/rocq/enc.v proof/rocq/encmem.v "(coqc round-trip proofs -> ocaml refs vs holo, byte-exact)"
-	@cd proof/rocq && $(COQC) -q enc.v >/dev/null && $(COQC) -q encmem.v >/dev/null \
-	  && rm -f enc_ref.mli encmem_ref.mli \
+	@echo TEST proof/rocq/enc.v proof/rocq/encmem.v proof/rocq/encli.v "(coqc round-trip proofs -> ocaml refs vs holo, byte-exact)"
+	@cd proof/rocq && $(COQC) -q enc.v >/dev/null && $(COQC) -q encmem.v >/dev/null && $(COQC) -q encli.v >/dev/null \
+	  && rm -f enc_ref.mli encmem_ref.mli encli_ref.mli \
 	  && $(OCAMLOPT) -w -a enc_ref.ml enc_drive.ml -o enc_drive >/dev/null \
-	  && $(OCAMLOPT) -w -a encmem_ref.ml encmem_drive.ml -o encmem_drive >/dev/null
+	  && $(OCAMLOPT) -w -a encmem_ref.ml encmem_drive.ml -o encmem_drive >/dev/null \
+	  && $(OCAMLOPT) -w -a encli_ref.ml encli_drive.ml -o encli_drive >/dev/null
 	@proof/rocq/enc_drive > out/.enc_oracle.l
 	@proof/rocq/encmem_drive > out/.encmem_oracle.l
+	@proof/rocq/encli_drive > out/.encli_oracle.l
 	@cat crew/holo/holo.l crew/holo/x64.l out/.enc_oracle.l | $m | grep -q "1792 / 1792 PASS" \
 	  || { echo "ENC (reg-direct) ORACLE FAILED:"; cat crew/holo/holo.l crew/holo/x64.l out/.enc_oracle.l | $m; exit 1; }
 	@cat crew/holo/holo.l crew/holo/x64.l out/.encmem_oracle.l | $m | grep -q "6144 / 6144 PASS" \
 	  || { echo "ENCMEM (memory) ORACLE FAILED:"; cat crew/holo/holo.l crew/holo/x64.l out/.encmem_oracle.l | $m; exit 1; }
+	@cat crew/holo/holo.l crew/holo/x64.l out/.encli_oracle.l | $m | grep -q "320 / 320 PASS" \
+	  || { echo "ENCLI (immediate) ORACLE FAILED:"; cat crew/holo/holo.l crew/holo/x64.l out/.encli_oracle.l | $m; exit 1; }
 	@cat crew/holo/holo.l crew/holo/x64.l out/.enc_oracle.l | $m
 	@cat crew/holo/holo.l crew/holo/x64.l out/.encmem_oracle.l | $m
+	@cat crew/holo/holo.l crew/holo/x64.l out/.encli_oracle.l | $m
 	@rm -f proof/rocq/enc.vo proof/rocq/enc.vok proof/rocq/enc.vos proof/rocq/enc.glob proof/rocq/.enc.aux \
 	  proof/rocq/encmem.vo proof/rocq/encmem.vok proof/rocq/encmem.vos proof/rocq/encmem.glob proof/rocq/.encmem.aux \
+	  proof/rocq/encli.vo proof/rocq/encli.vok proof/rocq/encli.vos proof/rocq/encli.glob proof/rocq/.encli.aux \
 	  proof/rocq/enc_ref.ml proof/rocq/enc_ref.mli proof/rocq/enc_drive \
 	  proof/rocq/encmem_ref.ml proof/rocq/encmem_ref.mli proof/rocq/encmem_drive \
+	  proof/rocq/encli_ref.ml proof/rocq/encli_ref.mli proof/rocq/encli_drive \
 	  proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
-	  out/.enc_oracle.l out/.encmem_oracle.l
+	  out/.enc_oracle.l out/.encmem_oracle.l out/.encli_oracle.l
 endif
 # the fuzz-first rung of the holo encoder verification ladder (crew/holo/fuzz/):
 # generate random IR forms, encode via holo, disassemble the bytes, and check the
