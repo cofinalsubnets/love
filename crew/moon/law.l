@@ -140,9 +140,10 @@
       ; here nothing does, so the copy fold proves the epilogue reload a
       ; self-load and the save/restore pair sweeps away entirely. the default
       ; `return 0` tail is DEAD after the explicit return and sweeps too.
+      ; and main is a slotless LEAF, so the frame link itself elides: no
+      ; push/mov/sub at entry, a bare ret at the exit.
       (= ir '((call main) (mov r6 r0) (li r0 60) (sys)
-              (label main) (push r4) (mov r4 sp) (sub sp sp 16)
-              (li r0 42) (mov sp r4) (pop r4) (ret)))
+              (label main) (li r0 42) (ret)))
       (two? (cgn "int main() { int x=1; while (x<5) x++; return x; }"))
       ; a RET-POSITION call tail-JUMPS (stage 8): the epilogue then (jmp F), no
       ; (call F) -- so deep tail recursion runs flat and the lvm shape Continues
@@ -696,10 +697,10 @@
                                                (member? <>>>f2 '(r10 r11)))))
                                            (n + 1) n))))
                   (go fs 0))
-   (ldat fs k) (? (! (two? fs)) ()
-                  (: f2 <fs
-                     (? (&& (two? f2) (&& (<f2 = 'ld) (&& (<>>f2 = 'fp) (<>>>f2 = k)))) 1
-                        (ldat >fs k))))
+   (ldat fs b k) (? (! (two? fs)) ()
+                    (: f2 <fs
+                       (? (&& (two? f2) (&& (<f2 = 'ld) (&& (<>>f2 = b) (<>>>f2 = k)))) 1
+                          (ldat >fs b k))))
    (hmovs fs) (: (go l n) (? (! (two? l)) n
                              (: f2 <l
                                 (go >l (? (&& (two? f2)
@@ -719,8 +720,12 @@
       (member? '(mov r11 r1) (caup irDa))
       (= 0 (wrapsa (caup irDa)))                     ; dead across the call: no spills
       (= 2 (wrapsa (caup irLa)))                     ; live across: both homes wrap
-      (ldat (caup irOa) 32)                          ; the 9th long reads ABOVE the lr+fp cells
-      (! (ldat (caup irOa) 16))                      ; ...never at the x64 base
+      ; f9 is a LEAF, so the frame elision re-addressed it off sp (K=32,
+      ; K9=64): the 9th long reads above the whole reservation, where the
+      ; caller stack sits -- fp+32 through the off+K map, never x64's +16
+      (ldat (caup irOa) 'sp 64)
+      (! (ldat (caup irOa) 'sp 48))
+      (! (ldat (caup irOa) 'fp 32))                  ; no fp read survives in a frameless leaf
       (= 0 (hmovs (caup irKa)))                      ; born-at-a-call locals keep their slots
       (member? '(mov r6 r0) (caup irBa))             ; the free local homes...
       (member? '(add r6 r6 r5) (caup irBa))          ; ...and accumulates 3-address

@@ -1582,6 +1582,77 @@
                      (: ej (peep g 'epi epi)
                         (sibs g fs () (elabs fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
 
+   ; -- LEAF-FRAME ELISION: a fn with no call left -- a true leaf, or every
+   ; call tail-jumped by the sibcall pass -- never needs the frame LINK (the
+   ; entry push/mov, x64's rbx slot, the sp-restore pair at every exit), only
+   ; its SLOTS. the slots re-address off sp: keep (sub sp K9) with K9 = K +
+   ; the link bytes (8 x64, 32 arm64), so every old base+off lands at
+   ; sp+(off+K) and sp sits exactly where the framed body held it; each exit
+   ; pays one (add sp K9) for the restore pair. a slotless fn (fully homed)
+   ; drops the sub too and its exits are bare. gated WHOLE-FN, hard: any body
+   ; sp motion (a surviving spush cell -- the exit add is only sound at zero
+   ; displacement, where the old (mov sp r4) was a reset from anywhere), any
+   ; raw splice (baked bytes can hide frame addressing), any call/callr, and
+   ; on x64 any r3 touch (rbx is callee-saved and its save slot is gone) keep
+   ; the frame as built. base slots ride a4base; uoff is each op's
+   ; displacement slot; the frame base anywhere OUTSIDE a base slot bails. --
+   uoff (: t (tablet 0)
+           _ (foldl (\ _ o (pin t o 3)) 0 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldsd ldss lea lean))
+           _ (foldl (\ _ o (pin t o 5)) 0 '(ldx ldxb leax))
+           _ (foldl (\ _ o (pin t o 2)) 0 '(st st1 st2 st4 stsd stss))
+           _ (foldl (\ _ o (pin t o 4)) 0 '(stx stxb))
+           t)
+   (unframe g fs)
+    (: a64 (a64? g)
+       fb (? a64 'fp 'r4)
+       pro (? a64
+              (&& ((nthr fs 1) = '(push lr)) (&& ((nthr fs 2) = '(push fp)) ((nthr fs 3) = '(lea fp sp 0))))
+              (&& ((nthr fs 1) = '(push r4)) ((nthr fs 2) = '(mov r4 sp))))
+       sf (nthr fs (? a64 4 3))
+       K (? (&& (two? sf) (&& (<sf = 'sub) (&& (<>sf = 'sp) (&& (<>>sf = 'sp) (charm? <>>>sf)))))
+            <>>>sf ())
+       body (dropf fs (? a64 5 4))
+       ne (? a64 3 2)                                ; the restore run's length
+       (epi3? l9)                                    ; l9 opens with the target's sp-restore forms
+        (? a64 (&& ((nthr l9 0) = '(lea sp fp 0)) (&& ((nthr l9 1) = '(pop fp)) ((nthr l9 2) = '(pop lr))))
+           (&& ((nthr l9 0) = '(mov sp r4)) ((nthr l9 1) = '(pop r4))))
+       (clean? f2 bp)                                ; fb only at its base slot; x64 r3 / a64 lr never
+        (: (go e i) (? (! (two? e)) 1
+                       (: x <e
+                          (? (&& (id? x fb) (! (i = bp))) ()
+                             (&& (! a64) (id? x 'r3)) ()
+                             (&& a64 (id? x 'lr)) ()
+                             (go >e (i + 1)))))
+           (go f2 0))
+       (scan l sl)                                   ; -> 'no | slots-flag
+        (? (! (two? l)) sl
+           (epi3? l) (scan (dropf l ne) sl)
+           (: f <l
+              (? (! (two? f)) (scan >l sl)
+                 (member? <f '(call callr raw push pop)) 'no
+                 (&& (member? <f '(sub add mov lea lean)) (<>f = 'sp)) 'no
+                 (: bp (peep a4base <f -1)
+                    (? (! (clean? f bp)) 'no
+                       (scan >l (? (&& (0 <= bp) (id? (nthr f bp) fb)) 1 sl)))))))
+       vs (? (&& pro (charm? K)) (scan body ()) 'no)
+       (? (id? vs 'no) fs
+          (: K9 (? vs (K + (? a64 32 8)) 0)
+             xf (? vs `(`('add 'sp 'sp K9)) ())
+             (radj f2 bp op9)                        ; the base slot -> sp, its displacement -> off+K
+              (: (go e i) (? (! (two? e)) ()
+                             (link (? (i = bp) 'sp (i = op9) (<e + K) <e)
+                                   (go >e (i + 1))))
+                 (go f2 0))
+             (rw l)
+              (? (! (two? l)) ()
+                 (epi3? l) (xf + (rw (dropf l ne)))
+                 (: f <l
+                    bp (? (two? f) (peep a4base <f -1) -1)
+                    (link (? (&& (0 <= bp) (id? (nthr f bp) fb))
+                             (radj f bp (peep uoff <f -1)) f)
+                          (rw >l))))
+             (link <fs (? vs (link `('sub 'sp 'sp K9) (rw body)) (rw body))))))
+
    ; -- IR constant propagation (cfoldir): a straight-line abstract pass over a
    ; function's final forms. it tracks known small constants in registers, frame
    ; slots, and machine-stack cells, folds ALU ops on them back to li's, turns
@@ -3347,7 +3418,7 @@
        lr (? av (lpick ir1 (caup av) (cauup av)) ())
        lh (? (two? lr) <lr ())
        lp0 (? (two? lr) <>lr hpool)
-       (? (bad? ir1) 'bad
+       irf (? (bad? ir1) 'bad
           (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
            (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
               _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
@@ -3381,7 +3452,8 @@
                    _ (pin g 'vuniv ()) _ (vmflush g)
                    _ (pin g 'lhome ()) _ (pin g 'homes ())   ; the wrap set dies with this fn
                    (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
-                ir1))))
+                ir1)))
+       (? (bad? irf) irf (unframe g irf)))
 
    ; the data tail: globals in declaration order, then the string table
    ; -> (dataforms nifforms) | 'bad. a global pinned to the `ai_nifs` section
