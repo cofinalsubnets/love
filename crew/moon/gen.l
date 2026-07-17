@@ -1594,7 +1594,9 @@
    ; displacement, where the old (mov sp r4) was a reset from anywhere), any
    ; raw splice (baked bytes can hide frame addressing), any call/callr, and
    ; on x64 any r3 touch (rbx is callee-saved and its save slot is gone) keep
-   ; the frame as built. base slots ride a4base; uoff is each op's
+   ; the frame as built -- but the callr PARK squeezes out first (the sv3
+   ; lane below), so a park-only r3 no longer counts as a touch. base slots
+   ; ride a4base; uoff is each op's
    ; displacement slot; the frame base anywhere OUTSIDE a base slot bails. --
    uoff (: t (tablet 0)
            _ (foldl (\ _ o (pin t o 3)) 0 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldsd ldss lea lean))
@@ -1611,11 +1613,30 @@
        sf (nthr fs (? a64 4 3))
        K (? (&& (two? sf) (&& (<sf = 'sub) (&& (<>sf = 'sp) (&& (<>>sf = 'sp) (charm? <>>>sf)))))
             <>>>sf ())
-       body (dropf fs (? a64 5 4))
-       ne (? a64 3 2)                                ; the restore run's length
-       (epi3? l9)                                    ; l9 opens with the target's sp-restore forms
-        (? a64 (&& ((nthr l9 0) = '(lea sp fp 0)) (&& ((nthr l9 1) = '(pop fp)) ((nthr l9 2) = '(pop lr))))
-           (&& ((nthr l9 0) = '(mov sp r4)) ((nthr l9 1) = '(pop r4))))
+       body0 (dropf fs (? a64 5 4))
+       ; -- the PARK lane (x64): a callr sib parks its target in r3 and unparks
+       ; with (mov r10 r3); when the staging between them folded away the pair
+       ; sits ADJACENT and collapses to one mov -- then the fn never WRITES r3
+       ; at all, so the caller's rbx rides the tail-jump untouched (the
+       ; callee-saved contract made unnecessary, not elided) and the rbx save
+       ; (body head, slot -8 is its alone) and each restore run's leading
+       ; (ld r3 r4 -8) drop with the frame. all-or-nothing as ever: any
+       ; residual r3 still bails and the original forms stand. --
+       sv3 (&& (! a64) ((nthr body0 0) = '(st r4 -8 r3)))
+       (squeeze l)
+        (? (! (two? l)) ()
+           (: f <l r >l
+              nx (? (two? r) <r ())
+              (? (&& (two? f) (&& (<f = 'mov) (&& (id? <>f 'r3) (&& (! (id? <>>f 'sp))
+                    (nx = '(mov r10 r3))))))
+                 (link `('mov 'r10 <>>f) (squeeze >r))
+                 (link f (squeeze r)))))
+       body (: b2 (? sv3 (dropf body0 1) body0) (? a64 b2 (squeeze b2)))
+       (epi3? l9)                                    ; l9 opens with a restore run -> its length | ()
+        (? a64 (? (&& ((nthr l9 0) = '(lea sp fp 0)) (&& ((nthr l9 1) = '(pop fp)) ((nthr l9 2) = '(pop lr)))) 3 ())
+           (&& ((nthr l9 0) = '(mov sp r4)) ((nthr l9 1) = '(pop r4))) 2
+           (&& ((nthr l9 0) = '(ld r3 r4 -8)) (&& ((nthr l9 1) = '(mov sp r4)) ((nthr l9 2) = '(pop r4)))) 3
+           ())
        (clean? f2 bp)                                ; fb only at its base slot; x64 r3 / a64 lr never
         (: (go e i) (? (! (two? e)) 1
                        (: x <e
@@ -1626,14 +1647,15 @@
            (go f2 0))
        (scan l sl)                                   ; -> 'no | slots-flag
         (? (! (two? l)) sl
-           (epi3? l) (scan (dropf l ne) sl)
-           (: f <l
-              (? (! (two? f)) (scan >l sl)
-                 (member? <f '(call callr raw push pop)) 'no
-                 (&& (member? <f '(sub add mov lea lean)) (<>f = 'sp)) 'no
-                 (: bp (peep a4base <f -1)
-                    (? (! (clean? f bp)) 'no
-                       (scan >l (? (&& (0 <= bp) (id? (nthr f bp) fb)) 1 sl)))))))
+           (: n3 (epi3? l)
+              (? n3 (scan (dropf l n3) sl)
+                 (: f <l
+                    (? (! (two? f)) (scan >l sl)
+                       (member? <f '(call callr raw push pop)) 'no
+                       (&& (member? <f '(sub add mov lea lean)) (<>f = 'sp)) 'no
+                       (: bp (peep a4base <f -1)
+                          (? (! (clean? f bp)) 'no
+                             (scan >l (? (&& (0 <= bp) (id? (nthr f bp) fb)) 1 sl)))))))))
        vs (? (&& pro (charm? K)) (scan body ()) 'no)
        (? (id? vs 'no) fs
           (: K9 (? vs (K + (? a64 32 8)) 0)
@@ -1645,12 +1667,13 @@
                  (go f2 0))
              (rw l)
               (? (! (two? l)) ()
-                 (epi3? l) (xf + (rw (dropf l ne)))
-                 (: f <l
-                    bp (? (two? f) (peep a4base <f -1) -1)
-                    (link (? (&& (0 <= bp) (id? (nthr f bp) fb))
-                             (radj f bp (peep uoff <f -1)) f)
-                          (rw >l))))
+                 (: n3 (epi3? l)
+                    (? n3 (xf + (rw (dropf l n3)))
+                       (: f <l
+                          bp (? (two? f) (peep a4base <f -1) -1)
+                          (link (? (&& (0 <= bp) (id? (nthr f bp) fb))
+                                   (radj f bp (peep uoff <f -1)) f)
+                                (rw >l))))))
              (link <fs (? vs (link `('sub 'sp 'sp K9) (rw body)) (rw body))))))
 
    ; -- IR constant propagation (cfoldir): a straight-line abstract pass over a
