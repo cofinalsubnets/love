@@ -625,10 +625,12 @@ static struct ai *boot(struct ai *g, bool argp) {
 #endif
 
   if (image_dump_path || image_bake_p) {                 // --bake: snapshot the post-warm heap, then exit
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__aarch64__)
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
     // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
     // with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
+    // BOTH glazing arches -- the guard was x86-only from when the glaze was too, so an arm64
+    // host bake carried the whole cache into img_nif_interp's revert (or a refused bake).
     g = ai_evals_(g, "(: c ((peep book 'glaze 0) 'cache) (map (\\ k (pull c k 0)) (keys c)))");
 #endif
     // HIDE the raw machine-code-execution seam from USERS (who boot this image): the glaze folded
