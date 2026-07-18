@@ -12,7 +12,7 @@
 // 128+signal for a signalled death (the shell convention), or -1 for the
 // (shouldn't-happen) neither case. The way host_run (main.c) decodes it.
 static inline int proc_status(int st) {
-  return WIFEXITED(st) ? WEXITSTATUS(st)
+ return WIFEXITED(st) ? WEXITSTATUS(st)
        : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1; }
 
 #endif

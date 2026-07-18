@@ -52,38 +52,38 @@ static void sig_dfl_job(void) {
 // captures) and exec (replaces in place). The child inherits init's stdio (a real
 // pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next hear.
 ai_noinline static struct ai *host_spawn(struct ai *g, ai_word argv) {
-  intptr_t argc = 0;
-  uintptr_t total = 0;
-  for (ai_word p = argv; chainp(p); p = B(p)) {
-    if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));   // misuse: non-string argv
-    argc++, total += len(A(p)) + 1; }
-  if (!argc) return ai_push(g, 1, putcharm(-1));              // empty argv
-  if (!ai_ok(g = ai_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
-  argv = g->sp[0];                                            // re-root post-ai_have
-  char **cav = (char**) g->hp;
-  char *blob = (char*) (g->hp + (argc + 1));
-  { uintptr_t off = 0; intptr_t i = 0;
-    for (ai_word p = argv; chainp(p); p = B(p), i++) {
-      struct ai_str *s = str(A(p));
-      memcpy(blob + off, txt(s), len(s));
-      blob[off + len(s)] = 0;
-      cav[i] = blob + off;
-      off += len(s) + 1; }
-    cav[argc] = NULL; }
-  fflush(NULL);                                               // flush now, not twice in the child
-  pid_t pid = fork();
-  if (pid < 0) return ai_push(g, 1, putcharm(-errno));
-  if (!pid) { sig_dfl_job(); execvp(cav[0], cav); _exit(127); }   // child: default signals, exec or die 127
-  return ai_push(g, 1, putcharm(pid)); }                      // parent: the live pid
+ intptr_t argc = 0;
+ uintptr_t total = 0;
+ for (ai_word p = argv; chainp(p); p = B(p)) {
+  if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));   // misuse: non-string argv
+  argc++, total += len(A(p)) + 1; }
+ if (!argc) return ai_push(g, 1, putcharm(-1));              // empty argv
+ if (!ai_ok(g = ai_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
+ argv = g->sp[0];                                            // re-root post-ai_have
+ char **cav = (char**) g->hp;
+ char *blob = (char*) (g->hp + (argc + 1));
+ { uintptr_t off = 0; intptr_t i = 0;
+  for (ai_word p = argv; chainp(p); p = B(p), i++) {
+   struct ai_str *s = str(A(p));
+   memcpy(blob + off, txt(s), len(s));
+   blob[off + len(s)] = 0;
+   cav[i] = blob + off;
+   off += len(s) + 1; }
+  cav[argc] = NULL; }
+ fflush(NULL);                                               // flush now, not twice in the child
+ pid_t pid = fork();
+ if (pid < 0) return ai_push(g, 1, putcharm(-errno));
+ if (!pid) { sig_dfl_job(); execvp(cav[0], cav); _exit(127); }   // child: default signals, exec or die 127
+ return ai_push(g, 1, putcharm(pid)); }                      // parent: the live pid
 
 static lvm(lvm_spawn) {
-  Pack(g);
-  g = host_spawn(g, Sp[0]);
-  if (!ai_ok(g)) return ghelp(g);
-  Unpack(g);
-  Sp[1] = Sp[0];                                              // pid over argv
-  Sp += 1; Ip += 1;
-  return Continue(); }
+ Pack(g);
+ g = host_spawn(g, Sp[0]);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Sp[1] = Sp[0];                                              // pid over argv
+ Sp += 1; Ip += 1;
+ return Continue(); }
 
 // (hear _) -> (pid . status) of one reaped child, () if none are pending, or a
 // negated errno (e.g. -ECHILD when no children remain). The pid is the CAR so the
@@ -91,22 +91,22 @@ static lvm(lvm_spawn) {
 // waitpid(-1, WNOHANG) reaps ANY child -- incl. reparented orphans on a real pid1.
 // The arg is a dummy (ignored), so a bare (hear) curries; call it (hear 0).
 ai_noinline static struct ai *host_reapany(struct ai *g) {
-  int st;
-  pid_t r = waitpid(-1, &st, WNOHANG);
-  if (r == 0) { g->sp[0] = ZeroPoint; return g; }            // none pending -> the real () (not charm 0)
-  if (r < 0)  { g->sp[0] = putcharm(-errno); return g; }     // error (ECHILD = none alive)
-  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
-  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+ int st;
+ pid_t r = waitpid(-1, &st, WNOHANG);
+ if (r == 0) { g->sp[0] = ZeroPoint; return g; }            // none pending -> the real () (not charm 0)
+ if (r < 0)  { g->sp[0] = putcharm(-errno); return g; }     // error (ECHILD = none alive)
+ if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+ struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(r), putcharm(proc_status(st)));
-  g->sp[0] = word(w);
-  return g; }
+ g->sp[0] = word(w);
+ return g; }
 
 static lvm(lvm_reapany) {
-  Pack(g);
-  g = host_reapany(g);
-  if (!ai_ok(g)) return ghelp(g);
-  Unpack(g);
-  Ip += 1; return Continue(); }
+ Pack(g);
+ g = host_reapany(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Ip += 1; return Continue(); }
 
 // --- the signal perceive source (Linux signalfd) --------------------------------
 // (sigfd sigs)  -> a PORT over a signalfd watching `sigs` (a list of signal numbers;
@@ -129,7 +129,7 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
  ai_word a = g->sp[0];
  if (chainp(a))
   for (ai_word p = a; chainp(p); p = B(p)) {
-   if (A(p) & 1) sigaddset(&m, (int) getcharm(A(p))); }
+  if (A(p) & 1) sigaddset(&m, (int) getcharm(A(p))); }
  else { sigaddset(&m, SIGCHLD); sigaddset(&m, SIGTERM); }
  if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ZeroPoint, g;
  int fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
@@ -292,11 +292,11 @@ ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int er
  char **cav = (char**) g->hp;
  char *blob = (char*) (g->hp + (argc + 1));
  { uintptr_t off = 0; intptr_t i = 0;
-   for (ai_word p = argv; chainp(p); p = B(p), i++) {
-    struct ai_str *s = str(A(p));
-    memcpy(blob + off, txt(s), len(s)); blob[off + len(s)] = 0;
-    cav[i] = blob + off; off += len(s) + 1; }
-   cav[argc] = NULL; }
+  for (ai_word p = argv; chainp(p); p = B(p), i++) {
+   struct ai_str *s = str(A(p));
+   memcpy(blob + off, txt(s), len(s)); blob[off + len(s)] = 0;
+   cav[i] = blob + off; off += len(s) + 1; }
+  cav[argc] = NULL; }
  fflush(NULL);
  pid_t pid = fork();
  if (pid < 0) return ai_push(g, 1, putcharm(-errno));
@@ -304,7 +304,7 @@ ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int er
   if (pg >= 0) {
    setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
    if (fg) { signal(SIGTTOU, SIG_IGN);          // the handoff, from the background
-             tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
+    tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
   if (in  >= 0) dup2(in, 0);
   if (out >= 0) dup2(out, 1);
   if (err >= 0) dup2(err, 2);

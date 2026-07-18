@@ -11,7 +11,7 @@
 #include <string.h>
 
 static const uint32_t K[64] = {
- 0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+ 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
@@ -28,9 +28,9 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
   w[i] = (uint32_t) p[4*i] << 24 | (uint32_t) p[4*i+1] << 16
        | (uint32_t) p[4*i+2] << 8 | (uint32_t) p[4*i+3];
  for (int i = 16; i < 64; i++) {
-  uint32_t s0 = rr(w[i-15], 7) ^ rr(w[i-15], 18) ^ (w[i-15] >> 3);
-  uint32_t s1 = rr(w[i-2], 17) ^ rr(w[i-2], 19) ^ (w[i-2] >> 10);
-  w[i] = w[i-16] + s0 + w[i-7] + s1; }
+  uint32_t s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >> 3);
+  uint32_t s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >> 10);
+  w[i] = w[i - 16] + s0 + w[i - 7] + s1; }
  uint32_t a = h[0], b = h[1], c = h[2], d = h[3],
           e = h[4], f = h[5], gg = h[6], hh = h[7];
  for (int i = 0; i < 64; i++) {
@@ -46,7 +46,7 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
  h[4] += e; h[5] += f; h[6] += gg; h[7] += hh; }
 
 static void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
- uint32_t h[8] = {0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
+ uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
                   0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
  size_t i = 0;
  for (; i + 64 <= len; i += 64) sha_block(h, msg + i);
@@ -63,9 +63,9 @@ static void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
  static const char hx[] = "0123456789abcdef";
  for (int k = 0; k < 8; k++)
   for (int j = 0; j < 4; j++) {
-   uint8_t b = (uint8_t) (h[k] >> (24 - 8 * j));
-   out[8*k + 2*j] = hx[b >> 4];
-   out[8*k + 2*j + 1] = hx[b & 15]; }
+  uint8_t b = (uint8_t) (h[k] >> (24 - 8 * j));
+  out[8 * k + 2 * j] = hx[b >> 4];
+  out[8 * k + 2 * j + 1] = hx[b & 15]; }
  out[64] = 0; }
 
 ai_noinline static struct ai *host_sha256(struct ai *g) {

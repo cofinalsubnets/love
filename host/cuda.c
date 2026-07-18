@@ -49,19 +49,19 @@ static lvm(lvm_cuda_gemm) {                                  // C(m,n) = A(m,k) 
   // double one=1, zero=0;                                   // column-major: compute B^T A^T = (A B)^T
   // cublasDgemm(h, CUBLAS_OP_N,CUBLAS_OP_N, n,m,k, &one, dB,n, dA,k, &zero, dC,n);
   // struct ai_vec *C = new gem-tray (m,n); cudaMemcpy D2H vec_data(C),dC; *(Sp += 1) = word(C);
-  *(Sp += 1) = ai_nil; return Ip++, Continue();
+ *(Sp += 1) = ai_nil; return Ip++, Continue();
 }
 static lvm(lvm_cuda_ew) {                                    // elementwise op over a,b (op = a tag, marshaled ai-side)
   // dispatch a fused +/-/* kernel by the op tag in Sp[0]; broadcast a(Sp[1]), b(Sp[2]).
-  *(Sp += 2) = ai_nil; return Ip++, Continue();
+ *(Sp += 2) = ai_nil; return Ip++, Continue();
 }
 static lvm(lvm_cuda_reduce) {                                // sum-all -> a scalar
   // cublasDasum / a segmented reduce over vec_data(Sp[0]); emit a boxed f64.
-  Sp[0] = ai_nil; return Ip++, Continue();
+ Sp[0] = ai_nil; return Ip++, Continue();
 }
 static lvm(lvm_cuda_transp) {                               // 2D transpose
   // cublasDgeam(h, CUBLAS_OP_T,CUBLAS_OP_N, ...) into a fresh (c,r) gem-tray.
-  Sp[0] = ai_nil; return Ip++, Continue();
+ Sp[0] = ai_nil; return Ip++, Continue();
 }
 #endif
 

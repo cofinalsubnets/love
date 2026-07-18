@@ -234,14 +234,14 @@ struct ai {
                   // prel runs of a bootstrap capture the SAME tablet and pre-egg
                   // registrations survive the egg warm). In v0..end, so GC-traced
                   // and image-serialized with no further wiring.
-  union {
-   ai_word x;
-   struct ai_io {
-    lvm_t *ap;
-    ai_word fd;
-    ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
-    ai_word eof_seen;
-   } *io; }; }; };
+   union {
+    ai_word x;
+    struct ai_io {
+     lvm_t *ap;
+     ai_word fd;
+     ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
+     ai_word eof_seen;
+    } *io; }; }; };
  intptr_t end[]; };
 
 struct ai_def { char const *n; intptr_t x; };
@@ -507,12 +507,12 @@ uintptr_t hash(struct ai*, word), ai_vec_bytes(struct ai_vec*);
 #define two(_) ((struct ai_chain*)(_))
 static ai_inline bool chainp(word _) { return lamp(_) && cell(_)->ap == lvm_chain; }
 static ai_inline void *bump(struct ai *g, uintptr_t n) {
-  if (g->gc_gen) { void *x = g->major_hp; g->major_hp += n; return x; }   // a generational collection is promoting into the major pool (gc_gen==0 during normal mutation: one predictable branch)
-  if (avail(g) < n) __builtin_trap();
-  void *x = g->hp; g->hp += n; return x; }
+ if (g->gc_gen) { void *x = g->major_hp; g->major_hp += n; return x; }   // a generational collection is promoting into the major pool (gc_gen==0 during normal mutation: one predictable branch)
+ if (avail(g) < n) __builtin_trap();
+ void *x = g->hp; g->hp += n; return x; }
 static ai_inline struct ai_chain *ini_chain(struct ai_chain *w, intptr_t a, intptr_t b) {
  return w->ap = lvm_chain, w->a = a, w->b = b, w; }
-static ai_inline struct ai *encode(struct ai*g, enum ai_status s) { return
+static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
   (struct ai*) ((uintptr_t) g | s); }
 // Raise: to the global `help` function when installed, else raise_c (ai.c).
 // ghelp re-raises an already-tagged g's own status.
