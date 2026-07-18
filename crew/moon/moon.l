@@ -51,8 +51,9 @@
    (totgt s) (? (|| (s = "x64") (s = "amd64")) 'x64
                 (|| (s = "arm64") (s = "aarch64")) 'arm64
                 (|| (s = "thumb2") (s = "cortex-m7")) 'thumb2
-                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2)")))
-   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (id? tgt 'thumb2) "__arm__" "__x86_64__")
+                (|| (s = "thumb1") (s = "cortex-m0")) 'thumb1   ; ARMv6-M (RP2040 / Cortex-M0+)
+                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb1)")))
+   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (member? tgt '(thumb2 thumb1)) "__arm__" "__x86_64__")
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag
    ; sigs ..) | a fatal exit. the -D lines PREPEND to the source text before the
    ; one lex, so the line numbering stays whole (tokens carry lines and a define

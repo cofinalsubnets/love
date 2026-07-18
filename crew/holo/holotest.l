@@ -2,7 +2,7 @@
 ; hex the assembler emits, and EVERY one was checked against the real toolchain: emit the bytes,
 ; `objdump -d -M intel`, confirm the mnemonic. so this file is the frozen record of that round-trip
 ; -- if a golden drifts, either the encoder broke or the disassembler disagrees, and either is a bug.
-; run: out/host/ai -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/arm64.l -l crew/holo/text.l -l crew/holo/elf.l crew/holo/holotest.l
+; run: cat crew/holo/{holo,x64,arm64,thumb2,thumb1,text,elf,holotest}.l | out/host/ai
 ; (exits nonzero on any miss). it gates both backends, the text front-end, and the ELF linker.
 
 (: pass (tablet 0) _ (pin pass 0 0)
@@ -420,6 +420,88 @@
                       '((add r0 r1 r0) (label top) (cmp r0 r2) (br eq done)
                         (add r1 r1 1) (cmp r1 r2) (br ne top) (label done) (ret))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb2 (at t 2))) 0 t2tests)
+
+   ;; -- the thumb1 backend (crew/holo/thumb1.l): the SAME neutral IR, a FOURTH target -- ARMv6-M
+   ;; (Cortex-M0/M0+, the RP2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT
+   ;; (so `li` byte-builds the constant), no wide ALU, no IT (so `set` branches over), no hardware
+   ;; divide. every golden disassembled/encoded by `llvm-mc --triple=thumbv6m-none-eabi` (mnemonics
+   ;; in the trailing comment). branches: B T2 (jmp, +-2KB), Bcc T1 (br, +-256B), BL T1 (call, wide);
+   ;; the pc-relative offset (halfword-scaled) was cross-checked forward AND backward. --
+   t1tests `(
+      `("t1.li"      "0520"              '((li r0 5)))                 ; movs r0, #5
+      `("t1.li.neg1" "0020c043"          '((li r0 -1)))                ; movs r0,#0 ; mvns r0,r0
+      `("t1.li.negN" "ff22d243"          '((li r2 -256)))              ; movs r2,#255 ; mvns r2,r2 (~255)
+      `("t1.li.big"  "1221090234310902563109027831" '((li r1 305419896)))  ; 0x12345678 byte-build (no litpool)
+      `("t1.mov"     "1846"              '((mov r0 r3)))               ; mov r0, r3 (hi-form)
+      `("t1.add"     "8818"              '((add r0 r1 r2)))            ; adds r0, r1, r2 (3-addr)
+      `("t1.sub"     "ac1b"              '((sub r4 r5 r6)))            ; subs r4, r5, r6
+      `("t1.addi3"   "481d"              '((add r0 r1 5)))             ; adds r0, r1, #5 (imm3, 3-addr)
+      `("t1.addi8"   "6430"              '((add r0 r0 100)))           ; adds r0, #100 (imm8, 2-addr)
+      `("t1.subneg"  "0838"              '((add r0 r0 -8)))            ; negative imm flips add->subs #8
+      `("t1.and"     "1040"              '((and r0 r0 r2)))            ; ands r0, r2 (2-addr)
+      `("t1.or"      "1143"              '((or  r1 r1 r2)))            ; orrs r1, r2
+      `("t1.xor"     "6340"              '((xor r3 r3 r4)))            ; eors r3, r4
+      `("t1.mul"     "5043"              '((imul r0 r0 r2)))           ; muls r0, r2
+      `("t1.cmp"     "8842"              '((cmp r0 r1)))               ; cmp r0, r1
+      `("t1.cmpi"    "2a28"              '((cmp r0 42)))               ; cmp r0, #42
+      `("t1.test"    "0842"              '((test r0 r1)))              ; tst r0, r1
+      `("t1.ld"      "8868"              '((ld r0 r1 8)))              ; ldr r0, [r1, #8]
+      `("t1.st"      "8860"              '((st r1 8 r0)))              ; str r0, [r1, #8]
+      `("t1.ldsp"    "0498"              '((ld r0 sp 16)))             ; ldr r0, [sp, #16] (T2)
+      `("t1.ldb"     "c878"              '((ldu1 r0 r1 3)))            ; ldrb r0, [r1, #3]
+      `("t1.ldh"     "8888"              '((ldu2 r0 r1 4)))            ; ldrh r0, [r1, #4]
+      `("t1.ld1"     "c87840b2"          '((ld1 r0 r1 3)))             ; ldrb + sxtb (no signed-imm load on v6-M)
+      `("t1.ld2"     "888800b2"          '((ld2 r0 r1 4)))             ; ldrh + sxth
+      `("t1.stb"     "c870"              '((st1 r1 3 r0)))             ; strb r0, [r1, #3]
+      `("t1.sx1"     "40b2"              '((sx1 r0)))                  ; sxtb r0, r0
+      `("t1.sx2"     "1bb2"              '((sx2 r3)))                  ; sxth r3, r3
+      `("t1.zx1"     "c0b2"              '((zx1 r0)))                  ; uxtb r0, r0
+      `("t1.zx2"     "bfb2"              '((zx2 r7)))                  ; uxth r7, r7
+      `("t1.sx4"     ""                  '((sx4 r0)))                  ; NO-OP: an int is already the full word
+      `("t1.neg"     "4042"              '((neg r0)))                  ; rsbs r0, r0, #0
+      `("t1.not"     "c043"              '((not r0)))                  ; mvns r0, r0
+      `("t1.inc"     "401c"              '((inc r0)))                  ; adds r0, r0, #1
+      `("t1.dec"     "401e"              '((dec r0)))                  ; subs r0, r0, #1
+      `("t1.shl"     "c000"              '((shl r0 3)))                ; lsls r0, r0, #3
+      `("t1.shr"     "c008"              '((shr r0 3)))                ; lsrs r0, r0, #3
+      `("t1.sar"     "c010"              '((sar r0 3)))                ; asrs r0, r0, #3
+      `("t1.shlv"    "8840"              '((shlv r0 r1)))              ; lsls r0, r0, r1 (count in r1)
+      `("t1.shrv"    "c840"              '((shrv r0 r1)))              ; lsrs r0, r0, r1
+      `("t1.sarv"    "0841"              '((sarv r0 r1)))              ; asrs r0, r0, r1
+      `("t1.lea0"    "bd46"              '((lea sp fp 0)))             ; mov sp, r7 (fp=r7 on v6-M; lea #0 rides the sp-legal MOV)
+      `("t1.leasp"   "04a8"              '((lea r0 sp 16)))            ; add r0, sp, #16
+      `("t1.leaa3"   "081d"              '((lea r0 r1 4)))             ; adds r0, r1, #4
+      `("t1.allocsp" "84b0"              '((lea sp sp -16)))           ; sub sp, sp, #16 (frame alloc)
+      `("t1.push"    "10b4"              '((push r4)))                 ; push {r4}
+      `("t1.pushlr"  "00b5"              '((push lr)))                 ; push {lr}
+      `("t1.pop"     "10bc"              '((pop r4)))                  ; pop {r4}
+      `("t1.poppc"   "00bd"              '((pop pc)))                  ; pop {pc}
+      `("t1.set"     "012000d00020"      '((set eq r0)))              ; movs r0,#1 ; beq .+0 ; movs r0,#0
+      `("t1.jmpr"    "1847"              '((jmpr r3)))                 ; bx r3
+      `("t1.callr"   "9847"              '((callr r3)))                ; blx r3
+      `("t1.ret"     "7047"              '((ret)))                     ; bx lr
+      `("t1.sys"     "00df"              '((sys)))                     ; svc #0
+      `("t1.nop"     "00bf"              '((nop)))                     ; nop
+      `("t1.trap"    "00be"              '((trap)))                    ; bkpt #0
+      ;; branches: forward and backward, the halfword-scaled offset scrambled into imm11/imm8/BL fields.
+      `("t1.jmp.fwd" "00e000bf"          '((jmp l) (nop) (label l)))   ; b #0   -> past the nop
+      `("t1.jmp.bwd" "00bffde7"          '((label l) (nop) (jmp l)))   ; b #-6  -> back to l
+      `("t1.br.fwd"  "00d000bf"          '((br eq l) (nop) (label l))) ; beq #0
+      `("t1.br.bwd"  "00bffdd1"          '((label l) (nop) (br ne l))) ; bne #-6
+      `("t1.call.fwd" "00f001f800bf"     '((call l) (nop) (label l)))  ; bl #2
+      ;; a whole trivial leaf end to end: r0 = r0 + r1 ; return.
+      `("t1.leaf"    "40187047"          '((add r0 r0 r1) (ret)))      ; adds r0,r0,r1 ; bx lr
+      ;; div/rem: v6-M has no hardware divide -> the inline restoring shift-subtract blob (t1-udivmod)
+      ;; plus, for the signed pair, the abs-and-refix sleeve. fixed self-contained branches (blo/bne).
+      `("t1.udiv" "0022202349005241824201d3121a491c5b1ef7d1"
+                  '((udiv r1 r1 r0)))                                  ; the 32-step unsigned core
+      `("t1.urem" "0022202349005241824201d3121a491c5b1ef7d11100"
+                  '((urem r1 r1 r0 r3)))                               ; core ; movs r1,r2 (remainder)
+      `("t1.div"  "ca17c3175140891a5840c01a5a4004b40022202349005241824201d3121a491c5b1ef7d108bc5940c91a"
+                  '((div r1 r1 r0)))                                   ; |a|,|b| ; qsign=sa^sb ; core ; refix
+      `("t1.rem"  "ca17c3175140891a5840c01a04b40022202349005241824201d3121a491c5b1ef7d108bc11005940c91a"
+                  '((rem r1 r1 r0 r3))))                               ; |a|,|b| ; core ; sign=sa ; refix
+   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb1 (at t 2))) 0 t1tests)
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)

@@ -24,7 +24,7 @@ korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew
 # (crew/holo/text.l = the neutral-text assembler front end gen.l's inline asm
 # parses templates with; it leaks stream globals incl. a `parse` rebind -- fine
 # here, no later cat member reads them bare.)
-moonfiles = crew/kore/text.l crew/kore/core.l crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/seal.l crew/kore/asbook.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/moon.l
+moonfiles = crew/kore/text.l crew/kore/core.l crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/thumb1.l crew/holo/seal.l crew/kore/asbook.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/moon.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these lines spell out/host$(hsuf) themselves.)
 #

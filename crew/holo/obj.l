@@ -51,7 +51,14 @@
                         bs (patch-with be k tgt off w (fix-a x))
                         (o-walk be >items labels wkset internal? rset (off + w)
                                 ((rev bs) + bacc) racc))
-                    (: fill (? (member? k '(b26 b19 adrp21 addlo12)) (le32 (fix-a x)) (o-zeros w))
+                    (: fill (? (member? k '(b26 b19 adrp21 addlo12)) (le32 (fix-a x))
+                               ; ARM is REL, not RELA: the addend rides IN the field. a surviving thumb
+                               ; branch holds its base encoding with the -4 PIPELINE addend baked in (the
+                               ; field is pc=instr+4 relative, but the reloc's P is the instr address, so
+                               ; the -4 compensates -- gas emits the identical fff7feff for `bl sym`). the
+                               ; linker folds S-P into the imm bits and needs the opcode there already.
+                               (member? k '(b bcc bl)) (patch-with be k off off w (fix-a x))
+                               (o-zeros w))
                        ; carry the byte just BEFORE the field (bacc's head, reversed) -- the
                        ; x64 opcode: E8/E9 (call/jmp) vs a lea's modrm, so reltext can tell a
                        ; control transfer (PLT32) from an address-of (PC32) for an external ref.
@@ -85,6 +92,120 @@
               (go >ns (off + (tally bs)) ((rev bs) + bacc) (>< off offs))))
        (go names 1 `(0) ()))
 
+   ; -- ELF32 / EM_ARM (the thumb backends). the 32-bit cousin of the emitter below:
+   ; a 52-byte header, 16-byte symbols, and REL (not RELA) relocations -- ARM's ABI
+   ; keeps the addend IN the field, so a surviving thumb branch carries its base
+   ; encoding (o-walk fills it) and .rel.text needs no addend column. thumb1 (v6-M)
+   ; reaches here for `-c`: .text + function/undef symbols + R_ARM_THM_CALL for every
+   ; external `bl`. a DATA relocation (an abs32 pointer) would need the literal-pool
+   ; `la` the backend doesn't emit yet, so a surviving data fixup scares LOUD. --
+   arm32-targets '(thumb1 thumb2 cortex-m0 cortex-m7 arm)
+   (arm32? t) (member? t arm32-targets)
+   r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
+   ; a 16-byte ELF32 symbol entry (name value size info other shndx) and an 8-byte REL entry.
+   (o-sym32 nameoff bind typ shndx value)
+    (catall `((le32 nameoff) (le32 value) (le32 0) `((| (<< bind 4) typ) 0) (le16 shndx)))
+   (o-rel32 offset symidx typ) (catall `((le32 offset) (le32 ((symidx * 256) + typ))))
+   ; a 40-byte ELF32 section header.
+   (sh32 nameoff typ flags off sz link info align entsz)
+    (catall `((le32 nameoff) (le32 typ) (le32 flags) (le32 0)
+               (le32 off) (le32 sz) (le32 link) (le32 info) (le32 align) (le32 entsz)))
+   (objelf32 target textforms dataforms funcnames globnames wknames nifforms)
+    (: machine (peep elf-machines target 0)
+       _ (? (machine = 0) (scare 'no-elf-machine target) 0)
+       be (peep backends target ())
+       rset '(b bcc bl)                              ; thumb internal branches are pc-relative -> resolve in place
+       wkset (: t (tablet 0) (go ws) (? (! (two? ws)) t (: _ (pin t (intern <ws) 1) (go >ws)))
+                (go wknames))
+       tp (: r laylax (? (lit? r) (r textforms be 0 (tablet 0) wkset) (scare 'holo-bake-stale 'laylax)))
+       dp (lay dataforms be 0 () (tablet 0))
+       np (lay nifforms be 0 () (tablet 0))
+       tlabels >tp dlabels >dp nlabels >np
+       tw (o-walk be <tp tlabels wkset 1 rset 0 () ())
+       dw (o-walk be <dp dlabels wkset 0 rset 0 () ())
+       nw (o-walk be <np nlabels wkset 0 rset 0 () ())
+       tbytes <tw trel <>tw
+       dbytes <dw drel <>dw
+       nbytes <nw nrel <>nw
+       _ (? (|| (two? drel) (two? nrel))            ; a data/nif pointer wants abs32 -- needs the literal-pool la first
+             (scare 'obj32-data-reloc-unsupported target) 0)
+       exts (o-exts (trel + drel + nrel) tlabels dlabels nlabels)
+       nfun (tally funcnames) nglob (tally globnames)
+       fstart 4 gstart (4 + nfun) estart ((4 + nfun) + nglob)
+       extidx (: t (tablet 0) (go es i) (? (! (two? es)) t (: _ (pin t <es (estart + i)) (go >es (i + 1))))
+                  (go exts 0))
+       fnidx (: t (tablet 0) (go fs i) (? (! (two? fs)) t (: _ (pin t (intern <fs) (fstart + i)) (go >fs (i + 1))))
+                (go funcnames 0))
+       symnames (funcnames + globnames + (map (\ s (string s)) exts))
+       str (o-strtab symnames)
+       strblob <str stroffs <>str
+       (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
+       ; -- the symbol table. a FUNC symbol's value carries the THUMB BIT (bit 0): a
+       ; cross-object R_ARM_THM_CALL folds it into T, so the callee is entered in
+       ; Thumb state -- vital on M0 (no ARM state at all). data OBJECT syms stay even. --
+       symbytes
+        (: fsyms (: (go fs i acc) (? (! (two? fs)) (catall (rev acc))
+                                     (go >fs (i + 1)
+                                         (>< (o-sym32 (nthr stroffs i)
+                                                      (? (member? <fs wknames) 2 1)   ; STB_WEAK vs STB_GLOBAL
+                                                      2 1 (| (peep tlabels (intern <fs) 0) 1)) acc)))  ; STT_FUNC, +thumb bit
+                    (go funcnames 0 ()))
+           gsyms (: (go gs i acc) (? (! (two? gs)) (catall (rev acc))
+                                     (go >gs (i + 1)
+                                         (>< (o-sym32 (nthr stroffs (nfun + i)) 1 1 2 (peep dlabels (intern <gs) 0)) acc)))
+                    (go globnames 0 ()))
+           esyms (: (go es i acc) (? (! (two? es)) (catall (rev acc))
+                                     (go >es (i + 1)
+                                         (>< (o-sym32 (nthr stroffs ((nfun + nglob) + i)) 1 0 0 0) acc)))
+                    (go exts 0 ()))
+           (catall `((o-sym32 0 0 0 0 0)              ; NULL
+                      (o-sym32 0 0 3 1 0)              ; .text section symbol
+                      (o-sym32 0 0 3 2 0)              ; .data
+                      (o-sym32 0 0 3 3 0)              ; ai_nifs
+                      fsyms gsyms esyms)))
+       nsym (4 + nfun + nglob + (tally exts))
+       ; -- .rel.text: R_ARM_THM_CALL for each external/weak `bl` (internal ones resolved in place). --
+       reltext (: (go rs acc)
+                   (? (! (two? rs)) (catall (rev acc))
+                      (: r <rs off <r k <>r lbl <>>r
+                         (? (id? k 'bl)
+                             (: sym (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
+                                (go >rs (>< (o-rel32 off sym r-thm-call) acc)))
+                            (scare 'obj32-text-reloc k))))
+                  (go trel ()))
+       ntrel (tally trel)
+       shnames `(".text" ".data" "ai_nifs" ".symtab" ".strtab" ".rel.text" ".shstrtab")
+       shstr (o-strtab shnames)
+       shstrblob <shstr shoffs <>shstr
+       (shname i) (nthr shoffs i)
+       ; -- file layout: 52-byte header, section contents packed tight, then the SHT. --
+       h-sz 52
+       t-off h-sz               t-sz (tally tbytes)
+       d-off (t-off + t-sz)     d-sz (tally dbytes)
+       n-off (d-off + d-sz)     n-sz (tally nbytes)
+       sym-off (n-off + n-sz)   sym-sz (* nsym 16)
+       str-off (sym-off + sym-sz) str-sz (tally strblob)
+       rt-off (str-off + str-sz)  rt-sz (* ntrel 8)
+       shs-off (rt-off + rt-sz)   shs-sz (tally shstrblob)
+       sht-off (shs-off + shs-sz)
+       sht (catall `(
+              (o-zeros 40)                                                 ; 0 NULL
+              (sh32 (shname 0) 1 6 t-off t-sz 0 0 4 0)                     ; 1 .text  PROGBITS ALLOC|EXEC
+              (sh32 (shname 1) 1 3 d-off d-sz 0 0 4 0)                     ; 2 .data  PROGBITS ALLOC|WRITE
+              (sh32 (shname 2) 1 3 n-off n-sz 0 0 4 0)                     ; 3 ai_nifs
+              (sh32 (shname 3) 2 0 sym-off sym-sz 5 4 4 16)                ; 4 .symtab link=.strtab info=first-global
+              (sh32 (shname 4) 3 0 str-off str-sz 0 0 1 0)                 ; 5 .strtab
+              (sh32 (shname 5) 9 0 rt-off rt-sz 4 1 4 8)                   ; 6 .rel.text  SHT_REL link=.symtab info=.text
+              (sh32 (shname 6) 3 0 shs-off shs-sz 0 0 1 0)))               ; 7 .shstrtab
+       hdr (catall `(
+              `(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)                     ; e_ident: \x7fELF 32-bit LSB
+              (le16 1) (le16 machine) (le32 1)                            ; ET_REL, EM_ARM, version
+              (le32 0) (le32 0) (le32 sht-off)                            ; e_entry=0, e_phoff=0, e_shoff
+              (le32 83886080) (le16 52) (le16 0)                          ; e_flags=EABI_VER5, e_ehsize=52, e_phentsize=0
+              (le16 0) (le16 40) (le16 8)                                 ; e_phnum=0, e_shentsize=40, e_shnum=8
+              (le16 7)))                                                  ; e_shstrndx=7
+       (catall `(hdr tbytes dbytes nbytes symbytes strblob reltext shstrblob sht)))
+
    ; build the whole .o image. textforms/dataforms/nifforms are cgen-obj's split
    ; IR (nifforms = the AI_NIF registry entries, laid in their own `ai_nifs`
    ; section so the linker's __start_/__stop_ bracket symbols bound them),
@@ -92,6 +213,8 @@
    ; variables (global OBJECT symbols); statics reach neither list and stay
    ; local labels. -> a byte list.
    (objelf target textforms dataforms funcnames globnames wknames nifforms)
+    (? (arm32? target)
+       (objelf32 target textforms dataforms funcnames globnames wknames nifforms)
     (: a64 (member? target '(arm64 aarch64))
        _ (? (|| (id? target 'x64) a64) 0 (scare 'obj-target target))
        rset (? a64 '(b26 b19) '(rel32 rel8))         ; the in-place-resolvable kinds (translation-invariant)
@@ -271,4 +394,4 @@
               (le32 0) (le16 64) (le16 0)                                 ; e_flags, e_ehsize, e_phentsize=0
               (le16 0) (le16 64) (le16 10)                                ; e_phnum=0, e_shentsize=64, e_shnum=10
               (le16 9)))                                                  ; e_shstrndx=9
-       (catall `(hdr tbytes dbytes nbytes symbytes strblob reltext reldata relnif shstrblob sht))))
+       (catall `(hdr tbytes dbytes nbytes symbytes strblob reltext reldata relnif shstrblob sht)))))

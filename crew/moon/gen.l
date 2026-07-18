@@ -151,7 +151,8 @@
    ; build/epilogue path verbatim. register-homing is OFF for now (nhome=0): every
    ; param spills to its frame slot, the simplest correct lane. --
    (a64? g) (id? (peep g 'tgt ()) 'arm64)
-   (t32? g) (id? (peep g 'tgt ()) 'thumb2)
+   (t32? g) (member? (peep g 'tgt ()) '(thumb2 thumb1))   ; the 32-bit thumb ABI family (AAPCS32): ARMv7E-M + ARMv6-M share it
+   (v6m? g) (id? (peep g 'tgt ()) 'thumb1)          ; ARMv6-M refinements ONLY: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
    (arm? g) (|| (a64? g) (t32? g))                  ; the lr-push / fp-base / bx-lr frame family
    (wsize g) (? (t32? g) 4 8)                       ; the machine WORD in bytes (a pointer, a gp scalar, a stack cell)
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
@@ -161,7 +162,7 @@
    (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 'r3)      ; the callr park (x64 rbx; arm64 x15; thumb2 r12/IP -- x3/r3 is the 4th ARG register)
    (ip2 g) (? (a64? g) 'r1 'r2)                     ; an int-pair aggregate's SECOND register (rax:rdx / x0:x1); thumb2 unused for M1 scalar
    (psc g) (? (a64? g) 'r9 'r0)                     ; the xmm-arg pop scratch (arm64 r0 IS arg 0; a pool reg is dead at a call)
-   (ovb g) (? (a64? g) 32 (t32? g) 8 16)            ; overflow params: above [ret+rbp] (x64) / the lr+fp push cells (arm64 2x16 / thumb2 2x4)
+   (ovb g) (? (a64? g) 32 (v6m? g) 12 (t32? g) 8 16)  ; overflow params above the push cells: x64 [ret+rbp]=16; arm64 2x16; thumb2 lr+fp=8; v6m lr+fp+r4=12
    ; the arm64 HOME pool: caller-saved, never an argument register (x0..x7 all
    ; stage args at calls, so no positional alignment with the incoming regs --
    ; every home takes one prologue mov), and clear of the staging scratches
@@ -182,6 +183,10 @@
           (cls = 'cmp) (&& (-4095 <= n) (n <= 4095))              ; imm12 only (no split -- flags)
           (cls = 'log) (&& (0 < n) (0 = (& n (n + 1))))
           ())
+       (v6m? g)
+       (? (cls = 'addsub) (&& (-255 <= n) (n <= 255))             ; v6-M ADDS/SUBS imm8 (imm3 3-addr / imm8 2-addr; negative flips)
+          (cls = 'cmp) (&& (0 <= n) (n <= 255))                   ; CMP imm8 only -- no CMN-imm on v6-M, so materialize negatives
+          ())                                                     ; log/mul: materialize into a register
        (t32? g)
        (? (cls = 'addsub) (&& (-4095 <= n) (n <= 4095))           ; ADDW/SUBW imm12
           (cls = 'cmp) (&& (-255 <= n) (n <= 255))                ; CMP/CMN imm8
@@ -269,7 +274,7 @@
    ; pointer-scale by an immediate: x64 imul takes it straight; arm64 mul has
    ; no immediate form, so the size rides r3 first (free mid-expression: the
    ; shuttle holds r0/r1, and args only load at the pops)
-   (imby g rX sz) (? (a64? g) `(`('li 'r3 sz) `('imul rX rX 'r3)) `(`('imul rX rX sz)))
+   (imby g rX sz) (? (|| (a64? g) (v6m? g)) `(`('li 'r3 sz) `('imul rX rX 'r3)) `(`('imul rX rX sz)))   ; v6-M mul, like arm64, has no imm form
    (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))   ; an 8-byte gp scalar: what a register home can carry
    ; -- the immediate lane: the left value already in r0, a compile-time constant
    ; on the right -> ONE imm-form op (holo's add/sub/imul/and/or/xor/cmp take a
@@ -1612,6 +1617,11 @@
    ; the sp hop rides lea (add-immediate) instead. cgstmt/build read the
    ; target's epilogue off g 'epi (pinned by cgen-core).
    epi-a64 `(`('lea 'sp 'fp 0) `('pop 'fp) `('pop 'lr) `('ret))
+   ; the v6-M twin: ARMv6-M POP restores r0..r7 and PC but NOT LR, so the return folds into
+   ; `pop {pc}` (the pushed lr lands straight in pc) -- no separate lr-restore + bx. fp is r7
+   ; here (the backend numbers it). r4 is the BOTTOM base (see t16slots): pushed just under fp,
+   ; popped just before it. mov sp,fp is framesize-independent, so this pins as g 'epi.
+   epi-t16 `(`('lea 'sp 'fp 0) `('pop 'r4) `('pop 'fp) `('pop 'pc))
    ; the arm64 RETARGET: gen speaks r4 for the frame base throughout, but x4
    ; is ALSO an AAPCS argument register -- so the rename is by POSITION, not
    ; by symbol: only the operand slot where r4 means "the frame base" (a
@@ -1636,6 +1646,25 @@
               (link (? (bp < 0) f (swap f 0 bp))
                     (go >l))))
        (go fs))
+   ; v6-M slot retarget: slots live at fp-NEGATIVE offsets (the shared x64/arm model), but ARMv6-M
+   ; loads/stores encode only POSITIVE immediates. slots must also stay STABLE across the sub/add-sp
+   ; shuffle moon wraps around calls (an sp-relative slot would read the wrong cell mid-staging), so
+   ; fp CAN'T serve: fp stays at the frame TOP for the framesize-independent epilogue (mov sp,fp). the
+   ; v6m frame therefore reserves a SECOND base, r4, planted at the frame BOTTOM (stable, never moves
+   ; during staging). this pass rewrites each fp-NEGATIVE slot access to r4 + (frame + off) -- the same
+   ; cell, now a positive offset from a stable low base. frame-LINK forms carry offset 0, never < 0,
+   ; so they keep fp. runs AFTER a4ize (which named the base fp), v6m only. r4 is free post-a4ize
+   ; (the build-time r4 frame-base all became fp; v6-M has 4 arg regs r0..r3, so r4 is never the 5th).
+   (elg l i) (? (i < 1) <l (elg >l (i - 1)))          ; 0-based accessor (gen.l's scope lacks moon.l's `el`)
+   (t16reb f i bp fr)
+    (? (! (two? f)) f
+       (link (? (i = bp) 'r4 (i = (bp + 1)) (fr + <f) <f) (t16reb >f (i + 1) bp fr)))
+   (t16slots fs fr)
+    (? (! (two? fs)) ()
+       (: f <fs
+          bp (? (two? f) (peep a4base <f -1) -1)
+          (link (? (&& (bp >= 0) (&& (id? (elg f bp) 'fp) ((elg f (bp + 1)) < 0))) (t16reb f 0 bp fr) f)
+                (t16slots >fs fr))))
 
    ; -- the SIBCALL pass (stage 8): a RET-position call tail-JUMPS instead, so
    ; deep tail recursion runs flat and the lvm shape Continues by jmp at
@@ -1721,7 +1750,7 @@
              (&& cand (: nx <rr (&& (two? nx) (&& (<nx = 'jmp) (peep el <>nx ())))))
               ((sibjmp g f) + (sibs g >rr () el hs ej crf))
              (link f (sibs g r (? (&& (two? f) (member? <f '(call callr raw))) () lw2) el hs ej crf)))))   ; raw: a builtin splice consumes its address like a call
-   (sibcall g fs) (? (peep g 'fesc ()) fs
+   (sibcall g fs) (? (|| (peep g 'fesc ()) (v6m? g)) fs   ; v6m: the pop-pc epilogue can't restore lr for a tail-jmp, so no sibcall (deferred optimization)
                      (: ej (peep g 'epi epi)
                         (sibs g fs () (elabs fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
 
@@ -3739,12 +3768,16 @@
                        ; forms already say fp/sp/lr and pass through a4ize
                        ; untouched). lr rides its own push cell (bl clobbers
                        ; it); no r3 slot -- x3/r3 is caller-saved under AAPCS.
-                       (a4ize
-                        (sibcall g
-                         (cat `(`('label (intern <>f))
-                                 `('push 'lr) `('push 'fp) `('lea 'fp 'sp 0) `('sub 'sp 'sp frame))
-                          (cat <sp0
-                           (body + `(`('li 'r0 0)) + epi-a64)))))
+                       ((? (v6m? g) (\ ir (t16slots ir frame)) (\ ir ir))   ; v6m: fp-neg slots -> r4-positive (after a4ize)
+                        (a4ize
+                         (sibcall g
+                          (cat (? (v6m? g)   ; v6m: extra push r4 (bottom base), planted AFTER the sub; fp stays at top
+                                  `(`('label (intern <>f)) `('push 'lr) `('push 'fp) `('push 'r4)
+                                     `('lea 'fp 'sp 0) `('sub 'sp 'sp frame) `('lea 'r4 'sp 0))
+                                  `(`('label (intern <>f))
+                                     `('push 'lr) `('push 'fp) `('lea 'fp 'sp 0) `('sub 'sp 'sp frame)))
+                           (cat <sp0
+                            (body + `(`('li 'r0 0)) + (? (v6m? g) epi-t16 epi-a64)))))))
                        (deadst
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (addrfold
@@ -3959,7 +3992,7 @@
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ()) _ (pin t 'statics ())
             _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0)) _ (pin t 'cgitems cgitems)
             _ (pin t 'stag stbl) _ (pin t 'sigs sigs)
-            _ (pin t 'tgt tgt) _ (pin t 'epi (? (member? tgt '(arm64 thumb2)) epi-a64 epi))
+            _ (pin t 'tgt tgt) _ (pin t 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2)) epi-a64 epi))
             _ (pin t 'sects (? (two? xtra) <>>xtra (tablet 0))) t)
        ; pass 0: every function name -- so a bare use of one is its address (la).
        ; the sig table too: an mproto sibling (`double sin(..), cos(..);`) has a
