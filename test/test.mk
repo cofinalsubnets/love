@@ -583,7 +583,7 @@ moon-m4: host out/host$(hsuf)/mooncc
 .PHONY: test_holo
 test_holo: host
 	@echo "HOLO crew/holo/holotest.l"; \
-	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/text.l crew/holo/elf.l crew/holo/holotest.l | $m > out/host/.test_holo.out 2>&1; r=$$?; \
+	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/text.l crew/holo/elf.l crew/holo/holotest.l | $m > out/host/.test_holo.out 2>&1; r=$$?; \
 	  cat out/host/.test_holo.out; \
 	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_holo.out; } \
 	    || { echo "FAIL holo (exit $$r)"; exit 1; }

@@ -353,6 +353,67 @@
                         '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0)))))  ; adrp+add pair: x at +16, page delta 0, lo12 16
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
+   ;; -- the thumb2 backend (crew/holo/thumb2.l): the SAME neutral IR, a THIRD target -- ARMv7E-M
+   ;; (Cortex-M7, the Teensy 4.1 / Playdate device CPU). MIXED 16/32-bit little-endian; a 32-bit
+   ;; word lays hi-halfword-first (le16(hw1)++le16(hw2)). every golden was disassembled by
+   ;; `llvm-mc --disassemble --triple=thumbv7em-none-eabi` (mnemonics in the trailing comment); the
+   ;; branch-offset scrambling (S/J1/J2/I1/I2) was cross-checked over forward/backward spans across
+   ;; the imm11 boundary. --
+   t2tests `(
+      `("t2.li"      "40f20500"          '((li r0 5)))                 ; movw r0, #5
+      `("t2.movt"    "45f27861c1f23421"  '((li r1 305419896)))         ; 0x12345678: movw + movt
+      `("t2.li.neg"  "4ff6ff72cff6ff72"  '((li r2 -1)))                ; movw #0xffff ; movt #0xffff
+      `("t2.mov"     "4fea0300"          '((mov r0 r3)))               ; mov.w r0, r3
+      `("t2.add"     "01eb0200"          '((add r0 r1 r2)))            ; add.w r0, r1, r2
+      `("t2.sub"     "a5eb0604"          '((sub r4 r5 r6)))            ; sub.w r4, r5, r6
+      `("t2.and"     "01ea0200"          '((and r0 r1 r2)))            ; and.w r0, r1, r2
+      `("t2.or"      "41ea0200"          '((or  r0 r1 r2)))            ; orr.w r0, r1, r2
+      `("t2.xor"     "88ea0907"          '((xor r7 r8 r9)))            ; eor.w r7, r8, r9
+      `("t2.addi"    "01f26400"          '((add r0 r1 100)))           ; addw r0, r1, #100
+      `("t2.subi"    "a1f26400"          '((sub r0 r1 100)))           ; subw r0, r1, #100
+      `("t2.addneg"  "a1f20800"          '((add r0 r1 -8)))            ; negative imm flips add->subw
+      `("t2.cmp"     "b0eb010f"          '((cmp r0 r1)))               ; cmp.w r0, r1
+      `("t2.cmpi"    "b0f12a0f"          '((cmp r0 42)))               ; cmp.w r0, #42
+      `("t2.mul"     "01fb02f0"          '((imul r0 r1 r2)))           ; mul r0, r1, r2
+      `("t2.ldr"     "d1f80800"          '((ld r0 r1 8)))              ; ldr.w r0, [r1, #8]
+      `("t2.str"     "c1f80800"          '((st r1 8 r0)))              ; str.w r0, [r1, #8]
+      `("t2.ldr.neg" "51f8040c"          '((ld r0 r1 -4)))            ; ldr r0, [r1, #-4] (T4)
+      `("t2.ld1"     "91f90300"          '((ld1 r0 r1 3)))             ; ldrsb.w r0, [r1, #3]
+      `("t2.st1"     "81f80300"          '((st1 r1 3 r0)))             ; strb.w r0, [r1, #3]
+      `("t2.push"    "4df8044d"          '((push r4)))                 ; str r4, [sp, #-4]!
+      `("t2.pop"     "5df8044b"          '((pop r4)))                  ; ldr r4, [sp], #4
+      `("t2.neg"     "c0f10000"          '((neg r0)))                  ; rsb.w r0, r0, #0
+      `("t2.not"     "6fea0000"          '((not r0)))                  ; mvn.w r0, r0
+      `("t2.inc"     "00f20100"          '((inc r0)))                  ; addw r0, r0, #1
+      `("t2.dec"     "a0f20100"          '((dec r0)))                  ; subw r0, r0, #1
+      `("t2.shl"     "4feac000"          '((shl r0 3)))                ; lsl.w r0, r0, #3
+      `("t2.shr"     "4fead000"          '((shr r0 3)))                ; lsr.w r0, r0, #3
+      `("t2.sar"     "4feae000"          '((sar r0 3)))                ; asr.w r0, r0, #3
+      `("t2.shlv"    "00fa01f0"          '((shlv r0 r1)))              ; lsl.w r0, r0, r1 (count in r1)
+      `("t2.sdiv"    "91fbf2f0"          '((div r0 r1 r2)))            ; sdiv r0, r1, r2
+      `("t2.udiv"    "b1fbf2f0"          '((udiv r0 r1 r2)))           ; udiv r0, r1, r2
+      `("t2.test"    "10ea010f"          '((test r0 r1)))              ; tst.w r0, r1
+      `("t2.jmpr"    "1847"              '((jmpr r3)))                 ; bx r3
+      `("t2.callr"   "9847"              '((callr r3)))                ; blx r3
+      `("t2.ret"     "7047"              '((ret)))                     ; bx lr
+      `("t2.sys"     "00df"              '((sys)))                     ; svc #0
+      `("t2.nop"     "00bf"              '((nop)))                     ; nop
+      `("t2.set"     "40f2000008bf40f20100" '((set eq r0)))            ; movw r0,#0 ; it eq ; movweq r0,#1
+      ;; branches: T4 (jmp), T3 conditional (br), T1 (call). the pc-relative offset is a bitfield
+      ;; scrambled across S/J1/J2 -- the fixup lays the whole 32-bit word in `patch`.
+      `("t2.jmp.fwd" "00f001b800bf" '((jmp l) (nop) (label l)))        ; b.w  -> +2 (past the nop)
+      `("t2.jmp.bwd" "00bffff7fdbf" '((label l) (nop) (jmp l)))        ; b.w  -> -6 (back to l)
+      `("t2.br.fwd"  "00f0018000bf" '((br eq l) (nop) (label l)))      ; beq.w -> +2
+      `("t2.call.fwd" "00f001f800bf" '((call l) (nop) (label l)))      ; bl    -> +2
+      ;; a whole trivial leaf end to end: r0 = r0 + r1 ; return.
+      `("t2.leaf"    "00eb01007047" '((add r0 r0 r1) (ret)))           ; add.w r0,r0,r1 ; bx lr
+      ;; a counted loop (the small-loop battery): the forward beq reaches `done`, the backward bne
+      ;; reaches `top`, both fixed 32-bit T3 landing byte-exact on their labels.
+      `("t2.loop"    "01eb0000b0eb020f00f0068001f20101b1eb020f7ff4f6af7047"
+                      '((add r0 r1 r0) (label top) (cmp r0 r2) (br eq done)
+                        (add r1 r1 1) (cmp r1 r2) (br ne top) (label done) (ret))))
+   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb2 (at t 2))) 0 t2tests)
+
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln (+ "crew/holo/holotest: " (+ (show np) (+ " passed, " (+ (show nf) " failed\n")))))
