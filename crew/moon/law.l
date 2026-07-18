@@ -42,6 +42,16 @@
       (= (tn (caup (clex "\"a\\nb\"")) 0) (L 'str "a\nb" 1))
       (= (tn (caup (clex "\"ab\\\ncd\"")) 0) (L 'str "abcd" 1))   ; \<newline> inside a string SPLICES (the pair vanishes) -- tar's --help strings
       (! (clex "\"open"))                                    ; unterminated string refuses
+      ; wide/prefixed literals: L (wchar_t) / u / U / u8 -- we carry no distinct wide type,
+      ; so the prefix DROPS. a char value is identical; a wide string reads narrow.
+      (= (tn (caup (clex "L'a'")) 0) (L 'num 97 1))          ; L'a' == 'a'
+      (= (tn (caup (clex "u'B'")) 0) (L 'num 66 1))          ; u'B'
+      (= (tn (caup (clex "U'C'")) 0) (L 'num 67 1))          ; U'C'
+      (= (tn (caup (clex "L'\\n'")) 0) (L 'num 10 1))        ; an escape rides through the prefix
+      (= (tn (caup (clex "L\"hi\"")) 0) (L 'str "hi" 1))     ; a wide string reads narrow
+      (= (tn (caup (clex "u8\"hi\"")) 0) (L 'str "hi" 1))    ; u8 (two-char prefix)
+      (= (tn (caup (clex "Long")) 0) (L 'id "Long" 1))       ; an id STARTING with L/u/U is NOT a prefix (no quote follows)
+      (= (tally (caup (clex "L L'a'"))) 2)                   ; bare L stays an id; L'a' a number
       (! (clex "int @"))                                     ; not C: the lex error rides up
       (= (tally (caup (clex "abc"))) 3)                   ; form-feed + vertical-tab are WHITESPACE (GNU page breaks); real FF/VT bytes here
       (! (clex "a /* open"))                                 ; unterminated comment refused

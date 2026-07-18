@@ -24,6 +24,14 @@
        (hexv c) (? (dig? c) (c - 48) (&& (97 <= c) (c <= 102)) (c - 87) (c - 55))         ; a=10 A=10
        (suf? c) (|| (c = 117) (|| (c = 85) (|| (c = 108) (c = 76))))                      ; u U l L
        (skipsuf j) (? (&& (j < n) (suf? (src j))) (skipsuf (j + 1)) j)                    ; eat an int-literal suffix run
+       ; a WIDE/prefixed literal marker before ' or " : L (C89 wchar_t), u/U (C11 char16/32),
+       ; u8 (C11 UTF-8 string). we carry no distinct wide type, so the prefix just DROPS -- a
+       ; char value is identical, a wide string reads narrow. -> prefix length (1|2), else 0.
+       (wpfx i) (: c (src i)
+                   (? (! (|| (c = 76) (|| (c = 117) (c = 85)))) 0
+                      (: pl (? (&& (c = 117) (&& ((i + 1) < n) ((src (i + 1)) = 56))) 2 1)   ; u8 -> 2
+                         nc (? ((i + pl) < n) (src (i + pl)) 0)
+                         (? (|| (nc = 39) (nc = 34)) pl 0))))
        ; does the literal spanning [i, j) carry a u/U? an l/L? (neither is a hex
        ; digit, so the whole-span scan is safe for decimal and hex integers alike)
        (hasu? i j) (: (go k) (? (j <= k) () (|| ((src k) = 117) ((src k) = 85)) 1 (go (k + 1))) (go i))
@@ -179,6 +187,7 @@
                      j2 (? <>r <r (skipsuf <r))    ; an integer eats its u/U/l/L suffix
                      k (? <>r 'flo (ukind i j2 <>>r))
                      (go j2 line (link `(k <>>r line) acc)))
+                 (< 0 (wpfx i)) (go (+ i (wpfx i)) line acc)   ; drop a wide-literal prefix; the ' or " lexes as usual
                  (idh? c) (: (idr j) (? (&& (j < n) (idc? (src j))) (idr (j + 1)) j)
                              j (idr i)
                              t (snip src i j)

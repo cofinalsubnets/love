@@ -148,24 +148,23 @@ fold defects — separate commit.
 
 ## 3. the syntax ledger
 
-Sweep of 40 constructs, x64: **32 pass, 8 fail** (brace elision, pointer-to-array, and
-function-returning-function-pointer landed). Grouped by *why* each is missing.
+Sweep of 40 constructs, x64: **33 pass, 7 fail** — all of C89 now passes. Grouped by *why* each
+remaining one is missing.
 
-### C89 — should work; these are the real conformance bugs
+### C89 — all RESOLVED
 
-| construct | probe | failure |
+| construct | probe | status |
 |---|---|---|
 | ~~pointer to array~~ | `int (*p)[3] = &a;` | **RESOLVED** |
 | ~~function returning function pointer~~ | `int (*g(void))(void){ return f; }` | **RESOLVED** |
 | ~~brace elision in nested initialiser~~ | `int a[2][2] = { 1,2,3,4 };` | **RESOLVED** |
-| wide character constant | `L'a'` | parse error |
+| ~~wide character constant~~ | `L'a'` | **RESOLVED** |
 
-Function-returning-function-pointer landed alongside pointer-to-array — the same parenthesized
-declarator, but the name carries an inner `(params)` (`pdtor` now parses them, not `skipbal`,
-and carries them out as a third result element). At top level, a declarator whose type is
-`('fn ret)` is recognized as a function (definition or prototype) with return type `ret` and
-those inner params bound in the body. Only the wide character constant `L'a'` remains in C89 —
-a lexer gap, not a declarator one.
+Wide/prefixed literals landed in the lexer (`wpfx` in `lex.l`): `L` (wchar_t), `u`/`U`
+(char16/32), `u8` (UTF-8 string). mooncc carries no distinct wide type, so the prefix simply
+drops — a char constant's value is identical, a wide string reads narrow. An identifier that
+merely begins with `L`/`u`/`U` (no quote follows) is untouched. The whole C89 row is now clean;
+what remains below is C99/C11/GNU.
 
 Brace elision landed: the init tree is normalized up front (`unelide`/`normfill` in `gen.l`)
 so an elided flat run is wrapped in explicit `('init ..)` before layout — the existing
