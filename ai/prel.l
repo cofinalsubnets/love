@@ -28,6 +28,17 @@
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
    (names _ ) (keys book)
+   ; -- the scope-layer door (the abyss). PROVISIONAL names enter/use/leave -- `open`/`close` are
+   ;    already file I/O; gwen to christen. `enter` pushes a fresh empty layer as the head (in-scope
+   ;    binds land there, defglob writes the head); `use` splices a module's book in just BELOW the
+   ;    head (its names read by bare name, your writes stay in your layer); `leave` unwinds to the
+   ;    pre-enter chain and hands the built layer back -- the caller names it: (: holo (leave ())).
+   ;    the unwind chain rides a reserved CHARM key (31337) in the pushed layer: a charm can never
+   ;    collide with a name (names are noms), the same trick the macro table (book[nil]) uses.
+   ;    all take an operand (ai has no nullary fns -- fire with the unit: (enter ()) / (leave ())). --
+   (enter _)  (: F (tablet 0) _ (pin F 31337 (books ())) _ (setbook (link F (books ()))) ())
+   (use m)    (setbook (link (cap (books ())) (link m (cup (books ())))))
+   (leave _)  (: F (cap (books ())) up (peep F 31337 ()) _ (pull F 31337 0) _ (setbook up) F)
    (caap x) (cap (cap x)) (caup x) (cap (cup x))
    (cuap x) (cup (cap x)) (cuup x) (cup (cup x))
    (caaap x) (cap (cap (cap x))) (caaup x) (cap (cap (cup x)))
