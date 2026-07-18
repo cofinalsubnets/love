@@ -199,6 +199,12 @@
                    (t16 0x0011)                ; movs r1,r2  -> |rem|
                    (t16 0x4059) (t16 0x1AC9))))  ; eors r1,r1,r3 ; subs r1,r1,r3
 
+   ;; la (part 2): the literal-pool LOAD. v6-M has no MOVW/MOVT to build an address, so gen.l expands
+   ;; (la Rd lbl) into (align 4) (lapool Rd) (raw ((fix 4 abs32 lbl 0))) -- the pooled address word sits
+   ;; immediately after, 4-aligned by the align, so LDR Rd,[pc,#0] (Align(pc+4,4)=here+4) reaches it;
+   ;; then B #2 hops the 4-byte word. Rd must be low (LDR-literal T1 is 3-bit).
+   (t1-lapool d) (: _ (need-lo d 'lapool-hi) (catall `((t16 (| 0x4800 (<< (rn d) 8))) (t16 0xE001))))
+
    ;; set: d <- (cond) ? 1 : 0 without IT. MOVS d,#1 ; Bcond .after ; MOVS d,#0 ; .after: (skip is imm8=0).
    (t1-set cond d)
       (: cc (ccn cond) _ (need-lo d 'set-hi)
@@ -278,6 +284,7 @@
             (= op 'rem)   (t1-rem   (at ins 1) (at ins 2) (at ins 3) (at ins 4))
             (= op 'udiv)  (t1-udiv  (at ins 1) (at ins 2) (at ins 3))
             (= op 'urem)  (t1-urem  (at ins 1) (at ins 2) (at ins 3) (at ins 4))
+            (= op 'lapool) (t1-lapool (at ins 1))
             (= op 'raw)   (at ins 1)                           ; splice pre-encoded bytes verbatim
             (= op 'ret)   (t16 0x4770)                         ; BX lr
             (= op 'sys)   (t16 0xDF00)                         ; SVC #0
@@ -305,6 +312,8 @@
                hw1 (| 0xF000 (| (<< s 10) imm10))
                hw2 (| 0xD000 (| (<< j1 13) (| (<< j2 11) imm11)))
                (t32 (| (<< hw1 16) hw2)))
+            (= kind 'abs32)                                 ; a pooled 32-bit ABSOLUTE address (la's word)
+            (le32 (+ target aux))                           ; internal resolve only; a .o leaves it an R_ARM_ABS32
             (scare 'badfix kind)))
 
    t1 (tablet 0)

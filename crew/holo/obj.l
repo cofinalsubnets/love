@@ -66,6 +66,11 @@
                                ((rev fill) + bacc) (>< `(off k lbl (fix-a x) (? (two? bacc) (cap bacc) 0)) racc)))))
              (o-walk be >items labels wkset internal? rset (off + 1) (>< x bacc) racc))))
    (o-zeros n) (? (n < 1) () (>< 0 (o-zeros (n - 1))))
+   ; splice a 4-byte little-endian value into a byte list at OFF (the ARM REL in-place addend: a
+   ; pooled abs32 field carries S's section offset there, since REL has no addend column).
+   (o-take l n) (? (! (two? l)) () (n < 1) () (>< <l (o-take >l (n - 1))))
+   (o-drop l n) (? (n < 1) l (! (two? l)) l (o-drop >l (n - 1)))
+   (o-put32 bytes off val) (catall `((o-take bytes off) (le32 val) (o-drop bytes (off + 4))))
 
    ; the externals: labels referenced by a relocation but defined in NO
    ; section -- each needs an UNDEF symbol. unique, first-seen order.
@@ -102,6 +107,7 @@
    arm32-targets '(thumb1 thumb2 cortex-m0 cortex-m7 arm)
    (arm32? t) (member? t arm32-targets)
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
+   r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
    ; a 16-byte ELF32 symbol entry (name value size info other shndx) and an 8-byte REL entry.
    (o-sym32 nameoff bind typ shndx value)
     (catall `((le32 nameoff) (le32 value) (le32 0) `((| (<< bind 4) typ) 0) (le16 shndx)))
@@ -124,10 +130,10 @@
        tw (o-walk be <tp tlabels wkset 1 rset 0 () ())
        dw (o-walk be <dp dlabels wkset 0 rset 0 () ())
        nw (o-walk be <np nlabels wkset 0 rset 0 () ())
-       tbytes <tw trel <>tw
+       tbytes0 <tw trel <>tw
        dbytes <dw drel <>dw
        nbytes <nw nrel <>nw
-       _ (? (|| (two? drel) (two? nrel))            ; a data/nif pointer wants abs32 -- needs the literal-pool la first
+       _ (? (|| (two? drel) (two? nrel))            ; a DATA-section pointer wants abs32 (la's word rides .text) -- unsupported
              (scare 'obj32-data-reloc-unsupported target) 0)
        exts (o-exts (trel + drel + nrel) tlabels dlabels nlabels)
        nfun (tally funcnames) nglob (tally globnames)
@@ -136,6 +142,24 @@
                   (go exts 0))
        fnidx (: t (tablet 0) (go fs i) (? (! (two? fs)) t (: _ (pin t (intern <fs) (fstart + i)) (go >fs (i + 1))))
                 (go funcnames 0))
+       globidx (: t (tablet 0) (go gs i) (? (! (two? gs)) t (: _ (pin t (intern <gs) (gstart + i)) (go >gs (i + 1))))
+                  (go globnames 0))
+       ; an abs32 pool target -> (symidx field). a defined global / a function address binds its OWN
+       ; symbol (addend rides the field, usually 0); a .data/ai_nifs static or string binds the SECTION
+       ; symbol with its offset in the field (REL has no addend column); anything else is external.
+       (a32loc lbl aux)
+        (? (o-has? globidx lbl) `((peep globidx lbl 0) aux)
+           (o-has? fnidx lbl)   `((peep fnidx lbl 0) aux)
+           (o-has? dlabels lbl) `(2 ((peep dlabels lbl 0) + aux))
+           (o-has? nlabels lbl) `(3 ((peep nlabels lbl 0) + aux))
+           `((peep extidx lbl 0) aux))
+       ; bake each abs32 field into .text (its addend, incl. a section-relative offset) before emitting.
+       tbytes (: (go rs bs) (? (! (two? rs)) bs
+                                (: r <rs
+                                   (go >rs (? (id? <>r 'abs32)
+                                              (: sl (a32loc <>>r <>>>r) (o-put32 bs <r <>sl))
+                                              bs))))
+                 (go trel tbytes0))
        symnames (funcnames + globnames + (map (\ s (string s)) exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
@@ -167,10 +191,12 @@
        ; -- .rel.text: R_ARM_THM_CALL for each external/weak `bl` (internal ones resolved in place). --
        reltext (: (go rs acc)
                    (? (! (two? rs)) (catall (rev acc))
-                      (: r <rs off <r k <>r lbl <>>r
+                      (: r <rs off <r k <>r lbl <>>r aux <>>>r
                          (? (id? k 'bl)
                              (: sym (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
                                 (go >rs (>< (o-rel32 off sym r-thm-call) acc)))
+                            (id? k 'abs32)
+                             (: sl (a32loc lbl aux) (go >rs (>< (o-rel32 off <sl r-arm-abs32) acc)))
                             (scare 'obj32-text-reloc k))))
                   (go trel ()))
        ntrel (tally trel)

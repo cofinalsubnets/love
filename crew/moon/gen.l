@@ -1665,6 +1665,17 @@
           bp (? (two? f) (peep a4base <f -1) -1)
           (link (? (&& (bp >= 0) (&& (id? (elg f bp) 'fp) ((elg f (bp + 1)) < 0))) (t16reb f 0 bp fr) f)
                 (t16slots >fs fr))))
+   ; v6m has no MOVW/MOVT to build an address, so an (la Rd lbl) becomes a literal-pool load: align to
+   ; a word, LDR Rd,[pc,#0], hop the pooled abs32 word (the backend's lapool), and lay the word as an
+   ; R_ARM_ABS32 the linker fills. runs LAST (after a4ize + t16slots), v6m only; other targets keep `la`
+   ; (rip-rel lea / adrp). the align keeps the word 4-aligned so LDR's #0 offset always reaches it.
+   (t16la fs)
+    (? (! (two? fs)) ()
+       (: f <fs
+          ((? (&& (two? f) (id? <f 'la))
+              `(`('align 4) `('lapool <>f) `('raw `(`('fix 4 'abs32 <>>f 0))))
+              `(f))
+           + (t16la >fs))))
 
    ; -- the SIBCALL pass (stage 8): a RET-position call tail-JUMPS instead, so
    ; deep tail recursion runs flat and the lvm shape Continues by jmp at
@@ -3768,7 +3779,7 @@
                        ; forms already say fp/sp/lr and pass through a4ize
                        ; untouched). lr rides its own push cell (bl clobbers
                        ; it); no r3 slot -- x3/r3 is caller-saved under AAPCS.
-                       ((? (v6m? g) (\ ir (t16slots ir frame)) (\ ir ir))   ; v6m: fp-neg slots -> r4-positive (after a4ize)
+                       ((? (v6m? g) (\ ir (t16la (t16slots ir frame))) (\ ir ir))   ; v6m: fp-neg slots -> r4-positive (after a4ize), then la -> literal pool
                         (a4ize
                          (sibcall g
                           (cat (? (v6m? g)   ; v6m: extra push r4 (bottom base), planted AFTER the sub; fp stays at top
