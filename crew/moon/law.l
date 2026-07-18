@@ -358,7 +358,28 @@
       (two? (cgn "int main() { _Static_assert(sizeof(int) == 4, \"w\"); return 0; }"))
       (two? (cgn "_Static_assert(1 + 2 * 3 == 7, \"folds\"); int main() { return 0; }"))
       (! (cgn "int main() { _Static_assert(sizeof(int) == 5, \"bad\"); return 0; }"))
-      (! (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))))
+      (! (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))
+      ; cfold: ?: folds the SELECTED arm (both directions); &&/|| fold != 0 (a negative is true).
+      (= (cast "int g = 1?2:3; int main() { return 0; }")
+         '(prog ((gdecl (("g" int (num 2)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "int g = 0?2:3; int main() { return 0; }")
+         '(prog ((gdecl (("g" int (num 3)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "int g = -1 && 1; int main() { return 0; }")
+         '(prog ((gdecl (("g" int (num 1)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "int g = 0 && 5; int main() { return 0; }")
+         '(prog ((gdecl (("g" int (num 0)))) (fn "main" () (blk ((ret (num 0))))))))
+      (= (cast "int g = 0 || 5; int main() { return 0; }")
+         '(prog ((gdecl (("g" int (num 1)))) (fn "main" () (blk ((ret (num 0))))))))
+      ; the dead ternary arm need not be constant (or defined): 1 ? 1 : 1/0 is a valid const expr
+      (two? (cgn "_Static_assert(1 ? 1 : 1/0, \"dead div0 unevaluated\"); int main() { return 0; }"))
+      ; false-folding asserts now FIRE (were silently let by -- the whole point of the fix)
+      (! (cgn "_Static_assert(1 ? 0 : 0, \"fires\"); int main() { return 0; }"))
+      (! (cgn "_Static_assert(1 && 0, \"fires\"); int main() { return 0; }"))
+      (! (cgn "_Static_assert(0 || 0, \"fires\"); int main() { return 0; }"))
+      ; a negative && is TRUE (would fire under the old (0 < a) truthiness) -- must NOT fire
+      (two? (cgn "_Static_assert(-1 && 1, \"negative true\"); int main() { return 0; }"))
+      ; a GENUINELY non-constant assert is still let by (cfold partial by design, policy unchanged)
+      (two? (cgn "int nc; _Static_assert(nc, \"let by\"); int main() { return 0; }"))))
 
 ; --- the `float` scalar + the compound literal (stage 6d). float is 4 bytes in
 ; memory but shares the double register lane (a load widens, a store narrows);

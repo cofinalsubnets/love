@@ -690,10 +690,18 @@
                   r (& v ((<< 1 w) - 1))
                   (? (r < (<< 1 (w - 1))) r (r - (<< 1 w))))
               v))                                   ; word-sized: the pattern is the value
-       (<e = 'land) (: a (cfold <>>e) b (cfold <>>>e)
-                            (? (|| (! (cint? a)) (! (cint? b))) () (? (&& (0 < a) (0 < b)) 1 0)))
-       (<e = 'lor) (: a (cfold <>>e) b (cfold <>>>e)
-                           (? (|| (! (cint? a)) (! (cint? b))) () (? (|| (0 < a) (0 < b)) 1 0)))
+       ; land/lor are 3-element ('land l r), so l=<>e r=<>>e (NOT the 4-element bin accessors);
+       ; truthiness is != 0, not > 0 -- a negative operand is true in C (-1 && 1 == 1).
+       (<e = 'land) (: a (cfold <>e) b (cfold <>>e)
+                            (? (|| (! (cint? a)) (! (cint? b))) () (? (&& (! (a = 0)) (! (b = 0))) 1 0)))
+       (<e = 'lor) (: a (cfold <>e) b (cfold <>>e)
+                           (? (|| (! (cint? a)) (! (cint? b))) () (? (|| (! (a = 0)) (! (b = 0))) 1 0)))
+       ; ternary ('cond c a b): fold only the SELECTED arm (C11 6.6) -- the dead arm need not be
+       ; constant (or even defined: 1 ? 0 : 1/0 is a valid constant expression).
+       (<e = 'cond) (: c (cfold <>e)
+                            (? (! (cint? c)) ()
+                               (: v (? (c = 0) (cfold <>>>e) (cfold <>>e))
+                                  (? (cint? v) v ()))))
        ())
    ; _Static_assert ( const-expr , "message" ) ;  -> (('tdef) rest) | () -- an
    ; assertion that FOLDS to false fails the compile; a non-constant one is let by.
