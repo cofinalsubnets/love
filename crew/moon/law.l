@@ -163,12 +163,12 @@
       ; a frame-escaping fn keeps the plain call (the address outlives the frame)
       (member? '(call g) (caup (cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }")))
       (! (cgn "int f() { return 1; }"))                      ; no main, no program
-      (! (cgn "int main() { return y; }"))                   ; undeclared name
+      (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a NAMED refusal now (rung 1, doc/moon-diag.md)
       (! (cgn "int main() { return 5=3; }"))                 ; not an lvalue
       (! (cgn "int main() { break; }"))                      ; no loop to leave
       (two? (cgn "int main() { int a=1; int b=2; return a<<b; }"))  ; variable shifts ride shlv now
       (two? (cgn "int f(int a) { return a; } int main() { return f(1); }"))
-      (! (cgn "int main() { return f(1,2,3,4,5,6,7); }"))          ; an unknown callee still refuses (f undeclared) ...
+      (gripe? (cgn "int main() { return f(1,2,3,4,5,6,7); }"))     ; an unknown callee still refuses, now naming it (f undeclared) ...
       (two? (cgn "int f(int a,int b,int c,int d,int e,int x,int y) { return y; } int main() { return f(1,2,3,4,5,6,7); }"))   ; ... but args 7+ ride the caller stack now, both sides
       (two? (cgn "int g; int main() { int *p = &g; *p = 3; return g; }"))
       (! (cgn "int main() { int *p; int *q; return (long)(p+q); }"))   ; ptr+ptr refused
@@ -458,7 +458,7 @@
       (member? '(label g) (el ob 2))                        ; a global label lives in DATA
       (! (member? '(call main) (el ob 1)))                  ; NO _start/crt0 in an object (the linker's crt calls main)
       (two? (cob "int only(int x) { return x + 1; }"))      ; a LIBRARY TU (no main) still emits an object
-      (! (cob "int main() { return nope; }"))))             ; a codegen error still refuses
+      (gripe? (cob "int main() { return nope; }"))))        ; an undeclared name refuses, now naming it (rung 1)
 
 ; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
 ; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.

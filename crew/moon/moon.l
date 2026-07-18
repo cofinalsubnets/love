@@ -54,6 +54,18 @@
                 (|| (s = "thumb1") (s = "cortex-m0")) 'thumb1   ; ARMv6-M (RP2040 / Cortex-M0+)
                 (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb1)")))
    (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (member? tgt '(thumb2 thumb1)) "__arm__" "__x86_64__")
+   ; the diagnostic driver (doc/moon-diag.md): a stage answered a gripe (a cause
+   ; it named itself) or a bare bad. a gripe prints "cc: <file>:<line>:<col>: msg"
+   ; -- an unknown file takes the source path, an unknown line/col elides; anything
+   ; else falls back to <plain>, so a not-yet-converted stage keeps today's line.
+   ; either way a fatal exit 1.
+   (ccdie val src plain)
+    (? (gripe? val)
+       (: file (: f (el val 1) (? f f src))
+          ln (el val 2) col (el val 3) msg (el val 4)
+          loc (file + (? ln (":" + (show ln)) "") + (? col (":" + (show col)) ""))
+          (udie 1 ("cc: " + loc + ": " + msg)))
+       (udie 1 plain))
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag
    ; sigs ..) | a fatal exit. the -D lines PREPEND to the source text before the
    ; one lex, so the line numbering stays whole (tokens carry lines and a define
@@ -65,11 +77,11 @@
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clex ((deftext ds9) + <>r))
-       _ (? (two? lx) () (udie 1 ("cc: lex error in " + src)))
+       _ (? (okv? lx) () (ccdie lx src ("cc: lex error in " + src)))
        pp (cpp <>lx (\ name sys? (incload is (cdir src) name sys?)) src)
-       _ (? (two? pp) () (udie 1 ("cc: preprocessor error in " + src)))
+       _ (? (okv? pp) () (ccdie pp src ("cc: preprocessor error in " + src)))
        ps (cparse-t <>pp tgt)                 ; thread the target so parse sizes pointers/longs at the ABI width
-       _ (? (two? ps) () (udie 1 ("cc: parse error in " + src)))
+       _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
        ps)
    ; the parser's static/section trio, threaded to the gen as one list
    (pxtra ps) `((el ps 5) (el ps 6) (el ps 7))
@@ -77,7 +89,7 @@
    (cc-exe src dst is ds tgt)
     (: ps (cc-parse src is ds tgt)
        ir (cgen <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
-       _ (? (two? ir) () (udie 1 ("cc: codegen error in " + src)))
+       _ (? (okv? ir) () (ccdie ir src ("cc: codegen error in " + src)))
        res (elf64 tgt (\ _ <>ir) ())
        _ (write-bytes dst (peep res 'bytes 0))
        (chmod dst 493))
@@ -87,7 +99,7 @@
    (cc-objbytes src is ds tgt)
     (: ps (cc-parse src is ds tgt)
        ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
-       _ (? (two? ob) () (udie 1 ("cc: codegen error in " + src)))
+       _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
        (objelf tgt (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5)))
    (cc-obj src dst is ds tgt) (write-bytes dst (cc-objbytes src is ds tgt))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object

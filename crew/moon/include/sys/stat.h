@@ -90,6 +90,7 @@ int chmod(char const*, unsigned int);
 int fchmod(int, unsigned int);
 unsigned int umask(unsigned int);
 int utimensat(int, char const*, struct timespec const*, int);
+int futimens(int, struct timespec const*);
 int mkfifo(char const*, unsigned int);
 int mknod(char const*, unsigned int, unsigned long);
 #endif

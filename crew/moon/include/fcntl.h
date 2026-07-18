@@ -22,10 +22,12 @@
 #define O_BINARY         0    /* no text/binary distinction on Linux (a DOS-ism; 0 = no-op) */
 #define O_TEXT           0
 #define AT_FDCWD      (-100)
+#define F_DUPFD          0
 #define F_GETFD          1
 #define F_SETFD          2
 #define F_GETFL          3
 #define F_SETFL          4
+#define F_DUPFD_CLOEXEC 1030   /* F_LINUX_SPECIFIC_BASE (1024) + 6 */
 #define FD_CLOEXEC       1
 int open(char const*, int, ...);
 int openat(int, char const*, int, ...);

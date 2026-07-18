@@ -3,11 +3,15 @@
 #ifndef NULL
 #define NULL ((void*)0)
 #endif
+#define EXIT_SUCCESS 0
+#define EXIT_FAILURE 1
 typedef unsigned long size_t;
 void *malloc(size_t);
 void *calloc(size_t, size_t);
 void *realloc(void*, size_t);
+void *reallocarray(void*, size_t, size_t);
 void  free(void*);
+const char *getprogname(void);   /* glibc >= 2.33 home (gnulib also reaches unistd.h for it) */
 void  exit(int);
 void  abort(void);
 int   atexit(void (*)(void));

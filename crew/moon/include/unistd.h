@@ -8,6 +8,7 @@ int close(int);
 long lseek(int, long, int);
 int open(char const*, int, ...);   /* fcntl.h's shape, repeated for the lone-include habit */
 long sysconf(int);
+const char *getprogname(void);   /* mirrors stdlib.h; gnulib's progname reaches either */
 #define _SC_PAGESIZE 30
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1

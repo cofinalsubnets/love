@@ -36,6 +36,14 @@
    (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
    (nthty l i) (? (! (two? l)) () (i < 1) <l (nthty >l (i - 1)))   ; the i-th list element or ()
    (bad? x) (id? x 'bad)
+   ; a diagnostic carrier (doc/moon-diag.md): a stage may answer this instead of
+   ; a bare bad, naming its own cause -- file/line/col (any () when unknown) and a
+   ; message. gripe? guards it; the driver (moon.l ccdie) formats it, else falls
+   ; back to today's generic line so unconverted stages don't regress. a gripe IS
+   ; a chain, so okv? -- a real stage result -- excludes it explicitly.
+   (gripe file line col msg) `('gripe file line col msg)
+   (gripe? x) (&& (two? x) (id? (cap x) 'gripe))
+   (okv? x) (&& (two? x) (! (gripe? x)))
    ; -- the value tuple (the operand allocator's phase 0): every expression
    ; answers (ty reg forms) -- its type, the REGISTER holding the value, and
    ; the forms that compute it. reg is r0 on every lane until the allocator
@@ -738,7 +746,8 @@
            (: en (vent g env <>e)
               (? (bad? en)
                   (? (peep (g 'fns) <>e ())     ; a function name is its address
-                     (mkv `('ptr (fnty g <>e)) 'r0 `(`('la 'r0 (intern <>e)))) 'bad)
+                     (mkv `('ptr (fnty g <>e)) 'r0 `(`('la 'r0 (intern <>e))))
+                     (: _ (pin g 'undecl <>e) 'bad))   ; undeclared: name it for the gripe (rung 1); an undeclared CALL funnels here too (call-fixed evaluates its head)
                  (<en = 'regv) (mkv <>>en <>en ())   ; a homed param IS its register: zero forms, borrowed (read-only)
                  (: ty <>>en
                     ap? (peep g 'argpos ())
@@ -4090,8 +4099,12 @@
            (: dat (cgdata g) (? (bad? dat) () `(g (rev acc) dat saw)))
            (: f <fs
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
-                 (: r (cgfn g f)
-                    (? (bad? r) (: _ (puts (+ ";; cgfn refuses " (<>f + "\n"))) ())
+                 (: _ (pin g 'undecl ())               ; fresh per fn: the pin the refusal reads names THIS fn's cause
+                    r (cgfn g f)
+                    (? (bad? r)
+                       (: u (peep g 'undecl ())         ; rung 1: an undeclared id was named -> a gripe carrying it + the enclosing fn
+                          (? u (gripe () () () ("undeclared '" + u + "' (in " + <>f + ")"))
+                             (: _ (puts (+ ";; cgfn refuses " (<>f + "\n"))) ())))   ; cause unknown: today's note + a bare bad
                        ; fn-start alignment to EVEN (2): a function's address can
                        ; ride into the heap as an object's ap (the lvm_* dispatch
                        ; kind), and the ai image codec's pointer/fixnum discriminator
@@ -4111,7 +4124,8 @@
                `(`('call 'main) `('li 'r8 93) `('sys))            ; x0 already the exit code; x8 = __NR_exit (93), svc
                `(`('call 'main) `('mov 'r6 'r0) `('li 'r0 60) `('sys)))
        r (cgen-core ast stbl sigs weaks xtra tgt)
-       (? (! (two? r)) ()
+       (? (gripe? r) r                               ; a named cause rides out to the driver (a gripe is a chain, so guard before two?)
+          (! (two? r)) ()
           (! (nthr r 3)) ()                          ; no main -> no program (the exe has nothing to start)
           (: dat <>>r                           ; (dataforms nifforms): the exe resolves labels itself,
              `(1 (crt0 + <>r + <dat + <>dat)))))   ; so the nif stream just rides along
@@ -4123,7 +4137,8 @@
    ; cross-section refs) into a symbol table + relocations.
    (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
-       (? (! (two? r)) ()
+       (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
+          (! (two? r)) ()
           (: sfns (? (two? xtra) <xtra (tablet 0))
              svars (? (two? xtra) <>xtra (tablet 0))
              sects (? (two? xtra) <>>xtra (tablet 0))

@@ -9,6 +9,8 @@ void *memmove(void*, void const*, size_t);
 void *memset(void*, int, size_t);
 int   memcmp(void const*, void const*, size_t);
 void *memchr(void const*, int, size_t);
+void *mempcpy(void*, void const*, size_t);      /* GNU extension: memcpy returning the END */
+void *rawmemchr(void const*, int);              /* GNU extension: memchr with no length bound */
 size_t strlen(char const*);
 int   strcmp(char const*, char const*);
 int   strncmp(char const*, char const*, size_t);
