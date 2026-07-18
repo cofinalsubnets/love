@@ -1,4 +1,4 @@
-; crew/moon/fmt.l -- moonfmt, the C reindenter (v2). shares NOTHING with the
+; crew/moon/fmt.l -- moonfmt, the C reindenter (v3). shares NOTHING with the
 ; parser/codegen: it reads text and writes text, a pure line-preserving pass.
 ; the house C style is the .l style ported to C -- 1-space indent, cuddled close
 ; braces, one-liners where they fit, hand-aligned tables -- so it REINDENTS
@@ -8,9 +8,11 @@
 ; ADDITIVELY -- it INSERTS a space around a glued operator but never DELETES one,
 ; so already-spaced code and hand alignment are untouched. binary +/-/& use the
 ; value-prev heuristic (reliable in C) with a keyword guard (`return -1` stays);
-; `*` is spaced only after ) ] or a digit (unambiguous multiply) -- an id-adjacent
-; `*` is left alone, since `word *p` (pointer) and `a * b` (multiply) are
-; indistinguishable without the typedef set (the v3 hook). cfmt : text -> text.
+; `*` is spaced only after ] or a digit (unambiguous multiply). v3 harvests a local
+; TYPE-NAME set (typedefs + struct/union/enum tags, no cpp) so a known type before a
+; glued `*` normalizes as a pointer declarator (`word*p` -> `word *p`); an unknown or
+; id-adjacent `*` is still left alone (positive knowledge only, never a wrong space).
+; cfmt : text -> text.
 (:
    iw 1                                                             ; indent WIDTH -- spaces per brace level (the one house knob)
    ; --- little string tools ---
@@ -63,10 +65,49 @@
                                     (c = 39) (w (i + 1) 'chr)
                                     (w (i + 1) 'code))))
                   (w 0 'code))
+   ; --- v3: harvest a best-effort C TYPE-NAME set from the source (no cpp, no parse):
+   ; the names DECLARED by `typedef .. NAME ;` (comma lists and `} NAME;` too) plus the
+   ; TAGS after struct/union/enum. it feeds the `*` decision so a KNOWN type before a
+   ; glued star reads as a pointer declarator (`word*p` -> `word *p`). a name it misses
+   ; (a macro typedef like _lvm(lvm_t), or a system-header type) just stays as v2 left
+   ; it -- positive knowledge only, so it never introduces a wrong space. ---
+   (typekw? w) (|| (w = "struct") (|| (w = "union") (w = "enum")))
+   (harvest src)
+    (: n (tally src)
+       ; resolve the identifier `wd` that just ended at terminator `c`: update td/tag/set
+       (add wd td bd pd tag c set)
+        (? (wd = "typedef") set                                    ; (td flip handled by caller)
+           (typekw? wd) set                                        ; (tag flip handled by caller)
+           tag (link wd set)                                       ; the id after struct/union/enum -- a tag
+           (&& td (&& (bd = 0) (&& (pd = 0) (member? c '(44 59 91))))) (link wd set)   ; a declared name (before , ; or [)
+           set)
+       (w i st td bd pd tag wd set)
+        (? (n <= i) set
+           (: c (src i)
+              (? (id? st 'blk) (? (&& ((i + 1) < n) (&& (c = 42) ((src (i + 1)) = 47))) (w (i + 2) 'code td bd pd tag "" set) (w (i + 1) 'blk td bd pd tag "" set))
+                 (id? st 'lin) (? (c = 10) (w (i + 1) 'code td bd pd tag "" set) (w (i + 1) 'lin td bd pd tag "" set))
+                 (id? st 'str) (? (c = 92) (w (i + 2) 'str td bd pd tag "" set) (c = 34) (w (i + 1) 'code td bd pd tag "" set) (w (i + 1) 'str td bd pd tag "" set))
+                 (id? st 'chr) (? (c = 92) (w (i + 2) 'chr td bd pd tag "" set) (c = 39) (w (i + 1) 'code td bd pd tag "" set) (w (i + 1) 'chr td bd pd tag "" set))
+                 (idc? c) (w (i + 1) 'code td bd pd tag (wd + (string c)) set)   ; grow the identifier
+                 ; a non-id char: resolve the just-ended identifier, then act on c
+                 (: set2 (? (0 < (tally wd)) (add wd td bd pd tag c set) set)
+                    td2 (? (wd = "typedef") 1 (&& td (! (&& (c = 59) (&& (bd = 0) (pd = 0))))))   ; typedef opens; a depth-0 ; closes
+                    tg2 (? (typekw? wd) 1 (&& tag (0 = (tally wd))))            ; struct/union/enum arms the next id; else consumed unless wd was empty (whitespace)
+                    (? (&& (c = 47) (&& ((i + 1) < n) ((src (i + 1)) = 47))) (w (i + 2) 'lin td2 bd pd 0 "" set2)   ; //
+                       (&& (c = 47) (&& ((i + 1) < n) ((src (i + 1)) = 42))) (w (i + 2) 'blk td2 bd pd 0 "" set2)   ; /*
+                       (c = 34) (w (i + 1) 'str td2 bd pd 0 "" set2)
+                       (c = 39) (w (i + 1) 'chr td2 bd pd 0 "" set2)
+                       (c = 123) (w (i + 1) 'code td2 (bd + 1) pd 0 "" set2)    ; { -- also clears any armed tag (anon struct)
+                       (c = 125) (w (i + 1) 'code td2 (mx 0 (bd - 1)) pd 0 "" set2)
+                       (c = 40) (w (i + 1) 'code td2 bd (pd + 1) tg2 "" set2)
+                       (c = 41) (w (i + 1) 'code td2 bd (mx 0 (pd - 1)) tg2 "" set2)
+                       (ws? c) (w (i + 1) 'code td2 bd pd tg2 "" set2)          ; whitespace keeps an armed tag alive
+                       (w (i + 1) 'code td2 bd pd tg2 "" set2))))))
+       (w 0 'code () 0 0 () "" ()))
    ; the walk. word = the identifier being built; pw = the last COMPLETED identifier
    ; (the token just left of an operator); lo = last out char (for space-dedup); pv =
    ; last significant (non-space) char (for the binary/unary decision).
-   (respace s)
+   (respace s tset)
     (: n (tally s)
        (w i st word pw lo pv out)
         (? (n <= i) out
@@ -109,12 +150,14 @@
                                  (: nxt (? ((i + 1) < n) (s (i + 1)) 0)
                                     (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 c) c (out + (binsp (string c) lo nxt))))
                                  (w (i + 1) 'code "" pw2 c c (out + (string c))))   ; unary / exponent sign: copy glued
-                             (c = 42)                                            ; * : SAFE subset -- binary only after ] or a digit
-                              (? (|| (pv = 93) (dig? pv))                        ;   (id- or )-adjacent * is left alone: a cast-deref
-                                                                                 ;   `(T*) *p` or a typedef `a*b` needs the type set)
-                                 (: nxt (? ((i + 1) < n) (s (i + 1)) 0)
-                                    (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 42) 42 (out + (binsp "*" lo nxt))))
-                                 (w (i + 1) 'code "" pw2 c c (out + (string c))))
+                             (c = 42)                                            ; * : declarator (known type) | multiply (] / digit) | leave
+                              (? (&& (&& (idc? pv) (member? pw2 tset))           ; a KNOWN type, and a NAME follows -> pointer declarator:
+                                     (&& ((i + 1) < n) (idc? (s (i + 1)))))      ;   space before, glue to the name (`word*p` -> `word *p`).
+                                  (w (i + 1) 'code "" pw2 42 42 (out + (? (|| (lo = 32) (lo = 0)) "" " ") + "*"))   ;   an ABSTRACT `type*` (no name: * before , ) [ *) is left alone
+                                 (|| (pv = 93) (dig? pv))                        ; after ] or a digit -> multiply
+                                  (: nxt (? ((i + 1) < n) (s (i + 1)) 0)
+                                     (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 42) 42 (out + (binsp "*" lo nxt))))
+                                 (w (i + 1) 'code "" pw2 c c (out + (string c))))   ; else leave glued (unknown id / deref)
                              (w (i + 1) 'code "" pw2 c c (out + (string c))))))))))   ; ) ] [ { } ~ ! ? : . # : copy verbatim
        (w 0 'code "" "" 0 0 ""))
 
@@ -159,6 +202,7 @@
    ; ride through verbatim. ---
    (cfmt src)
     (: lines (linesof src)
+       tset (harvest src)                                         ; the file's type-name set (v3), threaded to respace
        (g ls out bd pd inb inc bnd)
         (? (! (two? ls)) (unlines (rev out))
            (: raw <ls  rest >ls  t (rtrim raw)
@@ -177,7 +221,7 @@
                        (: r (scanline c ())
                           re? (&& (pd = 0) bnd)                         ; reindent this line?
                           fc (? ((c 0) = 125) 1 0)                      ; leading } dedents
-                          body (? (&& re? (! (hascmt? c))) (respace c) c)   ; respace only reindented, comment-free lines
+                          body (? (&& re? (! (hascmt? c))) (respace c tset) c)   ; respace only reindented, comment-free lines
                           line (? re? ((spaces (iw * (mx 0 (bd - fc)))) + body) t)
                           (g rest (link line out) (bd + <r) (mx 0 (pd + <>r)) <>>>r (endsl t)
                              (? (<>>r = 0) bnd (bnd? <>>r)))))))))
