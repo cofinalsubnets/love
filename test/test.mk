@@ -605,15 +605,19 @@ test_thumb1: host out/host$(hsuf)/mooncc
 	   echo "test_thumb1: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; fi; \
 	  d=$(ho)/thumb1; mkdir -p $$d; \
 	  { printf 'int acc = 40;\n'; \
+	    printf 'int arr[4];\n'; \
 	    printf 'struct S { int *p; int x; };\n'; \
 	    printf 'int addto(int x){ acc = acc + x; return acc; }\n'; \
 	    printf 'int divmod(int a,int b){ return a/b + a%%b; }\n'; \
-	    printf 'int sx(struct S *s){ return s->x; }\n'; } > $$d/lib.c; \
+	    printf 'int sx(struct S *s){ return s->x; }\n'; \
+	    printf 'int aset(int i,int v){ arr[i] = v; return 0; }\n'; \
+	    printf 'int aget(int i){ return arr[i]; }\n'; } > $$d/lib.c; \
 	  $(ho)/mooncc -t thumb1 -c $$d/lib.c  $$d/lib.o  || { echo "FAIL mooncc -t thumb1 -c lib"; exit 1; }; \
 	  { echo 'struct S { int *p; int x; };'; \
-	    echo 'int addto(int); int divmod(int,int); int sx(struct S*);'; \
+	    echo 'int addto(int); int divmod(int,int); int sx(struct S*); int aset(int,int); int aget(int);'; \
 	    echo 'int run(void){ int t = 0; struct S s; s.p = &t; s.x = 30;'; \
-	    echo '  int dd = divmod(-17,5); addto(50); return addto(dd) + sx(&s); }'; } > $$d/harness.c; \
+	    echo '  int dd = divmod(-17,5); addto(50); aset(3, 12);'; \
+	    echo '  return addto(dd) + sx(&s) + aget(3); }'; } > $$d/harness.c; \
 	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -ffreestanding -O2 -c $$d/harness.c -o $$d/harness.o || { echo "FAIL gcc harness"; exit 1; }; \
 	  { echo '.syntax unified'; echo '.cpu cortex-m0'; echo '.thumb'; \
 	    echo '.section .vectors,"a"'; echo '.word 0x20004000'; echo '.word _start+1'; \
@@ -627,8 +631,8 @@ test_thumb1: host out/host$(hsuf)/mooncc
 	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -c $$d/start.S -o $$d/start.o || { echo "FAIL as start.S"; exit 1; }; \
 	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harness.o $$d/lib.o -o $$d/t1.elf || { echo "FAIL ld thumb1 objects"; exit 1; }; \
 	  timeout 30 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1.elf; a=$$?; \
-	  [ $$a -eq 115 ] || { echo "FAIL thumb1 -c link+run (got $$a, want 115 = addto(40+50) then addto(-17/5 + -17%%5) + s->x=30; a wrong struct offset misreads s->x)"; exit 1; }; \
-	  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout vs gcc), ld binds, runs on qemu Cortex-M0"
+	  [ $$a -eq 127 ] || { echo "FAIL thumb1 -c link+run (got $$a, want 127 = addto(40+50) then addto(-17/5 + -17%%5)=85 + s->x=30 + arr[3]=12; a wrong struct offset misreads s->x, a wrong leax scale/base misreads arr[3])"; exit 1; }; \
+	  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax indexed array vs gcc), ld binds, runs on qemu Cortex-M0"
 # moon-tar -- the userland cousin of test_raw: build GNU tar 1.13 (a real third-
 # party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
 # prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar

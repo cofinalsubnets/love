@@ -472,6 +472,14 @@
       `("t1.leasp"   "04a8"              '((lea r0 sp 16)))            ; add r0, sp, #16
       `("t1.leaa3"   "081d"              '((lea r0 r1 4)))             ; adds r0, r1, #4
       `("t1.allocsp" "84b0"              '((lea sp sp -16)))           ; sub sp, sp, #16 (frame alloc)
+      ;; indexed address (leax) + the fused indexed loads (ldx/ldxb). scale>1 shifts index; scale 1 is a
+      ;; bare ADDS. the dest may alias base or index -- d==base with scale>1 borrows a saved low temp (r2).
+      `("t1.leax"    "90000818"          '((leax r0 r1 r2 4 0)))       ; lsls r0,r2,#2 ; adds r0,r1,r0
+      `("t1.leax.s1" "6319"              '((leax r3 r4 r5 1 0)))       ; scale 1: adds r3,r4,r5 outright
+      `("t1.leax.base" "04b48a00801804bc" '((leax r0 r0 r1 4 0)))     ; d==base: push r2;lsls r2,r1,#2;adds r0,r0,r2;pop r2
+      `("t1.leax.disp" "900008180830"    '((leax r0 r1 r2 4 8)))       ; ... ; adds r0,#8 (trailing disp)
+      `("t1.ldx"     "900008180068"      '((ldx r0 r1 r2 4 0)))        ; addr synth ; ldr r0,[r0]
+      `("t1.ldxb"    "88180078"          '((ldxb r0 r1 r2 1 0)))       ; adds r0,r1,r2 ; ldrb r0,[r0]
       `("t1.push"    "10b4"              '((push r4)))                 ; push {r4}
       `("t1.pushlr"  "00b5"              '((push lr)))                 ; push {lr}
       `("t1.pop"     "10bc"              '((pop r4)))                  ; pop {r4}

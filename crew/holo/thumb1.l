@@ -54,6 +54,7 @@
    (t1-movs d imm8) (: _ (need-lo d 'movs-hi) dn (rn d) (t16 (| 0x2000 (| (<< dn 8) (& imm8 255)))))
    (t1-mvns d s)    (: dn (rn d) sn (rn s) (t16 (| 0x43C0 (| (<< sn 3) dn))))         ; MVNS Rd, Rm  (Rd = ~Rm)
    (t1-lsls-imm d c) (: dn (rn d) (t16 (| 0x0000 (| (<< (& c 31) 6) (| (<< dn 3) dn)))))  ; LSLS Rd,Rd,#c
+   (t1-lsls-rri d m c) (: dn (rn d) mn (rn m) (t16 (| 0x0000 (| (<< (& c 31) 6) (| (<< mn 3) dn)))))  ; LSLS Rd,Rm,#c (3-addr)
    (t1-adds-i8 d imm8) (: _ (need-lo d 'adds-hi) dn (rn d) (t16 (| 0x3000 (| (<< dn 8) (& imm8 255)))))  ; ADDS Rdn,#imm8
    ;; byte-build any 32-bit u: MOVS top byte, then (LSLS 8; ADDS byte) down the word. 7 halfwords worst
    ;; case -- a literal pool (LDR Rd,[pc,#off] + a pooled word + a pc-rel fixup) is the size win, LATER.
@@ -137,6 +138,26 @@
    (t1-uxh d) (: dn (rn d) (t16 (| 0xB280 (| (<< dn 3) dn))))   ; UXTH Rd,Rd
    (t1-lds1 d base off) (+ (t1-ldb d base off) (t1-sxb d))      ; LDRSB == LDRB + SXTB
    (t1-lds2 d base off) (+ (t1-ldh d base off) (t1-sxh d))      ; LDRSH == LDRH + SXTH
+
+   ;; ---- indexed addressing: d <- base + index*scale (+disp). v6-M has no scaled-index memory op, so
+   ;;      synthesize LSLS+ADDS. moon's leax contract READS both sources before writing (x64 SIB / arm64
+   ;;      add-shifted), so d may ALIAS base or index -- and the two live sources are always DISTINCT regs.
+   ;;      scale 1 -> ADDS (3-addr, alias-safe outright). scale>1 shifts index by log2: shift into d works
+   ;;      unless d==base (that shift would clobber base first), so that lone case borrows a saved low temp.
+   (t1-lg2 scale) (? (= scale 2) 1 (= scale 4) 2 (= scale 8) 3 (= scale 1) 0 (scare 'badscale scale))
+   (t1-lowscratch a b lst)                                ; first low reg not aliasing a or b
+      (? (! lst) (scare 'no-scratch `(a b))
+         (: r <lst (? (|| (reg-eq r a) (reg-eq r b)) (t1-lowscratch a b >lst) r)))
+   (t1-eaddr d base index scale)                          ; d <- base + index*scale, honoring d==base|index
+      (: k (t1-lg2 scale)
+         (? (= scale 1) (t1-add-rrr d base index)
+            (! (reg-eq d base)) (+ (t1-lsls-rri d index k) (t1-add-rrr d base d))
+            (: s (t1-lowscratch d index '(r0 r1 r2 r3 r4 r5 r6 r7))
+               (catall `((t1-push s) (t1-lsls-rri s index k) (t1-add-rrr d base s) (t1-pop s))))))
+   (t1-leax d base index scale disp)
+      (+ (t1-eaddr d base index scale) (? (= disp 0) () (t1-addsub-imm 'add d d disp)))
+   (t1-ldx  d base index scale disp) (+ (t1-eaddr d base index scale) (t1-ld  d d disp))   ; fused leax+LDR
+   (t1-ldxb d base index scale disp) (+ (t1-eaddr d base index scale) (t1-ldb d d disp))   ; fused leax+LDRB
 
    ;; ---- extends as IR ops (sx1/2 sign, zx1/2 zero; w=4 is a no-op -- int is already the full word) ----
    (t1-sx w d) (? (= w 4) () (= w 1) (t1-sxb d) (t1-sxh d))
@@ -268,6 +289,9 @@
             (member? op '(shlv shrv sarv)) (t1-shiftv op (at ins 1) (at ins 2))
             (= op 'lea)   (t1-lea   (at ins 1) (at ins 2) (at ins 3))
             (= op 'lean)  (t1-lea   (at ins 1) (at ins 2) (at ins 3))
+            (= op 'leax)  (t1-leax  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
+            (= op 'ldx)   (t1-ldx   (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
+            (= op 'ldxb)  (t1-ldxb  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
             (= op 'push)  (t1-push  (at ins 1))
             (= op 'pop)   (t1-pop   (at ins 1))
             (= op 'neg)   (t1-neg   (at ins 1))
