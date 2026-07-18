@@ -45,12 +45,14 @@
                          (go (i + 1)))
                (go 0))
    (deftext ds) (foldl (\ a d (a + "#define " + (eqsp d) + "\n")) "" ds)
-   ; the target: 'x64 (the default) or 'arm64, picked by -t. the arch predefine
-   ; (__x86_64__ / __aarch64__) rides the -D channel so cpp stays target-blind.
+   ; the target: 'x64 (the default), 'arm64, or 'thumb2 (ARMv7E-M / Cortex-M7),
+   ; picked by -t. the arch predefine (__x86_64__ / __aarch64__ / __arm__) rides
+   ; the -D channel so cpp stays target-blind.
    (totgt s) (? (|| (s = "x64") (s = "amd64")) 'x64
                 (|| (s = "arm64") (s = "aarch64")) 'arm64
-                (udie 2 ("cc: unknown target " + s + " (x64 | arm64)")))
-   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" "__x86_64__")
+                (|| (s = "thumb2") (s = "cortex-m7")) 'thumb2
+                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2)")))
+   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (id? tgt 'thumb2) "__arm__" "__x86_64__")
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag
    ; sigs ..) | a fatal exit. the -D lines PREPEND to the source text before the
    ; one lex, so the line numbering stays whole (tokens carry lines and a define

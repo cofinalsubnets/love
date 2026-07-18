@@ -380,8 +380,15 @@
       `("t2.ldr.neg" "51f8040c"          '((ld r0 r1 -4)))            ; ldr r0, [r1, #-4] (T4)
       `("t2.ld1"     "91f90300"          '((ld1 r0 r1 3)))             ; ldrsb.w r0, [r1, #3]
       `("t2.st1"     "81f80300"          '((st1 r1 3 r0)))             ; strb.w r0, [r1, #3]
+      `("t2.lea"     "01f20800"          '((lea r0 r1 8)))             ; addw r0, r1, #8
+      `("t2.lea.mov" "dd46"              '((lea sp fp 0)))             ; mov sp, r11 -- lea #0 to sp rides the sp-legal 16-bit MOV
       `("t2.push"    "4df8044d"          '((push r4)))                 ; str r4, [sp, #-4]!
       `("t2.pop"     "5df8044b"          '((pop r4)))                  ; ldr r4, [sp], #4
+      `("t2.sx1"     "4ffa80f0"          '((sx1 r0)))                  ; sxtb.w r0, r0
+      `("t2.sx2"     "0ffa83f3"          '((sx2 r3)))                  ; sxth.w r3, r3
+      `("t2.zx1"     "5ffa80f0"          '((zx1 r0)))                  ; uxtb.w r0, r0
+      `("t2.zx2"     "1ffa87f7"          '((zx2 r7)))                  ; uxth.w r7, r7
+      `("t2.sx4"     ""                  '((sx4 r0)))                  ; NO-OP: an int is already the full 32-bit word
       `("t2.neg"     "c0f10000"          '((neg r0)))                  ; rsb.w r0, r0, #0
       `("t2.not"     "6fea0000"          '((not r0)))                  ; mvn.w r0, r0
       `("t2.inc"     "00f20100"          '((inc r0)))                  ; addw r0, r0, #1

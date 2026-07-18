@@ -116,11 +116,22 @@
    (thumb-st1 base off s)  (thumb-mem 0xF800 0xF880 s base off)  ; STRB
    (thumb-st2 base off s)  (thumb-mem 0xF820 0xF8A0 s base off)  ; STRH
 
-   (thumb-lea d base off)  (thumb-addsub-imm 'add d base off)
+   ;; MOV (register) T1, the 16-bit hi-register form -- the ONLY move that legally targets sp
+   ;; (MOV.W / ADDW with Rd=sp,Rn!=sp are UNPREDICTABLE on ARMv7-M). reaches all of r0..r15.
+   (thumb-movr d s) (: dn (rn d) sn (rn s) (t16 (| 0x4600 (| (<< (& (>> dn 3) 1) 7) (| (<< sn 3) (& dn 7))))))
+   ;; lea with a zero offset is a plain register copy -- ride movr so `lea sp, fp, 0` (the frame
+   ;; teardown) and `lea fp, sp, 0` (setup) encode as the sp-legal 16-bit move.
+   (thumb-lea d base off)  (? (= off 0) (thumb-movr d base) (thumb-addsub-imm 'add d base off))
 
    (thumb-push s) (: st (rn s) (t32 (| 0xF84D0000 (| (<< st 12) (| 0xD00 4)))))   ; STR Rt,[sp,#-4]!  P=1 U=0 W=1, imm8=4
    (thumb-pop  d) (: dt (rn d) (t32 (| 0xF85D0000 (| (<< dt 12) (| 0xB00 4)))))   ; LDR Rt,[sp],#4    P=0 U=1 W=1 (bit11=1), imm8=4
 
+   ;; sign/zero-extend the low w bytes in place. w=4 is a NO-OP -- an int is already the full 32-bit
+   ;; word here (unlike the 64-bit targets, where sx4/zx4 widen 32->64). w=1/2 -> SXTB/SXTH / UXTB/UXTH.
+   (thumb-sx w d) (? (= w 4) ()
+                     (: dn (rn d) (t32 (| (? (= w 1) 0xFA4FF080 0xFA0FF080) (| (<< dn 8) dn)))))   ; SXTB / SXTH Rd, Rd
+   (thumb-zx w d) (? (= w 4) ()
+                     (: dn (rn d) (t32 (| (? (= w 1) 0xFA5FF080 0xFA1FF080) (| (<< dn 8) dn)))))   ; UXTB / UXTH Rd, Rd
    (thumb-neg d) (: dn (rn d) (t32 (| (<< (| 0xF1C0 dn) 16) (<< dn 8))))          ; RSB Rd, Rd, #0
    (thumb-not d) (: dn (rn d) (t32 (| 0xEA6F0000 (| (<< dn 8) dn))))              ; MVN.W Rd, Rm
    (thumb-inc d) (thumb-addsub-imm 'add d d 1)
@@ -184,6 +195,12 @@
             (= op 'ldu1) (thumb-ldu1 (at ins 1) (at ins 2) (at ins 3))
             (= op 'ldu2) (thumb-ldu2 (at ins 1) (at ins 2) (at ins 3))
             (= op 'ldu4) (thumb-ld4  (at ins 1) (at ins 2) (at ins 3))   ; 32-bit zero-extend == word load here
+            (= op 'sx1)  (thumb-sx 1 (at ins 1))
+            (= op 'sx2)  (thumb-sx 2 (at ins 1))
+            (= op 'sx4)  (thumb-sx 4 (at ins 1))
+            (= op 'zx1)  (thumb-zx 1 (at ins 1))
+            (= op 'zx2)  (thumb-zx 2 (at ins 1))
+            (= op 'zx4)  (thumb-zx 4 (at ins 1))
             (member? op '(shlv shrv sarv)) (thumb-shiftv op (at ins 1) (at ins 2))
             (= op 'lea)  (thumb-lea  (at ins 1) (at ins 2) (at ins 3))
             (= op 'lean) (thumb-lea  (at ins 1) (at ins 2) (at ins 3))

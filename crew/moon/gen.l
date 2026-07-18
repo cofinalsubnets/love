@@ -140,36 +140,52 @@
                         (member? <l vp) (cut >l)
                         (link <l (cut >l)))
              (pin g 'pool (cut (peep g 'pool0 ()))))))
-   ; -- the TARGET seam: g 'tgt ('x64 | 'arm64) picks the ABI shapes; the IR
-   ; stays neutral. arm64 (AAPCS64): args ride r0..r7 (8 gp), the frame base
-   ; retargets to fp (x29) at the end of build (a4ize -- r4 is x4, a CALLER-
+   ; -- the TARGET seam: g 'tgt ('x64 | 'arm64 | 'thumb2) picks the ABI shapes;
+   ; the IR stays neutral. arm64 (AAPCS64): args ride r0..r7 (8 gp), the frame
+   ; base retargets to fp (x29) at the end of build (a4ize -- r4 is x4, a CALLER-
    ; saved arg register there), bl clobbers lr so the prologue saves it, and
-   ; x3 is caller-saved -- the rbx slot machinery falls away. --
+   ; x3 is caller-saved -- the rbx slot machinery falls away. thumb2 (AAPCS32,
+   ; Cortex-M7): a 32-bit WORD (wsize=4), args in r0..r3 (4 gp), the same lr-push
+   ; + fp-base + `bx lr` frame shape as arm64 (`arm?` covers both) -- r4 is
+   ; callee-saved there so no retarget is forced, but riding fp keeps the arm64
+   ; build/epilogue path verbatim. register-homing is OFF for now (nhome=0): every
+   ; param spills to its frame slot, the simplest correct lane. --
    (a64? g) (id? (peep g 'tgt ()) 'arm64)
+   (t32? g) (id? (peep g 'tgt ()) 'thumb2)
+   (arm? g) (|| (a64? g) (t32? g))                  ; the lr-push / fp-base / bx-lr frame family
+   (wsize g) (? (t32? g) 4 8)                       ; the machine WORD in bytes (a pointer, a gp scalar, a stack cell)
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
-   (argr g) (? (a64? g) argregs-a64 argregs)
-   (ngp g) (? (a64? g) 8 6)
-   (pkr g) (? (a64? g) 'r15 'r3)                    ; the callr park (x64 rbx; arm64 x15 -- x3 is the 4th ARG register)
-   (ip2 g) (? (a64? g) 'r1 'r2)                     ; an int-pair aggregate's SECOND register (rax:rdx / x0:x1)
+   argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
+   (argr g) (? (a64? g) argregs-a64 (t32? g) argregs-t32 argregs)
+   (ngp g) (? (a64? g) 8 (t32? g) 4 6)
+   (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 'r3)      ; the callr park (x64 rbx; arm64 x15; thumb2 r12/IP -- x3/r3 is the 4th ARG register)
+   (ip2 g) (? (a64? g) 'r1 'r2)                     ; an int-pair aggregate's SECOND register (rax:rdx / x0:x1); thumb2 unused for M1 scalar
    (psc g) (? (a64? g) 'r9 'r0)                     ; the xmm-arg pop scratch (arm64 r0 IS arg 0; a pool reg is dead at a call)
-   (ovb g) (? (a64? g) 32 16)                       ; overflow params: above [ret+rbp] (x64) / the lr+fp push cells (arm64)
+   (ovb g) (? (a64? g) 32 (t32? g) 8 16)            ; overflow params: above [ret+rbp] (x64) / the lr+fp push cells (arm64 2x16 / thumb2 2x4)
    ; the arm64 HOME pool: caller-saved, never an argument register (x0..x7 all
    ; stage args at calls, so no positional alignment with the incoming regs --
    ; every home takes one prologue mov), and clear of the staging scratches
    ; (x9 the xmm pop scratch, x15 the callr park, x16 holo's far-offset lane).
    hregs-a64 '(r10 r11 r12 r13 r14)
-   (hregs g) (? (a64? g) hregs-a64 opool)           ; the home pool (x64 rides opool, positionally arg-aligned)
-   (nhome g) (? (a64? g) 5 6)                       ; how many gp positions can home (the pool's reach)
-   (fbase g) (? (a64? g) 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize)
+   hregs-t32 '(r5 r6 r7 r8)                          ; thumb2 callee-saved home pool (inert while nhome=0)
+   (hregs g) (? (a64? g) hregs-a64 (t32? g) hregs-t32 opool)   ; the home pool (x64 rides opool, positionally arg-aligned)
+   (nhome g) (? (a64? g) 5 (t32? g) 0 6)            ; how many gp positions can home (thumb2: none yet -- spill all params)
+   (fbase g) (? (arm? g) 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize); arm64+thumb2 fp, x64 r4
    ; the immediate gate: x64 ALU/cmp immediates ride le32; arm64 add/sub/cmp
    ; take imm12 (a negative flips, a 24-bit value splits in the backend), the
    ; logicals only a bottom-aligned bitmask (2^n - 1), multiply none at all.
+   ; thumb2: ADDW/SUBW take a plain imm12 (0..4095, negative flips); cmp an imm8
+   ; (0..255, CMN on negatives); the logicals/mul have no simple immediate form.
    (immok g cls n)
     (? (a64? g)
        (? (cls = 'addsub) (&& (-16777215 <= n) (n <= 16777215))   ; imm12, or the backend's hi12+lo12 split
           (cls = 'cmp) (&& (-4095 <= n) (n <= 4095))              ; imm12 only (no split -- flags)
           (cls = 'log) (&& (0 < n) (0 = (& n (n + 1))))
           ())
+       (t32? g)
+       (? (cls = 'addsub) (&& (-4095 <= n) (n <= 4095))           ; ADDW/SUBW imm12
+          (cls = 'cmp) (&& (-255 <= n) (n <= 255))                ; CMP/CMN imm8
+          ())                                                     ; log/mul: materialize into a register
        (fits32? n))
    ; -- the type floor (struct sizes come off the stag table riding in g) --
    (ptr? ty) (&& (two? ty) (<ty = 'ptr))
@@ -237,11 +253,11 @@
    (rflip op) (? (op = 'lt) 'gt (op = 'gt) 'lt (op = 'le) 'ge (op = 'ge) 'le op)      ; MIRRORED (n < x reads x > n): constant-on-the-left
    (negrel op) (? (op = 'eq) 'ne (op = 'ne) 'eq (op = 'lt) 'ge (op = 'ge) 'lt (op = 'le) 'gt 'le)   ; NEGATED: branch-if-false
    (fits32? v) (&& (-2147483648 <= v) (v <= 2147483647))    ; holo's ALU/cmp/imul immediates ride le32
-   (tsz g ty) (? (ptr? ty) 8
+   (tsz g ty) (? (ptr? ty) (wsize g)
                  (arr? ty) (* <>>ty (tsz g <>ty))
                  (stru? ty) (caup (peep (g 'stag) <>ty 0))
                  (|| (ty = 'char) (ty = 'uchar)) 1 (|| (ty = 'short) (ty = 'ushort)) 2
-                 (|| (ty = 'int) (|| (ty = 'uint) (ty = 'float))) 4 8)
+                 (|| (ty = 'int) (|| (ty = 'uint) (ty = 'float))) 4 (wsize g))
    ; a member's (offset ty) off a struct type, | 'bad
    (fmem g ty name)
     (? (! (stru? ty)) 'bad
@@ -1679,6 +1695,7 @@
    (sibjmp g f)
     (? (<f = 'call) ((butret (peep g 'epi epi)) + `(`('jmp <>f)))
        (a64? g) ((butret epi-a64) + `(`('jmpr 'r15)))          ; the arm64 epilogue never touches the x15 park
+       (t32? g) ((butret epi-a64) + `(`('jmpr (pkr g))))       ; thumb2: the callr target parks in r12 (pkr), untouched by the epilogue
        (`(`('mov 'r10 'r3)) + (butret epi) + `(`('jmpr 'r10))))   ; park first: the x64 epilogue reloads r3
    ; a home reload run ((ld rH r4 slot)..) after a ret-position call is DEAD --
    ; the tail-jump hands the frame back first. skiprel peels exactly those.
@@ -3713,15 +3730,15 @@
               body (cgitems g <>sp0 (caup (caup (cuup f))) ())
               (? (bad? body) 'bad
                  (: frame (& ((peep g 'off 0) + 15) -16)
-                    (? (a64? g)
-                       ; the sibcall pass rides both targets (epim?/sibjmp read
+                    (? (arm? g)
+                       ; the sibcall pass rides all targets (epim?/sibjmp read
                        ; the epilogue off g 'epi); the IR sweeps still model x64
-                       ; shapes (8-byte pushes, the r4 frame roles) -- arm64
-                       ; rides the raw forms, retargeted r4 -> fp AFTER the
-                       ; sibcall rewrite (its patterns speak r4; the epilogue
+                       ; shapes (8-byte pushes, the r4 frame roles) -- arm64 AND
+                       ; thumb2 ride the raw forms, retargeted r4 -> fp AFTER the
+                       ; sibcall rewrite (their patterns speak r4; the epilogue
                        ; forms already say fp/sp/lr and pass through a4ize
                        ; untouched). lr rides its own push cell (bl clobbers
-                       ; it); no r3 slot -- x3 is caller-saved under AAPCS64.
+                       ; it); no r3 slot -- x3/r3 is caller-saved under AAPCS.
                        (a4ize
                         (sibcall g
                          (cat `(`('label (intern <>f))
@@ -3942,7 +3959,7 @@
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ()) _ (pin t 'statics ())
             _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0)) _ (pin t 'cgitems cgitems)
             _ (pin t 'stag stbl) _ (pin t 'sigs sigs)
-            _ (pin t 'tgt tgt) _ (pin t 'epi (? (id? tgt 'arm64) epi-a64 epi))
+            _ (pin t 'tgt tgt) _ (pin t 'epi (? (member? tgt '(arm64 thumb2)) epi-a64 epi))
             _ (pin t 'sects (? (two? xtra) <>>xtra (tablet 0))) t)
        ; pass 0: every function name -- so a bare use of one is its address (la).
        ; the sig table too: an mproto sibling (`double sin(..), cos(..);`) has a
