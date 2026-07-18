@@ -526,6 +526,32 @@ test_raw: host out/host$(hsuf)/mooncc
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
 	  echo "test_raw: ai.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
+# test_raw_bake -- the WAKE half of the gcc-free image cycle. mooncc could never bake
+# before (an EXEC's low load address collides the codec's pointer/fixnum index range);
+# a -pie ET_DYN loads high and clears it. Reuses test_raw's raw objects, links them
+# PIE, bakes the post-warm image into the binary's OWN .image (host/image.c self-patch),
+# then WAKES that image and runs the corpus over the woken heap. This is the ONLY gate
+# that exercises ai_image_load on a mooncc binary -- the seam where [[mooncc-fn-parity]]
+# hid (an odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot
+# gate; the fix aligns fns to even in gen.l). glaze.l is EXCLUDED: the bake mops the
+# eat/toast nifs (ai/egg.l seals them into the host image), so (lit? eat) cannot hold on
+# a woken heap -- the gcc build fails it identically, so it is not a mooncc regression.
+# Opt-in (not test_all): needs the -pie toolchain. x86-64 only.
+.PHONY: test_raw_bake
+test_raw_bake: test_raw
+	@echo BAKE-WAKE $(ho)/ai-raw-pie
+	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw_bake: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
+	  d=$(ho)/raw; \
+	  $(ho)/mooncc -pie $$d/*.o -o $(ho)/ai-raw-pie \
+	    || { echo "FAIL -pie link ai-raw-pie"; exit 1; }; \
+	  cp $(ho)/ai-raw-pie $(ho)/ai-raw-baked; \
+	  $(ho)/ai-raw-baked --bake >/dev/null 2>&1 \
+	    || { echo "FAIL --bake (mooncc-PIE binary refused to snapshot its own image)"; exit 1; }; \
+	  cat $(filter-out %/glaze.l,$t) | $(ho)/ai-raw-baked > $(ho)/.test_raw_bake.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_raw_bake.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_bake.out; } \
+	    || { echo "FAIL woken corpus (exit $$s) -- ai_image_load desync? see [[mooncc-fn-parity]]"; exit 1; }; \
+	  echo "test_raw_bake: the mooncc-PIE binary bakes its own image and WAKES it -- corpus passes on the woken heap"
 # test_raw's aarch64 twin (rung D): mooncc -t arm64 lays every object, mksys-arm64
 # the syscall leaf, OUR linker binds, qemu-user runs the corpus over the fresh
 # egg. Runs the WHOLE C-sorted $t (uukind{,law}.l included): the raw binary and

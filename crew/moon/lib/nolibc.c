@@ -1291,9 +1291,37 @@ struct group *getgrgid(gid_t g) { (void) g; return 0; }
 struct group *getgrnam(char const *n) { (void) n; return 0; }
 void setgrent(void) { }
 
-/* ---- dl_iterate_phdr off the auxv (AT_PHDR/AT_PHNUM): our exes are ET_EXEC,
- * so the bias is 0 and one callback covers "the main program" -- all image.c's
- * bake walk wants. ---- */
+/* ---- the load bias: 0 for a fixed-base ET_EXEC, the ASLR slide for a -pie
+ * ET_DYN. AT_PHDR is the runtime address of the program headers, which sit at
+ * file offset 64 inside the p_offset==0 PT_LOAD, so bias = AT_PHDR - 64 - that
+ * segment's link-time p_vaddr (0x400000 for EXEC -> 0; 0 for PIE -> the slide). ---- */
+static unsigned long __ai_bias(void) {
+  unsigned long phdr = 0; Elf64_Half phnum = 0;
+  for (long *a = __auxv; a && a[0]; a += 2) {
+    if (a[0] == 3) phdr = (unsigned long) a[1];        /* AT_PHDR */
+    if (a[0] == 5) phnum = (Elf64_Half) a[1]; }        /* AT_PHNUM */
+  if (!phdr) return 0;
+  Elf64_Phdr const *ph = (Elf64_Phdr const *) phdr;
+  for (Elf64_Half i = 0; i < phnum; i++)
+    if (ph[i].p_type == PT_LOAD && ph[i].p_offset == 0)
+      return phdr - 64 - (unsigned long) ph[i].p_vaddr;
+  return 0; }
+
+/* ---- -pie self-relocation. The linker (crew/holo/link.l) laid the exe at base 0
+ * and left every abs64 data pointer holding its base-0 offset, plus a table of
+ * those sites bracketed by __start_/__stop_ai_rela. Add the real load base to each
+ * -- the whole of static-PIE relocation, no dynamic loader. Must run before any
+ * such pointer is dereferenced (top of __ai_start). An ET_EXEC binary links an
+ * EMPTY table (start == stop), so this is a no-op there. ---- */
+extern long __start_ai_rela[], __stop_ai_rela[];
+static void __ai_reloc(void) {
+  unsigned long bias = __ai_bias();
+  for (long *p = __start_ai_rela; p < __stop_ai_rela; p++)
+    *(unsigned long *) (bias + (unsigned long) *p) += bias; }
+
+/* ---- dl_iterate_phdr off the auxv (AT_PHDR/AT_PHNUM): one callback covers "the
+ * main program", carrying the real load bias so image.c's bake walk bounds the
+ * in-binary pointers correctly under -pie (0 for a fixed-base ET_EXEC). ---- */
 int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), void *data) {
   unsigned long phdr = 0, phnum = 0;
   for (long *a = __auxv; a && a[0]; a += 2) {
@@ -1302,7 +1330,7 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
   if (!phdr) return 0;
   struct dl_phdr_info in;
   memset(&in, 0, sizeof in);
-  in.dlpi_addr = 0;
+  in.dlpi_addr = __ai_bias();
   in.dlpi_name = "";
   in.dlpi_phdr = (Elf64_Phdr const *) phdr;
   in.dlpi_phnum = (Elf64_Half) phnum;
@@ -1319,6 +1347,7 @@ void __ai_start(long *sp) {
   environ = e;
   while (*e) e++;
   __auxv = (long *) (e + 1);
+  __ai_reloc();                 /* -pie: slide abs64 data pointers before any is used (no-op for ET_EXEC) */
   stdout->fd = 1;
   stdout->wr = 1;
   stdout->buf = __obuf;

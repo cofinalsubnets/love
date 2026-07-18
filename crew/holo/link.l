@@ -138,12 +138,17 @@
             (each objs))
        glo)
 
-   ; resolve a name: the symbol book, or the synthesized nif brackets
-   (ldres glo n0 n1 nm)
+   ; resolve a name: the symbol book, or a synthesized bracket -- the nif region
+   ; (n0..n1) or, under -pie, the RELATIVE-reloc offset table (r0..r1) that
+   ; nolibc's startup walks to slide every abs64 data pointer by the load base.
+   ; non-pie leaves r0 == r1 (an empty table), so the startup loop is a no-op.
+   (ldres glo n0 n1 r0 r1 nm)
     (: r (peep glo nm ())
        (? (two? r) <r
           (nm = "__start_ai_nifs") n0
           (nm = "__stop_ai_nifs") n1
+          (nm = "__start_ai_rela") r0
+          (nm = "__stop_ai_rela") r1
           (scare 'link-undef nm)))
 
    ; patch one object's one section: stream its bytes, splicing each
@@ -151,7 +156,7 @@
    ; section base; a named one resolves through the book (so a weak def's
    ; callers meet the strong override). entries arrive in ascending offset
    ; order (obj.l's walk order) -- pieces come out as text snips + byte lists.
-   (ldpatch ob tag base glo n0 n1)
+   (ldpatch ob tag base glo n0 n1 r0 r1 relbox)
     (: s (peep ob 'src 0) se (peep (peep ob 'sects 0) tag ())
        off0 (ld-at se 0) sz (ld-at se 1)
        (ent es) (? (! (two? es)) ()
@@ -166,8 +171,12 @@
                     (: stag (peep (peep ob 'secmap 0) (ld-at sy 3) ())
                        _ (? stag 0 (scare 'link-sym-section (peep ob 'id 0)))
                        (peep ob (ld-key stag) 0))
-                    (ldres glo n0 n1 <sy))
+                    (ldres glo n0 n1 r0 r1 <sy))
               w (? (member? kind '(1 257)) 8 4)
+              ; -pie: this abs64 site holds a base-0 offset (base is 0), so record its
+              ; load-address for the startup relocator to add the real base to.
+              _ (? (&& relbox (member? kind '(1 257)))
+                    (pin relbox 0 (>< (base + ro) (peep relbox 0 ()))) 0)
               _ (? (member? kind '(1 2 4 257 275 277 282 283)) 0 (scare 'link-reloc kind))
               _ (? ((ro + w) <= sz) 0 (scare 'link-oob (peep ob 'id 0)))
               ; the aarch64 field kinds patch BITS of the instruction word the
@@ -191,15 +200,32 @@
                   (>< bs (>< (snip s pos (off0 + ro)) acc)))))
        (go off0 (ent (peep ob 'relas ())) ()))
 
+   ; count the abs64 (R_X86_64_64 / R_AARCH64_ABS64) data relocations across the
+   ; set -- the entry count of the -pie relocation table (8 bytes each).
+   (ld-nabs objs)
+    (foldl (\ a ob (foldl (\ a2 tr
+              (foldl (\ a3 e (? (member? (ld-at e 1) '(1 257)) (a3 + 1) a3)) a2 >tr))
+              a (peep ob 'relas ())))
+       0 objs)
+
    ; link a set of objects -- ((id bytes-text)..) -- into a static-exe PIECE
    ; list (texts + byte lists; ld-write lays them down). entry = the first
    ; object's text. one R+X+W segment maps the whole file, elf.l's shape.
-   (ldlink target srcs)
+   ; pie: emit ET_DYN laid at base 0 (the kernel biases it to a random high
+   ; address), collect every abs64 site into a trailing offset table bracketed
+   ; by __start_/__stop_ai_rela, and let nolibc's startup add the load base to
+   ; each -- the classic static-PIE self-relocation, our own toolchain end to end.
+   (ldlink target pie srcs)
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
        objs (map (\ p (ld-read <p <>p mach)) srcs)
-       lay (ldlay objs elf-base)
+       base (? pie 0 elf-base)
+       lay (ldlay objs base)
        end <lay n0 <>lay
+       nrel (? pie (ld-nabs objs) 0)
+       r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
+       r1 (r0 + (* 8 nrel))
+       relbox (? pie (: t (tablet 0) _ (pin t 0 ()) t) ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
        ; emit in layout order, zero-padding up to each section's base
        (emit tag cur os acc)
@@ -209,14 +235,14 @@
                  (: b (peep ob (ld-key tag) 0)
                     pad (? (cur < b) `((ld-zeros (b - cur))) ())
                     (emit tag (b + (ld-at se 1)) >os
-                          (acc + pad + (ldpatch ob tag b glo n0 end)))))))
-       et (emit 'text (elf-base + 120) objs ())
+                          (acc + pad + (ldpatch ob tag b glo n0 end r0 r1 relbox)))))))
+       et (emit 'text (base + 120) objs ())
        ed (emit 'data <et objs >et)
        en (emit 'nifs <ed objs >ed)
-       tail (? (<en < end) `((ld-zeros (end - <en))) ())
-       hdr (elf64-hdr elf-base (peep <objs 'tbase 0) (end - elf-base)
-                      (peep elf-machines target 0))
-       (>< hdr (>en + tail)))
+       tail (? (<en < r0) `((ld-zeros (r0 - <en))) ())      ; nif tail + table alignment in one pad
+       rtab (? pie (catall (map (\ o (le64 o)) (rev (peep relbox 0 ())))) ())
+       hdr (elf64-hdr (? pie 3 2) base (peep <objs 'tbase 0) (r1 - base) mach)
+       (>< hdr (>en + tail + (? pie `(rtab) ()))))
 
    ; write a piece list to a file, raw (texts pass through; byte lists pack).
    ; an explicit left walk: map runs its effects right-to-left.

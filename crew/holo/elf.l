@@ -18,10 +18,12 @@
         `((>< 'x64 62) (>< 'amd64 62) (>< 'arm64 183) (>< 'aarch64 183)))
 
    ;; the 120-byte header for a single R+X load segment at `base` covering the whole file.
-   (elf64-hdr base entry filesz machine)
+   ;; etype = 2 (ET_EXEC, fixed base) or 3 (ET_DYN, a static-PIE the kernel loads at a random
+   ;; base -- the mooncc `-pie` path, whose data pointers self-relocate at startup).
+   (elf64-hdr etype base entry filesz machine)
       (catall `(
          `(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
-         (le16 2) (le16 machine) (le32 1)                      ; ET_EXEC, e_machine, version 1
+         (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
          (le64 entry) (le64 64) (le64 0)                       ; e_entry, e_phoff=64, e_shoff=0
          (le32 0) (le16 64) (le16 56)                          ; e_flags, e_ehsize=64, e_phentsize=56
          (le16 1) (le16 0) (le16 0) (le16 0)                   ; e_phnum=1, no section headers
@@ -44,7 +46,7 @@
          code (holo-bytes-at target (mkprog dataddr) org)
          filesz (elf-hdr + (tally code) + (tally data))
          entry (base + elf-hdr)
-         img (catall `((elf64-hdr base entry filesz machine) code data))
+         img (catall `((elf64-hdr 2 base entry filesz machine) code data))
          res (tablet 0)
          _ (pin res 'bytes img) _ (pin res 'entry entry) _ (pin res 'dataddr dataddr)
          res)

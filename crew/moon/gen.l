@@ -3986,14 +3986,18 @@
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
                  (: r (cgfn g f)
                     (? (bad? r) (: _ (puts (+ ";; cgfn refuses " (<>f + "\n"))) ())
-                       ; fn-start ALIGNMENT was built and measured here 2026-07-16
-                       ; (('align 16) at this stitch, nop fill in holo's lay -- the
-                       ; form still exists there): 16 ran 8/8 interleaved corpus
-                       ; rounds SLOWER (~4%), 32 7/8 (~5%), branch-misses +9% --
-                       ; aligning every fn zeroes the low target-address bits and
-                       ; the BTB aliases. dense unaligned packing WINS on this
-                       ; frontend-bound core. don't retry as written.
-                       (gfns >fs (revcat r acc)
+                       ; fn-start alignment to EVEN (2): a function's address can
+                       ; ride into the heap as an object's ap (the lvm_* dispatch
+                       ; kind), and the ai image codec's pointer/fixnum discriminator
+                       ; is PARITY -- every pointer even, every fixnum odd (ai.c
+                       ; img_encode). an odd-addressed fn pointer reads back as a
+                       ; fixnum and the woken heap desyncs. WIDER alignment was built
+                       ; and measured 2026-07-16 and REVERTED: 16 ran 8/8 corpus
+                       ; rounds ~4% SLOWER, 32 ~5%, branch-misses +9% -- zeroing 4-5
+                       ; low bits aliases the BTB on this frontend-bound core. 2
+                       ; zeroes only bit 0, so the BTB is untouched (avg half a nop
+                       ; per fn) and the codec invariant holds. don't widen it.
+                       (gfns >fs (revcat (link `('align 2) r) acc)
                              (|| saw (<>f = "main"))))))))
        (? ok (gfns <>ast () ()) ()))
    (cgen ast stbl sigs weaks xtra tgt)              ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
