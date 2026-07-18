@@ -588,11 +588,16 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "uu.h"                                          // uu's NbE kernel (ai/uu.l, sweep at its tail) -- one global name, the
                                                          //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
 #include "holo.h"                                         // the crew/holo/ assembler -- a post-egg language SERVICE, built as a
-#include "x64.h"                                         //   scope MODULE: holo.l opens a named layer ((enter 'holo)), the core +
-#include "arm64.h"                                       //   BOTH backends load into it (bytes as DATA, never execute, so every
-#include "seal.h"                                        //   target is arch-neutral; the glaze executes its own arch), and seal.l's
-                                                         //   (leave ()) REGISTERS the layer as the module `holo` -- orth stays
-                                                         //   clean; (use 'holo) splices it, (from 'holo 'assemble) probes it.
+#if defined(__x86_64__)                                  //   scope MODULE: holo.l opens a named layer ((enter 'holo)), the core +
+#include "x64.h"                                         //   the NATIVE backend load into it, and seal.l's (leave ()) REGISTERS
+#elif defined(__aarch64__)                               //   the layer as the module `holo` -- orth stays clean; (use 'holo)
+#include "arm64.h"                                       //   splices it, (from 'holo 'assemble) probes it. native-ONLY here: the
+#endif                                                   //   glaze emits for the running arch, mooncc.image carries ALL backends
+                                                         //   (crew/build.mk moonfiles), a test that wants a cross backend loads it
+                                                         //   at runtime ((enter ()) (use 'holo) <backend.l> (leave ()) -- the
+                                                         //   test_glaze/test_raw_arm64 recipes), and ai0 keeps every backend so
+                                                         //   the corpus's cross-arch asserts still run under both its compilers.
+#include "seal.h"
 #include "bao.h"
   );
   // welow (church+HOF lowering, book['welow]) is a USER-code pass. A JIT must NOT lower its own

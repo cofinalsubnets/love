@@ -9,11 +9,14 @@
 # #include these and assemble the bootstrap with G_EGG_PRE/POST (ai.h).
 # Drop a .l into ai/ and it is picked up automatically -- no rule to edit.
 lib_h = $(patsubst ai/%.l,out/lib/%.h,$(wildcard ai/*.l))
-# the crew/holo/ assembler baked into BOTH runtimes as a core language service: the
-# neutral core + BOTH backends. They are pure ai (produce machine-code bytes as
-# DATA, never execute them), so every backend is arch-neutral and rides along on
-# every host -- only the glaze, which EXECUTES the bytes, is arch-bound (and it is
-# cat-loaded + x86-gated separately, never baked). asm_h = lcat headers (host ai);
+# the crew/holo/ assembler baked into BOTH runtimes as a core language service. The
+# backends are pure ai (produce machine-code bytes as DATA, never execute them), so
+# every one is arch-neutral -- but the HOST bakes its NATIVE backend only (main.c
+# arch-gates the include; mooncc.image carries ALL backends via its cat, and a test
+# that wants a cross backend runtime-loads it: (enter ()) (use 'holo) <backend.l>
+# (leave ())). ai0 keeps every backend so the corpus's cross-arch asserts run under
+# both its compilers. Both .h flavors are still GENERATED for both backends (ai0
+# needs them; the host simply includes one). asm_h = lcat headers (host ai);
 # asm0_h = sed-wrapped raw source (ai0, the bootstrap -- can't lcat its own sources).
 holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/seal.h
 asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h out/lib/seal0.h
