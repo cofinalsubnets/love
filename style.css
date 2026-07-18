@@ -105,6 +105,7 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
         display: flex; flex-direction: column; cursor: text;
         font-family: "Web437 DOS/V re. PRC16", "Px437 IBM VGA8", ui-monospace, monospace;
         font-size: 32px; line-height: 1; }
+#term[hidden] { display: none; }   /* display:flex would else out-specify [hidden] */
 /* output and input share one scroll region, so the prompt flows directly under
    the last line of output (a real terminal) rather than pinned to the box floor. */
 #scroll { flex: 1; overflow-y: auto; }
@@ -120,6 +121,25 @@ footer { margin-top: 3.5em; color: #414868; font-size: .85em;
 #row::before { content: "> "; color: #555555; white-space: pre; }
 #cmd { flex: 1; background: none; border: none; outline: none; resize: none;
        color: #ffffff; font: inherit; line-height: inherit; overflow: hidden; }
+
+/* --- the app screen (quay tty apps) --- the container chrome only; every
+   colour and glyph inside is the app's own ANSI, parsed to spans by the driver.
+   line-height:1 + the bitmap cell font make a true monospace grid. */
+#app { background: #000000; border: 1px solid #34406e; border-radius: 6px;
+       box-shadow: 0 0 30px -4px rgba(122,162,247,.28), 0 0 90px -22px rgba(122,162,247,.22);
+       padding: .8em; margin-top: 1em; outline: none; height: 80vh;
+       display: flex; flex-direction: column;
+       font-family: "Web437 DOS/V re. PRC16", "Px437 IBM VGA8", ui-monospace, monospace; }
+/* the id-level display:flex would out-specify the UA [hidden] rule, leaving the
+   box stuck visible -- restore hiding at matching specificity. */
+#app[hidden] { display: none; }
+/* flex:1 + min-height:0 give #screen a bounded box the driver measures and
+   fills with a cell grid; overflow:hidden clips any sub-cell rounding. */
+#screen { flex: 1; min-height: 0; overflow: hidden;
+          background: none; border: none; border-radius: 0; padding: 0; margin: 0;
+          color: #ffffff; font: inherit; line-height: 1; white-space: pre; }
+#appbar { flex-shrink: 0; color: #565f89; font-size: .8em; margin-top: .6em; }
+#appbar b { color: #7aa2f7; font-weight: normal; }
 
 /* --- chips (runnable examples) + the crew roster --- */
 .chip { display: inline-block; background: #1f2335; border: 1px solid #3b4261;
