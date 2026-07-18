@@ -14,6 +14,7 @@ installs = \
   $d/bin/ai \
   $d/bin/kore \
   $d/bin/mooncc \
+  $d/bin/moonfmt \
   $d/bin/cook \
   $d/bin/ain \
   $d/bin/lux \
@@ -75,6 +76,15 @@ $d/bin/ai: $(ho)/ai $(ho)/ai.baked
 # then it discovers a Makefile/Cookfile/Cards.l in the cwd. Installed as a SYMLINK
 # to the source so edits to crew/cook/cook.l are picked up without a reinstall.
 $d/bin/cook: crew/cook/cook.l
+	@echo LN	$(abspath $@)
+	@mkdir -p $(@D)
+	@ln -sf $(abspath $<) $@
+
+# moonfmt: the C formatter (crew/moon/fmt.l). Same single-file shebang mechanism as
+# cook (`#!/usr/bin/env -S ai -l` re-execs the installed `ai`; the SEAT inside fires
+# on its own name and quits). Installed as a SYMLINK to the source, so edits to
+# crew/moon/fmt.l are picked up without a reinstall.
+$d/bin/moonfmt: crew/moon/fmt.l
 	@echo LN	$(abspath $@)
 	@mkdir -p $(@D)
 	@ln -sf $(abspath $<) $@

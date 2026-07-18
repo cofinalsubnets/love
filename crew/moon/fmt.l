@@ -1,3 +1,4 @@
+#!/usr/bin/env -S ai -l
 ; crew/moon/fmt.l -- moonfmt, the C reindenter (v3). shares NOTHING with the
 ; parser/codegen: it reads text and writes text, a pure line-preserving pass.
 ; the house C style is the .l style ported to C -- 1-space indent, cuddled close
@@ -228,7 +229,7 @@
        (g lines () 0 0 () () 1))
 
    ; --- driver: moonfmt [-w] FILE ..  -> formatted text on stdout (gofmt-style),
-   ; or with -w rewritten in place. the seat drops the interpreter + this script. ---
+   ; or with -w rewritten in place. ---
    (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))
    (fmt-each fs fix) (? (! (two? fs)) 0
                         (: r (rdf <fs)
@@ -240,6 +241,19 @@
    (flags as fix acc) (? (! (two? as)) `(fix (rev acc))
                          (<as = "-w") (flags >as 1 acc)
                          (flags >as fix (link <as acc)))
-   f (flags >>cmdline () ())
-   files <>f
-   (? (two? files) (fmt-each files <f) (say err "usage: moonfmt [-w] FILE ..\n")))
+   (fmt-main as) (: f (flags as () ())                          ; run on the args AFTER the program seat
+                    files <>f
+                    (? (two? files) (: _ (fmt-each files <f) (quit 0))   ; quit so ai never runs the tool's own args as scripts
+                       (: _ (say err "usage: moonfmt [-w] FILE ..\n") (quit 2))))
+   ; the SEAT: fire fmt-main iff moonfmt sits in the program seat of the real command
+   ; line -- the positional program (dev: `ai crew/moon/fmt.l ..`), or a `-l` preload
+   ; (the installed shebang: `ai -l .../moonfmt ..`) -- taking the args after the seat.
+   ; stays quiet under any other program name. (the mooncc/ain precedent.)
+   (bn p) (: n (tally p) (g k r) (? (k < n) (g (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n)) (g 0 0))
+   (me? w) (: b (bn w) (|| (b = "moonfmt") (|| (b = "moonfmt.l") (b = "fmt.l"))))
+   (seat a) (? (! (two? a)) ()
+               (<a = "-l") (? (two? >a) (? (me? <>a) (link 1 >>a) (seat >>a)) ())
+               (me? <a) (link 1 >a)
+               ())
+   s (seat >cmdline)
+   (? (two? s) (fmt-main >s) ()))
