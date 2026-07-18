@@ -51,7 +51,7 @@
 </style>
 </head>
 <body>
-<nav class="topnav"><a href="../index.html">ai</a> &nbsp;&middot;&nbsp; <a href="../index.html#language">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../index.html#crew">crew</a> &nbsp;&middot;&nbsp; <a href="../index.html#lore">lore</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
+<nav class="topnav"><a href="../index.html">ai</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../crew/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
 <h1>ai benchmarks &mdash; milliseconds per iteration</h1>
 <p class="note">Lower is better. Each language self-times its inner loop (reps
 auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
@@ -74,9 +74,9 @@ source &rarr; trivial result, so compiled languages pay their compile).</p>
 </div>
 <div class="wrap"><div id="t"></div></div>
 <h2>SAT solvers &mdash; milliseconds to solve</h2>
-<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>apps/sat/flat.l</code>:
+<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>crew/sat/flat.l</code>:
 flat cask-resident state driven by three native kernels &mdash; propagation, the whole
-conflict handler, and the decision &mdash; each assembled through <code>apps/asm/</code> at
+conflict handler, and the decision &mdash; each assembled through <code>crew/holo/</code> at
 solver-build time, specialized to the instance size) against reference C solvers.
 Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
 and resolution-hard, where clause learning alone is <b>exponential</b> and ai&rsquo;s
@@ -95,40 +95,62 @@ machinery costs them the small random instances, where the light classics (picos
 minisat) lead &mdash; ai leads the whole-table net, ahead of cadical on PHP(5&ndash;7)
 and mid-field on the pure random rows.</p>
 <div class="wrap">
-<table><thead><tr><th>instance</th><th>picosat</th><th>cadical</th><th class='ai'>ai</th><th>kissat</th><th>glucose</th><th>minisat</th></tr></thead><tbody>
-<tr><th>php5</th><td class=''>2.609</td><td class=''>4.455</td><td class='ai fast '>2.000</td><td class=''>3.336</td><td class=''>4.670</td><td class=''>3.793</td></tr>
-<tr><th>php6</th><td class=''>5.057</td><td class=''>5.415</td><td class='ai fast '>3.000</td><td class=''>5.580</td><td class=''>5.899</td><td class=''>7.340</td></tr>
-<tr><th>php7</th><td class=''>25.479</td><td class=''>8.785</td><td class='ai fast '>4.000</td><td class=''>18.511</td><td class=''>41.013</td><td class=''>39.772</td></tr>
-<tr><th>php8</th><td class=''>224.6</td><td class='fast '>13.006</td><td class='ai '>15.000</td><td class=''>73.429</td><td class=''>889.8</td><td class=''>278.9</td></tr>
-<tr><th>rnd100</th><td class='fast '>16.136</td><td class=''>44.912</td><td class='ai '>29.000</td><td class=''>86.033</td><td class=''>24.196</td><td class=''>22.348</td></tr>
-<tr><th>rnd150</th><td class='fast '>42.089</td><td class=''>122.9</td><td class='ai '>116.0</td><td class=''>194.7</td><td class=''>66.050</td><td class=''>46.714</td></tr>
-<tr><th>uf100</th><td class='fast '>31.186</td><td class=''>89.881</td><td class='ai '>55.000</td><td class=''>187.0</td><td class=''>50.839</td><td class=''>43.026</td></tr>
-<tr><th>uuf100</th><td class='fast '>40.134</td><td class=''>118.4</td><td class='ai '>71.000</td><td class=''>247.3</td><td class=''>58.465</td><td class=''>50.396</td></tr>
-<tr><th>uuf150</th><td class='fast '>77.447</td><td class=''>256.1</td><td class='ai '>210.0</td><td class=''>289.5</td><td class=''>136.1</td><td class=''>89.815</td></tr>
-<tr><th>uf250</th><td class=''>1556.5</td><td class='fast '>1546.6</td><td class='ai '>1707.0</td><td class=''>2911.4</td><td class=''>3336.4</td><td class=''>4784.2</td></tr>
-<tr><th>flat100</th><td class=''>8.585</td><td class=''>11.327</td><td class='ai '>43.000</td><td class='fast '>8.323</td><td class=''>14.058</td><td class=''>13.581</td></tr>
-<tr class='netrow'><th>net</th><td class='net'>2029.8</td><td class='net'>2221.7</td><td class='net ai'>2255.0</td><td class='net'>4025.1</td><td class='net'>4627.5</td><td class='net'>5380.0</td></tr></tbody></table>
+<table><thead><tr><th>instance</th><th class='ai'>ai</th><th>picosat</th><th>cadical</th><th>kissat</th><th>glucose</th><th>minisat</th></tr></thead><tbody>
+<tr><th>php5</th><td class='ai fast '>0.0000</td><td class=''>3.242</td><td class=''>9.151</td><td class=''>4.433</td><td class=''>4.741</td><td class=''>14.585</td></tr>
+<tr><th>php6</th><td class='ai fast '>0.0000</td><td class=''>4.962</td><td class=''>5.398</td><td class=''>5.800</td><td class=''>5.840</td><td class=''>7.304</td></tr>
+<tr><th>php7</th><td class='ai fast '>0.0000</td><td class=''>25.413</td><td class=''>8.198</td><td class=''>17.346</td><td class=''>39.494</td><td class=''>39.279</td></tr>
+<tr><th>php8</th><td class='ai fast '>0.0000</td><td class=''>223.1</td><td class=''>12.183</td><td class=''>71.208</td><td class=''>879.2</td><td class=''>267.2</td></tr>
+<tr><th>rnd100</th><td class='ai fast '>0.0000</td><td class=''>14.968</td><td class=''>43.504</td><td class=''>82.534</td><td class=''>23.466</td><td class=''>20.917</td></tr>
+<tr><th>rnd150</th><td class='ai fast '>0.0000</td><td class=''>41.535</td><td class=''>120.2</td><td class=''>192.0</td><td class=''>63.823</td><td class=''>43.967</td></tr>
+<tr><th>uf100</th><td class='ai fast '>0.0000</td><td class=''>30.386</td><td class=''>83.930</td><td class=''>176.1</td><td class=''>47.065</td><td class=''>39.890</td></tr>
+<tr><th>uuf100</th><td class='ai fast '>1.000</td><td class=''>39.162</td><td class=''>113.7</td><td class=''>241.4</td><td class=''>57.597</td><td class=''>47.784</td></tr>
+<tr><th>uuf150</th><td class='ai fast '>0.0000</td><td class=''>74.640</td><td class=''>250.4</td><td class=''>285.2</td><td class=''>133.9</td><td class=''>87.740</td></tr>
+<tr><th>uf250</th><td class='ai fast '>0.0000</td><td class=''>1526.0</td><td class=''>1525.7</td><td class=''>2812.1</td><td class=''>3230.9</td><td class=''>4689.8</td></tr>
+<tr><th>flat100</th><td class='ai fast '>0.0000</td><td class=''>8.464</td><td class=''>11.214</td><td class=''>8.382</td><td class=''>14.432</td><td class=''>13.596</td></tr>
+<tr class='netrow'><th>net</th><td class='net ai'>1.000</td><td class='net'>1991.8</td><td class='net'>2183.6</td><td class='net'>3896.5</td><td class='net'>4500.5</td><td class='net'>5272.1</td></tr></tbody></table>
+</div>
+<h2>compilers &mdash; milliseconds to build ai, and to test it</h2>
+<p class="note">A third field, ai&rsquo;s C toolchain against the incumbents:
+<b>mooncc</b> is ai&rsquo;s own C compiler (<code>crew/moon/</code>), and it builds
+<code>ai</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
+<code>mksys</code> emits the syscall leaf, and our own linker (<code>crew/holo/</code>)
+binds the executable. The <b>build</b> row is the wall-clock to compile every C
+translation unit (<code>ai.c</code> + <code>host/*.c</code> + the <code>am</code> math
+floor) and link a working binary; the <b>test</b> row runs the full corpus (the same
+files <code>test_host</code>/<code>test_raw</code> feed) through the binary that build
+produced. All three lanes egg-boot (no baked image), so the corpus runs off the freshly
+eval&rsquo;d egg either way &mdash; a level field, so the test row also reflects each
+binary&rsquo;s own speed (it eval&rsquo;s its compiler out of the egg before the first
+test runs). gcc and clang build the identical units at the host&rsquo;s real
+<code>-O2</code> flags (minus <code>-Werror</code>, a lint gate, not a speed factor).
+mooncc trades some compile and run throughput for that self-sufficiency; the gap to the
+optimizing compilers is modest, and the binary it emits passes the identical corpus.</p>
+<div class="wrap">
+<table><thead><tr><th>phase</th><th>clang</th><th>gcc</th><th class='ai'>mooncc</th></tr></thead><tbody>
+<tr><th>build</th><td class='fast '>5469.8</td><td class=''>9194.2</td><td class='ai '>12588.4</td></tr>
+<tr><th>test</th><td class=''>4261.9</td><td class='fast '>3968.3</td><td class='ai '>5581.1</td></tr>
+<tr class='netrow'><th>net</th><td class='net'>9731.7</td><td class='net'>13162.5</td><td class='net ai'>18169.5</td></tr></tbody></table>
 </div>
 <script>
 const LANGS=["ai","go","rust","java","julia","luajit","pypy","node","elixir","chez","sbcl"];
 const BENCHES=["fib","tak","sum","deforest","primes","bell","strcat","strscan","hash","sort","tree","bintrees","mandelbrot","closure","cdcl","setup"];
 const PER={};
-PER["fib"]={"ai":4.2969,"go":3.7757,"rust":2.0035,"java":2.5862,"julia":4.3915,"luajit":8.0084,"pypy":8.4805,"node":7.4832,"elixir":7.2788,"chez":5.7031,"sbcl":5.4692};
-PER["tak"]={"ai":0.5000,"go":0.4617,"rust":0.3469,"java":0.3068,"julia":0.6971,"luajit":1.3912,"pypy":2.3089,"node":0.9596,"elixir":0.8647,"chez":0.5879,"sbcl":4.0004};
-PER["sum"]={"ai":0.2129,"go":0.1135,"rust":0.0525,"java":0.1931,"julia":0.0845,"luajit":0.0706,"pypy":0.2648,"node":0.7753,"elixir":0.4834,"chez":0.4961,"sbcl":0.7032};
-PER["deforest"]={"ai":0.0557,"go":0.0477,"rust":0.0116,"java":0.0133,"julia":0.0179,"luajit":0.0615,"pypy":0.1494,"node":1.1929,"elixir":0.4456,"chez":0.2256,"sbcl":0.2393};
-PER["primes"]={"ai":1.2539,"go":0.9055,"rust":0.7830,"java":0.7683,"julia":0.8978,"luajit":0.8039,"pypy":1.3169,"node":0.7768,"elixir":2.2569,"chez":1.7188,"sbcl":4.8598};
-PER["bell"]={"ai":67.5000,"go":25.0746,"java":35.2355,"julia":75.5032,"pypy":25.4803,"node":28.5706,"elixir":32.9479,"chez":67.7500,"sbcl":52.5048};
-PER["strcat"]={"ai":0.0273,"go":0.9570,"rust":0.0173,"java":1.6791,"julia":1.5363,"luajit":1.4280,"pypy":0.1664,"node":0.1107,"elixir":0.0436,"chez":1.3594,"sbcl":4.4223};
-PER["strscan"]={"ai":0.0825,"go":0.0654,"rust":0.0643,"java":0.0642,"julia":0.0644,"luajit":0.1323,"pypy":0.0639,"node":0.3858,"elixir":0.0998,"chez":0.1318,"sbcl":0.1738};
-PER["hash"]={"ai":1.0273,"go":0.5525,"rust":0.7451,"java":0.3071,"julia":0.4913,"luajit":1.0549,"pypy":0.4312,"node":0.7219,"chez":0.7812,"sbcl":0.9493};
-PER["sort"]={"ai":0.6504,"go":0.3616,"rust":0.0641,"java":0.1670,"julia":0.0624,"luajit":1.2097,"pypy":0.3688,"node":1.0044,"elixir":0.5282,"chez":0.4121,"sbcl":0.5938};
-PER["tree"]={"ai":0.8711,"go":1.5803,"rust":4.6771,"java":0.7843,"julia":3.2282,"luajit":3.6110,"pypy":1.9203,"node":1.4019,"elixir":0.9502,"chez":0.6191,"sbcl":1.4806};
-PER["bintrees"]={"ai":19.6875,"go":37.6426,"rust":79.9248,"java":14.3102,"julia":25.5175,"luajit":84.1388,"pypy":29.8670,"node":28.2846,"elixir":21.4866,"chez":15.3750,"sbcl":25.3774};
-PER["mandelbrot"]={"ai":0.5684,"go":0.9563,"rust":0.9256,"java":0.9067,"julia":0.9135,"luajit":1.0293,"pypy":1.3881,"node":0.9203,"elixir":21.3083,"chez":14.9375,"sbcl":1.0079};
-PER["closure"]={"ai":0.3789,"go":0.3225,"rust":0.2965,"java":0.3579,"julia":0.3500,"luajit":14.2956,"pypy":0.3681,"node":2.0509,"elixir":2.6340,"chez":1.4688,"sbcl":2.5158};
-PER["cdcl"]={"ai":45.8750};
-PER["setup"]={"ai":14.0650,"go":28.8740,"rust":62.0410,"java":330.6640,"julia":149.2250,"luajit":2.1580,"pypy":48.7120,"node":28.1580,"elixir":208.5440,"chez":53.9970,"sbcl":5.2430};
+PER["fib"]={"ai":4.2656,"go":3.8331,"rust":2.0294,"java":2.6618,"julia":4.6072,"luajit":7.7035,"pypy":7.9784,"node":7.5060,"elixir":7.1356,"chez":5.8438,"sbcl":5.4536};
+PER["tak"]={"ai":0.4922,"go":0.4660,"rust":0.3496,"java":0.3184,"julia":0.7122,"luajit":1.3679,"pypy":2.2641,"node":0.9511,"elixir":0.8303,"chez":0.5938,"sbcl":4.1566};
+PER["sum"]={"ai":0.1055,"go":0.1117,"rust":0.0523,"java":0.1932,"julia":0.0841,"luajit":0.0705,"pypy":0.2621,"node":0.7557,"elixir":0.4844,"chez":0.4883,"sbcl":0.6661};
+PER["deforest"]={"ai":0.0552,"go":0.0467,"rust":0.0117,"java":0.0138,"julia":0.0184,"luajit":0.0616,"pypy":0.1450,"node":1.1971,"elixir":0.4090,"chez":0.2402,"sbcl":0.2373};
+PER["primes"]={"ai":1.2305,"go":0.9039,"rust":0.7847,"java":0.7940,"julia":0.9019,"luajit":0.8097,"pypy":1.3162,"node":0.7900,"elixir":2.2617,"chez":1.7031,"sbcl":4.7817};
+PER["bell"]={"ai":47.8750,"go":24.9639,"java":35.3841,"julia":75.7078,"pypy":25.4544,"node":28.8131,"elixir":32.6955,"chez":66.7500,"sbcl":44.8790};
+PER["strcat"]={"ai":0.0259,"go":0.9159,"rust":0.0175,"java":1.6003,"julia":1.5586,"luajit":1.4441,"pypy":0.1616,"node":0.1116,"elixir":0.0433,"chez":1.2695,"sbcl":3.5159};
+PER["strscan"]={"ai":0.0764,"go":0.0648,"rust":0.0643,"java":0.0650,"julia":0.0650,"luajit":0.1303,"pypy":0.0635,"node":0.3879,"elixir":0.0999,"chez":0.1313,"sbcl":0.1699};
+PER["hash"]={"ai":0.7969,"go":0.5570,"rust":0.7498,"java":0.2966,"julia":0.4884,"luajit":1.0659,"pypy":0.4405,"node":0.7260,"chez":0.7695,"sbcl":0.8399};
+PER["sort"]={"ai":0.5039,"go":0.3653,"rust":0.0661,"java":0.1701,"julia":0.0605,"luajit":1.2008,"pypy":0.3625,"node":1.0213,"elixir":0.7541,"chez":0.4082,"sbcl":0.5840};
+PER["tree"]={"ai":0.6543,"go":1.5832,"rust":4.8768,"java":0.4140,"julia":3.2378,"luajit":3.5862,"pypy":1.9642,"node":1.4071,"elixir":0.9474,"chez":0.6191,"sbcl":1.3361};
+PER["bintrees"]={"ai":13.8750,"go":37.7871,"rust":82.6372,"java":14.5885,"julia":25.4920,"luajit":82.5415,"pypy":30.2935,"node":28.1528,"elixir":21.4376,"chez":15.0625,"sbcl":23.9396};
+PER["mandelbrot"]={"ai":0.5625,"go":0.9612,"rust":0.9343,"java":0.9147,"julia":0.9140,"luajit":1.0311,"pypy":1.4011,"node":0.9244,"elixir":21.5106,"chez":14.5625,"sbcl":1.0001};
+PER["closure"]={"ai":0.3760,"go":0.3236,"rust":0.2995,"java":0.3591,"julia":0.3529,"luajit":14.3229,"pypy":0.3730,"node":2.0737,"elixir":2.6101,"chez":1.5078,"sbcl":2.4065};
+PER["cdcl"]={"ai":32.0000};
+PER["setup"]={"ai":20.9330,"go":27.3750,"rust":60.6350,"java":329.0960,"julia":144.9770,"luajit":2.2610,"pypy":48.8230,"node":28.9340,"elixir":204.1900,"chez":53.5050,"sbcl":5.0000};
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 

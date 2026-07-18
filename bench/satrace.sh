@@ -18,7 +18,7 @@
 # every solver sees identical instances by construction; the SATLIB rows feed ai the
 # byte-identical files, converted to a formula literal by awk.
 #
-# ai's `fcdcl` (apps/sat/flat.l: flat-arena CDCL + the apps/asm/-emitted native BCP kernel)
+# ai's `fcdcl` (crew/sat/flat.l: flat-arena CDCL + the crew/holo/-emitted native BCP kernel)
 # is timed by its OWN clock around the solve call, so the interpreter warmup + the
 # self-tests (which would otherwise dominate) are
 # excluded -- the honest "solve time". External solvers are timed by process
@@ -30,7 +30,7 @@
 # 20=UNSAT), and `timeout` exits 124, all of which are normal control flow here.
 R=..
 GL=$R/out/host/ai
-export AI_NO_IMAGE=1   # REQUIRED for the flat solver's native BCP kernel: apps/sat/flat.l installs it
+export AI_NO_IMAGE=1   # REQUIRED for the flat solver's native BCP kernel: crew/sat/flat.l installs it
                        # through the `nif` seam, which the glazed image mops from the book (the
                        # no-image book keeps it). the old glaze<->sat.l miscompile is gone.
 TIMEOUT=${1:-30}
@@ -60,7 +60,7 @@ GEN2='(: (gen2 sd n m)
 rndm() { awk -v n="$1" 'BEGIN{printf "%d", int(n*4.26+0.5)}'; }
 
 # -- generate the DIMACS once (php re-stated here, the textbook encoding, so the
-#    files match apps/sat/sat.l's (php h) without loading its self-test). --
+#    files match crew/sat/sat.l's (php h) without loading its self-test). --
 gen() {
   cat <<'AI'
 (: (neg v) (- 0 v)
@@ -116,7 +116,7 @@ for h in $INSTANCES; do
   # (fbva/fmk) JITs, both OUTSIDE the clock, like the interpreter warmup -- the honest
   # "solve time" is the warm one (the rnd lane already warms the same way).
   out=$(printf '(: _ (fcdcl (php %s) (php-vars %s)) t0 (clock 0) r (fcdcl (php %s) (php-vars %s)) ms (- (clock 0) t0) _ (puts (+ "RESULT " (+ (show ms) (+ " " (show r))))))' "$h" "$h" "$h" "$h" \
-        | cat "$R/apps/sat/sat.l" "$R/apps/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+        | cat "$R/crew/sat/sat.l" "$R/crew/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
     echo "php$h ai $(echo "$out" | awk '{print $2, $3}')"
   else
@@ -148,7 +148,7 @@ for n in $RNDN; do
   # then each solve clocked in-process and summed -- same accounting as the php rows.
   out=$({ printf '%s\n' "$GEN2"
           printf '%s\n' "$RNDDRV" | sed "s/@N@/$n/g; s/@M@/$m/g; s/@K@/$RNDK/g"; } \
-        | cat "$R/apps/sat/sat.l" "$R/apps/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+        | cat "$R/crew/sat/sat.l" "$R/crew/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
     echo "rnd$n ai $(echo "$out" | awk '{print $2, $3}')"
   else
@@ -214,7 +214,7 @@ slibrow() {
   out=$({ printf '(: MS #0 SG #(0 "") W #0)\n'
           printf '%s\n' "$drv"
           printf '(: _ (puts (+ "RESULT " (+ (show (peep MS 0 0)) (+ " " (+ (peep SG 0 "") "\n"))))))\n'; } \
-        | cat "$R/apps/sat/sat.l" "$R/apps/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
+        | cat "$R/crew/sat/sat.l" "$R/crew/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
     echo "$row ai $(echo "$out" | awk '{print $2, $3}')"
   else

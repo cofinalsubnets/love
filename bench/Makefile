@@ -107,7 +107,7 @@ SHOW    := $(filter $(PRESENT),$(DEFAULT_LANGS))
 
 txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 
-.PHONY: all bench run raw html clean satrace setup $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace setup ccbench $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -157,12 +157,24 @@ $(SETUP): setup.sh $(GL) | $(BDIR)
 setup: $(SETUP)
 	@cat $(SETUP)
 
+# The compiler shootout (the page's FOURTH table): build the ai host binary with
+# mooncc / gcc / clang, and run the full corpus ($t) through each. Rows build+test,
+# columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
+# truth); the mooncc lane needs out/host/mooncc(+.image), so depend on `host`. Cached;
+# `make ccbench` to refresh it on its own. (mooncc is x86-64 only -- dnf elsewhere.)
+CCBENCH := $(BDIR)/ccbench.txt
+$(CCBENCH): ccbench.sh $(GL) $(R)/ai.c $(wildcard $(R)/host/*.c) | $(BDIR)
+	@$(MAKE) -s -C $(R) host out/host/mooncc out/host/mooncc.image
+	@AI_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
+ccbench: $(CCBENCH)
+	@cat $(CCBENCH)
+
 # Self-contained results page: bench/bench.html, the full roster as columns
 # (a present-but-empty language shows a dotted column), with a transpose button
-# and a viewport-chosen initial orientation, plus the SAT-solver shootout table.
-# Regenerate after a fresh `make all` (and `make satrace`/`make setup` for fresh times).
-html: $(call txt,$(PRESENT)) $(SATRACE) $(SETUP) mkhtml.sh | $(BDIR)
-	@cat $(call txt,$(PRESENT)) $(SETUP) | ./mkhtml.sh "$(ALL_LANGS)" "$(SATRACE)" > bench.html
+# and a viewport-chosen initial orientation, plus the SAT-solver + compiler tables.
+# Regenerate after a fresh `make all` (and `make satrace`/`make setup`/`make ccbench` for fresh times).
+html: $(call txt,$(PRESENT)) $(SATRACE) $(SETUP) $(CCBENCH) mkhtml.sh | $(BDIR)
+	@cat $(call txt,$(PRESENT)) $(SETUP) | ./mkhtml.sh "$(ALL_LANGS)" "$(SATRACE)" "$(CCBENCH)" > bench.html
 	@echo "wrote bench/bench.html"
 
 clean:

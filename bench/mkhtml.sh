@@ -98,9 +98,9 @@ HEAD
 if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
 <h2>SAT solvers &mdash; milliseconds to solve</h2>
-<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>apps/sat/flat.l</code>:
+<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>crew/sat/flat.l</code>:
 flat cask-resident state driven by three native kernels &mdash; propagation, the whole
-conflict handler, and the decision &mdash; each assembled through <code>apps/asm/</code> at
+conflict handler, and the decision &mdash; each assembled through <code>crew/holo/</code> at
 solver-build time, specialized to the instance size) against reference C solvers.
 Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
 and resolution-hard, where clause learning alone is <b>exponential</b> and ai&rsquo;s
@@ -143,6 +143,56 @@ awk '
     for(j=1;j<=ns;j++){s=ord[j]; printf "<td class=\047net%s\047>%s</td>", (s=="ai"?" ai":""), (anyto[s]?"dnf":fmt(netv[s]))}
     print "</tr></tbody></table>"
   }' "$2"
+echo "</div>"
+fi
+
+# -- the THIRD extra table: the COMPILER shootout (arg 3 = a ccbench.sh result file,
+# "<phase> <compiler> <ms> <note>" lines). Rows build+test, columns the compilers,
+# ordered by net = build+test (source to a tested binary), mooncc its honest position.
+# Rendered STATIC (like the SAT table); a dnf lane ranks last. Skipped if no file. --
+if [ -n "$3" ] && [ -s "$3" ]; then
+cat <<'CC'
+<h2>compilers &mdash; milliseconds to build ai, and to test it</h2>
+<p class="note">A third field, ai&rsquo;s C toolchain against the incumbents:
+<b>mooncc</b> is ai&rsquo;s own C compiler (<code>crew/moon/</code>), and it builds
+<code>ai</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
+<code>mksys</code> emits the syscall leaf, and our own linker (<code>crew/holo/</code>)
+binds the executable. The <b>build</b> row is the wall-clock to compile every C
+translation unit (<code>ai.c</code> + <code>host/*.c</code> + the <code>am</code> math
+floor) and link a working binary; the <b>test</b> row runs the full corpus (the same
+files <code>test_host</code>/<code>test_raw</code> feed) through the binary that build
+produced. All three lanes egg-boot (no baked image), so the corpus runs off the freshly
+eval&rsquo;d egg either way &mdash; a level field, so the test row also reflects each
+binary&rsquo;s own speed (it eval&rsquo;s its compiler out of the egg before the first
+test runs). gcc and clang build the identical units at the host&rsquo;s real
+<code>-O2</code> flags (minus <code>-Werror</code>, a lint gate, not a speed factor).
+mooncc trades some compile and run throughput for that self-sufficiency; the gap to the
+optimizing compilers is modest, and the binary it emits passes the identical corpus.</p>
+<div class="wrap">
+CC
+awk '
+  function fmt(x){ return x<1?sprintf("%.4f",x):x<100?sprintf("%.3f",x):sprintf("%.1f",x) }
+  { ph=$1; cc=$2; ms=$3
+    if(!(ph in pi)){pord[++np]=ph; pi[ph]=1}
+    if(!(cc in ci)){cord[++nc]=cc; ci[cc]=1}
+    val[ph,cc]=ms }
+  END{
+    for(j=1;j<=nc;j++){c=cord[j]; net=0; dn=0; for(i=1;i<=np;i++){v=val[pord[i],c]; if(v=="dnf"||v==""){dn=1; net+=1e9}else net+=v+0} netv[c]=net; anydn[c]=dn; ord[j]=c}
+    for(a=1;a<=nc;a++)for(b=a+1;b<=nc;b++)if(netv[ord[b]]<netv[ord[a]]){t=ord[a];ord[a]=ord[b];ord[b]=t}
+    for(i=1;i<=np;i++){m=1e18; for(j=1;j<=nc;j++){v=val[pord[i],ord[j]]; if(v!="dnf"&&v!=""&&v+0<m)m=v+0} minr[pord[i]]=m}
+    printf "<table><thead><tr><th>phase</th>"
+    for(j=1;j<=nc;j++){c=ord[j]; printf "<th%s>%s</th>", (c=="mooncc"?" class=\047ai\047":""), c}
+    print "</tr></thead><tbody>"
+    for(i=1;i<=np;i++){ph=pord[i]; printf "<tr><th>%s</th>", ph
+      for(j=1;j<=nc;j++){c=ord[j]; v=val[ph,c]; cl=(c=="mooncc"?"ai ":"")
+        if(v==""){printf "<td class=\047%smiss\047>·</td>",cl}
+        else if(v=="dnf"){printf "<td class=\047%sto\047>dnf</td>",cl}
+        else{f=(v+0==minr[ph]?"fast ":""); printf "<td class=\047%s%s\047>%s</td>",cl,f,fmt(v+0)}}
+      print "</tr>"}
+    printf "<tr class=\047netrow\047><th>net</th>"
+    for(j=1;j<=nc;j++){c=ord[j]; printf "<td class=\047net%s\047>%s</td>", (c=="mooncc"?" ai":""), (anydn[c]?"dnf":fmt(netv[c]))}
+    print "</tr></tbody></table>"
+  }' "$3"
 echo "</div>"
 fi
 
