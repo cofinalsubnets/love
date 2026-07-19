@@ -181,7 +181,7 @@ lvm_t lvm_kcall,
  lvm_sort,  lvm_tally,
  lvm_put, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
  lvm_unc, lvm_poke, lvm_peek,
- lvm_seek,  lvm_trim,   lvm_twirl,   lvm_add,
+ lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
  lvm_sub,   lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
  lvm_bmul_start, lvm_bmul,   // resumable (yieldable) bignum multiply (chunked schoolbook)
  lvm_kmul,                   // resumable (yieldable) subquadratic Karatsuba (loop body)
@@ -805,7 +805,7 @@ lvm_t lvm_fault;
  _(nif_string, "string", s1(lvm_string))\
  _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
- _(nif_twirl, "spin", s1(lvm_twirl))\
+ _(nif_spin, "spin", s1(lvm_spin))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
  _(nif_seek, "seek", s2(lvm_seek)) _(nif_pin, "saturate", s1(lvm_pin)) _(nif_peep, "peep", s3(lvm_peep))\
  _(nif_put, "pin", s3(lvm_put)) _(nif_pull, "pull", s3(lvm_pull))\
@@ -3046,7 +3046,7 @@ lvm(lvm_poke) {
  gen_dirty(g, (word*) c);            // a raw cell poke into a tenured object (ev thread-build / recursive-ref) -> major
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
-lvm(lvm_twirl) {
+lvm(lvm_spin) {
  size_t n = getcharm(Sp[0]);
  Have(n + Width(struct ai_tag));
  union u *k = (union u*) Hp;
