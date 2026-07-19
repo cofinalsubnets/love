@@ -76,7 +76,7 @@ lint: $(ho)/love
 # content-preserving + idempotent, so it only ever touches whitespace. SCOPED on purpose:
 # just the core + the host CLI. test/cc are compiler test INPUTS (deliberate formatting),
 # crew/moon/include are libc-shaped headers, port/* is board code -- none house style, so
-# none are swept. `fmt-check` is the gate variant (exit 1 if anything is unformatted).
+# none are swept. `fmt-check` is the read-only variant (exit 1 if anything is unformatted).
 FMT_FILES := love.c love.h $(wildcard host/*.c) $(wildcard host/*.h)
 fmt: $(ho)/love
 	@$(ho)/love $R/crew/moon/fmt.l -w $(FMT_FILES) && echo "fmt: formatted $(words $(FMT_FILES)) file(s)"
